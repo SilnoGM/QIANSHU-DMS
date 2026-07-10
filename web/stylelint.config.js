@@ -47,9 +47,11 @@ export default {
   ignoreFiles: [
     'node_modules/**/*',
     'apps/*/dist*/**/*',
+    'examples/*/dist*/**/*',
+    'packages/*/dist*/**/*',
     'apps/*/src/assets/fonts/**/*',
+    'examples/*/src/assets/fonts/**/*',
     'apps/*/public/tinymce/**/*',
-    'docs/.vitepress/cache/**/*',
-    'docs/.vitepress/dist/**/*',
+    'examples/*/public/tinymce/**/*',
   ],
 }

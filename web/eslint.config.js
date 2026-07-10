@@ -24,7 +24,9 @@ export default antfu(
   },
   {
     files: [
-      'src/**/*.vue',
+      'apps/qsmds-arco/**/*.vue',
+      'examples/*/**/*.vue',
+      'packages/**/*.vue',
     ],
     rules: {
       'vue/block-order': ['error', {
@@ -50,6 +52,7 @@ export default antfu(
         localeDir: [
           'packages/locales/lang/**/*.{json,json5,yaml,yml}',
           'apps/*/src/locales/lang/**/*.{json,json5,yaml,yml}',
+          'examples/*/src/locales/lang/**/*.{json,json5,yaml,yml}',
         ],
         messageSyntaxVersion: '^11.0.0',
       },
