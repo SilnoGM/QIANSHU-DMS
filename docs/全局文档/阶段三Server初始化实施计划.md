@@ -669,7 +669,7 @@ it('closes the external pool even when Prisma disconnect fails', async () => {
 运行：
 
 ```bash
-pnpm -C server test -- prisma.service.spec.ts --runInBand
+pnpm -C server exec jest --runInBand prisma.service.spec.ts
 ```
 
 Expected RED: `PrismaService` 尚不存在。
@@ -691,7 +691,7 @@ Expected RED: `PrismaService` 尚不存在。
 - [ ] **Step 4：运行 GREEN、全检查并提交**
 
 ```bash
-pnpm -C server test -- prisma.service.spec.ts --runInBand
+pnpm -C server exec jest --runInBand prisma.service.spec.ts
 env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server check
 env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server build
 test -d server/src/generated/prisma
@@ -894,7 +894,7 @@ unit 还必须精确检查以下调用契约：
 运行：
 
 ```bash
-pnpm -C server test -- database-health.indicator.spec.ts --runInBand
+pnpm -C server exec jest --runInBand database-health.indicator.spec.ts
 ```
 
 Expected RED: indicator 尚不存在。
@@ -910,7 +910,7 @@ Expected RED: indicator 尚不存在。
 - 失败调用 `.down()`，catch 不记录原始异常。
 
 ```bash
-pnpm -C server test -- database-health.indicator.spec.ts --runInBand
+pnpm -C server exec jest --runInBand database-health.indicator.spec.ts
 ```
 
 Expected: 成功、失败与脱敏断言全部通过。
@@ -960,6 +960,7 @@ const databasePassword = new URL(databaseUrl).password
 if (!databasePassword) {
   throw new Error('A database password is required for E2E tests')
 }
+const decodedDatabasePassword = decodeURIComponent(databasePassword)
 
 return request(app.getHttpServer())
   .get('/api/health')
@@ -971,6 +972,7 @@ return request(app.getHttpServer())
     // 真实 URL 和密码只能参与布尔断言，绝不能成为 Jest matcher 的输出参数。
     expect(serializedBody.includes(databaseUrl)).toBe(false)
     expect(serializedBody.includes(databasePassword)).toBe(false)
+    expect(serializedBody.includes(decodedDatabasePassword)).toBe(false)
     expect(normalizedBody.includes('postgresql://')).toBe(false)
     expect(normalizedBody.includes('postgres://')).toBe(false)
     expect(/[a-z][a-z\d+.-]*:\/\//i.test(serializedBody)).toBe(false)

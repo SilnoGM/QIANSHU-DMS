@@ -24,6 +24,8 @@ if (!databasePassword) {
   throw new Error('A database password is required for E2E tests')
 }
 
+const decodedDatabasePassword = decodeURIComponent(databasePassword)
+
 const FAILURE_CANARY = 'health-e2e-sensitive-canary'
 const FAILURE_MESSAGE =
   `postgresql://fake-user:fake-health-password@localhost/test ` +
@@ -47,6 +49,7 @@ function expectRealSecretsAreAbsent(body: unknown): void {
   // 真实 URL 与密码绝不作为 matcher 参数，失败输出只能展示布尔值。
   expect(serializedBody.includes(databaseUrl)).toBe(false)
   expect(serializedBody.includes(databasePassword)).toBe(false)
+  expect(serializedBody.includes(decodedDatabasePassword)).toBe(false)
   expect(normalizedBody.includes('postgresql://')).toBe(false)
   expect(normalizedBody.includes('postgres://')).toBe(false)
   expect(URL_SCHEME_PATTERN.test(serializedBody)).toBe(false)
