@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import {
   chmod,
   lstat,
@@ -10,9 +10,11 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import os from 'node:os'
+import { createConnection } from 'node:net'
 import path from 'node:path'
 import process from 'node:process'
 import test from 'node:test'
+import { setTimeout as delay } from 'node:timers/promises'
 import { fileURLToPath } from 'node:url'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -146,6 +148,114 @@ async function assertRootStateAbsent() {
   }
 }
 
+function shellQuote(value) {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    if (error?.code === 'ESRCH') {
+      return false
+    }
+    throw error
+  }
+}
+
+async function waitForProcessTreeStatus(statusPath) {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    try {
+      return JSON.parse(await readFile(statusPath, 'utf8'))
+    } catch (error) {
+      if (error?.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
+        throw error
+      }
+    }
+    await delay(25)
+  }
+  throw new Error('Timed out waiting for process-tree fixture')
+}
+
+async function waitForPidsToExit(pids) {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    if (pids.every(pid => !isPidAlive(pid))) {
+      return
+    }
+    await delay(25)
+  }
+  throw new Error('Timed out waiting for managed process tree to exit')
+}
+
+function canConnect(port) {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: '127.0.0.1', port })
+    let settled = false
+    const settle = (result) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (result) {
+        // 成功握手后用 FIN 正常结束，避免立即 RST 令服务端 fixture 产生假失败。
+        socket.end()
+      } else {
+        socket.destroy()
+      }
+      resolve(result)
+    }
+    socket.setTimeout(1_000, () => settle(false))
+    socket.once('connect', () => settle(true))
+    socket.once('error', () => settle(false))
+  })
+}
+
+function waitForChildExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve([child.exitCode, child.signalCode])
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      child.off('exit', handleExit)
+      reject(new Error('Timed out waiting for child process'))
+    }, timeoutMs)
+
+    function handleExit(code, signal) {
+      clearTimeout(timeout)
+      resolve([code, signal])
+    }
+
+    child.once('exit', handleExit)
+  })
+}
+
+async function waitForPortState(port, expectedState) {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    if (await canConnect(port) === expectedState) {
+      return
+    }
+    await delay(25)
+  }
+  throw new Error(`Timed out waiting for port state: ${expectedState}`)
+}
+
+function processTreeSnapshot(launcher, managedPids, port) {
+  return {
+    launcher: {
+      exitCode: launcher?.exitCode,
+      pid: launcher?.pid,
+      signalCode: launcher?.signalCode,
+    },
+    managed: managedPids.map(pid => ({ alive: isPidAlive(pid), pid })),
+    port,
+  }
+}
+
 if (entrypointChild) {
   test('真实入口集成测试在入口子进程中跳过以避免递归', {
     skip: 'QIANSHU_ENTRYPOINT_CHILD=1',
@@ -222,6 +332,87 @@ if (entrypointChild) {
         signal: 'SIGTERM',
       },
     )
+    await assertRootStateAbsent()
+  })
+
+  test('node --run 外层退出后清理真实多层开发进程组', {
+    skip: process.platform === 'win32'
+      ? 'Windows 不支持 POSIX 负 PID 进程组信号'
+      : false,
+  }, async (t) => {
+    const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'qianshu-dev-tree-'))
+    const statusPath = path.join(fixtureRoot, 'tree.json')
+    const fixturePath = path.join(scriptsDirectory, 'fixtures', 'dev-process-tree.mjs')
+    const packageScript = [
+      shellQuote(process.execPath),
+      shellQuote(fixturePath),
+      'manager',
+      shellQuote(statusPath),
+    ].join(' ')
+    await writeFile(
+      path.join(fixtureRoot, 'package.json'),
+      JSON.stringify({ private: true, scripts: { 'dev-tree': packageScript } }),
+      'utf8',
+    )
+
+    let launcher
+    let managedPids = []
+    t.after(async () => {
+      const cleanupPids = [
+        ...managedPids.slice().reverse(),
+        launcher?.pid,
+      ].filter(pid => Number.isInteger(pid) && pid > 1 && pid !== process.pid)
+      for (const pid of cleanupPids) {
+        if (isPidAlive(pid)) {
+          process.kill(pid, 'SIGTERM')
+        }
+      }
+      await delay(100)
+      for (const pid of cleanupPids) {
+        if (isPidAlive(pid)) {
+          process.kill(pid, 'SIGKILL')
+        }
+      }
+      if (launcher?.exitCode === null && launcher?.signalCode === null) {
+        await waitForChildExit(launcher, 1_000).catch(() => undefined)
+      }
+      await rm(fixtureRoot, { force: true, recursive: true })
+    })
+
+    launcher = spawn(process.execPath, ['--run', 'dev-tree'], {
+      cwd: fixtureRoot,
+      stdio: ['ignore', 'ignore', 'ignore'],
+    })
+    const status = await waitForProcessTreeStatus(statusPath)
+    managedPids = [status.managerPid, status.workerPid, status.leafPid]
+    assert.equal(
+      managedPids.every(pid => Number.isInteger(pid) && pid > 1),
+      true,
+    )
+    assert.equal(new Set(managedPids).size, 3)
+    assert.equal(
+      managedPids.every(isPidAlive),
+      true,
+      JSON.stringify(processTreeSnapshot(launcher, managedPids, status.port)),
+    )
+    try {
+      await waitForPortState(status.port, true)
+    } catch (cause) {
+      throw new Error(
+        `Process-tree listener was unavailable: ${JSON.stringify(
+          processTreeSnapshot(launcher, managedPids, status.port),
+        )}`,
+        { cause },
+      )
+    }
+
+    const launcherExit = waitForChildExit(launcher, 10_000)
+    launcher.kill('SIGTERM')
+    const [code, signal] = await launcherExit
+    assert.equal(code, null)
+    assert.equal(signal, 'SIGTERM')
+    await waitForPidsToExit(managedPids)
+    await waitForPortState(status.port, false)
     await assertRootStateAbsent()
   })
 }

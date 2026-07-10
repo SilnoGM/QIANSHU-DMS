@@ -11,10 +11,24 @@ import {
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
-const developmentCommands = [
-  ['pnpm', ['-C', 'server', 'dev']],
-  ['pnpm', ['-C', 'web', 'dev']],
-]
+const developmentCommandsByTarget = {
+  server: ['pnpm', ['-C', 'server', 'dev']],
+  web: ['pnpm', ['-C', 'web', 'dev']],
+}
+
+export function developmentCommandsFor(target) {
+  if (target === undefined) {
+    return Object.values(developmentCommandsByTarget)
+  }
+
+  const command = developmentCommandsByTarget[target]
+  if (!command) {
+    // 入口错误保持固定文本，不回显可能由外部调用方注入的原始参数。
+    throw new Error('Unsupported development target')
+  }
+
+  return [command]
+}
 
 function exitCodeFromSignal(signal) {
   const signalNumber = typeof signal === 'string'
@@ -29,14 +43,34 @@ function normalizeExitCode(exitCode) {
   return Number.isInteger(exitCode) && exitCode > 0 ? exitCode : 1
 }
 
-export function runDevelopment({ spawnImpl = spawn, processRef = process } = {}) {
+export function runDevelopment({
+  clearIntervalImpl = clearInterval,
+  commands = developmentCommandsFor(),
+  processRef = process,
+  setIntervalImpl = setInterval,
+  spawnImpl = spawn,
+  useProcessGroups = process.platform !== 'win32',
+} = {}) {
   return new Promise((resolve) => {
     const childStates = []
+    const initialParentPid = processRef.ppid
     let firstFailureCode
+    let parentMonitor
+    let rootSignalObserved = false
     let spawningComplete = false
     let completed = false
 
+    const stopParentMonitor = () => {
+      if (parentMonitor === undefined) {
+        return
+      }
+
+      clearIntervalImpl(parentMonitor)
+      parentMonitor = undefined
+    }
+
     const removeSignalListeners = () => {
+      processRef.off('SIGHUP', handleSighup)
       processRef.off('SIGINT', handleSigint)
       processRef.off('SIGTERM', handleSigterm)
     }
@@ -53,6 +87,7 @@ export function runDevelopment({ spawnImpl = spawn, processRef = process } = {})
       }
 
       completed = true
+      stopParentMonitor()
       removeSignalListeners()
       resolve(firstFailureCode ?? 0)
     }
@@ -62,11 +97,36 @@ export function runDevelopment({ spawnImpl = spawn, processRef = process } = {})
         return
       }
 
+      let attemptedProcessGroup = false
       try {
+        if (
+          useProcessGroups
+          && state.started
+          && Number.isInteger(state.child.pid)
+          && state.child.pid > 0
+          && typeof processRef.kill === 'function'
+        ) {
+          attemptedProcessGroup = true
+          // POSIX detached child 的 PID 同时是进程组 ID；向负 PID 发信号才能覆盖
+          // pnpm、shell、Nest/Vite 等完整后代树，而不是只结束直接 launcher。
+          processRef.kill(-state.child.pid, signal)
+          return
+        }
+
         state.child.kill(signal)
       } catch {
-        // kill 失败不能覆盖首个退出码，也不能回显可能携带环境信息的异常。
-        // 按阶段一约束继续等待该子进程后续 exit/error，不增加超时或 SIGKILL。
+        if (!attemptedProcessGroup) {
+          // 直接 child kill 的异常已经代表唯一可用路径失败，不能重复发送同一信号。
+          return
+        }
+
+        // 进程组可能已在 exit 事件到达前消失；再尝试直接 child 可覆盖不支持
+        // 负 PID 的注入实现。两次失败都不能覆盖首个退出码或回显底层异常。
+        try {
+          state.child.kill(signal)
+        } catch {
+          // 按阶段一约束继续等待真实 exit/error，不在编排器内增加 SIGKILL。
+        }
       }
     }
 
@@ -110,24 +170,40 @@ export function runDevelopment({ spawnImpl = spawn, processRef = process } = {})
       finishIfReady()
     }
 
+    function handleSighup() {
+      // 终端关闭时 detached 子进程组通常不会自动收到 HUP，必须由 manager
+      // 显式转发，否则 Nest/Vite 可能在 shell 消失后继续占用监听端口。
+      rootSignalObserved = true
+      handleRootSignal('SIGHUP', 129)
+    }
+
     function handleSigint() {
+      rootSignalObserved = true
       handleRootSignal('SIGINT', 130)
     }
 
     function handleSigterm() {
+      rootSignalObserved = true
       handleRootSignal('SIGTERM', 143)
     }
 
+    processRef.on('SIGHUP', handleSighup)
     processRef.on('SIGINT', handleSigint)
     processRef.on('SIGTERM', handleSigterm)
 
-    for (const [command, args] of developmentCommands) {
+    for (const [command, args] of commands) {
       let child
       try {
-        child = spawnImpl(command, args, {
+        const spawnOptions = {
           cwd: repositoryRoot,
           stdio: 'inherit',
-        })
+        }
+        if (useProcessGroups) {
+          // macOS/Linux 上每个依赖域拥有独立进程组，根编排信号不会误伤当前
+          // shell 或其他开发任务；Windows 保留 ChildProcess 的标准 kill 语义。
+          spawnOptions.detached = true
+        }
+        child = spawnImpl(command, args, spawnOptions)
       } catch {
         // 第一条 spawn 同步失败时不再启动第二条；第二条失败时清理已经启动的
         // peer。同步异常可能含敏感上下文，因此这里只记录统一失败码 1。
@@ -172,14 +248,42 @@ export function runDevelopment({ spawnImpl = spawn, processRef = process } = {})
     }
 
     spawningComplete = true
+    if (
+      useProcessGroups
+      && Number.isInteger(initialParentPid)
+      && initialParentPid > 1
+    ) {
+      // `node --run` 自身收到信号后不会把信号转给 package script。轮询 PPID
+      // 可在外层进程消失并把本进程重挂到 PID 1 时，主动终止受控进程组。
+      parentMonitor = setIntervalImpl(() => {
+        if (processRef.ppid === initialParentPid) {
+          return
+        }
+
+        stopParentMonitor()
+        if (!rootSignalObserved) {
+          handleRootSignal('SIGTERM', 143)
+        }
+      }, 100)
+      parentMonitor?.unref?.()
+    }
     finishIfReady()
   })
 }
 
 if (isDirectEntry(import.meta.url)) {
-  runDevelopment()
-    .then((exitCode) => {
-      process.exitCode = exitCode
-    })
-    .catch(error => applyFailureToProcess(error))
+  const target = process.argv[2]
+  const hasUnexpectedArguments = process.argv.length > 3
+
+  if (hasUnexpectedArguments) {
+    applyFailureToProcess(new Error('Unsupported development target'))
+  } else {
+    Promise.resolve()
+      .then(() => developmentCommandsFor(target))
+      .then(commands => runDevelopment({ commands }))
+      .then((exitCode) => {
+        process.exitCode = exitCode
+      })
+      .catch(error => applyFailureToProcess(error))
+  }
 }

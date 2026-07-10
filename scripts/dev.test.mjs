@@ -4,7 +4,10 @@ import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-import { runDevelopment } from './dev.mjs'
+import {
+  developmentCommandsFor,
+  runDevelopment,
+} from './dev.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
@@ -66,11 +69,166 @@ function createHarness({
   return {
     calls,
     children,
-    options: { spawnImpl, processRef },
+    // 大部分既有测试聚焦直接 ChildProcess 语义，显式关闭进程组后可保持断言单一；
+    // 进程组与父进程消失由下方专门测试覆盖。
+    options: { spawnImpl, processRef, useProcessGroups: false },
     processRef,
     spawnError,
   }
 }
+
+test('开发目标只接受 server、web 或省略值', () => {
+  assert.deepEqual(developmentCommandsFor(), expectedCommands.map(
+    ([command, args]) => [command, args],
+  ))
+  assert.deepEqual(developmentCommandsFor('server'), [
+    ['pnpm', ['-C', 'server', 'dev']],
+  ])
+  assert.deepEqual(developmentCommandsFor('web'), [
+    ['pnpm', ['-C', 'web', 'dev']],
+  ])
+  assert.throws(
+    () => developmentCommandsFor('unknown'),
+    /^Error: Unsupported development target$/,
+  )
+})
+
+test('单端模式只启动指定的开发命令', async () => {
+  const harness = createHarness()
+  const completion = runDevelopment({
+    ...harness.options,
+    commands: expectedCommands.slice(0, 1).map(([command, args]) => [
+      command,
+      args,
+    ]),
+  })
+
+  assert.deepEqual(harness.calls, expectedCommands.slice(0, 1))
+  harness.children[0].emit('exit', 0, null)
+
+  assert.equal(await completion, 0)
+})
+
+test('POSIX 进程组模式创建独立组并向完整子树转发信号', async () => {
+  const harness = createHarness()
+  const groupSignals = []
+  harness.processRef.kill = (pid, signal) => {
+    groupSignals.push([pid, signal])
+    return true
+  }
+
+  const completion = runDevelopment({
+    ...harness.options,
+    useProcessGroups: true,
+  })
+
+  assert.deepEqual(
+    harness.calls.map(([, , options]) => options.detached),
+    [true, true],
+  )
+  harness.processRef.emit('SIGINT')
+  assert.deepEqual(groupSignals, [
+    [-1_000, 'SIGINT'],
+    [-1_001, 'SIGINT'],
+  ])
+  assert.deepEqual(harness.children[0].killSignals, [])
+  assert.deepEqual(harness.children[1].killSignals, [])
+  harness.children[0].emit('exit', null, 'SIGINT')
+  harness.children[1].emit('exit', null, 'SIGINT')
+
+  assert.equal(await completion, 130)
+})
+
+test('进程组信号失败时回退到直接 ChildProcess 信号', async () => {
+  const harness = createHarness()
+  harness.processRef.kill = () => {
+    throw new Error('process group is unavailable')
+  }
+
+  const completion = runDevelopment({
+    ...harness.options,
+    useProcessGroups: true,
+  })
+
+  harness.processRef.emit('SIGTERM')
+  assert.deepEqual(harness.children[0].killSignals, ['SIGTERM'])
+  assert.deepEqual(harness.children[1].killSignals, ['SIGTERM'])
+  harness.children[0].emit('exit', null, 'SIGTERM')
+  harness.children[1].emit('exit', null, 'SIGTERM')
+
+  assert.equal(await completion, 143)
+})
+
+test('外层 node --run 消失时终止完整进程组并清理监控器', async () => {
+  const harness = createHarness()
+  const groupSignals = []
+  const intervalCallbacks = []
+  const clearedIntervals = []
+  const intervalHandle = { unref() {} }
+  harness.processRef.ppid = 4_000
+  harness.processRef.kill = (pid, signal) => {
+    groupSignals.push([pid, signal])
+    return true
+  }
+
+  const completion = runDevelopment({
+    ...harness.options,
+    useProcessGroups: true,
+    setIntervalImpl(callback) {
+      intervalCallbacks.push(callback)
+      return intervalHandle
+    },
+    clearIntervalImpl(handle) {
+      clearedIntervals.push(handle)
+    },
+  })
+
+  assert.equal(intervalCallbacks.length, 1)
+  harness.processRef.ppid = 1
+  intervalCallbacks[0]()
+  assert.deepEqual(groupSignals, [
+    [-1_000, 'SIGTERM'],
+    [-1_001, 'SIGTERM'],
+  ])
+  harness.children[0].emit('exit', null, 'SIGTERM')
+  harness.children[1].emit('exit', null, 'SIGTERM')
+
+  assert.equal(await completion, 143)
+  assert.deepEqual(clearedIntervals, [intervalHandle])
+})
+
+test('已经收到根信号后父进程消失不会重复发送降级信号', async () => {
+  const harness = createHarness()
+  const groupSignals = []
+  const intervalCallbacks = []
+  harness.processRef.ppid = 4_000
+  harness.processRef.kill = (pid, signal) => {
+    groupSignals.push([pid, signal])
+    return true
+  }
+
+  const completion = runDevelopment({
+    ...harness.options,
+    useProcessGroups: true,
+    setIntervalImpl(callback) {
+      intervalCallbacks.push(callback)
+      return { unref() {} }
+    },
+    clearIntervalImpl() {},
+  })
+
+  harness.processRef.emit('SIGINT')
+  harness.processRef.ppid = 1
+  intervalCallbacks[0]()
+  assert.deepEqual(groupSignals, [
+    [-1_000, 'SIGINT'],
+    [-1_001, 'SIGINT'],
+  ])
+  harness.children[0].emit('exit', null, 'SIGINT')
+  harness.children[1].emit('exit', null, 'SIGINT')
+
+  assert.equal(await completion, 130)
+})
 
 async function assertPending(promise) {
   const pending = Symbol('pending')
@@ -154,7 +312,11 @@ test('一个子进程正常退出时等待另一个正常退出', async () => {
   assert.equal(await completion, 0)
 })
 
-for (const [signal, expectedExitCode] of [['SIGINT', 130], ['SIGTERM', 143]]) {
+for (const [signal, expectedExitCode] of [
+  ['SIGHUP', 129],
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+]) {
   test(`根进程收到 ${signal} 时原样转发并返回 ${expectedExitCode}`, async () => {
     const harness = createHarness()
     const completion = runDevelopment(harness.options)
@@ -171,6 +333,7 @@ for (const [signal, expectedExitCode] of [['SIGINT', 130], ['SIGTERM', 143]]) {
 }
 
 for (const [signal, expectedExitCode] of [
+  ['SIGHUP', 129],
   ['SIGINT', 130],
   ['SIGTERM', 143],
   ['SIG_QIANSHU_UNKNOWN', 1],
@@ -245,16 +408,18 @@ test('两个子进程近乎同时失败时保留首个观察到的退出码', as
   assert.equal(await completion, 7)
 })
 
-test('完成后移除根进程的 SIGINT 和 SIGTERM listeners', async () => {
+test('完成后移除根进程的 SIGHUP、SIGINT 和 SIGTERM listeners', async () => {
   const harness = createHarness()
   const completion = runDevelopment(harness.options)
 
+  assert.equal(harness.processRef.listenerCount('SIGHUP'), 1)
   assert.equal(harness.processRef.listenerCount('SIGINT'), 1)
   assert.equal(harness.processRef.listenerCount('SIGTERM'), 1)
   harness.children[0].emit('exit', 0, null)
   harness.children[1].emit('exit', 0, null)
   await completion
 
+  assert.equal(harness.processRef.listenerCount('SIGHUP'), 0)
   assert.equal(harness.processRef.listenerCount('SIGINT'), 0)
   assert.equal(harness.processRef.listenerCount('SIGTERM'), 0)
 })

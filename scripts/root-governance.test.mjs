@@ -83,8 +83,8 @@ test('根 package 保持无依赖且不是 workspace', async () => {
   assert.deepEqual(manifest.scripts, {
     bootstrap: 'node ./scripts/bootstrap.mjs',
     dev: 'node ./scripts/dev.mjs',
-    'dev:server': 'pnpm -C server dev',
-    'dev:web': 'pnpm -C web dev',
+    'dev:server': 'node ./scripts/dev.mjs server',
+    'dev:web': 'node ./scripts/dev.mjs web',
     'test:root': 'node --test ./scripts/*.test.mjs',
     check: 'node ./scripts/check.mjs',
     'check:server': 'pnpm -C server check',

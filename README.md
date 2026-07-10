@@ -53,6 +53,8 @@ node --run bootstrap
 
 pnpm 11 的 `verifyDepsBeforeRun` 默认行为会在执行 package script 前尝试 install，即使根 package 没有依赖，也会生成根 `pnpm-lock.yaml` 和 `node_modules/` 状态文件。因此根公开 scripts 统一通过 Node.js 22+ 提供的 `node --run <script>` 执行；只有 Server 和 Web 独立依赖域继续使用 `pnpm -C`。
 
+在 macOS 与 Linux 上，三个根 `dev*` 命令通过独立进程组管理 pnpm、Nest/Vite 和后代进程，并统一处理 `SIGHUP`、`SIGINT`、`SIGTERM` 以及外层 `node --run` 提前退出。根编排以可靠启动和完整清理为目标，不保证把终端键盘快捷操作传给 detached 子进程；需要使用 Nest/Vite 交互式快捷操作时，直接执行 `pnpm -C server dev` 或 `pnpm -C web dev`。
+
 ## 检查与构建
 
 两端可以分别验证：
@@ -113,6 +115,8 @@ pnpm -C web dev
 ```bash
 node --run dev
 ```
+
+只启动一端时可使用 `node --run dev:server` 或 `node --run dev:web`；需要直接操作该端 CLI 的键盘快捷功能时，继续使用上方对应的 `pnpm -C` 命令。
 
 真实 `.env` 均已忽略，只能从 `.env.example` 或 `.env.*.example` 创建本地副本。浏览器可见的 `VITE_` 变量也不能存放 token、密码或数据库连接。
 
