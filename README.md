@@ -76,6 +76,16 @@ env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run build
 
 migration 和 E2E 必须使用全新、隔离的 PostgreSQL 16 测试数据库，并仅通过当前进程环境注入 `DATABASE_URL`。不要连接个人持久数据库、共享环境或生产数据库。
 
+先在同一个受控 shell 中通过密钥管理或临时容器流程 export 该测试库的 `DATABASE_URL`，再在启动任何 Prisma 或 Nest 命令前执行不回显原值的必填检查：
+
+```bash
+: "${DATABASE_URL:?DATABASE_URL must reference the isolated test database}"
+export DOTENV_CONFIG_PATH=/dev/null
+unset DEBUG
+```
+
+`DOTENV_CONFIG_PATH=/dev/null` 只阻止 `prisma.config.ts` 中的 `dotenv/config` 回退到本地文件；Nest `ConfigModule` 仍可读取 `server/.env`，因此上述 shell guard 必须先于 `test:e2e` 执行，使已注入的临时 URL 拥有明确优先级。
+
 在安全临时数据库已经就绪且 migration 尚未应用时执行：
 
 ```bash

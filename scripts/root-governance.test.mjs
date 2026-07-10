@@ -129,15 +129,9 @@ test('阶段三计划、后端架构和数据库迁移规范均为真实文件',
     'docs/后端文档/后端架构.md',
     'docs/后端文档/数据库迁移规范.md',
   ]
-  const missingDocuments = []
-
   for (const document of requiredDocuments) {
-    if (!(await exists(...document.split('/')))) {
-      missingDocuments.push(document)
-    }
+    await assertRegularFile(document)
   }
-
-  assert.deepEqual(missingDocuments, [])
 })
 
 test('文档索引链接到阶段三计划和两份后端正式文档', async () => {
@@ -148,10 +142,10 @@ test('文档索引链接到阶段三计划和两份后端正式文档', async ()
     './后端文档/数据库迁移规范.md',
   ]
 
-  assert.deepEqual(
-    requiredLinks.filter(link => !index.includes(`(${link})`)),
-    [],
-  )
+  for (const link of requiredLinks) {
+    assert.ok(index.includes(`(${link})`), `文档索引缺少链接：${link}`)
+    await assertRegularFile(path.join('docs', link))
+  }
 })
 
 test('根 README 使用当前时态且不保留阶段一至阶段三旧状态', async () => {
@@ -172,17 +166,37 @@ test('根 README 使用当前时态且不保留阶段一至阶段三旧状态', 
 
 test('根 README 给出两端独立安装、检查、migration 和 E2E 命令', async () => {
   const readme = await readFile(fromRoot('README.md'), 'utf8')
-  const requiredCommands = [
-    'pnpm -C server install --frozen-lockfile',
-    'pnpm -C web install --frozen-lockfile',
-    'pnpm -C server check',
-    'pnpm -C web check',
-    'pnpm -C server db:migrate:deploy',
-    'pnpm -C server test:e2e',
+  const installSection = markdownSection(readme, '## 独立安装')
+  const checkSection = markdownSection(readme, '## 检查与构建')
+  const databaseSection = markdownSection(readme, '## 数据库 migration 与 E2E')
+  const requiredCommandsBySection = [
+    [installSection, 'pnpm -C server install --frozen-lockfile'],
+    [installSection, 'pnpm -C web install --frozen-lockfile'],
+    [checkSection, 'pnpm -C server check'],
+    [checkSection, 'pnpm -C web check'],
+    [databaseSection, 'pnpm -C server db:migrate:deploy'],
+    [databaseSection, 'pnpm -C server test:e2e'],
   ]
 
   assert.deepEqual(
-    requiredCommands.filter(command => !readme.includes(command)),
+    requiredCommandsBySection
+      .filter(([section, command]) => !section.includes(command))
+      .map(([, command]) => command),
+    [],
+  )
+})
+
+test('根 README 的 migration 与 E2E 命令禁止静默回退到本地环境文件', async () => {
+  const readme = await readFile(fromRoot('README.md'), 'utf8')
+  const databaseSection = markdownSection(readme, '## 数据库 migration 与 E2E')
+  const requiredGuards = [
+    ': "${DATABASE_URL:?',
+    'export DOTENV_CONFIG_PATH=/dev/null',
+    'unset DEBUG',
+  ]
+
+  assert.deepEqual(
+    requiredGuards.filter(guard => !databaseSection.includes(guard)),
     [],
   )
 })
@@ -241,28 +255,33 @@ test('后端架构文档记录阶段三运行时、安全与测试边界', async
     fromRoot('docs', '后端文档', '后端架构.md'),
     'utf8',
   )
-  const requiredFacts = [
-    '`server/pnpm-workspace.yaml`',
-    '`allowBuilds`',
-    'CommonJS',
-    '`ValidationPipe`',
-    '`422`',
-    '`PrismaPg`',
-    '`pg.Pool`',
-    '`Database initialization failed`',
-    '`Database shutdown failed`',
-    '`DEBUG`',
-    '`prisma:*`',
-    '`GET /api/health`',
-    'Terminus',
-    '全局成功 envelope',
-    '阶段四',
+  const requiredFactsBySection = [
+    ['## 1. 文档定位', ['CommonJS']],
+    ['## 2. 工程与依赖边界', ['`server/pnpm-workspace.yaml`', '`allowBuilds`']],
+    ['## 4. 启动配置与 HTTP 基线', ['`ValidationPipe`', '`422`']],
+    [
+      '## 5. Prisma 与 PostgreSQL 生命周期',
+      [
+        '`PrismaPg`',
+        '`pg.Pool`',
+        '`Database initialization failed`',
+        '`Database shutdown failed`',
+        '`DEBUG`',
+        '`prisma:*`',
+      ],
+    ],
+    ['## 6. 健康检查', ['`GET /api/health`', 'Terminus', '全局成功 envelope']],
+    ['## 8. 阶段边界', ['阶段四', 'OpenAPI']],
   ]
 
-  assert.deepEqual(
-    requiredFacts.filter(fact => !architecture.includes(fact)),
-    [],
-  )
+  for (const [heading, facts] of requiredFactsBySection) {
+    const section = markdownSection(architecture, heading)
+    assert.deepEqual(
+      facts.filter(fact => !section.includes(fact)),
+      [],
+      `后端架构章节缺少事实：${heading}`,
+    )
+  }
 })
 
 test('数据库迁移规范记录不可变迁移、安全验证和向前修复规则', async () => {
@@ -270,25 +289,53 @@ test('数据库迁移规范记录不可变迁移、安全验证和向前修复�
     fromRoot('docs', '后端文档', '数据库迁移规范.md'),
     'utf8',
   )
-  const requiredFacts = [
-    '`prisma/schema.prisma`',
-    '`prisma/migrations/`',
-    '`src/generated/prisma/`',
-    '`20260710152144_init`',
-    '`prisma migrate dev`',
-    '`prisma migrate deploy`',
-    '`prisma migrate status`',
-    '`prisma db push`',
-    '`_prisma_migrations`',
-    'PostgreSQL 16',
-    '`trap`',
-    '`127.0.0.1`',
-    '`DATABASE_URL`',
-    '向前修复',
+  const requiredFactsBySection = [
+    [
+      '## 1. 目的与真相源',
+      ['`prisma/schema.prisma`', '`prisma/migrations/`', '`src/generated/prisma/`'],
+    ],
+    ['## 2. 当前迁移基线', ['`20260710152144_init`', 'PostgreSQL 16']],
+    ['## 3. 不可变与只追加原则', ['向前修复']],
+    [
+      '## 4. 命令使用边界',
+      [
+        '`prisma migrate dev`',
+        '`prisma migrate deploy`',
+        '`prisma migrate status`',
+        '`prisma db push`',
+      ],
+    ],
+    ['## 5. 空库部署验证', ['`_prisma_migrations`']],
+    [
+      '## 6. 临时 PostgreSQL 安全流程',
+      ['`trap`', '`127.0.0.1`', '`DATABASE_URL`'],
+    ],
+  ]
+
+  for (const [heading, facts] of requiredFactsBySection) {
+    const section = markdownSection(migrationGuide, heading)
+    assert.deepEqual(
+      facts.filter(fact => !section.includes(fact)),
+      [],
+      `数据库迁移章节缺少事实：${heading}`,
+    )
+  }
+})
+
+test('数据库迁移命令要求显式临时 URL 且禁止回退本地 .env', async () => {
+  const migrationGuide = await readFile(
+    fromRoot('docs', '后端文档', '数据库迁移规范.md'),
+    'utf8',
+  )
+  const commandSection = markdownSection(migrationGuide, '## 4. 命令使用边界')
+  const requiredGuards = [
+    ': "${DATABASE_URL:?',
+    'export DOTENV_CONFIG_PATH=/dev/null',
+    'unset DEBUG',
   ]
 
   assert.deepEqual(
-    requiredFacts.filter(fact => !migrationGuide.includes(fact)),
+    requiredGuards.filter(guard => !commandSection.includes(guard)),
     [],
   )
 })
