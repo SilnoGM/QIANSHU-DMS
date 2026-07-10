@@ -884,6 +884,13 @@ it('reports only a sanitized down status when SELECT 1 fails', async () => {
 })
 ```
 
+unit 还必须精确检查以下调用契约：
+
+- `$queryRaw` 只收到一个 `TemplateStringsArray`，`strings` 与 `strings.raw` 都严格等于 `['SELECT 1']`，没有插值 values。
+- 查询成功时 `up()` 无参数调用一次，且不调用 `down()`。
+- 查询失败时 `down()` 无参数调用一次，且不调用 `up()`；原始异常不得作为参数传给 health session。
+- 失败路径不调用 Nest `Logger.error` 或 `console.error`，返回值不包含原始异常 canary。
+
 运行：
 
 ```bash
@@ -912,7 +919,7 @@ Expected: 成功、失败与脱敏断言全部通过。
 
 `server/test/app.e2e-spec.ts` 使用 `@nestjs/testing` 和 `supertest` 创建真实 `AppModule`，调用 `configureApplication(app)` 复用 production 的 `/api` 前缀、ValidationPipe 和 shutdown hooks 配置。启动 Task 4 的临时 PostgreSQL、应用 migration 后，测试必须断言：
 
-E2E 必须拥有完整、异常安全的应用生命周期：
+E2E 必须把真实数据库和 fake 失败路径放入两个按文件顺序执行的 `describe`；每个 `describe` 各自拥有完整、异常安全的应用生命周期，前一个应用在后一个应用创建前已经关闭，任意时刻不得同时存活两个 Nest application：
 
 ```ts
 let app: INestApplication | undefined
@@ -927,7 +934,8 @@ beforeAll(async () => {
     configureApplication(app)
     await app.init()
   } catch (error) {
-    await app?.close()
+    // 清理失败不能覆盖原始初始化异常。
+    await app?.close().catch(() => undefined)
     throw error
   }
 })
@@ -940,37 +948,64 @@ afterAll(async () => {
 Task 5 必须新建自己的临时 PostgreSQL，不能引用 Task 4 已清理的容器。容器在启动前安装 Task 4 的 trap；Jest 无论 RED、GREEN 或异常退出，外层 shell 都负责最终清理。
 
 ```ts
-const databaseUrl = process.env.DATABASE_URL
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is required for E2E tests')
+function requireDatabaseUrl(): string {
+  const value = process.env.DATABASE_URL
+  if (!value) {
+    throw new Error('DATABASE_URL is required for E2E tests')
+  }
+  return value
+}
+const databaseUrl = requireDatabaseUrl()
+const databasePassword = new URL(databaseUrl).password
+if (!databasePassword) {
+  throw new Error('A database password is required for E2E tests')
 }
 
 return request(app.getHttpServer())
   .get('/api/health')
   .expect(200)
   .expect(({ body }) => {
+    const serializedBody = JSON.stringify(body)
+    const normalizedBody = serializedBody.toLowerCase()
+
+    // 真实 URL 和密码只能参与布尔断言，绝不能成为 Jest matcher 的输出参数。
+    expect(serializedBody.includes(databaseUrl)).toBe(false)
+    expect(serializedBody.includes(databasePassword)).toBe(false)
+    expect(normalizedBody.includes('postgresql://')).toBe(false)
+    expect(normalizedBody.includes('postgres://')).toBe(false)
+    expect(/[a-z][a-z\d+.-]*:\/\//i.test(serializedBody)).toBe(false)
     expect(body.status).toBe('ok')
     expect(body.info.database.status).toBe('up')
     expect(body).not.toHaveProperty('data')
-    expect(JSON.stringify(body)).not.toContain(databaseUrl)
   })
 ```
 
 同一 E2E 还必须断言 `GET /health` 返回 `404`，证明全局 `/api` 前缀真实生效。
 
-再创建一个独立 testing module，通过 `overrideProvider(PrismaService)` 注入只在 `$queryRaw` 抛出敏感 canary 的 fake。该失败应用也必须使用 `try/catch + app.close()` 和 `afterAll` 管理生命周期。HTTP 回归断言：
+第二个 `describe` 创建独立 testing module，通过 `overrideProvider(PrismaService)` 注入只在 `$queryRaw` 抛出敏感 canary 的 fake；override 必须发生在 `compile()` 之前，确保失败路径不会实例化或连接真实 `PrismaService`。该失败应用也必须使用 `try/catch + app.close().catch(() => undefined)` 和 `afterAll` 管理生命周期。Jest 配置和命令不得使用 `--forceExit`，资源泄漏必须由测试生命周期真实解决。HTTP 回归必须先以 `.includes(...)` 的布尔断言验证脱敏，再断言完整 Terminus body：
 
 ```ts
 return request(failedDatabaseApp.getHttpServer())
   .get('/api/health')
   .expect(503)
   .expect(({ body }) => {
-    expect(body.status).toBe('error')
-    expect(body.error.database.status).toBe('down')
-    expect(body.details.database.status).toBe('down')
-    expect(JSON.stringify(body)).not.toContain('do-not-print')
-    expect(JSON.stringify(body)).not.toContain('postgresql://')
-    expect(JSON.stringify(body)).not.toContain('stack')
+    const normalizedBody = JSON.stringify(body).toLowerCase()
+
+    expect(normalizedBody.includes('do-not-print')).toBe(false)
+    expect(normalizedBody.includes('postgresql://')).toBe(false)
+    expect(normalizedBody.includes('postgres://')).toBe(false)
+    expect(/[a-z][a-z\d+.-]*:\/\//i.test(normalizedBody)).toBe(false)
+    expect(normalizedBody.includes('database_url')).toBe(false)
+    expect(normalizedBody.includes('password')).toBe(false)
+    expect(normalizedBody.includes('select 1')).toBe(false)
+    expect(normalizedBody.includes('stack')).toBe(false)
+    expect(body).toEqual({
+      status: 'error',
+      info: {},
+      error: { database: { status: 'down' } },
+      details: { database: { status: 'down' } },
+    })
+    expect(body).not.toHaveProperty('data')
   })
 ```
 
@@ -1006,7 +1041,7 @@ export class HealthController {
 }
 ```
 
-`HealthModule` 导入 `TerminusModule`，提供 controller 与 indicator；`AppModule` 导入 `HealthModule`。
+`HealthModule` 导入 `TerminusModule.forRoot({ logger: false })`，避免健康探测失败时由 Terminus 记录 indicator 详情；module 提供 controller 与 indicator，`AppModule` 导入 `HealthModule`。
 
 - [ ] **Step 5：使用临时 PostgreSQL 运行 E2E、全检查并提交**
 
@@ -1125,16 +1160,18 @@ Expected: 全部成功；生成物均被 ignored，根目录没有依赖状态�
 4. `_prisma_migrations` 只有一条成功记录。
 5. `test:e2e` 通过。
 6. `pnpm -C server start:prod` 启动后，`curl --fail --silent http://127.0.0.1:3000/api/health` 返回数据库 `up`。
-7. 保持 Server 运行并停止临时 PostgreSQL 后，重复请求返回 `503`；body 的 `database.status` 为 `down`，`error`、`details` 和捕获日志都不包含 `postgresql://`、密码、SQL、stack 或底层异常。随后终止 Server 并确认端口释放。
+7. 保持同一个 Server 进程运行并停止临时 PostgreSQL 后，重复请求返回 `503`；body 的 `error.database.status` 与 `details.database.status` 都为 `down`，响应和捕获日志都不包含 URL scheme、真实密码、`DATABASE_URL`、SQL、stack、canary 或底层异常。随后终止 Server 并确认 PID 回收、子进程清理和端口释放。
 8. 重新启动一个全新临时数据库并应用 migration；`node --run dev:server` 可启动并响应，终止后无 Nest watch 或端口残留。
 9. `node --run dev` 同时启动前后端；验证 Server health 与 Web HTTP 后发送一次 `SIGINT`，两个子进程和监听端口都被清理。Web 使用已提交模板或临时环境注入，不提交真实 `.env`。
 
 不得打印 `DATABASE_URL`；所有退出路径都清理容器、变量、密码文件和临时目录。
 
-production smoke 在启动进程前扩展 Task 4 的 trap，使其幂等终止并 `wait` 精确的 `server_pid`。停库后的 `503` 不使用 `curl --fail`，而是分离 status 与 body：
+production smoke 在启动进程前 `unset DEBUG`，并扩展 Task 4 的 trap，使其幂等终止并 `wait` 精确的 `server_pid`；若该进程派生子进程，也只按记录的父子 PID 清理，不使用名称或端口批量杀进程。首次 `200` 与停库后的 `503` 必须来自同一个 `server_pid`：停止 PostgreSQL 后先用 `kill -0 "$server_pid"` 确认 Server 仍存活，再确认原端口仍由该进程链监听。请求必须设置连接和总时限，避免数据库或 socket 故障令验收无限挂起。停库后的 `503` 不使用 `curl --fail`，而是分离 status 与 body：
 
 ```bash
 health_status="$(curl --silent --show-error \
+  --connect-timeout 2 \
+  --max-time 10 \
   --output "$runtime_tmp/health-down.json" \
   --write-out '%{http_code}' \
   http://127.0.0.1:3000/api/health)"
@@ -1144,11 +1181,14 @@ node -e '
   const body = JSON.parse(fs.readFileSync(process.argv[1], "utf8"))
   if (body?.error?.database?.status !== "down") process.exit(1)
   if (body?.details?.database?.status !== "down") process.exit(1)
-  if (/postgresql:\/\/|password|stack|SELECT 1/i.test(JSON.stringify(body))) process.exit(1)
+  if (/[a-z][a-z\d+.-]*:\/\/|DATABASE_URL|password|stack|SELECT 1/i.test(JSON.stringify(body))) process.exit(1)
 ' "$runtime_tmp/health-down.json"
+if grep --fixed-strings --quiet -- "$pg_password" "$runtime_tmp/health-down.json"; then
+  exit 1
+fi
 ```
 
-Server stdout/stderr 写入 `runtime_tmp` 下的日志文件，结束后同样扫描 `postgresql://`、密码 canary、`DATABASE_URL`、SQL 和 stack；正常 Nest 启动日志允许保留，但不得包含敏感值。
+Server stdout/stderr 写入 `runtime_tmp` 下的日志文件。停库后再次断言同一 `server_pid` 存活且端口未释放，证明 `503` 是应用内健康降级而非进程重启或连接失败。结束时只终止记录的 PID，执行 `wait`，断言 PID、派生子进程和监听端口都已消失；随后扫描响应与日志，不得包含 `postgresql://`、`postgres://`、真实密码、密码 canary、`DATABASE_URL`、SQL、stack 或底层异常。正常 Nest 启动日志允许保留，但不得包含敏感值。
 
 - [ ] **Step 3：验证 Server 独立复制**
 
