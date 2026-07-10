@@ -4,7 +4,7 @@
 
 **目标：** 初始化可独立安装、检查、构建和运行的单一 NestJS Server，接入 Prisma 7 PostgreSQL driver adapter，建立安全的运行时配置、数据库生命周期、`GET /api/health` 和第一条空 migration。
 
-**架构：** `server/` 是独立 pnpm package，使用自己的 `package.json` 与 `pnpm-lock.yaml`，不加入根 workspace，也不依赖 `web/`。应用保持 CommonJS，Prisma Client 显式生成 CJS 代码；请求沿 `Controller -> Service -> PrismaService -> PostgreSQL` 流动，阶段三不创建业务模型、Repository、UseCase 或 Domain Entity。无数据库的工程检查与连接真实 PostgreSQL 的 migration/E2E 分开执行。
+**架构：** `server/` 是独立的单一 pnpm package，使用自己的 `package.json` 与 `pnpm-lock.yaml`，不加入根 workspace，也不依赖 `web/`。pnpm 11 要求项目级 lifecycle script 审批写入 `pnpm-workspace.yaml`，因此 Server 保留一个不声明 `packages` 的最小安全配置文件，只批准 Prisma 当前所需的两个 build scripts；这不会引入第二个 package 或跨目录 package graph。应用保持 CommonJS，Prisma Client 显式生成 CJS 代码；请求沿 `Controller -> Service -> PrismaService -> PostgreSQL` 流动，阶段三不创建业务模型、Repository、UseCase 或 Domain Entity。无数据库的工程检查与连接真实 PostgreSQL 的 migration/E2E 分开执行。
 
 **技术栈：** Node.js 24、pnpm 11.9、NestJS 11.1、TypeScript 5.9、Jest 29、Prisma ORM 7.8、`@prisma/adapter-pg` 7.8、`pg` 8.22、PostgreSQL 16、ESLint 9、`node:test`。
 
@@ -18,6 +18,7 @@
 - 健康检查成功体采用 Terminus 的端点专属结构，不增加全局成功 envelope。
 - 统一 `ApiError`、`X-Request-Id`、OpenAPI 快照、用户模块和 Web 契约适配留到阶段四。
 - 根 `package.json` 和根编排实现不改；Server 提供根脚本已经约定的 `dev`、`check`、`build`。
+- `server/pnpm-workspace.yaml` 仅承担 pnpm 11 项目配置职责，不声明 `packages`，`allowBuilds` 精确批准 `prisma` 与 `@prisma/engines`；新增 build script 依赖必须重新审查。
 - 不提交真实 `.env`、数据库连接串、生成的 Prisma Client、构建产物或测试日志。
 - 临时 PostgreSQL 使用独立容器和随机密码；不复用当前机器已有的 `5432`、`5433` 数据库。
 
@@ -34,7 +35,7 @@
 | `S3-R07` | **当**执行根 `test:root`、`check`、`build` 时，**系统应**真实编排 Server 与 Web，同时根目录仍不产生 workspace、lockfile 或 `node_modules/`。 | Task 1、Task 6、Task 7 |
 | `S3-R08` | **系统应始终**忽略真实环境文件、Prisma Client、构建和覆盖率产物，只跟踪无凭据的 `.env.example`。 | Task 1、Task 7 |
 | `S3-R09` | **当**应用完成全局初始化时，**系统应**启用 `/api` 前缀、shutdown hooks 和返回 `422` 的 DTO `ValidationPipe`。 | Task 2、Task 5 |
-| `S3-R10` | **系统应始终**保持单一 NestJS package，不创建 `server/pnpm-workspace.yaml`，也不使用 `file:`、`link:`、`portal:`、`workspace:*` 或跨端源码依赖。 | Task 1、Task 7 |
+| `S3-R10` | **系统应始终**保持单一 NestJS package；`server/pnpm-workspace.yaml` **应仅**包含精确的 Prisma `allowBuilds`，不声明 `packages` 或其他 package graph；依赖不得使用 `file:`、`link:`、`portal:`、`workspace:*` 或跨端源码。 | Task 1、Task 7 |
 
 ## 文件职责图
 
@@ -44,6 +45,7 @@ server/
 ├── README.md                         # Server 独立安装、配置和命令说明
 ├── package.json                      # 独立依赖与公开脚本
 ├── pnpm-lock.yaml                    # Server 独立锁文件
+├── pnpm-workspace.yaml               # pnpm 11 单 package allowBuilds 配置
 ├── nest-cli.json                     # Nest 编译入口
 ├── tsconfig.json                     # CommonJS TypeScript 基线
 ├── tsconfig.build.json               # 生产构建排除项
@@ -134,6 +136,7 @@ git commit -m "docs: 添加阶段三 Server 初始化计划"
 - Create: `scripts/server-boundary.test.mjs`
 - Create: `server/package.json`
 - Create: `server/pnpm-lock.yaml`
+- Create: `server/pnpm-workspace.yaml`
 - Create: `server/nest-cli.json`
 - Create: `server/tsconfig.json`
 - Create: `server/tsconfig.build.json`
@@ -157,7 +160,7 @@ test('Server 是带独立 lockfile 的单一私有 package', async () => {
   assert.equal(manifest.packageManager, 'pnpm@11.9.0')
   assert.equal('workspaces' in manifest, false)
   assert.equal(await exists('server/pnpm-lock.yaml'), true)
-  assert.equal(await exists('server/pnpm-workspace.yaml'), false)
+  assert.equal(await exists('server/pnpm-workspace.yaml'), true)
   assert.equal(await exists('server/package-lock.json'), false)
   assert.equal(await exists('server/yarn.lock'), false)
 })
@@ -177,7 +180,7 @@ test('Server 暴露根编排要求的脚本且不跨边界依赖', async () => {
 })
 ```
 
-测试还必须确认根目录仍不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 和 `node_modules/`，并确认 Server `.gitignore` 独立忽略 `.env`、`dist`、`coverage`、`src/generated/prisma`，同时放行 `.env.example`。
+测试还必须确认根目录仍不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 和 `node_modules/`；Server 配置文件内容精确为本 Task 下方的 `allowBuilds`，不含 `packages`、`catalog`、`overrides` 或其他 workspace graph 配置；并确认 Server `.gitignore` 独立忽略 `.env`、`dist`、`coverage`、`src/generated/prisma`，同时放行 `.env.example`。
 
 运行：
 
@@ -232,7 +235,7 @@ Expected RED: 因 `server/package.json`、lockfile 和独立规则尚不存在�
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",
-    "@nestjs/cli": "11.0.24",
+    "@nestjs/cli": "11.0.23",
     "@nestjs/schematics": "11.1.0",
     "@nestjs/testing": "11.1.28",
     "@types/jest": "29.5.14",
@@ -335,6 +338,16 @@ export default tseslint.config(
 )
 ```
 
+`server/pnpm-workspace.yaml` 不声明 `packages`，只审批已核验的 Prisma build scripts：
+
+```yaml
+allowBuilds:
+  '@prisma/engines': true
+  prisma: true
+```
+
+禁止设置 `dangerouslyAllowAllBuilds` 或 `strictDepBuilds: false`。若未来依赖图出现新的 lifecycle script，安装应继续失败，直到完成审查并精确更新 `allowBuilds`。
+
 production dependencies 精确固定为：
 
 ```text
@@ -356,7 +369,7 @@ dev dependencies 精确固定为：
 
 ```text
 @eslint/js@9.39.4
-@nestjs/cli@11.0.24
+@nestjs/cli@11.0.23
 @nestjs/schematics@11.1.0
 @nestjs/testing@11.1.28
 @types/jest@29.5.14
@@ -435,7 +448,7 @@ pnpm -C server install
 pnpm -C server install --frozen-lockfile
 ```
 
-Expected: 两次均成功，只生成 `server/node_modules` 和 `server/pnpm-lock.yaml`；根目录无依赖状态。
+Expected: 两次均成功，只生成 `server/node_modules` 和 `server/pnpm-lock.yaml`；已提交的 `server/pnpm-workspace.yaml` 内容不被安装改写，根目录无依赖状态。
 
 - [ ] **Step 5：运行边界 GREEN 并提交**
 
@@ -444,6 +457,7 @@ node --test scripts/server-boundary.test.mjs
 node --run test:root
 git add scripts/server-boundary.test.mjs \
   server/package.json server/pnpm-lock.yaml server/nest-cli.json \
+  server/pnpm-workspace.yaml \
   server/tsconfig.json server/tsconfig.build.json server/eslint.config.mjs \
   server/test/jest-e2e.json server/.gitignore server/.env.example \
   server/README.md server/AGENTS.md
@@ -1103,7 +1117,7 @@ Expected: 独立目录安装、检查、构建、migration、production start �
 test ! -e pnpm-workspace.yaml
 test ! -e pnpm-lock.yaml
 test ! -e node_modules
-test ! -e server/pnpm-workspace.yaml
+test -f server/pnpm-workspace.yaml
 test ! -e server/package-lock.json
 test ! -e server/yarn.lock
 git ls-files | rg '(^|/)\.env($|\.)' | rg -v '\.example$'
