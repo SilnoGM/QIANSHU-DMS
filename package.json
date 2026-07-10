@@ -1,0 +1,21 @@
+{
+  "name": "qianshu-dms",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": "^24.15.0"
+  },
+  "scripts": {
+    "bootstrap": "node ./scripts/bootstrap.mjs",
+    "dev": "node ./scripts/dev.mjs",
+    "dev:server": "pnpm -C server dev",
+    "dev:web": "pnpm -C web dev",
+    "test:root": "node --test ./scripts/*.test.mjs",
+    "check": "node ./scripts/check.mjs",
+    "check:server": "pnpm -C server check",
+    "check:web": "pnpm -C web check",
+    "build": "pnpm run build:server && pnpm run build:web",
+    "build:server": "pnpm -C server build",
+    "build:web": "pnpm -C web build"
+  }
+}
