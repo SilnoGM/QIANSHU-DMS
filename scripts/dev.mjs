@@ -1,0 +1,162 @@
+import { spawn } from 'node:child_process'
+import { constants as osConstants } from 'node:os'
+import path from 'node:path'
+import process from 'node:process'
+import { fileURLToPath } from 'node:url'
+
+import {
+  applyFailureToProcess,
+  isDirectEntry,
+} from './run-command.mjs'
+
+const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
+const repositoryRoot = path.resolve(scriptsDirectory, '..')
+const developmentCommands = [
+  ['pnpm', ['-C', 'server', 'dev']],
+  ['pnpm', ['-C', 'web', 'dev']],
+]
+
+function exitCodeFromSignal(signal) {
+  const signalNumber = typeof signal === 'string'
+    ? osConstants.signals[signal]
+    : undefined
+  return Number.isInteger(signalNumber) && signalNumber > 0
+    ? 128 + signalNumber
+    : 1
+}
+
+function normalizeExitCode(exitCode) {
+  return Number.isInteger(exitCode) && exitCode > 0 ? exitCode : 1
+}
+
+export function runDevelopment({ spawnImpl = spawn, processRef = process } = {}) {
+  return new Promise((resolve) => {
+    const childStates = []
+    let firstFailureCode
+    let spawningComplete = false
+    let completed = false
+
+    const removeSignalListeners = () => {
+      processRef.off('SIGINT', handleSigint)
+      processRef.off('SIGTERM', handleSigterm)
+    }
+
+    const finishIfReady = () => {
+      // spawn 循环结束前不能提前完成，否则极快退出的第一个子进程可能让第二个
+      // 子进程尚未创建就错误收口。所有已启动进程都终止后才清理根监听器。
+      if (
+        completed
+        || !spawningComplete
+        || childStates.some(state => !state.settled)
+      ) {
+        return
+      }
+
+      completed = true
+      removeSignalListeners()
+      resolve(firstFailureCode ?? 0)
+    }
+
+    const killRunningChild = (state, signal) => {
+      if (state.settled) {
+        return
+      }
+
+      try {
+        state.child.kill(signal)
+      } catch {
+        // kill 失败不能覆盖首个退出码，也不能回显可能携带环境信息的异常。
+        // 按阶段一约束继续等待该子进程后续 exit/error，不增加超时或 SIGKILL。
+      }
+    }
+
+    const recordFailure = (exitCode, sourceState, peerSignal = 'SIGTERM') => {
+      if (firstFailureCode !== undefined) {
+        return
+      }
+
+      firstFailureCode = normalizeExitCode(exitCode)
+      for (const state of childStates) {
+        if (state !== sourceState) {
+          killRunningChild(state, peerSignal)
+        }
+      }
+    }
+
+    const settleChild = (state, exitCode) => {
+      // 同一 ChildProcess 可能先发 error 再发 exit；只把第一个终态计入结果。
+      if (state.settled) {
+        return
+      }
+
+      state.settled = true
+      if (exitCode !== 0) {
+        recordFailure(exitCode, state)
+      }
+      finishIfReady()
+    }
+
+    const handleRootSignal = (signal, exitCode) => {
+      // 根信号也是一个终止原因，第一条已观察到的失败或信号始终获胜。
+      if (firstFailureCode !== undefined) {
+        return
+      }
+
+      firstFailureCode = exitCode
+      for (const state of childStates) {
+        killRunningChild(state, signal)
+      }
+      finishIfReady()
+    }
+
+    function handleSigint() {
+      handleRootSignal('SIGINT', 130)
+    }
+
+    function handleSigterm() {
+      handleRootSignal('SIGTERM', 143)
+    }
+
+    processRef.on('SIGINT', handleSigint)
+    processRef.on('SIGTERM', handleSigterm)
+
+    for (const [command, args] of developmentCommands) {
+      let child
+      try {
+        child = spawnImpl(command, args, {
+          cwd: repositoryRoot,
+          stdio: 'inherit',
+        })
+      } catch {
+        // 第一条 spawn 同步失败时不再启动第二条；第二条失败时清理已经启动的
+        // peer。同步异常可能含敏感上下文，因此这里只记录统一失败码 1。
+        recordFailure(1)
+        break
+      }
+
+      const state = { child, settled: false }
+      childStates.push(state)
+
+      child.once('error', () => {
+        settleChild(state, 1)
+      })
+      child.once('exit', (code, signal) => {
+        const exitCode = code === null
+          ? exitCodeFromSignal(signal)
+          : code === 0 ? 0 : normalizeExitCode(code)
+        settleChild(state, exitCode)
+      })
+    }
+
+    spawningComplete = true
+    finishIfReady()
+  })
+}
+
+if (isDirectEntry(import.meta.url)) {
+  runDevelopment()
+    .then((exitCode) => {
+      process.exitCode = exitCode
+    })
+    .catch(error => applyFailureToProcess(error))
+}

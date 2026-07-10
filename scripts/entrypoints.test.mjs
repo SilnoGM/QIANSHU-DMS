@@ -58,10 +58,24 @@ fs.appendFileSync(
   JSON.stringify(record) + '\\n',
 )
 
-if (record.args[0] === '-C' && record.args[1] === 'server') {
+const isDev = record.args[0] === '-C' && record.args[2] === 'dev'
+
+if (isDev && record.args[1] === 'server') {
+  setTimeout(() => process.exit(7), 100)
+} else if (isDev && record.args[1] === 'web') {
+  process.once('SIGTERM', () => {
+    fs.appendFileSync(
+      process.env.QIANSHU_FAKE_PNPM_LOG,
+      JSON.stringify({ ...record, event: 'signal', signal: 'SIGTERM' }) + '\\n',
+    )
+    process.exit(0)
+  })
+  setInterval(() => {}, 1_000)
+} else if (record.args[0] === '-C' && record.args[1] === 'server') {
   process.exit(7)
+} else {
+  process.exit(0)
 }
-process.exit(0)
 `
   await writeFile(fakePnpmPath, fakePnpmSource, 'utf8')
   await chmod(fakePnpmPath, 0o755)
@@ -142,6 +156,38 @@ if (entrypointChild) {
       cwd: repositoryRoot,
       args: ['-C', 'server', 'check'],
     }])
+    await assertRootStateAbsent()
+  })
+
+  test('dev 从仓库外直接执行时清理 Web 并保留 Server 退出码', async (t) => {
+    const fixture = await createFixture(t)
+    const result = runEntrypoint(path.join(scriptsDirectory, 'dev.mjs'), fixture)
+
+    assert.equal(result.error, undefined)
+    assert.equal(result.signal, null)
+    assert.equal(result.status, 7)
+    assert.equal(result.stderr.includes(testSecret), false)
+
+    const records = await readPnpmCalls(fixture.logPath)
+    const startRecords = records.filter(record => record.event === undefined)
+    assert.equal(startRecords.length, 2)
+    assert.equal(startRecords.every(record => record.cwd === repositoryRoot), true)
+    assert.deepEqual(
+      startRecords.map(record => record.args).sort((left, right) => left[1].localeCompare(right[1])),
+      [
+        ['-C', 'server', 'dev'],
+        ['-C', 'web', 'dev'],
+      ],
+    )
+    assert.deepEqual(
+      records.find(record => record.event === 'signal'),
+      {
+        cwd: repositoryRoot,
+        args: ['-C', 'web', 'dev'],
+        event: 'signal',
+        signal: 'SIGTERM',
+      },
+    )
     await assertRootStateAbsent()
   })
 }
