@@ -1083,11 +1083,17 @@ server_pid=$!
 curl --fail --silent --show-error http://127.0.0.1:3010/api/health \
   > "$server_copy/health.json"
 kill -TERM "$server_pid"
+set +e
 wait "$server_pid"
+server_status=$?
+set -e
 server_pid=""
+if [ "$server_status" -ne 0 ] && [ "$server_status" -ne 143 ]; then
+  exit "$server_status"
+fi
 ```
 
-启动前先确认 `3010` 未被占用；通过有限重试等待 HTTP 就绪，不能用固定长 sleep。解析 `health.json` 断言数据库为 `up`，扫描 `server.log` 不含连接 URL 或密码。无论 install、migration、启动、curl 或断言在哪一步失败，trap 都必须终止精确 PID、等待进程退出、清理精确容器和临时目录。
+启动前先确认 `3010` 未被占用；通过有限重试等待 HTTP 就绪，不能用固定长 sleep。解析 `health.json` 断言数据库为 `up`，扫描 `server.log` 不含连接 URL 或密码。显式终止允许进程按 shutdown hooks 返回 `0`，也允许由 `SIGTERM` 映射出的 `143`；其他退出码仍失败。无论 install、migration、启动、curl 或断言在哪一步失败，trap 都必须终止精确 PID、以 `wait "$server_pid" || true` 回收进程且不覆盖原始退出码，再清理精确容器和临时目录。
 
 Expected: 独立目录安装、检查、构建、migration、production start 和 health 全部通过；archive 初始内容不含 `.env`、`node_modules`、`dist`、coverage 或 generated client，运行后生成物仍只留在临时目录并最终被清理。
 
