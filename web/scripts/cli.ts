@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import * as p from '@clack/prompts'
 
 interface PackageJson {
@@ -13,16 +13,26 @@ interface PackageJson {
   scripts?: Record<string, string>
 }
 
-interface WorkspaceEntry {
+export type WorkspaceKind = 'business' | 'example'
+
+export interface WorkspaceEntry {
+  kind: WorkspaceKind
   name: string
   packageJsonPath: string
 }
 
-interface AppInfo {
+export interface AppInfo {
+  kind: WorkspaceKind
   name: string
   packageName: string
   description: string
   scripts: string[]
+}
+
+export interface AppChoice {
+  value: string
+  label: string
+  hint: string
 }
 
 interface RunMessageContext {
@@ -81,10 +91,6 @@ const modeConfigs: Record<Mode, ModeConfig> = {
 
 let childProcess: ReturnType<typeof spawn> | null = null
 
-process.on('SIGINT', () => {
-  childProcess?.kill('SIGINT')
-})
-
 function isBuildScript(scriptName: string): boolean {
   return scriptName === 'build' || scriptName.startsWith('build:')
 }
@@ -97,36 +103,35 @@ function isServeScript(scriptName: string): boolean {
   return scriptName === 'serve' || scriptName.startsWith('serve:')
 }
 
-function getWorkspaceEntries(): WorkspaceEntry[] {
+export function getWorkspaceEntries(workspaceRoot = rootDir): WorkspaceEntry[] {
   const entries: WorkspaceEntry[] = []
-  const appsDir = path.resolve(rootDir, 'apps')
+  const workspaceDirectories: Array<{ directory: string, kind: WorkspaceKind }> = [
+    { directory: 'apps', kind: 'business' },
+    { directory: 'examples', kind: 'example' },
+  ]
 
-  if (fs.existsSync(appsDir)) {
-    const apps = fs.readdirSync(appsDir, { withFileTypes: true })
+  for (const { directory, kind } of workspaceDirectories) {
+    const absoluteDirectory = path.resolve(workspaceRoot, directory)
+    if (!fs.existsSync(absoluteDirectory)) {
+      continue
+    }
 
-    for (const app of apps) {
-      if (!app.isDirectory()) {
-        continue
-      }
+    const children = fs.readdirSync(absoluteDirectory, { withFileTypes: true })
+      .filter(child => child.isDirectory())
+      .sort((left, right) => left.name.localeCompare(right.name, 'en'))
 
-      const packageJsonPath = path.join(appsDir, app.name, 'package.json')
+    for (const child of children) {
+      const packageJsonPath = path.join(absoluteDirectory, child.name, 'package.json')
       if (!fs.existsSync(packageJsonPath)) {
         continue
       }
 
       entries.push({
-        name: app.name,
+        kind,
+        name: child.name,
         packageJsonPath,
       })
     }
-  }
-
-  const docsPackageJsonPath = path.resolve(rootDir, 'docs', 'package.json')
-  if (fs.existsSync(docsPackageJsonPath)) {
-    entries.push({
-      name: 'docs',
-      packageJsonPath: docsPackageJsonPath,
-    })
   }
 
   return entries
@@ -136,10 +141,10 @@ function readPackageJson(packageJsonPath: string): PackageJson {
   return JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')) as PackageJson
 }
 
-function getApps(scriptMatcher: (scriptName: string) => boolean): AppInfo[] {
+export function getApps(scriptMatcher: (scriptName: string) => boolean, workspaceRoot = rootDir): AppInfo[] {
   const apps: AppInfo[] = []
 
-  for (const entry of getWorkspaceEntries()) {
+  for (const entry of getWorkspaceEntries(workspaceRoot)) {
     const packageJson = readPackageJson(entry.packageJsonPath)
     const scripts = Object.keys(packageJson.scripts ?? {}).filter(scriptMatcher)
 
@@ -148,6 +153,7 @@ function getApps(scriptMatcher: (scriptName: string) => boolean): AppInfo[] {
     }
 
     apps.push({
+      kind: entry.kind,
       name: entry.name,
       packageName: packageJson.name,
       description: packageJson.description || '',
@@ -158,10 +164,10 @@ function getApps(scriptMatcher: (scriptName: string) => boolean): AppInfo[] {
   return apps
 }
 
-function getAppChoices(apps: AppInfo[]): Array<{ value: string, label: string, hint: string }> {
+export function getAppChoices(apps: AppInfo[]): AppChoice[] {
   return apps.map(app => ({
     value: app.packageName,
-    label: app.name,
+    label: `[${app.kind}] ${app.name}`,
     hint: app.description,
   }))
 }
@@ -272,7 +278,8 @@ async function runMode(config: ModeConfig): Promise<void> {
 
   if (apps.length === 0) {
     p.log.error(config.noAppsMessage)
-    process.exit(1)
+    process.exitCode = 1
+    return
   }
 
   if (apps.length === 1) {
@@ -322,34 +329,52 @@ function isMode(value: string | undefined): value is Mode {
   return value !== undefined && validModes.includes(value as Mode)
 }
 
-function printHelp(): void {
+export function printHelp(): void {
   console.log(`Usage: tsx scripts/cli.ts --mode=<${validModes.join('|')}>`)
   console.log('Examples:')
-  console.log('  pnpm dev')
-  console.log('  pnpm build')
-  console.log('  pnpm serve')
-  console.log('  pnpm cli -- --mode=dev')
+  console.log('  pnpm dev:select')
+  console.log('  pnpm build:select')
+  console.log('  pnpm serve:select')
 }
 
 async function main(): Promise<void> {
-  const argv = process.argv.slice(2)
-  const modeArg = parseModeArg(argv)
+  const forwardSigint = () => childProcess?.kill('SIGINT')
+  process.on('SIGINT', forwardSigint)
 
-  if (hasHelpArg(argv)) {
-    printHelp()
-    return
+  try {
+    const argv = process.argv.slice(2)
+    const modeArg = parseModeArg(argv)
+
+    if (hasHelpArg(argv)) {
+      printHelp()
+      return
+    }
+
+    if (!isMode(modeArg)) {
+      p.log.error(`Invalid or missing mode. Expected one of: ${validModes.join(', ')}`)
+      printHelp()
+      process.exitCode = 1
+      return
+    }
+
+    await runMode(modeConfigs[modeArg])
   }
-
-  if (!isMode(modeArg)) {
-    p.log.error(`Invalid or missing mode. Expected one of: ${validModes.join(', ')}`)
-    printHelp()
-    process.exit(1)
+  finally {
+    process.off('SIGINT', forwardSigint)
   }
-
-  await runMode(modeConfigs[modeArg])
 }
 
-main().catch((error: Error) => {
-  p.log.error(error.message)
-  process.exit(1)
-})
+function isDirectEntry(moduleUrl: string, entryPath = process.argv[1]): boolean {
+  if (!entryPath) {
+    return false
+  }
+
+  return pathToFileURL(path.resolve(entryPath)).href === moduleUrl
+}
+
+if (isDirectEntry(import.meta.url)) {
+  main().catch((error: Error) => {
+    p.log.error(error.message)
+    process.exitCode = 1
+  })
+}

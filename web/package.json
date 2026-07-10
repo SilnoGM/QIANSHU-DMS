@@ -8,16 +8,27 @@
     "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
-    "dev": "tsx scripts/cli.ts --mode=dev",
-    "build": "tsx scripts/cli.ts --mode=build",
-    "serve": "tsx scripts/cli.ts --mode=serve",
+    "dev": "pnpm --filter qsmds-arco run dev",
+    "build": "pnpm --filter qsmds-arco run build",
+    "serve": "pnpm --filter qsmds-arco run serve",
+    "dev:select": "tsx scripts/cli.ts --mode=dev",
+    "build:select": "tsx scripts/cli.ts --mode=build",
+    "serve:select": "tsx scripts/cli.ts --mode=serve",
     "generate:settings-preferences": "pnpm --filter @fantastic-admin/settings generate:preferences",
-    "lint": "run-s lint:tsc lint:eslint lint:stylelint",
-    "lint:tsc": "pnpm --filter './apps/*' -r run lint",
-    "lint:eslint": "eslint . --cache --fix",
-    "lint:stylelint": "stylelint \"{apps,packages}/**/*.{css,scss,vue}\" \"docs/.vitepress/**/*.{css,scss,vue}\" --cache --fix",
-    "preinstall": "npx only-allow pnpm",
-    "postinstall": "simple-git-hooks",
+    "typecheck": "pnpm --filter qsmds-arco run typecheck",
+    "lint": "run-s lint:eslint lint:stylelint",
+    "lint:eslint": "eslint apps/qsmds-arco packages",
+    "lint:stylelint": "stylelint \"{apps/qsmds-arco,packages}/**/*.{css,scss,vue}\"",
+    "lint:fix": "run-s lint:eslint:fix lint:stylelint:fix",
+    "lint:eslint:fix": "eslint apps/qsmds-arco packages --fix",
+    "lint:stylelint:fix": "stylelint \"{apps/qsmds-arco,packages}/**/*.{css,scss,vue}\" --fix",
+    "test:scripts": "run-s test:scripts:node test:scripts:tsx",
+    "test:scripts:node": "node --test scripts/*.test.mjs",
+    "test:scripts:tsx": "tsx --test scripts/cli.test.ts",
+    "check": "run-s test:scripts typecheck lint",
+    "check:examples": "pnpm --filter @fantastic-admin/core --filter @fantastic-admin/core-arco-design-vue --filter @fantastic-admin/example -r run lint",
+    "build:examples": "pnpm --filter @fantastic-admin/core --filter @fantastic-admin/core-arco-design-vue --filter @fantastic-admin/example -r run build",
+    "preinstall": "node ./scripts/ensure-pnpm.mjs",
     "taze": "taze minor -wIr",
     "commit": "git cz",
     "release": "bumpp"
@@ -38,7 +49,6 @@
     "eslint": "catalog:",
     "lint-staged": "catalog:",
     "npm-run-all2": "catalog:",
-    "simple-git-hooks": "catalog:",
     "stylelint": "catalog:",
     "stylelint-config-recess-order": "catalog:",
     "stylelint-config-standard-scss": "catalog:",
@@ -49,10 +59,6 @@
     "typescript": "catalog:",
     "unocss": "catalog:",
     "unocss-preset-animations": "catalog:"
-  },
-  "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged",
-    "preserveUnused": true
   },
   "config": {
     "commitizen": {

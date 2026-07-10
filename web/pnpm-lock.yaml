@@ -256,9 +256,6 @@ catalogs:
     sign-canvas:
       specifier: ^2.0.0
       version: 2.0.0
-    simple-git-hooks:
-      specifier: ^2.13.1
-      version: 2.13.1
     sortablejs:
       specifier: ^1.15.7
       version: 1.15.7
@@ -450,9 +447,6 @@ importers:
       npm-run-all2:
         specifier: 'catalog:'
         version: 9.0.2
-      simple-git-hooks:
-        specifier: 'catalog:'
-        version: 2.13.1
       stylelint:
         specifier: 'catalog:'
         version: 17.14.0(typescript@6.0.3)
@@ -7376,10 +7370,6 @@ packages:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
 
-  simple-git-hooks@2.13.1:
-    resolution: {integrity: sha512-WszCLXwT4h2k1ufIXAgsbiTOazqqevFCIncOuUBZJ91DdvWcC5+OFkluWRQPrcuSYd8fjq+o2y1QfWqYMoAToQ==}
-    hasBin: true
-
   simple-statistics@7.9.0:
     resolution: {integrity: sha512-OOF4uUZseYAC54r2/W58KxlIe4aA33GyPBrX4WMSxQq/NBNVNIOBlJerpGnb64jGH6cUIqKKOkMdhymtmKmpiA==}
 
@@ -14261,8 +14251,6 @@ snapshots:
       - typescript
 
   signal-exit@4.1.0: {}
-
-  simple-git-hooks@2.13.1: {}
 
   simple-statistics@7.9.0: {}
 
