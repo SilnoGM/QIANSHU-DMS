@@ -135,11 +135,33 @@ export function runDevelopment({ spawnImpl = spawn, processRef = process } = {})
         break
       }
 
-      const state = { child, settled: false }
+      const state = {
+        child,
+        settled: false,
+        // 成功 spawn 的真实 ChildProcess 会提供正整数 pid；测试和极短时序下也可
+        // 通过后续 spawn 事件确认启动。只有未启动状态的 error 才等同 spawn failure。
+        started: Number.isInteger(child.pid) && child.pid > 0,
+      }
       childStates.push(state)
 
+      child.once('spawn', () => {
+        if (!state.settled) {
+          state.started = true
+        }
+      })
       child.once('error', () => {
-        settleChild(state, 1)
+        if (state.settled) {
+          return
+        }
+
+        if (!state.started) {
+          settleChild(state, 1)
+          return
+        }
+
+        // started child 的 error 可能来自 kill 失败等运行期问题，并不证明进程已
+        // 终止。记录失败并清理 peer，但必须等待该 child 的真实 exit 才能收口。
+        recordFailure(1, state)
       })
       child.once('exit', (code, signal) => {
         const exitCode = code === null

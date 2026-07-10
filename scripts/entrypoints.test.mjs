@@ -37,6 +37,7 @@ async function createFixture(testContext) {
   const binDirectory = path.join(fixtureRoot, 'bin')
   const outsideDirectory = path.join(fixtureRoot, 'outside')
   const logPath = path.join(fixtureRoot, 'pnpm-calls.jsonl')
+  const readyPath = path.join(fixtureRoot, 'web-dev.ready')
   await mkdir(binDirectory)
   await mkdir(outsideDirectory)
 
@@ -61,16 +62,37 @@ fs.appendFileSync(
 const isDev = record.args[0] === '-C' && record.args[2] === 'dev'
 
 if (isDev && record.args[1] === 'server') {
-  setTimeout(() => process.exit(7), 100)
+  const deadline = Date.now() + 5_000
+  const waitForWebReady = () => {
+    if (fs.existsSync(process.env.QIANSHU_FAKE_PNPM_READY)) {
+      process.exit(7)
+      return
+    }
+    if (Date.now() >= deadline) {
+      process.exit(12)
+      return
+    }
+    setTimeout(waitForWebReady, 10)
+  }
+  waitForWebReady()
 } else if (isDev && record.args[1] === 'web') {
+  const safetyTimer = setTimeout(() => process.exit(13), 5_000)
   process.once('SIGTERM', () => {
+    clearTimeout(safetyTimer)
     fs.appendFileSync(
       process.env.QIANSHU_FAKE_PNPM_LOG,
       JSON.stringify({ ...record, event: 'signal', signal: 'SIGTERM' }) + '\\n',
     )
     process.exit(0)
   })
-  setInterval(() => {}, 1_000)
+
+  const temporaryReadyPath = process.env.QIANSHU_FAKE_PNPM_READY + '.' + process.pid + '.tmp'
+  fs.writeFileSync(temporaryReadyPath, 'ready', 'utf8')
+  fs.renameSync(temporaryReadyPath, process.env.QIANSHU_FAKE_PNPM_READY)
+  fs.appendFileSync(
+    process.env.QIANSHU_FAKE_PNPM_LOG,
+    JSON.stringify({ ...record, event: 'ready' }) + '\\n',
+  )
 } else if (record.args[0] === '-C' && record.args[1] === 'server') {
   process.exit(7)
 } else {
@@ -84,6 +106,7 @@ if (isDev && record.args[1] === 'server') {
     binDirectory,
     logPath,
     outsideDirectory,
+    readyPath,
   }
 }
 
@@ -96,6 +119,7 @@ function runEntrypoint(entrypointPath, fixture) {
       PATH: `${fixture.binDirectory}${path.delimiter}${process.env.PATH ?? ''}`,
       QIANSHU_ENTRYPOINT_CHILD: '1',
       QIANSHU_FAKE_PNPM_LOG: fixture.logPath,
+      QIANSHU_FAKE_PNPM_READY: fixture.readyPath,
       QIANSHU_TEST_SECRET: testSecret,
     },
     maxBuffer: 5 * 1024 * 1024,
@@ -167,6 +191,8 @@ if (entrypointChild) {
     assert.equal(result.signal, null)
     assert.equal(result.status, 7)
     assert.equal(result.stderr.includes(testSecret), false)
+    assert.equal(await exists(fixture.readyPath), true)
+    assert.equal(await readFile(fixture.readyPath, 'utf8'), 'ready')
 
     const records = await readPnpmCalls(fixture.logPath)
     const startRecords = records.filter(record => record.event === undefined)
@@ -178,6 +204,14 @@ if (entrypointChild) {
         ['-C', 'server', 'dev'],
         ['-C', 'web', 'dev'],
       ],
+    )
+    assert.deepEqual(
+      records.find(record => record.event === 'ready'),
+      {
+        cwd: repositoryRoot,
+        args: ['-C', 'web', 'dev'],
+        event: 'ready',
+      },
     )
     assert.deepEqual(
       records.find(record => record.event === 'signal'),

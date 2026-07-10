@@ -14,14 +14,19 @@ const expectedCommands = [
 ]
 
 class FakeChild extends EventEmitter {
-  constructor({ killError } = {}) {
+  constructor({ killEmitsError = false, killError, pid = 1_000 } = {}) {
     super()
+    this.killEmitsError = killEmitsError
     this.killError = killError
     this.killSignals = []
+    this.pid = pid
   }
 
   kill(signal) {
     this.killSignals.push(signal)
+    if (this.killEmitsError) {
+      this.emit('error', new Error('kill emitted error'))
+    }
     if (this.killError) {
       throw this.killError
     }
@@ -29,7 +34,12 @@ class FakeChild extends EventEmitter {
   }
 }
 
-function createHarness({ throwAt, killThrowsAt = [] } = {}) {
+function createHarness({
+  killEmitsErrorAt = [],
+  killThrowsAt = [],
+  notStartedAt = [],
+  throwAt,
+} = {}) {
   const calls = []
   const children = []
   const processRef = new EventEmitter()
@@ -43,9 +53,11 @@ function createHarness({ throwAt, killThrowsAt = [] } = {}) {
     }
 
     const child = new FakeChild({
+      killEmitsError: killEmitsErrorAt.includes(callIndex),
       killError: killThrowsAt.includes(callIndex)
         ? new Error('kill failed with DATABASE_URL=secret')
         : undefined,
+      pid: notStartedAt.includes(callIndex) ? undefined : 1_000 + callIndex,
     })
     children.push(child)
     return child
@@ -81,6 +93,18 @@ test('立即并行启动 Server 与 Web，均正常退出后返回 0', async () 
 
 test('Server 首先返回 7 时终止 Web 并保留退出码 7', async () => {
   const harness = createHarness()
+  const completion = runDevelopment(harness.options)
+
+  harness.children[0].emit('exit', 7, null)
+  assert.deepEqual(harness.children[1].killSignals, ['SIGTERM'])
+  await assertPending(completion)
+  harness.children[1].emit('exit', null, 'SIGTERM')
+
+  assert.equal(await completion, 7)
+})
+
+test('已启动 Web 在 kill 时发出 error 仍等待真实 exit', async () => {
+  const harness = createHarness({ killEmitsErrorAt: [1] })
   const completion = runDevelopment(harness.options)
 
   harness.children[0].emit('exit', 7, null)
@@ -146,8 +170,26 @@ for (const [signal, expectedExitCode] of [['SIGINT', 130], ['SIGTERM', 143]]) {
   })
 }
 
+for (const [signal, expectedExitCode] of [
+  ['SIGINT', 130],
+  ['SIGTERM', 143],
+  ['SIG_QIANSHU_UNKNOWN', 1],
+]) {
+  test(`子进程直接收到 ${signal} 时映射为 ${expectedExitCode} 并清理 peer`, async () => {
+    const harness = createHarness()
+    const completion = runDevelopment(harness.options)
+
+    harness.children[0].emit('exit', null, signal)
+    assert.deepEqual(harness.children[1].killSignals, ['SIGTERM'])
+    await assertPending(completion)
+    harness.children[1].emit('exit', null, 'SIGTERM')
+
+    assert.equal(await completion, expectedExitCode)
+  })
+}
+
 test('子进程 error 返回 1、清理 peer，后续 exit 不覆盖结果', async () => {
-  const harness = createHarness()
+  const harness = createHarness({ notStartedAt: [0] })
   const completion = runDevelopment(harness.options)
 
   harness.children[0].emit('error', new Error('spawn failed'))
@@ -155,6 +197,20 @@ test('子进程 error 返回 1、清理 peer，后续 exit 不覆盖结果', asy
   harness.children[0].emit('exit', 7, null)
   await assertPending(completion)
   harness.children[1].emit('exit', null, 'SIGTERM')
+
+  assert.equal(await completion, 1)
+})
+
+test('spawn 事件将无 pid 子进程标记为 started，error 后等待真实 exit', async () => {
+  const harness = createHarness({ notStartedAt: [0] })
+  const completion = runDevelopment(harness.options)
+
+  harness.children[0].emit('spawn')
+  harness.children[0].emit('error', new Error('started child error'))
+  assert.deepEqual(harness.children[1].killSignals, ['SIGTERM'])
+  harness.children[1].emit('exit', null, 'SIGTERM')
+  await assertPending(completion)
+  harness.children[0].emit('exit', 1, null)
 
   assert.equal(await completion, 1)
 })
