@@ -55,6 +55,24 @@ test('runCommand 将不可执行命令的 spawn error 转为退出码 1', async 
   )
 })
 
+test('runCommand 将 spawnImpl 同步 throw 转为退出码 1 并保留 cause', async () => {
+  const cause = new Error('synchronous spawn failure')
+
+  await assert.rejects(
+    runCommand('fake-command', [], {
+      spawnImpl() {
+        throw cause
+      },
+    }),
+    (error) => {
+      assert.equal(error instanceof CommandExecutionError, true)
+      assert.equal(error.exitCode, 1)
+      assert.equal(error.cause, cause)
+      return true
+    },
+  )
+})
+
 test('runCommand 默认使用 inherit stdio', async () => {
   const child = new EventEmitter()
   const calls = []
