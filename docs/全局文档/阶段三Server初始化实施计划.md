@@ -713,7 +713,9 @@ git commit -m "feat(server): 配置 Prisma PostgreSQL 基础设施"
 
 - [ ] **Step 1：启动 migration 创建专用的临时 PostgreSQL 16**
 
-使用 `umask 077`、`mktemp` 和 `openssl rand -hex 32` 生成临时密码文件，容器名包含当前 PID，使用 label `qianshu-dms.temp=postgres-test`，只绑定 `127.0.0.1:15432:5432`。容器配置：
+使用 `umask 077`、`mktemp` 和 `openssl rand -hex 32` 生成临时密码文件，容器名包含当前 PID 和随机会话 ID。容器同时使用通用 label `qianshu-dms.temp=postgres-test` 和会话专属 label `qianshu-dms.session=<session-id>`，并通过 `--cidfile` 记录精确容器 ID。
+
+端口使用 `--publish 127.0.0.1::5432/tcp` 由 Docker 在 IPv4 loopback 上原子分配高位端口，再从 `docker port <container-id> 5432/tcp` 读取；禁止固定复用 `15432`，因为本机已有无关的已停止容器保留该端口映射。容器配置：
 
 ```text
 POSTGRES_USER=qianshu_test
@@ -722,7 +724,7 @@ POSTGRES_PASSWORD_FILE=/run/secrets/postgres-password
 image=postgres:16
 ```
 
-使用容器内 `pg_isready` 等待就绪。固定使用 `15432` 前必须先确认端口未被占用；若已占用则选择新的空闲高位端口，不能停止或复用现有容器。命令期间不得启用 `set -x`，不得打印密码或 `DATABASE_URL`。
+使用容器内 `pg_isready` 等待就绪，再通过 `SHOW server_version_num` 确认实际 major 为 `16`。命令期间不得启用 `set -x`，不得打印密码或 `DATABASE_URL`。
 
 每次临时数据库流程都必须在创建资源前安装同等语义的清理 trap；只清理本次生成的名称和目录：
 
@@ -730,18 +732,29 @@ image=postgres:16
 set -euo pipefail
 umask 077
 
-pg_name=""
+session_id="migration-$$-$RANDOM"
+pg_name="qianshu-dms-postgres-test-$session_id"
+pg_id=""
 pg_tmp=""
 
 cleanup_postgres() {
-  unset DATABASE_URL
-  if [ -n "${pg_name:-}" ]; then
-    docker rm --force --volumes "$pg_name" >/dev/null 2>&1 || true
+  original_status=$?
+  trap - EXIT INT TERM
+  set +e
+  cleanup_failed=0
+  unset DATABASE_URL DOTENV_CONFIG_PATH DEBUG
+  unset PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION
+  if [ -n "${pg_id:-}" ]; then
+    docker rm --force --volumes "$pg_id" >/dev/null 2>&1 || cleanup_failed=1
   fi
   if [ -n "${pg_tmp:-}" ]; then
-    rm -f "$pg_tmp/postgres-password"
-    rmdir "$pg_tmp" 2>/dev/null || true
+    rm -f "$pg_tmp/postgres-password" "$pg_tmp/container.cid" "$pg_tmp"/*.log
+    rmdir "$pg_tmp" 2>/dev/null || cleanup_failed=1
   fi
+  if [ "$cleanup_failed" -ne 0 ] && [ "$original_status" -eq 0 ]; then
+    original_status=1
+  fi
+  exit "$original_status"
 }
 
 trap cleanup_postgres EXIT
@@ -749,27 +762,30 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 pg_tmp="$(mktemp -d "${TMPDIR:-/tmp}/qianshu-dms-pg.XXXXXX")"
-pg_name="qianshu-dms-postgres-test-$$-$RANDOM"
 openssl rand -hex 32 > "$pg_tmp/postgres-password"
 ```
 
-容器启动、URL 注入、migration 和断言都必须在该 trap 所在的同一 shell 中执行。不得用宽泛 label 删除其他会话的容器；label 只用于最终残留审计。
+容器启动、URL 注入、migration 和断言都必须在该 trap 所在的同一 shell 中执行。清理只能使用 `pg_id` 或会话专属 label 找回唯一容器；不得使用通用 label 批量删除。通用 label 只用于最终残留审计。
+
+Docker `--cidfile` 不保证文件带尾随换行，在 `set -e` 下必须使用 `pg_id="$(<"$pg_tmp/container.cid")"` 读取，不得直接使用可因 EOF 返回非零的 `read`。
 
 - [ ] **Step 2：由 Prisma CLI 创建空 migration**
 
 只在当前 shell 临时 export `DATABASE_URL` 后执行：
 
 ```bash
-pnpm -C server exec prisma migrate dev --name init --create-only
+export DOTENV_CONFIG_PATH=/dev/null
+unset DEBUG PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION
+pnpm -C server exec prisma migrate dev --name init --create-only </dev/null
 ```
 
-Expected: 生成一个唯一的 `*_init/migration.sql` 和 `migration_lock.toml`；`schema.prisma` 仍没有 `model`，SQL 不创建业务表。该 migration 是新项目的空初始化 migration，不称为已有数据库 baseline。
+Expected: 生成一个唯一的 `*_init/migration.sql` 和 `migration_lock.toml`；`schema.prisma` 仍没有 `model`，SQL 除空白和 Prisma 说明性注释外不含可执行语句。Prisma 7.8 的 `--create-only` 可能在开发库中先创建空的 `_prisma_migrations` 元数据表，不能仅以该表是否存在判断新 migration 已应用；最终应用性以 Step 3 的全新库 deploy 和历史记录为准。该 migration 是新项目的空初始化 migration，不称为已有数据库 baseline。
 
 生成完成后清理第一个容器、密码文件、连接变量和临时目录。后续 deploy 验收不得复用该数据库。
 
 - [ ] **Step 3：在第二个全新数据库验证首次 deploy、二次幂等和历史记录**
 
-使用一个新的、同样在启动前注册上述 trap 的 shell，重新生成随机密码并启动名称不同的全新 PostgreSQL 16 容器。确认部署前不存在 `_prisma_migrations`，再执行：
+使用一个全新、独立的 Bash 进程，在启动前重新注册上述 trap，重新生成随机密码并启动名称不同的全新 PostgreSQL 16 容器。两个流程不共享容器、密码、端口、volume 或 `DATABASE_URL`。确认部署前不存在 `_prisma_migrations` 且 public schema 无表，再执行：
 
 ```bash
 pnpm -C server db:migrate:deploy
@@ -792,7 +808,7 @@ Expected: 两次 deploy 均成功，第二次报告无待应用 migration，stat
 
 - [ ] **Step 4：清理并提交不可变 migration**
 
-无论任一步成功或失败，都必须 `unset DATABASE_URL`、强制删除两个临时容器和匿名卷、删除临时密码文件与目录。确认没有 `qianshu-dms.temp=postgres-test` 残留容器。
+无论任一步成功或失败，都必须 `unset DATABASE_URL`、使用精确容器 ID 强制删除两个临时容器和匿名卷、删除临时密码文件与目录。确认没有 `qianshu-dms.temp=postgres-test` 残留容器；若有残留，只报告，不按通用 label 批量删除。
 
 ```bash
 git add server/prisma/migrations
