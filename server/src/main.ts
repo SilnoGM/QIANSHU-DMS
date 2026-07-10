@@ -32,11 +32,14 @@ export async function bootstrap(
   rootModuleLoader: RootModuleLoader = loadAppModule,
 ): Promise<void> {
   let application: INestApplication | undefined
+  let nestLoggerWasDisabled = false
   const runtimeLogger = new ConsoleLogger('Server')
 
   try {
     // AppModule 会在加载时执行环境校验，延迟到此处后其异常才能进入统一、脱敏的启动失败边界。
     const rootModule = await rootModuleLoader()
+    // 只有默认 factory 会用 logger:false 修改 Nest 全局 Logger；必须在真实调用前才标记，避免污染注入调用方。
+    nestLoggerWasDisabled = applicationFactory === createNestApplication
     application = await applicationFactory(rootModule)
     configureApplication(application)
 
@@ -55,8 +58,10 @@ export async function bootstrap(
       }
     }
 
-    // NestFactory 创建阶段会临时关闭全局 Logger；失败清理完成后恢复，避免污染测试或嵌入式调用方。
-    Logger.overrideLogger(runtimeLogger)
+    if (nestLoggerWasDisabled) {
+      // 默认 NestFactory 创建阶段会临时关闭全局 Logger；失败清理完成后恢复，避免污染后续进程状态。
+      Logger.overrideLogger(runtimeLogger)
+    }
 
     throw error
   }

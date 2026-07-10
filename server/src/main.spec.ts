@@ -41,21 +41,26 @@ describe('entry module', () => {
   it('can be imported without validating runtime environment', async () => {
     const databaseUrl = process.env.DATABASE_URL
     const exitCode = process.exitCode
-    const logger = jest.spyOn(console, 'error').mockImplementation()
+    const stderrWrite = jest
+      .spyOn(process.stderr, 'write')
+      .mockImplementation(() => true)
 
     try {
       delete process.env.DATABASE_URL
-      jest.resetModules()
+      let importedMain: typeof import('./main') | undefined
 
-      const importedMain = await import('./main')
+      await jest.isolateModulesAsync(async () => {
+        importedMain = await import('./main')
+      })
+
       await new Promise<void>((resolve) => setImmediate(resolve))
 
-      expect(typeof importedMain.bootstrap).toBe('function')
-      expect(typeof importedMain.runMain).toBe('function')
-      expect(logger).not.toHaveBeenCalled()
+      expect(typeof importedMain?.bootstrap).toBe('function')
+      expect(typeof importedMain?.runMain).toBe('function')
+      expect(stderrWrite).not.toHaveBeenCalled()
       expect(process.exitCode).toBe(exitCode)
     } finally {
-      logger.mockRestore()
+      stderrWrite.mockRestore()
       process.exitCode = exitCode
 
       if (databaseUrl === undefined) {
@@ -98,6 +103,42 @@ describe('bootstrap', () => {
     return { application, configService }
   }
 
+  it('does not replace the caller logger when root module loading fails', async () => {
+    const loadingError = new Error('module loading failed')
+    const overrideLogger = jest.spyOn(Logger, 'overrideLogger')
+    const rootModuleLoader = jest
+      .fn<Promise<Type<unknown>>, []>()
+      .mockRejectedValue(loadingError)
+
+    try {
+      await expect(bootstrap(undefined, rootModuleLoader)).rejects.toBe(
+        loadingError,
+      )
+      expect(overrideLogger).not.toHaveBeenCalled()
+    } finally {
+      overrideLogger.mockRestore()
+      Logger.overrideLogger(new ConsoleLogger())
+    }
+  })
+
+  it('does not replace the caller logger when an injected factory fails', async () => {
+    const factoryError = new Error('injected factory failed')
+    const overrideLogger = jest.spyOn(Logger, 'overrideLogger')
+    const applicationFactory = jest
+      .fn<Promise<INestApplication>, [Type<unknown>]>()
+      .mockRejectedValue(factoryError)
+
+    try {
+      await expect(
+        bootstrap(applicationFactory, createRootModuleLoader()),
+      ).rejects.toBe(factoryError)
+      expect(overrideLogger).not.toHaveBeenCalled()
+    } finally {
+      overrideLogger.mockRestore()
+      Logger.overrideLogger(new ConsoleLogger())
+    }
+  })
+
   it('disables Nest fatal abort so bootstrap errors reach the sanitized boundary', async () => {
     const { application } = createApplication()
     const createApplicationSpy = jest
@@ -135,6 +176,7 @@ describe('bootstrap', () => {
       .spyOn(process.stderr, 'write')
       .mockImplementation(() => true)
     const exitCode = process.exitCode
+    const overrideLogger = jest.spyOn(Logger, 'overrideLogger')
     const rootModuleLoader = jest
       .fn<Promise<Type<unknown>>, []>()
       .mockResolvedValue(FailingModule)
@@ -144,10 +186,12 @@ describe('bootstrap', () => {
         initializationError,
       )
       expect(stderrWrite).not.toHaveBeenCalled()
+      expect(overrideLogger).toHaveBeenCalledWith(expect.any(ConsoleLogger))
       expect(process.exitCode).toBe(exitCode)
     } finally {
       stderrWrite.mockRestore()
       process.exitCode = exitCode
+      overrideLogger.mockRestore()
       Logger.overrideLogger(new ConsoleLogger())
     }
   })

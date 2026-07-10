@@ -28,7 +28,7 @@
 | --- | --- | --- |
 | `S3-R01` | **当**仅复制 `server/` 到干净目录时，**系统应**能够使用 frozen lockfile 安装，并独立执行 `check` 与 `build`。 | Task 1、Task 7 |
 | `S3-R02` | **当**未提供 `DATABASE_URL` 时，**系统应**仍可执行 `prisma:generate`、`check` 与 `build`，且这些命令不得尝试连接数据库。 | Task 1、Task 3、Task 7 |
-| `S3-R03` | **当**Server 启动时，**系统应**校验 `NODE_ENV`、`PORT`、`DATABASE_URL`；失败信息只描述变量名和约束，不回显输入值。 | Task 2 |
+| `S3-R03` | **当**Server 启动时，**系统应**校验 `NODE_ENV`、`PORT`、`DATABASE_URL`；`DATABASE_URL` 仅接受可解析且以 `postgres://` 或 `postgresql://` 开头的分层 URI，失败信息只描述变量名和约束，不回显输入值。 | Task 2 |
 | `S3-R04` | **当**Nest 模块初始化和关闭时，**系统应**依次连接 Prisma，并在关闭时同时释放 Prisma Client 与外部 `pg.Pool`；即使 Prisma 断开失败，Pool 仍必须释放。 | Task 3 |
 | `S3-R05` | **当**PostgreSQL 可用且请求 `GET /api/health` 时，**系统应**返回 `200` 和数据库 `up` 状态；**当**探测失败时，**系统应**返回 `503`，且响应和日志不含连接串或底层错误。 | Task 5、Task 7 |
 | `S3-R06` | **当**在空 PostgreSQL 16 数据库执行 migration 时，**系统应**成功应用空初始化 migration；再次执行时应无待应用 migration，并在 `_prisma_migrations` 中只有一条成功记录。 | Task 4、Task 7 |
@@ -492,7 +492,7 @@ git commit -m "chore(server): 初始化独立 NestJS 工程"
 
 - [ ] **Step 1：先写环境校验失败测试**
 
-环境测试覆盖默认值、合法 PostgreSQL URL、必填 URL、协议、端口范围和不回显输入：
+环境测试覆盖默认值、两种合法 PostgreSQL 分层 URL、必填 URL、opaque URI、协议、端口边界和不回显输入：
 
 ```ts
 describe('validateEnvironment', () => {
@@ -509,6 +509,7 @@ describe('validateEnvironment', () => {
   it.each([
     [{}, 'DATABASE_URL'],
     [{ DATABASE_URL: 'mysql://user:do-not-print@localhost/test' }, 'DATABASE_URL'],
+    [{ DATABASE_URL: 'postgresql:opaque-do-not-print' }, 'DATABASE_URL'],
     [{ DATABASE_URL: 'postgresql://localhost/test', PORT: '0' }, 'PORT'],
     [{ DATABASE_URL: 'postgresql://localhost/test', NODE_ENV: 'preview' }, 'NODE_ENV'],
   ])('rejects invalid environment without echoing values', (input, key) => {
@@ -538,11 +539,11 @@ Expected RED: `env.validation.ts` 与 `app.setup.ts` 尚不存在。
 `validateEnvironment(config)` 返回保留未知键并规范化后的对象，规则精确为：
 
 - `NODE_ENV`: `development | test | production`，默认 `development`。
-- `PORT`: `1..65535` 的整数，默认 `3000`。
-- `DATABASE_URL`: 必填非空字符串，只接受 `postgres:` 或 `postgresql:`。
+- `PORT`: `1..65535` 的整数，默认 `3000`，测试必须覆盖 `1` 和 `65535` 两个合法边界。
+- `DATABASE_URL`: 必填非空字符串，只接受以 `postgres://` 或 `postgresql://` 开头的分层 URI；拒绝 `postgresql:foo`、`postgresql:/foo` 和其他 opaque 形式。
 - 所有错误文本仅使用 `Environment validation failed: <KEY> <constraint>`，不得拼接输入值或完整 `Error`。
 
-URL 校验使用标准 `URL` 解析器；测试中的 URL 只是假数据，不连接数据库。
+URL 在校验分层 URI 前缀后仍使用标准 `URL` 解析器；不额外强制 host 或数据库名，以兼容 PostgreSQL Unix socket URL。测试中的 URL 只是假数据，不连接数据库。
 
 - [ ] **Step 3：实现应用配置和启动边界**
 

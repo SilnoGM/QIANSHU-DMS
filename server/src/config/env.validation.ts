@@ -54,6 +54,17 @@ function normalizeDatabaseUrl(value: unknown): string {
   }
 
   const databaseUrl = value.trim()
+
+  if (
+    !databaseUrl.startsWith('postgres://') &&
+    !databaseUrl.startsWith('postgresql://')
+  ) {
+    throw validationError(
+      'DATABASE_URL',
+      'must use postgres:// or postgresql:// URL',
+    )
+  }
+
   let parsedUrl: URL
 
   try {
@@ -65,7 +76,7 @@ function normalizeDatabaseUrl(value: unknown): string {
   if (parsedUrl.protocol !== 'postgres:' && parsedUrl.protocol !== 'postgresql:') {
     throw validationError(
       'DATABASE_URL',
-      'must use postgres: or postgresql: protocol',
+      'must use postgres:// or postgresql:// URL',
     )
   }
 

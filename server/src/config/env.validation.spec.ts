@@ -31,6 +31,14 @@ describe('validateEnvironment', () => {
     })
   })
 
+  it('accepts the postgres hierarchical URL scheme', () => {
+    const databaseUrl = 'postgres://localhost:5432/qianshu_test'
+
+    expect(validateEnvironment({ DATABASE_URL: databaseUrl }).DATABASE_URL).toBe(
+      databaseUrl,
+    )
+  })
+
   it.each(['development', 'test', 'production'])(
     'accepts NODE_ENV=%s',
     (nodeEnv) => {
@@ -63,7 +71,7 @@ describe('validateEnvironment', () => {
         DATABASE_URL: unsafeValue,
       }),
     ).toThrow(
-      'Environment validation failed: DATABASE_URL must use postgres: or postgresql: protocol',
+      'Environment validation failed: DATABASE_URL must use postgres:// or postgresql:// URL',
     )
 
     try {
@@ -75,6 +83,22 @@ describe('validateEnvironment', () => {
       expect((error as Error).message).not.toContain('do-not-print')
     }
   })
+
+  it.each(['postgresql:foo', 'postgresql:/foo', 'postgres:opaque'])(
+    'rejects a non-hierarchical PostgreSQL URI without echoing it',
+    (databaseUrl) => {
+      try {
+        validateEnvironment({ DATABASE_URL: databaseUrl })
+        throw new Error('Expected validation to fail')
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error)
+        expect((error as Error).message).toBe(
+          'Environment validation failed: DATABASE_URL must use postgres:// or postgresql:// URL',
+        )
+        expect((error as Error).message).not.toContain(databaseUrl)
+      }
+    },
+  )
 
   it('rejects an unparseable DATABASE_URL without exposing parser details', () => {
     expect(() =>
@@ -99,6 +123,15 @@ describe('validateEnvironment', () => {
       )
     },
   )
+
+  it.each([1, 65535])('accepts boundary PORT=%s', (port) => {
+    expect(
+      validateEnvironment({
+        PORT: port,
+        DATABASE_URL: validDatabaseUrl,
+      }).PORT,
+    ).toBe(port)
+  })
 
   it.each([true, false, null, Symbol('port')])(
     'rejects a non-string and non-number PORT',
