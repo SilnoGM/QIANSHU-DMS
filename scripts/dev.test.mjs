@@ -91,6 +91,21 @@ test('Server 首先返回 7 时终止 Web 并保留退出码 7', async () => {
   assert.equal(await completion, 7)
 })
 
+test('已有失败码时仍转发后续根信号且不覆盖首码', async () => {
+  const harness = createHarness()
+  const completion = runDevelopment(harness.options)
+
+  harness.children[0].emit('exit', 7, null)
+  assert.deepEqual(harness.children[1].killSignals, ['SIGTERM'])
+  harness.processRef.emit('SIGINT')
+  assert.deepEqual(harness.children[1].killSignals, ['SIGTERM', 'SIGINT'])
+  harness.children[1].emit('exit', null, 'SIGINT')
+
+  assert.equal(await completion, 7)
+  assert.equal(harness.processRef.listenerCount('SIGINT'), 0)
+  assert.equal(harness.processRef.listenerCount('SIGTERM'), 0)
+})
+
 test('Web 首先返回 9 时终止 Server 并保留退出码 9', async () => {
   const harness = createHarness()
   const completion = runDevelopment(harness.options)

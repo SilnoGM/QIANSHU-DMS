@@ -97,12 +97,13 @@ export function runDevelopment({ spawnImpl = spawn, processRef = process } = {})
     }
 
     const handleRootSignal = (signal, exitCode) => {
-      // 根信号也是一个终止原因，第一条已观察到的失败或信号始终获胜。
-      if (firstFailureCode !== undefined) {
-        return
+      // 根信号到达时只在尚无结果时记录对应退出码，已有首个失败码则保持不变；
+      // 但每一次根信号都必须继续转发给仍运行的子进程，确保用户可以再次中断
+      // 尚未响应先前 SIGTERM 的 peer。
+      if (firstFailureCode === undefined) {
+        firstFailureCode = exitCode
       }
 
-      firstFailureCode = exitCode
       for (const state of childStates) {
         killRunningChild(state, signal)
       }
