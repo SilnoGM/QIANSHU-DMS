@@ -17,7 +17,7 @@
 - 本阶段新增唯一公共端点 `GET /api/health`，路由受全局 `/api` 前缀约束。
 - 健康检查成功体采用 Terminus 的端点专属结构，不增加全局成功 envelope。
 - 统一 `ApiError`、`X-Request-Id`、OpenAPI 快照、用户模块和 Web 契约适配留到阶段四。
-- 根 `package.json` 和根编排实现不改；Server 提供根脚本已经约定的 `dev`、`check`、`build`。
+- 根 package 继续保持无依赖，`bootstrap`、`check`、`build` 边界不变。Task 7 真实验收若发现 `dev*` 无法清理 Nest/Vite 后代，只允许按 TDD 修复开发进程生命周期，不借机扩大根编排职责。
 - `server/pnpm-workspace.yaml` 仅承担 pnpm 11 项目配置职责，不声明 `packages`，`allowBuilds` 精确批准 `prisma` 与 `@prisma/engines`；新增 build script 依赖必须重新审查。
 - 不提交真实 `.env`、数据库连接串、生成的 Prisma Client、构建产物或测试日志。
 - 临时 PostgreSQL 使用独立容器和随机密码；不复用当前机器已有的 `5432`、`5433` 数据库。
@@ -89,6 +89,7 @@ feat(server): 配置 Prisma PostgreSQL 基础设施
 feat(server): 添加空初始化数据库迁移
 feat(server): 添加数据库健康检查
 docs(server): 添加后端架构与迁移规范
+fix: 清理开发命令完整进程树
 docs: 记录阶段三验证完成
 ```
 
@@ -147,7 +148,7 @@ git commit -m "docs: 添加阶段三 Server 初始化计划"
 - Create: `server/README.md`
 - Create: `server/AGENTS.md`
 
-- [ ] **Step 1：先写 Server 边界失败测试**
+- [x] **Step 1：先写 Server 边界失败测试**
 
 `scripts/server-boundary.test.mjs` 使用 `node:test` 和 `node:assert/strict`，至少断言：
 
@@ -189,7 +190,7 @@ node --test scripts/server-boundary.test.mjs
 
 Expected RED: 因 `server/package.json`、lockfile 和独立规则尚不存在而失败。
 
-- [ ] **Step 2：创建最终 package manifest**
+- [x] **Step 2：创建最终 package manifest**
 
 `server/package.json` 使用固定的 Prisma、TypeScript 和 Jest 兼容线；所有会编译或执行应用源码的入口先生成 Prisma Client：
 
@@ -400,7 +401,7 @@ typescript-eslint@8.63.0
 
 不要加入 `tsx`、Swagger、OpenAPI、Repository 或业务依赖。
 
-- [ ] **Step 3：创建 CommonJS 编译、lint、Jest 和独立忽略配置**
+- [x] **Step 3：创建 CommonJS 编译、lint、Jest 和独立忽略配置**
 
 关键配置必须满足：
 
@@ -453,7 +454,7 @@ Jest unit root 指向 `src/`，E2E root 指向 `server/`；两者都忽略 `src/
 
 `server/README.md` 必须给出独立 install、无数据库 check/build、运行时三个环境变量和真实数据库 E2E 命令；明确 `start:prod` 直接运行已构建产物。`server/AGENTS.md` 必须固定 Controller/Service/Prisma 方向、migration 不可变、中文注释、TDD、敏感信息禁令、`check` 不含 E2E 和禁止跨根/Web 依赖。
 
-- [ ] **Step 4：安装依赖并生成独立 lockfile**
+- [x] **Step 4：安装依赖并生成独立 lockfile**
 
 ```bash
 pnpm -C server install
@@ -462,7 +463,7 @@ pnpm -C server install --frozen-lockfile
 
 Expected: 两次均成功，只生成 `server/node_modules` 和 `server/pnpm-lock.yaml`；已提交的 `server/pnpm-workspace.yaml` 内容不被安装改写，根目录无依赖状态。
 
-- [ ] **Step 5：运行边界 GREEN 并提交**
+- [x] **Step 5：运行边界 GREEN 并提交**
 
 ```bash
 node --test scripts/server-boundary.test.mjs
@@ -490,7 +491,7 @@ git commit -m "chore(server): 初始化独立 NestJS 工程"
 - Create: `server/src/app.setup.spec.ts`
 - Create: `server/src/app.module.ts`
 
-- [ ] **Step 1：先写环境校验失败测试**
+- [x] **Step 1：先写环境校验失败测试**
 
 环境测试覆盖默认值、两种合法 PostgreSQL 分层 URL、必填 URL、opaque URI、协议、端口边界和不回显输入：
 
@@ -534,7 +535,7 @@ pnpm -C server exec jest --runInBand src/app.setup.spec.ts
 
 Expected RED: `env.validation.ts` 与 `app.setup.ts` 尚不存在。
 
-- [ ] **Step 2：实现无敏感值回显的校验**
+- [x] **Step 2：实现无敏感值回显的校验**
 
 `validateEnvironment(config)` 返回保留未知键并规范化后的对象，规则精确为：
 
@@ -545,7 +546,7 @@ Expected RED: `env.validation.ts` 与 `app.setup.ts` 尚不存在。
 
 URL 在校验分层 URI 前缀后仍使用标准 `URL` 解析器；不额外强制 host 或数据库名，以兼容 PostgreSQL Unix socket URL。测试中的 URL 只是假数据，不连接数据库。
 
-- [ ] **Step 3：实现应用配置和启动边界**
+- [x] **Step 3：实现应用配置和启动边界**
 
 `AppModule` 使用：
 
@@ -573,7 +574,7 @@ app.enableShutdownHooks()
 
 `main.ts` 只负责创建 `AppModule`、调用 `configureApplication()`、从 `ConfigService` 读取端口并监听。若创建 app 后的任一步失败，bootstrap 必须在重新抛出前安全调用 `app.close()`；顶层 `.catch()` 只能记录固定文本 `Server bootstrap failed` 并设置非零退出状态，不输出原始异常或 `DATABASE_URL`。不得从 E2E 直接 import 一个会自动启动监听器的入口文件。
 
-- [ ] **Step 4：运行 GREEN、无数据库构建并提交**
+- [x] **Step 4：运行 GREEN、无数据库构建并提交**
 
 ```bash
 pnpm -C server exec jest --runInBand src/config/env.validation.spec.ts
@@ -607,7 +608,7 @@ Expected: 单元测试、typecheck、build 均通过且未连接数据库。此�
 - Create: `server/src/infrastructure/database/prisma.module.ts`
 - Modify: `server/src/app.module.ts`
 
-- [ ] **Step 1：建立不依赖在线数据库的 Prisma 生成配置**
+- [x] **Step 1：建立不依赖在线数据库的 Prisma 生成配置**
 
 `server/prisma/schema.prisma` 精确保持无业务模型：
 
@@ -634,7 +635,7 @@ env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server prisma:validate
 
 Expected: 两个命令均成功，只在 ignored 的 `server/src/generated/prisma/` 生成代码，不连接 PostgreSQL。
 
-- [ ] **Step 2：先写 Prisma 生命周期失败测试**
+- [x] **Step 2：先写 Prisma 生命周期失败测试**
 
 测试通过 spy 隔离真实网络，覆盖：
 
@@ -674,7 +675,7 @@ pnpm -C server exec jest --runInBand prisma.service.spec.ts
 
 Expected RED: `PrismaService` 尚不存在。
 
-- [ ] **Step 3：实现 PrismaPg、Pool 与双重释放**
+- [x] **Step 3：实现 PrismaPg、Pool 与双重释放**
 
 `PrismaService` 必须：
 
@@ -688,7 +689,7 @@ Expected RED: `PrismaService` 尚不存在。
 
 `PrismaModule` 使用 `@Global()`，只提供并导出 `PrismaService`。`AppModule` 只导入该 module，不创建 Repository 或业务 service。
 
-- [ ] **Step 4：运行 GREEN、全检查并提交**
+- [x] **Step 4：运行 GREEN、全检查并提交**
 
 ```bash
 pnpm -C server exec jest --runInBand prisma.service.spec.ts
@@ -711,7 +712,7 @@ git commit -m "feat(server): 配置 Prisma PostgreSQL 基础设施"
 - Create: `server/prisma/migrations/migration_lock.toml`
 - Create: `server/prisma/migrations/*_init/migration.sql`（目录名由 Prisma CLI 生成）
 
-- [ ] **Step 1：启动 migration 创建专用的临时 PostgreSQL 16**
+- [x] **Step 1：启动 migration 创建专用的临时 PostgreSQL 16**
 
 使用 `umask 077`、`mktemp` 和 `openssl rand -hex 32` 生成临时密码文件，容器名包含当前 PID 和随机会话 ID。容器同时使用通用 label `qianshu-dms.temp=postgres-test` 和会话专属 label `qianshu-dms.session=<session-id>`，并通过 `--cidfile` 记录精确容器 ID。
 
@@ -799,7 +800,7 @@ openssl rand -hex 32 > "$pg_tmp/postgres-password"
 
 Docker `--cidfile` 不保证文件带尾随换行，在 `set -e` 下必须使用 `pg_id="$(<"$pg_tmp/container.cid")"` 读取，不得直接使用可因 EOF 返回非零的 `read`。
 
-- [ ] **Step 2：由 Prisma CLI 创建空 migration**
+- [x] **Step 2：由 Prisma CLI 创建空 migration**
 
 只在当前 shell 临时 export `DATABASE_URL` 后执行：
 
@@ -813,7 +814,7 @@ Expected: 生成一个唯一的 `*_init/migration.sql` 和 `migration_lock.toml`
 
 生成完成后清理第一个容器、密码文件、连接变量和临时目录。后续 deploy 验收不得复用该数据库。
 
-- [ ] **Step 3：在第二个全新数据库验证首次 deploy、二次幂等和历史记录**
+- [x] **Step 3：在第二个全新数据库验证首次 deploy、二次幂等和历史记录**
 
 使用一个全新、独立的 Bash 进程，在启动前重新注册上述 trap，重新生成随机密码并启动名称不同的全新 PostgreSQL 16 容器。两个流程不共享容器、密码、端口、volume 或 `DATABASE_URL`。确认部署前不存在 `_prisma_migrations` 且 public schema 无表，再执行：
 
@@ -836,7 +837,7 @@ FROM "_prisma_migrations";
 
 Expected: 两次 deploy 均成功，第二次报告无待应用 migration，status 为 up to date，SQL 返回 `t`；除 `_prisma_migrations` 外不出现业务表。
 
-- [ ] **Step 4：清理并提交不可变 migration**
+- [x] **Step 4：清理并提交不可变 migration**
 
 无论任一步成功或失败，都必须 `unset DATABASE_URL`、使用精确容器 ID 强制删除两个临时容器和匿名卷、删除临时密码文件与目录。确认没有 `qianshu-dms.temp=postgres-test` 残留容器；若有残留，只报告，不按通用 label 批量删除。
 
@@ -860,7 +861,7 @@ git commit -m "feat(server): 添加空初始化数据库迁移"
 - Create: `server/test/app.e2e-spec.ts`
 - Modify: `server/src/app.module.ts`
 
-- [ ] **Step 1：先写数据库 indicator 失败测试**
+- [x] **Step 1：先写数据库 indicator 失败测试**
 
 测试使用 fake Prisma 和 fake `HealthIndicatorService`，不得连接数据库：
 
@@ -899,7 +900,7 @@ pnpm -C server exec jest --runInBand database-health.indicator.spec.ts
 
 Expected RED: indicator 尚不存在。
 
-- [ ] **Step 2：实现 indicator 并运行 unit GREEN**
+- [x] **Step 2：实现 indicator 并运行 unit GREEN**
 
 `DatabaseHealthIndicator.isHealthy('database')` 使用 Prisma tagged query 执行常量 `SELECT 1`，成功调用 `HealthIndicatorService.check(key).up()`，失败调用 `.down()`；catch 不记录原始异常。
 
@@ -915,7 +916,7 @@ pnpm -C server exec jest --runInBand database-health.indicator.spec.ts
 
 Expected: 成功、失败与脱敏断言全部通过。
 
-- [ ] **Step 3：先写 HTTP E2E 并验证 RED**
+- [x] **Step 3：先写 HTTP E2E 并验证 RED**
 
 `server/test/app.e2e-spec.ts` 使用 `@nestjs/testing` 和 `supertest` 创建真实 `AppModule`，调用 `configureApplication(app)` 复用 production 的 `/api` 前缀、ValidationPipe 和 shutdown hooks 配置。启动 Task 4 的临时 PostgreSQL、应用 migration 后，测试必须断言：
 
@@ -1021,7 +1022,7 @@ pnpm -C server test:e2e
 
 Expected RED: `GET /api/health` 返回 `404`，证明 E2E 能捕获缺失公共路由。不得通过改写期望值接受 `404`。
 
-- [ ] **Step 4：实现 controller、module 和应用装配**
+- [x] **Step 4：实现 controller、module 和应用装配**
 
 `HealthController`：
 
@@ -1045,7 +1046,7 @@ export class HealthController {
 
 `HealthModule` 导入 `TerminusModule.forRoot({ logger: false })`，避免健康探测失败时由 Terminus 记录 indicator 详情；module 提供 controller 与 indicator，`AppModule` 导入 `HealthModule`。
 
-- [ ] **Step 5：使用临时 PostgreSQL 运行 E2E、全检查并提交**
+- [x] **Step 5：使用临时 PostgreSQL 运行 E2E、全检查并提交**
 
 按 Task 4 的相同安全容器流程启动全新 PostgreSQL，先执行 migration，再执行：
 
@@ -1075,7 +1076,7 @@ git commit -m "feat(server): 添加数据库健康检查"
 - Modify: `README.md`
 - Modify: `scripts/root-governance.test.mjs`
 
-- [ ] **Step 1：先扩展根文档失败测试**
+- [x] **Step 1：先扩展根文档失败测试**
 
 `scripts/root-governance.test.mjs` 新增断言：
 
@@ -1092,7 +1093,7 @@ node --test scripts/root-governance.test.mjs
 
 Expected RED: 两份后端文档尚不存在，README 与工程方案仍含过期描述。
 
-- [ ] **Step 2：编写中文后端文档**
+- [x] **Step 2：编写中文后端文档**
 
 `后端架构.md` 至少说明：
 
@@ -1113,11 +1114,11 @@ Expected RED: 两份后端文档尚不存在，README 与工程方案仍含过�
 - 空库首次 deploy、二次幂等、status 与 `_prisma_migrations` 验证步骤。
 - 凭据只通过环境注入，命令与日志不得泄露 URL。
 
-- [ ] **Step 3：更新当前事实、索引和 README**
+- [x] **Step 3：更新当前事实、索引和 README**
 
 工程方案保留原始决策历史，但把“当前工程事实”更新为阶段三实际状态。README 描述根、Server、Web 都已可用，列出独立安装、无数据库检查、临时数据库 migration/E2E 的命令边界。
 
-- [ ] **Step 4：运行 GREEN 并提交**
+- [x] **Step 4：运行 GREEN 并提交**
 
 ```bash
 node --test scripts/root-governance.test.mjs
@@ -1136,23 +1137,28 @@ git commit -m "docs(server): 添加后端架构与迁移规范"
 
 - Modify: `docs/全局文档/阶段三Server初始化实施计划.md`
 
-- [ ] **Step 1：验证无数据库工程链路**
+- [x] **Step 1：验证无数据库工程链路**
 
 不删除任何现有文件；在未设置 `DATABASE_URL` 且禁止 dotenv 读取本地文件的进程中执行：
 
 ```bash
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server install --frozen-lockfile
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server prisma:generate
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server check
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server build
+test ! -e server/.env
+unset DATABASE_URL PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION
+export DOTENV_CONFIG_PATH=/dev/null
+export DEBUG=
+
+pnpm -C server install --frozen-lockfile
+pnpm -C server prisma:generate
+pnpm -C server check
+pnpm -C server build
 node --run test:root
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run check
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run build
+node --run check
+node --run build
 ```
 
 Expected: 全部成功；生成物均被 ignored，根目录没有依赖状态。
 
-- [ ] **Step 2：验证真实 PostgreSQL、migration、E2E 和直接运行**
+- [x] **Step 2：验证真实 PostgreSQL、migration、E2E 和直接运行**
 
 使用 Task 4 的独立临时 PostgreSQL 流程：
 
@@ -1168,7 +1174,7 @@ Expected: 全部成功；生成物均被 ignored，根目录没有依赖状态�
 
 不得打印 `DATABASE_URL`；所有退出路径都清理容器、变量、密码文件和临时目录。
 
-production smoke 在启动进程前 `unset DEBUG`，并扩展 Task 4 的 trap，使其幂等终止并 `wait` 精确的 `server_pid`；若该进程派生子进程，也只按记录的父子 PID 清理，不使用名称或端口批量杀进程。首次 `200` 与停库后的 `503` 必须来自同一个 `server_pid`：停止 PostgreSQL 后先用 `kill -0 "$server_pid"` 确认 Server 仍存活，再确认原端口仍由该进程链监听。请求必须设置连接和总时限，避免数据库或 socket 故障令验收无限挂起。停库后的 `503` 不使用 `curl --fail`，而是分离 status 与 body：
+production smoke 在启动进程前显式设置 `NODE_ENV=production` 与 `DEBUG=`，并清除 `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`。`DEBUG=` 可阻止后续 dotenv 回退重新注入 Prisma debug namespace。扩展 Task 4 的 trap，使其幂等终止并 `wait` 精确的 `server_pid`；若该进程派生子进程，也只按记录的父子 PID 清理，不使用名称或端口批量杀进程。首次 `200` 与停库后的 `503` 必须来自同一个 `server_pid`：停止 PostgreSQL 后先用 `kill -0 "$server_pid"` 确认 Server 仍存活，再确认原端口仍由该进程链监听。请求必须设置连接和总时限，避免数据库或 socket 故障令验收无限挂起。停库后的 `503` 不使用 `curl --fail`，而是分离 status 与 body：
 
 ```bash
 health_status="$(curl --silent --show-error \
@@ -1185,30 +1191,39 @@ node -e '
   if (body?.details?.database?.status !== "down") process.exit(1)
   if (/[a-z][a-z\d+.-]*:\/\/|DATABASE_URL|password|stack|SELECT 1/i.test(JSON.stringify(body))) process.exit(1)
 ' "$runtime_tmp/health-down.json"
-if grep --fixed-strings --quiet -- "$pg_password" "$runtime_tmp/health-down.json"; then
+if grep --fixed-strings --quiet \
+  --file "$pg_tmp/postgres-password" \
+  "$runtime_tmp/health-down.json" \
+  "$runtime_tmp/server.log"; then
   exit 1
 fi
 ```
 
-Server stdout/stderr 写入 `runtime_tmp` 下的日志文件。停库后再次断言同一 `server_pid` 存活且端口未释放，证明 `503` 是应用内健康降级而非进程重启或连接失败。结束时只终止记录的 PID，执行 `wait`，断言 PID、派生子进程和监听端口都已消失；随后扫描响应与日志，不得包含 `postgresql://`、`postgres://`、真实密码、密码 canary、`DATABASE_URL`、SQL、stack 或底层异常。正常 Nest 启动日志允许保留，但不得包含敏感值。
+密码扫描只通过权限为 `0600` 的 pattern file 传给 `grep --file`，不得把真实密码作为 argv。Server stdout/stderr 写入 `runtime_tmp` 下的日志文件。停库后再次断言同一 `server_pid` 存活且端口未释放，证明 `503` 是应用内健康降级而非进程重启或连接失败。结束时只终止记录的 PID，执行 `wait`，断言 PID、派生子进程和监听端口都已消失；随后扫描响应与日志，不得包含 `postgresql://`、`postgres://`、真实密码、密码 canary、`DATABASE_URL`、SQL、stack 或底层异常。正常 Nest 启动日志允许保留，但不得包含敏感值。
 
-- [ ] **Step 3：验证 Server 独立复制**
+开发 smoke 显式设置 `NODE_ENV=development`、`DEBUG=` 与 `BROWSER=none`，启动前确认 `3000` 和 Web 固定端口 `9000` 都未被占用。Web 环境变量键必须与 `.env.development.example` 一致，并由当前进程显式覆盖；一次 `SIGINT` 后根命令应返回 `130`，Nest/Vite 完整 PID 树与两个端口都必须消失。
+
+- [x] **Step 3：验证 Server 独立复制**
 
 从当前 `HEAD` 创建只含 Server 的 archive 到 `mktemp` 目录，而不是复制本地 `node_modules`：
 
 ```bash
 git archive HEAD:server | tar -x -C "$server_copy"
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null \
+env -u DATABASE_URL -u PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION \
+  DOTENV_CONFIG_PATH=/dev/null DEBUG= \
   pnpm -C "$server_copy" install --offline --frozen-lockfile
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C "$server_copy" check
-env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C "$server_copy" build
+env -u DATABASE_URL -u PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION \
+  DOTENV_CONFIG_PATH=/dev/null DEBUG= pnpm -C "$server_copy" check
+env -u DATABASE_URL -u PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION \
+  DOTENV_CONFIG_PATH=/dev/null DEBUG= pnpm -C "$server_copy" build
 ```
 
 然后使用一个全新 PostgreSQL 容器，把 Task 4 的 trap 扩展为同时清理 `server_copy` 和本次 `server_pid`。在同一 shell 中临时 export URL，执行独立副本的 `db:migrate:deploy`，再以空闲端口启动已构建产物：
 
 ```bash
 pnpm -C "$server_copy" db:migrate:deploy
-PORT=3010 pnpm -C "$server_copy" start:prod > "$server_copy/server.log" 2>&1 &
+NODE_ENV=production PORT=3010 DEBUG= \
+  pnpm -C "$server_copy" start:prod > "$server_copy/server.log" 2>&1 &
 server_pid=$!
 curl --fail --silent --show-error http://127.0.0.1:3010/api/health \
   > "$server_copy/health.json"
@@ -1227,7 +1242,7 @@ fi
 
 Expected: 独立目录安装、检查、构建、migration、production start 和 health 全部通过；archive 初始内容不含 `.env`、`node_modules`、`dist`、coverage 或 generated client，运行后生成物仍只留在临时目录并最终被清理。
 
-- [ ] **Step 4：执行安全、边界和 Git 审计**
+- [x] **Step 4：执行安全、边界和 Git 审计**
 
 ```bash
 test ! -e pnpm-workspace.yaml
@@ -1244,7 +1259,7 @@ git status --short
 
 Expected: 前六项满足；两次 tracked-artifact 扫描退出码 `1`；除计划完成记录外工作树干净。再扫描 staged/tracked 内容中的 private key、token、密码、credential、DSN 和 URL 内嵌凭据；测试 fixture 命中必须人工确认仅为明确的安全测试数据，不得放宽规则掩盖真实敏感信息。
 
-- [ ] **Step 5：双重审查并记录阶段完成**
+- [x] **Step 5：双重审查并记录阶段完成**
 
 按 `requesting-code-review` 执行：
 
@@ -1262,6 +1277,51 @@ git commit -m "docs: 记录阶段三验证完成"
 ```
 
 最终必须确认 `git status --short --branch` 无未提交修改，不 push。
+
+## 阶段三验证记录（2026-07-10）
+
+### 1. 工具链与无数据库链路
+
+- 验证环境：Node.js `v24.16.0`、pnpm `11.9.0`、Docker Engine `29.5.3`、PostgreSQL major `16`。
+- `server/` 的 frozen install、`prisma:generate`、`check` 和 `build` 均在 `server/.env` 不存在、`DATABASE_URL` 未设置、`DOTENV_CONFIG_PATH=/dev/null`、`DEBUG=` 的条件下通过。
+- Server unit：5 个 suite、47 个 test 全部通过；根治理与编排：75/75 通过；Web scripts：32 个 Node test 与 4 个 TypeScript test 通过，typecheck、ESLint、Stylelint 均通过。
+- 根 `node --run check` 与 `node --run build` 通过；根目录没有 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 或 `node_modules/`。
+
+### 2. migration、E2E 与 production 降级
+
+- 全新 PostgreSQL 16 上首次 `db:migrate:deploy`、第二次幂等 deploy、`prisma migrate status` 均通过；`_prisma_migrations` 只有 `20260710152144_init` 一条完成记录，public schema 无业务表。
+- 真实 PostgreSQL E2E 通过；`GET /api/health` 返回完整 Terminus `200/up` 响应，不含全局 `data` envelope。
+- 同一 production listener PID `81703` 在数据库运行时返回 `200/up`；停止其精确 PostgreSQL 容器后该 PID 与端口仍存活，并返回脱敏 `503/down`；随后 Server 以 `143` 退出，PID 树和 3000 端口全部释放。
+- 响应与捕获日志不含真实密码、数据库 URL、`DATABASE_URL`、`SELECT 1`、stack、canary 或底层数据库异常。
+
+### 3. 开发命令进程生命周期修复
+
+- 初次真实验收发现 `node --run dev:server` 只结束外层 launcher，pnpm、shell 与 Nest watch 被重挂到 PID 1，3000 端口残留。该失败没有被忽略，按 TDD 增加失败测试并修复。
+- 提交 `efdc2fa` 将 `dev`、`dev:server`、`dev:web` 收敛到 `scripts/dev.mjs`；POSIX 使用独立进程组，监控外层 PPID，并处理 `SIGHUP`、`SIGINT`、`SIGTERM`。
+- 修复后 `dev:server` 的一次 `SIGTERM` 返回 `143`；根 `dev` 的一次 `SIGINT` 返回 `130`；Server 3000、Web 9000 和全部记录后代 PID 均释放。独立 `dev:web` 的一次 `SIGTERM` 同样返回 `143` 且无残留。
+- 真实 `node --run -> manager -> worker -> leaf` 动态端口集成测试已纳入根测试。最终稳定 fixture 在 5 轮、每轮 4 个并行完整根测试中 20/20 通过，合计 1500/1500 test；安全 cleanup 后没有 fixture 进程或端口残留。
+
+### 4. Server 独立移植
+
+- `git archive HEAD:server` 的初始内容不含真实 `.env`、`node_modules`、`dist`、coverage 或 generated Prisma Client。
+- 独立临时目录内 `pnpm install --offline --frozen-lockfile`、无数据库 `check`、`build` 全部通过。
+- 第三个全新 PostgreSQL 16 容器上 migration history 验证通过；独立副本以 `NODE_ENV=production PORT=3010` 启动，listener PID `39597` 返回 `200/up`，随后以 `143` 退出并释放完整进程树与端口。
+
+### 5. 安全、资源与已知 warning
+
+- 2219 个 tracked 文件未命中 private key、AWS/GitHub/Slack/Google/Stripe token 或 JWT 强特征；全量 URL userinfo 扫描命中 7 行、分布于 6 个文件，逐项确认均为文档或测试中的明确 fake fixture，没有真实凭据。
+- 未跟踪真实 `.env`、依赖目录、构建产物、coverage 或 generated Prisma Client；空 migration 内容保持唯一注释不变。
+- 最终残留审计确认 3000、3010、9000 均空闲，`io.qianshu-dms.validation=true` 容器为 0，所有密码文件和临时目录均已清理。
+- Web production build 保留既有 Rolldown `INVALID_ANNOTATION` 与大于 500 kB chunk warning；退出码为 0，不阻断阶段三。Server 与 Web 当前均未安装 Prettier，因此没有为本阶段临时新增 formatter 依赖。
+- PostgreSQL 官方镜像初始化包含临时 bootstrap server；验收脚本最终以两次 ready 日志加 `SHOW server_version_num` 判定最终 server，避免 `pg_isready` 短暂成功造成竞态。
+- 同一 checkout 并发执行多个 `prisma generate`、Server `check` 或 `build` 会竞争 ignored 的 `src/generated/prisma/` 输出。本次双审并发曾出现 `EEXIST` 与短暂 0-byte `client.ts`；停止并发、串行 regenerate 后，两次独立 Server check 均恢复为 5 个 suite、47/47 test。开发与 CI 必须在同一工作树内串行执行这些生成命令；需要并行时使用彼此隔离的 checkout。
+
+### 6. 审查状态
+
+- Task 6 规格与文档质量审查：通过，无 Critical、Important、Minor finding。
+- 开发命令进程树修复质量审查：通过；最终 fixture 修复后 5 轮 × 4 并行完整根测试由独立审查再次验证通过。
+- 阶段三最终规格审查：`S3-R01..S3-R10` 全部通过，无 Critical、Important、Minor finding。
+- 阶段三最终质量审查：通过，无 Critical、Important finding；提出的 2 个 Minor 已在本记录中修正统计口径并补充同工作树并发生成限制，无未解决 finding。
 
 ## 阶段三完成判定
 
