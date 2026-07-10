@@ -40,11 +40,11 @@ docs: 记录阶段二验证完成
 - Create: `docs/全局文档/阶段二Web边界整理实施计划.md`
 - Modify: `docs/文档索引.md`
 
-- [ ] **Step 1：验证计划结构与索引**
+- [x] **Step 1：验证计划结构与索引**
 
 检查 Markdown 围栏成对、JSON 代码块可解析、相对链接存在，并运行 `git diff --check` 与根级回归测试。
 
-- [ ] **Step 2：精确暂存、审计并提交**
+- [x] **Step 2：精确暂存、审计并提交**
 
 ```bash
 git add docs/全局文档/阶段二Web边界整理实施计划.md docs/文档索引.md
@@ -64,7 +64,7 @@ git commit -m "docs: 添加阶段二 Web 边界整理计划"
 - Create: 4 个 app 各自的 `.env.test.example`
 - Track: 当前未跟踪的 `web/` 源码、workspace 配置、lockfile、项目 Skills 和公共 packages
 
-- [ ] **Step 1：先写安全失败测试**
+- [x] **Step 1：先写安全失败测试**
 
 先创建 `web-safety.test.mjs`，测试使用 Node 内置模块完成：
 
@@ -83,7 +83,7 @@ node --test web/scripts/web-safety.test.mjs
 
 Expected RED: 因 Web 自身尚未忽略 `.env.*` 且 12 个模板尚不存在而失败；失败原因必须与预期一致。
 
-- [ ] **Step 2：建立 Web 自身的环境文件保护**
+- [x] **Step 2：建立 Web 自身的环境文件保护**
 
 `web/.gitignore` 必须增加以下规则并保持放行顺序：
 
@@ -98,7 +98,7 @@ coverage
 
 该规则必须在把 `web/` 作为独立 Git 根时仍然有效，不能只依赖外层 `.gitignore`。
 
-- [ ] **Step 3：创建 12 个公开配置模板**
+- [x] **Step 3：创建 12 个公开配置模板**
 
 模板覆盖以下精确项目：
 
@@ -164,7 +164,7 @@ VITE_BUILD_ARCHIVE=false
 
 所有 `VITE_` 变量都属于浏览器可见配置，模板和真实文件中均禁止密钥、token、密码、DSN 或 URL 内嵌凭据。不得复制现有 `.env.*` 的值到提交中。
 
-- [ ] **Step 4：运行 GREEN**
+- [x] **Step 4：运行 GREEN**
 
 ```bash
 node --test web/scripts/web-safety.test.mjs
@@ -172,7 +172,7 @@ node --test web/scripts/web-safety.test.mjs
 
 Expected: PASS，临时目录由测试 cleanup 清理。
 
-- [ ] **Step 5：显式暂存并审计 Web 基线**
+- [x] **Step 5：显式暂存并审计 Web 基线**
 
 禁止直接使用未检查的 `git add -A`。暂存 `web/` 后必须验证：
 
@@ -185,7 +185,7 @@ git diff --cached --no-ext-diff --text --unified=0 | rg -n -- '(?i)(-----BEGIN [
 
 暂存内容不得包含 `node_modules`、`dist*`、coverage、`.DS_Store`、真实 `.env.*`、日志或根外路径。密钥扫描退出码 `1` 表示无命中；若有命中，必须逐条人工判定并记录为安全示例或移除真实敏感内容，不能通过放宽模式跳过。
 
-- [ ] **Step 6：提交**
+- [x] **Step 6：提交**
 
 ```bash
 git commit -m "chore(web): 安全纳入前端基座"
@@ -205,7 +205,7 @@ git commit -m "chore(web): 安全纳入前端基座"
 - Regenerate: `web/pnpm-lock.yaml`
 - Modify: `web/fantastic-admin.code-workspace`
 
-- [ ] **Step 1：先写边界失败测试**
+- [x] **Step 1：先写边界失败测试**
 
 测试必须断言最终结构：
 
@@ -234,7 +234,7 @@ node --test web/scripts/workspace-boundaries.test.mjs
 
 Expected RED: 因 `examples/*` 尚不存在、workspace 和 importer 仍是旧结构而失败。
 
-- [ ] **Step 2：建立可追踪 rename**
+- [x] **Step 2：建立可追踪 rename**
 
 Task 1 已建立 Web Git 基线后，执行以下精确命令：
 
@@ -256,7 +256,7 @@ done
 
 `git mv` 会把三个 app 当前 ignored 的本地 `node_modules` 一并物理移动。该生成目录不属于源码，本阶段不额外删除；必须证明它与真实 `.env.*` 仍保持 ignored，且没有进入 staged 或 commit。`dist*`、coverage 和日志同样只能作为 ignored 本地状态存在。
 
-- [ ] **Step 3：更新 workspace、lockfile 和编辑器工作区**
+- [x] **Step 3：更新 workspace、lockfile 和编辑器工作区**
 
 `pnpm-workspace.yaml` 最终为：
 
@@ -277,7 +277,7 @@ pnpm -C web install --lockfile-only --ignore-scripts
 
 `fantastic-admin.code-workspace` 必须成为有效 JSON，只列真实路径；i18n paths 同时包含 `apps/*` 和 `examples/*`。
 
-- [ ] **Step 4：运行 GREEN 和 workspace 验证**
+- [x] **Step 4：运行 GREEN 和 workspace 验证**
 
 ```bash
 node --test web/scripts/workspace-boundaries.test.mjs
@@ -286,7 +286,7 @@ pnpm -C web list -r --depth=-1 --parseable
 
 Expected: 根 package + 1 business app + 3 examples + 9 packages，共 14 个项目。
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add web/apps web/examples web/scripts/workspace-boundaries.test.mjs web/pnpm-workspace.yaml web/pnpm-lock.yaml web/fantastic-admin.code-workspace
@@ -308,7 +308,7 @@ git commit -m "refactor(web): 隔离业务应用与参考应用"
 - Modify: `web/apps/qsmds-arco/package.json`
 - Regenerate: `web/pnpm-lock.yaml`
 
-- [ ] **Step 1：先写脚本失败测试**
+- [x] **Step 1：先写脚本失败测试**
 
 `workspace-scripts.test.mjs` 断言：
 
@@ -334,7 +334,7 @@ pnpm -C web exec tsx --test scripts/cli.test.ts
 
 Expected RED: package scripts 与目标不符，pnpm 守卫模块不存在，CLI 缺少导出与 direct-entry guard。`cli.test.ts` 必须先通过源码前置断言阻止导入旧 CLI，不能因交互 prompt、挂起或无关语法错误形成伪 RED。
 
-- [ ] **Step 2：实现确定性 package scripts**
+- [x] **Step 2：实现确定性 package scripts**
 
 Web scripts 使用稳定 package name；核心结构为：
 
@@ -365,7 +365,7 @@ Web scripts 使用稳定 package name；核心结构为：
 
 保留现有设置生成、维护和发布命令。移除 `postinstall`、`simple-git-hooks` 配置和直接依赖，避免独立 Web 安装隐式改写外层 Git hooks。`apps/qsmds-arco` 增加 `typecheck: vue-tsc -b`。
 
-- [ ] **Step 3：重构可测试 CLI 与本地 pnpm 守卫**
+- [x] **Step 3：重构可测试 CLI 与本地 pnpm 守卫**
 
 CLI 必须导出纯函数并使用 direct-entry guard：
 
@@ -388,7 +388,7 @@ export function printHelp(): void
 
 `ensure-pnpm.mjs` 只读取 `npm_config_user_agent` 判断调用方，非 pnpm 时输出固定英文技术错误并返回非零，不回显环境变量。
 
-- [ ] **Step 4：运行 GREEN 并安全更新 lockfile**
+- [x] **Step 4：运行 GREEN 并安全更新 lockfile**
 
 Run:
 
@@ -400,7 +400,7 @@ pnpm -C web install --lockfile-only --ignore-scripts
 
 Expected: 全部测试通过，lockfile 只包含预期 importer 和依赖变化。
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add web/scripts/workspace-scripts.test.mjs web/scripts/cli.test.ts web/scripts/ensure-pnpm.mjs web/scripts/ensure-pnpm.test.mjs web/scripts/cli.ts web/package.json web/apps/qsmds-arco/package.json web/pnpm-lock.yaml
@@ -426,15 +426,18 @@ git commit -m "chore(web): 调整默认开发和验证脚本"
 - Modify: `web/skills/fa-store-generator/SKILL.md`
 - Modify: `web/skills/fa-slot-creator/SKILL.md`
 - Modify: `web/skills/fa-framework-settings/SKILL.md`
+- Modify: `web/skills/fa-i18n-manager/references/locale-structure.md`
+- Modify: `web/skills/fa-i18n-manager/references/adding-language.md`
+- Modify: `web/skills/fa-framework-settings/references/toolbar-settings.md`
 - Create: `docs/前端文档/前端架构.md`
 - Create: `docs/前端文档/应用边界规范.md`
 - Modify: `docs/文档索引.md`
 
-- [ ] **Step 1：先写工程配置失败测试**
+- [x] **Step 1：先写工程配置失败测试**
 
 `workspace-config.test.mjs` 读取最终配置并断言：ESLint/Stylelint 能覆盖 `apps/qsmds-arco`、`examples/*` 和实际 packages；配置不再引用不存在的 `docs`；忽略项同时覆盖业务与参考应用的生成目录。先运行并确认 RED 与现有 stale 路径一致。
 
-- [ ] **Step 2：修正配置、运行 GREEN 并提交**
+- [x] **Step 2：修正配置、运行 GREEN 并提交**
 
 ```bash
 node --test web/scripts/workspace-config.test.mjs
@@ -446,24 +449,25 @@ git commit -m "chore(web): 修正工程检查配置"
 
 提交只能包含配置测试、ESLint 和 Stylelint 文件。
 
-- [ ] **Step 3：先写协作规则失败测试并运行 Skill RED 场景**
+- [x] **Step 3：先写协作规则失败测试并运行 Skill RED 场景**
 
 `project-guidance.test.mjs` 断言：
 
 - `web/AGENTS.md` 与 `web/README.md` 明确唯一业务应用、examples 只读原则、依赖方向、独立命令和 env 安全。
 - 两份中文前端文档存在且被 `docs/文档索引.md` 链接。
-- 7 个项目 Skill 都把默认业务路径固定为 `apps/qsmds-arco`，并要求只有用户明确指定时才操作 `examples/*`。
+- 7 个项目 Skill 都把默认业务路径固定为 `apps/qsmds-arco`；`examples/*` 可只读查阅，只有用户明确点名具体参考应用并明确要求修改时才允许写入，且后续默认路径必须映射到该精确 reference 根目录。
 
 先运行测试确认 RED。随后给只读审查代理一个“为正式业务应用新增路由、Store、表单或页面”的压力场景，并要求它仅依据当前 Skill 决定写入路径；记录其选择旧 `apps/core`、泛化 `apps/<app>` 或把 reference 当业务 app 的失败证据。
 
-- [ ] **Step 4：修正文档与 Skills**
+- [x] **Step 4：修正文档与 Skills**
 
 - `web/AGENTS.md` 写明 `qsmds-arco` 唯一业务定位、examples 原则只读、依赖方向、默认命令、环境安全与中文可见文案。
 - `web/README.md` 用中文说明 Web 可独立复制、安装、开发、检查和构建。
 - code-facing Skill 默认业务路径改为 `apps/qsmds-arco`；只有用户明确要求参考项目时才允许操作 `examples/*`。
+- 主 Skill 直接引用的 reference 文档同步清除 `apps/<app>`，避免后续工作流重新引入旧应用歧义。
 - 创建两份有实际内容的中文前端文档并更新唯一索引，不创建空文档。
 
-- [ ] **Step 5：运行协作规则 GREEN 和 Skill GREEN 场景**
+- [x] **Step 5：运行协作规则 GREEN 和 Skill GREEN 场景**
 
 使用与 Step 3 相同的代理场景重新读取修改后的 Skill；目标必须稳定选择 `apps/qsmds-arco`，并拒绝把普通业务变更写进 `examples/*`。
 
@@ -471,10 +475,10 @@ git commit -m "chore(web): 修正工程检查配置"
 node --test web/scripts/project-guidance.test.mjs
 ```
 
-- [ ] **Step 6：提交**
+- [x] **Step 6：提交**
 
 ```bash
-git add web/scripts/project-guidance.test.mjs web/AGENTS.md web/README.md web/skills/fa-i18n-manager/SKILL.md web/skills/fa-route-generator/SKILL.md web/skills/fa-page-optimizer/SKILL.md web/skills/fa-form-builder/SKILL.md web/skills/fa-store-generator/SKILL.md web/skills/fa-slot-creator/SKILL.md web/skills/fa-framework-settings/SKILL.md docs/前端文档/前端架构.md docs/前端文档/应用边界规范.md docs/文档索引.md
+git add web/scripts/project-guidance.test.mjs web/AGENTS.md web/README.md web/skills/fa-i18n-manager/SKILL.md web/skills/fa-i18n-manager/references/locale-structure.md web/skills/fa-i18n-manager/references/adding-language.md web/skills/fa-route-generator/SKILL.md web/skills/fa-page-optimizer/SKILL.md web/skills/fa-form-builder/SKILL.md web/skills/fa-store-generator/SKILL.md web/skills/fa-slot-creator/SKILL.md web/skills/fa-framework-settings/SKILL.md web/skills/fa-framework-settings/references/toolbar-settings.md docs/前端文档/前端架构.md docs/前端文档/应用边界规范.md docs/文档索引.md
 git -c core.quotePath=false diff --cached --name-only
 git diff --cached --check
 git commit -m "docs(web): 明确应用边界和协作规则"
@@ -484,9 +488,9 @@ git commit -m "docs(web): 明确应用边界和协作规则"
 
 **Files:**
 
-- Modify: `docs/全局文档/阶段二Web边界整理实施计划.md`（仅完成状态）
+- Modify: `docs/全局文档/阶段二Web边界整理实施计划.md`（完成状态、实测命令修正与验证记录）
 
-- [ ] **Step 1：安装与静态检查**
+- [x] **Step 1：安装与静态检查**
 
 ```bash
 pnpm -C web install --frozen-lockfile
@@ -500,20 +504,20 @@ pnpm -C web build:examples
 
 检查命令执行前后必须比较 tracked diff，证明 `check` 不修改源码或配置。构建允许更新 ignored `dist*`。
 
-- [ ] **Step 2：验证四个应用可直接启动**
+- [x] **Step 2：验证四个应用可直接启动**
 
 依次在 PTY 中运行以下有界 smoke test：
 
 ```bash
-pnpm -C web dev -- --host 127.0.0.1 --port 43110 --strictPort
-pnpm -C web --filter @fantastic-admin/core run dev -- --host 127.0.0.1 --port 43111 --strictPort
-pnpm -C web --filter @fantastic-admin/core-arco-design-vue run dev -- --host 127.0.0.1 --port 43112 --strictPort
-pnpm -C web --filter @fantastic-admin/example run dev -- --host 127.0.0.1 --port 43113 --strictPort
+pnpm -C web dev --host 127.0.0.1 --port 43110 --strictPort
+pnpm -C web --filter @fantastic-admin/core run dev --host 127.0.0.1 --port 43111 --strictPort
+pnpm -C web --filter @fantastic-admin/core-arco-design-vue run dev --host 127.0.0.1 --port 43112 --strictPort
+pnpm -C web --filter @fantastic-admin/example run dev --host 127.0.0.1 --port 43113 --strictPort
 ```
 
 每条命令必须观察到 Vite ready，对对应 `http://127.0.0.1:<port>/` 的请求返回成功响应后立即发送 `SIGINT` 并等待进程退出；任何端口占用、启动错误或无法终止都按失败处理，不保留后台进程。
 
-- [ ] **Step 3：验证根门面与 workspace 边界**
+- [x] **Step 3：验证根门面与 workspace 边界**
 
 ```bash
 node --run test:root
@@ -524,7 +528,7 @@ pnpm -C web list -r --depth=-1 --parseable
 
 根目录仍不得出现 workspace、lockfile 或 node_modules。
 
-- [ ] **Step 4：验证 Web 独立复制**
+- [x] **Step 4：验证 Web 独立复制**
 
 从当前 Git commit 的 `web/` tree 创建临时副本，不复制根文件、Server、本地 node_modules 或真实 `.env.*`。必须在仓库外执行以下流程：
 
@@ -547,15 +551,15 @@ pnpm -C "$tmp_dir" build:examples
 随后在副本目录中依次执行以下四项有界启动 smoke test：
 
 ```bash
-pnpm -C "$tmp_dir" dev -- --host 127.0.0.1 --port 43120 --strictPort
-pnpm -C "$tmp_dir" --filter @fantastic-admin/core run dev -- --host 127.0.0.1 --port 43121 --strictPort
-pnpm -C "$tmp_dir" --filter @fantastic-admin/core-arco-design-vue run dev -- --host 127.0.0.1 --port 43122 --strictPort
-pnpm -C "$tmp_dir" --filter @fantastic-admin/example run dev -- --host 127.0.0.1 --port 43123 --strictPort
+pnpm -C "$tmp_dir" dev --host 127.0.0.1 --port 43120 --strictPort
+pnpm -C "$tmp_dir" --filter @fantastic-admin/core run dev --host 127.0.0.1 --port 43121 --strictPort
+pnpm -C "$tmp_dir" --filter @fantastic-admin/core-arco-design-vue run dev --host 127.0.0.1 --port 43122 --strictPort
+pnpm -C "$tmp_dir" --filter @fantastic-admin/example run dev --host 127.0.0.1 --port 43123 --strictPort
 ```
 
 分别确认 `http://127.0.0.1:43120/` 至 `43123/` 成功响应并用 `SIGINT` 等待退出，证明 `dev` 和三个参考应用的直接运行不依赖外层根目录；任何命令都不得改回 `-C web`。临时目录必须在验证后由 trap 安全清理；若 offline store 缺包，应如实报告并改用已获授权的正常安装，不得用外层相对路径或 symlink 伪造独立性。
 
-- [ ] **Step 5：最终安全和 Git 检查**
+- [x] **Step 5：最终安全和 Git 检查**
 
 - 只存在根唯一 `.git`。
 - 两端没有 `file:`、`link:` 或跨目录源码依赖。
@@ -563,7 +567,7 @@ pnpm -C "$tmp_dir" --filter @fantastic-admin/example run dev -- --host 127.0.0.1
 - `web/` 自身包含 package、workspace、lockfile、README、AGENTS 和 env examples。
 - `git diff --check`、文档 JSON/fence/link 检查和双重审查通过。
 
-- [ ] **Step 6：记录并提交阶段完成状态**
+- [x] **Step 6：记录并提交阶段完成状态**
 
 ```bash
 git add docs/全局文档/阶段二Web边界整理实施计划.md
@@ -571,3 +575,23 @@ git -c core.quotePath=false diff --cached --name-only
 git diff --cached --check
 git commit -m "docs: 记录阶段二验证完成"
 ```
+
+## 阶段完成记录（2026-07-10）
+
+阶段二已按 Task 0 至 Task 5 顺序完成。最终验证结果如下：
+
+- `pnpm -C web install --frozen-lockfile` 与独立副本的 `pnpm install --offline --frozen-lockfile` 均通过；lockfile 未发生变化。
+- `pnpm -C web test:scripts` 通过 32 个 Node 测试和 4 个 TypeScript 测试；`pnpm -C web check`、`check:examples` 均通过。
+- `pnpm -C web build`、`build:test`、`build:examples` 以及根级 `node --run build:web` 均通过。
+- `node --run test:root` 通过 47 个测试，`node --run check:web` 通过；workspace 枚举精确为根 package、1 个业务应用、3 个参考应用和 9 个公共包。
+- 当前仓库的 4 个应用分别在端口 `43110` 至 `43113` 返回 HTTP `200`；独立副本的 4 个应用分别在端口 `43120` 至 `43123` 返回 HTTP `200`。每次烟测均在响应后中断并确认端口关闭，无遗留后台进程。
+- 独立副本由 `git archive HEAD:web` 生成，导出前不含 `.git`、symlink、`node_modules`、`dist*`、coverage 或真实 `.env.*`；从零安装后完成正式应用与参考应用的检查、构建和启动。
+- 最终安全审计确认仓库只有根 `.git`，根目录无 workspace、lockfile 或 `node_modules`，Git 未追踪真实 `.env.*`、构建产物、日志、coverage、`.DS_Store` 或 symlink，manifest 不含 `file:`、`link:` 或 `portal:` 依赖。
+- 文档围栏、JSON 代码块、相对链接、`git diff --check` 和两轮独立审查均通过。
+
+验证期间记录以下非阻塞现象：
+
+- Vite 8 构建会报告上游 `@vueuse/core` 的 Rolldown pure annotation 位置警告和大 chunk warning，但所有构建退出码均为 `0`。
+- 纯净副本按安全约定只携带 `.env.*.example`；未注入环境配置时会提示 `VITE_APP_TITLE` 未定义，但检查、构建和启动仍成功。实际开发或发布前必须从模板创建本地环境文件或由部署平台注入变量，真实 `.env.*` 不得提交。
+- pnpm 包装的 Vite 进程在主动 `Ctrl-C` 后返回 `129`；每次均继续确认对应端口已经关闭，因此该退出码只代表有意中断，不代表启动失败。
+- 原计划命令中的额外 `--` 会被传给 Vite 并导致 `--host`、`--port` 被忽略，现已按实测修正为直接传递参数的写法。
