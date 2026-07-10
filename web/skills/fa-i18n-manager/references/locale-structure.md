@@ -24,7 +24,7 @@ packages/locales/
                 ├── zh-tw.json
                 └── en.json
 
-apps/<app>/src/locales/
+apps/qsmds-arco/src/locales/
 ├── index.ts          # 应用 i18n 适配层 + localesInfo 元数据 + $t
 └── lang/
     ├── route/        # 应用路由标题
@@ -36,7 +36,7 @@ apps/<app>/src/locales/
 
 ## Key 结构（按模块拆分）
 
-路由标题放在 `apps/<app>/src/locales/lang/route/*.json`：
+路由标题放在 `apps/qsmds-arco/src/locales/lang/route/*.json`：
 
 ```json
 {
@@ -74,7 +74,7 @@ apps/<app>/src/locales/
 }
 ```
 
-如果某个应用需要覆盖公共 `app.*` 文案，可在 `apps/<app>/src/locales/lang/app/**/*.json` 下添加同名 key。
+如果某个应用需要覆盖公共 `app.*` 文案，可在 `apps/qsmds-arco/src/locales/lang/app/**/*.json` 下添加同名 key。
 
 `flatJson: true` 表示也支持点号平铺写法，但项目实际使用嵌套结构。
 
@@ -110,7 +110,7 @@ meta: { title: $t('route.general.menu.root') }
 
 对应翻译：`"warning": "请修改 {path} 中的配置"`
 
-## localesInfo 结构（apps/<app>/src/locales/index.ts）
+## localesInfo 结构（apps/qsmds-arco/src/locales/index.ts）
 
 ```typescript
 const localesInfo = createLocalesInfo(messages, {
@@ -123,7 +123,7 @@ const localesInfo = createLocalesInfo(messages, {
 
 ## 语言切换机制
 
-- Vite 插件同时扫描 `packages/locales/lang/**/*` 和 `apps/<app>/src/locales/lang/**/*`
+- Vite 插件同时扫描 `packages/locales/lang/**/*` 和 `apps/qsmds-arco/src/locales/lang/**/*`
 - 应用语言包后加载，可覆盖公共语言包的同名 key
 - 用户切换语言 → `appSettingsStore.setDefaultLang(lang)`
 - Store 监听变化 → 更新 `locale.value` + `dayjs.locale(lang)`

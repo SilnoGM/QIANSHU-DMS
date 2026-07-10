@@ -1,75 +1,103 @@
-# Fantastic-admin
+# 千树 DMS Web 协作规则
 
-## 项目概述
+本文件约束 `web/` 独立工作区内的开发活动。仓库根规则仍然适用；若两者冲突，以约束更严格者为准。
 
-Fantastic-admin 是一个基于 Vue 3 的后台管理框架。
+## 工作区定位
 
-## 技术栈
+- `web/` 是可独立移植、安装、构建和发布的 pnpm workspace，拥有自己的 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml`。
+- `web/` 不依赖仓库根目录或 `server/` 的依赖安装状态，不得通过跨目录源码引用、`file:`、`link:` 或跨工作区 `workspace:*` 连接 Server。
+- 唯一正式业务应用是 `apps/qsmds-arco`。未明确指定目标时，正式需求默认在该应用实施，无需再次询问应用位置。
+- `examples/*` 仅用于保留初始基座和参考实现，可按需只读查阅。只有用户明确点名具体参考应用并明确要求修改时，才可以写入对应目录。
+- `packages/*` 只承载稳定、可复用且不含业务语义的共享能力，不放页面、业务 Store、业务 API 或领域规则。
 
-- **框架**: Vue 3.6 + TypeScript + Vite 8
-- **UI 组件**: Element Plus（默认，可替换） + Reka UI + UnoCSS（原子化 CSS）
-- **状态管理**: Pinia + pinia-plugin-persistedstate
-- **路由**: Vue Router 5
-- **包管理器**: pnpm（必须使用 pnpm，禁止使用 npm/yarn）
-- **国际化**: vue-i18n
-- **HTTP**: Axios
-- **Mock**: vite-plugin-fake-server
+## 当前技术栈
 
-## 目录结构
+- Vue 3.5、TypeScript 6、Vite 8
+- Arco Design Vue、Pinia、Vue Router、UnoCSS
+- vue-i18n、Axios
+- pnpm 11.9
 
-采用 pnpm monorepo 架构：
+版本真相源是 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml`，不得以参考应用文档或根目录依赖推断当前版本。
 
-```
+## 目录职责
+
+```text
+web/
 ├── apps/
-│   └── <app>/                # 应用
-│       └── src/
-│           ├── api/          # API 请求模块
-│           ├── assets/       # 静态资源
-│           ├── components/   # 全局业务组件
-│           ├── composables/  # 组合式函数
-│           ├── layouts/      # 布局组件
-│           ├── locales/      # i18n 语言文件
-│           ├── router/       # 路由配置
-│           ├── slots/        # 插槽组件
-│           ├── store/        # Pinia store
-│           ├── types/        # TypeScript 类型定义
-│           ├── ui/           # 框架内建 UI 组件（本地）
-│           ├── utils/        # 工具函数
-│           └── views/        # 页面视图
-├── packages/
-│   ├── components/           # 框架内建 UI 组件库（子包，跨应用共享）
-│   ├── settings/             # 框架设置（子包，跨应用共享）
-│   └── themes/               # 主题配置（子包，跨应用共享）
-├── scripts/                  # 工程脚本
-└── pnpm-workspace.yaml       # monorepo workspace 配置
+│   └── qsmds-arco/         # 唯一正式业务应用
+├── examples/               # 只读参考应用；仅在明确授权写入时修改
+├── packages/               # 稳定共享能力，不承载业务代码
+├── scripts/                # Web 工作区工程脚本
+├── skills/                 # Web 项目级 Skill
+├── package.json
+├── pnpm-workspace.yaml
+└── pnpm-lock.yaml
 ```
 
-## 常用命令
+正式应用的业务代码放在 `apps/qsmds-arco/src/`：
+
+- API 模块：`apps/qsmds-arco/src/api/`
+- 路由：`apps/qsmds-arco/src/router/`
+- Pinia Store：`apps/qsmds-arco/src/store/`
+- 页面：`apps/qsmds-arco/src/views/`
+- 应用级文案：`apps/qsmds-arco/src/locales/`
+
+## 依赖方向
+
+- 允许：`apps/qsmds-arco` → `packages/*`。
+- 允许：`examples/*` → `packages/*`，仅用于保持参考工程可运行。
+- 禁止：`packages/*` → `apps/qsmds-arco` 或 `examples/*`。
+- 禁止：`apps/qsmds-arco` → `examples/*`，也不得复制后再形成隐式同步关系。
+- 禁止：`examples/*` → `apps/qsmds-arco`。
+- `packages/*` 之间仅在职责清晰、无循环依赖时建立 `workspace:*` 依赖。
+
+新增共享包遵循 YAGNI：只有已有至少两个真实调用方、抽象边界已经稳定且内容不含业务语义时才提取；未来可能复用、参考应用存在相似代码或仅为缩短单个业务文件，都不是提取理由。
+
+## 命令约定
+
+在 `web/` 目录执行：
 
 ```bash
-pnpm dev          # 启动开发服务器
-pnpm build        # 构建
-pnpm lint         # 运行全量 lint（tsc + eslint + stylelint）
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm check
+pnpm build
 ```
+
+默认 `pnpm dev`、`pnpm check` 和 `pnpm build` 只操作 `apps/qsmds-arco` 及其必要共享包。需要显式处理参考应用时使用：
+
+```bash
+pnpm check:examples
+pnpm build:examples
+pnpm dev:select
+pnpm build:select
+pnpm serve:select
+```
+
+`pnpm lint` 是只读检查；自动修复必须显式运行 `pnpm lint:fix`。不要假设 Git hook 或 `lint-staged` 会自动执行验证，提交前应主动运行与改动匹配的命令。
 
 ## 开发规范
 
-- 使用 `<script setup lang="ts">` 语法
-- 样式优先使用 UnoCSS 原子类，复杂样式用 SCSS
-- 组件命名使用 PascalCase，文件名与组件名一致
-- API 模块放在 `apps/<app>/src/api/modules/`，按业务模块拆分
-- Store 模块放在 `apps/<app>/src/store/modules/`，使用 Pinia composition API 风格
-- 路由配置在 `apps/<app>/src/router/`，meta 属性可借助 fa-route-generator skill
-- i18n key 需同步更新所有语言文件（公共 `app.*` 文案在 `packages/locales/lang/`，应用路由/业务文案在 `apps/<app>/src/locales/lang/`）
+- 使用 `<script setup lang="ts">`；组件使用 PascalCase，技术标识、路径、API、字段和错误码使用英文。
+- 用户可见文案默认使用中文，并通过 i18n 维护；不得把技术标识翻译成中文变量名。
+- 样式优先使用 UnoCSS，确有复杂样式时再使用 SCSS。
+- 优先复用现有稳定能力，但不得为了“通用化”把正式业务代码移动到 `packages/*`。
+- 非直观的工程约束、生命周期和失败传播应写详细中文注释；避免无意义注释。
+- 修改 `examples/*` 前必须确认用户明确点名了具体参考应用并明确要求修改；仅要求参考或读取不构成写入授权。
 
-## 注意事项
+## 环境变量与安全
 
-- 框架内建组件在 `packages/components/` 子包中，优先使用内建组件而非第三方组件或自定义实现
-- 在任何情况下都请勿直接修改内建组件，确定修改前需要和用户进行确认
-- Mock 数据使用 `vite-plugin-fake-server`，文件放在 `apps/<app>/src/api/modules/` 对应模块旁
-- 代码提交前会自动运行 lint-staged，确保代码符合规范
-- Node.js 版本要求以根目录下 `package.json` 中定义的为准
+- 只提交 `.env.*.example` 模板，不提交真实 `.env` 或 `.env.*`。
+- 模板只保留变量名和非敏感示例，不得写入 token、密码、连接字符串或真实服务凭据。
+- 所有 `VITE_` 变量都会进入浏览器构建产物，必须视为公开信息，禁止放置任何密钥。
+- 日志不得输出 token、Cookie、密码、完整连接字符串或敏感请求体。
+
+## 前后端契约
+
+- Web 与 Server 只通过 HTTP 和 OpenAPI 契约协作，不共享源码或依赖安装。
+- OpenAPI 客户端生成安排在阶段四实施；当前不得假设 `api:generate` 已存在，也不得手写虚假的生成步骤。
+- 新增或修改公共 API、数据结构或数据库 schema 前，必须先获得用户确认。
 
 ## 反复修改检测
 
-在使用任何 fa-* 系列技能时，如果用户针对同一功能点已经要求修改 3 次及以上仍未达到预期（例如连续说"不对"、"再改改"、"还是不行"），必须触发 fa-feedback 技能，询问用户是否将问题反馈给框架作者。
+使用项目 `fa-*` Skill 时，如果用户针对同一功能点连续三次以上反馈仍未达到预期，应暂停猜测，重新核对需求、现有实现和验收标准；不要自动把问题归因于框架。

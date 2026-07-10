@@ -85,7 +85,7 @@ toolbar: {
 ### defaultLang
 - **类型**: `string`
 - **默认值**: `''`
-- **说明**: 设置应用的默认语言，参考 `apps/<app>/src/locales/index.ts` 导出的 `localesInfo`
+- **说明**: 设置应用的默认语言，参考 `apps/qsmds-arco/src/locales/index.ts` 导出的 `localesInfo`
   - `''` - 跟随浏览器语言设置
 
 **示例:**

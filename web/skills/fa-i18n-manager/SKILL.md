@@ -5,24 +5,21 @@ description: 管理 Fantastic-admin 框架的国际化(i18n)配置。当用户�
 
 # i18n Manager
 
-## 第一步：确认工作区（必须阻塞等待用户回复）
+## 第一步：确定工作区边界（必须执行）
 
-本项目是 monorepo 架构，`apps/` 目录下存放各应用。**在执行任何应用 i18n 文件读写操作之前**，必须先确认目标应用：
+本项目只有一个正式业务应用。普通业务需求以及用户所说的“正式应用”“业务应用”，都默认作用于 `apps/qsmds-arco`，无需重复询问应用名称；应用侧 i18n 文件默认位于 `apps/qsmds-arco/src/locales/`。
 
-1. 执行 `ls apps/` 列出所有可用应用
-2. **立即向用户提问**，明确询问要在哪个应用中管理 i18n，并**停止等待回复**
-3. 收到用户明确回复后，才能继续后续步骤
-
-> **严格规则**：如果用户没有在请求中明确说明目标应用（例如"在 example 应用中"、"apps/core"），则必须提问，不得自行猜测或默认选择任何应用。
-
-确认后，应用侧文件路径均以该应用目录为根，例如 `apps/<app>/src/locales/`。
+- `examples/*` 可按需只读查阅。只有用户明确指定参考应用时，才把它作为处理目标；即便已点名，仍必须同时明确要求修改，才允许写入对应的 `examples/<name>`。仅要求参考或读取不构成写入授权。
+- 下文所有 `apps/qsmds-arco/...` 都是正式业务需求的默认路径。获得上述参考应用写入授权后，先将目标根目录固定为用户点名的精确 `examples/<name>`，再把下文路径前缀 `apps/qsmds-arco` 替换为该目标根目录；除非用户另行明确要求，不得同时修改 `apps/qsmds-arco` 或其他 `examples/*`。
+- `packages/*` 只承载跨应用稳定复用的框架能力。业务翻译优先留在正式应用，不能因“可能复用”而提前下沉。
+- 如果用户给出的目标路径与上述边界冲突，先说明冲突并确认意图，不得把正式业务改动复制到参考应用。
 
 ## 项目 i18n 概览
 
 - 公共框架文案：`packages/locales/lang/app/` 目录下的所有 `.json` 文件
-- 应用路由/业务文案：`apps/<app>/src/locales/lang/` 目录下的所有 `.json` 文件
-- 应用覆盖公共文案：可在 `apps/<app>/src/locales/lang/app/` 下添加同名 key，应用文案会覆盖公共默认值
-- i18n 配置入口：`apps/<app>/src/locales/index.ts`（含 `localesInfo` 语言元数据）
+- 应用路由/业务文案：`apps/qsmds-arco/src/locales/lang/` 目录下的所有 `.json` 文件
+- 应用覆盖公共文案：可在 `apps/qsmds-arco/src/locales/lang/app/` 下添加同名 key，应用文案会覆盖公共默认值
+- i18n 配置入口：`apps/qsmds-arco/src/locales/index.ts`（含 `localesInfo` 语言元数据）
 - 公共 localesInfo 工具：`packages/locales/src/index.ts`
 - vue-i18n v11，Composition API 模式（`legacy: false`，`flatJson: true`）
 - 消息通过 `@intlify/unplugin-vue-i18n` 自动导入，无需手动 import JSON
@@ -38,10 +35,10 @@ description: 管理 Fantastic-admin 框架的国际化(i18n)配置。当用户�
 所有目标语言文件必须同步更新。原因是 `flatJson: true` 模式下，缺少 key 的语言会直接显示 key 名本身，用户会看到原始字符串而不是翻译文本。
 
 Key 命名规则：
-- 路由/页面标题：`route.<module>.<page>` 或 `route.<module>.<page>.root`，写入 `apps/<app>/src/locales/lang/route/*.json`
+- 路由/页面标题：`route.<module>.<page>` 或 `route.<module>.<page>.root`，写入 `apps/qsmds-arco/src/locales/lang/route/*.json`
 - 公共框架 UI 文本：`app.<category>.<key>`，写入 `packages/locales/lang/app/**/*.json`
-- 应用覆盖公共 UI 文本：`app.<category>.<key>`，写入 `apps/<app>/src/locales/lang/app/**/*.json`
-- 应用业务模块文本：`<module>.<key>`，写入 `apps/<app>/src/locales/lang/**/*.json` 的业务模块目录
+- 应用覆盖公共 UI 文本：`app.<category>.<key>`，写入 `apps/qsmds-arco/src/locales/lang/app/**/*.json`
+- 应用业务模块文本：`<module>.<key>`，写入 `apps/qsmds-arco/src/locales/lang/**/*.json` 的业务模块目录
 
 操作步骤：
 1. 判断 key 归属：公共框架文案、应用路由/业务文案，还是应用覆盖公共文案
@@ -55,7 +52,7 @@ Key 命名规则：
 根据检查范围扫描：
 
 - 公共框架文案：`packages/locales/lang/**/*.json`
-- 应用路由/业务文案：`apps/<app>/src/locales/lang/**/*.json`
+- 应用路由/业务文案：`apps/qsmds-arco/src/locales/lang/**/*.json`
 - 完整应用生效文案：同时扫描以上两个目录，并注意应用同名 key 会覆盖公共默认值
 
 输出差异报告：
@@ -105,7 +102,7 @@ meta: {
 
 ### 6. 启用工具栏语言切换器
 
-修改 `apps/<app>/src/settings.ts`：
+修改 `apps/qsmds-arco/src/settings.ts`：
 
 ```typescript
 toolbar: {

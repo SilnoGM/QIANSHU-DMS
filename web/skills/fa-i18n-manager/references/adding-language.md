@@ -9,14 +9,14 @@
 按实际使用范围补齐新语言文件：
 
 - 公共框架文案：在 `packages/locales/lang/app/**` 下为每个模块复制对应的 `en.json` 为 `ja.json`，翻译所有 value
-- 应用路由/业务文案：复制 `apps/<app>/src/locales/lang/route/en.json` 为 `apps/<app>/src/locales/lang/route/ja.json`，并按需补齐其它业务语言文件
-- 应用覆盖公共文案：如需覆盖公共 `app.*` 文案，在 `apps/<app>/src/locales/lang/app/**` 下添加对应 `ja.json` 和同名 key
+- 应用路由/业务文案：复制 `apps/qsmds-arco/src/locales/lang/route/en.json` 为 `apps/qsmds-arco/src/locales/lang/route/ja.json`，并按需补齐其它业务语言文件
+- 应用覆盖公共文案：如需覆盖公共 `app.*` 文案，在 `apps/qsmds-arco/src/locales/lang/app/**` 下添加对应 `ja.json` 和同名 key
 
 ### Step 2：注册到 localesInfo
 
 如果是全局新增语言，编辑 `packages/locales/src/index.ts`，在 `defaultLocalesInfo` 中添加默认语言信息。
 
-如果是单应用新增语言，编辑 `apps/<app>/src/locales/index.ts`，在 `createLocalesInfo()` 第二个参数中扩展语言信息：
+如果是单应用新增语言，编辑 `apps/qsmds-arco/src/locales/index.ts`，在 `createLocalesInfo()` 第二个参数中扩展语言信息：
 
 ```typescript
 const localesInfo = createLocalesInfo(messages, {
@@ -28,7 +28,7 @@ const localesInfo = createLocalesInfo(messages, {
 
 ### Step 3：同步 UI 组件库 locale
 
-如果应用使用 Element Plus、Ant Design Vue、Naive UI 等三方 UI 组件库，在 `apps/<app>/src/ui/provider/index.ts` 中补充对应语言映射。语言代码需与 `localesInfo` 保持一致。
+如果应用使用 Element Plus、Ant Design Vue、Naive UI 等三方 UI 组件库，在 `apps/qsmds-arco/src/ui/provider/index.ts` 中补充对应语言映射。语言代码需与 `localesInfo` 保持一致。
 
 ### Step 4：同步 dayjs locale（可选）
 
@@ -49,7 +49,7 @@ import 'dayjs/locale/ja'  // 需要时手动导入
 
 ### Step 1：创建语言文件
 
-按需创建 `packages/locales/lang/app/**/ar.json` 和 `apps/<app>/src/locales/lang/route/ar.json`，翻译所有内容。应用自己的业务语言文件也需要同步补齐 `ar.json`。
+按需创建 `packages/locales/lang/app/**/ar.json` 和 `apps/qsmds-arco/src/locales/lang/route/ar.json`，翻译所有内容。应用自己的业务语言文件也需要同步补齐 `ar.json`。
 
 ### Step 2：注册为 RTL
 

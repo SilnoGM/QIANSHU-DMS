@@ -5,21 +5,18 @@ description: 为 Fantastic-admin 框架生成 Pinia Store 模块。当用户提�
 
 # Store Generator
 
-## 第一步：确认工作区（必须阻塞等待用户回复）
+## 第一步：确定工作区边界（必须执行）
 
-本项目是 monorepo 架构，`apps/` 目录下存放各应用。**在执行任何文件读写操作之前**，必须先确认目标应用：
+本项目只有一个正式业务应用。普通业务需求以及用户所说的“正式应用”“业务应用”，都默认作用于 `apps/qsmds-arco`，无需重复询问应用名称；Store 默认位于 `apps/qsmds-arco/src/store/modules/`。
 
-1. 执行 `ls apps/` 列出所有可用应用
-2. **立即向用户提问**，明确询问要在哪个应用中创建 Store，并**停止等待回复**
-3. 收到用户明确回复后，才能继续后续步骤
-
-> **严格规则**：如果用户没有在请求中明确说明目标应用（例如"在 example 应用中"、"apps/core"），则必须提问，不得自行猜测或默认选择任何应用。
-
-确认后，后续所有文件路径均以该应用目录为根，例如 `apps/<app>/src/store/modules/`。
+- `examples/*` 可按需只读查阅。只有用户明确指定参考应用时，才把它作为处理目标；即便已点名，仍必须同时明确要求修改，才允许写入对应的 `examples/<name>`。仅要求参考或读取不构成写入授权。
+- 下文所有 `apps/qsmds-arco/...` 都是正式业务需求的默认路径。获得上述参考应用写入授权后，先将目标根目录固定为用户点名的精确 `examples/<name>`，再把下文路径前缀 `apps/qsmds-arco` 替换为该目标根目录；除非用户另行明确要求，不得同时修改 `apps/qsmds-arco` 或其他 `examples/*`。
+- `packages/*` 只承载跨应用稳定复用的框架能力；业务状态不得下沉到共享包。
+- 如果用户给出的目标路径与上述边界冲突，先说明冲突并确认意图，不得把正式业务改动复制到参考应用。
 
 ## 项目 Store 概览
 
-- 位置：`apps/<app>/src/store/modules/` （业务 store）
+- 位置：`apps/qsmds-arco/src/store/modules/` （业务 store）
 - 全部使用 **Composition API** 风格（`defineStore` + setup 函数）
 - 通过 `unplugin-auto-import` 自动导入，组件中无需手动 import
 - 持久化：`pinia-plugin-persistedstate` v4，配置 `persist: { pick: [...] }`
@@ -38,8 +35,8 @@ description: 为 Fantastic-admin 框架生成 Pinia Store 模块。当用户提�
 
 1. **Store 用途**：管理什么数据？（例如：用户信息、购物车、通知列表）
 2. **存放位置**：
-   - `apps/<app>/src/store/modules/` — 业务 store（推荐）
-   - `apps/<app>/src/store/modules/app/` — 框架级 store（仅框架内部使用）
+   - `apps/qsmds-arco/src/store/modules/` — 业务 store（推荐）
+   - `apps/qsmds-arco/src/store/modules/app/` — 框架级 store（仅框架内部使用）
 3. **State 字段**：需要哪些状态字段？请列出字段名、类型和初始值
 
 ### Step 2：收集功能需求
@@ -64,8 +61,8 @@ description: 为 Fantastic-admin 框架生成 Pinia Store 模块。当用户提�
 | 框架 store | `app<Name>` | `useApp<Name>Store` | `<name>.ts` |
 
 示例：
-- 购物车 → ID: `cart`，函数: `useCartStore`，文件: `apps/<app>/src/store/modules/cart.ts`
-- 通知 → ID: `notification`，函数: `useNotificationStore`，文件: `apps/<app>/src/store/modules/notification.ts`
+- 购物车 → ID: `cart`，函数: `useCartStore`，文件: `apps/qsmds-arco/src/store/modules/cart.ts`
+- 通知 → ID: `notification`，函数: `useNotificationStore`，文件: `apps/qsmds-arco/src/store/modules/notification.ts`
 
 ---
 

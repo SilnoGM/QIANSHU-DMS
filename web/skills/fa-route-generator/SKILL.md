@@ -7,21 +7,18 @@ description: 管理 Vue Router 路由配置，用于 Fantastic-admin 框架。�
 
 框架通过路由自动生成导航菜单，路由配置需要遵循特定约定。
 
-## 第一步：确认工作区（必须阻塞等待用户回复）
+## 第一步：确定工作区边界（必须执行）
 
-本项目是 monorepo 架构，`apps/` 目录下存放各应用。**在执行任何文件读写操作之前**，必须先确认目标应用：
+本项目只有一个正式业务应用。普通业务需求以及用户所说的“正式应用”“业务应用”，都默认作用于 `apps/qsmds-arco`，无需重复询问应用名称；路由文件默认位于 `apps/qsmds-arco/src/router/`。
 
-1. 执行 `ls apps/` 列出所有可用应用
-2. **立即向用户提问**，明确询问要在哪个应用中操作路由，并**停止等待回复**
-3. 收到用户明确回复后，才能继续后续步骤
-
-> **严格规则**：如果用户没有在请求中明确说明目标应用（例如"在 example 应用中"、"apps/core"），则必须提问，不得自行猜测或默认选择任何应用。
-
-确认后，后续所有文件路径均以该应用目录为根，例如 `apps/<app>/src/router/`。
+- `examples/*` 可按需只读查阅。只有用户明确指定参考应用时，才把它作为处理目标；即便已点名，仍必须同时明确要求修改，才允许写入对应的 `examples/<name>`。仅要求参考或读取不构成写入授权。
+- 下文所有 `apps/qsmds-arco/...` 都是正式业务需求的默认路径。获得上述参考应用写入授权后，先将目标根目录固定为用户点名的精确 `examples/<name>`，再把下文路径前缀 `apps/qsmds-arco` 替换为该目标根目录；除非用户另行明确要求，不得同时修改 `apps/qsmds-arco` 或其他 `examples/*`。
+- `packages/*` 只承载跨应用稳定复用的框架能力，不能存放业务路由。
+- 如果用户给出的目标路径与上述边界冲突，先说明冲突并确认意图，不得把正式业务改动复制到参考应用。
 
 ## 前置检查
 
-读取 `apps/<app>/src/settings.ts`，检查 `app.routeBaseOn` 的值：
+读取 `apps/qsmds-arco/src/settings.ts`，检查 `app.routeBaseOn` 的值：
 
 - `'frontend'`（默认）：可以继续
 - `'backend'`：路由由后端驱动，手动创建的路由文件会被忽略，告知用户此模式不支持前端路由文件生成
@@ -36,7 +33,7 @@ description: 管理 Vue Router 路由配置，用于 Fantastic-admin 框架。�
 
 #### 2. 创建路由文件
 
-在 `apps/<app>/src/router/modules/` 下创建 `<模块名>.ts`：
+在 `apps/qsmds-arco/src/router/modules/` 下创建 `<模块名>.ts`：
 
 ```typescript
 import type { RouteRecordRaw } from 'vue-router'
@@ -70,11 +67,11 @@ export default routes
 
 #### 3. 更新 routes.ts
 
-在 `apps/<app>/src/router/routes.ts` 中添加 import 并注册到对应主导航分组的 `children` 数组。
+在 `apps/qsmds-arco/src/router/routes.ts` 中添加 import 并注册到对应主导航分组的 `children` 数组。
 
 ### 场景 B: 修改现有路由
 
-定位路由文件（在 `apps/<app>/src/router/modules/` 下搜索），读取后按需修改 meta 属性。常见修改：
+定位路由文件（在 `apps/qsmds-arco/src/router/modules/` 下搜索），读取后按需修改 meta 属性。常见修改：
 
 **标签页合并**（新增页/编辑页合并到同一标签，避免开多个标签）：
 ```typescript

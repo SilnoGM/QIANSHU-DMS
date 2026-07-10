@@ -5,30 +5,27 @@ description: 管理和配置 Fantastic-admin 框架设置。当用户提到以�
 
 # 框架设置
 
-## 第一步：确认工作区（必须阻塞等待用户回复）
+## 第一步：确定工作区边界（必须执行）
 
-本项目是 monorepo 架构，`apps/` 目录下存放各应用。**在执行任何文件读写操作之前**，必须先确认目标应用：
+本项目只有一个正式业务应用。普通业务需求以及用户所说的“正式应用”“业务应用”，都默认作用于 `apps/qsmds-arco`，无需重复询问应用名称；应用设置默认位于 `apps/qsmds-arco/src/settings.ts`。
 
-1. 执行 `ls apps/` 列出所有可用应用
-2. **立即向用户提问**，明确询问要在哪个应用中修改设置，并**停止等待回复**
-3. 收到用户明确回复后，才能继续后续步骤
-
-> **严格规则**：如果用户没有在请求中明确说明目标应用（例如"在 example 应用中"、"apps/core"），则必须提问，不得自行猜测或默认选择任何应用。
-
-确认后，后续所有文件路径均以该应用目录为根，例如 `apps/<app>/src/settings.ts`。
+- `examples/*` 可按需只读查阅。只有用户明确指定参考应用时，才把它作为处理目标；即便已点名，仍必须同时明确要求修改，才允许写入对应的 `examples/<name>`。仅要求参考或读取不构成写入授权。
+- 下文所有 `apps/qsmds-arco/...` 都是正式业务需求的默认路径。获得上述参考应用写入授权后，先将目标根目录固定为用户点名的精确 `examples/<name>`，再把下文路径前缀 `apps/qsmds-arco` 替换为该目标根目录；除非用户另行明确要求，不得同时修改 `apps/qsmds-arco` 或其他 `examples/*`。
+- `packages/*` 只承载跨应用稳定复用的框架能力；业务配置不得写入共享默认值。
+- 如果用户给出的目标路径与上述边界冲突，先说明冲突并确认意图，不得把正式业务改动复制到参考应用。
 
 ## 核心文件
 
-- `apps/<app>/src/settings.ts` - 当前配置文件（修改此文件）
-- `packages/settings/types.ts` - TypeScript 类型定义（只读参考）
+- `apps/qsmds-arco/src/settings.ts` - 默认目标配置文件（根据工作区边界映射后修改）
+- `packages/settings/src/types.ts` - TypeScript 类型定义（只读参考）
 - `packages/settings/src/default.ts` - 默认完整配置（禁止修改，仅供参考）
 
 ## 工作流程
 
-1. 读取 `apps/<app>/src/settings.ts` 了解当前配置
-2. 查阅 `packages/settings/types.ts` 中的类型定义了解可用选项
+1. 读取目标应用的 `src/settings.ts` 了解当前配置（正式业务默认路径为 `apps/qsmds-arco/src/settings.ts`）
+2. 查阅 `packages/settings/src/types.ts` 中的类型定义了解可用选项
 3. 查阅 `packages/settings/src/default.ts` 了解默认值
-4. 仅修改 `apps/<app>/src/settings.ts`
+4. 仅修改目标应用的 `src/settings.ts`
 5. 修改后检查：与默认值相同的配置项直接移除——`settings.ts` 只需保留真正自定义的内容，框架会自动继承默认配置，这样维护时一眼就能看出哪些是项目定制的
 
 ### 主题配置补充规则
@@ -49,7 +46,7 @@ description: 管理和配置 Fantastic-admin 框架设置。当用户提到以�
 - `baseColorLight` / `baseColorDark` 是基础色名称，取值来自 `@fantastic-admin/themes` 的 `BASE_COLORS`
 - `light` / `dark` 是主题色名称，取值来自 `@fantastic-admin/themes` 的 `THEMES`
 - 当 `sync: true` 时，运行时会同步亮暗两套基础色和主题色；如果用户要分开配置，必须显式设为 `sync: false`
-- 只修改 `apps/<app>/src/settings.ts`，不要直接改 `packages/themes/index.ts`；如果用户是在“创建新主题”而不是“切换已有主题”，应改用 `fa-theme-customizer`
+- 只修改目标应用的 `src/settings.ts`，不要直接改 `packages/themes/index.ts`；如果用户是在“创建新主题”而不是“切换已有主题”，应改用 `fa-theme-customizer`
 
 ## 配置领域
 
