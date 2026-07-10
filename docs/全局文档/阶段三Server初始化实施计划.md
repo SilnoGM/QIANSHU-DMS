@@ -744,9 +744,39 @@ cleanup_postgres() {
   cleanup_failed=0
   unset DATABASE_URL DOTENV_CONFIG_PATH DEBUG
   unset PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION
+
+  if [ -z "${pg_id:-}" ] &&
+    [ -n "${pg_tmp:-}" ] &&
+    [ -s "$pg_tmp/container.cid" ]; then
+    pg_id="$(<"$pg_tmp/container.cid")"
+    case "$pg_id" in
+      ''|*[!0-9a-f]*) pg_id="" ;;
+    esac
+  fi
+
+  if [ -z "${pg_id:-}" ]; then
+    candidates="$(
+      docker ps -aq \
+        --filter "label=qianshu-dms.session=$session_id" 2>/dev/null
+    )" || cleanup_failed=1
+
+    case "${candidates:-}" in
+      "") ;;
+      *$'\n'*) cleanup_failed=1 ;;
+      *) pg_id="$candidates" ;;
+    esac
+  fi
+
   if [ -n "${pg_id:-}" ]; then
     docker rm --force --volumes "$pg_id" >/dev/null 2>&1 || cleanup_failed=1
   fi
+
+  residual="$(
+    docker ps -aq \
+      --filter "label=qianshu-dms.session=$session_id" 2>/dev/null
+  )" || cleanup_failed=1
+  [ -z "${residual:-}" ] || cleanup_failed=1
+
   if [ -n "${pg_tmp:-}" ]; then
     rm -f "$pg_tmp/postgres-password" "$pg_tmp/container.cid" "$pg_tmp"/*.log
     rmdir "$pg_tmp" 2>/dev/null || cleanup_failed=1
