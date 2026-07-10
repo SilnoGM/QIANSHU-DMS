@@ -35,7 +35,7 @@
 | `S3-R07` | **当**执行根 `test:root`、`check`、`build` 时，**系统应**真实编排 Server 与 Web，同时根目录仍不产生 workspace、lockfile 或 `node_modules/`。 | Task 1、Task 6、Task 7 |
 | `S3-R08` | **系统应始终**忽略真实环境文件、Prisma Client、构建和覆盖率产物，只跟踪无凭据的 `.env.example`。 | Task 1、Task 7 |
 | `S3-R09` | **当**应用完成全局初始化时，**系统应**启用 `/api` 前缀、shutdown hooks 和返回 `422` 的 DTO `ValidationPipe`。 | Task 2、Task 5 |
-| `S3-R10` | **系统应始终**保持单一 NestJS package；`server/pnpm-workspace.yaml` **应仅**包含精确的 Prisma `allowBuilds`，不声明 `packages` 或其他 package graph；依赖不得使用 `file:`、`link:`、`portal:`、`workspace:*` 或跨端源码。 | Task 1、Task 7 |
+| `S3-R10` | **系统应始终**保持单一 NestJS package；`server/pnpm-workspace.yaml` **应仅**包含精确的 Prisma `allowBuilds`，不声明 `packages` 或其他 package graph；所有依赖只允许固定 registry SemVer，不得使用 range、tag、alias、路径、URL、Git 来源或跨端源码。 | Task 1、Task 7 |
 
 ## 文件职责图
 
@@ -165,22 +165,21 @@ test('Server 是带独立 lockfile 的单一私有 package', async () => {
   assert.equal(await exists('server/yarn.lock'), false)
 })
 
-test('Server 暴露根编排要求的脚本且不跨边界依赖', async () => {
+test('Server 暴露根编排要求的脚本且只使用固定 registry SemVer', async () => {
   const manifest = JSON.parse(await readFile(fromRoot('server/package.json'), 'utf8'))
 
   for (const scriptName of ['dev', 'check', 'build']) {
     assert.equal(typeof manifest.scripts?.[scriptName], 'string')
   }
-  for (const dependencySpec of Object.values({
-    ...manifest.dependencies,
-    ...manifest.devDependencies,
-  })) {
-    assert.doesNotMatch(dependencySpec, /^(?:file:|link:|portal:|workspace:)/)
+  for (const { specifier } of dependencyEntries(manifest)) {
+    assert.equal(isFixedRegistryVersion(specifier), true)
   }
 })
 ```
 
-测试还必须确认根目录仍不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 和 `node_modules/`；Server 配置文件内容精确为本 Task 下方的 `allowBuilds`，不含 `packages`、`catalog`、`overrides` 或其他 workspace graph 配置；并确认 Server `.gitignore` 独立忽略 `.env`、`dist`、`coverage`、`src/generated/prisma`，同时放行 `.env.example`。
+依赖分类器必须只接受固定 SemVer，包括合法 prerelease 与 build metadata；必须拒绝 range、tag、npm alias、本地相对或绝对路径、tarball URL、Git URL、GitHub shorthand，以及 `file:`、`link:`、`portal:`、`workspace:`。测试覆盖 `dependencies`、`devDependencies`、`optionalDependencies`、`peerDependencies` 四个区段，并在不引入根 YAML 依赖、不运行安装命令的前提下安全读取 lockfile：`importers` 只能包含 `.`，每个 manifest specifier 必须与对应 importer 精确一致，fixture 必须证明 manifest/lock 漂移会失败。
+
+测试还必须确认 `tsconfig.build.json` 只包含 `src/**/*.ts`，并用 `rootDir: "./src"` 保持产物入口为 `dist/main.js`；确认根目录仍不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 和 `node_modules/`；Server 配置文件内容精确为本 Task 下方的 `allowBuilds`，不含 `packages`、`catalog`、`overrides` 或其他 workspace graph 配置；并确认 Server `.gitignore` 独立忽略 `.env`、`dist`、`coverage`、`src/generated/prisma`，同时放行 `.env.example`。
 
 运行：
 
@@ -283,6 +282,10 @@ Expected RED: 因 `server/package.json`、lockfile 和独立规则尚不存在�
 ```json
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "test", "dist", "**/*.spec.ts"]
 }
 ```
@@ -319,7 +322,6 @@ export default tseslint.config(
     files: ['**/*.ts'],
     languageOptions: {
       globals: {
-        ...globals.jest,
         ...globals.node,
       },
       parserOptions: {
@@ -333,6 +335,14 @@ export default tseslint.config(
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/unbound-method': 'off',
+    },
+  },
+  {
+    files: ['**/*.spec.ts', 'test/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
     },
   },
 )

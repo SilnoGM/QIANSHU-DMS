@@ -5,6 +5,12 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import {
+  assertLockfileMatchesManifest,
+  dependencyEntries,
+  isFixedRegistryVersion,
+  parseLockfileImporters,
+} from './server-boundary-helpers.mjs'
 
 // 始终从测试脚本所在位置定位仓库，保证从仓库外执行时仍验证同一套工程边界。
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -29,23 +35,6 @@ async function exists(...segments) {
     }
     throw error
   }
-}
-
-function dependencyEntries(manifest) {
-  const dependencySections = [
-    'dependencies',
-    'devDependencies',
-    'optionalDependencies',
-    'peerDependencies',
-  ]
-
-  return dependencySections.flatMap(section =>
-    Object.entries(manifest[section] ?? {}).map(([name, specifier]) => ({
-      name,
-      section,
-      specifier,
-    })),
-  )
 }
 
 function checkIgnore(fixtureRoot, relativePath) {
@@ -88,6 +77,15 @@ test('Server 是具备独立 lockfile 的单一私有 pnpm package', async () =>
   }
 })
 
+test('Server 生产构建只编译 src 并保持 dist/main.js 入口', async () => {
+  const buildConfig = JSON.parse(
+    await readFile(fromRoot('server', 'tsconfig.build.json'), 'utf8'),
+  )
+
+  assert.equal(buildConfig.compilerOptions?.rootDir, './src')
+  assert.deepEqual(buildConfig.include, ['src/**/*.ts'])
+})
+
 test('Server 只使用 pnpm 11 单 package 安全配置且不产生其他包管理器状态', async () => {
   // pnpm 11 将项目级安装安全设置统一放在 pnpm-workspace.yaml；精确比较可同时
   // 防止 packages、全局放开构建脚本或其他配置悄然形成多 package 图和安全降级。
@@ -102,22 +100,124 @@ test('Server 只使用 pnpm 11 单 package 安全配置且不产生其他包管�
   }
 })
 
-test('Server 的全部依赖只能来自独立 registry 版本', async () => {
+test('依赖版本分类器只接受固定 registry SemVer', () => {
+  const validSpecifiers = [
+    '0.0.0',
+    '1.2.3',
+    '1.2.3-alpha',
+    '1.2.3-alpha.1',
+    '1.2.3-0.3.7',
+    '1.2.3-x.7.z.92',
+    '1.2.3+build.01',
+    '1.2.3-alpha.1+build.5',
+  ]
+  const invalidSpecifiers = [
+    '',
+    '1',
+    '1.2',
+    '1.2.x',
+    '^1.2.3',
+    '~1.2.3',
+    '>=1.2.3',
+    '1.2.3 || 2.0.0',
+    '1.2.3 - 2.0.0',
+    'latest',
+    'next',
+    '01.2.3',
+    '1.02.3',
+    '1.2.03',
+    '1.2.3-01',
+    '1.2.3-alpha..1',
+    '1.2.3+build..1',
+    'file:../shared',
+    'link:../shared',
+    'portal:../shared',
+    'workspace:*',
+    '../web/pkg.tgz',
+    './vendor/pkg',
+    '/tmp/pkg',
+    '~/pkg',
+    'https://example.com/pkg.tgz',
+    'git+ssh://git@example.com/pkg.git',
+    'git://example.com/pkg.git',
+    'github:user/repo',
+    'user/repo',
+    'npm:other-package@1.2.3',
+  ]
+
+  for (const specifier of validSpecifiers) {
+    assert.equal(isFixedRegistryVersion(specifier), true, `应接受：${specifier}`)
+  }
+  for (const specifier of invalidSpecifiers) {
+    assert.equal(isFixedRegistryVersion(specifier), false, `应拒绝：${specifier}`)
+  }
+})
+
+test('lockfile importer 校验器能在只读条件下识别漂移和额外 importer', () => {
+  const manifest = { dependencies: { example: '1.2.3' } }
+  const matchingLockfile = `lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      example:
+        specifier: 1.2.3
+        version: 1.2.3
+
+packages:
+`
+
+  const matchingImporters = parseLockfileImporters(matchingLockfile)
+  assert.doesNotThrow(() => assertLockfileMatchesManifest(manifest, matchingImporters))
+
+  const driftedImporters = parseLockfileImporters(
+    matchingLockfile.replace('specifier: 1.2.3', 'specifier: 1.2.4'),
+  )
+  assert.throws(
+    () => assertLockfileMatchesManifest(manifest, driftedImporters),
+    /specifier 必须与 package\.json 一致/,
+  )
+
+  const extraImporters = parseLockfileImporters(
+    matchingLockfile.replace('\npackages:', '\n  copied:\n\npackages:'),
+  )
+  assert.throws(
+    () => assertLockfileMatchesManifest(manifest, extraImporters),
+    /只能包含单一 \. importer/,
+  )
+
+  const unsafeScalarLockfile = matchingLockfile.replace(
+    'specifier: 1.2.3',
+    'specifier: !!js/function function() {}',
+  )
+  assert.throws(
+    () => parseLockfileImporters(unsafeScalarLockfile),
+    /不受支持的标量/,
+  )
+})
+
+test('Server lockfile 只有单一 importer 且 specifier 与 manifest 一致', async () => {
+  const [manifestContents, lockfileContents] = await Promise.all([
+    readFile(fromRoot('server', 'package.json'), 'utf8'),
+    readFile(fromRoot('server', 'pnpm-lock.yaml'), 'utf8'),
+  ])
+  const manifest = JSON.parse(manifestContents)
+  const importers = parseLockfileImporters(lockfileContents)
+
+  assertLockfileMatchesManifest(manifest, importers)
+})
+
+test('Server 的全部依赖只能使用固定 registry SemVer', async () => {
   const manifest = JSON.parse(
     await readFile(fromRoot('server', 'package.json'), 'utf8'),
   )
-  const localProtocol = /^(?:file|link|portal|workspace):/
 
   for (const { name, section, specifier } of dependencyEntries(manifest)) {
     assert.equal(
-      typeof specifier,
-      'string',
-      `${section}.${name} 必须使用字符串版本`,
-    )
-    assert.equal(
-      localProtocol.test(specifier),
-      false,
-      `${section}.${name} 禁止跨依赖域引用：${specifier}`,
+      isFixedRegistryVersion(specifier),
+      true,
+      `${section}.${name} 必须固定为 registry SemVer：${specifier}`,
     )
   }
 })

@@ -12,7 +12,6 @@ export default tseslint.config(
     files: ['**/*.ts'],
     languageOptions: {
       globals: {
-        ...globals.jest,
         ...globals.node,
       },
       parserOptions: {
@@ -26,6 +25,14 @@ export default tseslint.config(
       '@typescript-eslint/no-misused-promises': 'error',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/unbound-method': 'off',
+    },
+  },
+  {
+    files: ['**/*.spec.ts', 'test/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
     },
   },
 )
