@@ -252,6 +252,7 @@ test('Server 忽略规则在独立 Git 根中保护本地状态并放行环境�
     'dist/main.js',
     'coverage/lcov.info',
     'src/generated/prisma/client.ts',
+    'tsconfig.build.tsbuildinfo',
     'server.log',
   ]
   const trackedTemplates = ['.env.example', '.env.test.example']

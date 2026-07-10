@@ -6,4 +6,5 @@ coverage/
 !.env.example
 !.env.*.example
 src/generated/prisma/
+*.tsbuildinfo
 *.log
