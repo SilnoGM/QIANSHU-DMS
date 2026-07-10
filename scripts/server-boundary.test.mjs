@@ -83,6 +83,7 @@ test('Server 生产构建只编译 src 并保持 dist/main.js 入口', async () 
   )
 
   assert.equal(buildConfig.compilerOptions?.rootDir, './src')
+  assert.equal(buildConfig.compilerOptions?.incremental, false)
   assert.deepEqual(buildConfig.include, ['src/**/*.ts'])
 })
 

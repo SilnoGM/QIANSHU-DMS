@@ -179,7 +179,7 @@ test('Server 暴露根编排要求的脚本且只使用固定 registry SemVer', 
 
 依赖分类器必须只接受固定 SemVer，包括合法 prerelease 与 build metadata；必须拒绝 range、tag、npm alias、本地相对或绝对路径、tarball URL、Git URL、GitHub shorthand，以及 `file:`、`link:`、`portal:`、`workspace:`。测试覆盖 `dependencies`、`devDependencies`、`optionalDependencies`、`peerDependencies` 四个区段，并在不引入根 YAML 依赖、不运行安装命令的前提下安全读取 lockfile：`importers` 只能包含 `.`，每个 manifest specifier 必须与对应 importer 精确一致，fixture 必须证明 manifest/lock 漂移会失败。
 
-测试还必须确认 `tsconfig.build.json` 只包含 `src/**/*.ts`，并用 `rootDir: "./src"` 保持产物入口为 `dist/main.js`；确认根目录仍不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 和 `node_modules/`；Server 配置文件内容精确为本 Task 下方的 `allowBuilds`，不含 `packages`、`catalog`、`overrides` 或其他 workspace graph 配置；并确认 Server `.gitignore` 独立忽略 `.env`、`dist`、`coverage`、`src/generated/prisma` 与 `*.tsbuildinfo`，同时放行 `.env.example`。
+测试还必须确认 `tsconfig.build.json` 只包含 `src/**/*.ts`，用 `rootDir: "./src"` 保持产物入口为 `dist/main.js`，并显式设置 `incremental: false`，避免 Nest 删除 `dist/` 后因目录外的旧增量状态而跳过 emit；确认根目录仍不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 和 `node_modules/`；Server 配置文件内容精确为本 Task 下方的 `allowBuilds`，不含 `packages`、`catalog`、`overrides` 或其他 workspace graph 配置；并确认 Server `.gitignore` 独立忽略 `.env`、`dist`、`coverage`、`src/generated/prisma` 与 `*.tsbuildinfo`，同时放行 `.env.example`。
 
 运行：
 
@@ -283,6 +283,7 @@ Expected RED: 因 `server/package.json`、lockfile 和独立规则尚不存在�
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "incremental": false,
     "rootDir": "./src"
   },
   "include": ["src/**/*.ts"],
@@ -578,6 +579,13 @@ pnpm -C server exec jest --runInBand src/config/env.validation.spec.ts
 pnpm -C server exec jest --runInBand src/app.setup.spec.ts
 env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server exec tsc --noEmit
 env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server exec nest build
+test -f server/dist/main.js
+test ! -e server/dist/src/main.js
+test ! -e server/dist/prisma.config.js
+env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server exec nest build
+test -f server/dist/main.js
+test ! -e server/dist/src/main.js
+test ! -e server/dist/prisma.config.js
 git add server/src/config server/src/main.ts server/src/app.setup.ts \
   server/src/app.setup.spec.ts server/src/app.module.ts
 git -c core.quotePath=false diff --cached --name-only
