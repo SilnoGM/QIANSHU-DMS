@@ -484,7 +484,7 @@ importers:
         specifier: 'catalog:'
         version: 1.3.0(@unocss/preset-wind3@66.7.4)(unocss@66.7.4(vite@8.1.3(@types/node@26.1.0)(esbuild@0.28.0)(jiti@2.7.0)(sass-embedded@1.100.0)(sass@1.100.0)(terser@5.48.0)(tsx@4.23.0)(yaml@2.9.0)))
 
-  apps/core:
+  examples/core:
     dependencies:
       '@fantastic-admin/components':
         specifier: workspace:*
@@ -704,7 +704,7 @@ importers:
         specifier: 'catalog:'
         version: 3.3.6(typescript@6.0.3)
 
-  apps/core-arco-design-vue:
+  examples/core-arco-design-vue:
     dependencies:
       '@fantastic-admin/components':
         specifier: workspace:*
@@ -927,7 +927,7 @@ importers:
         specifier: 'catalog:'
         version: 3.3.6(typescript@6.0.3)
 
-  apps/example:
+  examples/example:
     dependencies:
       '@fantastic-admin/components':
         specifier: workspace:*

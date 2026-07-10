@@ -8,8 +8,8 @@ verifyDepsBeforeRun: prompt
 
 packages:
   - apps/*
+  - examples/*
   - packages/*
-  - docs
 catalog:
   '@antfu/eslint-config': ^9.1.0
   '@clack/prompts': ^1.6.0
