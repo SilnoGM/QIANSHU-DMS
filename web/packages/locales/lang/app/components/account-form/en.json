@@ -1,0 +1,120 @@
+{
+  "app": {
+    "components": {
+      "accountForm": {
+        "login": {
+          "accountLogin": "Account Login",
+          "qrcodeLogin": "Scan Login",
+          "intro": "Welcome aboard 👋🏻",
+          "remember": "Remember Me",
+          "forget": "Forget Password?",
+          "noAccount": "No Account?",
+          "register": "Register New Account",
+          "wechatQrcode": "Please use WeChat scan login",
+          "testLogin": "Demo Account One-click Login",
+          "form": {
+            "account": "Account",
+            "password": "Password",
+            "login": "Login"
+          },
+          "rules": {
+            "account": "Please enter the account",
+            "password": "Please enter the password"
+          }
+        },
+        "loginAgain": {
+          "accountLogin": "Account Login",
+          "qrcodeLogin": "Scan Login",
+          "intro": "Please re-login",
+          "subIntro": "Your login status has expired",
+          "wechatQrcode": "Please use WeChat scan login",
+          "form": {
+            "account": "Account",
+            "password": "Password (123456)",
+            "login": "Login"
+          },
+          "rules": {
+            "account": "Please enter the account",
+            "password": "Please enter the password"
+          }
+        },
+        "register": {
+          "intro": "Explore from here 🚀",
+          "hasAccount": "Already have an account?",
+          "login": "Login",
+          "demoUnavailable": "This feature is not available in the demo system",
+          "form": {
+            "account": "Account",
+            "password": "Password",
+            "checkPassword": "Check Password",
+            "register": "Register"
+          },
+          "rules": {
+            "account": "Please enter an account",
+            "password": "Please enter a password",
+            "passwordLength": "Password length is 6 to 18 bits",
+            "checkPassword": "Please enter the password again",
+            "checkPasswordError": "The two passwords entered are inconsistent"
+          }
+        },
+        "resetPassword": {
+          "intro": "Forget password? 🔒",
+          "login": "Go to login",
+          "demoUnavailable": "This feature is not available in the demo system",
+          "form": {
+            "account": "Account",
+            "captcha": "Captcha",
+            "sendCaptcha": "Send Captcha",
+            "captchaCountdown": "Can resend in {0}s",
+            "newPassword": "New Password",
+            "confirm": "Confirm"
+          },
+          "rules": {
+            "account": "Please enter account",
+            "captcha": "Please enter captcha",
+            "newPassword": "Please enter new password",
+            "newPasswordLength": "The length of the password is 6 to 18 bits"
+          }
+        },
+        "editPassword": {
+          "intro": "Modify Password",
+          "subIntro": "Please enter the original password, new password and confirm password",
+          "success": "Mock update succeeded, please log in again",
+          "form": {
+            "password": "Original Password",
+            "newPassword": "New Password",
+            "checkPassword": "Confirm New Password",
+            "save": "Save"
+          },
+          "rules": {
+            "password": "Please enter the original password",
+            "newPassword": "Please enter the new password",
+            "passwordLength": "Password length is 6 to 18 characters",
+            "checkPassword": "Please confirm the new password",
+            "checkPasswordError": "The two passwords do not match"
+          }
+        },
+        "switchAdd": {
+          "intro": "Add Account",
+          "subIntro": "Add Account after switching accounts can log in",
+          "success": "Account added successfully",
+          "form": {
+            "account": "Account",
+            "password": "Password",
+            "login": "Add & Login"
+          },
+          "rules": {
+            "account": "Please enter the account",
+            "password": "Please enter the password"
+          }
+        },
+        "switchLogout": {
+          "select_account_to_sign_out": "Select account to sign out",
+          "current_login": "Current login",
+          "sign_out": "Sign out",
+          "sign_out_from_all_accounts": "Sign out all accounts"
+        }
+      }
+    }
+  }
+}

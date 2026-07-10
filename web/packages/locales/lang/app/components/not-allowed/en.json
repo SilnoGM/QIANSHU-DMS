@@ -1,0 +1,10 @@
+{
+  "app": {
+    "components": {
+      "notAllowed": {
+        "notPermitted": "Sorry, you don't have permission to access this page",
+        "goBack": "Back to home"
+      }
+    }
+  }
+}

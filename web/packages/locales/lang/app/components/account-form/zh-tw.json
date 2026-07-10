@@ -1,0 +1,120 @@
+{
+  "app": {
+    "components": {
+      "accountForm": {
+        "login": {
+          "accountLogin": "帳號密碼登入",
+          "qrcodeLogin": "掃碼登入",
+          "intro": "歡迎使用 👋🏻",
+          "remember": "記住我",
+          "forget": "忘記密碼了?",
+          "noAccount": "還沒有帳號?",
+          "register": "註冊新帳號",
+          "wechatQrcode": "請使用微信掃碼登入",
+          "testLogin": "演示帳號一键登入",
+          "form": {
+            "account": "用戶名",
+            "password": "密碼",
+            "login": "登入"
+          },
+          "rules": {
+            "account": "請輸入用戶名",
+            "password": "請輸入密碼"
+          }
+        },
+        "loginAgain": {
+          "accountLogin": "帳號密碼登入",
+          "qrcodeLogin": "掃碼登入",
+          "intro": "請重新登入",
+          "subIntro": "您的登入狀態已過期",
+          "wechatQrcode": "請使用微信掃碼登入",
+          "form": {
+            "account": "用戶名",
+            "password": "密碼 (123456)",
+            "login": "登入"
+          },
+          "rules": {
+            "account": "請輸入用戶名",
+            "password": "請輸入密碼"
+          }
+        },
+        "register": {
+          "intro": "探索從這裡開始 🚀",
+          "hasAccount": "已有帳號?",
+          "login": "去登入",
+          "demoUnavailable": "演示系統未提供該功能",
+          "form": {
+            "account": "用戶名",
+            "password": "密碼",
+            "checkPassword": "確認密碼",
+            "register": "註冊"
+          },
+          "rules": {
+            "account": "請輸入用戶名",
+            "password": "請輸入密碼",
+            "passwordLength": "密碼長度為6到18位",
+            "checkPassword": "請再次輸入密碼",
+            "checkPasswordError": "兩次輸入的密碼不一致"
+          }
+        },
+        "resetPassword": {
+          "intro": "忘記密碼了? 🔒",
+          "login": "去登錄",
+          "demoUnavailable": "演示系統未提供該功能",
+          "form": {
+            "account": "用戶名",
+            "captcha": "驗證碼",
+            "sendCaptcha": "發送驗證碼",
+            "captchaCountdown": "{0} 秒後可重新發送",
+            "newPassword": "新密碼",
+            "confirm": "確認"
+          },
+          "rules": {
+            "account": "請輸入用戶名",
+            "captcha": "請輸入驗證碼",
+            "newPassword": "請輸入新密碼",
+            "newPasswordLength": "密碼長度為6到18位"
+          }
+        },
+        "editPassword": {
+          "intro": "修改密碼",
+          "subIntro": "請輸入原密碼、新密碼和確認密碼",
+          "success": "模擬修改成功，請重新登入",
+          "form": {
+            "password": "原密碼",
+            "newPassword": "新密碼",
+            "checkPassword": "確認新密碼",
+            "save": "保存"
+          },
+          "rules": {
+            "password": "請輸入原密碼",
+            "newPassword": "請輸入新密碼",
+            "passwordLength": "密碼長度為6到18位",
+            "checkPassword": "請確認新密碼",
+            "checkPasswordError": "兩次輸入的密碼不一致"
+          }
+        },
+        "switchAdd": {
+          "intro": "添加帳號",
+          "subIntro": "添加帳號後，可以切換帳號登入",
+          "success": "帳號添加成功",
+          "form": {
+            "account": "用戶名",
+            "password": "密碼",
+            "login": "添加並登入"
+          },
+          "rules": {
+            "account": "請輸入用戶名",
+            "password": "請輸入密碼"
+          }
+        },
+        "switchLogout": {
+          "select_account_to_sign_out": "選擇要登出的帳號",
+          "current_login": "當前登錄",
+          "sign_out": "登出",
+          "sign_out_from_all_accounts": "登出所有帳號"
+        }
+      }
+    }
+  }
+}

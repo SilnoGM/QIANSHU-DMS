@@ -1,0 +1,24 @@
+{
+  "app": {
+    "layouts": {
+      "topbar": {
+        "tabbar": {
+          "reload": "重新加载",
+          "close": "关闭标签页",
+          "pin": "固定",
+          "unpin": "取消固定",
+          "maximize": "最大化",
+          "newWindow": "新窗口中打开",
+          "closeOtherSide": "关闭其它标签页",
+          "closeLeftSide": "关闭左侧标签页",
+          "closeRightSide": "关闭右侧标签页",
+          "scrollTip": {
+            "title": "温馨提示",
+            "description": "标签栏数量超过展示区域范围，可以将鼠标移到标签栏上，通过鼠标滚轮滑动浏览",
+            "action": "知道了"
+          }
+        }
+      }
+    }
+  }
+}

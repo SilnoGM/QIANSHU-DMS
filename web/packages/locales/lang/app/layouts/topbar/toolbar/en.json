@@ -1,0 +1,35 @@
+{
+  "app": {
+    "layouts": {
+      "topbar": {
+        "toolbar": {
+          "favorites": {
+            "title": "Favorites",
+            "add": "Add to Favorites",
+            "remove": "Remove from Favorites",
+            "empty": "Favorites is empty",
+            "addToFavorites": "Click {0} to add the current page to Favorites"
+          },
+          "menuSearch": {
+            "input": "Support title, URL fuzzy query",
+            "welcome": "Enter the navigation you want to search",
+            "empty": "Not found",
+            "upDown": "Choice",
+            "enter": "Enter",
+            "esc": "Exit"
+          },
+          "notification": {
+            "empty": "No notification",
+            "markAsRead": "Mark all as read",
+            "viewAll": "View all",
+            "todo": "Not implemented yet. Please implement it in your project."
+          },
+          "pageReload": {
+            "tooltip1": "Click while holding {0}",
+            "tooltip2": "to switch to native browser refresh"
+          }
+        }
+      }
+    }
+  }
+}

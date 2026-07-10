@@ -1,0 +1,209 @@
+{
+  "app": {
+    "layouts": {
+      "appSetting": {
+        "titleSettings": "應用配置",
+        "titlePreferences": "個人偏好",
+        "description": "在生產環境中應關閉該模組",
+        "warning": "在此處調整配置只是臨時生效，要想真正應用於項目，請點擊「 @:app.layouts.appSetting.copy 」按鈕，並粘貼到 {path} 文件中。",
+        "copy": "複製配置",
+        "reset": "重置",
+        "theme": {
+          "title": "主題",
+          "baseColor": "基礎色",
+          "themeColor": "主題色",
+          "colorScheme": "顏色方案",
+          "sync": "主題同步",
+          "syncTip": "切換顏色方案將共用同一套基礎色和主題色",
+          "radius": "圓角",
+          "colorAmblyopia": "色弱模式"
+        },
+        "menu": {
+          "title": "導航菜單",
+          "mode": {
+            "side": "側邊欄模式 (有主導航菜單)",
+            "head": "頂部模式",
+            "single": "側邊欄模式 (無主導航菜單)",
+            "only-side": "側邊欄精簡模式",
+            "only-head": "頂部精簡模式",
+            "side-panel": "側邊欄面板模式",
+            "head-panel": "頂部面板模式"
+          },
+          "dark": "深色模式",
+          "darkTip": "導航菜單深色模式僅在顏色方案亮色模式下生效",
+          "mainMenuClickMode": {
+            "title": "點擊主導航菜單",
+            "tip": "智能模式下默認執行切換操作，當次導航菜單只有一個可訪問的導航菜單時執行跳轉操作",
+            "switch": "切換",
+            "jump": "跳轉",
+            "smart": "智能"
+          },
+          "subMenuUniqueExpand": "次導航菜單唯一展開",
+          "subMenuCollapse": "次導航菜單收起",
+          "subMenuAutoCollapse": {
+            "title": "次導航菜單自動收起",
+            "tip": "次導航菜單收起時，鼠標懸停時會臨時展開"
+          },
+          "subMenuCollapseButton": "次導航菜單展開/收起按鈕",
+          "style": "風格",
+          "hotkeys": "快捷鍵"
+        },
+        "topbar": {
+          "title": "頂欄",
+          "tabbar": "標籤欄",
+          "toolbar": "工具欄",
+          "switchTabbarAndToolbar": {
+            "title": "展示切換",
+            "tip": "切換標籤欄和工具欄的展示順序"
+          },
+          "mode": {
+            "title": "模式",
+            "static": "静態",
+            "fixed": "固定",
+            "sticky": "粘性"
+          }
+        },
+        "tabbar": {
+          "title": "標籤欄",
+          "style": {
+            "title": "風格",
+            "default": "默認",
+            "fashion": "時尚",
+            "card": "卡片",
+            "square": "方塊"
+          },
+          "minMaxWidth": {
+            "title": "標籤頁寬度",
+            "tip": {
+              "constant": "@:app.layouts.appSetting.tabbar.minMaxWidth.constant ：在設置的區間值內自適應，當區間最小值和最大值相同時，則為固定寬度",
+              "adaptive": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive ：在設置的區間值內自適應",
+              "adaptive-min": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive-min ：在設置的區間值內自適應 (有最小寬度)",
+              "adaptive-max": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive-max ：在設置的區間值內自適應 (有最大寬度)"
+            },
+            "constant": "固定",
+            "adaptive": "自適應",
+            "adaptive-min": "自適應 (有最小寬度)",
+            "adaptive-max": "自適應 (有最大寬度)"
+          },
+          "icon": "顯示圖標",
+          "dblclickAction": {
+            "title": "雙擊標籤頁",
+            "reload": "刷新",
+            "close": "關閉",
+            "pin": "固定/取消固定",
+            "maximize": "最大化",
+            "window": "新窗口打開"
+          },
+          "memory": {
+            "title": "記憶功能",
+            "tip": "非固定和非常駐的標籤頁將在本次會話窗口中始終存在，刷新瀏覽器或重新登錄時不會丟失"
+          },
+          "hotkeys": "快捷鍵"
+        },
+        "toolbar": {
+          "title": "工具欄",
+          "favorites": {
+            "title": "收藏夾",
+            "tip": "可將常用導航添加進收藏夾"
+          },
+          "breadcrumb": {
+            "title": "麵包屑導航",
+            "style": {
+              "title": "風格",
+              "default": "默認",
+              "modern": "現代"
+            },
+            "mainMenu": "顯示主導航"
+          },
+          "menuSearch": {
+            "title": "導航搜索",
+            "hotkeys": "快捷鍵"
+          },
+          "notification": "通知中心",
+          "i18n": {
+            "title": "國際化",
+            "defaultLang": "默認語言",
+            "followSystem": "跟隨系統"
+          },
+          "fullscreen": "全屏",
+          "pageReload": {
+            "title": "頁面刷新",
+            "tip": "重新載入當前頁面，並且不刷新瀏覽器"
+          },
+          "colorScheme": "顏色主題",
+          "layout": "佈局"
+        },
+        "page": {
+          "title": "頁面",
+          "progress": {
+            "title": "載入進度條",
+            "tip": "路由跳轉時會在頁面頂部顯示進度條，該進度僅為模擬效果，並非真實加載進度"
+          },
+          "hotkeys": "快捷鍵"
+        },
+        "app": {
+          "title": "應用",
+          "account": {
+            "title": "賬戶",
+            "auth": "權限認證",
+            "expiredMode": {
+              "title": "過期模式",
+              "redirect": "重定向到登陸頁",
+              "popup": "彈出登陸窗口"
+            },
+            "multipleAccounts": "多賬號管理"
+          },
+          "dynamicTitle": {
+            "title": "動態標題",
+            "tip": "開啟時頁面標題會顯示當前路由標題，格式為\"頁面標題 - 網站名稱\"；關閉時則顯示網站名稱，網站名稱在項目根目錄下 .env.* 文件裡配置"
+          },
+          "watermark": {
+            "title": "水印",
+            "tip": "水印顯示內容在 src/store/modules/app/watermark.ts 文件中配置"
+          },
+          "feedback": {
+            "title": "反饋",
+            "tip": "允許用戶提交反饋，具體業務代碼在 src/components/AppAccountButton/feedback.vue 中自行補充"
+          },
+          "lockScreen": "鎖屏",
+          "rip": {
+            "title": "哀悼模式",
+            "tip": "網站整體變灰色"
+          },
+          "mobile": {
+            "title": "移動端訪問",
+            "tip": "關閉後，將禁用移動端訪問"
+          },
+          "layout": {
+            "title": "佈局",
+            "center": "居中顯示",
+            "centerScope": {
+              "title": "作用範圍",
+              "inner": "內部",
+              "outer": "外部"
+            },
+            "centerWidth": "居中寬度"
+          },
+          "home": {
+            "title": "主頁",
+            "enable": {
+              "title": "啟用",
+              "tip": "登錄後默認進入主頁，否則默認進入第一個導航頁面"
+            },
+            "homeTitle": {
+              "title": "標題",
+              "tip": "開啟國際化時，該設置無效"
+            }
+          },
+          "copyright": {
+            "title": "版權",
+            "enable": "啟用",
+            "dates": "日期",
+            "company": "公司",
+            "website": "網站"
+          }
+        }
+      }
+    }
+  }
+}

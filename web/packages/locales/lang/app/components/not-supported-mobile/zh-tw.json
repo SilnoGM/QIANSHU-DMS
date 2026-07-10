@@ -1,0 +1,9 @@
+{
+  "app": {
+    "components": {
+      "notSupportedMobile": {
+        "notSupported": "抱歉，本網站不支持移動設備訪問，請切換到桌面設備"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "app": {
+    "components": {
+      "checkUpdates": {
+        "message": "有新版本可用",
+        "description": "点击刷新按钮获取最新版本",
+        "confirm": "刷新",
+        "cancel": "稍后"
+      }
+    }
+  }
+}

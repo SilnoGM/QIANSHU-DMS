@@ -1,0 +1,13 @@
+{
+  "app": {
+    "components": {
+      "systemInfo": {
+        "title": "系統信息",
+        "version": "版本號",
+        "lastBuildTime": "最後編譯時間",
+        "deps": "生產環境依賴",
+        "devDeps": "開發環境依賴"
+      }
+    }
+  }
+}

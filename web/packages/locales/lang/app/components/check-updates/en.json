@@ -1,0 +1,12 @@
+{
+  "app": {
+    "components": {
+      "checkUpdates": {
+        "message": "The new version is available",
+        "description": "Click the refresh button to get the latest version",
+        "confirm": "Refresh",
+        "cancel": "Later"
+      }
+    }
+  }
+}

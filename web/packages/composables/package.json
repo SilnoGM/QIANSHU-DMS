@@ -1,0 +1,25 @@
+{
+  "name": "@fantastic-admin/composables",
+  "type": "module",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./resolver": "./resolver.ts"
+  },
+  "peerDependencies": {
+    "unplugin-auto-import": "catalog:",
+    "vue": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "unplugin-auto-import": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@rexa-developer/tiks": "catalog:",
+    "canvas-confetti": "catalog:"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "catalog:"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "app": {
+    "components": {
+      "accountButton": {
+        "index": {
+          "profile": "個人設置",
+          "preferences": "偏好設置",
+          "hotkeys": "快捷鍵",
+          "feedback": "反饋",
+          "lock_screen": "鎖定屏幕",
+          "logout": "退出登錄",
+          "current_account": "當前登錄帳號",
+          "switch_account": "切換帳號",
+          "add_account": "添加帳號",
+          "add_account_success": "添加帳號成功",
+          "add_account_success_confirm": "是否切換到該帳號？"
+        },
+        "feedback": {
+          "tips": "使用屏幕截圖能幫助我們更準確地了解問題",
+          "description": "請描述您的问题或建议",
+          "rules": {
+            "description": "請描述您的问题或建议"
+          },
+          "submit": "提交",
+          "submitSuccess": "模擬提交成功"
+        },
+        "lockScreenLock": {
+          "form": {
+            "lockPassword": "鎖屏密碼",
+            "lock": "鎖定"
+          },
+          "rules": {
+            "lockPassword": "請輸入鎖屏密碼"
+          }
+        },
+        "lockScreenUnlock": {
+          "form": {
+            "unlockPassword": "解鎖密碼",
+            "unlock": "解鎖",
+            "unlockPasswordError": "解鎖密碼錯誤"
+          },
+          "rules": {
+            "unlockPassword": "請輸入解鎖密碼"
+          }
+        }
+      }
+    }
+  }
+}
