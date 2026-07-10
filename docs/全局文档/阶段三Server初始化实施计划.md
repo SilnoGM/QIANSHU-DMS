@@ -29,7 +29,7 @@
 | `S3-R01` | **当**仅复制 `server/` 到干净目录时，**系统应**能够使用 frozen lockfile 安装，并独立执行 `check` 与 `build`。 | Task 1、Task 7 |
 | `S3-R02` | **当**未提供 `DATABASE_URL` 时，**系统应**仍可执行 `prisma:generate`、`check` 与 `build`，且这些命令不得尝试连接数据库。 | Task 1、Task 3、Task 7 |
 | `S3-R03` | **当**Server 启动时，**系统应**校验 `NODE_ENV`、`PORT`、`DATABASE_URL`；`DATABASE_URL` 仅接受可解析且以 `postgres://` 或 `postgresql://` 开头的分层 URI，失败信息只描述变量名和约束，不回显输入值。 | Task 2 |
-| `S3-R04` | **当**Nest 模块初始化和关闭时，**系统应**依次连接 Prisma，并在关闭时同时释放 Prisma Client 与外部 `pg.Pool`；即使 Prisma 断开失败，Pool 仍必须释放。 | Task 3 |
+| `S3-R04` | **当**Nest 模块初始化和关闭时，**系统应**依次连接 Prisma，并在关闭时同时释放 Prisma Client 与外部 `pg.Pool`；即使任一释放步骤失败，也必须尝试另一步，对外只抛出固定脱敏错误。 | Task 3 |
 | `S3-R05` | **当**PostgreSQL 可用且请求 `GET /api/health` 时，**系统应**返回 `200` 和数据库 `up` 状态；**当**探测失败时，**系统应**返回 `503`，且响应和日志不含连接串或底层错误。 | Task 5、Task 7 |
 | `S3-R06` | **当**在空 PostgreSQL 16 数据库执行 migration 时，**系统应**成功应用空初始化 migration；再次执行时应无待应用 migration，并在 `_prisma_migrations` 中只有一条成功记录。 | Task 4、Task 7 |
 | `S3-R07` | **当**执行根 `test:root`、`check`、`build` 时，**系统应**真实编排 Server 与 Web，同时根目录仍不产生 workspace、lockfile 或 `node_modules/`。 | Task 1、Task 6、Task 7 |
@@ -653,12 +653,18 @@ it('closes the external pool even when Prisma disconnect fails', async () => {
   jest.spyOn(service, '$disconnect').mockRejectedValue(new Error('sensitive detail'))
   const end = jest.spyOn(Pool.prototype, 'end').mockResolvedValue()
 
-  await expect(service.onModuleDestroy()).rejects.toThrow('sensitive detail')
+  await expect(service.onModuleDestroy()).rejects.toThrow('Database shutdown failed')
   expect(end).toHaveBeenCalledTimes(1)
 })
 ```
 
-还要测试 Pool 的 idle-client error handler 只记录固定文本，不记录传入错误内容或连接 URL。
+还要测试：
+
+- Pool 的 `max`、`connectionTimeoutMillis`、`query_timeout` 都是显式的有限正整数。
+- `$connect()` 失败时也必须尝试 `$disconnect()` 与 `pool.end()`，最终只抛出无 `cause` 的固定 `Database initialization failed`，因为此时 NestFactory 尚未向外返回可关闭的 application。
+- 正常关闭时 `$disconnect()` 先于 `pool.end()`，两者各执行一次。
+- `$disconnect()` 失败、`pool.end()` 失败、两者同时失败时，均尝试两个释放步骤，且最终只抛出无 `cause` 的固定 `Database shutdown failed`。
+- Pool 的自有 idle-client error handler 只记录固定文本，不把传入的 `Error`、stack 或连接 URL 作为 Logger 参数。
 
 运行：
 
@@ -673,11 +679,12 @@ Expected RED: `PrismaService` 尚不存在。
 `PrismaService` 必须：
 
 - 通过 `ConfigService.getOrThrow<string>('DATABASE_URL')` 获取连接串，不输出该值。
-- 创建单一 `pg.Pool`，设置有限 `max`、`connectionTimeoutMillis` 和 `query_timeout`，使连接与健康查询都具备超时上界。
+- 创建单一 `pg.Pool`，设置有限正整数 `max`、`connectionTimeoutMillis` 和 `query_timeout`；其中 `query_timeout` 是客户端等待上界，不承诺 PostgreSQL 服务端强制终止。
 - 通过 `new PrismaPg(pool)` 注入 `new PrismaClient({ adapter })`。
-- `onModuleInit()` 调用 `$connect()`。
-- `onModuleDestroy()` 使用 `try/finally`，先 `$disconnect()`，无论结果如何再 `pool.end()`。
+- `onModuleInit()` 调用 `$connect()`；若初始化失败，服务自行尝试 `$disconnect()` 和 `pool.end()` 后，只抛出新建且无 `cause` 的固定 `Error('Database initialization failed')`。
+- `onModuleDestroy()` 先 `$disconnect()`，无论结果如何都再尝试 `pool.end()`；任一步失败时只抛出新建且无 `cause` 的固定 `Error('Database shutdown failed')`，不向 Nest shutdown logger 传播底层详情。
 - 为外部 Pool 注册 idle error handler，但日志只写固定安全消息。
+- 不设置 `disposeExternalPool: true`，避免 Prisma `$disconnect()` 与显式 `pool.end()` 重复关闭。
 
 `PrismaModule` 使用 `@Global()`，只提供并导出 `PrismaService`。`AppModule` 只导入该 module，不创建 Repository 或业务 service。
 
@@ -1010,6 +1017,7 @@ Expected RED: 两份后端文档尚不存在，README 与工程方案仍含过�
 - CommonJS NestJS、模块职责与依赖方向。
 - 配置校验、全局 `/api`、`422` ValidationPipe 和 shutdown hooks。
 - Prisma Client 生成、`PrismaService`、外部 Pool 双重释放。
+- `@prisma/adapter-pg` 的 debug namespace 可能输出底层 Pool 错误；生产环境保持 `DEBUG` 未设置，若启用其他 namespace 则必须显式排除 `prisma:*`。
 - unit、integration、E2E 边界和 `GET /api/health`。
 - 本阶段没有业务模型、统一成功 envelope、统一错误体或 OpenAPI。
 
