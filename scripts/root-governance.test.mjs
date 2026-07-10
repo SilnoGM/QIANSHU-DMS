@@ -30,6 +30,19 @@ async function assertRegularFile(relativePath) {
   assert.equal(fileStats.isFile(), true, `治理路径必须是实际文件：${relativePath}`)
 }
 
+function markdownSection(document, heading) {
+  const sectionStart = document.indexOf(`${heading}\n`)
+  assert.notEqual(sectionStart, -1, `文档必须包含章节：${heading}`)
+
+  const contentStart = sectionStart + heading.length + 1
+  const remainingDocument = document.slice(contentStart)
+  const nextSectionOffset = remainingDocument.search(/^## /m)
+
+  return nextSectionOffset === -1
+    ? remainingDocument
+    : remainingDocument.slice(0, nextSectionOffset)
+}
+
 function checkIgnore(relativePath) {
   // 明确固定 Git 的工作目录，使忽略规则回归测试不依赖调用测试时所在的 cwd。
   const result = spawnSync(
@@ -108,6 +121,176 @@ test('文档索引链接到两份真实全局文档', async () => {
   assert.match(index, /\(\.\/全局文档\/阶段一根级治理实施计划\.md\)/)
   await assertRegularFile('docs/全局文档/项目工程组织方案.md')
   await assertRegularFile('docs/全局文档/阶段一根级治理实施计划.md')
+})
+
+test('阶段三计划、后端架构和数据库迁移规范均为真实文件', async () => {
+  const requiredDocuments = [
+    'docs/全局文档/阶段三Server初始化实施计划.md',
+    'docs/后端文档/后端架构.md',
+    'docs/后端文档/数据库迁移规范.md',
+  ]
+  const missingDocuments = []
+
+  for (const document of requiredDocuments) {
+    if (!(await exists(...document.split('/')))) {
+      missingDocuments.push(document)
+    }
+  }
+
+  assert.deepEqual(missingDocuments, [])
+})
+
+test('文档索引链接到阶段三计划和两份后端正式文档', async () => {
+  const index = await readFile(fromRoot('docs', '文档索引.md'), 'utf8')
+  const requiredLinks = [
+    './全局文档/阶段三Server初始化实施计划.md',
+    './后端文档/后端架构.md',
+    './后端文档/数据库迁移规范.md',
+  ]
+
+  assert.deepEqual(
+    requiredLinks.filter(link => !index.includes(`(${link})`)),
+    [],
+  )
+})
+
+test('根 README 使用当前时态且不保留阶段一至阶段三旧状态', async () => {
+  const readme = await readFile(fromRoot('README.md'), 'utf8')
+  const staleDescriptions = [
+    '当前提交只完成根级治理与文档纳管',
+    '待阶段二',
+    '待阶段三',
+    '当前处于根级工程治理阶段',
+    '其余根命令依赖后续任务',
+  ]
+
+  assert.deepEqual(
+    staleDescriptions.filter(description => readme.includes(description)),
+    [],
+  )
+})
+
+test('根 README 给出两端独立安装、检查、migration 和 E2E 命令', async () => {
+  const readme = await readFile(fromRoot('README.md'), 'utf8')
+  const requiredCommands = [
+    'pnpm -C server install --frozen-lockfile',
+    'pnpm -C web install --frozen-lockfile',
+    'pnpm -C server check',
+    'pnpm -C web check',
+    'pnpm -C server db:migrate:deploy',
+    'pnpm -C server test:e2e',
+  ]
+
+  assert.deepEqual(
+    requiredCommands.filter(command => !readme.includes(command)),
+    [],
+  )
+})
+
+test('工程方案当前事实准确反映根、Server、Web 和健康检查边界', async () => {
+  const design = await readFile(
+    fromRoot('docs', '全局文档', '项目工程组织方案.md'),
+    'utf8',
+  )
+  // 只检查“当前工程事实”，避免把后文保留的原始决策和阶段规划误判为已实施状态。
+  const currentFacts = markdownSection(design, '## 2. 当前工程事实')
+  const requiredFacts = [
+    '根目录不是 pnpm workspace',
+    '`server/package.json`',
+    '`server/pnpm-lock.yaml`',
+    '`server/pnpm-workspace.yaml`',
+    '`allowBuilds`',
+    '不声明 `packages`',
+    '`web/apps/qsmds-arco/`',
+    '`web/examples/core/`',
+    '`web/examples/core-arco-design-vue/`',
+    '`web/examples/example/`',
+    '`GET /api/health`',
+  ]
+
+  assert.deepEqual(
+    requiredFacts.filter(fact => !currentFacts.includes(fact)),
+    [],
+  )
+  assert.doesNotMatch(currentFacts, /server\/.*为空目录|尚未初始化后端框架/)
+  assert.doesNotMatch(currentFacts, /web\/apps\/(?:core|example)\//)
+})
+
+test('工程方案准确区分阶段三现状和阶段四待实施能力', async () => {
+  const design = await readFile(
+    fromRoot('docs', '全局文档', '项目工程组织方案.md'),
+    'utf8',
+  )
+  const requiredFacts = [
+    'moduleFormat = "cjs"',
+    '`server/test/app.e2e-spec.ts`',
+    '当前 `scripts/check.mjs`',
+    'OpenAPI 契约能力将在阶段四实施',
+    '环境变量模板已经纳入 Git',
+  ]
+
+  assert.deepEqual(
+    requiredFacts.filter(fact => !design.includes(fact)),
+    [],
+  )
+  assert.doesNotMatch(design, /HTTP 端到端测试放在 `test\/e2e\/`/)
+})
+
+test('后端架构文档记录阶段三运行时、安全与测试边界', async () => {
+  const architecture = await readFile(
+    fromRoot('docs', '后端文档', '后端架构.md'),
+    'utf8',
+  )
+  const requiredFacts = [
+    '`server/pnpm-workspace.yaml`',
+    '`allowBuilds`',
+    'CommonJS',
+    '`ValidationPipe`',
+    '`422`',
+    '`PrismaPg`',
+    '`pg.Pool`',
+    '`Database initialization failed`',
+    '`Database shutdown failed`',
+    '`DEBUG`',
+    '`prisma:*`',
+    '`GET /api/health`',
+    'Terminus',
+    '全局成功 envelope',
+    '阶段四',
+  ]
+
+  assert.deepEqual(
+    requiredFacts.filter(fact => !architecture.includes(fact)),
+    [],
+  )
+})
+
+test('数据库迁移规范记录不可变迁移、安全验证和向前修复规则', async () => {
+  const migrationGuide = await readFile(
+    fromRoot('docs', '后端文档', '数据库迁移规范.md'),
+    'utf8',
+  )
+  const requiredFacts = [
+    '`prisma/schema.prisma`',
+    '`prisma/migrations/`',
+    '`src/generated/prisma/`',
+    '`20260710152144_init`',
+    '`prisma migrate dev`',
+    '`prisma migrate deploy`',
+    '`prisma migrate status`',
+    '`prisma db push`',
+    '`_prisma_migrations`',
+    'PostgreSQL 16',
+    '`trap`',
+    '`127.0.0.1`',
+    '`DATABASE_URL`',
+    '向前修复',
+  ]
+
+  assert.deepEqual(
+    requiredFacts.filter(fact => !migrationGuide.includes(fact)),
+    [],
+  )
 })
 
 test('Git 忽略真实环境文件、系统文件和生成目录，但保留环境模板', () => {
