@@ -82,9 +82,12 @@ migration 和 E2E 必须使用全新、隔离的 PostgreSQL 16 测试数据库�
 : "${DATABASE_URL:?DATABASE_URL must reference the isolated test database}"
 export DOTENV_CONFIG_PATH=/dev/null
 unset DEBUG
+unset PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION
 ```
 
 `DOTENV_CONFIG_PATH=/dev/null` 只阻止 `prisma.config.ts` 中的 `dotenv/config` 回退到本地文件；Nest `ConfigModule` 仍可读取 `server/.env`，因此上述 shell guard 必须先于 `test:e2e` 执行，使已注入的临时 URL 拥有明确优先级。
+
+同时清除 `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`，避免当前 shell 继承过往会话对 Prisma 危险操作的确认状态。临时验证流程不得预授权破坏性数据库操作。
 
 在安全临时数据库已经就绪且 migration 尚未应用时执行：
 

@@ -43,6 +43,17 @@ function markdownSection(document, heading) {
     : remainingDocument.slice(0, nextSectionOffset)
 }
 
+function assertBashCodeLine(section, expectedLine) {
+  const bashBlocks = [...section.matchAll(/```bash\n([\s\S]*?)\n```/g)].map(
+    match => match[1],
+  )
+  const hasExactLine = bashBlocks.some(block =>
+    block.split('\n').includes(expectedLine),
+  )
+
+  assert.equal(hasExactLine, true, `bash 代码块缺少独立命令：${expectedLine}`)
+}
+
 function checkIgnore(relativePath) {
   // 明确固定 Git 的工作目录，使忽略规则回归测试不依赖调用测试时所在的 cwd。
   const result = spawnSync(
@@ -172,33 +183,33 @@ test('根 README 给出两端独立安装、检查、migration 和 E2E 命令', 
   const requiredCommandsBySection = [
     [installSection, 'pnpm -C server install --frozen-lockfile'],
     [installSection, 'pnpm -C web install --frozen-lockfile'],
-    [checkSection, 'pnpm -C server check'],
+    [
+      checkSection,
+      'env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null pnpm -C server check',
+    ],
     [checkSection, 'pnpm -C web check'],
     [databaseSection, 'pnpm -C server db:migrate:deploy'],
     [databaseSection, 'pnpm -C server test:e2e'],
   ]
 
-  assert.deepEqual(
-    requiredCommandsBySection
-      .filter(([section, command]) => !section.includes(command))
-      .map(([, command]) => command),
-    [],
-  )
+  for (const [section, command] of requiredCommandsBySection) {
+    assertBashCodeLine(section, command)
+  }
 })
 
 test('根 README 的 migration 与 E2E 命令禁止静默回退到本地环境文件', async () => {
   const readme = await readFile(fromRoot('README.md'), 'utf8')
   const databaseSection = markdownSection(readme, '## 数据库 migration 与 E2E')
   const requiredGuards = [
-    ': "${DATABASE_URL:?',
+    ': "${DATABASE_URL:?DATABASE_URL must reference the isolated test database}"',
     'export DOTENV_CONFIG_PATH=/dev/null',
     'unset DEBUG',
+    'unset PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION',
   ]
 
-  assert.deepEqual(
-    requiredGuards.filter(guard => !databaseSection.includes(guard)),
-    [],
-  )
+  for (const guard of requiredGuards) {
+    assertBashCodeLine(databaseSection, guard)
+  }
 })
 
 test('工程方案当前事实准确反映根、Server、Web 和健康检查边界', async () => {
@@ -226,8 +237,12 @@ test('工程方案当前事实准确反映根、Server、Web 和健康检查边�
     requiredFacts.filter(fact => !currentFacts.includes(fact)),
     [],
   )
+  assert.match(currentFacts, /^- 根目录不是 pnpm workspace，/m)
+  assert.match(currentFacts, /^- Server 已初始化为独立 NestJS 11 CommonJS /m)
+  assert.match(currentFacts, /^- 当前唯一 HTTP 能力是 `GET \/api\/health`，/m)
   assert.doesNotMatch(currentFacts, /server\/.*为空目录|尚未初始化后端框架/)
   assert.doesNotMatch(currentFacts, /web\/apps\/(?:core|example)\//)
+  assert.doesNotMatch(currentFacts, /(?:尚未|未|没有)提供.*GET \/api\/health/)
 })
 
 test('工程方案准确区分阶段三现状和阶段四待实施能力', async () => {
@@ -282,6 +297,10 @@ test('后端架构文档记录阶段三运行时、安全与测试边界', async
       `后端架构章节缺少事实：${heading}`,
     )
   }
+
+  const healthSection = markdownSection(architecture, '## 6. 健康检查')
+  assert.match(healthSection, /^当前提供 `GET \/api\/health`。/m)
+  assert.doesNotMatch(healthSection, /(?:尚未|未|没有)提供.*GET \/api\/health/)
 })
 
 test('数据库迁移规范记录不可变迁移、安全验证和向前修复规则', async () => {
@@ -329,15 +348,15 @@ test('数据库迁移命令要求显式临时 URL 且禁止回退本地 .env', a
   )
   const commandSection = markdownSection(migrationGuide, '## 4. 命令使用边界')
   const requiredGuards = [
-    ': "${DATABASE_URL:?',
+    ': "${DATABASE_URL:?DATABASE_URL must reference the isolated database}"',
     'export DOTENV_CONFIG_PATH=/dev/null',
     'unset DEBUG',
+    'unset PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION',
   ]
 
-  assert.deepEqual(
-    requiredGuards.filter(guard => !commandSection.includes(guard)),
-    [],
-  )
+  for (const guard of requiredGuards) {
+    assertBashCodeLine(commandSection, guard)
+  }
 })
 
 test('Git 忽略真实环境文件、系统文件和生成目录，但保留环境模板', () => {
