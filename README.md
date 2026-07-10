@@ -1,12 +1,12 @@
 # 千树 DMS
 
-千树 DMS 是面向业务管理场景的前后端一体化项目。本仓库采用组合式仓库组织方式：使用一个 Git 仓库统一管理工程治理、项目文档、Web 和 Server，但不把根目录建设为 pnpm workspace。
+千树 DMS 是面向业务管理场景的前后端一体化项目。项目目标采用组合式仓库组织方式：使用一个 Git 仓库统一管理工程治理、项目文档、Web 和 Server，但不把根目录建设为 pnpm workspace。当前提交只完成根级治理与文档纳管；本地 `web/` 基座仍待阶段二纳入 Git，`server/` 仍待阶段三初始化。
 
 ## 工程边界
 
 - 根目录只负责 Git 治理、中文文档和统一命令门面，不安装第三方依赖。
 - `server/` 将作为独立的 NestJS 应用，在初始化完成后拥有自己的 `package.json` 和 `pnpm-lock.yaml`。
-- `web/` 已是独立的 pnpm workspace，拥有自己的 workspace 配置和 `pnpm-lock.yaml`。
+- 本地 `web/` 基座已具备独立 pnpm workspace 结构，待阶段二整理边界并纳入 Git。
 - Web 与 Server 不通过 `file:`、`link:` 或跨目录源码引用建立依赖，只通过 HTTP 和 OpenAPI 契约协作。
 - 两端应能够分别安装、检查、构建和发布；根命令只负责协调，不改变各自的依赖边界。
 
@@ -21,17 +21,21 @@
 
 | 命令 | 说明 |
 | --- | --- |
-| `pnpm bootstrap` | 按 Server、Web 的顺序安装两个独立依赖域。 |
-| `pnpm dev` | 同时启动 Server 与 Web 开发进程。 |
-| `pnpm dev:server` | 仅启动 Server。 |
-| `pnpm dev:web` | 仅启动 Web。 |
-| `pnpm run test:root` | 运行根级治理与编排测试。 |
-| `pnpm check` | 运行阶段内已经建立的根级、Server 和 Web 检查。 |
-| `pnpm run check:server` | 仅运行 Server 检查。 |
-| `pnpm run check:web` | 仅运行 Web 检查。 |
-| `pnpm build` | 依次构建 Server 与 Web。 |
+| `node --run bootstrap` | 按 Server、Web 的顺序安装两个独立依赖域。 |
+| `node --run dev` | 同时启动 Server 与 Web 开发进程。 |
+| `node --run dev:server` | 仅启动 Server。 |
+| `node --run dev:web` | 仅启动 Web。 |
+| `node --run test:root` | 运行根级治理与编排测试。 |
+| `node --run check` | 运行阶段内已经建立的根级、Server 和 Web 检查。 |
+| `node --run check:server` | 仅运行 Server 检查。 |
+| `node --run check:web` | 仅运行 Web 检查。 |
+| `node --run build` | 依次构建 Server 与 Web。 |
+| `node --run build:server` | 仅构建 Server。 |
+| `node --run build:web` | 仅构建 Web。 |
 
-当前处于根级工程治理阶段，`server/` 尚未初始化。除 `pnpm run test:root` 外，其余根命令依赖后续任务中的编排脚本或尚未建立的 Server/Web 命令，因此暂不以真实全链路成功作为本阶段验收条件。
+pnpm 11 的 `verifyDepsBeforeRun` 默认行为会在执行 package script 前尝试 install，即使根 package 没有依赖，也会生成根 `pnpm-lock.yaml` 和 `node_modules/` 状态文件。因此根公开 scripts 统一通过 Node.js 22+ 提供的 `node --run <script>` 执行；只有 Server 和 Web 独立依赖域继续使用 `pnpm -C`。
+
+当前处于根级工程治理阶段。除 `node --run test:root` 外，其余根命令依赖后续任务中的编排脚本或尚未建立的 Server/Web 命令，因此暂不以真实全链路成功作为本阶段验收条件。
 
 ## 安全提示
 

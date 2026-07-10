@@ -14,7 +14,7 @@
     "check": "node ./scripts/check.mjs",
     "check:server": "pnpm -C server check",
     "check:web": "pnpm -C web check",
-    "build": "pnpm run build:server && pnpm run build:web",
+    "build": "pnpm -C server build && pnpm -C web build",
     "build:server": "pnpm -C server build",
     "build:web": "pnpm -C web build"
   }
