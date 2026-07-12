@@ -1,9 +1,19 @@
 import { type INestApplication, Logger } from '@nestjs/common'
-import { Test } from '@nestjs/testing'
+import type {
+  OpenAPIObject,
+} from '@nestjs/swagger'
+import {
+  Test,
+  type TestingModule,
+} from '@nestjs/testing'
+import { TerminusModule } from '@nestjs/terminus'
 import type { Response } from 'supertest'
 import request from 'supertest'
 
 import { configureApplication } from '../src/app.setup'
+import { DatabaseHealthIndicator } from '../src/modules/health/database-health.indicator'
+import { HealthController } from '../src/modules/health/health.controller'
+import { createOpenApiDocument } from '../src/openapi/openapi-document.factory'
 import {
   CONTRACT_SENSITIVE_CANARY,
 } from './fixtures/contract-fixture.controller'
@@ -12,6 +22,14 @@ import { ContractFixtureModule } from './fixtures/contract-fixture.module'
 const REQUEST_ID_PATTERN =
   /^req_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const CLIENT_REQUEST_ID = 'req_00000000-0000-4000-8000-000000000000'
+
+type ContractOperation = NonNullable<
+  OpenAPIObject['paths'][string]['get']
+> & { 'x-qianshu-contract'?: unknown }
+type ContractOpenApiResponse = Exclude<
+  NonNullable<ContractOperation['responses'][string]>,
+  { $ref: string }
+>
 
 function requireApplication(
   application: INestApplication | undefined,
@@ -51,8 +69,95 @@ function expectApiError(
   })
 }
 
+function requireOpenApiDocument(
+  document: OpenAPIObject | undefined,
+): OpenAPIObject {
+  if (!document) {
+    throw new Error('Contract OpenAPI document is not initialized')
+  }
+
+  return document
+}
+
+function requireOpenApiOperation(
+  document: OpenAPIObject,
+  path: string,
+  method: 'get' | 'post' | 'delete',
+): ContractOperation {
+  const operation = document.paths[path]?.[method]
+
+  if (!operation) {
+    throw new Error(`Missing contract operation ${method.toUpperCase()} ${path}`)
+  }
+
+  return operation
+}
+
+function requireOpenApiResponse(
+  operation: ContractOperation,
+  status: string,
+): ContractOpenApiResponse {
+  const response = operation.responses[status]
+
+  if (!response || '$ref' in response) {
+    throw new Error(`Missing inline contract response ${status}`)
+  }
+
+  return response
+}
+
+describe('health runtime contract', () => {
+  it('preserves the Terminus no-cache response header', async () => {
+    let moduleRef: TestingModule | undefined
+    let healthApplication: INestApplication | undefined
+
+    try {
+      moduleRef = await Test.createTestingModule({
+        imports: [TerminusModule.forRoot({ logger: false })],
+        controllers: [HealthController],
+        providers: [
+          {
+            provide: DatabaseHealthIndicator,
+            useValue: {
+              isHealthy: (key: string) =>
+                Promise.resolve({ [key]: { status: 'up' as const } }),
+            },
+          },
+        ],
+      }).compile()
+
+      healthApplication = moduleRef.createNestApplication()
+      configureApplication(healthApplication)
+      await healthApplication.init()
+
+      const response = await request(
+        healthApplication.getHttpServer(),
+      ).get('/api/health')
+
+      expectRequestId(response)
+      expect(response.status).toBe(200)
+      expect(response.body).toEqual({
+        status: 'ok',
+        info: { database: { status: 'up' } },
+        error: {},
+        details: { database: { status: 'up' } },
+      })
+      expect(response.headers['cache-control']).toBe(
+        'no-cache, no-store, must-revalidate',
+      )
+    } finally {
+      if (healthApplication) {
+        await healthApplication.close()
+      } else {
+        await moduleRef?.close()
+      }
+    }
+  })
+})
+
 describe('global HTTP response contract', () => {
   let application: INestApplication | undefined
+  let openApiDocument: OpenAPIObject | undefined
   let loggerError: jest.SpyInstance
 
   beforeAll(async () => {
@@ -66,9 +171,11 @@ describe('global HTTP response contract', () => {
       application = moduleRef.createNestApplication()
       configureApplication(application)
       await application.init()
+      openApiDocument = await createOpenApiDocument(ContractFixtureModule)
     } catch (error) {
       await application?.close().catch(() => undefined)
       application = undefined
+      openApiDocument = undefined
       loggerError.mockRestore()
       throw error
     }
@@ -77,6 +184,7 @@ describe('global HTTP response contract', () => {
   afterAll(async () => {
     await application?.close()
     application = undefined
+    openApiDocument = undefined
     loggerError.mockRestore()
   })
 
@@ -338,5 +446,180 @@ describe('global HTTP response contract', () => {
     const firstRequestId = expectRequestId(first)
     const secondRequestId = expectRequestId(second)
     expect(firstRequestId).not.toBe(secondRequestId)
+  })
+
+  it('publishes the exact test-only OpenAPI response matrix', () => {
+    const document = requireOpenApiDocument(openApiDocument)
+    const operationMatrix = [
+      [
+        '/api/contract/dto',
+        'get',
+        'contract_fixture_get_dto',
+        ['200', '500'],
+      ],
+      [
+        '/api/contract/pagination',
+        'get',
+        'contract_fixture_get_page',
+        ['200', '500'],
+      ],
+      [
+        '/api/contract/resources',
+        'post',
+        'contract_fixture_create',
+        ['201', '500'],
+      ],
+      [
+        '/api/contract/jobs',
+        'post',
+        'contract_fixture_accept',
+        ['202', '500'],
+      ],
+      [
+        '/api/contract/resources/fixture-1',
+        'delete',
+        'contract_fixture_delete',
+        ['204', '500'],
+      ],
+      [
+        '/api/contract/document.pdf',
+        'get',
+        'contract_fixture_download',
+        ['200', '500'],
+      ],
+      [
+        '/api/contract/echo',
+        'post',
+        'contract_fixture_echo',
+        ['201', '400', '422', '500'],
+      ],
+      [
+        '/api/contract/errors/{status}',
+        'get',
+        'contract_fixture_get_error',
+        ['400', '401', '403', '404', '409', '422', '500'],
+      ],
+      [
+        '/api/contract/health-like',
+        'get',
+        'contract_fixture_get_health_like_failure',
+        ['500', '503'],
+      ],
+    ] as const
+
+    expect(Object.keys(document.paths).sort()).toEqual(
+      operationMatrix.map(([path]) => path).sort(),
+    )
+
+    const operationIds = new Set<string>()
+
+    for (const [path, method, operationId, statuses] of operationMatrix) {
+      const operation = requireOpenApiOperation(document, path, method)
+      expect(operation.operationId).toBe(operationId)
+      expect(operation.operationId).not.toContain(
+        '__missing_operation_id__',
+      )
+      operationIds.add(operationId)
+      expect(operation['x-qianshu-contract']).toMatchObject({
+        kind: 'application',
+      })
+      expect(Object.keys(operation.responses).sort()).toEqual(
+        [...statuses].sort(),
+      )
+
+      for (const status of statuses) {
+        const response = requireOpenApiResponse(operation, status)
+        expect(response.headers?.['X-Request-Id']).toEqual({
+          schema: { type: 'string' },
+        })
+
+        if (Number(status) >= 400) {
+          expect(response.content?.['application/json']?.schema).toEqual({
+            $ref: '#/components/schemas/ApiError',
+          })
+        }
+      }
+    }
+
+    expect(operationIds.size).toBe(operationMatrix.length)
+    expect(
+      requireOpenApiOperation(
+        document,
+        '/api/contract/errors/{status}',
+        'get',
+      )['x-qianshu-contract'],
+    ).toEqual({
+      kind: 'application',
+      authentication: true,
+      authorization: true,
+      resourceLocator: true,
+      conflict: true,
+      validation: true,
+    })
+
+    const jsonSuccessSchemas = [
+      ['/api/contract/dto', 'get', '200', 'ContractFixtureRecordDto'],
+      [
+        '/api/contract/pagination',
+        'get',
+        '200',
+        'ContractFixturePageDto',
+      ],
+      [
+        '/api/contract/resources',
+        'post',
+        '201',
+        'ContractFixtureRecordDto',
+      ],
+      ['/api/contract/jobs', 'post', '202', 'ContractFixtureJobDto'],
+      ['/api/contract/echo', 'post', '201', 'ContractFixtureDto'],
+    ] as const
+
+    for (const [path, method, status, schemaName] of jsonSuccessSchemas) {
+      const operation = requireOpenApiOperation(document, path, method)
+      expect(
+        requireOpenApiResponse(operation, status).content?.[
+          'application/json'
+        ]?.schema,
+      ).toEqual({ $ref: `#/components/schemas/${schemaName}` })
+    }
+
+    const created = requireOpenApiResponse(
+      requireOpenApiOperation(
+        document,
+        '/api/contract/resources',
+        'post',
+      ),
+      '201',
+    )
+    expect(created.headers?.Location).toEqual({
+      description: '新建资源地址',
+      schema: { type: 'string' },
+    })
+
+    const noContent = requireOpenApiResponse(
+      requireOpenApiOperation(
+        document,
+        '/api/contract/resources/fixture-1',
+        'delete',
+      ),
+      '204',
+    )
+    expect(noContent).not.toHaveProperty('content')
+
+    const pdf = requireOpenApiResponse(
+      requireOpenApiOperation(
+        document,
+        '/api/contract/document.pdf',
+        'get',
+      ),
+      '200',
+    )
+    expect(pdf.content).toEqual({
+      'application/pdf': {
+        schema: { type: 'string', format: 'binary' },
+      },
+    })
+    expect(document.components?.schemas?.ApiError).toBeDefined()
   })
 })

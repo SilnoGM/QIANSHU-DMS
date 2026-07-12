@@ -18,6 +18,8 @@ const repositoryRoot = path.resolve(scriptsDirectory, '..')
 const serverRoot = path.join(repositoryRoot, 'server')
 const expectedPnpmSecuritySettings = `allowBuilds:
   '@prisma/engines': true
+  # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
+  '@scarf/scarf': false
   prisma: true
 `
 
