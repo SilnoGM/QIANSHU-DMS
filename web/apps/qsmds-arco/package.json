@@ -3,6 +3,11 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "api:generate": "pnpm --dir ../.. exec tsx scripts/generate-api.ts",
+    "prebuild": "pnpm run api:generate",
+    "prebuild:test": "pnpm run api:generate",
+    "prelint": "pnpm run api:generate",
+    "pretypecheck": "pnpm run api:generate",
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:test": "vue-tsc -b && vite build --mode test",

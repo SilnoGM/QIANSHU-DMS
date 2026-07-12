@@ -15,3 +15,6 @@ dist-ssr
 # Web 独立移植为单独仓库时，也必须排除测试产物和运行日志。
 coverage
 *.log
+
+# OpenAPI 客户端类型由本地 snapshot 生成，不进入版本库。
+apps/qsmds-arco/src/api/generated/

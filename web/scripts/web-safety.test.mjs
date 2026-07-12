@@ -222,13 +222,23 @@ test('Web 自身的 ignore 规则保护真实环境文件和生成物并放行�
   try {
     fs.copyFileSync(path.join(webRoot, '.gitignore'), path.join(temporaryDirectory, '.gitignore'))
     fs.mkdirSync(path.join(temporaryDirectory, 'app', 'coverage'), { recursive: true })
+    fs.mkdirSync(path.join(temporaryDirectory, 'apps', 'qsmds-arco', 'src', 'api', 'generated'), { recursive: true })
     fs.writeFileSync(path.join(temporaryDirectory, 'app', '.env.development'), 'PUBLIC_VALUE=true\n')
     fs.writeFileSync(path.join(temporaryDirectory, 'app', '.env.development.example'), 'PUBLIC_VALUE=true\n')
     fs.writeFileSync(path.join(temporaryDirectory, 'app', 'coverage', 'result.json'), '{}\n')
     fs.writeFileSync(path.join(temporaryDirectory, 'app', 'runtime.log'), 'safe test log\n')
+    fs.writeFileSync(
+      path.join(temporaryDirectory, 'apps', 'qsmds-arco', 'src', 'api', 'generated', 'types.gen.ts'),
+      'export type Generated = true\n',
+    )
     execFileSync('git', ['init', '--quiet'], { cwd: temporaryDirectory })
 
-    for (const ignoredPath of ['app/.env.development', 'app/coverage/result.json', 'app/runtime.log']) {
+    for (const ignoredPath of [
+      'app/.env.development',
+      'app/coverage/result.json',
+      'app/runtime.log',
+      'apps/qsmds-arco/src/api/generated/types.gen.ts',
+    ]) {
       const result = spawnSync('git', ['check-ignore', '--quiet', '--', ignoredPath], { cwd: temporaryDirectory })
       assert.equal(result.status, 0, `${ignoredPath} 应由 web/.gitignore 独立忽略`)
     }

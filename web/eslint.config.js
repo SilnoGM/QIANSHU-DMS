@@ -9,6 +9,7 @@ export default antfu(
     ignores: [
       '**/public',
       '**/dist*',
+      'apps/qsmds-arco/src/api/generated/**',
     ],
   },
   {
