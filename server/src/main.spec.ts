@@ -87,6 +87,7 @@ describe('bootstrap', () => {
       getOrThrow: jest.fn().mockReturnValue(43101),
     }
     const application = {
+      use: jest.fn(),
       setGlobalPrefix: jest.fn(),
       useGlobalPipes: jest.fn(),
       enableShutdownHooks: jest.fn(),

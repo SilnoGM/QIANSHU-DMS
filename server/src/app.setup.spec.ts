@@ -5,7 +5,9 @@ import {
 } from '@nestjs/common'
 import { IsString } from 'class-validator'
 
+import { API_PREFIX } from './app.constants'
 import { configureApplication } from './app.setup'
+import { requestIdMiddleware } from './infrastructure/http/request-id.middleware'
 
 class RequestDto {
   @IsString()
@@ -13,9 +15,10 @@ class RequestDto {
 }
 
 describe('configureApplication', () => {
-  it('configures the API prefix, strict validation and shutdown hooks', async () => {
+  it('configures request ID, API prefix, validation and shutdown in order', async () => {
     const globalPipes: PipeTransform[] = []
     const application = {
+      use: jest.fn(),
       setGlobalPrefix: jest.fn(),
       useGlobalPipes: jest.fn((...pipes: PipeTransform[]) => {
         globalPipes.push(...pipes)
@@ -25,9 +28,19 @@ describe('configureApplication', () => {
 
     configureApplication(application)
 
-    expect(application.setGlobalPrefix).toHaveBeenCalledWith('api')
+    expect(application.use).toHaveBeenCalledWith(requestIdMiddleware)
+    expect(application.setGlobalPrefix).toHaveBeenCalledWith(API_PREFIX)
     expect(application.useGlobalPipes).toHaveBeenCalledTimes(1)
     expect(application.enableShutdownHooks).toHaveBeenCalledTimes(1)
+    expect(application.use.mock.invocationCallOrder[0]).toBeLessThan(
+      application.setGlobalPrefix.mock.invocationCallOrder[0],
+    )
+    expect(
+      application.setGlobalPrefix.mock.invocationCallOrder[0],
+    ).toBeLessThan(application.useGlobalPipes.mock.invocationCallOrder[0])
+    expect(application.useGlobalPipes.mock.invocationCallOrder[0]).toBeLessThan(
+      application.enableShutdownHooks.mock.invocationCallOrder[0],
+    )
 
     const validationPipe = globalPipes[0]
     expect(validationPipe).toBeInstanceOf(ValidationPipe)
