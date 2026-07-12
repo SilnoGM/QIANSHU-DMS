@@ -826,6 +826,460 @@ test('directory cp 失败时不修改 target，并清理此前及部分复制的
   await assertNoTransactionDebris(fixture.root)
 })
 
+test('preflight 后 target parent 被换成外部 symlink 时拒绝越界写入', async (t) => {
+  const fixture = await createTransactionFixture(t)
+  const displacedParent = path.join(fixture.root, 'published-before-race')
+  const externalDirectory = path.join(fixture.root, 'external-parent')
+  const publishedBefore = await snapshotEntry(fixture.publishedDirectory)
+  const sourceBefore = await snapshotEntry(fixture.sourceDirectory)
+  await fs.mkdir(externalDirectory)
+  await fs.writeFile(
+    path.join(externalDirectory, 'external-canary.txt'),
+    'external-canary\n',
+  )
+  const externalBefore = await snapshotEntry(externalDirectory)
+  let parentObservations = 0
+  let injected = false
+  const fileSystem = createInjectedFileSystem({
+    lstat: async (entryPath) => {
+      if (entryPath === fixture.publishedDirectory) {
+        parentObservations += 1
+        // 三个 artifact 各自完成初始 preflight 后，在下一次身份复核
+        // 中注入父目录替换，固定覆盖可控的 TOCTOU 时序。
+        if (!injected && parentObservations === 4) {
+          injected = true
+          await fs.rename(fixture.publishedDirectory, displacedParent)
+          await fs.symlink(
+            externalDirectory,
+            fixture.publishedDirectory,
+            'dir',
+          )
+        }
+      }
+      return fs.lstat(entryPath)
+    },
+  })
+
+  await assert.rejects(
+    replaceArtifactsWithRollback(fixture.artifacts, {
+      fileSystem,
+      randomUUIDImpl: sequenceUuid('parent-identity-race'),
+    }),
+    /identity|symbolic link/u,
+  )
+
+  assert.equal(injected, true)
+  assert.deepEqual(await snapshotEntry(displacedParent), publishedBefore)
+  assert.deepEqual(await snapshotEntry(fixture.sourceDirectory), sourceBefore)
+  assert.deepEqual(await snapshotEntry(externalDirectory), externalBefore)
+  assert.deepEqual(await snapshotEntry(fixture.publishedDirectory), {
+    type: 'symlink',
+    target: externalDirectory,
+  })
+  await assertNoTransactionDebris(fixture.root)
+})
+
+test('preflight 后 directory source inode 被替换时拒绝复制新来源', async (t) => {
+  const fixture = await createTransactionFixture(t)
+  const originalSource = path.join(fixture.root, 'generated-source-before-race')
+  const publishedBefore = await snapshotEntry(fixture.publishedDirectory)
+  const sourceBefore = await snapshotEntry(fixture.sourceDirectory)
+  let sourceObservations = 0
+  let injected = false
+  const fileSystem = createInjectedFileSystem({
+    lstat: async (entryPath) => {
+      if (entryPath === fixture.sourceDirectory) {
+        sourceObservations += 1
+        if (!injected && sourceObservations === 2) {
+          injected = true
+          await fs.rename(fixture.sourceDirectory, originalSource)
+          await fs.mkdir(fixture.sourceDirectory)
+          await fs.writeFile(
+            path.join(fixture.sourceDirectory, 'foreign-canary.txt'),
+            'foreign-source\n',
+          )
+        }
+      }
+      return fs.lstat(entryPath)
+    },
+  })
+
+  await assert.rejects(
+    replaceArtifactsWithRollback(fixture.artifacts, {
+      fileSystem,
+      randomUUIDImpl: sequenceUuid('source-identity-race'),
+    }),
+    /identity/u,
+  )
+
+  assert.equal(injected, true)
+  assert.deepEqual(await snapshotEntry(fixture.publishedDirectory), publishedBefore)
+  assert.deepEqual(await snapshotEntry(originalSource), sourceBefore)
+  assert.deepEqual(await snapshotEntry(fixture.sourceDirectory), {
+    type: 'directory',
+    children: {
+      'foreign-canary.txt': {
+        type: 'file',
+        contents: Buffer.from('foreign-source\n').toString('base64'),
+      },
+    },
+  })
+  await assertNoTransactionDebris(fixture.root)
+})
+
+test('source parent 换为 symlink 且 leaf inode 未变时仍拒绝 staging', async (t) => {
+  const fixture = await createTransactionFixture(t)
+  const sourceParent = path.join(fixture.root, 'source-parent')
+  const displacedSourceParent = path.join(
+    fixture.root,
+    'source-parent-before-race',
+  )
+  const nestedSource = path.join(sourceParent, 'generated')
+  await fs.mkdir(sourceParent)
+  await fs.rename(fixture.sourceDirectory, nestedSource)
+  const directoryArtifact = fixture.artifacts.find(
+    artifact => artifact.kind === 'directory',
+  )
+  directoryArtifact.sourcePath = nestedSource
+  const publishedBefore = await snapshotEntry(fixture.publishedDirectory)
+  const sourceBefore = await snapshotEntry(nestedSource)
+  const leafIdentityBefore = await fs.lstat(nestedSource)
+  let parentObservations = 0
+  let injected = false
+  const fileSystem = createInjectedFileSystem({
+    lstat: async (entryPath) => {
+      if (entryPath === sourceParent) {
+        parentObservations += 1
+        if (!injected && parentObservations === 2) {
+          injected = true
+          await fs.rename(sourceParent, displacedSourceParent)
+          await fs.symlink(displacedSourceParent, sourceParent, 'dir')
+        }
+      }
+      return fs.lstat(entryPath)
+    },
+  })
+
+  await assert.rejects(
+    replaceArtifactsWithRollback(fixture.artifacts, {
+      fileSystem,
+      randomUUIDImpl: sequenceUuid('source-parent-race'),
+    }),
+    /symbolic link/u,
+  )
+
+  assert.equal(injected, true)
+  const leafIdentityAfter = await fs.lstat(
+    path.join(displacedSourceParent, 'generated'),
+  )
+  assert.equal(leafIdentityAfter.dev, leafIdentityBefore.dev)
+  assert.equal(leafIdentityAfter.ino, leafIdentityBefore.ino)
+  assert.deepEqual(await snapshotEntry(fixture.publishedDirectory), publishedBefore)
+  assert.deepEqual(
+    await snapshotEntry(path.join(displacedSourceParent, 'generated')),
+    sourceBefore,
+  )
+  await assertNoTransactionDebris(fixture.root)
+})
+
+test('directory staging 后严格校验失败时不发布任何 target', async (t) => {
+  const fixture = await createTransactionFixture(t)
+  const before = await snapshotEntry(fixture.root)
+  const validationFailure = new Error('staged directory validation failed')
+  let validationCalls = 0
+
+  await assert.rejects(
+    replaceArtifactsWithRollback(fixture.artifacts, {
+      randomUUIDImpl: sequenceUuid('staged-validation'),
+      validateStagedDirectory: async ({ artifact, directory }) => {
+        validationCalls += 1
+        assert.equal(artifact.kind, 'directory')
+        assert.equal(artifact.sourcePath, fixture.sourceDirectory)
+        assert.match(path.basename(directory), /\.tmp$/u)
+        assert.deepEqual(
+          await snapshotEntry(directory),
+          await snapshotEntry(fixture.sourceDirectory),
+        )
+        throw validationFailure
+      },
+    }),
+    error => error === validationFailure,
+  )
+
+  assert.equal(validationCalls, 1)
+  assert.deepEqual(await snapshotEntry(fixture.root), before)
+  await assertNoTransactionDebris(fixture.root)
+})
+
+test('validatePublished 失败时 backup 尚在并完整回滚三个旧 target', async (t) => {
+  const fixture = await createTransactionFixture(t)
+  await fs.writeFile(fixture.absentFile, 'old-first-sync\n')
+  const before = await snapshotEntry(fixture.root)
+  const validationFailure = new Error('published validation failed')
+  const uuidPrefix = 'published-validation'
+  const backupPaths = [
+    transactionSiblingPath(fixture.existingFile, `${uuidPrefix}-1`, 'bak'),
+    transactionSiblingPath(fixture.absentFile, `${uuidPrefix}-2`, 'bak'),
+    transactionSiblingPath(
+      fixture.existingDirectory,
+      `${uuidPrefix}-3`,
+      'bak',
+    ),
+  ]
+  let validationCalls = 0
+
+  await assert.rejects(
+    replaceArtifactsWithRollback(fixture.artifacts, {
+      randomUUIDImpl: sequenceUuid(uuidPrefix),
+      validatePublished: async () => {
+        validationCalls += 1
+        assert.equal(await fs.readFile(backupPaths[0], 'utf8'), 'old-contract\n')
+        assert.equal(await fs.readFile(backupPaths[1], 'utf8'), 'old-first-sync\n')
+        assert.deepEqual(
+          await snapshotEntry(backupPaths[2]),
+          before.children.published.children.generated,
+        )
+        throw validationFailure
+      },
+    }),
+    error => error === validationFailure,
+  )
+
+  assert.equal(validationCalls, 1)
+  assert.deepEqual(await snapshotEntry(fixture.root), before)
+  await assertNoTransactionDebris(fixture.root)
+})
+
+test('install rename 内 staged temp 被 foreign leaf 替换时不得成功发布', async (t) => {
+  const root = await createSandbox(t)
+  const target = path.join(root, 'contract.json')
+  const displacedStaged = path.join(root, 'displaced-staged.json')
+  const identifier = 'temp-leaf-race-1'
+  const tempPath = transactionSiblingPath(target, identifier, 'tmp')
+  const backupPath = transactionSiblingPath(target, identifier, 'bak')
+  await fs.writeFile(target, 'old-contract\n')
+  let injected = false
+  const fileSystem = createInjectedFileSystem({
+    rename: async (source, destination) => {
+      if (!injected && source === tempPath && destination === target) {
+        injected = true
+        await fs.rename(tempPath, displacedStaged)
+        await fs.writeFile(tempPath, 'foreign-temp\n')
+      }
+      return fs.rename(source, destination)
+    },
+  })
+
+  await assert.rejects(
+    replaceArtifactsWithRollback([
+      { kind: 'file', path: target, contents: 'new-contract\n' },
+    ], {
+      fileSystem,
+      randomUUIDImpl: sequenceUuid('temp-leaf-race'),
+    }),
+    error => (
+      error instanceof AggregateError
+      && /recovery was incomplete/u.test(error.message)
+    ),
+  )
+
+  assert.equal(injected, true)
+  assert.equal(await fs.readFile(target, 'utf8'), 'foreign-temp\n')
+  assert.equal(await fs.readFile(displacedStaged, 'utf8'), 'new-contract\n')
+  assert.equal(await fs.readFile(backupPath, 'utf8'), 'old-contract\n')
+})
+
+test('backup rename 内 original target 被 foreign leaf 替换时不 install 且不删 foreign', async (t) => {
+  const root = await createSandbox(t)
+  const target = path.join(root, 'contract.json')
+  const displacedOriginal = path.join(root, 'displaced-original.json')
+  const identifier = 'target-leaf-race-1'
+  const tempPath = transactionSiblingPath(target, identifier, 'tmp')
+  const backupPath = transactionSiblingPath(target, identifier, 'bak')
+  await fs.writeFile(target, 'old-contract\n')
+  let injected = false
+  const fileSystem = createInjectedFileSystem({
+    rename: async (source, destination) => {
+      if (!injected && source === target && destination === backupPath) {
+        injected = true
+        await fs.rename(target, displacedOriginal)
+        await fs.writeFile(target, 'foreign-target\n')
+      }
+      return fs.rename(source, destination)
+    },
+  })
+
+  await assert.rejects(
+    replaceArtifactsWithRollback([
+      { kind: 'file', path: target, contents: 'new-contract\n' },
+    ], {
+      fileSystem,
+      randomUUIDImpl: sequenceUuid('target-leaf-race'),
+    }),
+    error => (
+      error instanceof AggregateError
+      && /recovery was incomplete/u.test(error.message)
+    ),
+  )
+
+  assert.equal(injected, true)
+  await assertPathMissing(target)
+  await assertPathMissing(tempPath)
+  assert.equal(await fs.readFile(displacedOriginal, 'utf8'), 'old-contract\n')
+  assert.equal(await fs.readFile(backupPath, 'utf8'), 'foreign-target\n')
+})
+
+test('rollback 前 backup leaf 被替换时不 restore 且保留 foreign backup', async (t) => {
+  const root = await createSandbox(t)
+  const firstTarget = path.join(root, 'first.json')
+  const secondTarget = path.join(root, 'second.json')
+  const firstBackup = transactionSiblingPath(
+    firstTarget,
+    'backup-rollback-race-1',
+    'bak',
+  )
+  const secondTemp = transactionSiblingPath(
+    secondTarget,
+    'backup-rollback-race-2',
+    'tmp',
+  )
+  const displacedBackup = path.join(root, 'displaced-old-backup.json')
+  const forwardFailure = new Error('later install failed')
+  await fs.writeFile(firstTarget, 'old-first\n')
+  let rollbackStarted = false
+  let injected = false
+  const fileSystem = createInjectedFileSystem({
+    lstat: async (entryPath) => {
+      if (entryPath === firstBackup && rollbackStarted && !injected) {
+        let firstTargetMissing = false
+        try {
+          await fs.lstat(firstTarget)
+        } catch (error) {
+          firstTargetMissing = error?.code === 'ENOENT'
+        }
+        if (firstTargetMissing) {
+          injected = true
+          await fs.rename(firstBackup, displacedBackup)
+          await fs.writeFile(firstBackup, 'foreign-backup\n')
+        }
+      }
+      return fs.lstat(entryPath)
+    },
+    rename: async (source, destination) => {
+      if (source === secondTemp && destination === secondTarget) {
+        rollbackStarted = true
+        throw forwardFailure
+      }
+      return fs.rename(source, destination)
+    },
+  })
+
+  await assert.rejects(
+    replaceArtifactsWithRollback([
+      { kind: 'file', path: firstTarget, contents: 'new-first\n' },
+      { kind: 'file', path: secondTarget, contents: 'new-second\n' },
+    ], {
+      fileSystem,
+      randomUUIDImpl: sequenceUuid('backup-rollback-race'),
+    }),
+    error => (
+      error instanceof AggregateError
+      && error.cause === forwardFailure
+      && /recovery was incomplete/u.test(error.message)
+    ),
+  )
+
+  assert.equal(injected, true)
+  await assertPathMissing(firstTarget)
+  await assertPathMissing(secondTarget)
+  assert.equal(await fs.readFile(firstBackup, 'utf8'), 'foreign-backup\n')
+  assert.equal(await fs.readFile(displacedBackup, 'utf8'), 'old-first\n')
+})
+
+test('cleanup 前 backup leaf 被替换时不删除 foreign backup', async (t) => {
+  const root = await createSandbox(t)
+  const target = path.join(root, 'contract.json')
+  const backupPath = transactionSiblingPath(
+    target,
+    'backup-cleanup-race-1',
+    'bak',
+  )
+  const displacedBackup = path.join(root, 'displaced-cleanup-backup.json')
+  await fs.writeFile(target, 'old-contract\n')
+  let validationCompleted = false
+  let postValidationBackupObservations = 0
+  let injected = false
+  const fileSystem = createInjectedFileSystem({
+    lstat: async (entryPath) => {
+      if (entryPath === backupPath && validationCompleted) {
+        postValidationBackupObservations += 1
+        if (!injected && postValidationBackupObservations === 2) {
+          injected = true
+          await fs.rename(backupPath, displacedBackup)
+          await fs.writeFile(backupPath, 'foreign-backup\n')
+        }
+      }
+      return fs.lstat(entryPath)
+    },
+  })
+
+  await assert.rejects(
+    replaceArtifactsWithRollback([
+      { kind: 'file', path: target, contents: 'new-contract\n' },
+    ], {
+      fileSystem,
+      randomUUIDImpl: sequenceUuid('backup-cleanup-race'),
+      validatePublished: async () => {
+        validationCompleted = true
+      },
+    }),
+    error => (
+      error instanceof AggregateError
+      && error.message === 'Published artifact cleanup failed'
+    ),
+  )
+
+  assert.equal(injected, true)
+  assert.equal(await fs.readFile(target, 'utf8'), 'new-contract\n')
+  assert.equal(await fs.readFile(backupPath, 'utf8'), 'foreign-backup\n')
+  assert.equal(await fs.readFile(displacedBackup, 'utf8'), 'old-contract\n')
+})
+
+test('validatePublished 后 installed target 被替换时不覆盖 foreign target', async (t) => {
+  const root = await createSandbox(t)
+  const target = path.join(root, 'contract.json')
+  const displacedInstalled = path.join(root, 'displaced-installed.json')
+  const backupPath = transactionSiblingPath(
+    target,
+    'installed-leaf-race-1',
+    'bak',
+  )
+  await fs.writeFile(target, 'old-contract\n')
+  let injected = false
+
+  await assert.rejects(
+    replaceArtifactsWithRollback([
+      { kind: 'file', path: target, contents: 'new-contract\n' },
+    ], {
+      randomUUIDImpl: sequenceUuid('installed-leaf-race'),
+      validatePublished: async () => {
+        injected = true
+        await fs.rename(target, displacedInstalled)
+        await fs.writeFile(target, 'foreign-installed\n')
+      },
+    }),
+    error => (
+      error instanceof AggregateError
+      && /recovery was incomplete/u.test(error.message)
+    ),
+  )
+
+  assert.equal(injected, true)
+  assert.equal(await fs.readFile(target, 'utf8'), 'foreign-installed\n')
+  assert.equal(await fs.readFile(displacedInstalled, 'utf8'), 'new-contract\n')
+  assert.equal(await fs.readFile(backupPath, 'utf8'), 'old-contract\n')
+})
+
 test('target parent 首次不存在时可以成功发布', async (t) => {
   const root = await createSandbox(t)
   const target = path.join(root, 'fresh', 'deep', 'contract.json')

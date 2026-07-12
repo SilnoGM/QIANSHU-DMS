@@ -131,6 +131,13 @@ function normalizeArtifacts(artifacts) {
   return normalized
 }
 
+function normalizeOptionalCallback(callback, label) {
+  if (callback !== undefined && typeof callback !== 'function') {
+    throw new TypeError(`${label} must be a function when provided`)
+  }
+  return callback
+}
+
 async function lstatIfPresent(fileSystem, entryPath) {
   try {
     return await fileSystem.lstat(entryPath)
@@ -158,10 +165,133 @@ function absolutePathComponents(absolutePath) {
   return components
 }
 
-async function inspectTargetPath(targetPath, fileSystem) {
+function entryType(stats) {
+  if (stats.isFile()) {
+    return 'file'
+  }
+  if (stats.isDirectory()) {
+    return 'directory'
+  }
+  if (stats.isSymbolicLink()) {
+    return 'symbolic-link'
+  }
+  return 'other'
+}
+
+function entryIdentity(stats) {
+  return { dev: stats.dev, ino: stats.ino, type: entryType(stats) }
+}
+
+function sameEntryIdentity(left, right) {
+  return (
+    left.dev === right.dev
+    && left.ino === right.ino
+    && left.type === right.type
+  )
+}
+
+function assertRealDirectoryStats(stats, label) {
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw new Error(`${label} must not become a symbolic link or non-directory`)
+  }
+}
+
+function rememberTrustedDirectory(
+  trustedDirectories,
+  directory,
+  stats,
+  label,
+) {
+  assertRealDirectoryStats(stats, label)
+  const identity = entryIdentity(stats)
+  const existingIdentity = trustedDirectories.get(directory)
+  if (existingIdentity && !sameEntryIdentity(existingIdentity, identity)) {
+    throw new Error(`${label} identity changed during preflight`)
+  }
+  trustedDirectories.set(directory, identity)
+}
+
+async function assertDirectoryIdentity(
+  directory,
+  expectedIdentity,
+  fileSystem,
+  label,
+) {
+  const stats = await fileSystem.lstat(directory)
+  assertRealDirectoryStats(stats, label)
+  if (!sameEntryIdentity(entryIdentity(stats), expectedIdentity)) {
+    throw new Error(`${label} identity changed`)
+  }
+  return stats
+}
+
+async function assertTrustedDirectories(
+  trustedDirectories,
+  fileSystem,
+  label,
+) {
+  for (const [directory, identity] of trustedDirectories) {
+    await assertDirectoryIdentity(
+      directory,
+      identity,
+      fileSystem,
+      label,
+    )
+  }
+}
+
+async function assertTrustedTargetParents(trustedDirectories, fileSystem) {
+  return assertTrustedDirectories(
+    trustedDirectories,
+    fileSystem,
+    'Artifact target parent',
+  )
+}
+
+async function readEntryIdentity(entryPath, fileSystem) {
+  const stats = await fileSystem.lstat(entryPath)
+  if (stats.isSymbolicLink()) {
+    throw new Error('Owned artifact leaf must not be a symbolic link')
+  }
+  return entryIdentity(stats)
+}
+
+async function readEntryIdentityIfPresent(entryPath, fileSystem) {
+  const stats = await lstatIfPresent(fileSystem, entryPath)
+  if (!stats) {
+    return undefined
+  }
+  return entryIdentity(stats)
+}
+
+async function assertEntryIdentity(
+  entryPath,
+  expectedIdentity,
+  fileSystem,
+  label,
+) {
+  const actualIdentity = await readEntryIdentity(entryPath, fileSystem)
+  if (!sameEntryIdentity(actualIdentity, expectedIdentity)) {
+    throw new Error(`${label} identity changed`)
+  }
+  return actualIdentity
+}
+
+async function assertEntryMissing(entryPath, fileSystem, label) {
+  if (await lstatIfPresent(fileSystem, entryPath)) {
+    throw new Error(`${label} must remain absent`)
+  }
+}
+
+async function inspectTargetPath(
+  targetPath,
+  fileSystem,
+  trustedDirectories,
+) {
   const components = absolutePathComponents(targetPath)
   const targetIndex = components.length - 1
 
+  let originalTargetIdentity
   for (let index = 0; index < components.length; index += 1) {
     const component = components[index]
     const stats = await lstatIfPresent(fileSystem, component)
@@ -180,16 +310,42 @@ async function inspectTargetPath(targetPath, fileSystem) {
     if (index < targetIndex && !stats.isDirectory()) {
       throw new Error('Every existing artifact target parent must be a directory')
     }
+
+    if (index < targetIndex) {
+      rememberTrustedDirectory(
+        trustedDirectories,
+        component,
+        stats,
+        'Artifact target parent',
+      )
+    } else {
+      originalTargetIdentity = entryIdentity(stats)
+    }
   }
 
-  return { targetExists: true, missingParents: [] }
+  return { originalTargetIdentity, targetExists: true, missingParents: [] }
 }
 
-async function assertDirectorySource(sourcePath, fileSystem) {
-  const stats = await fileSystem.lstat(sourcePath)
-  if (stats.isSymbolicLink() || !stats.isDirectory()) {
-    throw new Error('Directory artifact source must be a real directory')
+async function inspectDirectorySource(sourcePath, fileSystem) {
+  const trustedDirectories = new Map()
+  for (const component of absolutePathComponents(sourcePath)) {
+    const stats = await fileSystem.lstat(component)
+    rememberTrustedDirectory(
+      trustedDirectories,
+      component,
+      stats,
+      'Directory artifact source parent',
+    )
   }
+  return trustedDirectories
+}
+
+async function assertDirectorySourceIdentity(plan, fileSystem) {
+  await assertTrustedDirectories(
+    plan.sourceDirectories,
+    fileSystem,
+    'Directory artifact source parent',
+  )
 }
 
 async function chooseSiblingPaths(
@@ -237,13 +393,22 @@ async function preflightArtifacts(artifacts, fileSystem, randomUUIDImpl) {
     artifacts.map(artifact => portablePathKey(artifact.path)),
   )
   const plans = []
+  const trustedDirectories = new Map()
 
   for (const artifact of artifacts) {
-    const targetInspection = await inspectTargetPath(artifact.path, fileSystem)
+    const targetInspection = await inspectTargetPath(
+      artifact.path,
+      fileSystem,
+      trustedDirectories,
+    )
+    let sourceDirectories
     if (artifact.kind === 'directory') {
-      await assertDirectorySource(artifact.sourcePath, fileSystem)
+      sourceDirectories = await inspectDirectorySource(
+        artifact.sourcePath,
+        fileSystem,
+      )
     }
-    plans.push({ artifact, ...targetInspection })
+    plans.push({ artifact, sourceDirectories, ...targetInspection })
   }
 
   for (const plan of plans) {
@@ -256,19 +421,27 @@ async function preflightArtifacts(artifacts, fileSystem, randomUUIDImpl) {
         randomUUIDImpl,
       ),
       {
+        backupIdentity: undefined,
         backupOwnership: 'none',
         backupState: plan.targetExists ? 'at-target' : 'not-required',
+        installedIdentity: undefined,
         installState: 'not-staged',
         recoveryErrors: [],
+        stagedIdentity: undefined,
         tempOwnership: 'none',
       },
     )
   }
 
-  return plans
+  return { plans, trustedDirectories }
 }
 
-async function createMissingParents(plans, fileSystem, createdParents) {
+async function createMissingParents(
+  plans,
+  fileSystem,
+  createdParents,
+  trustedDirectories,
+) {
   const seen = new Set()
   const missingParents = plans.flatMap(plan => plan.missingParents)
 
@@ -278,6 +451,14 @@ async function createMissingParents(plans, fileSystem, createdParents) {
     }
     seen.add(directory)
 
+    // mkdir 之前复核已存在的父目录链，避免在 preflight 与
+    // 创建缺失层级之间跟随新出现的 symlink。
+    await assertTrustedDirectories(
+      trustedDirectories,
+      fileSystem,
+      'Artifact target parent',
+    )
+
     try {
       await fileSystem.mkdir(directory)
       createdParents.push(directory)
@@ -285,12 +466,23 @@ async function createMissingParents(plans, fileSystem, createdParents) {
       if (error?.code !== 'EEXIST') {
         throw error
       }
-
-      const stats = await fileSystem.lstat(directory)
-      if (stats.isSymbolicLink() || !stats.isDirectory()) {
-        throw new Error('Concurrent target parent is not a real directory')
-      }
+      // 并发创建的真实目录可以被接管，但下方仍会记录
+      // 其 dev/ino，后续每个 mutation 边界都必须复核同一身份。
     }
+
+    const stats = await fileSystem.lstat(directory)
+    assertRealDirectoryStats(stats, 'Concurrent target parent')
+    rememberTrustedDirectory(
+      trustedDirectories,
+      directory,
+      stats,
+      'Artifact target parent',
+    )
+    await assertTrustedDirectories(
+      trustedDirectories,
+      fileSystem,
+      'Artifact target parent',
+    )
   }
 }
 
@@ -312,6 +504,7 @@ async function reconcileStagingFailure(plan, fileSystem, stagingError) {
     const tempStats = await lstatIfPresent(fileSystem, plan.tempPath)
     plan.tempOwnership = tempStats ? 'owned' : 'none'
     plan.installState = tempStats ? 'staged' : 'not-staged'
+    plan.stagedIdentity = tempStats ? entryIdentity(tempStats) : undefined
   } catch {
     plan.tempOwnership = 'unknown'
     plan.installState = 'ambiguous'
@@ -319,8 +512,18 @@ async function reconcileStagingFailure(plan, fileSystem, stagingError) {
   }
 }
 
-async function stageArtifacts(plans, fileSystem) {
+async function stageArtifacts(
+  plans,
+  fileSystem,
+  trustedDirectories,
+  validateStagedDirectory,
+) {
   for (const plan of plans) {
+    await assertTrustedTargetParents(trustedDirectories, fileSystem)
+    if (plan.artifact.kind === 'directory') {
+      await assertDirectorySourceIdentity(plan, fileSystem)
+    }
+
     try {
       if (plan.artifact.kind === 'file') {
         await fileSystem.writeFile(
@@ -344,46 +547,99 @@ async function stageArtifacts(plans, fileSystem) {
 
     plan.tempOwnership = 'owned'
     plan.installState = 'staged'
+    await assertTrustedTargetParents(trustedDirectories, fileSystem)
+
+    const stagedStats = await fileSystem.lstat(plan.tempPath)
+    const expectedStagedType = plan.artifact.kind === 'file'
+      ? 'file'
+      : 'directory'
+    if (
+      stagedStats.isSymbolicLink()
+      || entryType(stagedStats) !== expectedStagedType
+    ) {
+      plan.tempOwnership = 'unknown'
+      plan.installState = 'ambiguous'
+      addRecoveryError(plan, 'Staged artifact leaf ownership is ambiguous')
+      throw new Error('Staged artifact has an unexpected leaf type')
+    }
+    plan.stagedIdentity = entryIdentity(stagedStats)
+
+    if (plan.artifact.kind === 'directory') {
+      // cp 前后的 source inode 必须一致；暂存目录本身也要在
+      // 严格内容校验前后保持同一个真实目录身份。
+      await assertDirectorySourceIdentity(plan, fileSystem)
+      if (validateStagedDirectory) {
+        await validateStagedDirectory({
+          artifact: plan.artifact,
+          directory: plan.tempPath,
+        })
+      }
+
+      await assertDirectoryIdentity(
+        plan.tempPath,
+        plan.stagedIdentity,
+        fileSystem,
+        'Staged directory',
+      )
+    }
   }
 }
 
-async function observeRenameOutcome(source, destination, fileSystem) {
-  let sourceExists
-  let destinationExists
+async function observeRenameOutcome(
+  source,
+  destination,
+  expectedIdentity,
+  fileSystem,
+) {
+  let sourceIdentity
+  let destinationIdentity
   let observationFailed = false
 
   try {
-    sourceExists = Boolean(await lstatIfPresent(fileSystem, source))
+    sourceIdentity = await readEntryIdentityIfPresent(source, fileSystem)
   } catch {
     observationFailed = true
   }
 
   try {
-    destinationExists = Boolean(await lstatIfPresent(fileSystem, destination))
+    destinationIdentity = await readEntryIdentityIfPresent(
+      destination,
+      fileSystem,
+    )
   } catch {
     observationFailed = true
   }
 
   if (observationFailed) {
-    return { outcome: 'ambiguous', sourceExists, destinationExists }
+    return { outcome: 'ambiguous', sourceIdentity, destinationIdentity }
   }
-  if (!sourceExists && destinationExists) {
-    return { outcome: 'applied', sourceExists, destinationExists }
+  if (
+    !sourceIdentity
+    && destinationIdentity
+    && sameEntryIdentity(destinationIdentity, expectedIdentity)
+  ) {
+    return { outcome: 'applied', sourceIdentity, destinationIdentity }
   }
-  if (sourceExists && !destinationExists) {
-    return { outcome: 'not-applied', sourceExists, destinationExists }
+  if (
+    sourceIdentity
+    && sameEntryIdentity(sourceIdentity, expectedIdentity)
+    && !destinationIdentity
+  ) {
+    return { outcome: 'not-applied', sourceIdentity, destinationIdentity }
   }
-  return { outcome: 'ambiguous', sourceExists, destinationExists }
+  return { outcome: 'ambiguous', sourceIdentity, destinationIdentity }
 }
 
 function markBackupMoved(plan) {
   plan.backupOwnership = 'owned'
   plan.backupState = 'moved'
+  plan.backupIdentity = plan.originalTargetIdentity
 }
 
 function markArtifactInstalled(plan) {
   plan.installState = 'installed'
   plan.tempOwnership = 'none'
+  plan.installedIdentity = plan.stagedIdentity
 }
 
 function markArtifactReturnedToTemp(plan) {
@@ -396,29 +652,131 @@ function markBackupRestored(plan) {
   plan.backupState = 'at-target'
 }
 
-function markBackupOutcomeAmbiguous(plan) {
+function markBackupOutcomeAmbiguous(
+  plan,
+  message = 'Backup rename outcome is ambiguous',
+) {
   plan.backupOwnership = 'unknown'
   plan.backupState = 'ambiguous'
-  addRecoveryError(plan, 'Backup rename outcome is ambiguous')
+  addRecoveryError(plan, message)
 }
 
-function markInstallOutcomeAmbiguous(plan, observation) {
+function markInstallOutcomeAmbiguous(
+  plan,
+  observation,
+  message = 'Install rename outcome is ambiguous',
+) {
   plan.installState = 'ambiguous'
-  if (observation.sourceExists === false) {
+  if (!observation.sourceIdentity) {
     plan.tempOwnership = 'none'
-  } else if (observation.sourceExists !== true) {
+  } else if (
+    !sameEntryIdentity(observation.sourceIdentity, plan.stagedIdentity)
+  ) {
     plan.tempOwnership = 'unknown'
   }
-  addRecoveryError(plan, 'Install rename outcome is ambiguous')
+  addRecoveryError(plan, message)
 }
 
-async function moveTargetToBackup(plan, fileSystem) {
+function markOriginalTargetOwnershipLost(plan) {
+  plan.backupState = 'ambiguous'
+  plan.installState = 'ambiguous'
+  addRecoveryError(plan, 'Original target leaf ownership was lost')
+}
+
+function markStagedOwnershipLost(plan) {
+  plan.tempOwnership = 'unknown'
+  plan.installState = 'ambiguous'
+  addRecoveryError(plan, 'Staged artifact leaf ownership was lost')
+}
+
+function markInstalledOwnershipLost(plan) {
+  plan.installState = 'ambiguous'
+  addRecoveryError(plan, 'Installed artifact leaf ownership was lost')
+}
+
+async function assertOriginalTargetOwned(plan, fileSystem) {
+  try {
+    await assertEntryIdentity(
+      plan.artifact.path,
+      plan.originalTargetIdentity,
+      fileSystem,
+      'Original artifact target',
+    )
+  } catch (error) {
+    markOriginalTargetOwnershipLost(plan)
+    throw error
+  }
+}
+
+async function assertStagedArtifactOwned(plan, fileSystem) {
+  try {
+    await assertEntryIdentity(
+      plan.tempPath,
+      plan.stagedIdentity,
+      fileSystem,
+      'Staged artifact',
+    )
+  } catch (error) {
+    markStagedOwnershipLost(plan)
+    throw error
+  }
+}
+
+async function assertBackupOwned(plan, fileSystem) {
+  try {
+    await assertEntryIdentity(
+      plan.backupPath,
+      plan.backupIdentity,
+      fileSystem,
+      'Artifact backup',
+    )
+  } catch (error) {
+    markBackupOutcomeAmbiguous(plan, 'Backup leaf ownership was lost')
+    throw error
+  }
+}
+
+async function assertInstalledArtifactOwned(plan, fileSystem) {
+  try {
+    await assertEntryIdentity(
+      plan.artifact.path,
+      plan.installedIdentity,
+      fileSystem,
+      'Installed artifact',
+    )
+  } catch (error) {
+    markInstalledOwnershipLost(plan)
+    throw error
+  }
+}
+
+async function assertPublishedLeafTokens(plans, fileSystem) {
+  for (const plan of plans) {
+    if (plan.installState === 'installed') {
+      await assertInstalledArtifactOwned(plan, fileSystem)
+      await assertEntryMissing(
+        plan.tempPath,
+        fileSystem,
+        'Installed artifact temp',
+      )
+    }
+    if (plan.backupState === 'moved') {
+      await assertBackupOwned(plan, fileSystem)
+    }
+  }
+}
+
+async function moveTargetToBackup(plan, fileSystem, trustedDirectories) {
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
+  await assertOriginalTargetOwned(plan, fileSystem)
+  await assertStagedArtifactOwned(plan, fileSystem)
   try {
     await fileSystem.rename(plan.artifact.path, plan.backupPath)
   } catch (error) {
     const observation = await observeRenameOutcome(
       plan.artifact.path,
       plan.backupPath,
+      plan.originalTargetIdentity,
       fileSystem,
     )
     if (observation.outcome === 'applied') {
@@ -428,16 +786,57 @@ async function moveTargetToBackup(plan, fileSystem) {
     }
     throw error
   }
+
+  try {
+    await assertEntryIdentity(
+      plan.backupPath,
+      plan.originalTargetIdentity,
+      fileSystem,
+      'Artifact backup',
+    )
+  } catch (error) {
+    markBackupOutcomeAmbiguous(plan, 'Backup leaf ownership was lost')
+    throw error
+  }
   markBackupMoved(plan)
+  try {
+    await assertEntryMissing(
+      plan.artifact.path,
+      fileSystem,
+      'Artifact target after backup',
+    )
+  } catch (error) {
+    markInstalledOwnershipLost(plan)
+    throw error
+  }
+  await assertStagedArtifactOwned(plan, fileSystem)
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
 }
 
-async function installTempAtTarget(plan, fileSystem) {
+async function installTempAtTarget(plan, fileSystem, trustedDirectories) {
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
+  await assertStagedArtifactOwned(plan, fileSystem)
+  if (plan.backupState === 'moved') {
+    await assertBackupOwned(plan, fileSystem)
+  }
+  try {
+    await assertEntryMissing(
+      plan.artifact.path,
+      fileSystem,
+      'Artifact target before install',
+    )
+  } catch (error) {
+    markInstalledOwnershipLost(plan)
+    throw error
+  }
+
   try {
     await fileSystem.rename(plan.tempPath, plan.artifact.path)
   } catch (error) {
     const observation = await observeRenameOutcome(
       plan.tempPath,
       plan.artifact.path,
+      plan.stagedIdentity,
       fileSystem,
     )
     if (observation.outcome === 'applied') {
@@ -447,25 +846,65 @@ async function installTempAtTarget(plan, fileSystem) {
     }
     throw error
   }
+
+  const observation = await observeRenameOutcome(
+    plan.tempPath,
+    plan.artifact.path,
+    plan.stagedIdentity,
+    fileSystem,
+  )
+  if (observation.outcome !== 'applied') {
+    markInstallOutcomeAmbiguous(
+      plan,
+      observation,
+      'Installed artifact leaf ownership was lost',
+    )
+    throw new Error('Installed artifact identity does not match staged artifact')
+  }
   markArtifactInstalled(plan)
+  if (plan.backupState === 'moved') {
+    await assertBackupOwned(plan, fileSystem)
+  }
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
 }
 
-async function publishArtifacts(plans, fileSystem) {
+async function publishArtifacts(plans, fileSystem, trustedDirectories) {
   for (const plan of plans) {
     if (plan.targetExists) {
-      await moveTargetToBackup(plan, fileSystem)
+      await moveTargetToBackup(plan, fileSystem, trustedDirectories)
     }
-    await installTempAtTarget(plan, fileSystem)
+    await installTempAtTarget(plan, fileSystem, trustedDirectories)
   }
 }
 
-async function moveInstalledTargetBackToTemp(plan, fileSystem) {
+async function moveInstalledTargetBackToTemp(
+  plan,
+  fileSystem,
+  trustedDirectories,
+) {
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
+  if (plan.backupState === 'moved') {
+    await assertBackupOwned(plan, fileSystem)
+  }
+  await assertInstalledArtifactOwned(plan, fileSystem)
+  try {
+    await assertEntryMissing(
+      plan.tempPath,
+      fileSystem,
+      'Rollback artifact temp',
+    )
+  } catch (error) {
+    markStagedOwnershipLost(plan)
+    throw error
+  }
+
   try {
     await fileSystem.rename(plan.artifact.path, plan.tempPath)
   } catch (error) {
     const observation = await observeRenameOutcome(
       plan.artifact.path,
       plan.tempPath,
+      plan.installedIdentity,
       fileSystem,
     )
     if (observation.outcome === 'applied') {
@@ -474,23 +913,57 @@ async function moveInstalledTargetBackToTemp(plan, fileSystem) {
     }
     if (observation.outcome === 'ambiguous') {
       plan.installState = 'ambiguous'
-      plan.tempOwnership = observation.destinationExists === true
+      plan.tempOwnership = observation.destinationIdentity
         ? 'unknown'
         : 'none'
       addRecoveryError(plan, 'Rollback install rename outcome is ambiguous')
     }
     throw error
   }
+
+  const observation = await observeRenameOutcome(
+    plan.artifact.path,
+    plan.tempPath,
+    plan.installedIdentity,
+    fileSystem,
+  )
+  if (observation.outcome !== 'applied') {
+    markInstallOutcomeAmbiguous(
+      plan,
+      observation,
+      'Rollback staged leaf ownership was lost',
+    )
+    throw new Error('Rollback temp identity does not match installed artifact')
+  }
   markArtifactReturnedToTemp(plan)
+  if (plan.backupState === 'moved') {
+    await assertBackupOwned(plan, fileSystem)
+  }
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
 }
 
-async function restoreBackupToTarget(plan, fileSystem) {
+async function restoreBackupToTarget(plan, fileSystem, trustedDirectories) {
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
+  await assertBackupOwned(plan, fileSystem)
+  await assertStagedArtifactOwned(plan, fileSystem)
+  try {
+    await assertEntryMissing(
+      plan.artifact.path,
+      fileSystem,
+      'Artifact target before backup restore',
+    )
+  } catch (error) {
+    markInstalledOwnershipLost(plan)
+    throw error
+  }
+
   try {
     await fileSystem.rename(plan.backupPath, plan.artifact.path)
   } catch (error) {
     const observation = await observeRenameOutcome(
       plan.backupPath,
       plan.artifact.path,
+      plan.backupIdentity,
       fileSystem,
     )
     if (observation.outcome === 'applied') {
@@ -502,16 +975,42 @@ async function restoreBackupToTarget(plan, fileSystem) {
     }
     throw error
   }
+
+  const observation = await observeRenameOutcome(
+    plan.backupPath,
+    plan.artifact.path,
+    plan.backupIdentity,
+    fileSystem,
+  )
+  if (observation.outcome !== 'applied') {
+    markBackupOutcomeAmbiguous(
+      plan,
+      'Restored backup leaf ownership was lost',
+    )
+    plan.installState = 'ambiguous'
+    throw new Error('Restored target identity does not match artifact backup')
+  }
   markBackupRestored(plan)
+  await assertStagedArtifactOwned(plan, fileSystem)
+  await assertTrustedTargetParents(trustedDirectories, fileSystem)
 }
 
-async function rollbackPublishedArtifacts(plans, fileSystem, errors) {
+async function rollbackPublishedArtifacts(
+  plans,
+  fileSystem,
+  errors,
+  trustedDirectories,
+) {
   for (const plan of [...plans].reverse()) {
     if (plan.installState !== 'installed') {
       continue
     }
     try {
-      await moveInstalledTargetBackToTemp(plan, fileSystem)
+      await moveInstalledTargetBackToTemp(
+        plan,
+        fileSystem,
+        trustedDirectories,
+      )
     } catch (error) {
       errors.push(error)
     }
@@ -528,43 +1027,100 @@ async function rollbackPublishedArtifacts(plans, fileSystem, errors) {
       continue
     }
     try {
-      await restoreBackupToTarget(plan, fileSystem)
+      await restoreBackupToTarget(plan, fileSystem, trustedDirectories)
     } catch (error) {
       errors.push(error)
+      if (plans.some(candidate => (
+        candidate.backupState === 'ambiguous'
+        || candidate.installState === 'ambiguous'
+      ))) {
+        // 任一 leaf token 失效后不再恢复其他 backup，避免在
+        // 全局 target 所有权已不确定时覆盖并发产物。
+        break
+      }
     }
   }
 }
 
-async function removeOwnedTemps(plans, fileSystem, errors) {
+async function removeOwnedTemps(
+  plans,
+  fileSystem,
+  errors,
+  trustedDirectories,
+) {
   for (const plan of plans) {
     if (plan.tempOwnership !== 'owned') {
       continue
     }
     try {
+      await assertTrustedTargetParents(trustedDirectories, fileSystem)
+      await assertStagedArtifactOwned(plan, fileSystem)
       await fileSystem.rm(plan.tempPath, { recursive: true, force: true })
+      await assertEntryMissing(
+        plan.tempPath,
+        fileSystem,
+        'Removed artifact temp',
+      )
       plan.tempOwnership = 'none'
+      await assertTrustedTargetParents(trustedDirectories, fileSystem)
     } catch (error) {
       errors.push(error)
+      if (plans.some(candidate => (
+        candidate.backupState === 'ambiguous'
+        || candidate.installState === 'ambiguous'
+      ))) {
+        // leaf token 丢失后保留尚未处理的 temp，不再扩大
+        // cleanup 对未知并发状态的影响。
+        break
+      }
     }
   }
 }
 
-async function removeCommittedBackups(plans, fileSystem, errors) {
+async function removeCommittedBackups(
+  plans,
+  fileSystem,
+  errors,
+  trustedDirectories,
+) {
   for (const plan of plans) {
     if (plan.backupOwnership !== 'owned' || plan.backupState !== 'moved') {
       continue
     }
     try {
+      await assertTrustedTargetParents(trustedDirectories, fileSystem)
+      await assertPublishedLeafTokens(plans, fileSystem)
+      await assertBackupOwned(plan, fileSystem)
       await fileSystem.rm(plan.backupPath, { recursive: true, force: true })
+      await assertEntryMissing(
+        plan.backupPath,
+        fileSystem,
+        'Removed artifact backup',
+      )
       plan.backupOwnership = 'none'
       plan.backupState = 'discarded'
+      await assertPublishedLeafTokens(plans, fileSystem)
+      await assertTrustedTargetParents(trustedDirectories, fileSystem)
     } catch (error) {
       errors.push(error)
+      if (plans.some(candidate => (
+        candidate.backupState === 'ambiguous'
+        || candidate.installState === 'ambiguous'
+      ))) {
+        // leaf token 丢失后保留尚未处理的 backup，不再扩大
+        // cleanup 对未知并发状态的影响。
+        break
+      }
     }
   }
 }
 
-async function cleanupCreatedParents(createdParents, fileSystem, errors) {
+async function cleanupCreatedParents(
+  createdParents,
+  fileSystem,
+  errors,
+  trustedDirectories,
+) {
   const deepestFirst = [...new Set(createdParents)].sort((left, right) => (
     absolutePathComponents(right).length - absolutePathComponents(left).length
     || right.localeCompare(left)
@@ -572,8 +1128,19 @@ async function cleanupCreatedParents(createdParents, fileSystem, errors) {
 
   for (const directory of deepestFirst) {
     try {
+      const expectedIdentity = trustedDirectories.get(directory)
+      if (!expectedIdentity) {
+        throw new Error('Created target parent identity is unavailable')
+      }
+      await assertDirectoryIdentity(
+        directory,
+        expectedIdentity,
+        fileSystem,
+        'Created target parent',
+      )
       // rmdir 只会删除空目录，保证不会误删并发写入或既有 canary。
       await fileSystem.rmdir(directory)
+      trustedDirectories.delete(directory)
     } catch (error) {
       if (!['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error?.code)) {
         errors.push(error)
@@ -704,15 +1271,28 @@ export async function assertDirectoryContainsOnlyNonEmptyFile(
 
 export async function replaceArtifactsWithRollback(
   artifacts,
-  { fileSystem, randomUUIDImpl = randomUUID } = {},
+  {
+    fileSystem,
+    randomUUIDImpl = randomUUID,
+    validatePublished,
+    validateStagedDirectory,
+  } = {},
 ) {
   if (typeof randomUUIDImpl !== 'function') {
     throw new TypeError('randomUUIDImpl must be a function')
   }
 
   const normalizedArtifacts = normalizeArtifacts(artifacts)
+  const normalizedValidatePublished = normalizeOptionalCallback(
+    validatePublished,
+    'validatePublished',
+  )
+  const normalizedValidateStagedDirectory = normalizeOptionalCallback(
+    validateStagedDirectory,
+    'validateStagedDirectory',
+  )
   const workingFileSystem = resolveFileSystem(fileSystem)
-  const plans = await preflightArtifacts(
+  const { plans, trustedDirectories } = await preflightArtifacts(
     normalizedArtifacts,
     workingFileSystem,
     randomUUIDImpl,
@@ -720,28 +1300,74 @@ export async function replaceArtifactsWithRollback(
   const createdParents = []
 
   try {
-    await createMissingParents(plans, workingFileSystem, createdParents)
-    await stageArtifacts(plans, workingFileSystem)
+    await createMissingParents(
+      plans,
+      workingFileSystem,
+      createdParents,
+      trustedDirectories,
+    )
+    await assertTrustedTargetParents(trustedDirectories, workingFileSystem)
+    await stageArtifacts(
+      plans,
+      workingFileSystem,
+      trustedDirectories,
+      normalizedValidateStagedDirectory,
+    )
 
     // 单个 artifact 的同目录 rename 具备文件系统原子性；多个 artifact 之间
     // 只提供当前进程内的逆序 rollback，不承诺断电或进程崩溃级事务语义。
-    await publishArtifacts(plans, workingFileSystem)
+    await publishArtifacts(plans, workingFileSystem, trustedDirectories)
+    await assertTrustedTargetParents(trustedDirectories, workingFileSystem)
+    await assertPublishedLeafTokens(plans, workingFileSystem)
+
+    // 最终发布校验必须处于 backup 生命周期内；回调失败与
+    // forward rename 失败使用同一条 rollback 路径。
+    if (normalizedValidatePublished) {
+      await normalizedValidatePublished()
+    }
+    await assertPublishedLeafTokens(plans, workingFileSystem)
+    await assertTrustedTargetParents(trustedDirectories, workingFileSystem)
   } catch (operationError) {
     const recoveryErrors = []
-    await rollbackPublishedArtifacts(plans, workingFileSystem, recoveryErrors)
+    await rollbackPublishedArtifacts(
+      plans,
+      workingFileSystem,
+      recoveryErrors,
+      trustedDirectories,
+    )
     recoveryErrors.push(
       ...plans.flatMap(plan => plan.recoveryErrors),
     )
-    await removeOwnedTemps(plans, workingFileSystem, recoveryErrors)
+    await removeOwnedTemps(
+      plans,
+      workingFileSystem,
+      recoveryErrors,
+      trustedDirectories,
+    )
     // 失败路径绝不删除 backup：已恢复的 backup 路径已不存在；仍存在的 owned
     // 或 unknown backup 可能是唯一旧副本，必须原样保留供人工恢复。
-    await cleanupCreatedParents(createdParents, workingFileSystem, recoveryErrors)
+    await cleanupCreatedParents(
+      createdParents,
+      workingFileSystem,
+      recoveryErrors,
+      trustedDirectories,
+    )
     throwOperationError(operationError, recoveryErrors)
   }
 
   const cleanupErrors = []
-  await removeOwnedTemps(plans, workingFileSystem, cleanupErrors)
-  await removeCommittedBackups(plans, workingFileSystem, cleanupErrors)
+  await removeOwnedTemps(
+    plans,
+    workingFileSystem,
+    cleanupErrors,
+    trustedDirectories,
+  )
+  await removeCommittedBackups(
+    plans,
+    workingFileSystem,
+    cleanupErrors,
+    trustedDirectories,
+  )
   if (cleanupErrors.length > 0) {
     throw new AggregateError(cleanupErrors, 'Published artifact cleanup failed')
   }

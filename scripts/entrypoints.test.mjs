@@ -95,7 +95,11 @@ if (isDev && record.args[1] === 'server') {
     process.env.QIANSHU_FAKE_PNPM_LOG,
     JSON.stringify({ ...record, event: 'ready' }) + '\\n',
   )
-} else if (record.args[0] === '-C' && record.args[1] === 'server') {
+} else if (
+  record.args[0] === '-C' &&
+  record.args[1] === 'server' &&
+  ['install', 'openapi:generate'].includes(record.args[2])
+) {
   process.exit(7)
 } else {
   process.exit(0)
@@ -277,19 +281,39 @@ if (entrypointChild) {
     await assertRootStateAbsent()
   })
 
-  test('check 从仓库外直接执行时先完成根测试再运行 Server 检查', async (t) => {
+  test('check 从仓库外直接执行时保留 Contract 退出码且不执行 Web', async (t) => {
     const fixture = await createFixture(t)
     const result = runEntrypoint(path.join(scriptsDirectory, 'check.mjs'), fixture)
 
     assert.equal(result.error, undefined)
     assert.equal(result.signal, null)
     assert.equal(result.status, 7)
-    assert.match(result.stderr, /Command failed: pnpm/)
+    assert.match(result.stderr, /OpenAPI contract check failed/)
+    assert.equal(
+      result.stderr.includes(`Command failed: ${process.execPath}`),
+      true,
+    )
     assert.equal(result.stderr.includes(testSecret), false)
-    assert.deepEqual(await readPnpmCalls(fixture.logPath), [{
+    const records = await readPnpmCalls(fixture.logPath)
+    assert.equal(records.length, 2)
+    assert.deepEqual(records[0], {
       cwd: repositoryRoot,
       args: ['-C', 'server', 'check'],
-    }])
+    })
+    assert.equal(records[1].cwd, repositoryRoot)
+    assert.equal(records[1].args.length, 5)
+    assert.deepEqual(records[1].args.slice(0, 4), [
+      '-C',
+      'server',
+      'openapi:generate',
+      '--output',
+    ])
+    assert.equal(path.isAbsolute(records[1].args[4]), true)
+    assert.equal(
+      records.some(record => record.args[1] === 'web'),
+      false,
+      'Contract 失败后不得执行 Web 检查或生成',
+    )
     await assertRootStateAbsent()
   })
 

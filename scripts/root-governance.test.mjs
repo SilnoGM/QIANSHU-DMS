@@ -85,6 +85,8 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     dev: 'node ./scripts/dev.mjs',
     'dev:server': 'node ./scripts/dev.mjs server',
     'dev:web': 'node ./scripts/dev.mjs web',
+    'contract:sync': 'node ./scripts/contract-sync.mjs',
+    'contract:check': 'node ./scripts/contract-check.mjs',
     'test:root': 'node --test ./scripts/*.test.mjs',
     check: 'node ./scripts/check.mjs',
     'check:server': 'pnpm -C server check',
