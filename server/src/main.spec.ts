@@ -90,6 +90,7 @@ describe('bootstrap', () => {
       use: jest.fn(),
       setGlobalPrefix: jest.fn(),
       useGlobalPipes: jest.fn(),
+      useGlobalFilters: jest.fn(),
       enableShutdownHooks: jest.fn(),
       useLogger: jest.fn(),
       get: jest.fn().mockReturnValue(configService),
@@ -209,7 +210,23 @@ describe('bootstrap', () => {
     expect(rootModuleLoader).toHaveBeenCalledTimes(1)
     expect(applicationFactory).toHaveBeenCalledWith(AppModule)
     expect(application.setGlobalPrefix).toHaveBeenCalledWith('api')
+    expect(application.useGlobalPipes).toHaveBeenCalledTimes(1)
+    expect(application.useGlobalFilters).toHaveBeenCalledTimes(1)
     expect(application.enableShutdownHooks).toHaveBeenCalledTimes(1)
+    expect(application.use.mock.invocationCallOrder[0]).toBeLessThan(
+      application.setGlobalPrefix.mock.invocationCallOrder[0],
+    )
+    expect(
+      application.setGlobalPrefix.mock.invocationCallOrder[0],
+    ).toBeLessThan(application.useGlobalPipes.mock.invocationCallOrder[0])
+    expect(application.useGlobalPipes.mock.invocationCallOrder[0]).toBeLessThan(
+      application.useGlobalFilters.mock.invocationCallOrder[0],
+    )
+    expect(
+      application.useGlobalFilters.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      application.enableShutdownHooks.mock.invocationCallOrder[0],
+    )
     expect(configService.getOrThrow).toHaveBeenCalledWith('app.port')
     expect(application.listen).toHaveBeenCalledWith(43101)
     expect(application.useLogger).toHaveBeenCalledWith(

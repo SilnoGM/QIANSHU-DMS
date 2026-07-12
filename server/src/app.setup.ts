@@ -1,16 +1,20 @@
 import {
+  type ExceptionFilter,
   HttpStatus,
   type PipeTransform,
   ValidationPipe,
 } from '@nestjs/common'
 
 import { API_PREFIX } from './app.constants'
+import { ApiExceptionFilter } from './infrastructure/http/api-exception.filter'
 import { requestIdMiddleware } from './infrastructure/http/request-id.middleware'
+import { createValidationException } from './infrastructure/http/validation-exception.factory'
 
 interface ApplicationSetupTarget {
   use(...handlers: unknown[]): unknown
   setGlobalPrefix(prefix: string): unknown
   useGlobalPipes(...pipes: PipeTransform[]): unknown
+  useGlobalFilters(...filters: ExceptionFilter[]): unknown
   enableShutdownHooks(): unknown
 }
 
@@ -32,7 +36,9 @@ export function configureApplication(
       forbidNonWhitelisted: true,
       transform: true,
       errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+      exceptionFactory: createValidationException,
     }),
   )
+  application.useGlobalFilters(new ApiExceptionFilter())
   application.enableShutdownHooks()
 }

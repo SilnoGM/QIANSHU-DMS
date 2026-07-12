@@ -1,7 +1,9 @@
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
+import type { Response } from 'supertest'
 import request from 'supertest'
 
+import { REQUEST_ID_HEADER } from '../src/app.constants'
 import { AppModule } from '../src/app.module'
 import { configureApplication } from '../src/app.setup'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
@@ -27,6 +29,9 @@ if (!databasePassword) {
 const decodedDatabasePassword = decodeURIComponent(databasePassword)
 
 const FAILURE_CANARY = 'health-e2e-sensitive-canary'
+const CLIENT_REQUEST_ID = 'req_00000000-0000-4000-8000-000000000000'
+const REQUEST_ID_PATTERN =
+  /^req_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const FAILURE_MESSAGE =
   `postgresql://fake-user:fake-health-password@localhost/test ` +
   `DATABASE_URL SELECT 1 stack ${FAILURE_CANARY}`
@@ -40,6 +45,14 @@ function requireApplication(
   }
 
   return application
+}
+
+function expectServerGeneratedRequestId(response: Response): void {
+  const requestId = response.headers[REQUEST_ID_HEADER.toLowerCase()]
+
+  expect(typeof requestId).toBe('string')
+  expect(requestId).toMatch(REQUEST_ID_PATTERN)
+  expect(requestId).not.toBe(CLIENT_REQUEST_ID)
 }
 
 function expectRealSecretsAreAbsent(body: unknown): void {
@@ -98,8 +111,10 @@ describe('database health route with a real PostgreSQL connection', () => {
       requireApplication(application).getHttpServer(),
     )
       .get('/api/health')
+      .set(REQUEST_ID_HEADER, CLIENT_REQUEST_ID)
       .expect(200)
 
+    expectServerGeneratedRequestId(response)
     expectRealSecretsAreAbsent(response.body)
     expect(response.body).toEqual({
       status: 'ok',
@@ -111,9 +126,14 @@ describe('database health route with a real PostgreSQL connection', () => {
   })
 
   it('keeps the health route behind the global api prefix', async () => {
-    await request(requireApplication(application).getHttpServer())
+    const response = await request(
+      requireApplication(application).getHttpServer(),
+    )
       .get('/health')
+      .set(REQUEST_ID_HEADER, CLIENT_REQUEST_ID)
       .expect(404)
+
+    expectServerGeneratedRequestId(response)
   })
 })
 
@@ -154,8 +174,10 @@ describe('database health route with a failed database probe', () => {
       requireApplication(application).getHttpServer(),
     )
       .get('/api/health')
+      .set(REQUEST_ID_HEADER, CLIENT_REQUEST_ID)
       .expect(503)
 
+    expectServerGeneratedRequestId(response)
     expectRealSecretsAreAbsent(response.body)
     expectFailureDetailsAreAbsent(response.body)
     expect(response.body).toEqual({
