@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "pnpm prisma:generate && nest start --watch",
     "build": "pnpm prisma:generate && nest build",
+    "openapi:generate": "pnpm build && node dist/openapi/generate-openapi.js",
     "start": "pnpm prisma:generate && nest start",
     "start:prod": "node dist/main.js",
     "typecheck": "pnpm prisma:generate && tsc --noEmit",

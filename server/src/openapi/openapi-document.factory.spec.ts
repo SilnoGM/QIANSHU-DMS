@@ -90,7 +90,11 @@ describe('createOpenApiDocument', () => {
       rootModule: Type<unknown>,
       options: NestApplicationOptions,
     ) => {
-      expect(options).toEqual({ preview: true })
+      expect(options).toEqual({
+        preview: true,
+        logger: false,
+        abortOnError: false,
+      })
       const application = await createPreviewApplication(
         rootModule,
         options,
@@ -134,6 +138,52 @@ describe('createOpenApiDocument', () => {
       required: ['code', 'message', 'requestId'],
     })
     expect(closeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not initialize, listen or expose Swagger routes while scanning metadata', async () => {
+    const application = {
+      setGlobalPrefix: jest.fn(),
+      init: jest.fn(),
+      listen: jest.fn(),
+      close: jest.fn().mockResolvedValue(undefined),
+    } as unknown as INestApplication
+    const applicationFactory = jest
+      .fn<ReturnType<OpenApiApplicationFactory>, Parameters<OpenApiApplicationFactory>>()
+      .mockResolvedValue(application)
+    const document = {
+      openapi: '3.0.3',
+      info: { title: 'Qianshu DMS API', version: '0.0.0' },
+      paths: {},
+    }
+    const createDocumentSpy = jest
+      .spyOn(SwaggerModule, 'createDocument')
+      .mockReturnValue(document)
+    const setupSpy = jest.spyOn(SwaggerModule, 'setup')
+
+    try {
+      await expect(
+        createOpenApiDocument(
+          MissingOperationIdModule,
+          applicationFactory,
+        ),
+      ).resolves.toBe(document)
+      expect(applicationFactory).toHaveBeenCalledWith(
+        MissingOperationIdModule,
+        {
+          preview: true,
+          logger: false,
+          abortOnError: false,
+        },
+      )
+      expect(application.setGlobalPrefix).toHaveBeenCalledWith('api')
+      expect(application.init).not.toHaveBeenCalled()
+      expect(application.listen).not.toHaveBeenCalled()
+      expect(setupSpy).not.toHaveBeenCalled()
+      expect(application.close).toHaveBeenCalledTimes(1)
+    } finally {
+      createDocumentSpy.mockRestore()
+      setupSpy.mockRestore()
+    }
   })
 
   it('closes the preview application when document creation fails', async () => {
@@ -184,7 +234,7 @@ describe('createOpenApiDocument', () => {
 
     expect(operation).toBeDefined()
     expect(operation?.operationId).toBe('health_get')
-    expect(operation?.tags).toContain('health')
+    expect(operation?.tags).toEqual(['health'])
     expect(contractMetadata).toEqual({
       kind: 'health',
       authentication: false,

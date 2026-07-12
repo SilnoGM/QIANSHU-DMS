@@ -62,6 +62,8 @@ export async function createOpenApiDocument(
 ): Promise<OpenAPIObject> {
   const application = await applicationFactory(rootModule, {
     preview: true,
+    logger: false,
+    abortOnError: false,
   })
 
   try {
