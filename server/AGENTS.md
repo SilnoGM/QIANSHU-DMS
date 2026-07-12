@@ -32,6 +32,16 @@
 - 开发环境使用 `pnpm db:migrate:dev` 创建 migration；测试、CI 和部署环境仅使用 `pnpm db:migrate:deploy` 应用既有 migration。
 - 新增或修改数据库 schema 前，必须单独获得用户确认。
 
+## 接口契约
+
+- Controller、DTO 和 OpenAPI decorators 是定义真相源；`server/openapi/openapi.json` 是生成快照，不得手工修改。
+- 公共 operation 必须有稳定 `operationId`、真实 `x-qianshu-contract` 元数据、明确成功 response 和适用的 `ApiError` 错误矩阵。
+- response 使用 `ApiContractResponse` 声明并携带 `X-Request-Id`；`204` 禁止 body，binary 必须声明实际 media type。
+- `openapi:generate` 先完成包含 `prisma generate` 的 build，再通过 preview application 离线生成；preview 本身不读取 `.env`、不连接数据库、不监听端口。需要隔离整个命令时显式设置 `DOTENV_CONFIG_PATH=/dev/null`。
+- 正式运行时不开放 Swagger route 或 Swagger UI；snapshot 只从根 `contract:sync` 跨端同步，由 `contract:check` 只读验证。
+- 不在 OpenAPI、错误 body、日志或测试输出中泄露密码、token、连接字符串、SQL、堆栈或底层异常。
+- 新增或修改公共 API、数据结构、错误 code 或 response schema 前，必须单独获得用户确认。
+
 ## 开发与测试
 
 - 新功能、BUG 修复和复杂改动遵循 TDD：先写失败测试，再实现最小改动，最后在测试保持通过时重构。

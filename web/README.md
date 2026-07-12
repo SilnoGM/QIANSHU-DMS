@@ -48,6 +48,8 @@ web/
 │   ├── core-arco-design-vue/
 │   └── example/            # 示例参考
 ├── packages/               # 稳定共享能力
+├── openapi/
+│   └── openapi.json        # Web 自包含契约快照
 ├── scripts/                # 工作区脚本与测试
 ├── skills/                 # 项目级 Skill
 ├── package.json
@@ -94,9 +96,19 @@ pnpm check:examples
 pnpm build:examples
 ```
 
-Web 不读取仓库根目录或 Server 的 `node_modules/`，也不通过 `file:`、`link:` 或跨目录源码引用获取 Server 能力。前后端通过 HTTP 与 OpenAPI 契约协作。
+Web 不读取仓库根目录或 Server 的 `node_modules/`，也不通过 `file:`、`link:` 或跨目录源码引用获取 Server 能力。前后端通过 HTTP 与 OpenAPI 契约协作；`web/openapi/openapi.json` 随 Web 一起移植。
 
-OpenAPI 客户端生成将在阶段四落地；当前工作区尚未提供 `api:generate`，请勿将其写入现有流程。
+`api:generate` 只读 Web snapshot，并重建 ignored `apps/qsmds-arco/src/api/generated/`。该目录必须精确只有非空 `types.gen.ts`，不得手工修改或提交。正式 app 的 `lint`、`typecheck`、`build`、`build:test` 与 Web `test:api` 都通过 lifecycle 先生成。
+
+在主仓库中，跨端 snapshot 只通过根 `contract:sync` 更新，由 `contract:check` 只读检查：
+
+```bash
+node --run contract:sync
+node --run contract:check
+pnpm -C web api:generate
+```
+
+详细规则见[接口接入规范](../docs/前端文档/接口接入规范.md)。
 
 ## 提交前检查
 

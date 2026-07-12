@@ -8,7 +8,7 @@
 - `server/` 是独立的 NestJS 11 CommonJS 单一 package，拥有自己的 `package.json`、`pnpm-lock.yaml` 和 pnpm 11 安全配置。
 - `web/` 是独立 pnpm workspace；`apps/qsmds-arco/` 是唯一正式业务应用，三个初始基座位于 `examples/`。
 - Web 与 Server 不通过 `file:`、`link:`、`workspace:*` 或跨目录源码引用建立依赖，只通过 HTTP 协作。
-- 当前 Server 提供数据库健康检查 `GET /api/health`；业务 API 与 OpenAPI 契约将在阶段四实施。
+- 当前 Server 提供数据库健康检查 `GET /api/health`、Server-generated `X-Request-Id`、统一 `ApiError` 和离线 OpenAPI 契约；正式快照通过根命令与 Web 同步。
 - 两端可以分别构建；部署流程与发布关联将在阶段五实施，根命令只负责协调，不改变各自的依赖边界。
 
 ## 环境要求
@@ -43,6 +43,8 @@ node --run bootstrap
 | `node --run dev` | 同时启动 Server 与 Web 开发进程。 |
 | `node --run dev:server` | 仅启动 Server。 |
 | `node --run dev:web` | 仅启动 Web。 |
+| `node --run contract:sync` | 生成、验证并事务式同步 Server/Web OpenAPI 快照与 Web types。 |
+| `node --run contract:check` | 在临时目录只读检查快照、契约结构与生成类型。 |
 | `node --run test:root` | 运行根级治理与编排测试。 |
 | `node --run check` | 运行阶段内已经建立的根级、Server 和 Web 检查。 |
 | `node --run check:server` | 仅运行 Server 检查。 |
@@ -55,6 +57,21 @@ pnpm 11 的 `verifyDepsBeforeRun` 默认行为会在执行 package script 前尝
 
 在 macOS 与 Linux 上，三个根 `dev*` 命令通过独立进程组管理 pnpm、Nest/Vite 和后代进程，并统一处理 `SIGHUP`、`SIGINT`、`SIGTERM` 以及外层 `node --run` 提前退出。根编排以可靠启动和完整清理为目标，不保证把终端键盘快捷操作传给 detached 子进程；需要使用 Nest/Vite 交互式快捷操作时，直接执行 `pnpm -C server dev` 或 `pnpm -C web dev`。
 
+## 接口契约
+
+Server Controller、DTO 和 OpenAPI decorators 是定义真相源。`server/openapi/openapi.json` 与 `web/openapi/openapi.json` 是提交 Git 的两端快照，必须保持字节一致；Web 从自身快照生成 ignored `web/apps/qsmds-arco/src/api/generated/types.gen.ts`，不跨目录读取 Server 源码。
+
+```bash
+node --run contract:sync
+node --run contract:check
+pnpm -C web api:generate
+```
+
+- `contract:sync` 是两端快照唯一显式写同步入口，并同时验证 Web types-only 产品。
+- `contract:check` 将待比较的 snapshot 和 Web types 生成到临时目录，不修改跟踪文件；前置 Server build 仍可重建 ignored `server/dist/` 与 Prisma Client。可使用 `node --run contract:check -- --baseline server/openapi/openapi.json` 保护已有 `operationId`。
+- `api:generate` 只读 Web 自身快照，generated directory 必须精确只含非空 `types.gen.ts`，不得手工修改或提交。
+- 正式运行时不开放 Swagger route；完整规则见[后端接口契约规范](./docs/后端文档/接口契约规范.md)和[前端接口接入规范](./docs/前端文档/接口接入规范.md)。
+
 ## 检查与构建
 
 两端可以分别验证：
@@ -66,7 +83,7 @@ pnpm -C server build
 pnpm -C web build
 ```
 
-`server check` 包含 Prisma schema 校验、typecheck、只读 lint 与 unit tests，不连接数据库，也不运行 E2E。完整根编排使用：
+`server check` 包含 Prisma schema 校验、typecheck、只读 lint 与 unit tests，不连接数据库，也不运行 E2E。根 `check` 在 Server check 后运行只读 contract check，再检查 Web。完整根编排使用：
 
 ```bash
 node --run test:root
@@ -135,3 +152,5 @@ node --run dev
 - [前端架构](./docs/前端文档/前端架构.md)
 - [后端架构](./docs/后端文档/后端架构.md)
 - [数据库迁移规范](./docs/后端文档/数据库迁移规范.md)
+- [后端接口契约规范](./docs/后端文档/接口契约规范.md)
+- [前端接口接入规范](./docs/前端文档/接口接入规范.md)

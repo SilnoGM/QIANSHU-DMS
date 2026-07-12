@@ -55,6 +55,7 @@ allowBuilds:
 pnpm -C server dev
 pnpm -C server check
 pnpm -C server build
+pnpm -C server openapi:generate
 pnpm -C server test:e2e
 pnpm -C server db:migrate:dev
 pnpm -C server db:migrate:deploy
@@ -64,6 +65,16 @@ pnpm -C server db:migrate:deploy
 - `test:e2e` 面向真实 PostgreSQL，调用前必须通过当前进程环境提供测试数据库连接，且测试数据库必须与个人或生产数据库隔离。
 - `dev` 与 `start` 会先生成 Prisma Client，再启动 NestJS。
 - `start:prod` 直接执行已经构建的 `dist/main.js`，不会生成 Prisma Client；部署流程必须先完成安装、生成与构建。
+
+## 接口契约
+
+- Server Controller、DTO 和 OpenAPI decorators 是定义真相源，正式快照为 `server/openapi/openapi.json`。
+- `openapi:generate` 先执行 `pnpm build`（包含 `prisma generate`），再使用 preview application 离线生成快照。preview application 本身不读取 `.env`、不连接数据库、不监听端口；若要求包括前置 Prisma 构建在内的整个命令都不加载本地环境文件，需显式设置 `DOTENV_CONFIG_PATH=/dev/null`。
+- 每个 response 都携带 Server-generated `X-Request-Id`；除 Terminus health failure 的严格豁免外，应用级 JSON 错误统一为 `ApiError`。
+- 正式运行时不开放 Swagger route 或 Swagger UI；OpenAPI 仅通过提交 Git 的 snapshot 交付。
+- 跨端更新从仓库根使用 `node --run contract:sync`，只读验证使用 `node --run contract:check`。不要手工编辑 snapshot。
+
+详细规则见 [`docs/后端文档/接口契约规范.md`](../docs/后端文档/接口契约规范.md)。
 
 ## 边界约束
 

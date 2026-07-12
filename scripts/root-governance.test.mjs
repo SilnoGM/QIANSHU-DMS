@@ -103,7 +103,7 @@ test('根目录不创建 workspace、lockfile 或依赖目录', async () => {
   assert.equal(await exists('node_modules'), false)
 })
 
-test('根级治理文件和阶段一文档真实存在', async () => {
+test('根级治理文件和阶段一至阶段四文档真实存在', async () => {
   const requiredFiles = [
     'README.md',
     'AGENTS.md',
@@ -115,6 +115,10 @@ test('根级治理文件和阶段一文档真实存在', async () => {
     'docs/文档索引.md',
     'docs/全局文档/项目工程组织方案.md',
     'docs/全局文档/阶段一根级治理实施计划.md',
+    'docs/全局文档/阶段四接口契约设计.md',
+    'docs/全局文档/阶段四接口契约实施计划.md',
+    'docs/后端文档/接口契约规范.md',
+    'docs/前端文档/接口接入规范.md',
   ]
 
   for (const file of requiredFiles) {
@@ -127,13 +131,21 @@ test('Node.js 主版本配置为 24', async () => {
   assert.equal(nodeVersion.trim(), '24')
 })
 
-test('文档索引链接到两份真实全局文档', async () => {
+test('文档索引链接到真实全局文档与两端接口规范', async () => {
   const index = await readFile(fromRoot('docs', '文档索引.md'), 'utf8')
+  const requiredLinks = [
+    './全局文档/项目工程组织方案.md',
+    './全局文档/阶段一根级治理实施计划.md',
+    './全局文档/阶段四接口契约设计.md',
+    './全局文档/阶段四接口契约实施计划.md',
+    './后端文档/接口契约规范.md',
+    './前端文档/接口接入规范.md',
+  ]
 
-  assert.match(index, /\(\.\/全局文档\/项目工程组织方案\.md\)/)
-  assert.match(index, /\(\.\/全局文档\/阶段一根级治理实施计划\.md\)/)
-  await assertRegularFile('docs/全局文档/项目工程组织方案.md')
-  await assertRegularFile('docs/全局文档/阶段一根级治理实施计划.md')
+  for (const link of requiredLinks) {
+    assert.ok(index.includes(`(${link})`), `文档索引缺少链接：${link}`)
+    await assertRegularFile(path.join('docs', link))
+  }
 })
 
 test('阶段三计划、后端架构和数据库迁移规范均为真实文件', async () => {
@@ -161,7 +173,7 @@ test('文档索引链接到阶段三计划和两份后端正式文档', async ()
   }
 })
 
-test('根 README 使用当前时态且不保留阶段一至阶段三旧状态', async () => {
+test('根 README 使用当前时态且不保留阶段一至阶段四旧状态', async () => {
   const readme = await readFile(fromRoot('README.md'), 'utf8')
   const staleDescriptions = [
     '当前提交只完成根级治理与文档纳管',
@@ -169,6 +181,7 @@ test('根 README 使用当前时态且不保留阶段一至阶段三旧状态', 
     '待阶段三',
     '当前处于根级工程治理阶段',
     '其余根命令依赖后续任务',
+    '业务 API 与 OpenAPI 契约将在阶段四实施',
   ]
 
   assert.deepEqual(
@@ -233,6 +246,13 @@ test('工程方案当前事实准确反映根、Server、Web 和健康检查边�
     '`web/examples/core-arco-design-vue/`',
     '`web/examples/example/`',
     '`GET /api/health`',
+    '`server/openapi/openapi.json`',
+    '`web/openapi/openapi.json`',
+    '`contract:sync`',
+    '`contract:check`',
+    '`X-Request-Id`',
+    '`ApiError`',
+    '`apps/qsmds-arco/src/api/generated/`',
   ]
 
   assert.deepEqual(
@@ -245,9 +265,10 @@ test('工程方案当前事实准确反映根、Server、Web 和健康检查边�
   assert.doesNotMatch(currentFacts, /server\/.*为空目录|尚未初始化后端框架/)
   assert.doesNotMatch(currentFacts, /web\/apps\/(?:core|example)\//)
   assert.doesNotMatch(currentFacts, /(?:尚未|未|没有)提供.*GET \/api\/health/)
+  assert.doesNotMatch(currentFacts, /阶段四.*(?:尚未|未实施|待实施)/)
 })
 
-test('工程方案准确区分阶段三现状和阶段四待实施能力', async () => {
+test('工程方案准确记录阶段四已实施契约能力', async () => {
   const design = await readFile(
     fromRoot('docs', '全局文档', '项目工程组织方案.md'),
     'utf8',
@@ -256,7 +277,11 @@ test('工程方案准确区分阶段三现状和阶段四待实施能力', async
     'moduleFormat = "cjs"',
     '`server/test/app.e2e-spec.ts`',
     '当前 `scripts/check.mjs`',
-    'OpenAPI 契约能力将在阶段四实施',
+    '`server/openapi/openapi.json`',
+    '`web/openapi/openapi.json`',
+    '`node --run contract:sync`',
+    '`node --run contract:check`',
+    '`pnpm -C web api:generate`',
     '环境变量模板已经纳入 Git',
   ]
 
@@ -265,9 +290,15 @@ test('工程方案准确区分阶段三现状和阶段四待实施能力', async
     [],
   )
   assert.doesNotMatch(design, /HTTP 端到端测试放在 `test\/e2e\/`/)
+  assert.doesNotMatch(design, /OpenAPI 契约能力将在阶段四实施/)
+  assert.doesNotMatch(design, /`api:generate` 尚未实施/)
+  assert.doesNotMatch(design, /当前仓库尚无 `contract:sync`/)
+  assert.match(design, /阶段 4：接口契约（已实施并完成验收）/)
+  assert.doesNotMatch(design, /最终运行时验收待完成/)
+  assert.doesNotMatch(design, /Blob media type 不冲突/)
 })
 
-test('后端架构文档记录阶段三运行时、安全与测试边界', async () => {
+test('后端架构文档记录当前运行时、接口契约、安全与测试边界', async () => {
   const architecture = await readFile(
     fromRoot('docs', '后端文档', '后端架构.md'),
     'utf8',
@@ -287,8 +318,20 @@ test('后端架构文档记录阶段三运行时、安全与测试边界', async
         '`prisma:*`',
       ],
     ],
-    ['## 6. 健康检查', ['`GET /api/health`', 'Terminus', '全局成功 envelope']],
-    ['## 8. 阶段边界', ['阶段四', 'OpenAPI']],
+    [
+      '## 6. 健康检查',
+      ['`GET /api/health`', 'Terminus', '全局成功 envelope', '`X-Request-Id`'],
+    ],
+    [
+      '## 7. 接口契约与 OpenAPI',
+      [
+        '`ApiError`',
+        '`operationId`',
+        '`x-qianshu-contract`',
+        '`server/openapi/openapi.json`',
+        '不开放 Swagger route',
+      ],
+    ],
   ]
 
   for (const [heading, facts] of requiredFactsBySection) {
@@ -303,6 +346,241 @@ test('后端架构文档记录阶段三运行时、安全与测试边界', async
   const healthSection = markdownSection(architecture, '## 6. 健康检查')
   assert.match(healthSection, /^当前提供 `GET \/api\/health`。/m)
   assert.doesNotMatch(healthSection, /(?:尚未|未|没有)提供.*GET \/api\/health/)
+  assert.doesNotMatch(architecture, /OpenAPI 契约将在阶段四实施/)
+  assert.doesNotMatch(architecture, /这些接口契约能力将在阶段四/)
+})
+
+test('后端接口契约规范记录 Request ID、ApiError、OpenAPI 与安全边界', async () => {
+  const guide = await readFile(
+    fromRoot('docs', '后端文档', '接口契约规范.md'),
+    'utf8',
+  )
+  const requiredFactsBySection = [
+    [
+      '## 1. 契约真相源',
+      [
+        'Controller',
+        'DTO',
+        'OpenAPI decorators',
+        '`server/openapi/openapi.json`',
+      ],
+    ],
+    [
+      '## 2. Request ID 与 ApiError',
+      [
+        '`X-Request-Id`',
+        'Server-generated',
+        '`ApiError`',
+        '`fieldErrors`',
+        '`422`',
+        '`REQUEST_REJECTED`',
+        '中文',
+        'health',
+        'Terminus',
+      ],
+    ],
+    [
+      '## 3. OpenAPI 响应描述',
+      [
+        '`operationId`',
+        '`x-qianshu-contract`',
+        '`ApiContractResponse`',
+        '`204`',
+        'binary',
+        '`ApiApplicationContract`',
+      ],
+    ],
+    [
+      '## 4. 生成、同步与检查',
+      [
+        'preview',
+        '`openapi:generate`',
+        '`contract:sync`',
+        '`contract:check`',
+        '不读取 `.env`',
+        '不连接数据库',
+        '不监听端口',
+      ],
+    ],
+    [
+      '## 5. 安全边界',
+      ['不开放 Swagger route', '密码', '连接字符串', '堆栈'],
+    ],
+  ]
+
+  for (const [heading, facts] of requiredFactsBySection) {
+    const section = markdownSection(guide, heading)
+    assert.deepEqual(
+      facts.filter(fact => !section.includes(fact)),
+      [],
+      `后端接口契约章节缺少事实：${heading}`,
+    )
+  }
+})
+
+test('前端接口接入规范记录类型、响应、错误、重试、取消与 fake 边界', async () => {
+  const guide = await readFile(
+    fromRoot('docs', '前端文档', '接口接入规范.md'),
+    'utf8',
+  )
+  const requiredFactsBySection = [
+    [
+      '## 1. 快照与类型生成',
+      [
+        '`web/openapi/openapi.json`',
+        '`api:generate`',
+        '`apps/qsmds-arco/src/api/generated/`',
+        '`types.gen.ts`',
+        '不得手工修改',
+      ],
+    ],
+    [
+      '## 2. 成功响应',
+      ['`HealthGetResponses[200]`', '`AxiosResponse<T>`', '`res.data`'],
+    ],
+    [
+      '## 3. 错误与 Blob',
+      [
+        '`ApiClientError`',
+        '`1 MiB`',
+        '`Content-Type`',
+        '`Blob.type`',
+        '不读取或要求',
+        '`application/json`',
+        '`401`',
+        '`403`',
+      ],
+    ],
+    [
+      '## 4. 重试与取消',
+      [
+        '`GET`',
+        '`HEAD`',
+        '`OPTIONS`',
+        '`PUT`',
+        '`502`',
+        '`503`',
+        '`504`',
+        '`Retry-After`',
+        '`500/1000/2000 ms`',
+        '`CanceledError`',
+      ],
+    ],
+    [
+      '## 5. Fake 与网络前提',
+      [
+        '裸 DTO',
+        '`401 ApiError`',
+        '同源',
+        '反向代理',
+        '不声称支持跨域',
+        '`Access-Control-Expose-Headers: X-Request-Id, Retry-After`',
+      ],
+    ],
+  ]
+
+  for (const [heading, facts] of requiredFactsBySection) {
+    const section = markdownSection(guide, heading)
+    assert.deepEqual(
+      facts.filter(fact => !section.includes(fact)),
+      [],
+      `前端接口接入章节缺少事实：${heading}`,
+    )
+  }
+
+  assert.match(guide, /默认生成失败不承诺恢复旧目录/)
+  assert.doesNotMatch(guide, /Blob 自身 media type 不与响应 Header 冲突/)
+  assert.doesNotMatch(guide, /失败时恢复原目录/)
+})
+
+test('前端架构与协作文档使用当前契约时态并固定生成规则', async () => {
+  const architecture = await readFile(
+    fromRoot('docs', '前端文档', '前端架构.md'),
+    'utf8',
+  )
+  const contractSection = markdownSection(architecture, '## 8. 前后端契约')
+  const webReadme = await readFile(fromRoot('web', 'README.md'), 'utf8')
+  const agents = await readFile(fromRoot('web', 'AGENTS.md'), 'utf8')
+  const agentContractSection = markdownSection(agents, '## 前后端契约')
+  const requiredCurrentFacts = [
+    '`web/openapi/openapi.json`',
+    '`api:generate`',
+    '`apps/qsmds-arco/src/api/generated/`',
+    '`types.gen.ts`',
+    '`contract:sync`',
+    '`contract:check`',
+  ]
+
+  for (const document of [contractSection, webReadme, agentContractSection]) {
+    assert.deepEqual(
+      requiredCurrentFacts.filter(fact => !document.includes(fact)),
+      [],
+    )
+  }
+
+  const staleDescriptions = [
+    'OpenAPI 客户端生成在阶段四实施',
+    'OpenAPI 客户端生成将在阶段四落地',
+    '当前工作区尚未提供 `api:generate`',
+    'OpenAPI 客户端生成安排在阶段四实施',
+    '当前不得假设 `api:generate` 已存在',
+  ]
+  for (const document of [architecture, webReadme, agents]) {
+    assert.deepEqual(
+      staleDescriptions.filter(description => document.includes(description)),
+      [],
+    )
+  }
+
+  assertBashCodeLine(agentContractSection, 'node --run contract:sync')
+  assertBashCodeLine(agentContractSection, 'node --run contract:check')
+  assertBashCodeLine(agentContractSection, 'pnpm -C web api:generate')
+  for (const fact of [
+    '`lint`',
+    '`typecheck`',
+    '`build`',
+    '`build:test`',
+    '`test:api`',
+    '`apps/qsmds-arco/src/api/index.ts`',
+    '唯一生产 Axios Client',
+    '`AxiosResponse<T>`',
+    '`res.data`',
+  ]) {
+    assert.ok(agentContractSection.includes(fact), `web/AGENTS.md 缺少：${fact}`)
+  }
+})
+
+test('根与 Server 入口文档记录当前契约命令和运行时事实', async () => {
+  const rootReadme = await readFile(fromRoot('README.md'), 'utf8')
+  const serverReadme = await readFile(fromRoot('server', 'README.md'), 'utf8')
+  const serverAgents = await readFile(fromRoot('server', 'AGENTS.md'), 'utf8')
+  const contractSection = markdownSection(rootReadme, '## 接口契约')
+
+  assertBashCodeLine(contractSection, 'node --run contract:sync')
+  assertBashCodeLine(contractSection, 'node --run contract:check')
+  assertBashCodeLine(contractSection, 'pnpm -C web api:generate')
+  assert.ok(
+    contractSection.includes('`web/apps/qsmds-arco/src/api/generated/types.gen.ts`'),
+  )
+
+  const requiredServerFacts = [
+    '`server/openapi/openapi.json`',
+    '`openapi:generate`',
+    '`X-Request-Id`',
+    '`ApiError`',
+    '不开放 Swagger route',
+  ]
+  for (const document of [serverReadme, serverAgents]) {
+    assert.deepEqual(
+      requiredServerFacts.filter(fact => !document.includes(fact)),
+      [],
+    )
+  }
+  assert.ok(serverReadme.includes('preview application 本身不读取 `.env`'))
+  assert.doesNotMatch(
+    serverReadme,
+    /`openapi:generate`[^\n]*过程不读取 `\.env`/,
+  )
 })
 
 test('数据库迁移规范记录不可变迁移、安全验证和向前修复规则', async () => {

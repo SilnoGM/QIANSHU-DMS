@@ -95,8 +95,21 @@ pnpm serve:select
 ## 前后端契约
 
 - Web 与 Server 只通过 HTTP 和 OpenAPI 契约协作，不共享源码或依赖安装。
-- OpenAPI 客户端生成安排在阶段四实施；当前不得假设 `api:generate` 已存在，也不得手写虚假的生成步骤。
+- `web/openapi/openapi.json` 是 Web 自包含 snapshot；`api:generate` 只读该文件并重建 ignored `apps/qsmds-arco/src/api/generated/`。
+- generated directory 必须精确只有非空 regular `types.gen.ts`，不得手工修改或提交。
+- 正式 app 的 `lint`、`typecheck`、`build`、`build:test` 与 Web `test:api` 都通过 lifecycle 先运行生成。
+- 跨端 snapshot 只通过根 `contract:sync` 更新；`contract:check` 是只读检查，不得用复制命令或 Web 脚本直接覆盖 Server snapshot。
+- `apps/qsmds-arco/src/api/index.ts` 只装配唯一生产 Axios Client；成功路径保留完整 `AxiosResponse<T>`，Store 和调用方显式读取 `res.data`，不得恢复全局 envelope 解包。
+- 错误必须先收敛为 `ApiClientError`；Blob、`401/403`、取消、受限重试与 fake 裸 DTO 的规则以 `docs/前端文档/接口接入规范.md` 为准。
 - 新增或修改公共 API、数据结构或数据库 schema 前，必须先获得用户确认。
+
+在仓库根执行跨端同步和检查；在 Web 自身验证独立生成：
+
+```bash
+node --run contract:sync
+node --run contract:check
+pnpm -C web api:generate
+```
 
 ## 反复修改检测
 
