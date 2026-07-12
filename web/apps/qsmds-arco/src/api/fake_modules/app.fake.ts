@@ -1,3 +1,5 @@
+import type { ApiError } from '../api-error'
+
 import { faker } from '@faker-js/faker'
 import { defineFakeRoute } from 'vite-plugin-fake-server/client'
 
@@ -6,86 +8,82 @@ export default defineFakeRoute([
     url: '/fake/app/route/list',
     method: 'get',
     response: () => {
-      return {
-        error: '',
-        status: 1,
-        data: [
-          // 主导航
-          {
-            meta: {
-              title: '演示',
-              icon: 'uim:box',
-            },
-            children: [
-              // 次导航（一级路由）
-              {
-                path: '/multilevel_menu_example',
-                component: 'Layout',
-                name: 'multilevelMenuExample',
-                meta: {
-                  title: 'route.multimenu.root',
-                  icon: 'heroicons-solid:menu-alt-3',
-                },
-                children: [
-                  // 次导航（二级路由）
-                  {
-                    path: 'page',
-                    name: 'multilevelMenuExample1',
-                    component: 'multilevel_menu_example/page.vue',
-                    meta: {
-                      title: 'route.multimenu.page',
-                    },
-                  },
-                  {
-                    path: 'level2',
-                    name: 'multilevelMenuExample2',
-                    meta: {
-                      title: 'route.multimenu.level2.root',
-                    },
-                    children: [
-                      // 次导航（三级路由）
-                      {
-                        path: 'page',
-                        name: 'multilevelMenuExample2-1',
-                        component: 'multilevel_menu_example/level2/page.vue',
-                        meta: {
-                          title: 'route.multimenu.level2.page',
-                        },
-                      },
-                      {
-                        path: 'level3',
-                        name: 'multilevelMenuExample2-2',
-                        meta: {
-                          title: 'route.multimenu.level2.level3.root',
-                        },
-                        children: [
-                          // 次导航（四级路由）
-                          {
-                            path: 'page1',
-                            name: 'multilevelMenuExample2-2-1',
-                            component: 'multilevel_menu_example/level2/level3/page1.vue',
-                            meta: {
-                              title: 'route.multimenu.level2.level3.page1',
-                            },
-                          },
-                          {
-                            path: 'page2',
-                            name: 'multilevelMenuExample2-2-2',
-                            component: 'multilevel_menu_example/level2/level3/page2.vue',
-                            meta: {
-                              title: 'route.multimenu.level2.level3.page2',
-                            },
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
+      return [
+        // 主导航
+        {
+          meta: {
+            title: '演示',
+            icon: 'uim:box',
           },
-        ],
-      }
+          children: [
+            // 次导航（一级路由）
+            {
+              path: '/multilevel_menu_example',
+              component: 'Layout',
+              name: 'multilevelMenuExample',
+              meta: {
+                title: 'route.multimenu.root',
+                icon: 'heroicons-solid:menu-alt-3',
+              },
+              children: [
+                // 次导航（二级路由）
+                {
+                  path: 'page',
+                  name: 'multilevelMenuExample1',
+                  component: 'multilevel_menu_example/page.vue',
+                  meta: {
+                    title: 'route.multimenu.page',
+                  },
+                },
+                {
+                  path: 'level2',
+                  name: 'multilevelMenuExample2',
+                  meta: {
+                    title: 'route.multimenu.level2.root',
+                  },
+                  children: [
+                    // 次导航（三级路由）
+                    {
+                      path: 'page',
+                      name: 'multilevelMenuExample2-1',
+                      component: 'multilevel_menu_example/level2/page.vue',
+                      meta: {
+                        title: 'route.multimenu.level2.page',
+                      },
+                    },
+                    {
+                      path: 'level3',
+                      name: 'multilevelMenuExample2-2',
+                      meta: {
+                        title: 'route.multimenu.level2.level3.root',
+                      },
+                      children: [
+                        // 次导航（四级路由）
+                        {
+                          path: 'page1',
+                          name: 'multilevelMenuExample2-2-1',
+                          component: 'multilevel_menu_example/level2/level3/page1.vue',
+                          meta: {
+                            title: 'route.multimenu.level2.level3.page1',
+                          },
+                        },
+                        {
+                          path: 'page2',
+                          name: 'multilevelMenuExample2-2-2',
+                          component: 'multilevel_menu_example/level2/level3/page2.vue',
+                          meta: {
+                            title: 'route.multimenu.level2.level3.page2',
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ]
     },
   },
   {
@@ -93,13 +91,9 @@ export default defineFakeRoute([
     method: 'post',
     response: ({ body }) => {
       return {
-        error: '',
-        status: 1,
-        data: {
-          account: body.account,
-          token: `${body.account}:${faker.internet.jwt()}`,
-          avatar: `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${body.account}`,
-        },
+        account: body.account,
+        token: `${body.account}:${faker.internet.jwt()}`,
+        avatar: `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${body.account}`,
       }
     },
   },
@@ -109,9 +103,10 @@ export default defineFakeRoute([
     statusCode: 401,
     response: () => {
       return {
-        error: '',
-        status: 0,
-      }
+        code: 'UNAUTHORIZED',
+        message: '未登录或登录已失效',
+        requestId: `req_${faker.string.uuid()}`,
+      } satisfies ApiError
     },
   },
   {
@@ -133,11 +128,7 @@ export default defineFakeRoute([
         ]
       }
       return {
-        error: '',
-        status: 1,
-        data: {
-          permissions,
-        },
+        permissions,
       }
     },
   },
@@ -146,11 +137,7 @@ export default defineFakeRoute([
     method: 'post',
     response: () => {
       return {
-        error: '',
-        status: 1,
-        data: {
-          isSuccess: true,
-        },
+        isSuccess: true,
       }
     },
   },
@@ -166,11 +153,7 @@ export default defineFakeRoute([
         preferences = '{"theme":{"colorScheme":"dark","raduis":1},"menu":{"mode":"head","style":""},"layout":{"widthMode":"center"},"topbar":{"tabbar":false}}'
       }
       return {
-        error: '',
-        status: 1,
-        data: {
-          preferences,
-        },
+        preferences,
       }
     },
   },
@@ -179,11 +162,7 @@ export default defineFakeRoute([
     method: 'post',
     response: () => {
       return {
-        error: '',
-        status: 1,
-        data: {
-          isSuccess: true,
-        },
+        isSuccess: true,
       }
     },
   },
@@ -196,11 +175,7 @@ export default defineFakeRoute([
         tabbar = ''
       }
       return {
-        error: '',
-        status: 1,
-        data: {
-          tabbar,
-        },
+        tabbar,
       }
     },
   },
@@ -209,11 +184,7 @@ export default defineFakeRoute([
     method: 'post',
     response: () => {
       return {
-        error: '',
-        status: 1,
-        data: {
-          isSuccess: true,
-        },
+        isSuccess: true,
       }
     },
   },
@@ -226,11 +197,7 @@ export default defineFakeRoute([
         favorites = '[{"fullPath":"/multilevel_menu_example/page","title":"导航1","i18n":"route.multimenu.page","icon":"heroicons-solid:menu-alt-3"}]'
       }
       return {
-        error: '',
-        status: 1,
-        data: {
-          favorites,
-        },
+        favorites,
       }
     },
   },
@@ -239,11 +206,7 @@ export default defineFakeRoute([
     method: 'post',
     response: () => {
       return {
-        error: '',
-        status: 1,
-        data: {
-          isSuccess: true,
-        },
+        isSuccess: true,
       }
     },
   },
@@ -252,13 +215,9 @@ export default defineFakeRoute([
     method: 'get',
     response: () => {
       return {
-        error: '',
-        status: 1,
-        data: {
-          message: 4,
-          approval: 10,
-          default: 0,
-        },
+        message: 4,
+        approval: 10,
+        default: 0,
       }
     },
   },
@@ -286,13 +245,9 @@ export default defineFakeRoute([
         })
       }
       return {
-        error: '',
-        status: 1,
-        data: {
-          message: messageList,
-          approval: approvalList,
-          default: defaultList,
-        },
+        message: messageList,
+        approval: approvalList,
+        default: defaultList,
       }
     },
   },

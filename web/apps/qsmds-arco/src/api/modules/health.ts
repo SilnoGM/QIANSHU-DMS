@@ -1,6 +1,8 @@
 import type { AxiosInstance, AxiosResponse } from 'axios'
 import type { HealthGetResponses } from '../generated/types.gen'
 
+import api from '../index'
+
 export type HealthResponse = HealthGetResponses[200]
 
 /**
@@ -8,7 +10,7 @@ export type HealthResponse = HealthGetResponses[200]
  * Web Client 的 baseURL 已包含 `/api`，因此这里使用相对业务路径 `/health`。
  */
 export function getHealth(
-  client: AxiosInstance,
+  client: AxiosInstance = api,
 ): Promise<AxiosResponse<HealthResponse>> {
   return client.get<HealthResponse>('/health')
 }
