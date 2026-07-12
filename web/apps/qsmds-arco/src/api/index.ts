@@ -5,15 +5,6 @@ import axios from 'axios'
 const MAX_RETRY_COUNT = 3 // 最大重试次数
 const RETRY_DELAY = 1000 // 重试延迟时间（毫秒）
 
-// 扩展 AxiosRequestConfig 类型
-declare module 'axios' {
-  export interface AxiosRequestConfig {
-    retry?: boolean
-    retryCount?: number
-    fake?: boolean
-  }
-}
-
 const api = axios.create({
   baseURL: (import.meta.env.DEV && import.meta.env.VITE_ENABLE_PROXY) ? '/proxy/' : import.meta.env.VITE_APP_API_BASEURL,
   timeout: 1000 * 60,
