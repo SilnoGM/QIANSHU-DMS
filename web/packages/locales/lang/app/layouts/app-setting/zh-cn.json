@@ -1,0 +1,209 @@
+{
+  "app": {
+    "layouts": {
+      "appSetting": {
+        "titleSettings": "应用配置",
+        "titlePreferences": "个人偏好",
+        "description": "在生产环境中应关闭该模块",
+        "warning": "在此处调整配置只是临时生效，要想真正应用于项目，请点击「 @:app.layouts.appSetting.copy 」按钮，并粘贴到 {path} 文件中。",
+        "copy": "复制配置",
+        "reset": "重置",
+        "theme": {
+          "title": "主题",
+          "baseColor": "基础色",
+          "themeColor": "主题色",
+          "colorScheme": "颜色方案",
+          "sync": "主题同步",
+          "syncTip": "切换颜色方案将共用同一套基础色和主题色",
+          "radius": "圆角",
+          "colorAmblyopia": "色弱模式"
+        },
+        "menu": {
+          "title": "导航菜单",
+          "mode": {
+            "side": "侧边栏模式 (有主导航菜单)",
+            "head": "顶部模式",
+            "single": "侧边栏模式 (无主导航菜单)",
+            "only-side": "侧边栏精简模式",
+            "only-head": "顶部精简模式",
+            "side-panel": "侧边栏面板模式",
+            "head-panel": "顶部面板模式"
+          },
+          "dark": "深色模式",
+          "darkTip": "导航菜单深色模式仅在颜色方案亮色模式下生效",
+          "mainMenuClickMode": {
+            "title": "点击主导航菜单",
+            "tip": "智能模式下默认执行切换操作，当次导航菜单只有一个可访问的导航菜单时执行跳转操作",
+            "switch": "切换",
+            "jump": "跳转",
+            "smart": "智能"
+          },
+          "subMenuUniqueExpand": "次导航菜单唯一展开",
+          "subMenuCollapse": "次导航菜单收起",
+          "subMenuAutoCollapse": {
+            "title": "次导航菜单自动收起",
+            "tip": "次导航菜单收起时，鼠标悬停时会临时展开"
+          },
+          "subMenuCollapseButton": "次导航菜单展开/收起按钮",
+          "style": "风格",
+          "hotkeys": "快捷键"
+        },
+        "topbar": {
+          "title": "顶栏",
+          "tabbar": "标签栏",
+          "toolbar": "工具栏",
+          "switchTabbarAndToolbar": {
+            "title": "展示切换",
+            "tip": "切换标签栏和工具栏的展示顺序"
+          },
+          "mode": {
+            "title": "模式",
+            "static": "静态",
+            "fixed": "固定",
+            "sticky": "粘性"
+          }
+        },
+        "tabbar": {
+          "title": "标签栏",
+          "style": {
+            "title": "风格",
+            "default": "默认",
+            "fashion": "时尚",
+            "card": "卡片",
+            "square": "方块"
+          },
+          "minMaxWidth": {
+            "title": "标签页宽度",
+            "tip": {
+              "constant": "@:app.layouts.appSetting.tabbar.minMaxWidth.constant ：在设置的区间值内自适应，当区间最小值和最大值相同时，则为固定宽度",
+              "adaptive": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive ：在设置的区间值内自适应",
+              "adaptive-min": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive-min ：在设置的区间值内自适应 (有最小宽度)",
+              "adaptive-max": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive-max ：在设置的区间值内自适应 (有最大宽度)"
+            },
+            "constant": "固定",
+            "adaptive": "自适应",
+            "adaptive-min": "自适应 (有最小宽度)",
+            "adaptive-max": "自适应 (有最大宽度)"
+          },
+          "icon": "显示图标",
+          "dblclickAction": {
+            "title": "双击标签页",
+            "reload": "刷新",
+            "close": "关闭",
+            "pin": "固定/取消固定",
+            "maximize": "最大化",
+            "window": "新窗口打开"
+          },
+          "memory": {
+            "title": "记忆功能",
+            "tip": "非固定和非常驻的标签页将在本次会话窗口中始终存在，刷新浏览器或重新登录时不会丢失"
+          },
+          "hotkeys": "快捷键"
+        },
+        "toolbar": {
+          "title": "工具栏",
+          "favorites": {
+            "title": "收藏夹",
+            "tip": "可将常用导航添加进收藏夹"
+          },
+          "breadcrumb": {
+            "title": "面包屑导航",
+            "style": {
+              "title": "风格",
+              "default": "默认",
+              "modern": "现代"
+            },
+            "mainMenu": "显示主导航"
+          },
+          "menuSearch": {
+            "title": "导航搜索",
+            "hotkeys": "快捷键"
+          },
+          "notification": "通知中心",
+          "i18n": {
+            "title": "国际化",
+            "defaultLang": "默认语言",
+            "followSystem": "跟随系统"
+          },
+          "fullscreen": "全屏",
+          "pageReload": {
+            "title": "页面刷新",
+            "tip": "重新载入当前页面，并且不刷新浏览器"
+          },
+          "colorScheme": "颜色主题",
+          "layout": "布局"
+        },
+        "page": {
+          "title": "页面",
+          "progress": {
+            "title": "载入进度条",
+            "tip": "路由跳转时会在页面顶部显示进度条，该进度仅为模拟效果，并非真实加载进度"
+          },
+          "hotkeys": "快捷键"
+        },
+        "app": {
+          "title": "应用",
+          "account": {
+            "title": "账号",
+            "auth": "权限验证",
+            "expiredMode": {
+              "title": "过期模式",
+              "redirect": "重定向到登录页",
+              "popup": "弹出登录窗口"
+            },
+            "multipleAccounts": "多账号管理"
+          },
+          "dynamicTitle": {
+            "title": "动态标题",
+            "tip": "开启时页面标题会显示当前路由标题，格式为\"页面标题 - 网站名称\"；关闭时则显示网站名称，网站名称在项目根目录下 .env.* 文件里配置"
+          },
+          "watermark": {
+            "title": "水印",
+            "tip": "水印显示内容在 src/store/modules/app/watermark.ts 文件中配置"
+          },
+          "feedback": {
+            "title": "反馈",
+            "tip": "允许用户提交反馈，具体业务代码在 src/components/AppAccountButton/feedback.vue 中自行补充"
+          },
+          "lockScreen": "锁屏",
+          "rip": {
+            "title": "哀悼模式",
+            "tip": "网站整体变灰色"
+          },
+          "mobile": {
+            "title": "移动端访问",
+            "tip": "关闭后，将禁用移动端访问"
+          },
+          "layout": {
+            "title": "布局",
+            "center": "居中显示",
+            "centerScope": {
+              "title": "作用范围",
+              "inner": "内部",
+              "outer": "外部"
+            },
+            "centerWidth": "居中宽度"
+          },
+          "home": {
+            "title": "主页",
+            "enable": {
+              "title": "启用",
+              "tip": "登录后默认进入主页，否则默认进入第一个导航页面"
+            },
+            "homeTitle": {
+              "title": "标题",
+              "tip": "开启国际化时，该设置无效"
+            }
+          },
+          "copyright": {
+            "title": "版权",
+            "enable": "启用",
+            "dates": "日期",
+            "company": "公司",
+            "website": "网站"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "app": {
+    "components": {
+      "accountButton": {
+        "index": {
+          "profile": "Personal Settings",
+          "preferences": "Preferences",
+          "hotkeys": "Hotkeys",
+          "feedback": "Feedback",
+          "lock_screen": "Lock Screen",
+          "logout": "Logout",
+          "current_account": "Current Login Account",
+          "switch_account": "Switch Account",
+          "add_account": "Add Account",
+          "add_account_success": "Add account successfully",
+          "add_account_success_confirm": "Whether to switch to the account?"
+        },
+        "feedback": {
+          "tips": "Using screenshots can help us understand the problem more accurately",
+          "description": "Please describe your problem or suggestion",
+          "rules": {
+            "description": "Please describe your problem or suggestion"
+          },
+          "submit": "Submit",
+          "submitSuccess": "Mock submit succeeded"
+        },
+        "lockScreenLock": {
+          "form": {
+            "lockPassword": "Lock Screen Password",
+            "lock": "Lock"
+          },
+          "rules": {
+            "lockPassword": "Please enter the lock screen password"
+          }
+        },
+        "lockScreenUnlock": {
+          "form": {
+            "unlockPassword": "Unlock Password",
+            "unlock": "Unlock",
+            "unlockPasswordError": "Unlock Password Error"
+          },
+          "rules": {
+            "unlockPassword": "Please enter the unlock password"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "app": {
+    "components": {
+      "notAllowed": {
+        "notPermitted": "抱歉，你無權訪問該頁面",
+        "goBack": "返回主頁"
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "qianshu-dms",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": "^24.15.0"
+  },
+  "scripts": {
+    "bootstrap": "node ./scripts/bootstrap.mjs",
+    "dev": "node ./scripts/dev.mjs",
+    "dev:server": "node ./scripts/dev.mjs server",
+    "dev:web": "node ./scripts/dev.mjs web",
+    "contract:sync": "node ./scripts/contract-sync.mjs",
+    "contract:check": "node ./scripts/contract-check.mjs",
+    "ci:server-e2e": "node ./scripts/ci-postgres.mjs -- node ./scripts/ci-server-e2e.mjs",
+    "ci:contract": "node ./scripts/ci-contract-baseline.mjs",
+    "release:check": "node ./scripts/release-version.mjs",
+    "release:package:web": "node ./scripts/release-package.mjs web",
+    "release:package:server": "node ./scripts/release-package.mjs server",
+    "release:smoke:server": "node ./scripts/ci-postgres.mjs -- node ./scripts/release-package.mjs smoke-server",
+    "release:manifest": "node ./scripts/release-manifest.mjs",
+    "release:publish": "node ./scripts/release-github.mjs",
+    "test:root": "node --test ./scripts/*.test.mjs",
+    "check": "node ./scripts/check.mjs",
+    "check:server": "pnpm -C server check",
+    "check:web": "pnpm -C web check",
+    "build": "pnpm -C server build && pnpm -C web build",
+    "build:server": "pnpm -C server build",
+    "build:web": "pnpm -C web build"
+  }
+}

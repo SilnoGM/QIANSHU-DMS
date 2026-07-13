@@ -1,0 +1,24 @@
+{
+  "app": {
+    "layouts": {
+      "topbar": {
+        "tabbar": {
+          "reload": "Reload",
+          "close": "Close",
+          "pin": "Pin",
+          "unpin": "Unpin",
+          "maximize": "Maximize",
+          "newWindow": "Open In New Window",
+          "closeOtherSide": "Close Otherside Tabs",
+          "closeLeftSide": "Close Leftside Tabs",
+          "closeRightSide": "Close Rightside Tabs",
+          "scrollTip": {
+            "title": "Tip",
+            "description": "When the tabbar exceeds the visible area, move the pointer over it and use the mouse wheel to browse.",
+            "action": "Got it"
+          }
+        }
+      }
+    }
+  }
+}

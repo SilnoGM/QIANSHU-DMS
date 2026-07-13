@@ -1,0 +1,24 @@
+{
+  "app": {
+    "layouts": {
+      "topbar": {
+        "tabbar": {
+          "reload": "重新加載",
+          "close": "關閉標籤頁",
+          "pin": "固定",
+          "unpin": "取消固定",
+          "maximize": "最大化",
+          "newWindow": "新窗口中打開",
+          "closeOtherSide": "關閉其它標籤頁",
+          "closeLeftSide": "關閉左側標籤頁",
+          "closeRightSide": "關閉右側標籤頁",
+          "scrollTip": {
+            "title": "溫馨提示",
+            "description": "標籤欄數量超過展示區域範圍時，可將滑鼠移到標籤欄上，透過滑鼠滾輪滑動瀏覽",
+            "action": "知道了"
+          }
+        }
+      }
+    }
+  }
+}

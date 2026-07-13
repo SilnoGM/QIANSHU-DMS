@@ -1,0 +1,34 @@
+{
+  "folders": [
+    { "name": "apps/qsmds-arco", "path": "apps/qsmds-arco" },
+    { "name": "examples/core", "path": "examples/core" },
+    { "name": "examples/core-arco-design-vue", "path": "examples/core-arco-design-vue" },
+    { "name": "examples/example", "path": "examples/example" },
+    { "name": "packages/components", "path": "packages/components" },
+    { "name": "packages/composables", "path": "packages/composables" },
+    { "name": "packages/copyright", "path": "packages/copyright" },
+    { "name": "packages/hotkeys", "path": "packages/hotkeys" },
+    { "name": "packages/iconify-tools", "path": "packages/iconify-tools" },
+    { "name": "packages/locales", "path": "packages/locales" },
+    { "name": "packages/settings", "path": "packages/settings" },
+    { "name": "packages/themes", "path": "packages/themes" },
+    { "name": "packages/types", "path": "packages/types" }
+  ],
+  "settings": {
+    "i18n-ally-next.enabledFrameworks": [
+      "vue",
+      "vue-sfc"
+    ],
+    "i18n-ally-next.displayLanguage": "zh-cn",
+    "i18n-ally-next.editor.preferEditor": true,
+    "i18n-ally-next.keystyle": "nested",
+    "i18n-ally-next.sortKeys": true,
+    "i18n-ally-next.keepFulfilled": true,
+    "i18n-ally-next.dirStructure": "file",
+    "i18n-ally-next.localesPaths": [
+      "packages/locales/lang/**/*",
+      "apps/*/src/locales/lang/**/*",
+      "examples/*/src/locales/lang/**/*"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "app": {
+    "components": {
+      "systemInfo": {
+        "title": "System Info",
+        "version": "Version",
+        "lastBuildTime": "Last Build Time",
+        "deps": "Production Dependencies",
+        "devDeps": "Development Dependencies"
+      }
+    }
+  }
+}

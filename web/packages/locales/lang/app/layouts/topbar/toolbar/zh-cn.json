@@ -1,0 +1,35 @@
+{
+  "app": {
+    "layouts": {
+      "topbar": {
+        "toolbar": {
+          "favorites": {
+            "title": "收藏夹",
+            "add": "添加到收藏夹",
+            "remove": "从收藏夹删除",
+            "empty": "收藏夹是空的",
+            "addToFavorites": "点击 {0} 将当前页面添加到收藏夹"
+          },
+          "menuSearch": {
+            "input": "支持标题、拼音(首字母)、URL模糊查询",
+            "welcome": "输入你要搜索的导航",
+            "empty": "没有找到你想要的",
+            "upDown": "切换",
+            "enter": "访问",
+            "esc": "退出"
+          },
+          "notification": {
+            "empty": "暂无通知",
+            "markAsRead": "全部标记为已读",
+            "viewAll": "查看全部",
+            "todo": "暂未开发，需开发者自行实现"
+          },
+          "pageReload": {
+            "tooltip1": "按住 {0} 键并点击",
+            "tooltip2": "可切换为浏览器原生刷新"
+          }
+        }
+      }
+    }
+  }
+}

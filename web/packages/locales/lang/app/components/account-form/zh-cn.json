@@ -1,0 +1,120 @@
+{
+  "app": {
+    "components": {
+      "accountForm": {
+        "login": {
+          "accountLogin": "账号密码登录",
+          "qrcodeLogin": "扫码登录",
+          "intro": "欢迎使用 👋🏻",
+          "remember": "记住我",
+          "forget": "忘记密码了?",
+          "noAccount": "还没有帐号?",
+          "register": "注册新帐号",
+          "wechatQrcode": "请使用微信扫码登录",
+          "testLogin": "演示账号一键登录",
+          "form": {
+            "account": "用户名",
+            "password": "密码",
+            "login": "登录"
+          },
+          "rules": {
+            "account": "请输入用户名",
+            "password": "请输入密码"
+          }
+        },
+        "loginAgain": {
+          "accountLogin": "账号密码登录",
+          "qrcodeLogin": "扫码登录",
+          "intro": "请重新登录",
+          "subIntro": "您的登录状态已过期",
+          "wechatQrcode": "请使用微信扫码登录",
+          "form": {
+            "account": "用户名",
+            "password": "密码 (123456)",
+            "login": "登录"
+          },
+          "rules": {
+            "account": "请输入用户名",
+            "password": "请输入密码"
+          }
+        },
+        "register": {
+          "intro": "探索从这里开始 🚀",
+          "hasAccount": "已经有帐号?",
+          "login": "去登录",
+          "demoUnavailable": "演示系统未提供该功能",
+          "form": {
+            "account": "用户名",
+            "password": "密码",
+            "checkPassword": "确认密码",
+            "register": "注册"
+          },
+          "rules": {
+            "account": "请输入用户名",
+            "password": "请输入密码",
+            "passwordLength": "密码长度为6到18位",
+            "checkPassword": "请再次输入密码",
+            "checkPasswordError": "两次输入的密码不一致"
+          }
+        },
+        "resetPassword": {
+          "intro": "忘记密码了? 🔒",
+          "login": "去登录",
+          "demoUnavailable": "演示系统未提供该功能",
+          "form": {
+            "account": "用户名",
+            "captcha": "验证码",
+            "sendCaptcha": "发送验证码",
+            "captchaCountdown": "{0} 秒后可重新发送",
+            "newPassword": "新密码",
+            "confirm": "确认"
+          },
+          "rules": {
+            "account": "请输入用户名",
+            "captcha": "请输入验证码",
+            "newPassword": "请输入新密码",
+            "newPasswordLength": "密码长度为6到18位"
+          }
+        },
+        "editPassword": {
+          "intro": "修改密码",
+          "subIntro": "请输入原密码、新密码和确认密码",
+          "success": "模拟修改成功，请重新登录",
+          "form": {
+            "password": "原密码",
+            "newPassword": "新密码",
+            "checkPassword": "确认密码",
+            "save": "保存"
+          },
+          "rules": {
+            "password": "请输入原密码",
+            "newPassword": "请输入新密码",
+            "passwordLength": "密码长度为6到18位",
+            "checkPassword": "请确认新密码",
+            "checkPasswordError": "两次输入的密码不一致"
+          }
+        },
+        "switchAdd": {
+          "intro": "添加账号",
+          "subIntro": "添加账号后，可以切换账号登录",
+          "success": "账号添加成功",
+          "form": {
+            "account": "用户名",
+            "password": "密码",
+            "login": "添加并登录"
+          },
+          "rules": {
+            "account": "请输入用户名",
+            "password": "请输入密码"
+          }
+        },
+        "switchLogout": {
+          "select_account_to_sign_out": "选择要登出的账号",
+          "current_login": "当前登录",
+          "sign_out": "登出",
+          "sign_out_from_all_accounts": "登出所有账号"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,93 @@
+# 千树 DMS Server
+
+`server/` 是一个可独立复制、安装、检查、构建和运行的单一 NestJS package。它拥有自己的 `package.json`、`pnpm-lock.yaml` 与 pnpm 11 安全配置，不属于根目录或 `web/` 的多 package workspace。
+
+## 环境要求
+
+- Node.js `24.x`（最低满足 `^24.15.0`）
+- pnpm `11.9.0`
+- 运行应用、数据库迁移和 E2E 测试时需要 PostgreSQL
+
+## 独立安装
+
+从仓库根目录执行：
+
+```bash
+pnpm -C server install --frozen-lockfile
+```
+
+若只复制 `server/` 到其他位置，则在复制后的目录中执行：
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+不要在仓库根目录执行 `pnpm install`。根目录只负责无依赖编排，不维护 lockfile 或 `node_modules/`。
+
+## pnpm 11 单 package 安全与部署配置
+
+pnpm 11 使用 `pnpm-workspace.yaml` 保存项目级安装和部署设置，即使当前项目只有一个 package。当前文件内容为：
+
+```yaml
+injectWorkspacePackages: true
+allowBuilds:
+  '@prisma/engines': true
+  # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
+  '@scarf/scarf': false
+  prisma: true
+```
+
+- 文件不声明 `packages`，因此不会形成多 package dependency graph。
+- 仓库根目录没有 `pnpm-workspace.yaml`，所以 Server 安全配置不会把根目录、`web/` 或其他目录纳入嵌套 workspace。
+- `injectWorkspacePackages` 只服务现代 production deploy：正式 Server 归档通过 `pnpm deploy --prod` 生成自包含的 production 目录，不得使用 `--legacy`。
+- 该注入开关不声明 `packages`、不扩张 Server workspace，也不改变 Root、Server 与 Web 相互独立的依赖域。
+- 新增带 build script 的依赖前，必须审查包名、固定版本、脚本内容和必要性，再决定是否精确加入 `allowBuilds`。
+- 禁止使用 `dangerouslyAllowAllBuilds`、通配 matcher 或其他全局放开策略。
+
+## 环境变量
+
+将 `.env.example` 复制为本地 `.env`，并在本地填写真实配置。严禁提交 `.env` 或在日志中输出连接字符串。
+
+| 变量 | 用途 | 示例模板 |
+| --- | --- | --- |
+| `NODE_ENV` | 运行环境 | `development` |
+| `PORT` | HTTP 监听端口 | `3000` |
+| `DATABASE_URL` | PostgreSQL 连接字符串 | 模板保持为空 |
+
+## 常用命令
+
+```bash
+pnpm -C server dev
+pnpm -C server check
+pnpm -C server build
+pnpm -C server openapi:generate
+pnpm -C server test:e2e
+pnpm -C server db:migrate:dev
+pnpm -C server db:migrate:deploy
+```
+
+- `check` 与 `build` 只验证工程和单元测试，不连接数据库；它们在未设置 `DATABASE_URL` 时也应可执行。
+- `test:e2e` 面向真实 PostgreSQL，调用前必须通过当前进程环境提供测试数据库连接，且测试数据库必须与个人或生产数据库隔离。
+- `dev` 与 `start` 会先生成 Prisma Client，再启动 NestJS。
+- `start:prod` 直接执行已经构建的 `dist/main.js`，不会生成 Prisma Client；部署流程必须先完成安装、生成与构建。
+
+## 接口契约
+
+- Server Controller、DTO 和 OpenAPI decorators 是定义真相源，正式快照为 `server/openapi/openapi.json`。
+- `openapi:generate` 先执行 `pnpm build`（包含 `prisma generate`），再使用 preview application 离线生成快照。preview application 本身不读取 `.env`、不连接数据库、不监听端口；若要求包括前置 Prisma 构建在内的整个命令都不加载本地环境文件，需显式设置 `DOTENV_CONFIG_PATH=/dev/null`。
+- 每个 response 都携带 Server-generated `X-Request-Id`；除 Terminus health failure 的严格豁免外，应用级 JSON 错误统一为 `ApiError`。
+- 正式运行时不开放 Swagger route 或 Swagger UI；OpenAPI 仅通过提交 Git 的 snapshot 交付。
+- 跨端更新从仓库根使用 `node --run contract:sync`，只读验证使用 `node --run contract:check`。不要手工编辑 snapshot。
+
+详细规则见 [`docs/后端文档/接口契约规范.md`](../docs/后端文档/接口契约规范.md)。
+
+## 边界约束
+
+Server 不通过 `file:`、`link:`、`portal:`、`workspace:*` 或源码路径引用根目录与 `web/`。`pnpm-workspace.yaml` 不得声明 `packages`；跨端协作只通过 HTTP 与 OpenAPI 契约完成。
+
+## CI、发布与部署边界
+
+- 正式 Server 归档只承诺 `Ubuntu 24.04` / `glibc` / `x64` / `Node 24` 运行时兼容范围；不将 Alpine / `musl`、其他 CPU 架构或其他 Node.js 大版本视为已验证能力。
+- Release 流程仅验证、构建、归档、smoke test 和发布 GitHub Release，不会自动部署，不连接生产数据库，也不执行生产 migration。归档 smoke test 中的 `pnpm -C server db:migrate:deploy` 只作用于隔离的临时 CI PostgreSQL。
+- 实际生产部署和 production migration 由部署系统或运维流程在审查后单独执行，不属于当前 GitHub Release 的自动化边界。
+- 阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。

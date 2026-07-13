@@ -1,0 +1,17 @@
+{
+  "name": "@fantastic-admin/settings",
+  "type": "module",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate:preferences": "tsx scripts/generate-preferences.ts"
+  },
+  "dependencies": {
+    "@fantastic-admin/themes": "workspace:*",
+    "defu": "catalog:",
+    "es-toolkit": "catalog:",
+    "type-fest": "catalog:"
+  }
+}

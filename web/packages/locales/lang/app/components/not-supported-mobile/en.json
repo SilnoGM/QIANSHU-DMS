@@ -1,0 +1,9 @@
+{
+  "app": {
+    "components": {
+      "notSupportedMobile": {
+        "notSupported": "Sorry, this website does not support mobile device access, please switch to a desktop device"
+      }
+    }
+  }
+}

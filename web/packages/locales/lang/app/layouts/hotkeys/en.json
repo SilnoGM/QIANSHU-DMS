@@ -1,0 +1,32 @@
+{
+  "app": {
+    "layouts": {
+      "hotkeys": {
+        "title": "Hotkeys",
+        "global": {
+          "root": "Global",
+          "system": "View system information",
+          "search": "Activate navigation search"
+        },
+        "nav": {
+          "root": "Main navigation",
+          "next": "Activate next main navigation",
+          "prev": "Activate previous main navigation"
+        },
+        "tabbar": {
+          "root": "Tabbar",
+          "prev": "Switch to previous tab",
+          "next": "Switch to next tab",
+          "close": "Close current tab",
+          "n": "Switch to nth tab",
+          "last": "Switch to last tab"
+        },
+        "page": {
+          "root": "Page",
+          "maximizing": "Maximize",
+          "exit": "Exit maximize"
+        }
+      }
+    }
+  }
+}

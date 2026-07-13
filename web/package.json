@@ -1,0 +1,72 @@
+{
+  "name": "fantastic-admin-pro",
+  "type": "module",
+  "version": "6.3.0",
+  "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
+  "scripts": {
+    "api:generate": "pnpm --filter qsmds-arco run api:generate",
+    "dev": "pnpm --filter qsmds-arco run dev",
+    "build": "pnpm --filter qsmds-arco run build",
+    "serve": "pnpm --filter qsmds-arco run serve",
+    "dev:select": "tsx scripts/cli.ts --mode=dev",
+    "build:select": "tsx scripts/cli.ts --mode=build",
+    "serve:select": "tsx scripts/cli.ts --mode=serve",
+    "generate:settings-preferences": "pnpm --filter @fantastic-admin/settings generate:preferences",
+    "typecheck": "run-s typecheck:scripts typecheck:app",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json",
+    "typecheck:app": "pnpm --filter qsmds-arco run typecheck",
+    "lint": "run-s lint:eslint lint:stylelint",
+    "lint:eslint": "eslint apps/qsmds-arco packages",
+    "lint:stylelint": "stylelint \"{apps/qsmds-arco,packages}/**/*.{css,scss,vue}\"",
+    "lint:fix": "run-s lint:eslint:fix lint:stylelint:fix",
+    "lint:eslint:fix": "eslint apps/qsmds-arco packages --fix",
+    "lint:stylelint:fix": "stylelint \"{apps/qsmds-arco,packages}/**/*.{css,scss,vue}\" --fix",
+    "test:scripts": "run-s test:scripts:node test:scripts:tsx test:api",
+    "test:scripts:node": "node --test scripts/*.test.mjs",
+    "test:scripts:tsx": "tsx --test scripts/*.test.ts",
+    "pretest:api": "pnpm run api:generate",
+    "test:api": "tsx --test apps/qsmds-arco/test/api/*.test.ts",
+    "check": "run-s test:scripts typecheck lint",
+    "check:examples": "pnpm --filter @fantastic-admin/core --filter @fantastic-admin/core-arco-design-vue --filter @fantastic-admin/example -r run lint",
+    "build:examples": "pnpm --filter @fantastic-admin/core --filter @fantastic-admin/core-arco-design-vue --filter @fantastic-admin/example -r run build",
+    "preinstall": "node ./scripts/ensure-pnpm.mjs",
+    "taze": "taze minor -wIr",
+    "commit": "git cz"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:",
+    "@clack/prompts": "catalog:",
+    "@fantastic-admin/themes": "workspace:*",
+    "@hey-api/openapi-ts": "catalog:",
+    "@iconify/json": "catalog:",
+    "@intlify/eslint-plugin-vue-i18n": "catalog:",
+    "@stylistic/stylelint-config": "catalog:",
+    "@types/node": "catalog:",
+    "@unocss/core": "catalog:",
+    "@unocss/eslint-plugin": "catalog:",
+    "autoprefixer": "catalog:",
+    "cz-git": "catalog:",
+    "eslint": "catalog:",
+    "lint-staged": "catalog:",
+    "npm-run-all2": "catalog:",
+    "stylelint": "catalog:",
+    "stylelint-config-recess-order": "catalog:",
+    "stylelint-config-standard-scss": "catalog:",
+    "stylelint-config-standard-vue": "catalog:",
+    "stylelint-scss": "catalog:",
+    "taze": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "unocss": "catalog:",
+    "unocss-preset-animations": "catalog:"
+  },
+  "config": {
+    "commitizen": {
+      "path": "node_modules/cz-git"
+    }
+  }
+}

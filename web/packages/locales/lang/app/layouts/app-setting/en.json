@@ -1,0 +1,209 @@
+{
+  "app": {
+    "layouts": {
+      "appSetting": {
+        "titleSettings": "Application Settings",
+        "titlePreferences": "Personal Preferences",
+        "description": "This module should be turned off in production environments",
+        "warning": "Adjusting the configuration here is only temporarily effective. To truly apply it to the project, click the 「 @:app.layouts.appSetting.copy 」 button and paste it into the {path} file.",
+        "copy": "Copy Configuration",
+        "reset": "Reset",
+        "theme": {
+          "title": "Theme",
+          "baseColor": "Base Color",
+          "themeColor": "Theme Color",
+          "colorScheme": "Color Scheme",
+          "sync": "Theme Sync",
+          "syncTip": "Switching color schemes will share the same base color and theme color",
+          "radius": "Radius",
+          "colorAmblyopia": "Color Weakness Mode"
+        },
+        "menu": {
+          "title": "Navigation Bar",
+          "mode": {
+            "side": "Sidebar Mode (With Main Navigation)",
+            "head": "Top Mode",
+            "single": "Sidebar Mode (Without Main Navigation)",
+            "only-side": "Simplified Sidebar Mode",
+            "only-head": "Simplified Top Mode",
+            "side-panel": "Sidebar Panel Mode",
+            "head-panel": "Top Panel Mode"
+          },
+          "dark": "Dark Mode",
+          "darkTip": "Navigation bar dark mode only works when color scheme is light mode",
+          "mainMenuClickMode": {
+            "title": "Click Main Navigation",
+            "tip": "In smart mode, the default operation is to switch. When there is only one accessible navigation in the sub-navigation, the jump operation is performed.",
+            "switch": "Switch",
+            "jump": "Jump",
+            "smart": "Smart"
+          },
+          "subMenuUniqueExpand": "Unique Expansion of Sub Navigation",
+          "subMenuCollapse": "Collapse Sub Navigation",
+          "subMenuAutoCollapse": {
+            "title": "Auto Collapse Sub Navigation",
+            "tip": "When sub navigation is collapsed, it will temporarily expand when hovering with the mouse"
+          },
+          "subMenuCollapseButton": "Expand/Collapse Sub Navigation Button",
+          "style": "Style",
+          "hotkeys": "Hotkeys"
+        },
+        "topbar": {
+          "title": "Top Bar",
+          "tabbar": "Tab Bar",
+          "toolbar": "Tool Bar",
+          "switchTabbarAndToolbar": {
+            "title": "Display Switch",
+            "tip": "Switch the display order of tab bar and tool bar"
+          },
+          "mode": {
+            "title": "Mode",
+            "static": "Static",
+            "fixed": "Fixed",
+            "sticky": "Sticky"
+          }
+        },
+        "tabbar": {
+          "title": "Tab Bar",
+          "style": {
+            "title": "Style",
+            "default": "Default",
+            "fashion": "Fashion",
+            "card": "Card",
+            "square": "Square"
+          },
+          "minMaxWidth": {
+            "title": "Tab Width",
+            "tip": {
+              "constant": "@:app.layouts.appSetting.tabbar.minMaxWidth.constant : Adaptive within the set range, when the minimum and maximum values are the same, it is fixed width",
+              "adaptive": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive : Adaptive within the set range",
+              "adaptive-min": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive-min : Adaptive within the set range (with minimum width)",
+              "adaptive-max": "@:app.layouts.appSetting.tabbar.minMaxWidth.adaptive-max : Adaptive within the set range (with maximum width)"
+            },
+            "constant": "Constant",
+            "adaptive": "Adaptive",
+            "adaptive-min": "Adaptive (with minimum width)",
+            "adaptive-max": "Adaptive (with maximum width)"
+          },
+          "icon": "Show Icon",
+          "dblclickAction": {
+            "title": "Double Click Tab",
+            "reload": "Reload",
+            "close": "Close",
+            "pin": "Pin/Unpin",
+            "maximize": "Maximize",
+            "window": "Open in New Window"
+          },
+          "memory": {
+            "title": "Memory Function",
+            "tip": "Non-pinned and non-resident tabs will always exist in this session window, and will not be lost when refreshing the browser or re-logging in"
+          },
+          "hotkeys": "Hotkeys"
+        },
+        "toolbar": {
+          "title": "Tool Bar",
+          "favorites": {
+            "title": "Favorites",
+            "tip": "You can add commonly used navigation to favorites"
+          },
+          "breadcrumb": {
+            "title": "Breadcrumb Navigation",
+            "style": {
+              "title": "Style",
+              "default": "Default",
+              "modern": "Modern"
+            },
+            "mainMenu": "Show Main Navigation"
+          },
+          "menuSearch": {
+            "title": "Navigation Search",
+            "hotkeys": "Hotkeys"
+          },
+          "notification": "Notification Center",
+          "i18n": {
+            "title": "Internationalization",
+            "defaultLang": "Default Language",
+            "followSystem": "Follow System"
+          },
+          "fullscreen": "Fullscreen",
+          "pageReload": {
+            "title": "Page Reload",
+            "tip": "Reload the current page without refreshing the browser"
+          },
+          "colorScheme": "Color Theme",
+          "layout": "Layout"
+        },
+        "page": {
+          "title": "Page",
+          "progress": {
+            "title": "Loading Progress Bar",
+            "tip": "A progress bar will be displayed at the top of the page when routing, this progress is only a simulation effect, not the actual loading progress"
+          },
+          "hotkeys": "Hotkeys"
+        },
+        "app": {
+          "title": "Application",
+          "account": {
+            "title": "Account",
+            "auth": "Permission Authentication",
+            "expiredMode": {
+              "title": "Expiration Mode",
+              "redirect": "Redirect to Login Page",
+              "popup": "Pop-up Login Window"
+            },
+            "multipleAccounts": "Multi-Account Management"
+          },
+          "dynamicTitle": {
+            "title": "Dynamic Title",
+            "tip": "When enabled, the page title will show the current route title in the format \"Page Title - Website Name\"; when disabled, it displays the website name, which is configured in the .env.* file in the project root directory"
+          },
+          "watermark": {
+            "title": "Watermark",
+            "tip": "The watermark display content is configured in the src/store/modules/app/watermark.ts file"
+          },
+          "feedback": {
+            "title": "Feedback",
+            "tip": "Allows users to submit feedback, specific business code needs to be supplemented in src/components/AppAccountButton/feedback.vue"
+          },
+          "lockScreen": "Lock Screen",
+          "rip": {
+            "title": "Mourning Mode",
+            "tip": "The entire website turns gray"
+          },
+          "mobile": {
+            "title": "Mobile Access",
+            "tip": "After closing, mobile access will be disabled"
+          },
+          "layout": {
+            "title": "Layout",
+            "center": "Center Display",
+            "centerScope": {
+              "title": "Scope of Effect",
+              "inner": "Inner",
+              "outer": "Outer"
+            },
+            "centerWidth": "Center Width"
+          },
+          "home": {
+            "title": "Home",
+            "enable": {
+              "title": "Enable",
+              "tip": "After logging in, the default entry is the homepage, otherwise the default entry is the first navigation page"
+            },
+            "homeTitle": {
+              "title": "Title",
+              "tip": "When internationalization is enabled, this setting is invalid"
+            }
+          },
+          "copyright": {
+            "title": "Copyright",
+            "enable": "Enable",
+            "dates": "Dates",
+            "company": "Company",
+            "website": "Website"
+          }
+        }
+      }
+    }
+  }
+}
