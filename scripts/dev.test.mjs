@@ -197,6 +197,54 @@ test('外层 node --run 消失时终止完整进程组并清理监控器', async
   assert.deepEqual(clearedIntervals, [intervalHandle])
 })
 
+for (const [scenario, changedOuterParentPid] of [
+  ['被重挂到 PID 1', 1],
+  ['无法继续读取', undefined],
+]) {
+  test(`直接父 shell 存活但外层 node --run ${scenario}时终止完整进程组`, async () => {
+    const harness = createHarness()
+    const groupSignals = []
+    const intervalCallbacks = []
+    const parentPidReads = [5_000, 5_000, changedOuterParentPid]
+    const intervalHandle = { unref() {} }
+    harness.processRef.ppid = 4_000
+    harness.processRef.kill = (pid, signal) => {
+      groupSignals.push([pid, signal])
+      return true
+    }
+
+    const completion = runDevelopment({
+      ...harness.options,
+      useProcessGroups: true,
+      readParentPidImpl(pid) {
+        assert.equal(pid, 4_000)
+        return parentPidReads.shift()
+      },
+      setIntervalImpl(callback) {
+        intervalCallbacks.push(callback)
+        return intervalHandle
+      },
+      clearIntervalImpl() {},
+    })
+
+    // Linux 的 node --run 会留下仍存活的中间 shell；manager 的直接 PPID
+    // 保持不变时不能误杀，只有 shell 的 outer ancestry 变化或不可读取时收口。
+    assert.equal(intervalCallbacks.length, 1)
+    intervalCallbacks[0]()
+    assert.deepEqual(groupSignals, [])
+    intervalCallbacks[0]()
+    assert.deepEqual(groupSignals, [
+      [-1_000, 'SIGTERM'],
+      [-1_001, 'SIGTERM'],
+    ])
+    assert.deepEqual(parentPidReads, [])
+    harness.children[0].emit('exit', null, 'SIGTERM')
+    harness.children[1].emit('exit', null, 'SIGTERM')
+
+    assert.equal(await completion, 143)
+  })
+}
+
 test('已经收到根信号后父进程消失不会重复发送降级信号', async () => {
   const harness = createHarness()
   const groupSignals = []

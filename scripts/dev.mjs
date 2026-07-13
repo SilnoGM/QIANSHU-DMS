@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { constants as osConstants } from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
@@ -43,10 +44,45 @@ function normalizeExitCode(exitCode) {
   return Number.isInteger(exitCode) && exitCode > 0 ? exitCode : 1
 }
 
+function readLinuxParentPid(pid) {
+  if (
+    process.platform !== 'linux'
+    || !Number.isInteger(pid)
+    || pid <= 1
+  ) {
+    return undefined
+  }
+
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const commandEnd = stat.lastIndexOf(')')
+    if (commandEnd === -1) {
+      return undefined
+    }
+
+    // /proc/<pid>/stat 的 comm 字段允许空格和右括号，因此从最后一个右括号
+    // 后读取 state 与 PPID，不能对整行直接 split。
+    const [, parentPidText] = stat.slice(commandEnd + 2).split(' ')
+    if (!/^\d+$/u.test(parentPidText ?? '')) {
+      return undefined
+    }
+
+    const parentPid = Number(parentPidText)
+    return Number.isSafeInteger(parentPid) && parentPid > 0
+      ? parentPid
+      : undefined
+  } catch {
+    // 父进程在读取期间退出或 /proc 不可用时返回未知；监控器若已建立初始
+    // ancestry，会把后续未知状态视为外层 launcher 已消失并安全收口。
+    return undefined
+  }
+}
+
 export function runDevelopment({
   clearIntervalImpl = clearInterval,
   commands = developmentCommandsFor(),
   processRef = process,
+  readParentPidImpl = readLinuxParentPid,
   setIntervalImpl = setInterval,
   spawnImpl = spawn,
   useProcessGroups = process.platform !== 'win32',
@@ -54,6 +90,9 @@ export function runDevelopment({
   return new Promise((resolve) => {
     const childStates = []
     const initialParentPid = processRef.ppid
+    const initialOuterParentPid = useProcessGroups
+      ? readParentPidImpl(initialParentPid)
+      : undefined
     let firstFailureCode
     let parentMonitor
     let rootSignalObserved = false
@@ -255,8 +294,13 @@ export function runDevelopment({
     ) {
       // `node --run` 自身收到信号后不会把信号转给 package script。轮询 PPID
       // 可在外层进程消失并把本进程重挂到 PID 1 时，主动终止受控进程组。
+      // Linux 还会保留一层被重挂的 /bin/sh，导致 manager 的直接 PPID 不变；
+      // 此时必须同时比较该 shell 的 PPID，才能观察 outer node launcher 消失。
       parentMonitor = setIntervalImpl(() => {
-        if (processRef.ppid === initialParentPid) {
+        const directParentChanged = processRef.ppid !== initialParentPid
+        const outerParentChanged = initialOuterParentPid !== undefined
+          && readParentPidImpl(initialParentPid) !== initialOuterParentPid
+        if (!directParentChanged && !outerParentChanged) {
           return
         }
 

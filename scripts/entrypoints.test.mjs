@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import {
   chmod,
   lstat,
@@ -159,9 +160,28 @@ function shellQuote(value) {
 function isPidAlive(pid) {
   try {
     process.kill(pid, 0)
-    return true
   } catch (error) {
     if (error?.code === 'ESRCH') {
+      return false
+    }
+    throw error
+  }
+
+  if (process.platform !== 'linux') {
+    return true
+  }
+
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    const commandEnd = stat.lastIndexOf(')')
+
+    // Linux 的 kill(pid, 0) 对 zombie 仍返回成功，但 Z 状态已经不能执行代码、
+    // 持有监听端口或响应信号。测试必须把它视为已退出，避免把 PID 1 尚未回收
+    // 的瞬时进程表项误报成开发进程泄漏。
+    return commandEnd === -1 || stat[commandEnd + 2] !== 'Z'
+  } catch (error) {
+    if (error?.code === 'ENOENT') {
+      // kill(0) 与读取 /proc 之间进程可能刚好被回收，这是正常退出竞态。
       return false
     }
     throw error
