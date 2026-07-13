@@ -30,6 +30,10 @@ const pnpmSetupAction =
   'pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9'
 const setupNodeAction =
   'actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0'
+const uploadArtifactAction =
+  'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1'
+const downloadArtifactAction =
+  'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1'
 const requiredJobIds = Object.freeze([
   'root-governance',
   'server-check-build',
@@ -39,9 +43,17 @@ const requiredJobIds = Object.freeze([
   'ci-gate',
 ])
 const validationJobIds = requiredJobIds.slice(0, -1)
+const releaseJobIds = Object.freeze([
+  'verify',
+  'package-web',
+  'package-server',
+  'manifest',
+  'publish',
+])
 
 let workflowPromise
 let examplesWorkflowPromise
+let releaseWorkflowPromise
 
 async function readCiWorkflow() {
   workflowPromise ??= (async () => {
@@ -67,16 +79,16 @@ async function readExamplesWorkflow() {
   return examplesWorkflowPromise
 }
 
-async function readReleaseWorkflowIfPresent() {
-  try {
-    return await readFile(releaseWorkflowPath, 'utf8')
-  }
-  catch (error) {
-    if (error?.code === 'ENOENT') {
-      return ''
-    }
-    throw error
-  }
+async function readReleaseWorkflow() {
+  releaseWorkflowPromise ??= (async () => {
+    const stats = await lstat(releaseWorkflowPath)
+    assert.equal(stats.isSymbolicLink(), false, 'release.yml 不得是 symlink')
+    assert.equal(stats.isFile(), true, 'release.yml 必须是实际文件')
+    const source = await readFile(releaseWorkflowPath, 'utf8')
+    assert.notEqual(source.length, 0, 'release.yml 不得为空')
+    return source
+  })()
+  return releaseWorkflowPromise
 }
 
 function indentation(line) {
@@ -139,6 +151,15 @@ function findUseStep(job, action) {
   return matches[0]
 }
 
+function findNamedStep(job, name) {
+  const matches = extractSteps(job).filter(step => (
+    step.startsWith(`      - name: ${name}\n`)
+    || step === `      - name: ${name}`
+  ))
+  assert.equal(matches.length, 1, `命名 Step 必须恰好出现一次：${name}`)
+  return matches[0]
+}
+
 function assertTextOrder(source, expected, label) {
   let previous = -1
   for (const value of expected) {
@@ -178,6 +199,26 @@ function assertDependencySetup(job, expectedCachePaths) {
     return normalized.endsWith('pnpm-lock.yaml') ? [normalized] : []
   })
   assert.deepEqual(cacheLines, expectedCachePaths)
+}
+
+function assertToolSetupWithoutCache(job) {
+  assertTextOrder(
+    job,
+    [`uses: ${checkoutAction}`, `uses: ${pnpmSetupAction}`, `uses: ${setupNodeAction}`],
+    '无依赖安装的工具 setup',
+  )
+  const pnpm = findUseStep(job, pnpmSetupAction)
+  assert.match(pnpm, /\n          version: 11\.9\.0(?:\n|$)/u)
+  assert.match(pnpm, /\n          run_install: false(?:\n|$)/u)
+  const node = findUseStep(job, setupNodeAction)
+  assert.match(node, /\n          node-version-file: \.node-version(?:\n|$)/u)
+  assert.match(node, /\n          package-manager-cache: false(?:\n|$)/u)
+  assert.equal(job.includes('cache: pnpm'), false)
+  assert.equal(job.includes('cache-dependency-path:'), false)
+}
+
+function countOccurrences(source, value) {
+  return source.split(value).length - 1
 }
 
 function assertTrackedDiffIsLast(job) {
@@ -474,7 +515,7 @@ test('examples.yml 只执行 Web 参考应用冻结安装、检查、构建与 t
 test('参考应用 Workflow 不被主 CI 或 Release 引用', async () => {
   const workflows = [
     ['ci.yml', await readCiWorkflow()],
-    ['release.yml', await readReleaseWorkflowIfPresent()],
+    ['release.yml', await readReleaseWorkflow()],
   ]
   for (const [name, source] of workflows) {
     assert.equal(source.includes('examples.yml'), false, `${name} 不得调用 examples.yml`)
@@ -484,4 +525,337 @@ test('参考应用 Workflow 不被主 CI 或 Release 引用', async () => {
       `${name} 不得依赖参考应用 Job`,
     )
   }
+})
+
+test('Release trigger、只读权限与 concurrency 只允许稳定 Tag 串行发布', async () => {
+  const source = await readReleaseWorkflow()
+  assert.equal(source.endsWith('\n'), true, 'release.yml 必须以 LF 结尾')
+  assert.equal(source.includes('\r'), false, 'release.yml 只允许 LF')
+  assert.equal(source.includes('\t'), false, 'release.yml 禁止 tab 缩进')
+  assert.equal(/^.* +$/mu.test(source), false, 'release.yml 禁止行尾空格')
+  assert.deepEqual(
+    [...source.matchAll(/^([a-z][a-z0-9-]*):(?: .*)?$/gmu)].map(match => match[1]),
+    ['name', 'on', 'permissions', 'concurrency', 'jobs'],
+  )
+  assert.equal(source.startsWith('name: Release\n'), true)
+  assert.equal(extractBlock(source, 'on', 0), [
+    'on:',
+    '  push:',
+    '    tags:',
+    "      - 'v*.*.*'",
+  ].join('\n'))
+  assert.equal(extractBlock(source, 'permissions', 0), [
+    'permissions:',
+    '  contents: read',
+  ].join('\n'))
+  assert.equal(extractBlock(source, 'concurrency', 0), [
+    'concurrency:',
+    '  group: qianshu-release',
+    '  cancel-in-progress: false',
+  ].join('\n'))
+  for (const forbidden of [
+    'workflow_dispatch',
+    'pull_request',
+    'workflow_call',
+    'branches:',
+    'paths:',
+    'paths-ignore:',
+    'continue-on-error',
+    'include-hidden-files',
+    'overwrite:',
+    'pattern:',
+    'git tag',
+    'git push',
+    'secrets:',
+    '${{ secrets.',
+  ]) {
+    assert.equal(source.includes(forbidden), false, `release.yml 禁止：${forbidden}`)
+  }
+})
+
+test('Release verify 以本地 reusable CI 复验同一 release tag', async () => {
+  const verify = extractJobs(await readReleaseWorkflow()).get('verify')
+  assert.equal(verify, [
+    '  verify:',
+    '    uses: ./.github/workflows/ci.yml',
+    '    with:',
+    '      release_tag: ${{ github.ref_name }}',
+  ].join('\n'))
+})
+
+test('Release 五个 Job 的 needs、runner、timeout 和 checkout 精确', async () => {
+  const jobs = extractJobs(await readReleaseWorkflow())
+  assert.deepEqual([...jobs.keys()], releaseJobIds)
+  const expected = new Map([
+    ['package-web', { fetchDepth: 0, needs: 'verify', timeout: 30 }],
+    ['package-server', { fetchDepth: 0, needs: 'verify', timeout: 40 }],
+    ['manifest', { fetchDepth: 0, needs: '[package-web, package-server]', timeout: 25 }],
+    ['publish', { fetchDepth: 1, needs: 'manifest', timeout: 15 }],
+  ])
+  for (const [id, values] of expected) {
+    const job = jobs.get(id)
+    assert.match(job, new RegExp(`\\n    needs: ${values.needs.replaceAll('[', '\\[').replaceAll(']', '\\]')}(?:\\n|$)`, 'u'))
+    assert.match(job, /\n    runs-on: ubuntu-24\.04(?:\n|$)/u)
+    assert.match(job, new RegExp(`\\n    timeout-minutes: ${values.timeout}(?:\\n|$)`, 'u'))
+    assertCheckout(job, values.fetchDepth)
+    assert.equal(countOccurrences(job, 'run: git diff --exit-code -- .'), 1)
+  }
+})
+
+test('Release 只使用固定 Action SHA 且 artifact 身份只沿允许 Job 传播', async () => {
+  const source = await readReleaseWorkflow()
+  const references = usesFrom(source)
+  assert.equal(references.filter(value => value === './.github/workflows/ci.yml').length, 1)
+  assert.equal(references.filter(value => value === checkoutAction).length, 4)
+  assert.equal(references.filter(value => value === pnpmSetupAction).length, 3)
+  assert.equal(references.filter(value => value === setupNodeAction).length, 4)
+  assert.equal(references.filter(value => value === uploadArtifactAction).length, 3)
+  assert.equal(references.filter(value => value === downloadArtifactAction).length, 2)
+  assert.equal(references.length, 17)
+  assert.deepEqual(new Set(references), new Set([
+    './.github/workflows/ci.yml',
+    checkoutAction,
+    pnpmSetupAction,
+    setupNodeAction,
+    uploadArtifactAction,
+    downloadArtifactAction,
+  ]))
+
+  assert.equal(countOccurrences(source, '${{ steps.upload-web.outputs.artifact-id }}'), 1)
+  assert.equal(countOccurrences(source, '${{ steps.upload-server.outputs.artifact-id }}'), 1)
+  assert.equal(countOccurrences(source, '${{ steps.upload-final.outputs.artifact-id }}'), 1)
+  assert.equal(countOccurrences(source, '${{ steps.upload-final.outputs.artifact-digest }}'), 1)
+  assert.equal(countOccurrences(source, '${{ needs.package-web.outputs.artifact-id }}'), 1)
+  assert.equal(countOccurrences(source, '${{ needs.package-server.outputs.artifact-id }}'), 1)
+  assert.equal(countOccurrences(source, '${{ needs.manifest.outputs.artifact-id }}'), 2)
+  assert.equal(countOccurrences(source, '${{ needs.manifest.outputs.artifact-digest }}'), 1)
+  assert.equal(countOccurrences(source, '${{ needs.manifest.outputs.bundle-run-attempt }}'), 2)
+  assert.equal(source.includes('services:'), false)
+  assert.equal(source.includes('postgres:'), false)
+})
+
+test('package-web 重新构建、验证并上传唯一 Web archive', async () => {
+  const job = extractJobs(await readReleaseWorkflow()).get('package-web')
+  assert.equal(extractBlock(job, 'outputs', 4), [
+    '    outputs:',
+    '      artifact-id: ${{ steps.upload-web.outputs.artifact-id }}',
+  ].join('\n'))
+  assertDependencySetup(job, ['web/pnpm-lock.yaml'])
+  assert.equal(findNamedStep(job, 'Verify release identity'), [
+    '      - name: Verify release identity',
+    '        run: |',
+    '          node --run release:check -- \\',
+    '            --tag "$GITHUB_REF_NAME" \\',
+    '            --source-commit "$GITHUB_SHA"',
+  ].join('\n'))
+  assertTextOrder(job, [
+    'run: pnpm -C web install --frozen-lockfile',
+    'run: pnpm -C web build',
+    'node --run release:package:web --',
+    '--output "$RUNNER_TEMP/release-web"',
+    'test -f "$RUNNER_TEMP/release-web/qsmds-web-${GITHUB_REF_NAME}.tar.gz"',
+    'run: git diff --exit-code -- .',
+    `uses: ${uploadArtifactAction}`,
+  ], 'package-web')
+  assert.equal(findNamedStep(job, 'Upload Web archive'), [
+    '      - name: Upload Web archive',
+    '        id: upload-web',
+    `        uses: ${uploadArtifactAction}`,
+    '        with:',
+    '          name: release-web-${{ github.run_id }}-${{ github.run_attempt }}',
+    '          path: ${{ runner.temp }}/release-web/qsmds-web-${{ github.ref_name }}.tar.gz',
+    '          if-no-files-found: error',
+    '          retention-days: 1',
+    '          compression-level: 0',
+  ].join('\n'))
+  assert.equal(job.includes('server/pnpm-lock.yaml'), false)
+  assert.equal(job.includes('include-hidden-files'), false)
+})
+
+test('package-server 重新构建并在上传前完成隔离 PostgreSQL runtime smoke', async () => {
+  const job = extractJobs(await readReleaseWorkflow()).get('package-server')
+  assert.equal(extractBlock(job, 'outputs', 4), [
+    '    outputs:',
+    '      artifact-id: ${{ steps.upload-server.outputs.artifact-id }}',
+  ].join('\n'))
+  assertDependencySetup(job, ['server/pnpm-lock.yaml'])
+  assert.equal(findNamedStep(job, 'Verify release identity'), [
+    '      - name: Verify release identity',
+    '        run: |',
+    '          node --run release:check -- \\',
+    '            --tag "$GITHUB_REF_NAME" \\',
+    '            --source-commit "$GITHUB_SHA"',
+  ].join('\n'))
+  assertTextOrder(job, [
+    'run: pnpm -C server install --frozen-lockfile',
+    'run: pnpm -C server build',
+    'node --run release:package:server --',
+    '--output "$RUNNER_TEMP/release-server"',
+    'test -f "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
+    'node --run release:smoke:server --',
+    '--archive "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"',
+    'run: git diff --exit-code -- .',
+    `uses: ${uploadArtifactAction}`,
+  ], 'package-server')
+  assert.equal(findNamedStep(job, 'Upload Server archive'), [
+    '      - name: Upload Server archive',
+    '        id: upload-server',
+    `        uses: ${uploadArtifactAction}`,
+    '        with:',
+    '          name: release-server-${{ github.run_id }}-${{ github.run_attempt }}',
+    '          path: ${{ runner.temp }}/release-server/qsmds-server-${{ github.ref_name }}-linux-x64.tar.gz',
+    '          if-no-files-found: error',
+    '          retention-days: 1',
+    '          compression-level: 0',
+  ].join('\n'))
+  assert.equal(job.includes('web/pnpm-lock.yaml'), false)
+  assert.equal(job.includes('services:'), false)
+  assert.equal(job.includes('DATABASE_URL'), false)
+})
+
+test('manifest 只按两个精确 artifact ID 下载并使用隔离输入输出目录', async () => {
+  const job = extractJobs(await readReleaseWorkflow()).get('manifest')
+  assertToolSetupWithoutCache(job)
+  assert.equal(job.includes(' install'), false)
+  assert.equal(extractBlock(job, 'outputs', 4), [
+    '    outputs:',
+    '      artifact-id: ${{ steps.upload-final.outputs.artifact-id }}',
+    '      artifact-digest: ${{ steps.upload-final.outputs.artifact-digest }}',
+    '      bundle-run-attempt: ${{ github.run_attempt }}',
+  ].join('\n'))
+  assertTextOrder(job, [
+    'test ! -e "$RUNNER_TEMP/release-metadata"',
+    'node --run release:check --',
+    '--output "$RUNNER_TEMP/release-metadata/release-version.json"',
+    'test ! -e "$RUNNER_TEMP/release-inputs"',
+    `uses: ${downloadArtifactAction}`,
+    'test -d "$RUNNER_TEMP/release-inputs"',
+    'test ! -e "$RUNNER_TEMP/final-bundle"',
+    'node --run release:manifest --',
+    '--output "$RUNNER_TEMP/final-bundle"',
+    'test -f "$RUNNER_TEMP/final-bundle/release-manifest.json"',
+    'test -f "$RUNNER_TEMP/final-bundle/SHA256SUMS"',
+    'run: git diff --exit-code -- .',
+    `uses: ${uploadArtifactAction}`,
+  ], 'manifest')
+  assert.equal(findNamedStep(job, 'Download package artifacts'), [
+    '      - name: Download package artifacts',
+    `        uses: ${downloadArtifactAction}`,
+    '        with:',
+    '          artifact-ids: ${{ needs.package-web.outputs.artifact-id }},${{ needs.package-server.outputs.artifact-id }}',
+    '          path: ${{ runner.temp }}/release-inputs',
+    '          merge-multiple: true',
+  ].join('\n'))
+  const generate = findNamedStep(job, 'Generate final release bundle')
+  assert.match(generate, /\n        env:\n          QIANSHU_RUNNER_IMAGE: ubuntu-24\.04\n/u)
+  for (const forbidden of [
+    'ImageOS:',
+    'RUNNER_OS:',
+    'RUNNER_ARCH:',
+    'pattern:',
+    'github-token:',
+    'include-hidden-files',
+  ]) {
+    assert.equal(job.includes(forbidden), false, `Manifest Job 禁止：${forbidden}`)
+  }
+})
+
+test('manifest final bundle 恰好四文件并输出固定 final artifact 身份', async () => {
+  const job = extractJobs(await readReleaseWorkflow()).get('manifest')
+  const validateInputs = findNamedStep(job, 'Validate package artifact set')
+  for (const expected of [
+    'qsmds-web-${GITHUB_REF_NAME}.tar.gz',
+    'qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz',
+    'find "$RUNNER_TEMP/release-inputs" -mindepth 1 -maxdepth 1 | wc -l',
+    '-eq 2',
+  ]) {
+    assert.equal(validateInputs.includes(expected), true, `输入校验缺少：${expected}`)
+  }
+  const validateFinal = findNamedStep(job, 'Validate final release bundle')
+  for (const expected of [
+    'qsmds-web-${GITHUB_REF_NAME}.tar.gz',
+    'qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz',
+    'release-manifest.json',
+    'SHA256SUMS',
+    'find "$RUNNER_TEMP/final-bundle" -mindepth 1 -maxdepth 1 | wc -l',
+    '-eq 4',
+  ]) {
+    assert.equal(validateFinal.includes(expected), true, `最终目录校验缺少：${expected}`)
+  }
+  assert.equal(findNamedStep(job, 'Upload final release bundle'), [
+    '      - name: Upload final release bundle',
+    '        id: upload-final',
+    `        uses: ${uploadArtifactAction}`,
+    '        with:',
+    '          name: release-final-${{ github.run_id }}-${{ github.run_attempt }}',
+    '          path: ${{ runner.temp }}/final-bundle/',
+    '          if-no-files-found: error',
+    '          retention-days: 7',
+    '          compression-level: 0',
+  ].join('\n'))
+})
+
+test('publish-only 以唯一写权限复用原 bundle 身份且只归一化一次 digest', async () => {
+  const source = await readReleaseWorkflow()
+  const job = extractJobs(source).get('publish')
+  assert.equal(extractBlock(job, 'permissions', 4), [
+    '    permissions:',
+    '      actions: read',
+    '      contents: write',
+  ].join('\n'))
+  assert.equal(countOccurrences(source, 'contents: write'), 1)
+  assert.equal(countOccurrences(source, 'actions: read'), 1)
+  const node = findUseStep(job, setupNodeAction)
+  assert.match(node, /\n          node-version-file: \.node-version(?:\n|$)/u)
+  assert.match(node, /\n          package-manager-cache: false(?:\n|$)/u)
+  assert.equal(job.includes(pnpmSetupAction), false)
+  assert.equal(job.includes('pnpm '), false)
+  assert.deepEqual(usesFrom(job), [
+    checkoutAction,
+    setupNodeAction,
+    downloadArtifactAction,
+  ])
+  assert.equal(findNamedStep(job, 'Download final release bundle'), [
+    '      - name: Download final release bundle',
+    `        uses: ${downloadArtifactAction}`,
+    '        with:',
+    '          artifact-ids: ${{ needs.manifest.outputs.artifact-id }}',
+    '          path: ${{ runner.temp }}/final-bundle',
+  ].join('\n'))
+  assertTextOrder(job, [
+    'test ! -e "$RUNNER_TEMP/final-bundle"',
+    `uses: ${downloadArtifactAction}`,
+    'run: git diff --exit-code -- .',
+    'node --run release:publish --',
+  ], 'publish')
+  assert.equal(findNamedStep(job, 'Publish GitHub Release'), [
+    '      - name: Publish GitHub Release',
+    '        env:',
+    '          GITHUB_TOKEN: ${{ github.token }}',
+    '        run: |',
+    '          node --run release:publish -- \\',
+    '            --repository "$GITHUB_REPOSITORY" \\',
+    '            --tag "$GITHUB_REF_NAME" \\',
+    '            --source-commit "$GITHUB_SHA" \\',
+    '            --run-id "$GITHUB_RUN_ID" \\',
+    '            --bundle-run-attempt "${{ needs.manifest.outputs.bundle-run-attempt }}" \\',
+    '            --current-run-attempt "$GITHUB_RUN_ATTEMPT" \\',
+    '            --artifact-id "${{ needs.manifest.outputs.artifact-id }}" \\',
+    '            --artifact-digest "sha256:${{ needs.manifest.outputs.artifact-digest }}" \\',
+    '            --artifact-name "release-final-${GITHUB_RUN_ID}-${{ needs.manifest.outputs.bundle-run-attempt }}" \\',
+    '            --bundle "$RUNNER_TEMP/final-bundle"',
+  ].join('\n'))
+  assert.equal(
+    countOccurrences(source, 'sha256:${{ needs.manifest.outputs.artifact-digest }}'),
+    1,
+  )
+  for (const forbidden of [
+    '--artifact-digest "${{ needs.manifest.outputs.artifact-digest }}"',
+    'release:package:',
+    'release:manifest',
+    `uses: ${uploadArtifactAction}`,
+  ]) {
+    assert.equal(job.includes(forbidden), false, `Publish Job 禁止：${forbidden}`)
+  }
+  assert.equal(countOccurrences(source, 'GITHUB_TOKEN:'), 1)
 })

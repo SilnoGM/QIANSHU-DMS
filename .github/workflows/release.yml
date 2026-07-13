@@ -1,0 +1,315 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qianshu-release
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+    with:
+      release_tag: ${{ github.ref_name }}
+
+  package-web:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      artifact-id: ${{ steps.upload-web.outputs.artifact-id }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Verify release identity
+        run: |
+          node --run release:check -- \
+            --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA"
+
+      - name: Install Web dependencies
+        run: pnpm -C web install --frozen-lockfile
+
+      - name: Build Web
+        run: pnpm -C web build
+
+      - name: Package Web
+        run: |
+          node --run release:package:web -- \
+            --tag "$GITHUB_REF_NAME" \
+            --output "$RUNNER_TEMP/release-web"
+
+      - name: Verify Web archive
+        run: |
+          test -f "$RUNNER_TEMP/release-web/qsmds-web-${GITHUB_REF_NAME}.tar.gz"
+          test ! -L "$RUNNER_TEMP/release-web/qsmds-web-${GITHUB_REF_NAME}.tar.gz"
+          test -s "$RUNNER_TEMP/release-web/qsmds-web-${GITHUB_REF_NAME}.tar.gz"
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+      - name: Upload Web archive
+        id: upload-web
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-web-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-web/qsmds-web-${{ github.ref_name }}.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  package-server:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    outputs:
+      artifact-id: ${{ steps.upload-server.outputs.artifact-id }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - name: Verify release identity
+        run: |
+          node --run release:check -- \
+            --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA"
+
+      - name: Install Server dependencies
+        run: pnpm -C server install --frozen-lockfile
+
+      - name: Build Server
+        run: pnpm -C server build
+
+      - name: Package Server
+        run: |
+          node --run release:package:server -- \
+            --tag "$GITHUB_REF_NAME" \
+            --output "$RUNNER_TEMP/release-server"
+
+      - name: Verify Server archive
+        run: |
+          test -f "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+          test ! -L "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+          test -s "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+
+      - name: Smoke test Server archive
+        run: |
+          node --run release:smoke:server -- \
+            --tag "$GITHUB_REF_NAME" \
+            --archive "$RUNNER_TEMP/release-server/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+      - name: Upload Server archive
+        id: upload-server
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-server-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-server/qsmds-server-${{ github.ref_name }}-linux-x64.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  manifest:
+    needs: [package-web, package-server]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      artifact-id: ${{ steps.upload-final.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload-final.outputs.artifact-digest }}
+      bundle-run-attempt: ${{ github.run_attempt }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Prepare release metadata directory
+        run: |
+          test ! -e "$RUNNER_TEMP/release-metadata"
+          mkdir -m 700 "$RUNNER_TEMP/release-metadata"
+
+      - name: Write release identity
+        run: |
+          node --run release:check -- \
+            --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/release-metadata/release-version.json"
+
+      - name: Prepare package artifact directory
+        run: test ! -e "$RUNNER_TEMP/release-inputs"
+
+      - name: Download package artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.package-web.outputs.artifact-id }},${{ needs.package-server.outputs.artifact-id }}
+          path: ${{ runner.temp }}/release-inputs
+          merge-multiple: true
+
+      - name: Validate package artifact set
+        run: |
+          test -d "$RUNNER_TEMP/release-inputs"
+          test ! -L "$RUNNER_TEMP/release-inputs"
+          web_archive="$RUNNER_TEMP/release-inputs/qsmds-web-${GITHUB_REF_NAME}.tar.gz"
+          server_archive="$RUNNER_TEMP/release-inputs/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+          test -f "$web_archive"
+          test ! -L "$web_archive"
+          test -s "$web_archive"
+          test -f "$server_archive"
+          test ! -L "$server_archive"
+          test -s "$server_archive"
+          test "$(find "$RUNNER_TEMP/release-inputs" -mindepth 1 -maxdepth 1 | wc -l)" -eq 2
+
+      - name: Prepare final bundle directory
+        run: |
+          test ! -e "$RUNNER_TEMP/final-bundle"
+          mkdir -m 700 "$RUNNER_TEMP/final-bundle"
+          test -z "$(find "$RUNNER_TEMP/final-bundle" -mindepth 1 -print -quit)"
+
+      - name: Generate final release bundle
+        env:
+          QIANSHU_RUNNER_IMAGE: ubuntu-24.04
+        run: |
+          node --run release:manifest -- \
+            --release-metadata "$RUNNER_TEMP/release-metadata/release-version.json" \
+            --repository "$GITHUB_REPOSITORY" \
+            --workflow release.yml \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --web-archive "$RUNNER_TEMP/release-inputs/qsmds-web-${GITHUB_REF_NAME}.tar.gz" \
+            --server-archive "$RUNNER_TEMP/release-inputs/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz" \
+            --output "$RUNNER_TEMP/final-bundle"
+
+      - name: Validate final release bundle
+        run: |
+          test -d "$RUNNER_TEMP/final-bundle"
+          test ! -L "$RUNNER_TEMP/final-bundle"
+          web_archive="$RUNNER_TEMP/final-bundle/qsmds-web-${GITHUB_REF_NAME}.tar.gz"
+          server_archive="$RUNNER_TEMP/final-bundle/qsmds-server-${GITHUB_REF_NAME}-linux-x64.tar.gz"
+          test -f "$web_archive"
+          test ! -L "$web_archive"
+          test -s "$web_archive"
+          test -f "$server_archive"
+          test ! -L "$server_archive"
+          test -s "$server_archive"
+          test -f "$RUNNER_TEMP/final-bundle/release-manifest.json"
+          test ! -L "$RUNNER_TEMP/final-bundle/release-manifest.json"
+          test -s "$RUNNER_TEMP/final-bundle/release-manifest.json"
+          test -f "$RUNNER_TEMP/final-bundle/SHA256SUMS"
+          test ! -L "$RUNNER_TEMP/final-bundle/SHA256SUMS"
+          test -s "$RUNNER_TEMP/final-bundle/SHA256SUMS"
+          test "$(find "$RUNNER_TEMP/final-bundle" -mindepth 1 -maxdepth 1 | wc -l)" -eq 4
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+      - name: Upload final release bundle
+        id: upload-final
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-final-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/final-bundle/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  publish:
+    needs: manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Prepare final bundle download
+        run: test ! -e "$RUNNER_TEMP/final-bundle"
+
+      - name: Download final release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.manifest.outputs.artifact-id }}
+          path: ${{ runner.temp }}/final-bundle
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+      - name: Publish GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node --run release:publish -- \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$GITHUB_REF_NAME" \
+            --source-commit "$GITHUB_SHA" \
+            --run-id "$GITHUB_RUN_ID" \
+            --bundle-run-attempt "${{ needs.manifest.outputs.bundle-run-attempt }}" \
+            --current-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --artifact-id "${{ needs.manifest.outputs.artifact-id }}" \
+            --artifact-digest "sha256:${{ needs.manifest.outputs.artifact-digest }}" \
+            --artifact-name "release-final-${GITHUB_RUN_ID}-${{ needs.manifest.outputs.bundle-run-attempt }}" \
+            --bundle "$RUNNER_TEMP/final-bundle"
