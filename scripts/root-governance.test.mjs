@@ -74,6 +74,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
   const manifest = JSON.parse(await readFile(fromRoot('package.json'), 'utf8'))
 
   assert.equal(manifest.name, 'qianshu-dms')
+  assert.equal(manifest.version, '0.0.0')
   assert.equal(manifest.private, true)
   assert.equal(manifest.packageManager, 'pnpm@11.9.0')
   assert.equal(manifest.engines.node, '^24.15.0')

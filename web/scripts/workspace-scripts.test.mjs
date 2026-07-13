@@ -79,8 +79,10 @@ test('安装守卫不联网且嵌套 Web 不安装 Git hook', () => {
 })
 
 test('OpenAPI 生成由 Web root 委托正式应用，并只在受控检查前启用 lifecycle', () => {
-  const { scripts } = readJson('package.json')
-  const appScripts = readJson('apps/qsmds-arco/package.json').scripts
+  const workspaceManifest = readJson('package.json')
+  const { scripts } = workspaceManifest
+  const appManifest = readJson('apps/qsmds-arco/package.json')
+  const appScripts = appManifest.scripts
 
   assert.equal(scripts['api:generate'], 'pnpm --filter qsmds-arco run api:generate')
   assert.equal(appScripts['api:generate'], 'pnpm --dir ../.. exec tsx scripts/generate-api.ts')
@@ -95,7 +97,10 @@ test('OpenAPI 生成由 Web root 委托正式应用，并只在受控检查前�
   assert.equal(scripts['generate:settings-preferences'], 'pnpm --filter @fantastic-admin/settings generate:preferences')
   assert.equal(scripts.taze, 'taze minor -wIr')
   assert.equal(scripts.commit, 'git cz')
-  assert.equal(scripts.release, 'bumpp')
+  assert.equal(workspaceManifest.version, '6.3.0')
+  assert.equal(appManifest.version, '0.0.0')
+  assert.equal(Object.hasOwn(scripts, 'release'), false)
+  assert.equal(Object.hasOwn(workspaceManifest.devDependencies, 'bumpp'), false)
   assert.equal(Object.hasOwn(scripts, 'lint:tsc'), false)
 })
 

@@ -39,6 +39,8 @@ export default defineConfig(({ mode, command }) => {
     define: {
       __SYSTEM_INFO__: JSON.stringify({
         pkg: {
+          name: pkg.name,
+          version: pkg.version,
           dependencies: pkg.dependencies,
           devDependencies: pkg.devDependencies,
         },

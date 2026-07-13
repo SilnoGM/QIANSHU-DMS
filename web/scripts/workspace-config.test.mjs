@@ -7,6 +7,18 @@ import { pathToFileURL } from 'node:url'
 
 const webRoot = path.resolve(import.meta.dirname, '..')
 
+test('Web workspace 不再保留基座发布入口和 bumpp 锁文件状态', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(webRoot, 'package.json'), 'utf8'))
+  const workspaceConfig = fs.readFileSync(path.join(webRoot, 'pnpm-workspace.yaml'), 'utf8')
+  const lockfile = fs.readFileSync(path.join(webRoot, 'pnpm-lock.yaml'), 'utf8')
+
+  assert.equal(manifest.version, '6.3.0')
+  assert.equal(Object.hasOwn(manifest.scripts, 'release'), false)
+  assert.equal(Object.hasOwn(manifest.devDependencies, 'bumpp'), false)
+  assert.doesNotMatch(workspaceConfig, /^\s*bumpp:/mu)
+  assert.doesNotMatch(lockfile, /(?:^|\s)bumpp(?:@|:)/mu)
+})
+
 async function loadDefaultExport(relativePath) {
   const moduleUrl = pathToFileURL(path.join(webRoot, relativePath)).href
   const loadedModule = await import(moduleUrl)

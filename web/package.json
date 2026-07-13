@@ -35,8 +35,7 @@
     "build:examples": "pnpm --filter @fantastic-admin/core --filter @fantastic-admin/core-arco-design-vue --filter @fantastic-admin/example -r run build",
     "preinstall": "node ./scripts/ensure-pnpm.mjs",
     "taze": "taze minor -wIr",
-    "commit": "git cz",
-    "release": "bumpp"
+    "commit": "git cz"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
@@ -50,7 +49,6 @@
     "@unocss/core": "catalog:",
     "@unocss/eslint-plugin": "catalog:",
     "autoprefixer": "catalog:",
-    "bumpp": "catalog:",
     "cz-git": "catalog:",
     "eslint": "catalog:",
     "lint-staged": "catalog:",
