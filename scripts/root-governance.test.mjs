@@ -89,6 +89,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'contract:sync': 'node ./scripts/contract-sync.mjs',
     'contract:check': 'node ./scripts/contract-check.mjs',
     'ci:server-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-server-e2e.mjs',
+    'ci:contract': 'node ./scripts/ci-contract-baseline.mjs',
     'test:root': 'node --test ./scripts/*.test.mjs',
     check: 'node ./scripts/check.mjs',
     'check:server': 'pnpm -C server check',
