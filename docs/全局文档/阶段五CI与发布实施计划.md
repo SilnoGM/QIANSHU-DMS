@@ -94,7 +94,7 @@ feat: 建立GitHub Release安全协调
 ci: 添加主CI工作流
 ci: 添加参考应用工作流
 ci: 添加统一产品发布工作流
-docs: 完成阶段五发布文档与验收
+docs: 完成阶段五CI与发布文档
 ```
 
 每次提交前统一执行：
@@ -158,7 +158,7 @@ Expected: commit 成功且只包含实施计划和索引。
 - Modify: `web/scripts/workspace-config.test.mjs`
 - Create: `web/scripts/vite-system-info.test.ts`
 
-- [ ] **Step 1：先写版本镜像、bumpp 移除与 Vite 注入失败测试**
+- [x] **Step 1：先写版本镜像、bumpp 移除与 Vite 注入失败测试**
 
 在 `root-governance.test.mjs` 断言根 manifest 是产品版本镜像但仍无依赖：
 
@@ -180,7 +180,7 @@ assert.equal(parsedSystemInfo.pkg.version, '0.0.0')
 
 `vite-system-info.test.ts` 启动隔离 child process，并把 `cwd` 显式设为 `web/apps/qsmds-arco/` 后再 import `vite.config.ts`、调用 config factory、解析 `define.__SYSTEM_INFO__`；不能直接从 Web root 调用，因为 Vite 配置还会读取 app 相对路径，也不能用源码正则冒充行为验证。测试断言 child 成功后才检查 version，并保证父测试 cwd 未变化。同时读取 `web/pnpm-lock.yaml`，断言 importer、catalog、package 与 snapshot 均没有 `bumpp`。
 
-- [ ] **Step 2：运行目标测试并确认 RED**
+- [x] **Step 2：运行目标测试并确认 RED**
 
 ```bash
 set -euo pipefail
@@ -191,7 +191,7 @@ pnpm -C web test:scripts:tsx
 
 Expected RED: 根/app 缺少 `version`、旧 `release`/`bumpp` 仍存在，且 Vite 尚未注入 `pkg.version`。
 
-- [ ] **Step 3：实施最小 manifest 与 Vite 变更**
+- [x] **Step 3：实施最小 manifest 与 Vite 变更**
 
 精确修改：
 
@@ -225,7 +225,7 @@ __SYSTEM_INFO__: JSON.stringify({
 }),
 ```
 
-- [ ] **Step 4：只刷新 Web lockfile 并审计依赖差异**
+- [x] **Step 4：只刷新 Web lockfile 并审计依赖差异**
 
 ```bash
 set -euo pipefail
@@ -276,7 +276,7 @@ NODE
 
 Expected: lockfile 只删除 `bumpp` 与已不再可达的专属传递节点，没有其他直接依赖删除或版本漂移；inline auditor 不写入仓库。
 
-- [ ] **Step 5：运行回归并提交**
+- [x] **Step 5：运行回归并提交**
 
 ```bash
 set -euo pipefail
@@ -306,7 +306,7 @@ Expected: 所有命令通过；提交不包含 Server version 变化（其现值
 - Modify: `server/pnpm-lock.yaml`
 - Modify: `scripts/server-boundary.test.mjs`
 
-- [ ] **Step 1：先写 files 白名单与 workspace 注入失败测试**
+- [x] **Step 1：先写 files 白名单与 workspace 注入失败测试**
 
 将测试固定为：
 
@@ -322,7 +322,7 @@ assert.equal(serverLock.settings.injectWorkspacePackages, true)
 
 另加文本级审计：lockfile importer 与所有 dependency version 在刷新前后必须一致，只有 `settings.injectWorkspacePackages` 可新增。
 
-- [ ] **Step 2：运行边界测试并确认 RED**
+- [x] **Step 2：运行边界测试并确认 RED**
 
 ```bash
 node --test scripts/server-boundary.test.mjs
@@ -330,7 +330,7 @@ node --test scripts/server-boundary.test.mjs
 
 Expected RED: 缺少 `files` 与 `injectWorkspacePackages`。
 
-- [ ] **Step 3：修改 manifest/workspace 并精确刷新 Server lockfile**
+- [x] **Step 3：修改 manifest/workspace 并精确刷新 Server lockfile**
 
 ```yaml
 # server/pnpm-workspace.yaml
@@ -364,7 +364,7 @@ Expected: after bytes 只比 before 多唯一 settings 行，临时副本由 tra
 
 `server/package.json.files` 使用上一步精确数组。不得加入 `src/`、`test/`、`.env*` 或 Prisma CLI。
 
-- [ ] **Step 4：实际验证现代 deploy 结构**
+- [x] **Step 4：实际验证现代 deploy 结构**
 
 ```bash
 set -euo pipefail
@@ -385,7 +385,7 @@ node -e "const p=require(process.argv[1]); if(p.version!=='0.0.0') process.exit(
 
 Expected: modern deploy 成功并包含 production runtime；不得加 `--legacy`。
 
-- [ ] **Step 5：回归、锁文件审计并提交**
+- [x] **Step 5：回归、锁文件审计并提交**
 
 ```bash
 set -euo pipefail
@@ -408,7 +408,7 @@ Expected: `server/pnpm-lock.yaml` 只有 settings metadata 变化；所有验证
 - Create: `scripts/ci-postgres.mjs`
 - Create: `scripts/ci-postgres.test.mjs`
 
-- [ ] **Step 1：先写凭据顺序、容器所有权与清理失败测试**
+- [x] **Step 1：先写凭据顺序、容器所有权与清理失败测试**
 
 测试使用可注入 `randomBytes`、filesystem、runner、signal source 和 output writer，至少覆盖：
 
@@ -424,7 +424,7 @@ assert.deepEqual(remove.argv, ['rm', '--force', '--volumes', exactContainerId])
 
 覆盖 `docker run` 失败、health 超时、子进程失败、`SIGINT`、`SIGTERM`、重复 cleanup、伪造 cidfile 和日志脱敏。任何 cleanup 都只能使用本次 cidfile 中通过 `^[a-f0-9]{64}$` 校验的精确 ID。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/ci-postgres.test.mjs
@@ -432,7 +432,7 @@ node --test scripts/ci-postgres.test.mjs
 
 Expected RED: `ERR_MODULE_NOT_FOUND` 指向 `ci-postgres.mjs`。
 
-- [ ] **Step 3：实现可注入生命周期核心**
+- [x] **Step 3：实现可注入生命周期核心**
 
 稳定导出边界是 `POSTGRES_IMAGE`、`runWithPostgres({ command, dependencies })`、`assertOwnedContainerId(value)` 与 `redactSensitiveText(value, sensitiveValues)`。两个同步 helper 直接按以下代码实现，不能用宽松 trim 或正则替换泄露原文：
 
@@ -460,7 +460,7 @@ export function redactSensitiveText(value, sensitiveValues) {
 
 `runWithPostgres()` 的输入 `command` 是冻结的非空 argv 数组，成功返回 child 的 `0`，失败抛出携带首个非零 `exitCode` 的固定错误；`dependencies` 必须显式包含 randomBytes、filesystem、Docker runner、child runner、clock/wait、signal source 和 mask writer，测试不允许落回生产依赖。Run `node --test --test-name-pattern='ownership|redact|input' scripts/ci-postgres.test.mjs`，Expected: 同步 helper 与 input 转绿。
 
-- [ ] **Step 4：实现 session、随机凭据与本地/GitHub mask 边界**
+- [x] **Step 4：实现 session、随机凭据与本地/GitHub mask 边界**
 
 1. `fs.mkdtemp()` 创建 session 目录并 `chmod 0o700`；env file 使用 `mode: 0o600`。
 2. `randomBytes(32).toString('base64url')` 后立即登记敏感值；仅当 `GITHUB_ACTIONS === 'true'` 时向 Runner workflow-command channel 输出 `::add-mask::`，本地执行绝不打印密码。所有异常和转发的 child/Docker 输出先经过本地 `redactSensitiveText()`。
@@ -468,20 +468,20 @@ export function redactSensitiveText(value, sensitiveValues) {
 
 Run `node --test --test-name-pattern='session|password|mask|env file' scripts/ci-postgres.test.mjs`，Expected: 权限和 mask-before-Docker 矩阵转绿。
 
-- [ ] **Step 5：实现 digest Docker、health 与动态端口**
+- [x] **Step 5：实现 digest Docker、health 与动态端口**
 
 4. `docker run --detach --cidfile ... --env-file ... --label ... --publish 127.0.0.1::5432/tcp --health-cmd ... <digest>`；全程 argv 数组。
 5. 校验 cid，轮询 `docker inspect` health，再执行 `docker port <cid> 5432/tcp` 并只接受 `127.0.0.1:<1-65535>`。
 
 Run `node --test --test-name-pattern='docker|health|port|cidfile' scripts/ci-postgres.test.mjs`，Expected: Docker start/timeout/port fixture 转绿。
 
-- [ ] **Step 6：实现 child 环境、输出脱敏与首个退出码**
+- [x] **Step 6：实现 child 环境、输出脱敏与首个退出码**
 
 6. 构造 loopback `DATABASE_URL`，在 GitHub Actions 立即 mask 完整 URL、本地只登记 redaction，随后才传给 child env。测试故意让 child stderr 同时包含 password 与 URL，最终输出必须只含 `***`；由于 secret 按长度降序处理，输出也不得残留 `postgresql://qianshu_ci:***@...` 形式的部分连接串。
 
 Run `node --test --test-name-pattern='child|DATABASE_URL|exit code|stderr' scripts/ci-postgres.test.mjs`，Expected: child success/failure 与 overlapping secret 转绿。
 
-- [ ] **Step 7：实现 signal、幂等 cleanup 与 CLI**
+- [x] **Step 7：实现 signal、幂等 cleanup 与 CLI**
 
 7. 保存当前 child handle/process group ownership。收到 `SIGINT`/`SIGTERM` 时先向精确 child process group 转发同一 signal并有界等待；超时再升级终止，确认 child 已退出后才清数据库。`finally` 幂等地按 cid 清理 container/anonymous volumes，再删除 session 目录，始终保留最初失败/信号退出码；cleanup 失败只附加安全诊断。
 
@@ -493,7 +493,7 @@ node scripts/ci-postgres.mjs -- node scripts/ci-server-e2e.mjs
 
 Run `node --test --test-name-pattern='SIGINT|SIGTERM|cleanup|CLI' scripts/ci-postgres.test.mjs`，Expected: signal/重复清理/CLI 转绿且无残留 ownership。
 
-- [ ] **Step 8：GREEN、错误脱敏回归与提交**
+- [x] **Step 8：GREEN、错误脱敏回归与提交**
 
 ```bash
 set -euo pipefail
@@ -518,7 +518,7 @@ Expected: 单元测试不要求 Docker daemon；测试输出不出现 fixture pa
 - Modify: `scripts/run-command.mjs`
 - Modify: `scripts/run-command.test.mjs`
 
-- [ ] **Step 1：先写 URL 守卫、命令顺序与失败短路测试**
+- [x] **Step 1：先写 URL 守卫、命令顺序与失败短路测试**
 
 固定命令矩阵：
 
@@ -535,7 +535,7 @@ const EXPECTED_COMMANDS = [
 
 同时先在 `run-command.test.mjs` 添加失败测试：注入 `spawnImpl`，调用 `runCommand(..., { env: expectedEnv })`，断言收到的是同一显式 env object 且默认调用仍继承 `process.env`；此时现有实现未转发 `env`，测试应 RED。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/run-command.test.mjs scripts/ci-server-e2e.test.mjs
@@ -543,7 +543,7 @@ node --test scripts/run-command.test.mjs scripts/ci-server-e2e.test.mjs
 
 Expected RED: E2E 模块缺失，且 `runCommand` 尚未按显式 env 转发。
 
-- [ ] **Step 3：实现编排并接入根命令**
+- [x] **Step 3：实现编排并接入根命令**
 
 `validateCiDatabaseUrl()` 按以下最小代码实现，避免把远端/开发数据库误当 CI 数据库：
 
@@ -582,7 +582,7 @@ export async function runServerE2e({ env = process.env, run = runCommand }) {
 
 同时更新 `root-governance.test.mjs` 的完整 scripts truth source。
 
-- [ ] **Step 4：运行 GREEN、根回归并提交**
+- [x] **Step 4：运行 GREEN、根回归并提交**
 
 ```bash
 set -euo pipefail
@@ -607,7 +607,7 @@ Expected: 单元测试通过，根脚本仍无依赖。
 - Modify: `package.json`
 - Modify: `scripts/root-governance.test.mjs`
 
-- [ ] **Step 1：先写 PR、push、Release 与无基线失败测试**
+- [x] **Step 1：先写 PR、push、Release 与无基线失败测试**
 
 在真实临时 Git repo fixture 中提交不同 operationId snapshot，覆盖：
 
@@ -630,7 +630,7 @@ assert.deepEqual(await selectContractBaseline(firstPushEvent), { kind: 'none' })
 assert.equal(await fs.readFile(baselinePath, 'utf8'), expectedSnapshot)
 ```
 
-- [ ] **Step 2：运行目标测试并确认 RED**
+- [x] **Step 2：运行目标测试并确认 RED**
 
 ```bash
 node --test scripts/ci-contract-baseline.test.mjs
@@ -638,7 +638,7 @@ node --test scripts/ci-contract-baseline.test.mjs
 
 Expected RED: 缺少 baseline 模块。
 
-- [ ] **Step 3：实现事件解析、Git blob 提取和 contract 委托**
+- [x] **Step 3：实现事件解析、Git blob 提取和 contract 委托**
 
 稳定 SemVer helper 先在本模块实现，Task 6 再无行为变化地移到 `release-version.mjs`：
 
@@ -687,7 +687,7 @@ node scripts/contract-check.mjs --baseline <RUNNER_TEMP child>/openapi-baseline.
 
 无基线时不传 `--baseline`。child env 固定 `DOTENV_CONFIG_PATH=/dev/null`，移除 `DEBUG`、`DATABASE_URL` 与 `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION`。
 
-- [ ] **Step 4：接入根入口并执行 GREEN**
+- [x] **Step 4：接入根入口并执行 GREEN**
 
 ```json
 "ci:contract": "node ./scripts/ci-contract-baseline.mjs"
@@ -701,7 +701,7 @@ node --run test:root
 
 Expected: fixture repo 全矩阵通过；根 scripts truth source 同步且无第三方依赖。
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add package.json scripts/root-governance.test.mjs \
@@ -721,7 +721,7 @@ git commit -m "ci: 建立接口契约历史基线"
 - Modify: `package.json`
 - Modify: `scripts/root-governance.test.mjs`
 
-- [ ] **Step 1：先写版本与 Git 身份矩阵失败测试**
+- [x] **Step 1：先写版本与 Git 身份矩阵失败测试**
 
 用临时 bare `origin` + working repo 验证：
 
@@ -743,7 +743,7 @@ assert.deepEqual(await verifyReleaseVersion(validInput), {
 - source Commit 不可从 checkout 已取得的 `refs/remotes/origin/main` 到达。
 - 当前版本不严格大于可达的最高历史稳定 Tag；历史非法/不可 peel Tag 不能静默参与或污染排序。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/release-version.test.mjs
@@ -751,7 +751,7 @@ node --test scripts/release-version.test.mjs
 
 Expected RED: 模块缺失。
 
-- [ ] **Step 3：实现严格校验器与机器可读输出**
+- [x] **Step 3：实现严格校验器与机器可读输出**
 
 稳定导出及返回契约：
 
@@ -785,7 +785,7 @@ node scripts/release-version.mjs --tag v1.2.3 --source-commit <40-hex>
 
 可选 `--output <RUNNER_TEMP child>/release-version.json` 将同一成功对象以 canonical JSON + 单一末尾换行写入受控临时文件，供 Manifest Job 使用；stdout 与 output 文件内容必须相同语义。
 
-- [ ] **Step 4：接入根入口并执行 GREEN**
+- [x] **Step 4：接入根入口并执行 GREEN**
 
 ```json
 "release:check": "node ./scripts/release-version.mjs"
@@ -798,7 +798,7 @@ node --run test:root
 git diff --check
 ```
 
-- [ ] **Step 5：提交**
+- [x] **Step 5：提交**
 
 ```bash
 git add package.json scripts/root-governance.test.mjs \
@@ -817,7 +817,7 @@ git commit -m "feat: 建立发布版本与Tag校验"
 - Modify: `package.json`
 - Modify: `scripts/root-governance.test.mjs`
 
-- [ ] **Step 1：先写树边界、归档与 smoke 失败测试**
+- [x] **Step 1：先写树边界、归档与 smoke 失败测试**
 
 fixture 必须覆盖：
 
@@ -830,7 +830,7 @@ fixture 必须覆盖：
 - smoke 先用 checkout 的 Prisma CLI 对隔离 DB 执行一次 `db:migrate:deploy`，然后从全新解压目录以 `node dist/main.js` 启动；固定 `cwd` 为解压根，进程 env 没有 `NODE_PATH`/`DEBUG`/危险 Prisma 环境，health 必须 `200` 且有 Server-generated `X-Request-Id`。
 - 启动失败、health 超时、错误响应、`SIGINT`/`SIGTERM` 都终止精确进程组并清理临时目录；错误信息不得包含 `DATABASE_URL`。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/release-package.test.mjs
@@ -838,7 +838,7 @@ node --test scripts/release-package.test.mjs
 
 Expected RED: 缺少 package 模块。
 
-- [ ] **Step 3：先实现精确 input parser、CLI dispatch 与返回类型**
+- [x] **Step 3：先实现精确 input parser、CLI dispatch 与返回类型**
 
 稳定导出及返回契约：
 
@@ -860,13 +860,13 @@ node scripts/release-package.mjs smoke-server --tag v1.2.3 --archive <tar.gz>
 
 Run `node --test --test-name-pattern='input|CLI' scripts/release-package.test.mjs`，Expected: 只让尚未实现的 tree/package/smoke 行为继续失败，参数矩阵转绿。
 
-- [ ] **Step 4：实现 Web/Server tree policy**
+- [x] **Step 4：实现 Web/Server tree policy**
 
 `validateReleaseTree()` 使用 `lstat`，在读取 entry 后核对 parent/leaf canonical identity；Web policy 拒绝全部 symlink，Server policy 只接受不逃逸且不断裂的 pnpm symlink。portable key 同时做 Unicode NFC 与 case-fold 冲突检测。遍历前后都检查 root inode，避免校验期间被替换。
 
 Run `node --test --test-name-pattern='tree|symlink|special' scripts/release-package.test.mjs`，Expected: tree fixture 转绿，deploy/archive/smoke 仍 RED。
 
-- [ ] **Step 5：实现 Server modern deploy 与两端 staging**
+- [x] **Step 5：实现 Server modern deploy 与两端 staging**
 
 Server deploy 必须使用：
 
@@ -880,7 +880,7 @@ await run('pnpm', [
 
 Run `node --test --test-name-pattern='deploy|staging|Web package|Server package' scripts/release-package.test.mjs`，Expected: 两端 staging exact tree 转绿，archive/smoke 仍 RED。
 
-- [ ] **Step 6：实现确定性 GNU tar 生成**
+- [x] **Step 6：实现确定性 GNU tar 生成**
 
 GNU tar 参数固定为数组，并从 archive staging parent 运行：
 
@@ -894,13 +894,13 @@ GNU tar 参数固定为数组，并从 archive staging parent 运行：
 
 连续生成两份 archive，测试 raw bytes、SHA-256 与 gzip header。Run `node --test --test-name-pattern='archive|gzip|metadata' scripts/release-package.test.mjs`，Expected: 生成侧测试转绿。
 
-- [ ] **Step 7：实现解压前 tar header 审计与安全提取**
+- [x] **Step 7：实现解压前 tar header 审计与安全提取**
 
 `inspectTarGzipArchive()` 使用 `node:zlib` 解压 gzip stream，按 512-byte POSIX tar header 校验 checksum、size/padding、typeflag、name/prefix 和 PAX record；只接受 regular file/directory，以及 Server policy 下解析后仍位于 deploy root 的 symlink。遇到 GNU longname、hardlink、absolute path、空 segment、`.`/`..`、重复 portable path、device/FIFO/socket 或截断尾部立即失败。随后 GNU tar 提取参数至少包含 `--extract --gzip --no-same-owner --no-same-permissions --directory <fresh-canonical-root>`；提取目标必须是本次创建且预先确认为空的新目录。
 
 Run `node --test --test-name-pattern='preflight|PAX|traversal|extract' scripts/release-package.test.mjs`，Expected: 恶意 archive fixture 全部在 extract runner 调用前失败。
 
-- [ ] **Step 8：实现隔离 Server runtime smoke 与进程清理**
+- [x] **Step 8：实现隔离 Server runtime smoke 与进程清理**
 
 Server 子命令在非 `linux/x64` 平台必须失败，防止生成错误标识的 `linux-x64` 包。Web 可在本地生成 fixture 包，但正式 Workflow 同样运行 Ubuntu 24.04。
 
@@ -908,7 +908,7 @@ Smoke 端口不能默认使用 `3000`。端口 reserver 先在 `127.0.0.1:0` 取
 
 Run `node --test --test-name-pattern='smoke|port|health|process' scripts/release-package.test.mjs`，Expected: 端口竞争、超时、信号和成功矩阵转绿。
 
-- [ ] **Step 9：接入根入口并执行单元 GREEN**
+- [x] **Step 9：接入根入口并执行单元 GREEN**
 
 ```json
 "release:package:web": "node ./scripts/release-package.mjs web",
@@ -940,7 +940,7 @@ node --run release:smoke:server -- \
 
 Expected: archive 从新目录启动并通过 `/api/health`；验证过程不访问 production DB。
 
-- [ ] **Step 11：提交**
+- [x] **Step 11：提交**
 
 ```bash
 git add package.json scripts/root-governance.test.mjs \
@@ -959,11 +959,11 @@ git commit -m "build: 建立双端发布归档与运行验证"
 - Modify: `package.json`
 - Modify: `scripts/root-governance.test.mjs`
 
-- [ ] **Step 0：为新增 Release Manifest 数据结构取得单独确认**
+- [x] **Step 0：为新增 Release Manifest 数据结构取得单独确认**
 
 `release/manifest.schema.json` 是新增公共发布数据结构。开始写 schema 或生成器前，向用户单独确认本 Task 的精确字段仍以设计文档第 13.2 节为准；未确认时暂停 Task 8，不提前创建文件。
 
-- [ ] **Step 1：先写 schema mutation、hash 与重读失败测试**
+- [x] **Step 1：先写 schema mutation、hash 与重读失败测试**
 
 测试从有效 Manifest 开始逐类 mutation，至少覆盖：
 
@@ -975,7 +975,7 @@ git commit -m "build: 建立双端发布归档与运行验证"
 - `SHA256SUMS` 恰好三行、两个空格分隔、固定顺序、纯 hex；生成后重读任一文件变化必须失败。
 - schema 出现运行时不支持的 keyword 时，加载阶段必须失败，不能忽略。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/release-manifest.test.mjs
@@ -983,7 +983,7 @@ node --test scripts/release-manifest.test.mjs
 
 Expected RED: schema 和模块缺失。
 
-- [ ] **Step 3：创建精确 schema**
+- [x] **Step 3：创建精确 schema**
 
 `manifest.schema.json` 使用 Draft 2020-12，根和所有嵌套 object 都设：
 
@@ -1015,7 +1015,7 @@ new Set([
 
 当前 Manifest 没有 array 字段，因此 validator 不实现或接受 `items`/`minItems`；schema 与 validator 保持最小一致，不预留未使用语义。
 
-- [ ] **Step 4：实现 schema loader 与确定性子集 validator**
+- [x] **Step 4：实现 schema loader 与确定性子集 validator**
 
 先实现：
 
@@ -1024,7 +1024,7 @@ new Set([
 
 Run `node --test --test-name-pattern='schema|required|type|pattern|enum|additionalProperties|keyword' scripts/release-manifest.test.mjs`，Expected: schema mutation 矩阵转绿，其余 hash/bundle 测试仍 RED。
 
-- [ ] **Step 5：实现 source metadata、migration 与文件 hash**
+- [x] **Step 5：实现 source metadata、migration 与文件 hash**
 
 实现按原始 bytes 的 generic SHA-256、OpenAPI/Prisma schema hash、migration portable path 排序清单与 canonical JSON + 单一换行 aggregate hash。拒绝 symlink、special file、空 migration 集合、非法/冲突目录名。
 
@@ -1032,7 +1032,7 @@ runtime metadata 实际读取 `process.versions.node`（不带 `v` 前缀）、`
 
 Run `node --test --test-name-pattern='hash|migration|runtime|metadata' scripts/release-manifest.test.mjs`，Expected: metadata/hash fixture 转绿。
 
-- [ ] **Step 6：实现 Manifest 与 SHA256SUMS 生成**
+- [x] **Step 6：实现 Manifest 与 SHA256SUMS 生成**
 
 实现并冻结返回值：
 
@@ -1055,7 +1055,7 @@ node scripts/release-manifest.mjs \
 
 Run `node --test --test-name-pattern='Manifest|SHA256SUMS|checksum|reread' scripts/release-manifest.test.mjs`，Expected: 生成和磁盘重读转绿。
 
-- [ ] **Step 7：实现 final bundle verify 与 verify CLI**
+- [x] **Step 7：实现 final bundle verify 与 verify CLI**
 
 实现 `verifyReleaseBundle(input, dependencies) -> Promise<Readonly<VerifiedBundle>>`：从磁盘重读四文件，校验 schema、三行 checksum、固定文件集合，并交叉核对 Manifest identity 与两个归档 basename/size/digest。CLI：
 
@@ -1071,7 +1071,7 @@ node scripts/release-manifest.mjs verify \
 
 Run `node --test scripts/release-manifest.test.mjs`，Expected: bundle identity/TOCTOU 与全部测试转绿。
 
-- [ ] **Step 8：接入根入口、GREEN 与提交**
+- [x] **Step 8：接入根入口、GREEN 与提交**
 
 ```json
 "release:manifest": "node ./scripts/release-manifest.mjs"
@@ -1099,7 +1099,7 @@ Expected: schema mutation 全部被相应边界捕获；生成目录只在临时
 - Modify: `package.json`
 - Modify: `scripts/root-governance.test.mjs`
 
-- [ ] **Step 1：先写无网络 GitHub REST 状态机失败测试**
+- [x] **Step 1：先写无网络 GitHub REST 状态机失败测试**
 
 使用可注入 `fetch`、clock、wait、filesystem，构造分页 REST fixture，至少覆盖：
 
@@ -1129,7 +1129,7 @@ assert.deepEqual(mutations.map(request => request.method), [
 assert.equal(mutations.some(request => request.method === 'DELETE'), false)
 ```
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/release-github.test.mjs
@@ -1137,7 +1137,7 @@ node --test scripts/release-github.test.mjs
 
 Expected RED: 模块缺失。
 
-- [ ] **Step 3：实现认证 client、错误归一化与有界分页**
+- [x] **Step 3：实现认证 client、错误归一化与有界分页**
 
 稳定导出及返回契约：
 
@@ -1169,7 +1169,7 @@ node scripts/release-github.mjs \
 
 先完成只读 GET、Link pagination、最大页数/seen URL、HTTP status 分类和固定脱敏错误。Run `node --test --test-name-pattern='client|pagination|401|403|404|409|422|5xx' scripts/release-github.test.mjs`，Expected: client/pagination 矩阵转绿，mutation 状态机仍 RED。
 
-- [ ] **Step 4：实现远端 Tag、稳定版本与 workflow artifact 身份复验**
+- [x] **Step 4：实现远端 Tag、稳定版本与 workflow artifact 身份复验**
 
 远端复验至少读取：
 
@@ -1186,7 +1186,7 @@ GET /repos/{owner}/{repo}/releases?per_page=100&page={page}
 
 Run `node --test --test-name-pattern='tag|version|artifact|main' scripts/release-github.test.mjs`，Expected: 两次复用的只读 identity verifier 转绿，不产生 mutation。
 
-- [ ] **Step 5：实现唯一 marker 与 Draft ownership 判定**
+- [x] **Step 5：实现唯一 marker 与 Draft ownership 判定**
 
 marker 使用单个 HTML comment 和 canonical JSON：
 
@@ -1198,7 +1198,7 @@ marker 使用单个 HTML comment 和 canonical JSON：
 
 Run `node --test --test-name-pattern='marker|Draft|author|published|foreign' scripts/release-github.test.mjs`，Expected: ownership 矩阵转绿，尚未上传/发布。
 
-- [ ] **Step 6：实现 no-clobber asset reconcile 与 digest 重试**
+- [x] **Step 6：实现 no-clobber asset reconcile 与 digest 重试**
 
 四个唯一允许的 basename：
 
@@ -1215,13 +1215,13 @@ Run `node --test --test-name-pattern='marker|Draft|author|published|foreign' scr
 
 Run `node --test --test-name-pattern='asset|upload|digest|uploader|clobber' scripts/release-github.test.mjs`，Expected: 缺失补传/完全复用/冲突拒绝和有界等待转绿，仍不执行最终 publish。
 
-- [ ] **Step 7：实现第二次远端复验与唯一 publish gate**
+- [x] **Step 7：实现第二次远端复验与唯一 publish gate**
 
 发布前重新执行 Tag/稳定版本/main 校验、精确附件集合校验，并再次调用 `verifyReleaseBundle()` 交叉验证 Manifest/schema/checksum/identity；全部相同时最后唯一 PATCH 为 `{ draft: false }`。Mutation 网络结果不确定时只重读状态，不盲目重复 POST/PATCH。
 
 Run `node --test scripts/release-github.test.mjs`，Expected: 全部状态机测试转绿且 mutation 序列精确。
 
-- [ ] **Step 8：接入根入口、GREEN 与提交**
+- [x] **Step 8：接入根入口、GREEN 与提交**
 
 ```json
 "release:publish": "node ./scripts/release-github.mjs"
@@ -1248,7 +1248,7 @@ Expected: 测试没有真实网络调用；所有 mutation 的调用次数与顺
 - Create: `.github/workflows/ci.yml`
 - Modify: `scripts/root-governance.test.mjs`
 
-- [ ] **Step 1：先写 `ci.yml` 源码结构失败测试**
+- [x] **Step 1：先写 `ci.yml` 源码结构失败测试**
 
 由于根目录不能增加 YAML parser，测试以严格源码结构和受限 extraction 验证：
 
@@ -1265,7 +1265,7 @@ Expected: 测试没有真实网络调用；所有 mutation 的调用次数与顺
 - called workflow 并发组以 `qianshu-ci-` 开头，且不会与 `qianshu-release` 相同或取消 caller。
 - 所有 `uses:` 与 PostgreSQL image 精确等于“固定外部引用”表。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/ci-workflows.test.mjs
@@ -1273,7 +1273,7 @@ node --test scripts/ci-workflows.test.mjs
 
 Expected RED: `.github/workflows/ci.yml` 不存在。
 
-- [ ] **Step 3：实现 CI 触发、权限、并发和运行时模板**
+- [x] **Step 3：实现 CI 触发、权限、并发和运行时模板**
 
 Workflow 顶层骨架：
 
@@ -1320,13 +1320,13 @@ concurrency:
 
 不得同时启用两个 pnpm cache owner。
 
-- [ ] **Step 4：实现 root-governance 与 always ci-gate**
+- [x] **Step 4：实现 root-governance 与 always ci-gate**
 
 `root-governance` 不 setup pnpm、不 install，执行 `node --run test:root` 并检查根 lock/workspace/node_modules 不存在。`ci-gate` 以 `needs` 引用另外五个验证 Job，使用 `if: always()` 和 env `NEEDS_JSON: ${{ toJSON(needs) }}`；Node 程序只接受所有 `result === 'success'`，其他状态退出 1。
 
 Run `node --test --test-name-pattern='root-governance|ci-gate' scripts/ci-workflows.test.mjs`，Expected: root/gate 结构转绿。
 
-- [ ] **Step 5：实现两个 Server Job**
+- [x] **Step 5：实现两个 Server Job**
 
 命令固定：
 
@@ -1337,7 +1337,7 @@ server-e2e:         pnpm -C server install --frozen-lockfile; node --run ci:serv
 
 两个 Job 各自使用 server lock cache、timeout 和 tracked diff；E2E 不声明 GitHub `services:`。Run `node --test --test-name-pattern='server-check-build|server-e2e' scripts/ci-workflows.test.mjs`，Expected: Server jobs 转绿。
 
-- [ ] **Step 6：实现 Contract Job**
+- [x] **Step 6：实现 Contract Job**
 
 Contract Job 使用 `fetch-depth: 0`、两份 lock cache，分别 frozen install Server/Web 后运行 `node --run ci:contract`。设置：
 
@@ -1349,11 +1349,11 @@ env:
 
 不得设置 `DATABASE_URL`、`DEBUG` 或危险 Prisma 环境。Run `node --test --test-name-pattern='contract' scripts/ci-workflows.test.mjs`，Expected: PR/push/release input 与 history/cache 结构转绿。
 
-- [ ] **Step 7：实现 Web Job**
+- [x] **Step 7：实现 Web Job**
 
 `web-check-build` 只使用 Web lock cache，依次运行 frozen install、`api:generate`、`check`、`build`，验证 `dist/index.html` 后执行 tracked diff。Run `node --test --test-name-pattern='web-check-build' scripts/ci-workflows.test.mjs`，Expected: Web Job 转绿。
 
-- [ ] **Step 8：运行结构测试、固定 actionlint 与根回归**
+- [x] **Step 8：运行结构测试、固定 actionlint 与根回归**
 
 ```bash
 set -euo pipefail
@@ -1383,7 +1383,7 @@ node --run test:root
 
 Expected: 结构测试与 actionlint 均通过；这只证明本地语义，不声称 GitHub Actions 已运行。每个后续 Task 都必须重新创建临时目录、下载并校验 binary，不能复用本 Step 已被 trap 删除的路径或环境变量。
 
-- [ ] **Step 9：提交**
+- [x] **Step 9：提交**
 
 ```bash
 git add .github/workflows/ci.yml scripts/ci-workflows.test.mjs \
@@ -1399,7 +1399,7 @@ git commit -m "ci: 添加主CI工作流"
 - Create: `.github/workflows/examples.yml`
 - Modify: `scripts/ci-workflows.test.mjs`
 
-- [ ] **Step 1：先扩展 schedule/dispatch 与非阻断失败测试**
+- [x] **Step 1：先扩展 schedule/dispatch 与非阻断失败测试**
 
 断言 `examples.yml`：
 
@@ -1410,7 +1410,7 @@ git commit -m "ci: 添加主CI工作流"
 - 唯一 cache lockfile 是 `web/pnpm-lock.yaml`。
 - 只运行 Web frozen install、`check:examples`、`build:examples` 与 tracked diff。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/ci-workflows.test.mjs
@@ -1418,7 +1418,7 @@ node --test scripts/ci-workflows.test.mjs
 
 Expected RED: examples Workflow 不存在。
 
-- [ ] **Step 3：实现、lint、回归并提交**
+- [x] **Step 3：实现、lint、回归并提交**
 
 ```bash
 set -euo pipefail
@@ -1451,7 +1451,7 @@ Expected: 本 Task 独立下载并校验 actionlint；不得假定系统全局�
 - Create: `.github/workflows/release.yml`
 - Modify: `scripts/ci-workflows.test.mjs`
 
-- [ ] **Step 1：先扩展 Tag、final bundle 与最小写权限失败测试**
+- [x] **Step 1：先扩展 Tag、final bundle 与最小写权限失败测试**
 
 断言 `release.yml`：
 
@@ -1469,7 +1469,7 @@ Expected: 本 Task 独立下载并校验 actionlint；不得假定系统全局�
 - publish-only rerun 把原 `bundle-run-attempt`、artifact ID/digest 传给协调器，同时把当前 `github.run_attempt` 作为独立值；不得重新 build/manifest。
 - 所有 checkout `persist-credentials: false`、所有 Actions 完整 SHA、所有 **runner-backed** Job timeout、tracked diff 和固定附件名存在。`verify` 是 `jobs.<id>.uses` reusable-workflow call，不支持 `timeout-minutes`，其超时由被调 `ci.yml` 每个真实 Job 保证。
 
-- [ ] **Step 2：运行测试并确认 RED**
+- [x] **Step 2：运行测试并确认 RED**
 
 ```bash
 node --test scripts/ci-workflows.test.mjs
@@ -1477,7 +1477,7 @@ node --test scripts/ci-workflows.test.mjs
 
 Expected RED: release Workflow 不存在。
 
-- [ ] **Step 3：实现 Tag trigger、并发与 reusable verify**
+- [x] **Step 3：实现 Tag trigger、并发与 reusable verify**
 
 顶层和 verify：
 
@@ -1505,7 +1505,7 @@ jobs:
 
 Run `node --test --test-name-pattern='Release trigger|concurrency|verify' scripts/ci-workflows.test.mjs`，Expected: trigger/权限/verify 转绿，package/manifest/publish 仍 RED。
 
-- [ ] **Step 4：实现 package-web 与 Web artifact output**
+- [x] **Step 4：实现 package-web 与 Web artifact output**
 
 package-web 使用 full-history Tag checkout、Web cache/frozen install，并先执行：
 
@@ -1532,7 +1532,7 @@ node --run release:check -- \
 
 声明 `outputs.artifact-id: ${{ steps.upload-web.outputs.artifact-id }}`。Run `node --test --test-name-pattern='package-web|upload-web' scripts/ci-workflows.test.mjs`，Expected: Web package Job 转绿。
 
-- [ ] **Step 5：实现 package-server、runtime smoke 与 Server artifact output**
+- [x] **Step 5：实现 package-server、runtime smoke 与 Server artifact output**
 
 package-server 同样 full-history checkout，运行 `release:check`、Server frozen install/build、`release:package:server`，再通过 `release:smoke:server` 使用隔离 PostgreSQL 完成 archive health smoke；只有全部成功才执行 `upload-server`，retention/compression 与 Web 相同。
 
@@ -1552,7 +1552,7 @@ package-server:
 
 Run `node --test --test-name-pattern='package-server|upload-server|smoke' scripts/ci-workflows.test.mjs`，Expected: Server package Job 转绿。
 
-- [ ] **Step 6：实现 Manifest/final bundle 身份输出**
+- [x] **Step 6：实现 Manifest/final bundle 身份输出**
 
 Manifest Job 必须重新 checkout/fetch 全历史、setup Node/pnpm，并再次运行 `release:check --output "$RUNNER_TEMP/release-version.json"`。下载目标与输出目标分离：
 
@@ -1598,7 +1598,7 @@ outputs:
   bundle-run-attempt: ${{ github.run_attempt }}
 ```
 
-- [ ] **Step 7：实现 publish-only 外部写入 Job**
+- [x] **Step 7：实现 publish-only 外部写入 Job**
 
 ```yaml
 publish:
@@ -1639,7 +1639,7 @@ node --run release:publish -- \
 
 这些 shell 变量都作为独立 argv 且先由脚本校验；`GITHUB_TOKEN` 只通过 step env 注入，不出现在 argv。
 
-- [ ] **Step 8：本地结构/actionlint/根回归**
+- [x] **Step 8：本地结构/actionlint/根回归**
 
 ```bash
 set -euo pipefail
@@ -1664,7 +1664,7 @@ git diff --check
 
 Expected: 本地结构与 YAML 语义通过；不得声称远端 artifact outputs 或 publish-only rerun 已经在 GitHub 平台验证。
 
-- [ ] **Step 9：提交**
+- [x] **Step 9：提交**
 
 ```bash
 git add .github/workflows/release.yml scripts/ci-workflows.test.mjs
@@ -1691,7 +1691,7 @@ git commit -m "ci: 添加统一产品发布工作流"
 - Modify: `scripts/root-governance.test.mjs`
 - Modify: `web/scripts/project-guidance.test.mjs`
 
-- [ ] **Step 1：先写文档真相源与陈旧表述失败测试**
+- [x] **Step 1：先写文档真相源与陈旧表述失败测试**
 
 新增治理断言：
 
@@ -1704,7 +1704,7 @@ git commit -m "ci: 添加统一产品发布工作流"
 
 先运行并确认新的文档断言因文件缺失/陈旧事实而 RED。
 
-- [ ] **Step 2：编写 `发布与版本管理.md`**
+- [x] **Step 2：编写 `发布与版本管理.md`**
 
 中文文档必须完整覆盖：
 
@@ -1721,7 +1721,7 @@ git commit -m "ci: 添加统一产品发布工作流"
 
 不得写入真实 token、连接串、仓库 Secret 值或可误执行的测试 Tag 示例。
 
-- [ ] **Step 3：同步 README、架构文档和阶段状态**
+- [x] **Step 3：同步 README、架构文档和阶段状态**
 
 重点替换：
 
@@ -1732,7 +1732,7 @@ git commit -m "ci: 添加统一产品发布工作流"
 
 只有确有陈旧事实的文档才修改；根 `AGENTS.md` 当前边界无需为了凑文件而改动。
 
-- [ ] **Step 4：运行平台无关完整验证**
+- [x] **Step 4：运行平台无关完整验证**
 
 ```bash
 set -euo pipefail
@@ -1754,7 +1754,7 @@ git diff --check
 
 Expected: 所有命令通过；Docker E2E 后 `docker ps --filter label=com.qianshu-dms.ci --format '{{.ID}}'` 没有本次残留。若 Docker daemon 不可用，明确报告失败，不能跳过后声称完成。
 
-- [ ] **Step 5：运行固定 actionlint 与安全审计**
+- [x] **Step 5：运行固定 actionlint 与安全审计**
 
 ```bash
 set -euo pipefail
@@ -1824,7 +1824,9 @@ node scripts/release-manifest.mjs verify \
 
 这一步验证归档、Manifest schema、实际 hash 与 `SHA256SUMS` 重读，不创建/推送 `v0.0.0` Tag，不调用 GitHub Release mutation。fixture `tagObjectSha` 只用于本地数据结构测试，文档/交付不得把它描述为真实 Tag。若当前机器不是 Linux x64，只执行 unit fixture 并把真实归档验证留给 Task 14 的 Ubuntu Runner；交付说明必须明确该平台缺口。
 
-- [ ] **Step 7：更新计划勾选、提交文档收口并确认 clean**
+> 2026-07-13 本地收口证据：当前平台为 Darwin/arm64，已通过 `node --run test:root`（524 tests）、Server check/build、隔离 PostgreSQL 两次 migration deploy 与 26 个 E2E、Contract、Web generate/check/build、三个参考应用 check/build、固定 checksum 的 `actionlint 1.7.12`、根目录边界与 Docker 残留检查。Task 7 Step 10 与本 Task Step 6 保持未勾选；GitHub-hosted Ubuntu 24.04 的 production archive、runtime smoke 与 Manifest runtime metadata 未伪造，继续由 Task 14 验收。安全文本审计命中的 `POSTGRES_PASSWORD` 赋值是 masked 随机值写入临时 env-file，`release: bumpp` 命中是“不提供该入口”的负面约束，均经上下文复核，不代表硬编码 secret 或残留发布入口。
+
+- [x] **Step 7：更新计划勾选、提交文档收口并确认 clean**
 
 仅在对应命令已有最新成功证据时勾选本计划 Task；不得提前勾选 Task 14。
 
@@ -1838,7 +1840,7 @@ git add README.md server/README.md server/AGENTS.md web/README.md web/AGENTS.md 
   docs/文档索引.md scripts/root-governance.test.mjs \
   web/scripts/project-guidance.test.mjs
 git diff --cached --check
-git commit -m "docs: 完成阶段五发布文档与验收"
+git commit -m "docs: 完成阶段五CI与发布文档"
 git status --short
 ```
 

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { lstat, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import test from 'node:test'
@@ -203,6 +204,32 @@ test('文档索引链接到阶段三计划和两份后端正式文档', async ()
   }
 })
 
+test('阶段五正式文档和三份 Workflow 均为真实文件且索引精确', async () => {
+  const requiredFiles = [
+    '.github/workflows/ci.yml',
+    '.github/workflows/examples.yml',
+    '.github/workflows/release.yml',
+    'docs/全局文档/阶段五CI与发布设计.md',
+    'docs/全局文档/阶段五CI与发布实施计划.md',
+    'docs/全局文档/发布与版本管理.md',
+  ]
+  for (const file of requiredFiles) {
+    await assertRegularFile(file)
+  }
+
+  const index = await readFile(fromRoot('docs', '文档索引.md'), 'utf8')
+  const releaseGuideLink = './全局文档/发布与版本管理.md'
+  assert.ok(
+    index.includes(`[发布与版本管理](${releaseGuideLink})`),
+    '文档索引缺少发布与版本管理的精确链接',
+  )
+  assert.equal(
+    index.split(`(${releaseGuideLink})`).length - 1,
+    1,
+    `文档索引必须精确链接一次：${releaseGuideLink}`,
+  )
+})
+
 test('根 README 使用当前时态且不保留阶段一至阶段四旧状态', async () => {
   const readme = await readFile(fromRoot('README.md'), 'utf8')
   const staleDescriptions = [
@@ -218,6 +245,36 @@ test('根 README 使用当前时态且不保留阶段一至阶段四旧状态', 
     staleDescriptions.filter(description => readme.includes(description)),
     [],
   )
+})
+
+test('根 README 公开 CI 与 Release 命令但不暗示根安装', async () => {
+  const readme = await readFile(fromRoot('README.md'), 'utf8')
+  const rootCommands = markdownSection(readme, '## 根命令')
+  const releaseSection = markdownSection(readme, '## CI 与发布')
+  const requiredCommands = [
+    'node --run ci:server-e2e',
+    'node --run ci:contract',
+    'node --run release:check',
+    'node --run release:package:web',
+    'node --run release:package:server',
+    'node --run release:smoke:server',
+    'node --run release:manifest',
+    'node --run release:publish',
+  ]
+
+  for (const command of requiredCommands) {
+    assert.ok(releaseSection.includes(`\`${command}\``), `根 README 缺少命令：${command}`)
+  }
+  assert.ok(releaseSection.includes('根目录仍不执行 `pnpm install`'))
+  assert.ok(releaseSection.includes('GitHub 平台验收以 Task 14 为准'))
+  assert.ok(rootCommands.includes('归档已构建的正式 Web 产物'))
+  assert.ok(rootCommands.includes('归档已构建的 Server production 产物'))
+  assert.ok(
+    releaseSection.includes(
+      '`release:package:*` 只归档已构建产物，单独执行前必须先完成对应 build',
+    ),
+  )
+  assert.doesNotMatch(releaseSection, /GitHub CI 已通过/)
 })
 
 test('根 README 给出两端独立安装、检查、migration 和 E2E 命令', async () => {
@@ -326,6 +383,238 @@ test('工程方案准确记录阶段四已实施契约能力', async () => {
   assert.match(design, /阶段 4：接口契约（已实施并完成验收）/)
   assert.doesNotMatch(design, /最终运行时验收待完成/)
   assert.doesNotMatch(design, /Blob media type 不冲突/)
+})
+
+test('Server 文档限定 workspace 注入只服务现代 production deploy', async () => {
+  const documentPaths = [
+    'server/README.md',
+    'server/AGENTS.md',
+    'docs/后端文档/后端架构.md',
+  ]
+
+  for (const documentPath of documentPaths) {
+    const document = await readFile(fromRoot(documentPath), 'utf8')
+    assert.ok(
+      document.includes('`injectWorkspacePackages` 只服务现代 production deploy'),
+      `${documentPath} 必须限定 workspace 注入用途`,
+    )
+    assert.ok(document.includes('injectWorkspacePackages: true'))
+    assert.ok(
+      document.includes('`pnpm deploy --prod`'),
+      `${documentPath} 缺少现代 deploy 命令`,
+    )
+    assert.ok(
+      document.includes('不得使用 `--legacy`'),
+      `${documentPath} 必须拒绝 legacy deploy`,
+    )
+    assert.doesNotMatch(
+      document,
+      /pnpm-workspace\.yaml[^\n。]*仅承载[^\n。]*安全配置/u,
+      `${documentPath} 不得保留仅有安装安全配置的陈旧表述`,
+    )
+  }
+})
+
+test('工程方案记录三 Workflow、双端重建和本地与平台验收边界', async () => {
+  const design = await readFile(
+    fromRoot('docs', '全局文档', '项目工程组织方案.md'),
+    'utf8',
+  )
+  const currentFacts = markdownSection(design, '## 2. 当前工程事实')
+  const ciSection = markdownSection(design, '## 12. 当前 CI 与发布流程')
+  const releaseSection = markdownSection(design, '## 13. 构建、部署与 Release Manifest')
+  const requiredFacts = [
+    '`.github/workflows/ci.yml`',
+    '`.github/workflows/examples.yml`',
+    '`.github/workflows/release.yml`',
+    '`release/manifest.schema.json`',
+    '`injectWorkspacePackages`',
+    '阶段五代码与本地验证已实施',
+    'GitHub 平台验证以 Task 14 记录为准',
+  ]
+
+  assert.deepEqual(requiredFacts.filter(fact => !currentFacts.includes(fact)), [])
+  for (const fact of [
+    '`ci.yml`',
+    '`examples.yml`',
+    '`release.yml`',
+    '`ci-gate`',
+    '不按路径跳过',
+  ]) {
+    assert.ok(ciSection.includes(fact), `当前 CI 章节缺少：${fact}`)
+  }
+  for (const fact of [
+    '同一 Tag Commit',
+    'qsmds-web-vX.Y.Z.tar.gz',
+    'qsmds-server-vX.Y.Z-linux-x64.tar.gz',
+    'release-manifest.json',
+    'SHA256SUMS',
+  ]) {
+    assert.ok(releaseSection.includes(fact), `当前 Release 章节缺少：${fact}`)
+  }
+
+  for (const stale of [
+    /ci-server\.yml/,
+    /ci-web\.yml/,
+    /ci-contract\.yml/,
+    /ci-examples\.yml/,
+    /`server\/\*\*` 变化时/,
+    /`web\/\*\*`[^\n]*变化时/,
+    /只发布 Web 时，Server 可以继续引用上一产品版本/,
+    /未变化的组件重新构建或改版本/,
+    /阶段五 CI 设计（尚未实施）/,
+    /阶段 5：CI 与发布（待实施）/,
+  ]) {
+    assert.doesNotMatch(design, stale)
+  }
+  assert.ok(
+    design.includes('### 阶段 5：CI 与发布（代码与本地验证已实施）'),
+  )
+})
+
+test('阶段五设计记录实施事实并冻结已确认 EARS 需求', async () => {
+  const design = await readFile(
+    fromRoot('docs', '全局文档', '阶段五CI与发布设计.md'),
+    'utf8',
+  )
+  const location = markdownSection(design, '## 1. 文档定位')
+  const requirements = markdownSection(design, '## 5. EARS 需求')
+
+  assert.ok(location.includes('阶段五代码与本地验证已实施'))
+  assert.ok(location.includes('GitHub 平台验证以 Task 14 记录为准'))
+  assert.ok(
+    location.includes(
+      '[阶段五 CI 与发布实施计划](./阶段五CI与发布实施计划.md)',
+    ),
+  )
+  assert.doesNotMatch(location, /不声称相关能力已经落地|仓库仍没有/)
+  // 需求章节是已经确认的设计输入；Task 13 只能更新实施状态，不得顺手改写 REQ。
+  assert.equal(
+    createHash('sha256').update(requirements).digest('hex'),
+    '356740f4767a383461762f3d936335a2eab3c7cb32150c0bd63040c856554386',
+    '已经确认的 REQ-001 至 REQ-054 不得在文档收口时改写',
+  )
+})
+
+test('发布与版本管理文档覆盖完整发布、恢复与外部配置边界', async () => {
+  const guide = await readFile(
+    fromRoot('docs', '全局文档', '发布与版本管理.md'),
+    'utf8',
+  )
+  const requiredFactsBySection = [
+    [
+      '## 1. 状态与边界',
+      ['阶段五代码与本地验证已实施', '尚未进行 GitHub 平台验收', '`Task 14`'],
+    ],
+    [
+      '## 2. 产品版本与准备',
+      [
+        '`package.json.version`',
+        '`server/package.json.version`',
+        '`web/apps/qsmds-arco/package.json.version`',
+        '`web/package.json.version = 6.3.0`',
+        'Fantastic Admin',
+        '单独确认',
+        '`contract:sync`',
+        '版本准备 Commit',
+      ],
+    ],
+    [
+      '## 3. Annotated Tag',
+      ['annotated Tag', '`origin/main`', '禁止移动', '禁止复用'],
+    ],
+    [
+      '## 4. GitHub Actions 工作流',
+      [
+        '`ci.yml`',
+        '`examples.yml`',
+        '`release.yml`',
+        '`ci-gate`',
+        'Required Check',
+        '非阻断',
+        '双端 package Job 并行',
+      ],
+    ],
+    [
+      '## 5. Release 附件与校验',
+      [
+        '`qsmds-web-vX.Y.Z.tar.gz`',
+        '`qsmds-server-vX.Y.Z-linux-x64.tar.gz`',
+        '`release-manifest.json`',
+        '`SHA256SUMS`',
+        '四个固定附件',
+      ],
+    ],
+    [
+      '## 6. Server 兼容范围',
+      ['Ubuntu 24.04', 'glibc', 'x64', 'Node 24', 'Alpine/musl'],
+    ],
+    [
+      '## 7. Draft 恢复与不可变发布',
+      [
+        '只重跑失败的 `publish` Job',
+        'artifact ID',
+        'artifact digest',
+        '人工核对',
+        '未发布 Draft',
+        '新的 Patch 版本',
+      ],
+    ],
+    [
+      '## 8. Migration 与部署边界',
+      ['只向前', '不连接生产数据库', '不执行生产 migration', '不自动部署'],
+    ],
+    [
+      '## 9. 管理员一次性配置',
+      ['`ci-gate`', 'Required Check', '`v*.*.*`', 'Tag ruleset', 'Release immutability'],
+    ],
+  ]
+
+  for (const [heading, facts] of requiredFactsBySection) {
+    const section = markdownSection(guide, heading)
+    assert.deepEqual(
+      facts.filter(fact => !section.includes(fact)),
+      [],
+      `发布文档章节缺少事实：${heading}`,
+    )
+  }
+
+  const tagSection = markdownSection(guide, '## 3. Annotated Tag')
+  const orderedTagCommands = [
+    ': "${RELEASE_VERSION:?RELEASE_VERSION must be an approved stable version}"',
+    'git fetch origin main --tags',
+    'source_commit="$(git rev-parse refs/remotes/origin/main)"',
+    'git tag -a "v${RELEASE_VERSION}" "$source_commit" -m "千树 DMS v${RELEASE_VERSION}"',
+    'test "$(git cat-file -t "refs/tags/v${RELEASE_VERSION}")" = tag',
+    'test "$(git rev-parse "v${RELEASE_VERSION}^{commit}")" = "$source_commit"',
+    'node --run release:check -- --tag "v${RELEASE_VERSION}" --source-commit "$source_commit"',
+    'git push origin "v${RELEASE_VERSION}"',
+  ]
+  let previousCommandOffset = -1
+  for (const command of orderedTagCommands) {
+    assertBashCodeLine(tagSection, command)
+    const commandOffset = tagSection.indexOf(command)
+    assert.ok(
+      commandOffset > previousCommandOffset,
+      `Annotated Tag 安全命令顺序错误：${command}`,
+    )
+    previousCommandOffset = commandOffset
+  }
+
+  const assetSection = markdownSection(guide, '## 5. Release 附件与校验')
+  for (const command of [
+    ': "${RELEASE_TAG:?RELEASE_TAG must be an existing published version}"',
+    'gh release download "$RELEASE_TAG" --dir "$release_dir"',
+    '(cd "$release_dir" && sha256sum -c SHA256SUMS)',
+    '(cd "$release_dir" && shasum -a 256 -c SHA256SUMS)',
+  ]) {
+    assertBashCodeLine(assetSection, command)
+  }
+
+  assert.doesNotMatch(
+    guide,
+    /v0\.0\.0|git tag -f|git push (?:--force|-f)|gh release delete|DATABASE_URL=postgres|ghp_|github_pat_/,
+  )
 })
 
 test('后端架构文档记录当前运行时、接口契约、安全与测试边界', async () => {

@@ -2,9 +2,9 @@
 
 ## 1. 文档定位
 
-本文记录千树 DMS 阶段五“CI 与发布”的已确认需求、技术设计、边界和验收规则，是后续实施计划与代码实现的设计真相源。
+本文记录千树 DMS 阶段五“CI 与发布”的已确认需求、技术设计、边界和验收规则，是实施与后续演进的设计真相源。具体任务、验证命令和证据边界见[阶段五 CI 与发布实施计划](./阶段五CI与发布实施计划.md)。
 
-本文只描述已经确认的目标，不声称相关能力已经落地。在阶段五代码完成前，仓库仍没有 `.github/workflows/`、Release Manifest schema 或自动化 GitHub Release 流程。
+阶段五代码与本地验证已实施：仓库已包含三份 Workflow、Release Manifest schema、双端归档、Server runtime smoke 与 GitHub Draft Release 协调逻辑。GitHub 平台验证以 Task 14 记录为准；在取得真实 Actions run 和管理员外部设置证据前，不得声称 GitHub CI、平台保护或正式 Release 已通过验收。
 
 本设计建立在以下已实施事实之上：
 
@@ -14,6 +14,8 @@
 - `server/openapi/openapi.json` 与 `web/openapi/openapi.json` 已由根 `contract:sync` 同步，并由 `contract:check` 只读验证。
 - Server 是单一 NestJS 应用，使用 Prisma、PostgreSQL 16 和追加式 migration。
 - `web/apps/qsmds-arco/` 是唯一正式 Web 应用；三个 `web/examples/*` 只作为基座备份和参考。
+- 根目录继续无第三方依赖；Server 与 Web 的 frozen install、cache、构建和归档始终使用各自 lockfile。
+- 正式 Release 总是从同一个 Tag Commit 重新构建 Web 与 Server，且不自动部署或连接生产数据库。
 
 ## 2. 已确认决策
 
@@ -21,7 +23,7 @@
 
 1. 只实现 CI、版本校验、Release Manifest 和 GitHub Release 构建产物，不实现 Docker、GHCR 或自动部署。
 2. 正式发布由开发者人工创建并推送 `vX.Y.Z` annotated Tag 触发；Workflow 不创建 Tag、不修改版本源码。
-3. 每个产品 Tag 都从同一个 Commit 重新构建 Web 与 Server，不复用上一 Release 的旧组件产物。本决策明确覆盖[项目工程组织方案](./项目工程组织方案.md)第 13.2 节原有的“未变化组件沿用旧 digest”模型；阶段五实施收口时同步更新旧章节。
+3. 每个产品 Tag 都从同一个 Commit 重新构建 Web 与 Server，不复用上一 Release 的旧组件产物。本决策已经覆盖并替换[项目工程组织方案](./项目工程组织方案.md)第 13.2 节原有的“未变化组件沿用旧 digest”模型。
 4. CI 采用三工作流并行模型：
    - `ci.yml`：Root、Server、Server E2E、Contract、Web 与统一 `ci-gate`。
    - `examples.yml`：每月定时和手动验证参考应用。
@@ -32,17 +34,25 @@
 8. GitHub Release 先创建 Draft，附件上传和远端摘要校验全部通过后再发布。
 9. 已发布 Release、Tag 和用户附件永不由 Workflow 自动覆盖、移动或删除。
 
-## 3. 当前事实与缺口
+## 3. 当前实现与平台缺口
 
-### 3.1 当前可复用入口
+### 3.1 当前已实施入口
 
 根目录已有以下入口：
 
 ```text
 node --run test:root
+node --run ci:server-e2e
+node --run ci:contract
 node --run contract:check
 node --run check
 node --run build
+node --run release:check
+node --run release:package:web
+node --run release:package:server
+node --run release:smoke:server
+node --run release:manifest
+node --run release:publish
 ```
 
 Server 已有：
@@ -67,18 +77,13 @@ pnpm -C web check:examples
 pnpm -C web build:examples
 ```
 
-### 3.2 当前缺口
+### 3.2 尚待 Task 14 验收的外部状态
 
-- 仓库没有 `.github/` 或其他 CI 配置。
-- 根 `package.json` 没有产品 `version` 或 Release 校验命令。
-- Server 版本为 `0.0.0`；正式 Web app 没有 `version`；Web workspace 的 `6.3.0` 不是产品版本。
-- Web Vite 配置声明系统信息包含 `pkg.version`，但实际未写入该字段。
-- `contract:check` 已支持 `--baseline`，但没有根据 GitHub 事件安全提取基线的入口。
-- PostgreSQL E2E 的安全流程只存在于文档，没有无依赖的 CI 编排脚本。
-- Server `dist/` 已包含编译代码和生成后的 Prisma Client，但不包含生产运行依赖，不能直接作为独立运行包。
-- Web workspace 仍暴露 `pnpm -C web release -> bumpp` 基座发布入口，可能误改 `web/package.json` 的 `6.3.0` 并创建错误 Tag。
-- 仓库没有 Release Manifest schema、生成器、归档器或 GitHub Draft Release 协调逻辑。
-- 本地没有正式产品 Tag，因此首个 Release 没有历史 Release 基线。
+- `ci.yml`、`examples.yml` 与 `release.yml` 已通过本地结构、单元和语义验证，但尚未用真实 GitHub Actions run 证明平台行为。
+- `main` 的 `ci-gate` Required Check、`v*.*.*` Tag ruleset、Release immutability 与 Actions 默认 token 权限需要仓库管理员在 GitHub 手工配置并留存证据。
+- Ubuntu 24.04/glibc x64 的正式 Server production archive、runtime smoke 与 Manifest runtime metadata 必须由 GitHub-hosted Runner 验收；macOS 不伪造 Runner metadata。
+- 当前没有已授权的正式产品 Tag 或 GitHub Release；首个 Release 的 Tag、四附件、checksum、Manifest 与 Draft/Publish 行为仍需单独授权验证。
+- 自动部署、生产 migration、环境晋级与流量切换是明确非目标，不属于待补缺口。
 
 ## 4. 范围与非目标
 
@@ -426,11 +431,11 @@ pnpm -C server test:e2e
 | `server/package.json.version` | 独立 Server 版本和 OpenAPI `info.version` |
 | `web/apps/qsmds-arco/package.json.version` | 独立 Web 正式 app 版本 |
 
-阶段五初始只补齐缺失的两个 `0.0.0`，与现有 Server/OpenAPI `0.0.0` 对齐。`web/package.json.version = 6.3.0` 明确保留为基座版本，不参与校验。
+阶段五已经补齐根与正式 Web app 的 `0.0.0`，与 Server/OpenAPI `0.0.0` 对齐。`web/package.json.version = 6.3.0` 明确保留为基座版本，不参与校验。
 
-Web Vite system info 应显式包含正式 app 的 `pkg.version`，修复类型声明与实际注入不一致。
+Web Vite system info 已显式包含正式 app 的 `pkg.version`，类型声明与实际注入保持一致。
 
-现有 `web/package.json` 的 `release: bumpp`、对应 `bumpp` devDependency 和 workspace catalog entry 应删除，并按 Web 独立依赖域更新 `web/pnpm-lock.yaml`。统一产品版本准备只能按本节流程执行，不保留会修改基座 `6.3.0` 的第二发布入口。
+原 `web/package.json` 的 `release: bumpp`、对应 `bumpp` devDependency 和 workspace catalog entry 已删除，并已按 Web 独立依赖域更新 `web/pnpm-lock.yaml`。统一产品版本准备只能按本节流程执行，不保留会修改基座 `6.3.0` 的第二发布入口。
 
 ### 11.2 Release 前置流程
 
@@ -748,9 +753,9 @@ Workflow 采用 Draft -> 完整附件 -> 远端 Tag 复验 -> 发布的顺序与
 
 GitHub Draft/Publish 的真实外部写入只由 Tag Workflow 验证；本地与 PR 测试使用可注入假 CLI，不创建远程 Release。
 
-## 19. 文件边界
+## 19. 实施文件边界
 
-预计新增：
+阶段五已新增：
 
 ```text
 .github/workflows/
@@ -779,7 +784,7 @@ scripts/
 └── release-github.test.mjs
 ```
 
-预计修改：
+阶段五已按确认范围修改：
 
 - 根 `package.json`：补 `version: 0.0.0` 和无依赖 CI/Release scripts。
 - `scripts/root-governance.test.mjs`：纳管新的根命令与发布边界。
@@ -791,7 +796,7 @@ scripts/
 - `web/apps/qsmds-arco/package.json`：补 `version: 0.0.0`。
 - `web/apps/qsmds-arco/vite.config.ts`：注入 app version。
 - Web 对应工程测试：验证 version 注入。
-- `docs/全局文档/项目工程组织方案.md`：完成后将阶段五从目标更新为已实施事实。
+- `docs/全局文档/项目工程组织方案.md`：已将阶段五从目标更新为代码与本地验证实施事实，并单列 Task 14 平台边界。
 - `docs/全局文档/发布与版本管理.md`：提供版本准备、Tag、Release、校验和旧版本取用步骤。
 - `docs/文档索引.md`、根 README 与必要 AGENTS：同步真实入口和边界。
 
@@ -806,7 +811,7 @@ scripts/
 
 ## 20. 验收标准
 
-阶段五完成必须同时满足：
+阶段五仓库代码与本地验证完成必须同时满足：
 
 1. 三份 Workflow 通过结构测试，外部 Action 与 image 全部固定 SHA/digest。
 2. PR 和 `main` push 的五个 Required Job 可并行运行，`ci-gate` 精确汇总。
@@ -822,6 +827,8 @@ scripts/
 12. 没有真实 `.env`、密钥、连接字符串、日志、生成目录或构建产物进入 Git。
 13. 中文发布文档能让开发者从版本准备、Tag 到附件校验完整复现流程。
 14. 未推送时交付说明明确区分本地验证与 GitHub Actions 真实运行；推送后首次真实 CI/Release dry path 结果才能作为平台验收证据。
+
+前述仓库实现条件已由 Task 0–13 收口；GitHub-hosted Ubuntu 24.04 的 Release production path、真实 Workflow run 与管理员外部设置仍由 Task 14 验收。两类状态不得合并表述。
 
 ## 21. 后续演进条件
 

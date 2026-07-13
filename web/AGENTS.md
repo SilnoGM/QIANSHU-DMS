@@ -19,6 +19,16 @@
 
 版本真相源是 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml`，不得以参考应用文档或根目录依赖推断当前版本。
 
+## 版本与正式发布边界
+
+- `web/package.json.version = 6.3.0` 是 Fantastic Admin 上游基座版本，不是千树 DMS 的产品 version，不得据此创建产品 Tag。
+- `apps/qsmds-arco/package.json.version` 是正式 Web app 的产品 version，正式发布前必须与仓库根产品 version 和 Server 产品 version 保持一致。
+- Web 不提供 `release: bumpp` 或其他 `bumpp` 入口；不得在 Web 依赖域内另建一套产品版本推进流程。
+
+Web 仍可独立安装、检查、构建和移植。正式产品 Release 从同一个 Tag Commit 同时重新构建 Web 与 Server；这只是仓库根的发布编排，不改变两端独立依赖域，也不授权 Web 通过 `file:`、`link:`、跨目录 `workspace:*` 或源码引用依赖 Server。
+
+阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。Task 14 完成前，不得声称 GitHub CI、Tag 触发或正式 Release 已在平台通过。
+
 ## 目录职责
 
 ```text

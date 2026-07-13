@@ -9,7 +9,7 @@
 - `web/` 是独立 pnpm workspace；`apps/qsmds-arco/` 是唯一正式业务应用，三个初始基座位于 `examples/`。
 - Web 与 Server 不通过 `file:`、`link:`、`workspace:*` 或跨目录源码引用建立依赖，只通过 HTTP 协作。
 - 当前 Server 提供数据库健康检查 `GET /api/health`、Server-generated `X-Request-Id`、统一 `ApiError` 和离线 OpenAPI 契约；正式快照通过根命令与 Web 同步。
-- 两端可以分别构建；部署流程与发布关联将在阶段五实施，根命令只负责协调，不改变各自的依赖边界。
+- 两端可以分别构建；阶段五已经实现统一 CI 与 Release 的代码及本地验证，根命令只负责协调，不改变各自的依赖边界，也不执行自动部署。
 
 ## 环境要求
 
@@ -45,6 +45,14 @@ node --run bootstrap
 | `node --run dev:web` | 仅启动 Web。 |
 | `node --run contract:sync` | 生成、验证并事务式同步 Server/Web OpenAPI 快照与 Web types。 |
 | `node --run contract:check` | 在临时目录只读检查快照、契约结构与生成类型。 |
+| `node --run ci:server-e2e` | 使用隔离 PostgreSQL 16 临时数据库执行 migration、Server E2E 和清理检查。 |
+| `node --run ci:contract` | 使用 Git 基线执行 OpenAPI breaking-change 检查。 |
+| `node --run release:check` | 校验统一产品版本、严格 SemVer Tag 与 Tag Commit。 |
+| `node --run release:package:web` | 归档已构建的正式 Web 产物。 |
+| `node --run release:package:server` | 归档已构建的 Server production 产物。 |
+| `node --run release:smoke:server` | 在隔离 PostgreSQL 16 临时数据库上验证 Server Release 产物。 |
+| `node --run release:manifest` | 生成并校验 Release Manifest 与 `SHA256SUMS`。 |
+| `node --run release:publish` | 按受控 Draft 恢复规则发布 GitHub Release。 |
 | `node --run test:root` | 运行根级治理与编排测试。 |
 | `node --run check` | 运行阶段内已经建立的根级、Server 和 Web 检查。 |
 | `node --run check:server` | 仅运行 Server 检查。 |
@@ -90,6 +98,20 @@ node --run test:root
 env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run check
 env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run build
 ```
+
+## CI 与发布
+
+当前仓库只有三份 GitHub Actions workflow：`.github/workflows/ci.yml` 负责正式 Web、Server、契约和 PostgreSQL E2E 的主质量门禁，`.github/workflows/examples.yml` 负责三个参考应用，`.github/workflows/release.yml` 负责严格 SemVer Annotated Tag 触发的统一产品发布。正式 Release 始终从同一个 Tag Commit 重新构建 Web 与 Server，不复用普通 CI 产物，也不允许两端选择性沿用旧版本。
+
+根目录仍不执行 `pnpm install`；以下入口只使用 Node.js 标准库编排两个独立依赖域：
+
+- CI 验证入口：`node --run ci:server-e2e`、`node --run ci:contract`。
+- Release 准备与打包入口：`node --run release:check`、`node --run release:package:web`、`node --run release:package:server`、`node --run release:smoke:server`。
+- Release 清单与发布入口：`node --run release:manifest`、`node --run release:publish`。
+
+`release:package:*` 只归档已构建产物，单独执行前必须先完成对应 build：Web 使用 `node --run build:web`，Server 使用 `node --run build:server`。正式 `release.yml` 已在两个 package Job 内显式先执行 build，再调用归档入口。
+
+阶段五代码与本地验证完成，但 GitHub 平台验收以 Task 14 为准；当前不得把本地验证解释为 GitHub 平台已验收。Release workflow 只生成并发布可校验附件，不连接生产数据库、不执行 production migration，也不自动部署 Web 或 Server。版本准备、Annotated Tag、附件校验、Draft 恢复和管理员配置详见[发布与版本管理](./docs/全局文档/发布与版本管理.md)。
 
 ## 数据库 migration 与 E2E
 
@@ -149,6 +171,7 @@ node --run dev
 正式文档统一使用中文目录名和中文文件名，并收录在 [项目文档索引](./docs/文档索引.md) 中。主要入口：
 
 - [项目工程组织方案](./docs/全局文档/项目工程组织方案.md)
+- [发布与版本管理](./docs/全局文档/发布与版本管理.md)
 - [前端架构](./docs/前端文档/前端架构.md)
 - [后端架构](./docs/后端文档/后端架构.md)
 - [数据库迁移规范](./docs/后端文档/数据库迁移规范.md)

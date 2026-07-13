@@ -1,6 +1,6 @@
 # 千树 DMS Web
 
-`web/` 是千树 DMS 的独立前端工作区。它可以从主仓库单独移植，并使用自身的 pnpm workspace 与 `pnpm-lock.yaml` 完成安装、检查、构建和发布；运行这些流程不要求仓库根目录或 `server/` 已安装依赖。
+`web/` 是千树 DMS 的独立前端工作区。它可以从主仓库单独移植，并使用自身的 pnpm workspace 与 `pnpm-lock.yaml` 完成安装、检查和构建；运行这些流程不要求仓库根目录或 `server/` 已安装依赖。Web 也可以按需独立生成和交付自身产物，但仓库正式产品 Release 遵循下文的统一版本边界。
 
 ## 运行要求
 
@@ -71,6 +71,16 @@ web/
 - pnpm 11.9
 
 用户可见文案默认使用中文；代码、变量、路径、命令、API、字段、错误码和日志等技术资产使用英文。
+
+## 版本与正式发布边界
+
+- `web/package.json.version = 6.3.0` 是 Fantastic Admin 上游基座版本，不是千树 DMS 的产品 version。
+- `apps/qsmds-arco/package.json.version` 是正式 Web app 的产品 version，正式发布前必须与仓库根产品 version 和 Server 产品 version 保持一致。
+- Web 不提供 `release: bumpp` 或其他 `bumpp` 入口；产品版本准备与 Tag 创建统一按仓库根发布流程执行。
+
+Web 仍可独立安装、检查、构建和移植。正式产品 Release 从同一个 Tag Commit 同时重新构建 Web 与 Server，确保两端产物对应同一份已审查源码；该发布编排不改变依赖域，Web 与 Server 仍分别使用自己的 `package.json`、lockfile 和 `node_modules/`，也不会建立跨目录依赖。
+
+阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。在 Task 14 完成前，不将本地验证结果表述为 GitHub CI 或正式 Release 已通过。
 
 ## 环境变量
 

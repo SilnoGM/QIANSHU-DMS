@@ -65,7 +65,42 @@ test('Web 协作入口明确正式应用、参考应用和默认命令', () => {
   }
 })
 
-test('Web 架构文档固定独立工作区和依赖方向', rootDocumentTestOptions, () => {
+test('Web 协作文档区分上游基座与产品版本且不保留 bumpp 入口', () => {
+  const manifest = JSON.parse(readRequiredFile(`${webRoot}/package.json`))
+  const documents = [
+    ['README.md', readRequiredFile(`${webRoot}/README.md`)],
+    ['AGENTS.md', readRequiredFile(`${webRoot}/AGENTS.md`)],
+  ]
+
+  assert.equal(manifest.version, '6.3.0')
+  assert.equal('release' in manifest.scripts, false)
+  assert.equal(
+    Object.values(manifest.scripts).some(command => /\bbumpp\b/u.test(command)),
+    false,
+  )
+  assert.equal('bumpp' in (manifest.devDependencies ?? {}), false)
+
+  for (const [label, document] of documents) {
+    assert.ok(
+      document.includes(
+        '`web/package.json.version = 6.3.0` 是 Fantastic Admin 上游基座版本',
+      ),
+      `${label} 必须说明上游基座版本`,
+    )
+    assert.ok(
+      document.includes(
+        '`apps/qsmds-arco/package.json.version` 是正式 Web app 的产品 version',
+      ),
+      `${label} 必须说明产品版本真相源`,
+    )
+    assert.ok(
+      document.includes('不提供 `release: bumpp` 或其他 `bumpp` 入口'),
+      `${label} 必须禁止恢复基座发布入口`,
+    )
+  }
+})
+
+test('Web 架构文档固定独立工作区、依赖方向和产品版本边界', rootDocumentTestOptions, () => {
   const architecture = readRequiredFile(`${projectRoot}/docs/前端文档/前端架构.md`)
 
   assert.match(architecture, /独立(?:安装|构建|发布)/u)
@@ -74,7 +109,21 @@ test('Web 架构文档固定独立工作区和依赖方向', rootDocumentTestOpt
   assert.match(architecture, /packages\/\*/u)
   assert.match(architecture, /pnpm-lock\.yaml/u)
   assert.match(architecture, /OpenAPI/u)
-  assert.ok(architecture.includes('apps → packages'), '前端架构必须明确 apps → packages 依赖方向')
+  assert.ok(
+    architecture.includes('apps → packages'),
+    '前端架构必须明确 apps → packages 依赖方向',
+  )
+  assert.ok(
+    architecture.includes(
+      '`web/package.json.version = 6.3.0` 是 Fantastic Admin 上游基座版本',
+    ),
+  )
+  assert.ok(
+    architecture.includes(
+      '`apps/qsmds-arco/package.json.version` 是正式 Web app 的产品 version',
+    ),
+  )
+  assert.ok(architecture.includes('不提供 `release: bumpp` 或其他 `bumpp` 入口'))
 })
 
 test('应用边界规范禁止参考应用和共享包承载默认业务改动', rootDocumentTestOptions, () => {

@@ -24,18 +24,23 @@ pnpm install --frozen-lockfile
 
 不要在仓库根目录执行 `pnpm install`。根目录只负责无依赖编排，不维护 lockfile 或 `node_modules/`。
 
-## pnpm 11 单 package 安全配置
+## pnpm 11 单 package 安全与部署配置
 
-pnpm 11 使用 `pnpm-workspace.yaml` 保存项目级安装安全设置，即使当前项目只有一个 package。这里的文件只精确允许 Prisma 已审查的 `prisma` 与 `@prisma/engines` 运行安装脚本：
+pnpm 11 使用 `pnpm-workspace.yaml` 保存项目级安装和部署设置，即使当前项目只有一个 package。当前文件内容为：
 
 ```yaml
+injectWorkspacePackages: true
 allowBuilds:
   '@prisma/engines': true
+  # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
+  '@scarf/scarf': false
   prisma: true
 ```
 
 - 文件不声明 `packages`，因此不会形成多 package dependency graph。
 - 仓库根目录没有 `pnpm-workspace.yaml`，所以 Server 安全配置不会把根目录、`web/` 或其他目录纳入嵌套 workspace。
+- `injectWorkspacePackages` 只服务现代 production deploy：正式 Server 归档通过 `pnpm deploy --prod` 生成自包含的 production 目录，不得使用 `--legacy`。
+- 该注入开关不声明 `packages`、不扩张 Server workspace，也不改变 Root、Server 与 Web 相互独立的依赖域。
 - 新增带 build script 的依赖前，必须审查包名、固定版本、脚本内容和必要性，再决定是否精确加入 `allowBuilds`。
 - 禁止使用 `dangerouslyAllowAllBuilds`、通配 matcher 或其他全局放开策略。
 
@@ -79,3 +84,10 @@ pnpm -C server db:migrate:deploy
 ## 边界约束
 
 Server 不通过 `file:`、`link:`、`portal:`、`workspace:*` 或源码路径引用根目录与 `web/`。`pnpm-workspace.yaml` 不得声明 `packages`；跨端协作只通过 HTTP 与 OpenAPI 契约完成。
+
+## CI、发布与部署边界
+
+- 正式 Server 归档只承诺 `Ubuntu 24.04` / `glibc` / `x64` / `Node 24` 运行时兼容范围；不将 Alpine / `musl`、其他 CPU 架构或其他 Node.js 大版本视为已验证能力。
+- Release 流程仅验证、构建、归档、smoke test 和发布 GitHub Release，不会自动部署，不连接生产数据库，也不执行生产 migration。归档 smoke test 中的 `pnpm -C server db:migrate:deploy` 只作用于隔离的临时 CI PostgreSQL。
+- 实际生产部署和 production migration 由部署系统或运维流程在审查后单独执行，不属于当前 GitHub Release 的自动化边界。
+- 阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。

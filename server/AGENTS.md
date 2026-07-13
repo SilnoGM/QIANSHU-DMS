@@ -5,7 +5,7 @@
 ## 独立依赖域
 
 - `server/` 是单一 pnpm package，独立维护 `package.json`、`pnpm-lock.yaml` 与 `node_modules/`。
-- `pnpm-workspace.yaml` 仅承载 pnpm 11 的单 package 安全配置，不得声明 `packages`，也不得形成多 package dependency graph。
+- `pnpm-workspace.yaml` 承载 pnpm 11 的单 package 安全与 production deploy 配置，不得声明 `packages`，也不得形成多 package dependency graph。
 - 不在 `package.json` 声明 `workspaces`，不使用 `file:`、`link:`、`portal:` 或 `workspace:*` 依赖。
 - 禁止引用仓库根目录或 `web/` 的源码、生成物和依赖目录；前后端只通过 HTTP 与 OpenAPI 契约协作。
 - 只能在 `server/` 内安装依赖；禁止从仓库根目录执行 `pnpm install`。
@@ -13,7 +13,20 @@
 
 ## 依赖安装安全
 
+- `server/pnpm-workspace.yaml` 的当前配置必须与已验证的安装和部署语义保持一致：
+
+  ```yaml
+  injectWorkspacePackages: true
+  allowBuilds:
+    '@prisma/engines': true
+    # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
+    '@scarf/scarf': false
+    prisma: true
+  ```
+
 - `allowBuilds` 只允许已审查的 `prisma` 与 `@prisma/engines` 运行 build script。
+- `injectWorkspacePackages` 只服务现代 production deploy：正式 Server 归档使用 `pnpm deploy --prod`，不得使用 `--legacy`。
+- 该配置不得借机新增 `packages`、扩张 Server workspace 或把 Root / Web 纳入依赖图；Root、Server 与 Web 继续保持独立依赖域。
 - 新增带 build script 的依赖时，必须先审查固定版本、脚本内容和工程必要性，再精确添加包名。
 - 禁止使用 `dangerouslyAllowAllBuilds`、通配 matcher、`strictDepBuilds: false` 或其他全局放开策略。
 - pnpm 自动生成的占位值和临时 `minimumReleaseAgeExclude` 不得提交；依赖版本必须选择可通过既定供应链策略的版本。
@@ -49,6 +62,13 @@
 - `pnpm check` 包含 schema 校验、typecheck、只读 lint 与单元测试，不包含需要真实数据库的 E2E。
 - E2E 必须使用隔离的真实 PostgreSQL 测试数据库，并通过进程环境注入 `DATABASE_URL`。
 - `lint` 不得修改文件；只有明确执行 `pnpm lint:fix` 时才允许自动修复。
+
+## CI、发布与部署
+
+- 正式 Server 归档只支持 `Ubuntu 24.04` / `glibc` / `x64` / `Node 24`；Alpine / `musl`、其他 CPU 架构和其他 Node.js 大版本不得标记为已验证。
+- Release 工作流可以在隔离的临时 CI PostgreSQL 中执行归档 smoke test，但不得连接生产数据库或执行生产 migration。
+- 当前 GitHub Release 不包含自动部署；实际部署与 production migration 必须在下游运维流程中单独审查和执行。
+- 阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。
 
 ## 安全红线
 
