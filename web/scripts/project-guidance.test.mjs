@@ -190,3 +190,19 @@ test('主 Skill 直接引用的工作说明不再包含旧应用占位符', () =
     assert.doesNotMatch(content, /apps\/(?:core|example)(?:\b|\/)/u, `${relativePath} 仍含旧应用路径`)
   }
 })
+
+test('正式应用 Arco locale 导入路径与依赖包的小写文件名完全一致', () => {
+  const provider = readRequiredFile(
+    `${webRoot}/apps/qsmds-arco/src/ui/provider/index.ts`,
+  )
+
+  // macOS 默认文件系统不区分大小写，错误路径会在本地假通过；这里锁定依赖包
+  // 发布到 Linux Runner 后使用的真实小写文件名，防止再次出现 TS2307。
+  for (const localeFile of ['en-us', 'zh-cn', 'zh-tw']) {
+    assert.ok(
+      provider.includes(`@arco-design/web-vue/es/locale/lang/${localeFile}`),
+      `Arco locale 必须使用精确小写路径：${localeFile}`,
+    )
+  }
+  assert.doesNotMatch(provider, /locale\/lang\/(?:en-US|zh-CN|zh-TW)/u)
+})
