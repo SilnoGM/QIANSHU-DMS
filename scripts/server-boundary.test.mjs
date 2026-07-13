@@ -16,7 +16,8 @@ import {
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
 const serverRoot = path.join(repositoryRoot, 'server')
-const expectedPnpmSecuritySettings = `allowBuilds:
+const expectedPnpmSecuritySettings = `injectWorkspacePackages: true
+allowBuilds:
   '@prisma/engines': true
   # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
   '@scarf/scarf': false
@@ -67,6 +68,11 @@ test('Server 是具备独立 lockfile 的单一私有 pnpm package', async () =>
   assert.equal(manifest.packageManager, 'pnpm@11.9.0')
   assert.equal(manifest.engines?.node, '^24.15.0')
   assert.equal('workspaces' in manifest, false)
+  assert.deepEqual(manifest.files, [
+    'dist/',
+    'prisma/schema.prisma',
+    'prisma/migrations/',
+  ])
   assert.equal(manifest.devDependencies?.['@nestjs/cli'], '11.0.23')
 
   for (const scriptName of ['dev', 'check', 'build']) {
@@ -209,6 +215,23 @@ test('Server lockfile 只有单一 importer 且 specifier 与 manifest 一致', 
   const importers = parseLockfileImporters(lockfileContents)
 
   assertLockfileMatchesManifest(manifest, importers)
+})
+
+test('Server lockfile 只在 settings 启用现代 deploy workspace 注入', async () => {
+  const lockfileContents = await readFile(
+    fromRoot('server', 'pnpm-lock.yaml'),
+    'utf8',
+  )
+  const injectionSettings = lockfileContents.match(
+    /^\s*injectWorkspacePackages:\s*true\s*$/gmu,
+  )
+
+  // 唯一匹配既证明值为 true，也防止 importer 或 package 条目重复注入该配置。
+  assert.equal(injectionSettings?.length, 1)
+  assert.match(
+    lockfileContents,
+    /^settings:\n  autoInstallPeers: true\n  excludeLinksFromLockfile: false\n  injectWorkspacePackages: true\n\nimporters:/mu,
+  )
 })
 
 test('Server 的全部依赖只能使用固定 registry SemVer', async () => {
