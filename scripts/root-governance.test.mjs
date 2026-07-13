@@ -124,6 +124,15 @@ test('发布清单与 GitHub Release 协调器均为真实文件', async () => {
   }
 })
 
+test('主 CI Workflow 与源码结构测试均为真实文件', async () => {
+  for (const file of [
+    '.github/workflows/ci.yml',
+    'scripts/ci-workflows.test.mjs',
+  ]) {
+    await assertRegularFile(file)
+  }
+})
+
 test('根级治理文件和阶段一至阶段四文档真实存在', async () => {
   const requiredFiles = [
     'README.md',

@@ -1,0 +1,217 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_call:
+    inputs:
+      release_tag:
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qianshu-ci-${{ inputs.release_tag != '' && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ inputs.release_tag == '' }}
+
+jobs:
+  root-governance:
+    name: Root governance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Run root governance tests
+        run: node --run test:root
+
+      - name: Verify root dependency boundary
+        run: |
+          test ! -e pnpm-workspace.yaml
+          test ! -e pnpm-lock.yaml
+          test ! -e node_modules
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+  server-check-build:
+    name: Server check and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - name: Install Server dependencies
+        run: pnpm -C server install --frozen-lockfile
+
+      - name: Check Server
+        run: pnpm -C server check
+
+      - name: Build Server
+        run: pnpm -C server build
+
+      - name: Verify Server entrypoint
+        run: test -f server/dist/main.js && test ! -L server/dist/main.js && test -s server/dist/main.js
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+  server-e2e:
+    name: Server E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - name: Install Server dependencies
+        run: pnpm -C server install --frozen-lockfile
+
+      - name: Run isolated Server E2E
+        run: node --run ci:server-e2e
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+  contract:
+    name: Contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      DOTENV_CONFIG_PATH: /dev/null
+      QIANSHU_RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - name: Checkout repository with full history
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: |
+            server/pnpm-lock.yaml
+            web/pnpm-lock.yaml
+
+      - name: Install Server dependencies
+        run: pnpm -C server install --frozen-lockfile
+
+      - name: Install Web dependencies
+        run: pnpm -C web install --frozen-lockfile
+
+      - name: Check API contract
+        run: node --run ci:contract
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+  web-check-build:
+    name: Web check and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 11.9.0
+          run_install: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install Web dependencies
+        run: pnpm -C web install --frozen-lockfile
+
+      - name: Generate Web API types
+        run: pnpm -C web api:generate
+
+      - name: Check Web
+        run: pnpm -C web check
+
+      - name: Build Web
+        run: pnpm -C web build
+
+      - name: Verify Web entrypoint
+        run: test -f web/apps/qsmds-arco/dist/index.html && test ! -L web/apps/qsmds-arco/dist/index.html && test -s web/apps/qsmds-arco/dist/index.html
+
+      - name: Verify tracked files are unchanged
+        run: git diff --exit-code -- .
+
+  ci-gate:
+    name: CI gate
+    needs: [root-governance, server-check-build, server-e2e, contract, web-check-build]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every validation Job to succeed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node -e "const needs=JSON.parse(process.env.NEEDS_JSON);const results=Object.values(needs).map(entry=>entry.result);if(results.length!==5||results.some(result=>result!=='success'))process.exit(1)"
