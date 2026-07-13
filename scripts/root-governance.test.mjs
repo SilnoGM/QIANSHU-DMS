@@ -95,6 +95,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'release:package:server': 'node ./scripts/release-package.mjs server',
     'release:smoke:server': 'node ./scripts/ci-postgres.mjs -- node ./scripts/release-package.mjs smoke-server',
     'release:manifest': 'node ./scripts/release-manifest.mjs',
+    'release:publish': 'node ./scripts/release-github.mjs',
     'test:root': 'node --test ./scripts/*.test.mjs',
     check: 'node ./scripts/check.mjs',
     'check:server': 'pnpm -C server check',
@@ -111,11 +112,13 @@ test('根目录不创建 workspace、lockfile 或依赖目录', async () => {
   assert.equal(await exists('node_modules'), false)
 })
 
-test('发布清单 schema、生成器与测试均为真实文件', async () => {
+test('发布清单与 GitHub Release 协调器均为真实文件', async () => {
   for (const file of [
     'release/manifest.schema.json',
     'scripts/release-manifest.mjs',
     'scripts/release-manifest.test.mjs',
+    'scripts/release-github.mjs',
+    'scripts/release-github.test.mjs',
   ]) {
     await assertRegularFile(file)
   }
