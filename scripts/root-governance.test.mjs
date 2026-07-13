@@ -94,6 +94,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'release:package:web': 'node ./scripts/release-package.mjs web',
     'release:package:server': 'node ./scripts/release-package.mjs server',
     'release:smoke:server': 'node ./scripts/ci-postgres.mjs -- node ./scripts/release-package.mjs smoke-server',
+    'release:manifest': 'node ./scripts/release-manifest.mjs',
     'test:root': 'node --test ./scripts/*.test.mjs',
     check: 'node ./scripts/check.mjs',
     'check:server': 'pnpm -C server check',
@@ -108,6 +109,16 @@ test('根目录不创建 workspace、lockfile 或依赖目录', async () => {
   assert.equal(await exists('pnpm-workspace.yaml'), false)
   assert.equal(await exists('pnpm-lock.yaml'), false)
   assert.equal(await exists('node_modules'), false)
+})
+
+test('发布清单 schema、生成器与测试均为真实文件', async () => {
+  for (const file of [
+    'release/manifest.schema.json',
+    'scripts/release-manifest.mjs',
+    'scripts/release-manifest.test.mjs',
+  ]) {
+    await assertRegularFile(file)
+  }
 })
 
 test('根级治理文件和阶段一至阶段四文档真实存在', async () => {
