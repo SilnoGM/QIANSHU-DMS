@@ -191,18 +191,23 @@ test('主 Skill 直接引用的工作说明不再包含旧应用占位符', () =
   }
 })
 
-test('正式应用 Arco locale 导入路径与依赖包的小写文件名完全一致', () => {
-  const provider = readRequiredFile(
-    `${webRoot}/apps/qsmds-arco/src/ui/provider/index.ts`,
-  )
+test('正式应用与已授权 Arco 参考应用的 locale 导入路径使用精确小写文件名', () => {
+  const providerPaths = [
+    'apps/qsmds-arco/src/ui/provider/index.ts',
+    'examples/core-arco-design-vue/src/ui/provider/index.ts',
+  ]
 
-  // macOS 默认文件系统不区分大小写，错误路径会在本地假通过；这里锁定依赖包
-  // 发布到 Linux Runner 后使用的真实小写文件名，防止再次出现 TS2307。
-  for (const localeFile of ['en-us', 'zh-cn', 'zh-tw']) {
-    assert.ok(
-      provider.includes(`@arco-design/web-vue/es/locale/lang/${localeFile}`),
-      `Arco locale 必须使用精确小写路径：${localeFile}`,
-    )
+  // macOS 默认文件系统不区分大小写，错误路径会在本地假通过；这里同时锁定
+  // 正式应用与 CI 会检查的参考应用，确保路径匹配 Linux Runner 上的真实文件名。
+  for (const providerPath of providerPaths) {
+    const provider = readRequiredFile(`${webRoot}/${providerPath}`)
+
+    for (const localeFile of ['en-us', 'zh-cn', 'zh-tw']) {
+      assert.ok(
+        provider.includes(`@arco-design/web-vue/es/locale/lang/${localeFile}`),
+        `${providerPath} 的 Arco locale 必须使用精确小写路径：${localeFile}`,
+      )
+    }
+    assert.doesNotMatch(provider, /locale\/lang\/(?:en-US|zh-CN|zh-TW)/u)
   }
-  assert.doesNotMatch(provider, /locale\/lang\/(?:en-US|zh-CN|zh-TW)/u)
 })

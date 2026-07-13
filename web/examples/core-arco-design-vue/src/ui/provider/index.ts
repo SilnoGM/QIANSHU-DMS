@@ -1,8 +1,8 @@
 import type { App } from 'vue'
 import ArcoVue from '@arco-design/web-vue'
-import en from '@arco-design/web-vue/es/locale/lang/en-US'
-import zhCN from '@arco-design/web-vue/es/locale/lang/zh-CN'
-import zhTW from '@arco-design/web-vue/es/locale/lang/zh-TW'
+import en from '@arco-design/web-vue/es/locale/lang/en-us'
+import zhCN from '@arco-design/web-vue/es/locale/lang/zh-cn'
+import zhTW from '@arco-design/web-vue/es/locale/lang/zh-tw'
 import '@arco-design/web-vue/dist/arco.css'
 
 function install(app: App) {
