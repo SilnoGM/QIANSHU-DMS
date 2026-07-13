@@ -29,6 +29,7 @@ export class CommandExecutionError extends Error {
 export function runCommand(command, args, options = {}) {
   const {
     cwd,
+    env = process.env,
     spawnImpl = spawn,
     stdio = 'inherit',
   } = options
@@ -37,7 +38,7 @@ export function runCommand(command, args, options = {}) {
     let child
 
     try {
-      child = spawnImpl(command, args, { cwd, stdio })
+      child = spawnImpl(command, args, { cwd, env, stdio })
     } catch (cause) {
       reject(new CommandExecutionError(`Command failed to start: ${command}`, 1, cause))
       return

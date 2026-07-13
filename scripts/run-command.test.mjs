@@ -86,11 +86,36 @@ test('runCommand 默认使用 inherit stdio', async () => {
   child.emit('exit', 0, null)
   await completion
 
-  assert.deepEqual(calls, [{
+  assert.equal(calls[0].options.env, process.env)
+  assert.deepEqual({ ...calls[0], options: {
+    cwd: calls[0].options.cwd,
+    stdio: calls[0].options.stdio,
+  } }, {
     command: 'fake-command',
     args: [],
     options: { cwd: undefined, stdio: 'inherit' },
-  }])
+  })
+})
+
+test('runCommand 原样转发显式 env object', async () => {
+  const child = new EventEmitter()
+  const calls = []
+  const expectedEnv = {
+    DATABASE_URL: 'postgresql://redacted',
+    NODE_ENV: 'test',
+  }
+  const completion = runCommand('fake-command', [], {
+    env: expectedEnv,
+    spawnImpl(command, args, options) {
+      calls.push({ command, args, options })
+      return child
+    },
+  })
+
+  child.emit('exit', 0, null)
+  await completion
+
+  assert.equal(calls[0].options.env, expectedEnv)
 })
 
 test('runCommand 转发 cwd 与 stdio，并将 SIGINT 转为退出码 130', async () => {
@@ -111,14 +136,18 @@ test('runCommand 转发 cwd 与 stdio，并将 SIGINT 转为退出码 130', asyn
     assert.equal(error.exitCode, 130)
     return true
   })
-  assert.deepEqual(calls, [{
+  assert.equal(calls[0].options.env, process.env)
+  assert.deepEqual({ ...calls[0], options: {
+    cwd: calls[0].options.cwd,
+    stdio: calls[0].options.stdio,
+  } }, {
     command: 'fake-command',
     args: ['--flag'],
     options: {
       cwd: '/tmp/qianshu-run-command-test',
       stdio: 'pipe',
     },
-  }])
+  })
 })
 
 test('runCommand 将未知 signal 归一为退出码 1', async () => {
