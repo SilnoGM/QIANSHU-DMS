@@ -11,6 +11,18 @@ import { POSTGRES_IMAGE } from './ci-postgres.mjs'
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
 const workflowPath = path.join(repositoryRoot, '.github', 'workflows', 'ci.yml')
+const examplesWorkflowPath = path.join(
+  repositoryRoot,
+  '.github',
+  'workflows',
+  'examples.yml',
+)
+const releaseWorkflowPath = path.join(
+  repositoryRoot,
+  '.github',
+  'workflows',
+  'release.yml',
+)
 
 const checkoutAction =
   'actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0'
@@ -29,6 +41,7 @@ const requiredJobIds = Object.freeze([
 const validationJobIds = requiredJobIds.slice(0, -1)
 
 let workflowPromise
+let examplesWorkflowPromise
 
 async function readCiWorkflow() {
   workflowPromise ??= (async () => {
@@ -40,6 +53,30 @@ async function readCiWorkflow() {
     return source
   })()
   return workflowPromise
+}
+
+async function readExamplesWorkflow() {
+  examplesWorkflowPromise ??= (async () => {
+    const stats = await lstat(examplesWorkflowPath)
+    assert.equal(stats.isSymbolicLink(), false, 'examples.yml 不得是 symlink')
+    assert.equal(stats.isFile(), true, 'examples.yml 必须是实际文件')
+    const source = await readFile(examplesWorkflowPath, 'utf8')
+    assert.notEqual(source.length, 0, 'examples.yml 不得为空')
+    return source
+  })()
+  return examplesWorkflowPromise
+}
+
+async function readReleaseWorkflowIfPresent() {
+  try {
+    return await readFile(releaseWorkflowPath, 'utf8')
+  }
+  catch (error) {
+    if (error?.code === 'ENOENT') {
+      return ''
+    }
+    throw error
+  }
 }
 
 function indentation(line) {
@@ -354,4 +391,97 @@ test('web-check-build 只使用 Web cache 并验证正式应用产物', async ()
   assert.equal(job.includes('server/pnpm-lock.yaml'), false)
   assert.equal(job.includes('check:examples'), false)
   assert.equal(job.includes('build:examples'), false)
+})
+
+test('examples.yml 只声明手动与每月定时触发并保持只读权限', async () => {
+  const source = await readExamplesWorkflow()
+  assert.equal(source.endsWith('\n'), true, 'examples.yml 必须以 LF 结尾')
+  assert.equal(source.includes('\r'), false, 'examples.yml 只允许 LF')
+  assert.equal(source.includes('\t'), false, 'examples.yml 禁止 tab 缩进')
+  assert.equal(/^.* +$/mu.test(source), false, 'examples.yml 禁止行尾空格')
+  assert.deepEqual(
+    [...source.matchAll(/^([a-z][a-z0-9-]*):(?: .*)?$/gmu)].map(match => match[1]),
+    ['name', 'on', 'permissions', 'jobs'],
+  )
+  assert.equal(source.startsWith('name: Examples\n'), true)
+  assert.equal(extractBlock(source, 'on', 0), [
+    'on:',
+    '  workflow_dispatch:',
+    '  schedule:',
+    "    - cron: '17 2 1 * *'",
+  ].join('\n'))
+  assert.equal(extractBlock(source, 'permissions', 0), [
+    'permissions:',
+    '  contents: read',
+  ].join('\n'))
+  for (const forbidden of [
+    'pull_request',
+    'push:',
+    'workflow_call',
+    'continue-on-error',
+    'paths:',
+    'paths-ignore:',
+    'secrets:',
+    '${{ secrets.',
+  ]) {
+    assert.equal(source.includes(forbidden), false, `examples.yml 禁止：${forbidden}`)
+  }
+})
+
+test('examples.yml 只有独立参考应用 Job 且固定运行时与 Action', async () => {
+  const source = await readExamplesWorkflow()
+  const jobs = extractJobs(source)
+  assert.deepEqual([...jobs.keys()], ['examples-check-build'])
+  const job = jobs.get('examples-check-build')
+  assert.match(job, /\n    runs-on: ubuntu-24\.04(?:\n|$)/u)
+  assert.match(job, /\n    timeout-minutes: 25(?:\n|$)/u)
+  assert.equal(job.includes('\n    needs:'), false)
+  assertCheckout(job, 1)
+  assertDependencySetup(job, ['web/pnpm-lock.yaml'])
+  assert.deepEqual(usesFrom(source), [
+    checkoutAction,
+    pnpmSetupAction,
+    setupNodeAction,
+  ])
+  assert.equal(source.includes('server/pnpm-lock.yaml'), false)
+  assert.equal(source.includes('services:'), false)
+  assert.equal((source.match(/          cache: pnpm$/gmu) ?? []).length, 1)
+})
+
+test('examples.yml 只执行 Web 参考应用冻结安装、检查、构建与 tracked diff', async () => {
+  const job = extractJobs(await readExamplesWorkflow()).get('examples-check-build')
+  const runCommands = extractSteps(job).flatMap((step) => {
+    const match = /^        run: (.+)$/mu.exec(step)
+    return match === null ? [] : [match[1]]
+  })
+  assert.deepEqual(runCommands, [
+    'pnpm -C web install --frozen-lockfile',
+    'pnpm -C web check:examples',
+    'pnpm -C web build:examples',
+    'git diff --exit-code -- .',
+  ])
+  assertTrackedDiffIsLast(job)
+  for (const forbidden of [
+    'api:generate',
+    'pnpm -C web check\n',
+    'pnpm -C web build\n',
+    'pnpm -C server',
+  ]) {
+    assert.equal(job.includes(forbidden), false, `参考应用 Job 禁止：${forbidden}`)
+  }
+})
+
+test('参考应用 Workflow 不被主 CI 或 Release 引用', async () => {
+  const workflows = [
+    ['ci.yml', await readCiWorkflow()],
+    ['release.yml', await readReleaseWorkflowIfPresent()],
+  ]
+  for (const [name, source] of workflows) {
+    assert.equal(source.includes('examples.yml'), false, `${name} 不得调用 examples.yml`)
+    assert.equal(
+      source.includes('examples-check-build'),
+      false,
+      `${name} 不得依赖参考应用 Job`,
+    )
+  }
 })
