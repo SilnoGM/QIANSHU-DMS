@@ -98,7 +98,13 @@ test('OpenAPI 生成由 Web root 委托正式应用，并只在受控检查前�
   assert.equal(scripts.taze, 'taze minor -wIr')
   assert.equal(scripts.commit, 'git cz')
   assert.equal(workspaceManifest.version, '6.3.0')
-  assert.equal(appManifest.version, '0.0.0')
+  // Web root 的 version 冻结上游基座版本；正式 app 的 version 则是会随发布推进的
+  // 产品版本真相源，因此这里只冻结严格稳定 SemVer 格式，不固定某个产品版本值。
+  assert.match(
+    appManifest.version,
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u,
+    '正式 app version 必须是无前导零、prerelease 或 build metadata 的稳定 SemVer',
+  )
   assert.equal(Object.hasOwn(scripts, 'release'), false)
   assert.equal(Object.hasOwn(workspaceManifest.devDependencies, 'bumpp'), false)
   assert.equal(Object.hasOwn(scripts, 'lint:tsc'), false)

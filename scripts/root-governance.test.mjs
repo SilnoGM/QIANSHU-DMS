@@ -75,7 +75,13 @@ test('根 package 保持无依赖且不是 workspace', async () => {
   const manifest = JSON.parse(await readFile(fromRoot('package.json'), 'utf8'))
 
   assert.equal(manifest.name, 'qianshu-dms')
-  assert.equal(manifest.version, '0.0.0')
+  // 根 manifest 是会随正式发布推进的产品版本真相源；治理测试只冻结严格稳定
+  // SemVer 格式，避免合法版本升级因为测试硬编码旧值而无意义地破坏 CI。
+  assert.match(
+    manifest.version,
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u,
+    '根产品 version 必须是无前导零、prerelease 或 build metadata 的稳定 SemVer',
+  )
   assert.equal(manifest.private, true)
   assert.equal(manifest.packageManager, 'pnpm@11.9.0')
   assert.equal(manifest.engines.node, '^24.15.0')
