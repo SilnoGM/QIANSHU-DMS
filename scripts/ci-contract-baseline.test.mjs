@@ -8,12 +8,14 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import {
-  compareVersions,
   parseContractEventInput,
-  parseStableVersion,
   runContractCheckForEvent,
   selectContractBaseline,
 } from './ci-contract-baseline.mjs'
+import {
+  compareVersions,
+  parseStableVersion,
+} from './release-version.mjs'
 import { CommandExecutionError } from './run-command.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))

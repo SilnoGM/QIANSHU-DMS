@@ -1,0 +1,718 @@
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import * as fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import process from 'node:process'
+import test from 'node:test'
+import { fileURLToPath } from 'node:url'
+
+import {
+  STABLE_TAG_PATTERN,
+  compareVersions,
+  parseReleaseVersionArguments,
+  parseStableVersion,
+  readProductVersions,
+  runReleaseVersionCli,
+  verifyReleaseVersion,
+} from './release-version.mjs'
+
+const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
+const entrypoint = path.join(scriptsDirectory, 'release-version.mjs')
+
+function gitResult(repositoryRoot, args, options = {}) {
+  const result = spawnSync('git', args, {
+    cwd: repositoryRoot,
+    encoding: null,
+    input: options.input,
+  })
+  if (result.error) {
+    throw result.error
+  }
+  return {
+    exitCode: result.status,
+    stderr: result.stderr ?? Buffer.alloc(0),
+    stdout: result.stdout ?? Buffer.alloc(0),
+  }
+}
+
+function mustGit(repositoryRoot, args, options) {
+  const result = gitResult(repositoryRoot, args, options)
+  assert.equal(
+    result.exitCode,
+    0,
+    `Git fixture command failed: git ${args.join(' ')}\n${result.stderr}`,
+  )
+  return result.stdout.toString('utf8').trim()
+}
+
+async function createGitFixture(t) {
+  const temporaryRoot = await fs.realpath(os.tmpdir())
+  const sandbox = await fs.mkdtemp(
+    path.join(temporaryRoot, 'qianshu-release-version-test-'),
+  )
+  const origin = path.join(sandbox, 'origin.git')
+  const repositoryRoot = path.join(sandbox, 'repository')
+  const runnerTemp = path.join(sandbox, 'runner-temp')
+  await fs.mkdir(repositoryRoot)
+  await fs.mkdir(runnerTemp)
+  mustGit(sandbox, ['init', '--bare', '--initial-branch=main', origin])
+  mustGit(repositoryRoot, ['init', '--initial-branch=main'])
+  mustGit(repositoryRoot, ['config', 'user.name', 'Qianshu Release Fixture'])
+  mustGit(
+    repositoryRoot,
+    ['config', 'user.email', 'release-fixture@example.invalid'],
+  )
+  mustGit(repositoryRoot, ['remote', 'add', 'origin', origin])
+  t.after(() => fs.rm(sandbox, { force: true, recursive: true }))
+  return { origin, repositoryRoot, runnerTemp, sandbox }
+}
+
+function jsonBytes(value) {
+  return `${JSON.stringify(value, null, 2)}\n`
+}
+
+async function writeProductFiles(repositoryRoot, version, overrides = {}) {
+  const versions = {
+    root: version,
+    server: version,
+    serverOpenApi: version,
+    webApp: version,
+    webOpenApi: version,
+    ...overrides.versions,
+  }
+  const serverOpenApi = jsonBytes({
+    info: { title: 'Qianshu Server', version: versions.serverOpenApi },
+    openapi: '3.0.3',
+    paths: {},
+  })
+  const webOpenApi = overrides.webOpenApiBytes ?? jsonBytes({
+    info: { title: 'Qianshu Server', version: versions.webOpenApi },
+    openapi: '3.0.3',
+    paths: {},
+  })
+  const files = new Map([
+    ['package.json', jsonBytes({ name: 'qianshu-dms', version: versions.root })],
+    [
+      'server/package.json',
+      jsonBytes({ name: 'qianshu-server', version: versions.server }),
+    ],
+    [
+      'web/apps/qsmds-arco/package.json',
+      jsonBytes({ name: 'qsmds-arco', version: versions.webApp }),
+    ],
+    ['server/openapi/openapi.json', serverOpenApi],
+    ['web/openapi/openapi.json', webOpenApi],
+  ])
+
+  for (const [relativePath, contents] of files) {
+    const target = path.join(repositoryRoot, relativePath)
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, contents)
+  }
+}
+
+async function commitProductVersion(
+  repositoryRoot,
+  version,
+  message,
+  overrides,
+) {
+  await writeProductFiles(repositoryRoot, version, overrides)
+  mustGit(repositoryRoot, ['add', '--all'])
+  mustGit(repositoryRoot, ['commit', '-m', message])
+  return mustGit(repositoryRoot, ['rev-parse', 'HEAD'])
+}
+
+function createAnnotatedTag(repositoryRoot, tag, target = 'HEAD') {
+  mustGit(repositoryRoot, [
+    'tag',
+    '--annotate',
+    tag,
+    target,
+    '--message',
+    `release ${tag}`,
+  ])
+  return mustGit(repositoryRoot, ['rev-parse', `refs/tags/${tag}`])
+}
+
+async function createValidReleaseFixture(t) {
+  const fixture = await createGitFixture(t)
+  const historicalCommit = await commitProductVersion(
+    fixture.repositoryRoot,
+    '1.0.0',
+    'release 1.0.0',
+  )
+  createAnnotatedTag(fixture.repositoryRoot, 'v1.0.0', historicalCommit)
+  const sourceCommit = await commitProductVersion(
+    fixture.repositoryRoot,
+    '1.2.3',
+    'release 1.2.3',
+  )
+  const tagObjectSha = createAnnotatedTag(
+    fixture.repositoryRoot,
+    'v1.2.3',
+    sourceCommit,
+  )
+  mustGit(fixture.repositoryRoot, [
+    'push',
+    '--set-upstream',
+    'origin',
+    'main',
+  ])
+  return {
+    ...fixture,
+    historicalCommit,
+    sourceCommit,
+    tagObjectSha,
+    tag: 'v1.2.3',
+    version: '1.2.3',
+  }
+}
+
+function verificationInput(fixture, overrides = {}) {
+  return {
+    sourceCommit: fixture.sourceCommit,
+    tag: fixture.tag,
+    ...overrides,
+  }
+}
+
+function verificationDependencies(fixture, overrides = {}) {
+  return {
+    fileSystem: fs,
+    repositoryRoot: fixture.repositoryRoot,
+    ...overrides,
+  }
+}
+
+test('稳定 SemVer 与 Tag pattern 只接受规范安全版本并数字排序', () => {
+  assert.equal(STABLE_TAG_PATTERN.test('v0.0.0'), true)
+  assert.equal(STABLE_TAG_PATTERN.test('v12.3.45'), true)
+  assert.deepEqual(parseStableVersion('1.2.3'), [1, 2, 3])
+  assert.equal(Object.isFrozen(parseStableVersion('1.2.3')), true)
+  assert.equal(compareVersions([1, 10, 0], [1, 2, 99]), 8)
+  assert.equal(compareVersions([1, 2, 3], [1, 2, 3]), 0)
+
+  for (const value of [
+    'v1.2',
+    '1.2.3',
+    'v1.2.3-rc.1',
+    'v1.2.3+build',
+    'v01.2.3',
+    'v1.02.3',
+    'v1.2.03',
+  ]) {
+    assert.equal(STABLE_TAG_PATTERN.test(value), false)
+  }
+  for (const value of [
+    '1.2',
+    '1.2.3-rc.1',
+    '1.2.3+build',
+    '01.2.3',
+    '1.02.3',
+    '1.2.03',
+    '9007199254740992.0.0',
+  ]) {
+    assert.throws(() => parseStableVersion(value))
+  }
+})
+
+test('readProductVersions 读取固定五个版本且验证双快照 raw bytes', async (t) => {
+  const fixture = await createGitFixture(t)
+  await writeProductFiles(fixture.repositoryRoot, '1.2.3')
+
+  const result = await readProductVersions(fs, fixture.repositoryRoot)
+
+  assert.equal(Object.isFrozen(result), true)
+  assert.deepEqual(result, {
+    root: '1.2.3',
+    server: '1.2.3',
+    serverOpenApi: '1.2.3',
+    webApp: '1.2.3',
+    webOpenApi: '1.2.3',
+  })
+
+  await fs.writeFile(
+    path.join(fixture.repositoryRoot, 'web', 'package.json'),
+    jsonBytes({ version: '999.0.0' }),
+  )
+  assert.deepEqual(
+    await readProductVersions(fs, fixture.repositoryRoot),
+    result,
+  )
+})
+
+test('任一产品版本不一致、双快照字节不同或 JSON 非法都拒绝且脱敏', async (t) => {
+  const fixture = await createGitFixture(t)
+  const versionKeys = [
+    'root',
+    'server',
+    'webApp',
+    'serverOpenApi',
+    'webOpenApi',
+  ]
+
+  for (const key of versionKeys) {
+    await writeProductFiles(fixture.repositoryRoot, '1.2.3', {
+      versions: { [key]: '1.2.4' },
+    })
+    await assert.rejects(
+      readProductVersions(fs, fixture.repositoryRoot),
+    )
+  }
+
+  const sameDocument = {
+    info: { title: 'Qianshu Server', version: '1.2.3' },
+    openapi: '3.0.3',
+    paths: {},
+  }
+  await writeProductFiles(fixture.repositoryRoot, '1.2.3', {
+    webOpenApiBytes: JSON.stringify(sameDocument),
+  })
+  await assert.rejects(
+    readProductVersions(fs, fixture.repositoryRoot),
+    /snapshot bytes/u,
+  )
+
+  const secret = 'release-version-json-secret'
+  await fs.writeFile(
+    path.join(fixture.repositoryRoot, 'package.json'),
+    `{ invalid ${secret}`,
+  )
+  await assert.rejects(
+    readProductVersions(fs, fixture.repositoryRoot),
+    error => !error.message.includes(secret),
+  )
+})
+
+test('verifyReleaseVersion 返回冻结的产品与 annotated Tag 身份', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+
+  const result = await verifyReleaseVersion(
+    verificationInput(fixture),
+    verificationDependencies(fixture),
+  )
+
+  assert.equal(Object.isFrozen(result), true)
+  assert.deepEqual(result, {
+    version: '1.2.3',
+    tag: 'v1.2.3',
+    tagObjectSha: fixture.tagObjectSha,
+    sourceCommit: fixture.sourceCommit,
+  })
+})
+
+test('当前 annotated Tag Git 身份命令保持固定顺序与 argv', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  const calls = []
+  const git = async args => {
+    calls.push([...args])
+    return gitResult(fixture.repositoryRoot, args)
+  }
+
+  await verifyReleaseVersion(
+    verificationInput(fixture),
+    verificationDependencies(fixture, { git }),
+  )
+
+  assert.deepEqual(calls.slice(0, 6), [
+    ['cat-file', '-t', 'refs/tags/v1.2.3'],
+    ['cat-file', 'tag', 'refs/tags/v1.2.3'],
+    ['rev-parse', 'refs/tags/v1.2.3'],
+    ['rev-parse', 'refs/tags/v1.2.3^{commit}'],
+    ['rev-parse', 'refs/remotes/origin/main'],
+    [
+      'merge-base',
+      '--is-ancestor',
+      fixture.sourceCommit,
+      'refs/remotes/origin/main',
+    ],
+  ])
+})
+
+test('verifyReleaseVersion 精确拒绝 input shape、Tag 与 source SHA', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  const invalidInputs = [
+    { sourceCommit: fixture.sourceCommit, tag: 'v1.2' },
+    { sourceCommit: fixture.sourceCommit, tag: '1.2.3' },
+    { sourceCommit: fixture.sourceCommit, tag: 'v1.2.3-rc.1' },
+    { sourceCommit: fixture.sourceCommit, tag: 'v1.2.3+build' },
+    { sourceCommit: fixture.sourceCommit.slice(0, 12), tag: fixture.tag },
+    { ...verificationInput(fixture), githubContext: { token: 'secret' } },
+  ]
+
+  for (const input of invalidInputs) {
+    await assert.rejects(
+      verifyReleaseVersion(input, verificationDependencies(fixture)),
+    )
+  }
+})
+
+test('拒绝 lightweight、非 Commit target、递归 Tag 与 header tag 漂移', async (t) => {
+  const cases = [
+    {
+      name: 'lightweight',
+      createTag(repositoryRoot, sourceCommit) {
+        mustGit(repositoryRoot, ['tag', 'v1.2.3', sourceCommit])
+      },
+    },
+    {
+      name: 'blob target',
+      createTag(repositoryRoot) {
+        const blob = mustGit(repositoryRoot, ['rev-parse', 'HEAD:package.json'])
+        createAnnotatedTag(repositoryRoot, 'v1.2.3', blob)
+      },
+    },
+    {
+      name: 'recursive tag target',
+      createTag(repositoryRoot, sourceCommit) {
+        createAnnotatedTag(repositoryRoot, 'v1.2.2', sourceCommit)
+        createAnnotatedTag(repositoryRoot, 'v1.2.3', 'refs/tags/v1.2.2')
+      },
+    },
+    {
+      name: 'header tag drift',
+      createTag(repositoryRoot, sourceCommit) {
+        const tagObject = createAnnotatedTag(
+          repositoryRoot,
+          'v1.2.2',
+          sourceCommit,
+        )
+        mustGit(repositoryRoot, [
+          'update-ref',
+          'refs/tags/v1.2.3',
+          tagObject,
+        ])
+      },
+    },
+  ]
+
+  for (const fixtureCase of cases) {
+    await t.test(fixtureCase.name, async (nestedT) => {
+      const fixture = await createGitFixture(nestedT)
+      const sourceCommit = await commitProductVersion(
+        fixture.repositoryRoot,
+        '1.2.3',
+        fixtureCase.name,
+      )
+      fixtureCase.createTag(fixture.repositoryRoot, sourceCommit)
+      mustGit(fixture.repositoryRoot, [
+        'push',
+        '--set-upstream',
+        'origin',
+        'main',
+      ])
+
+      await assert.rejects(
+        verifyReleaseVersion(
+          { sourceCommit, tag: 'v1.2.3' },
+          verificationDependencies(fixture),
+        ),
+      )
+    })
+  }
+})
+
+test('peeled Commit 必须等于完整 sourceCommit', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+
+  await assert.rejects(
+    verifyReleaseVersion(
+      verificationInput(fixture, {
+        sourceCommit: fixture.historicalCommit,
+      }),
+      verificationDependencies(fixture),
+    ),
+  )
+})
+
+test('peeled Commit 与 sourceCommit 正确时仍必须等于当前 checkout', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  mustGit(fixture.repositoryRoot, [
+    'commit',
+    '--allow-empty',
+    '--message',
+    'checkout moved after tag',
+  ])
+  mustGit(fixture.repositoryRoot, ['push', 'origin', 'main'])
+
+  await assert.rejects(
+    verifyReleaseVersion(
+      verificationInput(fixture),
+      verificationDependencies(fixture),
+    ),
+  )
+})
+
+test('source Commit 必须可从已取得的 origin/main 到达', async (t) => {
+  const fixture = await createGitFixture(t)
+  await commitProductVersion(
+    fixture.repositoryRoot,
+    '1.0.0',
+    'main base',
+  )
+  mustGit(fixture.repositoryRoot, [
+    'push',
+    '--set-upstream',
+    'origin',
+    'main',
+  ])
+  mustGit(fixture.repositoryRoot, ['switch', '--create', 'feature'])
+  const sourceCommit = await commitProductVersion(
+    fixture.repositoryRoot,
+    '1.2.3',
+    'feature release',
+  )
+  createAnnotatedTag(fixture.repositoryRoot, 'v1.2.3', sourceCommit)
+
+  await assert.rejects(
+    verifyReleaseVersion(
+      { sourceCommit, tag: 'v1.2.3' },
+      verificationDependencies(fixture),
+    ),
+  )
+})
+
+test('当前版本必须严格大于当前 Commit 可达的最高历史稳定 Tag', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  createAnnotatedTag(
+    fixture.repositoryRoot,
+    'v2.0.0',
+    fixture.historicalCommit,
+  )
+
+  await assert.rejects(
+    verifyReleaseVersion(
+      verificationInput(fixture),
+      verificationDependencies(fixture),
+    ),
+  )
+})
+
+test('历史 prerelease/非法与不可达稳定 Tag 不污染稳定版本排序', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  createAnnotatedTag(
+    fixture.repositoryRoot,
+    'v99.0.0-rc.1',
+    fixture.historicalCommit,
+  )
+  createAnnotatedTag(
+    fixture.repositoryRoot,
+    'v-not-a-version',
+    fixture.historicalCommit,
+  )
+  mustGit(fixture.repositoryRoot, ['switch', '--create', 'future'])
+  const futureCommit = await commitProductVersion(
+    fixture.repositoryRoot,
+    '9.0.0',
+    'future release',
+  )
+  createAnnotatedTag(fixture.repositoryRoot, 'v9.0.0', futureCommit)
+  mustGit(fixture.repositoryRoot, ['switch', 'main'])
+
+  const result = await verifyReleaseVersion(
+    verificationInput(fixture),
+    verificationDependencies(fixture),
+  )
+  assert.equal(result.version, '1.2.3')
+})
+
+test('历史稳定 Tag 若为 lightweight 或不可 peel 对象必须失败', async (t) => {
+  for (const kind of ['lightweight', 'blob']) {
+    await t.test(kind, async (nestedT) => {
+      const fixture = await createValidReleaseFixture(nestedT)
+      if (kind === 'lightweight') {
+        mustGit(fixture.repositoryRoot, [
+          'tag',
+          'v1.1.0',
+          fixture.historicalCommit,
+        ])
+      } else {
+        const blob = mustGit(
+          fixture.repositoryRoot,
+          ['rev-parse', `${fixture.historicalCommit}:package.json`],
+        )
+        createAnnotatedTag(fixture.repositoryRoot, 'v1.1.0', blob)
+      }
+
+      await assert.rejects(
+        verifyReleaseVersion(
+          verificationInput(fixture),
+          verificationDependencies(fixture),
+        ),
+      )
+    })
+  }
+})
+
+test('CLI 参数只接受固定 tag/source 与可选 output', () => {
+  const cwd = path.join(path.sep, 'tmp', 'release-caller')
+  const sourceCommit = 'a'.repeat(40)
+  assert.deepEqual(
+    parseReleaseVersionArguments([
+      '--tag',
+      'v1.2.3',
+      '--source-commit',
+      sourceCommit,
+    ], cwd),
+    { outputPath: undefined, sourceCommit, tag: 'v1.2.3' },
+  )
+  assert.deepEqual(
+    parseReleaseVersionArguments([
+      '--tag',
+      'v1.2.3',
+      '--source-commit',
+      sourceCommit,
+      '--output',
+      'release-version.json',
+    ], cwd),
+    {
+      outputPath: path.join(cwd, 'release-version.json'),
+      sourceCommit,
+      tag: 'v1.2.3',
+    },
+  )
+
+  for (const argv of [
+    [],
+    ['--tag', 'v1.2.3'],
+    ['--source-commit', sourceCommit, '--tag', 'v1.2.3'],
+    ['--tag', 'v1.2.3', '--source-commit', sourceCommit, '--unknown'],
+    ['--tag', 'v1.2.3', '--source-commit', sourceCommit, '--output'],
+  ]) {
+    assert.throws(() => parseReleaseVersionArguments(argv, cwd))
+  }
+})
+
+test('CLI stdout 与安全 output 文件使用相同 canonical JSON', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  const outputDirectory = await fs.mkdtemp(
+    path.join(fixture.runnerTemp, 'release-version-'),
+  )
+  const outputPath = path.join(outputDirectory, 'release-version.json')
+  const writes = []
+
+  const result = await runReleaseVersionCli({
+    argv: [
+      '--tag',
+      fixture.tag,
+      '--source-commit',
+      fixture.sourceCommit,
+      '--output',
+      outputPath,
+    ],
+    cwd: fixture.repositoryRoot,
+    env: { RUNNER_TEMP: fixture.runnerTemp },
+    fileSystem: fs,
+    repositoryRoot: fixture.repositoryRoot,
+    stdout: { write: value => writes.push(value) },
+  })
+
+  const expectedLine = `${JSON.stringify(result)}\n`
+  assert.equal(writes.join(''), expectedLine)
+  assert.equal(await fs.readFile(outputPath, 'utf8'), expectedLine)
+  assert.deepEqual(JSON.parse(expectedLine), result)
+  assert.equal((await fs.lstat(outputPath)).isFile(), true)
+})
+
+test('CLI canonicalize RUNNER_TEMP alias 后仍接受同一真实 child', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  const runnerTempAlias = path.join(fixture.sandbox, 'runner-temp-alias')
+  await fs.symlink(fixture.runnerTemp, runnerTempAlias, 'dir')
+  const outputDirectory = await fs.mkdtemp(
+    path.join(fixture.runnerTemp, 'release-version-'),
+  )
+  const outputPath = path.join(
+    runnerTempAlias,
+    path.basename(outputDirectory),
+    'release-version.json',
+  )
+
+  await runReleaseVersionCli({
+    argv: [
+      '--tag',
+      fixture.tag,
+      '--source-commit',
+      fixture.sourceCommit,
+      '--output',
+      outputPath,
+    ],
+    cwd: fixture.repositoryRoot,
+    env: { RUNNER_TEMP: runnerTempAlias },
+    fileSystem: fs,
+    repositoryRoot: fixture.repositoryRoot,
+    stdout: { write() {} },
+  })
+
+  assert.equal(
+    (await fs.lstat(path.join(
+      outputDirectory,
+      'release-version.json',
+    ))).isFile(),
+    true,
+  )
+})
+
+test('CLI output 拒绝 RUNNER_TEMP 外路径、错误文件名与既有 leaf', async (t) => {
+  const fixture = await createValidReleaseFixture(t)
+  const outputDirectory = await fs.mkdtemp(
+    path.join(fixture.runnerTemp, 'release-version-'),
+  )
+  const baseOptions = {
+    cwd: fixture.repositoryRoot,
+    env: { RUNNER_TEMP: fixture.runnerTemp },
+    fileSystem: fs,
+    repositoryRoot: fixture.repositoryRoot,
+    stdout: { write() {} },
+  }
+  const outputPaths = [
+    path.join(fixture.sandbox, 'release-version.json'),
+    path.join(outputDirectory, 'unexpected.json'),
+  ]
+  const externalDirectory = path.join(fixture.sandbox, 'external-output')
+  const symlinkDirectory = path.join(fixture.runnerTemp, 'symlink-child')
+  await fs.mkdir(externalDirectory)
+  await fs.symlink(externalDirectory, symlinkDirectory, 'dir')
+  outputPaths.push(path.join(symlinkDirectory, 'release-version.json'))
+  const existingPath = path.join(outputDirectory, 'release-version.json')
+  await fs.writeFile(existingPath, 'existing-canary\n')
+  outputPaths.push(existingPath)
+
+  for (const outputPath of outputPaths) {
+    await assert.rejects(runReleaseVersionCli({
+      ...baseOptions,
+      argv: [
+        '--tag',
+        fixture.tag,
+        '--source-commit',
+        fixture.sourceCommit,
+        '--output',
+        outputPath,
+      ],
+    }))
+  }
+  assert.equal(await fs.readFile(existingPath, 'utf8'), 'existing-canary\n')
+})
+
+test('CLI 失败固定写 stderr 且不泄露参数或环境', async (t) => {
+  const fixture = await createGitFixture(t)
+  const secret = 'release-cli-secret'
+  const result = spawnSync(
+    process.execPath,
+    [entrypoint, '--tag', secret, '--source-commit', 'short-sha'],
+    {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        RUNNER_TEMP: fixture.runnerTemp,
+        SECRET_CANARY: secret,
+      },
+    },
+  )
+
+  assert.equal(result.status, 1)
+  assert.equal(result.stdout, '')
+  assert.equal(result.stderr, 'Release version check failed\n')
+  assert.equal(result.stderr.includes(secret), false)
+})

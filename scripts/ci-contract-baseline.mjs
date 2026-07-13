@@ -10,13 +10,17 @@ import {
   isDirectEntry,
   runCommand,
 } from './run-command.mjs'
+import {
+  STABLE_TAG_PATTERN,
+  compareVersions,
+  parseStableVersion,
+} from './release-version.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const defaultRepositoryRoot = path.resolve(scriptsDirectory, '..')
 const snapshotPath = 'server/openapi/openapi.json'
 const zeroSha = '0'.repeat(40)
 const fullShaPattern = /^[0-9a-f]{40}$/u
-const stableTagPattern = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u
 const gitOutputLimit = 16 * 1024 * 1024
 const noBaseline = Object.freeze({ kind: 'none' })
 
@@ -53,27 +57,6 @@ function assertFullSha(value, label, { allowZero = false } = {}) {
     throw new TypeError(`${label} must be a full Git SHA`)
   }
   return value
-}
-
-export function parseStableVersion(value) {
-  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.exec(value)
-  if (!match) {
-    throw new Error('Stable version is invalid')
-  }
-  const tuple = match.slice(1).map(Number)
-  if (!tuple.every(Number.isSafeInteger)) {
-    throw new Error('Stable version is unsafe')
-  }
-  return Object.freeze(tuple)
-}
-
-export function compareVersions(left, right) {
-  for (let index = 0; index < 3; index += 1) {
-    if (left[index] !== right[index]) {
-      return left[index] - right[index]
-    }
-  }
-  return 0
 }
 
 function normalizeEventInput(input) {
@@ -122,7 +105,7 @@ function normalizeEventInput(input) {
       ['currentSha', 'eventName', 'releaseTag', 'runnerTemp'],
       'Release input',
     )
-    if (!stableTagPattern.test(input.releaseTag)) {
+    if (!STABLE_TAG_PATTERN.test(input.releaseTag)) {
       throw new TypeError('Release tag must be a stable vX.Y.Z tag')
     }
     parseStableVersion(input.releaseTag.slice(1))
@@ -312,8 +295,7 @@ async function resolveReleaseBaseline(input, dependencies) {
   let selected
 
   for (const tag of tags) {
-    const match = stableTagPattern.exec(tag)
-    if (!match) {
+    if (!STABLE_TAG_PATTERN.test(tag)) {
       continue
     }
     const version = parseStableVersion(tag.slice(1))
