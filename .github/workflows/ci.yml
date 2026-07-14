@@ -85,6 +85,19 @@ jobs:
       - name: Verify Server entrypoint
         run: test -f server/dist/main.js && test ! -L server/dist/main.js && test -s server/dist/main.js
 
+      - name: Package Server release archive
+        if: inputs.release_tag == ''
+        run: |
+          package_tag="v$(node -p 'require("./package.json").version')"
+          output="$RUNNER_TEMP/release-server-ci"
+          node --run release:package:server -- \
+            --tag "$package_tag" \
+            --output "$output"
+          archive="$output/qsmds-server-${package_tag}-linux-x64.tar.gz"
+          test -f "$archive"
+          test ! -L "$archive"
+          test -s "$archive"
+
       - name: Verify tracked files are unchanged
         run: git diff --exit-code -- .
 
