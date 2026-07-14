@@ -4,7 +4,7 @@
 
 **Goal:** 为 Server release packaging 增加不泄密的稳定阶段错误码，并在普通 PR/main CI 的 Ubuntu 24.04 x64 环境中真实复现失败链路。
 
-**Architecture:** 阶段诊断只在 `release-package.mjs` 内实现，不扩展共享 `run-command.mjs`。现有 `server-check-build` Job 复用 frozen install 和 build，在 `$RUNNER_TEMP` 中运行真实 packaging，但不上传、不发布，也不运行 PostgreSQL smoke。
+**Architecture:** packaging 阶段分类仍收敛在 `release-package.mjs`。最终代码审查补充将 `CommandExecutionError` 的可信身份、构造快照和窄退出码 accessor 收敛到共享 `run-command.mjs`，并将 `release-package.mjs`、`openapi-contract.mjs` 与 `release-version.mjs` 的生产信任点统一迁移到该 accessor。现有 `server-check-build` Job 复用 frozen install 和 build，在 `$RUNNER_TEMP` 中运行真实 packaging，但不上传、不发布，也不运行 PostgreSQL smoke。
 
 **Tech Stack:** Node.js 24、`node:test`、pnpm 11、GitHub Actions、GNU tar、现有 Release packaging CLI。
 
@@ -14,9 +14,13 @@
 
 - Modify: `scripts/release-package.mjs` — 定义固定阶段错误、包装 packaging 边界、输出安全诊断。
 - Modify: `scripts/release-package.test.mjs` — 覆盖阶段分类、退出码、脱敏和 cleanup 首错。
+- Supplemental Modify: `scripts/run-command.mjs`、`scripts/run-command.test.mjs` — 使用模块私有 `WeakMap` 固化可信 identity、message 与 `1..255` 退出码，并覆盖 prototype/getter 伪造。
+- Supplemental Modify: `scripts/openapi-contract.mjs`、`scripts/openapi-contract.test.mjs` — 将 reporter 迁移到可信 accessor，并覆盖真实 `Error` 替换 prototype 的回归路径。
+- Supplemental Modify: `scripts/release-version.mjs` — 将私有 reporter 迁移到可信 accessor；保持 reporter 私有，并由 accessor 单测、现有 CLI 测试与代码审查共同验证。
+- Verify without modification: `scripts/release-version.test.mjs` — 继续验证完整版本检查与 CLI 安全失败行为。
 - Modify: `scripts/ci-workflows.test.mjs` — 固定普通 CI 的真实 packaging step 结构与禁止项。
 - Modify: `.github/workflows/ci.yml` — 在现有 Server Job 中执行真实 packaging。
-- Do not modify: `scripts/run-command.mjs`、`.github/workflows/release.yml`、`package.json`、产品版本、OpenAPI、数据库 schema 和 migration。
+- Do not modify: `.github/workflows/release.yml`、`package.json`、产品版本、OpenAPI、数据库 schema 和 migration。
 
 本计划在首次 Draft PR CI 返回后结束诊断阶段。若 CI 失败，必须先依据白名单 code 编写根因专属失败测试和补充计划；若 CI 通过，必须记录“当前无法稳定复现”，不得猜测修改 prune、tar、archive limit 或依赖内容。
 
@@ -66,7 +70,8 @@ test('ReleasePackageStageError 只接受白名单 code 并保留安全退出码'
 })
 ```
 
-同时从 `run-command.mjs` import `CommandExecutionError`。
+同时从 `run-command.mjs` import `CommandExecutionError` 与
+`getTrustedCommandExitCode`。
 
 - [ ] **Step 3：增加真实 `packageServer()` deploy wiring 失败测试**
 
@@ -422,6 +427,13 @@ const releasePackageFailureCodeSet = new Set(
   Object.values(RELEASE_PACKAGE_FAILURE_CODES),
 )
 
+const releasePackageStageErrorSet = new WeakSet()
+const classifiedReleasePackageStageErrorSet = new WeakSet()
+
+function commandExecutionExitCode(error) {
+  return getTrustedCommandExitCode(error) ?? 1
+}
+
 export class ReleasePackageStageError extends Error {
   constructor(code, cause) {
     if (!releasePackageFailureCodeSet.has(code)) {
@@ -433,23 +445,37 @@ export class ReleasePackageStageError extends Error {
       code: { enumerable: true, value: code },
       exitCode: {
         enumerable: true,
-        value: cause instanceof CommandExecutionError ? cause.exitCode : 1,
+        value: commandExecutionExitCode(cause),
       },
     })
+    releasePackageStageErrorSet.add(this)
   }
+}
+
+function createReleasePackageStageError(code, cause) {
+  const error = new ReleasePackageStageError(code, cause)
+  classifiedReleasePackageStageErrorSet.add(error)
+  return error
 }
 
 async function withReleasePackageStage(code, operation) {
   try {
     return await operation()
   } catch (cause) {
-    if (cause instanceof ReleasePackageStageError) {
+    if (classifiedReleasePackageStageErrorSet.has(cause)) {
       throw cause
     }
-    throw new ReleasePackageStageError(code, cause)
+    throw createReleasePackageStageError(code, cause)
   }
 }
 ```
+
+`CommandExecutionError` 的可信身份不能依赖公开 prototype、`Error` internal
+brand 或 `.exitCode` 属性。`scripts/run-command.mjs` 使用模块私有 `WeakMap`
+保存构造时的 `{ exitCode, message }` 快照，将有效失败码限制为整数
+`1..255`，并通过 `getTrustedCommandExitCode()` 只暴露可信退出码；公开
+`exitCode` 同时定义为不可写、不可配置。消费者对 `undefined` 统一回退为
+`1`。
 
 - [ ] **Step 2：包装 Server packaging 的每个已确认边界**
 
@@ -540,9 +566,9 @@ outer catch 只将未分类错误归一为 `unknown`：
 
 ```js
 } catch (error) {
-  primaryError = error instanceof ReleasePackageStageError
+  primaryError = classifiedReleasePackageStageErrorSet.has(error)
     ? error
-    : new ReleasePackageStageError(
+    : createReleasePackageStageError(
         RELEASE_PACKAGE_FAILURE_CODES.unknown,
         error,
       )
@@ -554,7 +580,7 @@ outer catch 只将未分类错误归一为 `unknown`：
 
 ```js
 if (primaryError === undefined && cleanupError !== undefined) {
-  throw new ReleasePackageStageError(
+  throw createReleasePackageStageError(
     RELEASE_PACKAGE_FAILURE_CODES.stageCleanup,
     cleanupError,
   )
@@ -571,12 +597,36 @@ export function applyReleasePackageFailure(
   processRef = process,
   consoleRef = console,
 ) {
-  const failure = error instanceof ReleasePackageStageError ? error : undefined
+  const failure = releasePackageStageErrorSet.has(error) ? error : undefined
   processRef.exitCode = failure?.exitCode
-    ?? (error instanceof CommandExecutionError ? error.exitCode : 1)
+    ?? (getTrustedCommandExitCode(error) ?? 1)
   const code = failure?.code ?? RELEASE_PACKAGE_FAILURE_CODES.unknown
   consoleRef.error(`Release package failed [code=${code}]`)
 }
+```
+
+回归测试必须使用真实 `Error` 再替换 prototype，不能只用
+`Object.create(CommandExecutionError.prototype)`；后者没有 `Error` internal
+brand，无法覆盖本次 reviewer 发现的绕过路径。至少验证正数、`256` 与
+throwing getter 都不会被读取或传播：
+
+```js
+const forgedError = Object.assign(new Error('secret'), { exitCode: 256 })
+Object.setPrototypeOf(forgedError, CommandExecutionError.prototype)
+
+let getterReads = 0
+const throwingGetterError = new Error('secret')
+Object.defineProperty(throwingGetterError, 'exitCode', {
+  get() {
+    getterReads += 1
+    throw new Error('exitCode getter must not run')
+  },
+})
+Object.setPrototypeOf(throwingGetterError, CommandExecutionError.prototype)
+
+assert.equal(getTrustedCommandExitCode(forgedError), undefined)
+assert.equal(getTrustedCommandExitCode(throwingGetterError), undefined)
+assert.equal(getterReads, 0)
 ```
 
 - [ ] **Step 6：运行局部测试并确认 GREEN**
