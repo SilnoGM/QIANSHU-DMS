@@ -219,6 +219,19 @@ test('applyFailureToProcess 保留命令失败码并输出安全消息', () => {
   assert.deepEqual(messages, ['Command failed: fake-command'])
 })
 
+test('applyFailureToProcess 使用构造时消息快照而非可变公开属性', () => {
+  const processRef = { exitCode: undefined }
+  const messages = []
+  const consoleRef = { error: message => messages.push(message) }
+  const error = new CommandExecutionError('Command failed: trusted-command', 7)
+  error.message = 'DATABASE_URL=postgres://mutated-secret'
+
+  applyFailureToProcess(error, processRef, consoleRef)
+
+  assert.equal(processRef.exitCode, 7)
+  assert.deepEqual(messages, ['Command failed: trusted-command'])
+})
+
 test('applyFailureToProcess 将未知错误归一为 1 且不泄露错误内容', () => {
   const processRef = { exitCode: undefined }
   const messages = []
