@@ -668,8 +668,12 @@ GITHUB_EVENT_NAME
 GITHUB_EVENT_PATH
 GITHUB_SHA
 RUNNER_TEMP
-QIANSHU_RELEASE_TAG    # 仅 workflow_call release 场景；其他事件必须为空
+QIANSHU_RELEASE_TAG    # 仅由 release.yml 的 workflow_call input 设置
 ```
+
+GitHub reusable workflow 保留 caller 的 `github` context。因此正式 Tag push
+调用 `ci.yml` 时，`GITHUB_EVENT_NAME` 仍是 `push`；Contract CLI 必须同时校验
+payload `ref` 与 `QIANSHU_RELEASE_TAG`，再归一化为内部 `release` 事件。
 
 路径处理必须先 `realpath`/canonicalize `RUNNER_TEMP`，再由 `mkdtemp()` 创建子目录。先用 tree mode 证明历史路径是唯一普通文件，再按 blob OID 提取；只检查 `cat-file -t commit:path` 不够，因为 Git symlink 也是 blob。Git 只通过 argv 执行：
 
