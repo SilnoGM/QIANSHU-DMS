@@ -22,10 +22,33 @@ test('CommandExecutionError 保留有效退出码和 cause', () => {
 })
 
 test('CommandExecutionError 将无效退出码归一为 1', () => {
-  for (const exitCode of [0, -1, 1.5, Number.NaN, '7', undefined]) {
+  for (const exitCode of [0, -1, 1.5, 256, Number.NaN, '7', undefined]) {
     const error = new CommandExecutionError('Command failed: node', exitCode)
     assert.equal(error.exitCode, 1)
   }
+})
+
+test('CommandExecutionError 的公开退出码不可被外部篡改', () => {
+  const error = new CommandExecutionError('Command failed: node', 7)
+  const descriptor = Object.getOwnPropertyDescriptor(error, 'exitCode')
+
+  assert.equal(descriptor?.writable, false)
+  assert.equal(descriptor?.configurable, false)
+  assert.equal(Reflect.set(error, 'exitCode', 9), false)
+  assert.equal(error.exitCode, 7)
+})
+
+test('可信退出码读取只接受由模块真实构造的命令错误', async () => {
+  const runCommandModule = await import('./run-command.mjs')
+  const readExitCode = runCommandModule.getTrustedCommandExitCode
+  const trustedError = new CommandExecutionError('Command failed: node', 7)
+  const forgedError = Object.assign(new Error('forged'), { exitCode: 9 })
+  Object.setPrototypeOf(forgedError, CommandExecutionError.prototype)
+
+  assert.equal(typeof readExitCode, 'function')
+  assert.equal(readExitCode(trustedError), 7)
+  assert.equal(readExitCode(forgedError), undefined)
+  assert.equal(readExitCode(new Error('unknown')), undefined)
 })
 
 test('runCommand 使用真实 Node 子进程处理成功退出', async () => {
@@ -207,6 +230,41 @@ test('applyFailureToProcess 将未知错误归一为 1 且不泄露错误内容'
     consoleRef,
   )
 
+  assert.equal(processRef.exitCode, 1)
+  assert.deepEqual(messages, ['Command failed unexpectedly'])
+})
+
+test('applyFailureToProcess 拒绝真实 Error 通过替换 prototype 伪造命令错误', () => {
+  const processRef = { exitCode: undefined }
+  const messages = []
+  const consoleRef = { error: message => messages.push(message) }
+  const forgedError = Object.assign(
+    new Error('DATABASE_URL=postgres://prototype-secret'),
+    { exitCode: 7 },
+  )
+  Object.setPrototypeOf(forgedError, CommandExecutionError.prototype)
+
+  applyFailureToProcess(forgedError, processRef, consoleRef)
+
+  assert.equal(processRef.exitCode, 1)
+  assert.deepEqual(messages, ['Command failed unexpectedly'])
+})
+
+test('applyFailureToProcess 不触发伪造命令错误的 throwing getter', () => {
+  const processRef = { exitCode: undefined }
+  const messages = []
+  const consoleRef = { error: message => messages.push(message) }
+  const forgedError = new Error('DATABASE_URL=postgres://getter-secret')
+  Object.defineProperty(forgedError, 'exitCode', {
+    get() {
+      throw new Error('exitCode getter must not run')
+    },
+  })
+  Object.setPrototypeOf(forgedError, CommandExecutionError.prototype)
+
+  assert.doesNotThrow(() => {
+    applyFailureToProcess(forgedError, processRef, consoleRef)
+  })
   assert.equal(processRef.exitCode, 1)
   assert.deepEqual(messages, ['Command failed unexpectedly'])
 })

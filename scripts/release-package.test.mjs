@@ -878,18 +878,33 @@ test('ReleasePackageStageError 只接受白名单 code 并保留安全退出码'
 
 test('ReleasePackageStageError 安全归一异常命令退出码', async (t) => {
   const secret = 'command-exit-code-getter-secret'
-  const invalidCommandError = new CommandExecutionError('Command failed: pnpm', 7)
-  invalidCommandError.exitCode = -99
+  const trustedCommandError = new CommandExecutionError('Command failed: pnpm', 7)
+  Reflect.set(trustedCommandError, 'exitCode', -99)
   const forgedPositiveCommandError = Object.assign(
-    Object.create(CommandExecutionError.prototype),
+    new Error('forged positive command failure'),
     { exitCode: 7 },
   )
-  const throwingExitCodeError = Object.create(CommandExecutionError.prototype)
+  Object.setPrototypeOf(
+    forgedPositiveCommandError,
+    CommandExecutionError.prototype,
+  )
+  const forgedOutOfRangeCommandError = Object.assign(
+    new Error('forged out-of-range command failure'),
+    { exitCode: 256 },
+  )
+  Object.setPrototypeOf(
+    forgedOutOfRangeCommandError,
+    CommandExecutionError.prototype,
+  )
+  let throwingExitCodeReadCount = 0
+  const throwingExitCodeError = new Error('forged getter command failure')
   Object.defineProperty(throwingExitCodeError, 'exitCode', {
     get() {
+      throwingExitCodeReadCount += 1
       throw new Error(secret)
     },
   })
+  Object.setPrototypeOf(throwingExitCodeError, CommandExecutionError.prototype)
   const throwingInstanceofError = new Proxy({}, {
     getPrototypeOf() {
       throw new Error(secret)
@@ -897,10 +912,32 @@ test('ReleasePackageStageError 安全归一异常命令退出码', async (t) => 
   })
 
   for (const fixtureCase of [
-    { cause: forgedPositiveCommandError, label: 'forged positive exitCode' },
-    { cause: invalidCommandError, label: 'invalid real exitCode' },
-    { cause: throwingExitCodeError, label: 'throwing exitCode getter' },
-    { cause: throwingInstanceofError, label: 'throwing instanceof check' },
+    {
+      cause: trustedCommandError,
+      exitCode: 7,
+      label: 'trusted snapshot ignores external mutation',
+    },
+    {
+      cause: forgedPositiveCommandError,
+      exitCode: 1,
+      label: 'forged positive exitCode',
+    },
+    {
+      cause: forgedOutOfRangeCommandError,
+      exitCode: 1,
+      label: 'forged 256 exitCode',
+    },
+    {
+      cause: throwingExitCodeError,
+      exitCode: 1,
+      label: 'throwing exitCode getter',
+      readCount: () => throwingExitCodeReadCount,
+    },
+    {
+      cause: throwingInstanceofError,
+      exitCode: 1,
+      label: 'throwing instanceof check',
+    },
   ]) {
     await t.test(fixtureCase.label, () => {
       let failure
@@ -910,7 +947,8 @@ test('ReleasePackageStageError 安全归一异常命令退出码', async (t) => 
           fixtureCase.cause,
         )
       })
-      assert.equal(failure.exitCode, 1)
+      assert.equal(failure.exitCode, fixtureCase.exitCode)
+      assert.equal(fixtureCase.readCount?.() ?? 0, 0)
     })
   }
 })
@@ -1340,18 +1378,30 @@ test('release package reporter 拒绝伪造阶段错误原型', () => {
 
 test('release package reporter 安全归一命令错误退出码', async (t) => {
   const secret = 'command-reporter-secret-canary'
-  const invalidCommandError = new CommandExecutionError('Command failed: pnpm', 7)
-  invalidCommandError.exitCode = -99
+  const trustedCommandError = new CommandExecutionError('Command failed: pnpm', 7)
+  Reflect.set(trustedCommandError, 'exitCode', -99)
   const forgedCommandError = Object.assign(
-    Object.create(CommandExecutionError.prototype),
+    new Error('forged positive command reporter failure'),
     { exitCode: 7 },
   )
-  const throwingExitCodeError = Object.create(CommandExecutionError.prototype)
+  Object.setPrototypeOf(forgedCommandError, CommandExecutionError.prototype)
+  const forgedOutOfRangeCommandError = Object.assign(
+    new Error('forged out-of-range command reporter failure'),
+    { exitCode: 256 },
+  )
+  Object.setPrototypeOf(
+    forgedOutOfRangeCommandError,
+    CommandExecutionError.prototype,
+  )
+  let throwingExitCodeReadCount = 0
+  const throwingExitCodeError = new Error('forged getter command reporter failure')
   Object.defineProperty(throwingExitCodeError, 'exitCode', {
     get() {
+      throwingExitCodeReadCount += 1
       throw new Error(secret)
     },
   })
+  Object.setPrototypeOf(throwingExitCodeError, CommandExecutionError.prototype)
   const throwingInstanceofError = new Proxy({}, {
     getPrototypeOf() {
       throw new Error(secret)
@@ -1360,8 +1410,22 @@ test('release package reporter 安全归一命令错误退出码', async (t) => 
 
   for (const fixtureCase of [
     { error: forgedCommandError, exitCode: 1, label: 'forged positive prototype' },
-    { error: invalidCommandError, exitCode: 1, label: 'invalid real exitCode' },
-    { error: throwingExitCodeError, exitCode: 1, label: 'throwing exitCode getter' },
+    {
+      error: forgedOutOfRangeCommandError,
+      exitCode: 1,
+      label: 'forged 256 prototype',
+    },
+    {
+      error: trustedCommandError,
+      exitCode: 7,
+      label: 'trusted snapshot ignores external mutation',
+    },
+    {
+      error: throwingExitCodeError,
+      exitCode: 1,
+      label: 'throwing exitCode getter',
+      readCount: () => throwingExitCodeReadCount,
+    },
     { error: throwingInstanceofError, exitCode: 1, label: 'throwing instanceof check' },
     {
       error: new CommandExecutionError('Command failed: pnpm', 7),
@@ -1386,6 +1450,7 @@ test('release package reporter 安全归一命令错误退出码', async (t) => 
         )
       })
       assert.equal(processRef.exitCode, fixtureCase.exitCode)
+      assert.equal(fixtureCase.readCount?.() ?? 0, 0)
       assert.deepEqual(stderrCalls, [[
         'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]',
       ]])
