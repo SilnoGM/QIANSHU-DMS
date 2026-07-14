@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import {
   CommandExecutionError,
+  getTrustedCommandExitCode,
   isDirectEntry,
 } from './run-command.mjs'
 
@@ -623,12 +624,7 @@ function applyReleaseFailureToProcess(
   processRef = process,
   consoleRef = console,
 ) {
-  const exitCode = error instanceof CommandExecutionError
-    ? error.exitCode
-    : 1
-  processRef.exitCode = Number.isInteger(exitCode) && exitCode > 0
-    ? exitCode
-    : 1
+  processRef.exitCode = getTrustedCommandExitCode(error) ?? 1
   consoleRef.error('Release version check failed')
 }
 

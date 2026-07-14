@@ -12,6 +12,9 @@ import { fileURLToPath } from 'node:url'
 import { gunzipSync, gzipSync } from 'node:zlib'
 
 import {
+  RELEASE_PACKAGE_FAILURE_CODES,
+  ReleasePackageStageError,
+  applyReleasePackageFailure,
   inspectTarGzipArchive,
   packageServer,
   packageWeb,
@@ -20,6 +23,7 @@ import {
   smokeServerArchive,
   validateReleaseTree,
 } from './release-package.mjs'
+import { CommandExecutionError } from './run-command.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const entrypoint = path.join(scriptsDirectory, 'release-package.mjs')
@@ -806,6 +810,658 @@ function createPackagingRunner({ serverDeploySource, calls }) {
   }
 }
 
+function fileSystemWith(overrides) {
+  return new Proxy(fs, {
+    get(target, property) {
+      return overrides[property] ?? target[property]
+    },
+  })
+}
+
+async function createServerPackagingFixture(t) {
+  const fixture = await createSandbox(t)
+  const deploySource = path.join(fixture.sandbox, 'deploy-source')
+  await createServerTree(deploySource)
+  const output = await fs.mkdtemp(path.join(fixture.outputRoot, 'server-stage-'))
+  const calls = []
+  const baseRun = createPackagingRunner({
+    calls,
+    serverDeploySource: deploySource,
+  })
+  return { baseRun, calls, deploySource, fixture, output }
+}
+
+async function createWebPackagingFixture(t) {
+  const fixture = await createSandbox(t)
+  const sourceRoot = path.join(
+    fixture.repositoryRoot,
+    'web',
+    'apps',
+    'qsmds-arco',
+    'dist',
+  )
+  await createWebTree(sourceRoot)
+  return {
+    fixture,
+    output: path.join(fixture.outputRoot, 'web-package'),
+    sourceRoot,
+  }
+}
+
+test('ReleasePackageStageError 只接受白名单 code 并保留安全退出码', () => {
+  assert.deepEqual(RELEASE_PACKAGE_FAILURE_CODES, {
+    archiveCreate: 'RELEASE_PACKAGE_ARCHIVE_CREATE_FAILED',
+    archiveDigest: 'RELEASE_PACKAGE_ARCHIVE_DIGEST_FAILED',
+    archiveInspect: 'RELEASE_PACKAGE_ARCHIVE_INSPECT_FAILED',
+    outputPrepare: 'RELEASE_PACKAGE_OUTPUT_PREPARE_FAILED',
+    serverDeploy: 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED',
+    serverPrune: 'RELEASE_PACKAGE_SERVER_PRUNE_FAILED',
+    stageCleanup: 'RELEASE_PACKAGE_STAGE_CLEANUP_FAILED',
+    stageCreate: 'RELEASE_PACKAGE_STAGE_CREATE_FAILED',
+    stageValidate: 'RELEASE_PACKAGE_STAGE_VALIDATE_FAILED',
+    unknown: 'RELEASE_PACKAGE_UNKNOWN_FAILED',
+  })
+  assert.equal(Object.isFrozen(RELEASE_PACKAGE_FAILURE_CODES), true)
+
+  const commandCause = new CommandExecutionError('Command failed: pnpm', 7)
+  const failure = new ReleasePackageStageError(
+    RELEASE_PACKAGE_FAILURE_CODES.serverDeploy,
+    commandCause,
+  )
+
+  assert.equal(failure.name, 'ReleasePackageStageError')
+  assert.equal(failure.code, 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED')
+  assert.equal(failure.cause, commandCause)
+  assert.equal(failure.exitCode, 7)
+  assert.throws(() => new ReleasePackageStageError('FORGED_CODE', new Error()))
+})
+
+test('ReleasePackageStageError 安全归一异常命令退出码', async (t) => {
+  const secret = 'command-exit-code-getter-secret'
+  const trustedCommandError = new CommandExecutionError('Command failed: pnpm', 7)
+  Reflect.set(trustedCommandError, 'exitCode', -99)
+  const forgedPositiveCommandError = Object.assign(
+    new Error('forged positive command failure'),
+    { exitCode: 7 },
+  )
+  Object.setPrototypeOf(
+    forgedPositiveCommandError,
+    CommandExecutionError.prototype,
+  )
+  const forgedOutOfRangeCommandError = Object.assign(
+    new Error('forged out-of-range command failure'),
+    { exitCode: 256 },
+  )
+  Object.setPrototypeOf(
+    forgedOutOfRangeCommandError,
+    CommandExecutionError.prototype,
+  )
+  let throwingExitCodeReadCount = 0
+  const throwingExitCodeError = new Error('forged getter command failure')
+  Object.defineProperty(throwingExitCodeError, 'exitCode', {
+    get() {
+      throwingExitCodeReadCount += 1
+      throw new Error(secret)
+    },
+  })
+  Object.setPrototypeOf(throwingExitCodeError, CommandExecutionError.prototype)
+  const throwingInstanceofError = new Proxy({}, {
+    getPrototypeOf() {
+      throw new Error(secret)
+    },
+  })
+
+  for (const fixtureCase of [
+    {
+      cause: trustedCommandError,
+      exitCode: 7,
+      label: 'trusted snapshot ignores external mutation',
+    },
+    {
+      cause: forgedPositiveCommandError,
+      exitCode: 1,
+      label: 'forged positive exitCode',
+    },
+    {
+      cause: forgedOutOfRangeCommandError,
+      exitCode: 1,
+      label: 'forged 256 exitCode',
+    },
+    {
+      cause: throwingExitCodeError,
+      exitCode: 1,
+      label: 'throwing exitCode getter',
+      readCount: () => throwingExitCodeReadCount,
+    },
+    {
+      cause: throwingInstanceofError,
+      exitCode: 1,
+      label: 'throwing instanceof check',
+    },
+  ]) {
+    await t.test(fixtureCase.label, () => {
+      let failure
+      assert.doesNotThrow(() => {
+        failure = new ReleasePackageStageError(
+          RELEASE_PACKAGE_FAILURE_CODES.serverDeploy,
+          fixtureCase.cause,
+        )
+      })
+      assert.equal(failure.exitCode, fixtureCase.exitCode)
+      assert.equal(fixtureCase.readCount?.() ?? 0, 0)
+    })
+  }
+})
+
+test('packageServer 将 pnpm deploy 首错分类且保留退出码', async (t) => {
+  const context = await createServerPackagingFixture(t)
+  const commandCause = new CommandExecutionError('Command failed: pnpm', 9)
+  const harness = createDependencies(context.fixture, {
+    async run(command) {
+      assert.equal(command, 'pnpm')
+      throw commandCause
+    },
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: context.output, tag },
+      harness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.serverDeploy
+      && error.cause === commandCause
+      && error.exitCode === 9
+    ),
+  )
+})
+
+test('packageServer 将外部阶段错误按 deploy 边界重新分类', async (t) => {
+  const context = await createServerPackagingFixture(t)
+  const externalStageError = new ReleasePackageStageError(
+    RELEASE_PACKAGE_FAILURE_CODES.archiveDigest,
+    new Error('external-stage-error'),
+  )
+  const harness = createDependencies(context.fixture, {
+    async run(command) {
+      assert.equal(command, 'pnpm')
+      throw externalStageError
+    },
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: context.output, tag },
+      harness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.serverDeploy
+      && error.cause === externalStageError
+    ),
+  )
+})
+
+test('packageServer 对每个 packaging 边界返回固定阶段 code', async (t) => {
+  const cases = [
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.outputPrepare,
+      label: 'output prepare',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async lstat(target) {
+              if (target === context.output) {
+                throw cause
+              }
+              return fs.lstat(target)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.stageCreate,
+      label: 'stage create',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async mkdtemp() {
+              throw cause
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.serverPrune,
+      label: 'server prune',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async rm(target, options) {
+              if (target.endsWith('/node_modules/prisma')) {
+                throw cause
+              }
+              return fs.rm(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.stageValidate,
+      label: 'stage validate',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async realpath(target) {
+              // Server packaging 不预校验源码；这个 basename 只命中 deploy 后的 staging root。
+              if (path.basename(target).startsWith('qsmds-server-')) {
+                throw cause
+              }
+              return fs.realpath(target)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.archiveCreate,
+      label: 'archive create',
+      overrides(context, cause) {
+        return {
+          async run(command, args, options) {
+            if (command === 'tar') {
+              throw cause
+            }
+            return context.baseRun(command, args, options)
+          },
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.archiveInspect,
+      label: 'archive inspect',
+      overrides(context, cause) {
+        let archiveReads = 0
+        return {
+          fileSystem: fileSystemWith({
+            async readFile(target, options) {
+              // finalizeArchive 第一次读取 archive 属于安全检查阶段。
+              if (target.endsWith('.tar.gz') && archiveReads++ === 0) {
+                throw cause
+              }
+              return fs.readFile(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.archiveDigest,
+      label: 'archive digest',
+      overrides(context, cause) {
+        let archiveReads = 0
+        return {
+          fileSystem: fileSystemWith({
+            async readFile(target, options) {
+              // archive 通过 inspector 后的第二次读取才进入 digest 阶段。
+              if (target.endsWith('.tar.gz') && archiveReads++ === 1) {
+                throw cause
+              }
+              return fs.readFile(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.stageCleanup,
+      label: 'stage cleanup',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async rm(target, options) {
+              if (path.basename(target).startsWith('qianshu-release-stage-')) {
+                throw cause
+              }
+              return fs.rm(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+  ]
+
+  for (const fixtureCase of cases) {
+    await t.test(fixtureCase.label, async (nestedT) => {
+      const context = await createServerPackagingFixture(nestedT)
+      const cause = new Error(`stage-canary-${fixtureCase.label}`)
+      const harness = createDependencies(
+        context.fixture,
+        fixtureCase.overrides(context, cause),
+      )
+
+      await assert.rejects(
+        packageServer(
+          { outputDirectory: context.output, tag },
+          harness.dependencies,
+        ),
+        error => (
+          error instanceof ReleasePackageStageError
+          && error.code === fixtureCase.code
+          && error.cause === cause
+        ),
+      )
+    })
+  }
+})
+
+test('packageServer cleanup 不覆盖主错误且唯一 cleanup 错误删除 archive', async (t) => {
+  const primaryContext = await createServerPackagingFixture(t)
+  const primaryCause = new Error('archive-create-primary-canary')
+  const primaryCleanupCause = new Error('stage-cleanup-secondary-canary')
+  let primaryCleanupCalls = 0
+  const primaryCleanupFileSystem = fileSystemWith({
+    async rm(target, options) {
+      if (path.basename(target).startsWith('qianshu-release-stage-')) {
+        primaryCleanupCalls += 1
+        throw primaryCleanupCause
+      }
+      return fs.rm(target, options)
+    },
+  })
+  const primaryHarness = createDependencies(primaryContext.fixture, {
+    fileSystem: primaryCleanupFileSystem,
+    async run(command, args, options) {
+      if (command === 'tar') {
+        throw primaryCause
+      }
+      return primaryContext.baseRun(command, args, options)
+    },
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: primaryContext.output, tag },
+      primaryHarness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.archiveCreate
+      && error.cause === primaryCause
+    ),
+  )
+  assert.equal(primaryCleanupCalls, 1)
+
+  const cleanupContext = await createServerPackagingFixture(t)
+  const cleanupCause = new Error('stage-cleanup-only-canary')
+  let cleanupCalls = 0
+  const cleanupFileSystem = fileSystemWith({
+    async rm(target, options) {
+      if (path.basename(target).startsWith('qianshu-release-stage-')) {
+        cleanupCalls += 1
+        throw cleanupCause
+      }
+      return fs.rm(target, options)
+    },
+  })
+  const cleanupHarness = createDependencies(cleanupContext.fixture, {
+    fileSystem: cleanupFileSystem,
+    run: cleanupContext.baseRun,
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: cleanupContext.output, tag },
+      cleanupHarness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.stageCleanup
+      && error.cause === cleanupCause
+    ),
+  )
+  assert.equal(cleanupCalls, 1)
+  await assert.rejects(
+    fs.lstat(path.join(
+      cleanupContext.output,
+      'qsmds-server-v1.2.3-linux-x64.tar.gz',
+    )),
+    { code: 'ENOENT' },
+  )
+})
+
+test('packageWeb 将 source validation 与 copy 的外部阶段错误归一 unknown', async (t) => {
+  const cases = [
+    {
+      fileSystem(context, cause) {
+        return fileSystemWith({
+          async lstat(target) {
+            if (target === context.sourceRoot) {
+              throw cause
+            }
+            return fs.lstat(target)
+          },
+        })
+      },
+      label: 'source validation',
+    },
+    {
+      fileSystem(_context, cause) {
+        return fileSystemWith({
+          async cp() {
+            throw cause
+          },
+        })
+      },
+      label: 'copy',
+    },
+  ]
+
+  for (const fixtureCase of cases) {
+    await t.test(fixtureCase.label, async (nestedT) => {
+      const context = await createWebPackagingFixture(nestedT)
+      const externalStageError = new ReleasePackageStageError(
+        RELEASE_PACKAGE_FAILURE_CODES.archiveDigest,
+        new Error(`external-web-stage-${fixtureCase.label}`),
+      )
+      const harness = createDependencies(context.fixture, {
+        fileSystem: fixtureCase.fileSystem(context, externalStageError),
+        async run() {
+          assert.fail('Web failure must happen before tar')
+        },
+      })
+
+      await assert.rejects(
+        packageWeb(
+          { outputDirectory: context.output, tag },
+          harness.dependencies,
+        ),
+        error => (
+          error instanceof ReleasePackageStageError
+          && error.code === RELEASE_PACKAGE_FAILURE_CODES.unknown
+          && error.cause === externalStageError
+        ),
+      )
+    })
+  }
+})
+
+test('release package reporter 只输出内部白名单 code', () => {
+  const secret = 'postgresql://user:password@host/database?token=secret'
+  const stderrCalls = []
+  const processRef = { exitCode: 0 }
+  const consoleRef = {
+    error(...values) {
+      stderrCalls.push(values)
+    },
+  }
+  const failure = new ReleasePackageStageError(
+    RELEASE_PACKAGE_FAILURE_CODES.archiveInspect,
+    new Error(secret),
+  )
+
+  applyReleasePackageFailure(failure, processRef, consoleRef)
+  assert.equal(processRef.exitCode, 1)
+  assert.equal(stderrCalls.length, 1)
+  assert.equal(stderrCalls[0].length, 1)
+  assert.equal(typeof stderrCalls[0][0], 'string')
+  assert.equal(
+    stderrCalls[0][0],
+    'Release package failed [code=RELEASE_PACKAGE_ARCHIVE_INSPECT_FAILED]',
+  )
+  assert.equal(
+    stderrCalls.flat().some(value => String(value).includes(secret)),
+    false,
+  )
+
+  stderrCalls.length = 0
+  processRef.exitCode = 0
+  applyReleasePackageFailure(
+    { code: 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED', message: secret },
+    processRef,
+    consoleRef,
+  )
+  assert.equal(processRef.exitCode, 1)
+  assert.equal(stderrCalls.length, 1)
+  assert.equal(stderrCalls[0].length, 1)
+  assert.equal(typeof stderrCalls[0][0], 'string')
+  assert.equal(
+    stderrCalls[0][0],
+    'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]',
+  )
+  assert.equal(
+    stderrCalls.flat().some(value => String(value).includes(secret)),
+    false,
+  )
+})
+
+test('release package reporter 拒绝伪造阶段错误原型', () => {
+  const secretCanary = 'forged-stage-code-secret-canary'
+  const forgedFailure = Object.assign(
+    Object.create(ReleasePackageStageError.prototype),
+    { code: secretCanary, exitCode: -99 },
+  )
+  const stderrCalls = []
+  const processRef = { exitCode: 0 }
+  const consoleRef = {
+    error(...values) {
+      stderrCalls.push(values)
+    },
+  }
+
+  applyReleasePackageFailure(forgedFailure, processRef, consoleRef)
+
+  assert.deepEqual({
+    exitCode: processRef.exitCode,
+    leaked: stderrCalls.flat().some(value =>
+      String(value).includes(secretCanary)),
+    stderrCalls,
+  }, {
+    exitCode: 1,
+    leaked: false,
+    stderrCalls: [[
+      'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]',
+    ]],
+  })
+})
+
+test('release package reporter 安全归一命令错误退出码', async (t) => {
+  const secret = 'command-reporter-secret-canary'
+  const trustedCommandError = new CommandExecutionError('Command failed: pnpm', 7)
+  Reflect.set(trustedCommandError, 'exitCode', -99)
+  const forgedCommandError = Object.assign(
+    new Error('forged positive command reporter failure'),
+    { exitCode: 7 },
+  )
+  Object.setPrototypeOf(forgedCommandError, CommandExecutionError.prototype)
+  const forgedOutOfRangeCommandError = Object.assign(
+    new Error('forged out-of-range command reporter failure'),
+    { exitCode: 256 },
+  )
+  Object.setPrototypeOf(
+    forgedOutOfRangeCommandError,
+    CommandExecutionError.prototype,
+  )
+  let throwingExitCodeReadCount = 0
+  const throwingExitCodeError = new Error('forged getter command reporter failure')
+  Object.defineProperty(throwingExitCodeError, 'exitCode', {
+    get() {
+      throwingExitCodeReadCount += 1
+      throw new Error(secret)
+    },
+  })
+  Object.setPrototypeOf(throwingExitCodeError, CommandExecutionError.prototype)
+  const throwingInstanceofError = new Proxy({}, {
+    getPrototypeOf() {
+      throw new Error(secret)
+    },
+  })
+
+  for (const fixtureCase of [
+    { error: forgedCommandError, exitCode: 1, label: 'forged positive prototype' },
+    {
+      error: forgedOutOfRangeCommandError,
+      exitCode: 1,
+      label: 'forged 256 prototype',
+    },
+    {
+      error: trustedCommandError,
+      exitCode: 7,
+      label: 'trusted snapshot ignores external mutation',
+    },
+    {
+      error: throwingExitCodeError,
+      exitCode: 1,
+      label: 'throwing exitCode getter',
+      readCount: () => throwingExitCodeReadCount,
+    },
+    { error: throwingInstanceofError, exitCode: 1, label: 'throwing instanceof check' },
+    {
+      error: new CommandExecutionError('Command failed: pnpm', 7),
+      exitCode: 7,
+      label: 'valid real exitCode',
+    },
+  ]) {
+    await t.test(fixtureCase.label, () => {
+      const stderrCalls = []
+      const processRef = { exitCode: 0 }
+      const consoleRef = {
+        error(...values) {
+          stderrCalls.push(values)
+        },
+      }
+
+      assert.doesNotThrow(() => {
+        applyReleasePackageFailure(
+          fixtureCase.error,
+          processRef,
+          consoleRef,
+        )
+      })
+      assert.equal(processRef.exitCode, fixtureCase.exitCode)
+      assert.equal(fixtureCase.readCount?.() ?? 0, 0)
+      assert.deepEqual(stderrCalls, [[
+        'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]',
+      ]])
+      assert.equal(
+        stderrCalls.flat().some(value => String(value).includes(secret)),
+        false,
+      )
+    })
+  }
+})
+
 test('packageWeb 构建 exact staging、固定 GNU tar argv 与确定性 archive', async (t) => {
   const fixture = await createSandbox(t)
   const distRoot = path.join(
@@ -837,7 +1493,7 @@ test('packageWeb 构建 exact staging、固定 GNU tar argv 与确定性 archive
   )
   assert.equal(first.sha256, second.sha256)
   assert.equal(first.size, (await fs.lstat(first.archivePath)).size)
-  assert.deepEqual(calls[0][1].slice(0, 15), [
+  assert.deepEqual(calls[0][1].slice(0, 13), [
     '--create',
     '--gzip',
     '--file',
@@ -849,6 +1505,7 @@ test('packageWeb 构建 exact staging、固定 GNU tar argv 与确定性 archive
     '--numeric-owner',
     '--format=posix',
     '--pax-option=delete=atime,delete=ctime',
+    '--hard-dereference',
     'qsmds-web-v1.2.3',
   ])
   const gzip = await fs.readFile(first.archivePath)
@@ -929,6 +1586,12 @@ test('packageServer 非 linux/x64 fail-closed；Linux 使用精确 pnpm deploy',
     '--prod',
     'deploy',
     calls[0][1][6],
+  ])
+  const tarCall = calls.find(([command]) => command === 'tar')
+  assert.ok(tarCall)
+  assert.deepEqual(tarCall[1].slice(-2), [
+    '--hard-dereference',
+    'qsmds-server-v1.2.3-linux-x64',
   ])
   assert.equal(path.basename(result.archivePath),
     'qsmds-server-v1.2.3-linux-x64.tar.gz')
@@ -1343,6 +2006,9 @@ test('CLI dispatch 返回单行 JSON，失败固定脱敏', async (t) => {
   )
   assert.equal(cliFailure.status, 1)
   assert.equal(cliFailure.stdout, '')
-  assert.equal(cliFailure.stderr, 'Release package failed\n')
+  assert.equal(
+    cliFailure.stderr,
+    'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]\n',
+  )
   assert.equal(cliFailure.stderr.includes(secret), false)
 })

@@ -376,6 +376,58 @@ test('applyContractFailureToProcess 保留 CommandExecutionError 非零失败码
   assert.deepEqual(calls, ['OpenAPI contract check failed'])
 })
 
+test('applyContractFailureToProcess 拒绝真实 Error 通过替换 prototype 伪造退出码', async (t) => {
+  const forgedPositiveError = Object.assign(
+    new Error(`forged-positive-${DOCUMENT_CANARY}`),
+    { exitCode: 9 },
+  )
+  Object.setPrototypeOf(forgedPositiveError, CommandExecutionError.prototype)
+  const forgedOutOfRangeError = Object.assign(
+    new Error(`forged-256-${DOCUMENT_CANARY}`),
+    { exitCode: 256 },
+  )
+  Object.setPrototypeOf(
+    forgedOutOfRangeError,
+    CommandExecutionError.prototype,
+  )
+  let throwingExitCodeReadCount = 0
+  const throwingExitCodeError = new Error(`forged-getter-${DOCUMENT_CANARY}`)
+  Object.defineProperty(throwingExitCodeError, 'exitCode', {
+    get() {
+      throwingExitCodeReadCount += 1
+      throw new Error('exitCode getter must not run')
+    },
+  })
+  Object.setPrototypeOf(throwingExitCodeError, CommandExecutionError.prototype)
+
+  for (const fixtureCase of [
+    { error: forgedPositiveError, label: 'positive exitCode' },
+    { error: forgedOutOfRangeError, label: '256 exitCode' },
+    {
+      error: throwingExitCodeError,
+      label: 'throwing exitCode getter',
+      readCount: () => throwingExitCodeReadCount,
+    },
+  ]) {
+    await t.test(fixtureCase.label, () => {
+      const processRef = { exitCode: undefined }
+      const calls = []
+
+      assert.doesNotThrow(() => {
+        applyContractFailureToProcess(
+          fixtureCase.error,
+          processRef,
+          { error: message => calls.push(message) },
+        )
+      })
+      assert.equal(processRef.exitCode, 1)
+      assert.equal(fixtureCase.readCount?.() ?? 0, 0)
+      assert.deepEqual(calls, ['OpenAPI contract check failed'])
+      assert.equal(calls.some(message => message.includes(DOCUMENT_CANARY)), false)
+    })
+  }
+})
+
 test('完整 fixture 通过契约校验并解析所有 escaped/local refs', () => {
   assert.doesNotThrow(() =>
     assertOpenApiContract(createValidContractFixture()),

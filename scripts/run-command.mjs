@@ -4,8 +4,14 @@ import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
+// 公开 prototype 与属性都可被外部对象伪造，因此只有构造器写入的 WeakMap
+// 快照才代表本模块真实创建的命令错误。快照不向调用方暴露 message。
+const commandExecutionErrorDetails = new WeakMap()
+
 function normalizeExitCode(exitCode) {
-  return Number.isInteger(exitCode) && exitCode > 0 ? exitCode : 1
+  return Number.isInteger(exitCode) && exitCode >= 1 && exitCode <= 255
+    ? exitCode
+    : 1
 }
 
 function exitCodeFromSignal(signal) {
@@ -14,16 +20,28 @@ function exitCodeFromSignal(signal) {
     : undefined
 
   return Number.isInteger(signalNumber) && signalNumber > 0
-    ? 128 + signalNumber
+    ? normalizeExitCode(128 + signalNumber)
     : 1
 }
 
 export class CommandExecutionError extends Error {
   constructor(message, exitCode = 1, cause) {
     super(message, { cause })
+    const normalizedExitCode = normalizeExitCode(exitCode)
     this.name = 'CommandExecutionError'
-    this.exitCode = normalizeExitCode(exitCode)
+    Object.defineProperty(this, 'exitCode', {
+      enumerable: true,
+      value: normalizedExitCode,
+    })
+    commandExecutionErrorDetails.set(this, {
+      exitCode: normalizedExitCode,
+      message: this.message,
+    })
   }
+}
+
+export function getTrustedCommandExitCode(error) {
+  return commandExecutionErrorDetails.get(error)?.exitCode
 }
 
 export function runCommand(command, args, options = {}) {
@@ -84,15 +102,13 @@ export function applyFailureToProcess(
   processRef = process,
   consoleRef = console,
 ) {
-  const isCommandFailure = error instanceof CommandExecutionError
-  processRef.exitCode = isCommandFailure
-    ? normalizeExitCode(error.exitCode)
-    : 1
+  const trustedDetails = commandExecutionErrorDetails.get(error)
+  processRef.exitCode = trustedDetails?.exitCode ?? 1
 
   // 未知异常可能携带环境变量、请求体或底层连接信息，因此不回显其 message。
-  // CommandExecutionError 只由本模块使用命令名构造，刻意不包含 args 或 env。
+  // 真实 CommandExecutionError 使用构造时快照，后续公开属性篡改不会进入日志。
   consoleRef.error(
-    isCommandFailure ? error.message : 'Command failed unexpectedly',
+    trustedDetails?.message ?? 'Command failed unexpectedly',
   )
 }
 

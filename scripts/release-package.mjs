@@ -15,6 +15,7 @@ import {
 } from './release-version.mjs'
 import {
   CommandExecutionError,
+  getTrustedCommandExitCode,
   isDirectEntry,
   runCommand,
 } from './run-command.mjs'
@@ -28,6 +29,71 @@ const healthTimeoutMilliseconds = 30_000
 const healthPollMilliseconds = 250
 const portAttemptLimit = 3
 const processTerminationGraceMilliseconds = 5_000
+
+export const RELEASE_PACKAGE_FAILURE_CODES = Object.freeze({
+  archiveCreate: 'RELEASE_PACKAGE_ARCHIVE_CREATE_FAILED',
+  archiveDigest: 'RELEASE_PACKAGE_ARCHIVE_DIGEST_FAILED',
+  archiveInspect: 'RELEASE_PACKAGE_ARCHIVE_INSPECT_FAILED',
+  outputPrepare: 'RELEASE_PACKAGE_OUTPUT_PREPARE_FAILED',
+  serverDeploy: 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED',
+  serverPrune: 'RELEASE_PACKAGE_SERVER_PRUNE_FAILED',
+  stageCleanup: 'RELEASE_PACKAGE_STAGE_CLEANUP_FAILED',
+  stageCreate: 'RELEASE_PACKAGE_STAGE_CREATE_FAILED',
+  stageValidate: 'RELEASE_PACKAGE_STAGE_VALIDATE_FAILED',
+  unknown: 'RELEASE_PACKAGE_UNKNOWN_FAILED',
+})
+
+const releasePackageFailureCodeSet = new Set(
+  Object.values(RELEASE_PACKAGE_FAILURE_CODES),
+)
+// 构造器身份供 reporter 信任；factory 身份只供内部阶段传播，二者不可混用。
+const releasePackageStageErrorSet = new WeakSet()
+const classifiedReleasePackageStageErrorSet = new WeakSet()
+
+function commandExecutionExitCode(error) {
+  // prototype、Error internal brand 与公开属性均不足以证明构造来源；
+  // 只有 run-command 模块的私有快照可以传播原始退出码。
+  return getTrustedCommandExitCode(error) ?? 1
+}
+
+export class ReleasePackageStageError extends Error {
+  constructor(code, cause) {
+    if (!releasePackageFailureCodeSet.has(code)) {
+      throw new TypeError('Release package failure code is unsupported')
+    }
+    super('Release package stage failed', { cause })
+    this.name = 'ReleasePackageStageError'
+    Object.defineProperties(this, {
+      code: {
+        enumerable: true,
+        value: code,
+      },
+      exitCode: {
+        enumerable: true,
+        value: commandExecutionExitCode(cause),
+      },
+    })
+    releasePackageStageErrorSet.add(this)
+  }
+}
+
+function createReleasePackageStageError(code, cause) {
+  const error = new ReleasePackageStageError(code, cause)
+  classifiedReleasePackageStageErrorSet.add(error)
+  return error
+}
+
+async function withReleasePackageStage(code, operation) {
+  try {
+    return await operation()
+  } catch (cause) {
+    if (classifiedReleasePackageStageErrorSet.has(cause)) {
+      // 只有本模块 factory 分类的错误才能跨外层阶段保留首错位置。
+      throw cause
+    }
+    throw createReleasePackageStageError(code, cause)
+  }
+}
 
 function isRecord(value) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -862,6 +928,9 @@ function tarArguments(archivePath, topLevelName) {
     '--numeric-owner',
     '--format=posix',
     '--pax-option=delete=atime,delete=ctime',
+    // hardlink 与 symlink 是不同的 tar 语义；这里只展开前者，后者继续由
+    // inspector 按对应 policy 校验，禁止改成会跟随 symlink 的 --dereference。
+    '--hard-dereference',
     topLevelName,
   ]
 }
@@ -871,16 +940,24 @@ async function finalizeArchive(
   policy,
   dependencies,
 ) {
-  await inspectTarGzipArchive(archivePath, policy, dependencies)
-  const readFile = resolveFileSystemMethod(dependencies.fileSystem, 'readFile')
-  const lstat = resolveFileSystemMethod(dependencies.fileSystem, 'lstat')
-  const stats = await lstat(archivePath)
-  const bytes = Buffer.from(await readFile(archivePath))
-  return Object.freeze({
-    archivePath,
-    size: stats.size,
-    sha256: createHash('sha256').update(bytes).digest('hex'),
-  })
+  await withReleasePackageStage(
+    RELEASE_PACKAGE_FAILURE_CODES.archiveInspect,
+    () => inspectTarGzipArchive(archivePath, policy, dependencies),
+  )
+  return withReleasePackageStage(
+    RELEASE_PACKAGE_FAILURE_CODES.archiveDigest,
+    async () => {
+      const readFile = resolveFileSystemMethod(dependencies.fileSystem, 'readFile')
+      const lstat = resolveFileSystemMethod(dependencies.fileSystem, 'lstat')
+      const stats = await lstat(archivePath)
+      const bytes = Buffer.from(await readFile(archivePath))
+      return Object.freeze({
+        archivePath,
+        size: stats.size,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      })
+    },
+  )
 }
 
 async function pruneServerDevelopmentArtifacts(stageRoot, dependencies) {
@@ -938,9 +1015,12 @@ async function packageRelease(kind, input, dependencies) {
     throw new Error('Server release packaging requires linux/x64')
   }
   const policy = policyFor(kind, normalizedInput.tag)
-  const output = await prepareOutputDirectory(
-    normalizedInput.outputDirectory,
-    normalizedDependencies,
+  const output = await withReleasePackageStage(
+    RELEASE_PACKAGE_FAILURE_CODES.outputPrepare,
+    () => prepareOutputDirectory(
+      normalizedInput.outputDirectory,
+      normalizedDependencies,
+    ),
   )
   const outputDirectory = output.directory
   const mkdtemp = resolveFileSystemMethod(normalizedDependencies.fileSystem, 'mkdtemp')
@@ -954,8 +1034,9 @@ async function packageRelease(kind, input, dependencies) {
   let primaryError
   let stageParent
   try {
-    stageParent = await mkdtemp(
-      path.join(outputDirectory, 'qianshu-release-stage-'),
+    stageParent = await withReleasePackageStage(
+      RELEASE_PACKAGE_FAILURE_CODES.stageCreate,
+      () => mkdtemp(path.join(outputDirectory, 'qianshu-release-stage-')),
     )
     const stageRoot = path.join(stageParent, policy.topLevelName)
     if (kind === 'web') {
@@ -974,28 +1055,43 @@ async function packageRelease(kind, input, dependencies) {
         verbatimSymlinks: true,
       })
     } else {
-      await runStep(
-        normalizedDependencies.run,
-        'pnpm',
-        [
-          '-C',
-          'server',
-          '--filter',
-          '@qianshu-dms/server',
-          '--prod',
-          'deploy',
-          stageRoot,
-        ],
-        { cwd: normalizedDependencies.repositoryRoot },
+      await withReleasePackageStage(
+        RELEASE_PACKAGE_FAILURE_CODES.serverDeploy,
+        () => runStep(
+          normalizedDependencies.run,
+          'pnpm',
+          [
+            '-C',
+            'server',
+            '--filter',
+            '@qianshu-dms/server',
+            '--prod',
+            'deploy',
+            stageRoot,
+          ],
+          { cwd: normalizedDependencies.repositoryRoot },
+        ),
       )
-      await pruneServerDevelopmentArtifacts(stageRoot, normalizedDependencies)
+      await withReleasePackageStage(
+        RELEASE_PACKAGE_FAILURE_CODES.serverPrune,
+        () => pruneServerDevelopmentArtifacts(
+          stageRoot,
+          normalizedDependencies,
+        ),
+      )
     }
-    await validateReleaseTree(stageRoot, policy, normalizedDependencies)
-    await runStep(
-      normalizedDependencies.run,
-      'tar',
-      tarArguments(archivePath, policy.topLevelName),
-      { cwd: stageParent },
+    await withReleasePackageStage(
+      RELEASE_PACKAGE_FAILURE_CODES.stageValidate,
+      () => validateReleaseTree(stageRoot, policy, normalizedDependencies),
+    )
+    await withReleasePackageStage(
+      RELEASE_PACKAGE_FAILURE_CODES.archiveCreate,
+      () => runStep(
+        normalizedDependencies.run,
+        'tar',
+        tarArguments(archivePath, policy.topLevelName),
+        { cwd: stageParent },
+      ),
     )
     const result = await finalizeArchive(
       archivePath,
@@ -1005,8 +1101,13 @@ async function packageRelease(kind, input, dependencies) {
     completed = true
     return result
   } catch (error) {
-    primaryError = error
-    throw error
+    primaryError = classifiedReleasePackageStageErrorSet.has(error)
+      ? error
+      : createReleasePackageStageError(
+          RELEASE_PACKAGE_FAILURE_CODES.unknown,
+          error,
+        )
+    throw primaryError
   } finally {
     let cleanupError
     if (stageParent !== undefined) {
@@ -1032,7 +1133,10 @@ async function packageRelease(kind, input, dependencies) {
       }
     }
     if (primaryError === undefined && cleanupError !== undefined) {
-      throw cleanupError
+      throw createReleasePackageStageError(
+        RELEASE_PACKAGE_FAILURE_CODES.stageCleanup,
+        cleanupError,
+      )
     }
   }
 }
@@ -1415,11 +1519,16 @@ export async function runReleasePackageCli({
   return result
 }
 
-function applyReleasePackageFailure(error) {
-  process.exitCode = error instanceof CommandExecutionError
-    ? error.exitCode
-    : 1
-  console.error('Release package failed')
+export function applyReleasePackageFailure(
+  error,
+  processRef = process,
+  consoleRef = console,
+) {
+  const failure = releasePackageStageErrorSet.has(error) ? error : undefined
+  processRef.exitCode = failure?.exitCode
+    ?? commandExecutionExitCode(error)
+  const code = failure?.code ?? RELEASE_PACKAGE_FAILURE_CODES.unknown
+  consoleRef.error(`Release package failed [code=${code}]`)
 }
 
 if (isDirectEntry(import.meta.url)) {
