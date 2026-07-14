@@ -45,6 +45,24 @@ export const RELEASE_PACKAGE_FAILURE_CODES = Object.freeze({
 const releasePackageFailureCodeSet = new Set(
   Object.values(RELEASE_PACKAGE_FAILURE_CODES),
 )
+// 构造器身份供 reporter 信任；factory 身份只供内部阶段传播，二者不可混用。
+const releasePackageStageErrorSet = new WeakSet()
+const classifiedReleasePackageStageErrorSet = new WeakSet()
+
+function normalizeReleasePackageExitCode(value) {
+  return Number.isInteger(value) && value > 0 ? value : 1
+}
+
+function commandExecutionExitCode(error) {
+  try {
+    return Error.isError(error) && error instanceof CommandExecutionError
+      ? normalizeReleasePackageExitCode(error.exitCode)
+      : 1
+  } catch {
+    // 外部错误的 prototype 或 exitCode getter 不可信，读取异常统一安全降级。
+    return 1
+  }
+}
 
 export class ReleasePackageStageError extends Error {
   constructor(code, cause) {
@@ -60,21 +78,28 @@ export class ReleasePackageStageError extends Error {
       },
       exitCode: {
         enumerable: true,
-        value: cause instanceof CommandExecutionError ? cause.exitCode : 1,
+        value: commandExecutionExitCode(cause),
       },
     })
+    releasePackageStageErrorSet.add(this)
   }
+}
+
+function createReleasePackageStageError(code, cause) {
+  const error = new ReleasePackageStageError(code, cause)
+  classifiedReleasePackageStageErrorSet.add(error)
+  return error
 }
 
 async function withReleasePackageStage(code, operation) {
   try {
     return await operation()
   } catch (cause) {
-    if (cause instanceof ReleasePackageStageError) {
-      // 已分类错误不得被外层阶段覆盖，否则会丢失真正的首错位置。
+    if (classifiedReleasePackageStageErrorSet.has(cause)) {
+      // 只有本模块 factory 分类的错误才能跨外层阶段保留首错位置。
       throw cause
     }
-    throw new ReleasePackageStageError(code, cause)
+    throw createReleasePackageStageError(code, cause)
   }
 }
 
@@ -1081,9 +1106,9 @@ async function packageRelease(kind, input, dependencies) {
     completed = true
     return result
   } catch (error) {
-    primaryError = error instanceof ReleasePackageStageError
+    primaryError = classifiedReleasePackageStageErrorSet.has(error)
       ? error
-      : new ReleasePackageStageError(
+      : createReleasePackageStageError(
           RELEASE_PACKAGE_FAILURE_CODES.unknown,
           error,
         )
@@ -1113,7 +1138,7 @@ async function packageRelease(kind, input, dependencies) {
       }
     }
     if (primaryError === undefined && cleanupError !== undefined) {
-      throw new ReleasePackageStageError(
+      throw createReleasePackageStageError(
         RELEASE_PACKAGE_FAILURE_CODES.stageCleanup,
         cleanupError,
       )
@@ -1504,9 +1529,9 @@ export function applyReleasePackageFailure(
   processRef = process,
   consoleRef = console,
 ) {
-  const failure = error instanceof ReleasePackageStageError ? error : undefined
+  const failure = releasePackageStageErrorSet.has(error) ? error : undefined
   processRef.exitCode = failure?.exitCode
-    ?? (error instanceof CommandExecutionError ? error.exitCode : 1)
+    ?? commandExecutionExitCode(error)
   const code = failure?.code ?? RELEASE_PACKAGE_FAILURE_CODES.unknown
   consoleRef.error(`Release package failed [code=${code}]`)
 }

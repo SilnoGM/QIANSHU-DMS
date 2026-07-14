@@ -831,6 +831,23 @@ async function createServerPackagingFixture(t) {
   return { baseRun, calls, deploySource, fixture, output }
 }
 
+async function createWebPackagingFixture(t) {
+  const fixture = await createSandbox(t)
+  const sourceRoot = path.join(
+    fixture.repositoryRoot,
+    'web',
+    'apps',
+    'qsmds-arco',
+    'dist',
+  )
+  await createWebTree(sourceRoot)
+  return {
+    fixture,
+    output: path.join(fixture.outputRoot, 'web-package'),
+    sourceRoot,
+  }
+}
+
 test('ReleasePackageStageError 只接受白名单 code 并保留安全退出码', () => {
   assert.deepEqual(RELEASE_PACKAGE_FAILURE_CODES, {
     archiveCreate: 'RELEASE_PACKAGE_ARCHIVE_CREATE_FAILED',
@@ -859,6 +876,45 @@ test('ReleasePackageStageError 只接受白名单 code 并保留安全退出码'
   assert.throws(() => new ReleasePackageStageError('FORGED_CODE', new Error()))
 })
 
+test('ReleasePackageStageError 安全归一异常命令退出码', async (t) => {
+  const secret = 'command-exit-code-getter-secret'
+  const invalidCommandError = new CommandExecutionError('Command failed: pnpm', 7)
+  invalidCommandError.exitCode = -99
+  const forgedPositiveCommandError = Object.assign(
+    Object.create(CommandExecutionError.prototype),
+    { exitCode: 7 },
+  )
+  const throwingExitCodeError = Object.create(CommandExecutionError.prototype)
+  Object.defineProperty(throwingExitCodeError, 'exitCode', {
+    get() {
+      throw new Error(secret)
+    },
+  })
+  const throwingInstanceofError = new Proxy({}, {
+    getPrototypeOf() {
+      throw new Error(secret)
+    },
+  })
+
+  for (const fixtureCase of [
+    { cause: forgedPositiveCommandError, label: 'forged positive exitCode' },
+    { cause: invalidCommandError, label: 'invalid real exitCode' },
+    { cause: throwingExitCodeError, label: 'throwing exitCode getter' },
+    { cause: throwingInstanceofError, label: 'throwing instanceof check' },
+  ]) {
+    await t.test(fixtureCase.label, () => {
+      let failure
+      assert.doesNotThrow(() => {
+        failure = new ReleasePackageStageError(
+          RELEASE_PACKAGE_FAILURE_CODES.serverDeploy,
+          fixtureCase.cause,
+        )
+      })
+      assert.equal(failure.exitCode, 1)
+    })
+  }
+})
+
 test('packageServer 将 pnpm deploy 首错分类且保留退出码', async (t) => {
   const context = await createServerPackagingFixture(t)
   const commandCause = new CommandExecutionError('Command failed: pnpm', 9)
@@ -879,6 +935,32 @@ test('packageServer 将 pnpm deploy 首错分类且保留退出码', async (t) =
       && error.code === RELEASE_PACKAGE_FAILURE_CODES.serverDeploy
       && error.cause === commandCause
       && error.exitCode === 9
+    ),
+  )
+})
+
+test('packageServer 将外部阶段错误按 deploy 边界重新分类', async (t) => {
+  const context = await createServerPackagingFixture(t)
+  const externalStageError = new ReleasePackageStageError(
+    RELEASE_PACKAGE_FAILURE_CODES.archiveDigest,
+    new Error('external-stage-error'),
+  )
+  const harness = createDependencies(context.fixture, {
+    async run(command) {
+      assert.equal(command, 'pnpm')
+      throw externalStageError
+    },
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: context.output, tag },
+      harness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.serverDeploy
+      && error.cause === externalStageError
     ),
   )
 })
@@ -1121,6 +1203,62 @@ test('packageServer cleanup 不覆盖主错误且唯一 cleanup 错误删除 arc
   )
 })
 
+test('packageWeb 将 source validation 与 copy 的外部阶段错误归一 unknown', async (t) => {
+  const cases = [
+    {
+      fileSystem(context, cause) {
+        return fileSystemWith({
+          async lstat(target) {
+            if (target === context.sourceRoot) {
+              throw cause
+            }
+            return fs.lstat(target)
+          },
+        })
+      },
+      label: 'source validation',
+    },
+    {
+      fileSystem(_context, cause) {
+        return fileSystemWith({
+          async cp() {
+            throw cause
+          },
+        })
+      },
+      label: 'copy',
+    },
+  ]
+
+  for (const fixtureCase of cases) {
+    await t.test(fixtureCase.label, async (nestedT) => {
+      const context = await createWebPackagingFixture(nestedT)
+      const externalStageError = new ReleasePackageStageError(
+        RELEASE_PACKAGE_FAILURE_CODES.archiveDigest,
+        new Error(`external-web-stage-${fixtureCase.label}`),
+      )
+      const harness = createDependencies(context.fixture, {
+        fileSystem: fixtureCase.fileSystem(context, externalStageError),
+        async run() {
+          assert.fail('Web failure must happen before tar')
+        },
+      })
+
+      await assert.rejects(
+        packageWeb(
+          { outputDirectory: context.output, tag },
+          harness.dependencies,
+        ),
+        error => (
+          error instanceof ReleasePackageStageError
+          && error.code === RELEASE_PACKAGE_FAILURE_CODES.unknown
+          && error.cause === externalStageError
+        ),
+      )
+    })
+  }
+})
+
 test('release package reporter 只输出内部白名单 code', () => {
   const secret = 'postgresql://user:password@host/database?token=secret'
   const stderrCalls = []
@@ -1168,6 +1306,95 @@ test('release package reporter 只输出内部白名单 code', () => {
     stderrCalls.flat().some(value => String(value).includes(secret)),
     false,
   )
+})
+
+test('release package reporter 拒绝伪造阶段错误原型', () => {
+  const secretCanary = 'forged-stage-code-secret-canary'
+  const forgedFailure = Object.assign(
+    Object.create(ReleasePackageStageError.prototype),
+    { code: secretCanary, exitCode: -99 },
+  )
+  const stderrCalls = []
+  const processRef = { exitCode: 0 }
+  const consoleRef = {
+    error(...values) {
+      stderrCalls.push(values)
+    },
+  }
+
+  applyReleasePackageFailure(forgedFailure, processRef, consoleRef)
+
+  assert.deepEqual({
+    exitCode: processRef.exitCode,
+    leaked: stderrCalls.flat().some(value =>
+      String(value).includes(secretCanary)),
+    stderrCalls,
+  }, {
+    exitCode: 1,
+    leaked: false,
+    stderrCalls: [[
+      'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]',
+    ]],
+  })
+})
+
+test('release package reporter 安全归一命令错误退出码', async (t) => {
+  const secret = 'command-reporter-secret-canary'
+  const invalidCommandError = new CommandExecutionError('Command failed: pnpm', 7)
+  invalidCommandError.exitCode = -99
+  const forgedCommandError = Object.assign(
+    Object.create(CommandExecutionError.prototype),
+    { exitCode: 7 },
+  )
+  const throwingExitCodeError = Object.create(CommandExecutionError.prototype)
+  Object.defineProperty(throwingExitCodeError, 'exitCode', {
+    get() {
+      throw new Error(secret)
+    },
+  })
+  const throwingInstanceofError = new Proxy({}, {
+    getPrototypeOf() {
+      throw new Error(secret)
+    },
+  })
+
+  for (const fixtureCase of [
+    { error: forgedCommandError, exitCode: 1, label: 'forged positive prototype' },
+    { error: invalidCommandError, exitCode: 1, label: 'invalid real exitCode' },
+    { error: throwingExitCodeError, exitCode: 1, label: 'throwing exitCode getter' },
+    { error: throwingInstanceofError, exitCode: 1, label: 'throwing instanceof check' },
+    {
+      error: new CommandExecutionError('Command failed: pnpm', 7),
+      exitCode: 7,
+      label: 'valid real exitCode',
+    },
+  ]) {
+    await t.test(fixtureCase.label, () => {
+      const stderrCalls = []
+      const processRef = { exitCode: 0 }
+      const consoleRef = {
+        error(...values) {
+          stderrCalls.push(values)
+        },
+      }
+
+      assert.doesNotThrow(() => {
+        applyReleasePackageFailure(
+          fixtureCase.error,
+          processRef,
+          consoleRef,
+        )
+      })
+      assert.equal(processRef.exitCode, fixtureCase.exitCode)
+      assert.deepEqual(stderrCalls, [[
+        'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]',
+      ]])
+      assert.equal(
+        stderrCalls.flat().some(value => String(value).includes(secret)),
+        false,
+      )
+    })
+  }
 })
 
 test('packageWeb 构建 exact staging、固定 GNU tar argv 与确定性 archive', async (t) => {
