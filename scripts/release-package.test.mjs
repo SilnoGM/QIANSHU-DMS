@@ -12,6 +12,9 @@ import { fileURLToPath } from 'node:url'
 import { gunzipSync, gzipSync } from 'node:zlib'
 
 import {
+  RELEASE_PACKAGE_FAILURE_CODES,
+  ReleasePackageStageError,
+  applyReleasePackageFailure,
   inspectTarGzipArchive,
   packageServer,
   packageWeb,
@@ -20,6 +23,7 @@ import {
   smokeServerArchive,
   validateReleaseTree,
 } from './release-package.mjs'
+import { CommandExecutionError } from './run-command.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const entrypoint = path.join(scriptsDirectory, 'release-package.mjs')
@@ -806,6 +810,366 @@ function createPackagingRunner({ serverDeploySource, calls }) {
   }
 }
 
+function fileSystemWith(overrides) {
+  return new Proxy(fs, {
+    get(target, property) {
+      return overrides[property] ?? target[property]
+    },
+  })
+}
+
+async function createServerPackagingFixture(t) {
+  const fixture = await createSandbox(t)
+  const deploySource = path.join(fixture.sandbox, 'deploy-source')
+  await createServerTree(deploySource)
+  const output = await fs.mkdtemp(path.join(fixture.outputRoot, 'server-stage-'))
+  const calls = []
+  const baseRun = createPackagingRunner({
+    calls,
+    serverDeploySource: deploySource,
+  })
+  return { baseRun, calls, deploySource, fixture, output }
+}
+
+test('ReleasePackageStageError 只接受白名单 code 并保留安全退出码', () => {
+  assert.deepEqual(RELEASE_PACKAGE_FAILURE_CODES, {
+    archiveCreate: 'RELEASE_PACKAGE_ARCHIVE_CREATE_FAILED',
+    archiveDigest: 'RELEASE_PACKAGE_ARCHIVE_DIGEST_FAILED',
+    archiveInspect: 'RELEASE_PACKAGE_ARCHIVE_INSPECT_FAILED',
+    outputPrepare: 'RELEASE_PACKAGE_OUTPUT_PREPARE_FAILED',
+    serverDeploy: 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED',
+    serverPrune: 'RELEASE_PACKAGE_SERVER_PRUNE_FAILED',
+    stageCleanup: 'RELEASE_PACKAGE_STAGE_CLEANUP_FAILED',
+    stageCreate: 'RELEASE_PACKAGE_STAGE_CREATE_FAILED',
+    stageValidate: 'RELEASE_PACKAGE_STAGE_VALIDATE_FAILED',
+    unknown: 'RELEASE_PACKAGE_UNKNOWN_FAILED',
+  })
+  assert.equal(Object.isFrozen(RELEASE_PACKAGE_FAILURE_CODES), true)
+
+  const commandCause = new CommandExecutionError('Command failed: pnpm', 7)
+  const failure = new ReleasePackageStageError(
+    RELEASE_PACKAGE_FAILURE_CODES.serverDeploy,
+    commandCause,
+  )
+
+  assert.equal(failure.name, 'ReleasePackageStageError')
+  assert.equal(failure.code, 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED')
+  assert.equal(failure.cause, commandCause)
+  assert.equal(failure.exitCode, 7)
+  assert.throws(() => new ReleasePackageStageError('FORGED_CODE', new Error()))
+})
+
+test('packageServer 将 pnpm deploy 首错分类且保留退出码', async (t) => {
+  const context = await createServerPackagingFixture(t)
+  const commandCause = new CommandExecutionError('Command failed: pnpm', 9)
+  const harness = createDependencies(context.fixture, {
+    async run(command) {
+      assert.equal(command, 'pnpm')
+      throw commandCause
+    },
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: context.output, tag },
+      harness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.serverDeploy
+      && error.cause === commandCause
+      && error.exitCode === 9
+    ),
+  )
+})
+
+test('packageServer 对每个 packaging 边界返回固定阶段 code', async (t) => {
+  const cases = [
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.outputPrepare,
+      label: 'output prepare',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async lstat(target) {
+              if (target === context.output) {
+                throw cause
+              }
+              return fs.lstat(target)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.stageCreate,
+      label: 'stage create',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async mkdtemp() {
+              throw cause
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.serverPrune,
+      label: 'server prune',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async rm(target, options) {
+              if (target.endsWith('/node_modules/prisma')) {
+                throw cause
+              }
+              return fs.rm(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.stageValidate,
+      label: 'stage validate',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async realpath(target) {
+              // Server packaging 不预校验源码；这个 basename 只命中 deploy 后的 staging root。
+              if (path.basename(target).startsWith('qsmds-server-')) {
+                throw cause
+              }
+              return fs.realpath(target)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.archiveCreate,
+      label: 'archive create',
+      overrides(context, cause) {
+        return {
+          async run(command, args, options) {
+            if (command === 'tar') {
+              throw cause
+            }
+            return context.baseRun(command, args, options)
+          },
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.archiveInspect,
+      label: 'archive inspect',
+      overrides(context, cause) {
+        let archiveReads = 0
+        return {
+          fileSystem: fileSystemWith({
+            async readFile(target, options) {
+              // finalizeArchive 第一次读取 archive 属于安全检查阶段。
+              if (target.endsWith('.tar.gz') && archiveReads++ === 0) {
+                throw cause
+              }
+              return fs.readFile(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.archiveDigest,
+      label: 'archive digest',
+      overrides(context, cause) {
+        let archiveReads = 0
+        return {
+          fileSystem: fileSystemWith({
+            async readFile(target, options) {
+              // archive 通过 inspector 后的第二次读取才进入 digest 阶段。
+              if (target.endsWith('.tar.gz') && archiveReads++ === 1) {
+                throw cause
+              }
+              return fs.readFile(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+    {
+      code: RELEASE_PACKAGE_FAILURE_CODES.stageCleanup,
+      label: 'stage cleanup',
+      overrides(context, cause) {
+        return {
+          fileSystem: fileSystemWith({
+            async rm(target, options) {
+              if (path.basename(target).startsWith('qianshu-release-stage-')) {
+                throw cause
+              }
+              return fs.rm(target, options)
+            },
+          }),
+          run: context.baseRun,
+        }
+      },
+    },
+  ]
+
+  for (const fixtureCase of cases) {
+    await t.test(fixtureCase.label, async (nestedT) => {
+      const context = await createServerPackagingFixture(nestedT)
+      const cause = new Error(`stage-canary-${fixtureCase.label}`)
+      const harness = createDependencies(
+        context.fixture,
+        fixtureCase.overrides(context, cause),
+      )
+
+      await assert.rejects(
+        packageServer(
+          { outputDirectory: context.output, tag },
+          harness.dependencies,
+        ),
+        error => (
+          error instanceof ReleasePackageStageError
+          && error.code === fixtureCase.code
+          && error.cause === cause
+        ),
+      )
+    })
+  }
+})
+
+test('packageServer cleanup 不覆盖主错误且唯一 cleanup 错误删除 archive', async (t) => {
+  const primaryContext = await createServerPackagingFixture(t)
+  const primaryCause = new Error('archive-create-primary-canary')
+  const primaryCleanupCause = new Error('stage-cleanup-secondary-canary')
+  let primaryCleanupCalls = 0
+  const primaryCleanupFileSystem = fileSystemWith({
+    async rm(target, options) {
+      if (path.basename(target).startsWith('qianshu-release-stage-')) {
+        primaryCleanupCalls += 1
+        throw primaryCleanupCause
+      }
+      return fs.rm(target, options)
+    },
+  })
+  const primaryHarness = createDependencies(primaryContext.fixture, {
+    fileSystem: primaryCleanupFileSystem,
+    async run(command, args, options) {
+      if (command === 'tar') {
+        throw primaryCause
+      }
+      return primaryContext.baseRun(command, args, options)
+    },
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: primaryContext.output, tag },
+      primaryHarness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.archiveCreate
+      && error.cause === primaryCause
+    ),
+  )
+  assert.equal(primaryCleanupCalls, 1)
+
+  const cleanupContext = await createServerPackagingFixture(t)
+  const cleanupCause = new Error('stage-cleanup-only-canary')
+  let cleanupCalls = 0
+  const cleanupFileSystem = fileSystemWith({
+    async rm(target, options) {
+      if (path.basename(target).startsWith('qianshu-release-stage-')) {
+        cleanupCalls += 1
+        throw cleanupCause
+      }
+      return fs.rm(target, options)
+    },
+  })
+  const cleanupHarness = createDependencies(cleanupContext.fixture, {
+    fileSystem: cleanupFileSystem,
+    run: cleanupContext.baseRun,
+  })
+
+  await assert.rejects(
+    packageServer(
+      { outputDirectory: cleanupContext.output, tag },
+      cleanupHarness.dependencies,
+    ),
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.stageCleanup
+      && error.cause === cleanupCause
+    ),
+  )
+  assert.equal(cleanupCalls, 1)
+  await assert.rejects(
+    fs.lstat(path.join(
+      cleanupContext.output,
+      'qsmds-server-v1.2.3-linux-x64.tar.gz',
+    )),
+    { code: 'ENOENT' },
+  )
+})
+
+test('release package reporter 只输出内部白名单 code', () => {
+  const secret = 'postgresql://user:password@host/database?token=secret'
+  const stderrCalls = []
+  const processRef = { exitCode: 0 }
+  const consoleRef = {
+    error(...values) {
+      stderrCalls.push(values)
+    },
+  }
+  const failure = new ReleasePackageStageError(
+    RELEASE_PACKAGE_FAILURE_CODES.archiveInspect,
+    new Error(secret),
+  )
+
+  applyReleasePackageFailure(failure, processRef, consoleRef)
+  assert.equal(processRef.exitCode, 1)
+  assert.equal(stderrCalls.length, 1)
+  assert.equal(stderrCalls[0].length, 1)
+  assert.equal(typeof stderrCalls[0][0], 'string')
+  assert.equal(
+    stderrCalls[0][0],
+    'Release package failed [code=RELEASE_PACKAGE_ARCHIVE_INSPECT_FAILED]',
+  )
+  assert.equal(
+    stderrCalls.flat().some(value => String(value).includes(secret)),
+    false,
+  )
+
+  stderrCalls.length = 0
+  processRef.exitCode = 0
+  applyReleasePackageFailure(
+    { code: 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED', message: secret },
+    processRef,
+    consoleRef,
+  )
+  assert.equal(processRef.exitCode, 1)
+  assert.equal(stderrCalls.length, 1)
+  assert.equal(stderrCalls[0].length, 1)
+  assert.equal(typeof stderrCalls[0][0], 'string')
+  assert.equal(
+    stderrCalls[0][0],
+    'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]',
+  )
+  assert.equal(
+    stderrCalls.flat().some(value => String(value).includes(secret)),
+    false,
+  )
+})
+
 test('packageWeb 构建 exact staging、固定 GNU tar argv 与确定性 archive', async (t) => {
   const fixture = await createSandbox(t)
   const distRoot = path.join(
@@ -1343,6 +1707,9 @@ test('CLI dispatch 返回单行 JSON，失败固定脱敏', async (t) => {
   )
   assert.equal(cliFailure.status, 1)
   assert.equal(cliFailure.stdout, '')
-  assert.equal(cliFailure.stderr, 'Release package failed\n')
+  assert.equal(
+    cliFailure.stderr,
+    'Release package failed [code=RELEASE_PACKAGE_UNKNOWN_FAILED]\n',
+  )
   assert.equal(cliFailure.stderr.includes(secret), false)
 })
