@@ -366,14 +366,35 @@ test('ci-gate always 汇总五个 Job 且拒绝所有非 success 状态', async 
 test('server-check-build 使用 Server cache 并执行固定检查构建顺序', async () => {
   const job = extractJobs(await readCiWorkflow()).get('server-check-build')
   assertDependencySetup(job, ['server/pnpm-lock.yaml'])
+  const packageStep = findNamedStep(job, 'Package Server release archive')
+  assert.equal(packageStep, [
+    '      - name: Package Server release archive',
+    "        if: inputs.release_tag == ''",
+    '        run: |',
+    '          package_tag="v$(node -p \'require("./package.json").version\')"',
+    '          output="$RUNNER_TEMP/release-server-ci"',
+    '          node --run release:package:server -- \\',
+    '            --tag "$package_tag" \\',
+    '            --output "$output"',
+    '          archive="$output/qsmds-server-${package_tag}-linux-x64.tar.gz"',
+    '          test -f "$archive"',
+    '          test ! -L "$archive"',
+    '          test -s "$archive"',
+  ].join('\n'))
   assertTextOrder(job, [
     'run: pnpm -C server install --frozen-lockfile',
     'run: pnpm -C server check',
     'run: pnpm -C server build',
+    '      - name: Verify Server entrypoint',
     'run: test -f server/dist/main.js && test ! -L server/dist/main.js && test -s server/dist/main.js',
+    '      - name: Package Server release archive',
     'run: git diff --exit-code -- .',
   ], 'server-check-build')
   assert.equal(job.includes('web/pnpm-lock.yaml'), false)
+  assert.equal(job.includes('\n    permissions:'), false)
+  assert.equal(job.includes('actions/upload-artifact'), false)
+  assert.equal(job.includes('release:smoke:server'), false)
+  assert.equal(job.includes('DATABASE_URL'), false)
 })
 
 test('server-e2e 只通过固定 PostgreSQL wrapper 执行隔离 E2E', async () => {
