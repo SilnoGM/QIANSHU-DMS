@@ -936,6 +936,9 @@ function tarArguments(archivePath, topLevelName) {
     '--numeric-owner',
     '--format=posix',
     '--pax-option=delete=atime,delete=ctime',
+    // hardlink 与 symlink 是不同的 tar 语义；这里只展开前者，后者继续由
+    // inspector 按对应 policy 校验，禁止改成会跟随 symlink 的 --dereference。
+    '--hard-dereference',
     topLevelName,
   ]
 }
