@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import process from 'node:process'
 
-import { CommandExecutionError } from './run-command.mjs'
+import { getTrustedCommandExitCode } from './run-command.mjs'
 
 const HTTP_METHODS = new Set([
   'delete',
@@ -890,12 +890,7 @@ export function applyContractFailureToProcess(
   processRef = process,
   consoleRef = console,
 ) {
-  const exitCode = error instanceof CommandExecutionError
-    ? error.exitCode
-    : 1
-  processRef.exitCode = Number.isInteger(exitCode) && exitCode > 0
-    ? exitCode
-    : 1
+  processRef.exitCode = getTrustedCommandExitCode(error) ?? 1
 
   // CLI 边界永远不把异常对象交给 reporter，避免 cause、快照或连接信息泄露。
   consoleRef.error('OpenAPI contract check failed')

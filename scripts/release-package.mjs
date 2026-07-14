@@ -15,6 +15,7 @@ import {
 } from './release-version.mjs'
 import {
   CommandExecutionError,
+  getTrustedCommandExitCode,
   isDirectEntry,
   runCommand,
 } from './run-command.mjs'
@@ -49,19 +50,10 @@ const releasePackageFailureCodeSet = new Set(
 const releasePackageStageErrorSet = new WeakSet()
 const classifiedReleasePackageStageErrorSet = new WeakSet()
 
-function normalizeReleasePackageExitCode(value) {
-  return Number.isInteger(value) && value > 0 ? value : 1
-}
-
 function commandExecutionExitCode(error) {
-  try {
-    return Error.isError(error) && error instanceof CommandExecutionError
-      ? normalizeReleasePackageExitCode(error.exitCode)
-      : 1
-  } catch {
-    // 外部错误的 prototype 或 exitCode getter 不可信，读取异常统一安全降级。
-    return 1
-  }
+  // prototype、Error internal brand 与公开属性均不足以证明构造来源；
+  // 只有 run-command 模块的私有快照可以传播原始退出码。
+  return getTrustedCommandExitCode(error) ?? 1
 }
 
 export class ReleasePackageStageError extends Error {
