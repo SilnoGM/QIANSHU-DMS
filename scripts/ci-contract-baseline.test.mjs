@@ -141,7 +141,7 @@ function pushInput(fixture, beforeSha, currentSha) {
 
 function releaseInput(fixture, currentSha, releaseTag) {
   return {
-    eventName: 'workflow_call',
+    eventName: 'release',
     currentSha,
     releaseTag,
     runnerTemp: fixture.runnerTemp,
@@ -591,6 +591,76 @@ test('无 baseline 不传参数，child 非零退出码和首个错误原样传�
   assert.deepEqual(await fs.readdir(fixture.runnerTemp), [])
 })
 
+test('Release reusable workflow 将 caller Tag push 归一为内部 release 事件', async (t) => {
+  const fixture = await createGitFixture(t)
+  const currentSha = 'a'.repeat(40)
+  const eventPath = path.join(fixture.sandbox, 'release-event.json')
+  await fs.writeFile(eventPath, JSON.stringify({
+    before: zeroSha,
+    ref: 'refs/tags/v1.2.3',
+    repository: { private: true },
+  }))
+
+  assert.deepEqual(
+    await parseContractEventInput({
+      env: {
+        GITHUB_EVENT_NAME: 'push',
+        GITHUB_EVENT_PATH: eventPath,
+        GITHUB_SHA: currentSha,
+        QIANSHU_RELEASE_TAG: 'v1.2.3',
+        RUNNER_TEMP: fixture.runnerTemp,
+      },
+      fileSystem: fs,
+    }),
+    {
+      currentSha,
+      eventName: 'release',
+      releaseTag: 'v1.2.3',
+      runnerTemp: fixture.runnerTemp,
+    },
+  )
+})
+
+test('Release input 只接受与版本一致的 caller Tag push', async (t) => {
+  const fixture = await createGitFixture(t)
+  const currentSha = 'a'.repeat(40)
+  const eventPath = path.join(fixture.sandbox, 'invalid-release-event.json')
+  const cases = [
+    {
+      event: {},
+      eventName: 'workflow_call',
+    },
+    {
+      event: { before: currentSha, ref: 'refs/heads/main' },
+      eventName: 'push',
+    },
+    {
+      event: { before: zeroSha, ref: 'refs/tags/v1.2.4' },
+      eventName: 'push',
+    },
+  ]
+
+  for (const fixtureCase of cases) {
+    await fs.writeFile(eventPath, JSON.stringify(fixtureCase.event))
+    await assert.rejects(
+      parseContractEventInput({
+        env: {
+          GITHUB_EVENT_NAME: fixtureCase.eventName,
+          GITHUB_EVENT_PATH: eventPath,
+          GITHUB_SHA: currentSha,
+          QIANSHU_RELEASE_TAG: 'v1.2.3',
+          RUNNER_TEMP: fixture.runnerTemp,
+        },
+        fileSystem: fs,
+      }),
+      {
+        message: 'QIANSHU_RELEASE_TAG requires a matching tag push',
+        name: 'TypeError',
+      },
+    )
+  }
+})
+
 test('生产事件解析只提取受控字段并限制 release tag 场景', async (t) => {
   const fixture = await createGitFixture(t)
   const currentSha = await commitSnapshot(
@@ -635,21 +705,6 @@ test('生产事件解析只提取受控字段并限制 release tag 场景', asyn
       fileSystem: fs,
     }),
     pushInput(fixture, currentSha, currentSha),
-  )
-
-  await fs.writeFile(eventPath, '{}\n')
-  assert.deepEqual(
-    await parseContractEventInput({
-      env: {
-        GITHUB_EVENT_NAME: 'workflow_call',
-        GITHUB_EVENT_PATH: eventPath,
-        GITHUB_SHA: currentSha,
-        QIANSHU_RELEASE_TAG: 'v1.2.3',
-        RUNNER_TEMP: fixture.runnerTemp,
-      },
-      fileSystem: fs,
-    }),
-    releaseInput(fixture, currentSha, 'v1.2.3'),
   )
 
   await assert.rejects(parseContractEventInput({

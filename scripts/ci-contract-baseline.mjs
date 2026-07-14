@@ -99,7 +99,7 @@ function normalizeEventInput(input) {
     })
   }
 
-  if (eventName === 'workflow_call') {
+  if (eventName === 'release') {
     assertExactKeys(
       input,
       ['currentSha', 'eventName', 'releaseTag', 'runnerTemp'],
@@ -554,8 +554,24 @@ export async function parseContractEventInput({
     throw new Error('GitHub event payload must be an object')
   }
 
-  if (eventName !== 'workflow_call' && releaseTag !== '') {
-    throw new TypeError('QIANSHU_RELEASE_TAG is only valid for workflow_call')
+  if (releaseTag !== '') {
+    // GitHub reusable workflow 会保留 caller 的 github context，因此由正式
+    // Tag push 调用 ci.yml 时，GITHUB_EVENT_NAME 仍为 push。release input
+    // 只有与同一次 Tag push 的 ref 精确一致时，才允许进入内部 release 模式。
+    if (
+      eventName !== 'push'
+      || readEventField(event, ['ref']) !== `refs/tags/${releaseTag}`
+    ) {
+      throw new TypeError(
+        'QIANSHU_RELEASE_TAG requires a matching tag push',
+      )
+    }
+    return normalizeEventInput({
+      currentSha,
+      eventName: 'release',
+      releaseTag,
+      runnerTemp,
+    })
   }
   if (eventName === 'pull_request') {
     return normalizeEventInput({
@@ -571,14 +587,6 @@ export async function parseContractEventInput({
       currentSha,
       eventName,
       ref: readEventField(event, ['ref']),
-      runnerTemp,
-    })
-  }
-  if (eventName === 'workflow_call') {
-    return normalizeEventInput({
-      currentSha,
-      eventName,
-      releaseTag,
       runnerTemp,
     })
   }
