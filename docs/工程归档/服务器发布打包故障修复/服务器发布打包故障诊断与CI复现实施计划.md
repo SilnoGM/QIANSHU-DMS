@@ -1,5 +1,9 @@
 # 服务器发布打包故障诊断与 CI 复现实施计划
 
+> [!IMPORTANT]
+> 本文档是已归档的服务器发布打包故障历史诊断与修复记录，不作为当前执行依据。
+> 当前有效规范请参阅[发布与版本管理](../../全局文档/发布与版本管理.md)和[项目工程组织方案](../../全局文档/项目工程组织方案.md)；归档背景与证据见[归档说明](./归档说明.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `subagent-driven-development`（推荐）或 `executing-plans` 按任务执行本计划。所有步骤使用 checkbox 跟踪，生产代码修改必须遵循 RED → GREEN。
 
 **Goal:** 为 Server release packaging 增加不泄密的稳定阶段错误码，并在普通 PR/main CI 的 Ubuntu 24.04 x64 环境中真实复现失败链路。

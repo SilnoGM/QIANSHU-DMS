@@ -1,5 +1,9 @@
 # 阶段二 Web 边界整理实施计划
 
+> [!IMPORTANT]
+> 本文档是已归档的历史设计与实施记录，不作为当前执行依据。
+> 当前有效规范请参阅[项目工程组织方案](../../全局文档/项目工程组织方案.md)和[开发工作流](../../全局文档/开发工作流.md)；归档背景与证据见[归档说明](./归档说明.md)。
+
 > **供智能代理执行：** REQUIRED SUB-SKILL: Use `subagent-driven-development` or `executing-plans` to implement this plan task-by-task. Executable changes follow TDD; edits to project `SKILL.md` files also follow `writing-skills` RED/GREEN verification.
 
 **目标：** 将现有 Web 基座安全纳入根 Git，把唯一业务应用与三套参考应用分区，并建立只读默认检查、显式参考应用命令和可独立复制安装构建的 Web workspace。

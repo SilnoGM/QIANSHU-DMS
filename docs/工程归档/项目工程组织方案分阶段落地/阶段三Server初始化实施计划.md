@@ -1,5 +1,9 @@
 # 阶段三 Server 初始化实施计划
 
+> [!IMPORTANT]
+> 本文档是已归档的历史设计与实施记录，不作为当前执行依据。
+> 当前有效规范请参阅[项目工程组织方案](../../全局文档/项目工程组织方案.md)和[开发工作流](../../全局文档/开发工作流.md)；归档背景与证据见[归档说明](./归档说明.md)。
+
 > **供智能代理执行：** REQUIRED SUB-SKILL: Use `subagent-driven-development` or `executing-plans` to implement this plan task-by-task. 所有新功能遵循 `test-driven-development` 的 RED/GREEN/REFACTOR 顺序；配置文件、生成文件和 Prisma CLI 产物属于 TDD 例外，但必须通过相邻的边界测试或真实命令验证。
 
 **目标：** 初始化可独立安装、检查、构建和运行的单一 NestJS Server，接入 Prisma 7 PostgreSQL driver adapter，建立安全的运行时配置、数据库生命周期、`GET /api/health` 和第一条空 migration。

@@ -1,5 +1,9 @@
 # 阶段五 CI 与发布 Implementation Plan
 
+> [!IMPORTANT]
+> 本文档是已归档的阶段五 CI 与发布历史设计与实施记录，不作为当前执行依据。
+> 当前有效规范请参阅[发布与版本管理](../../全局文档/发布与版本管理.md)和[项目工程组织方案](../../全局文档/项目工程组织方案.md)；归档背景与证据见[归档说明](./归档说明.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在不改变根无依赖、Web/Server 独立依赖域和现有业务 API/数据库 schema 的前提下，建立可审计的三工作流 CI、隔离 PostgreSQL E2E、严格产品版本检查、双端 Release 归档、Release Manifest 和不可覆盖的 GitHub Draft Release 流程。

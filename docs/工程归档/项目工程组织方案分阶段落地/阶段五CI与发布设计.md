@@ -1,5 +1,9 @@
 # 阶段五 CI 与发布设计
 
+> [!IMPORTANT]
+> 本文档是已归档的阶段五 CI 与发布历史设计与实施记录，不作为当前执行依据。
+> 当前有效规范请参阅[发布与版本管理](../../全局文档/发布与版本管理.md)和[项目工程组织方案](../../全局文档/项目工程组织方案.md)；归档背景与证据见[归档说明](./归档说明.md)。
+
 ## 1. 文档定位
 
 本文记录千树 DMS 阶段五“CI 与发布”的已确认需求、技术设计、边界和验收规则，是实施与后续演进的设计真相源。具体任务、验证命令和证据边界见[阶段五 CI 与发布实施计划](./阶段五CI与发布实施计划.md)。
@@ -23,7 +27,7 @@
 
 1. 只实现 CI、版本校验、Release Manifest 和 GitHub Release 构建产物，不实现 Docker、GHCR 或自动部署。
 2. 正式发布由开发者人工创建并推送 `vX.Y.Z` annotated Tag 触发；Workflow 不创建 Tag、不修改版本源码。
-3. 每个产品 Tag 都从同一个 Commit 重新构建 Web 与 Server，不复用上一 Release 的旧组件产物。本决策已经覆盖并替换[项目工程组织方案](./项目工程组织方案.md)第 13.2 节原有的“未变化组件沿用旧 digest”模型。
+3. 每个产品 Tag 都从同一个 Commit 重新构建 Web 与 Server，不复用上一 Release 的旧组件产物。本决策已经覆盖并替换[项目工程组织方案](../../全局文档/项目工程组织方案.md)第 13.2 节原有的“未变化组件沿用旧 digest”模型。
 4. CI 采用三工作流并行模型：
    - `ci.yml`：Root、Server、Server E2E、Contract、Web 与统一 `ci-gate`。
    - `examples.yml`：每月定时和手动验证参考应用。
@@ -853,6 +857,6 @@ scripts/
 - [GitHub REST：Release assets](https://docs.github.com/en/rest/releases/assets)
 - [Docker：`docker container run`](https://docs.docker.com/reference/cli/docker/container/run/)
 - [pnpm 11：pnpm deploy](https://pnpm.io/cli/deploy)
-- [项目工程组织方案](./项目工程组织方案.md)
+- [项目工程组织方案](../../全局文档/项目工程组织方案.md)
 - [阶段四接口契约设计](./阶段四接口契约设计.md)
-- [数据库迁移规范](../后端文档/数据库迁移规范.md)
+- [数据库迁移规范](../../后端文档/数据库迁移规范.md)
