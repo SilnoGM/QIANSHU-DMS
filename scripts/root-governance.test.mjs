@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstat, readFile } from 'node:fs/promises'
+import { lstat, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -9,6 +9,46 @@ import { fileURLToPath } from 'node:url'
 // 测试以自身位置推导仓库根目录，避免调用者从其他工作目录执行时误读同名文件。
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
+
+const currentGlobalDocuments = Object.freeze([
+  '发布与版本管理.md',
+  '开发工作流.md',
+  '项目工程组织方案.md',
+])
+
+const archiveTasks = new Map([
+  [
+    '项目工程组织方案分阶段落地',
+    Object.freeze([
+      '归档说明.md',
+      '阶段一根级治理实施计划.md',
+      '阶段二Web边界整理实施计划.md',
+      '阶段三Server初始化实施计划.md',
+      '阶段四接口契约实施计划.md',
+      '阶段四接口契约设计.md',
+      '阶段五CI与发布实施计划.md',
+      '阶段五CI与发布设计.md',
+    ]),
+  ],
+  [
+    '服务器发布打包故障修复',
+    Object.freeze([
+      '归档说明.md',
+      '服务器发布归档硬链接根因修复实施计划.md',
+      '服务器发布归档硬链接根因修复设计.md',
+      '服务器发布打包故障诊断与CI复现实施计划.md',
+      '服务器发布打包故障诊断与修复设计.md',
+    ]),
+  ],
+  [
+    '文档体系收口与归档整理',
+    Object.freeze([
+      '归档说明.md',
+      '文档体系收口与归档整理实施计划.md',
+      '文档体系收口与归档整理设计.md',
+    ]),
+  ],
+])
 
 function fromRoot(...segments) {
   return path.join(repositoryRoot, ...segments)
@@ -22,6 +62,444 @@ async function exists(...segments) {
     if (error?.code === 'ENOENT') {
       return false
     }
+    throw error
+  }
+}
+
+// 精确目录契约同时编码名称和实体类型；symlink 或其他特殊条目不会被过滤掉，
+// 而是作为 unexpected kind 触发 deepEqual 失败。
+async function directoryEntryKinds(relativeDirectory) {
+  const entries = await readdir(fromRoot(relativeDirectory), {
+    withFileTypes: true,
+  })
+  return entries.map(entry => {
+    if (entry.isFile()) return `file:${entry.name}`
+    if (entry.isDirectory()) return `directory:${entry.name}`
+    if (entry.isSymbolicLink()) return `symlink:${entry.name}`
+    return `other:${entry.name}`
+  }).sort()
+}
+
+function expectedDirectoryEntryKinds({ directories = [], files = [] }) {
+  return [
+    ...directories.map(name => `directory:${name}`),
+    ...files.map(name => `file:${name}`),
+  ].sort()
+}
+
+// docs 树只允许真实文件和目录；任何 symlink 或特殊条目都直接失败，避免扫描器
+// 因 Dirent.isFile/isDirectory 均为 false 而静默跳过。
+async function markdownFilesUnder(relativeDirectory) {
+  const entries = await readdir(fromRoot(relativeDirectory), {
+    withFileTypes: true,
+  })
+  const files = []
+  for (const entry of entries) {
+    const relativePath = path.join(relativeDirectory, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...await markdownFilesUnder(relativePath))
+    } else if (entry.isFile() && entry.name.endsWith('.md')) {
+      files.push(relativePath)
+    } else if (!entry.isFile()) {
+      assert.fail(`docs 树不得包含 symlink 或特殊条目：${relativePath}`)
+    }
+  }
+  return files.sort()
+}
+
+function isEscapedMarkdownCharacter(document, index) {
+  let backslashCount = 0
+  for (let cursor = index - 1; cursor >= 0 && document[cursor] === '\\'; cursor -= 1) {
+    backslashCount += 1
+  }
+  return backslashCount % 2 === 1
+}
+
+function backtickRunLength(document, start) {
+  let end = start
+  while (document[end] === '`') end += 1
+  return end - start
+}
+
+function nextUnescapedBacktick(document, start) {
+  let cursor = start
+  while (cursor < document.length) {
+    const candidate = document.indexOf('`', cursor)
+    if (candidate === -1) return -1
+    if (!isEscapedMarkdownCharacter(document, candidate)) return candidate
+    cursor = candidate + 1
+  }
+  return -1
+}
+
+// code span 只能由长度完全相同的 backtick run 闭合。被遮蔽区域保留换行，
+// 避免删除代码后把原本分离的 Markdown 片段拼成一个虚假的链接。
+function maskMarkdownCodeSpans(document) {
+  let result = ''
+  let cursor = 0
+  while (cursor < document.length) {
+    const openingStart = nextUnescapedBacktick(document, cursor)
+    if (openingStart === -1) return result + document.slice(cursor)
+
+    const openingLength = backtickRunLength(document, openingStart)
+    let closingStart = nextUnescapedBacktick(
+      document,
+      openingStart + openingLength,
+    )
+    while (
+      closingStart !== -1 &&
+      backtickRunLength(document, closingStart) !== openingLength
+    ) {
+      closingStart = nextUnescapedBacktick(
+        document,
+        closingStart + backtickRunLength(document, closingStart),
+      )
+    }
+
+    if (closingStart === -1) {
+      const openingEnd = openingStart + openingLength
+      result += document.slice(cursor, openingEnd)
+      cursor = openingEnd
+      continue
+    }
+
+    const closingEnd = closingStart + openingLength
+    result += document.slice(cursor, openingStart)
+    result += document.slice(openingStart, closingEnd).replace(/[^\n]/gu, ' ')
+    cursor = closingEnd
+  }
+  return result
+}
+
+function openingMarkdownFence(line) {
+  const match = line.match(/^ {0,3}(`{3,}|~{3,})/u)
+  if (!match) return undefined
+  return { marker: match[1][0], length: match[1].length }
+}
+
+function closesMarkdownFence(line, activeFence) {
+  const match = line.match(/^ {0,3}(`+|~+)[ \t]*\r?$/u)
+  return Boolean(
+    match &&
+      match[1][0] === activeFence.marker &&
+      match[1].length >= activeFence.length,
+  )
+}
+
+// 计划文档会在 fenced/inline code 中展示待写入的链接示例；这些技术示例不是
+// 当前文档导航。Fence 只允许 0-3 个前导空格，且关闭标记必须同类、足够长、
+// 尾部仅含空白；四空格缩进 marker 是代码文本，不能跨行开启 fence/code span。
+function markdownOutsideFencedCode(document) {
+  let activeFence
+  const outsideFences = document
+    .split('\n')
+    .map(line => {
+      if (activeFence !== undefined) {
+        if (closesMarkdownFence(line, activeFence)) activeFence = undefined
+        return ''
+      }
+
+      const openingFence = openingMarkdownFence(line)
+      if (openingFence !== undefined) {
+        activeFence = openingFence
+        return ''
+      }
+      if (/^ {4,}(?:`{3,}|~{3,})/u.test(line)) return ''
+      return line
+    })
+    .join('\n')
+
+  return maskMarkdownCodeSpans(outsideFences)
+}
+
+// 归档提示必须紧跟一级标题；只读取开头的同一个 block，避免正文、代码示例
+// 或测试代码中的同名字符串让缺失的真实提示产生 false-positive。
+function leadingArchiveNotice(document) {
+  const lines = document.replaceAll('\r\n', '\n').split('\n')
+  assert.match(lines[0] ?? '', /^#\s+\S/u)
+  let index = 1
+  while (lines[index] === '') index += 1
+  assert.equal(lines[index], '> [!IMPORTANT]')
+  const notice = []
+  while (lines[index]?.startsWith('>')) {
+    notice.push(lines[index])
+    index += 1
+  }
+  return notice.join('\n')
+}
+
+function readBracketedMarkdown(document, start) {
+  if (document[start] !== '[') return undefined
+  let depth = 1
+  let cursor = start + 1
+  while (cursor < document.length) {
+    if (document[cursor] === '\\' && cursor + 1 < document.length) {
+      cursor += 2
+      continue
+    }
+    if (document[cursor] === '[') depth += 1
+    if (document[cursor] === ']') {
+      depth -= 1
+      if (depth === 0) {
+        return {
+          content: document.slice(start + 1, cursor),
+          end: cursor + 1,
+        }
+      }
+    }
+    cursor += 1
+  }
+  return undefined
+}
+
+function unescapeMarkdownPunctuation(value) {
+  let result = ''
+  let cursor = 0
+  while (cursor < value.length) {
+    const nextCharacter = value[cursor + 1]
+    if (
+      value[cursor] === '\\' &&
+      nextCharacter !== undefined &&
+      /[!-/:-@[-`{-~]/u.test(nextCharacter)
+    ) {
+      result += nextCharacter
+      cursor += 2
+      continue
+    }
+    result += value[cursor]
+    cursor += 1
+  }
+  return result
+}
+
+function skipMarkdownWhitespace(document, start) {
+  let cursor = start
+  while (/[ \t\r\n]/u.test(document[cursor] ?? '')) cursor += 1
+  return cursor
+}
+
+function inlineLinkEndAfterTarget(document, start) {
+  const cursor = skipMarkdownWhitespace(document, start)
+  return document[cursor] === ')' ? cursor + 1 : undefined
+}
+
+function readInlineMarkdownTarget(document, openingParenthesis) {
+  let cursor = skipMarkdownWhitespace(document, openingParenthesis + 1)
+  if (document[cursor] === ')') return { target: '', end: cursor + 1 }
+
+  if (document[cursor] === '<') {
+    const targetStart = cursor + 1
+    cursor = targetStart
+    while (cursor < document.length) {
+      if (document[cursor] === '\\' && cursor + 1 < document.length) {
+        cursor += 2
+        continue
+      }
+      if (document[cursor] === '\n' || document[cursor] === '\r') return undefined
+      if (document[cursor] === '>') {
+        const end = inlineLinkEndAfterTarget(document, cursor + 1)
+        if (end === undefined) return undefined
+        return {
+          target: unescapeMarkdownPunctuation(
+            document.slice(targetStart, cursor),
+          ),
+          end,
+        }
+      }
+      cursor += 1
+    }
+    return undefined
+  }
+
+  const targetStart = cursor
+  let depth = 0
+  while (cursor < document.length) {
+    if (document[cursor] === '\\' && cursor + 1 < document.length) {
+      cursor += 2
+      continue
+    }
+    if (document[cursor] === '(') {
+      depth += 1
+      cursor += 1
+      continue
+    }
+    if (document[cursor] === ')') {
+      if (depth > 0) {
+        depth -= 1
+        cursor += 1
+        continue
+      }
+      return {
+        target: unescapeMarkdownPunctuation(
+          document.slice(targetStart, cursor),
+        ),
+        end: cursor + 1,
+      }
+    }
+    if (/[ \t\r\n]/u.test(document[cursor]) && depth === 0) {
+      const end = inlineLinkEndAfterTarget(document, cursor)
+      if (end === undefined) return undefined
+      return {
+        target: unescapeMarkdownPunctuation(
+          document.slice(targetStart, cursor),
+        ),
+        end,
+      }
+    }
+    cursor += 1
+  }
+  return undefined
+}
+
+function readReferenceDefinitionTarget(line, start) {
+  let cursor = skipMarkdownWhitespace(line, start)
+  if (line[cursor] === '<') {
+    const targetStart = cursor + 1
+    cursor = targetStart
+    while (cursor < line.length) {
+      if (line[cursor] === '\\' && cursor + 1 < line.length) {
+        cursor += 2
+        continue
+      }
+      if (line[cursor] === '>') {
+        return unescapeMarkdownPunctuation(line.slice(targetStart, cursor))
+      }
+      cursor += 1
+    }
+    return undefined
+  }
+
+  const targetStart = cursor
+  let depth = 0
+  while (cursor < line.length && !(/[ \t\r]/u.test(line[cursor]) && depth === 0)) {
+    if (line[cursor] === '\\' && cursor + 1 < line.length) {
+      cursor += 2
+      continue
+    }
+    if (line[cursor] === '(') depth += 1
+    if (line[cursor] === ')') {
+      if (depth === 0) return undefined
+      depth -= 1
+    }
+    cursor += 1
+  }
+  if (cursor === targetStart || depth !== 0) return undefined
+  return unescapeMarkdownPunctuation(line.slice(targetStart, cursor))
+}
+
+function normalizeReferenceLabel(label) {
+  return unescapeMarkdownPunctuation(label)
+    .trim()
+    .replace(/\s+/gu, ' ')
+    .toLowerCase()
+}
+
+function markdownReferenceDefinitions(document) {
+  const definitions = new Map()
+  for (const line of document.split('\n')) {
+    const indent = line.match(/^ {0,3}/u)?.[0].length ?? 0
+    const label = readBracketedMarkdown(line, indent)
+    if (!label || line[label.end] !== ':') continue
+    const target = readReferenceDefinitionTarget(line, label.end + 1)
+    const normalizedLabel = normalizeReferenceLabel(label.content)
+    if (
+      target !== undefined &&
+      normalizedLabel !== '' &&
+      !definitions.has(normalizedLabel)
+    ) {
+      definitions.set(normalizedLabel, target)
+    }
+  }
+  return definitions
+}
+
+// 这里只解析治理检查需要的 inline/full-reference 链接，不尝试实现完整 renderer。
+// 有限状态扫描器负责 bracket/parenthesis 平衡与反斜杠 escape，避免正则截断 target。
+function localMarkdownLinks(document) {
+  const visibleMarkdown = markdownOutsideFencedCode(document)
+  const referenceDefinitions = markdownReferenceDefinitions(visibleMarkdown)
+  const targets = []
+  let cursor = 0
+  while (cursor < visibleMarkdown.length) {
+    if (
+      visibleMarkdown[cursor] !== '[' ||
+      isEscapedMarkdownCharacter(visibleMarkdown, cursor)
+    ) {
+      cursor += 1
+      continue
+    }
+
+    const label = readBracketedMarkdown(visibleMarkdown, cursor)
+    if (!label) {
+      cursor += 1
+      continue
+    }
+
+    const imageMarker = cursor - 1
+    const isImage =
+      visibleMarkdown[imageMarker] === '!' &&
+      !isEscapedMarkdownCharacter(visibleMarkdown, imageMarker)
+    let parsedLink
+    if (visibleMarkdown[label.end] === '(') {
+      parsedLink = readInlineMarkdownTarget(visibleMarkdown, label.end)
+    } else if (visibleMarkdown[label.end] === '[') {
+      const reference = readBracketedMarkdown(visibleMarkdown, label.end)
+      if (reference) {
+        const referenceLabel = normalizeReferenceLabel(
+          reference.content === '' ? label.content : reference.content,
+        )
+        const target = referenceDefinitions.get(referenceLabel)
+        if (target !== undefined) parsedLink = { target, end: reference.end }
+      }
+    }
+
+    if (parsedLink) {
+      if (!isImage && parsedLink.target !== '') targets.push(parsedLink.target)
+      cursor = parsedLink.end
+      continue
+    }
+    cursor = label.end
+  }
+
+  return targets.filter(
+    target => !/^(?:[a-z][a-z\d+.-]*:|#|\/)/iu.test(target),
+  )
+}
+
+// 所有本地目标必须保持在仓库根内；即使链接目标当前存在，也不能允许 ../ 逃逸。
+function resolveLocalMarkdownLink(sourceRelativePath, target) {
+  const decodedPath = decodeURIComponent(target.split(/[?#]/u)[0])
+  const targetRelativePath = path.normalize(
+    path.join(path.dirname(sourceRelativePath), decodedPath),
+  )
+  const containment = path.relative(repositoryRoot, fromRoot(targetRelativePath))
+  assert.ok(
+    containment !== '..' &&
+      !containment.startsWith(`..${path.sep}`) &&
+      !path.isAbsolute(containment),
+    `Markdown 链接不得逃逸仓库：${sourceRelativePath} -> ${target}`,
+  )
+  return targetRelativePath
+}
+
+// lstat 每一级路径，既拒绝链接目标本身是 symlink，也拒绝通过 symlink 父目录
+// 间接逃逸；普通文件或目录才是可接受的本地 Markdown 目标。
+async function safeLocalMarkdownTargetExists(relativePath) {
+  const segments = relativePath.split(path.sep).filter(segment => segment !== '')
+  let currentPath = repositoryRoot
+  try {
+    for (const [index, segment] of segments.entries()) {
+      currentPath = path.join(currentPath, segment)
+      const stats = await lstat(currentPath)
+      if (stats.isSymbolicLink()) return false
+      if (index < segments.length - 1 && !stats.isDirectory()) return false
+      if (index === segments.length - 1) {
+        return stats.isFile() || stats.isDirectory()
+      }
+    }
+    return false
+  } catch (error) {
+    if (error?.code === 'ENOENT' || error?.code === 'ENOTDIR') return false
     throw error
   }
 }
@@ -70,6 +548,118 @@ function checkIgnore(relativePath) {
   )
   return result.status
 }
+
+test('Markdown code 过滤遵循 fence 与 code span 边界', async t => {
+  const scenarios = [
+    {
+      name: '双反引号 code span 不产生真实链接',
+      document: '``[示例](missing.md)``\n[当前文档](visible.md)',
+      expectedTargets: ['visible.md'],
+    },
+    {
+      name: '四反引号 fence 内的三反引号不会提前关闭 fence',
+      document: [
+        '````markdown',
+        '[示例一](missing-one.md)',
+        '```',
+        '[示例二](missing-two.md)',
+        '````',
+        '[当前文档](visible.md)',
+      ].join('\n'),
+      expectedTargets: ['visible.md'],
+    },
+    {
+      name: '四空格缩进 marker 不会开启 fence',
+      document: [
+        '    ```markdown',
+        '[当前文档](visible.md)',
+        '    ```',
+      ].join('\n'),
+      expectedTargets: ['visible.md'],
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, () => {
+      assert.deepEqual(localMarkdownLinks(scenario.document), scenario.expectedTargets)
+    })
+  }
+})
+
+test('Markdown link parser 解析治理所需链接语法', async t => {
+  const scenarios = [
+    {
+      name: '嵌套 label',
+      document: '[outer [inner]](missing.md)',
+      expectedTargets: ['missing.md'],
+    },
+    {
+      name: 'target 中的平衡括号',
+      document: '[x](docs/foo(bar).md)',
+      expectedTargets: ['docs/foo(bar).md'],
+    },
+    {
+      name: 'reference-style link',
+      document: '[guide][ref]\n\n[ref]: ./guide.md',
+      expectedTargets: ['./guide.md'],
+    },
+    {
+      name: 'reference label 忽略首尾空白、连续空白与大小写',
+      document: '[guide][  ReF   Label ]\n\n[ref label]: ./guide.md',
+      expectedTargets: ['./guide.md'],
+    },
+    {
+      name: '转义 bracket 与 target 括号',
+      document: '[escaped \\[label\\]](docs/foo\\(bar\\).md)',
+      expectedTargets: ['docs/foo(bar).md'],
+    },
+    {
+      name: 'image 不作为文档链接',
+      document: '![image](image.png)',
+      expectedTargets: [],
+    },
+    {
+      name: 'angle target 保留空格',
+      document: '[guide](<docs/guide file.md>)',
+      expectedTargets: ['docs/guide file.md'],
+    },
+    {
+      name: 'scheme、anchor 与 absolute target 被过滤',
+      document: [
+        '[web](https://example.com)',
+        '[anchor](#section)',
+        '[absolute](/docs/guide.md)',
+      ].join('\n'),
+      expectedTargets: [],
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, () => {
+      assert.deepEqual(localMarkdownLinks(scenario.document), scenario.expectedTargets)
+    })
+  }
+})
+
+test('索引链接计数只使用 code 之外的真实 target', () => {
+  const index = [
+    '[工程归档](./工程归档/归档索引.md)',
+    '``[inline 示例](./工程归档/归档索引.md)``',
+    '```markdown',
+    '[fenced 示例](./工程归档/虚构任务/归档说明.md)',
+    '```',
+  ].join('\n')
+  const targets = localMarkdownLinks(index)
+
+  assert.equal(
+    targets.filter(target => target === './工程归档/归档索引.md').length,
+    1,
+  )
+  assert.equal(
+    targets.filter(target => /^\.\/工程归档\/[^/]+\/归档说明\.md$/u.test(target)).length,
+    0,
+  )
+})
 
 test('根 package 保持无依赖且不是 workspace', async () => {
   const manifest = JSON.parse(await readFile(fromRoot('package.json'), 'utf8'))
@@ -140,8 +730,8 @@ test('主 CI Workflow 与源码结构测试均为真实文件', async () => {
   }
 })
 
-test('根级治理文件和阶段一至阶段四文档真实存在', async () => {
-  const requiredFiles = [
+test('根治理入口和当前指导文档均为真实文件', async () => {
+  for (const file of [
     'README.md',
     'AGENTS.md',
     '.gitignore',
@@ -151,14 +741,10 @@ test('根级治理文件和阶段一至阶段四文档真实存在', async () =>
     'scripts/root-governance.test.mjs',
     'docs/文档索引.md',
     'docs/全局文档/项目工程组织方案.md',
-    'docs/全局文档/阶段一根级治理实施计划.md',
-    'docs/全局文档/阶段四接口契约设计.md',
-    'docs/全局文档/阶段四接口契约实施计划.md',
-    'docs/后端文档/接口契约规范.md',
-    'docs/前端文档/接口接入规范.md',
-  ]
-
-  for (const file of requiredFiles) {
+    'docs/全局文档/开发工作流.md',
+    'docs/全局文档/发布与版本管理.md',
+    'docs/工程归档/归档索引.md',
+  ]) {
     await assertRegularFile(file)
   }
 })
@@ -168,72 +754,173 @@ test('Node.js 主版本配置为 24', async () => {
   assert.equal(nodeVersion.trim(), '24')
 })
 
-test('文档索引链接到真实全局文档与两端接口规范', async () => {
+test('全局文档只保留三份当前指导文档', async () => {
+  assert.deepEqual(
+    await directoryEntryKinds(path.join('docs', '全局文档')),
+    expectedDirectoryEntryKinds({ files: currentGlobalDocuments }),
+  )
+})
+
+test('工程归档按任务组织且每个任务文件集合精确', async () => {
+  assert.deepEqual(
+    await directoryEntryKinds(path.join('docs', '工程归档')),
+    expectedDirectoryEntryKinds({
+      directories: [...archiveTasks.keys()],
+      files: ['归档索引.md'],
+    }),
+  )
+  for (const [taskName, expectedFiles] of archiveTasks) {
+    assert.deepEqual(
+      await directoryEntryKinds(path.join('docs', '工程归档', taskName)),
+      expectedDirectoryEntryKinds({ files: expectedFiles }),
+      `归档任务文件集合不正确：${taskName}`,
+    )
+  }
+})
+
+test('文档索引只展开当前文档并通过唯一入口进入工程归档', async () => {
   const index = await readFile(fromRoot('docs', '文档索引.md'), 'utf8')
-  const requiredLinks = [
+  const indexTargets = localMarkdownLinks(index)
+  const currentLinks = [
     './全局文档/项目工程组织方案.md',
-    './全局文档/阶段一根级治理实施计划.md',
-    './全局文档/阶段四接口契约设计.md',
-    './全局文档/阶段四接口契约实施计划.md',
-    './后端文档/接口契约规范.md',
+    './全局文档/开发工作流.md',
+    './全局文档/发布与版本管理.md',
+    './前端文档/前端架构.md',
+    './前端文档/应用边界规范.md',
     './前端文档/接口接入规范.md',
-  ]
-
-  for (const link of requiredLinks) {
-    assert.ok(index.includes(`(${link})`), `文档索引缺少链接：${link}`)
-    await assertRegularFile(path.join('docs', link))
-  }
-})
-
-test('阶段三计划、后端架构和数据库迁移规范均为真实文件', async () => {
-  const requiredDocuments = [
-    'docs/全局文档/阶段三Server初始化实施计划.md',
-    'docs/后端文档/后端架构.md',
-    'docs/后端文档/数据库迁移规范.md',
-  ]
-  for (const document of requiredDocuments) {
-    await assertRegularFile(document)
-  }
-})
-
-test('文档索引链接到阶段三计划和两份后端正式文档', async () => {
-  const index = await readFile(fromRoot('docs', '文档索引.md'), 'utf8')
-  const requiredLinks = [
-    './全局文档/阶段三Server初始化实施计划.md',
     './后端文档/后端架构.md',
     './后端文档/数据库迁移规范.md',
+    './后端文档/接口契约规范.md',
   ]
+  for (const link of currentLinks) {
+    assert.equal(indexTargets.filter(target => target === link).length, 1)
+  }
+  assert.equal(
+    indexTargets.filter(target => target === './工程归档/归档索引.md').length,
+    1,
+  )
+  assert.equal(
+    indexTargets.filter(target => target.startsWith('./工程归档/')).length,
+    1,
+    '项目文档索引只能通过一个入口进入工程归档',
+  )
+  assert.doesNotMatch(index, /\.\/全局文档\/阶段/u)
+  assert.ok(index.includes('仅用于历史追溯，不作为当前执行依据'))
+})
 
-  for (const link of requiredLinks) {
-    assert.ok(index.includes(`(${link})`), `文档索引缺少链接：${link}`)
-    await assertRegularFile(path.join('docs', link))
+test('工程归档索引覆盖全部任务且任务说明包含完整字段', async () => {
+  const archiveIndex = await readFile(
+    fromRoot('docs', '工程归档', '归档索引.md'),
+    'utf8',
+  )
+  const archiveIndexTargets = localMarkdownLinks(archiveIndex)
+  const requiredHeadings = [
+    '## 1. 归档范围',
+    '## 2. 任务时间线',
+    '## 3. 文档清单与阅读顺序',
+    '## 4. 结果与归档原因',
+    '## 5. 当前真相源',
+    '## 6. 关联证据',
+  ]
+  assert.ok(archiveIndex.includes(
+    '| 任务名称 | 任务类型 | 首次产出日期 | 完成日期 | 归档日期 | 最终结果 | 归档原因 | 当前真相源 | 归档说明 |',
+  ))
+  const indexedTaskNames = archiveIndexTargets
+    .map(target => target.match(/^\.\/([^/]+)\/归档说明\.md$/u)?.[1])
+    .filter(taskName => taskName !== undefined)
+    .sort()
+  assert.deepEqual(indexedTaskNames, [...archiveTasks.keys()].sort())
+  for (const [taskName, expectedFiles] of archiveTasks) {
+    assert.equal(
+      archiveIndexTargets.filter(
+        target => target === `./${taskName}/归档说明.md`,
+      ).length,
+      1,
+      `工程归档索引必须且只能有一行任务：${taskName}`,
+    )
+    const explanation = await readFile(
+      fromRoot('docs', '工程归档', taskName, '归档说明.md'),
+      'utf8',
+    )
+    for (const heading of requiredHeadings) assert.ok(explanation.includes(heading))
+    for (const file of expectedFiles.filter(file => file !== '归档说明.md')) {
+      assert.ok(explanation.includes(file))
+    }
+    for (const field of [
+      '首次产出日期',
+      '文档声明日期',
+      '首次 Commit',
+      '原路径',
+      '当前路径',
+      '用途',
+      '阶段',
+      '归档原因',
+    ]) {
+      assert.ok(explanation.includes(field))
+    }
   }
 })
 
-test('阶段五正式文档和三份 Workflow 均为真实文件且索引精确', async () => {
-  const requiredFiles = [
-    '.github/workflows/ci.yml',
-    '.github/workflows/examples.yml',
-    '.github/workflows/release.yml',
-    'docs/全局文档/阶段五CI与发布设计.md',
-    'docs/全局文档/阶段五CI与发布实施计划.md',
-    'docs/全局文档/发布与版本管理.md',
-  ]
-  for (const file of requiredFiles) {
-    await assertRegularFile(file)
+test('每份归档设计和实施计划都有归档提示', async () => {
+  for (const [taskName, files] of archiveTasks) {
+    for (const file of files.filter(file => file !== '归档说明.md')) {
+      const document = await readFile(
+        fromRoot('docs', '工程归档', taskName, file),
+        'utf8',
+      )
+      const notice = leadingArchiveNotice(document)
+      assert.ok(notice.includes('[归档说明](./归档说明.md)'))
+      assert.match(
+        notice,
+        /\[(?:项目工程组织方案|开发工作流|发布与版本管理)\]\(\.\.\/\.\.\/全局文档\/(?:项目工程组织方案|开发工作流|发布与版本管理)\.md\)/u,
+      )
+    }
   }
+})
 
-  const index = await readFile(fromRoot('docs', '文档索引.md'), 'utf8')
-  const releaseGuideLink = './全局文档/发布与版本管理.md'
-  assert.ok(
-    index.includes(`[发布与版本管理](${releaseGuideLink})`),
-    '文档索引缺少发布与版本管理的精确链接',
+test('docs 下全部本地 Markdown 链接都指向真实仓库路径', async () => {
+  for (const source of await markdownFilesUnder('docs')) {
+    const document = await readFile(fromRoot(source), 'utf8')
+    for (const target of localMarkdownLinks(document)) {
+      assert.equal(
+        await safeLocalMarkdownTargetExists(
+          resolveLocalMarkdownLink(source, target),
+        ),
+        true,
+        `Markdown 链接失效或经过 symlink：${source} -> ${target}`,
+      )
+    }
+  }
+})
+
+test('当前指导文档不保留平台待验收状态', async () => {
+  const staleState =
+    /Task 14|平台尚未(?:验收|验证)|尚未进行 GitHub 平台验收|当前不能声称 GitHub CI 已通过|GitHub 平台验证以 Task 14/u
+  for (const file of currentGlobalDocuments) {
+    const document = await readFile(
+      fromRoot('docs', '全局文档', file),
+      'utf8',
+    )
+    assert.doesNotMatch(document, staleState, `当前指导文档仍有旧状态：${file}`)
+  }
+})
+
+test('开发工作流在安装前声明并验证受支持 runtime', async () => {
+  const workflow = await readFile(
+    fromRoot('docs', '全局文档', '开发工作流.md'),
+    'utf8',
   )
-  assert.equal(
-    index.split(`(${releaseGuideLink})`).length - 1,
-    1,
-    `文档索引必须精确链接一次：${releaseGuideLink}`,
-  )
+  for (const fact of [
+    '.node-version',
+    'package.json#engines.node',
+    'package.json#packageManager',
+    '^24.15.0',
+    'pnpm@11.9.0',
+    'node --version',
+    'pnpm --version',
+  ]) {
+    assert.ok(workflow.includes(fact), `开发工作流缺少 runtime 事实：${fact}`)
+  }
 })
 
 test('根 README 使用当前时态且不保留阶段一至阶段四旧状态', async () => {
@@ -253,10 +940,11 @@ test('根 README 使用当前时态且不保留阶段一至阶段四旧状态', 
   )
 })
 
-test('根 README 公开 CI 与 Release 命令但不暗示根安装', async () => {
+test('根 README 公开 CI、Release 与当前平台事实且不暗示根安装', async () => {
   const readme = await readFile(fromRoot('README.md'), 'utf8')
   const rootCommands = markdownSection(readme, '## 根命令')
   const releaseSection = markdownSection(readme, '## CI 与发布')
+  const documentSection = markdownSection(readme, '## 项目文档')
   const requiredCommands = [
     'node --run ci:server-e2e',
     'node --run ci:contract',
@@ -272,7 +960,10 @@ test('根 README 公开 CI 与 Release 命令但不暗示根安装', async () =>
     assert.ok(releaseSection.includes(`\`${command}\``), `根 README 缺少命令：${command}`)
   }
   assert.ok(releaseSection.includes('根目录仍不执行 `pnpm install`'))
-  assert.ok(releaseSection.includes('GitHub 平台验收以 Task 14 为准'))
+  assert.ok(releaseSection.includes('`v0.1.2` 已完成 GitHub 平台验收'))
+  assert.ok(releaseSection.includes('Main CI Run `29317624359`'))
+  assert.ok(releaseSection.includes('Release Run `29317866199` attempt `2`'))
+  assert.doesNotMatch(releaseSection, /平台验收以 Task 14 为准|当前不得.*平台已验收/u)
   assert.ok(rootCommands.includes('归档已构建的正式 Web 产物'))
   assert.ok(rootCommands.includes('归档已构建的 Server production 产物'))
   assert.ok(
@@ -280,7 +971,12 @@ test('根 README 公开 CI 与 Release 命令但不暗示根安装', async () =>
       '`release:package:*` 只归档已构建产物，单独执行前必须先完成对应 build',
     ),
   )
-  assert.doesNotMatch(releaseSection, /GitHub CI 已通过/)
+  for (const link of [
+    './docs/全局文档/开发工作流.md',
+    './docs/工程归档/归档索引.md',
+  ]) {
+    assert.ok(documentSection.includes(`(${link})`), `根 README 缺少文档入口：${link}`)
+  }
 })
 
 test('根 README 给出两端独立安装、检查、migration 和 E2E 命令', async () => {
@@ -386,7 +1082,6 @@ test('工程方案准确记录阶段四已实施契约能力', async () => {
   assert.doesNotMatch(design, /OpenAPI 契约能力将在阶段四实施/)
   assert.doesNotMatch(design, /`api:generate` 尚未实施/)
   assert.doesNotMatch(design, /当前仓库尚无 `contract:sync`/)
-  assert.match(design, /阶段 4：接口契约（已实施并完成验收）/)
   assert.doesNotMatch(design, /最终运行时验收待完成/)
   assert.doesNotMatch(design, /Blob media type 不冲突/)
 })
@@ -435,11 +1130,21 @@ test('工程方案记录三 Workflow、双端重建和本地与平台验收边�
     '`.github/workflows/release.yml`',
     '`release/manifest.schema.json`',
     '`injectWorkspacePackages`',
-    '阶段五代码与本地验证已实施',
-    'GitHub 平台验证以 Task 14 记录为准',
   ]
 
   assert.deepEqual(requiredFacts.filter(fact => !currentFacts.includes(fact)), [])
+  for (const fact of [
+    '| 状态 | 已全部完成 |',
+    '| 完成日期 | 2026-07-14 |',
+    '| 当前产品版本 | `v0.1.2` |',
+    '| 当前正式版本 Source Commit | `ec418b8a7dca9c0da51770f6559813f3c7059077` |',
+    'Server release archive packaging',
+    'Main CI Run `29317624359`',
+    'Release Run `29317866199`',
+    '[项目工程组织方案分阶段落地]',
+  ]) {
+    assert.ok(design.includes(fact), `工程方案缺少完成事实：${fact}`)
+  }
   for (const fact of [
     '`ci.yml`',
     '`examples.yml`',
@@ -473,21 +1178,33 @@ test('工程方案记录三 Workflow、双端重建和本地与平台验收边�
   ]) {
     assert.doesNotMatch(design, stale)
   }
-  assert.ok(
-    design.includes('### 阶段 5：CI 与发布（代码与本地验证已实施）'),
+  const implementationResult = markdownSection(
+    design,
+    '## 16. 实施结果与历史归档',
   )
+  for (const phase of ['阶段一', '阶段二', '阶段三', '阶段四', '阶段五']) {
+    assert.match(
+      implementationResult,
+      new RegExp(`^[^\\n]*${phase}[^\\n]*完成[^\\n]*$`, 'mu'),
+      `工程方案缺少${phase}完成摘要`,
+    )
+  }
+  assert.ok(implementationResult.includes('[项目工程组织方案分阶段落地]'))
 })
 
-test('阶段五设计记录实施事实并冻结已确认 EARS 需求', async () => {
+test('阶段五历史设计保留实施计划链接并冻结已确认 EARS 需求', async () => {
   const design = await readFile(
-    fromRoot('docs', '全局文档', '阶段五CI与发布设计.md'),
+    fromRoot(
+      'docs',
+      '工程归档',
+      '项目工程组织方案分阶段落地',
+      '阶段五CI与发布设计.md',
+    ),
     'utf8',
   )
   const location = markdownSection(design, '## 1. 文档定位')
   const requirements = markdownSection(design, '## 5. EARS 需求')
 
-  assert.ok(location.includes('阶段五代码与本地验证已实施'))
-  assert.ok(location.includes('GitHub 平台验证以 Task 14 记录为准'))
   assert.ok(
     location.includes(
       '[阶段五 CI 与发布实施计划](./阶段五CI与发布实施计划.md)',
@@ -502,7 +1219,7 @@ test('阶段五设计记录实施事实并冻结已确认 EARS 需求', async ()
   )
 })
 
-test('发布与版本管理文档覆盖完整发布、恢复与外部配置边界', async () => {
+test('发布与版本管理文档覆盖平台基线、完整发布、恢复与外部配置边界', async () => {
   const guide = await readFile(
     fromRoot('docs', '全局文档', '发布与版本管理.md'),
     'utf8',
@@ -510,7 +1227,14 @@ test('发布与版本管理文档覆盖完整发布、恢复与外部配置边�
   const requiredFactsBySection = [
     [
       '## 1. 状态与边界',
-      ['阶段五代码与本地验证已实施', '尚未进行 GitHub 平台验收', '`Task 14`'],
+      [
+        '`v0.1.2`',
+        '`ec418b8a7dca9c0da51770f6559813f3c7059077`',
+        '29317624359',
+        '29240879781',
+        '29317866199',
+        'attempt 2',
+      ],
     ],
     [
       '## 2. 产品版本与准备',
@@ -539,6 +1263,7 @@ test('发布与版本管理文档覆盖完整发布、恢复与外部配置边�
         'Required Check',
         '非阻断',
         '双端 package Job 并行',
+        'Actions 默认 `contents: read`',
       ],
     ],
     [
@@ -564,6 +1289,10 @@ test('发布与版本管理文档覆盖完整发布、恢复与外部配置边�
         '人工核对',
         '未发布 Draft',
         '新的 Patch 版本',
+        '`v0.1.2`',
+        'Release Run `29317866199`',
+        'attempt `2`',
+        '自然恢复',
       ],
     ],
     [
@@ -571,8 +1300,15 @@ test('发布与版本管理文档覆盖完整发布、恢复与外部配置边�
       ['只向前', '不连接生产数据库', '不执行生产 migration', '不自动部署'],
     ],
     [
-      '## 9. 管理员一次性配置',
-      ['`ci-gate`', 'Required Check', '`v*.*.*`', 'Tag ruleset', 'Release immutability'],
+      '## 9. 平台治理基线',
+      [
+        '`ci-gate`',
+        'Required Check',
+        '`v*.*.*`',
+        'Tag ruleset',
+        'Release immutability',
+        '`contents: read`',
+      ],
     ],
   ]
 
