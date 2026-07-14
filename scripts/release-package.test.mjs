@@ -1428,7 +1428,7 @@ test('packageWeb 构建 exact staging、固定 GNU tar argv 与确定性 archive
   )
   assert.equal(first.sha256, second.sha256)
   assert.equal(first.size, (await fs.lstat(first.archivePath)).size)
-  assert.deepEqual(calls[0][1].slice(0, 15), [
+  assert.deepEqual(calls[0][1].slice(0, 13), [
     '--create',
     '--gzip',
     '--file',
@@ -1440,6 +1440,7 @@ test('packageWeb 构建 exact staging、固定 GNU tar argv 与确定性 archive
     '--numeric-owner',
     '--format=posix',
     '--pax-option=delete=atime,delete=ctime',
+    '--hard-dereference',
     'qsmds-web-v1.2.3',
   ])
   const gzip = await fs.readFile(first.archivePath)
@@ -1520,6 +1521,12 @@ test('packageServer 非 linux/x64 fail-closed；Linux 使用精确 pnpm deploy',
     '--prod',
     'deploy',
     calls[0][1][6],
+  ])
+  const tarCall = calls.find(([command]) => command === 'tar')
+  assert.ok(tarCall)
+  assert.deepEqual(tarCall[1].slice(-2), [
+    '--hard-dereference',
+    'qsmds-server-v1.2.3-linux-x64',
   ])
   assert.equal(path.basename(result.archivePath),
     'qsmds-server-v1.2.3-linux-x64.tar.gz')
