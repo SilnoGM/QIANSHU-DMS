@@ -18,9 +18,15 @@ const fantasticAdminHandbookPaths = {
   authKeepAliveAndI18n: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/权限保活与国际化.md', import.meta.url)),
   advanced: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/高级能力构建与升级.md', import.meta.url)),
 }
+const fantasticAdminComponentHandbookPaths = {
+  index: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/README.md', import.meta.url)),
+  selection: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/选型与使用规则.md', import.meta.url)),
+  basic: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/基础版组件.md', import.meta.url)),
+}
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
 const webLockfilePath = fileURLToPath(new URL('../pnpm-lock.yaml', import.meta.url))
+const fantasticAdminComponentsIndexPath = fileURLToPath(new URL('../packages/components/src/index.ts', import.meta.url))
 const pageOptimizerGovernancePaths = {
   skill: fileURLToPath(new URL('../skills/fa-page-optimizer/SKILL.md', import.meta.url)),
   catalog: fileURLToPath(new URL('../skills/fa-page-optimizer/references/components-catalog.md', import.meta.url)),
@@ -387,8 +393,12 @@ function isMarkdownFenceClosing(line, opening) {
     && /^[ \t]*$/u.test(content.slice(length))
 }
 
-function readMarkdownHeadingAnchors(content) {
-  const anchors = new Set()
+/**
+ * 统一移除 fenced code，供锚点与真实标题覆盖扫描共享。
+ * 这样示例代码里的伪标题不能冒充文档条目。
+ */
+function readMarkdownLinesOutsideFences(content) {
+  const lines = []
   let openingFence
 
   for (const line of content.split(/\r?\n/u)) {
@@ -404,6 +414,16 @@ function readMarkdownHeadingAnchors(content) {
       continue
     }
 
+    lines.push(line)
+  }
+
+  return lines
+}
+
+function readMarkdownHeadingAnchors(content) {
+  const anchors = new Set()
+
+  for (const line of readMarkdownLinesOutsideFences(content)) {
     const heading = readMarkdownHeading(line)
     if (heading) {
       anchors.add(createHeadingAnchor(heading))
@@ -411,6 +431,48 @@ function readMarkdownHeadingAnchors(content) {
   }
 
   return anchors
+}
+
+function readMarkdownSecondLevelHeadings(content) {
+  return readMarkdownLinesOutsideFences(content)
+    .filter(line => /^##[ \t]+[^#]/u.test(line))
+    .map(line => readMarkdownHeading(line))
+}
+
+/**
+ * 基础版公开能力只能来自 index.ts 两个稳定注释之间的 export 区段。
+ * 先切区段再提取名称，避免专业版导出误入基础手册覆盖数。
+ */
+function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath)) {
+  const basicMarker = '// 基础版组件'
+  const proMarker = '// 专业版组件'
+  const basicStart = componentIndex.indexOf(basicMarker)
+  const proStart = componentIndex.indexOf(proMarker, basicStart + basicMarker.length)
+
+  assert.notEqual(basicStart, -1, `Fantastic-admin 组件入口缺少区段标记：${basicMarker}`)
+  assert.notEqual(proStart, -1, `Fantastic-admin 组件入口缺少区段标记：${proMarker}`)
+  assert.ok(proStart > basicStart, 'Fantastic-admin 组件入口的专业版区段必须位于基础版区段之后')
+
+  const publicNamePattern = /\b(?:Fa|useFa)[A-Z][A-Za-z0-9]+/gu
+  const basicSection = componentIndex.slice(basicStart + basicMarker.length, proStart)
+  const exportedSpecifiers = basicSection
+    .split(/\r?\n/u)
+    .map(line => line.match(/^\s*export(?:\s+type)?\s*\{([^}]*)\}/u)?.[1])
+    .filter(Boolean)
+    .join('\n')
+
+  return [...new Set([...exportedSpecifiers.matchAll(publicNamePattern)].map(match => match[0]))]
+}
+
+function assertExistingMarkdownLinks(content, sourcePath) {
+  const links = [...content.matchAll(/\[[^\]]+\]\((\.\/[^)#]+\.md)(?:#[^)]+)?\)/gu)]
+    .map(match => match[1])
+
+  assert.notEqual(links.length, 0, `Markdown 文档必须包含可验证的相对链接：${sourcePath}`)
+  for (const link of links) {
+    const targetPath = resolve(dirname(sourcePath), link)
+    assert.equal(existsSync(targetPath), true, `Markdown 相对链接目标不存在：source=${sourcePath}; target=${link}`)
+  }
 }
 
 /**
@@ -585,6 +647,97 @@ test('Fantastic-admin Markdown 标题扫描忽略 fenced code', () => {
     [...anchors],
     ['fence-外标题', '关闭-fence-后标题'],
     '标题扫描必须忽略 backtick/tilde fence 内的伪标题，并正确校验关闭 fence 的字符和长度',
+  )
+})
+
+test('Fantastic-admin 基础公开名提取忽略非 export 文本', () => {
+  const publicNames = readFantasticAdminBasicPublicNames([
+    '// 基础版组件',
+    '// FaCommentOnly',
+    'const example = "useFaStringOnly"',
+    'export { Alert as FaAlert } from "./basic/alert"',
+    'export { useDrawer as useFaDrawer } from "./basic/drawer"',
+    '// 专业版组件',
+  ].join('\n'))
+
+  assert.deepEqual(
+    publicNames,
+    ['FaAlert', 'useFaDrawer'],
+    '基础公开名只能来自基础区段的 export 声明，注释与字符串不得冒充公共能力',
+  )
+})
+
+test('Fantastic-admin 基础组件分册覆盖本地全部公开导出并固定选型边界', () => {
+  const publicNames = readFantasticAdminBasicPublicNames()
+  assert.equal(
+    publicNames.length,
+    52,
+    `Fantastic-admin 基础区段公开名数量漂移：期望 52，实际 ${publicNames.length}；请核对 ${fantasticAdminComponentsIndexPath}`,
+  )
+
+  const documents = Object.fromEntries(
+    Object.entries(fantasticAdminComponentHandbookPaths).map(([name, filePath]) => [name, readRequiredFile(filePath)]),
+  )
+  const readmeScope = readSecondLevelSection(documents.index, '1. 适用范围与真相源')
+  for (const requiredPhrase of [
+    'Fantastic-admin Pro `6.3.0`',
+    '`web/apps/qsmds-arco`',
+    '2026-07-15',
+    '`web/packages/components/src/index.ts`',
+    '本地公开导出',
+    '官网分类仅作参考',
+  ]) {
+    assert.ok(readmeScope.includes(requiredPhrase), `内置组件 README 的适用范围与真相源缺少：${requiredPhrase}`)
+  }
+  assert.ok(
+    documents.index.includes('[选型与使用规则](./选型与使用规则.md)'),
+    '内置组件 README 必须链接真实的选型与使用规则分册',
+  )
+  assert.ok(
+    documents.index.includes('[基础版组件](./基础版组件.md)'),
+    '内置组件 README 必须链接真实的基础版组件分册',
+  )
+  assert.ok(
+    documents.index.includes('源码导航')
+    && documents.index.includes('不代表优先级')
+    && documents.index.includes('专业版')
+    && documents.index.includes('正式能力'),
+    '内置组件 README 必须说明基础/专业分册只是源码导航，专业版属于正式能力',
+  )
+  assertExistingMarkdownLinks(documents.index, fantasticAdminComponentHandbookPaths.index)
+
+  const responsibilityMatrix = readSecondLevelSection(documents.selection, '2. 组件职责矩阵')
+  for (const requiredPhrase of ['框架壳', '标准业务交互', '领域组件']) {
+    assert.ok(responsibilityMatrix.includes(requiredPhrase), `组件职责矩阵缺少可定位规则：${requiredPhrase}`)
+  }
+  const sharingBoundary = readSecondLevelSection(documents.selection, '3. 领域组件与共享边界')
+  assert.ok(sharingBoundary.includes('YAGNI'), '领域组件与共享边界必须明确遵循 YAGNI')
+
+  const publicNameSet = new Set(publicNames)
+  const documentedHeadings = readMarkdownSecondLevelHeadings(documents.basic)
+    .map(heading => heading.match(/^((?:Fa|useFa)[A-Z][A-Za-z0-9]+)(?:[ \t]|$)/u)?.[1])
+    .filter(Boolean)
+
+  for (const publicName of publicNames) {
+    const headingCount = documentedHeadings.filter(name => name === publicName).length
+    assert.equal(
+      headingCount,
+      1,
+      `基础版组件公开名必须恰好有一个真实二级 Markdown 标题：name=${publicName}; actual=${headingCount}; file=${fantasticAdminComponentHandbookPaths.basic}`,
+    )
+  }
+
+  // 代码示例同样会向读者声明公共能力，因此额外名称扫描保留 fenced code；
+  // 只移除不可见的 Markdown link destination，避免 URL 路径大小写被误判为组件名。
+  const visibleBasicContent = documents.basic.replace(/(\[[^\]]*\])\([^)]+\)/gu, '$1')
+  const claimedPublicNames = [...new Set(
+    [...visibleBasicContent.matchAll(/\b(?:Fa|useFa)[A-Z][A-Za-z0-9]+/gu)].map(match => match[0]),
+  )]
+  const unexportedClaims = claimedPublicNames.filter(name => !publicNameSet.has(name))
+  assert.deepEqual(
+    unexportedClaims,
+    [],
+    `基础版组件文档不得宣称本地基础区段未导出的 Fa*/useFa* 能力：${unexportedClaims.join(', ')}`,
   )
 })
 
