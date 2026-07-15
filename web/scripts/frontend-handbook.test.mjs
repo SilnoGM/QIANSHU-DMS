@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { parse as parseVueSfc } from '@vue/compiler-sfc'
 import ts from 'typescript'
 
 const handbookPath = fileURLToPath(new URL('../../docs/前端文档/前端开发手册/README.md', import.meta.url))
@@ -2464,8 +2465,33 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
 
   const inputSection = readSecondLevelSection(dataEntry, 'Input')
   const inputExample = inputSection.match(/```vue\n([\s\S]*?)```/u)?.[1] ?? ''
+  const keywordInputOpeningTag = inputExample.match(/<AInput\b[^>]*>/u)?.[0]
+  const passwordInputOpeningTag = inputExample.match(/<AInputPassword\b[^>]*>/u)?.[0]
+  const task6RegressionErrors = []
   for (const requiredPhrase of ['普通 `span`', '没有 `tabindex`', '键盘事件', '键盘可访问性是硬要求']) {
     assert.ok(inputSection.includes(requiredPhrase), `Input 内置控制可访问性限制缺少：${requiredPhrase}`)
+  }
+  if (!keywordInputOpeningTag) {
+    task6RegressionErrors.push('Input 示例必须包含 AInput opening tag')
+  }
+  else {
+    if (!/:input-attrs="\{\s*id:\s*'search-keyword'\s*\}"/u.test(keywordInputOpeningTag)) {
+      task6RegressionErrors.push('AInput 示例必须通过 input-attrs 把 search-keyword id 传给原生 input')
+    }
+    if (/\sid=(?:"|')/u.test(keywordInputOpeningTag)) {
+      task6RegressionErrors.push('AInput 示例不得把 id 直接传给 wrapper')
+    }
+  }
+  if (!passwordInputOpeningTag) {
+    task6RegressionErrors.push('Input 示例必须包含 AInputPassword opening tag')
+  }
+  else {
+    if (!/:input-attrs="\{\s*id:\s*'account-password'\s*\}"/u.test(passwordInputOpeningTag)) {
+      task6RegressionErrors.push('AInputPassword 示例必须通过 input-attrs 把 account-password id 传给原生 input')
+    }
+    if (/\sid=(?:"|')/u.test(passwordInputOpeningTag)) {
+      task6RegressionErrors.push('AInputPassword 示例不得把 id 直接传给 wrapper')
+    }
   }
   assert.match(inputExample, /:allow-clear="false"/u, 'Input 示例必须关闭内置 clear 控件')
   assert.match(inputExample, /:invisible-button="false"/u, 'Input 示例必须关闭内置 password visibility 控件')
@@ -2497,6 +2523,34 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
   for (const requiredPhrase of ['父级', '已配置', '默认自动上传']) {
     assert.ok(uploadSection.includes(requiredPhrase), `Upload 可执行接线说明缺少：${requiredPhrase}`)
   }
+
+  for (const [documentName, content] of [
+    ['通用与布局组件.md', commonAndLayout],
+    ['数据录入组件.md', dataEntry],
+  ]) {
+    const vueFences = [...content.matchAll(/^```vue[^\S\r\n]*\r?\n([\s\S]*?)^```[^\S\r\n]*$/gmu)]
+    if (vueFences.length === 0) {
+      task6RegressionErrors.push(`${documentName} 必须包含 vue fence`)
+    }
+
+    for (const [index, fence] of vueFences.entries()) {
+      const fenceNumber = index + 1
+      const { errors } = parseVueSfc(fence[1], {
+        filename: `${documentName}#vue-fence-${fenceNumber}.vue`,
+      })
+      if (errors.length > 0) {
+        task6RegressionErrors.push(
+          `${documentName} 第 ${fenceNumber} 个 vue fence 解析失败：${errors.map(error => error instanceof Error ? error.message : String(error)).join('; ')}`,
+        )
+      }
+    }
+  }
+  assert.equal(
+    task6RegressionErrors.length,
+    0,
+    `Task 6 示例语义或解析边界错误：\n${task6RegressionErrors.join('\n')}`,
+  )
+
   assert.doesNotMatch(
     `${commonAndLayout}\n${dataEntry}`,
     /TODO|TBD|['"]\/api\/[\w/{-]+|https?:\/\/[^\s)]+\/api\/[\w/{-]+|Bearer\s+[\w.~-]+/u,
