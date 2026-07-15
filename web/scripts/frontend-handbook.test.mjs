@@ -87,6 +87,7 @@ const arcoDesignVueTask7SourcePaths = {
   spin: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/spin/spin.js', import.meta.url)),
   table: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/table/table.js', import.meta.url)),
   tableColumn: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/table/table-column.js', import.meta.url)),
+  tableColumnSorter: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/table/hooks/use-column-sorter.js', import.meta.url)),
   tableTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/table/interface.d.ts', import.meta.url)),
   tabsTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/tabs/tabs.d.ts', import.meta.url)),
   topbarTabbar: fileURLToPath(new URL('../apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue', import.meta.url)),
@@ -273,6 +274,16 @@ function readStaticPropertyName(name) {
   return ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined
 }
 
+function createCheckedSourceFile(source, filename, scriptKind) {
+  const sourceFile = ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, scriptKind)
+  const parseDiagnostics = sourceFile.parseDiagnostics ?? []
+  const diagnosticText = parseDiagnostics
+    .map(diagnostic => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+    .join('\n')
+  assert.equal(parseDiagnostics.length, 0, `${filename} 语法解析失败：\n${diagnosticText}`)
+  return sourceFile
+}
+
 function findObjectPropertyInitializer(objectLiteral, propertyName) {
   for (const property of objectLiteral.properties) {
     if (ts.isPropertyAssignment(property) && readStaticPropertyName(property.name) === propertyName) {
@@ -287,13 +298,7 @@ function findObjectPropertyInitializer(objectLiteral, propertyName) {
  * 使用 AST 而不是锁定编译器生成的变量名，确保等价重编译不会制造假红。
  */
 function readInstalledComponentContract(source, expectedComponentName) {
-  const sourceFile = ts.createSourceFile(
-    `${expectedComponentName}.js`,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JS,
-  )
+  const sourceFile = createCheckedSourceFile(source, `${expectedComponentName}.js`, ts.ScriptKind.JS)
   let componentOptions
 
   function visitComponent(node) {
@@ -364,13 +369,7 @@ function readInstalledComponentContract(source, expectedComponentName) {
  * 同时解析默认 import 的目录，避免手写 coverage 与 sourceSlug 一起漂移后仍假绿。
  */
 function readArcoRuntimeInventory(source) {
-  const sourceFile = ts.createSourceFile(
-    'arco-vue.js',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JS,
-  )
+  const sourceFile = createCheckedSourceFile(source, 'arco-vue.js', ts.ScriptKind.JS)
   const importSlugs = new Map()
   let componentsInitializer
 
@@ -415,7 +414,7 @@ function readArcoRuntimeInventory(source) {
 }
 
 function readNamedFunctionSource(source, functionName) {
-  const sourceFile = ts.createSourceFile(`${functionName}.js`, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  const sourceFile = createCheckedSourceFile(source, `${functionName}.js`, ts.ScriptKind.JS)
   let functionSource
 
   function visit(node) {
@@ -1015,38 +1014,184 @@ function collectTypeScriptSemanticDiagnostics(source, filename) {
   return ts.getPreEmitDiagnostics(program)
 }
 
-/**
- * 通过 TypeScript AST 制造缺失属性变异，避免测试本身锁定属性顺序或引号风格。
- */
-function removeTypeScriptObjectProperty(source, propertyName) {
-  const sourceFile = ts.createSourceFile(
-    'object-property-mutation.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  )
-  let removedCount = 0
-  const transformResult = ts.transform(sourceFile, [context => (rootNode) => {
-    function visit(node) {
-      if (ts.isPropertyAssignment(node) && readStaticPropertyName(node.name) === propertyName) {
-        removedCount += 1
-        return undefined
-      }
-      return ts.visitEachChild(node, visit, context)
-    }
-    return ts.visitNode(rootNode, visit)
-  }])
+function unwrapTypeScriptExpression(node) {
+  let current = node
+  while (
+    ts.isAsExpression(current)
+    || ts.isNonNullExpression(current)
+    || ts.isParenthesizedExpression(current)
+    || ts.isSatisfiesExpression(current)
+    || ts.isTypeAssertionExpression(current)
+  ) {
+    current = current.expression
+  }
+  return current
+}
 
-  try {
-    assert.equal(removedCount, 1, `TypeScript 变异必须恰好移除一个 ${propertyName} 属性`)
-    const transformedSourceFile = transformResult.transformed[0]
-    assert.ok(ts.isSourceFile(transformedSourceFile), 'TypeScript 属性变异必须保留 SourceFile')
-    return ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(transformedSourceFile)
+/**
+ * 只定位 `columns` 数组中 `sortable.sorter === true` 的远端排序列，避免把其他
+ * 对象上的同名属性误当成 Table 契约或变异目标。
+ */
+function readRemoteTableSorterTarget(source, filename) {
+  const sourceFile = createCheckedSourceFile(source, filename, ts.ScriptKind.TS)
+  const columnsDeclarations = []
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === 'columns') {
+        columnsDeclarations.push(declaration)
+      }
+    }
   }
-  finally {
-    transformResult.dispose()
+  assert.equal(columnsDeclarations.length, 1, `${filename} 必须恰好声明一个 columns`)
+
+  const columnsInitializer = columnsDeclarations[0].initializer
+  assert.ok(columnsInitializer, `${filename} columns 必须有初始化值`)
+  const columns = unwrapTypeScriptExpression(columnsInitializer)
+  assert.ok(ts.isArrayLiteralExpression(columns), `${filename} columns 必须使用数组字面量`)
+
+  const remoteSorterTargets = []
+  for (const element of columns.elements) {
+    const column = unwrapTypeScriptExpression(element)
+    if (!ts.isObjectLiteralExpression(column)) {
+      continue
+    }
+    const sortableInitializer = findObjectPropertyInitializer(column, 'sortable')
+    if (!sortableInitializer) {
+      continue
+    }
+    const sortable = unwrapTypeScriptExpression(sortableInitializer)
+    if (!ts.isObjectLiteralExpression(sortable)) {
+      continue
+    }
+    const sorterInitializer = findObjectPropertyInitializer(sortable, 'sorter')
+    if (sorterInitializer && unwrapTypeScriptExpression(sorterInitializer).kind === ts.SyntaxKind.TrueKeyword) {
+      remoteSorterTargets.push(sortable)
+    }
   }
+  assert.equal(remoteSorterTargets.length, 1, `${filename} 必须恰好包含一个 sortable.sorter === true 的远端排序列`)
+
+  const sortDirectionsInitializer = findObjectPropertyInitializer(remoteSorterTargets[0], 'sortDirections')
+  assert.ok(sortDirectionsInitializer, `${filename} 远端排序列必须声明 sortDirections`)
+  const sortDirections = unwrapTypeScriptExpression(sortDirectionsInitializer)
+  assert.ok(ts.isArrayLiteralExpression(sortDirections), `${filename} sortDirections 必须使用数组字面量`)
+  return { sortDirections, sourceFile }
+}
+
+function assertRemoteTableSortDirections(source, filename) {
+  const { sortDirections } = readRemoteTableSorterTarget(source, filename)
+  assert.notEqual(sortDirections.elements.length, 0, `${filename} sortDirections 不能为空`)
+  for (const element of sortDirections.elements) {
+    const direction = unwrapTypeScriptExpression(element)
+    assert.ok(
+      ts.isStringLiteral(direction) && (direction.text === 'ascend' || direction.text === 'descend'),
+      `${filename} sortDirections 只允许 ascend 或 descend 字面量`,
+    )
+  }
+}
+
+function emptyRemoteTableSortDirections(source, filename) {
+  const { sortDirections, sourceFile } = readRemoteTableSorterTarget(source, filename)
+  const start = sortDirections.getStart(sourceFile)
+  return `${source.slice(0, start)}[]${source.slice(sortDirections.end)}`
+}
+
+function hasRuntimeSortDirectionsLengthGuard(source) {
+  const sourceFile = createCheckedSourceFile(source, 'use-column-sorter.js', ts.ScriptKind.JS)
+  const hasSorterInitializers = []
+  function findHasSorter(node) {
+    if (
+      ts.isVariableDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && node.name.text === 'hasSorter'
+      && node.initializer
+    ) {
+      hasSorterInitializers.push(node.initializer)
+    }
+    ts.forEachChild(node, findHasSorter)
+  }
+  findHasSorter(sourceFile)
+  assert.equal(hasSorterInitializers.length, 1, 'Table sorter hook 必须恰好声明一个 hasSorter')
+
+  let hasLengthGuard = false
+  function findLengthGuard(node) {
+    if (
+      ts.isBinaryExpression(node)
+      && node.operatorToken.kind === ts.SyntaxKind.GreaterThanToken
+      && ts.isNumericLiteral(node.right)
+      && node.right.text === '0'
+      && ts.isPropertyAccessExpression(node.left)
+      && node.left.name.text === 'length'
+      && ts.isPropertyAccessExpression(node.left.expression)
+      && node.left.expression.name.text === 'value'
+      && ts.isIdentifier(node.left.expression.expression)
+      && node.left.expression.expression.text === 'sortDirections'
+    ) {
+      hasLengthGuard = true
+    }
+    ts.forEachChild(node, findLengthGuard)
+  }
+  findLengthGuard(hasSorterInitializers[0])
+  return hasLengthGuard
+}
+
+function readBeforeOkCatchMessageErrorStatement(source, filename) {
+  const sourceFile = createCheckedSourceFile(source, filename, ts.ScriptKind.TS)
+  const beforeOkFunctions = sourceFile.statements.filter(statement => (
+    ts.isFunctionDeclaration(statement) && statement.name?.text === 'beforeOk'
+  ))
+  assert.equal(beforeOkFunctions.length, 1, `${filename} 必须恰好声明一个 beforeOk 函数`)
+  const beforeOk = beforeOkFunctions[0]
+  assert.ok(beforeOk.body, `${filename} beforeOk 必须包含函数体`)
+
+  const catchBlocks = beforeOk.body.statements
+    .filter(ts.isTryStatement)
+    .flatMap(statement => statement.catchClause ? [statement.catchClause.block] : [])
+  assert.equal(catchBlocks.length, 1, `${filename} beforeOk 必须恰好包含一个 catch block`)
+
+  const messageErrorCalls = []
+  function findMessageError(node) {
+    if (
+      ts.isCallExpression(node)
+      && ts.isPropertyAccessExpression(node.expression)
+      && ts.isIdentifier(node.expression.expression)
+      && node.expression.expression.text === 'Message'
+      && node.expression.name.text === 'error'
+    ) {
+      messageErrorCalls.push(node)
+      return
+    }
+    if (node !== catchBlocks[0] && ts.isFunctionLike(node)) {
+      return
+    }
+    ts.forEachChild(node, findMessageError)
+  }
+  findMessageError(catchBlocks[0])
+  assert.equal(messageErrorCalls.length, 1, `${filename} beforeOk catch 必须调用 Message.error`)
+
+  let statement = messageErrorCalls[0]
+  while (statement.parent && !ts.isExpressionStatement(statement)) {
+    statement = statement.parent
+  }
+  assert.ok(ts.isExpressionStatement(statement), `${filename} Message.error 必须作为活动表达式语句执行`)
+  return { sourceFile, statement }
+}
+
+function assertBeforeOkCatchMessageError(source, filename) {
+  readBeforeOkCatchMessageErrorStatement(source, filename)
+}
+
+function mutateBeforeOkCatchMessageError(source, filename, mutation) {
+  assert.ok(mutation === 'comment' || mutation === 'delete', `不支持的 Message.error 变异：${mutation}`)
+  const { sourceFile, statement } = readBeforeOkCatchMessageErrorStatement(source, filename)
+  const start = statement.getStart(sourceFile)
+  const originalStatement = source.slice(start, statement.end)
+  const replacement = mutation === 'comment'
+    ? `// ${originalStatement.replaceAll('\n', '\n// ')}`
+    : ''
+  return `${source.slice(0, start)}${replacement}${source.slice(statement.end)}`
 }
 
 function formatVueCompilerError(error) {
@@ -2690,6 +2835,11 @@ test('Arco Design Vue Task 7 runtime inventory 使用 AST 且不依赖生成格�
     expectedInventory,
     'runtime inventory 不得依赖双引号、分号或 components 对象的换行格式',
   )
+  assert.throws(
+    () => readArcoRuntimeInventory('const components = {'),
+    /语法解析失败/u,
+    'runtime inventory AST helper 必须拒绝 parseDiagnostics',
+  )
 })
 
 test('Arco Design Vue Task 7 Table 示例通过真实 TypeScript 语义检查', () => {
@@ -2697,6 +2847,34 @@ test('Arco Design Vue Task 7 Table 示例通过真实 TypeScript 语义检查', 
   const tableSection = readSecondLevelSection(dataDisplay, 'Table')
   const tableExample = extractVueFences(tableSection)[0].source
   const scriptSetup = readTypeScriptScriptSetup(tableExample, 'Table.vue')
+  const sorterHookSource = readRequiredFile(arcoDesignVueTask7SourcePaths.tableColumnSorter)
+
+  assert.doesNotThrow(
+    () => assertRemoteTableSortDirections(scriptSetup, 'TableExample.ts'),
+    '远端排序列必须提供非空且合法的 sortDirections',
+  )
+  assert.equal(
+    hasRuntimeSortDirectionsLengthGuard(sorterHookSource),
+    true,
+    'Table 运行时必须以 sortDirections.length > 0 决定是否展示排序入口',
+  )
+
+  const emptySortDirections = emptyRemoteTableSortDirections(scriptSetup, 'TableEmptySortDirections.ts')
+  assert.deepEqual(
+    collectTypeScriptSemanticDiagnostics(emptySortDirections, 'TableEmptySortDirections.ts'),
+    [],
+    '空 sortDirections 在严格 TypeScript 中仍合法，必须由运行时契约另行拦截',
+  )
+  assert.throws(
+    () => assertRemoteTableSortDirections(emptySortDirections, 'TableEmptySortDirections.ts'),
+    /sortDirections 不能为空/u,
+    '空 sortDirections 虽通过 TypeScript，也必须被运行时契约测试拒绝',
+  )
+  assert.throws(
+    () => assertRemoteTableSortDirections('const columns = [', 'TableMalformed.ts'),
+    /语法解析失败/u,
+    'Table AST helper 必须拒绝 parseDiagnostics',
+  )
 
   assert.deepEqual(
     collectTypeScriptSemanticDiagnostics(scriptSetup, 'TableExample.ts'),
@@ -2711,7 +2889,13 @@ test('Arco Design Vue Task 7 Table 示例通过真实 TypeScript 语义检查', 
     'semantic probe 必须识别普通 TypeScript 类型错误',
   )
 
-  const missingSortDirections = removeTypeScriptObjectProperty(scriptSetup, 'sortDirections')
+  const missingSortDirections = `
+import type { TableColumnData } from '@arco-design/web-vue'
+
+const columns = [
+  { title: '订单', dataIndex: 'name', sortable: { sorter: true } },
+] satisfies TableColumnData[]
+`
   const missingSortDirectionsDiagnostics = collectTypeScriptSemanticDiagnostics(
     missingSortDirections,
     'TableMissingSortDirections.ts',
@@ -2727,6 +2911,35 @@ test('Arco Design Vue Task 7 Table 示例通过真实 TypeScript 语义检查', 
     )),
     true,
     '缺失 sortDirections 的诊断必须来自真实 TableSortable 类型',
+  )
+})
+
+test('Arco Design Vue Task 7 异步确认 catch 使用活动 Message.error 调用', () => {
+  const feedback = readRequiredFile(arcoDesignVueHandbookPaths.feedback)
+
+  for (const family of ['Drawer', 'Modal', 'Popconfirm']) {
+    const section = readSecondLevelSection(feedback, family)
+    const example = extractVueFences(section)[0].source
+    const scriptSetup = readTypeScriptScriptSetup(example, `${family}.vue`)
+
+    assert.doesNotThrow(
+      () => assertBeforeOkCatchMessageError(scriptSetup, `${family}.ts`),
+      `${family} beforeOk catch 必须包含活动 Message.error 调用`,
+    )
+    for (const mutation of ['comment', 'delete']) {
+      const mutated = mutateBeforeOkCatchMessageError(scriptSetup, `${family}-${mutation}.ts`, mutation)
+      assert.throws(
+        () => assertBeforeOkCatchMessageError(mutated, `${family}-${mutation}.ts`),
+        /catch 必须调用 Message\.error/u,
+        `${family} Message.error 被${mutation === 'comment' ? '注释' : '删除'}后必须失败`,
+      )
+    }
+  }
+
+  assert.throws(
+    () => assertBeforeOkCatchMessageError('async function beforeOk( {', 'MalformedBeforeOk.ts'),
+    /语法解析失败/u,
+    '异步反馈 AST helper 必须拒绝 parseDiagnostics',
   )
 })
 
@@ -3138,7 +3351,6 @@ test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注
 
   for (const family of ['Drawer', 'Modal', 'Popconfirm']) {
     const section = readSecondLevelSection(feedback, family)
-    const exampleSource = extractVueFences(section)[0].source
     for (const phrase of [
       '`onBeforeOk(done)`',
       '`done(true)`',
@@ -3154,7 +3366,6 @@ test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注
     ]) {
       assert.ok(section.includes(phrase), `${family} 异步确认与关闭语义缺少：${phrase}`)
     }
-    assert.ok(exampleSource.includes('Message.error('), `${family} 示例 catch 必须向用户展示可读失败反馈`)
   }
 
   assert.doesNotMatch(extractVueFences(readSecondLevelSection(feedback, 'Spin'))[0].source, /:delay=/u, 'Spin 示例不得使用虚构 delay prop')
