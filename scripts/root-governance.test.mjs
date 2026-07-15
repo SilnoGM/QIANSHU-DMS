@@ -48,6 +48,14 @@ const archiveTasks = new Map([
       '文档体系收口与归档整理设计.md',
     ]),
   ],
+  [
+    'Fantastic-admin与Arco文档本地化',
+    Object.freeze([
+      '归档说明.md',
+      'Fantastic-admin与Arco文档本地化实施计划.md',
+      'Fantastic-admin与Arco文档本地化设计.md',
+    ]),
+  ],
 ])
 
 function fromRoot(...segments) {

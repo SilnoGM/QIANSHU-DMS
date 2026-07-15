@@ -1,19 +1,27 @@
 # Fantastic-admin 与 Arco 文档本地化设计
 
+> [!IMPORTANT]
+> 本文已归档，仅用于追溯手册信息架构、选型决策与验收边界，不再作为当前执行依据。
+> 当前前端指导请使用[前端开发手册](../../前端文档/前端开发手册/README.md)，仓库协作流程请参阅[开发工作流](../../全局文档/开发工作流.md)。
+> 任务时间线、偏差处理和验证证据请参阅[归档说明](./归档说明.md)。
+
 ## 1. 文档定位
 
 本文记录“Fantastic-admin 与 Arco 文档本地化”任务已经确认的目标、信息架构、内容模型、真相源优先级、完整性口径、维护规则和验收边界，是后续实施计划与正式手册编写的设计真相源。
 
 | 项目 | 内容 |
 | --- | --- |
-| 文档状态 | 设计已确认，待实施 |
+| 文档状态 | 已完成并归档 |
 | 确认日期 | 2026-07-15 |
+| 完成日期 | 2026-07-15 |
 | 适用产品 | 千树 DMS Web |
 | 正式应用 | `web/apps/qsmds-arco` |
 | Fantastic-admin 基线 | 专业版 `6.3.0` |
 | Arco Design Vue 基线 | `@arco-design/web-vue@2.58.0` |
 | 内容方案 | 完整手册型、分层多册 |
-| 实施计划 | 本设计审阅通过后单独编写 |
+| 实施计划 | [Fantastic-admin 与 Arco 文档本地化实施计划](./Fantastic-admin与Arco文档本地化实施计划.md) |
+| 最终实施 Commit | `9af8244130607eacf7bea90a0f8cff7dfc94c62b` |
+| 归档说明 | [归档说明](./归档说明.md) |
 
 本任务不是把三个网站逐页复制到仓库，而是将 Fantastic-admin 官方指南、Fantastic-admin 内置组件和 Arco Design Vue 组件库的完整知识目录，按照千树 DMS 的依赖版本、专业版源码和日常开发路径，重写为可检索、可执行、可维护的本地中文手册。
 
@@ -120,7 +128,7 @@ docs/前端文档/前端开发手册/
     ├── 数据录入组件.md
     ├── 数据展示组件.md
     ├── 反馈组件.md
-    └── 导航及其他组件.md
+    └── 导航与其他组件.md
 ~~~
 
 目录名和文档名整体使用中文；框架名、组件名、包名、API、Props、Events、Slots、命令和路径保留英文。
@@ -283,12 +291,13 @@ API 明细采用“高频 API 本地化 + 完整 API 官方直链”的方式。
 
 ~~~bash
 git diff --check
-rg -n 'TODO|TBD|待补充|后续补充' docs/前端文档/前端开发手册
-rg -n 'Fantastic-admin|@arco-design/web-vue|web/apps/qsmds-arco' docs/前端文档/前端开发手册
+pnpm -C web exec node --test scripts/frontend-handbook.test.mjs
+pnpm -C web run test:scripts:node
+pnpm -C web exec eslint scripts/frontend-handbook.test.mjs
 git status --short
 ~~~
 
-若仓库已有 Markdown 格式化或文档链接检查入口，实施计划应补充并执行对应命令。任何失败必须如实报告。
+链接、占位、虚构 endpoint 与敏感值由 `frontend-handbook.test.mjs` 中的递归 Markdown 链接检查和 fence-aware 策略扫描统一验证。这些检查会区分 Vue 合法插值、空敏感字段与真实占位/硬编码值，避免宽泛文本正则产生误报。任何失败必须如实报告。
 
 ## 12. 实施与提交边界
 
@@ -317,3 +326,20 @@ git status --short
 8. 文档不含大段官网复制内容、敏感信息、虚构业务契约或占位文本。
 9. 全部验证命令通过，最终 Git 暂存范围经过核对。
 10. 文档变更按既定小步提交进入根 Git 仓库。
+
+## 14. 完成与归档记录
+
+2026-07-15 已按本设计完成实施。正式手册共 21 份 Markdown，根入口下分为 Fantastic-admin 指南、Fantastic-admin 内置组件和 Arco Design Vue 三个知识域。
+
+| 验收项 | 结果 | 证据 |
+| --- | --- | --- |
+| 分层多册、根索引与分册导航 | 通过 | `docs/前端文档/前端开发手册/README.md`；递归链接与锚点检查通过 |
+| Fantastic-admin 指南覆盖 | `49/49` | 覆盖契约、本地章节与直接来源 URL 结构化校验通过 |
+| Fantastic-admin 本地公开能力 | `100%` | 基础区段 `52` 个运行时公开名；专业区段 `50` 个运行时公开名，全部从 `web/packages/components/src/index.ts` 动态核对 |
+| Arco Design Vue 组件家族 | `74/74` | 覆盖矩阵、分册 H2 与本地 `arco-vue.js` 运行时安装清单精确一致 |
+| 专业版主线与版本差异 | 通过 | 专业版组件独立分册；官网、锁定依赖、本地源码和正式应用按真相源优先级记录 |
+| 组件选型 | 通过 | 17 组 Fantastic-admin/Arco 重叠能力采用精确名称、本地导出/类型真相源和已审定决策校验 |
+| 占位、虚构契约与敏感信息 | 通过 | fence-aware 策略扫描覆盖 TODO/TBD、占位、虚构 endpoint、Bearer、Cookie 和常见敏感赋值 |
+| 完整验证与提交范围 | 通过 | 最终实施 Commit `9af8244130607eacf7bea90a0f8cff7dfc94c62b`；归档前 Web 脚本测试 `100/100`、ESLint 和 `git diff --check` 通过 |
+
+本设计与实施计划自此退出当前开发指导入口，仅作为决策与实施证据保留。当前使用入口为[前端开发手册](../../前端文档/前端开发手册/README.md)。
