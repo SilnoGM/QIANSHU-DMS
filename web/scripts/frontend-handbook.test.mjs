@@ -2,13 +2,20 @@
 
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { parse as parseVueSfc } from '@vue/compiler-sfc'
 import ts from 'typescript'
 
 const handbookPath = fileURLToPath(new URL('../../docs/前端文档/前端开发手册/README.md', import.meta.url))
+const qsmdsArcoManifestPath = fileURLToPath(new URL('../apps/qsmds-arco/package.json', import.meta.url))
+const requireFromQsmdsArco = createRequire(qsmdsArcoManifestPath)
+const {
+  compileScript: compileVueScript,
+  compileTemplate: compileVueTemplate,
+  parse: parseVueSfc,
+} = requireFromQsmdsArco('vue/compiler-sfc')
 const fantasticAdminHandbookPaths = {
   index: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/README.md', import.meta.url)),
   guide: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/指引与开发准备.md', import.meta.url)),
@@ -41,6 +48,10 @@ const arcoDesignVueIntegrationSourcePaths = {
   providerPlugin: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.ts', import.meta.url)),
   providerComponent: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.vue', import.meta.url)),
   vitePlugins: fileURLToPath(new URL('../apps/qsmds-arco/vite/plugins.ts', import.meta.url)),
+}
+const arcoDesignVueTask6SourcePaths = {
+  timePickerTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/time-picker/time-picker.d.ts', import.meta.url)),
+  uploadTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/upload/upload.d.ts', import.meta.url)),
 }
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
@@ -630,6 +641,7 @@ function readMarkdownFenceOpening(line) {
 
   return {
     character,
+    infoString: content.slice(length).trim(),
     length,
   }
 }
@@ -674,6 +686,147 @@ function readMarkdownLinesOutsideFences(content) {
   }
 
   return lines
+}
+
+/**
+ * 提取 Markdown 中真正闭合且 info string 精确为 vue 的完整代码内容。
+ * 调用方据此逐家族确认示例存在，并对每个 SFC 独立报告文档名与序号。
+ */
+function extractVueFences(content) {
+  const fences = []
+  let openingFence
+  let openingLine = 0
+  let sourceLines = []
+
+  for (const [index, line] of content.split(/\r?\n/u).entries()) {
+    if (openingFence) {
+      if (isMarkdownFenceClosing(line, openingFence)) {
+        if (openingFence.infoString === 'vue') {
+          fences.push({
+            line: openingLine,
+            source: sourceLines.join('\n'),
+          })
+        }
+        openingFence = undefined
+        sourceLines = []
+      }
+      else {
+        sourceLines.push(line)
+      }
+      continue
+    }
+
+    openingFence = readMarkdownFenceOpening(line)
+    if (openingFence) {
+      openingLine = index + 1
+    }
+  }
+
+  return fences
+}
+
+function formatVueCompilerError(error) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * 对每个 Vue SFC 先解析结构，再分别编译 script 与 template 的语法。
+ * 这不是语义 typecheck；目标是补上 parse-only 无法发现的语法假绿。
+ */
+function collectVueFenceSyntaxErrors(content, documentName) {
+  const errors = []
+  const fences = extractVueFences(content)
+
+  if (fences.length === 0) {
+    errors.push(`${documentName} 未找到 vue fence`)
+  }
+  for (const [index, fence] of fences.entries()) {
+    const fenceNumber = index + 1
+    const filename = `${documentName}#vue-fence-${fenceNumber}.vue`
+    const id = `task6-vue-fence-${fenceNumber}`
+    let descriptor
+
+    try {
+      const result = parseVueSfc(fence.source, { filename })
+      descriptor = result.descriptor
+      for (const error of result.errors) {
+        errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 解析失败：${formatVueCompilerError(error)}`)
+      }
+      if (result.errors.length > 0) {
+        continue
+      }
+    }
+    catch (error) {
+      errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 解析抛错：${formatVueCompilerError(error)}`)
+      continue
+    }
+
+    let bindingMetadata
+    if (descriptor.script || descriptor.scriptSetup) {
+      try {
+        bindingMetadata = compileVueScript(descriptor, { id }).bindings
+      }
+      catch (error) {
+        errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 脚本语法编译失败：${formatVueCompilerError(error)}`)
+      }
+    }
+
+    if (descriptor.template) {
+      try {
+        const result = compileVueTemplate({
+          compilerOptions: bindingMetadata ? { bindingMetadata } : undefined,
+          filename,
+          id,
+          scoped: descriptor.styles.some(style => style.scoped),
+          source: descriptor.template.content,
+        })
+        for (const error of result.errors) {
+          errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 模板语法编译失败：${formatVueCompilerError(error)}`)
+        }
+      }
+      catch (error) {
+        errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 模板语法编译抛错：${formatVueCompilerError(error)}`)
+      }
+    }
+  }
+
+  return errors
+}
+
+function assertVueFencesSyntaxCompile(content, documentName) {
+  const errors = collectVueFenceSyntaxErrors(content, documentName)
+  assert.equal(errors.length, 0, `${documentName} Vue SFC 语法编译失败：\n${errors.join('\n')}`)
+}
+
+/**
+ * 一般双花括号只扫描 fence 外说明文字；代码 fence 内另抓典型的大写占位名，
+ * 避免把 Vue 合法插值误判为占位。endpoint、Bearer 与敏感赋值覆盖全部示例。
+ */
+function findTask6DocPolicyViolations(content) {
+  const violations = []
+  const prose = readMarkdownLinesOutsideFences(content).join('\n')
+  const collectMatches = (source, pattern, label) => {
+    for (const match of source.matchAll(pattern)) {
+      violations.push(`${label}：${match[0]}`)
+    }
+  }
+
+  collectMatches(
+    content,
+    /^(?:TODO|TBD|待补充|后续补充)(?:[ \t]*(?::|：)[^\r\n]*|[ \t]*)$/gmu,
+    '占位行',
+  )
+  collectMatches(prose, /\{\{[^{}\r\n]+\}\}/gu, '占位标记')
+  collectMatches(content, /\{\{[A-Z][A-Z0-9_]*\}\}|<PLACEHOLDER>/gu, '占位标记')
+  collectMatches(content, /(['"`])\/api\/[\w./{}$?=&%-]+\1/gu, '虚构 endpoint')
+  collectMatches(content, /Bearer\s+[\w.~-]+/gu, '硬编码 Bearer')
+  collectMatches(
+    content,
+    /\b(?:password|token|secret|api[_-]?key)\s*[:=]\s*(['"`])[^'"`\r\n]+\1/giu,
+    '硬编码敏感值',
+  )
+
+  return [...new Set(violations)]
 }
 
 function readMarkdownHeadingAnchors(content) {
@@ -2230,12 +2383,20 @@ test('Arco Design Vue 分册完整覆盖 74 个组件家族并落地 Task 6 的 
       `https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/${sourceSlug}`,
       `Arco Design Vue 覆盖矩阵版本源码目录错误：${family}`,
     )
-    const expectedStatus = {
-      Message: '已注入 `$message`；静态 API 可显式导入',
-      Modal: '`AModal` 已全局注册；已注入 `$modal`；静态 API 可显式导入',
-      Notification: '已注入 `$notification`；静态 API 可显式导入',
-    }[family] ?? '正式应用已全局注册'
-    assert.equal(row.status, expectedStatus, `Arco Design Vue 覆盖矩阵接入状态必须记录当前事实：${family}`)
+    if (family === 'Message' || family === 'Notification') {
+      const instanceApi = family === 'Message' ? '$message' : '$notification'
+      assert.ok(row.status.includes(instanceApi), `${family} 接入状态必须记录实例注入 ${instanceApi}`)
+      assert.ok(row.status.includes('静态 API'), `${family} 接入状态必须记录静态 API`)
+      assert.doesNotMatch(row.status, /全局注册/u, `${family} 接入状态不得声称模板组件全局注册`)
+    }
+    else if (family === 'Modal') {
+      for (const requiredPhrase of ['AModal', '$modal', '静态 API']) {
+        assert.ok(row.status.includes(requiredPhrase), `Modal 接入状态缺少：${requiredPhrase}`)
+      }
+    }
+    else {
+      assert.ok(row.status.includes('全局注册'), `${family} 接入状态必须包含全局注册事实`)
+    }
     assert.equal(row.checkedAt, '2026-07-15', `Arco Design Vue 覆盖矩阵核对日期错误：${family}`)
 
     if (documentKey) {
@@ -2277,7 +2438,7 @@ test('Arco Design Vue 分册完整覆盖 74 个组件家族并落地 Task 6 的 
     for (const requiredLabel of ['当前接入：', '实际组件名：', '高频契约：', '可访问性与响应式：']) {
       assert.ok(section.includes(requiredLabel), `${family} 章节缺少统一说明字段：${requiredLabel}`)
     }
-    assert.ok(section.includes('```vue'), `${family} 章节必须包含 Vue 3 + TypeScript 最小示例`)
+    assert.ok(extractVueFences(section).length >= 1, `${family} 章节必须包含完整且闭合的 Vue 3 + TypeScript 示例`)
     assert.ok(
       section.includes(`https://arco.design/vue/component/${sourceSlug}`),
       `${family} 章节必须直接链接当前官方组件页`,
@@ -2420,6 +2581,27 @@ test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语�
 test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边界', () => {
   const commonAndLayout = readRequiredFile(arcoDesignVueHandbookPaths.commonAndLayout)
   const dataEntry = readRequiredFile(arcoDesignVueHandbookPaths.dataEntry)
+  const qsmdsArcoManifest = JSON.parse(readRequiredFile(qsmdsArcoManifestPath))
+  const timePickerTypesSource = readRequiredFile(arcoDesignVueTask6SourcePaths.timePickerTypes)
+  const uploadTypesSource = readRequiredFile(arcoDesignVueTask6SourcePaths.uploadTypes)
+  const task6RegressionErrors = []
+
+  assert.ok(
+    Object.hasOwn(qsmdsArcoManifest.dependencies ?? {}, 'vue'),
+    '正式应用必须直接声明 vue，Task 6 语法编译不得依赖 root hoist 或传递依赖布局',
+  )
+  assert.ok(
+    timePickerTypesSource.includes('\'update:modelValue\': (timeString: string | Array<string | undefined> | undefined) => true;'),
+    'TimePicker 2.58.0 类型真相源必须保留完整 update:modelValue union',
+  )
+  for (const methodSignature of [
+    'submit(fileItem?: FileItem | undefined): void;',
+    'abort(fileItem: FileItem): void;',
+    'updateFile(id: string, file: File): void;',
+    'upload(files: File[]): void;',
+  ]) {
+    assert.ok(uploadTypesSource.includes(methodSignature), `Upload 2.58.0 类型真相源缺少：${methodSignature}`)
+  }
 
   const familyContracts = {
     Button: ['`AButton`', '`AButtonGroup`', '`html-type`'],
@@ -2463,11 +2645,31 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
     assert.ok(dataEntry.includes(requiredPhrase), `数据录入组件分册缺少跨组件质量边界：${requiredPhrase}`)
   }
 
+  const autoCompleteSection = readSecondLevelSection(dataEntry, 'AutoComplete')
+  const autoCompleteExample = extractVueFences(autoCompleteSection)[0]?.source ?? ''
+  const autoCompleteOpeningTag = autoCompleteExample.match(/<AAutoComplete\b[^>]*>/u)?.[0]
+  if (!autoCompleteExample.includes('<label for="region-keyword">')) {
+    task6RegressionErrors.push('AutoComplete 示例必须提供关联 region-keyword 的可见 label')
+  }
+  if (!autoCompleteOpeningTag) {
+    task6RegressionErrors.push('AutoComplete 示例必须包含 AAutoComplete opening tag')
+  }
+  else {
+    if (!/:input-attrs="\{\s*id:\s*'region-keyword'\s*\}"/u.test(autoCompleteOpeningTag)) {
+      task6RegressionErrors.push('AutoComplete 示例必须通过 input-attrs 把 region-keyword id 传给原生 input')
+    }
+    if (/\sid=(?:"|')/u.test(autoCompleteOpeningTag)) {
+      task6RegressionErrors.push('AutoComplete 示例不得把 id 直接传给 wrapper')
+    }
+  }
+  if (!autoCompleteSection.includes('wrapper') || !autoCompleteSection.includes('`input-attrs`')) {
+    task6RegressionErrors.push('AutoComplete 章节必须说明 wrapper 与原生 input 属性边界')
+  }
+
   const inputSection = readSecondLevelSection(dataEntry, 'Input')
-  const inputExample = inputSection.match(/```vue\n([\s\S]*?)```/u)?.[1] ?? ''
+  const inputExample = extractVueFences(inputSection)[0]?.source ?? ''
   const keywordInputOpeningTag = inputExample.match(/<AInput\b[^>]*>/u)?.[0]
   const passwordInputOpeningTag = inputExample.match(/<AInputPassword\b[^>]*>/u)?.[0]
-  const task6RegressionErrors = []
   for (const requiredPhrase of ['普通 `span`', '没有 `tabindex`', '键盘事件', '键盘可访问性是硬要求']) {
     assert.ok(inputSection.includes(requiredPhrase), `Input 内置控制可访问性限制缺少：${requiredPhrase}`)
   }
@@ -2501,8 +2703,62 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
     assert.match(buttonTag, /\baria-label=/u, 'Input suffix 原生按钮必须提供可访问名称')
   }
 
+  const timePickerSection = readSecondLevelSection(dataEntry, 'TimePicker')
+  const timePickerExample = extractVueFences(timePickerSection)[0]?.source ?? ''
+  const timePickerOpeningTag = timePickerExample.match(/<ATimePicker\b[^>]*>/u)?.[0]
+  const timePickerOutputType = timePickerExample.match(
+    /type ([A-Za-z_$][\w$]*) = string \| Array<string \| undefined> \| undefined/u,
+  )?.[1]
+  const timePickerUpdateHandler = timePickerOpeningTag?.match(
+    /@update:model-value="([A-Za-z_$][\w$]*)"/u,
+  )?.[1]
+  for (const requiredPhrase of ['clear', '`undefined`', 'Array<string | undefined>', '半范围']) {
+    if (!timePickerSection.includes(requiredPhrase)) {
+      task6RegressionErrors.push(`TimePicker 输出空值与半范围边界缺少：${requiredPhrase}`)
+    }
+  }
+  for (const [pattern, message] of [
+    [/ref<string\[\]>\(\[\]\)/u, 'TimePicker 示例必须保持归一化后的 string[] 业务状态'],
+    [/\):\s*[A-Za-z_$][\w$]* is \[string, string\]/u, 'TimePicker 示例必须用类型守卫识别完整两项范围'],
+    [/[A-Za-z_$][\w$]*\.length === 2/u, 'TimePicker 完整范围类型守卫必须校验两项长度'],
+    [/typeof [A-Za-z_$][\w$]* === 'string'/u, 'TimePicker 完整范围类型守卫必须排除 undefined 元素'],
+    [/serviceWindow\.value\s*=/u, 'TimePicker update handler 必须显式更新归一化后的业务状态'],
+    [/\?\s*\[\.\.\.[A-Za-z_$][\w$]*\]/u, 'TimePicker update handler 必须复制完整两项范围'],
+    [/:\s*\[\]/u, 'TimePicker update handler 必须把 clear 或半范围归一化为空数组'],
+  ]) {
+    if (!pattern.test(timePickerExample)) {
+      task6RegressionErrors.push(message)
+    }
+  }
+  if (!timePickerOutputType) {
+    task6RegressionErrors.push('TimePicker 示例必须精确声明真实更新值 union')
+  }
+  if (!timePickerOpeningTag) {
+    task6RegressionErrors.push('TimePicker 示例必须包含 ATimePicker opening tag')
+  }
+  else {
+    if (!/:model-value="serviceWindow"/u.test(timePickerOpeningTag)) {
+      task6RegressionErrors.push('TimePicker 示例必须使用受控 model-value 输入')
+    }
+    if (!timePickerUpdateHandler) {
+      task6RegressionErrors.push('TimePicker 示例必须用 handler 接收真实 update union')
+    }
+    if (/\bv-model=/u.test(timePickerOpeningTag)) {
+      task6RegressionErrors.push('TimePicker 范围示例不得把窄化 string[] 直接用于 v-model')
+    }
+  }
+  if (timePickerOutputType && timePickerUpdateHandler) {
+    const handlerSignature = new RegExp(
+      `function\\s+${timePickerUpdateHandler}\\s*\\([^:]+:\\s*${timePickerOutputType}\\s*\\)`,
+      'u',
+    )
+    if (!handlerSignature.test(timePickerExample)) {
+      task6RegressionErrors.push('TimePicker 显式 update handler 参数必须覆盖真实输出 union')
+    }
+  }
+
   const transferSection = readSecondLevelSection(dataEntry, 'Transfer')
-  const transferExample = transferSection.match(/```vue\n([\s\S]*?)```/u)?.[1] ?? ''
+  const transferExample = extractVueFences(transferSection)[0]?.source ?? ''
   assert.match(
     transferExample,
     /import type \{ TransferItem \} from '@arco-design\/web-vue\/es\/transfer\/interface'/u,
@@ -2515,7 +2771,7 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
   }
 
   const uploadSection = readSecondLevelSection(dataEntry, 'Upload')
-  const uploadExample = uploadSection.match(/```vue\n([\s\S]*?)```/u)?.[1] ?? ''
+  const uploadExample = extractVueFences(uploadSection)[0]?.source ?? ''
   const uploadOpeningTag = uploadExample.match(/<AUpload\b[^>]*>/u)?.[0]
   assert.ok(uploadOpeningTag, 'Upload 示例必须包含 AUpload opening tag')
   assert.match(uploadOpeningTag, /:custom-request="props\.customRequest"/u, 'Upload 示例必须真实绑定父级传入的 customRequest')
@@ -2523,37 +2779,86 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
   for (const requiredPhrase of ['父级', '已配置', '默认自动上传']) {
     assert.ok(uploadSection.includes(requiredPhrase), `Upload 可执行接线说明缺少：${requiredPhrase}`)
   }
+  for (const methodSignature of [
+    '`submit(fileItem?)`',
+    '`abort(fileItem)`',
+    '`updateFile(id, file)`',
+    '`upload(files)`',
+  ]) {
+    if (!uploadSection.includes(methodSignature)) {
+      task6RegressionErrors.push(`Upload 公开方法契约缺少：${methodSignature}`)
+    }
+  }
+  if (!uploadSection.includes('后三者参数必需')) {
+    task6RegressionErrors.push('Upload 必须明确 abort / updateFile / upload 的参数必需')
+  }
+  for (const zeroArgumentMethod of ['abort', 'updateFile', 'upload']) {
+    if (uploadSection.includes(`\`${zeroArgumentMethod}()\``)) {
+      task6RegressionErrors.push(`Upload 正文不得继续记录零参 ${zeroArgumentMethod}()`)
+    }
+  }
 
   for (const [documentName, content] of [
     ['通用与布局组件.md', commonAndLayout],
     ['数据录入组件.md', dataEntry],
   ]) {
-    const vueFences = [...content.matchAll(/^```vue[^\S\r\n]*\r?\n([\s\S]*?)^```[^\S\r\n]*$/gmu)]
-    if (vueFences.length === 0) {
-      task6RegressionErrors.push(`${documentName} 必须包含 vue fence`)
-    }
-
-    for (const [index, fence] of vueFences.entries()) {
-      const fenceNumber = index + 1
-      const { errors } = parseVueSfc(fence[1], {
-        filename: `${documentName}#vue-fence-${fenceNumber}.vue`,
-      })
-      if (errors.length > 0) {
-        task6RegressionErrors.push(
-          `${documentName} 第 ${fenceNumber} 个 vue fence 解析失败：${errors.map(error => error instanceof Error ? error.message : String(error)).join('; ')}`,
-        )
-      }
-    }
+    task6RegressionErrors.push(...collectVueFenceSyntaxErrors(content, documentName))
+    task6RegressionErrors.push(...findTask6DocPolicyViolations(content).map(violation => `${documentName}：${violation}`))
   }
   assert.equal(
     task6RegressionErrors.length,
     0,
     `Task 6 示例语义或解析边界错误：\n${task6RegressionErrors.join('\n')}`,
   )
+})
 
-  assert.doesNotMatch(
-    `${commonAndLayout}\n${dataEntry}`,
-    /TODO|TBD|['"]\/api\/[\w/{-]+|https?:\/\/[^\s)]+\/api\/[\w/{-]+|Bearer\s+[\w.~-]+/u,
-    'Task 6 组件文档不得包含待办占位、虚构业务端点或硬编码认证值',
+test('Task 6 Vue fence 语法编译拒绝 parse-only 无法发现的非法 TypeScript', () => {
+  const invalidSfcDocument = [
+    '```vue',
+    '<script setup lang="ts">',
+    'const invalidValue: = 1',
+    '</script>',
+    '',
+    '<template><div>fixture</div></template>',
+    '```',
+  ].join('\n')
+  const [invalidFence] = extractVueFences(invalidSfcDocument)
+  assert.ok(invalidFence, 'synthetic fixture 必须包含真实 vue fence')
+  assert.deepEqual(
+    parseVueSfc(invalidFence.source, { filename: 'synthetic-invalid.vue' }).errors,
+    [],
+    'synthetic fixture 必须先证明 parse-only 会对非法 TypeScript 假绿',
   )
+  assert.throws(
+    () => assertVueFencesSyntaxCompile(invalidSfcDocument, 'synthetic-invalid.md'),
+    /synthetic-invalid\.md.*第 1 个 vue fence.*语法/u,
+    '完整语法编译必须拒绝 parse-only 无法发现的非法 TypeScript',
+  )
+})
+
+test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与敏感值', () => {
+  const scanResult = {
+    bearer: findTask6DocPolicyViolations('Authorization: Bearer real-looking-token').some(item => item.includes('Bearer')),
+    bracePlaceholder: findTask6DocPolicyViolations('接口地址：{{UPLOAD_ENDPOINT}}').some(item => item.includes('{{UPLOAD_ENDPOINT}}')),
+    endpoint: findTask6DocPolicyViolations('const endpoint = `/api/files`').some(item => item.includes('/api/files')),
+    placeholderLine: findTask6DocPolicyViolations('TODO: 补充真实接口').some(item => item.includes('TODO')),
+    placeholderTag: findTask6DocPolicyViolations('<PLACEHOLDER>').some(item => item.includes('<PLACEHOLDER>')),
+    safeTodo: findTask6DocPolicyViolations('TODO 规则用于解释扫描边界'),
+    sensitiveValue: findTask6DocPolicyViolations('const password = "real-secret-123"').some(item => item.includes('敏感值')),
+    vueInterpolation: findTask6DocPolicyViolations([
+      '```vue',
+      '<template>{{ passwordMasked ? \'显示\' : \'隐藏\' }}</template>',
+      '```',
+    ].join('\n')),
+  }
+  assert.deepEqual(scanResult, {
+    bearer: true,
+    bracePlaceholder: true,
+    endpoint: true,
+    placeholderLine: true,
+    placeholderTag: true,
+    safeTodo: [],
+    sensitiveValue: true,
+    vueInterpolation: [],
+  })
 })
