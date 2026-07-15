@@ -1249,6 +1249,88 @@ test('Fantastic-admin 专业组件分册覆盖本地全部公开导出并固定�
   )
 })
 
+test('Fantastic-admin 专业组件实现契约：useFaLoading 生命周期与并发边界', () => {
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+  const section = readSecondLevelSection(proHandbook, 'useFaLoading')
+
+  for (const requiredPhrase of [
+    '`vnode` 与 `mountNode` 是 module-global',
+    '`instance` 当前从未被赋值',
+    '重复调用或并发调用不可靠',
+    '`getCurrentInstance()`',
+    '只有调用时存在活动组件实例',
+    '`onUnmounted`',
+    '无论在 `setup` 直接调用，还是在事件或 async 回调调用',
+    '`finally`',
+    '显式调用 `close()`',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `useFaLoading 实现级契约缺少：${requiredPhrase}`)
+  }
+  assert.doesNotMatch(
+    section,
+    /全局同时只保留一个内部实例|新调用会清理旧实例|组件卸载也会 cleanup/u,
+    'useFaLoading 不得承诺当前源码没有可靠实现的单例或自动卸载清理',
+  )
+})
+
+test('Fantastic-admin 专业组件实现契约：FaSteps 状态可访问性边界', () => {
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+  const section = readSecondLevelSection(proHandbook, 'FaSteps')
+
+  for (const requiredPhrase of [
+    '颜色、图标和序号',
+    '`title` / `description` 是步骤自身文案，不是状态文字',
+    '没有状态 `aria-label`',
+    '可读状态文本',
+    '可访问名称',
+    'Arco Steps',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaSteps 状态可访问性契约缺少：${requiredPhrase}`)
+  }
+  assert.equal(
+    section.includes('错误/完成状态同时有图标和文字，不只用颜色'),
+    false,
+    'FaSteps 不得把普通 title/description 错写为状态文字',
+  )
+})
+
+test('Fantastic-admin 专业组件实现契约：FaMultiStepLoader 显式启动与复位', () => {
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+  const section = readSecondLevelSection(proHandbook, 'FaMultiStepLoader')
+
+  for (const requiredPhrase of [
+    'watch 没有 `immediate`',
+    'function run()',
+    'running.value = true',
+    'function reset()',
+    '@complete="reset"',
+    '@error="reset"',
+    '@close="reset"',
+    '@click="run"',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaMultiStepLoader 启动/复位契约缺少：${requiredPhrase}`)
+  }
+  assert.equal(
+    section.includes('const running = ref(true)'),
+    false,
+    'FaMultiStepLoader 示例不得依赖初始 true 触发非 immediate watch',
+  )
+})
+
+test('Fantastic-admin 专业组件实现契约：FaCodePreview 真实组合结构', () => {
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+  const section = readSecondLevelSection(proHandbook, 'FaCodePreview')
+
+  for (const requiredPhrase of ['上方预览、下方按需源码', '`PageMain`', '`Button`', '`Icon`', '`FaCode`']) {
+    assert.ok(section.includes(requiredPhrase), `FaCodePreview 真实组合结构缺少：${requiredPhrase}`)
+  }
+  assert.doesNotMatch(
+    section,
+    /并排|Collapsible/u,
+    'FaCodePreview 不得写成并排布局或不存在的 Collapsible 组合',
+  )
+})
+
 test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () => {
   const skills = readRequiredFile(fantasticAdminHandbookPaths.skills)
   const commonRules = readSecondLevelSection(skills, '共同安全与执行规则')
