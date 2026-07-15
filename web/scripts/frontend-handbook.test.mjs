@@ -364,18 +364,54 @@ function readInstalledComponentContract(source, expectedComponentName) {
  * 同时解析默认 import 的目录，避免手写 coverage 与 sourceSlug 一起漂移后仍假绿。
  */
 function readArcoRuntimeInventory(source) {
-  const componentBlock = source.match(/const components\s*=\s*\{([\s\S]*?)\n\};/u)?.[1]
-  assert.ok(componentBlock, '无法从 arco-vue.js 解析主 components 安装对象')
-  const importSlugs = new Map(
-    [...source.matchAll(/^import (\w+) from "\.\/([^/]+)\/index\.js";$/gmu)]
-      .map(([, localName, sourceSlug]) => [localName, sourceSlug]),
+  const sourceFile = ts.createSourceFile(
+    'arco-vue.js',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
   )
-  const families = componentBlock.split(',').map(item => item.trim()).filter(Boolean)
-  return new Map(families.map((family) => {
-    assert.match(family, /^\w+$/u, 'arco-vue.js components 只能使用静态简写属性')
+  const importSlugs = new Map()
+  let componentsInitializer
+
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isImportDeclaration(statement)
+      && statement.importClause?.name
+      && ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      const moduleSegments = statement.moduleSpecifier.text.split('/')
+      if (moduleSegments.length === 3 && moduleSegments[0] === '.' && moduleSegments[2] === 'index.js') {
+        const localName = statement.importClause.name.text
+        assert.equal(importSlugs.has(localName), false, `arco-vue.js 默认 import 重复：${localName}`)
+        importSlugs.set(localName, moduleSegments[1])
+      }
+    }
+
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === 'components') {
+          assert.equal(componentsInitializer, undefined, 'arco-vue.js 只能声明一个 components 变量')
+          assert.ok(
+            declaration.initializer && ts.isObjectLiteralExpression(declaration.initializer),
+            'arco-vue.js components 必须使用静态对象字面量',
+          )
+          componentsInitializer = declaration.initializer
+        }
+      }
+    }
+  }
+
+  assert.ok(componentsInitializer, '无法从 arco-vue.js 解析主 components 安装对象')
+  const inventory = new Map()
+  for (const property of componentsInitializer.properties) {
+    assert.ok(ts.isShorthandPropertyAssignment(property), 'arco-vue.js components 只能使用静态简写属性')
+    const family = property.name.text
+    assert.equal(inventory.has(family), false, `arco-vue.js components 家族重复：${family}`)
     assert.equal(importSlugs.has(family), true, `${family} 必须来自组件目录的 index.js`)
-    return [family, importSlugs.get(family)]
-  }))
+    inventory.set(family, importSlugs.get(family))
+  }
+  return inventory
 }
 
 function readNamedFunctionSource(source, functionName) {
@@ -928,6 +964,89 @@ function assertSingleVueFenceWithTemplate(section, family) {
   assert.deepEqual(parsed.errors, [], `${family} Vue SFC 解析失败`)
   assert.ok(parsed.descriptor.template, `${family} Vue SFC 必须包含 template`)
   assert.notEqual(parsed.descriptor.template.content.trim(), '', `${family} Vue SFC template 不能为空`)
+}
+
+/**
+ * 语义 probe 直接读取文档示例的 script setup，禁止用手写摘录替代被展示的代码。
+ */
+function readTypeScriptScriptSetup(vueSource, filename) {
+  const parsed = parseVueSfc(vueSource, { filename })
+  assert.deepEqual(parsed.errors, [], `${filename} Vue SFC 解析失败`)
+  assert.ok(parsed.descriptor.scriptSetup, `${filename} 必须包含 script setup`)
+  assert.equal(parsed.descriptor.scriptSetup.lang, 'ts', `${filename} script setup 必须使用 lang="ts"`)
+  return parsed.descriptor.scriptSetup.content
+}
+
+/**
+ * 使用内存虚拟文件运行完整 TypeScript Program，让模块解析继续读取工作区真实的
+ * `@arco-design/web-vue` 与 Vue 声明文件，同时不在仓库落下临时产物。
+ */
+function collectTypeScriptSemanticDiagnostics(source, filename) {
+  const virtualFilePath = resolve(dirname(qsmdsArcoManifestPath), `.frontend-handbook-${filename}`)
+  const compilerOptions = {
+    lib: ['lib.esnext.d.ts', 'lib.dom.d.ts', 'lib.dom.iterable.d.ts'],
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    noEmit: true,
+    skipLibCheck: true,
+    strict: true,
+    target: ts.ScriptTarget.ESNext,
+    types: [],
+  }
+  const compilerHost = ts.createCompilerHost(compilerOptions, true)
+  const defaultFileExists = compilerHost.fileExists.bind(compilerHost)
+  const defaultGetSourceFile = compilerHost.getSourceFile.bind(compilerHost)
+  const defaultReadFile = compilerHost.readFile.bind(compilerHost)
+
+  compilerHost.fileExists = filePath => filePath === virtualFilePath || defaultFileExists(filePath)
+  compilerHost.readFile = filePath => filePath === virtualFilePath ? source : defaultReadFile(filePath)
+  compilerHost.getSourceFile = (filePath, languageVersion, onError, shouldCreateNewSourceFile) => {
+    if (filePath === virtualFilePath) {
+      return ts.createSourceFile(filePath, source, languageVersion, true, ts.ScriptKind.TS)
+    }
+    return defaultGetSourceFile(filePath, languageVersion, onError, shouldCreateNewSourceFile)
+  }
+
+  const program = ts.createProgram({
+    host: compilerHost,
+    options: compilerOptions,
+    rootNames: [virtualFilePath],
+  })
+  return ts.getPreEmitDiagnostics(program)
+}
+
+/**
+ * 通过 TypeScript AST 制造缺失属性变异，避免测试本身锁定属性顺序或引号风格。
+ */
+function removeTypeScriptObjectProperty(source, propertyName) {
+  const sourceFile = ts.createSourceFile(
+    'object-property-mutation.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  )
+  let removedCount = 0
+  const transformResult = ts.transform(sourceFile, [context => (rootNode) => {
+    function visit(node) {
+      if (ts.isPropertyAssignment(node) && readStaticPropertyName(node.name) === propertyName) {
+        removedCount += 1
+        return undefined
+      }
+      return ts.visitEachChild(node, visit, context)
+    }
+    return ts.visitNode(rootNode, visit)
+  }])
+
+  try {
+    assert.equal(removedCount, 1, `TypeScript 变异必须恰好移除一个 ${propertyName} 属性`)
+    const transformedSourceFile = transformResult.transformed[0]
+    assert.ok(ts.isSourceFile(transformedSourceFile), 'TypeScript 属性变异必须保留 SourceFile')
+    return ts.createPrinter({ newLine: ts.NewLineKind.LineFeed }).printFile(transformedSourceFile)
+  }
+  finally {
+    transformResult.dispose()
+  }
 }
 
 function formatVueCompilerError(error) {
@@ -2558,6 +2677,59 @@ test('fa-page-optimizer 使用真实的 basic/pro 组件 README 路径', () => {
   )
 })
 
+test('Arco Design Vue Task 7 runtime inventory 使用 AST 且不依赖生成格式', () => {
+  const source = readRequiredFile(arcoDesignVueTask7SourcePaths.arcoVue)
+  const expectedInventory = readArcoRuntimeInventory(source)
+  const reformattedSource = [
+    ...[...expectedInventory].map(([family, sourceSlug]) => `import ${family} from './${sourceSlug}/index.js'`),
+    `const components={${[...expectedInventory.keys()].join(',')}}`,
+  ].join('\n')
+
+  assert.deepEqual(
+    readArcoRuntimeInventory(reformattedSource),
+    expectedInventory,
+    'runtime inventory 不得依赖双引号、分号或 components 对象的换行格式',
+  )
+})
+
+test('Arco Design Vue Task 7 Table 示例通过真实 TypeScript 语义检查', () => {
+  const dataDisplay = readRequiredFile(arcoDesignVueHandbookPaths.dataDisplay)
+  const tableSection = readSecondLevelSection(dataDisplay, 'Table')
+  const tableExample = extractVueFences(tableSection)[0].source
+  const scriptSetup = readTypeScriptScriptSetup(tableExample, 'Table.vue')
+
+  assert.deepEqual(
+    collectTypeScriptSemanticDiagnostics(scriptSetup, 'TableExample.ts'),
+    [],
+    'Table script setup 必须在 strict 模式下解析真实 Arco 与 Vue 类型且 diagnostics=0',
+  )
+
+  const brokenType = `${scriptSetup}\nconst broken: string = 1\n`
+  assert.notEqual(
+    collectTypeScriptSemanticDiagnostics(brokenType, 'TableBrokenType.ts').length,
+    0,
+    'semantic probe 必须识别普通 TypeScript 类型错误',
+  )
+
+  const missingSortDirections = removeTypeScriptObjectProperty(scriptSetup, 'sortDirections')
+  const missingSortDirectionsDiagnostics = collectTypeScriptSemanticDiagnostics(
+    missingSortDirections,
+    'TableMissingSortDirections.ts',
+  )
+  assert.notEqual(
+    missingSortDirectionsDiagnostics.length,
+    0,
+    'semantic probe 必须识别 sorter=true 缺少 sortDirections',
+  )
+  assert.equal(
+    missingSortDirectionsDiagnostics.some(diagnostic => (
+      ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n').includes('sortDirections')
+    )),
+    true,
+    '缺失 sortDirections 的诊断必须来自真实 TableSortable 类型',
+  )
+})
+
 test('Arco Design Vue Task 7 补齐剩余 46 个家族并完成 74 个家族矩阵', () => {
   const documents = Object.fromEntries(
     Object.entries(arcoDesignVueHandbookPaths).map(([name, filePath]) => [name, readRequiredFile(filePath)]),
@@ -2764,11 +2936,6 @@ test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态
   for (const unsupportedProp of ['render', 'slotName', 'titleSlotName']) {
     assert.equal(tableColumnContract.props.has(unsupportedProp), false, `ATableColumn 不得虚构 ${unsupportedProp} prop`)
   }
-  assert.match(
-    tableTypesSource,
-    /interface TableSortable\s*\{\s*sortDirections:\s*\('ascend'\s*\|\s*'descend'\)\[\];/u,
-    'TableSortable 的 sortDirections 在 2.58.0 类型中是必填字段',
-  )
   assert.match(tableSource, /column\.sortable[\s\S]{0,100}\.sorter\)\s*!==\s*true/u, 'sortable.sorter=true 必须跳过本地排序')
   assert.match(tableSource, /rowSelection\.value[\s\S]{0,120}\.onlyCurrent/u, 'Table onlyCurrent 必须绑定运行时翻页选择逻辑')
 
@@ -2895,13 +3062,6 @@ test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态
   assert.doesNotMatch(extractVueFences(imageSection)[0].source, /\blazy-load(?==|\s)/u, 'Image 示例不得使用虚构 lazy-load prop')
   const collapseSection = readSecondLevelSection(dataDisplay, 'Collapse')
   assert.doesNotMatch(collapseSection, /键盘可切换/u, 'Collapse 章节不得暗示 2.58.0 自动支持键盘切换')
-
-  const tableSection = readSecondLevelSection(dataDisplay, 'Table')
-  assert.match(
-    extractVueFences(tableSection)[0].source,
-    /sortable:\s*\{\s*sorter:\s*true,\s*sortDirections:\s*\['ascend',\s*'descend'\]\s*\}/u,
-    'Table 远端排序示例必须补齐严格类型要求的 sortDirections',
-  )
 })
 
 test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注入与异步关闭语义', () => {
