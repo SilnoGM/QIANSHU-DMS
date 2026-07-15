@@ -229,6 +229,65 @@ function findTableRow(content, firstCell) {
 }
 
 /**
+ * 选型契约只读取指定二级章节中的表格行，并把职责、组件族和项目决策
+ * 固定到对应单元格；这样其他段落中的正确关键词不能掩盖矩阵漂移。
+ */
+function assertFantasticAdminSelectionContracts(content) {
+  const responsibilityMatrix = readSecondLevelSection(content, '2. 组件职责矩阵')
+  for (const [responsibility, expectedTarget] of [
+    ['框架壳、导航、页面容器、框架内部交互', 'Fantastic-admin 内置组件'],
+    ['标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互', 'Arco Design Vue'],
+    ['领域组件', '`web/apps/qsmds-arco/src/components/`'],
+  ]) {
+    const row = findTableRow(responsibilityMatrix, responsibility)
+    const context = `组件职责矩阵：${responsibility}`
+
+    assert.ok(row, `${context} 行不存在`)
+    assert.equal(row.length, 4, `${context} 必须保持四个表格单元格`)
+    assert.equal(row[1], expectedTarget, `${context} 默认落点错误：期望 ${expectedTarget}，实际 ${row[1]}`)
+  }
+
+  const overlapMatrix = readSecondLevelSection(content, '4. 与 Arco 重叠能力的选择')
+  const overlapRows = Object.fromEntries(
+    ['表单与表单项', '表格与描述', '反馈'].map((capability) => {
+      const row = findTableRow(overlapMatrix, capability)
+      const context = `重叠能力选择矩阵：${capability}`
+
+      assert.ok(row, `${context} 行不存在`)
+      assert.equal(row.length, 4, `${context} 必须保持四个表格单元格`)
+      return [capability, row]
+    }),
+  )
+
+  for (const requiredPhrase of ['`FaForm`', '`FaFormItem`']) {
+    assert.ok(
+      overlapRows['表单与表单项'][1].includes(requiredPhrase),
+      `重叠能力选择矩阵：表单与表单项的 Fantastic-admin 单元格缺少 ${requiredPhrase}`,
+    )
+  }
+  for (const requiredPhrase of ['`AForm`', '`AFormItem`']) {
+    assert.ok(
+      overlapRows['表单与表单项'][2].includes(requiredPhrase),
+      `重叠能力选择矩阵：表单与表单项的 Arco 单元格缺少 ${requiredPhrase}`,
+    )
+  }
+  for (const requiredPhrase of ['标准业务表单默认 Arco', '语义迁移']) {
+    assert.ok(
+      overlapRows['表单与表单项'][3].includes(requiredPhrase),
+      `重叠能力选择矩阵：表单与表单项的项目决策缺少 ${requiredPhrase}`,
+    )
+  }
+  assert.ok(
+    overlapRows['表格与描述'][3].includes('标准业务数据展示默认 Arco'),
+    '重叠能力选择矩阵：表格与描述的项目决策缺少“标准业务数据展示默认 Arco”',
+  )
+  assert.ok(
+    overlapRows['反馈'][3].includes('业务反馈默认 Arco'),
+    '重叠能力选择矩阵：反馈的项目决策缺少“业务反馈默认 Arco”',
+  )
+}
+
+/**
  * 版本治理必须定位到指定二级章节，避免其他章节的正确文字
  * 掩盖固定基线表遗漏或漂移。
  */
@@ -442,8 +501,9 @@ function readMarkdownSecondLevelHeadings(content) {
 
 /**
  * 基础版公开能力只能来自 index.ts 两个稳定注释之间的 export 区段。
- * 先切区段再用 TypeScript AST 读取真实导出名，避免注释、字符串或专业版导出
- * 冒充基础版公共能力；在去重前拒绝同名导出，防止覆盖测试被 Set 静默掩盖。
+ * 先切区段再用 TypeScript AST 读取真实运行时导出名，排除注释、字符串、
+ * type-only 和专业版导出。公开名集合不透明的 runtime star/namespace export
+ * 必须显式失败；命名导出则在去重前拒绝同名，防止覆盖测试被静默掩盖。
  */
 function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath)) {
   const basicMarker = '// 基础版组件'
@@ -467,11 +527,28 @@ function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fa
   const rawPublicNames = []
 
   function visit(node) {
-    if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+    if (ts.isExportDeclaration(node) && !node.isTypeOnly) {
+      const moduleName = node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)
+        ? node.moduleSpecifier.text
+        : '<unknown>'
+
+      if (!node.exportClause) {
+        assert.fail(
+          `Fantastic-admin 基础公开覆盖无法静默解析 runtime export star：module=${moduleName}`,
+        )
+      }
+      if (ts.isNamespaceExport(node.exportClause)) {
+        assert.fail(
+          `Fantastic-admin 基础公开覆盖无法静默解析 runtime namespace export：module=${moduleName}`,
+        )
+      }
+
       for (const specifier of node.exportClause.elements) {
-        const publicName = specifier.name.text
-        if (publicNamePattern.test(publicName)) {
-          rawPublicNames.push(publicName)
+        if (!specifier.isTypeOnly) {
+          const publicName = specifier.name.text
+          if (publicNamePattern.test(publicName)) {
+            rawPublicNames.push(publicName)
+          }
         }
       }
     }
@@ -496,13 +573,27 @@ function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fa
 }
 
 function assertExistingMarkdownLinks(content, sourcePath) {
-  const links = [...content.matchAll(/\[[^\]]+\]\((\.\/[^)#]+\.md)(?:#[^)]+)?\)/gu)]
-    .map(match => match[1])
+  const links = [...content.matchAll(/\[[^\]]+\]\((\.\/[^)#]+\.md)(?:#([^)]+))?\)/gu)]
+    .map(match => ({ relativePath: match[1], rawFragment: match[2] }))
 
   assert.notEqual(links.length, 0, `Markdown 文档必须包含可验证的相对链接：${sourcePath}`)
-  for (const link of links) {
-    const targetPath = resolve(dirname(sourcePath), link)
-    assert.equal(existsSync(targetPath), true, `Markdown 相对链接目标不存在：source=${sourcePath}; target=${link}`)
+  for (const { relativePath, rawFragment } of links) {
+    const targetPath = resolve(dirname(sourcePath), relativePath)
+    assert.equal(
+      existsSync(targetPath),
+      true,
+      `Markdown 相对链接目标不存在：source=${sourcePath}; target=${relativePath}`,
+    )
+
+    if (rawFragment) {
+      const fragment = decodeURIComponent(rawFragment)
+      const headingAnchors = readMarkdownHeadingAnchors(readFileSync(targetPath, 'utf8'))
+      assert.equal(
+        headingAnchors.has(fragment),
+        true,
+        `Markdown 相对链接锚点不存在：source=${sourcePath}; target=${relativePath}; anchor=${fragment}`,
+      )
+    }
   }
 }
 
@@ -681,6 +772,17 @@ test('Fantastic-admin Markdown 标题扫描忽略 fenced code', () => {
   )
 })
 
+test('Fantastic-admin 相对 Markdown 链接拒绝真实文件中的不存在锚点', () => {
+  assert.throws(
+    () => assertExistingMarkdownLinks(
+      '[错误锚点](./基础版组件.md#not-existing-anchor)',
+      fantasticAdminComponentHandbookPaths.index,
+    ),
+    /Markdown 相对链接锚点不存在.*not-existing-anchor/u,
+    '相对 Markdown 链接不能只验证文件存在而忽略 fragment',
+  )
+})
+
 test('Fantastic-admin 基础公开名提取仅读取真实 export specifier', () => {
   const publicNames = readFantasticAdminBasicPublicNames([
     '// 基础版组件',
@@ -692,13 +794,43 @@ test('Fantastic-admin 基础公开名提取仅读取真实 export specifier', ()
     '  // useFaLineCommentOnly',
     '  useDrawer as useFaDrawer,',
     '} from "./basic/mixed"',
+    'export type { Ghost as FaTypeOnly } from "./basic/type-only"',
+    'export { type InlineGhost as FaInlineTypeOnly, Modal as FaModal } from "./basic/inline-type-only"',
     '// 专业版组件',
   ].join('\n'))
 
   assert.deepEqual(
     publicNames,
-    ['FaAlert', 'FaAvatar', 'useFaDrawer'],
-    '基础公开名只能来自真实 export specifier，导出块内外的注释与字符串不得冒充公共能力，且必须支持多行 alias',
+    ['FaAlert', 'FaAvatar', 'FaModal', 'useFaDrawer'],
+    '基础公开名只能来自运行时 export specifier，必须忽略注释、字符串和 type-only 导出，并支持多行 alias',
+  )
+})
+
+test('Fantastic-admin 基础公开名提取拒绝 runtime export star', () => {
+  const runtimeExportStarFixture = [
+    '// 基础版组件',
+    'export * from "./basic/runtime-star"',
+    '// 专业版组件',
+  ].join('\n')
+
+  assert.throws(
+    () => readFantasticAdminBasicPublicNames(runtimeExportStarFixture),
+    /基础公开覆盖无法静默解析 runtime export star/u,
+    'runtime export star 的公开名集合不透明，覆盖测试必须显式失败',
+  )
+})
+
+test('Fantastic-admin 基础公开名提取拒绝 runtime namespace export', () => {
+  const runtimeNamespaceExportFixture = [
+    '// 基础版组件',
+    'export * as FaNamespace from "./basic/runtime-namespace"',
+    '// 专业版组件',
+  ].join('\n')
+
+  assert.throws(
+    () => readFantasticAdminBasicPublicNames(runtimeNamespaceExportFixture),
+    /基础公开覆盖无法静默解析 runtime namespace export/u,
+    'runtime namespace export 不能被当作普通命名导出或静默忽略',
   )
 })
 
@@ -768,6 +900,39 @@ test('Fantastic-admin 基础组件文档记录 FaTable 选择与 footer 运行�
   }
 })
 
+test('Fantastic-admin 组件选型契约拒绝标准业务默认落到 Fantastic-admin', () => {
+  const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
+  const mutatedSelection = selection.replace(
+    '| 标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互 | Arco Design Vue |',
+    '| 标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互 | Fantastic-admin 内置组件 |',
+  )
+
+  assert.notEqual(mutatedSelection, selection, '标准业务默认落点变异 fixture 必须命中真实职责矩阵')
+  assert.throws(
+    () => assertFantasticAdminSelectionContracts(mutatedSelection),
+    /组件职责矩阵.*标准业务交互/u,
+    '标准业务默认落点改为 Fantastic-admin 时，结构化职责矩阵契约必须失败',
+  )
+})
+
+for (const [capability, originalDecision, mutatedDecision] of [
+  ['表单与表单项', '标准业务表单默认 Arco', '标准业务表单默认 Fantastic-admin'],
+  ['表格与描述', '标准业务数据展示默认 Arco', '标准业务数据展示默认 Fantastic-admin'],
+  ['反馈', '业务反馈默认 Arco', '业务反馈默认 Fantastic-admin'],
+]) {
+  test(`Fantastic-admin 组件选型契约拒绝${capability}默认落点变异`, () => {
+    const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
+    const mutatedSelection = selection.replace(originalDecision, mutatedDecision)
+
+    assert.notEqual(mutatedSelection, selection, `${capability}变异 fixture 必须命中真实重叠能力矩阵`)
+    assert.throws(
+      () => assertFantasticAdminSelectionContracts(mutatedSelection),
+      new RegExp(`重叠能力选择矩阵.*${capability}`, 'u'),
+      `${capability}默认落点改为 Fantastic-admin 时，结构化重叠能力契约必须失败`,
+    )
+  })
+}
+
 test('Fantastic-admin 基础组件分册覆盖本地全部公开导出并固定选型边界', () => {
   const publicNames = readFantasticAdminBasicPublicNames()
   assert.equal(
@@ -807,14 +972,21 @@ test('Fantastic-admin 基础组件分册覆盖本地全部公开导出并固定�
   )
   assertExistingMarkdownLinks(documents.index, fantasticAdminComponentHandbookPaths.index)
 
-  const responsibilityMatrix = readSecondLevelSection(documents.selection, '2. 组件职责矩阵')
-  for (const requiredPhrase of ['框架壳', '标准业务交互', '领域组件']) {
-    assert.ok(responsibilityMatrix.includes(requiredPhrase), `组件职责矩阵缺少可定位规则：${requiredPhrase}`)
-  }
+  assertFantasticAdminSelectionContracts(documents.selection)
   const sharingBoundary = readSecondLevelSection(documents.selection, '3. 领域组件与共享边界')
   assert.ok(sharingBoundary.includes('YAGNI'), '领域组件与共享边界必须明确遵循 YAGNI')
 
   const publicNameSet = new Set(publicNames)
+  const basicIndex = readSecondLevelSection(documents.index, '3. 基础组件分类索引')
+  const indexedPublicNames = [...new Set(
+    [...basicIndex.matchAll(/`((?:Fa|useFa)[A-Z][A-Za-z0-9]+)`/gu)].map(match => match[1]),
+  )].sort()
+  assert.deepEqual(
+    indexedPublicNames,
+    publicNames,
+    '组件 README 基础分类索引中的全部 Fa*/useFa* code token 必须与基础区段运行时公开名集合完全一致',
+  )
+
   const documentedHeadings = readMarkdownSecondLevelHeadings(documents.basic)
     .map(heading => heading.match(/^((?:Fa|useFa)[A-Z][A-Za-z0-9]+)(?:[ \t]|$)/u)?.[1])
     .filter(Boolean)
