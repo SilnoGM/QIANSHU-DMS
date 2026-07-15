@@ -5,6 +5,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
+import ts from 'typescript'
 
 const handbookPath = fileURLToPath(new URL('../../docs/前端文档/前端开发手册/README.md', import.meta.url))
 const fantasticAdminHandbookPaths = {
@@ -441,7 +442,8 @@ function readMarkdownSecondLevelHeadings(content) {
 
 /**
  * 基础版公开能力只能来自 index.ts 两个稳定注释之间的 export 区段。
- * 先切区段再提取名称，避免专业版导出误入基础手册覆盖数。
+ * 先切区段再用 TypeScript AST 读取真实导出名，避免注释、字符串或专业版导出
+ * 冒充基础版公共能力；在去重前拒绝同名导出，防止覆盖测试被 Set 静默掩盖。
  */
 function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath)) {
   const basicMarker = '// 基础版组件'
@@ -453,15 +455,44 @@ function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fa
   assert.notEqual(proStart, -1, `Fantastic-admin 组件入口缺少区段标记：${proMarker}`)
   assert.ok(proStart > basicStart, 'Fantastic-admin 组件入口的专业版区段必须位于基础版区段之后')
 
-  const publicNamePattern = /\b(?:Fa|useFa)[A-Z][A-Za-z0-9]+/gu
   const basicSection = componentIndex.slice(basicStart + basicMarker.length, proStart)
-  const exportedSpecifiers = basicSection
-    .split(/\r?\n/u)
-    .map(line => line.match(/^\s*export(?:\s+type)?\s*\{([^}]*)\}/u)?.[1])
-    .filter(Boolean)
-    .join('\n')
+  const sourceFile = ts.createSourceFile(
+    'fantastic-admin-basic-exports.ts',
+    basicSection,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  )
+  const publicNamePattern = /^(?:Fa|useFa)[A-Z][A-Za-z0-9]+$/u
+  const rawPublicNames = []
 
-  return [...new Set([...exportedSpecifiers.matchAll(publicNamePattern)].map(match => match[0]))]
+  function visit(node) {
+    if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+      for (const specifier of node.exportClause.elements) {
+        const publicName = specifier.name.text
+        if (publicNamePattern.test(publicName)) {
+          rawPublicNames.push(publicName)
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit)
+  }
+
+  visit(sourceFile)
+
+  const uniquePublicNames = [...new Set(rawPublicNames)]
+  const duplicatedPublicNames = [...new Set(
+    rawPublicNames.filter((publicName, index) => rawPublicNames.indexOf(publicName) !== index),
+  )]
+
+  assert.equal(
+    rawPublicNames.length,
+    uniquePublicNames.length,
+    `Fantastic-admin 基础区段存在重复公开名：${duplicatedPublicNames.join(', ')}`,
+  )
+
+  return uniquePublicNames.sort()
 }
 
 function assertExistingMarkdownLinks(content, sourcePath) {
@@ -650,21 +681,91 @@ test('Fantastic-admin Markdown 标题扫描忽略 fenced code', () => {
   )
 })
 
-test('Fantastic-admin 基础公开名提取忽略非 export 文本', () => {
+test('Fantastic-admin 基础公开名提取仅读取真实 export specifier', () => {
   const publicNames = readFantasticAdminBasicPublicNames([
     '// 基础版组件',
     '// FaCommentOnly',
     'const example = "useFaStringOnly"',
-    'export { Alert as FaAlert } from "./basic/alert"',
-    'export { useDrawer as useFaDrawer } from "./basic/drawer"',
+    'export { /* FaBlockCommentOnly */ Avatar as FaAvatar } from "./basic/avatar"',
+    'export {',
+    '  /* FaMultilineBlockCommentOnly */ Alert as FaAlert,',
+    '  // useFaLineCommentOnly',
+    '  useDrawer as useFaDrawer,',
+    '} from "./basic/mixed"',
     '// 专业版组件',
   ].join('\n'))
 
   assert.deepEqual(
     publicNames,
-    ['FaAlert', 'useFaDrawer'],
-    '基础公开名只能来自基础区段的 export 声明，注释与字符串不得冒充公共能力',
+    ['FaAlert', 'FaAvatar', 'useFaDrawer'],
+    '基础公开名只能来自真实 export specifier，导出块内外的注释与字符串不得冒充公共能力，且必须支持多行 alias',
   )
+})
+
+test('Fantastic-admin 基础公开名提取拒绝重复导出名', () => {
+  const duplicatedPublicNameFixture = [
+    '// 基础版组件',
+    'export { Alert as FaAlert } from "./basic/alert"',
+    'export { Avatar as FaAlert } from "./basic/avatar"',
+    '// 专业版组件',
+  ].join('\n')
+
+  assert.throws(
+    () => readFantasticAdminBasicPublicNames(duplicatedPublicNameFixture),
+    /Fantastic-admin 基础区段存在重复公开名：FaAlert/u,
+    '重复公开名必须在去重前显式失败，不能被 Set 静默隐藏',
+  )
+})
+
+test('Fantastic-admin 基础组件文档记录 FaInput autocomplete 固定契约', () => {
+  const basicHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.basic)
+  const inputSection = readSecondLevelSection(basicHandbook, 'FaInput')
+
+  assert.ok(
+    inputSection.includes('`autocomplete="off"`')
+    && inputSection.includes('调用方当前无法覆盖'),
+    'FaInput 必须记录源码在 attrs 合并后固定 autocomplete="off"，调用方当前无法覆盖',
+  )
+  assert.doesNotMatch(
+    basicHandbook,
+    /<FaInput[^>]*\sautocomplete\s*=/u,
+    'FaInput 示例不得再暗示调用方传入的 autocomplete 会生效',
+  )
+})
+
+test('Fantastic-admin 基础组件文档记录 FaProgress 只读展示契约', () => {
+  const basicHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.basic)
+  const progressSection = readSecondLevelSection(basicHandbook, 'FaProgress')
+
+  for (const requiredPhrase of ['默认值为 0', '只读展示输入', ':model-value="progress"']) {
+    assert.ok(progressSection.includes(requiredPhrase), `FaProgress 只读展示契约缺少：${requiredPhrase}`)
+  }
+  assert.doesNotMatch(
+    progressSection,
+    /<FaProgress[^>]*\sv-model(?::[\w-]+)?\s*=/u,
+    'FaProgress 示例不得声明运行时不存在的双向更新',
+  )
+  assert.equal(
+    progressSection.includes('`update:modelValue`'),
+    false,
+    'FaProgress 不得宣称 wrapper 会发出 update:modelValue',
+  )
+})
+
+test('Fantastic-admin 基础组件文档记录 FaTable 选择与 footer 运行时边界', () => {
+  const basicHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.basic)
+  const tableSection = readSecondLevelSection(basicHandbook, 'FaTable')
+
+  for (const requiredPhrase of [
+    '只有排序与展开状态可由调用方受控',
+    '选择状态由组件内部 `rowSelection` 管理',
+    '没有 selection prop 或 model',
+    '`TableFooterSlotProps` 仍是根入口导出的类型',
+    '当前运行时未接入 `footer-{columnId}`',
+    '调用方不能传入该 slot',
+  ]) {
+    assert.ok(tableSection.includes(requiredPhrase), `FaTable 运行时边界缺少：${requiredPhrase}`)
+  }
 })
 
 test('Fantastic-admin 基础组件分册覆盖本地全部公开导出并固定选型边界', () => {
