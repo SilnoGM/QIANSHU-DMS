@@ -452,6 +452,29 @@ test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () 
   assert.ok(commonRules.includes('FaPageMain'), '共同规则必须明确框架页面壳 FaPageMain 可以保留')
   assert.ok(commonRules.includes('app.use(ArcoVue)'), '共同规则必须记录正式应用的 Arco 全局注册事实')
 
+  for (const [sourceContract, arcoContract] of [
+    ['validation-schema', 'rules'],
+    ['name', 'field'],
+    ['FormExpose.submit()', 'validate()'],
+    ['componentField', '插槽参数'],
+  ]) {
+    assert.ok(
+      commonRules.includes(sourceContract) && commonRules.includes(arcoContract),
+      `共同规则缺少 Arco 表单语义适配：${sourceContract} -> ${arcoContract}`,
+    )
+  }
+  for (const requiredPhrase of [
+    '不得只替换组件名',
+    'validator',
+    'v-model',
+    'html-type="submit"',
+    '@submit-success',
+    '@submit-failed',
+    '重写',
+  ]) {
+    assert.ok(commonRules.includes(requiredPhrase), `共同规则缺少 Arco 表单适配要求：${requiredPhrase}`)
+  }
+
   for (const skillName of [
     'fa-form-builder',
     'fa-framework-settings',
@@ -484,6 +507,31 @@ test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () 
       section.includes('复用') && section.includes('不直接采用') && section.includes('Fa* 业务 UI'),
       `${skillName} 必须明确只复用工作流与结构，不直接采用默认 Fa* 业务 UI 输出`,
     )
+  }
+
+  const formBuilderUiRule = findTableRow(readSecondLevelSection(skills, 'fa-form-builder'), 'UI 落地')?.[1] ?? ''
+  for (const requiredPhrase of [
+    '不得只替换组件名',
+    'validation-schema',
+    'rules',
+    'validator',
+    'name',
+    'field',
+    'v-model',
+    'model',
+    'FormExpose.submit()',
+    'validate()',
+    'html-type="submit"',
+    'componentField',
+    '插槽参数',
+    '重写',
+  ]) {
+    assert.ok(formBuilderUiRule.includes(requiredPhrase), `fa-form-builder UI 落地缺少 Arco 语义适配：${requiredPhrase}`)
+  }
+
+  const crudUiRule = findTableRow(readSecondLevelSection(skills, 'fa-crud-page-generator'), 'UI 落地')?.[1] ?? ''
+  for (const requiredPhrase of ['DetailForm.submit(): Promise<boolean>', '对外契约', '内部', 'validate()']) {
+    assert.ok(crudUiRule.includes(requiredPhrase), `fa-crud-page-generator UI 落地缺少表单提交适配：${requiredPhrase}`)
   }
 })
 

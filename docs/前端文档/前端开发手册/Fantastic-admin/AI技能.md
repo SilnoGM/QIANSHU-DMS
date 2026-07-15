@@ -18,7 +18,7 @@ Fantastic-admin 将高频开发任务写成可审查的 `SKILL.md`，让 Agent �
 6. **遵守 UI 职责**：标准业务表单、表格、分页、按钮和反馈默认使用 Arco Design Vue；Fantastic-admin 内置组件只用于框架壳、框架交互，或需求明确且经本地 README/源码确认的 Pro 特有能力。Skill 中的 Fa* 模板不是正式应用的业务 UI 选型授权。
 7. **人工负责验收**：官方 Skill 页没有为每个 Skill 规定独立验证命令。本手册将本地 Skill 契约、项目通用检查与运行时回归组合为验收方案，Agent 输出不能替代人工代码审查。
 
-正式应用通过 `web/apps/qsmds-arco/src/ui/provider/index.ts` 的 `app.use(ArcoVue)` 全局注册 Arco Design Vue。执行会生成或改写页面 UI 的 Skill 时，按下表转换默认 Fa* 业务 UI；`FaPageMain` 等框架页面壳可以保留，`FaIconPicker`、日期、可视化和动画等显式 Pro 能力只在需求确实需要时采用。
+正式应用通过 `web/apps/qsmds-arco/src/ui/provider/index.ts` 的 `app.use(ArcoVue)` 全局注册 Arco Design Vue。执行会生成或改写页面 UI 的 Skill 时，按下表转换默认 Fa* 业务 UI；`FaPageMain` 等框架页面壳可以保留，`FaIconPicker`、日期、可视化和动画等显式 Pro 能力只在需求确实需要时采用。下表只是组件职责映射，不得只替换组件名；表单还必须完成后续 props、校验、提交和插槽语义适配。
 
 | Skill 默认 Fa 输出 | 正式业务页面默认实现 |
 | --- | --- |
@@ -28,6 +28,16 @@ Fantastic-admin 将高频开发任务写成可审查的 `SKILL.md`，让 Agent �
 | `FaButton` | `AButton` |
 | `FaToast / useFaToast` | Arco `Message / Notification` |
 | `FaModal / useFaModal` | `AModal / Modal` |
+
+### Arco 表单语义适配
+
+本节以本地 `@arco-design/web-vue@2.58.0` 的 `form.d.ts`、`form-item.d.ts` 和实现为准。将 Fa 表单改为 Arco 时不得只替换组件名，必须同时处理以下契约：
+
+1. **校验规则**：`AForm` 没有 vee-validate 的 `validation-schema` prop。将原 `validation-schema` / zod 校验意图转换为 `AForm` 的 `rules` 或 `AFormItem` 的字段级 `rules`；需要继续使用 zod 判断时，写成 Arco `FieldRule.validator(value, callback)`，在 `safeParse` 后以 `callback()` 表示通过、`callback(message)` 表示失败，不能把 typed schema 直接传给 Arco。
+2. **字段和值绑定**：`FaFormItem name="account"` 改为 `AFormItem field="account"`；`AForm` 绑定 `:model="model"`，每个输入控件显式使用 `v-model="model.account"` 或等价字段路径。不能依赖 `FaFormItem` 的自动控件注入来同步值。
+3. **命令式提交**：Arco form ref 没有 `FormExpose.submit()`。命令式流程改用 Arco form ref 的 `validate()`；该方法校验通过时返回 `undefined`，失败时返回字段错误记录，只有没有错误时才调用业务 API。
+4. **HTML submit**：也可以使用 `AForm` 实际支持的原生表单提交链路：`AButton html-type="submit"` 触发表单后，成功监听 `@submit-success`，失败监听 `@submit-failed`；前者参数是 `values, event`，后者是 `{ values, errors }, event`。`@submit` 会在两种结果下都触发并收到 `{ values, errors }, event`，不能把它误写成只在成功时执行的事件。
+5. **插槽和自动注入**：`FaFormItem` 默认插槽的 `componentField`、首控件自动绑定，以及 `description` / `message` 插槽都不能原样搬到 `AFormItem`。移除 `#default="{ componentField }"` 和相关 `v-bind`，按 Arco 的 `default`、`label`、`help`、`extra` 插槽重写；这些 Arco 插槽不提供 Fa 的插槽参数，控件值与事件仍由显式 `v-model` 和业务 handler 绑定。
 
 通用静态验证命令为：
 
@@ -47,7 +57,7 @@ pnpm -C web run build
 | 应用定位 | 这是确认例外：用户未指定目标应用时，必须保留本地 Skill 的“先查看 `web/apps/` 再确认”流程，不默认写入 `web/apps/qsmds-arco`。 |
 | 必需输入 | 明确目标 `apps/<app>`、模块中英文名、`src/views/` 下存放路径、真实字段契约、详情模式、批量删除、fake、路由与 i18n 需求。 |
 | 默认输出 | `web/apps/<app>/src/views/{path}/{module}/list.vue`、`detail.vue`（仅 `router`）、`components/DetailForm/index.vue`、`src/api/modules/{name}.ts`，可选 `src/api/fake_modules/{name}.fake.ts`、`src/router/modules/*.ts` 与 `src/locales/lang/route/*.json`。 |
-| UI 落地 | 复用该 Skill 的 CRUD 工作流、文件清单、详情模式和失败传播结构，但不直接采用其默认 Fa* 业务 UI 输出；标准表单、表格、分页、普通按钮和反馈按共同映射改为 Arco，框架页面壳和明确需要的 Pro 能力除外。 |
+| UI 落地 | 复用该 Skill 的 CRUD 工作流、文件清单、详情模式和失败传播结构，但不直接采用其默认 Fa* 业务 UI 输出；标准表单、表格、分页、普通按钮和反馈按共同映射改为 Arco，框架页面壳和明确需要的 Pro 能力除外。`DetailForm.submit(): Promise<boolean>` 对外契约可以保留，但内部必须改用 Arco form ref 的 `validate()`：存在 errors 时返回 `false`，校验通过且业务提交成功后才返回 `true`，不得继续调用 `FormExpose.submit()`。 |
 | 只读与风险边界 | `web/examples/*` 只读；不修改 `web/packages/components/`；先列出目标文件并读取已有内容。生成 API client 不等于获准新增服务端公共 API，也不允许自行补出字段。 |
 | 人工复核与验证 | 检查表单校验失败时不关闭容器、请求路径与 OpenAPI 一致、列表查询与分页参数正确；再执行通用 `check`、`build` 与完整 CRUD 运行回归。 |
 
@@ -59,12 +69,12 @@ pnpm -C web run build
 
 | 维度 | 项目化约定 |
 | --- | --- |
-| 用途 | 生成包含初始值、校验和提交操作区骨架的独立 Router 表单页，并复用本地 Skill 的 vee-validate 与 zod 工作流。 |
+| 用途 | 生成包含初始值、校验和提交操作区骨架的独立 Router 表单页，并复用本地 Skill 的字段收集、校验意图与失败传播结构。 |
 | 何时使用 | 资料页、设置页、注册页或独立编辑页，且不需列表与 CRUD 配套文件时。 |
 | 应用定位 | 默认正式应用 `web/apps/qsmds-arco`，无需重复询问；参考应用仍须精确点名并明确授权。 |
 | 必需输入 | 模块中英文名、`src/views/` 下存放路径、字段名/类型/中文标签/必填性，以及单列或双列布局。 |
 | 默认输出 | `web/apps/qsmds-arco/src/views/{path}/{name}/index.vue`。路由与真实 API 接入不在该 Skill 的默认输出内。 |
-| UI 落地 | 复用该 Skill 的字段收集、校验、布局和提交工作流，但不直接采用其默认 Fa* 业务 UI 输出；`FaForm / FaFormItem` 在正式业务表单中映射为 `AForm / AFormItem`，输入、按钮与反馈也使用对应 Arco 组件。 |
+| UI 落地 | 复用该 Skill 的字段收集、校验、布局和提交工作流，但不直接采用其默认 Fa* 业务 UI 输出，并且不得只替换组件名：将 `validation-schema` / zod 转为 Arco `rules` 或字段 `validator`，将 `name` 转为 `field`，控件显式 `v-model` 到 form `model`；将 `FormExpose.submit()` 改为 Arco form ref 的 `validate()`，或使用 `html-type="submit"` 配合 `@submit-success` / `@submit-failed`；移除 `componentField` 自动注入并按 Arco 插槽参数重写 `default`、`label`、`help`、`extra`。 |
 | 只读与风险边界 | `web/examples/*` 只读，`web/packages/*` 不承载业务表单与业务校验。未提供真实契约时，提交处只保留待接入边界，不生造 API、动态选项或上传地址。 |
 | 人工复核与验证 | 复核 zod 规则、初始值类型、中文可见文案、响应式单/双列布局、提交失败传播与取消行为；再执行通用命令和浏览器表单回归。 |
 
