@@ -87,9 +87,9 @@
 | Tree | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tree) | 正式应用已全局注册 | 2026-07-15 |
 | Alert | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/alert) | 正式应用已全局注册 | 2026-07-15 |
 | Drawer | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/drawer) | 正式应用已全局注册 | 2026-07-15 |
-| Message | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/message) | 正式应用已全局注册 | 2026-07-15 |
-| Modal | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/modal) | 正式应用已全局注册 | 2026-07-15 |
-| Notification | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/notification) | 正式应用已全局注册 | 2026-07-15 |
+| Message | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/message) | 已注入 `$message`；静态 API 可显式导入 | 2026-07-15 |
+| Modal | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/modal) | `AModal` 已全局注册；已注入 `$modal`；静态 API 可显式导入 | 2026-07-15 |
+| Notification | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/notification) | 已注入 `$notification`；静态 API 可显式导入 | 2026-07-15 |
 | Popconfirm | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/popconfirm) | 正式应用已全局注册 | 2026-07-15 |
 | Result | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/result) | 正式应用已全局注册 | 2026-07-15 |
 | Skeleton | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/skeleton) | 正式应用已全局注册 | 2026-07-15 |

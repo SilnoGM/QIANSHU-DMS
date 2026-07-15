@@ -32,7 +32,11 @@ const arcoDesignVueHandbookPaths = {
   dataEntry: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Arco-Design-Vue/数据录入组件.md', import.meta.url)),
 }
 const arcoDesignVueIntegrationSourcePaths = {
+  componentTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/components.d.ts', import.meta.url)),
   main: fileURLToPath(new URL('../apps/qsmds-arco/src/main.ts', import.meta.url)),
+  message: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/message/index.js', import.meta.url)),
+  modal: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/modal/index.js', import.meta.url)),
+  notification: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/notification/index.js', import.meta.url)),
   providerPlugin: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.ts', import.meta.url)),
   providerComponent: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.vue', import.meta.url)),
   vitePlugins: fileURLToPath(new URL('../apps/qsmds-arco/vite/plugins.ts', import.meta.url)),
@@ -2225,7 +2229,12 @@ test('Arco Design Vue 分册完整覆盖 74 个组件家族并落地 Task 6 的 
       `https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/${sourceSlug}`,
       `Arco Design Vue 覆盖矩阵版本源码目录错误：${family}`,
     )
-    assert.equal(row.status, '正式应用已全局注册', `Arco Design Vue 覆盖矩阵接入状态必须记录当前事实：${family}`)
+    const expectedStatus = {
+      Message: '已注入 `$message`；静态 API 可显式导入',
+      Modal: '`AModal` 已全局注册；已注入 `$modal`；静态 API 可显式导入',
+      Notification: '已注入 `$notification`；静态 API 可显式导入',
+    }[family] ?? '正式应用已全局注册'
+    assert.equal(row.status, expectedStatus, `Arco Design Vue 覆盖矩阵接入状态必须记录当前事实：${family}`)
     assert.equal(row.checkedAt, '2026-07-15', `Arco Design Vue 覆盖矩阵核对日期错误：${family}`)
 
     if (documentKey) {
@@ -2281,7 +2290,11 @@ test('Arco Design Vue 分册完整覆盖 74 个组件家族并落地 Task 6 的 
 
 test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语言与主题链路', () => {
   const integration = readRequiredFile(arcoDesignVueHandbookPaths.integration)
+  const componentTypesSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.componentTypes)
   const mainSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.main)
+  const messageSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.message)
+  const modalSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.modal)
+  const notificationSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.notification)
   const pluginSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.providerPlugin)
   const providerSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.providerComponent)
   const vitePluginsSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.vitePlugins)
@@ -2316,6 +2329,22 @@ test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语�
     vitePluginsSource,
     /\bArcoResolver\b/u,
     '正式应用 Vite 源码当前未配置 ArcoResolver；接入模式变化后必须重新核对手册',
+  )
+  for (const globalProperty of ['$message', '$notification', '$modal']) {
+    assert.ok(componentTypesSource.includes(globalProperty), `Arco 2.58.0 全局实例类型缺少：${globalProperty}`)
+  }
+  assert.ok(componentTypesSource.includes('AModal'), 'Arco 2.58.0 必须公开模板组件 AModal')
+  assert.doesNotMatch(
+    componentTypesSource,
+    /\bA(?:Message|Notification)\b/u,
+    'Arco 2.58.0 不得被误读为公开 Message / Notification 模板组件',
+  )
+  assert.ok(messageSource.includes('app.config.globalProperties.$message'), 'Message install 必须注入 $message')
+  assert.ok(notificationSource.includes('app.config.globalProperties.$notification'), 'Notification install 必须注入 $notification')
+  assert.ok(
+    modalSource.includes('app.component(componentPrefix + _Modal.name, _Modal)')
+    && modalSource.includes('app.config.globalProperties.$modal'),
+    'Modal install 必须同时注册模板组件并注入 $modal',
   )
 
   for (const requiredPhrase of [
@@ -2356,6 +2385,22 @@ test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语�
   ]) {
     assert.ok(feedbackSection.includes(requiredPhrase), `Arco 命令式反馈边界说明缺少：${requiredPhrase}`)
   }
+  for (const requiredPhrase of [
+    '`$message`',
+    '`$notification`',
+    '`$modal`',
+    '`AModal`',
+    '`app._context`',
+    '直接 import',
+    '最近的 `AConfigProvider`',
+  ]) {
+    assert.ok(feedbackSection.includes(requiredPhrase), `Arco 命令式反馈接入语义缺少：${requiredPhrase}`)
+  }
+  assert.doesNotMatch(
+    `${integration}\n${readRequiredFile(arcoDesignVueHandbookPaths.index)}`,
+    /\bA(?:Message|Notification)\b/u,
+    'Arco 手册不得虚构 Message / Notification 模板组件',
+  )
   for (const requiredPhrase of [
     '`window`',
     '`document`',
@@ -2416,9 +2461,45 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
   for (const requiredPhrase of ['键盘', '焦点', 'label', '错误', '窄屏', '敏感输入']) {
     assert.ok(dataEntry.includes(requiredPhrase), `数据录入组件分册缺少跨组件质量边界：${requiredPhrase}`)
   }
+
+  const inputSection = readSecondLevelSection(dataEntry, 'Input')
+  const inputExample = inputSection.match(/```vue\n([\s\S]*?)```/u)?.[1] ?? ''
+  for (const requiredPhrase of ['普通 `span`', '没有 `tabindex`', '键盘事件', '键盘可访问性是硬要求']) {
+    assert.ok(inputSection.includes(requiredPhrase), `Input 内置控制可访问性限制缺少：${requiredPhrase}`)
+  }
+  assert.match(inputExample, /:allow-clear="false"/u, 'Input 示例必须关闭内置 clear 控件')
+  assert.match(inputExample, /:invisible-button="false"/u, 'Input 示例必须关闭内置 password visibility 控件')
+  assert.ok((inputExample.match(/<button\b[^>]*>/gu) ?? []).length >= 2, 'Input 示例必须为清空与显隐分别提供原生 button')
+  for (const buttonTag of inputExample.match(/<button\b[^>]*>/gu) ?? []) {
+    assert.match(buttonTag, /\btype="button"/u, 'Input suffix 原生按钮必须显式使用 type="button"')
+    assert.match(buttonTag, /\baria-label=/u, 'Input suffix 原生按钮必须提供可访问名称')
+  }
+
+  const transferSection = readSecondLevelSection(dataEntry, 'Transfer')
+  const transferExample = transferSection.match(/```vue\n([\s\S]*?)```/u)?.[1] ?? ''
+  assert.match(
+    transferExample,
+    /import type \{ TransferItem \} from '@arco-design\/web-vue\/es\/transfer\/interface'/u,
+    'Transfer 示例必须从真实 2.58.0 子路径导入 TransferItem',
+  )
+  assert.match(transferExample, /const items = \[[\s\S]*?\]\s+satisfies TransferItem\[\]/u, 'Transfer 示例数据必须用 satisfies 锁定类型')
+  assert.equal(transferExample.match(/disabled: false/gu)?.length, 2, 'Transfer 示例每个静态条目都必须显式提供 disabled')
+  for (const requiredPhrase of ['`tabindex="-1"`', '不包含数量', '没有覆盖 API', '业务双列表或分步选择器', '原生 `<button type="button">`']) {
+    assert.ok(transferSection.includes(requiredPhrase), `Transfer 内置移动按钮限制缺少：${requiredPhrase}`)
+  }
+
+  const uploadSection = readSecondLevelSection(dataEntry, 'Upload')
+  const uploadExample = uploadSection.match(/```vue\n([\s\S]*?)```/u)?.[1] ?? ''
+  const uploadOpeningTag = uploadExample.match(/<AUpload\b[^>]*>/u)?.[0]
+  assert.ok(uploadOpeningTag, 'Upload 示例必须包含 AUpload opening tag')
+  assert.match(uploadOpeningTag, /:custom-request="props\.customRequest"/u, 'Upload 示例必须真实绑定父级传入的 customRequest')
+  assert.doesNotMatch(uploadOpeningTag, /:auto-upload="false"/u, 'Upload 示例采用默认自动上传时不得关闭 auto-upload')
+  for (const requiredPhrase of ['父级', '已配置', '默认自动上传']) {
+    assert.ok(uploadSection.includes(requiredPhrase), `Upload 可执行接线说明缺少：${requiredPhrase}`)
+  }
   assert.doesNotMatch(
     `${commonAndLayout}\n${dataEntry}`,
-    /TODO|TBD|\/api\/[\w/{-]+|Bearer\s+[\w.~-]+/u,
+    /TODO|TBD|['"]\/api\/[\w/{-]+|https?:\/\/[^\s)]+\/api\/[\w/{-]+|Bearer\s+[\w.~-]+/u,
     'Task 6 组件文档不得包含待办占位、虚构业务端点或硬编码认证值',
   )
 })
