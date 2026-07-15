@@ -689,10 +689,11 @@ function readMarkdownLinesOutsideFences(content) {
 }
 
 /**
- * 提取 Markdown 中真正闭合且 info string 精确为 vue 的完整代码内容。
- * 调用方据此逐家族确认示例存在，并对每个 SFC 独立报告文档名与序号。
+ * 底层扫描同时保留闭合的 Vue fence 与 EOF 未闭合诊断。
+ * opening line 使用 1-based Markdown 行号，供编译错误定位原文。
  */
-function extractVueFences(content) {
+function scanVueFences(content) {
+  const diagnostics = []
   const fences = []
   let openingFence
   let openingLine = 0
@@ -722,7 +723,22 @@ function extractVueFences(content) {
     }
   }
 
-  return fences
+  if (openingFence) {
+    diagnostics.push({
+      infoString: openingFence.infoString,
+      line: openingLine,
+    })
+  }
+
+  return { diagnostics, fences }
+}
+
+/**
+ * 章节覆盖检查继续只消费真正闭合且 info string 精确为 vue 的示例，
+ * 未闭合诊断由 collectVueFenceSyntaxErrors 通过底层扫描结果统一报告。
+ */
+function extractVueFences(content) {
+  return scanVueFences(content).fences
 }
 
 function formatVueCompilerError(error) {
@@ -735,13 +751,19 @@ function formatVueCompilerError(error) {
  */
 function collectVueFenceSyntaxErrors(content, documentName) {
   const errors = []
-  const fences = extractVueFences(content)
+  const { diagnostics, fences } = scanVueFences(content)
 
-  if (fences.length === 0) {
+  if (fences.length === 0 && diagnostics.length === 0) {
     errors.push(`${documentName} 未找到 vue fence`)
+  }
+  for (const diagnostic of diagnostics) {
+    errors.push(
+      `${documentName} 第 ${diagnostic.line} 行 fence 未闭合（info string: ${diagnostic.infoString || '<empty>'}）`,
+    )
   }
   for (const [index, fence] of fences.entries()) {
     const fenceNumber = index + 1
+    const fenceContext = `${documentName} 第 ${fence.line} 行（第 ${fenceNumber} 个 vue fence）`
     const filename = `${documentName}#vue-fence-${fenceNumber}.vue`
     const id = `task6-vue-fence-${fenceNumber}`
     let descriptor
@@ -750,14 +772,14 @@ function collectVueFenceSyntaxErrors(content, documentName) {
       const result = parseVueSfc(fence.source, { filename })
       descriptor = result.descriptor
       for (const error of result.errors) {
-        errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 解析失败：${formatVueCompilerError(error)}`)
+        errors.push(`${fenceContext}解析失败：${formatVueCompilerError(error)}`)
       }
       if (result.errors.length > 0) {
         continue
       }
     }
     catch (error) {
-      errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 解析抛错：${formatVueCompilerError(error)}`)
+      errors.push(`${fenceContext}解析抛错：${formatVueCompilerError(error)}`)
       continue
     }
 
@@ -767,7 +789,7 @@ function collectVueFenceSyntaxErrors(content, documentName) {
         bindingMetadata = compileVueScript(descriptor, { id }).bindings
       }
       catch (error) {
-        errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 脚本语法编译失败：${formatVueCompilerError(error)}`)
+        errors.push(`${fenceContext}脚本语法编译失败：${formatVueCompilerError(error)}`)
       }
     }
 
@@ -781,11 +803,11 @@ function collectVueFenceSyntaxErrors(content, documentName) {
           source: descriptor.template.content,
         })
         for (const error of result.errors) {
-          errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 模板语法编译失败：${formatVueCompilerError(error)}`)
+          errors.push(`${fenceContext}模板语法编译失败：${formatVueCompilerError(error)}`)
         }
       }
       catch (error) {
-        errors.push(`${documentName} 第 ${fenceNumber} 个 vue fence 模板语法编译抛错：${formatVueCompilerError(error)}`)
+        errors.push(`${fenceContext}模板语法编译抛错：${formatVueCompilerError(error)}`)
       }
     }
   }
@@ -804,29 +826,59 @@ function assertVueFencesSyntaxCompile(content, documentName) {
  */
 function findTask6DocPolicyViolations(content) {
   const violations = []
-  const prose = readMarkdownLinesOutsideFences(content).join('\n')
-  const collectMatches = (source, pattern, label) => {
-    for (const match of source.matchAll(pattern)) {
-      violations.push(`${label}：${match[0]}`)
+  let openingFence
+
+  const collectMatches = (line, lineNumber, pattern, label) => {
+    for (const match of line.matchAll(pattern)) {
+      violations.push(`第 ${lineNumber} 行 ${label}：${match[0]}`)
     }
   }
 
-  collectMatches(
-    content,
-    /^(?:TODO|TBD|待补充|后续补充)(?:[ \t]*(?::|：)[^\r\n]*|[ \t]*)$/gmu,
-    '占位行',
-  )
-  collectMatches(prose, /\{\{[^{}\r\n]+\}\}/gu, '占位标记')
-  collectMatches(content, /\{\{[A-Z][A-Z0-9_]*\}\}|<PLACEHOLDER>/gu, '占位标记')
-  collectMatches(content, /(['"`])\/api\/[\w./{}$?=&%-]+\1/gu, '虚构 endpoint')
-  collectMatches(content, /Bearer\s+[\w.~-]+/gu, '硬编码 Bearer')
-  collectMatches(
-    content,
-    /\b(?:password|token|secret|api[_-]?key)\s*[:=]\s*(['"`])[^'"`\r\n]+\1/giu,
-    '硬编码敏感值',
-  )
+  for (const [index, line] of content.split(/\r?\n/u).entries()) {
+    const lineNumber = index + 1
+    let insideFence = Boolean(openingFence)
 
-  return [...new Set(violations)]
+    if (openingFence && isMarkdownFenceClosing(line, openingFence)) {
+      openingFence = undefined
+      continue
+    }
+    if (!openingFence) {
+      openingFence = readMarkdownFenceOpening(line)
+      if (openingFence) {
+        continue
+      }
+      insideFence = false
+    }
+
+    collectMatches(
+      line,
+      lineNumber,
+      /^[ \t]*(?:TODO|TBD|待补充|后续补充)(?:[ \t]*(?::|：)[^\r\n]*|[ \t]*)$/gu,
+      '占位行',
+    )
+    collectMatches(
+      line,
+      lineNumber,
+      insideFence ? /\{\{[A-Z][A-Z0-9_]*\}\}/gu : /\{\{[^{}\r\n]+\}\}/gu,
+      '占位标记',
+    )
+    collectMatches(line, lineNumber, /<PLACEHOLDER>/gu, '占位标记')
+    collectMatches(
+      line,
+      lineNumber,
+      /(['"`])(?:https?:\/\/[^/'"`\s]+)?\/api\/[\w./{}$?=&%-]+\1/gu,
+      '虚构 endpoint',
+    )
+    collectMatches(line, lineNumber, /Bearer\s+[\w.~-]+/gu, '硬编码 Bearer')
+    collectMatches(
+      line,
+      lineNumber,
+      /\b(?:password|token|secret|api[_-]?key)\s*[:=]\s*(['"`])[^'"`\r\n]+\1/giu,
+      '硬编码敏感值',
+    )
+  }
+
+  return violations
 }
 
 function readMarkdownHeadingAnchors(content) {
@@ -2831,16 +2883,41 @@ test('Task 6 Vue fence 语法编译拒绝 parse-only 无法发现的非法 TypeS
   )
   assert.throws(
     () => assertVueFencesSyntaxCompile(invalidSfcDocument, 'synthetic-invalid.md'),
-    /synthetic-invalid\.md.*第 1 个 vue fence.*语法/u,
-    '完整语法编译必须拒绝 parse-only 无法发现的非法 TypeScript',
+    /synthetic-invalid\.md.*第 1 行.*第 1 个 vue fence.*语法/u,
+    '完整语法编译必须拒绝 parse-only 无法发现的非法 TypeScript，并报告 fence opening line',
+  )
+})
+
+test('Task 6 Vue fence 诊断保留 EOF 未闭合 fence 的 opening line 与 info string', () => {
+  const unclosedSfcDocument = [
+    '# synthetic fixture',
+    '',
+    '```vue',
+    '<template><div>fixture</div></template>',
+  ].join('\n')
+  assert.deepEqual(
+    collectVueFenceSyntaxErrors(unclosedSfcDocument, 'synthetic-unclosed.md'),
+    ['synthetic-unclosed.md 第 3 行 fence 未闭合（info string: vue）'],
   )
 })
 
 test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与敏感值', () => {
+  const duplicatedViolations = findTask6DocPolicyViolations([
+    'TODO: 相同占位',
+    '普通说明',
+    'TODO: 相同占位',
+  ].join('\n'))
   const scanResult = {
     bearer: findTask6DocPolicyViolations('Authorization: Bearer real-looking-token').some(item => item.includes('Bearer')),
     bracePlaceholder: findTask6DocPolicyViolations('接口地址：{{UPLOAD_ENDPOINT}}').some(item => item.includes('{{UPLOAD_ENDPOINT}}')),
+    duplicatedLines: duplicatedViolations
+      .filter(item => item.includes('TODO: 相同占位'))
+      .map(item => item.match(/第 (\d+) 行/u)?.[1]),
     endpoint: findTask6DocPolicyViolations('const endpoint = `/api/files`').some(item => item.includes('/api/files')),
+    fullUrlEndpoint: findTask6DocPolicyViolations('const endpoint = `https://example.com/api/users`')
+      .some(item => item.includes('第 1 行') && item.includes('https://example.com/api/users')),
+    indentedPlaceholderLine: findTask6DocPolicyViolations('  TODO: 补充真实接口')
+      .some(item => item.includes('第 1 行') && item.includes('TODO')),
     placeholderLine: findTask6DocPolicyViolations('TODO: 补充真实接口').some(item => item.includes('TODO')),
     placeholderTag: findTask6DocPolicyViolations('<PLACEHOLDER>').some(item => item.includes('<PLACEHOLDER>')),
     safeTodo: findTask6DocPolicyViolations('TODO 规则用于解释扫描边界'),
@@ -2854,7 +2931,10 @@ test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与�
   assert.deepEqual(scanResult, {
     bearer: true,
     bracePlaceholder: true,
+    duplicatedLines: ['1', '3'],
     endpoint: true,
+    fullUrlEndpoint: true,
+    indentedPlaceholderLine: true,
     placeholderLine: true,
     placeholderTag: true,
     safeTodo: [],
