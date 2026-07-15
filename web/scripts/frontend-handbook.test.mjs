@@ -25,6 +25,18 @@ const fantasticAdminComponentHandbookPaths = {
   basic: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/基础版组件.md', import.meta.url)),
   pro: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/专业版组件.md', import.meta.url)),
 }
+const arcoDesignVueHandbookPaths = {
+  index: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Arco-Design-Vue/README.md', import.meta.url)),
+  integration: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Arco-Design-Vue/接入基础与全局配置.md', import.meta.url)),
+  commonAndLayout: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Arco-Design-Vue/通用与布局组件.md', import.meta.url)),
+  dataEntry: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Arco-Design-Vue/数据录入组件.md', import.meta.url)),
+}
+const arcoDesignVueIntegrationSourcePaths = {
+  main: fileURLToPath(new URL('../apps/qsmds-arco/src/main.ts', import.meta.url)),
+  providerPlugin: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.ts', import.meta.url)),
+  providerComponent: fileURLToPath(new URL('../apps/qsmds-arco/src/ui/provider/index.vue', import.meta.url)),
+  vitePlugins: fileURLToPath(new URL('../apps/qsmds-arco/vite/plugins.ts', import.meta.url)),
+}
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
 const webLockfilePath = fileURLToPath(new URL('../pnpm-lock.yaml', import.meta.url))
@@ -107,6 +119,85 @@ const fantasticAdminReadingOrder = [
   ['高级能力、构建与升级', './高级能力构建与升级.md'],
   ['AI 技能', './AI技能.md'],
 ]
+
+const arcoDesignVueCoverage = [
+  ['Button', '通用', 'commonAndLayout', 'button'],
+  ['Link', '通用', 'commonAndLayout', 'link'],
+  ['Typography', '通用', 'commonAndLayout', 'typography'],
+  ['Divider', '布局', 'commonAndLayout', 'divider'],
+  ['Grid', '布局', 'commonAndLayout', 'grid'],
+  ['Layout', '布局', 'commonAndLayout', 'layout'],
+  ['Space', '布局', 'commonAndLayout', 'space'],
+  ['AutoComplete', '数据录入', 'dataEntry', 'auto-complete'],
+  ['Cascader', '数据录入', 'dataEntry', 'cascader'],
+  ['Checkbox', '数据录入', 'dataEntry', 'checkbox'],
+  ['ColorPicker', '数据录入', 'dataEntry', 'color-picker'],
+  ['DatePicker', '数据录入', 'dataEntry', 'date-picker'],
+  ['Form', '数据录入', 'dataEntry', 'form'],
+  ['Input', '数据录入', 'dataEntry', 'input'],
+  ['InputNumber', '数据录入', 'dataEntry', 'input-number'],
+  ['InputTag', '数据录入', 'dataEntry', 'input-tag'],
+  ['Mention', '数据录入', 'dataEntry', 'mention'],
+  ['Radio', '数据录入', 'dataEntry', 'radio'],
+  ['Rate', '数据录入', 'dataEntry', 'rate'],
+  ['Select', '数据录入', 'dataEntry', 'select'],
+  ['Slider', '数据录入', 'dataEntry', 'slider'],
+  ['Switch', '数据录入', 'dataEntry', 'switch'],
+  ['Textarea', '数据录入', 'dataEntry', 'textarea'],
+  ['TimePicker', '数据录入', 'dataEntry', 'time-picker'],
+  ['Transfer', '数据录入', 'dataEntry', 'transfer'],
+  ['TreeSelect', '数据录入', 'dataEntry', 'tree-select'],
+  ['Upload', '数据录入', 'dataEntry', 'upload'],
+  ['VerificationCode', '数据录入', 'dataEntry', 'verification-code'],
+  ['Avatar', '数据展示', undefined, 'avatar'],
+  ['Badge', '数据展示', undefined, 'badge'],
+  ['Calendar', '数据展示', undefined, 'calendar'],
+  ['Card', '数据展示', undefined, 'card'],
+  ['Carousel', '数据展示', undefined, 'carousel'],
+  ['Collapse', '数据展示', undefined, 'collapse'],
+  ['Comment', '数据展示', undefined, 'comment'],
+  ['Descriptions', '数据展示', undefined, 'descriptions'],
+  ['Empty', '数据展示', undefined, 'empty'],
+  ['Image', '数据展示', undefined, 'image'],
+  ['List', '数据展示', undefined, 'list'],
+  ['Popover', '数据展示', undefined, 'popover'],
+  ['Progress', '数据展示', undefined, 'progress'],
+  ['Statistic', '数据展示', undefined, 'statistic'],
+  ['Table', '数据展示', undefined, 'table'],
+  ['Tag', '数据展示', undefined, 'tag'],
+  ['Timeline', '数据展示', undefined, 'timeline'],
+  ['Tooltip', '数据展示', undefined, 'tooltip'],
+  ['Tree', '数据展示', undefined, 'tree'],
+  ['Alert', '反馈', undefined, 'alert'],
+  ['Drawer', '反馈', undefined, 'drawer'],
+  ['Message', '反馈', undefined, 'message'],
+  ['Modal', '反馈', undefined, 'modal'],
+  ['Notification', '反馈', undefined, 'notification'],
+  ['Popconfirm', '反馈', undefined, 'popconfirm'],
+  ['Result', '反馈', undefined, 'result'],
+  ['Skeleton', '反馈', undefined, 'skeleton'],
+  ['Spin', '反馈', undefined, 'spin'],
+  ['Affix', '导航', undefined, 'affix'],
+  ['Anchor', '导航', undefined, 'anchor'],
+  ['BackTop', '导航', undefined, 'back-top'],
+  ['Breadcrumb', '导航', undefined, 'breadcrumb'],
+  ['Dropdown', '导航', undefined, 'dropdown'],
+  ['Menu', '导航', undefined, 'menu'],
+  ['PageHeader', '导航', undefined, 'page-header'],
+  ['Pagination', '导航', undefined, 'pagination'],
+  ['Steps', '导航', undefined, 'steps'],
+  ['Tabs', '导航', undefined, 'tabs'],
+  ['ConfigProvider', '其他', undefined, 'config-provider'],
+  ['Icon', '其他', undefined, 'icon-component'],
+  ['OverflowList', '其他', undefined, 'overflow-list'],
+  ['ResizeBox', '其他', undefined, 'resize-box'],
+  ['Scrollbar', '其他', undefined, 'scrollbar'],
+  ['Split', '其他', undefined, 'split'],
+  ['Trigger', '其他', undefined, 'trigger'],
+  ['Watermark', '其他', undefined, 'watermark'],
+]
+
+const arcoTask6Coverage = arcoDesignVueCoverage.filter(([, , documentKey]) => documentKey)
 
 /**
  * 入口文档是正式开发依据，缺失时必须直接失败，不能用空内容继续断言。
@@ -427,6 +518,48 @@ function readCoverageMatrix(content) {
       key: cells[0],
       officialUrl: officialLink[1],
       localTarget: localLink[1],
+    })
+  }
+
+  return rows
+}
+
+/**
+ * Arco 覆盖矩阵以组件家族为稳定身份，并把当前已成册与下一任务待成册状态
+ * 分开解析。测试只锁字段、顺序、版本来源和真实导航，不锁说明性文案。
+ */
+function readArcoDesignVueCoverageMatrix(content) {
+  const header = '| 英文家族 | 分类 | 分册 | 官方版本来源 | 接入状态 | 核对日期 |'
+  const lines = content.split(/\r?\n/u)
+  const headerIndex = lines.findIndex(line => line.trim() === header)
+
+  assert.notEqual(headerIndex, -1, `Arco Design Vue 覆盖矩阵必须包含表头：${header}`)
+  assert.match(
+    lines[headerIndex + 1] ?? '',
+    /^\|(?:\s*:?-+:?\s*\|)+$/u,
+    'Arco Design Vue 覆盖矩阵缺少合法分隔行',
+  )
+
+  const rows = []
+  for (let index = headerIndex + 2; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (!line.startsWith('|') || !line.endsWith('|')) {
+      break
+    }
+
+    const cells = line.slice(1, -1).split('|').map(cell => cell.trim())
+    assert.equal(cells.length, 6, `Arco Design Vue 覆盖矩阵行必须有 6 列：${line}`)
+    const sourceLink = cells[3].match(/^\[[^\]]+\]\((https:\/\/github\.com\/arco-design\/arco-design-vue\/tree\/2\.58\.0\/packages\/web-vue\/components\/[^)]+)\)$/u)
+    assert.ok(sourceLink, `Arco Design Vue 官方版本来源必须固定到 2.58.0 tag 组件目录：${cells[0]}`)
+    assert.doesNotMatch(cells[4], /^\s*$|TODO|TBD|待补充|占位/u, `Arco Design Vue 覆盖矩阵缺少真实接入状态：${cells[0]}`)
+
+    rows.push({
+      family: cells[0],
+      category: cells[1],
+      volume: cells[2],
+      sourceUrl: sourceLink[1],
+      status: cells[4],
+      checkedAt: cells[5],
     })
   }
 
@@ -2023,5 +2156,269 @@ test('fa-page-optimizer 使用真实的 basic/pro 组件 README 路径', () => {
     skills.includes('web/packages/components/src/basic/<component>/README.md')
     && skills.includes('web/packages/components/src/pro/<component>/README.md'),
     'AI 技能手册必须同时记录 basic 与 pro 组件 README 的真实路径模板',
+  )
+})
+
+test('Arco Design Vue 分册完整覆盖 74 个组件家族并落地 Task 6 的 28 个章节', () => {
+  const documents = Object.fromEntries(
+    Object.entries(arcoDesignVueHandbookPaths).map(([name, filePath]) => [name, readRequiredFile(filePath)]),
+  )
+  const arcoVersion = readArcoCatalogResolvedVersion()
+
+  assert.equal(arcoVersion, '2.58.0', 'Task 6 文档基线必须与 lockfile 锁定的 Arco Design Vue 2.58.0 一致')
+  assert.equal(arcoDesignVueCoverage.length, 74, 'Arco Design Vue 覆盖契约必须独立固定为 74 个家族')
+  assert.equal(arcoTask6Coverage.length, 28, 'Task 6 必须独立固定首批 28 个家族')
+  for (const requiredPhrase of [
+    '`@arco-design/web-vue@2.58.0`',
+    '`web/apps/qsmds-arco`',
+    '唯一正式 Web 应用',
+    '2026-07-15',
+    '74',
+    'https://arco.design/vue/docs/start',
+    'https://github.com/arco-design/arco-design-vue/tree/2.58.0',
+    '5a707cc60c1130d8dae3aefb2e93616541952a66',
+  ]) {
+    assert.ok(documents.index.includes(requiredPhrase), `Arco Design Vue 入口缺少基线信息：${requiredPhrase}`)
+  }
+  for (const relativeLink of [
+    './接入基础与全局配置.md',
+    './通用与布局组件.md',
+    './数据录入组件.md',
+  ]) {
+    assert.ok(documents.index.includes(relativeLink), `Arco Design Vue 入口缺少现存分册链接：${relativeLink}`)
+  }
+  assert.ok(
+    documents.index.includes('../Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择'),
+    'Arco Design Vue 入口必须回链 Fantastic-admin 内置组件选型规则',
+  )
+  assert.equal(
+    readMarkdownHeadingAnchors(readRequiredFile(fantasticAdminComponentHandbookPaths.selection))
+      .has('4-与-arco-重叠能力的选择'),
+    true,
+    'Arco Design Vue 入口回链的 Fantastic-admin 选型章节必须真实存在',
+  )
+  assert.doesNotMatch(
+    documents.index,
+    /\.\/(?:数据展示|反馈|导航|其他)组件\.md/u,
+    'Task 7 分册创建前不得在 Arco Design Vue 入口制造死链',
+  )
+  assertExistingMarkdownLinks(documents.index, arcoDesignVueHandbookPaths.index)
+
+  const coverageRows = readArcoDesignVueCoverageMatrix(documents.index)
+  assert.equal(coverageRows.length, 74, 'Arco Design Vue 覆盖矩阵必须恰好包含 74 行')
+  assert.equal(
+    new Set(coverageRows.map(row => row.family)).size,
+    coverageRows.length,
+    'Arco Design Vue 覆盖矩阵中的英文家族不得重复',
+  )
+
+  const volumeNames = {
+    commonAndLayout: '通用与布局组件',
+    dataEntry: '数据录入组件',
+  }
+  for (const [index, [family, category, documentKey, sourceSlug]] of arcoDesignVueCoverage.entries()) {
+    const row = coverageRows[index]
+    assert.equal(row.family, family, `Arco Design Vue 覆盖矩阵家族顺序漂移：index=${index}`)
+    assert.equal(row.category, category, `Arco Design Vue 覆盖矩阵分类错误：${family}`)
+    assert.equal(
+      row.sourceUrl,
+      `https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/${sourceSlug}`,
+      `Arco Design Vue 覆盖矩阵版本源码目录错误：${family}`,
+    )
+    assert.equal(row.status, '正式应用已全局注册', `Arco Design Vue 覆盖矩阵接入状态必须记录当前事实：${family}`)
+    assert.equal(row.checkedAt, '2026-07-15', `Arco Design Vue 覆盖矩阵核对日期错误：${family}`)
+
+    if (documentKey) {
+      const expectedVolume = volumeNames[documentKey]
+      assert.equal(
+        row.volume,
+        `[${expectedVolume}](./${expectedVolume}.md#${family.toLowerCase()})`,
+        `Task 6 家族必须链接到真实分册章节：${family}`,
+      )
+    }
+    else {
+      assert.equal(row.volume, 'Task 7 待纳入', `Task 7 家族在分册创建前必须使用非链接状态：${family}`)
+    }
+  }
+
+  const expectedHeadings = {
+    commonAndLayout: arcoTask6Coverage.filter(([, , key]) => key === 'commonAndLayout').map(([family]) => family),
+    dataEntry: arcoTask6Coverage.filter(([, , key]) => key === 'dataEntry').map(([family]) => family),
+  }
+  assert.deepEqual(
+    readMarkdownSecondLevelHeadings(documents.commonAndLayout),
+    expectedHeadings.commonAndLayout,
+    '通用与布局组件分册必须按契约顺序恰好包含 7 个家族 H2',
+  )
+  assert.deepEqual(
+    readMarkdownSecondLevelHeadings(documents.dataEntry),
+    expectedHeadings.dataEntry,
+    '数据录入组件分册必须按契约顺序恰好包含 21 个家族 H2',
+  )
+  const task6Headings = [
+    ...readMarkdownSecondLevelHeadings(documents.commonAndLayout),
+    ...readMarkdownSecondLevelHeadings(documents.dataEntry),
+  ]
+  assert.equal(task6Headings.length, 28, 'Task 6 分册必须恰好包含 28 个 fence 外 H2')
+  assert.equal(new Set(task6Headings).size, 28, 'Task 6 的 28 个家族 H2 必须唯一')
+
+  for (const [family, , documentKey, sourceSlug] of arcoTask6Coverage) {
+    const section = readSecondLevelSection(documents[documentKey], family)
+    for (const requiredLabel of ['当前接入：', '实际组件名：', '高频契约：', '可访问性与响应式：']) {
+      assert.ok(section.includes(requiredLabel), `${family} 章节缺少统一说明字段：${requiredLabel}`)
+    }
+    assert.ok(section.includes('```vue'), `${family} 章节必须包含 Vue 3 + TypeScript 最小示例`)
+    assert.ok(
+      section.includes(`https://arco.design/vue/component/${sourceSlug}`),
+      `${family} 章节必须直接链接当前官方组件页`,
+    )
+    assert.ok(
+      section.includes(`https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/${sourceSlug}`),
+      `${family} 章节必须直接链接 2.58.0 tag 源码目录`,
+    )
+  }
+})
+
+test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语言与主题链路', () => {
+  const integration = readRequiredFile(arcoDesignVueHandbookPaths.integration)
+  const mainSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.main)
+  const pluginSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.providerPlugin)
+  const providerSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.providerComponent)
+  const vitePluginsSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.vitePlugins)
+  const installSection = readSecondLevelSection(integration, '当前安装与启动链路')
+  const providerSection = readSecondLevelSection(integration, '全局配置、语言与主题')
+  const feedbackSection = readSecondLevelSection(integration, '命令式反馈 API')
+  const engineeringSection = readSecondLevelSection(integration, '工程边界、验证与升级')
+
+  for (const requiredSourcePhrase of [
+    'import ArcoVue from \'@arco-design/web-vue\'',
+    'import \'@arco-design/web-vue/dist/arco.css\'',
+    'import en from \'@arco-design/web-vue/es/locale/lang/en-us\'',
+    'import zhCN from \'@arco-design/web-vue/es/locale/lang/zh-cn\'',
+    'import zhTW from \'@arco-design/web-vue/es/locale/lang/zh-tw\'',
+    'app.use(ArcoVue)',
+  ]) {
+    assert.ok(pluginSource.includes(requiredSourcePhrase), `正式应用 Arco plugin 源码事实漂移：${requiredSourcePhrase}`)
+  }
+  assert.ok(mainSource.includes('app.use(uiProvider)'), '正式应用入口必须继续安装 uiProvider')
+  for (const requiredSourcePhrase of [
+    '<AConfigProvider :locale="locales[appSettingsStore.lang]">',
+    'window.matchMedia(\'(prefers-color-scheme: dark)\')',
+    'document.body.setAttribute(\'arco-theme\', \'dark\')',
+  ]) {
+    assert.ok(providerSource.includes(requiredSourcePhrase), `正式应用 Provider 源码事实漂移：${requiredSourcePhrase}`)
+  }
+  assert.ok(
+    vitePluginsSource.includes('FantasticAdminComponentsResolver()'),
+    '正式应用 Vite components resolver 必须继续记录 Fantastic-admin 当前事实',
+  )
+  assert.doesNotMatch(
+    vitePluginsSource,
+    /\bArcoResolver\b/u,
+    '正式应用 Vite 源码当前未配置 ArcoResolver；接入模式变化后必须重新核对手册',
+  )
+
+  for (const requiredPhrase of [
+    'import ArcoVue from \'@arco-design/web-vue\'',
+    'import \'@arco-design/web-vue/dist/arco.css\'',
+    'app.use(ArcoVue)',
+    'app.use(uiProvider)',
+    '全局注册',
+    '整包 CSS',
+    'FantasticAdminComponentsResolver()',
+    '未配置 `ArcoResolver`',
+    '不是 Arco 按需自动导入',
+    '显式 `import type`',
+  ]) {
+    assert.ok(installSection.includes(requiredPhrase), `Arco 当前安装链路说明缺少：${requiredPhrase}`)
+  }
+  for (const requiredPhrase of [
+    '`zh-cn`',
+    '`zh-tw`',
+    '`en`',
+    'locales[appSettingsStore.lang]',
+    'AConfigProvider',
+    'document.body.setAttribute(\'arco-theme\', \'dark\')',
+    'window.matchMedia(\'(prefers-color-scheme: dark)\')',
+    'system',
+    '当前实际启用',
+  ]) {
+    assert.ok(providerSection.includes(requiredPhrase), `Arco 全局 Provider 说明缺少：${requiredPhrase}`)
+  }
+  for (const requiredPhrase of [
+    'from \'@arco-design/web-vue\'',
+    '`Message`',
+    '`Notification`',
+    '`Modal`',
+    '静态方法',
+    'ConfigProvider',
+    '项目封装',
+  ]) {
+    assert.ok(feedbackSection.includes(requiredPhrase), `Arco 命令式反馈边界说明缺少：${requiredPhrase}`)
+  }
+  for (const requiredPhrase of [
+    '`window`',
+    '`document`',
+    'SSR',
+    '样式顺序',
+    '主题变量',
+    'TypeScript',
+    '测试',
+    '升级',
+    '`pnpm-lock.yaml`',
+  ]) {
+    assert.ok(engineeringSection.includes(requiredPhrase), `Arco 工程边界说明缺少：${requiredPhrase}`)
+  }
+})
+
+test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边界', () => {
+  const commonAndLayout = readRequiredFile(arcoDesignVueHandbookPaths.commonAndLayout)
+  const dataEntry = readRequiredFile(arcoDesignVueHandbookPaths.dataEntry)
+
+  const familyContracts = {
+    Button: ['`AButton`', '`AButtonGroup`', '`html-type`'],
+    Typography: ['`ATypographyTitle`', '`ATypographyParagraph`', '`ATypographyText`'],
+    Grid: ['`ARow`', '`ACol`', '`xs`', '`xxl`'],
+    Layout: ['`ALayoutHeader`', '`ALayoutSider`', '`ALayoutContent`', '`ALayoutFooter`'],
+    Cascader: ['`v-model`', '`multiple`', '`path-mode`'],
+    Checkbox: ['`ACheckboxGroup`'],
+    ColorPicker: ['`AColorPicker`', '`show-text`'],
+    DatePicker: ['`ADatePicker`', '`ARangePicker`', '`AWeekPicker`', '`AMonthPicker`', '`AQuarterPicker`', '`AYearPicker`', '`value-format`'],
+    Form: ['`AForm`', '`AFormItem`', '`model`', '`field`', '`rules`', '`validate()`', '`FaForm`', '标准业务表单默认 Arco'],
+    Input: ['`AInput`', '`AInputSearch`', '`AInputPassword`'],
+    Mention: ['`AMention`'],
+    Radio: ['`ARadioGroup`'],
+    Select: ['`AOption`', '`AOptgroup`'],
+    Textarea: ['`ATextarea`'],
+    TimePicker: ['`ATimePicker`', '`type="time-range"`', '没有 `value-format`', '`string[]`'],
+    Transfer: ['`v-model`', '`data`'],
+    TreeSelect: ['`v-model`', '`data`'],
+    Upload: ['`custom-request`', '`UploadRequest`', '`abort`', '项目 HTTP client', '服务端验证', '不得硬编码 token'],
+    VerificationCode: ['`AVerificationCode`'],
+  }
+
+  for (const [family, requiredPhrases] of Object.entries(familyContracts)) {
+    const source = arcoTask6Coverage.find(([candidate]) => candidate === family)?.[2] === 'commonAndLayout'
+      ? commonAndLayout
+      : dataEntry
+    const section = readSecondLevelSection(source, family)
+    for (const requiredPhrase of requiredPhrases) {
+      assert.ok(section.includes(requiredPhrase), `${family} 章节缺少 2.58.0 关键契约：${requiredPhrase}`)
+    }
+  }
+
+  for (const family of ['Cascader', 'Select', 'Transfer', 'TreeSelect']) {
+    assert.ok(
+      readSecondLevelSection(dataEntry, family).match(/虚拟列表|大数据/u),
+      `${family} 必须说明大数据或虚拟列表边界`,
+    )
+  }
+  for (const requiredPhrase of ['键盘', '焦点', 'label', '错误', '窄屏', '敏感输入']) {
+    assert.ok(dataEntry.includes(requiredPhrase), `数据录入组件分册缺少跨组件质量边界：${requiredPhrase}`)
+  }
+  assert.doesNotMatch(
+    `${commonAndLayout}\n${dataEntry}`,
+    /TODO|TBD|\/api\/[\w/{-]+|Bearer\s+[\w.~-]+/u,
+    'Task 6 组件文档不得包含待办占位、虚构业务端点或硬编码认证值',
   )
 })
