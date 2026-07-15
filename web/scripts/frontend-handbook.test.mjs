@@ -23,6 +23,7 @@ const fantasticAdminComponentHandbookPaths = {
   index: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/README.md', import.meta.url)),
   selection: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/选型与使用规则.md', import.meta.url)),
   basic: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/基础版组件.md', import.meta.url)),
+  pro: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin内置组件/专业版组件.md', import.meta.url)),
 }
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
@@ -226,6 +227,55 @@ function findTableRow(content, firstCell) {
     .filter(line => line.startsWith('|') && line.endsWith('|'))
     .map(line => line.slice(1, -1).split('|').map(cell => cell.trim()))
     .find(cells => cells[0] === firstCell)
+}
+
+/**
+ * 分类索引的覆盖契约只读取 Markdown 表格“公开能力”列。表格后的解释文字可能
+ * 合理地再次提到组件名，不能让这些重复文字掩盖表格自身漏项。
+ */
+function assertPublicNameIndexTable(content, expectedPublicNames, context) {
+  const lines = content.split(/\r?\n/u)
+  const tableHeaders = lines
+    .map((line, index) => ({ cells: line.startsWith('|') && line.endsWith('|')
+      ? line.slice(1, -1).split('|').map(cell => cell.trim())
+      : [], index }))
+    .filter(item => item.cells.includes('公开能力'))
+
+  assert.equal(tableHeaders.length, 1, `${context}必须且只能包含一个“公开能力”表格`)
+  const [{ cells: headerCells, index: headerIndex }] = tableHeaders
+  const publicNameColumnIndex = headerCells.indexOf('公开能力')
+  assert.match(
+    lines[headerIndex + 1] ?? '',
+    /^\|(?:\s*:?-+:?\s*\|)+$/u,
+    `${context}的“公开能力”表格缺少合法分隔行`,
+  )
+
+  const indexedPublicNames = []
+  for (let index = headerIndex + 2; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (!line.startsWith('|') || !line.endsWith('|')) {
+      break
+    }
+
+    const cells = line.slice(1, -1).split('|').map(cell => cell.trim())
+    assert.equal(cells.length, headerCells.length, `${context}表格列数漂移：${line}`)
+    indexedPublicNames.push(
+      ...[...cells[publicNameColumnIndex].matchAll(/`((?:Fa|useFa)[A-Z][A-Za-z0-9]+)`/gu)]
+        .map(match => match[1]),
+    )
+  }
+
+  const sortedPublicNames = indexedPublicNames.sort()
+  assert.equal(
+    new Set(sortedPublicNames).size,
+    sortedPublicNames.length,
+    `${context}的“公开能力”列中每个 Fa*/useFa* 必须恰好出现一次`,
+  )
+  assert.deepEqual(
+    sortedPublicNames,
+    expectedPublicNames,
+    `${context}的“公开能力”列必须与对应运行时公开名集合完全一致`,
+  )
 }
 
 /**
@@ -499,32 +549,49 @@ function readMarkdownSecondLevelHeadings(content) {
     .map(line => readMarkdownHeading(line))
 }
 
+const fantasticAdminProRuntimeStarExports = [
+  './pro/mention/mention',
+  './pro/pattern-bg/variants',
+]
+
 /**
- * 基础版公开能力只能来自 index.ts 两个稳定注释之间的 export 区段。
- * 先切区段再用 TypeScript AST 读取真实运行时导出名，排除注释、字符串、
- * type-only 和专业版导出。公开名集合不透明的 runtime star/namespace export
- * 必须显式失败；命名导出则在去重前拒绝同名，防止覆盖测试被静默掩盖。
+ * 公开能力只能来自 index.ts 指定注释后的 export 区段。先切区段再用
+ * TypeScript AST 读取真实运行时导出名，排除注释、字符串与 type-only。
+ * 命名导出在去重前拒绝同名；runtime namespace export 一律失败；runtime
+ * export star 只允许调用方给出的精确清单，既兼容专业版现有两条聚合导出，
+ * 又确保以后新增不透明 star export 时测试会要求人工核对。
  */
-function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath)) {
-  const basicMarker = '// 基础版组件'
-  const proMarker = '// 专业版组件'
-  const basicStart = componentIndex.indexOf(basicMarker)
-  const proStart = componentIndex.indexOf(proMarker, basicStart + basicMarker.length)
+function readFantasticAdminPublicExports({
+  allowedRuntimeStarModules = [],
+  componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath),
+  endMarker,
+  sectionName,
+  startMarker,
+}) {
+  const sectionStart = componentIndex.indexOf(startMarker)
+  assert.notEqual(sectionStart, -1, `Fantastic-admin 组件入口缺少区段标记：${startMarker}`)
 
-  assert.notEqual(basicStart, -1, `Fantastic-admin 组件入口缺少区段标记：${basicMarker}`)
-  assert.notEqual(proStart, -1, `Fantastic-admin 组件入口缺少区段标记：${proMarker}`)
-  assert.ok(proStart > basicStart, 'Fantastic-admin 组件入口的专业版区段必须位于基础版区段之后')
+  const sectionContentStart = sectionStart + startMarker.length
+  const sectionEnd = endMarker
+    ? componentIndex.indexOf(endMarker, sectionContentStart)
+    : componentIndex.length
 
-  const basicSection = componentIndex.slice(basicStart + basicMarker.length, proStart)
+  if (endMarker) {
+    assert.notEqual(sectionEnd, -1, `Fantastic-admin 组件入口缺少区段标记：${endMarker}`)
+    assert.ok(sectionEnd > sectionStart, `Fantastic-admin 组件入口的 ${endMarker} 必须位于 ${startMarker} 之后`)
+  }
+
+  const section = componentIndex.slice(sectionContentStart, sectionEnd)
   const sourceFile = ts.createSourceFile(
-    'fantastic-admin-basic-exports.ts',
-    basicSection,
+    `fantastic-admin-${sectionName}-exports.ts`,
+    section,
     ts.ScriptTarget.Latest,
     true,
     ts.ScriptKind.TS,
   )
   const publicNamePattern = /^(?:Fa|useFa)[A-Z][A-Za-z0-9]+$/u
-  const rawPublicNames = []
+  const rawPublicExports = []
+  const runtimeStarModules = []
 
   function visit(node) {
     if (ts.isExportDeclaration(node) && !node.isTypeOnly) {
@@ -533,21 +600,24 @@ function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fa
         : '<unknown>'
 
       if (!node.exportClause) {
+        assert.ok(
+          allowedRuntimeStarModules.includes(moduleName),
+          `Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime export star：module=${moduleName}`,
+        )
+        runtimeStarModules.push(moduleName)
+      }
+      else if (ts.isNamespaceExport(node.exportClause)) {
         assert.fail(
-          `Fantastic-admin 基础公开覆盖无法静默解析 runtime export star：module=${moduleName}`,
+          `Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime namespace export：module=${moduleName}`,
         )
       }
-      if (ts.isNamespaceExport(node.exportClause)) {
-        assert.fail(
-          `Fantastic-admin 基础公开覆盖无法静默解析 runtime namespace export：module=${moduleName}`,
-        )
-      }
-
-      for (const specifier of node.exportClause.elements) {
-        if (!specifier.isTypeOnly) {
-          const publicName = specifier.name.text
-          if (publicNamePattern.test(publicName)) {
-            rawPublicNames.push(publicName)
+      else {
+        for (const specifier of node.exportClause.elements) {
+          if (!specifier.isTypeOnly) {
+            const publicName = specifier.name.text
+            if (publicNamePattern.test(publicName)) {
+              rawPublicExports.push({ moduleName, publicName })
+            }
           }
         }
       }
@@ -558,6 +628,13 @@ function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fa
 
   visit(sourceFile)
 
+  assert.deepEqual(
+    [...runtimeStarModules].sort(),
+    [...allowedRuntimeStarModules].sort(),
+    `Fantastic-admin ${sectionName}区段的受控 runtime export star 必须与已核对清单完全一致`,
+  )
+
+  const rawPublicNames = rawPublicExports.map(item => item.publicName)
   const uniquePublicNames = [...new Set(rawPublicNames)]
   const duplicatedPublicNames = [...new Set(
     rawPublicNames.filter((publicName, index) => rawPublicNames.indexOf(publicName) !== index),
@@ -566,10 +643,32 @@ function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fa
   assert.equal(
     rawPublicNames.length,
     uniquePublicNames.length,
-    `Fantastic-admin 基础区段存在重复公开名：${duplicatedPublicNames.join(', ')}`,
+    `Fantastic-admin ${sectionName}区段存在重复公开名：${duplicatedPublicNames.join(', ')}`,
   )
 
-  return uniquePublicNames.sort()
+  return {
+    publicNames: uniquePublicNames.sort(),
+    runtimeStarModules: [...runtimeStarModules].sort(),
+    sourceModules: [...new Set(rawPublicExports.map(item => item.moduleName))].sort(),
+  }
+}
+
+function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath)) {
+  return readFantasticAdminPublicExports({
+    componentIndex,
+    endMarker: '// 专业版组件',
+    sectionName: '基础',
+    startMarker: '// 基础版组件',
+  }).publicNames
+}
+
+function readFantasticAdminProPublicExports(componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath)) {
+  return readFantasticAdminPublicExports({
+    allowedRuntimeStarModules: fantasticAdminProRuntimeStarExports,
+    componentIndex,
+    sectionName: '专业',
+    startMarker: '// 专业版组件',
+  })
 }
 
 function assertExistingMarkdownLinks(content, sourcePath) {
@@ -849,6 +948,68 @@ test('Fantastic-admin 基础公开名提取拒绝重复导出名', () => {
   )
 })
 
+test('Fantastic-admin 基础分类索引表漏项不能由表后说明掩盖', () => {
+  const publicNames = readFantasticAdminBasicPublicNames()
+  const basicIndex = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.index),
+    '3. 基础组件分类索引',
+  )
+  const mutatedBasicIndex = basicIndex.replace(
+    '| 按钮与选择控件 | `FaButton`、',
+    '| 按钮与选择控件 | ',
+  )
+
+  assert.notEqual(mutatedBasicIndex, basicIndex, '基础分类索引漏项 fixture 必须从表格中删除 FaButton')
+  assert.ok(
+    mutatedBasicIndex.includes('`FaButton` 与 `FaButtonGroup`'),
+    '基础分类索引漏项 fixture 必须保留表后说明里的 FaButton，证明它不能补足表格覆盖',
+  )
+  assert.throws(
+    () => assertPublicNameIndexTable(mutatedBasicIndex, publicNames, '组件 README 基础分类索引'),
+    /基础分类索引.*运行时公开名集合/u,
+    '分类表格删除 FaButton 时，即使表后说明仍提及 FaButton，结构化覆盖契约也必须失败',
+  )
+})
+
+test('Fantastic-admin 专业公开名提取只放行已核对的 runtime export star', () => {
+  const proExports = readFantasticAdminProPublicExports([
+    '// 专业版组件',
+    '// FaCommentOnly',
+    'const example = "useFaStringOnly"',
+    'export { AnimatedBeam as FaAnimatedBeam } from "./pro/animated-beam"',
+    'export { type Ghost as FaInlineTypeOnly, Loading as FaLoading } from "./pro/loading"',
+    'export type { Ghost as FaTypeOnly } from "./pro/type-only"',
+    'export * from "./pro/mention/mention"',
+    'export * from "./pro/pattern-bg/variants"',
+  ].join('\n'))
+
+  assert.deepEqual(
+    proExports.publicNames,
+    ['FaAnimatedBeam', 'FaLoading'],
+    '专业公开名只能来自运行时 export specifier，并继续忽略注释、字符串和 type-only 导出',
+  )
+  assert.deepEqual(
+    proExports.runtimeStarModules,
+    fantasticAdminProRuntimeStarExports,
+    '专业区段只能精确放行本地已核对的两条 runtime export star',
+  )
+})
+
+test('Fantastic-admin 专业公开名提取拒绝未知 runtime export star', () => {
+  const unknownRuntimeExportStarFixture = [
+    '// 专业版组件',
+    'export * from "./pro/mention/mention"',
+    'export * from "./pro/pattern-bg/variants"',
+    'export * from "./pro/unknown-runtime-star"',
+  ].join('\n')
+
+  assert.throws(
+    () => readFantasticAdminProPublicExports(unknownRuntimeExportStarFixture),
+    /专业公开覆盖无法静默解析 runtime export star：module=\.\/pro\/unknown-runtime-star/u,
+    '专业区段新增未知 runtime export star 时必须显式失败，不能扩大为任意 allowlist',
+  )
+})
+
 test('Fantastic-admin 基础组件文档记录 FaInput autocomplete 固定契约', () => {
   const basicHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.basic)
   const inputSection = readSecondLevelSection(basicHandbook, 'FaInput')
@@ -978,13 +1139,10 @@ test('Fantastic-admin 基础组件分册覆盖本地全部公开导出并固定�
 
   const publicNameSet = new Set(publicNames)
   const basicIndex = readSecondLevelSection(documents.index, '3. 基础组件分类索引')
-  const indexedPublicNames = [...new Set(
-    [...basicIndex.matchAll(/`((?:Fa|useFa)[A-Z][A-Za-z0-9]+)`/gu)].map(match => match[1]),
-  )].sort()
-  assert.deepEqual(
-    indexedPublicNames,
+  assertPublicNameIndexTable(
+    basicIndex,
     publicNames,
-    '组件 README 基础分类索引中的全部 Fa*/useFa* code token 必须与基础区段运行时公开名集合完全一致',
+    '组件 README 基础分类索引',
   )
 
   const documentedHeadings = readMarkdownSecondLevelHeadings(documents.basic)
@@ -1011,6 +1169,83 @@ test('Fantastic-admin 基础组件分册覆盖本地全部公开导出并固定�
     unexportedClaims,
     [],
     `基础版组件文档不得宣称本地基础区段未导出的 Fa*/useFa* 能力：${unexportedClaims.join(', ')}`,
+  )
+})
+
+test('Fantastic-admin 专业组件分册覆盖本地全部公开导出并固定选型边界', () => {
+  const proExports = readFantasticAdminProPublicExports()
+  const publicNames = proExports.publicNames
+  assert.equal(
+    publicNames.length,
+    50,
+    `Fantastic-admin 专业区段公开名数量漂移：期望 50，实际 ${publicNames.length}；请核对 ${fantasticAdminComponentsIndexPath}`,
+  )
+  assert.equal(
+    proExports.sourceModules.length,
+    47,
+    `Fantastic-admin 专业区段运行时公开名的源码目录数量漂移：期望 47，实际 ${proExports.sourceModules.length}`,
+  )
+  assert.deepEqual(
+    proExports.runtimeStarModules,
+    fantasticAdminProRuntimeStarExports,
+    'Fantastic-admin 专业区段 runtime export star 必须保持精确两条已核对路径',
+  )
+
+  const index = readRequiredFile(fantasticAdminComponentHandbookPaths.index)
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+
+  assert.ok(
+    index.includes('[专业版组件](./专业版组件.md)'),
+    '内置组件 README 必须链接真实的专业版组件分册',
+  )
+  assert.ok(
+    index.includes('专业版是千树 DMS 正式能力'),
+    '内置组件 README 必须明确专业版是千树 DMS 正式能力',
+  )
+  assertExistingMarkdownLinks(index, fantasticAdminComponentHandbookPaths.index)
+  assertExistingMarkdownLinks(proHandbook, fantasticAdminComponentHandbookPaths.pro)
+
+  const proIndex = readSecondLevelSection(index, '4. 专业组件分类索引')
+  assertPublicNameIndexTable(
+    proIndex,
+    publicNames,
+    '组件 README 专业分类索引',
+  )
+
+  for (const requiredPhrase of [
+    'Fantastic-admin Pro `6.3.0`',
+    '`web/apps/qsmds-arco`',
+    '50 个运行时公开名',
+    '47 个源码目录',
+    '2026-07-15',
+    '`web/packages/components/src/index.ts`',
+    '官网仅用于解释与追溯',
+  ]) {
+    assert.ok(proHandbook.includes(requiredPhrase), `专业版组件分册的基线说明缺少：${requiredPhrase}`)
+  }
+
+  const documentedHeadings = readMarkdownSecondLevelHeadings(proHandbook)
+    .map(heading => heading.match(/^((?:Fa|useFa)[A-Z][A-Za-z0-9]+)(?:[ \t]|$)/u)?.[1])
+    .filter(Boolean)
+  for (const publicName of publicNames) {
+    const headingCount = documentedHeadings.filter(name => name === publicName).length
+    assert.equal(
+      headingCount,
+      1,
+      `专业版组件公开名必须恰好有一个真实二级 Markdown 标题：name=${publicName}; actual=${headingCount}; file=${fantasticAdminComponentHandbookPaths.pro}`,
+    )
+  }
+
+  const publicNameSet = new Set(publicNames)
+  const visibleProContent = proHandbook.replace(/(\[[^\]]*\])\([^)]+\)/gu, '$1')
+  const claimedPublicNames = [...new Set(
+    [...visibleProContent.matchAll(/\b(?:Fa|useFa)[A-Z][A-Za-z0-9]+/gu)].map(match => match[0]),
+  )]
+  const unexportedClaims = claimedPublicNames.filter(name => !publicNameSet.has(name))
+  assert.deepEqual(
+    unexportedClaims,
+    [],
+    `专业版组件文档不得宣称本地专业区段未导出的 Fa*/useFa* 能力：${unexportedClaims.join(', ')}`,
   )
 })
 
