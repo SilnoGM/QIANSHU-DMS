@@ -61,17 +61,23 @@ const arcoDesignVueTask7SourcePaths = {
   anchor: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/anchor/anchor.js', import.meta.url)),
   arcoVue: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/arco-vue.js', import.meta.url)),
   avatar: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/avatar/avatar.js', import.meta.url)),
+  calendar: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/calendar/calendar.js', import.meta.url)),
+  collapseItem: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/collapse/collapse-item.js', import.meta.url)),
   collapseTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/collapse/collapse.d.ts', import.meta.url)),
+  configProvider: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/config-provider/config-provider.js', import.meta.url)),
   drawer: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/drawer/index.js', import.meta.url)),
   drawerComponent: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/drawer/drawer.js', import.meta.url)),
+  empty: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/empty/empty.js', import.meta.url)),
   faPageHeader: fileURLToPath(new URL('../packages/components/src/basic/page-header/index.vue', import.meta.url)),
   faTabs: fileURLToPath(new URL('../packages/components/src/basic/tabs/index.vue', import.meta.url)),
   icon: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/icon-component/icon.js', import.meta.url)),
   image: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/image/image.js', import.meta.url)),
   imagePreview: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/image/preview.vue_vue_type_script_lang.js', import.meta.url)),
+  imagePreviewAction: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/image/preview-action.js', import.meta.url)),
   imagePreviewGroup: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/image/preview-group.vue_vue_type_script_lang.js', import.meta.url)),
   notificationTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/notification/index.d.ts', import.meta.url)),
   overflowList: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/overflow-list/overflow-list.js', import.meta.url)),
+  pageHeader: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/page-header/page-header.js', import.meta.url)),
   popconfirm: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/popconfirm/popconfirm.js', import.meta.url)),
   resizeBoxTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/resize-box/resize-box.d.ts', import.meta.url)),
   scrollbar: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/scrollbar/scrollbar.js', import.meta.url)),
@@ -80,11 +86,14 @@ const arcoDesignVueTask7SourcePaths = {
   splitTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/split/split.d.ts', import.meta.url)),
   spin: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/spin/spin.js', import.meta.url)),
   table: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/table/table.js', import.meta.url)),
+  tableColumn: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/table/table-column.js', import.meta.url)),
   tableTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/table/interface.d.ts', import.meta.url)),
   tabsTypes: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/tabs/tabs.d.ts', import.meta.url)),
   topbarTabbar: fileURLToPath(new URL('../apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue', import.meta.url)),
   topbarTabbarStore: fileURLToPath(new URL('../apps/qsmds-arco/src/store/modules/app/tabbar.ts', import.meta.url)),
   tree: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/tree/tree.js', import.meta.url)),
+  treeBaseNode: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/tree/base-node.js', import.meta.url)),
+  treeCheckUtils: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/tree/utils/check-utils.js', import.meta.url)),
   trigger: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/trigger/trigger.js', import.meta.url)),
 }
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
@@ -258,6 +267,130 @@ const arcoTask7Coverage = arcoDesignVueCoverage.filter(([, , documentKey]) => !a
 function readRequiredFile(filePath) {
   assert.equal(existsSync(filePath), true, `缺少前端手册治理所需文件：${filePath}`)
   return readFileSync(filePath, 'utf8')
+}
+
+function readStaticPropertyName(name) {
+  return ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined
+}
+
+function findObjectPropertyInitializer(objectLiteral, propertyName) {
+  for (const property of objectLiteral.properties) {
+    if (ts.isPropertyAssignment(property) && readStaticPropertyName(property.name) === propertyName) {
+      return property.initializer
+    }
+  }
+  return undefined
+}
+
+/**
+ * 从已安装包的 `defineComponent()` 选项读取 prop 与 slot 名称。
+ * 使用 AST 而不是锁定编译器生成的变量名，确保等价重编译不会制造假红。
+ */
+function readInstalledComponentContract(source, expectedComponentName) {
+  const sourceFile = ts.createSourceFile(
+    `${expectedComponentName}.js`,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.JS,
+  )
+  let componentOptions
+
+  function visitComponent(node) {
+    if (
+      ts.isCallExpression(node)
+      && ts.isIdentifier(node.expression)
+      && node.expression.text === 'defineComponent'
+      && node.arguments.length > 0
+      && ts.isObjectLiteralExpression(node.arguments[0])
+    ) {
+      const options = node.arguments[0]
+      const name = findObjectPropertyInitializer(options, 'name')
+      if (name && ts.isStringLiteral(name) && name.text === expectedComponentName) {
+        componentOptions = options
+      }
+    }
+    ts.forEachChild(node, visitComponent)
+  }
+  visitComponent(sourceFile)
+  assert.ok(componentOptions, `无法从已安装源码解析 ${expectedComponentName} defineComponent 选项`)
+
+  const props = new Set()
+  const propsInitializer = findObjectPropertyInitializer(componentOptions, 'props')
+  if (propsInitializer && ts.isObjectLiteralExpression(propsInitializer)) {
+    for (const property of propsInitializer.properties) {
+      const name = readStaticPropertyName(property.name)
+      if (name) {
+        props.add(name)
+      }
+    }
+  }
+
+  const slots = new Set()
+  function isSlotsExpression(node) {
+    return (ts.isIdentifier(node) && node.text === 'slots')
+      || (ts.isPropertyAccessExpression(node) && node.name.text === '$slots')
+  }
+  function visitSlots(node) {
+    if (ts.isPropertyAccessExpression(node) && isSlotsExpression(node.expression)) {
+      slots.add(node.name.text)
+    }
+    if (
+      ts.isElementAccessExpression(node)
+      && isSlotsExpression(node.expression)
+      && node.argumentExpression
+      && ts.isStringLiteral(node.argumentExpression)
+    ) {
+      slots.add(node.argumentExpression.text)
+    }
+    if (
+      ts.isCallExpression(node)
+      && ts.isIdentifier(node.expression)
+      && node.expression.text === 'renderSlot'
+      && node.arguments[1]
+      && ts.isStringLiteral(node.arguments[1])
+    ) {
+      slots.add(node.arguments[1].text)
+    }
+    ts.forEachChild(node, visitSlots)
+  }
+  visitSlots(sourceFile)
+
+  return { props, slots }
+}
+
+/**
+ * `arco-vue.js` 的主 components 对象是 74 个家族的运行时安装真相源。
+ * 同时解析默认 import 的目录，避免手写 coverage 与 sourceSlug 一起漂移后仍假绿。
+ */
+function readArcoRuntimeInventory(source) {
+  const componentBlock = source.match(/const components\s*=\s*\{([\s\S]*?)\n\};/u)?.[1]
+  assert.ok(componentBlock, '无法从 arco-vue.js 解析主 components 安装对象')
+  const importSlugs = new Map(
+    [...source.matchAll(/^import (\w+) from "\.\/([^/]+)\/index\.js";$/gmu)]
+      .map(([, localName, sourceSlug]) => [localName, sourceSlug]),
+  )
+  const families = componentBlock.split(',').map(item => item.trim()).filter(Boolean)
+  return new Map(families.map((family) => {
+    assert.match(family, /^\w+$/u, 'arco-vue.js components 只能使用静态简写属性')
+    assert.equal(importSlugs.has(family), true, `${family} 必须来自组件目录的 index.js`)
+    return [family, importSlugs.get(family)]
+  }))
+}
+
+function readNamedFunctionSource(source, functionName) {
+  const sourceFile = ts.createSourceFile(`${functionName}.js`, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS)
+  let functionSource
+
+  function visit(node) {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === functionName) {
+      functionSource = node.getText(sourceFile)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  assert.ok(functionSource, `无法从已安装源码解析函数：${functionName}`)
+  return functionSource
 }
 
 function readFantasticAdminVersion() {
@@ -775,6 +908,26 @@ function scanVueFences(content) {
  */
 function extractVueFences(content) {
   return scanVueFences(content).fences
+}
+
+function countTextOccurrences(content, expectedText) {
+  return content.split(expectedText).length - 1
+}
+
+/**
+ * 每个家族只保留一个可复制示例，并要求示例具有非空 template。
+ * 结构检查与后续语法编译分开报错，缺 template 时能直接定位到家族章节。
+ */
+function assertSingleVueFenceWithTemplate(section, family) {
+  const { diagnostics, fences } = scanVueFences(section)
+  assert.deepEqual(diagnostics, [], `${family} 章节不得包含未闭合 fence`)
+  assert.equal(fences.length, 1, `${family} 章节必须恰好包含一个 vue fence`)
+
+  const filename = `${family}.vue`
+  const parsed = parseVueSfc(fences[0].source, { filename })
+  assert.deepEqual(parsed.errors, [], `${family} Vue SFC 解析失败`)
+  assert.ok(parsed.descriptor.template, `${family} Vue SFC 必须包含 template`)
+  assert.notEqual(parsed.descriptor.template.content.trim(), '', `${family} Vue SFC template 不能为空`)
 }
 
 function formatVueCompilerError(error) {
@@ -2410,9 +2563,16 @@ test('Arco Design Vue Task 7 补齐剩余 46 个家族并完成 74 个家族矩�
     Object.entries(arcoDesignVueHandbookPaths).map(([name, filePath]) => [name, readRequiredFile(filePath)]),
   )
   const arcoVersion = readArcoCatalogResolvedVersion()
+  const runtimeInventory = readArcoRuntimeInventory(readRequiredFile(arcoDesignVueTask7SourcePaths.arcoVue))
 
   assert.equal(arcoVersion, '2.58.0', 'Arco 文档基线必须与 lockfile 锁定的 Arco Design Vue 2.58.0 一致')
   assert.equal(arcoDesignVueCoverage.length, 74, 'Arco Design Vue 覆盖契约必须独立固定为 74 个家族')
+  assert.equal(runtimeInventory.size, 74, 'arco-vue.js 主 components 安装对象必须恰好包含 74 个家族')
+  assert.deepEqual(
+    [...runtimeInventory.keys()].sort(),
+    arcoDesignVueCoverage.map(([family]) => family).sort(),
+    '手册 74 家族必须与 arco-vue.js 运行时安装 inventory 精确一致',
+  )
   assert.equal(arcoTask6Coverage.length, 28, 'Task 6 必须独立固定首批 28 个家族')
   assert.equal(arcoTask7Coverage.length, 46, 'Task 7 必须独立固定剩余 46 个家族')
   for (const requiredPhrase of [
@@ -2467,6 +2627,12 @@ test('Arco Design Vue Task 7 补齐剩余 46 个家族并完成 74 个家族矩�
   }
   for (const [index, [family, category, documentKey, sourceSlug]] of arcoDesignVueCoverage.entries()) {
     const row = coverageRows[index]
+    assert.equal(runtimeInventory.get(family), sourceSlug, `${family} sourceSlug 必须匹配 arco-vue.js 默认 import`)
+    assert.equal(
+      existsSync(resolve(dirname(arcoDesignVueTask7SourcePaths.arcoVue), sourceSlug, 'index.js')),
+      true,
+      `${family} sourceSlug 必须落到本地已安装组件目录：${sourceSlug}`,
+    )
     assert.equal(row.family, family, `Arco Design Vue 覆盖矩阵家族顺序漂移：index=${index}`)
     assert.equal(row.category, category, `Arco Design Vue 覆盖矩阵分类错误：${family}`)
     assert.equal(
@@ -2521,41 +2687,95 @@ test('Arco Design Vue Task 7 补齐剩余 46 个家族并完成 74 个家族矩�
 
   for (const [family, , documentKey, sourceSlug] of arcoDesignVueCoverage) {
     const section = readSecondLevelSection(documents[documentKey], family)
+    const prose = readMarkdownLinesOutsideFences(section).join('\n')
     for (const requiredLabel of ['当前接入：', '实际组件名：', '高频契约：', '可访问性与响应式：']) {
-      assert.ok(section.includes(requiredLabel), `${family} 章节缺少统一说明字段：${requiredLabel}`)
+      assert.equal(
+        countTextOccurrences(prose, requiredLabel),
+        1,
+        `${family} 章节 fence 外必须恰好出现一次统一说明字段：${requiredLabel}`,
+      )
     }
-    assert.ok(extractVueFences(section).length >= 1, `${family} 章节必须包含完整且闭合的 Vue 3 + TypeScript 示例`)
-    assert.ok(
-      section.includes(`https://arco.design/vue/component/${sourceSlug}`),
-      `${family} 章节必须直接链接当前官方组件页`,
+    assertSingleVueFenceWithTemplate(section, family)
+    assert.equal(
+      countTextOccurrences(prose, `https://arco.design/vue/component/${sourceSlug}`),
+      1,
+      `${family} 章节 fence 外必须恰好链接一次当前官方组件页`,
     )
-    assert.ok(
-      section.includes(`https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/${sourceSlug}`),
-      `${family} 章节必须直接链接 2.58.0 tag 源码目录`,
+    assert.equal(
+      countTextOccurrences(
+        prose,
+        `https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/${sourceSlug}`,
+      ),
+      1,
+      `${family} 章节 fence 外必须恰好链接一次 2.58.0 tag 源码目录`,
     )
   }
 
   for (const documentKey of ['dataDisplay', 'feedback', 'navigationAndOther']) {
     const documentName = `${volumeNames[documentKey]}.md`
     assertVueFencesSyntaxCompile(documents[documentKey], documentName)
-    assert.deepEqual(
-      findArcoDocPolicyViolations(documents[documentKey]),
-      [],
-      `${documentName} 不得包含占位、虚构 endpoint 或硬编码敏感信息`,
-    )
+  }
+  for (const documentKey of ['index', 'dataDisplay', 'feedback', 'navigationAndOther']) {
+    const documentName = documentKey === 'index' ? 'README.md' : `${volumeNames[documentKey]}.md`
+    assert.deepEqual(findArcoDocPolicyViolations(documents[documentKey]), [], `${documentName} 不得包含占位、虚构 endpoint 或硬编码敏感信息`)
   }
 })
 
 test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态与大数据契约', () => {
   const dataDisplay = readRequiredFile(arcoDesignVueHandbookPaths.dataDisplay)
   const avatarSource = readRequiredFile(arcoDesignVueTask7SourcePaths.avatar)
+  const calendarSource = readRequiredFile(arcoDesignVueTask7SourcePaths.calendar)
+  const collapseItemSource = readRequiredFile(arcoDesignVueTask7SourcePaths.collapseItem)
   const collapseTypesSource = readRequiredFile(arcoDesignVueTask7SourcePaths.collapseTypes)
   const imageSource = readRequiredFile(arcoDesignVueTask7SourcePaths.image)
   const imagePreviewSource = readRequiredFile(arcoDesignVueTask7SourcePaths.imagePreview)
+  const imagePreviewActionSource = readRequiredFile(arcoDesignVueTask7SourcePaths.imagePreviewAction)
   const imagePreviewGroupSource = readRequiredFile(arcoDesignVueTask7SourcePaths.imagePreviewGroup)
   const tableSource = readRequiredFile(arcoDesignVueTask7SourcePaths.table)
+  const tableColumnSource = readRequiredFile(arcoDesignVueTask7SourcePaths.tableColumn)
   const tableTypesSource = readRequiredFile(arcoDesignVueTask7SourcePaths.tableTypes)
   const treeSource = readRequiredFile(arcoDesignVueTask7SourcePaths.tree)
+  const treeBaseNodeSource = readRequiredFile(arcoDesignVueTask7SourcePaths.treeBaseNode)
+  const treeCheckUtilsSource = readRequiredFile(arcoDesignVueTask7SourcePaths.treeCheckUtils)
+
+  const calendarContract = readInstalledComponentContract(calendarSource, 'Calendar')
+  assert.equal(calendarContract.props.has('isWeek'), true, 'Calendar 2.58.0 必须公开 isWeek')
+  assert.equal(calendarContract.props.has('isWeekend'), false, 'Calendar 2.58.0 没有 isWeekend')
+  assert.match(calendarSource, /"panelChange":\s*\([^)]*\)\s*=>\s*true/u, 'Calendar 必须公开 panelChange 日期面板事件')
+  assert.doesNotMatch(calendarSource, /"update:mode"/u, 'Calendar mode 没有 update:mode 回写事件')
+  assert.doesNotMatch(
+    readNamedFunctionSource(calendarSource, 'changeMode'),
+    /\bemit\s*\(/u,
+    'Calendar 内部 mode 切换不得误判为 panelChange emit',
+  )
+
+  assert.match(collapseItemSource, /"role":\s*"button"/u, 'Collapse header 必须保留现有 button role')
+  assert.match(collapseItemSource, /"tabindex":\s*"0"/u, 'Collapse header 必须保留现有 tabindex')
+  assert.doesNotMatch(collapseItemSource, /onKey(?:down|up)/u, 'Collapse 2.58.0 header 没有键盘事件实现')
+
+  const imageContract = readInstalledComponentContract(imageSource, 'Image')
+  assert.equal(imageContract.props.has('lazyLoad'), false, 'Image 2.58.0 不得虚构 lazyLoad prop')
+  assert.match(imagePreviewGroupSource, /emit\("change",\s*index\)/u, 'ImagePreviewGroup change 运行时必须只传 index 一个参数')
+  assert.doesNotMatch(imagePreviewGroupSource, /emit\("change",[^,\n]+,/u, 'ImagePreviewGroup change 不得多传第二个参数')
+  assert.match(imagePreviewActionSource, /\[`\$\{prefixCls\}-disabled`\]:\s*disabled/u, 'ImagePreviewAction disabled 只进入样式 class')
+  assert.doesNotMatch(imagePreviewActionSource, /if\s*\(disabled\)\s*return/u, 'ImagePreviewAction disabled 没有阻止 attrs click handler')
+
+  const tableColumnContract = readInstalledComponentContract(tableColumnSource, 'TableColumn')
+  for (const unsupportedProp of ['render', 'slotName', 'titleSlotName']) {
+    assert.equal(tableColumnContract.props.has(unsupportedProp), false, `ATableColumn 不得虚构 ${unsupportedProp} prop`)
+  }
+  assert.match(
+    tableTypesSource,
+    /interface TableSortable\s*\{\s*sortDirections:\s*\('ascend'\s*\|\s*'descend'\)\[\];/u,
+    'TableSortable 的 sortDirections 在 2.58.0 类型中是必填字段',
+  )
+  assert.match(tableSource, /column\.sortable[\s\S]{0,100}\.sorter\)\s*!==\s*true/u, 'sortable.sorter=true 必须跳过本地排序')
+  assert.match(tableSource, /rowSelection\.value[\s\S]{0,120}\.onlyCurrent/u, 'Table onlyCurrent 必须绑定运行时翻页选择逻辑')
+
+  assert.match(treeSource, /defaultExpandAll:\s*\{[\s\S]*?default:\s*true/u, 'Tree defaultExpandAll 必须绑定默认 true')
+  assert.match(readNamedFunctionSource(treeCheckUtilsSource, 'getCheckedStateByInitKeys'), /onlyCheckLeaf/u, 'onlyCheckLeaf 只参与受控 key 初始化')
+  assert.doesNotMatch(readNamedFunctionSource(treeCheckUtilsSource, 'getCheckedStateByCheck'), /onlyCheckLeaf/u, 'onlyCheckLeaf 不参与用户点击勾选')
+  assert.doesNotMatch(treeBaseNodeSource, /"role":\s*"treeitem"|"tabindex"|onKey(?:down|up)/u, 'Tree 节点没有完整 treeitem 或键盘实现')
 
   for (const [source, phrase, message] of [
     [avatarSource, 'alt: "avatar"', 'Avatar 2.58.0 图片 alt 固定为 avatar'],
@@ -2582,9 +2802,10 @@ test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态
 
   const familyContracts = {
     Avatar: ['`AAvatar`', '`AAvatarGroup`'],
+    Calendar: ['`is-week`', '`mode`', '不会回写', '`panel-change`', '日期面板'],
     Card: ['`ACard`', '`ACardGrid`', '`ACardMeta`'],
     Carousel: ['`ACarousel`', '`ACarouselItem`', '`current`', '从 1 开始'],
-    Collapse: ['`ACollapse`', '`ACollapseItem`', '`activeKey`', '数组', '`accordion`', '`key`'],
+    Collapse: ['`ACollapse`', '`ACollapseItem`', '`activeKey`', '数组', '`accordion`', '`key`', '`keydown`', '业务补强'],
     Descriptions: ['`ADescriptions`', '`ADescriptionsItem`'],
     Image: [
       '`AImage`',
@@ -2598,6 +2819,7 @@ test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态
       '`change(index)`',
       '只传一个参数',
       '`disabled` 只影响样式',
+      '没有 `lazy-load`',
     ],
     List: ['`AList`', '`AListItem`', '`AListItemMeta`'],
     Statistic: ['`AStatistic`', '`ACountdown`'],
@@ -2622,6 +2844,7 @@ test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态
       '`estimatedSize`',
       '`buffer`',
       '`sortable.sorter: true`',
+      '`sortDirections`',
       '不能把 `filter` 写成 `true`',
       '`filter: () => true`',
       '避免二次本地过滤',
@@ -2655,6 +2878,8 @@ test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态
       '默认 `true`',
       '`onlyCheckLeaf`',
       '不会禁止用户点击父节点',
+      '`tree` / `treeitem`',
+      '业务补强',
     ],
   }
   for (const [family, phrases] of Object.entries(familyContracts)) {
@@ -2663,6 +2888,20 @@ test('Arco Design Vue Task 7 数据展示分册固定复合组件、受控状态
       assert.ok(section.includes(phrase), `${family} 高频契约缺少：${phrase}`)
     }
   }
+
+  const calendarSection = readSecondLevelSection(dataDisplay, 'Calendar')
+  assert.doesNotMatch(calendarSection, /`is-weekend`|\bis-weekend\b/u, 'Calendar 章节不得虚构 is-weekend prop')
+  const imageSection = readSecondLevelSection(dataDisplay, 'Image')
+  assert.doesNotMatch(extractVueFences(imageSection)[0].source, /\blazy-load(?==|\s)/u, 'Image 示例不得使用虚构 lazy-load prop')
+  const collapseSection = readSecondLevelSection(dataDisplay, 'Collapse')
+  assert.doesNotMatch(collapseSection, /键盘可切换/u, 'Collapse 章节不得暗示 2.58.0 自动支持键盘切换')
+
+  const tableSection = readSecondLevelSection(dataDisplay, 'Table')
+  assert.match(
+    extractVueFences(tableSection)[0].source,
+    /sortable:\s*\{\s*sorter:\s*true,\s*sortDirections:\s*\['ascend',\s*'descend'\]\s*\}/u,
+    'Table 远端排序示例必须补齐严格类型要求的 sortDirections',
+  )
 })
 
 test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注入与异步关闭语义', () => {
@@ -2678,10 +2917,20 @@ test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注
   const skeletonSource = readRequiredFile(arcoDesignVueTask7SourcePaths.skeleton)
   const spinSource = readRequiredFile(arcoDesignVueTask7SourcePaths.spin)
 
+  const skeletonContract = readInstalledComponentContract(skeletonSource, 'Skeleton')
+  assert.equal(skeletonContract.slots.has('default'), true, 'Skeleton loading 时必须使用 default 骨架 slot')
+  assert.equal(skeletonContract.slots.has('content'), true, 'Skeleton 完成后必须使用 content slot')
+  const spinContract = readInstalledComponentContract(spinSource, 'Spin')
+  assert.equal(spinContract.props.has('delay'), false, 'Spin 2.58.0 没有 delay prop')
+  assert.equal(spinContract.slots.has('default'), true, 'Spin 必须识别 default 内容区域')
+
+  const asyncGuardPattern = /props\.onBeforeOk\(\(([\w$]+)\s*=\s*true\)\s*=>\s*resolve\(\1\)\)/u
+  assert.match(drawerComponentSource, asyncGuardPattern, 'Drawer 必须支持 done callback 关闭语义')
+  assert.match(popconfirmSource, asyncGuardPattern, 'Popconfirm 必须支持 done callback 关闭语义')
+
   for (const [source, phrase, message] of [
     [alertSource, 'emit("afterClose")', 'Alert 必须区分 close 与 afterClose'],
     [drawerSource, 'open: (config, appContext = app._context)', 'Drawer 实例注入必须携带 app context'],
-    [drawerComponentSource, 'props.onBeforeOk((closed2 = true) => resolve(closed2))', 'Drawer 必须支持 done 回调关闭'],
     [drawerComponentSource, 'props.onBeforeCancel()', 'Drawer 必须支持同步取消守卫'],
     [messageSource, 'app.config.globalProperties.$message', 'Message 必须注入 $message'],
     [messageSource, 'appContext = app._context', 'Message 实例注入必须携带 app context'],
@@ -2689,11 +2938,7 @@ test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注
     [notificationSource, 'app.config.globalProperties.$notification', 'Notification 必须注入 $notification'],
     [notificationSource, 'notification.remove = (id)', 'Notification 静态入口必须支持 remove'],
     [notificationTypesSource, 'remove: (id: string) => void;', 'Notification 静态类型必须支持 remove'],
-    [popconfirmSource, 'props.onBeforeOk((closed2 = true) => resolve(closed2))', 'Popconfirm 必须支持 done 回调关闭'],
     [popconfirmSource, 'props.onBeforeCancel()', 'Popconfirm 必须支持同步取消守卫'],
-    [skeletonSource, '_ctx.loading ? renderSlot(_ctx.$slots, "default"', 'Skeleton loading 必须渲染默认插槽'],
-    [skeletonSource, 'renderSlot(_ctx.$slots, "content"', 'Skeleton 完成后必须渲染 content 插槽'],
-    [spinSource, 'slots.default ? createVNode', 'Spin 必须区分有无默认内容'],
   ]) {
     assert.ok(source.includes(phrase), `Arco 2.58.0 源码事实漂移：${message}`)
   }
@@ -2722,7 +2967,7 @@ test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注
     ],
     Popconfirm: ['`APopconfirm`'],
     Skeleton: ['`ASkeleton`', '`loading=true`', '默认 slot', '`#content`', '真实内容'],
-    Spin: ['`ASpin`', '`loading`', '`delay`', '局部', '`Message.loading`', '`FaLoading`'],
+    Spin: ['`ASpin`', '`loading`', '没有 `delay`', '局部', '`Message.loading`', '`FaLoading`'],
   }
   for (const [family, phrases] of Object.entries(familyContracts)) {
     const section = readSecondLevelSection(feedback, family)
@@ -2733,6 +2978,7 @@ test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注
 
   for (const family of ['Drawer', 'Modal', 'Popconfirm']) {
     const section = readSecondLevelSection(feedback, family)
+    const exampleSource = extractVueFences(section)[0].source
     for (const phrase of [
       '`onBeforeOk(done)`',
       '`done(true)`',
@@ -2748,16 +2994,26 @@ test('Arco Design Vue Task 7 反馈分册区分组件、静态方法、实例注
     ]) {
       assert.ok(section.includes(phrase), `${family} 异步确认与关闭语义缺少：${phrase}`)
     }
+    assert.ok(exampleSource.includes('Message.error('), `${family} 示例 catch 必须向用户展示可读失败反馈`)
   }
+
+  assert.doesNotMatch(extractVueFences(readSecondLevelSection(feedback, 'Spin'))[0].source, /:delay=/u, 'Spin 示例不得使用虚构 delay prop')
 })
 
 test('Arco Design Vue Task 7 导航分册固定页面标题、内容标签与路由页签三层边界', () => {
   const navigationAndOther = readRequiredFile(arcoDesignVueHandbookPaths.navigationAndOther)
   const faPageHeaderSource = readRequiredFile(arcoDesignVueTask7SourcePaths.faPageHeader)
   const faTabsSource = readRequiredFile(arcoDesignVueTask7SourcePaths.faTabs)
+  const pageHeaderSource = readRequiredFile(arcoDesignVueTask7SourcePaths.pageHeader)
   const tabsTypesSource = readRequiredFile(arcoDesignVueTask7SourcePaths.tabsTypes)
   const topbarTabbarSource = readRequiredFile(arcoDesignVueTask7SourcePaths.topbarTabbar)
   const topbarTabbarStoreSource = readRequiredFile(arcoDesignVueTask7SourcePaths.topbarTabbarStore)
+
+  const pageHeaderContract = readInstalledComponentContract(pageHeaderSource, 'PageHeader')
+  for (const slotName of ['back-icon', 'breadcrumb', 'default', 'extra', 'subtitle', 'title']) {
+    assert.equal(pageHeaderContract.slots.has(slotName), true, `APageHeader 必须公开 ${slotName} slot`)
+  }
+  assert.equal(pageHeaderContract.slots.has('content'), false, 'APageHeader 2.58.0 没有 content slot')
 
   for (const [source, phrase, message] of [
     [faPageHeaderSource, 'title?: string', 'FaPageHeader 必须公开 title'],
@@ -2788,9 +3044,12 @@ test('Arco Design Vue Task 7 导航分册固定页面标题、内容标签与路
     '`show-back`',
     '不负责路由',
     '`web/packages/components/src/basic/page-header/index.vue`',
+    '正文使用 `#default`',
+    '没有 `#content`',
   ]) {
     assert.ok(pageHeaderSection.includes(phrase), `PageHeader 三层边界缺少：${phrase}`)
   }
+  assert.doesNotMatch(pageHeaderSection, /(?:提供|支持)\s*`#content`/u, 'PageHeader 章节不得虚构 content slot')
 
   const tabsSection = readSecondLevelSection(navigationAndOther, 'Tabs')
   for (const phrase of [
@@ -2826,13 +3085,31 @@ test('Arco Design Vue Task 7 其他组件分册固定 Icon 类型缺口与底层
   const anchorSource = readRequiredFile(arcoDesignVueTask7SourcePaths.anchor)
   const arcoVueSource = readRequiredFile(arcoDesignVueTask7SourcePaths.arcoVue)
   const componentTypesSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.componentTypes)
+  const configProviderSource = readRequiredFile(arcoDesignVueTask7SourcePaths.configProvider)
+  const emptySource = readRequiredFile(arcoDesignVueTask7SourcePaths.empty)
   const iconSource = readRequiredFile(arcoDesignVueTask7SourcePaths.icon)
+  const providerPluginSource = readRequiredFile(arcoDesignVueIntegrationSourcePaths.providerPlugin)
   const overflowListSource = readRequiredFile(arcoDesignVueTask7SourcePaths.overflowList)
   const resizeBoxTypesSource = readRequiredFile(arcoDesignVueTask7SourcePaths.resizeBoxTypes)
   const scrollbarSource = readRequiredFile(arcoDesignVueTask7SourcePaths.scrollbar)
   const scrollbarTypesSource = readRequiredFile(arcoDesignVueTask7SourcePaths.scrollbarTypes)
   const splitTypesSource = readRequiredFile(arcoDesignVueTask7SourcePaths.splitTypes)
   const triggerSource = readRequiredFile(arcoDesignVueTask7SourcePaths.trigger)
+
+  const configProviderContract = readInstalledComponentContract(configProviderSource, 'ConfigProvider')
+  for (const unsupportedProp of ['componentConfig', 'empty']) {
+    assert.equal(configProviderContract.props.has(unsupportedProp), false, `AConfigProvider 2.58.0 没有 ${unsupportedProp} prop`)
+  }
+  assert.match(emptySource, /configCtx\?\.slots\.empty|configCtx == null[\s\S]{0,100}configCtx\.slots\.empty/u, 'ConfigProvider empty 是由 AEmpty 消费的 slot')
+
+  const anchorContract = readInstalledComponentContract(anchorSource, 'Anchor')
+  assert.equal(anchorContract.props.has('smooth'), true, 'Anchor 必须声明 smooth prop')
+  assert.equal(countTextOccurrences(anchorSource, 'smooth'), 1, 'Anchor 2.58.0 运行时不得读取 smooth prop')
+
+  const runtimeInventory = readArcoRuntimeInventory(arcoVueSource)
+  assert.equal(runtimeInventory.get('Icon'), 'icon-component', 'ArcoVue 必须从 icon-component 安装 Icon')
+  assert.match(arcoVueSource, /const ArcoVue\s*=\s*\{\s*\.\.\.components/u, 'ArcoVue 默认导出必须继承主 components 注册对象')
+  assert.doesNotMatch(providerPluginSource, /ArcoVueIcon/u, '正式应用 Provider 不得虚构独立 ArcoVueIcon plugin')
 
   assert.doesNotMatch(componentTypesSource, /\bA(?:Icon|OverflowList|Scrollbar)\b/u, '全局模板类型没有声明三类底层组件')
   for (const runtimeName of ['Scrollbar', 'Icon', 'OverflowList']) {
@@ -2842,7 +3119,6 @@ test('Arco Design Vue Task 7 其他组件分册固定 Icon 类型缺口与底层
     assert.ok(iconSource.includes(phrase), `IconComponent 源码事实缺少：${phrase}`)
   }
   for (const [source, phrase, message] of [
-    [anchorSource, 'smooth:', 'Anchor 必须声明 smooth prop'],
     [overflowListSource, 'change: (value) => true', 'OverflowList change 参数必须是隐藏数量'],
     [overflowListSource, 'number: overflowNumber.value', 'OverflowList overflow slot 必须暴露 number'],
     [resizeBoxTypesSource, 'movingStart: (ev: MouseEvent) => true;', 'ResizeBox 必须公开 movingStart'],
@@ -2879,6 +3155,7 @@ test('Arco Design Vue Task 7 其他组件分册固定 Icon 类型缺口与底层
 
   const familyContracts = {
     Anchor: ['`smooth`', '2.58.0', '未读取'],
+    ConfigProvider: ['`#empty`', '不是 prop', '没有 `component-config`'],
     Menu: ['`selectedKeys`', '`openKeys`', '`collapsed`', '`update:collapsed`'],
     Pagination: ['`current`', '`pageSize`'],
     Steps: ['`current`'],
@@ -2909,6 +3186,9 @@ test('Arco Design Vue Task 7 其他组件分册固定 Icon 类型缺口与底层
       assert.ok(section.includes(phrase), `${family} 高频契约缺少：${phrase}`)
     }
   }
+
+  const configProviderSection = readSecondLevelSection(navigationAndOther, 'ConfigProvider')
+  assert.doesNotMatch(extractVueFences(configProviderSection)[0].source, /component-config=/u, 'ConfigProvider 示例不得使用虚构 component-config prop')
 })
 
 test('Arco Design Vue 接入基础分册锁定正式应用的真实安装、语言与主题链路', () => {
