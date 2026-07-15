@@ -12,6 +12,11 @@ const fantasticAdminHandbookPaths = {
   guide: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/指引与开发准备.md', import.meta.url)),
   skills: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/AI技能.md', import.meta.url)),
   foundation: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/工程基础.md', import.meta.url)),
+  apiAndLogin: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/服务端交互与登录.md', import.meta.url)),
+  routingAndState: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/路由导航与状态管理.md', import.meta.url)),
+  settings: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/应用配置.md', import.meta.url)),
+  authKeepAliveAndI18n: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/权限保活与国际化.md', import.meta.url)),
+  advanced: fileURLToPath(new URL('../../docs/前端文档/前端开发手册/Fantastic-admin/高级能力构建与升级.md', import.meta.url)),
 }
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
@@ -47,6 +52,32 @@ const fantasticAdminCoverage = [
   ['入门 / 构建与预览', 'https://fantastic-admin.hurui.me/guide/build.md', './工程基础.md#构建与预览'],
   ['高级 / Composition API', 'https://fantastic-admin.hurui.me/guide/composition-api.md', './工程基础.md#composition-api'],
   ['高级 / JSX', 'https://fantastic-admin.hurui.me/guide/jsx.md', './工程基础.md#jsx'],
+  ['入门 / 与服务端交互', 'https://fantastic-admin.hurui.me/guide/axios.md', './服务端交互与登录.md#与服务端交互'],
+  ['入门 / 登录相关', 'https://fantastic-admin.hurui.me/guide/login.md', './服务端交互与登录.md#登录相关'],
+  ['入门 / 路由 (导航菜单)', 'https://fantastic-admin.hurui.me/guide/router.md', './路由导航与状态管理.md#路由导航菜单'],
+  ['入门 / 全局状态管理', 'https://fantastic-admin.hurui.me/guide/store.md', './路由导航与状态管理.md#全局状态管理'],
+  ['应用配置 / 介绍', 'https://fantastic-admin.hurui.me/guide/settings.md', './应用配置.md#应用配置介绍'],
+  ['应用配置 / 应用', 'https://fantastic-admin.hurui.me/guide/settings/app.md', './应用配置.md#应用'],
+  ['应用配置 / 主题', 'https://fantastic-admin.hurui.me/guide/settings/theme.md', './应用配置.md#主题'],
+  ['应用配置 / 导航菜单', 'https://fantastic-admin.hurui.me/guide/settings/menu.md', './应用配置.md#导航菜单'],
+  ['应用配置 / 顶栏', 'https://fantastic-admin.hurui.me/guide/settings/topbar.md', './应用配置.md#顶栏'],
+  ['应用配置 / 标签栏', 'https://fantastic-admin.hurui.me/guide/settings/tabbar.md', './应用配置.md#标签栏'],
+  ['应用配置 / 工具栏', 'https://fantastic-admin.hurui.me/guide/settings/toolbar.md', './应用配置.md#工具栏'],
+  ['应用配置 / 页面', 'https://fantastic-admin.hurui.me/guide/settings/page.md', './应用配置.md#页面'],
+  ['高级 / 权限验证', 'https://fantastic-admin.hurui.me/guide/auth.md', './权限保活与国际化.md#权限验证'],
+  ['高级 / 页面保活', 'https://fantastic-admin.hurui.me/guide/keep-alive.md', './权限保活与国际化.md#页面保活'],
+  ['高级 / 国际化', 'https://fantastic-admin.hurui.me/guide/i18n.md', './权限保活与国际化.md#国际化'],
+  ['高级 / 内置 API', 'https://fantastic-admin.hurui.me/guide/api.md', './高级能力构建与升级.md#内置-api'],
+  ['高级 / 预留插槽', 'https://fantastic-admin.hurui.me/guide/slots.md', './高级能力构建与升级.md#预留插槽'],
+  ['高级 / 快捷键', 'https://fantastic-admin.hurui.me/guide/hotkeys.md', './权限保活与国际化.md#快捷键'],
+  ['高级 / 私有 Storage 数据', 'https://fantastic-admin.hurui.me/guide/storage.md', './权限保活与国际化.md#私有-storage-数据'],
+  ['高级 / 开发者工具', 'https://fantastic-admin.hurui.me/guide/devtools.md', './高级能力构建与升级.md#开发者工具'],
+  ['高级 / 自定义字体', 'https://fantastic-admin.hurui.me/guide/font.md', './高级能力构建与升级.md#自定义字体'],
+  ['高级 / 首屏 Loading', 'https://fantastic-admin.hurui.me/guide/loading.md', './高级能力构建与升级.md#首屏-loading'],
+  ['高级 / 搭配 UI 组件库', 'https://fantastic-admin.hurui.me/guide/with-ui-libraries.md', './高级能力构建与升级.md#搭配-ui-组件库'],
+  ['其他 / 框架更新', 'https://fantastic-admin.hurui.me/guide/upgrade.md', './高级能力构建与升级.md#框架更新'],
+  ['其他 / 常见问题', 'https://fantastic-admin.hurui.me/guide/q-a.md', './高级能力构建与升级.md#常见问题'],
+  ['其他 / 从 v5 迁移', 'https://fantastic-admin.hurui.me/guide/migration-from-v5.md', './高级能力构建与升级.md#从-v5-迁移'],
 ]
 
 /**
@@ -384,7 +415,7 @@ test('前端开发手册入口固定正式应用、技术基线与组件职责',
   )
 })
 
-test('Fantastic-admin 分册完整覆盖第一阶段官方主题', () => {
+test('Fantastic-admin 分册完整覆盖官方主题', () => {
   const documents = Object.fromEntries(
     Object.entries(fantasticAdminHandbookPaths).map(([name, filePath]) => [name, readRequiredFile(filePath)]),
   )
@@ -393,14 +424,14 @@ test('Fantastic-admin 分册完整覆盖第一阶段官方主题', () => {
     assert.notEqual(content.trim(), '', `Fantastic-admin 分册不得为空：${name}`)
   }
 
-  assert.equal(fantasticAdminCoverage.length, 23, 'Fantastic-admin 覆盖契约必须独立固定为 23 项')
+  assert.equal(fantasticAdminCoverage.length, 49, 'Fantastic-admin 覆盖契约必须独立固定为 49 项')
 
   const coverageRows = readCoverageMatrix(documents.index)
   const actualKeys = coverageRows.map(row => row.key)
   const expectedKeys = fantasticAdminCoverage.map(([key]) => key)
 
   assert.equal(new Set(actualKeys).size, actualKeys.length, 'Fantastic-admin 覆盖矩阵不得包含重复覆盖键')
-  assert.deepEqual(actualKeys, expectedKeys, 'Fantastic-admin 覆盖矩阵必须按约定顺序完整收录 23 个覆盖键')
+  assert.deepEqual(actualKeys, expectedKeys, 'Fantastic-admin 覆盖矩阵必须按约定顺序完整收录 49 个覆盖键')
 
   for (const [key, officialUrl, localTarget] of fantasticAdminCoverage) {
     const row = coverageRows.find(candidate => candidate.key === key)
