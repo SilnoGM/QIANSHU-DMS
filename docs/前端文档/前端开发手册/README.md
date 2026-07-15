@@ -54,15 +54,20 @@ Arco Design Vue 用于标准业务 UI，包括通用与布局、数据录入、�
 
 ## 6. 按任务阅读
 
-Fantastic-admin 知识域已经建立独立分册，统一入口为 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)。其余知识域文档纳入仓库后，再由各域入口维护章节级导航。
+三个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，框架组件从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)进入，标准业务 UI 从 [Arco Design Vue 手册](./Arco-Design-Vue/README.md)进入。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
 
-| 任务 | 阅读和核对顺序 |
-| --- | --- |
-| 新增页面 | 先确认[应用边界规范](../应用边界规范.md)，再查 Fantastic-admin 的工程基础与页面约定；在 `web/apps/qsmds-arco/src/views/` 实现页面，按职责选择 Arco、内置组件或领域组件。 |
-| 配置路由与导航 | 查 Fantastic-admin 的路由、导航、权限和保活知识，再核对 `web/apps/qsmds-arco/src/router/`、`web/apps/qsmds-arco/src/settings.ts` 与 `web/apps/qsmds-arco/src/store/`；不要从 `web/examples/*` 复制成运行依赖。 |
-| 选择业务 UI 或组件 | 先按第 5 节判断框架壳、标准业务 UI 或领域组件，再查 Fantastic-admin 内置组件和 Arco Design Vue 对应条目；本地导出与正式应用接入状态优先。 |
-| 接入认证与 API | 先查 Fantastic-admin 的服务端交互与登录链路，再遵循[接口接入规范](../接口接入规范.md)，核对 `web/apps/qsmds-arco/src/api/`、路由守卫和认证 Store；公共 API 或数据结构变更必须另行确认。 |
-| 构建、发布或升级 | 先读 [Web 工作区说明](../../../web/README.md)和[开发工作流](../../全局文档/开发工作流.md)，再查 Fantastic-admin 构建、框架更新与迁移知识；升级时同时复核 lockfile、正式应用接入、内置组件导出和本手册版本基线。 |
+| 任务 | 阅读入口 | 正式应用核对点与边界 |
+| --- | --- | --- |
+| 新增页面 | 先读[应用边界规范](../应用边界规范.md)，再按[路由（导航菜单）](./Fantastic-admin/路由导航与状态管理.md#路由导航菜单)确定页面与导航归属。 | 页面落在 `web/apps/qsmds-arco/src/views/`，路由落在 `web/apps/qsmds-arco/src/router/`；领域组件留在应用内，不从 `web/examples/*` 建立运行依赖。 |
+| 配置路由 | 以[路由（导航菜单）](./Fantastic-admin/路由导航与状态管理.md#路由导航菜单)和[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)为顺序。 | 核对 `web/apps/qsmds-arco/src/router/`、`web/apps/qsmds-arco/src/settings.ts` 与 account Store；路由、菜单、按钮权限和 Server 鉴权分层处理。 |
+| 接入登录 | 阅读[登录相关](./Fantastic-admin/服务端交互与登录.md#登录相关)与[接口接入规范](../接口接入规范.md)。 | 从 `web/apps/qsmds-arco/src/api/`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/router/guards.ts` 核对当前 fake 登录链路；不得凭空声明真实 Server 登录端点。 |
+| 实现权限 | 阅读[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)，再回查路由与登录链路。 | 以 `web/apps/qsmds-arco/src/router/guards.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/settings.ts` 为准；前端可见性不能替代 Server 授权。 |
+| 选择表单 | 先读 [FaForm 与 AForm 不是名称替换](./Fantastic-admin内置组件/选型与使用规则.md#7-faform-与-aform-不是名称替换)，再查 [Arco Form](./Arco-Design-Vue/数据录入组件.md#form)。 | `web/apps/qsmds-arco/src/views/` 的标准业务表单默认使用 Arco；只有框架内部既有 vee-validate 契约才保留 `FaForm`，迁移必须重写校验、字段和 slot 语义。 |
+| 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断职责，再查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table)。 | `web/apps/qsmds-arco/src/views/` 的业务数据展示默认使用 Arco；远端分页、排序、筛选、选择和虚拟化分别建模，窄屏优先卡片或抽屉式明细。 |
+| 上传文件 | 阅读 [Arco Upload](./Arco-Design-Vue/数据录入组件.md#upload)与[选型安全规则](./Fantastic-admin内置组件/选型与使用规则.md#10-安全规则)。 | `web/apps/qsmds-arco/src/api/` 当前没有可凭空引用的上传端点；页面从真实契约注入 `customRequest`，鉴权走统一 client，客户端校验不能替代服务端校验。 |
+| 反馈状态 | 阅读 [Arco Message](./Arco-Design-Vue/反馈组件.md#message)、[Modal](./Arco-Design-Vue/反馈组件.md#modal)和命令式反馈边界。 | `web/apps/qsmds-arco/src/ui/provider/` 已提供应用级注入；局部 Provider、静态方法和实例注入的 context 不同，异步失败必须给出可读反馈并释放 loading。 |
+| 主题配置 | 先读 Fantastic-admin [主题](./Fantastic-admin/应用配置.md#主题)，再核对 Arco [全局配置、语言与主题](./Arco-Design-Vue/接入基础与全局配置.md#全局配置语言与主题)。 | 主题入口为 `web/apps/qsmds-arco/src/settings.ts`，Arco 同步位于 `web/apps/qsmds-arco/src/ui/provider/`；不得只改一套 token 造成明暗主题分裂。 |
+| 构建升级 | 先读[构建与预览](./Fantastic-admin/工程基础.md#构建与预览)和[框架更新](./Fantastic-admin/高级能力构建与升级.md#框架更新)，并结合 [Web 工作区说明](../../../web/README.md)。 | 从 `web/apps/qsmds-arco/package.json` 和 `web/pnpm-lock.yaml` 验证正式应用；升级同时复核 Provider、路由、Store、内置导出、74 家族矩阵与本手册基线。 |
 
 ## 7. 更新触发条件
 

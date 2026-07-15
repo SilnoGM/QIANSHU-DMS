@@ -1,7 +1,7 @@
 /* eslint-disable test/no-import-node-test */
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import test from 'node:test'
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
 const handbookPath = fileURLToPath(new URL('../../docs/前端文档/前端开发手册/README.md', import.meta.url))
+const handbookDirectoryPath = dirname(handbookPath)
 const qsmdsArcoManifestPath = fileURLToPath(new URL('../apps/qsmds-arco/package.json', import.meta.url))
 const requireFromQsmdsArco = createRequire(qsmdsArcoManifestPath)
 const {
@@ -99,6 +100,7 @@ const arcoDesignVueTask7SourcePaths = {
 }
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
+const repositoryRootPath = resolve(dirname(webManifestPath), '..')
 const webLockfilePath = fileURLToPath(new URL('../pnpm-lock.yaml', import.meta.url))
 const fantasticAdminComponentsIndexPath = fileURLToPath(new URL('../packages/components/src/index.ts', import.meta.url))
 const fantasticAdminProSourcePaths = {
@@ -260,6 +262,39 @@ const arcoDesignVueCoverage = [
 const arcoTask6DocumentKeys = new Set(['commonAndLayout', 'dataEntry'])
 const arcoTask6Coverage = arcoDesignVueCoverage.filter(([, , documentKey]) => arcoTask6DocumentKeys.has(documentKey))
 const arcoTask7Coverage = arcoDesignVueCoverage.filter(([, , documentKey]) => !arcoTask6DocumentKeys.has(documentKey))
+
+const handbookTaskNavigation = [
+  ['新增页面', './Fantastic-admin/路由导航与状态管理.md#路由导航菜单'],
+  ['配置路由', './Fantastic-admin/路由导航与状态管理.md#路由导航菜单'],
+  ['接入登录', './Fantastic-admin/服务端交互与登录.md#登录相关'],
+  ['实现权限', './Fantastic-admin/权限保活与国际化.md#权限验证'],
+  ['选择表单', './Arco-Design-Vue/数据录入组件.md#form'],
+  ['选择表格', './Arco-Design-Vue/数据展示组件.md#table'],
+  ['上传文件', './Arco-Design-Vue/数据录入组件.md#upload'],
+  ['反馈状态', './Arco-Design-Vue/反馈组件.md#message'],
+  ['主题配置', './Fantastic-admin/应用配置.md#主题'],
+  ['构建升级', './Fantastic-admin/高级能力构建与升级.md#框架更新'],
+]
+
+const fantasticAdminArcoOverlapContracts = [
+  ['Button', ['`FaButton`', '`FaButtonGroup`'], ['`AButton`', '`AButtonGroup`'], '标准业务操作默认 Arco；框架壳、Fantastic-admin 内置浮层或已有框架交互才使用 Fa，单一操作区不混用。'],
+  ['Card', ['`FaCard`'], ['`ACard`', '`ACardMeta`', '`ACardGrid`'], '标准业务内容卡片默认 Arco；框架壳内已有 Fa 视觉契约时保留 `FaCard`，不能只为局部外观切换组件族。'],
+  ['Form', ['`FaForm`', '`FaFormItem`'], ['`AForm`', '`AFormItem`'], '标准业务表单默认 Arco；两者不是名称替换，迁移必须完成校验、字段、提交、disabled 与 slot 的语义迁移。'],
+  ['Input', ['`FaInput`', '`FaTextarea`'], ['`AInput`', '`ATextarea`'], '业务录入默认 Arco；同一表单只保留一套值、错误、焦点和尺寸契约，框架内部既有 vee-validate 字段才保留 Fa。'],
+  ['Select', ['`FaSelect`', '`FaCheckboxGroup`', '`FaRadioGroup`'], ['`ASelect`', '`ACascader`', '`ATreeSelect`', '`ACheckboxGroup`', '`ARadioGroup`'], '业务选择默认 Arco；先按数据层级选择 Select、Cascader 或 TreeSelect，不用 Fa 外观差异代替交互建模。'],
+  ['Table', ['`FaTable`', '`FaDescriptions`'], ['`ATable`', '`ADescriptions`'], '标准业务数据展示默认 Arco；只有既有框架内部 TanStack 状态契约才保留 `FaTable`，数组 columns 与声明式列契约不得混写。'],
+  ['Pagination', ['`FaPagination`'], ['`APagination`'], '业务列表默认 Arco，并与 `ATable` 的受控 `current`、`pageSize`、`total` 保持同一查询状态；框架内部既有列表才保留 Fa。'],
+  ['Modal/Drawer', ['`FaModal`', '`FaDrawer`', '`useFaModal`', '`useFaDrawer`'], ['`AModal`', '`ADrawer`', '`$modal`', '`$drawer`'], '业务编辑与确认默认 Arco；框架全局命令式流程可保留 Fa composable，但必须统一异步关闭、错误反馈和焦点恢复。'],
+  ['Toast/Message', ['`FaToast`', '`useFaToast`'], ['`Message`', '`Notification`', '`$message`', '`$notification`'], '业务反馈默认 Arco；框架根节点既有反馈链路可保留 Fa。静态方法与实例注入的 context 不同，不跨层冒充。'],
+  ['Tooltip/Popover', ['`FaTooltip`', '`FaPopover`'], ['`ATooltip`', '`APopover`', '`ATrigger`'], '业务说明浮层默认 Arco；框架内部已有触发结构或二维菜单契约时才使用 Fa，并分别验证键盘、触屏和碰撞。'],
+  ['Tabs', ['`FaTabs`'], ['`ATabs`'], '业务内容切换默认 Arco；`FaTabs` 只用于框架内部既有容器，二者都不能替代 Fantastic-admin 的路由 Tabbar。'],
+  ['Tag/Badge', ['`FaTag`', '`FaBadge`'], ['`ATag`', '`ABadge`'], '业务状态与计数默认 Arco；框架壳现有状态标记可保留 Fa，颜色之外必须保留文字、数值或可读状态。'],
+  ['Upload', ['`FaFileUpload`', '`FaImageUpload`'], ['`AUpload`'], '标准业务上传默认 Arco；只有明确依赖本地 Fa request/progress 契约的既有框架流程才保留 Fa，二者都必须接入受控 HTTP client。'],
+  ['ImagePreview', ['`FaImagePreview`', '`useFaImagePreview`'], ['`AImage`', '`AImagePreview`', '`AImagePreviewGroup`'], '标准业务图片预览默认 Arco；框架既有全局预览链路可保留 Fa，业务图片需要 `alt` 时不得使用不支持该契约的封装。'],
+  ['Tree', ['`FaTree`'], ['`ATree`', '`ATreeSelect`'], '标准业务树默认 Arco；只有明确需要当前 Reka 封装 API 的既有页面才使用 `FaTree`，组织、菜单和权限树不因专业版可用而默认切换。'],
+  ['Steps', ['`FaSteps`'], ['`ASteps`'], '标准业务流程默认 Arco；`FaSteps` 是从 0 开始的受控展示且触发器被禁用，仅在其视觉与 slot 契约就是需求时采用。'],
+  ['PageHeader', ['`FaPageHeader`', '`FaPageMain`'], ['`APageHeader`'], '框架页面标题默认 Fantastic-admin，使用 `FaPageHeader` 与 `FaPageMain` 维持壳层布局；业务区域内部需要 Arco 返回/面包屑语义时才局部使用 `APageHeader`。'],
+]
 
 /**
  * 入口文档是正式开发依据，缺失时必须直接失败，不能用空内容继续断言。
@@ -548,6 +583,242 @@ function findTableRow(content, firstCell) {
     .find(cells => cells[0] === firstCell)
 }
 
+function readMarkdownTableBodyRows(content, expectedFirstHeader) {
+  const tableRows = content
+    .split(/\r?\n/u)
+    .filter(line => line.startsWith('|') && line.endsWith('|'))
+    .map(line => line.slice(1, -1).split('|').map(cell => cell.trim()))
+
+  assert.ok(tableRows.length >= 2, `Markdown 表格缺少表头或分隔行：${expectedFirstHeader}`)
+  assert.equal(tableRows[0][0], expectedFirstHeader, `Markdown 表格首列表头必须为：${expectedFirstHeader}`)
+  assert.ok(
+    tableRows[1].every(cell => /^:?-+:?$/u.test(cell)),
+    `Markdown 表格分隔行无效：${expectedFirstHeader}`,
+  )
+  return tableRows.slice(2)
+}
+
+function readMarkdownFilesRecursively(directoryPath) {
+  return readdirSync(directoryPath, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+    .flatMap((entry) => {
+      const entryPath = resolve(directoryPath, entry.name)
+      if (entry.isDirectory()) {
+        return readMarkdownFilesRecursively(entryPath)
+      }
+      return entry.isFile() && entry.name.endsWith('.md') ? [entryPath] : []
+    })
+}
+
+function removeMarkdownInlineCode(line) {
+  let output = ''
+  let index = 0
+
+  while (index < line.length) {
+    if (line[index] !== '`') {
+      output += line[index]
+      index += 1
+      continue
+    }
+
+    let delimiterLength = 1
+    while (line[index + delimiterLength] === '`') {
+      delimiterLength += 1
+    }
+    const delimiter = '`'.repeat(delimiterLength)
+    const closingIndex = line.indexOf(delimiter, index + delimiterLength)
+    if (closingIndex === -1) {
+      output += delimiter
+      index += delimiterLength
+      continue
+    }
+
+    output += ' '.repeat(closingIndex + delimiterLength - index)
+    index = closingIndex + delimiterLength
+  }
+
+  return output
+}
+
+function readMarkdownInlineCodeValues(content) {
+  return [...content.matchAll(/`([^`\r\n]+)`/gu)].map(match => match[1])
+}
+
+function readArcoComponentTypeMemberNames(content) {
+  return new Set(
+    [...content.matchAll(/^\s+(A[A-Za-z0-9]+|\$[a-z][A-Za-z0-9]*):/gmu)]
+      .map(match => match[1]),
+  )
+}
+
+/**
+ * 扫描 fenced code 和 inline code 之外的 Markdown inline link。
+ * 目标里的括号按嵌套层级闭合，因此 `guide_(draft).md` 不会被截断；
+ * 发现 `[label](target` 这类未闭合语法时显式返回诊断，不允许坏链因正则未命中而假绿。
+ */
+function scanMarkdownLinks(content) {
+  const destinations = []
+  const diagnostics = []
+  const lines = readMarkdownLinesOutsideFences(content).map(removeMarkdownInlineCode)
+
+  for (const [lineIndex, line] of lines.entries()) {
+    let searchIndex = 0
+
+    while (searchIndex < line.length) {
+      const linkOpeningIndex = line.indexOf('](', searchIndex)
+      if (linkOpeningIndex === -1) {
+        break
+      }
+
+      const labelOpeningIndex = line.lastIndexOf('[', linkOpeningIndex)
+      if (labelOpeningIndex === -1) {
+        searchIndex = linkOpeningIndex + 2
+        continue
+      }
+
+      let cursor = linkOpeningIndex + 2
+      let nestedParentheses = 0
+      let linkClosingIndex = -1
+      while (cursor < line.length) {
+        if (line[cursor] === '\\') {
+          cursor += 2
+          continue
+        }
+        if (line[cursor] === '(') {
+          nestedParentheses += 1
+        }
+        else if (line[cursor] === ')') {
+          if (nestedParentheses === 0) {
+            linkClosingIndex = cursor
+            break
+          }
+          nestedParentheses -= 1
+        }
+        cursor += 1
+      }
+
+      if (linkClosingIndex === -1) {
+        diagnostics.push(`第 ${lineIndex + 1} 个可见文本行 Markdown 链接未闭合：${line.slice(labelOpeningIndex)}`)
+        break
+      }
+
+      const linkBody = line.slice(linkOpeningIndex + 2, linkClosingIndex).trim()
+      if (linkBody === '') {
+        diagnostics.push(`第 ${lineIndex + 1} 个可见文本行 Markdown 链接缺少目标：${line.slice(labelOpeningIndex, linkClosingIndex + 1)}`)
+        searchIndex = linkClosingIndex + 1
+        continue
+      }
+
+      let rawDestination
+      if (linkBody.startsWith('<')) {
+        const angleClosingIndex = linkBody.indexOf('>')
+        if (angleClosingIndex === -1) {
+          diagnostics.push(`第 ${lineIndex + 1} 个可见文本行 Markdown 链接目标未闭合：${line.slice(labelOpeningIndex, linkClosingIndex + 1)}`)
+          searchIndex = linkClosingIndex + 1
+          continue
+        }
+        rawDestination = linkBody.slice(1, angleClosingIndex)
+      }
+      else {
+        let destinationEnd = linkBody.length
+        let destinationParentheses = 0
+        for (let index = 0; index < linkBody.length; index += 1) {
+          if (linkBody[index] === '\\') {
+            index += 1
+            continue
+          }
+          if (linkBody[index] === '(') {
+            destinationParentheses += 1
+          }
+          else if (linkBody[index] === ')') {
+            destinationParentheses -= 1
+          }
+          else if (/\s/u.test(linkBody[index]) && destinationParentheses === 0) {
+            destinationEnd = index
+            break
+          }
+        }
+        rawDestination = linkBody.slice(0, destinationEnd)
+      }
+
+      destinations.push(rawDestination)
+      searchIndex = linkClosingIndex + 1
+    }
+  }
+
+  return { destinations, diagnostics }
+}
+
+/**
+ * 相对链接可以跨目录、指向非 Markdown 资源并携带 fragment；
+ * 协议链接与纯页内锚点不属于本地文件契约。
+ */
+function readRelativeMarkdownLinks(content) {
+  return scanMarkdownLinks(content).destinations.filter((rawDestination) => {
+    if (
+      rawDestination.startsWith('#')
+      || rawDestination.startsWith('//')
+      || /^[A-Za-z][A-Za-z\d+.-]*:/u.test(rawDestination)
+    ) {
+      return false
+    }
+    return true
+  })
+}
+
+function assertRelativeMarkdownLinkExists(sourcePath, rawDestination) {
+  const hashIndex = rawDestination.indexOf('#')
+  const rawPathAndQuery = hashIndex === -1 ? rawDestination : rawDestination.slice(0, hashIndex)
+  const rawFragment = hashIndex === -1 ? undefined : rawDestination.slice(hashIndex + 1)
+  const rawPath = rawPathAndQuery.split('?')[0]
+  let decodedPath
+  let decodedFragment
+
+  try {
+    decodedPath = decodeURIComponent(rawPath)
+    decodedFragment = rawFragment ? decodeURIComponent(rawFragment) : undefined
+  }
+  catch (error) {
+    assert.fail(`Markdown 相对链接 URL 编码无效：source=${sourcePath}; target=${rawDestination}; error=${error.message}`)
+  }
+
+  assert.notEqual(decodedPath, '', `Markdown 相对链接缺少文件目标：source=${sourcePath}; target=${rawDestination}`)
+  const targetPath = resolve(dirname(sourcePath), decodedPath)
+  assert.equal(
+    existsSync(targetPath),
+    true,
+    `Markdown 相对链接目标不存在：source=${sourcePath}; target=${rawDestination}; resolved=${targetPath}`,
+  )
+
+  if (decodedFragment && targetPath.endsWith('.md')) {
+    const headingAnchors = readMarkdownHeadingAnchors(readRequiredFile(targetPath))
+    assert.equal(
+      headingAnchors.has(decodedFragment),
+      true,
+      `Markdown 相对链接锚点不存在：source=${sourcePath}; target=${rawDestination}; anchor=${decodedFragment}`,
+    )
+  }
+}
+
+function assertRepositoryPathTokenExists(pathToken, context) {
+  assert.ok(
+    pathToken.startsWith('web/'),
+    `${context} 不得使用脱离仓库根的缩写路径：${pathToken}`,
+  )
+
+  const wildcardIndex = pathToken.indexOf('*')
+  if (wildcardIndex !== -1) {
+    assert.equal(wildcardIndex, pathToken.length - 1, `${context} 只允许路径末尾使用 *：${pathToken}`)
+  }
+  const concretePathToken = wildcardIndex === -1 ? pathToken : pathToken.slice(0, wildcardIndex)
+  const targetPath = resolve(repositoryRootPath, concretePathToken)
+  assert.ok(
+    targetPath === repositoryRootPath || targetPath.startsWith(`${repositoryRootPath}/`),
+    `${context} 路径不得越出仓库：${pathToken}`,
+  )
+  assert.equal(existsSync(targetPath), true, `${context} 路径不存在：${pathToken} -> ${targetPath}`)
+}
+
 /**
  * 分类索引的覆盖契约只读取 Markdown 表格“公开能力”列。表格后的解释文字可能
  * 合理地再次提到组件名，不能让这些重复文字掩盖表格自身漏项。
@@ -617,43 +888,113 @@ function assertFantasticAdminSelectionContracts(content) {
   }
 
   const overlapMatrix = readSecondLevelSection(content, '4. 与 Arco 重叠能力的选择')
-  const overlapRows = Object.fromEntries(
-    ['表单与表单项', '表格与描述', '反馈'].map((capability) => {
-      const row = findTableRow(overlapMatrix, capability)
-      const context = `重叠能力选择矩阵：${capability}`
-
-      assert.ok(row, `${context} 行不存在`)
-      assert.equal(row.length, 4, `${context} 必须保持四个表格单元格`)
-      return [capability, row]
-    }),
+  const overlapRows = readMarkdownTableBodyRows(overlapMatrix, '能力')
+  assert.deepEqual(
+    overlapRows.map(row => row[0]),
+    fantasticAdminArcoOverlapContracts.map(([capability]) => capability),
+    '重叠能力选择矩阵必须按约定顺序完整收录 17 组能力，且不得使用宽泛合并行掩盖漏项',
   )
 
-  for (const requiredPhrase of ['`FaForm`', '`FaFormItem`']) {
-    assert.ok(
-      overlapRows['表单与表单项'][1].includes(requiredPhrase),
-      `重叠能力选择矩阵：表单与表单项的 Fantastic-admin 单元格缺少 ${requiredPhrase}`,
-    )
-  }
-  for (const requiredPhrase of ['`AForm`', '`AFormItem`']) {
-    assert.ok(
-      overlapRows['表单与表单项'][2].includes(requiredPhrase),
-      `重叠能力选择矩阵：表单与表单项的 Arco 单元格缺少 ${requiredPhrase}`,
-    )
-  }
-  for (const requiredPhrase of ['标准业务表单默认 Arco', '语义迁移']) {
-    assert.ok(
-      overlapRows['表单与表单项'][3].includes(requiredPhrase),
-      `重叠能力选择矩阵：表单与表单项的项目决策缺少 ${requiredPhrase}`,
-    )
-  }
-  assert.ok(
-    overlapRows['表格与描述'][3].includes('标准业务数据展示默认 Arco'),
-    '重叠能力选择矩阵：表格与描述的项目决策缺少“标准业务数据展示默认 Arco”',
+  const fantasticAdminPublicNames = new Set([
+    ...readFantasticAdminBasicPublicNames(),
+    ...readFantasticAdminProPublicExports().publicNames,
+  ])
+  const arcoComponentTypeMemberNames = readArcoComponentTypeMemberNames(
+    readRequiredFile(arcoDesignVueIntegrationSourcePaths.componentTypes),
   )
-  assert.ok(
-    overlapRows['反馈'][3].includes('业务反馈默认 Arco'),
-    '重叠能力选择矩阵：反馈的项目决策缺少“业务反馈默认 Arco”',
+  const arcoRuntimeInventory = readArcoRuntimeInventory(
+    readRequiredFile(arcoDesignVueTask7SourcePaths.arcoVue),
   )
+
+  for (const [index, [capability, fantasticAdminNames, arcoNames, decisionText]] of fantasticAdminArcoOverlapContracts.entries()) {
+    const row = overlapRows[index]
+    const context = `重叠能力选择矩阵：${capability}`
+    assert.equal(row.length, 4, `${context} 必须保持四个表格单元格`)
+    const expectedFantasticAdminNames = fantasticAdminNames.map(name => name.slice(1, -1))
+    const expectedArcoNames = arcoNames.map(name => name.slice(1, -1))
+
+    assert.deepEqual(
+      readMarkdownInlineCodeValues(row[1]),
+      expectedFantasticAdminNames,
+      `${context} 的 Fantastic-admin 名称必须与约定精确一致，不得漏项或混入虚构名称`,
+    )
+    assert.deepEqual(
+      readMarkdownInlineCodeValues(row[2]),
+      expectedArcoNames,
+      `${context} 的 Arco 名称必须与约定精确一致，不得漏项或混入虚构名称`,
+    )
+    assert.doesNotMatch(
+      removeMarkdownInlineCode(row[1]),
+      /\b(?:Fa|useFa)[A-Z][A-Za-z0-9]*\b/u,
+      `${context} 的 Fantastic-admin 名称必须全部使用 inline code，避免非结构化文本绕过精确集合校验`,
+    )
+    assert.doesNotMatch(
+      removeMarkdownInlineCode(row[2]),
+      /\bA[A-Z][A-Za-z0-9]*\b|\b(?:Message|Notification)\b|\$[a-z][A-Za-z0-9]*/u,
+      `${context} 的 Arco 名称必须全部使用 inline code，避免非结构化文本绕过精确集合校验`,
+    )
+
+    for (const publicName of expectedFantasticAdminNames) {
+      assert.equal(
+        fantasticAdminPublicNames.has(publicName),
+        true,
+        `${context} 的 Fantastic-admin 名称必须存在于当前公开导出：${publicName}`,
+      )
+    }
+    for (const publicName of expectedArcoNames) {
+      if (publicName.startsWith('A') || publicName.startsWith('$')) {
+        assert.equal(
+          arcoComponentTypeMemberNames.has(publicName),
+          true,
+          `${context} 的 Arco 名称必须存在于当前 components.d.ts：${publicName}`,
+        )
+      }
+      else {
+        assert.equal(
+          arcoRuntimeInventory.has(publicName),
+          true,
+          `${context} 的 Arco 命令式能力必须存在于当前运行时安装对象：${publicName}`,
+        )
+      }
+    }
+    assert.equal(
+      row[3],
+      decisionText,
+      `${context} 的项目决策必须与已审定语义精确一致，不得追加否定或模糊化表述`,
+    )
+  }
+}
+
+function assertHandbookTaskNavigation(content) {
+  const taskSection = readSecondLevelSection(content, '6. 按任务阅读')
+  const rows = readMarkdownTableBodyRows(taskSection, '任务')
+
+  assert.deepEqual(
+    rows.map(row => row[0]),
+    handbookTaskNavigation.map(([task]) => task),
+    '按任务阅读必须按约定顺序完整收录十类任务，不能用宽泛任务合并漏项',
+  )
+  for (const [index, [task, requiredTarget]] of handbookTaskNavigation.entries()) {
+    const row = rows[index]
+    const linkScan = scanMarkdownLinks(row[1])
+    assert.equal(row.length, 3, `任务导航必须包含任务、阅读入口、正式应用核对点三列：${task}`)
+    assert.deepEqual(linkScan.diagnostics, [], `任务导航存在无法解析的 Markdown 链接：${task}`)
+    assert.ok(
+      linkScan.destinations.includes(requiredTarget),
+      `任务导航缺少可点击的约定本地入口：${task} -> ${requiredTarget}`,
+    )
+    assert.ok(
+      row[2].includes('`web/apps/qsmds-arco'),
+      `任务导航必须写明正式应用中的核对位置或实施边界：${task}`,
+    )
+    const repositoryPathTokens = readMarkdownInlineCodeValues(row[2])
+      .filter(value => value.includes('/'))
+    assert.notEqual(repositoryPathTokens.length, 0, `任务导航必须提供可复制的仓库路径：${task}`)
+    for (const pathToken of repositoryPathTokens) {
+      assertRepositoryPathTokenExists(pathToken, `任务导航：${task}`)
+    }
+  }
+  assert.doesNotMatch(content, /其余知识域文档纳入仓库后/u, '根入口不得保留“其余知识域以后纳入”的过时说明')
 }
 
 /**
@@ -1323,11 +1664,24 @@ function findArcoDocPolicyViolations(content) {
       '虚构 endpoint',
     )
     collectMatches(line, lineNumber, /Bearer\s+[\w.~-]+/gu, '硬编码 Bearer')
+    for (const match of line.matchAll(/\b(?:password|token|secret|cookie|api[_-]?key)\s*[:=]\s*(['"`])([^'"`\r\n]*)\1/giu)) {
+      const value = match[2]
+      const isSafePlaceholder = value === '' || /^<[A-Z][A-Z0-9_]*>$/u.test(value)
+      if (!isSafePlaceholder) {
+        violations.push(`第 ${lineNumber} 行 硬编码敏感值：${match[0]}`)
+      }
+    }
     collectMatches(
       line,
       lineNumber,
-      /\b(?:password|token|secret|api[_-]?key)\s*[:=]\s*(['"`])[^'"`\r\n]+\1/giu,
-      '硬编码敏感值',
+      /\b(?:set-cookie|cookie)\s*:\s*(?!['"`<])\S+/giu,
+      '未加引号的 Cookie header',
+    )
+    collectMatches(
+      line,
+      lineNumber,
+      /\bcookie\s*=\s*(?!['"`<])\S+/giu,
+      '未加引号的 Cookie 值',
     )
   }
 
@@ -1711,6 +2065,106 @@ function assertCoverageLocalTarget(key, localTarget) {
   const headingAnchors = readMarkdownHeadingAnchors(readFileSync(filePath, 'utf8'))
   assert.equal(headingAnchors.has(anchor), true, `Fantastic-admin 本地落点锚点不存在：${context}`)
 }
+
+test('前端开发手册提供十类任务的可执行本地导航', () => {
+  const handbook = readRequiredFile(handbookPath)
+  assertHandbookTaskNavigation(handbook)
+})
+
+test('前端开发手册任务导航拒绝用 inline code 冒充可点击链接', () => {
+  const handbook = readRequiredFile(handbookPath)
+  const executableLink = '[路由（导航菜单）](./Fantastic-admin/路由导航与状态管理.md#路由导航菜单)'
+  const mutatedHandbook = handbook.replace(
+    executableLink,
+    '`./Fantastic-admin/路由导航与状态管理.md#路由导航菜单`',
+  )
+
+  assert.notEqual(mutatedHandbook, handbook, '任务导航不可点击链接变异必须命中真实入口')
+  assert.throws(
+    () => assertHandbookTaskNavigation(mutatedHandbook),
+    /任务导航缺少可点击的约定本地入口：新增页面/u,
+    '任务导航中的路径文本或 inline code 不能冒充 Markdown link',
+  )
+})
+
+test('前端开发手册任务导航拒绝脱离仓库根的缩写路径', () => {
+  const handbook = readRequiredFile(handbookPath)
+  const mutatedHandbook = handbook.replace(
+    '`web/apps/qsmds-arco/src/router/guards.ts` 核对当前 fake',
+    '`src/router/guards.ts` 核对当前 fake',
+  )
+
+  assert.notEqual(mutatedHandbook, handbook, '任务导航缩写路径变异必须命中真实行')
+  assert.throws(
+    () => assertHandbookTaskNavigation(mutatedHandbook),
+    /不得使用脱离仓库根的缩写路径：src\/router\/guards\.ts/u,
+    '任务导航中的 src/ 缩写不是从仓库根可直接复制的路径',
+  )
+})
+
+test('前端开发手册任务导航检查同行的每一个路径候选', () => {
+  const handbook = readRequiredFile(handbookPath)
+  const mutatedHandbook = handbook.replace(
+    '`web/apps/qsmds-arco/src/router/guards.ts` 核对当前 fake',
+    '`apps/qsmds-arco/src/router/guards.ts` 核对当前 fake',
+  )
+
+  assert.notEqual(mutatedHandbook, handbook, '任务导航次要缩写路径变异必须命中真实行')
+  assert.throws(
+    () => assertHandbookTaskNavigation(mutatedHandbook),
+    /不得使用脱离仓库根的缩写路径：apps\/qsmds-arco\/src\/router\/guards\.ts/u,
+    '同行已有其他合法 web\/ 路径时，任何次要缩写路径仍必须失败',
+  )
+})
+
+test('Markdown 链接扫描识别未闭合语法与平衡括号目标', () => {
+  assert.deepEqual(
+    scanMarkdownLinks('[合法](./guide_(draft).md)'),
+    { destinations: ['./guide_(draft).md'], diagnostics: [] },
+    '目标文件名中的平衡括号必须保留在完整 destination 中',
+  )
+
+  const malformedScan = scanMarkdownLinks('[坏链](./missing.md')
+  assert.deepEqual(malformedScan.destinations, [], '未闭合链接不得产生可验证的 destination')
+  assert.equal(malformedScan.diagnostics.length, 1, '未闭合链接必须产生一条显式诊断')
+  assert.match(malformedScan.diagnostics[0], /Markdown 链接未闭合/u)
+
+  assert.deepEqual(
+    scanMarkdownLinks('`[代码](./missing.md`'),
+    { destinations: [], diagnostics: [] },
+    'inline code 中的链接形状文本不属于 Markdown 导航',
+  )
+})
+
+test('前端开发手册全部相对链接与 Markdown 锚点可解析', () => {
+  const markdownPaths = readMarkdownFilesRecursively(handbookDirectoryPath)
+  let relativeLinkCount = 0
+
+  assert.notEqual(markdownPaths.length, 0, `前端开发手册目录中必须存在 Markdown：${handbookDirectoryPath}`)
+  for (const sourcePath of markdownPaths) {
+    const content = readRequiredFile(sourcePath)
+    const linkScan = scanMarkdownLinks(content)
+    assert.deepEqual(
+      linkScan.diagnostics,
+      [],
+      `Markdown 链接语法无法解析：source=${sourcePath}; diagnostics=${linkScan.diagnostics.join('; ')}`,
+    )
+    const relativeLinks = readRelativeMarkdownLinks(content)
+    relativeLinkCount += relativeLinks.length
+    for (const rawDestination of relativeLinks) {
+      assertRelativeMarkdownLinkExists(sourcePath, rawDestination)
+    }
+  }
+  assert.ok(relativeLinkCount > 0, '前端开发手册必须包含可验证的相对链接')
+})
+
+test('前端开发手册全部分册不包含占位、虚构端点或硬编码敏感值', () => {
+  const violations = readMarkdownFilesRecursively(handbookDirectoryPath)
+    .flatMap(filePath => findArcoDocPolicyViolations(readRequiredFile(filePath))
+      .map(violation => `${filePath}: ${violation}`))
+
+  assert.deepEqual(violations, [], `前端开发手册存在安全或占位策略违规：\n${violations.join('\n')}`)
+})
 
 test('前端开发手册入口固定正式应用、技术基线与组件职责', () => {
   const handbook = readRequiredFile(handbookPath)
@@ -2156,9 +2610,9 @@ test('Fantastic-admin 组件选型契约拒绝标准业务默认落到 Fantastic
 })
 
 for (const [capability, originalDecision, mutatedDecision] of [
-  ['表单与表单项', '标准业务表单默认 Arco', '标准业务表单默认 Fantastic-admin'],
-  ['表格与描述', '标准业务数据展示默认 Arco', '标准业务数据展示默认 Fantastic-admin'],
-  ['反馈', '业务反馈默认 Arco', '业务反馈默认 Fantastic-admin'],
+  ['Form', '标准业务表单默认 Arco', '标准业务表单默认 Fantastic-admin'],
+  ['Table', '标准业务数据展示默认 Arco', '标准业务数据展示默认 Fantastic-admin'],
+  ['Toast/Message', '业务反馈默认 Arco', '业务反馈默认 Fantastic-admin'],
 ]) {
   test(`Fantastic-admin 组件选型契约拒绝${capability}默认落点变异`, () => {
     const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
@@ -2172,6 +2626,69 @@ for (const [capability, originalDecision, mutatedDecision] of [
     )
   })
 }
+
+for (const [source, replacement, expectedMessage] of [
+  [
+    '`FaButton`、`FaButtonGroup`',
+    '`FaButton`、`FaButtonGroup`、`FaImaginaryButton`',
+    /Button.*Fantastic-admin 名称必须与约定精确一致/u,
+  ],
+  [
+    '`AButton`、`AButtonGroup`',
+    '`AButton`、`AButtonGroup`、`AImaginaryButton`',
+    /Button.*Arco 名称必须与约定精确一致/u,
+  ],
+]) {
+  test(`Fantastic-admin 组件选型契约拒绝虚构名称：${replacement}`, () => {
+    const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
+    const mutatedSelection = selection.replace(source, replacement)
+
+    assert.notEqual(mutatedSelection, selection, '虚构组件名变异 fixture 必须命中真实矩阵')
+    assert.throws(
+      () => assertFantasticAdminSelectionContracts(mutatedSelection),
+      expectedMessage,
+      '矩阵单元格中混入额外虚构名称时必须失败',
+    )
+  })
+}
+
+for (const [source, replacement, expectedMessage] of [
+  [
+    '`FaButton`、`FaButtonGroup`',
+    '`FaButton`、`FaButtonGroup`、FaImaginaryButton',
+    /Button.*Fantastic-admin 名称必须全部使用 inline code/u,
+  ],
+  [
+    '`AButton`、`AButtonGroup`',
+    '`AButton`、`AButtonGroup`、AImaginaryButton',
+    /Button.*Arco 名称必须全部使用 inline code/u,
+  ],
+]) {
+  test(`Fantastic-admin 组件选型契约拒绝非结构化虚构名称：${replacement}`, () => {
+    const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
+    const mutatedSelection = selection.replace(source, replacement)
+
+    assert.notEqual(mutatedSelection, selection, '非结构化虚构名称变异 fixture 必须命中真实矩阵')
+    assert.throws(
+      () => assertFantasticAdminSelectionContracts(mutatedSelection),
+      expectedMessage,
+      '不使用 inline code 的虚构名称也必须进入契约校验',
+    )
+  })
+}
+
+test('Fantastic-admin 组件选型契约拒绝在已审定决策后追加否定表述', () => {
+  const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
+  const buttonDecision = fantasticAdminArcoOverlapContracts[0][3]
+  const mutatedSelection = selection.replace(buttonDecision, `${buttonDecision}以上决策不成立。`)
+
+  assert.notEqual(mutatedSelection, selection, '项目决策否定变异 fixture 必须命中真实矩阵')
+  assert.throws(
+    () => assertFantasticAdminSelectionContracts(mutatedSelection),
+    /Button.*项目决策必须与已审定语义精确一致/u,
+    '已审定句子后面追加否定文字时，选型契约必须失败',
+  )
+})
 
 test('Fantastic-admin 基础组件分册覆盖本地全部公开导出并固定选型边界', () => {
   const publicNames = readFantasticAdminBasicPublicNames()
@@ -3970,6 +4487,12 @@ test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与�
   const scanResult = {
     bearer: findArcoDocPolicyViolations('Authorization: Bearer real-looking-token').some(item => item.includes('Bearer')),
     bracePlaceholder: findArcoDocPolicyViolations('接口地址：{{UPLOAD_ENDPOINT}}').some(item => item.includes('{{UPLOAD_ENDPOINT}}')),
+    cookieColon: findArcoDocPolicyViolations('COOKIE: "real-session-id"').some(item => item.includes('敏感值')),
+    cookieEquals: findArcoDocPolicyViolations('cookie = \'real-session-id\'').some(item => item.includes('敏感值')),
+    cookieHeaderUnquoted: findArcoDocPolicyViolations('Cookie: session=real-session-id')
+      .some(item => item.includes('Cookie header')),
+    cookieUnquoted: findArcoDocPolicyViolations('cookie = real-session-id')
+      .some(item => item.includes('未加引号的 Cookie 值')),
     duplicatedLines: duplicatedViolations
       .filter(item => item.includes('TODO: 相同占位'))
       .map(item => item.match(/第 (\d+) 行/u)?.[1]),
@@ -3980,7 +4503,11 @@ test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与�
       .some(item => item.includes('第 1 行') && item.includes('TODO')),
     placeholderLine: findArcoDocPolicyViolations('TODO: 补充真实接口').some(item => item.includes('TODO')),
     placeholderTag: findArcoDocPolicyViolations('<PLACEHOLDER>').some(item => item.includes('<PLACEHOLDER>')),
+    safeEmptyPassword: findArcoDocPolicyViolations('const password = \'\''),
+    safeTokenPlaceholder: findArcoDocPolicyViolations('const token = "<TOKEN>"'),
     safeTodo: findArcoDocPolicyViolations('TODO 规则用于解释扫描边界'),
+    setCookieHeaderUnquoted: findArcoDocPolicyViolations('Set-Cookie: session=real-session-id')
+      .some(item => item.includes('Cookie header')),
     sensitiveValue: findArcoDocPolicyViolations('const password = "real-secret-123"').some(item => item.includes('敏感值')),
     vueInterpolation: findArcoDocPolicyViolations([
       '```vue',
@@ -3991,13 +4518,20 @@ test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与�
   assert.deepEqual(scanResult, {
     bearer: true,
     bracePlaceholder: true,
+    cookieColon: true,
+    cookieEquals: true,
+    cookieHeaderUnquoted: true,
+    cookieUnquoted: true,
     duplicatedLines: ['1', '3'],
     endpoint: true,
     fullUrlEndpoint: true,
     indentedPlaceholderLine: true,
     placeholderLine: true,
     placeholderTag: true,
+    safeEmptyPassword: [],
+    safeTokenPlaceholder: [],
     safeTodo: [],
+    setCookieHeaderUnquoted: true,
     sensitiveValue: true,
     vueInterpolation: [],
   })
