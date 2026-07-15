@@ -1680,15 +1680,13 @@ test('Fantastic-admin 专业组件示例契约：FaCarousel 使用单个 v-for F
     readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
     'FaCarousel',
   )
+  const articleOpeningTags = section.match(/<article\b[^>]*>/gu) ?? []
+  const generatedArticleTag = articleOpeningTags.find(tag => (
+    /\bv-for="[^"]+"/u.test(tag) && /\s:key="[^"]+"/u.test(tag)
+  ))
 
-  for (const requiredPhrase of [
-    '默认插槽第一个 VNode 的 `children`',
-    'const items = [',
-    '<article v-for="item in items"',
-    ':key="item.title"',
-  ]) {
-    assert.ok(section.includes(requiredPhrase), `FaCarousel Fragment 示例契约缺少：${requiredPhrase}`)
-  }
+  assert.ok(section.includes('默认插槽第一个 VNode 的 `children`'), 'FaCarousel 必须记录默认插槽读取边界')
+  assert.ok(generatedArticleTag, 'FaCarousel 示例必须由同一个 article opening tag 提供 v-for 与 :key')
 })
 
 test('Fantastic-admin 专业组件示例契约：FaTextHighlight 提供真实渐变背景', () => {
@@ -1703,26 +1701,48 @@ test('Fantastic-admin 专业组件示例契约：FaTextHighlight 提供真实渐
   assert.equal(section.includes('Motion'), false, 'FaTextHighlight 不得再写成 Motion 实现')
 })
 
-test('Fantastic-admin 专业组件示例契约：FaGlowyCardWrapper 只能拥有页面唯一 main', () => {
-  const section = readSecondLevelSection(
-    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
-    'FaGlowyCardWrapper',
-  )
+test('Fantastic-admin 专业组件示例契约：FaGlowyCard 与 Wrapper 成对拥有页面唯一 main', () => {
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+  const cardSection = readSecondLevelSection(proHandbook, 'FaGlowyCard')
+  const wrapperSection = readSecondLevelSection(proHandbook, 'FaGlowyCardWrapper')
+  const sections = [cardSection, wrapperSection]
+  const vueExamples = sections.flatMap(section => (
+    [...section.matchAll(/```vue\n([\s\S]*?)```/gu)].map(match => match[1])
+  ))
 
-  for (const requiredPhrase of [
-    '根节点固定为 `<main>`',
-    '页面唯一的 `main`',
-    '不能作为普通内部 wrapper',
-    '普通 `div`',
-    '<FaGlowyCard>',
-  ]) {
-    assert.ok(section.includes(requiredPhrase), `FaGlowyCardWrapper main 语义契约缺少：${requiredPhrase}`)
+  for (const [heading, section] of [['FaGlowyCard', cardSection], ['FaGlowyCardWrapper', wrapperSection]]) {
+    for (const requiredPhrase of [
+      '不得裸用',
+      '`--glowy-card-radius`',
+      '`--glowy-card-backup-border`',
+      '`--glowy-card-x`',
+      '`FaGlowyCardWrapper` 注入',
+      '页面唯一的 `main`',
+      '已有 `main`',
+      '`ACard`',
+    ]) {
+      assert.ok(section.includes(requiredPhrase), `${heading} 成对使用与静态降级契约缺少：${requiredPhrase}`)
+    }
   }
-  assert.doesNotMatch(
-    section,
-    /```vue[\s\S]*<FaGlowyCardWrapper/u,
-    '已有正式应用 main 的示例不得把 FaGlowyCardWrapper 当普通内部容器',
+
+  const pairedExample = vueExamples.find(example => /<FaGlowyCardWrapper(?:\s|>)/u.test(example))
+  assert.ok(pairedExample, '必须提供 FaGlowyCardWrapper 与 FaGlowyCard 的合法成对示例')
+  assert.ok(
+    pairedExample.includes('页面没有其他 main；组件拥有页面唯一 main'),
+    '成对示例必须明确页面没有其他 main，Wrapper 拥有唯一 main',
   )
+  assert.match(
+    pairedExample,
+    /<FaGlowyCardWrapper(?:\s|>)[\s\S]*<FaGlowyCard(?:\s|>)/u,
+    '唯一 main 示例必须让 Wrapper 包含 Card',
+  )
+  assert.ok(vueExamples.some(example => /<ACard(?:\s|>)/u.test(example)), '已有 main 的安全降级示例必须使用 ACard')
+
+  for (const example of vueExamples) {
+    const usesCard = /<FaGlowyCard(?:\s|>)/u.test(example)
+    const usesWrapper = /<FaGlowyCardWrapper(?:\s|>)/u.test(example)
+    assert.ok(!usesCard || usesWrapper, 'Vue 示例不得在 Wrapper 外裸用 FaGlowyCard')
+  }
 })
 
 test('Fantastic-admin 专业组件示例契约：FaTimeline 仅严格合并相邻原始 datetime', () => {
@@ -1750,18 +1770,31 @@ test('Fantastic-admin 专业组件示例契约：FaSparkline 固定数据域与�
     'FaSparkline',
   )
 
+  function assertMatchingSparklineSummaryIds(candidate) {
+    const describedBy = candidate.match(/\baria-describedby="([^"]+)"/u)?.[1]
+    const summaryOpeningTag = candidate.match(/<figcaption\b[^>]*>/u)?.[0]
+    const summaryId = summaryOpeningTag?.match(/\sid="([^"]+)"/u)?.[1]
+
+    assert.ok(describedBy, 'FaSparkline 示例必须通过 aria-describedby 关联静态摘要')
+    assert.ok(summaryId, 'FaSparkline 示例必须为静态摘要提供 id')
+    assert.equal(describedBy, summaryId, 'FaSparkline 的 aria-describedby 必须与静态摘要 id 一致')
+  }
+
   for (const requiredPhrase of [
     '有限非负值',
     '至少一个值大于 0',
     '全零',
     '`NaN`',
     '负值',
-    'aria-describedby="sparkline-summary"',
-    'id="sparkline-summary"',
     '最近五期',
   ]) {
     assert.ok(section.includes(requiredPhrase), `FaSparkline 数据与可访问性契约缺少：${requiredPhrase}`)
   }
+  assertMatchingSparklineSummaryIds(section)
+  assert.doesNotThrow(
+    () => assertMatchingSparklineSummaryIds(section.replaceAll('sparkline-summary', 'trend-description')),
+    'FaSparkline 摘要 id 等价改名不应触发假失败',
+  )
   assert.ok(section.includes(':value="[12, 16, 14, 20, 18]"'), 'FaSparkline 示例必须保留合法正值序列')
 })
 
@@ -1787,17 +1820,40 @@ test('Fantastic-admin 专业组件示例契约：FaScratchOff 提供外部状态
     'FaScratchOff',
   )
 
-  for (const requiredPhrase of [
-    'const revealed = ref(false)',
-    '<button type="button"',
-    '@click="revealed = true"',
-    '直接显示内容',
-    'v-if="revealed"',
-    'v-else',
-    '@complete="revealed = true"',
-  ]) {
-    assert.ok(section.includes(requiredPhrase), `FaScratchOff 键盘替代契约缺少：${requiredPhrase}`)
+  function assertScratchOffAlternative(candidate) {
+    const stateName = candidate.match(/\bconst\s+([A-Za-z_$][\w$]*)\s*=\s*ref\(false\)/u)?.[1]
+    assert.ok(stateName, 'FaScratchOff 示例必须用 ref(false) 管理外部完成状态')
+
+    const escapedStateName = stateName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+    const buttonOpeningTag = candidate.match(/<button\b[^>]*>/u)?.[0]
+    const scratchOffOpeningTag = candidate.match(/<FaScratchOff\b[^>]*>/u)?.[0]
+    assert.ok(buttonOpeningTag, 'FaScratchOff 示例必须提供原生 button')
+    assert.match(buttonOpeningTag, /\btype="button"/u, 'FaScratchOff 替代按钮必须显式使用 type="button"')
+    assert.match(
+      buttonOpeningTag,
+      new RegExp(`@click="${escapedStateName}\\s*=\\s*true"`, 'u'),
+      'FaScratchOff 替代按钮必须切换外部完成状态',
+    )
+    assert.ok(scratchOffOpeningTag, 'FaScratchOff 示例必须保留 canvas 交互组件')
+    assert.match(scratchOffOpeningTag, /\bv-else\b/u, 'FaScratchOff canvas 必须与静态内容形成 v-if/v-else')
+    assert.match(
+      scratchOffOpeningTag,
+      new RegExp(`@complete="${escapedStateName}\\s*=\\s*true"`, 'u'),
+      'FaScratchOff complete 必须切换同一个外部完成状态',
+    )
+    assert.match(
+      candidate,
+      new RegExp(`\\bv-if="${escapedStateName}"`, 'u'),
+      'FaScratchOff 完成后必须切换到静态内容',
+    )
   }
+
+  assert.ok(section.includes('直接显示内容'), 'FaScratchOff 原生替代按钮必须提供明确文案')
+  assertScratchOffAlternative(section)
+  assert.doesNotThrow(
+    () => assertScratchOffAlternative(section.replaceAll('revealed', 'contentVisible')),
+    'FaScratchOff 外部状态等价改名不应触发假失败',
+  )
 })
 
 test('Fantastic-admin 专业组件示例契约：FaMarquee 只重复隐藏的装饰内容', () => {
@@ -1805,9 +1861,11 @@ test('Fantastic-admin 专业组件示例契约：FaMarquee 只重复隐藏的装
     readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
     'FaMarquee',
   )
+  const marqueeOpeningTag = section.match(/<FaMarquee\b[^>]*>/u)?.[0]
 
   assert.equal(section.match(/class="sr-only"/gu)?.length, 1, 'FaMarquee 静态语义文本必须且只能出现一次')
-  assert.ok(section.includes('<FaMarquee aria-hidden="true"'), '重复的 FaMarquee 动画 DOM 必须对辅助技术隐藏')
+  assert.ok(marqueeOpeningTag, 'FaMarquee 示例必须包含组件 opening tag')
+  assert.match(marqueeOpeningTag, /\baria-hidden="true"/u, '重复的 FaMarquee 动画 DOM 必须对辅助技术隐藏')
   for (const requiredPhrase of ['语义文本放在动画外', '不得放交互控件', '不得承载唯一信息']) {
     assert.ok(section.includes(requiredPhrase), `FaMarquee 重复内容边界缺少：${requiredPhrase}`)
   }
