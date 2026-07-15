@@ -80,6 +80,18 @@ const fantasticAdminCoverage = [
   ['其他 / 从 v5 迁移', 'https://fantastic-admin.hurui.me/guide/migration-from-v5.md', './高级能力构建与升级.md#从-v5-迁移'],
 ]
 
+const fantasticAdminReadingOrder = [
+  ['Fantastic-admin 开发手册', './README.md'],
+  ['指引与开发准备', './指引与开发准备.md'],
+  ['工程基础', './工程基础.md'],
+  ['服务端交互与登录', './服务端交互与登录.md'],
+  ['路由导航与状态管理', './路由导航与状态管理.md'],
+  ['应用配置', './应用配置.md'],
+  ['权限、保活与国际化', './权限保活与国际化.md'],
+  ['高级能力、构建与升级', './高级能力构建与升级.md'],
+  ['AI 技能', './AI技能.md'],
+]
+
 /**
  * 入口文档是正式开发依据，缺失时必须直接失败，不能用空内容继续断言。
  * 明确报告绝对路径可以让本地开发与 CI 都快速定位文档搬移或漏提交问题。
@@ -231,6 +243,36 @@ function readSecondLevelSection(content, heading) {
 }
 
 /**
+ * 解析二级章节中的 Markdown 有序链接，并固定连续编号与相对 `.md` 目标。
+ * 调用方先用 `readSecondLevelSection()` 隔离章节，避免其他列表掩盖阅读顺序漂移。
+ */
+function readMarkdownOrderedLinks(content) {
+  const orderedLines = content
+    .split(/\r?\n/u)
+    .filter(line => /^\s*\d+\.\s+/u.test(line))
+
+  assert.notEqual(orderedLines.length, 0, 'Fantastic-admin 阅读顺序章节必须包含 Markdown 有序列表')
+
+  return orderedLines.map((line, index) => {
+    const match = line.match(/^\s*(\d+)\.\s+\[([^\]]+)\]\((\.\/[^)\s]+\.md)\)/u)
+
+    assert.ok(match, `Fantastic-admin 阅读顺序第 ${index + 1} 项格式无效：${line}`)
+    const suffix = line.slice(match[0].length).trim()
+    assert.ok(
+      suffix === '' || suffix.startsWith('：'),
+      `Fantastic-admin 阅读顺序第 ${index + 1} 项链接后的说明格式无效：${line}`,
+    )
+    assert.equal(
+      Number(match[1]),
+      index + 1,
+      `Fantastic-admin 阅读顺序编号必须连续：期望 ${index + 1}，实际 ${match[1]}`,
+    )
+
+    return [match[2], match[3]]
+  })
+}
+
+/**
  * 覆盖矩阵只以“覆盖键”作为稳定身份，不锁定整段说明文案。
  * 这样可以让维护者调整项目化说明，同时防止主题遗漏、重复或链接漂移。
  */
@@ -302,14 +344,73 @@ function readMarkdownHeading(line) {
   return heading || undefined
 }
 
+/**
+ * 读取 Markdown fenced code 的起始标记。Fence 必须由至少 3 个相同的
+ * backtick 或 tilde 构成；backtick info string 不能再包含 backtick。
+ */
+function readMarkdownFenceOpening(line) {
+  const content = line.replace(/^ {0,3}/u, '')
+  const character = content[0]
+  if (!['`', '~'].includes(character)) {
+    return undefined
+  }
+
+  let length = 0
+  while (content[length] === character) {
+    length += 1
+  }
+  if (length < 3) {
+    return undefined
+  }
+  if (character === '`' && content.slice(length).includes('`')) {
+    return undefined
+  }
+
+  return {
+    character,
+    length,
+  }
+}
+
+/**
+ * 关闭 fence 必须使用与起始 fence 相同的字符，长度不得更短，且行尾只能有空白。
+ * 这样 fence 内较短或异种标记不会提前恢复标题扫描。
+ */
+function isMarkdownFenceClosing(line, opening) {
+  const content = line.replace(/^ {0,3}/u, '')
+  let length = 0
+  while (content[length] === opening.character) {
+    length += 1
+  }
+
+  return length >= opening.length
+    && /^[ \t]*$/u.test(content.slice(length))
+}
+
 function readMarkdownHeadingAnchors(content) {
-  return new Set(
-    content
-      .split(/\r?\n/u)
-      .map(readMarkdownHeading)
-      .filter(Boolean)
-      .map(createHeadingAnchor),
-  )
+  const anchors = new Set()
+  let openingFence
+
+  for (const line of content.split(/\r?\n/u)) {
+    if (openingFence) {
+      if (isMarkdownFenceClosing(line, openingFence)) {
+        openingFence = undefined
+      }
+      continue
+    }
+
+    openingFence = readMarkdownFenceOpening(line)
+    if (openingFence) {
+      continue
+    }
+
+    const heading = readMarkdownHeading(line)
+    if (heading) {
+      anchors.add(createHeadingAnchor(heading))
+    }
+  }
+
+  return anchors
 }
 
 /**
@@ -424,6 +525,13 @@ test('Fantastic-admin 分册完整覆盖官方主题', () => {
     assert.notEqual(content.trim(), '', `Fantastic-admin 分册不得为空：${name}`)
   }
 
+  const readingOrderSection = readSecondLevelSection(documents.index, '3. 阅读顺序')
+  assert.deepEqual(
+    readMarkdownOrderedLinks(readingOrderSection),
+    fantasticAdminReadingOrder,
+    'Fantastic-admin 阅读顺序必须按约定标题、相对链接和顺序完整收录 9 册',
+  )
+
   assert.equal(fantasticAdminCoverage.length, 49, 'Fantastic-admin 覆盖契约必须独立固定为 49 项')
 
   const coverageRows = readCoverageMatrix(documents.index)
@@ -452,6 +560,31 @@ test('Fantastic-admin 分册完整覆盖官方主题', () => {
   assert.ok(
     maintenanceRules.includes('web/apps/qsmds-arco/vite.config.ts'),
     'Fantastic-admin 分册维护触发条件必须显式包含正式应用 vite.config.ts',
+  )
+})
+
+test('Fantastic-admin Markdown 标题扫描忽略 fenced code', () => {
+  const anchors = readMarkdownHeadingAnchors([
+    '## Fence 外标题',
+    '```md',
+    '## 反引号 fence 内伪标题',
+    '~~~',
+    '## 异种关闭符后的伪标题',
+    '```',
+    '~~~~text',
+    '## 波浪 fence 内伪标题',
+    '~~~',
+    '## 过短关闭符后的伪标题',
+    '````',
+    '## 异种关闭符后的第二个伪标题',
+    '~~~~~',
+    '## 关闭 Fence 后标题',
+  ].join('\n'))
+
+  assert.deepEqual(
+    [...anchors],
+    ['fence-外标题', '关闭-fence-后标题'],
+    '标题扫描必须忽略 backtick/tilde fence 内的伪标题，并正确校验关闭 fence 的字符和长度',
   )
 })
 
