@@ -29,6 +29,14 @@ const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', im
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
 const webLockfilePath = fileURLToPath(new URL('../pnpm-lock.yaml', import.meta.url))
 const fantasticAdminComponentsIndexPath = fileURLToPath(new URL('../packages/components/src/index.ts', import.meta.url))
+const fantasticAdminProSourcePaths = {
+  codePreview: fileURLToPath(new URL('../packages/components/src/pro/code-preview/index.vue', import.meta.url)),
+  loading: fileURLToPath(new URL('../packages/components/src/pro/loading/useLoading.ts', import.meta.url)),
+  mention: fileURLToPath(new URL('../packages/components/src/pro/mention/mention/index.ts', import.meta.url)),
+  multiStepLoader: fileURLToPath(new URL('../packages/components/src/pro/multi-step-loader/index.vue', import.meta.url)),
+  patternBgVariants: fileURLToPath(new URL('../packages/components/src/pro/pattern-bg/variants.ts', import.meta.url)),
+  steps: fileURLToPath(new URL('../packages/components/src/pro/steps/index.vue', import.meta.url)),
+}
 const pageOptimizerGovernancePaths = {
   skill: fileURLToPath(new URL('../skills/fa-page-optimizer/SKILL.md', import.meta.url)),
   catalog: fileURLToPath(new URL('../skills/fa-page-optimizer/references/components-catalog.md', import.meta.url)),
@@ -553,13 +561,153 @@ const fantasticAdminProRuntimeStarExports = [
   './pro/mention/mention',
   './pro/pattern-bg/variants',
 ]
+const fantasticAdminProStarExportInventories = {
+  './pro/mention/mention': {
+    runtimeNames: [
+      'MentionContent',
+      'MentionInput',
+      'MentionItem',
+      'MentionLabel',
+      'MentionPortal',
+      'MentionRoot',
+    ],
+    typeNames: [
+      'MentionAlign',
+      'MentionClassName',
+      'MentionCollisionPadding',
+      'MentionDirection',
+      'MentionItemRegistration',
+      'MentionOption',
+      'MentionRange',
+      'MentionSide',
+    ],
+  },
+  './pro/pattern-bg/variants': {
+    runtimeNames: ['patternBgMaskVariants', 'patternBgVariants'],
+    typeNames: ['BaseProps', 'PatternBgMaskVariants', 'PatternBgVariants'],
+  },
+}
+
+function hasTypeScriptModifier(node, modifierKind) {
+  return ts.canHaveModifiers(node)
+    && (ts.getModifiers(node)?.some(modifier => modifier.kind === modifierKind) ?? false)
+}
+
+/**
+ * 受控 star export 的目标模块必须公开透明。这里读取模块自身的顶层 export，
+ * 分开记录运行时值与类型；遇到嵌套 star、namespace 或绑定模式就直接失败，
+ * 迫使维护者在源码形态变化后人工确认，而不是让治理测试猜测公开面。
+ */
+function readFantasticAdminModulePublicSymbols(source, moduleName) {
+  const sourceFile = ts.createSourceFile(
+    `fantastic-admin-star-${moduleName.replaceAll('/', '-')}.ts`,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  )
+  const runtimeNames = []
+  const typeNames = []
+
+  function addIdentifierName(name, targetNames, declarationKind) {
+    assert.ok(
+      name && ts.isIdentifier(name),
+      `Fantastic-admin 专业 runtime export star 符号清单无法解析 ${declarationKind}：module=${moduleName}`,
+    )
+    targetNames.push(name.text)
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      assert.ok(
+        statement.exportClause && !ts.isNamespaceExport(statement.exportClause),
+        `Fantastic-admin 专业 runtime export star 符号清单包含不透明 export：module=${moduleName}`,
+      )
+
+      for (const specifier of statement.exportClause.elements) {
+        const targetNames = statement.isTypeOnly || specifier.isTypeOnly ? typeNames : runtimeNames
+        targetNames.push(specifier.name.text)
+      }
+      continue
+    }
+
+    if (ts.isVariableStatement(statement) && hasTypeScriptModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+      if (hasTypeScriptModifier(statement, ts.SyntaxKind.DeclareKeyword)) {
+        assert.fail(`Fantastic-admin 专业 runtime export star 符号清单包含 declare variable：module=${moduleName}`)
+      }
+      for (const declaration of statement.declarationList.declarations) {
+        addIdentifierName(declaration.name, runtimeNames, 'variable binding')
+      }
+      continue
+    }
+
+    if (
+      (ts.isFunctionDeclaration(statement)
+        || ts.isClassDeclaration(statement)
+        || ts.isEnumDeclaration(statement))
+      && hasTypeScriptModifier(statement, ts.SyntaxKind.ExportKeyword)
+    ) {
+      if (hasTypeScriptModifier(statement, ts.SyntaxKind.DefaultKeyword)) {
+        continue
+      }
+      if (hasTypeScriptModifier(statement, ts.SyntaxKind.DeclareKeyword)) {
+        assert.fail(`Fantastic-admin 专业 runtime export star 符号清单包含 declare declaration：module=${moduleName}`)
+      }
+      addIdentifierName(statement.name, runtimeNames, 'runtime declaration')
+      continue
+    }
+
+    if (
+      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement))
+      && hasTypeScriptModifier(statement, ts.SyntaxKind.ExportKeyword)
+    ) {
+      addIdentifierName(statement.name, typeNames, 'type declaration')
+      continue
+    }
+
+    if (
+      (ts.isModuleDeclaration(statement)
+        || ts.isImportEqualsDeclaration(statement)
+        || ts.isExportAssignment(statement))
+      && (ts.isExportAssignment(statement)
+        || hasTypeScriptModifier(statement, ts.SyntaxKind.ExportKeyword))
+    ) {
+      if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+        continue
+      }
+      assert.fail(`Fantastic-admin 专业 runtime export star 符号清单包含不支持的 runtime export：module=${moduleName}`)
+    }
+  }
+
+  for (const [symbolKind, names] of [['runtime', runtimeNames], ['type', typeNames]]) {
+    assert.equal(
+      names.length,
+      new Set(names).size,
+      `Fantastic-admin 专业 runtime export star ${symbolKind} 符号清单存在重复项：module=${moduleName}`,
+    )
+  }
+
+  return {
+    runtimeNames: [...runtimeNames].sort(),
+    typeNames: [...typeNames].sort(),
+  }
+}
+
+function assertFantasticAdminStarExportInventory(source, moduleName) {
+  const expectedInventory = fantasticAdminProStarExportInventories[moduleName]
+  assert.ok(expectedInventory, `Fantastic-admin 专业 runtime export star 缺少符号清单：module=${moduleName}`)
+  assert.deepEqual(
+    readFantasticAdminModulePublicSymbols(source, moduleName),
+    expectedInventory,
+    `Fantastic-admin 专业 runtime export star 符号清单漂移：module=${moduleName}`,
+  )
+}
 
 /**
  * 公开能力只能来自 index.ts 指定注释后的 export 区段。先切区段再用
- * TypeScript AST 读取真实运行时导出名，排除注释、字符串与 type-only。
- * 命名导出在去重前拒绝同名；runtime namespace export 一律失败；runtime
- * export star 只允许调用方给出的精确清单，既兼容专业版现有两条聚合导出，
- * 又确保以后新增不透明 star export 时测试会要求人工核对。
+ * TypeScript AST 读取命名转发与直接运行时声明，排除注释、字符串、
+ * type-only 与 default。命名导出在去重前拒绝同名；无法透明解析的运行时
+ * export 形态一律失败；runtime export star 只允许调用方给出的精确清单。
  */
 function readFantasticAdminPublicExports({
   allowedRuntimeStarModules = [],
@@ -593,40 +741,85 @@ function readFantasticAdminPublicExports({
   const rawPublicExports = []
   const runtimeStarModules = []
 
-  function visit(node) {
-    if (ts.isExportDeclaration(node) && !node.isTypeOnly) {
-      const moduleName = node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)
-        ? node.moduleSpecifier.text
+  function addRuntimePublicName(name, moduleName) {
+    if (publicNamePattern.test(name)) {
+      rawPublicExports.push({ moduleName, publicName: name })
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement) && !statement.isTypeOnly) {
+      const moduleName = statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+        ? statement.moduleSpecifier.text
         : '<unknown>'
 
-      if (!node.exportClause) {
+      if (!statement.exportClause) {
         assert.ok(
           allowedRuntimeStarModules.includes(moduleName),
           `Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime export star：module=${moduleName}`,
         )
         runtimeStarModules.push(moduleName)
       }
-      else if (ts.isNamespaceExport(node.exportClause)) {
+      else if (ts.isNamespaceExport(statement.exportClause)) {
         assert.fail(
           `Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime namespace export：module=${moduleName}`,
         )
       }
       else {
-        for (const specifier of node.exportClause.elements) {
+        for (const specifier of statement.exportClause.elements) {
           if (!specifier.isTypeOnly) {
-            const publicName = specifier.name.text
-            if (publicNamePattern.test(publicName)) {
-              rawPublicExports.push({ moduleName, publicName })
-            }
+            addRuntimePublicName(specifier.name.text, moduleName)
           }
         }
       }
+      continue
     }
 
-    ts.forEachChild(node, visit)
-  }
+    if (ts.isVariableStatement(statement) && hasTypeScriptModifier(statement, ts.SyntaxKind.ExportKeyword)) {
+      if (hasTypeScriptModifier(statement, ts.SyntaxKind.DeclareKeyword)) {
+        continue
+      }
+      for (const declaration of statement.declarationList.declarations) {
+        assert.ok(
+          ts.isIdentifier(declaration.name),
+          `Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime export variable binding`,
+        )
+        addRuntimePublicName(declaration.name.text, '<direct>')
+      }
+      continue
+    }
 
-  visit(sourceFile)
+    if (
+      (ts.isFunctionDeclaration(statement)
+        || ts.isClassDeclaration(statement)
+        || ts.isEnumDeclaration(statement))
+      && hasTypeScriptModifier(statement, ts.SyntaxKind.ExportKeyword)
+    ) {
+      if (
+        hasTypeScriptModifier(statement, ts.SyntaxKind.DefaultKeyword)
+        || hasTypeScriptModifier(statement, ts.SyntaxKind.DeclareKeyword)
+      ) {
+        continue
+      }
+      assert.ok(
+        statement.name && ts.isIdentifier(statement.name),
+        `Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime export declaration`,
+      )
+      addRuntimePublicName(statement.name.text, '<direct>')
+      continue
+    }
+
+    if (
+      (ts.isModuleDeclaration(statement) || ts.isImportEqualsDeclaration(statement))
+      && hasTypeScriptModifier(statement, ts.SyntaxKind.ExportKeyword)
+    ) {
+      assert.fail(`Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime export declaration`)
+    }
+
+    if (ts.isExportAssignment(statement) && statement.isExportEquals) {
+      assert.fail(`Fantastic-admin ${sectionName}公开覆盖无法静默解析 runtime export assignment`)
+    }
+  }
 
   assert.deepEqual(
     [...runtimeStarModules].sort(),
@@ -663,6 +856,15 @@ function readFantasticAdminBasicPublicNames(componentIndex = readRequiredFile(fa
 }
 
 function readFantasticAdminProPublicExports(componentIndex = readRequiredFile(fantasticAdminComponentsIndexPath)) {
+  assertFantasticAdminStarExportInventory(
+    readRequiredFile(fantasticAdminProSourcePaths.mention),
+    './pro/mention/mention',
+  )
+  assertFantasticAdminStarExportInventory(
+    readRequiredFile(fantasticAdminProSourcePaths.patternBgVariants),
+    './pro/pattern-bg/variants',
+  )
+
   return readFantasticAdminPublicExports({
     allowedRuntimeStarModules: fantasticAdminProRuntimeStarExports,
     componentIndex,
@@ -905,6 +1107,46 @@ test('Fantastic-admin 基础公开名提取仅读取真实 export specifier', ()
   )
 })
 
+test('Fantastic-admin 公开名提取支持直接运行时声明并排除类型与 default', () => {
+  const publicNames = readFantasticAdminBasicPublicNames([
+    '// 基础版组件',
+    'export const FaVariable = 1, FaSecondVariable = 2',
+    'export function useFaFunction() {}',
+    'export class FaClass {}',
+    'export enum FaEnum { Ready }',
+    'export interface FaInterface {}',
+    'export type FaType = string',
+    'export default class FaDefaultClass {}',
+    '// 专业版组件',
+  ].join('\n'))
+
+  assert.deepEqual(
+    publicNames,
+    ['FaClass', 'FaEnum', 'FaSecondVariable', 'FaVariable', 'useFaFunction'],
+    '直接 export 的 const/function/class/enum 是运行时公开名；type/interface/default 不得计入',
+  )
+})
+
+test('Fantastic-admin 公开名提取拒绝可能承载运行时公开名的不支持 export 形态', () => {
+  for (const [fixtureName, declaration] of [
+    ['binding pattern', 'export const { FaDestructured } = registry'],
+    ['namespace declaration', 'export namespace FaRuntimeNamespace {}'],
+    ['export assignment', 'const FaAssigned = {}; export = FaAssigned'],
+  ]) {
+    const fixture = [
+      '// 基础版组件',
+      declaration,
+      '// 专业版组件',
+    ].join('\n')
+
+    assert.throws(
+      () => readFantasticAdminBasicPublicNames(fixture),
+      /基础公开覆盖无法静默解析 runtime export/u,
+      `不支持的 ${fixtureName} 必须显式失败，不能静默漏掉运行时公开名`,
+    )
+  }
+})
+
 test('Fantastic-admin 基础公开名提取拒绝 runtime export star', () => {
   const runtimeExportStarFixture = [
     '// 基础版组件',
@@ -1007,6 +1249,47 @@ test('Fantastic-admin 专业公开名提取拒绝未知 runtime export star', ()
     () => readFantasticAdminProPublicExports(unknownRuntimeExportStarFixture),
     /专业公开覆盖无法静默解析 runtime export star：module=\.\/pro\/unknown-runtime-star/u,
     '专业区段新增未知 runtime export star 时必须显式失败，不能扩大为任意 allowlist',
+  )
+})
+
+test('Fantastic-admin 专业 runtime export star 固定精确运行时与类型符号清单', () => {
+  for (const [moduleName, sourcePath] of [
+    ['./pro/mention/mention', fantasticAdminProSourcePaths.mention],
+    ['./pro/pattern-bg/variants', fantasticAdminProSourcePaths.patternBgVariants],
+  ]) {
+    assert.deepEqual(
+      readFantasticAdminModulePublicSymbols(readRequiredFile(sourcePath), moduleName),
+      fantasticAdminProStarExportInventories[moduleName],
+      `Fantastic-admin 专业 runtime export star 符号清单漂移：module=${moduleName}`,
+    )
+  }
+})
+
+test('Fantastic-admin 专业 runtime export star 删除符号变异必须失败', () => {
+  const moduleName = './pro/mention/mention'
+  const source = readRequiredFile(fantasticAdminProSourcePaths.mention)
+  const mutatedSource = source.replace(
+    'export { default as MentionRoot } from \'./MentionRoot.vue\'\n',
+    '',
+  )
+
+  assert.notEqual(mutatedSource, source, 'Mention runtime symbol 删除变异 fixture 必须命中真实源码')
+  assert.throws(
+    () => assertFantasticAdminStarExportInventory(mutatedSource, moduleName),
+    /符号清单/u,
+    '删除 MentionRoot 后，受控 star export 精确清单必须失败',
+  )
+})
+
+test('Fantastic-admin 专业 runtime export star 新增符号变异必须失败', () => {
+  const moduleName = './pro/pattern-bg/variants'
+  const source = readRequiredFile(fantasticAdminProSourcePaths.patternBgVariants)
+  const mutatedSource = `${source}\nexport const patternBgUnexpected = true\n`
+
+  assert.throws(
+    () => assertFantasticAdminStarExportInventory(mutatedSource, moduleName),
+    /符号清单/u,
+    '新增 patternBgUnexpected 后，受控 star export 精确清单必须失败',
   )
 })
 
@@ -1252,6 +1535,7 @@ test('Fantastic-admin 专业组件分册覆盖本地全部公开导出并固定�
 test('Fantastic-admin 专业组件实现契约：useFaLoading 生命周期与并发边界', () => {
   const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
   const section = readSecondLevelSection(proHandbook, 'useFaLoading')
+  const source = readRequiredFile(fantasticAdminProSourcePaths.loading)
 
   for (const requiredPhrase of [
     '`vnode` 与 `mountNode` 是 module-global',
@@ -1271,11 +1555,29 @@ test('Fantastic-admin 专业组件实现契约：useFaLoading 生命周期与并
     /全局同时只保留一个内部实例|新调用会清理旧实例|组件卸载也会 cleanup/u,
     'useFaLoading 不得承诺当前源码没有可靠实现的单例或自动卸载清理',
   )
+  for (const requiredSource of [
+    'let instance: App<Element> | null = null',
+    'let mountNode: HTMLElement | null = null',
+    'let vnode: VNode | null = null',
+    'const currentInstance = getCurrentInstance()',
+    'if (instance && mountNode)',
+    'if (currentInstance)',
+    'onUnmounted(() =>',
+  ]) {
+    assert.ok(source.includes(requiredSource), `useFaLoading 真实源码 guard 缺少：${requiredSource}`)
+  }
+  assert.equal(
+    source.match(/\binstance\s*=/gu)?.length,
+    1,
+    'useFaLoading 的 instance 当前只能在 cleanup 中归零；出现新的赋值后必须复核并发说明',
+  )
+  assert.ok(source.includes('instance = null'), 'useFaLoading 的 instance 唯一赋值必须仍是 cleanup 归零')
 })
 
 test('Fantastic-admin 专业组件实现契约：FaSteps 状态可访问性边界', () => {
   const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
   const section = readSecondLevelSection(proHandbook, 'FaSteps')
+  const source = readRequiredFile(fantasticAdminProSourcePaths.steps)
 
   for (const requiredPhrase of [
     '颜色、图标和序号',
@@ -1292,11 +1594,27 @@ test('Fantastic-admin 专业组件实现契约：FaSteps 状态可访问性边�
     false,
     'FaSteps 不得把普通 title/description 错写为状态文字',
   )
+  for (const requiredSource of [
+    '<StepperTrigger disabled>',
+    'getStepStatus(index) === \'finish\'',
+    'getStepStatus(index) === \'error\'',
+    '<span v-else>{{ index + 1 }}</span>',
+    '{{ step.title }}',
+    '{{ step.description }}',
+  ]) {
+    assert.ok(source.includes(requiredSource), `FaSteps 真实源码 guard 缺少：${requiredSource}`)
+  }
+  assert.doesNotMatch(
+    source,
+    /aria-label|statusText/u,
+    'FaSteps 源码新增状态可访问名称后必须复核手册边界，不能让 guard 静默放过',
+  )
 })
 
 test('Fantastic-admin 专业组件实现契约：FaMultiStepLoader 显式启动与复位', () => {
   const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
   const section = readSecondLevelSection(proHandbook, 'FaMultiStepLoader')
+  const source = readRequiredFile(fantasticAdminProSourcePaths.multiStepLoader)
 
   for (const requiredPhrase of [
     'watch 没有 `immediate`',
@@ -1315,11 +1633,25 @@ test('Fantastic-admin 专业组件实现契约：FaMultiStepLoader 显式启动�
     false,
     'FaMultiStepLoader 示例不得依赖初始 true 触发非 immediate watch',
   )
+  assert.match(source, /watch\(\s*\(\) => props\.loading,/u, 'FaMultiStepLoader 真实源码必须继续监听 loading')
+  assert.doesNotMatch(source, /immediate\s*:/u, 'FaMultiStepLoader watch 新增 immediate 后必须复核启动说明')
+  for (const requiredSource of [
+    'stateChange: [number]',
+    'complete: []',
+    'close: []',
+    'error: [Error, number]',
+    'emit(\'complete\')',
+    'emit(\'close\')',
+    'emit(\'error\'',
+  ]) {
+    assert.ok(source.includes(requiredSource), `FaMultiStepLoader 真实源码 guard 缺少：${requiredSource}`)
+  }
 })
 
 test('Fantastic-admin 专业组件实现契约：FaCodePreview 真实组合结构', () => {
   const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
   const section = readSecondLevelSection(proHandbook, 'FaCodePreview')
+  const source = readRequiredFile(fantasticAdminProSourcePaths.codePreview)
 
   for (const requiredPhrase of ['上方预览、下方按需源码', '`PageMain`', '`Button`', '`Icon`', '`FaCode`']) {
     assert.ok(section.includes(requiredPhrase), `FaCodePreview 真实组合结构缺少：${requiredPhrase}`)
@@ -1329,6 +1661,176 @@ test('Fantastic-admin 专业组件实现契约：FaCodePreview 真实组合结�
     /并排|Collapsible/u,
     'FaCodePreview 不得写成并排布局或不存在的 Collapsible 组合',
   )
+  for (const requiredSource of [
+    'import Button from \'../../basic/button/index.vue\'',
+    'import Icon from \'../../basic/icon/index.vue\'',
+    'import PageMain from \'../../basic/page-main/index.vue\'',
+    'import Code from \'../code/index.vue\'',
+    '<PageMain :title main-class="p-0">',
+    '<Code v-show="showSource"',
+    '@click="showSource = !showSource"',
+  ]) {
+    assert.ok(source.includes(requiredSource), `FaCodePreview 真实源码 guard 缺少：${requiredSource}`)
+  }
+  assert.equal(source.includes('Collapsible'), false, 'FaCodePreview 新增 Collapsible 后必须复核组合结构说明')
+})
+
+test('Fantastic-admin 专业组件示例契约：FaCarousel 使用单个 v-for Fragment', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaCarousel',
+  )
+
+  for (const requiredPhrase of [
+    '默认插槽第一个 VNode 的 `children`',
+    'const items = [',
+    '<article v-for="item in items"',
+    ':key="item.title"',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaCarousel Fragment 示例契约缺少：${requiredPhrase}`)
+  }
+})
+
+test('Fantastic-admin 专业组件示例契约：FaTextHighlight 提供真实渐变背景', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaTextHighlight',
+  )
+
+  for (const requiredPhrase of ['bg-gradient-to-r', 'from-primary', 'to-accent', 'CSS keyframes']) {
+    assert.ok(section.includes(requiredPhrase), `FaTextHighlight 渐变实现契约缺少：${requiredPhrase}`)
+  }
+  assert.equal(section.includes('Motion'), false, 'FaTextHighlight 不得再写成 Motion 实现')
+})
+
+test('Fantastic-admin 专业组件示例契约：FaGlowyCardWrapper 只能拥有页面唯一 main', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaGlowyCardWrapper',
+  )
+
+  for (const requiredPhrase of [
+    '根节点固定为 `<main>`',
+    '页面唯一的 `main`',
+    '不能作为普通内部 wrapper',
+    '普通 `div`',
+    '<FaGlowyCard>',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaGlowyCardWrapper main 语义契约缺少：${requiredPhrase}`)
+  }
+  assert.doesNotMatch(
+    section,
+    /```vue[\s\S]*<FaGlowyCardWrapper/u,
+    '已有正式应用 main 的示例不得把 FaGlowyCardWrapper 当普通内部容器',
+  )
+})
+
+test('Fantastic-admin 专业组件示例契约：FaTimeline 仅严格合并相邻原始 datetime', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaTimeline',
+  )
+
+  for (const requiredPhrase of [
+    '相邻项',
+    '原始 `datetime`',
+    '严格 `===`',
+    '不同 `Date` 实例',
+    '不同格式',
+    '先排序',
+    '同一种 `string` 或 `number`',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaTimeline 严格合并契约缺少：${requiredPhrase}`)
+  }
+})
+
+test('Fantastic-admin 专业组件示例契约：FaSparkline 固定数据域与静态摘要', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaSparkline',
+  )
+
+  for (const requiredPhrase of [
+    '有限非负值',
+    '至少一个值大于 0',
+    '全零',
+    '`NaN`',
+    '负值',
+    'aria-describedby="sparkline-summary"',
+    'id="sparkline-summary"',
+    '最近五期',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaSparkline 数据与可访问性契约缺少：${requiredPhrase}`)
+  }
+  assert.ok(section.includes(':value="[12, 16, 14, 20, 18]"'), 'FaSparkline 示例必须保留合法正值序列')
+})
+
+test('Fantastic-admin 专业组件示例契约：FaFlipCard 正面保留关键数字', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaFlipCard',
+  )
+  const keyInformationIndex = section.indexOf('可用 1280 件')
+  const backSlotIndex = section.indexOf('<template #back>')
+
+  assert.notEqual(keyInformationIndex, -1, 'FaFlipCard 示例正面必须显示关键数字“可用 1280 件”')
+  assert.notEqual(backSlotIndex, -1, 'FaFlipCard 示例必须明确背面 slot 的补充信息边界')
+  assert.ok(keyInformationIndex < backSlotIndex, 'FaFlipCard 关键数字必须出现在背面 slot 之前的正面内容中')
+  for (const requiredPhrase of ['背面只放补充信息', 'hover-only', '没有键盘', '没有触摸', '没有受控入口']) {
+    assert.ok(section.includes(requiredPhrase), `FaFlipCard 交互边界缺少：${requiredPhrase}`)
+  }
+})
+
+test('Fantastic-admin 专业组件示例契约：FaScratchOff 提供外部状态与原生按钮替代', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaScratchOff',
+  )
+
+  for (const requiredPhrase of [
+    'const revealed = ref(false)',
+    '<button type="button"',
+    '@click="revealed = true"',
+    '直接显示内容',
+    'v-if="revealed"',
+    'v-else',
+    '@complete="revealed = true"',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaScratchOff 键盘替代契约缺少：${requiredPhrase}`)
+  }
+})
+
+test('Fantastic-admin 专业组件示例契约：FaMarquee 只重复隐藏的装饰内容', () => {
+  const section = readSecondLevelSection(
+    readRequiredFile(fantasticAdminComponentHandbookPaths.pro),
+    'FaMarquee',
+  )
+
+  assert.equal(section.match(/class="sr-only"/gu)?.length, 1, 'FaMarquee 静态语义文本必须且只能出现一次')
+  assert.ok(section.includes('<FaMarquee aria-hidden="true"'), '重复的 FaMarquee 动画 DOM 必须对辅助技术隐藏')
+  for (const requiredPhrase of ['语义文本放在动画外', '不得放交互控件', '不得承载唯一信息']) {
+    assert.ok(section.includes(requiredPhrase), `FaMarquee 重复内容边界缺少：${requiredPhrase}`)
+  }
+})
+
+test('Fantastic-admin 专业组件实现术语与真实源码保持一致', () => {
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+  const contracts = [
+    ['FaDigitalCard', ['`Card`、`Icon`、`Tooltip`', '`computed` 计算趋势图标'], /\bTrend\b/u],
+    ['FaFlipCard', ['CSS/UnoCSS', '`group-hover` transition'], /\bMotion\b/u],
+    ['FaScrollingText', ['inline `transform` / `opacity` transition'], /Vue Transition/u],
+    ['FaSpotlightCard', ['`MouseEvent`', '`@mousemove`'], /PointerEvent/u],
+    ['FaTextHighlight', ['CSS keyframes'], /\bMotion\b/u],
+    ['FaTimeline', ['本地 `ScrollArea`', '`@on-scroll`'], /VueUse/u],
+  ]
+
+  for (const [heading, requiredPhrases, forbiddenPattern] of contracts) {
+    const section = readSecondLevelSection(proHandbook, heading)
+    for (const requiredPhrase of requiredPhrases) {
+      assert.ok(section.includes(requiredPhrase), `${heading} 真实实现术语缺少：${requiredPhrase}`)
+    }
+    assert.doesNotMatch(section, forbiddenPattern, `${heading} 不得回退到错误的实现术语`)
+  }
 })
 
 test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () => {
