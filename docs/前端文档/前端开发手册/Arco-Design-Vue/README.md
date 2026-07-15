@@ -1,6 +1,6 @@
 # Arco Design Vue 开发手册
 
-本分册面向千树 DMS 唯一正式 Web 应用 `web/apps/qsmds-arco`，适用版本为 `@arco-design/web-vue@2.58.0`，核对日期为 2026-07-15。组件家族总数固定为 74；Task 6 已完成接入基础、通用与布局、数据录入共 28 个家族，Task 7 将继续补齐其余 46 个家族。
+本分册面向千树 DMS 唯一正式 Web 应用 `web/apps/qsmds-arco`，适用版本为 `@arco-design/web-vue@2.58.0`，核对日期为 2026-07-15。组件家族总数固定为 74；Task 6 已完成首批 28 个家族，Task 7 已完成数据展示、反馈、导航与其他共 46 个家族，五个组件分册现已完整覆盖全部家族。
 
 ## 真相源与适用边界
 
@@ -14,7 +14,10 @@
 1. [接入基础与全局配置](./接入基础与全局配置.md)：先理解全局注册、样式、语言、主题和命令式 API 边界。
 2. [通用与布局组件](./通用与布局组件.md)：建立按钮、文字、栅格和页面布局的基础用法。
 3. [数据录入组件](./数据录入组件.md)：按受控值、校验、可访问性和安全边界实现表单。
-4. [Fantastic-admin 内置组件选型规则](../Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)：能力重叠时先按项目职责矩阵选型。
+4. [数据展示组件](./数据展示组件.md)：核对复合组件、受控展示状态、Table 与 Tree 的大数据边界。
+5. [反馈组件](./反馈组件.md)：区分模板组件、命令式入口、异步关闭和反馈生命周期。
+6. [导航与其他组件](./导航与其他组件.md)：遵守 Fantastic-admin 框架壳边界并使用底层工具组件。
+7. [Fantastic-admin 内置组件选型规则](../Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)：能力重叠时先按项目职责矩阵选型。
 
 ## 命名与选型
 
@@ -34,7 +37,7 @@
 
 ## 74 个家族覆盖矩阵
 
-“接入状态”描述运行时事实；“分册”描述文档完成度。Task 7 尚未创建的分册使用非链接文本，避免制造死链。
+“接入状态”描述运行时事实；“分册”链接到当前版本已经核对的家族章节。
 
 | 英文家族 | 分类 | 分册 | 官方版本来源 | 接入状态 | 核对日期 |
 | --- | --- | --- | --- | --- | --- |
@@ -66,49 +69,49 @@
 | TreeSelect | 数据录入 | [数据录入组件](./数据录入组件.md#treeselect) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tree-select) | 正式应用已全局注册 | 2026-07-15 |
 | Upload | 数据录入 | [数据录入组件](./数据录入组件.md#upload) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/upload) | 正式应用已全局注册 | 2026-07-15 |
 | VerificationCode | 数据录入 | [数据录入组件](./数据录入组件.md#verificationcode) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/verification-code) | 正式应用已全局注册 | 2026-07-15 |
-| Avatar | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/avatar) | 正式应用已全局注册 | 2026-07-15 |
-| Badge | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/badge) | 正式应用已全局注册 | 2026-07-15 |
-| Calendar | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/calendar) | 正式应用已全局注册 | 2026-07-15 |
-| Card | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/card) | 正式应用已全局注册 | 2026-07-15 |
-| Carousel | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/carousel) | 正式应用已全局注册 | 2026-07-15 |
-| Collapse | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/collapse) | 正式应用已全局注册 | 2026-07-15 |
-| Comment | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/comment) | 正式应用已全局注册 | 2026-07-15 |
-| Descriptions | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/descriptions) | 正式应用已全局注册 | 2026-07-15 |
-| Empty | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/empty) | 正式应用已全局注册 | 2026-07-15 |
-| Image | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/image) | 正式应用已全局注册 | 2026-07-15 |
-| List | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/list) | 正式应用已全局注册 | 2026-07-15 |
-| Popover | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/popover) | 正式应用已全局注册 | 2026-07-15 |
-| Progress | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/progress) | 正式应用已全局注册 | 2026-07-15 |
-| Statistic | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/statistic) | 正式应用已全局注册 | 2026-07-15 |
-| Table | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/table) | 正式应用已全局注册 | 2026-07-15 |
-| Tag | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tag) | 正式应用已全局注册 | 2026-07-15 |
-| Timeline | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/timeline) | 正式应用已全局注册 | 2026-07-15 |
-| Tooltip | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tooltip) | 正式应用已全局注册 | 2026-07-15 |
-| Tree | 数据展示 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tree) | 正式应用已全局注册 | 2026-07-15 |
-| Alert | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/alert) | 正式应用已全局注册 | 2026-07-15 |
-| Drawer | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/drawer) | 正式应用已全局注册 | 2026-07-15 |
-| Message | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/message) | 已注入 `$message`；静态 API 可显式导入 | 2026-07-15 |
-| Modal | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/modal) | `AModal` 已全局注册；已注入 `$modal`；静态 API 可显式导入 | 2026-07-15 |
-| Notification | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/notification) | 已注入 `$notification`；静态 API 可显式导入 | 2026-07-15 |
-| Popconfirm | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/popconfirm) | 正式应用已全局注册 | 2026-07-15 |
-| Result | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/result) | 正式应用已全局注册 | 2026-07-15 |
-| Skeleton | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/skeleton) | 正式应用已全局注册 | 2026-07-15 |
-| Spin | 反馈 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/spin) | 正式应用已全局注册 | 2026-07-15 |
-| Affix | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/affix) | 正式应用已全局注册 | 2026-07-15 |
-| Anchor | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/anchor) | 正式应用已全局注册 | 2026-07-15 |
-| BackTop | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/back-top) | 正式应用已全局注册 | 2026-07-15 |
-| Breadcrumb | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/breadcrumb) | 正式应用已全局注册 | 2026-07-15 |
-| Dropdown | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/dropdown) | 正式应用已全局注册 | 2026-07-15 |
-| Menu | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/menu) | 正式应用已全局注册 | 2026-07-15 |
-| PageHeader | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/page-header) | 正式应用已全局注册 | 2026-07-15 |
-| Pagination | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/pagination) | 正式应用已全局注册 | 2026-07-15 |
-| Steps | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/steps) | 正式应用已全局注册 | 2026-07-15 |
-| Tabs | 导航 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tabs) | 正式应用已全局注册 | 2026-07-15 |
-| ConfigProvider | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/config-provider) | 正式应用已全局注册 | 2026-07-15 |
-| Icon | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/icon-component) | 正式应用已全局注册 | 2026-07-15 |
-| OverflowList | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/overflow-list) | 正式应用已全局注册 | 2026-07-15 |
-| ResizeBox | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/resize-box) | 正式应用已全局注册 | 2026-07-15 |
-| Scrollbar | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/scrollbar) | 正式应用已全局注册 | 2026-07-15 |
-| Split | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/split) | 正式应用已全局注册 | 2026-07-15 |
-| Trigger | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/trigger) | 正式应用已全局注册 | 2026-07-15 |
-| Watermark | 其他 | Task 7 待纳入 | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/watermark) | 正式应用已全局注册 | 2026-07-15 |
+| Avatar | 数据展示 | [数据展示组件](./数据展示组件.md#avatar) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/avatar) | 正式应用已全局注册 | 2026-07-15 |
+| Badge | 数据展示 | [数据展示组件](./数据展示组件.md#badge) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/badge) | 正式应用已全局注册 | 2026-07-15 |
+| Calendar | 数据展示 | [数据展示组件](./数据展示组件.md#calendar) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/calendar) | 正式应用已全局注册 | 2026-07-15 |
+| Card | 数据展示 | [数据展示组件](./数据展示组件.md#card) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/card) | 正式应用已全局注册 | 2026-07-15 |
+| Carousel | 数据展示 | [数据展示组件](./数据展示组件.md#carousel) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/carousel) | 正式应用已全局注册 | 2026-07-15 |
+| Collapse | 数据展示 | [数据展示组件](./数据展示组件.md#collapse) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/collapse) | 正式应用已全局注册 | 2026-07-15 |
+| Comment | 数据展示 | [数据展示组件](./数据展示组件.md#comment) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/comment) | 正式应用已全局注册 | 2026-07-15 |
+| Descriptions | 数据展示 | [数据展示组件](./数据展示组件.md#descriptions) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/descriptions) | 正式应用已全局注册 | 2026-07-15 |
+| Empty | 数据展示 | [数据展示组件](./数据展示组件.md#empty) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/empty) | 正式应用已全局注册 | 2026-07-15 |
+| Image | 数据展示 | [数据展示组件](./数据展示组件.md#image) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/image) | 正式应用已全局注册 | 2026-07-15 |
+| List | 数据展示 | [数据展示组件](./数据展示组件.md#list) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/list) | 正式应用已全局注册 | 2026-07-15 |
+| Popover | 数据展示 | [数据展示组件](./数据展示组件.md#popover) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/popover) | 正式应用已全局注册 | 2026-07-15 |
+| Progress | 数据展示 | [数据展示组件](./数据展示组件.md#progress) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/progress) | 正式应用已全局注册 | 2026-07-15 |
+| Statistic | 数据展示 | [数据展示组件](./数据展示组件.md#statistic) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/statistic) | 正式应用已全局注册 | 2026-07-15 |
+| Table | 数据展示 | [数据展示组件](./数据展示组件.md#table) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/table) | 正式应用已全局注册 | 2026-07-15 |
+| Tag | 数据展示 | [数据展示组件](./数据展示组件.md#tag) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tag) | 正式应用已全局注册 | 2026-07-15 |
+| Timeline | 数据展示 | [数据展示组件](./数据展示组件.md#timeline) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/timeline) | 正式应用已全局注册 | 2026-07-15 |
+| Tooltip | 数据展示 | [数据展示组件](./数据展示组件.md#tooltip) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tooltip) | 正式应用已全局注册 | 2026-07-15 |
+| Tree | 数据展示 | [数据展示组件](./数据展示组件.md#tree) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tree) | 正式应用已全局注册 | 2026-07-15 |
+| Alert | 反馈 | [反馈组件](./反馈组件.md#alert) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/alert) | 正式应用已全局注册 | 2026-07-15 |
+| Drawer | 反馈 | [反馈组件](./反馈组件.md#drawer) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/drawer) | `ADrawer` 已全局注册；已注入 `$drawer`；静态 API 可显式导入 | 2026-07-15 |
+| Message | 反馈 | [反馈组件](./反馈组件.md#message) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/message) | 已注入 `$message`；静态 API 可显式导入 | 2026-07-15 |
+| Modal | 反馈 | [反馈组件](./反馈组件.md#modal) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/modal) | `AModal` 已全局注册；已注入 `$modal`；静态 API 可显式导入 | 2026-07-15 |
+| Notification | 反馈 | [反馈组件](./反馈组件.md#notification) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/notification) | 已注入 `$notification`；静态 API 可显式导入 | 2026-07-15 |
+| Popconfirm | 反馈 | [反馈组件](./反馈组件.md#popconfirm) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/popconfirm) | 正式应用已全局注册 | 2026-07-15 |
+| Result | 反馈 | [反馈组件](./反馈组件.md#result) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/result) | 正式应用已全局注册 | 2026-07-15 |
+| Skeleton | 反馈 | [反馈组件](./反馈组件.md#skeleton) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/skeleton) | 正式应用已全局注册 | 2026-07-15 |
+| Spin | 反馈 | [反馈组件](./反馈组件.md#spin) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/spin) | 正式应用已全局注册 | 2026-07-15 |
+| Affix | 导航 | [导航与其他组件](./导航与其他组件.md#affix) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/affix) | 正式应用已全局注册 | 2026-07-15 |
+| Anchor | 导航 | [导航与其他组件](./导航与其他组件.md#anchor) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/anchor) | 正式应用已全局注册 | 2026-07-15 |
+| BackTop | 导航 | [导航与其他组件](./导航与其他组件.md#backtop) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/back-top) | 正式应用已全局注册 | 2026-07-15 |
+| Breadcrumb | 导航 | [导航与其他组件](./导航与其他组件.md#breadcrumb) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/breadcrumb) | 正式应用已全局注册 | 2026-07-15 |
+| Dropdown | 导航 | [导航与其他组件](./导航与其他组件.md#dropdown) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/dropdown) | 正式应用已全局注册 | 2026-07-15 |
+| Menu | 导航 | [导航与其他组件](./导航与其他组件.md#menu) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/menu) | 正式应用已全局注册 | 2026-07-15 |
+| PageHeader | 导航 | [导航与其他组件](./导航与其他组件.md#pageheader) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/page-header) | 正式应用已全局注册 | 2026-07-15 |
+| Pagination | 导航 | [导航与其他组件](./导航与其他组件.md#pagination) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/pagination) | 正式应用已全局注册 | 2026-07-15 |
+| Steps | 导航 | [导航与其他组件](./导航与其他组件.md#steps) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/steps) | 正式应用已全局注册 | 2026-07-15 |
+| Tabs | 导航 | [导航与其他组件](./导航与其他组件.md#tabs) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/tabs) | 正式应用已全局注册 | 2026-07-15 |
+| ConfigProvider | 其他 | [导航与其他组件](./导航与其他组件.md#configprovider) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/config-provider) | 正式应用已全局注册 | 2026-07-15 |
+| Icon | 其他 | [导航与其他组件](./导航与其他组件.md#icon) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/icon-component) | 正式应用已全局注册 | 2026-07-15 |
+| OverflowList | 其他 | [导航与其他组件](./导航与其他组件.md#overflowlist) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/overflow-list) | 正式应用已全局注册 | 2026-07-15 |
+| ResizeBox | 其他 | [导航与其他组件](./导航与其他组件.md#resizebox) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/resize-box) | 正式应用已全局注册 | 2026-07-15 |
+| Scrollbar | 其他 | [导航与其他组件](./导航与其他组件.md#scrollbar) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/scrollbar) | 正式应用已全局注册 | 2026-07-15 |
+| Split | 其他 | [导航与其他组件](./导航与其他组件.md#split) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/split) | 正式应用已全局注册 | 2026-07-15 |
+| Trigger | 其他 | [导航与其他组件](./导航与其他组件.md#trigger) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/trigger) | 正式应用已全局注册 | 2026-07-15 |
+| Watermark | 其他 | [导航与其他组件](./导航与其他组件.md#watermark) | [2.58.0 source](https://github.com/arco-design/arco-design-vue/tree/2.58.0/packages/web-vue/components/watermark) | 正式应用已全局注册 | 2026-07-15 |
