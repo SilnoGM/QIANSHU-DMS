@@ -50,10 +50,10 @@
 | AI 技能 / fa-slot-creator | [官方文档](https://fantastic-admin.hurui.me/guide/skills/fa-slot-creator.md) | [fa-slot-creator](./AI技能.md#fa-slot-creator) | 本地 Skill 已核对，19 个自动发现位置已映射 |
 | AI 技能 / fa-store-generator | [官方文档](https://fantastic-admin.hurui.me/guide/skills/fa-store-generator.md) | [fa-store-generator](./AI技能.md#fa-store-generator) | 本地 Skill 已核对，业务 Store 与框架 Store 边界已明确 |
 | AI 技能 / fa-theme-customizer | [官方文档](https://fantastic-admin.hurui.me/guide/skills/fa-theme-customizer.md) | [fa-theme-customizer](./AI技能.md#fa-theme-customizer) | 本地 Skill 已核对，三层主题结构已映射 |
-| 入门 / 准备工作 | [官方文档](https://fantastic-admin.hurui.me/guide/ready.md) | [准备工作](./工程基础.md#准备工作) | 已核对 Node.js、pnpm、源码与 IDE 要求 |
-| 入门 / 开始 | [官方文档](https://fantastic-admin.hurui.me/guide/start.md) | [开始](./工程基础.md#开始) | 已映射独立 `web/` workspace 与正式应用默认命令 |
-| 入门 / 代码规范 | [官方文档](https://fantastic-admin.hurui.me/guide/coding-standard.md) | [代码规范](./工程基础.md#代码规范) | 已映射项目实际检查脚本与注释要求 |
-| 入门 / 术语 | [官方文档](https://fantastic-admin.hurui.me/guide/term.md) | [项目术语](./工程基础.md#项目术语) | 已映射布局、导航、顶栏、标签栏与工具栏路径 |
+| 入门 / 准备工作 | [官方文档](https://fantastic-admin.hurui.me/guide/ready.md) | [开发前提](./指引与开发准备.md#开发前提) | 已核对 Node.js、pnpm、源码与 IDE 要求 |
+| 入门 / 开始 | [官方文档](https://fantastic-admin.hurui.me/guide/start.md) | [工作区启动与检查](./指引与开发准备.md#工作区启动与检查) | 已映射独立 `web/` workspace 与正式应用默认命令 |
+| 入门 / 代码规范 | [官方文档](https://fantastic-admin.hurui.me/guide/coding-standard.md) | [代码规范](./指引与开发准备.md#代码规范) | 已映射项目实际检查脚本与注释要求 |
+| 入门 / 术语 | [官方文档](https://fantastic-admin.hurui.me/guide/term.md) | [项目术语](./指引与开发准备.md#项目术语) | 已映射布局、导航、顶栏、标签栏与工具栏路径 |
 | 入门 / 环境变量 | [官方文档](https://fantastic-admin.hurui.me/guide/env.md) | [环境变量](./工程基础.md#环境变量) | 已核对三套示例文件与 `VITE_` 公开数据边界 |
 | 入门 / 资源 | [官方文档](https://fantastic-admin.hurui.me/guide/resources.md) | [资源](./工程基础.md#资源) | 已核对 `src/assets`、就近资源与 `public` 选择规则 |
 | 入门 / 图标 | [官方文档](https://fantastic-admin.hurui.me/guide/icon.md) | [图标](./工程基础.md#图标) | 已核对 `FaIcon`、UnoCSS、Iconify 与 SVG spritemap |
@@ -65,7 +65,7 @@
 
 - `web/package.json.version`、`web/pnpm-lock.yaml` 或 `web/apps/qsmds-arco/package.json` 变化时，先重新核对版本、命令、依赖和最后核对日期。
 - `web/skills/*/SKILL.md` 或相关 `references/` 变化时，同步复核 Skill 的输入、落点、只读边界和验证方式。
-- `web/apps/qsmds-arco/vite/`、`src/assets/`、`public/`、`src/iconify/` 或 `web/uno.config.ts` 变化时，复核工程基础章节。
+- `web/apps/qsmds-arco/vite.config.ts`、`web/apps/qsmds-arco/vite/`、`src/assets/`、`public/`、`src/iconify/` 或 `web/uno.config.ts` 变化时，复核工程基础章节。
 - 当前官网说明与本地 `6.3.0` 不一致时，保留官方直接链接并明确差异，不把在线最新状态写成当前项目事实。
 - 新增主题时，覆盖矩阵中必须同时给出唯一覆盖键、直接官方来源、有效本地落点和当前状态。
 - 手册中不写真实 `.env`、token、密码、连接字符串、Cookie 或专业版授权信息；不伪造业务 API、路由、字段或数据结构。

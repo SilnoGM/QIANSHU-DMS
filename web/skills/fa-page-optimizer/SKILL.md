@@ -37,10 +37,11 @@ Read: references/components-catalog.md
 确定组件后，读取对应 README 了解完整 API（props、slots、events）：
 
 ```
-Read: packages/components/src/<component-name>/README.md
+Read: packages/components/src/basic/<component-name>/README.md
+Read: packages/components/src/pro/<component-name>/README.md
 ```
 
-README 是最权威的用法来源，不确定时优先看文档而不是猜。
+先按组件目录所属的 `basic/` 或 `pro/` 选择一条真实路径。README 是最权威的用法来源，不确定时优先看文档而不是猜。
 
 ### 步骤 3: 参考优化模式（可选）
 
@@ -72,4 +73,4 @@ Read: references/optimization-patterns.md
 
 ### 步骤 5: 验证
 
-Fa 组件通过 `unplugin-auto-import` 自动导入，无需手动写 import 语句。替换后确认 props 和 v-model 绑定符合组件 API。如有问题，回到 `packages/components/src/<component-name>/README.md` 核对。
+Fa 组件通过 `unplugin-auto-import` 自动导入，无需手动写 import 语句。替换后确认 props 和 v-model 绑定符合组件 API。如有问题，回到 `packages/components/src/basic/<component-name>/README.md` 或 `packages/components/src/pro/<component-name>/README.md` 核对。

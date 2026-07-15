@@ -3,7 +3,7 @@
 本文档列出所有可用的框架内建组件及其使用场景。组件位于 `packages/components/src/`。
 
 > **提示**: 每个组件目录下都有 `README.md` 使用文档，包含完整的 API 说明 (Props/Slots/Events/Methods) 和示例代码。
-> 查阅方式：`Read: packages/components/src/<component-name>/README.md`
+> 查阅方式：基础组件使用 `Read: packages/components/src/basic/<component-name>/README.md`；专业组件使用 `Read: packages/components/src/pro/<component-name>/README.md`。
 
 ## 基础组件
 

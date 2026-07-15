@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
@@ -15,6 +16,12 @@ const fantasticAdminHandbookPaths = {
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
 const webLockfilePath = fileURLToPath(new URL('../pnpm-lock.yaml', import.meta.url))
+const pageOptimizerGovernancePaths = {
+  skill: fileURLToPath(new URL('../skills/fa-page-optimizer/SKILL.md', import.meta.url)),
+  catalog: fileURLToPath(new URL('../skills/fa-page-optimizer/references/components-catalog.md', import.meta.url)),
+  basicReadme: fileURLToPath(new URL('../packages/components/src/basic/form/README.md', import.meta.url)),
+  proReadme: fileURLToPath(new URL('../packages/components/src/pro/icon-picker/README.md', import.meta.url)),
+}
 
 const fantasticAdminCoverage = [
   ['指引 / 文档说明', 'https://fantastic-admin.hurui.me/guide/intro.md', './指引与开发准备.md#文档说明'],
@@ -30,10 +37,10 @@ const fantasticAdminCoverage = [
   ['AI 技能 / fa-slot-creator', 'https://fantastic-admin.hurui.me/guide/skills/fa-slot-creator.md', './AI技能.md#fa-slot-creator'],
   ['AI 技能 / fa-store-generator', 'https://fantastic-admin.hurui.me/guide/skills/fa-store-generator.md', './AI技能.md#fa-store-generator'],
   ['AI 技能 / fa-theme-customizer', 'https://fantastic-admin.hurui.me/guide/skills/fa-theme-customizer.md', './AI技能.md#fa-theme-customizer'],
-  ['入门 / 准备工作', 'https://fantastic-admin.hurui.me/guide/ready.md', './工程基础.md#准备工作'],
-  ['入门 / 开始', 'https://fantastic-admin.hurui.me/guide/start.md', './工程基础.md#开始'],
-  ['入门 / 代码规范', 'https://fantastic-admin.hurui.me/guide/coding-standard.md', './工程基础.md#代码规范'],
-  ['入门 / 术语', 'https://fantastic-admin.hurui.me/guide/term.md', './工程基础.md#项目术语'],
+  ['入门 / 准备工作', 'https://fantastic-admin.hurui.me/guide/ready.md', './指引与开发准备.md#开发前提'],
+  ['入门 / 开始', 'https://fantastic-admin.hurui.me/guide/start.md', './指引与开发准备.md#工作区启动与检查'],
+  ['入门 / 代码规范', 'https://fantastic-admin.hurui.me/guide/coding-standard.md', './指引与开发准备.md#代码规范'],
+  ['入门 / 术语', 'https://fantastic-admin.hurui.me/guide/term.md', './指引与开发准备.md#项目术语'],
   ['入门 / 环境变量', 'https://fantastic-admin.hurui.me/guide/env.md', './工程基础.md#环境变量'],
   ['入门 / 资源', 'https://fantastic-admin.hurui.me/guide/resources.md', './工程基础.md#资源'],
   ['入门 / 图标', 'https://fantastic-admin.hurui.me/guide/icon.md', './工程基础.md#图标'],
@@ -229,6 +236,69 @@ function readCoverageMatrix(content) {
   return rows
 }
 
+/**
+ * 将本分册使用的普通 Markdown 标题转换为 VitePress/GitHub 风格锚点。
+ * 当前标题不依赖自定义 id；保留中英文、数字和连字符，移除 Markdown 装饰与标点。
+ */
+function createHeadingAnchor(heading) {
+  return heading
+    .trim()
+    .toLowerCase()
+    .replace(/\[([^\]]+)\]\([^)]+\)/gu, '$1')
+    .replace(/[`*_~]/gu, '')
+    .replace(/[^\p{Letter}\p{Number}\s-]/gu, '')
+    .replace(/\s+/gu, '-')
+}
+
+function readMarkdownHeading(line) {
+  let headingLevel = 0
+  while (headingLevel < 6 && line[headingLevel] === '#') {
+    headingLevel += 1
+  }
+  if (headingLevel === 0 || ![' ', '\t'].includes(line[headingLevel])) {
+    return undefined
+  }
+
+  let contentStart = headingLevel
+  while ([' ', '\t'].includes(line[contentStart])) {
+    contentStart += 1
+  }
+
+  let heading = line.slice(contentStart).trim()
+  while (heading.endsWith('#')) {
+    heading = heading.slice(0, -1).trimEnd()
+  }
+  return heading || undefined
+}
+
+function readMarkdownHeadingAnchors(content) {
+  return new Set(
+    content
+      .split(/\r?\n/u)
+      .map(readMarkdownHeading)
+      .filter(Boolean)
+      .map(createHeadingAnchor),
+  )
+}
+
+/**
+ * 覆盖矩阵的本地链接是离线 CI 可验证的导航契约。失败信息同时携带覆盖键、
+ * 相对文件和锚点，避免维护者只能从通用的 ENOENT 或布尔断言反查来源。
+ */
+function assertCoverageLocalTarget(key, localTarget) {
+  const [relativeFile, rawAnchor, ...unexpectedParts] = localTarget.split('#')
+  const anchor = rawAnchor ? decodeURIComponent(rawAnchor) : '<missing>'
+  const filePath = resolve(dirname(fantasticAdminHandbookPaths.index), relativeFile)
+  const context = `coverage=${key}; file=${relativeFile}; anchor=${anchor}`
+
+  assert.equal(unexpectedParts.length, 0, `Fantastic-admin 本地落点包含多个锚点分隔符：${context}`)
+  assert.notEqual(anchor, '<missing>', `Fantastic-admin 本地落点必须包含章节锚点：${context}`)
+  assert.equal(existsSync(filePath), true, `Fantastic-admin 本地落点文件不存在：${context}`)
+
+  const headingAnchors = readMarkdownHeadingAnchors(readFileSync(filePath, 'utf8'))
+  assert.equal(headingAnchors.has(anchor), true, `Fantastic-admin 本地落点锚点不存在：${context}`)
+}
+
 test('前端开发手册入口固定正式应用、技术基线与组件职责', () => {
   const handbook = readRequiredFile(handbookPath)
   const documentIndex = readRequiredFile(documentIndexPath)
@@ -239,6 +309,10 @@ test('前端开发手册入口固定正式应用、技术基线与组件职责',
   assert.ok(
     documentIndex.includes('./前端文档/前端开发手册/README.md'),
     '根文档索引必须收录前端开发手册入口',
+  )
+  assert.ok(
+    handbook.includes('./Fantastic-admin/README.md'),
+    '前端开发手册必须收录 Fantastic-admin 分册真实入口',
   )
   assert.ok(
     handbook.includes(`Fantastic-admin 专业版 \`${fantasticAdminVersion}\``),
@@ -319,6 +393,8 @@ test('Fantastic-admin 分册完整覆盖第一阶段官方主题', () => {
     assert.notEqual(content.trim(), '', `Fantastic-admin 分册不得为空：${name}`)
   }
 
+  assert.equal(fantasticAdminCoverage.length, 23, 'Fantastic-admin 覆盖契约必须独立固定为 23 项')
+
   const coverageRows = readCoverageMatrix(documents.index)
   const actualKeys = coverageRows.map(row => row.key)
   const expectedKeys = fantasticAdminCoverage.map(([key]) => key)
@@ -330,5 +406,107 @@ test('Fantastic-admin 分册完整覆盖第一阶段官方主题', () => {
     const row = coverageRows.find(candidate => candidate.key === key)
     assert.equal(row?.officialUrl, officialUrl, `Fantastic-admin 覆盖键必须指向对应直接官方来源：${key}`)
     assert.equal(row?.localTarget, localTarget, `Fantastic-admin 覆盖键必须指向对应本地章节：${key}`)
+    assertCoverageLocalTarget(key, localTarget)
   }
+
+  for (const duplicateHeading of ['准备工作', '开始', '代码规范', '项目术语']) {
+    assert.doesNotMatch(
+      documents.foundation,
+      new RegExp(`^## ${duplicateHeading}$`, 'mu'),
+      `工程基础不得重复拥有由指引与开发准备维护的章节：${duplicateHeading}`,
+    )
+  }
+
+  const maintenanceRules = readSecondLevelSection(documents.index, '5. 维护规则')
+  assert.ok(
+    maintenanceRules.includes('web/apps/qsmds-arco/vite.config.ts'),
+    'Fantastic-admin 分册维护触发条件必须显式包含正式应用 vite.config.ts',
+  )
+})
+
+test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () => {
+  const skills = readRequiredFile(fantasticAdminHandbookPaths.skills)
+  const commonRules = readSecondLevelSection(skills, '共同安全与执行规则')
+
+  assert.ok(
+    commonRules.includes('七个')
+    && commonRules.includes('fa-crud-page-generator')
+    && commonRules.includes('fa-theme-customizer')
+    && commonRules.includes('未指定')
+    && commonRules.includes('确认'),
+    '共同规则必须区分七个默认正式应用 Skill，以及两个未指定目标时需确认的例外 Skill',
+  )
+
+  for (const [from, to] of [
+    ['FaForm / FaFormItem', 'AForm / AFormItem'],
+    ['FaTable', 'ATable'],
+    ['FaPagination', 'APagination'],
+    ['FaButton', 'AButton'],
+    ['FaToast / useFaToast', 'Message / Notification'],
+  ]) {
+    assert.ok(
+      commonRules.includes(from) && commonRules.includes(to),
+      `共同规则缺少 Fantastic-admin 到 Arco 的可执行映射：${from} -> ${to}`,
+    )
+  }
+  assert.ok(commonRules.includes('FaPageMain'), '共同规则必须明确框架页面壳 FaPageMain 可以保留')
+  assert.ok(commonRules.includes('app.use(ArcoVue)'), '共同规则必须记录正式应用的 Arco 全局注册事实')
+
+  for (const skillName of [
+    'fa-form-builder',
+    'fa-framework-settings',
+    'fa-i18n-manager',
+    'fa-page-optimizer',
+    'fa-route-generator',
+    'fa-slot-creator',
+    'fa-store-generator',
+  ]) {
+    const appTargetRow = findTableRow(readSecondLevelSection(skills, skillName), '应用定位')
+    assert.ok(
+      appTargetRow?.[1].includes('默认正式应用')
+      && appTargetRow[1].includes('web/apps/qsmds-arco'),
+      `${skillName} 必须明确默认正式应用定位`,
+    )
+  }
+
+  for (const skillName of ['fa-crud-page-generator', 'fa-theme-customizer']) {
+    const appTargetRow = findTableRow(readSecondLevelSection(skills, skillName), '应用定位')
+    assert.ok(
+      appTargetRow?.[1].includes('未指定')
+      && appTargetRow[1].includes('确认'),
+      `${skillName} 必须保留本地 Skill 的目标应用确认例外`,
+    )
+  }
+
+  for (const skillName of ['fa-crud-page-generator', 'fa-form-builder', 'fa-page-optimizer']) {
+    const section = readSecondLevelSection(skills, skillName)
+    assert.ok(
+      section.includes('复用') && section.includes('不直接采用') && section.includes('Fa* 业务 UI'),
+      `${skillName} 必须明确只复用工作流与结构，不直接采用默认 Fa* 业务 UI 输出`,
+    )
+  }
+})
+
+test('fa-page-optimizer 使用真实的 basic/pro 组件 README 路径', () => {
+  readRequiredFile(pageOptimizerGovernancePaths.basicReadme)
+  readRequiredFile(pageOptimizerGovernancePaths.proReadme)
+
+  const wrongReadmeTemplate = /packages\/components\/src\/<component(?:-name)?>\/README\.md/u
+  for (const [name, filePath] of Object.entries({
+    skill: pageOptimizerGovernancePaths.skill,
+    catalog: pageOptimizerGovernancePaths.catalog,
+  })) {
+    assert.doesNotMatch(
+      readRequiredFile(filePath),
+      wrongReadmeTemplate,
+      `fa-page-optimizer ${name} 不得继续使用缺少 basic/pro 层级的 README 路径模板`,
+    )
+  }
+
+  const skills = readRequiredFile(fantasticAdminHandbookPaths.skills)
+  assert.ok(
+    skills.includes('web/packages/components/src/basic/<component>/README.md')
+    && skills.includes('web/packages/components/src/pro/<component>/README.md'),
+    'AI 技能手册必须同时记录 basic 与 pro 组件 README 的真实路径模板',
+  )
 })
