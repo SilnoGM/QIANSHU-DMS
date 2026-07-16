@@ -1,7 +1,21 @@
 <style>
-@keyframes qianshu-loading-ring {
+@keyframes qianshu-loading-stripes {
+  from {
+    transform: translate3d(-6vw, 0, 0);
+  }
+
   to {
-    transform: rotate(1turn);
+    transform: translate3d(6vw, 0, 0);
+  }
+}
+
+@keyframes qianshu-loading-progress {
+  from {
+    transform: translate3d(-130%, 0, 0);
+  }
+
+  to {
+    transform: translate3d(350%, 0, 0);
   }
 }
 
@@ -11,109 +25,83 @@
 }
 
 .qianshu-loading {
-  --loading-brand-green: #2fa127;
-  --loading-brand-brown: #8e6439;
-  --loading-canvas: #f4f6ef;
-  --loading-surface: #e9eee5;
-  --loading-ink: #182019;
-  --loading-muted: #667066;
-  --loading-guide: #d7ddd1;
+  --loading-primary: __QIANSHU_LOADING_PRIMARY__;
+  --loading-foreground: __QIANSHU_LOADING_FOREGROUND__;
   position: fixed;
   inset: 0;
   z-index: 10000;
   display: grid;
-  place-items: center;
-  min-width: 280px;
+  width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
+  place-items: center;
   padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
   overflow: hidden;
-  color: var(--loading-ink);
+  color: oklch(var(--loading-foreground));
   font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  text-align: center;
   user-select: none;
-  background: var(--loading-canvas);
+  background: linear-gradient(
+    100deg,
+    #f0f6fe 0%,
+    #ecf5ff 30%,
+    #f4f7f7 62%,
+    #fefae9 100%
+  );
+  isolation: isolate;
 }
 
-/* 两条低对比引导线建立数据工作台的秩序感，同时避免首屏落入通用居中卡片样式。 */
-.qianshu-loading::before {
+/* 斜线只借用当前浅色主题主色，并以极低透明度提供持续但不喧宾夺主的方向感。 */
+.qianshu-loading__stripes {
   position: absolute;
-  inset: clamp(24px, 5vw, 72px);
+  inset: -25%;
+  z-index: 0;
   pointer-events: none;
-  content: "";
-  border-top: 1px solid var(--loading-guide);
-  border-left: 1px solid var(--loading-guide);
-}
-
-.qianshu-loading::after {
-  position: absolute;
-  right: clamp(24px, 5vw, 72px);
-  bottom: clamp(24px, 5vw, 72px);
-  width: 52px;
-  height: 3px;
-  pointer-events: none;
-  content: "";
-  background: var(--loading-brand-brown);
-  border-left: 76px solid var(--loading-brand-green);
+  background-image: repeating-linear-gradient(
+    113deg,
+    transparent 0,
+    transparent 127px,
+    oklch(var(--loading-primary) / 4.5%) 128px,
+    oklch(var(--loading-primary) / 4.5%) 129px,
+    transparent 130px,
+    transparent 256px
+  );
+  animation: qianshu-loading-stripes 8s linear infinite alternate;
+  will-change: transform;
 }
 
 .qianshu-loading__stage {
   position: relative;
-  display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
-  gap: 32px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  width: min(560px, calc(100vw - 80px));
-  transform: translateY(-4vh);
-}
-
-.qianshu-loading__logo-frame {
-  position: relative;
-  display: grid;
-  width: 120px;
-  height: 120px;
-  place-items: center;
-  background: var(--loading-surface);
-  border: 1px solid var(--loading-guide);
-  border-radius: 50%;
-}
-
-/* 年轮只承担“仍在初始化”的状态表达；Logo 本体保持静止，避免削弱品牌辨识度。 */
-.qianshu-loading__ring {
-  position: absolute;
-  inset: -1px;
-  border: 2px solid transparent;
-  border-top-color: var(--loading-brand-green);
-  border-right-color: var(--loading-brand-green);
-  border-bottom-color: var(--loading-brand-brown);
-  border-radius: 50%;
-  animation: qianshu-loading-ring 1.7s linear infinite;
+  width: min(360px, calc(100vw - 48px));
+  transform: translateY(-3vh);
 }
 
 .qianshu-loading__logo {
-  position: relative;
   display: block;
-  width: 92px;
-  height: 92px;
+  width: 108px;
+  height: 108px;
   object-fit: contain;
+  filter: drop-shadow(0 12px 20px oklch(var(--loading-primary) / 10%));
 }
 
-.qianshu-loading__copy {
-  min-width: 0;
-}
-
-.qianshu-loading__brand {
-  margin: 0 0 8px;
-  color: var(--loading-brand-brown);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.5;
-  letter-spacing: 0.16em;
+.qianshu-loading__heading {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  margin-top: 20px;
 }
 
 .qianshu-loading__title {
+  min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: clamp(26px, 3vw, 32px);
+  font-size: 26px;
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: -0.02em;
@@ -121,85 +109,95 @@
   white-space: nowrap;
 }
 
-.qianshu-loading__divider {
-  width: 100%;
-  height: 1px;
-  margin: 18px 0 13px;
-  background: var(--loading-guide);
+.qianshu-loading__version {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  color: oklch(var(--loading-primary));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  background: oklch(var(--loading-primary) / 8%);
+  border: 1px solid oklch(var(--loading-primary) / 14%);
+  border-radius: 999px;
+}
+
+.qianshu-loading__progress {
+  width: min(320px, 100%);
+  height: 4px;
+  margin-top: 28px;
+  overflow: hidden;
+  background: oklch(var(--loading-primary) / 10%);
+  border-radius: 999px;
+}
+
+/* 进度段表达“仍在向前初始化”，不展示无法由真实加载状态支撑的百分比。 */
+.qianshu-loading__progress-value {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: oklch(var(--loading-primary));
+  border-radius: inherit;
+  box-shadow: 0 0 12px oklch(var(--loading-primary) / 24%);
+  animation: qianshu-loading-progress 1.45s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
 }
 
 .qianshu-loading__status {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  color: var(--loading-muted);
-  font-size: 14px;
+  margin: 12px 0 0;
+  color: oklch(var(--loading-foreground) / 62%);
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+}
+
+.qianshu-loading__copyright {
+  position: absolute;
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, calc(env(safe-area-inset-bottom) + 16px));
+  left: max(24px, env(safe-area-inset-left));
+  z-index: 1;
+  margin: 0;
+  color: oklch(var(--loading-foreground) / 62%);
+  font-size: 12px;
   line-height: 1.6;
 }
 
-.qianshu-loading__status-dot {
-  flex: 0 0 auto;
-  width: 6px;
-  height: 6px;
-  background: var(--loading-brand-green);
-  border-radius: 50%;
-}
-
-.qianshu-loading__scope {
-  margin-left: auto;
-  font-size: 12px;
-}
-
-html.dark .qianshu-loading,
-html[color-scheme="dark"] .qianshu-loading {
-  --loading-canvas: #151a16;
-  --loading-surface: #edf1e8;
-  --loading-ink: #eef3ea;
-  --loading-muted: #a7b0a6;
-  --loading-guide: #323b33;
-}
-
 @media (max-width: 560px) {
-  .qianshu-loading::before {
-    inset: 24px;
-  }
-
-  .qianshu-loading::after {
-    right: 24px;
-    bottom: 24px;
-  }
-
   .qianshu-loading__stage {
-    grid-template-columns: 1fr;
-    gap: 24px;
-    justify-items: center;
-    width: min(320px, calc(100vw - 64px));
-    text-align: center;
+    width: min(280px, calc(100vw - 48px));
     transform: translateY(-2vh);
   }
 
-  .qianshu-loading__logo-frame {
-    width: 104px;
-    height: 104px;
-  }
-
   .qianshu-loading__logo {
-    width: 78px;
-    height: 78px;
+    width: 84px;
+    height: 84px;
   }
 
-  .qianshu-loading__copy {
-    width: 100%;
+  .qianshu-loading__heading {
+    gap: 7px;
+    margin-top: 18px;
   }
 
-  .qianshu-loading__status {
-    flex-wrap: wrap;
-    justify-content: center;
+  .qianshu-loading__title {
+    font-size: 21px;
+    line-height: 1.35;
   }
 
-  .qianshu-loading__scope {
-    flex-basis: 100%;
-    margin-left: 0;
+  .qianshu-loading__version {
+    padding: 2px 7px;
+  }
+
+  .qianshu-loading__progress {
+    width: min(240px, 100%);
+    margin-top: 24px;
+  }
+
+  .qianshu-loading__copyright {
+    right: max(16px, env(safe-area-inset-right));
+    bottom: max(16px, calc(env(safe-area-inset-bottom) + 12px));
+    left: max(16px, env(safe-area-inset-left));
+    font-size: 11px;
   }
 }
 
@@ -209,9 +207,18 @@ html[color-scheme="dark"] .qianshu-loading {
     transition-duration: 1ms !important;
   }
 
-  .qianshu-loading__ring {
+  .qianshu-loading__stripes,
+  .qianshu-loading__progress-value {
     animation: none;
-    transform: rotate(18deg);
+  }
+
+  .qianshu-loading__stripes {
+    transform: none;
+  }
+
+  .qianshu-loading__progress-value {
+    width: 42%;
+    transform: none;
   }
 }
 </style>
@@ -222,25 +229,27 @@ html[color-scheme="dark"] .qianshu-loading {
   aria-live="polite"
   aria-busy="true"
 >
+  <div class="qianshu-loading__stripes" aria-hidden="true"></div>
+
   <div class="qianshu-loading__stage">
-    <div class="qianshu-loading__logo-frame" aria-hidden="true">
-      <span class="qianshu-loading__ring"></span>
-      <img
-        class="qianshu-loading__logo"
-        src="/src/assets/images/logo.svg"
-        alt=""
-      />
+    <img
+      class="qianshu-loading__logo"
+      src="/src/assets/images/logo.svg"
+      alt=""
+    />
+
+    <div class="qianshu-loading__heading">
+      <p class="qianshu-loading__title">%VITE_APP_TITLE%</p>
+      <span class="qianshu-loading__version">v__QIANSHU_APP_VERSION__</span>
     </div>
 
-    <div class="qianshu-loading__copy">
-      <p class="qianshu-loading__brand">千树 DMS</p>
-      <p class="qianshu-loading__title">%VITE_APP_TITLE%</p>
-      <div class="qianshu-loading__divider" aria-hidden="true"></div>
-      <div class="qianshu-loading__status">
-        <span class="qianshu-loading__status-dot" aria-hidden="true"></span>
-        <span>正在准备工作台</span>
-        <span class="qianshu-loading__scope">面向业务管理场景</span>
-      </div>
+    <div class="qianshu-loading__progress" aria-hidden="true">
+      <span class="qianshu-loading__progress-value"></span>
     </div>
+    <p class="qianshu-loading__status">正在准备工作台</p>
   </div>
+
+  <p class="qianshu-loading__copyright">
+    © 2023–2026 Liaocheng Qianshu Culture Media Co., Ltd. All Rights Reserved.
+  </p>
 </div>

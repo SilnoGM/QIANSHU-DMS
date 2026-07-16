@@ -25,7 +25,13 @@ import VueDevTools from 'vite-plugin-vue-devtools'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-export default function createVitePlugins(mode: string, isBuild = false) {
+interface AppLoadingData {
+  version: string
+  primary: string
+  foreground: string
+}
+
+export default function createVitePlugins(mode: string, isBuild: boolean, appLoadingData: AppLoadingData) {
   const viteEnv = parseLoadedEnv(loadEnv(mode, process.cwd()))
   const vitePlugins: (PluginOption | PluginOption[])[] = [
     vue(),
@@ -114,6 +120,25 @@ export default function createVitePlugins(mode: string, isBuild = false) {
     }),
 
     AppLoading('loading.html'),
+
+    {
+      name: 'qsmds-app-loading-data',
+      transformIndexHtml: {
+        order: 'post',
+        handler(html) {
+          // Loading 在应用脚本执行前展示，因此由 Vite 将产品版本与所选浅色主题写入最终 HTML，避免首帧闪用错误配色。
+          const replacements = {
+            __QIANSHU_APP_VERSION__: appLoadingData.version,
+            __QIANSHU_LOADING_PRIMARY__: appLoadingData.primary,
+            __QIANSHU_LOADING_FOREGROUND__: appLoadingData.foreground,
+          }
+          return Object.entries(replacements).reduce(
+            (result, [token, value]) => result.replaceAll(token, value),
+            html,
+          )
+        },
+      },
+    },
 
     // https://github.com/unplugin/unplugin-turbo-console
     viteEnv.VITE_ENABLE_TURBO_CONSOLE && TurboConsole({

@@ -1,15 +1,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { BASE_COLORS } from '@fantastic-admin/themes'
 import dayjs from 'dayjs'
 import { defineConfig, loadEnv } from 'vite'
 import { parseLoadedEnv } from 'vite-plugin-env-parse'
 import pkg from './package.json'
+import { APP_THEME_BASE_COLORS } from './src/settings.theme'
 import createVitePlugins from './vite/plugins'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode, command }) => {
   const env = parseLoadedEnv(loadEnv(mode, process.cwd()))
+  const loadingTheme = BASE_COLORS[APP_THEME_BASE_COLORS.light].light
   // 全局 scss 资源
   const scssResources: string[] = []
   fs.readdirSync('src/assets/styles/resources').forEach((dirname) => {
@@ -47,7 +50,11 @@ export default defineConfig(({ mode, command }) => {
         lastBuildTime: dayjs().format('YYYY-MM-DD HH:mm:ss'),
       }),
     },
-    plugins: createVitePlugins(mode, command === 'build'),
+    plugins: createVitePlugins(mode, command === 'build', {
+      version: pkg.version,
+      primary: loadingTheme['--primary'],
+      foreground: loadingTheme['--foreground'],
+    }),
     optimizeDeps: {
       exclude: [
         '@fantastic-admin/components',

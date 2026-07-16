@@ -1,4 +1,5 @@
 import { setSettings } from '@fantastic-admin/settings'
+import { APP_THEME_BASE_COLORS } from './settings.theme'
 
 export default setSettings({
   app: {
@@ -26,8 +27,8 @@ export default setSettings({
     },
   },
   theme: {
-    baseColorLight: 'zinc',
-    baseColorDark: 'zinc',
+    baseColorLight: APP_THEME_BASE_COLORS.light,
+    baseColorDark: APP_THEME_BASE_COLORS.dark,
   },
   menu: {
     mode: 'head',
