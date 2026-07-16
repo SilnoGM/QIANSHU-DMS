@@ -68,8 +68,8 @@ const appIdentityByDirectory = {
     },
     title: '千树 DMS',
     titleByMode: {
-      development: '千树DMS',
-      production: '千树DMS',
+      development: '千树数据管理系统',
+      production: '千树数据管理系统',
     },
   },
 }
