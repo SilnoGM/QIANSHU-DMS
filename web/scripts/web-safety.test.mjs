@@ -62,7 +62,15 @@ const appIdentityByDirectory = {
   },
   'qsmds-arco': {
     storagePrefix: 'qianshu-dms',
+    storagePrefixByMode: {
+      development: 'qsdms_dev',
+      production: 'qsdms_pro',
+    },
     title: '千树 DMS',
+    titleByMode: {
+      development: '千树DMS',
+      production: '千树DMS',
+    },
   },
 }
 
@@ -73,8 +81,8 @@ function getExpectedValues(mode, appDirectoryName) {
   const commonValues = {
     VITE_APP_API_BASEURL: '/api',
     VITE_APP_DEBUG_TOOL: '',
-    VITE_APP_STORAGE_PREFIX: identity.storagePrefix,
-    VITE_APP_TITLE: identity.title,
+    VITE_APP_STORAGE_PREFIX: identity.storagePrefixByMode?.[mode] ?? identity.storagePrefix,
+    VITE_APP_TITLE: identity.titleByMode?.[mode] ?? identity.title,
   }
 
   if (mode === 'development') {
