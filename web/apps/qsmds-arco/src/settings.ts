@@ -11,7 +11,7 @@ export default setSettings({
     checkUpdates: true,
     mobile: false,
     copyright: {
-      enable: true,
+      enable: false,
       dates: '2023-2026',
       company: 'Liaocheng Qianshu Culture Media Co., Ltd. All Rights Reserved.',
       website: 'https://qianshu.ltd/web//official/#/',
