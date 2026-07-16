@@ -17,12 +17,12 @@ export default setSettings({
       website: 'https://qianshu.ltd/web//official/#/',
     },
     preferences: {
-      theme: true,
-      menu: true,
-      topbar: true,
-      tabbar: true,
-      toolbar: true,
-      page: true,
+      theme: false,
+      menu: false,
+      topbar: false,
+      tabbar: false,
+      toolbar: false,
+      page: false,
     },
   },
   theme: {
@@ -34,14 +34,22 @@ export default setSettings({
     style: 'line',
     mainMenuClickMode: 'smart',
     subMenuCollapseButton: true,
+    hotkeys: false,
   },
   topbar: {
     mode: 'fixed',
+  },
+  tabbar: {
+    hotkeys: false,
   },
   toolbar: {
     breadcrumb: {
       style: 'modern',
       mainMenu: true,
+    },
+    menuSearch: {
+      enable: true,
+      hotkeys: false,
     },
     notification: true,
     fullscreen: true,
