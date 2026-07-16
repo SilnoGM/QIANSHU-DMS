@@ -15,8 +15,7 @@ const router = createRouter({
 setupGuards(router)
 setupExtensions(router)
 
-router.isReady().then(() => {
-  loadingFadeOut()
-})
+// Loading 只表达应用初始化状态；初始导航失败时也必须解除遮罩，避免错误页面被永久阻挡。
+router.isReady().then(loadingFadeOut, loadingFadeOut)
 
 export default router
