@@ -19,6 +19,14 @@
   }
 }
 
+/* 只提供首屏可见时长基准，不产生位移、闪烁或颜色变化。 */
+@keyframes qianshu-loading-minimum-duration {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+
 .qianshu-loading,
 .qianshu-loading * {
   box-sizing: border-box;
@@ -48,6 +56,8 @@
     #f4f7f7 62%,
     #fefae9 100%
   );
+  animation: qianshu-loading-minimum-duration 1.5s linear;
+  animation-fill-mode: none;
   isolation: isolate;
 }
 

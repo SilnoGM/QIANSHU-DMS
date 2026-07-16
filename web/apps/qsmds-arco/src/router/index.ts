@@ -3,6 +3,7 @@ import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router
 import pinia from '@/store'
 import setupExtensions from './extensions'
 import setupGuards from './guards'
+import { finishAppLoadingAfterMinimumDuration } from './loading'
 // 路由相关数据
 import { constantRoutes } from './routes'
 
@@ -15,7 +16,12 @@ const router = createRouter({
 setupGuards(router)
 setupExtensions(router)
 
-// Loading 只表达应用初始化状态；初始导航失败时也必须解除遮罩，避免错误页面被永久阻挡。
-router.isReady().then(loadingFadeOut, loadingFadeOut)
+function finishInitialLoading() {
+  const loadingElement = document.querySelector<HTMLElement>('.qianshu-loading')
+  return finishAppLoadingAfterMinimumDuration(loadingElement, loadingFadeOut)
+}
+
+// 成功与失败共用同一退出路径：短加载补足至 1500ms，慢加载不追加等待，并始终解除遮罩。
+router.isReady().then(finishInitialLoading, finishInitialLoading)
 
 export default router

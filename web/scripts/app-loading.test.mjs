@@ -7,6 +7,9 @@ import { fileURLToPath } from 'node:url'
 const webRoot = fileURLToPath(new URL('../', import.meta.url))
 const loadingTemplate = readFileSync(`${webRoot}/apps/qsmds-arco/loading.html`, 'utf8')
 const routerSource = readFileSync(`${webRoot}/apps/qsmds-arco/src/router/index.ts`, 'utf8')
+const reducedMotionStyles = loadingTemplate.slice(
+  loadingTemplate.indexOf('@media (prefers-reduced-motion: reduce)'),
+)
 
 test('正式应用首屏 Loading 使用浅色主题动效并保持独立初始化边界', () => {
   assert.match(loadingTemplate, /src\/assets\/images\/logo\.svg/u)
@@ -25,6 +28,12 @@ test('正式应用首屏 Loading 使用浅色主题动效并保持独立初始�
   assert.match(loadingTemplate, /repeating-linear-gradient\(/u)
   assert.match(loadingTemplate, /@keyframes\s+qianshu-loading-stripes/u)
   assert.match(loadingTemplate, /@keyframes\s+qianshu-loading-progress/u)
+  assert.match(loadingTemplate, /@keyframes\s+qianshu-loading-minimum-duration/u)
+  assert.match(
+    loadingTemplate,
+    /animation:\s*qianshu-loading-minimum-duration\s+1\.5s\s+linear/u,
+  )
+  assert.match(loadingTemplate, /animation-fill-mode:\s*none/u)
   assert.match(loadingTemplate, /class="qianshu-loading__version"/u)
   assert.match(loadingTemplate, /class="qianshu-loading__progress"/u)
   assert.match(loadingTemplate, /class="qianshu-loading__stripes"\s+aria-hidden="true"/u)
@@ -33,12 +42,17 @@ test('正式应用首屏 Loading 使用浅色主题动效并保持独立初始�
     /--loading-primary:\s*__QIANSHU_LOADING_PRIMARY__/u,
   )
   assert.match(
-    loadingTemplate,
-    /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?animation:\s*none/u,
+    reducedMotionStyles,
+    /\.qianshu-loading__stripes,\s*\.qianshu-loading__progress-value\s*\{\s*animation:\s*none;/u,
   )
   assert.match(
     loadingTemplate,
     /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\[data-app-loading\][\s\S]*?transition-duration:\s*1ms\s*!important/u,
+  )
+  assert.doesNotMatch(reducedMotionStyles, /qianshu-loading-minimum-duration/u)
+  assert.doesNotMatch(
+    reducedMotionStyles,
+    /\.qianshu-loading\s*\{[^}]*animation:\s*none/iu,
   )
 
   assert.doesNotMatch(loadingTemplate, /#2fa127|#8e6439/iu)
@@ -48,9 +62,13 @@ test('正式应用首屏 Loading 使用浅色主题动效并保持独立初始�
   assert.doesNotMatch(loadingTemplate, /<script|\bfetch\s*\(|\baxios\b|\bpinia\b/iu)
 })
 
-test('初始路由无论成功或失败都会解除首屏 Loading', () => {
+test('初始路由无论成功或失败都遵守最短展示时间并解除 Loading', () => {
   assert.match(
     routerSource,
-    /router\.isReady\(\)\.then\(\s*loadingFadeOut\s*,\s*loadingFadeOut\s*\)/u,
+    /finishAppLoadingAfterMinimumDuration/u,
+  )
+  assert.match(
+    routerSource,
+    /router\.isReady\(\)\.then\(\s*finishInitialLoading\s*,\s*finishInitialLoading\s*\)/u,
   )
 })
