@@ -78,6 +78,7 @@ function createFixture(overrides: { forced?: boolean } = {}) {
   const transaction: TransactionMock = {
     $queryRaw: jest
       .fn()
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([snapshot])
       .mockResolvedValueOnce([
         {
@@ -277,7 +278,16 @@ describe('PasswordChangeService', () => {
       permissions: ['users:read'],
     })
 
-    expect(fixture.transaction.$queryRaw).toHaveBeenCalledTimes(3)
+    expect(fixture.transaction.$queryRaw).toHaveBeenCalledTimes(4)
+    const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(timeoutQuery.strings.join('')).toContain("set_config('statement_timeout'")
+    expect(
+      fixture.transaction.$queryRaw.mock.invocationCallOrder[0],
+    ).toBeLessThan(fixture.transaction.$queryRaw.mock.invocationCallOrder[1])
     expect(fixture.transaction.user.update).toHaveBeenCalledWith({
       where: { id: USER_ID },
       data: {
@@ -319,9 +329,10 @@ describe('PasswordChangeService', () => {
     ['disabled user', { status: UserStatus.DISABLED }],
   ])('returns AUTH_STATE_CHANGED for a %s after hashing', async (_label, change) => {
     const fixture = createFixture()
-    fixture.transaction.$queryRaw.mockReset().mockResolvedValueOnce([
-      { ...fixture.snapshot, ...change },
-    ])
+    fixture.transaction.$queryRaw
+      .mockReset()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ ...fixture.snapshot, ...change }])
 
     const error = await captureApiError(
       fixture.service.change(CHANGE_INPUT),
@@ -336,6 +347,7 @@ describe('PasswordChangeService', () => {
     const fixture = createFixture()
     fixture.transaction.$queryRaw
       .mockReset()
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([fixture.snapshot])
       .mockResolvedValueOnce([
         {

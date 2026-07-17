@@ -35,6 +35,7 @@ function createFixture() {
   const transaction = {
     $queryRaw: jest
       .fn()
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         { id: USER_ID, status: UserStatus.ACTIVE, authVersion: 4 },
       ])
@@ -120,6 +121,17 @@ describe('LogoutService', () => {
       requestId: INPUT.requestId,
       sourceIpHash: IP_HASH,
     })
+    const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(timeoutQuery.strings.join('')).toContain("set_config('statement_timeout'")
+    expect(
+      fixture.transaction.$queryRaw.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      fixture.sessions.revokeSessionInTransaction.mock.invocationCallOrder[0],
+    )
   })
 
   it('does not write a duplicate audit when a racing request already revoked the Session', async () => {
@@ -136,7 +148,16 @@ describe('LogoutService', () => {
 
     await fixture.service.logoutAll(INPUT)
 
-    expect(fixture.transaction.$queryRaw).toHaveBeenCalledTimes(3)
+    expect(fixture.transaction.$queryRaw).toHaveBeenCalledTimes(4)
+    const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(timeoutQuery.strings.join('')).toContain("set_config('statement_timeout'")
+    expect(
+      fixture.transaction.$queryRaw.mock.invocationCallOrder[0],
+    ).toBeLessThan(fixture.transaction.$queryRaw.mock.invocationCallOrder[1])
     expect(fixture.transaction.user.update).toHaveBeenCalledWith({
       where: { id: USER_ID },
       data: { authVersion: { increment: 1 } },
@@ -180,6 +201,7 @@ describe('LogoutService', () => {
     }
     fixture.transaction.$queryRaw
       .mockReset()
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([user])
       .mockResolvedValueOnce([session])
       .mockResolvedValueOnce([{ now: DATABASE_NOW }])

@@ -11,6 +11,7 @@ import {
   UserStatus,
 } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { SessionTokenProvider } from './providers/session-token.provider'
 
@@ -169,9 +170,10 @@ export class AuthSessionService {
     reason: SessionRevokedReason,
   ): Promise<boolean> {
     try {
-      return await this.prisma.$transaction((transaction) =>
-        this.revokeSessionInTransaction(transaction, sessionId, reason),
-      )
+      return await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        return this.revokeSessionInTransaction(transaction, sessionId, reason)
+      })
     } catch {
       throw this.createServiceUnavailableException()
     }
@@ -182,9 +184,10 @@ export class AuthSessionService {
     reason: SessionRevokedReason,
   ): Promise<number> {
     try {
-      return await this.prisma.$transaction((transaction) =>
-        this.revokeAllForUserInTransaction(transaction, userId, reason),
-      )
+      return await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        return this.revokeAllForUserInTransaction(transaction, userId, reason)
+      })
     } catch {
       throw this.createServiceUnavailableException()
     }
@@ -201,6 +204,8 @@ export class AuthSessionService {
 
     try {
       return await this.prisma.$transaction(async (transaction) => {
+        // selector 行锁也必须受 transaction-local lock/statement timeout 约束。
+        await applyTransactionTimeouts(transaction)
         const rows = await transaction.$queryRaw<LockedSessionRow[]>`
           SELECT
             s.token_hash AS "tokenHash",

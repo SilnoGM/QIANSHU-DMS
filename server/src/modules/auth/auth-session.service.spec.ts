@@ -131,6 +131,7 @@ describe('AuthSessionService', () => {
     const token = tokenProvider.generate()
     const absoluteExpiresAt = new Date(DATABASE_NOW.getTime() + 2 * 60 * 60 * 1_000)
     transaction.$queryRaw
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         createLockedSessionRow(token.tokenHash, { absoluteExpiresAt }),
       ])
@@ -155,6 +156,15 @@ describe('AuthSessionService', () => {
         idleExpiresAt: absoluteExpiresAt,
       },
     })
+    const rawQueryCalls = transaction.$queryRaw.mock.calls as unknown[][]
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(timeoutQuery.strings.join('')).toContain("set_config('statement_timeout'")
+    expect(transaction.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      transaction.$queryRaw.mock.invocationCallOrder[1],
+    )
   })
 
   it('does not touch a session inside the five-minute activity window', async () => {
@@ -162,6 +172,7 @@ describe('AuthSessionService', () => {
     const { service, tokenProvider } = createService(transaction)
     const token = tokenProvider.generate()
     transaction.$queryRaw
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         createLockedSessionRow(token.tokenHash, {
           lastActivityAt: new Date(DATABASE_NOW.getTime() - 4 * 60 * 1_000),
@@ -178,6 +189,7 @@ describe('AuthSessionService', () => {
     const { service, tokenProvider } = createService(transaction)
     const token = tokenProvider.generate()
     transaction.$queryRaw
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([createLockedSessionRow(token.tokenHash)])
       .mockResolvedValueOnce([{ now: DATABASE_NOW }])
 
@@ -197,6 +209,7 @@ describe('AuthSessionService', () => {
     const { service, tokenProvider } = createService(transaction)
     const token = tokenProvider.generate()
     transaction.$queryRaw
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         createLockedSessionRow(token.tokenHash, overrides),
       ])
@@ -210,10 +223,62 @@ describe('AuthSessionService', () => {
     const transaction = createTransactionMock()
     const { service, tokenProvider } = createService(transaction)
     const token = tokenProvider.generate()
-    transaction.$queryRaw.mockResolvedValueOnce([])
+    transaction.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
 
     await expect(service.authenticate(token.value)).resolves.toBeNull()
-    expect(transaction.$queryRaw).toHaveBeenCalledTimes(1)
+    expect(transaction.$queryRaw).toHaveBeenCalledTimes(2)
+  })
+
+  it('applies transaction-local timeouts before the standalone single-session revoke', async () => {
+    const transaction = createTransactionMock()
+    transaction.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ now: DATABASE_NOW }])
+    transaction.authSession.updateMany.mockResolvedValue({ count: 1 })
+    const { service } = createService(transaction)
+
+    await expect(
+      service.revokeSession(
+        'e8acf4bf-51b9-4fbf-a2eb-4b107fbec1e1',
+        SessionRevokedReason.LOGOUT,
+      ),
+    ).resolves.toBe(true)
+
+    const rawQueryCalls = transaction.$queryRaw.mock.calls as unknown[][]
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(transaction.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      transaction.$queryRaw.mock.invocationCallOrder[1],
+    )
+  })
+
+  it('applies transaction-local timeouts before the standalone user-session revoke', async () => {
+    const transaction = createTransactionMock()
+    transaction.$queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ now: DATABASE_NOW }])
+    transaction.authSession.updateMany.mockResolvedValue({ count: 2 })
+    const { service } = createService(transaction)
+
+    await expect(
+      service.revokeAllForUser(
+        USER_ID,
+        SessionRevokedReason.PASSWORD_CHANGED,
+      ),
+    ).resolves.toBe(2)
+
+    const rawQueryCalls = transaction.$queryRaw.mock.calls as unknown[][]
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(transaction.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      transaction.$queryRaw.mock.invocationCallOrder[1],
+    )
   })
 
   it('revokes only active sessions using PostgreSQL time', async () => {

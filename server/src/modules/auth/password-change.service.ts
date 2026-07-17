@@ -13,6 +13,7 @@ import {
   type UserStatus as UserStatusValue,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import type { RequestAuthContext } from './auth-context'
 import { AuthSessionService } from './auth-session.service'
@@ -215,6 +216,8 @@ export class PasswordChangeService {
     sourceIpHash: Buffer,
   ): Promise<LoginResult> {
     return this.prisma.$transaction(async (transaction) => {
+      // 必须先设置 transaction-local 超时，再按 User -> Session 顺序取得行锁。
+      await applyTransactionTimeouts(transaction)
       // 固定先锁 User，再锁当前 Session；login/password-reset 同样先竞争 User 锁。
       const lockedUsers = await transaction.$queryRaw<UserPasswordSnapshot[]>(
         Prisma.sql`

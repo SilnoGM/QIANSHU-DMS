@@ -11,6 +11,7 @@ import {
   type UserStatus as UserStatusValue,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import type { RequestAuthContext } from './auth-context'
 import { AuthSessionService } from './auth-session.service'
@@ -62,6 +63,7 @@ export class LogoutService {
     try {
       const sourceIpHash = this.subjectHasher.hashIp(input.sourceIp)
       await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
         const revoked = await this.sessions.revokeSessionInTransaction(
           transaction,
           input.auth?.sessionId ?? '',
@@ -94,6 +96,8 @@ export class LogoutService {
       const sourceIpHash = this.subjectHasher.hashIp(input.sourceIp)
 
       await this.prisma.$transaction(async (transaction) => {
+        // 必须先设置 transaction-local 超时，再按 User -> Session 顺序取得行锁。
+        await applyTransactionTimeouts(transaction)
         // 固定先锁 User，再锁当前 Session，与改密路径保持相同的互斥顺序。
         const users = await transaction.$queryRaw<LockedUserRow[]>(Prisma.sql`
           SELECT "id", "status", "auth_version" AS "authVersion"

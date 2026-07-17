@@ -278,6 +278,16 @@ describe('AuthService login', () => {
       },
     )
 
+    const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(timeoutQuery.strings.join('')).toContain("set_config('statement_timeout'")
+    expect(
+      fixture.transaction.$queryRaw.mock.invocationCallOrder[0],
+    ).toBeLessThan(fixture.audit.record.mock.invocationCallOrder[0])
+
     const auditCalls = fixture.audit.record.mock.calls as unknown[][]
     const auditPayload = JSON.stringify(auditCalls[0]?.[1])
     expect(auditPayload).not.toContain(LOGIN_INPUT.username)
@@ -345,7 +355,13 @@ describe('AuthService login', () => {
     })
 
     const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
-    const lockQuery = rawQueryCalls[0]?.[0] as {
+    const timeoutQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+    }
+    expect(timeoutQuery.strings.join('')).toContain("set_config('lock_timeout'")
+    expect(timeoutQuery.strings.join('')).toContain("set_config('statement_timeout'")
+
+    const lockQuery = rawQueryCalls[1]?.[0] as {
       strings: readonly string[]
       values: readonly unknown[]
     }
@@ -353,6 +369,9 @@ describe('AuthService login', () => {
     expect(lockQuery.strings.join('')).toContain('clock_timestamp()')
     expect(lockQuery.strings.join('')).not.toContain(USER_ID)
     expect(lockQuery.values).toContain(USER_ID)
+    expect(
+      fixture.transaction.$queryRaw.mock.invocationCallOrder[0],
+    ).toBeLessThan(fixture.transaction.$queryRaw.mock.invocationCallOrder[1])
     expect(fixture.transaction.user.update).toHaveBeenCalledWith({
       where: { id: USER_ID },
       data: { lastLoginAt: DATABASE_NOW },

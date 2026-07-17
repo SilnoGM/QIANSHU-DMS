@@ -12,6 +12,7 @@ import {
   type UserStatus as UserStatusValue,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuthSessionService } from './auth-session.service'
 import type { LoginInput, LoginResult } from './auth.types'
@@ -196,6 +197,8 @@ export class AuthService {
     }
 
     await this.prisma.$transaction(async (transaction) => {
+      // 必须是 callback 内第一项数据库操作，约束失败审计的锁等待和语句耗时。
+      await applyTransactionTimeouts(transaction)
       await this.audit.record(transaction, {
         eventType: AuditEventType.AUTH_LOGIN_FAILED,
         outcome: AuditOutcome.FAILURE,
@@ -214,6 +217,8 @@ export class AuthService {
     requestId: string,
   ): Promise<LoginResult> {
     return this.prisma.$transaction(async (transaction) => {
+      // 必须先设置 transaction-local 超时，再读取或锁定任何业务数据。
+      await applyTransactionTimeouts(transaction)
       const rows = await transaction.$queryRaw<LockedUserRow[]>(Prisma.sql`
         SELECT
           "id",
