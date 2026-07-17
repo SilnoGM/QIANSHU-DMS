@@ -1,0 +1,450 @@
+import { HttpStatus } from '@nestjs/common'
+
+import { AccessControlService } from '../access-control/access-control.service'
+import {
+  AuditActorType,
+  AuditEventType,
+  AuditOutcome,
+  AuthRateLimitScope,
+  UserStatus,
+} from '../../generated/prisma/enums'
+import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { ApiException } from '../../infrastructure/http/api.exception'
+import { AuthService } from './auth.service'
+import { AuthSessionService, type IssuedSession } from './auth-session.service'
+import { AuthRateLimitService } from './providers/auth-rate-limit.service'
+import { AuthSubjectHasher } from './providers/auth-subject-hasher'
+import {
+  AuthCapacityUnavailableError,
+  PasswordProvider,
+} from './providers/password.provider'
+
+const USER_ID = '8ac94425-c78c-4b32-ae2d-e3ce808b0275'
+const REQUEST_ID = 'b19b2237-b935-462d-a818-02cc67b051c2'
+const SOURCE_IP = '192.0.2.18'
+const DATABASE_NOW = new Date('2026-07-17T03:04:05.678Z')
+const USERNAME_HASH = Buffer.alloc(32, 0x11)
+const IP_HASH = Buffer.alloc(32, 0x22)
+
+const USER_SNAPSHOT = {
+  id: USER_ID,
+  username: 'Opérator',
+  usernameNormalized: 'opérator',
+  displayName: '操作员',
+  passwordHash: '$argon2id$verified-user-hash',
+  status: UserStatus.ACTIVE,
+  mustChangePassword: false,
+  authVersion: 4,
+} as const
+
+const ISSUED_SESSION: IssuedSession = {
+  tokenValue: 'e8acf4bf-51b9-4fbf-a2eb-4b107fbec1e1.secret-value',
+  session: {
+    id: 'e8acf4bf-51b9-4fbf-a2eb-4b107fbec1e1',
+    userId: USER_ID,
+    username: USER_SNAPSHOT.username,
+    displayName: USER_SNAPSHOT.displayName,
+    mustChangePassword: false,
+    createdAt: DATABASE_NOW,
+    lastActivityAt: DATABASE_NOW,
+    idleExpiresAt: new Date('2026-07-19T03:04:05.678Z'),
+    absoluteExpiresAt: new Date('2026-08-16T03:04:05.678Z'),
+  },
+}
+
+type TransactionMock = {
+  $queryRaw: jest.Mock
+  $executeRaw: jest.Mock
+  user: {
+    update: jest.Mock
+  }
+}
+
+function createTransactionMock(): TransactionMock {
+  return {
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn().mockResolvedValue(2),
+    user: {
+      update: jest.fn().mockResolvedValue({}),
+    },
+  }
+}
+
+function createLockedUserRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: USER_SNAPSHOT.id,
+    username: USER_SNAPSHOT.username,
+    displayName: USER_SNAPSHOT.displayName,
+    passwordHash: USER_SNAPSHOT.passwordHash,
+    status: USER_SNAPSHOT.status,
+    mustChangePassword: USER_SNAPSHOT.mustChangePassword,
+    authVersion: USER_SNAPSHOT.authVersion,
+    databaseNow: DATABASE_NOW,
+    ...overrides,
+  }
+}
+
+function createFixture() {
+  const transaction = createTransactionMock()
+  transaction.$queryRaw.mockResolvedValue([createLockedUserRow()])
+
+  const prisma = {
+    user: {
+      findUnique: jest.fn().mockResolvedValue(USER_SNAPSHOT),
+    },
+    $transaction: jest.fn(
+      async (callback: (transaction: TransactionMock) => Promise<unknown>) =>
+        callback(transaction),
+    ),
+  }
+  const sessions = {
+    validateWithoutTouch: jest.fn().mockResolvedValue(null),
+    createInTransaction: jest.fn().mockResolvedValue(ISSUED_SESSION),
+  }
+  const rateLimits = {
+    assertAllowed: jest.fn().mockResolvedValue(undefined),
+    recordFailure: jest.fn().mockResolvedValue(undefined),
+    clear: jest.fn().mockResolvedValue(undefined),
+  }
+  const subjectHasher = {
+    hashUsername: jest.fn().mockReturnValue(USERNAME_HASH),
+    hashIp: jest.fn().mockReturnValue(IP_HASH),
+  }
+  const passwords = {
+    verify: jest.fn().mockResolvedValue(true),
+    verifyWithDummyHash: jest.fn().mockResolvedValue(false),
+  }
+  const audit = {
+    record: jest.fn().mockResolvedValue({ id: 'audit-event-id' }),
+  }
+  const accessControl = {
+    getPermissionCodes: jest.fn().mockResolvedValue([]),
+    getPermissionCodesInTransaction: jest
+      .fn()
+      .mockResolvedValue(['roles:read', 'users:read']),
+  }
+
+  const service = new AuthService(
+    prisma as unknown as PrismaService,
+    sessions as unknown as AuthSessionService,
+    rateLimits as unknown as AuthRateLimitService,
+    subjectHasher as unknown as AuthSubjectHasher,
+    passwords as unknown as PasswordProvider,
+    audit,
+    accessControl as unknown as AccessControlService,
+  )
+
+  return {
+    accessControl,
+    audit,
+    passwords,
+    prisma,
+    rateLimits,
+    service,
+    sessions,
+    subjectHasher,
+    transaction,
+  }
+}
+
+const LOGIN_INPUT = {
+  username: '  Ope\u0301rator  ',
+  password: 'correct horse battery staple',
+  sourceIp: SOURCE_IP,
+  requestId: REQUEST_ID,
+} as const
+
+async function captureError(operation: Promise<unknown>): Promise<ApiException> {
+  const error = await operation.catch((caught: unknown) => caught)
+
+  expect(error).toBeInstanceOf(ApiException)
+  return error as ApiException
+}
+
+describe('AuthService login', () => {
+  it('rejects an already authenticated browser without touching or starting login work', async () => {
+    const fixture = createFixture()
+    fixture.sessions.validateWithoutTouch.mockResolvedValue({
+      ...ISSUED_SESSION.session,
+    })
+
+    const error = await captureError(
+      fixture.service.login({
+        ...LOGIN_INPUT,
+        existingSessionToken: ISSUED_SESSION.tokenValue,
+      }),
+    )
+
+    expect(error.getStatus()).toBe(HttpStatus.CONFLICT)
+    expect(error).toMatchObject({ code: 'ALREADY_AUTHENTICATED' })
+    expect(fixture.sessions.validateWithoutTouch).toHaveBeenCalledWith(
+      ISSUED_SESSION.tokenValue,
+    )
+    expect(fixture.subjectHasher.hashUsername).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.assertAllowed).not.toHaveBeenCalled()
+    expect(fixture.prisma.user.findUnique).not.toHaveBeenCalled()
+    expect(fixture.passwords.verify).not.toHaveBeenCalled()
+  })
+
+  it('normalizes username and checks both HMAC rate-limit buckets before Argon2', async () => {
+    const fixture = createFixture()
+
+    await fixture.service.login(LOGIN_INPUT)
+
+    expect(fixture.subjectHasher.hashUsername).toHaveBeenCalledWith('opérator')
+    expect(fixture.subjectHasher.hashIp).toHaveBeenCalledWith(SOURCE_IP)
+    expect(fixture.rateLimits.assertAllowed).toHaveBeenNthCalledWith(
+      1,
+      AuthRateLimitScope.LOGIN_USERNAME,
+      USERNAME_HASH,
+    )
+    expect(fixture.rateLimits.assertAllowed).toHaveBeenNthCalledWith(
+      2,
+      AuthRateLimitScope.LOGIN_IP,
+      IP_HASH,
+    )
+    expect(fixture.prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { usernameNormalized: 'opérator' },
+      select: {
+        id: true,
+        username: true,
+        usernameNormalized: true,
+        displayName: true,
+        passwordHash: true,
+        status: true,
+        mustChangePassword: true,
+        authVersion: true,
+      },
+    })
+
+    const lastRateLimitCall = Math.max(
+      ...fixture.rateLimits.assertAllowed.mock.invocationCallOrder,
+    )
+    expect(lastRateLimitCall).toBeLessThan(
+      fixture.passwords.verify.mock.invocationCallOrder[0],
+    )
+  })
+
+  it('does not invoke Argon2 when either pre-check reports a blocked bucket', async () => {
+    const fixture = createFixture()
+    fixture.rateLimits.assertAllowed.mockRejectedValueOnce(
+      new ApiException(
+        HttpStatus.TOO_MANY_REQUESTS,
+        'AUTH_RATE_LIMITED',
+        '操作过于频繁，请稍后重试',
+      ),
+    )
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS)
+    expect(error).toMatchObject({ code: 'AUTH_RATE_LIMITED' })
+    expect(fixture.passwords.verify).not.toHaveBeenCalled()
+    expect(fixture.passwords.verifyWithDummyHash).not.toHaveBeenCalled()
+    expect(fixture.prisma.user.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('uses the fixed dummy verification path for an unknown username', async () => {
+    const fixture = createFixture()
+    fixture.prisma.user.findUnique.mockResolvedValue(null)
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED)
+    expect(error).toMatchObject({ code: 'INVALID_CREDENTIALS' })
+    expect(fixture.passwords.verifyWithDummyHash).toHaveBeenCalledWith(
+      LOGIN_INPUT.password,
+    )
+    expect(fixture.passwords.verify).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.recordFailure).toHaveBeenNthCalledWith(
+      1,
+      AuthRateLimitScope.LOGIN_USERNAME,
+      USERNAME_HASH,
+    )
+    expect(fixture.rateLimits.recordFailure).toHaveBeenNthCalledWith(
+      2,
+      AuthRateLimitScope.LOGIN_IP,
+      IP_HASH,
+    )
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      {
+        eventType: AuditEventType.AUTH_LOGIN_FAILED,
+        outcome: AuditOutcome.FAILURE,
+        actorType: AuditActorType.ANONYMOUS,
+        requestId: REQUEST_ID,
+        reasonCode: 'INVALID_CREDENTIALS',
+        sourceIpHash: IP_HASH,
+      },
+    )
+
+    const auditCalls = fixture.audit.record.mock.calls as unknown[][]
+    const auditPayload = JSON.stringify(auditCalls[0]?.[1])
+    expect(auditPayload).not.toContain(LOGIN_INPUT.username)
+    expect(auditPayload).not.toContain('opérator')
+    expect(auditPayload).not.toContain(SOURCE_IP)
+    expect(auditPayload).not.toContain(LOGIN_INPUT.password)
+  })
+
+  it.each([
+    ['a wrong password', UserStatus.ACTIVE, false],
+    ['a disabled user', UserStatus.DISABLED, true],
+  ])(
+    'returns the same public failure and records both buckets for %s',
+    async (_label, status, passwordMatches) => {
+      const fixture = createFixture()
+      fixture.prisma.user.findUnique.mockResolvedValue({
+        ...USER_SNAPSHOT,
+        status,
+      })
+      fixture.passwords.verify.mockResolvedValue(passwordMatches)
+
+      const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+      expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED)
+      expect(error).toMatchObject({ code: 'INVALID_CREDENTIALS' })
+      expect(fixture.passwords.verify).toHaveBeenCalledWith(
+        LOGIN_INPUT.password,
+        USER_SNAPSHOT.passwordHash,
+      )
+      expect(fixture.rateLimits.recordFailure).toHaveBeenCalledTimes(2)
+      expect(fixture.audit.record).toHaveBeenCalledWith(
+        fixture.transaction,
+        expect.objectContaining({
+          eventType: AuditEventType.AUTH_LOGIN_FAILED,
+          actorType: AuditActorType.ANONYMOUS,
+          reasonCode: 'INVALID_CREDENTIALS',
+          sourceIpHash: IP_HASH,
+        }),
+      )
+      expect(fixture.sessions.createInTransaction).not.toHaveBeenCalled()
+    },
+  )
+
+  it('maps Argon2 queue exhaustion to the fixed capacity contract', async () => {
+    const fixture = createFixture()
+    fixture.passwords.verify.mockRejectedValue(
+      new AuthCapacityUnavailableError(),
+    )
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
+    expect(error).toMatchObject({ code: 'AUTH_CAPACITY_UNAVAILABLE' })
+    expect(error.publicMessage).not.toContain('Argon2')
+    expect(fixture.rateLimits.recordFailure).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('locks and rechecks the user, then updates, creates the session, clears limits and audits atomically', async () => {
+    const fixture = createFixture()
+
+    await expect(fixture.service.login(LOGIN_INPUT)).resolves.toEqual({
+      issuedSession: ISSUED_SESSION,
+      permissions: ['roles:read', 'users:read'],
+    })
+
+    const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
+    const lockQuery = rawQueryCalls[0]?.[0] as {
+      strings: readonly string[]
+      values: readonly unknown[]
+    }
+    expect(lockQuery.strings.join('')).toContain('FOR UPDATE')
+    expect(lockQuery.strings.join('')).toContain('clock_timestamp()')
+    expect(lockQuery.strings.join('')).not.toContain(USER_ID)
+    expect(lockQuery.values).toContain(USER_ID)
+    expect(fixture.transaction.user.update).toHaveBeenCalledWith({
+      where: { id: USER_ID },
+      data: { lastLoginAt: DATABASE_NOW },
+    })
+    expect(fixture.sessions.createInTransaction).toHaveBeenCalledWith(
+      fixture.transaction,
+      {
+        id: USER_ID,
+        authVersion: USER_SNAPSHOT.authVersion,
+        username: USER_SNAPSHOT.username,
+        displayName: USER_SNAPSHOT.displayName,
+        mustChangePassword: false,
+      },
+    )
+    expect(fixture.transaction.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(fixture.rateLimits.clear).not.toHaveBeenCalled()
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      {
+        eventType: AuditEventType.AUTH_LOGIN_SUCCEEDED,
+        outcome: AuditOutcome.SUCCESS,
+        actorType: AuditActorType.USER,
+        actorUserId: USER_ID,
+        targetType: 'User',
+        targetId: USER_ID,
+        requestId: REQUEST_ID,
+        sourceIpHash: IP_HASH,
+      },
+    )
+
+    const createOrder = fixture.sessions.createInTransaction.mock.invocationCallOrder[0]
+    const auditOrder = fixture.audit.record.mock.invocationCallOrder[0]
+    expect(createOrder).toBeLessThan(auditOrder)
+  })
+
+  it.each([
+    ['missing user', null],
+    ['changed password hash', createLockedUserRow({ passwordHash: 'changed' })],
+    ['changed auth version', createLockedUserRow({ authVersion: 5 })],
+    ['changed status', createLockedUserRow({ status: UserStatus.DISABLED })],
+  ])('fails closed with AUTH_STATE_CHANGED for a %s after verification', async (
+    _label,
+    lockedRow,
+  ) => {
+    const fixture = createFixture()
+    fixture.transaction.$queryRaw.mockResolvedValue(
+      lockedRow === null ? [] : [lockedRow],
+    )
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.CONFLICT)
+    expect(error).toMatchObject({ code: 'AUTH_STATE_CHANGED' })
+    expect(fixture.transaction.user.update).not.toHaveBeenCalled()
+    expect(fixture.sessions.createInTransaction).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+    expect(fixture.transaction.$executeRaw).not.toHaveBeenCalled()
+  })
+
+  it('reads permissions in the mutation transaction so a read failure rolls back before session creation', async () => {
+    const fixture = createFixture()
+    fixture.accessControl.getPermissionCodesInTransaction.mockRejectedValue(
+      new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'INTERNAL_ERROR',
+        '服务器内部错误',
+      ),
+    )
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
+    expect(error).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' })
+    expect(
+      fixture.accessControl.getPermissionCodesInTransaction,
+    ).toHaveBeenCalledWith(fixture.transaction, USER_ID)
+    expect(fixture.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(fixture.accessControl.getPermissionCodes).not.toHaveBeenCalled()
+    expect(fixture.sessions.createInTransaction).not.toHaveBeenCalled()
+  })
+
+  it('does not expose a database or audit error through the login boundary', async () => {
+    const fixture = createFixture()
+    fixture.audit.record.mockRejectedValue(
+      new Error('postgres://secret@example.invalid/private?password=leak'),
+    )
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
+    expect(error).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' })
+    expect(error.message).not.toContain('postgres://')
+    expect(error.message).not.toContain('password=')
+  })
+})

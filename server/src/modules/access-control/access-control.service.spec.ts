@@ -121,6 +121,34 @@ describe('AccessControlService', () => {
     expect(findMany).toHaveBeenCalledTimes(2)
   })
 
+  it('can read permissions through the caller transaction for an atomic auth response', async () => {
+    const defaultFindMany = jest
+      .fn<Promise<PermissionQueryResult>, [unknown]>()
+      .mockResolvedValue([])
+    const transactionFindMany = jest
+      .fn<Promise<PermissionQueryResult>, [unknown]>()
+      .mockResolvedValue([
+        {
+          role: {
+            permissions: [{ permission: { code: 'users:read' } }],
+          },
+        },
+      ])
+    const service = new AccessControlService(
+      createPrismaService(defaultFindMany),
+    )
+    const transaction = createPrismaService(transactionFindMany)
+
+    await expect(
+      service.getPermissionCodesInTransaction(
+        transaction as never,
+        'user-123',
+      ),
+    ).resolves.toEqual(['users:read'])
+    expect(transactionFindMany).toHaveBeenCalledTimes(1)
+    expect(defaultFindMany).not.toHaveBeenCalled()
+  })
+
   it('returns an empty list when the user has no roles or permissions', async () => {
     const findMany = jest.fn<Promise<PermissionQueryResult>, [unknown]>()
       .mockResolvedValue([])

@@ -1,0 +1,346 @@
+import { HttpStatus, Injectable } from '@nestjs/common'
+
+import { AccessControlService } from '../access-control/access-control.service'
+import { AuditService } from '../audit/audit.service'
+import { Prisma } from '../../generated/prisma/client'
+import {
+  AuditActorType,
+  AuditEventType,
+  AuditOutcome,
+  AuthRateLimitScope,
+  UserStatus,
+  type UserStatus as UserStatusValue,
+} from '../../generated/prisma/enums'
+import { PrismaService } from '../../infrastructure/database/prisma.service'
+import { ApiException } from '../../infrastructure/http/api.exception'
+import { AuthSessionService } from './auth-session.service'
+import type { LoginInput, LoginResult } from './auth.types'
+import { AuthRateLimitService } from './providers/auth-rate-limit.service'
+import { AuthSubjectHasher } from './providers/auth-subject-hasher'
+import {
+  AuthCapacityUnavailableError,
+  PasswordProvider,
+} from './providers/password.provider'
+import { normalizeUsername } from './providers/username-normalizer'
+
+const INVALID_CREDENTIALS_CODE = 'INVALID_CREDENTIALS'
+const AUTH_STATE_CHANGED_CODE = 'AUTH_STATE_CHANGED'
+const AUTH_SERVICE_UNAVAILABLE_CODE = 'AUTH_SERVICE_UNAVAILABLE'
+
+type UserCredentialSnapshot = Readonly<{
+  id: string
+  username: string
+  usernameNormalized: string
+  displayName: string
+  passwordHash: string
+  status: UserStatusValue
+  mustChangePassword: boolean
+  authVersion: number
+}>
+
+type LockedUserRow = Readonly<{
+  id: string
+  username: string
+  displayName: string
+  passwordHash: string
+  status: UserStatusValue
+  mustChangePassword: boolean
+  authVersion: number
+  databaseNow: Date
+}>
+
+/**
+ * 登录应用服务。
+ *
+ * 该边界只对外暴露稳定错误码；原始 SQL、PHC、username、IP 和密码
+ * 都不会进入错误或 Audit metadata。成功登录的 User 更新、Session、限流
+ * 清理和 Audit 位于同一 PostgreSQL 事务，任一步失败均不会留下
+ * 未交付的 Session。
+ */
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly sessions: AuthSessionService,
+    private readonly rateLimits: AuthRateLimitService,
+    private readonly subjectHasher: AuthSubjectHasher,
+    private readonly passwords: PasswordProvider,
+    private readonly audit: AuditService,
+    private readonly accessControl: AccessControlService,
+  ) {}
+
+  async login(input: LoginInput): Promise<LoginResult> {
+    try {
+      await this.assertBrowserIsAnonymous(input.existingSessionToken)
+
+      const { usernameNormalized } = normalizeUsername(input.username)
+      const usernameHash = this.subjectHasher.hashUsername(usernameNormalized)
+      const sourceIpHash = this.subjectHasher.hashIp(input.sourceIp)
+
+      // 两个限流桶必须在 User 查询和昂贵 Argon2 之前同时受检。
+      await Promise.all([
+        this.rateLimits.assertAllowed(
+          AuthRateLimitScope.LOGIN_USERNAME,
+          usernameHash,
+        ),
+        this.rateLimits.assertAllowed(AuthRateLimitScope.LOGIN_IP, sourceIpHash),
+      ])
+
+      const user = await this.loadCredentialSnapshot(usernameNormalized)
+      const passwordMatches = await this.verifyPassword(input.password, user)
+
+      if (
+        user === null
+        || !passwordMatches
+        || user.status !== UserStatus.ACTIVE
+      ) {
+        await this.recordInvalidCredentials(
+          usernameHash,
+          sourceIpHash,
+          input.requestId,
+        )
+        throw this.createInvalidCredentialsException()
+      }
+
+      return await this.createSuccessfulLogin(
+        user,
+        usernameHash,
+        sourceIpHash,
+        input.requestId,
+      )
+    }
+    catch (error) {
+      if (error instanceof ApiException) {
+        throw error
+      }
+
+      if (error instanceof AuthCapacityUnavailableError) {
+        throw new ApiException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          'AUTH_CAPACITY_UNAVAILABLE',
+          '认证服务繁忙，请稍后重试',
+        )
+      }
+
+      // 所有 provider/Prisma/Audit 原始错误都在这个边界终止。
+      throw this.createServiceUnavailableException()
+    }
+  }
+
+  private async assertBrowserIsAnonymous(
+    existingSessionToken: string | undefined,
+  ): Promise<void> {
+    if (existingSessionToken === undefined || existingSessionToken.length === 0) {
+      return
+    }
+
+    const existingSession = await this.sessions.validateWithoutTouch(
+      existingSessionToken,
+    )
+    if (existingSession !== null) {
+      throw new ApiException(
+        HttpStatus.CONFLICT,
+        'ALREADY_AUTHENTICATED',
+        '当前浏览器已登录，请先退出当前账号',
+      )
+    }
+  }
+
+  private loadCredentialSnapshot(
+    usernameNormalized: string,
+  ): Promise<UserCredentialSnapshot | null> {
+    return this.prisma.user.findUnique({
+      where: { usernameNormalized },
+      select: {
+        id: true,
+        username: true,
+        usernameNormalized: true,
+        displayName: true,
+        passwordHash: true,
+        status: true,
+        mustChangePassword: true,
+        authVersion: true,
+      },
+    })
+  }
+
+  private verifyPassword(
+    password: string,
+    user: UserCredentialSnapshot | null,
+  ): Promise<boolean> {
+    if (user === null) {
+      return this.passwords.verifyWithDummyHash(password)
+    }
+
+    // DISABLED 用户也走真实 Hash verify，避免从工作量区分账号状态。
+    return this.passwords.verify(password, user.passwordHash)
+  }
+
+  private async recordInvalidCredentials(
+    usernameHash: Buffer,
+    sourceIpHash: Buffer,
+    requestId: string,
+  ): Promise<void> {
+    const rateLimitResults = await Promise.allSettled([
+      this.rateLimits.recordFailure(
+        AuthRateLimitScope.LOGIN_USERNAME,
+        usernameHash,
+      ),
+      this.rateLimits.recordFailure(AuthRateLimitScope.LOGIN_IP, sourceIpHash),
+    ])
+
+    // 两个失败桶都已尝试写入后再统一失败，避免一个 reject 使另一个
+    // Promise 变成无人收口的后台任务。
+    if (rateLimitResults.some((result) => result.status === 'rejected')) {
+      throw new Error('Authentication failure could not be recorded')
+    }
+
+    await this.prisma.$transaction(async (transaction) => {
+      await this.audit.record(transaction, {
+        eventType: AuditEventType.AUTH_LOGIN_FAILED,
+        outcome: AuditOutcome.FAILURE,
+        actorType: AuditActorType.ANONYMOUS,
+        requestId,
+        reasonCode: INVALID_CREDENTIALS_CODE,
+        sourceIpHash,
+      })
+    })
+  }
+
+  private async createSuccessfulLogin(
+    snapshot: UserCredentialSnapshot,
+    usernameHash: Buffer,
+    sourceIpHash: Buffer,
+    requestId: string,
+  ): Promise<LoginResult> {
+    return this.prisma.$transaction(async (transaction) => {
+      const rows = await transaction.$queryRaw<LockedUserRow[]>(Prisma.sql`
+        SELECT
+          "id",
+          "username",
+          "display_name" AS "displayName",
+          "password_hash" AS "passwordHash",
+          "status",
+          "must_change_password" AS "mustChangePassword",
+          "auth_version" AS "authVersion",
+          clock_timestamp() AS "databaseNow"
+        FROM "users"
+        WHERE "id" = CAST(${snapshot.id} AS uuid)
+        FOR UPDATE
+      `)
+      const lockedUser = rows[0]
+
+      if (!this.matchesVerifiedSnapshot(snapshot, lockedUser)) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          AUTH_STATE_CHANGED_CODE,
+          '认证状态已变化，请重试',
+        )
+      }
+
+      if (!this.isValidDatabaseDate(lockedUser.databaseNow)) {
+        throw new Error('Invalid database clock result')
+      }
+
+      // 权限与 User/Session 写入共享事务；读取失败会回滚整次登录，不留下客户端
+      // 无法取得 Cookie 的孤立 Session，响应也与该次数据库状态保持一致。
+      const permissions = await this.readPermissionsInTransaction(
+        transaction,
+        lockedUser.id,
+      )
+
+      await transaction.user.update({
+        where: { id: lockedUser.id },
+        data: { lastLoginAt: lockedUser.databaseNow },
+      })
+
+      const issuedSession = await this.sessions.createInTransaction(
+        transaction,
+        {
+          id: lockedUser.id,
+          authVersion: lockedUser.authVersion,
+          username: lockedUser.username,
+          displayName: lockedUser.displayName,
+          mustChangePassword: lockedUser.mustChangePassword,
+        },
+      )
+
+      // 成功后的限流清理与 Session 处于同一事务；清理失败会回滚 Session，
+      // 不会出现客户端没收到 Cookie 而数据库留下活跃 Session。
+      await transaction.$executeRaw(Prisma.sql`
+        DELETE FROM "auth_rate_limits"
+        WHERE
+          (
+            "scope" = ${AuthRateLimitScope.LOGIN_USERNAME}::"auth_rate_limit_scope"
+            AND "subject_key_hash" = ${Buffer.from(usernameHash)}
+          )
+          OR
+          (
+            "scope" = ${AuthRateLimitScope.LOGIN_IP}::"auth_rate_limit_scope"
+            AND "subject_key_hash" = ${Buffer.from(sourceIpHash)}
+          )
+      `)
+
+      await this.audit.record(transaction, {
+        eventType: AuditEventType.AUTH_LOGIN_SUCCEEDED,
+        outcome: AuditOutcome.SUCCESS,
+        actorType: AuditActorType.USER,
+        actorUserId: lockedUser.id,
+        targetType: 'User',
+        targetId: lockedUser.id,
+        requestId,
+        sourceIpHash,
+      })
+
+      return { issuedSession, permissions }
+    })
+  }
+
+  private matchesVerifiedSnapshot(
+    snapshot: UserCredentialSnapshot,
+    lockedUser: LockedUserRow | undefined,
+  ): lockedUser is LockedUserRow {
+    return (
+      lockedUser !== undefined
+      && lockedUser.passwordHash === snapshot.passwordHash
+      && lockedUser.authVersion === snapshot.authVersion
+      && lockedUser.status === snapshot.status
+      && lockedUser.status === UserStatus.ACTIVE
+    )
+  }
+
+  private async readPermissionsInTransaction(
+    transaction: Prisma.TransactionClient,
+    userId: string,
+  ): Promise<string[]> {
+    try {
+      return await this.accessControl.getPermissionCodesInTransaction(
+        transaction,
+        userId,
+      )
+    } catch {
+      // AccessControl 的内部错误统一收口为认证链路的暂时不可用契约。
+      throw this.createServiceUnavailableException()
+    }
+  }
+
+  private isValidDatabaseDate(value: unknown): value is Date {
+    return value instanceof Date && Number.isFinite(value.getTime())
+  }
+
+  private createInvalidCredentialsException(): ApiException {
+    return new ApiException(
+      HttpStatus.UNAUTHORIZED,
+      INVALID_CREDENTIALS_CODE,
+      '用户名或密码错误',
+    )
+  }
+
+  private createServiceUnavailableException(): ApiException {
+    return new ApiException(
+      HttpStatus.SERVICE_UNAVAILABLE,
+      AUTH_SERVICE_UNAVAILABLE_CODE,
+      '认证服务暂时不可用',
+    )
+  }
+}

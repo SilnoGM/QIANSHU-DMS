@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 
+import type { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 
@@ -19,7 +20,21 @@ export class AccessControlService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getPermissionCodes(userId: string): Promise<string[]> {
-    const userRoles = await this.loadUserRoles(userId)
+    return this.getPermissionCodesFrom(this.prisma, userId)
+  }
+
+  getPermissionCodesInTransaction(
+    transaction: Prisma.TransactionClient,
+    userId: string,
+  ): Promise<string[]> {
+    return this.getPermissionCodesFrom(transaction, userId)
+  }
+
+  private async getPermissionCodesFrom(
+    reader: Pick<Prisma.TransactionClient, 'userRole'>,
+    userId: string,
+  ): Promise<string[]> {
+    const userRoles = await this.loadUserRoles(reader, userId)
     const permissionCodes = new Set<string>()
 
     for (const userRole of userRoles) {
@@ -48,9 +63,12 @@ export class AccessControlService {
     return requiredPermissionCodes.some((code) => granted.has(code))
   }
 
-  private async loadUserRoles(userId: string) {
+  private async loadUserRoles(
+    reader: Pick<Prisma.TransactionClient, 'userRole'>,
+    userId: string,
+  ) {
     try {
-      return await this.prisma.userRole.findMany({
+      return await reader.userRole.findMany({
         where: { userId },
         select: {
           role: {
@@ -66,8 +84,7 @@ export class AccessControlService {
           },
         },
       })
-    }
-    catch {
+    } catch {
       // Prisma/驱动错误可能包含 SQL、主机和连接信息；授权链路只返回固定安全契约。
       throw new ApiException(
         INTERNAL_ERROR_STATUS,
