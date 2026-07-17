@@ -198,7 +198,7 @@ model AuditEvent {
   sourceIpHash  Bytes?         @map("source_ip_hash") @db.ByteA
   metadata      Json           @default("{}") @db.JsonB
 
-  actorUser User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  actorUser User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
 
   @@index([occurredAt(sort: Desc), id(sort: Desc)], map: "audit_events_occurred_at_id_idx")
   @@index([actorUserId, occurredAt(sort: Desc)], map: "audit_events_actor_user_id_occurred_at_idx")

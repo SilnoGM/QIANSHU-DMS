@@ -304,7 +304,7 @@ ALTER TABLE "auth_sessions"
 ALTER TABLE "audit_events"
   ADD CONSTRAINT "audit_events_actor_user_id_fkey"
   FOREIGN KEY ("actor_user_id") REFERENCES "users" ("id")
-  ON DELETE SET NULL ON UPDATE CASCADE;
+  ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- Seed the only system role.
 INSERT INTO "roles" (

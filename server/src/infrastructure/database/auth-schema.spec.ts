@@ -115,6 +115,18 @@ describe('authentication and RBAC database schema', () => {
     )
   })
 
+  it('restricts deletion of audited users so actor identity cannot be nulled', () => {
+    const auditEvent = extractModel(readSchema(), 'AuditEvent')
+    const migration = readMigration()
+
+    expect(auditEvent).toContain(
+      '@relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)',
+    )
+    expect(migration).toMatch(
+      /CONSTRAINT "audit_events_actor_user_id_fkey"[\s\S]*?ON DELETE RESTRICT ON UPDATE CASCADE;/,
+    )
+  })
+
   it('does not create rejected remember-me, device or reauthentication columns', () => {
     const migration = readMigration()
 
