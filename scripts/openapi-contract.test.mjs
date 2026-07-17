@@ -651,6 +651,26 @@ mutationTest(
   /kind/,
 )
 
+test('application metadata 接受认证接口所需的可选契约字段', () => {
+  const document = cloneDocument()
+  const metadata = operation(document, '/api/widgets', 'post')[
+    'x-qianshu-contract'
+  ]
+  Object.assign(metadata, {
+    session: 'none',
+    csrf: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 409,
+        codes: ['AUTH_STATE_CHANGED'],
+      },
+    ],
+  })
+
+  assert.doesNotThrow(() => assertOpenApiContract(document))
+})
+
 for (const field of [
   'authentication',
   'authorization',

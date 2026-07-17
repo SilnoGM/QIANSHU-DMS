@@ -27,6 +27,33 @@ const CONTRACT_METADATA_FIELDS = [
   'kind',
   ...CONTRACT_BOOLEAN_FIELDS,
 ]
+const CONTRACT_OPTIONAL_METADATA_FIELDS = [
+  'session',
+  'csrf',
+  'privateNoStore',
+  'errors',
+]
+const CONTRACT_ALLOWED_METADATA_FIELDS = new Set([
+  ...CONTRACT_METADATA_FIELDS,
+  ...CONTRACT_OPTIONAL_METADATA_FIELDS,
+])
+const CONTRACT_SESSION_REQUIREMENTS = new Set([
+  'none',
+  'optional',
+  'required',
+])
+const CONTRACT_ERROR_STATUSES = new Set([
+  400,
+  401,
+  403,
+  404,
+  409,
+  422,
+  429,
+  500,
+  503,
+])
+const CONTRACT_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/u
 const API_ERROR_PROPERTIES = [
   'code',
   'fieldErrors',
@@ -409,17 +436,16 @@ function assertMetadata(record, metadata) {
     fail(`Missing x-qianshu-contract ${context}`)
   }
 
-  const keys = Object.keys(metadata).sort()
-  const expectedKeys = [...CONTRACT_METADATA_FIELDS].sort()
-  if (
-    keys.length !== expectedKeys.length ||
-    !keys.every((key, index) => key === expectedKeys[index])
-  ) {
-    const missingField = CONTRACT_METADATA_FIELDS.find(
-      field => !hasOwn(metadata, field),
-    )
+  const keys = Object.keys(metadata)
+  const missingField = CONTRACT_METADATA_FIELDS.find(
+    field => !hasOwn(metadata, field),
+  )
+  const unknownField = keys.find(
+    field => !CONTRACT_ALLOWED_METADATA_FIELDS.has(field),
+  )
+  if (missingField !== undefined || unknownField !== undefined) {
     fail(
-      `x-qianshu-contract ${missingField ?? 'fields'} must be exact ${context}`,
+      `x-qianshu-contract ${missingField ?? unknownField ?? 'fields'} must be exact ${context}`,
     )
   }
   if (metadata.kind !== 'health' && metadata.kind !== 'application') {
@@ -433,14 +459,74 @@ function assertMetadata(record, metadata) {
   if (metadata.authorization && !metadata.authentication) {
     fail(`authorization requires authentication ${context}`)
   }
+  if (hasOwn(metadata, 'session')) {
+    if (!CONTRACT_SESSION_REQUIREMENTS.has(metadata.session)) {
+      fail(`x-qianshu-contract session is invalid ${context}`)
+    }
+    const sessionRequiresAuthentication = metadata.session === 'required'
+    if (metadata.authentication !== sessionRequiresAuthentication) {
+      fail(`session requirement conflicts with authentication ${context}`)
+    }
+  }
+  for (const field of ['csrf', 'privateNoStore']) {
+    if (hasOwn(metadata, field) && typeof metadata[field] !== 'boolean') {
+      fail(`x-qianshu-contract ${field} must be boolean ${context}`)
+    }
+  }
+  if (hasOwn(metadata, 'errors')) {
+    assertErrorMetadata(record, metadata.errors)
+  }
   if (metadata.kind === 'health') {
     for (const field of CONTRACT_BOOLEAN_FIELDS) {
       if (metadata[field]) {
         fail(`health metadata ${field} must be false ${context}`)
       }
     }
+    const optionalField = CONTRACT_OPTIONAL_METADATA_FIELDS.find(
+      field => hasOwn(metadata, field),
+    )
+    if (optionalField !== undefined) {
+      fail(`health metadata cannot declare ${optionalField} ${context}`)
+    }
   }
   return metadata
+}
+
+function assertErrorMetadata(record, errors) {
+  const context = operationContext(record)
+  if (!Array.isArray(errors) || errors.length === 0) {
+    fail(`x-qianshu-contract errors must be a non-empty array ${context}`)
+  }
+
+  const seenStatuses = new Set()
+  for (const error of errors) {
+    if (
+      !isRecord(error) ||
+      Object.keys(error).length !== 2 ||
+      !hasOwn(error, 'status') ||
+      !hasOwn(error, 'codes')
+    ) {
+      fail(`x-qianshu-contract error fields must be exact ${context}`)
+    }
+    if (
+      !Number.isInteger(error.status) ||
+      !CONTRACT_ERROR_STATUSES.has(error.status) ||
+      seenStatuses.has(error.status)
+    ) {
+      fail(`x-qianshu-contract error status is invalid ${context}`)
+    }
+    seenStatuses.add(error.status)
+    if (
+      !Array.isArray(error.codes) ||
+      error.codes.length === 0 ||
+      new Set(error.codes).size !== error.codes.length ||
+      error.codes.some(code =>
+        typeof code !== 'string' || !CONTRACT_ERROR_CODE_PATTERN.test(code),
+      )
+    ) {
+      fail(`x-qianshu-contract error codes are invalid ${context}`)
+    }
+  }
 }
 
 function baseMediaType(mediaType) {
