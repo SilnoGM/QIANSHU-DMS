@@ -70,6 +70,13 @@
   ],
   "servers": [],
   "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-qianshu_session"
+      }
+    },
     "schemas": {
       "HealthSuccessResponseDto": {
         "type": "object",
