@@ -5,6 +5,8 @@ import {
   timingSafeEqual,
 } from 'node:crypto'
 
+import { Injectable } from '@nestjs/common'
+
 const SESSION_SECRET_BYTE_LENGTH = 32
 const SESSION_TOKEN_HASH_BYTE_LENGTH = 32
 const SESSION_SECRET_ENCODED_LENGTH = 43
@@ -32,6 +34,7 @@ export type GeneratedSessionToken = Readonly<
  * Cookie 中保存 `uuid.secret`，数据库只保存 selector 和 secret 的 SHA-256；
  * 这里不承载 JWT、Remember Me 或设备信息。
  */
+@Injectable()
 export class SessionTokenProvider {
   generate(): GeneratedSessionToken {
     const sessionId = randomUUID()
