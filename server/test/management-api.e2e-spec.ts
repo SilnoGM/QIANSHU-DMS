@@ -236,6 +236,7 @@ describe('Management API with PostgreSQL', () => {
       .get('/api/users')
       .expect(401)
       .expect((response) => {
+        expect(response.headers['cache-control']).toBe('private, no-store')
         expect(readResponseBody<ApiErrorBody>(response).code).toBe(
           'AUTHENTICATION_REQUIRED',
         )
@@ -248,6 +249,7 @@ describe('Management API with PostgreSQL', () => {
       .get('/api/users')
       .expect(403)
       .expect((response) => {
+        expect(response.headers['cache-control']).toBe('private, no-store')
         expect(readResponseBody<ApiErrorBody>(response).code).toBe('FORBIDDEN')
       })
 
@@ -262,6 +264,76 @@ describe('Management API with PostgreSQL', () => {
       'users:read',
     )
     await adminBrowser.get('/api/users').expect(200)
+  })
+
+  it('rejects user creation, password reset and RBAC writes without CSRF proof', async () => {
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const target = await createDirectUser()
+    const adminBrowser = request.agent(application.getHttpServer())
+    await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+
+    const role = await prisma.role.create({
+      data: {
+        code: `${ROLE_CODE_PREFIX}${randomUUID().replaceAll('-', '')}`,
+        name: 'CSRF E2E Role',
+      },
+    })
+    createdRoleIds.add(role.id)
+
+    const rejectedUsername = `${USERNAME_PREFIX}csrf-${randomUUID()}`
+    const createUserResponse = await adminBrowser
+      .post('/api/users')
+      .send({
+        username: rejectedUsername,
+        displayName: '不得创建的用户',
+        password: `Rejected create password ${randomUUID()}`,
+        mustChangePassword: false,
+      })
+      .expect(403)
+    expect(readResponseBody<ApiErrorBody>(createUserResponse).code).toBe(
+      'CSRF_REJECTED',
+    )
+
+    const resetResponse = await adminBrowser
+      .post(`/api/users/${target.user.id}/password-reset`)
+      .send({
+        newPassword: `Rejected reset password ${randomUUID()}`,
+        mustChangePassword: true,
+      })
+      .expect(403)
+    expect(readResponseBody<ApiErrorBody>(resetResponse).code).toBe(
+      'CSRF_REJECTED',
+    )
+
+    const replacePermissionsResponse = await adminBrowser
+      .put(`/api/roles/${role.id}/permissions`)
+      .send({ permissionIds: [] })
+      .expect(403)
+    expect(
+      readResponseBody<ApiErrorBody>(replacePermissionsResponse).code,
+    ).toBe('CSRF_REJECTED')
+
+    // CSRF Guard 必须先于业务服务执行，三个请求都不能留下业务写入。
+    await expect(
+      prisma.user.count({
+        where: { usernameNormalized: rejectedUsername.toLowerCase() },
+      }),
+    ).resolves.toBe(0)
+    const persistedTarget = await prisma.user.findUniqueOrThrow({
+      where: { id: target.user.id },
+    })
+    expect(persistedTarget.authVersion).toBe(0)
+    expect(persistedTarget.mustChangePassword).toBe(false)
+    await expect(
+      passwordProvider.verify(target.password, persistedTarget.passwordHash),
+    ).resolves.toBe(true)
+    await expect(
+      prisma.rolePermission.count({ where: { roleId: role.id } }),
+    ).resolves.toBe(0)
   })
 
   it('supports the complete user lifecycle with exact pagination and invalidates old Sessions after reset', async () => {

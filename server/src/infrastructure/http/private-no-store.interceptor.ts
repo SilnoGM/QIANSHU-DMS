@@ -45,7 +45,7 @@ function getNormalizedRequestPaths(request: unknown): string[] | undefined {
   return paths
 }
 
-function isExactHealthRequest(request: unknown): boolean {
+export function isExactHealthRequest(request: unknown): boolean {
   const paths = getNormalizedRequestPaths(request)
 
   // 所有已提供的 URL 视图必须一致，避免用伪造的 path 掩盖真实 application URL。

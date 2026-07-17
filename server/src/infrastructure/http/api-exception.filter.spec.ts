@@ -88,6 +88,10 @@ describe('ApiExceptionFilter', () => {
 
     expect(response.status).toHaveBeenCalledWith(503)
     expect(response.json).toHaveBeenCalledWith(terminusFailureBody)
+    expect(response.setHeader).not.toHaveBeenCalledWith(
+      'Cache-Control',
+      'private, no-store',
+    )
     expect(logger.error).not.toHaveBeenCalled()
   })
 
@@ -110,6 +114,10 @@ describe('ApiExceptionFilter', () => {
       fieldErrors: { version: ['请刷新后重试'] },
       requestId,
     })
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private, no-store',
+    )
     expect(logger.error).not.toHaveBeenCalled()
   })
 
@@ -179,5 +187,9 @@ describe('ApiExceptionFilter', () => {
       requestId,
     })
     expect(response.json).not.toHaveBeenCalledWith(terminusFailureBody)
+    expect(response.setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'private, no-store',
+    )
   })
 })
