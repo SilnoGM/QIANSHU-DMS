@@ -14,6 +14,7 @@ import {
   AuthUserDto,
 } from './auth-context.dto'
 import { ChangePasswordRequestDto } from './change-password-request.dto'
+import { EmptyRequestDto } from './empty-request.dto'
 import { LoginRequestDto } from './login-request.dto'
 
 async function validatePlain<T extends object>(
@@ -46,6 +47,13 @@ class AuthDtoContractController {
   @ApiBody({ type: ChangePasswordRequestDto })
   @ApiOkResponse({ type: AuthContextDto })
   changePassword(): AuthContextDto {
+    throw new Error('OpenAPI scan only')
+  }
+
+  @Post('logout')
+  @ApiBody({ type: EmptyRequestDto, required: true })
+  @ApiOkResponse({ type: AuthContextDto })
+  logout(): AuthContextDto {
     throw new Error('OpenAPI scan only')
   }
 }
@@ -145,6 +153,16 @@ describe('Auth request DTO validation', () => {
       expect(errorProperties(result.errors)).toEqual([field])
     },
   )
+
+  it('logout empty body 只接受空 JSON object', async () => {
+    const empty = await validatePlain(EmptyRequestDto, {})
+    const unexpected = await validatePlain(EmptyRequestDto, {
+      account: 'must-not-be-accepted',
+    })
+
+    expect(empty.errors).toEqual([])
+    expect(errorProperties(unexpected.errors)).toEqual(['account'])
+  })
 })
 
 describe('Auth DTO OpenAPI contract', () => {
@@ -186,6 +204,10 @@ describe('Auth DTO OpenAPI contract', () => {
         },
       },
       required: ['newPassword'],
+    })
+    expect(requireSchema(document, EmptyRequestDto.name)).toEqual({
+      type: 'object',
+      properties: {},
     })
   })
 

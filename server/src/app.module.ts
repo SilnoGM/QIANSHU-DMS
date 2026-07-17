@@ -9,6 +9,9 @@ import { HTTP_MODULES } from './http.modules'
 import { PrismaModule } from './infrastructure/database/prisma.module'
 import { PrivateNoStoreInterceptor } from './infrastructure/http/private-no-store.interceptor'
 import { CsrfProtectionGuard } from './modules/auth/guards/csrf-protection.guard'
+import { AuthenticationGuard } from './modules/auth/guards/authentication.guard'
+import { PasswordChangeRequiredGuard } from './modules/auth/guards/password-change-required.guard'
+import { PermissionGuard } from './modules/auth/guards/permission.guard'
 
 @Module({
   imports: [
@@ -25,6 +28,18 @@ import { CsrfProtectionGuard } from './modules/auth/guards/csrf-protection.guard
     {
       provide: APP_GUARD,
       useClass: CsrfProtectionGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: AuthenticationGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PasswordChangeRequiredGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionGuard,
     },
     {
       provide: APP_INTERCEPTOR,
