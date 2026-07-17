@@ -83,8 +83,22 @@ describe('bootstrap', () => {
     listenError?: Error
     closeError?: Error
   }) {
+    const expressApplication = {
+      set: jest.fn(),
+    }
     const configService = {
-      getOrThrow: jest.fn().mockReturnValue(43101),
+      getOrThrow: jest.fn((key: string) => {
+        if (key === 'app.port') {
+          return 43101
+        }
+        if (key === 'auth.trustProxyHops') {
+          return 1
+        }
+        if (key === 'app.nodeEnv') {
+          return 'development'
+        }
+        throw new Error('Unexpected configuration key')
+      }),
     }
     const application = {
       use: jest.fn(),
@@ -94,6 +108,9 @@ describe('bootstrap', () => {
       enableShutdownHooks: jest.fn(),
       useLogger: jest.fn(),
       get: jest.fn().mockReturnValue(configService),
+      getHttpAdapter: jest.fn().mockReturnValue({
+        getInstance: jest.fn().mockReturnValue(expressApplication),
+      }),
       listen: options?.listenError
         ? jest.fn().mockRejectedValue(options.listenError)
         : jest.fn().mockResolvedValue(undefined),
@@ -102,7 +119,7 @@ describe('bootstrap', () => {
         : jest.fn().mockResolvedValue(undefined),
     }
 
-    return { application, configService }
+    return { application, configService, expressApplication }
   }
 
   it('does not replace the caller logger when root module loading fails', async () => {
@@ -199,7 +216,7 @@ describe('bootstrap', () => {
   })
 
   it('creates AppModule, configures the application and listens on app.port', async () => {
-    const { application, configService } = createApplication()
+    const { application, configService, expressApplication } = createApplication()
     const applicationFactory = jest
       .fn<Promise<INestApplication>, [Type<unknown>]>()
       .mockResolvedValue(application as unknown as INestApplication)
@@ -228,7 +245,15 @@ describe('bootstrap', () => {
       application.enableShutdownHooks.mock.invocationCallOrder[0],
     )
     expect(configService.getOrThrow).toHaveBeenCalledWith('app.port')
+    expect(configService.getOrThrow).toHaveBeenCalledWith('app.nodeEnv')
+    expect(configService.getOrThrow).toHaveBeenCalledWith(
+      'auth.trustProxyHops',
+    )
+    expect(expressApplication.set).toHaveBeenCalledWith('trust proxy', 1)
     expect(application.listen).toHaveBeenCalledWith(43101)
+    expect(expressApplication.set.mock.invocationCallOrder[0]).toBeLessThan(
+      application.listen.mock.invocationCallOrder[0] ?? Infinity,
+    )
     expect(application.useLogger).toHaveBeenCalledWith(
       expect.any(ConsoleLogger),
     )

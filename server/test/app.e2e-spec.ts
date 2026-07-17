@@ -122,6 +122,9 @@ describe('database health route with a real PostgreSQL connection', () => {
       error: {},
       details: { database: { status: 'up' } },
     })
+    expect(response.headers['cache-control']).toBe(
+      'no-cache, no-store, must-revalidate',
+    )
     expect(response.body).not.toHaveProperty('data')
   })
 
