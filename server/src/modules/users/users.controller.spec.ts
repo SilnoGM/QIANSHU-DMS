@@ -1,4 +1,5 @@
 import { Reflector } from '@nestjs/core'
+import { HTTP_CODE_METADATA } from '@nestjs/common/constants'
 
 import { requestIdMiddleware } from '../../infrastructure/http/request-id.middleware'
 import { attachRequestAuthContext } from '../auth/auth-context'
@@ -139,6 +140,24 @@ describe('UsersController', () => {
       disable: ['users:disable'],
       replaceRoles: ['users:assign-roles'],
       resetPassword: ['users:reset-password'],
+    })
+  })
+
+  it('returns 200 for POST actions that update an existing user', () => {
+    const statusCodes = Object.fromEntries(
+      ['enable', 'disable', 'resetPassword'].map(method => [
+        method,
+        Reflect.getMetadata(
+          HTTP_CODE_METADATA,
+          UsersController.prototype[method as keyof UsersController],
+        ),
+      ]),
+    )
+
+    expect(statusCodes).toEqual({
+      enable: 200,
+      disable: 200,
+      resetPassword: 200,
     })
   })
 })

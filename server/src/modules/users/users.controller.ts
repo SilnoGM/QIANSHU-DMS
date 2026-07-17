@@ -125,6 +125,7 @@ export class UsersController {
 
   @Post(':userId/enable')
   @RequirePermissions('users:enable')
+  @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'userId', type: 'string', format: 'uuid' })
   @ApiContractResponse({ status: HttpStatus.OK, type: UserDto })
   @ApiApplicationContract({
@@ -148,6 +149,7 @@ export class UsersController {
 
   @Post(':userId/disable')
   @RequirePermissions('users:disable')
+  @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'userId', type: 'string', format: 'uuid' })
   @ApiContractResponse({ status: HttpStatus.OK, type: UserDto })
   @ApiApplicationContract({
@@ -207,6 +209,7 @@ export class UsersController {
 
   @Post(':userId/password-reset')
   @RequirePermissions('users:reset-password')
+  @HttpCode(HttpStatus.OK)
   @ApiParam({ name: 'userId', type: 'string', format: 'uuid' })
   @ApiContractResponse({ status: HttpStatus.OK, type: UserDto })
   @ApiApplicationContract({
