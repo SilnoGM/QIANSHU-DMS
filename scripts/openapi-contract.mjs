@@ -678,15 +678,28 @@ function assertNoApiErrorOrEnvelope(document, rootSchema, record, status) {
 
 function assertJsonComponentSchema(document, schema, record, status) {
   const context = operationContext(record, status)
-  if (
-    !isRecord(schema) ||
-    typeof schema.$ref !== 'string'
-  ) {
+  if (!isRecord(schema)) {
     fail(`JSON success must use a component $ref ${context}`)
   }
+
+  let componentReference
+  if (typeof schema.$ref === 'string') {
+    componentReference = schema.$ref
+  } else if (
+    schema.type === 'array' &&
+    isRecord(schema.items) &&
+    typeof schema.items.$ref === 'string'
+  ) {
+    // Role 与 Permission 目录按设计直接返回 DTO 数组；数组自身保持简单，元素仍
+    // 必须直接引用 component，避免匿名 inline object 绕过响应契约治理。
+    componentReference = schema.items.$ref
+  } else {
+    fail(`JSON success must use a component $ref ${context}`)
+  }
+
   resolveDirectSchemaComponent(
     document,
-    schema.$ref,
+    componentReference,
     `JSON success must use a direct component $ref ${context}`,
   )
   assertNoApiErrorOrEnvelope(document, schema, record, status)
