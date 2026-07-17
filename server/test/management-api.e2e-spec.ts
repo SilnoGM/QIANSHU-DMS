@@ -1,0 +1,703 @@
+import { randomUUID } from 'node:crypto'
+
+import type { INestApplication } from '@nestjs/common'
+import { Test } from '@nestjs/testing'
+import request from 'supertest'
+
+import { AppModule } from '../src/app.module'
+import { configureApplication } from '../src/app.setup'
+import {
+  AuditActorType,
+  AuditEventType,
+  AuditOutcome,
+  UserStatus,
+} from '../src/generated/prisma/enums'
+import { PrismaService } from '../src/infrastructure/database/prisma.service'
+import { PasswordProvider } from '../src/modules/auth/providers/password.provider'
+
+const APP_ORIGIN = 'http://127.0.0.1:9000'
+const CSRF_HEADERS = {
+  Origin: APP_ORIGIN,
+  'X-Qianshu-CSRF': '1',
+  'Sec-Fetch-Site': 'same-origin',
+} as const
+const USERNAME_PREFIX = 'management-api-e2e-'
+const ROLE_CODE_PREFIX = 'management_e2e_'
+const PERMISSION_CODE_PREFIX = 'management-e2e:'
+
+interface ApiErrorBody {
+  code: string
+}
+
+interface AuthContextBody {
+  user: {
+    id: string
+    username: string
+    displayName: string
+    mustChangePassword: boolean
+  }
+  permissions: string[]
+}
+
+interface UserBody {
+  id: string
+  username: string
+  displayName: string
+  status: 'ACTIVE' | 'DISABLED'
+  mustChangePassword: boolean
+  roleIds: string[]
+}
+
+interface UserPageBody {
+  items: UserBody[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+interface RoleBody {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  isSystem: boolean
+  permissionIds: string[]
+}
+
+interface PermissionBody {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  systemOnly: boolean
+}
+
+interface AuditEventBody {
+  id: string
+  eventType: string
+  outcome: string
+  occurredAt: string
+  actorType: string
+  actorUserId: string | null
+  targetType: string | null
+  targetId: string | null
+  requestId: string
+  correlationId: string | null
+  reasonCode: string | null
+  metadata: Record<string, string | number | boolean | null>
+}
+
+interface AuditPageBody {
+  items: AuditEventBody[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+function readResponseBody<T>(response: { body: unknown }): T {
+  return response.body as T
+}
+
+function readSessionCookie(response: { headers: Record<string, unknown> }): string {
+  const setCookie = response.headers['set-cookie']
+  if (!Array.isArray(setCookie) || typeof setCookie[0] !== 'string') {
+    throw new Error('Expected a Session Set-Cookie header')
+  }
+
+  return setCookie
+    .filter((cookie): cookie is string => typeof cookie === 'string')
+    .map((cookie) => cookie.split(';', 1)[0])
+    .join('; ')
+}
+
+describe('Management API with PostgreSQL', () => {
+  let application: INestApplication
+  let prisma: PrismaService
+  let passwordProvider: PasswordProvider
+  const createdUserIds = new Set<string>()
+  const createdRoleIds = new Set<string>()
+  const createdPermissionIds = new Set<string>()
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile()
+    application = moduleRef.createNestApplication()
+    configureApplication(application, { nodeEnvironment: 'test' })
+    await application.init()
+    prisma = application.get(PrismaService)
+    passwordProvider = application.get(PasswordProvider)
+  })
+
+  afterEach(async () => {
+    // 即使断言在记录 response id 之前失败，也按本套件专用前缀找回残留数据。
+    const [prefixedUsers, prefixedRoles, prefixedPermissions] =
+      await Promise.all([
+        prisma.user.findMany({
+          where: { usernameNormalized: { startsWith: USERNAME_PREFIX } },
+          select: { id: true },
+        }),
+        prisma.role.findMany({
+          where: { code: { startsWith: ROLE_CODE_PREFIX } },
+          select: { id: true },
+        }),
+        prisma.permission.findMany({
+          where: { code: { startsWith: PERMISSION_CODE_PREFIX } },
+          select: { id: true },
+        }),
+      ])
+
+    prefixedUsers.forEach(({ id }) => createdUserIds.add(id))
+    prefixedRoles.forEach(({ id }) => createdRoleIds.add(id))
+    prefixedPermissions.forEach(({ id }) => createdPermissionIds.add(id))
+
+    const userIds = [...createdUserIds]
+    if (userIds.length > 0) {
+      // Audit actor 使用 RESTRICT；User 还存在 createdBy/disabledBy 自关联，必须按序清理。
+      await prisma.auditEvent.deleteMany({
+        where: { actorUserId: { in: userIds } },
+      })
+      await prisma.user.updateMany({
+        where: { id: { in: userIds } },
+        // DISABLED 行的 disabledAt/disabledByUserId 受数据库一致性约束保护；
+        // 清理时先整体恢复为合法 ACTIVE 状态，再解除测试内 User 自关联。
+        data: {
+          status: UserStatus.ACTIVE,
+          createdByUserId: null,
+          disabledAt: null,
+          disabledByUserId: null,
+        },
+      })
+      await prisma.user.deleteMany({ where: { id: { in: userIds } } })
+    }
+
+    const roleIds = [...createdRoleIds]
+    if (roleIds.length > 0) {
+      await prisma.role.deleteMany({ where: { id: { in: roleIds } } })
+    }
+
+    const permissionIds = [...createdPermissionIds]
+    if (permissionIds.length > 0) {
+      await prisma.permission.deleteMany({
+        where: { id: { in: permissionIds } },
+      })
+    }
+
+    createdUserIds.clear()
+    createdRoleIds.clear()
+    createdPermissionIds.clear()
+  })
+
+  afterAll(async () => {
+    await application.close()
+  })
+
+  async function createDirectUser(options: { systemAdmin?: boolean } = {}) {
+    const suffix = randomUUID()
+    const username = `${USERNAME_PREFIX}${suffix}`
+    const password = `Management secure password ${suffix}`
+    const user = await prisma.user.create({
+      data: {
+        username,
+        usernameNormalized: username.toLowerCase(),
+        displayName: 'Management API E2E',
+        passwordHash: await passwordProvider.hash(password),
+        passwordChangedAt: new Date(),
+      },
+    })
+    createdUserIds.add(user.id)
+
+    if (options.systemAdmin === true) {
+      const systemAdminRole = await prisma.role.findUniqueOrThrow({
+        where: { code: 'system_admin' },
+      })
+      await prisma.userRole.create({
+        data: { userId: user.id, roleId: systemAdminRole.id },
+      })
+    }
+
+    return { password, user }
+  }
+
+  async function login(
+    browser: ReturnType<typeof request.agent>,
+    username: string,
+    password: string,
+  ) {
+    return browser
+      .post('/api/auth/login')
+      .set(CSRF_HEADERS)
+      .send({ username, password })
+      .expect(200)
+  }
+
+  it('requires authentication and management permissions before allowing a system_admin request', async () => {
+    await request(application.getHttpServer())
+      .get('/api/users')
+      .expect(401)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'AUTHENTICATION_REQUIRED',
+        )
+      })
+
+    const ordinary = await createDirectUser()
+    const ordinaryBrowser = request.agent(application.getHttpServer())
+    await login(ordinaryBrowser, ordinary.user.username, ordinary.password)
+    await ordinaryBrowser
+      .get('/api/users')
+      .expect(403)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe('FORBIDDEN')
+      })
+
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const adminBrowser = request.agent(application.getHttpServer())
+    const loginResponse = await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+    expect(readResponseBody<AuthContextBody>(loginResponse).permissions).toContain(
+      'users:read',
+    )
+    await adminBrowser.get('/api/users').expect(200)
+  })
+
+  it('supports the complete user lifecycle with exact pagination and invalidates old Sessions after reset', async () => {
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const adminBrowser = request.agent(application.getHttpServer())
+    await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+
+    const roleCode = `${ROLE_CODE_PREFIX}${randomUUID().replaceAll('-', '')}`
+    const roleResponse = await adminBrowser
+      .post('/api/roles')
+      .set(CSRF_HEADERS)
+      .send({ code: roleCode, name: '仓库资料员' })
+      .expect(201)
+    const role = readResponseBody<RoleBody>(roleResponse)
+    createdRoleIds.add(role.id)
+
+    const suffix = randomUUID()
+    const username = `${USERNAME_PREFIX}created-${suffix}`
+    const originalPassword = `Created user secure password ${suffix}`
+    const createResponse = await adminBrowser
+      .post('/api/users')
+      .set(CSRF_HEADERS)
+      .send({
+        username,
+        displayName: '待维护用户',
+        password: originalPassword,
+        mustChangePassword: false,
+      })
+      .expect(201)
+    const created = readResponseBody<UserBody>(createResponse)
+    createdUserIds.add(created.id)
+    expect(created).toMatchObject({
+      username,
+      displayName: '待维护用户',
+      status: 'ACTIVE',
+      mustChangePassword: false,
+      roleIds: [],
+    })
+    expect(created).not.toHaveProperty('password')
+    expect(created).not.toHaveProperty('passwordHash')
+
+    const firstPage = await adminBrowser
+      .get('/api/users')
+      .query({ page: 1, pageSize: 1, username: username.toUpperCase() })
+      .expect(200)
+    expect(readResponseBody<UserPageBody>(firstPage)).toMatchObject({
+      items: [{ id: created.id, username }],
+      page: 1,
+      pageSize: 1,
+      total: 1,
+    })
+
+    const emptySecondPage = await adminBrowser
+      .get('/api/users')
+      .query({ page: 2, pageSize: 1, username })
+      .expect(200)
+    expect(readResponseBody<UserPageBody>(emptySecondPage)).toMatchObject({
+      items: [],
+      page: 2,
+      pageSize: 1,
+      total: 1,
+    })
+
+    await adminBrowser
+      .get(`/api/users/${created.id}`)
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<UserBody>(response).id).toBe(created.id)
+      })
+
+    await adminBrowser
+      .patch(`/api/users/${created.id}`)
+      .set(CSRF_HEADERS)
+      .send({ displayName: '已改名用户' })
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<UserBody>(response).displayName).toBe(
+          '已改名用户',
+        )
+      })
+
+    await adminBrowser
+      .put(`/api/users/${created.id}/roles`)
+      .set(CSRF_HEADERS)
+      .send({ roleIds: [role.id] })
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<UserBody>(response).roleIds).toEqual([role.id])
+      })
+
+    const targetBeforeDisable = request.agent(application.getHttpServer())
+    await login(targetBeforeDisable, username, originalPassword)
+    await adminBrowser
+      .post(`/api/users/${created.id}/disable`)
+      .set(CSRF_HEADERS)
+      .send({})
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<UserBody>(response).status).toBe('DISABLED')
+      })
+    await targetBeforeDisable.get('/api/auth/me').expect(401)
+
+    await adminBrowser
+      .post(`/api/users/${created.id}/enable`)
+      .set(CSRF_HEADERS)
+      .send({})
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<UserBody>(response).status).toBe('ACTIVE')
+      })
+
+    const targetBeforeReset = request.agent(application.getHttpServer())
+    await login(targetBeforeReset, username, originalPassword)
+    const newPassword = `Administrator reset password ${randomUUID()}`
+    await adminBrowser
+      .post(`/api/users/${created.id}/password-reset`)
+      .set(CSRF_HEADERS)
+      .send({ newPassword, mustChangePassword: true })
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<UserBody>(response).mustChangePassword).toBe(
+          true,
+        )
+      })
+
+    await targetBeforeReset.get('/api/auth/me').expect(401)
+    const storedUser = await prisma.user.findUniqueOrThrow({
+      where: { id: created.id },
+    })
+    expect(storedUser.authVersion).toBe(2)
+    await expect(
+      passwordProvider.verify(newPassword, storedUser.passwordHash),
+    ).resolves.toBe(true)
+    await expect(
+      passwordProvider.verify(originalPassword, storedUser.passwordHash),
+    ).resolves.toBe(false)
+
+    const resetSessions = await prisma.authSession.findMany({
+      where: { userId: created.id, revokedReason: 'PASSWORD_RESET' },
+    })
+    expect(resetSessions).toHaveLength(1)
+
+    const targetAfterReset = request.agent(application.getHttpServer())
+    const relogin = await login(targetAfterReset, username, newPassword)
+    expect(
+      readResponseBody<AuthContextBody>(relogin).user.mustChangePassword,
+    ).toBe(true)
+  })
+
+  it('manages ordinary roles while atomically rejecting systemOnly and missing permissions, then paginates safe audit data', async () => {
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const adminBrowser = request.agent(application.getHttpServer())
+    await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+
+    const roleCode = `${ROLE_CODE_PREFIX}${randomUUID().replaceAll('-', '')}`
+    const createdRoleResponse = await adminBrowser
+      .post('/api/roles')
+      .set(CSRF_HEADERS)
+      .send({
+        code: roleCode,
+        name: '初始角色',
+        description: '初始说明',
+      })
+      .expect(201)
+    const role = readResponseBody<RoleBody>(createdRoleResponse)
+    createdRoleIds.add(role.id)
+    expect(role).toMatchObject({
+      code: roleCode,
+      name: '初始角色',
+      isSystem: false,
+      permissionIds: [],
+    })
+
+    await adminBrowser
+      .patch(`/api/roles/${role.id}`)
+      .set(CSRF_HEADERS)
+      .send({ name: '已编辑角色', description: '已编辑说明' })
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<RoleBody>(response)).toMatchObject({
+          id: role.id,
+          name: '已编辑角色',
+          description: '已编辑说明',
+        })
+      })
+
+    const permissionsResponse = await adminBrowser
+      .get('/api/permissions')
+      .expect(200)
+    const permissionCatalog = readResponseBody<PermissionBody[]>(
+      permissionsResponse,
+    )
+    expect(permissionCatalog).toHaveLength(12)
+    expect(permissionCatalog.map(({ code }) => code)).toEqual(
+      [...permissionCatalog.map(({ code }) => code)].sort(),
+    )
+    const systemOnlyPermission = permissionCatalog.find(
+      ({ systemOnly }) => systemOnly,
+    )
+    expect(systemOnlyPermission).toBeDefined()
+
+    const businessPermission = await prisma.permission.create({
+      data: {
+        code: `${PERMISSION_CODE_PREFIX}${randomUUID()}`,
+        name: 'E2E 业务读取',
+        systemOnly: false,
+      },
+    })
+    createdPermissionIds.add(businessPermission.id)
+
+    await adminBrowser
+      .put(`/api/roles/${role.id}/permissions`)
+      .set(CSRF_HEADERS)
+      .send({ permissionIds: [businessPermission.id] })
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<RoleBody>(response).permissionIds).toEqual([
+          businessPermission.id,
+        ])
+      })
+
+    await adminBrowser
+      .put(`/api/roles/${role.id}/permissions`)
+      .set(CSRF_HEADERS)
+      .send({
+        permissionIds: [businessPermission.id, systemOnlyPermission?.id],
+      })
+      .expect(403)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe('FORBIDDEN')
+      })
+
+    await adminBrowser
+      .get(`/api/roles/${role.id}`)
+      .expect(200)
+      .expect((response) => {
+        expect(readResponseBody<RoleBody>(response).permissionIds).toEqual([
+          businessPermission.id,
+        ])
+      })
+
+    await adminBrowser
+      .put(`/api/roles/${role.id}/permissions`)
+      .set(CSRF_HEADERS)
+      .send({ permissionIds: [businessPermission.id, randomUUID()] })
+      .expect(404)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'PERMISSION_NOT_FOUND',
+        )
+      })
+
+    const persistedRelations = await prisma.rolePermission.findMany({
+      where: { roleId: role.id },
+      select: { permissionId: true },
+    })
+    expect(persistedRelations).toEqual([
+      { permissionId: businessPermission.id },
+    ])
+
+    const sourceAudit = await prisma.auditEvent.create({
+      data: {
+        eventType: AuditEventType.USER_UPDATED,
+        outcome: AuditOutcome.SUCCESS,
+        occurredAt: new Date(Date.now() + 60_000),
+        actorType: AuditActorType.USER,
+        actorUserId: administrator.user.id,
+        targetType: 'User',
+        targetId: administrator.user.id,
+        requestId: `management-e2e-${randomUUID()}`,
+        sourceIpHash: Buffer.alloc(32, 1),
+        metadata: {
+          visible: 'yes',
+          nested: { mustNotEscape: true },
+        },
+      },
+    })
+
+    const auditFirstPageResponse = await adminBrowser
+      .get('/api/audit-events')
+      .query({ page: 1, pageSize: 1 })
+      .expect(200)
+    const auditFirstPage = readResponseBody<AuditPageBody>(
+      auditFirstPageResponse,
+    )
+    expect(auditFirstPage).toMatchObject({ page: 1, pageSize: 1 })
+    expect(auditFirstPage.total).toBeGreaterThanOrEqual(5)
+    expect(auditFirstPage.items).toHaveLength(1)
+    expect(auditFirstPage.items[0]).toMatchObject({
+      id: sourceAudit.id,
+      actorUserId: administrator.user.id,
+      metadata: { visible: 'yes' },
+    })
+    expect(Object.keys(auditFirstPage.items[0] ?? {}).sort()).toEqual([
+      'actorType',
+      'actorUserId',
+      'correlationId',
+      'eventType',
+      'id',
+      'metadata',
+      'occurredAt',
+      'outcome',
+      'reasonCode',
+      'requestId',
+      'targetId',
+      'targetType',
+    ])
+    expect(auditFirstPage.items[0]).not.toHaveProperty('sourceIpHash')
+    expect(auditFirstPage.items[0]).not.toHaveProperty('actorUser')
+
+    const auditSecondPage = readResponseBody<AuditPageBody>(
+      await adminBrowser
+        .get('/api/audit-events')
+        .query({ page: 2, pageSize: 1 })
+        .expect(200),
+    )
+    expect(auditSecondPage).toMatchObject({ page: 2, pageSize: 1 })
+    expect(auditSecondPage.items).toHaveLength(1)
+    expect(auditSecondPage.items[0]?.id).not.toBe(sourceAudit.id)
+  })
+
+  it('rejects administrator self-reset and preserves the last active system_admin', async () => {
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const adminBrowser = request.agent(application.getHttpServer())
+    await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+
+    await adminBrowser
+      .post(`/api/users/${administrator.user.id}/password-reset`)
+      .set(CSRF_HEADERS)
+      .send({
+        newPassword: `Forbidden self reset ${randomUUID()}`,
+        mustChangePassword: false,
+      })
+      .expect(409)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'SELF_PASSWORD_RESET_NOT_ALLOWED',
+        )
+      })
+
+    await adminBrowser
+      .put(`/api/users/${administrator.user.id}/roles`)
+      .set(CSRF_HEADERS)
+      .send({ roleIds: [] })
+      .expect(409)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'LAST_SYSTEM_ADMIN_REQUIRED',
+        )
+      })
+
+    const systemRole = await prisma.role.findUniqueOrThrow({
+      where: { code: 'system_admin' },
+    })
+    await expect(
+      prisma.userRole.findUnique({
+        where: {
+          userId_roleId: {
+            userId: administrator.user.id,
+            roleId: systemRole.id,
+          },
+        },
+      }),
+    ).resolves.not.toBeNull()
+    await adminBrowser.get('/api/users').expect(200)
+  })
+
+  it('serializes concurrent password resets so only one snapshot can commit', async () => {
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const target = await createDirectUser()
+    const adminBrowser = request.agent(application.getHttpServer())
+    const adminLogin = await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+    const adminCookie = readSessionCookie(adminLogin)
+
+    const targetBrowser = request.agent(application.getHttpServer())
+    await login(targetBrowser, target.user.username, target.password)
+
+    const candidatePasswords = Array.from(
+      { length: 4 },
+      () => `Concurrent reset password ${randomUUID()}`,
+    )
+    const responses = await Promise.all(
+      candidatePasswords.map((newPassword) =>
+        request(application.getHttpServer())
+          .post(`/api/users/${target.user.id}/password-reset`)
+          .set(CSRF_HEADERS)
+          .set('Cookie', adminCookie)
+          .send({ newPassword, mustChangePassword: false }),
+      ),
+    )
+
+    const successfulIndexes = responses
+      .map((response, index) => ({ index, status: response.status }))
+      .filter(({ status }) => status === 200)
+      .map(({ index }) => index)
+    expect(successfulIndexes).toHaveLength(1)
+    for (const response of responses.filter(({ status }) => status !== 200)) {
+      expect(response.status).toBe(409)
+      expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+        'AUTH_STATE_CHANGED',
+      )
+    }
+
+    const winningPassword = candidatePasswords[successfulIndexes[0] ?? -1]
+    expect(winningPassword).toBeDefined()
+    const storedTarget = await prisma.user.findUniqueOrThrow({
+      where: { id: target.user.id },
+    })
+    expect(storedTarget.authVersion).toBe(1)
+    await expect(
+      passwordProvider.verify(winningPassword ?? '', storedTarget.passwordHash),
+    ).resolves.toBe(true)
+    await targetBrowser.get('/api/auth/me').expect(401)
+
+    const resetRevocations = await prisma.authSession.count({
+      where: {
+        userId: target.user.id,
+        revokedReason: 'PASSWORD_RESET',
+      },
+    })
+    expect(resetRevocations).toBe(1)
+  })
+})
