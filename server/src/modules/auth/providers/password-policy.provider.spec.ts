@@ -25,7 +25,7 @@ const expectWeakPassword = (
   expect((thrown as ApiException).getStatus()).toBe(
     HttpStatus.UNPROCESSABLE_ENTITY,
   )
-  expect((thrown as ApiException).code).toBe('WEAK_PASSWORD')
+  expect((thrown as ApiException).code).toBe('PASSWORD_POLICY_VIOLATION')
   expect((thrown as ApiException).publicMessage).toBe('密码不符合要求')
   expect((thrown as ApiException).fieldErrors).toEqual({
     [fieldName]: ['密码不符合要求'],

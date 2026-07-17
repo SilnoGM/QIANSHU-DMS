@@ -91,7 +91,7 @@ export class PasswordPolicyProvider {
   ): ApiException {
     return new ApiException(
       HttpStatus.UNPROCESSABLE_ENTITY,
-      'WEAK_PASSWORD',
+      'PASSWORD_POLICY_VIOLATION',
       '密码不符合要求',
       { [fieldName]: ['密码不符合要求'] },
     )
