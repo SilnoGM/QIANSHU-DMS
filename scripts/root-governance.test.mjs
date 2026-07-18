@@ -695,6 +695,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'contract:sync': 'node ./scripts/contract-sync.mjs',
     'contract:check': 'node ./scripts/contract-check.mjs',
     'ci:server-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-server-e2e.mjs',
+    'ci:browser-auth-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-auth-e2e.mjs',
     'ci:contract': 'node ./scripts/ci-contract-baseline.mjs',
     'release:check': 'node ./scripts/release-version.mjs',
     'release:package:web': 'node ./scripts/release-package.mjs web',

@@ -24,6 +24,11 @@ export async function check(run = runCommand) {
     cwd: repositoryRoot,
   })
   await run('pnpm', ['-C', 'web', 'check'], { cwd: repositoryRoot })
+  // 真实 Cookie、浏览器重启和多标签同步必须在两端静态检查均通过后，
+  // 由唯一隔离入口启动 PostgreSQL、正式构建与系统 Chrome 验证。
+  await run(process.execPath, ['--run', 'ci:browser-auth-e2e'], {
+    cwd: repositoryRoot,
+  })
 }
 
 if (isDirectEntry(import.meta.url)) {

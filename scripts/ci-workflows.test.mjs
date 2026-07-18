@@ -40,6 +40,7 @@ const requiredJobIds = Object.freeze([
   'server-e2e',
   'contract',
   'web-check-build',
+  'browser-auth-e2e',
   'ci-gate',
 ])
 const validationJobIds = requiredJobIds.slice(0, -1)
@@ -315,11 +316,11 @@ test('ci.yml Required Job、runner、timeout 与 tracked diff 精确', async () 
 test('ci.yml 只使用固定 Action SHA 且 cache owner 唯一', async () => {
   const source = await readCiWorkflow()
   const references = usesFrom(source)
-  assert.equal(references.filter(value => value === checkoutAction).length, 5)
-  assert.equal(references.filter(value => value === pnpmSetupAction).length, 4)
-  assert.equal(references.filter(value => value === setupNodeAction).length, 5)
-  assert.equal(references.length, 14)
-  assert.equal((source.match(/          cache: pnpm$/gmu) ?? []).length, 4)
+  assert.equal(references.filter(value => value === checkoutAction).length, 6)
+  assert.equal(references.filter(value => value === pnpmSetupAction).length, 5)
+  assert.equal(references.filter(value => value === setupNodeAction).length, 6)
+  assert.equal(references.length, 17)
+  assert.equal((source.match(/          cache: pnpm$/gmu) ?? []).length, 5)
   assert.equal(source.includes('services:'), false)
   assert.equal(source.includes('postgres:'), false)
 })
@@ -341,11 +342,11 @@ test('root-governance 不安装依赖并保持根依赖域为空', async () => {
   ], 'root-governance')
 })
 
-test('ci-gate always 汇总五个 Job 且拒绝所有非 success 状态', async () => {
+test('ci-gate always 汇总六个 Job 且拒绝所有非 success 状态', async () => {
   const gate = extractJobs(await readCiWorkflow()).get('ci-gate')
   assert.match(
     gate,
-    /\n    needs: \[root-governance, server-check-build, server-e2e, contract, web-check-build\](?:\n|$)/u,
+    /\n    needs: \[root-governance, server-check-build, server-e2e, contract, web-check-build, browser-auth-e2e\](?:\n|$)/u,
   )
   assert.match(gate, /\n    if: always\(\)(?:\n|$)/u)
   assert.match(gate, /\n          NEEDS_JSON: \$\{\{ toJSON\(needs\) \}\}(?:\n|$)/u)
@@ -453,6 +454,23 @@ test('web-check-build 只使用 Web cache 并验证正式应用产物', async ()
   assert.equal(job.includes('server/pnpm-lock.yaml'), false)
   assert.equal(job.includes('check:examples'), false)
   assert.equal(job.includes('build:examples'), false)
+})
+
+test('browser-auth-e2e 安装双依赖域并只调用隔离根入口', async () => {
+  const job = extractJobs(await readCiWorkflow()).get('browser-auth-e2e')
+  assertDependencySetup(job, [
+    'server/pnpm-lock.yaml',
+    'web/pnpm-lock.yaml',
+  ])
+  assertTextOrder(job, [
+    'run: pnpm -C server install --frozen-lockfile',
+    'run: pnpm -C web install --frozen-lockfile',
+    'run: node --run ci:browser-auth-e2e',
+    'run: git diff --exit-code -- .',
+  ], 'browser-auth-e2e')
+  assert.equal(job.includes('services:'), false)
+  assert.equal(job.includes('DATABASE_URL'), false)
+  assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)
 })
 
 test('examples.yml 只声明手动与每月定时触发并保持只读权限', async () => {
