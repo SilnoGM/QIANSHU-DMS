@@ -9,6 +9,7 @@ import {
   type PasswordArgon2Driver,
   type PasswordHashOptions,
 } from './password.provider'
+import type { AuthMetricLogger } from '../../../infrastructure/observability/auth-metric.logger'
 
 const validPassword = 'correct-password'
 
@@ -115,6 +116,72 @@ describe('PasswordProvider password policy', () => {
 })
 
 describe('PasswordProvider Argon2 capacity', () => {
+  it('记录 active、queue、拒绝与成功/失败延迟，且 Label 只有固定枚举', async () => {
+    const firstHash = createDeferred<string>()
+    const queuedVerify = createDeferred<boolean>()
+    const driver = createDriver({
+      hash: jest
+        .fn()
+        .mockImplementationOnce(() => firstHash.promise)
+        .mockRejectedValueOnce(new Error('native failure with password canary')),
+      verify: jest.fn(() => queuedVerify.promise),
+    })
+    const metrics: jest.Mocked<Pick<
+      AuthMetricLogger,
+      | 'recordArgon2Capacity'
+      | 'recordArgon2Latency'
+      | 'recordArgon2Rejected'
+    >> = {
+      recordArgon2Capacity: jest.fn(),
+      recordArgon2Latency: jest.fn(),
+      recordArgon2Rejected: jest.fn(),
+    }
+    const clockValues = [10, 15, 20, 29]
+    const provider = new PasswordProvider({
+      driver,
+      maxActive: 1,
+      maxQueued: 1,
+      metrics,
+      monotonicNow: () => clockValues.shift() ?? 29,
+    })
+
+    const active = provider.hash(validPassword)
+    const queued = provider.verify(validPassword, '$argon2id$stored')
+    const rejected = provider.hash('another-password')
+
+    await expect(rejected).rejects.toBeInstanceOf(AuthCapacityUnavailableError)
+    expect(metrics.recordArgon2Rejected).toHaveBeenCalledWith('hash')
+    expect(metrics.recordArgon2Capacity).toHaveBeenCalledWith(1, 0)
+    expect(metrics.recordArgon2Capacity).toHaveBeenCalledWith(1, 1)
+
+    firstHash.resolve('$argon2id$first')
+    await expect(active).resolves.toBe('$argon2id$first')
+    expect(metrics.recordArgon2Latency).toHaveBeenCalledWith(
+      'hash',
+      'success',
+      5,
+    )
+    expect(metrics.recordArgon2Capacity).toHaveBeenCalledWith(1, 0)
+
+    queuedVerify.resolve(true)
+    await expect(queued).resolves.toBe(true)
+    expect(metrics.recordArgon2Latency).toHaveBeenCalledWith(
+      'verify',
+      'success',
+      9,
+    )
+    expect(metrics.recordArgon2Capacity).toHaveBeenLastCalledWith(0, 0)
+
+    const failed = provider.hash(validPassword)
+    await expect(failed).rejects.toBeInstanceOf(PasswordOperationFailedError)
+    expect(metrics.recordArgon2Latency).toHaveBeenLastCalledWith(
+      'hash',
+      'failure',
+      0,
+    )
+    expect(JSON.stringify(metrics)).not.toContain(validPassword)
+  })
+
   it('让 hash 与 verify 共用有界 active 和 queue，并在饱和时返回固定错误', async () => {
     const firstHash = createDeferred<string>()
     const queuedVerify = createDeferred<boolean>()

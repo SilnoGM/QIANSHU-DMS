@@ -11,6 +11,7 @@ import {
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import type { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import type { RequestAuthContext } from './auth-context'
 import { AuthSessionService, type IssuedSession } from './auth-session.service'
 import { PasswordChangeService } from './password-change.service'
@@ -137,6 +138,14 @@ function createFixture(overrides: { forced?: boolean } = {}) {
       .fn()
       .mockResolvedValue(['users:read']),
   }
+  const metrics: jest.Mocked<Pick<
+    AuthMetricLogger,
+    'recordPassword' | 'recordSession' | 'recordSessionRevoked'
+  >> = {
+    recordPassword: jest.fn(),
+    recordSession: jest.fn(),
+    recordSessionRevoked: jest.fn(),
+  }
 
   const service = new PasswordChangeService(
     prisma as unknown as PrismaService,
@@ -147,12 +156,14 @@ function createFixture(overrides: { forced?: boolean } = {}) {
     policy as unknown as PasswordPolicyProvider,
     audit,
     accessControl as unknown as AccessControlService,
+    metrics as unknown as AuthMetricLogger,
   )
 
   return {
     accessControl,
     audit,
     passwords,
+    metrics,
     policy,
     prisma,
     rateLimits,
@@ -216,6 +227,10 @@ describe('PasswordChangeService', () => {
     expect(fixture.rateLimits.recordFailure).toHaveBeenCalledTimes(2)
     expect(fixture.policy.assertAcceptable).not.toHaveBeenCalled()
     expect(fixture.prisma.$transaction).not.toHaveBeenCalled()
+    expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+      'change',
+      'failure',
+    )
   })
 
   it('treats a missing normal current password as the same fixed failure', async () => {
@@ -320,6 +335,27 @@ describe('PasswordChangeService', () => {
       requestId: CHANGE_INPUT.requestId,
       sourceIpHash: IP_HASH,
     })
+    expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+      'change',
+      'success',
+    )
+    expect(fixture.metrics.recordSessionRevoked).toHaveBeenCalledWith(1)
+    expect(fixture.metrics.recordSession).toHaveBeenCalledWith('created')
+  })
+
+  it('does not report committed password or Session success when the transaction rolls back', async () => {
+    const fixture = createFixture()
+    fixture.audit.record.mockRejectedValue(new Error('audit failure canary'))
+
+    const error = await captureApiError(fixture.service.change(CHANGE_INPUT))
+
+    expect(error).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' })
+    expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+      'change',
+      'failure',
+    )
+    expect(fixture.metrics.recordSessionRevoked).not.toHaveBeenCalled()
+    expect(fixture.metrics.recordSession).not.toHaveBeenCalled()
   })
 
   it.each([

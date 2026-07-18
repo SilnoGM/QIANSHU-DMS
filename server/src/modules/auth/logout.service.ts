@@ -13,6 +13,10 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import {
+  AuthMetricLogger,
+  NOOP_AUTH_METRIC_LOGGER,
+} from '../../infrastructure/observability/auth-metric.logger'
 import type { RequestAuthContext } from './auth-context'
 import { AuthSessionService } from './auth-session.service'
 import { AuthSubjectHasher } from './providers/auth-subject-hasher'
@@ -53,6 +57,7 @@ export class LogoutService {
     private readonly sessions: AuthSessionService,
     private readonly subjectHasher: AuthSubjectHasher,
     private readonly audit: AuditService,
+    private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
   async logout(input: OptionalLogoutInput): Promise<void> {
@@ -62,7 +67,7 @@ export class LogoutService {
 
     try {
       const sourceIpHash = this.subjectHasher.hashIp(input.sourceIp)
-      await this.prisma.$transaction(async (transaction) => {
+      const revokedCount = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         const revoked = await this.sessions.revokeSessionInTransaction(
           transaction,
@@ -72,7 +77,7 @@ export class LogoutService {
 
         // 并发 logout/logout-all 已完成吊销时保持幂等，也不重复制造成功 Audit。
         if (!revoked || input.auth === null) {
-          return
+          return 0
         }
 
         await this.audit.record(transaction, {
@@ -85,7 +90,12 @@ export class LogoutService {
           requestId: input.requestId,
           sourceIpHash,
         })
+        return 1
       })
+      // Audit 与撤销事务提交后才输出，幂等 no-op 不增加计数。
+      if (revokedCount > 0) {
+        this.metrics.recordSessionRevoked(revokedCount)
+      }
     } catch {
       throw this.createServiceUnavailableException()
     }
@@ -95,7 +105,7 @@ export class LogoutService {
     try {
       const sourceIpHash = this.subjectHasher.hashIp(input.sourceIp)
 
-      await this.prisma.$transaction(async (transaction) => {
+      const revokedCount = await this.prisma.$transaction(async (transaction) => {
         // 必须先设置 transaction-local 超时，再按 User -> Session 顺序取得行锁。
         await applyTransactionTimeouts(transaction)
         // 固定先锁 User，再锁当前 Session，与改密路径保持相同的互斥顺序。
@@ -140,7 +150,7 @@ export class LogoutService {
           where: { id: lockedUser.id },
           data: { authVersion: { increment: 1 } },
         })
-        await this.sessions.revokeAllForUserInTransaction(
+        const count = await this.sessions.revokeAllForUserInTransaction(
           transaction,
           lockedUser.id,
           SessionRevokedReason.LOGOUT_ALL,
@@ -155,7 +165,11 @@ export class LogoutService {
           requestId: input.requestId,
           sourceIpHash,
         })
+        return count
       })
+      if (revokedCount > 0) {
+        this.metrics.recordSessionRevoked(revokedCount)
+      }
     } catch (error) {
       if (error instanceof ApiException) {
         throw error

@@ -1,5 +1,11 @@
 import * as argon2 from 'argon2'
 
+import {
+  NOOP_AUTH_METRIC_LOGGER,
+  type Argon2MetricOperation,
+  type AuthMetricLogger,
+} from '../../../infrastructure/observability/auth-metric.logger'
+
 export const PASSWORD_MIN_CODE_POINTS = 15
 export const PASSWORD_MAX_CODE_POINTS = 128
 
@@ -52,9 +58,17 @@ export interface PasswordProviderOptions {
   maxQueued?: number
   dummyHash?: string
   driver?: PasswordArgon2Driver
+  metrics?: Pick<
+    AuthMetricLogger,
+    | 'recordArgon2Capacity'
+    | 'recordArgon2Latency'
+    | 'recordArgon2Rejected'
+  >
+  monotonicNow?: () => number
 }
 
 interface QueuedOperation {
+  kind: Argon2MetricOperation
   operation(): Promise<unknown>
   resolve(value: unknown): void
   reject(reason: unknown): void
@@ -136,6 +150,8 @@ export class PasswordProvider {
   private readonly maxQueued: number
   private readonly dummyHash: string
   private readonly driver: PasswordArgon2Driver
+  private readonly metrics: NonNullable<PasswordProviderOptions['metrics']>
+  private readonly monotonicNow: () => number
   private readonly queue: QueuedOperation[] = []
   private active = 0
 
@@ -144,6 +160,8 @@ export class PasswordProvider {
     this.maxQueued = options.maxQueued ?? DEFAULT_MAX_QUEUED
     this.dummyHash = options.dummyHash ?? DEFAULT_DUMMY_PASSWORD_HASH
     this.driver = options.driver ?? nativeArgon2Driver
+    this.metrics = options.metrics ?? NOOP_AUTH_METRIC_LOGGER
+    this.monotonicNow = options.monotonicNow ?? (() => performance.now())
 
     if (!Number.isInteger(this.maxActive) || this.maxActive < 1) {
       throw new TypeError('maxActive must be a positive integer')
@@ -159,7 +177,7 @@ export class PasswordProvider {
   async hash(password: string): Promise<string> {
     const normalizedPassword = normalizeAndValidatePassword(password)
 
-    return this.runPasswordOperation(() =>
+    return this.runPasswordOperation('hash', () =>
       this.driver.hash(normalizedPassword, PASSWORD_HASH_OPTIONS),
     )
   }
@@ -173,7 +191,7 @@ export class PasswordProvider {
       return false
     }
 
-    return this.runPasswordOperation(() =>
+    return this.runPasswordOperation('verify', () =>
       this.driver.verify(passwordHash, normalizedPassword),
     )
   }
@@ -184,10 +202,11 @@ export class PasswordProvider {
   }
 
   private async runPasswordOperation<T>(
+    kind: Argon2MetricOperation,
     operation: () => Promise<T>,
   ): Promise<T> {
     try {
-      return await this.runBounded(operation)
+      return await this.runBounded(kind, operation)
     } catch (error) {
       if (error instanceof AuthCapacityUnavailableError) {
         throw error
@@ -198,31 +217,48 @@ export class PasswordProvider {
     }
   }
 
-  private runBounded<T>(operation: () => Promise<T>): Promise<T> {
+  private runBounded<T>(
+    kind: Argon2MetricOperation,
+    operation: () => Promise<T>,
+  ): Promise<T> {
     if (this.active < this.maxActive) {
-      return this.startOperation(operation)
+      return this.startOperation(kind, operation)
     }
 
     if (this.queue.length >= this.maxQueued) {
+      this.metrics.recordArgon2Rejected(kind)
       return Promise.reject(new AuthCapacityUnavailableError())
     }
 
     return new Promise<T>((resolve, reject) => {
       this.queue.push({
+        kind,
         operation,
         resolve: (value) => resolve(value as T),
         reject,
       })
+      this.metrics.recordArgon2Capacity(this.active, this.queue.length)
     })
   }
 
-  private async startOperation<T>(operation: () => Promise<T>): Promise<T> {
+  private async startOperation<T>(
+    kind: Argon2MetricOperation,
+    operation: () => Promise<T>,
+  ): Promise<T> {
     this.active += 1
+    this.metrics.recordArgon2Capacity(this.active, this.queue.length)
+    const startedAt = this.readMonotonicNow()
 
     try {
-      return await operation()
+      const result = await operation()
+      this.recordLatency(kind, 'success', startedAt)
+      return result
+    } catch (error) {
+      this.recordLatency(kind, 'failure', startedAt)
+      throw error
     } finally {
       this.active -= 1
+      this.metrics.recordArgon2Capacity(this.active, this.queue.length)
       this.startNextQueuedOperation()
     }
   }
@@ -234,6 +270,35 @@ export class PasswordProvider {
     }
 
     // startOperation 在调用异步 driver 前同步占住 active slot，因此 drain 期间不会超卖并发。
-    void this.startOperation(next.operation).then(next.resolve, next.reject)
+    void this.startOperation(next.kind, next.operation).then(
+      next.resolve,
+      next.reject,
+    )
+  }
+
+  private readMonotonicNow(): number | null {
+    try {
+      const value = this.monotonicNow()
+      return Number.isFinite(value) ? value : null
+    } catch {
+      return null
+    }
+  }
+
+  private recordLatency(
+    kind: Argon2MetricOperation,
+    result: 'success' | 'failure',
+    startedAt: number | null,
+  ): void {
+    const completedAt = this.readMonotonicNow()
+    if (startedAt === null || completedAt === null) {
+      return
+    }
+
+    this.metrics.recordArgon2Latency(
+      kind,
+      result,
+      Math.max(0, completedAt - startedAt),
+    )
   }
 }

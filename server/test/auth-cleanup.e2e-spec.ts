@@ -383,9 +383,11 @@ describe('auth cleanup against isolated PostgreSQL', () => {
     let boundarySessionId = ''
     let fixedCutoffSessionId = ''
     let capturedCutoff: Date | undefined
+    const purgeRequestId = `${TEST_PREFIX}-purge`
 
     const result = await cleanupAuthenticationData({
       connectionString: databaseUrl,
+      createAuditRequestId: () => purgeRequestId,
       createClient: (connectionString) =>
         new HookedCleanupClient(connectionString, {
           observedDeleteCutoffs,
@@ -419,6 +421,33 @@ describe('auth cleanup against isolated PostgreSQL', () => {
         auditEventsDeleted: 1,
       },
     })
+    const purgeAudit = await controlClient.query<{
+      actorType: string
+      eventType: string
+      metadata: Record<string, number>
+      outcome: string
+    }>(
+      `
+        SELECT
+          actor_type AS "actorType",
+          event_type AS "eventType",
+          metadata,
+          outcome
+        FROM audit_events
+        WHERE request_id = $1
+      `,
+      [purgeRequestId],
+    )
+    expect(purgeAudit.rows).toEqual([{
+      actorType: 'SYSTEM',
+      eventType: 'AUTH_RETENTION_PURGED',
+      metadata: {
+        authRecordsDeleted: 5,
+        rateLimitRecordsDeleted: 2,
+        auditRecordsDeleted: 1,
+      },
+      outcome: 'SUCCESS',
+    }])
     expect(capturedCutoff).toBeInstanceOf(Date)
     expect(observedDeleteCutoffs).toHaveLength(3)
     expect(
@@ -518,6 +547,7 @@ describe('auth cleanup against isolated PostgreSQL', () => {
 
     const failure = await cleanupAuthenticationData({
       connectionString: databaseUrl,
+      createAuditRequestId: () => `${TEST_PREFIX}-failed`,
       createClient: (connectionString) =>
         new HookedCleanupClient(connectionString, {
           beforeSessionDelete(invocation) {
@@ -547,7 +577,10 @@ describe('auth cleanup against isolated PostgreSQL', () => {
     expect(afterFailure.rows[0]?.count).toBe('1')
 
     await expect(
-      cleanupAuthenticationData({ connectionString: databaseUrl }),
+      cleanupAuthenticationData({
+        connectionString: databaseUrl,
+        createAuditRequestId: () => `${TEST_PREFIX}-retry`,
+      }),
     ).resolves.toEqual({
       status: 'completed',
       counts: {
@@ -576,6 +609,7 @@ describe('auth cleanup against isolated PostgreSQL', () => {
     const releaseFirst = createDeferred()
     const firstCleanup = cleanupAuthenticationData({
       connectionString: databaseUrl,
+      createAuditRequestId: () => `${TEST_PREFIX}-first`,
       createClient: (connectionString) =>
         new HookedCleanupClient(connectionString, {
           async afterCutoff() {
@@ -599,6 +633,7 @@ describe('auth cleanup against isolated PostgreSQL', () => {
     try {
       secondResult = await cleanupAuthenticationData({
         connectionString: databaseUrl,
+        createAuditRequestId: () => `${TEST_PREFIX}-second`,
       })
     } catch {
       secondFailed = true

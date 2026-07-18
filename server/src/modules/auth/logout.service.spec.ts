@@ -9,6 +9,7 @@ import {
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import type { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import type { RequestAuthContext } from './auth-context'
 import { AuthSessionService } from './auth-session.service'
 import { LogoutService } from './logout.service'
@@ -65,14 +66,27 @@ function createFixture() {
   }
   const subjectHasher = { hashIp: jest.fn().mockReturnValue(IP_HASH) }
   const audit = { record: jest.fn().mockResolvedValue({}) }
+  const metrics: jest.Mocked<Pick<
+    AuthMetricLogger,
+    'recordSessionRevoked'
+  >> = { recordSessionRevoked: jest.fn() }
   const service = new LogoutService(
     prisma as unknown as PrismaService,
     sessions as unknown as AuthSessionService,
     subjectHasher as unknown as AuthSubjectHasher,
     audit,
+    metrics as unknown as AuthMetricLogger,
   )
 
-  return { audit, prisma, service, sessions, subjectHasher, transaction }
+  return {
+    audit,
+    metrics,
+    prisma,
+    service,
+    sessions,
+    subjectHasher,
+    transaction,
+  }
 }
 
 const INPUT = {
@@ -121,6 +135,7 @@ describe('LogoutService', () => {
       requestId: INPUT.requestId,
       sourceIpHash: IP_HASH,
     })
+    expect(fixture.metrics.recordSessionRevoked).toHaveBeenCalledWith(1)
     const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
     const timeoutQuery = rawQueryCalls[0]?.[0] as {
       strings: readonly string[]
@@ -141,6 +156,7 @@ describe('LogoutService', () => {
     await fixture.service.logout(INPUT)
 
     expect(fixture.audit.record).not.toHaveBeenCalled()
+    expect(fixture.metrics.recordSessionRevoked).not.toHaveBeenCalled()
   })
 
   it('locks User and current Session before logout-all version invalidation', async () => {
@@ -177,6 +193,7 @@ describe('LogoutService', () => {
       requestId: INPUT.requestId,
       sourceIpHash: IP_HASH,
     })
+    expect(fixture.metrics.recordSessionRevoked).toHaveBeenCalledWith(2)
   })
 
   it.each([
@@ -224,5 +241,6 @@ describe('LogoutService', () => {
     expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
     expect(error).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' })
     expect(error.message).not.toContain('postgres://')
+    expect(fixture.metrics.recordSessionRevoked).not.toHaveBeenCalled()
   })
 })

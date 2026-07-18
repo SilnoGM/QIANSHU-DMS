@@ -6,6 +6,7 @@ import {
 
 import { ApiException } from './api.exception'
 import { ApiExceptionFilter } from './api-exception.filter'
+import type { AuthMetricLogger } from '../observability/auth-metric.logger'
 import {
   getRequestId,
   requestIdMiddleware,
@@ -78,7 +79,11 @@ function createFilterContext(path = '/api/contracts') {
 describe('ApiExceptionFilter', () => {
   it('keeps the complete Terminus health failure body unchanged', () => {
     const logger = { error: jest.fn() }
-    const filter = new ApiExceptionFilter(logger)
+    const metrics = { recordHttpError: jest.fn() }
+    const filter = new ApiExceptionFilter(
+      logger,
+      metrics as unknown as AuthMetricLogger,
+    )
     const { host, response } = createFilterContext('/api/health')
 
     filter.catch(
@@ -93,6 +98,45 @@ describe('ApiExceptionFilter', () => {
       'private, no-store',
     )
     expect(logger.error).not.toHaveBeenCalled()
+    expect(metrics.recordHttpError).not.toHaveBeenCalled()
+  })
+
+  it.each([401, 403, 429, 503] as const)(
+    'counts non-health HTTP %s exactly once with no request data Label',
+    (status) => {
+      const logger = { error: jest.fn() }
+      const metrics = { recordHttpError: jest.fn() }
+      const filter = new ApiExceptionFilter(
+        logger,
+        metrics as unknown as AuthMetricLogger,
+      )
+      const { host } = createFilterContext('/api/auth/protected')
+
+      filter.catch(
+        new ApiException(status, 'FIXED_CODE', SENSITIVE_CANARY),
+        host,
+      )
+
+      expect(metrics.recordHttpError).toHaveBeenCalledTimes(1)
+      expect(metrics.recordHttpError).toHaveBeenCalledWith(status)
+      expect(JSON.stringify(metrics.recordHttpError.mock.calls)).not.toContain(
+        SENSITIVE_CANARY,
+      )
+    },
+  )
+
+  it('does not count statuses outside the designed HTTP metric set', () => {
+    const logger = { error: jest.fn() }
+    const metrics = { recordHttpError: jest.fn() }
+    const filter = new ApiExceptionFilter(
+      logger,
+      metrics as unknown as AuthMetricLogger,
+    )
+    const { host } = createFilterContext()
+
+    filter.catch(new ApiException(409, 'CONFLICT', '冲突'), host)
+
+    expect(metrics.recordHttpError).not.toHaveBeenCalled()
   })
 
   it('preserves an explicit ApiException safe contract', () => {

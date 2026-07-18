@@ -10,6 +10,7 @@ import {
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import type { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import { AuthService } from './auth.service'
 import { AuthSessionService, type IssuedSession } from './auth-session.service'
 import { AuthRateLimitService } from './providers/auth-rate-limit.service'
@@ -123,6 +124,13 @@ function createFixture() {
       .fn()
       .mockResolvedValue(['roles:read', 'users:read']),
   }
+  const metrics: jest.Mocked<Pick<
+    AuthMetricLogger,
+    'recordLogin' | 'recordSession'
+  >> = {
+    recordLogin: jest.fn(),
+    recordSession: jest.fn(),
+  }
 
   const service = new AuthService(
     prisma as unknown as PrismaService,
@@ -132,12 +140,14 @@ function createFixture() {
     passwords as unknown as PasswordProvider,
     audit,
     accessControl as unknown as AccessControlService,
+    metrics as unknown as AuthMetricLogger,
   )
 
   return {
     accessControl,
     audit,
     passwords,
+    metrics,
     prisma,
     rateLimits,
     service,
@@ -242,6 +252,9 @@ describe('AuthService login', () => {
     expect(fixture.passwords.verify).not.toHaveBeenCalled()
     expect(fixture.passwords.verifyWithDummyHash).not.toHaveBeenCalled()
     expect(fixture.prisma.user.findUnique).not.toHaveBeenCalled()
+    expect(fixture.metrics.recordLogin).toHaveBeenCalledWith('rate_limited')
+    expect(fixture.metrics.recordLogin).toHaveBeenCalledTimes(1)
+    expect(fixture.metrics.recordSession).not.toHaveBeenCalled()
   })
 
   it('uses the fixed dummy verification path for an unknown username', async () => {
@@ -277,6 +290,8 @@ describe('AuthService login', () => {
         sourceIpHash: IP_HASH,
       },
     )
+    expect(fixture.metrics.recordLogin).toHaveBeenCalledWith('failure')
+    expect(fixture.metrics.recordSession).not.toHaveBeenCalled()
 
     const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
     const timeoutQuery = rawQueryCalls[0]?.[0] as {
@@ -353,6 +368,8 @@ describe('AuthService login', () => {
       issuedSession: ISSUED_SESSION,
       permissions: ['roles:read', 'users:read'],
     })
+    expect(fixture.metrics.recordLogin).toHaveBeenCalledWith('success')
+    expect(fixture.metrics.recordSession).toHaveBeenCalledWith('created')
 
     const rawQueryCalls = fixture.transaction.$queryRaw.mock.calls as unknown[][]
     const timeoutQuery = rawQueryCalls[0]?.[0] as {
@@ -465,5 +482,8 @@ describe('AuthService login', () => {
     expect(error).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' })
     expect(error.message).not.toContain('postgres://')
     expect(error.message).not.toContain('password=')
+    expect(fixture.metrics.recordLogin).toHaveBeenCalledWith('failure')
+    // Session insert发生在随后回滚的事务内，不能伪记为已创建。
+    expect(fixture.metrics.recordSession).not.toHaveBeenCalled()
   })
 })

@@ -13,6 +13,7 @@ import {
   UserStatus,
 } from '../../generated/prisma/enums'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
+import type { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import {
   AuthAdminOperationError,
   AuthAdminService,
@@ -68,14 +69,30 @@ function createFixture() {
       [unknown, RecordAuditEventInput]
     >().mockResolvedValue({ id: 'audit-id' }),
   }
+  const metrics: jest.Mocked<Pick<
+    AuthMetricLogger,
+    'recordPassword' | 'recordSessionRevoked'
+  >> = {
+    recordPassword: jest.fn(),
+    recordSessionRevoked: jest.fn(),
+  }
   const service = new AuthAdminService(
     prisma as unknown as PrismaService,
     passwords as unknown as PasswordProvider,
     passwordPolicy as unknown as PasswordPolicyProvider,
     audit as unknown as AuditService,
+    metrics as unknown as AuthMetricLogger,
   )
 
-  return { audit, passwordPolicy, passwords, prisma, service, transaction }
+  return {
+    audit,
+    metrics,
+    passwordPolicy,
+    passwords,
+    prisma,
+    service,
+    transaction,
+  }
 }
 
 function queryText(query: unknown): string {
@@ -200,6 +217,10 @@ describe('AuthAdminService bootstrap', () => {
       requestId: bootstrapAudit?.requestId,
     })
     expect(fixture.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+      'create',
+      'success',
+    )
   })
 
   it('refuses bootstrap when any UserRole already points to system_admin', async () => {
@@ -225,6 +246,10 @@ describe('AuthAdminService bootstrap', () => {
     expect(fixture.transaction.user.create).not.toHaveBeenCalled()
     expect(fixture.transaction.userRole.create).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
+    expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+      'create',
+      'failure',
+    )
   })
 
   it('propagates a fixed failure when Audit rejects so the surrounding transaction can roll back', async () => {
@@ -247,6 +272,10 @@ describe('AuthAdminService bootstrap', () => {
       code: 'SYSTEM_ADMIN_OPERATION_FAILED',
       message: '系统管理员操作失败',
     })
+    expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+      'create',
+      'failure',
+    )
   })
 })
 
@@ -346,6 +375,11 @@ describe('AuthAdminService recovery', () => {
       const userLockQuery = fixture.transaction.$queryRaw.mock.calls[2]?.[0]
       expect(queryText(roleLockQuery)).toContain('FROM "roles"')
       expect(queryText(userLockQuery)).toContain('FROM "users"')
+      expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+        'reset',
+        'success',
+      )
+      expect(fixture.metrics.recordSessionRevoked).toHaveBeenCalledWith(2)
     },
   )
 
@@ -368,5 +402,10 @@ describe('AuthAdminService recovery', () => {
     expect(fixture.transaction.user.update).not.toHaveBeenCalled()
     expect(fixture.transaction.authSession.updateMany).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
+    expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
+      'reset',
+      'failure',
+    )
+    expect(fixture.metrics.recordSessionRevoked).not.toHaveBeenCalled()
   })
 })

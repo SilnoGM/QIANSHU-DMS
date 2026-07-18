@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config'
 
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
+import { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import { AuthContextService } from './auth-context.service'
 import { AuthController } from './auth.controller'
 import { AuthModule } from './auth.module'
@@ -44,6 +45,7 @@ describe('AuthModule metadata', () => {
         SessionTokenProvider,
         AccessControlService,
         AuditService,
+        AuthMetricLogger,
       ]),
     )
   })
@@ -52,7 +54,10 @@ describe('AuthModule metadata', () => {
     const providers = Reflect.getMetadata('providers', AuthModule) as Array<{
       provide?: unknown
       inject?: unknown[]
-      useFactory?: (config: ConfigService) => unknown
+      useFactory?: (
+        config: ConfigService,
+        metrics: AuthMetricLogger,
+      ) => unknown
     }>
     const passwordDefinition = providers.find(
       (provider) => provider.provide === PasswordProvider,
@@ -65,8 +70,13 @@ describe('AuthModule metadata', () => {
       }),
     } as unknown as ConfigService
 
-    expect(passwordDefinition?.inject).toEqual([ConfigService])
-    expect(passwordDefinition?.useFactory?.(config)).toBeInstanceOf(
+    const metrics = new AuthMetricLogger({ log: jest.fn() })
+
+    expect(passwordDefinition?.inject).toEqual([
+      ConfigService,
+      AuthMetricLogger,
+    ])
+    expect(passwordDefinition?.useFactory?.(config, metrics)).toBeInstanceOf(
       PasswordProvider,
     )
     expect(config.getOrThrow).toHaveBeenCalledWith(

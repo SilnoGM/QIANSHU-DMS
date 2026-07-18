@@ -13,6 +13,10 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import {
+  AuthMetricLogger,
+  NOOP_AUTH_METRIC_LOGGER,
+} from '../../infrastructure/observability/auth-metric.logger'
 import { PasswordPolicyProvider } from '../auth/providers/password-policy.provider'
 import {
   AuthCapacityUnavailableError,
@@ -95,6 +99,7 @@ export class UsersService {
     private readonly passwords: PasswordProvider,
     private readonly passwordPolicy: PasswordPolicyProvider,
     private readonly audit: AuditService,
+    private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
   async list(query: UserListQueryDto): Promise<UserPageDto> {
@@ -152,12 +157,11 @@ export class UsersService {
     context: UsersCommandContext,
     input: CreateUserRequestDto,
   ): Promise<UserDto> {
-    const normalizedContext = normalizeUsersCommandContext(context)
-    const normalizedUsername = normalizeUsername(input.username)
-    this.assertValidUsername(normalizedUsername)
-    const displayName = this.normalizeDisplayName(input.displayName)
-
     try {
+      const normalizedContext = normalizeUsersCommandContext(context)
+      const normalizedUsername = normalizeUsername(input.username)
+      this.assertValidUsername(normalizedUsername)
+      const displayName = this.normalizeDisplayName(input.displayName)
       const acceptedPassword = this.passwordPolicy.assertAcceptable({
         password: input.password,
         username: normalizedUsername.username,
@@ -166,7 +170,7 @@ export class UsersService {
       })
       const passwordHash = await this.passwords.hash(acceptedPassword)
 
-      return await this.prisma.$transaction(async (transaction) => {
+      const createdUser = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         const databaseNow = await readDatabaseNow(transaction)
         const created = await transaction.user.create({
@@ -197,8 +201,11 @@ export class UsersService {
 
         return toUserDto(created)
       })
+      this.metrics.recordPassword('create', 'success')
+      return createdUser
     }
     catch (error) {
+      this.metrics.recordPassword('create', 'failure')
       if (this.isPrismaError(error, 'P2002')) {
         throw new ApiException(
           HttpStatus.CONFLICT,
@@ -307,7 +314,8 @@ export class UsersService {
     }
 
     try {
-      return await this.prisma.$transaction(async (transaction) => {
+      let revokedSessionCount = 0
+      const disabledUser = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         // system_admin Role 是所有“最后管理员”修改的共同串行化锁。
         const systemRole = await lockSystemAdminRole(transaction)
@@ -348,13 +356,14 @@ export class UsersService {
           },
           select: USER_RESPONSE_SELECT,
         })
-        await transaction.authSession.updateMany({
+        const revoked = await transaction.authSession.updateMany({
           where: { userId: normalizedUserId, revokedAt: null },
           data: {
             revokedAt: databaseNow,
             revokedReason: SessionRevokedReason.USER_DISABLED,
           },
         })
+        revokedSessionCount = revoked.count
 
         await this.recordUserAudit(
           transaction,
@@ -365,6 +374,8 @@ export class UsersService {
 
         return toUserDto(disabled)
       })
+      this.metrics.recordSessionRevoked(revokedSessionCount)
+      return disabledUser
     }
     catch (error) {
       this.rethrowKnownError(error)
@@ -507,18 +518,18 @@ export class UsersService {
     userId: string,
     input: PasswordResetRequestDto,
   ): Promise<UserDto> {
-    const normalizedContext = normalizeUsersCommandContext(context)
-    const normalizedUserId = normalizeUuid(userId)
-
-    if (normalizedContext.actorUserId === normalizedUserId) {
-      throw new ApiException(
-        HttpStatus.CONFLICT,
-        SELF_PASSWORD_RESET_NOT_ALLOWED_CODE,
-        '不能通过管理接口重置本人密码',
-      )
-    }
-
     try {
+      const normalizedContext = normalizeUsersCommandContext(context)
+      const normalizedUserId = normalizeUuid(userId)
+
+      if (normalizedContext.actorUserId === normalizedUserId) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          SELF_PASSWORD_RESET_NOT_ALLOWED_CODE,
+          '不能通过管理接口重置本人密码',
+        )
+      }
+
       const snapshot = await this.readPasswordResetSnapshot(normalizedUserId)
       const acceptedPassword = this.passwordPolicy.assertAcceptable({
         password: input.newPassword,
@@ -528,7 +539,8 @@ export class UsersService {
       })
       const passwordHash = await this.passwords.hash(acceptedPassword)
 
-      return await this.prisma.$transaction(async (transaction) => {
+      let revokedSessionCount = 0
+      const updatedUser = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         const lockedUsers = await lockUsers(transaction, [
           normalizedContext.actorUserId,
@@ -566,13 +578,14 @@ export class UsersService {
           },
           select: USER_RESPONSE_SELECT,
         })
-        await transaction.authSession.updateMany({
+        const revoked = await transaction.authSession.updateMany({
           where: { userId: normalizedUserId, revokedAt: null },
           data: {
             revokedAt: databaseNow,
             revokedReason: SessionRevokedReason.PASSWORD_RESET,
           },
         })
+        revokedSessionCount = revoked.count
         await this.audit.record(transaction, {
           eventType: AuditEventType.USER_PASSWORD_RESET,
           outcome: AuditOutcome.SUCCESS,
@@ -586,8 +599,12 @@ export class UsersService {
 
         return toUserDto(updated)
       })
+      this.metrics.recordPassword('reset', 'success')
+      this.metrics.recordSessionRevoked(revokedSessionCount)
+      return updatedUser
     }
     catch (error) {
+      this.metrics.recordPassword('reset', 'failure')
       this.rethrowKnownError(error)
     }
   }

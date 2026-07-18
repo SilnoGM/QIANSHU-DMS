@@ -1,5 +1,7 @@
 import 'dotenv/config'
 
+import { randomUUID } from 'node:crypto'
+
 import { Client, type QueryResultRow } from 'pg'
 
 export const AUTH_CLEANUP_BATCH_SIZE = 500
@@ -99,6 +101,7 @@ export type AuthCleanupClientFactory = (
 export interface CleanupAuthenticationDataOptions {
   readonly connectionString: string
   readonly createClient?: AuthCleanupClientFactory
+  readonly createAuditRequestId?: () => string
 }
 
 interface LockRow extends QueryResultRow {
@@ -319,6 +322,81 @@ async function deleteInBatches(
   } while (deletedCount === AUTH_CLEANUP_BATCH_SIZE)
 }
 
+function createCleanupAuditRequestId(): string {
+  return `cleanup:${randomUUID()}`
+}
+
+function containsControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0)
+    return codePoint !== undefined && (codePoint <= 31 || codePoint === 127)
+  })
+}
+
+function validateCleanupAuditRequestId(value: unknown): string {
+  if (
+    typeof value !== 'string'
+    || value.length === 0
+    || Array.from(value).length > 64
+    || containsControlCharacter(value)
+  ) {
+    throw new Error(AUTH_CLEANUP_FAILURE_MESSAGE)
+  }
+
+  return value
+}
+
+/**
+ * 只有三类删除批次全部提交后才写成功 Audit。Audit 自身使用独立短事务；写入失败
+ * 会让命令非零退出，但绝不会把 skip 或中途失败伪造成成功清理。
+ */
+async function recordCleanupAudit(
+  client: AuthCleanupPgClient,
+  counts: AuthCleanupCounts,
+  requestId: string,
+): Promise<void> {
+  await client.query('BEGIN')
+
+  try {
+    await client.query(
+      `SELECT set_config('statement_timeout', $1, true)`,
+      [AUTH_CLEANUP_STATEMENT_TIMEOUT],
+    )
+    await client.query(
+      `
+        INSERT INTO "audit_events" (
+          "event_type",
+          "outcome",
+          "actor_type",
+          "target_type",
+          "request_id",
+          "metadata"
+        )
+        VALUES (
+          'AUTH_RETENTION_PURGED',
+          'SUCCESS',
+          'SYSTEM',
+          'AuthenticationRetention',
+          $1,
+          $2::jsonb
+        )
+      `,
+      [
+        requestId,
+        JSON.stringify({
+          authRecordsDeleted: counts.authSessionsDeleted,
+          rateLimitRecordsDeleted: counts.authRateLimitsDeleted,
+          auditRecordsDeleted: counts.auditEventsDeleted,
+        }),
+      ],
+    )
+    await client.query('COMMIT')
+  } catch {
+    await rollbackQuietly(client)
+    throw new Error(AUTH_CLEANUP_FAILURE_MESSAGE)
+  }
+}
+
 /**
  * 使用一个专用 pg Client 完成认证保留数据清理。
  *
@@ -369,6 +447,11 @@ export async function cleanupAuthenticationData(
         counts,
         'auditEventsDeleted',
       )
+
+      const auditRequestId = validateCleanupAuditRequestId(
+        (options.createAuditRequestId ?? createCleanupAuditRequestId)(),
+      )
+      await recordCleanupAudit(client, counts, auditRequestId)
 
       result = { status: 'completed', counts: safeCounts(counts) }
     }
@@ -433,21 +516,52 @@ async function runDefaultCleanup(): Promise<AuthCleanupResult> {
 function cleanupMetric(
   status: AuthCleanupResult['status'] | 'failed',
   counts: AuthCleanupCounts,
+  durationMs: number,
 ): string {
   return JSON.stringify({
+    kind: 'metric',
     metric: 'auth_cleanup',
     status,
+    durationMs,
     ...counts,
   })
+}
+
+function readMonotonicTime(clock: () => number): number | null {
+  try {
+    const value = clock()
+    return Number.isFinite(value) ? value : null
+  } catch {
+    return null
+  }
+}
+
+function cleanupDuration(
+  startedAt: number | null,
+  clock: () => number,
+): number {
+  const completedAt = readMonotonicTime(clock)
+  if (startedAt === null || completedAt === null) {
+    return 0
+  }
+
+  return Math.round(Math.max(0, completedAt - startedAt) * 1_000) / 1_000
 }
 
 export async function runAuthCleanupCli(
   cleanup: AuthCleanupRunner = runDefaultCleanup,
   output: AuthCleanupOutput = console,
+  monotonicNow: () => number = () => performance.now(),
 ): Promise<void> {
+  const startedAt = readMonotonicTime(monotonicNow)
+
   try {
     const result = await cleanup()
-    output.log(cleanupMetric(result.status, result.counts))
+    output.log(cleanupMetric(
+      result.status,
+      result.counts,
+      cleanupDuration(startedAt, monotonicNow),
+    ))
   } catch (error) {
     const counts =
       error instanceof AuthCleanupExecutionError
@@ -455,7 +569,11 @@ export async function runAuthCleanupCli(
         : emptyCounts()
 
     // CLI 只输出固定枚举与已提交计数；原始异常、连接串、SQL 和参数均不进入日志。
-    output.error(cleanupMetric('failed', counts))
+    output.error(cleanupMetric(
+      'failed',
+      counts,
+      cleanupDuration(startedAt, monotonicNow),
+    ))
     process.exitCode = 1
   }
 }

@@ -14,6 +14,10 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import {
+  AuthMetricLogger,
+  NOOP_AUTH_METRIC_LOGGER,
+} from '../../infrastructure/observability/auth-metric.logger'
 import { AuthSessionService } from './auth-session.service'
 import type { LoginInput, LoginResult } from './auth.types'
 import { AuthRateLimitService } from './providers/auth-rate-limit.service'
@@ -68,6 +72,7 @@ export class AuthService {
     private readonly passwords: PasswordProvider,
     private readonly audit: AuditService,
     private readonly accessControl: AccessControlService,
+    private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
   async login(input: LoginInput): Promise<LoginResult> {
@@ -103,14 +108,24 @@ export class AuthService {
         throw this.createInvalidCredentialsException()
       }
 
-      return await this.createSuccessfulLogin(
+      const result = await this.createSuccessfulLogin(
         user,
         usernameHash,
         sourceIpHash,
         input.requestId,
       )
+      // 事务提交后才记录登录与 Session 创建，避免 Audit/COMMIT 失败产生虚假成功指标。
+      this.metrics.recordLogin('success')
+      this.metrics.recordSession('created')
+      return result
     }
     catch (error) {
+      this.metrics.recordLogin(
+        error instanceof ApiException && error.code === 'AUTH_RATE_LIMITED'
+          ? 'rate_limited'
+          : 'failure',
+      )
+
       if (error instanceof ApiException) {
         throw error
       }

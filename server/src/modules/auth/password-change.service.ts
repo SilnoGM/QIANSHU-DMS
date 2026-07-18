@@ -15,6 +15,10 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import {
+  AuthMetricLogger,
+  NOOP_AUTH_METRIC_LOGGER,
+} from '../../infrastructure/observability/auth-metric.logger'
 import type { RequestAuthContext } from './auth-context'
 import { AuthSessionService } from './auth-session.service'
 import type { LoginResult } from './auth.types'
@@ -47,6 +51,11 @@ type LockedSessionRow = Readonly<{
 
 type DatabaseClockRow = Readonly<{ now: Date }>
 
+type PasswordRotationResult = Readonly<{
+  loginResult: LoginResult
+  revokedSessionCount: number
+}>
+
 export interface PasswordChangeInput {
   auth: RequestAuthContext
   currentPassword?: string
@@ -72,6 +81,7 @@ export class PasswordChangeService {
     private readonly passwordPolicy: PasswordPolicyProvider,
     private readonly audit: AuditService,
     private readonly accessControl: AccessControlService,
+    private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
   async change(input: PasswordChangeInput): Promise<LoginResult> {
@@ -118,14 +128,21 @@ export class PasswordChangeService {
 
       const newPasswordHash = await this.passwords.hash(normalizedNewPassword)
 
-      return await this.rotatePasswordAndSession(
+      const rotation = await this.rotatePasswordAndSession(
         input,
         snapshot,
         newPasswordHash,
         userHash,
         sourceIpHash,
       )
+      // 事务提交后再记录业务成功、旧 Session 撤销和新 Session 创建。
+      this.metrics.recordPassword('change', 'success')
+      this.metrics.recordSessionRevoked(rotation.revokedSessionCount)
+      this.metrics.recordSession('created')
+      return rotation.loginResult
     } catch (error) {
+      this.metrics.recordPassword('change', 'failure')
+
       if (error instanceof ApiException) {
         throw error
       }
@@ -214,7 +231,7 @@ export class PasswordChangeService {
     newPasswordHash: string,
     userHash: Buffer,
     sourceIpHash: Buffer,
-  ): Promise<LoginResult> {
+  ): Promise<PasswordRotationResult> {
     return this.prisma.$transaction(async (transaction) => {
       // 必须先设置 transaction-local 超时，再按 User -> Session 顺序取得行锁。
       await applyTransactionTimeouts(transaction)
@@ -287,7 +304,7 @@ export class PasswordChangeService {
         },
       })
 
-      await this.sessions.revokeAllForUserInTransaction(
+      const revokedSessionCount = await this.sessions.revokeAllForUserInTransaction(
         transaction,
         lockedUser.id,
         SessionRevokedReason.PASSWORD_CHANGED,
@@ -328,7 +345,10 @@ export class PasswordChangeService {
         sourceIpHash,
       })
 
-      return { issuedSession, permissions }
+      return {
+        loginResult: { issuedSession, permissions },
+        revokedSessionCount,
+      }
     })
   }
 

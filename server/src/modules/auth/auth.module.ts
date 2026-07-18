@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService } from '../audit/audit.service'
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
+import { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import { AuthContextService } from './auth-context.service'
 import { AuthController } from './auth.controller'
 import { AuthSessionService } from './auth-session.service'
@@ -19,11 +20,15 @@ import { SessionTokenProvider } from './providers/session-token.provider'
 
 const passwordProviderDefinition = {
   provide: PasswordProvider,
-  inject: [ConfigService],
-  useFactory: (config: ConfigService): PasswordProvider =>
+  inject: [ConfigService, AuthMetricLogger],
+  useFactory: (
+    config: ConfigService,
+    metrics: AuthMetricLogger,
+  ): PasswordProvider =>
     new PasswordProvider({
       maxActive: config.getOrThrow<number>('auth.argon2.concurrency'),
       maxQueued: config.getOrThrow<number>('auth.argon2.queueLimit'),
+      metrics,
     }),
 }
 
@@ -44,6 +49,7 @@ const passwordProviderDefinition = {
     SessionTokenProvider,
     AccessControlService,
     AuditService,
+    AuthMetricLogger,
     passwordProviderDefinition,
   ],
   exports: [
@@ -55,6 +61,7 @@ const passwordProviderDefinition = {
     SessionCookieProvider,
     AccessControlService,
     AuditService,
+    AuthMetricLogger,
   ],
 })
 export class AuthModule {}

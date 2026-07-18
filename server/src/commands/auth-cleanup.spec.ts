@@ -11,6 +11,7 @@ import {
 const DATABASE_URL = 'postgresql://localhost:5432/qianshu_test'
 const BACKEND_PID = 4_312
 const CUTOFF = new Date('2026-07-17T00:00:00.000Z')
+const AUDIT_REQUEST_ID = 'cleanup:test-request-id'
 
 interface ObservedQuery {
   text: string
@@ -153,6 +154,44 @@ function queriesContaining(
 }
 
 describe('cleanupAuthenticationData', () => {
+  it('records one completed-only AUTH_RETENTION_PURGED Audit after committed deletion batches', async () => {
+    const fixture = createFakeClient({
+      sessionBatchCounts: [2],
+      rateLimitBatchCounts: [3],
+      auditBatchCounts: [4],
+    })
+
+    await cleanupAuthenticationData({
+      connectionString: DATABASE_URL,
+      createClient: () => fixture.client,
+      createAuditRequestId: () => AUDIT_REQUEST_ID,
+    })
+
+    const auditInserts = fixture.observedQueries.filter(({ text }) =>
+      text.startsWith('INSERT INTO "audit_events"'),
+    )
+    expect(auditInserts).toHaveLength(1)
+    expect(auditInserts[0]?.text).toContain("'AUTH_RETENTION_PURGED'")
+    expect(auditInserts[0]?.text).toContain("'SUCCESS'")
+    expect(auditInserts[0]?.text).toContain("'SYSTEM'")
+    expect(auditInserts[0]?.values).toEqual([
+      AUDIT_REQUEST_ID,
+      JSON.stringify({
+        authRecordsDeleted: 2,
+        rateLimitRecordsDeleted: 3,
+        auditRecordsDeleted: 4,
+      }),
+    ])
+
+    const insertIndex = fixture.observedQueries.indexOf(auditInserts[0])
+    const lastDeleteCommitIndex = fixture.observedQueries
+      .map(({ text }, index) => (text === 'COMMIT' ? index : -1))
+      .filter((index) => index >= 0)
+      .at(-2)
+    expect(lastDeleteCommitIndex).toBeDefined()
+    expect(insertIndex).toBeGreaterThan(lastDeleteCommitIndex!)
+  })
+
   it('uses one dedicated backend for lock, fixed cutoff, all batches and unlock', async () => {
     const fixture = createFakeClient({
       sessionBatchCounts: [AUTH_CLEANUP_BATCH_SIZE, 2],
@@ -178,7 +217,6 @@ describe('cleanupAuthenticationData', () => {
     expect(createClient).toHaveBeenCalledWith(DATABASE_URL)
     expect(fixture.connect).toHaveBeenCalledTimes(1)
     expect(fixture.end).toHaveBeenCalledTimes(1)
-
     const lockQuery = queriesContaining(
       fixture.observedQueries,
       'pg_try_advisory_lock',
@@ -218,10 +256,10 @@ describe('cleanupAuthenticationData', () => {
     const commitIndexes = fixture.observedQueries
       .map(({ text }, index) => (text === 'COMMIT' ? index : -1))
       .filter((index) => index >= 0)
-    expect(beginIndexes).toHaveLength(deleteQueries.length)
-    expect(commitIndexes).toHaveLength(deleteQueries.length)
+    expect(beginIndexes).toHaveLength(deleteQueries.length + 1)
+    expect(commitIndexes).toHaveLength(deleteQueries.length + 1)
 
-    for (const beginIndex of beginIndexes) {
+    for (const beginIndex of beginIndexes.slice(0, -1)) {
       expect(fixture.observedQueries[beginIndex + 1]?.text).toContain(
         "set_config('statement_timeout'",
       )
@@ -230,6 +268,16 @@ describe('cleanupAuthenticationData', () => {
       )
       expect(fixture.observedQueries[beginIndex + 3]?.text).toBe('COMMIT')
     }
+
+    const auditBeginIndex = beginIndexes.at(-1)
+    expect(auditBeginIndex).toBeDefined()
+    expect(fixture.observedQueries[auditBeginIndex! + 1]?.text).toContain(
+      "set_config('statement_timeout'",
+    )
+    expect(fixture.observedQueries[auditBeginIndex! + 2]?.text).toContain(
+      'AUTH_RETENTION_PURGED',
+    )
+    expect(fixture.observedQueries[auditBeginIndex! + 3]?.text).toBe('COMMIT')
   })
 
   it('encodes the three retention rules and equality boundaries in parameterized SQL', async () => {
@@ -294,6 +342,9 @@ describe('cleanupAuthenticationData', () => {
       queriesContaining(fixture.observedQueries, 'pg_advisory_unlock'),
     ).toEqual([])
     expect(fixture.end).toHaveBeenCalledTimes(1)
+    expect(
+      queriesContaining(fixture.observedQueries, 'AUTH_RETENTION_PURGED'),
+    ).toEqual([])
   })
 
   it('counts only committed batches and always rolls back, unlocks and disconnects after a later failure', async () => {
@@ -324,6 +375,9 @@ describe('cleanupAuthenticationData', () => {
       queriesContaining(fixture.observedQueries, 'pg_advisory_unlock'),
     ).toHaveLength(1)
     expect(fixture.end).toHaveBeenCalledTimes(1)
+    expect(
+      queriesContaining(fixture.observedQueries, 'AUTH_RETENTION_PURGED'),
+    ).toEqual([])
   })
 
   it.each([
@@ -379,6 +433,10 @@ describe('runAuthCleanupCli', () => {
     const log = jest.fn<void, [string]>()
     const error = jest.fn<void, [string]>()
 
+    const clock = jest.fn()
+      .mockReturnValueOnce(10)
+      .mockReturnValueOnce(42.3456)
+
     await runAuthCleanupCli(
       () => Promise.resolve({
         status: 'skipped_already_running',
@@ -389,12 +447,15 @@ describe('runAuthCleanupCli', () => {
         },
       }),
       { log, error },
+      clock,
     )
 
     expect(log).toHaveBeenCalledWith(
       JSON.stringify({
+        kind: 'metric',
         metric: 'auth_cleanup',
         status: 'skipped_already_running',
+        durationMs: 32.346,
         authSessionsDeleted: 0,
         authRateLimitsDeleted: 0,
         auditEventsDeleted: 0,
@@ -417,17 +478,24 @@ describe('runAuthCleanupCli', () => {
       value: new Error(unsafeCanary),
     })
 
-    await runAuthCleanupCli(async () => Promise.reject(failure), {
-      log,
-      error,
-    })
+    const clock = jest.fn()
+      .mockReturnValueOnce(100)
+      .mockReturnValueOnce(112.5)
+
+    await runAuthCleanupCli(
+      async () => Promise.reject(failure),
+      { log, error },
+      clock,
+    )
 
     expect(error).toHaveBeenCalledTimes(1)
     const output = String(error.mock.calls[0]?.[0])
     expect(output).toBe(
       JSON.stringify({
+        kind: 'metric',
         metric: 'auth_cleanup',
         status: 'failed',
+        durationMs: 12.5,
         authSessionsDeleted: AUTH_CLEANUP_BATCH_SIZE,
         authRateLimitsDeleted: 2,
         auditEventsDeleted: 0,

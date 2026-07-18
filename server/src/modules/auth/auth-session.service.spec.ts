@@ -3,6 +3,7 @@ import { HttpStatus } from '@nestjs/common'
 import { SessionRevokedReason, UserStatus } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import type { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import { AuthSessionService } from './auth-session.service'
 import { SessionTokenProvider } from './providers/session-token.provider'
 
@@ -36,12 +37,21 @@ function createService(transaction: TransactionMock) {
     ),
   }
   const tokenProvider = new SessionTokenProvider()
+  const metrics: jest.Mocked<Pick<
+    AuthMetricLogger,
+    'recordSession' | 'recordSessionRevoked'
+  >> = {
+    recordSession: jest.fn(),
+    recordSessionRevoked: jest.fn(),
+  }
 
   return {
+    metrics,
     prisma,
     service: new AuthSessionService(
       prisma as unknown as PrismaService,
       tokenProvider,
+      metrics as unknown as AuthMetricLogger,
     ),
     tokenProvider,
   }
@@ -127,7 +137,7 @@ describe('AuthSessionService', () => {
 
   it('authenticates under a row lock and touches an idle session after five minutes', async () => {
     const transaction = createTransactionMock()
-    const { service, tokenProvider } = createService(transaction)
+    const { metrics, service, tokenProvider } = createService(transaction)
     const token = tokenProvider.generate()
     const absoluteExpiresAt = new Date(DATABASE_NOW.getTime() + 2 * 60 * 60 * 1_000)
     transaction.$queryRaw
@@ -156,6 +166,7 @@ describe('AuthSessionService', () => {
         idleExpiresAt: absoluteExpiresAt,
       },
     })
+    expect(metrics.recordSession).toHaveBeenCalledWith('valid')
     const rawQueryCalls = transaction.$queryRaw.mock.calls as unknown[][]
     const timeoutQuery = rawQueryCalls[0]?.[0] as {
       strings: readonly string[]
@@ -206,7 +217,7 @@ describe('AuthSessionService', () => {
     ['an absolutely expired session', { absoluteExpiresAt: new Date(DATABASE_NOW) }],
   ])('returns null for %s', async (_label, overrides) => {
     const transaction = createTransactionMock()
-    const { service, tokenProvider } = createService(transaction)
+    const { metrics, service, tokenProvider } = createService(transaction)
     const token = tokenProvider.generate()
     transaction.$queryRaw
       .mockResolvedValueOnce([])
@@ -217,6 +228,11 @@ describe('AuthSessionService', () => {
 
     await expect(service.authenticate(token.value)).resolves.toBeNull()
     expect(transaction.authSession.update).not.toHaveBeenCalled()
+    if (_label.includes('expired')) {
+      expect(metrics.recordSession).toHaveBeenCalledWith('expired')
+    } else {
+      expect(metrics.recordSession).not.toHaveBeenCalled()
+    }
   })
 
   it('returns null without reading the clock when the selector does not exist', async () => {
@@ -237,7 +253,7 @@ describe('AuthSessionService', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ now: DATABASE_NOW }])
     transaction.authSession.updateMany.mockResolvedValue({ count: 1 })
-    const { service } = createService(transaction)
+    const { metrics, service } = createService(transaction)
 
     await expect(
       service.revokeSession(
@@ -245,6 +261,7 @@ describe('AuthSessionService', () => {
         SessionRevokedReason.LOGOUT,
       ),
     ).resolves.toBe(true)
+    expect(metrics.recordSessionRevoked).toHaveBeenCalledWith(1)
 
     const rawQueryCalls = transaction.$queryRaw.mock.calls as unknown[][]
     const timeoutQuery = rawQueryCalls[0]?.[0] as {
@@ -262,7 +279,7 @@ describe('AuthSessionService', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ now: DATABASE_NOW }])
     transaction.authSession.updateMany.mockResolvedValue({ count: 2 })
-    const { service } = createService(transaction)
+    const { metrics, service } = createService(transaction)
 
     await expect(
       service.revokeAllForUser(
@@ -270,6 +287,7 @@ describe('AuthSessionService', () => {
         SessionRevokedReason.PASSWORD_CHANGED,
       ),
     ).resolves.toBe(2)
+    expect(metrics.recordSessionRevoked).toHaveBeenCalledWith(2)
 
     const rawQueryCalls = transaction.$queryRaw.mock.calls as unknown[][]
     const timeoutQuery = rawQueryCalls[0]?.[0] as {
@@ -285,7 +303,7 @@ describe('AuthSessionService', () => {
     const transaction = createTransactionMock()
     transaction.$queryRaw.mockResolvedValueOnce([{ now: DATABASE_NOW }])
     transaction.authSession.updateMany.mockResolvedValue({ count: 2 })
-    const { service } = createService(transaction)
+    const { metrics, service } = createService(transaction)
 
     await expect(
       service.revokeAllForUserInTransaction(
@@ -301,6 +319,8 @@ describe('AuthSessionService', () => {
         revokedReason: SessionRevokedReason.PASSWORD_CHANGED,
       },
     })
+    // 调用方事务尚未提交，底层 helper 不能提前制造撤销成功指标。
+    expect(metrics.recordSessionRevoked).not.toHaveBeenCalled()
   })
 
   it('maps database failures to one fixed service-unavailable error', async () => {

@@ -13,6 +13,10 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import {
+  AuthMetricLogger,
+  NOOP_AUTH_METRIC_LOGGER,
+} from '../../infrastructure/observability/auth-metric.logger'
 import { SessionTokenProvider } from './providers/session-token.provider'
 
 const AUTH_SERVICE_UNAVAILABLE_CODE = 'AUTH_SERVICE_UNAVAILABLE'
@@ -66,6 +70,11 @@ export type IssuedSession = Readonly<{
   tokenValue: string
 }>
 
+type SessionValidationResult = Readonly<{
+  metricEvent?: 'valid' | 'expired'
+  session: AuthenticatedSession | null
+}>
+
 /**
  * 管理单一 PostgreSQL Session 的创建、认证、活动续期与吊销。
  *
@@ -77,6 +86,7 @@ export class AuthSessionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokenProvider: SessionTokenProvider,
+    private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
   async createInTransaction(
@@ -170,10 +180,12 @@ export class AuthSessionService {
     reason: SessionRevokedReason,
   ): Promise<boolean> {
     try {
-      return await this.prisma.$transaction(async (transaction) => {
+      const revoked = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         return this.revokeSessionInTransaction(transaction, sessionId, reason)
       })
+      this.metrics.recordSessionRevoked(revoked ? 1 : 0)
+      return revoked
     } catch {
       throw this.createServiceUnavailableException()
     }
@@ -184,10 +196,12 @@ export class AuthSessionService {
     reason: SessionRevokedReason,
   ): Promise<number> {
     try {
-      return await this.prisma.$transaction(async (transaction) => {
+      const revokedCount = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
         return this.revokeAllForUserInTransaction(transaction, userId, reason)
       })
+      this.metrics.recordSessionRevoked(revokedCount)
+      return revokedCount
     } catch {
       throw this.createServiceUnavailableException()
     }
@@ -203,7 +217,7 @@ export class AuthSessionService {
     }
 
     try {
-      return await this.prisma.$transaction(async (transaction) => {
+      const validation = await this.prisma.$transaction(async (transaction) => {
         // selector 行锁也必须受 transaction-local lock/statement timeout 约束。
         await applyTransactionTimeouts(transaction)
         const rows = await transaction.$queryRaw<LockedSessionRow[]>`
@@ -229,17 +243,24 @@ export class AuthSessionService {
 
         const row = rows[0]
         if (!row) {
-          return null
+          return { session: null } satisfies SessionValidationResult
         }
 
         if (!this.tokenProvider.matchesTokenHash(parsedToken.secret, row.tokenHash)) {
-          return null
+          return { session: null } satisfies SessionValidationResult
         }
 
         // 时钟必须在取得 Session 行锁之后读取，才能为随后判断和 touch 提供同一基准。
         const databaseNow = await this.readDatabaseNow(transaction)
-        if (!this.isValidSession(row, databaseNow)) {
-          return null
+        const state = this.classifySession(row, databaseNow)
+        if (state === 'invalid') {
+          return { session: null } satisfies SessionValidationResult
+        }
+        if (state === 'expired') {
+          return {
+            metricEvent: 'expired',
+            session: null,
+          } satisfies SessionValidationResult
         }
 
         let lastActivityAt = row.lastActivityAt
@@ -268,34 +289,51 @@ export class AuthSessionService {
         }
 
         return {
-          id: parsedToken.sessionId,
-          userId: row.userId,
-          username: row.username,
-          displayName: row.displayName,
-          mustChangePassword: row.mustChangePassword,
-          createdAt: row.createdAt,
-          lastActivityAt,
-          idleExpiresAt,
-          absoluteExpiresAt: row.absoluteExpiresAt,
-        }
+          metricEvent: 'valid',
+          session: {
+            id: parsedToken.sessionId,
+            userId: row.userId,
+            username: row.username,
+            displayName: row.displayName,
+            mustChangePassword: row.mustChangePassword,
+            createdAt: row.createdAt,
+            lastActivityAt,
+            idleExpiresAt,
+            absoluteExpiresAt: row.absoluteExpiresAt,
+          },
+        } satisfies SessionValidationResult
       })
+      if (validation.metricEvent !== undefined) {
+        // touch 事务提交后才记录有效/过期，避免数据库失败产生虚假成功样本。
+        this.metrics.recordSession(validation.metricEvent)
+      }
+      return validation.session
     } catch {
       // 驱动错误和连接信息可能含敏感数据，对外只能返回固定错误。
       throw this.createServiceUnavailableException()
     }
   }
 
-  private isValidSession(
+  private classifySession(
     row: LockedSessionRow,
     databaseNow: Date,
-  ): boolean {
-    return (
-      row.revokedAt === null &&
-      row.status === UserStatus.ACTIVE &&
-      row.sessionAuthVersion === row.userAuthVersion &&
-      databaseNow.getTime() < row.idleExpiresAt.getTime() &&
-      databaseNow.getTime() < row.absoluteExpiresAt.getTime()
-    )
+  ): 'valid' | 'expired' | 'invalid' {
+    if (
+      row.revokedAt !== null
+      || row.status !== UserStatus.ACTIVE
+      || row.sessionAuthVersion !== row.userAuthVersion
+    ) {
+      return 'invalid'
+    }
+
+    if (
+      databaseNow.getTime() >= row.idleExpiresAt.getTime()
+      || databaseNow.getTime() >= row.absoluteExpiresAt.getTime()
+    ) {
+      return 'expired'
+    }
+
+    return 'valid'
   }
 
   private async readDatabaseNow(

@@ -6,6 +6,7 @@ import type { PasswordPolicyProvider } from '../auth/providers/password-policy.p
 import type { PasswordProvider } from '../auth/providers/password.provider'
 import { SessionRevokedReason, UserStatus } from '../../generated/prisma/enums'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import type { AuthMetricLogger } from '../../infrastructure/observability/auth-metric.logger'
 import { SYSTEM_ADMIN_ROLE_CODE } from '../access-control/permission.constants'
 import { UsersService, type UsersCommandContext } from './users.service'
 
@@ -181,6 +182,10 @@ interface ServiceFixture {
   audit: AuditFixture
   passwordPolicy: PasswordPolicyFixture
   passwords: PasswordsFixture
+  metrics: jest.Mocked<Pick<
+    AuthMetricLogger,
+    'recordPassword' | 'recordSessionRevoked'
+  >>
 }
 
 function createServiceFixture(): ServiceFixture {
@@ -238,14 +243,27 @@ function createServiceFixture(): ServiceFixture {
       'new-password-hash',
     ),
   }
+  const metrics: ServiceFixture['metrics'] = {
+    recordPassword: jest.fn(),
+    recordSessionRevoked: jest.fn(),
+  }
   const service = new UsersService(
     prisma as unknown as PrismaService,
     passwords as unknown as PasswordProvider,
     passwordPolicy as unknown as PasswordPolicyProvider,
     audit as AuditService,
+    metrics as unknown as AuthMetricLogger,
   )
 
-  return { service, prisma, transaction, audit, passwordPolicy, passwords }
+  return {
+    service,
+    prisma,
+    transaction,
+    audit,
+    passwordPolicy,
+    passwords,
+    metrics,
+  }
 }
 
 function expectApiException(
@@ -329,7 +347,7 @@ describe('UsersService reads', () => {
 
 describe('UsersService create and simple updates', () => {
   it('创建 ACTIVE 且无角色的用户，使用 DB clock 并在同一事务写审计', async () => {
-    const { service, transaction, audit, passwordPolicy, passwords } =
+    const { service, transaction, audit, passwordPolicy, passwords, metrics } =
       createServiceFixture()
     const created = userFixture({
       authVersion: 0,
@@ -386,11 +404,12 @@ describe('UsersService create and simple updates', () => {
     )
     expect(JSON.stringify(result)).not.toContain('password')
     expect(result.roleIds).toEqual([])
+    expect(metrics.recordPassword).toHaveBeenCalledWith('create', 'success')
     expectTransactionTimeoutAppliedFirst(transaction)
   })
 
   it('把 username 唯一冲突稳定映射为 USERNAME_ALREADY_EXISTS', async () => {
-    const { service, transaction } = createServiceFixture()
+    const { service, transaction, metrics } = createServiceFixture()
     transaction.$queryRaw.mockResolvedValue([{ now: DATABASE_NOW }])
     transaction.user.create.mockRejectedValue({ code: 'P2002' })
 
@@ -404,6 +423,7 @@ describe('UsersService create and simple updates', () => {
       HttpStatus.CONFLICT,
       'USERNAME_ALREADY_EXISTS',
     )
+    expect(metrics.recordPassword).toHaveBeenCalledWith('create', 'failure')
   })
 
   it('PATCH 仅更新规范化后的 displayName 并写 USER_UPDATED', async () => {
@@ -542,7 +562,7 @@ describe('UsersService disable', () => {
   })
 
   it('禁用时递增 authVersion，只吊销活跃 Session 并原子写审计', async () => {
-    const { service, transaction, audit } = createServiceFixture()
+    const { service, transaction, audit, metrics } = createServiceFixture()
     const disabled = userFixture({ status: UserStatus.DISABLED })
     transaction.$queryRaw
       .mockResolvedValueOnce([])
@@ -578,6 +598,7 @@ describe('UsersService disable', () => {
       transaction,
       expect.objectContaining({ eventType: 'USER_DISABLED' }),
     )
+    expect(metrics.recordSessionRevoked).toHaveBeenCalledWith(2)
     expectTransactionTimeoutAppliedFirst(transaction)
   })
 })
@@ -789,7 +810,7 @@ describe('UsersService replaceRoles', () => {
 
 describe('UsersService resetPassword', () => {
   it('Hash 前拒绝管理员重置本人密码', async () => {
-    const { service, prisma, passwords } = createServiceFixture()
+    const { service, prisma, passwords, metrics } = createServiceFixture()
 
     await expectApiException(
       service.resetPassword(context, ACTOR_ID, {
@@ -801,6 +822,7 @@ describe('UsersService resetPassword', () => {
     )
     expect(prisma.user.findUnique).not.toHaveBeenCalled()
     expect(passwords.hash).not.toHaveBeenCalled()
+    expect(metrics.recordPassword).toHaveBeenCalledWith('reset', 'failure')
   })
 
   it('大小写不同的同一 UUID 仍禁止通过管理接口重置本人密码', async () => {
@@ -823,7 +845,7 @@ describe('UsersService resetPassword', () => {
   })
 
   it('Hash 后 target 快照变化时返回 AUTH_STATE_CHANGED 且不写入', async () => {
-    const { service, prisma, transaction } = createServiceFixture()
+    const { service, prisma, transaction, metrics } = createServiceFixture()
     prisma.user.findUnique.mockResolvedValue(userFixture())
     transaction.$queryRaw
       .mockResolvedValueOnce([])
@@ -862,10 +884,11 @@ describe('UsersService resetPassword', () => {
       'AUTH_STATE_CHANGED',
     )
     expect(transaction.user.update).not.toHaveBeenCalled()
+    expect(metrics.recordPassword).toHaveBeenCalledWith('reset', 'failure')
   })
 
   it('允许重置 DISABLED 用户但不启用，递增版本并吊销全部活跃 Session', async () => {
-    const { service, prisma, transaction, audit, passwordPolicy } =
+    const { service, prisma, transaction, audit, passwordPolicy, metrics } =
       createServiceFixture()
     const snapshot = userFixture({ status: UserStatus.DISABLED })
     const updated = userFixture({
@@ -947,6 +970,8 @@ describe('UsersService resetPassword', () => {
       metadata: { mustChangePassword: true },
     })
     expect(result.status).toBe(UserStatus.DISABLED)
+    expect(metrics.recordPassword).toHaveBeenCalledWith('reset', 'success')
+    expect(metrics.recordSessionRevoked).toHaveBeenCalledWith(3)
     expect(JSON.stringify(result)).not.toContain('password')
     expectTransactionTimeoutAppliedFirst(transaction)
   })

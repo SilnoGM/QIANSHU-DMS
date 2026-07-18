@@ -16,6 +16,10 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
+import {
+  AuthMetricLogger,
+  NOOP_AUTH_METRIC_LOGGER,
+} from '../../infrastructure/observability/auth-metric.logger'
 import { PasswordPolicyProvider } from '../../modules/auth/providers/password-policy.provider'
 import {
   AuthCapacityUnavailableError,
@@ -90,6 +94,7 @@ export class AuthAdminService {
     private readonly passwords: PasswordProvider,
     private readonly passwordPolicy: PasswordPolicyProvider,
     private readonly audit: AuditService,
+    private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
   async bootstrap(input: BootstrapAdminInput): Promise<{ userId: string }> {
@@ -103,7 +108,7 @@ export class AuthAdminService {
       const passwordHash = await this.passwords.hash(acceptedPassword)
       const requestId = this.createCliRequestId()
 
-      return await this.prisma.$transaction(async (transaction) => {
+      const result = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
 
         // 固定双 int4 advisory key 只串行化本操作，不阻塞其他无关事务。
@@ -155,8 +160,11 @@ export class AuthAdminService {
 
         return { userId: user.id }
       })
+      this.metrics.recordPassword('create', 'success')
+      return result
     }
     catch (error) {
+      this.metrics.recordPassword('create', 'failure')
       throw this.toSafeOperationError(error)
     }
   }
@@ -184,7 +192,8 @@ export class AuthAdminService {
       const passwordHash = await this.passwords.hash(acceptedPassword)
       const requestId = this.createCliRequestId()
 
-      return await this.prisma.$transaction(async (transaction) => {
+      let revokedSessionCount = 0
+      const result = await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
 
         // 与在线 UserRole 写路径保持 Role -> User 顺序，防止关系移除与恢复交错提交。
@@ -224,13 +233,14 @@ export class AuthAdminService {
           },
           select: { id: true },
         })
-        await transaction.authSession.updateMany({
+        const revoked = await transaction.authSession.updateMany({
           where: { userId: lockedUser.id, revokedAt: null },
           data: {
             revokedAt: databaseNow,
             revokedReason: SessionRevokedReason.ADMIN_RECOVERY,
           },
         })
+        revokedSessionCount = revoked.count
         await this.audit.record(transaction, {
           eventType: AuditEventType.SYSTEM_ADMIN_RECOVERED,
           outcome: AuditOutcome.SUCCESS,
@@ -243,8 +253,12 @@ export class AuthAdminService {
 
         return { userId: lockedUser.id, enabled: enablesDisabledUser }
       })
+      this.metrics.recordPassword('reset', 'success')
+      this.metrics.recordSessionRevoked(revokedSessionCount)
+      return result
     }
     catch (error) {
+      this.metrics.recordPassword('reset', 'failure')
       throw this.toSafeOperationError(error)
     }
   }
