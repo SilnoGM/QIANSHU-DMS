@@ -6,10 +6,13 @@
 // biome-ignore lint: disable
 export {}
 declare global {
+  const AuthLifecycleCoordinator: typeof import('../store/modules/app/auth-lifecycle').AuthLifecycleCoordinator
   const EffectScope: typeof import('vue').EffectScope
+  const StaleAuthStateError: typeof import('../store/modules/app/auth-lifecycle').StaleAuthStateError
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
+  const createAuthLifecycleState: typeof import('../store/modules/app/auth-lifecycle').createAuthLifecycleState
   const createPinia: typeof import('pinia').createPinia
   const customRef: typeof import('vue').customRef
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
@@ -33,6 +36,8 @@ declare global {
   const mapStores: typeof import('pinia').mapStores
   const mapWritableState: typeof import('pinia').mapWritableState
   const markRaw: typeof import('vue').markRaw
+  const matchesAllPermissions: typeof import('../composables/app/auth').matchesAllPermissions
+  const matchesAuthorization: typeof import('../composables/app/auth').matchesAuthorization
   const nextTick: typeof import('vue').nextTick
   const onActivated: typeof import('vue').onActivated
   const onBeforeMount: typeof import('vue').onBeforeMount
@@ -54,7 +59,10 @@ declare global {
   const reactive: typeof import('vue').reactive
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
+  const resolveAuthRetryNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveAuthRetryNavigation
   const resolveComponent: typeof import('vue').resolveComponent
+  const resolveForcedPasswordCompletionNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveForcedPasswordCompletionNavigation
+  const resolveRequestedFullPath: typeof import('../store/modules/app/auth-retry-navigation').resolveRequestedFullPath
   const setActivePinia: typeof import('pinia').setActivePinia
   const setMapStoreSuffix: typeof import('pinia').setMapStoreSuffix
   const shallowReactive: typeof import('vue').shallowReactive
@@ -112,4 +120,10 @@ declare global {
   // @ts-ignore
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, ShallowRef, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
+  // @ts-ignore
+  export type { StaleAuthStateError, AuthLifecycleCoordinator, AuthState, AuthLifecycleState, AuthLifecycleDependencies, RevalidationOptions } from '../store/modules/app/auth-lifecycle'
+  import('../store/modules/app/auth-lifecycle')
+  // @ts-ignore
+  export type { AuthRetryNavigation } from '../store/modules/app/auth-retry-navigation'
+  import('../store/modules/app/auth-retry-navigation')
 }

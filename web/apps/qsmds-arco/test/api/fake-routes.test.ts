@@ -4,7 +4,6 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- API 单元测试由 Node.js 内置 test runner 直接运行。
 import test from 'node:test'
 
-import { isApiError } from '../../src/api/api-error'
 import appFakeRouteConfig from '../../src/api/fake_modules/app.fake'
 
 const routes = Array.isArray(appFakeRouteConfig)
@@ -60,14 +59,10 @@ test('route/list 直接返回原路由数组', () => {
     route.statusCode ?? 200,
   ])
 
-  assert.equal(routes.length, 13)
-  assert.equal(new Set(routes.map(route => route.url)).size, 13)
+  assert.equal(routes.length, 9)
+  assert.equal(new Set(routes.map(route => route.url)).size, 9)
   assert.deepEqual(routeSignatures, [
     ['/fake/app/route/list', 'get', 200],
-    ['/fake/app/account/login', 'post', 200],
-    ['/fake/app/account/login/expired', 'post', 401],
-    ['/fake/app/account/permission', 'get', 200],
-    ['/fake/app/account/password/edit', 'post', 200],
     ['/fake/app/preferences', 'get', 200],
     ['/fake/app/preferences/edit', 'post', 200],
     ['/fake/app/tabbar', 'get', 200],
@@ -154,81 +149,18 @@ test('route/list 直接返回原路由数组', () => {
   ])
 })
 
-test('account/login 直接返回登录 DTO', () => {
-  const body = callRoute('/fake/app/account/login', {
-    body: {
-      account: 'admin',
-      password: 'secret',
-    },
-  })
-
-  assertBareDto(body)
-  assert.equal(typeof body, 'object')
-  assert.ok(body)
-  assert.equal(Reflect.get(body, 'account'), 'admin')
-  assert.match(Reflect.get(body, 'token'), /^admin:.+$/)
+test('旧 fake 登录、权限和改密路由已删除', () => {
   assert.equal(
-    Reflect.get(body, 'avatar'),
-    'https://api.dicebear.com/9.x/bottts-neutral/svg?seed=admin',
+    routes.some(route => route.url.startsWith('/fake/app/account/')),
+    false,
   )
 })
 
-test('account/permission 直接返回按 Token 计算的 permissions', () => {
-  const adminBody = callRoute('/fake/app/account/permission', {
-    headers: { token: 'admin:token' },
-  })
-  const testBody = callRoute('/fake/app/account/permission', {
-    headers: { token: 'test:token' },
-  })
-  const unknownBody = callRoute('/fake/app/account/permission', {
-    headers: { token: 'unknown:token' },
-  })
-
-  assertBareDto(adminBody)
-  assertBareDto(testBody)
-  assertBareDto(unknownBody)
-  assert.deepEqual(adminBody, {
-    permissions: [
-      'pages.general:browse',
-      'pages.form:browse',
-      'pages.list:browse',
-      'pages.shop:browse',
-    ],
-  })
-  assert.deepEqual(testBody, {
-    permissions: ['pages.general:browse'],
-  })
-  assert.deepEqual(unknownBody, { permissions: [] })
-})
-
-test('account/password/edit 直接返回成功 DTO', () => {
-  const body = callRoute('/fake/app/account/password/edit')
+test('preferences 不再依赖旧 Token', () => {
+  const body = callRoute('/fake/app/preferences')
 
   assertBareDto(body)
-  assert.deepEqual(body, { isSuccess: true })
-})
-
-test('preferences 直接返回按 Token 计算的 preferences', () => {
-  const adminBody = callRoute('/fake/app/preferences', {
-    headers: { token: 'admin:token' },
-  })
-  const testBody = callRoute('/fake/app/preferences', {
-    headers: { token: 'test:token' },
-  })
-  const unknownBody = callRoute('/fake/app/preferences', {
-    headers: { token: 'unknown:token' },
-  })
-
-  assertBareDto(adminBody)
-  assertBareDto(testBody)
-  assertBareDto(unknownBody)
-  assert.deepEqual(adminBody, {
-    preferences: '{"theme":{"colorScheme":"light"}}',
-  })
-  assert.deepEqual(testBody, {
-    preferences: '{"theme":{"colorScheme":"dark","raduis":1},"menu":{"mode":"head","style":""},"layout":{"widthMode":"center"},"topbar":{"tabbar":false}}',
-  })
-  assert.deepEqual(unknownBody, { preferences: '' })
+  assert.deepEqual(body, { preferences: '' })
 })
 
 test('preferences/edit 直接返回成功 DTO', () => {
@@ -254,20 +186,11 @@ test('tabbar/edit 直接返回成功 DTO', () => {
   assert.deepEqual(body, { isSuccess: true })
 })
 
-test('toolbar/favorites 直接返回按 Token 计算的 favorites', () => {
-  const adminBody = callRoute('/fake/app/toolbar/favorites', {
-    headers: { token: 'admin:token' },
-  })
-  const unknownBody = callRoute('/fake/app/toolbar/favorites', {
-    headers: { token: 'unknown:token' },
-  })
+test('toolbar/favorites 不再依赖旧 Token', () => {
+  const body = callRoute('/fake/app/toolbar/favorites')
 
-  assertBareDto(adminBody)
-  assertBareDto(unknownBody)
-  assert.deepEqual(adminBody, {
-    favorites: '[{"fullPath":"/multilevel_menu_example/page","title":"导航1","i18n":"route.multimenu.page","icon":"heroicons-solid:menu-alt-3"}]',
-  })
-  assert.deepEqual(unknownBody, { favorites: '' })
+  assertBareDto(body)
+  assert.deepEqual(body, { favorites: '' })
 })
 
 test('toolbar/favorites/edit 直接返回成功 DTO', () => {
@@ -307,27 +230,4 @@ test('notification/list 直接返回三类通知列表 DTO', () => {
     })),
     default: [],
   })
-})
-
-test('account/login/expired 返回 HTTP 401 ApiError', () => {
-  const route = findRoute('/fake/app/account/login/expired')
-  const body = callRoute(route.url)
-  const nextBody = callRoute(route.url)
-
-  assert.equal(route.statusCode, 401)
-  assertBareDto(body)
-  assertBareDto(nextBody)
-  assert.ok(isApiError(body))
-  assert.ok(isApiError(nextBody))
-  assert.equal(body.code, 'UNAUTHORIZED')
-  assert.equal(body.message, '未登录或登录已失效')
-  assert.match(
-    body.requestId,
-    /^req_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-  )
-  assert.match(
-    nextBody.requestId,
-    /^req_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-  )
-  assert.notEqual(nextBody.requestId, body.requestId)
 })

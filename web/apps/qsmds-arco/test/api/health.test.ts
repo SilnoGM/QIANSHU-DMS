@@ -57,7 +57,7 @@ test('getHealth 未注入 Client 时使用唯一生产 api', async () => {
   const calls: string[] = []
   const originalGet = api.get
 
-  assert.equal(api.defaults.baseURL, '/api')
+  assert.equal(api.defaults.baseURL, '/api/')
   assert.equal(api.defaults.timeout, 60_000)
   assert.equal(api.defaults.responseType, 'json')
 

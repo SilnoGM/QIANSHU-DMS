@@ -6,27 +6,6 @@ export default {
     fake: true,
   }),
 
-  // 登录
-  login: (data: {
-    account: string
-    password: string
-  }) => api.post('app/account/login', data, {
-    fake: true,
-  }),
-
-  // 获取权限
-  permission: () => api.get('app/account/permission', {
-    fake: true,
-  }),
-
-  // 修改密码
-  passwordEdit: (data: {
-    password: string
-    newPassword: string
-  }) => api.post('app/account/password/edit', data, {
-    fake: true,
-  }),
-
   // 获取偏好设置
   preferences: () => api.get('app/preferences', {
     fake: true,

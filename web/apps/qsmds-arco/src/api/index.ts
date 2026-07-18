@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from './base-url'
 import { createApiClient } from './client'
 
 const environment = import.meta.env
@@ -7,18 +8,21 @@ const environment = import.meta.env
  * 这里仅桥接 Vite env、Pinia store 与用户提示能力。
  */
 const api = createApiClient({
-  baseURL: environment?.DEV && environment.VITE_ENABLE_PROXY
-    ? '/proxy/'
-    : environment?.VITE_APP_API_BASEURL ?? '/api',
+  baseURL: resolveApiBaseUrl(
+    environment?.VITE_APP_API_BASEURL,
+    environment?.DEV === true && environment.VITE_ENABLE_PROXY === true,
+  ),
   fakeBaseURL: '/fake/',
   timeout: 60_000,
   hooks: {
+    getAuthEpoch: () => useAppAccountStore().authEpoch,
+    getAuthSignal: () => useAppAccountStore().getAuthSignal(),
     getLanguage: () => useAppSettingsStore().lang,
-    getToken: () => {
-      const account = useAppAccountStore()
-      return account.isLogin ? account.token : undefined
-    },
-    requestLogout: () => useAppAccountStore().requestLogout(),
+    handleSessionInvalid: (requestEpoch, broadcastSessionInvalid) =>
+      useAppAccountStore().handleSessionInvalid(
+        requestEpoch,
+        broadcastSessionInvalid,
+      ),
     notifyError: message => useFaToast().error('Error', {
       description: message,
     }),

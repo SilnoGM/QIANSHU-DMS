@@ -88,9 +88,13 @@ export const useAppFavoritesStore = defineStore(
     }
     // 更新 storage 数据
     async function updateStorage() {
+      const userId = appAccountStore.userId
+      if (userId === '') {
+        return
+      }
       if (storageTo.value === 'local') {
         const favoritesData = localStorage.has('favoritesData') ? JSON.parse(localStorage.getItem('favoritesData') as string) : {}
-        favoritesData[appAccountStore.account] = list.value
+        favoritesData[userId] = list.value
         localStorage.setItem('favoritesData', JSON.stringify(favoritesData))
       }
       else if (storageTo.value === 'server') {
@@ -99,15 +103,24 @@ export const useAppFavoritesStore = defineStore(
     }
     // 根据 storage 数据复原当前帐号的标签页
     async function recoveryStorage() {
+      const userId = appAccountStore.userId
+      if (userId === '') {
+        list.value = []
+        return
+      }
       if (storageTo.value === 'local') {
         if (localStorage.has('favoritesData')) {
-          list.value = JSON.parse(localStorage.getItem('favoritesData') as string)[appAccountStore.account] || []
+          list.value = JSON.parse(localStorage.getItem('favoritesData') as string)[userId] || []
         }
       }
       else if (storageTo.value === 'server') {
         const res = await apiApp.favorites()
         list.value = JSON.parse(res.data.favorites || '[]')
       }
+    }
+
+    function clean() {
+      list.value = []
     }
 
     return {
@@ -118,6 +131,7 @@ export const useAppFavoritesStore = defineStore(
       remove,
       sort,
       recoveryStorage,
+      clean,
     }
   },
 )

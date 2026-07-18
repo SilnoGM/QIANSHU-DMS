@@ -718,34 +718,6 @@ async function handleReset() {
         </div>
       </FaPageMain>
       <FaPageMain v-if="mode === 'settings'" :title="t('app.layouts.appSetting.app.title')" class="m-0 mb-4 break-inside-avoid light:border-none" title-class="font-bold" main-class="space-y-4">
-        <div class="p-4 pb-4 pt-14 border rounded-lg relative space-y-4">
-          <div class="font-bold px-4 py-2 border-b border-e rounded-rb-lg inset-s-0 inset-t-0 absolute">
-            {{ t('app.layouts.appSetting.app.account.title') }}
-          </div>
-          <div class="setting-item">
-            <div class="label">
-              {{ t('app.layouts.appSetting.app.account.auth') }}
-            </div>
-            <FaSwitch v-model="appSettingsStore.settings.app.account.auth" />
-          </div>
-          <div class="setting-item">
-            <div class="label">
-              {{ t('app.layouts.appSetting.app.account.expiredMode.title') }}
-            </div>
-            <FaSelect
-              v-model="appSettingsStore.settings.app.account.expiredMode" :options="[
-                { label: t('app.layouts.appSetting.app.account.expiredMode.redirect'), value: 'redirect' },
-                { label: t('app.layouts.appSetting.app.account.expiredMode.popup'), value: 'popup' },
-              ]"
-            />
-          </div>
-          <div class="setting-item">
-            <div class="label">
-              {{ t('app.layouts.appSetting.app.account.multipleAccounts') }}
-            </div>
-            <FaSwitch v-model="appSettingsStore.settings.app.account.multipleAccounts" />
-          </div>
-        </div>
         <div class="setting-item">
           <div class="label">
             {{ t('app.layouts.appSetting.app.dynamicTitle.title') }}
@@ -772,12 +744,6 @@ async function handleReset() {
             </FaTooltip>
           </div>
           <FaSwitch v-model="appSettingsStore.settings.app.feedback" />
-        </div>
-        <div class="setting-item">
-          <div class="label">
-            {{ t('app.layouts.appSetting.app.lockScreen') }}
-          </div>
-          <FaSwitch v-model="appSettingsStore.settings.app.lockScreen" />
         </div>
         <div class="setting-item">
           <div class="label">

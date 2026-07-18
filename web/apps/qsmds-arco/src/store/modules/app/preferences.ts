@@ -32,10 +32,14 @@ export const useAppPreferencesStore = defineStore(
 
     // 获取偏好设置
     async function getPreferences() {
+      const userId = appAccountStore.userId
+      if (userId === '') {
+        return
+      }
       let data = {}
       if (storageTo.value === 'local') {
         if (localStorage.has('preferences')) {
-          data = JSON.parse(localStorage.getItem('preferences') as string)[appAccountStore.account] || {}
+          data = JSON.parse(localStorage.getItem('preferences') as string)[userId] || {}
         }
       }
       else if (storageTo.value === 'server') {
@@ -49,11 +53,15 @@ export const useAppPreferencesStore = defineStore(
       if (!appAccountStore.isLogin) {
         return
       }
+      const userId = appAccountStore.userId
+      if (userId === '') {
+        return
+      }
       data = diffTwoObj(settingsDefault, data)
       delete data.app
       if (storageTo.value === 'local') {
         const preferencesData = localStorage.has('preferences') ? JSON.parse(localStorage.getItem('preferences') as string) : {}
-        preferencesData[appAccountStore.account] = data
+        preferencesData[userId] = data
         localStorage.setItem('preferences', JSON.stringify(preferencesData))
       }
       else if (storageTo.value === 'server') {

@@ -24,9 +24,15 @@ export default defineConfig(({ mode, command }) => {
     // 开发服务器选项 https://cn.vitejs.dev/config/server-options
     server: {
       open: true,
-      host: true,
+      // 与 Server 默认 APP_ORIGIN 精确一致，避免 localhost/127.0.0.1 导致 CSRF 拒绝。
+      host: '127.0.0.1',
       port: 9000,
       proxy: {
+        // 根 `pnpm dev` 的正式认证链路固定使用同源 `/api`，Origin 原样转发给 Server。
+        '/api': {
+          target: 'http://127.0.0.1:3000',
+          changeOrigin: false,
+        },
         '/proxy': {
           target: env.VITE_APP_API_BASEURL,
           changeOrigin: command === 'serve' && env.VITE_ENABLE_PROXY,

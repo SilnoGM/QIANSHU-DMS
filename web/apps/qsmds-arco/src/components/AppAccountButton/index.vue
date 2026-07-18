@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
-import SwitchAdd from '@/components/AppAccountForm/switch-add.vue'
-import SwitchLogout from '@/components/AppAccountForm/switch-logout.vue'
 import { cn } from '@/utils'
 import eventBus from '@/utils/eventBus'
 import Feedback from './feedback.vue'
-import LockScreen from './lock-screen.vue'
-import Profile from './profile.vue'
 
 defineOptions({
   name: 'AppAccountButton',
@@ -33,45 +29,6 @@ const appAccountStore = useAppAccountStore()
 const { t } = useI18n()
 const { generateI18nTitle } = useAppMenu()
 
-const switchAddModal = useFaModal().create({
-  header: false,
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  openAutoFocus: true,
-  content: () => h(SwitchAdd, {
-    onSuccess: (account) => {
-      switchAddModal.close()
-      useFaModal().confirm({
-        title: t('app.components.accountButton.index.add_account_success'),
-        content: t('app.components.accountButton.index.add_account_success_confirm'),
-        onConfirm: () => {
-          appAccountStore.multipleAccountsSwitch(account)
-        },
-      })
-    },
-  }),
-})
-
-const switchLogoutModal = useFaModal().create({
-  header: false,
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  content: () => h(SwitchLogout),
-})
-
-const profileModal = useFaModal().create({
-  alignCenter: true,
-  header: false,
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  class: 'h-[500px] sm:max-w-xl overflow-hidden',
-  contentClass: 'min-h-full p-0 flex',
-  content: () => h(Profile),
-})
-
 const feedbackModal = useFaModal().create({
   title: () => t('app.components.accountButton.index.feedback'),
   footer: false,
@@ -83,22 +40,33 @@ const feedbackModal = useFaModal().create({
   }),
 })
 
-const lockScreenModal = useFaModal().create({
-  title: () => t('app.components.accountButton.index.lock_screen'),
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  content: () => h(LockScreen, {
-    onLock: () => {
-      lockScreenModal.update({
-        header: false,
-        closable: false,
-        overlayBlur: true,
-      })
+async function handleLogout() {
+  try {
+    await appAccountStore.logout()
+  }
+  catch {
+    useFaToast().error('退出失败', {
+      description: '当前登录状态尚未确认，请稍后重试。',
+    })
+  }
+}
+
+function confirmLogoutAll() {
+  useFaModal().confirm({
+    title: '退出全部登录',
+    content: '将撤销该账号在所有浏览器中的登录，是否继续？',
+    onConfirm: async () => {
+      try {
+        await appAccountStore.logoutAll()
+      }
+      catch {
+        useFaToast().error('退出失败', {
+          description: '当前登录状态尚未确认，请稍后重试。',
+        })
+      }
     },
-    onClose: () => lockScreenModal.close(),
-  }),
-})
+  })
+}
 </script>
 
 <template>
@@ -108,7 +76,6 @@ const lockScreenModal = useFaModal().create({
         ...(appSettingsStore.settings.app.home.enable
           ? [{ label: generateI18nTitle(appSettingsStore.settings.app.home.title), icon: 'i-mdi:home', handle: () => router.push({ path: appSettingsStore.settings.app.home.fullPath }) }]
           : []),
-        { label: t('app.components.accountButton.index.profile'), icon: 'i-mdi:account', handle: () => profileModal.open() },
         ...(appPreferencesStore.isEnabled
           ? [{ label: t('app.components.accountButton.index.preferences'), icon: 'i-mdi:cog', handle: () => eventBus.emit('global-app-setting-toggle', 'preferences') }]
           : []),
@@ -122,20 +89,16 @@ const lockScreenModal = useFaModal().create({
           : []),
       ],
       [
-        ...(appSettingsStore.settings.app.lockScreen
-          ? [{ label: t('app.components.accountButton.index.lock_screen'), icon: 'i-mdi:lock', handle: () => lockScreenModal.open() }]
-          : []),
+        { label: '修改密码', icon: 'i-mdi:form-textbox-password', handle: () => eventBus.emit('global-change-password-visible') },
         {
           label: t('app.components.accountButton.index.logout'),
           icon: 'i-mdi:logout',
-          handle: () => {
-            if (appSettingsStore.settings.app.account.multipleAccounts && appAccountStore.multipleAccounts.length > 1) {
-              switchLogoutModal.open()
-            }
-            else {
-              appAccountStore.logout(appSettingsStore.settings.app.home.fullPath)
-            }
-          },
+          handle: handleLogout,
+        },
+        {
+          label: '退出全部登录',
+          icon: 'i-mdi:logout-variant',
+          handle: confirmLogoutAll,
         },
       ],
     ]" class="flex-center"
@@ -152,34 +115,9 @@ const lockScreenModal = useFaModal().create({
               {{ appAccountStore.account }}
             </div>
             <div class="text-xs text-secondary-foreground/50 font-normal">
-              [ xyz@xyz.com ]
+              {{ appAccountStore.displayName }}
             </div>
           </div>
-          <FaDropdown
-            v-if="appSettingsStore.settings.app.account.multipleAccounts"
-            align="end"
-            :items="[
-              appAccountStore.multipleAccounts.filter(item => item.account !== appAccountStore.account).map(item => ({
-                label: item.account,
-                icon: item.avatar,
-                handle: () => appAccountStore.multipleAccountsSwitch(item.account),
-              })),
-              [
-                { label: t('app.components.accountButton.index.add_account'), icon: 'i-mdi:account-plus', handle: () => switchAddModal.open() },
-                ...(appAccountStore.multipleAccounts.length > 1
-                  ? [{ label: t('app.components.accountButton.index.logout'), icon: 'i-mdi:logout', handle: () => switchLogoutModal.open() }]
-                  : []),
-              ],
-            ]"
-          >
-            <div>
-              <FaTooltip :text="t('app.components.accountButton.index.switch_account')" align="end">
-                <FaButton variant="ghost" size="icon-sm" class="ms-5">
-                  <FaIcon name="i-ant-design:swap-outlined" class="text-secondary-foreground/80 size-4" />
-                </FaButton>
-              </FaTooltip>
-            </div>
-          </FaDropdown>
         </div>
       </div>
     </template>

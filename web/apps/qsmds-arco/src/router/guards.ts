@@ -12,8 +12,31 @@ function setupRoutes(router: Router) {
     const appRouteStore = useAppRouteStore()
     const appMenuStore = useAppMenuStore()
     const appTabbarStore = useAppTabbarStore()
-    // 是否已登录
-    if (appAccountStore.isLogin) {
+    // 首屏必须先由共享 /me 建立身份，禁止根据旧 Storage 猜测登录状态。
+    if (appAccountStore.authState === 'loading') {
+      try {
+        await appAccountStore.initializeAuth()
+      }
+      catch {
+        // 被新身份边界作废的 passive 请求由后续导航重新读取当前 Store。
+      }
+    }
+
+    if (appAccountStore.authState === 'unavailable') {
+      // 根组件展示稳定故障态；保留当前 URL，避免错误跳到登录页。
+      return false
+    }
+
+    if (appAccountStore.authState === 'logging_out') {
+      return false
+    }
+
+    if (appAccountStore.authState === 'password_change_required') {
+      // 根组件只挂载不可关闭的改密 Modal，不生成业务路由或业务 Shell。
+      return true
+    }
+
+    if (appAccountStore.authState === 'authenticated') {
       // 是否已根据权限动态生成并注册路由
       if (appRouteStore.isGenerate) {
         // 导航菜单如果不是 single 模式，则需要根据 path 定位主导航菜单的选中状态
@@ -44,8 +67,6 @@ function setupRoutes(router: Router) {
       }
       else {
         try {
-          // 获取用户权限
-          appSettingsStore.settings.app.account.auth && await appAccountStore.getPermissions()
           // 获取用户偏好设置
           appPreferencesStore.isEnabled && await appPreferencesStore.getPreferences()
           // 生成动态路由

@@ -1,200 +1,346 @@
-import apiApp from '@/api/modules/app'
-import router from '@/router'
-import eventBus from '@/utils/eventBus'
+import type {
+  AuthContextDto,
+  ChangePasswordRequestDto,
+  LoginRequestDtoWritable,
+} from '@/api/generated/types.gen'
 
-interface accountItem {
-  token: string
-  account: string
-  avatar: string
+import authApi from '@/api/modules/auth'
+import router from '@/router'
+import {
+  AuthLifecycleCoordinator,
+  createAuthLifecycleState,
+} from './auth-lifecycle'
+
+type AuthBroadcastType = 'AUTH_CONTEXT_CHANGED' | 'AUTH_INVALIDATED'
+
+const AUTH_CHANNEL_NAME = 'qianshu-auth-v1'
+
+function readErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined
+  }
+  if ('body' in error && typeof error.body === 'object' && error.body !== null) {
+    const body = error.body
+    if ('code' in body && typeof body.code === 'string') {
+      return body.code
+    }
+  }
+  return 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : undefined
 }
 
-export const useAppAccountStore = defineStore(
-  'appAccount',
-  () => {
-    const appSettingsStore = useAppSettingsStore()
-    const appTabbarStore = useAppTabbarStore()
-    const appRouteStore = useAppRouteStore()
-    const appMenuStore = useAppMenuStore()
+function isUnknownMutationResult(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('kind' in error)) {
+    return false
+  }
+  if (error.kind === 'network') {
+    return true
+  }
+  return 'status' in error
+    && typeof error.status === 'number'
+    && error.status >= 500
+}
 
-    // 账号信息
-    const token = ref(localStorage.getItem('token') ?? '')
-    const account = ref(localStorage.getItem('account') ?? '')
-    const avatar = ref(localStorage.getItem('avatar') ?? '')
+export const useAppAccountStore = defineStore('appAccount', () => {
+  const appTabbarStore = useAppTabbarStore()
+  const appRouteStore = useAppRouteStore()
+  const appMenuStore = useAppMenuStore()
+  const appFavoritesStore = useAppFavoritesStore()
+  const appKeepAliveStore = useAppKeepAliveStore()
+  const appIframeStore = useAppIframeStore()
 
-    // 权限信息
-    const permissions = ref<string[]>([])
+  const lifecycleState = reactive(createAuthLifecycleState())
+  const logoutPromise = shallowRef<Promise<void> | null>(null)
+  let authAbortController = new AbortController()
+  let authChannel: BroadcastChannel | null = null
+  let synchronizationStarted = false
 
-    // 多账号信息
-    const multipleAccounts = ref<accountItem[]>([])
+  function cleanIdentityDomain(): void {
+    authAbortController.abort()
+    authAbortController = new AbortController()
+    appTabbarStore.clean()
+    appFavoritesStore.clean()
+    appKeepAliveStore.clean()
+    appIframeStore.close(appIframeStore.openedList.map(item => item.path))
+    appRouteStore.removeRoutes()
+    appMenuStore.setActived(0)
+  }
 
-    // 登录状态
-    const isLogin = computed(() => {
-      if (token.value) {
-        return true
+  function getAuthSignal(): AbortSignal {
+    return authAbortController.signal
+  }
+
+  function rebuildPermissionRoutes(): void {
+    appKeepAliveStore.clean()
+    appTabbarStore.clean()
+    appRouteStore.removeRoutes()
+    queueMicrotask(async () => {
+      if (router.currentRoute.value.name !== 'login') {
+        try {
+          await router.replace(router.currentRoute.value.fullPath)
+          const { auth } = useAppAuth()
+          const currentAllowed = router.currentRoute.value.matched.every(route =>
+            auth(route.meta.auth ?? ''))
+          if (!currentAllowed) {
+            // 权限缩减后优先进入当前菜单域首个可访问页面；无菜单时回到稳定首页。
+            await router.replace(appMenuStore.sidebarMenusFirstDeepestPath)
+          }
+        }
+        catch {
+          // Router 取消或组件加载失败时保留根层 403/错误态，不制造重定向循环。
+        }
       }
-      return false
     })
+  }
 
-    // 登录
-    async function login(data: {
-      account: string
-      password: string
-    }) {
-      const res = await apiApp.login(data)
-      localStorage.setItem('account', res.data.account)
-      localStorage.setItem('token', res.data.token)
-      localStorage.setItem('avatar', res.data.avatar)
-      account.value = res.data.account
-      token.value = res.data.token
-      avatar.value = res.data.avatar
-      if (appSettingsStore.settings.app.account.multipleAccounts) {
-        multipleAccountsAdd({
-          account: res.data.account,
-          token: res.data.token,
-          avatar: res.data.avatar,
+  const coordinator = new AuthLifecycleCoordinator({
+    state: lifecycleState,
+    getMe: (signal, broadcastSessionInvalid) =>
+      authApi.me(signal, broadcastSessionInvalid).then(response => response.data),
+    onIdentityBoundary: cleanIdentityDomain,
+    onMutationRevalidated: () => broadcast('AUTH_CONTEXT_CHANGED'),
+    onPermissionsChanged: rebuildPermissionRoutes,
+  })
+
+  const authState = toRef(lifecycleState, 'authState')
+  const authContext = toRef(lifecycleState, 'authContext')
+  const authEpoch = toRef(lifecycleState, 'authEpoch')
+  const errorCode = toRef(lifecycleState, 'errorCode')
+  const permissions = computed(() => authContext.value?.permissions ?? [])
+  const userId = computed(() => authContext.value?.user.id ?? '')
+  const account = computed(() => authContext.value?.user.username ?? '')
+  const displayName = computed(() => authContext.value?.user.displayName ?? '')
+  const avatar = computed(() => '')
+  const isLogin = computed(() => authContext.value !== null)
+
+  function broadcast(type: AuthBroadcastType): void {
+    try {
+      authChannel?.postMessage({ type })
+    }
+    catch {
+      // BroadcastChannel 是 best effort；失败不改变当前标签的服务端认证结果。
+    }
+  }
+
+  function isAuthBroadcastMessage(value: unknown): value is { type: AuthBroadcastType } {
+    return typeof value === 'object'
+      && value !== null
+      && 'type' in value
+      && (value.type === 'AUTH_CONTEXT_CHANGED' || value.type === 'AUTH_INVALIDATED')
+  }
+
+  function startAuthSynchronization(): void {
+    if (synchronizationStarted) {
+      return
+    }
+    synchronizationStarted = true
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        authChannel = new BroadcastChannel(AUTH_CHANNEL_NAME)
+        authChannel.addEventListener('message', (event: MessageEvent<unknown>) => {
+          if (isAuthBroadcastMessage(event.data)) {
+            void coordinator.revalidateAuth({
+              broadcastSessionInvalid: false,
+            }).catch(() => undefined)
+          }
         })
       }
-    }
-
-    // 手动登出
-    function logout(redirect = router.currentRoute.value.fullPath) {
-      localStorage.removeItem('token')
-      token.value = ''
-      router.push({
-        name: 'login',
-        query: {
-          ...(redirect !== appSettingsStore.settings.app.home.fullPath && router.currentRoute.value.name !== 'login' && { redirect }),
-        },
-      }).then(logoutCleanStatus)
-    }
-    // 请求登出
-    function requestLogout() {
-      if (appSettingsStore.settings.app.account.expiredMode === 'redirect' || !appRouteStore.isGenerate) {
-        localStorage.removeItem('token')
-        token.value = ''
-        router.push({
-          name: 'login',
-          query: {
-            ...(
-              router.currentRoute.value.fullPath !== appSettingsStore.settings.app.home.fullPath
-              && router.currentRoute.value.name !== 'login'
-              && {
-                redirect: router.currentRoute.value.fullPath,
-              }
-            ),
-          },
-        }).then(logoutCleanStatus)
-      }
-      else {
-        // 此处仅清除 localStorage 中登录状态的变量，以保证在弹出登录窗口模式下页面展示依旧正常
-        localStorage.removeItem('token')
-        eventBus.emit('global-login-again-visible')
+      catch {
+        authChannel = null
       }
     }
-    // 登出后清除状态
-    function logoutCleanStatus() {
-      const logoutAccount = account.value
-      localStorage.removeItem('account')
-      localStorage.removeItem('avatar')
-      account.value = ''
-      avatar.value = ''
-      permissions.value = []
-      appSettingsStore.updateSettings({}, true)
-      appTabbarStore.clean()
-      appRouteStore.removeRoutes()
-      appMenuStore.setActived(0)
-      multipleAccountsRemove(logoutAccount)
+
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        void coordinator.revalidateAuth().catch(() => undefined)
+      }
+    })
+  }
+
+  function navigateToLogin(): void {
+    if (router.currentRoute.value.name === 'login') {
+      return
+    }
+    const currentPath = router.currentRoute.value.fullPath
+    void router.replace({
+      name: 'login',
+      query: { redirect: currentPath },
+    })
+  }
+
+  async function initializeAuth(): Promise<AuthContextDto | null> {
+    startAuthSynchronization()
+    return coordinator.revalidateAuth()
+  }
+
+  async function revalidateAuth(): Promise<AuthContextDto | null> {
+    const pendingNotice = lifecycleState.errorCode === 'PASSWORD_CHANGE_RESULT_UNKNOWN'
+      ? lifecycleState.errorCode
+      : null
+    const context = await coordinator.revalidateAuth()
+    if (pendingNotice !== null && context === null) {
+      lifecycleState.errorCode = pendingNotice
+    }
+    return context
+  }
+
+  function revalidateAfterMutation(): Promise<AuthContextDto | null> {
+    return coordinator.revalidateAfterMutation()
+  }
+
+  function applyAuthContext(context: AuthContextDto): void {
+    coordinator.applyAuthContext(context)
+  }
+
+  function handleSessionInvalid(
+    requestEpoch: number,
+    shouldBroadcast = true,
+  ): void {
+    const changed = coordinator.handleSessionInvalid(requestEpoch)
+    if (!changed) {
+      return
+    }
+    if (shouldBroadcast) {
+      broadcast('AUTH_INVALIDATED')
+    }
+    navigateToLogin()
+  }
+
+  async function login(data: LoginRequestDtoWritable): Promise<AuthContextDto | null> {
+    lifecycleState.errorCode = null
+    coordinator.invalidatePassiveRevalidation()
+    try {
+      const response = await authApi.login(data)
+      coordinator.applyAuthContext(response.data)
+      broadcast('AUTH_CONTEXT_CHANGED')
+      return response.data
+    }
+    catch (error) {
+      if (
+        readErrorCode(error) === 'ALREADY_AUTHENTICATED'
+        || isUnknownMutationResult(error)
+      ) {
+        const context = await coordinator.revalidateAfterMutation()
+        if (context !== null) {
+          return context
+        }
+      }
+      throw error
+    }
+  }
+
+  async function changePassword(
+    data: ChangePasswordRequestDto,
+  ): Promise<AuthContextDto | null> {
+    lifecycleState.errorCode = null
+    const previousSessionCreatedAt = lifecycleState.authContext?.session.createdAt
+    coordinator.invalidatePassiveRevalidation()
+    try {
+      const response = await authApi.changePassword(data)
+      coordinator.applyAuthContext(response.data)
+      broadcast('AUTH_CONTEXT_CHANGED')
+      return response.data
+    }
+    catch (error) {
+      if (isUnknownMutationResult(error)) {
+        const context = await coordinator.revalidateAfterMutation()
+        if (
+          context !== null
+          && context.session.createdAt !== previousSessionCreatedAt
+        ) {
+          return context
+        }
+        if (
+          lifecycleState.authState === 'anonymous'
+          || lifecycleState.authState === 'unavailable'
+        ) {
+          // 安全提示不含密码，仅用于在 Modal 因 401 卸载后向登录页交代未知结果。
+          lifecycleState.errorCode = 'PASSWORD_CHANGE_RESULT_UNKNOWN'
+        }
+      }
+      throw error
+    }
+  }
+
+  function performLogout(allSessions: boolean): Promise<void> {
+    if (logoutPromise.value !== null) {
+      return logoutPromise.value
     }
 
-    // 获取权限
-    async function getPermissions() {
-      const res = await apiApp.permission()
-      permissions.value = res.data.permissions
-    }
+    const requestEpoch = lifecycleState.authEpoch
+    coordinator.markLoggingOut()
+    coordinator.invalidatePassiveRevalidation()
 
-    // 修改密码
-    async function editPassword(data: {
-      password: string
-      newPassword: string
-    }) {
-      await apiApp.passwordEdit(data)
-    }
-
-    async function multipleAccountsCheck(data: {
-      account: string
-      password: string
-    }) {
-      const res = await apiApp.login(data)
-      multipleAccountsAdd({
-        token: res.data.token,
-        account: res.data.account,
-        avatar: res.data.avatar,
+    const operation = (allSessions ? authApi.logoutAll() : authApi.logout())
+      .then(() => {
+        const changed = coordinator.handleSessionInvalid(requestEpoch)
+        if (changed) {
+          broadcast('AUTH_INVALIDATED')
+          navigateToLogin()
+        }
       })
-    }
+      .catch(async (error: unknown) => {
+        // API Client 可能已经用确定 401 完成统一身份清理。
+        if (lifecycleState.authContext === null) {
+          navigateToLogin()
+          return
+        }
 
-    function multipleAccountsAdd(accItem: accountItem) {
-      const index = multipleAccounts.value.findIndex(item => item.account === accItem.account)
-      if (index !== -1) {
-        multipleAccounts.value[index] = accItem
-      }
-      else {
-        multipleAccounts.value.push(accItem)
-      }
-    }
+        if (isUnknownMutationResult(error)) {
+          await coordinator.revalidateAfterMutation()
+          if (lifecycleState.authState === 'anonymous') {
+            broadcast('AUTH_INVALIDATED')
+            navigateToLogin()
+            return
+          }
+        }
+        else {
+          coordinator.restoreStateFromContext()
+        }
+        throw error
+      })
+      .finally(() => {
+        logoutPromise.value = null
+      })
 
-    function multipleAccountsRemove(acc?: accountItem['account']) {
-      if (acc) {
-        multipleAccounts.value = multipleAccounts.value.filter(item => item.account !== acc)
-      }
-      else {
-        multipleAccounts.value = []
-      }
-    }
+    logoutPromise.value = operation
+    return operation
+  }
 
-    // 切换账号
-    function multipleAccountsSwitch(acc: string) {
-      const item = multipleAccounts.value.find(item => item.account === acc)
-      if (item) {
-        localStorage.setItem('account', item.account)
-        localStorage.setItem('token', item.token)
-        localStorage.setItem('avatar', item.avatar)
-        window.location.reload()
-      }
-    }
+  function logout(): Promise<void> {
+    return performLogout(false)
+  }
 
-    // 锁屏
-    function lock() {
-      localStorage.removeItem('token')
-    }
+  function logoutAll(): Promise<void> {
+    return performLogout(true)
+  }
 
-    // 解锁
-    function unlock() {
-      localStorage.setItem('token', token.value)
-    }
-
-    return {
-      token,
-      account,
-      avatar,
-      permissions,
-      multipleAccounts,
-      isLogin,
-      login,
-      logout,
-      requestLogout,
-      getPermissions,
-      editPassword,
-      multipleAccountsCheck,
-      multipleAccountsAdd,
-      multipleAccountsRemove,
-      multipleAccountsSwitch,
-      lock,
-      unlock,
-    }
-  },
-  {
-    persist: {
-      pick: ['multipleAccounts'],
-    },
-  },
-)
+  return {
+    authState,
+    authContext,
+    authEpoch,
+    getAuthSignal,
+    errorCode,
+    logoutPromise,
+    permissions,
+    userId,
+    account,
+    displayName,
+    avatar,
+    isLogin,
+    initializeAuth,
+    revalidateAuth,
+    revalidateAfterMutation,
+    applyAuthContext,
+    handleSessionInvalid,
+    login,
+    changePassword,
+    logout,
+    logoutAll,
+  }
+}, {
+  // 浏览器身份只允许由本次启动的 /api/auth/me 建立，禁止 Pinia hydrate 旧认证状态。
+  persist: false,
+})

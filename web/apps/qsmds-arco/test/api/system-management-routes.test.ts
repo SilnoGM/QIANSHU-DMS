@@ -1,0 +1,61 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+// eslint-disable-next-line test/no-import-node-test -- 路由契约使用 Node.js 内置 runner。
+import test from 'node:test'
+
+import systemManagementRoutes, {
+  MANAGEMENT_READ_PERMISSIONS,
+} from '../../src/router/modules/system.management'
+
+test('系统管理路由按读取权限隔离四个管理页面', () => {
+  assert.equal(systemManagementRoutes.path, '/system')
+  assert.deepEqual(systemManagementRoutes.meta?.auth, [
+    'users:read',
+    'roles:read',
+    'audit:read',
+  ])
+
+  assert.deepEqual(
+    systemManagementRoutes.children?.map(route => ({
+      auth: route.meta?.auth,
+      name: route.name,
+      path: route.path,
+    })),
+    [
+      { auth: 'users:read', name: 'systemUsers', path: 'users' },
+      { auth: 'roles:read', name: 'systemRoles', path: 'roles' },
+      { auth: 'roles:read', name: 'systemPermissions', path: 'permissions' },
+      { auth: 'audit:read', name: 'systemAudit', path: 'audit' },
+    ],
+  )
+})
+
+test('首页复用管理读取权限门槛，使无业务页面的身份进入稳定 403', () => {
+  assert.deepEqual(MANAGEMENT_READ_PERMISSIONS, [
+    'users:read',
+    'roles:read',
+    'audit:read',
+  ])
+
+  const routesSource = readFileSync(
+    new URL('../../src/router/routes.ts', import.meta.url),
+    'utf8',
+  )
+  assert.match(
+    routesSource,
+    /path: ''[\s\S]*?meta: \{[\s\S]*?auth: \[\.\.\.MANAGEMENT_READ_PERMISSIONS\]/u,
+  )
+})
+
+test('无业务权限的已登录用户仍可从 403 页面打开账户菜单', () => {
+  const notAllowedSource = readFileSync(
+    new URL('../../src/components/AppNotAllowed/index.vue', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(notAllowedSource, /useAppAccountStore\(\)/u)
+  assert.match(
+    notAllowedSource,
+    /appAccountStore\.authState === 'authenticated'[\s\S]*?<AppAccountButton/u,
+  )
+})
