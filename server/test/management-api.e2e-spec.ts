@@ -13,7 +13,12 @@ import {
   UserStatus,
 } from '../src/generated/prisma/enums'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
+import { ApiException } from '../src/infrastructure/http/api.exception'
 import { PasswordProvider } from '../src/modules/auth/providers/password.provider'
+import {
+  UsersService,
+  type UsersCommandContext,
+} from '../src/modules/users/users.service'
 
 const APP_ORIGIN = 'http://127.0.0.1:9000'
 const CSRF_HEADERS = {
@@ -114,6 +119,7 @@ describe('Management API with PostgreSQL', () => {
   let application: INestApplication
   let prisma: PrismaService
   let passwordProvider: PasswordProvider
+  let usersService: UsersService
   const createdUserIds = new Set<string>()
   const createdRoleIds = new Set<string>()
   const createdPermissionIds = new Set<string>()
@@ -127,6 +133,7 @@ describe('Management API with PostgreSQL', () => {
     await application.init()
     prisma = application.get(PrismaService)
     passwordProvider = application.get(PasswordProvider)
+    usersService = application.get(UsersService)
   })
 
   afterEach(async () => {
@@ -711,6 +718,57 @@ describe('Management API with PostgreSQL', () => {
       }),
     ).resolves.not.toBeNull()
     await adminBrowser.get('/api/users').expect(200)
+  })
+
+  it('serializes mutually disabling system_admin users so exactly one remains active', async () => {
+    const firstAdministrator = await createDirectUser({ systemAdmin: true })
+    const secondAdministrator = await createDirectUser({ systemAdmin: true })
+    const createCommandContext = (actorUserId: string): UsersCommandContext => ({
+      actorUserId,
+      // disable 不读取 Session，但命令上下文仍必须使用合法 UUID，确保走真实归一化路径。
+      actorSessionId: randomUUID(),
+      requestId: randomUUID(),
+    })
+
+    const results = await Promise.allSettled([
+      usersService.disable(
+        createCommandContext(firstAdministrator.user.id),
+        secondAdministrator.user.id,
+      ),
+      usersService.disable(
+        createCommandContext(secondAdministrator.user.id),
+        firstAdministrator.user.id,
+      ),
+    ])
+
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(1)
+    const rejection = results.find(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    expect(rejection).toBeDefined()
+    if (!(rejection?.reason instanceof ApiException)) {
+      throw new Error('Expected the losing transaction to return ApiException')
+    }
+    expect(rejection.reason.getStatus()).toBe(409)
+    expect(rejection.reason.code).toBe('LAST_SYSTEM_ADMIN_REQUIRED')
+
+    const systemRole = await prisma.role.findUniqueOrThrow({
+      where: { code: 'system_admin' },
+    })
+    await expect(
+      prisma.userRole.count({
+        where: {
+          roleId: systemRole.id,
+          userId: {
+            in: [
+              firstAdministrator.user.id,
+              secondAdministrator.user.id,
+            ],
+          },
+          user: { status: UserStatus.ACTIVE },
+        },
+      }),
+    ).resolves.toBe(1)
   })
 
   it('serializes concurrent password resets so only one snapshot can commit', async () => {
