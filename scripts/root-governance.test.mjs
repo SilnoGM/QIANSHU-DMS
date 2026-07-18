@@ -57,6 +57,14 @@ const archiveTasks = new Map([
       'Fantastic-admin与Arco文档本地化设计.md',
     ]),
   ],
+  [
+    '用户认证与权限体系落地',
+    Object.freeze([
+      '归档说明.md',
+      '任务.md',
+      '前端设计规格.md',
+    ]),
+  ],
 ])
 
 function fromRoot(...segments) {
@@ -1028,7 +1036,7 @@ test('根 README 的 migration 与 E2E 命令禁止静默回退到本地环境�
   }
 })
 
-test('工程方案当前事实准确反映根、Server、Web 和健康检查边界', async () => {
+test('工程方案当前事实准确反映根、Server、Web 和 HTTP 能力边界', async () => {
   const design = await readFile(
     fromRoot('docs', '全局文档', '项目工程组织方案.md'),
     'utf8',
@@ -1054,6 +1062,7 @@ test('工程方案当前事实准确反映根、Server、Web 和健康检查边�
     '`X-Request-Id`',
     '`ApiError`',
     '`apps/qsmds-arco/src/api/generated/`',
+    '9 个 `fake: true`',
   ]
 
   assert.deepEqual(
@@ -1062,7 +1071,10 @@ test('工程方案当前事实准确反映根、Server、Web 和健康检查边�
   )
   assert.match(currentFacts, /^- 根目录不是 pnpm workspace，/m)
   assert.match(currentFacts, /^- Server 已初始化为独立 NestJS 11 CommonJS /m)
-  assert.match(currentFacts, /^- 当前唯一 HTTP 能力是 `GET \/api\/health`，/m)
+  assert.match(
+    currentFacts,
+    /^- Server 已挂载 .*提供 `GET \/api\/health` 健康检查、Cookie Session 认证、用户管理、RBAC 与审计查询能力。$/m,
+  )
   assert.doesNotMatch(currentFacts, /server\/.*为空目录|尚未初始化后端框架/)
   assert.doesNotMatch(currentFacts, /web\/apps\/(?:core|example)\//)
   assert.doesNotMatch(currentFacts, /(?:尚未|未|没有)提供.*GET \/api\/health/)
@@ -1146,8 +1158,9 @@ test('工程方案记录三 Workflow、双端重建和本地与平台验收边�
 
   assert.deepEqual(requiredFacts.filter(fact => !currentFacts.includes(fact)), [])
   for (const fact of [
-    '| 状态 | 已全部完成 |',
-    '| 完成日期 | 2026-07-14 |',
+    '| 状态 | 工程组织基线已完成；用户认证与权限体系功能分支本地验收完成 |',
+    '| 基线完成日期 | 2026-07-14 |',
+    '| 当前事实更新日期 | 2026-07-18 |',
     '| 当前产品版本 | `v0.1.2` |',
     '| 当前正式版本 Source Commit | `ec418b8a7dca9c0da51770f6559813f3c7059077` |',
     'Server release archive packaging',
@@ -1436,6 +1449,11 @@ test('后端接口契约规范记录 Request ID、ApiError、OpenAPI 与安全�
         'DTO',
         'OpenAPI decorators',
         '`server/openapi/openapi.json`',
+        '`/api/auth`',
+        '`/api/users`',
+        '`/api/roles`',
+        '`/api/permissions`',
+        '`/api/audit-events`',
       ],
     ],
     [
@@ -1489,6 +1507,7 @@ test('后端接口契约规范记录 Request ID、ApiError、OpenAPI 与安全�
       `后端接口契约章节缺少事实：${heading}`,
     )
   }
+  assert.doesNotMatch(guide, /当前正式契约只包含 `GET \/api\/health`/)
 })
 
 test('前端接口接入规范记录类型、响应、错误、重试、取消与 fake 边界', async () => {
@@ -1520,7 +1539,7 @@ test('前端接口接入规范记录类型、响应、错误、重试、取消�
         '`Blob.type`',
         '不读取或要求',
         '`application/json`',
-        '`401`',
+        '`401 AUTHENTICATION_REQUIRED`',
         '`403`',
       ],
     ],
@@ -1543,7 +1562,8 @@ test('前端接口接入规范记录类型、响应、错误、重试、取消�
       '## 5. Fake 与网络前提',
       [
         '裸 DTO',
-        '`401 ApiError`',
+        '`ApiError`',
+        '`AUTHENTICATION_REQUIRED`',
         '同源',
         '反向代理',
         '不声称支持跨域',

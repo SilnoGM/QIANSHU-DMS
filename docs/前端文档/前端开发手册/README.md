@@ -60,7 +60,7 @@ Arco Design Vue 用于标准业务 UI，包括通用与布局、数据录入、�
 | --- | --- | --- |
 | 新增页面 | 先读[应用边界规范](../应用边界规范.md)，再按[路由（导航菜单）](./Fantastic-admin/路由导航与状态管理.md#路由导航菜单)确定页面与导航归属。 | 页面落在 `web/apps/qsmds-arco/src/views/`，路由落在 `web/apps/qsmds-arco/src/router/`；领域组件留在应用内，不从 `web/examples/*` 建立运行依赖。 |
 | 配置路由 | 以[路由（导航菜单）](./Fantastic-admin/路由导航与状态管理.md#路由导航菜单)和[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)为顺序。 | 核对 `web/apps/qsmds-arco/src/router/`、`web/apps/qsmds-arco/src/settings.ts` 与 account Store；路由、菜单、按钮权限和 Server 鉴权分层处理。 |
-| 接入登录 | 阅读[登录相关](./Fantastic-admin/服务端交互与登录.md#登录相关)与[接口接入规范](../接口接入规范.md)。 | 从 `web/apps/qsmds-arco/src/api/`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/router/guards.ts` 核对当前 fake 登录链路；不得凭空声明真实 Server 登录端点。 |
+| 接入登录 | 阅读[登录相关](./Fantastic-admin/服务端交互与登录.md#登录相关)与[接口接入规范](../接口接入规范.md)。 | 从 `web/apps/qsmds-arco/src/api/modules/auth.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/router/guards.ts` 核对真实 Cookie Session、启动 `/api/auth/me`、六态生命周期和 Server 权限边界。 |
 | 实现权限 | 阅读[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)，再回查路由与登录链路。 | 以 `web/apps/qsmds-arco/src/router/guards.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/settings.ts` 为准；前端可见性不能替代 Server 授权。 |
 | 选择表单 | 先读 [FaForm 与 AForm 不是名称替换](./Fantastic-admin内置组件/选型与使用规则.md#7-faform-与-aform-不是名称替换)，再查 [Arco Form](./Arco-Design-Vue/数据录入组件.md#form)。 | `web/apps/qsmds-arco/src/views/` 的标准业务表单默认使用 Arco；只有框架内部既有 vee-validate 契约才保留 `FaForm`，迁移必须重写校验、字段和 slot 语义。 |
 | 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断职责，再查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table)。 | `web/apps/qsmds-arco/src/views/` 的业务数据展示默认使用 Arco；远端分页、排序、筛选、选择和虚拟化分别建模，窄屏优先卡片或抽屉式明细。 |

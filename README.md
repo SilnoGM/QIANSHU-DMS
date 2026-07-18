@@ -8,7 +8,7 @@
 - `server/` 是独立的 NestJS 11 CommonJS 单一 package，拥有自己的 `package.json`、`pnpm-lock.yaml` 和 pnpm 11 安全配置。
 - `web/` 是独立 pnpm workspace；`apps/qsmds-arco/` 是唯一正式业务应用，三个初始基座位于 `examples/`。
 - Web 与 Server 不通过 `file:`、`link:`、`workspace:*` 或跨目录源码引用建立依赖，只通过 HTTP 协作。
-- 当前 Server 提供数据库健康检查 `GET /api/health`、Server-generated `X-Request-Id`、统一 `ApiError` 和离线 OpenAPI 契约；正式快照通过根命令与 Web 同步。
+- 当前 Server 提供 `GET /api/health`、Cookie Session 认证、用户与密码管理、RBAC、审计查询、Server-generated `X-Request-Id`、统一 `ApiError` 和离线 OpenAPI 契约；正式快照通过根命令与 Web 同步。
 - 两端可以分别构建；阶段五已经实现统一 CI 与 Release 的代码及本地验证，根命令只负责协调，不改变各自的依赖边界，也不执行自动部署。
 
 ## 环境要求
@@ -46,6 +46,7 @@ node --run bootstrap
 | `node --run contract:sync` | 生成、验证并事务式同步 Server/Web OpenAPI 快照与 Web types。 |
 | `node --run contract:check` | 在临时目录只读检查快照、契约结构与生成类型。 |
 | `node --run ci:server-e2e` | 使用隔离 PostgreSQL 16 临时数据库执行 migration、Server E2E 和清理检查。 |
+| `node --run ci:browser-auth-e2e` | 使用隔离 PostgreSQL、真实 Server/Web 和系统 Chrome 验证 Cookie 认证链路。 |
 | `node --run ci:contract` | 使用 Git 基线执行 OpenAPI breaking-change 检查。 |
 | `node --run release:check` | 校验统一产品版本、严格 SemVer Tag 与 Tag Commit。 |
 | `node --run release:package:web` | 归档已构建的正式 Web 产物。 |
@@ -54,7 +55,7 @@ node --run bootstrap
 | `node --run release:manifest` | 生成并校验 Release Manifest 与 `SHA256SUMS`。 |
 | `node --run release:publish` | 按受控 Draft 恢复规则发布 GitHub Release。 |
 | `node --run test:root` | 运行根级治理与编排测试。 |
-| `node --run check` | 运行阶段内已经建立的根级、Server 和 Web 检查。 |
+| `node --run check` | 依次运行 Root、Server、Contract、Web 和真实浏览器认证检查。 |
 | `node --run check:server` | 仅运行 Server 检查。 |
 | `node --run check:web` | 仅运行 Web 检查。 |
 | `node --run build` | 依次构建 Server 与 Web。 |
@@ -91,7 +92,7 @@ pnpm -C server build
 pnpm -C web build
 ```
 
-`server check` 包含 Prisma schema 校验、typecheck、只读 lint 与 unit tests，不连接数据库，也不运行 E2E。根 `check` 在 Server check 后运行只读 contract check，再检查 Web。完整根编排使用：
+`server check` 包含 Prisma schema 校验、typecheck、只读 lint 与 unit tests，不连接数据库，也不运行 E2E。根 `check` 在 Server check 后运行只读 contract check、Web check 和隔离的真实浏览器认证 E2E；数据库 Server E2E 仍使用独立入口。完整根编排使用：
 
 ```bash
 node --run test:root
@@ -101,11 +102,11 @@ env -u DATABASE_URL DOTENV_CONFIG_PATH=/dev/null node --run build
 
 ## CI 与发布
 
-当前仓库只有三份 GitHub Actions workflow：`.github/workflows/ci.yml` 负责正式 Web、Server、契约和 PostgreSQL E2E 的主质量门禁，`.github/workflows/examples.yml` 负责三个参考应用，`.github/workflows/release.yml` 负责严格 SemVer Annotated Tag 触发的统一产品发布。正式 Release 始终从同一个 Tag Commit 重新构建 Web 与 Server，不复用普通 CI 产物，也不允许两端选择性沿用旧版本。
+当前仓库只有三份 GitHub Actions workflow：`.github/workflows/ci.yml` 负责 Root、Server、PostgreSQL E2E、Contract、Web 和 Browser auth E2E 六个验证 Job，`.github/workflows/examples.yml` 负责三个参考应用，`.github/workflows/release.yml` 负责严格 SemVer Annotated Tag 触发的统一产品发布。正式 Release 始终从同一个 Tag Commit 重新构建 Web 与 Server，不复用普通 CI 产物，也不允许两端选择性沿用旧版本。
 
 根目录仍不执行 `pnpm install`；以下入口只使用 Node.js 标准库编排两个独立依赖域：
 
-- CI 验证入口：`node --run ci:server-e2e`、`node --run ci:contract`。
+- CI 验证入口：`node --run ci:server-e2e`、`node --run ci:browser-auth-e2e`、`node --run ci:contract`。
 - Release 准备与打包入口：`node --run release:check`、`node --run release:package:web`、`node --run release:package:server`、`node --run release:smoke:server`。
 - Release 清单与发布入口：`node --run release:manifest`、`node --run release:publish`。
 
@@ -144,7 +145,17 @@ pnpm -C server test:e2e
 
 ## 本地开发
 
-准备本地 `server/.env` 后，可以分别运行：
+首次本地使用时，先从 `server/.env.example` 创建被 Git 忽略的 `server/.env`，配置开发 PostgreSQL 的 `DATABASE_URL`。确认目标是允许写入的本地开发库后，应用已提交 migration、构建交互式管理命令并初始化首个 `system_admin`：
+
+```bash
+pnpm -C server db:migrate:deploy
+pnpm -C server build
+pnpm -C server auth:bootstrap-admin
+```
+
+`auth:bootstrap-admin` 只接受交互式 TTY，永久密码使用隐藏输入并二次确认，不得放入 argv、环境变量或日志。数据库已经存在 `system_admin` 时不要重复初始化；离线恢复使用同样需要先构建的 `pnpm -C server auth:recover-admin`。
+
+完成首次初始化后，可以分别运行：
 
 ```bash
 pnpm -C server dev

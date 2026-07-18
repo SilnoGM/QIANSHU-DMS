@@ -99,9 +99,13 @@ const arcoDesignVueTask7SourcePaths = {
   trigger: fileURLToPath(new URL('../node_modules/@arco-design/web-vue/es/trigger/trigger.js', import.meta.url)),
 }
 const documentIndexPath = fileURLToPath(new URL('../../docs/文档索引.md', import.meta.url))
+const serverOpenApiPath = fileURLToPath(new URL('../../server/openapi/openapi.json', import.meta.url))
 const webManifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
 const repositoryRootPath = resolve(dirname(webManifestPath), '..')
 const webLockfilePath = fileURLToPath(new URL('../pnpm-lock.yaml', import.meta.url))
+const contractApiEndpointPaths = new Set(
+  Object.keys(JSON.parse(readFileSync(serverOpenApiPath, 'utf8')).paths ?? {}),
+)
 const fantasticAdminComponentsIndexPath = fileURLToPath(new URL('../packages/components/src/index.ts', import.meta.url))
 const fantasticAdminProSourcePaths = {
   codePreview: fileURLToPath(new URL('../packages/components/src/pro/code-preview/index.vue', import.meta.url)),
@@ -988,7 +992,7 @@ function assertHandbookTaskNavigation(content) {
       `任务导航必须写明正式应用中的核对位置或实施边界：${task}`,
     )
     const repositoryPathTokens = readMarkdownInlineCodeValues(row[2])
-      .filter(value => value.includes('/'))
+      .filter(value => value.includes('/') && !contractApiEndpointPaths.has(value))
     assert.notEqual(repositoryPathTokens.length, 0, `任务导航必须提供可复制的仓库路径：${task}`)
     for (const pathToken of repositoryPathTokens) {
       assertRepositoryPathTokenExists(pathToken, `任务导航：${task}`)
@@ -1657,12 +1661,15 @@ function findArcoDocPolicyViolations(content) {
       '占位标记',
     )
     collectMatches(line, lineNumber, /<PLACEHOLDER>/gu, '占位标记')
-    collectMatches(
-      line,
-      lineNumber,
-      /(['"`])(?:https?:\/\/[^/'"`\s]+)?\/api\/[\w./{}$?=&%-]+\1/gu,
-      '虚构 endpoint',
-    )
+    for (const match of line.matchAll(
+      /(['"`])((?:https?:\/\/[^/'"`\s]+)?\/api\/[\w./{}$?=&%-]+)\1/gu,
+    )) {
+      const apiIndex = match[2].indexOf('/api/')
+      const endpointPath = match[2].slice(apiIndex).split(/[?#]/u)[0]
+      if (!contractApiEndpointPaths.has(endpointPath)) {
+        violations.push(`第 ${lineNumber} 行 虚构 endpoint：${match[0]}`)
+      }
+    }
     collectMatches(line, lineNumber, /Bearer\s+[\w.~-]+/gu, '硬编码 Bearer')
     for (const match of line.matchAll(/\b(?:password|token|secret|cookie|api[_-]?key)\s*[:=]\s*(['"`])([^'"`\r\n]*)\1/giu)) {
       const value = match[2]
@@ -2090,8 +2097,8 @@ test('前端开发手册任务导航拒绝用 inline code 冒充可点击链接'
 test('前端开发手册任务导航拒绝脱离仓库根的缩写路径', () => {
   const handbook = readRequiredFile(handbookPath)
   const mutatedHandbook = handbook.replace(
-    '`web/apps/qsmds-arco/src/router/guards.ts` 核对当前 fake',
-    '`src/router/guards.ts` 核对当前 fake',
+    '`web/apps/qsmds-arco/src/router/guards.ts`',
+    '`src/router/guards.ts`',
   )
 
   assert.notEqual(mutatedHandbook, handbook, '任务导航缩写路径变异必须命中真实行')
@@ -2105,8 +2112,8 @@ test('前端开发手册任务导航拒绝脱离仓库根的缩写路径', () =>
 test('前端开发手册任务导航检查同行的每一个路径候选', () => {
   const handbook = readRequiredFile(handbookPath)
   const mutatedHandbook = handbook.replace(
-    '`web/apps/qsmds-arco/src/router/guards.ts` 核对当前 fake',
-    '`apps/qsmds-arco/src/router/guards.ts` 核对当前 fake',
+    '`web/apps/qsmds-arco/src/router/guards.ts`',
+    '`apps/qsmds-arco/src/router/guards.ts`',
   )
 
   assert.notEqual(mutatedHandbook, handbook, '任务导航次要缩写路径变异必须命中真实行')
@@ -4493,12 +4500,13 @@ test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与�
       .some(item => item.includes('Cookie header')),
     cookieUnquoted: findArcoDocPolicyViolations('cookie = real-session-id')
       .some(item => item.includes('未加引号的 Cookie 值')),
+    contractEndpoint: findArcoDocPolicyViolations('const endpoint = `/api/auth/me`'),
     duplicatedLines: duplicatedViolations
       .filter(item => item.includes('TODO: 相同占位'))
       .map(item => item.match(/第 (\d+) 行/u)?.[1]),
     endpoint: findArcoDocPolicyViolations('const endpoint = `/api/files`').some(item => item.includes('/api/files')),
-    fullUrlEndpoint: findArcoDocPolicyViolations('const endpoint = `https://example.com/api/users`')
-      .some(item => item.includes('第 1 行') && item.includes('https://example.com/api/users')),
+    fullUrlEndpoint: findArcoDocPolicyViolations('const endpoint = `https://example.com/api/imaginary-users`')
+      .some(item => item.includes('第 1 行') && item.includes('https://example.com/api/imaginary-users')),
     indentedPlaceholderLine: findArcoDocPolicyViolations('  TODO: 补充真实接口')
       .some(item => item.includes('第 1 行') && item.includes('TODO')),
     placeholderLine: findArcoDocPolicyViolations('TODO: 补充真实接口').some(item => item.includes('TODO')),
@@ -4522,6 +4530,7 @@ test('Task 6 文档策略扫描区分普通 TODO 说明并覆盖常见占位与�
     cookieEquals: true,
     cookieHeaderUnquoted: true,
     cookieUnquoted: true,
+    contractEndpoint: [],
     duplicatedLines: ['1', '3'],
     endpoint: true,
     fullUrlEndpoint: true,
