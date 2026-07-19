@@ -183,25 +183,6 @@ export class AuthRateLimitService {
     }
   }
 
-  /**
-   * 将预占释放并入调用方已经存在的成功事务。
-   *
-   * 这样 Session/密码变更若回滚，预占释放也会回滚；外层随后再用独立短事务
-   * 释放，既不漏记真实凭证失败，也不把基础设施故障误算成失败。
-   */
-  async releaseReservationInTransaction(
-    transaction: Prisma.TransactionClient,
-    reservation: AuthRateLimitReservation,
-  ): Promise<void> {
-    const entries = this.validateAndSortReservation(reservation)
-
-    try {
-      await this.releaseEntriesInTransaction(transaction, entries)
-    } catch {
-      throw new AuthRateLimitOperationFailedError()
-    }
-  }
-
   private async releaseEntriesInTransaction(
     transaction: Prisma.TransactionClient,
     entries: readonly AuthRateLimitReservationEntry[],

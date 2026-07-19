@@ -61,9 +61,9 @@ type LockedUserRow = Readonly<{
  * 登录应用服务。
  *
  * 该边界只对外暴露稳定错误码；原始 SQL、PHC、username、IP 和密码
- * 都不会进入错误或 Audit metadata。成功登录的 User 更新、Session、限流
- * 预占释放和 Audit 位于同一 PostgreSQL 事务，任一步失败均不会留下
- * 未交付的 Session。
+ * 都不会进入错误或 Audit metadata。凭证验证成功后使用独立短事务单次释放
+ * 限流预占；随后 User 更新、Session 和 Audit 位于同一 PostgreSQL 事务，
+ * 任一步失败均不会留下未交付的 Session。
  */
 @Injectable()
 export class AuthService {
@@ -115,14 +115,17 @@ export class AuthService {
         throw this.createInvalidCredentialsException()
       }
 
+      // 正确凭证不应占用失败额度。释放使用独立短事务，并在 await 前移交本地
+      // 所有权：若 COMMIT 结果未知，绝不能重试并误减同窗口另一条真实失败。
+      const verifiedReservation = rateLimitReservation
+      rateLimitReservation = undefined
+      await this.rateLimits.releaseReservation(verifiedReservation)
+
       const result = await this.createSuccessfulLogin(
         user,
         sourceIpHash,
         input.requestId,
-        rateLimitReservation,
       )
-      // 成功事务已经释放本次预占；后续指标异常也不得二次递减。
-      rateLimitReservation = undefined
       // 事务提交后才记录登录与 Session 创建，避免 Audit/COMMIT 失败产生虚假成功指标。
       this.metrics.recordLogin('success')
       this.metrics.recordSession('created')
@@ -233,7 +236,6 @@ export class AuthService {
     snapshot: UserCredentialSnapshot,
     sourceIpHash: Buffer,
     requestId: string,
-    rateLimitReservation: AuthRateLimitReservation,
   ): Promise<LoginResult> {
     return this.prisma.$transaction(async (transaction) => {
       // 必须先设置 transaction-local 超时，再读取或锁定任何业务数据。
@@ -287,12 +289,6 @@ export class AuthService {
           displayName: lockedUser.displayName,
           mustChangePassword: lockedUser.mustChangePassword,
         },
-      )
-
-      // 只释放当前成功请求自己的预占，不清除并发请求已经形成的真实失败计数。
-      await this.rateLimits.releaseReservationInTransaction(
-        transaction,
-        rateLimitReservation,
       )
 
       await this.audit.record(transaction, {

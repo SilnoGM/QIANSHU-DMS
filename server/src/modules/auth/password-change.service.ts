@@ -70,8 +70,9 @@ export interface PasswordChangeInput {
 /**
  * 用户主动改密流程。
  *
- * 正常模式验证当前密码；强制改密模式只依赖已经通过 Guard 的受限 Session。最终
- * User 更新、旧 Session 吊销、新 Session 创建、限流清理和 Audit 同事务提交。
+ * 正常模式验证当前密码；强制改密模式只依赖已经通过 Guard 的受限 Session。
+ * 正确凭证的限流预占先由独立短事务单次释放，随后 User 更新、旧 Session 吊销、
+ * 新 Session 创建和 Audit 同事务提交。
  */
 @Injectable()
 export class PasswordChangeService {
@@ -131,6 +132,12 @@ export class PasswordChangeService {
             { currentPassword: ['当前密码错误'] },
           )
         }
+
+        // 当前密码正确后不再占用失败额度。await 前先清空本地引用，确保释放事务
+        // 的 COMMIT 结果未知时 fail-closed，绝不重试并误减其他失败计数。
+        const verifiedReservation = rateLimitReservation
+        rateLimitReservation = undefined
+        await this.rateLimits.releaseReservation(verifiedReservation)
       }
 
       const normalizedNewPassword = this.passwordPolicy.assertAcceptable({
@@ -157,10 +164,7 @@ export class PasswordChangeService {
         snapshot,
         newPasswordHash,
         sourceIpHash,
-        rateLimitReservation,
       )
-      // 成功事务已释放预占；指标记录不允许造成二次递减。
-      rateLimitReservation = undefined
       // 事务提交后再记录业务成功、旧 Session 撤销和新 Session 创建。
       this.metrics.recordPassword('change', 'success')
       this.metrics.recordSessionRevoked(rotation.revokedSessionCount)
@@ -220,7 +224,6 @@ export class PasswordChangeService {
     snapshot: UserPasswordSnapshot,
     newPasswordHash: string,
     sourceIpHash: Buffer,
-    rateLimitReservation: AuthRateLimitReservation | undefined,
   ): Promise<PasswordRotationResult> {
     return this.prisma.$transaction(async (transaction) => {
       // 必须先设置 transaction-local 超时，再按 User -> Session 顺序取得行锁。
@@ -309,14 +312,6 @@ export class PasswordChangeService {
           authVersion: updatedUser.authVersion,
         },
       )
-
-      if (rateLimitReservation !== undefined) {
-        // 只释放当前已验证请求的预占；并发错误请求的计数必须继续保留。
-        await this.rateLimits.releaseReservationInTransaction(
-          transaction,
-          rateLimitReservation,
-        )
-      }
 
       await this.audit.record(transaction, {
         eventType: AuditEventType.USER_PASSWORD_CHANGED,

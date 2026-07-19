@@ -1,6 +1,5 @@
 import { HttpStatus } from '@nestjs/common'
 
-import { Prisma } from '../../../generated/prisma/client'
 import {
   AuthRateLimitScope,
   type AuthRateLimitScope as AuthRateLimitScopeValue,
@@ -187,17 +186,6 @@ describe('AuthRateLimitService release', () => {
     ])
   })
 
-  it('可并入已有成功事务且不创建嵌套事务', async () => {
-    const { executeRaw, runTransaction, service, transaction } = createService()
-
-    await service.releaseReservationInTransaction(
-      transaction as unknown as Prisma.TransactionClient,
-      createReservation(),
-    )
-
-    expect(runTransaction).not.toHaveBeenCalled()
-    expect(executeRaw).toHaveBeenCalledTimes(2)
-  })
 })
 
 describe('AuthRateLimitService input and failure boundaries', () => {

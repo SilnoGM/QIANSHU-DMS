@@ -119,7 +119,6 @@ function createFixture() {
   const rateLimits = {
     reserveAttempts: jest.fn().mockResolvedValue(RATE_LIMIT_RESERVATION),
     releaseReservation: jest.fn().mockResolvedValue(undefined),
-    releaseReservationInTransaction: jest.fn().mockResolvedValue(undefined),
   }
   const subjectHasher = {
     hashUsername: jest.fn().mockReturnValue(USERNAME_HASH),
@@ -367,7 +366,7 @@ describe('AuthService login', () => {
     expect(fixture.audit.record).not.toHaveBeenCalled()
   })
 
-  it('locks and rechecks the user, then updates, creates the session, releases its reservation and audits atomically', async () => {
+  it('releases the verified reservation once before starting the successful business transaction', async () => {
     const fixture = createFixture()
 
     await expect(fixture.service.login(LOGIN_INPUT)).resolves.toEqual({
@@ -409,11 +408,18 @@ describe('AuthService login', () => {
         mustChangePassword: false,
       },
     )
-    expect(fixture.rateLimits.releaseReservationInTransaction).toHaveBeenCalledWith(
-      fixture.transaction,
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledTimes(1)
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
       RATE_LIMIT_RESERVATION,
     )
-    expect(fixture.rateLimits.releaseReservation).not.toHaveBeenCalled()
+    expect(
+      fixture.passwords.verify.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      fixture.rateLimits.releaseReservation.mock.invocationCallOrder[0],
+    )
+    expect(
+      fixture.rateLimits.releaseReservation.mock.invocationCallOrder[0],
+    ).toBeLessThan(fixture.prisma.$transaction.mock.invocationCallOrder[0])
     expect(fixture.audit.record).toHaveBeenCalledWith(
       fixture.transaction,
       {
@@ -431,6 +437,44 @@ describe('AuthService login', () => {
     const createOrder = fixture.sessions.createInTransaction.mock.invocationCallOrder[0]
     const auditOrder = fixture.audit.record.mock.invocationCallOrder[0]
     expect(createOrder).toBeLessThan(auditOrder)
+  })
+
+  it('does not release twice when the business callback completes but the transaction promise rejects', async () => {
+    const fixture = createFixture()
+    fixture.prisma.$transaction.mockImplementationOnce(
+      async (callback: (transaction: TransactionMock) => Promise<unknown>) => {
+        await callback(fixture.transaction)
+        throw new Error('commit result unknown')
+      },
+    )
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
+    expect(error).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' })
+    // callback 已完整执行，模拟的是 COMMIT 结果未知，而不是 callback 内回滚。
+    expect(fixture.sessions.createInTransaction).toHaveBeenCalledTimes(1)
+    expect(fixture.audit.record).toHaveBeenCalledTimes(1)
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledTimes(1)
+    expect(
+      fixture.rateLimits.releaseReservation.mock.invocationCallOrder[0],
+    ).toBeLessThan(fixture.prisma.$transaction.mock.invocationCallOrder[0])
+  })
+
+  it('fails closed without retrying when the independent reservation release rejects', async () => {
+    const fixture = createFixture()
+    fixture.rateLimits.releaseReservation.mockRejectedValueOnce(
+      new Error('release result unknown: postgresql://secret.invalid/private'),
+    )
+
+    const error = await captureError(fixture.service.login(LOGIN_INPUT))
+
+    expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
+    expect(error).toMatchObject({ code: 'AUTH_SERVICE_UNAVAILABLE' })
+    expect(error.message).not.toContain('postgresql://')
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledTimes(1)
+    expect(fixture.prisma.$transaction).not.toHaveBeenCalled()
+    expect(fixture.sessions.createInTransaction).not.toHaveBeenCalled()
   })
 
   it.each([
