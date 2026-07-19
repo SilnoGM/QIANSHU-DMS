@@ -14,8 +14,9 @@ const route = useRoute()
 const router = useRouter()
 const appSettingsStore = useAppSettingsStore()
 
-// 复用构建环境中的应用标题，避免登录页与浏览器标题、侧边栏品牌名称出现分叉。
+// 复用构建环境中的应用标题与版本号，避免登录页品牌信息和其他入口出现分叉。
 const appTitle = import.meta.env.VITE_APP_TITLE
+const appVersion = `v${__SYSTEM_INFO__.pkg.version}`
 const redirect = ref(route.query.redirect?.toString() ?? appSettingsStore.settings.app.home.fullPath)
 
 const activeColorScheme = computed(() => appSettingsStore.currentColorScheme ?? 'light')
@@ -104,6 +105,7 @@ function handleLogin() {
       <div class="login-brand inset-s-4 inset-t-4 absolute z-1 flex items-center gap-2">
         <img src="@/assets/images/logo.svg" :alt="`${appTitle} LOGO`" class="rounded h-8 w-8 object-contain">
         <span class="text-base text-foreground font-bold leading-none whitespace-nowrap">{{ appTitle }}</span>
+        <FaBadge :value="appVersion" variant="secondary" class="login-version-badge" badge-class="text-[10px] font-medium leading-4 ring-border" />
       </div>
       <img src="@/assets/images/login-banner.png" class="banner">
       <AppCopyright v-if="appSettingsStore.mode === 'pc' && ['left', 'right'].includes(layoutAlign)" class="w-full bottom-0 absolute" />
@@ -244,6 +246,26 @@ function handleLogin() {
   .login-form {
     width: 500px;
     transition: height 0.15s ease;
+  }
+}
+
+.login-version-badge {
+  flex: none;
+  height: 32px;
+
+  :deep(> div) {
+    position: static;
+    display: flex;
+    align-items: center;
+    width: auto;
+    height: auto;
+  }
+
+  :deep([data-slot="badge"]) {
+    position: static;
+    inset: auto;
+    transform: none !important;
+    translate: none !important;
   }
 }
 
