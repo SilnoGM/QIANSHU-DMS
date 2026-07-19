@@ -103,9 +103,9 @@ function handleLogin() {
   <div class="login-box" :class="layoutAlign">
     <div class="login-banner">
       <div class="login-brand inset-s-4 inset-t-4 absolute z-1 flex items-center gap-2">
-        <img src="@/assets/images/logo.svg" :alt="`${appTitle} LOGO`" class="rounded h-8 w-8 object-contain">
-        <span class="text-base text-foreground font-bold leading-none whitespace-nowrap">{{ appTitle }}</span>
-        <FaBadge :value="appVersion" variant="secondary" class="login-version-badge" badge-class="text-[10px] font-medium leading-4 ring-border" />
+        <img src="@/assets/images/logo.svg" :alt="`${appTitle} LOGO`" class="rounded h-10 w-10 object-contain">
+        <span class="text-xl text-foreground font-bold leading-none whitespace-nowrap">{{ appTitle }}</span>
+        <FaBadge :value="appVersion" variant="secondary" class="login-version-badge" badge-class="px-2.5 py-0.5 text-xs font-medium leading-5 ring-border" />
       </div>
       <img src="@/assets/images/login-banner.svg" alt="数据管理系统插画" class="banner">
       <AppCopyright v-if="appSettingsStore.mode === 'pc' && ['left', 'right'].includes(layoutAlign)" class="w-full bottom-0 absolute" />
@@ -256,7 +256,7 @@ function handleLogin() {
 
 .login-version-badge {
   flex: none;
-  height: 32px;
+  height: 40px;
 
   :deep(> div) {
     position: static;
