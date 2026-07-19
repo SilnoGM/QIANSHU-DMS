@@ -28,6 +28,7 @@ const validApiError = {
 
 interface HookRecorder {
   hooks: ApiClientHooks
+  authRevalidationCodes: string[]
   authEpochReads: number
   invalidationBroadcasts: boolean[]
   invalidatedEpochs: number[]
@@ -43,6 +44,7 @@ function createHookRecorder(options: {
     requestEpoch: number,
     broadcastSessionInvalid: boolean,
   ) => void
+  handleAuthRevalidationRequired?: (code: string) => void
   notifyError?: (message: string) => void
   now?: () => number
   sleep?: ApiClientHooks['sleep']
@@ -50,6 +52,7 @@ function createHookRecorder(options: {
   const invalidatedEpochs: number[] = []
   const invalidationBroadcasts: boolean[] = []
   const notifications: string[] = []
+  const authRevalidationCodes: string[] = []
   let authEpochReads = 0
   let languageReads = 0
   const defaultAuthController = new AbortController()
@@ -74,6 +77,10 @@ function createHookRecorder(options: {
           broadcastSessionInvalid,
         )
       },
+      handleAuthRevalidationRequired: (code) => {
+        authRevalidationCodes.push(code)
+        return options.handleAuthRevalidationRequired?.(code)
+      },
       notifyError: (message) => {
         notifications.push(message)
         return options.notifyError?.(message)
@@ -81,6 +88,7 @@ function createHookRecorder(options: {
       now: options.now,
       sleep: options.sleep,
     },
+    authRevalidationCodes,
     get authEpochReads() {
       return authEpochReads
     },
@@ -302,6 +310,79 @@ test('确定的 AUTHENTICATION_REQUIRED 才清理身份，403 只提示权限不
   }
 })
 
+test('403 按错误码触发正确认证恢复与提示，页面本地处理时不重复 toast', async () => {
+  const cases = [
+    {
+      code: 'FORBIDDEN',
+      expectedAuthRevalidationCodes: [],
+      expectedNotifications: ['没有权限执行此操作'],
+    },
+    {
+      code: 'PASSWORD_CHANGE_REQUIRED',
+      expectedAuthRevalidationCodes: ['PASSWORD_CHANGE_REQUIRED'],
+      expectedNotifications: [],
+    },
+    {
+      code: 'CSRF_REJECTED',
+      expectedAuthRevalidationCodes: ['CSRF_REJECTED'],
+      expectedNotifications: ['登录状态校验失败，请重试操作'],
+    },
+    {
+      code: 'FUTURE_FORBIDDEN_REASON',
+      expectedAuthRevalidationCodes: [],
+      expectedNotifications: ['服务端提供的安全错误文案'],
+    },
+  ] as const
+
+  for (const testCase of cases) {
+    const recorder = createHookRecorder()
+    const adapter: AxiosAdapter = async (config) => {
+      throw createHttpError(config, 403, {
+        ...validApiError,
+        code: testCase.code,
+        message: '服务端提供的安全错误文案',
+      })
+    }
+    const client = createApiClient({
+      adapter,
+      baseURL: '/api/',
+      hooks: recorder.hooks,
+    })
+
+    await assert.rejects(client.get('/protected'))
+
+    assert.deepEqual(
+      recorder.authRevalidationCodes,
+      testCase.expectedAuthRevalidationCodes,
+      testCase.code,
+    )
+    assert.deepEqual(
+      recorder.notifications,
+      testCase.expectedNotifications,
+      testCase.code,
+    )
+  }
+
+  const localRecorder = createHookRecorder()
+  const localClient = createApiClient({
+    adapter: async (config) => {
+      throw createHttpError(config, 403, {
+        ...validApiError,
+        code: 'CSRF_REJECTED',
+        message: '请求来源校验失败',
+      })
+    },
+    baseURL: '/api/',
+    hooks: localRecorder.hooks,
+  })
+
+  await assert.rejects(localClient.post('/form-mutation', {}, {
+    errorPresentation: 'local',
+  }))
+  assert.deepEqual(localRecorder.authRevalidationCodes, ['CSRF_REJECTED'])
+  assert.deepEqual(localRecorder.notifications, [])
+})
+
 test('handleSessionInvalid 同步抛错时仍拒绝 normalized 401，且不泄漏 hook 错误', async () => {
   const hookError = new Error('raw logout hook secret')
   const recorder = createHookRecorder({
@@ -388,7 +469,7 @@ test('notifyError 异步拒绝时等待并隔离失败，最终仍拒绝 normali
   assert.notEqual(rejected, hookError)
   assert.equal(JSON.stringify(rejected).includes('raw notify hook secret'), false)
   assert.deepEqual(recorder.invalidatedEpochs, [])
-  assert.deepEqual(recorder.notifications, ['没有权限执行此操作'])
+  assert.deepEqual(recorder.notifications, ['服务器返回了无法识别的错误响应'])
 })
 
 test('401/403 的 unparseable response 不作为 Session 失效证明', async () => {
@@ -420,9 +501,7 @@ test('401/403 的 unparseable response 不作为 Session 失效证明', async ()
     assert.deepEqual(recorder.invalidatedEpochs, [])
     assert.deepEqual(
       recorder.notifications,
-      status === 403
-        ? ['没有权限执行此操作']
-        : ['服务器返回了无法识别的错误响应'],
+      ['服务器返回了无法识别的错误响应'],
     )
   }
 })

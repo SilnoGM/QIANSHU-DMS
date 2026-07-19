@@ -48,7 +48,7 @@ test('认证 API 使用真实 Session 路径且所有认证 mutation 禁止自�
       method: 'post',
       url: 'auth/login',
       data: { username: 'operator', password: 'secret input' },
-      config: { retry: false },
+      config: { errorPresentation: 'local', retry: false },
     },
     { method: 'get', url: 'auth/me', config: { retry: false } },
     {
@@ -60,19 +60,19 @@ test('认证 API 使用真实 Session 路径且所有认证 mutation 禁止自�
       method: 'post',
       url: 'auth/password/change',
       data: { currentPassword: 'old secret', newPassword: 'new secret' },
-      config: { retry: false },
+      config: { errorPresentation: 'local', retry: false },
     },
     {
       method: 'post',
       url: 'auth/logout',
       data: {},
-      config: { retry: false },
+      config: { errorPresentation: 'local', retry: false },
     },
     {
       method: 'post',
       url: 'auth/logout-all',
       data: {},
-      config: { retry: false },
+      config: { errorPresentation: 'local', retry: false },
     },
   ])
 })

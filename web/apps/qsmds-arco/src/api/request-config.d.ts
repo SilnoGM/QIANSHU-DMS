@@ -5,6 +5,8 @@ declare module 'axios' {
   interface AxiosRequestConfig {
     authEpoch?: number
     broadcastSessionInvalid?: boolean
+    /** 页面已经提供内联错误态时，禁止 API Client 再弹重复 Toast。 */
+    errorPresentation?: 'global' | 'local'
     retry?: boolean
     retryCount?: number
     fake?: boolean
@@ -12,6 +14,7 @@ declare module 'axios' {
 
   interface InternalAxiosRequestConfig {
     broadcastSessionInvalid?: boolean
+    errorPresentation?: 'global' | 'local'
   }
 }
 

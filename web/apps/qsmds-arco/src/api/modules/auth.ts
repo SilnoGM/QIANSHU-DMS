@@ -11,7 +11,10 @@ import api from '../index'
 export function createAuthApi(client: AxiosInstance) {
   return {
     login: (data: LoginRequestDtoWritable) =>
-      client.post<AuthContextDto>('auth/login', data, { retry: false }),
+      client.post<AuthContextDto>('auth/login', data, {
+        errorPresentation: 'local',
+        retry: false,
+      }),
     me: (
       signal?: AbortSignal,
       broadcastSessionInvalid = true,
@@ -25,10 +28,17 @@ export function createAuthApi(client: AxiosInstance) {
       }),
     changePassword: (data: ChangePasswordRequestDto) =>
       client.post<AuthContextDto>('auth/password/change', data, {
+        errorPresentation: 'local',
         retry: false,
       }),
-    logout: () => client.post<void>('auth/logout', {}, { retry: false }),
-    logoutAll: () => client.post<void>('auth/logout-all', {}, { retry: false }),
+    logout: () => client.post<void>('auth/logout', {}, {
+      errorPresentation: 'local',
+      retry: false,
+    }),
+    logoutAll: () => client.post<void>('auth/logout-all', {}, {
+      errorPresentation: 'local',
+      retry: false,
+    }),
   }
 }
 

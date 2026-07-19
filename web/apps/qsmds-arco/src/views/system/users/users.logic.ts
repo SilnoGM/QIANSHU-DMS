@@ -17,12 +17,78 @@ export interface ApiFailure {
 
 export type FieldErrors = Record<string, string>
 
+export interface UserAdminActionsInput {
+  canAssignRoles: boolean
+  canDisable: boolean
+  canEnable: boolean
+  canResetPassword: boolean
+  currentUserId: string
+  status: 'ACTIVE' | 'DISABLED'
+  userId: string
+}
+
+export interface UserAdminActions {
+  canAssignRoles: boolean
+  canDisable: boolean
+  canEnable: boolean
+  canResetPassword: boolean
+  hasMoreAction: boolean
+}
+
+export interface RefreshAfterRoleAssignmentInput {
+  currentUserId: string
+  reloadUsers: () => Promise<unknown>
+  revalidateCurrentAuth: () => Promise<unknown>
+  userId: string
+}
+
 /** 分配角色同时需要用户授权写权限与角色目录读取权限。 */
 export function canManageUserRoles(
   hasAssignPermission: boolean,
   hasRoleReadPermission: boolean,
 ): boolean {
   return hasAssignPermission && hasRoleReadPermission
+}
+
+/**
+ * 管理员不能通过用户管理入口重置或禁用自己；本人改密由头像菜单的改密弹窗负责。
+ * 角色分配仍保留，并由服务端的最后一个 system_admin 规则兜底。
+ */
+export function resolveUserAdminActions(
+  input: UserAdminActionsInput,
+): UserAdminActions {
+  const isCurrentUser = input.userId === input.currentUserId
+  const canResetPassword = !isCurrentUser && input.canResetPassword
+  const canDisable = !isCurrentUser
+    && input.status === 'ACTIVE'
+    && input.canDisable
+  const canEnable = !isCurrentUser
+    && input.status === 'DISABLED'
+    && input.canEnable
+
+  return {
+    canAssignRoles: input.canAssignRoles,
+    canDisable,
+    canEnable,
+    canResetPassword,
+    hasMoreAction: input.canAssignRoles
+      || canResetPassword
+      || canDisable
+      || canEnable,
+  }
+}
+
+/**
+ * 修改本人角色后，服务端权限已经即时生效，必须先刷新 AuthContext，再刷新列表。
+ * 修改其他用户时不触碰当前身份域，避免无意义的路由与菜单重建。
+ */
+export async function refreshAfterRoleAssignment(
+  input: RefreshAfterRoleAssignmentInput,
+): Promise<void> {
+  if (input.userId === input.currentUserId) {
+    await input.revalidateCurrentAuth()
+  }
+  await input.reloadUsers()
 }
 
 /** 目录未知时禁止提交，避免把“加载失败的空数组”误当成清空全部角色。 */

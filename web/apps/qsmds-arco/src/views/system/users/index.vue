@@ -13,12 +13,15 @@ import UserFormModal from './user-form-modal.vue'
 import {
   buildUserListQuery,
   getApiFailure,
+  refreshAfterRoleAssignment,
   canManageUserRoles as resolveCanManageUserRoles,
+  resolveUserAdminActions,
 } from './users.logic'
 
 defineOptions({ name: 'SystemUsers' })
 
 const { auth } = useAppAuth()
+const appAccountStore = useAppAccountStore()
 const isNarrow = useMediaQuery('(max-width: 767px)')
 
 const canRead = computed(() => auth('users:read'))
@@ -191,6 +194,9 @@ function openEdit(user: UserDto): void {
 }
 
 function openPasswordReset(user: UserDto): void {
+  if (!userActions(user).canResetPassword) {
+    return
+  }
   closeMobileActions()
   passwordTarget.value = user
   passwordVisible.value = true
@@ -207,6 +213,13 @@ function openRoleAssignment(user: UserDto): void {
 }
 
 function openStatusChange(user: UserDto, action: 'enable' | 'disable'): void {
+  const actions = userActions(user)
+  if (
+    (action === 'enable' && !actions.canEnable)
+    || (action === 'disable' && !actions.canDisable)
+  ) {
+    return
+  }
   closeMobileActions()
   statusTarget.value = user
   statusAction.value = action
@@ -222,10 +235,20 @@ function closeMobileActions(): void {
   mobileActionsVisible.value = false
 }
 
+function userActions(user: UserDto) {
+  return resolveUserAdminActions({
+    canAssignRoles: canManageUserRoles.value,
+    canDisable: canDisable.value,
+    canEnable: canEnable.value,
+    canResetPassword: canResetPassword.value,
+    currentUserId: appAccountStore.userId,
+    status: user.status,
+    userId: user.id,
+  })
+}
+
 function hasMoreAction(user: UserDto): boolean {
-  return canManageUserRoles.value
-    || canResetPassword.value
-    || (user.status === 'ACTIVE' ? canDisable.value : canEnable.value)
+  return userActions(user).hasMoreAction
 }
 
 function handleMoreAction(action: unknown, user: UserDto): void {
@@ -254,11 +277,20 @@ async function verifyUnknownCreate(username: string): Promise<void> {
   await loadUsers()
 }
 
-async function handleMutationSuccess(user: UserDto): Promise<void> {
+async function handleMutationSuccess(): Promise<void> {
+  await loadUsers()
+}
+
+async function handleRoleAssignmentSuccess(user: UserDto): Promise<void> {
   if (createdWithoutRole.value?.id === user.id && user.roleIds.length > 0) {
     createdWithoutRole.value = null
   }
-  await loadUsers()
+  await refreshAfterRoleAssignment({
+    currentUserId: appAccountStore.userId,
+    reloadUsers: loadUsers,
+    revalidateCurrentAuth: () => appAccountStore.revalidateAfterMutation(),
+    userId: user.id,
+  })
 }
 
 onMounted(() => {
@@ -381,16 +413,16 @@ onMounted(() => {
                   <FaIcon name="i-lucide:chevron-down" class="ml-1" />
                 </AButton>
                 <template #content>
-                  <ADoption v-if="canManageUserRoles" value="roles">
+                  <ADoption v-if="userActions(record).canAssignRoles" value="roles">
                     分配角色
                   </ADoption>
-                  <ADoption v-if="canResetPassword" value="password">
+                  <ADoption v-if="userActions(record).canResetPassword" value="password">
                     设置密码
                   </ADoption>
-                  <ADoption v-if="record.status === 'ACTIVE' && canDisable" value="disable">
+                  <ADoption v-if="userActions(record).canDisable" value="disable">
                     禁用用户
                   </ADoption>
-                  <ADoption v-if="record.status === 'DISABLED' && canEnable" value="enable">
+                  <ADoption v-if="userActions(record).canEnable" value="enable">
                     启用用户
                   </ADoption>
                 </template>
@@ -412,7 +444,7 @@ onMounted(() => {
               </div>
             </template>
             <template #extra>
-              <AButton type="text" @click="openMobileActions(user)">
+              <AButton v-if="canUpdate || hasMoreAction(user)" type="text" @click="openMobileActions(user)">
                 操作
               </AButton>
             </template>
@@ -480,14 +512,14 @@ onMounted(() => {
         <AButton v-if="canUpdate" long @click="openEdit(mobileActionTarget!)">
           编辑显示名称
         </AButton>
-        <AButton v-if="canManageUserRoles" long @click="openRoleAssignment(mobileActionTarget!)">
+        <AButton v-if="mobileActionTarget && userActions(mobileActionTarget).canAssignRoles" long @click="openRoleAssignment(mobileActionTarget)">
           分配角色
         </AButton>
-        <AButton v-if="canResetPassword" long @click="openPasswordReset(mobileActionTarget!)">
+        <AButton v-if="mobileActionTarget && userActions(mobileActionTarget).canResetPassword" long @click="openPasswordReset(mobileActionTarget)">
           设置或重置密码
         </AButton>
         <AButton
-          v-if="mobileActionTarget?.status === 'ACTIVE' && canDisable"
+          v-if="mobileActionTarget && userActions(mobileActionTarget).canDisable"
           long
           status="danger"
           @click="openStatusChange(mobileActionTarget, 'disable')"
@@ -495,7 +527,7 @@ onMounted(() => {
           禁用用户
         </AButton>
         <AButton
-          v-if="mobileActionTarget?.status === 'DISABLED' && canEnable"
+          v-if="mobileActionTarget && userActions(mobileActionTarget).canEnable"
           long
           status="success"
           @click="openStatusChange(mobileActionTarget, 'enable')"
@@ -523,7 +555,7 @@ onMounted(() => {
       :roles="roles"
       :roles-loading="rolesLoading"
       :roles-error-message="rolesErrorMessage"
-      @success="handleMutationSuccess"
+      @success="handleRoleAssignmentSuccess"
     />
     <StatusChangeModal
       v-model="statusVisible"

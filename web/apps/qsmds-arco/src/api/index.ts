@@ -23,6 +23,8 @@ const api = createApiClient({
         requestEpoch,
         broadcastSessionInvalid,
       ),
+    handleAuthRevalidationRequired: () =>
+      useAppAccountStore().revalidateAuth(),
     notifyError: message => useFaToast().error('Error', {
       description: message,
     }),

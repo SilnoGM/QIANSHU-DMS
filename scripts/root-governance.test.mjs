@@ -1540,7 +1540,10 @@ test('前端接口接入规范记录类型、响应、错误、重试、取消�
         '不读取或要求',
         '`application/json`',
         '`401 AUTHENTICATION_REQUIRED`',
-        '`403`',
+        '`403 FORBIDDEN`',
+        '`403 PASSWORD_CHANGE_REQUIRED`',
+        '`403 CSRF_REJECTED`',
+        '`errorPresentation: \'local\'`',
       ],
     ],
     [

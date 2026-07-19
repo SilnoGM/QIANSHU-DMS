@@ -30,6 +30,7 @@ export interface ApiClientHooks {
     requestEpoch: number,
     broadcastSessionInvalid: boolean,
   ) => void
+  handleAuthRevalidationRequired: (code: string) => void
   notifyError: (message: string) => void
   sleep?: Sleep
   now?: Now
@@ -386,6 +387,7 @@ export function createApiClient(
       const normalized = await normalizeAxiosError(
         axiosError ?? new AxiosErrorValue(),
       )
+      const shouldNotifyGlobally = config?.errorPresentation !== 'local'
 
       if (
         normalized.kind === 'http'
@@ -400,12 +402,36 @@ export function createApiClient(
           ),
         )
       }
-      else if ('status' in normalized && normalized.status === 403) {
-        await invokeSideEffectSafely(
-          () => options.hooks.notifyError('没有权限执行此操作'),
-        )
+      else if (normalized.kind === 'http' && normalized.status === 403) {
+        const code = normalized.body.code
+        if (code === 'PASSWORD_CHANGE_REQUIRED' || code === 'CSRF_REJECTED') {
+          // 两类拒绝都说明本地 AuthContext 可能落后于服务端，先重新读取 /auth/me。
+          await invokeSideEffectSafely(
+            () => options.hooks.handleAuthRevalidationRequired(code),
+          )
+        }
+
+        if (shouldNotifyGlobally) {
+          if (code === 'FORBIDDEN') {
+            await invokeSideEffectSafely(
+              () => options.hooks.notifyError('没有权限执行此操作'),
+            )
+          }
+          else if (code === 'CSRF_REJECTED') {
+            await invokeSideEffectSafely(
+              () => options.hooks.notifyError('登录状态校验失败，请重试操作'),
+            )
+          }
+          else if (code !== 'PASSWORD_CHANGE_REQUIRED') {
+            await invokeSideEffectSafely(
+              () => options.hooks.notifyError(
+                getApiClientErrorMessage(normalized),
+              ),
+            )
+          }
+        }
       }
-      else {
+      else if (shouldNotifyGlobally) {
         await invokeSideEffectSafely(
           () => options.hooks.notifyError(getApiClientErrorMessage(normalized)),
         )

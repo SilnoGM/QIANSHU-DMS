@@ -35,40 +35,56 @@ export function createManagementApi(client: AxiosInstance) {
       list: (query: UserListQuery = {}) =>
         client.get<UserPageDto>('users', { params: query }),
       create: (data: CreateUserRequestDtoWritable) =>
-        client.post<UserDto>('users', data, { retry: false }),
+        client.post<UserDto>('users', data, {
+          errorPresentation: 'local',
+          retry: false,
+        }),
       get: (userId: string) =>
         client.get<UserDto>(resourcePath('users', userId)),
       update: (userId: string, data: UpdateUserRequestDto) =>
-        client.patch<UserDto>(resourcePath('users', userId), data),
+        client.patch<UserDto>(resourcePath('users', userId), data, {
+          errorPresentation: 'local',
+        }),
       enable: (userId: string) =>
-        client.post<UserDto>(`${resourcePath('users', userId)}/enable`, {}),
+        client.post<UserDto>(`${resourcePath('users', userId)}/enable`, {}, {
+          errorPresentation: 'local',
+        }),
       disable: (userId: string) =>
-        client.post<UserDto>(`${resourcePath('users', userId)}/disable`, {}),
+        client.post<UserDto>(`${resourcePath('users', userId)}/disable`, {}, {
+          errorPresentation: 'local',
+        }),
       replaceRoles: (userId: string, data: ReplaceUserRolesRequestDto) =>
-        client.put<UserDto>(`${resourcePath('users', userId)}/roles`, data),
+        client.put<UserDto>(`${resourcePath('users', userId)}/roles`, data, {
+          errorPresentation: 'local',
+        }),
       resetPassword: (
         userId: string,
         data: PasswordResetRequestDtoWritable,
       ) => client.post<UserDto>(
         `${resourcePath('users', userId)}/password-reset`,
         data,
-        { retry: false },
+        { errorPresentation: 'local', retry: false },
       ),
     },
     roles: {
       list: () => client.get<RoleDto[]>('roles'),
       create: (data: CreateRoleRequestDto) =>
-        client.post<RoleDto>('roles', data),
+        client.post<RoleDto>('roles', data, {
+          errorPresentation: 'local',
+        }),
       get: (roleId: string) =>
         client.get<RoleDto>(resourcePath('roles', roleId)),
       update: (roleId: string, data: UpdateRoleRequestDto) =>
-        client.patch<RoleDto>(resourcePath('roles', roleId), data),
+        client.patch<RoleDto>(resourcePath('roles', roleId), data, {
+          errorPresentation: 'local',
+        }),
       replacePermissions: (
         roleId: string,
         data: ReplaceRolePermissionsRequestDto,
       ) => client.put<RoleDto>(
         `${resourcePath('roles', roleId)}/permissions`,
         data,
+        { errorPresentation: 'local' },
       ),
     },
     permissions: {

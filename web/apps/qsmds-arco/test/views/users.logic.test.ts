@@ -9,6 +9,8 @@ import {
   clearPasswordFields,
   createPasswordFields,
   getApiFailure,
+  refreshAfterRoleAssignment,
+  resolveUserAdminActions,
   validateIdentityFields,
   validatePasswordFields,
 } from '../../src/views/system/users/users.logic'
@@ -20,6 +22,84 @@ test('角色目录不可读或加载失败时禁止打开或提交角色替换',
   assert.equal(canSubmitRoleAssignment(false, ''), true)
   assert.equal(canSubmitRoleAssignment(true, ''), false)
   assert.equal(canSubmitRoleAssignment(false, '角色目录加载失败'), false)
+})
+
+test('当前登录用户只保留角色分配，不暴露管理员重置密码或状态变更入口', () => {
+  assert.deepEqual(resolveUserAdminActions({
+    canAssignRoles: true,
+    canDisable: true,
+    canEnable: true,
+    canResetPassword: true,
+    currentUserId: 'current-user',
+    status: 'ACTIVE',
+    userId: 'current-user',
+  }), {
+    canAssignRoles: true,
+    canDisable: false,
+    canEnable: false,
+    canResetPassword: false,
+    hasMoreAction: true,
+  })
+
+  assert.deepEqual(resolveUserAdminActions({
+    canAssignRoles: false,
+    canDisable: true,
+    canEnable: true,
+    canResetPassword: true,
+    currentUserId: 'current-user',
+    status: 'ACTIVE',
+    userId: 'current-user',
+  }), {
+    canAssignRoles: false,
+    canDisable: false,
+    canEnable: false,
+    canResetPassword: false,
+    hasMoreAction: false,
+  })
+
+  assert.deepEqual(resolveUserAdminActions({
+    canAssignRoles: false,
+    canDisable: true,
+    canEnable: true,
+    canResetPassword: true,
+    currentUserId: 'current-user',
+    status: 'ACTIVE',
+    userId: 'other-user',
+  }), {
+    canAssignRoles: false,
+    canDisable: true,
+    canEnable: false,
+    canResetPassword: true,
+    hasMoreAction: true,
+  })
+})
+
+test('本人角色变更先刷新 AuthContext 再刷新列表，其他用户只刷新列表', async () => {
+  const currentUserCalls: string[] = []
+  await refreshAfterRoleAssignment({
+    currentUserId: 'current-user',
+    reloadUsers: async () => {
+      currentUserCalls.push('reload-users')
+    },
+    revalidateCurrentAuth: async () => {
+      currentUserCalls.push('revalidate-auth')
+    },
+    userId: 'current-user',
+  })
+  assert.deepEqual(currentUserCalls, ['revalidate-auth', 'reload-users'])
+
+  const otherUserCalls: string[] = []
+  await refreshAfterRoleAssignment({
+    currentUserId: 'current-user',
+    reloadUsers: async () => {
+      otherUserCalls.push('reload-users')
+    },
+    revalidateCurrentAuth: async () => {
+      otherUserCalls.push('revalidate-auth')
+    },
+    userId: 'other-user',
+  })
+  assert.deepEqual(otherUserCalls, ['reload-users'])
 })
 
 test('用户列表只发送分页和规范化后的精确用户名，不添加 status 查询', () => {
