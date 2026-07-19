@@ -14,6 +14,8 @@ const route = useRoute()
 const router = useRouter()
 const appSettingsStore = useAppSettingsStore()
 
+// 复用构建环境中的应用标题，避免登录页与浏览器标题、侧边栏品牌名称出现分叉。
+const appTitle = import.meta.env.VITE_APP_TITLE
 const redirect = ref(route.query.redirect?.toString() ?? appSettingsStore.settings.app.home.fullPath)
 
 const activeColorScheme = computed(() => appSettingsStore.currentColorScheme ?? 'light')
@@ -99,7 +101,10 @@ function handleLogin() {
   </div>
   <div class="login-box" :class="layoutAlign">
     <div class="login-banner">
-      <img src="@/assets/images/logo.svg" class="rounded h-8 inset-s-4 inset-t-4 absolute">
+      <div class="login-brand inset-s-4 inset-t-4 absolute z-1 flex items-center gap-2">
+        <img src="@/assets/images/logo.svg" :alt="`${appTitle} LOGO`" class="rounded h-8 w-8 object-contain">
+        <span class="text-base text-foreground font-bold leading-none whitespace-nowrap">{{ appTitle }}</span>
+      </div>
       <img src="@/assets/images/login-banner.png" class="banner">
       <AppCopyright v-if="appSettingsStore.mode === 'pc' && ['left', 'right'].includes(layoutAlign)" class="w-full bottom-0 absolute" />
     </div>
@@ -134,6 +139,13 @@ function handleLogin() {
     .login-banner {
       width: 100%;
       padding: 20px 0;
+
+      .login-brand {
+        position: relative;
+        inset-block-start: auto;
+        inset-inline-start: auto;
+        margin: 0 16px 12px;
+      }
 
       .banner {
         position: relative;
