@@ -26,6 +26,13 @@ const appSettingsStore = useAppSettingsStore()
 const appPreferencesStore = useAppPreferencesStore()
 const appAccountStore = useAppAccountStore()
 
+// 菜单顶部优先展示用户可读的显示名；显示名缺失时回退用户名，并避免上下两行重复。
+const accountDisplayName = computed(() => appAccountStore.displayName.trim() || appAccountStore.account)
+const accountUsername = computed(() => {
+  const username = appAccountStore.account.trim()
+  return username !== '' && username !== accountDisplayName.value ? username : ''
+})
+
 const { t } = useI18n()
 const { generateI18nTitle } = useAppMenu()
 
@@ -113,18 +120,18 @@ async function submitLogout(scope: LogoutScope) {
     ]" class="flex-center"
   >
     <template #header>
-      <div class="space-y-2">
+      <div class="w-[334px] space-y-2">
         <div class="text-xs text-secondary-foreground/50 font-light">
           {{ t('app.components.accountButton.index.current_account') }}
         </div>
         <div class="flex-center-start gap-2">
           <FaAvatar :src="appAccountStore.avatar" :fallback="appAccountStore.account.slice(0, 2)" shape="square" />
-          <div class="space-y-1">
-            <div class="text-base lh-none">
-              {{ appAccountStore.account }}
+          <div class="flex-1 min-w-0 space-y-1">
+            <div class="text-base lh-none truncate">
+              {{ accountDisplayName }}
             </div>
-            <div class="text-xs text-secondary-foreground/50 font-normal">
-              {{ appAccountStore.displayName }}
+            <div v-if="accountUsername" class="text-xs text-secondary-foreground/50 font-normal truncate">
+              {{ accountUsername }}
             </div>
           </div>
         </div>

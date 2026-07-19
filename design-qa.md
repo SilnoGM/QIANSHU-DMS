@@ -4,6 +4,7 @@
 
 - source visual truth：用户提供的 Chrome 登录页截图，以及目标素材 `web/apps/qsmds-arco/src/assets/images/login-banner.svg`。
 - implementation screenshot：桌面端 `/private/tmp/qianshu-login-input-height-desktop-final.jpg`；移动端通过 `390 × 844` 实际视口 DOM 尺寸与溢出状态验收。
+- account menu screenshot：`/private/tmp/qianshu-account-menu-final.jpg`，使用已登录账户实际打开菜单验收。
 - viewport：桌面端 `1920 × 900`；移动端 `390 × 844`。
 - state：浅色主题、登录页默认右侧布局、未输入账号信息。
 - primary interactions tested：用户名、密码和登录按钮均可见且可用；未提交登录，避免改变当前认证状态。
@@ -33,6 +34,12 @@
 
 - 最终比较未发现可执行的 P0、P1 或 P2 问题。
 
+## 账户菜单验收
+
+- 顶部主文字读取 `displayName`，当前实测为“超级管理员”；辅助文字读取 `username`，当前实测为 `superadmin`。
+- `displayName` 为空时主文字回退到 `username`；回退后隐藏重复的辅助文字。
+- 菜单实际宽度为 `360px`，可视宽度与滚动宽度一致，用户信息与菜单项均无横向溢出。
+
 ## Comparison History
 
 1. 第一轮移动端检查发现 P2：绝对定位的品牌标题与插画头部轻微重叠。
@@ -50,6 +57,8 @@
 13. 桌面端与移动端复核：品牌组合垂直居中；移动端品牌区位于 `y: 20px`，插画从 `y: 72px` 开始，二者不重叠，页面无横向滚动。
 14. 用户名与密码输入框容器统一调整为 `44px` 高，内部输入控件使用 `height: 100%` 跟随容器。
 15. 桌面端与移动端复核：两个输入框高度一致，文字与前置图标垂直居中；移动端页面无横向滚动。
+16. 账户菜单顶部文字层级调整为显示名在上、用户名在下，并加入显示名缺失时的回退与去重处理。
+17. 账户菜单通过头部内容宽度局部撑开到实际 `360px`，未修改共享下拉菜单公共 API。
 
 ## Implementation Checklist
 
