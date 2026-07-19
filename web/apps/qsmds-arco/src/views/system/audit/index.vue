@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import type { TableColumn } from '@fantastic-admin/components'
 import type { AuditEventDto } from '@/api/generated/types.gen'
+import { useMediaQuery } from '@vueuse/core'
 import managementApi from '@/api/modules/management'
 import {
   auditMetadataEntries,
@@ -17,16 +19,45 @@ const pageError = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const isNarrow = useMediaQuery('(max-width: 767px)')
 
 const canRead = computed(() => auth('audit:read'))
-const columns = [
-  { title: '时间', dataIndex: 'occurredAt', slotName: 'time', width: 190 },
-  { title: '事件', dataIndex: 'eventType', slotName: 'event', width: 230 },
-  { title: '结果', dataIndex: 'outcome', slotName: 'outcome', width: 90 },
-  { title: '操作者 ID', dataIndex: 'actorUserId', slotName: 'actor', width: 240 },
-  { title: '目标', slotName: 'target', width: 250 },
-  { title: '请求 ID', dataIndex: 'requestId', slotName: 'requestId', width: 250 },
-  { title: 'Metadata', dataIndex: 'metadata', slotName: 'metadata', width: 320 },
+const paginationLayout = computed(() => isNarrow.value
+  ? 'total, sizes, pager'
+  : 'total, sizes, ->, pager, jumper')
+/**
+ * FaPagination 的双向绑定是分页查询的唯一入口。页容量改变时先把页码
+ * 归一为 1，再只发起一次请求，避免同时监听 pageChange/sizeChange 造成重复查询。
+ */
+const paginationPage = computed({
+  get: () => currentPage.value,
+  set: (page: number) => {
+    if (page === currentPage.value) {
+      return
+    }
+    currentPage.value = page
+    void loadEvents(page, pageSize.value)
+  },
+})
+const paginationSize = computed({
+  get: () => pageSize.value,
+  set: (size: number) => {
+    if (size === pageSize.value) {
+      return
+    }
+    pageSize.value = size
+    currentPage.value = 1
+    void loadEvents(1, size)
+  },
+})
+const columns: TableColumn<AuditEventDto>[] = [
+  { accessorKey: 'occurredAt', header: '时间', width: 190 },
+  { accessorKey: 'eventType', header: '事件', width: 230 },
+  { accessorKey: 'outcome', header: '结果', width: 90 },
+  { accessorKey: 'actorUserId', header: '操作者 ID', width: 240 },
+  { id: 'target', header: '目标', width: 250 },
+  { accessorKey: 'requestId', header: '请求 ID', width: 250 },
+  { accessorKey: 'metadata', header: 'Metadata', width: 320 },
 ]
 
 function safeErrorMessage(error: unknown): string {
@@ -73,14 +104,6 @@ async function loadEvents(page = currentPage.value, size = pageSize.value): Prom
   }
 }
 
-function changePage(page: number): void {
-  void loadEvents(page, pageSize.value)
-}
-
-function changePageSize(size: number): void {
-  void loadEvents(1, size)
-}
-
 function targetLabel(event: AuditEventDto): string {
   if (event.targetType === null && event.targetId === null) {
     return '—'
@@ -97,185 +120,207 @@ onMounted(loadEvents)
       <template #title>
         审计日志
       </template>
-      <AButton v-if="canRead" :loading="loading" @click="loadEvents()">
-        <template #icon>
-          <FaIcon name="i-mdi:refresh" />
-        </template>
+      <FaButton v-if="canRead" variant="outline" :loading="loading" @click="loadEvents()">
+        <FaIcon name="i-mdi:refresh" />
         刷新
-      </AButton>
+      </FaButton>
     </FaPageHeader>
 
     <FaPageMain>
-      <AResult v-if="!canRead" status="403" title="没有权限" subtitle="当前账号不能查看安全审计。" />
+      <FaEmpty
+        v-if="!canRead"
+        icon="i-lucide:shield-x"
+        title="没有权限"
+        description="当前账号不能查看安全审计。"
+        class="min-h-64"
+      />
       <template v-else>
-        <AAlert v-if="pageError" type="error" class="mb-4">
-          {{ pageError }}
-          <AButton type="text" size="small" @click="loadEvents()">
-            重试
-          </AButton>
-        </AAlert>
+        <FaAlert
+          v-if="pageError"
+          variant="destructive"
+          icon="i-lucide:circle-alert"
+          title="审计日志加载失败"
+          class="mb-4"
+        >
+          <template #description>
+            <div class="flex flex-wrap gap-2 items-center justify-between">
+              <span>{{ pageError }}</span>
+              <FaButton variant="outline" size="sm" @click="loadEvents()">
+                重试
+              </FaButton>
+            </div>
+          </template>
+        </FaAlert>
 
-        <div class="desktop-list">
-          <ATable
+        <div data-testid="audit-table" class="hidden md:block" :aria-busy="loading">
+          <FaTable
             row-key="id"
             :columns="columns"
             :data="events"
-            :loading="loading"
-            :pagination="false"
-            :scroll="{ x: 1580 }"
+            table-class="min-w-[1580px]"
+            :class="loading ? 'pointer-events-none opacity-60' : undefined"
           >
-            <template #time="{ record }">
-              {{ formatAuditTime(record.occurredAt) }}
+            <template #cell-occurredAt="{ row }">
+              {{ formatAuditTime(row.original.occurredAt) }}
             </template>
-            <template #event="{ record }">
-              <div class="event-cell">
-                <strong>{{ formatAuditEvent(record.eventType) }}</strong>
-                <code>{{ record.eventType }}</code>
+            <template #cell-eventType="{ row }">
+              <div class="gap-1 grid">
+                <strong>{{ formatAuditEvent(row.original.eventType) }}</strong>
+                <code class="text-muted-foreground">{{ row.original.eventType }}</code>
               </div>
             </template>
-            <template #outcome="{ record }">
-              <ATag :color="record.outcome === 'SUCCESS' ? 'green' : 'red'">
-                {{ formatAuditOutcome(record.outcome) }}
-              </ATag>
+            <template #cell-outcome="{ row }">
+              <FaTag :variant="row.original.outcome === 'SUCCESS' ? 'secondary' : 'destructive'">
+                {{ formatAuditOutcome(row.original.outcome) }}
+              </FaTag>
             </template>
-            <template #actor="{ record }">
-              <code>{{ record.actorUserId || '—' }}</code>
+            <template #cell-actorUserId="{ row }">
+              <code class="break-all">{{ row.original.actorUserId || '—' }}</code>
             </template>
-            <template #target="{ record }">
-              <code>{{ targetLabel(record) }}</code>
+            <template #cell-target="{ row }">
+              <code class="break-all">{{ targetLabel(row.original) }}</code>
             </template>
-            <template #requestId="{ record }">
-              <code>{{ record.requestId }}</code>
+            <template #cell-requestId="{ row }">
+              <code class="break-all">{{ row.original.requestId }}</code>
             </template>
-            <template #metadata="{ record }">
-              <span v-if="auditMetadataEntries(record.metadata).length === 0" class="secondary-text">—</span>
-              <div v-else class="metadata-list">
-                <ATag v-for="entry in auditMetadataEntries(record.metadata)" :key="entry.key" bordered>
+            <template #cell-metadata="{ row }">
+              <span v-if="auditMetadataEntries(row.original.metadata).length === 0" class="text-muted-foreground">—</span>
+              <div v-else class="flex flex-wrap gap-1.5 min-w-0">
+                <FaTag
+                  v-for="entry in auditMetadataEntries(row.original.metadata)"
+                  :key="entry.key"
+                  variant="outline"
+                  class="h-auto max-w-full whitespace-normal break-all"
+                >
                   {{ entry.key }}={{ entry.value }}
-                </ATag>
+                </FaTag>
               </div>
             </template>
-          </ATable>
+            <template #empty>
+              <div
+                v-if="loading"
+                class="text-muted-foreground flex-col-center gap-3 min-h-40"
+                role="status"
+              >
+                <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-7" />
+                <span class="text-sm">正在加载审计日志…</span>
+              </div>
+              <FaEmpty
+                v-else
+                icon="i-lucide:scroll-text"
+                title="暂无审计记录"
+                description="当前查询范围内没有可展示的审计事件。"
+                class="min-h-40"
+              />
+            </template>
+          </FaTable>
         </div>
 
-        <div class="mobile-list" :aria-busy="loading">
-          <AEmpty v-if="!loading && events.length === 0" description="暂无审计记录" />
-          <ACard v-for="event in events" :key="event.id" class="audit-card" :bordered="true">
-            <template #title>
-              {{ formatAuditEvent(event.eventType) }}
-            </template>
-            <template #extra>
-              <ATag :color="event.outcome === 'SUCCESS' ? 'green' : 'red'">
-                {{ formatAuditOutcome(event.outcome) }}
-              </ATag>
-            </template>
-
-            <div class="card-fields">
-              <div><span>时间</span><strong>{{ formatAuditTime(event.occurredAt) }}</strong></div>
-              <div><span>事件码</span><code>{{ event.eventType }}</code></div>
-              <div><span>操作者 ID</span><code>{{ event.actorUserId || '—' }}</code></div>
-              <div><span>目标</span><code>{{ targetLabel(event) }}</code></div>
-              <div><span>请求 ID</span><code>{{ event.requestId }}</code></div>
-              <div>
-                <span>Metadata</span>
-                <div v-if="auditMetadataEntries(event.metadata).length > 0" class="metadata-list">
-                  <ATag v-for="entry in auditMetadataEntries(event.metadata)" :key="entry.key" bordered>
-                    {{ entry.key }}={{ entry.value }}
-                  </ATag>
+        <div class="gap-3 grid md:hidden" :aria-busy="loading">
+          <div
+            v-if="loading && events.length === 0"
+            class="text-muted-foreground flex-col-center gap-3 min-h-40"
+            role="status"
+          >
+            <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-7" />
+            <span class="text-sm">正在加载审计日志…</span>
+          </div>
+          <FaEmpty
+            v-else-if="events.length === 0"
+            icon="i-lucide:scroll-text"
+            title="暂无审计记录"
+            description="当前查询范围内没有可展示的审计事件。"
+            class="min-h-40"
+          />
+          <FaCard
+            v-for="event in events"
+            :key="event.id"
+            data-testid="audit-card"
+            header-class="pb-3"
+            content-class="space-y-3"
+            :class="loading ? 'pointer-events-none opacity-60' : undefined"
+          >
+            <template #header>
+              <div class="flex gap-3 items-start justify-between">
+                <div class="min-w-0">
+                  <strong class="block break-words">{{ formatAuditEvent(event.eventType) }}</strong>
+                  <code class="text-xs text-muted-foreground break-all">{{ event.eventType }}</code>
                 </div>
-                <strong v-else>—</strong>
+                <FaTag :variant="event.outcome === 'SUCCESS' ? 'secondary' : 'destructive'" class="shrink-0">
+                  {{ formatAuditOutcome(event.outcome) }}
+                </FaTag>
               </div>
-            </div>
-          </ACard>
+            </template>
+
+            <dl class="text-sm m-0 gap-3 grid">
+              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <dt class="text-muted-foreground">
+                  时间
+                </dt>
+                <dd class="font-medium m-0">
+                  {{ formatAuditTime(event.occurredAt) }}
+                </dd>
+              </div>
+              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <dt class="text-muted-foreground">
+                  操作者 ID
+                </dt>
+                <dd class="m-0">
+                  <code class="break-all">{{ event.actorUserId || '—' }}</code>
+                </dd>
+              </div>
+              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <dt class="text-muted-foreground">
+                  目标
+                </dt>
+                <dd class="m-0">
+                  <code class="break-all">{{ targetLabel(event) }}</code>
+                </dd>
+              </div>
+              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <dt class="text-muted-foreground">
+                  请求 ID
+                </dt>
+                <dd class="m-0">
+                  <code class="break-all">{{ event.requestId }}</code>
+                </dd>
+              </div>
+              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <dt class="text-muted-foreground">
+                  Metadata
+                </dt>
+                <dd class="m-0 min-w-0">
+                  <div v-if="auditMetadataEntries(event.metadata).length > 0" class="flex flex-wrap gap-1.5 min-w-0">
+                    <FaTag
+                      v-for="entry in auditMetadataEntries(event.metadata)"
+                      :key="entry.key"
+                      variant="outline"
+                      class="h-auto max-w-full whitespace-normal break-all"
+                    >
+                      {{ entry.key }}={{ entry.value }}
+                    </FaTag>
+                  </div>
+                  <span v-else>—</span>
+                </dd>
+              </div>
+            </dl>
+          </FaCard>
         </div>
 
-        <div v-if="total > 0" class="pagination-wrap">
-          <APagination
-            :current="currentPage"
-            :page-size="pageSize"
+        <div
+          v-if="total > 0"
+          class="mt-4 overflow-x-auto"
+          :class="loading ? 'pointer-events-none opacity-60' : undefined"
+        >
+          <FaPagination
+            v-model:page="paginationPage"
+            v-model:size="paginationSize"
             :total="total"
-            :page-size-options="[20, 50, 100]"
-            show-total
-            show-page-size
-            :disabled="loading"
-            @change="changePage"
-            @page-size-change="changePageSize"
+            :sizes="[20, 50, 100]"
+            :layout="paginationLayout"
           />
         </div>
       </template>
     </FaPageMain>
   </div>
 </template>
-
-<style scoped>
-.event-cell {
-  display: grid;
-  gap: 3px;
-}
-
-.event-cell code,
-.secondary-text {
-  color: var(--color-text-3);
-}
-
-.metadata-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-width: 0;
-}
-
-.metadata-list :deep(.arco-tag) {
-  max-width: 100%;
-  height: auto;
-  overflow-wrap: anywhere;
-  white-space: normal;
-}
-
-.mobile-list {
-  display: none;
-}
-
-.card-fields {
-  display: grid;
-  gap: 11px;
-}
-
-.card-fields > div {
-  display: grid;
-  grid-template-columns: 92px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-}
-
-.card-fields > div > span {
-  color: var(--color-text-3);
-}
-
-.card-fields code {
-  overflow-wrap: anywhere;
-}
-
-.pagination-wrap {
-  display: flex;
-  justify-content: flex-end;
-  padding-bottom: 2px;
-  margin-top: 18px;
-  overflow-x: auto;
-}
-
-@media (width <= 767px) {
-  .desktop-list {
-    display: none;
-  }
-
-  .mobile-list {
-    display: grid;
-    gap: 12px;
-  }
-
-  .pagination-wrap {
-    justify-content: flex-start;
-  }
-}
-</style>

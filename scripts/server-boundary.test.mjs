@@ -251,7 +251,12 @@ test('Server 的全部依赖只能使用固定 registry SemVer', async () => {
 })
 
 test('仓库根目录仍不产生 pnpm workspace、lockfile 或依赖目录', async () => {
-  for (const relativePath of ['pnpm-workspace.yaml', 'pnpm-lock.yaml', 'node_modules']) {
+  for (const relativePath of [
+    'pnpm-workspace.yaml',
+    'pnpm-lock.yaml',
+    'node_modules',
+    '.pnpm-store',
+  ]) {
     assert.equal(await exists(relativePath), false, `根目录禁止创建：${relativePath}`)
   }
 })

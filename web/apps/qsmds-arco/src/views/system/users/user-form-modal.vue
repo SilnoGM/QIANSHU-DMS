@@ -1,7 +1,6 @@
 <script setup lang="ts">
+import type { FormExpose } from '@fantastic-admin/components'
 import type { UserDto } from '@/api/generated/types.gen'
-
-import { useMediaQuery } from '@vueuse/core'
 
 import managementApi from '@/api/modules/management'
 
@@ -27,12 +26,21 @@ const emits = defineEmits<{
   'unknownResult': [username: string]
 }>()
 
-const isNarrow = useMediaQuery('(max-width: 767px)')
 const loading = ref(false)
 const errorMessage = ref('')
 const requestId = ref<string>()
 const fieldErrors = reactive<Record<string, string>>({})
-const model = reactive({
+
+interface UserFormModel {
+  username: string
+  displayName: string
+  mustChangePassword: boolean
+  newPassword: string
+  confirmPassword: string
+}
+
+const formRef = useTemplateRef<FormExpose<UserFormModel>>('formRef')
+const model = reactive<UserFormModel>({
   username: '',
   displayName: '',
   mustChangePassword: true,
@@ -42,8 +50,16 @@ const model = reactive({
 function clearErrors(): void {
   errorMessage.value = ''
   requestId.value = undefined
+  formRef.value?.clearValidate()
   for (const key of Object.keys(fieldErrors)) {
     delete fieldErrors[key]
+  }
+}
+
+function setFieldErrors(errors: Record<string, string>): void {
+  Object.assign(fieldErrors, errors)
+  for (const [field, message] of Object.entries(errors)) {
+    formRef.value?.setFieldError(field, message)
   }
 }
 
@@ -73,12 +89,14 @@ function close(): void {
 }
 
 function applyServerFieldErrors(error: unknown): void {
+  const serverErrors: Record<string, string> = {}
   for (const field of ['username', 'displayName', 'password'] as const) {
     const message = getApiFieldError(error, field)
     if (message !== undefined) {
-      fieldErrors[field === 'password' ? 'newPassword' : field] = message
+      serverErrors[field === 'password' ? 'newPassword' : field] = message
     }
   }
+  setFieldErrors(serverErrors)
 }
 
 async function submit(): Promise<void> {
@@ -87,8 +105,7 @@ async function submit(): Promise<void> {
   }
 
   clearErrors()
-  Object.assign(
-    fieldErrors,
+  setFieldErrors(
     props.mode === 'create'
       ? {
           ...validateIdentityFields(model.username, model.displayName),
@@ -138,6 +155,14 @@ async function submit(): Promise<void> {
   }
 }
 
+function updateVisible(value: boolean): void {
+  if (value) {
+    emits('update:modelValue', true)
+    return
+  }
+  close()
+}
+
 watch(() => props.modelValue, (visible) => {
   if (visible) {
     initializeModel()
@@ -150,102 +175,90 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <AModal
-    :visible="modelValue"
+  <FaModal
+    :model-value="modelValue"
     :title="mode === 'create' ? '新建用户' : '编辑用户'"
-    :width="isNarrow ? 'calc(100vw - 24px)' : 520"
+    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[520px]"
     :closable="!loading"
-    :mask-closable="!loading"
-    :esc-to-close="!loading"
+    :close-on-click-overlay="!loading"
+    :close-on-press-escape="!loading"
     :footer="false"
-    unmount-on-close
-    @cancel="close"
+    destroy-on-close
+    @update:model-value="updateVisible"
   >
-    <AAlert v-if="errorMessage" type="error" class="mb-4">
-      {{ errorMessage }}
-      <template v-if="requestId" #action>
-        <span class="text-xs font-mono">requestId: {{ requestId }}</span>
+    <FaAlert v-if="errorMessage" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">
+      <template #description>
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <span>{{ errorMessage }}</span>
+          <span v-if="requestId" class="text-xs font-mono">requestId: {{ requestId }}</span>
+        </div>
       </template>
-    </AAlert>
+    </FaAlert>
 
-    <AForm :model="model" layout="vertical" @submit-success="submit">
-      <AFormItem
-        field="username"
-        label="用户名"
-        :required="mode === 'create'"
-        :validate-status="fieldErrors.username ? 'error' : undefined"
-        :help="fieldErrors.username"
-      >
-        <AInput
+    <FaForm ref="formRef" :model="model" :disabled="loading" class="gap-4" @submit="submit">
+      <FaFormItem name="username" label="用户名" :required="mode === 'create'">
+        <FaInput
           v-model="model.username"
           :disabled="mode === 'edit'"
           :maxlength="128"
           autocomplete="off"
-          allow-clear
+          clearable
+          class="w-full"
           placeholder="请输入用户名"
+          @clear="model.username = ''"
         />
-      </AFormItem>
+      </FaFormItem>
 
-      <AFormItem
-        field="displayName"
-        label="显示名称"
-        required
-        :validate-status="fieldErrors.displayName ? 'error' : undefined"
-        :help="fieldErrors.displayName"
-      >
-        <AInput
+      <FaFormItem name="displayName" label="显示名称" required>
+        <FaInput
           v-model="model.displayName"
           :maxlength="128"
           autocomplete="off"
-          allow-clear
+          clearable
+          class="w-full"
           placeholder="请输入显示名称"
+          @clear="model.displayName = ''"
         />
-      </AFormItem>
+      </FaFormItem>
 
       <template v-if="mode === 'create'">
-        <AFormItem
-          field="newPassword"
-          label="初始密码"
-          required
-          :validate-status="fieldErrors.newPassword ? 'error' : undefined"
-          :help="fieldErrors.newPassword"
-        >
-          <AInputPassword
+        <FaFormItem name="newPassword" label="初始密码" required>
+          <FaInput
             v-model="model.newPassword"
+            type="password"
             autocomplete="new-password"
-            allow-clear
+            clearable
+            class="w-full"
             placeholder="请输入 8 至 20 个字符"
+            @clear="model.newPassword = ''"
           />
-        </AFormItem>
-        <AFormItem
-          field="confirmPassword"
-          label="确认密码"
-          required
-          :validate-status="fieldErrors.confirmPassword ? 'error' : undefined"
-          :help="fieldErrors.confirmPassword"
-        >
-          <AInputPassword
+        </FaFormItem>
+        <FaFormItem name="confirmPassword" label="确认密码" required>
+          <FaInput
             v-model="model.confirmPassword"
+            type="password"
             autocomplete="new-password"
-            allow-clear
+            clearable
+            class="w-full"
             placeholder="请再次输入初始密码"
+            @clear="model.confirmPassword = ''"
           />
-        </AFormItem>
-        <AFormItem field="mustChangePassword" label="登录要求">
-          <ACheckbox v-model="model.mustChangePassword">
+        </FaFormItem>
+        <FaFormItem name="mustChangePassword" label="登录要求">
+          <FaCheckbox v-model="model.mustChangePassword">
             下次登录必须修改密码
-          </ACheckbox>
-        </AFormItem>
+          </FaCheckbox>
+        </FaFormItem>
       </template>
 
-      <div class="mt-6 flex gap-3 justify-end">
-        <AButton :disabled="loading" @click="close">
+      <div class="mt-2 flex gap-3 justify-end">
+        <FaButton type="button" variant="outline" :disabled="loading" @click="close">
           取消
-        </AButton>
-        <AButton type="primary" html-type="submit" :loading="loading" :disabled="loading">
+        </FaButton>
+        <FaButton type="submit" :loading="loading" :disabled="loading">
           {{ mode === 'create' ? '创建用户' : '保存修改' }}
-        </AButton>
+        </FaButton>
       </div>
-    </AForm>
-  </AModal>
+    </FaForm>
+  </FaModal>
 </template>

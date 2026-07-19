@@ -13,6 +13,7 @@
 ## 当前技术栈
 
 - Vue 3.5、TypeScript 6、Vite 8
+- Fantastic-admin Pro `6.3.0` 及其内置组件
 - Arco Design Vue、Pinia、Vue Router、UnoCSS
 - vue-i18n、Axios
 - pnpm 11.9
@@ -90,6 +91,13 @@ pnpm serve:select
 
 - 使用 `<script setup lang="ts">`；组件使用 PascalCase，技术标识、路径、API、字段和错误码使用英文。
 - 用户可见文案默认使用中文，并通过 i18n 维护；不得把技术标识翻译成中文变量名。
+- UI 组件必须按以下四级顺序选型：
+  1. Fantastic-admin 内置组件。
+  2. Arco Design Vue 组件。
+  3. 基于 Arco Design Vue 的应用级自定义组件。
+  4. 基于原生 Vue 的自定义组件。
+- 只有上一级无法满足已确认的功能、交互、无障碍或性能契约时，才能进入下一级；不得仅因个人习惯或局部外观跳过 Fantastic-admin 内置组件。
+- 页面样式优先使用当前主题 token 和语义类，包括 `bg-background`、`text-foreground`、`text-muted-foreground`、`border-border`；不得默认硬编码颜色，并必须同时验证亮色与暗色主题。
 - 样式优先使用 UnoCSS，确有复杂样式时再使用 SCSS。
 - 优先复用现有稳定能力，但不得为了“通用化”把正式业务代码移动到 `packages/*`。
 - 非直观的工程约束、生命周期和失败传播应写详细中文注释；避免无意义注释。

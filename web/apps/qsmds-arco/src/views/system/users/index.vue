@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TableColumnData } from '@arco-design/web-vue'
+import type { TableColumn } from '@fantastic-admin/components'
 import type { RoleDto, UserDto } from '@/api/generated/types.gen'
 
 import { useMediaQuery } from '@vueuse/core'
@@ -64,16 +64,63 @@ const mobileActionsVisible = ref(false)
 const mobileActionTarget = ref<UserDto | null>(null)
 const createdWithoutRole = ref<UserDto | null>(null)
 
-const columns: TableColumnData[] = [
-  { title: '用户名', dataIndex: 'username', slotName: 'username', width: 180 },
-  { title: '显示名称', dataIndex: 'displayName', minWidth: 150 },
-  { title: '状态', dataIndex: 'status', slotName: 'status', width: 100 },
-  { title: '角色', dataIndex: 'roleIds', slotName: 'roles', minWidth: 200 },
-  { title: '改密要求', dataIndex: 'mustChangePassword', slotName: 'mustChangePassword', width: 120 },
-  { title: '最近登录', dataIndex: 'lastLoginAt', slotName: 'lastLoginAt', width: 170 },
-  { title: '创建时间', dataIndex: 'createdAt', slotName: 'createdAt', width: 170 },
-  { title: '操作', slotName: 'actions', fixed: 'right', width: 150 },
+const columns: TableColumn<UserDto>[] = [
+  { accessorKey: 'username', header: '用户名', width: 180 },
+  { accessorKey: 'displayName', header: '显示名称', minWidth: 150 },
+  { accessorKey: 'status', header: '状态', width: 100 },
+  { accessorKey: 'roleIds', id: 'roles', header: '角色', minWidth: 200 },
+  {
+    accessorKey: 'mustChangePassword',
+    id: 'password-requirement',
+    header: '改密要求',
+    width: 120,
+  },
+  {
+    accessorKey: 'lastLoginAt',
+    id: 'last-login',
+    header: '最近登录',
+    width: 170,
+  },
+  {
+    accessorKey: 'createdAt',
+    id: 'created-at',
+    header: '创建时间',
+    width: 170,
+  },
+  { id: 'actions', header: '操作', fixed: 'right', width: 150, enableHiding: false },
 ]
+
+/**
+ * FaPagination 同时提供双向绑定与 change 事件。这里统一由 computed setter
+ * 发起查询，切换 pageSize 时直接把页码归一为 1，避免 size/page 各请求一次。
+ */
+const paginationPage = computed({
+  get: () => page.value,
+  set: (nextPage: number) => {
+    if (nextPage === page.value) {
+      return
+    }
+    page.value = nextPage
+    void loadUsers()
+  },
+})
+const paginationSize = computed({
+  get: () => pageSize.value,
+  set: (nextPageSize: number) => {
+    if (nextPageSize === pageSize.value) {
+      return
+    }
+    pageSize.value = nextPageSize
+    page.value = 1
+    void loadUsers()
+  },
+})
+const paginationLayout = computed(() => isNarrow.value
+  ? 'total, ->, pager'
+  : 'total, sizes, ->, pager, jumper')
+const mobileDrawerTitle = computed(() => mobileActionTarget.value === null
+  ? '用户操作'
+  : `用户操作 · ${mobileActionTarget.value.username}`)
 
 const dateTimeFormatter = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -169,17 +216,6 @@ async function resetSearch(): Promise<void> {
   await loadUsers()
 }
 
-async function changePage(nextPage: number): Promise<void> {
-  page.value = nextPage
-  await loadUsers()
-}
-
-async function changePageSize(nextPageSize: number): Promise<void> {
-  pageSize.value = nextPageSize
-  page.value = 1
-  await loadUsers()
-}
-
 function openCreate(): void {
   formMode.value = 'create'
   formTarget.value = null
@@ -251,16 +287,32 @@ function hasMoreAction(user: UserDto): boolean {
   return userActions(user).hasMoreAction
 }
 
-function handleMoreAction(action: unknown, user: UserDto): void {
-  if (action === 'roles') {
-    openRoleAssignment(user)
+interface UserActionMenuItem {
+  label: string
+  handle: () => void
+  variant?: 'default' | 'destructive'
+}
+
+function moreActionItems(user: UserDto): UserActionMenuItem[][] {
+  const actions = userActions(user)
+  const items: UserActionMenuItem[] = []
+  if (actions.canAssignRoles) {
+    items.push({ label: '分配角色', handle: () => openRoleAssignment(user) })
   }
-  else if (action === 'password') {
-    openPasswordReset(user)
+  if (actions.canResetPassword) {
+    items.push({ label: '设置密码', handle: () => openPasswordReset(user) })
   }
-  else if (action === 'enable' || action === 'disable') {
-    openStatusChange(user, action)
+  if (actions.canDisable) {
+    items.push({
+      label: '禁用用户',
+      variant: 'destructive',
+      handle: () => openStatusChange(user, 'disable'),
+    })
   }
+  if (actions.canEnable) {
+    items.push({ label: '启用用户', handle: () => openStatusChange(user, 'enable') })
+  }
+  return [items]
 }
 
 async function handleFormSuccess(user: UserDto): Promise<void> {
@@ -303,239 +355,342 @@ onMounted(() => {
 <template>
   <div>
     <FaPageHeader title="用户管理" description="查询用户并管理基础信息、状态、角色和登录密码。">
-      <AButton v-if="canCreate" type="primary" @click="openCreate">
-        <template #icon>
-          <FaIcon name="i-lucide:user-plus" />
-        </template>
+      <FaButton v-if="canCreate" @click="openCreate">
+        <FaIcon name="i-lucide:user-plus" />
         新建用户
-      </AButton>
+      </FaButton>
     </FaPageHeader>
 
     <FaPageMain v-if="!canRead">
-      <AResult status="403" title="无权查看用户" subtitle="当前身份缺少 users:read 权限。" />
+      <FaEmpty
+        icon="i-lucide:shield-alert"
+        title="无权查看用户"
+        description="当前身份缺少 users:read 权限。"
+        class="py-12"
+      />
     </FaPageMain>
 
     <template v-else>
       <FaPageMain>
-        <AAlert v-if="createdWithoutRole" type="warning" closable class="mb-4" @close="createdWithoutRole = null">
-          用户 <strong class="font-mono">{{ createdWithoutRole.username }}</strong> 已创建，当前无业务权限。
-          <template v-if="canManageUserRoles" #action>
-            <AButton size="mini" @click="openRoleAssignment(createdWithoutRole)">
-              分配角色
-            </AButton>
+        <FaAlert
+          v-if="createdWithoutRole"
+          icon="i-lucide:triangle-alert"
+          class="mb-4 border-primary/30 bg-primary/5"
+        >
+          <template #description>
+            <div class="flex flex-wrap gap-3 items-center justify-between">
+              <span>
+                用户 <strong class="font-mono">{{ createdWithoutRole.username }}</strong> 已创建，当前无业务权限。
+              </span>
+              <div class="flex gap-2 items-center">
+                <FaButton
+                  v-if="canManageUserRoles"
+                  variant="outline"
+                  size="sm"
+                  @click="openRoleAssignment(createdWithoutRole)"
+                >
+                  分配角色
+                </FaButton>
+                <FaButton
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="关闭无角色提示"
+                  @click="createdWithoutRole = null"
+                >
+                  <FaIcon name="i-lucide:x" />
+                </FaButton>
+              </div>
+            </div>
           </template>
-        </AAlert>
+        </FaAlert>
 
-        <AAlert v-if="rolesErrorMessage" type="warning" closable class="mb-4" @close="rolesErrorMessage = ''">
-          角色名称暂时无法加载：{{ rolesErrorMessage }}。列表仍可使用角色 ID 核查。
-        </AAlert>
+        <FaAlert
+          v-if="rolesErrorMessage"
+          icon="i-lucide:triangle-alert"
+          class="mb-4 border-primary/30 bg-primary/5"
+        >
+          <template #description>
+            <div class="flex gap-3 items-center justify-between">
+              <span>角色名称暂时无法加载：{{ rolesErrorMessage }}。列表仍可使用角色 ID 核查。</span>
+              <FaButton
+                variant="ghost"
+                size="icon-sm"
+                class="shrink-0"
+                aria-label="关闭角色目录错误提示"
+                @click="rolesErrorMessage = ''"
+              >
+                <FaIcon name="i-lucide:x" />
+              </FaButton>
+            </div>
+          </template>
+        </FaAlert>
 
-        <div class="user-filter-bar">
-          <AInput
+        <div class="flex flex-wrap gap-3 items-center">
+          <FaInput
             v-model="usernameInput"
-            class="user-filter-input"
-            allow-clear
+            type="search"
+            class="w-full max-[479px]:basis-full sm:max-w-[360px]"
+            clearable
             placeholder="精确用户名"
-            @press-enter="search"
+            @clear="usernameInput = ''"
+            @keyup.enter="search"
           >
-            <template #prefix>
+            <template #start>
               <FaIcon name="i-lucide:search" />
             </template>
-          </AInput>
-          <AButton type="primary" :loading="loading" @click="search">
+          </FaInput>
+          <FaButton class="max-[479px]:flex-1" :loading="loading" @click="search">
             查询
-          </AButton>
-          <AButton :disabled="loading" @click="resetSearch">
+          </FaButton>
+          <FaButton class="max-[479px]:flex-1" variant="outline" :disabled="loading" @click="resetSearch">
             重置
-          </AButton>
+          </FaButton>
         </div>
 
-        <AAlert v-if="listErrorMessage" type="error" class="mt-4">
-          {{ listErrorMessage }}
-          <template #action>
-            <ASpace>
-              <span v-if="listRequestId" class="text-xs font-mono">requestId: {{ listRequestId }}</span>
-              <AButton size="mini" @click="loadUsers">
-                重试
-              </AButton>
-            </ASpace>
+        <FaAlert
+          v-if="listErrorMessage"
+          variant="destructive"
+          icon="i-lucide:circle-alert"
+          class="mt-4"
+        >
+          <template #description>
+            <div class="flex flex-wrap gap-3 items-center justify-between">
+              <span>{{ listErrorMessage }}</span>
+              <div class="flex gap-2 items-center">
+                <span v-if="listRequestId" class="text-xs font-mono">requestId: {{ listRequestId }}</span>
+                <FaButton variant="outline" size="sm" @click="loadUsers">
+                  重试
+                </FaButton>
+              </div>
+            </div>
           </template>
-        </AAlert>
+        </FaAlert>
       </FaPageMain>
 
       <FaPageMain>
-        <ATable
-          v-if="!isNarrow"
-          :columns="columns"
-          :data="users"
-          :loading="loading"
-          :pagination="false"
-          row-key="id"
-          :scroll="{ x: 1320 }"
-        >
-          <template #username="{ record }">
-            <span class="font-medium font-mono">{{ record.username }}</span>
-          </template>
-          <template #status="{ record }">
-            <ATag :color="record.status === 'ACTIVE' ? 'green' : 'gray'">
-              {{ record.status === 'ACTIVE' ? '启用' : '禁用' }}
-            </ATag>
-          </template>
-          <template #roles="{ record }">
-            <ASpace v-if="record.roleIds.length > 0" wrap :size="4">
-              <ATag v-for="roleId in record.roleIds" :key="roleId" :color="roleById(roleId)?.isSystem ? 'orangered' : undefined">
-                {{ roleById(roleId)?.name ?? shortId(roleId) }}
-              </ATag>
-            </ASpace>
-            <ATag v-else color="orange">
-              无角色
-            </ATag>
-          </template>
-          <template #mustChangePassword="{ record }">
-            <ATag :color="record.mustChangePassword ? 'orange' : 'green'">
-              {{ record.mustChangePassword ? '需要改密' : '无需改密' }}
-            </ATag>
-          </template>
-          <template #lastLoginAt="{ record }">
-            {{ formatDate(record.lastLoginAt) }}
-          </template>
-          <template #createdAt="{ record }">
-            {{ formatDate(record.createdAt) }}
-          </template>
-          <template #actions="{ record }">
-            <ASpace :size="4">
-              <AButton v-if="canUpdate" type="text" size="small" @click="openEdit(record)">
-                编辑
-              </AButton>
-              <ADropdown v-if="hasMoreAction(record)" trigger="click" @select="handleMoreAction($event, record)">
-                <AButton type="text" size="small">
-                  更多
-                  <FaIcon name="i-lucide:chevron-down" class="ml-1" />
-                </AButton>
-                <template #content>
-                  <ADoption v-if="userActions(record).canAssignRoles" value="roles">
-                    分配角色
-                  </ADoption>
-                  <ADoption v-if="userActions(record).canResetPassword" value="password">
-                    设置密码
-                  </ADoption>
-                  <ADoption v-if="userActions(record).canDisable" value="disable">
-                    禁用用户
-                  </ADoption>
-                  <ADoption v-if="userActions(record).canEnable" value="enable">
-                    启用用户
-                  </ADoption>
-                </template>
-              </ADropdown>
-            </ASpace>
-          </template>
-        </ATable>
-
-        <div v-else class="user-card-list" :aria-busy="loading">
-          <ASpin v-if="loading" class="py-12" />
-          <AEmpty v-else-if="users.length === 0" description="暂无用户" />
-          <ACard v-for="user in users" v-else :key="user.id" class="user-card" :bordered="true">
-            <template #title>
-              <div class="flex gap-2 min-w-0 items-center">
-                <span class="font-mono truncate">{{ user.username }}</span>
-                <ATag :color="user.status === 'ACTIVE' ? 'green' : 'gray'">
-                  {{ user.status === 'ACTIVE' ? '启用' : '禁用' }}
-                </ATag>
+        <div v-if="!isNarrow" class="relative" :aria-busy="loading">
+          <FaTable
+            data-testid="user-table"
+            row-key="id"
+            table-root-class="overflow-x-auto"
+            table-class="min-w-[1320px]"
+            :columns="columns"
+            :data="users"
+            empty-text="暂无用户"
+          >
+            <template #cell-username="{ row }">
+              <span class="font-medium font-mono">{{ row.original.username }}</span>
+            </template>
+            <template #cell-status="{ row }">
+              <FaTag
+                variant="outline"
+                :class="row.original.status === 'ACTIVE'
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-border bg-muted text-muted-foreground'"
+              >
+                {{ row.original.status === 'ACTIVE' ? '启用' : '禁用' }}
+              </FaTag>
+            </template>
+            <template #cell-roles="{ row }">
+              <div v-if="row.original.roleIds.length > 0" class="flex flex-wrap gap-1">
+                <FaTag
+                  v-for="roleId in row.original.roleIds"
+                  :key="roleId"
+                  variant="outline"
+                  :class="roleById(roleId)?.isSystem
+                    ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                    : 'border-border bg-muted/50 text-foreground'"
+                >
+                  {{ roleById(roleId)?.name ?? shortId(roleId) }}
+                </FaTag>
+              </div>
+              <FaTag v-else variant="outline" class="text-destructive border-destructive/30 bg-destructive/5">
+                无角色
+              </FaTag>
+            </template>
+            <template #cell-password-requirement="{ row }">
+              <FaTag
+                variant="outline"
+                :class="row.original.mustChangePassword
+                  ? 'border-primary/30 bg-primary/5 text-primary'
+                  : 'border-border bg-muted text-muted-foreground'"
+              >
+                {{ row.original.mustChangePassword ? '需要改密' : '无需改密' }}
+              </FaTag>
+            </template>
+            <template #cell-last-login="{ row }">
+              {{ formatDate(row.original.lastLoginAt) }}
+            </template>
+            <template #cell-created-at="{ row }">
+              {{ formatDate(row.original.createdAt) }}
+            </template>
+            <template #cell-actions="{ row }">
+              <div class="flex gap-1 items-center">
+                <FaButton v-if="canUpdate" variant="ghost" size="sm" @click="openEdit(row.original)">
+                  编辑
+                </FaButton>
+                <FaDropdown v-if="hasMoreAction(row.original)" :items="moreActionItems(row.original)" align="end">
+                  <FaButton variant="ghost" size="sm">
+                    更多
+                    <FaIcon name="i-lucide:chevron-down" />
+                  </FaButton>
+                </FaDropdown>
               </div>
             </template>
-            <template #extra>
-              <AButton v-if="canUpdate || hasMoreAction(user)" type="text" @click="openMobileActions(user)">
-                操作
-              </AButton>
+          </FaTable>
+          <div v-if="loading" class="bg-background/70 flex-center inset-0 absolute backdrop-blur-[1px]">
+            <FaIcon name="i-lucide:loader-circle" class="text-primary size-7 animate-spin" />
+            <span class="sr-only">正在加载用户</span>
+          </div>
+        </div>
+
+        <div v-else class="user-card-list flex flex-col gap-3 min-h-24" :aria-busy="loading">
+          <div v-if="loading" class="py-12 flex-center">
+            <FaIcon name="i-lucide:loader-circle" class="text-primary size-7 animate-spin" />
+            <span class="sr-only">正在加载用户</span>
+          </div>
+          <FaEmpty v-else-if="users.length === 0" icon="i-lucide:users" title="暂无用户" />
+          <FaCard
+            v-for="user in users"
+            v-else
+            :key="user.id"
+            data-testid="user-card"
+            class="user-card py-0 gap-0"
+            header-class="p-4"
+            content-class="px-4 pb-4"
+          >
+            <template #header>
+              <div class="flex gap-3 min-w-0 items-center justify-between">
+                <div class="flex gap-2 min-w-0 items-center">
+                  <span class="font-mono truncate">{{ user.username }}</span>
+                  <FaTag
+                    variant="outline"
+                    :class="user.status === 'ACTIVE'
+                      ? 'border-primary/30 bg-primary/10 text-primary'
+                      : 'border-border bg-muted text-muted-foreground'"
+                  >
+                    {{ user.status === 'ACTIVE' ? '启用' : '禁用' }}
+                  </FaTag>
+                </div>
+                <FaButton
+                  v-if="canUpdate || hasMoreAction(user)"
+                  variant="ghost"
+                  size="sm"
+                  @click="openMobileActions(user)"
+                >
+                  操作
+                </FaButton>
+              </div>
             </template>
 
-            <dl class="user-card-fields">
+            <dl class="m-0 gap-x-4 gap-y-3.5 grid grid-cols-2 max-[479px]:grid-cols-1">
               <div>
-                <dt>显示名称</dt>
-                <dd>{{ user.displayName }}</dd>
+                <dt class="text-xs text-muted-foreground mb-1">
+                  显示名称
+                </dt>
+                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                  {{ user.displayName }}
+                </dd>
               </div>
               <div>
-                <dt>改密要求</dt>
-                <dd>{{ user.mustChangePassword ? '下次登录必须改密' : '无需改密' }}</dd>
+                <dt class="text-xs text-muted-foreground mb-1">
+                  改密要求
+                </dt>
+                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                  {{ user.mustChangePassword ? '下次登录必须改密' : '无需改密' }}
+                </dd>
               </div>
-              <div class="user-card-field-wide">
-                <dt>角色</dt>
-                <dd>
-                  <ASpace v-if="user.roleIds.length > 0" wrap :size="4">
-                    <ATag v-for="roleId in user.roleIds" :key="roleId">
+              <div class="col-span-full max-[479px]:col-span-1">
+                <dt class="text-xs text-muted-foreground mb-1">
+                  角色
+                </dt>
+                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                  <div v-if="user.roleIds.length > 0" class="flex flex-wrap gap-1">
+                    <FaTag v-for="roleId in user.roleIds" :key="roleId" variant="outline">
                       {{ roleById(roleId)?.name ?? shortId(roleId) }}
-                    </ATag>
-                  </ASpace>
+                    </FaTag>
+                  </div>
                   <span v-else>无角色</span>
                 </dd>
               </div>
               <div>
-                <dt>最近登录</dt>
-                <dd>{{ formatDate(user.lastLoginAt) }}</dd>
+                <dt class="text-xs text-muted-foreground mb-1">
+                  最近登录
+                </dt>
+                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                  {{ formatDate(user.lastLoginAt) }}
+                </dd>
               </div>
               <div>
-                <dt>创建时间</dt>
-                <dd>{{ formatDate(user.createdAt) }}</dd>
+                <dt class="text-xs text-muted-foreground mb-1">
+                  创建时间
+                </dt>
+                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                  {{ formatDate(user.createdAt) }}
+                </dd>
               </div>
             </dl>
-          </ACard>
+          </FaCard>
         </div>
 
-        <div v-if="total > 0" class="mt-5 flex justify-end">
-          <APagination
-            :current="page"
-            :page-size="pageSize"
+        <div v-if="total > 0" class="mt-5 max-w-full overflow-x-auto">
+          <FaPagination
+            v-model:page="paginationPage"
+            v-model:size="paginationSize"
             :total="total"
-            :page-size-options="[20, 50, 100]"
-            show-total
-            show-page-size
-            :simple="isNarrow"
-            @change="changePage"
-            @page-size-change="changePageSize"
+            :sizes="[20, 50, 100]"
+            :layout="paginationLayout"
+            class="min-w-max"
           />
         </div>
       </FaPageMain>
     </template>
 
-    <ADrawer
-      :visible="mobileActionsVisible"
-      placement="bottom"
-      :height="360"
+    <FaDrawer
+      v-model="mobileActionsVisible"
+      :title="mobileDrawerTitle"
+      side="bottom"
       :footer="false"
-      unmount-on-close
-      @cancel="closeMobileActions"
+      content-class="h-[min(22.5rem,calc(100dvh-1.5rem))]"
+      destroy-on-close
     >
-      <template #title>
-        用户操作 · <span class="font-mono">{{ mobileActionTarget?.username }}</span>
-      </template>
-      <div class="mobile-action-list">
-        <AButton v-if="canUpdate" long @click="openEdit(mobileActionTarget!)">
+      <div data-testid="user-actions-drawer" class="pb-[max(0.75rem,env(safe-area-inset-bottom))] gap-3 grid">
+        <FaButton v-if="canUpdate" class="w-full" variant="outline" @click="openEdit(mobileActionTarget!)">
           编辑显示名称
-        </AButton>
-        <AButton v-if="mobileActionTarget && userActions(mobileActionTarget).canAssignRoles" long @click="openRoleAssignment(mobileActionTarget)">
+        </FaButton>
+        <FaButton
+          v-if="mobileActionTarget && userActions(mobileActionTarget).canAssignRoles"
+          class="w-full"
+          variant="outline"
+          @click="openRoleAssignment(mobileActionTarget)"
+        >
           分配角色
-        </AButton>
-        <AButton v-if="mobileActionTarget && userActions(mobileActionTarget).canResetPassword" long @click="openPasswordReset(mobileActionTarget)">
+        </FaButton>
+        <FaButton
+          v-if="mobileActionTarget && userActions(mobileActionTarget).canResetPassword"
+          class="w-full"
+          variant="outline"
+          @click="openPasswordReset(mobileActionTarget)"
+        >
           设置或重置密码
-        </AButton>
-        <AButton
+        </FaButton>
+        <FaButton
           v-if="mobileActionTarget && userActions(mobileActionTarget).canDisable"
-          long
-          status="danger"
+          class="w-full"
+          variant="destructive"
           @click="openStatusChange(mobileActionTarget, 'disable')"
         >
           禁用用户
-        </AButton>
-        <AButton
+        </FaButton>
+        <FaButton
           v-if="mobileActionTarget && userActions(mobileActionTarget).canEnable"
-          long
-          status="success"
+          class="w-full"
           @click="openStatusChange(mobileActionTarget, 'enable')"
         >
           启用用户
-        </AButton>
+        </FaButton>
       </div>
-    </ADrawer>
+    </FaDrawer>
 
     <UserFormModal
       v-model="formVisible"
@@ -565,74 +720,3 @@ onMounted(() => {
     />
   </div>
 </template>
-
-<style scoped>
-.user-filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-}
-
-.user-filter-input {
-  width: min(360px, 100%);
-}
-
-.user-card-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-height: 96px;
-}
-
-.user-card-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 16px;
-  margin: 0;
-}
-
-.user-card-fields div {
-  min-width: 0;
-}
-
-.user-card-fields dt {
-  margin-bottom: 4px;
-  font-size: 12px;
-  color: var(--color-text-3);
-}
-
-.user-card-fields dd {
-  margin: 0;
-  color: var(--color-text-1);
-  overflow-wrap: anywhere;
-}
-
-.user-card-field-wide {
-  grid-column: 1 / -1;
-}
-
-.mobile-action-list {
-  display: grid;
-  gap: 12px;
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-}
-
-@media (width <= 479px) {
-  .user-filter-bar > * {
-    flex: 1 1 auto;
-  }
-
-  .user-filter-input {
-    flex-basis: 100%;
-  }
-
-  .user-card-fields {
-    grid-template-columns: 1fr;
-  }
-
-  .user-card-field-wide {
-    grid-column: auto;
-  }
-}
-</style>

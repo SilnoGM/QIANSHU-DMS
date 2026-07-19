@@ -16,7 +16,7 @@
 - Node.js 24，根命令要求 `^24.15.0`，可通过 `.node-version` 选择主版本。
 - pnpm 11.9.0，以根 `package.json` 的 `packageManager` 字段为准。
 
-根目录不执行 `pnpm install`，也不应生成根 `pnpm-lock.yaml`、`pnpm-workspace.yaml` 或 `node_modules/`。
+根目录不执行 `pnpm install`，也不应生成根 `pnpm-lock.yaml`、`pnpm-workspace.yaml`、`node_modules/` 或 `.pnpm-store/`。
 
 ## 独立安装
 
@@ -40,6 +40,7 @@ node --run bootstrap
 | 命令 | 说明 |
 | --- | --- |
 | `node --run bootstrap` | 按 Server、Web 的顺序安装两个独立依赖域。 |
+| `node --run cleanup:root` | 审查并自动删除四类精确根违规产物。 |
 | `node --run dev` | 同时启动 Server 与 Web 开发进程。 |
 | `node --run dev:server` | 仅启动 Server。 |
 | `node --run dev:web` | 仅启动 Web。 |
@@ -63,6 +64,8 @@ node --run bootstrap
 | `node --run build:web` | 仅构建 Web。 |
 
 pnpm 11 的 `verifyDepsBeforeRun` 默认行为会在执行 package script 前尝试 install，即使根 package 没有依赖，也会生成根 `pnpm-lock.yaml` 和 `node_modules/` 状态文件。因此根公开 scripts 统一通过 Node.js 22+ 提供的 `node --run <script>` 执行；只有 Server 和 Web 独立依赖域继续使用 `pnpm -C`。
+
+`cleanup:root` 的自动删除范围严格限定为根 `pnpm-workspace.yaml`、`pnpm-lock.yaml`、`node_modules/` 和 `.pnpm-store/`。根 `dev*` 与 `check` 入口会先调用同一清理器；它不会扫描或删除 `web/`、`server/` 以及其他根文件。清理失败会返回非零状态并阻止后续启动或检查。
 
 在 macOS 与 Linux 上，三个根 `dev*` 命令通过独立进程组管理 pnpm、Nest/Vite 和后代进程，并统一处理 `SIGHUP`、`SIGINT`、`SIGTERM` 以及外层 `node --run` 提前退出。根编排以可靠启动和完整清理为目标，不保证把终端键盘快捷操作传给 detached 子进程；需要使用 Nest/Vite 交互式快捷操作时，直接执行 `pnpm -C server dev` 或 `pnpm -C web dev`。
 

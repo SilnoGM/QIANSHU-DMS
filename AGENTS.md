@@ -40,7 +40,8 @@
 
 ## 工程边界
 
-- 根目录不是 pnpm workspace，不创建根 `pnpm-workspace.yaml`、`pnpm-lock.yaml` 或 `node_modules/`，也不声明第三方依赖。
+- 根目录不是 pnpm workspace，不创建根 `pnpm-workspace.yaml`、`pnpm-lock.yaml`、`node_modules/` 或 `.pnpm-store/`，也不声明第三方依赖。
+- 用户已预授权 `node --run cleanup:root` 以及根 `dev*`、`check` 入口自动删除上述四类精确根违规产物，无需再次确认；不得把自动删除范围扩展到其他名称、子目录或用户文件。
 - `web/` 与 `server/` 是两个独立依赖域，分别维护自己的 `package.json` 和 lockfile。
 - Web 与 Server 不通过 `file:`、`link:`、`workspace:*` 或跨目录源码引用相互依赖。
 - Web 与 Server 通过 HTTP 和 OpenAPI 契约协作；根脚本只负责无依赖编排。

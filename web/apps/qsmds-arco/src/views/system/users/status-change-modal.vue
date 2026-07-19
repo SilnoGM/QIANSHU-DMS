@@ -57,6 +57,14 @@ async function submit(): Promise<void> {
   }
 }
 
+function updateVisible(value: boolean): void {
+  if (value) {
+    emits('update:modelValue', true)
+    return
+  }
+  close()
+}
+
 watch(() => props.modelValue, (visible) => {
   if (!visible) {
     errorMessage.value = ''
@@ -66,44 +74,45 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <AModal
-    :visible="modelValue"
+  <FaModal
+    :model-value="modelValue"
     :title="isDisable ? '确认禁用用户' : '确认启用用户'"
-    width="min(480px, calc(100vw - 24px))"
+    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[480px]"
     :closable="!loading"
-    :mask-closable="!loading"
-    :esc-to-close="!loading"
+    :close-on-click-overlay="!loading"
+    :close-on-press-escape="!loading"
     :footer="false"
-    unmount-on-close
-    @cancel="close"
+    destroy-on-close
+    @update:model-value="updateVisible"
   >
-    <AAlert v-if="errorMessage" type="error" class="mb-4">
-      {{ errorMessage }}
-      <template v-if="requestId" #action>
-        <span class="text-xs font-mono">requestId: {{ requestId }}</span>
+    <FaAlert v-if="errorMessage" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">
+      <template #description>
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <span>{{ errorMessage }}</span>
+          <span v-if="requestId" class="text-xs font-mono">requestId: {{ requestId }}</span>
+        </div>
       </template>
-    </AAlert>
+    </FaAlert>
     <p class="leading-6 m-0">
       确认{{ isDisable ? '禁用' : '启用' }}用户
       <strong class="font-mono mx-1">{{ user?.username }}</strong>？
     </p>
-    <p v-if="isDisable" class="text-sm text-[rgb(var(--warning-6))] mb-0 mt-3">
+    <p v-if="isDisable" class="text-sm text-destructive mb-0 mt-3">
       禁用后，该用户的全部现有 Session 将立即撤销。
     </p>
 
     <div class="mt-6 flex gap-3 justify-end">
-      <AButton :disabled="loading" @click="close">
+      <FaButton variant="outline" :disabled="loading" @click="close">
         取消
-      </AButton>
-      <AButton
-        :status="isDisable ? 'danger' : 'success'"
-        type="primary"
+      </FaButton>
+      <FaButton
+        :variant="isDisable ? 'destructive' : 'default'"
         :loading="loading"
         :disabled="loading"
         @click="submit"
       >
         确认{{ isDisable ? '禁用' : '启用' }}
-      </AButton>
+      </FaButton>
     </div>
-  </AModal>
+  </FaModal>
 </template>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
+import type { FormExpose } from '@fantastic-admin/components'
 import type { UserDto } from '@/api/generated/types.gen'
-
-import { useMediaQuery } from '@vueuse/core'
 
 import managementApi from '@/api/modules/management'
 
@@ -23,27 +22,45 @@ const emits = defineEmits<{
   'success': [user: UserDto]
 }>()
 
-const isNarrow = useMediaQuery('(max-width: 767px)')
 const loading = ref(false)
 const errorMessage = ref('')
 const requestId = ref<string>()
 const fieldErrors = reactive<Record<string, string>>({})
-const model = reactive({
+
+interface PasswordResetModel {
+  mustChangePassword: boolean
+  newPassword: string
+  confirmPassword: string
+  username: string
+}
+
+const formRef = useTemplateRef<FormExpose<PasswordResetModel>>('formRef')
+const model = reactive<PasswordResetModel>({
   mustChangePassword: true,
+  username: '',
   ...createPasswordFields(),
 })
 
 function clearErrors(): void {
   errorMessage.value = ''
   requestId.value = undefined
+  formRef.value?.clearValidate()
   for (const key of Object.keys(fieldErrors)) {
     delete fieldErrors[key]
+  }
+}
+
+function setFieldErrors(errors: Record<string, string>): void {
+  Object.assign(fieldErrors, errors)
+  for (const [field, message] of Object.entries(errors)) {
+    formRef.value?.setFieldError(field, message)
   }
 }
 
 function resetModel(): void {
   clearPasswordFields(model)
   model.mustChangePassword = true
+  model.username = props.user?.username ?? ''
 }
 
 function close(): void {
@@ -60,10 +77,7 @@ async function submit(): Promise<void> {
     return
   }
   clearErrors()
-  Object.assign(
-    fieldErrors,
-    validatePasswordFields(model.newPassword, model.confirmPassword),
-  )
+  setFieldErrors(validatePasswordFields(model.newPassword, model.confirmPassword))
   if (Object.keys(fieldErrors).length > 0) {
     return
   }
@@ -83,7 +97,7 @@ async function submit(): Promise<void> {
   catch (error) {
     const serverPasswordError = getApiFieldError(error, 'newPassword')
     if (serverPasswordError !== undefined) {
-      fieldErrors.newPassword = serverPasswordError
+      setFieldErrors({ newPassword: serverPasswordError })
     }
     const failure = getApiFailure(error)
     requestId.value = failure.requestId
@@ -100,6 +114,14 @@ async function submit(): Promise<void> {
   }
 }
 
+function updateVisible(value: boolean): void {
+  if (value) {
+    emits('update:modelValue', true)
+    return
+  }
+  close()
+}
+
 watch(() => props.modelValue, (visible) => {
   if (visible) {
     resetModel()
@@ -113,73 +135,71 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <AModal
-    :visible="modelValue"
+  <FaModal
+    :model-value="modelValue"
     title="设置或重置密码"
-    :width="isNarrow ? 'calc(100vw - 24px)' : 520"
+    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[520px]"
     :closable="!loading"
-    :mask-closable="!loading"
-    :esc-to-close="!loading"
+    :close-on-click-overlay="!loading"
+    :close-on-press-escape="!loading"
     :footer="false"
-    unmount-on-close
-    @cancel="close"
+    destroy-on-close
+    @update:model-value="updateVisible"
   >
-    <AAlert type="warning" class="mb-4">
-      保存后，新密码立即成为用户登录密码，并撤销该用户的全部现有 Session。
-    </AAlert>
-    <AAlert v-if="errorMessage" type="error" class="mb-4">
-      {{ errorMessage }}
-      <template v-if="requestId" #action>
-        <span class="text-xs font-mono">requestId: {{ requestId }}</span>
+    <FaAlert icon="i-lucide:triangle-alert" class="mb-4 border-primary/30 bg-primary/5">
+      <template #description>
+        保存后，新密码立即成为用户登录密码，并撤销该用户的全部现有 Session。
       </template>
-    </AAlert>
+    </FaAlert>
+    <FaAlert v-if="errorMessage" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">
+      <template #description>
+        <div class="flex flex-wrap gap-2 items-center justify-between">
+          <span>{{ errorMessage }}</span>
+          <span v-if="requestId" class="text-xs font-mono">requestId: {{ requestId }}</span>
+        </div>
+      </template>
+    </FaAlert>
 
-    <AForm :model="model" layout="vertical" @submit-success="submit">
-      <AFormItem label="用户名">
-        <AInput :model-value="user?.username ?? ''" disabled />
-      </AFormItem>
-      <AFormItem
-        field="newPassword"
-        label="新密码"
-        required
-        :validate-status="fieldErrors.newPassword ? 'error' : undefined"
-        :help="fieldErrors.newPassword"
-      >
-        <AInputPassword
+    <FaForm ref="formRef" :model="model" :disabled="loading" class="gap-4" @submit="submit">
+      <FaFormItem name="username" label="用户名">
+        <FaInput v-model="model.username" class="w-full" disabled />
+      </FaFormItem>
+      <FaFormItem name="newPassword" label="新密码" required>
+        <FaInput
           v-model="model.newPassword"
+          type="password"
           autocomplete="new-password"
-          allow-clear
+          clearable
+          class="w-full"
           placeholder="请输入 8 至 20 个字符"
+          @clear="model.newPassword = ''"
         />
-      </AFormItem>
-      <AFormItem
-        field="confirmPassword"
-        label="确认新密码"
-        required
-        :validate-status="fieldErrors.confirmPassword ? 'error' : undefined"
-        :help="fieldErrors.confirmPassword"
-      >
-        <AInputPassword
+      </FaFormItem>
+      <FaFormItem name="confirmPassword" label="确认新密码" required>
+        <FaInput
           v-model="model.confirmPassword"
+          type="password"
           autocomplete="new-password"
-          allow-clear
+          clearable
+          class="w-full"
           placeholder="请再次输入新密码"
+          @clear="model.confirmPassword = ''"
         />
-      </AFormItem>
-      <AFormItem field="mustChangePassword" label="登录要求">
-        <ACheckbox v-model="model.mustChangePassword">
+      </FaFormItem>
+      <FaFormItem name="mustChangePassword" label="登录要求">
+        <FaCheckbox v-model="model.mustChangePassword">
           下次登录必须修改密码
-        </ACheckbox>
-      </AFormItem>
+        </FaCheckbox>
+      </FaFormItem>
 
-      <div class="mt-6 flex gap-3 justify-end">
-        <AButton :disabled="loading" @click="close">
+      <div class="mt-2 flex gap-3 justify-end">
+        <FaButton type="button" variant="outline" :disabled="loading" @click="close">
           取消
-        </AButton>
-        <AButton type="primary" html-type="submit" :loading="loading" :disabled="loading">
+        </FaButton>
+        <FaButton type="submit" :loading="loading" :disabled="loading">
           设置密码
-        </AButton>
+        </FaButton>
       </div>
-    </AForm>
-  </AModal>
+    </FaForm>
+  </FaModal>
 </template>

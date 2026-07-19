@@ -24,15 +24,41 @@ const expectedCommands = [
   ],
 ]
 
-test('check 严格按照 Root、Server、Contract、Web、Browser E2E 的顺序执行且不自动修复', async () => {
+test('check 先清理根违规产物，再严格执行其余只读检查', async () => {
   const calls = []
+  let cleaned = false
 
-  await check(async (command, args, options) => {
-    calls.push([command, args, options])
-  })
+  await check(
+    async (command, args, options) => {
+      assert.equal(cleaned, true)
+      calls.push([command, args, options])
+    },
+    async () => {
+      cleaned = true
+    },
+  )
 
+  assert.equal(cleaned, true)
   assert.deepEqual(calls, expectedCommands)
   assert.equal(calls.flat(2).includes('--fix'), false)
+})
+
+test('check 在根违规产物清理失败后不执行任何检查', async () => {
+  const expectedError = new Error('root cleanup failed')
+  let runCalled = false
+
+  await assert.rejects(
+    check(
+      async () => {
+        runCalled = true
+      },
+      async () => {
+        throw expectedError
+      },
+    ),
+    error => error === expectedError,
+  )
+  assert.equal(runCalled, false)
 })
 
 for (const [failureIndex, label] of [
@@ -47,12 +73,15 @@ for (const [failureIndex, label] of [
     const expectedError = new Error(`${label} check failed`)
 
     await assert.rejects(
-      check(async (command, args, options) => {
-        calls.push([command, args, options])
-        if (calls.length === failureIndex + 1) {
-          throw expectedError
-        }
-      }),
+      check(
+        async (command, args, options) => {
+          calls.push([command, args, options])
+          if (calls.length === failureIndex + 1) {
+            throw expectedError
+          }
+        },
+        async () => {},
+      ),
       error => error === expectedError,
     )
 

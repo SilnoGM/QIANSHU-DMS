@@ -506,8 +506,10 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   })
   await restartedPage.setViewport(390, 844, true)
   await restartedPage.waitFor(`(() => (
-    document.querySelector('.user-card-list')?.getClientRects().length > 0
-    && document.querySelector('.arco-table') === null
+    [...document.querySelectorAll('[data-testid="user-card"]')]
+      .some(card => card.getClientRects().length > 0)
+    && ![...document.querySelectorAll('[data-testid="user-table"]')]
+      .some(table => table.getClientRects().length > 0)
     && [...document.querySelectorAll('button')].some(button => (
       button.textContent?.trim() === '操作'
       && button.getClientRects().length > 0
@@ -524,11 +526,20 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     true,
   )
   await restartedPage.evaluate(`(() => {
-    const close = document.querySelector('.arco-drawer-close-btn')
-    if (!close) throw new Error('drawer close unavailable')
-    close.click()
+    const drawerContent = document.querySelector('[data-testid="user-actions-drawer"]')
+    const drawer = drawerContent?.closest('[role="dialog"]')
+    if (!drawer || drawer.getClientRects().length === 0) {
+      throw new Error('drawer unavailable')
+    }
+    window.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      code: 'Escape',
+      key: 'Escape',
+    }))
     return true
   })()`)
+  await restartedPage.waitFor(`![...document.querySelectorAll('[data-testid="user-actions-drawer"]')]
+    .some(content => content.getClientRects().length > 0)`)
   await restartedPage.setViewport(1280, 800, false)
   const detachedLogout = await restartedPage.evaluate(
     apiExpression('/api/auth/logout', 'POST', {}),
@@ -651,13 +662,21 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     'password_change_required',
   )
   await restartedPage.waitFor(`document.body.innerText.includes('请先修改密码')`)
-  const forcedModal = await restartedPage.evaluate(`({
-    closeButtons: document.querySelectorAll('.arco-modal-close-btn').length,
-    currentPasswordInputs: document.querySelectorAll('input[autocomplete="current-password"]').length,
-    newPasswordInputs: document.querySelectorAll('input[autocomplete="new-password"]').length,
-    showsBusinessMenu: document.body.innerText.includes('系统管理'),
-    showsExit: document.body.innerText.includes('退出登录'),
-  })`)
+  const forcedModal = await restartedPage.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('请先修改密码'))
+    const closeButtons = [...(dialog?.querySelectorAll('[aria-label="Close"], button') ?? [])]
+      .filter(candidate => candidate.getAttribute('aria-label') === 'Close'
+        || candidate.textContent?.trim() === 'Close')
+    return {
+      closeButtons: closeButtons.length,
+      currentPasswordInputs: document.querySelectorAll('input[autocomplete="current-password"]').length,
+      newPasswordInputs: document.querySelectorAll('input[autocomplete="new-password"]').length,
+      showsBusinessMenu: document.body.innerText.includes('系统管理'),
+      showsExit: document.body.innerText.includes('退出登录'),
+    }
+  })()`)
   assert.deepEqual(forcedModal, {
     closeButtons: 0,
     currentPasswordInputs: 0,

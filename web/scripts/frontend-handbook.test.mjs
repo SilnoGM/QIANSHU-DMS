@@ -272,31 +272,31 @@ const handbookTaskNavigation = [
   ['配置路由', './Fantastic-admin/路由导航与状态管理.md#路由导航菜单'],
   ['接入登录', './Fantastic-admin/服务端交互与登录.md#登录相关'],
   ['实现权限', './Fantastic-admin/权限保活与国际化.md#权限验证'],
-  ['选择表单', './Arco-Design-Vue/数据录入组件.md#form'],
-  ['选择表格', './Arco-Design-Vue/数据展示组件.md#table'],
-  ['上传文件', './Arco-Design-Vue/数据录入组件.md#upload'],
-  ['反馈状态', './Arco-Design-Vue/反馈组件.md#message'],
+  ['选择表单', './Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择'],
+  ['选择表格', './Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择'],
+  ['上传文件', './Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择'],
+  ['反馈状态', './Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择'],
   ['主题配置', './Fantastic-admin/应用配置.md#主题'],
   ['构建升级', './Fantastic-admin/高级能力构建与升级.md#框架更新'],
 ]
 
 const fantasticAdminArcoOverlapContracts = [
-  ['Button', ['`FaButton`', '`FaButtonGroup`'], ['`AButton`', '`AButtonGroup`'], '标准业务操作默认 Arco；框架壳、Fantastic-admin 内置浮层或已有框架交互才使用 Fa，单一操作区不混用。'],
-  ['Card', ['`FaCard`'], ['`ACard`', '`ACardMeta`', '`ACardGrid`'], '标准业务内容卡片默认 Arco；框架壳内已有 Fa 视觉契约时保留 `FaCard`，不能只为局部外观切换组件族。'],
-  ['Form', ['`FaForm`', '`FaFormItem`'], ['`AForm`', '`AFormItem`'], '标准业务表单默认 Arco；两者不是名称替换，迁移必须完成校验、字段、提交、disabled 与 slot 的语义迁移。'],
-  ['Input', ['`FaInput`', '`FaTextarea`'], ['`AInput`', '`ATextarea`'], '业务录入默认 Arco；同一表单只保留一套值、错误、焦点和尺寸契约，框架内部既有 vee-validate 字段才保留 Fa。'],
-  ['Select', ['`FaSelect`', '`FaCheckboxGroup`', '`FaRadioGroup`'], ['`ASelect`', '`ACascader`', '`ATreeSelect`', '`ACheckboxGroup`', '`ARadioGroup`'], '业务选择默认 Arco；先按数据层级选择 Select、Cascader 或 TreeSelect，不用 Fa 外观差异代替交互建模。'],
-  ['Table', ['`FaTable`', '`FaDescriptions`'], ['`ATable`', '`ADescriptions`'], '标准业务数据展示默认 Arco；只有既有框架内部 TanStack 状态契约才保留 `FaTable`，数组 columns 与声明式列契约不得混写。'],
-  ['Pagination', ['`FaPagination`'], ['`APagination`'], '业务列表默认 Arco，并与 `ATable` 的受控 `current`、`pageSize`、`total` 保持同一查询状态；框架内部既有列表才保留 Fa。'],
-  ['Modal/Drawer', ['`FaModal`', '`FaDrawer`', '`useFaModal`', '`useFaDrawer`'], ['`AModal`', '`ADrawer`', '`$modal`', '`$drawer`'], '业务编辑与确认默认 Arco；框架全局命令式流程可保留 Fa composable，但必须统一异步关闭、错误反馈和焦点恢复。'],
-  ['Toast/Message', ['`FaToast`', '`useFaToast`'], ['`Message`', '`Notification`', '`$message`', '`$notification`'], '业务反馈默认 Arco；框架根节点既有反馈链路可保留 Fa。静态方法与实例注入的 context 不同，不跨层冒充。'],
-  ['Tooltip/Popover', ['`FaTooltip`', '`FaPopover`'], ['`ATooltip`', '`APopover`', '`ATrigger`'], '业务说明浮层默认 Arco；框架内部已有触发结构或二维菜单契约时才使用 Fa，并分别验证键盘、触屏和碰撞。'],
-  ['Tabs', ['`FaTabs`'], ['`ATabs`'], '业务内容切换默认 Arco；`FaTabs` 只用于框架内部既有容器，二者都不能替代 Fantastic-admin 的路由 Tabbar。'],
-  ['Tag/Badge', ['`FaTag`', '`FaBadge`'], ['`ATag`', '`ABadge`'], '业务状态与计数默认 Arco；框架壳现有状态标记可保留 Fa，颜色之外必须保留文字、数值或可读状态。'],
-  ['Upload', ['`FaFileUpload`', '`FaImageUpload`'], ['`AUpload`'], '标准业务上传默认 Arco；只有明确依赖本地 Fa request/progress 契约的既有框架流程才保留 Fa，二者都必须接入受控 HTTP client。'],
-  ['ImagePreview', ['`FaImagePreview`', '`useFaImagePreview`'], ['`AImage`', '`AImagePreview`', '`AImagePreviewGroup`'], '标准业务图片预览默认 Arco；框架既有全局预览链路可保留 Fa，业务图片需要 `alt` 时不得使用不支持该契约的封装。'],
-  ['Tree', ['`FaTree`'], ['`ATree`', '`ATreeSelect`'], '标准业务树默认 Arco；只有明确需要当前 Reka 封装 API 的既有页面才使用 `FaTree`，组织、菜单和权限树不因专业版可用而默认切换。'],
-  ['Steps', ['`FaSteps`'], ['`ASteps`'], '标准业务流程默认 Arco；`FaSteps` 是从 0 开始的受控展示且触发器被禁用，仅在其视觉与 slot 契约就是需求时采用。'],
+  ['Button', ['`FaButton`', '`FaButtonGroup`'], ['`AButton`', '`AButtonGroup`'], '标准业务操作优先 Fantastic-admin；`FaButton` 无法满足已确认交互时才回退 Arco，单一操作区不混用组件族。'],
+  ['Card', ['`FaCard`'], ['`ACard`', '`ACardMeta`', '`ACardGrid`'], '标准业务内容卡片优先 Fantastic-admin；`FaCard` 缺少已确认结构能力时才回退 Arco，不为局部外观混用组件族。'],
+  ['Form', ['`FaForm`', '`FaFormItem`'], ['`AForm`', '`AFormItem`'], '标准业务表单优先 Fantastic-admin；无法满足校验或字段契约时才回退 Arco，并完整迁移校验、提交、disabled 与 slot 语义。'],
+  ['Input', ['`FaInput`', '`FaTextarea`'], ['`AInput`', '`ATextarea`'], '业务录入优先 Fantastic-admin；Fa 输入能力无法满足已确认交互时才回退 Arco，同一表单只保留一套值、错误、焦点和尺寸契约。'],
+  ['Select', ['`FaSelect`', '`FaCombobox`', '`FaCascader`', '`FaCheckboxGroup`', '`FaRadioGroup`'], ['`ASelect`', '`ACascader`', '`ATreeSelect`', '`ACheckboxGroup`', '`ARadioGroup`'], '业务选择优先 Fantastic-admin；搜索单选先核对 `FaCombobox`，层级单选先核对 `FaCascader`；Fa 选择能力仍无法满足多选、树选择或大数据契约时才按需求回退 Arco。'],
+  ['Table', ['`FaTable`', '`FaDescriptions`'], ['`ATable`', '`ADescriptions`'], '标准业务数据展示优先 Fantastic-admin；`FaTable` 无法满足已确认表格能力时才回退 Arco，TanStack columns 与 Arco 声明式列契约不得混写。'],
+  ['Pagination', ['`FaPagination`'], ['`APagination`'], '业务列表优先 Fantastic-admin；`FaPagination` 无法满足已确认分页能力时才回退 Arco，并与查询的 page、pageSize、total 保持单一受控状态。'],
+  ['Modal/Drawer', ['`FaModal`', '`FaDrawer`', '`useFaModal`', '`useFaDrawer`'], ['`AModal`', '`ADrawer`', '`$modal`', '`$drawer`'], '业务编辑与确认优先 Fantastic-admin；Fa 浮层无法满足已确认交互时才回退 Arco，并统一异步关闭、错误反馈和焦点恢复。'],
+  ['Toast/Message', ['`FaToast`', '`useFaToast`'], ['`Message`', '`Notification`', '`$message`', '`$notification`'], '业务反馈优先 Fantastic-admin；Fa 反馈无法满足已确认上下文或交互时才回退 Arco，静态方法与实例注入的 context 不跨层冒充。'],
+  ['Tooltip/Popover', ['`FaTooltip`', '`FaPopover`'], ['`ATooltip`', '`APopover`', '`ATrigger`'], '业务说明浮层优先 Fantastic-admin；Fa 浮层无法满足触发、碰撞或内容契约时才回退 Arco，并验证键盘与触屏。'],
+  ['Tabs', ['`FaTabs`'], ['`ATabs`'], '业务内容切换优先 Fantastic-admin；`FaTabs` 无法满足已确认切换契约时才回退 Arco，二者都不能替代 Fantastic-admin 的路由 Tabbar。'],
+  ['Tag/Badge', ['`FaTag`', '`FaBadge`'], ['`ATag`', '`ABadge`'], '业务状态与计数优先 Fantastic-admin；Fa 变体无法满足已确认语义时才回退 Arco，颜色之外必须保留文字、数值或可读状态。'],
+  ['Upload', ['`FaFileUpload`', '`FaImageUpload`'], ['`AUpload`'], '标准业务上传优先 Fantastic-admin；Fa request 或进度契约无法满足需求时才回退 Arco，二者都必须接入受控 HTTP client。'],
+  ['ImagePreview', ['`FaImagePreview`', '`useFaImagePreview`'], ['`AImage`', '`AImagePreview`', '`AImagePreviewGroup`'], '标准业务图片预览优先 Fantastic-admin；需要 `alt` 等 Fa 未提供的契约时才回退 Arco 或原生语义元素，不伪造不存在的 prop。'],
+  ['Tree', ['`FaTree`'], ['`ATree`', '`ATreeSelect`'], '标准业务树优先 Fantastic-admin；`FaTree` 无法满足选择、搜索或无障碍契约时才回退 Arco，并按真实层级数据建模。'],
+  ['Steps', ['`FaSteps`'], ['`ASteps`'], '标准业务流程优先 Fantastic-admin；`FaSteps` 无法满足交互或无障碍契约时才回退 Arco，不能把只读展示冒充可操作步骤。'],
   ['PageHeader', ['`FaPageHeader`', '`FaPageMain`'], ['`APageHeader`'], '框架页面标题默认 Fantastic-admin，使用 `FaPageHeader` 与 `FaPageMain` 维持壳层布局；业务区域内部需要 Arco 返回/面包屑语义时才局部使用 `APageHeader`。'],
 ]
 
@@ -880,7 +880,7 @@ function assertFantasticAdminSelectionContracts(content) {
   const responsibilityMatrix = readSecondLevelSection(content, '2. 组件职责矩阵')
   for (const [responsibility, expectedTarget] of [
     ['框架壳、导航、页面容器、框架内部交互', 'Fantastic-admin 内置组件'],
-    ['标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互', 'Arco Design Vue'],
+    ['标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互', 'Fantastic-admin 内置组件'],
     ['领域组件', '`web/apps/qsmds-arco/src/components/`'],
   ]) {
     const row = findTableRow(responsibilityMatrix, responsibility)
@@ -889,6 +889,20 @@ function assertFantasticAdminSelectionContracts(content) {
     assert.ok(row, `${context} 行不存在`)
     assert.equal(row.length, 4, `${context} 必须保持四个表格单元格`)
     assert.equal(row[1], expectedTarget, `${context} 默认落点错误：期望 ${expectedTarget}，实际 ${row[1]}`)
+  }
+
+  for (const [level, expectedImplementation] of [
+    ['1', 'Fantastic-admin 内置组件'],
+    ['2', 'Arco Design Vue 组件'],
+    ['3', '基于 Arco Design Vue 的应用级自定义组件'],
+    ['4', '基于原生 Vue 的自定义组件'],
+  ]) {
+    const row = findTableRow(responsibilityMatrix, level)
+    const context = `组件实现优先级：${level}`
+
+    assert.ok(row, `${context} 行不存在`)
+    assert.equal(row.length, 3, `${context} 必须保持三个表格单元格`)
+    assert.equal(row[1], expectedImplementation, `${context} 实现落点错误`)
   }
 
   const overlapMatrix = readSecondLevelSection(content, '4. 与 Arco 重叠能力的选择')
@@ -966,6 +980,22 @@ function assertFantasticAdminSelectionContracts(content) {
       decisionText,
       `${context} 的项目决策必须与已审定语义精确一致，不得追加否定或模糊化表述`,
     )
+  }
+
+  const styleSection = readSecondLevelSection(content, '9. 样式、无障碍与响应式')
+  for (const requiredPhrase of [
+    '当前主题 token',
+    '`web/packages/themes/index.ts`',
+    '`web/uno.config.ts`',
+    '`bg-background`',
+    '`text-foreground`',
+    '`text-muted-foreground`',
+    '`border-border`',
+    '不得默认硬编码颜色',
+    '亮色',
+    '暗色',
+  ]) {
+    assert.ok(styleSection.includes(requiredPhrase), `主题 token 选型契约缺少：${requiredPhrase}`)
   }
 }
 
@@ -2210,12 +2240,12 @@ test('前端开发手册入口固定正式应用、技术基线与组件职责',
     '手册必须明确 web/apps/qsmds-arco 是唯一正式 Web 应用',
   )
   assert.ok(
-    handbook.includes('Arco Design Vue 用于标准业务 UI'),
-    '手册必须明确 Arco Design Vue 用于标准业务 UI',
+    handbook.includes('Fantastic-admin 内置组件是标准业务 UI 的第一优先级'),
+    '手册必须明确 Fantastic-admin 内置组件是标准业务 UI 第一优先级',
   )
   assert.ok(
-    handbook.includes('Fantastic-admin 内置组件用于框架壳与框架交互'),
-    '手册必须明确 Fantastic-admin 内置组件用于框架壳与框架交互',
+    handbook.includes('Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库'),
+    '手册必须明确 Arco Design Vue 只在 Fantastic-admin 无法满足时回退使用',
   )
   assert.ok(
     handbook.includes('web/apps/qsmds-arco/src/router/'),
@@ -2601,25 +2631,25 @@ test('Fantastic-admin 基础组件文档记录 FaTable 选择与 footer 运行�
   }
 })
 
-test('Fantastic-admin 组件选型契约拒绝标准业务默认落到 Fantastic-admin', () => {
+test('Fantastic-admin 组件选型契约拒绝标准业务默认回退到 Arco', () => {
   const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
   const mutatedSelection = selection.replace(
-    '| 标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互 | Arco Design Vue |',
     '| 标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互 | Fantastic-admin 内置组件 |',
+    '| 标准业务交互：表单、数据录入、数据展示、反馈、企业后台交互 | Arco Design Vue |',
   )
 
   assert.notEqual(mutatedSelection, selection, '标准业务默认落点变异 fixture 必须命中真实职责矩阵')
   assert.throws(
     () => assertFantasticAdminSelectionContracts(mutatedSelection),
     /组件职责矩阵.*标准业务交互/u,
-    '标准业务默认落点改为 Fantastic-admin 时，结构化职责矩阵契约必须失败',
+    '标准业务默认落点改为 Arco 时，结构化职责矩阵契约必须失败',
   )
 })
 
 for (const [capability, originalDecision, mutatedDecision] of [
-  ['Form', '标准业务表单默认 Arco', '标准业务表单默认 Fantastic-admin'],
-  ['Table', '标准业务数据展示默认 Arco', '标准业务数据展示默认 Fantastic-admin'],
-  ['Toast/Message', '业务反馈默认 Arco', '业务反馈默认 Fantastic-admin'],
+  ['Form', '标准业务表单优先 Fantastic-admin', '标准业务表单优先 Arco'],
+  ['Table', '标准业务数据展示优先 Fantastic-admin', '标准业务数据展示优先 Arco'],
+  ['Toast/Message', '业务反馈优先 Fantastic-admin', '业务反馈优先 Arco'],
 ]) {
   test(`Fantastic-admin 组件选型契约拒绝${capability}默认落点变异`, () => {
     const selection = readRequiredFile(fantasticAdminComponentHandbookPaths.selection)
@@ -2629,7 +2659,7 @@ for (const [capability, originalDecision, mutatedDecision] of [
     assert.throws(
       () => assertFantasticAdminSelectionContracts(mutatedSelection),
       new RegExp(`重叠能力选择矩阵.*${capability}`, 'u'),
-      `${capability}默认落点改为 Fantastic-admin 时，结构化重叠能力契约必须失败`,
+      `${capability}默认落点改为 Arco 时，结构化重叠能力契约必须失败`,
     )
   })
 }
@@ -2694,6 +2724,100 @@ test('Fantastic-admin 组件选型契约拒绝在已审定决策后追加否定�
     () => assertFantasticAdminSelectionContracts(mutatedSelection),
     /Button.*项目决策必须与已审定语义精确一致/u,
     '已审定句子后面追加否定文字时，选型契约必须失败',
+  )
+})
+
+test('前端标准文档不得重新引入 Arco-first 业务默认值', () => {
+  const violations = [
+    ['前端手册入口', handbookPath],
+    ['Fantastic-admin AI 技能', fantasticAdminHandbookPaths.skills],
+    ['内置组件索引', fantasticAdminComponentHandbookPaths.index],
+    ['内置组件选型', fantasticAdminComponentHandbookPaths.selection],
+    ['基础版组件', fantasticAdminComponentHandbookPaths.basic],
+    ['专业版组件', fantasticAdminComponentHandbookPaths.pro],
+    ...Object.entries(arcoDesignVueHandbookPaths)
+      .map(([documentName, filePath]) => [`Arco ${documentName}`, filePath]),
+  ].flatMap(([documentName, filePath]) => readRequiredFile(filePath)
+    .split(/(?<=[。！？])|\n/u)
+    .map((sentence, index) => ({ documentName, index: index + 1, sentence: sentence.trim() }))
+    .filter(({ sentence }) => {
+      // 只拦截“优先/默认”直接指向 Arco 的选型句，避免把“优先 Fa，
+      // 不足时回退 Arco”或 Arco 组件自身的默认 prop 描述误判为冲突。
+      return /(?:默认(?:优先)?|优先|仍先|先(?:用|选|评估)|首选)\s*(?:使用|采用|选择|评估)?\s*(?:Arco|`A[A-Z])/u
+        .test(sentence)
+    }))
+
+  assert.deepEqual(
+    violations,
+    [],
+    `前端标准文档存在 Arco-first 业务默认值：${violations
+      .map(({ documentName, index, sentence }) => `${documentName}:${index}:${sentence}`)
+      .join(' | ')}`,
+  )
+})
+
+test('Arco 手册先执行 Fantastic-admin 选型，再进入回退资料', () => {
+  const content = readRequiredFile(arcoDesignVueHandbookPaths.index)
+  const readingOrder = readSecondLevelSection(content, '阅读顺序')
+  const items = [...readingOrder.matchAll(/^(\d+)\.\s+\[[^\]]+\]\(([^)]+)\)/gmu)]
+
+  assert.deepEqual(
+    items.map(([, number]) => Number(number)),
+    items.map((_, index) => index + 1),
+    'Arco 手册阅读顺序编号必须从 1 连续递增',
+  )
+  assert.equal(
+    items[0]?.[2],
+    '../Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择',
+    '进入 Arco 回退资料前必须先执行 Fantastic-admin 内置组件选型',
+  )
+})
+
+test('Arco 分册引用的 Fa 名称必须来自当前公开导出', () => {
+  const publicNames = new Set([
+    ...readFantasticAdminBasicPublicNames(),
+    ...readFantasticAdminProPublicExports().publicNames,
+  ])
+  const invalidReferences = Object.entries(arcoDesignVueHandbookPaths)
+    .flatMap(([documentName, filePath]) => {
+      const content = readRequiredFile(filePath)
+      return [...content.matchAll(/`((?:Fa|useFa)[A-Z][A-Za-z0-9]*)`/gu)]
+        .map(([, publicName]) => ({ documentName, publicName }))
+        .filter(({ publicName }) => !publicNames.has(publicName))
+    })
+
+  assert.deepEqual(
+    invalidReferences,
+    [],
+    `Arco 分册引用了不存在的 Fa 公开名：${invalidReferences
+      .map(({ documentName, publicName }) => `${documentName}:${publicName}`)
+      .join(' | ')}`,
+  )
+})
+
+test('专业版粒子背景说明 hex 输入限制与主题 token 边界', () => {
+  const proHandbook = readRequiredFile(fantasticAdminComponentHandbookPaths.pro)
+  const section = readSecondLevelSection(proHandbook, 'FaParticlesBg')
+
+  for (const requiredPhrase of [
+    '`#RGB`',
+    '`#RRGGBB`',
+    '不能直接绑定当前 CSS token',
+    '已确认业务数据或外部品牌契约',
+  ]) {
+    assert.ok(section.includes(requiredPhrase), `FaParticlesBg 主题边界缺少：${requiredPhrase}`)
+  }
+})
+
+test('AI 技能共同规则编号连续且不重复', () => {
+  const skills = readRequiredFile(fantasticAdminHandbookPaths.skills)
+  const section = readSecondLevelSection(skills, '共同安全与执行规则').split(/\n### /u)[0]
+  const numbers = [...section.matchAll(/^(\d+)\./gmu)].map(([, number]) => Number(number))
+
+  assert.deepEqual(
+    numbers,
+    numbers.map((_, index) => index + 1),
+    'AI 技能共同规则必须从 1 连续编号',
   )
 })
 
@@ -3211,7 +3335,7 @@ test('Fantastic-admin 专业组件实现术语与真实源码保持一致', () =
   }
 })
 
-test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () => {
+test('Fantastic-admin AI Skill 遵循应用定位与 Fa-first 业务 UI 契约', () => {
   const skills = readRequiredFile(fantasticAdminHandbookPaths.skills)
   const commonRules = readSecondLevelSection(skills, '共同安全与执行规则')
 
@@ -3233,8 +3357,17 @@ test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () 
   ]) {
     assert.ok(
       commonRules.includes(from) && commonRules.includes(to),
-      `共同规则缺少 Fantastic-admin 到 Arco 的可执行映射：${from} -> ${to}`,
+      `共同规则缺少 Fantastic-admin 能力不足时的 Arco 回退映射：${from} -> ${to}`,
     )
+  }
+  for (const requiredPhrase of [
+    'Fantastic-admin 内置组件',
+    '第一优先级',
+    '无法满足',
+    'Arco Design Vue',
+    '当前主题 token',
+  ]) {
+    assert.ok(commonRules.includes(requiredPhrase), `共同规则缺少 Fa-first 执行契约：${requiredPhrase}`)
   }
   assert.ok(commonRules.includes('FaPageMain'), '共同规则必须明确框架页面壳 FaPageMain 可以保留')
   assert.ok(commonRules.includes('app.use(ArcoVue)'), '共同规则必须记录正式应用的 Arco 全局注册事实')
@@ -3291,8 +3424,11 @@ test('Fantastic-admin AI Skill 遵循应用定位与 Arco 业务 UI 契约', () 
   for (const skillName of ['fa-crud-page-generator', 'fa-form-builder', 'fa-page-optimizer']) {
     const section = readSecondLevelSection(skills, skillName)
     assert.ok(
-      section.includes('复用') && section.includes('不直接采用') && section.includes('Fa* 业务 UI'),
-      `${skillName} 必须明确只复用工作流与结构，不直接采用默认 Fa* 业务 UI 输出`,
+      section.includes('优先')
+      && section.includes('Fa* 业务 UI')
+      && section.includes('无法满足')
+      && section.includes('Arco'),
+      `${skillName} 必须明确优先采用 Fa* 业务 UI，无法满足时才回退 Arco`,
     )
   }
 
@@ -4248,7 +4384,7 @@ test('Arco Design Vue Task 6 组件分册固定关键 2.58.0 契约与安全边�
     Checkbox: ['`ACheckboxGroup`'],
     ColorPicker: ['`AColorPicker`', '`show-text`'],
     DatePicker: ['`ADatePicker`', '`ARangePicker`', '`AWeekPicker`', '`AMonthPicker`', '`AQuarterPicker`', '`AYearPicker`', '`value-format`'],
-    Form: ['`AForm`', '`AFormItem`', '`model`', '`field`', '`rules`', '`validate()`', '`FaForm`', '标准业务表单默认 Arco'],
+    Form: ['`AForm`', '`AFormItem`', '`model`', '`field`', '`rules`', '`validate()`', '`FaForm`', 'Fantastic-admin 无法满足表单契约时才使用 Arco'],
     Input: ['`AInput`', '`AInputSearch`', '`AInputPassword`'],
     Mention: ['`AMention`'],
     Radio: ['`ARadioGroup`'],

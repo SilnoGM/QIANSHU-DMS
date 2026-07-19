@@ -9,6 +9,7 @@ import {
   applyFailureToProcess,
   isDirectEntry,
 } from './run-command.mjs'
+import { cleanRootArtifacts } from './root-artifact-cleaner.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
@@ -29,6 +30,18 @@ export function developmentCommandsFor(target) {
   }
 
   return [command]
+}
+
+export async function startDevelopment(target, {
+  cleanRoot = cleanRootArtifacts,
+  run = runDevelopment,
+} = {}) {
+  const commands = developmentCommandsFor(target)
+  // pnpm 从根 package 启动脚本时可能已生成违规 lockfile 或状态目录，因此
+  // 必须在创建任何长期运行子进程之前清理。目标参数要先完成无副作用校验，
+  // 清理失败则直接阻止 Server/Web 启动。
+  await cleanRoot()
+  return run({ commands })
 }
 
 function exitCodeFromSignal(signal) {
@@ -323,8 +336,7 @@ if (isDirectEntry(import.meta.url)) {
     applyFailureToProcess(new Error('Unsupported development target'))
   } else {
     Promise.resolve()
-      .then(() => developmentCommandsFor(target))
-      .then(commands => runDevelopment({ commands }))
+      .then(() => startDevelopment(target))
       .then((exitCode) => {
         process.exitCode = exitCode
       })

@@ -65,6 +65,43 @@ test('Web 协作入口明确正式应用、参考应用和默认命令', () => {
   }
 })
 
+test('Web 协作规则固定 UI 组件四级优先级和当前主题 token', () => {
+  const guidance = readRequiredFile(`${webRoot}/AGENTS.md`)
+  const priorities = [
+    'Fantastic-admin 内置组件',
+    'Arco Design Vue 组件',
+    '基于 Arco Design Vue 的应用级自定义组件',
+    '基于原生 Vue 的自定义组件',
+  ]
+  const indexes = priorities.map((priority) => {
+    const index = guidance.indexOf(priority)
+    assert.notEqual(index, -1, `Web 协作规则缺少 UI 优先级：${priority}`)
+    return index
+  })
+
+  assert.deepEqual(
+    indexes,
+    indexes.toSorted((left, right) => left - right),
+    'Web 协作规则必须按 Fantastic Admin、Arco、基于 Arco 自定义、原生 Vue 自定义的顺序书写',
+  )
+  assert.doesNotMatch(
+    guidance,
+    /(?:默认(?:优先)?|优先|仍先|先(?:用|选|评估)|首选)[^。！？\n]{0,48}(?:Arco|`A\w+)/u,
+    'Web 协作规则不得在其他位置重新声明 Arco-first 业务默认值',
+  )
+  for (const requiredPhrase of [
+    'Fantastic-admin Pro `6.3.0` 及其内置组件',
+    '当前主题 token',
+    '`bg-background`',
+    '`text-foreground`',
+    '`text-muted-foreground`',
+    '`border-border`',
+    '不得默认硬编码颜色',
+  ]) {
+    assert.ok(guidance.includes(requiredPhrase), `Web 协作规则缺少主题 token 契约：${requiredPhrase}`)
+  }
+})
+
 test('Web 协作文档区分上游基座与产品版本且不保留 bumpp 入口', () => {
   const manifest = JSON.parse(readRequiredFile(`${webRoot}/package.json`))
   const documents = [
