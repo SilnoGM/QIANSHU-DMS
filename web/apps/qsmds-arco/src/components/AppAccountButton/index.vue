@@ -40,32 +40,46 @@ const feedbackModal = useFaModal().create({
   }),
 })
 
-async function handleLogout() {
+type LogoutScope = 'current' | 'all'
+
+const logoutDialogVisible = ref(false)
+const logoutAction = ref<LogoutScope | null>(null)
+const logoutPending = computed(() => logoutAction.value !== null)
+
+function openLogoutDialog() {
+  logoutDialogVisible.value = true
+}
+
+function closeLogoutDialog() {
+  if (!logoutPending.value) {
+    logoutDialogVisible.value = false
+  }
+}
+
+async function submitLogout(scope: LogoutScope) {
+  // 退出请求会改变全局认证状态，请求期间禁止切换退出范围或重复提交。
+  if (logoutPending.value) {
+    return
+  }
+
+  logoutAction.value = scope
   try {
-    await appAccountStore.logout()
+    if (scope === 'all') {
+      await appAccountStore.logoutAll()
+    }
+    else {
+      await appAccountStore.logout()
+    }
+    logoutDialogVisible.value = false
   }
   catch {
     useFaToast().error('退出失败', {
       description: '当前登录状态尚未确认，请稍后重试。',
     })
   }
-}
-
-function confirmLogoutAll() {
-  useFaModal().confirm({
-    title: '退出全部登录',
-    content: '将撤销该账号在所有浏览器中的登录，是否继续？',
-    onConfirm: async () => {
-      try {
-        await appAccountStore.logoutAll()
-      }
-      catch {
-        useFaToast().error('退出失败', {
-          description: '当前登录状态尚未确认，请稍后重试。',
-        })
-      }
-    },
-  })
+  finally {
+    logoutAction.value = null
+  }
 }
 </script>
 
@@ -93,12 +107,7 @@ function confirmLogoutAll() {
         {
           label: t('app.components.accountButton.index.logout'),
           icon: 'i-mdi:logout',
-          handle: handleLogout,
-        },
-        {
-          label: '退出全部登录',
-          icon: 'i-mdi:logout-variant',
-          handle: confirmLogoutAll,
+          handle: openLogoutDialog,
         },
       ],
     ]" class="flex-center"
@@ -137,4 +146,60 @@ function confirmLogoutAll() {
       </div>
     </FaButton>
   </FaDropdown>
+
+  <FaModal
+    v-model="logoutDialogVisible"
+    title="退出登录"
+    description="请选择本次要退出的登录范围。"
+    align-center
+    :closable="!logoutPending"
+    :close-on-click-overlay="!logoutPending"
+    :close-on-press-escape="!logoutPending"
+    class="sm:max-w-[560px]"
+  >
+    <div class="space-y-3">
+      <section class="p-4 border rounded-lg space-y-1.5">
+        <div class="font-medium flex gap-2 items-center">
+          <FaIcon name="i-mdi:logout" class="text-primary size-5" />
+          退出当前登录
+        </div>
+        <p class="text-sm text-secondary-foreground/70 leading-6">
+          只退出当前浏览器的这次登录，其他浏览器或电脑仍保持登录。
+        </p>
+      </section>
+
+      <section class="p-4 border border-destructive/30 rounded-lg bg-destructive/5 space-y-1.5">
+        <div class="text-destructive font-medium flex gap-2 items-center">
+          <FaIcon name="i-mdi:logout-variant" class="size-5" />
+          退出所有登录
+        </div>
+        <p class="text-sm text-secondary-foreground/70 leading-6">
+          撤销该账号的所有登录，包括当前浏览器、其他浏览器和其他电脑。
+        </p>
+      </section>
+    </div>
+
+    <template #footer>
+      <div class="gap-2 grid w-full sm:flex sm:justify-end">
+        <FaButton variant="outline" :disabled="logoutPending" @click="closeLogoutDialog">
+          取消
+        </FaButton>
+        <FaButton
+          :loading="logoutAction === 'current'"
+          :disabled="logoutPending"
+          @click="submitLogout('current')"
+        >
+          退出当前登录
+        </FaButton>
+        <FaButton
+          variant="destructive"
+          :loading="logoutAction === 'all'"
+          :disabled="logoutPending"
+          @click="submitLogout('all')"
+        >
+          退出所有登录
+        </FaButton>
+      </div>
+    </template>
+  </FaModal>
 </template>

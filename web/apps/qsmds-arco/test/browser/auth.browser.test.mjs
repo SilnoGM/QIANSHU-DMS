@@ -676,9 +676,86 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     routeBeforeActivePasswordChange,
   )
 
-  await restartedPage.evaluate(storeMethodExpression('logout'))
+  // 账户菜单只保留一个退出入口，由同一弹窗明确选择当前 Session 或全部 Session。
+  const logoutRequestUrls = []
+  const currentLogoutUrl = `${configuration.baseUrl}/api/auth/logout`
+  const allLogoutUrl = `${configuration.baseUrl}/api/auth/logout-all`
+  restartedPage.on('Network.requestWillBeSent', ({ request }) => {
+    if (request?.method === 'POST' && [currentLogoutUrl, allLogoutUrl].includes(request.url)) {
+      logoutRequestUrls.push(request.url)
+    }
+  })
+  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await restartedPage.waitFor(`(() => [...document.querySelectorAll('[role="menuitem"]')].some((item) => (
+    item.textContent?.trim() === '退出登录'
+    && item.getClientRects().length > 0
+  )))()`)
+  const logoutMenu = await restartedPage.evaluate(`(() => {
+    const labels = [...document.querySelectorAll('[role="menuitem"]')]
+      .filter(item => item.getClientRects().length > 0)
+      .map(item => item.textContent?.trim())
+    return {
+      logoutEntryCount: labels.filter(label => label === '退出登录').length,
+      showsLegacyLogoutAll: labels.includes('退出全部登录'),
+    }
+  })()`)
+  assert.deepEqual(logoutMenu, {
+    logoutEntryCount: 1,
+    showsLegacyLogoutAll: false,
+  })
+  await clickVisibleText(restartedPage, '退出登录')
+  await restartedPage.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some((dialog) => (
+    dialog.getClientRects().length > 0
+    && dialog.textContent?.includes('退出当前登录')
+    && dialog.textContent?.includes('退出所有登录')
+  )))()`)
+  const logoutDialog = await restartedPage.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0)
+    const text = dialog?.textContent ?? ''
+    const buttons = [...(dialog?.querySelectorAll('button') ?? [])]
+      .filter(button => button.getClientRects().length > 0)
+      .map(button => button.textContent?.trim())
+    return {
+      explainsCurrent: text.includes('只退出当前浏览器的这次登录，其他浏览器或电脑仍保持登录'),
+      explainsAll: text.includes('撤销该账号的所有登录，包括当前浏览器、其他浏览器和其他电脑'),
+      hasCancel: buttons.includes('取消'),
+      hasCurrent: buttons.includes('退出当前登录'),
+      hasAll: buttons.includes('退出所有登录'),
+    }
+  })()`)
+  assert.deepEqual(logoutDialog, {
+    explainsCurrent: true,
+    explainsAll: true,
+    hasCancel: true,
+    hasCurrent: true,
+    hasAll: true,
+  })
+  await clickVisibleButton(restartedPage, '取消')
+  await restartedPage.waitFor(`(() => ![...document.querySelectorAll('[role="dialog"]')].some((dialog) => (
+    dialog.getClientRects().length > 0
+    && dialog.textContent?.includes('退出当前登录')
+  )))()`)
+  await waitForAuthState(restartedPage, 'authenticated')
+
+  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await clickVisibleText(restartedPage, '退出登录')
+  await clickVisibleButton(restartedPage, '退出当前登录')
   await waitForAuthState(restartedPage, 'anonymous')
   assert.equal(await cookieNamed(restartedPage, '__Host-qianshu_session'), undefined)
+  assert.deepEqual(logoutRequestUrls, [currentLogoutUrl])
+
+  await loginThroughUi(restartedPage, {
+    ...configuration,
+    password: activePassword,
+    username: limitedCredentials.username,
+  })
+  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await clickVisibleText(restartedPage, '退出登录')
+  await clickVisibleButton(restartedPage, '退出所有登录')
+  await waitForAuthState(restartedPage, 'anonymous')
+  assert.equal(await cookieNamed(restartedPage, '__Host-qianshu_session'), undefined)
+  assert.deepEqual(logoutRequestUrls, [currentLogoutUrl, allLogoutUrl])
 
   // 首屏 /me 网络故障会中止原导航；重试得到确定 401 后必须显式进入登录页。
   const unavailablePage = await browser.newPage()
