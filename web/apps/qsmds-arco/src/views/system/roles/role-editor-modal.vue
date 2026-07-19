@@ -102,6 +102,12 @@ function close(): void {
   }
 }
 
+function handleVisibleChange(visible: boolean): void {
+  if (!visible) {
+    close()
+  }
+}
+
 watch(() => [props.visible, props.role] as const, ([visible]) => {
   if (visible) {
     resetForm()
@@ -110,61 +116,77 @@ watch(() => [props.visible, props.role] as const, ([visible]) => {
 </script>
 
 <template>
-  <AModal
-    :visible="visible"
+  <FaModal
+    :model-value="visible"
     :title="isEditing ? '编辑角色' : '创建角色'"
-    width="min(520px, calc(100vw - 24px))"
-    :mask-closable="!loading"
-    :esc-to-close="!loading"
+    class="sm:max-w-[520px]"
     :closable="!loading"
-    unmount-on-close
-    @cancel="close"
+    :close-on-click-overlay="!loading"
+    :close-on-press-escape="!loading"
+    :footer="false"
+    @update:model-value="handleVisibleChange"
   >
-    <AAlert v-if="errorMessage || validationMessage" type="error" class="mb-4">
-      {{ validationMessage || errorMessage }}
-    </AAlert>
-    <AAlert v-if="isEditing" type="info" class="mb-4">
-      角色编码创建后不可修改。
-    </AAlert>
+    <FaAlert
+      v-if="errorMessage || validationMessage"
+      variant="destructive"
+      icon="i-lucide:circle-alert"
+      :description="validationMessage || errorMessage"
+      class="mb-4"
+    />
+    <FaAlert
+      v-if="isEditing"
+      icon="i-lucide:info"
+      description="角色编码创建后不可修改。"
+      class="mb-4"
+    />
 
-    <AForm :model="form" layout="vertical" @submit-success="submit">
-      <AFormItem field="code" label="角色编码" required>
-        <AInput
+    <FaForm :model="form" :disabled="loading" class="gap-4" @submit="submit">
+      <FaFormItem name="code" label="角色编码" required>
+        <FaInput
           v-model="form.code"
           :disabled="isEditing || loading"
-          :max-length="128"
+          class="w-full"
+          maxlength="128"
           placeholder="例如 warehouse_reader"
-          allow-clear
+          clearable
+          @clear="form.code = ''"
         />
-      </AFormItem>
-      <AFormItem field="name" label="角色名称" required>
-        <AInput
+      </FaFormItem>
+      <FaFormItem name="name" label="角色名称" required>
+        <FaInput
           v-model="form.name"
           :disabled="loading"
-          :max-length="128"
+          class="w-full"
+          maxlength="128"
           placeholder="请输入便于识别的名称"
-          allow-clear
+          clearable
+          @clear="form.name = ''"
         />
-      </AFormItem>
-      <AFormItem field="description" label="角色说明">
-        <ATextarea
+      </FaFormItem>
+      <FaFormItem
+        name="description"
+        label="角色说明"
+        :description="`${codePointLength(form.description)} / 2000`"
+        description-class="text-right"
+      >
+        <FaTextarea
           v-model="form.description"
           :disabled="loading"
-          :max-length="2000"
-          :auto-size="{ minRows: 3, maxRows: 7 }"
+          class="w-full"
+          input-class="min-h-24 max-h-56"
+          maxlength="2000"
           placeholder="可选；清空后保存将移除原说明"
-          show-word-limit
         />
-      </AFormItem>
-    </AForm>
+      </FaFormItem>
 
-    <template #footer>
-      <AButton :disabled="loading" @click="close">
-        取消
-      </AButton>
-      <AButton type="primary" :loading="loading" @click="submit">
-        {{ isEditing ? '保存修改' : '创建角色' }}
-      </AButton>
-    </template>
-  </AModal>
+      <div class="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <FaButton type="button" variant="outline" :disabled="loading" @click="close">
+          取消
+        </FaButton>
+        <FaButton type="submit" :loading="loading">
+          {{ isEditing ? '保存修改' : '创建角色' }}
+        </FaButton>
+      </div>
+    </FaForm>
+  </FaModal>
 </template>

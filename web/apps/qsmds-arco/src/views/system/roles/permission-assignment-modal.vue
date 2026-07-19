@@ -18,11 +18,27 @@ const emits = defineEmits<{
 }>()
 
 const selectedIds = ref<string[]>([])
-const groups = computed(() => groupPermissions(props.permissions))
+const groups = computed(() => groupPermissions(props.permissions).map(group => ({
+  ...group,
+  options: group.permissions.map(permission => ({
+    label: permission.name,
+    value: permission.id,
+    description: permission.description || permission.name,
+    disabled: permission.systemOnly,
+    code: permission.code,
+    systemOnly: permission.systemOnly,
+  })),
+})))
 
 function close(): void {
   if (!props.loading) {
     emits('update:visible', false)
+  }
+}
+
+function handleVisibleChange(visible: boolean): void {
+  if (!visible) {
+    close()
   }
 }
 
@@ -47,97 +63,81 @@ watch(() => [props.visible, props.role] as const, ([visible, role]) => {
 </script>
 
 <template>
-  <AModal
-    :visible="visible"
+  <FaModal
+    :model-value="visible"
     :title="role === null ? '分配权限' : `为「${role.name}」分配权限`"
-    width="min(760px, calc(100vw - 24px))"
-    :mask-closable="!loading"
-    :esc-to-close="!loading"
+    class="sm:max-w-[760px]"
     :closable="!loading"
-    unmount-on-close
-    @cancel="close"
+    :close-on-click-overlay="!loading"
+    :close-on-press-escape="!loading"
+    :footer="false"
+    @update:model-value="handleVisibleChange"
   >
-    <AAlert v-if="errorMessage" type="error" class="mb-4">
-      {{ errorMessage }}
-    </AAlert>
-    <AAlert type="warning" class="mb-4">
-      提交会替换该角色的完整权限集合；不勾选任何权限表示清空。系统专用权限不可分配给普通角色。
-    </AAlert>
+    <FaAlert
+      v-if="errorMessage"
+      variant="destructive"
+      icon="i-lucide:circle-alert"
+      :description="errorMessage"
+      class="mb-4"
+    />
+    <FaAlert
+      icon="i-lucide:triangle-alert"
+      description="提交会替换该角色的完整权限集合；不勾选任何权限表示清空。系统专用权限不可分配给普通角色。"
+      class="mb-4"
+    />
 
-    <AEmpty v-if="permissions.length === 0" description="暂无可分配权限" />
-    <div v-else class="permission-groups">
-      <section v-for="group in groups" :key="group.key" class="permission-group">
-        <div class="permission-group__header">
+    <FaEmpty
+      v-if="permissions.length === 0"
+      icon="i-lucide:shield-off"
+      title="暂无可分配权限"
+      description="请先确认权限目录已正常加载。"
+    />
+    <div v-else class="pr-1 gap-3 grid max-h-[min(60vh,640px)] overflow-y-auto">
+      <section v-for="group in groups" :key="group.key" class="p-3.5 border border-border rounded-lg">
+        <div class="text-foreground mb-3 flex gap-3 items-center justify-between">
           <strong>{{ group.label }}</strong>
-          <span>{{ group.permissions.length }} 项</span>
+          <span class="text-sm text-muted-foreground">{{ group.permissions.length }} 项</span>
         </div>
-        <ACheckboxGroup v-model="selectedIds" direction="vertical" class="permission-group__items">
-          <ACheckbox
-            v-for="permission in group.permissions"
-            :key="permission.id"
-            :value="permission.id"
-            :disabled="loading || permission.systemOnly"
-          >
-            <span class="permission-option">
-              <span>
-                <code>{{ permission.code }}</code>
-                <ATag v-if="permission.systemOnly" size="small" color="orangered" class="ml-2">
+        <FaCheckboxGroup
+          v-model="selectedIds"
+          :options="group.options"
+          :disabled="loading"
+          class="gap-2.5"
+          option-class="rounded-lg border border-border p-3 transition-colors hover:border-primary/40"
+        >
+          <template #option="{ option, checked, disabled }">
+            <div
+              class="gap-1 grid min-w-0 w-full"
+              :class="[
+                checked && 'text-foreground',
+                disabled && 'opacity-60',
+              ]"
+            >
+              <div class="flex flex-wrap gap-2 min-w-0 items-center">
+                <code class="min-w-0 [overflow-wrap:anywhere]">{{ option.code }}</code>
+                <FaTag v-if="option.systemOnly" variant="outline">
                   系统专用
-                </ATag>
+                </FaTag>
+                <span class="text-xs font-medium ml-auto" :class="checked ? 'text-primary' : 'text-muted-foreground'">
+                  {{ checked ? '已选中' : disabled ? '不可分配' : '可选择' }}
+                </span>
+              </div>
+              <span class="text-xs text-muted-foreground leading-5 whitespace-normal">
+                {{ option.description }}
               </span>
-              <small>{{ permission.description || permission.name }}</small>
-            </span>
-          </ACheckbox>
-        </ACheckboxGroup>
+            </div>
+          </template>
+        </FaCheckboxGroup>
       </section>
     </div>
 
-    <template #footer>
-      <AButton :disabled="loading" @click="close">
+    <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+      <FaButton variant="outline" :disabled="loading" @click="close">
         取消
-      </AButton>
-      <AButton type="primary" :loading="loading" :disabled="role?.isSystem" @click="submit">
+      </FaButton>
+      <FaButton :loading="loading" :disabled="role?.isSystem" @click="submit">
         保存权限
-      </AButton>
-    </template>
-  </AModal>
+      </FaButton>
+    </div>
+  </FaModal>
 </template>
-
-<style scoped>
-.permission-groups {
-  display: grid;
-  gap: 12px;
-  max-height: min(60vh, 640px);
-  padding-right: 4px;
-  overflow-y: auto;
-}
-
-.permission-group {
-  padding: 14px;
-  border: 1px solid var(--color-border-2);
-  border-radius: 8px;
-}
-
-.permission-group__header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  color: var(--color-text-2);
-}
-
-.permission-group__items {
-  gap: 10px;
-  width: 100%;
-}
-
-.permission-option {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.permission-option small {
-  color: var(--color-text-3);
-  white-space: normal;
-}
-</style>

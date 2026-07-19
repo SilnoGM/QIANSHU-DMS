@@ -215,25 +215,26 @@ async function clickVisibleTableRowButton(page, marker, text) {
   })()`)
 }
 
-/** 只在当前可见 Modal 中点击按钮，防止页面标题区同名按钮抢先命中。 */
+/** 只在当前可见对话框中点击按钮，避免绑定具体组件库的私有 DOM class。 */
 async function clickVisibleModalButton(page, text) {
   const serializedText = JSON.stringify(text)
-  await page.waitFor(`(() => [...document.querySelectorAll('.arco-modal')].some((modal) => (
-    modal.getClientRects().length > 0
-    && [...modal.querySelectorAll('button')].some(button => (
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some((dialog) => (
+    dialog.getClientRects().length > 0
+    && [...dialog.querySelectorAll('button')].some(button => (
       button.textContent?.trim() === ${serializedText}
       && button.getClientRects().length > 0
       && !button.disabled
     ))
   )))()`)
   await page.evaluate(`(() => {
-    const modal = [...document.querySelectorAll('.arco-modal')]
-      .find(candidate => candidate.getClientRects().length > 0)
-    const button = [...(modal?.querySelectorAll('button') ?? [])].find(candidate => (
-      candidate.textContent?.trim() === ${serializedText}
-      && candidate.getClientRects().length > 0
-      && !candidate.disabled
-    ))
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')]
+      .filter(candidate => candidate.getClientRects().length > 0)
+      .reverse()
+    const button = dialogs
+      .flatMap(dialog => [...dialog.querySelectorAll('button')])
+      .find(candidate => candidate.textContent?.trim() === ${serializedText}
+        && candidate.getClientRects().length > 0
+        && !candidate.disabled)
     if (!button) throw new Error('modal button unavailable')
     button.click()
     return true
@@ -241,23 +242,25 @@ async function clickVisibleModalButton(page, text) {
 }
 
 /**
- * 通过原生 value setter 驱动 Vue 的 input 事件；限定可见 Modal 后，测试不会
+ * 通过原生 value setter 驱动 Vue 的 input 事件；限定可见对话框后，测试不会
  * 误填页面筛选框或已进入离场动画的旧弹窗。
  */
 async function fillVisibleModalControl(page, selector, value) {
   const serializedSelector = JSON.stringify(selector)
   const serializedValue = JSON.stringify(value)
-  await page.waitFor(`(() => [...document.querySelectorAll('.arco-modal')].some((modal) => (
-    modal.getClientRects().length > 0
-    && [...modal.querySelectorAll(${serializedSelector})].some(control => (
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some((dialog) => (
+    dialog.getClientRects().length > 0
+    && [...dialog.querySelectorAll(${serializedSelector})].some(control => (
       control.getClientRects().length > 0
       && !control.disabled
     ))
   )))()`)
   await page.evaluate(`(() => {
-    const modal = [...document.querySelectorAll('.arco-modal')]
-      .find(candidate => candidate.getClientRects().length > 0)
-    const control = [...(modal?.querySelectorAll(${serializedSelector}) ?? [])]
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')]
+      .filter(candidate => candidate.getClientRects().length > 0)
+      .reverse()
+    const control = dialogs
+      .flatMap(dialog => [...dialog.querySelectorAll(${serializedSelector})])
       .find(candidate => candidate.getClientRects().length > 0 && !candidate.disabled)
     if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
       throw new Error('modal control unavailable')
@@ -290,9 +293,11 @@ async function fillVisibleInput(page, selector, value) {
   })()`)
 }
 
-async function waitForNoVisibleModal(page) {
-  await page.waitFor(`![...document.querySelectorAll('.arco-modal')]
-    .some(modal => modal.getClientRects().length > 0)`)
+async function waitForNoVisibleModal(page, dialogText) {
+  const serializedText = JSON.stringify(dialogText)
+  await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
+    .some(dialog => dialog.getClientRects().length > 0
+      && dialog.textContent?.includes(${serializedText}))`)
 }
 
 /**
@@ -317,27 +322,43 @@ async function waitForCardsInsideViewport(page, selector, expectedText) {
 
 async function selectVisibleModalOption(page, text) {
   const serializedText = JSON.stringify(text)
-  await page.evaluate(`(() => {
-    const modal = [...document.querySelectorAll('.arco-modal')]
-      .find(candidate => candidate.getClientRects().length > 0)
-    const select = [...(modal?.querySelectorAll('.arco-select-view') ?? [])]
-      .find(candidate => candidate.getClientRects().length > 0)
-    if (!select) throw new Error('modal select unavailable')
-    select.click()
-    return true
-  })()`)
-  await page.waitFor(`(() => [...document.querySelectorAll('.arco-select-option')].some(option => (
-    option.textContent?.trim() === ${serializedText}
-    && option.getClientRects().length > 0
-    && option.getAttribute('aria-disabled') !== 'true'
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some((dialog) => (
+    dialog.getClientRects().length > 0
+    && [...dialog.querySelectorAll('[role="checkbox"]')].some((option) => {
+      const label = option.id
+        ? dialog.querySelector('label[for="' + CSS.escape(option.id) + '"]')
+        : null
+      const optionText = [option.textContent, option.parentElement?.textContent, label?.textContent]
+        .filter(Boolean)
+        .join(' ')
+      return optionText.includes(${serializedText})
+        && option.getClientRects().length > 0
+        && option.getAttribute('aria-disabled') !== 'true'
+        && !option.disabled
+    })
   )))()`)
   await page.evaluate(`(() => {
-    const option = [...document.querySelectorAll('.arco-select-option')].find(candidate => (
-      candidate.textContent?.trim() === ${serializedText}
-      && candidate.getClientRects().length > 0
-      && candidate.getAttribute('aria-disabled') !== 'true'
-    ))
-    if (!option) throw new Error('select option unavailable')
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')]
+      .filter(candidate => candidate.getClientRects().length > 0)
+      .reverse()
+    const option = dialogs
+      .flatMap(dialog => [...dialog.querySelectorAll('[role="checkbox"]')].map(candidate => ({
+        candidate,
+        dialog,
+      })))
+      .find(({ candidate, dialog }) => {
+        const label = candidate.id
+          ? dialog.querySelector('label[for="' + CSS.escape(candidate.id) + '"]')
+          : null
+        const optionText = [candidate.textContent, candidate.parentElement?.textContent, label?.textContent]
+          .filter(Boolean)
+          .join(' ')
+        return optionText.includes(${serializedText})
+          && candidate.getClientRects().length > 0
+          && candidate.getAttribute('aria-disabled') !== 'true'
+          && !candidate.disabled
+      })?.candidate
+    if (!option) throw new Error('checkbox option unavailable')
     option.click()
     return true
   })()`)
@@ -428,7 +449,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'Browser UI role created through real Chrome',
   )
   await clickVisibleModalButton(page, '创建角色')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '创建角色')
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(roleCode)})`)
 
   let rolesResponse = await page.evaluate(apiExpression('/api/roles', 'GET'))
@@ -449,7 +470,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'Browser UI role edited through real Chrome',
   )
   await clickVisibleModalButton(page, '保存修改')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '编辑角色')
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(editedRoleName)})`)
 
   rolesResponse = await page.evaluate(apiExpression('/api/roles', 'GET'))
@@ -460,18 +481,20 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   // 首期目录全部是 systemOnly：普通角色仍可通过 UI 明确提交空集合，但不能
   // 越权勾选任何系统专用权限。保存动作必须落审计而非前端空操作。
   await clickVisibleTableRowButton(page, roleCode, '分配权限')
-  await page.waitFor(`(() => [...document.querySelectorAll('.arco-modal')].some(modal => (
-    modal.getClientRects().length > 0
-    && modal.textContent?.includes('分配权限')
-    && modal.textContent?.includes('users:read')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
+    dialog.getClientRects().length > 0
+    && dialog.textContent?.includes('分配权限')
+    && dialog.textContent?.includes('users:read')
   )))()`)
   const permissionModalState = await page.evaluate(`(() => {
-    const modal = [...document.querySelectorAll('.arco-modal')]
-      .find(candidate => candidate.getClientRects().length > 0)
-    const options = [...(modal?.querySelectorAll('.permission-option') ?? [])]
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('分配权限'))
+    const options = [...(dialog?.querySelectorAll('[role="checkbox"]') ?? [])]
     return {
-      enabledCheckboxes: [...(modal?.querySelectorAll('input[type="checkbox"]') ?? [])]
-        .filter(input => !input.disabled).length,
+      enabledCheckboxes: options.filter(option => (
+        option.getAttribute('aria-disabled') !== 'true' && !option.disabled
+      )).length,
       optionCount: options.length,
       showsUsersRead: options.some(option => option.textContent?.includes('users:read')),
     }
@@ -480,7 +503,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.ok(permissionModalState.optionCount > 0)
   assert.equal(permissionModalState.enabledCheckboxes, 0)
   await clickVisibleModalButton(page, '保存权限')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '分配权限')
 
   rolesResponse = await page.evaluate(apiExpression('/api/roles', 'GET'))
   managedRole = rolesResponse.body?.find(role => role.code === roleCode)
@@ -495,21 +518,24 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await page.waitFor(`document.body.innerText.includes('用户管理')`)
   await fillVisibleInput(page, 'input[placeholder="精确用户名"]', managedUsername)
   await clickVisibleButton(page, '查询')
-  await page.waitFor(`(() => [...document.querySelectorAll('.user-card')].some(card => (
+  await page.waitFor(`(() => [...document.querySelectorAll('[data-testid="user-card"]')].some(card => (
     card.textContent?.includes(${JSON.stringify(managedUsername)})
     && card.getClientRects().length > 0
   )))()`)
   await clickVisibleButton(page, '操作')
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(`用户操作 · ${managedUsername}`)})`)
   await clickVisibleButton(page, '设置或重置密码')
-  await page.waitFor(`(() => [...document.querySelectorAll('.arco-modal')].some(modal => (
-    modal.getClientRects().length > 0
-    && modal.textContent?.includes('设置或重置密码')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
+    dialog.getClientRects().length > 0
+    && dialog.textContent?.includes('设置或重置密码')
+    && dialog.querySelectorAll('input[autocomplete="new-password"]').length === 2
   )))()`)
   const narrowPasswordModal = await page.evaluate(`(() => {
-    const modal = [...document.querySelectorAll('.arco-modal')]
-      .find(candidate => candidate.getClientRects().length > 0)
-    const rect = modal?.getBoundingClientRect()
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('设置或重置密码')
+        && candidate.querySelectorAll('input[autocomplete="new-password"]').length === 2)
+    const rect = dialog?.getBoundingClientRect()
     return rect === undefined ? null : {
       left: rect.left,
       right: rect.right,
@@ -523,7 +549,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.ok(narrowPasswordModal.width <= narrowPasswordModal.viewportWidth - 20)
   await fillPasswordModal(page, { newPassword: managedResetPassword })
   await clickVisibleModalButton(page, '设置密码')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '设置或重置密码')
 
   let userResponse = await page.evaluate(apiExpression(
     `/api/users?username=${managedUsername}&page=1&pageSize=20`,
@@ -548,18 +574,18 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     editedDisplayName,
   )
   await clickVisibleModalButton(page, '保存修改')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '编辑用户')
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(editedDisplayName)})`)
 
   await clickVisibleTableRowButton(page, managedUsername, '更多')
   await clickVisibleText(page, '分配角色')
-  await page.waitFor(`(() => [...document.querySelectorAll('.arco-modal')].some(modal => (
-    modal.getClientRects().length > 0
-    && modal.textContent?.includes('分配角色')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
+    dialog.getClientRects().length > 0
+    && dialog.textContent?.includes('分配角色')
   )))()`)
   await selectVisibleModalOption(page, editedRoleName)
   await clickVisibleModalButton(page, '替换角色集合')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '分配角色')
 
   userResponse = await page.evaluate(apiExpression(
     `/api/users?username=${managedUsername}&page=1&pageSize=20`,
@@ -572,7 +598,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await clickVisibleTableRowButton(page, managedUsername, '更多')
   await clickVisibleText(page, '禁用用户')
   await clickVisibleModalButton(page, '确认禁用')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '确认禁用用户')
   userResponse = await page.evaluate(apiExpression(
     `/api/users?username=${managedUsername}&page=1&pageSize=20`,
     'GET',
@@ -583,7 +609,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await clickVisibleTableRowButton(page, managedUsername, '更多')
   await clickVisibleText(page, '启用用户')
   await clickVisibleModalButton(page, '确认启用')
-  await waitForNoVisibleModal(page)
+  await waitForNoVisibleModal(page, '确认启用用户')
   userResponse = await page.evaluate(apiExpression(
     `/api/users?username=${managedUsername}&page=1&pageSize=20`,
     'GET',
@@ -594,16 +620,16 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   // 角色、权限目录和审计都必须在窄屏切换为卡片；卡片边界不得跑出视口。
   await page.setViewport(390, 844, true)
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
-  await waitForCardsInsideViewport(page, '.role-card', editedRoleName)
+  await waitForCardsInsideViewport(page, '[data-testid="role-card"]', editedRoleName)
   assert.equal(await page.evaluate(`(() => (
-    [...document.querySelectorAll('.desktop-list')]
+    [...document.querySelectorAll('[data-testid="role-table"]')]
       .some(element => element.getClientRects().length > 0)
   ))()`), false)
 
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/permissions'))
-  await waitForCardsInsideViewport(page, '.permission-card', 'users:read')
+  await waitForCardsInsideViewport(page, '[data-testid="permission-card"]', 'users:read')
   const narrowPermissionCatalog = await page.evaluate(`(() => {
-    const cards = [...document.querySelectorAll('.permission-card')]
+    const cards = [...document.querySelectorAll('[data-testid="permission-card"]')]
       .filter(card => card.getClientRects().length > 0)
     const cardRects = cards.map((card) => {
       const rect = card.getBoundingClientRect()
@@ -620,7 +646,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       documentWidth: document.documentElement.scrollWidth,
       overflowCards: cardRects.filter(rect => rect.left < 0 || rect.right > innerWidth),
       viewportWidth: innerWidth,
-      visibleTables: [...document.querySelectorAll('.permission-section .desktop-list')]
+      visibleTables: [...document.querySelectorAll('[data-testid="permission-table"]')]
         .filter(element => element.getClientRects().length > 0).length,
     }
   })()`)
@@ -633,9 +659,9 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(narrowPermissionCatalog.visibleTables, 0)
 
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/audit'))
-  await waitForCardsInsideViewport(page, '.audit-card')
+  await waitForCardsInsideViewport(page, '[data-testid="audit-card"]')
   const narrowAudit = await page.evaluate(`(() => {
-    const cards = [...document.querySelectorAll('.audit-card')]
+    const cards = [...document.querySelectorAll('[data-testid="audit-card"]')]
       .filter(card => card.getClientRects().length > 0)
     const text = document.body.innerText
     return {
@@ -654,7 +680,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
         userRolesChanged: text.includes('用户角色已变更'),
         userUpdated: text.includes('用户已更新'),
       },
-      visibleTables: [...document.querySelectorAll('.desktop-list')]
+      visibleTables: [...document.querySelectorAll('[data-testid="audit-table"]')]
         .filter(element => element.getClientRects().length > 0).length,
     }
   })()`)
