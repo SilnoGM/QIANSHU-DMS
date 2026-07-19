@@ -3,8 +3,8 @@
 ## 验收基线
 
 - source visual truth：用户提供的 Chrome 登录页截图，以及目标素材 `web/apps/qsmds-arco/src/assets/images/login-banner.svg`。
-- implementation screenshot：桌面端 `/private/tmp/qianshu-login-svg-desktop-enlarged-final.jpg`；移动端 `/private/tmp/qianshu-login-svg-mobile-enlarged-final.jpg`。
-- viewport：桌面端 `1920 × 810`；移动端 `390 × 844`。
+- implementation screenshot：桌面端 `/private/tmp/qianshu-login-svg-desktop-larger-final.jpg`；移动端 `/private/tmp/qianshu-login-svg-mobile-larger-final.jpg`。
+- viewport：桌面端 `1920 × 900`；移动端 `390 × 844`。
 - state：浅色主题、登录页默认右侧布局、未输入账号信息。
 - primary interactions tested：用户名、密码和登录按钮均可见且可用；未提交登录，避免改变当前认证状态。
 - console errors checked：最终页面无 `error` 级别控制台日志。
@@ -16,9 +16,9 @@
 ## 局部对比证据
 
 - 桌面端品牌区位于 `x: 16px, y: 16px`，LOGO 为 `32 × 32px`，组合宽度约为 `219px`；版本 Badge 为约 `43 × 18px`，与 `32px` 高的品牌行垂直居中。
-- 桌面端 SVG 图片框由 `680 × 510px` 放大为 `780 × 585px`，保持素材 `4:3` 画布比例并在左侧区域居中；与右侧登录表单没有重叠。
+- 桌面端 SVG 图片框最终放大为 `920 × 690px`，保持素材 `4:3` 画布比例并在左侧区域居中；与右侧登录表单没有重叠。
 - 移动端最终品牌区从绝对定位调整为独立占位行，品牌区位于 `y: 20px`，插画从 `y: 64px` 开始，二者不再重叠。
-- 移动端 SVG 图片框由 `375 × 281.25px` 放大为 `420 × 315px`；使用 SVG 画布安全留白和水平居中偏移放大主体，`clientWidth` 与 `scrollWidth` 均为 `390px`，无横向溢出，登录按钮完整可见。
+- 移动端 SVG 图片框最终放大为 `480 × 360px`；核心仪表盘完整显示，左右装饰元素采用轻微出血效果。页面内容宽度与滚动宽度均为 `379px`，无横向溢出；整页高度为 `884px`，可正常纵向滚动且登录按钮完整可见。
 
 ## 必查视觉面
 
@@ -43,6 +43,8 @@
 7. 修复：桌面端改为 `width: min(60%, 680px)`、`height: auto` 和 `aspect-ratio: 4 / 3`；移动端保留 `375px` 上限，最终两种视口均完整显示。
 8. 按最新视觉反馈继续放大插画：桌面端调整为 `width: min(68%, 780px)`，实际图片框为 `780 × 585px`；移动端调整为 `width: min(108%, 420px)`，实际图片框为 `420 × 315px`。
 9. 放大后重新验证真实前后端联调页面：桌面端插画与表单不重叠，移动端 `390 × 844` 视口无横向滚动，控制台无 `error` 日志。
+10. 按进一步放大要求，桌面端上限调整为 `920px`，实际图片框为 `920 × 690px`；移动端上限调整为 `480px`，实际图片框为 `480 × 360px`。
+11. 最终真实页面复核：桌面端插画与表单仍无重叠；移动端核心图形完整、登录控件可见，无横向滚动，并保留正常纵向滚动能力。
 
 ## Implementation Checklist
 

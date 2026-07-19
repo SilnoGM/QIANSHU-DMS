@@ -156,7 +156,7 @@ function handleLogin() {
         left: 50%;
         display: inherit;
         /* 适度超出容器放大 SVG 画布，并通过自身偏移保持视觉内容居中；父级负责裁切画布留白而非主体。 */
-        width: min(108%, 420px);
+        width: min(127%, 480px);
         max-width: none;
         margin: 0;
         aspect-ratio: 4 / 3;
@@ -202,7 +202,7 @@ function handleLogin() {
           top: 50%;
           left: 50%;
           /* SVG 画布为 4:3，桌面端按宽度缩放并限制上限，避免宽屏下尺寸失控或比例失真。 */
-          width: min(68%, 780px);
+          width: min(78%, 920px);
           height: auto;
           aspect-ratio: 4 / 3;
           object-fit: contain;
