@@ -1,0 +1,30 @@
+/**
+ * 内置系统管理员角色的稳定技术标识。
+ *
+ * 该值必须与首个认证迁移中的 seed 保持一致，业务代码不得依赖角色显示名称。
+ */
+export const SYSTEM_ADMIN_ROLE_CODE = 'system_admin' as const
+
+/**
+ * 首期用户、角色与审计管理功能使用的完整权限目录。
+ *
+ * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
+ * 新权限必须同时更新迁移、设计文档与此处，不能只在运行时代码中隐式出现。
+ */
+export const MANAGEMENT_PERMISSION_CODES = [
+  'users:read',
+  'users:create',
+  'users:update',
+  'users:enable',
+  'users:disable',
+  'users:assign-roles',
+  'users:reset-password',
+  'roles:read',
+  'roles:create',
+  'roles:update',
+  'roles:assign-permissions',
+  'audit:read',
+] as const
+
+export type ManagementPermissionCode =
+  (typeof MANAGEMENT_PERMISSION_CODES)[number]

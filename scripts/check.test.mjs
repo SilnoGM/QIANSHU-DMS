@@ -17,9 +17,14 @@ const expectedCommands = [
     { cwd: repositoryRoot },
   ],
   ['pnpm', ['-C', 'web', 'check'], { cwd: repositoryRoot }],
+  [
+    process.execPath,
+    ['--run', 'ci:browser-auth-e2e'],
+    { cwd: repositoryRoot },
+  ],
 ]
 
-test('check 严格按照 Root、Server、Contract、Web 的顺序执行且不自动修复', async () => {
+test('check 严格按照 Root、Server、Contract、Web、Browser E2E 的顺序执行且不自动修复', async () => {
   const calls = []
 
   await check(async (command, args, options) => {
@@ -35,6 +40,7 @@ for (const [failureIndex, label] of [
   'Server',
   'Contract',
   'Web',
+  'Browser E2E',
 ].entries()) {
   test(`check 在 ${label} 失败后立即停止并保留同一错误`, async () => {
     const calls = []

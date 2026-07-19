@@ -7,10 +7,10 @@ export default setSettings({
       auth: true,
     },
     feedback: true,
-    lockScreen: true,
     errorLog: true,
     checkUpdates: true,
-    mobile: false,
+    // 用户管理已提供窄屏卡片与底部操作 Drawer，正式应用必须允许进入移动布局。
+    mobile: true,
     copyright: {
       enable: false,
       dates: '2023-2026',

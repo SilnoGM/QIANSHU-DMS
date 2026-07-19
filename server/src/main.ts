@@ -16,6 +16,10 @@ type ApplicationFactory = (
 ) => Promise<INestApplication>
 type RootModuleLoader = () => Promise<Type<unknown>>
 
+interface ExpressApplicationSettings {
+  set(setting: string, value: unknown): unknown
+}
+
 const createNestApplication: ApplicationFactory = (rootModule) =>
   NestFactory.create(rootModule, {
     abortOnError: false,
@@ -41,10 +45,22 @@ export async function bootstrap(
     // 只有默认 factory 会用 logger:false 修改 Nest 全局 Logger；必须在真实调用前才标记，避免污染注入调用方。
     nestLoggerWasDisabled = applicationFactory === createNestApplication
     application = await applicationFactory(rootModule)
-    configureApplication(application)
-
     const configService = application.get(ConfigService)
+    const nodeEnvironment = configService.getOrThrow<
+      'development' | 'test' | 'production'
+    >('app.nodeEnv')
+    configureApplication(application, { nodeEnvironment })
+
     const port = configService.getOrThrow<number>('app.port')
+    const trustProxyHops = configService.getOrThrow<number>(
+      'auth.trustProxyHops',
+    )
+    const expressApplication = application
+      .getHttpAdapter()
+      .getInstance() as ExpressApplicationSettings
+
+    // 只接受校验后的明确 hop 数；绝不使用会信任任意转发头的 trust proxy=true。
+    expressApplication.set('trust proxy', trustProxyHops)
     await application.listen(port)
     // 初始化与监听成功后才恢复 Nest 日志，避免失败路径先于脱敏边界输出底层异常。
     application.useLogger(runtimeLogger)

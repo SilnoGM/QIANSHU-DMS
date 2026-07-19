@@ -1,85 +1,195 @@
 <script setup lang="ts">
-import { toTypedSchema } from '@vee-validate/zod'
-import * as z from 'zod'
+defineOptions({ name: 'ChangePasswordModal' })
 
-defineOptions({
-  name: 'EditPasswordForm',
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  forced?: boolean
+}>(), {
+  forced: false,
 })
 
-const { t } = useI18n()
+const emits = defineEmits<{
+  'update:modelValue': [value: boolean]
+  'success': []
+}>()
+
 const appAccountStore = useAppAccountStore()
-
 const loading = ref(false)
-
-interface EditPasswordModel {
-  password: string
-  newPassword: string
-  checkPassword: string
-}
-
-const model = ref<EditPasswordModel>({
-  password: '',
+const errorMessage = ref('')
+const model = reactive({
+  currentPassword: '',
   newPassword: '',
-  checkPassword: '',
+  confirmPassword: '',
 })
 
-const validationSchema = toTypedSchema(
-  z.object({
-    password: z.string().min(1, t('app.components.accountForm.editPassword.rules.password')),
-    newPassword: z.string().min(1, t('app.components.accountForm.editPassword.rules.newPassword')).min(6, t('app.components.accountForm.editPassword.rules.passwordLength')).max(18, t('app.components.accountForm.editPassword.rules.passwordLength')),
-    checkPassword: z.string().min(1, t('app.components.accountForm.editPassword.rules.checkPassword')),
-  }).refine(data => data.newPassword === data.checkPassword, {
-    message: t('app.components.accountForm.editPassword.rules.checkPasswordError'),
-    path: ['checkPassword'],
-  }),
-)
-
-function onSubmit(values: EditPasswordModel) {
-  loading.value = true
-  appAccountStore.editPassword(values).then(async () => {
-    useFaToast().success(t('app.components.accountForm.editPassword.success'))
-    appAccountStore.logout()
-  }).finally(() => {
-    loading.value = false
-  })
+function clearPasswords(): void {
+  model.currentPassword = ''
+  model.newPassword = ''
+  model.confirmPassword = ''
 }
+
+function close(): void {
+  if (props.forced || loading.value) {
+    return
+  }
+  clearPasswords()
+  errorMessage.value = ''
+  emits('update:modelValue', false)
+}
+
+function validate(): string | null {
+  if (!props.forced) {
+    const currentPasswordLength = Array.from(model.currentPassword).length
+    if (currentPasswordLength < 8 || currentPasswordLength > 20) {
+      return '当前密码长度应为 8 至 20 个字符'
+    }
+  }
+  const length = Array.from(model.newPassword).length
+  if (length < 8 || length > 20) {
+    return '新密码长度应为 8 至 20 个字符'
+  }
+  if (model.newPassword !== model.confirmPassword) {
+    return '两次输入的新密码不一致'
+  }
+  return null
+}
+
+function safeErrorMessage(
+  error: unknown,
+  fallback = '修改密码失败，请稍后重试',
+): string {
+  if (
+    typeof error === 'object'
+    && error !== null
+    && 'body' in error
+    && typeof error.body === 'object'
+    && error.body !== null
+    && 'message' in error.body
+    && typeof error.body.message === 'string'
+  ) {
+    return error.body.message
+  }
+  return fallback
+}
+
+function isUnknownResult(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'kind' in error
+    && (
+      error.kind === 'network'
+      || (
+        'status' in error
+        && typeof error.status === 'number'
+        && error.status >= 500
+      )
+    )
+}
+
+async function submit(): Promise<void> {
+  if (loading.value) {
+    return
+  }
+  const validationError = validate()
+  if (validationError !== null) {
+    errorMessage.value = validationError
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    await appAccountStore.changePassword({
+      ...(props.forced ? {} : { currentPassword: model.currentPassword }),
+      newPassword: model.newPassword,
+    })
+    clearPasswords()
+    useFaToast().success('密码修改成功')
+    emits('success')
+    emits('update:modelValue', false)
+  }
+  catch (error) {
+    if (isUnknownResult(error)) {
+      clearPasswords()
+      errorMessage.value = '修改结果未知，请优先使用刚设置的新密码登录'
+    }
+    else {
+      errorMessage.value = safeErrorMessage(error)
+    }
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+async function exit(): Promise<void> {
+  if (loading.value) {
+    return
+  }
+  loading.value = true
+  try {
+    await appAccountStore.logout()
+  }
+  catch (error) {
+    errorMessage.value = isUnknownResult(error)
+      ? '退出结果未知，请重新检查登录状态后再试'
+      : safeErrorMessage(error, '退出失败，请稍后重试')
+  }
+  finally {
+    loading.value = false
+  }
+}
+
+watch(() => props.modelValue, (visible) => {
+  if (!visible) {
+    clearPasswords()
+    errorMessage.value = ''
+  }
+})
 </script>
 
 <template>
-  <div class="flex-col-stretch-center w-full">
-    <FaBlurReveal :delay="0.2" :duration="0.4" class="mb-6 space-y-2">
-      <h3 class="text-4xl font-bold">
-        {{ t('app.components.accountForm.editPassword.intro') }}
-      </h3>
-      <p class="text-sm text-muted-foreground lg:text-base">
-        {{ t('app.components.accountForm.editPassword.subIntro') }}
-      </p>
-    </FaBlurReveal>
-    <FaForm :model="model" :validation-schema="validationSchema" @submit="onSubmit">
-      <FaFormItem name="password">
-        <FaInput type="password" :placeholder="t('app.components.accountForm.editPassword.form.password')" class="w-full">
-          <template #start>
-            <FaIcon name="i-lucide:lock" />
-          </template>
-        </FaInput>
-      </FaFormItem>
-      <FaFormItem name="newPassword">
-        <FaInput type="password" :placeholder="t('app.components.accountForm.editPassword.form.newPassword')" class="w-full">
-          <template #start>
-            <FaIcon name="i-lucide:lock" />
-          </template>
-        </FaInput>
-      </FaFormItem>
-      <FaFormItem name="checkPassword">
-        <FaInput type="password" :placeholder="t('app.components.accountForm.editPassword.form.checkPassword')" class="w-full">
-          <template #start>
-            <FaIcon name="i-lucide:lock" />
-          </template>
-        </FaInput>
-      </FaFormItem>
-      <FaButton :loading="loading" size="lg" class="mt-8 w-full" type="submit">
-        {{ t('app.components.accountForm.editPassword.form.save') }}
-      </FaButton>
-    </FaForm>
-  </div>
+  <AModal
+    :visible="modelValue"
+    :title="forced ? '请先修改密码' : '修改密码'"
+    :closable="!forced && !loading"
+    :mask-closable="!forced && !loading"
+    :esc-to-close="!forced && !loading"
+    :footer="false"
+    :width="480"
+    unmount-on-close
+    @cancel="close"
+  >
+    <AAlert v-if="forced" type="warning" class="mb-4">
+      管理员要求你修改密码后才能进入系统。
+    </AAlert>
+    <AAlert v-if="errorMessage" type="error" class="mb-4">
+      {{ errorMessage }}
+    </AAlert>
+    <AForm :model="model" layout="vertical" @submit-success="submit">
+      <AFormItem v-if="!forced" field="currentPassword" label="当前密码" required>
+        <AInputPassword v-model="model.currentPassword" autocomplete="current-password" allow-clear />
+      </AFormItem>
+      <AFormItem field="newPassword" label="新密码" required>
+        <AInputPassword v-model="model.newPassword" autocomplete="new-password" allow-clear />
+        <template #extra>
+          8 至 20 个字符，支持空格与 Unicode。
+        </template>
+      </AFormItem>
+      <AFormItem field="confirmPassword" label="确认新密码" required>
+        <AInputPassword v-model="model.confirmPassword" autocomplete="new-password" allow-clear />
+      </AFormItem>
+      <div class="mt-6 flex gap-3 justify-end">
+        <AButton v-if="forced" :disabled="loading" @click="exit">
+          退出登录
+        </AButton>
+        <AButton v-else :disabled="loading" @click="close">
+          取消
+        </AButton>
+        <AButton type="primary" html-type="submit" :loading="loading" :disabled="loading">
+          修改密码
+        </AButton>
+      </div>
+    </AForm>
+  </AModal>
 </template>

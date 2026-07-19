@@ -9,11 +9,21 @@ import {
 import { mapExceptionToApiError } from './api-error.mapper'
 import { getRequestId } from './request-id.middleware'
 import {
+  AuthMetricLogger,
+  NOOP_AUTH_METRIC_LOGGER,
+  isAuthHttpErrorStatus,
+} from '../observability/auth-metric.logger'
+import {
   type HealthFailureRequest,
   isTerminusHealthFailureExemption,
 } from './terminus-health-failure.guard'
+import {
+  isExactHealthRequest,
+  PRIVATE_NO_STORE_CACHE_CONTROL,
+} from './private-no-store.interceptor'
 
 interface ErrorResponse {
+  setHeader(name: string, value: string): unknown
   status(status: number): ErrorResponse
   json(body: unknown): unknown
 }
@@ -24,6 +34,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     private readonly logger: Pick<Logger, 'error'> = new Logger(
       ApiExceptionFilter.name,
     ),
+    private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
@@ -31,6 +42,12 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const request = http.getRequest<HealthFailureRequest & object>()
     const response = http.getResponse<ErrorResponse>()
     const requestId = getRequestId(request)
+
+    // APP_GUARD 早于 APP_INTERCEPTOR 执行；认证或权限 Guard 抛错时，缓存拦截器
+    // 尚未进入。全局错误边界因此负责所有非 health 错误响应的同值兜底。
+    if (!isExactHealthRequest(request)) {
+      response.setHeader('Cache-Control', PRIVATE_NO_STORE_CACHE_CONTROL)
+    }
 
     if (exception instanceof HttpException) {
       const originalStatus = exception.getStatus()
@@ -50,6 +67,11 @@ export class ApiExceptionFilter implements ExceptionFilter {
     }
 
     const mapped = mapExceptionToApiError(exception, requestId)
+
+    if (isAuthHttpErrorStatus(mapped.status)) {
+      // Guard 与 Controller 的异常都会汇聚到这里；Label 只保留固定 status 枚举。
+      this.metrics.recordHttpError(mapped.status)
+    }
 
     if (mapped.unexpected) {
       // 未知异常可能携带请求、数据库或堆栈敏感信息；日志只关联服务端生成的 Request ID。

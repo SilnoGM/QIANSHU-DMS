@@ -1,12 +1,8 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
-import SwitchAdd from '@/components/AppAccountForm/switch-add.vue'
-import SwitchLogout from '@/components/AppAccountForm/switch-logout.vue'
 import { cn } from '@/utils'
 import eventBus from '@/utils/eventBus'
 import Feedback from './feedback.vue'
-import LockScreen from './lock-screen.vue'
-import Profile from './profile.vue'
 
 defineOptions({
   name: 'AppAccountButton',
@@ -33,45 +29,6 @@ const appAccountStore = useAppAccountStore()
 const { t } = useI18n()
 const { generateI18nTitle } = useAppMenu()
 
-const switchAddModal = useFaModal().create({
-  header: false,
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  openAutoFocus: true,
-  content: () => h(SwitchAdd, {
-    onSuccess: (account) => {
-      switchAddModal.close()
-      useFaModal().confirm({
-        title: t('app.components.accountButton.index.add_account_success'),
-        content: t('app.components.accountButton.index.add_account_success_confirm'),
-        onConfirm: () => {
-          appAccountStore.multipleAccountsSwitch(account)
-        },
-      })
-    },
-  }),
-})
-
-const switchLogoutModal = useFaModal().create({
-  header: false,
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  content: () => h(SwitchLogout),
-})
-
-const profileModal = useFaModal().create({
-  alignCenter: true,
-  header: false,
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  class: 'h-[500px] sm:max-w-xl overflow-hidden',
-  contentClass: 'min-h-full p-0 flex',
-  content: () => h(Profile),
-})
-
 const feedbackModal = useFaModal().create({
   title: () => t('app.components.accountButton.index.feedback'),
   footer: false,
@@ -83,22 +40,47 @@ const feedbackModal = useFaModal().create({
   }),
 })
 
-const lockScreenModal = useFaModal().create({
-  title: () => t('app.components.accountButton.index.lock_screen'),
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  content: () => h(LockScreen, {
-    onLock: () => {
-      lockScreenModal.update({
-        header: false,
-        closable: false,
-        overlayBlur: true,
-      })
-    },
-    onClose: () => lockScreenModal.close(),
-  }),
-})
+type LogoutScope = 'current' | 'all'
+
+const logoutDialogVisible = ref(false)
+const logoutAction = ref<LogoutScope | null>(null)
+const logoutPending = computed(() => logoutAction.value !== null)
+
+function openLogoutDialog() {
+  logoutDialogVisible.value = true
+}
+
+function closeLogoutDialog() {
+  if (!logoutPending.value) {
+    logoutDialogVisible.value = false
+  }
+}
+
+async function submitLogout(scope: LogoutScope) {
+  // 退出请求会改变全局认证状态，请求期间禁止切换退出范围或重复提交。
+  if (logoutPending.value) {
+    return
+  }
+
+  logoutAction.value = scope
+  try {
+    if (scope === 'all') {
+      await appAccountStore.logoutAll()
+    }
+    else {
+      await appAccountStore.logout()
+    }
+    logoutDialogVisible.value = false
+  }
+  catch {
+    useFaToast().error('退出失败', {
+      description: '当前登录状态尚未确认，请稍后重试。',
+    })
+  }
+  finally {
+    logoutAction.value = null
+  }
+}
 </script>
 
 <template>
@@ -108,7 +90,6 @@ const lockScreenModal = useFaModal().create({
         ...(appSettingsStore.settings.app.home.enable
           ? [{ label: generateI18nTitle(appSettingsStore.settings.app.home.title), icon: 'i-mdi:home', handle: () => router.push({ path: appSettingsStore.settings.app.home.fullPath }) }]
           : []),
-        { label: t('app.components.accountButton.index.profile'), icon: 'i-mdi:account', handle: () => profileModal.open() },
         ...(appPreferencesStore.isEnabled
           ? [{ label: t('app.components.accountButton.index.preferences'), icon: 'i-mdi:cog', handle: () => eventBus.emit('global-app-setting-toggle', 'preferences') }]
           : []),
@@ -122,20 +103,11 @@ const lockScreenModal = useFaModal().create({
           : []),
       ],
       [
-        ...(appSettingsStore.settings.app.lockScreen
-          ? [{ label: t('app.components.accountButton.index.lock_screen'), icon: 'i-mdi:lock', handle: () => lockScreenModal.open() }]
-          : []),
+        { label: '修改密码', icon: 'i-mdi:form-textbox-password', handle: () => eventBus.emit('global-change-password-visible') },
         {
           label: t('app.components.accountButton.index.logout'),
           icon: 'i-mdi:logout',
-          handle: () => {
-            if (appSettingsStore.settings.app.account.multipleAccounts && appAccountStore.multipleAccounts.length > 1) {
-              switchLogoutModal.open()
-            }
-            else {
-              appAccountStore.logout(appSettingsStore.settings.app.home.fullPath)
-            }
-          },
+          handle: openLogoutDialog,
         },
       ],
     ]" class="flex-center"
@@ -152,34 +124,9 @@ const lockScreenModal = useFaModal().create({
               {{ appAccountStore.account }}
             </div>
             <div class="text-xs text-secondary-foreground/50 font-normal">
-              [ xyz@xyz.com ]
+              {{ appAccountStore.displayName }}
             </div>
           </div>
-          <FaDropdown
-            v-if="appSettingsStore.settings.app.account.multipleAccounts"
-            align="end"
-            :items="[
-              appAccountStore.multipleAccounts.filter(item => item.account !== appAccountStore.account).map(item => ({
-                label: item.account,
-                icon: item.avatar,
-                handle: () => appAccountStore.multipleAccountsSwitch(item.account),
-              })),
-              [
-                { label: t('app.components.accountButton.index.add_account'), icon: 'i-mdi:account-plus', handle: () => switchAddModal.open() },
-                ...(appAccountStore.multipleAccounts.length > 1
-                  ? [{ label: t('app.components.accountButton.index.logout'), icon: 'i-mdi:logout', handle: () => switchLogoutModal.open() }]
-                  : []),
-              ],
-            ]"
-          >
-            <div>
-              <FaTooltip :text="t('app.components.accountButton.index.switch_account')" align="end">
-                <FaButton variant="ghost" size="icon-sm" class="ms-5">
-                  <FaIcon name="i-ant-design:swap-outlined" class="text-secondary-foreground/80 size-4" />
-                </FaButton>
-              </FaTooltip>
-            </div>
-          </FaDropdown>
         </div>
       </div>
     </template>
@@ -199,4 +146,60 @@ const lockScreenModal = useFaModal().create({
       </div>
     </FaButton>
   </FaDropdown>
+
+  <FaModal
+    v-model="logoutDialogVisible"
+    title="退出登录"
+    description="请选择本次要退出的登录范围。"
+    align-center
+    :closable="!logoutPending"
+    :close-on-click-overlay="!logoutPending"
+    :close-on-press-escape="!logoutPending"
+    class="sm:max-w-[560px]"
+  >
+    <div class="space-y-3">
+      <section class="p-4 border rounded-lg space-y-1.5">
+        <div class="font-medium flex gap-2 items-center">
+          <FaIcon name="i-mdi:logout" class="text-primary size-5" />
+          退出当前登录
+        </div>
+        <p class="text-sm text-secondary-foreground/70 leading-6">
+          只退出当前浏览器的这次登录，其他浏览器或电脑仍保持登录。
+        </p>
+      </section>
+
+      <section class="p-4 border border-destructive/30 rounded-lg bg-destructive/5 space-y-1.5">
+        <div class="text-destructive font-medium flex gap-2 items-center">
+          <FaIcon name="i-mdi:logout-variant" class="size-5" />
+          退出所有登录
+        </div>
+        <p class="text-sm text-secondary-foreground/70 leading-6">
+          撤销该账号的所有登录，包括当前浏览器、其他浏览器和其他电脑。
+        </p>
+      </section>
+    </div>
+
+    <template #footer>
+      <div class="gap-2 grid w-full sm:flex sm:justify-end">
+        <FaButton variant="outline" :disabled="logoutPending" @click="closeLogoutDialog">
+          取消
+        </FaButton>
+        <FaButton
+          :loading="logoutAction === 'current'"
+          :disabled="logoutPending"
+          @click="submitLogout('current')"
+        >
+          退出当前登录
+        </FaButton>
+        <FaButton
+          variant="destructive"
+          :loading="logoutAction === 'all'"
+          :disabled="logoutPending"
+          @click="submitLogout('all')"
+        >
+          退出所有登录
+        </FaButton>
+      </div>
+    </template>
+  </FaModal>
 </template>

@@ -256,9 +256,10 @@ export const useAppTabbarStore = defineStore(
     // 清空所有标签页，登出的时候需要清空
     function clean() {
       // 将非固定和非常驻标签页记录从 sessionStorage 中删除
-      if (appSettingsStore.settings.tabbar.memory) {
+      const userId = appAccountStore.userId
+      if (appSettingsStore.settings.tabbar.memory && userId !== '') {
         const unpinData = sessionStorage.has('tabbarTempData') ? JSON.parse(sessionStorage.getItem('tabbarTempData') as string) : {}
-        unpinData[appAccountStore.account] = []
+        unpinData[userId] = []
         sessionStorage.setItem('tabbarTempData', JSON.stringify(unpinData))
       }
       list.value = []
@@ -303,9 +304,13 @@ export const useAppTabbarStore = defineStore(
     }
     // 更新 storage 数据
     async function updateStorage() {
+      const userId = appAccountStore.userId
+      if (userId === '') {
+        return
+      }
       if (storageTo.value === 'local') {
         const pinData = localStorage.has('tabbarPinData') ? JSON.parse(localStorage.getItem('tabbarPinData') as string) : {}
-        pinData[appAccountStore.account] = cloneDeep(list.value.filter((item) => {
+        pinData[userId] = cloneDeep(list.value.filter((item) => {
           return item.isPin
         })).map((item) => {
           // 不存储自定义标题
@@ -326,7 +331,7 @@ export const useAppTabbarStore = defineStore(
       if (appSettingsStore.settings.tabbar.memory) {
         // 将非固定和非常驻标签页记录到 sessionStorage
         const unpinData = sessionStorage.has('tabbarTempData') ? JSON.parse(sessionStorage.getItem('tabbarTempData') as string) : {}
-        unpinData[appAccountStore.account] = cloneDeep(list.value.filter((item) => {
+        unpinData[userId] = cloneDeep(list.value.filter((item) => {
           return !item.isPin && !item.tabPermanent
         })).map((item) => {
           // 不存储自定义标题
@@ -338,16 +343,20 @@ export const useAppTabbarStore = defineStore(
     }
     // 根据 storage 数据复原当前帐号的标签页
     async function recoveryStorage() {
+      const userId = appAccountStore.userId
+      if (userId === '') {
+        return
+      }
       const recoveryData: TabbarRecordRaw[] = []
       if (storageTo.value === 'local' && localStorage.has('tabbarPinData')) {
-        recoveryData.push(...(JSON.parse(localStorage.getItem('tabbarPinData') as string)[appAccountStore.account] || []))
+        recoveryData.push(...(JSON.parse(localStorage.getItem('tabbarPinData') as string)[userId] || []))
       }
       else if (storageTo.value === 'server') {
         const res = await apiApp.tabbar()
         recoveryData.push(...JSON.parse(res.data.tabbar || '[]'))
       }
       if (appSettingsStore.settings.tabbar.memory && sessionStorage.has('tabbarTempData')) {
-        recoveryData.push(...(JSON.parse(sessionStorage.getItem('tabbarTempData') as string)[appAccountStore.account] || []))
+        recoveryData.push(...(JSON.parse(sessionStorage.getItem('tabbarTempData') as string)[userId] || []))
       }
       recoveryData.forEach((item) => {
         if (list.value.every(tab => tab.tabId !== item.tabId)) {

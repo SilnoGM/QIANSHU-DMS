@@ -1,6 +1,3 @@
-import type { ApiError } from '../api-error'
-
-import { faker } from '@faker-js/faker'
 import { defineFakeRoute } from 'vite-plugin-fake-server/client'
 
 export default defineFakeRoute([
@@ -87,75 +84,9 @@ export default defineFakeRoute([
     },
   },
   {
-    url: '/fake/app/account/login',
-    method: 'post',
-    response: ({ body }) => {
-      return {
-        account: body.account,
-        token: `${body.account}:${faker.internet.jwt()}`,
-        avatar: `https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${body.account}`,
-      }
-    },
-  },
-  {
-    url: '/fake/app/account/login/expired',
-    method: 'post',
-    statusCode: 401,
-    response: () => {
-      return {
-        code: 'UNAUTHORIZED',
-        message: '未登录或登录已失效',
-        requestId: `req_${faker.string.uuid()}`,
-      } satisfies ApiError
-    },
-  },
-  {
-    url: '/fake/app/account/permission',
-    method: 'get',
-    response: ({ headers }) => {
-      let permissions: string[] = []
-      if (headers.token?.indexOf('admin') === 0) {
-        permissions = [
-          'pages.general:browse',
-          'pages.form:browse',
-          'pages.list:browse',
-          'pages.shop:browse',
-        ]
-      }
-      else if (headers.token?.indexOf('test') === 0) {
-        permissions = [
-          'pages.general:browse',
-        ]
-      }
-      return {
-        permissions,
-      }
-    },
-  },
-  {
-    url: '/fake/app/account/password/edit',
-    method: 'post',
-    response: () => {
-      return {
-        isSuccess: true,
-      }
-    },
-  },
-  {
     url: '/fake/app/preferences',
     method: 'get',
-    response: ({ headers }) => {
-      let preferences = ''
-      if (headers.token?.indexOf('admin') === 0) {
-        preferences = '{"theme":{"colorScheme":"light"}}'
-      }
-      else if (headers.token?.indexOf('test') === 0) {
-        preferences = '{"theme":{"colorScheme":"dark","raduis":1},"menu":{"mode":"head","style":""},"layout":{"widthMode":"center"},"topbar":{"tabbar":false}}'
-      }
-      return {
-        preferences,
-      }
-    },
+    response: () => ({ preferences: '' }),
   },
   {
     url: '/fake/app/preferences/edit',
@@ -169,15 +100,7 @@ export default defineFakeRoute([
   {
     url: '/fake/app/tabbar',
     method: 'get',
-    response: ({ headers }) => {
-      let tabbar = ''
-      if (headers.token?.indexOf('admin') === 0) {
-        tabbar = ''
-      }
-      return {
-        tabbar,
-      }
-    },
+    response: () => ({ tabbar: '' }),
   },
   {
     url: '/fake/app/tabbar/edit',
@@ -191,15 +114,7 @@ export default defineFakeRoute([
   {
     url: '/fake/app/toolbar/favorites',
     method: 'get',
-    response: ({ headers }) => {
-      let favorites = ''
-      if (headers.token?.indexOf('admin') === 0) {
-        favorites = '[{"fullPath":"/multilevel_menu_example/page","title":"导航1","i18n":"route.multimenu.page","icon":"heroicons-solid:menu-alt-3"}]'
-      }
-      return {
-        favorites,
-      }
-    },
+    response: () => ({ favorites: '' }),
   },
   {
     url: '/fake/app/toolbar/favorites/edit',

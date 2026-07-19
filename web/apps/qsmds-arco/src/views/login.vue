@@ -2,8 +2,6 @@
 import { diffTwoObj } from '@fantastic-admin/settings'
 import { BASE_COLORS, THEMES } from '@fantastic-admin/themes'
 import Login from '@/components/AppAccountForm/login.vue'
-import Register from '@/components/AppAccountForm/register.vue'
-import ResetPassword from '@/components/AppAccountForm/reset-password.vue'
 import ColorScheme from '@/layouts/components/Topbar/Toolbar/ColorScheme/index.vue'
 import Language from '@/layouts/components/Topbar/Toolbar/I18n/index.vue'
 import settingsDefault from '@/settings'
@@ -37,10 +35,6 @@ const themeList = computed(() => {
 
 // 布局对齐方式
 const layoutAlign = ref<'left' | 'center' | 'right'>('center')
-// 表单相关
-const account = ref<string>()
-const formType = ref<'login' | 'register' | 'resetPassword'>('login')
-
 function checkVisible<T extends object>(preference: boolean | T | undefined, property?: keyof T): boolean {
   if (typeof preference === 'boolean') {
     return preference
@@ -110,24 +104,7 @@ function handleLogin() {
       <AppCopyright v-if="appSettingsStore.mode === 'pc' && ['left', 'right'].includes(layoutAlign)" class="w-full bottom-0 absolute" />
     </div>
     <div class="login-form flex-col-center">
-      <FaSmoothSwipe :active-index="['login', 'register', 'resetPassword'].indexOf(formType)">
-        <Login
-          :account
-          @on-login="handleLogin"
-          @on-register="(val) => { formType = 'register'; account = val }"
-          @on-reset-password="(val) => { formType = 'resetPassword'; account = val }"
-        />
-        <Register
-          :account
-          @on-register="(val) => { formType = 'login'; account = val }"
-          @on-login="formType = 'login'"
-        />
-        <ResetPassword
-          :account
-          @on-reset-password="(val) => { formType = 'login'; account = val }"
-          @on-login="formType = 'login'"
-        />
-      </FaSmoothSwipe>
+      <Login @on-login="handleLogin" />
     </div>
   </div>
   <AppCopyright v-if="appSettingsStore.mode === 'mobile' || layoutAlign === 'center'" class="copyright" />

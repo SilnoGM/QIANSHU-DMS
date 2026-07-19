@@ -66,7 +66,7 @@
 | 高级 / Composition API | [官方文档](https://fantastic-admin.hurui.me/guide/composition-api.md) | [Composition API](./工程基础.md#composition-api) | 正式应用已广泛使用 `<script setup lang="ts">` 与自动导入 |
 | 高级 / JSX | [官方文档](https://fantastic-admin.hurui.me/guide/jsx.md) | [JSX](./工程基础.md#jsx) | 构建链已启用 JSX，正式应用当前未使用 `.jsx` 或 `.tsx` 业务文件 |
 | 入门 / 与服务端交互 | [官方文档](https://fantastic-admin.hurui.me/guide/axios.md) | [与服务端交互](./服务端交互与登录.md#与服务端交互) | 已映射 AxiosResponse、ApiClientError、受限重试、取消、Blob 和 bare fake DTO 契约 |
-| 入门 / 登录相关 | [官方文档](https://fantastic-admin.hurui.me/guide/login.md) | [登录相关](./服务端交互与登录.md#登录相关) | 已记录当前 fake 登录、account Store、redirect 与 guard 链路，未声明真实 Server 登录端点 |
+| 入门 / 登录相关 | [官方文档](https://fantastic-admin.hurui.me/guide/login.md) | [登录相关](./服务端交互与登录.md#登录相关) | 已记录真实 Cookie Session、六态 Account Store、启动恢复、改密、退出、redirect 与 guard 链路 |
 | 入门 / 路由 (导航菜单) | [官方文档](https://fantastic-admin.hurui.me/guide/router.md) | [路由（导航菜单）](./路由导航与状态管理.md#路由导航菜单) | 已核对三类路由、前后端生成分支、菜单 meta、扩展导航与未配置能力 |
 | 入门 / 全局状态管理 | [官方文档](https://fantastic-admin.hurui.me/guide/store.md) | [全局状态管理](./路由导航与状态管理.md#全局状态管理) | 已核对 Pinia 入口、11 个框架 Store 和业务 Store 放置边界 |
 | 应用配置 / 介绍 | [官方文档](https://fantastic-admin.hurui.me/guide/settings.md) | [应用配置介绍](./应用配置.md#应用配置介绍) | 已固定 setSettings、SettingsOptions、共享默认与正式应用覆盖关系 |
@@ -77,7 +77,7 @@
 | 应用配置 / 标签栏 | [官方文档](https://fantastic-admin.hurui.me/guide/settings/tabbar.md) | [标签栏](./应用配置.md#标签栏) | 已记录当前关闭状态、完整配置和 Storage 联动 |
 | 应用配置 / 工具栏 | [官方文档](https://fantastic-admin.hurui.me/guide/settings/toolbar.md) | [工具栏](./应用配置.md#工具栏) | 已记录各工具默认、布局数组和 fake API 边界 |
 | 应用配置 / 页面 | [官方文档](https://fantastic-admin.hurui.me/guide/settings/page.md) | [页面](./应用配置.md#页面) | 已记录动画、进度、iframe 保活、快捷键与无障碍边界 |
-| 高级 / 权限验证 | [官方文档](https://fantastic-admin.hurui.me/guide/auth.md) | [权限验证](./权限保活与国际化.md#权限验证) | 已拆分身份、菜单、路由、按钮与 Server 鉴权，当前 app 权限开关关闭 |
+| 高级 / 权限验证 | [官方文档](https://fantastic-admin.hurui.me/guide/auth.md) | [权限验证](./权限保活与国际化.md#权限验证) | 已拆分身份、菜单、路由、按钮与 Server 鉴权，权限只读取 `/api/auth/me` 快照且无本地开关绕过 |
 | 高级 / 页面保活 | [官方文档](https://fantastic-admin.hurui.me/guide/keep-alive.md) | [页面保活](./权限保活与国际化.md#页面保活) | 已核对 keepAlive/noKeepAlive、组件 name、标签关闭和 iframe 独立链路 |
 | 高级 / 国际化 | [官方文档](https://fantastic-admin.hurui.me/guide/i18n.md) | [国际化](./权限保活与国际化.md#国际化) | 已核对 Vue I18n、路由语言包、Arco locale、Header 与 RTL 链路 |
 | 高级 / 内置 API | [官方文档](https://fantastic-admin.hurui.me/guide/api.md) | [内置 API](./高级能力构建与升级.md#内置-api) | 已列出本地 app/shared composables、Router 扩展、eventBus 和 dayjs |

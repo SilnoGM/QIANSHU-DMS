@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import EditPassword from '@/components/AppAccountForm/edit-password.vue'
-
 const active = ref(0)
 const tabs = ref([
   {
@@ -30,7 +28,9 @@ const tabs = ref([
       <div v-if="active === 0">
         请开发者自行扩展
       </div>
-      <EditPassword v-if="active === 1" />
+      <div v-if="active === 1" class="text-sm text-muted-foreground">
+        请从账户菜单打开“修改密码”弹窗。
+      </div>
     </div>
   </div>
 </template>

@@ -8,7 +8,9 @@ import {
 import { API_PREFIX } from './app.constants'
 import { ApiExceptionFilter } from './infrastructure/http/api-exception.filter'
 import { requestIdMiddleware } from './infrastructure/http/request-id.middleware'
+import { createSecurityHeadersMiddleware } from './infrastructure/http/security-headers.middleware'
 import { createValidationException } from './infrastructure/http/validation-exception.factory'
+import { AuthMetricLogger } from './infrastructure/observability/auth-metric.logger'
 
 interface ApplicationSetupTarget {
   use(...handlers: unknown[]): unknown
@@ -16,6 +18,10 @@ interface ApplicationSetupTarget {
   useGlobalPipes(...pipes: PipeTransform[]): unknown
   useGlobalFilters(...filters: ExceptionFilter[]): unknown
   enableShutdownHooks(): unknown
+}
+
+interface ApplicationSetupOptions {
+  nodeEnvironment?: 'development' | 'test' | 'production'
 }
 
 /**
@@ -27,8 +33,14 @@ interface ApplicationSetupTarget {
  */
 export function configureApplication(
   application: ApplicationSetupTarget,
+  options: ApplicationSetupOptions = {},
 ): void {
   application.use(requestIdMiddleware)
+  application.use(
+    createSecurityHeadersMiddleware(
+      options.nodeEnvironment ?? 'development',
+    ),
+  )
   application.setGlobalPrefix(API_PREFIX)
   application.useGlobalPipes(
     new ValidationPipe({
@@ -39,6 +51,8 @@ export function configureApplication(
       exceptionFactory: createValidationException,
     }),
   )
-  application.useGlobalFilters(new ApiExceptionFilter())
+  application.useGlobalFilters(
+    new ApiExceptionFilter(undefined, new AuthMetricLogger()),
+  )
   application.enableShutdownHooks()
 }

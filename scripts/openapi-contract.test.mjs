@@ -651,6 +651,38 @@ mutationTest(
   /kind/,
 )
 
+test('application metadata 接受认证接口所需的可选契约字段', () => {
+  const document = cloneDocument()
+  const metadata = operation(document, '/api/widgets', 'post')[
+    'x-qianshu-contract'
+  ]
+  Object.assign(metadata, {
+    session: 'none',
+    csrf: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 409,
+        codes: ['AUTH_STATE_CHANGED'],
+      },
+    ],
+  })
+
+  assert.doesNotThrow(() => assertOpenApiContract(document))
+})
+
+test('JSON success 接受顶层数组且 items 直接引用 component DTO', () => {
+  const document = cloneDocument()
+  createSuccess(document).content['application/json'].schema = {
+    type: 'array',
+    items: {
+      $ref: '#/components/schemas/WidgetCreateResponse',
+    },
+  }
+
+  assert.doesNotThrow(() => assertOpenApiContract(document))
+})
+
 for (const field of [
   'authentication',
   'authorization',

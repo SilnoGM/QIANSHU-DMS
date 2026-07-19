@@ -15,7 +15,10 @@ import {
   isCancel,
 } from 'axios'
 
-import { createApiClient } from '../../src/api/client'
+import {
+  createApiClient,
+  StaleAuthEpochError,
+} from '../../src/api/client'
 
 const validApiError = {
   code: 'VALIDATION_FAILED',
@@ -25,56 +28,76 @@ const validApiError = {
 
 interface HookRecorder {
   hooks: ApiClientHooks
+  authRevalidationCodes: string[]
+  authEpochReads: number
+  invalidationBroadcasts: boolean[]
+  invalidatedEpochs: number[]
   languageReads: number
-  logoutCount: number
   notifications: string[]
-  tokenReads: number
 }
 
 function createHookRecorder(options: {
+  getAuthEpoch?: () => number
+  getAuthSignal?: () => AbortSignal
   getLanguage?: () => string
-  getToken?: () => string | undefined
+  handleSessionInvalid?: (
+    requestEpoch: number,
+    broadcastSessionInvalid: boolean,
+  ) => void
+  handleAuthRevalidationRequired?: (code: string) => void
   notifyError?: (message: string) => void
   now?: () => number
-  requestLogout?: () => void
   sleep?: ApiClientHooks['sleep']
 } = {}): HookRecorder {
+  const invalidatedEpochs: number[] = []
+  const invalidationBroadcasts: boolean[] = []
   const notifications: string[] = []
+  const authRevalidationCodes: string[] = []
+  let authEpochReads = 0
   let languageReads = 0
-  let logoutCount = 0
-  let tokenReads = 0
+  const defaultAuthController = new AbortController()
 
   return {
     hooks: {
+      getAuthEpoch: () => {
+        authEpochReads += 1
+        return options.getAuthEpoch?.() ?? 0
+      },
+      getAuthSignal: () =>
+        options.getAuthSignal?.() ?? defaultAuthController.signal,
       getLanguage: () => {
         languageReads += 1
         return options.getLanguage?.() ?? 'zh-CN'
       },
-      getToken: () => {
-        tokenReads += 1
-        return options.getToken?.()
+      handleSessionInvalid: (requestEpoch, broadcastSessionInvalid) => {
+        invalidatedEpochs.push(requestEpoch)
+        invalidationBroadcasts.push(broadcastSessionInvalid)
+        return options.handleSessionInvalid?.(
+          requestEpoch,
+          broadcastSessionInvalid,
+        )
+      },
+      handleAuthRevalidationRequired: (code) => {
+        authRevalidationCodes.push(code)
+        return options.handleAuthRevalidationRequired?.(code)
       },
       notifyError: (message) => {
         notifications.push(message)
         return options.notifyError?.(message)
       },
       now: options.now,
-      requestLogout: () => {
-        logoutCount += 1
-        return options.requestLogout?.()
-      },
       sleep: options.sleep,
     },
+    authRevalidationCodes,
+    get authEpochReads() {
+      return authEpochReads
+    },
+    invalidationBroadcasts,
+    invalidatedEpochs,
     get languageReads() {
       return languageReads
     },
-    get logoutCount() {
-      return logoutCount
-    },
     notifications,
-    get tokenReads() {
-      return tokenReads
-    },
   }
 }
 
@@ -165,9 +188,50 @@ test('成功请求保留 adapter 返回的完整 AxiosResponse', async () => {
   assert.equal(response.request, request)
 })
 
-test('每次请求动态读取语言和 Token，并让 fake 请求使用独立 baseURL', async () => {
+test('每个请求绑定当前身份域 AbortSignal 以便身份切换时取消在途业务请求', async () => {
+  const authController = new AbortController()
+  let capturedSignal: AbortSignal | undefined
+  const recorder = createHookRecorder({
+    getAuthSignal: () => authController.signal,
+  })
+  const client = createApiClient({
+    adapter: async (config) => {
+      capturedSignal = config.signal
+      return createResponse(config, { ok: true })
+    },
+    baseURL: '/api/',
+    hooks: recorder.hooks,
+  })
+
+  await client.get('/protected')
+
+  assert.equal(capturedSignal, authController.signal)
+})
+
+test('BroadcastChannel 的 /me 可禁止 401 身份清理再次广播', async () => {
+  const recorder = createHookRecorder()
+  const adapter: AxiosAdapter = async (config) => {
+    throw createHttpError(config, 401, {
+      ...validApiError,
+      code: 'AUTHENTICATION_REQUIRED',
+    })
+  }
+  const client = createApiClient({
+    adapter,
+    baseURL: '/api/',
+    hooks: recorder.hooks,
+  })
+
+  await assert.rejects(client.get('/auth/me', {
+    broadcastSessionInvalid: false,
+  }))
+
+  assert.deepEqual(recorder.invalidatedEpochs, [0])
+  assert.deepEqual(recorder.invalidationBroadcasts, [false])
+})
+
+test('每次请求动态读取语言、移除 Token，并为 Cookie 与 unsafe method 设置固定语义', async () => {
   let language = 'zh-CN'
-  let token: string | undefined = 'token-one'
   const configs: InternalAxiosRequestConfig[] = []
   const adapter: AxiosAdapter = async (config) => {
     configs.push(config)
@@ -175,7 +239,6 @@ test('每次请求动态读取语言和 Token，并让 fake 请求使用独立 b
   }
   const recorder = createHookRecorder({
     getLanguage: () => language,
-    getToken: () => token,
   })
   const client = createApiClient({
     adapter,
@@ -184,28 +247,39 @@ test('每次请求动态读取语言和 Token，并让 fake 请求使用独立 b
     hooks: recorder.hooks,
   })
 
-  await client.get('/menus', { fake: true })
+  await client.get('/menus', {
+    fake: true,
+    headers: { Token: 'legacy-token' },
+  })
   language = 'en-US'
-  token = undefined
-  await client.get('/health')
+  await client.post('/users', { displayName: '操作员' }, {
+    headers: { Token: 'caller-token' },
+  })
 
   assert.equal(configs.length, 2)
   assert.equal(configs[0]?.baseURL, '/fake/')
   assert.equal(configs[0]?.headers.get('Accept-Language'), 'zh-CN')
-  assert.equal(configs[0]?.headers.get('Token'), 'token-one')
+  assert.equal(configs[0]?.headers.has('Token'), false)
+  assert.equal(configs[0]?.withCredentials, true)
   assert.equal(configs[1]?.baseURL, '/api/')
   assert.equal(configs[1]?.headers.get('Accept-Language'), 'en-US')
   assert.equal(configs[1]?.headers.has('Token'), false)
+  assert.equal(configs[1]?.headers.get('Content-Type'), 'application/json')
+  assert.equal(configs[1]?.headers.get('X-Qianshu-CSRF'), '1')
+  assert.equal(configs[1]?.withCredentials, true)
   assert.equal(recorder.languageReads, 2)
-  assert.equal(recorder.tokenReads, 2)
+  assert.equal(recorder.authEpochReads, 4)
 })
 
-test('401 只请求登出，403 只提示权限不足', async () => {
+test('确定的 AUTHENTICATION_REQUIRED 才清理身份，403 只提示权限不足', async () => {
   for (const status of [401, 403]) {
     const recorder = createHookRecorder()
     const adapter: AxiosAdapter = async (config) => {
       throw createHttpError(config, status, {
         ...validApiError,
+        code: status === 401
+          ? 'AUTHENTICATION_REQUIRED'
+          : 'FORBIDDEN',
         message: 'raw server authorization message',
       })
     }
@@ -226,25 +300,101 @@ test('401 只请求登出，403 只提示权限不足', async () => {
     )
 
     if (status === 401) {
-      assert.equal(recorder.logoutCount, 1)
+      assert.deepEqual(recorder.invalidatedEpochs, [0])
       assert.deepEqual(recorder.notifications, [])
     }
     else {
-      assert.equal(recorder.logoutCount, 0)
+      assert.deepEqual(recorder.invalidatedEpochs, [])
       assert.deepEqual(recorder.notifications, ['没有权限执行此操作'])
     }
   }
 })
 
-test('requestLogout 同步抛错时仍拒绝 normalized 401，且不泄漏 hook 错误', async () => {
+test('403 按错误码触发正确认证恢复与提示，页面本地处理时不重复 toast', async () => {
+  const cases = [
+    {
+      code: 'FORBIDDEN',
+      expectedAuthRevalidationCodes: [],
+      expectedNotifications: ['没有权限执行此操作'],
+    },
+    {
+      code: 'PASSWORD_CHANGE_REQUIRED',
+      expectedAuthRevalidationCodes: ['PASSWORD_CHANGE_REQUIRED'],
+      expectedNotifications: [],
+    },
+    {
+      code: 'CSRF_REJECTED',
+      expectedAuthRevalidationCodes: ['CSRF_REJECTED'],
+      expectedNotifications: ['登录状态校验失败，请重试操作'],
+    },
+    {
+      code: 'FUTURE_FORBIDDEN_REASON',
+      expectedAuthRevalidationCodes: [],
+      expectedNotifications: ['服务端提供的安全错误文案'],
+    },
+  ] as const
+
+  for (const testCase of cases) {
+    const recorder = createHookRecorder()
+    const adapter: AxiosAdapter = async (config) => {
+      throw createHttpError(config, 403, {
+        ...validApiError,
+        code: testCase.code,
+        message: '服务端提供的安全错误文案',
+      })
+    }
+    const client = createApiClient({
+      adapter,
+      baseURL: '/api/',
+      hooks: recorder.hooks,
+    })
+
+    await assert.rejects(client.get('/protected'))
+
+    assert.deepEqual(
+      recorder.authRevalidationCodes,
+      testCase.expectedAuthRevalidationCodes,
+      testCase.code,
+    )
+    assert.deepEqual(
+      recorder.notifications,
+      testCase.expectedNotifications,
+      testCase.code,
+    )
+  }
+
+  const localRecorder = createHookRecorder()
+  const localClient = createApiClient({
+    adapter: async (config) => {
+      throw createHttpError(config, 403, {
+        ...validApiError,
+        code: 'CSRF_REJECTED',
+        message: '请求来源校验失败',
+      })
+    },
+    baseURL: '/api/',
+    hooks: localRecorder.hooks,
+  })
+
+  await assert.rejects(localClient.post('/form-mutation', {}, {
+    errorPresentation: 'local',
+  }))
+  assert.deepEqual(localRecorder.authRevalidationCodes, ['CSRF_REJECTED'])
+  assert.deepEqual(localRecorder.notifications, [])
+})
+
+test('handleSessionInvalid 同步抛错时仍拒绝 normalized 401，且不泄漏 hook 错误', async () => {
   const hookError = new Error('raw logout hook secret')
   const recorder = createHookRecorder({
-    requestLogout: () => {
+    handleSessionInvalid: () => {
       throw hookError
     },
   })
   const adapter: AxiosAdapter = async (config) => {
-    throw createHttpError(config, 401, validApiError)
+    throw createHttpError(config, 401, {
+      ...validApiError,
+      code: 'AUTHENTICATION_REQUIRED',
+    })
   }
   const client = createApiClient({
     adapter,
@@ -261,13 +411,16 @@ test('requestLogout 同步抛错时仍拒绝 normalized 401，且不泄漏 hook 
   }
 
   assert.deepEqual(rejected, {
-    body: validApiError,
+    body: {
+      ...validApiError,
+      code: 'AUTHENTICATION_REQUIRED',
+    },
     kind: 'http',
     status: 401,
   })
   assert.notEqual(rejected, hookError)
   assert.equal(JSON.stringify(rejected).includes('raw logout hook secret'), false)
-  assert.equal(recorder.logoutCount, 1)
+  assert.deepEqual(recorder.invalidatedEpochs, [0])
   assert.deepEqual(recorder.notifications, [])
 })
 
@@ -315,11 +468,11 @@ test('notifyError 异步拒绝时等待并隔离失败，最终仍拒绝 normali
   })
   assert.notEqual(rejected, hookError)
   assert.equal(JSON.stringify(rejected).includes('raw notify hook secret'), false)
-  assert.equal(recorder.logoutCount, 0)
-  assert.deepEqual(recorder.notifications, ['没有权限执行此操作'])
+  assert.deepEqual(recorder.invalidatedEpochs, [])
+  assert.deepEqual(recorder.notifications, ['服务器返回了无法识别的错误响应'])
 })
 
-test('401/403 的 unparseable response 仍执行唯一认证副作用', async () => {
+test('401/403 的 unparseable response 不作为 Session 失效证明', async () => {
   for (const status of [401, 403]) {
     const recorder = createHookRecorder()
     const adapter: AxiosAdapter = async (config) => {
@@ -345,12 +498,81 @@ test('401/403 的 unparseable response 仍执行唯一认证副作用', async ()
         && error.status === status,
     )
 
-    assert.equal(recorder.logoutCount, status === 401 ? 1 : 0)
+    assert.deepEqual(recorder.invalidatedEpochs, [])
     assert.deepEqual(
       recorder.notifications,
-      status === 403 ? ['没有权限执行此操作'] : [],
+      ['服务器返回了无法识别的错误响应'],
     )
   }
+})
+
+test('旧 epoch 的成功响应以内部取消错误结束，不写回或触发全局副作用', async () => {
+  let authEpoch = 7
+  const recorder = createHookRecorder({
+    getAuthEpoch: () => authEpoch,
+  })
+  const adapter: AxiosAdapter = async (config) => {
+    authEpoch += 1
+    return createResponse(config, { shouldNotEscape: true })
+  }
+  const client = createApiClient({
+    adapter,
+    baseURL: '/api/',
+    hooks: recorder.hooks,
+  })
+
+  await assert.rejects(
+    client.get('/late-success'),
+    error => error instanceof StaleAuthEpochError && isCanceledError(error),
+  )
+  assert.deepEqual(recorder.invalidatedEpochs, [])
+  assert.deepEqual(recorder.notifications, [])
+})
+
+test('旧 epoch 迟到的 AUTHENTICATION_REQUIRED 不得清理新身份', async () => {
+  let authEpoch = 3
+  const recorder = createHookRecorder({
+    getAuthEpoch: () => authEpoch,
+  })
+  const adapter: AxiosAdapter = async (config) => {
+    authEpoch += 1
+    throw createHttpError(config, 401, {
+      ...validApiError,
+      code: 'AUTHENTICATION_REQUIRED',
+    })
+  }
+  const client = createApiClient({
+    adapter,
+    baseURL: '/api/',
+    hooks: recorder.hooks,
+  })
+
+  await assert.rejects(
+    client.get('/late-unauthorized'),
+    error => error instanceof StaleAuthEpochError,
+  )
+  assert.deepEqual(recorder.invalidatedEpochs, [])
+  assert.deepEqual(recorder.notifications, [])
+})
+
+test('INVALID_CREDENTIALS 保留给登录表单处理，不触发 Session 清理', async () => {
+  const recorder = createHookRecorder()
+  const adapter: AxiosAdapter = async (config) => {
+    throw createHttpError(config, 401, {
+      ...validApiError,
+      code: 'INVALID_CREDENTIALS',
+      message: '用户名或密码错误',
+    })
+  }
+  const client = createApiClient({
+    adapter,
+    baseURL: '/api/',
+    hooks: recorder.hooks,
+  })
+
+  await assert.rejects(client.post('/auth/login', {}))
+  assert.deepEqual(recorder.invalidatedEpochs, [])
+  assert.deepEqual(recorder.notifications, ['用户名或密码错误'])
 })
 
 test('最终 http、http-unparseable 与 network 错误只显示安全文案', async () => {
@@ -409,7 +631,7 @@ test('最终 http、http-unparseable 与 network 错误只显示安全文案', a
       testCase.expectedKind,
     )
     assert.deepEqual(recorder.notifications, [testCase.expectedMessage])
-    assert.equal(recorder.logoutCount, 0)
+    assert.deepEqual(recorder.invalidatedEpochs, [])
     assert.equal(JSON.stringify(rejected).includes('raw server secret'), false)
     assert.equal(JSON.stringify(rejected).includes('raw network secret'), false)
     assert.equal(JSON.stringify(rejected).includes('raw axios secret'), false)
@@ -444,7 +666,7 @@ test('非 Axios Error 收敛为安全 network 错误，不泄漏原始异常', a
   assert.notEqual(rejected, rawError)
   assert.equal(JSON.stringify(rejected).includes('raw non-axios adapter secret'), false)
   assert.deepEqual(recorder.notifications, ['网络连接失败，请稍后重试'])
-  assert.equal(recorder.logoutCount, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
 })
 
 test('显式 retry 只对允许的 method 与暂时性失败执行一次重试', async () => {
@@ -710,8 +932,8 @@ test('命名 request-level adapter 在 dispatch 前安全拒绝，不调用 fact
   assert.equal(factoryAdapterCalls, 0)
   assert.equal(customFetchCalls, 0)
   assert.equal(recorder.languageReads, 0)
-  assert.equal(recorder.tokenReads, 0)
-  assert.equal(recorder.logoutCount, 0)
+  assert.equal(recorder.authEpochReads, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
   assert.equal(
     JSON.stringify(rejected).includes('Unsafe Axios adapter configuration'),
@@ -751,8 +973,8 @@ test('默认 factory 遇到 config.env fetch 环境时在 adapter 前安全拒�
   })
   assert.equal(customFetchCalls, 0)
   assert.equal(recorder.languageReads, 0)
-  assert.equal(recorder.tokenReads, 0)
-  assert.equal(recorder.logoutCount, 0)
+  assert.equal(recorder.authEpochReads, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
   assert.equal(
     JSON.stringify(rejected).includes('Unsafe Axios adapter configuration'),
@@ -792,8 +1014,8 @@ test('已取消请求优先于不安全 adapter 限制，保持 CanceledError �
   assert.equal(factoryAdapterCalls, 0)
   assert.equal(customFetchCalls, 0)
   assert.equal(recorder.languageReads, 0)
-  assert.equal(recorder.tokenReads, 0)
-  assert.equal(recorder.logoutCount, 0)
+  assert.equal(recorder.authEpochReads, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
 })
 
@@ -941,28 +1163,25 @@ test('网络失败最多重试三次，固定退避为 500/1000/2000ms', async (
   assert.deepEqual(recorder.notifications, ['网络连接失败，请稍后重试'])
 })
 
-test('同一重试链每次重新读取语言和 Token，并删除已失效的旧 Token', async () => {
+test('同一重试链刷新语言但保持原 authEpoch，并始终删除 Token', async () => {
   let language = 'zh-CN'
-  let token: string | undefined = 'old-token'
   const headerSnapshots: Array<{
+    authEpoch: number | undefined
     hasToken: boolean
     language: unknown
-    token: unknown
   }> = []
   const recorder = createHookRecorder({
     getLanguage: () => language,
-    getToken: () => token,
     sleep: async () => {},
   })
   const adapter: AxiosAdapter = async (config) => {
     headerSnapshots.push({
+      authEpoch: config.authEpoch,
       hasToken: config.headers.has('Token'),
       language: config.headers.get('Accept-Language'),
-      token: config.headers.get('Token'),
     })
     if (headerSnapshots.length === 1) {
       language = 'en-US'
-      token = undefined
       throw createNetworkError(config)
     }
     return createResponse(config, { ok: true })
@@ -973,13 +1192,17 @@ test('同一重试链每次重新读取语言和 Token，并删除已失效的�
     hooks: recorder.hooks,
   })
 
-  const response = await client.get('/dynamic-headers', { retry: true })
+  const response = await client.get('/dynamic-headers', {
+    headers: { Token: 'legacy-token' },
+    retry: true,
+  })
 
   assert.deepEqual(response.data, { ok: true })
   assert.deepEqual(headerSnapshots, [
-    { hasToken: true, language: 'zh-CN', token: 'old-token' },
-    { hasToken: false, language: 'en-US', token: undefined },
+    { authEpoch: 0, hasToken: false, language: 'zh-CN' },
+    { authEpoch: 0, hasToken: false, language: 'en-US' },
   ])
+  assert.equal(recorder.authEpochReads, 2)
 })
 
 test('外部 retryCount 在每次决策前规范化，且任意原始值最多调用 adapter 四次', async () => {
@@ -1083,8 +1306,8 @@ test('发送前已经 aborted 时拒绝 CanceledError，且不读取 hooks 或�
 
   assert.equal(adapterCalls, 0)
   assert.equal(recorder.languageReads, 0)
-  assert.equal(recorder.tokenReads, 0)
-  assert.equal(recorder.logoutCount, 0)
+  assert.equal(recorder.authEpochReads, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
 })
 
@@ -1118,7 +1341,7 @@ test('adapter 返回的 CanceledError 原样拒绝，且不重试、不提示、
 
   assert.equal(adapterCalls, 1)
   assert.deepEqual(delays, [])
-  assert.equal(recorder.logoutCount, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
 })
 
@@ -1159,7 +1382,7 @@ test('仅带 ERR_CANCELED code 的 AxiosError 也原样拒绝且无副作用', a
 
   assert.equal(adapterCalls, 1)
   assert.deepEqual(delays, [])
-  assert.equal(recorder.logoutCount, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
 })
 
@@ -1203,7 +1426,7 @@ test('重试等待期间 abort 时原样拒绝 sleep 的 CanceledError，且不�
     return isCanceledError(error)
   })
   assert.equal(adapterCalls, 1)
-  assert.equal(recorder.logoutCount, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
 })
 
@@ -1234,6 +1457,6 @@ test('sleep 完成后重新检查 signal，阻止下一次 adapter 调用', asyn
   )
 
   assert.equal(adapterCalls, 1)
-  assert.equal(recorder.logoutCount, 0)
+  assert.deepEqual(recorder.invalidatedEpochs, [])
   assert.deepEqual(recorder.notifications, [])
 })

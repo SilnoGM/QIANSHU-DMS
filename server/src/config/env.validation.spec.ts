@@ -2,6 +2,12 @@ import { validateEnvironment } from './env.validation'
 
 describe('validateEnvironment', () => {
   const validDatabaseUrl = 'postgresql://localhost:5432/qianshu_test'
+  const validDevelopmentOrigin = 'http://127.0.0.1:9000'
+  const productionKeys = {
+    AUTH_USERNAME_HMAC_KEY: Buffer.alloc(32, 1).toString('base64url'),
+    AUTH_USER_ID_HMAC_KEY: Buffer.alloc(32, 2).toString('base64url'),
+    AUTH_IP_HMAC_KEY: Buffer.alloc(32, 3).toString('base64url'),
+  }
 
   it('uses development and port 3000 when optional values are missing', () => {
     expect(
@@ -12,6 +18,10 @@ describe('validateEnvironment', () => {
       NODE_ENV: 'development',
       PORT: 3000,
       DATABASE_URL: validDatabaseUrl,
+      APP_ORIGIN: validDevelopmentOrigin,
+      TRUST_PROXY_HOPS: 0,
+      AUTH_ARGON2_CONCURRENCY: 2,
+      AUTH_ARGON2_QUEUE_LIMIT: 32,
     })
   })
 
@@ -21,12 +31,20 @@ describe('validateEnvironment', () => {
         NODE_ENV: 'test',
         PORT: '43100',
         DATABASE_URL: `  ${validDatabaseUrl}  `,
+        APP_ORIGIN: '  http://localhost:9000  ',
+        TRUST_PROXY_HOPS: '1',
+        AUTH_ARGON2_CONCURRENCY: '3',
+        AUTH_ARGON2_QUEUE_LIMIT: '48',
         CUSTOM_SETTING: 'kept',
       }),
     ).toEqual({
       NODE_ENV: 'test',
       PORT: 43100,
       DATABASE_URL: validDatabaseUrl,
+      APP_ORIGIN: 'http://localhost:9000',
+      TRUST_PROXY_HOPS: 1,
+      AUTH_ARGON2_CONCURRENCY: 3,
+      AUTH_ARGON2_QUEUE_LIMIT: 48,
       CUSTOM_SETTING: 'kept',
     })
   })
@@ -46,6 +64,13 @@ describe('validateEnvironment', () => {
         validateEnvironment({
           NODE_ENV: nodeEnv,
           DATABASE_URL: validDatabaseUrl,
+          ...(nodeEnv === 'production'
+            ? {
+                APP_ORIGIN: 'https://dms.example.com',
+                TRUST_PROXY_HOPS: '1',
+                ...productionKeys,
+              }
+            : {}),
         }).NODE_ENV,
       ).toBe(nodeEnv)
     },
@@ -178,5 +203,133 @@ describe('validateEnvironment', () => {
     ).toThrow(
       'Environment validation failed: NODE_ENV must be one of development, test, production',
     )
+  })
+
+  describe('authentication environment', () => {
+    it('accepts a complete production origin, proxy and independent HMAC key set', () => {
+      expect(
+        validateEnvironment({
+          NODE_ENV: 'production',
+          DATABASE_URL: validDatabaseUrl,
+          APP_ORIGIN: 'https://dms.example.com',
+          TRUST_PROXY_HOPS: '1',
+          ...productionKeys,
+        }),
+      ).toMatchObject({
+        NODE_ENV: 'production',
+        APP_ORIGIN: 'https://dms.example.com',
+        TRUST_PROXY_HOPS: 1,
+        ...productionKeys,
+      })
+    })
+
+    it.each([
+      ['http://dms.example.com', 'must use https in production'],
+      ['https://user@dms.example.com', 'must be an origin without credentials, path, query, or fragment'],
+      ['https://dms.example.com/app', 'must be an origin without credentials, path, query, or fragment'],
+      ['https://dms.example.com?x=1', 'must be an origin without credentials, path, query, or fragment'],
+    ])('rejects invalid production APP_ORIGIN=%s', (appOrigin, constraint) => {
+      expect(() =>
+        validateEnvironment({
+          NODE_ENV: 'production',
+          DATABASE_URL: validDatabaseUrl,
+          APP_ORIGIN: appOrigin,
+          TRUST_PROXY_HOPS: '1',
+          ...productionKeys,
+        }),
+      ).toThrow(`Environment validation failed: APP_ORIGIN ${constraint}`)
+    })
+
+    it.each([
+      'http://192.168.1.20:9000',
+      'https://development.example.com',
+    ])('rejects non-loopback development APP_ORIGIN=%s', (appOrigin) => {
+      expect(() =>
+        validateEnvironment({
+          DATABASE_URL: validDatabaseUrl,
+          APP_ORIGIN: appOrigin,
+        }),
+      ).toThrow(
+        'Environment validation failed: APP_ORIGIN must use an exact loopback host outside production',
+      )
+    })
+
+    it('requires production APP_ORIGIN without exposing an unsafe value', () => {
+      expect(() =>
+        validateEnvironment({
+          NODE_ENV: 'production',
+          DATABASE_URL: validDatabaseUrl,
+          TRUST_PROXY_HOPS: '1',
+          ...productionKeys,
+        }),
+      ).toThrow('Environment validation failed: APP_ORIGIN is required')
+    })
+
+    it.each([
+      ['TRUST_PROXY_HOPS', -1],
+      ['TRUST_PROXY_HOPS', 3],
+      ['AUTH_ARGON2_CONCURRENCY', 0],
+      ['AUTH_ARGON2_CONCURRENCY', 65],
+      ['AUTH_ARGON2_QUEUE_LIMIT', -1],
+      ['AUTH_ARGON2_QUEUE_LIMIT', 4097],
+    ])('rejects invalid bounded integer %s=%s', (key, value) => {
+      expect(() =>
+        validateEnvironment({
+          DATABASE_URL: validDatabaseUrl,
+          [key]: value,
+        }),
+      ).toThrow(`Environment validation failed: ${key} must be an integer`)
+    })
+
+    it.each([
+      'AUTH_USERNAME_HMAC_KEY',
+      'AUTH_USER_ID_HMAC_KEY',
+      'AUTH_IP_HMAC_KEY',
+    ])('requires %s in production', (missingKey) => {
+      const input: Record<string, unknown> = {
+        NODE_ENV: 'production',
+        DATABASE_URL: validDatabaseUrl,
+        APP_ORIGIN: 'https://dms.example.com',
+        TRUST_PROXY_HOPS: '1',
+        ...productionKeys,
+      }
+      delete input[missingKey]
+
+      expect(() => validateEnvironment(input)).toThrow(
+        `Environment validation failed: ${missingKey} is required in production`,
+      )
+    })
+
+    it('rejects malformed or short HMAC keys without echoing them', () => {
+      const unsafeKey = 'short-secret-do-not-print'
+
+      expect(() =>
+        validateEnvironment({
+          NODE_ENV: 'production',
+          DATABASE_URL: validDatabaseUrl,
+          APP_ORIGIN: 'https://dms.example.com',
+          TRUST_PROXY_HOPS: '1',
+          ...productionKeys,
+          AUTH_IP_HMAC_KEY: unsafeKey,
+        }),
+      ).toThrow(
+        'Environment validation failed: AUTH_IP_HMAC_KEY must be base64url encoding exactly 32 bytes',
+      )
+    })
+
+    it('rejects reused HMAC keys', () => {
+      expect(() =>
+        validateEnvironment({
+          NODE_ENV: 'production',
+          DATABASE_URL: validDatabaseUrl,
+          APP_ORIGIN: 'https://dms.example.com',
+          TRUST_PROXY_HOPS: '1',
+          ...productionKeys,
+          AUTH_IP_HMAC_KEY: productionKeys.AUTH_USERNAME_HMAC_KEY,
+        }),
+      ).toThrow(
+        'Environment validation failed: AUTH_HMAC_KEYS must be distinct',
+      )
+    })
   })
 })

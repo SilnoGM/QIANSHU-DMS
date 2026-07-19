@@ -43,6 +43,10 @@ test('Vite 注入产品版本、首屏主题且不改变父进程 cwd', async ()
         if (!appLoadingPlugin || !loadingDataPlugin) {
           throw new Error('App loading plugins are unavailable')
         }
+        const apiProxy = config.server?.proxy?.['/api']
+        if (typeof apiProxy !== 'object' || apiProxy === null) {
+          throw new Error('Development API proxy is unavailable')
+        }
 
         const runHtmlTransform = async (plugin, html) => {
           const hook = plugin.transformIndexHtml
@@ -62,6 +66,12 @@ test('Vite 注入产品版本、首屏主题且不改变父进程 cwd', async ()
         transformedHtml = await runHtmlTransform(loadingDataPlugin, transformedHtml)
 
         process.stdout.write('QIANSHU_SYSTEM_INFO=' + config.define.__SYSTEM_INFO__ + '\\n')
+        process.stdout.write('QIANSHU_DEV_SERVER=' + Buffer.from(JSON.stringify({
+          apiChangeOrigin: apiProxy.changeOrigin,
+          apiTarget: apiProxy.target,
+          host: config.server.host,
+          port: config.server.port,
+        })).toString('base64') + '\\n')
         process.stdout.write('QIANSHU_LOADING_ORDER=' + loadingDataPlugin.transformIndexHtml.order + '\\n')
         process.stdout.write('QIANSHU_LOADING_HTML=' + Buffer.from(transformedHtml).toString('base64'))
       })
@@ -89,6 +99,10 @@ test('Vite 注入产品版本、首屏主题且不改变父进程 cwd', async ()
     return line.slice(marker.length)
   }
   const systemInfo = JSON.parse(readProbeValue('QIANSHU_SYSTEM_INFO='))
+  const developmentServer = JSON.parse(Buffer.from(
+    readProbeValue('QIANSHU_DEV_SERVER='),
+    'base64',
+  ).toString('utf8'))
   const loadingHtml = Buffer.from(
     readProbeValue('QIANSHU_LOADING_HTML='),
     'base64',
@@ -96,6 +110,12 @@ test('Vite 注入产品版本、首屏主题且不改变父进程 cwd', async ()
   const loadingTheme = BASE_COLORS[APP_THEME_BASE_COLORS.light].light
 
   assert.equal(systemInfo.pkg.version, appManifest.version)
+  assert.deepEqual(developmentServer, {
+    apiChangeOrigin: false,
+    apiTarget: 'http://127.0.0.1:3000',
+    host: '127.0.0.1',
+    port: 9000,
+  })
   assert.equal(appSettings.theme.baseColorLight, APP_THEME_BASE_COLORS.light)
   assert.equal(appSettings.theme.baseColorDark, APP_THEME_BASE_COLORS.dark)
   assert.equal(readProbeValue('QIANSHU_LOADING_ORDER='), 'post')

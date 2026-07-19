@@ -7,6 +7,7 @@ import { HealthCheck, HealthCheckService } from '@nestjs/terminus'
 
 import { ApiContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
+import { Public } from '../auth/decorators/auth.decorators'
 import { DatabaseHealthIndicator } from './database-health.indicator'
 import {
   HealthFailureResponseDto,
@@ -22,6 +23,7 @@ export class HealthController {
   ) {}
 
   @Get()
+  @Public()
   // 禁用会覆盖专用 DTO 的 inline Swagger schema，同时显式保留 Terminus 的 no-cache 运行时 Header。
   @HealthCheck({ noCache: true, swaggerDocumentation: false })
   @ApiOperation({ operationId: 'health_get' })

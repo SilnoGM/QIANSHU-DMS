@@ -94,6 +94,52 @@ class DecoratorContractController {
     },
   })
   downloadDocument(): void {}
+
+  @Get('session-none')
+  @ApiApplicationContract({
+    operationId: 'decorator_contract_session_none',
+    session: 'none',
+  })
+  @ApiContractResponse({ status: 200, type: DecoratorResponseDto })
+  getSessionNoneContract(): DecoratorResponseDto {
+    return { value: 'session-none' }
+  }
+
+  @Get('session-required')
+  @ApiApplicationContract({
+    operationId: 'decorator_contract_session_required',
+    session: 'required',
+    authorization: true,
+  })
+  @ApiContractResponse({ status: 200, type: DecoratorResponseDto })
+  getSessionRequiredContract(): DecoratorResponseDto {
+    return { value: 'session-required' }
+  }
+
+  @Post('session-optional')
+  @ApiApplicationContract({
+    operationId: 'decorator_contract_session_optional',
+    session: 'optional',
+    csrf: true,
+    privateNoStore: true,
+    errors: [
+      { status: 503, codes: ['AUTH_CAPACITY_UNAVAILABLE'] },
+      {
+        status: 401,
+        codes: ['INVALID_CREDENTIALS', 'AUTHENTICATION_REQUIRED'],
+      },
+      { status: 429, codes: ['AUTH_RATE_LIMITED', 'AUTH_RATE_LIMITED'] },
+      { status: 401, codes: ['INVALID_CREDENTIALS'] },
+      { status: 400, codes: ['BAD_REQUEST'] },
+      { status: 403, codes: ['CSRF_REJECTED'] },
+      { status: 404, codes: ['USER_NOT_FOUND'] },
+      { status: 409, codes: ['ALREADY_AUTHENTICATED'] },
+      { status: 422, codes: ['PASSWORD_POLICY_VIOLATION'] },
+      { status: 500, codes: ['INTERNAL_ERROR'] },
+    ],
+  })
+  @ApiContractResponse({ status: 204 })
+  postSessionOptionalContract(): void {}
 }
 
 @Module({ controllers: [DecoratorContractController] })
@@ -146,6 +192,66 @@ describe('OpenAPI contract decorators', () => {
         authorization: true,
       }),
     ).toThrow('OpenAPI authorization requires authentication')
+  })
+
+  it('rejects authorization unless the effective Session requirement is required', () => {
+    expect(() =>
+      ApiApplicationContract({
+        operationId: 'invalid_optional_authorization_contract',
+        session: 'optional',
+        authorization: true,
+      }),
+    ).toThrow('OpenAPI authorization requires a required Session')
+    expect(() =>
+      ApiApplicationContract({
+        operationId: 'invalid_no_session_authorization_contract',
+        session: 'none',
+        authorization: true,
+      }),
+    ).toThrow('OpenAPI authorization requires a required Session')
+  })
+
+  it('rejects contradictory legacy authentication and explicit Session requirements', () => {
+    expect(() =>
+      ApiApplicationContract({
+        operationId: 'invalid_legacy_required_contract',
+        authentication: false,
+        session: 'required',
+      }),
+    ).toThrow('OpenAPI authentication conflicts with Session requirement')
+    expect(() =>
+      ApiApplicationContract({
+        operationId: 'invalid_legacy_optional_contract',
+        authentication: true,
+        session: 'optional',
+      }),
+    ).toThrow('OpenAPI authentication conflicts with Session requirement')
+  })
+
+  it('rejects unsupported error statuses and unstable error codes', () => {
+    expect(() =>
+      ApiApplicationContract({
+        operationId: 'invalid_error_status_contract',
+        errors: [
+          {
+            status: 418 as 400,
+            codes: ['REQUEST_REJECTED'],
+          },
+        ],
+      }),
+    ).toThrow('OpenAPI contract error status is unsupported: 418')
+    expect(() =>
+      ApiApplicationContract({
+        operationId: 'invalid_error_code_contract',
+        errors: [{ status: 400, codes: ['bad-request'] }],
+      }),
+    ).toThrow('OpenAPI contract error code is invalid: bad-request')
+    expect(() =>
+      ApiApplicationContract({
+        operationId: 'missing_error_code_contract',
+        errors: [{ status: 400, codes: [] }],
+      }),
+    ).toThrow('OpenAPI contract error codes cannot be empty for status 400')
   })
 
   it('publishes the complete application error matrix and metadata', () => {
@@ -261,5 +367,120 @@ describe('OpenAPI contract decorators', () => {
         schema: { type: 'string', format: 'binary' },
       },
     })
+  })
+
+  it('publishes explicit none and required Session security requirements', () => {
+    const noneOperation = requireOperation(
+      document,
+      '/api/decorator-contract/session-none',
+      'get',
+    )
+    const requiredOperation = requireOperation(
+      document,
+      '/api/decorator-contract/session-required',
+      'get',
+    )
+
+    expect(noneOperation.security).toEqual([])
+    expect(noneOperation['x-qianshu-contract']).toEqual({
+      kind: 'application',
+      authentication: false,
+      authorization: false,
+      resourceLocator: false,
+      conflict: false,
+      validation: false,
+      session: 'none',
+    })
+    expect(requiredOperation.security).toEqual([
+      { sessionCookie: [] },
+    ])
+    expect(requiredOperation['x-qianshu-contract']).toEqual({
+      kind: 'application',
+      authentication: true,
+      authorization: true,
+      resourceLocator: false,
+      conflict: false,
+      validation: false,
+      session: 'required',
+    })
+  })
+
+  it('normalizes optional Session, CSRF, no-store and stable error metadata', () => {
+    const operation = requireOperation(
+      document,
+      '/api/decorator-contract/session-optional',
+      'post',
+    )
+
+    expect(operation.security).toEqual([
+      { sessionCookie: [] },
+      {},
+    ])
+    expect(operation.parameters).toContainEqual({
+      name: 'X-Qianshu-CSRF',
+      in: 'header',
+      required: true,
+      schema: { type: 'string', enum: ['1'] },
+    })
+    expect(operation['x-qianshu-contract']).toEqual({
+      kind: 'application',
+      authentication: false,
+      authorization: false,
+      resourceLocator: false,
+      conflict: false,
+      validation: false,
+      session: 'optional',
+      csrf: true,
+      privateNoStore: true,
+      errors: [
+        { status: 400, codes: ['BAD_REQUEST'] },
+        {
+          status: 401,
+          codes: ['AUTHENTICATION_REQUIRED', 'INVALID_CREDENTIALS'],
+        },
+        { status: 403, codes: ['CSRF_REJECTED'] },
+        { status: 404, codes: ['USER_NOT_FOUND'] },
+        { status: 409, codes: ['ALREADY_AUTHENTICATED'] },
+        { status: 422, codes: ['PASSWORD_POLICY_VIOLATION'] },
+        { status: 429, codes: ['AUTH_RATE_LIMITED'] },
+        { status: 500, codes: ['INTERNAL_ERROR'] },
+        { status: 503, codes: ['AUTH_CAPACITY_UNAVAILABLE'] },
+      ],
+    })
+    expect(Object.keys(operation.responses).sort()).toEqual([
+      '204',
+      '400',
+      '401',
+      '403',
+      '404',
+      '409',
+      '422',
+      '429',
+      '500',
+      '503',
+    ])
+
+    for (const response of Object.values(operation.responses)) {
+      expect(response).toBeDefined()
+      expect(response).not.toHaveProperty('$ref')
+
+      if (!response || '$ref' in response) {
+        throw new Error('Missing inline optional Session response')
+      }
+
+      expect(response.headers?.['Cache-Control']).toEqual({
+        description: '身份相关响应禁止缓存',
+        schema: {
+          type: 'string',
+          enum: ['private, no-store'],
+        },
+      })
+    }
+
+    for (const status of [400, 401, 403, 404, 409, 422, 429, 500, 503]) {
+      expect(requireResponse(operation, status).content?.['application/json']?.schema).toEqual({
+        $ref: '#/components/schemas/ApiError',
+      })
+    }
   })
 })

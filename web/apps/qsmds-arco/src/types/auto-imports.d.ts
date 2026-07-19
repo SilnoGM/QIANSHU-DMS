@@ -6,10 +6,15 @@
 // biome-ignore lint: disable
 export {}
 declare global {
+  const AuthLifecycleCoordinator: typeof import('../store/modules/app/auth-lifecycle').AuthLifecycleCoordinator
+  const AuthSynchronizationQueue: typeof import('../store/modules/app/auth-synchronization-queue').AuthSynchronizationQueue
   const EffectScope: typeof import('vue').EffectScope
+  const LatestVersionTaskQueue: typeof import('../store/modules/app/auth-synchronization-queue').LatestVersionTaskQueue
+  const StaleAuthStateError: typeof import('../store/modules/app/auth-lifecycle').StaleAuthStateError
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
+  const createAuthLifecycleState: typeof import('../store/modules/app/auth-lifecycle').createAuthLifecycleState
   const createPinia: typeof import('pinia').createPinia
   const customRef: typeof import('vue').customRef
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
@@ -22,6 +27,7 @@ declare global {
   const getCurrentWatcher: typeof import('vue').getCurrentWatcher
   const h: typeof import('vue').h
   const inject: typeof import('vue').inject
+  const isAuthRouteAuthorized: typeof import('../store/modules/app/auth-retry-navigation').isAuthRouteAuthorized
   const isProxy: typeof import('vue').isProxy
   const isReactive: typeof import('vue').isReactive
   const isReadonly: typeof import('vue').isReadonly
@@ -33,6 +39,8 @@ declare global {
   const mapStores: typeof import('pinia').mapStores
   const mapWritableState: typeof import('pinia').mapWritableState
   const markRaw: typeof import('vue').markRaw
+  const matchesAllPermissions: typeof import('../composables/app/auth').matchesAllPermissions
+  const matchesAuthorization: typeof import('../composables/app/auth').matchesAuthorization
   const nextTick: typeof import('vue').nextTick
   const onActivated: typeof import('vue').onActivated
   const onBeforeMount: typeof import('vue').onBeforeMount
@@ -54,13 +62,20 @@ declare global {
   const reactive: typeof import('vue').reactive
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
+  const resolveAuthPermissionFallback: typeof import('../store/modules/app/auth-retry-navigation').resolveAuthPermissionFallback
+  const resolveAuthRetryNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveAuthRetryNavigation
+  const resolveAuthSynchronizationNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveAuthSynchronizationNavigation
   const resolveComponent: typeof import('vue').resolveComponent
+  const resolveForcedPasswordCompletionNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveForcedPasswordCompletionNavigation
+  const resolveRequestedFullPath: typeof import('../store/modules/app/auth-retry-navigation').resolveRequestedFullPath
   const setActivePinia: typeof import('pinia').setActivePinia
   const setMapStoreSuffix: typeof import('pinia').setMapStoreSuffix
   const shallowReactive: typeof import('vue').shallowReactive
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
+  const shouldRequestAuthRouteReconciliation: typeof import('../store/modules/app/auth-retry-navigation').shouldRequestAuthRouteReconciliation
   const storeToRefs: typeof import('pinia').storeToRefs
+  const toForcedAuthNavigation: typeof import('../store/modules/app/auth-retry-navigation').toForcedAuthNavigation
   const toRaw: typeof import('vue').toRaw
   const toRef: typeof import('vue').toRef
   const toRefs: typeof import('vue').toRefs
@@ -112,4 +127,13 @@ declare global {
   // @ts-ignore
   export type { Component, Slot, Slots, ComponentPublicInstance, ComputedRef, DirectiveBinding, ExtractDefaultPropTypes, ExtractPropTypes, ExtractPublicPropTypes, InjectionKey, PropType, Ref, ShallowRef, MaybeRef, MaybeRefOrGetter, VNode, WritableComputedRef } from 'vue'
   import('vue')
+  // @ts-ignore
+  export type { StaleAuthStateError, AuthLifecycleCoordinator, AuthState, AuthLifecycleState, AuthLifecycleDependencies, RevalidationOptions } from '../store/modules/app/auth-lifecycle'
+  import('../store/modules/app/auth-lifecycle')
+  // @ts-ignore
+  export type { AuthRetryNavigation, AuthRetryNavigationTarget, AuthSynchronizationNavigationInput, AuthPermissionFallbackInput, AuthRouteReconciliationInput } from '../store/modules/app/auth-retry-navigation'
+  import('../store/modules/app/auth-retry-navigation')
+  // @ts-ignore
+  export type { LatestVersionTaskQueue, AuthSynchronizationQueue } from '../store/modules/app/auth-synchronization-queue'
+  import('../store/modules/app/auth-synchronization-queue')
 }

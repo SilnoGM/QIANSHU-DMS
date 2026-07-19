@@ -7,3 +7,201 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+
+  @@map("user_status")
+}
+
+enum SessionRevokedReason {
+  LOGOUT
+  LOGOUT_ALL
+  PASSWORD_CHANGED
+  PASSWORD_RESET
+  USER_DISABLED
+  ADMIN_RECOVERY
+
+  @@map("session_revoked_reason")
+}
+
+enum AuthRateLimitScope {
+  LOGIN_USERNAME
+  LOGIN_IP
+  PASSWORD_CHANGE_USER
+  PASSWORD_CHANGE_IP
+
+  @@map("auth_rate_limit_scope")
+}
+
+enum AuditActorType {
+  ANONYMOUS
+  USER
+  SYSTEM
+
+  @@map("audit_actor_type")
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+
+  @@map("audit_outcome")
+}
+
+enum AuditEventType {
+  AUTH_LOGIN_SUCCEEDED
+  AUTH_LOGIN_FAILED
+  AUTH_LOGOUT
+  AUTH_LOGOUT_ALL
+  USER_CREATED
+  USER_UPDATED
+  USER_ENABLED
+  USER_DISABLED
+  USER_PASSWORD_CHANGED
+  USER_PASSWORD_RESET
+  USER_ROLES_CHANGED
+  ROLE_CREATED
+  ROLE_UPDATED
+  ROLE_PERMISSIONS_CHANGED
+  SYSTEM_BOOTSTRAP
+  SYSTEM_ADMIN_RECOVERED
+  AUTH_RETENTION_PURGED
+
+  @@map("audit_event_type")
+}
+
+model User {
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username           String     @db.VarChar(128)
+  usernameNormalized String     @unique(map: "users_username_normalized_key") @map("username_normalized") @db.VarChar(128)
+  displayName        String     @map("display_name") @db.VarChar(128)
+  passwordHash       String     @map("password_hash") @db.Text
+  status             UserStatus @default(ACTIVE)
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  passwordChangedAt  DateTime   @map("password_changed_at") @db.Timestamptz(6)
+  authVersion        Int        @default(0) @map("auth_version")
+  lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  createdByUserId    String?    @map("created_by_user_id") @db.Uuid
+  disabledAt         DateTime?  @map("disabled_at") @db.Timestamptz(6)
+  disabledByUserId   String?    @map("disabled_by_user_id") @db.Uuid
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy     User?         @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdUsers  User[]        @relation("UserCreatedBy")
+  disabledBy    User?         @relation("UserDisabledBy", fields: [disabledByUserId], references: [id], onDelete: Restrict)
+  disabledUsers User[]        @relation("UserDisabledBy")
+  roles         UserRole[]
+  sessions      AuthSession[]
+  auditEvents   AuditEvent[]  @relation("AuditActor")
+
+  @@index([status], map: "users_status_idx")
+  @@map("users")
+}
+
+model Role {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String  @unique(map: "roles_code_key") @db.VarChar(128)
+  name        String  @db.VarChar(128)
+  description String? @db.Text
+  isSystem    Boolean @default(false) @map("is_system")
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String  @unique(map: "permissions_code_key") @db.VarChar(128)
+  name        String  @db.VarChar(128)
+  description String? @db.Text
+  systemOnly  Boolean @default(false) @map("system_only")
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId String @map("user_id") @db.Uuid
+  roleId String @map("role_id") @db.Uuid
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId], map: "user_roles_pkey")
+  @@index([roleId, userId], map: "user_roles_role_id_user_id_idx")
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId], map: "role_permissions_pkey")
+  @@index([permissionId, roleId], map: "role_permissions_permission_id_role_id_idx")
+  @@map("role_permissions")
+}
+
+model AuthSession {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String                @map("user_id") @db.Uuid
+  tokenHash         Bytes                 @unique(map: "auth_sessions_token_hash_key") @map("token_hash") @db.ByteA
+  authVersion       Int                   @map("auth_version")
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastActivityAt    DateTime              @map("last_activity_at") @db.Timestamptz(6)
+  idleExpiresAt     DateTime              @map("idle_expires_at") @db.Timestamptz(6)
+  absoluteExpiresAt DateTime              @map("absolute_expires_at") @db.Timestamptz(6)
+  revokedAt         DateTime?             @map("revoked_at") @db.Timestamptz(6)
+  revokedReason     SessionRevokedReason? @map("revoked_reason")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, absoluteExpiresAt], map: "auth_sessions_user_id_revoked_at_absolute_expires_at_idx")
+  @@index([idleExpiresAt], map: "auth_sessions_idle_expires_at_idx")
+  @@map("auth_sessions")
+}
+
+model AuthRateLimit {
+  scope           AuthRateLimitScope
+  subjectKeyHash  Bytes              @map("subject_key_hash") @db.ByteA
+  bucketStartedAt DateTime           @map("bucket_started_at") @db.Timestamptz(6)
+  attemptCount    Int                @default(0) @map("attempt_count")
+  blockedUntil    DateTime?          @map("blocked_until") @db.Timestamptz(6)
+  updatedAt       DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([scope, subjectKeyHash], map: "auth_rate_limits_scope_subject_key_hash_key")
+  @@index([updatedAt], map: "auth_rate_limits_updated_at_idx")
+  @@index([blockedUntil], map: "auth_rate_limits_blocked_until_idx")
+  @@map("auth_rate_limits")
+}
+
+model AuditEvent {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  eventType     AuditEventType @map("event_type")
+  outcome       AuditOutcome
+  occurredAt    DateTime       @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  actorType     AuditActorType @map("actor_type")
+  actorUserId   String?        @map("actor_user_id") @db.Uuid
+  targetType    String?        @map("target_type") @db.VarChar(128)
+  targetId      String?        @map("target_id") @db.VarChar(128)
+  requestId     String         @map("request_id") @db.VarChar(64)
+  correlationId String?        @map("correlation_id") @db.VarChar(128)
+  reasonCode    String?        @map("reason_code") @db.VarChar(128)
+  sourceIpHash  Bytes?         @map("source_ip_hash") @db.ByteA
+  metadata      Json           @default("{}") @db.JsonB
+
+  actorUser User? @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([occurredAt(sort: Desc), id(sort: Desc)], map: "audit_events_occurred_at_id_idx")
+  @@index([actorUserId, occurredAt(sort: Desc)], map: "audit_events_actor_user_id_occurred_at_idx")
+  @@index([eventType, occurredAt(sort: Desc)], map: "audit_events_event_type_occurred_at_idx")
+  @@map("audit_events")
+}

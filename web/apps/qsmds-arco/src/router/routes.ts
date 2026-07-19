@@ -2,8 +2,9 @@ import type { RouteRecordMainRaw } from '@fantastic-admin/types'
 import type { RouteRecordRaw } from 'vue-router'
 import { $t } from '@/locales'
 import pinia from '@/store'
-import MultilevelMenuExample from './modules/multilevel.menu.example'
-import UiExample from './modules/ui.example'
+import SystemManagement, {
+  MANAGEMENT_READ_PERMISSIONS,
+} from './modules/system.management'
 
 // 固定路由（默认路由）
 const constantRoutes: RouteRecordRaw[] = [
@@ -42,6 +43,8 @@ const systemRoutes: RouteRecordRaw[] = [
           title: $t(useAppSettingsStore(pinia).settings.app.home.title),
           icon: 'i-ant-design:home-twotone',
           breadcrumb: false,
+          // 首期只有系统管理业务页；没有任一读取权限时根层展示稳定 403。
+          auth: [...MANAGEMENT_READ_PERMISSIONS],
         },
       },
       {
@@ -61,20 +64,11 @@ const systemRoutes: RouteRecordRaw[] = [
 const asyncRoutes: RouteRecordMainRaw[] = [
   {
     meta: {
-      title: $t('route.demo'),
-      icon: 'i-ri:function-ai-line',
+      title: '系统管理',
+      icon: 'i-lucide:settings-2',
     },
     children: [
-      MultilevelMenuExample,
-    ],
-  },
-  {
-    meta: {
-      title: 'UI',
-      icon: 'i-whh:jqueryui',
-    },
-    children: [
-      UiExample,
+      SystemManagement,
     ],
   },
 ]

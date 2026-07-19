@@ -57,6 +57,14 @@ const archiveTasks = new Map([
       'Fantastic-admin与Arco文档本地化设计.md',
     ]),
   ],
+  [
+    '用户认证与权限体系落地',
+    Object.freeze([
+      '归档说明.md',
+      '任务.md',
+      '前端设计规格.md',
+    ]),
+  ],
 ])
 
 function fromRoot(...segments) {
@@ -695,6 +703,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'contract:sync': 'node ./scripts/contract-sync.mjs',
     'contract:check': 'node ./scripts/contract-check.mjs',
     'ci:server-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-server-e2e.mjs',
+    'ci:browser-auth-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-auth-e2e.mjs',
     'ci:contract': 'node ./scripts/ci-contract-baseline.mjs',
     'release:check': 'node ./scripts/release-version.mjs',
     'release:package:web': 'node ./scripts/release-package.mjs web',
@@ -1027,7 +1036,7 @@ test('根 README 的 migration 与 E2E 命令禁止静默回退到本地环境�
   }
 })
 
-test('工程方案当前事实准确反映根、Server、Web 和健康检查边界', async () => {
+test('工程方案当前事实准确反映根、Server、Web 和 HTTP 能力边界', async () => {
   const design = await readFile(
     fromRoot('docs', '全局文档', '项目工程组织方案.md'),
     'utf8',
@@ -1053,6 +1062,7 @@ test('工程方案当前事实准确反映根、Server、Web 和健康检查边�
     '`X-Request-Id`',
     '`ApiError`',
     '`apps/qsmds-arco/src/api/generated/`',
+    '9 个 `fake: true`',
   ]
 
   assert.deepEqual(
@@ -1061,7 +1071,10 @@ test('工程方案当前事实准确反映根、Server、Web 和健康检查边�
   )
   assert.match(currentFacts, /^- 根目录不是 pnpm workspace，/m)
   assert.match(currentFacts, /^- Server 已初始化为独立 NestJS 11 CommonJS /m)
-  assert.match(currentFacts, /^- 当前唯一 HTTP 能力是 `GET \/api\/health`，/m)
+  assert.match(
+    currentFacts,
+    /^- Server 已挂载 .*提供 `GET \/api\/health` 健康检查、Cookie Session 认证、用户管理、RBAC 与审计查询能力。$/m,
+  )
   assert.doesNotMatch(currentFacts, /server\/.*为空目录|尚未初始化后端框架/)
   assert.doesNotMatch(currentFacts, /web\/apps\/(?:core|example)\//)
   assert.doesNotMatch(currentFacts, /(?:尚未|未|没有)提供.*GET \/api\/health/)
@@ -1145,8 +1158,9 @@ test('工程方案记录三 Workflow、双端重建和本地与平台验收边�
 
   assert.deepEqual(requiredFacts.filter(fact => !currentFacts.includes(fact)), [])
   for (const fact of [
-    '| 状态 | 已全部完成 |',
-    '| 完成日期 | 2026-07-14 |',
+    '| 状态 | 工程组织基线已完成；用户认证与权限体系功能分支本地验收完成 |',
+    '| 基线完成日期 | 2026-07-14 |',
+    '| 当前事实更新日期 | 2026-07-18 |',
     '| 当前产品版本 | `v0.1.2` |',
     '| 当前正式版本 Source Commit | `ec418b8a7dca9c0da51770f6559813f3c7059077` |',
     'Server release archive packaging',
@@ -1384,6 +1398,9 @@ test('后端架构文档记录当前运行时、接口契约、安全与测试�
       [
         '`PrismaPg`',
         '`pg.Pool`',
+        '原子预占',
+        '不跨 Argon2',
+        '释放本次预占',
         '`Database initialization failed`',
         '`Database shutdown failed`',
         '`DEBUG`',
@@ -1435,6 +1452,11 @@ test('后端接口契约规范记录 Request ID、ApiError、OpenAPI 与安全�
         'DTO',
         'OpenAPI decorators',
         '`server/openapi/openapi.json`',
+        '`/api/auth`',
+        '`/api/users`',
+        '`/api/roles`',
+        '`/api/permissions`',
+        '`/api/audit-events`',
       ],
     ],
     [
@@ -1488,6 +1510,7 @@ test('后端接口契约规范记录 Request ID、ApiError、OpenAPI 与安全�
       `后端接口契约章节缺少事实：${heading}`,
     )
   }
+  assert.doesNotMatch(guide, /当前正式契约只包含 `GET \/api\/health`/)
 })
 
 test('前端接口接入规范记录类型、响应、错误、重试、取消与 fake 边界', async () => {
@@ -1519,8 +1542,11 @@ test('前端接口接入规范记录类型、响应、错误、重试、取消�
         '`Blob.type`',
         '不读取或要求',
         '`application/json`',
-        '`401`',
-        '`403`',
+        '`401 AUTHENTICATION_REQUIRED`',
+        '`403 FORBIDDEN`',
+        '`403 PASSWORD_CHANGE_REQUIRED`',
+        '`403 CSRF_REJECTED`',
+        '`errorPresentation: \'local\'`',
       ],
     ],
     [
@@ -1542,7 +1568,8 @@ test('前端接口接入规范记录类型、响应、错误、重试、取消�
       '## 5. Fake 与网络前提',
       [
         '裸 DTO',
-        '`401 ApiError`',
+        '`ApiError`',
+        '`AUTHENTICATION_REQUIRED`',
         '同源',
         '反向代理',
         '不声称支持跨域',
@@ -1655,17 +1682,71 @@ test('根与 Server 入口文档记录当前契约命令和运行时事实', asy
   )
 })
 
+test('Server 安装与运行文档跟随可执行配置和环境模板', async () => {
+  const serverReadme = await readFile(fromRoot('server', 'README.md'), 'utf8')
+  const serverAgents = await readFile(fromRoot('server', 'AGENTS.md'), 'utf8')
+  const backendArchitecture = await readFile(
+    fromRoot('docs', '后端文档', '后端架构.md'),
+    'utf8',
+  )
+  const pnpmSettings = await readFile(
+    fromRoot('server', 'pnpm-workspace.yaml'),
+    'utf8',
+  )
+  const envTemplate = await readFile(fromRoot('server', '.env.example'), 'utf8')
+  const manifest = JSON.parse(
+    await readFile(fromRoot('server', 'package.json'), 'utf8'),
+  )
+
+  assert.match(pnpmSettings, /^\s*argon2: true$/m)
+  for (const document of [serverReadme, serverAgents, backendArchitecture]) {
+    assert.match(document, /^\s*argon2: true$/m)
+  }
+
+  const environmentSection = markdownSection(serverReadme, '## 环境变量')
+  const environmentNames = [...envTemplate.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)]
+    .map(match => match[1])
+  assert.ok(environmentNames.length > 0)
+  assert.deepEqual(
+    environmentNames.filter(name => !environmentSection.includes(`\`${name}\``)),
+    [],
+  )
+
+  const commandsSection = markdownSection(serverReadme, '## 常用命令')
+  const authCommands = Object.keys(manifest.scripts)
+    .filter(name => name.startsWith('auth:'))
+    .map(name => `pnpm -C server ${name}`)
+  assert.deepEqual(
+    authCommands.filter(command => !commandsSection.includes(command)),
+    [],
+  )
+})
+
 test('数据库迁移规范记录不可变迁移、安全验证和向前修复规则', async () => {
   const migrationGuide = await readFile(
     fromRoot('docs', '后端文档', '数据库迁移规范.md'),
     'utf8',
   )
+  const migrationsRoot = fromRoot('server', 'prisma', 'migrations')
+  const migrationNames = (await readdir(migrationsRoot, { withFileTypes: true }))
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name)
+    .sort()
   const requiredFactsBySection = [
     [
       '## 1. 目的与真相源',
       ['`prisma/schema.prisma`', '`prisma/migrations/`', '`src/generated/prisma/`'],
     ],
-    ['## 2. 当前迁移基线', ['`20260710152144_init`', 'PostgreSQL 16']],
+    [
+      '## 2. 当前迁移基线',
+      [
+        ...migrationNames.map(name => `\`${name}\``),
+        '`AuthSession`',
+        '`AuthRateLimit`',
+        '`AuditEvent`',
+        'PostgreSQL 16',
+      ],
+    ],
     ['## 3. 不可变与只追加原则', ['向前修复']],
     [
       '## 4. 命令使用边界',
@@ -1691,6 +1772,14 @@ test('数据库迁移规范记录不可变迁移、安全验证和向前修复�
       `数据库迁移章节缺少事实：${heading}`,
     )
   }
+
+  assert.doesNotMatch(migrationGuide, /当前 `schema\.prisma` 也没有任何业务 model/)
+  assert.doesNotMatch(migrationGuide, /migration history 只有一条成功记录/)
+  assert.doesNotMatch(
+    migrationGuide,
+    /`_prisma_migrations` 只有 `20260710152144_init` 一条成功记录/,
+  )
+  assert.doesNotMatch(migrationGuide, /public schema 没有业务表/)
 })
 
 test('数据库迁移命令要求显式临时 URL 且禁止回退本地 .env', async () => {

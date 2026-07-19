@@ -116,6 +116,13 @@ describe('createOpenApiDocument', () => {
       version: readExpectedPackageVersion(),
     })
     expect(document.tags).toEqual([{ name: 'health', description: '' }])
+    expect(document.components?.securitySchemes).toEqual({
+      sessionCookie: {
+        type: 'apiKey',
+        in: 'cookie',
+        name: '__Host-qianshu_session',
+      },
+    })
     expect(
       document.paths['/api/missing-operation-id']?.get?.operationId,
     ).toBe(

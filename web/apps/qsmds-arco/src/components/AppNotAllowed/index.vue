@@ -10,6 +10,7 @@ const router = useRouter()
 
 const appSettingsStore = useAppSettingsStore()
 const appTabbarStore = useAppTabbarStore()
+const appAccountStore = useAppAccountStore()
 
 onMounted(() => {
   if (appSettingsStore.settings.topbar.tabbar) {
@@ -23,7 +24,18 @@ function goBack() {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full relative">
+    <!-- 403 只阻断业务能力；已登录用户仍需保留改密和退出等账户自服务入口。 -->
+    <div
+      v-if="appAccountStore.authState === 'authenticated'"
+      class="right-4 top-4 absolute z-10"
+    >
+      <AppAccountButton
+        dropdown-side="bottom"
+        button-variant="secondary"
+        class="bg-background/90 min-w-36 shadow-sm backdrop-blur"
+      />
+    </div>
     <div class="flex h-[5vh] lg:h-[10vh]">
       <div class="w-[5vh] lg:w-[10vh]" />
       <div class="border-inline border-dashed flex-1" />

@@ -23,9 +23,14 @@ import {
 } from './retry'
 
 export interface ApiClientHooks {
+  getAuthEpoch: () => number
+  getAuthSignal: () => AbortSignal
   getLanguage: () => string
-  getToken: () => string | undefined
-  requestLogout: () => void
+  handleSessionInvalid: (
+    requestEpoch: number,
+    broadcastSessionInvalid: boolean,
+  ) => void
+  handleAuthRevalidationRequired: (code: string) => void
   notifyError: (message: string) => void
   sleep?: Sleep
   now?: Now
@@ -57,8 +62,15 @@ class UnsupportedAdapterConfigurationError extends TypeError {
   }
 }
 
+/** 身份边界变化后的旧响应使用 Axios 取消语义结束，调用方仍会执行 finally。 */
+export class StaleAuthEpochError extends CanceledError<unknown> {
+  constructor(config?: InternalAxiosRequestConfig) {
+    super('Authentication context changed', config)
+  }
+}
+
 /**
- * 在读取语言、Token 或进入 adapter 前检查取消状态。
+ * 在读取语言或进入 adapter 前检查取消状态。
  *
  * 这里创建 Axios 原生 CanceledError，确保发送前取消与 adapter/等待阶段取消
  * 对调用方呈现一致语义，也不会进入错误归一化和用户提示流程。
@@ -80,10 +92,10 @@ function isAxiosCancellation(
 }
 
 /**
- * 初始发送与 adapter 内重试共用同一份动态配置刷新逻辑。
+ * 初始发送与 adapter 内重试共用语言、CSRF 和 fake URL 刷新逻辑。
  *
  * 每个可执行用户代码的 hook 前后都检查 signal，避免取消后继续读取认证状态；
- * headers 只在两个 hook 都成功且请求仍有效时更新，避免留下部分刷新的配置。
+ * 自定义 Token Header 无论来自旧代码还是调用方都必须被移除；Cookie 才是身份凭证。
  */
 function refreshRequestConfig(
   config: InternalAxiosRequestConfig,
@@ -97,16 +109,76 @@ function refreshRequestConfig(
 
   const language = options.hooks.getLanguage()
   throwIfRequestCanceled(config)
-  const token = options.hooks.getToken()
-  throwIfRequestCanceled(config)
 
   config.headers.set('Accept-Language', language)
-  if (token === undefined) {
-    // 同一 config 会被 adapter 循环复用；Token 失效时必须主动删除旧 header。
-    config.headers.delete('Token')
+  config.headers.delete('Token')
+
+  const method = config.method?.toLowerCase()
+  if (method !== undefined && ['delete', 'patch', 'post', 'put'].includes(method)) {
+    config.headers.set('Content-Type', 'application/json')
+    config.headers.set('X-Qianshu-CSRF', '1')
   }
-  else {
-    config.headers.set('Token', token)
+}
+
+function currentAuthEpochOrStale(
+  config: InternalAxiosRequestConfig,
+  hooks: ApiClientHooks,
+): number {
+  try {
+    const epoch = hooks.getAuthEpoch()
+    if (!Number.isSafeInteger(epoch) || epoch < 0) {
+      throw new StaleAuthEpochError(config)
+    }
+    return epoch
+  }
+  catch (error) {
+    if (error instanceof StaleAuthEpochError) {
+      throw error
+    }
+    // Hook 原始异常可能含运行时状态，统一收敛为固定取消错误。
+    throw new StaleAuthEpochError(config)
+  }
+}
+
+/**
+ * 把调用方取消信号与当前身份域信号合并。身份切换会 Abort 旧身份全部在途请求，
+ * 调用方自己的取消（例如 passive /me 被 mutation 作废）也继续生效。
+ */
+function bindCurrentAuthSignal(
+  config: InternalAxiosRequestConfig,
+  hooks: ApiClientHooks,
+): void {
+  let authSignal: AbortSignal
+  try {
+    authSignal = hooks.getAuthSignal()
+  }
+  catch {
+    throw new StaleAuthEpochError(config)
+  }
+
+  if (config.signal === undefined) {
+    config.signal = authSignal
+  }
+  else if (config.signal !== authSignal) {
+    // 本项目调用方只传标准 AbortController.signal；Axios 为兼容性将字段声明得更宽。
+    config.signal = AbortSignal.any([
+      config.signal as AbortSignal,
+      authSignal,
+    ])
+  }
+  throwIfRequestCanceled(config)
+}
+
+function throwIfAuthEpochStale(
+  config: InternalAxiosRequestConfig | undefined,
+  hooks: ApiClientHooks,
+): void {
+  if (
+    config !== undefined
+    && config.authEpoch !== undefined
+    && config.authEpoch !== currentAuthEpochOrStale(config, hooks)
+  ) {
+    throw new StaleAuthEpochError(config)
   }
 }
 
@@ -250,6 +322,7 @@ export function createApiClient(
     baseURL: options.baseURL,
     responseType: 'json',
     timeout: options.timeout,
+    withCredentials: true,
   })
 
   instance.interceptors.request.use((config) => {
@@ -273,12 +346,17 @@ export function createApiClient(
       throw new UnsupportedAdapterConfigurationError()
     }
 
+    config.authEpoch = currentAuthEpochOrStale(config, options.hooks)
+    bindCurrentAuthSignal(config, options.hooks)
     refreshRequestConfig(config, retryingAdapterOptions)
     return config
   })
 
   instance.interceptors.response.use(
-    response => response,
+    (response) => {
+      throwIfAuthEpochStale(response.config, options.hooks)
+      return response
+    },
     async (error: unknown) => {
       const axiosError = axios.isAxiosError<unknown>(error)
         ? error
@@ -298,20 +376,62 @@ export function createApiClient(
         return Promise.reject(normalized)
       }
 
+      try {
+        throwIfAuthEpochStale(config, options.hooks)
+      }
+      catch (staleError) {
+        return Promise.reject(staleError)
+      }
+
       // 非 Axios adapter 异常同样收敛为固定 network 文案，绝不透传原始 Error。
       const normalized = await normalizeAxiosError(
         axiosError ?? new AxiosErrorValue(),
       )
+      const shouldNotifyGlobally = config?.errorPresentation !== 'local'
 
-      if ('status' in normalized && normalized.status === 401) {
-        await invokeSideEffectSafely(options.hooks.requestLogout)
-      }
-      else if ('status' in normalized && normalized.status === 403) {
+      if (
+        normalized.kind === 'http'
+        && normalized.status === 401
+        && normalized.body.code === 'AUTHENTICATION_REQUIRED'
+        && config?.authEpoch !== undefined
+      ) {
         await invokeSideEffectSafely(
-          () => options.hooks.notifyError('没有权限执行此操作'),
+          () => options.hooks.handleSessionInvalid(
+            config.authEpoch as number,
+            config.broadcastSessionInvalid !== false,
+          ),
         )
       }
-      else {
+      else if (normalized.kind === 'http' && normalized.status === 403) {
+        const code = normalized.body.code
+        if (code === 'PASSWORD_CHANGE_REQUIRED' || code === 'CSRF_REJECTED') {
+          // 两类拒绝都说明本地 AuthContext 可能落后于服务端，先重新读取 /auth/me。
+          await invokeSideEffectSafely(
+            () => options.hooks.handleAuthRevalidationRequired(code),
+          )
+        }
+
+        if (shouldNotifyGlobally) {
+          if (code === 'FORBIDDEN') {
+            await invokeSideEffectSafely(
+              () => options.hooks.notifyError('没有权限执行此操作'),
+            )
+          }
+          else if (code === 'CSRF_REJECTED') {
+            await invokeSideEffectSafely(
+              () => options.hooks.notifyError('登录状态校验失败，请重试操作'),
+            )
+          }
+          else if (code !== 'PASSWORD_CHANGE_REQUIRED') {
+            await invokeSideEffectSafely(
+              () => options.hooks.notifyError(
+                getApiClientErrorMessage(normalized),
+              ),
+            )
+          }
+        }
+      }
+      else if (shouldNotifyGlobally) {
         await invokeSideEffectSafely(
           () => options.hooks.notifyError(getApiClientErrorMessage(normalized)),
         )

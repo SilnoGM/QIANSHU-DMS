@@ -56,6 +56,7 @@ defineExpose({
 
 <template>
   <InputGroup :class="cn('w-[200px]', props.class)" @mouseenter="isHovered = true" @mouseleave="isHovered = false">
+    <!-- 调用方显式声明登录字段语义时必须原样下传；普通输入框仍默认关闭自动填充。 -->
     <Input
       v-bind="{
         ...omit(props, ['type', 'align', 'clearable', 'class', 'inputClass', 'startClass', 'endClass']),
@@ -66,7 +67,7 @@ defineExpose({
       ref="inputRef"
       v-model="value"
       data-slot="input-group-control"
-      autocomplete="off"
+      :autocomplete="$attrs.autocomplete?.toString() ?? 'off'"
       @focus="isFocused = true"
       @blur="isFocused = false"
     />
