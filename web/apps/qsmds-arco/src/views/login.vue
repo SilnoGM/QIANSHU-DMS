@@ -107,7 +107,7 @@ function handleLogin() {
         <span class="text-base text-foreground font-bold leading-none whitespace-nowrap">{{ appTitle }}</span>
         <FaBadge :value="appVersion" variant="secondary" class="login-version-badge" badge-class="text-[10px] font-medium leading-4 ring-border" />
       </div>
-      <img src="@/assets/images/login-banner.png" class="banner">
+      <img src="@/assets/images/login-banner.svg" alt="数据管理系统插画" class="banner">
       <AppCopyright v-if="appSettingsStore.mode === 'pc' && ['left', 'right'].includes(layoutAlign)" class="w-full bottom-0 absolute" />
     </div>
     <div class="login-form flex-col-center">
@@ -198,8 +198,10 @@ function handleLogin() {
           position: absolute;
           top: 50%;
           left: 50%;
-          width: 50%;
-          height: 50%;
+          /* SVG 画布为 4:3，桌面端按宽度缩放并限制上限，避免宽屏下尺寸失控或比例失真。 */
+          width: min(60%, 680px);
+          height: auto;
+          aspect-ratio: 4 / 3;
           object-fit: contain;
           transform: translateX(-50%) translateY(-50%);
         }
