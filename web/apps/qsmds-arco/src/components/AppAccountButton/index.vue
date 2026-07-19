@@ -120,7 +120,7 @@ async function submitLogout(scope: LogoutScope) {
     ]" class="flex-center"
   >
     <template #header>
-      <div class="w-[334px] space-y-2">
+      <div class="w-[214px] space-y-2">
         <div class="text-xs text-secondary-foreground/50 font-light">
           {{ t('app.components.accountButton.index.current_account') }}
         </div>
