@@ -34,6 +34,8 @@ allowBuilds:
   '@prisma/engines': true
   # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
   '@scarf/scarf': false
+  # argon2 通过 node-gyp-build 选择已发布的 N-API 预构建二进制；密码 Hash/verify 需要其原生实现。
+  argon2: true
   prisma: true
 ```
 
@@ -50,9 +52,18 @@ allowBuilds:
 
 | 变量 | 用途 | 示例模板 |
 | --- | --- | --- |
-| `NODE_ENV` | 运行环境 | `development` |
+| `NODE_ENV` | 运行环境；production 会启用严格来源、Cookie 与 HMAC 校验 | `development` |
 | `PORT` | HTTP 监听端口 | `3000` |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | 模板保持为空 |
+| `APP_ORIGIN` | Web 的精确 origin；production 必须使用 HTTPS | `http://127.0.0.1:9000` |
+| `TRUST_PROXY_HOPS` | 可信反向代理跳数，只允许 `0` 到 `2` | `0` |
+| `AUTH_ARGON2_CONCURRENCY` | 单实例同时执行的 Argon2 上限 | `2` |
+| `AUTH_ARGON2_QUEUE_LIMIT` | 单实例等待 Argon2 的队列上限 | `32` |
+| `AUTH_USERNAME_HMAC_KEY` | username 限流主体 Hash key；production 必填 | development 留空时进程随机生成 |
+| `AUTH_USER_ID_HMAC_KEY` | user ID 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
+| `AUTH_IP_HMAC_KEY` | IP 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
+
+三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
 
 ## 常用命令
 
@@ -64,12 +75,17 @@ pnpm -C server openapi:generate
 pnpm -C server test:e2e
 pnpm -C server db:migrate:dev
 pnpm -C server db:migrate:deploy
+pnpm -C server auth:bootstrap-admin
+pnpm -C server auth:recover-admin
+pnpm -C server auth:cleanup
 ```
 
 - `check` 与 `build` 只验证工程和单元测试，不连接数据库；它们在未设置 `DATABASE_URL` 时也应可执行。
 - `test:e2e` 面向真实 PostgreSQL，调用前必须通过当前进程环境提供测试数据库连接，且测试数据库必须与个人或生产数据库隔离。
 - `dev` 与 `start` 会先生成 Prisma Client，再启动 NestJS。
 - `start:prod` 直接执行已经构建的 `dist/main.js`，不会生成 Prisma Client；部署流程必须先完成安装、生成与构建。
+- `auth:bootstrap-admin` 只用于首次创建 `system_admin`；`auth:recover-admin` 只用于已有 `system_admin` 的离线密码恢复。两者都要求本机交互式 TTY，密码不得通过 argv、环境变量或脚本传入。
+- `auth:cleanup` 由单一外部 Cron 定期调用，用于小批清理过期 Session 和限流数据；API 实例不会自行启动清理定时器。
 
 ## 接口契约
 

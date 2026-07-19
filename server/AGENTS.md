@@ -21,10 +21,12 @@
     '@prisma/engines': true
     # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
     '@scarf/scarf': false
+    # argon2 通过 node-gyp-build 选择已发布的 N-API 预构建二进制；密码 Hash/verify 需要其原生实现。
+    argon2: true
     prisma: true
   ```
 
-- `allowBuilds` 只允许已审查的 `prisma` 与 `@prisma/engines` 运行 build script。
+- `allowBuilds` 只允许已审查的 `prisma`、`@prisma/engines` 与 `argon2` 运行 build script；`@scarf/scarf` 被明确拒绝。
 - `injectWorkspacePackages` 只服务现代 production deploy：正式 Server 归档使用 `pnpm deploy --prod`，不得使用 `--legacy`。
 - 该配置不得借机新增 `packages`、扩张 Server workspace 或把 Root / Web 纳入依赖图；Root、Server 与 Web 继续保持独立依赖域。
 - 新增带 build script 的依赖时，必须先审查固定版本、脚本内容和工程必要性，再精确添加包名。

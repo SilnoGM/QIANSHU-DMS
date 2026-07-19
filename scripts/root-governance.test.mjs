@@ -1676,17 +1676,71 @@ test('根与 Server 入口文档记录当前契约命令和运行时事实', asy
   )
 })
 
+test('Server 安装与运行文档跟随可执行配置和环境模板', async () => {
+  const serverReadme = await readFile(fromRoot('server', 'README.md'), 'utf8')
+  const serverAgents = await readFile(fromRoot('server', 'AGENTS.md'), 'utf8')
+  const backendArchitecture = await readFile(
+    fromRoot('docs', '后端文档', '后端架构.md'),
+    'utf8',
+  )
+  const pnpmSettings = await readFile(
+    fromRoot('server', 'pnpm-workspace.yaml'),
+    'utf8',
+  )
+  const envTemplate = await readFile(fromRoot('server', '.env.example'), 'utf8')
+  const manifest = JSON.parse(
+    await readFile(fromRoot('server', 'package.json'), 'utf8'),
+  )
+
+  assert.match(pnpmSettings, /^\s*argon2: true$/m)
+  for (const document of [serverReadme, serverAgents, backendArchitecture]) {
+    assert.match(document, /^\s*argon2: true$/m)
+  }
+
+  const environmentSection = markdownSection(serverReadme, '## 环境变量')
+  const environmentNames = [...envTemplate.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)]
+    .map(match => match[1])
+  assert.ok(environmentNames.length > 0)
+  assert.deepEqual(
+    environmentNames.filter(name => !environmentSection.includes(`\`${name}\``)),
+    [],
+  )
+
+  const commandsSection = markdownSection(serverReadme, '## 常用命令')
+  const authCommands = Object.keys(manifest.scripts)
+    .filter(name => name.startsWith('auth:'))
+    .map(name => `pnpm -C server ${name}`)
+  assert.deepEqual(
+    authCommands.filter(command => !commandsSection.includes(command)),
+    [],
+  )
+})
+
 test('数据库迁移规范记录不可变迁移、安全验证和向前修复规则', async () => {
   const migrationGuide = await readFile(
     fromRoot('docs', '后端文档', '数据库迁移规范.md'),
     'utf8',
   )
+  const migrationsRoot = fromRoot('server', 'prisma', 'migrations')
+  const migrationNames = (await readdir(migrationsRoot, { withFileTypes: true }))
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name)
+    .sort()
   const requiredFactsBySection = [
     [
       '## 1. 目的与真相源',
       ['`prisma/schema.prisma`', '`prisma/migrations/`', '`src/generated/prisma/`'],
     ],
-    ['## 2. 当前迁移基线', ['`20260710152144_init`', 'PostgreSQL 16']],
+    [
+      '## 2. 当前迁移基线',
+      [
+        ...migrationNames.map(name => `\`${name}\``),
+        '`AuthSession`',
+        '`AuthRateLimit`',
+        '`AuditEvent`',
+        'PostgreSQL 16',
+      ],
+    ],
     ['## 3. 不可变与只追加原则', ['向前修复']],
     [
       '## 4. 命令使用边界',
@@ -1712,6 +1766,14 @@ test('数据库迁移规范记录不可变迁移、安全验证和向前修复�
       `数据库迁移章节缺少事实：${heading}`,
     )
   }
+
+  assert.doesNotMatch(migrationGuide, /当前 `schema\.prisma` 也没有任何业务 model/)
+  assert.doesNotMatch(migrationGuide, /migration history 只有一条成功记录/)
+  assert.doesNotMatch(
+    migrationGuide,
+    /`_prisma_migrations` 只有 `20260710152144_init` 一条成功记录/,
+  )
+  assert.doesNotMatch(migrationGuide, /public schema 没有业务表/)
 })
 
 test('数据库迁移命令要求显式临时 URL 且禁止回退本地 .env', async () => {
