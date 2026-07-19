@@ -8,6 +8,7 @@
   },
   "scripts": {
     "bootstrap": "node ./scripts/bootstrap.mjs",
+    "cleanup:root": "node ./scripts/root-artifact-cleaner.mjs",
     "dev": "node ./scripts/dev.mjs",
     "dev:server": "node ./scripts/dev.mjs server",
     "dev:web": "node ./scripts/dev.mjs web",

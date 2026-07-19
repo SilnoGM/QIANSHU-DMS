@@ -144,7 +144,12 @@ async function readPnpmCalls(logPath) {
 }
 
 async function assertRootStateAbsent() {
-  for (const name of ['pnpm-workspace.yaml', 'pnpm-lock.yaml', 'node_modules']) {
+  for (const name of [
+    'pnpm-workspace.yaml',
+    'pnpm-lock.yaml',
+    'node_modules',
+    '.pnpm-store',
+  ]) {
     assert.equal(
       await exists(path.join(repositoryRoot, name)),
       false,

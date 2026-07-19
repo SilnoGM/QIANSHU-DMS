@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 import {
   developmentCommandsFor,
   runDevelopment,
+  startDevelopment,
 } from './dev.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -91,6 +92,65 @@ test('开发目标只接受 server、web 或省略值', () => {
     () => developmentCommandsFor('unknown'),
     /^Error: Unsupported development target$/,
   )
+})
+
+test('开发入口先清理根违规产物再启动目标进程', async () => {
+  const events = []
+
+  const exitCode = await startDevelopment('web', {
+    async cleanRoot() {
+      events.push('cleanup')
+    },
+    async run(options) {
+      events.push(['run', options.commands])
+      return 0
+    },
+  })
+
+  assert.equal(exitCode, 0)
+  assert.deepEqual(events, [
+    'cleanup',
+    ['run', [['pnpm', ['-C', 'web', 'dev']]]],
+  ])
+})
+
+test('根违规产物清理失败时开发入口不启动任何进程', async () => {
+  const expectedError = new Error('cleanup failed')
+  let runCalled = false
+
+  await assert.rejects(
+    startDevelopment(undefined, {
+      async cleanRoot() {
+        throw expectedError
+      },
+      async run() {
+        runCalled = true
+        return 0
+      },
+    }),
+    error => error === expectedError,
+  )
+  assert.equal(runCalled, false)
+})
+
+test('无效开发目标在清理和启动前被拒绝', async () => {
+  let cleanupCalled = false
+  let runCalled = false
+
+  await assert.rejects(
+    startDevelopment('unknown', {
+      async cleanRoot() {
+        cleanupCalled = true
+      },
+      async run() {
+        runCalled = true
+        return 0
+      },
+    }),
+    /^Error: Unsupported development target$/,
+  )
+  assert.equal(cleanupCalled, false)
+  assert.equal(runCalled, false)
 })
 
 test('单端模式只启动指定的开发命令', async () => {

@@ -697,6 +697,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
   assert.equal('devDependencies' in manifest, false)
   assert.deepEqual(manifest.scripts, {
     bootstrap: 'node ./scripts/bootstrap.mjs',
+    'cleanup:root': 'node ./scripts/root-artifact-cleaner.mjs',
     dev: 'node ./scripts/dev.mjs',
     'dev:server': 'node ./scripts/dev.mjs server',
     'dev:web': 'node ./scripts/dev.mjs web',
@@ -725,6 +726,50 @@ test('根目录不创建 workspace、lockfile 或依赖目录', async () => {
   assert.equal(await exists('pnpm-workspace.yaml'), false)
   assert.equal(await exists('pnpm-lock.yaml'), false)
   assert.equal(await exists('node_modules'), false)
+  assert.equal(await exists('.pnpm-store'), false)
+})
+
+test('根自动清理授权只覆盖四类精确违规产物', async () => {
+  const agents = await readFile(fromRoot('AGENTS.md'), 'utf8')
+  const readme = await readFile(fromRoot('README.md'), 'utf8')
+  const exactArtifacts = [
+    'pnpm-workspace.yaml',
+    'pnpm-lock.yaml',
+    'node_modules/',
+    '.pnpm-store/',
+  ]
+
+  assert.ok(agents.includes('无需再次确认'))
+  assert.ok(agents.includes('不得把自动删除范围扩展'))
+  assert.ok(readme.includes('`node --run cleanup:root`'))
+  assert.ok(readme.includes('它不会扫描或删除 `web/`、`server/`'))
+  for (const artifact of exactArtifacts) {
+    assert.ok(agents.includes(`\`${artifact}\``), `AGENTS.md 缺少：${artifact}`)
+  }
+})
+
+test('当前态架构文档统一声明四类根违规产物', async () => {
+  const currentStateDocuments = [
+    'docs/全局文档/开发工作流.md',
+    'docs/后端文档/后端架构.md',
+    'docs/全局文档/项目工程组织方案.md',
+  ]
+  const exactArtifacts = [
+    'pnpm-workspace.yaml',
+    'pnpm-lock.yaml',
+    'node_modules/',
+    '.pnpm-store/',
+  ]
+
+  for (const documentPath of currentStateDocuments) {
+    const document = await readFile(fromRoot(documentPath), 'utf8')
+    for (const artifact of exactArtifacts) {
+      assert.ok(
+        document.includes(`\`${artifact}\``),
+        `${documentPath} 缺少：${artifact}`,
+      )
+    }
+  }
 })
 
 test('发布清单与 GitHub Release 协调器均为真实文件', async () => {
@@ -756,6 +801,8 @@ test('根治理入口和当前指导文档均为真实文件', async () => {
     '.editorconfig',
     '.node-version',
     'package.json',
+    'scripts/root-artifact-cleaner.mjs',
+    'scripts/root-artifact-cleaner.test.mjs',
     'scripts/root-governance.test.mjs',
     'docs/文档索引.md',
     'docs/全局文档/项目工程组织方案.md',

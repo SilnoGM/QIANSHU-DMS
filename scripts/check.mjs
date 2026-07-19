@@ -7,15 +7,23 @@ import {
   isDirectEntry,
   runCommand,
 } from './run-command.mjs'
+import { cleanRootArtifacts } from './root-artifact-cleaner.mjs'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
 
-export async function check(run = runCommand) {
+export async function check(
+  run = runCommand,
+  cleanRoot = cleanRootArtifacts,
+) {
+  // 用户已为四类精确根违规产物授权自动清理。检查入口必须先恢复根边界，
+  // 再执行只读验证；清理失败时后续步骤全部停止，避免把脏状态报告成通过。
+  await cleanRoot()
+
   // 根测试通过 process.execPath 调用 node --run，避免 pnpm 11 在根 package
-  // 自动 install 并生成 pnpm-lock.yaml 或 node_modules 状态目录。所有步骤都
-  // 锚定脚本所在仓库根，确保从任意 cwd 直接执行时解析同一 package、
-  // 契约入口和两端目录。严格串行的 await 会在任一边界失败时立即短路。
+  // 自动 install 并生成新的状态目录。所有步骤都锚定脚本所在仓库根，确保
+  // 从任意 cwd 直接执行时解析同一 package、契约入口和两端目录。
+  // 严格串行的 await 会在任一边界失败时立即短路。
   await run(process.execPath, ['--run', 'test:root'], { cwd: repositoryRoot })
   await run('pnpm', ['-C', 'server', 'check'], { cwd: repositoryRoot })
   // Node 24 的 node --run 会把 package script 的非零退出码归一为 1。
