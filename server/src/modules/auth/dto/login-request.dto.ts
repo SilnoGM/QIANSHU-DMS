@@ -16,10 +16,12 @@ export class LoginRequestDto {
   @ApiProperty({
     type: 'string',
     format: 'password',
-    maxLength: 128,
+    minLength: 8,
+    maxLength: 20,
     writeOnly: true,
   })
   @IsString()
-  @IsUnicodeCodePointLength(0, 128)
+  // 短输入交给认证服务统一映射为 INVALID_CREDENTIALS；这里只在 Argon2 前拦截超长输入。
+  @IsUnicodeCodePointLength(0, 20)
   password!: string
 }

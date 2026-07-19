@@ -115,6 +115,11 @@ function readSessionCookie(response: { headers: Record<string, unknown> }): stri
     .join('; ')
 }
 
+/** 生成落在 8..20 边界内且每次运行不同的测试密码，保证 E2E 测试的是目标业务分支。 */
+function createTestPassword(label: string): string {
+  return `${label}-${randomUUID().slice(0, 8)}`
+}
+
 describe('Management API with PostgreSQL', () => {
   let application: INestApplication
   let prisma: PrismaService
@@ -202,7 +207,7 @@ describe('Management API with PostgreSQL', () => {
   async function createDirectUser(options: { systemAdmin?: boolean } = {}) {
     const suffix = randomUUID()
     const username = `${USERNAME_PREFIX}${suffix}`
-    const password = `Management secure password ${suffix}`
+    const password = createTestPassword('Manage')
     const user = await prisma.user.create({
       data: {
         username,
@@ -297,7 +302,7 @@ describe('Management API with PostgreSQL', () => {
       .send({
         username: rejectedUsername,
         displayName: '不得创建的用户',
-        password: `Rejected create password ${randomUUID()}`,
+        password: createTestPassword('Reject'),
         mustChangePassword: false,
       })
       .expect(403)
@@ -308,7 +313,7 @@ describe('Management API with PostgreSQL', () => {
     const resetResponse = await adminBrowser
       .post(`/api/users/${target.user.id}/password-reset`)
       .send({
-        newPassword: `Rejected reset password ${randomUUID()}`,
+        newPassword: createTestPassword('Reject'),
         mustChangePassword: true,
       })
       .expect(403)
@@ -363,7 +368,7 @@ describe('Management API with PostgreSQL', () => {
 
     const suffix = randomUUID()
     const username = `${USERNAME_PREFIX}created-${suffix}`
-    const originalPassword = `Created user secure password ${suffix}`
+    const originalPassword = createTestPassword('Create')
     const createResponse = await adminBrowser
       .post('/api/users')
       .set(CSRF_HEADERS)
@@ -458,7 +463,7 @@ describe('Management API with PostgreSQL', () => {
 
     const targetBeforeReset = request.agent(application.getHttpServer())
     await login(targetBeforeReset, username, originalPassword)
-    const newPassword = `Administrator reset password ${randomUUID()}`
+    const newPassword = createTestPassword('Reset')
     await adminBrowser
       .post(`/api/users/${created.id}/password-reset`)
       .set(CSRF_HEADERS)
@@ -683,7 +688,7 @@ describe('Management API with PostgreSQL', () => {
       .post(`/api/users/${administrator.user.id}/password-reset`)
       .set(CSRF_HEADERS)
       .send({
-        newPassword: `Forbidden self reset ${randomUUID()}`,
+        newPassword: createTestPassword('Self'),
         mustChangePassword: false,
       })
       .expect(409)
@@ -787,7 +792,7 @@ describe('Management API with PostgreSQL', () => {
 
     const candidatePasswords = Array.from(
       { length: 4 },
-      () => `Concurrent reset password ${randomUUID()}`,
+      () => createTestPassword('Concurrent'),
     )
     const responses = await Promise.all(
       candidatePasswords.map((newPassword) =>

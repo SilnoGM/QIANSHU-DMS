@@ -85,8 +85,8 @@ export function validatePasswordFields(
 ): FieldErrors {
   const errors: FieldErrors = {}
   const length = codePointLength(newPassword)
-  if (length < 15 || length > 128) {
-    errors.newPassword = '密码长度应为 15 至 128 个字符'
+  if (length < 8 || length > 20) {
+    errors.newPassword = '密码长度应为 8 至 20 个字符'
   }
   else if (newPassword !== confirmPassword) {
     errors.confirmPassword = '两次输入的密码不一致'

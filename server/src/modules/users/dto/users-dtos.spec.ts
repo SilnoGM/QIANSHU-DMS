@@ -87,13 +87,13 @@ describe('User request DTO validation', () => {
     const valid = await validatePlain(CreateUserRequestDto, {
       username: '😀'.repeat(128),
       displayName: '操作员',
-      password: 'a'.repeat(15),
+      password: 'a'.repeat(8),
       mustChangePassword: true,
     })
     const invalid = await validatePlain(CreateUserRequestDto, {
       username: '😀'.repeat(129),
       displayName: '',
-      password: 'a'.repeat(14),
+      password: 'a'.repeat(7),
       mustChangePassword: 'true',
     })
 
@@ -123,7 +123,7 @@ describe('User request DTO validation', () => {
       ],
     })
     const reset = await validatePlain(PasswordResetRequestDto, {
-      newPassword: 'a'.repeat(15),
+      newPassword: 'a'.repeat(8),
     })
     const extra = await validatePlain(UpdateUserRequestDto, {
       displayName: '新名称',

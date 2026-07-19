@@ -7,7 +7,8 @@ export class ChangePasswordRequestDto {
   @ApiPropertyOptional({
     type: 'string',
     format: 'password',
-    maxLength: 128,
+    minLength: 8,
+    maxLength: 20,
     writeOnly: true,
   })
   // `@IsOptional` 会同时放过 null；这里只把真正缺失的 undefined 视为可选。
@@ -15,17 +16,19 @@ export class ChangePasswordRequestDto {
     value !== undefined,
   )
   @IsString()
-  @IsUnicodeCodePointLength(0, 128)
+  // 短输入交给业务层保持 CURRENT_PASSWORD_INVALID，DTO 只拦截超长输入。
+  @IsUnicodeCodePointLength(0, 20)
   currentPassword?: string
 
   @ApiProperty({
     type: 'string',
     format: 'password',
-    minLength: 15,
-    maxLength: 128,
+    minLength: 8,
+    maxLength: 20,
     writeOnly: true,
   })
   @IsString()
-  @IsUnicodeCodePointLength(0, 128)
+  // 最小长度由 PasswordPolicyProvider 统一映射为 PASSWORD_POLICY_VIOLATION。
+  @IsUnicodeCodePointLength(0, 20)
   newPassword!: string
 }

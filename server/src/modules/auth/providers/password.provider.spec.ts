@@ -54,8 +54,8 @@ describe('PasswordProvider password policy', () => {
   })
 
   it.each([
-    ['低于 15 个 Unicode code point', '😀'.repeat(14)],
-    ['超过 128 个 Unicode code point', '😀'.repeat(129)],
+    ['低于 8 个 Unicode code point', '😀'.repeat(7)],
+    ['超过 20 个 Unicode code point', '😀'.repeat(21)],
   ])('拒绝%s', async (_description, password) => {
     const driver = createDriver()
     const provider = new PasswordProvider({ driver })
@@ -66,14 +66,17 @@ describe('PasswordProvider password policy', () => {
     expect(driver.hash).not.toHaveBeenCalled()
   })
 
-  it('按 Unicode code point 而不是 UTF-16 code unit 计算边界', async () => {
-    const driver = createDriver()
-    const provider = new PasswordProvider({ driver })
+  it.each([8, 20])(
+    '按 Unicode code point 接受 %i 个字符的边界',
+    async (length) => {
+      const driver = createDriver()
+      const provider = new PasswordProvider({ driver })
 
-    await expect(provider.hash('😀'.repeat(15))).resolves.toBe(
-      '$argon2id$test-hash',
-    )
-  })
+      await expect(provider.hash('😀'.repeat(length))).resolves.toBe(
+        '$argon2id$test-hash',
+      )
+    },
+  )
 
   it('verify 对输入执行相同 NFC 规范化', async () => {
     const driver = createDriver()
@@ -88,12 +91,12 @@ describe('PasswordProvider password policy', () => {
     )
   })
 
-  it('verify 在 Argon2 前拒绝超长输入且返回 false', async () => {
+  it('verify 在 Argon2 前拒绝超过 20 个字符的输入且返回 false', async () => {
     const driver = createDriver()
     const provider = new PasswordProvider({ driver })
 
     await expect(
-      provider.verify('a'.repeat(129), '$argon2id$stored'),
+      provider.verify('a'.repeat(21), '$argon2id$stored'),
     ).resolves.toBe(false)
     expect(driver.verify).not.toHaveBeenCalled()
   })

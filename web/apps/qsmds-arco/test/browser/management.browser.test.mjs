@@ -13,6 +13,9 @@ function readConfiguration(environment) {
   const profileDirectory = environment.QIANSHU_BROWSER_AUTH_PROFILE_DIRECTORY
   const username = environment.QIANSHU_BROWSER_AUTH_ADMIN_USERNAME
   const password = environment.QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD
+  const passwordLength = typeof password === 'string'
+    ? Array.from(password.normalize('NFC')).length
+    : 0
   let production
   let development
   try {
@@ -34,7 +37,8 @@ function readConfiguration(environment) {
     || typeof username !== 'string'
     || !/^[a-z][a-z0-9_]{2,63}$/u.test(username)
     || typeof password !== 'string'
-    || Array.from(password).length < 15
+    || passwordLength < 8
+    || passwordLength > 20
   ) {
     throw new Error('Browser auth test configuration is invalid')
   }
@@ -366,9 +370,12 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   timeout: 240_000,
 }, async (t) => {
   const configuration = readConfiguration(process.env)
+  const passwordSeed = Array.from(configuration.password.normalize('NFC'))
+    .slice(0, 8)
+    .join('')
   const managedUsername = 'browser_ui_managed'
-  const managedInitialPassword = `${configuration.password}-UiInitial6`
-  const managedResetPassword = `${configuration.password}-UiReset5`
+  const managedInitialPassword = `${passwordSeed}-UI6`
+  const managedResetPassword = `${passwordSeed}-UR5`
   const roleCode = 'browser_ui_role'
   const initialRoleName = 'Browser UI Role'
   const editedRoleName = 'Browser UI Operator'

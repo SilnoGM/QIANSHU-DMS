@@ -35,8 +35,8 @@ describe('executeAuthAdminCli', () => {
       .mockResolvedValueOnce('系统管理员')
     io.readSecret = jest
       .fn()
-      .mockResolvedValueOnce('A-strong-permanent-password')
-      .mockResolvedValueOnce('A-strong-permanent-password')
+      .mockResolvedValueOnce('Admin-pass-2026!')
+      .mockResolvedValueOnce('Admin-pass-2026!')
     const service = {
       bootstrap: jest.fn().mockResolvedValue({ userId: 'created-id' }),
     }

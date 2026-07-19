@@ -166,7 +166,7 @@ describe('AuthAdminService bootstrap', () => {
       fixture.service.bootstrap({
         username: '  RootAdmin  ',
         displayName: '  系统管理员  ',
-        password: 'A-strong-permanent-password',
+        password: 'Admin-pass-2026!',
       }),
     ).resolves.toEqual({ userId: ADMIN_ID })
 
@@ -177,12 +177,10 @@ describe('AuthAdminService bootstrap', () => {
     expect(queries[1]).toContain('pg_advisory_xact_lock')
     expect(queries[2]).toContain('FOR UPDATE')
     expect(fixture.passwordPolicy.assertAcceptable).toHaveBeenCalledWith({
-      password: 'A-strong-permanent-password',
-      username: 'RootAdmin',
-      usernameNormalized: 'rootadmin',
+      password: 'Admin-pass-2026!',
     })
     expect(fixture.passwords.hash).toHaveBeenCalledWith(
-      'A-strong-permanent-password',
+      'Admin-pass-2026!',
     )
     expect(fixture.transaction.userRole.findFirst).toHaveBeenCalledWith({
       where: { roleId: ROLE_ID },
@@ -237,7 +235,7 @@ describe('AuthAdminService bootstrap', () => {
       fixture.service.bootstrap({
         username: 'another-admin',
         displayName: '另一个管理员',
-        password: 'Another-strong-password',
+        password: 'Another-pass-2026!',
       }),
     ).rejects.toMatchObject<Pick<AuthAdminOperationError, 'code'>>({
       code: 'SYSTEM_ADMIN_ALREADY_BOOTSTRAPPED',
@@ -259,14 +257,14 @@ describe('AuthAdminService bootstrap', () => {
     fixture.transaction.user.create.mockResolvedValue({ id: ADMIN_ID })
     fixture.transaction.userRole.create.mockResolvedValue({})
     fixture.audit.record.mockRejectedValue(
-      new Error('password=A-strong-permanent-password'),
+      new Error('password=Admin-pass-2026!'),
     )
 
     await expect(
       fixture.service.bootstrap({
         username: 'rootadmin',
         displayName: '系统管理员',
-        password: 'A-strong-permanent-password',
+        password: 'Admin-pass-2026!',
       }),
     ).rejects.toMatchObject<Pick<AuthAdminOperationError, 'code' | 'message'>>({
       code: 'SYSTEM_ADMIN_OPERATION_FAILED',
@@ -318,7 +316,7 @@ describe('AuthAdminService recovery', () => {
       await expect(
         fixture.service.recover({
           username: 'rootadmin',
-          password: 'A-new-strong-permanent-password',
+          password: 'Admin-new-2026!',
           enableDisabled,
         }),
       ).resolves.toEqual({ userId: ADMIN_ID, enabled: enableDisabled })
@@ -350,12 +348,10 @@ describe('AuthAdminService recovery', () => {
       const recoveryAudit = fixture.audit.record.mock.calls[0]?.[1]
       expect(recoveryAudit?.requestId).toMatch(/^cli:[0-9a-f-]{36}$/u)
       expect(fixture.passwordPolicy.assertAcceptable).toHaveBeenCalledWith({
-        password: 'A-new-strong-permanent-password',
-        username: 'RootAdmin',
-        usernameNormalized: 'rootadmin',
+        password: 'Admin-new-2026!',
       })
       expect(fixture.passwords.hash).toHaveBeenCalledWith(
-        'A-new-strong-permanent-password',
+        'Admin-new-2026!',
       )
       expect(fixture.audit.record).toHaveBeenCalledWith(fixture.transaction, {
         eventType: AuditEventType.SYSTEM_ADMIN_RECOVERED,
@@ -392,7 +388,7 @@ describe('AuthAdminService recovery', () => {
     await expect(
       fixture.service.recover({
         username: 'rootadmin',
-        password: 'A-new-strong-permanent-password',
+        password: 'Admin-new-2026!',
         enableDisabled: false,
       }),
     ).rejects.toMatchObject<Pick<AuthAdminOperationError, 'code'>>({

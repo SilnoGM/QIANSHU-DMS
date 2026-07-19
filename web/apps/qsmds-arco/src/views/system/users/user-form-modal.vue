@@ -214,7 +214,7 @@ watch(() => props.modelValue, (visible) => {
             v-model="model.newPassword"
             autocomplete="new-password"
             allow-clear
-            placeholder="请输入 15 至 128 个字符"
+            placeholder="请输入 8 至 20 个字符"
           />
         </AFormItem>
         <AFormItem

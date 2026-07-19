@@ -102,8 +102,6 @@ export class AuthAdminService {
       const identity = this.normalizeIdentity(input.username, input.displayName)
       const acceptedPassword = this.passwordPolicy.assertAcceptable({
         password: input.password,
-        username: identity.username,
-        usernameNormalized: identity.usernameNormalized,
       })
       const passwordHash = await this.passwords.hash(acceptedPassword)
       const requestId = this.createCliRequestId()
@@ -186,8 +184,6 @@ export class AuthAdminService {
       const snapshot = await this.loadRecoverySnapshot(input.username)
       const acceptedPassword = this.passwordPolicy.assertAcceptable({
         password: input.password,
-        username: snapshot.username,
-        usernameNormalized: snapshot.usernameNormalized,
       })
       const passwordHash = await this.passwords.hash(acceptedPassword)
       const requestId = this.createCliRequestId()

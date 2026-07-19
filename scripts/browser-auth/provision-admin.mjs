@@ -92,6 +92,9 @@ export function readProvisionInput(environment) {
   catch {
     throw new Error('Browser auth admin fixture input is invalid')
   }
+  const passwordLength = typeof password === 'string'
+    ? Array.from(password.normalize('NFC')).length
+    : 0
   if (
     !['postgres:', 'postgresql:'].includes(database.protocol)
     || database.username !== 'qianshu_ci'
@@ -105,8 +108,8 @@ export function readProvisionInput(environment) {
     || Array.from(displayName).length < 1
     || Array.from(displayName).length > 128
     || typeof password !== 'string'
-    || Array.from(password).length < 15
-    || Array.from(password).length > 128
+    || passwordLength < 8
+    || passwordLength > 20
   ) {
     throw new Error('Browser auth admin fixture input is invalid')
   }

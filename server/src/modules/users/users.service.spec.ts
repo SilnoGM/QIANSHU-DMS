@@ -366,18 +366,16 @@ describe('UsersService create and simple updates', () => {
       {
         username: '  ALICÉ  ',
         displayName: '  Alice Operator  ',
-        password: 'correct horse battery',
+        password: 'correct horse power',
         mustChangePassword: true,
       },
     )
 
     expect(passwordPolicy.assertAcceptable).toHaveBeenCalledWith({
-      password: 'correct horse battery',
-      username: 'ALICÉ',
-      usernameNormalized: 'alicé',
+      password: 'correct horse power',
       fieldName: 'password',
     })
-    expect(passwords.hash).toHaveBeenCalledWith('correct horse battery')
+    expect(passwords.hash).toHaveBeenCalledWith('correct horse power')
     const createArgs = transaction.user.create.mock.calls[0]?.[0] as {
       data: Record<string, unknown>
     }
@@ -417,7 +415,7 @@ describe('UsersService create and simple updates', () => {
       service.create(context, {
         username: 'Alice',
         displayName: 'Alice',
-        password: 'correct horse battery',
+        password: 'correct horse power',
         mustChangePassword: false,
       }),
       HttpStatus.CONFLICT,
@@ -814,7 +812,7 @@ describe('UsersService resetPassword', () => {
 
     await expectApiException(
       service.resetPassword(context, ACTOR_ID, {
-        newPassword: 'correct horse battery',
+        newPassword: 'correct horse power',
         mustChangePassword: true,
       }),
       HttpStatus.CONFLICT,
@@ -833,7 +831,7 @@ describe('UsersService resetPassword', () => {
         { ...context, actorUserId: ACTOR_ID.toUpperCase() },
         ACTOR_ID,
         {
-          newPassword: 'correct horse battery',
+          newPassword: 'correct horse power',
           mustChangePassword: true,
         },
       ),
@@ -877,7 +875,7 @@ describe('UsersService resetPassword', () => {
 
     await expectApiException(
       service.resetPassword(context, TARGET_ID, {
-        newPassword: 'correct horse battery',
+        newPassword: 'correct horse power',
         mustChangePassword: false,
       }),
       HttpStatus.CONFLICT,
@@ -928,14 +926,12 @@ describe('UsersService resetPassword', () => {
     transaction.authSession.updateMany.mockResolvedValue({ count: 3 })
 
     const result = await service.resetPassword(context, TARGET_ID, {
-      newPassword: 'correct horse battery',
+      newPassword: 'correct horse power',
       mustChangePassword: true,
     })
 
     expect(passwordPolicy.assertAcceptable).toHaveBeenCalledWith({
-      password: 'correct horse battery',
-      username: 'Alice',
-      usernameNormalized: 'alice',
+      password: 'correct horse power',
       fieldName: 'newPassword',
     })
     expect(transaction.user.update).toHaveBeenCalledWith(
@@ -1018,7 +1014,7 @@ describe('UsersService resetPassword', () => {
       uppercaseContext,
       TARGET_ID.toUpperCase(),
       {
-        newPassword: 'correct horse battery',
+        newPassword: 'correct horse power',
         mustChangePassword: false,
       },
     )

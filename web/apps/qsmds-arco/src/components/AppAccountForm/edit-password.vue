@@ -38,12 +38,15 @@ function close(): void {
 }
 
 function validate(): string | null {
-  if (!props.forced && model.currentPassword.length === 0) {
-    return '请输入当前密码'
+  if (!props.forced) {
+    const currentPasswordLength = Array.from(model.currentPassword).length
+    if (currentPasswordLength < 8 || currentPasswordLength > 20) {
+      return '当前密码长度应为 8 至 20 个字符'
+    }
   }
   const length = Array.from(model.newPassword).length
-  if (length < 15 || length > 128) {
-    return '新密码长度应为 15 至 128 个字符'
+  if (length < 8 || length > 20) {
+    return '新密码长度应为 8 至 20 个字符'
   }
   if (model.newPassword !== model.confirmPassword) {
     return '两次输入的新密码不一致'
@@ -170,7 +173,7 @@ watch(() => props.modelValue, (visible) => {
       <AFormItem field="newPassword" label="新密码" required>
         <AInputPassword v-model="model.newPassword" autocomplete="new-password" allow-clear />
         <template #extra>
-          15 至 128 个字符，支持空格与 Unicode。
+          8 至 20 个字符，支持空格与 Unicode。
         </template>
       </AFormItem>
       <AFormItem field="confirmPassword" label="确认新密码" required>

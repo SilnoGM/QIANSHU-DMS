@@ -164,8 +164,6 @@ export class UsersService {
       const displayName = this.normalizeDisplayName(input.displayName)
       const acceptedPassword = this.passwordPolicy.assertAcceptable({
         password: input.password,
-        username: normalizedUsername.username,
-        usernameNormalized: normalizedUsername.usernameNormalized,
         fieldName: 'password',
       })
       const passwordHash = await this.passwords.hash(acceptedPassword)
@@ -533,8 +531,6 @@ export class UsersService {
       const snapshot = await this.readPasswordResetSnapshot(normalizedUserId)
       const acceptedPassword = this.passwordPolicy.assertAcceptable({
         password: input.newPassword,
-        username: snapshot.username,
-        usernameNormalized: snapshot.usernameNormalized,
         fieldName: 'newPassword',
       })
       const passwordHash = await this.passwords.hash(acceptedPassword)

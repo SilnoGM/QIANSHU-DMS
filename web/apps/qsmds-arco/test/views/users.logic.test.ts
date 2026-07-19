@@ -46,20 +46,24 @@ test('用户身份字段按 Unicode code point 校验并只在提交值中裁剪
   })
 })
 
-test('管理员设置密码使用 15 至 128 个 Unicode 字符并校验两次输入一致', () => {
-  assert.deepEqual(validatePasswordFields('a'.repeat(15), 'a'.repeat(15)), {})
-  assert.deepEqual(validatePasswordFields('😀'.repeat(14), '😀'.repeat(14)), {
-    newPassword: '密码长度应为 15 至 128 个字符',
+test('管理员设置密码使用 8 至 20 个 Unicode 字符并校验两次输入一致', () => {
+  assert.deepEqual(validatePasswordFields('a'.repeat(8), 'a'.repeat(8)), {})
+  assert.deepEqual(validatePasswordFields('😀'.repeat(20), '😀'.repeat(20)), {})
+  assert.deepEqual(validatePasswordFields('😀'.repeat(7), '😀'.repeat(7)), {
+    newPassword: '密码长度应为 8 至 20 个字符',
   })
-  assert.deepEqual(validatePasswordFields('a'.repeat(15), 'b'.repeat(15)), {
+  assert.deepEqual(validatePasswordFields('😀'.repeat(21), '😀'.repeat(21)), {
+    newPassword: '密码长度应为 8 至 20 个字符',
+  })
+  assert.deepEqual(validatePasswordFields('a'.repeat(8), 'b'.repeat(8)), {
     confirmPassword: '两次输入的密码不一致',
   })
 })
 
 test('密码字段可集中清空，避免成功、关闭或未知结果后残留', () => {
   const fields = createPasswordFields()
-  fields.newPassword = 'a'.repeat(15)
-  fields.confirmPassword = 'a'.repeat(15)
+  fields.newPassword = 'a'.repeat(8)
+  fields.confirmPassword = 'a'.repeat(8)
 
   clearPasswordFields(fields)
 

@@ -159,7 +159,7 @@ function createFixture() {
 
 const LOGIN_INPUT = {
   username: '  Ope\u0301rator  ',
-  password: 'correct horse battery staple',
+  password: 'correct horse power',
   sourceIp: SOURCE_IP,
   requestId: REQUEST_ID,
 } as const

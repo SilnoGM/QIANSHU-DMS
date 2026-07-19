@@ -70,13 +70,14 @@ test('同源代理按 /api 边界路由并保留浏览器 Origin/CSRF Header', (
 })
 
 test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验', () => {
-  const input = readProvisionInput({
+  const environment = {
     DATABASE_URL:
       'postgresql://qianshu_ci:db-password@127.0.0.1:54321/qianshu_ci?schema=public',
     QIANSHU_BROWSER_AUTH_ADMIN_DISPLAY_NAME: 'Browser Admin',
     QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD: 'BrowserAuth-secret!7',
     QIANSHU_BROWSER_AUTH_ADMIN_USERNAME: 'browser_admin',
-  })
+  }
+  const input = readProvisionInput(environment)
   const command = createProvisionCommand(input, { PATH: '/usr/bin' })
 
   assert.deepEqual(command.args.slice(0, 4), [
@@ -86,9 +87,21 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.equal(command.env.QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD, input.password)
   assert.equal(command.env.DATABASE_URL, input.databaseUrl)
   assert.throws(
-    () => readProvisionInput({ ...input, QIANSHU_BROWSER_AUTH_ADMIN_USERNAME: '../admin' }),
+    () => readProvisionInput({
+      ...environment,
+      QIANSHU_BROWSER_AUTH_ADMIN_USERNAME: '../admin',
+    }),
     { message: 'Browser auth admin fixture input is invalid' },
   )
+  for (const invalidPassword of ['1234567', 'x'.repeat(21)]) {
+    assert.throws(
+      () => readProvisionInput({
+        ...environment,
+        QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD: invalidPassword,
+      }),
+      { message: 'Browser auth admin fixture input is invalid' },
+    )
+  }
 })
 
 test('Server 启动诊断只输出固定分类且不透传底层敏感消息', () => {

@@ -51,7 +51,7 @@ describe('runAuthAdminCommand', () => {
   })
 
   it('uses hidden double-entry for bootstrap and only prints a fixed success message', async () => {
-    const password = 'A-strong-permanent-password'
+    const password = 'Admin-pass-2026!'
     const { io, lines } = createIOFixture({
       text: ['RootAdmin', '系统管理员'],
       secrets: [password, password],
@@ -77,7 +77,7 @@ describe('runAuthAdminCommand', () => {
   it('does not call the service when the two passwords differ', async () => {
     const { io } = createIOFixture({
       text: ['RootAdmin', '系统管理员'],
-      secrets: ['A-strong-permanent-password', 'Different-strong-password'],
+      secrets: ['Admin-pass-2026!', 'Different-pass-2026!'],
     })
     const service = createServiceFixture()
 
@@ -97,7 +97,7 @@ describe('runAuthAdminCommand', () => {
   ] as const)(
     'keeps a disabled administrator disabled unless the operator types the exact high-risk confirmation %j',
     async (confirmation, expectedEnable) => {
-      const password = 'A-new-strong-permanent-password'
+      const password = 'Admin-new-2026!'
       const { io, lines } = createIOFixture({
         text: ['rootadmin', confirmation],
         secrets: [password, password],

@@ -99,6 +99,11 @@ function createSessionCookie(tokenValue: string): string {
   return `qianshu_session_dev=${tokenValue}`
 }
 
+/** 生成落在 8..20 边界内且每次运行不同的测试密码，避免用超长 UUID 破坏场景前置条件。 */
+function createTestPassword(label: string): string {
+  return `${label}-${randomUUID().slice(0, 8)}`
+}
+
 describe('Auth API with Cookie Session and PostgreSQL', () => {
   let application: INestApplication
   let prisma: PrismaService
@@ -152,7 +157,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
 
   async function createUser(options: { mustChangePassword?: boolean } = {}) {
     const suffix = randomUUID()
-    const password = `Initial secure password ${suffix}`
+    const password = createTestPassword('Init')
     const user = await prisma.user.create({
       data: {
         username: `auth-e2e-${suffix}`,
@@ -505,12 +510,12 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
       .expect(200)
     const oldSessionId = readSessionId(login)
     const oldCookie = readSessionCookiePair(login)
-    const newPassword = `Normal replacement password ${randomUUID()}`
+    const newPassword = createTestPassword('Normal')
 
     const wrongCurrent = await browser
       .post('/api/auth/password/change')
       .set(CSRF_HEADERS)
-      .send({ currentPassword: `${password} wrong`, newPassword })
+      .send({ currentPassword: createTestPassword('Wrong'), newPassword })
       .expect(422)
     expect(readResponseBody<ApiErrorBody>(wrongCurrent)).toMatchObject({
       code: 'CURRENT_PASSWORD_INVALID',
@@ -533,7 +538,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
     const weakPassword = await browser
       .post('/api/auth/password/change')
       .set(CSRF_HEADERS)
-      .send({ currentPassword: password, newPassword: 'too short' })
+      .send({ currentPassword: password, newPassword: '1234567' })
       .expect(422)
     expect(readResponseBody<ApiErrorBody>(weakPassword)).toMatchObject({
       code: 'PASSWORD_POLICY_VIOLATION',
@@ -586,7 +591,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
   it('rotates a forced-change Session without requiring the administrator-set password again', async () => {
     const { password, user } = await createUser({ mustChangePassword: true })
     const browser = request.agent(application.getHttpServer())
-    const newPassword = `Replacement secure password ${randomUUID()}`
+    const newPassword = createTestPassword('Forced')
 
     const login = await browser
       .post('/api/auth/login')
@@ -646,7 +651,10 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
     const wrongPassword = await request(application.getHttpServer())
       .post('/api/auth/login')
       .set(CSRF_HEADERS)
-      .send({ username: user.username, password: `${password} wrong` })
+      .send({
+        username: user.username,
+        password: createTestPassword('Wrong'),
+      })
       .expect(401)
     const unknownAccount = await request(application.getHttpServer())
       .post('/api/auth/login')
@@ -695,7 +703,10 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
     const blocked = await request(application.getHttpServer())
       .post('/api/auth/login')
       .set(CSRF_HEADERS)
-      .send({ username: blockedUsername, password: `Any ${randomUUID()}` })
+      .send({
+        username: blockedUsername,
+        password: createTestPassword('Any'),
+      })
       .expect(429)
     expect(readResponseBody<ApiErrorBody>(blocked)).toMatchObject({
       code: 'AUTH_RATE_LIMITED',
@@ -733,7 +744,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
       .post('/api/auth/password/change')
       .send({
         currentPassword: password,
-        newPassword: `Rejected password change ${randomUUID()}`,
+        newPassword: createTestPassword('Reject'),
       })
       .expect(403)
     expect(readResponseBody<ApiErrorBody>(passwordChange).code).toBe(

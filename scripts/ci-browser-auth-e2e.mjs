@@ -510,7 +510,7 @@ async function runProductionBrowserAuthE2e() {
       databaseUrl,
       ports,
       secrets: {
-        adminPassword: `BrowserAuth-${randomBytes(18).toString('base64url')}!7`,
+        adminPassword: `Br-${randomBytes(9).toString('base64url')}!7`,
         hmacKeys: [0, 1, 2].map(() => randomBytes(32).toString('base64url')),
       },
       sessionDirectory,

@@ -28,8 +28,11 @@ const model = ref<LoginModel>({ username: '', password: '' })
 const validationSchema = toTypedSchema(z.object({
   username: z.string().min(1, '请输入用户名'),
   password: z.string().min(1, '请输入密码').refine(
-    value => Array.from(value).length <= 128,
-    '密码不能超过 128 个字符',
+    (value) => {
+      const length = Array.from(value).length
+      return length >= 8 && length <= 20
+    },
+    '密码长度应为 8 至 20 个字符',
   ),
 }))
 

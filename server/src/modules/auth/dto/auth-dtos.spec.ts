@@ -93,19 +93,27 @@ describe('Auth request DTO validation', () => {
     expect(errorProperties(empty.errors)).toEqual(['username'])
   })
 
-  it('要求登录密码是 string 且最多 128 code points，并原样保留空格', async () => {
-    const password = '  keep surrounding spaces  '
+  it('登录 DTO 原样保留空格、拒绝超过 20 code points，并让短密码进入固定认证失败路径', async () => {
+    const password = '  password  '
     const valid = await validatePlain(LoginRequestDto, {
       username: 'operator',
       password,
     })
-    const emojiBoundary = await validatePlain(LoginRequestDto, {
+    const minimumBoundary = await validatePlain(LoginRequestDto, {
       username: 'operator',
-      password: '😀'.repeat(128),
+      password: '😀'.repeat(8),
+    })
+    const maximumBoundary = await validatePlain(LoginRequestDto, {
+      username: 'operator',
+      password: '😀'.repeat(20),
+    })
+    const tooShort = await validatePlain(LoginRequestDto, {
+      username: 'operator',
+      password: '😀'.repeat(7),
     })
     const tooLong = await validatePlain(LoginRequestDto, {
       username: 'operator',
-      password: '😀'.repeat(129),
+      password: '😀'.repeat(21),
     })
     const wrongType = await validatePlain(LoginRequestDto, {
       username: 'operator',
@@ -114,14 +122,16 @@ describe('Auth request DTO validation', () => {
 
     expect(valid.errors).toEqual([])
     expect(valid.instance.password).toBe(password)
-    expect(emojiBoundary.errors).toEqual([])
+    expect(minimumBoundary.errors).toEqual([])
+    expect(maximumBoundary.errors).toEqual([])
+    expect(tooShort.errors).toEqual([])
     expect(errorProperties(tooLong.errors)).toEqual(['password'])
     expect(errorProperties(wrongType.errors)).toEqual(['password'])
   })
 
   it('currentPassword 可省略但若提供必须为 string，且密码字段都不 trim', async () => {
     const withoutCurrent = await validatePlain(ChangePasswordRequestDto, {
-      newPassword: 'short',
+      newPassword: 'new-pass',
     })
     const currentPassword = '  current password  '
     const newPassword = '  new password  '
@@ -142,15 +152,28 @@ describe('Auth request DTO validation', () => {
   })
 
   it.each(['currentPassword', 'newPassword'] as const)(
-    '%s 按 Unicode code point 拒绝超过 128 的输入',
+    '%s 在 DTO 边界拒绝超过 20 个 Unicode code point 的输入',
     async (field) => {
       const input = {
-        newPassword: 'valid input',
-        [field]: '😀'.repeat(129),
+        newPassword: 'valid-input',
+        [field]: '😀'.repeat(21),
       }
       const result = await validatePlain(ChangePasswordRequestDto, input)
 
       expect(errorProperties(result.errors)).toEqual([field])
+    },
+  )
+
+  it.each(['currentPassword', 'newPassword'] as const)(
+    '%s 的短输入交给业务层映射稳定错误',
+    async (field) => {
+      const input = {
+        newPassword: 'valid-input',
+        [field]: '😀'.repeat(7),
+      }
+      const result = await validatePlain(ChangePasswordRequestDto, input)
+
+      expect(result.errors).toEqual([])
     },
   )
 
@@ -180,7 +203,8 @@ describe('Auth DTO OpenAPI contract', () => {
         password: {
           type: 'string',
           format: 'password',
-          maxLength: 128,
+          minLength: 8,
+          maxLength: 20,
           writeOnly: true,
         },
       },
@@ -192,14 +216,15 @@ describe('Auth DTO OpenAPI contract', () => {
         currentPassword: {
           type: 'string',
           format: 'password',
-          maxLength: 128,
+          minLength: 8,
+          maxLength: 20,
           writeOnly: true,
         },
         newPassword: {
           type: 'string',
           format: 'password',
-          minLength: 15,
-          maxLength: 128,
+          minLength: 8,
+          maxLength: 20,
           writeOnly: true,
         },
       },

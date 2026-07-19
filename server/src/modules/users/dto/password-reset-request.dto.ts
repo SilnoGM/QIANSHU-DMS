@@ -7,12 +7,12 @@ export class PasswordResetRequestDto {
   @ApiProperty({
     type: 'string',
     format: 'password',
-    minLength: 15,
-    maxLength: 128,
+    minLength: 8,
+    maxLength: 20,
     writeOnly: true,
   })
   @IsString()
-  @IsUnicodeCodePointLength(15, 128)
+  @IsUnicodeCodePointLength(8, 20)
   newPassword!: string
 
   @ApiProperty({ type: 'boolean' })

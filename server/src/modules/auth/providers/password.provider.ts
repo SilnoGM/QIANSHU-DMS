@@ -6,8 +6,8 @@ import {
   type AuthMetricLogger,
 } from '../../../infrastructure/observability/auth-metric.logger'
 
-export const PASSWORD_MIN_CODE_POINTS = 15
-export const PASSWORD_MAX_CODE_POINTS = 128
+export const PASSWORD_MIN_CODE_POINTS = 8
+export const PASSWORD_MAX_CODE_POINTS = 20
 
 export const ARGON2_MEMORY_COST_KIB = 19_456
 export const ARGON2_TIME_COST = 2
@@ -85,7 +85,7 @@ export class PasswordPolicyViolationError extends Error {
   readonly code = 'PASSWORD_POLICY_VIOLATION'
 
   constructor() {
-    super('Password must contain 15 to 128 Unicode code points')
+    super('Password must contain 8 to 20 Unicode code points')
     this.name = 'PasswordPolicyViolationError'
   }
 }

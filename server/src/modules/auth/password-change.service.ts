@@ -109,8 +109,6 @@ export class PasswordChangeService {
 
       const normalizedNewPassword = this.passwordPolicy.assertAcceptable({
         password: input.newPassword,
-        username: snapshot.username,
-        usernameNormalized: snapshot.usernameNormalized,
         fieldName: 'newPassword',
       })
       const matchesCurrentPassword = await this.passwords.verify(
