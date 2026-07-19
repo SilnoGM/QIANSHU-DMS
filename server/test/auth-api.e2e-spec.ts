@@ -720,6 +720,43 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
     ).resolves.toBe(0)
   })
 
+  it('admits only five concurrent wrong-password requests into Argon2 and rolls back the rejected IP reservations', async () => {
+    const { user } = await createUser()
+    const verifySpy = jest.spyOn(passwordProvider, 'verify')
+
+    try {
+      const responses = await Promise.all(
+        Array.from({ length: 10 }, () =>
+          request(application.getHttpServer())
+            .post('/api/auth/login')
+            .set(CSRF_HEADERS)
+            .send({
+              username: user.username,
+              password: createTestPassword('Wrong'),
+            }),
+        ),
+      )
+
+      expect(responses.filter(response => response.status === 401)).toHaveLength(5)
+      expect(responses.filter(response => response.status === 429)).toHaveLength(5)
+      expect(verifySpy).toHaveBeenCalledTimes(5)
+
+      const buckets = await prisma.authRateLimit.findMany()
+      expect(buckets).toHaveLength(2)
+      expect(
+        buckets.find(
+          bucket => bucket.scope === AuthRateLimitScope.LOGIN_USERNAME,
+        ),
+      ).toMatchObject({ attemptCount: 5 })
+      // 被 username 桶拒绝的五个事务不得只留下 LOGIN_IP 的半次预占。
+      expect(
+        buckets.find(bucket => bucket.scope === AuthRateLimitScope.LOGIN_IP),
+      ).toMatchObject({ attemptCount: 5 })
+    } finally {
+      verifySpy.mockRestore()
+    }
+  })
+
   it('rejects a login without CSRF proof and does not set a Session Cookie', async () => {
     const { password, user } = await createUser()
 

@@ -1398,6 +1398,9 @@ test('后端架构文档记录当前运行时、接口契约、安全与测试�
       [
         '`PrismaPg`',
         '`pg.Pool`',
+        '原子预占',
+        '不跨 Argon2',
+        '释放本次预占',
         '`Database initialization failed`',
         '`Database shutdown failed`',
         '`DEBUG`',

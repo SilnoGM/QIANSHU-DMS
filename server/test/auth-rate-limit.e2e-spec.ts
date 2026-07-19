@@ -5,7 +5,10 @@ import { ConfigService } from '@nestjs/config'
 import { AuthRateLimitScope } from '../src/generated/prisma/enums'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { ApiException } from '../src/infrastructure/http/api.exception'
-import { AuthRateLimitService } from '../src/modules/auth/providers/auth-rate-limit.service'
+import {
+  type AuthRateLimitReservation,
+  AuthRateLimitService,
+} from '../src/modules/auth/providers/auth-rate-limit.service'
 
 function requireDatabaseUrl(): string {
   const value = process.env.DATABASE_URL
@@ -50,49 +53,85 @@ describe('AuthRateLimitService against PostgreSQL', () => {
     return subjectHash
   }
 
-  it('atomically blocks a username after five concurrent failures and clears it', async () => {
-    const subjectHash = createSubjectHash()
-
-    await service.assertAllowed(
-      AuthRateLimitScope.LOGIN_USERNAME,
-      subjectHash,
-    )
-    await Promise.all(
-      Array.from({ length: 5 }, () =>
-        service.recordFailure(
-          AuthRateLimitScope.LOGIN_USERNAME,
-          subjectHash,
-        ),
+  it('atomically admits only five concurrent username attempts without leaving a partial IP reservation', async () => {
+    const usernameHash = createSubjectHash()
+    const ipHash = createSubjectHash()
+    const results = await Promise.allSettled(
+      Array.from({ length: 10 }, () =>
+        service.reserveAttempts([
+          {
+            scope: AuthRateLimitScope.LOGIN_USERNAME,
+            subjectKeyHash: usernameHash,
+          },
+          {
+            scope: AuthRateLimitScope.LOGIN_IP,
+            subjectKeyHash: ipHash,
+          },
+        ]),
       ),
     )
 
-    const stored = await prisma.authRateLimit.findUniqueOrThrow({
+    const admitted = results
+      .filter(
+        (result): result is PromiseFulfilledResult<AuthRateLimitReservation> =>
+          result.status === 'fulfilled',
+      )
+      .map(result => result.value)
+    const rejected = results.filter(result => result.status === 'rejected')
+    expect(admitted).toHaveLength(5)
+    expect(rejected).toHaveLength(5)
+    for (const result of rejected) {
+      expect(result.status === 'rejected' ? result.reason : undefined)
+        .toBeInstanceOf(ApiException)
+      expect(result.status === 'rejected' ? result.reason : undefined)
+        .toMatchObject({ code: 'AUTH_RATE_LIMITED' })
+    }
+
+    const usernameBucket = await prisma.authRateLimit.findUniqueOrThrow({
       where: {
         scope_subjectKeyHash: {
           scope: AuthRateLimitScope.LOGIN_USERNAME,
-          subjectKeyHash: Uint8Array.from(subjectHash),
+          subjectKeyHash: Uint8Array.from(usernameHash),
         },
       },
     })
-    expect(stored.attemptCount).toBe(5)
-    expect(stored.blockedUntil).not.toBeNull()
+    const ipBucket = await prisma.authRateLimit.findUniqueOrThrow({
+      where: {
+        scope_subjectKeyHash: {
+          scope: AuthRateLimitScope.LOGIN_IP,
+          subjectKeyHash: Uint8Array.from(ipHash),
+        },
+      },
+    })
+    expect(usernameBucket.attemptCount).toBe(5)
+    expect(usernameBucket.blockedUntil).not.toBeNull()
+    // 五个被拒事务若留下部分写入，这里会大于五。
+    expect(ipBucket.attemptCount).toBe(5)
 
-    const blocked = await service
-      .assertAllowed(AuthRateLimitScope.LOGIN_USERNAME, subjectHash)
-      .catch((error: unknown) => error)
-    expect(blocked).toBeInstanceOf(ApiException)
-    expect(blocked).toMatchObject({ code: 'AUTH_RATE_LIMITED' })
+    await service.releaseReservation(admitted[0])
 
-    await service.clear(AuthRateLimitScope.LOGIN_USERNAME, subjectHash)
-    await expect(
-      service.assertAllowed(
-        AuthRateLimitScope.LOGIN_USERNAME,
-        subjectHash,
-      ),
-    ).resolves.toBeUndefined()
+    const releasedUsernameBucket = await prisma.authRateLimit.findUniqueOrThrow({
+      where: {
+        scope_subjectKeyHash: {
+          scope: AuthRateLimitScope.LOGIN_USERNAME,
+          subjectKeyHash: Uint8Array.from(usernameHash),
+        },
+      },
+    })
+    const releasedIpBucket = await prisma.authRateLimit.findUniqueOrThrow({
+      where: {
+        scope_subjectKeyHash: {
+          scope: AuthRateLimitScope.LOGIN_IP,
+          subjectKeyHash: Uint8Array.from(ipHash),
+        },
+      },
+    })
+    expect(releasedUsernameBucket.attemptCount).toBe(4)
+    expect(releasedUsernameBucket.blockedUntil).toBeNull()
+    expect(releasedIpBucket.attemptCount).toBe(4)
   })
 
-  it('resets an expired fixed window instead of carrying old attempts forward', async () => {
+  it('resets an expired fixed window and a release only removes its own reservation', async () => {
     const subjectHash = createSubjectHash()
     await prisma.$executeRaw`
       INSERT INTO auth_rate_limits (
@@ -111,12 +150,14 @@ describe('AuthRateLimitService against PostgreSQL', () => {
       )
     `
 
-    await service.recordFailure(
-      AuthRateLimitScope.LOGIN_USERNAME,
-      subjectHash,
-    )
+    const reservation = await service.reserveAttempts([
+      {
+        scope: AuthRateLimitScope.LOGIN_USERNAME,
+        subjectKeyHash: subjectHash,
+      },
+    ])
 
-    const stored = await prisma.authRateLimit.findUniqueOrThrow({
+    const reserved = await prisma.authRateLimit.findUniqueOrThrow({
       where: {
         scope_subjectKeyHash: {
           scope: AuthRateLimitScope.LOGIN_USERNAME,
@@ -124,13 +165,20 @@ describe('AuthRateLimitService against PostgreSQL', () => {
         },
       },
     })
-    expect(stored.attemptCount).toBe(1)
-    expect(stored.blockedUntil).toBeNull()
-    await expect(
-      service.assertAllowed(
-        AuthRateLimitScope.LOGIN_USERNAME,
-        subjectHash,
-      ),
-    ).resolves.toBeUndefined()
+    expect(reserved.attemptCount).toBe(1)
+    expect(reserved.blockedUntil).toBeNull()
+
+    await service.releaseReservation(reservation)
+
+    const released = await prisma.authRateLimit.findUniqueOrThrow({
+      where: {
+        scope_subjectKeyHash: {
+          scope: AuthRateLimitScope.LOGIN_USERNAME,
+          subjectKeyHash: Uint8Array.from(subjectHash),
+        },
+      },
+    })
+    expect(released.attemptCount).toBe(0)
+    expect(released.blockedUntil).toBeNull()
   })
 })

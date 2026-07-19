@@ -26,6 +26,20 @@ const SOURCE_IP = '192.0.2.18'
 const DATABASE_NOW = new Date('2026-07-17T03:04:05.678Z')
 const USERNAME_HASH = Buffer.alloc(32, 0x11)
 const IP_HASH = Buffer.alloc(32, 0x22)
+const RATE_LIMIT_RESERVATION = Object.freeze({
+  entries: Object.freeze([
+    Object.freeze({
+      scope: AuthRateLimitScope.LOGIN_IP,
+      subjectKeyHash: IP_HASH,
+      bucketStartedAtKey: '2026-07-17 03:04:05.678+00',
+    }),
+    Object.freeze({
+      scope: AuthRateLimitScope.LOGIN_USERNAME,
+      subjectKeyHash: USERNAME_HASH,
+      bucketStartedAtKey: '2026-07-17 03:04:05.678+00',
+    }),
+  ]),
+})
 
 const USER_SNAPSHOT = {
   id: USER_ID,
@@ -103,9 +117,9 @@ function createFixture() {
     createInTransaction: jest.fn().mockResolvedValue(ISSUED_SESSION),
   }
   const rateLimits = {
-    assertAllowed: jest.fn().mockResolvedValue(undefined),
-    recordFailure: jest.fn().mockResolvedValue(undefined),
-    clear: jest.fn().mockResolvedValue(undefined),
+    reserveAttempts: jest.fn().mockResolvedValue(RATE_LIMIT_RESERVATION),
+    releaseReservation: jest.fn().mockResolvedValue(undefined),
+    releaseReservationInTransaction: jest.fn().mockResolvedValue(undefined),
   }
   const subjectHasher = {
     hashUsername: jest.fn().mockReturnValue(USERNAME_HASH),
@@ -191,28 +205,28 @@ describe('AuthService login', () => {
       ISSUED_SESSION.tokenValue,
     )
     expect(fixture.subjectHasher.hashUsername).not.toHaveBeenCalled()
-    expect(fixture.rateLimits.assertAllowed).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.reserveAttempts).not.toHaveBeenCalled()
     expect(fixture.prisma.user.findUnique).not.toHaveBeenCalled()
     expect(fixture.passwords.verify).not.toHaveBeenCalled()
   })
 
-  it('normalizes username and checks both HMAC rate-limit buckets before Argon2', async () => {
+  it('normalizes username and atomically reserves both HMAC rate-limit buckets before Argon2', async () => {
     const fixture = createFixture()
 
     await fixture.service.login(LOGIN_INPUT)
 
     expect(fixture.subjectHasher.hashUsername).toHaveBeenCalledWith('opérator')
     expect(fixture.subjectHasher.hashIp).toHaveBeenCalledWith(SOURCE_IP)
-    expect(fixture.rateLimits.assertAllowed).toHaveBeenNthCalledWith(
-      1,
-      AuthRateLimitScope.LOGIN_USERNAME,
-      USERNAME_HASH,
-    )
-    expect(fixture.rateLimits.assertAllowed).toHaveBeenNthCalledWith(
-      2,
-      AuthRateLimitScope.LOGIN_IP,
-      IP_HASH,
-    )
+    expect(fixture.rateLimits.reserveAttempts).toHaveBeenCalledWith([
+      {
+        scope: AuthRateLimitScope.LOGIN_USERNAME,
+        subjectKeyHash: USERNAME_HASH,
+      },
+      {
+        scope: AuthRateLimitScope.LOGIN_IP,
+        subjectKeyHash: IP_HASH,
+      },
+    ])
     expect(fixture.prisma.user.findUnique).toHaveBeenCalledWith({
       where: { usernameNormalized: 'opérator' },
       select: {
@@ -227,17 +241,16 @@ describe('AuthService login', () => {
       },
     })
 
-    const lastRateLimitCall = Math.max(
-      ...fixture.rateLimits.assertAllowed.mock.invocationCallOrder,
-    )
-    expect(lastRateLimitCall).toBeLessThan(
+    expect(
+      fixture.rateLimits.reserveAttempts.mock.invocationCallOrder[0],
+    ).toBeLessThan(
       fixture.passwords.verify.mock.invocationCallOrder[0],
     )
   })
 
-  it('does not invoke Argon2 when either pre-check reports a blocked bucket', async () => {
+  it('does not invoke Argon2 when the atomic reservation reports a blocked bucket', async () => {
     const fixture = createFixture()
-    fixture.rateLimits.assertAllowed.mockRejectedValueOnce(
+    fixture.rateLimits.reserveAttempts.mockRejectedValueOnce(
       new ApiException(
         HttpStatus.TOO_MANY_REQUESTS,
         'AUTH_RATE_LIMITED',
@@ -269,16 +282,7 @@ describe('AuthService login', () => {
       LOGIN_INPUT.password,
     )
     expect(fixture.passwords.verify).not.toHaveBeenCalled()
-    expect(fixture.rateLimits.recordFailure).toHaveBeenNthCalledWith(
-      1,
-      AuthRateLimitScope.LOGIN_USERNAME,
-      USERNAME_HASH,
-    )
-    expect(fixture.rateLimits.recordFailure).toHaveBeenNthCalledWith(
-      2,
-      AuthRateLimitScope.LOGIN_IP,
-      IP_HASH,
-    )
+    expect(fixture.rateLimits.releaseReservation).not.toHaveBeenCalled()
     expect(fixture.audit.record).toHaveBeenCalledWith(
       fixture.transaction,
       {
@@ -332,7 +336,7 @@ describe('AuthService login', () => {
         LOGIN_INPUT.password,
         USER_SNAPSHOT.passwordHash,
       )
-      expect(fixture.rateLimits.recordFailure).toHaveBeenCalledTimes(2)
+      expect(fixture.rateLimits.releaseReservation).not.toHaveBeenCalled()
       expect(fixture.audit.record).toHaveBeenCalledWith(
         fixture.transaction,
         expect.objectContaining({
@@ -357,11 +361,13 @@ describe('AuthService login', () => {
     expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
     expect(error).toMatchObject({ code: 'AUTH_CAPACITY_UNAVAILABLE' })
     expect(error.publicMessage).not.toContain('Argon2')
-    expect(fixture.rateLimits.recordFailure).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
     expect(fixture.audit.record).not.toHaveBeenCalled()
   })
 
-  it('locks and rechecks the user, then updates, creates the session, clears limits and audits atomically', async () => {
+  it('locks and rechecks the user, then updates, creates the session, releases its reservation and audits atomically', async () => {
     const fixture = createFixture()
 
     await expect(fixture.service.login(LOGIN_INPUT)).resolves.toEqual({
@@ -403,8 +409,11 @@ describe('AuthService login', () => {
         mustChangePassword: false,
       },
     )
-    expect(fixture.transaction.$executeRaw).toHaveBeenCalledTimes(1)
-    expect(fixture.rateLimits.clear).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservationInTransaction).toHaveBeenCalledWith(
+      fixture.transaction,
+      RATE_LIMIT_RESERVATION,
+    )
+    expect(fixture.rateLimits.releaseReservation).not.toHaveBeenCalled()
     expect(fixture.audit.record).toHaveBeenCalledWith(
       fixture.transaction,
       {
@@ -446,6 +455,9 @@ describe('AuthService login', () => {
     expect(fixture.sessions.createInTransaction).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
     expect(fixture.transaction.$executeRaw).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 
   it('reads permissions in the mutation transaction so a read failure rolls back before session creation', async () => {
@@ -468,6 +480,9 @@ describe('AuthService login', () => {
     expect(fixture.prisma.$transaction).toHaveBeenCalledTimes(1)
     expect(fixture.accessControl.getPermissionCodes).not.toHaveBeenCalled()
     expect(fixture.sessions.createInTransaction).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 
   it('does not expose a database or audit error through the login boundary', async () => {
@@ -485,5 +500,8 @@ describe('AuthService login', () => {
     expect(fixture.metrics.recordLogin).toHaveBeenCalledWith('failure')
     // Session insert发生在随后回滚的事务内，不能伪记为已创建。
     expect(fixture.metrics.recordSession).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 })

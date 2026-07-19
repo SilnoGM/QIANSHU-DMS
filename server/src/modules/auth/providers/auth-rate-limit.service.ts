@@ -6,6 +6,7 @@ import {
   type AuthRateLimitScope,
 } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 
 const SUBJECT_KEY_HASH_BYTE_LENGTH = 32
@@ -19,9 +20,29 @@ const RATE_LIMIT_ATTEMPT_LIMITS: Readonly<
   [AuthRateLimitScopeValues.PASSWORD_CHANGE_IP]: 30,
 })
 
-type AuthRateLimitStateRow = Readonly<{
-  blockedUntil: Date | null
-  dbNow: Date
+export type AuthRateLimitAttempt = Readonly<{
+  scope: AuthRateLimitScope
+  subjectKeyHash: Buffer
+}>
+
+type AuthRateLimitReservationEntry = Readonly<{
+  bucketStartedAtKey: string
+  scope: AuthRateLimitScope
+  subjectKeyHash: Buffer
+}>
+
+/**
+ * 一次凭证校验占用的全部限流桶。
+ *
+ * 调用方只应在凭证错误时保留该预占；成功或基础设施错误必须释放。精确的
+ * bucket key 让迟到释放不会误减已经滚动到下一固定窗口的计数。
+ */
+export type AuthRateLimitReservation = Readonly<{
+  entries: readonly AuthRateLimitReservationEntry[]
+}>
+
+type ReservationRow = Readonly<{
+  bucketStartedAtKey: string
 }>
 
 export class AuthRateLimitInputError extends Error {
@@ -46,180 +67,285 @@ export class AuthRateLimitOperationFailedError extends Error {
 /**
  * PostgreSQL 固定窗口认证限流。
  *
- * Service 只接收 HMAC 后的 32-byte 主体，不持有 username、userId 或 IP 明文；
- * 所有时效判断都使用同一条 SQL 内的 clock_timestamp()，避免应用实例时钟漂移。
+ * 在 Argon2 之前原子预占全部相关桶，消除“先检查、后计数”允许并发突发穿透
+ * 阈值的竞态。短事务只负责预占，不跨 Argon2 持锁；同一批桶按稳定顺序加锁，
+ * 防止不同请求以相反顺序互相等待。
  */
 @Injectable()
 export class AuthRateLimitService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** 必须由调用方在进入昂贵 Argon2 操作前调用。 */
-  async assertAllowed(
-    scope: AuthRateLimitScope,
-    subjectKeyHash: Buffer,
-  ): Promise<void> {
-    const { safeSubjectKeyHash } = this.validateInput(scope, subjectKeyHash)
-    let rows: AuthRateLimitStateRow[]
+  async reserveAttempts(
+    attempts: readonly AuthRateLimitAttempt[],
+  ): Promise<AuthRateLimitReservation> {
+    const safeAttempts = this.validateAndSortAttempts(attempts)
 
     try {
-      rows = await this.prisma.$queryRaw<AuthRateLimitStateRow[]>(
-        Prisma.sql`
-          SELECT
-            "blocked_until" AS "blockedUntil",
-            clock_timestamp() AS "dbNow"
-          FROM "auth_rate_limits"
-          WHERE "scope" = ${scope}::"auth_rate_limit_scope"
-            AND "subject_key_hash" = ${safeSubjectKeyHash}
-          LIMIT 1
-        `,
-      )
-    }
-    catch {
+      return await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const entries: AuthRateLimitReservationEntry[] = []
+
+        for (const attempt of safeAttempts) {
+          const rows = await transaction.$queryRaw<ReservationRow[]>(Prisma.sql`
+            INSERT INTO "auth_rate_limits" AS "current" (
+              "scope",
+              "subject_key_hash",
+              "bucket_started_at",
+              "attempt_count",
+              "blocked_until",
+              "updated_at"
+            )
+            SELECT
+              ${attempt.scope}::"auth_rate_limit_scope",
+              ${attempt.subjectKeyHash},
+              "database_time"."db_now",
+              1,
+              NULL,
+              "database_time"."db_now"
+            FROM (
+              SELECT clock_timestamp() AS "db_now"
+            ) AS "database_time"
+            ON CONFLICT ("scope", "subject_key_hash")
+            DO UPDATE SET
+              "bucket_started_at" = CASE
+                WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at"
+                  THEN EXCLUDED."updated_at"
+                ELSE "current"."bucket_started_at"
+              END,
+              "attempt_count" = CASE
+                WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at"
+                  THEN 1
+                ELSE "current"."attempt_count" + 1
+              END,
+              "blocked_until" = CASE
+                WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at"
+                  THEN NULL
+                WHEN "current"."attempt_count" + 1 >= ${attempt.attemptLimit}
+                  THEN EXCLUDED."updated_at" + INTERVAL '15 minutes'
+                ELSE NULL
+              END,
+              "updated_at" = EXCLUDED."updated_at"
+            WHERE
+              (
+                "current"."blocked_until" IS NULL
+                OR "current"."blocked_until" <= EXCLUDED."updated_at"
+              )
+              AND (
+                "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at"
+                OR "current"."attempt_count" < ${attempt.attemptLimit}
+              )
+            RETURNING
+              "current"."bucket_started_at"::text AS "bucketStartedAtKey"
+          `)
+          const row = rows[0]
+
+          if (row === undefined) {
+            // 在 callback 内抛出可确保此前已预占的桶随事务一起回滚。
+            throw this.createRateLimitedException()
+          }
+          if (!this.isValidBucketStartedAtKey(row.bucketStartedAtKey)) {
+            throw new AuthRateLimitOperationFailedError()
+          }
+
+          entries.push(Object.freeze({
+            bucketStartedAtKey: row.bucketStartedAtKey,
+            scope: attempt.scope,
+            subjectKeyHash: Buffer.from(attempt.subjectKeyHash),
+          }))
+        }
+
+        return Object.freeze({ entries: Object.freeze(entries) })
+      })
+    } catch (error) {
+      if (
+        error instanceof ApiException
+        && error.code === 'AUTH_RATE_LIMITED'
+      ) {
+        throw error
+      }
       throw new AuthRateLimitOperationFailedError()
     }
+  }
 
-    const row = rows[0]
-    if (row === undefined) {
-      return
+  /** 成功或非凭证错误在独立短事务中原子释放全部预占桶。 */
+  async releaseReservation(
+    reservation: AuthRateLimitReservation,
+  ): Promise<void> {
+    const entries = this.validateAndSortReservation(reservation)
+
+    try {
+      await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        await this.releaseEntriesInTransaction(transaction, entries)
+      })
+    } catch {
+      throw new AuthRateLimitOperationFailedError()
+    }
+  }
+
+  /**
+   * 将预占释放并入调用方已经存在的成功事务。
+   *
+   * 这样 Session/密码变更若回滚，预占释放也会回滚；外层随后再用独立短事务
+   * 释放，既不漏记真实凭证失败，也不把基础设施故障误算成失败。
+   */
+  async releaseReservationInTransaction(
+    transaction: Prisma.TransactionClient,
+    reservation: AuthRateLimitReservation,
+  ): Promise<void> {
+    const entries = this.validateAndSortReservation(reservation)
+
+    try {
+      await this.releaseEntriesInTransaction(transaction, entries)
+    } catch {
+      throw new AuthRateLimitOperationFailedError()
+    }
+  }
+
+  private async releaseEntriesInTransaction(
+    transaction: Prisma.TransactionClient,
+    entries: readonly AuthRateLimitReservationEntry[],
+  ): Promise<void> {
+    for (const entry of entries) {
+      const attemptLimit = RATE_LIMIT_ATTEMPT_LIMITS[entry.scope]
+
+      await transaction.$executeRaw(Prisma.sql`
+        UPDATE "auth_rate_limits" AS "current"
+        SET
+          "attempt_count" = "current"."attempt_count" - 1,
+          "blocked_until" = CASE
+            WHEN "current"."attempt_count" - 1 < ${attemptLimit}
+              THEN NULL
+            ELSE "current"."blocked_until"
+          END,
+          "updated_at" = clock_timestamp()
+        WHERE "current"."scope" = ${entry.scope}::"auth_rate_limit_scope"
+          AND "current"."subject_key_hash" = ${entry.subjectKeyHash}
+          AND "current"."bucket_started_at" = ${entry.bucketStartedAtKey}::timestamptz
+          AND "current"."attempt_count" > 0
+      `)
+    }
+  }
+
+  private validateAndSortAttempts(
+    attempts: readonly AuthRateLimitAttempt[],
+  ): ReadonlyArray<AuthRateLimitAttempt & { attemptLimit: number }> {
+    if (!Array.isArray(attempts) || attempts.length === 0) {
+      throw new AuthRateLimitInputError()
     }
 
+    const safeAttempts = attempts.map((attempt) => {
+      const validated = this.validateAttempt(attempt)
+      return {
+        ...validated,
+        attemptLimit: RATE_LIMIT_ATTEMPT_LIMITS[validated.scope],
+      }
+    })
+    safeAttempts.sort((left, right) => this.compareSubjects(left, right))
+    this.assertNoDuplicateSubjects(safeAttempts)
+    return safeAttempts
+  }
+
+  private validateAndSortReservation(
+    reservation: AuthRateLimitReservation,
+  ): readonly AuthRateLimitReservationEntry[] {
+    const reservationValue: unknown = reservation
     if (
-      !this.isValidDatabaseDate(row.dbNow) ||
-      (row.blockedUntil !== null &&
-        !this.isValidDatabaseDate(row.blockedUntil))
+      typeof reservationValue !== 'object'
+      || reservationValue === null
     ) {
-      throw new AuthRateLimitOperationFailedError()
+      throw new AuthRateLimitInputError()
+    }
+    const entriesValue = (reservationValue as { entries?: unknown }).entries
+    if (!Array.isArray(entriesValue) || entriesValue.length === 0) {
+      throw new AuthRateLimitInputError()
     }
 
-    // 等号边界必须放行；blocked_until > dbNow 才表示仍在封禁窗口内。
+    const entries = entriesValue.map((entry: unknown) => {
+      const subject = this.validateAttempt(entry)
+      const bucketStartedAtKey = (
+        entry as { bucketStartedAtKey?: unknown }
+      ).bucketStartedAtKey
+      if (!this.isValidBucketStartedAtKey(bucketStartedAtKey)) {
+        throw new AuthRateLimitInputError()
+      }
+      return {
+        bucketStartedAtKey,
+        scope: subject.scope,
+        subjectKeyHash: subject.subjectKeyHash,
+      }
+    })
+    entries.sort((left, right) => this.compareSubjects(left, right))
+    this.assertNoDuplicateSubjects(entries)
+    return entries
+  }
+
+  private validateAttempt(attempt: unknown): AuthRateLimitAttempt {
+    if (typeof attempt !== 'object' || attempt === null) {
+      throw new AuthRateLimitInputError()
+    }
+    const candidate = attempt as Partial<AuthRateLimitAttempt>
+    const scope = candidate.scope
+    const subjectKeyHash = candidate.subjectKeyHash
     if (
-      row.blockedUntil !== null &&
-      row.blockedUntil.getTime() > row.dbNow.getTime()
-    ) {
-      throw new ApiException(
-        HttpStatus.TOO_MANY_REQUESTS,
-        'AUTH_RATE_LIMITED',
-        '操作过于频繁，请稍后重试',
-      )
-    }
-  }
-
-  async recordFailure(
-    scope: AuthRateLimitScope,
-    subjectKeyHash: Buffer,
-  ): Promise<void> {
-    const { attemptLimit, safeSubjectKeyHash } = this.validateInput(
-      scope,
-      subjectKeyHash,
-    )
-
-    try {
-      /**
-       * 单条 INSERT ... ON CONFLICT 完成并发线性化：
-       * - database_time 只计算一次 clock_timestamp()，再借 EXCLUDED.updated_at 复用；
-       * - 活跃封禁保持原值，避免并发中的迟到失败无限延长封禁；
-       * - 15 分钟窗口在等号边界重置为第一次失败；
-       * - 达到阈值后从当前数据库时间起封禁 15 分钟。
-       */
-      await this.prisma.$executeRaw(
-        Prisma.sql`
-          INSERT INTO "auth_rate_limits" AS "current" (
-            "scope",
-            "subject_key_hash",
-            "bucket_started_at",
-            "attempt_count",
-            "blocked_until",
-            "updated_at"
-          )
-          SELECT
-            ${scope}::"auth_rate_limit_scope",
-            ${safeSubjectKeyHash},
-            "database_time"."db_now",
-            1,
-            NULL,
-            "database_time"."db_now"
-          FROM (
-            SELECT clock_timestamp() AS "db_now"
-          ) AS "database_time"
-          ON CONFLICT ("scope", "subject_key_hash")
-          DO UPDATE SET
-            "bucket_started_at" = CASE
-              WHEN "current"."blocked_until" > EXCLUDED."updated_at"
-                THEN "current"."bucket_started_at"
-              WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at"
-                THEN EXCLUDED."updated_at"
-              ELSE "current"."bucket_started_at"
-            END,
-            "attempt_count" = CASE
-              WHEN "current"."blocked_until" > EXCLUDED."updated_at"
-                THEN "current"."attempt_count"
-              WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at"
-                THEN 1
-              ELSE "current"."attempt_count" + 1
-            END,
-            "blocked_until" = CASE
-              WHEN "current"."blocked_until" > EXCLUDED."updated_at"
-                THEN "current"."blocked_until"
-              WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at"
-                THEN NULL
-              WHEN "current"."attempt_count" + 1 >= ${attemptLimit}
-                THEN EXCLUDED."updated_at" + INTERVAL '15 minutes'
-              ELSE NULL
-            END,
-            "updated_at" = EXCLUDED."updated_at"
-        `,
-      )
-    }
-    catch {
-      throw new AuthRateLimitOperationFailedError()
-    }
-  }
-
-  async clear(
-    scope: AuthRateLimitScope,
-    subjectKeyHash: Buffer,
-  ): Promise<void> {
-    const { safeSubjectKeyHash } = this.validateInput(scope, subjectKeyHash)
-
-    try {
-      await this.prisma.$executeRaw(
-        Prisma.sql`
-          DELETE FROM "auth_rate_limits"
-          WHERE "scope" = ${scope}::"auth_rate_limit_scope"
-            AND "subject_key_hash" = ${safeSubjectKeyHash}
-        `,
-      )
-    }
-    catch {
-      throw new AuthRateLimitOperationFailedError()
-    }
-  }
-
-  private validateInput(
-    scope: AuthRateLimitScope,
-    subjectKeyHash: Buffer,
-  ): Readonly<{
-    attemptLimit: number
-    safeSubjectKeyHash: Buffer
-  }> {
-    const attemptLimit = RATE_LIMIT_ATTEMPT_LIMITS[scope]
-
-    if (
-      attemptLimit === undefined ||
-      !Buffer.isBuffer(subjectKeyHash) ||
-      subjectKeyHash.byteLength !== SUBJECT_KEY_HASH_BYTE_LENGTH
+      !this.isValidScope(scope)
+      || !Buffer.isBuffer(subjectKeyHash)
+      || subjectKeyHash.byteLength !== SUBJECT_KEY_HASH_BYTE_LENGTH
     ) {
       throw new AuthRateLimitInputError()
     }
 
     // 复制调用方 Buffer，避免异步 SQL 执行期间被外部修改查询参数。
     return {
-      attemptLimit,
-      safeSubjectKeyHash: Buffer.from(subjectKeyHash),
+      scope,
+      subjectKeyHash: Buffer.from(subjectKeyHash),
     }
   }
 
-  private isValidDatabaseDate(value: unknown): value is Date {
-    return value instanceof Date && Number.isFinite(value.getTime())
+  private isValidScope(value: unknown): value is AuthRateLimitScope {
+    return (
+      typeof value === 'string'
+      && Object.prototype.hasOwnProperty.call(RATE_LIMIT_ATTEMPT_LIMITS, value)
+    )
+  }
+
+  private assertNoDuplicateSubjects(
+    subjects: readonly AuthRateLimitAttempt[],
+  ): void {
+    for (let index = 1; index < subjects.length; index += 1) {
+      const previous = subjects[index - 1]
+      const current = subjects[index]
+      if (
+        previous !== undefined
+        && current !== undefined
+        && previous.scope === current.scope
+        && previous.subjectKeyHash.equals(current.subjectKeyHash)
+      ) {
+        throw new AuthRateLimitInputError()
+      }
+    }
+  }
+
+  private compareSubjects(
+    left: AuthRateLimitAttempt,
+    right: AuthRateLimitAttempt,
+  ): number {
+    if (left.scope !== right.scope) {
+      // 直接使用 ASCII/code-unit 顺序，不依赖实例的 ICU locale 配置。
+      return left.scope < right.scope ? -1 : 1
+    }
+    return Buffer.compare(left.subjectKeyHash, right.subjectKeyHash)
+  }
+
+  private isValidBucketStartedAtKey(value: unknown): value is string {
+    return typeof value === 'string' && value.length > 0 && value.length <= 64
+  }
+
+  private createRateLimitedException(): ApiException {
+    return new ApiException(
+      HttpStatus.TOO_MANY_REQUESTS,
+      'AUTH_RATE_LIMITED',
+      '操作过于频繁，请稍后重试',
+    )
   }
 }

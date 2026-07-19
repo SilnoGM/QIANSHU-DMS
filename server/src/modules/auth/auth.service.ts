@@ -20,7 +20,10 @@ import {
 } from '../../infrastructure/observability/auth-metric.logger'
 import { AuthSessionService } from './auth-session.service'
 import type { LoginInput, LoginResult } from './auth.types'
-import { AuthRateLimitService } from './providers/auth-rate-limit.service'
+import {
+  type AuthRateLimitReservation,
+  AuthRateLimitService,
+} from './providers/auth-rate-limit.service'
 import { AuthSubjectHasher } from './providers/auth-subject-hasher'
 import {
   AuthCapacityUnavailableError,
@@ -59,7 +62,7 @@ type LockedUserRow = Readonly<{
  *
  * 该边界只对外暴露稳定错误码；原始 SQL、PHC、username、IP 和密码
  * 都不会进入错误或 Audit metadata。成功登录的 User 更新、Session、限流
- * 清理和 Audit 位于同一 PostgreSQL 事务，任一步失败均不会留下
+ * 预占释放和 Audit 位于同一 PostgreSQL 事务，任一步失败均不会留下
  * 未交付的 Session。
  */
 @Injectable()
@@ -76,6 +79,8 @@ export class AuthService {
   ) {}
 
   async login(input: LoginInput): Promise<LoginResult> {
+    let rateLimitReservation: AuthRateLimitReservation | undefined
+
     try {
       await this.assertBrowserIsAnonymous(input.existingSessionToken)
 
@@ -83,13 +88,17 @@ export class AuthService {
       const usernameHash = this.subjectHasher.hashUsername(usernameNormalized)
       const sourceIpHash = this.subjectHasher.hashIp(input.sourceIp)
 
-      // 两个限流桶必须在 User 查询和昂贵 Argon2 之前同时受检。
-      await Promise.all([
-        this.rateLimits.assertAllowed(
-          AuthRateLimitScope.LOGIN_USERNAME,
-          usernameHash,
-        ),
-        this.rateLimits.assertAllowed(AuthRateLimitScope.LOGIN_IP, sourceIpHash),
+      // 两个桶在同一短事务中预占：任一桶已封禁时，另一桶的写入随事务回滚。
+      // 预占提交后才进入 User 查询和 Argon2，事务不会跨昂贵计算持锁。
+      rateLimitReservation = await this.rateLimits.reserveAttempts([
+        {
+          scope: AuthRateLimitScope.LOGIN_USERNAME,
+          subjectKeyHash: usernameHash,
+        },
+        {
+          scope: AuthRateLimitScope.LOGIN_IP,
+          subjectKeyHash: sourceIpHash,
+        },
       ])
 
       const user = await this.loadCredentialSnapshot(usernameNormalized)
@@ -100,26 +109,36 @@ export class AuthService {
         || !passwordMatches
         || user.status !== UserStatus.ACTIVE
       ) {
-        await this.recordInvalidCredentials(
-          usernameHash,
-          sourceIpHash,
-          input.requestId,
-        )
+        // 凭证失败保留预占计数；先清空本地引用，避免 catch 将其误释放。
+        rateLimitReservation = undefined
+        await this.recordInvalidCredentials(sourceIpHash, input.requestId)
         throw this.createInvalidCredentialsException()
       }
 
       const result = await this.createSuccessfulLogin(
         user,
-        usernameHash,
         sourceIpHash,
         input.requestId,
+        rateLimitReservation,
       )
+      // 成功事务已经释放本次预占；后续指标异常也不得二次递减。
+      rateLimitReservation = undefined
       // 事务提交后才记录登录与 Session 创建，避免 Audit/COMMIT 失败产生虚假成功指标。
       this.metrics.recordLogin('success')
       this.metrics.recordSession('created')
       return result
     }
-    catch (error) {
+    catch (caughtError) {
+      let error = caughtError
+      if (rateLimitReservation !== undefined) {
+        try {
+          // Argon2 capacity、Prisma、权限读取或状态竞争都不是凭证失败。
+          await this.rateLimits.releaseReservation(rateLimitReservation)
+        } catch (releaseError) {
+          error = releaseError
+        }
+      }
+
       this.metrics.recordLogin(
         error instanceof ApiException && error.code === 'AUTH_RATE_LIMITED'
           ? 'rate_limited'
@@ -193,24 +212,9 @@ export class AuthService {
   }
 
   private async recordInvalidCredentials(
-    usernameHash: Buffer,
     sourceIpHash: Buffer,
     requestId: string,
   ): Promise<void> {
-    const rateLimitResults = await Promise.allSettled([
-      this.rateLimits.recordFailure(
-        AuthRateLimitScope.LOGIN_USERNAME,
-        usernameHash,
-      ),
-      this.rateLimits.recordFailure(AuthRateLimitScope.LOGIN_IP, sourceIpHash),
-    ])
-
-    // 两个失败桶都已尝试写入后再统一失败，避免一个 reject 使另一个
-    // Promise 变成无人收口的后台任务。
-    if (rateLimitResults.some((result) => result.status === 'rejected')) {
-      throw new Error('Authentication failure could not be recorded')
-    }
-
     await this.prisma.$transaction(async (transaction) => {
       // 必须是 callback 内第一项数据库操作，约束失败审计的锁等待和语句耗时。
       await applyTransactionTimeouts(transaction)
@@ -227,9 +231,9 @@ export class AuthService {
 
   private async createSuccessfulLogin(
     snapshot: UserCredentialSnapshot,
-    usernameHash: Buffer,
     sourceIpHash: Buffer,
     requestId: string,
+    rateLimitReservation: AuthRateLimitReservation,
   ): Promise<LoginResult> {
     return this.prisma.$transaction(async (transaction) => {
       // 必须先设置 transaction-local 超时，再读取或锁定任何业务数据。
@@ -285,21 +289,11 @@ export class AuthService {
         },
       )
 
-      // 成功后的限流清理与 Session 处于同一事务；清理失败会回滚 Session，
-      // 不会出现客户端没收到 Cookie 而数据库留下活跃 Session。
-      await transaction.$executeRaw(Prisma.sql`
-        DELETE FROM "auth_rate_limits"
-        WHERE
-          (
-            "scope" = ${AuthRateLimitScope.LOGIN_USERNAME}::"auth_rate_limit_scope"
-            AND "subject_key_hash" = ${Buffer.from(usernameHash)}
-          )
-          OR
-          (
-            "scope" = ${AuthRateLimitScope.LOGIN_IP}::"auth_rate_limit_scope"
-            AND "subject_key_hash" = ${Buffer.from(sourceIpHash)}
-          )
-      `)
+      // 只释放当前成功请求自己的预占，不清除并发请求已经形成的真实失败计数。
+      await this.rateLimits.releaseReservationInTransaction(
+        transaction,
+        rateLimitReservation,
+      )
 
       await this.audit.record(transaction, {
         eventType: AuditEventType.AUTH_LOGIN_SUCCEEDED,

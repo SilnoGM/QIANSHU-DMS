@@ -22,7 +22,10 @@ import {
 import type { RequestAuthContext } from './auth-context'
 import { AuthSessionService } from './auth-session.service'
 import type { LoginResult } from './auth.types'
-import { AuthRateLimitService } from './providers/auth-rate-limit.service'
+import {
+  type AuthRateLimitReservation,
+  AuthRateLimitService,
+} from './providers/auth-rate-limit.service'
 import { AuthSubjectHasher } from './providers/auth-subject-hasher'
 import { PasswordPolicyProvider } from './providers/password-policy.provider'
 import {
@@ -85,6 +88,8 @@ export class PasswordChangeService {
   ) {}
 
   async change(input: PasswordChangeInput): Promise<LoginResult> {
+    let rateLimitReservation: AuthRateLimitReservation | undefined
+
     try {
       const snapshot = await this.loadSnapshot(input.auth.userId)
       if (
@@ -99,12 +104,33 @@ export class PasswordChangeService {
       const sourceIpHash = this.subjectHasher.hashIp(input.sourceIp)
 
       if (!snapshot.mustChangePassword) {
-        await this.verifyNormalCurrentPassword(
-          input.currentPassword,
-          snapshot.passwordHash,
-          userHash,
-          sourceIpHash,
-        )
+        rateLimitReservation = await this.rateLimits.reserveAttempts([
+          {
+            scope: AuthRateLimitScope.PASSWORD_CHANGE_USER,
+            subjectKeyHash: userHash,
+          },
+          {
+            scope: AuthRateLimitScope.PASSWORD_CHANGE_IP,
+            subjectKeyHash: sourceIpHash,
+          },
+        ])
+
+        const currentPasswordMatches =
+          input.currentPassword !== undefined
+          && (await this.passwords.verify(
+            input.currentPassword,
+            snapshot.passwordHash,
+          ))
+        if (!currentPasswordMatches) {
+          // 当前密码错误就是应保留的失败；不能由统一 catch 释放本次预占。
+          rateLimitReservation = undefined
+          throw new ApiException(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            'CURRENT_PASSWORD_INVALID',
+            '当前密码错误',
+            { currentPassword: ['当前密码错误'] },
+          )
+        }
       }
 
       const normalizedNewPassword = this.passwordPolicy.assertAcceptable({
@@ -130,15 +156,27 @@ export class PasswordChangeService {
         input,
         snapshot,
         newPasswordHash,
-        userHash,
         sourceIpHash,
+        rateLimitReservation,
       )
+      // 成功事务已释放预占；指标记录不允许造成二次递减。
+      rateLimitReservation = undefined
       // 事务提交后再记录业务成功、旧 Session 撤销和新 Session 创建。
       this.metrics.recordPassword('change', 'success')
       this.metrics.recordSessionRevoked(rotation.revokedSessionCount)
       this.metrics.recordSession('created')
       return rotation.loginResult
-    } catch (error) {
+    } catch (caughtError) {
+      let error = caughtError
+      if (rateLimitReservation !== undefined) {
+        try {
+          // 新密码校验、Argon2 capacity、数据库或状态竞争均非当前凭证失败。
+          await this.rateLimits.releaseReservation(rateLimitReservation)
+        } catch (releaseError) {
+          error = releaseError
+        }
+      }
+
       this.metrics.recordPassword('change', 'failure')
 
       if (error instanceof ApiException) {
@@ -177,58 +215,12 @@ export class PasswordChangeService {
     })
   }
 
-  private async verifyNormalCurrentPassword(
-    currentPassword: string | undefined,
-    passwordHash: string,
-    userHash: Buffer,
-    sourceIpHash: Buffer,
-  ): Promise<void> {
-    await Promise.all([
-      this.rateLimits.assertAllowed(
-        AuthRateLimitScope.PASSWORD_CHANGE_USER,
-        userHash,
-      ),
-      this.rateLimits.assertAllowed(
-        AuthRateLimitScope.PASSWORD_CHANGE_IP,
-        sourceIpHash,
-      ),
-    ])
-
-    const matches =
-      currentPassword !== undefined &&
-      (await this.passwords.verify(currentPassword, passwordHash))
-    if (matches) {
-      return
-    }
-
-    const recorded = await Promise.allSettled([
-      this.rateLimits.recordFailure(
-        AuthRateLimitScope.PASSWORD_CHANGE_USER,
-        userHash,
-      ),
-      this.rateLimits.recordFailure(
-        AuthRateLimitScope.PASSWORD_CHANGE_IP,
-        sourceIpHash,
-      ),
-    ])
-    if (recorded.some((result) => result.status === 'rejected')) {
-      throw new Error('Password failure could not be recorded')
-    }
-
-    throw new ApiException(
-      HttpStatus.UNPROCESSABLE_ENTITY,
-      'CURRENT_PASSWORD_INVALID',
-      '当前密码错误',
-      { currentPassword: ['当前密码错误'] },
-    )
-  }
-
   private async rotatePasswordAndSession(
     input: PasswordChangeInput,
     snapshot: UserPasswordSnapshot,
     newPasswordHash: string,
-    userHash: Buffer,
     sourceIpHash: Buffer,
+    rateLimitReservation: AuthRateLimitReservation | undefined,
   ): Promise<PasswordRotationResult> {
     return this.prisma.$transaction(async (transaction) => {
       // 必须先设置 transaction-local 超时，再按 User -> Session 顺序取得行锁。
@@ -318,19 +310,13 @@ export class PasswordChangeService {
         },
       )
 
-      await transaction.$executeRaw(Prisma.sql`
-        DELETE FROM "auth_rate_limits"
-        WHERE
-          (
-            "scope" = ${AuthRateLimitScope.PASSWORD_CHANGE_USER}::"auth_rate_limit_scope"
-            AND "subject_key_hash" = ${Buffer.from(userHash)}
-          )
-          OR
-          (
-            "scope" = ${AuthRateLimitScope.PASSWORD_CHANGE_IP}::"auth_rate_limit_scope"
-            AND "subject_key_hash" = ${Buffer.from(sourceIpHash)}
-          )
-      `)
+      if (rateLimitReservation !== undefined) {
+        // 只释放当前已验证请求的预占；并发错误请求的计数必须继续保留。
+        await this.rateLimits.releaseReservationInTransaction(
+          transaction,
+          rateLimitReservation,
+        )
+      }
 
       await this.audit.record(transaction, {
         eventType: AuditEventType.USER_PASSWORD_CHANGED,

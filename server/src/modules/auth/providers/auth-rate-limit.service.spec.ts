@@ -1,5 +1,6 @@
 import { HttpStatus } from '@nestjs/common'
 
+import { Prisma } from '../../../generated/prisma/client'
 import {
   AuthRateLimitScope,
   type AuthRateLimitScope as AuthRateLimitScopeValue,
@@ -9,37 +10,75 @@ import { ApiException } from '../../../infrastructure/http/api.exception'
 import {
   AuthRateLimitInputError,
   AuthRateLimitOperationFailedError,
+  type AuthRateLimitReservation,
   AuthRateLimitService,
 } from './auth-rate-limit.service'
-
-type QueryResult = Array<{
-  blockedUntil: Date | null
-  dbNow: Date
-}>
 
 interface RawSql {
   readonly strings: readonly string[]
   readonly values: readonly unknown[]
 }
 
-type QueryRaw = (query: RawSql) => Promise<QueryResult>
+type QueryRaw = (query: RawSql) => Promise<unknown>
 type ExecuteRaw = (query: RawSql) => Promise<number>
 
-const SUBJECT_KEY_HASH = Buffer.alloc(32, 0x5a)
-const DB_NOW = new Date('2026-07-17T10:00:00.000Z')
+const USER_HASH = Buffer.alloc(32, 0x5a)
+const IP_HASH = Buffer.alloc(32, 0x6b)
+const BUCKET_KEY = '2026-07-17 10:00:00.123456+00'
 
 function createService() {
   const queryRaw = jest.fn<ReturnType<QueryRaw>, Parameters<QueryRaw>>()
-  const executeRaw = jest.fn<ReturnType<ExecuteRaw>, Parameters<ExecuteRaw>>()
-  const prisma = {
+  const executeRaw = jest
+    .fn<ReturnType<ExecuteRaw>, Parameters<ExecuteRaw>>()
+    .mockResolvedValue(1)
+  const transaction = {
     $executeRaw: executeRaw,
     $queryRaw: queryRaw,
+  }
+  const runTransaction = jest.fn(
+    async (callback: (client: typeof transaction) => Promise<unknown>) =>
+      callback(transaction),
+  )
+  const prisma = {
+    $transaction: runTransaction,
   } as unknown as PrismaService
 
   return {
     executeRaw,
     queryRaw,
+    runTransaction,
     service: new AuthRateLimitService(prisma),
+    transaction,
+  }
+}
+
+function createAttempts() {
+  return [
+    {
+      scope: AuthRateLimitScope.LOGIN_USERNAME,
+      subjectKeyHash: USER_HASH,
+    },
+    {
+      scope: AuthRateLimitScope.LOGIN_IP,
+      subjectKeyHash: IP_HASH,
+    },
+  ] as const
+}
+
+function createReservation(): AuthRateLimitReservation {
+  return {
+    entries: [
+      {
+        scope: AuthRateLimitScope.LOGIN_USERNAME,
+        subjectKeyHash: USER_HASH,
+        bucketStartedAtKey: BUCKET_KEY,
+      },
+      {
+        scope: AuthRateLimitScope.LOGIN_IP,
+        subjectKeyHash: IP_HASH,
+        bucketStartedAtKey: BUCKET_KEY,
+      },
+    ],
   }
 }
 
@@ -47,129 +86,117 @@ function normalizeSql(query: RawSql): string {
   return query.strings.join('?').replace(/\s+/g, ' ').trim()
 }
 
-describe('AuthRateLimitService.assertAllowed', () => {
-  it('使用 clock_timestamp 查询数据库时间，未命中记录时允许继续', async () => {
-    const { queryRaw, service } = createService()
-    queryRaw.mockResolvedValue([])
+describe('AuthRateLimitService.reserveAttempts', () => {
+  it('在同一短事务中按稳定顺序预占全部桶并返回精确窗口 key', async () => {
+    const { queryRaw, runTransaction, service } = createService()
+    queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ bucketStartedAtKey: BUCKET_KEY }])
+      .mockResolvedValueOnce([{ bucketStartedAtKey: BUCKET_KEY }])
 
-    await expect(
-      service.assertAllowed(
-        AuthRateLimitScope.LOGIN_USERNAME,
-        SUBJECT_KEY_HASH,
-      ),
-    ).resolves.toBeUndefined()
+    const reservation = await service.reserveAttempts(createAttempts())
 
-    expect(queryRaw).toHaveBeenCalledTimes(1)
-    const query = queryRaw.mock.calls[0]?.[0]
-    expect(query).toBeDefined()
-    expect(normalizeSql(query)).toBe(
-      'SELECT "blocked_until" AS "blockedUntil", clock_timestamp() AS "dbNow" FROM "auth_rate_limits" WHERE "scope" = ?::"auth_rate_limit_scope" AND "subject_key_hash" = ? LIMIT 1',
+    expect(runTransaction).toHaveBeenCalledTimes(1)
+    expect(queryRaw).toHaveBeenCalledTimes(3)
+    const timeoutQuery = queryRaw.mock.calls[0]?.[0]
+    expect(normalizeSql(timeoutQuery)).toContain("set_config('lock_timeout'")
+
+    const ipQuery = queryRaw.mock.calls[1]?.[0]
+    const usernameQuery = queryRaw.mock.calls[2]?.[0]
+    expect(normalizeSql(ipQuery)).toContain(
+      'ON CONFLICT ("scope", "subject_key_hash") DO UPDATE SET',
     )
-    expect(query?.values).toEqual([
+    expect(normalizeSql(ipQuery)).toContain(
+      '"current"."attempt_count" < ?',
+    )
+    expect(normalizeSql(ipQuery)).toContain(
+      'RETURNING "current"."bucket_started_at"::text AS "bucketStartedAtKey"',
+    )
+    expect(ipQuery.values).toEqual([
+      AuthRateLimitScope.LOGIN_IP,
+      IP_HASH,
+      30,
+      30,
+    ])
+    expect(usernameQuery.values).toEqual([
       AuthRateLimitScope.LOGIN_USERNAME,
-      SUBJECT_KEY_HASH,
+      USER_HASH,
+      5,
+      5,
+    ])
+    expect(reservation.entries).toEqual([
+      {
+        scope: AuthRateLimitScope.LOGIN_IP,
+        subjectKeyHash: IP_HASH,
+        bucketStartedAtKey: BUCKET_KEY,
+      },
+      {
+        scope: AuthRateLimitScope.LOGIN_USERNAME,
+        subjectKeyHash: USER_HASH,
+        bucketStartedAtKey: BUCKET_KEY,
+      },
     ])
   })
 
-  it('blockedUntil 严格晚于数据库时间时返回固定 429 ApiException', async () => {
+  it('任一桶拒绝时抛出固定 429，并依赖事务回滚此前预占', async () => {
     const { queryRaw, service } = createService()
-    queryRaw.mockResolvedValue([
-      {
-        blockedUntil: new Date(DB_NOW.getTime() + 1),
-        dbNow: DB_NOW,
-      },
-    ])
+    queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ bucketStartedAtKey: BUCKET_KEY }])
+      .mockResolvedValueOnce([])
 
-    const operation = service.assertAllowed(
-      AuthRateLimitScope.LOGIN_IP,
-      SUBJECT_KEY_HASH,
-    )
+    const operation = service.reserveAttempts(createAttempts())
 
     await expect(operation).rejects.toBeInstanceOf(ApiException)
     await expect(operation).rejects.toMatchObject({
       code: 'AUTH_RATE_LIMITED',
       publicMessage: '操作过于频繁，请稍后重试',
+      status: HttpStatus.TOO_MANY_REQUESTS,
     })
-    await expect(operation).rejects.toHaveProperty(
-      'status',
-      HttpStatus.TOO_MANY_REQUESTS,
-    )
   })
+})
 
-  it('blockedUntil 等于数据库时间时按严格大于边界放行', async () => {
-    const { queryRaw, service } = createService()
-    queryRaw.mockResolvedValue([
-      {
-        blockedUntil: new Date(DB_NOW),
-        dbNow: new Date(DB_NOW),
-      },
+describe('AuthRateLimitService release', () => {
+  it('在独立短事务中按稳定顺序只递减匹配窗口的本次预占', async () => {
+    const { executeRaw, queryRaw, runTransaction, service } = createService()
+    queryRaw.mockResolvedValueOnce([])
+
+    await service.releaseReservation(createReservation())
+
+    expect(runTransaction).toHaveBeenCalledTimes(1)
+    expect(executeRaw).toHaveBeenCalledTimes(2)
+    const ipQuery = executeRaw.mock.calls[0]?.[0]
+    const usernameQuery = executeRaw.mock.calls[1]?.[0]
+    expect(normalizeSql(ipQuery)).toContain(
+      '"attempt_count" = "current"."attempt_count" - 1',
+    )
+    expect(normalizeSql(ipQuery)).toContain(
+      '"current"."bucket_started_at" = ?::timestamptz',
+    )
+    expect(ipQuery.values).toEqual([
+      30,
+      AuthRateLimitScope.LOGIN_IP,
+      IP_HASH,
+      BUCKET_KEY,
     ])
-
-    await expect(
-      service.assertAllowed(
-        AuthRateLimitScope.PASSWORD_CHANGE_USER,
-        SUBJECT_KEY_HASH,
-      ),
-    ).resolves.toBeUndefined()
-  })
-
-  it('blockedUntil 为 null 时放行', async () => {
-    const { queryRaw, service } = createService()
-    queryRaw.mockResolvedValue([{ blockedUntil: null, dbNow: DB_NOW }])
-
-    await expect(
-      service.assertAllowed(
-        AuthRateLimitScope.PASSWORD_CHANGE_IP,
-        SUBJECT_KEY_HASH,
-      ),
-    ).resolves.toBeUndefined()
-  })
-})
-
-describe('AuthRateLimitService.recordFailure', () => {
-  it.each([
-    [AuthRateLimitScope.LOGIN_USERNAME, 5],
-    [AuthRateLimitScope.PASSWORD_CHANGE_USER, 5],
-    [AuthRateLimitScope.LOGIN_IP, 30],
-    [AuthRateLimitScope.PASSWORD_CHANGE_IP, 30],
-  ] as const)('为 %s 使用固定 15 分钟窗口和阈值 %i', async (scope, limit) => {
-    const { executeRaw, service } = createService()
-    executeRaw.mockResolvedValue(1)
-
-    await expect(
-      service.recordFailure(scope, SUBJECT_KEY_HASH),
-    ).resolves.toBeUndefined()
-
-    expect(executeRaw).toHaveBeenCalledTimes(1)
-    const query = executeRaw.mock.calls[0]?.[0]
-    expect(query).toBeDefined()
-    expect(normalizeSql(query)).toBe(
-      `INSERT INTO "auth_rate_limits" AS "current" ( "scope", "subject_key_hash", "bucket_started_at", "attempt_count", "blocked_until", "updated_at" ) SELECT ?::"auth_rate_limit_scope", ?, "database_time"."db_now", 1, NULL, "database_time"."db_now" FROM ( SELECT clock_timestamp() AS "db_now" ) AS "database_time" ON CONFLICT ("scope", "subject_key_hash") DO UPDATE SET "bucket_started_at" = CASE WHEN "current"."blocked_until" > EXCLUDED."updated_at" THEN "current"."bucket_started_at" WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at" THEN EXCLUDED."updated_at" ELSE "current"."bucket_started_at" END, "attempt_count" = CASE WHEN "current"."blocked_until" > EXCLUDED."updated_at" THEN "current"."attempt_count" WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at" THEN 1 ELSE "current"."attempt_count" + 1 END, "blocked_until" = CASE WHEN "current"."blocked_until" > EXCLUDED."updated_at" THEN "current"."blocked_until" WHEN "current"."bucket_started_at" + INTERVAL '15 minutes' <= EXCLUDED."updated_at" THEN NULL WHEN "current"."attempt_count" + 1 >= ? THEN EXCLUDED."updated_at" + INTERVAL '15 minutes' ELSE NULL END, "updated_at" = EXCLUDED."updated_at"`,
-    )
-    expect(query?.values).toEqual([scope, SUBJECT_KEY_HASH, limit])
-    expect(normalizeSql(query)).not.toMatch(/\b(?:now|current_timestamp)\s*\(/i)
-  })
-})
-
-describe('AuthRateLimitService.clear', () => {
-  it('使用参数化固定 SQL 删除一个主体的限流桶', async () => {
-    const { executeRaw, service } = createService()
-    executeRaw.mockResolvedValue(1)
-
-    await expect(
-      service.clear(AuthRateLimitScope.LOGIN_USERNAME, SUBJECT_KEY_HASH),
-    ).resolves.toBeUndefined()
-
-    expect(executeRaw).toHaveBeenCalledTimes(1)
-    const query = executeRaw.mock.calls[0]?.[0]
-    expect(query).toBeDefined()
-    expect(normalizeSql(query)).toBe(
-      'DELETE FROM "auth_rate_limits" WHERE "scope" = ?::"auth_rate_limit_scope" AND "subject_key_hash" = ?',
-    )
-    expect(query?.values).toEqual([
+    expect(usernameQuery.values).toEqual([
+      5,
       AuthRateLimitScope.LOGIN_USERNAME,
-      SUBJECT_KEY_HASH,
+      USER_HASH,
+      BUCKET_KEY,
     ])
+  })
+
+  it('可并入已有成功事务且不创建嵌套事务', async () => {
+    const { executeRaw, runTransaction, service, transaction } = createService()
+
+    await service.releaseReservationInTransaction(
+      transaction as unknown as Prisma.TransactionClient,
+      createReservation(),
+    )
+
+    expect(runTransaction).not.toHaveBeenCalled()
+    expect(executeRaw).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -179,82 +206,66 @@ describe('AuthRateLimitService input and failure boundaries', () => {
     Buffer.alloc(31),
     Buffer.alloc(33),
     'not-bytes',
-  ])('在查询数据库前拒绝非 32-byte subjectKeyHash', async (invalidHash) => {
-    const { executeRaw, queryRaw, service } = createService()
+  ])('在事务前拒绝非 32-byte subjectKeyHash', async (invalidHash) => {
+    const { runTransaction, service } = createService()
 
     await expect(
-      service.assertAllowed(
-        AuthRateLimitScope.LOGIN_USERNAME,
-        invalidHash as unknown as Buffer,
-      ),
+      service.reserveAttempts([
+        {
+          scope: AuthRateLimitScope.LOGIN_USERNAME,
+          subjectKeyHash: invalidHash as unknown as Buffer,
+        },
+      ]),
     ).rejects.toBeInstanceOf(AuthRateLimitInputError)
-    await expect(
-      service.recordFailure(
-        AuthRateLimitScope.LOGIN_USERNAME,
-        invalidHash as unknown as Buffer,
-      ),
-    ).rejects.toBeInstanceOf(AuthRateLimitInputError)
-    await expect(
-      service.clear(
-        AuthRateLimitScope.LOGIN_USERNAME,
-        invalidHash as unknown as Buffer,
-      ),
-    ).rejects.toBeInstanceOf(AuthRateLimitInputError)
-    expect(queryRaw).not.toHaveBeenCalled()
-    expect(executeRaw).not.toHaveBeenCalled()
+    expect(runTransaction).not.toHaveBeenCalled()
   })
 
-  it('在查询数据库前拒绝运行期未知 scope', async () => {
-    const { executeRaw, queryRaw, service } = createService()
+  it('在事务前拒绝空集合、重复主体和运行期未知 scope', async () => {
+    const { runTransaction, service } = createService()
+    const duplicate = createAttempts()[0]
     const invalidScope = 'LOGIN_OTHER' as AuthRateLimitScopeValue
 
+    await expect(service.reserveAttempts([])).rejects.toBeInstanceOf(
+      AuthRateLimitInputError,
+    )
     await expect(
-      service.assertAllowed(invalidScope, SUBJECT_KEY_HASH),
-    ).rejects.toMatchObject({
-      code: 'AUTH_RATE_LIMIT_INPUT_INVALID',
-      message: 'Authentication rate-limit input is invalid',
-    })
-    expect(queryRaw).not.toHaveBeenCalled()
-    expect(executeRaw).not.toHaveBeenCalled()
+      service.reserveAttempts([duplicate, duplicate]),
+    ).rejects.toBeInstanceOf(AuthRateLimitInputError)
+    await expect(
+      service.reserveAttempts([
+        { scope: invalidScope, subjectKeyHash: USER_HASH },
+      ]),
+    ).rejects.toBeInstanceOf(AuthRateLimitInputError)
+    expect(runTransaction).not.toHaveBeenCalled()
   })
 
-  it.each(['assertAllowed', 'recordFailure', 'clear'] as const)(
-    '%s 将数据库驱动异常替换为不带 cause 的固定内部错误',
-    async (method) => {
-      const secretCanary = 'postgresql://secret@localhost/qianshu'
-      const { executeRaw, queryRaw, service } = createService()
-      queryRaw.mockRejectedValue(new Error(secretCanary))
-      executeRaw.mockRejectedValue(new Error(secretCanary))
+  it('将数据库驱动异常替换为不带 cause 的固定内部错误', async () => {
+    const secretCanary = 'postgresql://secret@localhost/qianshu'
+    const { runTransaction, service } = createService()
+    runTransaction.mockRejectedValue(new Error(secretCanary))
 
-      const operation = service[method](
-        AuthRateLimitScope.LOGIN_IP,
-        SUBJECT_KEY_HASH,
-      )
+    const operation = service.reserveAttempts(createAttempts())
 
-      await expect(operation).rejects.toBeInstanceOf(
-        AuthRateLimitOperationFailedError,
-      )
-      await expect(operation).rejects.toMatchObject({
-        code: 'AUTH_RATE_LIMIT_OPERATION_FAILED',
-        message: 'Authentication rate-limit operation failed',
-      })
-      const error = await operation.catch((caught: unknown) => caught)
-      expect(JSON.stringify(error)).not.toContain(secretCanary)
-      expect((error as Error & { cause?: unknown }).cause).toBeUndefined()
-    },
-  )
+    await expect(operation).rejects.toBeInstanceOf(
+      AuthRateLimitOperationFailedError,
+    )
+    const error = await operation.catch((caught: unknown) => caught)
+    expect(error).toMatchObject({
+      code: 'AUTH_RATE_LIMIT_OPERATION_FAILED',
+      message: 'Authentication rate-limit operation failed',
+    })
+    expect(JSON.stringify(error)).not.toContain(secretCanary)
+    expect((error as Error & { cause?: unknown }).cause).toBeUndefined()
+  })
 
-  it('将异常查询结果映射为固定内部错误', async () => {
+  it('将异常窗口 key 映射为固定内部错误', async () => {
     const { queryRaw, service } = createService()
-    queryRaw.mockResolvedValue([
-      {
-        blockedUntil: new Date(DB_NOW.getTime() + 1),
-        dbNow: 'not-a-date' as unknown as Date,
-      },
-    ])
+    queryRaw
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ bucketStartedAtKey: null }])
 
     await expect(
-      service.assertAllowed(AuthRateLimitScope.LOGIN_IP, SUBJECT_KEY_HASH),
+      service.reserveAttempts([createAttempts()[0]]),
     ).rejects.toBeInstanceOf(AuthRateLimitOperationFailedError)
   })
 })

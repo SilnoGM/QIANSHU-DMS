@@ -28,6 +28,20 @@ const SESSION_ID = 'e8acf4bf-51b9-4fbf-a2eb-4b107fbec1e1'
 const DATABASE_NOW = new Date('2026-07-17T08:00:00.000Z')
 const USER_HASH = Buffer.alloc(32, 0x31)
 const IP_HASH = Buffer.alloc(32, 0x32)
+const RATE_LIMIT_RESERVATION = Object.freeze({
+  entries: Object.freeze([
+    Object.freeze({
+      scope: AuthRateLimitScope.PASSWORD_CHANGE_IP,
+      subjectKeyHash: IP_HASH,
+      bucketStartedAtKey: '2026-07-17 08:00:00+00',
+    }),
+    Object.freeze({
+      scope: AuthRateLimitScope.PASSWORD_CHANGE_USER,
+      subjectKeyHash: USER_HASH,
+      bucketStartedAtKey: '2026-07-17 08:00:00+00',
+    }),
+  ]),
+})
 
 const AUTH_CONTEXT: RequestAuthContext = Object.freeze({
   sessionId: SESSION_ID,
@@ -113,8 +127,9 @@ function createFixture(overrides: { forced?: boolean } = {}) {
     createInTransaction: jest.fn().mockResolvedValue(ISSUED_SESSION),
   }
   const rateLimits = {
-    assertAllowed: jest.fn().mockResolvedValue(undefined),
-    recordFailure: jest.fn().mockResolvedValue(undefined),
+    reserveAttempts: jest.fn().mockResolvedValue(RATE_LIMIT_RESERVATION),
+    releaseReservation: jest.fn().mockResolvedValue(undefined),
+    releaseReservationInTransaction: jest.fn().mockResolvedValue(undefined),
   }
   const subjectHasher = {
     hashUserId: jest.fn().mockReturnValue(USER_HASH),
@@ -190,31 +205,30 @@ async function captureApiError(operation: Promise<unknown>): Promise<ApiExceptio
 }
 
 describe('PasswordChangeService', () => {
-  it('checks user and IP failure buckets before verifying a normal current password', async () => {
+  it('atomically reserves user and IP buckets before verifying a normal current password', async () => {
     const fixture = createFixture()
 
     await fixture.service.change(CHANGE_INPUT)
 
     expect(fixture.subjectHasher.hashUserId).toHaveBeenCalledWith(USER_ID)
-    expect(fixture.rateLimits.assertAllowed).toHaveBeenNthCalledWith(
-      1,
-      AuthRateLimitScope.PASSWORD_CHANGE_USER,
-      USER_HASH,
-    )
-    expect(fixture.rateLimits.assertAllowed).toHaveBeenNthCalledWith(
-      2,
-      AuthRateLimitScope.PASSWORD_CHANGE_IP,
-      IP_HASH,
-    )
-    const lastRateCheck = Math.max(
-      ...fixture.rateLimits.assertAllowed.mock.invocationCallOrder,
-    )
-    expect(lastRateCheck).toBeLessThan(
+    expect(fixture.rateLimits.reserveAttempts).toHaveBeenCalledWith([
+      {
+        scope: AuthRateLimitScope.PASSWORD_CHANGE_USER,
+        subjectKeyHash: USER_HASH,
+      },
+      {
+        scope: AuthRateLimitScope.PASSWORD_CHANGE_IP,
+        subjectKeyHash: IP_HASH,
+      },
+    ])
+    expect(
+      fixture.rateLimits.reserveAttempts.mock.invocationCallOrder[0],
+    ).toBeLessThan(
       fixture.passwords.verify.mock.invocationCallOrder[0],
     )
   })
 
-  it('records both buckets and returns fixed CURRENT_PASSWORD_INVALID', async () => {
+  it('keeps both reserved buckets and returns fixed CURRENT_PASSWORD_INVALID', async () => {
     const fixture = createFixture()
     fixture.passwords.verify.mockReset().mockResolvedValue(false)
 
@@ -224,7 +238,7 @@ describe('PasswordChangeService', () => {
 
     expect(error.getStatus()).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
     expect(error).toMatchObject({ code: 'CURRENT_PASSWORD_INVALID' })
-    expect(fixture.rateLimits.recordFailure).toHaveBeenCalledTimes(2)
+    expect(fixture.rateLimits.releaseReservation).not.toHaveBeenCalled()
     expect(fixture.policy.assertAcceptable).not.toHaveBeenCalled()
     expect(fixture.prisma.$transaction).not.toHaveBeenCalled()
     expect(fixture.metrics.recordPassword).toHaveBeenCalledWith(
@@ -248,7 +262,7 @@ describe('PasswordChangeService', () => {
 
     expect(error).toMatchObject({ code: 'CURRENT_PASSWORD_INVALID' })
     expect(fixture.passwords.verify).not.toHaveBeenCalled()
-    expect(fixture.rateLimits.recordFailure).toHaveBeenCalledTimes(2)
+    expect(fixture.rateLimits.releaseReservation).not.toHaveBeenCalled()
   })
 
   it('uses a forced Session as admission and does not depend on currentPassword', async () => {
@@ -260,7 +274,7 @@ describe('PasswordChangeService', () => {
       currentPassword: 'intentionally ignored',
     })
 
-    expect(fixture.rateLimits.assertAllowed).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.reserveAttempts).not.toHaveBeenCalled()
     // forced mode only verifies that the new password differs from the old hash.
     expect(fixture.passwords.verify).toHaveBeenCalledTimes(1)
     expect(fixture.passwords.verify).toHaveBeenCalledWith(
@@ -283,6 +297,9 @@ describe('PasswordChangeService', () => {
     expect(error.getStatus()).toBe(HttpStatus.UNPROCESSABLE_ENTITY)
     expect(error).toMatchObject({ code: 'PASSWORD_MUST_DIFFER' })
     expect(fixture.passwords.hash).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 
   it('locks User then current Session and atomically rotates all Sessions', async () => {
@@ -325,6 +342,11 @@ describe('PasswordChangeService', () => {
         mustChangePassword: false,
       }),
     )
+    expect(fixture.rateLimits.releaseReservationInTransaction).toHaveBeenCalledWith(
+      fixture.transaction,
+      RATE_LIMIT_RESERVATION,
+    )
+    expect(fixture.rateLimits.releaseReservation).not.toHaveBeenCalled()
     expect(fixture.audit.record).toHaveBeenCalledWith(fixture.transaction, {
       eventType: AuditEventType.USER_PASSWORD_CHANGED,
       outcome: AuditOutcome.SUCCESS,
@@ -356,6 +378,9 @@ describe('PasswordChangeService', () => {
     )
     expect(fixture.metrics.recordSessionRevoked).not.toHaveBeenCalled()
     expect(fixture.metrics.recordSession).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 
   it.each([
@@ -377,6 +402,9 @@ describe('PasswordChangeService', () => {
     expect(error.getStatus()).toBe(HttpStatus.CONFLICT)
     expect(error).toMatchObject({ code: 'AUTH_STATE_CHANGED' })
     expect(fixture.transaction.user.update).not.toHaveBeenCalled()
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 
   it('returns AUTH_STATE_CHANGED when the current Session is no longer usable', async () => {
@@ -401,6 +429,9 @@ describe('PasswordChangeService', () => {
     )
 
     expect(error).toMatchObject({ code: 'AUTH_STATE_CHANGED' })
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 
   it('maps Argon2 queue exhaustion to AUTH_CAPACITY_UNAVAILABLE', async () => {
@@ -415,5 +446,8 @@ describe('PasswordChangeService', () => {
 
     expect(error.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE)
     expect(error).toMatchObject({ code: 'AUTH_CAPACITY_UNAVAILABLE' })
+    expect(fixture.rateLimits.releaseReservation).toHaveBeenCalledWith(
+      RATE_LIMIT_RESERVATION,
+    )
   })
 })
