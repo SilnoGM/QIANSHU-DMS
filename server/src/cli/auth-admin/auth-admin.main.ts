@@ -1,7 +1,6 @@
 import type { Type } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 
-import { AuthAdminModule } from './auth-admin.module'
 import {
   AuthAdminOperationError,
   AuthAdminService,
@@ -25,11 +24,15 @@ export type CreateAuthAdminApplication =
   () => Promise<AuthAdminCliApplication>
 
 export const createAuthAdminApplication =
-  async (): Promise<AuthAdminCliApplication> =>
-    NestFactory.createApplicationContext(AuthAdminModule, {
+  async (): Promise<AuthAdminCliApplication> => {
+    // CLI 编排层会被无数据库环境的单元测试导入。仅在交互式检查通过且确实
+    // 需要创建 application context 时加载 Module，环境校验仍在真实启动前执行。
+    const { AuthAdminModule } = await import('./auth-admin.module')
+    return NestFactory.createApplicationContext(AuthAdminModule, {
       abortOnError: false,
       logger: false,
     })
+  }
 
 /**
  * CLI 最外层安全边界。

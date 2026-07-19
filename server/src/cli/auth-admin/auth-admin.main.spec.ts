@@ -16,6 +16,27 @@ function createIO(interactive = true) {
 }
 
 describe('executeAuthAdminCli', () => {
+  it('delays loading the environment-bound Nest module until application creation', async () => {
+    const moduleLoadError = new Error('auth admin module loaded')
+    jest.resetModules()
+    jest.doMock('./auth-admin.module', () => {
+      throw moduleLoadError
+    })
+
+    try {
+      // 导入纯 CLI 编排层不得触发 ConfigModule 环境校验；只有真正创建
+      // application context 时，才允许加载依赖 DATABASE_URL 的 Nest module。
+      const mainModule = await import('./auth-admin.main')
+      await expect(mainModule.createAuthAdminApplication()).rejects.toBe(
+        moduleLoadError,
+      )
+    }
+    finally {
+      jest.dontMock('./auth-admin.module')
+      jest.resetModules()
+    }
+  })
+
   it('refuses non-TTY execution before creating an application or database connection', async () => {
     const { io, lines } = createIO(false)
     const createApplication = jest.fn()
