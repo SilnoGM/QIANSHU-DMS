@@ -466,7 +466,8 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       value: undefined,
     })
   `)
-  await restartedPage.navigate(`${configuration.baseUrl}/`)
+  // 重启后直接恢复受保护深链接；页面内容和最终路由共同证明首轮 Router guard 已完成。
+  await restartedPage.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
   await waitForAuthState(restartedPage, 'authenticated')
   assert.deepEqual(await restartedPage.evaluate(storeSnapshotExpression()), {
     state: 'authenticated',
@@ -475,9 +476,13 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
 
   // 先通过真实管理页发起业务请求，再在 Store 不知情时从服务端撤销 Cookie；
   // 随后的“查询”必须由 Axios 统一 401 拦截器清理身份并导航登录。
-  await restartedPage.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
-  await waitForAuthState(restartedPage, 'authenticated')
-  await restartedPage.waitFor(`document.body.innerText.includes('用户管理')`).catch(async () => {
+  await restartedPage.waitFor(`(() => {
+    const router = document.querySelector('#app')?.__vue_app__
+      ?.config?.globalProperties?.$router
+    return router?.currentRoute?.value?.name === 'systemUsers'
+      && router.currentRoute.value.fullPath === '/system/users'
+      && document.body.innerText.includes('用户管理')
+  })()`).catch(async () => {
     // 诊断只保留路由结构和固定页面标记，禁止把用户名、响应体或其他身份数据写入 CI 日志。
     const diagnostic = await restartedPage.evaluate(`(() => {
       const vue = document.querySelector('#app')?.__vue_app__
