@@ -26,3 +26,18 @@ test('持久偏好按不可变 userId 分区且身份边界清空收藏内存', 
   assert.match(favoritesSource, /function clean\(\)/u)
   assert.match(accountSource, /appFavoritesStore\.clean\(\)/u)
 })
+
+test('广播与公开认证重验统一协调路由，后台异常只记录脱敏固定文本', () => {
+  const accountSource = readStore('account')
+
+  assert.match(accountSource, /revalidateAndReconcile\(false\)/u)
+  assert.match(
+    accountSource,
+    /async function revalidateAuth\([\s\S]*?await revalidateAndReconcile\(true\)/u,
+  )
+  assert.doesNotMatch(accountSource, /\.catch\(\(\) => undefined\)/u)
+  assert.doesNotMatch(
+    accountSource,
+    /console\.error\([^\n]*,\s*error\s*\)/u,
+  )
+})

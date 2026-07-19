@@ -1,15 +1,23 @@
+import type { RouteLocationRaw } from 'vue-router'
 import type {
   AuthContextDto,
   ChangePasswordRequestDto,
   LoginRequestDtoWritable,
 } from '@/api/generated/types.gen'
 
+import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import authApi from '@/api/modules/auth'
 import router from '@/router'
 import {
   AuthLifecycleCoordinator,
   createAuthLifecycleState,
+  StaleAuthStateError,
 } from './auth-lifecycle'
+import {
+  isAuthRouteAuthorized,
+  resolveAuthPermissionFallback,
+  resolveAuthSynchronizationNavigation,
+} from './auth-retry-navigation'
 
 type AuthBroadcastType = 'AUTH_CONTEXT_CHANGED' | 'AUTH_INVALIDATED'
 
@@ -46,6 +54,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   const appTabbarStore = useAppTabbarStore()
   const appRouteStore = useAppRouteStore()
   const appMenuStore = useAppMenuStore()
+  const appSettingsStore = useAppSettingsStore()
   const appFavoritesStore = useAppFavoritesStore()
   const appKeepAliveStore = useAppKeepAliveStore()
   const appIframeStore = useAppIframeStore()
@@ -55,8 +64,13 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   let authAbortController = new AbortController()
   let authChannel: BroadcastChannel | null = null
   let synchronizationStarted = false
+  let routeDomainVersion = 0
+  let requestedRouteDomainVersion = 0
+  let reconciledRouteDomainVersion = 0
+  let routeReconciliationPromise: Promise<void> | null = null
 
   function cleanIdentityDomain(): void {
+    routeDomainVersion += 1
     authAbortController.abort()
     authAbortController = new AbortController()
     appTabbarStore.clean()
@@ -71,27 +85,12 @@ export const useAppAccountStore = defineStore('appAccount', () => {
     return authAbortController.signal
   }
 
-  function rebuildPermissionRoutes(): void {
+  function resetPermissionRoutes(): void {
+    routeDomainVersion += 1
     appKeepAliveStore.clean()
     appTabbarStore.clean()
     appRouteStore.removeRoutes()
-    queueMicrotask(async () => {
-      if (router.currentRoute.value.name !== 'login') {
-        try {
-          await router.replace(router.currentRoute.value.fullPath)
-          const { auth } = useAppAuth()
-          const currentAllowed = router.currentRoute.value.matched.every(route =>
-            auth(route.meta.auth ?? ''))
-          if (!currentAllowed) {
-            // 权限缩减后优先进入当前菜单域首个可访问页面；无菜单时回到稳定首页。
-            await router.replace(appMenuStore.sidebarMenusFirstDeepestPath)
-          }
-        }
-        catch {
-          // Router 取消或组件加载失败时保留根层 403/错误态，不制造重定向循环。
-        }
-      }
-    })
+    appMenuStore.setActived(0)
   }
 
   const coordinator = new AuthLifecycleCoordinator({
@@ -100,7 +99,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
       authApi.me(signal, broadcastSessionInvalid).then(response => response.data),
     onIdentityBoundary: cleanIdentityDomain,
     onMutationRevalidated: () => broadcast('AUTH_CONTEXT_CHANGED'),
-    onPermissionsChanged: rebuildPermissionRoutes,
+    onPermissionsChanged: resetPermissionRoutes,
   })
 
   const authState = toRef(lifecycleState, 'authState')
@@ -113,6 +112,106 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   const displayName = computed(() => authContext.value?.user.displayName ?? '')
   const avatar = computed(() => '')
   const isLogin = computed(() => authContext.value !== null)
+
+  async function replaceAuthRoute(target: RouteLocationRaw): Promise<void> {
+    const failure = await router.replace(target)
+    if (failure === undefined) {
+      return
+    }
+    if (isNavigationFailure(
+      failure,
+      NavigationFailureType.cancelled | NavigationFailureType.duplicated,
+    )) {
+      // 新认证事件抢占旧导航或目标已经一致时无需报错；其余失败必须上抛。
+      return
+    }
+    throw failure
+  }
+
+  async function reconcileAuthRoute(): Promise<void> {
+    const reconciliationEpoch = lifecycleState.authEpoch
+    const currentRoute = router.currentRoute.value
+    const target = resolveAuthSynchronizationNavigation({
+      currentFullPath: currentRoute.fullPath,
+      currentRouteName: currentRoute.name,
+      homeFullPath: appSettingsStore.settings.app.home.fullPath,
+      loginRedirect: currentRoute.query.redirect,
+      state: lifecycleState.authState,
+    })
+    if (target === null) {
+      return
+    }
+
+    await replaceAuthRoute(target)
+    if (
+      reconciliationEpoch !== lifecycleState.authEpoch
+      || lifecycleState.authState !== 'authenticated'
+    ) {
+      return
+    }
+
+    const currentAllowed = isAuthRouteAuthorized(
+      router.currentRoute.value.matched.map(route => route.meta.auth),
+      permissions.value,
+    )
+    // 权限缩减后只降级一次：有菜单时进入第一个可访问页面；无菜单时回到
+    // 稳定首页，由根层 403 提供账户自服务入口，避免两个无权路径互相跳转。
+    const fallback = resolveAuthPermissionFallback({
+      currentAllowed,
+      currentFullPath: router.currentRoute.value.fullPath,
+      fallbackFullPath: appMenuStore.sidebarMenusFirstDeepestPath,
+      state: lifecycleState.authState,
+    })
+    if (fallback !== null) {
+      await replaceAuthRoute(fallback)
+    }
+  }
+
+  function requestAuthRouteReconciliation(version: number): Promise<void> {
+    requestedRouteDomainVersion = Math.max(
+      requestedRouteDomainVersion,
+      version,
+    )
+    if (routeReconciliationPromise !== null) {
+      return routeReconciliationPromise
+    }
+
+    const operation = (async () => {
+      while (requestedRouteDomainVersion > reconciledRouteDomainVersion) {
+        const versionToReconcile = requestedRouteDomainVersion
+        await reconcileAuthRoute()
+        reconciledRouteDomainVersion = versionToReconcile
+      }
+    })()
+    routeReconciliationPromise = operation.finally(() => {
+      routeReconciliationPromise = null
+    })
+    return routeReconciliationPromise
+  }
+
+  async function revalidateAndReconcile(
+    broadcastSessionInvalid: boolean,
+    afterMutation = false,
+  ): Promise<AuthContextDto | null> {
+    const previousRouteDomainVersion = routeDomainVersion
+    const context = afterMutation
+      ? await coordinator.revalidateAfterMutation()
+      : await coordinator.revalidateAuth({ broadcastSessionInvalid })
+    if (routeDomainVersion !== previousRouteDomainVersion) {
+      await requestAuthRouteReconciliation(routeDomainVersion)
+    }
+    return context
+  }
+
+  function reportBackgroundSynchronizationError(error: unknown): void {
+    if (error instanceof StaleAuthStateError) {
+      return
+    }
+    lifecycleState.errorCode = 'AUTH_ROUTE_RECONCILIATION_FAILED'
+    lifecycleState.authState = 'unavailable'
+    // 原始 Axios/Router error 可能携带 URL 或请求配置，日志只输出固定脱敏文本。
+    console.error('[auth] Background synchronization failed')
+  }
 
   function broadcast(type: AuthBroadcastType): void {
     try {
@@ -141,9 +240,8 @@ export const useAppAccountStore = defineStore('appAccount', () => {
         authChannel = new BroadcastChannel(AUTH_CHANNEL_NAME)
         authChannel.addEventListener('message', (event: MessageEvent<unknown>) => {
           if (isAuthBroadcastMessage(event.data)) {
-            void coordinator.revalidateAuth({
-              broadcastSessionInvalid: false,
-            }).catch(() => undefined)
+            void revalidateAndReconcile(false)
+              .catch(reportBackgroundSynchronizationError)
           }
         })
       }
@@ -154,7 +252,8 @@ export const useAppAccountStore = defineStore('appAccount', () => {
 
     window.addEventListener('pageshow', (event) => {
       if (event.persisted) {
-        void coordinator.revalidateAuth().catch(() => undefined)
+        void revalidateAndReconcile(true)
+          .catch(reportBackgroundSynchronizationError)
       }
     })
   }
@@ -179,7 +278,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
     const pendingNotice = lifecycleState.errorCode === 'PASSWORD_CHANGE_RESULT_UNKNOWN'
       ? lifecycleState.errorCode
       : null
-    const context = await coordinator.revalidateAuth()
+    const context = await revalidateAndReconcile(true)
     if (pendingNotice !== null && context === null) {
       lifecycleState.errorCode = pendingNotice
     }
@@ -187,7 +286,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   }
 
   function revalidateAfterMutation(): Promise<AuthContextDto | null> {
-    return coordinator.revalidateAfterMutation()
+    return revalidateAndReconcile(true, true)
   }
 
   function applyAuthContext(context: AuthContextDto): void {

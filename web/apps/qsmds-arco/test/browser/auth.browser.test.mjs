@@ -375,6 +375,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   await primaryPage.evaluate(storeMethodExpression('logout'))
   await waitForAuthState(primaryPage, 'anonymous')
   await waitForAuthState(secondaryPage, 'anonymous')
+  await secondaryPage.waitFor(`location.hash.startsWith('#/login')`)
   assert.ok(secondaryMeRequests >= 1 && secondaryMeRequests <= 2)
 
   await primaryPage.evaluate(storeMethodExpression('login', {
@@ -383,6 +384,57 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   }))
   await waitForAuthState(primaryPage, 'authenticated')
   await waitForAuthState(secondaryPage, 'authenticated')
+  await secondaryPage.waitFor(`(() => {
+    const vue = document.querySelector('#app')?.__vue_app__
+    const pinia = vue?.config?.globalProperties?.$pinia
+    const routeStore = pinia?._s?.get('appRoute')
+    const menuStore = pinia?._s?.get('appMenu')
+    const router = vue?.config?.globalProperties?.$router
+    return !location.hash.startsWith('#/login')
+      && routeStore?.isGenerate === true
+      && menuStore?.sidebarMenus?.length > 0
+      && router?.currentRoute?.value?.name !== 'login'
+      && document.body.innerText.includes('系统管理')
+  })()`)
+
+  // 模拟同一用户的 Session 轮换先清空身份域；随后服务端广播重新验证必须
+  // 注册动态路由、重建菜单并恢复当前业务 Shell，而不是等待手动刷新。
+  await secondaryPage.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
+  await secondaryPage.waitFor(`document.body.innerText.includes('用户管理')`)
+  await secondaryPage.evaluate(authStoreExpression(`
+    const rotated = JSON.parse(JSON.stringify(store.authContext))
+    rotated.session.createdAt = '2099-01-01T00:00:00.000Z'
+    store.applyAuthContext(rotated)
+    return true
+  `))
+  assert.equal(await secondaryPage.evaluate(`(() => {
+    const vue = document.querySelector('#app')?.__vue_app__
+    const pinia = vue?.config?.globalProperties?.$pinia
+    const routeStore = pinia?._s?.get('appRoute')
+    const menuStore = pinia?._s?.get('appMenu')
+    const router = vue?.config?.globalProperties?.$router
+    return routeStore?.isGenerate === false
+      && menuStore?.sidebarMenus?.length === 0
+      && router?.hasRoute?.('systemUsers') === false
+  })()`), true)
+  await primaryPage.evaluate(`(() => {
+    const channel = new BroadcastChannel('qianshu-auth-v1')
+    channel.postMessage({ type: 'AUTH_CONTEXT_CHANGED' })
+    channel.close()
+    return true
+  })()`)
+  await secondaryPage.waitFor(`(() => {
+    const vue = document.querySelector('#app')?.__vue_app__
+    const pinia = vue?.config?.globalProperties?.$pinia
+    const routeStore = pinia?._s?.get('appRoute')
+    const menuStore = pinia?._s?.get('appMenu')
+    const router = vue?.config?.globalProperties?.$router
+    return location.hash.startsWith('#/system/users')
+      && routeStore?.isGenerate === true
+      && menuStore?.sidebarMenus?.length > 0
+      && router?.hasRoute?.('systemUsers') === true
+      && document.body.innerText.includes('用户管理')
+  })()`)
   secondaryMeRequests = 0
   await primaryPage.evaluate(`(() => {
     const channel = new BroadcastChannel('qianshu-auth-v1')
@@ -461,7 +513,8 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   assert.equal(
     await restartedPage.evaluate(`(() => (
       document.body.innerText.includes('分配角色')
-      && document.body.innerText.includes('设置或重置密码')
+      && !document.body.innerText.includes('设置或重置密码')
+      && !document.body.innerText.includes('禁用用户')
     ))()`),
     true,
   )

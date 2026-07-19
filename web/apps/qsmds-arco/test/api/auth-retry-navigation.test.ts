@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  isAuthRouteAuthorized,
+  resolveAuthPermissionFallback,
   resolveAuthRetryNavigation,
+  resolveAuthSynchronizationNavigation,
   resolveForcedPasswordCompletionNavigation,
   resolveRequestedFullPath,
 } from '../../src/store/modules/app/auth-retry-navigation'
@@ -77,4 +80,84 @@ test('首次导航被网络故障中止时，从真实 hash 地址恢复原深�
     '/system/roles',
   )
   assert.equal(resolveRequestedFullPath('/', ''), '/')
+})
+
+test('跨标签退出进入登录页并保留业务路径，已在登录页时不重复重定向', () => {
+  assert.deepEqual(resolveAuthSynchronizationNavigation({
+    currentFullPath: '/system/users?page=2',
+    currentRouteName: 'systemUsers',
+    homeFullPath: '/',
+    loginRedirect: undefined,
+    state: 'anonymous',
+  }), {
+    name: 'login',
+    query: { redirect: '/system/users?page=2' },
+  })
+  assert.equal(resolveAuthSynchronizationNavigation({
+    currentFullPath: '/login?redirect=/system/users',
+    currentRouteName: 'login',
+    homeFullPath: '/',
+    loginRedirect: '/system/users',
+    state: 'anonymous',
+  }), null)
+})
+
+test('跨标签重新登录离开登录页，拒绝会回到登录页的 redirect 循环', () => {
+  assert.equal(resolveAuthSynchronizationNavigation({
+    currentFullPath: '/login?redirect=/system/users',
+    currentRouteName: 'login',
+    homeFullPath: '/',
+    loginRedirect: '/system/users',
+    state: 'authenticated',
+  }), '/system/users')
+  assert.equal(resolveAuthSynchronizationNavigation({
+    currentFullPath: '/login?redirect=/login',
+    currentRouteName: 'login',
+    homeFullPath: '/',
+    loginRedirect: '/login',
+    state: 'authenticated',
+  }), '/')
+  assert.equal(resolveAuthSynchronizationNavigation({
+    currentFullPath: '/login?redirect=//outside.example',
+    currentRouteName: 'login',
+    homeFullPath: '/',
+    loginRedirect: '//outside.example',
+    state: 'authenticated',
+  }), '/')
+})
+
+test('Session 轮换后重新进入当前路由，并按最新权限判断是否需要降级', () => {
+  assert.equal(resolveAuthSynchronizationNavigation({
+    currentFullPath: '/system/users?page=2',
+    currentRouteName: 'systemUsers',
+    homeFullPath: '/',
+    loginRedirect: undefined,
+    state: 'authenticated',
+  }), '/system/users?page=2')
+  assert.equal(isAuthRouteAuthorized([
+    ['users:read', 'roles:read'],
+    'users:read',
+  ], ['roles:read']), false)
+  assert.equal(isAuthRouteAuthorized([
+    ['users:read', 'roles:read'],
+    'roles:read',
+  ], ['roles:read']), true)
+  assert.equal(resolveAuthPermissionFallback({
+    currentAllowed: false,
+    currentFullPath: '/system/users',
+    fallbackFullPath: '/system/roles',
+    state: 'authenticated',
+  }), '/system/roles')
+  assert.equal(resolveAuthPermissionFallback({
+    currentAllowed: false,
+    currentFullPath: '/',
+    fallbackFullPath: '/',
+    state: 'authenticated',
+  }), null)
+  assert.equal(resolveAuthPermissionFallback({
+    currentAllowed: true,
+    currentFullPath: '/system/users',
+    fallbackFullPath: '/system/roles',
+    state: 'authenticated',
+  }), null)
 })

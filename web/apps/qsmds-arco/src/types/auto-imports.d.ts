@@ -25,6 +25,7 @@ declare global {
   const getCurrentWatcher: typeof import('vue').getCurrentWatcher
   const h: typeof import('vue').h
   const inject: typeof import('vue').inject
+  const isAuthRouteAuthorized: typeof import('../store/modules/app/auth-retry-navigation').isAuthRouteAuthorized
   const isProxy: typeof import('vue').isProxy
   const isReactive: typeof import('vue').isReactive
   const isReadonly: typeof import('vue').isReadonly
@@ -59,7 +60,9 @@ declare global {
   const reactive: typeof import('vue').reactive
   const readonly: typeof import('vue').readonly
   const ref: typeof import('vue').ref
+  const resolveAuthPermissionFallback: typeof import('../store/modules/app/auth-retry-navigation').resolveAuthPermissionFallback
   const resolveAuthRetryNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveAuthRetryNavigation
+  const resolveAuthSynchronizationNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveAuthSynchronizationNavigation
   const resolveComponent: typeof import('vue').resolveComponent
   const resolveForcedPasswordCompletionNavigation: typeof import('../store/modules/app/auth-retry-navigation').resolveForcedPasswordCompletionNavigation
   const resolveRequestedFullPath: typeof import('../store/modules/app/auth-retry-navigation').resolveRequestedFullPath
@@ -124,6 +127,6 @@ declare global {
   export type { StaleAuthStateError, AuthLifecycleCoordinator, AuthState, AuthLifecycleState, AuthLifecycleDependencies, RevalidationOptions } from '../store/modules/app/auth-lifecycle'
   import('../store/modules/app/auth-lifecycle')
   // @ts-ignore
-  export type { AuthRetryNavigation } from '../store/modules/app/auth-retry-navigation'
+  export type { AuthRetryNavigation, AuthSynchronizationNavigationInput, AuthPermissionFallbackInput } from '../store/modules/app/auth-retry-navigation'
   import('../store/modules/app/auth-retry-navigation')
 }
