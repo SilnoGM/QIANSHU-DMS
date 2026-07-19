@@ -129,14 +129,14 @@ async function checkLoginState() {
     </AAlert>
     <FaForm :model="model" :validation-schema="validationSchema" @submit="onSubmit">
       <FaFormItem name="username">
-        <FaInput type="text" placeholder="用户名" autocomplete="username" class="w-full">
+        <FaInput type="text" placeholder="用户名" autocomplete="username" class="h-11 w-full" input-class="h-full">
           <template #start>
             <FaIcon name="i-lucide:user" />
           </template>
         </FaInput>
       </FaFormItem>
       <FaFormItem name="password">
-        <FaInput type="password" placeholder="密码" autocomplete="current-password" class="w-full">
+        <FaInput type="password" placeholder="密码" autocomplete="current-password" class="h-11 w-full" input-class="h-full">
           <template #start>
             <FaIcon name="i-lucide:lock" />
           </template>
