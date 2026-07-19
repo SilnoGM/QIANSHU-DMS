@@ -177,6 +177,33 @@ export class AuthLifecycleCoordinator {
     return this.startRevalidation(options.broadcastSessionInvalid ?? true)
   }
 
+  /**
+   * 跨标签或 pageshow 事件代表“事件到达后的服务端事实”。若事件到达前已经有
+   * `/me` 在途，普通去重会让该事件直接复用旧响应，因此这里先跨过旧请求，再
+   * 保证至少有一轮事件后的 revalidation。
+   *
+   * 这里刻意不调用 invalidatePassiveRevalidation：在途请求可能是 mutation 的
+   * fresh `/me`，同步事件只能等待或复用它，不能中止 mutation 的确定性收敛。
+   */
+  async revalidateAfterSynchronizationEvent(
+    options: RevalidationOptions = {},
+  ): Promise<AuthContextDto | null> {
+    const pendingBeforeSynchronization = this.revalidatePromise
+    if (pendingBeforeSynchronization !== null) {
+      try {
+        await pendingBeforeSynchronization
+      }
+      catch (error) {
+        // 事件之后启动的 mutation 可能使旧 passive `/me` 变 stale。此时继续复用
+        // mutation fresh `/me` 即可；其他异常仍应保留原失败传播语义。
+        if (!(error instanceof StaleAuthStateError)) {
+          throw error
+        }
+      }
+    }
+    return this.revalidateAuth(options)
+  }
+
   revalidateAfterMutation(): Promise<AuthContextDto | null> {
     this.invalidatePassiveRevalidation()
     return this.startRevalidation(true).then((context) => {

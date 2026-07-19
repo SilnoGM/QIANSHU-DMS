@@ -73,6 +73,7 @@ declare global {
   const shallowReactive: typeof import('vue').shallowReactive
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
+  const shouldRequestAuthRouteReconciliation: typeof import('../store/modules/app/auth-retry-navigation').shouldRequestAuthRouteReconciliation
   const storeToRefs: typeof import('pinia').storeToRefs
   const toForcedAuthNavigation: typeof import('../store/modules/app/auth-retry-navigation').toForcedAuthNavigation
   const toRaw: typeof import('vue').toRaw
@@ -130,7 +131,7 @@ declare global {
   export type { StaleAuthStateError, AuthLifecycleCoordinator, AuthState, AuthLifecycleState, AuthLifecycleDependencies, RevalidationOptions } from '../store/modules/app/auth-lifecycle'
   import('../store/modules/app/auth-lifecycle')
   // @ts-ignore
-  export type { AuthRetryNavigation, AuthRetryNavigationTarget, AuthSynchronizationNavigationInput, AuthPermissionFallbackInput } from '../store/modules/app/auth-retry-navigation'
+  export type { AuthRetryNavigation, AuthRetryNavigationTarget, AuthSynchronizationNavigationInput, AuthPermissionFallbackInput, AuthRouteReconciliationInput } from '../store/modules/app/auth-retry-navigation'
   import('../store/modules/app/auth-retry-navigation')
   // @ts-ignore
   export type { LatestVersionTaskQueue, AuthSynchronizationQueue } from '../store/modules/app/auth-synchronization-queue'

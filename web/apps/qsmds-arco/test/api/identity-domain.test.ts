@@ -48,3 +48,29 @@ test('广播与公开认证重验统一协调路由，后台异常只记录脱�
     /console\.error\([^\n]*,\s*error\s*\)/u,
   )
 })
+
+test('自动认证重验使用独立单调版本请求路由协调', () => {
+  const accountSource = readStore('account')
+
+  assert.match(accountSource, /let routeReconciliationRequestVersion = 0/u)
+  assert.match(
+    accountSource,
+    /const previousAuthState = lifecycleState\.authState/u,
+  )
+  assert.match(
+    accountSource,
+    /shouldRequestAuthRouteReconciliation\(\{[\s\S]*?previousState: previousAuthState/u,
+  )
+  assert.match(
+    accountSource,
+    /routeReconciliationRequestVersion \+= 1/u,
+  )
+  assert.match(
+    accountSource,
+    /routeReconciliationQueue\.request\(routeReconciliationRequestVersion\)/u,
+  )
+  assert.doesNotMatch(
+    accountSource,
+    /routeReconciliationQueue\.request\(routeDomainVersion\)/u,
+  )
+})

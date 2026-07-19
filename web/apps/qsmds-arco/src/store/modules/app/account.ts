@@ -1,9 +1,9 @@
+import type { AuthRetryNavigationTarget } from './auth-retry-navigation'
 import type {
   AuthContextDto,
   ChangePasswordRequestDto,
   LoginRequestDtoWritable,
 } from '@/api/generated/types.gen'
-import type { AuthRetryNavigationTarget } from './auth-retry-navigation'
 
 import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import authApi from '@/api/modules/auth'
@@ -17,6 +17,7 @@ import {
   isAuthRouteAuthorized,
   resolveAuthPermissionFallback,
   resolveAuthSynchronizationNavigation,
+  shouldRequestAuthRouteReconciliation,
   toForcedAuthNavigation,
 } from './auth-retry-navigation'
 import {
@@ -25,6 +26,7 @@ import {
 } from './auth-synchronization-queue'
 
 type AuthBroadcastType = 'AUTH_CONTEXT_CHANGED' | 'AUTH_INVALIDATED'
+type AuthRevalidationSource = 'mutation' | 'passive' | 'synchronization'
 
 const AUTH_CHANNEL_NAME = 'qianshu-auth-v1'
 
@@ -70,12 +72,14 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   let authChannel: BroadcastChannel | null = null
   let synchronizationStarted = false
   let routeDomainVersion = 0
+  let routeReconciliationRequestVersion = 0
   const routeReconciliationQueue = new LatestVersionTaskQueue(
     reconcileAuthRoute,
   )
   const backgroundAuthSynchronizationQueue = new AuthSynchronizationQueue(
     broadcastSessionInvalid => revalidateAndReconcile(
       broadcastSessionInvalid,
+      'synchronization',
     ).then(() => undefined),
   )
 
@@ -181,22 +185,27 @@ export const useAppAccountStore = defineStore('appAccount', () => {
 
   async function revalidateAndReconcile(
     broadcastSessionInvalid: boolean,
-    afterMutation = false,
+    source: AuthRevalidationSource = 'passive',
   ): Promise<AuthContextDto | null> {
     const previousRouteDomainVersion = routeDomainVersion
-    const context = afterMutation
+    const previousAuthState = lifecycleState.authState
+    const context = source === 'mutation'
       ? await coordinator.revalidateAfterMutation()
-      : await coordinator.revalidateAuth({ broadcastSessionInvalid })
-    const hasDeterministicAuthState = lifecycleState.authState === 'authenticated'
-      || lifecycleState.authState === 'anonymous'
-    if (
-      hasDeterministicAuthState
-      && (
-        routeDomainVersion !== previousRouteDomainVersion
-        || routeReconciliationQueue.hasPending
-      )
-    ) {
-      await routeReconciliationQueue.request(routeDomainVersion)
+      : source === 'synchronization'
+        ? await coordinator.revalidateAfterSynchronizationEvent({
+            broadcastSessionInvalid,
+          })
+        : await coordinator.revalidateAuth({ broadcastSessionInvalid })
+    if (shouldRequestAuthRouteReconciliation({
+      currentState: lifecycleState.authState,
+      previousState: previousAuthState,
+      routeDomainChanged: routeDomainVersion !== previousRouteDomainVersion,
+      routeReconciliationPending: routeReconciliationQueue.hasPending,
+    })) {
+      // 身份域版本可以保持 0，也可能一次请求内增长多次；任务队列使用独立、
+      // 严格单调的请求版本，确保每个需要协调的确定状态都不会被当作已完成。
+      routeReconciliationRequestVersion += 1
+      await routeReconciliationQueue.request(routeReconciliationRequestVersion)
     }
     return context
   }
@@ -284,7 +293,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   }
 
   function revalidateAfterMutation(): Promise<AuthContextDto | null> {
-    return revalidateAndReconcile(true, true)
+    return revalidateAndReconcile(true, 'mutation')
   }
 
   function applyAuthContext(context: AuthContextDto): void {

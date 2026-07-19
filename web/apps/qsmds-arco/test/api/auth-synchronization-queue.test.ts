@@ -1,11 +1,41 @@
+import type { AuthContextDto } from '../../src/api/generated/types.gen'
+
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 认证同步队列使用 Node.js 内置 runner 验证并发时序。
 import test from 'node:test'
 
 import {
+  AuthLifecycleCoordinator,
+  StaleAuthStateError,
+} from '../../src/store/modules/app/auth-lifecycle'
+import {
   AuthSynchronizationQueue,
   LatestVersionTaskQueue,
 } from '../../src/store/modules/app/auth-synchronization-queue'
+
+const SESSION_ONE: AuthContextDto = {
+  user: {
+    id: 'user-1',
+    username: 'operator',
+    displayName: '操作员',
+    mustChangePassword: false,
+  },
+  permissions: ['users:read'],
+  session: {
+    createdAt: '2026-07-17T00:00:00.000Z',
+    lastActivityAt: '2026-07-17T01:00:00.000Z',
+    idleExpiresAt: '2026-07-19T01:00:00.000Z',
+    absoluteExpiresAt: '2026-08-16T00:00:00.000Z',
+  },
+}
+
+const SESSION_TWO: AuthContextDto = {
+  ...SESSION_ONE,
+  session: {
+    ...SESSION_ONE.session,
+    createdAt: '2026-07-18T00:00:00.000Z',
+  },
+}
 
 function deferred<T = void>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -17,7 +47,131 @@ function deferred<T = void>() {
   return { promise, reject, resolve }
 }
 
-test('认证广播在旧 /me 在途时到达会追加最新一轮，而不是复用旧结果后丢失', async () => {
+function createCoordinator(
+  getMe: (
+    signal: AbortSignal,
+    broadcastSessionInvalid: boolean,
+  ) => Promise<AuthContextDto>,
+) {
+  const mutationRevalidations: AuthContextDto[] = []
+  const coordinator = new AuthLifecycleCoordinator({
+    getMe,
+    onIdentityBoundary: () => undefined,
+    onMutationRevalidated: context => mutationRevalidations.push(context),
+    onPermissionsChanged: () => undefined,
+  })
+  return { coordinator, mutationRevalidations }
+}
+
+test('事件前已有 foreground /me 在途时，认证队列必须跨过旧请求后再发起新 /me', async () => {
+  const oldResponse = deferred<AuthContextDto>()
+  const eventResponse = deferred<AuthContextDto>()
+  const signals: AbortSignal[] = []
+  let calls = 0
+  const { coordinator } = createCoordinator((signal) => {
+    signals.push(signal)
+    calls += 1
+    return calls === 1 ? oldResponse.promise : eventResponse.promise
+  })
+  const queue = new AuthSynchronizationQueue(
+    async (broadcastSessionInvalid) => {
+      await coordinator.revalidateAfterSynchronizationEvent({
+        broadcastSessionInvalid,
+      })
+    },
+  )
+
+  const foreground = coordinator.revalidateAuth()
+  assert.equal(calls, 1)
+  const event = queue.request(false)
+  await Promise.resolve()
+
+  // Broadcast 只能等待事件前的请求，不能为了制造 fresh /me 而中止它。
+  assert.equal(signals[0]?.aborted, false)
+  assert.equal(calls, 1)
+  oldResponse.resolve(SESSION_ONE)
+  await foreground
+  await Promise.resolve()
+
+  assert.equal(calls, 2)
+  eventResponse.resolve(SESSION_TWO)
+  await event
+  assert.equal(coordinator.state.authContext?.session.createdAt, SESSION_TWO.session.createdAt)
+})
+
+test('事件前已有 mutation fresh /me 在途时，认证队列不取消 mutation 且在其后再校验', async () => {
+  const mutationResponse = deferred<AuthContextDto>()
+  const eventResponse = deferred<AuthContextDto>()
+  const signals: AbortSignal[] = []
+  let calls = 0
+  const { coordinator, mutationRevalidations } = createCoordinator((signal) => {
+    signals.push(signal)
+    calls += 1
+    return calls === 1 ? mutationResponse.promise : eventResponse.promise
+  })
+  const queue = new AuthSynchronizationQueue(
+    async (broadcastSessionInvalid) => {
+      await coordinator.revalidateAfterSynchronizationEvent({
+        broadcastSessionInvalid,
+      })
+    },
+  )
+
+  const mutation = coordinator.revalidateAfterMutation()
+  const event = queue.request(false)
+  await Promise.resolve()
+
+  assert.equal(signals[0]?.aborted, false)
+  assert.equal(calls, 1)
+  mutationResponse.resolve(SESSION_ONE)
+  await mutation
+  await Promise.resolve()
+
+  assert.equal(calls, 2)
+  assert.deepEqual(mutationRevalidations, [SESSION_ONE])
+  eventResponse.resolve(SESSION_ONE)
+  await event
+})
+
+test('同步事件等待旧 passive /me 时，mutation fresh /me 可以安全接管', async () => {
+  const oldResponse = deferred<AuthContextDto>()
+  const mutationResponse = deferred<AuthContextDto>()
+  const signals: AbortSignal[] = []
+  let calls = 0
+  const { coordinator, mutationRevalidations } = createCoordinator((signal) => {
+    signals.push(signal)
+    calls += 1
+    return calls === 1 ? oldResponse.promise : mutationResponse.promise
+  })
+  const queue = new AuthSynchronizationQueue(
+    async (broadcastSessionInvalid) => {
+      await coordinator.revalidateAfterSynchronizationEvent({
+        broadcastSessionInvalid,
+      })
+    },
+  )
+
+  const passive = coordinator.revalidateAuth()
+  const event = queue.request(false)
+  await Promise.resolve()
+  const mutation = coordinator.revalidateAfterMutation()
+
+  assert.equal(calls, 2)
+  assert.equal(signals[0]?.aborted, true)
+  assert.equal(signals[1]?.aborted, false)
+  oldResponse.resolve(SESSION_ONE)
+  await assert.rejects(passive, error => error instanceof StaleAuthStateError)
+  // 同步事件应复用事件后创建的 mutation fresh `/me`，不得再启动第三个请求。
+  assert.equal(calls, 2)
+
+  mutationResponse.resolve(SESSION_TWO)
+  await Promise.all([mutation, event])
+  assert.equal(signals[1]?.aborted, false)
+  assert.deepEqual(mutationRevalidations, [SESSION_TWO])
+  assert.equal(coordinator.state.authContext?.session.createdAt, SESSION_TWO.session.createdAt)
+})
+
+test('队列已发出 /me 后收到新广播会追加最新一轮', async () => {
   const firstRequest = deferred()
   const policies: boolean[] = []
   const queue = new AuthSynchronizationQueue(async (broadcastSessionInvalid) => {

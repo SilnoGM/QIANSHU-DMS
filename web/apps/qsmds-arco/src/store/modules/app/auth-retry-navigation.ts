@@ -25,6 +25,33 @@ export interface AuthPermissionFallbackInput {
   state: AuthState
 }
 
+export interface AuthRouteReconciliationInput {
+  currentState: AuthState
+  previousState: AuthState
+  routeDomainChanged: boolean
+  routeReconciliationPending: boolean
+}
+
+function isDeterministicAuthState(state: AuthState): boolean {
+  return state === 'authenticated' || state === 'anonymous'
+}
+
+/**
+ * `/me` 从 loading/unavailable 收敛为确定状态时，即使身份域版本没有变化也要
+ * 补一次路由协调。例如初始空身份收到 401 不会清理身份域，但深链仍必须进入
+ * login 并保留 redirect。已有失败任务则在下一次确定结果后重试。
+ */
+export function shouldRequestAuthRouteReconciliation(
+  input: AuthRouteReconciliationInput,
+): boolean {
+  if (!isDeterministicAuthState(input.currentState)) {
+    return false
+  }
+  return !isDeterministicAuthState(input.previousState)
+    || input.routeDomainChanged
+    || input.routeReconciliationPending
+}
+
 /**
  * 身份边界已经删除动态路由时，即使 URL 字符串没有变化也必须重新经过 Guard。
  * `force` 阻止 Vue Router 在固定 404 等同路径场景提前返回 duplicated failure。

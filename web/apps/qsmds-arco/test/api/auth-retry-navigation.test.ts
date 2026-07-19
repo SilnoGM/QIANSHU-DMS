@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 纯导航决策使用 Node.js 内置 runner 即可验证。
 import test from 'node:test'
 
+import { AuthLifecycleCoordinator } from '../../src/store/modules/app/auth-lifecycle'
 import {
   isAuthRouteAuthorized,
   resolveAuthPermissionFallback,
@@ -9,6 +10,7 @@ import {
   resolveAuthSynchronizationNavigation,
   resolveForcedPasswordCompletionNavigation,
   resolveRequestedFullPath,
+  shouldRequestAuthRouteReconciliation,
   toForcedAuthNavigation,
 } from '../../src/store/modules/app/auth-retry-navigation'
 
@@ -101,6 +103,62 @@ test('跨标签退出进入登录页并保留业务路径，已在登录页时�
     loginRedirect: '/system/users',
     state: 'anonymous',
   }), null)
+})
+
+test('初始自动重验的 401 收敛为 anonymous 后请求路由协调并保留深链 redirect', async () => {
+  const coordinator = new AuthLifecycleCoordinator({
+    getMe: async () => {
+      throw Object.assign(new Error('simulated authentication required'), {
+        body: {
+          code: 'AUTHENTICATION_REQUIRED',
+          message: '需要登录',
+          requestId: 'req-background-authentication-required',
+        },
+        kind: 'http',
+        status: 401,
+      })
+    },
+    onIdentityBoundary: () => undefined,
+    onMutationRevalidated: () => undefined,
+    onPermissionsChanged: () => undefined,
+  })
+  coordinator.state.authState = 'unavailable'
+  const previousState = coordinator.state.authState
+
+  await coordinator.revalidateAuth({ broadcastSessionInvalid: false })
+
+  assert.equal(coordinator.state.authState, 'anonymous')
+  assert.equal(shouldRequestAuthRouteReconciliation({
+    currentState: coordinator.state.authState,
+    previousState,
+    routeDomainChanged: false,
+    routeReconciliationPending: false,
+  }), true)
+  assert.deepEqual(resolveAuthSynchronizationNavigation({
+    currentFullPath: '/system/users?page=2',
+    currentRouteName: 'notFound',
+    homeFullPath: '/',
+    loginRedirect: undefined,
+    state: 'anonymous',
+  }), {
+    name: 'login',
+    query: { redirect: '/system/users?page=2' },
+  })
+})
+
+test('认证状态和身份域均未变化时不重复请求路由协调', () => {
+  assert.equal(shouldRequestAuthRouteReconciliation({
+    currentState: 'authenticated',
+    previousState: 'authenticated',
+    routeDomainChanged: false,
+    routeReconciliationPending: false,
+  }), false)
+  assert.equal(shouldRequestAuthRouteReconciliation({
+    currentState: 'unavailable',
+    previousState: 'loading',
+    routeDomainChanged: true,
+    routeReconciliationPending: true,
+  }), false)
 })
 
 test('跨标签重新登录离开登录页，拒绝会回到登录页的 redirect 循环', () => {
