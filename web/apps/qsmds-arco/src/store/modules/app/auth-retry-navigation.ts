@@ -8,6 +8,8 @@ export type AuthRetryNavigation
     }
     | null
 
+export type AuthRetryNavigationTarget = Exclude<AuthRetryNavigation, null>
+
 export interface AuthSynchronizationNavigationInput {
   currentFullPath: string
   currentRouteName: string | symbol | null | undefined
@@ -21,6 +23,18 @@ export interface AuthPermissionFallbackInput {
   currentFullPath: string
   fallbackFullPath: string
   state: AuthState
+}
+
+/**
+ * 身份边界已经删除动态路由时，即使 URL 字符串没有变化也必须重新经过 Guard。
+ * `force` 阻止 Vue Router 在固定 404 等同路径场景提前返回 duplicated failure。
+ */
+export function toForcedAuthNavigation(
+  target: AuthRetryNavigationTarget,
+) {
+  return typeof target === 'string'
+    ? { force: true as const, path: target }
+    : { ...target, force: true as const }
 }
 
 /**

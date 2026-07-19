@@ -7,7 +7,9 @@
 export {}
 declare global {
   const AuthLifecycleCoordinator: typeof import('../store/modules/app/auth-lifecycle').AuthLifecycleCoordinator
+  const AuthSynchronizationQueue: typeof import('../store/modules/app/auth-synchronization-queue').AuthSynchronizationQueue
   const EffectScope: typeof import('vue').EffectScope
+  const LatestVersionTaskQueue: typeof import('../store/modules/app/auth-synchronization-queue').LatestVersionTaskQueue
   const StaleAuthStateError: typeof import('../store/modules/app/auth-lifecycle').StaleAuthStateError
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const computed: typeof import('vue').computed
@@ -72,6 +74,7 @@ declare global {
   const shallowReadonly: typeof import('vue').shallowReadonly
   const shallowRef: typeof import('vue').shallowRef
   const storeToRefs: typeof import('pinia').storeToRefs
+  const toForcedAuthNavigation: typeof import('../store/modules/app/auth-retry-navigation').toForcedAuthNavigation
   const toRaw: typeof import('vue').toRaw
   const toRef: typeof import('vue').toRef
   const toRefs: typeof import('vue').toRefs
@@ -127,6 +130,9 @@ declare global {
   export type { StaleAuthStateError, AuthLifecycleCoordinator, AuthState, AuthLifecycleState, AuthLifecycleDependencies, RevalidationOptions } from '../store/modules/app/auth-lifecycle'
   import('../store/modules/app/auth-lifecycle')
   // @ts-ignore
-  export type { AuthRetryNavigation, AuthSynchronizationNavigationInput, AuthPermissionFallbackInput } from '../store/modules/app/auth-retry-navigation'
+  export type { AuthRetryNavigation, AuthRetryNavigationTarget, AuthSynchronizationNavigationInput, AuthPermissionFallbackInput } from '../store/modules/app/auth-retry-navigation'
   import('../store/modules/app/auth-retry-navigation')
+  // @ts-ignore
+  export type { LatestVersionTaskQueue, AuthSynchronizationQueue } from '../store/modules/app/auth-synchronization-queue'
+  import('../store/modules/app/auth-synchronization-queue')
 }

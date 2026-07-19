@@ -33,7 +33,10 @@ export function createManagementApi(client: AxiosInstance) {
   return {
     users: {
       list: (query: UserListQuery = {}) =>
-        client.get<UserPageDto>('users', { params: query }),
+        client.get<UserPageDto>('users', {
+          errorPresentation: 'local',
+          params: query,
+        }),
       create: (data: CreateUserRequestDtoWritable) =>
         client.post<UserDto>('users', data, {
           errorPresentation: 'local',
@@ -67,7 +70,9 @@ export function createManagementApi(client: AxiosInstance) {
       ),
     },
     roles: {
-      list: () => client.get<RoleDto[]>('roles'),
+      list: () => client.get<RoleDto[]>('roles', {
+        errorPresentation: 'local',
+      }),
       create: (data: CreateRoleRequestDto) =>
         client.post<RoleDto>('roles', data, {
           errorPresentation: 'local',
@@ -88,11 +93,16 @@ export function createManagementApi(client: AxiosInstance) {
       ),
     },
     permissions: {
-      list: () => client.get<PermissionDto[]>('permissions'),
+      list: () => client.get<PermissionDto[]>('permissions', {
+        errorPresentation: 'local',
+      }),
     },
     auditEvents: {
       list: (query: AuditEventListQuery = {}) =>
-        client.get<AuditEventPageDto>('audit-events', { params: query }),
+        client.get<AuditEventPageDto>('audit-events', {
+          errorPresentation: 'local',
+          params: query,
+        }),
     },
   }
 }

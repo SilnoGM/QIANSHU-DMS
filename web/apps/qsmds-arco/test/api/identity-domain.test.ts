@@ -30,7 +30,14 @@ test('持久偏好按不可变 userId 分区且身份边界清空收藏内存', 
 test('广播与公开认证重验统一协调路由，后台异常只记录脱敏固定文本', () => {
   const accountSource = readStore('account')
 
-  assert.match(accountSource, /revalidateAndReconcile\(false\)/u)
+  assert.match(
+    accountSource,
+    /backgroundAuthSynchronizationQueue\.request\(false\)/u,
+  )
+  assert.match(
+    accountSource,
+    /backgroundAuthSynchronizationQueue\.request\(true\)/u,
+  )
   assert.match(
     accountSource,
     /async function revalidateAuth\([\s\S]*?await revalidateAndReconcile\(true\)/u,

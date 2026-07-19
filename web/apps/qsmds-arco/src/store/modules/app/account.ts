@@ -1,9 +1,9 @@
-import type { RouteLocationRaw } from 'vue-router'
 import type {
   AuthContextDto,
   ChangePasswordRequestDto,
   LoginRequestDtoWritable,
 } from '@/api/generated/types.gen'
+import type { AuthRetryNavigationTarget } from './auth-retry-navigation'
 
 import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import authApi from '@/api/modules/auth'
@@ -17,7 +17,12 @@ import {
   isAuthRouteAuthorized,
   resolveAuthPermissionFallback,
   resolveAuthSynchronizationNavigation,
+  toForcedAuthNavigation,
 } from './auth-retry-navigation'
+import {
+  AuthSynchronizationQueue,
+  LatestVersionTaskQueue,
+} from './auth-synchronization-queue'
 
 type AuthBroadcastType = 'AUTH_CONTEXT_CHANGED' | 'AUTH_INVALIDATED'
 
@@ -65,9 +70,14 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   let authChannel: BroadcastChannel | null = null
   let synchronizationStarted = false
   let routeDomainVersion = 0
-  let requestedRouteDomainVersion = 0
-  let reconciledRouteDomainVersion = 0
-  let routeReconciliationPromise: Promise<void> | null = null
+  const routeReconciliationQueue = new LatestVersionTaskQueue(
+    reconcileAuthRoute,
+  )
+  const backgroundAuthSynchronizationQueue = new AuthSynchronizationQueue(
+    broadcastSessionInvalid => revalidateAndReconcile(
+      broadcastSessionInvalid,
+    ).then(() => undefined),
+  )
 
   function cleanIdentityDomain(): void {
     routeDomainVersion += 1
@@ -113,8 +123,10 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   const avatar = computed(() => '')
   const isLogin = computed(() => authContext.value !== null)
 
-  async function replaceAuthRoute(target: RouteLocationRaw): Promise<void> {
-    const failure = await router.replace(target)
+  async function replaceAuthRoute(
+    target: AuthRetryNavigationTarget,
+  ): Promise<void> {
+    const failure = await router.replace(toForcedAuthNavigation(target))
     if (failure === undefined) {
       return
     }
@@ -167,28 +179,6 @@ export const useAppAccountStore = defineStore('appAccount', () => {
     }
   }
 
-  function requestAuthRouteReconciliation(version: number): Promise<void> {
-    requestedRouteDomainVersion = Math.max(
-      requestedRouteDomainVersion,
-      version,
-    )
-    if (routeReconciliationPromise !== null) {
-      return routeReconciliationPromise
-    }
-
-    const operation = (async () => {
-      while (requestedRouteDomainVersion > reconciledRouteDomainVersion) {
-        const versionToReconcile = requestedRouteDomainVersion
-        await reconcileAuthRoute()
-        reconciledRouteDomainVersion = versionToReconcile
-      }
-    })()
-    routeReconciliationPromise = operation.finally(() => {
-      routeReconciliationPromise = null
-    })
-    return routeReconciliationPromise
-  }
-
   async function revalidateAndReconcile(
     broadcastSessionInvalid: boolean,
     afterMutation = false,
@@ -197,8 +187,16 @@ export const useAppAccountStore = defineStore('appAccount', () => {
     const context = afterMutation
       ? await coordinator.revalidateAfterMutation()
       : await coordinator.revalidateAuth({ broadcastSessionInvalid })
-    if (routeDomainVersion !== previousRouteDomainVersion) {
-      await requestAuthRouteReconciliation(routeDomainVersion)
+    const hasDeterministicAuthState = lifecycleState.authState === 'authenticated'
+      || lifecycleState.authState === 'anonymous'
+    if (
+      hasDeterministicAuthState
+      && (
+        routeDomainVersion !== previousRouteDomainVersion
+        || routeReconciliationQueue.hasPending
+      )
+    ) {
+      await routeReconciliationQueue.request(routeDomainVersion)
     }
     return context
   }
@@ -240,7 +238,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
         authChannel = new BroadcastChannel(AUTH_CHANNEL_NAME)
         authChannel.addEventListener('message', (event: MessageEvent<unknown>) => {
           if (isAuthBroadcastMessage(event.data)) {
-            void revalidateAndReconcile(false)
+            void backgroundAuthSynchronizationQueue.request(false)
               .catch(reportBackgroundSynchronizationError)
           }
         })
@@ -252,7 +250,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
 
     window.addEventListener('pageshow', (event) => {
       if (event.persisted) {
-        void revalidateAndReconcile(true)
+        void backgroundAuthSynchronizationQueue.request(true)
           .catch(reportBackgroundSynchronizationError)
       }
     })

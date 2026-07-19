@@ -9,6 +9,7 @@ import {
   resolveAuthSynchronizationNavigation,
   resolveForcedPasswordCompletionNavigation,
   resolveRequestedFullPath,
+  toForcedAuthNavigation,
 } from '../../src/store/modules/app/auth-retry-navigation'
 
 test('身份重试恢复认证时重新进入原业务路径', () => {
@@ -160,4 +161,19 @@ test('Session 轮换后重新进入当前路由，并按最新权限判断是否
     fallbackFullPath: '/system/roles',
     state: 'authenticated',
   }), null)
+})
+
+test('身份域清理后的同路径导航强制经过 Guard，不能被 Router 当作重复导航跳过', () => {
+  assert.deepEqual(toForcedAuthNavigation('/missing-page'), {
+    force: true,
+    path: '/missing-page',
+  })
+  assert.deepEqual(toForcedAuthNavigation({
+    name: 'login',
+    query: { redirect: '/system/users' },
+  }), {
+    force: true,
+    name: 'login',
+    query: { redirect: '/system/users' },
+  })
 })

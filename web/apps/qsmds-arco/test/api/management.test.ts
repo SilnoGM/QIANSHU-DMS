@@ -63,7 +63,10 @@ test('用户管理 API 使用 OpenAPI 路径并禁止密码写请求自动重试
     {
       method: 'get',
       url: 'users',
-      config: { params: { page: 2, pageSize: 20, username: 'operator' } },
+      config: {
+        errorPresentation: 'local',
+        params: { page: 2, pageSize: 20, username: 'operator' },
+      },
     },
     {
       method: 'post',
@@ -118,7 +121,7 @@ test('角色、权限目录和审计 API 使用稳定 method、path 与分页参
   await api.auditEvents.list({ page: 3, pageSize: 50 })
 
   assert.deepEqual(fixture.calls, [
-    { method: 'get', url: 'roles', config: undefined },
+    { method: 'get', url: 'roles', config: { errorPresentation: 'local' } },
     {
       method: 'post',
       url: 'roles',
@@ -138,11 +141,14 @@ test('角色、权限目录和审计 API 使用稳定 method、path 与分页参
       data: { permissionIds: ['permission-id'] },
       config: { errorPresentation: 'local' },
     },
-    { method: 'get', url: 'permissions', config: undefined },
+    { method: 'get', url: 'permissions', config: { errorPresentation: 'local' } },
     {
       method: 'get',
       url: 'audit-events',
-      config: { params: { page: 3, pageSize: 50 } },
+      config: {
+        errorPresentation: 'local',
+        params: { page: 3, pageSize: 50 },
+      },
     },
   ])
 })
