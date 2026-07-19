@@ -34,7 +34,7 @@ const themeList = computed(() => {
 })
 
 // 布局对齐方式
-const layoutAlign = ref<'left' | 'center' | 'right'>('center')
+const layoutAlign = ref<'left' | 'center' | 'right'>('right')
 function checkVisible<T extends object>(preference: boolean | T | undefined, property?: keyof T): boolean {
   if (typeof preference === 'boolean') {
     return preference
