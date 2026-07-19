@@ -15,12 +15,14 @@ Fantastic-admin 将高频开发任务写成可审查的 `SKILL.md`，让 Agent �
 3. **先确认输入和文件清单**：不从模糊需求推测 API、路由、字段、权限或数据结构；写入前读取已有目标，防止覆盖用户工作。
 4. **不扩大授权**：Skill 触发只代表应使用对应工作流，不代表已获准修改公共 API、数据结构、数据库 schema 或删除文件；这些动作仍须单独确认。
 5. **不泄露敏感信息**：不向提示、代码、日志或生成文件写入真实 token、密码、连接字符串、Cookie、`.env` 内容或专业版授权信息。
-6. **遵守 UI 职责**：标准业务表单、表格、分页、按钮和反馈默认使用 Arco Design Vue；Fantastic-admin 内置组件只用于框架壳、框架交互，或需求明确且经本地 README/源码确认的 Pro 特有能力。Skill 中的 Fa* 模板不是正式应用的业务 UI 选型授权。
-7. **人工负责验收**：官方 Skill 页没有为每个 Skill 规定独立验证命令。本手册将本地 Skill 契约、项目通用检查与运行时回归组合为验收方案，Agent 输出不能替代人工代码审查。
+6. **遵守 UI 四级优先级**：Fantastic-admin 内置组件是标准业务 UI 的第一优先级；只有本地 Fa 真实 API 无法满足已确认契约时，才依次回退到 Arco Design Vue、基于 Arco 的应用级自定义组件、基于原生 Vue 的自定义组件。
+7. **复用当前主题**：样式优先使用当前主题 token 与语义类，不在页面中默认硬编码颜色，并验证亮色与暗色主题。
+8. **保留框架页面壳**：业务页面改造时保留 Fantastic-admin 的 `FaPageMain` 等框架页面壳；只替换壳层内部的业务 UI，不用 Arco 或自定义容器重建框架布局。
+9. **人工负责验收**：官方 Skill 页没有为每个 Skill 规定独立验证命令。本手册将本地 Skill 契约、项目通用检查与运行时回归组合为验收方案，Agent 输出不能替代人工代码审查。
 
-正式应用通过 `web/apps/qsmds-arco/src/ui/provider/index.ts` 的 `app.use(ArcoVue)` 全局注册 Arco Design Vue。执行会生成或改写页面 UI 的 Skill 时，按下表转换默认 Fa* 业务 UI；`FaPageMain` 等框架页面壳可以保留，`FaIconPicker`、日期、可视化和动画等显式 Pro 能力只在需求确实需要时采用。下表只是组件职责映射，不得只替换组件名；表单还必须完成后续 props、校验、提交和插槽语义适配。
+正式应用的 Fa 组件通过 Fantastic-admin resolver 接入；Arco Design Vue 仅作能力回退，并已由 `web/apps/qsmds-arco/src/ui/provider/index.ts` 的 `app.use(ArcoVue)` 全局注册。执行会生成或改写页面 UI 的 Skill 时，优先使用 Skill 提供的 Fa* 业务 UI，并用本地 README、源码和类型核对真实契约。下表只在 Fantastic-admin 无法满足需求时作为 Arco 回退映射，不得只替换组件名；表单还必须完成后续 props、校验、提交和插槽语义适配。
 
-| Skill 默认 Fa 输出 | 正式业务页面默认实现 |
+| 优先的 Fa 输出 | Fa 能力无法满足时的 Arco 回退 |
 | --- | --- |
 | `FaForm / FaFormItem` | `AForm / AFormItem` |
 | `FaTable` | `ATable` |
@@ -29,9 +31,9 @@ Fantastic-admin 将高频开发任务写成可审查的 `SKILL.md`，让 Agent �
 | `FaToast / useFaToast` | Arco `Message / Notification` |
 | `FaModal / useFaModal` | `AModal / Modal` |
 
-### Arco 表单语义适配
+### FaForm 无法满足时的 Arco 表单语义适配
 
-本节以本地 `@arco-design/web-vue@2.58.0` 的 `form.d.ts`、`form-item.d.ts` 和实现为准。将 Fa 表单改为 Arco 时不得只替换组件名，必须同时处理以下契约：
+本节以本地 `@arco-design/web-vue@2.58.0` 的 `form.d.ts`、`form-item.d.ts` 和实现为准。只有已确认 FaForm 无法满足表单契约时才执行本节；将 Fa 表单改为 Arco 时不得只替换组件名，必须同时处理以下契约：
 
 1. **校验规则**：`AForm` 没有 vee-validate 的 `validation-schema` prop。将原 `validation-schema` / zod 校验意图转换为 `AForm` 的 `rules` 或 `AFormItem` 的字段级 `rules`；需要继续使用 zod 判断时，写成 Arco `FieldRule.validator(value, callback)`，在 `safeParse` 后以 `callback()` 表示通过、`callback(message)` 表示失败，不能把 typed schema 直接传给 Arco。
 2. **字段和值绑定**：`FaFormItem name="account"` 改为 `AFormItem field="account"`；`AForm` 绑定 `:model="model"`，每个输入控件显式使用 `v-model="model.account"` 或等价字段路径。不能依赖 `FaFormItem` 的自动控件注入来同步值。
@@ -57,7 +59,7 @@ pnpm -C web run build
 | 应用定位 | 这是确认例外：用户未指定目标应用时，必须保留本地 Skill 的“先查看 `web/apps/` 再确认”流程，不默认写入 `web/apps/qsmds-arco`。 |
 | 必需输入 | 明确目标 `apps/<app>`、模块中英文名、`src/views/` 下存放路径、真实字段契约、详情模式、批量删除、fake、路由与 i18n 需求。 |
 | 默认输出 | `web/apps/<app>/src/views/{path}/{module}/list.vue`、`detail.vue`（仅 `router`）、`components/DetailForm/index.vue`、`src/api/modules/{name}.ts`，可选 `src/api/fake_modules/{name}.fake.ts`、`src/router/modules/*.ts` 与 `src/locales/lang/route/*.json`。 |
-| UI 落地 | 复用该 Skill 的 CRUD 工作流、文件清单、详情模式和失败传播结构，但不直接采用其默认 Fa* 业务 UI 输出；标准表单、表格、分页、普通按钮和反馈按共同映射改为 Arco，框架页面壳和明确需要的 Pro 能力除外。`DetailForm.submit(): Promise<boolean>` 对外契约可以保留，但内部必须改用 Arco form ref 的 `validate()`：存在 errors 时返回 `false`，校验通过且业务提交成功后才返回 `true`，不得继续调用 `FormExpose.submit()`。 |
+| UI 落地 | 复用该 Skill 的 CRUD 工作流、文件清单、详情模式和失败传播结构，优先采用其 Fa* 业务 UI 输出并核对本地 API；无法满足已确认契约时才回退 Arco。若回退表单，`DetailForm.submit(): Promise<boolean>` 对外契约可以保留，但内部必须改用 Arco form ref 的 `validate()`：存在 errors 时返回 `false`，校验通过且业务提交成功后才返回 `true`，不得继续调用 `FormExpose.submit()`。 |
 | 只读与风险边界 | `web/examples/*` 只读；不修改 `web/packages/components/`；先列出目标文件并读取已有内容。生成 API client 不等于获准新增服务端公共 API，也不允许自行补出字段。 |
 | 人工复核与验证 | 检查表单校验失败时不关闭容器、请求路径与 OpenAPI 一致、列表查询与分页参数正确；再执行通用 `check`、`build` 与完整 CRUD 运行回归。 |
 
@@ -74,7 +76,7 @@ pnpm -C web run build
 | 应用定位 | 默认正式应用 `web/apps/qsmds-arco`，无需重复询问；参考应用仍须精确点名并明确授权。 |
 | 必需输入 | 模块中英文名、`src/views/` 下存放路径、字段名/类型/中文标签/必填性，以及单列或双列布局。 |
 | 默认输出 | `web/apps/qsmds-arco/src/views/{path}/{name}/index.vue`。路由与真实 API 接入不在该 Skill 的默认输出内。 |
-| UI 落地 | 复用该 Skill 的字段收集、校验、布局和提交工作流，但不直接采用其默认 Fa* 业务 UI 输出，并且不得只替换组件名：将 `validation-schema` / zod 转为 Arco `rules` 或字段 `validator`，将 `name` 转为 `field`，控件显式 `v-model` 到 form `model`；将 `FormExpose.submit()` 改为 Arco form ref 的 `validate()`，或使用 `html-type="submit"` 配合 `@submit-success` / `@submit-failed`；移除 `componentField` 自动注入并按 Arco 插槽参数重写 `default`、`label`、`help`、`extra`。 |
+| UI 落地 | 复用该 Skill 的字段收集、校验、布局和提交工作流，优先采用 Fa* 业务 UI 输出。只有无法满足已确认契约时才回退 Arco，且不得只替换组件名：将 `validation-schema` / zod 转为 Arco `rules` 或字段 `validator`，将 `name` 转为 `field`，控件显式 `v-model` 到 form `model`；将 `FormExpose.submit()` 改为 Arco form ref 的 `validate()`，或使用 `html-type="submit"` 配合 `@submit-success` / `@submit-failed`；移除 `componentField` 自动注入并按 Arco 插槽参数重写 `default`、`label`、`help`、`extra`。 |
 | 只读与风险边界 | `web/examples/*` 只读，`web/packages/*` 不承载业务表单与业务校验。未提供真实契约时，提交处只保留待接入边界，不生造 API、动态选项或上传地址。 |
 | 人工复核与验证 | 复核 zod 规则、初始值类型、中文可见文案、响应式单/双列布局、提交失败传播与取消行为；再执行通用命令和浏览器表单回归。 |
 
@@ -123,8 +125,8 @@ pnpm -C web run build
 | 应用定位 | 默认正式应用 `web/apps/qsmds-arco`，目标页面位于其 `src/views/`；参考应用写入仍须精确授权。 |
 | 必需输入 | 目标页面精确路径、希望优化的区域、是否允许拆分局部组件，以及必须保持的 API、权限、状态与交互契约。 |
 | 默认输出 | 修改 `web/apps/qsmds-arco/src/views/**/*.vue`，必要时在同一业务模块的 `components/` 下拆分局部组件。 |
-| UI 落地 | 复用该 Skill 的页面分析、替换机会识别和行为对比工作流，但不直接采用其默认 Fa* 业务 UI 输出；普通表单、表格、分页、按钮和反馈使用 Arco，只有框架壳、框架交互和明确的 Pro 能力使用 Fa*。 |
-| 只读与风险边界 | `web/examples/*` 只读；Fa 组件 API 以 `web/packages/components/src/basic/<component>/README.md`、`web/packages/components/src/pro/<component>/README.md` 和源码为准，不猜 props 或 events。该 Skill 不得覆盖根手册中“Arco 承载标准业务 UI、Fa 承载框架壳与框架交互”的职责边界。 |
+| UI 落地 | 复用该 Skill 的页面分析、替换机会识别和行为对比工作流，优先采用经本地源码确认的 Fa* 业务 UI；无法满足已确认契约时才回退 Arco，再不足才实现应用级自定义组件。 |
+| 只读与风险边界 | `web/examples/*` 只读；Fa 组件 API 以 `web/packages/components/src/basic/<component>/README.md`、`web/packages/components/src/pro/<component>/README.md` 和源码为准，不猜 props 或 events。该 Skill 不得跳过“Fantastic-admin 内置组件优先，无法满足才逐级回退”的全局边界。 |
 | 人工复核与验证 | 对比改前后 API 调用、权限分支、表单状态和交互结果，核对 props、`v-model`、slots 与 events；执行通用命令并做视觉、键盘和响应式回归。 |
 
 本地真相源：`web/skills/fa-page-optimizer/SKILL.md`、`web/skills/fa-page-optimizer/references/components-catalog.md` 和 `optimization-patterns.md`。

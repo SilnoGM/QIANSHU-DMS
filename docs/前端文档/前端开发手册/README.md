@@ -25,11 +25,11 @@
 
 ### 3.2 Fantastic-admin 内置组件
 
-Fantastic-admin 内置组件用于框架壳与框架交互，本知识域负责基础版与专业版内置组件的本地可用状态、公开导出、关键 API、最小用法和选型规则。组件是否可用以 `web/packages/components/src/index.ts` 及其本地源码为准；专业版能力属于当前正式基线，不是可选附录。
+Fantastic-admin 内置组件是标准业务 UI 的第一优先级，同时承担框架壳与框架交互。本知识域负责基础版与专业版内置组件的本地可用状态、公开导出、关键 API、最小用法和选型规则。组件是否可用以 `web/packages/components/src/index.ts` 及其本地源码为准；专业版能力属于当前正式基线，不是可选附录。
 
 ### 3.3 Arco Design Vue
 
-Arco Design Vue 用于标准业务 UI，包括通用与布局、数据录入、数据展示、反馈、导航及其他组件。该知识域以 `@arco-design/web-vue@2.58.0` 为固定版本，说明组件在正式应用中的接入状态、高频 API、项目化示例，以及与 Fantastic-admin 内置组件重叠时的选择依据。
+Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，包括通用与布局、数据录入、数据展示、反馈、导航及其他组件。该知识域以 `@arco-design/web-vue@2.58.0` 为固定版本，说明组件在正式应用中的接入状态、高频 API、项目化示例，以及与 Fantastic-admin 内置组件重叠时的回退依据。
 
 ## 4. 真相源优先级
 
@@ -47,14 +47,14 @@ Arco Design Vue 用于标准业务 UI，包括通用与布局、数据录入、�
 | 层级 | 默认职责 | 主要位置 | 不应承担 |
 | --- | --- | --- | --- |
 | 框架壳与框架交互 | 应用布局、导航、页面容器、标签栏、主题、权限与框架生命周期；优先使用 Fantastic-admin 框架能力和内置组件 | `web/apps/qsmds-arco/src/layouts/`、`web/apps/qsmds-arco/src/router/`、`web/apps/qsmds-arco/src/settings.ts`、`web/packages/components/` | 千树 DMS 领域 API 和业务状态流 |
-| 标准业务 UI | 表单、表格、数据展示、反馈、弹出层等通用后台交互；默认使用 Arco Design Vue | `web/apps/qsmds-arco/src/views/` 及页面内组件 | 替代框架导航、布局或保活机制 |
+| 标准业务 UI | 表单、表格、数据展示、反馈、弹出层等通用后台交互；优先使用 Fantastic-admin 内置组件 | `web/apps/qsmds-arco/src/views/` 及页面内组件 | 替代框架导航、布局或保活机制 |
 | 领域组件 | 封装带有千树 DMS 业务语义、权限或流程的交互 | `web/apps/qsmds-arco/src/components/` | 伪装成通用能力进入共享包 |
 
-同一页面可以按职责组合两套组件，但不得仅为视觉差异混用同类基础控件。专业版特有的日期、可视化、动画或框架封装可使用 Fantastic-admin 专业版组件；常规业务表单、数据展示和反馈优先使用 Arco Design Vue。只有至少两个真实调用方、接口稳定且不含领域语义的能力，才评估进入 `web/packages/*`，并继续遵循 YAGNI。
+同一页面可以组合不同职责的组件，但不得仅为视觉差异混用同类基础控件。选型固定按 Fantastic-admin 内置组件、Arco Design Vue 组件、基于 Arco Design Vue 的应用级自定义组件、基于原生 Vue 的自定义组件的顺序逐级回退。只有至少两个真实调用方、接口稳定且不含领域语义的能力，才评估进入 `web/packages/*`，并继续遵循 YAGNI。
 
 ## 6. 按任务阅读
 
-三个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，框架组件从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)进入，标准业务 UI 从 [Arco Design Vue 手册](./Arco-Design-Vue/README.md)进入。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
+三个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，标准业务 UI 先从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)和[选型与使用规则](./Fantastic-admin内置组件/选型与使用规则.md)进入；经核对 Fa 能力无法满足已确认契约时，再查 [Arco Design Vue 手册](./Arco-Design-Vue/README.md)作为回退资料。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
 
 | 任务 | 阅读入口 | 正式应用核对点与边界 |
 | --- | --- | --- |
@@ -62,10 +62,10 @@ Arco Design Vue 用于标准业务 UI，包括通用与布局、数据录入、�
 | 配置路由 | 以[路由（导航菜单）](./Fantastic-admin/路由导航与状态管理.md#路由导航菜单)和[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)为顺序。 | 核对 `web/apps/qsmds-arco/src/router/`、`web/apps/qsmds-arco/src/settings.ts` 与 account Store；路由、菜单、按钮权限和 Server 鉴权分层处理。 |
 | 接入登录 | 阅读[登录相关](./Fantastic-admin/服务端交互与登录.md#登录相关)与[接口接入规范](../接口接入规范.md)。 | 从 `web/apps/qsmds-arco/src/api/modules/auth.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/router/guards.ts` 核对真实 Cookie Session、启动 `/api/auth/me`、六态生命周期和 Server 权限边界。 |
 | 实现权限 | 阅读[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)，再回查路由与登录链路。 | 以 `web/apps/qsmds-arco/src/router/guards.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/settings.ts` 为准；前端可见性不能替代 Server 授权。 |
-| 选择表单 | 先读 [FaForm 与 AForm 不是名称替换](./Fantastic-admin内置组件/选型与使用规则.md#7-faform-与-aform-不是名称替换)，再查 [Arco Form](./Arco-Design-Vue/数据录入组件.md#form)。 | `web/apps/qsmds-arco/src/views/` 的标准业务表单默认使用 Arco；只有框架内部既有 vee-validate 契约才保留 `FaForm`，迁移必须重写校验、字段和 slot 语义。 |
-| 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断职责，再查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table)。 | `web/apps/qsmds-arco/src/views/` 的业务数据展示默认使用 Arco；远端分页、排序、筛选、选择和虚拟化分别建模，窄屏优先卡片或抽屉式明细。 |
-| 上传文件 | 阅读 [Arco Upload](./Arco-Design-Vue/数据录入组件.md#upload)与[选型安全规则](./Fantastic-admin内置组件/选型与使用规则.md#10-安全规则)。 | `web/apps/qsmds-arco/src/api/` 当前没有可凭空引用的上传端点；页面从真实契约注入 `customRequest`，鉴权走统一 client，客户端校验不能替代服务端校验。 |
-| 反馈状态 | 阅读 [Arco Message](./Arco-Design-Vue/反馈组件.md#message)、[Modal](./Arco-Design-Vue/反馈组件.md#modal)和命令式反馈边界。 | `web/apps/qsmds-arco/src/ui/provider/` 已提供应用级注入；局部 Provider、静态方法和实例注入的 context 不同，异步失败必须给出可读反馈并释放 loading。 |
+| 选择表单 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)与 [FaForm 回退到 AForm 的语义迁移](./Fantastic-admin内置组件/选型与使用规则.md#7-faform-与-aform-不是名称替换)。 | `web/apps/qsmds-arco/src/views/` 的标准业务表单优先 `FaForm`；无法满足已确认契约时才回退 `AForm`，并完整重写校验、字段、提交和 slot 语义。 |
+| 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断，再按能力不足查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table)。 | `web/apps/qsmds-arco/src/views/` 的业务数据展示优先 `FaTable`；其无法满足已确认表格能力时才回退 `ATable`，窄屏优先卡片或抽屉式明细。 |
+| 上传文件 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)与[选型安全规则](./Fantastic-admin内置组件/选型与使用规则.md#10-安全规则)。 | `web/apps/qsmds-arco/src/api/` 当前没有可凭空引用的上传端点；优先核对 Fa request 契约，不足时才回退 Arco，鉴权始终走统一 client。 |
+| 反馈状态 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)，再按能力不足查 [Arco Message](./Arco-Design-Vue/反馈组件.md#message)与 [Modal](./Arco-Design-Vue/反馈组件.md#modal)。 | `web/apps/qsmds-arco/src/views/` 的反馈优先 Fa 组件与 composable；回退 Arco 时要区分静态方法与实例注入 context，异步失败必须释放 loading。 |
 | 主题配置 | 先读 Fantastic-admin [主题](./Fantastic-admin/应用配置.md#主题)，再核对 Arco [全局配置、语言与主题](./Arco-Design-Vue/接入基础与全局配置.md#全局配置语言与主题)。 | 主题入口为 `web/apps/qsmds-arco/src/settings.ts`，Arco 同步位于 `web/apps/qsmds-arco/src/ui/provider/`；不得只改一套 token 造成明暗主题分裂。 |
 | 构建升级 | 先读[构建与预览](./Fantastic-admin/工程基础.md#构建与预览)和[框架更新](./Fantastic-admin/高级能力构建与升级.md#框架更新)，并结合 [Web 工作区说明](../../../web/README.md)。 | 从 `web/apps/qsmds-arco/package.json` 和 `web/pnpm-lock.yaml` 验证正式应用；升级同时复核 Provider、路由、Store、内置导出、74 家族矩阵与本手册基线。 |
 
