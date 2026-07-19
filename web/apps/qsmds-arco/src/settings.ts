@@ -68,7 +68,7 @@ export default setSettings({
     ],
   },
   page: {
-    transitionMode: 'slide-right',
+    transitionMode: 'fade',
     iframeKeepAliveMax: 9,
     hotkeys: false,
   },
