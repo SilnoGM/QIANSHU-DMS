@@ -110,11 +110,15 @@ export class AuthAdminService {
         await applyTransactionTimeouts(transaction)
 
         // 固定双 int4 advisory key 只串行化本操作，不阻塞其他无关事务。
+        // PostgreSQL 函数返回 void，而 PrismaPg 无法反序列化 void 列；转换为 text
+        // 仅改变查询结果类型，不改变事务级锁的获取与自动释放语义。
         await transaction.$queryRaw(Prisma.sql`
-          SELECT pg_advisory_xact_lock(
-            CAST(${BOOTSTRAP_LOCK_NAMESPACE} AS integer),
-            CAST(${BOOTSTRAP_LOCK_OPERATION} AS integer)
-          )
+          SELECT CAST(
+            pg_advisory_xact_lock(
+              CAST(${BOOTSTRAP_LOCK_NAMESPACE} AS integer),
+              CAST(${BOOTSTRAP_LOCK_OPERATION} AS integer)
+            ) AS text
+          ) AS "lockAcquired"
         `)
         const systemAdminRole = await lockSystemAdminRole(transaction)
         const existingMembership = await transaction.userRole.findFirst({

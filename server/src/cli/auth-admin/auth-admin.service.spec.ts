@@ -175,6 +175,9 @@ describe('AuthAdminService bootstrap', () => {
     )
     expect(queries[0]).toContain("set_config('lock_timeout'")
     expect(queries[1]).toContain('pg_advisory_xact_lock')
+    // PostgreSQL advisory lock 返回 void；PrismaPg 无法反序列化 void 列，必须先转成 text。
+    expect(queries[1]).toContain('AS text')
+    expect(queries[1]).toContain('"lockAcquired"')
     expect(queries[2]).toContain('FOR UPDATE')
     expect(fixture.passwordPolicy.assertAcceptable).toHaveBeenCalledWith({
       password: 'Admin-pass-2026!',
