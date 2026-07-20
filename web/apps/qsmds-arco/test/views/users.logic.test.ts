@@ -10,6 +10,7 @@ import {
   createPasswordFields,
   getApiFailure,
   refreshAfterRoleAssignment,
+  refreshAfterUserUpdate,
   resolveUserAdminActions,
   validateIdentityFields,
   validatePasswordFields,
@@ -91,6 +92,44 @@ test('本人角色变更先刷新 AuthContext 再刷新列表，其他用户只�
   const otherUserCalls: string[] = []
   await refreshAfterRoleAssignment({
     currentUserId: 'current-user',
+    reloadUsers: async () => {
+      otherUserCalls.push('reload-users')
+    },
+    revalidateCurrentAuth: async () => {
+      otherUserCalls.push('revalidate-auth')
+    },
+    userId: 'other-user',
+  })
+  assert.deepEqual(otherUserCalls, ['reload-users'])
+})
+
+test('管理员编辑本人资料后依次刷新身份、Profile 和列表，其他用户只刷新列表', async () => {
+  const currentUserCalls: string[] = []
+  await refreshAfterUserUpdate({
+    currentUserId: 'current-user',
+    refreshCurrentProfile: async () => {
+      currentUserCalls.push('refresh-profile')
+    },
+    reloadUsers: async () => {
+      currentUserCalls.push('reload-users')
+    },
+    revalidateCurrentAuth: async () => {
+      currentUserCalls.push('revalidate-auth')
+    },
+    userId: 'current-user',
+  })
+  assert.deepEqual(currentUserCalls, [
+    'revalidate-auth',
+    'refresh-profile',
+    'reload-users',
+  ])
+
+  const otherUserCalls: string[] = []
+  await refreshAfterUserUpdate({
+    currentUserId: 'current-user',
+    refreshCurrentProfile: async () => {
+      otherUserCalls.push('refresh-profile')
+    },
     reloadUsers: async () => {
       otherUserCalls.push('reload-users')
     },

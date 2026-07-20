@@ -14,6 +14,7 @@ import {
   buildUserListQuery,
   getApiFailure,
   refreshAfterRoleAssignment,
+  refreshAfterUserUpdate,
   canManageUserRoles as resolveCanManageUserRoles,
   resolveUserAdminActions,
 } from './users.logic'
@@ -319,7 +320,13 @@ async function handleFormSuccess(user: UserDto): Promise<void> {
   if (formMode.value === 'create' && user.roleIds.length === 0) {
     createdWithoutRole.value = user
   }
-  await loadUsers()
+  await refreshAfterUserUpdate({
+    currentUserId: appAccountStore.userId,
+    refreshCurrentProfile: () => appAccountStore.refreshProfileAfterMutation(),
+    reloadUsers: loadUsers,
+    revalidateCurrentAuth: () => appAccountStore.revalidateAfterMutation(),
+    userId: user.id,
+  })
 }
 
 async function verifyUnknownCreate(username: string): Promise<void> {
@@ -656,7 +663,7 @@ onMounted(() => {
     >
       <div data-testid="user-actions-drawer" class="pb-[max(0.75rem,env(safe-area-inset-bottom))] gap-3 grid">
         <FaButton v-if="canUpdate" class="w-full" variant="outline" @click="openEdit(mobileActionTarget!)">
-          编辑显示名称
+          编辑用户资料
         </FaButton>
         <FaButton
           v-if="mobileActionTarget && userActions(mobileActionTarget).canAssignRoles"

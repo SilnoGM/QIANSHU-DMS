@@ -47,6 +47,7 @@ export function createManagementApi(client: AxiosInstance) {
       update: (userId: string, data: UpdateUserRequestDto) =>
         client.patch<UserDto>(resourcePath('users', userId), data, {
           errorPresentation: 'local',
+          retry: false,
         }),
       enable: (userId: string) =>
         client.post<UserDto>(`${resourcePath('users', userId)}/enable`, {}, {

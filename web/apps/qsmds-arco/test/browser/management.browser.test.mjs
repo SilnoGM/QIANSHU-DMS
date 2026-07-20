@@ -401,6 +401,10 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   const initialRoleName = 'Browser UI Role'
   const editedRoleName = 'Browser UI Operator'
   const editedDisplayName = 'Browser UI Managed Edited'
+  const editedEmail = 'browser.ui.managed@example.com'
+  const editedMobile = '+8613900139000'
+  const editedAvatarUrl = 'https://example.com/browser-ui-managed.png'
+  const editedRemark = 'Browser UI administrator note'
   const browser = await launchChrome({
     executable: configuration.chromeExecutable,
     // 独立 Profile 让本场景不依赖上一场景最终留下的 Cookie 状态。
@@ -568,14 +572,83 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   )))()`)
 
   await clickVisibleTableRowButton(page, managedUsername, '编辑')
+  let managedUserPatchRequests = 0
+  const managedUserPatchUrl = `${configuration.baseUrl}/api/users/${createdUser.body.id}`
+  const removeManagedUserPatchListener = page.on(
+    'Network.requestWillBeSent',
+    ({ request }) => {
+      if (request?.method === 'PATCH' && request.url === managedUserPatchUrl) {
+        managedUserPatchRequests += 1
+      }
+    },
+  )
   await fillVisibleModalControl(
     page,
     'input[placeholder="请输入显示名称"]',
     editedDisplayName,
   )
+  await fillVisibleModalControl(
+    page,
+    'input[placeholder="可选；清空后保存将移除邮箱"]',
+    editedEmail,
+  )
+  await fillVisibleModalControl(
+    page,
+    'input[placeholder="例如 +8613800138000"]',
+    editedMobile,
+  )
+  await fillVisibleModalControl(
+    page,
+    'input[placeholder="可选；请输入 HTTP 或 HTTPS 绝对地址"]',
+    editedAvatarUrl,
+  )
+  await fillVisibleModalControl(
+    page,
+    'textarea[placeholder="可选；仅系统管理员可见"]',
+    editedRemark,
+  )
   await clickVisibleModalButton(page, '保存修改')
   await waitForNoVisibleModal(page, '编辑用户')
+  removeManagedUserPatchListener()
+  assert.equal(managedUserPatchRequests, 1)
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(editedDisplayName)})`)
+
+  userResponse = await page.evaluate(apiExpression(
+    `/api/users?username=${managedUsername}&page=1&pageSize=20`,
+    'GET',
+  ))
+  managedUser = userResponse.body?.items?.find(user => user.username === managedUsername)
+  assert.ok(managedUser)
+  assert.deepEqual(managedUser?.profile, {
+    avatarUrl: editedAvatarUrl,
+    createdAt: managedUser.profile.createdAt,
+    email: editedEmail,
+    mobileE164: editedMobile,
+    remark: editedRemark,
+    updatedAt: managedUser.profile.updatedAt,
+  })
+  assert.equal('emailNormalized' in managedUser.profile, false)
+
+  const updateAudits = await page.evaluate(apiExpression(
+    '/api/audit-events?page=1&pageSize=100',
+    'GET',
+  ))
+  const managedUserUpdateAudit = updateAudits.body?.items?.find(event => (
+    event.eventType === 'USER_UPDATED'
+    && event.targetId === createdUser.body.id
+  ))
+  assert.deepEqual(managedUserUpdateAudit?.metadata, {
+    changedFields: 'avatarUrl,displayName,email,mobileE164,remark',
+  })
+  const serializedUpdateAudit = JSON.stringify(managedUserUpdateAudit?.metadata)
+  for (const sensitiveValue of [
+    editedEmail,
+    editedMobile,
+    editedAvatarUrl,
+    editedRemark,
+  ]) {
+    assert.equal(serializedUpdateAudit.includes(sensitiveValue), false)
+  }
 
   await clickVisibleTableRowButton(page, managedUsername, '更多')
   await clickVisibleText(page, '分配角色')
@@ -592,7 +665,16 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'GET',
   ))
   managedUser = userResponse.body?.items?.find(user => user.username === managedUsername)
+  assert.ok(managedUser)
   assert.equal(managedUser?.displayName, editedDisplayName)
+  assert.deepEqual(managedUser?.profile, {
+    avatarUrl: editedAvatarUrl,
+    createdAt: managedUser.profile.createdAt,
+    email: editedEmail,
+    mobileE164: editedMobile,
+    remark: editedRemark,
+    updatedAt: managedUser.profile.updatedAt,
+  })
   assert.deepEqual(managedUser?.roleIds, [managedRole.id])
 
   await clickVisibleTableRowButton(page, managedUsername, '更多')

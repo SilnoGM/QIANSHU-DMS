@@ -84,7 +84,7 @@ test('用户管理 API 使用 OpenAPI 路径并禁止密码写请求自动重试
       method: 'patch',
       url: 'users/user-id',
       data: { displayName: '新名称' },
-      config: { errorPresentation: 'local' },
+      config: { errorPresentation: 'local', retry: false },
     },
     { method: 'post', url: 'users/user-id/enable', data: {}, config: { errorPresentation: 'local' } },
     { method: 'post', url: 'users/user-id/disable', data: {}, config: { errorPresentation: 'local' } },

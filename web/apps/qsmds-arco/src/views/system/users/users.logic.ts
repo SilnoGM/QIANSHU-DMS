@@ -42,6 +42,11 @@ export interface RefreshAfterRoleAssignmentInput {
   userId: string
 }
 
+export interface RefreshAfterUserUpdateInput
+  extends RefreshAfterRoleAssignmentInput {
+  refreshCurrentProfile: () => Promise<unknown>
+}
+
 /** 分配角色同时需要用户授权写权限与角色目录读取权限。 */
 export function canManageUserRoles(
   hasAssignPermission: boolean,
@@ -87,6 +92,21 @@ export async function refreshAfterRoleAssignment(
 ): Promise<void> {
   if (input.userId === input.currentUserId) {
     await input.revalidateCurrentAuth()
+  }
+  await input.reloadUsers()
+}
+
+/**
+ * 管理员通过用户管理修改本人时，响应里的 UserDto 不属于账户身份域真相源。
+ * 先重验 AuthContext，再读取本人受限 Profile，最后刷新管理列表；修改其他用户
+ * 时只刷新列表，避免无意义的账户请求和跨标签广播。
+ */
+export async function refreshAfterUserUpdate(
+  input: RefreshAfterUserUpdateInput,
+): Promise<void> {
+  if (input.userId === input.currentUserId) {
+    await input.revalidateCurrentAuth()
+    await input.refreshCurrentProfile()
   }
   await input.reloadUsers()
 }

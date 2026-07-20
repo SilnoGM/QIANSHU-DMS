@@ -49,6 +49,7 @@ const systemViewContracts = [
       'FaPagination',
       'FaTable',
       'FaTag',
+      'FaTextarea',
     ],
   },
   {
@@ -154,6 +155,9 @@ const clearableStringModelContracts = [
   { file: '../../src/views/system/users/role-assignment-modal.vue', model: 'roleSearch' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.username' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.displayName' },
+  { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.email' },
+  { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.mobileE164' },
+  { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.avatarUrl' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.newPassword' },
   { file: '../../src/views/system/users/user-form-modal.vue', model: 'model.confirmPassword' },
   { file: '../../src/views/system/roles/role-editor-modal.vue', model: 'form.code' },
@@ -187,6 +191,57 @@ test('角色分配提交期间锁定 auto-bind 之外的交互控件', () => {
     source,
     /<FaCheckboxGroup[^>]+v-model="model\.roleIds"[^>]+:disabled="loading"[^>]*>/u,
   )
+})
+
+test('用户表单只在 edit 模式展示 Profile 字段，并保持一次原子 PATCH', () => {
+  const source = readRelativeSource(
+    '../../src/views/system/users/user-form-modal.vue',
+  )
+
+  assert.match(
+    source,
+    /<template v-if="mode === 'edit'">[\s\S]*?model\.email[\s\S]*?model\.mobileE164[\s\S]*?model\.avatarUrl[\s\S]*?model\.remark[\s\S]*?<\/template>/u,
+  )
+  assert.match(source, /props\.user\.profile\.email/u)
+  assert.doesNotMatch(source, /props\.user\.profile\s*\?\?/u)
+  assert.match(source, /buildAdminUserProfilePatch/u)
+  assert.match(source, /getProfileConflictField/u)
+  assert.match(source, /managementApi\.users\.update\(/u)
+  assert.doesNotMatch(source, /profileApi\.(?:get|update)\(/u)
+  assert.match(
+    source,
+    /Object\.keys\(updatePatch\)\.length === 0/u,
+    '无差异时必须在发起管理 PATCH 前返回',
+  )
+})
+
+test('管理员编辑本人后刷新 AuthContext 与 Profile，移动端使用完整资料名称', () => {
+  const source = readRelativeSource('../../src/views/system/users/index.vue')
+
+  assert.match(source, /refreshAfterUserUpdate/u)
+  assert.match(source, /revalidateCurrentAuth:\s*\(\) => appAccountStore\.revalidateAfterMutation\(\)/u)
+  assert.match(source, /refreshCurrentProfile:\s*\(\) => appAccountStore\.refreshProfileAfterMutation\(\)/u)
+  assert.match(source, />\s*编辑用户资料\s*</u)
+  assert.doesNotMatch(source, />\s*编辑显示名称\s*</u)
+})
+
+test('管理员资料表单使用 720px 响应式布局和 FaTextarea 备注', () => {
+  const source = readRelativeSource(
+    '../../src/views/system/users/user-form-modal.vue',
+  )
+
+  assert.match(source, /sm:max-w-\[720px\]/u)
+  assert.match(source, /grid-cols-1/u)
+  assert.match(source, /md:grid-cols-2/u)
+  assert.match(source, /<FaTextarea[^>]+v-model="model\.remark"/u)
+  assert.doesNotMatch(source, /overflow-x-(?:auto|scroll)/u)
+  for (const closeGuard of [
+    ':closable="!loading"',
+    ':close-on-click-overlay="!loading"',
+    ':close-on-press-escape="!loading"',
+  ]) {
+    assert.ok(source.includes(closeGuard))
+  }
 })
 
 test('系统管理浏览器测试使用组件无关的可访问性选择器', () => {

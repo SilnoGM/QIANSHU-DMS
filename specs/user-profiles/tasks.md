@@ -117,13 +117,13 @@ flowchart TD
   - [x] 8.9 更新任务状态并创建提交：`feat: 添加个人资料编辑入口`。该提交同时包含任务 7。
   - _Requirements: 3, 4, 8, 10, 11_
 
-- [ ] 9. 以 TDD 扩展管理员用户资料表单
-  - [ ] 9.1 先扩展 `users.logic.test.ts`、`system-management.test.ts` 和 user form tests，固定 create 模式不出现 Profile 输入、edit 模式出现 Email/Mobile/Avatar/remark；受 `UserDto.profile` 影响的 fixture 只补真实嵌套 Profile，不增加兼容 fallback。
-  - [ ] 9.2 测试 Web 只构造实际变化的部分 PATCH，空资料转 `null`，Email/Mobile 冲突映射到对应字段。
-  - [ ] 9.3 扩展 `user-form-modal.vue`：桌面宽度 `720px`、移动单列、`FaTextarea` 管理备注、提交期间防重复与关闭保护。
-  - [ ] 9.4 确认 Profile 和 displayName 仍由一次 `managementApi.users.update()` 原子提交，不顺序调用两个 mutation，并显式设置 `retry: false` 避免重复 Audit。
-  - [ ] 9.5 运行 users logic/form tests、management API tests、Web typecheck 和 lint。
-  - [ ] 9.6 更新任务状态并创建提交：`feat: 完善管理员用户资料表单`。
+- [x] 9. 以 TDD 扩展管理员用户资料表单
+  - [x] 9.1 先扩展 `users.logic.test.ts`、`system-management.test.ts` 和 user form tests，固定 create 模式不出现 Profile 输入、edit 模式出现 Email/Mobile/Avatar/remark；受 `UserDto.profile` 影响的 fixture 只补真实嵌套 Profile，不增加兼容 fallback。
+  - [x] 9.2 测试 Web 只构造实际变化的部分 PATCH，空资料转 `null`，Email/Mobile 冲突映射到对应字段。
+  - [x] 9.3 扩展 `user-form-modal.vue`：桌面宽度 `720px`、移动单列、`FaTextarea` 管理备注、提交期间防重复与关闭保护。
+  - [x] 9.4 确认 Profile 和 displayName 仍由一次 `managementApi.users.update()` 原子提交，不顺序调用两个 mutation，并显式设置 `retry: false` 避免重复 Audit。
+  - [x] 9.5 运行 users logic/form tests、management API tests、Web typecheck 和 lint。
+  - [x] 9.6 更新任务状态并创建提交：`feat: 完善管理员用户资料表单`。
   - _Requirements: 6, 7, 9, 12_
 
 - [ ] 10. 完成隔离 E2E、本地 migration、真实浏览器和全量验收
