@@ -4,10 +4,12 @@ import {
   ALLOW_PASSWORD_CHANGE_REQUIRED_METADATA,
   OPTIONAL_SESSION_METADATA,
   PUBLIC_ROUTE_METADATA,
+  REQUIRE_AUTHENTICATED_SESSION_METADATA,
   REQUIRED_PERMISSIONS_METADATA,
   AllowPasswordChangeRequired,
   OptionalSession,
   Public,
+  RequireAuthenticatedSession,
   RequirePermissions,
 } from './auth.decorators'
 
@@ -23,7 +25,13 @@ class DecoratorFixture {
 
   @RequirePermissions('users:read', 'users:update')
   permissionRoute(): void {}
+
+  @RequireAuthenticatedSession()
+  authenticatedSessionRoute(): void {}
 }
+
+@RequireAuthenticatedSession()
+class AuthenticatedSessionControllerFixture {}
 
 describe('auth decorators', () => {
   const reflector = new Reflector()
@@ -60,5 +68,47 @@ describe('auth decorators', () => {
 
     expect(requiredPermissions).toEqual(['users:read', 'users:update'])
     expect(Object.isFrozen(requiredPermissions)).toBe(true)
+  })
+
+  it('marks a method that requires a normal authenticated Session without business permissions', () => {
+    expect(
+      reflector.get(
+        REQUIRE_AUTHENTICATED_SESSION_METADATA,
+        DecoratorFixture.prototype.authenticatedSessionRoute,
+      ),
+    ).toBe(true)
+    expect(
+      reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        DecoratorFixture.prototype.authenticatedSessionRoute,
+      ),
+    ).toBeUndefined()
+    expect(
+      reflector.get(
+        PUBLIC_ROUTE_METADATA,
+        DecoratorFixture.prototype.authenticatedSessionRoute,
+      ),
+    ).toBeUndefined()
+    expect(
+      reflector.get(
+        OPTIONAL_SESSION_METADATA,
+        DecoratorFixture.prototype.authenticatedSessionRoute,
+      ),
+    ).toBeUndefined()
+    expect(
+      reflector.get(
+        ALLOW_PASSWORD_CHANGE_REQUIRED_METADATA,
+        DecoratorFixture.prototype.authenticatedSessionRoute,
+      ),
+    ).toBeUndefined()
+  })
+
+  it('supports the authenticated Session declaration at Controller class scope', () => {
+    expect(
+      reflector.get(
+        REQUIRE_AUTHENTICATED_SESSION_METADATA,
+        AuthenticatedSessionControllerFixture,
+      ),
+    ).toBe(true)
   })
 })

@@ -2,6 +2,7 @@ import { AuditModule } from './modules/audit/audit.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { HealthModule } from './modules/health/health.module'
 import { PermissionsModule } from './modules/permissions/permissions.module'
+import { ProfileModule } from './modules/profile/profile.module'
 import { RolesModule } from './modules/roles/roles.module'
 import { UsersModule } from './modules/users/users.module'
 
@@ -9,6 +10,7 @@ import { UsersModule } from './modules/users/users.module'
 export const HTTP_MODULES = [
   HealthModule,
   AuthModule,
+  ProfileModule,
   UsersModule,
   RolesModule,
   PermissionsModule,

@@ -9,6 +9,9 @@ export const OPTIONAL_SESSION_METADATA = Symbol('qianshu.auth.optional-session')
 export const ALLOW_PASSWORD_CHANGE_REQUIRED_METADATA = Symbol(
   'qianshu.auth.allow-password-change-required',
 )
+export const REQUIRE_AUTHENTICATED_SESSION_METADATA = Symbol(
+  'qianshu.auth.require-authenticated-session',
+)
 export const REQUIRED_PERMISSIONS_METADATA = Symbol(
   'qianshu.auth.required-permissions',
 )
@@ -22,6 +25,17 @@ export const OptionalSession = (): MethodDecorator & ClassDecorator =>
 export const AllowPasswordChangeRequired = ():
   MethodDecorator & ClassDecorator =>
   SetMetadata(ALLOW_PASSWORD_CHANGE_REQUIRED_METADATA, true)
+
+/**
+ * 声明路由只要求正常登录身份，不要求任何业务权限。
+ *
+ * 该元数据只由 PermissionGuard 消费；AuthenticationGuard 和
+ * PasswordChangeRequiredGuard 仍按全局顺序执行，因此它不能把匿名请求或强制改密
+ * Session 变成可访问状态。
+ */
+export const RequireAuthenticatedSession = ():
+  MethodDecorator & ClassDecorator =>
+  SetMetadata(REQUIRE_AUTHENTICATED_SESSION_METADATA, true)
 
 export const RequirePermissions = (
   ...permissionCodes: readonly string[]

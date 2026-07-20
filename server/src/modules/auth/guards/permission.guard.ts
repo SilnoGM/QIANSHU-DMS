@@ -13,6 +13,7 @@ import {
   ALLOW_PASSWORD_CHANGE_REQUIRED_METADATA,
   OPTIONAL_SESSION_METADATA,
   PUBLIC_ROUTE_METADATA,
+  REQUIRE_AUTHENTICATED_SESSION_METADATA,
   REQUIRED_PERMISSIONS_METADATA,
 } from '../decorators/auth.decorators'
 
@@ -39,6 +40,11 @@ export class PermissionGuard implements CanActivate {
         REQUIRED_PERMISSIONS_METADATA,
         targets,
       )
+    const requiresAuthenticatedSession =
+      this.reflector.getAllAndOverride<boolean>(
+        REQUIRE_AUTHENTICATED_SESSION_METADATA,
+        targets,
+      ) === true
     const bypassesBusinessPermissions = [
       PUBLIC_ROUTE_METADATA,
       OPTIONAL_SESSION_METADATA,
@@ -47,6 +53,29 @@ export class PermissionGuard implements CanActivate {
       (metadataKey) =>
         this.reflector.getAllAndOverride<boolean>(metadataKey, targets) === true,
     )
+
+    if (requiresAuthenticatedSession) {
+      // 同一路由不能同时选择“仅登录”与业务权限两套授权模型；冲突声明必须默认拒绝，
+      // 避免装饰器顺序或后续重构意外放宽权限。
+      if (requiredPermissions !== undefined && requiredPermissions.length > 0) {
+        throw new ApiException(
+          HttpStatus.FORBIDDEN,
+          FORBIDDEN_CODE,
+          FORBIDDEN_MESSAGE,
+        )
+      }
+
+      const request = context.switchToHttp().getRequest<unknown>()
+      if (typeof request !== 'object' || request === null) {
+        return this.rejectAuthenticationRequired()
+      }
+
+      if (getOptionalRequestAuthContext(request) === null) {
+        return this.rejectAuthenticationRequired()
+      }
+
+      return true
+    }
 
     // 首期只有 health/login、optional logout 和强制改密 allowlist 能绕过业务权限。
     // 这使遗漏 @RequirePermissions 的普通 Controller 默认为拒绝，而不是隐式公开。

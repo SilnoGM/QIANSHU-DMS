@@ -5,7 +5,10 @@ import { Reflector } from '@nestjs/core'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { attachRequestAuthContext } from '../auth-context'
 import type { AuthenticatedSession } from '../auth-session.service'
-import { AllowPasswordChangeRequired } from '../decorators/auth.decorators'
+import {
+  AllowPasswordChangeRequired,
+  RequireAuthenticatedSession,
+} from '../decorators/auth.decorators'
 import { PasswordChangeRequiredGuard } from './password-change-required.guard'
 
 const BASE_SESSION: AuthenticatedSession = {
@@ -23,6 +26,9 @@ const BASE_SESSION: AuthenticatedSession = {
 class RouteFixture {
   @AllowPasswordChangeRequired()
   allowedRoute(): void {}
+
+  @RequireAuthenticatedSession()
+  authenticatedSessionRoute(): void {}
 
   protectedRoute(): void {}
 }
@@ -85,6 +91,28 @@ describe('PasswordChangeRequiredGuard', () => {
       publicMessage: '必须先修改密码',
     })
     expect((thrown as ApiException).getStatus()).toBe(HttpStatus.FORBIDDEN)
+  })
+
+  it('does not treat an authenticated Session declaration as a forced-password-change allowlist', () => {
+    const request = {}
+    attachRequestAuthContext(request, {
+      ...BASE_SESSION,
+      mustChangePassword: true,
+    })
+
+    expect(() =>
+      guard.canActivate(
+        createContext(
+          request,
+          RouteFixture.prototype.authenticatedSessionRoute,
+        ),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'PASSWORD_CHANGE_REQUIRED',
+        publicMessage: '必须先修改密码',
+      }),
+    )
   })
 
   it('does not block a public or anonymous optional request without identity', () => {

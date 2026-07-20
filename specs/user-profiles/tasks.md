@@ -51,27 +51,27 @@ flowchart TD
   - [x] 2.9 更新本任务状态，复核 staged diff 后创建提交：`feat: 添加用户资料数据模型与创建不变量`。
   - _Requirements: 1, 2_
 
-- [ ] 3. 以 TDD 增加“正常登录但无需业务权限”的授权边界
-  - [ ] 3.1 先扩展并运行失败的 `auth.decorators.spec.ts`、`permission.guard.spec.ts`，必要时补充 `password-change-required.guard.spec.ts`。
-  - [ ] 3.2 测试固定 `@RequireAuthenticatedSession()` 的 Controller/Method metadata、有身份时不查询 `AccessControlService`、无身份时返回 `401 AUTHENTICATION_REQUIRED`。
-  - [ ] 3.3 测试该声明与非空 `@RequirePermissions()` 同时存在时 fail closed，且不等价于 `Public`、`OptionalSession` 或 `AllowPasswordChangeRequired`。
-  - [ ] 3.4 实现认证 metadata 和 `PermissionGuard` 独立分支，不改变全局 Guard 顺序。
-  - [ ] 3.5 运行 Auth Guard 定向测试，确认 `mustChangePassword=true` 仍由前置 Guard 返回 `403 PASSWORD_CHANGE_REQUIRED`。
+- [x] 3. 以 TDD 增加“正常登录但无需业务权限”的授权边界
+  - [x] 3.1 先扩展并运行失败的 `auth.decorators.spec.ts`、`permission.guard.spec.ts`，必要时补充 `password-change-required.guard.spec.ts`。
+  - [x] 3.2 测试固定 `@RequireAuthenticatedSession()` 的 Controller/Method metadata、有身份时不查询 `AccessControlService`、无身份时返回 `401 AUTHENTICATION_REQUIRED`。
+  - [x] 3.3 测试该声明与非空 `@RequirePermissions()` 同时存在时 fail closed，且不等价于 `Public`、`OptionalSession` 或 `AllowPasswordChangeRequired`。
+  - [x] 3.4 实现认证 metadata 和 `PermissionGuard` 独立分支，不改变全局 Guard 顺序。
+  - [x] 3.5 运行 Auth Guard 定向测试，确认 `mustChangePassword=true` 仍由前置 Guard 返回 `403 PASSWORD_CHANGE_REQUIRED`。
   - _Requirements: 3, 4, 8, 10, 11_
 
-- [ ] 4. 以 TDD 实现本人 Profile DTO、规范化器、Service 与 HTTP API
-  - [ ] 4.1 先新增并运行失败的 `profile-dtos.spec.ts` 和 `user-profile.normalizer.spec.ts`，覆盖 nullable、空 PATCH、空字符串、额外字段、Unicode 长度与纯规范化规则。
-  - [ ] 4.2 实现 `CurrentUserProfileDto` 和 `UpdateCurrentUserProfileRequestDto`；本人响应精确限定为 `userId/email/mobileE164/avatarUrl/createdAt/updatedAt`。
-  - [ ] 4.3 实现纯 `user-profile.normalizer.ts`：Email NFC/trim/lowercase normalized、E.164、绝对 `http/https` URL、URL credentials 拒绝、`Object.hasOwn()` 和稳定 `changedFields`。
-  - [ ] 4.4 先新增并运行失败的 `user-profile.service.spec.ts`，覆盖受限 select、null 清空、同事务 Audit、缺失 Profile、Audit 失败回滚和安全异常收敛。
-  - [ ] 4.5 实现 `UserProfileService`：本人 GET、本人 PATCH、供 `UsersService` 复用的事务内更新方法；不得请求 Avatar URL，不改变 `authVersion` 或 Session。
-  - [ ] 4.6 测试并实现 Prisma `P2002` 已知 target 到 `EMAIL_ALREADY_EXISTS`、`MOBILE_ALREADY_EXISTS` 的映射；未知 target 固定返回内部错误，不透传数据库信息。
-  - [ ] 4.7 先新增并运行失败的 `profile.controller.spec.ts`、`profile.module.spec.ts`，确认 userId 只来自 `RequestAuthContext`，且 Controller 不声明 `users:*` 权限。
-  - [ ] 4.8 实现 `ProfileController`、`ProfileModule` 并注册 `HTTP_MODULES`；固定 `profile_get`、`profile_update`、Session、CSRF、no-store 和错误 metadata。
-  - [ ] 4.9 先新增并运行失败的 `server/test/profile-api.e2e-spec.ts`，覆盖匿名、强制改密、无管理权限用户、CSRF、额外字段、null 清空、409、事务回滚、精确响应和 Audit 脱敏。
-  - [ ] 4.10 在隔离 PostgreSQL 验证 Prisma 7 adapter 的真实 `P2002 meta.target`，根据测试证据完成最小映射实现。
-  - [ ] 4.11 运行 Profile 定向单元/E2E、`prisma:validate`、`typecheck`，再通过 `contract:sync` 和 `contract:check` 生成并校验本人接口契约。
-  - [ ] 4.12 更新任务状态并创建提交：`feat: 添加本人资料接口`。该提交同时包含任务 3 的内部授权边界。
+- [x] 4. 以 TDD 实现本人 Profile DTO、规范化器、Service 与 HTTP API
+  - [x] 4.1 先新增并运行失败的 `profile-dtos.spec.ts` 和 `user-profile.normalizer.spec.ts`，覆盖 nullable、空 PATCH、空字符串、额外字段、Unicode 长度与纯规范化规则。
+  - [x] 4.2 实现 `CurrentUserProfileDto` 和 `UpdateCurrentUserProfileRequestDto`；本人响应精确限定为 `userId/email/mobileE164/avatarUrl/createdAt/updatedAt`。
+  - [x] 4.3 实现纯 `user-profile.normalizer.ts`：Email NFC/trim/lowercase normalized、E.164、绝对 `http/https` URL、URL credentials 拒绝、`Object.hasOwn()` 和稳定 `changedFields`。
+  - [x] 4.4 先新增并运行失败的 `user-profile.service.spec.ts`，覆盖受限 select、null 清空、同事务 Audit、缺失 Profile、Audit 失败回滚和安全异常收敛。
+  - [x] 4.5 实现 `UserProfileService`：本人 GET、本人 PATCH、供 `UsersService` 复用的事务内更新方法；不得请求 Avatar URL，不改变 `authVersion` 或 Session。
+  - [x] 4.6 测试并实现 Prisma `P2002` 已知 target 到 `EMAIL_ALREADY_EXISTS`、`MOBILE_ALREADY_EXISTS` 的映射；未知 target 固定返回内部错误，不透传数据库信息。
+  - [x] 4.7 先新增并运行失败的 `profile.controller.spec.ts`、`profile.module.spec.ts`，确认 userId 只来自 `RequestAuthContext`，且 Controller 不声明 `users:*` 权限。
+  - [x] 4.8 实现 `ProfileController`、`ProfileModule` 并注册 `HTTP_MODULES`；固定 `profile_get`、`profile_update`、Session、CSRF、no-store 和错误 metadata。
+  - [x] 4.9 先新增并运行失败的 `server/test/profile-api.e2e-spec.ts`，覆盖匿名、强制改密、无管理权限用户、CSRF、额外字段、null 清空、409、事务回滚、精确响应和 Audit 脱敏。
+  - [x] 4.10 在隔离 PostgreSQL 验证 Prisma 7 adapter 的真实 `P2002 meta.target`，根据测试证据完成最小映射实现。
+  - [x] 4.11 运行 Profile 定向单元/E2E、`prisma:validate`、`typecheck`，再通过 `contract:sync` 和 `contract:check` 生成并校验本人接口契约。
+  - [x] 4.12 更新任务状态并创建提交：`feat: 添加本人资料接口`。该提交同时包含任务 3 的内部授权边界。
   - _Requirements: 3-11_
 
 - [ ] 5. 以 TDD 扩展管理员 User 聚合读取与原子 PATCH

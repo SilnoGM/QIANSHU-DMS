@@ -8,6 +8,7 @@ import { attachRequestAuthContext } from '../auth-context'
 import type { AuthenticatedSession } from '../auth-session.service'
 import {
   AllowPasswordChangeRequired,
+  RequireAuthenticatedSession,
   RequirePermissions,
 } from '../decorators/auth.decorators'
 import { PermissionGuard } from './permission.guard'
@@ -30,6 +31,13 @@ class RouteFixture {
 
   @AllowPasswordChangeRequired()
   allowlistedAuthRoute(): void {}
+
+  @RequireAuthenticatedSession()
+  authenticatedSessionRoute(): void {}
+
+  @RequireAuthenticatedSession()
+  @RequirePermissions('users:read')
+  conflictingAuthenticatedSessionRoute(): void {}
 
   noPermissionRoute(): void {}
 }
@@ -130,6 +138,65 @@ describe('PermissionGuard', () => {
       ),
     ).resolves.toBe(true)
     expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+  })
+
+  it('allows an authenticated Session route without querying business permissions', async () => {
+    const { accessControl, guard } = createGuard()
+    const request = {}
+    attachRequestAuthContext(request, SESSION)
+
+    await expect(
+      guard.canActivate(
+        createContext(
+          request,
+          RouteFixture.prototype.authenticatedSessionRoute,
+        ),
+      ),
+    ).resolves.toBe(true)
+    expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+    expect(accessControl.hasAll).not.toHaveBeenCalled()
+  })
+
+  it('returns authentication-required when an authenticated Session route has no identity', async () => {
+    const { accessControl, guard } = createGuard()
+
+    const error = await guard
+      .canActivate(
+        createContext({}, RouteFixture.prototype.authenticatedSessionRoute),
+      )
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ApiException)
+    expect(error).toMatchObject({
+      code: 'AUTHENTICATION_REQUIRED',
+      publicMessage: '需要登录',
+    })
+    expect((error as ApiException).getStatus()).toBe(HttpStatus.UNAUTHORIZED)
+    expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when authenticated Session and business permissions are both declared', async () => {
+    const { accessControl, guard } = createGuard()
+    const request = {}
+    attachRequestAuthContext(request, SESSION)
+
+    const error = await guard
+      .canActivate(
+        createContext(
+          request,
+          RouteFixture.prototype.conflictingAuthenticatedSessionRoute,
+        ),
+      )
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(ApiException)
+    expect(error).toMatchObject({
+      code: 'FORBIDDEN',
+      publicMessage: '权限不足',
+    })
+    expect((error as ApiException).getStatus()).toBe(HttpStatus.FORBIDDEN)
+    expect(accessControl.getPermissionCodes).not.toHaveBeenCalled()
+    expect(accessControl.hasAll).not.toHaveBeenCalled()
   })
 
   it('denies a normal route that forgot to declare its required permissions', async () => {
