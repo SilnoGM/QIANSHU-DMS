@@ -1120,7 +1120,7 @@ test('工程方案当前事实准确反映根、Server、Web 和 HTTP 能力边�
   assert.match(currentFacts, /^- Server 已初始化为独立 NestJS 11 CommonJS /m)
   assert.match(
     currentFacts,
-    /^- Server 已挂载 .*提供 `GET \/api\/health` 健康检查、Cookie Session 认证、用户管理、RBAC 与审计查询能力。$/m,
+    /^- Server 已挂载 .*提供 `GET \/api\/health` 健康检查、Cookie Session 认证、本人资料、用户管理、RBAC 与审计查询能力。$/m,
   )
   assert.doesNotMatch(currentFacts, /server\/.*为空目录|尚未初始化后端框架/)
   assert.doesNotMatch(currentFacts, /web\/apps\/(?:core|example)\//)
