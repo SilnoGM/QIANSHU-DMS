@@ -19,7 +19,7 @@ const routes: RouteRecordRaw = {
   name: 'systemManagement',
   component: Layout,
   meta: {
-    title: '系统管理',
+    title: '权限体系',
     icon: 'i-lucide:settings-2',
     auth: [...MANAGEMENT_READ_PERMISSIONS],
   },

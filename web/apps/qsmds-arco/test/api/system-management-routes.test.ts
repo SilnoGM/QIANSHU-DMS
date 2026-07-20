@@ -9,6 +9,7 @@ import systemManagementRoutes, {
 
 test('系统管理路由按读取权限隔离四个管理页面', () => {
   assert.equal(systemManagementRoutes.path, '/system')
+  assert.equal(systemManagementRoutes.meta?.title, '权限体系')
   assert.deepEqual(systemManagementRoutes.meta?.auth, [
     'users:read',
     'roles:read',
@@ -28,6 +29,19 @@ test('系统管理路由按读取权限隔离四个管理页面', () => {
       { auth: 'audit:read', name: 'systemAudit', path: 'audit' },
     ],
   )
+})
+
+test('系统管理主导航下的一级菜单显示权限体系且不改变路由边界', () => {
+  const routesSource = readFileSync(
+    new URL('../../src/router/routes.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    routesSource,
+    /const asyncRoutes:[\s\S]*?meta: \{[\s\S]*?title: '系统管理',[\s\S]*?children: \[[\s\S]*?SystemManagement/u,
+  )
+  assert.match(routesSource, /import SystemManagement,[\s\S]*?from '\.\/modules\/system\.management'/u)
 })
 
 test('首页复用管理读取权限门槛，使无业务页面的身份进入稳定 403', () => {
