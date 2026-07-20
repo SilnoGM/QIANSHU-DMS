@@ -11,7 +11,7 @@ defineOptions({ name: 'ComponentCatalogPage' })
  * 展示壳只接收静态说明，不读取 API、Store 或示例 fixture。
  * 后续真实组件由分类页面通过 slots 或明确属性接入，避免展示层反向污染正式组件。
  */
-defineProps<{
+withDefaults(defineProps<{
   description: string
   emptyDescription: string
   headline: string
@@ -19,9 +19,14 @@ defineProps<{
   principles: readonly CatalogPrinciple[]
   routePath: string
   sectionLabel: string
+  stageLabel?: string
   summary: string
   title: string
-}>()
+}>(), {
+  stageLabel: '骨架就绪',
+})
+
+const slots = useSlots()
 </script>
 
 <template>
@@ -96,7 +101,7 @@ defineProps<{
                 </dt>
                 <dd class="m-0">
                   <FaTag variant="outline">
-                    骨架就绪
+                    {{ stageLabel }}
                   </FaTag>
                 </dd>
               </div>
@@ -105,7 +110,12 @@ defineProps<{
         </aside>
       </div>
 
-      <section class="mt-8 pt-8 border-t border-border" aria-labelledby="catalog-empty-title">
+      <!-- 默认插槽只承载已经具备测试契约的真实组件资产；空分类继续显示统一空状态。 -->
+      <section v-if="slots.default" class="mt-8 pt-8 border-t border-border">
+        <slot />
+      </section>
+
+      <section v-else class="mt-8 pt-8 border-t border-border" aria-labelledby="catalog-empty-title">
         <div class="p-4 border border-border rounded-xl border-dashed bg-muted/10 sm-p-6">
           <FaEmpty
             icon="i-lucide:package-open"
