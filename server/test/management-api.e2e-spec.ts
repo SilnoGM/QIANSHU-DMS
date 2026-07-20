@@ -51,6 +51,14 @@ interface UserBody {
   status: 'ACTIVE' | 'DISABLED'
   mustChangePassword: boolean
   roleIds: string[]
+  profile: {
+    email: string | null
+    mobileE164: string | null
+    avatarUrl: string | null
+    remark: string | null
+    createdAt: string
+    updatedAt: string
+  }
 }
 
 interface UserPageBody {
@@ -119,6 +127,11 @@ function readSessionCookie(response: { headers: Record<string, unknown> }): stri
 /** 生成落在 8..20 边界内且每次运行不同的测试密码，保证 E2E 测试的是目标业务分支。 */
 function createTestPassword(label: string): string {
   return `${label}-${randomUUID().slice(0, 8)}`
+}
+
+function createTestMobileE164(): string {
+  const digits = randomUUID().replace(/\D/gu, '').padEnd(10, '1').slice(0, 10)
+  return `+861${digits}`
 }
 
 describe('Management API with PostgreSQL', () => {
@@ -371,6 +384,30 @@ describe('Management API with PostgreSQL', () => {
     const suffix = randomUUID()
     const username = `${USERNAME_PREFIX}created-${suffix}`
     const originalPassword = createTestPassword('Create')
+
+    const rejectedProfileUsername = `${USERNAME_PREFIX}profile-input-${suffix}`
+    await adminBrowser
+      .post('/api/users')
+      .set(CSRF_HEADERS)
+      .send({
+        username: rejectedProfileUsername,
+        displayName: '不得带资料创建',
+        password: originalPassword,
+        mustChangePassword: false,
+        email: 'must-not-be-created@example.com',
+      })
+      .expect(422)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'VALIDATION_FAILED',
+        )
+      })
+    await expect(
+      prisma.user.count({
+        where: { usernameNormalized: rejectedProfileUsername.toLowerCase() },
+      }),
+    ).resolves.toBe(0)
+
     const createResponse = await adminBrowser
       .post('/api/users')
       .set(CSRF_HEADERS)
@@ -389,9 +426,20 @@ describe('Management API with PostgreSQL', () => {
       status: 'ACTIVE',
       mustChangePassword: false,
       roleIds: [],
+      profile: {
+        email: null,
+        mobileE164: null,
+        avatarUrl: null,
+        remark: null,
+      },
     })
     expect(created).not.toHaveProperty('password')
     expect(created).not.toHaveProperty('passwordHash')
+    expect(typeof created.profile.createdAt).toBe('string')
+    expect(typeof created.profile.updatedAt).toBe('string')
+    await expect(
+      prisma.userProfile.count({ where: { userId: created.id } }),
+    ).resolves.toBe(1)
 
     const firstPage = await adminBrowser
       .get('/api/users')
@@ -422,16 +470,68 @@ describe('Management API with PostgreSQL', () => {
         expect(readResponseBody<UserBody>(response).id).toBe(created.id)
       })
 
+    const profileEmail = `Operator-${suffix}@Example.com`
+    const profileMobile = createTestMobileE164()
+    const profileAvatar = `https://example.com/avatar/${suffix}.png`
+    const updateAuditCountBefore = await prisma.auditEvent.count({
+      where: {
+        eventType: AuditEventType.USER_UPDATED,
+        targetId: created.id,
+      },
+    })
     await adminBrowser
       .patch(`/api/users/${created.id}`)
       .set(CSRF_HEADERS)
-      .send({ displayName: '已改名用户' })
+      .send({
+        displayName: '已改名用户',
+        email: `  ${profileEmail}  `,
+        mobileE164: profileMobile,
+        avatarUrl: profileAvatar,
+        remark: ' 仅管理员可见 ',
+      })
       .expect(200)
       .expect((response) => {
-        expect(readResponseBody<UserBody>(response).displayName).toBe(
-          '已改名用户',
-        )
+        expect(readResponseBody<UserBody>(response)).toMatchObject({
+          displayName: '已改名用户',
+          profile: {
+            email: profileEmail,
+            mobileE164: profileMobile,
+            avatarUrl: profileAvatar,
+            remark: '仅管理员可见',
+          },
+        })
       })
+
+    const storedProfile = await prisma.userProfile.findUniqueOrThrow({
+      where: { userId: created.id },
+    })
+    expect(storedProfile).toMatchObject({
+      email: profileEmail,
+      emailNormalized: profileEmail.toLowerCase(),
+      mobileE164: profileMobile,
+      avatarUrl: profileAvatar,
+      remark: '仅管理员可见',
+    })
+    const updateAudits = await prisma.auditEvent.findMany({
+      where: {
+        eventType: AuditEventType.USER_UPDATED,
+        targetId: created.id,
+      },
+      orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
+    })
+    expect(updateAudits).toHaveLength(updateAuditCountBefore + 1)
+    expect(updateAudits[0]?.metadata).toEqual({
+      changedFields: 'avatarUrl,displayName,email,mobileE164,remark',
+    })
+    const serializedUpdateAudit = JSON.stringify(updateAudits[0]?.metadata)
+    for (const sensitiveValue of [
+      profileEmail,
+      profileMobile,
+      profileAvatar,
+      '仅管理员可见',
+    ]) {
+      expect(serializedUpdateAudit).not.toContain(sensitiveValue)
+    }
 
     await adminBrowser
       .put(`/api/users/${created.id}/roles`)
@@ -499,6 +599,81 @@ describe('Management API with PostgreSQL', () => {
     expect(
       readResponseBody<AuthContextBody>(relogin).user.mustChangePassword,
     ).toBe(true)
+  })
+
+  it('maps Email/Mobile conflicts to stable 409 without partial User or Audit writes', async () => {
+    const administrator = await createDirectUser({ systemAdmin: true })
+    const target = await createDirectUser()
+    const conflicting = await createDirectUser()
+    const adminBrowser = request.agent(application.getHttpServer())
+    await login(
+      adminBrowser,
+      administrator.user.username,
+      administrator.password,
+    )
+
+    const conflictingEmail = `Conflict-${randomUUID()}@Example.com`
+    const conflictingMobile = createTestMobileE164()
+    await prisma.userProfile.update({
+      where: { userId: conflicting.user.id },
+      data: {
+        email: conflictingEmail,
+        emailNormalized: conflictingEmail.toLowerCase(),
+        mobileE164: conflictingMobile,
+      },
+    })
+    const auditCountBefore = await prisma.auditEvent.count({
+      where: {
+        eventType: AuditEventType.USER_UPDATED,
+        targetId: target.user.id,
+      },
+    })
+
+    await adminBrowser
+      .patch(`/api/users/${target.user.id}`)
+      .set(CSRF_HEADERS)
+      .send({
+        displayName: '不得部分提交 Email',
+        email: conflictingEmail.toLowerCase(),
+      })
+      .expect(409)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'EMAIL_ALREADY_EXISTS',
+        )
+      })
+    await adminBrowser
+      .patch(`/api/users/${target.user.id}`)
+      .set(CSRF_HEADERS)
+      .send({
+        displayName: '不得部分提交 Mobile',
+        mobileE164: conflictingMobile,
+      })
+      .expect(409)
+      .expect((response) => {
+        expect(readResponseBody<ApiErrorBody>(response).code).toBe(
+          'MOBILE_ALREADY_EXISTS',
+        )
+      })
+
+    const unchanged = await prisma.user.findUniqueOrThrow({
+      where: { id: target.user.id },
+      include: { profile: true },
+    })
+    expect(unchanged.displayName).toBe('Management API E2E')
+    expect(unchanged.profile).toMatchObject({
+      email: null,
+      emailNormalized: null,
+      mobileE164: null,
+    })
+    await expect(
+      prisma.auditEvent.count({
+        where: {
+          eventType: AuditEventType.USER_UPDATED,
+          targetId: target.user.id,
+        },
+      }),
+    ).resolves.toBe(auditCountBefore)
   })
 
   it('manages ordinary roles while atomically rejecting systemOnly and missing permissions, then paginates safe audit data', async () => {

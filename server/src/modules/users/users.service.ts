@@ -24,6 +24,8 @@ import {
   PasswordProvider,
 } from '../auth/providers/password.provider'
 import { normalizeUsername } from '../auth/providers/username-normalizer'
+import { UserProfileService } from '../profile/user-profile.service'
+import { createChangedFields } from '../profile/user-profile.normalizer'
 import type { CreateUserRequestDto } from './dto/create-user-request.dto'
 import type { PasswordResetRequestDto } from './dto/password-reset-request.dto'
 import type { ReplaceUserRolesRequestDto } from './dto/replace-user-roles-request.dto'
@@ -52,6 +54,12 @@ const LAST_SYSTEM_ADMIN_REQUIRED_CODE = 'LAST_SYSTEM_ADMIN_REQUIRED'
 const SELF_PASSWORD_RESET_NOT_ALLOWED_CODE =
   'SELF_PASSWORD_RESET_NOT_ALLOWED'
 const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR'
+const ADMIN_PROFILE_UPDATE_FIELDS = [
+  'email',
+  'mobileE164',
+  'avatarUrl',
+  'remark',
+] as const
 
 type PasswordResetSnapshot = Readonly<{
   authVersion: number
@@ -99,6 +107,7 @@ export class UsersService {
     private readonly passwords: PasswordProvider,
     private readonly passwordPolicy: PasswordPolicyProvider,
     private readonly audit: AuditService,
+    private readonly userProfiles: UserProfileService,
     private readonly metrics: AuthMetricLogger = NOOP_AUTH_METRIC_LOGGER,
   ) {}
 
@@ -216,32 +225,88 @@ export class UsersService {
     }
   }
 
-  async updateDisplayName(
+  async update(
     context: UsersCommandContext,
     userId: string,
     input: UpdateUserRequestDto,
   ): Promise<UserDto> {
     const normalizedContext = normalizeUsersCommandContext(context)
     const normalizedUserId = normalizeUuid(userId)
-    const displayName = this.normalizeDisplayName(input.displayName)
+    // ValidationPipe 开启 transform 后，class field 会把未提交字段也实例化为
+    // 值为 undefined 的 own property；这里只把 own 且非 undefined 视为真实输入。
+    // null 仍需保留给后续校验，以免吞掉客户端显式提交的非法值。
+    const updatesDisplayName = Object.hasOwn(input, 'displayName')
+      && input.displayName !== undefined
+    const profileInput: Record<string, unknown> = {}
+    for (const field of ADMIN_PROFILE_UPDATE_FIELDS) {
+      if (Object.hasOwn(input, field) && input[field] !== undefined) {
+        profileInput[field] = input[field]
+      }
+    }
+    const profileFields = Object.keys(profileInput)
+
+    if (!updatesDisplayName && profileFields.length === 0) {
+      throw new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+      )
+    }
+
+    const displayName = updatesDisplayName
+      ? this.normalizeDisplayName(input.displayName)
+      : undefined
 
     try {
       return await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
-        const updated = await transaction.user.update({
-          where: { id: normalizedUserId },
-          data: { displayName },
-          select: USER_RESPONSE_SELECT,
+        // 先锁 User，既能稳定区分 USER_NOT_FOUND，也能防止 Profile-only 更新与
+        // 并发 User 删除交错后被误判为 Profile 不变量损坏。
+        const lockedUsers = await lockUsers(transaction, [normalizedUserId])
+        if (!lockedUsers.has(normalizedUserId)) {
+          throw this.userNotFound()
+        }
+
+        if (displayName !== undefined) {
+          await transaction.user.update({
+            where: { id: normalizedUserId },
+            data: { displayName },
+            select: { id: true },
+          })
+        }
+
+        const changedFields = displayName === undefined
+          ? []
+          : ['displayName']
+        if (profileFields.length > 0) {
+          const profileUpdate = await this.userProfiles.updateInTransaction(
+            transaction,
+            normalizedUserId,
+            profileInput,
+            { allowRemark: true },
+          )
+          changedFields.push(
+            ...profileUpdate.changedFields.split(',').filter(Boolean),
+          )
+        }
+
+        const updated = await this.readUserInTransaction(
+          transaction,
+          normalizedUserId,
+        )
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.USER_UPDATED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: normalizedContext.actorUserId,
+          targetType: 'User',
+          targetId: normalizedUserId,
+          requestId: normalizedContext.requestId,
+          // Audit 只能保留排序后的稳定字段名，不能包含任何资料值。
+          metadata: { changedFields: createChangedFields(changedFields) },
         })
 
-        await this.recordUserAudit(
-          transaction,
-          normalizedContext,
-          normalizedUserId,
-          AuditEventType.USER_UPDATED,
-        )
-
-        return toUserDto(updated)
+        return updated
       })
     }
     catch (error) {
@@ -730,7 +795,16 @@ export class UsersService {
     })
   }
 
-  private normalizeDisplayName(displayName: string): string {
+  private normalizeDisplayName(displayName: unknown): string {
+    if (typeof displayName !== 'string') {
+      throw new ApiException(
+        HttpStatus.UNPROCESSABLE_ENTITY,
+        'VALIDATION_FAILED',
+        '请求参数校验失败',
+        { displayName: ['展示名称不能为空且不能超过 128 个字符'] },
+      )
+    }
+
     const normalized = displayName.normalize('NFC').trim()
     const length = Array.from(normalized).length
     if (length < 1 || length > 128) {

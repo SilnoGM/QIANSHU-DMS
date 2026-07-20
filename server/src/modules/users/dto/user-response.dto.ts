@@ -2,6 +2,26 @@ import { ApiProperty } from '@nestjs/swagger'
 
 import { UserStatus } from '../../../generated/prisma/enums'
 
+export class AdminUserProfileDto {
+  @ApiProperty({ type: 'string', maxLength: 254, nullable: true })
+  email!: string | null
+
+  @ApiProperty({ type: 'string', maxLength: 16, nullable: true })
+  mobileE164!: string | null
+
+  @ApiProperty({ type: 'string', maxLength: 2048, nullable: true })
+  avatarUrl!: string | null
+
+  @ApiProperty({ type: 'string', maxLength: 2000, nullable: true })
+  remark!: string | null
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  createdAt!: string
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  updatedAt!: string
+}
+
 export class UserDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   id!: string
@@ -33,6 +53,9 @@ export class UserDto {
 
   @ApiProperty({ type: 'string', format: 'date-time' })
   updatedAt!: string
+
+  @ApiProperty({ type: () => AdminUserProfileDto })
+  profile!: AdminUserProfileDto
 }
 
 export class UserPageDto {

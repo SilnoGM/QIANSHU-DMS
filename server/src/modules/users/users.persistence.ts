@@ -15,6 +15,16 @@ export const USER_RESPONSE_SELECT = {
     select: { roleId: true },
     orderBy: { roleId: 'asc' },
   },
+  profile: {
+    select: {
+      email: true,
+      mobileE164: true,
+      avatarUrl: true,
+      remark: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
 } satisfies Prisma.UserSelect
 
 export type UserResponseRow = Prisma.UserGetPayload<{
@@ -58,6 +68,10 @@ export function normalizeUuid(uuid: string): string {
  * mapper；角色 ID 在最后一道响应边界再次去重排序，避免关系读取顺序漂移。
  */
 export function toUserDto(user: UserResponseRow): UserDto {
+  if (user.profile === null) {
+    throw new Error('User profile invariant violated')
+  }
+
   return {
     id: user.id,
     username: user.username,
@@ -68,6 +82,14 @@ export function toUserDto(user: UserResponseRow): UserDto {
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
     createdAt: user.createdAt.toISOString(),
     updatedAt: user.updatedAt.toISOString(),
+    profile: {
+      email: user.profile.email,
+      mobileE164: user.profile.mobileE164,
+      avatarUrl: user.profile.avatarUrl,
+      remark: user.profile.remark,
+      createdAt: user.profile.createdAt.toISOString(),
+      updatedAt: user.profile.updatedAt.toISOString(),
+    },
   }
 }
 

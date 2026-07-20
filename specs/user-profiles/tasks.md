@@ -74,24 +74,24 @@ flowchart TD
   - [x] 4.12 更新任务状态并创建提交：`feat: 添加本人资料接口`。该提交同时包含任务 3 的内部授权边界。
   - _Requirements: 3-11_
 
-- [ ] 5. 以 TDD 扩展管理员 User 聚合读取与原子 PATCH
-  - [ ] 5.1 先扩展并运行失败的 `users-dtos.spec.ts`、`users.persistence.spec.ts`、`users.service.spec.ts`、`users.controller.spec.ts` 和 `users.module.spec.ts`。
-  - [ ] 5.2 测试固定必需的嵌套 `UserDto.profile`：允许公开资料、`remark` 和时间字段，禁止 `emailNormalized`。
-  - [ ] 5.3 测试固定扁平、全可选的管理 PATCH；拒绝空对象、额外字段、非法 Profile 值，并保持既有 displayName 更新可用。
-  - [ ] 5.4 扩展 `USER_RESPONSE_SELECT` 和 mapper；Profile 缺失必须作为不变量损坏失败，不得运行时 upsert。
-  - [ ] 5.5 扩展 `UsersService`，在一个现有事务中更新 User/Profile 并写一次 `USER_UPDATED` Audit；唯一冲突或 Audit 失败时全部回滚。
-  - [ ] 5.6 确认 Audit 只记录排序后的字段名，可包含 `displayName`、`remark`，不能包含任何资料值。
-  - [ ] 5.7 扩展 management E2E：创建用户自动有 Profile；`users:read` 返回 Profile；`users:update` 可更新 Profile/remark；权限不足继续拒绝。
-  - [ ] 5.8 确认新建用户 API 不接受 Profile 输入，普通用户本人能力不放宽 `/api/users`。
+- [x] 5. 以 TDD 扩展管理员 User 聚合读取与原子 PATCH
+  - [x] 5.1 先扩展并运行失败的 `users-dtos.spec.ts`、`users.persistence.spec.ts`、`users.service.spec.ts`、`users.controller.spec.ts` 和 `users.module.spec.ts`。
+  - [x] 5.2 测试固定必需的嵌套 `UserDto.profile`：允许公开资料、`remark` 和时间字段，禁止 `emailNormalized`。
+  - [x] 5.3 测试固定扁平、全可选的管理 PATCH；拒绝空对象、额外字段、非法 Profile 值，并保持既有 displayName 更新可用。
+  - [x] 5.4 扩展 `USER_RESPONSE_SELECT` 和 mapper；Profile 缺失必须作为不变量损坏失败，不得运行时 upsert。
+  - [x] 5.5 扩展 `UsersService`，在一个现有事务中更新 User/Profile 并写一次 `USER_UPDATED` Audit；唯一冲突或 Audit 失败时全部回滚。
+  - [x] 5.6 确认 Audit 只记录排序后的字段名，可包含 `displayName`、`remark`，不能包含任何资料值。
+  - [x] 5.7 扩展 management E2E：创建用户自动有 Profile；`users:read` 返回 Profile；`users:update` 可更新 Profile/remark；权限不足继续拒绝。
+  - [x] 5.8 确认新建用户 API 不接受 Profile 输入，普通用户本人能力不放宽 `/api/users`。
   - _Requirements: 2, 6, 7, 9, 11, 12_
 
-- [ ] 6. 同步公共契约并完成 Server 总门禁
-  - [ ] 6.1 运行 `node --run contract:sync`，只通过生成链路更新 `server/openapi/openapi.json` 与 `web/openapi/openapi.json`。
-  - [ ] 6.2 检查只新增 `profile_get/profile_update` 并扩展 `UserDto/users_update`；本人 schema 不包含 `remark`、`emailNormalized`。
-  - [ ] 6.3 运行 `pnpm -C server check` 和 `node --run ci:server-e2e`；不得用共享开发库的 `pnpm -C server test:e2e` 代替正式结果。
-  - [ ] 6.4 再运行 `node --run contract:check` 和 `git diff --check`，确认 migration 二次 deploy、状态检查和 OpenAPI 字节级比较通过。
-  - [ ] 6.5 如验证失败，先报告并修复根因，补回归测试后重跑完整门禁。
-  - [ ] 6.6 更新任务状态并创建提交：`feat: 扩展管理员用户资料维护`。
+- [x] 6. 同步公共契约并完成 Server 总门禁
+  - [x] 6.1 运行 `node --run contract:sync`，只通过生成链路更新 `server/openapi/openapi.json` 与 `web/openapi/openapi.json`。
+  - [x] 6.2 检查只新增 `profile_get/profile_update` 并扩展 `UserDto/users_update`；本人 schema 不包含 `remark`、`emailNormalized`。
+  - [x] 6.3 运行 `pnpm -C server check` 和 `node --run ci:server-e2e`；不得用共享开发库的 `pnpm -C server test:e2e` 代替正式结果。
+  - [x] 6.4 再运行 `node --run contract:check` 和 `git diff --check`，确认 migration 二次 deploy、状态检查和 OpenAPI 字节级比较通过。
+  - [x] 6.5 如验证失败，先报告并修复根因，补回归测试后重跑完整门禁。
+  - [x] 6.6 更新任务状态并创建提交：`feat: 扩展管理员用户资料维护`。
   - _Requirements: 1-9, 11, 12_
 
 - [ ] 7. 以 TDD 实现 Web Profile API 与账户身份域状态

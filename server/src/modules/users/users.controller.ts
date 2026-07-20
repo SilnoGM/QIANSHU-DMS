@@ -107,16 +107,23 @@ export class UsersController {
     csrf: true,
     badRequest: true,
     resourceLocator: true,
+    conflict: true,
     validation: true,
     privateNoStore: true,
-    errors: [{ status: 404, codes: ['USER_NOT_FOUND'] }],
+    errors: [
+      { status: 404, codes: ['USER_NOT_FOUND'] },
+      {
+        status: 409,
+        codes: ['EMAIL_ALREADY_EXISTS', 'MOBILE_ALREADY_EXISTS'],
+      },
+    ],
   })
   update(
     @Param('userId', USER_ID_PIPE) userId: string,
     @Body() dto: UpdateUserRequestDto,
     @Req() request: object,
   ): Promise<UserDto> {
-    return this.users.updateDisplayName(
+    return this.users.update(
       this.commandContext(request),
       userId,
       dto,

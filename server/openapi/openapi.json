@@ -2373,6 +2373,32 @@
               }
             }
           },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "422": {
             "headers": {
               "X-Request-Id": {
@@ -2440,7 +2466,7 @@
           "authentication": true,
           "authorization": true,
           "resourceLocator": true,
-          "conflict": false,
+          "conflict": true,
           "validation": true,
           "session": "required",
           "csrf": true,
@@ -2450,6 +2476,13 @@
               "status": 404,
               "codes": [
                 "USER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "EMAIL_ALREADY_EXISTS",
+                "MOBILE_ALREADY_EXISTS"
               ]
             }
           ]
@@ -5447,6 +5480,47 @@
           }
         }
       },
+      "AdminUserProfileDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "nullable": true
+          },
+          "mobileE164": {
+            "type": "string",
+            "maxLength": 16,
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "maxLength": 2000,
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "email",
+          "mobileE164",
+          "avatarUrl",
+          "remark",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
       "UserDto": {
         "type": "object",
         "properties": {
@@ -5492,6 +5566,9 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/AdminUserProfileDto"
           }
         },
         "required": [
@@ -5503,7 +5580,8 @@
           "roleIds",
           "lastLoginAt",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "profile"
         ]
       },
       "UserPageDto": {
@@ -5574,11 +5652,32 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 128
+          },
+          "email": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 254,
+            "nullable": true
+          },
+          "mobileE164": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16,
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "nullable": true
           }
-        },
-        "required": [
-          "displayName"
-        ]
+        }
       },
       "ReplaceUserRolesRequestDto": {
         "type": "object",

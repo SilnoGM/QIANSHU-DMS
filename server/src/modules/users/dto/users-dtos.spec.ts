@@ -1,4 +1,4 @@
-import { Controller, Get, Module, Post } from '@nestjs/common'
+import { Controller, Get, Module, Patch, Post } from '@nestjs/common'
 import { ApiBody, ApiOkResponse, type OpenAPIObject } from '@nestjs/swagger'
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
@@ -9,7 +9,11 @@ import { PasswordResetRequestDto } from './password-reset-request.dto'
 import { ReplaceUserRolesRequestDto } from './replace-user-roles-request.dto'
 import { UpdateUserRequestDto } from './update-user-request.dto'
 import { UserListQueryDto } from './user-list-query.dto'
-import { UserDto, UserPageDto } from './user-response.dto'
+import {
+  AdminUserProfileDto,
+  UserDto,
+  UserPageDto,
+} from './user-response.dto'
 
 async function validatePlain<T extends object>(
   dtoType: new () => T,
@@ -40,6 +44,13 @@ class UsersDtoContractController {
   @ApiBody({ type: CreateUserRequestDto })
   @ApiOkResponse({ type: UserDto })
   create(): UserDto {
+    throw new Error('OpenAPI scan only')
+  }
+
+  @Patch()
+  @ApiBody({ type: UpdateUserRequestDto })
+  @ApiOkResponse({ type: UserDto })
+  update(): UserDto {
     throw new Error('OpenAPI scan only')
   }
 }
@@ -104,12 +115,67 @@ describe('User request DTO validation', () => {
       'password',
       'username',
     ])
+
+    const profileInput = await validatePlain(CreateUserRequestDto, {
+      username: 'operator',
+      displayName: '操作员',
+      password: 'a'.repeat(8),
+      mustChangePassword: true,
+      email: 'must-not-be-created@example.com',
+    })
+    expect(errorProperties(profileInput.errors)).toEqual(['email'])
   })
 
-  it('更新只接受 displayName，角色 ID 必须是 UUID，重置密码不允许缺字段', async () => {
-    const update = await validatePlain(UpdateUserRequestDto, {
+  it('更新接受任意非空 User/Profile 子集和 nullable 清空值', async () => {
+    const displayNameOnly = await validatePlain(UpdateUserRequestDto, {
       displayName: '新名称',
     })
+    const profileOnly = await validatePlain(UpdateUserRequestDto, {
+      email: 'operator@example.com',
+      mobileE164: '+8613800138000',
+      avatarUrl: 'https://example.com/avatar.png',
+      remark: '仅管理员可见',
+    })
+    const nullableProfile = await validatePlain(UpdateUserRequestDto, {
+      email: null,
+      mobileE164: null,
+      avatarUrl: null,
+      remark: null,
+    })
+    const emptyPatch = await validatePlain(UpdateUserRequestDto, {})
+    const emptyValues = await validatePlain(UpdateUserRequestDto, {
+      displayName: '',
+      email: '',
+      mobileE164: '',
+      avatarUrl: '',
+      remark: '',
+    })
+    const extra = await validatePlain(UpdateUserRequestDto, {
+      displayName: '新名称',
+      username: 'cannot-change',
+      userId: '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1',
+      emailNormalized: 'operator@example.com',
+    })
+
+    expect(displayNameOnly.errors).toEqual([])
+    expect(profileOnly.errors).toEqual([])
+    expect(nullableProfile.errors).toEqual([])
+    expect(emptyPatch.errors).not.toHaveLength(0)
+    expect(errorProperties(emptyValues.errors)).toEqual([
+      'avatarUrl',
+      'displayName',
+      'email',
+      'mobileE164',
+      'remark',
+    ])
+    expect(errorProperties(extra.errors)).toEqual([
+      'emailNormalized',
+      'userId',
+      'username',
+    ])
+  })
+
+  it('角色 ID 必须是 UUID，重置密码不允许缺字段', async () => {
     const roles = await validatePlain(ReplaceUserRolesRequestDto, {
       roleIds: [
         '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1',
@@ -125,17 +191,11 @@ describe('User request DTO validation', () => {
     const reset = await validatePlain(PasswordResetRequestDto, {
       newPassword: 'a'.repeat(8),
     })
-    const extra = await validatePlain(UpdateUserRequestDto, {
-      displayName: '新名称',
-      username: 'cannot-change',
-    })
 
-    expect(update.errors).toEqual([])
     expect(errorProperties(roles.errors)).toEqual(['roleIds'])
     // Service 会按稳定 UUID 顺序去重；重复输入不能造成部分写入或 unique 冲突。
     expect(duplicateRoles.errors).toEqual([])
     expect(errorProperties(reset.errors)).toEqual(['mustChangePassword'])
-    expect(errorProperties(extra.errors)).toEqual(['username'])
   })
 })
 
@@ -167,6 +227,7 @@ describe('User DTO OpenAPI contract', () => {
         },
         createdAt: { type: 'string', format: 'date-time' },
         updatedAt: { type: 'string', format: 'date-time' },
+        profile: { $ref: `#/components/schemas/${AdminUserProfileDto.name}` },
       },
       required: [
         'id',
@@ -178,7 +239,67 @@ describe('User DTO OpenAPI contract', () => {
         'lastLoginAt',
         'createdAt',
         'updatedAt',
+        'profile',
       ],
+    })
+  })
+
+  it('管理员 Profile 响应包含备注但不暴露 emailNormalized', () => {
+    expect(requireSchema(document, AdminUserProfileDto.name)).toEqual({
+      type: 'object',
+      properties: {
+        email: { type: 'string', maxLength: 254, nullable: true },
+        mobileE164: { type: 'string', maxLength: 16, nullable: true },
+        avatarUrl: { type: 'string', maxLength: 2048, nullable: true },
+        remark: { type: 'string', maxLength: 2000, nullable: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+      required: [
+        'email',
+        'mobileE164',
+        'avatarUrl',
+        'remark',
+        'createdAt',
+        'updatedAt',
+      ],
+    })
+  })
+
+  it('管理员 PATCH 文档保持五个扁平可选字段', () => {
+    expect(requireSchema(document, UpdateUserRequestDto.name)).toEqual({
+      type: 'object',
+      properties: {
+        displayName: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 128,
+        },
+        email: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 254,
+          nullable: true,
+        },
+        mobileE164: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 16,
+          nullable: true,
+        },
+        avatarUrl: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 2048,
+          nullable: true,
+        },
+        remark: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 2000,
+          nullable: true,
+        },
+      },
     })
   })
 

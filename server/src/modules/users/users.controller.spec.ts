@@ -1,7 +1,10 @@
+import { Module } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { HTTP_CODE_METADATA } from '@nestjs/common/constants'
+import type { OpenAPIObject } from '@nestjs/swagger'
 
 import { requestIdMiddleware } from '../../infrastructure/http/request-id.middleware'
+import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import { UsersController } from './users.controller'
@@ -39,12 +42,20 @@ function createFixture() {
     lastLoginAt: null,
     createdAt: '2026-07-17T08:00:00.000Z',
     updatedAt: '2026-07-17T08:00:00.000Z',
+    profile: {
+      email: null,
+      mobileE164: null,
+      avatarUrl: null,
+      remark: null,
+      createdAt: '2026-07-17T08:00:00.000Z',
+      updatedAt: '2026-07-17T08:00:00.000Z',
+    },
   }
   const service = {
     list: jest.fn().mockResolvedValue({ items: [user], page: 1, pageSize: 20, total: 1 }),
     create: jest.fn().mockResolvedValue(user),
     getById: jest.fn().mockResolvedValue(user),
-    updateDisplayName: jest.fn().mockResolvedValue(user),
+    update: jest.fn().mockResolvedValue(user),
     enable: jest.fn().mockResolvedValue(user),
     disable: jest.fn().mockResolvedValue(user),
     replaceRoles: jest.fn().mockResolvedValue(user),
@@ -57,6 +68,16 @@ function createFixture() {
     user,
   }
 }
+
+@Module({
+  controllers: [UsersController],
+  providers: [{ provide: UsersService, useValue: {} }],
+})
+class UsersControllerContractModule {}
+
+type ContractOperation = NonNullable<
+  OpenAPIObject['paths'][string]['patch']
+> & { 'x-qianshu-contract'?: unknown }
 
 describe('UsersController', () => {
   it('forwards list and detail queries without inventing filters', async () => {
@@ -105,6 +126,29 @@ describe('UsersController', () => {
       }),
       TARGET_USER_ID,
       resetDto,
+    )
+  })
+
+  it('forwards the complete partial User/Profile PATCH under users:update', async () => {
+    const fixture = createFixture()
+    const request = createRequest()
+    const updateDto = {
+      displayName: '已更新名称',
+      email: 'operator@example.com',
+      mobileE164: null,
+      avatarUrl: 'https://example.com/avatar.png',
+      remark: 'internal note',
+    }
+
+    await fixture.controller.update(TARGET_USER_ID, updateDto, request)
+
+    expect(fixture.service.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: ACTOR_USER_ID,
+        actorSessionId: SESSION_ID,
+      }),
+      TARGET_USER_ID,
+      updateDto,
     )
   })
 
@@ -159,5 +203,50 @@ describe('UsersController', () => {
       disable: 200,
       resetPassword: 200,
     })
+  })
+})
+
+describe('UsersController update API contract', () => {
+  let operation: ContractOperation
+
+  beforeAll(async () => {
+    const document = await createOpenApiDocument(UsersControllerContractModule)
+    const candidate = document.paths['/api/users/{userId}']?.patch
+    if (!candidate) {
+      throw new Error('Missing PATCH /api/users/{userId}')
+    }
+    operation = candidate
+  })
+
+  it('publishes atomic Profile conflict codes under the existing users:update boundary', () => {
+    expect(operation.operationId).toBe('users_update')
+    expect(operation['x-qianshu-contract']).toEqual({
+      kind: 'application',
+      authentication: true,
+      authorization: true,
+      resourceLocator: true,
+      conflict: true,
+      validation: true,
+      session: 'required',
+      csrf: true,
+      privateNoStore: true,
+      errors: [
+        { status: 404, codes: ['USER_NOT_FOUND'] },
+        {
+          status: 409,
+          codes: ['EMAIL_ALREADY_EXISTS', 'MOBILE_ALREADY_EXISTS'],
+        },
+      ],
+    })
+    expect(Object.keys(operation.responses).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+      '404',
+      '409',
+      '422',
+      '500',
+    ])
   })
 })
