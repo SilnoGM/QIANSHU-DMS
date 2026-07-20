@@ -2,6 +2,7 @@
 import type { CurrencyAmountValue, CurrencyCode } from '@/components/base/AmountDisplay/format'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import ComponentCatalogPage from '../shared/ComponentCatalogPage.vue'
+import DateTimeDisplayShowcase from './components/DateTimeDisplayShowcase.vue'
 
 defineOptions({ name: 'ComponentLibraryBasic' })
 
@@ -76,7 +77,7 @@ const stateExamples: readonly CurrencyExample[] = [
     route-path="/component-library/basic"
     icon="i-lucide:shapes"
     :principles="principles"
-    stage-label="首个组件已展示"
+    stage-label="两个组件已展示"
     empty-description="阶段三将选择一个真实基础组件，完成测试、实现、状态示例和业务页面复用闭环。"
   >
     <section aria-labelledby="amount-display-title">
@@ -195,5 +196,6 @@ const stateExamples: readonly CurrencyExample[] = [
         </div>
       </div>
     </section>
+    <DateTimeDisplayShowcase />
   </ComponentCatalogPage>
 </template>

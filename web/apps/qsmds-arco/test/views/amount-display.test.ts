@@ -71,7 +71,7 @@ test('基础组件页面展示四币种与边界状态，并由展示壳在有�
   )
 
   assert.match(pageSource, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
-  assert.match(pageSource, /stage-label="首个组件已展示"/u)
+  assert.match(pageSource, /stage-label="两个组件已展示"/u)
   assert.match(pageSource, /<AmountDisplay/u)
   for (const currency of ['CNY', 'TWD', 'MYR', 'USD']) {
     assert.match(pageSource, new RegExp(`currency: '${currency}'`, 'u'))
