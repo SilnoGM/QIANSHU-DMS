@@ -102,9 +102,9 @@ function handleLogin() {
   </div>
   <div class="login-box" :class="layoutAlign">
     <div class="login-banner">
-      <div class="login-brand inset-s-4 inset-t-4 absolute z-1 flex items-center gap-2">
+      <div class="login-brand flex gap-2 items-center inset-s-4 inset-t-4 absolute z-1">
         <img src="@/assets/images/logo.svg" :alt="`${appTitle} LOGO`" class="rounded h-10 w-10 object-contain">
-        <span class="text-xl text-foreground font-bold leading-none whitespace-nowrap">{{ appTitle }}</span>
+        <span class="text-xl text-foreground leading-none font-bold whitespace-nowrap">{{ appTitle }}</span>
         <FaBadge :value="appVersion" variant="secondary" class="login-version-badge" badge-class="px-2.5 py-0.5 text-xs font-medium leading-5 ring-border" />
       </div>
       <img src="@/assets/images/login-banner.svg" alt="数据管理系统插画" class="banner">
@@ -155,11 +155,12 @@ function handleLogin() {
         right: inherit;
         left: 50%;
         display: inherit;
+
         /* 适度超出容器放大 SVG 画布，并通过自身偏移保持视觉内容居中；父级负责裁切画布留白而非主体。 */
         width: min(127%, 480px);
         max-width: none;
-        margin: 0;
         aspect-ratio: 4 / 3;
+        margin: 0;
         transform: translateX(-50%);
       }
     }
@@ -201,6 +202,7 @@ function handleLogin() {
           position: absolute;
           top: 50%;
           left: 50%;
+
           /* SVG 画布为 4:3，桌面端按宽度缩放并限制上限，避免宽屏下尺寸失控或比例失真。 */
           width: min(78%, 920px);
           height: auto;
