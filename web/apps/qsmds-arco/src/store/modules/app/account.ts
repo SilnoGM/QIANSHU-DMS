@@ -1,12 +1,16 @@
 import type { AuthRetryNavigationTarget } from './auth-retry-navigation'
+import type { LoadProfileOptions } from './profile-lifecycle'
 import type {
   AuthContextDto,
   ChangePasswordRequestDto,
+  CurrentUserProfileDto,
   LoginRequestDtoWritable,
+  UpdateCurrentUserProfileRequestDto,
 } from '@/api/generated/types.gen'
 
 import { isNavigationFailure, NavigationFailureType } from 'vue-router'
 import authApi from '@/api/modules/auth'
+import profileApi from '@/api/modules/profile'
 import router from '@/router'
 import {
   AuthLifecycleCoordinator,
@@ -24,8 +28,14 @@ import {
   AuthSynchronizationQueue,
   LatestVersionTaskQueue,
 } from './auth-synchronization-queue'
+import {
+  createProfileLifecycleState,
+  ProfileLifecycleCoordinator,
+  StaleProfileStateError,
+} from './profile-lifecycle'
 
 type AuthBroadcastType = 'AUTH_CONTEXT_CHANGED' | 'AUTH_INVALIDATED'
+type AccountBroadcastType = AuthBroadcastType | 'PROFILE_CHANGED'
 type AuthRevalidationSource = 'mutation' | 'passive' | 'synchronization'
 
 const AUTH_CHANNEL_NAME = 'qianshu-auth-v1'
@@ -67,6 +77,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   const appIframeStore = useAppIframeStore()
 
   const lifecycleState = reactive(createAuthLifecycleState())
+  const profileLifecycleState = reactive(createProfileLifecycleState())
   const logoutPromise = shallowRef<Promise<void> | null>(null)
   let authAbortController = new AbortController()
   let authChannel: BroadcastChannel | null = null
@@ -82,11 +93,27 @@ export const useAppAccountStore = defineStore('appAccount', () => {
       'synchronization',
     ).then(() => undefined),
   )
+  const profileCoordinator = new ProfileLifecycleCoordinator({
+    state: profileLifecycleState,
+    getIdentity: () => {
+      const context = lifecycleState.authContext
+      return lifecycleState.authState === 'authenticated' && context !== null
+        ? {
+            authEpoch: lifecycleState.authEpoch,
+            userId: context.user.id,
+          }
+        : null
+    },
+    getProfile: signal => profileApi.get(signal).then(response => response.data),
+    updateProfile: patch => profileApi.update(patch).then(response => response.data),
+    onProfileChanged: () => broadcast('PROFILE_CHANGED'),
+  })
 
   function cleanIdentityDomain(): void {
     routeDomainVersion += 1
     authAbortController.abort()
     authAbortController = new AbortController()
+    profileCoordinator.clearProfile()
     appTabbarStore.clean()
     appFavoritesStore.clean()
     appKeepAliveStore.clean()
@@ -120,11 +147,14 @@ export const useAppAccountStore = defineStore('appAccount', () => {
   const authContext = toRef(lifecycleState, 'authContext')
   const authEpoch = toRef(lifecycleState, 'authEpoch')
   const errorCode = toRef(lifecycleState, 'errorCode')
+  const profile = toRef(profileLifecycleState, 'profile')
+  const profileState = toRef(profileLifecycleState, 'profileState')
+  const profileErrorCode = toRef(profileLifecycleState, 'profileErrorCode')
   const permissions = computed(() => authContext.value?.permissions ?? [])
   const userId = computed(() => authContext.value?.user.id ?? '')
   const account = computed(() => authContext.value?.user.username ?? '')
   const displayName = computed(() => authContext.value?.user.displayName ?? '')
-  const avatar = computed(() => '')
+  const avatar = computed(() => profile.value?.avatarUrl ?? '')
   const isLogin = computed(() => authContext.value !== null)
 
   async function replaceAuthRoute(
@@ -220,7 +250,7 @@ export const useAppAccountStore = defineStore('appAccount', () => {
     console.error('[auth] Background synchronization failed')
   }
 
-  function broadcast(type: AuthBroadcastType): void {
+  function broadcast(type: AccountBroadcastType): void {
     try {
       authChannel?.postMessage({ type })
     }
@@ -236,6 +266,14 @@ export const useAppAccountStore = defineStore('appAccount', () => {
       && (value.type === 'AUTH_CONTEXT_CHANGED' || value.type === 'AUTH_INVALIDATED')
   }
 
+  function isProfileBroadcastMessage(value: unknown): value is { type: 'PROFILE_CHANGED' } {
+    return typeof value === 'object'
+      && value !== null
+      && Object.keys(value).length === 1
+      && 'type' in value
+      && value.type === 'PROFILE_CHANGED'
+  }
+
   function startAuthSynchronization(): void {
     if (synchronizationStarted) {
       return
@@ -246,7 +284,11 @@ export const useAppAccountStore = defineStore('appAccount', () => {
       try {
         authChannel = new BroadcastChannel(AUTH_CHANNEL_NAME)
         authChannel.addEventListener('message', (event: MessageEvent<unknown>) => {
-          if (isAuthBroadcastMessage(event.data)) {
+          if (isProfileBroadcastMessage(event.data)) {
+            void loadProfile({ force: true })
+              .catch(reportBackgroundProfileError)
+          }
+          else if (isAuthBroadcastMessage(event.data)) {
             void backgroundAuthSynchronizationQueue.request(false)
               .catch(reportBackgroundSynchronizationError)
           }
@@ -275,6 +317,46 @@ export const useAppAccountStore = defineStore('appAccount', () => {
       query: { redirect: currentPath },
     })
   }
+
+  function loadProfile(
+    options: LoadProfileOptions = {},
+  ): Promise<CurrentUserProfileDto | null> {
+    return profileCoordinator.loadProfile(options)
+  }
+
+  function updateProfile(
+    patch: UpdateCurrentUserProfileRequestDto,
+  ): Promise<CurrentUserProfileDto> {
+    return profileCoordinator.updateProfile(patch)
+  }
+
+  async function refreshProfileAfterMutation(): Promise<CurrentUserProfileDto | null> {
+    const refreshedProfile = await loadProfile({ force: true })
+    // 管理接口可能更新当前登录用户；这里只广播无数据事件，让其他标签自行 GET。
+    broadcast('PROFILE_CHANGED')
+    return refreshedProfile
+  }
+
+  function clearProfile(): void {
+    profileCoordinator.clearProfile()
+  }
+
+  function reportBackgroundProfileError(error: unknown): void {
+    if (error instanceof StaleProfileStateError) {
+      return
+    }
+    // 原始请求错误可能包含 URL 或配置；后台刷新只输出固定脱敏文本。
+    console.error('[profile] Background synchronization failed')
+  }
+
+  watch(authState, (state) => {
+    if (state === 'authenticated') {
+      void loadProfile().catch(reportBackgroundProfileError)
+    }
+    else {
+      clearProfile()
+    }
+  }, { flush: 'sync' })
 
   async function initializeAuth(): Promise<AuthContextDto | null> {
     startAuthSynchronization()
@@ -429,6 +511,9 @@ export const useAppAccountStore = defineStore('appAccount', () => {
     authEpoch,
     getAuthSignal,
     errorCode,
+    profile,
+    profileState,
+    profileErrorCode,
     logoutPromise,
     permissions,
     userId,
@@ -443,6 +528,10 @@ export const useAppAccountStore = defineStore('appAccount', () => {
     handleSessionInvalid,
     login,
     changePassword,
+    loadProfile,
+    updateProfile,
+    refreshProfileAfterMutation,
+    clearProfile,
     logout,
     logoutAll,
   }

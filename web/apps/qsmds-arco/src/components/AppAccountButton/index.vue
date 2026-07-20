@@ -110,6 +110,7 @@ async function submitLogout(scope: LogoutScope) {
           : []),
       ],
       [
+        { label: t('accountProfile.menu'), icon: 'i-mdi:account-edit', handle: () => eventBus.emit('global-profile-visible') },
         { label: '修改密码', icon: 'i-mdi:form-textbox-password', handle: () => eventBus.emit('global-change-password-visible') },
         {
           label: t('app.components.accountButton.index.logout'),

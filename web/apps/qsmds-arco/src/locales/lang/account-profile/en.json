@@ -1,0 +1,33 @@
+{
+  "accountProfile": {
+    "menu": "Profile",
+    "title": "Profile",
+    "description": "Manage your public contact details and avatar.",
+    "displayName": "Display name",
+    "username": "Username",
+    "email": "Email",
+    "mobileE164": "Mobile (E.164)",
+    "avatarUrl": "Avatar URL",
+    "avatarPreview": "Avatar preview",
+    "emailPlaceholder": "name{'@'}example.com",
+    "mobilePlaceholder": "+8613800138000",
+    "avatarPlaceholder": "https://example.com/avatar.png",
+    "loading": "Loading profile…",
+    "loadFailed": "Your profile is temporarily unavailable. Please retry.",
+    "retry": "Reload",
+    "cancel": "Cancel",
+    "save": "Save changes",
+    "saved": "Profile updated",
+    "updateFailed": "The profile update failed. Please try again later.",
+    "resultUnknown": "The update result is not confirmed. Reload to verify it.",
+    "emailConflict": "This email is already used by another user",
+    "mobileConflict": "This mobile number is already used by another user",
+    "validation": {
+      "emailInvalid": "Enter a valid email address",
+      "emailTooLong": "Email must not exceed 254 characters",
+      "mobileE164Invalid": "Enter a valid E.164 mobile number",
+      "avatarUrlInvalid": "Enter a valid absolute HTTP or HTTPS URL",
+      "avatarUrlTooLong": "Avatar URL must not exceed 2048 characters"
+    }
+  }
+}

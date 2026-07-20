@@ -94,27 +94,27 @@ flowchart TD
   - [x] 6.6 更新任务状态并创建提交：`feat: 扩展管理员用户资料维护`。
   - _Requirements: 1-9, 11, 12_
 
-- [ ] 7. 以 TDD 实现 Web Profile API 与账户身份域状态
-  - [ ] 7.1 先新增并运行失败的 `test/api/profile.test.ts`，固定 GET/PATCH method、`profile` path、AbortSignal、local error presentation 和 PATCH no-retry；同时扩展 `management.test.ts`，固定管理员 PATCH 也禁止自动重试。
-  - [ ] 7.2 新增 `src/api/modules/profile.ts`，所有 DTO 只从 OpenAPI 生成类型导入，不手改 `types.gen.ts`。
-  - [ ] 7.3 先新增并运行失败的 `test/views/profile.logic.test.ts`，覆盖空字符串转 `null`、规范化、差异 PATCH、字段错误映射和未知 mutation 结果对账。
-  - [ ] 7.4 先新增并运行失败的 `profile-lifecycle.test.ts`，并扩展 identity-domain tests，覆盖并发 GET 去重、Profile 非持久化、身份清理、Abort、`authEpoch + userId` 迟到响应拒绝和脱敏广播。
-  - [ ] 7.5 在 `appAccount` Store 增加 `profile/profileState/profileErrorCode`、加载、更新和清理能力；Profile GET 失败不得改变认证状态或卸载 Shell。
-  - [ ] 7.6 把账户头像来源改为当前 Profile 的 `avatarUrl`，无值或加载失败继续使用既有 fallback。
-  - [ ] 7.7 扩展现有 BroadcastChannel：只发送无数据的 `PROFILE_CHANGED`，接收端重新 GET，不广播 Email、手机号或 URL。
-  - [ ] 7.8 运行 Web API、logic、identity-domain 定向测试和 app typecheck。
+- [x] 7. 以 TDD 实现 Web Profile API 与账户身份域状态
+  - [x] 7.1 先新增并运行失败的 `test/api/profile.test.ts`，固定 GET/PATCH method、`profile` path、AbortSignal、local error presentation 和 PATCH no-retry；同时扩展 `management.test.ts`，固定管理员 PATCH 也禁止自动重试。
+  - [x] 7.2 新增 `src/api/modules/profile.ts`，所有 DTO 只从 OpenAPI 生成类型导入，不手改 `types.gen.ts`。
+  - [x] 7.3 先新增并运行失败的 `test/views/profile.logic.test.ts`，覆盖空字符串转 `null`、规范化、差异 PATCH、字段错误映射和未知 mutation 结果对账。
+  - [x] 7.4 先新增并运行失败的 `profile-lifecycle.test.ts`，并扩展 identity-domain tests，覆盖并发 GET 去重、Profile 非持久化、身份清理、Abort、`authEpoch + userId` 迟到响应拒绝和脱敏广播。
+  - [x] 7.5 在 `appAccount` Store 增加 `profile/profileState/profileErrorCode`、加载、更新和清理能力；Profile GET 失败不得改变认证状态或卸载 Shell。
+  - [x] 7.6 把账户头像来源改为当前 Profile 的 `avatarUrl`，无值或加载失败继续使用既有 fallback。
+  - [x] 7.7 扩展现有 BroadcastChannel：只发送无数据的 `PROFILE_CHANGED`，接收端重新 GET，不广播 Email、手机号或 URL。
+  - [x] 7.8 运行 Web API、logic、identity-domain 定向测试和 app typecheck。
   - _Requirements: 3, 4, 6, 7, 9, 10, 11_
 
-- [ ] 8. 以 TDD 实现普通用户本人资料 Modal
-  - [ ] 8.1 先新增并运行失败的 account-profile component/static test，固定账户菜单入口、Fantastic-admin 组件、语义 token、桌面双区、移动单列和普通用户无 `remark`。
-  - [ ] 8.2 在 Browser E2E 中先增加“无管理权限用户打开个人资料并修改本人资料”的失败场景，确认失败原因为入口/界面尚未实现。
-  - [ ] 8.3 把现有未接线 `AppAccountButton/profile.vue` 改为正式 `FaModal` 表单，不新增同义组件。
-  - [ ] 8.4 在 `AppAccountButton` 增加“个人资料”入口，通过 `global-profile-visible` 交给根 `App.vue` 管理单一 Modal 生命周期。
-  - [ ] 8.5 实现只读显示名/用户名、Email/Mobile/Avatar URL、有效 URL 才预览、失败 fallback、加载重试、提交锁和无差异禁用；源码与 DOM 均不得出现普通用户 `remark`、`emailNormalized`。
-  - [ ] 8.6 增加应用级 `accountProfile` 的 `zh-cn/zh-tw/en` locale，不修改 shared package 文案。
-  - [ ] 8.7 确认退出、Session 失效、切换身份和强制改密状态会关闭 Modal 并清理 Profile。
-  - [ ] 8.8 运行 Profile API/logic/component tests、Web typecheck 和相关 Browser 场景，确认未新增 UI 依赖、硬编码颜色或横向滚动。
-  - [ ] 8.9 更新任务状态并创建提交：`feat: 添加个人资料编辑入口`。该提交同时包含任务 7。
+- [x] 8. 以 TDD 实现普通用户本人资料 Modal
+  - [x] 8.1 先新增并运行失败的 account-profile component/static test，固定账户菜单入口、Fantastic-admin 组件、语义 token、桌面双区、移动单列和普通用户无 `remark`。
+  - [x] 8.2 在 Browser E2E 中先增加“无管理权限用户打开个人资料并修改本人资料”的失败场景，确认失败原因为入口/界面尚未实现。
+  - [x] 8.3 把现有未接线 `AppAccountButton/profile.vue` 改为正式 `FaModal` 表单，不新增同义组件。
+  - [x] 8.4 在 `AppAccountButton` 增加“个人资料”入口，通过 `global-profile-visible` 交给根 `App.vue` 管理单一 Modal 生命周期。
+  - [x] 8.5 实现只读显示名/用户名、Email/Mobile/Avatar URL、有效 URL 才预览、失败 fallback、加载重试、提交锁和无差异禁用；源码与 DOM 均不得出现普通用户 `remark`、`emailNormalized`。
+  - [x] 8.6 增加应用级 `accountProfile` 的 `zh-cn/zh-tw/en` locale，不修改 shared package 文案。
+  - [x] 8.7 确认退出、Session 失效、切换身份和强制改密状态会关闭 Modal 并清理 Profile。
+  - [x] 8.8 运行 Profile API/logic/component tests、Web typecheck 和相关 Browser 场景，确认未新增 UI 依赖、硬编码颜色或横向滚动。
+  - [x] 8.9 更新任务状态并创建提交：`feat: 添加个人资料编辑入口`。该提交同时包含任务 7。
   - _Requirements: 3, 4, 8, 10, 11_
 
 - [ ] 9. 以 TDD 扩展管理员用户资料表单

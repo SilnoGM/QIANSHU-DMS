@@ -10,12 +10,16 @@ declare global {
   const AuthSynchronizationQueue: typeof import('../store/modules/app/auth-synchronization-queue').AuthSynchronizationQueue
   const EffectScope: typeof import('vue').EffectScope
   const LatestVersionTaskQueue: typeof import('../store/modules/app/auth-synchronization-queue').LatestVersionTaskQueue
+  const ProfileLifecycleCoordinator: typeof import('../store/modules/app/profile-lifecycle').ProfileLifecycleCoordinator
+  const ProfileMutationResultUnknownError: typeof import('../store/modules/app/profile-lifecycle').ProfileMutationResultUnknownError
   const StaleAuthStateError: typeof import('../store/modules/app/auth-lifecycle').StaleAuthStateError
+  const StaleProfileStateError: typeof import('../store/modules/app/profile-lifecycle').StaleProfileStateError
   const acceptHMRUpdate: typeof import('pinia').acceptHMRUpdate
   const computed: typeof import('vue').computed
   const createApp: typeof import('vue').createApp
   const createAuthLifecycleState: typeof import('../store/modules/app/auth-lifecycle').createAuthLifecycleState
   const createPinia: typeof import('pinia').createPinia
+  const createProfileLifecycleState: typeof import('../store/modules/app/profile-lifecycle').createProfileLifecycleState
   const customRef: typeof import('vue').customRef
   const defineAsyncComponent: typeof import('vue').defineAsyncComponent
   const defineComponent: typeof import('vue').defineComponent
@@ -136,4 +140,7 @@ declare global {
   // @ts-ignore
   export type { LatestVersionTaskQueue, AuthSynchronizationQueue } from '../store/modules/app/auth-synchronization-queue'
   import('../store/modules/app/auth-synchronization-queue')
+  // @ts-ignore
+  export type { StaleProfileStateError, ProfileMutationResultUnknownError, ProfileLifecycleCoordinator, ProfileState, ProfileLifecycleState, ProfileIdentity, ProfileLifecycleDependencies, LoadProfileOptions } from '../store/modules/app/profile-lifecycle'
+  import('../store/modules/app/profile-lifecycle')
 }

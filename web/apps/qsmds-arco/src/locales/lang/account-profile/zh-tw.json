@@ -1,0 +1,33 @@
+{
+  "accountProfile": {
+    "menu": "個人資料",
+    "title": "個人資料",
+    "description": "維護你的公開聯絡方式和頭像。",
+    "displayName": "顯示名稱",
+    "username": "使用者名稱",
+    "email": "電子郵件",
+    "mobileE164": "手機號碼（E.164）",
+    "avatarUrl": "頭像網址",
+    "avatarPreview": "頭像預覽",
+    "emailPlaceholder": "name{'@'}example.com",
+    "mobilePlaceholder": "+8613800138000",
+    "avatarPlaceholder": "https://example.com/avatar.png",
+    "loading": "正在載入個人資料…",
+    "loadFailed": "個人資料暫時無法載入，請重試。",
+    "retry": "重新載入",
+    "cancel": "取消",
+    "save": "儲存變更",
+    "saved": "個人資料已更新",
+    "updateFailed": "個人資料更新失敗，請稍後再試。",
+    "resultUnknown": "更新結果尚未確認，請重新載入後核對。",
+    "emailConflict": "此電子郵件已被其他使用者使用",
+    "mobileConflict": "此手機號碼已被其他使用者使用",
+    "validation": {
+      "emailInvalid": "請輸入有效的電子郵件地址",
+      "emailTooLong": "電子郵件不能超過 254 個字元",
+      "mobileE164Invalid": "請輸入有效的 E.164 手機號碼",
+      "avatarUrlInvalid": "請輸入有效的 HTTP 或 HTTPS 絕對網址",
+      "avatarUrlTooLong": "頭像網址不能超過 2048 個字元"
+    }
+  }
+}

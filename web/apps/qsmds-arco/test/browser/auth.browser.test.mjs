@@ -206,6 +206,21 @@ async function clickVisibleText(page, text) {
   })()`)
 }
 
+async function clickVisibleDialogButton(page, dialogText, buttonText) {
+  await page.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes(${JSON.stringify(dialogText)}))
+    const button = [...(dialog?.querySelectorAll('button') ?? [])]
+      .find(candidate => candidate.getClientRects().length > 0
+        && !candidate.disabled
+        && candidate.textContent?.trim() === ${JSON.stringify(buttonText)})
+    if (!button) throw new Error('visible dialog button unavailable')
+    button.click()
+    return true
+  })()`)
+}
+
 async function fillPasswordModal(page, values) {
   const serialized = JSON.stringify(values)
   await page.evaluate(`(() => {
@@ -215,8 +230,12 @@ async function fillPasswordModal(page, values) {
       input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }))
       input.dispatchEvent(new Event('change', { bubbles: true }))
     }
-    const current = document.querySelector('input[autocomplete="current-password"]')
-    const next = [...document.querySelectorAll('input[autocomplete="new-password"]')]
+    const modal = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.getAttribute('aria-label')?.includes('密码'))
+    const current = [...(modal?.querySelectorAll('input[autocomplete="current-password"]') ?? [])]
+      .find(input => input.getClientRects().length > 0)
+    const next = [...(modal?.querySelectorAll('input[autocomplete="new-password"]') ?? [])]
       .filter(input => input.getClientRects().length > 0)
     if (values.currentPassword !== undefined) {
       if (!current) throw new Error('current password input unavailable')
@@ -225,6 +244,27 @@ async function fillPasswordModal(page, values) {
     if (next.length !== 2) throw new Error('new password inputs unavailable')
     setValue(next[0], values.newPassword)
     setValue(next[1], values.newPassword)
+    return true
+  })()`)
+}
+
+async function fillVisibleProfileForm(page, values) {
+  const serialized = JSON.stringify(values)
+  await page.evaluate(`(() => {
+    const values = ${serialized}
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('个人资料'))
+    const setValue = (input, value) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value)
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }))
+      input.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    for (const [autocomplete, value] of Object.entries(values)) {
+      const input = dialog?.querySelector('input[autocomplete="' + autocomplete + '"]')
+      if (!input) throw new Error('profile input unavailable')
+      setValue(input, value)
+    }
     return true
   })()`)
 }
@@ -718,6 +758,218 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   assert.equal(forbiddenUsers.body?.code, 'FORBIDDEN')
   await waitForAuthState(restartedPage, 'authenticated')
 
+  // 无管理权限用户通过账户菜单维护本人资料；真实 GET/PATCH、刷新持久化、
+  // 头像失败 fallback、移动端单列与暗色主题必须同时成立。
+  const profileRequests = []
+  const profileApiUrl = `${configuration.baseUrl}/api/profile`
+  const removeProfileRequestListener = restartedPage.on(
+    'Network.requestWillBeSent',
+    ({ request }) => {
+      if (request?.url === profileApiUrl) {
+        profileRequests.push({ method: request.method, postData: request.postData })
+      }
+    },
+  )
+  const profileValues = {
+    email: 'browser.limited@example.com',
+    tel: '+8613800138000',
+    url: `${configuration.baseUrl}/missing-profile-avatar.png`,
+  }
+  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await clickVisibleText(restartedPage, '个人资料')
+  await restartedPage.waitFor(`(() => (
+    document.querySelector('input[autocomplete="email"]')?.getClientRects().length > 0
+    && document.querySelector('input[autocomplete="tel"]')?.getClientRects().length > 0
+    && document.querySelector('input[autocomplete="url"]')?.getClientRects().length > 0
+  ))()`)
+  await fillVisibleProfileForm(restartedPage, profileValues)
+  await clickVisibleButton(restartedPage, '保存修改')
+  await restartedPage.waitFor(`(() => ![...document.querySelectorAll('[role="dialog"]')]
+    .some(dialog => dialog.getClientRects().length > 0
+      && dialog.textContent?.includes('个人资料')))()`)
+  await restartedPage.waitFor(authStoreExpression(`
+    return store.profile?.email === ${JSON.stringify(profileValues.email)}
+      && store.profile?.mobileE164 === ${JSON.stringify(profileValues.tel)}
+      && store.profile?.avatarUrl === ${JSON.stringify(profileValues.url)}
+  `))
+  assert.equal(
+    profileRequests.filter(request => request.method === 'PATCH').length,
+    1,
+  )
+  const patchRequest = profileRequests.find(request => request.method === 'PATCH')
+  const serializedPatch = patchRequest?.postData ?? ''
+  assert.equal(serializedPatch.includes(profileValues.email), true)
+  assert.equal(serializedPatch.includes(profileValues.tel), true)
+  assert.equal(serializedPatch.includes(profileValues.url), true)
+
+  const persistedProfile = await restartedPage.evaluate(
+    apiExpression('/api/profile', 'GET'),
+  )
+  assert.equal(persistedProfile.status, 200)
+  assert.equal(persistedProfile.cacheControl, 'private, no-store')
+  assert.deepEqual(Object.keys(persistedProfile.body).sort(), [
+    'avatarUrl',
+    'createdAt',
+    'email',
+    'mobileE164',
+    'updatedAt',
+    'userId',
+  ])
+
+  await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
+  await clickVisibleText(restartedPage, '个人资料')
+  await restartedPage.waitFor(`document.querySelector('input[autocomplete="email"]')?.value === ${JSON.stringify(profileValues.email)}`)
+  await restartedPage.waitFor(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('个人资料'))
+    const fallback = dialog?.querySelector('[data-slot="avatar-fallback"]')
+    return fallback?.getClientRects().length > 0
+  })()`)
+
+  await restartedPage.setViewport(390, 844, true)
+  const mobileProfileLayout = await restartedPage.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('个人资料'))
+    const grid = dialog?.querySelector('.grid-cols-1')
+    if (!dialog || !grid) return null
+    const columns = getComputedStyle(grid).gridTemplateColumns
+      .split(' ')
+      .filter(Boolean)
+    return {
+      columns: columns.length,
+      dialogWidth: dialog.getBoundingClientRect().width,
+      viewportWidth: innerWidth,
+      documentFits: document.documentElement.scrollWidth <= innerWidth,
+    }
+  })()`)
+  assert.equal(mobileProfileLayout?.columns, 1)
+  assert.ok(mobileProfileLayout?.dialogWidth <= mobileProfileLayout?.viewportWidth)
+  assert.equal(mobileProfileLayout?.documentFits, true)
+
+  const lightProfileTheme = await restartedPage.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('个人资料'))
+    if (!dialog) return null
+    const style = getComputedStyle(dialog)
+    return {
+      background: style.backgroundColor,
+      foreground: style.color,
+    }
+  })()`)
+
+  await restartedPage.evaluate(`(() => {
+    const vue = document.querySelector('#app')?.__vue_app__
+    const store = vue?.config?.globalProperties?.$pinia?._s?.get('appSettings')
+    store?.setColorScheme('dark')
+    return true
+  })()`)
+  await restartedPage.waitFor(`document.documentElement.classList.contains('dark')`)
+  const darkProfileTheme = await restartedPage.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('个人资料'))
+    if (!dialog) return null
+    const style = getComputedStyle(dialog)
+    return {
+      background: style.backgroundColor,
+      foreground: style.color,
+    }
+  })()`)
+  assert.notEqual(darkProfileTheme?.background, 'rgba(0, 0, 0, 0)')
+  assert.notEqual(darkProfileTheme?.background, darkProfileTheme?.foreground)
+  assert.notEqual(darkProfileTheme?.background, lightProfileTheme?.background)
+  await restartedPage.evaluate(`(() => {
+    const vue = document.querySelector('#app')?.__vue_app__
+    vue?.config?.globalProperties?.$pinia?._s?.get('appSettings')?.setColorScheme('light')
+    return true
+  })()`)
+  await clickVisibleDialogButton(restartedPage, '个人资料', '取消')
+  await restartedPage.waitFor(`(() => ![...document.querySelectorAll('[role="dialog"]')]
+    .some(candidate => candidate.getClientRects().length > 0
+      && candidate.textContent?.includes('个人资料')))()`)
+  await restartedPage.setViewport(1280, 800, false)
+
+  await restartedPage.navigate(appRouteUrl(configuration.baseUrl, '/'))
+  await waitForAuthState(restartedPage, 'authenticated')
+  await restartedPage.waitFor(authStoreExpression(`
+    return store.profileState === 'ready'
+      && store.profile?.email === ${JSON.stringify(profileValues.email)}
+  `))
+  removeProfileRequestListener()
+
+  // 两个启用 BroadcastChannel 的真实标签页只交换无数据事件；接收端仅重新 GET
+  // Profile，不应重跑 /auth/me，也不能在消息中夹带任何资料值。
+  const profilePrimaryPage = await browser.newPage()
+  const profileSecondaryPage = await browser.newPage()
+  await profilePrimaryPage.addScriptOnNewDocument(`
+    const NativeBroadcastChannel = globalThis.BroadcastChannel
+    globalThis.__qianshuProfileMessages = []
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: class RecordingBroadcastChannel extends NativeBroadcastChannel {
+        postMessage(value) {
+          globalThis.__qianshuProfileMessages.push(value)
+          return super.postMessage(value)
+        }
+      },
+    })
+  `)
+  let profileSecondaryGets = 0
+  let profileSecondaryMeGets = 0
+  const removeProfileSecondaryListener = profileSecondaryPage.on(
+    'Network.requestWillBeSent',
+    ({ request }) => {
+      if (request?.method !== 'GET') {
+        return
+      }
+      if (request.url === profileApiUrl) {
+        profileSecondaryGets += 1
+      }
+      if (request.url === `${configuration.baseUrl}/api/auth/me`) {
+        profileSecondaryMeGets += 1
+      }
+    },
+  )
+  await profilePrimaryPage.navigate(appRouteUrl(configuration.baseUrl, '/'))
+  await profileSecondaryPage.navigate(appRouteUrl(configuration.baseUrl, '/'))
+  await waitForAuthState(profilePrimaryPage, 'authenticated')
+  await waitForAuthState(profileSecondaryPage, 'authenticated')
+  await profilePrimaryPage.waitFor(authStoreExpression(`
+    return store.profileState === 'ready'
+  `))
+  await profileSecondaryPage.waitFor(authStoreExpression(`
+    return store.profileState === 'ready'
+  `))
+  profileSecondaryGets = 0
+  profileSecondaryMeGets = 0
+  const synchronizedEmail = 'browser.limited.sync@example.com'
+  await profilePrimaryPage.evaluate(storeMethodExpression('updateProfile', {
+    email: synchronizedEmail,
+  }))
+  await profileSecondaryPage.waitFor(authStoreExpression(`
+    return store.profile?.email === ${JSON.stringify(synchronizedEmail)}
+  `))
+  await new Promise(resolve => setTimeout(resolve, 200))
+  assert.equal(profileSecondaryGets, 1)
+  assert.equal(profileSecondaryMeGets, 0)
+  const profileMessages = await profilePrimaryPage.evaluate(
+    'globalThis.__qianshuProfileMessages',
+  )
+  assert.deepEqual(profileMessages, [{ type: 'PROFILE_CHANGED' }])
+  assert.equal(
+    JSON.stringify(profileMessages).includes(profileValues.tel)
+    || JSON.stringify(profileMessages).includes(profileValues.url)
+    || JSON.stringify(profileMessages).includes(synchronizedEmail),
+    false,
+  )
+  removeProfileSecondaryListener()
+  profilePrimaryPage.close()
+  profileSecondaryPage.close()
+  await restartedPage.bringToFront()
+
   // 普通主动改密从真实账户菜单打开可关闭 Modal，要求当前密码且不改变路由。
   const routeBeforeActivePasswordChange = await restartedPage.evaluate(
     'location.hash',
@@ -725,15 +977,23 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
   await clickVisibleText(restartedPage, '修改密码')
   await restartedPage.waitFor(`(() => (
-    document.body.innerText.includes('修改密码')
-    && document.querySelector('input[autocomplete="current-password"]')?.getClientRects().length > 0
+    [...document.querySelectorAll('[role="dialog"]')].some((modal) => (
+      modal.getClientRects().length > 0
+      && modal.getAttribute('aria-label') === '修改密码'
+      && modal.querySelector('input[autocomplete="current-password"]')?.getClientRects().length > 0
+    ))
   ))()`)
-  const activeModal = await restartedPage.evaluate(`({
-    currentPasswordInputs: [...document.querySelectorAll('input[autocomplete="current-password"]')]
-      .filter(input => input.getClientRects().length > 0).length,
-    newPasswordInputs: [...document.querySelectorAll('input[autocomplete="new-password"]')]
-      .filter(input => input.getClientRects().length > 0).length,
-  })`)
+  const activeModal = await restartedPage.evaluate(`(() => {
+    const modal = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.getAttribute('aria-label') === '修改密码')
+    return {
+      currentPasswordInputs: [...(modal?.querySelectorAll('input[autocomplete="current-password"]') ?? [])]
+        .filter(input => input.getClientRects().length > 0).length,
+      newPasswordInputs: [...(modal?.querySelectorAll('input[autocomplete="new-password"]') ?? [])]
+        .filter(input => input.getClientRects().length > 0).length,
+    }
+  })()`)
   assert.deepEqual(activeModal, {
     currentPasswordInputs: 1,
     newPasswordInputs: 2,
@@ -742,11 +1002,18 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     currentPassword: forcedPassword,
     newPassword: activePassword,
   })
+  const activePasswordResponse = restartedPage.waitForEvent(
+    'Network.responseReceived',
+    event => event.response?.url === `${configuration.baseUrl}/api/auth/password/change`,
+  )
   await clickVisibleButton(restartedPage, '修改密码')
+  assert.equal((await activePasswordResponse).response?.status, 200)
   await waitForAuthState(restartedPage, 'authenticated')
   await restartedPage.waitFor(`(() => (
-    ![...document.querySelectorAll('input[autocomplete="current-password"]')]
-      .some(input => input.getClientRects().length > 0)
+    ![...document.querySelectorAll('[role="dialog"]')].some((modal) => (
+      modal.getClientRects().length > 0
+      && modal.getAttribute('aria-label') === '修改密码'
+    ))
   ))()`)
   assert.equal(
     await restartedPage.evaluate('location.hash'),

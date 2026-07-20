@@ -195,6 +195,10 @@ export class ChromePage {
     await navigated
   }
 
+  bringToFront() {
+    return this.connection.send('Page.bringToFront')
+  }
+
   async evaluate(expression) {
     const result = await this.connection.send('Runtime.evaluate', {
       awaitPromise: true,

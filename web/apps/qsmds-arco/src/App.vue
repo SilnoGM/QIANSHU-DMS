@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppAccountProfile from '@/components/AppAccountButton/profile.vue'
 import EditPassword from '@/components/AppAccountForm/edit-password.vue'
 import {
   resolveAuthRetryNavigation,
@@ -24,6 +25,7 @@ const { auth } = useAppAuth()
 const { auth: localeAuth } = useAppLocaleAuth()
 const { generateI18nTitle } = useAppMenu()
 const changePasswordVisible = ref(false)
+const profileVisible = ref(false)
 
 document.body.setAttribute('data-os', ua.getOS().name || '')
 
@@ -60,15 +62,23 @@ onMounted(() => {
     appSettingsStore.setMode(document.documentElement.clientWidth)
   })
   eventBus.on('global-change-password-visible', openChangePassword)
+  eventBus.on('global-profile-visible', openProfile)
 })
 
 onBeforeUnmount(() => {
   eventBus.off('global-change-password-visible', openChangePassword)
+  eventBus.off('global-profile-visible', openProfile)
 })
 
 function openChangePassword() {
   if (appAccountStore.authState === 'authenticated') {
     changePasswordVisible.value = true
+  }
+}
+
+function openProfile() {
+  if (appAccountStore.authState === 'authenticated') {
+    profileVisible.value = true
   }
 }
 
@@ -97,6 +107,7 @@ async function handleNormalPasswordSuccess() {
 watch(() => appAccountStore.authState, (state, previousState) => {
   if (state !== 'authenticated') {
     changePasswordVisible.value = false
+    profileVisible.value = false
   }
   const target = resolveForcedPasswordCompletionNavigation(
     previousState,
@@ -162,6 +173,10 @@ watch(() => appSettingsStore.lang, () => {
       v-if="appAccountStore.authState === 'authenticated'"
       v-model="changePasswordVisible"
       @success="handleNormalPasswordSuccess"
+    />
+    <AppAccountProfile
+      v-if="appAccountStore.authState === 'authenticated'"
+      v-model="profileVisible"
     />
     <FaToast :theme="appSettingsStore.currentColorScheme" />
     <AppCheckUpdates />

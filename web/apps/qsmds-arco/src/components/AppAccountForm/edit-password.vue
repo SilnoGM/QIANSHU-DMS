@@ -152,11 +152,13 @@ watch(() => props.modelValue, (visible) => {
   <AModal
     :visible="modelValue"
     :title="forced ? '请先修改密码' : '修改密码'"
+    :aria-label="forced ? '请先修改密码' : '修改密码'"
     :closable="!forced && !loading"
     :mask-closable="!forced && !loading"
     :esc-to-close="!forced && !loading"
     :footer="false"
     :width="480"
+    role="dialog"
     unmount-on-close
     @cancel="close"
   >

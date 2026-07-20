@@ -1,0 +1,33 @@
+{
+  "accountProfile": {
+    "menu": "个人资料",
+    "title": "个人资料",
+    "description": "维护你的公开联系方式和头像。",
+    "displayName": "显示名称",
+    "username": "用户名",
+    "email": "邮箱",
+    "mobileE164": "手机号（E.164）",
+    "avatarUrl": "头像地址",
+    "avatarPreview": "头像预览",
+    "emailPlaceholder": "name{'@'}example.com",
+    "mobilePlaceholder": "+8613800138000",
+    "avatarPlaceholder": "https://example.com/avatar.png",
+    "loading": "正在加载个人资料…",
+    "loadFailed": "个人资料暂时无法加载，请重试。",
+    "retry": "重新加载",
+    "cancel": "取消",
+    "save": "保存修改",
+    "saved": "个人资料已更新",
+    "updateFailed": "个人资料更新失败，请稍后重试。",
+    "resultUnknown": "更新结果尚未确认，请重新加载后核对。",
+    "emailConflict": "该邮箱已被其他用户使用",
+    "mobileConflict": "该手机号已被其他用户使用",
+    "validation": {
+      "emailInvalid": "请输入有效的邮箱地址",
+      "emailTooLong": "邮箱不能超过 254 个字符",
+      "mobileE164Invalid": "请输入有效的 E.164 手机号",
+      "avatarUrlInvalid": "请输入有效的 HTTP 或 HTTPS 绝对地址",
+      "avatarUrlTooLong": "头像地址不能超过 2048 个字符"
+    }
+  }
+}
