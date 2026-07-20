@@ -605,23 +605,17 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   assert.equal(await cookieNamed(restartedPage, '__Host-qianshu_session'), undefined)
 
   // 制造 mutation transport unknown：一个 mutation 前开始的 passive /me 被悬停，
-  // login transport 失败后只能创建新的 /me。CDP 网络事件顺序直接证明 fresh /me
-  // 创建于 mutation transport settled 之后，而不是复用旧请求。
-  const networkOrder = []
-  const removePausedListener = restartedPage.on(
+  // login 仍悬停时只能观察到旧 passive /me；注入 transport failure 后必须出现
+  // 第二个 requestId。这样直接证明 fresh /me 未复用旧请求，不依赖 CDP 不同
+  // 请求或不同 domain 的事件到达顺序。
+  const pausedMeRequestIds = []
+  const removePausedMeListener = restartedPage.on(
     'Fetch.requestPaused',
-    event => networkOrder.push({
-      requestId: event.requestId,
-      type: 'request-paused',
-      url: event.request?.url,
-    }),
-  )
-  const removeFailedListener = restartedPage.on(
-    'Network.loadingFailed',
-    event => networkOrder.push({
-      requestId: event.requestId,
-      type: 'loading-failed',
-    }),
+    (event) => {
+      if (event.request?.url === `${configuration.baseUrl}/api/auth/me`) {
+        pausedMeRequestIds.push(event.requestId)
+      }
+    },
   )
   await restartedPage.enableRequestInterception([
     { urlPattern: '*api/auth/login*' },
@@ -638,6 +632,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       return true
     `))
     passiveRequest = await passivePaused
+    assert.deepEqual(pausedMeRequestIds, [passiveRequest.requestId])
 
     const loginPaused = restartedPage.waitForEvent(
       'Fetch.requestPaused',
@@ -655,11 +650,12 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       return true
     `))
     const loginRequest = await loginPaused
-    assert.equal(typeof loginRequest.networkId, 'string')
-
-    const loginTransportFailed = restartedPage.waitForEvent(
-      'Network.loadingFailed',
-      event => event.requestId === loginRequest.networkId,
+    assert.deepEqual(pausedMeRequestIds, [passiveRequest.requestId])
+    assert.equal(
+      await restartedPage.evaluate(
+        'globalThis.__qianshuBrowserUnknownDone === false',
+      ),
+      true,
     )
     const freshMePaused = restartedPage.waitForEvent(
       'Fetch.requestPaused',
@@ -669,20 +665,20 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
       ),
     )
     await restartedPage.failInterceptedRequest(loginRequest.requestId)
-    await loginTransportFailed
     const freshMeRequest = await freshMePaused
+    assert.notEqual(freshMeRequest.requestId, passiveRequest.requestId)
+    assert.deepEqual(pausedMeRequestIds, [
+      passiveRequest.requestId,
+      freshMeRequest.requestId,
+    ])
+    assert.equal(
+      await restartedPage.evaluate(
+        'globalThis.__qianshuBrowserUnknownDone === false',
+      ),
+      true,
+    )
     await restartedPage.continueInterceptedRequest(freshMeRequest.requestId)
     await restartedPage.waitFor('globalThis.__qianshuBrowserUnknownDone === true')
-
-    const loginSettledIndex = networkOrder.findIndex(event => (
-      event.type === 'loading-failed'
-      && event.requestId === loginRequest.networkId
-    ))
-    const freshMeIndex = networkOrder.findIndex(event => (
-      event.type === 'request-paused'
-      && event.requestId === freshMeRequest.requestId
-    ))
-    assert.ok(loginSettledIndex >= 0 && freshMeIndex > loginSettledIndex)
   }
   finally {
     if (passiveRequest !== undefined) {
@@ -690,8 +686,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
         .catch(() => undefined)
     }
     await restartedPage.disableRequestInterception().catch(() => undefined)
-    removePausedListener()
-    removeFailedListener()
+    removePausedMeListener()
   }
   await waitForAuthState(restartedPage, 'anonymous')
 
