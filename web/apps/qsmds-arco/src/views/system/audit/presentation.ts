@@ -5,6 +5,16 @@ export interface AuditMetadataEntry {
   value: string
 }
 
+export interface AuditOutcomeTagPresentation {
+  class?: string
+  variant: 'destructive' | 'outline'
+}
+
+const SUCCESS_TAG_CLASS = [
+  'border-green-600/30 bg-green-600/10 text-green-700',
+  'dark:border-green-400/30 dark:bg-green-400/10 dark:text-green-400',
+].join(' ')
+
 const EVENT_LABELS: Readonly<Record<string, string>> = {
   AUTH_LOGIN_SUCCEEDED: '登录成功',
   AUTH_LOGIN_FAILED: '登录失败',
@@ -48,6 +58,35 @@ export function formatAuditOutcome(outcome: string): string {
     return '失败'
   }
   return outcome
+}
+
+/**
+ * 展示名帮助管理员快速识别操作者，稳定的用户 ID 仍由页面相邻列完整保留。
+ * USER 理论上总能通过受 Restrict 保护的外键找到用户；若数据异常则显式提示，
+ * SYSTEM 与 ANONYMOUS 本来就没有用户展示名，因此使用中性占位符。
+ */
+export function formatAuditActorDisplayName(
+  actorType: string,
+  displayName: string | null,
+): string {
+  const normalizedDisplayName = displayName?.trim()
+  if (normalizedDisplayName) {
+    return normalizedDisplayName
+  }
+  return actorType === 'USER' ? '未知用户' : '—'
+}
+
+/** 桌面表格与移动卡片共享同一状态语义，避免两套视图出现颜色漂移。 */
+export function auditOutcomeTagPresentation(
+  outcome: string,
+): AuditOutcomeTagPresentation {
+  if (outcome === 'SUCCESS') {
+    return {
+      class: SUCCESS_TAG_CLASS,
+      variant: 'outline',
+    }
+  }
+  return { variant: 'destructive' }
 }
 
 export function formatAuditTime(value: string): string {

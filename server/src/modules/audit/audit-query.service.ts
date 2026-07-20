@@ -30,6 +30,11 @@ const AUDIT_EVENT_PUBLIC_SELECT = {
   occurredAt: true,
   actorType: true,
   actorUserId: true,
+  actorUser: {
+    select: {
+      displayName: true,
+    },
+  },
   targetType: true,
   targetId: true,
   requestId: true,
@@ -146,6 +151,7 @@ function mapAuditEvent(row: AuditEventPublicRow): AuditEventDto {
     occurredAt: row.occurredAt.toISOString(),
     actorType: row.actorType,
     actorUserId: row.actorUserId,
+    actorDisplayName: row.actorUser?.displayName ?? null,
     targetType: row.targetType,
     targetId: row.targetId,
     requestId: row.requestId,

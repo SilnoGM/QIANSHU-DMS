@@ -5,6 +5,8 @@ import { useMediaQuery } from '@vueuse/core'
 import managementApi from '@/api/modules/management'
 import {
   auditMetadataEntries,
+  auditOutcomeTagPresentation,
+  formatAuditActorDisplayName,
   formatAuditEvent,
   formatAuditOutcome,
   formatAuditTime,
@@ -54,6 +56,7 @@ const columns: TableColumn<AuditEventDto>[] = [
   { accessorKey: 'occurredAt', header: '时间', width: 190 },
   { accessorKey: 'eventType', header: '事件', width: 230 },
   { accessorKey: 'outcome', header: '结果', width: 90 },
+  { accessorKey: 'actorDisplayName', header: '用户展示名', width: 180 },
   { accessorKey: 'actorUserId', header: '操作者 ID', width: 240 },
   { id: 'target', header: '目标', width: 250 },
   { accessorKey: 'requestId', header: '请求 ID', width: 250 },
@@ -157,7 +160,7 @@ onMounted(loadEvents)
             row-key="id"
             :columns="columns"
             :data="events"
-            table-class="min-w-[1580px]"
+            table-class="min-w-[1760px]"
             :class="loading ? 'pointer-events-none opacity-60' : undefined"
           >
             <template #cell-occurredAt="{ row }">
@@ -170,9 +173,14 @@ onMounted(loadEvents)
               </div>
             </template>
             <template #cell-outcome="{ row }">
-              <FaTag :variant="row.original.outcome === 'SUCCESS' ? 'secondary' : 'destructive'">
+              <FaTag v-bind="auditOutcomeTagPresentation(row.original.outcome)">
                 {{ formatAuditOutcome(row.original.outcome) }}
               </FaTag>
+            </template>
+            <template #cell-actorDisplayName="{ row }">
+              <span class="font-medium">
+                {{ formatAuditActorDisplayName(row.original.actorType, row.original.actorDisplayName) }}
+              </span>
             </template>
             <template #cell-actorUserId="{ row }">
               <code class="break-all">{{ row.original.actorUserId || '—' }}</code>
@@ -246,7 +254,7 @@ onMounted(loadEvents)
                   <strong class="block break-words">{{ formatAuditEvent(event.eventType) }}</strong>
                   <code class="text-xs text-muted-foreground break-all">{{ event.eventType }}</code>
                 </div>
-                <FaTag :variant="event.outcome === 'SUCCESS' ? 'secondary' : 'destructive'" class="shrink-0">
+                <FaTag v-bind="auditOutcomeTagPresentation(event.outcome)" class="shrink-0">
                   {{ formatAuditOutcome(event.outcome) }}
                 </FaTag>
               </div>
@@ -259,6 +267,14 @@ onMounted(loadEvents)
                 </dt>
                 <dd class="font-medium m-0">
                   {{ formatAuditTime(event.occurredAt) }}
+                </dd>
+              </div>
+              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <dt class="text-muted-foreground">
+                  用户展示名
+                </dt>
+                <dd class="font-medium m-0">
+                  {{ formatAuditActorDisplayName(event.actorType, event.actorDisplayName) }}
                 </dd>
               </div>
               <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">

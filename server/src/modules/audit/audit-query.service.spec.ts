@@ -18,6 +18,7 @@ interface AuditEventQueryRow {
   occurredAt: Date
   actorType: AuditActorType
   actorUserId: string | null
+  actorUser: { displayName: string } | null
   targetType: string | null
   targetId: string | null
   requestId: string
@@ -36,6 +37,7 @@ function createRow(
     occurredAt: new Date('2026-07-17T08:30:00.000Z'),
     actorType: AuditActorType.USER,
     actorUserId: ACTOR_USER_ID,
+    actorUser: { displayName: '系统管理员' },
     targetType: 'User',
     targetId: ACTOR_USER_ID,
     requestId: 'req-123',
@@ -152,6 +154,7 @@ describe('AuditQueryService', () => {
         occurredAt: '2026-07-17T08:30:00.000Z',
         actorType: AuditActorType.USER,
         actorUserId: ACTOR_USER_ID,
+        actorDisplayName: '系统管理员',
         targetType: 'User',
         targetId: ACTOR_USER_ID,
         requestId: 'req-123',
@@ -165,8 +168,11 @@ describe('AuditQueryService', () => {
       select: Record<string, unknown>
     }
     expect(query.select.sourceIpHash).toBeUndefined()
-    expect(query.select.actorUser).toBeUndefined()
+    expect(query.select.actorUser).toEqual({
+      select: { displayName: true },
+    })
     expect(Object.keys(result.items[0] ?? {}).sort()).toEqual([
+      'actorDisplayName',
       'actorType',
       'actorUserId',
       'correlationId',
@@ -181,6 +187,24 @@ describe('AuditQueryService', () => {
       'targetType',
     ])
     expect(JSON.stringify(result)).not.toContain('sourceIpHash')
+  })
+
+  it.each([
+    AuditActorType.SYSTEM,
+    AuditActorType.ANONYMOUS,
+  ])('%s 事件不臆造用户展示名', async (actorType) => {
+    const fixture = createPrismaFixture([
+      createRow({
+        actorType,
+        actorUserId: null,
+        actorUser: null,
+      }),
+    ])
+    const service = new AuditQueryService(fixture.prisma)
+
+    const result = await service.list({})
+
+    expect(result.items[0]?.actorDisplayName).toBeNull()
   })
 
   it('drops nested or collection metadata values instead of exposing them', async () => {

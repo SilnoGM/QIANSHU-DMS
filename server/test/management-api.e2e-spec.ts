@@ -84,6 +84,7 @@ interface AuditEventBody {
   occurredAt: string
   actorType: string
   actorUserId: string | null
+  actorDisplayName: string | null
   targetType: string | null
   targetId: string | null
   requestId: string
@@ -645,9 +646,11 @@ describe('Management API with PostgreSQL', () => {
     expect(auditFirstPage.items[0]).toMatchObject({
       id: sourceAudit.id,
       actorUserId: administrator.user.id,
+      actorDisplayName: administrator.user.displayName,
       metadata: { visible: 'yes' },
     })
     expect(Object.keys(auditFirstPage.items[0] ?? {}).sort()).toEqual([
+      'actorDisplayName',
       'actorType',
       'actorUserId',
       'correlationId',

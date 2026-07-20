@@ -7,6 +7,8 @@ import test from 'node:test'
 
 import {
   auditMetadataEntries,
+  auditOutcomeTagPresentation,
+  formatAuditActorDisplayName,
   formatAuditEvent,
   formatAuditOutcome,
 } from '../../src/views/system/audit/presentation'
@@ -314,4 +316,23 @@ test('审计事件和结果使用稳定中文文案，未知值保留原值便�
   assert.equal(formatAuditEvent('DOMAIN_EVENT'), 'DOMAIN_EVENT')
   assert.equal(formatAuditOutcome('SUCCESS'), '成功')
   assert.equal(formatAuditOutcome('FAILURE'), '失败')
+})
+
+test('审计操作者展示名保留真实名称并区分异常用户', () => {
+  assert.equal(formatAuditActorDisplayName('USER', '系统管理员'), '系统管理员')
+  assert.equal(formatAuditActorDisplayName('USER', null), '未知用户')
+  assert.equal(formatAuditActorDisplayName('SYSTEM', null), '—')
+  assert.equal(formatAuditActorDisplayName('ANONYMOUS', null), '—')
+})
+
+test('审计成功标签使用绿色成功语义，失败仍使用 destructive', () => {
+  const success = auditOutcomeTagPresentation('SUCCESS')
+  assert.equal(success.variant, 'outline')
+  assert.equal(
+    success.class,
+    'border-green-600/30 bg-green-600/10 text-green-700 dark:border-green-400/30 dark:bg-green-400/10 dark:text-green-400',
+  )
+  assert.deepEqual(auditOutcomeTagPresentation('FAILURE'), {
+    variant: 'destructive',
+  })
 })

@@ -32,6 +32,9 @@ export class AuditEventDto {
   actorUserId!: string | null
 
   @ApiProperty({ type: 'string', maxLength: 128, nullable: true })
+  actorDisplayName!: string | null
+
+  @ApiProperty({ type: 'string', maxLength: 128, nullable: true })
   targetType!: string | null
 
   @ApiProperty({ type: 'string', maxLength: 128, nullable: true })

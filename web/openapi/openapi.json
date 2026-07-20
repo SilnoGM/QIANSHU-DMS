@@ -5347,6 +5347,11 @@
             "format": "uuid",
             "nullable": true
           },
+          "actorDisplayName": {
+            "type": "string",
+            "maxLength": 128,
+            "nullable": true
+          },
           "targetType": {
             "type": "string",
             "maxLength": 128,
@@ -5396,6 +5401,7 @@
           "occurredAt",
           "actorType",
           "actorUserId",
+          "actorDisplayName",
           "targetType",
           "targetId",
           "requestId",
