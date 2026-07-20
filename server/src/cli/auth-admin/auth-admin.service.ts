@@ -145,6 +145,7 @@ export class AuthAdminService {
             authVersion: 0,
             lastLoginAt: null,
             createdByUserId: null,
+            profile: { create: {} },
           },
           select: { id: true },
         })

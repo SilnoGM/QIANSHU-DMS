@@ -96,9 +96,25 @@ model User {
   roles         UserRole[]
   sessions      AuthSession[]
   auditEvents   AuditEvent[]  @relation("AuditActor")
+  profile       UserProfile?
 
   @@index([status], map: "users_status_idx")
   @@map("users")
+}
+
+model UserProfile {
+  userId          String   @id @map("user_id") @db.Uuid
+  email           String?  @db.VarChar(254)
+  emailNormalized String?  @unique(map: "user_profiles_email_normalized_key") @map("email_normalized") @db.VarChar(254)
+  mobileE164      String?  @unique(map: "user_profiles_mobile_e164_key") @map("mobile_e164") @db.VarChar(16)
+  avatarUrl       String?  @map("avatar_url") @db.VarChar(2048)
+  remark          String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
 }
 
 model Role {

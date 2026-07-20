@@ -216,6 +216,7 @@ describe('Management API with PostgreSQL', () => {
         displayName: 'Management API E2E',
         passwordHash: await passwordProvider.hash(password),
         passwordChangedAt: new Date(),
+        profile: { create: {} },
       },
     })
     createdUserIds.add(user.id)

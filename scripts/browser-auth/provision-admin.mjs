@@ -45,6 +45,10 @@ const { Client } = require('pg')
       ],
     )
     await client.query(
+      'INSERT INTO user_profiles (user_id) VALUES ($1)',
+      [user.rows[0].id],
+    )
+    await client.query(
       'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)',
       [user.rows[0].id, role.rows[0].id],
     )

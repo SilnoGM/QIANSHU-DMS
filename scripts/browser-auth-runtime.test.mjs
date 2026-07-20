@@ -84,6 +84,7 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
     '-C', 'server', 'exec', 'node',
   ])
   assert.equal(command.args.includes(input.password), false)
+  assert.match(command.args.at(-1), /INSERT INTO user_profiles/u)
   assert.equal(command.env.QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD, input.password)
   assert.equal(command.env.DATABASE_URL, input.databaseUrl)
   assert.throws(

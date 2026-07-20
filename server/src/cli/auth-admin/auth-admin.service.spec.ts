@@ -29,6 +29,7 @@ interface TransactionFixture {
   authSession: { updateMany: jest.Mock }
   role: { findUnique: jest.Mock }
   user: { create: jest.Mock; update: jest.Mock }
+  userProfile: { create: jest.Mock; upsert: jest.Mock }
   userRole: {
     create: jest.Mock
     findFirst: jest.Mock
@@ -42,6 +43,7 @@ function createTransaction(): TransactionFixture {
     authSession: { updateMany: jest.fn() },
     role: { findUnique: jest.fn() },
     user: { create: jest.fn(), update: jest.fn() },
+    userProfile: { create: jest.fn(), upsert: jest.fn() },
     userRole: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -201,6 +203,7 @@ describe('AuthAdminService bootstrap', () => {
         authVersion: 0,
         lastLoginAt: null,
         createdByUserId: null,
+        profile: { create: {} },
       },
       select: { id: true },
     })
@@ -277,6 +280,52 @@ describe('AuthAdminService bootstrap', () => {
       'create',
       'failure',
     )
+  })
+
+  it('Profile 嵌套创建失败时不创建 Role 关系或 Audit', async () => {
+    const fixture = createFixture()
+    prepareBootstrapQueries(fixture.transaction)
+    fixture.transaction.userRole.findFirst.mockResolvedValue(null)
+    fixture.transaction.user.create.mockRejectedValue(
+      new Error('user profile nested create failed'),
+    )
+
+    await expect(
+      fixture.service.bootstrap({
+        username: 'rootadmin',
+        displayName: '系统管理员',
+        password: 'Admin-pass-2026!',
+      }),
+    ).rejects.toMatchObject<Pick<AuthAdminOperationError, 'code' | 'message'>>({
+      code: 'SYSTEM_ADMIN_OPERATION_FAILED',
+      message: '系统管理员操作失败',
+    })
+
+    expect(fixture.transaction.userRole.create).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
+
+  it('Role 关系创建失败时不继续写 Audit，并让 User/Profile 所在事务失败', async () => {
+    const fixture = createFixture()
+    prepareBootstrapQueries(fixture.transaction)
+    fixture.transaction.userRole.findFirst.mockResolvedValue(null)
+    fixture.transaction.user.create.mockResolvedValue({ id: ADMIN_ID })
+    fixture.transaction.userRole.create.mockRejectedValue(
+      new Error('user role create failed'),
+    )
+
+    await expect(
+      fixture.service.bootstrap({
+        username: 'rootadmin',
+        displayName: '系统管理员',
+        password: 'Admin-pass-2026!',
+      }),
+    ).rejects.toMatchObject<Pick<AuthAdminOperationError, 'code' | 'message'>>({
+      code: 'SYSTEM_ADMIN_OPERATION_FAILED',
+      message: '系统管理员操作失败',
+    })
+
+    expect(fixture.audit.record).not.toHaveBeenCalled()
   })
 })
 
@@ -379,6 +428,8 @@ describe('AuthAdminService recovery', () => {
         'success',
       )
       expect(fixture.metrics.recordSessionRevoked).toHaveBeenCalledWith(2)
+      expect(fixture.transaction.userProfile.create).not.toHaveBeenCalled()
+      expect(fixture.transaction.userProfile.upsert).not.toHaveBeenCalled()
     },
   )
 

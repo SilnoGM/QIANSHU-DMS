@@ -31,24 +31,24 @@ flowchart TD
 
 ## 3. 实施任务
 
-- [ ] 1. 固化规格、检查基线并建立首个提交
-  - [ ] 1.1 检查 `git status --short`、现有差异和根目录违规产物，确认不会覆盖用户工作。
-  - [ ] 1.2 运行现有基线：`pnpm -C server check`、`node --run contract:check`、`pnpm -C web check`；若失败，先记录并区分基线问题与本功能问题。
-  - [ ] 1.3 检查 `requirements.md`、`design.md`、`tasks.md` 的一致性和 Markdown 空白错误。
-  - [ ] 1.4 只暂存三个规格文件，复核 staged diff 和敏感文件范围。
-  - [ ] 1.5 创建提交：`docs: 明确用户资料扩展需求与设计`。
+- [x] 1. 固化规格、检查基线并建立首个提交
+  - [x] 1.1 检查 `git status --short`、现有差异和根目录违规产物，确认不会覆盖用户工作。
+  - [x] 1.2 运行现有基线：`pnpm -C server check`、`node --run contract:check`、`pnpm -C web check`；若失败，先记录并区分基线问题与本功能问题。
+  - [x] 1.3 检查 `requirements.md`、`design.md`、`tasks.md` 的一致性和 Markdown 空白错误。
+  - [x] 1.4 只暂存三个规格文件，复核 staged diff 和敏感文件范围。
+  - [x] 1.5 创建提交：`docs: 明确用户资料扩展需求与设计`。
   - _Requirements: 1-12_
 
-- [ ] 2. 以 TDD 建立 UserProfile Schema、migration 与创建不变量
-  - [ ] 2.1 先新增并运行失败的 `server/src/infrastructure/database/user-profile-schema.spec.ts`，固定 Prisma 字段、映射、关系、具名约束和 migration SQL。
-  - [ ] 2.2 先新增并运行失败的 `server/test/user-profile-migration.e2e-spec.ts`：在随机临时 schema 中回放旧 migration、插入历史 User、再执行新 migration。
-  - [ ] 2.3 在 `server/prisma/schema.prisma` 新增 `UserProfile` 和 `User.profile`，创建新的不可变 migration；实现历史回填、主键外键、Cascade、两个唯一索引及 Email/Mobile Check。
-  - [ ] 2.4 在真实 PostgreSQL 回放测试中验证：一人一 Profile、初始字段为空、时间非空、多行 `NULL` 合法、重复非空值和非法 E.164 被拒绝、删除 User 后级联删除；测试最终必须 rollback。
-  - [ ] 2.5 先扩展并运行失败的 `users.service.spec.ts` 与 `auth-admin.service.spec.ts`，要求两个正式 User 创建入口在原事务中嵌套 `profile: { create: {} }`。
-  - [ ] 2.6 修改 `UsersService.create()` 和 `AuthAdminService.bootstrap()`；验证 Profile、Role 或 Audit 失败时 User 不会单独提交，恢复管理员流程不创建或 upsert Profile。
-  - [ ] 2.7 使用 `rg` 重新枚举全部直接创建 User 的测试和浏览器 fixture，并同步显式创建空 Profile，包括 auth、session、management E2E 与 `scripts/browser-auth/provision-admin.mjs`。
-  - [ ] 2.8 运行 schema/创建路径定向测试、`pnpm -C server prisma:validate`、`pnpm -C server typecheck` 和隔离 migration E2E。
-  - [ ] 2.9 更新本任务状态，复核 staged diff 后创建提交：`feat: 添加用户资料数据模型与创建不变量`。
+- [x] 2. 以 TDD 建立 UserProfile Schema、migration 与创建不变量
+  - [x] 2.1 先新增并运行失败的 `server/src/infrastructure/database/user-profile-schema.spec.ts`，固定 Prisma 字段、映射、关系、具名约束和 migration SQL。
+  - [x] 2.2 先新增并运行失败的 `server/test/user-profile-migration.e2e-spec.ts`：在随机临时 schema 中回放旧 migration、插入历史 User、再执行新 migration。
+  - [x] 2.3 在 `server/prisma/schema.prisma` 新增 `UserProfile` 和 `User.profile`，创建新的不可变 migration；实现历史回填、主键外键、Cascade、两个唯一索引及 Email/Mobile Check。
+  - [x] 2.4 在真实 PostgreSQL 回放测试中验证：一人一 Profile、初始字段为空、时间非空、多行 `NULL` 合法、重复非空值和非法 E.164 被拒绝、删除 User 后级联删除；测试最终必须 rollback。
+  - [x] 2.5 先扩展并运行失败的 `users.service.spec.ts` 与 `auth-admin.service.spec.ts`，要求两个正式 User 创建入口在原事务中嵌套 `profile: { create: {} }`。
+  - [x] 2.6 修改 `UsersService.create()` 和 `AuthAdminService.bootstrap()`；验证 Profile、Role 或 Audit 失败时 User 不会单独提交，恢复管理员流程不创建或 upsert Profile。
+  - [x] 2.7 使用 `rg` 重新枚举全部直接创建 User 的测试和浏览器 fixture，并同步显式创建空 Profile，包括 auth、session、management E2E 与 `scripts/browser-auth/provision-admin.mjs`。
+  - [x] 2.8 运行 schema/创建路径定向测试、`pnpm -C server prisma:validate`、`pnpm -C server typecheck` 和隔离 migration E2E。
+  - [x] 2.9 更新本任务状态，复核 staged diff 后创建提交：`feat: 添加用户资料数据模型与创建不变量`。
   - _Requirements: 1, 2_
 
 - [ ] 3. 以 TDD 增加“正常登录但无需业务权限”的授权边界

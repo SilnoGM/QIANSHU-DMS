@@ -166,6 +166,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
         passwordHash: await passwordProvider.hash(password),
         passwordChangedAt: new Date(),
         mustChangePassword: options.mustChangePassword ?? false,
+        profile: { create: {} },
       },
     })
     const systemRole = await prisma.role.findUniqueOrThrow({
@@ -188,6 +189,7 @@ describe('Auth API with Cookie Session and PostgreSQL', () => {
         // Guard 用例不走密码登录；使用明确的测试占位值避免无意义 Argon2 成本。
         passwordHash: 'e2e-only-not-a-real-password-hash',
         passwordChangedAt: new Date(),
+        profile: { create: {} },
       },
     })
     createdUserIds.push(user.id)

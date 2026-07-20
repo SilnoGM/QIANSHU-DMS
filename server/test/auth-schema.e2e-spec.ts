@@ -76,16 +76,21 @@ describe('authentication schema migration against PostgreSQL', () => {
     const username = `schema-e2e-${randomUUID()}`
     const result = await client.query<{ id: string }>(
       `
-        INSERT INTO users (
-          username,
-          username_normalized,
-          display_name,
-          password_hash,
-          password_changed_at,
-          updated_at
+        WITH created_user AS (
+          INSERT INTO users (
+            username,
+            username_normalized,
+            display_name,
+            password_hash,
+            password_changed_at,
+            updated_at
+          )
+          VALUES ($1, $1, 'Schema E2E', 'test-only-hash', clock_timestamp(), clock_timestamp())
+          RETURNING id
         )
-        VALUES ($1, $1, 'Schema E2E', 'test-only-hash', clock_timestamp(), clock_timestamp())
-        RETURNING id
+        INSERT INTO user_profiles (user_id)
+        SELECT id FROM created_user
+        RETURNING user_id AS id
       `,
       [username],
     )

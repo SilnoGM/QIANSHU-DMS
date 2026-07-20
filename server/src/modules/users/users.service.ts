@@ -183,6 +183,7 @@ export class UsersService {
             authVersion: 0,
             lastLoginAt: null,
             createdByUserId: normalizedContext.actorUserId,
+            profile: { create: {} },
           },
           select: USER_RESPONSE_SELECT,
         })

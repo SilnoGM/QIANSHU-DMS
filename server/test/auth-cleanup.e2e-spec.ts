@@ -178,16 +178,21 @@ describe('auth cleanup against isolated PostgreSQL', () => {
     const username = `${TEST_PREFIX}-${label}-${randomUUID()}`
     const result = await controlClient.query<{ id: string }>(
       `
-        INSERT INTO users (
-          username,
-          username_normalized,
-          display_name,
-          password_hash,
-          password_changed_at,
-          updated_at
+        WITH created_user AS (
+          INSERT INTO users (
+            username,
+            username_normalized,
+            display_name,
+            password_hash,
+            password_changed_at,
+            updated_at
+          )
+          VALUES ($1, $1, 'Cleanup E2E', 'test-only-hash', clock_timestamp(), clock_timestamp())
+          RETURNING id
         )
-        VALUES ($1, $1, 'Cleanup E2E', 'test-only-hash', clock_timestamp(), clock_timestamp())
-        RETURNING id
+        INSERT INTO user_profiles (user_id)
+        SELECT id FROM created_user
+        RETURNING user_id AS id
       `,
       [username],
     )

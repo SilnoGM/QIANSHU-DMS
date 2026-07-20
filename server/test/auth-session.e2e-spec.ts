@@ -53,6 +53,7 @@ describe('AuthSessionService against PostgreSQL', () => {
         displayName: 'Session E2E',
         passwordHash: 'e2e-only-not-a-real-password-hash',
         passwordChangedAt: new Date(),
+        profile: { create: {} },
       },
     })
     createdUserIds.push(user.id)

@@ -390,6 +390,7 @@ describe('UsersService create and simple updates', () => {
       authVersion: 0,
       lastLoginAt: null,
       createdByUserId: ACTOR_ID,
+      profile: { create: {} },
     })
     expect(audit.record).toHaveBeenCalledWith(
       transaction,
@@ -421,6 +422,49 @@ describe('UsersService create and simple updates', () => {
       HttpStatus.CONFLICT,
       'USERNAME_ALREADY_EXISTS',
     )
+    expect(metrics.recordPassword).toHaveBeenCalledWith('create', 'failure')
+  })
+
+  it('Profile 嵌套创建失败时不继续写 Audit，并让外层事务整体失败', async () => {
+    const { service, transaction, audit, metrics } = createServiceFixture()
+    transaction.$queryRaw.mockResolvedValue([{ now: DATABASE_NOW }])
+    transaction.user.create.mockRejectedValue(
+      new Error('user profile nested create failed'),
+    )
+
+    await expectApiException(
+      service.create(context, {
+        username: 'Alice',
+        displayName: 'Alice',
+        password: 'correct horse power',
+        mustChangePassword: false,
+      }),
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      'INTERNAL_ERROR',
+    )
+
+    expect(audit.record).not.toHaveBeenCalled()
+    expect(metrics.recordPassword).toHaveBeenCalledWith('create', 'failure')
+  })
+
+  it('创建 User 后 Audit 失败时继续向外传播，确保事务不能提交 User/Profile', async () => {
+    const { service, transaction, audit, metrics } = createServiceFixture()
+    transaction.$queryRaw.mockResolvedValue([{ now: DATABASE_NOW }])
+    transaction.user.create.mockResolvedValue(userFixture({ roles: [] }))
+    audit.record.mockRejectedValue(new Error('audit failed'))
+
+    await expectApiException(
+      service.create(context, {
+        username: 'Alice',
+        displayName: 'Alice',
+        password: 'correct horse power',
+        mustChangePassword: false,
+      }),
+      HttpStatus.INTERNAL_SERVER_ERROR,
+      'INTERNAL_ERROR',
+    )
+
+    expect(audit.record).toHaveBeenCalledTimes(1)
     expect(metrics.recordPassword).toHaveBeenCalledWith('create', 'failure')
   })
 
