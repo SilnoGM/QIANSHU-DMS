@@ -77,7 +77,7 @@ defineProps<{
         <aside class="min-w-0">
           <div class="p-5 border border-border rounded-xl bg-muted/20">
             <div class="text-xs text-muted-foreground tracking-widest font-semibold mb-3">
-              ROUTE
+              入口路径
             </div>
             <code class="text-xs text-foreground break-all">{{ routePath }}</code>
 
