@@ -29,6 +29,8 @@ export default setSettings({
   theme: {
     baseColorLight: APP_THEME_BASE_COLORS.light,
     baseColorDark: APP_THEME_BASE_COLORS.dark,
+    light: 'green',
+    dark: 'green',
   },
   menu: {
     mode: 'head',
