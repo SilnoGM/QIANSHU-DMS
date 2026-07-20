@@ -2,6 +2,9 @@ import type { RouteRecordMainRaw } from '@fantastic-admin/types'
 import type { RouteRecordRaw } from 'vue-router'
 import { $t } from '@/locales'
 import pinia from '@/store'
+import ComponentLibraryRoutes, {
+  shouldEnableComponentLibrary,
+} from './modules/component.library'
 import SystemManagement, {
   MANAGEMENT_READ_PERMISSIONS,
 } from './modules/system.management'
@@ -61,6 +64,14 @@ const systemRoutes: RouteRecordRaw[] = [
 ]
 
 // 动态路由（异步路由、导航菜单路由）
+const componentLibraryMainRoute: RouteRecordMainRaw = {
+  meta: {
+    title: '组件库',
+    icon: 'i-lucide:library-big',
+  },
+  children: ComponentLibraryRoutes,
+}
+
 const asyncRoutes: RouteRecordMainRaw[] = [
   {
     meta: {
@@ -71,6 +82,9 @@ const asyncRoutes: RouteRecordMainRaw[] = [
       SystemManagement,
     ],
   },
+  ...(shouldEnableComponentLibrary(import.meta.env)
+    ? [componentLibraryMainRoute]
+    : []),
 ]
 
 export {
