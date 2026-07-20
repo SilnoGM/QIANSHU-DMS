@@ -126,18 +126,18 @@ flowchart TD
   - [x] 9.6 更新任务状态并创建提交：`feat: 完善管理员用户资料表单`。
   - _Requirements: 6, 7, 9, 12_
 
-- [ ] 10. 完成隔离 E2E、本地 migration、真实浏览器和全量验收
-  - [ ] 10.1 运行 `pnpm -C server check`、`node --run ci:server-e2e`、`node --run contract:check`，保存最新通过证据。
-  - [ ] 10.2 运行 `pnpm -C web check`、`pnpm -C web build`、`node --run ci:browser-auth-e2e`；Browser fixture 不得依赖开发库或隐式 Profile 自愈。
-  - [ ] 10.3 本地部署前先只读确认数据库目标和当前进程，不输出连接字符串；暂停旧 Server 用户创建写流量后执行 migration，再启动新 Server。
-  - [ ] 10.4 验证 `/api/health` 的 database 状态、Server/Web 端口和进程均真实就绪；不能只以 watcher 或前端端口作为成功依据。
-  - [ ] 10.5 只读核对本地 User/Profile 数量一致、唯一约束存在；不得输出 Email、手机号、URL、备注或连接信息。
-  - [ ] 10.6 在真实 Chrome 桌面端验证：普通用户入口、GET/PATCH、头像即时更新/失败回退、刷新持久化、无 `/api/users` 权限；管理员验证 Profile/remark；双标签页验证 `PROFILE_CHANGED` 只触发重新 GET 且不携带资料值。
-  - [ ] 10.7 在 `390x844` 移动视口验证单列、不溢出、可滚动和可提交；分别检查亮色、暗色主题。
-  - [ ] 10.8 验证强制改密用户不能打开/调用 Profile，Audit 事件只有字段名且不含 PII；Browser 断言必须同时检查真实 API、Store/DOM 状态，不能只检查 Toast。
-  - [ ] 10.9 对发现的问题先补失败回归测试再修复；每个独立修复使用 `fix: 中文描述` 小提交并重新运行受影响门禁。
-  - [ ] 10.10 运行最终 `node --run test:root`、`git diff --check`、`git status --short`，检查无根违规产物、无 `.env`、无密钥、无生成目录和无未提交功能改动。
-  - [ ] 10.11 把本清单全部真实完成项勾选，复核提交历史；不执行 push，除非用户另行明确要求。
+- [x] 10. 完成隔离 E2E、本地 migration、真实浏览器和全量验收
+  - [x] 10.1 运行 `pnpm -C server check`、`node --run ci:server-e2e`、`node --run contract:check`，保存最新通过证据。
+  - [x] 10.2 运行 `pnpm -C web check`、`pnpm -C web build`、`node --run ci:browser-auth-e2e`；Browser fixture 不得依赖开发库或隐式 Profile 自愈。
+  - [x] 10.3 本地部署前先只读确认数据库目标和当前进程，不输出连接字符串；暂停旧 Server 用户创建写流量后执行 migration，再启动新 Server。
+  - [x] 10.4 验证 `/api/health` 的 database 状态、Server/Web 端口和进程均真实就绪；不能只以 watcher 或前端端口作为成功依据。
+  - [x] 10.5 只读核对本地 User/Profile 数量一致、唯一约束存在；不得输出 Email、手机号、URL、备注或连接信息。
+  - [x] 10.6 在真实 Chrome 桌面端验证：普通用户入口、GET/PATCH、头像即时更新/失败回退、刷新持久化、无 `/api/users` 权限；管理员验证 Profile/remark；双标签页验证 `PROFILE_CHANGED` 只触发重新 GET 且不携带资料值。
+  - [x] 10.7 在 `390x844` 移动视口验证单列、不溢出、可滚动和可提交；分别检查亮色、暗色主题。
+  - [x] 10.8 验证强制改密用户不能打开/调用 Profile，Audit 事件只有字段名且不含 PII；Browser 断言必须同时检查真实 API、Store/DOM 状态，不能只检查 Toast。
+  - [x] 10.9 对发现的问题先补失败回归测试再修复；每个独立修复使用 `fix: 中文描述` 小提交并重新运行受影响门禁。
+  - [x] 10.10 运行最终 `node --run test:root`、`git diff --check`、`git status --short`，检查无根违规产物、无 `.env`、无密钥、无生成目录和无未提交功能改动。
+  - [x] 10.11 把本清单全部真实完成项勾选，复核提交历史；不执行 push，除非用户另行明确要求。
   - _Requirements: 1-12_
 
 ## 4. Git 提交计划
