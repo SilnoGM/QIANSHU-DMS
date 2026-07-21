@@ -771,8 +771,8 @@ watch([tableColumns, isNarrow], () => {
   --qs-table-header-font-size: 0.8125rem;
   --qs-table-body-font-size: 0.875rem;
   --qs-table-meta-font-size: 0.75rem;
-  --qs-table-pinned-overlay-start: oklch(24% 0.012 285deg / 22%);
-  --qs-table-pinned-overlay-middle: oklch(24% 0.012 285deg / 8%);
+  --qs-table-pinned-overlay-start: oklch(24% 0.012 285deg / 8%);
+  --qs-table-pinned-overlay-middle: oklch(24% 0.012 285deg / 2%);
   --qs-table-pinned-overlay-end: oklch(24% 0.012 285deg / 0%);
 
   font-family: var(--qs-table-font-family);
@@ -782,8 +782,8 @@ watch([tableColumns, isNarrow], () => {
 }
 
 :global(.dark .qs-generic-table) {
-  --qs-table-pinned-overlay-start: oklch(4% 0.01 285deg / 58%);
-  --qs-table-pinned-overlay-middle: oklch(4% 0.01 285deg / 22%);
+  --qs-table-pinned-overlay-start: oklch(4% 0.01 285deg / 28%);
+  --qs-table-pinned-overlay-middle: oklch(4% 0.01 285deg / 8%);
   --qs-table-pinned-overlay-end: oklch(4% 0.01 285deg / 0%);
 }
 
@@ -858,9 +858,9 @@ watch([tableColumns, isNarrow], () => {
 .qs-generic-table :deep([data-pinned-edge="left"])::after {
   position: absolute;
   inset-block: 0;
-  inset-inline-end: -28px;
+  inset-inline-end: -24px;
   z-index: 2;
-  width: 28px;
+  width: 24px;
   pointer-events: none;
   content: "";
   background: linear-gradient(to right, var(--qs-table-pinned-overlay-start) 0%, var(--qs-table-pinned-overlay-middle) 42%, var(--qs-table-pinned-overlay-end) 100%);
@@ -871,9 +871,9 @@ watch([tableColumns, isNarrow], () => {
 .qs-generic-table :deep([data-pinned-edge="right"])::before {
   position: absolute;
   inset-block: 0;
-  inset-inline-start: -28px;
+  inset-inline-start: -24px;
   z-index: 2;
-  width: 28px;
+  width: 24px;
   pointer-events: none;
   content: "";
   background: linear-gradient(to left, var(--qs-table-pinned-overlay-start) 0%, var(--qs-table-pinned-overlay-middle) 42%, var(--qs-table-pinned-overlay-end) 100%);
