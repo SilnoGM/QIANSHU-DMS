@@ -10,9 +10,10 @@ const props = defineProps<{
 }>()
 
 const formattedAmount = computed(() => formatCurrencyAmount(props.value, props.currency))
+// 有效金额已经包含币种代码，aria-label 直接复用展示文本，避免重复朗读 CNY 等代码。
 const ariaLabel = computed(() => formattedAmount.value === EMPTY_AMOUNT_TEXT
   ? `${props.currency} 金额不可用`
-  : `${props.currency} ${formattedAmount.value}`)
+  : formattedAmount.value)
 </script>
 
 <template>
@@ -20,7 +21,7 @@ const ariaLabel = computed(() => formattedAmount.value === EMPTY_AMOUNT_TEXT
     :aria-label="ariaLabel"
     :data-currency="currency"
     :data-empty="formattedAmount === EMPTY_AMOUNT_TEXT"
-    class="text-foreground tracking-tight font-medium inline-flex whitespace-nowrap items-baseline tabular-nums"
+    class="text-foreground tracking-[0.01em] font-medium font-mono text-right inline-flex whitespace-nowrap items-baseline justify-end tabular-nums"
   >
     {{ formattedAmount }}
   </span>

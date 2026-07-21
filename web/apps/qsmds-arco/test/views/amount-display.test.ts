@@ -13,30 +13,30 @@ function readRelativeSource(relativePath: string): string {
 }
 
 test('金额格式化明确区分人民币、台币、林吉特和美元', () => {
-  assert.equal(formatCurrencyAmount('12846.37', 'CNY'), '¥12,846.37')
-  assert.equal(formatCurrencyAmount('384590', 'TWD'), 'NT$384,590.00')
-  assert.equal(formatCurrencyAmount('27518.4', 'MYR'), 'RM27,518.40')
-  assert.equal(formatCurrencyAmount('-864.72', 'USD'), '-$864.72')
+  assert.equal(formatCurrencyAmount('12846.37', 'CNY'), '¥12,846.37 CNY')
+  assert.equal(formatCurrencyAmount('384590', 'TWD'), 'NT$384,590.00 TWD')
+  assert.equal(formatCurrencyAmount('27518.4', 'MYR'), 'RM27,518.40 MYR')
+  assert.equal(formatCurrencyAmount('-864.72', 'USD'), '-$864.72 USD')
 })
 
 test('金额格式化统一使用两位小数并执行十进制 half-up 舍入', () => {
-  assert.equal(formatCurrencyAmount('0', 'CNY'), '¥0.00')
-  assert.equal(formatCurrencyAmount('.5', 'USD'), '$0.50')
-  assert.equal(formatCurrencyAmount('12.344', 'CNY'), '¥12.34')
-  assert.equal(formatCurrencyAmount('12.345', 'CNY'), '¥12.35')
-  assert.equal(formatCurrencyAmount('-12.345', 'CNY'), '-¥12.35')
-  assert.equal(formatCurrencyAmount('-0.004', 'USD'), '$0.00')
-  assert.equal(formatCurrencyAmount('-0.005', 'USD'), '-$0.01')
+  assert.equal(formatCurrencyAmount('0', 'CNY'), '¥0.00 CNY')
+  assert.equal(formatCurrencyAmount('.5', 'USD'), '$0.50 USD')
+  assert.equal(formatCurrencyAmount('12.344', 'CNY'), '¥12.34 CNY')
+  assert.equal(formatCurrencyAmount('12.345', 'CNY'), '¥12.35 CNY')
+  assert.equal(formatCurrencyAmount('-12.345', 'CNY'), '-¥12.35 CNY')
+  assert.equal(formatCurrencyAmount('-0.004', 'USD'), '$0.00 USD')
+  assert.equal(formatCurrencyAmount('-0.005', 'USD'), '-$0.01 USD')
 })
 
 test('十进制字符串在安全整数范围外仍保持精确显示', () => {
   assert.equal(
     formatCurrencyAmount('9007199254740993.21', 'USD'),
-    '$9,007,199,254,740,993.21',
+    '$9,007,199,254,740,993.21 USD',
   )
   assert.equal(
     formatCurrencyAmount('9999999999999999.995', 'TWD'),
-    'NT$10,000,000,000,000,000.00',
+    'NT$10,000,000,000,000,000.00 TWD',
   )
 })
 
@@ -45,7 +45,7 @@ test('空值、非法值和非有限 number 统一显示占位符', () => {
     assert.equal(formatCurrencyAmount(value, 'CNY'), EMPTY_AMOUNT_TEXT)
   }
 
-  assert.equal(formatCurrencyAmount(' 0012.30 ', 'MYR'), 'RM12.30')
+  assert.equal(formatCurrencyAmount(' 0012.30 ', 'MYR'), 'RM12.30 MYR')
 })
 
 test('AmountDisplay 是无业务依赖的行内展示组件', () => {
@@ -57,6 +57,9 @@ test('AmountDisplay 是无业务依赖的行内展示组件', () => {
   assert.match(source, /formatCurrencyAmount/u)
   assert.match(source, /:data-currency="currency"/u)
   assert.match(source, /:aria-label="ariaLabel"/u)
+  assert.match(source, /font-mono/u)
+  assert.match(source, /text-right/u)
+  assert.match(source, /justify-end/u)
   assert.match(source, /tabular-nums/u)
   assert.match(source, /whitespace-nowrap/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)

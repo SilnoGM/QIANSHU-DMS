@@ -90,7 +90,7 @@ function roundToMinorUnit(value: string): RoundedAmount {
 }
 
 /**
- * 格式化组件唯一使用的纯函数：固定两位小数、千分位和明确币种符号。
+ * 格式化组件唯一使用的纯函数：固定两位小数、千分位，并在金额末尾附加币种代码。
  */
 export function formatCurrencyAmount(
   value: CurrencyAmountValue,
@@ -106,5 +106,5 @@ export function formatCurrencyAmount(
   const rounded = roundToMinorUnit(normalized)
   const groupedInteger = rounded.integer.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
 
-  return `${rounded.negative ? '-' : ''}${symbol}${groupedInteger}.${rounded.fraction}`
+  return `${rounded.negative ? '-' : ''}${symbol}${groupedInteger}.${rounded.fraction} ${currency}`
 }
