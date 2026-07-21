@@ -34,6 +34,10 @@
 
 默认汇总当前页 `data`；服务端分页场景可通过 `summaryValues` 传入全量数据汇总结果。页面也可以提供 `summary-{columnId}` 插槽覆盖桌面端表尾内容。
 
+## 排版约定
+
+组件内置 13px 表头、14px 正文、12px 辅助信息的紧凑层级，并为表体、汇总和分页统一开启 `tabular-nums`。普通业务文字继续使用系统比例字体；订单号、结算单号等编码可在插槽中使用 `font-mono`；数量、百分比和金额保持正文系统字体，并使用 `font-medium tabular-nums` 提升纵向比较效率。右对齐只表达列布局，不应被用来替代数字的 `tabular-nums` 语义。
+
 ## 复合单元格
 
 需要在一列内展示主信息、辅助说明、两组金额或多个状态时，使用 `QsTableStackedCell` 与 `QsTableStackedLine` 组合现有的 `cell-{columnId}` 插槽。两个组件只管理纵向节奏和逐行样式，不内置订单、金额等业务语义。

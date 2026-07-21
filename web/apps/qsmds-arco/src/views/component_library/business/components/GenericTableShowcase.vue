@@ -277,7 +277,7 @@ function recordEvent(message: string) {
             <QsTableStackedLine
               nowrap
               weight="semibold"
-              content-class="text-xs font-mono"
+              content-class="text-[13px] leading-5 tracking-[0.01em] font-mono tabular-nums"
             >
               {{ row.original.settlementNo }}
               <template #suffix>
@@ -289,7 +289,7 @@ function recordEvent(message: string) {
             </QsTableStackedLine>
             <QsTableStackedLine
               tone="muted"
-              content-class="text-xs"
+              content-class="text-xs leading-4"
             >
               {{ row.original.orderSource }}
             </QsTableStackedLine>
@@ -297,17 +297,17 @@ function recordEvent(message: string) {
         </template>
 
         <template #cell-shipmentCount="{ row }">
-          <span class="tabular-nums">{{ row.original.shipmentCount }} 票</span>
+          <span class="tracking-tight font-medium tabular-nums">{{ row.original.shipmentCount }} 票</span>
         </template>
 
         <template #cell-completionRate="{ row }">
-          <span class="tabular-nums">{{ row.original.completionRate }}%</span>
+          <span class="tracking-tight font-medium tabular-nums">{{ row.original.completionRate }}%</span>
         </template>
 
         <template #summary-completionRate="{ label, value }">
           <div class="gap-0.5 grid">
-            <span class="text-[11px] text-muted-foreground font-normal">{{ label }}</span>
-            <strong class="font-semibold tabular-nums">{{ Number(value).toFixed(1) }}%</strong>
+            <span class="text-xs text-muted-foreground leading-4 font-normal">{{ label }}</span>
+            <strong class="text-sm leading-5 font-semibold tabular-nums">{{ Number(value).toFixed(1) }}%</strong>
           </div>
         </template>
 
@@ -335,17 +335,17 @@ function recordEvent(message: string) {
 
         <template #summary-amount="{ value }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="实际" tone="success" weight="medium">
+            <QsTableStackedLine label="实际" tone="success" weight="semibold" content-class="text-sm tabular-nums">
               <AmountDisplay :value="value" currency="CNY" />
             </QsTableStackedLine>
-            <QsTableStackedLine label="标准" weight="medium">
+            <QsTableStackedLine label="标准" weight="semibold" content-class="text-sm tabular-nums">
               <AmountDisplay :value="pageStandardAmount" currency="CNY" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
 
         <template #cell-updatedAt="{ row }">
-          <DateTimeDisplay :value="row.original.updatedAt" />
+          <DateTimeDisplay class="text-[13px] leading-5" :value="row.original.updatedAt" />
         </template>
 
         <template #cell-status="{ row }">
@@ -359,7 +359,7 @@ function recordEvent(message: string) {
             <QsTableStackedCell class="group min-w-0">
               <QsTableStackedLine
                 weight="semibold"
-                content-class="text-sm font-mono break-all"
+                content-class="text-sm leading-5 tracking-[0.01em] font-mono break-all tabular-nums"
               >
                 {{ row.settlementNo }}
                 <template #suffix>
@@ -370,38 +370,38 @@ function recordEvent(message: string) {
                   />
                 </template>
               </QsTableStackedLine>
-              <QsTableStackedLine tone="muted" content-class="text-xs">
+              <QsTableStackedLine tone="muted" content-class="text-xs leading-4">
                 {{ row.orderSource }}
               </QsTableStackedLine>
             </QsTableStackedCell>
-            <span class="text-xs text-muted-foreground font-mono shrink-0">#{{ rowNumber }}</span>
+            <span class="text-xs text-muted-foreground leading-4 font-medium shrink-0 tabular-nums">#{{ rowNumber }}</span>
           </div>
           <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2">
             <div class="col-span-2">
-              <dt class="text-xs text-muted-foreground mb-1">
+              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
                 运输路线
               </dt>
-              <dd class="text-sm m-0">
+              <dd class="text-sm leading-5 m-0">
                 {{ row.route }}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground mb-1">
+              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
                 结算金额
               </dt>
               <dd class="m-0">
                 <QsTableStackedCell>
-                  <QsTableStackedLine label="实际" tone="success" weight="medium">
+                  <QsTableStackedLine label="实际" tone="success" weight="medium" content-class="text-sm tabular-nums">
                     <AmountDisplay :value="row.amount" currency="CNY" />
                   </QsTableStackedLine>
-                  <QsTableStackedLine label="标准" weight="medium">
+                  <QsTableStackedLine label="标准" weight="medium" content-class="text-sm tabular-nums">
                     <AmountDisplay :value="row.standardAmount" currency="CNY" />
                   </QsTableStackedLine>
                 </QsTableStackedCell>
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground mb-1">
+              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
                 状态
               </dt>
               <dd class="m-0">
@@ -411,18 +411,18 @@ function recordEvent(message: string) {
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground mb-1">
+              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
                 负责人
               </dt>
-              <dd class="text-sm m-0">
+              <dd class="text-sm leading-5 m-0">
                 {{ row.owner }}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground mb-1">
+              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
                 完成率
               </dt>
-              <dd class="text-sm font-medium m-0 tabular-nums">
+              <dd class="text-sm leading-5 tracking-tight font-medium m-0 tabular-nums">
                 {{ row.completionRate }}%
               </dd>
             </div>

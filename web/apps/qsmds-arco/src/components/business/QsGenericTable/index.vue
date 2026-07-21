@@ -463,7 +463,7 @@ watch(filters, (nextFilters) => {
     </div>
 
     <div v-if="activeFilters.length" class="pb-4 flex flex-wrap gap-2 items-center">
-      <span class="text-xs text-muted-foreground">已应用</span>
+      <span class="text-xs text-muted-foreground leading-4">已应用</span>
       <FaTag
         v-for="filter in activeFilters"
         :key="filter.key"
@@ -542,7 +542,7 @@ watch(filters, (nextFilters) => {
             :value="getSummaryValue(column)"
           >
             <div :class="getSummaryContentClass(column)">
-              <span class="text-[11px] text-muted-foreground font-normal">
+              <span class="text-xs text-muted-foreground leading-4 font-normal">
                 {{ getSummaryTypeLabel(column.summary!.type) }}
               </span>
               <component
@@ -550,7 +550,7 @@ watch(filters, (nextFilters) => {
                 v-if="getSummaryRenderer(column)"
                 v-bind="getSummaryComponentProps(column, getSummaryValue(column))"
               />
-              <strong v-else class="font-semibold">
+              <strong v-else class="text-sm leading-5 font-semibold tabular-nums">
                 {{ formatSummaryValue(getSummaryValue(column)) }}
               </strong>
             </div>
@@ -612,16 +612,16 @@ watch(filters, (nextFilters) => {
             :row-number="getContinuousRowNumber(page, pageSize, index)"
           >
             <div class="mb-3 pb-3 border-b border-border flex items-center justify-between">
-              <span class="text-xs text-muted-foreground font-mono">
+              <span class="text-xs text-muted-foreground leading-4 font-medium tabular-nums">
                 #{{ getContinuousRowNumber(page, pageSize, index) }}
               </span>
             </div>
             <dl class="m-0 gap-3 grid sm-grid-cols-2">
               <div v-for="column in visibleColumnDefinitions" :key="column.id" class="min-w-0">
-                <dt class="text-xs text-muted-foreground mb-1">
+                <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
                   {{ column.title }}
                 </dt>
-                <dd class="text-sm m-0 break-words">
+                <dd class="text-sm leading-5 m-0 break-words tabular-nums">
                   <div :class="getCopyCellClass(column)">
                     <span>{{ getMobileValue(row, column, index) }}</span>
                     <CopyCellButton
@@ -638,7 +638,7 @@ watch(filters, (nextFilters) => {
         </div>
 
         <div v-if="summaryColumns.length" class="p-4 border-t-2 border-border bg-muted/20">
-          <div class="text-xs text-muted-foreground font-semibold mb-3">
+          <div class="text-xs text-muted-foreground leading-4 font-semibold mb-3">
             当前页汇总
           </div>
           <div class="gap-4 grid grid-cols-2">
@@ -649,14 +649,14 @@ watch(filters, (nextFilters) => {
                 :label="getSummaryTypeLabel(column.summary!.type)"
                 :value="getSummaryValue(column)"
               >
-                <span class="text-xs text-muted-foreground">{{ column.title }} · {{ getSummaryTypeLabel(column.summary!.type) }}</span>
+                <span class="text-xs text-muted-foreground leading-4">{{ column.title }} · {{ getSummaryTypeLabel(column.summary!.type) }}</span>
                 <component
                   :is="getSummaryRenderer(column)"
                   v-if="getSummaryRenderer(column)"
                   v-bind="getSummaryComponentProps(column, getSummaryValue(column))"
                   class="mt-1"
                 />
-                <strong v-else class="mt-1 block">{{ formatSummaryValue(getSummaryValue(column)) }}</strong>
+                <strong v-else class="text-sm leading-5 font-semibold mt-1 block tabular-nums">{{ formatSummaryValue(getSummaryValue(column)) }}</strong>
               </slot>
             </div>
           </div>
@@ -712,11 +712,78 @@ watch(filters, (nextFilters) => {
 
 <style scoped>
 /*
+ * 通用表格使用独立但克制的排版比例：13px 表头、14px 正文、12px 辅助信息。
+ * 数字仍沿用正文系统字体，只开启 tabular-nums，避免把金额和百分比误做成代码。
+ */
+.qs-generic-table {
+  --qs-table-font-family: -apple-system, "BlinkMacSystemFont", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --qs-table-header-font-size: 0.8125rem;
+  --qs-table-body-font-size: 0.875rem;
+  --qs-table-meta-font-size: 0.75rem;
+
+  font-family: var(--qs-table-font-family);
+  font-size: var(--qs-table-body-font-size);
+  line-height: 1.25rem;
+  color: oklch(var(--foreground));
+}
+
+.qs-generic-table :deep([data-slot="table"]) {
+  font-family: inherit;
+  font-size: var(--qs-table-body-font-size);
+  line-height: 1.25rem;
+}
+
+.qs-generic-table :deep([data-slot="table-head"]) {
+  padding-inline: 0.75rem;
+  font-size: var(--qs-table-header-font-size);
+  font-weight: 600;
+  line-height: 1.125rem;
+  color: oklch(var(--muted-foreground));
+  letter-spacing: 0.01em;
+}
+
+.qs-generic-table :deep([data-slot="table-cell"]) {
+  padding: 0.5rem 0.75rem;
+  font-size: var(--qs-table-body-font-size);
+  font-weight: 400;
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25rem;
+}
+
+/*
+ * 右对齐是业务表格中数值列的默认语义，使用中等字重和轻微紧缩字距，
+ * 既方便纵向扫读，也不会抢过表尾汇总的层级。
+ */
+.qs-generic-table :deep([data-slot="table-body"] [data-slot="table-cell"].text-right) {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.qs-generic-table :deep([data-slot="table-body"] > [data-slot="table-row"] > [data-slot="table-cell"]:first-child) {
+  font-size: var(--qs-table-meta-font-size);
+  font-weight: 500;
+  line-height: 1rem;
+  color: oklch(var(--muted-foreground));
+  letter-spacing: 0.01em;
+}
+
+/*
  * 固定列由 FaTable 使用独立背景避免滚动内容透出。桌面汇总行统一覆盖为主题
  * background，消除固定列与普通列分别使用 background / muted 的色差。
  */
 .qs-generic-table :deep([data-slot="table-footer"]),
 .qs-generic-table :deep([data-slot="table-footer"] [data-slot="table-cell"]) {
   background-color: oklch(var(--background));
+}
+
+.qs-generic-table :deep([data-slot="table-footer"] [data-slot="table-cell"]) {
+  font-weight: 600;
+}
+
+.qs-generic-table :deep([data-slot="pagination"]) {
+  font-size: var(--qs-table-body-font-size);
+  font-feature-settings: "tnum" 1;
+  font-variant-numeric: tabular-nums;
 }
 </style>

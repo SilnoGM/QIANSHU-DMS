@@ -48,13 +48,13 @@ const weightClass = computed(() => ({
 <template>
   <div
     data-slot="qs-table-stacked-line"
-    class="leading-5 flex gap-2 min-w-0 items-baseline"
+    class="text-sm leading-5 flex gap-2 min-w-0 items-baseline"
     :class="nowrap && 'whitespace-nowrap'"
   >
     <span
       v-if="label"
       data-slot="qs-table-stacked-line-label"
-      class="text-muted-foreground font-normal shrink-0"
+      class="text-xs text-muted-foreground leading-5 font-normal shrink-0"
       :class="labelClass"
     >
       {{ label }}

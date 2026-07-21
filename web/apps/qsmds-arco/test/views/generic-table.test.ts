@@ -179,6 +179,42 @@ test('桌面汇总行使用统一背景且自定义汇总组件跟随列对齐',
   assert.match(source, /background-color: oklch\(var\(--background\)\)/u)
 })
 
+test('通用表格使用分层文字排版并为数字提供稳定的纵向比较能力', () => {
+  const tableSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const showcaseSource = readRelativeSource(
+    '../../src/views/component_library/business/components/GenericTableShowcase.vue',
+  )
+
+  // 表头、正文和辅助信息分别使用 13px、14px、12px，避免字号层级依赖底层默认值。
+  assert.match(tableSource, /--qs-table-header-font-size: 0\.8125rem/u)
+  assert.match(tableSource, /--qs-table-body-font-size: 0\.875rem/u)
+  assert.match(tableSource, /--qs-table-meta-font-size: 0\.75rem/u)
+  assert.match(tableSource, /\[data-slot="table-head"\][\s\S]*?font-weight: 600/u)
+  assert.match(tableSource, /\[data-slot="table-cell"\][\s\S]*?font-variant-numeric: tabular-nums/u)
+  assert.match(tableSource, /\[data-slot="table-body"\][\s\S]*?:first-child[\s\S]*?font-size: var\(--qs-table-meta-font-size\)/u)
+  assert.match(tableSource, /\[data-slot="pagination"\][\s\S]*?font-variant-numeric: tabular-nums/u)
+
+  const settlementCellSource = showcaseSource.match(
+    /<template #cell-settlementNo[\s\S]*?(?=<template #cell-shipmentCount)/u,
+  )?.[0]
+  assert.ok(settlementCellSource)
+  assert.match(settlementCellSource, /text-\[13px\]/u)
+  assert.match(settlementCellSource, /font-mono/u)
+  assert.match(settlementCellSource, /tabular-nums/u)
+  assert.match(settlementCellSource, /text-xs leading-4/u)
+
+  for (const slotName of ['shipmentCount', 'completionRate']) {
+    const numericCellSource = showcaseSource.match(
+      new RegExp(`<template #cell-${slotName}[\\s\\S]*?<\\/template>`, 'u'),
+    )?.[0]
+    assert.ok(numericCellSource)
+    assert.match(numericCellSource, /font-medium/u)
+    assert.match(numericCellSource, /tabular-nums/u)
+  }
+})
+
 test('列设置面板支持动态调整左中右对齐并通过公开状态回传', () => {
   const panelSource = readRelativeSource(
     '../../src/components/business/QsGenericTable/ColumnSettingsPanel.vue',
