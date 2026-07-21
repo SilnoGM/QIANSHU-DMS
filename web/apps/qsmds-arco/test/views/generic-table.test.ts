@@ -353,7 +353,7 @@ test('双行单元格支持主次内容、逐行样式与尾部操作', () => {
     /<template #cell-amount[\s\S]*?<\/template>/u,
   )?.[0]
   assert.ok(amountCellSource)
-  assert.equal(amountCellSource.match(/weight="medium"/gu)?.length, 2)
+  assert.equal(amountCellSource.match(/weight="semibold"/gu)?.length, 2)
   assert.equal(amountCellSource.match(/content-class="text-sm tabular-nums"/gu)?.length, 2)
-  assert.doesNotMatch(amountCellSource, /weight="semibold"|content-class="text-xs tabular-nums"/u)
+  assert.doesNotMatch(amountCellSource, /weight="medium"|content-class="text-xs tabular-nums"/u)
 })

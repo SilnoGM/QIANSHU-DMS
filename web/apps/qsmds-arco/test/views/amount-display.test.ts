@@ -58,6 +58,8 @@ test('AmountDisplay 是无业务依赖的行内展示组件', () => {
   assert.match(source, /:data-currency="currency"/u)
   assert.match(source, /:aria-label="ariaLabel"/u)
   assert.match(source, /font-qs-data-mono/u)
+  assert.match(source, /font-semibold/u)
+  assert.doesNotMatch(source, /font-medium/u)
   assert.match(source, /text-right/u)
   assert.match(source, /justify-end/u)
   assert.match(source, /tabular-nums/u)
@@ -83,6 +85,12 @@ test('结算单号与金额共用 SF Mono 数据字体 Token', () => {
   assert.match(globalStyles, /\.font-qs-data-mono\s*\{[\s\S]*?font-family:\s*var\(--qs-font-data-mono\);/u)
   assert.match(amountSource, /font-qs-data-mono/u)
   assert.equal(showcaseSource.match(/font-qs-data-mono/gu)?.length, 2)
+  assert.equal(
+    showcaseSource.match(
+      /<QsTableStackedLine[^>]*weight="semibold"[^>]*>\s*<AmountDisplay\b[^>]*\/>\s*<\/QsTableStackedLine>/gu,
+    )?.length,
+    6,
+  )
 })
 
 test('基础组件页面展示四币种与边界状态，并由展示壳在有资产时替换空状态', () => {
