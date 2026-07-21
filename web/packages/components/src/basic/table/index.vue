@@ -814,6 +814,22 @@ function getPinnedColumnClass(column: Column<TData, unknown>, area: 'cell' | 'he
   )
 }
 
+/**
+ * 固定列边界是阴影、分隔线等层级样式唯一需要关注的位置。把边界方向作为
+ * 内部 DOM 语义输出，业务组件无需依赖列序号或复杂相邻选择器推断边界。
+ */
+function getPinnedEdge(column: Column<TData, unknown>): TableColumnFixed | undefined {
+  const pin = column.getIsPinned()
+
+  if (pin === 'left' && column.getIsLastColumn('left')) {
+    return 'left'
+  }
+
+  if (pin === 'right' && column.getIsFirstColumn('right')) {
+    return 'right'
+  }
+}
+
 function isLastVisibleLeafColumn(column: Column<TData, unknown>) {
   return table.getVisibleLeafColumns().at(-1)?.id === column.id
 }
@@ -1025,6 +1041,9 @@ defineExpose({
               :class="getHeaderClass(header)"
               :style="getHeaderStyle(header, headerGroupIndex)"
               :aria-sort="getHeaderAriaSort(header)"
+              :data-pinned="header.column.getIsPinned() || undefined"
+              :data-pinned-edge="getPinnedEdge(header.column)"
+              :data-sorted="header.column.getIsSorted() || undefined"
               :data-sortable="props.sortable && header.column.getCanSort() ? '' : undefined"
               @click="handleHeaderClick(header, $event)"
             >
@@ -1077,6 +1096,8 @@ defineExpose({
                 :class="getCellClass(cell)"
                 :style="getColumnStyle(cell.column)"
                 :data-pinned="cell.column.getIsPinned() || undefined"
+                :data-pinned-edge="getPinnedEdge(cell.column)"
+                :data-sorted="cell.column.getIsSorted() || undefined"
               >
                 <div
                   v-if="shouldRenderTreeCell(cell, row)"
@@ -1176,6 +1197,7 @@ defineExpose({
               :class="getFooterClass(footer)"
               :style="getColumnStyle(footer.column)"
               :data-pinned="footer.column.getIsPinned() || undefined"
+              :data-pinned-edge="getPinnedEdge(footer.column)"
             >
               <template v-if="!footer.isPlaceholder">
                 <slot

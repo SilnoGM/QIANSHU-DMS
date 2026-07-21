@@ -9,7 +9,7 @@ import type {
 import type { Component } from 'vue'
 import type { QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTableColumnSettings, QsGenericTableFilterDefinition, QsGenericTableFilterValue, QsGenericTableFilterValues, QsGenericTableSummaryValue } from './logic'
 
-import { useMediaQuery } from '@vueuse/core'
+import { useMediaQuery, useResizeObserver } from '@vueuse/core'
 import ColumnSettingsPanel from './ColumnSettingsPanel.vue'
 import CopyCellButton from './CopyCellButton.vue'
 import FilterPanel from './FilterPanel.vue'
@@ -85,8 +85,13 @@ const search = defineModel<string>('search', { default: '' })
 const filters = defineModel<QsGenericTableFilterValues>('filters', { default: () => ({}) })
 const sorting = defineModel<TableSortingState>('sorting', { default: () => [] })
 
+const TABLE_SCROLL_EDGE_TOLERANCE = 1
+
 const slots = useSlots()
 const isNarrow = useMediaQuery('(max-width: 767px)')
+const desktopTableRoot = ref<HTMLElement>()
+const hasLeftTableOverflow = ref(false)
+const hasRightTableOverflow = ref(false)
 const searchDraft = ref(search.value)
 const filterDraft = ref<QsGenericTableFilterValues>({ ...filters.value })
 const desktopFilterVisible = ref(false)
@@ -360,6 +365,40 @@ function getMobileRowKey(row: TData, index: number) {
   return getContinuousRowNumber(page.value, pageSize.value, index)
 }
 
+function getTableScrollContainer() {
+  return desktopTableRoot.value?.querySelector<HTMLElement>('[data-slot="table-container"]')
+}
+
+/**
+ * 固定列阴影只表达“还有内容被固定列覆盖”的状态：离开左边界后显示左阴影，
+ * 尚未到达右边界时显示右阴影。1px 容差用于吸收缩放和子像素滚动误差。
+ */
+function syncTableOverflowState(container = getTableScrollContainer()) {
+  if (!container) {
+    hasLeftTableOverflow.value = false
+    hasRightTableOverflow.value = false
+    return
+  }
+
+  const maxScrollLeft = Math.max(container.scrollWidth - container.clientWidth, 0)
+  const normalizedScrollLeft = Math.min(Math.max(container.scrollLeft, 0), maxScrollLeft)
+  hasLeftTableOverflow.value = normalizedScrollLeft > TABLE_SCROLL_EDGE_TOLERANCE
+  hasRightTableOverflow.value = maxScrollLeft - normalizedScrollLeft > TABLE_SCROLL_EDGE_TOLERANCE
+}
+
+function handleTableScroll(event: Event) {
+  const target = event.target
+  if (target instanceof HTMLElement && target.dataset.slot === 'table-container') {
+    syncTableOverflowState(target)
+  }
+}
+
+useResizeObserver(desktopTableRoot, () => syncTableOverflowState())
+
+onMounted(() => {
+  nextTick(syncTableOverflowState)
+})
+
 watch(() => props.columns, (nextColumns) => {
   columnSettings.value = reconcileColumnSettings(nextColumns, columnSettings.value)
 }, { deep: true })
@@ -371,6 +410,10 @@ watch(search, (nextSearch) => {
 watch(filters, (nextFilters) => {
   filterDraft.value = { ...nextFilters }
 }, { deep: true })
+
+watch([tableColumns, isNarrow], () => {
+  nextTick(syncTableOverflowState)
+}, { flush: 'post' })
 </script>
 
 <template>
@@ -489,7 +532,15 @@ watch(filters, (nextFilters) => {
       </template>
     </FaAlert>
 
-    <div v-if="!isNarrow" class="relative" :aria-busy="loading">
+    <div
+      v-if="!isNarrow"
+      ref="desktopTableRoot"
+      class="relative"
+      :aria-busy="loading"
+      :data-has-left-overflow="hasLeftTableOverflow ? '' : undefined"
+      :data-has-right-overflow="hasRightTableOverflow ? '' : undefined"
+      @scroll.capture="handleTableScroll"
+    >
       <FaTable
         :border="border"
         :columns="tableColumns"
@@ -720,11 +771,16 @@ watch(filters, (nextFilters) => {
   --qs-table-header-font-size: 0.8125rem;
   --qs-table-body-font-size: 0.875rem;
   --qs-table-meta-font-size: 0.75rem;
+  --qs-table-pinned-shadow-color: oklch(28% 0.015 285deg / 32%);
 
   font-family: var(--qs-table-font-family);
   font-size: var(--qs-table-body-font-size);
   line-height: 1.25rem;
   color: oklch(var(--foreground));
+}
+
+:global(.dark .qs-generic-table) {
+  --qs-table-pinned-shadow-color: oklch(4% 0.01 285deg / 72%);
 }
 
 .qs-generic-table :deep([data-slot="table"]) {
@@ -758,6 +814,55 @@ watch(filters, (nextFilters) => {
 .qs-generic-table :deep([data-slot="table-body"] [data-slot="table-cell"].text-right) {
   font-weight: 500;
   letter-spacing: -0.01em;
+}
+
+/*
+ * 取消 FaTable 默认常驻阴影，再根据滚动方向只抬高实际覆盖内容的固定边界。
+ * 2px 主题分隔线明确边界，近距离实体阴影与远距离柔和投影共同表达纵深。
+ */
+.qs-generic-table :deep([data-pinned]) {
+  box-shadow: none;
+  transition: background-color 150ms ease-out, box-shadow 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* 固定列始终使用不透明底色，避免排序色的透明度让滚动内容穿透。 */
+.qs-generic-table :deep([data-slot="table-head"][data-pinned]) {
+  background-color: oklch(var(--muted)) !important;
+}
+
+.qs-generic-table :deep([data-slot="table-body"] [data-slot="table-cell"][data-pinned]) {
+  background-color: oklch(var(--background)) !important;
+}
+
+.qs-generic-table :deep([data-slot="table-head"][data-pinned][data-sorted]) {
+  background-color: color-mix(in oklch, oklch(var(--primary)) 20%, oklch(var(--background))) !important;
+}
+
+.qs-generic-table :deep([data-slot="table-body"] [data-slot="table-cell"][data-pinned][data-sorted]) {
+  background-color: color-mix(in oklch, oklch(var(--primary)) 10%, oklch(var(--background))) !important;
+}
+
+/*
+ * FaTable 的普通列通过 tr 透出 hover 背景，固定列则拥有不透明背景。这里把
+ * muted 与 background 混合为同等观感的不透明颜色，并统一写入所有 td；这样
+ * 既覆盖排序列的 !bg-*，也避免固定列悬停时再次露出下方滚动内容。
+ */
+.qs-generic-table :deep([data-slot="table-body"] [data-slot="table-row"]:hover > [data-slot="table-cell"]) {
+  background-color: color-mix(in oklch, oklch(var(--muted)) 50%, oklch(var(--background))) !important;
+}
+
+.qs-generic-table [data-has-left-overflow] :deep([data-pinned-edge="left"]) {
+  box-shadow:
+    2px 0 0 oklch(var(--border)),
+    8px 0 14px -6px var(--qs-table-pinned-shadow-color),
+    20px 0 32px -18px var(--qs-table-pinned-shadow-color);
+}
+
+.qs-generic-table [data-has-right-overflow] :deep([data-pinned-edge="right"]) {
+  box-shadow:
+    -2px 0 0 oklch(var(--border)),
+    -8px 0 14px -6px var(--qs-table-pinned-shadow-color),
+    -20px 0 32px -18px var(--qs-table-pinned-shadow-color);
 }
 
 .qs-generic-table :deep([data-slot="table-body"] > [data-slot="table-row"] > [data-slot="table-cell"]:first-child) {

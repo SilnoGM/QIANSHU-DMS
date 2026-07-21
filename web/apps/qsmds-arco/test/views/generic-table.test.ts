@@ -215,6 +215,38 @@ test('通用表格使用分层文字排版并为数字提供稳定的纵向比�
   }
 })
 
+test('固定列与普通列共享悬停背景并根据横向滚动位置显示边界层级', () => {
+  const tableSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const faTableSource = readRelativeSource(
+    '../../../../packages/components/src/basic/table/index.vue',
+  )
+
+  // Header、Body 与 Footer 使用同一固定方向和边界标记，业务表格无需依赖列序号猜测边界。
+  assert.match(faTableSource, /:data-pinned="header\.column\.getIsPinned\(\) \|\| undefined"/u)
+  assert.equal(faTableSource.match(/:data-pinned-edge="getPinnedEdge\(/gu)?.length, 3)
+  assert.equal(faTableSource.match(/:data-sorted="\w+\.column\.getIsSorted\(\) \|\| undefined"/gu)?.length, 2)
+
+  assert.match(tableSource, /const hasLeftTableOverflow = ref\(false\)/u)
+  assert.match(tableSource, /const hasRightTableOverflow = ref\(false\)/u)
+  assert.match(tableSource, /function syncTableOverflowState/u)
+  assert.match(tableSource, /@scroll\.capture="handleTableScroll"/u)
+  assert.match(tableSource, /:data-has-left-overflow=/u)
+  assert.match(tableSource, /:data-has-right-overflow=/u)
+  assert.match(tableSource, /useResizeObserver/u)
+
+  // 悬停时显式覆盖所有 td，并把 muted 与 background 混合成不透明颜色，
+  // 固定列和排序列不能在 hover 状态重新露出下方滚动内容。
+  assert.match(tableSource, /\[data-slot="table-row"\]:hover > \[data-slot="table-cell"\][\s\S]*?background-color: color-mix\(in oklch, oklch\(var\(--muted\)\) 50%, oklch\(var\(--background\)\)\) !important/u)
+  assert.match(tableSource, /\[data-pinned\][\s\S]*?box-shadow: none/u)
+  assert.match(tableSource, /\[data-slot="table-cell"\]\[data-pinned\][\s\S]*?background-color: oklch\(var\(--background\)\) !important/u)
+  assert.match(tableSource, /\[data-pinned\]\[data-sorted\][\s\S]*?color-mix\(in oklch/u)
+  assert.match(tableSource, /:global\(\.dark \.qs-generic-table\)/u)
+  assert.match(tableSource, /data-has-left-overflow[\s\S]*?data-pinned-edge="left"[\s\S]*?2px 0 0 oklch\(var\(--border\)\)[\s\S]*?8px 0 14px -6px var\(--qs-table-pinned-shadow-color\)[\s\S]*?20px 0 32px -18px var\(--qs-table-pinned-shadow-color\)/u)
+  assert.match(tableSource, /data-has-right-overflow[\s\S]*?data-pinned-edge="right"[\s\S]*?-2px 0 0 oklch\(var\(--border\)\)[\s\S]*?-8px 0 14px -6px var\(--qs-table-pinned-shadow-color\)[\s\S]*?-20px 0 32px -18px var\(--qs-table-pinned-shadow-color\)/u)
+})
+
 test('列设置面板支持动态调整左中右对齐并通过公开状态回传', () => {
   const panelSource = readRelativeSource(
     '../../src/components/business/QsGenericTable/ColumnSettingsPanel.vue',
