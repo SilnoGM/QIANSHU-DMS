@@ -105,7 +105,9 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式
 
   assert.match(source, /defineOptions\(\{ name: 'QsGenericTable' \}\)/u)
   assert.match(source, /<FaTable/u)
+  assert.match(source, /:sortable="true"/u)
   assert.match(source, /<FaPagination/u)
+  assert.match(source, /\? 'total, sizes, ->, pager'/u)
   assert.match(source, /<FaPopover/u)
   assert.match(source, /<FaDrawer/u)
   assert.match(source, /QS_GENERIC_TABLE_ROW_NUMBER_COLUMN_ID/u)

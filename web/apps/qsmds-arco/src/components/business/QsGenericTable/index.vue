@@ -96,7 +96,7 @@ const columnSettings = ref<QsGenericTableColumnSettings>(
 
 const totalRows = computed(() => props.total ?? props.data.length)
 const paginationLayout = computed(() => isNarrow.value
-  ? 'total, ->, pager'
+  ? 'total, sizes, ->, pager'
   : 'total, sizes, ->, pager, jumper')
 
 const columnSettingItems = computed<QsGenericTableColumnSettingItem[]>(() => props.columns.map(column => ({
@@ -440,6 +440,7 @@ watch(filters, (nextFilters) => {
         :columns="tableColumns"
         :data="data"
         :row-key="rowKey"
+        :sortable="true"
         :sorting="sorting"
         :stripe="stripe"
         :table-class="tableClass"
