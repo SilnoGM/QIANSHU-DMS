@@ -124,6 +124,20 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
 })
 
+test('搜索框仅使用 FaInput 的统一清除按钮', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const searchInputMatch = source.match(/<FaInput[\s\S]*?<\/FaInput>/u)
+
+  // type="search" 会让部分浏览器额外绘制原生清除按钮，与 FaInput clearable 重复。
+  assert.ok(searchInputMatch)
+  assert.match(searchInputMatch[0], /\sclearable(?:\s|>)/u)
+  assert.match(searchInputMatch[0], /type="text"/u)
+  assert.match(searchInputMatch[0], /enterkeyhint="search"/u)
+  assert.doesNotMatch(searchInputMatch[0], /type="search"/u)
+})
+
 test('筛选下拉不向 Reka Select 传入空字符串选项', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsGenericTable/FilterPanel.vue',

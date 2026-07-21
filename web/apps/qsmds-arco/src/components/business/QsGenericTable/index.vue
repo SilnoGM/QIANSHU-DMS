@@ -377,11 +377,14 @@ watch(filters, (nextFilters) => {
   <section class="qs-generic-table min-w-0" aria-label="业务通用表格">
     <div class="pb-4 flex flex-wrap gap-3 items-center justify-between">
       <div v-if="searchable" class="flex flex-1 gap-2 min-w-0 items-center">
+        <!-- FaInput 已提供统一的 clearable 按钮，使用 text 可避免浏览器为 search 再渲染原生清除控件。 -->
         <FaInput
           v-model="searchDraft"
-          type="search"
+          type="text"
           clearable
           class="w-full sm-max-w-80"
+          enterkeyhint="search"
+          inputmode="search"
           :placeholder="searchPlaceholder"
           @clear="clearSearch"
           @keyup.enter="submitSearch"
