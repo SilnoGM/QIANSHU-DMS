@@ -30,6 +30,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
   {
     id: 'status',
     accessorKey: 'status',
+    align: 'center',
     defaultVisible: false,
     fixed: 'right',
     title: '状态',
@@ -37,6 +38,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
   {
     id: 'amount',
     accessorKey: 'amount',
+    align: 'right',
     summary: { type: 'sum' },
     title: '金额',
   },
@@ -63,29 +65,30 @@ test('行号跨分页连续计算且不依赖业务数据主键', () => {
   assert.equal(getContinuousRowNumber(3, 50, 7), 108)
 })
 
-test('列设置保留默认显隐和左右固定配置', () => {
+test('列设置保留默认显隐、左右固定和对齐配置', () => {
   const settings = createDefaultColumnSettings(columns)
 
   assert.deepEqual(settings, {
-    amount: { fixed: undefined, visible: true },
-    owner: { fixed: undefined, visible: true },
-    status: { fixed: 'right', visible: false },
+    amount: { align: 'right', fixed: undefined, visible: true },
+    owner: { align: 'left', fixed: undefined, visible: true },
+    status: { align: 'center', fixed: 'right', visible: false },
   })
 
   const visibleColumns = resolveVisibleTableColumns(columns, {
     ...settings,
-    owner: { fixed: 'left', visible: true },
-    status: { fixed: 'right', visible: true },
+    owner: { align: 'center', fixed: 'left', visible: true },
+    status: { align: 'left', fixed: 'right', visible: true },
   })
 
   assert.deepEqual(visibleColumns.map(column => ({
+    align: column.align,
     fixed: column.fixed,
     id: column.id,
     width: column.width,
   })), [
-    { fixed: 'left', id: 'owner', width: 140 },
-    { fixed: 'right', id: 'status', width: undefined },
-    { fixed: undefined, id: 'amount', width: undefined },
+    { align: 'center', fixed: 'left', id: 'owner', width: 140 },
+    { align: 'left', fixed: 'right', id: 'status', width: undefined },
+    { align: 'right', fixed: undefined, id: 'amount', width: undefined },
   ])
 })
 
@@ -140,4 +143,21 @@ test('桌面汇总行使用统一背景且自定义汇总组件跟随列对齐',
   assert.match(source, /justify-items-center text-center/u)
   assert.match(source, /\[data-slot="table-footer"\]/u)
   assert.match(source, /background-color: oklch\(var\(--background\)\)/u)
+})
+
+test('列设置面板支持动态调整左中右对齐并通过公开状态回传', () => {
+  const panelSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/ColumnSettingsPanel.vue',
+  )
+  const tableSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(panelSource, /列显示、固定与对齐/u)
+  assert.match(panelSource, /对齐方式/u)
+  assert.match(panelSource, /\{ align: 'left' \}/u)
+  assert.match(panelSource, /\{ align: 'center' \}/u)
+  assert.match(panelSource, /\{ align: 'right' \}/u)
+  assert.match(tableSource, /align\?: TableAlign/u)
+  assert.match(tableSource, /align: columnSettings\.value\[column\.id\]\?\.align/u)
 })

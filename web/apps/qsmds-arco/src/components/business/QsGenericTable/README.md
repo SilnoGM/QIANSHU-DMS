@@ -19,10 +19,13 @@
 - `id`、`title`：稳定列标识与展示标题。
 - `defaultVisible`：列是否默认显示。
 - `fixed`：默认固定到 `left` 或 `right`。
+- `align`：默认内容对齐，可选 `left`、`center`、`right`，未设置时使用 `left`。
 - `sortable`：是否允许排序。
 - `summary`：支持 `count`、`average`、`sum`，可通过 `component` 和 `componentProps` 指定汇总渲染组件。
 
 行号列由组件生成，始终固定在最左侧且不可隐藏。行号按照 `(page - 1) * pageSize + rowIndex + 1` 连续计算。
+
+“列设置”支持在运行时调整显隐、左右固定与内容对齐，表头、单元格和汇总内容会同步更新。“恢复默认”会还原 `columns` 中声明的初始状态。`columnSettingsChange` 事件返回每列的 `visible`、`fixed` 和 `align` 状态，业务页面可按需持久化。
 
 默认汇总当前页 `data`；服务端分页场景可通过 `summaryValues` 传入全量数据汇总结果。页面也可以提供 `summary-{columnId}` 插槽覆盖桌面端表尾内容。
 

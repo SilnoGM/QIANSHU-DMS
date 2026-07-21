@@ -1,4 +1,4 @@
-import type { TableColumn, TableColumnFixed } from '@fantastic-admin/components'
+import type { TableAlign, TableColumn, TableColumnFixed } from '@fantastic-admin/components'
 import type { Component } from 'vue'
 
 export const DEFAULT_PAGE_SIZE = 20
@@ -45,6 +45,7 @@ export type QsGenericTableColumn<TData extends object = Record<string, unknown>,
   }
 
 export interface QsGenericTableColumnSetting {
+  align: TableAlign
   fixed: TableColumnFixed | undefined
   visible: boolean
 }
@@ -60,12 +61,17 @@ function normalizeFixed(fixed: boolean | TableColumnFixed | undefined): TableCol
   return fixed === true ? 'left' : fixed || undefined
 }
 
+function normalizeAlign(align: TableAlign | undefined): TableAlign {
+  return align ?? 'left'
+}
+
 export function createDefaultColumnSettings<TData extends object>(
   columns: readonly QsGenericTableColumn<TData>[],
 ): QsGenericTableColumnSettings {
   return Object.fromEntries(columns.map(column => [
     column.id,
     {
+      align: normalizeAlign(column.align),
       fixed: normalizeFixed(column.fixed),
       visible: column.defaultVisible !== false,
     },
@@ -82,10 +88,21 @@ export function reconcileColumnSettings<TData extends object>(
 ): QsGenericTableColumnSettings {
   const defaults = createDefaultColumnSettings(columns)
 
-  return Object.fromEntries(columns.map(column => [
-    column.id,
-    current[column.id] ?? defaults[column.id],
-  ]))
+  return Object.fromEntries(columns.map((column) => {
+    const currentSetting = current[column.id]
+    const defaultSetting = defaults[column.id]!
+
+    return [
+      column.id,
+      currentSetting
+        ? {
+            align: currentSetting.align ?? defaultSetting.align,
+            fixed: currentSetting.fixed,
+            visible: currentSetting.visible,
+          }
+        : defaultSetting,
+    ]
+  }))
 }
 
 export function resolveVisibleTableColumns<TData extends object>(
@@ -94,6 +111,7 @@ export function resolveVisibleTableColumns<TData extends object>(
 ): TableColumn<TData, any>[] {
   return columns.flatMap((column) => {
     const setting = settings[column.id] ?? {
+      align: normalizeAlign(column.align),
       fixed: normalizeFixed(column.fixed),
       visible: column.defaultVisible !== false,
     }
@@ -104,6 +122,7 @@ export function resolveVisibleTableColumns<TData extends object>(
 
     return [{
       ...column,
+      align: setting.align,
       enableHiding: false,
       enableSorting: column.sortable ?? column.enableSorting ?? false,
       fixed: setting.fixed,

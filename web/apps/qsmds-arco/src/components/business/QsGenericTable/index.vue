@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="TData extends object = Record<string, unknown>">
 import type {
+  TableAlign,
   TableColumn,
   TableColumnFixed,
   TableProps,
@@ -100,6 +101,7 @@ const paginationLayout = computed(() => isNarrow.value
   : 'total, sizes, ->, pager, jumper')
 
 const columnSettingItems = computed<QsGenericTableColumnSettingItem[]>(() => props.columns.map(column => ({
+  align: columnSettings.value[column.id]?.align ?? column.align ?? 'left',
   fixed: columnSettings.value[column.id]?.fixed,
   id: column.id,
   title: column.title,
@@ -111,8 +113,16 @@ const visibleBusinessColumns = computed(() => resolveVisibleTableColumns(
   columnSettings.value,
 ))
 
-const visibleColumnDefinitions = computed(() => props.columns.filter(column =>
-  columnSettings.value[column.id]?.visible !== false))
+const visibleColumnDefinitions = computed(() => props.columns.flatMap((column) => {
+  if (columnSettings.value[column.id]?.visible === false) {
+    return []
+  }
+
+  return [{
+    ...column,
+    align: columnSettings.value[column.id]?.align ?? column.align ?? 'left',
+  }]
+}))
 
 const summaryColumns = computed(() => visibleColumnDefinitions.value.filter(column => column.summary))
 const hasSummary = computed(() => summaryColumns.value.length > 0)
@@ -260,7 +270,7 @@ function resetAllQueries() {
   emit('filterChange', {})
 }
 
-function updateColumnSetting(id: string, patch: { fixed?: TableColumnFixed, visible?: boolean }) {
+function updateColumnSetting(id: string, patch: { align?: TableAlign, fixed?: TableColumnFixed, visible?: boolean }) {
   const current = columnSettings.value[id]
   if (!current) {
     return
@@ -269,6 +279,7 @@ function updateColumnSetting(id: string, patch: { fixed?: TableColumnFixed, visi
   columnSettings.value = {
     ...columnSettings.value,
     [id]: {
+      align: patch.align ?? current.align,
       fixed: Object.hasOwn(patch, 'fixed') ? patch.fixed : current.fixed,
       visible: patch.visible ?? current.visible,
     },
