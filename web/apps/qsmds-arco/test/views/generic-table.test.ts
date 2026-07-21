@@ -201,7 +201,7 @@ test('通用表格使用分层文字排版并为数字提供稳定的纵向比�
   )?.[0]
   assert.ok(settlementCellSource)
   assert.match(settlementCellSource, /text-\[13px\]/u)
-  assert.match(settlementCellSource, /font-mono/u)
+  assert.match(settlementCellSource, /font-qs-data-mono/u)
   assert.match(settlementCellSource, /tabular-nums/u)
   assert.match(settlementCellSource, /text-xs leading-4/u)
 

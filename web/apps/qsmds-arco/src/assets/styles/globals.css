@@ -2,6 +2,12 @@
 :root {
   color-scheme: light;
 
+  /*
+   * 业务编码与金额共享同一套等宽字体，优先使用 macOS 的 SF Mono。
+   * SFMono-Regular 兼容系统暴露的 PostScript 字体名，其余环境回退至平台等宽字体。
+   */
+  --qs-font-data-mono: "SF Mono", "SFMono-Regular", ui-monospace, monospace;
+
   /* 头部宽度（默认自适应宽度，可固定宽度，固定宽度后为居中显示） */
   --g-header-width: 100%;
 
@@ -72,6 +78,11 @@ body {
 
 #app {
   height: 100%;
+}
+
+/* 结算单号、金额等需要稳定字符宽度的数据内容统一使用此语义类。 */
+.font-qs-data-mono {
+  font-family: var(--qs-font-data-mono);
 }
 
 /* textarea 字体跟随系统 */

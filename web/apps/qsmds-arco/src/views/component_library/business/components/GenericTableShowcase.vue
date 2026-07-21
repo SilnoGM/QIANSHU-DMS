@@ -277,7 +277,7 @@ function recordEvent(message: string) {
             <QsTableStackedLine
               nowrap
               weight="semibold"
-              content-class="text-[13px] leading-5 tracking-[0.01em] font-mono tabular-nums"
+              content-class="text-[13px] leading-5 tracking-[0.01em] font-qs-data-mono tabular-nums"
             >
               {{ row.original.settlementNo }}
               <template #suffix>
@@ -359,7 +359,7 @@ function recordEvent(message: string) {
             <QsTableStackedCell class="group min-w-0">
               <QsTableStackedLine
                 weight="semibold"
-                content-class="text-sm leading-5 tracking-[0.01em] font-mono break-all tabular-nums"
+                content-class="text-sm leading-5 tracking-[0.01em] font-qs-data-mono break-all tabular-nums"
               >
                 {{ row.settlementNo }}
                 <template #suffix>

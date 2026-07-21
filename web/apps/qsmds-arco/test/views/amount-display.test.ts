@@ -57,12 +57,32 @@ test('AmountDisplay 是无业务依赖的行内展示组件', () => {
   assert.match(source, /formatCurrencyAmount/u)
   assert.match(source, /:data-currency="currency"/u)
   assert.match(source, /:aria-label="ariaLabel"/u)
-  assert.match(source, /font-mono/u)
+  assert.match(source, /font-qs-data-mono/u)
   assert.match(source, /text-right/u)
   assert.match(source, /justify-end/u)
   assert.match(source, /tabular-nums/u)
   assert.match(source, /whitespace-nowrap/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
+})
+
+test('结算单号与金额共用 SF Mono 数据字体 Token', () => {
+  const globalStyles = readRelativeSource(
+    '../../src/assets/styles/globals.css',
+  )
+  const amountSource = readRelativeSource(
+    '../../src/components/base/AmountDisplay/index.vue',
+  )
+  const showcaseSource = readRelativeSource(
+    '../../src/views/component_library/business/components/GenericTableShowcase.vue',
+  )
+
+  assert.match(
+    globalStyles,
+    /--qs-font-data-mono:\s*"SF Mono",\s*"SFMono-Regular",\s*ui-monospace,\s*monospace;/u,
+  )
+  assert.match(globalStyles, /\.font-qs-data-mono\s*\{[\s\S]*?font-family:\s*var\(--qs-font-data-mono\);/u)
+  assert.match(amountSource, /font-qs-data-mono/u)
+  assert.equal(showcaseSource.match(/font-qs-data-mono/gu)?.length, 2)
 })
 
 test('基础组件页面展示四币种与边界状态，并由展示壳在有资产时替换空状态', () => {
