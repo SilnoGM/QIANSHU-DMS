@@ -243,8 +243,13 @@ test('固定列与普通列共享悬停背景并根据横向滚动位置显示�
   assert.match(tableSource, /\[data-slot="table-cell"\]\[data-pinned\][\s\S]*?background-color: oklch\(var\(--background\)\) !important/u)
   assert.match(tableSource, /\[data-pinned\]\[data-sorted\][\s\S]*?color-mix\(in oklch/u)
   assert.match(tableSource, /:global\(\.dark \.qs-generic-table\)/u)
-  assert.match(tableSource, /data-has-left-overflow[\s\S]*?data-pinned-edge="left"[\s\S]*?2px 0 0 oklch\(var\(--border\)\)[\s\S]*?8px 0 14px -6px var\(--qs-table-pinned-shadow-color\)[\s\S]*?20px 0 32px -18px var\(--qs-table-pinned-shadow-color\)/u)
-  assert.match(tableSource, /data-has-right-overflow[\s\S]*?data-pinned-edge="right"[\s\S]*?-2px 0 0 oklch\(var\(--border\)\)[\s\S]*?-8px 0 14px -6px var\(--qs-table-pinned-shadow-color\)[\s\S]*?-20px 0 32px -18px var\(--qs-table-pinned-shadow-color\)/u)
+  // 边界层级由位于滚动内容上方的 28px 渐变遮罩表达，不能再依赖容易被
+  // 表格绘制顺序削弱的单元格模糊阴影。
+  assert.match(tableSource, /\[data-pinned-edge="left"\]\)::after[\s\S]*?inset-inline-end: -28px[\s\S]*?width: 28px[\s\S]*?linear-gradient\(to right/u)
+  assert.match(tableSource, /\[data-pinned-edge="right"\]\)::before[\s\S]*?inset-inline-start: -28px[\s\S]*?width: 28px[\s\S]*?linear-gradient\(to left/u)
+  assert.match(tableSource, /pointer-events: none/u)
+  assert.match(tableSource, /data-has-left-overflow[\s\S]*?data-pinned-edge="left"[\s\S]*?opacity: 1/u)
+  assert.match(tableSource, /data-has-right-overflow[\s\S]*?data-pinned-edge="right"[\s\S]*?opacity: 1/u)
 })
 
 test('列设置面板支持动态调整左中右对齐并通过公开状态回传', () => {

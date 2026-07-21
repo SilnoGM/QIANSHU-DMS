@@ -771,7 +771,9 @@ watch([tableColumns, isNarrow], () => {
   --qs-table-header-font-size: 0.8125rem;
   --qs-table-body-font-size: 0.875rem;
   --qs-table-meta-font-size: 0.75rem;
-  --qs-table-pinned-shadow-color: oklch(28% 0.015 285deg / 32%);
+  --qs-table-pinned-overlay-start: oklch(24% 0.012 285deg / 22%);
+  --qs-table-pinned-overlay-middle: oklch(24% 0.012 285deg / 8%);
+  --qs-table-pinned-overlay-end: oklch(24% 0.012 285deg / 0%);
 
   font-family: var(--qs-table-font-family);
   font-size: var(--qs-table-body-font-size);
@@ -780,7 +782,9 @@ watch([tableColumns, isNarrow], () => {
 }
 
 :global(.dark .qs-generic-table) {
-  --qs-table-pinned-shadow-color: oklch(4% 0.01 285deg / 72%);
+  --qs-table-pinned-overlay-start: oklch(4% 0.01 285deg / 58%);
+  --qs-table-pinned-overlay-middle: oklch(4% 0.01 285deg / 22%);
+  --qs-table-pinned-overlay-end: oklch(4% 0.01 285deg / 0%);
 }
 
 .qs-generic-table :deep([data-slot="table"]) {
@@ -818,7 +822,7 @@ watch([tableColumns, isNarrow], () => {
 
 /*
  * 取消 FaTable 默认常驻阴影，再根据滚动方向只抬高实际覆盖内容的固定边界。
- * 2px 主题分隔线明确边界，近距离实体阴影与远距离柔和投影共同表达纵深。
+ * 边界线负责定位，位于滚动内容上方的渐变遮罩负责表达固定区域的纵深。
  */
 .qs-generic-table :deep([data-pinned]) {
   box-shadow: none;
@@ -851,18 +855,46 @@ watch([tableColumns, isNarrow], () => {
   background-color: color-mix(in oklch, oklch(var(--muted)) 50%, oklch(var(--background))) !important;
 }
 
+.qs-generic-table :deep([data-pinned-edge="left"])::after {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: -28px;
+  z-index: 2;
+  width: 28px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(to right, var(--qs-table-pinned-overlay-start) 0%, var(--qs-table-pinned-overlay-middle) 42%, var(--qs-table-pinned-overlay-end) 100%);
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.qs-generic-table :deep([data-pinned-edge="right"])::before {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -28px;
+  z-index: 2;
+  width: 28px;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(to left, var(--qs-table-pinned-overlay-start) 0%, var(--qs-table-pinned-overlay-middle) 42%, var(--qs-table-pinned-overlay-end) 100%);
+  opacity: 0;
+  transition: opacity 180ms cubic-bezier(0.25, 1, 0.5, 1);
+}
+
 .qs-generic-table [data-has-left-overflow] :deep([data-pinned-edge="left"]) {
-  box-shadow:
-    2px 0 0 oklch(var(--border)),
-    8px 0 14px -6px var(--qs-table-pinned-shadow-color),
-    20px 0 32px -18px var(--qs-table-pinned-shadow-color);
+  box-shadow: 1px 0 0 oklch(var(--border));
+}
+
+.qs-generic-table [data-has-left-overflow] :deep([data-pinned-edge="left"])::after {
+  opacity: 1;
 }
 
 .qs-generic-table [data-has-right-overflow] :deep([data-pinned-edge="right"]) {
-  box-shadow:
-    -2px 0 0 oklch(var(--border)),
-    -8px 0 14px -6px var(--qs-table-pinned-shadow-color),
-    -20px 0 32px -18px var(--qs-table-pinned-shadow-color);
+  box-shadow: -1px 0 0 oklch(var(--border));
+}
+
+.qs-generic-table [data-has-right-overflow] :deep([data-pinned-edge="right"])::before {
+  opacity: 1;
 }
 
 .qs-generic-table :deep([data-slot="table-body"] > [data-slot="table-row"] > [data-slot="table-cell"]:first-child) {
