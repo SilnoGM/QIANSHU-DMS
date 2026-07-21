@@ -120,3 +120,12 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式
   assert.match(source, /20, 50, 100, 200/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
 })
+
+test('筛选下拉不向 Reka Select 传入空字符串选项', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/FilterPanel.vue',
+  )
+
+  assert.doesNotMatch(source, /\{ label: '全部', value: '' \}/u)
+  assert.match(source, /QS_GENERIC_TABLE_ALL_FILTER_VALUE/u)
+})

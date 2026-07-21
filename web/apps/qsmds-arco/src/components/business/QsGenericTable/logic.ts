@@ -3,6 +3,7 @@ import type { Component } from 'vue'
 
 export const DEFAULT_PAGE_SIZE = 20
 export const DEFAULT_PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const
+export const QS_GENERIC_TABLE_ALL_FILTER_VALUE = '__qs_generic_table_all_filter__'
 export const QS_GENERIC_TABLE_ROW_NUMBER_COLUMN_ID = '__qs_generic_table_row_number__'
 
 export type QsGenericTableFilterValue = number | string | undefined

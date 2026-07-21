@@ -4,6 +4,7 @@ import type {
   QsGenericTableFilterValue,
   QsGenericTableFilterValues,
 } from './logic'
+import { QS_GENERIC_TABLE_ALL_FILTER_VALUE } from './logic'
 
 defineOptions({ name: 'QsGenericTableFilterPanel' })
 
@@ -20,13 +21,14 @@ const emit = defineEmits<{
 
 function getOptions(definition: QsGenericTableFilterDefinition) {
   return [
-    { label: '全部', value: '' },
+    // Reka Select 禁止空字符串选项，使用内部哨兵值表达“全部”，提交时再还原为 undefined。
+    { label: '全部', value: QS_GENERIC_TABLE_ALL_FILTER_VALUE },
     ...definition.options.map(option => ({ ...option })),
   ]
 }
 
 function updateValue(key: string, value: unknown) {
-  emit('update', key, value === '' || value == null
+  emit('update', key, value === QS_GENERIC_TABLE_ALL_FILTER_VALUE || value == null
     ? undefined
     : value as number | string)
 }
