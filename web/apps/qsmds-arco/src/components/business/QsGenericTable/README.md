@@ -40,6 +40,8 @@
 
 `QsTableStackedLine` 支持 `label`、`tone`、`weight`、`nowrap`，以及 `labelClass`、`contentClass`、`suffixClass`。组件根节点也接受普通 `class`；`suffix` 插槽可放置复制、跳转等行内操作。
 
+实际/标准、已收/未收等可比较数值应使用相同的字号、字重与 `tabular-nums`，只通过 `tone` 表达状态差异，避免颜色之外的排版变化干扰比较。
+
 ```vue
 <template #cell-order="{ row }">
   <QsTableStackedCell class="group">

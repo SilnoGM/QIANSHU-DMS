@@ -317,7 +317,7 @@ function recordEvent(message: string) {
               label="实际"
               nowrap
               tone="success"
-              weight="semibold"
+              weight="medium"
               content-class="text-sm tabular-nums"
             >
               <AmountDisplay :value="row.original.amount" currency="CNY" />
@@ -326,7 +326,7 @@ function recordEvent(message: string) {
               label="标准"
               nowrap
               weight="medium"
-              content-class="text-xs tabular-nums"
+              content-class="text-sm tabular-nums"
             >
               <AmountDisplay :value="row.original.standardAmount" currency="CNY" />
             </QsTableStackedLine>
@@ -335,7 +335,7 @@ function recordEvent(message: string) {
 
         <template #summary-amount="{ value }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="实际" tone="success" weight="semibold">
+            <QsTableStackedLine label="实际" tone="success" weight="medium">
               <AmountDisplay :value="value" currency="CNY" />
             </QsTableStackedLine>
             <QsTableStackedLine label="标准" weight="medium">
@@ -391,7 +391,7 @@ function recordEvent(message: string) {
               </dt>
               <dd class="m-0">
                 <QsTableStackedCell>
-                  <QsTableStackedLine label="实际" tone="success" weight="semibold">
+                  <QsTableStackedLine label="实际" tone="success" weight="medium">
                     <AmountDisplay :value="row.amount" currency="CNY" />
                   </QsTableStackedLine>
                   <QsTableStackedLine label="标准" weight="medium">

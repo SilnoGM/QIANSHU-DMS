@@ -69,7 +69,7 @@ const weightClass = computed(() => ({
     <span
       v-if="slots.suffix"
       data-slot="qs-table-stacked-line-suffix"
-      class="inline-flex shrink-0 items-center self-center"
+      class="inline-flex shrink-0 h-5 items-center self-center"
       :class="suffixClass"
     >
       <slot name="suffix" />

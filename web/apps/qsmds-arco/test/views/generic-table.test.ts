@@ -254,6 +254,8 @@ test('双行单元格支持主次内容、逐行样式与尾部操作', () => {
   assert.match(cellSource, /name: 'QsTableStackedCell'/u)
   assert.match(cellSource, /data-slot="qs-table-stacked-cell"/u)
   assert.match(cellSource, /inline-grid/u)
+  assert.match(cellSource, /gap-0\.5/u)
+  assert.doesNotMatch(cellSource, /gap-1(?:\s|")/u)
 
   assert.match(lineSource, /name: 'QsTableStackedLine'/u)
   assert.match(lineSource, /labelClass\?:/u)
@@ -264,6 +266,7 @@ test('双行单元格支持主次内容、逐行样式与尾部操作', () => {
   assert.match(lineSource, /type StackedLineWeight = 'medium' \| 'normal' \| 'semibold'/u)
   assert.match(lineSource, /weight\?: StackedLineWeight/u)
   assert.match(lineSource, /slots\.suffix/u)
+  assert.match(lineSource, /data-slot="qs-table-stacked-line-suffix"[\s\S]*?class="[^"]*h-5/u)
 
   assert.match(showcaseSource, /orderSource:/u)
   assert.match(showcaseSource, /standardAmount:/u)
@@ -272,4 +275,12 @@ test('双行单元格支持主次内容、逐行样式与尾部操作', () => {
   assert.match(showcaseSource, /#suffix/u)
   assert.match(showcaseSource, /label="实际"/u)
   assert.match(showcaseSource, /label="标准"/u)
+
+  const amountCellSource = showcaseSource.match(
+    /<template #cell-amount[\s\S]*?<\/template>/u,
+  )?.[0]
+  assert.ok(amountCellSource)
+  assert.equal(amountCellSource.match(/weight="medium"/gu)?.length, 2)
+  assert.equal(amountCellSource.match(/content-class="text-sm tabular-nums"/gu)?.length, 2)
+  assert.doesNotMatch(amountCellSource, /weight="semibold"|content-class="text-xs tabular-nums"/u)
 })
