@@ -161,3 +161,20 @@ test('列设置面板支持动态调整左中右对齐并通过公开状态回�
   assert.match(tableSource, /align\?: TableAlign/u)
   assert.match(tableSource, /align: columnSettings\.value\[column\.id\]\?\.align/u)
 })
+
+test('列设置面板使用紧凑矩阵区分固定与对齐操作', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/ColumnSettingsPanel.vue',
+  )
+
+  assert.match(source, /显示列/u)
+  assert.match(source, /grid-cols-\[minmax\(0,1fr\)_auto_auto\]/u)
+  assert.match(source, /<FaTooltip/u)
+  assert.match(source, /i-lucide:panel-left/u)
+  assert.match(source, /i-lucide:pin-off/u)
+  assert.match(source, /i-lucide:panel-right/u)
+  assert.match(source, /i-lucide:align-left/u)
+  assert.match(source, /i-lucide:align-center/u)
+  assert.match(source, /i-lucide:align-right/u)
+  assert.match(source, /class="(?:p-0 size-7|size-7 p-0)"/u)
+})
