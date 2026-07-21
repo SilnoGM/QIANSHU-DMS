@@ -39,6 +39,7 @@ import {
   TableCaption,
   TableCell,
   TableEmpty,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -495,6 +496,14 @@ const tableRootComponent = computed(() => isSingleSelectionMode.value ? RadioGro
 const tableRootModelValue = computed(() => isSingleSelectionMode.value ? singleSelectedRowId.value : undefined)
 const stripeInteractionClass = computed(() => props.stripe ? '[&:hover>td]:bg-muted/50 [&[data-state=selected]>td]:bg-muted' : undefined)
 const hasToolbar = computed(() => props.columnVisibility || Boolean(slots.toolbar))
+/**
+ * TanStack 会为每一组表头生成对应的 footer group。只有列定义声明 footer，
+ * 或调用方提供动态 footer slot 时才渲染 tfoot，避免普通表格出现空白表尾。
+ */
+const hasFooter = computed(() => table.getFooterGroups().some(footerGroup => footerGroup.headers.some(footer =>
+  !footer.isPlaceholder
+  && (Boolean(footer.column.columnDef.footer) || hasColumnSlot(getFooterSlotName(footer))),
+)))
 const columnVisibilityColumns = computed(() => {
   void resolvedColumns.value
   void columnVisibilityState.value
@@ -560,6 +569,10 @@ function getHeaderSlotName(header: Header<TData, unknown>) {
   return getColumnSlotName('header', header.column.id)
 }
 
+function getFooterSlotName(footer: Header<TData, unknown>) {
+  return getColumnSlotName('footer', footer.column.id)
+}
+
 function getCellSlotName(cell: Cell<TData, unknown>) {
   return getColumnSlotName('cell', cell.column.id)
 }
@@ -590,6 +603,14 @@ function getHeaderSlotProps(header: Header<TData, unknown>): any {
   return {
     column: header.column,
     header,
+    table,
+  }
+}
+
+function getFooterSlotProps(footer: Header<TData, unknown>): any {
+  return {
+    column: footer.column,
+    header: footer,
     table,
   }
 }
@@ -752,6 +773,18 @@ function getCellClass(cell: Cell<TData, unknown>) {
     columnDef.class,
     resolveColumnClass(columnDef.cellClass, cell.getContext()),
     isSelectionColumn(cell.column) && cn('px-3', props.selectionColumnClass),
+  )
+}
+
+function getFooterClass(footer: Header<TData, unknown>) {
+  const columnDef = footer.column.columnDef as TableColumn<TData, unknown>
+
+  return cn(
+    'bg-muted/50 font-medium',
+    getAlignClass(columnDef.align),
+    getHeaderBorderClass(footer),
+    getPinnedColumnClass(footer.column, 'cell'),
+    columnDef.class,
   )
 }
 
@@ -1129,6 +1162,36 @@ defineExpose({
             </slot>
           </TableEmpty>
         </TableBody>
+
+        <TableFooter v-if="hasFooter">
+          <TableRow
+            v-for="footerGroup in table.getFooterGroups()"
+            :key="footerGroup.id"
+            class="border-b-0"
+          >
+            <TableCell
+              v-for="footer in footerGroup.headers"
+              :key="footer.id"
+              :colspan="footer.colSpan"
+              :class="getFooterClass(footer)"
+              :style="getColumnStyle(footer.column)"
+              :data-pinned="footer.column.getIsPinned() || undefined"
+            >
+              <template v-if="!footer.isPlaceholder">
+                <slot
+                  v-if="hasColumnSlot(getFooterSlotName(footer))"
+                  :name="getFooterSlotName(footer)"
+                  v-bind="getFooterSlotProps(footer)"
+                />
+                <FlexRender
+                  v-else-if="footer.column.columnDef.footer"
+                  :render="footer.column.columnDef.footer"
+                  :props="footer.getContext()"
+                />
+              </template>
+            </TableCell>
+          </TableRow>
+        </TableFooter>
       </Table>
     </component>
   </div>
