@@ -6,6 +6,8 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
+import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 
 defineOptions({ name: 'GenericTableShowcase' })
 
@@ -13,15 +15,18 @@ interface SettlementRow {
   amount: number
   completionRate: number
   id: string
+  orderSource: '客户委托' | '平台订单' | '自然流订单'
   owner: string
   region: string
   route: string
   settlementNo: string
   shipmentCount: number
+  standardAmount: number
   status: '待复核' | '已完成' | '已暂停'
   updatedAt: string
 }
 
+const orderSources: SettlementRow['orderSource'][] = ['自然流订单', '客户委托', '平台订单']
 const owners = ['林舟', '陈念', '周衡', '苏遥', '顾言'] as const
 const regions = ['华东', '华南', '华北', '西南'] as const
 const routes = [
@@ -41,11 +46,13 @@ const sourceRows: SettlementRow[] = Array.from({ length: 64 }, (_, index) => ({
   amount: 8_600 + index * 437.25,
   completionRate: 72 + (index * 7) % 27,
   id: `settlement-${index + 1}`,
+  orderSource: orderSources[index % orderSources.length]!,
   owner: owners[index % owners.length]!,
   region: regions[index % regions.length]!,
   route: routes[index % routes.length]!,
   settlementNo: `QS-202607-${String(index + 1).padStart(4, '0')}`,
   shipmentCount: 6 + (index * 3) % 18,
+  standardAmount: 9_600 + index * 437.25,
   status: statuses[index % statuses.length]!,
   updatedAt: new Date(Date.UTC(2026, 6, 20, 8 + (index % 8), 5 + index)).toISOString(),
 }))
@@ -53,16 +60,16 @@ const sourceRows: SettlementRow[] = Array.from({ length: 64 }, (_, index) => ({
 const columns: QsGenericTableColumn<SettlementRow>[] = [
   {
     accessorKey: 'settlementNo',
-    copyable: true,
     fixed: 'left',
     id: 'settlementNo',
     sortable: true,
     summary: { type: 'count' },
-    title: '结算单号',
-    width: 176,
+    title: '结算单信息',
+    width: 208,
   },
   {
     accessorKey: 'route',
+    copyable: true,
     id: 'route',
     sortable: true,
     title: '运输路线',
@@ -112,7 +119,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
       type: 'sum',
     },
     title: '结算金额',
-    width: 148,
+    width: 192,
   },
   {
     accessorKey: 'updatedAt',
@@ -155,7 +162,7 @@ const filteredRows = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase('zh-CN')
 
   return sourceRows.filter((row) => {
-    const matchesSearch = !keyword || [row.settlementNo, row.route, row.owner]
+    const matchesSearch = !keyword || [row.settlementNo, row.orderSource, row.route, row.owner]
       .some(value => value.toLocaleLowerCase('zh-CN').includes(keyword))
     const matchesRegion = !filters.value.region || row.region === filters.value.region
     const matchesStatus = !filters.value.status || row.status === filters.value.status
@@ -189,6 +196,11 @@ const pageRows = computed(() => {
   const start = (page.value - 1) * pageSize.value
   return sortedRows.value.slice(start, start + pageSize.value)
 })
+
+const pageStandardAmount = computed(() => pageRows.value.reduce(
+  (total, row) => total + row.standardAmount,
+  0,
+))
 
 function statusClass(status: SettlementRow['status']) {
   return {
@@ -250,8 +262,8 @@ function recordEvent(message: string) {
         :total="sortedRows.length"
         :filter-definitions="filterDefinitions"
         :page-size-options="[20, 50, 100, 200]"
-        table-class="min-w-[1240px]"
-        search-placeholder="搜索结算单号、路线或负责人"
+        table-class="min-w-[1320px]"
+        search-placeholder="搜索结算单号、来源、路线或负责人"
         add-label="新增结算单"
         @add="recordEvent('add · 已通知业务页面')"
         @column-settings-change="recordEvent('column-settings-change · 展示状态已更新')"
@@ -261,7 +273,27 @@ function recordEvent(message: string) {
         @sorting-change="recordEvent('sorting-change · 排序状态已更新')"
       >
         <template #cell-settlementNo="{ row }">
-          <code class="text-xs text-foreground font-semibold whitespace-nowrap">{{ row.original.settlementNo }}</code>
+          <QsTableStackedCell class="group">
+            <QsTableStackedLine
+              nowrap
+              weight="semibold"
+              content-class="text-xs font-mono"
+            >
+              {{ row.original.settlementNo }}
+              <template #suffix>
+                <CopyCellButton
+                  label="结算单号"
+                  :text="row.original.settlementNo"
+                />
+              </template>
+            </QsTableStackedLine>
+            <QsTableStackedLine
+              tone="muted"
+              content-class="text-xs"
+            >
+              {{ row.original.orderSource }}
+            </QsTableStackedLine>
+          </QsTableStackedCell>
         </template>
 
         <template #cell-shipmentCount="{ row }">
@@ -280,7 +312,36 @@ function recordEvent(message: string) {
         </template>
 
         <template #cell-amount="{ row }">
-          <AmountDisplay :value="row.original.amount" currency="CNY" />
+          <QsTableStackedCell>
+            <QsTableStackedLine
+              label="实际"
+              nowrap
+              tone="success"
+              weight="semibold"
+              content-class="text-sm tabular-nums"
+            >
+              <AmountDisplay :value="row.original.amount" currency="CNY" />
+            </QsTableStackedLine>
+            <QsTableStackedLine
+              label="标准"
+              nowrap
+              weight="medium"
+              content-class="text-xs tabular-nums"
+            >
+              <AmountDisplay :value="row.original.standardAmount" currency="CNY" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+
+        <template #summary-amount="{ value }">
+          <QsTableStackedCell>
+            <QsTableStackedLine label="实际" tone="success" weight="semibold">
+              <AmountDisplay :value="value" currency="CNY" />
+            </QsTableStackedLine>
+            <QsTableStackedLine label="标准" weight="medium">
+              <AmountDisplay :value="pageStandardAmount" currency="CNY" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
         </template>
 
         <template #cell-updatedAt="{ row }">
@@ -295,28 +356,48 @@ function recordEvent(message: string) {
 
         <template #mobile-row="{ row, rowNumber }">
           <div class="mb-3 pb-3 border-b border-border flex gap-3 items-start justify-between">
-            <div class="min-w-0">
-              <div class="flex gap-1 min-w-0 items-center">
-                <code class="text-sm font-semibold break-all">{{ row.settlementNo }}</code>
-                <CopyCellButton
-                  always-visible
-                  label="结算单号"
-                  :text="row.settlementNo"
-                />
-              </div>
-              <p class="text-xs text-muted-foreground m-0 mt-1">
-                {{ row.route }}
-              </p>
-            </div>
+            <QsTableStackedCell class="group min-w-0">
+              <QsTableStackedLine
+                weight="semibold"
+                content-class="text-sm font-mono break-all"
+              >
+                {{ row.settlementNo }}
+                <template #suffix>
+                  <CopyCellButton
+                    always-visible
+                    label="结算单号"
+                    :text="row.settlementNo"
+                  />
+                </template>
+              </QsTableStackedLine>
+              <QsTableStackedLine tone="muted" content-class="text-xs">
+                {{ row.orderSource }}
+              </QsTableStackedLine>
+            </QsTableStackedCell>
             <span class="text-xs text-muted-foreground font-mono shrink-0">#{{ rowNumber }}</span>
           </div>
           <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2">
+            <div class="col-span-2">
+              <dt class="text-xs text-muted-foreground mb-1">
+                运输路线
+              </dt>
+              <dd class="text-sm m-0">
+                {{ row.route }}
+              </dd>
+            </div>
             <div>
               <dt class="text-xs text-muted-foreground mb-1">
                 结算金额
               </dt>
               <dd class="m-0">
-                <AmountDisplay :value="row.amount" currency="CNY" />
+                <QsTableStackedCell>
+                  <QsTableStackedLine label="实际" tone="success" weight="semibold">
+                    <AmountDisplay :value="row.amount" currency="CNY" />
+                  </QsTableStackedLine>
+                  <QsTableStackedLine label="标准" weight="medium">
+                    <AmountDisplay :value="row.standardAmount" currency="CNY" />
+                  </QsTableStackedLine>
+                </QsTableStackedCell>
               </dd>
             </div>
             <div>

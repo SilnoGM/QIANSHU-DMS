@@ -239,3 +239,37 @@ test('列级 copyable 配置为桌面与窄屏提供剪贴板复制反馈', () =
   assert.match(buttonSource, /@click\.stop/u)
   assert.match(buttonSource, /aria-live="polite"/u)
 })
+
+test('双行单元格支持主次内容、逐行样式与尾部操作', () => {
+  const cellSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/QsTableStackedCell.vue',
+  )
+  const lineSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/QsTableStackedLine.vue',
+  )
+  const showcaseSource = readRelativeSource(
+    '../../src/views/component_library/business/components/GenericTableShowcase.vue',
+  )
+
+  assert.match(cellSource, /name: 'QsTableStackedCell'/u)
+  assert.match(cellSource, /data-slot="qs-table-stacked-cell"/u)
+  assert.match(cellSource, /inline-grid/u)
+
+  assert.match(lineSource, /name: 'QsTableStackedLine'/u)
+  assert.match(lineSource, /labelClass\?:/u)
+  assert.match(lineSource, /contentClass\?:/u)
+  assert.match(lineSource, /suffixClass\?:/u)
+  assert.match(lineSource, /type StackedLineTone = 'danger' \| 'default' \| 'muted' \| 'success' \| 'warning'/u)
+  assert.match(lineSource, /tone\?: StackedLineTone/u)
+  assert.match(lineSource, /type StackedLineWeight = 'medium' \| 'normal' \| 'semibold'/u)
+  assert.match(lineSource, /weight\?: StackedLineWeight/u)
+  assert.match(lineSource, /slots\.suffix/u)
+
+  assert.match(showcaseSource, /orderSource:/u)
+  assert.match(showcaseSource, /standardAmount:/u)
+  assert.match(showcaseSource, /<QsTableStackedCell/u)
+  assert.match(showcaseSource, /<QsTableStackedLine/u)
+  assert.match(showcaseSource, /#suffix/u)
+  assert.match(showcaseSource, /label="实际"/u)
+  assert.match(showcaseSource, /label="标准"/u)
+})

@@ -34,6 +34,30 @@
 
 默认汇总当前页 `data`；服务端分页场景可通过 `summaryValues` 传入全量数据汇总结果。页面也可以提供 `summary-{columnId}` 插槽覆盖桌面端表尾内容。
 
+## 复合单元格
+
+需要在一列内展示主信息、辅助说明、两组金额或多个状态时，使用 `QsTableStackedCell` 与 `QsTableStackedLine` 组合现有的 `cell-{columnId}` 插槽。两个组件只管理纵向节奏和逐行样式，不内置订单、金额等业务语义。
+
+`QsTableStackedLine` 支持 `label`、`tone`、`weight`、`nowrap`，以及 `labelClass`、`contentClass`、`suffixClass`。组件根节点也接受普通 `class`；`suffix` 插槽可放置复制、跳转等行内操作。
+
+```vue
+<template #cell-order="{ row }">
+  <QsTableStackedCell class="group">
+    <QsTableStackedLine weight="semibold" content-class="font-mono">
+      {{ row.original.orderNo }}
+      <template #suffix>
+        <CopyCellButton label="订单号" :text="row.original.orderNo" />
+      </template>
+    </QsTableStackedLine>
+    <QsTableStackedLine tone="muted" content-class="text-xs">
+      {{ row.original.orderSource }}
+    </QsTableStackedLine>
+  </QsTableStackedCell>
+</template>
+```
+
+复合单元格仍由列的 `accessorKey` 或 `accessorFn` 决定排序和默认复制值。如果每一行需要复制不同内容，应像上例一样在对应行的 `suffix` 中组合 `CopyCellButton`。移动端自定义卡片可以在 `mobile-row` 插槽中复用同一组件。
+
 ## 响应式约定
 
 桌面端使用 `FaTable`，列设置和筛选使用 `FaPopover`；小于 `768px` 时使用结构化列表，列设置和筛选进入底部 `FaDrawer`。业务页面可通过 `mobile-row` 插槽提供更贴合领域的窄屏行布局。
