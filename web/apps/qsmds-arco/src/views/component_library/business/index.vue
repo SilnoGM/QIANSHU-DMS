@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ComponentCatalogPage from '../shared/ComponentCatalogPage.vue'
+import GenericTableShowcase from './components/GenericTableShowcase.vue'
 
 defineOptions({ name: 'ComponentLibraryBusiness' })
 
@@ -32,6 +33,9 @@ const principles = [
     route-path="/component-library/business"
     icon="i-lucide:workflow"
     :principles="principles"
+    stage-label="首个组件已展示"
     empty-description="后续仅在出现真实跨页面复用需求时增加业务组件，避免为假设场景提前抽象。"
-  />
+  >
+    <GenericTableShowcase />
+  </ComponentCatalogPage>
 </template>
