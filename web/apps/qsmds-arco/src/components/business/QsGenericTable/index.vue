@@ -305,6 +305,16 @@ function getSummaryRenderer(column: QsGenericTableColumn<TData>): Component | un
   return column.summary?.component
 }
 
+function getSummaryContentClass(column: QsGenericTableColumn<TData>) {
+  return [
+    'gap-0.5 grid',
+    // Grid 会把自定义组件拉伸到整列宽度；显式设置 justify-items，才能让
+    // AmountDisplay 等 inline-flex 组件与标题、表头共享同一条对齐边界。
+    column.align === 'right' && 'justify-items-end text-right',
+    column.align === 'center' && 'justify-items-center text-center',
+  ]
+}
+
 function getMobileValue(row: TData, column: QsGenericTableColumn<TData>, index: number) {
   const value = getColumnRawValue(row, column, index)
   return value === undefined || value === null || value === '' ? '—' : String(value)
@@ -475,7 +485,7 @@ watch(filters, (nextFilters) => {
             :label="getSummaryTypeLabel(column.summary!.type)"
             :value="getSummaryValue(column)"
           >
-            <div class="gap-0.5 grid">
+            <div :class="getSummaryContentClass(column)">
               <span class="text-[11px] text-muted-foreground font-normal">
                 {{ getSummaryTypeLabel(column.summary!.type) }}
               </span>
@@ -635,3 +645,14 @@ watch(filters, (nextFilters) => {
     </FaDrawer>
   </section>
 </template>
+
+<style scoped>
+/*
+ * 固定列由 FaTable 使用独立背景避免滚动内容透出。桌面汇总行统一覆盖为主题
+ * background，消除固定列与普通列分别使用 background / muted 的色差。
+ */
+.qs-generic-table :deep([data-slot="table-footer"]),
+.qs-generic-table :deep([data-slot="table-footer"] [data-slot="table-cell"]) {
+  background-color: oklch(var(--background));
+}
+</style>

@@ -129,3 +129,15 @@ test('筛选下拉不向 Reka Select 传入空字符串选项', () => {
   assert.doesNotMatch(source, /\{ label: '全部', value: '' \}/u)
   assert.match(source, /QS_GENERIC_TABLE_ALL_FILTER_VALUE/u)
 })
+
+test('桌面汇总行使用统一背景且自定义汇总组件跟随列对齐', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(source, /function getSummaryContentClass/u)
+  assert.match(source, /justify-items-end text-right/u)
+  assert.match(source, /justify-items-center text-center/u)
+  assert.match(source, /\[data-slot="table-footer"\]/u)
+  assert.match(source, /background-color: oklch\(var\(--background\)\)/u)
+})
