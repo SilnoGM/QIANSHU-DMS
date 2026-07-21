@@ -33,10 +33,11 @@ export interface QsGenericTableSummaryDefinition<TData extends object> {
 
 /**
  * 业务列继续继承 FaTable/TanStack 的列描述，只增加业务层需要的稳定标题、
- * 默认显隐、排序开关与汇总配置，避免重新发明另一套单元格渲染协议。
+ * 默认显隐、复制、排序与汇总配置，避免重新发明另一套单元格渲染协议。
  */
 export type QsGenericTableColumn<TData extends object = Record<string, unknown>, TValue = unknown>
   = TableColumn<TData, TValue> & {
+    copyable?: boolean
     defaultVisible?: boolean
     id: string
     sortable?: boolean

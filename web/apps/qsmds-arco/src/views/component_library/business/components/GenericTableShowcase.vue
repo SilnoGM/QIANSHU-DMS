@@ -4,6 +4,7 @@ import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTab
 
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 
 defineOptions({ name: 'GenericTableShowcase' })
@@ -52,6 +53,7 @@ const sourceRows: SettlementRow[] = Array.from({ length: 64 }, (_, index) => ({
 const columns: QsGenericTableColumn<SettlementRow>[] = [
   {
     accessorKey: 'settlementNo',
+    copyable: true,
     fixed: 'left',
     id: 'settlementNo',
     sortable: true,
@@ -294,7 +296,14 @@ function recordEvent(message: string) {
         <template #mobile-row="{ row, rowNumber }">
           <div class="mb-3 pb-3 border-b border-border flex gap-3 items-start justify-between">
             <div class="min-w-0">
-              <code class="text-sm font-semibold break-all">{{ row.settlementNo }}</code>
+              <div class="flex gap-1 min-w-0 items-center">
+                <code class="text-sm font-semibold break-all">{{ row.settlementNo }}</code>
+                <CopyCellButton
+                  always-visible
+                  label="结算单号"
+                  :text="row.settlementNo"
+                />
+              </div>
               <p class="text-xs text-muted-foreground m-0 mt-1">
                 {{ row.route }}
               </p>

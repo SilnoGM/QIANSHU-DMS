@@ -198,3 +198,30 @@ test('列设置面板使用紧凑矩阵区分固定与对齐操作', () => {
   assert.match(source, /i-lucide:align-right/u)
   assert.match(source, /class="(?:p-0 size-7|size-7 p-0)"/u)
 })
+
+test('列级 copyable 配置为桌面与窄屏提供剪贴板复制反馈', () => {
+  const logicSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/logic.ts',
+  )
+  const tableSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const showcaseSource = readRelativeSource(
+    '../../src/views/component_library/business/components/GenericTableShowcase.vue',
+  )
+
+  assert.match(logicSource, /copyable\?: boolean/u)
+  assert.match(tableSource, /column\.copyable/u)
+  assert.match(tableSource, /<CopyCellButton/u)
+  assert.match(showcaseSource, /copyable: true/u)
+
+  const buttonSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/CopyCellButton.vue',
+  )
+  assert.match(buttonSource, /navigator\.clipboard\.writeText/u)
+  assert.match(buttonSource, /i-lucide:copy/u)
+  assert.match(buttonSource, /i-lucide:check/u)
+  assert.match(buttonSource, /i-lucide:triangle-alert/u)
+  assert.match(buttonSource, /@click\.stop/u)
+  assert.match(buttonSource, /aria-live="polite"/u)
+})

@@ -11,6 +11,7 @@ import type { QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTa
 
 import { useMediaQuery } from '@vueuse/core'
 import ColumnSettingsPanel from './ColumnSettingsPanel.vue'
+import CopyCellButton from './CopyCellButton.vue'
 import FilterPanel from './FilterPanel.vue'
 import {
   calculateColumnSummary,
@@ -127,7 +128,7 @@ const visibleColumnDefinitions = computed(() => props.columns.flatMap((column) =
 const summaryColumns = computed(() => visibleColumnDefinitions.value.filter(column => column.summary))
 const hasSummary = computed(() => summaryColumns.value.length > 0)
 const slottedCellColumns = computed(() => visibleColumnDefinitions.value.filter(column =>
-  Boolean(slots[`cell-${column.id}`])))
+  column.copyable || Boolean(slots[`cell-${column.id}`])))
 const slottedHeaderColumns = computed(() => visibleColumnDefinitions.value.filter(column =>
   Boolean(slots[`header-${column.id}`])))
 
@@ -338,6 +339,14 @@ function getMobileValue(row: TData, column: QsGenericTableColumn<TData>, index: 
   return value === undefined || value === null || value === '' ? '—' : String(value)
 }
 
+function getCopyCellClass(column: QsGenericTableColumn<TData>) {
+  return [
+    'group min-w-0 flex gap-1 items-center',
+    column.align === 'right' && 'justify-end',
+    column.align === 'center' && 'justify-center',
+  ]
+}
+
 function getMobileRowKey(row: TData, index: number) {
   if (typeof props.rowKey === 'function') {
     return props.rowKey(row, index)
@@ -504,7 +513,18 @@ watch(filters, (nextFilters) => {
           :key="`cell-${column.id}`"
           #[`cell-${column.id}`]="scope"
         >
-          <slot :name="`cell-${column.id}`" v-bind="scope" />
+          <div v-if="column.copyable" :class="getCopyCellClass(column)">
+            <div class="min-w-0">
+              <slot :name="`cell-${column.id}`" v-bind="scope">
+                {{ getMobileValue(scope.row.original, column, scope.row.index) }}
+              </slot>
+            </div>
+            <CopyCellButton
+              :label="column.title"
+              :text="getMobileValue(scope.row.original, column, scope.row.index)"
+            />
+          </div>
+          <slot v-else :name="`cell-${column.id}`" v-bind="scope" />
         </template>
 
         <template
@@ -599,7 +619,15 @@ watch(filters, (nextFilters) => {
                   {{ column.title }}
                 </dt>
                 <dd class="text-sm m-0 break-words">
-                  {{ getMobileValue(row, column, index) }}
+                  <div :class="getCopyCellClass(column)">
+                    <span>{{ getMobileValue(row, column, index) }}</span>
+                    <CopyCellButton
+                      v-if="column.copyable"
+                      always-visible
+                      :label="column.title"
+                      :text="getMobileValue(row, column, index)"
+                    />
+                  </div>
                 </dd>
               </div>
             </dl>
