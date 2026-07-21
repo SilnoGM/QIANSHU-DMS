@@ -168,6 +168,16 @@ const activeFilters = computed(() => props.filterDefinitions.flatMap((definition
     valueLabel: definition.options.find(option => option.value === value)?.label ?? String(value),
   }]
 }))
+// 筛选入口只反映已经提交的条件，面板中的草稿变化不会提前改变按钮状态。
+const filterButtonLabel = computed(() => {
+  if (activeFilters.value.length === 0) {
+    return '筛选'
+  }
+  if (activeFilters.value.length === 1) {
+    return `已筛选：${activeFilters.value[0]!.label}`
+  }
+  return '已筛选：多个条件'
+})
 const hasActiveQuery = computed(() => Boolean(search.value.trim()) || activeFilters.value.length > 0)
 
 const paginationPage = computed({
@@ -221,9 +231,6 @@ function openFilters() {
   filterDraft.value = { ...filters.value }
   if (isNarrow.value) {
     filterDrawerVisible.value = true
-  }
-  else {
-    desktopFilterVisible.value = !desktopFilterVisible.value
   }
 }
 
@@ -380,17 +387,42 @@ watch(filters, (nextFilters) => {
       </div>
 
       <div class="ms-auto flex flex-wrap gap-2 items-center">
+        <FaPopover
+          v-if="filterDefinitions.length && !isNarrow"
+          v-model:open="desktopFilterVisible"
+          align="end"
+          class="p-0"
+        >
+          <FaButton
+            variant="outline"
+            :class="activeFilters.length ? 'border-primary/40 bg-primary/8 text-primary hover-bg-primary/12' : undefined"
+            :aria-expanded="desktopFilterVisible"
+            :aria-pressed="activeFilters.length > 0"
+            @click="openFilters"
+          >
+            <FaIcon name="i-lucide:list-filter" />
+            {{ filterButtonLabel }}
+          </FaButton>
+          <template #panel>
+            <FilterPanel
+              :definitions="filterDefinitions"
+              :values="filterDraft"
+              @apply="applyFilters"
+              @reset="resetFilters"
+              @update="updateFilterDraft"
+            />
+          </template>
+        </FaPopover>
         <FaButton
-          v-if="filterDefinitions.length"
+          v-else-if="filterDefinitions.length"
           variant="outline"
-          :aria-expanded="desktopFilterVisible || filterDrawerVisible"
+          :class="activeFilters.length ? 'border-primary/40 bg-primary/8 text-primary hover-bg-primary/12' : undefined"
+          :aria-expanded="filterDrawerVisible"
+          :aria-pressed="activeFilters.length > 0"
           @click="openFilters"
         >
           <FaIcon name="i-lucide:list-filter" />
-          筛选
-          <span v-if="activeFilters.length" class="text-xs px-1.5 rounded-full bg-primary/12 flex-center h-5 min-w-5">
-            {{ activeFilters.length }}
-          </span>
+          {{ filterButtonLabel }}
         </FaButton>
 
         <FaPopover v-if="!isNarrow" align="end" class="p-4">
@@ -432,16 +464,6 @@ watch(filters, (nextFilters) => {
       <FaButton variant="ghost" size="sm" class="text-muted-foreground" @click="resetFilters">
         清空筛选
       </FaButton>
-    </div>
-
-    <div v-if="desktopFilterVisible && !isNarrow" class="mb-4 p-4 border border-border rounded-lg bg-muted/20">
-      <FilterPanel
-        :definitions="filterDefinitions"
-        :values="filterDraft"
-        @apply="applyFilters"
-        @reset="resetFilters"
-        @update="updateFilterDraft"
-      />
     </div>
 
     <FaAlert v-if="error" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">

@@ -35,8 +35,22 @@ function updateValue(key: string, value: unknown) {
 </script>
 
 <template>
-  <div>
-    <div class="gap-4 grid lg-grid-cols-3 sm-grid-cols-2">
+  <div class="w-[min(30rem,calc(100vw-2rem))]">
+    <div class="p-4 border-b border-border flex gap-3 items-start">
+      <span class="text-primary rounded-md bg-primary/10 flex-center shrink-0 size-8">
+        <FaIcon name="i-lucide:list-filter" class="size-4" />
+      </span>
+      <div class="min-w-0">
+        <h3 class="text-sm font-semibold m-0">
+          筛选条件
+        </h3>
+        <p class="text-xs text-muted-foreground leading-5 m-0 mt-0.5">
+          选择条件后应用，关闭面板不会改变当前结果。
+        </p>
+      </div>
+    </div>
+
+    <div class="p-4 gap-4 grid max-h-[min(24rem,calc(100dvh-13rem))] overflow-y-auto sm-grid-cols-2">
       <label v-for="definition in definitions" :key="definition.key" class="gap-1.5 grid">
         <span class="text-xs text-muted-foreground font-medium">{{ definition.label }}</span>
         <FaSelect
@@ -48,11 +62,12 @@ function updateValue(key: string, value: unknown) {
         />
       </label>
     </div>
-    <div class="mt-5 flex gap-2 items-center justify-end">
-      <FaButton variant="outline" @click="emit('reset')">
+
+    <div class="p-3 border-t border-border bg-muted/20 flex gap-2 items-center justify-end">
+      <FaButton variant="outline" class="flex-1 sm-flex-none" @click="emit('reset')">
         重置
       </FaButton>
-      <FaButton @click="emit('apply')">
+      <FaButton class="flex-1 sm-flex-none" @click="emit('apply')">
         应用筛选
       </FaButton>
     </div>

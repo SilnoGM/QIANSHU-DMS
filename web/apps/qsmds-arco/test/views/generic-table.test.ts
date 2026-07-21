@@ -133,6 +133,26 @@ test('筛选下拉不向 Reka Select 传入空字符串选项', () => {
   assert.match(source, /QS_GENERIC_TABLE_ALL_FILTER_VALUE/u)
 })
 
+test('筛选入口使用面板并根据已应用条件呈现按钮状态', () => {
+  const tableSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const panelSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/FilterPanel.vue',
+  )
+
+  assert.match(tableSource, /const filterButtonLabel = computed/u)
+  assert.match(tableSource, /已筛选：多个条件/u)
+  assert.match(tableSource, /`已筛选：\$\{activeFilters\.value\[0\]!?\.label\}`/u)
+  assert.match(tableSource, /v-model:open="desktopFilterVisible"/u)
+  assert.match(tableSource, /:aria-pressed="activeFilters\.length > 0"/u)
+  assert.match(tableSource, /border-primary\/40 bg-primary\/8 text-primary/u)
+  assert.doesNotMatch(tableSource, /v-if="desktopFilterVisible && !isNarrow"/u)
+  assert.match(panelSource, /筛选条件/u)
+  assert.match(panelSource, /应用筛选/u)
+  assert.match(panelSource, /重置/u)
+})
+
 test('桌面汇总行使用统一背景且自定义汇总组件跟随列对齐', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',
