@@ -63,6 +63,7 @@ test('Stylelint 忽略业务、参考和公共包生成物且不引用 docs', as
     'packages/*/dist*/**/*',
     'apps/*/src/assets/fonts/**/*',
     'examples/*/src/assets/fonts/**/*',
+    'apps/qsmds-arco/public/assets/fonts/noto/**/*',
     'apps/*/public/tinymce/**/*',
     'examples/*/public/tinymce/**/*',
   ])
