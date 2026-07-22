@@ -104,6 +104,14 @@ textarea {
   font-family: var(--qs-font-sans);
 }
 
+/*
+ * vue-sonner 在 Toast 容器上直接声明系统字体。增加 html 元素选择器提高优先级，
+ * 确保正式构建无论如何排列依赖 CSS，都使用产品统一的 Sans Token。
+ */
+html [data-sonner-toaster] {
+  font-family: var(--qs-font-sans);
+}
+
 /* 原生代码语义统一使用产品 Mono；中文缺字由 Token 内的 Noto Sans SC 承接。 */
 code,
 kbd,

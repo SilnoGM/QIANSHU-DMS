@@ -155,6 +155,13 @@ test('全局 Token 只组合 Noto Sans、Noto Mono 与原生 Emoji 例外', () =
   assert.match(globalStyles, /\.font-qs-data-mono\s*\{[\s\S]*?font-family:\s*var\(--qs-font-mono\);/u)
 })
 
+test('Sonner Toast 以高于依赖默认规则的选择器消费全局 Sans Token', () => {
+  assert.match(
+    globalStyles,
+    /html\s+\[data-sonner-toaster\]\s*\{[^}]*font-family:\s*var\(--qs-font-sans\);[^}]*\}/u,
+  )
+})
+
 test('UnoCSS 的 font-sans 与 font-mono 映射到产品字体 Token', () => {
   assert.match(
     unoConfig,
