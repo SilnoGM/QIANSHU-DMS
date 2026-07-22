@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { countGraphemes } from '#utils'
 import Icon from '../icon/index.vue'
 import Tooltip from '../tooltip/index.vue'
 
@@ -16,7 +17,7 @@ const props = withDefaults(
   {
     password: '',
     rules: () => [
-      { label: '长度至少为8个字符', rule: value => value.length >= 8 },
+      { label: '长度至少为8个字符', rule: value => countGraphemes(value) >= 8 },
       { label: '包含大写字母', rule: value => /[A-Z]/.test(value) },
       { label: '包含小写字母', rule: value => /[a-z]/.test(value) },
       { label: '包含数字', rule: value => /\d/.test(value) },

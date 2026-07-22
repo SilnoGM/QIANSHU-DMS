@@ -22,13 +22,15 @@
 
 ```ts
 const defaultRules = [
-  { label: '长度至少为8个字符', rule: value => value.length >= 8 },
+  { label: '长度至少为8个字符', rule: value => countGraphemes(value) >= 8 },
   { label: '包含大写字母', rule: value => /[A-Z]/.test(value) },
   { label: '包含小写字母', rule: value => /[a-z]/.test(value) },
   { label: '包含数字', rule: value => /\d/.test(value) },
   { label: '包含特殊字符', rule: value => /[^A-Z0-9]/i.test(value) },
 ]
 ```
+
+默认长度规则按用户看到的完整字素簇计数，不会把 ZWJ、肤色、国旗或组合附加符号拆成多个字符。该规则只用于强度展示，提交校验仍由具体业务契约决定。
 
 ## 默认颜色阈值
 

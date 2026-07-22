@@ -45,10 +45,6 @@ let openRequestVersion = 0
 
 const loading = computed(() => appAccountStore.profileState === 'loading')
 const previewUrl = computed(() => resolveAvatarPreviewUrl(model.avatarUrl))
-const fallbackText = computed(() => {
-  const source = appAccountStore.displayName.trim() || appAccountStore.account.trim()
-  return source.slice(0, 2)
-})
 const hasChanges = computed(() => {
   if (initialProfile.value === null) {
     return false
@@ -289,7 +285,6 @@ watch(() => props.modelValue, (visible) => {
       <aside class="p-4 text-center border border-border rounded-lg bg-muted/30 flex flex-col gap-3 items-center">
         <FaAvatar
           :src="previewUrl ?? ''"
-          :fallback="fallbackText"
           class="border-4 border-background size-24 shadow-sm"
         >
           <FaIcon name="i-carbon:user-avatar-filled" class="text-muted-foreground size-12" />

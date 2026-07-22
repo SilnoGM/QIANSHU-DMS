@@ -87,6 +87,19 @@ test('账户菜单通过根 App 管理唯一的个人资料 Modal 生命周期',
   )
 })
 
+test('账户头像把完整文本交给共享 Avatar 按字素簇生成降级文案', () => {
+  const profileSource = readRelativeSource(
+    '../../src/components/AppAccountButton/profile.vue',
+  )
+  const buttonSource = readRelativeSource(
+    '../../src/components/AppAccountButton/index.vue',
+  )
+
+  assert.doesNotMatch(profileSource, /fallbackText|\.slice\(0,\s*2\)/u)
+  assert.match(buttonSource, /:fallback="appAccountStore\.account"/u)
+  assert.doesNotMatch(buttonSource, /\.slice\(0,\s*2\)/u)
+})
+
 test('个人资料文案由应用级 zh-cn、zh-tw、en locale 提供', () => {
   for (const language of ['zh-cn', 'zh-tw', 'en']) {
     const source = readRelativeSource(

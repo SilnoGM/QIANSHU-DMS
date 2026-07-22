@@ -286,7 +286,6 @@ watch(() => props.modelValue, (visible) => {
           <FaInput
             v-model="model.username"
             :disabled="mode === 'edit'"
-            :maxlength="128"
             autocomplete="off"
             clearable
             class="w-full"
@@ -298,7 +297,6 @@ watch(() => props.modelValue, (visible) => {
         <FaFormItem name="displayName" label="显示名称" required>
           <FaInput
             v-model="model.displayName"
-            :maxlength="128"
             autocomplete="off"
             clearable
             class="w-full"
