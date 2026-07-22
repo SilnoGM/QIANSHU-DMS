@@ -5,6 +5,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 const webRoot = fileURLToPath(new URL('../', import.meta.url))
+const appHtml = readFileSync(`${webRoot}/apps/qsmds-arco/index.html`, 'utf8')
 const loadingTemplate = readFileSync(`${webRoot}/apps/qsmds-arco/loading.html`, 'utf8')
 const routerSource = readFileSync(`${webRoot}/apps/qsmds-arco/src/router/index.ts`, 'utf8')
 const reducedMotionStyles = loadingTemplate.slice(
@@ -23,6 +24,14 @@ test('正式应用首屏 Loading 使用浅色主题动效并保持独立初始�
   assert.match(loadingTemplate, /role="status"/u)
   assert.match(loadingTemplate, /aria-live="polite"/u)
   assert.match(loadingTemplate, /aria-busy="true"/u)
+  assert.match(
+    loadingTemplate,
+    /font-family:\s*"Noto Sans SC",\s*"Apple Color Emoji",\s*"Segoe UI Emoji",\s*"Noto Color Emoji";/u,
+  )
+  assert.doesNotMatch(
+    loadingTemplate,
+    /font-family:[^;]*(?:PingFang SC|Microsoft YaHei|system-ui|sans-serif)/iu,
+  )
   assert.match(loadingTemplate, /object-fit:\s*contain/u)
   assert.match(loadingTemplate, /linear-gradient\(/u)
   assert.match(loadingTemplate, /repeating-linear-gradient\(/u)
@@ -62,13 +71,37 @@ test('正式应用首屏 Loading 使用浅色主题动效并保持独立初始�
   assert.doesNotMatch(loadingTemplate, /<script|\bfetch\s*\(|\baxios\b|\bpinia\b/iu)
 })
 
-test('初始路由无论成功或失败都遵守最短展示时间并解除 Loading', () => {
+test('字体失败状态提供可诊断且可操作的首屏终态', () => {
+  assert.match(loadingTemplate, /data-loading-state="loading"/u)
+  assert.match(loadingTemplate, /class="qianshu-loading__retry"[^>]*hidden/u)
+  assert.match(loadingTemplate, />重新加载<\/button>/u)
+  assert.match(
+    loadingTemplate,
+    /\[data-loading-state="font-error"\][\s\S]*?\.qianshu-loading__progress/u,
+  )
+})
+
+test('本地字体入口在模块脚本前注册且不访问外部字体服务', () => {
+  const sansIndex = appHtml.indexOf('/noto-sans-sc/fonts.css')
+  const monoIndex = appHtml.indexOf('/noto-sans-mono/fonts.css')
+  const moduleIndex = appHtml.indexOf('<script type="module"')
+
+  assert.ok(sansIndex >= 0)
+  assert.ok(monoIndex > sansIndex)
+  assert.ok(moduleIndex > monoIndex)
+  assert.doesNotMatch(appHtml, /fonts\.(?:googleapis|gstatic)\.com/iu)
+})
+
+test('初始路由与核心字体汇入同一退出路径', () => {
   assert.match(
     routerSource,
-    /finishAppLoadingAfterMinimumDuration/u,
+    /waitForRequiredAppFonts\(document\.fonts\)/u,
   )
   assert.match(
     routerSource,
-    /router\.isReady\(\)\.then\(\s*finishInitialLoading\s*,\s*finishInitialLoading\s*\)/u,
+    /finishInitialAppLoading\(\{[\s\S]*?routeReady:\s*router\.isReady\(\)[\s\S]*?fontsReady/u,
   )
+  assert.match(routerSource, /showFontFailure/u)
+  assert.match(routerSource, /data-loading-state|dataset\.loadingState/u)
+  assert.match(routerSource, /window\.location\.reload\(\)/u)
 })

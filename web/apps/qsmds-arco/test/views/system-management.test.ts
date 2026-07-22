@@ -244,6 +244,49 @@ test('管理员资料表单使用 720px 响应式布局和 FaTextarea 备注', (
   }
 })
 
+test('自由文本输入不使用会拆分 Emoji 的原生 maxlength，角色说明按字素簇显示计数', () => {
+  const userFormSource = readRelativeSource(
+    '../../src/views/system/users/user-form-modal.vue',
+  )
+  const roleFormSource = readRelativeSource(
+    '../../src/views/system/roles/role-editor-modal.vue',
+  )
+
+  function findControl(source: string, tag: string, model: string): string {
+    const escapedModel = model.replaceAll('.', '\\.')
+    const match = source.match(
+      new RegExp(`<${tag}[^>]+v-model="${escapedModel}"[^>]*>`, 'u'),
+    )
+    assert.ok(match, `未找到 ${tag} 的 ${model} 绑定`)
+    return match[0]
+  }
+
+  for (const model of ['model.username', 'model.displayName']) {
+    assert.doesNotMatch(
+      findControl(userFormSource, 'FaInput', model),
+      /maxlength/u,
+    )
+  }
+
+  assert.doesNotMatch(
+    findControl(roleFormSource, 'FaInput', 'form.name'),
+    /maxlength/u,
+  )
+  assert.doesNotMatch(
+    findControl(roleFormSource, 'FaTextarea', 'form.description'),
+    /maxlength/u,
+  )
+  assert.match(
+    roleFormSource,
+    /:description="`\$\{countGraphemes\(form\.description\)\} \/ 2000`"/u,
+  )
+  assert.match(
+    findControl(roleFormSource, 'FaInput', 'form.code'),
+    /maxlength="128"/u,
+    '角色编码只允许 ASCII，继续使用原生 maxlength 与 Server 契约一致',
+  )
+})
+
 test('系统管理浏览器测试使用组件无关的可访问性选择器', () => {
   const browserSources = [
     '../browser/auth.browser.test.mjs',

@@ -2623,9 +2623,9 @@ test('Fantastic-admin 基础组件文档记录 FaTable 选择与 footer 运行�
     '只有排序与展开状态可由调用方受控',
     '选择状态由组件内部 `rowSelection` 管理',
     '没有 selection prop 或 model',
-    '`TableFooterSlotProps` 仍是根入口导出的类型',
-    '当前运行时未接入 `footer-{columnId}`',
-    '调用方不能传入该 slot',
+    '运行时已接入 `footer-{columnId}`',
+    '作用域类型为 `TableFooterSlotProps`',
+    '才渲染 `tfoot`',
   ]) {
     assert.ok(tableSection.includes(requiredPhrase), `FaTable 运行时边界缺少：${requiredPhrase}`)
   }

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { cn } from '#utils'
+import { cn, splitGraphemes } from '#utils'
 
 defineOptions({
   name: 'BuiltInFlipWords',
@@ -35,7 +35,7 @@ function startAnimation() {
 const splitWords = computed(() => {
   return currentWord.value.split(' ').map(word => ({
     word,
-    letters: word.split(''),
+    letters: splitGraphemes(word),
   }))
 })
 

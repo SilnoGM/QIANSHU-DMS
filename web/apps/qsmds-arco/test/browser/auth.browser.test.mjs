@@ -333,6 +333,24 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   `)
   await primaryPage.navigate(`${configuration.baseUrl}/`)
   await waitForAuthState(primaryPage, 'anonymous')
+  await primaryPage.waitFor(
+    `document.querySelector('[data-sonner-toaster]') !== null`,
+  )
+  const fontFamilies = await primaryPage.evaluate(`(() => {
+    const toaster = document.querySelector('[data-sonner-toaster]')
+    if (!(toaster instanceof HTMLElement)) return null
+
+    return {
+      body: getComputedStyle(document.body).fontFamily,
+      toaster: getComputedStyle(toaster).fontFamily,
+    }
+  })()`)
+  assert.ok(fontFamilies !== null)
+  assert.equal(
+    fontFamilies.toaster,
+    fontFamilies.body,
+    '正式构建中的 Sonner Toast 必须使用与 body 相同的全局 Sans 计算字体',
+  )
   const storageState = await primaryPage.evaluate(`({
     token: localStorage.getItem('token'),
     account: sessionStorage.getItem('account'),

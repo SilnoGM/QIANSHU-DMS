@@ -22,6 +22,7 @@ import { compression } from 'vite-plugin-compression2'
 import { envParse, parseLoadedEnv } from 'vite-plugin-env-parse'
 import { vitePluginFakeServer } from 'vite-plugin-fake-server'
 import VueDevTools from 'vite-plugin-vue-devtools'
+import { createSnapdomFontIsolationPlugin } from '../../../scripts/sanitize-snapdom'
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -34,6 +35,7 @@ interface AppLoadingData {
 export default function createVitePlugins(mode: string, isBuild: boolean, appLoadingData: AppLoadingData) {
   const viteEnv = parseLoadedEnv(loadEnv(mode, process.cwd()))
   const vitePlugins: (PluginOption | PluginOption[])[] = [
+    createSnapdomFontIsolationPlugin(),
     vue(),
     vueJsx(),
     vueLegacy({

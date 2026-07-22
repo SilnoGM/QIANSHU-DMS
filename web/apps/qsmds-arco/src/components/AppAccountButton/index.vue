@@ -126,7 +126,7 @@ async function submitLogout(scope: LogoutScope) {
           {{ t('app.components.accountButton.index.current_account') }}
         </div>
         <div class="flex-center-start gap-2">
-          <FaAvatar :src="appAccountStore.avatar" :fallback="appAccountStore.account.slice(0, 2)" shape="square" />
+          <FaAvatar :src="appAccountStore.avatar" :fallback="appAccountStore.account" shape="square" />
           <div class="flex-1 min-w-0 space-y-1">
             <div class="text-base lh-none truncate">
               {{ accountDisplayName }}

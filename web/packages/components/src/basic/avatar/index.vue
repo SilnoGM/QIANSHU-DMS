@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
+import { takeGraphemes } from '#utils'
 import { Avatar, AvatarFallback, AvatarImage } from './avatar'
 
 defineOptions({
@@ -18,7 +19,7 @@ const props = defineProps<{
     <AvatarImage :src="src" />
     <AvatarFallback class="inline-flex">
       <slot>
-        {{ fallback?.slice(0, 2) }}
+        {{ takeGraphemes(fallback ?? '', 2) }}
       </slot>
     </AvatarFallback>
   </Avatar>

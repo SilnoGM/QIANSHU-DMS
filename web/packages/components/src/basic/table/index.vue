@@ -39,6 +39,7 @@ import {
   TableCaption,
   TableCell,
   TableEmpty,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -495,6 +496,14 @@ const tableRootComponent = computed(() => isSingleSelectionMode.value ? RadioGro
 const tableRootModelValue = computed(() => isSingleSelectionMode.value ? singleSelectedRowId.value : undefined)
 const stripeInteractionClass = computed(() => props.stripe ? '[&:hover>td]:bg-muted/50 [&[data-state=selected]>td]:bg-muted' : undefined)
 const hasToolbar = computed(() => props.columnVisibility || Boolean(slots.toolbar))
+/**
+ * TanStack 会为每一组表头生成对应的 footer group。只有列定义声明 footer，
+ * 或调用方提供动态 footer slot 时才渲染 tfoot，避免普通表格出现空白表尾。
+ */
+const hasFooter = computed(() => table.getFooterGroups().some(footerGroup => footerGroup.headers.some(footer =>
+  !footer.isPlaceholder
+  && (Boolean(footer.column.columnDef.footer) || hasColumnSlot(getFooterSlotName(footer))),
+)))
 const columnVisibilityColumns = computed(() => {
   void resolvedColumns.value
   void columnVisibilityState.value
@@ -560,6 +569,10 @@ function getHeaderSlotName(header: Header<TData, unknown>) {
   return getColumnSlotName('header', header.column.id)
 }
 
+function getFooterSlotName(footer: Header<TData, unknown>) {
+  return getColumnSlotName('footer', footer.column.id)
+}
+
 function getCellSlotName(cell: Cell<TData, unknown>) {
   return getColumnSlotName('cell', cell.column.id)
 }
@@ -590,6 +603,14 @@ function getHeaderSlotProps(header: Header<TData, unknown>): any {
   return {
     column: header.column,
     header,
+    table,
+  }
+}
+
+function getFooterSlotProps(footer: Header<TData, unknown>): any {
+  return {
+    column: footer.column,
+    header: footer,
     table,
   }
 }
@@ -755,6 +776,18 @@ function getCellClass(cell: Cell<TData, unknown>) {
   )
 }
 
+function getFooterClass(footer: Header<TData, unknown>) {
+  const columnDef = footer.column.columnDef as TableColumn<TData, unknown>
+
+  return cn(
+    'bg-muted/50 font-medium',
+    getAlignClass(columnDef.align),
+    getHeaderBorderClass(footer),
+    getPinnedColumnClass(footer.column, 'cell'),
+    columnDef.class,
+  )
+}
+
 function getSortedColumnClass(column: Column<TData, unknown>, area: 'cell' | 'header') {
   if (!props.sortable || !column.getIsSorted()) {
     return undefined
@@ -779,6 +812,22 @@ function getPinnedColumnClass(column: Column<TData, unknown>, area: 'cell' | 'he
     pin === 'left' && column.getIsLastColumn('left') && 'shadow-[4px_0_6px_-4px_rgb(0_0_0/0.18)]',
     pin === 'right' && column.getIsFirstColumn('right') && 'shadow-[-4px_0_6px_-4px_rgb(0_0_0/0.18)]',
   )
+}
+
+/**
+ * 固定列边界是阴影、分隔线等层级样式唯一需要关注的位置。把边界方向作为
+ * 内部 DOM 语义输出，业务组件无需依赖列序号或复杂相邻选择器推断边界。
+ */
+function getPinnedEdge(column: Column<TData, unknown>): TableColumnFixed | undefined {
+  const pin = column.getIsPinned()
+
+  if (pin === 'left' && column.getIsLastColumn('left')) {
+    return 'left'
+  }
+
+  if (pin === 'right' && column.getIsFirstColumn('right')) {
+    return 'right'
+  }
 }
 
 function isLastVisibleLeafColumn(column: Column<TData, unknown>) {
@@ -992,6 +1041,9 @@ defineExpose({
               :class="getHeaderClass(header)"
               :style="getHeaderStyle(header, headerGroupIndex)"
               :aria-sort="getHeaderAriaSort(header)"
+              :data-pinned="header.column.getIsPinned() || undefined"
+              :data-pinned-edge="getPinnedEdge(header.column)"
+              :data-sorted="header.column.getIsSorted() || undefined"
               :data-sortable="props.sortable && header.column.getCanSort() ? '' : undefined"
               @click="handleHeaderClick(header, $event)"
             >
@@ -1044,6 +1096,8 @@ defineExpose({
                 :class="getCellClass(cell)"
                 :style="getColumnStyle(cell.column)"
                 :data-pinned="cell.column.getIsPinned() || undefined"
+                :data-pinned-edge="getPinnedEdge(cell.column)"
+                :data-sorted="cell.column.getIsSorted() || undefined"
               >
                 <div
                   v-if="shouldRenderTreeCell(cell, row)"
@@ -1129,6 +1183,37 @@ defineExpose({
             </slot>
           </TableEmpty>
         </TableBody>
+
+        <TableFooter v-if="hasFooter">
+          <TableRow
+            v-for="footerGroup in table.getFooterGroups()"
+            :key="footerGroup.id"
+            class="border-b-0"
+          >
+            <TableCell
+              v-for="footer in footerGroup.headers"
+              :key="footer.id"
+              :colspan="footer.colSpan"
+              :class="getFooterClass(footer)"
+              :style="getColumnStyle(footer.column)"
+              :data-pinned="footer.column.getIsPinned() || undefined"
+              :data-pinned-edge="getPinnedEdge(footer.column)"
+            >
+              <template v-if="!footer.isPlaceholder">
+                <slot
+                  v-if="hasColumnSlot(getFooterSlotName(footer))"
+                  :name="getFooterSlotName(footer)"
+                  v-bind="getFooterSlotProps(footer)"
+                />
+                <FlexRender
+                  v-else-if="footer.column.columnDef.footer"
+                  :render="footer.column.columnDef.footer"
+                  :props="footer.getContext()"
+                />
+              </template>
+            </TableCell>
+          </TableRow>
+        </TableFooter>
       </Table>
     </component>
   </div>

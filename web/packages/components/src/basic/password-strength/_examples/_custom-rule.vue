@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // 组件实际使用时无需手动导入，框架会自动导入
 import { ref } from 'vue'
+import { countGraphemes } from '#utils'
 import FaInput from '../../input/index.vue'
 import FaPasswordStrength from '../index.vue'
 
 const password = ref('')
 
 const rules = [
-  { label: '长度至少为 10 个字符', rule: (value: string) => value.length >= 10 },
+  { label: '长度至少为 10 个字符', rule: (value: string) => countGraphemes(value) >= 10 },
   { label: '包含大写字母', rule: (value: string) => /[A-Z]/.test(value) },
   { label: '包含数字', rule: (value: string) => /\d/.test(value) },
   { label: '包含特殊字符', rule: (value: string) => /[^A-Z0-9]/i.test(value) },

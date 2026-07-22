@@ -51,6 +51,8 @@ export default {
     'packages/*/dist*/**/*',
     'apps/*/src/assets/fonts/**/*',
     'examples/*/src/assets/fonts/**/*',
+    // 本地化 Google Fonts CSS 保留上游属性顺序和 Unicode 分片，由专用 Hash/外链校验器审计。
+    'apps/qsmds-arco/public/assets/fonts/noto/**/*',
     'apps/*/public/tinymce/**/*',
     'examples/*/public/tinymce/**/*',
   ],

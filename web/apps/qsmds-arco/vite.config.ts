@@ -63,6 +63,7 @@ export default defineConfig(({ mode, command }) => {
     }),
     optimizeDeps: {
       exclude: [
+        '@zumer/snapdom',
         '@fantastic-admin/components',
         '@fantastic-admin/composables',
       ],

@@ -16,6 +16,8 @@
     "build:select": "tsx scripts/cli.ts --mode=build",
     "serve:select": "tsx scripts/cli.ts --mode=serve",
     "generate:settings-preferences": "pnpm --filter @fantastic-admin/settings generate:preferences",
+    "fonts:download": "node scripts/download-noto-fonts.mjs",
+    "fonts:verify": "node scripts/verify-noto-fonts.mjs",
     "typecheck": "run-s typecheck:scripts typecheck:app",
     "typecheck:scripts": "tsc -p tsconfig.scripts.json",
     "typecheck:app": "pnpm --filter qsmds-arco run typecheck",

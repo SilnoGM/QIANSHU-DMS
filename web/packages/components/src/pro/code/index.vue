@@ -29,14 +29,8 @@ const { copy, copied, isSupported } = useClipboard({ legacy: true })
 </template>
 
 <style scoped>
-@font-face {
-  font-family: FontWithASyntaxHighlighter;
-  src:
-    url("FontWithASyntaxHighlighter-Regular.woff2")
-    format("woff2");
-}
-
 code {
-  font-family: FontWithASyntaxHighlighter, monospace;
+  /* 字体资源由宿主应用统一注册，公共组件只消费产品等宽语义 Token。 */
+  font-family: var(--qs-font-mono);
 }
 </style>

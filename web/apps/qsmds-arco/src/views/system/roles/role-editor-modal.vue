@@ -5,6 +5,8 @@ import type {
   UpdateRoleRequestDto,
 } from '@/api/generated/types.gen'
 
+import { countGraphemes } from '@/utils/grapheme'
+
 defineOptions({ name: 'RoleEditorModal' })
 
 const props = defineProps<{
@@ -38,6 +40,7 @@ function resetForm(): void {
 }
 
 function codePointLength(value: string): number {
+  // Server/OpenAPI 已按 Unicode 码点定义字段上限；UI 字素簇计数不能改变提交契约。
   return Array.from(value).length
 }
 
@@ -157,7 +160,6 @@ watch(() => [props.visible, props.role] as const, ([visible]) => {
           v-model="form.name"
           :disabled="loading"
           class="w-full"
-          maxlength="128"
           placeholder="请输入便于识别的名称"
           clearable
           @clear="form.name = ''"
@@ -166,7 +168,7 @@ watch(() => [props.visible, props.role] as const, ([visible]) => {
       <FaFormItem
         name="description"
         label="角色说明"
-        :description="`${codePointLength(form.description)} / 2000`"
+        :description="`${countGraphemes(form.description)} / 2000`"
         description-class="text-right"
       >
         <FaTextarea
@@ -174,7 +176,6 @@ watch(() => [props.visible, props.role] as const, ([visible]) => {
           :disabled="loading"
           class="w-full"
           input-class="min-h-24 max-h-56"
-          maxlength="2000"
           placeholder="可选；清空后保存将移除原说明"
         />
       </FaFormItem>

@@ -2,6 +2,23 @@
 :root {
   color-scheme: light;
 
+  /*
+   * 正文与等宽语义只使用项目固定的 Noto 字体。原生 Emoji 是唯一系统字体例外，
+   * 且始终排在业务文本字体之后，不能参与普通中文或拉丁文字的排版。
+   */
+  --qs-font-text-sans: "Noto Sans SC";
+  --qs-font-text-mono: "Noto Sans Mono", "Noto Sans SC";
+  --qs-font-native-emoji:
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Noto Color Emoji";
+  --qs-font-sans:
+    var(--qs-font-text-sans),
+    var(--qs-font-native-emoji);
+  --qs-font-mono:
+    var(--qs-font-text-mono),
+    var(--qs-font-native-emoji);
+
   /* 头部宽度（默认自适应宽度，可固定宽度，固定宽度后为居中显示） */
   --g-header-width: 100%;
 
@@ -64,19 +81,52 @@ body {
   text-autospace: normal;
 }
 
+html {
+  font-family: var(--qs-font-sans);
+
+  /* 禁止浏览器伪造未提供的粗体或斜体，保持不同设备的字形来源一致。 */
+  font-synthesis: none;
+}
+
 body {
   box-sizing: border-box;
   margin: 0;
+  font-family: var(--qs-font-sans);
   -webkit-tap-highlight-color: transparent;
+}
+
+/* 原生表单控件不保证继承 body，显式绑定产品 Sans 避免平台默认字体渗入。 */
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: var(--qs-font-sans);
+}
+
+/*
+ * vue-sonner 在 Toast 容器上直接声明系统字体。增加 html 元素选择器提高优先级，
+ * 确保正式构建无论如何排列依赖 CSS，都使用产品统一的 Sans Token。
+ */
+html [data-sonner-toaster] {
+  font-family: var(--qs-font-sans);
+}
+
+/* 原生代码语义统一使用产品 Mono；中文缺字由 Token 内的 Noto Sans SC 承接。 */
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--qs-font-mono);
 }
 
 #app {
   height: 100%;
 }
 
-/* textarea 字体跟随系统 */
-textarea {
-  font-family: inherit;
+/* 结算单号、金额等需要稳定字符宽度的数据内容统一使用此语义类。 */
+.font-qs-data-mono {
+  font-family: var(--qs-font-mono);
 }
 
 /* medium-zoom */
