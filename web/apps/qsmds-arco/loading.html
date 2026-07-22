@@ -162,6 +162,47 @@
   letter-spacing: 0.04em;
 }
 
+.qianshu-loading__retry {
+  padding: 7px 14px;
+  margin-top: 16px;
+  color: oklch(var(--loading-primary));
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  background: oklch(var(--loading-primary) / 8%);
+  border: 1px solid oklch(var(--loading-primary) / 24%);
+  border-radius: 8px;
+}
+
+.qianshu-loading__retry:hover {
+  background: oklch(var(--loading-primary) / 14%);
+}
+
+.qianshu-loading__retry:focus-visible {
+  outline: 2px solid oklch(var(--loading-primary) / 55%);
+  outline-offset: 3px;
+}
+
+.qianshu-loading__retry[hidden] {
+  display: none;
+}
+
+/* 字体超时或失败后停止“仍在加载”的视觉暗示，并保留可操作的诊断终态。 */
+.qianshu-loading[data-loading-state="font-error"] .qianshu-loading__progress {
+  display: none;
+}
+
+.qianshu-loading[data-loading-state="font-error"] .qianshu-loading__stripes {
+  animation-play-state: paused;
+}
+
+.qianshu-loading[data-loading-state="font-error"] .qianshu-loading__status {
+  color: oklch(var(--loading-foreground) / 78%);
+  letter-spacing: 0;
+}
+
 .qianshu-loading__copyright {
   position: absolute;
   right: max(24px, env(safe-area-inset-right));
@@ -236,6 +277,7 @@
 
 <div
   class="qianshu-loading"
+  data-loading-state="loading"
   role="status"
   aria-live="polite"
   aria-busy="true"
@@ -258,6 +300,7 @@
       <span class="qianshu-loading__progress-value"></span>
     </div>
     <p class="qianshu-loading__status">正在准备工作台</p>
+    <button class="qianshu-loading__retry" type="button" hidden>重新加载</button>
   </div>
 
   <p class="qianshu-loading__copyright">
