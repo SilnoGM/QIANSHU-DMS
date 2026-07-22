@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- Web 工程脚本使用 Node.js 内置 test runner，不引入额外测试运行时。
 import test from 'node:test'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { brotliCompressSync, gzipSync } from 'node:zlib'
 
 import {
   assertWoff2Buffer,
@@ -108,4 +112,34 @@ test('已提交字体快照通过完整性校验', async () => {
     'noto-sans-sc': 101,
   })
   assert.equal(verification.totalShardCount, 108)
+})
+
+test('构建快照仅在显式允许时接受可无损还原的压缩副产物', async (t) => {
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'qianshu-noto-build-'))
+  const releaseDirectory = path.join(temporaryRoot, 'font-release')
+  t.after(() => rm(temporaryRoot, { force: true, recursive: true }))
+
+  await cp(DEFAULT_NOTO_FONT_RELEASE_DIRECTORY, releaseDirectory, { recursive: true })
+  const manifestPath = path.join(releaseDirectory, 'manifest.json')
+  const manifestBuffer = await readFile(manifestPath)
+  await writeFile(`${manifestPath}.gz`, gzipSync(manifestBuffer))
+  await writeFile(`${manifestPath}.br`, brotliCompressSync(manifestBuffer))
+
+  await assert.rejects(
+    verifyNotoFontSnapshot(releaseDirectory),
+    /SHA256SUMS file set mismatch/u,
+  )
+
+  const verification = await verifyNotoFontSnapshot(releaseDirectory, {
+    allowCompressedArtifacts: true,
+  })
+  assert.equal(verification.compressedArtifactCount, 2)
+
+  await writeFile(`${manifestPath}.gz`, gzipSync(Buffer.from('not the manifest')))
+  await assert.rejects(
+    verifyNotoFontSnapshot(releaseDirectory, {
+      allowCompressedArtifacts: true,
+    }),
+    /Compressed font artifact does not match its source/u,
+  )
 })

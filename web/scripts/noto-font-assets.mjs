@@ -12,6 +12,7 @@ import {
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
+import { brotliDecompressSync, gunzipSync } from 'node:zlib'
 
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const webRoot = path.resolve(scriptsDirectory, '..')
@@ -392,7 +393,44 @@ export async function downloadNotoFontSnapshot({
   }
 }
 
-async function verifyChecksumFile(rootDirectory) {
+async function verifyCompressedArtifacts(
+  rootDirectory,
+  compressedRelativeFiles,
+  checksumEntries,
+) {
+  for (const compressedRelativePath of compressedRelativeFiles) {
+    const compressionSuffix = compressedRelativePath.endsWith('.br') ? '.br' : '.gz'
+    const sourceRelativePath = compressedRelativePath.slice(0, -compressionSuffix.length)
+    if (!checksumEntries.has(sourceRelativePath)) {
+      throw new Error(`Compressed font artifact has no snapshot source: ${compressedRelativePath}`)
+    }
+
+    const compressedBuffer = await readRequiredRegularFile(
+      resolveSnapshotPath(rootDirectory, compressedRelativePath),
+    )
+    let decompressedBuffer
+    try {
+      decompressedBuffer = compressionSuffix === '.br'
+        ? brotliDecompressSync(compressedBuffer)
+        : gunzipSync(compressedBuffer)
+    }
+    catch {
+      throw new Error(`Compressed font artifact is invalid: ${compressedRelativePath}`)
+    }
+
+    const sourceBuffer = await readRequiredRegularFile(
+      resolveSnapshotPath(rootDirectory, sourceRelativePath),
+    )
+    if (!decompressedBuffer.equals(sourceBuffer)) {
+      throw new Error(`Compressed font artifact does not match its source: ${compressedRelativePath}`)
+    }
+  }
+}
+
+async function verifyChecksumFile(
+  rootDirectory,
+  { allowCompressedArtifacts = false } = {},
+) {
   const checksumBuffer = await readRequiredRegularFile(path.join(rootDirectory, 'SHA256SUMS'))
   const checksumEntries = new Map()
   for (const line of checksumBuffer.toString('utf8').trim().split('\n')) {
@@ -405,7 +443,13 @@ async function verifyChecksumFile(rootDirectory) {
 
   const actualRelativeFiles = (await listSnapshotFiles(rootDirectory))
     .filter(relativePath => relativePath !== 'SHA256SUMS')
-  assertSameStringSet(checksumEntries.keys(), actualRelativeFiles, 'SHA256SUMS file set')
+  const compressedRelativeFiles = allowCompressedArtifacts
+    ? actualRelativeFiles.filter(relativePath => relativePath.endsWith('.br') || relativePath.endsWith('.gz'))
+    : []
+  const snapshotRelativeFiles = allowCompressedArtifacts
+    ? actualRelativeFiles.filter(relativePath => !compressedRelativeFiles.includes(relativePath))
+    : actualRelativeFiles
+  assertSameStringSet(checksumEntries.keys(), snapshotRelativeFiles, 'SHA256SUMS file set')
 
   for (const [relativePath, expectedHash] of checksumEntries) {
     const buffer = await readRequiredRegularFile(resolveSnapshotPath(rootDirectory, relativePath))
@@ -413,6 +457,11 @@ async function verifyChecksumFile(rootDirectory) {
       throw new Error(`SHA256SUMS mismatch for ${relativePath}`)
     }
   }
+
+  if (allowCompressedArtifacts) {
+    await verifyCompressedArtifacts(rootDirectory, compressedRelativeFiles, checksumEntries)
+  }
+  return compressedRelativeFiles.length
 }
 
 function assertSameStringSet(actualValues, expectedValues, label) {
@@ -425,7 +474,12 @@ function assertSameStringSet(actualValues, expectedValues, label) {
 
 export async function verifyNotoFontSnapshot(
   releaseDirectory = DEFAULT_NOTO_FONT_RELEASE_DIRECTORY,
+  { allowCompressedArtifacts = false } = {},
 ) {
+  if (typeof allowCompressedArtifacts !== 'boolean') {
+    throw new TypeError('allowCompressedArtifacts must be a boolean')
+  }
+
   const absoluteRoot = path.resolve(releaseDirectory)
   const rootStats = await lstat(absoluteRoot)
   if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
@@ -561,6 +615,8 @@ export async function verifyNotoFontSnapshot(
     throw new Error('Font snapshot total shard count is invalid')
   }
 
-  await verifyChecksumFile(absoluteRoot)
-  return { familyShardCounts, totalShardCount }
+  const compressedArtifactCount = await verifyChecksumFile(absoluteRoot, {
+    allowCompressedArtifacts,
+  })
+  return { compressedArtifactCount, familyShardCounts, totalShardCount }
 }
