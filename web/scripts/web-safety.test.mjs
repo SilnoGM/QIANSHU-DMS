@@ -47,6 +47,11 @@ const expectedKeysByMode = {
   ],
 }
 
+const applicationSpecificKeysByDirectory = {
+  // 组件库是千树 DMS 的内部调试能力，不属于三个上游参考应用的公共环境契约。
+  'qsmds-arco': ['VITE_ENABLE_COMPONENT_LIBRARY'],
+}
+
 const appIdentityByDirectory = {
   'core': {
     storagePrefix: 'fantastic-admin-core-reference',
@@ -84,10 +89,15 @@ function getExpectedValues(mode, appDirectoryName) {
     VITE_APP_STORAGE_PREFIX: identity.storagePrefixByMode?.[mode] ?? identity.storagePrefix,
     VITE_APP_TITLE: identity.titleByMode?.[mode] ?? identity.title,
   }
+  // 开发模式便于组件建设而默认展示；test/production 必须保持关闭，只有显式 true 才注册路由。
+  const applicationSpecificValues = appDirectoryName === 'qsmds-arco'
+    ? { VITE_ENABLE_COMPONENT_LIBRARY: mode === 'development' ? 'true' : 'false' }
+    : {}
 
   if (mode === 'development') {
     return {
       ...commonValues,
+      ...applicationSpecificValues,
       VITE_APP_SETTING: 'true',
       VITE_ENABLE_PROXY: 'false',
       VITE_ENABLE_TURBO_CONSOLE: 'false',
@@ -99,6 +109,7 @@ function getExpectedValues(mode, appDirectoryName) {
   if (mode === 'test') {
     return {
       ...commonValues,
+      ...applicationSpecificValues,
       VITE_APP_DISABLE_DEVTOOL: 'false',
       VITE_APP_SETTING: 'false',
       VITE_BUILD_ARCHIVE: 'false',
@@ -110,6 +121,7 @@ function getExpectedValues(mode, appDirectoryName) {
 
   return {
     ...commonValues,
+    ...applicationSpecificValues,
     VITE_APP_DISABLE_DEVTOOL: 'true',
     VITE_APP_SETTING: 'false',
     VITE_BUILD_ARCHIVE: 'false',
@@ -212,7 +224,11 @@ test('所有 Web 应用都提供精确且不含凭据的环境模板', () => {
       assert.equal(fs.existsSync(templatePath), true, `缺少环境模板：${templatePath}`)
 
       const entries = parseEnvTemplate(templatePath)
-      assert.deepEqual(Object.keys(entries).sort(), [...expectedKeysByMode[mode]].sort(), `${templatePath} 的键集合不正确`)
+      const expectedKeys = [
+        ...expectedKeysByMode[mode],
+        ...(applicationSpecificKeysByDirectory[appDirectoryName] ?? []),
+      ]
+      assert.deepEqual(Object.keys(entries).sort(), expectedKeys.sort(), `${templatePath} 的键集合不正确`)
       assert.deepEqual(entries, getExpectedValues(mode, appDirectoryName), `${templatePath} 的公开默认值不正确`)
 
       for (const [key, value] of Object.entries(entries)) {
