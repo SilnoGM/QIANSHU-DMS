@@ -3,10 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico?v=512e9fae" />
-    <link rel="stylesheet" href="/browser_upgrade/index.css" />
-    <!-- 只注册字体资源；具体字体应用范围由 QsGenericTable 的局部变量控制。 -->
+    <!-- 字体声明必须先于首屏 Loading 与浏览器升级样式，确保 Vue 启动前即可使用本地字体。 -->
     <link rel="stylesheet" href="/assets/fonts/noto/google-fonts-css2-2026-07-22/noto-sans-sc/fonts.css" />
     <link rel="stylesheet" href="/assets/fonts/noto/google-fonts-css2-2026-07-22/noto-sans-mono/fonts.css" />
+    <link rel="stylesheet" href="/browser_upgrade/index.css" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover"/>
     <meta http-equiv="Expires" content="0">
     <meta http-equiv="Pragma" content="no-cache">

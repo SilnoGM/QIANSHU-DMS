@@ -54,7 +54,8 @@ function createTerminalInfoPlugin(options: CopyrightOptions = {}): PluginOption 
 
 function createSystemCopyrightPlugin(options: CopyrightOptions = {}): PluginOption {
   const { website } = resolveOptions(options)
-  const fontFamily = 'font-family: "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;'
+  // DevTools 样式无法可靠读取页面 CSS Token，因此显式复用产品 Noto 与原生 Emoji 顺序。
+  const fontFamily = 'font-family: "Noto Sans Mono", "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";'
   const mainStyle = `${fontFamily} font-size: 14px; font-weight: 700; padding: 6px 8px; color: #35495e; background: #42b883;`
   const subStyle = `${fontFamily} font-size: 14px; font-weight: 400; padding: 6px 8px; color: #fff; background: #35495e;`
   const iconStyle = `${fontFamily} font-size: 14px; font-weight: 500; padding: 6px 4px 6px 8px; color: #d7f0ff; background: #1d5b85;`

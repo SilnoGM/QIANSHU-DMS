@@ -67,7 +67,7 @@ test('AmountDisplay 是无业务依赖的行内展示组件', () => {
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
 })
 
-test('结算单号与金额共用 SF Mono 数据字体 Token', () => {
+test('结算单号与金额共用 Noto Sans Mono 语义字体 Token', () => {
   const globalStyles = readRelativeSource(
     '../../src/assets/styles/globals.css',
   )
@@ -80,9 +80,9 @@ test('结算单号与金额共用 SF Mono 数据字体 Token', () => {
 
   assert.match(
     globalStyles,
-    /--qs-font-data-mono:\s*"SF Mono",\s*"SFMono-Regular",\s*ui-monospace,\s*monospace;/u,
+    /--qs-font-text-mono:\s*"Noto Sans Mono",\s*"Noto Sans SC";/u,
   )
-  assert.match(globalStyles, /\.font-qs-data-mono\s*\{[\s\S]*?font-family:\s*var\(--qs-font-data-mono\);/u)
+  assert.match(globalStyles, /\.font-qs-data-mono\s*\{[\s\S]*?font-family:\s*var\(--qs-font-mono\);/u)
   assert.match(amountSource, /font-qs-data-mono/u)
   assert.equal(showcaseSource.match(/font-qs-data-mono/gu)?.length, 2)
   assert.equal(

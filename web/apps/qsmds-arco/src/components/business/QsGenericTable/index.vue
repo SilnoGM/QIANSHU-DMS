@@ -764,12 +764,10 @@ watch([tableColumns, isNarrow], () => {
 <style scoped>
 /*
  * 通用表格使用独立但克制的排版比例：13px 表头、14px 正文、12px 辅助信息。
- * 中文与正文使用 Noto Sans SC；业务编码和金额通过局部数据字体变量使用
- * Noto Sans Mono。Mono 不包含的中文字符继续回退到 Noto Sans SC。
+ * 表格正文只消费全局 Sans Token；业务编码和金额通过 font-qs-data-mono
+ * 消费全局 Mono Token，组件内不再维护另一套字体回退规则。
  */
 .qs-generic-table {
-  --qs-table-font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --qs-font-data-mono: "Noto Sans Mono", "Noto Sans SC", "SF Mono", "SFMono-Regular", ui-monospace, monospace;
   --qs-table-header-font-size: 0.8125rem;
   --qs-table-body-font-size: 0.875rem;
   --qs-table-meta-font-size: 0.75rem;
@@ -777,7 +775,7 @@ watch([tableColumns, isNarrow], () => {
   --qs-table-pinned-overlay-middle: oklch(24% 0.012 285deg / 2%);
   --qs-table-pinned-overlay-end: oklch(24% 0.012 285deg / 0%);
 
-  font-family: var(--qs-table-font-family);
+  font-family: var(--qs-font-sans);
   font-size: var(--qs-table-body-font-size);
   line-height: 1.25rem;
   color: oklch(var(--foreground));

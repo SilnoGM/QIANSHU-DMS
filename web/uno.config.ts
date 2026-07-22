@@ -75,6 +75,13 @@ export default defineConfig({
       return cls.join(' ')
     }],
   ],
+  theme: {
+    /* UnoCSS 字体工具类只引用产品 Token，避免 presetWind4 注入平台字体栈。 */
+    font: {
+      sans: 'var(--qs-font-sans)',
+      mono: 'var(--qs-font-mono)',
+    },
+  },
   presets: [
     presetWind4(),
     presetAnimations(),

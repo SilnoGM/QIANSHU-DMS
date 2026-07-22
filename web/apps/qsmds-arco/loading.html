@@ -46,7 +46,8 @@
   padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
   overflow: hidden;
   color: oklch(var(--loading-foreground));
-  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+  /* Loading 早于 globals.css 生效，因此在此复制产品 Sans 与原生 Emoji 的固定顺序。 */
+  font-family: "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   text-align: center;
   user-select: none;
   background: linear-gradient(

@@ -186,13 +186,10 @@ test('通用表格使用分层文字排版并为数字提供稳定的纵向比�
   const showcaseSource = readRelativeSource(
     '../../src/views/component_library/business/components/GenericTableShowcase.vue',
   )
-  const appHtml = readRelativeSource('../../index.html')
 
-  // HTML 只注册自托管字体，实际字体变量限定在 QsGenericTable 根节点内，不能替换全局默认字体。
-  assert.match(appHtml, /href="\/assets\/fonts\/noto\/google-fonts-css2-2026-07-22\/noto-sans-sc\/fonts\.css"/u)
-  assert.match(appHtml, /href="\/assets\/fonts\/noto\/google-fonts-css2-2026-07-22\/noto-sans-mono\/fonts\.css"/u)
-  assert.match(tableSource, /--qs-table-font-family:\s*"Noto Sans SC",\s*"PingFang SC",\s*"Microsoft YaHei",\s*sans-serif;/u)
-  assert.match(tableSource, /--qs-font-data-mono:\s*"Noto Sans Mono",\s*"Noto Sans SC",\s*"SF Mono",\s*"SFMono-Regular",\s*ui-monospace,\s*monospace;/u)
+  // 通用表格只消费全局 Sans Token；编码与金额继续通过语义类消费全局 Mono Token。
+  assert.match(tableSource, /font-family:\s*var\(--qs-font-sans\);/u)
+  assert.doesNotMatch(tableSource, /--qs-table-font-family|--qs-font-data-mono/u)
 
   // 表头、正文和辅助信息分别使用 13px、14px、12px，避免字号层级依赖底层默认值。
   assert.match(tableSource, /--qs-table-header-font-size: 0\.8125rem/u)
