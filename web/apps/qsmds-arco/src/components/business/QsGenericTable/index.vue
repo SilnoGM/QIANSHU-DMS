@@ -764,10 +764,12 @@ watch([tableColumns, isNarrow], () => {
 <style scoped>
 /*
  * 通用表格使用独立但克制的排版比例：13px 表头、14px 正文、12px 辅助信息。
- * 数字仍沿用正文系统字体，只开启 tabular-nums，避免把金额和百分比误做成代码。
+ * 中文与正文使用 Noto Sans SC；业务编码和金额通过局部数据字体变量使用
+ * Noto Sans Mono。Mono 不包含的中文字符继续回退到 Noto Sans SC。
  */
 .qs-generic-table {
-  --qs-table-font-family: -apple-system, "BlinkMacSystemFont", "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --qs-table-font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --qs-font-data-mono: "Noto Sans Mono", "Noto Sans SC", "SF Mono", "SFMono-Regular", ui-monospace, monospace;
   --qs-table-header-font-size: 0.8125rem;
   --qs-table-body-font-size: 0.875rem;
   --qs-table-meta-font-size: 0.75rem;
