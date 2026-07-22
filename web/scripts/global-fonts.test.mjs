@@ -33,6 +33,37 @@ const allowedFontFamilies = new Set([
   ...nativeEmojiFamilies,
 ])
 const runtimeSourceExtensions = new Set(['.css', '.html', '.scss', '.ts', '.vue'])
+const controlledFontAssetRoots = [
+  'apps/qsmds-arco',
+  'packages',
+]
+const notoSnapshotRoot = 'apps/qsmds-arco/public/assets/fonts/noto/google-fonts-css2-2026-07-22/'
+const fontBinaryPattern = /\.(?:eot|otf|ttf|woff2?)$/iu
+const legacyFontPathPattern = /(?:fontwithasyntaxhighlighter|digital[-_ ]?7)/iu
+
+function normalizeWebRelativePath(absolutePath) {
+  return relative(webRoot, absolutePath).replaceAll('\\', '/')
+}
+
+function collectFiles(rootPath) {
+  const files = []
+
+  for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
+    const absolutePath = join(rootPath, entry.name)
+
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name.startsWith('dist-')) {
+        continue
+      }
+      files.push(...collectFiles(absolutePath))
+    }
+    else if (entry.isFile()) {
+      files.push(absolutePath)
+    }
+  }
+
+  return files
+}
 
 function collectRuntimeSourceFiles(rootPath) {
   const files = []
@@ -164,4 +195,25 @@ test('项目自有正式运行时代码不再声明其他正文或等宽字体',
   for (const runtimeFile of runtimeFiles) {
     assertAllowedFontFamilyDeclarations(runtimeFile)
   }
+})
+
+test('正式应用与共享包物理上只保留固定 Noto 字体快照', () => {
+  // `web/examples` 是上游参考应用，用户已明确要求保留；守卫覆盖整个正式应用与共享包，
+  // 只排除依赖目录和可重复生成的 dist*，避免旧字体藏到 src/public 之外。
+  const controlledFiles = controlledFontAssetRoots.flatMap(root => collectFiles(join(webRoot, root)))
+  const residues = controlledFiles
+    .map(normalizeWebRelativePath)
+    .filter((relativePath) => {
+      if (legacyFontPathPattern.test(relativePath)) {
+        return true
+      }
+      return fontBinaryPattern.test(relativePath) && !relativePath.startsWith(notoSnapshotRoot)
+    })
+    .sort()
+
+  assert.equal(
+    residues.length,
+    0,
+    `正式应用或共享包仍存在非 Noto 字体资产：\n${residues.join('\n')}`,
+  )
 })

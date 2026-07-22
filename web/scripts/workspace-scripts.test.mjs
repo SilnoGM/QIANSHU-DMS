@@ -117,3 +117,16 @@ test('正式业务应用提供语义明确的 typecheck 命令', () => {
   const { scripts } = readJson('apps/qsmds-arco/package.json')
   assert.equal(scripts.typecheck, 'vue-tsc -b')
 })
+
+test('正式构建与测试构建都不能绕过字体物理零残留守卫', () => {
+  const { scripts } = readJson('apps/qsmds-arco/package.json')
+
+  assert.equal(
+    scripts.build,
+    'vue-tsc -b && vite build && node ../../scripts/verify-noto-fonts.mjs dist/assets/fonts/noto/google-fonts-css2-2026-07-22 --allow-compressed-artifacts && node ../../scripts/verify-font-zero-residue.mjs dist',
+  )
+  assert.equal(
+    scripts['build:test'],
+    'vue-tsc -b && vite build --mode test && node ../../scripts/verify-noto-fonts.mjs dist-test/assets/fonts/noto/google-fonts-css2-2026-07-22 --allow-compressed-artifacts && node ../../scripts/verify-font-zero-residue.mjs dist-test',
+  )
+})
