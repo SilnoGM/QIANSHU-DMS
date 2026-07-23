@@ -98,7 +98,7 @@ test('金额通过 data-emphasis 角色统一消费 Mono 14/20/500 与等宽数�
   assert.doesNotMatch(showcaseSource, /\bweight="semibold"/u)
 })
 
-test('基础组件页面展示四币种与边界状态，并由展示壳在有资产时替换空状态', () => {
+test('金额独立页面展示四币种与边界状态，并且不再挂载其他组件展示区', () => {
   const pageSource = readRelativeSource(
     '../../src/views/component_library/basic/index.vue',
   )
@@ -107,8 +107,12 @@ test('基础组件页面展示四币种与边界状态，并由展示壳在有�
   )
 
   assert.match(pageSource, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
-  assert.match(pageSource, /stage-label="两个组件已展示"/u)
+  assert.match(pageSource, /defineOptions\(\{ name: 'ComponentLibraryAmountDisplay' \}\)/u)
+  assert.match(pageSource, /title="金额显示"/u)
+  assert.match(pageSource, /route-path="\/component-library\/basic\/amount-display"/u)
+  assert.match(pageSource, /stage-label="金额组件已展示"/u)
   assert.match(pageSource, /<AmountDisplay/u)
+  assert.doesNotMatch(pageSource, /DateTimeDisplayShowcase|GenericTableShowcase/u)
   for (const currency of ['CNY', 'TWD', 'MYR', 'USD']) {
     assert.match(pageSource, new RegExp(`currency: '${currency}'`, 'u'))
   }

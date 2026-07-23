@@ -93,17 +93,21 @@ test('DateTimeDisplay 是带语义与无障碍信息的无业务依赖展示组�
   assert.match(shortcut, /\btabular-nums\b/u)
 })
 
-test('基础组件页面接入日期时间展示区，并保持示例与业务依赖隔离', () => {
+test('日期独立页面只挂载日期展示区，并保持示例与业务依赖隔离', () => {
   const pageSource = readRelativeSource(
-    '../../src/views/component_library/basic/index.vue',
+    '../../src/views/component_library/basic/date-time-display.vue',
   )
   const showcaseSource = readRelativeSource(
     '../../src/views/component_library/basic/components/DateTimeDisplayShowcase.vue',
   )
 
+  assert.match(pageSource, /defineOptions\(\{ name: 'ComponentLibraryDateTimeDisplay' \}\)/u)
   assert.match(pageSource, /import DateTimeDisplayShowcase from '.\/components\/DateTimeDisplayShowcase\.vue'/u)
-  assert.match(pageSource, /stage-label="两个组件已展示"/u)
+  assert.match(pageSource, /title="日期显示"/u)
+  assert.match(pageSource, /route-path="\/component-library\/basic\/date-time-display"/u)
+  assert.match(pageSource, /stage-label="日期组件已展示"/u)
   assert.match(pageSource, /<DateTimeDisplayShowcase\s*\/>/u)
+  assert.doesNotMatch(pageSource, /AmountDisplay|GenericTableShowcase/u)
   assert.match(showcaseSource, /<DateTimeDisplay/u)
   for (const timeZone of ['Asia/Shanghai', 'Asia/Taipei', 'Asia/Kuala_Lumpur', 'America/New_York']) {
     assert.match(showcaseSource, new RegExp(`timeZone: '${timeZone}'`, 'u'))

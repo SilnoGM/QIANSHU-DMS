@@ -5,6 +5,10 @@ interface ComponentLibraryEnvironment {
   VITE_ENABLE_COMPONENT_LIBRARY?: boolean
 }
 
+function Layout() {
+  return import('@/layouts/index.vue')
+}
+
 /**
  * 本地开发始终保留组件调试入口，避免真实 `.env` 成为开发前置条件。
  * 非开发构建必须显式传入公开布尔开关，确保生产默认不注册内部路由。
@@ -14,29 +18,65 @@ export function shouldEnableComponentLibrary(environment: ComponentLibraryEnviro
 }
 
 /**
- * 三个分类保持为次导航一级叶子路由，由 route Store 的 singleMenu 转换负责挂载正式 Layout。
- * 分类内部只有在真实组件数量增长后才增加子路由，避免首期建立空洞的多级结构。
+ * 基础组件与业务组件使用分类父路由，每个可验收组件拥有独立叶子路由。
+ * 父路径显式重定向到首个组件，既兼容历史分类地址，也保证直接刷新有确定落点。
+ * 页面模板尚未形成多个资产，继续使用 singleMenu 保持现有导航层级。
  */
 const routes: RouteRecordRaw[] = [
   {
     path: '/component-library/basic',
     name: 'componentLibraryBasic',
-    component: () => import('@/views/component_library/basic/index.vue'),
+    component: Layout,
+    redirect: {
+      name: 'componentLibraryAmountDisplay',
+    },
     meta: {
       title: '基础组件',
       icon: 'i-lucide:shapes',
-      singleMenu: true,
     },
+    children: [
+      {
+        path: 'amount-display',
+        name: 'componentLibraryAmountDisplay',
+        component: () => import('@/views/component_library/basic/index.vue'),
+        meta: {
+          title: '金额显示',
+          icon: 'i-lucide:badge-dollar-sign',
+        },
+      },
+      {
+        path: 'date-time-display',
+        name: 'componentLibraryDateTimeDisplay',
+        component: () => import('@/views/component_library/basic/date-time-display.vue'),
+        meta: {
+          title: '日期显示',
+          icon: 'i-lucide:clock-3',
+        },
+      },
+    ],
   },
   {
     path: '/component-library/business',
     name: 'componentLibraryBusiness',
-    component: () => import('@/views/component_library/business/index.vue'),
+    component: Layout,
+    redirect: {
+      name: 'componentLibraryGenericTable',
+    },
     meta: {
       title: '业务组件',
       icon: 'i-lucide:workflow',
-      singleMenu: true,
     },
+    children: [
+      {
+        path: 'generic-table',
+        name: 'componentLibraryGenericTable',
+        component: () => import('@/views/component_library/business/index.vue'),
+        meta: {
+          title: '通用表格',
+          icon: 'i-lucide:table-2',
+        },
+      },
+    ],
   },
   {
     path: '/component-library/page-templates',

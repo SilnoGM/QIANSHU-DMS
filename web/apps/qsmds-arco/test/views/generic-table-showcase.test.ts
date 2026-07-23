@@ -7,7 +7,7 @@ function readRelativeSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
-test('业务组件页面展示通用表格及金额汇总自定义组件', () => {
+test('通用表格独立页面只挂载表格展示区，并保留金额汇总自定义组件', () => {
   const pageSource = readRelativeSource(
     '../../src/views/component_library/business/index.vue',
   )
@@ -15,9 +15,13 @@ test('业务组件页面展示通用表格及金额汇总自定义组件', () =>
     '../../src/views/component_library/business/components/GenericTableShowcase.vue',
   )
 
+  assert.match(pageSource, /defineOptions\(\{ name: 'ComponentLibraryGenericTable' \}\)/u)
   assert.match(pageSource, /import GenericTableShowcase from '.\/components\/GenericTableShowcase\.vue'/u)
-  assert.match(pageSource, /stage-label="首个组件已展示"/u)
+  assert.match(pageSource, /title="通用表格"/u)
+  assert.match(pageSource, /route-path="\/component-library\/business\/generic-table"/u)
+  assert.match(pageSource, /stage-label="通用表格已展示"/u)
   assert.match(pageSource, /<GenericTableShowcase\s*\/>/u)
+  assert.doesNotMatch(pageSource, /DateTimeDisplayShowcase/u)
   assert.match(showcaseSource, /<QsGenericTable/u)
   assert.match(showcaseSource, /component: AmountDisplay/u)
   assert.match(showcaseSource, /currency: 'CNY'/u)

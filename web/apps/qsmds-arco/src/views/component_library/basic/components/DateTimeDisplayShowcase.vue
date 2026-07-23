@@ -84,7 +84,7 @@ const stateExamples: readonly DateTimeStateExample[] = [
 </script>
 
 <template>
-  <section class="mt-8" aria-labelledby="date-time-display-title">
+  <section aria-labelledby="date-time-display-title">
     <div class="p-5 border border-border rounded-xl bg-background sm-p-7">
       <div class="flex flex-wrap gap-4 items-start justify-between">
         <div class="min-w-0">

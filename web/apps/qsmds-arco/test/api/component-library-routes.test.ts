@@ -24,34 +24,71 @@ test('组件库在开发环境默认开启，其他环境必须显式启用', ()
   }), true)
 })
 
-test('组件库提供三个稳定的次导航一级路由', () => {
+test('组件库按分类提供三个独立组件路由', () => {
+  const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
+
+  assert.equal(basicRoute?.name, 'componentLibraryBasic')
+  assert.equal(basicRoute?.path, '/component-library/basic')
+  assert.equal(basicRoute?.meta?.title, '基础组件')
+  assert.equal(basicRoute?.meta?.singleMenu, undefined)
+  assert.deepEqual(basicRoute?.redirect, {
+    name: 'componentLibraryAmountDisplay',
+  })
   assert.deepEqual(
-    componentLibraryRoutes.map(route => ({
+    basicRoute?.children?.map(route => ({
       name: route.name,
       path: route.path,
-      singleMenu: route.meta?.singleMenu,
       title: route.meta?.title,
     })),
     [
       {
-        name: 'componentLibraryBasic',
-        path: '/component-library/basic',
-        singleMenu: true,
-        title: '基础组件',
+        name: 'componentLibraryAmountDisplay',
+        path: 'amount-display',
+        title: '金额显示',
       },
       {
-        name: 'componentLibraryBusiness',
-        path: '/component-library/business',
-        singleMenu: true,
-        title: '业务组件',
-      },
-      {
-        name: 'componentLibraryPageTemplates',
-        path: '/component-library/page-templates',
-        singleMenu: true,
-        title: '页面模板',
+        name: 'componentLibraryDateTimeDisplay',
+        path: 'date-time-display',
+        title: '日期显示',
       },
     ],
+  )
+
+  assert.equal(businessRoute?.name, 'componentLibraryBusiness')
+  assert.equal(businessRoute?.path, '/component-library/business')
+  assert.equal(businessRoute?.meta?.title, '业务组件')
+  assert.equal(businessRoute?.meta?.singleMenu, undefined)
+  assert.deepEqual(businessRoute?.redirect, {
+    name: 'componentLibraryGenericTable',
+  })
+  assert.deepEqual(
+    businessRoute?.children?.map(route => ({
+      name: route.name,
+      path: route.path,
+      title: route.meta?.title,
+    })),
+    [
+      {
+        name: 'componentLibraryGenericTable',
+        path: 'generic-table',
+        title: '通用表格',
+      },
+    ],
+  )
+
+  assert.equal(pageTemplatesRoute?.name, 'componentLibraryPageTemplates')
+  assert.equal(pageTemplatesRoute?.path, '/component-library/page-templates')
+  assert.equal(pageTemplatesRoute?.meta?.title, '页面模板')
+  assert.equal(pageTemplatesRoute?.meta?.singleMenu, true)
+
+  const componentRouteNames = [
+    ...(basicRoute?.children ?? []),
+    ...(businessRoute?.children ?? []),
+  ].map(route => route.name)
+  assert.equal(new Set(componentRouteNames).size, 3)
+  assert.ok(
+    [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
+      .every(route => !route.path.startsWith('/')),
   )
 })
 
@@ -75,17 +112,22 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('三个分类页面复用展示壳且不依赖业务 API 或 Store', () => {
+test('三个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
-      componentName: 'ComponentLibraryBasic',
+      componentName: 'ComponentLibraryAmountDisplay',
       file: '../../src/views/component_library/basic/index.vue',
-      title: '基础组件',
+      title: '金额显示',
     },
     {
-      componentName: 'ComponentLibraryBusiness',
+      componentName: 'ComponentLibraryDateTimeDisplay',
+      file: '../../src/views/component_library/basic/date-time-display.vue',
+      title: '日期显示',
+    },
+    {
+      componentName: 'ComponentLibraryGenericTable',
       file: '../../src/views/component_library/business/index.vue',
-      title: '业务组件',
+      title: '通用表格',
     },
     {
       componentName: 'ComponentLibraryPageTemplates',
