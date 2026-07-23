@@ -764,8 +764,8 @@ watch([tableColumns, isNarrow], () => {
 <style scoped>
 /*
  * 通用表格使用独立但克制的排版比例：13px 表头、14px 正文、12px 辅助信息。
- * 表格正文只消费全局 Sans Token；业务编码和金额通过 font-qs-data-mono
- * 消费全局 Mono Token，组件内不再维护另一套字体回退规则。
+ * 组件不声明 font-family，正文直接继承 html/body 的全局 Sans Token；
+ * 业务编码和金额通过 font-qs-data-mono 消费全局 Mono Token。
  */
 .qs-generic-table {
   --qs-table-header-font-size: 0.8125rem;
@@ -775,7 +775,6 @@ watch([tableColumns, isNarrow], () => {
   --qs-table-pinned-overlay-middle: oklch(24% 0.012 285deg / 2%);
   --qs-table-pinned-overlay-end: oklch(24% 0.012 285deg / 0%);
 
-  font-family: var(--qs-font-sans);
   font-size: var(--qs-table-body-font-size);
   line-height: 1.25rem;
   color: oklch(var(--foreground));
@@ -788,7 +787,6 @@ watch([tableColumns, isNarrow], () => {
 }
 
 .qs-generic-table :deep([data-slot="table"]) {
-  font-family: inherit;
   font-size: var(--qs-table-body-font-size);
   line-height: 1.25rem;
 }

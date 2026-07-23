@@ -187,9 +187,8 @@ test('通用表格使用分层文字排版并为数字提供稳定的纵向比�
     '../../src/views/component_library/business/components/GenericTableShowcase.vue',
   )
 
-  // 通用表格只消费全局 Sans Token；编码与金额继续通过语义类消费全局 Mono Token。
-  assert.match(tableSource, /font-family:\s*var\(--qs-font-sans\);/u)
-  assert.doesNotMatch(tableSource, /--qs-table-font-family|--qs-font-data-mono/u)
+  // 通用表格完全继承全局字体，不在组件内重复声明字体栈或字体级联规则。
+  assert.doesNotMatch(tableSource, /font-family\s*:|--qs-table-font-family|--qs-font-data-mono/u)
 
   // 表头、正文和辅助信息分别使用 13px、14px、12px，避免字号层级依赖底层默认值。
   assert.match(tableSource, /--qs-table-header-font-size: 0\.8125rem/u)
