@@ -2,7 +2,7 @@
 import ComponentCatalogPage from '../shared/ComponentCatalogPage.vue'
 import GenericTableShowcase from './components/GenericTableShowcase.vue'
 
-defineOptions({ name: 'ComponentLibraryBusiness' })
+defineOptions({ name: 'ComponentLibraryGenericTable' })
 
 const principles = [
   {
@@ -25,16 +25,16 @@ const principles = [
 
 <template>
   <ComponentCatalogPage
-    title="业务组件"
-    description="集中验收带有领域语义、但能够跨业务页面复用的交互组件。"
-    section-label="领域交互"
-    headline="让业务语义清晰，让数据副作用可控"
-    summary="业务组件可以封装稳定的领域交互，但服务端仍是权限和数据正确性的最终边界。示例页只展示状态与事件，不承担正式业务流程。"
-    route-path="/component-library/business"
-    icon="i-lucide:workflow"
+    title="通用表格"
+    description="独立验收 QsGenericTable 的查询状态、操作列、汇总和响应式展示。"
+    section-label="QsGenericTable"
+    headline="统一数据浏览与行级操作"
+    summary="通用表格组合搜索、筛选、排序、分页、列设置、汇总和移动卡片；页面仍负责数据请求、权限判断和所有写入副作用。"
+    route-path="/component-library/business/generic-table"
+    icon="i-lucide:table-2"
     :principles="principles"
-    stage-label="首个组件已展示"
-    empty-description="后续仅在出现真实跨页面复用需求时增加业务组件，避免为假设场景提前抽象。"
+    stage-label="通用表格已展示"
+    empty-description="通用表格示例尚未接入。"
   >
     <GenericTableShowcase />
   </ComponentCatalogPage>

@@ -2,9 +2,8 @@
 import type { CurrencyAmountValue, CurrencyCode } from '@/components/base/AmountDisplay/format'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import ComponentCatalogPage from '../shared/ComponentCatalogPage.vue'
-import DateTimeDisplayShowcase from './components/DateTimeDisplayShowcase.vue'
 
-defineOptions({ name: 'ComponentLibraryBasic' })
+defineOptions({ name: 'ComponentLibraryAmountDisplay' })
 
 const principles = [
   {
@@ -69,16 +68,16 @@ const stateExamples: readonly CurrencyExample[] = [
 
 <template>
   <ComponentCatalogPage
-    title="基础组件"
-    description="沉淀可由多个业务页面直接复用的低耦合界面能力。"
-    section-label="基础能力"
-    headline="先稳定组件接口，再进入业务页面"
-    summary="本分类只接收具备清晰输入输出、完整状态和真实复用价值的组件。Arco Design Vue 与 Fantastic-admin 已有能力继续查阅现有手册，不在这里重复建设。"
-    route-path="/component-library/basic"
-    icon="i-lucide:shapes"
+    title="金额显示"
+    description="独立验收 AmountDisplay 的多币种、精度、舍入和空值边界。"
+    section-label="AmountDisplay"
+    headline="稳定显示四种结算币种"
+    summary="金额组件只负责格式化展示，不读取业务 Store 或调用 API。精确金额优先传入十进制字符串，统一输出币种符号、千分位和两位小数。"
+    route-path="/component-library/basic/amount-display"
+    icon="i-lucide:badge-dollar-sign"
     :principles="principles"
-    stage-label="两个组件已展示"
-    empty-description="阶段三将选择一个真实基础组件，完成测试、实现、状态示例和业务页面复用闭环。"
+    stage-label="金额组件已展示"
+    empty-description="金额组件示例尚未接入。"
   >
     <section aria-labelledby="amount-display-title">
       <div class="p-5 border border-border rounded-xl bg-background sm-p-7">
@@ -86,7 +85,7 @@ const stateExamples: readonly CurrencyExample[] = [
           <div class="min-w-0">
             <div class="text-primary flex gap-2 items-center">
               <FaIcon name="i-lucide:badge-dollar-sign" class="size-5" />
-              <span class="text-xs tracking-[0.16em] font-semibold">首个基础组件</span>
+              <span class="text-xs tracking-[0.16em] font-semibold">基础显示组件</span>
             </div>
             <h3 id="amount-display-title" class="text-xl tracking-tight font-semibold m-0 mt-3 sm-text-2xl">
               金额格式化显示
@@ -196,6 +195,5 @@ const stateExamples: readonly CurrencyExample[] = [
         </div>
       </div>
     </section>
-    <DateTimeDisplayShowcase />
   </ComponentCatalogPage>
 </template>
