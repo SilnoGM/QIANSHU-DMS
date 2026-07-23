@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import * as defaultFileSystem from 'node:fs/promises'
 import net from 'node:net'
 import os from 'node:os'
@@ -29,6 +29,13 @@ const healthTimeoutMilliseconds = 30_000
 const healthPollMilliseconds = 250
 const portAttemptLimit = 3
 const processTerminationGraceMilliseconds = 5_000
+const serverSmokeAppOrigin = 'https://release-smoke.invalid'
+const serverSmokeHmacKeyBytes = 32
+const serverSmokeHmacKeyNames = Object.freeze([
+  'AUTH_USERNAME_HMAC_KEY',
+  'AUTH_USER_ID_HMAC_KEY',
+  'AUTH_IP_HMAC_KEY',
+])
 
 export const RELEASE_PACKAGE_FAILURE_CODES = Object.freeze({
   archiveCreate: 'RELEASE_PACKAGE_ARCHIVE_CREATE_FAILED',
@@ -37,6 +44,7 @@ export const RELEASE_PACKAGE_FAILURE_CODES = Object.freeze({
   outputPrepare: 'RELEASE_PACKAGE_OUTPUT_PREPARE_FAILED',
   serverDeploy: 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED',
   serverPrune: 'RELEASE_PACKAGE_SERVER_PRUNE_FAILED',
+  serverSmoke: 'RELEASE_PACKAGE_SERVER_SMOKE_FAILED',
   stageCleanup: 'RELEASE_PACKAGE_STAGE_CLEANUP_FAILED',
   stageCreate: 'RELEASE_PACKAGE_STAGE_CREATE_FAILED',
   stageValidate: 'RELEASE_PACKAGE_STAGE_VALIDATE_FAILED',
@@ -1162,6 +1170,28 @@ function sanitizedDatabaseEnv(sourceEnv, databaseUrl, extra = {}) {
   return env
 }
 
+function createServerSmokeEnvironment(sourceEnv, databaseUrl) {
+  const generatedKeys = new Set()
+  while (generatedKeys.size < serverSmokeHmacKeyNames.length) {
+    generatedKeys.add(randomBytes(serverSmokeHmacKeyBytes).toString('base64url'))
+  }
+  const keys = [...generatedKeys]
+  const authenticationEnv = Object.fromEntries(
+    serverSmokeHmacKeyNames.map((name, index) => [name, keys[index]]),
+  )
+  /*
+   * Release smoke 必须经过真实 production 配置校验，但绝不能依赖或继承部署
+   * 环境中的长期密钥。这里为一次 smoke 调用生成三把独立临时 key，并覆盖调用方
+   * 同名变量；migration 与随后所有端口重试复用同一份环境，既保持测试封闭，也
+   * 避免真实 Secret 被无意传播到 smoke 子进程。
+   */
+  return Object.freeze(sanitizedDatabaseEnv(sourceEnv, databaseUrl, {
+    NODE_ENV: 'production',
+    APP_ORIGIN: serverSmokeAppOrigin,
+    ...authenticationEnv,
+  }))
+}
+
 async function extractServerArchive(
   input,
   policy,
@@ -1288,12 +1318,17 @@ async function stopProcessGroup(handle, signal, dependencies) {
   await completion
 }
 
-async function runHealthAttempt(serverRoot, port, input, dependencies, signalState) {
-  const childEnv = sanitizedDatabaseEnv(
-    dependencies.env,
-    input.databaseUrl,
-    { NODE_ENV: 'production', PORT: String(port) },
-  )
+async function runHealthAttempt(
+  serverRoot,
+  port,
+  smokeEnvironment,
+  dependencies,
+  signalState,
+) {
+  const childEnv = {
+    ...smokeEnvironment,
+    PORT: String(port),
+  }
   const handle = dependencies.processGroup.spawn(
     process.execPath,
     ['dist/main.js'],
@@ -1365,7 +1400,7 @@ async function runHealthAttempt(serverRoot, port, input, dependencies, signalSta
   }
 }
 
-export async function smokeServerArchive(input, dependencies = {}) {
+async function runServerArchiveSmoke(input, dependencies = {}) {
   const normalizedInput = normalizeSmokeInput(input)
   const normalizedDependencies = normalizeDependencies(dependencies)
   if (
@@ -1381,7 +1416,7 @@ export async function smokeServerArchive(input, dependencies = {}) {
     policy,
     normalizedDependencies,
   )
-  const migrationEnv = sanitizedDatabaseEnv(
+  const smokeEnvironment = createServerSmokeEnvironment(
     normalizedDependencies.env,
     normalizedInput.databaseUrl,
   )
@@ -1389,7 +1424,7 @@ export async function smokeServerArchive(input, dependencies = {}) {
     normalizedDependencies.run,
     'pnpm',
     ['-C', 'server', 'db:migrate:deploy'],
-    { cwd: normalizedDependencies.repositoryRoot, env: migrationEnv },
+    { cwd: normalizedDependencies.repositoryRoot, env: smokeEnvironment },
   )
 
   const rm = resolveFileSystemMethod(normalizedDependencies.fileSystem, 'rm')
@@ -1427,7 +1462,7 @@ export async function smokeServerArchive(input, dependencies = {}) {
       const passed = await runHealthAttempt(
         extracted.serverRoot,
         reservation.port,
-        normalizedInput,
+        smokeEnvironment,
         normalizedDependencies,
         signalState,
       )
@@ -1452,6 +1487,13 @@ export async function smokeServerArchive(input, dependencies = {}) {
       }
     }
   }
+}
+
+export function smokeServerArchive(input, dependencies = {}) {
+  return withReleasePackageStage(
+    RELEASE_PACKAGE_FAILURE_CODES.serverSmoke,
+    () => runServerArchiveSmoke(input, dependencies),
+  )
 }
 
 export function parseReleasePackageArguments(argv, cwd = process.cwd()) {

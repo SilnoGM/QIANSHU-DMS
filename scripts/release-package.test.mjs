@@ -30,6 +30,12 @@ const entrypoint = path.join(scriptsDirectory, 'release-package.mjs')
 const tag = 'v1.2.3'
 const databaseUrl =
   'postgresql://qianshu_ci:fixture-password@127.0.0.1:54321/qianshu_ci?schema=public'
+const smokeAppOrigin = 'https://release-smoke.invalid'
+const smokeHmacKeyNames = Object.freeze([
+  'AUTH_USERNAME_HMAC_KEY',
+  'AUTH_USER_ID_HMAC_KEY',
+  'AUTH_IP_HMAC_KEY',
+])
 
 function webPolicy(versionTag = tag) {
   return {
@@ -856,6 +862,7 @@ test('ReleasePackageStageError 只接受白名单 code 并保留安全退出码'
     outputPrepare: 'RELEASE_PACKAGE_OUTPUT_PREPARE_FAILED',
     serverDeploy: 'RELEASE_PACKAGE_SERVER_DEPLOY_FAILED',
     serverPrune: 'RELEASE_PACKAGE_SERVER_PRUNE_FAILED',
+    serverSmoke: 'RELEASE_PACKAGE_SERVER_SMOKE_FAILED',
     stageCleanup: 'RELEASE_PACKAGE_STAGE_CLEANUP_FAILED',
     stageCreate: 'RELEASE_PACKAGE_STAGE_CREATE_FAILED',
     stageValidate: 'RELEASE_PACKAGE_STAGE_VALIDATE_FAILED',
@@ -1656,6 +1663,13 @@ test('smoke 先 migration/安全提取，再以净化 env 和动态端口启动 
     }
   }
   const harness = createDependencies(fixture, { processGroup, run })
+  const callerCanaries = {
+    APP_ORIGIN: 'https://production.example.com',
+    AUTH_USERNAME_HMAC_KEY: 'caller-username-secret',
+    AUTH_USER_ID_HMAC_KEY: 'caller-user-id-secret',
+    AUTH_IP_HMAC_KEY: 'caller-ip-secret',
+  }
+  Object.assign(harness.dependencies.env, callerCanaries)
 
   await smokeServerArchive(
     { archivePath: archive.archivePath, databaseUrl, tag },
@@ -1689,6 +1703,23 @@ test('smoke 先 migration/安全提取，再以净化 env 和动态端口启动 
   assert.equal(
     Object.hasOwn(childEnv, 'PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION'),
     false,
+  )
+  const migrationEnv = calls[0][2].env
+  for (const smokeEnv of [migrationEnv, childEnv]) {
+    assert.equal(smokeEnv.APP_ORIGIN, smokeAppOrigin)
+    const smokeKeys = smokeHmacKeyNames.map(name => smokeEnv[name])
+    assert.equal(new Set(smokeKeys).size, smokeHmacKeyNames.length)
+    for (const [index, value] of smokeKeys.entries()) {
+      assert.match(value, /^[A-Za-z0-9_-]{43}$/u)
+      const decoded = Buffer.from(value, 'base64url')
+      assert.equal(decoded.length, 32)
+      assert.equal(decoded.toString('base64url'), value)
+      assert.notEqual(value, callerCanaries[smokeHmacKeyNames[index]])
+    }
+  }
+  assert.deepEqual(
+    Object.fromEntries(smokeHmacKeyNames.map(name => [name, migrationEnv[name]])),
+    Object.fromEntries(smokeHmacKeyNames.map(name => [name, childEnv[name]])),
   )
   assert.ok(processGroup.calls.some(call => call.type === 'terminate'))
   assert.ok(processGroup.calls.some(call => call.type === 'wait'))
@@ -1731,6 +1762,17 @@ test('smoke 端口竞争最多重试三次且 health 必须含 request id 与数
     processGroup.calls.filter(call => call.type === 'spawn').length,
     2,
   )
+  const spawnCalls = processGroup.calls.filter(call => call.type === 'spawn')
+  assert.deepEqual(
+    spawnCalls.map(call => call.handle.options.env.PORT),
+    ['41001', '41002'],
+  )
+  for (const name of ['APP_ORIGIN', ...smokeHmacKeyNames]) {
+    assert.equal(
+      spawnCalls[0].handle.options.env[name],
+      spawnCalls[1].handle.options.env[name],
+    )
+  }
 
   const invalidHarness = createDependencies(fixture, {
     fetch: async () => response({ requestId: '', body: { status: 'ok' } }),
@@ -1952,8 +1994,82 @@ test('smoke health clock 非有限值时安全失败并完成清理', async (t) 
       { archivePath: archive.archivePath, databaseUrl, tag },
       harness.dependencies,
     ),
-    /clock/u,
+    error => (
+      error instanceof ReleasePackageStageError
+      && error.code === RELEASE_PACKAGE_FAILURE_CODES.serverSmoke
+      && /clock/u.test(error.cause?.message)
+    ),
   )
+  assert.deepEqual(await fs.readdir(fixture.runnerTemp), [])
+})
+
+test('smoke 失败使用固定阶段 code 且 reporter 不泄露运行环境', async (t) => {
+  const fixture = await createSandbox(t)
+  const archive = await createServerArchiveFixture(fixture)
+  const callerSecret = 'caller-production-hmac-secret'
+  let attemptedEnv
+  const processGroup = {
+    spawn(_command, _args, options) {
+      attemptedEnv = options.env
+      throw new Error(`fixture startup failure: ${JSON.stringify(options.env)}`)
+    },
+    status() {
+      assert.fail('spawn 失败后不得查询进程状态')
+    },
+    async terminate() {
+      assert.fail('spawn 失败后不得终止不存在的进程')
+    },
+    async wait() {
+      assert.fail('spawn 失败后不得等待不存在的进程')
+    },
+  }
+  const run = async (command, args) => {
+    if (command === 'tar') {
+      const extractRoot = args[args.indexOf('--directory') + 1]
+      await fs.cp(
+        archive.root,
+        path.join(extractRoot, 'qsmds-server-v1.2.3-linux-x64'),
+        { recursive: true, verbatimSymlinks: true },
+      )
+    }
+  }
+  const harness = createDependencies(fixture, { processGroup, run })
+  Object.assign(harness.dependencies.env, {
+    AUTH_USERNAME_HMAC_KEY: callerSecret,
+    AUTH_USER_ID_HMAC_KEY: callerSecret,
+    AUTH_IP_HMAC_KEY: callerSecret,
+  })
+
+  let failure
+  try {
+    await smokeServerArchive(
+      { archivePath: archive.archivePath, databaseUrl, tag },
+      harness.dependencies,
+    )
+  } catch (error) {
+    failure = error
+  }
+
+  assert.ok(failure instanceof ReleasePackageStageError)
+  assert.equal(failure.code, RELEASE_PACKAGE_FAILURE_CODES.serverSmoke)
+  assert.ok(attemptedEnv)
+  const stderrCalls = []
+  const processRef = { exitCode: 0 }
+  applyReleasePackageFailure(
+    failure,
+    processRef,
+    { error: value => stderrCalls.push(value) },
+  )
+  assert.equal(processRef.exitCode, 1)
+  assert.deepEqual(stderrCalls, [
+    'Release package failed [code=RELEASE_PACKAGE_SERVER_SMOKE_FAILED]',
+  ])
+  const stderr = stderrCalls.join('\n')
+  assert.equal(stderr.includes(callerSecret), false)
+  assert.equal(stderr.includes(databaseUrl), false)
+  for (const name of smokeHmacKeyNames) {
+    assert.equal(stderr.includes(attemptedEnv[name]), false)
+  }
   assert.deepEqual(await fs.readdir(fixture.runnerTemp), [])
 })
 
