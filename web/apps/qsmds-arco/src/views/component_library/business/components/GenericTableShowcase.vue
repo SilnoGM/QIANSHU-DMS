@@ -62,6 +62,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
     accessorKey: 'settlementNo',
     fixed: 'left',
     id: 'settlementNo',
+    cellClass: 'qs-type-data-emphasis',
     sortable: true,
     summary: { type: 'count' },
     title: '结算单信息',
@@ -92,6 +93,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
     accessorKey: 'shipmentCount',
     align: 'right',
     id: 'shipmentCount',
+    cellClass: 'qs-type-data',
     sortable: true,
     summary: { type: 'sum' },
     title: '票数',
@@ -101,6 +103,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
     accessorKey: 'completionRate',
     align: 'right',
     id: 'completionRate',
+    cellClass: 'qs-type-data',
     sortable: true,
     summary: { type: 'average' },
     title: '完成率',
@@ -110,6 +113,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
     accessorKey: 'amount',
     align: 'right',
     id: 'amount',
+    cellClass: 'qs-type-data-emphasis',
     sortable: true,
     summary: {
       component: AmountDisplay,
@@ -125,6 +129,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
     accessorKey: 'updatedAt',
     defaultVisible: false,
     id: 'updatedAt',
+    cellClass: 'qs-type-data',
     sortable: true,
     title: '更新时间',
     width: 176,
@@ -277,8 +282,7 @@ function recordEvent(message: string) {
           <QsTableStackedCell class="group">
             <QsTableStackedLine
               nowrap
-              weight="semibold"
-              content-class="text-[13px] leading-5 tracking-[0.01em] font-qs-data-mono tabular-nums"
+              content-class="qs-type-data-emphasis"
             >
               {{ row.original.settlementNo }}
               <template #suffix>
@@ -290,7 +294,7 @@ function recordEvent(message: string) {
             </QsTableStackedLine>
             <QsTableStackedLine
               tone="muted"
-              content-class="text-xs leading-4"
+              content-class="qs-type-meta"
             >
               {{ row.original.orderSource }}
             </QsTableStackedLine>
@@ -298,17 +302,17 @@ function recordEvent(message: string) {
         </template>
 
         <template #cell-shipmentCount="{ row }">
-          <span class="tracking-tight font-medium tabular-nums">{{ row.original.shipmentCount }} 票</span>
+          <span>{{ row.original.shipmentCount }} 票</span>
         </template>
 
         <template #cell-completionRate="{ row }">
-          <span class="tracking-tight font-medium tabular-nums">{{ row.original.completionRate }}%</span>
+          <span>{{ row.original.completionRate }}%</span>
         </template>
 
         <template #summary-completionRate="{ label, value }">
           <div class="gap-0.5 grid">
-            <span class="text-xs text-muted-foreground leading-4 font-normal">{{ label }}</span>
-            <strong class="text-sm leading-5 font-semibold tabular-nums">{{ Number(value).toFixed(1) }}%</strong>
+            <span class="qs-type-meta">{{ label }}</span>
+            <strong class="qs-type-data-emphasis">{{ Number(value).toFixed(1) }}%</strong>
           </div>
         </template>
 
@@ -318,16 +322,12 @@ function recordEvent(message: string) {
               label="实际"
               nowrap
               tone="success"
-              weight="semibold"
-              content-class="text-sm tabular-nums"
             >
               <AmountDisplay :value="row.original.amount" currency="CNY" />
             </QsTableStackedLine>
             <QsTableStackedLine
               label="标准"
               nowrap
-              weight="semibold"
-              content-class="text-sm tabular-nums"
             >
               <AmountDisplay :value="row.original.standardAmount" currency="CNY" />
             </QsTableStackedLine>
@@ -336,21 +336,21 @@ function recordEvent(message: string) {
 
         <template #summary-amount="{ value }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="实际" tone="success" weight="semibold" content-class="text-sm tabular-nums">
+            <QsTableStackedLine label="实际" tone="success">
               <AmountDisplay :value="value" currency="CNY" />
             </QsTableStackedLine>
-            <QsTableStackedLine label="标准" weight="semibold" content-class="text-sm tabular-nums">
+            <QsTableStackedLine label="标准">
               <AmountDisplay :value="pageStandardAmount" currency="CNY" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
 
         <template #cell-updatedAt="{ row }">
-          <DateTimeDisplay class="text-[13px] leading-5" :value="row.original.updatedAt" />
+          <DateTimeDisplay :value="row.original.updatedAt" />
         </template>
 
         <template #cell-status="{ row }">
-          <FaTag variant="outline" :class="statusClass(row.original.status)">
+          <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row.original.status)">
             {{ row.original.status }}
           </FaTag>
         </template>
@@ -381,8 +381,7 @@ function recordEvent(message: string) {
           <div class="mb-3 pb-3 border-b border-border flex gap-3 items-start justify-between">
             <QsTableStackedCell class="group min-w-0">
               <QsTableStackedLine
-                weight="semibold"
-                content-class="text-sm leading-5 tracking-[0.01em] font-qs-data-mono break-all tabular-nums"
+                content-class="qs-type-data-emphasis break-all"
               >
                 {{ row.settlementNo }}
                 <template #suffix>
@@ -393,59 +392,59 @@ function recordEvent(message: string) {
                   />
                 </template>
               </QsTableStackedLine>
-              <QsTableStackedLine tone="muted" content-class="text-xs leading-4">
+              <QsTableStackedLine tone="muted" content-class="qs-type-meta">
                 {{ row.orderSource }}
               </QsTableStackedLine>
             </QsTableStackedCell>
-            <span class="text-xs text-muted-foreground leading-4 font-medium shrink-0 tabular-nums">#{{ rowNumber }}</span>
+            <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
           </div>
           <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2">
             <div class="col-span-2">
-              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
+              <dt class="qs-type-compact-label mb-1">
                 运输路线
               </dt>
-              <dd class="text-sm leading-5 m-0">
+              <dd class="qs-type-body m-0">
                 {{ row.route }}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
+              <dt class="qs-type-compact-label mb-1">
                 结算金额
               </dt>
               <dd class="m-0">
                 <QsTableStackedCell>
-                  <QsTableStackedLine label="实际" tone="success" weight="semibold" content-class="text-sm tabular-nums">
+                  <QsTableStackedLine label="实际" tone="success">
                     <AmountDisplay :value="row.amount" currency="CNY" />
                   </QsTableStackedLine>
-                  <QsTableStackedLine label="标准" weight="semibold" content-class="text-sm tabular-nums">
+                  <QsTableStackedLine label="标准">
                     <AmountDisplay :value="row.standardAmount" currency="CNY" />
                   </QsTableStackedLine>
                 </QsTableStackedCell>
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
+              <dt class="qs-type-compact-label mb-1">
                 状态
               </dt>
               <dd class="m-0">
-                <FaTag variant="outline" :class="statusClass(row.status)">
+                <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row.status)">
                   {{ row.status }}
                 </FaTag>
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
+              <dt class="qs-type-compact-label mb-1">
                 负责人
               </dt>
-              <dd class="text-sm leading-5 m-0">
+              <dd class="qs-type-body m-0">
                 {{ row.owner }}
               </dd>
             </div>
             <div>
-              <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
+              <dt class="qs-type-compact-label mb-1">
                 完成率
               </dt>
-              <dd class="text-sm leading-5 tracking-tight font-medium m-0 tabular-nums">
+              <dd class="qs-type-data m-0">
                 {{ row.completionRate }}%
               </dd>
             </div>

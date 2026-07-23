@@ -263,8 +263,11 @@ samp {
   line-height: var(--qs-type-leading-xs);
 }
 
-[data-slot="table"],
-[data-slot="table-cell"] {
+/*
+ * 表格默认角色必须保持零 specificity，确保业务列通过现有 cellClass 显式声明的
+ * identifier / numeric 等数据角色可以覆盖默认正文，而不受样式加载顺序影响。
+ */
+:where([data-slot="table"], [data-slot="table-cell"]) {
   font-family: var(--qs-font-sans);
   font-size: var(--qs-type-size-sm);
   font-weight: var(--qs-type-weight-regular);

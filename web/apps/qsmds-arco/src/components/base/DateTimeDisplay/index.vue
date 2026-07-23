@@ -33,7 +33,7 @@ const ariaLabel = computed(() => formattedDateTime.value === EMPTY_DATE_TIME_TEX
     :data-empty="formattedDateTime === EMPTY_DATE_TIME_TEXT"
     :data-format="format"
     :data-time-zone="timeZone"
-    class="text-foreground tracking-tight font-medium inline-flex whitespace-nowrap items-baseline tabular-nums"
+    class="qs-type-data inline-flex whitespace-nowrap items-baseline"
   >
     {{ formattedDateTime }}
   </time>

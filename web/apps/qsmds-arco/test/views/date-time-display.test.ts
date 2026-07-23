@@ -70,6 +70,8 @@ test('DateTimeDisplay 是带语义与无障碍信息的无业务依赖展示组�
   const source = readRelativeSource(
     '../../src/components/base/DateTimeDisplay/index.vue',
   )
+  const unoConfig = readRelativeSource('../../../../uno.config.ts')
+  const shortcut = unoConfig.match(/'qs-type-data': '([^']+)'/u)?.[1]
 
   assert.match(source, /defineOptions\(\{ name: 'DateTimeDisplay' \}\)/u)
   assert.match(source, /formatDateTime/u)
@@ -77,9 +79,18 @@ test('DateTimeDisplay 是带语义与无障碍信息的无业务依赖展示组�
   assert.match(source, /:data-time-zone="timeZone"/u)
   assert.match(source, /:data-format="format"/u)
   assert.match(source, /:aria-label="ariaLabel"/u)
-  assert.match(source, /tabular-nums/u)
+  assert.match(source, /\bqs-type-data\b/u)
+  assert.doesNotMatch(source, /\bfont-medium\b/u)
+  assert.doesNotMatch(source, /\btracking-tight\b/u)
   assert.match(source, /whitespace-nowrap/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
+
+  assert.ok(shortcut)
+  assert.match(shortcut, /\bfont-mono\b/u)
+  assert.match(shortcut, /\[font-size:var\(--qs-type-size-sm,0\.875rem\)\]/u)
+  assert.match(shortcut, /\[font-weight:var\(--qs-type-weight-regular,400\)\]/u)
+  assert.match(shortcut, /\[line-height:var\(--qs-type-leading-sm,1\.25rem\)\]/u)
+  assert.match(shortcut, /\btabular-nums\b/u)
 })
 
 test('基础组件页面接入日期时间展示区，并保持示例与业务依赖隔离', () => {

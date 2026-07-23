@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：实施中（Task 3：代码与参考应用回归完成，正式应用受保护表面并入 Task 4/5 验收）
+- 状态：实施中（Task 5：正式页面与移动端迁移）
 - 目标分支：`feat/Typesetting-specification`
 - 需求规格：[全局排版规范需求](./requirements.md)
 - 技术设计：[全局排版 Token 技术设计](./design.md)
@@ -137,12 +137,12 @@ flowchart TD
   - [x] 3.7 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一基础组件排版`。
   - _Requirements: R2-R4, R6, R8-R10_
 
-- [ ] 4. 以 TDD 统一数据展示与 `QsGenericTable`
-  - [ ] 4.1 先调整并运行失败的现有契约测试：
+- [x] 4. 以 TDD 统一数据展示与 `QsGenericTable`
+  - [x] 4.1 先调整并运行失败的现有契约测试：
     - `amount-display.test.ts`：Mono `14/20/500`、`tabular-nums`，禁止 `font-semibold`。
     - `date-time-display.test.ts`：Mono `14/20/400`、`tabular-nums`，禁止 `font-medium` 和 `tracking-tight`。
     - `generic-table.test.ts`：表头、正文、meta、identifier、numeric、datetime、emphasis 和 action 角色；禁止局部字号 Token 和右对齐推断。
-  - [ ] 4.2 运行红测并逐条确认失败原因来自旧排版实现，而不是测试路径或运行环境：
+  - [x] 4.2 运行红测并逐条确认失败原因来自旧排版实现，而不是测试路径或运行环境：
 
     ```bash
     cd web
@@ -152,20 +152,27 @@ flowchart TD
       apps/qsmds-arco/test/views/amount-display.test.ts
     ```
 
-  - [ ] 4.3 修改 `DateTimeDisplay` 和 `AmountDisplay` 的排版角色，不改变格式化、时区、精度、符号、颜色参数、空值或错误值行为。
-  - [ ] 4.4 让 `QsGenericTable` 和 `QsTableStackedLine` 消费全局角色：
+    - 沙箱内首次运行因 `tsx` IPC 报 `listen EPERM`；对同一条窄命令授权重试后得到预期 `27 passed / 4 failed`。
+    - 四个失败分别来自旧的 `AmountDisplay`、`DateTimeDisplay`、表格 bridge specificity 和 `QsGenericTable` 局部排版，测试路径及既有业务逻辑断言均正常。
+
+  - [x] 4.3 修改 `DateTimeDisplay` 和 `AmountDisplay` 的排版角色，不改变格式化、时区、精度、符号、颜色参数、空值或错误值行为。
+  - [x] 4.4 让 `QsGenericTable` 和 `QsTableStackedLine` 消费全局角色：
     - 删除局部 `--qs-table-*-font-size`。
     - 表头自动使用 `table-header`。
     - 正文、行号、辅助信息和移动字段名分别使用 `body`、`meta`、`compact-label`。
     - 删除所有右对齐单元格自动 `500` 的规则。
     - 保留操作列、固定列、排序、悬停、汇总、分页和响应式行为。
-  - [ ] 4.5 更新 `GenericTableShowcase.vue` 作为真实验收样本，通过现有 slot、`cellClass` 和展示组件显式标注 identifier、numeric、datetime、amount 与 summary。
-  - [ ] 4.6 让定向测试转绿，并运行 `pnpm run test:api`、`pnpm run typecheck`、`pnpm run lint`、`pnpm run build`。
-  - [ ] 4.7 在浏览器验证业务组件页：
+  - [x] 4.5 更新 `GenericTableShowcase.vue` 作为真实验收样本，通过现有 slot、`cellClass` 和展示组件显式标注 identifier、numeric、datetime、amount 与 summary。
+  - [x] 4.6 让定向测试转绿，并运行 `pnpm run test:api`、`pnpm run typecheck`、`pnpm run lint`、`pnpm run build`。
+    - 定向测试 `31/31`、全局排版契约 `7/7`、API 契约 `247/247`；`typecheck`、`lint` 和生产构建均通过。
+    - 生产构建完成 Noto 字体与零残留校验：`108` 个字体分片，扫描 `279` 个文件、`164` 个文本产物和 `108` 个字体资产。
+  - [x] 4.7 在浏览器验证业务组件页：
     - 桌面表头、普通值、单号、数字、金额、日期和操作列。
     - 固定列、排序、汇总和分页行为。
     - `390px` 卡片、字段标签、Drawer 操作和无水平溢出。
-  - [ ] 4.8 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一数据展示与表格排版`。
+    - 正式应用使用仅限当前标签页、无持久化的合成认证上下文进行受保护页面验收；未写入 Cookie、数据库或业务数据。
+    - 桌面与 `390×844` 的 computed style、固定列边界、排序、汇总、分页、筛选 Drawer、列设置 Drawer 和无水平溢出均通过，控制台无 warning/error。
+  - [x] 4.8 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一数据展示与表格排版`。
   - _Requirements: R4-R10_
 
 - [ ] 5. 以 TDD 迁移正式页面与移动端数据卡片
