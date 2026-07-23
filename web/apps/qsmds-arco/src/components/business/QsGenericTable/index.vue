@@ -7,7 +7,7 @@ import type {
   TableSortingState,
 } from '@fantastic-admin/components'
 import type { Component } from 'vue'
-import type { QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTableColumnSettings, QsGenericTableFilterDefinition, QsGenericTableFilterValue, QsGenericTableFilterValues, QsGenericTableSummaryValue } from './logic'
+import type { QsGenericTableActionColumn, QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTableColumnSettings, QsGenericTableFilterDefinition, QsGenericTableFilterValue, QsGenericTableFilterValues, QsGenericTableSummaryValue } from './logic'
 
 import { useMediaQuery, useResizeObserver } from '@vueuse/core'
 import ColumnSettingsPanel from './ColumnSettingsPanel.vue'
@@ -15,6 +15,7 @@ import CopyCellButton from './CopyCellButton.vue'
 import FilterPanel from './FilterPanel.vue'
 import {
   calculateColumnSummary,
+  createActionColumn,
   createDefaultColumnSettings,
   DEFAULT_PAGE_SIZE,
   formatSummaryValue,
@@ -22,6 +23,7 @@ import {
   getContinuousRowNumber,
   getSummaryComponentProps,
   getSummaryTypeLabel,
+  QS_GENERIC_TABLE_ACTION_COLUMN_ID,
   QS_GENERIC_TABLE_ROW_NUMBER_COLUMN_ID,
   reconcileColumnSettings,
   resolveVisibleTableColumns,
@@ -30,6 +32,7 @@ import {
 defineOptions({ name: 'QsGenericTable' })
 
 const props = withDefaults(defineProps<{
+  actionColumn?: QsGenericTableActionColumn
   addLabel?: string
   addable?: boolean
   border?: boolean
@@ -50,6 +53,7 @@ const props = withDefaults(defineProps<{
   tableClass?: string
   total?: number
 }>(), {
+  actionColumn: () => ({}),
   addLabel: '新增数据',
   addable: true,
   border: false,
@@ -88,6 +92,7 @@ const sorting = defineModel<TableSortingState>('sorting', { default: () => [] })
 const TABLE_SCROLL_EDGE_TOLERANCE = 1
 
 const slots = useSlots()
+const actionCellSlotName = `cell-${QS_GENERIC_TABLE_ACTION_COLUMN_ID}`
 const isNarrow = useMediaQuery('(max-width: 767px)')
 const desktopTableRoot = ref<HTMLElement>()
 const hasLeftTableOverflow = ref(false)
@@ -132,6 +137,7 @@ const visibleColumnDefinitions = computed(() => props.columns.flatMap((column) =
 
 const summaryColumns = computed(() => visibleColumnDefinitions.value.filter(column => column.summary))
 const hasSummary = computed(() => summaryColumns.value.length > 0)
+const hasActionColumn = computed(() => Boolean(slots.actions))
 const slottedCellColumns = computed(() => visibleColumnDefinitions.value.filter(column =>
   column.copyable || Boolean(slots[`cell-${column.id}`])))
 const slottedHeaderColumns = computed(() => visibleColumnDefinitions.value.filter(column =>
@@ -158,6 +164,9 @@ const tableColumns = computed<TableColumn<TData, any>[]>(() => {
       // FaTable 只有发现 footer 声明或 footer-* 插槽时才生成表尾。
       footer: getSourceColumn(column.id)?.summary ? ' ' : column.footer,
     })),
+    ...(hasActionColumn.value
+      ? [createActionColumn<TData>(props.actionColumn, hasSummary.value)]
+      : []),
   ]
 })
 
@@ -349,6 +358,14 @@ function getCopyCellClass(column: QsGenericTableColumn<TData>) {
     'group min-w-0 flex gap-1 items-center',
     column.align === 'right' && 'justify-end',
     column.align === 'center' && 'justify-center',
+  ]
+}
+
+function getActionContentClass() {
+  return [
+    'min-w-0 flex flex-wrap gap-1 items-center',
+    props.actionColumn.align === 'center' && 'justify-center',
+    props.actionColumn.align === 'right' && 'justify-end',
   ]
 }
 
@@ -581,6 +598,20 @@ watch([tableColumns, isNarrow], () => {
           <slot v-else :name="`cell-${column.id}`" v-bind="scope" />
         </template>
 
+        <template v-if="hasActionColumn" #[actionCellSlotName]="scope">
+          <div
+            :class="getActionContentClass()"
+            :aria-label="`第 ${getContinuousRowNumber(page, pageSize, scope.row.index)} 行操作`"
+          >
+            <slot
+              name="actions"
+              :index="scope.row.index"
+              :row="scope.row.original"
+              :row-number="getContinuousRowNumber(page, pageSize, scope.row.index)"
+            />
+          </div>
+        </template>
+
         <template
           v-for="column in summaryColumns"
           :key="`footer-${column.id}`"
@@ -686,6 +717,21 @@ watch([tableColumns, isNarrow], () => {
               </div>
             </dl>
           </slot>
+          <div
+            v-if="hasActionColumn"
+            data-slot="qs-generic-table-mobile-actions"
+            class="mt-3 pt-3 border-t border-border"
+            :aria-label="`第 ${getContinuousRowNumber(page, pageSize, index)} 行操作`"
+          >
+            <div :class="getActionContentClass()">
+              <slot
+                name="actions"
+                :index="index"
+                :row="row"
+                :row-number="getContinuousRowNumber(page, pageSize, index)"
+              />
+            </div>
+          </div>
         </div>
 
         <div v-if="summaryColumns.length" class="p-4 border-t-2 border-border bg-muted/20">

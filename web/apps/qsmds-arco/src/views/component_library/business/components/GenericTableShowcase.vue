@@ -257,6 +257,7 @@ function recordEvent(message: string) {
         v-model:sorting="sorting"
         class="mt-5"
         row-key="id"
+        :action-column="{ width: 168 }"
         :columns="columns"
         :data="pageRows"
         :total="sortedRows.length"
@@ -352,6 +353,28 @@ function recordEvent(message: string) {
           <FaTag variant="outline" :class="statusClass(row.original.status)">
             {{ row.original.status }}
           </FaTag>
+        </template>
+
+        <template #actions="{ row, rowNumber }">
+          <FaButton
+            variant="ghost"
+            size="sm"
+            :aria-label="`查看第 ${rowNumber} 行`"
+            @click="recordEvent(`action:view · ${row.settlementNo}`)"
+          >
+            <FaIcon name="i-lucide:eye" />
+            查看
+          </FaButton>
+          <FaButton
+            variant="ghost"
+            size="sm"
+            :aria-label="`复核第 ${rowNumber} 行`"
+            :disabled="row.status !== '待复核'"
+            @click="recordEvent(`action:review · ${row.settlementNo}`)"
+          >
+            <FaIcon name="i-lucide:clipboard-check" />
+            复核
+          </FaButton>
         </template>
 
         <template #mobile-row="{ row, rowNumber }">

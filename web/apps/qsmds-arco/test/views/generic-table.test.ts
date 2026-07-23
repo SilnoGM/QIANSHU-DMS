@@ -1,4 +1,4 @@
-import type { QsGenericTableColumn } from '../../src/components/business/QsGenericTable/logic'
+import type { QsGenericTableActionColumn, QsGenericTableColumn } from '../../src/components/business/QsGenericTable/logic'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
@@ -6,10 +6,12 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   calculateColumnSummary,
+  createActionColumn,
   createDefaultColumnSettings,
   DEFAULT_PAGE_SIZE,
   DEFAULT_PAGE_SIZE_OPTIONS,
   getContinuousRowNumber,
+  QS_GENERIC_TABLE_ACTION_COLUMN_ID,
   resolveVisibleTableColumns,
 } from '../../src/components/business/QsGenericTable/logic'
 
@@ -92,6 +94,50 @@ test('列设置保留默认显隐、左右固定和对齐配置', () => {
   ])
 })
 
+test('操作列默认固定在右侧且不参与隐藏和排序', () => {
+  const defaultColumn = createActionColumn<SettlementRow>()
+
+  assert.deepEqual({
+    align: defaultColumn.align,
+    enableHiding: defaultColumn.enableHiding,
+    enableSorting: defaultColumn.enableSorting,
+    fixed: defaultColumn.fixed,
+    header: defaultColumn.header,
+    id: defaultColumn.id,
+    width: defaultColumn.width,
+  }, {
+    align: 'left',
+    enableHiding: false,
+    enableSorting: false,
+    fixed: 'right',
+    header: '操作',
+    id: QS_GENERIC_TABLE_ACTION_COLUMN_ID,
+    width: 160,
+  })
+
+  const customConfig: QsGenericTableActionColumn = {
+    align: 'center',
+    fixed: false,
+    title: '更多操作',
+    width: 208,
+  }
+  const customColumn = createActionColumn<SettlementRow>(customConfig, true)
+
+  assert.deepEqual({
+    align: customColumn.align,
+    fixed: customColumn.fixed,
+    footer: customColumn.footer,
+    header: customColumn.header,
+    width: customColumn.width,
+  }, {
+    align: 'center',
+    fixed: undefined,
+    footer: ' ',
+    header: '更多操作',
+    width: 208,
+  })
+})
+
 test('列汇总支持总数、平均值和求和', () => {
   const baseColumn = columns[2]
 
@@ -122,6 +168,21 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式
   assert.match(source, /mobile-row/u)
   assert.match(source, /20, 50, 100, 200/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
+})
+
+test('操作列由 actions 插槽按需启用并在桌面与窄屏复用同一行级作用域', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(source, /actionColumn\?: QsGenericTableActionColumn/u)
+  assert.match(source, /const hasActionColumn = computed\(\(\) => Boolean\(slots\.actions\)\)/u)
+  assert.match(source, /createActionColumn<TData>\(props\.actionColumn, hasSummary\.value\)/u)
+  assert.match(source, /const actionCellSlotName = `cell-\$\{QS_GENERIC_TABLE_ACTION_COLUMN_ID\}`/u)
+  assert.equal(source.match(/<slot\s+name="actions"/gu)?.length, 2)
+  assert.match(source, /:row="scope\.row\.original"/u)
+  assert.match(source, /:row-number="getContinuousRowNumber\(page, pageSize, scope\.row\.index\)"/u)
+  assert.match(source, /data-slot="qs-generic-table-mobile-actions"/u)
 })
 
 test('搜索框仅使用 FaInput 的统一清除按钮', () => {
