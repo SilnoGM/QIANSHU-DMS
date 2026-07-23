@@ -4,6 +4,7 @@ import type { Component } from 'vue'
 export const DEFAULT_PAGE_SIZE = 20
 export const DEFAULT_PAGE_SIZE_OPTIONS = [20, 50, 100, 200] as const
 export const QS_GENERIC_TABLE_ALL_FILTER_VALUE = '__qs_generic_table_all_filter__'
+export const QS_GENERIC_TABLE_ACTION_COLUMN_ID = '__qs_generic_table_actions__'
 export const QS_GENERIC_TABLE_ROW_NUMBER_COLUMN_ID = '__qs_generic_table_row_number__'
 
 export type QsGenericTableFilterValue = number | string | undefined
@@ -32,6 +33,19 @@ export interface QsGenericTableSummaryDefinition<TData extends object> {
 }
 
 /**
+ * 操作列只定义稳定的表格展示约束，按钮、权限和业务副作用继续由 actions 插槽负责。
+ * fixed 显式传 false 时取消固定；未配置时默认固定在最右侧。
+ */
+export interface QsGenericTableActionColumn {
+  align?: TableAlign
+  fixed?: false | TableColumnFixed
+  maxWidth?: number | string
+  minWidth?: number | string
+  title?: string
+  width?: number | string
+}
+
+/**
  * 业务列继续继承 FaTable/TanStack 的列描述，只增加业务层需要的稳定标题、
  * 默认显隐、复制、排序与汇总配置，避免重新发明另一套单元格渲染协议。
  */
@@ -44,6 +58,24 @@ export type QsGenericTableColumn<TData extends object = Record<string, unknown>,
     summary?: QsGenericTableSummaryDefinition<TData>
     title: string
   }
+
+export function createActionColumn<TData extends object>(
+  config: QsGenericTableActionColumn = {},
+  hasSummary = false,
+): TableColumn<TData, unknown> {
+  return {
+    align: config.align ?? 'left',
+    enableHiding: false,
+    enableSorting: false,
+    fixed: config.fixed === false ? undefined : config.fixed ?? 'right',
+    footer: hasSummary ? ' ' : undefined,
+    header: config.title ?? '操作',
+    id: QS_GENERIC_TABLE_ACTION_COLUMN_ID,
+    maxWidth: config.maxWidth,
+    minWidth: config.minWidth,
+    width: config.width ?? 160,
+  }
+}
 
 export interface QsGenericTableColumnSetting {
   align: TableAlign

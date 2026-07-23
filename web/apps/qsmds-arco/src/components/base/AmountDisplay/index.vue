@@ -21,7 +21,7 @@ const ariaLabel = computed(() => formattedAmount.value === EMPTY_AMOUNT_TEXT
     :aria-label="ariaLabel"
     :data-currency="currency"
     :data-empty="formattedAmount === EMPTY_AMOUNT_TEXT"
-    class="font-qs-data-mono text-foreground tracking-[0.01em] font-semibold text-right inline-flex whitespace-nowrap items-baseline justify-end tabular-nums"
+    class="qs-type-data-emphasis text-right inline-flex whitespace-nowrap items-baseline justify-end"
   >
     {{ formattedAmount }}
   </span>

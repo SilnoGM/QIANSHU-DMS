@@ -7,7 +7,7 @@ import type {
   TableSortingState,
 } from '@fantastic-admin/components'
 import type { Component } from 'vue'
-import type { QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTableColumnSettings, QsGenericTableFilterDefinition, QsGenericTableFilterValue, QsGenericTableFilterValues, QsGenericTableSummaryValue } from './logic'
+import type { QsGenericTableActionColumn, QsGenericTableColumn, QsGenericTableColumnSettingItem, QsGenericTableColumnSettings, QsGenericTableFilterDefinition, QsGenericTableFilterValue, QsGenericTableFilterValues, QsGenericTableSummaryValue } from './logic'
 
 import { useMediaQuery, useResizeObserver } from '@vueuse/core'
 import ColumnSettingsPanel from './ColumnSettingsPanel.vue'
@@ -15,6 +15,7 @@ import CopyCellButton from './CopyCellButton.vue'
 import FilterPanel from './FilterPanel.vue'
 import {
   calculateColumnSummary,
+  createActionColumn,
   createDefaultColumnSettings,
   DEFAULT_PAGE_SIZE,
   formatSummaryValue,
@@ -22,6 +23,7 @@ import {
   getContinuousRowNumber,
   getSummaryComponentProps,
   getSummaryTypeLabel,
+  QS_GENERIC_TABLE_ACTION_COLUMN_ID,
   QS_GENERIC_TABLE_ROW_NUMBER_COLUMN_ID,
   reconcileColumnSettings,
   resolveVisibleTableColumns,
@@ -30,6 +32,7 @@ import {
 defineOptions({ name: 'QsGenericTable' })
 
 const props = withDefaults(defineProps<{
+  actionColumn?: QsGenericTableActionColumn
   addLabel?: string
   addable?: boolean
   border?: boolean
@@ -50,6 +53,7 @@ const props = withDefaults(defineProps<{
   tableClass?: string
   total?: number
 }>(), {
+  actionColumn: () => ({}),
   addLabel: '新增数据',
   addable: true,
   border: false,
@@ -88,6 +92,7 @@ const sorting = defineModel<TableSortingState>('sorting', { default: () => [] })
 const TABLE_SCROLL_EDGE_TOLERANCE = 1
 
 const slots = useSlots()
+const actionCellSlotName = `cell-${QS_GENERIC_TABLE_ACTION_COLUMN_ID}`
 const isNarrow = useMediaQuery('(max-width: 767px)')
 const desktopTableRoot = ref<HTMLElement>()
 const hasLeftTableOverflow = ref(false)
@@ -132,6 +137,7 @@ const visibleColumnDefinitions = computed(() => props.columns.flatMap((column) =
 
 const summaryColumns = computed(() => visibleColumnDefinitions.value.filter(column => column.summary))
 const hasSummary = computed(() => summaryColumns.value.length > 0)
+const hasActionColumn = computed(() => Boolean(slots.actions))
 const slottedCellColumns = computed(() => visibleColumnDefinitions.value.filter(column =>
   column.copyable || Boolean(slots[`cell-${column.id}`])))
 const slottedHeaderColumns = computed(() => visibleColumnDefinitions.value.filter(column =>
@@ -143,6 +149,7 @@ const tableColumns = computed<TableColumn<TData, any>[]>(() => {
     header: '#',
     footer: hasSummary.value ? '汇总' : undefined,
     cell: ({ row }) => `#${getContinuousRowNumber(page.value, pageSize.value, row.index)}`,
+    cellClass: 'qs-type-meta tabular-nums',
     enableHiding: false,
     enableSorting: false,
     fixed: 'left',
@@ -158,6 +165,9 @@ const tableColumns = computed<TableColumn<TData, any>[]>(() => {
       // FaTable 只有发现 footer 声明或 footer-* 插槽时才生成表尾。
       footer: getSourceColumn(column.id)?.summary ? ' ' : column.footer,
     })),
+    ...(hasActionColumn.value
+      ? [createActionColumn<TData>(props.actionColumn, hasSummary.value)]
+      : []),
   ]
 })
 
@@ -352,6 +362,14 @@ function getCopyCellClass(column: QsGenericTableColumn<TData>) {
   ]
 }
 
+function getActionContentClass() {
+  return [
+    'min-w-0 flex flex-wrap gap-1 items-center',
+    props.actionColumn.align === 'center' && 'justify-center',
+    props.actionColumn.align === 'right' && 'justify-end',
+  ]
+}
+
 function getMobileRowKey(row: TData, index: number) {
   if (typeof props.rowKey === 'function') {
     return props.rowKey(row, index)
@@ -417,7 +435,7 @@ watch([tableColumns, isNarrow], () => {
 </script>
 
 <template>
-  <section class="qs-generic-table min-w-0" aria-label="业务通用表格">
+  <section class="qs-generic-table qs-type-body min-w-0" aria-label="业务通用表格">
     <div class="pb-4 flex flex-wrap gap-3 items-center justify-between">
       <div v-if="searchable" class="flex flex-1 gap-2 min-w-0 items-center">
         <!-- FaInput 已提供统一的 clearable 按钮，使用 text 可避免浏览器为 search 再渲染原生清除控件。 -->
@@ -506,7 +524,7 @@ watch([tableColumns, isNarrow], () => {
     </div>
 
     <div v-if="activeFilters.length" class="pb-4 flex flex-wrap gap-2 items-center">
-      <span class="text-xs text-muted-foreground leading-4">已应用</span>
+      <span class="qs-type-meta">已应用</span>
       <FaTag
         v-for="filter in activeFilters"
         :key="filter.key"
@@ -581,6 +599,20 @@ watch([tableColumns, isNarrow], () => {
           <slot v-else :name="`cell-${column.id}`" v-bind="scope" />
         </template>
 
+        <template v-if="hasActionColumn" #[actionCellSlotName]="scope">
+          <div
+            :class="getActionContentClass()"
+            :aria-label="`第 ${getContinuousRowNumber(page, pageSize, scope.row.index)} 行操作`"
+          >
+            <slot
+              name="actions"
+              :index="scope.row.index"
+              :row="scope.row.original"
+              :row-number="getContinuousRowNumber(page, pageSize, scope.row.index)"
+            />
+          </div>
+        </template>
+
         <template
           v-for="column in summaryColumns"
           :key="`footer-${column.id}`"
@@ -593,7 +625,7 @@ watch([tableColumns, isNarrow], () => {
             :value="getSummaryValue(column)"
           >
             <div :class="getSummaryContentClass(column)">
-              <span class="text-xs text-muted-foreground leading-4 font-normal">
+              <span class="qs-type-meta">
                 {{ getSummaryTypeLabel(column.summary!.type) }}
               </span>
               <component
@@ -601,7 +633,7 @@ watch([tableColumns, isNarrow], () => {
                 v-if="getSummaryRenderer(column)"
                 v-bind="getSummaryComponentProps(column, getSummaryValue(column))"
               />
-              <strong v-else class="text-sm leading-5 font-semibold tabular-nums">
+              <strong v-else class="qs-type-data-emphasis">
                 {{ formatSummaryValue(getSummaryValue(column)) }}
               </strong>
             </div>
@@ -663,16 +695,16 @@ watch([tableColumns, isNarrow], () => {
             :row-number="getContinuousRowNumber(page, pageSize, index)"
           >
             <div class="mb-3 pb-3 border-b border-border flex items-center justify-between">
-              <span class="text-xs text-muted-foreground leading-4 font-medium tabular-nums">
+              <span class="qs-type-meta tabular-nums">
                 #{{ getContinuousRowNumber(page, pageSize, index) }}
               </span>
             </div>
             <dl class="m-0 gap-3 grid sm-grid-cols-2">
               <div v-for="column in visibleColumnDefinitions" :key="column.id" class="min-w-0">
-                <dt class="text-xs text-muted-foreground leading-4 font-medium mb-1">
+                <dt class="qs-type-compact-label mb-1">
                   {{ column.title }}
                 </dt>
-                <dd class="text-sm leading-5 m-0 break-words tabular-nums">
+                <dd class="qs-type-body m-0 break-words">
                   <div :class="getCopyCellClass(column)">
                     <span>{{ getMobileValue(row, column, index) }}</span>
                     <CopyCellButton
@@ -686,10 +718,25 @@ watch([tableColumns, isNarrow], () => {
               </div>
             </dl>
           </slot>
+          <div
+            v-if="hasActionColumn"
+            data-slot="qs-generic-table-mobile-actions"
+            class="mt-3 pt-3 border-t border-border"
+            :aria-label="`第 ${getContinuousRowNumber(page, pageSize, index)} 行操作`"
+          >
+            <div :class="getActionContentClass()">
+              <slot
+                name="actions"
+                :index="index"
+                :row="row"
+                :row-number="getContinuousRowNumber(page, pageSize, index)"
+              />
+            </div>
+          </div>
         </div>
 
         <div v-if="summaryColumns.length" class="p-4 border-t-2 border-border bg-muted/20">
-          <div class="text-xs text-muted-foreground leading-4 font-semibold mb-3">
+          <div class="qs-type-compact-title mb-3">
             当前页汇总
           </div>
           <div class="gap-4 grid grid-cols-2">
@@ -700,14 +747,14 @@ watch([tableColumns, isNarrow], () => {
                 :label="getSummaryTypeLabel(column.summary!.type)"
                 :value="getSummaryValue(column)"
               >
-                <span class="text-xs text-muted-foreground leading-4">{{ column.title }} · {{ getSummaryTypeLabel(column.summary!.type) }}</span>
+                <span class="qs-type-meta">{{ column.title }} · {{ getSummaryTypeLabel(column.summary!.type) }}</span>
                 <component
                   :is="getSummaryRenderer(column)"
                   v-if="getSummaryRenderer(column)"
                   v-bind="getSummaryComponentProps(column, getSummaryValue(column))"
                   class="mt-1"
                 />
-                <strong v-else class="text-sm leading-5 font-semibold mt-1 block tabular-nums">{{ formatSummaryValue(getSummaryValue(column)) }}</strong>
+                <strong v-else class="qs-type-data-emphasis mt-1 block">{{ formatSummaryValue(getSummaryValue(column)) }}</strong>
               </slot>
             </div>
           </div>
@@ -763,22 +810,13 @@ watch([tableColumns, isNarrow], () => {
 
 <style scoped>
 /*
- * 通用表格使用独立但克制的排版比例：13px 表头、14px 正文、12px 辅助信息。
- * 表格正文只消费全局 Sans Token；业务编码和金额通过 font-qs-data-mono
- * 消费全局 Mono Token，组件内不再维护另一套字体回退规则。
+ * 通用表格只保留固定列与交互表面的局部视觉规则。表头、正文和辅助信息均消费
+ * 全局排版角色，业务数据语义由 cellClass、slot 或领域展示组件显式声明。
  */
 .qs-generic-table {
-  --qs-table-header-font-size: 0.8125rem;
-  --qs-table-body-font-size: 0.875rem;
-  --qs-table-meta-font-size: 0.75rem;
   --qs-table-pinned-overlay-start: oklch(24% 0.012 285deg / 8%);
   --qs-table-pinned-overlay-middle: oklch(24% 0.012 285deg / 2%);
   --qs-table-pinned-overlay-end: oklch(24% 0.012 285deg / 0%);
-
-  font-family: var(--qs-font-sans);
-  font-size: var(--qs-table-body-font-size);
-  line-height: 1.25rem;
-  color: oklch(var(--foreground));
 }
 
 :global(.dark .qs-generic-table) {
@@ -787,37 +825,12 @@ watch([tableColumns, isNarrow], () => {
   --qs-table-pinned-overlay-end: oklch(4% 0.01 285deg / 0%);
 }
 
-.qs-generic-table :deep([data-slot="table"]) {
-  font-family: inherit;
-  font-size: var(--qs-table-body-font-size);
-  line-height: 1.25rem;
-}
-
 .qs-generic-table :deep([data-slot="table-head"]) {
   padding-inline: 0.75rem;
-  font-size: var(--qs-table-header-font-size);
-  font-weight: 600;
-  line-height: 1.125rem;
-  color: oklch(var(--muted-foreground));
-  letter-spacing: 0.01em;
 }
 
 .qs-generic-table :deep([data-slot="table-cell"]) {
   padding: 0.5rem 0.75rem;
-  font-size: var(--qs-table-body-font-size);
-  font-weight: 400;
-  font-feature-settings: "tnum" 1;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.25rem;
-}
-
-/*
- * 右对齐是业务表格中数值列的默认语义，使用中等字重和轻微紧缩字距，
- * 既方便纵向扫读，也不会抢过表尾汇总的层级。
- */
-.qs-generic-table :deep([data-slot="table-body"] [data-slot="table-cell"].text-right) {
-  font-weight: 500;
-  letter-spacing: -0.01em;
 }
 
 /*
@@ -897,14 +910,6 @@ watch([tableColumns, isNarrow], () => {
   opacity: 1;
 }
 
-.qs-generic-table :deep([data-slot="table-body"] > [data-slot="table-row"] > [data-slot="table-cell"]:first-child) {
-  font-size: var(--qs-table-meta-font-size);
-  font-weight: 500;
-  line-height: 1rem;
-  color: oklch(var(--muted-foreground));
-  letter-spacing: 0.01em;
-}
-
 /*
  * 固定列由 FaTable 使用独立背景避免滚动内容透出。桌面汇总行统一覆盖为主题
  * background，消除固定列与普通列分别使用 background / muted 的色差。
@@ -914,12 +919,7 @@ watch([tableColumns, isNarrow], () => {
   background-color: oklch(var(--background));
 }
 
-.qs-generic-table :deep([data-slot="table-footer"] [data-slot="table-cell"]) {
-  font-weight: 600;
-}
-
 .qs-generic-table :deep([data-slot="pagination"]) {
-  font-size: var(--qs-table-body-font-size);
   font-feature-settings: "tnum" 1;
   font-variant-numeric: tabular-nums;
 }

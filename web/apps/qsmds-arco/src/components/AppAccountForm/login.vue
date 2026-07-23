@@ -112,10 +112,10 @@ async function checkLoginState() {
 <template>
   <div class="p-8 flex-col-stretch-center min-h-440px w-full sm:p-12">
     <FaBlurReveal :delay="0.2" :duration="0.4" class="mb-8 space-y-2">
-      <h3 class="text-4xl font-bold">
+      <h3 class="qs-type-auth-display">
         欢迎登录
       </h3>
-      <p class="text-sm text-muted-foreground lg:text-base">
+      <p class="qs-type-description">
         {{ title }}
       </p>
     </FaBlurReveal>

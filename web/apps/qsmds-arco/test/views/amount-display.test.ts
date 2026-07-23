@@ -57,40 +57,45 @@ test('AmountDisplay 是无业务依赖的行内展示组件', () => {
   assert.match(source, /formatCurrencyAmount/u)
   assert.match(source, /:data-currency="currency"/u)
   assert.match(source, /:aria-label="ariaLabel"/u)
-  assert.match(source, /font-qs-data-mono/u)
-  assert.match(source, /font-semibold/u)
-  assert.doesNotMatch(source, /font-medium/u)
+  assert.match(source, /\bqs-type-data-emphasis\b/u)
+  assert.doesNotMatch(source, /\bfont-semibold\b/u)
+  assert.doesNotMatch(source, /\bfont-medium\b/u)
+  assert.doesNotMatch(source, /\btracking-\[/u)
   assert.match(source, /text-right/u)
   assert.match(source, /justify-end/u)
-  assert.match(source, /tabular-nums/u)
   assert.match(source, /whitespace-nowrap/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
 })
 
-test('结算单号与金额共用 Noto Sans Mono 语义字体 Token', () => {
+test('金额通过 data-emphasis 角色统一消费 Mono 14/20/500 与等宽数字', () => {
   const globalStyles = readRelativeSource(
     '../../src/assets/styles/globals.css',
   )
+  const unoConfig = readRelativeSource('../../../../uno.config.ts')
   const amountSource = readRelativeSource(
     '../../src/components/base/AmountDisplay/index.vue',
   )
   const showcaseSource = readRelativeSource(
     '../../src/views/component_library/business/components/GenericTableShowcase.vue',
   )
+  const shortcut = unoConfig.match(
+    /'qs-type-data-emphasis': '([^']+)'/u,
+  )?.[1]
 
   assert.match(
     globalStyles,
     /--qs-font-text-mono:\s*"Noto Sans Mono",\s*"Noto Sans SC";/u,
   )
-  assert.match(globalStyles, /\.font-qs-data-mono\s*\{[\s\S]*?font-family:\s*var\(--qs-font-mono\);/u)
-  assert.match(amountSource, /font-qs-data-mono/u)
-  assert.equal(showcaseSource.match(/font-qs-data-mono/gu)?.length, 2)
-  assert.equal(
-    showcaseSource.match(
-      /<QsTableStackedLine[^>]*weight="semibold"[^>]*>\s*<AmountDisplay\b[^>]*\/>\s*<\/QsTableStackedLine>/gu,
-    )?.length,
-    6,
-  )
+  assert.ok(shortcut)
+  assert.match(shortcut, /\bfont-mono\b/u)
+  assert.match(shortcut, /\[font-size:var\(--qs-type-size-sm,0\.875rem\)\]/u)
+  assert.match(shortcut, /\[font-weight:var\(--qs-type-weight-medium,500\)\]/u)
+  assert.match(shortcut, /\[line-height:var\(--qs-type-leading-sm,1\.25rem\)\]/u)
+  assert.match(shortcut, /\btabular-nums\b/u)
+  assert.match(amountSource, /\bqs-type-data-emphasis\b/u)
+  assert.match(showcaseSource, /cellClass:\s*'qs-type-data-emphasis'/u)
+  // 外层复合行不得把 AmountDisplay 的 500 字重强制提升为 600。
+  assert.doesNotMatch(showcaseSource, /\bweight="semibold"/u)
 })
 
 test('基础组件页面展示四币种与边界状态，并由展示壳在有资产时替换空状态', () => {

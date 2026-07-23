@@ -34,9 +34,36 @@
 
 默认汇总当前页 `data`；服务端分页场景可通过 `summaryValues` 传入全量数据汇总结果。页面也可以提供 `summary-{columnId}` 插槽覆盖桌面端表尾内容。
 
+## 操作列
+
+提供 `actions` 作用域插槽时，组件自动在业务列之后追加操作列；没有该插槽时不会生成空列，现有调用方的表格结构保持不变。操作列默认标题为“操作”、宽度为 `160`、固定在右侧，并且不参与排序、列显隐和汇总。
+
+`actionColumn` 可配置 `title`、`width`、`minWidth`、`maxWidth`、`align` 和 `fixed`。`fixed` 默认是 `right`；显式传入 `false` 可取消固定，也可以沿用表格固定列契约传入 `left` 或 `right`。业务列不得使用保留标识 `__qs_generic_table_actions__`。
+
+`actions` 插槽提供原始业务行 `row`、当前页内索引 `index` 和跨分页连续行号 `rowNumber`。按钮、权限判断、禁用条件、确认交互与数据写入均由业务页面负责，通用表格不预设“查看”“编辑”或“删除”等动作。
+
+```vue
+<QsGenericTable :columns="columns" :data="rows" :action-column="{ width: 168 }">
+  <template #actions="{ row, rowNumber }">
+    <FaButton
+      variant="ghost"
+      size="sm"
+      :aria-label="`编辑第 ${rowNumber} 行`"
+      @click="openEditor(row)"
+    >
+      编辑
+    </FaButton>
+  </template>
+</QsGenericTable>
+```
+
+桌面端操作列遵循固定列的滚动边界样式；小于 `768px` 时，同一 `actions` 插槽会渲染在卡片底部。即使业务页面覆盖 `mobile-row`，操作区仍由组件追加，因此不需要重复维护一套窄屏操作逻辑。
+
 ## 排版约定
 
-组件内置 13px 表头、14px 正文、12px 辅助信息的紧凑层级，并为表体、汇总和分页统一开启 `tabular-nums`。普通业务文字使用全局 `Noto Sans SC`；订单号、结算单号等编码可在插槽中使用 `font-mono`；数量、百分比和金额保持全局比例字体，并使用 `font-medium tabular-nums` 提升纵向比较效率。右对齐只表达列布局，不应被用来替代数字的 `tabular-nums` 语义。
+组件通过全局排版 Token 自动提供 `table-header` 表头和 `body` 普通正文。结构化数据必须由业务调用方显式声明：订单号、结算单号和金额使用 `qs-type-data-emphasis`，数量、百分比和日期时间使用 `qs-type-data`，来源、行号和辅助说明使用 `qs-type-meta`，状态标签使用 `qs-type-status-tag`。只有这些明确的数据角色启用 Mono 或 `tabular-nums`；普通中文值继续使用 Sans。
+
+桌面列优先通过现有 `cellClass` 声明单值语义；复合内容和移动卡片通过 `cell-*`、`mobile-row` 插槽声明；日期时间和金额优先复用 `DateTimeDisplay`、`AmountDisplay`。右对齐只表达布局，组件不会根据 `align`、列名或文案推断数据语义。
 
 ## 复合单元格
 
@@ -49,13 +76,13 @@
 ```vue
 <template #cell-order="{ row }">
   <QsTableStackedCell class="group">
-    <QsTableStackedLine weight="semibold" content-class="font-mono">
+    <QsTableStackedLine content-class="qs-type-data-emphasis">
       {{ row.original.orderNo }}
       <template #suffix>
         <CopyCellButton label="订单号" :text="row.original.orderNo" />
       </template>
     </QsTableStackedLine>
-    <QsTableStackedLine tone="muted" content-class="text-xs">
+    <QsTableStackedLine tone="muted" content-class="qs-type-meta">
       {{ row.original.orderSource }}
     </QsTableStackedLine>
   </QsTableStackedCell>

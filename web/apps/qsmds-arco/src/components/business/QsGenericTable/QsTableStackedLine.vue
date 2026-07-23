@@ -36,11 +36,11 @@ const toneClass = computed(() => ({
   warning: 'text-warning [&>*]:!text-warning',
 })[props.tone])
 
-// medium 与 semibold 需要覆盖直接子组件的默认字重，normal 则保留子组件自己的
-// 字体约定，避免普通行意外削弱标签或其他领域组件的层级。
+// medium 与 semibold 仍是复合行的显式覆盖能力；normal 不再生成局部字重，
+// 让 data-emphasis 等语义角色可以可靠覆盖根节点继承的正文默认值。
 const weightClass = computed(() => ({
   medium: 'font-medium [&>*]:!font-medium',
-  normal: 'font-normal',
+  normal: undefined,
   semibold: 'font-semibold [&>*]:!font-semibold',
 })[props.weight])
 </script>
@@ -48,13 +48,13 @@ const weightClass = computed(() => ({
 <template>
   <div
     data-slot="qs-table-stacked-line"
-    class="text-sm leading-5 flex gap-2 min-w-0 items-baseline"
+    class="qs-type-body flex gap-2 min-w-0 items-baseline"
     :class="nowrap && 'whitespace-nowrap'"
   >
     <span
       v-if="label"
       data-slot="qs-table-stacked-line-label"
-      class="text-xs text-muted-foreground leading-5 font-normal shrink-0"
+      class="qs-type-meta shrink-0"
       :class="labelClass"
     >
       {{ label }}

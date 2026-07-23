@@ -1,4 +1,4 @@
-import type { QsGenericTableColumn } from '../../src/components/business/QsGenericTable/logic'
+import type { QsGenericTableActionColumn, QsGenericTableColumn } from '../../src/components/business/QsGenericTable/logic'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
@@ -6,10 +6,12 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import {
   calculateColumnSummary,
+  createActionColumn,
   createDefaultColumnSettings,
   DEFAULT_PAGE_SIZE,
   DEFAULT_PAGE_SIZE_OPTIONS,
   getContinuousRowNumber,
+  QS_GENERIC_TABLE_ACTION_COLUMN_ID,
   resolveVisibleTableColumns,
 } from '../../src/components/business/QsGenericTable/logic'
 
@@ -92,6 +94,50 @@ test('列设置保留默认显隐、左右固定和对齐配置', () => {
   ])
 })
 
+test('操作列默认固定在右侧且不参与隐藏和排序', () => {
+  const defaultColumn = createActionColumn<SettlementRow>()
+
+  assert.deepEqual({
+    align: defaultColumn.align,
+    enableHiding: defaultColumn.enableHiding,
+    enableSorting: defaultColumn.enableSorting,
+    fixed: defaultColumn.fixed,
+    header: defaultColumn.header,
+    id: defaultColumn.id,
+    width: defaultColumn.width,
+  }, {
+    align: 'left',
+    enableHiding: false,
+    enableSorting: false,
+    fixed: 'right',
+    header: '操作',
+    id: QS_GENERIC_TABLE_ACTION_COLUMN_ID,
+    width: 160,
+  })
+
+  const customConfig: QsGenericTableActionColumn = {
+    align: 'center',
+    fixed: false,
+    title: '更多操作',
+    width: 208,
+  }
+  const customColumn = createActionColumn<SettlementRow>(customConfig, true)
+
+  assert.deepEqual({
+    align: customColumn.align,
+    fixed: customColumn.fixed,
+    footer: customColumn.footer,
+    header: customColumn.header,
+    width: customColumn.width,
+  }, {
+    align: 'center',
+    fixed: undefined,
+    footer: ' ',
+    header: '更多操作',
+    width: 208,
+  })
+})
+
 test('列汇总支持总数、平均值和求和', () => {
   const baseColumn = columns[2]
 
@@ -122,6 +168,21 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式
   assert.match(source, /mobile-row/u)
   assert.match(source, /20, 50, 100, 200/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
+})
+
+test('操作列由 actions 插槽按需启用并在桌面与窄屏复用同一行级作用域', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(source, /actionColumn\?: QsGenericTableActionColumn/u)
+  assert.match(source, /const hasActionColumn = computed\(\(\) => Boolean\(slots\.actions\)\)/u)
+  assert.match(source, /createActionColumn<TData>\(props\.actionColumn, hasSummary\.value\)/u)
+  assert.match(source, /const actionCellSlotName = `cell-\$\{QS_GENERIC_TABLE_ACTION_COLUMN_ID\}`/u)
+  assert.equal(source.match(/<slot\s+name="actions"/gu)?.length, 2)
+  assert.match(source, /:row="scope\.row\.original"/u)
+  assert.match(source, /:row-number="getContinuousRowNumber\(page, pageSize, scope\.row\.index\)"/u)
+  assert.match(source, /data-slot="qs-generic-table-mobile-actions"/u)
 })
 
 test('搜索框仅使用 FaInput 的统一清除按钮', () => {
@@ -179,44 +240,84 @@ test('桌面汇总行使用统一背景且自定义汇总组件跟随列对齐',
   assert.match(source, /background-color: oklch\(var\(--background\)\)/u)
 })
 
-test('通用表格使用分层文字排版并为数字提供稳定的纵向比较能力', () => {
+test('通用表格消费全局角色且只由显式业务语义启用结构化数据排版', () => {
   const tableSource = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const stackedLineSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/QsTableStackedLine.vue',
   )
   const showcaseSource = readRelativeSource(
     '../../src/views/component_library/business/components/GenericTableShowcase.vue',
   )
+  const globalStyles = readRelativeSource(
+    '../../src/assets/styles/globals.css',
+  )
+  const logicSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/logic.ts',
+  )
 
-  // 通用表格只消费全局 Sans Token；编码与金额继续通过语义类消费全局 Mono Token。
-  assert.match(tableSource, /font-family:\s*var\(--qs-font-sans\);/u)
-  assert.doesNotMatch(tableSource, /--qs-table-font-family|--qs-font-data-mono/u)
+  // 全局 bridge 提供低优先级的正文默认值，cellClass 上的显式数据角色必须能够覆盖它。
+  assert.match(globalStyles, /:where\(\[data-slot="table"\],\s*\[data-slot="table-cell"\]\)\s*\{/u)
+  // 表头需要覆盖 FaTable 自带的 font-medium，因此不能和可覆盖的正文默认值一起降权。
+  assert.match(globalStyles, /(?:^|\n)\[data-slot="table-head"\]\s*\{[^}]*font-weight:\s*var\(--qs-type-weight-semibold\)/u)
+  assert.match(globalStyles, /(?:^|\n)\[data-slot="table-footer"\]\s*\{/u)
+  assert.doesNotMatch(globalStyles, /:where\(\[data-slot="table-(?:head|footer)"\]\)/u)
 
-  // 表头、正文和辅助信息分别使用 13px、14px、12px，避免字号层级依赖底层默认值。
-  assert.match(tableSource, /--qs-table-header-font-size: 0\.8125rem/u)
-  assert.match(tableSource, /--qs-table-body-font-size: 0\.875rem/u)
-  assert.match(tableSource, /--qs-table-meta-font-size: 0\.75rem/u)
-  assert.match(tableSource, /\[data-slot="table-head"\][\s\S]*?font-weight: 600/u)
-  assert.match(tableSource, /\[data-slot="table-cell"\][\s\S]*?font-variant-numeric: tabular-nums/u)
-  assert.match(tableSource, /\[data-slot="table-body"\][\s\S]*?:first-child[\s\S]*?font-size: var\(--qs-table-meta-font-size\)/u)
+  // 组件内不得复制全局字号，也不得给全部单元格或右对齐列猜测 numeric / emphasis。
+  assert.doesNotMatch(tableSource, /font-family\s*:|--qs-table-(?:header|body|meta)-font-size|--qs-font-data-mono/u)
+  assert.doesNotMatch(tableSource, /\[data-slot="table-cell"\][^{]*\{[^}]*font-variant-numeric/u)
+  assert.doesNotMatch(tableSource, /\[data-slot="table-cell"\]\.text-right/u)
+  assert.doesNotMatch(tableSource, /column\.align\s*===\s*['"]right['"][\s\S]{0,200}qs-type-data/u)
+
+  // 默认表格与移动卡片明确标注正文、行号、字段名、汇总和分页语义。
+  assert.match(tableSource, /cellClass:\s*'qs-type-meta tabular-nums'/u)
+  assert.match(tableSource, /class="qs-type-meta tabular-nums"/u)
+  assert.match(tableSource, /<dt class="qs-type-compact-label mb-1">/u)
+  assert.match(tableSource, /<dd class="qs-type-body m-0 break-words">/u)
+  assert.match(tableSource, /<span class="qs-type-meta">/u)
+  assert.match(tableSource, /<strong v-else class="qs-type-data-emphasis"/u)
   assert.match(tableSource, /\[data-slot="pagination"\][\s\S]*?font-variant-numeric: tabular-nums/u)
+  assert.match(stackedLineSource, /class="qs-type-body flex gap-2 min-w-0 items-baseline"/u)
+  assert.match(stackedLineSource, /class="qs-type-meta shrink-0"/u)
 
-  const settlementCellSource = showcaseSource.match(
-    /<template #cell-settlementNo[\s\S]*?(?=<template #cell-shipmentCount)/u,
-  )?.[0]
-  assert.ok(settlementCellSource)
-  assert.match(settlementCellSource, /text-\[13px\]/u)
-  assert.match(settlementCellSource, /font-qs-data-mono/u)
-  assert.match(settlementCellSource, /tabular-nums/u)
-  assert.match(settlementCellSource, /text-xs leading-4/u)
+  // Showcase 只使用现有 cellClass、slot 与展示组件表达真实业务语义。
+  for (const [columnId, role] of [
+    ['settlementNo', 'qs-type-data-emphasis'],
+    ['shipmentCount', 'qs-type-data'],
+    ['completionRate', 'qs-type-data'],
+    ['amount', 'qs-type-data-emphasis'],
+    ['updatedAt', 'qs-type-data'],
+  ]) {
+    const columnSource = showcaseSource.match(
+      new RegExp(`\\{[\\s\\S]*?id: '${columnId}'[\\s\\S]*?\\}`, 'u'),
+    )?.[0]
+    assert.ok(columnSource, `缺少 ${columnId} 列`)
+    assert.match(columnSource, new RegExp(`cellClass: '${role}'`, 'u'))
+  }
 
+  assert.match(showcaseSource, /content-class="qs-type-data-emphasis"/u)
+  assert.match(showcaseSource, /content-class="qs-type-meta"/u)
+  assert.match(showcaseSource, /class="qs-type-status-tag"/u)
+  assert.match(showcaseSource, /<DateTimeDisplay\s+:value=/u)
+  assert.match(showcaseSource, /<AmountDisplay\s+:value=/u)
+  assert.match(showcaseSource, /<dt class="qs-type-compact-label mb-1">/u)
+  assert.match(showcaseSource, /<dd class="qs-type-body m-0">/u)
+  assert.match(showcaseSource, /<dd class="qs-type-data m-0">/u)
+  assert.doesNotMatch(showcaseSource, /font-qs-data-mono|text-\[13px\]/u)
   for (const slotName of ['shipmentCount', 'completionRate']) {
     const numericCellSource = showcaseSource.match(
       new RegExp(`<template #cell-${slotName}[\\s\\S]*?<\\/template>`, 'u'),
     )?.[0]
     assert.ok(numericCellSource)
-    assert.match(numericCellSource, /font-medium/u)
-    assert.match(numericCellSource, /tabular-nums/u)
+    assert.doesNotMatch(numericCellSource, /font-medium|tracking-tight|tabular-nums/u)
   }
+
+  // 公共 column 数据结构保持不变，操作按钮继续由 FaButton 的全局 action bridge 接管。
+  assert.doesNotMatch(logicSource, /\bsemantic\??\s*:/u)
+  assert.match(showcaseSource, /<template #actions=/u)
+  assert.match(showcaseSource, /<FaButton[\s\S]*?查看/u)
+  assert.match(globalStyles, /\[data-slot="button"\][\s\S]*?font-weight:\s*var\(--qs-type-weight-medium\)/u)
 })
 
 test('固定列与普通列共享悬停背景并根据横向滚动位置显示边界层级', () => {
@@ -357,7 +458,10 @@ test('双行单元格支持主次内容、逐行样式与尾部操作', () => {
     /<template #cell-amount[\s\S]*?<\/template>/u,
   )?.[0]
   assert.ok(amountCellSource)
-  assert.equal(amountCellSource.match(/weight="semibold"/gu)?.length, 2)
-  assert.equal(amountCellSource.match(/content-class="text-sm tabular-nums"/gu)?.length, 2)
-  assert.doesNotMatch(amountCellSource, /weight="medium"|content-class="text-xs tabular-nums"/u)
+  assert.equal(amountCellSource.match(/<AmountDisplay\b/gu)?.length, 2)
+  // 金额语义由 AmountDisplay 自身负责，复合行不得再覆盖其 500 字重。
+  assert.doesNotMatch(
+    amountCellSource,
+    /weight="(?:medium|semibold)"|content-class="text-(?:xs|sm) tabular-nums"/u,
+  )
 })

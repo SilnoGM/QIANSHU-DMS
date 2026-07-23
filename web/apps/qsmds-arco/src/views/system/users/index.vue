@@ -387,7 +387,7 @@ onMounted(() => {
           <template #description>
             <div class="flex flex-wrap gap-3 items-center justify-between">
               <span>
-                用户 <strong class="font-mono">{{ createdWithoutRole.username }}</strong> 已创建，当前无业务权限。
+                用户 <strong class="qs-type-data-emphasis">{{ createdWithoutRole.username }}</strong> 已创建，当前无业务权限。
               </span>
               <div class="flex gap-2 items-center">
                 <FaButton
@@ -464,7 +464,7 @@ onMounted(() => {
             <div class="flex flex-wrap gap-3 items-center justify-between">
               <span>{{ listErrorMessage }}</span>
               <div class="flex gap-2 items-center">
-                <span v-if="listRequestId" class="text-xs font-mono">requestId: {{ listRequestId }}</span>
+                <span v-if="listRequestId" class="qs-type-meta font-mono">requestId: {{ listRequestId }}</span>
                 <FaButton variant="outline" size="sm" @click="loadUsers">
                   重试
                 </FaButton>
@@ -486,11 +486,12 @@ onMounted(() => {
             empty-text="暂无用户"
           >
             <template #cell-username="{ row }">
-              <span class="font-medium font-mono">{{ row.original.username }}</span>
+              <span class="qs-type-data-emphasis">{{ row.original.username }}</span>
             </template>
             <template #cell-status="{ row }">
               <FaTag
                 variant="outline"
+                class="qs-type-status-tag"
                 :class="row.original.status === 'ACTIVE'
                   ? 'border-primary/30 bg-primary/10 text-primary'
                   : 'border-border bg-muted text-muted-foreground'"
@@ -518,6 +519,7 @@ onMounted(() => {
             <template #cell-password-requirement="{ row }">
               <FaTag
                 variant="outline"
+                class="qs-type-status-tag"
                 :class="row.original.mustChangePassword
                   ? 'border-primary/30 bg-primary/5 text-primary'
                   : 'border-border bg-muted text-muted-foreground'"
@@ -526,10 +528,10 @@ onMounted(() => {
               </FaTag>
             </template>
             <template #cell-last-login="{ row }">
-              {{ formatDate(row.original.lastLoginAt) }}
+              <span class="qs-type-data">{{ formatDate(row.original.lastLoginAt) }}</span>
             </template>
             <template #cell-created-at="{ row }">
-              {{ formatDate(row.original.createdAt) }}
+              <span class="qs-type-data">{{ formatDate(row.original.createdAt) }}</span>
             </template>
             <template #cell-actions="{ row }">
               <div class="flex gap-1 items-center">
@@ -551,6 +553,7 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- 移动卡片显式声明字段语义，防止桌面表格的结构化数据角色在窄屏回退为普通正文。 -->
         <div v-else class="user-card-list flex flex-col gap-3 min-h-24" :aria-busy="loading">
           <div v-if="loading" class="py-12 flex-center">
             <FaIcon name="i-lucide:loader-circle" class="text-primary size-7 animate-spin" />
@@ -569,9 +572,10 @@ onMounted(() => {
             <template #header>
               <div class="flex gap-3 min-w-0 items-center justify-between">
                 <div class="flex gap-2 min-w-0 items-center">
-                  <span class="font-mono truncate">{{ user.username }}</span>
+                  <span class="qs-type-data-emphasis truncate">{{ user.username }}</span>
                   <FaTag
                     variant="outline"
+                    class="qs-type-status-tag"
                     :class="user.status === 'ACTIVE'
                       ? 'border-primary/30 bg-primary/10 text-primary'
                       : 'border-border bg-muted text-muted-foreground'"
@@ -592,26 +596,26 @@ onMounted(() => {
 
             <dl class="m-0 gap-x-4 gap-y-3.5 grid grid-cols-2 max-[479px]:grid-cols-1">
               <div>
-                <dt class="text-xs text-muted-foreground mb-1">
+                <dt class="qs-type-compact-label mb-1">
                   显示名称
                 </dt>
-                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
                   {{ user.displayName }}
                 </dd>
               </div>
               <div>
-                <dt class="text-xs text-muted-foreground mb-1">
+                <dt class="qs-type-compact-label mb-1">
                   改密要求
                 </dt>
-                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
                   {{ user.mustChangePassword ? '下次登录必须改密' : '无需改密' }}
                 </dd>
               </div>
               <div class="col-span-full max-[479px]:col-span-1">
-                <dt class="text-xs text-muted-foreground mb-1">
+                <dt class="qs-type-compact-label mb-1">
                   角色
                 </dt>
-                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
                   <div v-if="user.roleIds.length > 0" class="flex flex-wrap gap-1">
                     <FaTag v-for="roleId in user.roleIds" :key="roleId" variant="outline">
                       {{ roleById(roleId)?.name ?? shortId(roleId) }}
@@ -621,18 +625,18 @@ onMounted(() => {
                 </dd>
               </div>
               <div>
-                <dt class="text-xs text-muted-foreground mb-1">
+                <dt class="qs-type-compact-label mb-1">
                   最近登录
                 </dt>
-                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                <dd class="qs-type-data m-0 [overflow-wrap:anywhere]">
                   {{ formatDate(user.lastLoginAt) }}
                 </dd>
               </div>
               <div>
-                <dt class="text-xs text-muted-foreground mb-1">
+                <dt class="qs-type-compact-label mb-1">
                   创建时间
                 </dt>
-                <dd class="text-foreground m-0 [overflow-wrap:anywhere]">
+                <dd class="qs-type-data m-0 [overflow-wrap:anywhere]">
                   {{ formatDate(user.createdAt) }}
                 </dd>
               </div>

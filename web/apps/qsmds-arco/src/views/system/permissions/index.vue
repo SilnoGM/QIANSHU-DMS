@@ -107,7 +107,7 @@ onMounted(loadPermissions)
           role="status"
         >
           <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-7" />
-          <span class="text-sm">正在加载权限目录…</span>
+          <span class="qs-type-body">正在加载权限目录…</span>
         </div>
 
         <FaEmpty
@@ -127,10 +127,10 @@ onMounted(loadPermissions)
           >
             <header class="px-4 py-3 border-b border-border bg-muted/30 flex gap-4 items-center justify-between">
               <div class="min-w-0">
-                <h2 class="text-base font-semibold m-0">
+                <h2 class="qs-type-component-title m-0">
                   {{ group.label }}
                 </h2>
-                <code class="text-xs text-muted-foreground break-all">{{ group.key }}</code>
+                <code class="qs-type-meta break-all">{{ group.key }}</code>
               </div>
               <FaTag variant="secondary" class="shrink-0">
                 {{ group.permissions.length }} 项
@@ -146,13 +146,16 @@ onMounted(loadPermissions)
                 :class="loading ? 'pointer-events-none opacity-60' : undefined"
               >
                 <template #cell-code="{ row }">
-                  <code>{{ row.original.code }}</code>
+                  <code class="qs-type-data-emphasis">{{ row.original.code }}</code>
                 </template>
                 <template #cell-description="{ row }">
-                  <span class="text-muted-foreground">{{ row.original.description || '—' }}</span>
+                  <span class="qs-type-description">{{ row.original.description || '—' }}</span>
                 </template>
                 <template #cell-systemOnly="{ row }">
-                  <FaTag :variant="row.original.systemOnly ? 'secondary' : 'outline'">
+                  <FaTag
+                    :variant="row.original.systemOnly ? 'secondary' : 'outline'"
+                    class="qs-type-status-tag"
+                  >
                     {{ row.original.systemOnly ? '系统专用' : '普通权限' }}
                   </FaTag>
                 </template>
@@ -160,6 +163,7 @@ onMounted(loadPermissions)
             </div>
 
             <div class="p-3 gap-3 grid md:hidden">
+              <!-- 权限卡片没有字段表格或操作区，只标注已有标题、编码、说明与范围状态。 -->
               <FaCard
                 v-for="permission in group.permissions"
                 :key="permission.id"
@@ -168,14 +172,17 @@ onMounted(loadPermissions)
               >
                 <template #header>
                   <div class="flex gap-3 items-start justify-between">
-                    <strong class="min-w-0 break-words">{{ permission.name }}</strong>
-                    <FaTag :variant="permission.systemOnly ? 'secondary' : 'outline'" class="shrink-0">
+                    <strong class="qs-type-compact-title min-w-0 break-words">{{ permission.name }}</strong>
+                    <FaTag
+                      :variant="permission.systemOnly ? 'secondary' : 'outline'"
+                      class="qs-type-status-tag shrink-0"
+                    >
                       {{ permission.systemOnly ? '系统专用' : '普通权限' }}
                     </FaTag>
                   </div>
                 </template>
-                <code class="text-sm break-all">{{ permission.code }}</code>
-                <p class="text-sm text-muted-foreground m-0">
+                <code class="qs-type-data-emphasis break-all">{{ permission.code }}</code>
+                <p class="qs-type-description m-0">
                   {{ permission.description || '暂无补充说明' }}
                 </p>
               </FaCard>
