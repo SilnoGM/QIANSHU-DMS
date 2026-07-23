@@ -51,10 +51,10 @@ const slots = useSlots()
           <p class="text-xs text-primary tracking-[0.18em] font-semibold m-0 mb-3">
             {{ sectionLabel }}
           </p>
-          <h2 class="text-2xl leading-tight tracking-tight font-semibold m-0 md-text-3xl">
+          <h2 class="qs-type-display-title m-0">
             {{ headline }}
           </h2>
-          <p class="text-sm text-muted-foreground leading-7 m-0 mt-4 max-w-3xl md-text-base">
+          <p class="qs-type-body-relaxed text-muted-foreground m-0 mt-4 max-w-3xl">
             {{ summary }}
           </p>
 
@@ -68,10 +68,10 @@ const slots = useSlots()
                 <FaIcon :name="principle.icon" class="size-5" />
               </span>
               <div class="min-w-0">
-                <h3 class="text-sm font-semibold m-0 mb-1">
+                <h3 class="qs-type-compact-title m-0 mb-1">
                   {{ principle.title }}
                 </h3>
-                <p class="text-sm text-muted-foreground leading-6 m-0">
+                <p class="qs-type-body-relaxed text-muted-foreground m-0">
                   {{ principle.description }}
                 </p>
               </div>

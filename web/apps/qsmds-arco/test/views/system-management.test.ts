@@ -434,3 +434,168 @@ test('审计成功标签使用绿色成功语义，失败仍使用 destructive',
     variant: 'destructive',
   })
 })
+
+test('用户管理桌面数据与移动卡片显式区分普通值、标识、日期和状态', () => {
+  const source = readRelativeSource('../../src/views/system/users/index.vue')
+
+  assert.match(
+    source,
+    /<template #cell-username[\s\S]*?<span class="qs-type-data-emphasis">/u,
+  )
+  assert.equal(
+    source.match(/<template #cell-(?:last-login|created-at)[\s\S]*?<span class="qs-type-data">/gu)?.length,
+    2,
+  )
+  assert.match(
+    source,
+    /<span class="qs-type-data-emphasis truncate">\{\{ user\.username \}\}<\/span>/u,
+  )
+  assert.equal(
+    source.match(/<dt class="qs-type-compact-label mb-1">/gu)?.length,
+    5,
+  )
+  assert.equal(
+    source.match(/<dd class="qs-type-body m-0 \[overflow-wrap:anywhere\]">/gu)?.length,
+    3,
+  )
+  assert.equal(
+    source.match(/<dd class="qs-type-data m-0 \[overflow-wrap:anywhere\]">/gu)?.length,
+    2,
+  )
+  assert.match(
+    source,
+    /<FaTag[\s\S]{0,260}?class="qs-type-status-tag"[\s\S]{0,260}?\{\{ user\.status/u,
+  )
+  assert.match(
+    source,
+    /<FaButton[^>]*@click="openMobileActions\(user\)"[^>]*>\s*操作\s*<\/FaButton>/u,
+  )
+  assert.doesNotMatch(source, /<dt class="text-xs text-muted-foreground/u)
+})
+
+test('角色管理移动卡片使用 compact、data 与 body 角色且保留既有操作入口', () => {
+  const source = readRelativeSource('../../src/views/system/roles/index.vue')
+
+  assert.match(
+    source,
+    /<template #cell-role[\s\S]*?<strong class="qs-type-body-medium">/u,
+  )
+  assert.match(
+    source,
+    /<code class="qs-type-data-emphasis w-full block">\{\{ row\.original\.code \}\}<\/code>/u,
+  )
+  assert.match(
+    source,
+    /<template #cell-permissionCount[\s\S]*?<span class="qs-type-data">/u,
+  )
+  assert.match(
+    source,
+    /<template #header>[\s\S]{0,180}?<strong class="qs-type-compact-title">\{\{ role\.name \}\}<\/strong>/u,
+  )
+  assert.equal(
+    source.match(/<span class="qs-type-compact-label">/gu)?.length,
+    3,
+  )
+  assert.match(
+    source,
+    /<code class="qs-type-data-emphasis \[overflow-wrap:anywhere\]">\{\{ role\.code \}\}<\/code>/u,
+  )
+  assert.match(
+    source,
+    /<span class="qs-type-data">\{\{ role\.permissionIds\.length \}\}<\/span>/u,
+  )
+  assert.match(
+    source,
+    /<p class="qs-type-body m-0 \[overflow-wrap:anywhere\]">/u,
+  )
+  assert.match(source, /<FaTag[^>]*class="qs-type-status-tag"/u)
+  assert.match(
+    source,
+    /<FaButton[^>]*@click="openEdit\(role\)"[^>]*>\s*编辑\s*<\/FaButton>/u,
+  )
+  assert.doesNotMatch(source, /<div class="text-sm gap-2\.5 grid">/u)
+})
+
+test('权限目录使用组件标题、标识、说明和状态角色', () => {
+  const source = readRelativeSource('../../src/views/system/permissions/index.vue')
+
+  assert.match(source, /<h2 class="qs-type-component-title m-0">/u)
+  assert.match(
+    source,
+    /<code class="qs-type-meta break-all">\{\{ group\.key \}\}<\/code>/u,
+  )
+  assert.match(
+    source,
+    /<template #cell-code[\s\S]*?<code class="qs-type-data-emphasis">/u,
+  )
+  assert.match(
+    source,
+    /<strong class="qs-type-compact-title min-w-0 break-words">\{\{ permission\.name \}\}<\/strong>/u,
+  )
+  assert.match(
+    source,
+    /<code class="qs-type-data-emphasis break-all">\{\{ permission\.code \}\}<\/code>/u,
+  )
+  assert.match(
+    source,
+    /<p class="qs-type-description m-0">/u,
+  )
+  assert.match(
+    source,
+    /<FaTag[^>]*:variant="permission\.systemOnly \? 'secondary' : 'outline'"[^>]*class="qs-type-status-tag shrink-0"/u,
+  )
+  assert.doesNotMatch(
+    source,
+    /<(?:h2|code|p|strong) class="[^"]*(?:text-(?:xs|sm|base)|font-semibold)[^"]*"/u,
+  )
+})
+
+test('审计日志桌面与移动卡片区分时间、标识、普通重点值和状态', () => {
+  const source = readRelativeSource('../../src/views/system/audit/index.vue')
+
+  assert.match(
+    source,
+    /<template #cell-occurredAt[\s\S]*?<span class="qs-type-data">/u,
+  )
+  assert.match(
+    source,
+    /<template #cell-eventType[\s\S]*?<strong class="qs-type-body-medium">[\s\S]*?<code class="qs-type-data-emphasis">/u,
+  )
+  assert.match(
+    source,
+    /<template #cell-actorDisplayName[\s\S]*?<span class="qs-type-body-medium">/u,
+  )
+  assert.equal(
+    source.match(/<template #cell-(?:actorUserId|target|requestId)[\s\S]*?<code class="qs-type-data-emphasis break-all">/gu)?.length,
+    3,
+  )
+  assert.match(
+    source,
+    /<strong class="qs-type-compact-title block break-words">/u,
+  )
+  assert.match(
+    source,
+    /<code class="qs-type-data-emphasis break-all">\{\{ event\.eventType \}\}<\/code>/u,
+  )
+  assert.equal(
+    source.match(/<dt class="qs-type-compact-label">/gu)?.length,
+    6,
+  )
+  assert.match(
+    source,
+    /<dd class="qs-type-data m-0">[\s\S]*?formatAuditTime/u,
+  )
+  assert.match(
+    source,
+    /<dd class="qs-type-body-medium m-0">[\s\S]*?formatAuditActorDisplayName/u,
+  )
+  assert.equal(
+    source.match(/<dd class="qs-type-data-emphasis m-0">/gu)?.length,
+    3,
+  )
+  assert.match(
+    source,
+    /<FaTag v-bind="auditOutcomeTagPresentation\(event\.outcome\)" class="qs-type-status-tag shrink-0">/u,
+  )
+  assert.doesNotMatch(source, /<dl class="text-sm m-0 gap-3 grid">/u)
+})

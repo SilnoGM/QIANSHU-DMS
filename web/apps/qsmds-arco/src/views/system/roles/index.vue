@@ -231,18 +231,18 @@ onMounted(loadData)
         >
           <template #cell-role="{ row }">
             <div class="flex flex-wrap gap-2 items-center">
-              <strong>{{ row.original.name }}</strong>
-              <FaTag v-if="row.original.isSystem" variant="secondary">
+              <strong class="qs-type-body-medium">{{ row.original.name }}</strong>
+              <FaTag v-if="row.original.isSystem" variant="secondary" class="qs-type-status-tag">
                 系统角色
               </FaTag>
-              <code class="text-xs text-muted-foreground w-full block">{{ row.original.code }}</code>
+              <code class="qs-type-data-emphasis w-full block">{{ row.original.code }}</code>
             </div>
           </template>
           <template #cell-description="{ row }">
-            <span class="text-muted-foreground">{{ row.original.description || '—' }}</span>
+            <span class="qs-type-description">{{ row.original.description || '—' }}</span>
           </template>
           <template #cell-permissionCount="{ row }">
-            {{ row.original.permissionIds.length }}
+            <span class="qs-type-data">{{ row.original.permissionIds.length }}</span>
           </template>
           <template #cell-actions="{ row }">
             <div v-if="hasRoleAction(row.original)" class="flex flex-wrap gap-1">
@@ -270,6 +270,7 @@ onMounted(loadData)
         </FaTable>
       </div>
 
+      <!-- 移动卡片沿用原有断点与操作，仅把每类信息映射到稳定排版角色。 -->
       <div class="gap-3 grid md:hidden" :aria-busy="loading">
         <div
           v-if="loading && roles.length === 0"
@@ -297,24 +298,24 @@ onMounted(loadData)
         >
           <template #header>
             <div class="flex flex-wrap gap-2 items-center">
-              <strong>{{ role.name }}</strong>
-              <FaTag v-if="role.isSystem" variant="secondary">
+              <strong class="qs-type-compact-title">{{ role.name }}</strong>
+              <FaTag v-if="role.isSystem" variant="secondary" class="qs-type-status-tag">
                 系统角色
               </FaTag>
             </div>
           </template>
-          <div class="text-sm gap-2.5 grid">
+          <div class="qs-type-body gap-2.5 grid">
             <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
-              <span class="text-muted-foreground">编码</span>
-              <code class="[overflow-wrap:anywhere]">{{ role.code }}</code>
+              <span class="qs-type-compact-label">编码</span>
+              <code class="qs-type-data-emphasis [overflow-wrap:anywhere]">{{ role.code }}</code>
             </div>
             <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
-              <span class="text-muted-foreground">权限数量</span>
-              <strong>{{ role.permissionIds.length }}</strong>
+              <span class="qs-type-compact-label">权限数量</span>
+              <span class="qs-type-data">{{ role.permissionIds.length }}</span>
             </div>
             <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
-              <span class="text-muted-foreground">说明</span>
-              <p class="m-0 [overflow-wrap:anywhere]">
+              <span class="qs-type-compact-label">说明</span>
+              <p class="qs-type-body m-0 [overflow-wrap:anywhere]">
                 {{ role.description || '—' }}
               </p>
             </div>

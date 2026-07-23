@@ -66,7 +66,7 @@ flowchart TD
   - [x] 1.5 更新本任务状态，复核 staged diff 后创建提交：`test: 修正业务表格字体继承断言`。
   - _Requirements: R5, R9, R10_
 
-- [ ] 2. 以 TDD 建立全局排版 Token 与应用级 bridge
+- [x] 2. 以 TDD 建立全局排版 Token 与应用级 bridge
   - [x] 2.1 新增 `web/scripts/global-typography.test.mjs`，使用小型解析 helper 分别断言基础字号、行高、字重和字距 Token，不使用依赖换行的大型正则。
   - [x] 2.2 增加并运行失败的 Token 契约，固定：
     - `body` 为 Sans `14/20/400`。
@@ -96,13 +96,13 @@ flowchart TD
     ```
 
   - [x] 2.8 确认正式构建实际生成 `qs-type-*` CSS，并通过 Noto 字体完整性和字体零残留守卫。
-  - [ ] 2.9 在浏览器抽查 `body`、FaButton、Arco Button、Fa/Arco Form 和 Modal 的 computed style，确认全局级联生效且无控制台错误。
+  - [x] 2.9 在浏览器抽查 `body`、FaButton、Arco Button、Fa/Arco Form 和 Modal 的 computed style，确认全局级联生效且无控制台错误。
     - 已完成当前匿名可访问表面：正式应用 `body`、FaButton、Fa Form、桌面/移动 Form Control、Arco Button、Noto 字体加载、水平溢出和控制台检查。
-    - 当前不存在无需认证的实际 Modal 路由；Modal 与受保护页面的实测并入 Task 3/5 的代表页面回归，完成前本项保持未勾选。
+    - 受保护的用户表单 Modal 已使用当前标签页内、无持久化的合成认证上下文完成实测：标题为 Sans `18/24/600`，标签为 Sans `14/20/500`，输入为 Sans `14/20/400`，按钮为 Sans `14/20/500`，无布局溢出或控制台错误。
   - [x] 2.10 更新任务状态，复核 staged diff 后创建提交：`feat: 建立全局排版 Token`。
   - _Requirements: R1-R4, R6, R8-R10_
 
-- [ ] 3. 以 TDD 统一 Fa 与 Arco 基础组件排版
+- [x] 3. 以 TDD 统一 Fa 与 Arco 基础组件排版
   - [x] 3.1 先审计下列组件已有 `data-slot` 和最终 class，确定每项使用应用级 bridge 还是显式 `qs-type-*` shortcut；不得同时冻结两种等价实现：
     - `page-header`
     - `button`
@@ -131,9 +131,9 @@ flowchart TD
     pnpm run build:examples
     ```
 
-  - [ ] 3.6 在正式应用和至少一个参考应用抽查 PageHeader、Button、Form、Table、Modal，确认 fallback 有效且没有布局变化。
+  - [x] 3.6 在正式应用和至少一个参考应用抽查 PageHeader、Button、Form、Table、Modal，确认 fallback 有效且没有布局变化。
     - 参考应用已完成 PageHeader、Button、Form、Table、带描述 Modal 的 computed style 与控制台回归。
-    - 正式应用匿名表面已完成 Button 与 Form；受保护的 PageHeader、Table、Modal 并入 Task 4/5 真实页面验收，完成前本项保持未勾选。
+    - 正式应用已完成匿名 Button、Form，以及受保护 PageHeader、Table、Modal 的 computed style 与布局回归；桌面和 `390×844` 均无文档级水平溢出，控制台无 warning/error。
   - [x] 3.7 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一基础组件排版`。
   - _Requirements: R2-R4, R6, R8-R10_
 
@@ -175,10 +175,10 @@ flowchart TD
   - [x] 4.8 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一数据展示与表格排版`。
   - _Requirements: R4-R10_
 
-- [ ] 5. 以 TDD 迁移正式页面与移动端数据卡片
-  - [ ] 5.1 新增 `web/apps/qsmds-arco/test/views/typography-consumers.test.ts`，先固定登录页、组件目录和代表页面的语义角色。
-  - [ ] 5.2 扩展 `system-management.test.ts`，先固定用户、角色、权限和审计移动卡片的 `compact-label`、`body`、`data`、`data-emphasis` 和 action 消费关系。
-  - [ ] 5.3 运行红测，确认失败来自尚未迁移的旧 utility：
+- [x] 5. 以 TDD 迁移正式页面与移动端数据卡片
+  - [x] 5.1 新增 `web/apps/qsmds-arco/test/views/typography-consumers.test.ts`，先固定登录页、组件目录和代表页面的语义角色。
+  - [x] 5.2 扩展 `system-management.test.ts`，先固定用户、角色、权限和审计移动卡片的 `compact-label`、`body`、`data`、`data-emphasis` 和 action 消费关系。
+  - [x] 5.3 运行红测，确认失败来自尚未迁移的旧 utility：
 
     ```bash
     cd web
@@ -187,25 +187,32 @@ flowchart TD
       apps/qsmds-arco/test/views/system-management.test.ts
     ```
 
-  - [ ] 5.4 迁移 `components/AppAccountForm/login.vue` 和 `views/component_library/shared/ComponentCatalogPage.vue`：
+    - 沙箱内首次运行因 `tsx` IPC 报 `listen EPERM`；对同一条窄命令授权重试后得到预期 `32 passed / 6 failed`。
+    - 六个失败分别对应登录、组件目录、用户、角色、权限和审计的旧排版消费；既有 32 项业务、权限和组件契约全部通过。
+
+  - [x] 5.4 迁移 `components/AppAccountForm/login.vue` 和 `views/component_library/shared/ComponentCatalogPage.vue`：
     - 登录标题使用 `auth-display`。
     - 组件目录 Hero 使用 `display-title`。
     - 普通页面、区块和组件标题使用对应语义角色。
-  - [ ] 5.5 迁移以下正式页面，不扩大到未审计页面：
+  - [x] 5.5 迁移以下正式页面，不扩大到未审计页面：
     - `views/system/users/index.vue`
     - `views/system/roles/index.vue`
     - `views/system/permissions/index.vue`
     - `views/system/audit/index.vue`
-  - [ ] 5.6 统一移动卡片字段标签、普通值、编码、数字、日期、重点值、状态和操作；不得改变数据格式化、权限判断、Drawer 生命周期或业务动作。
-  - [ ] 5.7 让定向测试转绿，并运行 `pnpm run test:api`、`pnpm run typecheck`、`pnpm run lint`、`pnpm run build`。
-  - [ ] 5.8 在浏览器完成代表页面检查：
+  - [x] 5.6 统一移动卡片字段标签、普通值、编码、数字、日期、重点值、状态和操作；不得改变数据格式化、权限判断、Drawer 生命周期或业务动作。
+  - [x] 5.7 让定向测试转绿，并运行 `pnpm run test:api`、`pnpm run typecheck`、`pnpm run lint`、`pnpm run build`。
+    - 定向排版与系统管理测试 `38/38`、全量 API/页面契约 `253/253`；`typecheck`、`lint` 和生产构建均通过。
+    - 生产构建完成 Noto 字体与零残留校验：`108` 个字体分片，扫描 `279` 个文件、`164` 个文本产物和 `108` 个字体资产。
+  - [x] 5.8 在浏览器完成代表页面检查：
     - 登录页。
     - 业务组件页。
     - 用户管理页及用户表单 Modal。
     - 角色、权限和审计页面。
     - 桌面与 `390×844`；亮色与受控暗色状态。
     - `scrollWidth <= innerWidth`、无新增 console warning/error。
-  - [ ] 5.9 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一页面与移动端排版`。
+    - 登录页、业务组件页、用户管理及表单 Modal、角色、权限和审计页面均已逐项读取 computed style；Sans、Mono、字号、行高、字重、主题颜色、`tabular-nums` 和 disabled `opacity: 0.5` 符合 Token。
+    - 桌面与 `390×844` 的亮色和临时 `.dark` 状态均通过；临时暗色 class 已恢复，所有页面无文档级水平溢出，控制台无 warning/error。
+  - [x] 5.9 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一页面与移动端排版`。
   - _Requirements: R2-R10_
 
 - [ ] 6. 生成持久规范并完成完整验收

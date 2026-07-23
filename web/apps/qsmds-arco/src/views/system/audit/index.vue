@@ -164,32 +164,35 @@ onMounted(loadEvents)
             :class="loading ? 'pointer-events-none opacity-60' : undefined"
           >
             <template #cell-occurredAt="{ row }">
-              {{ formatAuditTime(row.original.occurredAt) }}
+              <span class="qs-type-data">{{ formatAuditTime(row.original.occurredAt) }}</span>
             </template>
             <template #cell-eventType="{ row }">
               <div class="gap-1 grid">
-                <strong>{{ formatAuditEvent(row.original.eventType) }}</strong>
-                <code class="text-muted-foreground">{{ row.original.eventType }}</code>
+                <strong class="qs-type-body-medium">{{ formatAuditEvent(row.original.eventType) }}</strong>
+                <code class="qs-type-data-emphasis">{{ row.original.eventType }}</code>
               </div>
             </template>
             <template #cell-outcome="{ row }">
-              <FaTag v-bind="auditOutcomeTagPresentation(row.original.outcome)">
+              <FaTag
+                v-bind="auditOutcomeTagPresentation(row.original.outcome)"
+                class="qs-type-status-tag"
+              >
                 {{ formatAuditOutcome(row.original.outcome) }}
               </FaTag>
             </template>
             <template #cell-actorDisplayName="{ row }">
-              <span class="font-medium">
+              <span class="qs-type-body-medium">
                 {{ formatAuditActorDisplayName(row.original.actorType, row.original.actorDisplayName) }}
               </span>
             </template>
             <template #cell-actorUserId="{ row }">
-              <code class="break-all">{{ row.original.actorUserId || '—' }}</code>
+              <code class="qs-type-data-emphasis break-all">{{ row.original.actorUserId || '—' }}</code>
             </template>
             <template #cell-target="{ row }">
-              <code class="break-all">{{ targetLabel(row.original) }}</code>
+              <code class="qs-type-data-emphasis break-all">{{ targetLabel(row.original) }}</code>
             </template>
             <template #cell-requestId="{ row }">
-              <code class="break-all">{{ row.original.requestId }}</code>
+              <code class="qs-type-data-emphasis break-all">{{ row.original.requestId }}</code>
             </template>
             <template #cell-metadata="{ row }">
               <span v-if="auditMetadataEntries(row.original.metadata).length === 0" class="text-muted-foreground">—</span>
@@ -224,6 +227,7 @@ onMounted(loadEvents)
           </FaTable>
         </div>
 
+        <!-- 审计移动卡片保留安全字段与原始格式化逻辑，仅显式区分标签、时间和标识。 -->
         <div class="gap-3 grid md:hidden" :aria-busy="loading">
           <div
             v-if="loading && events.length === 0"
@@ -251,61 +255,61 @@ onMounted(loadEvents)
             <template #header>
               <div class="flex gap-3 items-start justify-between">
                 <div class="min-w-0">
-                  <strong class="block break-words">{{ formatAuditEvent(event.eventType) }}</strong>
-                  <code class="text-xs text-muted-foreground break-all">{{ event.eventType }}</code>
+                  <strong class="qs-type-compact-title block break-words">{{ formatAuditEvent(event.eventType) }}</strong>
+                  <code class="qs-type-data-emphasis break-all">{{ event.eventType }}</code>
                 </div>
-                <FaTag v-bind="auditOutcomeTagPresentation(event.outcome)" class="shrink-0">
+                <FaTag v-bind="auditOutcomeTagPresentation(event.outcome)" class="qs-type-status-tag shrink-0">
                   {{ formatAuditOutcome(event.outcome) }}
                 </FaTag>
               </div>
             </template>
 
-            <dl class="text-sm m-0 gap-3 grid">
+            <dl class="qs-type-body m-0 gap-3 grid">
               <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="text-muted-foreground">
+                <dt class="qs-type-compact-label">
                   时间
                 </dt>
-                <dd class="font-medium m-0">
+                <dd class="qs-type-data m-0">
                   {{ formatAuditTime(event.occurredAt) }}
                 </dd>
               </div>
               <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="text-muted-foreground">
+                <dt class="qs-type-compact-label">
                   用户展示名
                 </dt>
-                <dd class="font-medium m-0">
+                <dd class="qs-type-body-medium m-0">
                   {{ formatAuditActorDisplayName(event.actorType, event.actorDisplayName) }}
                 </dd>
               </div>
               <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="text-muted-foreground">
+                <dt class="qs-type-compact-label">
                   操作者 ID
                 </dt>
-                <dd class="m-0">
+                <dd class="qs-type-data-emphasis m-0">
                   <code class="break-all">{{ event.actorUserId || '—' }}</code>
                 </dd>
               </div>
               <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="text-muted-foreground">
+                <dt class="qs-type-compact-label">
                   目标
                 </dt>
-                <dd class="m-0">
+                <dd class="qs-type-data-emphasis m-0">
                   <code class="break-all">{{ targetLabel(event) }}</code>
                 </dd>
               </div>
               <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="text-muted-foreground">
+                <dt class="qs-type-compact-label">
                   请求 ID
                 </dt>
-                <dd class="m-0">
+                <dd class="qs-type-data-emphasis m-0">
                   <code class="break-all">{{ event.requestId }}</code>
                 </dd>
               </div>
               <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="text-muted-foreground">
+                <dt class="qs-type-compact-label">
                   Metadata
                 </dt>
-                <dd class="m-0 min-w-0">
+                <dd class="qs-type-body m-0 min-w-0">
                   <div v-if="auditMetadataEntries(event.metadata).length > 0" class="flex flex-wrap gap-1.5 min-w-0">
                     <FaTag
                       v-for="entry in auditMetadataEntries(event.metadata)"
