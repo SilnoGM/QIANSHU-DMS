@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：实施中（Task 2：建立全局排版 Token 与应用级 bridge）
+- 状态：实施中（Task 2：代码与静态门禁完成，浏览器 Modal 验收随 Task 3 组件回归完成）
 - 目标分支：`feat/Typesetting-specification`
 - 需求规格：[全局排版规范需求](./requirements.md)
 - 技术设计：[全局排版 Token 技术设计](./design.md)
@@ -67,25 +67,25 @@ flowchart TD
   - _Requirements: R5, R9, R10_
 
 - [ ] 2. 以 TDD 建立全局排版 Token 与应用级 bridge
-  - [ ] 2.1 新增 `web/scripts/global-typography.test.mjs`，使用小型解析 helper 分别断言基础字号、行高、字重和字距 Token，不使用依赖换行的大型正则。
-  - [ ] 2.2 增加并运行失败的 Token 契约，固定：
+  - [x] 2.1 新增 `web/scripts/global-typography.test.mjs`，使用小型解析 helper 分别断言基础字号、行高、字重和字距 Token，不使用依赖换行的大型正则。
+  - [x] 2.2 增加并运行失败的 Token 契约，固定：
     - `body` 为 Sans `14/20/400`。
     - `display-title`、`auth-display`、`page-title`、标题、正文、表单、操作、标签、弹窗、表格和数据角色完整。
     - 移动 form-control 为 `16/24/400`，`768px` 起恢复 `14/20/400`。
     - 排版颜色只消费现有主题语义变量。
     - Fa slot 映射和 Arco bridge 只覆盖已确认的字体指标。
     - 普通 Tag / Badge 默认使用 `tag`，只有明确状态调用点才显式使用 `status-tag`，不得根据 variant 猜测。
-  - [ ] 2.3 运行红测并确认失败原因为 Token 和 bridge 尚未实现：
+  - [x] 2.3 运行红测并确认失败原因为 Token 和 bridge 尚未实现：
 
     ```bash
     cd web
     node --test scripts/global-fonts.test.mjs scripts/global-typography.test.mjs
     ```
 
-  - [ ] 2.4 在 `web/apps/qsmds-arco/src/assets/styles/globals.css` 增加基础 Token、根排版、语义规则、Fa slot 映射和受控 Arco bridge。
-  - [ ] 2.5 在 `web/uno.config.ts` 增加 `qs-type-*` shortcuts；引用应用变量时提供静态 fallback，不创建第二套字体家族别名。
-  - [ ] 2.6 保留 Arco mini 按钮 `12px` 尺寸语义；不得通过 bridge 改动高度、padding、状态、颜色或交互。
-  - [ ] 2.7 让定向测试转绿，并运行：
+  - [x] 2.4 在 `web/apps/qsmds-arco/src/assets/styles/globals.css` 增加基础 Token、根排版、语义规则、Fa slot 映射和受控 Arco bridge。
+  - [x] 2.5 在 `web/uno.config.ts` 增加 `qs-type-*` shortcuts；引用应用变量时提供静态 fallback，不创建第二套字体家族别名。
+  - [x] 2.6 保留 Arco mini 按钮 `12px` 尺寸语义；不得通过 bridge 改动高度、padding、状态、颜色或交互。
+  - [x] 2.7 让定向测试转绿，并运行：
 
     ```bash
     pnpm run test:scripts:node
@@ -95,9 +95,11 @@ flowchart TD
     pnpm run build
     ```
 
-  - [ ] 2.8 确认正式构建实际生成 `qs-type-*` CSS，并通过 Noto 字体完整性和字体零残留守卫。
+  - [x] 2.8 确认正式构建实际生成 `qs-type-*` CSS，并通过 Noto 字体完整性和字体零残留守卫。
   - [ ] 2.9 在浏览器抽查 `body`、FaButton、Arco Button、Fa/Arco Form 和 Modal 的 computed style，确认全局级联生效且无控制台错误。
-  - [ ] 2.10 更新任务状态，复核 staged diff 后创建提交：`feat: 建立全局排版 Token`。
+    - 已完成当前匿名可访问表面：正式应用 `body`、FaButton、Fa Form、桌面/移动 Form Control、Arco Button、Noto 字体加载、水平溢出和控制台检查。
+    - 当前不存在无需认证的实际 Modal 路由；Modal 与受保护页面的实测并入 Task 3/5 的代表页面回归，完成前本项保持未勾选。
+  - [x] 2.10 更新任务状态，复核 staged diff 后创建提交：`feat: 建立全局排版 Token`。
   - _Requirements: R1-R4, R6, R8-R10_
 
 - [ ] 3. 以 TDD 统一 Fa 与 Arco 基础组件排版

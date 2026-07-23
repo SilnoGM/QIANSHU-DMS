@@ -19,6 +19,33 @@
     var(--qs-font-text-mono),
     var(--qs-font-native-emoji);
 
+  /*
+   * 基础排版尺度是字号、行高、字重与字距的唯一数值真相源。
+   * 13px / 18px 的高密度表头属于组件特例，不扩展为通用尺度。
+   */
+  --qs-type-size-xs: 0.75rem;
+  --qs-type-size-sm: 0.875rem;
+  --qs-type-size-md: 1rem;
+  --qs-type-size-lg: 1.125rem;
+  --qs-type-size-xl: 1.25rem;
+  --qs-type-size-2xl: 1.5rem;
+  --qs-type-size-3xl: 1.875rem;
+  --qs-type-size-4xl: 2.25rem;
+  --qs-type-leading-xs: 1rem;
+  --qs-type-leading-sm: 1.25rem;
+  --qs-type-leading-md: 1.5rem;
+  --qs-type-leading-lg: 1.75rem;
+  --qs-type-leading-xl: 2rem;
+  --qs-type-leading-2xl: 2.375rem;
+  --qs-type-leading-3xl: 2.5rem;
+  --qs-type-weight-regular: 400;
+  --qs-type-weight-medium: 500;
+  --qs-type-weight-semibold: 600;
+  --qs-type-weight-bold: 700;
+  --qs-type-tracking-normal: 0;
+  --qs-type-tracking-tight: -0.025em;
+  --qs-type-tracking-wide: 0.16em;
+
   /* 头部宽度（默认自适应宽度，可固定宽度，固定宽度后为居中显示） */
   --g-header-width: 100%;
 
@@ -92,6 +119,9 @@ body {
   box-sizing: border-box;
   margin: 0;
   font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-sm);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-sm);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -128,6 +158,185 @@ samp {
 .font-qs-data-mono {
   font-family: var(--qs-font-mono);
 }
+
+/*
+ * 正式应用通过稳定 data-slot 和已审计的 Arco 选择器消费排版 Token。
+ * 本区段只接管字体指标与文字语义，不改变组件尺寸、布局、背景或交互。
+ */
+
+/* qs-typography-bridge:start */
+[data-slot="button"],
+.arco-btn:not(.arco-btn-size-mini) {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-sm);
+  font-weight: var(--qs-type-weight-medium);
+  line-height: var(--qs-type-leading-sm);
+}
+
+[data-slot="button"]:disabled,
+.arco-btn-disabled {
+  opacity: 0.5;
+}
+
+.arco-btn-size-mini {
+  font-family: var(--qs-font-sans);
+  font-weight: var(--qs-type-weight-medium);
+}
+
+[data-slot="label"],
+[data-slot="form-label"],
+.arco-form-item-label-col > .arco-form-item-label,
+.arco-form-size-mini .arco-form-item-label-col > .arco-form-item-label,
+.arco-form-size-small .arco-form-item-label-col > .arco-form-item-label,
+.arco-form-size-large .arco-form-item-label-col > .arco-form-item-label {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-sm);
+  font-weight: var(--qs-type-weight-medium);
+  line-height: var(--qs-type-leading-sm);
+}
+
+[data-slot="label"],
+[data-slot="form-label"] {
+  color: oklch(var(--foreground));
+}
+
+[data-slot="form-description"] {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-xs);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-xs);
+  color: oklch(var(--muted-foreground));
+}
+
+[data-slot="form-message"] {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-xs);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-xs);
+  color: oklch(var(--destructive));
+}
+
+.arco-form-item-extra,
+.arco-form-item-message {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-xs);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-xs);
+}
+
+[data-slot="input"],
+[data-slot="textarea"],
+[data-slot="form-control"],
+[data-slot="input-group-control"],
+[data-slot="select-trigger"],
+.arco-input-wrapper .arco-input.arco-input-size-mini,
+.arco-input-wrapper .arco-input.arco-input-size-small,
+.arco-input-wrapper .arco-input.arco-input-size-medium,
+.arco-input-wrapper .arco-input.arco-input-size-large,
+.arco-textarea {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-md);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-md);
+}
+
+[data-slot="tag"]:not(.qs-type-status-tag) {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-xs);
+  font-weight: var(--qs-type-weight-medium);
+  line-height: var(--qs-type-leading-xs);
+}
+
+[data-slot="badge"],
+.arco-tag:not(.qs-type-status-tag) {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-xs);
+  font-weight: var(--qs-type-weight-medium);
+  line-height: var(--qs-type-leading-xs);
+}
+
+[data-slot="tag"].qs-type-status-tag,
+.arco-tag.qs-type-status-tag {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-xs);
+  font-weight: var(--qs-type-weight-semibold);
+  line-height: var(--qs-type-leading-xs);
+}
+
+[data-slot="table"],
+[data-slot="table-cell"] {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-sm);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-sm);
+}
+
+[data-slot="table-head"] {
+  font-family: var(--qs-font-sans);
+  font-size: 0.8125rem;
+  font-weight: var(--qs-type-weight-semibold);
+  line-height: 1.125rem;
+  color: oklch(var(--muted-foreground));
+  letter-spacing: 0.01em;
+}
+
+[data-slot="table-footer"] {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-sm);
+  font-weight: var(--qs-type-weight-medium);
+  line-height: var(--qs-type-leading-sm);
+}
+
+[data-slot="dialog-title"],
+[data-slot="sheet-title"] {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-lg);
+  font-weight: var(--qs-type-weight-semibold);
+  line-height: var(--qs-type-leading-md);
+  color: oklch(var(--foreground));
+}
+
+[data-slot="dialog-description"],
+[data-slot="sheet-description"] {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-sm);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-sm);
+  color: oklch(var(--muted-foreground));
+}
+
+.arco-modal-header .arco-modal-title,
+.arco-modal-simple .arco-modal-title {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-lg);
+  font-weight: var(--qs-type-weight-semibold);
+  line-height: var(--qs-type-leading-md);
+}
+
+.arco-modal-body {
+  font-family: var(--qs-font-sans);
+  font-size: var(--qs-type-size-sm);
+  font-weight: var(--qs-type-weight-regular);
+  line-height: var(--qs-type-leading-sm);
+}
+
+@media (width >= 768px) {
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="form-control"],
+  [data-slot="input-group-control"],
+  [data-slot="select-trigger"],
+  .arco-input-wrapper .arco-input.arco-input-size-mini,
+  .arco-input-wrapper .arco-input.arco-input-size-small,
+  .arco-input-wrapper .arco-input.arco-input-size-medium,
+  .arco-input-wrapper .arco-input.arco-input-size-large,
+  .arco-textarea {
+    font-size: var(--qs-type-size-sm);
+    line-height: var(--qs-type-leading-sm);
+  }
+}
+
+/* qs-typography-bridge:end */
 
 /* medium-zoom */
 .medium-zoom-overlay,

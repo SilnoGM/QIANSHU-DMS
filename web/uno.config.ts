@@ -46,6 +46,36 @@ function generateFrameworkCss(colorSchemes: ThemeTokens) {
   })
 }
 
+/*
+ * 语义排版 shortcut 只组合已确认的字体、尺度与主题颜色，不承载布局。
+ * 每个应用级 CSS 变量都保留静态数值 fallback，保证共享组件在参考应用中仍有有效计算值。
+ */
+const qsTypographyShortcuts = {
+  'qs-type-display-title': 'font-sans [font-size:var(--qs-type-size-2xl,1.5rem)] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:var(--qs-type-leading-xl,2rem)] [letter-spacing:var(--qs-type-tracking-tight,-0.025em)] text-foreground md:[font-size:var(--qs-type-size-3xl,1.875rem)] md:[line-height:var(--qs-type-leading-2xl,2.375rem)]',
+  'qs-type-auth-display': 'font-sans [font-size:var(--qs-type-size-4xl,2.25rem)] [font-weight:var(--qs-type-weight-bold,700)] [line-height:var(--qs-type-leading-3xl,2.5rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-page-title': 'font-sans [font-size:var(--qs-type-size-xl,1.25rem)] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:var(--qs-type-leading-lg,1.75rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground md:[font-size:var(--qs-type-size-2xl,1.5rem)] md:[line-height:var(--qs-type-leading-xl,2rem)]',
+  'qs-type-section-title': 'font-sans [font-size:var(--qs-type-size-lg,1.125rem)] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:var(--qs-type-leading-lg,1.75rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-component-title': 'font-sans [font-size:var(--qs-type-size-md,1rem)] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:var(--qs-type-leading-md,1.5rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-compact-title': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-body': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-regular,400)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-body-medium': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-medium,500)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-body-relaxed': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-regular,400)] [line-height:var(--qs-type-leading-md,1.5rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-description': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-regular,400)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-muted-foreground',
+  'qs-type-meta': 'font-sans [font-size:var(--qs-type-size-xs,0.75rem)] [font-weight:var(--qs-type-weight-regular,400)] [line-height:var(--qs-type-leading-xs,1rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-muted-foreground',
+  'qs-type-compact-label': 'font-sans [font-size:var(--qs-type-size-xs,0.75rem)] [font-weight:var(--qs-type-weight-medium,500)] [line-height:var(--qs-type-leading-xs,1rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-muted-foreground',
+  'qs-type-form-label': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-medium,500)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-form-help': 'font-sans [font-size:var(--qs-type-size-xs,0.75rem)] [font-weight:var(--qs-type-weight-regular,400)] [line-height:var(--qs-type-leading-xs,1rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-muted-foreground',
+  'qs-type-form-control': 'font-sans [font-size:var(--qs-type-size-md,1rem)] [font-weight:var(--qs-type-weight-regular,400)] [line-height:var(--qs-type-leading-md,1.5rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground md:[font-size:var(--qs-type-size-sm,0.875rem)] md:[line-height:var(--qs-type-leading-sm,1.25rem)]',
+  'qs-type-action': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-medium,500)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] disabled:opacity-50',
+  'qs-type-action-disabled': 'font-sans [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-medium,500)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] opacity-50',
+  'qs-type-tag': 'font-sans [font-size:var(--qs-type-size-xs,0.75rem)] [font-weight:var(--qs-type-weight-medium,500)] [line-height:var(--qs-type-leading-xs,1rem)] [letter-spacing:var(--qs-type-tracking-normal,0)]',
+  'qs-type-status-tag': 'font-sans [font-size:var(--qs-type-size-xs,0.75rem)] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:var(--qs-type-leading-xs,1rem)] [letter-spacing:var(--qs-type-tracking-normal,0)]',
+  'qs-type-dialog-title': 'font-sans [font-size:var(--qs-type-size-lg,1.125rem)] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:var(--qs-type-leading-md,1.5rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground',
+  'qs-type-table-header': 'font-sans [font-size:0.8125rem] [font-weight:var(--qs-type-weight-semibold,600)] [line-height:1.125rem] [letter-spacing:0.01em] text-muted-foreground',
+  'qs-type-data': 'font-mono [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-regular,400)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground tabular-nums',
+  'qs-type-data-emphasis': 'font-mono [font-size:var(--qs-type-size-sm,0.875rem)] [font-weight:var(--qs-type-weight-medium,500)] [line-height:var(--qs-type-leading-sm,1.25rem)] [letter-spacing:var(--qs-type-tracking-normal,0)] text-foreground tabular-nums',
+} satisfies Record<string, string>
+
 export default defineConfig({
   content: {
     pipeline: {
@@ -56,7 +86,10 @@ export default defineConfig({
       ],
     },
   },
+  // 精确 safelist 让正式构建生成全部语义角色，而不是依赖某个临时消费方触发提取。
+  safelist: Object.keys(qsTypographyShortcuts),
   shortcuts: [
+    qsTypographyShortcuts,
     [/^flex-?(col)?-(start|end|center|baseline|stretch)-?(start|end|center|between|around|evenly|left|right)?$/, ([, col, items, justify]) => {
       const cls = ['flex']
       if (col === 'col') {
@@ -78,8 +111,8 @@ export default defineConfig({
   theme: {
     /* UnoCSS 字体工具类只引用产品 Token，避免 presetWind4 注入平台字体栈。 */
     font: {
-      sans: 'var(--qs-font-sans)',
-      mono: 'var(--qs-font-mono)',
+      sans: 'var(--qs-font-sans, "Noto Sans SC")',
+      mono: 'var(--qs-font-mono, "Noto Sans Mono", "Noto Sans SC")',
     },
   },
   presets: [

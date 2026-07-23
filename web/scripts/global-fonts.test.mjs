@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
+import { extname, join, relative } from 'node:path'
 // eslint-disable-next-line test/no-import-node-test -- 此脚本由 Node.js 内置 test runner 直接运行。
 import test from 'node:test'
-import { extname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const webRoot = fileURLToPath(new URL('../', import.meta.url))
@@ -39,7 +39,7 @@ const controlledFontAssetRoots = [
 ]
 const notoSnapshotRoot = 'apps/qsmds-arco/public/assets/fonts/noto/google-fonts-css2-2026-07-22/'
 const fontBinaryPattern = /\.(?:eot|otf|ttf|woff2?)$/iu
-const legacyFontPathPattern = /(?:fontwithasyntaxhighlighter|digital[-_ ]?7)/iu
+const legacyFontPathPattern = /fontwithasyntaxhighlighter|digital[-_ ]?7/iu
 
 function normalizeWebRelativePath(absolutePath) {
   return relative(webRoot, absolutePath).replaceAll('\\', '/')
@@ -165,7 +165,7 @@ test('Sonner Toast 以高于依赖默认规则的选择器消费全局 Sans Toke
 test('UnoCSS 的 font-sans 与 font-mono 映射到产品字体 Token', () => {
   assert.match(
     unoConfig,
-    /font:\s*\{[\s\S]*?sans:\s*'var\(--qs-font-sans\)'[\s\S]*?mono:\s*'var\(--qs-font-mono\)'/u,
+    /font:\s*\{[\s\S]*?sans:\s*'var\(--qs-font-sans,\s*"Noto Sans SC"\)'[\s\S]*?mono:\s*'var\(--qs-font-mono,\s*"Noto Sans Mono",\s*"Noto Sans SC"\)'/u,
   )
 })
 
