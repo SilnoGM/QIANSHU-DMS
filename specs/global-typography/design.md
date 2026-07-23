@@ -2,9 +2,9 @@
 
 ## 1. 文档状态
 
-- 状态：待用户确认
+- 状态：已确认，等待实施计划确认
 - 需求规格：[全局排版规范需求](./requirements.md)
-- 后续实施计划：设计确认后生成 `tasks.md`
+- 实施计划：[全局排版规范实施计划](./tasks.md)
 - 关联现行规范：
   - [全局字体统一设计](../../docs/前端文档/全局字体统一设计.md)
   - [组件库建设方案](../../docs/前端文档/组件库建设方案.md)
@@ -258,7 +258,7 @@ line-height: var(--qs-type-leading-sm)
 | `[data-slot="label"]` | `form-label` |
 | FormDescription / FormMessage | `form-help` |
 | `[data-slot="input"]`、`[data-slot="textarea"]` | `form-control` |
-| `[data-slot="tag"]` | `status-tag` |
+| `[data-slot="tag"]` | 默认 `tag`；状态调用点显式使用 `status-tag` |
 | `[data-slot="badge"]` | `tag` |
 | `[data-slot="table"]`、`[data-slot="table-cell"]` | `body` |
 | `[data-slot="table-head"]` | `table-header` |
@@ -269,6 +269,8 @@ line-height: var(--qs-type-leading-sm)
 | SheetDescription | `description` |
 
 FaButton 已满足 `14/20/500` 和禁用 `opacity: 0.5`，实施只建立语义消费，不改变高度、padding、variant 或焦点样式。
+
+FaTag 同时承载普通标签和状态标签，不能根据组件名或 variant 猜测状态语义。全局默认映射为 `tag`；只有业务上明确表达状态的调用点才显式增加 `qs-type-status-tag`。本次不为此新增公共 prop。
 
 ### 5.4 Arco bridge
 
@@ -282,7 +284,7 @@ bridge 只覆盖正式应用已经使用且审计过的字体指标：
 | `.arco-form-item-extra` | `form-help` muted |
 | `.arco-form-item-message` | `form-help` destructive |
 | `.arco-input`、`.arco-textarea` | `form-control` |
-| `.arco-tag` | `tag` 或已知状态标签角色 |
+| `.arco-tag` | 默认 `tag`；状态调用点显式使用 `status-tag` |
 | `.arco-modal-title` | `dialog-title` |
 | `.arco-modal-body` | `body` |
 
@@ -292,6 +294,8 @@ bridge 禁止修改：
 - focus、hover、loading、disabled 行为。
 - 主题颜色、背景、边框和阴影。
 - Arco CSS 文件本身。
+
+Arco Tag 同样不得根据颜色或 variant 推断状态；状态调用点应显式选择语义类。
 
 ### 5.5 页面标题
 
