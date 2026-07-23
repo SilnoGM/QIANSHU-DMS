@@ -90,7 +90,7 @@ const rootStyle = computed<CSSProperties>(() => ({
 }))
 
 const labelClass = computed(() => cn(
-  'text-sm font-medium leading-none',
+  'text-sm font-medium',
   resolvedLabelPlacement.value === 'top'
     ? 'inline-flex items-center gap-1 px-1'
     : 'flex min-h-9 items-center gap-1 sm:pt-0',

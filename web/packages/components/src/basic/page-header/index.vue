@@ -24,12 +24,12 @@ const slots = defineSlots<{
 <template>
   <div :class="cn('mb-4 flex flex-wrap items-center justify-between gap-5 border-b bg-background px-5 py-4', props.class)">
     <div :class="cn('flex-[1_1_70%]', props.mainClass)">
-      <div class="text-2xl">
+      <div class="qs-type-page-title">
         <slot name="title">
           {{ title }}
         </slot>
       </div>
-      <div class="text-sm text-secondary-foreground/50 mt-2 empty-hidden">
+      <div class="qs-type-description mt-2 empty-hidden">
         <slot name="description">
           {{ description }}
         </slot>

@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：实施中（Task 2：代码与静态门禁完成，浏览器 Modal 验收随 Task 3 组件回归完成）
+- 状态：实施中（Task 3：代码与参考应用回归完成，正式应用受保护表面并入 Task 4/5 验收）
 - 目标分支：`feat/Typesetting-specification`
 - 需求规格：[全局排版规范需求](./requirements.md)
 - 技术设计：[全局排版 Token 技术设计](./design.md)
@@ -103,7 +103,7 @@ flowchart TD
   - _Requirements: R1-R4, R6, R8-R10_
 
 - [ ] 3. 以 TDD 统一 Fa 与 Arco 基础组件排版
-  - [ ] 3.1 先审计下列组件已有 `data-slot` 和最终 class，确定每项使用应用级 bridge 还是显式 `qs-type-*` shortcut；不得同时冻结两种等价实现：
+  - [x] 3.1 先审计下列组件已有 `data-slot` 和最终 class，确定每项使用应用级 bridge 还是显式 `qs-type-*` shortcut；不得同时冻结两种等价实现：
     - `page-header`
     - `button`
     - `form`、`label`
@@ -111,16 +111,16 @@ flowchart TD
     - `tag`、`badge`
     - `table`
     - `dialog`、`sheet`
-  - [ ] 3.2 先扩展 `global-typography.test.mjs`，固定以下消费关系；已由稳定 slot 满足的关系作为回归断言，缺失 hook 或存在冲突 utility 的关系必须先形成红测：
+  - [x] 3.2 先扩展 `global-typography.test.mjs`，固定以下消费关系；已由稳定 slot 满足的关系作为回归断言，缺失 hook 或存在冲突 utility 的关系必须先形成红测：
     - `FaPageHeader`：`page-title`、`description`
     - `FaButton`：`action`
     - 表单：`form-label`、`form-help`、`form-control`
     - `FaTag` / `FaBadge`：默认 `tag`；明确状态调用点显式使用 `status-tag`
     - `FaTable`：`table-header`、`body`、`body-medium`
     - `FaModal` / Drawer：`dialog-title`、`description`
-  - [ ] 3.3 只修改无法由稳定 slot 完成映射的最小共享组件文件，候选范围严格限制为 `design.md` 第 8.2 节。
-  - [ ] 3.4 移除已审计的冲突 utility，例如 PageHeader 描述的 `secondary-foreground/50`、Label 的 `leading-none`、DialogTitle 的 `18/18`；保留组件布局、尺寸和交互。
-  - [ ] 3.5 运行定向测试、共享组件检查和参考应用回归：
+  - [x] 3.3 只修改无法由稳定 slot 完成映射的最小共享组件文件，候选范围严格限制为 `design.md` 第 8.2 节。
+  - [x] 3.4 移除已审计的冲突 utility，例如 PageHeader 描述的 `secondary-foreground/50`、Label 的 `leading-none`、DialogTitle 的 `18/18`；保留组件布局、尺寸和交互。
+  - [x] 3.5 运行定向测试、共享组件检查和参考应用回归：
 
     ```bash
     cd web
@@ -132,7 +132,9 @@ flowchart TD
     ```
 
   - [ ] 3.6 在正式应用和至少一个参考应用抽查 PageHeader、Button、Form、Table、Modal，确认 fallback 有效且没有布局变化。
-  - [ ] 3.7 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一基础组件排版`。
+    - 参考应用已完成 PageHeader、Button、Form、Table、带描述 Modal 的 computed style 与控制台回归。
+    - 正式应用匿名表面已完成 Button 与 Form；受保护的 PageHeader、Table、Modal 并入 Task 4/5 真实页面验收，完成前本项保持未勾选。
+  - [x] 3.7 更新任务状态，复核 staged diff 后创建提交：`refactor: 统一基础组件排版`。
   - _Requirements: R2-R4, R6, R8-R10_
 
 - [ ] 4. 以 TDD 统一数据展示与 `QsGenericTable`

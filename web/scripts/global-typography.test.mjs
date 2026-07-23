@@ -8,6 +8,57 @@ import { fileURLToPath } from 'node:url'
 const webRoot = fileURLToPath(new URL('../', import.meta.url))
 const globalStyles = readWebFile('apps/qsmds-arco/src/assets/styles/globals.css')
 const unoConfig = readWebFile('uno.config.ts')
+const sharedComponentSources = {
+  badge: readWebFile('packages/components/src/basic/badge/badge/Badge.vue'),
+  button: readWebFile('packages/components/src/basic/button/button/Button.vue'),
+  dialogDescription: readWebFile(
+    'packages/components/src/basic/modal/dialog/DialogDescription.vue',
+  ),
+  dialogTitle: readWebFile(
+    'packages/components/src/basic/modal/dialog/DialogTitle.vue',
+  ),
+  formControl: readWebFile(
+    'packages/components/src/basic/form/form/FormControl.vue',
+  ),
+  formDescription: readWebFile(
+    'packages/components/src/basic/form/form/FormDescription.vue',
+  ),
+  formItem: readWebFile('packages/components/src/basic/form/FormItem.vue'),
+  formLabel: readWebFile(
+    'packages/components/src/basic/form/form/FormLabel.vue',
+  ),
+  formMessage: readWebFile(
+    'packages/components/src/basic/form/form/FormMessage.vue',
+  ),
+  input: readWebFile('packages/components/src/basic/input/input/Input.vue'),
+  label: readWebFile('packages/components/src/basic/label/label/Label.vue'),
+  pageHeader: readWebFile(
+    'packages/components/src/basic/page-header/index.vue',
+  ),
+  selectTrigger: readWebFile(
+    'packages/components/src/basic/select/select/SelectTrigger.vue',
+  ),
+  sheetDescription: readWebFile(
+    'packages/components/src/basic/drawer/sheet/SheetDescription.vue',
+  ),
+  sheetTitle: readWebFile(
+    'packages/components/src/basic/drawer/sheet/SheetTitle.vue',
+  ),
+  table: readWebFile('packages/components/src/basic/table/table/Table.vue'),
+  tableCell: readWebFile(
+    'packages/components/src/basic/table/table/TableCell.vue',
+  ),
+  tableFooter: readWebFile(
+    'packages/components/src/basic/table/table/TableFooter.vue',
+  ),
+  tableHead: readWebFile(
+    'packages/components/src/basic/table/table/TableHead.vue',
+  ),
+  tag: readWebFile('packages/components/src/basic/tag/tag/Tag.vue'),
+  textarea: readWebFile(
+    'packages/components/src/basic/textarea/textarea/Textarea.vue',
+  ),
+}
 
 function readWebFile(relativePath) {
   return readFileSync(join(webRoot, relativePath), 'utf8')
@@ -252,4 +303,66 @@ test('应用级 Fa 与 Arco bridge 只映射已确认的排版指标', () => {
     bridge,
     /^\s*(padding|height|width|background|border|box-shadow|transition)\s*:/mu,
   )
+})
+
+test('共享基础组件通过稳定 data-slot 接入应用级排版 bridge', () => {
+  const expectedSlots = new Map([
+    ['badge', 'badge'],
+    ['button', 'button'],
+    ['dialogDescription', 'dialog-description'],
+    ['dialogTitle', 'dialog-title'],
+    ['formControl', 'form-control'],
+    ['formDescription', 'form-description'],
+    ['formLabel', 'form-label'],
+    ['formMessage', 'form-message'],
+    ['input', 'input'],
+    ['label', 'label'],
+    ['selectTrigger', 'select-trigger'],
+    ['sheetDescription', 'sheet-description'],
+    ['sheetTitle', 'sheet-title'],
+    ['table', 'table'],
+    ['tableCell', 'table-cell'],
+    ['tableFooter', 'table-footer'],
+    ['tableHead', 'table-head'],
+    ['tag', 'tag'],
+    ['textarea', 'textarea'],
+  ])
+
+  for (const [component, slot] of expectedSlots) {
+    assert.match(
+      sharedComponentSources[component],
+      new RegExp(`data-slot="${slot}"`, 'u'),
+      `${component} 缺少稳定 data-slot="${slot}"`,
+    )
+  }
+
+  // 状态字重只能由业务调用点显式声明，基础 Tag 不得根据 variant 自动推断。
+  assert.doesNotMatch(
+    sharedComponentSources.tag,
+    /\bqs-type-status-tag\b/u,
+  )
+})
+
+test('共享组件移除与全局语义角色冲突的局部排版 utility', () => {
+  assert.match(
+    sharedComponentSources.pageHeader,
+    /\bqs-type-page-title\b/u,
+  )
+  assert.match(
+    sharedComponentSources.pageHeader,
+    /\bqs-type-description\b/u,
+  )
+  assert.doesNotMatch(sharedComponentSources.pageHeader, /\btext-2xl\b/u)
+  assert.doesNotMatch(
+    sharedComponentSources.pageHeader,
+    /\btext-secondary-foreground\/50\b/u,
+  )
+
+  for (const component of ['formItem', 'label', 'dialogTitle']) {
+    assert.doesNotMatch(
+      sharedComponentSources[component],
+      /\bleading-none\b/u,
+      `${component} 仍覆盖全局行高`,
+    )
+  }
 })
