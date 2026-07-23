@@ -98,6 +98,15 @@ jobs:
           test ! -L "$archive"
           test -s "$archive"
 
+      - name: Smoke test Server release archive
+        if: inputs.release_tag == ''
+        run: |
+          package_tag="v$(node -p 'require("./package.json").version')"
+          archive="$RUNNER_TEMP/release-server-ci/qsmds-server-${package_tag}-linux-x64.tar.gz"
+          node --run release:smoke:server -- \
+            --tag "$package_tag" \
+            --archive "$archive"
+
       - name: Verify tracked files are unchanged
         run: git diff --exit-code -- .
 

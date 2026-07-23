@@ -382,6 +382,17 @@ test('server-check-build 使用 Server cache 并执行固定检查构建顺序',
     '          test ! -L "$archive"',
     '          test -s "$archive"',
   ].join('\n'))
+  const smokeStep = findNamedStep(job, 'Smoke test Server release archive')
+  assert.equal(smokeStep, [
+    '      - name: Smoke test Server release archive',
+    "        if: inputs.release_tag == ''",
+    '        run: |',
+    '          package_tag="v$(node -p \'require("./package.json").version\')"',
+    '          archive="$RUNNER_TEMP/release-server-ci/qsmds-server-${package_tag}-linux-x64.tar.gz"',
+    '          node --run release:smoke:server -- \\',
+    '            --tag "$package_tag" \\',
+    '            --archive "$archive"',
+  ].join('\n'))
   assertTextOrder(job, [
     'run: pnpm -C server install --frozen-lockfile',
     'run: pnpm -C server check',
@@ -389,12 +400,15 @@ test('server-check-build 使用 Server cache 并执行固定检查构建顺序',
     '      - name: Verify Server entrypoint',
     'run: test -f server/dist/main.js && test ! -L server/dist/main.js && test -s server/dist/main.js',
     '      - name: Package Server release archive',
+    '      - name: Smoke test Server release archive',
+    'node --run release:smoke:server --',
+    '--archive "$archive"',
     'run: git diff --exit-code -- .',
   ], 'server-check-build')
   assert.equal(job.includes('web/pnpm-lock.yaml'), false)
   assert.equal(job.includes('\n    permissions:'), false)
   assert.equal(job.includes('actions/upload-artifact'), false)
-  assert.equal(job.includes('release:smoke:server'), false)
+  assert.equal(job.includes('release:smoke:server'), true)
   assert.equal(job.includes('DATABASE_URL'), false)
 })
 
