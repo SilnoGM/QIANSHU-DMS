@@ -177,7 +177,8 @@ test('Vue 生效前的 Loading 与浏览器升级页使用同一显式 Sans 栈'
 })
 
 test('业务表格与公共组件只消费全局 Sans 或 Mono Token', () => {
-  assert.match(tableSource, /font-family:\s*var\(--qs-font-sans\);/u)
+  // 业务表格继承应用根字体，局部重复声明会重新制造组件级字体真相源。
+  assert.doesNotMatch(tableSource, /font-family\s*:/u)
   assert.doesNotMatch(tableSource, /--qs-table-font-family|--qs-font-data-mono/u)
 
   assert.match(codeComponentSource, /font-family:\s*var\(--qs-font-mono\);/u)

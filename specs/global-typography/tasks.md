@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：待用户确认，尚未进入正式代码实施
+- 状态：实施中（Task 2：建立全局排版 Token 与应用级 bridge）
 - 目标分支：`feat/Typesetting-specification`
 - 需求规格：[全局排版规范需求](./requirements.md)
 - 技术设计：[全局排版 Token 技术设计](./design.md)
@@ -52,18 +52,18 @@ flowchart TD
   - [x] 0.5 创建提交：`985493d docs: 补充全局排版设计规范`。
   - _Requirements: R1-R10_
 
-- [ ] 1. 恢复全局字体测试基线
-  - [ ] 1.1 运行当前基线并保存预期的唯一失败证据：
+- [x] 1. 恢复全局字体测试基线
+  - [x] 1.1 运行当前基线并保存预期的唯一失败证据：
 
     ```bash
     cd web
     node --test scripts/global-fonts.test.mjs scripts/workspace-scripts.test.mjs
     ```
 
-  - [ ] 1.2 只修改 `web/scripts/global-fonts.test.mjs` 的陈旧断言，使其与 `generic-table.test.ts`、当前实现及全局继承架构一致：`QsGenericTable` 不得声明局部 `font-family`。
-  - [ ] 1.3 不修改任何生产代码，重新运行同一命令并证明基线全绿。
-  - [ ] 1.4 运行 `pnpm run test:scripts:node`，确认测试修正没有削弱 Noto 字体和零残留守卫。
-  - [ ] 1.5 更新本任务状态，复核 staged diff 后创建提交：`test: 修正业务表格字体继承断言`。
+  - [x] 1.2 只修改 `web/scripts/global-fonts.test.mjs` 的陈旧断言，使其与 `generic-table.test.ts`、当前实现及全局继承架构一致：`QsGenericTable` 不得声明局部 `font-family`。
+  - [x] 1.3 不修改任何生产代码，重新运行同一命令并证明基线全绿。
+  - [x] 1.4 运行 `pnpm run test:scripts:node`，确认测试修正没有削弱 Noto 字体和零残留守卫。
+  - [x] 1.5 更新本任务状态，复核 staged diff 后创建提交：`test: 修正业务表格字体继承断言`。
   - _Requirements: R5, R9, R10_
 
 - [ ] 2. 以 TDD 建立全局排版 Token 与应用级 bridge
