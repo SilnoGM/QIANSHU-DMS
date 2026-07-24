@@ -76,6 +76,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:table-2',
         },
       },
+      {
+        path: 'generic-drawer',
+        name: 'componentLibraryGenericDrawer',
+        component: () => import('@/views/component_library/business/generic-drawer.vue'),
+        meta: {
+          title: '通用抽屉',
+          icon: 'i-lucide:panel-right-open',
+        },
+      },
     ],
   },
   {

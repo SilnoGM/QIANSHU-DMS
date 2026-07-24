@@ -11,7 +11,7 @@
 | 分类 | 职责 | 当前组件 |
 | --- | --- | --- |
 | 基础组件 | 封装稳定、低业务耦合的只读展示规则，不读取业务 Store，不请求领域 API | [金额显示](./基础组件/金额显示.md)、[日期显示](./基础组件/日期显示.md) |
-| 业务组件 | 组合基础组件和 Fantastic-admin 能力，提供可复用的业务交互骨架，但不内置具体业务动作或数据副作用 | [通用表格](./业务组件/通用表格.md) |
+| 业务组件 | 组合基础组件和 Fantastic-admin 能力，提供可复用的业务交互骨架，但不内置具体业务动作或数据副作用 | [通用表格](./业务组件/通用表格.md)、[通用抽屉](./业务组件/通用抽屉.md) |
 
 页面模板仍按[组件库建设方案](../../组件库建设方案.md)治理；当前没有需要纳入本分册的稳定页面模板说明书。
 
@@ -24,7 +24,8 @@
 │   ├── 金额显示.md
 │   └── 日期显示.md
 └── 业务组件/
-    └── 通用表格.md
+    ├── 通用表格.md
+    └── 通用抽屉.md
 ```
 
 代码目录与文档分类保持一致：
@@ -35,15 +36,17 @@ web/apps/qsmds-arco/src/components/
 │   ├── AmountDisplay/
 │   └── DateTimeDisplay/
 └── business/
-    └── QsGenericTable/
+    ├── QsGenericTable/
+    └── QsGenericDrawer/
 ```
 
 ## 3. 使用边界
 
-- 优先复用本分册已有组件，不在业务页面重复实现相同的金额、日期时间或通用表格规则。
+- 优先复用本分册已有组件，不在业务页面重复实现相同的金额、日期时间、通用表格或任务抽屉规则。
 - 基础组件只负责展示。币种口径、时区选择、字段权限和数据来源由业务调用方决定。
 - `QsGenericTable` 只管理查询与展示状态，不请求 API、不读取 Store，也不自动搜索、筛选、排序或分页切片。
 - 操作按钮、权限检查、确认交互、页面跳转和数据写入必须由 `actions` 插槽的调用方负责。
+- `QsGenericDrawer` 只管理任务容器、稳定状态和关闭生命周期；Footer 按钮、表单、权限与数据写入由调用方负责。
 - 组件内核不足以满足已确认需求时，先按[前端开发手册](../README.md#5-组件与代码边界)复核选型，再决定扩展现有组件或回退到下层能力。
 - 排版角色统一遵循[全局排版规范](../../全局排版规范.md)，不得按列名、文案或对齐方式猜测金额、单号、日期等数据语义。
 
@@ -54,6 +57,7 @@ web/apps/qsmds-arco/src/components/
 | 基础组件 | `AmountDisplay` | `/component-library/basic/amount-display` |
 | 基础组件 | `DateTimeDisplay` | `/component-library/basic/date-time-display` |
 | 业务组件 | `QsGenericTable` | `/component-library/business/generic-table` |
+| 业务组件 | `QsGenericDrawer` | `/component-library/business/generic-drawer` |
 
 组件库路由在开发环境自动注册。非开发构建只有在公开布尔变量 `VITE_ENABLE_COMPONENT_LIBRARY=true` 时才注册，生产环境默认不提供该入口。Showcase 用于接口和视觉验收，不代表组件已经接入真实业务页面。
 
@@ -86,7 +90,9 @@ pnpm -C web exec tsx --test \
   apps/qsmds-arco/test/views/amount-display.test.ts \
   apps/qsmds-arco/test/views/date-time-display.test.ts \
   apps/qsmds-arco/test/views/generic-table.test.ts \
-  apps/qsmds-arco/test/views/generic-table-showcase.test.ts
+  apps/qsmds-arco/test/views/generic-table-showcase.test.ts \
+  apps/qsmds-arco/test/views/generic-drawer.test.ts \
+  apps/qsmds-arco/test/views/generic-drawer-showcase.test.ts
 
 pnpm -C web exec node --test scripts/frontend-handbook.test.mjs
 pnpm -C web exec eslint scripts/frontend-handbook.test.mjs

@@ -208,8 +208,12 @@ function handleAnimationEnd() {
         })"
       >
         <VisuallyHidden v-if="!!slots.header">
-          <SheetTitle />
-          <SheetDescription />
+          <SheetTitle>
+            {{ typeof props.title === 'function' ? props.title() : props.title }}
+          </SheetTitle>
+          <SheetDescription>
+            {{ typeof props.description === 'function' ? props.description() : props.description }}
+          </SheetDescription>
         </VisuallyHidden>
         <slot name="header">
           <SheetTitle :class="{ 'text-center': props.centered }">

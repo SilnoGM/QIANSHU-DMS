@@ -24,7 +24,7 @@ test('组件库在开发环境默认开启，其他环境必须显式启用', ()
   }), true)
 })
 
-test('组件库按分类提供三个独立组件路由', () => {
+test('组件库按分类提供四个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -73,6 +73,11 @@ test('组件库按分类提供三个独立组件路由', () => {
         path: 'generic-table',
         title: '通用表格',
       },
+      {
+        name: 'componentLibraryGenericDrawer',
+        path: 'generic-drawer',
+        title: '通用抽屉',
+      },
     ],
   )
 
@@ -85,7 +90,7 @@ test('组件库按分类提供三个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 3)
+  assert.equal(new Set(componentRouteNames).size, 4)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -112,7 +117,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('三个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('四个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -128,6 +133,11 @@ test('三个组件页面与页面模板复用展示壳且不依赖业务 API 或
       componentName: 'ComponentLibraryGenericTable',
       file: '../../src/views/component_library/business/index.vue',
       title: '通用表格',
+    },
+    {
+      componentName: 'ComponentLibraryGenericDrawer',
+      file: '../../src/views/component_library/business/generic-drawer.vue',
+      title: '通用抽屉',
     },
     {
       componentName: 'ComponentLibraryPageTemplates',
