@@ -234,7 +234,7 @@ onBeforeUnmount(() => {
       >
         <div
           v-if="slots['header-leading']"
-          class="rounded-lg bg-primary/10 text-primary size-9 flex shrink-0 items-center justify-center"
+          class="text-primary rounded-lg bg-primary/10 flex shrink-0 size-9 items-center justify-center"
         >
           <slot name="header-leading" />
         </div>
@@ -254,7 +254,7 @@ onBeforeUnmount(() => {
 
         <div
           v-if="slots['header-extra']"
-          class="min-h-9 flex shrink-0 items-center"
+          class="flex shrink-0 min-h-9 items-center"
         >
           <slot name="header-extra" />
         </div>
@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
           v-if="closable"
           variant="ghost"
           size="icon"
-          class="rounded-lg size-11 shrink-0 -m-1 md:size-9 md:m-0"
+          class="rounded-lg shrink-0 size-11 -m-1 md:m-0 md:size-9"
           aria-label="关闭抽屉"
           :disabled="submitting || closePending"
           @click="closeFromButton"
@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
     <template v-if="hasFooter" #footer>
       <div
         data-slot="qs-generic-drawer-footer"
-        class="px-4 pt-3 w-full flex flex-col-reverse gap-2 md:px-6 md:flex-row md:items-center md:justify-end pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+        class="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 flex flex-col-reverse gap-2 w-full md:px-6 md:flex-row md:items-center md:justify-end"
         :aria-busy="submitting"
         :inert="submitting || undefined"
       >

@@ -139,7 +139,7 @@ async function simulateSubmit() {
                   v-for="state in demoStates"
                   :key="state.value"
                   type="button"
-                  class="text-start p-3 border rounded-lg bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  class="p-3 text-start border rounded-lg bg-background transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                   :class="selectedState === state.value
                     ? 'border-primary ring-1 ring-primary/20'
                     : 'border-border hover:border-primary/40'"
@@ -149,7 +149,7 @@ async function simulateSubmit() {
                     <FaIcon :name="state.icon" class="text-primary size-4" />
                     <strong class="qs-type-body-medium">{{ state.label }}</strong>
                   </span>
-                  <span class="qs-type-meta text-muted-foreground block mt-1.5">
+                  <span class="qs-type-meta text-muted-foreground mt-1.5 block">
                     {{ state.description }}
                   </span>
                 </button>
@@ -166,7 +166,7 @@ async function simulateSubmit() {
                     v-for="size in drawerSizes"
                     :key="size"
                     type="button"
-                    class="text-xs uppercase rounded-md h-8 flex-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    class="text-xs rounded-md flex-1 h-8 uppercase transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     :class="selectedSize === size
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
@@ -187,7 +187,7 @@ async function simulateSubmit() {
                     v-for="placement in drawerPlacements"
                     :key="placement"
                     type="button"
-                    class="text-xs rounded-md h-8 flex-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    class="text-xs rounded-md flex-1 h-8 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     :class="selectedPlacement === placement
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'"
@@ -209,22 +209,28 @@ async function simulateSubmit() {
           </strong>
           <dl class="text-sm m-0 mt-4 gap-3 grid">
             <div class="flex gap-4 items-center justify-between">
-              <dt class="text-muted-foreground">状态</dt>
-              <dd class="m-0 font-medium">
+              <dt class="text-muted-foreground">
+                状态
+              </dt>
+              <dd class="font-medium m-0">
                 {{ demoStates.find(state => state.value === selectedState)?.label }}
               </dd>
             </div>
             <div class="flex gap-4 items-center justify-between">
-              <dt class="text-muted-foreground">最后事件</dt>
-              <dd class="text-end m-0 font-medium break-all">
+              <dt class="text-muted-foreground">
+                最后事件
+              </dt>
+              <dd class="font-medium m-0 text-end break-all">
                 {{ lastEvent }}
               </dd>
             </div>
             <div class="flex gap-4 items-center justify-between">
-              <dt class="text-muted-foreground">关闭原因</dt>
+              <dt class="text-muted-foreground">
+                关闭原因
+              </dt>
               <dd
                 data-testid="generic-drawer-close-reason"
-                class="text-end m-0 font-medium break-all"
+                class="font-medium m-0 text-end break-all"
               >
                 {{ lastCloseReason }}
               </dd>
@@ -260,7 +266,7 @@ async function simulateSubmit() {
       </template>
 
       <template #header-extra>
-        <FaTag variant="outline" class="qs-type-status-tag border-amber-500/30 text-amber-700 dark:text-amber-300">
+        <FaTag variant="outline" class="text-amber-700 qs-type-status-tag border-amber-500/30 dark:text-amber-300">
           待复核
         </FaTag>
       </template>
@@ -278,20 +284,36 @@ async function simulateSubmit() {
           </h3>
           <dl class="text-sm m-0 mt-3 gap-3 grid sm:grid-cols-2">
             <div class="p-3 border border-border rounded-lg bg-muted/20">
-              <dt class="qs-type-meta text-muted-foreground">客户</dt>
-              <dd class="qs-type-body-medium m-0 mt-1">千航贸易（上海）有限公司</dd>
+              <dt class="qs-type-meta text-muted-foreground">
+                客户
+              </dt>
+              <dd class="qs-type-body-medium m-0 mt-1">
+                千航贸易（上海）有限公司
+              </dd>
             </div>
             <div class="p-3 border border-border rounded-lg bg-muted/20">
-              <dt class="qs-type-meta text-muted-foreground">预计箱量</dt>
-              <dd class="qs-type-data-emphasis m-0 mt-1">12 × 40HQ</dd>
+              <dt class="qs-type-meta text-muted-foreground">
+                预计箱量
+              </dt>
+              <dd class="qs-type-data-emphasis m-0 mt-1">
+                12 × 40HQ
+              </dd>
             </div>
             <div class="p-3 border border-border rounded-lg bg-muted/20">
-              <dt class="qs-type-meta text-muted-foreground">计划离港</dt>
-              <dd class="qs-type-data m-0 mt-1">2026-07-28 14:30</dd>
+              <dt class="qs-type-meta text-muted-foreground">
+                计划离港
+              </dt>
+              <dd class="qs-type-data m-0 mt-1">
+                2026-07-28 14:30
+              </dd>
             </div>
             <div class="p-3 border border-border rounded-lg bg-muted/20">
-              <dt class="qs-type-meta text-muted-foreground">负责人</dt>
-              <dd class="qs-type-body-medium m-0 mt-1">林舟 · 华东运营组</dd>
+              <dt class="qs-type-meta text-muted-foreground">
+                负责人
+              </dt>
+              <dd class="qs-type-body-medium m-0 mt-1">
+                林舟 · 华东运营组
+              </dd>
             </div>
           </dl>
         </section>
@@ -303,8 +325,8 @@ async function simulateSubmit() {
           <p class="qs-type-body-relaxed text-muted-foreground m-0 mt-2">
             当前示例只演示内容滚动与视觉层级。正式页面应在默认插槽中组合自己的表单、校验和领域组件。
           </p>
-          <div class="p-3 border border-primary/20 rounded-lg bg-primary/5 mt-3 flex gap-3 items-start">
-            <FaIcon name="i-lucide:info" class="text-primary size-4 mt-0.5 shrink-0" />
+          <div class="mt-3 p-3 border border-primary/20 rounded-lg bg-primary/5 flex gap-3 items-start">
+            <FaIcon name="i-lucide:info" class="text-primary mt-0.5 shrink-0 size-4" />
             <p class="qs-type-description m-0">
               抽屉不会发起保存请求，也不会推断当前用户是否拥有复核权限。
             </p>

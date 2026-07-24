@@ -1,10 +1,10 @@
 export type QsGenericDrawerSize = 'sm' | 'md' | 'lg' | 'xl'
 export type QsGenericDrawerPlacement = 'right' | 'bottom'
-export type QsGenericDrawerCloseReason =
-  | 'close-button'
-  | 'overlay'
-  | 'escape'
-  | 'programmatic'
+export type QsGenericDrawerCloseReason
+  = | 'close-button'
+    | 'overlay'
+    | 'escape'
+    | 'programmatic'
 
 export type QsGenericDrawerBeforeClose = (
   reason: QsGenericDrawerCloseReason,

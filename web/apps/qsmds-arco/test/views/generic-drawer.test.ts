@@ -96,13 +96,19 @@ test('FaDrawer 自定义头部仍把传入标题和描述写入可访问名称',
   const source = readRelativeSource(
     '../../../../packages/components/src/basic/drawer/index.vue',
   )
+  const hiddenHeader = source.slice(
+    source.indexOf('<VisuallyHidden v-if="!!slots.header">'),
+    source.indexOf('</VisuallyHidden>', source.indexOf('<VisuallyHidden v-if="!!slots.header">')),
+  )
+  const hiddenTitle = hiddenHeader.slice(
+    hiddenHeader.indexOf('<SheetTitle>'),
+    hiddenHeader.indexOf('</SheetTitle>'),
+  )
+  const hiddenDescription = hiddenHeader.slice(
+    hiddenHeader.indexOf('<SheetDescription>'),
+    hiddenHeader.indexOf('</SheetDescription>'),
+  )
 
-  assert.match(
-    source,
-    /<VisuallyHidden v-if="!!slots\.header">[\s\S]*?<SheetTitle>[\s\S]*?props\.title[\s\S]*?<\/SheetTitle>/u,
-  )
-  assert.match(
-    source,
-    /<SheetDescription[\s\S]*?>[\s\S]*?props\.description[\s\S]*?<\/SheetDescription>/u,
-  )
+  assert.match(hiddenTitle, /props\.title/u)
+  assert.match(hiddenDescription, /props\.description/u)
 })
