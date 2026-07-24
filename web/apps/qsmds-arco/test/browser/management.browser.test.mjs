@@ -164,6 +164,38 @@ async function clickVisibleButton(page, text) {
   })()`)
 }
 
+async function clickVisibleCardButton(page, cardTestId, cardText, buttonText) {
+  await page.waitFor(`(() => {
+    const card = [...document.querySelectorAll(${JSON.stringify(`[data-testid="${cardTestId}"]`)})]
+      .find(candidate => (
+        candidate.textContent?.includes(${JSON.stringify(cardText)})
+        && candidate.getClientRects().length > 0
+      ))
+    const actions = card?.parentElement?.querySelector('[data-slot="qs-generic-table-mobile-actions"]')
+    return [...(actions?.querySelectorAll('button') ?? [])].some(button => (
+      button.textContent?.trim() === ${JSON.stringify(buttonText)}
+      && button.getClientRects().length > 0
+      && !button.disabled
+    ))
+  })()`)
+  await page.evaluate(`(() => {
+    const card = [...document.querySelectorAll(${JSON.stringify(`[data-testid="${cardTestId}"]`)})]
+      .find(candidate => (
+        candidate.textContent?.includes(${JSON.stringify(cardText)})
+        && candidate.getClientRects().length > 0
+      ))
+    const actions = card?.parentElement?.querySelector('[data-slot="qs-generic-table-mobile-actions"]')
+    const button = [...(actions?.querySelectorAll('button') ?? [])].find(candidate => (
+      candidate.textContent?.trim() === ${JSON.stringify(buttonText)}
+      && candidate.getClientRects().length > 0
+      && !candidate.disabled
+    ))
+    if (!button) throw new Error('visible card button unavailable')
+    button.click()
+    return true
+  })()`)
+}
+
 async function clickVisibleText(page, text) {
   await page.waitFor(`(() => [...document.querySelectorAll('body *')].some((element) => (
     element.textContent?.trim() === ${JSON.stringify(text)}
@@ -522,11 +554,15 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await page.waitFor(`document.body.innerText.includes('用户管理')`)
   await fillVisibleInput(page, 'input[placeholder="精确用户名"]', managedUsername)
   await clickVisibleButton(page, '查询')
-  await page.waitFor(`(() => [...document.querySelectorAll('[data-testid="user-card"]')].some(card => (
-    card.textContent?.includes(${JSON.stringify(managedUsername)})
-    && card.getClientRects().length > 0
-  )))()`)
-  await clickVisibleButton(page, '操作')
+  await page.waitFor(`(() => {
+    const table = document.querySelector('[data-testid="user-table"]')
+    const cards = [...document.querySelectorAll('[data-testid="user-card"]')]
+      .filter(card => card.getClientRects().length > 0)
+    return table?.querySelector('[aria-busy="false"]') !== null
+      && cards.length === 1
+      && cards[0].textContent?.includes(${JSON.stringify(managedUsername)})
+  })()`)
+  await clickVisibleCardButton(page, 'user-card', managedUsername, '操作')
   await page.waitFor(`document.body.innerText.includes(${JSON.stringify(`用户操作 · ${managedUsername}`)})`)
   await clickVisibleButton(page, '设置或重置密码')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
