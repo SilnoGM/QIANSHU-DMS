@@ -1,11 +1,18 @@
 import { Injectable } from '@nestjs/common'
 
 import type { Prisma } from '../../generated/prisma/client'
+import {
+  AuditEventType,
+  type AuditEventType as AuditEventTypeValue,
+  AuditOutcome,
+  type AuditOutcome as AuditOutcomeValue,
+} from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import {
   AUDIT_PAGE_SIZE_MAXIMUM,
+  AUDIT_REQUEST_ID_MAXIMUM_LENGTH,
   AuditEventListQueryDto,
 } from './dto/audit-event-list-query.dto'
 import {
@@ -18,6 +25,10 @@ const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 20
 const UNPROCESSABLE_ENTITY_STATUS = 422
 const INTERNAL_ERROR_STATUS = 500
+const AUDIT_EVENT_TYPES = new Set<AuditEventTypeValue>(
+  Object.values(AuditEventType),
+)
+const AUDIT_OUTCOMES = new Set<AuditOutcomeValue>(Object.values(AuditOutcome))
 
 /**
  * 查询只选择公共响应字段。特别不选择 `sourceIpHash`，使该不可逆标识即使在后续
@@ -51,6 +62,9 @@ interface NormalizedAuditEventQuery {
   page: number
   pageSize: number
   skip: number
+  requestId?: string
+  eventType?: AuditEventTypeValue
+  outcome?: AuditOutcomeValue
 }
 
 /**
@@ -66,7 +80,17 @@ export class AuditQueryService {
 
   async list(query: AuditEventListQueryDto): Promise<AuditEventPageDto> {
     const normalized = normalizeQuery(query)
+    // count 与 findMany 复用该对象，避免总数与分页数据出现过滤口径漂移。
     const where: Prisma.AuditEventWhereInput = {}
+    if (normalized.requestId !== undefined) {
+      where.requestId = normalized.requestId
+    }
+    if (normalized.eventType !== undefined) {
+      where.eventType = normalized.eventType
+    }
+    if (normalized.outcome !== undefined) {
+      where.outcome = normalized.outcome
+    }
 
     try {
       const { total, rows } = await this.prisma.$transaction(
@@ -112,6 +136,9 @@ function normalizeQuery(query: AuditEventListQueryDto): NormalizedAuditEventQuer
 
   const page = query.page ?? DEFAULT_PAGE
   const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
+  const requestId = query.requestId
+  const eventType = query.eventType
+  const outcome = query.outcome
 
   if (
     !Number.isSafeInteger(page)
@@ -119,6 +146,22 @@ function normalizeQuery(query: AuditEventListQueryDto): NormalizedAuditEventQuer
     || !Number.isSafeInteger(pageSize)
     || pageSize < 1
     || pageSize > AUDIT_PAGE_SIZE_MAXIMUM
+    || (
+      requestId !== undefined
+      && (
+        typeof requestId !== 'string'
+        || countUnicodeCodePoints(requestId) < 1
+        || countUnicodeCodePoints(requestId) > AUDIT_REQUEST_ID_MAXIMUM_LENGTH
+      )
+    )
+    || (
+      eventType !== undefined
+      && !AUDIT_EVENT_TYPES.has(eventType)
+    )
+    || (
+      outcome !== undefined
+      && !AUDIT_OUTCOMES.has(outcome)
+    )
   ) {
     throwValidationError()
   }
@@ -132,7 +175,14 @@ function normalizeQuery(query: AuditEventListQueryDto): NormalizedAuditEventQuer
     page,
     pageSize,
     skip,
+    requestId,
+    eventType,
+    outcome,
   }
+}
+
+function countUnicodeCodePoints(value: string): number {
+  return Array.from(value).length
 }
 
 function throwValidationError(): never {

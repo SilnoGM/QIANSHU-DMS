@@ -3,6 +3,7 @@ import { ApiBody, ApiOkResponse, type OpenAPIObject } from '@nestjs/swagger'
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
+import { UserStatus } from '../../../generated/prisma/enums'
 import { createOpenApiDocument } from '../../../openapi/openapi-document.factory'
 import { CreateUserRequestDto } from './create-user-request.dto'
 import { PasswordResetRequestDto } from './password-reset-request.dto'
@@ -92,6 +93,24 @@ describe('User request DTO validation', () => {
       username: ' Alice ',
     })
     expect(errorProperties(invalid.errors)).toEqual(['page', 'pageSize'])
+  })
+
+  it('用户列表只接受公开契约中的状态枚举', async () => {
+    const active = await validatePlain(UserListQueryDto, {
+      status: UserStatus.ACTIVE,
+    })
+    const disabled = await validatePlain(UserListQueryDto, {
+      status: UserStatus.DISABLED,
+    })
+    const invalid = await validatePlain(UserListQueryDto, {
+      status: 'PENDING',
+    })
+
+    expect(active.errors).toEqual([])
+    expect(active.instance.status).toBe(UserStatus.ACTIVE)
+    expect(disabled.errors).toEqual([])
+    expect(disabled.instance.status).toBe(UserStatus.DISABLED)
+    expect(errorProperties(invalid.errors)).toEqual(['status'])
   })
 
   it('创建请求严格要求四个字段，并按 Unicode code point 限制输入', async () => {

@@ -42,7 +42,12 @@ test('用户管理 API 使用 OpenAPI 路径并禁止密码写请求自动重试
   const fixture = createClientRecorder()
   const api = createManagementApi(fixture.client)
 
-  await api.users.list({ page: 2, pageSize: 20, username: 'operator' })
+  await api.users.list({
+    page: 2,
+    pageSize: 20,
+    username: 'operator',
+    status: 'ACTIVE',
+  })
   await api.users.create({
     username: 'operator',
     displayName: '操作员',
@@ -65,7 +70,12 @@ test('用户管理 API 使用 OpenAPI 路径并禁止密码写请求自动重试
       url: 'users',
       config: {
         errorPresentation: 'local',
-        params: { page: 2, pageSize: 20, username: 'operator' },
+        params: {
+          page: 2,
+          pageSize: 20,
+          username: 'operator',
+          status: 'ACTIVE',
+        },
       },
     },
     {
@@ -118,7 +128,13 @@ test('角色、权限目录和审计 API 使用稳定 method、path 与分页参
     permissionIds: ['permission-id'],
   })
   await api.permissions.list()
-  await api.auditEvents.list({ page: 3, pageSize: 50 })
+  await api.auditEvents.list({
+    page: 3,
+    pageSize: 50,
+    requestId: 'request-123',
+    eventType: 'USER_UPDATED',
+    outcome: 'FAILURE',
+  })
 
   assert.deepEqual(fixture.calls, [
     { method: 'get', url: 'roles', config: { errorPresentation: 'local' } },
@@ -147,7 +163,13 @@ test('角色、权限目录和审计 API 使用稳定 method、path 与分页参
       url: 'audit-events',
       config: {
         errorPresentation: 'local',
-        params: { page: 3, pageSize: 50 },
+        params: {
+          page: 3,
+          pageSize: 50,
+          requestId: 'request-123',
+          eventType: 'USER_UPDATED',
+          outcome: 'FAILURE',
+        },
       },
     },
   ])

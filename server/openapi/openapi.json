@@ -1551,6 +1551,18 @@
               "maxLength": 128,
               "type": "string"
             }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ACTIVE",
+                "DISABLED"
+              ]
+            }
           }
         ],
         "responses": {
@@ -4937,6 +4949,55 @@
               "maximum": 100,
               "default": 20,
               "type": "integer"
+            }
+          },
+          {
+            "name": "requestId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "eventType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AUTH_LOGIN_SUCCEEDED",
+                "AUTH_LOGIN_FAILED",
+                "AUTH_LOGOUT",
+                "AUTH_LOGOUT_ALL",
+                "USER_CREATED",
+                "USER_UPDATED",
+                "USER_ENABLED",
+                "USER_DISABLED",
+                "USER_PASSWORD_CHANGED",
+                "USER_PASSWORD_RESET",
+                "USER_ROLES_CHANGED",
+                "ROLE_CREATED",
+                "ROLE_UPDATED",
+                "ROLE_PERMISSIONS_CHANGED",
+                "SYSTEM_BOOTSTRAP",
+                "SYSTEM_ADMIN_RECOVERED",
+                "AUTH_RETENTION_PURGED"
+              ]
+            }
+          },
+          {
+            "name": "outcome",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SUCCESS",
+                "FAILURE"
+              ]
             }
           }
         ],

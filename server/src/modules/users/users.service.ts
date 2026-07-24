@@ -114,9 +114,15 @@ export class UsersService {
   async list(query: UserListQueryDto): Promise<UserPageDto> {
     const page = query.page ?? 1
     const pageSize = query.pageSize ?? 20
-    const where = query.username === undefined
-      ? {}
-      : { usernameNormalized: normalizeUsername(query.username).usernameNormalized }
+    // count 与 findMany 必须复用同一个过滤对象，保证总数和当前页使用同一查询口径。
+    const where: Prisma.UserWhereInput = {}
+    if (query.username !== undefined) {
+      where.usernameNormalized =
+        normalizeUsername(query.username).usernameNormalized
+    }
+    if (query.status !== undefined) {
+      where.status = query.status
+    }
 
     try {
       const [total, users] = await Promise.all([

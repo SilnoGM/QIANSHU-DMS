@@ -140,6 +140,44 @@ describe('AuditQueryService', () => {
     )
   })
 
+  it('组合精确查询条件，并让 count/findMany 共享同一 where', async () => {
+    const fixture = createPrismaFixture([], 0)
+    const service = new AuditQueryService(fixture.prisma)
+
+    await service.list({
+      page: 1,
+      pageSize: 20,
+      requestId: 'request-123',
+      eventType: AuditEventType.USER_UPDATED,
+      outcome: AuditOutcome.FAILURE,
+    })
+
+    const countInput = fixture.count.mock.calls[0]?.[0] as {
+      where: unknown
+    }
+    const findManyInput = fixture.findMany.mock.calls[0]?.[0] as {
+      where: unknown
+    }
+    expect(countInput.where).toEqual({
+      requestId: 'request-123',
+      eventType: AuditEventType.USER_UPDATED,
+      outcome: AuditOutcome.FAILURE,
+    })
+    expect(findManyInput.where).toBe(countInput.where)
+  })
+
+  it('按 Unicode code point 接受 64 个双码元字符的 requestId', async () => {
+    const fixture = createPrismaFixture([], 0)
+    const service = new AuditQueryService(fixture.prisma)
+    const requestId = '😀'.repeat(64)
+
+    await service.list({ requestId })
+
+    expect(fixture.count).toHaveBeenCalledWith({
+      where: { requestId },
+    })
+  })
+
   it('returns only the public projection and serializes timestamps', async () => {
     const fixture = createPrismaFixture()
     const service = new AuditQueryService(fixture.prisma)
@@ -242,6 +280,10 @@ describe('AuditQueryService', () => {
       'unsafe offset',
       { page: Number.MAX_SAFE_INTEGER, pageSize: 100 },
     ],
+    ['empty requestId', { requestId: '' }],
+    ['requestId above 64 code points', { requestId: '😀'.repeat(65) }],
+    ['unknown eventType', { eventType: 'UNKNOWN_EVENT' }],
+    ['unknown outcome', { outcome: 'UNKNOWN_OUTCOME' }],
   ])('rejects %s with the fixed 422 contract', async (_name, query) => {
     const fixture = createPrismaFixture()
     const service = new AuditQueryService(fixture.prisma)
