@@ -74,13 +74,14 @@ export function resolveUserAdminActions(
     && input.status === 'DISABLED'
     && input.canEnable
 
+  // “分配角色”在桌面操作列直接展示，在移动端也有独立按钮；
+  // 更多菜单只统计设置密码和启停用户等次级操作，避免生成空菜单。
   return {
     canAssignRoles: input.canAssignRoles,
     canDisable,
     canEnable,
     canResetPassword,
-    hasMoreAction: input.canAssignRoles
-      || canResetPassword
+    hasMoreAction: canResetPassword
       || canDisable
       || canEnable,
   }

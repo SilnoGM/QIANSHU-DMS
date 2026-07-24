@@ -70,6 +70,7 @@ const systemViewContracts = [
       'FaPageMain',
       'FaTag',
       'FaTextarea',
+      'QsGenericDrawer',
       'QsGenericTable',
     ],
   },
@@ -142,6 +143,40 @@ for (const contract of systemViewContracts) {
   })
 }
 
+test('角色权限分配使用业务通用抽屉并由抽屉统一管理滚动与提交状态', () => {
+  const roleSource = readRelativeSource('../../src/views/system/roles/index.vue')
+  const assignmentSource = readRelativeSource(
+    '../../src/views/system/roles/permission-assignment-modal.vue',
+  )
+  const drawerTag = assignmentSource.match(/<QsGenericDrawer\b[\s\S]*?>/u)?.[0]
+
+  assert.match(
+    assignmentSource,
+    /import QsGenericDrawer from '@\/components\/business\/QsGenericDrawer\/index\.vue'/u,
+  )
+  assert.match(assignmentSource, /defineOptions\(\{ name: 'PermissionAssignmentDrawer' \}\)/u)
+  assert.ok(drawerTag)
+  assert.match(drawerTag, /\bplacement="right"/u)
+  assert.match(drawerTag, /\bsize="xl"/u)
+  assert.match(drawerTag, /:submitting="loading"/u)
+  assert.doesNotMatch(
+    drawerTag,
+    /:loading=/u,
+    '权限保存是提交态，不得误触发通用抽屉的内容加载骨架',
+  )
+  assert.match(assignmentSource, /<template #header-leading>/u)
+  assert.match(assignmentSource, /<template #footer>/u)
+  assert.doesNotMatch(assignmentSource, /<FaModal\b/u)
+  assert.doesNotMatch(
+    assignmentSource,
+    /max-h-\[[^\]]+\][^"]*overflow-y-auto/u,
+    '抽屉内容区应由 QsGenericDrawer 统一滚动，避免权限列表出现嵌套滚动条',
+  )
+  assert.match(roleSource, /import PermissionAssignmentDrawer from '\.\/permission-assignment-modal\.vue'/u)
+  assert.match(roleSource, /<PermissionAssignmentDrawer\b/u)
+  assert.doesNotMatch(roleSource, /\bpermissionModalVisible\b/u)
+})
+
 test('四个系统管理页面统一使用 QsGenericTable 内置搜索、筛选和列设置', () => {
   for (const contract of systemViewContracts) {
     const entrySource = readRelativeSource(contract.files[0])
@@ -188,6 +223,21 @@ test('用户管理只保留 QsGenericTable 内置查询工具栏', () => {
   assert.doesNotMatch(source, /<FaInput\b/u)
   assert.doesNotMatch(source, /@click="resetSearch"/u)
   assert.match(source, /search-placeholder="输入完整用户名搜索"/u)
+})
+
+test('用户管理将分配角色直接展示在桌面操作列', () => {
+  const source = readRelativeSource('../../src/views/system/users/index.vue')
+  const moreActionItemsSource = source.match(
+    /function moreActionItems\(user: UserDto\): UserActionMenuItem\[\]\[\] \{[\s\S]*?\n\}/u,
+  )?.[0]
+
+  assert.ok(moreActionItemsSource)
+  assert.doesNotMatch(moreActionItemsSource, /分配角色/u)
+  assert.match(source, /:action-column="\{ width: 230 \}"/u)
+  assert.match(
+    source,
+    /<FaButton\s+v-if="userActions\(user\)\.canAssignRoles"[\s\S]*?@click="openRoleAssignment\(user\)"[\s\S]*?>\s*分配角色\s*<\/FaButton>/u,
+  )
 })
 
 test('权限目录合并为一个带资源列的通用表格', () => {

@@ -191,6 +191,9 @@ async function clickVisibleCardButton(page, cardTestId, cardText, buttonText) {
       && !candidate.disabled
     ))
     if (!button) throw new Error('visible card button unavailable')
+    // DOM click 不会像真实键盘操作那样自动建立焦点；先聚焦触发器，才能验证
+    // Drawer 关闭后把焦点恢复到用户原先操作的移动端按钮。
+    button.focus({ preventScroll: true })
     button.click()
     return true
   })()`)
@@ -543,22 +546,44 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     && dialog.textContent?.includes('分配权限')
     && dialog.textContent?.includes('users:read')
   )))()`)
-  const permissionModalState = await page.evaluate(`(() => {
+  await page.waitFor(`(() => {
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
       .find(candidate => candidate.getClientRects().length > 0
         && candidate.textContent?.includes('分配权限'))
+    const rect = dialog?.getBoundingClientRect()
+    return rect !== undefined && Math.abs(window.innerWidth - rect.right) <= 1
+  })()`)
+  const permissionDrawerState = await page.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('分配权限'))
+    const rect = dialog?.getBoundingClientRect()
+    const footer = dialog?.querySelector('[data-slot="qs-generic-drawer-footer"]')
+    const footerRect = footer?.getBoundingClientRect()
     const options = [...(dialog?.querySelectorAll('[role="checkbox"]') ?? [])]
     return {
+      contentUsesGenericDrawer: dialog?.querySelector(
+        '[data-slot="qs-generic-drawer"]',
+      ) !== null,
       enabledCheckboxes: options.filter(option => (
         option.getAttribute('aria-disabled') !== 'true' && !option.disabled
       )).length,
+      footerBottomGap: rect && footerRect ? Math.abs(rect.bottom - footerRect.bottom) : null,
+      hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
       optionCount: options.length,
+      rightGap: rect ? Math.abs(window.innerWidth - rect.right) : null,
       showsUsersRead: options.some(option => option.textContent?.includes('users:read')),
+      width: rect?.width ?? null,
     }
   })()`)
-  assert.equal(permissionModalState.showsUsersRead, true)
-  assert.ok(permissionModalState.optionCount > 0)
-  assert.equal(permissionModalState.enabledCheckboxes, 0)
+  assert.equal(permissionDrawerState.contentUsesGenericDrawer, true)
+  assert.equal(permissionDrawerState.showsUsersRead, true)
+  assert.ok(permissionDrawerState.optionCount > 0)
+  assert.equal(permissionDrawerState.enabledCheckboxes, 0)
+  assert.equal(Math.round(permissionDrawerState.width), 768)
+  assert.ok(permissionDrawerState.rightGap <= 1)
+  assert.ok(permissionDrawerState.footerBottomGap <= 2)
+  assert.equal(permissionDrawerState.hasHorizontalOverflow, false)
   await clickVisibleModalButton(page, '保存权限')
   await waitForNoVisibleModal(page, '分配权限')
 
@@ -568,9 +593,55 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.deepEqual(managedRole?.permissionIds, [])
   assert.equal(typeof managedRole?.id, 'string')
 
-  // 在 390px 真机指标下从用户卡片进入重置密码，验证 Drawer -> Modal 的
-  // 关键操作链和弹窗宽度；之后再切回桌面表格完成编辑、角色与状态操作。
+  // 窄屏重新从角色卡片打开同一权限抽屉，证明它占满可用宽度、保留 44px
+  // 关闭目标和纵向 Footer，关闭后再把焦点交还给原“分配权限”入口。
   await page.setViewport(390, 844, true)
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await page.waitFor(`document.body.innerText.includes(${JSON.stringify(roleCode)})`)
+  await clickVisibleCardButton(page, 'role-card', roleCode, '分配权限')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => {
+    const rect = dialog.getBoundingClientRect()
+    return dialog.getClientRects().length > 0
+      && dialog.textContent?.includes('分配权限')
+      && dialog.querySelector('[data-slot="qs-generic-drawer"]')
+      && Math.abs(rect.left) <= 1
+      && Math.abs(window.innerWidth - rect.right) <= 1
+  }))()`)
+  const narrowPermissionDrawer = await page.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('分配权限'))
+    const rect = dialog?.getBoundingClientRect()
+    const closeButtonRect = dialog
+      ?.querySelector('[aria-label="关闭抽屉"]')
+      ?.getBoundingClientRect()
+    const footerButtonWidths = [
+      ...(dialog?.querySelectorAll('[data-slot="qs-generic-drawer-footer"] button') ?? []),
+    ].map(button => button.getBoundingClientRect().width)
+    return {
+      closeButtonHeight: closeButtonRect?.height ?? null,
+      footerButtonWidths,
+      hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
+      left: rect?.left ?? null,
+      right: rect?.right ?? null,
+      width: rect?.width ?? null,
+    }
+  })()`)
+  assert.equal(Math.round(narrowPermissionDrawer.left), 0)
+  assert.equal(Math.round(narrowPermissionDrawer.right), 390)
+  assert.equal(Math.round(narrowPermissionDrawer.width), 390)
+  assert.ok(narrowPermissionDrawer.closeButtonHeight >= 44)
+  assert.deepEqual(
+    narrowPermissionDrawer.footerButtonWidths.map(width => width > 300),
+    [true, true],
+  )
+  assert.equal(narrowPermissionDrawer.hasHorizontalOverflow, false)
+  await clickVisibleModalButton(page, '取消')
+  await waitForNoVisibleModal(page, '分配权限')
+  await page.waitFor(`document.activeElement?.textContent?.trim() === '分配权限'`)
+
+  // 继续在 390px 真机指标下从用户卡片进入重置密码，验证 Drawer -> Modal 的
+  // 关键操作链和弹窗宽度；之后再切回桌面表格完成编辑、角色与状态操作。
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
   await page.waitFor(`document.body.innerText.includes('用户管理')`)
   await waitForTableTools(page, 'user-table', '输入完整用户名搜索')
@@ -712,8 +783,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     assert.equal(serializedUpdateAudit.includes(sensitiveValue), false)
   }
 
-  await clickVisibleTableRowButton(page, managedUsername, '更多')
-  await clickVisibleText(page, '分配角色')
+  await clickVisibleTableRowButton(page, managedUsername, '分配角色')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
     dialog.getClientRects().length > 0
     && dialog.textContent?.includes('分配角色')
