@@ -783,8 +783,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     assert.equal(serializedUpdateAudit.includes(sensitiveValue), false)
   }
 
-  await clickVisibleTableRowButton(page, managedUsername, '更多')
-  await clickVisibleText(page, '分配角色')
+  await clickVisibleTableRowButton(page, managedUsername, '分配角色')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
     dialog.getClientRects().length > 0
     && dialog.textContent?.includes('分配角色')

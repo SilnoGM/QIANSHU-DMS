@@ -39,7 +39,7 @@ test('当前登录用户只保留角色分配，不暴露管理员重置密码�
     canDisable: false,
     canEnable: false,
     canResetPassword: false,
-    hasMoreAction: true,
+    hasMoreAction: false,
   })
 
   assert.deepEqual(resolveUserAdminActions({

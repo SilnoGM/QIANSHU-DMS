@@ -313,6 +313,12 @@ function hasMoreAction(user: UserDto): boolean {
   return userActions(user).hasMoreAction
 }
 
+/** 移动端统一操作入口还需覆盖已从“更多”提升为直接操作的角色分配。 */
+function hasAvailableAction(user: UserDto): boolean {
+  const actions = userActions(user)
+  return canUpdate.value || actions.canAssignRoles || actions.hasMoreAction
+}
+
 interface UserActionMenuItem {
   label: string
   handle: () => void
@@ -322,9 +328,6 @@ interface UserActionMenuItem {
 function moreActionItems(user: UserDto): UserActionMenuItem[][] {
   const actions = userActions(user)
   const items: UserActionMenuItem[] = []
-  if (actions.canAssignRoles) {
-    items.push({ label: '分配角色', handle: () => openRoleAssignment(user) })
-  }
   if (actions.canResetPassword) {
     items.push({ label: '设置密码', handle: () => openPasswordReset(user) })
   }
@@ -484,7 +487,7 @@ onMounted(() => {
           v-model:filters="filters"
           data-testid="user-table"
           row-key="id"
-          :action-column="{ width: 150 }"
+          :action-column="{ width: 230 }"
           :addable="false"
           :columns="columns"
           :data="users"
@@ -625,7 +628,7 @@ onMounted(() => {
 
           <template #actions="{ row: user }">
             <FaButton
-              v-if="isNarrow && (canUpdate || hasMoreAction(user))"
+              v-if="isNarrow && hasAvailableAction(user)"
               class="w-full"
               variant="outline"
               size="sm"
@@ -636,6 +639,14 @@ onMounted(() => {
             <div v-else-if="!isNarrow" class="flex gap-1 items-center">
               <FaButton v-if="canUpdate" variant="ghost" size="sm" @click="openEdit(user)">
                 编辑
+              </FaButton>
+              <FaButton
+                v-if="userActions(user).canAssignRoles"
+                variant="ghost"
+                size="sm"
+                @click="openRoleAssignment(user)"
+              >
+                分配角色
               </FaButton>
               <FaDropdown v-if="hasMoreAction(user)" :items="moreActionItems(user)" align="end">
                 <FaButton variant="ghost" size="sm">

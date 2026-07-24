@@ -225,6 +225,21 @@ test('用户管理只保留 QsGenericTable 内置查询工具栏', () => {
   assert.match(source, /search-placeholder="输入完整用户名搜索"/u)
 })
 
+test('用户管理将分配角色直接展示在桌面操作列', () => {
+  const source = readRelativeSource('../../src/views/system/users/index.vue')
+  const moreActionItemsSource = source.match(
+    /function moreActionItems\(user: UserDto\): UserActionMenuItem\[\]\[\] \{[\s\S]*?\n\}/u,
+  )?.[0]
+
+  assert.ok(moreActionItemsSource)
+  assert.doesNotMatch(moreActionItemsSource, /分配角色/u)
+  assert.match(source, /:action-column="\{ width: 230 \}"/u)
+  assert.match(
+    source,
+    /<FaButton\s+v-if="userActions\(user\)\.canAssignRoles"[\s\S]*?@click="openRoleAssignment\(user\)"[\s\S]*?>\s*分配角色\s*<\/FaButton>/u,
+  )
+})
+
 test('权限目录合并为一个带资源列的通用表格', () => {
   const source = readRelativeSource('../../src/views/system/permissions/index.vue')
 
