@@ -17,7 +17,7 @@ import {
   filterRoleTableRows,
   hasVisibleTableColumn,
 } from '@/views/system/shared/table-query'
-import PermissionAssignmentModal from './permission-assignment-modal.vue'
+import PermissionAssignmentDrawer from './permission-assignment-modal.vue'
 import { canAssignRolePermissions, canEditRole } from './presentation'
 import RoleEditorModal from './role-editor-modal.vue'
 
@@ -37,7 +37,7 @@ const editorRole = ref<RoleDto | null>(null)
 const editorLoading = ref(false)
 const editorError = ref('')
 
-const permissionModalVisible = ref(false)
+const permissionDrawerVisible = ref(false)
 const permissionRole = ref<RoleDto | null>(null)
 const permissionLoading = ref(false)
 const permissionError = ref('')
@@ -179,7 +179,7 @@ function openPermissions(role: RoleDto): void {
   }
   permissionRole.value = role
   permissionError.value = ''
-  permissionModalVisible.value = true
+  permissionDrawerVisible.value = true
 }
 
 async function savePermissions(roleId: string, permissionIds: string[]): Promise<void> {
@@ -188,17 +188,25 @@ async function savePermissions(roleId: string, permissionIds: string[]): Promise
   }
   permissionLoading.value = true
   permissionError.value = ''
+  let saved = false
   try {
     const response = await managementApi.roles.replacePermissions(roleId, { permissionIds })
     replaceRole(response.data)
-    permissionModalVisible.value = false
-    useFaToast().success('角色权限已更新')
+    saved = true
   }
   catch (error) {
     permissionError.value = safeErrorMessage(error, '权限保存失败，请稍后重试')
   }
   finally {
     permissionLoading.value = false
+  }
+
+  if (saved) {
+    // QsGenericDrawer 在 submitting 期间拒绝所有关闭。先让子组件收到提交态结束，
+    // 再发起受控关闭，避免抽屉按关闭守卫回写 true 而与页面状态分叉。
+    await nextTick()
+    permissionDrawerVisible.value = false
+    useFaToast().success('角色权限已更新')
   }
 }
 
@@ -358,8 +366,8 @@ onMounted(loadData)
       :error-message="editorError"
       @submit="saveRole"
     />
-    <PermissionAssignmentModal
-      v-model:visible="permissionModalVisible"
+    <PermissionAssignmentDrawer
+      v-model:visible="permissionDrawerVisible"
       :role="permissionRole"
       :permissions="permissions"
       :loading="permissionLoading"
