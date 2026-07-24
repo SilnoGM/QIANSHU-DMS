@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import type { TableColumn } from '@fantastic-admin/components'
 import type { PermissionDto } from '@/api/generated/types.gen'
+import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+
 import managementApi from '@/api/modules/management'
+import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { groupPermissions } from './catalog'
 
 defineOptions({ name: 'SystemPermissions' })
@@ -13,11 +15,11 @@ const pageError = ref('')
 
 const canRead = computed(() => auth('roles:read'))
 const groups = computed(() => groupPermissions(permissions.value))
-const columns: TableColumn<PermissionDto>[] = [
-  { accessorKey: 'code', header: '权限码', width: 240 },
-  { accessorKey: 'name', header: '名称', width: 180 },
-  { accessorKey: 'description', header: '说明' },
-  { accessorKey: 'systemOnly', header: '范围', width: 120 },
+const columns: QsGenericTableColumn<PermissionDto>[] = [
+  { id: 'code', accessorKey: 'code', title: '权限码', width: 240 },
+  { id: 'name', accessorKey: 'name', title: '名称', width: 180 },
+  { id: 'description', accessorKey: 'description', title: '说明' },
+  { id: 'systemOnly', accessorKey: 'systemOnly', title: '范围', width: 120 },
 ]
 
 function safeErrorMessage(error: unknown): string {
@@ -137,56 +139,57 @@ onMounted(loadPermissions)
               </FaTag>
             </header>
 
-            <div data-testid="permission-table" class="hidden md:block">
-              <FaTable
-                row-key="id"
-                :columns="columns"
-                :data="group.permissions"
-                table-class="min-w-[720px]"
-                :class="loading ? 'pointer-events-none opacity-60' : undefined"
-              >
-                <template #cell-code="{ row }">
-                  <code class="qs-type-data-emphasis">{{ row.original.code }}</code>
-                </template>
-                <template #cell-description="{ row }">
-                  <span class="qs-type-description">{{ row.original.description || '—' }}</span>
-                </template>
-                <template #cell-systemOnly="{ row }">
-                  <FaTag
-                    :variant="row.original.systemOnly ? 'secondary' : 'outline'"
-                    class="qs-type-status-tag"
-                  >
-                    {{ row.original.systemOnly ? '系统专用' : '普通权限' }}
-                  </FaTag>
-                </template>
-              </FaTable>
-            </div>
+            <QsGenericTable
+              data-testid="permission-table"
+              row-key="id"
+              class="p-3 md:p-0"
+              :aria-label="`${group.label}权限列表`"
+              :columns="columns"
+              :data="group.permissions"
+              :loading="loading"
+              :searchable="false"
+              :addable="false"
+              :show-column-settings="false"
+              :show-pagination="false"
+              table-class="min-w-[720px]"
+            >
+              <template #cell-code="{ row }">
+                <code class="qs-type-data-emphasis">{{ row.original.code }}</code>
+              </template>
+              <template #cell-description="{ row }">
+                <span class="qs-type-description">{{ row.original.description || '—' }}</span>
+              </template>
+              <template #cell-systemOnly="{ row }">
+                <FaTag
+                  :variant="row.original.systemOnly ? 'secondary' : 'outline'"
+                  class="qs-type-status-tag"
+                >
+                  {{ row.original.systemOnly ? '系统专用' : '普通权限' }}
+                </FaTag>
+              </template>
 
-            <div class="p-3 gap-3 grid md:hidden">
-              <!-- 权限卡片没有字段表格或操作区，只标注已有标题、编码、说明与范围状态。 -->
-              <FaCard
-                v-for="permission in group.permissions"
-                :key="permission.id"
-                data-testid="permission-card"
-                content-class="space-y-2"
-              >
-                <template #header>
+              <!-- 通用表格负责每个权限分组的响应式卡片；这里不再嵌套第二层 FaCard。 -->
+              <template #mobile-row="{ row: permission, rowNumber }">
+                <div data-testid="permission-card" class="gap-2 grid">
                   <div class="flex gap-3 items-start justify-between">
                     <strong class="qs-type-compact-title min-w-0 break-words">{{ permission.name }}</strong>
-                    <FaTag
-                      :variant="permission.systemOnly ? 'secondary' : 'outline'"
-                      class="qs-type-status-tag shrink-0"
-                    >
-                      {{ permission.systemOnly ? '系统专用' : '普通权限' }}
-                    </FaTag>
+                    <div class="flex shrink-0 flex-col gap-1 items-end">
+                      <FaTag
+                        :variant="permission.systemOnly ? 'secondary' : 'outline'"
+                        class="qs-type-status-tag"
+                      >
+                        {{ permission.systemOnly ? '系统专用' : '普通权限' }}
+                      </FaTag>
+                      <span class="qs-type-meta tabular-nums">#{{ rowNumber }}</span>
+                    </div>
                   </div>
-                </template>
-                <code class="qs-type-data-emphasis break-all">{{ permission.code }}</code>
-                <p class="qs-type-description m-0">
-                  {{ permission.description || '暂无补充说明' }}
-                </p>
-              </FaCard>
-            </div>
+                  <code class="qs-type-data-emphasis break-all">{{ permission.code }}</code>
+                  <p class="qs-type-description m-0">
+                    {{ permission.description || '暂无补充说明' }}
+                  </p>
+                </div>
+              </template>
+            </QsGenericTable>
           </section>
         </div>
       </template>

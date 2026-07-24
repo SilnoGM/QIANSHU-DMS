@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import type { TableColumn } from '@fantastic-admin/components'
 import type {
   CreateRoleRequestDto,
   PermissionDto,
   RoleDto,
   UpdateRoleRequestDto,
 } from '@/api/generated/types.gen'
+import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+
 import managementApi from '@/api/modules/management'
+import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import PermissionAssignmentModal from './permission-assignment-modal.vue'
 import { canAssignRolePermissions, canEditRole } from './presentation'
 import RoleEditorModal from './role-editor-modal.vue'
@@ -30,11 +32,15 @@ const permissionRole = ref<RoleDto | null>(null)
 const permissionLoading = ref(false)
 const permissionError = ref('')
 
-const columns: TableColumn<RoleDto>[] = [
-  { id: 'role', accessorKey: 'name', header: '角色', width: 220 },
-  { id: 'description', accessorKey: 'description', header: '说明', minWidth: 240 },
-  { id: 'permissionCount', accessorKey: 'permissionIds', header: '权限数量', width: 110 },
-  { id: 'actions', header: '操作', width: 180, fixed: 'right' },
+const columns: QsGenericTableColumn<RoleDto>[] = [
+  { id: 'role', accessorKey: 'name', title: '角色', width: 220 },
+  { id: 'description', accessorKey: 'description', title: '说明', minWidth: 240 },
+  {
+    id: 'permissionCount',
+    accessorFn: role => role.permissionIds.length,
+    title: '权限数量',
+    width: 110,
+  },
 ]
 
 function safeErrorMessage(error: unknown, fallback: string): string {
@@ -219,108 +225,39 @@ onMounted(loadData)
         </template>
       </FaAlert>
 
-      <div data-testid="role-table" class="hidden md:block">
-        <FaTable
-          row-key="id"
-          :columns="columns"
-          :data="roles"
-          :empty-text="loading ? '正在加载角色…' : '暂无角色'"
-          table-class="min-w-[860px]"
-          :aria-busy="loading"
-          :class="loading && 'pointer-events-none opacity-60'"
-        >
-          <template #cell-role="{ row }">
-            <div class="flex flex-wrap gap-2 items-center">
-              <strong class="qs-type-body-medium">{{ row.original.name }}</strong>
-              <FaTag v-if="row.original.isSystem" variant="secondary" class="qs-type-status-tag">
-                系统角色
-              </FaTag>
-              <code class="qs-type-data-emphasis w-full block">{{ row.original.code }}</code>
-            </div>
-          </template>
-          <template #cell-description="{ row }">
-            <span class="qs-type-description">{{ row.original.description || '—' }}</span>
-          </template>
-          <template #cell-permissionCount="{ row }">
-            <span class="qs-type-data">{{ row.original.permissionIds.length }}</span>
-          </template>
-          <template #cell-actions="{ row }">
-            <div v-if="hasRoleAction(row.original)" class="flex flex-wrap gap-1">
-              <FaButton
-                v-if="auth('roles:update')"
-                variant="ghost"
-                size="sm"
-                :disabled="loading"
-                @click="openEdit(row.original)"
-              >
-                编辑
-              </FaButton>
-              <FaButton
-                v-if="auth('roles:assign-permissions')"
-                variant="ghost"
-                size="sm"
-                :disabled="loading || !permissionCatalogReady"
-                @click="openPermissions(row.original)"
-              >
-                分配权限
-              </FaButton>
-            </div>
-            <span v-else class="text-muted-foreground">{{ row.original.isSystem ? '系统角色只读' : '—' }}</span>
-          </template>
-        </FaTable>
-      </div>
-
-      <!-- 移动卡片沿用原有断点与操作，仅把每类信息映射到稳定排版角色。 -->
-      <div class="gap-3 grid md:hidden" :aria-busy="loading">
-        <div
-          v-if="loading && roles.length === 0"
-          class="text-muted-foreground py-12 flex-center gap-2"
-          role="status"
-        >
-          <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
-          <span>正在加载角色…</span>
-        </div>
-        <FaEmpty
-          v-if="!loading && roles.length === 0"
-          icon="i-lucide:shield-check"
-          title="暂无角色"
-          description="创建角色后可在此维护角色信息与权限。"
-        />
-        <FaCard
-          v-for="role in roles"
-          :key="role.id"
-          data-testid="role-card"
-          class="py-4 gap-4"
-          :class="loading && 'pointer-events-none opacity-60'"
-          header-class="px-4"
-          content-class="px-4"
-          footer-class="flex-wrap gap-2 px-4"
-        >
-          <template #header>
-            <div class="flex flex-wrap gap-2 items-center">
-              <strong class="qs-type-compact-title">{{ role.name }}</strong>
-              <FaTag v-if="role.isSystem" variant="secondary" class="qs-type-status-tag">
-                系统角色
-              </FaTag>
-            </div>
-          </template>
-          <div class="qs-type-body gap-2.5 grid">
-            <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
-              <span class="qs-type-compact-label">编码</span>
-              <code class="qs-type-data-emphasis [overflow-wrap:anywhere]">{{ role.code }}</code>
-            </div>
-            <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
-              <span class="qs-type-compact-label">权限数量</span>
-              <span class="qs-type-data">{{ role.permissionIds.length }}</span>
-            </div>
-            <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
-              <span class="qs-type-compact-label">说明</span>
-              <p class="qs-type-body m-0 [overflow-wrap:anywhere]">
-                {{ role.description || '—' }}
-              </p>
-            </div>
+      <QsGenericTable
+        data-testid="role-table"
+        row-key="id"
+        :columns="columns"
+        :data="roles"
+        :loading="loading"
+        :action-column="{ width: 180 }"
+        :searchable="false"
+        :addable="false"
+        :show-column-settings="false"
+        :show-pagination="false"
+        empty-title="暂无角色"
+        empty-description="创建角色后可在此维护角色信息与权限。"
+        table-class="min-w-[860px]"
+      >
+        <template #cell-role="{ row }">
+          <div class="flex flex-wrap gap-2 items-center">
+            <strong class="qs-type-body-medium">{{ row.original.name }}</strong>
+            <FaTag v-if="row.original.isSystem" variant="secondary" class="qs-type-status-tag">
+              系统角色
+            </FaTag>
+            <code class="qs-type-data-emphasis w-full block">{{ row.original.code }}</code>
           </div>
-          <template v-if="hasRoleAction(role)" #footer>
+        </template>
+        <template #cell-description="{ row }">
+          <span class="qs-type-description">{{ row.original.description || '—' }}</span>
+        </template>
+        <template #cell-permissionCount="{ row }">
+          <span class="qs-type-data">{{ row.original.permissionIds.length }}</span>
+        </template>
+
+        <template #actions="{ row: role }">
+          <template v-if="hasRoleAction(role)">
             <FaButton
               v-if="auth('roles:update')"
               variant="ghost"
@@ -340,8 +277,40 @@ onMounted(loadData)
               分配权限
             </FaButton>
           </template>
-        </FaCard>
-      </div>
+          <span v-else class="text-muted-foreground">{{ role.isSystem ? '系统角色只读' : '—' }}</span>
+        </template>
+
+        <!-- 通用表格统一控制断点和卡片外壳；页面只描述角色字段，操作区复用 actions 插槽。 -->
+        <template #mobile-row="{ row: role, rowNumber }">
+          <div data-testid="role-card" class="gap-4 grid">
+            <div class="flex gap-3 items-start justify-between">
+              <div class="flex flex-wrap gap-2 min-w-0 items-center">
+                <strong class="qs-type-compact-title">{{ role.name }}</strong>
+                <FaTag v-if="role.isSystem" variant="secondary" class="qs-type-status-tag">
+                  系统角色
+                </FaTag>
+              </div>
+              <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
+            </div>
+            <div class="qs-type-body gap-2.5 grid">
+              <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
+                <span class="qs-type-compact-label">编码</span>
+                <code class="qs-type-data-emphasis [overflow-wrap:anywhere]">{{ role.code }}</code>
+              </div>
+              <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
+                <span class="qs-type-compact-label">权限数量</span>
+                <span class="qs-type-data">{{ role.permissionIds.length }}</span>
+              </div>
+              <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
+                <span class="qs-type-compact-label">说明</span>
+                <p class="qs-type-body m-0 [overflow-wrap:anywhere]">
+                  {{ role.description || '—' }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </template>
+      </QsGenericTable>
     </FaPageMain>
 
     <RoleEditorModal

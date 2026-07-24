@@ -704,7 +704,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
   await waitForCardsInsideViewport(page, '[data-testid="role-card"]', editedRoleName)
   assert.equal(await page.evaluate(`(() => (
-    [...document.querySelectorAll('[data-testid="role-table"]')]
+    [...document.querySelectorAll('[data-testid="role-table"] table')]
       .some(element => element.getClientRects().length > 0)
   ))()`), false)
 
@@ -728,7 +728,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       documentWidth: document.documentElement.scrollWidth,
       overflowCards: cardRects.filter(rect => rect.left < 0 || rect.right > innerWidth),
       viewportWidth: innerWidth,
-      visibleTables: [...document.querySelectorAll('[data-testid="permission-table"]')]
+      visibleTables: [...document.querySelectorAll('[data-testid="permission-table"] table')]
         .filter(element => element.getClientRects().length > 0).length,
     }
   })()`)
@@ -762,7 +762,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
         userRolesChanged: text.includes('用户角色已变更'),
         userUpdated: text.includes('用户已更新'),
       },
-      visibleTables: [...document.querySelectorAll('[data-testid="audit-table"]')]
+      visibleTables: [...document.querySelectorAll('[data-testid="audit-table"] table')]
         .filter(element => element.getClientRects().length > 0).length,
     }
   })()`)
