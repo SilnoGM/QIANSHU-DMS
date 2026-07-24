@@ -32,6 +32,8 @@
 
 “列设置”支持在运行时调整显隐、左右固定与内容对齐，表头、单元格和汇总内容会同步更新。“恢复默认”会还原 `columns` 中声明的初始状态。`columnSettingsChange` 事件返回每列的 `visible`、`fixed` 和 `align` 状态，业务页面可按需持久化。
 
+已有页面需要保留自己的页头工具栏时，可将 `searchable`、`addable`、`showColumnSettings` 设为 `false`；筛选定义同时为空时，组件不会保留空工具栏间距。`showColumnSettings` 默认值为 `true`。
+
 默认汇总当前页 `data`；服务端分页场景可通过 `summaryValues` 传入全量数据汇总结果。页面也可以提供 `summary-{columnId}` 插槽覆盖桌面端表尾内容。
 
 ## 操作列

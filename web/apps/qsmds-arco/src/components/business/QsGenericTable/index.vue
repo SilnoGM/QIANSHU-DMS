@@ -47,6 +47,7 @@ const props = withDefaults(defineProps<{
   rowKey?: TableProps<TData>['rowKey']
   searchable?: boolean
   searchPlaceholder?: string
+  showColumnSettings?: boolean
   showPagination?: boolean
   stripe?: boolean
   summaryValues?: Record<string, QsGenericTableSummaryValue>
@@ -66,6 +67,7 @@ const props = withDefaults(defineProps<{
   rowKey: undefined,
   searchable: true,
   searchPlaceholder: '搜索当前业务数据',
+  showColumnSettings: true,
   showPagination: true,
   stripe: false,
   summaryValues: () => ({}),
@@ -107,6 +109,12 @@ const columnSettings = ref<QsGenericTableColumnSettings>(
 )
 
 const totalRows = computed(() => props.total ?? props.data.length)
+// 系统页面可能复用已有页头查询与操作区；所有工具都关闭时不保留空白占位。
+const hasToolbar = computed(() =>
+  props.searchable
+  || props.filterDefinitions.length > 0
+  || props.showColumnSettings
+  || props.addable)
 const paginationLayout = computed(() => isNarrow.value
   ? 'total, sizes, ->, pager'
   : 'total, sizes, ->, pager, jumper')
@@ -203,7 +211,7 @@ const paginationPage = computed({
       return
     }
     page.value = nextPage
-    emitPaginationChange()
+    emitPaginationChange(nextPage, pageSize.value)
   },
 })
 
@@ -215,14 +223,18 @@ const paginationSize = computed({
     }
     pageSize.value = nextPageSize
     page.value = 1
-    emitPaginationChange()
+    emitPaginationChange(1, nextPageSize)
   },
 })
 
-function emitPaginationChange() {
+/**
+ * 受控 defineModel 只会先发出 update 事件，父组件的新 prop 要到后续更新周期才会
+ * 回流。分页事件必须直接使用本次 setter 的值，不能立即回读仍可能是旧值的 model。
+ */
+function emitPaginationChange(nextPage: number, nextPageSize: number) {
   emit('paginationChange', {
-    page: page.value,
-    pageSize: pageSize.value,
+    page: nextPage,
+    pageSize: nextPageSize,
   })
 }
 
@@ -258,11 +270,13 @@ function updateFilterDraft(key: string, value: QsGenericTableFilterValue) {
 }
 
 function applyFilters() {
-  filters.value = { ...filterDraft.value }
+  // 与分页相同，事件负载必须使用本次提交值，不能回读尚未由父组件同步的 model。
+  const nextFilters = { ...filterDraft.value }
+  filters.value = nextFilters
   resetPage()
   desktopFilterVisible.value = false
   filterDrawerVisible.value = false
-  emit('filterChange', { ...filters.value })
+  emit('filterChange', { ...nextFilters })
 }
 
 function resetFilters() {
@@ -436,8 +450,8 @@ watch([tableColumns, isNarrow], () => {
 
 <template>
   <section class="qs-generic-table qs-type-body min-w-0" aria-label="业务通用表格">
-    <div class="pb-4 flex flex-wrap gap-3 items-center justify-between">
-      <div v-if="searchable" class="flex flex-1 gap-2 min-w-0 items-center">
+    <div v-if="hasToolbar" class="pb-4 flex flex-wrap gap-3 items-center justify-between">
+      <div v-if="searchable" class="flex flex-1 basis-full gap-2 min-w-0 items-center sm-basis-auto">
         <!-- FaInput 已提供统一的 clearable 按钮，使用 text 可避免浏览器为 search 再渲染原生清除控件。 -->
         <FaInput
           v-model="searchDraft"
@@ -498,7 +512,7 @@ watch([tableColumns, isNarrow], () => {
           {{ filterButtonLabel }}
         </FaButton>
 
-        <FaPopover v-if="!isNarrow" align="end" class="p-4">
+        <FaPopover v-if="showColumnSettings && !isNarrow" align="end" class="p-4">
           <FaButton variant="outline">
             <FaIcon name="i-lucide:columns-3" />
             列设置
@@ -511,7 +525,7 @@ watch([tableColumns, isNarrow], () => {
             />
           </template>
         </FaPopover>
-        <FaButton v-else variant="outline" @click="columnDrawerVisible = true">
+        <FaButton v-else-if="showColumnSettings" variant="outline" @click="columnDrawerVisible = true">
           <FaIcon name="i-lucide:columns-3" />
           列设置
         </FaButton>
@@ -791,6 +805,7 @@ watch([tableColumns, isNarrow], () => {
     </FaDrawer>
 
     <FaDrawer
+      v-if="showColumnSettings"
       v-model="columnDrawerVisible"
       title="列设置"
       side="bottom"

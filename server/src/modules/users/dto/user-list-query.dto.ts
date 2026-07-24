@@ -1,7 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
-import { IsInt, IsString, Max, Min, ValidateIf } from 'class-validator'
+import {
+  IsEnum,
+  IsInt,
+  IsString,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator'
 
+import {
+  UserStatus,
+  type UserStatus as UserStatusValue,
+} from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 export class UserListQueryDto {
@@ -30,4 +41,14 @@ export class UserListQueryDto {
   @IsString()
   @IsUnicodeCodePointLength(1, 128)
   username?: string
+
+  @ApiPropertyOptional({
+    type: 'string',
+    enum: [UserStatus.ACTIVE, UserStatus.DISABLED],
+  })
+  @ValidateIf((_object: UserListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsEnum(UserStatus)
+  status?: UserStatusValue
 }

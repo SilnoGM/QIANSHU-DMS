@@ -566,7 +566,7 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   await restartedPage.waitFor(`(() => (
     [...document.querySelectorAll('[data-testid="user-card"]')]
       .some(card => card.getClientRects().length > 0)
-    && ![...document.querySelectorAll('[data-testid="user-table"]')]
+    && ![...document.querySelectorAll('[data-testid="user-table"] table')]
       .some(table => table.getClientRects().length > 0)
     && [...document.querySelectorAll('button')].some(button => (
       button.textContent?.trim() === '操作'

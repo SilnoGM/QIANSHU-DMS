@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import type { TableColumn } from '@fantastic-admin/components'
 import type { RoleDto, UserDto } from '@/api/generated/types.gen'
+import type {
+  QsGenericTableColumn,
+  QsGenericTableFilterDefinition,
+  QsGenericTableFilterValues,
+} from '@/components/business/QsGenericTable/logic'
 
 import { useMediaQuery } from '@vueuse/core'
 
 import managementApi from '@/api/modules/management'
+import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 
+import { hasVisibleTableColumn } from '../shared/table-query'
 import PasswordResetModal from './password-reset-modal.vue'
 import RoleAssignmentModal from './role-assignment-modal.vue'
 import StatusChangeModal from './status-change-modal.vue'
@@ -41,11 +47,12 @@ const users = ref<UserDto[]>([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
-const usernameInput = ref('')
-const appliedUsername = ref('')
+const searchKeyword = ref('')
+const filters = ref<QsGenericTableFilterValues>({})
 const listErrorMessage = ref('')
 const listRequestId = ref<string>()
 let listRequestVersion = 0
+let queryRefreshPending = false
 
 const roles = ref<RoleDto[]>([])
 const rolesLoading = ref(false)
@@ -65,35 +72,45 @@ const mobileActionsVisible = ref(false)
 const mobileActionTarget = ref<UserDto | null>(null)
 const createdWithoutRole = ref<UserDto | null>(null)
 
-const columns: TableColumn<UserDto>[] = [
-  { accessorKey: 'username', header: '用户名', width: 180 },
-  { accessorKey: 'displayName', header: '显示名称', minWidth: 150 },
-  { accessorKey: 'status', header: '状态', width: 100 },
-  { accessorKey: 'roleIds', id: 'roles', header: '角色', minWidth: 200 },
+const columns: QsGenericTableColumn<UserDto>[] = [
+  { accessorKey: 'username', id: 'username', title: '用户名', width: 180 },
+  { accessorKey: 'displayName', id: 'displayName', minWidth: 150, title: '显示名称' },
+  { accessorKey: 'status', id: 'status', title: '状态', width: 100 },
+  { accessorKey: 'roleIds', id: 'roles', minWidth: 200, title: '角色' },
   {
     accessorKey: 'mustChangePassword',
     id: 'password-requirement',
-    header: '改密要求',
+    title: '改密要求',
     width: 120,
   },
   {
     accessorKey: 'lastLoginAt',
     id: 'last-login',
-    header: '最近登录',
+    title: '最近登录',
     width: 170,
   },
   {
     accessorKey: 'createdAt',
     id: 'created-at',
-    header: '创建时间',
+    title: '创建时间',
     width: 170,
   },
-  { id: 'actions', header: '操作', fixed: 'right', width: 150, enableHiding: false },
+]
+
+const filterDefinitions: QsGenericTableFilterDefinition[] = [
+  {
+    key: 'status',
+    label: '用户状态',
+    options: [
+      { label: '启用', value: 'ACTIVE' },
+      { label: '禁用', value: 'DISABLED' },
+    ],
+  },
 ]
 
 /**
- * FaPagination 同时提供双向绑定与 change 事件。这里统一由 computed setter
- * 发起查询，切换 pageSize 时直接把页码归一为 1，避免 size/page 各请求一次。
+ * 用户页沿用 computed setter 作为分页请求入口；setter 与搜索/筛选事件共用同一个
+ * 微任务合并器，因此 pageSize + page 的连续更新也只会产生一次查询。
  */
 const paginationPage = computed({
   get: () => page.value,
@@ -102,7 +119,7 @@ const paginationPage = computed({
       return
     }
     page.value = nextPage
-    void loadUsers()
+    scheduleListRefresh(false)
   },
 })
 const paginationSize = computed({
@@ -113,12 +130,9 @@ const paginationSize = computed({
     }
     pageSize.value = nextPageSize
     page.value = 1
-    void loadUsers()
+    scheduleListRefresh(false)
   },
 })
-const paginationLayout = computed(() => isNarrow.value
-  ? 'total, ->, pager'
-  : 'total, sizes, ->, pager, jumper')
 const mobileDrawerTitle = computed(() => mobileActionTarget.value === null
   ? '用户操作'
   : `用户操作 · ${mobileActionTarget.value.username}`)
@@ -179,7 +193,8 @@ async function loadUsers(): Promise<void> {
     const response = await managementApi.users.list(buildUserListQuery(
       page.value,
       pageSize.value,
-      appliedUsername.value,
+      searchKeyword.value,
+      filters.value.status,
     ))
     if (requestVersion !== listRequestVersion) {
       return
@@ -204,17 +219,27 @@ async function loadUsers(): Promise<void> {
   }
 }
 
-async function search(): Promise<void> {
-  appliedUsername.value = usernameInput.value
-  page.value = 1
-  await loadUsers()
+/**
+ * QsGenericTable 的“清除查询条件”会在同一轮交互连续发出 search 和
+ * filterChange。分页 setter 也复用该合并器，确保搜索、筛选、分页及同时清空
+ * 都只请求一次。
+ */
+function scheduleListRefresh(resetPage: boolean): void {
+  if (resetPage) {
+    page.value = 1
+  }
+  if (queryRefreshPending) {
+    return
+  }
+  queryRefreshPending = true
+  queueMicrotask(() => {
+    queryRefreshPending = false
+    void loadUsers()
+  })
 }
 
-async function resetSearch(): Promise<void> {
-  usernameInput.value = ''
-  appliedUsername.value = ''
-  page.value = 1
-  await loadUsers()
+function scheduleQueryRefresh(): void {
+  scheduleListRefresh(true)
 }
 
 function openCreate(): void {
@@ -330,8 +355,8 @@ async function handleFormSuccess(user: UserDto): Promise<void> {
 }
 
 async function verifyUnknownCreate(username: string): Promise<void> {
-  usernameInput.value = username
-  appliedUsername.value = username
+  searchKeyword.value = username
+  filters.value = {}
   page.value = 1
   await loadUsers()
 }
@@ -378,7 +403,7 @@ onMounted(() => {
     </FaPageMain>
 
     <template v-else>
-      <FaPageMain>
+      <FaPageMain v-if="createdWithoutRole || rolesErrorMessage || listErrorMessage">
         <FaAlert
           v-if="createdWithoutRole"
           icon="i-lucide:triangle-alert"
@@ -432,33 +457,10 @@ onMounted(() => {
           </template>
         </FaAlert>
 
-        <div class="flex flex-wrap gap-3 items-center">
-          <FaInput
-            v-model="usernameInput"
-            type="search"
-            class="w-full max-[479px]:basis-full sm:max-w-[360px]"
-            clearable
-            placeholder="精确用户名"
-            @clear="usernameInput = ''"
-            @keyup.enter="search"
-          >
-            <template #start>
-              <FaIcon name="i-lucide:search" />
-            </template>
-          </FaInput>
-          <FaButton class="max-[479px]:flex-1" :loading="loading" @click="search">
-            查询
-          </FaButton>
-          <FaButton class="max-[479px]:flex-1" variant="outline" :disabled="loading" @click="resetSearch">
-            重置
-          </FaButton>
-        </div>
-
         <FaAlert
           v-if="listErrorMessage"
           variant="destructive"
           icon="i-lucide:circle-alert"
-          class="mt-4"
         >
           <template #description>
             <div class="flex flex-wrap gap-3 items-center justify-between">
@@ -475,105 +477,87 @@ onMounted(() => {
       </FaPageMain>
 
       <FaPageMain>
-        <div v-if="!isNarrow" class="relative" :aria-busy="loading">
-          <FaTable
-            data-testid="user-table"
-            row-key="id"
-            table-root-class="overflow-x-auto"
-            table-class="min-w-[1320px]"
-            :columns="columns"
-            :data="users"
-            empty-text="暂无用户"
-          >
-            <template #cell-username="{ row }">
-              <span class="qs-type-data-emphasis">{{ row.original.username }}</span>
-            </template>
-            <template #cell-status="{ row }">
+        <QsGenericTable
+          v-model:page="paginationPage"
+          v-model:page-size="paginationSize"
+          v-model:search="searchKeyword"
+          v-model:filters="filters"
+          data-testid="user-table"
+          row-key="id"
+          :action-column="{ width: 150 }"
+          :addable="false"
+          :columns="columns"
+          :data="users"
+          :filter-definitions="filterDefinitions"
+          :loading="loading"
+          :page-size-options="[20, 50, 100]"
+          :total="total"
+          empty-title="暂无用户"
+          empty-description="当前没有可展示的用户。"
+          search-placeholder="输入完整用户名搜索"
+          table-class="min-w-[1320px]"
+          @filter-change="scheduleQueryRefresh"
+          @search="scheduleQueryRefresh"
+        >
+          <template #cell-username="{ row }">
+            <span class="qs-type-data-emphasis">{{ row.original.username }}</span>
+          </template>
+          <template #cell-status="{ row }">
+            <FaTag
+              variant="outline"
+              class="qs-type-status-tag"
+              :class="row.original.status === 'ACTIVE'
+                ? 'border-primary/30 bg-primary/10 text-primary'
+                : 'border-border bg-muted text-muted-foreground'"
+            >
+              {{ row.original.status === 'ACTIVE' ? '启用' : '禁用' }}
+            </FaTag>
+          </template>
+          <template #cell-roles="{ row }">
+            <div v-if="row.original.roleIds.length > 0" class="flex flex-wrap gap-1">
               <FaTag
+                v-for="roleId in row.original.roleIds"
+                :key="roleId"
                 variant="outline"
-                class="qs-type-status-tag"
-                :class="row.original.status === 'ACTIVE'
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-border bg-muted text-muted-foreground'"
+                :class="roleById(roleId)?.isSystem
+                  ? 'border-destructive/30 bg-destructive/10 text-destructive'
+                  : 'border-border bg-muted/50 text-foreground'"
               >
-                {{ row.original.status === 'ACTIVE' ? '启用' : '禁用' }}
+                {{ roleById(roleId)?.name ?? shortId(roleId) }}
               </FaTag>
-            </template>
-            <template #cell-roles="{ row }">
-              <div v-if="row.original.roleIds.length > 0" class="flex flex-wrap gap-1">
-                <FaTag
-                  v-for="roleId in row.original.roleIds"
-                  :key="roleId"
-                  variant="outline"
-                  :class="roleById(roleId)?.isSystem
-                    ? 'border-destructive/30 bg-destructive/10 text-destructive'
-                    : 'border-border bg-muted/50 text-foreground'"
-                >
-                  {{ roleById(roleId)?.name ?? shortId(roleId) }}
-                </FaTag>
-              </div>
-              <FaTag v-else variant="outline" class="text-destructive border-destructive/30 bg-destructive/5">
-                无角色
-              </FaTag>
-            </template>
-            <template #cell-password-requirement="{ row }">
-              <FaTag
-                variant="outline"
-                class="qs-type-status-tag"
-                :class="row.original.mustChangePassword
-                  ? 'border-primary/30 bg-primary/5 text-primary'
-                  : 'border-border bg-muted text-muted-foreground'"
-              >
-                {{ row.original.mustChangePassword ? '需要改密' : '无需改密' }}
-              </FaTag>
-            </template>
-            <template #cell-last-login="{ row }">
-              <span class="qs-type-data">{{ formatDate(row.original.lastLoginAt) }}</span>
-            </template>
-            <template #cell-created-at="{ row }">
-              <span class="qs-type-data">{{ formatDate(row.original.createdAt) }}</span>
-            </template>
-            <template #cell-actions="{ row }">
-              <div class="flex gap-1 items-center">
-                <FaButton v-if="canUpdate" variant="ghost" size="sm" @click="openEdit(row.original)">
-                  编辑
-                </FaButton>
-                <FaDropdown v-if="hasMoreAction(row.original)" :items="moreActionItems(row.original)" align="end">
-                  <FaButton variant="ghost" size="sm">
-                    更多
-                    <FaIcon name="i-lucide:chevron-down" />
-                  </FaButton>
-                </FaDropdown>
-              </div>
-            </template>
-          </FaTable>
-          <div v-if="loading" class="bg-background/70 flex-center inset-0 absolute backdrop-blur-[1px]">
-            <FaIcon name="i-lucide:loader-circle" class="text-primary size-7 animate-spin" />
-            <span class="sr-only">正在加载用户</span>
-          </div>
-        </div>
+            </div>
+            <FaTag v-else variant="outline" class="text-destructive border-destructive/30 bg-destructive/5">
+              无角色
+            </FaTag>
+          </template>
+          <template #cell-password-requirement="{ row }">
+            <FaTag
+              variant="outline"
+              class="qs-type-status-tag"
+              :class="row.original.mustChangePassword
+                ? 'border-primary/30 bg-primary/5 text-primary'
+                : 'border-border bg-muted text-muted-foreground'"
+            >
+              {{ row.original.mustChangePassword ? '需要改密' : '无需改密' }}
+            </FaTag>
+          </template>
+          <template #cell-last-login="{ row }">
+            <span class="qs-type-data">{{ formatDate(row.original.lastLoginAt) }}</span>
+          </template>
+          <template #cell-created-at="{ row }">
+            <span class="qs-type-data">{{ formatDate(row.original.createdAt) }}</span>
+          </template>
 
-        <!-- 移动卡片显式声明字段语义，防止桌面表格的结构化数据角色在窄屏回退为普通正文。 -->
-        <div v-else class="user-card-list flex flex-col gap-3 min-h-24" :aria-busy="loading">
-          <div v-if="loading" class="py-12 flex-center">
-            <FaIcon name="i-lucide:loader-circle" class="text-primary size-7 animate-spin" />
-            <span class="sr-only">正在加载用户</span>
-          </div>
-          <FaEmpty v-else-if="users.length === 0" icon="i-lucide:users" title="暂无用户" />
-          <FaCard
-            v-for="user in users"
-            v-else
-            :key="user.id"
-            data-testid="user-card"
-            class="user-card py-0 gap-0"
-            header-class="p-4"
-            content-class="px-4 pb-4"
-          >
-            <template #header>
-              <div class="flex gap-3 min-w-0 items-center justify-between">
+          <!-- 移动卡片显式声明字段语义，防止桌面表格的结构化数据角色在窄屏回退为普通正文。 -->
+          <template #mobile-row="{ columns: visibleColumns, row: user, rowNumber }">
+            <div data-testid="user-card" class="user-card gap-4 grid">
+              <div class="flex gap-3 items-start justify-between">
                 <div class="flex gap-2 min-w-0 items-center">
-                  <span class="qs-type-data-emphasis truncate">{{ user.username }}</span>
+                  <template v-if="hasVisibleTableColumn(visibleColumns, 'username')">
+                    <span class="qs-type-data-emphasis truncate">{{ user.username }}</span>
+                  </template>
                   <FaTag
+                    v-if="hasVisibleTableColumn(visibleColumns, 'status')"
                     variant="outline"
                     class="qs-type-status-tag"
                     :class="user.status === 'ACTIVE'
@@ -583,77 +567,86 @@ onMounted(() => {
                     {{ user.status === 'ACTIVE' ? '启用' : '禁用' }}
                   </FaTag>
                 </div>
-                <FaButton
-                  v-if="canUpdate || hasMoreAction(user)"
-                  variant="ghost"
-                  size="sm"
-                  @click="openMobileActions(user)"
+                <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
+              </div>
+
+              <dl class="m-0 gap-x-4 gap-y-3.5 grid grid-cols-2 max-[479px]:grid-cols-1">
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'displayName')">
+                  <dt class="qs-type-compact-label mb-1">
+                    显示名称
+                  </dt>
+                  <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
+                    {{ user.displayName }}
+                  </dd>
+                </div>
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'password-requirement')">
+                  <dt class="qs-type-compact-label mb-1">
+                    改密要求
+                  </dt>
+                  <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
+                    {{ user.mustChangePassword ? '下次登录必须改密' : '无需改密' }}
+                  </dd>
+                </div>
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'roles')"
+                  class="col-span-full max-[479px]:col-span-1"
                 >
-                  操作
+                  <dt class="qs-type-compact-label mb-1">
+                    角色
+                  </dt>
+                  <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
+                    <div v-if="user.roleIds.length > 0" class="flex flex-wrap gap-1">
+                      <FaTag v-for="roleId in user.roleIds" :key="roleId" variant="outline">
+                        {{ roleById(roleId)?.name ?? shortId(roleId) }}
+                      </FaTag>
+                    </div>
+                    <span v-else>无角色</span>
+                  </dd>
+                </div>
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'last-login')">
+                  <dt class="qs-type-compact-label mb-1">
+                    最近登录
+                  </dt>
+                  <dd class="qs-type-data m-0 [overflow-wrap:anywhere]">
+                    {{ formatDate(user.lastLoginAt) }}
+                  </dd>
+                </div>
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'created-at')">
+                  <dt class="qs-type-compact-label mb-1">
+                    创建时间
+                  </dt>
+                  <dd class="qs-type-data m-0 [overflow-wrap:anywhere]">
+                    {{ formatDate(user.createdAt) }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </template>
+
+          <template #actions="{ row: user }">
+            <FaButton
+              v-if="isNarrow && (canUpdate || hasMoreAction(user))"
+              class="w-full"
+              variant="outline"
+              size="sm"
+              @click="openMobileActions(user)"
+            >
+              操作
+            </FaButton>
+            <div v-else-if="!isNarrow" class="flex gap-1 items-center">
+              <FaButton v-if="canUpdate" variant="ghost" size="sm" @click="openEdit(user)">
+                编辑
+              </FaButton>
+              <FaDropdown v-if="hasMoreAction(user)" :items="moreActionItems(user)" align="end">
+                <FaButton variant="ghost" size="sm">
+                  更多
+                  <FaIcon name="i-lucide:chevron-down" />
                 </FaButton>
-              </div>
-            </template>
-
-            <dl class="m-0 gap-x-4 gap-y-3.5 grid grid-cols-2 max-[479px]:grid-cols-1">
-              <div>
-                <dt class="qs-type-compact-label mb-1">
-                  显示名称
-                </dt>
-                <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
-                  {{ user.displayName }}
-                </dd>
-              </div>
-              <div>
-                <dt class="qs-type-compact-label mb-1">
-                  改密要求
-                </dt>
-                <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
-                  {{ user.mustChangePassword ? '下次登录必须改密' : '无需改密' }}
-                </dd>
-              </div>
-              <div class="col-span-full max-[479px]:col-span-1">
-                <dt class="qs-type-compact-label mb-1">
-                  角色
-                </dt>
-                <dd class="qs-type-body m-0 [overflow-wrap:anywhere]">
-                  <div v-if="user.roleIds.length > 0" class="flex flex-wrap gap-1">
-                    <FaTag v-for="roleId in user.roleIds" :key="roleId" variant="outline">
-                      {{ roleById(roleId)?.name ?? shortId(roleId) }}
-                    </FaTag>
-                  </div>
-                  <span v-else>无角色</span>
-                </dd>
-              </div>
-              <div>
-                <dt class="qs-type-compact-label mb-1">
-                  最近登录
-                </dt>
-                <dd class="qs-type-data m-0 [overflow-wrap:anywhere]">
-                  {{ formatDate(user.lastLoginAt) }}
-                </dd>
-              </div>
-              <div>
-                <dt class="qs-type-compact-label mb-1">
-                  创建时间
-                </dt>
-                <dd class="qs-type-data m-0 [overflow-wrap:anywhere]">
-                  {{ formatDate(user.createdAt) }}
-                </dd>
-              </div>
-            </dl>
-          </FaCard>
-        </div>
-
-        <div v-if="total > 0" class="mt-5 max-w-full overflow-x-auto">
-          <FaPagination
-            v-model:page="paginationPage"
-            v-model:size="paginationSize"
-            :total="total"
-            :sizes="[20, 50, 100]"
-            :layout="paginationLayout"
-            class="min-w-max"
-          />
-        </div>
+              </FaDropdown>
+            </div>
+            <span v-else class="qs-type-meta">无可用操作</span>
+          </template>
+        </QsGenericTable>
       </FaPageMain>
     </template>
 

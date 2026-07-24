@@ -2,7 +2,7 @@
 
 ## 1. 定位与适用对象
 
-本手册是千树 DMS Web 开发的统一知识入口，用于把 Fantastic-admin 框架能力、Fantastic-admin 内置组件和 Arco Design Vue 标准业务组件放入同一套项目语境中。它不镜像上游网站，而是依据仓库锁定版本和正式应用代码，说明当前项目可用的能力、选型边界、开发路径与维护规则。
+本手册是千树 DMS Web 开发的统一知识入口，用于把 Fantastic-admin 框架能力、Fantastic-admin 内置组件、Arco Design Vue 标准业务组件和千树 DMS 自定义组件放入同一套项目语境中。它不镜像上游网站，而是依据仓库锁定版本和正式应用代码，说明当前项目可用的能力、选型边界、开发路径与维护规则。
 
 适用对象包括新增或维护 Web 页面、路由、权限、接口、组件、构建配置的开发者，以及负责代码审查、版本升级和前端技术治理的维护者。开始具体任务前，应先按本页确认正式应用、知识域和真相源，再进入相应主题。
 
@@ -13,11 +13,11 @@
 | Fantastic-admin | Fantastic-admin 专业版 `6.3.0` |
 | Arco Design Vue | `@arco-design/web-vue@2.58.0` |
 | 正式应用 | `web/apps/qsmds-arco` |
-| 最后核对日期 | `2026-07-15` |
+| 最后核对日期 | `2026-07-24` |
 
 `web/apps/qsmds-arco` 是千树 DMS 唯一正式 Web 应用。`web/examples/*` 仅用于只读参考，不是正式应用，也不承担业务实现或产品发布职责；本手册中的项目路径、接入结论和开发建议均以正式应用为准。
 
-## 3. 三个知识域
+## 3. 四个知识域
 
 ### 3.1 Fantastic-admin
 
@@ -30,6 +30,10 @@ Fantastic-admin 内置组件是标准业务 UI 的第一优先级，同时承担
 ### 3.3 Arco Design Vue
 
 Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，包括通用与布局、数据录入、数据展示、反馈、导航及其他组件。该知识域以 `@arco-design/web-vue@2.58.0` 为固定版本，说明组件在正式应用中的接入状态、高频 API、项目化示例，以及与 Fantastic-admin 内置组件重叠时的回退依据。
+
+### 3.4 千树 DMS 自定义组件库
+
+千树 DMS 自定义组件库记录正式应用内已经形成稳定接口的基础组件和业务组件。该知识域按代码职责分为“基础组件”和“业务组件”，提供真实导入路径、Props、Events、Slots、格式化边界、响应式行为、Showcase 路由和验证命令；具体入口见[自定义组件库手册](./自定义组件库/README.md)。
 
 ## 4. 真相源优先级
 
@@ -54,7 +58,7 @@ Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，�
 
 ## 6. 按任务阅读
 
-三个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，标准业务 UI 先从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)和[选型与使用规则](./Fantastic-admin内置组件/选型与使用规则.md)进入；经核对 Fa 能力无法满足已确认契约时，再查 [Arco Design Vue 手册](./Arco-Design-Vue/README.md)作为回退资料。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
+四个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，标准业务 UI 先从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)和[选型与使用规则](./Fantastic-admin内置组件/选型与使用规则.md)进入；经核对 Fa 能力无法满足已确认契约时，再查 [Arco Design Vue 手册](./Arco-Design-Vue/README.md)作为回退资料。复用正式应用已有能力时，从[自定义组件库手册](./自定义组件库/README.md)核对真实接口和使用边界。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
 
 | 任务 | 阅读入口 | 正式应用核对点与边界 |
 | --- | --- | --- |
@@ -63,7 +67,7 @@ Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，�
 | 接入登录 | 阅读[登录相关](./Fantastic-admin/服务端交互与登录.md#登录相关)与[接口接入规范](../接口接入规范.md)。 | 从 `web/apps/qsmds-arco/src/api/modules/auth.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/router/guards.ts` 核对真实 Cookie Session、启动 `/api/auth/me`、六态生命周期和 Server 权限边界。 |
 | 实现权限 | 阅读[权限验证](./Fantastic-admin/权限保活与国际化.md#权限验证)，再回查路由与登录链路。 | 以 `web/apps/qsmds-arco/src/router/guards.ts`、`web/apps/qsmds-arco/src/store/modules/app/account.ts` 和 `web/apps/qsmds-arco/src/settings.ts` 为准；前端可见性不能替代 Server 授权。 |
 | 选择表单 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)与 [FaForm 回退到 AForm 的语义迁移](./Fantastic-admin内置组件/选型与使用规则.md#7-faform-与-aform-不是名称替换)。 | `web/apps/qsmds-arco/src/views/` 的标准业务表单优先 `FaForm`；无法满足已确认契约时才回退 `AForm`，并完整重写校验、字段、提交和 slot 语义。 |
-| 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断，再按能力不足查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table)。 | `web/apps/qsmds-arco/src/views/` 的业务数据展示优先 `FaTable`；其无法满足已确认表格能力时才回退 `ATable`，窄屏优先卡片或抽屉式明细。 |
+| 选择表格 | 先按[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)判断；通用查询列表优先核对[通用表格](./自定义组件库/业务组件/通用表格.md)，仍有能力缺口时再查 [Arco Table](./Arco-Design-Vue/数据展示组件.md#table)。 | `web/apps/qsmds-arco/src/views/` 的通用查询列表优先复用 `web/apps/qsmds-arco/src/components/business/QsGenericTable/`；标准数据展示优先 `FaTable`，其无法满足已确认表格能力时才回退 `ATable`，窄屏优先卡片或抽屉式明细。 |
 | 上传文件 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)与[选型安全规则](./Fantastic-admin内置组件/选型与使用规则.md#10-安全规则)。 | `web/apps/qsmds-arco/src/api/` 当前没有可凭空引用的上传端点；优先核对 Fa request 契约，不足时才回退 Arco，鉴权始终走统一 client。 |
 | 反馈状态 | 先读[重叠能力选择](./Fantastic-admin内置组件/选型与使用规则.md#4-与-arco-重叠能力的选择)，再按能力不足查 [Arco Message](./Arco-Design-Vue/反馈组件.md#message)与 [Modal](./Arco-Design-Vue/反馈组件.md#modal)。 | `web/apps/qsmds-arco/src/views/` 的反馈优先 Fa 组件与 composable；回退 Arco 时要区分静态方法与实例注入 context，异步失败必须释放 loading。 |
 | 主题配置 | 先读 Fantastic-admin [主题](./Fantastic-admin/应用配置.md#主题)，再核对 Arco [全局配置、语言与主题](./Arco-Design-Vue/接入基础与全局配置.md#全局配置语言与主题)。 | 主题入口为 `web/apps/qsmds-arco/src/settings.ts`，Arco 同步位于 `web/apps/qsmds-arco/src/ui/provider/`；不得只改一套 token 造成明暗主题分裂。 |

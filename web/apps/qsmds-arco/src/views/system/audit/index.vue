@@ -1,8 +1,18 @@
 <script setup lang="ts">
-import type { TableColumn } from '@fantastic-admin/components'
 import type { AuditEventDto } from '@/api/generated/types.gen'
-import { useMediaQuery } from '@vueuse/core'
+import type {
+  QsGenericTableColumn,
+  QsGenericTableFilterDefinition,
+  QsGenericTableFilterValues,
+} from '@/components/business/QsGenericTable/logic'
+
 import managementApi from '@/api/modules/management'
+import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import { hasVisibleTableColumn } from '../shared/table-query'
+import {
+  AUDIT_EVENT_TYPES,
+  buildAuditEventListQuery,
+} from './audit.logic'
 import {
   auditMetadataEntries,
   auditOutcomeTagPresentation,
@@ -21,46 +31,40 @@ const pageError = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
-const isNarrow = useMediaQuery('(max-width: 767px)')
+const searchKeyword = ref('')
+const filters = ref<QsGenericTableFilterValues>({})
+let listRequestVersion = 0
+let queryRefreshPending = false
 
 const canRead = computed(() => auth('audit:read'))
-const paginationLayout = computed(() => isNarrow.value
-  ? 'total, sizes, pager'
-  : 'total, sizes, ->, pager, jumper')
-/**
- * FaPagination 的双向绑定是分页查询的唯一入口。页容量改变时先把页码
- * 归一为 1，再只发起一次请求，避免同时监听 pageChange/sizeChange 造成重复查询。
- */
-const paginationPage = computed({
-  get: () => currentPage.value,
-  set: (page: number) => {
-    if (page === currentPage.value) {
-      return
-    }
-    currentPage.value = page
-    void loadEvents(page, pageSize.value)
+const columns: QsGenericTableColumn<AuditEventDto>[] = [
+  { id: 'occurredAt', accessorKey: 'occurredAt', title: '时间', width: 190 },
+  { id: 'eventType', accessorKey: 'eventType', title: '事件', width: 230 },
+  { id: 'outcome', accessorKey: 'outcome', title: '结果', width: 90 },
+  { id: 'actorDisplayName', accessorKey: 'actorDisplayName', title: '用户展示名', width: 180 },
+  { id: 'actorUserId', accessorKey: 'actorUserId', title: '操作者 ID', width: 240 },
+  { id: 'target', title: '目标', width: 250 },
+  { id: 'requestId', accessorKey: 'requestId', title: '请求 ID', width: 250 },
+  { id: 'metadata', accessorKey: 'metadata', title: 'Metadata', width: 320 },
+]
+
+const filterDefinitions: QsGenericTableFilterDefinition[] = [
+  {
+    key: 'eventType',
+    label: '事件类型',
+    options: AUDIT_EVENT_TYPES.map(value => ({
+      label: formatAuditEvent(value),
+      value,
+    })),
   },
-})
-const paginationSize = computed({
-  get: () => pageSize.value,
-  set: (size: number) => {
-    if (size === pageSize.value) {
-      return
-    }
-    pageSize.value = size
-    currentPage.value = 1
-    void loadEvents(1, size)
+  {
+    key: 'outcome',
+    label: '执行结果',
+    options: [
+      { label: '成功', value: 'SUCCESS' },
+      { label: '失败', value: 'FAILURE' },
+    ],
   },
-})
-const columns: TableColumn<AuditEventDto>[] = [
-  { accessorKey: 'occurredAt', header: '时间', width: 190 },
-  { accessorKey: 'eventType', header: '事件', width: 230 },
-  { accessorKey: 'outcome', header: '结果', width: 90 },
-  { accessorKey: 'actorDisplayName', header: '用户展示名', width: 180 },
-  { accessorKey: 'actorUserId', header: '操作者 ID', width: 240 },
-  { id: 'target', header: '目标', width: 250 },
-  { accessorKey: 'requestId', header: '请求 ID', width: 250 },
-  { accessorKey: 'metadata', header: 'Metadata', width: 320 },
 ]
 
 function safeErrorMessage(error: unknown): string {
@@ -86,25 +90,63 @@ function safeErrorMessage(error: unknown): string {
 }
 
 async function loadEvents(page = currentPage.value, size = pageSize.value): Promise<void> {
-  if (loading.value || !canRead.value) {
+  if (!canRead.value) {
     return
   }
+  const requestVersion = ++listRequestVersion
   loading.value = true
   pageError.value = ''
   try {
-    // 审计查询契约首期只允许 page/pageSize，页面不得臆造事件、用户或时间筛选。
-    const response = await managementApi.auditEvents.list({ page, pageSize: size })
+    const response = await managementApi.auditEvents.list(buildAuditEventListQuery(
+      page,
+      size,
+      searchKeyword.value,
+      filters.value.eventType,
+      filters.value.outcome,
+    ))
+    if (requestVersion !== listRequestVersion) {
+      return
+    }
     events.value = response.data.items
     currentPage.value = response.data.page
     pageSize.value = response.data.pageSize
     total.value = response.data.total
   }
   catch (error) {
+    if (requestVersion !== listRequestVersion) {
+      return
+    }
     pageError.value = safeErrorMessage(error)
   }
   finally {
-    loading.value = false
+    if (requestVersion === listRequestVersion) {
+      loading.value = false
+    }
   }
+}
+
+/**
+ * QsGenericTable 会先统一更新 page/pageSize，再只触发一次 paginationChange。
+ * 页面只消费该事件负载发起服务端查询，避免叠加监听 model 更新而重复请求。
+ */
+function handlePaginationChange(pagination: { page: number, pageSize: number }): void {
+  void loadEvents(pagination.page, pagination.pageSize)
+}
+
+/**
+ * 搜索、筛选及组件的“同时清空”动作统一在一个微任务内合并，确保页码归一为 1
+ * 后只向服务端发送一次包含全部最新条件的查询。
+ */
+function scheduleQueryRefresh(): void {
+  currentPage.value = 1
+  if (queryRefreshPending) {
+    return
+  }
+  queryRefreshPending = true
+  queueMicrotask(() => {
+    queryRefreshPending = false
+    void loadEvents()
+  })
 }
 
 function targetLabel(event: AuditEventDto): string {
@@ -155,191 +197,179 @@ onMounted(loadEvents)
           </template>
         </FaAlert>
 
-        <div data-testid="audit-table" class="hidden md:block" :aria-busy="loading">
-          <FaTable
-            row-key="id"
-            :columns="columns"
-            :data="events"
-            table-class="min-w-[1760px]"
-            :class="loading ? 'pointer-events-none opacity-60' : undefined"
-          >
-            <template #cell-occurredAt="{ row }">
-              <span class="qs-type-data">{{ formatAuditTime(row.original.occurredAt) }}</span>
-            </template>
-            <template #cell-eventType="{ row }">
-              <div class="gap-1 grid">
-                <strong class="qs-type-body-medium">{{ formatAuditEvent(row.original.eventType) }}</strong>
-                <code class="qs-type-data-emphasis">{{ row.original.eventType }}</code>
-              </div>
-            </template>
-            <template #cell-outcome="{ row }">
+        <QsGenericTable
+          v-model:page="currentPage"
+          v-model:page-size="pageSize"
+          v-model:search="searchKeyword"
+          v-model:filters="filters"
+          data-testid="audit-table"
+          row-key="id"
+          :columns="columns"
+          :data="events"
+          :filter-definitions="filterDefinitions"
+          :total="total"
+          :loading="loading"
+          :page-size-options="[20, 50, 100]"
+          :addable="false"
+          empty-title="暂无审计记录"
+          empty-description="当前查询范围内没有可展示的审计事件。"
+          search-placeholder="输入完整请求 ID 搜索"
+          table-class="min-w-[1760px]"
+          :class="loading && events.length ? 'pointer-events-none' : undefined"
+          @filter-change="scheduleQueryRefresh"
+          @pagination-change="handlePaginationChange"
+          @search="scheduleQueryRefresh"
+        >
+          <template #cell-occurredAt="{ row }">
+            <span class="qs-type-data">{{ formatAuditTime(row.original.occurredAt) }}</span>
+          </template>
+          <template #cell-eventType="{ row }">
+            <div class="gap-1 grid">
+              <strong class="qs-type-body-medium">{{ formatAuditEvent(row.original.eventType) }}</strong>
+              <code class="qs-type-data-emphasis">{{ row.original.eventType }}</code>
+            </div>
+          </template>
+          <template #cell-outcome="{ row }">
+            <FaTag
+              v-bind="auditOutcomeTagPresentation(row.original.outcome)"
+              class="qs-type-status-tag"
+            >
+              {{ formatAuditOutcome(row.original.outcome) }}
+            </FaTag>
+          </template>
+          <template #cell-actorDisplayName="{ row }">
+            <span class="qs-type-body-medium">
+              {{ formatAuditActorDisplayName(row.original.actorType, row.original.actorDisplayName) }}
+            </span>
+          </template>
+          <template #cell-actorUserId="{ row }">
+            <code class="qs-type-data-emphasis break-all">{{ row.original.actorUserId || '—' }}</code>
+          </template>
+          <template #cell-target="{ row }">
+            <code class="qs-type-data-emphasis break-all">{{ targetLabel(row.original) }}</code>
+          </template>
+          <template #cell-requestId="{ row }">
+            <code class="qs-type-data-emphasis break-all">{{ row.original.requestId }}</code>
+          </template>
+          <template #cell-metadata="{ row }">
+            <span v-if="auditMetadataEntries(row.original.metadata).length === 0" class="text-muted-foreground">—</span>
+            <div v-else class="flex flex-wrap gap-1.5 min-w-0">
               <FaTag
-                v-bind="auditOutcomeTagPresentation(row.original.outcome)"
-                class="qs-type-status-tag"
+                v-for="entry in auditMetadataEntries(row.original.metadata)"
+                :key="entry.key"
+                variant="outline"
+                class="h-auto max-w-full whitespace-normal break-all"
               >
-                {{ formatAuditOutcome(row.original.outcome) }}
+                {{ entry.key }}={{ entry.value }}
               </FaTag>
-            </template>
-            <template #cell-actorDisplayName="{ row }">
-              <span class="qs-type-body-medium">
-                {{ formatAuditActorDisplayName(row.original.actorType, row.original.actorDisplayName) }}
-              </span>
-            </template>
-            <template #cell-actorUserId="{ row }">
-              <code class="qs-type-data-emphasis break-all">{{ row.original.actorUserId || '—' }}</code>
-            </template>
-            <template #cell-target="{ row }">
-              <code class="qs-type-data-emphasis break-all">{{ targetLabel(row.original) }}</code>
-            </template>
-            <template #cell-requestId="{ row }">
-              <code class="qs-type-data-emphasis break-all">{{ row.original.requestId }}</code>
-            </template>
-            <template #cell-metadata="{ row }">
-              <span v-if="auditMetadataEntries(row.original.metadata).length === 0" class="text-muted-foreground">—</span>
-              <div v-else class="flex flex-wrap gap-1.5 min-w-0">
-                <FaTag
-                  v-for="entry in auditMetadataEntries(row.original.metadata)"
-                  :key="entry.key"
-                  variant="outline"
-                  class="h-auto max-w-full whitespace-normal break-all"
-                >
-                  {{ entry.key }}={{ entry.value }}
-                </FaTag>
-              </div>
-            </template>
-            <template #empty>
-              <div
-                v-if="loading"
-                class="text-muted-foreground flex-col-center gap-3 min-h-40"
-                role="status"
-              >
-                <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-7" />
-                <span class="text-sm">正在加载审计日志…</span>
-              </div>
-              <FaEmpty
-                v-else
-                icon="i-lucide:scroll-text"
-                title="暂无审计记录"
-                description="当前查询范围内没有可展示的审计事件。"
-                class="min-h-40"
-              />
-            </template>
-          </FaTable>
-        </div>
+            </div>
+          </template>
 
-        <!-- 审计移动卡片保留安全字段与原始格式化逻辑，仅显式区分标签、时间和标识。 -->
-        <div class="gap-3 grid md:hidden" :aria-busy="loading">
-          <div
-            v-if="loading && events.length === 0"
-            class="text-muted-foreground flex-col-center gap-3 min-h-40"
-            role="status"
-          >
-            <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-7" />
-            <span class="text-sm">正在加载审计日志…</span>
-          </div>
-          <FaEmpty
-            v-else-if="events.length === 0"
-            icon="i-lucide:scroll-text"
-            title="暂无审计记录"
-            description="当前查询范围内没有可展示的审计事件。"
-            class="min-h-40"
-          />
-          <FaCard
-            v-for="event in events"
-            :key="event.id"
-            data-testid="audit-card"
-            header-class="pb-3"
-            content-class="space-y-3"
-            :class="loading ? 'pointer-events-none opacity-60' : undefined"
-          >
-            <template #header>
-              <div class="flex gap-3 items-start justify-between">
-                <div class="min-w-0">
+          <!--
+            QsGenericTable 已提供移动卡片外框和加载态；插槽只描述审计业务内容，
+            避免再嵌套 FaCard 形成双层边框，同时保留浏览器验收使用的稳定标识。
+          -->
+          <template #mobile-row="{ columns: visibleColumns, row: event, rowNumber }">
+            <div data-testid="audit-card" class="space-y-3">
+              <div class="pb-3 flex gap-3 items-start justify-between">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'eventType')"
+                  class="min-w-0"
+                >
                   <strong class="qs-type-compact-title block break-words">{{ formatAuditEvent(event.eventType) }}</strong>
                   <code class="qs-type-data-emphasis break-all">{{ event.eventType }}</code>
                 </div>
-                <FaTag v-bind="auditOutcomeTagPresentation(event.outcome)" class="qs-type-status-tag shrink-0">
-                  {{ formatAuditOutcome(event.outcome) }}
-                </FaTag>
-              </div>
-            </template>
-
-            <dl class="qs-type-body m-0 gap-3 grid">
-              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="qs-type-compact-label">
-                  时间
-                </dt>
-                <dd class="qs-type-data m-0">
-                  {{ formatAuditTime(event.occurredAt) }}
-                </dd>
-              </div>
-              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="qs-type-compact-label">
-                  用户展示名
-                </dt>
-                <dd class="qs-type-body-medium m-0">
-                  {{ formatAuditActorDisplayName(event.actorType, event.actorDisplayName) }}
-                </dd>
-              </div>
-              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="qs-type-compact-label">
-                  操作者 ID
-                </dt>
-                <dd class="qs-type-data-emphasis m-0">
-                  <code class="break-all">{{ event.actorUserId || '—' }}</code>
-                </dd>
-              </div>
-              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="qs-type-compact-label">
-                  目标
-                </dt>
-                <dd class="qs-type-data-emphasis m-0">
-                  <code class="break-all">{{ targetLabel(event) }}</code>
-                </dd>
-              </div>
-              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="qs-type-compact-label">
-                  请求 ID
-                </dt>
-                <dd class="qs-type-data-emphasis m-0">
-                  <code class="break-all">{{ event.requestId }}</code>
-                </dd>
-              </div>
-              <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
-                <dt class="qs-type-compact-label">
-                  Metadata
-                </dt>
-                <dd class="qs-type-body m-0 min-w-0">
-                  <div v-if="auditMetadataEntries(event.metadata).length > 0" class="flex flex-wrap gap-1.5 min-w-0">
-                    <FaTag
-                      v-for="entry in auditMetadataEntries(event.metadata)"
-                      :key="entry.key"
-                      variant="outline"
-                      class="h-auto max-w-full whitespace-normal break-all"
-                    >
-                      {{ entry.key }}={{ entry.value }}
+                <div class="flex shrink-0 flex-col gap-1 items-end">
+                  <template v-if="hasVisibleTableColumn(visibleColumns, 'outcome')">
+                    <FaTag v-bind="auditOutcomeTagPresentation(event.outcome)" class="qs-type-status-tag">
+                      {{ formatAuditOutcome(event.outcome) }}
                     </FaTag>
-                  </div>
-                  <span v-else>—</span>
-                </dd>
+                  </template>
+                  <span class="qs-type-meta tabular-nums">#{{ rowNumber }}</span>
+                </div>
               </div>
-            </dl>
-          </FaCard>
-        </div>
 
-        <div
-          v-if="total > 0"
-          class="mt-4 overflow-x-auto"
-          :class="loading ? 'pointer-events-none opacity-60' : undefined"
-        >
-          <FaPagination
-            v-model:page="paginationPage"
-            v-model:size="paginationSize"
-            :total="total"
-            :sizes="[20, 50, 100]"
-            :layout="paginationLayout"
-          />
-        </div>
+              <dl class="qs-type-body m-0 gap-3 grid">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'occurredAt')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
+                  <dt class="qs-type-compact-label">
+                    时间
+                  </dt>
+                  <dd class="qs-type-data m-0">
+                    {{ formatAuditTime(event.occurredAt) }}
+                  </dd>
+                </div>
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'actorDisplayName')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
+                  <dt class="qs-type-compact-label">
+                    用户展示名
+                  </dt>
+                  <dd class="qs-type-body-medium m-0">
+                    {{ formatAuditActorDisplayName(event.actorType, event.actorDisplayName) }}
+                  </dd>
+                </div>
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'actorUserId')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
+                  <dt class="qs-type-compact-label">
+                    操作者 ID
+                  </dt>
+                  <dd class="qs-type-data-emphasis m-0">
+                    <code class="break-all">{{ event.actorUserId || '—' }}</code>
+                  </dd>
+                </div>
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'target')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
+                  <dt class="qs-type-compact-label">
+                    目标
+                  </dt>
+                  <dd class="qs-type-data-emphasis m-0">
+                    <code class="break-all">{{ targetLabel(event) }}</code>
+                  </dd>
+                </div>
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'requestId')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
+                  <dt class="qs-type-compact-label">
+                    请求 ID
+                  </dt>
+                  <dd class="qs-type-data-emphasis m-0">
+                    <code class="break-all">{{ event.requestId }}</code>
+                  </dd>
+                </div>
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'metadata')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
+                  <dt class="qs-type-compact-label">
+                    Metadata
+                  </dt>
+                  <dd class="qs-type-body m-0 min-w-0">
+                    <div v-if="auditMetadataEntries(event.metadata).length > 0" class="flex flex-wrap gap-1.5 min-w-0">
+                      <FaTag
+                        v-for="entry in auditMetadataEntries(event.metadata)"
+                        :key="entry.key"
+                        variant="outline"
+                        class="h-auto max-w-full whitespace-normal break-all"
+                      >
+                        {{ entry.key }}={{ entry.value }}
+                      </FaTag>
+                    </div>
+                    <span v-else>—</span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </template>
+        </QsGenericTable>
       </template>
     </FaPageMain>
   </div>

@@ -141,17 +141,21 @@ test('管理员编辑本人资料后依次刷新身份、Profile 和列表，其
   assert.deepEqual(otherUserCalls, ['reload-users'])
 })
 
-test('用户列表只发送分页和规范化后的精确用户名，不添加 status 查询', () => {
-  assert.deepEqual(buildUserListQuery(2, 50, '  Alice  '), {
+test('用户列表发送分页、规范化后的精确用户名和状态筛选', () => {
+  assert.deepEqual(buildUserListQuery(2, 50, '  Alice  ', 'DISABLED'), {
     page: 2,
     pageSize: 50,
+    status: 'DISABLED',
     username: 'Alice',
   })
-  assert.deepEqual(buildUserListQuery(1, 20, '   '), {
+  assert.deepEqual(buildUserListQuery(1, 20, '   ', undefined), {
     page: 1,
     pageSize: 20,
   })
-  assert.equal('status' in buildUserListQuery(1, 20, 'Alice'), false)
+  assert.equal(
+    'status' in buildUserListQuery(1, 20, 'Alice', 'UNKNOWN'),
+    false,
+  )
 })
 
 test('用户身份字段按 Unicode code point 校验并只在提交值中裁剪首尾空白', () => {

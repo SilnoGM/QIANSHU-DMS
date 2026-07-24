@@ -1,8 +1,11 @@
 export interface UserListQuery {
   page: number
   pageSize: number
+  status?: UserStatus
   username?: string
 }
+
+export type UserStatus = 'ACTIVE' | 'DISABLED'
 
 export interface PasswordFields {
   newPassword: string
@@ -120,19 +123,24 @@ export function canSubmitRoleAssignment(
 }
 
 /**
- * 用户查询目前只有精确用户名和分页参数。
- * 空用户名必须省略，不能把设计中尚无服务端契约的 status 偷渡成查询参数。
+ * 用户列表使用服务端全量查询，用户名按精确值提交，状态只接受公开枚举。
+ * 空值和被篡改的筛选值必须省略，避免把无效参数送入启用白名单校验的 API。
  */
 export function buildUserListQuery(
   page: number,
   pageSize: number,
   username: string,
+  status: unknown,
 ): UserListQuery {
   const normalizedUsername = username.normalize('NFC').trim()
+  const normalizedStatus = status === 'ACTIVE' || status === 'DISABLED'
+    ? status
+    : undefined
   return {
     page,
     pageSize,
     ...(normalizedUsername === '' ? {} : { username: normalizedUsername }),
+    ...(normalizedStatus === undefined ? {} : { status: normalizedStatus }),
   }
 }
 

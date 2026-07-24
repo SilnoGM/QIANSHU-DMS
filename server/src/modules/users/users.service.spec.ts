@@ -376,6 +376,31 @@ describe('UsersService reads', () => {
     )
   })
 
+  it('同时按规范化 username 与 status 查询，并让 count/findMany 共享同一 where', async () => {
+    const { service, prisma } = createServiceFixture()
+    prisma.user.count.mockResolvedValue(0)
+    prisma.user.findMany.mockResolvedValue([])
+
+    await service.list({
+      page: 1,
+      pageSize: 20,
+      username: ' Alice ',
+      status: UserStatus.DISABLED,
+    })
+
+    const countInput = prisma.user.count.mock.calls[0]?.[0] as {
+      where: unknown
+    }
+    const findManyInput = prisma.user.findMany.mock.calls[0]?.[0] as {
+      where: unknown
+    }
+    expect(countInput.where).toEqual({
+      usernameNormalized: 'alice',
+      status: UserStatus.DISABLED,
+    })
+    expect(findManyInput.where).toBe(countInput.where)
+  })
+
   it('详情不存在时返回 USER_NOT_FOUND', async () => {
     const { service, prisma } = createServiceFixture()
     prisma.user.findUnique.mockResolvedValue(null)

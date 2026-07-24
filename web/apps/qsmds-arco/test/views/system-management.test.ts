@@ -34,7 +34,6 @@ const systemViewContracts = [
     requiredComponents: [
       'FaAlert',
       'FaButton',
-      'FaCard',
       'FaCheckbox',
       'FaCheckboxGroup',
       'FaDrawer',
@@ -46,10 +45,9 @@ const systemViewContracts = [
       'FaModal',
       'FaPageHeader',
       'FaPageMain',
-      'FaPagination',
-      'FaTable',
       'FaTag',
       'FaTextarea',
+      'QsGenericTable',
     ],
   },
   {
@@ -62,7 +60,6 @@ const systemViewContracts = [
     requiredComponents: [
       'FaAlert',
       'FaButton',
-      'FaCard',
       'FaCheckboxGroup',
       'FaEmpty',
       'FaForm',
@@ -71,9 +68,9 @@ const systemViewContracts = [
       'FaModal',
       'FaPageHeader',
       'FaPageMain',
-      'FaTable',
       'FaTag',
       'FaTextarea',
+      'QsGenericTable',
     ],
   },
   {
@@ -82,13 +79,12 @@ const systemViewContracts = [
     requiredComponents: [
       'FaAlert',
       'FaButton',
-      'FaCard',
       'FaEmpty',
       'FaIcon',
       'FaPageHeader',
       'FaPageMain',
-      'FaTable',
       'FaTag',
+      'QsGenericTable',
     ],
   },
   {
@@ -97,14 +93,12 @@ const systemViewContracts = [
     requiredComponents: [
       'FaAlert',
       'FaButton',
-      'FaCard',
       'FaEmpty',
       'FaIcon',
       'FaPageHeader',
       'FaPageMain',
-      'FaPagination',
-      'FaTable',
       'FaTag',
+      'QsGenericTable',
     ],
   },
 ] as const
@@ -148,8 +142,91 @@ for (const contract of systemViewContracts) {
   })
 }
 
+test('四个系统管理页面统一使用 QsGenericTable 内置搜索、筛选和列设置', () => {
+  for (const contract of systemViewContracts) {
+    const entrySource = readRelativeSource(contract.files[0])
+    const tableTags = entrySource.match(/<QsGenericTable\b[\s\S]*?>/gu) ?? []
+
+    assert.match(
+      entrySource,
+      /import QsGenericTable from '@\/components\/business\/QsGenericTable\/index\.vue'/u,
+      `${contract.label}必须显式导入 QsGenericTable`,
+    )
+    assert.match(entrySource, /<QsGenericTable\b/u)
+    assert.doesNotMatch(entrySource, /<FaTable\b/u)
+    assert.doesNotMatch(entrySource, /<FaPagination\b/u)
+    assert.doesNotMatch(entrySource, /<FaCard\b/u)
+    assert.doesNotMatch(
+      entrySource,
+      /import type \{ TableColumn \} from '@fantastic-admin\/components'/u,
+      `${contract.label}列定义必须切换到 QsGenericTableColumn`,
+    )
+    assert.match(
+      entrySource,
+      /import type \{[\s\S]{0,240}?\bQsGenericTableColumn\b[\s\S]{0,240}?\} from '@\/components\/business\/QsGenericTable\/logic'/u,
+      `${contract.label}必须使用通用表格的列契约`,
+    )
+    assert.ok(tableTags.length > 0, `${contract.label}缺少 QsGenericTable`)
+    for (const tableTag of tableTags) {
+      assert.match(tableTag, /v-model:search="[^"]+"/u)
+      assert.match(tableTag, /v-model:filters="[^"]+"/u)
+      assert.match(tableTag, /:filter-definitions="[^"]+"/u)
+      assert.match(tableTag, /:addable="false"/u)
+      assert.doesNotMatch(tableTag, /:searchable="false"/u)
+      assert.doesNotMatch(tableTag, /:show-column-settings="false"/u)
+    }
+    assert.match(entrySource, /<template #mobile-row="\{[^"]*\bcolumns\b[^"]*\}">/u)
+    assert.match(entrySource, /class="qs-type-meta[^"]*tabular-nums"[^>]*>#\{\{ rowNumber \}\}/u)
+  }
+})
+
+test('用户管理只保留 QsGenericTable 内置查询工具栏', () => {
+  const source = readRelativeSource('../../src/views/system/users/index.vue')
+
+  assert.doesNotMatch(source, /const usernameInput = ref/u)
+  assert.doesNotMatch(source, /async function resetSearch/u)
+  assert.doesNotMatch(source, /<FaInput\b/u)
+  assert.doesNotMatch(source, /@click="resetSearch"/u)
+  assert.match(source, /search-placeholder="输入完整用户名搜索"/u)
+})
+
+test('权限目录合并为一个带资源列的通用表格', () => {
+  const source = readRelativeSource('../../src/views/system/permissions/index.vue')
+
+  assert.equal(source.match(/<QsGenericTable\b/gu)?.length, 1)
+  assert.doesNotMatch(source, /v-for="group in groups"/u)
+  assert.doesNotMatch(source, /data-testid="permission-section"/u)
+  assert.match(source, /:data="filteredPermissionRows"/u)
+  assert.match(source, /id:\s*'resource'/u)
+  assert.match(source, /<template #cell-resource=/u)
+})
+
+test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {
+  const userSource = readRelativeSource('../../src/views/system/users/index.vue')
+  const roleSource = readRelativeSource('../../src/views/system/roles/index.vue')
+  const permissionSource = readRelativeSource('../../src/views/system/permissions/index.vue')
+  const auditSource = readRelativeSource('../../src/views/system/audit/index.vue')
+
+  assert.match(userSource, /<template #actions="\{ row: user \}">/u)
+  assert.match(userSource, /v-model:page="paginationPage"/u)
+  assert.match(userSource, /v-model:page-size="paginationSize"/u)
+  assert.match(userSource, /:page-size-options="\[20, 50, 100\]"/u)
+  assert.doesNotMatch(userSource, /@pagination-change=/u)
+
+  assert.match(roleSource, /<template #actions="\{ row: role \}">/u)
+  assert.match(roleSource, /:show-pagination="false"/u)
+  assert.doesNotMatch(roleSource, /id:\s*'actions'/u)
+
+  assert.match(permissionSource, /:show-pagination="false"/u)
+  assert.doesNotMatch(permissionSource, /<template #actions=/u)
+
+  assert.match(auditSource, /v-model:page="currentPage"/u)
+  assert.match(auditSource, /v-model:page-size="pageSize"/u)
+  assert.match(auditSource, /@pagination-change="handlePaginationChange"/u)
+  assert.match(auditSource, /:page-size-options="\[20, 50, 100\]"/u)
+})
+
 const clearableStringModelContracts = [
-  { file: '../../src/views/system/users/index.vue', model: 'usernameInput' },
   { file: '../../src/views/system/users/password-reset-modal.vue', model: 'model.newPassword' },
   { file: '../../src/views/system/users/password-reset-modal.vue', model: 'model.confirmPassword' },
   { file: '../../src/views/system/users/role-assignment-modal.vue', model: 'roleSearch' },
@@ -298,27 +375,36 @@ test('系统管理浏览器测试使用组件无关的可访问性选择器', ()
     /\.arco-(?:drawer|modal|select|table)[\w-]*/u,
     '浏览器测试不得绑定 Arco 私有 DOM class，迁移后应使用 role 或稳定业务标识',
   )
+  for (const tableTestId of ['user-table', 'role-table', 'permission-table', 'audit-table']) {
+    assert.match(
+      browserSources,
+      new RegExp(`\\[data-testid="${tableTestId}"\\] table`, 'u'),
+      `${tableTestId} 的窄屏断言必须检查通用组件内的原生表格，而不是始终可见的组件根节点`,
+    )
+  }
 })
 
-test('审计分页只通过受控 model 发起查询，切换 pageSize 不叠加 change 监听', () => {
+test('审计分页只通过 QsGenericTable 的单一 paginationChange 事件发起查询', () => {
   const source = readRelativeSource('../../src/views/system/audit/index.vue')
 
-  assert.match(source, /const paginationPage = computed\(/u)
-  assert.match(source, /const paginationSize = computed\(/u)
-  assert.match(source, /currentPage\.value = 1\s+void loadEvents\(1, size\)/u)
+  assert.match(
+    source,
+    /function handlePaginationChange\(pagination: \{ page: number, pageSize: number \}\)[\s\S]*?void loadEvents\(pagination\.page, pagination\.pageSize\)/u,
+  )
+  assert.doesNotMatch(source, /const pagination(?:Page|Size) = computed\(/u)
   assert.doesNotMatch(
     source,
-    /@(?:page|size)-change=/u,
-    'FaPagination 的 v-model 与 change 事件不得同时驱动查询，否则 pageSize 变化可能重复请求',
+    /@(?:page|size)-change=|@update:(?:page|page-size)=/u,
+    '分页只能由 QsGenericTable 的 paginationChange 驱动查询，避免页码与页容量分别重复请求',
   )
 })
 
-test('角色列表为窄屏加载状态提供反馈并禁用操作', () => {
+test('角色列表把加载状态交给通用表格并继续禁用业务操作', () => {
   const source = readRelativeSource('../../src/views/system/roles/index.vue')
 
   assert.match(
     source,
-    /v-if="loading && roles\.length === 0"[\s\S]{0,320}<FaIcon[^>]+name="i-lucide:loader-circle"/u,
+    /<QsGenericTable(?=[\s\S]{0,500}?:loading="loading")/u,
   )
   assert.match(source, /:disabled="loading"[^>]*>\s*编辑/u)
   assert.match(source, /:disabled="loading \|\| !permissionCatalogReady"/u)
@@ -490,7 +576,7 @@ test('角色管理移动卡片使用 compact、data 与 body 角色且保留既�
   )
   assert.match(
     source,
-    /<template #header>[\s\S]{0,180}?<strong class="qs-type-compact-title">\{\{ role\.name \}\}<\/strong>/u,
+    /<template #mobile-row="\{ columns: visibleColumns, row: role, rowNumber \}">[\s\S]{0,500}?<strong class="qs-type-compact-title">\{\{ role\.name \}\}<\/strong>/u,
   )
   assert.equal(
     source.match(/<span class="qs-type-compact-label">/gu)?.length,
@@ -516,13 +602,12 @@ test('角色管理移动卡片使用 compact、data 与 body 角色且保留既�
   assert.doesNotMatch(source, /<div class="text-sm gap-2\.5 grid">/u)
 })
 
-test('权限目录使用组件标题、标识、说明和状态角色', () => {
+test('权限目录单表使用资源、标识、说明和状态排版角色', () => {
   const source = readRelativeSource('../../src/views/system/permissions/index.vue')
 
-  assert.match(source, /<h2 class="qs-type-component-title m-0">/u)
   assert.match(
     source,
-    /<code class="qs-type-meta break-all">\{\{ group\.key \}\}<\/code>/u,
+    /<template #cell-resource[\s\S]*?<span class="qs-type-body-medium">[\s\S]*?<code class="qs-type-meta">/u,
   )
   assert.match(
     source,
@@ -530,19 +615,19 @@ test('权限目录使用组件标题、标识、说明和状态角色', () => {
   )
   assert.match(
     source,
-    /<strong class="qs-type-compact-title min-w-0 break-words">\{\{ permission\.name \}\}<\/strong>/u,
+    /<strong\s[^>]*class="qs-type-compact-title min-w-0 break-words"[^>]*>[\s\S]{0,80}?\{\{ permission\.name \}\}[\s\S]{0,40}?<\/strong>/u,
   )
   assert.match(
     source,
-    /<code class="qs-type-data-emphasis break-all">\{\{ permission\.code \}\}<\/code>/u,
+    /<code\s[^>]*class="qs-type-data-emphasis break-all"[^>]*>[\s\S]{0,80}?\{\{ permission\.code \}\}[\s\S]{0,40}?<\/code>/u,
   )
   assert.match(
     source,
-    /<p class="qs-type-description m-0">/u,
+    /<p\s[^>]*class="qs-type-description m-0"[^>]*>/u,
   )
   assert.match(
     source,
-    /<FaTag[^>]*:variant="permission\.systemOnly \? 'secondary' : 'outline'"[^>]*class="qs-type-status-tag shrink-0"/u,
+    /<FaTag[^>]*:variant="permission\.systemOnly \? 'secondary' : 'outline'"[^>]*class="qs-type-status-tag"/u,
   )
   assert.doesNotMatch(
     source,
@@ -595,7 +680,7 @@ test('审计日志桌面与移动卡片区分时间、标识、普通重点值�
   )
   assert.match(
     source,
-    /<FaTag v-bind="auditOutcomeTagPresentation\(event\.outcome\)" class="qs-type-status-tag shrink-0">/u,
+    /<FaTag v-bind="auditOutcomeTagPresentation\(event\.outcome\)" class="qs-type-status-tag">/u,
   )
   assert.doesNotMatch(source, /<dl class="text-sm m-0 gap-3 grid">/u)
 })

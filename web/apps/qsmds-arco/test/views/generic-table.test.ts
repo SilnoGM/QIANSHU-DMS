@@ -67,6 +67,40 @@ test('行号跨分页连续计算且不依赖业务数据主键', () => {
   assert.equal(getContinuousRowNumber(3, 50, 7), 108)
 })
 
+test('受控分页事件直接携带本次变更值，不回读尚未同步的 v-model', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(
+    source,
+    /page\.value = nextPage\s+emitPaginationChange\(nextPage, pageSize\.value\)/u,
+  )
+  assert.match(
+    source,
+    /pageSize\.value = nextPageSize\s+page\.value = 1\s+emitPaginationChange\(1, nextPageSize\)/u,
+  )
+  assert.match(
+    source,
+    /function emitPaginationChange\(nextPage: number, nextPageSize: number\)/u,
+  )
+})
+
+test('受控筛选事件直接携带已应用的草稿值，不回读尚未同步的 v-model', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(
+    source,
+    /const nextFilters = \{ \.\.\.filterDraft\.value \}\s+filters\.value = nextFilters/u,
+  )
+  assert.match(
+    source,
+    /emit\('filterChange', \{ \.\.\.nextFilters \}\)/u,
+  )
+})
+
 test('列设置保留默认显隐、左右固定和对齐配置', () => {
   const settings = createDefaultColumnSettings(columns)
 
@@ -170,6 +204,19 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
 })
 
+test('通用表格允许调用方关闭列设置并在没有工具时移除工具栏占位', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(source, /showColumnSettings\?: boolean/u)
+  assert.match(source, /showColumnSettings: true/u)
+  assert.match(source, /const hasToolbar = computed\(/u)
+  assert.match(source, /v-if="hasToolbar" class="pb-4 flex flex-wrap gap-3 items-center justify-between"/u)
+  assert.match(source, /v-if="showColumnSettings && !isNarrow"/u)
+  assert.match(source, /v-else-if="showColumnSettings"/u)
+})
+
 test('操作列由 actions 插槽按需启用并在桌面与窄屏复用同一行级作用域', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',
@@ -197,6 +244,17 @@ test('搜索框仅使用 FaInput 的统一清除按钮', () => {
   assert.match(searchInputMatch[0], /type="text"/u)
   assert.match(searchInputMatch[0], /enterkeyhint="search"/u)
   assert.doesNotMatch(searchInputMatch[0], /type="search"/u)
+})
+
+test('窄屏搜索区独占一行，避免筛选和列设置把输入框压缩为图标', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(
+    source,
+    /v-if="searchable" class="flex flex-1 basis-full gap-2 min-w-0 items-center sm-basis-auto"/u,
+  )
 })
 
 test('筛选下拉不向 Reka Select 传入空字符串选项', () => {

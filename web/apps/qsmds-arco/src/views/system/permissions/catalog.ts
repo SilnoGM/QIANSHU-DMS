@@ -19,9 +19,13 @@ function compareText(left: string, right: string): number {
   return left < right ? -1 : 1
 }
 
-function permissionResource(code: string): string {
+export function permissionResource(code: string): string {
   const separator = code.indexOf(':')
   return separator > 0 ? code.slice(0, separator) : code
+}
+
+export function permissionResourceLabel(resource: string): string {
+  return RESOURCE_LABELS[resource] ?? resource
 }
 
 /**
@@ -44,7 +48,7 @@ export function groupPermissions(permissions: readonly PermissionDto[]): Permiss
     .sort(([left], [right]) => compareText(left, right))
     .map(([key, entries]) => ({
       key,
-      label: RESOURCE_LABELS[key] ?? key,
+      label: permissionResourceLabel(key),
       permissions: entries,
     }))
 }

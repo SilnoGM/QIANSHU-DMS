@@ -1,8 +1,19 @@
 <script setup lang="ts">
-import type { TableColumn } from '@fantastic-admin/components'
 import type { PermissionDto } from '@/api/generated/types.gen'
+import type {
+  QsGenericTableColumn,
+  QsGenericTableFilterDefinition,
+  QsGenericTableFilterValues,
+} from '@/components/business/QsGenericTable/logic'
+
 import managementApi from '@/api/modules/management'
-import { groupPermissions } from './catalog'
+import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import {
+  filterPermissionTableRows,
+  hasVisibleTableColumn,
+  permissionResourceOptions,
+} from '@/views/system/shared/table-query'
+import { permissionResource, permissionResourceLabel } from './catalog'
 
 defineOptions({ name: 'SystemPermissions' })
 
@@ -10,15 +21,39 @@ const { auth } = useAppAuth()
 const permissions = ref<PermissionDto[]>([])
 const loading = ref(false)
 const pageError = ref('')
+const tableSearch = ref('')
+const tableFilters = ref<QsGenericTableFilterValues>({})
 
 const canRead = computed(() => auth('roles:read'))
-const groups = computed(() => groupPermissions(permissions.value))
-const columns: TableColumn<PermissionDto>[] = [
-  { accessorKey: 'code', header: '权限码', width: 240 },
-  { accessorKey: 'name', header: '名称', width: 180 },
-  { accessorKey: 'description', header: '说明' },
-  { accessorKey: 'systemOnly', header: '范围', width: 120 },
+const columns: QsGenericTableColumn<PermissionDto>[] = [
+  {
+    id: 'resource',
+    accessorFn: permission => permissionResource(permission.code),
+    title: '资源',
+    width: 160,
+  },
+  { id: 'code', accessorKey: 'code', title: '权限码', width: 240 },
+  { id: 'name', accessorKey: 'name', title: '名称', width: 180 },
+  { id: 'description', accessorKey: 'description', title: '说明' },
+  { id: 'systemOnly', accessorKey: 'systemOnly', title: '范围', width: 120 },
 ]
+const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
+  {
+    key: 'resource',
+    label: '资源',
+    options: permissionResourceOptions(permissions.value),
+  },
+  {
+    key: 'permissionScope',
+    label: '权限范围',
+    options: [
+      { label: '系统专用', value: 'system' },
+      { label: '普通权限', value: 'business' },
+    ],
+  },
+])
+const filteredPermissionRows = computed(() =>
+  filterPermissionTableRows(permissions.value, tableSearch.value, tableFilters.value))
 
 function safeErrorMessage(error: unknown): string {
   if (typeof error !== 'object' || error === null) {
@@ -65,7 +100,7 @@ onMounted(loadPermissions)
 
 <template>
   <div>
-    <FaPageHeader description="只读查看系统当前可用权限。权限按资源分组并按权限码稳定排序。">
+    <FaPageHeader description="只读查看系统当前可用权限，可按资源和权限范围快速检索。">
       <template #title>
         权限目录
       </template>
@@ -101,94 +136,95 @@ onMounted(loadPermissions)
           </template>
         </FaAlert>
 
-        <div
-          v-if="loading && groups.length === 0"
-          class="text-muted-foreground flex-col-center gap-3 min-h-40"
-          role="status"
+        <QsGenericTable
+          v-model:search="tableSearch"
+          v-model:filters="tableFilters"
+          data-testid="permission-table"
+          class="text-card-foreground"
+          row-key="id"
+          aria-label="权限目录列表"
+          :columns="columns"
+          :data="filteredPermissionRows"
+          :filter-definitions="filterDefinitions"
+          :loading="loading"
+          :searchable="true"
+          :addable="false"
+          :show-column-settings="true"
+          :show-pagination="false"
+          empty-title="暂无权限"
+          empty-description="当前权限目录没有可展示的数据。"
+          search-placeholder="搜索权限码、名称、说明或资源"
+          table-class="min-w-[880px]"
         >
-          <FaIcon name="i-svg-spinners:90-ring-with-bg" class="text-primary size-7" />
-          <span class="qs-type-body">正在加载权限目录…</span>
-        </div>
+          <template #cell-resource="{ row }">
+            <div class="gap-0.5 grid">
+              <span class="qs-type-body-medium">
+                {{ permissionResourceLabel(permissionResource(row.original.code)) }}
+              </span>
+              <code class="qs-type-meta">{{ permissionResource(row.original.code) }}</code>
+            </div>
+          </template>
+          <template #cell-code="{ row }">
+            <code class="qs-type-data-emphasis">{{ row.original.code }}</code>
+          </template>
+          <template #cell-description="{ row }">
+            <span class="qs-type-description">{{ row.original.description || '—' }}</span>
+          </template>
+          <template #cell-systemOnly="{ row }">
+            <FaTag
+              :variant="row.original.systemOnly ? 'secondary' : 'outline'"
+              class="qs-type-status-tag"
+            >
+              {{ row.original.systemOnly ? '系统专用' : '普通权限' }}
+            </FaTag>
+          </template>
 
-        <FaEmpty
-          v-else-if="groups.length === 0"
-          icon="i-lucide:list-checks"
-          title="暂无权限"
-          description="当前权限目录没有可展示的数据。"
-          class="min-h-40"
-        />
-
-        <div v-else class="gap-4 grid" :aria-busy="loading">
-          <section
-            v-for="group in groups"
-            :key="group.key"
-            data-testid="permission-section"
-            class="text-card-foreground border border-border rounded-lg bg-card overflow-hidden"
-          >
-            <header class="px-4 py-3 border-b border-border bg-muted/30 flex gap-4 items-center justify-between">
-              <div class="min-w-0">
-                <h2 class="qs-type-component-title m-0">
-                  {{ group.label }}
-                </h2>
-                <code class="qs-type-meta break-all">{{ group.key }}</code>
-              </div>
-              <FaTag variant="secondary" class="shrink-0">
-                {{ group.permissions.length }} 项
-              </FaTag>
-            </header>
-
-            <div data-testid="permission-table" class="hidden md:block">
-              <FaTable
-                row-key="id"
-                :columns="columns"
-                :data="group.permissions"
-                table-class="min-w-[720px]"
-                :class="loading ? 'pointer-events-none opacity-60' : undefined"
-              >
-                <template #cell-code="{ row }">
-                  <code class="qs-type-data-emphasis">{{ row.original.code }}</code>
-                </template>
-                <template #cell-description="{ row }">
-                  <span class="qs-type-description">{{ row.original.description || '—' }}</span>
-                </template>
-                <template #cell-systemOnly="{ row }">
+          <!-- 自定义卡片使用 visibleColumns，同步响应列设置中的字段显隐。 -->
+          <template #mobile-row="{ columns: visibleColumns, row: permission, rowNumber }">
+            <div data-testid="permission-card" class="gap-2 grid">
+              <div class="flex gap-3 items-start justify-between">
+                <strong
+                  v-if="hasVisibleTableColumn(visibleColumns, 'name')"
+                  class="qs-type-compact-title min-w-0 break-words"
+                >
+                  {{ permission.name }}
+                </strong>
+                <div class="flex shrink-0 flex-col gap-1 items-end">
                   <FaTag
-                    :variant="row.original.systemOnly ? 'secondary' : 'outline'"
+                    v-if="hasVisibleTableColumn(visibleColumns, 'systemOnly')"
+                    :variant="permission.systemOnly ? 'secondary' : 'outline'"
                     class="qs-type-status-tag"
                   >
-                    {{ row.original.systemOnly ? '系统专用' : '普通权限' }}
+                    {{ permission.systemOnly ? '系统专用' : '普通权限' }}
                   </FaTag>
-                </template>
-              </FaTable>
-            </div>
-
-            <div class="p-3 gap-3 grid md:hidden">
-              <!-- 权限卡片没有字段表格或操作区，只标注已有标题、编码、说明与范围状态。 -->
-              <FaCard
-                v-for="permission in group.permissions"
-                :key="permission.id"
-                data-testid="permission-card"
-                content-class="space-y-2"
+                  <span class="qs-type-meta tabular-nums">#{{ rowNumber }}</span>
+                </div>
+              </div>
+              <div
+                v-if="hasVisibleTableColumn(visibleColumns, 'resource')"
+                class="gap-2 grid [grid-template-columns:72px_minmax(0,1fr)]"
               >
-                <template #header>
-                  <div class="flex gap-3 items-start justify-between">
-                    <strong class="qs-type-compact-title min-w-0 break-words">{{ permission.name }}</strong>
-                    <FaTag
-                      :variant="permission.systemOnly ? 'secondary' : 'outline'"
-                      class="qs-type-status-tag shrink-0"
-                    >
-                      {{ permission.systemOnly ? '系统专用' : '普通权限' }}
-                    </FaTag>
-                  </div>
-                </template>
-                <code class="qs-type-data-emphasis break-all">{{ permission.code }}</code>
-                <p class="qs-type-description m-0">
-                  {{ permission.description || '暂无补充说明' }}
-                </p>
-              </FaCard>
+                <span class="qs-type-compact-label">资源</span>
+                <span class="qs-type-body">
+                  {{ permissionResourceLabel(permissionResource(permission.code)) }}
+                  <code class="qs-type-meta ms-1">{{ permissionResource(permission.code) }}</code>
+                </span>
+              </div>
+              <code
+                v-if="hasVisibleTableColumn(visibleColumns, 'code')"
+                class="qs-type-data-emphasis break-all"
+              >
+                {{ permission.code }}
+              </code>
+              <p
+                v-if="hasVisibleTableColumn(visibleColumns, 'description')"
+                class="qs-type-description m-0"
+              >
+                {{ permission.description || '暂无补充说明' }}
+              </p>
             </div>
-          </section>
-        </div>
+          </template>
+        </QsGenericTable>
       </template>
     </FaPageMain>
   </div>
