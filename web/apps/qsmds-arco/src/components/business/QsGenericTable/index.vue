@@ -211,7 +211,7 @@ const paginationPage = computed({
       return
     }
     page.value = nextPage
-    emitPaginationChange()
+    emitPaginationChange(nextPage, pageSize.value)
   },
 })
 
@@ -223,14 +223,18 @@ const paginationSize = computed({
     }
     pageSize.value = nextPageSize
     page.value = 1
-    emitPaginationChange()
+    emitPaginationChange(1, nextPageSize)
   },
 })
 
-function emitPaginationChange() {
+/**
+ * 受控 defineModel 只会先发出 update 事件，父组件的新 prop 要到后续更新周期才会
+ * 回流。分页事件必须直接使用本次 setter 的值，不能立即回读仍可能是旧值的 model。
+ */
+function emitPaginationChange(nextPage: number, nextPageSize: number) {
   emit('paginationChange', {
-    page: page.value,
-    pageSize: pageSize.value,
+    page: nextPage,
+    pageSize: nextPageSize,
   })
 }
 
@@ -266,11 +270,13 @@ function updateFilterDraft(key: string, value: QsGenericTableFilterValue) {
 }
 
 function applyFilters() {
-  filters.value = { ...filterDraft.value }
+  // 与分页相同，事件负载必须使用本次提交值，不能回读尚未由父组件同步的 model。
+  const nextFilters = { ...filterDraft.value }
+  filters.value = nextFilters
   resetPage()
   desktopFilterVisible.value = false
   filterDrawerVisible.value = false
-  emit('filterChange', { ...filters.value })
+  emit('filterChange', { ...nextFilters })
 }
 
 function resetFilters() {
@@ -445,7 +451,7 @@ watch([tableColumns, isNarrow], () => {
 <template>
   <section class="qs-generic-table qs-type-body min-w-0" aria-label="业务通用表格">
     <div v-if="hasToolbar" class="pb-4 flex flex-wrap gap-3 items-center justify-between">
-      <div v-if="searchable" class="flex flex-1 gap-2 min-w-0 items-center">
+      <div v-if="searchable" class="flex flex-1 basis-full gap-2 min-w-0 items-center sm-basis-auto">
         <!-- FaInput 已提供统一的 clearable 按钮，使用 text 可避免浏览器为 search 再渲染原生清除控件。 -->
         <FaInput
           v-model="searchDraft"

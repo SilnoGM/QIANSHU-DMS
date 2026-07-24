@@ -1,9 +1,18 @@
 <script setup lang="ts">
 import type { AuditEventDto } from '@/api/generated/types.gen'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import type {
+  QsGenericTableColumn,
+  QsGenericTableFilterDefinition,
+  QsGenericTableFilterValues,
+} from '@/components/business/QsGenericTable/logic'
 
 import managementApi from '@/api/modules/management'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import { hasVisibleTableColumn } from '../shared/table-query'
+import {
+  AUDIT_EVENT_TYPES,
+  buildAuditEventListQuery,
+} from './audit.logic'
 import {
   auditMetadataEntries,
   auditOutcomeTagPresentation,
@@ -22,6 +31,10 @@ const pageError = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const searchKeyword = ref('')
+const filters = ref<QsGenericTableFilterValues>({})
+let listRequestVersion = 0
+let queryRefreshPending = false
 
 const canRead = computed(() => auth('audit:read'))
 const columns: QsGenericTableColumn<AuditEventDto>[] = [
@@ -33,6 +46,25 @@ const columns: QsGenericTableColumn<AuditEventDto>[] = [
   { id: 'target', title: '目标', width: 250 },
   { id: 'requestId', accessorKey: 'requestId', title: '请求 ID', width: 250 },
   { id: 'metadata', accessorKey: 'metadata', title: 'Metadata', width: 320 },
+]
+
+const filterDefinitions: QsGenericTableFilterDefinition[] = [
+  {
+    key: 'eventType',
+    label: '事件类型',
+    options: AUDIT_EVENT_TYPES.map(value => ({
+      label: formatAuditEvent(value),
+      value,
+    })),
+  },
+  {
+    key: 'outcome',
+    label: '执行结果',
+    options: [
+      { label: '成功', value: 'SUCCESS' },
+      { label: '失败', value: 'FAILURE' },
+    ],
+  },
 ]
 
 function safeErrorMessage(error: unknown): string {
@@ -58,24 +90,38 @@ function safeErrorMessage(error: unknown): string {
 }
 
 async function loadEvents(page = currentPage.value, size = pageSize.value): Promise<void> {
-  if (loading.value || !canRead.value) {
+  if (!canRead.value) {
     return
   }
+  const requestVersion = ++listRequestVersion
   loading.value = true
   pageError.value = ''
   try {
-    // 审计查询契约首期只允许 page/pageSize，页面不得臆造事件、用户或时间筛选。
-    const response = await managementApi.auditEvents.list({ page, pageSize: size })
+    const response = await managementApi.auditEvents.list(buildAuditEventListQuery(
+      page,
+      size,
+      searchKeyword.value,
+      filters.value.eventType,
+      filters.value.outcome,
+    ))
+    if (requestVersion !== listRequestVersion) {
+      return
+    }
     events.value = response.data.items
     currentPage.value = response.data.page
     pageSize.value = response.data.pageSize
     total.value = response.data.total
   }
   catch (error) {
+    if (requestVersion !== listRequestVersion) {
+      return
+    }
     pageError.value = safeErrorMessage(error)
   }
   finally {
-    loading.value = false
+    if (requestVersion === listRequestVersion) {
+      loading.value = false
+    }
   }
 }
 
@@ -85,6 +131,22 @@ async function loadEvents(page = currentPage.value, size = pageSize.value): Prom
  */
 function handlePaginationChange(pagination: { page: number, pageSize: number }): void {
   void loadEvents(pagination.page, pagination.pageSize)
+}
+
+/**
+ * 搜索、筛选及组件的“同时清空”动作统一在一个微任务内合并，确保页码归一为 1
+ * 后只向服务端发送一次包含全部最新条件的查询。
+ */
+function scheduleQueryRefresh(): void {
+  currentPage.value = 1
+  if (queryRefreshPending) {
+    return
+  }
+  queryRefreshPending = true
+  queueMicrotask(() => {
+    queryRefreshPending = false
+    void loadEvents()
+  })
 }
 
 function targetLabel(event: AuditEventDto): string {
@@ -138,21 +200,25 @@ onMounted(loadEvents)
         <QsGenericTable
           v-model:page="currentPage"
           v-model:page-size="pageSize"
+          v-model:search="searchKeyword"
+          v-model:filters="filters"
           data-testid="audit-table"
           row-key="id"
           :columns="columns"
           :data="events"
+          :filter-definitions="filterDefinitions"
           :total="total"
           :loading="loading"
           :page-size-options="[20, 50, 100]"
-          :searchable="false"
           :addable="false"
-          :show-column-settings="false"
           empty-title="暂无审计记录"
           empty-description="当前查询范围内没有可展示的审计事件。"
+          search-placeholder="输入完整请求 ID 搜索"
           table-class="min-w-[1760px]"
           :class="loading && events.length ? 'pointer-events-none' : undefined"
+          @filter-change="scheduleQueryRefresh"
           @pagination-change="handlePaginationChange"
+          @search="scheduleQueryRefresh"
         >
           <template #cell-occurredAt="{ row }">
             <span class="qs-type-data">{{ formatAuditTime(row.original.occurredAt) }}</span>
@@ -203,23 +269,31 @@ onMounted(loadEvents)
             QsGenericTable 已提供移动卡片外框和加载态；插槽只描述审计业务内容，
             避免再嵌套 FaCard 形成双层边框，同时保留浏览器验收使用的稳定标识。
           -->
-          <template #mobile-row="{ row: event, rowNumber }">
+          <template #mobile-row="{ columns: visibleColumns, row: event, rowNumber }">
             <div data-testid="audit-card" class="space-y-3">
               <div class="pb-3 flex gap-3 items-start justify-between">
-                <div class="min-w-0">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'eventType')"
+                  class="min-w-0"
+                >
                   <strong class="qs-type-compact-title block break-words">{{ formatAuditEvent(event.eventType) }}</strong>
                   <code class="qs-type-data-emphasis break-all">{{ event.eventType }}</code>
                 </div>
                 <div class="flex shrink-0 flex-col gap-1 items-end">
-                  <FaTag v-bind="auditOutcomeTagPresentation(event.outcome)" class="qs-type-status-tag">
-                    {{ formatAuditOutcome(event.outcome) }}
-                  </FaTag>
+                  <template v-if="hasVisibleTableColumn(visibleColumns, 'outcome')">
+                    <FaTag v-bind="auditOutcomeTagPresentation(event.outcome)" class="qs-type-status-tag">
+                      {{ formatAuditOutcome(event.outcome) }}
+                    </FaTag>
+                  </template>
                   <span class="qs-type-meta tabular-nums">#{{ rowNumber }}</span>
                 </div>
               </div>
 
               <dl class="qs-type-body m-0 gap-3 grid">
-                <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'occurredAt')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
                   <dt class="qs-type-compact-label">
                     时间
                   </dt>
@@ -227,7 +301,10 @@ onMounted(loadEvents)
                     {{ formatAuditTime(event.occurredAt) }}
                   </dd>
                 </div>
-                <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'actorDisplayName')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
                   <dt class="qs-type-compact-label">
                     用户展示名
                   </dt>
@@ -235,7 +312,10 @@ onMounted(loadEvents)
                     {{ formatAuditActorDisplayName(event.actorType, event.actorDisplayName) }}
                   </dd>
                 </div>
-                <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'actorUserId')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
                   <dt class="qs-type-compact-label">
                     操作者 ID
                   </dt>
@@ -243,7 +323,10 @@ onMounted(loadEvents)
                     <code class="break-all">{{ event.actorUserId || '—' }}</code>
                   </dd>
                 </div>
-                <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'target')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
                   <dt class="qs-type-compact-label">
                     目标
                   </dt>
@@ -251,7 +334,10 @@ onMounted(loadEvents)
                     <code class="break-all">{{ targetLabel(event) }}</code>
                   </dd>
                 </div>
-                <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'requestId')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
                   <dt class="qs-type-compact-label">
                     请求 ID
                   </dt>
@@ -259,7 +345,10 @@ onMounted(loadEvents)
                     <code class="break-all">{{ event.requestId }}</code>
                   </dd>
                 </div>
-                <div class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'metadata')"
+                  class="gap-2 grid grid-cols-[5.75rem_minmax(0,1fr)] items-start"
+                >
                   <dt class="qs-type-compact-label">
                     Metadata
                   </dt>

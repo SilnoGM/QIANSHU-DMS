@@ -5,10 +5,18 @@ import type {
   RoleDto,
   UpdateRoleRequestDto,
 } from '@/api/generated/types.gen'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import type {
+  QsGenericTableColumn,
+  QsGenericTableFilterDefinition,
+  QsGenericTableFilterValues,
+} from '@/components/business/QsGenericTable/logic'
 
 import managementApi from '@/api/modules/management'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import {
+  filterRoleTableRows,
+  hasVisibleTableColumn,
+} from '@/views/system/shared/table-query'
 import PermissionAssignmentModal from './permission-assignment-modal.vue'
 import { canAssignRolePermissions, canEditRole } from './presentation'
 import RoleEditorModal from './role-editor-modal.vue'
@@ -21,6 +29,8 @@ const permissions = ref<PermissionDto[]>([])
 const permissionCatalogReady = ref(false)
 const loading = ref(false)
 const pageError = ref('')
+const tableSearch = ref('')
+const tableFilters = ref<QsGenericTableFilterValues>({})
 
 const editorVisible = ref(false)
 const editorRole = ref<RoleDto | null>(null)
@@ -42,6 +52,18 @@ const columns: QsGenericTableColumn<RoleDto>[] = [
     width: 110,
   },
 ]
+const filterDefinitions: QsGenericTableFilterDefinition[] = [
+  {
+    key: 'roleType',
+    label: '角色类型',
+    options: [
+      { label: '系统角色', value: 'system' },
+      { label: '自定义角色', value: 'custom' },
+    ],
+  },
+]
+const tableRows = computed(() =>
+  filterRoleTableRows(roles.value, tableSearch.value, tableFilters.value))
 
 function safeErrorMessage(error: unknown, fallback: string): string {
   if (typeof error !== 'object' || error === null) {
@@ -226,18 +248,22 @@ onMounted(loadData)
       </FaAlert>
 
       <QsGenericTable
+        v-model:search="tableSearch"
+        v-model:filters="tableFilters"
         data-testid="role-table"
         row-key="id"
         :columns="columns"
-        :data="roles"
+        :data="tableRows"
+        :filter-definitions="filterDefinitions"
         :loading="loading"
         :action-column="{ width: 180 }"
-        :searchable="false"
+        :searchable="true"
         :addable="false"
-        :show-column-settings="false"
+        :show-column-settings="true"
         :show-pagination="false"
         empty-title="暂无角色"
         empty-description="创建角色后可在此维护角色信息与权限。"
+        search-placeholder="搜索角色名称、编码或说明"
         table-class="min-w-[860px]"
       >
         <template #cell-role="{ row }">
@@ -281,10 +307,13 @@ onMounted(loadData)
         </template>
 
         <!-- 通用表格统一控制断点和卡片外壳；页面只描述角色字段，操作区复用 actions 插槽。 -->
-        <template #mobile-row="{ row: role, rowNumber }">
+        <template #mobile-row="{ columns: visibleColumns, row: role, rowNumber }">
           <div data-testid="role-card" class="gap-4 grid">
             <div class="flex gap-3 items-start justify-between">
-              <div class="flex flex-wrap gap-2 min-w-0 items-center">
+              <div
+                v-if="hasVisibleTableColumn(visibleColumns, 'role')"
+                class="flex flex-wrap gap-2 min-w-0 items-center"
+              >
                 <strong class="qs-type-compact-title">{{ role.name }}</strong>
                 <FaTag v-if="role.isSystem" variant="secondary" class="qs-type-status-tag">
                   系统角色
@@ -293,15 +322,24 @@ onMounted(loadData)
               <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
             </div>
             <div class="qs-type-body gap-2.5 grid">
-              <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
+              <div
+                v-if="hasVisibleTableColumn(visibleColumns, 'role')"
+                class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]"
+              >
                 <span class="qs-type-compact-label">编码</span>
                 <code class="qs-type-data-emphasis [overflow-wrap:anywhere]">{{ role.code }}</code>
               </div>
-              <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
+              <div
+                v-if="hasVisibleTableColumn(visibleColumns, 'permissionCount')"
+                class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]"
+              >
                 <span class="qs-type-compact-label">权限数量</span>
                 <span class="qs-type-data">{{ role.permissionIds.length }}</span>
               </div>
-              <div class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]">
+              <div
+                v-if="hasVisibleTableColumn(visibleColumns, 'description')"
+                class="gap-2 grid [grid-template-columns:88px_minmax(0,1fr)]"
+              >
                 <span class="qs-type-compact-label">说明</span>
                 <p class="qs-type-body m-0 [overflow-wrap:anywhere]">
                   {{ role.description || '—' }}

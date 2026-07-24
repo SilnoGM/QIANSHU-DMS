@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import type { RoleDto, UserDto } from '@/api/generated/types.gen'
-import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
+import type {
+  QsGenericTableColumn,
+  QsGenericTableFilterDefinition,
+  QsGenericTableFilterValues,
+} from '@/components/business/QsGenericTable/logic'
 
 import { useMediaQuery } from '@vueuse/core'
 
 import managementApi from '@/api/modules/management'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 
+import { hasVisibleTableColumn } from '../shared/table-query'
 import PasswordResetModal from './password-reset-modal.vue'
 import RoleAssignmentModal from './role-assignment-modal.vue'
 import StatusChangeModal from './status-change-modal.vue'
@@ -42,11 +47,12 @@ const users = ref<UserDto[]>([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
-const usernameInput = ref('')
-const appliedUsername = ref('')
+const searchKeyword = ref('')
+const filters = ref<QsGenericTableFilterValues>({})
 const listErrorMessage = ref('')
 const listRequestId = ref<string>()
 let listRequestVersion = 0
+let queryRefreshPending = false
 
 const roles = ref<RoleDto[]>([])
 const rolesLoading = ref(false)
@@ -91,9 +97,20 @@ const columns: QsGenericTableColumn<UserDto>[] = [
   },
 ]
 
+const filterDefinitions: QsGenericTableFilterDefinition[] = [
+  {
+    key: 'status',
+    label: '用户状态',
+    options: [
+      { label: '启用', value: 'ACTIVE' },
+      { label: '禁用', value: 'DISABLED' },
+    ],
+  },
+]
+
 /**
- * QsGenericTable 的分页只通过双向绑定更新这里的受控模型。由 computed setter
- * 作为唯一查询入口，切换 pageSize 时先把页码归一为 1，避免 size/page 重复请求。
+ * 用户页沿用 computed setter 作为分页请求入口；setter 与搜索/筛选事件共用同一个
+ * 微任务合并器，因此 pageSize + page 的连续更新也只会产生一次查询。
  */
 const paginationPage = computed({
   get: () => page.value,
@@ -102,7 +119,7 @@ const paginationPage = computed({
       return
     }
     page.value = nextPage
-    void loadUsers()
+    scheduleListRefresh(false)
   },
 })
 const paginationSize = computed({
@@ -113,7 +130,7 @@ const paginationSize = computed({
     }
     pageSize.value = nextPageSize
     page.value = 1
-    void loadUsers()
+    scheduleListRefresh(false)
   },
 })
 const mobileDrawerTitle = computed(() => mobileActionTarget.value === null
@@ -176,7 +193,8 @@ async function loadUsers(): Promise<void> {
     const response = await managementApi.users.list(buildUserListQuery(
       page.value,
       pageSize.value,
-      appliedUsername.value,
+      searchKeyword.value,
+      filters.value.status,
     ))
     if (requestVersion !== listRequestVersion) {
       return
@@ -201,17 +219,27 @@ async function loadUsers(): Promise<void> {
   }
 }
 
-async function search(): Promise<void> {
-  appliedUsername.value = usernameInput.value
-  page.value = 1
-  await loadUsers()
+/**
+ * QsGenericTable 的“清除查询条件”会在同一轮交互连续发出 search 和
+ * filterChange。分页 setter 也复用该合并器，确保搜索、筛选、分页及同时清空
+ * 都只请求一次。
+ */
+function scheduleListRefresh(resetPage: boolean): void {
+  if (resetPage) {
+    page.value = 1
+  }
+  if (queryRefreshPending) {
+    return
+  }
+  queryRefreshPending = true
+  queueMicrotask(() => {
+    queryRefreshPending = false
+    void loadUsers()
+  })
 }
 
-async function resetSearch(): Promise<void> {
-  usernameInput.value = ''
-  appliedUsername.value = ''
-  page.value = 1
-  await loadUsers()
+function scheduleQueryRefresh(): void {
+  scheduleListRefresh(true)
 }
 
 function openCreate(): void {
@@ -327,8 +355,8 @@ async function handleFormSuccess(user: UserDto): Promise<void> {
 }
 
 async function verifyUnknownCreate(username: string): Promise<void> {
-  usernameInput.value = username
-  appliedUsername.value = username
+  searchKeyword.value = username
+  filters.value = {}
   page.value = 1
   await loadUsers()
 }
@@ -375,7 +403,7 @@ onMounted(() => {
     </FaPageMain>
 
     <template v-else>
-      <FaPageMain>
+      <FaPageMain v-if="createdWithoutRole || rolesErrorMessage || listErrorMessage">
         <FaAlert
           v-if="createdWithoutRole"
           icon="i-lucide:triangle-alert"
@@ -429,33 +457,10 @@ onMounted(() => {
           </template>
         </FaAlert>
 
-        <div class="flex flex-wrap gap-3 items-center">
-          <FaInput
-            v-model="usernameInput"
-            type="search"
-            class="w-full max-[479px]:basis-full sm:max-w-[360px]"
-            clearable
-            placeholder="精确用户名"
-            @clear="usernameInput = ''"
-            @keyup.enter="search"
-          >
-            <template #start>
-              <FaIcon name="i-lucide:search" />
-            </template>
-          </FaInput>
-          <FaButton class="max-[479px]:flex-1" :loading="loading" @click="search">
-            查询
-          </FaButton>
-          <FaButton class="max-[479px]:flex-1" variant="outline" :disabled="loading" @click="resetSearch">
-            重置
-          </FaButton>
-        </div>
-
         <FaAlert
           v-if="listErrorMessage"
           variant="destructive"
           icon="i-lucide:circle-alert"
-          class="mt-4"
         >
           <template #description>
             <div class="flex flex-wrap gap-3 items-center justify-between">
@@ -475,20 +480,24 @@ onMounted(() => {
         <QsGenericTable
           v-model:page="paginationPage"
           v-model:page-size="paginationSize"
+          v-model:search="searchKeyword"
+          v-model:filters="filters"
           data-testid="user-table"
           row-key="id"
           :action-column="{ width: 150 }"
           :addable="false"
           :columns="columns"
           :data="users"
+          :filter-definitions="filterDefinitions"
           :loading="loading"
           :page-size-options="[20, 50, 100]"
-          :searchable="false"
-          :show-column-settings="false"
           :total="total"
           empty-title="暂无用户"
           empty-description="当前没有可展示的用户。"
+          search-placeholder="输入完整用户名搜索"
           table-class="min-w-[1320px]"
+          @filter-change="scheduleQueryRefresh"
+          @search="scheduleQueryRefresh"
         >
           <template #cell-username="{ row }">
             <span class="qs-type-data-emphasis">{{ row.original.username }}</span>
@@ -540,12 +549,15 @@ onMounted(() => {
           </template>
 
           <!-- 移动卡片显式声明字段语义，防止桌面表格的结构化数据角色在窄屏回退为普通正文。 -->
-          <template #mobile-row="{ row: user, rowNumber }">
+          <template #mobile-row="{ columns: visibleColumns, row: user, rowNumber }">
             <div data-testid="user-card" class="user-card gap-4 grid">
               <div class="flex gap-3 items-start justify-between">
                 <div class="flex gap-2 min-w-0 items-center">
-                  <span class="qs-type-data-emphasis truncate">{{ user.username }}</span>
+                  <template v-if="hasVisibleTableColumn(visibleColumns, 'username')">
+                    <span class="qs-type-data-emphasis truncate">{{ user.username }}</span>
+                  </template>
                   <FaTag
+                    v-if="hasVisibleTableColumn(visibleColumns, 'status')"
                     variant="outline"
                     class="qs-type-status-tag"
                     :class="user.status === 'ACTIVE'
@@ -559,7 +571,7 @@ onMounted(() => {
               </div>
 
               <dl class="m-0 gap-x-4 gap-y-3.5 grid grid-cols-2 max-[479px]:grid-cols-1">
-                <div>
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'displayName')">
                   <dt class="qs-type-compact-label mb-1">
                     显示名称
                   </dt>
@@ -567,7 +579,7 @@ onMounted(() => {
                     {{ user.displayName }}
                   </dd>
                 </div>
-                <div>
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'password-requirement')">
                   <dt class="qs-type-compact-label mb-1">
                     改密要求
                   </dt>
@@ -575,7 +587,10 @@ onMounted(() => {
                     {{ user.mustChangePassword ? '下次登录必须改密' : '无需改密' }}
                   </dd>
                 </div>
-                <div class="col-span-full max-[479px]:col-span-1">
+                <div
+                  v-if="hasVisibleTableColumn(visibleColumns, 'roles')"
+                  class="col-span-full max-[479px]:col-span-1"
+                >
                   <dt class="qs-type-compact-label mb-1">
                     角色
                   </dt>
@@ -588,7 +603,7 @@ onMounted(() => {
                     <span v-else>无角色</span>
                   </dd>
                 </div>
-                <div>
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'last-login')">
                   <dt class="qs-type-compact-label mb-1">
                     最近登录
                   </dt>
@@ -596,7 +611,7 @@ onMounted(() => {
                     {{ formatDate(user.lastLoginAt) }}
                   </dd>
                 </div>
-                <div>
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'created-at')">
                   <dt class="qs-type-compact-label mb-1">
                     创建时间
                   </dt>

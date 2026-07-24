@@ -352,6 +352,26 @@ async function waitForCardsInsideViewport(page, selector, expectedText) {
   })()`)
 }
 
+/**
+ * 四个系统管理页面统一由 QsGenericTable 提供搜索、筛选和列设置。
+ * 断言限定在表格根节点内，避免页头业务按钮或其他输入控件造成误报。
+ */
+async function waitForTableTools(page, tableTestId, searchPlaceholder) {
+  const serializedRootSelector = JSON.stringify(`[data-testid="${tableTestId}"]`)
+  const serializedPlaceholder = JSON.stringify(searchPlaceholder)
+  await page.waitFor(`(() => {
+    const root = document.querySelector(${serializedRootSelector})
+    if (!root || root.getClientRects().length === 0) return false
+    const search = root.querySelector('input[placeholder=' + JSON.stringify(${serializedPlaceholder}) + ']')
+    const buttonLabels = [...root.querySelectorAll('button')]
+      .filter(button => button.getClientRects().length > 0)
+      .map(button => button.textContent?.trim() ?? '')
+    return search?.getClientRects().length > 0
+      && buttonLabels.some(label => label === '筛选' || label.startsWith('已筛选：'))
+      && buttonLabels.includes('列设置')
+  })()`)
+}
+
 async function selectVisibleModalOption(page, text) {
   const serializedText = JSON.stringify(text)
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some((dialog) => (
@@ -466,6 +486,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     document.body.innerText.includes('角色管理')
     && document.body.innerText.includes('system_admin')
   ))()`)
+  await waitForTableTools(page, 'role-table', '搜索角色名称、编码或说明')
 
   // 创建角色后读取真实 API 状态，证明不是只验证了 Toast 或 Modal 动画。
   await clickVisibleButton(page, '创建角色')
@@ -552,7 +573,12 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await page.setViewport(390, 844, true)
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/users'))
   await page.waitFor(`document.body.innerText.includes('用户管理')`)
-  await fillVisibleInput(page, 'input[placeholder="精确用户名"]', managedUsername)
+  await waitForTableTools(page, 'user-table', '输入完整用户名搜索')
+  assert.equal(
+    await page.evaluate(`document.querySelector('input[placeholder="精确用户名"]') === null`),
+    true,
+  )
+  await fillVisibleInput(page, 'input[placeholder="输入完整用户名搜索"]', managedUsername)
   await clickVisibleButton(page, '查询')
   await page.waitFor(`(() => {
     const table = document.querySelector('[data-testid="user-table"]')
@@ -738,6 +764,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   // 角色、权限目录和审计都必须在窄屏切换为卡片；卡片边界不得跑出视口。
   await page.setViewport(390, 844, true)
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/roles'))
+  await waitForTableTools(page, 'role-table', '搜索角色名称、编码或说明')
   await waitForCardsInsideViewport(page, '[data-testid="role-card"]', editedRoleName)
   assert.equal(await page.evaluate(`(() => (
     [...document.querySelectorAll('[data-testid="role-table"] table')]
@@ -745,6 +772,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   ))()`), false)
 
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/permissions'))
+  await waitForTableTools(page, 'permission-table', '搜索权限码、名称、说明或资源')
   await waitForCardsInsideViewport(page, '[data-testid="permission-card"]', 'users:read')
   const narrowPermissionCatalog = await page.evaluate(`(() => {
     const cards = [...document.querySelectorAll('[data-testid="permission-card"]')]
@@ -763,6 +791,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       cardsInsideViewport: cardRects.every(rect => rect.left >= 0 && rect.right <= innerWidth),
       documentWidth: document.documentElement.scrollWidth,
       overflowCards: cardRects.filter(rect => rect.left < 0 || rect.right > innerWidth),
+      tableRootCount: document.querySelectorAll('[data-testid="permission-table"]').length,
       viewportWidth: innerWidth,
       visibleTables: [...document.querySelectorAll('[data-testid="permission-table"] table')]
         .filter(element => element.getClientRects().length > 0).length,
@@ -774,9 +803,11 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     true,
     JSON.stringify(narrowPermissionCatalog),
   )
+  assert.equal(narrowPermissionCatalog.tableRootCount, 1)
   assert.equal(narrowPermissionCatalog.visibleTables, 0)
 
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/audit'))
+  await waitForTableTools(page, 'audit-table', '输入完整请求 ID 搜索')
   await waitForCardsInsideViewport(page, '[data-testid="audit-card"]')
   const narrowAudit = await page.evaluate(`(() => {
     const cards = [...document.querySelectorAll('[data-testid="audit-card"]')]

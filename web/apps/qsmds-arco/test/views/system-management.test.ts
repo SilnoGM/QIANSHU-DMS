@@ -142,9 +142,10 @@ for (const contract of systemViewContracts) {
   })
 }
 
-test('四个系统管理页面统一使用 QsGenericTable 且不再直接维护表格骨架', () => {
+test('四个系统管理页面统一使用 QsGenericTable 内置搜索、筛选和列设置', () => {
   for (const contract of systemViewContracts) {
     const entrySource = readRelativeSource(contract.files[0])
+    const tableTags = entrySource.match(/<QsGenericTable\b[\s\S]*?>/gu) ?? []
 
     assert.match(
       entrySource,
@@ -162,15 +163,42 @@ test('四个系统管理页面统一使用 QsGenericTable 且不再直接维护�
     )
     assert.match(
       entrySource,
-      /import type \{ QsGenericTableColumn \} from '@\/components\/business\/QsGenericTable\/logic'/u,
+      /import type \{[\s\S]{0,240}?\bQsGenericTableColumn\b[\s\S]{0,240}?\} from '@\/components\/business\/QsGenericTable\/logic'/u,
       `${contract.label}必须使用通用表格的列契约`,
     )
-    assert.match(entrySource, /<template #mobile-row="\{ row: [^,}]+, rowNumber \}">/u)
+    assert.ok(tableTags.length > 0, `${contract.label}缺少 QsGenericTable`)
+    for (const tableTag of tableTags) {
+      assert.match(tableTag, /v-model:search="[^"]+"/u)
+      assert.match(tableTag, /v-model:filters="[^"]+"/u)
+      assert.match(tableTag, /:filter-definitions="[^"]+"/u)
+      assert.match(tableTag, /:addable="false"/u)
+      assert.doesNotMatch(tableTag, /:searchable="false"/u)
+      assert.doesNotMatch(tableTag, /:show-column-settings="false"/u)
+    }
+    assert.match(entrySource, /<template #mobile-row="\{[^"]*\bcolumns\b[^"]*\}">/u)
     assert.match(entrySource, /class="qs-type-meta[^"]*tabular-nums"[^>]*>#\{\{ rowNumber \}\}/u)
-    assert.match(entrySource, /:searchable="false"/u)
-    assert.match(entrySource, /:addable="false"/u)
-    assert.match(entrySource, /:show-column-settings="false"/u)
   }
+})
+
+test('用户管理只保留 QsGenericTable 内置查询工具栏', () => {
+  const source = readRelativeSource('../../src/views/system/users/index.vue')
+
+  assert.doesNotMatch(source, /const usernameInput = ref/u)
+  assert.doesNotMatch(source, /async function resetSearch/u)
+  assert.doesNotMatch(source, /<FaInput\b/u)
+  assert.doesNotMatch(source, /@click="resetSearch"/u)
+  assert.match(source, /search-placeholder="输入完整用户名搜索"/u)
+})
+
+test('权限目录合并为一个带资源列的通用表格', () => {
+  const source = readRelativeSource('../../src/views/system/permissions/index.vue')
+
+  assert.equal(source.match(/<QsGenericTable\b/gu)?.length, 1)
+  assert.doesNotMatch(source, /v-for="group in groups"/u)
+  assert.doesNotMatch(source, /data-testid="permission-section"/u)
+  assert.match(source, /:data="filteredPermissionRows"/u)
+  assert.match(source, /id:\s*'resource'/u)
+  assert.match(source, /<template #cell-resource=/u)
 })
 
 test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {
@@ -199,7 +227,6 @@ test('系统管理页面按现有业务能力配置通用表格操作列与分�
 })
 
 const clearableStringModelContracts = [
-  { file: '../../src/views/system/users/index.vue', model: 'usernameInput' },
   { file: '../../src/views/system/users/password-reset-modal.vue', model: 'model.newPassword' },
   { file: '../../src/views/system/users/password-reset-modal.vue', model: 'model.confirmPassword' },
   { file: '../../src/views/system/users/role-assignment-modal.vue', model: 'roleSearch' },
@@ -549,7 +576,7 @@ test('角色管理移动卡片使用 compact、data 与 body 角色且保留既�
   )
   assert.match(
     source,
-    /<template #mobile-row="\{ row: role, rowNumber \}">[\s\S]{0,360}?<strong class="qs-type-compact-title">\{\{ role\.name \}\}<\/strong>/u,
+    /<template #mobile-row="\{ columns: visibleColumns, row: role, rowNumber \}">[\s\S]{0,500}?<strong class="qs-type-compact-title">\{\{ role\.name \}\}<\/strong>/u,
   )
   assert.equal(
     source.match(/<span class="qs-type-compact-label">/gu)?.length,
@@ -575,13 +602,12 @@ test('角色管理移动卡片使用 compact、data 与 body 角色且保留既�
   assert.doesNotMatch(source, /<div class="text-sm gap-2\.5 grid">/u)
 })
 
-test('权限目录使用组件标题、标识、说明和状态角色', () => {
+test('权限目录单表使用资源、标识、说明和状态排版角色', () => {
   const source = readRelativeSource('../../src/views/system/permissions/index.vue')
 
-  assert.match(source, /<h2 class="qs-type-component-title m-0">/u)
   assert.match(
     source,
-    /<code class="qs-type-meta break-all">\{\{ group\.key \}\}<\/code>/u,
+    /<template #cell-resource[\s\S]*?<span class="qs-type-body-medium">[\s\S]*?<code class="qs-type-meta">/u,
   )
   assert.match(
     source,
@@ -589,15 +615,15 @@ test('权限目录使用组件标题、标识、说明和状态角色', () => {
   )
   assert.match(
     source,
-    /<strong class="qs-type-compact-title min-w-0 break-words">\{\{ permission\.name \}\}<\/strong>/u,
+    /<strong\s[^>]*class="qs-type-compact-title min-w-0 break-words"[^>]*>[\s\S]{0,80}?\{\{ permission\.name \}\}[\s\S]{0,40}?<\/strong>/u,
   )
   assert.match(
     source,
-    /<code class="qs-type-data-emphasis break-all">\{\{ permission\.code \}\}<\/code>/u,
+    /<code\s[^>]*class="qs-type-data-emphasis break-all"[^>]*>[\s\S]{0,80}?\{\{ permission\.code \}\}[\s\S]{0,40}?<\/code>/u,
   )
   assert.match(
     source,
-    /<p class="qs-type-description m-0">/u,
+    /<p\s[^>]*class="qs-type-description m-0"[^>]*>/u,
   )
   assert.match(
     source,
