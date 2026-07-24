@@ -36,9 +36,8 @@ const RIGHT_SIZE_CLASSES: Record<QsGenericDrawerSize, string> = {
 }
 
 const BASE_CONTENT_CLASS = [
-  'max-w-none overflow-hidden border-border bg-background shadow-xl',
+  'qs-generic-drawer-panel max-w-none overflow-hidden border-border bg-background shadow-xl outline-none',
   'data-[state=open]:duration-220 data-[state=closed]:duration-180',
-  'motion-reduce:duration-0 motion-reduce:transition-none',
 ].join(' ')
 
 /**

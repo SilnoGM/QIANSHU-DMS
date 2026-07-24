@@ -240,13 +240,14 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="pt-0.5 flex-1 min-w-0">
-          <h2 data-slot="sheet-title" class="m-0 break-words">
+          <h2 data-slot="sheet-title" class="m-0 break-words" aria-hidden="true">
             {{ title }}
           </h2>
           <p
             v-if="description"
             data-slot="sheet-description"
             class="m-0 mt-1 break-words"
+            aria-hidden="true"
           >
             {{ description }}
           </p>
@@ -301,7 +302,6 @@ onBeforeUnmount(() => {
           v-if="error"
           data-slot="qs-generic-drawer-error"
           class="mb-4"
-          role="alert"
         >
           <FaAlert
             variant="destructive"
@@ -332,7 +332,7 @@ onBeforeUnmount(() => {
     <template v-if="hasFooter" #footer>
       <div
         data-slot="qs-generic-drawer-footer"
-        class="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 flex flex-col-reverse gap-2 w-full md:px-6 md:flex-row md:items-center md:justify-end"
+        class="px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 flex flex-col gap-2 w-full md:px-6 md:flex-row md:items-center md:justify-end"
         :aria-busy="submitting"
         :inert="submitting || undefined"
       >
@@ -341,3 +341,16 @@ onBeforeUnmount(() => {
     </template>
   </FaDrawer>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * 底层 Sheet 同时使用 transition 与 animation。近零时长保留 animationend，
+   * 使 opened / closed 生命周期事件在减少动态效果时仍能稳定触发。
+   */
+  :global(.qs-generic-drawer-panel) {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+</style>

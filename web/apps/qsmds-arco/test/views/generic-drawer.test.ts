@@ -31,6 +31,8 @@ test('通用抽屉默认使用 md，并为四档右侧宽度保留移动端全�
     )
 
     assert.match(contentClass, /w-screen/u)
+    assert.match(contentClass, /qs-generic-drawer-panel/u)
+    assert.match(contentClass, /outline-none/u)
     assert.match(contentClass, new RegExp(widthClass.replaceAll('[', '\\[').replaceAll(']', '\\]'), 'u'))
     assert.match(contentClass, /md:max-w-\[calc\(100vw-3rem\)\]/u)
   })
@@ -72,6 +74,11 @@ test('QsGenericDrawer 以 FaDrawer 为内核并提供第一版声明式状态与
   const source = readRelativeSource(
     '../../src/components/business/QsGenericDrawer/index.vue',
   )
+  const errorSlotStart = source.indexOf('data-slot="qs-generic-drawer-error"')
+  const errorOpeningTag = source.slice(
+    source.lastIndexOf('<div', errorSlotStart),
+    source.indexOf('>', errorSlotStart) + 1,
+  )
 
   assert.match(source, /defineOptions\(\{ name: 'QsGenericDrawer' \}\)/u)
   assert.match(source, /<FaDrawer/u)
@@ -88,6 +95,10 @@ test('QsGenericDrawer 以 FaDrawer 为内核并提供第一版声明式状态与
   assert.match(source, /animate-pulse/u)
   assert.match(source, /aria-busy/u)
   assert.match(source, /env\(safe-area-inset-bottom\)/u)
+  assert.match(source, /@media \(prefers-reduced-motion: reduce\)/u)
+  assert.match(source, /animation-duration: 0\.01ms !important/u)
+  assert.match(source, /<h2 data-slot="sheet-title"[^>]*aria-hidden="true">/u)
+  assert.doesNotMatch(errorOpeningTag, /role="alert"/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
   assert.doesNotMatch(source, />\s*(编辑|删除)\s*</u)
 })
