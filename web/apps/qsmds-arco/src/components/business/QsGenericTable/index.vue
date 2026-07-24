@@ -47,6 +47,7 @@ const props = withDefaults(defineProps<{
   rowKey?: TableProps<TData>['rowKey']
   searchable?: boolean
   searchPlaceholder?: string
+  showColumnSettings?: boolean
   showPagination?: boolean
   stripe?: boolean
   summaryValues?: Record<string, QsGenericTableSummaryValue>
@@ -66,6 +67,7 @@ const props = withDefaults(defineProps<{
   rowKey: undefined,
   searchable: true,
   searchPlaceholder: '搜索当前业务数据',
+  showColumnSettings: true,
   showPagination: true,
   stripe: false,
   summaryValues: () => ({}),
@@ -107,6 +109,12 @@ const columnSettings = ref<QsGenericTableColumnSettings>(
 )
 
 const totalRows = computed(() => props.total ?? props.data.length)
+// 系统页面可能复用已有页头查询与操作区；所有工具都关闭时不保留空白占位。
+const hasToolbar = computed(() =>
+  props.searchable
+  || props.filterDefinitions.length > 0
+  || props.showColumnSettings
+  || props.addable)
 const paginationLayout = computed(() => isNarrow.value
   ? 'total, sizes, ->, pager'
   : 'total, sizes, ->, pager, jumper')
@@ -436,7 +444,7 @@ watch([tableColumns, isNarrow], () => {
 
 <template>
   <section class="qs-generic-table qs-type-body min-w-0" aria-label="业务通用表格">
-    <div class="pb-4 flex flex-wrap gap-3 items-center justify-between">
+    <div v-if="hasToolbar" class="pb-4 flex flex-wrap gap-3 items-center justify-between">
       <div v-if="searchable" class="flex flex-1 gap-2 min-w-0 items-center">
         <!-- FaInput 已提供统一的 clearable 按钮，使用 text 可避免浏览器为 search 再渲染原生清除控件。 -->
         <FaInput
@@ -498,7 +506,7 @@ watch([tableColumns, isNarrow], () => {
           {{ filterButtonLabel }}
         </FaButton>
 
-        <FaPopover v-if="!isNarrow" align="end" class="p-4">
+        <FaPopover v-if="showColumnSettings && !isNarrow" align="end" class="p-4">
           <FaButton variant="outline">
             <FaIcon name="i-lucide:columns-3" />
             列设置
@@ -511,7 +519,7 @@ watch([tableColumns, isNarrow], () => {
             />
           </template>
         </FaPopover>
-        <FaButton v-else variant="outline" @click="columnDrawerVisible = true">
+        <FaButton v-else-if="showColumnSettings" variant="outline" @click="columnDrawerVisible = true">
           <FaIcon name="i-lucide:columns-3" />
           列设置
         </FaButton>
@@ -791,6 +799,7 @@ watch([tableColumns, isNarrow], () => {
     </FaDrawer>
 
     <FaDrawer
+      v-if="showColumnSettings"
       v-model="columnDrawerVisible"
       title="列设置"
       side="bottom"

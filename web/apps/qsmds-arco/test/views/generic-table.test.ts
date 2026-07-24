@@ -170,6 +170,19 @@ test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式
   assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
 })
 
+test('通用表格允许调用方关闭列设置并在没有工具时移除工具栏占位', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+
+  assert.match(source, /showColumnSettings\?: boolean/u)
+  assert.match(source, /showColumnSettings: true/u)
+  assert.match(source, /const hasToolbar = computed\(/u)
+  assert.match(source, /v-if="hasToolbar" class="pb-4 flex flex-wrap gap-3 items-center justify-between"/u)
+  assert.match(source, /v-if="showColumnSettings && !isNarrow"/u)
+  assert.match(source, /v-else-if="showColumnSettings"/u)
+})
+
 test('操作列由 actions 插槽按需启用并在桌面与窄屏复用同一行级作用域', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',
