@@ -4,6 +4,7 @@ import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTab
 
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { sumMoneyValues } from '@/components/base/MoneyInput/logic'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
@@ -202,9 +203,19 @@ const pageRows = computed(() => {
   return sortedRows.value.slice(start, start + pageSize.value)
 })
 
-const pageStandardAmount = computed(() => pageRows.value.reduce(
-  (total, row) => total + row.standardAmount,
-  0,
+/**
+ * 通用票数和完成率继续走 QsGenericTable 的 number 汇总；金额先收敛为严格十进制
+ * 字符串，再通过既有 summaryValues 注入，避免把数据库 DECIMAL 降级为浮点求和。
+ */
+const summaryValues = computed(() => ({
+  amount: sumMoneyValues(
+    pageRows.value.map(row => String(row.amount)),
+    { precision: 2 },
+  ),
+}))
+const pageStandardAmount = computed(() => sumMoneyValues(
+  pageRows.value.map(row => String(row.standardAmount)),
+  { precision: 2 },
 ))
 
 function statusClass(status: SettlementRow['status']) {
@@ -265,6 +276,7 @@ function recordEvent(message: string) {
         :action-column="{ width: 168 }"
         :columns="columns"
         :data="pageRows"
+        :summary-values="summaryValues"
         :total="sortedRows.length"
         :filter-definitions="filterDefinitions"
         :page-size-options="[20, 50, 100, 200]"

@@ -45,6 +45,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'money-input',
+        name: 'componentLibraryMoneyInput',
+        component: () => import('@/views/component_library/basic/money-input.vue'),
+        meta: {
+          title: '金额输入',
+          icon: 'i-lucide:hand-coins',
+        },
+      },
+      {
         path: 'date-time-display',
         name: 'componentLibraryDateTimeDisplay',
         component: () => import('@/views/component_library/basic/date-time-display.vue'),

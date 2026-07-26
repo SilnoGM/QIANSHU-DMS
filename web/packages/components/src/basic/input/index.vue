@@ -10,6 +10,8 @@ import { InputGroup, InputGroupAddon } from './input-group'
 
 defineOptions({
   name: 'BuiltInInput',
+  // 原生属性由下方 v-bind 显式交给真实 input，禁止 Vue 再复制到 InputGroup 根节点。
+  inheritAttrs: false,
 })
 
 const props = withDefaults(defineProps<{

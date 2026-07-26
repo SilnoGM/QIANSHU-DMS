@@ -58,6 +58,7 @@ catalog:
   cropperjs: 1.6.2
   cz-git: ^1.13.1
   dayjs: ^1.11.21
+  decimal.js: ^10.6.0
   defu: ^6.1.7
   disable-devtool: ^0.3.9
   echarts: ^6.1.0
