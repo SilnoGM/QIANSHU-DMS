@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import type { TableSortingState } from '@fantastic-admin/components'
+import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 
 import Decimal from 'decimal.js'
+import productDetail from '@/assets/images/component-library/image-group/product-detail.svg'
+import productFront from '@/assets/images/component-library/image-group/product-front.svg'
+import productLabel from '@/assets/images/component-library/image-group/product-label.svg'
+import productPackage from '@/assets/images/component-library/image-group/product-package.svg'
+import productSide from '@/assets/images/component-library/image-group/product-side.svg'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { sumMoneyValues } from '@/components/base/MoneyInput/logic'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -17,6 +24,7 @@ interface SettlementRow {
   amount: string
   completionRate: number
   id: string
+  images: readonly ImageGroupItem[]
   orderSource: '客户委托' | '平台订单' | '自然流订单'
   owner: string
   region: string
@@ -39,6 +47,13 @@ const routes = [
   '厦门 → 台北',
 ] as const
 const statuses: SettlementRow['status'][] = ['待复核', '已完成', '已暂停', '已完成']
+const productImages: readonly ImageGroupItem[] = [
+  { alt: '墨蓝色旅行收纳包正面', key: 'front', src: productFront, tooltip: '产品正面图' },
+  { alt: '旅行收纳包侧面', key: 'side', src: productSide, tooltip: '产品侧面图' },
+  { alt: '旅行收纳包内部隔层', key: 'detail', src: productDetail, tooltip: '内部隔层' },
+  { alt: '产品包装箱', key: 'package', src: productPackage, tooltip: '产品包装' },
+  { alt: '产品标签细节', key: 'label', src: productLabel, tooltip: '标签细节' },
+]
 const amountBase = new Decimal('8600.00')
 const standardAmountBase = new Decimal('9600.00')
 const amountStep = new Decimal('437.25')
@@ -55,6 +70,7 @@ const sourceRows: SettlementRow[] = Array.from({ length: 64 }, (_, index) => {
     amount: amountBase.plus(amountOffset).toFixed(2),
     completionRate: 72 + (index * 7) % 27,
     id: `settlement-${index + 1}`,
+    images: productImages.slice(0, 1 + (index % productImages.length)),
     orderSource: orderSources[index % orderSources.length]!,
     owner: owners[index % owners.length]!,
     region: regions[index % regions.length]!,
@@ -77,6 +93,12 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
     summary: { type: 'count' },
     title: '结算单信息',
     width: 208,
+  },
+  {
+    accessorKey: 'images',
+    id: 'images',
+    title: '产品主图',
+    width: 160,
   },
   {
     accessorKey: 'route',
@@ -295,7 +317,7 @@ function recordEvent(message: string) {
         :total="sortedRows.length"
         :filter-definitions="filterDefinitions"
         :page-size-options="[20, 50, 100, 200]"
-        table-class="min-w-[1320px]"
+        table-class="min-w-[1480px]"
         search-placeholder="搜索结算单号、来源、路线或负责人"
         add-label="新增结算单"
         @add="recordEvent('add · 已通知业务页面')"
@@ -326,6 +348,10 @@ function recordEvent(message: string) {
               {{ row.original.orderSource }}
             </QsTableStackedLine>
           </QsTableStackedCell>
+        </template>
+
+        <template #cell-images="{ row }">
+          <ImageGroup :items="row.original.images" :max-count="4" radius="lg" />
         </template>
 
         <template #cell-shipmentCount="{ row }">
@@ -435,6 +461,14 @@ function recordEvent(message: string) {
             <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
           </div>
           <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2">
+            <div class="col-span-2">
+              <dt class="qs-type-compact-label mb-1">
+                产品主图
+              </dt>
+              <dd class="m-0">
+                <ImageGroup :items="row.images" :max-count="4" radius="lg" />
+              </dd>
+            </div>
             <div class="col-span-2">
               <dt class="qs-type-compact-label mb-1">
                 运输路线

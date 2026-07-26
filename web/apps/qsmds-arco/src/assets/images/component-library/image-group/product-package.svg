@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" role="img" aria-labelledby="title">
+  <title id="title">产品包装箱</title>
+  <rect width="480" height="480" fill="#f4f2ed"/>
+  <path d="m84 159 157-75 155 75-155 76Z" fill="#d4b888"/>
+  <path d="m84 159 157 76v170L84 326Z" fill="#b99561"/>
+  <path d="m396 159-155 76v170l155-79Z" fill="#c9a874"/>
+  <path d="m183 112 157 77" stroke="#ead6b1" stroke-width="25"/>
+  <path d="M241 235v170" stroke="#967447" stroke-width="5"/>
+  <rect x="112" y="244" width="84" height="50" rx="7" fill="#f2eadc"/>
+  <path d="M128 260h52M128 274h38" stroke="#82633d" stroke-width="6" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" role="img" aria-labelledby="title">
+  <title id="title">产品标签细节</title>
+  <rect width="480" height="480" fill="#eef0f2"/>
+  <rect x="92" y="72" width="296" height="336" rx="30" fill="#f9fafb" stroke="#c8ced4" stroke-width="8"/>
+  <rect x="127" y="112" width="96" height="96" rx="18" fill="#31465a"/>
+  <path d="M151 137h48v48h-48Z" fill="none" stroke="#f5f7f8" stroke-width="8"/>
+  <path d="M256 127h89M256 151h67M256 175h78" stroke="#5d6974" stroke-width="12" stroke-linecap="round"/>
+  <path d="M127 246h218M127 277h218M127 308h156" stroke="#a8b0b8" stroke-width="10" stroke-linecap="round"/>
+  <path d="M128 350h14v26h-14Zm25 0h8v26h-8Zm20 0h18v26h-18Zm30 0h7v26h-7Zm19 0h13v26h-13Zm25 0h6v26h-6Zm18 0h17v26h-17Zm29 0h9v26h-9Zm20 0h16v26h-16Z" fill="#31465a"/>
+</svg>

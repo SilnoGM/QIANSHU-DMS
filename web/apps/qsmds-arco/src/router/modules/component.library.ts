@@ -71,6 +71,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:message-circle-more',
         },
       },
+      {
+        path: 'image-group',
+        name: 'componentLibraryImageGroup',
+        component: () => import('@/views/component_library/basic/image-group.vue'),
+        meta: {
+          title: '图片组',
+          icon: 'i-lucide:images',
+        },
+      },
     ],
   },
   {

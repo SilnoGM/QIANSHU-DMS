@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" role="img" aria-labelledby="title">
+  <title id="title">墨蓝色旅行收纳包正面</title>
+  <rect width="480" height="480" fill="#eef1f3"/>
+  <rect x="94" y="121" width="292" height="238" rx="42" fill="#27384a"/>
+  <path d="M177 124v-20c0-19 15-34 34-34h58c19 0 34 15 34 34v20" fill="none" stroke="#27384a" stroke-width="24" stroke-linecap="round"/>
+  <path d="M114 180h252" fill="none" stroke="#536577" stroke-width="8" stroke-linecap="round"/>
+  <rect x="126" y="213" width="228" height="104" rx="22" fill="#33495e"/>
+  <path d="M240 216v98" fill="none" stroke="#82909d" stroke-width="5"/>
+  <circle cx="240" cy="183" r="8" fill="#aab6bf"/>
+  <rect x="314" y="273" width="52" height="33" rx="10" fill="#6f8f83"/>
+</svg>

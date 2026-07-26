@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 480" role="img" aria-labelledby="title">
+  <title id="title">旅行收纳包内部隔层</title>
+  <rect width="480" height="480" fill="#eef4f2"/>
+  <rect x="70" y="72" width="340" height="336" rx="44" fill="#314b49"/>
+  <rect x="91" y="93" width="298" height="294" rx="30" fill="#dce9e5"/>
+  <path d="M240 94v292M92 242h296" fill="none" stroke="#78948c" stroke-width="8"/>
+  <rect x="111" y="113" width="109" height="109" rx="17" fill="#adc2ba"/>
+  <rect x="260" y="113" width="109" height="109" rx="17" fill="#c8d8d2"/>
+  <rect x="111" y="262" width="109" height="105" rx="17" fill="#c8d8d2"/>
+  <rect x="260" y="262" width="109" height="105" rx="17" fill="#adc2ba"/>
+  <circle cx="240" cy="242" r="15" fill="#314b49"/>
+</svg>

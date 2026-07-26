@@ -24,7 +24,7 @@ test('组件库在开发环境默认开启，其他环境必须显式启用', ()
   }), true)
 })
 
-test('组件库按分类提供七个独立组件路由', () => {
+test('组件库按分类提供八个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -60,6 +60,11 @@ test('组件库按分类提供七个独立组件路由', () => {
         name: 'componentLibraryQsToast',
         path: 'toast',
         title: '轻提示',
+      },
+      {
+        name: 'componentLibraryImageGroup',
+        path: 'image-group',
+        title: '图片组',
       },
     ],
   )
@@ -105,7 +110,7 @@ test('组件库按分类提供七个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 7)
+  assert.equal(new Set(componentRouteNames).size, 8)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -132,7 +137,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('七个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('八个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -153,6 +158,11 @@ test('七个组件页面与页面模板复用展示壳且不依赖业务 API 或
       componentName: 'ComponentLibraryQsToast',
       file: '../../src/views/component_library/basic/toast.vue',
       title: '轻提示',
+    },
+    {
+      componentName: 'ComponentLibraryImageGroup',
+      file: '../../src/views/component_library/basic/image-group.vue',
+      title: '图片组',
     },
     {
       componentName: 'ComponentLibraryGenericTable',
