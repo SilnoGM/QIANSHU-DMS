@@ -2,6 +2,7 @@
 import type { TableSortingState } from '@fantastic-admin/components'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 
+import Decimal from 'decimal.js'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { sumMoneyValues } from '@/components/base/MoneyInput/logic'
@@ -13,7 +14,7 @@ import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStac
 defineOptions({ name: 'GenericTableShowcase' })
 
 interface SettlementRow {
-  amount: number
+  amount: string
   completionRate: number
   id: string
   orderSource: '客户委托' | '平台订单' | '自然流订单'
@@ -22,7 +23,7 @@ interface SettlementRow {
   route: string
   settlementNo: string
   shipmentCount: number
-  standardAmount: number
+  standardAmount: string
   status: '待复核' | '已完成' | '已暂停'
   updatedAt: string
 }
@@ -38,25 +39,33 @@ const routes = [
   '厦门 → 台北',
 ] as const
 const statuses: SettlementRow['status'][] = ['待复核', '已完成', '已暂停', '已完成']
+const amountBase = new Decimal('8600.00')
+const standardAmountBase = new Decimal('9600.00')
+const amountStep = new Decimal('437.25')
 
 /**
  * 组件库示例使用确定性本地数据，既能稳定复现分页和汇总结果，也不会把演示页
- * 接到真实业务 API。页面只验证组件输入输出，不模拟服务端权限与写入成功。
+ * 接到真实业务 API。金额仅在生成阶段临时使用 Decimal，进入行模型前即收敛为
+ * 固定两位字符串，示例因此与数据库 DECIMAL -> API string 的正式契约保持一致。
  */
-const sourceRows: SettlementRow[] = Array.from({ length: 64 }, (_, index) => ({
-  amount: 8_600 + index * 437.25,
-  completionRate: 72 + (index * 7) % 27,
-  id: `settlement-${index + 1}`,
-  orderSource: orderSources[index % orderSources.length]!,
-  owner: owners[index % owners.length]!,
-  region: regions[index % regions.length]!,
-  route: routes[index % routes.length]!,
-  settlementNo: `QS-202607-${String(index + 1).padStart(4, '0')}`,
-  shipmentCount: 6 + (index * 3) % 18,
-  standardAmount: 9_600 + index * 437.25,
-  status: statuses[index % statuses.length]!,
-  updatedAt: new Date(Date.UTC(2026, 6, 20, 8 + (index % 8), 5 + index)).toISOString(),
-}))
+const sourceRows: SettlementRow[] = Array.from({ length: 64 }, (_, index) => {
+  const amountOffset = amountStep.times(index)
+
+  return {
+    amount: amountBase.plus(amountOffset).toFixed(2),
+    completionRate: 72 + (index * 7) % 27,
+    id: `settlement-${index + 1}`,
+    orderSource: orderSources[index % orderSources.length]!,
+    owner: owners[index % owners.length]!,
+    region: regions[index % regions.length]!,
+    route: routes[index % routes.length]!,
+    settlementNo: `QS-202607-${String(index + 1).padStart(4, '0')}`,
+    shipmentCount: 6 + (index * 3) % 18,
+    standardAmount: standardAmountBase.plus(amountOffset).toFixed(2),
+    status: statuses[index % statuses.length]!,
+    updatedAt: new Date(Date.UTC(2026, 6, 20, 8 + (index % 8), 5 + index)).toISOString(),
+  }
+})
 
 const columns: QsGenericTableColumn<SettlementRow>[] = [
   {
@@ -186,9 +195,15 @@ const sortedRows = computed(() => {
     for (const rule of sorting.value) {
       const leftValue = left[rule.id as keyof SettlementRow]
       const rightValue = right[rule.id as keyof SettlementRow]
-      const result = typeof leftValue === 'number' && typeof rightValue === 'number'
-        ? leftValue - rightValue
-        : String(leftValue).localeCompare(String(rightValue), 'zh-CN')
+      /**
+       * 金额行值保持十进制字符串，排序时才临时构造 Decimal。不能使用字典序，也
+       * 不能转回 Number，否则会分别造成数值顺序错误或重新引入 IEEE 754 精度损失。
+       */
+      const result = rule.id === 'amount'
+        ? new Decimal(left.amount).comparedTo(right.amount)
+        : typeof leftValue === 'number' && typeof rightValue === 'number'
+          ? leftValue - rightValue
+          : String(leftValue).localeCompare(String(rightValue), 'zh-CN')
 
       if (result !== 0) {
         return rule.desc ? -result : result
@@ -204,17 +219,17 @@ const pageRows = computed(() => {
 })
 
 /**
- * 通用票数和完成率继续走 QsGenericTable 的 number 汇总；金额先收敛为严格十进制
- * 字符串，再通过既有 summaryValues 注入，避免把数据库 DECIMAL 降级为浮点求和。
+ * 通用票数和完成率继续走 QsGenericTable 的 number 汇总；金额字符串交给
+ * sumMoneyValues 精确计算，再通过既有 summaryValues 注入。
  */
 const summaryValues = computed(() => ({
   amount: sumMoneyValues(
-    pageRows.value.map(row => String(row.amount)),
+    pageRows.value.map(row => row.amount),
     { precision: 2 },
   ),
 }))
 const pageStandardAmount = computed(() => sumMoneyValues(
-  pageRows.value.map(row => String(row.standardAmount)),
+  pageRows.value.map(row => row.standardAmount),
   { precision: 2 },
 ))
 

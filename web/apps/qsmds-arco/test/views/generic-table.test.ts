@@ -15,14 +15,14 @@ import {
   resolveVisibleTableColumns,
 } from '../../src/components/business/QsGenericTable/logic'
 
-interface SettlementRow {
-  amount: number
+interface GenericMetricRow {
   id: string
   owner: string
+  quantity: number
   status: string
 }
 
-const columns: QsGenericTableColumn<SettlementRow>[] = [
+const columns: QsGenericTableColumn<GenericMetricRow>[] = [
   {
     id: 'owner',
     accessorKey: 'owner',
@@ -38,18 +38,18 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
     title: '状态',
   },
   {
-    id: 'amount',
-    accessorKey: 'amount',
+    id: 'quantity',
+    accessorKey: 'quantity',
     align: 'right',
     summary: { type: 'sum' },
-    title: '金额',
+    title: '数量',
   },
 ]
 
-const rows: SettlementRow[] = [
-  { amount: 120, id: 's-1', owner: '林舟', status: '待处理' },
-  { amount: 180, id: 's-2', owner: '陈念', status: '已完成' },
-  { amount: 300, id: 's-3', owner: '周衡', status: '已完成' },
+const rows: GenericMetricRow[] = [
+  { id: 's-1', owner: '林舟', quantity: 120, status: '待处理' },
+  { id: 's-2', owner: '陈念', quantity: 180, status: '已完成' },
+  { id: 's-3', owner: '周衡', quantity: 300, status: '已完成' },
 ]
 
 function readRelativeSource(relativePath: string): string {
@@ -105,8 +105,8 @@ test('列设置保留默认显隐、左右固定和对齐配置', () => {
   const settings = createDefaultColumnSettings(columns)
 
   assert.deepEqual(settings, {
-    amount: { align: 'right', fixed: undefined, visible: true },
     owner: { align: 'left', fixed: undefined, visible: true },
+    quantity: { align: 'right', fixed: undefined, visible: true },
     status: { align: 'center', fixed: 'right', visible: false },
   })
 
@@ -124,12 +124,12 @@ test('列设置保留默认显隐、左右固定和对齐配置', () => {
   })), [
     { align: 'center', fixed: 'left', id: 'owner', width: 140 },
     { align: 'left', fixed: 'right', id: 'status', width: undefined },
-    { align: 'right', fixed: undefined, id: 'amount', width: undefined },
+    { align: 'right', fixed: undefined, id: 'quantity', width: undefined },
   ])
 })
 
 test('操作列默认固定在右侧且不参与隐藏和排序', () => {
-  const defaultColumn = createActionColumn<SettlementRow>()
+  const defaultColumn = createActionColumn<GenericMetricRow>()
 
   assert.deepEqual({
     align: defaultColumn.align,
@@ -155,7 +155,7 @@ test('操作列默认固定在右侧且不参与隐藏和排序', () => {
     title: '更多操作',
     width: 208,
   }
-  const customColumn = createActionColumn<SettlementRow>(customConfig, true)
+  const customColumn = createActionColumn<GenericMetricRow>(customConfig, true)
 
   assert.deepEqual({
     align: customColumn.align,
