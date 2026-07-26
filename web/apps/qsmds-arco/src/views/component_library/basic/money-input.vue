@@ -11,6 +11,11 @@ const principles = [
     icon: 'i-lucide:braces',
   },
   {
+    title: '金额币种分别保存',
+    description: '金额保持原字符串；币种默认 CNY，并通过右侧下拉独立选择，不执行隐式汇率换算。',
+    icon: 'i-lucide:coins',
+  },
+  {
     title: '严格校验后计算',
     description: '先拒绝展示符号、科学计数法和超精度文本，再交给 Decimal 比较或汇总。',
     icon: 'i-lucide:shield-check',
@@ -26,10 +31,10 @@ const principles = [
 <template>
   <ComponentCatalogPage
     title="金额输入"
-    description="独立验收 MoneyInput 的严格金额字符串、AmountDisplay 配对和 Decimal 精确汇总。"
+    description="独立验收 MoneyInput 的严格金额字符串、默认与可选币种、AmountDisplay 配对和 Decimal 精确汇总。"
     section-label="MoneyInput"
-    headline="从录入到展示保持十进制精度"
-    summary="组件以 FaInput 为内核，对外只使用 string 或 null；decimal.js 仅承担精确比较、规范化与汇总。"
+    headline="金额与币种分离，精度贯穿录入到展示"
+    summary="组件以 FaInput 为内核；金额使用 string 或 null，币种使用独立命名模型，decimal.js 仅承担精确比较、规范化与同币种汇总。"
     route-path="/component-library/basic/money-input"
     icon="i-lucide:hand-coins"
     :principles="principles"

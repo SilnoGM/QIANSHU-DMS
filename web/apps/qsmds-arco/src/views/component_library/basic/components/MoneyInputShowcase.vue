@@ -5,6 +5,7 @@ import type {
   MoneyValidationResult,
 } from '@/components/base/MoneyInput/logic'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import { resolveCommonMoneyCurrency } from '@/components/base/MoneyInput/currency'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import {
   MoneyValidationError,
@@ -20,6 +21,7 @@ interface SettlementLine {
 }
 
 const amount = ref<MoneyAmount>('12846.37')
+const currency = ref<CurrencyCode>('CNY')
 const lines = reactive<SettlementLine[]>([
   {
     amount: '12846.37',
@@ -54,7 +56,17 @@ const normalizedAmount = computed(() => (
     ? amountValidation.value.normalizedValue
     : null
 ))
+const summaryCurrency = computed(() => (
+  resolveCommonMoneyCurrency(lines.map(line => line.currency))
+))
 const summary = computed(() => {
+  if (!summaryCurrency.value) {
+    return {
+      error: '不同币种不能直接汇总，请先统一币种或完成业务汇率换算',
+      value: null,
+    }
+  }
+
   try {
     return {
       error: '',
@@ -107,9 +119,9 @@ const summary = computed(() => {
           <MoneyInput
             id="money-input-primary"
             v-model="amount"
+            v-model:currency="currency"
             aria-describedby="money-input-description money-input-feedback"
             class="mt-3"
-            currency="CNY"
             max="9999999999999999.99"
             min="0.00"
           />
@@ -120,7 +132,7 @@ const summary = computed(() => {
             :class="amountValidation.valid ? 'text-muted-foreground' : 'text-destructive'"
           >
             {{ amountValidation.valid
-              ? `持久化值：${amountValidation.normalizedValue ?? 'null'}`
+              ? `持久化值：amount=${amountValidation.normalizedValue ?? 'null'}，currency=${currency}`
               : amountValidation.message }}
           </p>
         </div>
@@ -133,7 +145,7 @@ const summary = computed(() => {
             <span class="text-xs text-muted-foreground">AmountDisplay</span>
             <AmountDisplay
               :value="normalizedAmount"
-              currency="CNY"
+              :currency="currency"
               class="text-lg"
             />
           </div>
@@ -168,7 +180,9 @@ const summary = computed(() => {
               任一行包含非法金额时，汇总明确失败，不会把该行静默当作零。
             </p>
           </div>
-          <span class="text-xs text-muted-foreground">当前列 · CNY</span>
+          <span class="text-xs text-muted-foreground">
+            当前列 · {{ summaryCurrency ?? '混合币种' }}
+          </span>
         </div>
 
         <div class="mt-4 border-y border-border divide-border divide-y">
@@ -183,7 +197,7 @@ const summary = computed(() => {
             <MoneyInput
               :id="`money-line-${line.id}`"
               v-model="line.amount"
-              :currency="line.currency"
+              v-model:currency="line.currency"
             />
             <AmountDisplay
               :value="validateMoneyString(line.amount).valid ? line.amount : null"
@@ -201,7 +215,19 @@ const summary = computed(() => {
               {{ summary.error }}
             </p>
           </div>
-          <AmountDisplay :value="summary.value" currency="CNY" class="text-xl" />
+          <AmountDisplay
+            v-if="summaryCurrency"
+            :value="summary.value"
+            :currency="summaryCurrency"
+            class="text-xl"
+          />
+          <span
+            v-else
+            aria-label="混合币种不可汇总"
+            class="text-xl text-muted-foreground font-mono"
+          >
+            —
+          </span>
         </div>
       </div>
     </div>
