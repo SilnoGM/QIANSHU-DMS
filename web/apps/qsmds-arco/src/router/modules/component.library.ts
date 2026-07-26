@@ -62,6 +62,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:clock-3',
         },
       },
+      {
+        path: 'toast',
+        name: 'componentLibraryQsToast',
+        component: () => import('@/views/component_library/basic/toast.vue'),
+        meta: {
+          title: '轻提示',
+          icon: 'i-lucide:message-circle-more',
+        },
+      },
     ],
   },
   {
