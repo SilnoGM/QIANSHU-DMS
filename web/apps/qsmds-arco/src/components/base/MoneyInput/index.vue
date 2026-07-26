@@ -108,14 +108,14 @@ function handleDraftUpdate(value: number | string | undefined): void {
 }
 
 /**
- * 失焦时才把合法草稿补齐到固定精度；非法草稿原样保留，便于用户定位并修正。
- * 规范化结果仍通过 v-model 发出，所以 FaFormItem 能获得最终持久化字符串。
+ * 可编辑状态失焦时才把合法草稿补齐到固定精度；非法草稿原样保留，便于用户定位
+ * 并修正。readonly 仅执行校验和 blur 通知，不得产生隐式 v-model 写入。
  */
 function handleBlur(event: Event): void {
   touched.value = true
   const result = validationResult.value
 
-  if (result.valid) {
+  if (result.valid && !props.readonly) {
     const normalizedValue = normalizeMoneyString(
       currentMoneyValue.value,
       validationOptions.value,

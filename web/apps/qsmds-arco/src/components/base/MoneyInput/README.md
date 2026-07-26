@@ -60,7 +60,8 @@ const amount = ref<string | null>(null)
 | `placeholder` | `string` | 根据精度生成 | 输入占位文本 |
 
 原生 `name`、`aria-*`、`autocomplete`、`input` 和 `change` 等属性或事件会继续
-转交给 `FaInput`，可以直接作为 `FaFormItem` 的第一个控件使用。
+转交给 `FaInput` 内的真实 `<input>`，不会重复落到输入组外层，可以直接作为
+`FaFormItem` 的第一个控件使用。
 
 ## 校验
 
@@ -85,6 +86,8 @@ const result = validateMoneyString(amount.value, {
 })
 ```
 
+`readonly` 状态只执行校验并发出 `blur`，不会在失焦时补零或写回 `v-model`。
+
 ## 精确汇总
 
 列汇总使用 `sumMoneyValues`，返回固定精度字符串：
@@ -100,5 +103,10 @@ const total = sumMoneyValues(
 ```
 
 `null` 不参与计算；非法金额会抛出带稳定错误码的 `MoneyValidationError`，不会
-静默按零处理。需要把精确金额放进 `QsGenericTable` 时，可通过既有
-`summaryValues` 传入该字符串，再交给 `AmountDisplay` 渲染。
+静默按零处理。汇总内部按当前批次的金额位数、精度和行数创建隔离的 Decimal
+计算精度，不依赖默认 20 位有效数字。需要把精确金额放进 `QsGenericTable` 时，
+可通过既有 `summaryValues` 传入该字符串，再交给 `AmountDisplay` 渲染。
+
+当前 `AmountDisplay` 的货币展示契约固定为两位小数，因此二者直接配对时应保留
+`MoneyInput` 默认的 `precision=2`。非两位金额仍可录入和计算，但展示层需要使用
+与该业务精度一致的组件，不能假定 `AmountDisplay` 会保留额外小数位。

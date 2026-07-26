@@ -57,6 +57,17 @@ test('金额字符串拒绝空字符串、展示字符、宽松小数与科学�
   }
 })
 
+test('金额校验对运行时非字符串数据返回格式错误而不是抛出 TypeError', () => {
+  for (const value of [12, undefined, { amount: '12.00' }]) {
+    assert.deepEqual(validateMoneyString(value as never), {
+      code: 'INVALID_FORMAT',
+      message: '请输入正确的金额，例如 1234.50',
+      normalizedValue: null,
+      valid: false,
+    })
+  }
+})
+
 test('金额校验区分小数位、负数和精确上下限错误', () => {
   assert.deepEqual(validateMoneyString('12.345'), {
     code: 'PRECISION_EXCEEDED',
@@ -88,6 +99,23 @@ test('金额校验区分小数位、负数和精确上下限错误', () => {
   })
 })
 
+test('金额边界配置拒绝运行时非字符串值', () => {
+  assert.throws(
+    () => validateMoneyString('12.00', { min: 12 as never }),
+    {
+      message: 'min 必须是小数位不超过 precision 的严格金额字符串',
+      name: 'TypeError',
+    },
+  )
+  assert.throws(
+    () => validateMoneyString('12.00', { max: 20 as never }),
+    {
+      message: 'max 必须是小数位不超过 precision 的严格金额字符串',
+      name: 'TypeError',
+    },
+  )
+})
+
 test('列汇总使用 Decimal 保持小数与安全整数范围外精度', () => {
   assert.equal(
     sumMoneyValues([
@@ -108,6 +136,25 @@ test('列汇总使用 Decimal 保持小数与安全整数范围外精度', () =>
   }), '10.00')
 })
 
+test('列汇总按金额位数与行数扩展 Decimal 精度，避免默认 20 位有效数字舍入', () => {
+  assert.equal(
+    sumMoneyValues(
+      Array.from({ length: 200 }).fill('9999999999999999.99'),
+      { precision: 2 },
+    ),
+    '1999999999999999998.00',
+  )
+  assert.equal(
+    sumMoneyValues([
+      '0.1234567890123456789012345',
+      '0.0000000000000000000000001',
+    ], {
+      precision: 25,
+    }),
+    '0.1234567890123456789012346',
+  )
+})
+
 test('列汇总遇到非法金额时明确失败而不是静默按零处理', () => {
   assert.throws(
     () => sumMoneyValues(['12.30', '1e3'], { precision: 2 }),
@@ -120,6 +167,9 @@ test('列汇总遇到非法金额时明确失败而不是静默按零处理', ()
 test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍校验状态', () => {
   const source = readRelativeSource(
     '../../src/components/base/MoneyInput/index.vue',
+  )
+  const faInputSource = readRelativeSource(
+    '../../../../packages/components/src/basic/input/index.vue',
   )
 
   assert.match(source, /defineOptions\(\{[\s\S]*?name: 'MoneyInput'[\s\S]*?inheritAttrs: false/u)
@@ -135,7 +185,14 @@ test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍
   assert.match(source, /\btabular-nums\b/u)
   assert.match(source, /\btext-right\b/u)
   assert.match(source, /CURRENCY_SYMBOLS\[currency\]/u)
+  assert.match(source, /result\.valid && !props\.readonly/u)
   assert.doesNotMatch(source, /type="number"|FaNumberField|@\/api|useApp\w*Store/u)
+
+  // FaInput 必须只把 id、aria-* 与原生事件下传给真实 input，不能再自动复制到 InputGroup。
+  assert.match(
+    faInputSource,
+    /defineOptions\(\{[\s\S]*?name: 'BuiltInInput'[\s\S]*?inheritAttrs: false/u,
+  )
 })
 
 test('金额输入独立页面串联输入、显示、严格校验与精确汇总', () => {

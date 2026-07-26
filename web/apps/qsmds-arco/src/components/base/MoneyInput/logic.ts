@@ -82,7 +82,9 @@ function resolveBound(
     return undefined
   }
 
-  const match = STRICT_MONEY_PATTERN.exec(value)
+  const match = typeof value === 'string'
+    ? STRICT_MONEY_PATTERN.exec(value)
+    : null
   if (!match || (match[1]?.length ?? 0) > precision) {
     throw new TypeError(`${name} 必须是小数位不超过 precision 的严格金额字符串`)
   }
@@ -142,6 +144,14 @@ export function validateMoneyString(
       normalizedValue: null,
       valid: true,
     }
+  }
+
+  // API 响应和动态表单数据不受 TypeScript 运行时约束，非字符串统一按格式错误处理。
+  if (typeof value !== 'string') {
+    return invalidResult(
+      'INVALID_FORMAT',
+      '请输入正确的金额，例如 1234.50',
+    )
   }
 
   const match = STRICT_MONEY_PATTERN.exec(value)
@@ -210,7 +220,7 @@ export function normalizeMoneyString(
 ): MoneyAmount {
   const result = validateMoneyString(value, options)
   if (!result.valid) {
-    throw new MoneyValidationError(value ?? '', result)
+    throw new MoneyValidationError(String(value ?? ''), result)
   }
 
   return result.normalizedValue
@@ -225,7 +235,8 @@ export function sumMoneyValues(
   options: MoneyValidationOptions = {},
 ): string {
   const precision = resolvePrecision(options.precision)
-  let total = new Decimal(0)
+  const normalizedValues: string[] = []
+  let maxIntegerDigits = 1
 
   for (const value of values) {
     if (value === null) {
@@ -236,7 +247,32 @@ export function sumMoneyValues(
       ...options,
       precision,
     })
-    total = total.plus(normalizedValue)
+    normalizedValues.push(normalizedValue)
+
+    const unsignedValue = normalizedValue.startsWith('-')
+      ? normalizedValue.slice(1)
+      : normalizedValue
+    const integerPart = unsignedValue.split('.')[0] ?? '0'
+    const integerDigits = integerPart.replace(/^0+/u, '').length || 1
+    maxIntegerDigits = Math.max(maxIntegerDigits, integerDigits)
+  }
+
+  /**
+   * Decimal 的默认有效数字精度只有 20 位，直接连续 plus 会在大整数或多行进位时
+   * 舍入。这里按当前批次的最大整数位、小数位和最大进位位数创建隔离构造器，
+   * 既不污染 decimal.js 全局配置，也能覆盖该批次精确和的全部有效数字。
+   */
+  const carryDigits = normalizedValues.length > 1
+    ? Math.ceil(Math.log10(normalizedValues.length))
+    : 0
+  const MoneyDecimal = Decimal.clone({
+    precision: maxIntegerDigits + precision + carryDigits,
+    rounding: Decimal.ROUND_HALF_UP,
+  })
+  let total = new MoneyDecimal(0)
+
+  for (const value of normalizedValues) {
+    total = total.plus(value)
   }
 
   return total.toFixed(precision, Decimal.ROUND_HALF_UP)
