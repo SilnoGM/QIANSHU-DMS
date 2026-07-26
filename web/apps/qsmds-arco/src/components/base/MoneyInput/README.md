@@ -5,42 +5,47 @@
 
 ## 数据协议
 
-组件公共值固定为 `string | null`：
+金额公共值固定为 `string | null`，币种通过独立的命名模型保存：
 
 ```ts
 type MoneyAmount = string | null
+type CurrencyCode = 'CNY' | 'TWD' | 'MYR' | 'USD'
 ```
 
 - `"1234.50"`：合法金额。
 - `null`：业务空值。
 - `""`、`"1,234.50"`、`"¥12.00"`、`"1e3"`：非法持久化金额。
-- 币种通过独立 `currency` 属性传递，不写入金额值。
+- 币种通过独立的 `v-model:currency` 命名模型传递，不写入金额值。
+- `currency` 默认使用 `CNY`，右侧下拉可切换四个已支持币种。
 - API 应使用 JSON string 传递金额，不要先转换为 JavaScript `number`。
 
 推荐数据流：
 
 ```text
-MoneyInput -> "1234.50" -> AmountDisplay -> sumMoneyValues
+MoneyInput -> { amount: "1234.50", currency: "CNY" }
+           -> AmountDisplay / 同币种 sumMoneyValues
 ```
 
 ## 基础用法
 
 ```vue
 <script setup lang="ts">
+import type { CurrencyCode } from '@/components/base/AmountDisplay/format'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 
 const amount = ref<string | null>(null)
+const currency = ref<CurrencyCode>('CNY')
 </script>
 
 <template>
   <MoneyInput
     v-model="amount"
-    currency="CNY"
+    v-model:currency="currency"
     :precision="2"
     min="0.00"
   />
-  <AmountDisplay :value="amount" currency="CNY" />
+  <AmountDisplay :value="amount" :currency="currency" />
 </template>
 ```
 
@@ -49,7 +54,7 @@ const amount = ref<string | null>(null)
 | 属性 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `modelValue` | `string \| null` | `null` | 无分组符、无币种符号的金额字符串 |
-| `currency` | `CNY \| TWD \| MYR \| USD` | 必填 | 输入框两端显示的币种语义 |
+| `currency` | `CNY \| TWD \| MYR \| USD` | `CNY` | 通过 `v-model:currency` 双向绑定的独立币种 |
 | `precision` | `number` | `2` | 小数位，必须是 `0..100` 的整数 |
 | `allowNegative` | `boolean` | `false` | 是否允许负数 |
 | `min` | `string` | - | 精确最小值 |
@@ -62,6 +67,18 @@ const amount = ref<string | null>(null)
 原生 `name`、`aria-*`、`autocomplete`、`input` 和 `change` 等属性或事件会继续
 转交给 `FaInput` 内的真实 `<input>`，不会重复落到输入组外层，可以直接作为
 `FaFormItem` 的第一个控件使用。
+
+切换币种只更新 `currency`，不会换算或改写金额字符串。调用方应把二者分别提交：
+
+```ts
+{
+  amount: '1234.50',
+  currency: 'USD',
+}
+```
+
+`disabled` 或 `readonly` 时币种下拉同步锁定。不同币种不能直接汇总；业务必须先
+统一币种或使用明确汇率完成换算，再调用 `sumMoneyValues`。
 
 ## 校验
 

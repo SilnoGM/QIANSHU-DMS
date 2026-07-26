@@ -8,6 +8,11 @@ import type {
 } from './logic'
 import { CURRENCY_SYMBOLS } from '../AmountDisplay/format'
 import {
+  DEFAULT_MONEY_CURRENCY,
+  isMoneyCurrencyCode,
+  MONEY_CURRENCY_OPTIONS,
+} from './currency'
+import {
   DEFAULT_MONEY_PRECISION,
   normalizeMoneyString,
   validateMoneyString,
@@ -21,7 +26,6 @@ defineOptions({
 const props = withDefaults(defineProps<{
   allowNegative?: boolean
   clearable?: boolean
-  currency: CurrencyCode
   disabled?: boolean
   inputClass?: HTMLAttributes['class']
   max?: string
@@ -44,6 +48,9 @@ const emits = defineEmits<{
 
 const modelValue = defineModel<MoneyAmount>({
   default: null,
+})
+const currency = defineModel<CurrencyCode>('currency', {
+  default: DEFAULT_MONEY_CURRENCY,
 })
 
 const attrs = useAttrs()
@@ -107,6 +114,12 @@ function handleDraftUpdate(value: number | string | undefined): void {
   }
 }
 
+function handleCurrencyUpdate(value: unknown): void {
+  if (isMoneyCurrencyCode(value)) {
+    currency.value = value
+  }
+}
+
 /**
  * 可编辑状态失焦时才把合法草稿补齐到固定精度；非法草稿原样保留，便于用户定位
  * 并修正。readonly 仅执行校验和 blur 通知，不得产生隐式 v-model 写入。
@@ -155,6 +168,7 @@ defineExpose({
     :data-currency="currency"
     :data-validation-code="validationCode"
     :disabled="disabled"
+    end-class="pe-1.5"
     :input-class="['font-mono tabular-nums text-right', inputClass]"
     :placeholder="resolvedPlaceholder"
     :readonly="readonly"
@@ -170,8 +184,19 @@ defineExpose({
       </span>
     </template>
     <template #end>
-      <span class="text-xs text-muted-foreground font-mono">
-        {{ currency }}
+      <span
+        role="group"
+        aria-label="币种选择"
+        class="flex shrink-0 items-center"
+      >
+        <FaSelect
+          :model-value="currency"
+          :options="MONEY_CURRENCY_OPTIONS"
+          :disabled="disabled || readonly"
+          class="text-xs font-mono px-2 py-0 border-0 bg-transparent shrink-0 w-[5rem] shadow-none dark:bg-transparent data-[size=default]:h-8 dark:hover:bg-transparent"
+          position="popper"
+          @update:model-value="handleCurrencyUpdate"
+        />
       </span>
     </template>
   </FaInput>

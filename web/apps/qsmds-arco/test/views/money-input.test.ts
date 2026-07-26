@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
+  DEFAULT_MONEY_CURRENCY,
+  isMoneyCurrencyCode,
+  MONEY_CURRENCY_OPTIONS,
+  resolveCommonMoneyCurrency,
+} from '../../src/components/base/MoneyInput/currency'
+import {
   MoneyValidationError,
   normalizeMoneyString,
   sumMoneyValues,
@@ -32,6 +38,30 @@ test('严格金额字符串可规范化为空值或固定精度十进制文本',
     valid: true,
   })
   assert.equal(normalizeMoneyString('-0.00', { allowNegative: true }), '0.00')
+})
+
+test('金额输入默认使用 CNY，并从金额展示真相源派生四个可选币种', () => {
+  assert.equal(DEFAULT_MONEY_CURRENCY, 'CNY')
+  assert.deepEqual(MONEY_CURRENCY_OPTIONS, [
+    { label: 'CNY', value: 'CNY' },
+    { label: 'TWD', value: 'TWD' },
+    { label: 'MYR', value: 'MYR' },
+    { label: 'USD', value: 'USD' },
+  ])
+
+  for (const currency of ['CNY', 'TWD', 'MYR', 'USD']) {
+    assert.equal(isMoneyCurrencyCode(currency), true)
+  }
+  for (const currency of [undefined, null, '', 'EUR', 12]) {
+    assert.equal(isMoneyCurrencyCode(currency), false)
+  }
+})
+
+test('币种汇总只接受同一币种，空集合与混合币种都不伪造汇总币种', () => {
+  assert.equal(resolveCommonMoneyCurrency(['CNY', 'CNY', 'CNY']), 'CNY')
+  assert.equal(resolveCommonMoneyCurrency(['USD']), 'USD')
+  assert.equal(resolveCommonMoneyCurrency([]), null)
+  assert.equal(resolveCommonMoneyCurrency(['CNY', 'USD']), null)
 })
 
 test('金额字符串拒绝空字符串、展示字符、宽松小数与科学计数法', () => {
@@ -174,7 +204,17 @@ test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍
 
   assert.match(source, /defineOptions\(\{[\s\S]*?name: 'MoneyInput'[\s\S]*?inheritAttrs: false/u)
   assert.match(source, /defineModel<MoneyAmount>/u)
+  assert.match(
+    source,
+    /defineModel<CurrencyCode>\('currency', \{[\s\S]*?default: DEFAULT_MONEY_CURRENCY/u,
+  )
   assert.match(source, /<FaInput/u)
+  assert.match(source, /<FaSelect/u)
+  assert.match(source, /:model-value="currency"/u)
+  assert.match(source, /:options="MONEY_CURRENCY_OPTIONS"/u)
+  assert.match(source, /:disabled="disabled \|\| readonly"/u)
+  assert.match(source, /@update:model-value="handleCurrencyUpdate"/u)
+  assert.match(source, /role="group"[\s\S]*?aria-label="币种选择"/u)
   assert.match(source, /inputmode="decimal"/u)
   assert.match(source, /:aria-invalid="ariaInvalid"/u)
   assert.match(source, /:data-validation-code="validationCode"/u)
@@ -185,7 +225,12 @@ test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍
   assert.match(source, /\btabular-nums\b/u)
   assert.match(source, /\btext-right\b/u)
   assert.match(source, /CURRENCY_SYMBOLS\[currency\]/u)
+  assert.match(source, /isMoneyCurrencyCode/u)
   assert.match(source, /result\.valid && !props\.readonly/u)
+  assert.doesNotMatch(
+    source,
+    /defineProps<\{[\s\S]*?\bcurrency: CurrencyCode/u,
+  )
   assert.doesNotMatch(source, /type="number"|FaNumberField|@\/api|useApp\w*Store/u)
 
   // FaInput 必须只把 id、aria-* 与原生事件下传给真实 input，不能再自动复制到 InputGroup。
@@ -215,6 +260,14 @@ test('金额输入独立页面串联输入、显示、严格校验与精确汇�
   assert.match(showcaseSource, /import MoneyInput from '@\/components\/base\/MoneyInput\/index\.vue'/u)
   assert.match(showcaseSource, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
   assert.match(showcaseSource, /sumMoneyValues/u)
+  assert.match(showcaseSource, /const currency = ref<CurrencyCode>\('CNY'\)/u)
+  assert.match(showcaseSource, /v-model:currency="currency"/u)
+  assert.match(showcaseSource, /v-model:currency="line\.currency"/u)
+  assert.match(showcaseSource, /:currency="currency"/u)
+  assert.match(showcaseSource, /resolveCommonMoneyCurrency/u)
+  assert.match(showcaseSource, /不同币种不能直接汇总/u)
+  assert.match(showcaseSource, /summaryCurrency \?\? '混合币种'/u)
+  assert.match(showcaseSource, /v-if="summaryCurrency"/u)
   assert.match(showcaseSource, /<MoneyInput/u)
   assert.match(showcaseSource, /<AmountDisplay/u)
   assert.doesNotMatch(showcaseSource, /@\/api|useApp\w*Store/u)
@@ -222,5 +275,8 @@ test('金额输入独立页面串联输入、显示、严格校验与精确汇�
   assert.match(readmeSource, /string \| null/u)
   assert.match(readmeSource, /decimal\.js/u)
   assert.match(readmeSource, /INVALID_FORMAT/u)
+  assert.match(readmeSource, /v-model:currency/u)
+  assert.match(readmeSource, /默认.*CNY/u)
+  assert.match(readmeSource, /不同币种/u)
   assert.match(readmeSource, /MoneyInput[\s\S]*AmountDisplay[\s\S]*sumMoneyValues/u)
 })
