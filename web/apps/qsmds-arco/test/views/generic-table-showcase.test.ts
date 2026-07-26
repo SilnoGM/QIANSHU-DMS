@@ -48,3 +48,15 @@ test('通用表格独立页面只挂载表格展示区，并保留金额汇总�
   assert.match(showcaseSource, /#mobile-row/u)
   assert.doesNotMatch(showcaseSource, /@\/api|useApp\w*Store/u)
 })
+
+test('双行金额在桌面单元格、汇总和移动卡片中统一末位对齐', () => {
+  const showcaseSource = readRelativeSource(
+    '../../src/views/component_library/business/components/GenericTableShowcase.vue',
+  )
+
+  assert.equal(
+    showcaseSource.match(/content-class="ml-auto flex justify-end text-right"/gu)?.length,
+    6,
+  )
+  assert.doesNotMatch(showcaseSource, /content-class="[^"]*w-\[[^"]*ch[^"]*"/u)
+})

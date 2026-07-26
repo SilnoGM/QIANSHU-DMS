@@ -346,6 +346,7 @@ function recordEvent(message: string) {
         <template #cell-amount="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine
+              content-class="ml-auto flex justify-end text-right"
               label="实际"
               nowrap
               tone="success"
@@ -353,6 +354,7 @@ function recordEvent(message: string) {
               <AmountDisplay :value="row.original.amount" currency="CNY" />
             </QsTableStackedLine>
             <QsTableStackedLine
+              content-class="ml-auto flex justify-end text-right"
               label="标准"
               nowrap
             >
@@ -363,10 +365,17 @@ function recordEvent(message: string) {
 
         <template #summary-amount="{ value }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="实际" tone="success">
+            <QsTableStackedLine
+              content-class="ml-auto flex justify-end text-right"
+              label="实际"
+              tone="success"
+            >
               <AmountDisplay :value="value" currency="CNY" />
             </QsTableStackedLine>
-            <QsTableStackedLine label="标准">
+            <QsTableStackedLine
+              content-class="ml-auto flex justify-end text-right"
+              label="标准"
+            >
               <AmountDisplay :value="pageStandardAmount" currency="CNY" />
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -440,10 +449,17 @@ function recordEvent(message: string) {
               </dt>
               <dd class="m-0">
                 <QsTableStackedCell>
-                  <QsTableStackedLine label="实际" tone="success">
+                  <QsTableStackedLine
+                    content-class="ml-auto flex justify-end text-right"
+                    label="实际"
+                    tone="success"
+                  >
                     <AmountDisplay :value="row.amount" currency="CNY" />
                   </QsTableStackedLine>
-                  <QsTableStackedLine label="标准">
+                  <QsTableStackedLine
+                    content-class="ml-auto flex justify-end text-right"
+                    label="标准"
+                  >
                     <AmountDisplay :value="row.standardAmount" currency="CNY" />
                   </QsTableStackedLine>
                 </QsTableStackedCell>
