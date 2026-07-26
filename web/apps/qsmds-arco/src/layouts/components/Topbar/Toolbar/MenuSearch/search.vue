@@ -193,7 +193,7 @@ function pageJump(path: listTypes['path'], query: listTypes['query'], link: list
 </script>
 
 <template>
-  <FaModal v-model="isShow" :footer="appSettingsStore.mode === 'pc'" :closable="false" open-auto-focus border class="w-full lg-max-w-2xl" content-class="flex flex-col p-0 min-h-auto" header-class="p-0" footer-class="p-0">
+  <FaModal v-model="isShow" :title="t('app.layouts.topbar.toolbar.menuSearch.welcome')" :footer="appSettingsStore.mode === 'pc'" :closable="false" open-auto-focus border class="w-full lg-max-w-2xl" content-class="flex flex-col p-0 min-h-auto" header-class="p-0" footer-class="p-0">
     <template #header>
       <div class="flex flex-shrink-0 h-12 items-center">
         <div class="flex-center h-full w-14">

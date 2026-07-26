@@ -37,7 +37,7 @@
 | `cancelButtonText` | `string \| () => string` | `'取消'` | 取消按钮文字 |
 | `confirmButtonDisabled` | `boolean` | `false` | 确定按钮是否禁用 |
 | `confirmButtonLoading` | `boolean` | `false` | 确定按钮加载状态 |
-| `beforeClose` | `(action, done) => void` | - | 关闭前回调 |
+| `beforeClose` | `(action, done) => void \| Promise<void>` | - | 关闭前守卫；调用 `done` 后才关闭 |
 | `header` | `boolean` | `true` | 是否显示头部 |
 | `footer` | `boolean` | `true` | 是否显示底部 |
 | `closeOnClickOverlay` | `boolean` | `true` | 点击遮罩是否关闭 |
@@ -134,7 +134,10 @@ function showWarning() {
 
 1. **v-model 绑定**：使用 `v-model` 控制对话框打开状态
 2. **图标类型**：`icon` 支持 `info`、`success`、`warning`、`error` 四种
-3. **关闭回调**：`beforeClose` 接收 `action`（`confirm`/`cancel`/`close`）和 `done` 函数
+3. **关闭守卫**：`beforeClose` 接收 `action`（`confirm`/`cancel`/`close`）和 `done` 函数；支持返回 `Promise`，守卫抛错或拒绝时保持弹窗打开，同一时间只执行一个关闭守卫
 4. **拖拽限制**：拖拽仅在有标题栏且非最大化状态下有效
-5. **动画事件**：`opened` 和 `closed` 在动画完成后触发
-6. **函数式调用**：`useFaModal()` 提供 `info`、`success`、`warning`、`error`、`confirm` 方法
+5. **可访问名称**：使用 `header` 插槽或隐藏默认头部时仍应传入非空 `title`；可选的 `description` 会一并提供给辅助技术
+6. **模态语义**：组件使用单一原生遮罩、焦点约束与背景滚动锁；关闭后由底层对话框恢复触发元素焦点
+7. **保留内容**：`destroyOnClose=false` 时内容保持挂载但退出模态交互；再次打开会重新进入焦点范围
+8. **动画事件**：`opened` 和 `closed` 在面板动画完成后各触发一次
+9. **函数式调用**：`useFaModal()` 提供 `info`、`success`、`warning`、`error`、`confirm` 方法

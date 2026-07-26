@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { VNode } from 'vue'
 import type { ModalEmits, ModalProps } from '.'
+import type { ModalCloseAction } from './logic'
 import { VisuallyHidden } from 'reka-ui'
 import { computed, nextTick, ref, shallowRef, useId, useTemplateRef, watch } from 'vue'
 import { cn } from '#utils'
@@ -14,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from './dialog'
+import { runModalBeforeClose } from './logic'
 import { useDraggable } from './use-draggable'
 
 defineOptions({
@@ -65,13 +67,12 @@ const dialogRef = ref()
 const modalId = shallowRef(props.id ?? useId())
 const isOpen = ref(props.modelValue)
 const isMaximize = ref(props.maximize)
+const closePending = ref(false)
+const lastCompletedAnimationState = shallowRef<'closed' | 'opened' | null>(null)
 
 watch(() => props.modelValue, (newValue) => {
   isOpen.value = newValue
 })
-
-const hasOpened = ref(false)
-const isClosed = ref(!props.modelValue)
 
 watch(isOpen, (val) => {
   emits('update:modelValue', val)
@@ -81,13 +82,7 @@ watch(isOpen, (val) => {
   else {
     emits('close')
   }
-  isClosed.value = false
-  if (val && !hasOpened.value) {
-    hasOpened.value = true
-  }
 })
-
-const forceMount = computed(() => !props.destroyOnClose && hasOpened.value)
 
 const { isDragging, transform } = useDraggable(
   dialogRef,
@@ -114,62 +109,60 @@ watch(isOpen, (val) => {
   }
 })
 
+/**
+ * 所有由弹窗内部发起的关闭操作共享同一把锁。
+ *
+ * 这样可以避免用户连续点击关闭按钮、遮罩、取消或确定时，并发执行多个异步守卫，
+ * 造成重复提交、重复事件或状态反复切换。
+ */
+async function requestClose(
+  action: ModalCloseAction,
+  onApproved: () => void,
+) {
+  if (closePending.value) {
+    return
+  }
+
+  closePending.value = true
+  try {
+    await runModalBeforeClose(props.beforeClose, action, onApproved)
+  }
+  finally {
+    closePending.value = false
+  }
+}
+
 async function updateOpen(value: boolean) {
   if (value) {
     isOpen.value = value
-    emits('open')
+    return
   }
-  else {
-    if (props.beforeClose) {
-      await props.beforeClose(
-        'close',
-        () => {
-          isOpen.value = value
-          emits('close')
-        },
-      )
-    }
-    else {
-      isOpen.value = value
-      emits('close')
-    }
-  }
+
+  await requestClose('close', () => {
+    isOpen.value = false
+  })
 }
 
 const isConfirmButtonLoading = ref(false)
 
 async function onConfirm() {
-  if (props.beforeClose) {
-    isConfirmButtonLoading.value = true
-    await props.beforeClose(
-      'confirm',
-      () => {
-        isOpen.value = false
-        emits('confirm')
-      },
-    )
-    isConfirmButtonLoading.value = false
+  isConfirmButtonLoading.value = true
+  try {
+    await requestClose('confirm', () => {
+      isOpen.value = false
+      emits('confirm')
+    })
   }
-  else {
-    isOpen.value = false
-    emits('confirm')
+  finally {
+    isConfirmButtonLoading.value = false
   }
 }
 
 async function onCancel() {
-  if (props.beforeClose) {
-    await props.beforeClose(
-      'cancel',
-      () => {
-        isOpen.value = false
-        emits('cancel')
-      },
-    )
-  }
-  else {
+  await requestClose('cancel', () => {
     isOpen.value = false
     emits('cancel')
-  }
+  })
 }
 
 function handleOpenAutoFocus(e: Event) {
@@ -207,18 +200,23 @@ function handleMaximize(val: boolean) {
 }
 
 function handleAnimationEnd() {
-  if (isOpen.value) {
+  const completedState = isOpen.value ? 'opened' : 'closed'
+  if (lastCompletedAnimationState.value === completedState) {
+    return
+  }
+
+  lastCompletedAnimationState.value = completedState
+  if (completedState === 'opened') {
     emits('opened')
   }
   else {
     emits('closed')
-    isClosed.value = true
   }
 }
 </script>
 
 <template>
-  <Dialog :modal="false" :open="isOpen" @update:open="updateOpen">
+  <Dialog :modal="true" :open="isOpen" :unmount-on-hide="props.destroyOnClose" @update:open="updateOpen">
     <DialogContent
       ref="dialogContentRef"
       :modal-id="modalId"
@@ -229,15 +227,12 @@ function handleAnimationEnd() {
       :overlay-blur="props.overlayBlur"
       :maximize="isMaximize"
       :maximizable="props.maximizable"
-      :force-mount="forceMount"
       :class="cn('z-2000 top-0 sm:top-[5vh] translate-y-0 flex flex-col p-0 gap-0 mx-auto overflow-hidden max-w-full h-[calc-size(auto,size)] min-h-full max-h-full sm:min-h-auto sm:max-h-[90vh]', props.class, {
         'sm:top-0 size-full max-w-full sm:max-w-full max-h-full sm:max-h-full': isMaximize,
         'top-1/2 -translate-y-1/2 min-h-auto sm:top-1/2 sm:-translate-y-1/2': props.alignCenter,
         'duration-0': isDragging,
-        'hidden': isClosed,
       })"
       @open-auto-focus="handleOpenAutoFocus"
-      @close-auto-focus="handleFocusOutside"
       @focus-outside="handleFocusOutside"
       @pointer-down-outside="handleClickOutside"
       @interact-outside="handleClickOutside"
@@ -252,8 +247,12 @@ function handleAnimationEnd() {
         })"
       >
         <VisuallyHidden v-if="!!slots.header">
-          <DialogTitle />
-          <DialogDescription />
+          <DialogTitle>
+            {{ typeof props.title === 'function' ? props.title() : props.title }}
+          </DialogTitle>
+          <DialogDescription>
+            {{ typeof props.description === 'function' ? props.description() : props.description }}
+          </DialogDescription>
         </VisuallyHidden>
         <slot name="header">
           <DialogTitle class="flex-center gap-x-2 sm:justify-start" :class="{ 'sm:justify-center': props.center }">
@@ -278,8 +277,12 @@ function handleAnimationEnd() {
         </slot>
       </DialogHeader>
       <VisuallyHidden v-else>
-        <DialogTitle />
-        <DialogDescription />
+        <DialogTitle>
+          {{ typeof props.title === 'function' ? props.title() : props.title }}
+        </DialogTitle>
+        <DialogDescription>
+          {{ typeof props.description === 'function' ? props.description() : props.description }}
+        </DialogDescription>
       </VisuallyHidden>
       <div v-if="!!slots.default" :class="cn('relative flex-1 min-h-40 p-4 overflow-y-auto', props.contentClass)">
         <slot />

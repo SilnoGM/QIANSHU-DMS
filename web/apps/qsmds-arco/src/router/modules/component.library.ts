@@ -85,6 +85,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:panel-right-open',
         },
       },
+      {
+        path: 'generic-modal',
+        name: 'componentLibraryGenericModal',
+        component: () => import('@/views/component_library/business/generic-modal.vue'),
+        meta: {
+          title: '通用模态框',
+          icon: 'i-lucide:panels-top-left',
+        },
+      },
     ],
   },
   {
