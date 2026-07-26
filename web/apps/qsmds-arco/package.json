@@ -36,6 +36,7 @@
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
     "dayjs": "catalog:",
+    "decimal.js": "catalog:",
     "disable-devtool": "catalog:",
     "eruda": "catalog:",
     "es-toolkit": "catalog:",

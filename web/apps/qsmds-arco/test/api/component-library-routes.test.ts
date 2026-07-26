@@ -24,7 +24,7 @@ test('组件库在开发环境默认开启，其他环境必须显式启用', ()
   }), true)
 })
 
-test('组件库按分类提供五个独立组件路由', () => {
+test('组件库按分类提供六个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -45,6 +45,11 @@ test('组件库按分类提供五个独立组件路由', () => {
         name: 'componentLibraryAmountDisplay',
         path: 'amount-display',
         title: '金额显示',
+      },
+      {
+        name: 'componentLibraryMoneyInput',
+        path: 'money-input',
+        title: '金额输入',
       },
       {
         name: 'componentLibraryDateTimeDisplay',
@@ -95,7 +100,7 @@ test('组件库按分类提供五个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 5)
+  assert.equal(new Set(componentRouteNames).size, 6)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -122,7 +127,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('五个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('六个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -133,6 +138,11 @@ test('五个组件页面与页面模板复用展示壳且不依赖业务 API 或
       componentName: 'ComponentLibraryDateTimeDisplay',
       file: '../../src/views/component_library/basic/date-time-display.vue',
       title: '日期显示',
+    },
+    {
+      componentName: 'ComponentLibraryMoneyInput',
+      file: '../../src/views/component_library/basic/money-input.vue',
+      title: '金额输入',
     },
     {
       componentName: 'ComponentLibraryGenericTable',
