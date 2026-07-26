@@ -13,7 +13,7 @@ const open = shallowRef(false)
   <FaButton @click="open = true">
     打开弹窗
   </FaButton>
-  <FaModal v-model="open">
+  <FaModal v-model="open" title="自定义头部">
     <template #header>
       <div class="pr-8 flex gap-3 items-start">
         <FaIcon name="i-lucide:message-square-warning" class="text-primary mt-0.5 size-5" />

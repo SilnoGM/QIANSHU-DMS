@@ -1,4 +1,5 @@
 import type { Component, HTMLAttributes, VNode } from 'vue'
+import type { ModalBeforeClose } from './logic'
 import { createVNode, getCurrentInstance, h, isVNode, onUnmounted, ref, render, shallowRef, watchEffect } from 'vue'
 import Modal from './index.vue'
 
@@ -25,10 +26,7 @@ export interface ModalProps {
   cancelButtonText?: string | (() => string)
   confirmButtonDisabled?: boolean
   confirmButtonLoading?: boolean
-  beforeClose?: (
-    action: 'confirm' | 'cancel' | 'close',
-    done: () => void,
-  ) => void
+  beforeClose?: ModalBeforeClose
   header?: boolean
   footer?: boolean
   closeOnClickOverlay?: boolean
