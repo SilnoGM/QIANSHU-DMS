@@ -2743,8 +2743,10 @@ test('前端标准文档不得重新引入 Arco-first 业务默认值', () => {
     .filter(({ sentence }) => {
       // 只拦截“优先/默认”直接指向 Arco 的选型句，避免把“优先 Fa，
       // 不足时回退 Arco”或 Arco 组件自身的默认 prop 描述误判为冲突。
-      return /(?:默认(?:优先)?|优先|仍先|先(?:用|选|评估)|首选)\s*(?:使用|采用|选择|评估)?\s*(?:Arco|`A[A-Z])/u
-        .test(sentence)
+      // 先移除空白再匹配连续语义，避免多个可选空白量词相邻造成超线性回溯。
+      const compactSentence = sentence.replace(/\s+/gu, '')
+      return /(?:默认(?:优先)?|优先|仍先|先(?:用|选|评估)|首选)(?:使用|采用|选择|评估)?(?:Arco|`A[A-Z])/u
+        .test(compactSentence)
     }))
 
   assert.deepEqual(
