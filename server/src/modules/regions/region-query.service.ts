@@ -8,6 +8,10 @@ import {
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import {
+  type RegionListQueryDto,
+  type RegionNavigationNodeDto,
+} from './dto/region-management.dto'
+import {
   type RegionOptionDto,
   type RegionPathDto,
   type RegionPathNodeDto,
@@ -16,6 +20,12 @@ import {
   type RegionOptionsQueryDto,
   type RegionSearchQueryDto,
 } from './dto/region-selection.dto'
+import type { RegionDto, RegionPageDto } from './dto/region.dto'
+import {
+  readRegionById,
+  readRegionNavigation,
+  readRegionPage,
+} from './region-management-query.persistence'
 import { normalizeRegionSearchText } from './region.normalizer'
 
 interface RegionNode {
@@ -172,12 +182,26 @@ function assertThreeLevelCityPath(
 }
 
 /**
- * 地区选择查询保持在独立只读服务中：业务选择器只接触有效 options/search，
- * 而历史 path 明确保留停用节点，避免旧业务值因后台停用而无法回显。
+ * 地区读取保持在同一只读服务中：业务选择器只接触有效 options/search，
+ * 历史 path 明确保留停用节点；管理读取则返回 own/effective 两类状态和来源字段。
  */
 @Injectable()
 export class RegionQueryService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async navigation(): Promise<RegionNavigationNodeDto[]> {
+    return readRegionNavigation(this.prisma)
+  }
+
+  async list(
+    query: Readonly<Partial<RegionListQueryDto>>,
+  ): Promise<RegionPageDto> {
+    return readRegionPage(this.prisma, query)
+  }
+
+  async getById(regionId: string): Promise<RegionDto> {
+    return readRegionById(this.prisma, regionId)
+  }
 
   async options(
     query: RegionOptionsQueryDto,

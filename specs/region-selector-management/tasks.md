@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 7）
+- 状态：Phase 4 实施中（Task 8）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -280,22 +280,22 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     client；更新 Task 6 状态并创建提交：`feat: 添加地区选择查询接口`。
   - _Requirements: R3, R4, R8, R9, R10_
 
-- [ ] 7. 以 TDD 实现地区管理查询 API 与 OpenAPI
-  - [ ] 7.1 先新增并运行失败的 management query service/controller 测试和
+- [x] 7. 以 TDD 实现地区管理查询 API 与 OpenAPI
+  - [x] 7.1 先新增并运行失败的 management query service/controller 测试和
     `server/test/regions-management-api.e2e-spec.ts` 读取场景。
-  - [ ] 7.2 实现 `GET /api/regions/navigation`，一次返回全部国家/地区及省/州，
+  - [x] 7.2 实现 `GET /api/regions/navigation`，一次返回全部国家/地区及省/州，
     包含停用状态但不加载城市。
-  - [ ] 7.3 实现 `GET /api/regions`：parent 推导 level、当前直属下级、query/code、
+  - [x] 7.3 实现 `GET /api/regions`：parent 推导 level、当前直属下级、query/code、
     `ownStatus/availability`、分页、排序白名单和最终 UUID tie-breaker。
-  - [ ] 7.4 实现 `GET /api/regions/:regionId`，返回来源字段、own/effective 状态和时间，
+  - [x] 7.4 实现 `GET /api/regions/:regionId`，返回来源字段、own/effective 状态和时间，
     支持后续 unknown mutation read-after-write。
-  - [ ] 7.5 `count + rows` 使用同一 interactive transaction 和既有 query timeout；
+  - [x] 7.5 `count + rows` 使用同一 interactive transaction 和既有 query timeout；
     effective 状态使用固定两级 join 计算，不落库。
-  - [ ] 7.6 Controller 全部要求 `regions:read`；E2E 覆盖无权限 403、读取权限成功、
+  - [x] 7.6 Controller 全部要求 `regions:read`；E2E 覆盖无权限 403、读取权限成功、
     current parent 隔离、三种互斥展示状态和 100 pageSize 上限。
-  - [ ] 7.7 更新契约测试并运行 `contract:sync/contract:check`，确认新增 management
+  - [x] 7.7 更新契约测试并运行 `contract:sync/contract:check`，确认新增 management
     query DTO/operationId/permission/no-store/errors。
-  - [ ] 7.8 运行 Server 定向测试、check、build、隔离 E2E；更新 Task 7 状态并创建提交：
+  - [x] 7.8 运行 Server 定向测试、check、build、隔离 E2E；更新 Task 7 状态并创建提交：
     `feat: 添加地区管理查询接口`。
   - _Requirements: R5, R7, R8, R9, R10_
 

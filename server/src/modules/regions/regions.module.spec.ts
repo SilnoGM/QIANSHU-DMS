@@ -3,16 +3,18 @@ import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
 import { RegionQueryService } from './region-query.service'
 import { RegionSelectionController } from './region-selection.controller'
+import { RegionsController } from './regions.controller'
 import { RegionsModule } from './regions.module'
 
 describe('RegionsModule metadata', () => {
-  it('composes the shared database/auth providers and selection boundary', () => {
+  it('composes the shared database/auth providers and both HTTP boundaries', () => {
     expect(Reflect.getMetadata('imports', RegionsModule)).toEqual([
       PrismaModule,
       AuthModule,
     ])
     expect(Reflect.getMetadata('controllers', RegionsModule)).toEqual([
       RegionSelectionController,
+      RegionsController,
     ])
     expect(Reflect.getMetadata('providers', RegionsModule)).toEqual([
       RegionQueryService,
