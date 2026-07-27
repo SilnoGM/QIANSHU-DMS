@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -18,6 +18,10 @@ const SCRIPT_DIRECTORY = dirname(fileURLToPath(import.meta.url))
 const DEFAULT_DATA_DIRECTORY = resolve(
   SCRIPT_DIRECTORY,
   '../../prisma/region-data',
+)
+const DEFAULT_SEED_MIGRATION_PATH = resolve(
+  SCRIPT_DIRECTORY,
+  '../../prisma/migrations/20260727100000_regions_seed/migration.sql',
 )
 const LEVEL_ORDER = Object.freeze({
   COUNTRY_REGION: 0,
@@ -699,16 +703,213 @@ export function serializeRegionSeed(seed) {
   return `${JSON.stringify(seed, null, 2)}\n`
 }
 
+function sqlLiteral(value) {
+  if (value === null) {
+    return 'NULL'
+  }
+
+  return `'${String(value).replaceAll("'", "''")}'`
+}
+
+function serializeRegionRow(region) {
+  const values = [
+    `${sqlLiteral(region.id)}::uuid`,
+    sqlLiteral(region.code),
+    sqlLiteral(region.name),
+    sqlLiteral(region.normalizedName),
+    sqlLiteral(region.englishName),
+    sqlLiteral(region.sourceName),
+    sqlLiteral(region.sourceCode),
+    sqlLiteral(region.administrativeType),
+    `${sqlLiteral(region.level)}::"region_level"`,
+    region.parentId === null ? 'NULL' : `${sqlLiteral(region.parentId)}::uuid`,
+    region.enabled ? 'true' : 'false',
+    String(region.sortOrder),
+  ]
+
+  return `  (${values.join(', ')})`
+}
+
+function serializeLevelInsert(regions, level) {
+  const scopedRegions = regions.filter(region => region.level === level)
+  const expected = EXPECTED_COUNTS.byLevel[level]
+  invariant(
+    scopedRegions.length === expected,
+    `${level} migration 行数必须为 ${expected}`,
+  )
+
+  return [
+    `-- Seed ${level}: ${expected} nodes`,
+    'INSERT INTO "regions" (',
+    '  "id",',
+    '  "code",',
+    '  "name",',
+    '  "normalized_name",',
+    '  "english_name",',
+    '  "source_name",',
+    '  "source_code",',
+    '  "administrative_type",',
+    '  "level",',
+    '  "parent_id",',
+    '  "enabled",',
+    '  "sort_order"',
+    ')',
+    'VALUES',
+    `${scopedRegions.map(serializeRegionRow).join(',\n')};`,
+  ].join('\n')
+}
+
+function serializeCountAssertion({ expected, label, where = '' }) {
+  return [
+    '  SELECT count(*)::integer',
+    '  INTO actual_count',
+    where.length > 0
+      ? `  FROM "regions"\n  WHERE ${where};`
+      : '  FROM "regions";',
+    '',
+    `  IF actual_count <> ${expected} THEN`,
+    `    RAISE EXCEPTION '${label}: expected ${expected}, got %', actual_count;`,
+    '  END IF;',
+  ].join('\n')
+}
+
+function serializeUniqueCodeAssertion() {
+  return [
+    '  SELECT count(DISTINCT "code")::integer',
+    '  INTO actual_count',
+    '  FROM "regions";',
+    '',
+    `  IF actual_count <> ${EXPECTED_COUNTS.total} THEN`,
+    `    RAISE EXCEPTION 'region seed unique code count mismatch: expected ${EXPECTED_COUNTS.total}, got %', actual_count;`,
+    '  END IF;',
+  ].join('\n')
+}
+
+function serializePathAssertion({
+  cityCode,
+  cityName,
+  countryName,
+  provinceName,
+  sourceCode,
+}) {
+  return [
+    '  IF NOT EXISTS (',
+    '    SELECT 1',
+    '    FROM "regions" AS city',
+    '    JOIN "regions" AS province ON province."id" = city."parent_id"',
+    '    JOIN "regions" AS country ON country."id" = province."parent_id"',
+    `    WHERE city."code" = ${sqlLiteral(cityCode)}`,
+    `      AND city."name" = ${sqlLiteral(cityName)}`,
+    `      AND city."source_code" = ${sqlLiteral(sourceCode)}`,
+    `      AND province."name" = ${sqlLiteral(provinceName)}`,
+    `      AND country."name" = ${sqlLiteral(countryName)}`,
+    "      AND city.\"level\" = 'CITY'::\"region_level\"",
+    "      AND province.\"level\" = 'PROVINCE_STATE'::\"region_level\"",
+    "      AND country.\"level\" = 'COUNTRY_REGION'::\"region_level\"",
+    '  ) THEN',
+    `    RAISE EXCEPTION 'region seed path ${cityCode} mismatch';`,
+    '  END IF;',
+  ].join('\n')
+}
+
+/**
+ * migration SQL 只由已经通过 hash、normalizer、数量与层级校验的 canonical seed
+ * 生成。三个 level 必须使用三个独立 INSERT，确保 hierarchy trigger 在插入子级前
+ * 已经能读取父级；末尾断言让任何额外行、缺行或关键路径漂移整笔事务回滚。
+ */
+export function serializeRegionSeedMigration(seed) {
+  invariant(
+    JSON.stringify(seed.counts) === JSON.stringify(EXPECTED_COUNTS),
+    '只有固定 602 节点 canonical seed 可以生成 migration',
+  )
+
+  const countAssertions = [
+    serializeCountAssertion({
+      expected: EXPECTED_COUNTS.total,
+      label: 'region seed total count mismatch',
+    }),
+    ...Object.entries(EXPECTED_COUNTS.byDomain).flatMap(
+      ([domain, domainCounts]) =>
+        ['COUNTRY_REGION', 'PROVINCE_STATE', 'CITY'].map(level =>
+          serializeCountAssertion({
+            expected: domainCounts[level],
+            label: `region seed ${domain}/${level} count mismatch`,
+            where:
+              `split_part("code", '-', 1) = ${sqlLiteral(domain)} ` +
+              `AND "level" = ${sqlLiteral(level)}::"region_level"`,
+          }),
+        ),
+    ),
+  ]
+  const pathAssertions = [
+    serializePathAssertion({
+      cityCode: 'CN-110000-CITY',
+      cityName: '北京市',
+      countryName: '中国',
+      provinceName: '北京市',
+      sourceCode: '110000',
+    }),
+    serializePathAssertion({
+      cityCode: 'TW-64000',
+      cityName: '高雄市',
+      countryName: '中国台湾',
+      provinceName: '台湾',
+      sourceCode: 'E/64000',
+    }),
+    serializePathAssertion({
+      cityCode: 'MY-01-01',
+      cityName: 'Batu Pahat',
+      countryName: '马来西亚',
+      provinceName: '柔佛',
+      sourceCode: '1_1',
+    }),
+  ]
+
+  return [
+    'BEGIN;',
+    '',
+    '-- Generated by server/scripts/region-data/generate-region-seed.mjs.',
+    '-- Do not edit this migration by hand; regenerate it from regions.seed.json.',
+    '',
+    serializeLevelInsert(seed.regions, 'COUNTRY_REGION'),
+    '',
+    serializeLevelInsert(seed.regions, 'PROVINCE_STATE'),
+    '',
+    serializeLevelInsert(seed.regions, 'CITY'),
+    '',
+    '-- Fail the transaction if canonical counts, identities or paths drift.',
+    'DO $region_seed_assertions$',
+    'DECLARE',
+    '  actual_count integer;',
+    'BEGIN',
+    countAssertions.join('\n\n'),
+    '',
+    serializeUniqueCodeAssertion(),
+    '',
+    pathAssertions.join('\n\n'),
+    'END;',
+    '$region_seed_assertions$;',
+    '',
+    'COMMIT;',
+    '',
+  ].join('\n')
+}
+
 async function runCli(arguments_) {
-  const unknownArguments = arguments_.filter(argument => argument !== '--check')
+  const supportedArguments = new Set(['--check', '--migration'])
+  const unknownArguments = arguments_.filter(
+    argument => !supportedArguments.has(argument),
+  )
   invariant(
     unknownArguments.length === 0,
     `未知参数：${unknownArguments.join(', ')}`,
   )
+  invariant(arguments_.length <= 1, '--check 与 --migration 不能同时使用')
 
   const seed = await buildRegionSeed()
   const serialized = serializeRegionSeed(seed)
   const outputPath = resolve(DEFAULT_DATA_DIRECTORY, 'regions.seed.json')
+  const migration = serializeRegionSeedMigration(seed)
 
   if (arguments_.includes('--check')) {
     const checkedIn = await readFile(outputPath, 'utf8')
@@ -716,7 +917,31 @@ async function runCli(arguments_) {
       checkedIn === serialized,
       'regions.seed.json 不是当前固定来源的 canonical 输出，请重新生成',
     )
-    console.log(`Region seed is up to date (${seed.counts.total} nodes).`)
+    const checkedInMigration = await readFile(
+      DEFAULT_SEED_MIGRATION_PATH,
+      'utf8',
+    )
+    invariant(
+      checkedInMigration === migration,
+      '地区 seed migration 不是 canonical 输出，请重新生成',
+    )
+    console.log(
+      `Region seed and migration are up to date (${seed.counts.total} nodes).`,
+    )
+    return
+  }
+
+  if (arguments_.includes('--migration')) {
+    const checkedIn = await readFile(outputPath, 'utf8')
+    invariant(
+      checkedIn === serialized,
+      '生成 migration 前必须先提交当前 canonical regions.seed.json',
+    )
+    await mkdir(dirname(DEFAULT_SEED_MIGRATION_PATH), { recursive: true })
+    await writeFile(DEFAULT_SEED_MIGRATION_PATH, migration, 'utf8')
+    console.log(
+      `Generated ${DEFAULT_SEED_MIGRATION_PATH} (${seed.counts.total} nodes).`,
+    )
     return
   }
 

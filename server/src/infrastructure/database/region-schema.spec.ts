@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { MANAGEMENT_PERMISSION_CODES } from '../../modules/access-control/permission.constants'
@@ -9,6 +9,10 @@ const migrationPath = resolve(
   serverRoot,
   'prisma/migrations/20260727090000_regions_schema_and_permissions/migration.sql',
 )
+const seedMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20260727100000_regions_seed/migration.sql',
+)
 
 function readSchema(): string {
   return readFileSync(schemaPath, 'utf8')
@@ -16,6 +20,10 @@ function readSchema(): string {
 
 function readMigration(): string {
   return readFileSync(migrationPath, 'utf8')
+}
+
+function readSeedMigration(): string {
+  return readFileSync(seedMigrationPath, 'utf8')
 }
 
 function extractModel(schema: string, modelName: string): string {
@@ -183,5 +191,60 @@ describe('region database schema', () => {
     expect(migration).toMatch(
       /INSERT INTO "role_permissions"[\s\S]*?'00000000-0000-4000-8000-000000000001'[\s\S]*?WHERE "code" IN \([\s\S]*?'regions:read'[\s\S]*?'regions:disable'[\s\S]*?\);/u,
     )
+  })
+
+  it('keeps schema and canonical seed in two immutable offline migrations', () => {
+    const migrationDirectories = readdirSync(
+      resolve(serverRoot, 'prisma/migrations'),
+      { withFileTypes: true },
+    )
+      .filter(entry => entry.isDirectory() && entry.name.includes('regions_'))
+      .map(entry => entry.name)
+      .sort()
+    const schemaMigration = readMigration()
+    const seedMigration = readSeedMigration()
+
+    expect(migrationDirectories).toEqual([
+      '20260727090000_regions_schema_and_permissions',
+      '20260727100000_regions_seed',
+    ])
+    expect(schemaMigration).not.toContain('INSERT INTO "regions"')
+    expect(seedMigration).not.toMatch(
+      /\b(?:CREATE|ALTER|DROP)\s+(?:TABLE|TYPE|FUNCTION|TRIGGER)\b/iu,
+    )
+    expect(seedMigration).not.toContain('ON CONFLICT DO NOTHING')
+    expect(seedMigration).not.toMatch(/\b(?:curl|fetch|https?):/iu)
+    expect(seedMigration.trimStart()).toMatch(/^BEGIN;/u)
+    expect(seedMigration.trimEnd()).toMatch(/COMMIT;$/u)
+  })
+
+  it('inserts the three levels separately and asserts all fixed counts and paths', () => {
+    const seedMigration = readSeedMigration()
+    const regionInsertStatements =
+      seedMigration.match(/INSERT INTO "regions"/gu) ?? []
+
+    expect(regionInsertStatements).toHaveLength(3)
+    expect(seedMigration).toContain('-- Seed COUNTRY_REGION: 3 nodes')
+    expect(seedMigration).toContain('-- Seed PROVINCE_STATE: 48 nodes')
+    expect(seedMigration).toContain('-- Seed CITY: 551 nodes')
+
+    for (const assertion of [
+      'region seed total count mismatch',
+      'region seed unique code count mismatch',
+      'region seed CN/COUNTRY_REGION count mismatch',
+      'region seed CN/PROVINCE_STATE count mismatch',
+      'region seed CN/CITY count mismatch',
+      'region seed TW/COUNTRY_REGION count mismatch',
+      'region seed TW/PROVINCE_STATE count mismatch',
+      'region seed TW/CITY count mismatch',
+      'region seed MY/COUNTRY_REGION count mismatch',
+      'region seed MY/PROVINCE_STATE count mismatch',
+      'region seed MY/CITY count mismatch',
+      'region seed path CN-110000-CITY mismatch',
+      'region seed path TW-64000 mismatch',
+      'region seed path MY-01-01 mismatch',
+    ]) {
+      expect(seedMigration).toContain(assertion)
+    }
   })
 })

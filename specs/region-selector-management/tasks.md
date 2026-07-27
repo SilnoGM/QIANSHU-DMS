@@ -201,18 +201,18 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     `feat: 添加地区数据库结构与权限`。
   - _Requirements: R1, R7, R8, R10_
 
-- [ ] 4. 以 TDD 生成并验证 602 节点 Seed migration
-  - [ ] 4.1 先新增并运行失败的 `server/test/region-seed.e2e-spec.ts`，固定分域数量、
+- [x] 4. 以 TDD 生成并验证 602 节点 Seed migration
+  - [x] 4.1 先新增并运行失败的 `server/test/region-seed.e2e-spec.ts`，固定分域数量、
     level 数量、唯一 code、canonical 字段和关键路径。
-  - [ ] 4.2 扩展静态 schema 测试，要求 schema 与 seed 为两份独立 migration，seed
+  - [x] 4.2 扩展静态 schema 测试，要求 schema 与 seed 为两份独立 migration，seed
     不联网、不改旧 migration、不含 `ON CONFLICT DO NOTHING`。
-  - [ ] 4.3 使用 Task 2 转换器和 `regions.seed.json` 生成不可变
+  - [x] 4.3 使用 Task 2 转换器和 `regions.seed.json` 生成不可变
     `<timestamp>_regions_seed/migration.sql`，不得手工维护 602 行双份真相。
-  - [ ] 4.4 Seed SQL 显式事务并按 3 个根、48 个省州、551 个城市三批插入；末尾 SQL
+  - [x] 4.4 Seed SQL 显式事务并按 3 个根、48 个省州、551 个城市三批插入；末尾 SQL
     断言总量、各数据域、唯一 code 和三条关键路径。
-  - [ ] 4.5 E2E 全量扫描 `name`、`englishName`、`sourceName`、`sourceCode`、
+  - [x] 4.5 E2E 全量扫描 `name`、`englishName`、`sourceName`、`sourceCode`、
     `normalizedName`、`administrativeType`、UUID 和 parent chain，不能只验证 count。
-  - [ ] 4.6 运行：
+  - [x] 4.6 运行：
 
     ```bash
     node --test server/scripts/region-data/generate-region-seed.test.mjs
@@ -221,9 +221,9 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     node --run ci:server-e2e
     ```
 
-  - [ ] 4.7 确认隔离流程已经执行两次 `prisma migrate deploy` 和一次
+  - [x] 4.7 确认隔离流程已经执行两次 `prisma migrate deploy` 和一次
     `prisma migrate status`，且第二次没有重复数据。
-  - [ ] 4.8 更新 Task 4 状态并创建提交：`feat: 添加地区首期种子数据`。
+  - [x] 4.8 更新 Task 4 状态并创建提交：`feat: 添加地区首期种子数据`。
   - _Requirements: R1, R2, R9, R10_
 
 - [ ] 5. 以 TDD 实现 DTO、normalizer 和持久化错误边界
