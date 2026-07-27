@@ -1,6 +1,11 @@
 # QsGoodTooltip 产品提示
 
-`QsGoodTooltip` 是基于 `FaTooltip` 的只读业务展示组件，用于在产品图片获得鼠标 hover 或键盘焦点时补充 SPU / SKU 信息。组件只统一左侧方形图片和右侧信息区域，不读取 API、Store，也不接收完整产品 DTO。
+产品提示由两个同目录组件组成：
+
+- `QsGoodTooltip`：完整包装器，使用 `FaTooltip` 管理触发、定位与窄屏方向。
+- `QsGoodTooltipContent`：纯内容层，只统一左侧方形图片、失败占位和右侧信息区域，可复用到已有 Tooltip 的内容插槽中。
+
+两者都不读取 API、Store，不接收完整产品 DTO，也不推断 SPU / SKU 字段。
 
 ## Props
 
@@ -23,7 +28,34 @@
 
 ## 与 ImageGroup 组合
 
-`ImageGroup` 默认已经为每张图片提供 `FaTooltip`。外层改用产品提示时必须关闭内部 Tooltip，避免两个浮层竞争：
+### 每张图片对应不同 SPU / SKU
+
+`ImageGroup` 已经为每张可见图片提供独立 `FaTooltip`。调用方通过 `#tooltip="{ item }"` 复用 `QsGoodTooltipContent`，再使用稳定的 `item.key` 查找该图片对应的产品：
+
+```vue
+<ImageGroup
+  :items="productImages"
+  :max-count="productImages.length"
+>
+  <template #tooltip="{ item }">
+    <QsGoodTooltipContent
+      :image-src="item.src"
+      :image-alt="item.alt"
+    >
+      <template v-if="productByImageKey.get(String(item.key))">
+        <!-- 调用方渲染该图片对应的 SPU / SKU 信息。 -->
+      </template>
+      <span v-else>该图片暂未关联 SPU / SKU</span>
+    </QsGoodTooltipContent>
+  </template>
+</ImageGroup>
+```
+
+此模式保留 `ImageGroup` 的默认 `tooltip=true`，且不能在 `#tooltip` 中嵌套 `QsGoodTooltip`。每个条目都应提供字符串化后仍唯一的稳定 `key`；不要按会随过滤、排序改变的 `index` 关联产品。若需要每张图片都能独立 hover，`maxCount` 必须不小于图片数量。
+
+### 整组图片对应同一产品
+
+如果整个图片组只对应同一产品，可以继续使用外层 `QsGoodTooltip`。此时必须关闭内部 Tooltip，避免两个浮层竞争：
 
 ```vue
 <QsGoodTooltip
@@ -50,7 +82,7 @@
 </QsGoodTooltip>
 ```
 
-`tabindex="0"` 为整个图片组补充产品提示的键盘入口；图片组内部原有的预览和方向键行为仍由 `ImageGroup` 管理。实施到具体页面时应同时验证鼠标 hover、键盘 focus 和图片点击，不能只验证其中一种输入方式。
+调用方应提供单个稳定根节点作为外层触发器并确保其可聚焦；图片组内部原有的预览和方向键行为仍由 `ImageGroup` 管理。实施到具体页面时应同时验证鼠标 hover、键盘 focus 和图片点击，不能只验证其中一种输入方式。
 
 ## 使用边界
 
@@ -58,4 +90,4 @@
 - `content` 中不放按钮、链接、输入框或选择器；需要交互内容时应改用 `FaPopover` 等可聚焦浮层。
 - Reka Tooltip 会忽略触屏的 `pointermove`，因此触屏用户不能依赖 hover 主动打开产品提示。
 - 左侧图片使用固定方形区域；地址为空或加载失败时显示占位，不造成内容宽度跳动。
-- 调用方使用普通 `FaTooltip`、`QsGoodTooltip` 或 `ImageGroup` 内置提示三者之一，不嵌套开启多个 Tooltip。
+- `QsGoodTooltipContent` 只提供布局，不创建新的 Tooltip；`QsGoodTooltip` 与 `ImageGroup` 内置 `FaTooltip` 不能嵌套。
