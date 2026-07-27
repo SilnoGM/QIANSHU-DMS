@@ -65,6 +65,31 @@ export interface ImageGroupItem {
 </template>
 ```
 
+## 产品提示组合
+
+`ImageGroup` 内置 Tooltip 负责逐张图片的预览与说明。业务页面如果需要在整个图片组上展示 SPU / SKU 信息，应由调用方改用 `QsGoodTooltip`，并显式关闭内部 Tooltip：
+
+```vue
+<QsGoodTooltip
+  :image-src="row.mainImage"
+  image-alt="产品主图"
+  side="right"
+>
+  <ImageGroup
+    :items="row.images"
+    :tooltip="false"
+    tabindex="0"
+    radius="lg"
+  />
+
+  <template #content>
+    <!-- 调用方自行组织产品名称、SPU / SKU 编码和规格等只读信息。 -->
+  </template>
+</QsGoodTooltip>
+```
+
+普通文本说明也可以由调用方使用外层 `FaTooltip`。内置 `FaTooltip`、外层 `FaTooltip` 和 `QsGoodTooltip` 三种方式互斥使用，同一触发区域不能嵌套多个 Tooltip。`ImageGroup` 不导入业务组件，也不增加 `tooltipType`、产品对象或领域字段。
+
 ## 交互与边界
 
 - 超过 `maxCount` 时显示 `maxCount - 1` 张真实图片和一个 `+N`；点击 `+N` 从第一张隐藏图片开始预览。
