@@ -44,6 +44,31 @@ test('系统管理主导航下的一级菜单显示权限体系且不改变路�
   assert.match(routesSource, /import SystemManagement,[\s\S]*?from '\.\/modules\/system\.management'/u)
 })
 
+test('系统管理主导航始终注册独立应用配置页面且不受环境变量控制', () => {
+  const applicationSettingsRouteSource = readFileSync(
+    new URL('../../src/router/modules/application.settings.ts', import.meta.url),
+    'utf8',
+  )
+  const routesSource = readFileSync(
+    new URL('../../src/router/routes.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(applicationSettingsRouteSource, /path: '\/system\/application-settings'/u)
+  assert.match(applicationSettingsRouteSource, /name: 'systemApplicationSettings'/u)
+  assert.match(applicationSettingsRouteSource, /title: '应用配置'/u)
+  assert.match(applicationSettingsRouteSource, /singleMenu: true/u)
+  assert.doesNotMatch(applicationSettingsRouteSource, /import\.meta\.env|VITE_APP_SETTING/u)
+  assert.match(
+    routesSource,
+    /import ApplicationSettings from '\.\/modules\/application\.settings'/u,
+  )
+  assert.match(
+    routesSource,
+    /title: '系统管理'[\s\S]*?children: \[[\s\S]*?SystemManagement,[\s\S]*?ApplicationSettings/u,
+  )
+})
+
 test('首页复用管理读取权限门槛，使无业务页面的身份进入稳定 403', () => {
   assert.deepEqual(MANAGEMENT_READ_PERMISSIONS, [
     'users:read',

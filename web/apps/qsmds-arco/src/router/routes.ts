@@ -2,6 +2,7 @@ import type { RouteRecordMainRaw } from '@fantastic-admin/types'
 import type { RouteRecordRaw } from 'vue-router'
 import { $t } from '@/locales'
 import pinia from '@/store'
+import ApplicationSettings from './modules/application.settings'
 import ComponentLibraryRoutes, {
   shouldEnableComponentLibrary,
 } from './modules/component.library'
@@ -80,6 +81,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     },
     children: [
       SystemManagement,
+      ApplicationSettings,
     ],
   },
   ...(shouldEnableComponentLibrary(import.meta.env)
