@@ -18,12 +18,12 @@ const principles = [
   },
   {
     title: '每张图片独立提示',
-    description: 'FaTooltip 始终对应当前缩略图，键盘聚焦与鼠标 hover 获得相同信息。',
+    description: '逐项 tooltip 插槽可替换内容，键盘聚焦与鼠标 hover 始终对应当前缩略图。',
     icon: 'i-lucide:message-square-text',
   },
   {
     title: '领域结构留在页面',
-    description: '组件只接收 ImageGroupItem；产品、SKU 和附件字段由调用方显式映射。',
+    description: '组件只接收 ImageGroupItem；产品、SKU 和附件由调用方使用稳定 key 显式映射。',
     icon: 'i-lucide:split',
   },
 ] as const

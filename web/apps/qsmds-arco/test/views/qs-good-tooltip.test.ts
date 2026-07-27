@@ -67,7 +67,7 @@ test('QsGoodTooltipContent 固定左图右文布局并覆盖空图和加载失�
   )
 })
 
-test('QsGoodTooltip 中文文档说明只读边界和 ImageGroup 互斥组合', () => {
+test('QsGoodTooltip 中文文档说明只读边界和 ImageGroup 两种组合', () => {
   const readme = readRelativeSource(
     '../../src/components/business/QsGoodTooltip/README.md',
   )

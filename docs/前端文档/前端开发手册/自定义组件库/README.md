@@ -61,7 +61,7 @@ web/apps/qsmds-arco/src/components/
 - `QsGenericModal` 只管理聚焦任务容器、稳定状态和关闭生命周期；Footer 按钮、表单、权限与数据写入由调用方负责。
 - `QsToast` 通过 `useQsToast()` 提供受控轻提示 API；调用方只提供文案、时长和动作，不替换内部视觉组件。
 - `ImageGroup` 只管理图片缩略图、逐图 Tooltip、溢出和整组预览，不认识产品、SKU 或附件领域字段。
-- `QsGoodTooltip` 只提供产品图与只读信息插槽；使用它包裹 `ImageGroup` 时必须传入 `:tooltip="false"`，避免嵌套 Tooltip。
+- `QsGoodTooltip` 提供完整 Tooltip 包装器，`QsGoodTooltipContent` 提供可复用的左图右文内容层。`ImageGroup` 每张图片对应不同 SPU / SKU 时，通过逐项 `tooltip` 插槽按稳定 `item.key` 渲染内容层；只有整组对应同一产品、使用外层包装器时才传入 `:tooltip="false"`。
 - 组件内核不足以满足已确认需求时，先按[前端开发手册](../README.md#5-组件与代码边界)复核选型，再决定扩展现有组件或回退到下层能力。
 - 排版角色统一遵循[全局排版规范](../../全局排版规范.md)，不得按列名、文案或对齐方式猜测金额、单号、日期等数据语义。
 

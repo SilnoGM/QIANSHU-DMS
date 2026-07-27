@@ -21,8 +21,8 @@ const principles = [
     icon: 'i-lucide:badge-info',
   },
   {
-    title: '与图片提示互斥',
-    description: '外层使用产品提示时关闭 ImageGroup 内置 Tooltip，避免同一触发区域出现竞争浮层。',
+    title: '内容层可以复用',
+    description: '已有 Tooltip 宿主时复用 QsGoodTooltipContent；只有完整包装时才使用 QsGoodTooltip。',
     icon: 'i-lucide:split',
   },
 ] as const

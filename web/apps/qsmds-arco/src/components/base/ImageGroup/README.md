@@ -37,7 +37,7 @@ export interface ImageGroupItem {
 
 ## Slots 与 Events
 
-- `tooltip`：覆盖单张图片的 Tooltip 内容。
+- `tooltip`：覆盖单张图片的 Tooltip 内容，作用域参数为 `{ item, index, total }`。
 - `empty`：覆盖无有效图片时的 `—`。
 - `error`：覆盖单张图片加载失败状态。
 - `preview`：成功打开预览时返回 `{ item, index }`。
@@ -67,7 +67,37 @@ export interface ImageGroupItem {
 
 ## 产品提示组合
 
-`ImageGroup` 内置 Tooltip 负责逐张图片的预览与说明。业务页面如果需要在整个图片组上展示 SPU / SKU 信息，应由调用方改用 `QsGoodTooltip`，并显式关闭内部 Tooltip：
+`ImageGroup` 不决定业务提示类型，调用方按产品与图片的对应关系选择组合方式。
+
+### 每张图片对应不同 SPU / SKU
+
+保留内置 `FaTooltip`，通过逐项 `tooltip` 插槽复用不含浮层的 `QsGoodTooltipContent`。映射必须使用每张图片显式、稳定且字符串化后仍唯一的 `item.key`：
+
+```vue
+<ImageGroup
+  :items="row.images"
+  :max-count="row.images.length"
+  radius="lg"
+>
+  <template #tooltip="{ item }">
+    <QsGoodTooltipContent
+      :image-src="item.src"
+      :image-alt="item.alt"
+    >
+      <template v-if="productByImageKey.get(String(item.key))">
+        <!-- 渲染该图片对应的 SPU / SKU 名称、编码和规格。 -->
+      </template>
+      <span v-else>该图片暂未关联 SPU / SKU</span>
+    </QsGoodTooltipContent>
+  </template>
+</ImageGroup>
+```
+
+此模式不能传入 `:tooltip="false"`，也不能在 `tooltip` 插槽中嵌套自带 `FaTooltip` 的 `QsGoodTooltip`。不要按 `index` 映射产品：空地址过滤或排序变化会改变索引。严格要求每张图片都能 hover 时，`maxCount` 不得小于图片数量，因为 `+N` 是聚合入口而不是单图触发器。
+
+### 整组图片对应同一产品
+
+如果整个图片组对应同一产品，由调用方使用外层 `QsGoodTooltip`，并显式关闭内部 Tooltip：
 
 ```vue
 <QsGoodTooltip
@@ -88,7 +118,7 @@ export interface ImageGroupItem {
 </QsGoodTooltip>
 ```
 
-普通文本说明也可以由调用方使用外层 `FaTooltip`。内置 `FaTooltip`、外层 `FaTooltip` 和 `QsGoodTooltip` 三种方式互斥使用，同一触发区域不能嵌套多个 Tooltip。`ImageGroup` 不导入业务组件，也不增加 `tooltipType`、产品对象或领域字段。
+普通文本说明也可以由调用方使用外层 `FaTooltip`。同一触发区域不能嵌套多个 Tooltip；`QsGoodTooltipContent` 只是内容层，不会增加嵌套浮层。`ImageGroup` 不导入业务组件，也不增加 `tooltipType`、产品对象或领域字段。
 
 ## 交互与边界
 
