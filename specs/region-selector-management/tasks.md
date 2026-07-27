@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 2 与 Task 3）
+- 状态：Phase 4 实施中（Task 6）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -226,12 +226,12 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 4.8 更新 Task 4 状态并创建提交：`feat: 添加地区首期种子数据`。
   - _Requirements: R1, R2, R9, R10_
 
-- [ ] 5. 以 TDD 实现 DTO、normalizer 和持久化错误边界
-  - [ ] 5.1 先新增并运行失败的 DTO 测试，覆盖 selection、management、command、
+- [x] 5. 以 TDD 实现 DTO、normalizer 和持久化错误边界
+  - [x] 5.1 先新增并运行失败的 DTO 测试，覆盖 selection、management、command、
     UUID param、query pagination/sort/filter、额外字段和空 PATCH。
-  - [ ] 5.2 先新增并运行失败的 `region.normalizer.spec.ts`，覆盖 NFC、Unicode 空白、
+  - [x] 5.2 先新增并运行失败的 `region.normalizer.spec.ts`，覆盖 NFC、Unicode 空白、
     `en-US` lowercase、`É/é`、`İ/i̇`、code 大写、code points 上限和可选字段转 null。
-  - [ ] 5.3 先新增并运行失败的 `region.persistence-error.mapper.spec.ts`，覆盖：
+  - [x] 5.3 先新增并运行失败的 `region.persistence-error.mapper.spec.ts`，覆盖：
     - code unique；
     - sibling composite unique；
     - root partial unique；
@@ -239,14 +239,14 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     - hierarchy check；
     - serialization/deadlock/lock timeout；
     - 未知异常固定 500 且不泄露底层内容。
-  - [ ] 5.4 新增 `server/src/modules/regions/dto/*.ts`、
+  - [x] 5.4 新增 `server/src/modules/regions/dto/*.ts`、
     `region.normalizer.ts`、`region.persistence-error.mapper.ts`，公共 DTO 与
     `design.md` 第 7.4 节一致。
-  - [ ] 5.5 `ownStatus` 与 `availability` 使用设计中的互斥规则；不接受客户端 level
+  - [x] 5.5 `ownStatus` 与 `availability` 使用设计中的互斥规则；不接受客户端 level
     推导管理列表。
-  - [ ] 5.6 运行定向测试、`prisma:validate`、Server typecheck/lint；确认中文字段错误和
+  - [x] 5.6 运行定向测试、`prisma:validate`、Server typecheck/lint；确认中文字段错误和
     `422 VALIDATION_FAILED` 契约稳定。
-  - [ ] 5.7 更新 Task 5 状态并创建提交：`feat: 添加地区服务输入与错误边界`。
+  - [x] 5.7 更新 Task 5 状态并创建提交：`feat: 添加地区服务输入与错误边界`。
   - _Requirements: R1, R3, R5, R6, R8, R10_
 
 - [ ] 6. 以 TDD 实现地区选择查询 Service、Controller 与 OpenAPI
