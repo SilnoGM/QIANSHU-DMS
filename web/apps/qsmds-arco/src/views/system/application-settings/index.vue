@@ -17,7 +17,7 @@ defineOptions({
     <div class="px-4 lg:px-6">
       <AppSettingsPanel active mode="settings" />
 
-      <div class="mx-auto pb-4 max-w-2xl">
+      <div class="mx-auto mt-4 pb-4 max-w-2xl">
         <AppSettingsActions mode="settings" />
       </div>
     </div>
