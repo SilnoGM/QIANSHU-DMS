@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 9）
+- 状态：Phase 4 实施中（Task 10）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -322,24 +322,24 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 8.10 更新 Task 8 状态并创建提交：`feat: 添加地区管理维护接口`。
   - _Requirements: R1, R6, R7, R8, R9, R10_
 
-- [ ] 9. 以 TDD 实现 Web API 与 RegionSelectorProvider
-  - [ ] 9.1 先新增并运行失败的 `web/apps/qsmds-arco/test/api/regions.test.ts`，固定
+- [x] 9. 以 TDD 实现 Web API 与 RegionSelectorProvider
+  - [x] 9.1 先新增并运行失败的 `web/apps/qsmds-arco/test/api/regions.test.ts`，固定
     method/path/query/body/signal、local error presentation，以及全部写请求 no-retry。
-  - [ ] 9.2 新增 `src/api/modules/regions.ts`，只从 generated types 导入 DTO；不手写
+  - [x] 9.2 新增 `src/api/modules/regions.ts`，只从 generated types 导入 DTO；不手写
     OpenAPI 响应结构。
-  - [ ] 9.3 先新增并运行失败的 `region-selector-provider.test.ts`，固定 DTO runtime
+  - [x] 9.3 先新增并运行失败的 `region-selector-provider.test.ts`，固定 DTO runtime
     校验、恰好三层 path、parent 连续、city ID 相等、deep readonly/freeze。
-  - [ ] 9.4 红测固定 identity cache key、5 分钟 TTL、相同 key in-flight dedupe、
+  - [x] 9.4 红测固定 identity cache key、5 分钟 TTL、相同 key in-flight dedupe、
     单消费者取消、全部消费者取消、failure/cancel 不缓存。
-  - [ ] 9.5 红测固定 auth signal/epoch/userId、generation 防迟到、登出清理和
+  - [x] 9.5 红测固定 auth signal/epoch/userId、generation 防迟到、登出清理和
     `subscribeInvalidation`。
-  - [ ] 9.6 红测固定 `BroadcastChannel("qianshu-regions-v1")` 只发送
+  - [x] 9.6 红测固定 `BroadcastChannel("qianshu-regions-v1")` 只发送
     `{ type: "REGIONS_CHANGED" }`，接收后不回广播、不传地区数据。
-  - [ ] 9.7 实现 `types.ts`、`provider.ts` 和受控 invalidation API；`main.ts` 在安装
+  - [x] 9.7 实现 `types.ts`、`provider.ts` 和受控 invalidation API；`main.ts` 在安装
     Pinia 后提供默认 provider，provider prop 仍可供隔离环境覆盖。
-  - [ ] 9.8 运行 API/provider 定向测试、`pnpm -C web test:api`、typecheck、lint；
+  - [x] 9.8 运行 API/provider 定向测试、`pnpm -C web test:api`、typecheck、lint；
     确认无新依赖和无业务数据持久化。
-  - [ ] 9.9 更新 Task 9 状态并创建提交：`feat: 添加地区选择数据提供层`。
+  - [x] 9.9 更新 Task 9 状态并创建提交：`feat: 添加地区选择数据提供层`。
   - _Requirements: R3, R4, R6, R8, R9, R10_
 
 - [ ] 10. 以 TDD 实现 `QsRegionSelector`
