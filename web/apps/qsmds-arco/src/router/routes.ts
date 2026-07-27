@@ -3,6 +3,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import { $t } from '@/locales'
 import pinia from '@/store'
 import ApplicationSettings from './modules/application.settings'
+import BasicData from './modules/basic.data'
 import ComponentLibraryRoutes, {
   shouldEnableComponentLibrary,
 } from './modules/component.library'
@@ -81,6 +82,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     },
     children: [
       SystemManagement,
+      BasicData,
       ApplicationSettings,
     ],
   },
