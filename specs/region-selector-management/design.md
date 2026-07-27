@@ -950,8 +950,11 @@ emit('change', {
 - `resolvedPathTree`：当前 `modelValue` 的完整路径，可包含已停用节点；
 - `searchTree`：当前一次远程搜索返回的完整路径。
 
-渲染前按 UUID 合并，保持 Server 顺序；搜索词变化时整棵替换 `searchTree`，不能让
-历史搜索持续膨胀内存。
+真正交给 `ACascader` 的交互树只合并 `navigationTree` 与当前搜索态的
+`searchTree`，并保持 Server 顺序；搜索词变化时整棵替换 `searchTree`，清空搜索后
+立即退出交互树，不能让历史搜索持续膨胀内存。`resolvedPathTree` 只用于当前值的严格
+校验和安全 fallback label，不进入普通 options；否则单条历史路径的部分 children 会
+让 Arco 误判父级已完成 lazy load，阻断同国省州或同省城市切换。
 
 行为：
 

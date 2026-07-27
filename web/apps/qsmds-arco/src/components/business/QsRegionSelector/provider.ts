@@ -282,6 +282,7 @@ function cloneSearchResponse(value: unknown): RegionSelectorSearchResult {
       || !Number.isSafeInteger(source.limit)
       || (source.limit as number) < 1
       || (source.limit as number) > 50
+      || source.items.length > (source.limit as number)
     ) {
       throw new TypeError('Invalid search response')
     }
@@ -632,6 +633,11 @@ export function createRegionSelectorProvider(
     return consumeInFlight(key, entry, signal)
   }
 
+  // 先验证身份上下文，再创建可选的跨标签资源；初始化失败不能泄漏 channel。
+  const initialContext = readRuntimeContext()
+  currentIdentityKey = initialContext.identityKey
+  bindAuthSignal(initialContext.authSignal)
+
   try {
     channel = options.channelFactory?.(REGION_BROADCAST_CHANNEL_NAME) ?? null
   }
@@ -647,10 +653,6 @@ export function createRegionSelectorProvider(
       }
     }
   }
-
-  const initialContext = readRuntimeContext()
-  currentIdentityKey = initialContext.identityKey
-  bindAuthSignal(initialContext.authSignal)
 
   const provider: RegionSelectorProvider = Object.freeze({
     listChildren: ({

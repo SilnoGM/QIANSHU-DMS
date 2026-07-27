@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 10）
+- 状态：Phase 4 实施中（Task 11）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -342,29 +342,31 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 9.9 更新 Task 9 状态并创建提交：`feat: 添加地区选择数据提供层`。
   - _Requirements: R3, R4, R6, R8, R9, R10_
 
-- [ ] 10. 以 TDD 实现 `QsRegionSelector`
-  - [ ] 10.1 先新增并运行失败的 `region-selector.logic.test.ts` 和
+- [x] 10. 以 TDD 实现 `QsRegionSelector`
+  - [x] 10.1 先新增并运行失败的 `region-selector.logic.test.ts` 和
     `region-selector.test.ts`，固定 `CITY UUID | null`、typed change 和只读 tuple。
-  - [ ] 10.2 红测固定 navigation/resolved/search 三棵树、UUID merge、lazy load、
-    `done()` retry、250ms remote search 和 request version stale 防护。
-  - [ ] 10.3 红测固定 existing ID path 回显不触发 change、停用 path 标记、无效 path
+  - [x] 10.2 红测固定 navigation/resolved/search 三棵树隔离、交互树 UUID merge、
+    partial path 不阻断 lazy load、`done()` retry、250ms remote search 和 request
+    version stale 防护。
+  - [x] 10.3 红测固定 existing ID path 回显不触发 change、停用 path 标记、无效 path
     保留原 value、只允许 CITY、clear 转 null。
-  - [ ] 10.4 实现 `logic.ts`、`control-attrs.ts`、`index.vue`，以
+  - [x] 10.4 实现 `logic.ts`、`control-attrs.ts`、`index.vue`，以
     `ACascader@2.58.0` 为私有内核；不得使用/扩展 `FaCascader` 或暴露 Arco 类型。
-  - [ ] 10.5 固定 `multiple/pathMode/checkStrictly/expandTrigger` 等内核参数，控制
+  - [x] 10.5 固定 `multiple/pathMode/checkStrictly/expandTrigger` 等内核参数，控制
     `inputValue`、`filterOption`、`formatLabel`、loading/error/retry。
-  - [ ] 10.6 实现真实 input bridge：id/name/tabindex/required/autocomplete/aria、
+  - [x] 10.6 实现真实 input bridge：id/name/tabindex/required/autocomplete/aria、
     focus/blur、describedby 合并、清理旧 attr 和 Arco DOM 唯一 input 断言。
-  - [ ] 10.7 实现复合 required 与原生 form 语义：搜索词不能替代 CITY 选择，
+  - [x] 10.7 实现复合 required 与原生 form 语义：搜索词不能替代 CITY 选择，
     `FormData` 必须写 CITY UUID。
-  - [ ] 10.8 使用现有语义 token 实现 full width、完整 path、停用/错误文字、390px
+  - [x] 10.8 使用现有语义 token 实现 full width、完整 path、停用/错误文字、390px
     popup 内部滚动、dark 和 reduced motion；不增加渐变、卡片堆叠或局部字体栈。
-  - [ ] 10.9 定向运行：
+  - [x] 10.9 定向运行：
 
     ```bash
     pnpm -C web exec node --import tsx --test \
       apps/qsmds-arco/test/views/region-selector.logic.test.ts \
       apps/qsmds-arco/test/views/region-selector.test.ts \
+      apps/qsmds-arco/test/views/region-selector-control-attrs.test.ts \
       apps/qsmds-arco/test/views/region-selector-provider.test.ts
     pnpm -C web test:api
     pnpm -C web typecheck
@@ -372,9 +374,9 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     pnpm -C web build
     ```
 
-  - [ ] 10.10 如 `tsx` CLI 在沙箱报 IPC `listen EPERM`，仅对上述
+  - [x] 10.10 如 `tsx` CLI 在沙箱报 IPC `listen EPERM`，仅对上述
     `node --import tsx --test` 窄命令授权重试，不修改 watcher 或测试语义。
-  - [ ] 10.11 更新 Task 10 状态并创建提交：`feat: 添加地区选择器组件`。
+  - [x] 10.11 更新 Task 10 状态并创建提交：`feat: 添加地区选择器组件`。
   - _Requirements: R3, R4, R8, R9, R10_
 
 - [ ] 11. 以 TDD 增加中文 README 与隔离 Showcase

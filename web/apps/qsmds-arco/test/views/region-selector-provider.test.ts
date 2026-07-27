@@ -320,6 +320,33 @@ test('resolvePath 与 search 返回独立 deep-frozen path，并剥离 DTO envel
   harness.dispose()
 })
 
+test('search 拒绝 items 超过声明 limit 的畸形成功响应', async () => {
+  const harness = createHarness({
+    dataSource: createDataSource({
+      search: async () => ({
+        hasMore: true,
+        items: [
+          { cityId: CITY_ID, path: rawPath().path },
+          { cityId: CITY_ID, path: rawPath().path },
+        ],
+        limit: 1,
+      }),
+    }),
+  })
+
+  await assert.rejects(
+    harness.provider.search({
+      query: '高雄',
+      signal: new AbortController().signal,
+    }),
+    (error: unknown) =>
+      error instanceof RegionSelectorResponseError
+      && error.code === 'REGION_SELECTOR_RESPONSE_INVALID',
+  )
+
+  harness.dispose()
+})
+
 test('缓存 key 包含 identity 与规范化参数，TTL 固定 300000ms 且只缓存成功结果', async () => {
   let now = 10_000
   const calls: Array<{ kind: string, value: string | null }> = []
@@ -616,6 +643,30 @@ test('BroadcastChannel 只发送 exact 失效消息，收到消息只本地失�
   harness.dispose()
   assert.equal(channel.closed, true)
   assert.equal(channel.onmessage, null)
+})
+
+test('初始身份上下文无效时不创建 BroadcastChannel 资源', () => {
+  const channel = createFakeChannel()
+  let channelFactoryCalls = 0
+
+  assert.throws(
+    () => createRegionSelectorProvider({
+      channelFactory: () => {
+        channelFactoryCalls += 1
+        return channel
+      },
+      dataSource: createDataSource(),
+      getAuthSignal: () => new AbortController().signal,
+      getIdentity: () => {
+        throw new Error('identity unavailable')
+      },
+      now: () => 0,
+    }),
+    /identity unavailable/u,
+  )
+
+  assert.equal(channelFactoryCalls, 0)
+  assert.equal(channel.closed, false)
 })
 
 test('默认 controller 显式安装，全局 invalidation 未安装时 no-op', () => {
