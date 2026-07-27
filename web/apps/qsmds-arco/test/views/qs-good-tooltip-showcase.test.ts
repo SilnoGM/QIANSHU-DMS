@@ -35,7 +35,7 @@ test('产品提示拥有独立业务组件页面并展示核心边界状态', ()
   )
 })
 
-test('图片组页面保留原示例并追加 QsGoodTooltip 互斥组合示例', () => {
+test('图片组页面保留原示例并追加逐图 SPU / SKU 产品提示示例', () => {
   const pageSource = readRelativeSource(
     '../../src/views/component_library/basic/image-group.vue',
   )
@@ -51,17 +51,28 @@ test('图片组页面保留原示例并追加 QsGoodTooltip 互斥组合示例',
   )
 
   assert.match(combinationSource, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
-  assert.match(combinationSource, /import QsGoodTooltip from '@\/components\/business\/QsGoodTooltip\/index\.vue'/u)
-  assert.equal((combinationSource.match(/<QsGoodTooltip/gu) ?? []).length, 2)
-  assert.equal((combinationSource.match(/^\s+:tooltip="false"$/gmu) ?? []).length, 2)
-  assert.equal(
-    (combinationSource.match(/data-slot="good-tooltip-image-group-trigger"/gu) ?? []).length,
-    2,
+  assert.match(
+    combinationSource,
+    /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u,
   )
-  assert.equal((combinationSource.match(/^\s+tabindex="0"$/gmu) ?? []).length, 2)
-  assert.match(combinationSource, /SPU 信息/u)
-  assert.match(combinationSource, /SKU 信息/u)
-  assert.match(combinationSource, /<template #content>/u)
+  assert.match(combinationSource, /new Map<string, GoodTooltipExample>/u)
+  assert.match(combinationSource, /function resolveGoodByImage\(item: ImageGroupItem\)/u)
+  assert.match(combinationSource, /String\(item\.key\)/u)
+  const imageKeys = [...combinationSource.matchAll(/key: '((?:spu|sku):[^']+)'/gu)]
+    .map(match => match[1])
+  assert.equal(imageKeys.length, 4)
+  assert.equal(new Set(imageKeys).size, imageKeys.length)
+  assert.match(combinationSource, /#tooltip="\{ item, index, total \}"/u)
+  assert.match(combinationSource, /<QsGoodTooltipContent/u)
+  assert.match(combinationSource, /:image-src="item\.src"/u)
+  assert.match(combinationSource, /:max-count="productImages\.length"/u)
+  assert.match(combinationSource, /该图片暂未关联 SPU \/ SKU/u)
+  assert.match(combinationSource, /SPU-BAG-/u)
+  assert.match(combinationSource, /SKU-BAG-/u)
+  assert.doesNotMatch(combinationSource, /import QsGoodTooltip from/u)
+  assert.doesNotMatch(combinationSource, /<QsGoodTooltip(?:\s|>)/u)
+  assert.doesNotMatch(combinationSource, /:tooltip="false"/u)
+  assert.doesNotMatch(combinationSource, /good-tooltip-image-group-trigger/u)
   assert.doesNotMatch(
     combinationSource,
     /@\/api|useApp\w*Store|linear-gradient|radial-gradient|purple|violet|indigo|fuchsia/u,

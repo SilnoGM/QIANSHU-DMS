@@ -139,6 +139,13 @@ test('ImageGroup 复用 FaTooltip 和整组图片预览，并覆盖完整交互�
   assert.match(source, /import \{ useFaImagePreview \} from '@fantastic-admin\/components'/u)
   assert.match(source, /<FaTooltip/u)
   assert.match(source, /<template #content>/u)
+  assert.match(
+    source,
+    /tooltip: \(props: \{ index: number, item: ImageGroupItem, total: number \}\) => unknown/u,
+  )
+  assert.match(source, /name="tooltip"[\s\S]*:item="entry\.image\.item"/u)
+  assert.match(source, /:index="entry\.image\.index"/u)
+  assert.match(source, /:total="normalizedItems\.length"/u)
   assert.match(source, /imagePreview\.open\(previewSources\.value,\s*index\)/u)
   assert.match(source, /data-slot="image-group"/u)
   assert.match(source, /role="group"/u)
@@ -155,7 +162,7 @@ test('ImageGroup 复用 FaTooltip 和整组图片预览，并覆盖完整交互�
   assert.match(source, /data-image-state="loaded"/u)
   assert.doesNotMatch(
     source,
-    /@\/api|useApp\w*Store|linear-gradient|radial-gradient|purple|violet|indigo|fuchsia|system-ui|-apple-system|Inter|Roboto|Arial/u,
+    /@\/api|@\/components\/business\/QsGoodTooltip|useApp\w*Store|linear-gradient|radial-gradient|purple|violet|indigo|fuchsia|system-ui|-apple-system|Inter|Roboto|Arial/u,
   )
 })
 
