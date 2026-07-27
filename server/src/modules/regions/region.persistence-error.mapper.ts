@@ -37,6 +37,25 @@ function addTargets(destination: Set<string>, value: unknown): void {
   }
 }
 
+function addConstraintFacts(
+  facts: PersistenceErrorFacts,
+  value: unknown,
+): void {
+  if (typeof value === 'string') {
+    addString(facts.constraints, value)
+    return
+  }
+  if (!isRecord(value)) {
+    return
+  }
+
+  // Prisma 7 driver adapter 使用结构化 constraint，而旧 client 使用字符串名称。
+  // 这里只读取明确的 fields/index/name，绝不扫描 message/detail。
+  addTargets(facts.targets, value.fields)
+  addString(facts.constraints, value.index)
+  addString(facts.constraints, value.name)
+}
+
 /**
  * 只读取白名单结构字段，不解析数据库 message/detail，避免内部 SQL 或用户值被误当
  * 成稳定错误信号，也确保未知异常不会随响应向外泄露。
@@ -59,15 +78,18 @@ function readPersistenceErrorFacts(error: unknown): PersistenceErrorFacts {
     visited.add(candidate)
 
     addString(facts.codes, candidate.code)
-    addString(facts.constraints, candidate.constraint)
+    addConstraintFacts(facts, candidate.constraint)
     addString(facts.fieldNames, candidate.field_name)
+    addString(facts.fieldNames, candidate.fieldName)
     addTargets(facts.targets, candidate.target)
 
     // Prisma 与 driver adapter 的结构在不同运行模式下会多包一层，只遍历已知容器。
     for (const key of [
       'meta',
       'database_error',
+      'databaseError',
       'driver_adapter_error',
+      'driverAdapterError',
       'cause',
     ]) {
       const nested = candidate[key]
@@ -138,6 +160,11 @@ export function mapRegionPersistenceError(error: unknown): ApiException {
     isUniqueViolation
     && (
       (
+        facts.targets.size === 1
+        && facts.targets.has('normalizedname')
+      )
+      ||
+      (
         facts.targets.has('parentid')
         && facts.targets.has('normalizedname')
       )
@@ -162,6 +189,7 @@ export function mapRegionPersistenceError(error: unknown): ApiException {
     isForeignKeyViolation
     && (
       hasParentForeignKeyFieldName(facts)
+      || facts.targets.has('parentid')
       || hasConstraint(facts, 'regions_parent_id_fkey')
     )
   ) {

@@ -1,21 +1,41 @@
 import {
+  Body,
   Controller,
   Get,
+  HttpCode,
   HttpStatus,
   Param,
+  Patch,
+  Post,
   Query,
+  Req,
 } from '@nestjs/common'
 import { ApiTags } from '@nestjs/swagger'
 
+import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
+import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { EmptyRequestDto } from '../auth/dto/empty-request.dto'
+import {
+  CreateRegionRequestDto,
+  UpdateRegionRequestDto,
+} from './dto/region-command.dto'
 import {
   RegionIdParamDto,
   RegionListQueryDto,
   RegionNavigationNodeDto,
 } from './dto/region-management.dto'
-import { RegionDto, RegionPageDto } from './dto/region.dto'
+import {
+  RegionDto,
+  RegionMutationResultDto,
+  RegionPageDto,
+} from './dto/region.dto'
+import {
+  RegionCommandService,
+  type RegionsCommandContext,
+} from './region-command.service'
 import { RegionQueryService } from './region-query.service'
 
 /**
@@ -27,7 +47,10 @@ import { RegionQueryService } from './region-query.service'
 @ApiTags('regions')
 @Controller('regions')
 export class RegionsController {
-  constructor(private readonly regions: RegionQueryService) {}
+  constructor(
+    private readonly regions: RegionQueryService,
+    private readonly commands: RegionCommandService,
+  ) {}
 
   @Get('navigation')
   @RequirePermissions('regions:read')
@@ -80,6 +103,137 @@ export class RegionsController {
     return this.regions.list(query)
   }
 
+  @Post()
+  @RequirePermissions('regions:create')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiContractResponse({
+    status: HttpStatus.CREATED,
+    type: RegionDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'regions_create',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['REGION_PARENT_NOT_FOUND'] },
+      {
+        status: 409,
+        codes: [
+          'REGION_CODE_ALREADY_EXISTS',
+          'REGION_NAME_ALREADY_EXISTS',
+          'REGION_STATE_CHANGED',
+        ],
+      },
+      {
+        status: 422,
+        codes: ['REGION_HIERARCHY_INVALID', 'VALIDATION_FAILED'],
+      },
+    ],
+  })
+  create(
+    @Body() dto: CreateRegionRequestDto,
+    @Req() request: object,
+  ): Promise<RegionDto> {
+    return this.commands.create(this.commandContext(request), dto)
+  }
+
+  @Post(':regionId/enable')
+  @RequirePermissions('regions:enable')
+  @HttpCode(HttpStatus.OK)
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: RegionMutationResultDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'regions_enable',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['REGION_NOT_FOUND'] },
+      { status: 409, codes: ['REGION_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  enable(
+    @Param() params: RegionIdParamDto,
+    @Body() _dto: EmptyRequestDto,
+    @Req() request: object,
+  ): Promise<RegionMutationResultDto> {
+    return this.commands.enable(
+      this.commandContext(request),
+      params.regionId,
+    )
+  }
+
+  @Post(':regionId/disable')
+  @RequirePermissions('regions:disable')
+  @HttpCode(HttpStatus.OK)
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: RegionMutationResultDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'regions_disable',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['REGION_NOT_FOUND'] },
+      { status: 409, codes: ['REGION_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  disable(
+    @Param() params: RegionIdParamDto,
+    @Body() _dto: EmptyRequestDto,
+    @Req() request: object,
+  ): Promise<RegionMutationResultDto> {
+    return this.commands.disable(
+      this.commandContext(request),
+      params.regionId,
+    )
+  }
+
   @Get(':regionId')
   @RequirePermissions('regions:read')
   @ApiContractResponse({
@@ -105,5 +259,57 @@ export class RegionsController {
   })
   getById(@Param() params: RegionIdParamDto): Promise<RegionDto> {
     return this.regions.getById(params.regionId)
+  }
+
+  @Patch(':regionId')
+  @RequirePermissions('regions:update')
+  @ApiContractResponse({
+    status: HttpStatus.OK,
+    type: RegionDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'regions_update',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['REGION_NOT_FOUND'] },
+      {
+        status: 409,
+        codes: ['REGION_NAME_ALREADY_EXISTS', 'REGION_STATE_CHANGED'],
+      },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  update(
+    @Param() params: RegionIdParamDto,
+    @Body() dto: UpdateRegionRequestDto,
+    @Req() request: object,
+  ): Promise<RegionDto> {
+    return this.commands.update(
+      this.commandContext(request),
+      params.regionId,
+      dto,
+    )
+  }
+
+  private commandContext(request: object): RegionsCommandContext {
+    return {
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }
   }
 }

@@ -36,6 +36,25 @@ describe('Region persistence error mapper', () => {
     expectMapped(
       {
         code: 'P2002',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { fields: ['normalized_name'] },
+            },
+          },
+        },
+        message: 'must-not-leak root name',
+      },
+      {
+        code: 'REGION_NAME_ALREADY_EXISTS',
+        message: '同一上级下地区名称已存在',
+        status: 409,
+      },
+    )
+    expectMapped(
+      {
+        code: 'P2002',
         message: 'must-not-leak sibling name',
         meta: { target: ['parent_id', 'normalized_name'] },
       },
@@ -50,6 +69,46 @@ describe('Region persistence error mapper', () => {
         code: '23505',
         constraint: 'regions_root_normalized_name_key',
         detail: 'must-not-leak root name',
+      },
+      {
+        code: 'REGION_NAME_ALREADY_EXISTS',
+        message: '同一上级下地区名称已存在',
+        status: 409,
+      },
+    )
+    expectMapped(
+      {
+        code: 'P2002',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: { fields: ['code'] },
+            },
+          },
+        },
+        message: 'must-not-leak Prisma adapter detail',
+      },
+      {
+        code: 'REGION_CODE_ALREADY_EXISTS',
+        message: '地区编码已存在',
+        status: 409,
+      },
+    )
+    expectMapped(
+      {
+        code: 'P2002',
+        meta: {
+          driverAdapterError: {
+            cause: {
+              kind: 'UniqueConstraintViolation',
+              constraint: {
+                fields: ['parent_id', 'normalized_name'],
+              },
+            },
+          },
+        },
+        message: 'must-not-leak sibling values',
       },
       {
         code: 'REGION_NAME_ALREADY_EXISTS',
@@ -127,11 +186,6 @@ describe('Region persistence error mapper', () => {
       new Error('must-not-leak password=secret'),
       { code: 'P2002', meta: { target: ['unknown'] }, message: 'must-not-leak' },
       { code: 'P2002', meta: { target: ['zipcode'] }, message: 'must-not-leak' },
-      {
-        code: 'P2002',
-        meta: { target: ['normalized_name'] },
-        message: 'must-not-leak',
-      },
       {
         code: 'P2002',
         meta: { target: ['parent_id', 'normalized_name_shadow'] },

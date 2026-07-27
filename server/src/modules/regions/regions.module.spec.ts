@@ -1,6 +1,7 @@
 import { HTTP_MODULES } from '../../http.modules'
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
+import { RegionCommandService } from './region-command.service'
 import { RegionQueryService } from './region-query.service'
 import { RegionSelectionController } from './region-selection.controller'
 import { RegionsController } from './regions.controller'
@@ -18,6 +19,7 @@ describe('RegionsModule metadata', () => {
     ])
     expect(Reflect.getMetadata('providers', RegionsModule)).toEqual([
       RegionQueryService,
+      RegionCommandService,
     ])
   })
 

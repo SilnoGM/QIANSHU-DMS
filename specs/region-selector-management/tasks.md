@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 8）
+- 状态：Phase 4 实施中（Task 9）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -299,27 +299,27 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     `feat: 添加地区管理查询接口`。
   - _Requirements: R5, R7, R8, R9, R10_
 
-- [ ] 8. 以 TDD 实现地区创建、编辑、启停、并发与审计
-  - [ ] 8.1 先新增并运行失败的 `RegionCommandService`、management controller 和真实
+- [x] 8. 以 TDD 实现地区创建、编辑、启停、并发与审计
+  - [x] 8.1 先新增并运行失败的 `RegionCommandService`、management controller 和真实
     PostgreSQL E2E 写场景。
-  - [ ] 8.2 创建测试固定 parent 推导 level、CITY 下拒绝、parent `FOR SHARE`、全局
+  - [x] 8.2 创建测试固定 parent 推导 level、CITY 下拒绝、parent `FOR SHARE`、全局
     code 和 sibling/root normalized name 并发冲突。
-  - [ ] 8.3 编辑测试固定 `SELECT ... FOR UPDATE`、仅 name/englishName/sortOrder、
+  - [x] 8.3 编辑测试固定 `SELECT ... FOR UPDATE`、仅 name/englishName/sortOrder、
     identity 字段 422、空/无变化幂等。
-  - [ ] 8.4 启停测试固定 ancestry/subtree 稳定锁序、只改变目标 own state、后代
+  - [x] 8.4 启停测试固定 ancestry/subtree 稳定锁序、只改变目标 own state、后代
     effective 状态实时变化、`affectedCount` 和重复命令幂等。
-  - [ ] 8.5 所有真实 mutation 先 `applyTransactionTimeouts`，Region 和 Audit 在同一
+  - [x] 8.5 所有真实 mutation 先 `applyTransactionTimeouts`，Region 和 Audit 在同一
     transaction；模拟 Audit 失败证明 Region 回滚。
-  - [ ] 8.6 Audit 固定四个 event、trusted actor、`targetType="Region"`、target UUID、
+  - [x] 8.6 Audit 固定四个 event、trusted actor、`targetType="Region"`、target UUID、
     排序 `changedFields`、string level、number affectedCount，不记录字段值或请求体。
-  - [ ] 8.7 实现 POST/PATCH/enable/disable endpoint，分别要求
+  - [x] 8.7 实现 POST/PATCH/enable/disable endpoint，分别要求
     `regions:create/update/enable/disable` 和 CSRF；在 OpenAPI 中固定写接口契约，
     Task 9 的 Web wrapper 显式使用 `retry:false`；不注册 DELETE route。
-  - [ ] 8.8 E2E 覆盖部分权限组合、malformed JSON 400、DTO 422、404/409、CSRF、
+  - [x] 8.8 E2E 覆盖部分权限组合、malformed JSON 400、DTO 422、404/409、CSRF、
     requestId、同事务回滚和安全日志。
-  - [ ] 8.9 更新 OpenAPI 契约测试，运行 Server check/build、隔离 E2E、
+  - [x] 8.9 更新 OpenAPI 契约测试，运行 Server check/build、隔离 E2E、
     `contract:sync/contract:check`。
-  - [ ] 8.10 更新 Task 8 状态并创建提交：`feat: 添加地区管理维护接口`。
+  - [x] 8.10 更新 Task 8 状态并创建提交：`feat: 添加地区管理维护接口`。
   - _Requirements: R1, R6, R7, R8, R9, R10_
 
 - [ ] 9. 以 TDD 实现 Web API 与 RegionSelectorProvider
