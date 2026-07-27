@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 13）
+- 状态：Phase 4 实施中（Task 14）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -427,28 +427,28 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 12.10 更新 Task 12 状态并创建提交：`feat: 添加地区管理查询页面`。
   - _Requirements: R5, R7, R8, R9, R10_
 
-- [ ] 13. 以 TDD 实现地区管理表单、启停和缓存联动
-  - [ ] 13.1 先新增并运行失败的 form/status component 与 pure logic 测试，固定新增/
+- [x] 13. 以 TDD 实现地区管理表单、启停和缓存联动
+  - [x] 13.1 先新增并运行失败的 form/status component 与 pure logic 测试，固定新增/
     编辑字段差异、code 只读、字段错误、提交锁和重复提交保护。
-  - [ ] 13.2 实现 `region-form-modal.vue`：父路径/level 只读；创建接收
+  - [x] 13.2 实现 `region-form-modal.vue`：父路径/level 只读；创建接收
     name/englishName/code/sortOrder/enabled；编辑只提交三个可变字段。
-  - [ ] 13.3 实现 `region-status-change-modal.vue`：独立启停确认、完整路径、后代选择器
+  - [x] 13.3 实现 `region-status-change-modal.vue`：独立启停确认、完整路径、后代选择器
     失效说明、无数据删除说明和语义化危险操作。
-  - [ ] 13.4 页面按 `regions:create/update/enable/disable` 分别显示动作，Server 仍是
+  - [x] 13.4 页面按 `regions:create/update/enable/disable` 分别显示动作，Server 仍是
     最终授权；任何位置都不出现 DELETE。
-  - [ ] 13.5 mutation 不做乐观更新、不自动重试；提交中阻止按钮、遮罩、Escape、
+  - [x] 13.5 mutation 不做乐观更新、不自动重试；提交中阻止按钮、遮罩、Escape、
     close button 和重复请求。
-  - [ ] 13.6 实现 unknown result 对账：
+  - [x] 13.6 实现 unknown result 对账：
     - create 按 parent scope + exact code 查询；
     - update/status 按 ID 查询；
     - 只在最终状态匹配时按成功处理；
     - 无法确认时保留上下文并提示刷新确认。
-  - [ ] 13.7 成功或确认成功后刷新当前列表/必要 navigation、保留 scope、调用
+  - [x] 13.7 成功或确认成功后刷新当前列表/必要 navigation、保留 scope、调用
     `invalidateRegionSelectorCache({ broadcast:true })` 并用 `QsToast` 提示。
-  - [ ] 13.8 测试 source/status/page composition、权限组合、字段错误、unknown result、
+  - [x] 13.8 测试 source/status/page composition、权限组合、字段错误、unknown result、
     cache invalidation 和移动卡片动作。
-  - [ ] 13.9 运行 management API/logic/component tests、全量 Web check/build。
-  - [ ] 13.10 更新 Task 13 状态并创建提交：`feat: 添加地区管理维护流程`。
+  - [x] 13.9 运行 management API/logic/component tests、全量 Web check/build。
+  - [x] 13.10 更新 Task 13 状态并创建提交：`feat: 添加地区管理维护流程`。
   - _Requirements: R5, R6, R7, R8, R9, R10_
 
 - [ ] 14. 建立隔离地区 Browser E2E 并完成真实交互验收

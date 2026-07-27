@@ -571,6 +571,10 @@ test('审计 metadata 仅把契约标量按 key 排序并转换为可读文本',
 
 test('审计事件和结果使用稳定中文文案，未知值保留原值便于排查', () => {
   assert.equal(formatAuditEvent('ROLE_UPDATED'), '角色已更新')
+  assert.equal(formatAuditEvent('REGION_CREATED'), '地区已创建')
+  assert.equal(formatAuditEvent('REGION_UPDATED'), '地区已更新')
+  assert.equal(formatAuditEvent('REGION_ENABLED'), '地区已启用')
+  assert.equal(formatAuditEvent('REGION_DISABLED'), '地区已停用')
   assert.equal(formatAuditEvent('DOMAIN_EVENT'), 'DOMAIN_EVENT')
   assert.equal(formatAuditOutcome('SUCCESS'), '成功')
   assert.equal(formatAuditOutcome('FAILURE'), '失败')

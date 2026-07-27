@@ -1,9 +1,16 @@
 <script setup lang="ts">
 import type { TableSortingState } from '@fantastic-admin/components'
+import type { RegionFormSubmit } from './region-form.logic'
+import type {
+  RegionStatusAction,
+  RegionStatusChangeRequest,
+} from './region-status.logic'
 import type { RegionScope } from './regions.logic'
 import type {
+  CreateRegionRequestDto,
   RegionDto,
   RegionNavigationNodeDto,
+  UpdateRegionRequestDto,
 } from '@/api/generated/types.gen'
 import type {
   QsGenericTableColumn,
@@ -13,27 +20,38 @@ import type {
 
 import regionsApi from '@/api/modules/regions'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import { invalidateRegionSelectorCache } from '@/components/business/QsRegionSelector/provider'
 
 import { hasVisibleTableColumn } from '../../shared/table-query'
+import RegionFormModal from './region-form-modal.vue'
 import RegionScopeTree from './region-scope-tree.vue'
+import RegionStatusChangeModal from './region-status-change-modal.vue'
 import {
   administrativeTypeLabel,
   buildRegionListQuery,
+  buildRegionReconciliationQuery,
   canApplyRegionResponse,
   childLevelForScope,
   createRegionQueryRefreshScheduler,
   createRegionScopeTree,
   createRootRegionScope,
+  findMatchingCreatedRegion,
   getRegionApiFailure,
+  getRegionMutationFailure,
   isRegionAbortError,
+  matchesRegionStatus,
+  matchesRegionUpdate,
   normalizeRegionFilters,
   ownStatusLabel,
   regionDisplayStatus,
   regionDisplayStatusLabel,
   regionLevelLabel,
   regionScopeKey,
+  requiresRegionNavigationRefresh,
+  resolveRegionAdminActions,
   ROOT_SCOPE_ID,
 } from './regions.logic'
 
@@ -41,8 +59,13 @@ defineOptions({ name: 'SystemBasicDataRegions' })
 
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
+const toast = useQsToast()
 
 const canRead = computed(() => auth('regions:read'))
+const canCreate = computed(() => auth('regions:create'))
+const canUpdate = computed(() => auth('regions:update'))
+const canEnable = computed(() => auth('regions:enable'))
+const canDisable = computed(() => auth('regions:disable'))
 const scope = ref<RegionScope>(createRootRegionScope())
 const scopeDrawerVisible = ref(false)
 
@@ -69,9 +92,33 @@ let listRequestVersion = 0
 let listAbortController: AbortController | null = null
 let lastAppliedFilters: QsGenericTableFilterValues = {}
 
+const formVisible = ref(false)
+const formMode = ref<'create' | 'edit'>('create')
+const formScope = ref<RegionScope>(createRootRegionScope())
+const formTarget = ref<RegionDto | null>(null)
+const formSubmitting = ref(false)
+const formError = ref<string | null>(null)
+const formRequestId = ref<string | null>(null)
+const formFieldErrors = ref<Readonly<Record<string, string>>>({})
+
+const statusVisible = ref(false)
+const statusAction = ref<RegionStatusAction>('disable')
+const statusScope = ref<RegionScope>(createRootRegionScope())
+const statusTarget = ref<RegionDto | null>(null)
+const statusSubmitting = ref(false)
+const statusError = ref<string | null>(null)
+const statusRequestId = ref<string>()
+
+let reconciliationAbortController: AbortController | null = null
+
 const navigationTree = computed(() => createRegionScopeTree(navigation.value))
 const targetLevel = computed(() => childLevelForScope(scope.value))
 const targetLevelLabel = computed(() => regionLevelLabel(targetLevel.value))
+const formTargetLevel = computed(() => formMode.value === 'edit' && formTarget.value !== null
+  ? formTarget.value.level
+  : childLevelForScope(formScope.value))
+const formParentPath = computed(() =>
+  formScope.value.path.map(node => node.name))
 const scopePathLabel = computed(() => scope.value.kind === 'ROOT'
   ? scope.value.label
   : scope.value.path.map(node => node.name).join(' / '))
@@ -359,6 +406,394 @@ function selectScope(nextScope: RegionScope): void {
   void loadRegions()
 }
 
+const UNKNOWN_MUTATION_RESULT_MESSAGE = '操作结果未知，请刷新后确认'
+
+function resetFormFailure(): void {
+  formError.value = null
+  formRequestId.value = null
+  formFieldErrors.value = {}
+}
+
+function resetStatusFailure(): void {
+  statusError.value = null
+  statusRequestId.value = undefined
+}
+
+function openCreate(): void {
+  if (!canRead.value || !canCreate.value) {
+    return
+  }
+  formMode.value = 'create'
+  formScope.value = scope.value
+  formTarget.value = null
+  resetFormFailure()
+  formVisible.value = true
+}
+
+function regionActions(region: RegionDto) {
+  return resolveRegionAdminActions({
+    canDisable: canDisable.value,
+    canEnable: canEnable.value,
+    canUpdate: canUpdate.value,
+    enabled: region.enabled,
+  })
+}
+
+function openEdit(region: RegionDto): void {
+  if (!canRead.value || !regionActions(region).canEdit) {
+    return
+  }
+  formMode.value = 'edit'
+  formScope.value = scope.value
+  formTarget.value = region
+  resetFormFailure()
+  formVisible.value = true
+}
+
+function openStatusChange(
+  region: RegionDto,
+  action: RegionStatusAction,
+): void {
+  const actions = regionActions(region)
+  if (
+    !canRead.value
+    || (action === 'enable' && !actions.canEnable)
+    || (action === 'disable' && !actions.canDisable)
+  ) {
+    return
+  }
+  statusAction.value = action
+  statusScope.value = scope.value
+  statusTarget.value = region
+  resetStatusFailure()
+  statusVisible.value = true
+}
+
+function cancelForm(): void {
+  if (!formSubmitting.value) {
+    formVisible.value = false
+  }
+}
+
+function cancelStatusChange(): void {
+  if (!statusSubmitting.value) {
+    statusVisible.value = false
+  }
+}
+
+async function reconcileUnknownCreate(
+  operationScope: RegionScope,
+  request: CreateRegionRequestDto,
+): Promise<RegionDto | undefined> {
+  reconciliationAbortController?.abort()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const response = await regionsApi.management.list(
+      buildRegionReconciliationQuery(operationScope, request.code),
+      controller.signal,
+    )
+    return findMatchingCreatedRegion(
+      response.data.items,
+      operationScope,
+      request,
+    )
+  }
+  catch {
+    return undefined
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+async function reconcileUnknownUpdate(
+  regionId: string,
+  request: UpdateRegionRequestDto,
+): Promise<RegionDto | undefined> {
+  reconciliationAbortController?.abort()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const response = await regionsApi.management.get(regionId, controller.signal)
+    return matchesRegionUpdate(response.data, request)
+      ? response.data
+      : undefined
+  }
+  catch {
+    return undefined
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+async function reconcileUnknownStatus(
+  regionId: string,
+  enabled: boolean,
+): Promise<RegionDto | undefined> {
+  reconciliationAbortController?.abort()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const response = await regionsApi.management.get(regionId, controller.signal)
+    return matchesRegionStatus(response.data, enabled)
+      ? response.data
+      : undefined
+  }
+  catch {
+    return undefined
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+async function refreshAfterRegionMutation(region: RegionDto): Promise<void> {
+  const refreshes: Promise<void>[] = [loadRegions()]
+  if (requiresRegionNavigationRefresh(region.level)) {
+    refreshes.push(loadNavigation())
+  }
+  await Promise.all(refreshes)
+}
+
+async function closeFormAfterSuccess(): Promise<void> {
+  /*
+   * 先解除 QsGenericModal 的提交锁，再等待一次渲染，确保成功关闭不会被组件按
+   * “提交中禁止遮罩/Escape/close”规则拦截。
+   */
+  formSubmitting.value = false
+  await nextTick()
+  formVisible.value = false
+}
+
+async function closeStatusAfterSuccess(): Promise<void> {
+  statusSubmitting.value = false
+  await nextTick()
+  statusVisible.value = false
+}
+
+async function finishRegionMutation(input: {
+  confirmedAfterNetworkFailure: boolean
+  kind: 'create' | 'disable' | 'enable' | 'update'
+  region: RegionDto
+  surface: 'form' | 'status'
+}): Promise<void> {
+  if (input.surface === 'form') {
+    await closeFormAfterSuccess()
+  }
+  else {
+    await closeStatusAfterSuccess()
+  }
+
+  /*
+   * mutation 已经成功后，各展示副作用不能反向改变结论：Selector provider
+   * 内部保证失效通知隔离，列表/导航加载也各自在局部 error surface 收敛失败。
+   */
+  invalidateRegionSelectorCache({ broadcast: true })
+  if (!canRead.value) {
+    formTarget.value = null
+    statusTarget.value = null
+    return
+  }
+  const labels = {
+    create: '地区已创建',
+    disable: '地区已停用',
+    enable: '地区已启用',
+    update: '地区已更新',
+  } as const
+  toast.success(labels[input.kind], {
+    description: input.confirmedAfterNetworkFailure
+      ? `${input.region.name} 已通过最终状态核对确认。`
+      : input.region.name,
+  })
+  await refreshAfterRegionMutation(input.region)
+}
+
+function applyKnownFormFailure(error: unknown): void {
+  const failure = getRegionMutationFailure(error)
+  formError.value = failure.message
+  formRequestId.value = failure.requestId ?? null
+  formFieldErrors.value = failure.fieldErrors
+  formSubmitting.value = false
+}
+
+async function handleFormSubmit(submission: RegionFormSubmit): Promise<void> {
+  if (
+    !canRead.value
+    || formSubmitting.value
+    || !formVisible.value
+    || submission.mode !== formMode.value
+  ) {
+    return
+  }
+
+  const operationScope = formScope.value
+  const operationTarget = formTarget.value
+  if (
+    (submission.mode === 'create' && !canCreate.value)
+    || (submission.mode === 'edit' && !canUpdate.value)
+  ) {
+    formError.value = '当前身份已无权执行该操作，请刷新页面后重试'
+    return
+  }
+  if (submission.mode === 'edit' && operationTarget === null) {
+    formError.value = '未找到待编辑地区，请关闭弹窗后重试'
+    return
+  }
+  if (
+    submission.mode === 'edit'
+    && Object.keys(submission.value).length === 0
+  ) {
+    formError.value = '未检测到可提交的变更'
+    return
+  }
+
+  resetFormFailure()
+  formSubmitting.value = true
+  let resolvedRegion: RegionDto | undefined
+  let confirmedAfterNetworkFailure = false
+
+  if (submission.mode === 'create') {
+    const request: CreateRegionRequestDto = {
+      ...submission.value,
+      // parent/level 始终由打开弹窗时的 scope 推导，不信任展示组件回传的上下文。
+      parentId: operationScope.id,
+    }
+    try {
+      const response = await regionsApi.management.create(request)
+      resolvedRegion = response.data
+    }
+    catch (error) {
+      const failure = getRegionMutationFailure(error)
+      if (!failure.unknownResult) {
+        applyKnownFormFailure(error)
+        return
+      }
+      if (!canRead.value) {
+        formSubmitting.value = false
+        return
+      }
+      resolvedRegion = await reconcileUnknownCreate(operationScope, request)
+      if (resolvedRegion === undefined) {
+        formError.value = UNKNOWN_MUTATION_RESULT_MESSAGE
+        formSubmitting.value = false
+        return
+      }
+      confirmedAfterNetworkFailure = true
+    }
+  }
+  else {
+    const request = submission.value
+    try {
+      const response = await regionsApi.management.update(
+        operationTarget!.id,
+        request,
+      )
+      resolvedRegion = response.data
+    }
+    catch (error) {
+      const failure = getRegionMutationFailure(error)
+      if (!failure.unknownResult) {
+        applyKnownFormFailure(error)
+        return
+      }
+      if (!canRead.value) {
+        formSubmitting.value = false
+        return
+      }
+      resolvedRegion = await reconcileUnknownUpdate(
+        operationTarget!.id,
+        request,
+      )
+      if (resolvedRegion === undefined) {
+        formError.value = UNKNOWN_MUTATION_RESULT_MESSAGE
+        formSubmitting.value = false
+        return
+      }
+      confirmedAfterNetworkFailure = true
+    }
+  }
+
+  await finishRegionMutation({
+    confirmedAfterNetworkFailure,
+    kind: submission.mode === 'create' ? 'create' : 'update',
+    region: resolvedRegion,
+    surface: 'form',
+  })
+}
+
+async function handleStatusSubmit(
+  request: RegionStatusChangeRequest,
+): Promise<void> {
+  const operationTarget = statusTarget.value
+  if (
+    !canRead.value
+    || statusSubmitting.value
+    || !statusVisible.value
+    || operationTarget === null
+    || request.regionId !== operationTarget.id
+    || request.action !== statusAction.value
+  ) {
+    return
+  }
+  if (
+    (request.action === 'enable' && !canEnable.value)
+    || (request.action === 'disable' && !canDisable.value)
+  ) {
+    statusError.value = '当前身份已无权执行该操作，请刷新页面后重试'
+    return
+  }
+
+  resetStatusFailure()
+  statusSubmitting.value = true
+  let resolvedRegion: RegionDto | undefined
+  let confirmedAfterNetworkFailure = false
+
+  try {
+    const response = request.action === 'enable'
+      ? await regionsApi.management.enable(request.regionId)
+      : await regionsApi.management.disable(request.regionId)
+    resolvedRegion = response.data.region
+  }
+  catch (error) {
+    const failure = getRegionMutationFailure(error)
+    if (!failure.unknownResult) {
+      statusError.value = failure.message
+      statusRequestId.value = failure.requestId
+      statusSubmitting.value = false
+      return
+    }
+    if (!canRead.value) {
+      statusSubmitting.value = false
+      return
+    }
+    resolvedRegion = await reconcileUnknownStatus(
+      request.regionId,
+      request.action === 'enable',
+    )
+    if (resolvedRegion === undefined) {
+      statusError.value = UNKNOWN_MUTATION_RESULT_MESSAGE
+      statusSubmitting.value = false
+      return
+    }
+    confirmedAfterNetworkFailure = true
+  }
+
+  await finishRegionMutation({
+    confirmedAfterNetworkFailure,
+    kind: request.action,
+    region: resolvedRegion,
+    surface: 'status',
+  })
+}
+
 function refreshAll(): void {
   void Promise.all([
     loadNavigation(),
@@ -366,29 +801,50 @@ function refreshAll(): void {
   ])
 }
 
+function clearMutationContexts(): void {
+  formVisible.value = false
+  statusVisible.value = false
+  formTarget.value = null
+  statusTarget.value = null
+  formScope.value = createRootRegionScope()
+  statusScope.value = createRootRegionScope()
+  resetFormFailure()
+  resetStatusFailure()
+}
+
 watch(
   [() => appAccountStore.authEpoch, canRead],
-  ([, nextCanRead]) => {
+  ([nextAuthEpoch, nextCanRead], [previousAuthEpoch]) => {
+    const identityChanged = nextAuthEpoch !== previousAuthEpoch
     navigationAbortController?.abort()
     listAbortController?.abort()
+    reconciliationAbortController?.abort()
     navigationRequestVersion += 1
     listRequestVersion += 1
     navigationLoading.value = false
     listLoading.value = false
-    if (nextCanRead) {
-      refreshAll()
+    if (identityChanged || !nextCanRead) {
+      /*
+       * authEpoch 是强身份边界。即使新旧身份都可读，也不能让新身份继续看到或提交
+       * 旧身份打开的表单；动态撤销 read 时同样立即移除全部 mutation 上下文。
+       */
+      clearMutationContexts()
+    }
+
+    if (!nextCanRead) {
+      // 同一用户的权限集合变化不会推进 authEpoch；撤权时仍需立即清除已加载数据，
+      // 并依靠 authorized response guard 阻止同一 tick 内到达的旧响应回写。
+      navigation.value = []
+      rows.value = []
+      total.value = 0
+      navigationError.value = ''
+      listError.value = ''
+      navigationRequestId.value = undefined
+      listRequestId.value = undefined
       return
     }
 
-    // 同一用户的权限集合变化不会推进 authEpoch；撤权时仍需立即清除已加载数据，
-    // 并依靠 authorized response guard 阻止同一 tick 内到达的旧响应回写。
-    navigation.value = []
-    rows.value = []
-    total.value = 0
-    navigationError.value = ''
-    listError.value = ''
-    navigationRequestId.value = undefined
-    listRequestId.value = undefined
+    refreshAll()
   },
 )
 
@@ -403,6 +859,7 @@ onBeforeUnmount(() => {
   listRequestVersion += 1
   navigationAbortController?.abort()
   listAbortController?.abort()
+  reconciliationAbortController?.abort()
   queryScheduler.dispose()
 })
 </script>
@@ -413,6 +870,13 @@ onBeforeUnmount(() => {
       title="地区管理"
       description="按国家/地区、省/州和城市三级结构查询地区主数据；搜索与筛选只作用于当前直属层级。"
     >
+      <FaButton
+        v-if="canRead && canCreate"
+        @click="openCreate"
+      >
+        <FaIcon name="i-lucide:plus" />
+        新增{{ targetLevelLabel }}
+      </FaButton>
       <FaButton
         v-if="canRead"
         variant="outline"
@@ -565,6 +1029,45 @@ onBeforeUnmount(() => {
               <DateTimeDisplay :value="row.original.updatedAt" />
             </template>
 
+            <template #actions="{ row: region }">
+              <div
+                v-if="regionActions(region).hasAny"
+                class="flex flex-wrap gap-1 items-center"
+              >
+                <FaButton
+                  v-if="regionActions(region).canEdit"
+                  variant="ghost"
+                  size="sm"
+                  class="min-h-11 w-full md:min-h-8 md:w-auto"
+                  :aria-label="`编辑地区 ${region.name}`"
+                  @click="openEdit(region)"
+                >
+                  编辑
+                </FaButton>
+                <FaButton
+                  v-if="regionActions(region).canEnable"
+                  variant="ghost"
+                  size="sm"
+                  class="min-h-11 w-full md:min-h-8 md:w-auto"
+                  :aria-label="`启用地区 ${region.name}`"
+                  @click="openStatusChange(region, 'enable')"
+                >
+                  启用
+                </FaButton>
+                <FaButton
+                  v-if="regionActions(region).canDisable"
+                  variant="ghost"
+                  size="sm"
+                  class="text-destructive min-h-11 w-full md:min-h-8 md:w-auto"
+                  :aria-label="`停用地区 ${region.name}`"
+                  @click="openStatusChange(region, 'disable')"
+                >
+                  停用
+                </FaButton>
+              </div>
+              <span v-else class="qs-type-meta">仅查看</span>
+            </template>
+
             <template #mobile-row="{ columns: visibleColumns, row: region, rowNumber }">
               <div data-testid="region-card" class="gap-4 grid min-w-0">
                 <div class="flex gap-3 min-w-0 items-start justify-between">
@@ -675,6 +1178,35 @@ onBeforeUnmount(() => {
         />
       </div>
     </QsGenericDrawer>
+
+    <RegionFormModal
+      v-if="canRead"
+      :model-value="formVisible"
+      :mode="formMode"
+      :parent-id="formScope.id"
+      :parent-path="formParentPath"
+      :target-level="formTargetLevel"
+      :region="formTarget"
+      :submitting="formSubmitting"
+      :error="formError"
+      :request-id="formRequestId"
+      :field-errors="formFieldErrors"
+      @cancel="cancelForm"
+      @submit="handleFormSubmit"
+    />
+
+    <RegionStatusChangeModal
+      v-if="canRead"
+      :model-value="statusVisible"
+      :action="statusAction"
+      :region="statusTarget"
+      :ancestor-path="statusScope.path"
+      :submitting="statusSubmitting"
+      :error="statusError"
+      :request-id="statusRequestId"
+      @cancel="cancelStatusChange"
+      @submit="handleStatusSubmit"
+    />
   </div>
 </template>
 

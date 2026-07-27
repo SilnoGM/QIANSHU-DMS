@@ -1,6 +1,8 @@
 import type {
+  CreateRegionRequestDto,
   RegionDto,
   RegionNavigationNodeDto,
+  UpdateRegionRequestDto,
 } from '../../src/api/generated/types.gen'
 
 import assert from 'node:assert/strict'
@@ -9,15 +11,22 @@ import test from 'node:test'
 
 import {
   buildRegionListQuery,
+  buildRegionReconciliationQuery,
   canApplyRegionResponse,
   childLevelForScope,
   createRegionQueryRefreshScheduler,
   createRegionScopeTree,
   createRootRegionScope,
+  findMatchingCreatedRegion,
+  getRegionMutationFailure,
+  matchesRegionStatus,
+  matchesRegionUpdate,
   normalizeRegionFilters,
   normalizeRegionSorting,
   regionDisplayStatus,
   regionDisplayStatusLabel,
+  requiresRegionNavigationRefresh,
+  resolveRegionAdminActions,
   ROOT_SCOPE_ID,
 } from '../../src/views/system/basic-data/regions/regions.logic'
 
@@ -221,4 +230,178 @@ test('连续查询事件在同一 microtask 合并为一次刷新', async () => 
   scheduler.schedule()
   await Promise.resolve()
   assert.equal(refreshCount, 1)
+})
+
+const kaohsiung: RegionDto = {
+  id: 'city-kaohsiung',
+  parentId: 'province-tw',
+  code: 'TW-64000',
+  name: '高雄市',
+  englishName: 'Kaohsiung City',
+  sourceName: '高雄市',
+  sourceCode: 'E/64000',
+  administrativeType: 'MUNICIPALITY',
+  level: 'CITY',
+  enabled: true,
+  effectiveEnabled: true,
+  sortOrder: 1,
+  createdAt: '2026-07-27T00:00:00.000Z',
+  updatedAt: '2026-07-27T00:00:00.000Z',
+}
+
+test('只有 network mutation 失败进入结果未知，HTTP 500 仍是已知失败', () => {
+  assert.deepEqual(getRegionMutationFailure({
+    kind: 'network',
+    code: 'NETWORK_ERROR',
+    message: '网络连接失败，请稍后重试',
+  }), {
+    code: undefined,
+    fieldErrors: {},
+    message: '网络连接失败，请稍后重试',
+    requestId: undefined,
+    unknownResult: true,
+  })
+
+  assert.deepEqual(getRegionMutationFailure({
+    kind: 'http',
+    status: 500,
+    body: {
+      code: 'INTERNAL_ERROR',
+      message: '系统繁忙',
+      requestId: 'request-http-500',
+    },
+  }), {
+    code: 'INTERNAL_ERROR',
+    fieldErrors: {},
+    message: '系统繁忙',
+    requestId: 'request-http-500',
+    unknownResult: false,
+  })
+})
+
+test('mutation 字段错误只读取白名单并将地区冲突定位到对应字段', () => {
+  assert.deepEqual(getRegionMutationFailure({
+    kind: 'http',
+    status: 422,
+    body: {
+      code: 'VALIDATION_FAILED',
+      message: '请求参数校验失败',
+      requestId: 'request-validation',
+      fieldErrors: {
+        name: ['名称不能为空'],
+        parentId: ['不应泄露为可编辑字段'],
+        unknown: ['忽略未知字段'],
+      },
+    },
+  }).fieldErrors, {
+    name: '名称不能为空',
+  })
+
+  assert.deepEqual(getRegionMutationFailure({
+    kind: 'http',
+    status: 409,
+    body: {
+      code: 'REGION_CODE_ALREADY_EXISTS',
+      message: '地区 Code 已存在',
+      requestId: 'request-conflict',
+    },
+  }).fieldErrors, {
+    code: '地区 Code 已存在',
+  })
+})
+
+test('创建结果未知按当前父级和 exact code 查询，根级必须省略 parentId', () => {
+  assert.deepEqual(
+    buildRegionReconciliationQuery(createRootRegionScope(), '  cn  '),
+    {
+      code: 'CN',
+      page: 1,
+      pageSize: 20,
+    },
+  )
+  assert.deepEqual(buildRegionReconciliationQuery({
+    kind: 'PROVINCE_STATE',
+    id: 'province-tw',
+    label: '台湾',
+    path: [],
+  }, ' tw-64000 '), {
+    code: 'TW-64000',
+    page: 1,
+    pageSize: 20,
+    parentId: 'province-tw',
+  })
+})
+
+test('创建对账必须完整匹配 parent、层级及全部提交字段', () => {
+  const scope = {
+    kind: 'PROVINCE_STATE' as const,
+    id: 'province-tw',
+    label: '台湾',
+    path: [],
+  }
+  const request: CreateRegionRequestDto = {
+    parentId: 'province-tw',
+    code: 'TW-64000',
+    name: '高雄市',
+    englishName: 'Kaohsiung City',
+    sortOrder: 1,
+    enabled: true,
+  }
+
+  assert.equal(findMatchingCreatedRegion([kaohsiung], scope, request)?.id, kaohsiung.id)
+  assert.equal(findMatchingCreatedRegion([
+    { ...kaohsiung, name: '高雄' },
+  ], scope, request), undefined)
+  assert.equal(findMatchingCreatedRegion([
+    kaohsiung,
+    { ...kaohsiung, id: 'duplicate' },
+  ], scope, request), undefined)
+})
+
+test('编辑与启停对账只在提交字段或目标状态最终匹配时成功', () => {
+  const update: UpdateRegionRequestDto = {
+    name: '高雄',
+    englishName: null,
+    sortOrder: 2,
+  }
+  assert.equal(matchesRegionUpdate({
+    ...kaohsiung,
+    name: '高雄',
+    englishName: null,
+    sortOrder: 2,
+  }, update), true)
+  assert.equal(matchesRegionUpdate(kaohsiung, update), false)
+  assert.equal(matchesRegionStatus(kaohsiung, true), true)
+  assert.equal(matchesRegionStatus(kaohsiung, false), false)
+})
+
+test('地区动作按四项权限与当前状态分别收敛且不会产生删除动作', () => {
+  assert.deepEqual(resolveRegionAdminActions({
+    canDisable: true,
+    canEnable: true,
+    canUpdate: true,
+    enabled: true,
+  }), {
+    canDisable: true,
+    canEdit: true,
+    canEnable: false,
+    hasAny: true,
+  })
+  assert.deepEqual(resolveRegionAdminActions({
+    canDisable: false,
+    canEnable: false,
+    canUpdate: false,
+    enabled: false,
+  }), {
+    canDisable: false,
+    canEdit: false,
+    canEnable: false,
+    hasAny: false,
+  })
+})
+
+test('国家与省州 mutation 需要刷新 navigation，城市只刷新当前列表', () => {
+  assert.equal(requiresRegionNavigationRefresh('COUNTRY_REGION'), true)
+  assert.equal(requiresRegionNavigationRefresh('PROVINCE_STATE'), true)
+  assert.equal(requiresRegionNavigationRefresh('CITY'), false)
 })

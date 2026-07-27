@@ -108,7 +108,7 @@ test('页面在权限变化时中止旧请求且实际守卫先于响应写入',
   )
   assert.match(
     source,
-    /watch\(\s*\[\(\) => appAccountStore\.authEpoch, canRead\],[\s\S]*?navigationAbortController\?\.abort\(\)[\s\S]*?listAbortController\?\.abort\(\)[\s\S]*?if \(nextCanRead\) \{[\s\S]*?refreshAll\(\)/u,
+    /watch\(\s*\[\(\) => appAccountStore\.authEpoch, canRead\],[\s\S]*?navigationAbortController\?\.abort\(\)[\s\S]*?listAbortController\?\.abort\(\)[\s\S]*?if \(!nextCanRead\) \{[\s\S]*?return[\s\S]*?refreshAll\(\)/u,
   )
   assert.match(
     source,
@@ -136,15 +136,120 @@ test('地区页覆盖 reduced motion 与 44px 移动触控目标', () => {
   )
 })
 
-test('Task 12 只提供查询与刷新，不提前实现地区写操作', () => {
+test('地区维护按四项权限组合，并在没有行级写权限时明确显示仅查看', () => {
+  const source = readSource('../../src/views/system/basic-data/regions/index.vue')
+
+  for (const permission of [
+    'regions:create',
+    'regions:update',
+    'regions:enable',
+    'regions:disable',
+  ]) {
+    assert.match(source, new RegExp(permission, 'u'))
+  }
+  assert.match(source, /resolveRegionAdminActions/u)
+  assert.match(source, /<template #actions="\{ row: region \}">/u)
+  assert.match(source, /仅查看/u)
+  assert.doesNotMatch(source, /management\.delete|删除地区|regions:delete/u)
+})
+
+test('页面组合纯受控表单与启停弹窗，API 与副作用仍由业务页持有', () => {
   const source = [
     readSource('../../src/views/system/basic-data/regions/index.vue'),
-    readSource('../../src/views/system/basic-data/regions/regions.logic.ts'),
-    readSource('../../src/views/system/basic-data/regions/region-scope-tree.vue'),
   ].join('\n')
 
-  assert.doesNotMatch(
+  assert.match(source, /import RegionFormModal from '.\/region-form-modal\.vue'/u)
+  assert.match(source, /import RegionStatusChangeModal from '.\/region-status-change-modal\.vue'/u)
+  assert.match(source, /regionsApi\.management\.create/u)
+  assert.match(source, /regionsApi\.management\.update/u)
+  assert.match(source, /regionsApi\.management\.enable/u)
+  assert.match(source, /regionsApi\.management\.disable/u)
+  assert.match(source, /<RegionFormModal\b/u)
+  assert.match(source, /<RegionStatusChangeModal\b/u)
+})
+
+test('mutation 只对 network 做最终状态对账并在成功后联动 selector cache 与 Toast', () => {
+  const source = readSource('../../src/views/system/basic-data/regions/index.vue')
+
+  assert.match(source, /failure\.unknownResult/u)
+  assert.match(source, /reconcileUnknownCreate/u)
+  assert.match(source, /reconcileUnknownUpdate/u)
+  assert.match(source, /reconcileUnknownStatus/u)
+  assert.match(source, /invalidateRegionSelectorCache\(\{ broadcast: true \}\)/u)
+  assert.match(source, /useQsToast\(\)/u)
+  assert.match(source, /操作结果未知，请刷新后确认/u)
+  assert.match(
     source,
-    /management\.(?:create|update|enable|disable)|RegionFormModal|RegionStatusChangeModal|删除地区/u,
+    /formSubmitting\.value = false[\s\S]*?await nextTick\(\)[\s\S]*?formVisible\.value = false/u,
+  )
+  assert.match(
+    source,
+    /statusSubmitting\.value = false[\s\S]*?await nextTick\(\)[\s\S]*?statusVisible\.value = false/u,
+  )
+})
+
+test('桌面与移动卡片复用动作插槽，按钮可访问名称包含目标地区', () => {
+  const source = readSource('../../src/views/system/basic-data/regions/index.vue')
+
+  assert.match(source, /<template #actions="\{ row: region \}">/u)
+  assert.match(source, /:aria-label="`编辑地区 \$\{region\.name\}`"/u)
+  assert.match(source, /:aria-label="`启用地区 \$\{region\.name\}`"/u)
+  assert.match(source, /:aria-label="`停用地区 \$\{region\.name\}`"/u)
+  assert.match(source, /min-h-11[^"]*md:min-h-8/u)
+})
+
+test('动态撤销 regions:read 时立即隐藏维护上下文并阻止新的写请求', () => {
+  const source = readSource('../../src/views/system/basic-data/regions/index.vue')
+
+  assert.match(
+    source,
+    /function openCreate\(\): void \{\s*if \(!canRead\.value \|\| !canCreate\.value\)/u,
+  )
+  assert.match(
+    source,
+    /function openEdit\(region: RegionDto\): void \{\s*if \(!canRead\.value \|\| !regionActions\(region\)\.canEdit\)/u,
+  )
+  assert.match(
+    source,
+    /function openStatusChange\([\s\S]*?if \(\s*!canRead\.value/u,
+  )
+  assert.match(
+    source,
+    /async function handleFormSubmit[\s\S]*?if \(\s*!canRead\.value/u,
+  )
+  assert.match(
+    source,
+    /async function handleStatusSubmit[\s\S]*?if \(\s*!canRead\.value/u,
+  )
+  assert.match(
+    source,
+    /function clearMutationContexts\(\): void \{[\s\S]*?formVisible\.value = false[\s\S]*?statusVisible\.value = false[\s\S]*?formTarget\.value = null[\s\S]*?statusTarget\.value = null/u,
+  )
+  assert.match(
+    source,
+    /if \(identityChanged \|\| !nextCanRead\) \{[\s\S]*?clearMutationContexts\(\)/u,
+  )
+  assert.match(source, /<RegionFormModal\s+v-if="canRead"/u)
+  assert.match(source, /<RegionStatusChangeModal\s+v-if="canRead"/u)
+})
+
+test('authEpoch 切换身份时即使新身份可读也必须清空旧弹窗目标', () => {
+  const source = readSource('../../src/views/system/basic-data/regions/index.vue')
+
+  assert.match(
+    source,
+    /\(\[nextAuthEpoch, nextCanRead\], \[previousAuthEpoch\]\) => \{/u,
+  )
+  assert.match(
+    source,
+    /const identityChanged = nextAuthEpoch !== previousAuthEpoch/u,
+  )
+  assert.match(
+    source,
+    /if \(identityChanged \|\| !nextCanRead\) \{[\s\S]*?clearMutationContexts\(\)/u,
+  )
+  assert.match(
+    source,
+    /if \(!nextCanRead\) \{[\s\S]*?return[\s\S]*?refreshAll\(\)/u,
   )
 })

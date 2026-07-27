@@ -1,8 +1,10 @@
 import type { TableSortingState } from '@fantastic-admin/components'
 import type {
+  CreateRegionRequestDto,
   RegionDto,
   RegionNavigationNodeDto,
   RegionsListData,
+  UpdateRegionRequestDto,
 } from '@/api/generated/types.gen'
 
 export const ROOT_SCOPE_ID = '__region_root__'
@@ -86,6 +88,26 @@ export interface RegionApiFailure {
   readonly requestId: string | undefined
 }
 
+export interface RegionMutationFailure extends RegionApiFailure {
+  readonly code: string | undefined
+  readonly fieldErrors: Readonly<Record<string, string>>
+  readonly unknownResult: boolean
+}
+
+export interface RegionAdminActions {
+  readonly canDisable: boolean
+  readonly canEdit: boolean
+  readonly canEnable: boolean
+  readonly hasAny: boolean
+}
+
+export interface ResolveRegionAdminActionsInput {
+  readonly canDisable: boolean
+  readonly canEnable: boolean
+  readonly canUpdate: boolean
+  readonly enabled: boolean
+}
+
 type RegionListQuery = NonNullable<RegionsListData['query']>
 
 const REGION_PAGE_SIZES = new Set([20, 50, 100])
@@ -94,6 +116,13 @@ const REGION_SORT_FIELDS = new Set<RegionSortBy>([
   'name',
   'sortOrder',
   'updatedAt',
+])
+const REGION_MUTATION_FIELDS = new Set([
+  'code',
+  'enabled',
+  'englishName',
+  'name',
+  'sortOrder',
 ])
 
 export function createRootRegionScope(): RegionScope {
@@ -341,6 +370,101 @@ export function buildRegionListQuery(
   }
 }
 
+/**
+ * create 的网络结果未知对账必须复用管理列表的 exact code 参数。根节点不能传
+ * `parentId: null`，否则会与 OpenAPI 的“参数省略表示根级”契约漂移。
+ */
+export function buildRegionReconciliationQuery(
+  scope: RegionScope,
+  code: string,
+): RegionListQuery {
+  return {
+    ...(scope.id === null ? {} : { parentId: scope.id }),
+    code: code.normalize('NFC').trim().toLocaleUpperCase('en-US'),
+    page: 1,
+    pageSize: 20,
+  }
+}
+
+function normalizedNullableEnglishName(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  const normalized = value.normalize('NFC').trim()
+  return normalized === '' ? null : normalized
+}
+
+function matchesCreatedRegion(
+  region: RegionDto,
+  scope: RegionScope,
+  request: CreateRegionRequestDto,
+): boolean {
+  return region.parentId === scope.id
+    && region.parentId === request.parentId
+    && region.level === childLevelForScope(scope)
+    && region.code === request.code
+    && region.name === request.name
+    && region.englishName === normalizedNullableEnglishName(request.englishName)
+    && region.sortOrder === request.sortOrder
+    && region.enabled === request.enabled
+}
+
+/**
+ * code 在数据库全局唯一，正常情况下 exact code 最多返回一项。若响应异常地包含
+ * 多个完整匹配项则拒绝猜测，继续保留弹窗让管理员人工核查。
+ */
+export function findMatchingCreatedRegion(
+  regions: readonly RegionDto[],
+  scope: RegionScope,
+  request: CreateRegionRequestDto,
+): RegionDto | undefined {
+  const matches = regions.filter(region =>
+    matchesCreatedRegion(region, scope, request))
+  return matches.length === 1 ? matches[0] : undefined
+}
+
+export function matchesRegionUpdate(
+  region: RegionDto,
+  request: UpdateRegionRequestDto,
+): boolean {
+  return (
+    (request.name === undefined || region.name === request.name)
+    && (
+      request.englishName === undefined
+      || region.englishName === normalizedNullableEnglishName(request.englishName)
+    )
+    && (
+      request.sortOrder === undefined
+      || region.sortOrder === request.sortOrder
+    )
+  )
+}
+
+export function matchesRegionStatus(
+  region: RegionDto,
+  enabled: boolean,
+): boolean {
+  return region.enabled === enabled
+}
+
+export function requiresRegionNavigationRefresh(level: RegionLevel): boolean {
+  return level === 'COUNTRY_REGION' || level === 'PROVINCE_STATE'
+}
+
+export function resolveRegionAdminActions(
+  input: ResolveRegionAdminActionsInput,
+): RegionAdminActions {
+  const canEdit = input.canUpdate
+  const canEnable = !input.enabled && input.canEnable
+  const canDisable = input.enabled && input.canDisable
+  return {
+    canDisable,
+    canEdit,
+    canEnable,
+    hasAny: canEdit || canEnable || canDisable,
+  }
+}
+
 export function canApplyRegionResponse(
   input: RegionResponseGuardInput,
 ): boolean {
@@ -416,6 +540,86 @@ export function getRegionApiFailure(error: unknown): RegionApiFailure {
       message: '地区数据加载失败，请稍后重试',
       requestId: undefined,
     }
+  }
+}
+
+/**
+ * Mutation 不自动重试。只有标准化 API client 明确标记的 `network` 错误代表请求
+ * 可能已到达 Server，因而需要读回最终状态；任何 HTTP 状态（包括 500）都有确定
+ * 响应，不能再用一次查询把失败误判成成功。
+ */
+export function getRegionMutationFailure(error: unknown): RegionMutationFailure {
+  const fallback: RegionMutationFailure = {
+    code: undefined,
+    fieldErrors: {},
+    message: '操作失败，请稍后重试',
+    requestId: undefined,
+    unknownResult: false,
+  }
+
+  try {
+    if (!isRecord(error)) {
+      return fallback
+    }
+    if (error.kind === 'network') {
+      return {
+        code: undefined,
+        fieldErrors: {},
+        message: typeof error.message === 'string'
+          ? error.message
+          : '网络连接失败，请稍后重试',
+        requestId: undefined,
+        unknownResult: true,
+      }
+    }
+    if (error.kind !== 'http' || !isRecord(error.body)) {
+      return {
+        ...fallback,
+        message: typeof error.message === 'string'
+          ? error.message
+          : '服务器返回了无法识别的错误响应',
+        requestId: typeof error.requestId === 'string'
+          ? error.requestId
+          : undefined,
+      }
+    }
+
+    const body = error.body
+    const code = typeof body.code === 'string' ? body.code : undefined
+    const message = typeof body.message === 'string'
+      ? body.message
+      : fallback.message
+    const fieldErrors: Record<string, string> = {}
+    if (isRecord(body.fieldErrors)) {
+      for (const [field, messages] of Object.entries(body.fieldErrors)) {
+        if (
+          REGION_MUTATION_FIELDS.has(field)
+          && Array.isArray(messages)
+          && typeof messages[0] === 'string'
+        ) {
+          fieldErrors[field] = messages[0]
+        }
+      }
+    }
+    if (code === 'REGION_CODE_ALREADY_EXISTS' && fieldErrors.code === undefined) {
+      fieldErrors.code = message
+    }
+    if (code === 'REGION_NAME_ALREADY_EXISTS' && fieldErrors.name === undefined) {
+      fieldErrors.name = message
+    }
+
+    return {
+      code,
+      fieldErrors,
+      message,
+      requestId: typeof body.requestId === 'string'
+        ? body.requestId
+        : undefined,
+      unknownResult: false,
+    }
+  }
+  catch {
+    return fallback
   }
 }
 
