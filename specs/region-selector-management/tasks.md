@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 3 任务草案，等待实施确认
+- 状态：Phase 4 实施中（Task 2 与 Task 3）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -81,12 +81,12 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
 
 ## 4. 实施任务
 
-- [ ] 1. 复核实施边界并建立绿色基线
-  - [ ] 1.1 检查 `git status --short --branch`、当前 HEAD、现有 worktree 和未提交差异，
+- [x] 1. 复核实施边界并建立绿色基线
+  - [x] 1.1 检查 `git status --short --branch`、当前 HEAD、现有 worktree 和未提交差异，
     确认只在 `feat/region-selector-management` 工作且不覆盖用户文件。
-  - [ ] 1.2 检查根目录不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml`、
+  - [x] 1.2 检查根目录不存在 `pnpm-workspace.yaml`、`pnpm-lock.yaml`、
     `node_modules/`、`.pnpm-store/` 等违规产物。
-  - [ ] 1.3 运行 Server、契约、Web、根脚本和现有浏览器基线：
+  - [x] 1.3 运行 Server、契约、Web、根脚本和现有浏览器基线：
 
     ```bash
     pnpm -C server check
@@ -99,15 +99,15 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     node --run ci:browser-auth-e2e
     ```
 
-  - [ ] 1.4 记录 `basic-data-routes.test.ts` 当前“地区为空页面、无权限”基线，以及其余
+  - [x] 1.4 记录 `basic-data-routes.test.ts` 当前“地区为空页面、无权限”基线，以及其余
     四个基础数据空页面断言；后续只改变地区相关断言。
-  - [ ] 1.5 若基线失败，停止功能修改并先报告；未经确认不得把无关基线修复混入本分支。
-  - [ ] 1.6 把本文状态更新为“实施中（Task 2）”；Task 1 状态随 Task 2 的首个绿色提交
+  - [x] 1.5 若基线失败，停止功能修改并先报告；未经确认不得把无关基线修复混入本分支。
+  - [x] 1.6 把本文状态更新为“实施中（Task 2）”；Task 1 状态随 Task 2 的首个绿色提交
     一并记录，不制造仅勾选 checkbox 的空提交。
   - _Requirements: R1-R10_
 
-- [ ] 2. 以 TDD 固化三地来源、转换器和 canonical 数据资产
-  - [ ] 2.1 先新增并运行失败的
+- [x] 2. 以 TDD 固化三地来源、转换器和 canonical 数据资产
+  - [x] 2.1 先新增并运行失败的
     `server/scripts/region-data/generate-region-seed.test.mjs`，固定三份源文件 SHA-256：
     - 中国大陆：
       `8c4e8afc5dfc16b77d34cf39b2547d07ab6a46e46b414679d494e50353970edc`
@@ -115,14 +115,14 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
       `5e9dfa16d989e569179f02375775ac5f0036d866305a4e11456e989ff59504f1`
     - 马来西亚：
       `6ed9f08a88e3bd93a3cfe697b2135352688c495ae4595c6a37ae0980fffe7995`
-  - [ ] 2.2 红测固定来源 commit/date、license/归属、过滤规则、稳定 UUIDv5 namespace、
+  - [x] 2.2 红测固定来源 commit/date、license/归属、过滤规则、稳定 UUIDv5 namespace、
     canonical 排序、显示字段 normalizer 和技术 code。
-  - [ ] 2.3 红测精确断言各数据域及 3/48/551/602 数量，不用“大于零”或少量样例代替。
-  - [ ] 2.4 红测固定中国 31/369、中国台湾 1/22、马来西亚 16/160，以及直辖市同名
+  - [x] 2.3 红测精确断言各数据域及 3/48/551/602 数量，不用“大于零”或少量样例代替。
+  - [x] 2.4 红测固定中国 31/369、中国台湾 1/22、马来西亚 16/160，以及直辖市同名
     叶子、省直管业务叶子、同名马来西亚三级叶子。
-  - [ ] 2.5 红测固定 `中国台湾 → 台湾 → 高雄市`，并断言
+  - [x] 2.5 红测固定 `中国台湾 → 台湾 → 高雄市`，并断言
     `sourceName` 为来源繁体、`sourceCode="E/64000"`、`code="TW-64000"`。
-  - [ ] 2.6 新增：
+  - [x] 2.6 新增：
 
     ```text
     server/prisma/region-data/
@@ -138,13 +138,13 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     └── generate-region-seed.mjs
     ```
 
-  - [ ] 2.7 转换器只使用 Node 内置模块；先验证 hash，再规范化、转换、计数、生成 UUID，
+  - [x] 2.7 转换器只使用 Node 内置模块；先验证 hash，再规范化、转换、计数、生成 UUID，
     任一差异立即失败。不得调用 `fetch`、HTTP client 或隐式读取临时目录。
-  - [ ] 2.8 `regions.seed.json` 只由转换器生成；人工审校映射以显式、可 review 的输入
+  - [x] 2.8 `regions.seed.json` 只由转换器生成；人工审校映射以显式、可 review 的输入
     固定，不引入机器翻译或自动繁简转换。
-  - [ ] 2.9 README/manifest 记录 URL、版本、日期、许可证、归属、原始摘要、转换规则、
+  - [x] 2.9 README/manifest 记录 URL、版本、日期、许可证、归属、原始摘要、转换规则、
     数量、关键路径和 `transformVersion`。
-  - [ ] 2.10 运行并保存绿色结果：
+  - [x] 2.10 运行并保存绿色结果：
 
     ```bash
     shasum -a 256 \
@@ -155,7 +155,7 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     node server/scripts/region-data/generate-region-seed.mjs --check
     ```
 
-  - [ ] 2.11 更新 Task 1-2 状态，只暂存本任务数据资产/脚本/测试，运行 staged diff 检查，
+  - [x] 2.11 更新 Task 1-2 状态，只暂存本任务数据资产/脚本/测试，运行 staged diff 检查，
     创建提交：`feat: 添加地区固定数据资产`。
   - _Requirements: R2, R9, R10_
 
