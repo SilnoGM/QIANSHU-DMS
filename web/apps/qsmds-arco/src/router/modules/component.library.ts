@@ -130,6 +130,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:package-search',
         },
       },
+      {
+        path: 'region-selector',
+        name: 'componentLibraryQsRegionSelector',
+        component: () => import('@/views/component_library/business/region-selector.vue'),
+        meta: {
+          title: '地区选择器',
+          icon: 'i-lucide:map-pinned',
+        },
+      },
     ],
   },
   {

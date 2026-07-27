@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 11）
+- 状态：Phase 4 实施中（Task 12）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -379,18 +379,18 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 10.11 更新 Task 10 状态并创建提交：`feat: 添加地区选择器组件`。
   - _Requirements: R3, R4, R8, R9, R10_
 
-- [ ] 11. 以 TDD 增加中文 README 与隔离 Showcase
-  - [ ] 11.1 先扩展 `component-library-routes.test.ts` 并新增
+- [x] 11. 以 TDD 增加中文 README 与隔离 Showcase
+  - [x] 11.1 先扩展 `component-library-routes.test.ts` 并新增
     `region-selector-showcase.test.ts`，固定第 10 个独立组件叶子路由。
-  - [ ] 11.2 新增 `/component-library/business/region-selector`、页面和
+  - [x] 11.2 新增 `/component-library/business/region-selector`、页面和
     `RegionSelectorShowcase.vue`；不得把多个组件重新聚合到同一示例页。
-  - [ ] 11.3 Showcase 显式传本地 fixture provider，醒目标注“交互样例，不是正式地区
+  - [x] 11.3 Showcase 显式传本地 fixture provider，醒目标注“交互样例，不是正式地区
     数据”，不得 import 正式 API、Store 或默认 provider。
-  - [ ] 11.4 覆盖标准、中国台湾高雄、停用历史路径、readonly、disabled、一次失败重试
+  - [x] 11.4 覆盖标准、中国台湾高雄、停用历史路径、readonly、disabled、一次失败重试
     和窄屏状态。
-  - [ ] 11.5 完成 `QsRegionSelector/README.md`：public API、provider、value/path、
+  - [x] 11.5 完成 `QsRegionSelector/README.md`：public API、provider、value/path、
     缓存/身份、错误、表单、FormData、示例边界和调用方职责。
-  - [ ] 11.6 运行组件路由/Showcase/选择器测试、Web typecheck/lint/build；更新
+  - [x] 11.6 运行组件路由/Showcase/选择器测试、Web typecheck/lint/build；更新
     Task 11 状态并创建提交：`feat: 添加地区选择器示例与文档`。
   - _Requirements: R4, R9, R10_
 
