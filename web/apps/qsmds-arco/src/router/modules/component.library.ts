@@ -121,6 +121,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:panels-top-left',
         },
       },
+      {
+        path: 'good-tooltip',
+        name: 'componentLibraryQsGoodTooltip',
+        component: () => import('@/views/component_library/business/good-tooltip.vue'),
+        meta: {
+          title: '产品提示',
+          icon: 'i-lucide:package-search',
+        },
+      },
     ],
   },
   {

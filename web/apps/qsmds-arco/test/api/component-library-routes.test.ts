@@ -24,7 +24,7 @@ test('组件库在开发环境默认开启，其他环境必须显式启用', ()
   }), true)
 })
 
-test('组件库按分类提供八个独立组件路由', () => {
+test('组件库按分类提供九个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -98,6 +98,11 @@ test('组件库按分类提供八个独立组件路由', () => {
         path: 'generic-modal',
         title: '通用模态框',
       },
+      {
+        name: 'componentLibraryQsGoodTooltip',
+        path: 'good-tooltip',
+        title: '产品提示',
+      },
     ],
   )
 
@@ -110,7 +115,7 @@ test('组件库按分类提供八个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 8)
+  assert.equal(new Set(componentRouteNames).size, 9)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -137,7 +142,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('八个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('九个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -178,6 +183,11 @@ test('八个组件页面与页面模板复用展示壳且不依赖业务 API 或
       componentName: 'ComponentLibraryGenericModal',
       file: '../../src/views/component_library/business/generic-modal.vue',
       title: '通用模态框',
+    },
+    {
+      componentName: 'ComponentLibraryQsGoodTooltip',
+      file: '../../src/views/component_library/business/good-tooltip.vue',
+      title: '产品提示',
     },
     {
       componentName: 'ComponentLibraryPageTemplates',

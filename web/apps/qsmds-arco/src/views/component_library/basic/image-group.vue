@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ComponentCatalogPage from '../shared/ComponentCatalogPage.vue'
+import GoodTooltipImageGroupShowcase from './components/GoodTooltipImageGroupShowcase.vue'
 import ImageGroupShowcase from './components/ImageGroupShowcase.vue'
 
 defineOptions({ name: 'ComponentLibraryImageGroup' })
@@ -42,5 +43,6 @@ const principles = [
     empty-description="图片组组件示例尚未接入。"
   >
     <ImageGroupShowcase />
+    <GoodTooltipImageGroupShowcase />
   </ComponentCatalogPage>
 </template>
