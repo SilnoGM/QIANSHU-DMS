@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 路由与空页面契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
-import basicDataRoutes from '../../src/router/modules/basic.data'
+import basicDataRoutes, {
+  BASIC_DATA_READ_PERMISSIONS,
+} from '../../src/router/modules/basic.data'
 
 const basicDataPageContracts = [
   {
@@ -38,15 +40,14 @@ const basicDataPageContracts = [
   },
 ] as const
 
-test('基础数据在系统管理下提供五个独立叶子路由', () => {
+test('基础数据父路由按读取权限进入第一个可访问子页', () => {
   assert.equal(basicDataRoutes.path, '/system/basic-data')
   assert.equal(basicDataRoutes.name, 'systemBasicData')
   assert.equal(basicDataRoutes.meta?.title, '基础数据')
-  assert.equal(basicDataRoutes.meta?.auth, undefined)
+  assert.deepEqual(BASIC_DATA_READ_PERMISSIONS, ['regions:read'])
+  assert.deepEqual(basicDataRoutes.meta?.auth, ['regions:read'])
   assert.equal(typeof basicDataRoutes.component, 'function')
-  assert.deepEqual(basicDataRoutes.redirect, {
-    name: 'systemBasicDataRegions',
-  })
+  assert.equal(basicDataRoutes.redirect, undefined)
 
   assert.deepEqual(
     basicDataRoutes.children?.map(route => ({
@@ -56,7 +57,7 @@ test('基础数据在系统管理下提供五个独立叶子路由', () => {
       title: route.meta?.title,
     })),
     basicDataPageContracts.map(page => ({
-      auth: undefined,
+      auth: page.name === 'systemBasicDataRegions' ? 'regions:read' : undefined,
       name: page.name,
       path: page.path,
       title: page.title,
@@ -87,8 +88,20 @@ test('基础数据作为一级菜单注册在系统管理顶部主路由内', ()
   )
 })
 
-test('五个基础数据叶子路由当前只承载空页面', () => {
-  for (const page of basicDataPageContracts) {
+test('地区管理是受权限保护的真实业务页面', () => {
+  const source = readFileSync(
+    new URL('../../src/views/system/basic-data/regions/index.vue', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /<script setup lang="ts">/u)
+  assert.match(source, /regionsApi\.management\.(?:navigation|list)/u)
+  assert.match(source, /<RegionScopeTree\b/u)
+  assert.match(source, /<QsGenericTable\b/u)
+})
+
+test('地区以外的四个基础数据叶子路由仍只承载空页面', () => {
+  for (const page of basicDataPageContracts.slice(1)) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
     const renderedMarkup = source
       .replaceAll(/<\/?template>/gu, '')

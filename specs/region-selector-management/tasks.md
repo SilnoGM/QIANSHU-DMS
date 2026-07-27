@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 12）
+- 状态：Phase 4 实施中（Task 13）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -394,19 +394,19 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     Task 11 状态并创建提交：`feat: 添加地区选择器示例与文档`。
   - _Requirements: R4, R9, R10_
 
-- [ ] 12. 以 TDD 实现地区管理查询路由与真实业务页面
-  - [ ] 12.1 先修改并运行失败的 `basic-data-routes.test.ts`、
+- [x] 12. 以 TDD 实现地区管理查询路由与真实业务页面
+  - [x] 12.1 先修改并运行失败的 `basic-data-routes.test.ts`、
     `system-management-routes.test.ts` 和 `system-management.test.ts`：
     - 地区页不再为空；
     - 其余四个基础数据页仍为空；
     - 地区叶子需要 `regions:read`；
     - 父路由没有固定 redirect；
     - 系统首页 any-of 包含 `regions:read`。
-  - [ ] 12.2 先新增并运行失败的 `regions.logic.test.ts`，固定 scope → 直属 level、
+  - [x] 12.2 先新增并运行失败的 `regions.logic.test.ts`，固定 scope → 直属 level、
     query 参数、own/effective 状态、sorting whitelist、request version 和事件合并。
-  - [ ] 12.3 修改 `router/modules/basic.data.ts`、`system.management.ts` 及必要路由测试，
+  - [x] 12.3 修改 `router/modules/basic.data.ts`、`system.management.ts` 及必要路由测试，
     新增 `BASIC_DATA_READ_PERMISSIONS`，复用现有授权子路由 redirect guard。
-  - [ ] 12.4 实现：
+  - [x] 12.4 实现：
 
     ```text
     views/system/basic-data/regions/
@@ -415,16 +415,16 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     └── region-scope-tree.vue
     ```
 
-  - [ ] 12.5 页面只组合一个 `FaPageMain`：桌面 `18rem + minmax(0,1fr)`，左侧只显示
+  - [x] 12.5 页面只组合一个 `FaPageMain`：桌面 `18rem + minmax(0,1fr)`，左侧只显示
     国家/地区和省/州，右侧 `QsGenericTable` 分页显示直属下级。
-  - [ ] 12.6 停用/继承停用导航节点必须仍可选；状态有文字。移动端导航进入底部
+  - [x] 12.6 停用/继承停用导航节点必须仍可选；状态有文字。移动端导航进入底部
     `QsGenericDrawer` 并恢复焦点。
-  - [ ] 12.7 `QsGenericTable` 使用 `addable=false`、受控 page/pageSize/search/filter/
+  - [x] 12.7 `QsGenericTable` 使用 `addable=false`、受控 page/pageSize/search/filter/
     sorting、完整桌面列和移动卡片；不直接重建 `FaTable/FaPagination`。
-  - [ ] 12.8 实现 navigation/list AbortController、requestVersion、scope 保护、error/
+  - [x] 12.8 实现 navigation/list AbortController、requestVersion、scope 保护、error/
     retry/requestId 和区分空状态；页面查询不读取 selector cache。
-  - [ ] 12.9 运行 route/logic/page 定向测试、全量 `test:api`、typecheck、lint、build。
-  - [ ] 12.10 更新 Task 12 状态并创建提交：`feat: 添加地区管理查询页面`。
+  - [x] 12.9 运行 route/logic/page 定向测试、全量 `test:api`、typecheck、lint、build。
+  - [x] 12.10 更新 Task 12 状态并创建提交：`feat: 添加地区管理查询页面`。
   - _Requirements: R5, R7, R8, R9, R10_
 
 - [ ] 13. 以 TDD 实现地区管理表单、启停和缓存联动

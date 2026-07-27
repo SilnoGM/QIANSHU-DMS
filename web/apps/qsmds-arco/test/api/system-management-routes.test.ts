@@ -14,6 +14,7 @@ test('系统管理路由按读取权限隔离四个管理页面', () => {
     'users:read',
     'roles:read',
     'audit:read',
+    'regions:read',
   ])
 
   assert.deepEqual(
@@ -74,6 +75,7 @@ test('首页复用管理读取权限门槛，使无业务页面的身份进入�
     'users:read',
     'roles:read',
     'audit:read',
+    'regions:read',
   ])
 
   const routesSource = readFileSync(
