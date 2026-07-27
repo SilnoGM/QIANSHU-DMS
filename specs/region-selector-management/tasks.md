@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 6）
+- 状态：Phase 4 实施中（Task 7）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -249,23 +249,23 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 5.7 更新 Task 5 状态并创建提交：`feat: 添加地区服务输入与错误边界`。
   - _Requirements: R1, R3, R5, R6, R8, R10_
 
-- [ ] 6. 以 TDD 实现地区选择查询 Service、Controller 与 OpenAPI
-  - [ ] 6.1 先新增并运行失败的 query service、selection controller/module 测试和
+- [x] 6. 以 TDD 实现地区选择查询 Service、Controller 与 OpenAPI
+  - [x] 6.1 先新增并运行失败的 query service、selection controller/module 测试和
     `server/test/region-selection-api.e2e-spec.ts`。
-  - [ ] 6.2 测试固定 options 根/直属下级 lazy 查询、父级校验、有效状态过滤和
+  - [x] 6.2 测试固定 options 根/直属下级 lazy 查询、父级校验、有效状态过滤和
     `sortOrder, normalizedName, id` 稳定排序。
-  - [ ] 6.3 测试固定 search 的三层字段匹配、exact/prefix/substring 命中等级、完整
+  - [x] 6.3 测试固定 search 的三层字段匹配、exact/prefix/substring 命中等级、完整
     path 稳定排序、默认/最大 limit 和 `hasMore`。
-  - [ ] 6.4 测试固定 path 恰好三层、停用历史值仍返回状态、不存在与非 CITY 错误分离。
-  - [ ] 6.5 实现 `RegionQueryService`、`RegionSelectionController`、`RegionsModule`，
+  - [x] 6.4 测试固定 path 恰好三层、停用历史值仍返回状态、不存在与非 CITY 错误分离。
+  - [x] 6.5 实现 `RegionQueryService`、`RegionSelectionController`、`RegionsModule`，
     并注册到 `server/src/http.modules.ts`。
-  - [ ] 6.6 三个 endpoint 使用 `@RequireAuthenticatedSession()`、`privateNoStore`，
+  - [x] 6.6 三个 endpoint 使用 `@RequireAuthenticatedSession()`、`privateNoStore`，
     不声明或隐式授予 `regions:*`。
-  - [ ] 6.7 E2E 覆盖匿名 401、强制改密拒绝、正常无管理权限用户成功、非法 UUID 422、
+  - [x] 6.7 E2E 覆盖匿名 401、强制改密拒绝、正常无管理权限用户成功、非法 UUID 422、
     安全错误和 `X-Request-Id`。
-  - [ ] 6.8 增加 OpenAPI 契约测试，固定 operationId、Session、无 authorization、
+  - [x] 6.8 增加 OpenAPI 契约测试，固定 operationId、Session、无 authorization、
     no-store、DTO 和 endpoint errors。
-  - [ ] 6.9 运行：
+  - [x] 6.9 运行：
 
     ```bash
     pnpm -C server test -- --runInBand regions
@@ -276,7 +276,7 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     node --run contract:check
     ```
 
-  - [ ] 6.10 只提交生成链路产生的 OpenAPI snapshot/Web types，不提交 Prisma generated
+  - [x] 6.10 只提交生成链路产生的 OpenAPI snapshot/Web types，不提交 Prisma generated
     client；更新 Task 6 状态并创建提交：`feat: 添加地区选择查询接口`。
   - _Requirements: R3, R4, R8, R9, R10_
 

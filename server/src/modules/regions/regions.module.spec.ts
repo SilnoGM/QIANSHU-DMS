@@ -1,0 +1,25 @@
+import { HTTP_MODULES } from '../../http.modules'
+import { PrismaModule } from '../../infrastructure/database/prisma.module'
+import { AuthModule } from '../auth/auth.module'
+import { RegionQueryService } from './region-query.service'
+import { RegionSelectionController } from './region-selection.controller'
+import { RegionsModule } from './regions.module'
+
+describe('RegionsModule metadata', () => {
+  it('composes the shared database/auth providers and selection boundary', () => {
+    expect(Reflect.getMetadata('imports', RegionsModule)).toEqual([
+      PrismaModule,
+      AuthModule,
+    ])
+    expect(Reflect.getMetadata('controllers', RegionsModule)).toEqual([
+      RegionSelectionController,
+    ])
+    expect(Reflect.getMetadata('providers', RegionsModule)).toEqual([
+      RegionQueryService,
+    ])
+  })
+
+  it('is registered in the single live HTTP/OpenAPI module list', () => {
+    expect(HTTP_MODULES).toContain(RegionsModule)
+  })
+})
