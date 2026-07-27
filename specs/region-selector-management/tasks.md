@@ -159,23 +159,23 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     创建提交：`feat: 添加地区固定数据资产`。
   - _Requirements: R2, R9, R10_
 
-- [ ] 3. 以 TDD 建立 Region schema、三级强约束、权限与审计类型
-  - [ ] 3.1 先新增并运行失败的
+- [x] 3. 以 TDD 建立 Region schema、三级强约束、权限与审计类型
+  - [x] 3.1 先新增并运行失败的
     `server/src/infrastructure/database/region-schema.spec.ts`，固定 Prisma enum/model、
     字段映射、索引、具名 check、partial unique、FK、trigger、权限和 Audit enum。
-  - [ ] 3.2 先新增并运行失败的 `server/test/region-schema.e2e-spec.ts`，在隔离
+  - [x] 3.2 先新增并运行失败的 `server/test/region-schema.e2e-spec.ts`，在隔离
     PostgreSQL 16 验证根/二级/三级合法写入和所有非法层级写入。
-  - [ ] 3.3 在 `server/prisma/schema.prisma` 增加 `RegionLevel`、自关联 `Region` 和四个
+  - [x] 3.3 在 `server/prisma/schema.prisma` 增加 `RegionLevel`、自关联 `Region` 和四个
     Region Audit event；`effectiveEnabled` 不落库。
-  - [ ] 3.4 新增不可变
+  - [x] 3.4 新增不可变
     `<timestamp>_regions_schema_and_permissions/migration.sql`，显式事务创建：
     - 表、enum、索引与 root partial unique；
     - code/name/source/admin type/sort/parent shape check；
     - `ON DELETE/UPDATE RESTRICT` self FK；
     - hierarchy 和 identity immutable trigger。
-  - [ ] 3.5 E2E 证明错层、孤儿、自引用、负排序、重复 code、重复根/同父名称、
+  - [x] 3.5 E2E 证明错层、孤儿、自引用、负排序、重复 code、重复根/同父名称、
     identity UPDATE 和存在 child 的 parent DELETE 均被数据库拒绝且不留部分数据。
-  - [ ] 3.6 Migration 新增并显式授予 `system_admin`：
+  - [x] 3.6 Migration 新增并显式授予 `system_admin`：
 
     ```text
     00000000-0000-4000-8000-000000000113  regions:read
@@ -185,10 +185,10 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     00000000-0000-4000-8000-000000000117  regions:disable
     ```
 
-  - [ ] 3.7 五项权限固定为 `systemOnly=false`；更新
+  - [x] 3.7 五项权限固定为 `systemOnly=false`；更新
     `permission.constants.ts` 及受精确权限集合影响的 access-control/auth schema/API
     测试，不通过兼容 fallback 放宽旧断言。
-  - [ ] 3.8 运行：
+  - [x] 3.8 运行：
 
     ```bash
     pnpm -C server test -- --runInBand region-schema.spec.ts
@@ -197,7 +197,7 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     node --run ci:server-e2e
     ```
 
-  - [ ] 3.9 确认未提交 Prisma generated client，更新 Task 3 状态并创建提交：
+  - [x] 3.9 确认未提交 Prisma generated client，更新 Task 3 状态并创建提交：
     `feat: 添加地区数据库结构与权限`。
   - _Requirements: R1, R7, R8, R10_
 

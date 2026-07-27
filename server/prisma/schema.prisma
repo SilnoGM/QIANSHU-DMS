@@ -65,11 +65,23 @@ enum AuditEventType {
   ROLE_CREATED
   ROLE_UPDATED
   ROLE_PERMISSIONS_CHANGED
+  REGION_CREATED
+  REGION_UPDATED
+  REGION_ENABLED
+  REGION_DISABLED
   SYSTEM_BOOTSTRAP
   SYSTEM_ADMIN_RECOVERED
   AUTH_RETENTION_PURGED
 
   @@map("audit_event_type")
+}
+
+enum RegionLevel {
+  COUNTRY_REGION
+  PROVINCE_STATE
+  CITY
+
+  @@map("region_level")
 }
 
 model User {
@@ -220,4 +232,29 @@ model AuditEvent {
   @@index([actorUserId, occurredAt(sort: Desc)], map: "audit_events_actor_user_id_occurred_at_idx")
   @@index([eventType, occurredAt(sort: Desc)], map: "audit_events_event_type_occurred_at_idx")
   @@map("audit_events")
+}
+
+model Region {
+  id                 String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code               String      @unique(map: "regions_code_key") @db.VarChar(64)
+  name               String      @db.VarChar(128)
+  normalizedName     String      @map("normalized_name") @db.VarChar(128)
+  englishName        String?     @map("english_name") @db.VarChar(128)
+  sourceName         String?     @map("source_name") @db.VarChar(128)
+  sourceCode         String?     @map("source_code") @db.VarChar(64)
+  administrativeType String      @map("administrative_type") @db.VarChar(64)
+  level              RegionLevel
+  parentId           String?     @map("parent_id") @db.Uuid
+  enabled            Boolean     @default(true)
+  sortOrder          Int         @default(0) @map("sort_order")
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  parent   Region?  @relation("RegionHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  children Region[] @relation("RegionHierarchy")
+
+  @@unique([parentId, normalizedName], map: "regions_parent_id_normalized_name_key")
+  @@index([parentId, sortOrder, normalizedName, id], map: "regions_parent_id_sort_order_name_id_idx")
+  @@index([level, enabled, normalizedName, id], map: "regions_level_enabled_name_id_idx")
+  @@map("regions")
 }
