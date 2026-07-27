@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMediaQuery } from '@vueuse/core'
 import { computed, ref, toRefs, watch } from 'vue'
 
 type GoodTooltipAlign = 'center' | 'end' | 'start'
@@ -38,9 +39,9 @@ const {
   disabled,
   imageAlt,
   imageSrc,
-  side,
 } = toRefs(props)
 
+const isNarrowViewport = useMediaQuery('(max-width: 639px)')
 const imageFailed = ref(false)
 const hasImageSource = computed(() => (
   typeof props.imageSrc === 'string'
@@ -49,6 +50,17 @@ const hasImageSource = computed(() => (
 const imageFitClass = computed(() => (
   props.imageFit === 'contain' ? 'object-contain' : 'object-cover'
 ))
+const resolvedSide = computed<GoodTooltipSide>(() => {
+  // 窄屏没有足够的横向空间容纳产品卡片。Reka 只会优先翻转到相反侧，
+  // 因此 left / right 在两侧都不足时需要主动降级为 top，避免浮层越出视口。
+  if (
+    isNarrowViewport.value
+    && (props.side === 'left' || props.side === 'right')
+  ) {
+    return 'top'
+  }
+  return props.side
+})
 
 watch(
   () => props.imageSrc,
@@ -66,7 +78,7 @@ function handleImageError() {
 <template>
   <FaTooltip
     :delay="delay"
-    :side="side"
+    :side="resolvedSide"
     :align="align"
     :disabled="disabled"
   >

@@ -54,6 +54,10 @@ test('图片组页面保留原示例并追加 QsGoodTooltip 互斥组合示例',
   assert.match(combinationSource, /import QsGoodTooltip from '@\/components\/business\/QsGoodTooltip\/index\.vue'/u)
   assert.equal((combinationSource.match(/<QsGoodTooltip/gu) ?? []).length, 2)
   assert.equal((combinationSource.match(/^\s+:tooltip="false"$/gmu) ?? []).length, 2)
+  assert.equal(
+    (combinationSource.match(/data-slot="good-tooltip-image-group-trigger"/gu) ?? []).length,
+    2,
+  )
   assert.equal((combinationSource.match(/^\s+tabindex="0"$/gmu) ?? []).length, 2)
   assert.match(combinationSource, /SPU 信息/u)
   assert.match(combinationSource, /SKU 信息/u)

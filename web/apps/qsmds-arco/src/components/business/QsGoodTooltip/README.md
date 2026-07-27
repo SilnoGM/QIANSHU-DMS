@@ -10,7 +10,7 @@
 | `imageAlt` | `string` | `''` | 图片替代文本；右侧已经提供完整名称时可以保持空值 |
 | `imageFit` | `'cover' \| 'contain'` | `'cover'` | 图片裁切方式 |
 | `delay` | `number` | `300` | Tooltip 显示延迟，单位为毫秒 |
-| `side` | `'top' \| 'right' \| 'bottom' \| 'left'` | `'top'` | Tooltip 相对触发器的方向 |
+| `side` | `'top' \| 'right' \| 'bottom' \| 'left'` | `'top'` | Tooltip 相对触发器的首选方向；窄屏下 `left` / `right` 自动降级为 `top`，避免横向越界 |
 | `align` | `'start' \| 'center' \| 'end'` | `'center'` | Tooltip 对齐方式 |
 | `disabled` | `boolean` | `false` | 是否禁用产品提示 |
 

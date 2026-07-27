@@ -62,14 +62,22 @@ const skuImages: readonly ImageGroupItem[] = [
               image-alt="城市旅行收纳包"
               side="right"
             >
-              <ImageGroup
-                :items="spuImages"
-                :tooltip="false"
-                :max-count="3"
+              <!-- 原生根节点稳定承接 Tooltip 的 hover / focus 事件；
+                   ImageGroup 仍只负责缩略图与内部按钮的预览交互。 -->
+              <span
+                data-slot="good-tooltip-image-group-trigger"
                 tabindex="0"
-                radius="lg"
-                size="lg"
-              />
+                aria-label="查看城市旅行收纳包产品信息"
+                class="rounded-lg inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+              >
+                <ImageGroup
+                  :items="spuImages"
+                  :tooltip="false"
+                  :max-count="3"
+                  radius="lg"
+                  size="lg"
+                />
+              </span>
 
               <template #content>
                 <div class="min-w-0">
@@ -112,13 +120,19 @@ const skuImages: readonly ImageGroupItem[] = [
               image-fit="contain"
               side="left"
             >
-              <ImageGroup
-                :items="skuImages"
-                :tooltip="false"
+              <span
+                data-slot="good-tooltip-image-group-trigger"
                 tabindex="0"
-                radius="lg"
-                size="lg"
-              />
+                aria-label="查看墨蓝色中号旅行收纳包规格信息"
+                class="rounded-lg inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+              >
+                <ImageGroup
+                  :items="skuImages"
+                  :tooltip="false"
+                  radius="lg"
+                  size="lg"
+                />
+              </span>
 
               <template #content>
                 <div class="min-w-0">
