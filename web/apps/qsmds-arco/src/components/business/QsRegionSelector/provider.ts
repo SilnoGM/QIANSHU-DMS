@@ -373,13 +373,17 @@ export function createRegionSelectorProvider(
     }
   }
 
+  function clearRuntimeData(): void {
+    generation += 1
+    abortAllInFlight()
+    cache.clear()
+  }
+
   function invalidateLocal(): void {
     if (disposed) {
       return
     }
-    generation += 1
-    abortAllInFlight()
-    cache.clear()
+    clearRuntimeData()
     notifyInvalidation()
   }
 
@@ -421,15 +425,24 @@ export function createRegionSelectorProvider(
   }
 
   function applyRuntimeContext(next: RuntimeContext): void {
+    const authSignalChanged = currentAuthSignal !== next.authSignal
     const changed = currentIdentityKey !== next.identityKey
-      || currentAuthSignal !== next.authSignal
-    if (currentIdentityKey !== null && changed) {
-      // 身份边界必须先推进 generation 并中止旧请求，再切换到新 identity/signal。
-      invalidateLocal()
+      || authSignalChanged
+    const shouldInvalidate = currentIdentityKey !== null && changed
+    if (shouldInvalidate) {
+      /*
+       * 先阻断旧 generation，再发布新 identity/signal，最后通知订阅者。组件收到
+       * 通知会同步恢复已有 path；若通知时仍暴露旧上下文，它会再次触发同一失效，
+       * 形成 resolvePath 递归。这里拆开数据清理与通知，确保重入读取新上下文。
+       */
+      clearRuntimeData()
     }
     currentIdentityKey = next.identityKey
-    if (currentAuthSignal !== next.authSignal) {
+    if (authSignalChanged) {
       bindAuthSignal(next.authSignal)
+    }
+    if (shouldInvalidate) {
+      notifyInvalidation()
     }
   }
 

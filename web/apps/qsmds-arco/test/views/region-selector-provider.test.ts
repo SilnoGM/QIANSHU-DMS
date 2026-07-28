@@ -591,6 +591,51 @@ test('identity 或 auth signal 静默替换时，完成门禁仍拒绝旧响应'
   harness.dispose()
 })
 
+test('身份切换通知期间的订阅者重取使用新上下文且不递归失效', async () => {
+  let calls = 0
+  const harness = createHarness({
+    dataSource: createDataSource({
+      getPath: async (cityId) => {
+        calls += 1
+        return rawPath(cityId)
+      },
+    }),
+  })
+  let invalidations = 0
+  let reentrantRequest: Promise<unknown> | null = null
+  harness.provider.subscribeInvalidation?.(() => {
+    invalidations += 1
+    /*
+     * 真实组件收到身份失效后会立即恢复已有 CITY 的 path。上限只用于让旧实现
+     * 稳定失败而不耗尽 Node 调用栈；正确实现只会进入一次。
+     */
+    if (invalidations <= 4) {
+      reentrantRequest = harness.provider.resolvePath({
+        cityId: CITY_ID,
+        signal: new AbortController().signal,
+      })
+    }
+  })
+
+  harness.setIdentity({
+    authEpoch: 8,
+    userId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  })
+  harness.setAuthController(new AbortController())
+  const initiatingRequest = harness.provider.resolvePath({
+    cityId: CITY_ID,
+    signal: new AbortController().signal,
+  })
+
+  await initiatingRequest
+  assert.notEqual(reentrantRequest, null)
+  await reentrantRequest
+  assert.equal(invalidations, 1)
+  assert.equal(calls, 1, '同一新身份的重入与发起请求应共享 in-flight')
+
+  harness.dispose()
+})
+
 test('BroadcastChannel 只发送 exact 失效消息，收到消息只本地失效且不回广播', async () => {
   const channel = createFakeChannel()
   const channelNames: string[] = []
