@@ -784,16 +784,21 @@ test('Provider 边界不导入 API、Store 或持久化能力', () => {
   assert.doesNotMatch(combined, /new BroadcastChannel/u)
 })
 
-test('正式应用在安装 Pinia 后创建并注入默认 Provider', () => {
+test('正式应用在 Router 安装后同步挂载，并仅在地区请求时动态装载 API', () => {
   const mainSource = readFileSync(
     new URL('../../src/main.ts', import.meta.url),
     'utf8',
   )
 
-  assert.match(
+  assert.doesNotMatch(
     mainSource,
     /import regionsApi from ['"]@\/api\/modules\/regions['"]/u,
   )
+  assert.match(
+    mainSource,
+    /await import\(['"]@\/api\/modules\/regions['"]\)/u,
+  )
+  assert.doesNotMatch(mainSource, /await router\.isReady\(\)/u)
   assert.match(
     mainSource,
     /installDefaultRegionSelectorProvider/u,
@@ -802,6 +807,10 @@ test('正式应用在安装 Pinia 后创建并注入默认 Provider', () => {
   assert.match(mainSource, /useAppAccountStore/u)
 
   const piniaInstallIndex = mainSource.indexOf('app.use(pinia)')
+  const routerInstallIndex = mainSource.indexOf('app.use(router)')
+  const regionsApiImportIndex = mainSource.indexOf(
+    'await import(\'@/api/modules/regions\')',
+  )
   const accountStoreIndex = mainSource.indexOf('useAppAccountStore(pinia)')
   const providerInstallIndex = mainSource.indexOf(
     'installDefaultRegionSelectorProvider({',
@@ -811,9 +820,12 @@ test('正式应用在安装 Pinia 后创建并注入默认 Provider', () => {
   )
 
   assert.ok(piniaInstallIndex >= 0)
-  assert.ok(accountStoreIndex > piniaInstallIndex)
+  assert.ok(routerInstallIndex > piniaInstallIndex)
+  assert.ok(accountStoreIndex > routerInstallIndex)
   assert.ok(providerInstallIndex > accountStoreIndex)
+  assert.ok(regionsApiImportIndex > providerInstallIndex)
   assert.ok(providerInjectionIndex > providerInstallIndex)
+  assert.ok(mainSource.indexOf('app.mount(\'#app\')') > providerInjectionIndex)
   assert.match(
     mainSource,
     /authEpoch:\s*appAccountStore\.authEpoch/u,
