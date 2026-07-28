@@ -1,11 +1,12 @@
+import type { MenuRecordRaw } from '@fantastic-admin/types'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 路由与空页面契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
-import basicDataRoutes, {
-  BASIC_DATA_READ_PERMISSIONS,
-} from '../../src/router/modules/basic.data'
+import { matchesAuthorization } from '../../src/composables/app/auth'
+import basicDataRoutes from '../../src/router/modules/basic.data'
+import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
 const basicDataPageContracts = [
   {
@@ -40,12 +41,11 @@ const basicDataPageContracts = [
   },
 ] as const
 
-test('基础数据父路由按读取权限进入第一个可访问子页', () => {
+test('基础数据父路由保持权限中立并由叶子路由独立鉴权', () => {
   assert.equal(basicDataRoutes.path, '/system/basic-data')
   assert.equal(basicDataRoutes.name, 'systemBasicData')
   assert.equal(basicDataRoutes.meta?.title, '基础数据')
-  assert.deepEqual(BASIC_DATA_READ_PERMISSIONS, ['regions:read'])
-  assert.deepEqual(basicDataRoutes.meta?.auth, ['regions:read'])
+  assert.equal(basicDataRoutes.meta?.auth, undefined)
   assert.equal(typeof basicDataRoutes.component, 'function')
   assert.equal(basicDataRoutes.redirect, undefined)
 
@@ -69,6 +69,41 @@ test('基础数据父路由按读取权限进入第一个可访问子页', () =>
   assert.equal(
     new Set(basicDataRoutes.children?.map(route => route.name)).size,
     basicDataPageContracts.length,
+  )
+})
+
+test('无地区读取权限时仍保留其余四个基础数据菜单', () => {
+  const permissions = ['users:read']
+  const menuFixture: MenuRecordRaw[] = [{
+    path: basicDataRoutes.path,
+    meta: {
+      auth: basicDataRoutes.meta?.auth,
+      title: basicDataRoutes.meta?.title,
+    },
+    children: (basicDataRoutes.children ?? []).map(route => ({
+      path: route.path,
+      meta: {
+        auth: route.meta?.auth,
+        title: route.meta?.title,
+      },
+    })),
+  }]
+
+  // 使用生产递归过滤函数验证父项保留、地区隐藏及四个权限中立叶子的顺序。
+  const [visibleBasicData] = filterAccessibleMenus(
+    menuFixture,
+    value => matchesAuthorization(permissions, value),
+    () => true,
+  )
+
+  assert.equal(visibleBasicData?.path, '/system/basic-data')
+  assert.deepEqual(
+    visibleBasicData?.children?.map(menu => menu.path),
+    ['currencies', 'exchange-rates', 'numbering', 'dictionaries'],
+  )
+  assert.equal(
+    visibleBasicData?.children?.some(menu => menu.path === 'regions'),
+    false,
   )
 })
 

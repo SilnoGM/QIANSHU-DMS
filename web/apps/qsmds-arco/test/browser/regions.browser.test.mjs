@@ -1404,6 +1404,19 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
         && body.includes('无权访问该页面')
         && document.querySelector('[data-testid="region-table"]') === null
     })()`)
+
+    /*
+     * 基础数据父级保持权限中立。失去地区权限后直接访问父路径，Router 应跳过
+     * 地区叶子并进入第一个仍可访问的货币页面，同时保留另外三个空页面入口。
+     */
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/system/basic-data'))
+    await page.waitFor(`(() => {
+      const body = document.body.innerText
+      return location.hash === '#/system/basic-data/currencies'
+        && ['货币管理', '汇率管理', '编号管理', '字典管理']
+          .every(title => body.includes(title))
+        && !body.includes('地区管理')
+    })()`)
   })
   await page.evaluate(restorePermissionsExpression())
   await page.navigate(appRouteUrl(configuration.baseUrl, managementRoute))

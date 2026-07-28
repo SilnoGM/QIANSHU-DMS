@@ -1,7 +1,7 @@
 import type { MenuRecordMainRaw, MenuRecordRaw, RouteRecordMainRaw } from '@fantastic-admin/types'
 import type { RouteRecordRaw } from 'vue-router'
-import { cloneDeep } from 'es-toolkit'
 import { resolveRoutePath } from '@/utils'
+import { filterAccessibleMenus } from './menu.logic'
 
 export const useAppMenuStore = defineStore(
   'appMenu',
@@ -185,21 +185,7 @@ export const useAppMenuStore = defineStore(
     const localeAuth = useAppLocaleAuth()
     // 根据权限过滤导航
     function filterAsyncMenus<T extends MenuRecordMainRaw[] | MenuRecordRaw[]>(menus: T): T {
-      const res: any = []
-      menus.forEach((menu) => {
-        if (auth.auth(menu.meta?.auth ?? '') && localeAuth.auth(menu.meta?.localeAuth ?? '')) {
-          const tmpMenu = cloneDeep(menu)
-          if (tmpMenu.children && tmpMenu.children.length > 0) {
-            tmpMenu.children = filterAsyncMenus(tmpMenu.children) as MenuRecordRaw[]
-            tmpMenu.children.length > 0 && res.push(tmpMenu)
-          }
-          else {
-            delete tmpMenu.children
-            res.push(tmpMenu)
-          }
-        }
-      })
-      return res
+      return filterAccessibleMenus(menus, auth.auth, localeAuth.auth)
     }
     // 设置主导航
     function isPathInMenus(menus: MenuRecordRaw[], path: string) {

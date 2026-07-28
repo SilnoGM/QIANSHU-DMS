@@ -4,13 +4,9 @@ function Layout() {
   return import('@/layouts/index.vue')
 }
 
-export const BASIC_DATA_READ_PERMISSIONS = [
-  'regions:read',
-] as const
-
 /**
- * 基础数据父级使用 any-of 读取权限。父路由不固定重定向到地区管理，
- * 后续增加其他基础数据权限时可继续由全局 guard 选择首个有权访问的叶子。
+ * 基础数据父级保持权限中立，由各业务叶子独立声明访问权限。
+ * 这样无地区权限的账号仍可看到其余基础数据入口，避免父级鉴权误删整棵菜单。
  */
 const routes: RouteRecordRaw = {
   path: '/system/basic-data',
@@ -19,7 +15,6 @@ const routes: RouteRecordRaw = {
   meta: {
     title: '基础数据',
     icon: 'i-lucide:database',
-    auth: [...BASIC_DATA_READ_PERMISSIONS],
   },
   children: [
     {
