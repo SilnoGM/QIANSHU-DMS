@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 15）
+- 状态：已完成（2026-07-28 全量验收通过）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -12,8 +12,8 @@
 - Server：`server`
 - 真实业务入口：`/system/basic-data/regions`
 
-本清单已在用户确认后进入 Phase 4 实施；Task 1-14 已按测试、实现、验证和提交结果
-实时勾选。尚未完成的 Task 15 保持未勾选，不得提前声明全量验收或交付完成。
+本清单已按确认范围完成 Phase 4 实施；Task 1-15 均有对应测试、实现、验证和提交
+证据。未执行 push、merge、分支删除或 worktree 清理。
 
 ## 2. 执行规则
 
@@ -482,8 +482,8 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 14.10 更新 Task 14 状态并创建提交：`test: 添加地区功能浏览器验收`。
   - _Requirements: R3-R10_
 
-- [ ] 15. 完成全量门禁、数据审计和交付收口
-  - [ ] 15.1 重新运行数据资产与 Server 全量门禁：
+- [x] 15. 完成全量门禁、数据审计和交付收口
+  - [x] 15.1 重新运行数据资产与 Server 全量门禁：
 
     ```bash
     node --test server/scripts/region-data/generate-region-seed.test.mjs
@@ -494,14 +494,14 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     node --run ci:server-e2e
     ```
 
-  - [ ] 15.2 重新生成后验证契约无漂移：
+  - [x] 15.2 重新生成后验证契约无漂移：
 
     ```bash
     node --run contract:sync
     node --run contract:check
     ```
 
-  - [ ] 15.3 运行 Web、Browser 和根级完整门禁：
+  - [x] 15.3 运行 Web、Browser 和根级完整门禁：
 
     ```bash
     pnpm -C web check
@@ -512,19 +512,49 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     git diff --check
     ```
 
-  - [ ] 15.4 复核最新隔离数据库证据精确为 3/48/551/602，并包含台湾、北京和马来西亚
+  - [x] 15.4 复核最新隔离数据库证据精确为 3/48/551/602，并包含台湾、北京和马来西亚
     关键路径；不得引用早期或不同 HEAD 的结果。
-  - [ ] 15.5 复核 OpenAPI 选择接口无需 `regions:*`，管理接口逐 endpoint 权限、CSRF、
+  - [x] 15.5 复核 OpenAPI 选择接口无需 `regions:*`，管理接口逐 endpoint 权限、CSRF、
     no-store、错误矩阵正确，且没有 DELETE。
-  - [ ] 15.6 复核组件 README、Showcase fixture、真实业务页职责和缓存广播边界，没有
+  - [x] 15.6 复核组件 README、Showcase fixture、真实业务页职责和缓存广播边界，没有
     示例数据成为正式真相源。
-  - [ ] 15.7 检查 staged/unstaged/untracked 范围，无 `.env`、密钥、日志、构建产物、
+  - [x] 15.7 检查 staged/unstaged/untracked 范围，无 `.env`、密钥、日志、构建产物、
     Prisma generated client、根依赖产物或无关用户修改。
-  - [ ] 15.8 把所有真实完成项勾选并把文档状态改为“已完成”；如没有代码修复，创建
+  - [x] 15.8 把所有真实完成项勾选并把文档状态改为“已完成”；如没有代码修复，创建
     最终提交：`docs: 记录地区功能验收结果`，不制造其他空提交。
-  - [ ] 15.9 检查 `git status --short` 和提交历史；不 push、不 merge、不删除分支，
+  - [x] 15.9 检查 `git status --short` 和提交历史；不 push、不 merge、不删除分支，
     等待用户给出后续 Git 生命周期要求。
   - _Requirements: R1-R10_
+
+### 4.1 Task 15 最新验收证据
+
+- 固定数据资产：生成测试 `9/9` 通过，`--check` 确认 canonical seed 与 migration
+  完全一致，共 `602` 个节点；实际计数为 `3 COUNTRY_REGION`、
+  `48 PROVINCE_STATE`、`551 CITY`，且 `602` 个技术 code 全部唯一。
+- 关键路径：
+  - `中国 → 北京市 → 北京市`
+  - `中国台湾 → 台湾 → 高雄市`
+  - `马来西亚 → 柔佛 → Batu Pahat`
+- Server：Prisma schema 有效，`pnpm -C server check` 为 `83 suites / 721 tests`；
+  build 通过；隔离 PostgreSQL 16 从空库应用全部 5 条 migration、重复 deploy 无
+  pending，Server E2E 为 `15 suites / 88 tests`。
+- OpenAPI：`contract:sync` 与 `contract:check` 均通过且生成资产无漂移。选择接口只要求
+  正常 Session；管理接口逐 endpoint 使用 `regions:read/create/update/enable/disable`，
+  写接口保留 CSRF，所有响应 `private, no-store`，且没有 DELETE。
+- Web：`pnpm -C web check` 中 Node `148`、TSX `49`、API/View `434` 项测试通过，
+  typecheck、ESLint、Stylelint 和 production build 均通过；字体零残留校验通过。
+- Browser：认证与系统管理基线 `2/2` 通过；地区专属选择器与管理场景 `2/2` 通过，
+  覆盖台湾路径、权限矩阵、写入、双标签缓存失效、桌面/窄屏及表单语义。
+- 根级：`node --run test:root` 以 JUnit 复核 `608` 个 leaf testcases，无 failure、
+  error 或 skip；最终 `node --run check` 和 `git diff --check` 均通过。
+- 只读审计未发现 P0/P1：README/Showcase fixture/正式业务页职责边界正确，缓存具备
+  identity、TTL、取消、迟到写入和跨标签失效保护；工作树无敏感文件、生成 client、
+  构建产物或根依赖违规。
+- 全量门禁首次发现地区 API 静态装载扩大 API/Store/Router 模块求值环，已通过
+  `b515242` 改为 Provider 同步注入、地区 API 请求时动态装载，并新增启动顺序回归测试。
+  同时以 `07c9ca3` 更新 5 项可分配地区权限的 Browser 验收并收紧精确选项定位。
+- 构建仅保留第三方 `@vueuse/core` pure annotation 与既有大 chunk 非阻断警告；未出现
+  新增编译、类型、测试或运行时错误。
 
 ## 5. Git 提交计划
 

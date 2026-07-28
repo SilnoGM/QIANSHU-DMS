@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：需求草案，等待确认
+- 状态：已完成（2026-07-28 验收通过）
 - 目标分支：`feat/region-selector-management`
 - 正式 Web 应用：`web/apps/qsmds-arco`
 - Server：`server`

@@ -2,17 +2,17 @@
 
 ## 1. 文档状态
 
-- 状态：技术设计草案，等待确认
+- 状态：技术设计已实施并验收（2026-07-28）
 - 需求基线：`requirements.md` 已确认
 - 目标分支：`feat/region-selector-management`
 - 正式 Web 应用：`web/apps/qsmds-arco`
 - Server：`server`
 - 真实业务入口：`/system/basic-data/regions`
 - 公共业务组件：`QsRegionSelector`
-- 下一阶段：确认本文后生成 `tasks.md`
+- 实施计划：`tasks.md`（已完成）
 
-本文只定义实现契约，不包含 schema、API、组件或页面代码。实施阶段不得在未更新并重新
-确认本文的情况下改变三级结构、种子数量、公共 value、公共 API、权限或缓存边界。
+本文记录已经实施并通过验收的技术契约。后续变更不得在未更新并重新确认本文的情况下
+改变三级结构、种子数量、公共 value、公共 API、权限或缓存边界。
 
 ## 2. 设计目标与边界
 
@@ -1537,4 +1537,5 @@ PostgreSQL 编排；浏览器结论必须对应当前 HEAD，不以“页面能�
 7. 地区管理使用前两层导航 + 当前直属下级 `QsGenericTable`，移动端导航进入 Drawer。
 8. mutation 不自动重试；确认成功后当前 tab 立即、其他 tab 通过失效广播清缓存。
 
-本文确认后进入 Phase 3，只生成可执行的 `tasks.md`；实现仍需等待任务文档确认。
+本文已按照 `tasks.md` 完成实施；最终门禁、数据审计与交付证据记录在该文档
+“Task 15 最新验收证据”一节。
