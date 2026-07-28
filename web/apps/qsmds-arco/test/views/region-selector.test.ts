@@ -246,6 +246,11 @@ test('状态、真实 input bridge 与私有 popup 样式覆盖可访问响应�
     source,
     /\.arco-select-view-clear-btn\)[\s\S]*?min-width:\s*44px[\s\S]*?min-height:\s*44px/u,
   )
+  assert.match(
+    source,
+    /\.qs-region-selector :deep\(\.arco-select-view-single \.arco-select-view-clear-btn\)[\s\S]*?display:\s*inline-flex[\s\S]*?visibility:\s*visible/u,
+    '已选值的清空控件必须覆盖 Arco 的 display 与 visibility 并保留可 Tab 到达的操作',
+  )
   assert.match(source, /prefers-reduced-motion:\s*reduce/u)
   assert.match(source, /:global\(\.qs-region-selector-popup/u)
   assert.match(source, /oklch\(var\(--(?:background|foreground|border|muted|ring)\)\)/u)

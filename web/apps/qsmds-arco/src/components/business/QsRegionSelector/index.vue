@@ -981,6 +981,20 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+/*
+ * Arco 默认同时用 display:none 与 visibility:hidden 隐藏 clear control，键盘用户
+ * 即使获得 tabindex 也无法 Tab 到达。已选值本就需要公开清空能力，因此以包含
+ * single view 的局部高优先级选择器覆盖；未选择时 Arco 不渲染该节点。
+ */
+.qs-region-selector :deep(.arco-select-view-single .arco-select-view-clear-btn) {
+  display: inline-flex;
+  visibility: visible;
+}
+
+.qs-region-selector :deep(.arco-select-view-single .arco-select-view-clear-btn ~ *) {
+  display: none;
+}
+
 .qs-region-selector__retry {
   min-height: 28px;
   padding: 0 0.625rem;
