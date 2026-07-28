@@ -14,6 +14,7 @@ import {
 } from '../../src/views/system/audit/presentation'
 import {
   groupPermissions,
+  permissionResourceLabel,
   sanitizePermissionSelection,
 } from '../../src/views/system/permissions/catalog'
 import {
@@ -102,6 +103,25 @@ const systemViewContracts = [
       'QsGenericTable',
     ],
   },
+  {
+    files: [
+      '../../src/views/system/basic-data/regions/index.vue',
+      '../../src/views/system/basic-data/regions/region-scope-tree.vue',
+    ],
+    label: '地区管理',
+    requiredComponents: [
+      'FaAlert',
+      'FaButton',
+      'FaEmpty',
+      'FaIcon',
+      'FaPageHeader',
+      'FaPageMain',
+      'FaTag',
+      'FaTree',
+      'QsGenericDrawer',
+      'QsGenericTable',
+    ],
+  },
 ] as const
 
 function readRelativeSource(relativePath: string) {
@@ -177,7 +197,7 @@ test('角色权限分配使用业务通用抽屉并由抽屉统一管理滚动�
   assert.doesNotMatch(roleSource, /\bpermissionModalVisible\b/u)
 })
 
-test('四个系统管理页面统一使用 QsGenericTable 内置搜索、筛选和列设置', () => {
+test('五个系统管理页面统一使用 QsGenericTable 内置搜索、筛选和列设置', () => {
   for (const contract of systemViewContracts) {
     const entrySource = readRelativeSource(contract.files[0])
     const tableTags = entrySource.match(/<QsGenericTable\b[\s\S]*?>/gu) ?? []
@@ -249,6 +269,10 @@ test('权限目录合并为一个带资源列的通用表格', () => {
   assert.match(source, /:data="filteredPermissionRows"/u)
   assert.match(source, /id:\s*'resource'/u)
   assert.match(source, /<template #cell-resource=/u)
+})
+
+test('权限目录以中文展示地区管理资源', () => {
+  assert.equal(permissionResourceLabel('regions'), '地区管理')
 })
 
 test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {
@@ -547,6 +571,10 @@ test('审计 metadata 仅把契约标量按 key 排序并转换为可读文本',
 
 test('审计事件和结果使用稳定中文文案，未知值保留原值便于排查', () => {
   assert.equal(formatAuditEvent('ROLE_UPDATED'), '角色已更新')
+  assert.equal(formatAuditEvent('REGION_CREATED'), '地区已创建')
+  assert.equal(formatAuditEvent('REGION_UPDATED'), '地区已更新')
+  assert.equal(formatAuditEvent('REGION_ENABLED'), '地区已启用')
+  assert.equal(formatAuditEvent('REGION_DISABLED'), '地区已停用')
   assert.equal(formatAuditEvent('DOMAIN_EVENT'), 'DOMAIN_EVENT')
   assert.equal(formatAuditOutcome('SUCCESS'), '成功')
   assert.equal(formatAuditOutcome('FAILURE'), '失败')

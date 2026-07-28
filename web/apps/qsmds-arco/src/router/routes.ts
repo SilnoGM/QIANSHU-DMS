@@ -5,6 +5,7 @@ import pinia from '@/store'
 import ApplicationSettings from './modules/application.settings'
 import BasicData from './modules/basic.data'
 import ComponentLibraryRoutes, {
+  createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
 import SystemManagement, {
@@ -71,7 +72,10 @@ const componentLibraryMainRoute: RouteRecordMainRaw = {
     title: '组件库',
     icon: 'i-lucide:library-big',
   },
-  children: ComponentLibraryRoutes,
+  children: [
+    ...ComponentLibraryRoutes,
+    ...createRegionSelectorBrowserE2eRoutes(import.meta.env),
+  ],
 }
 
 const asyncRoutes: RouteRecordMainRaw[] = [

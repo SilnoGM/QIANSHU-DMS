@@ -383,7 +383,7 @@ async function selectVisibleModalOption(page, text) {
       const label = option.id
         ? dialog.querySelector('label[for="' + CSS.escape(option.id) + '"]')
         : null
-      const optionText = [option.textContent, option.parentElement?.textContent, label?.textContent]
+      const optionText = [option.textContent, label?.textContent]
         .filter(Boolean)
         .join(' ')
       return optionText.includes(${serializedText})
@@ -405,7 +405,7 @@ async function selectVisibleModalOption(page, text) {
         const label = candidate.id
           ? dialog.querySelector('label[for="' + CSS.escape(candidate.id) + '"]')
           : null
-        const optionText = [candidate.textContent, candidate.parentElement?.textContent, label?.textContent]
+        const optionText = [candidate.textContent, label?.textContent]
           .filter(Boolean)
           .join(' ')
         return optionText.includes(${serializedText})
@@ -538,8 +538,19 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   managedRole = rolesResponse.body?.find(role => role.code === roleCode)
   assert.equal(managedRole?.name, editedRoleName)
 
-  // 首期目录全部是 systemOnly：普通角色仍可通过 UI 明确提交空集合，但不能
-  // 越权勾选任何系统专用权限。保存动作必须落审计而非前端空操作。
+  /*
+   * 地区权限是首批可分配的业务权限，既要能勾选，也不能让普通角色越权勾选
+   * users/roles/audit 等系统专用权限。保存后以真实 API 结果确认完整替换已落库。
+   */
+  const permissionsResponse = await page.evaluate(
+    apiExpression('/api/permissions', 'GET'),
+  )
+  assert.equal(permissionsResponse.status, 200)
+  const regionReadPermission = permissionsResponse.body?.find(
+    permission => permission.code === 'regions:read',
+  )
+  assert.equal(typeof regionReadPermission?.id, 'string')
+
   await clickVisibleTableRowButton(page, roleCode, '分配权限')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
     dialog.getClientRects().length > 0
@@ -561,13 +572,18 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     const footer = dialog?.querySelector('[data-slot="qs-generic-drawer-footer"]')
     const footerRect = footer?.getBoundingClientRect()
     const options = [...(dialog?.querySelectorAll('[role="checkbox"]') ?? [])]
+      .filter(option => option.getClientRects().length > 0)
     return {
       contentUsesGenericDrawer: dialog?.querySelector(
         '[data-slot="qs-generic-drawer"]',
       ) !== null,
-      enabledCheckboxes: options.filter(option => (
-        option.getAttribute('aria-disabled') !== 'true' && !option.disabled
-      )).length,
+      enabledPermissionCodes: options
+        .filter(option => (
+          option.getAttribute('aria-disabled') !== 'true' && !option.disabled
+        ))
+        .map(option => option.querySelector('code')?.textContent?.trim())
+        .filter(Boolean)
+        .sort(),
       footerBottomGap: rect && footerRect ? Math.abs(rect.bottom - footerRect.bottom) : null,
       hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
       optionCount: options.length,
@@ -579,18 +595,25 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(permissionDrawerState.contentUsesGenericDrawer, true)
   assert.equal(permissionDrawerState.showsUsersRead, true)
   assert.ok(permissionDrawerState.optionCount > 0)
-  assert.equal(permissionDrawerState.enabledCheckboxes, 0)
+  assert.deepEqual(permissionDrawerState.enabledPermissionCodes, [
+    'regions:create',
+    'regions:disable',
+    'regions:enable',
+    'regions:read',
+    'regions:update',
+  ])
   assert.equal(Math.round(permissionDrawerState.width), 768)
   assert.ok(permissionDrawerState.rightGap <= 1)
   assert.ok(permissionDrawerState.footerBottomGap <= 2)
   assert.equal(permissionDrawerState.hasHorizontalOverflow, false)
+  await selectVisibleModalOption(page, 'regions:read')
   await clickVisibleModalButton(page, '保存权限')
   await waitForNoVisibleModal(page, '分配权限')
 
   rolesResponse = await page.evaluate(apiExpression('/api/roles', 'GET'))
   managedRole = rolesResponse.body?.find(role => role.code === roleCode)
   assert.equal(rolesResponse.status, 200)
-  assert.deepEqual(managedRole?.permissionIds, [])
+  assert.deepEqual(managedRole?.permissionIds, [regionReadPermission.id])
   assert.equal(typeof managedRole?.id, 'string')
 
   // 窄屏重新从角色卡片打开同一权限抽屉，证明它占满可用宽度、保留 44px

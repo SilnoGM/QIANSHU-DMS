@@ -4,20 +4,22 @@ function Layout() {
   return import('@/layouts/index.vue')
 }
 
+export const BASIC_DATA_READ_PERMISSIONS = [
+  'regions:read',
+] as const
+
 /**
- * 基础数据当前只建立稳定的导航层级与页面入口，不预设权限和业务实现。
- * 父路径重定向到首个叶子路由，确保直接访问或刷新时始终拥有明确落点。
+ * 基础数据父级使用 any-of 读取权限。父路由不固定重定向到地区管理，
+ * 后续增加其他基础数据权限时可继续由全局 guard 选择首个有权访问的叶子。
  */
 const routes: RouteRecordRaw = {
   path: '/system/basic-data',
   name: 'systemBasicData',
   component: Layout,
-  redirect: {
-    name: 'systemBasicDataRegions',
-  },
   meta: {
     title: '基础数据',
     icon: 'i-lucide:database',
+    auth: [...BASIC_DATA_READ_PERMISSIONS],
   },
   children: [
     {
@@ -27,6 +29,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '地区管理',
         icon: 'i-lucide:map-pinned',
+        auth: 'regions:read',
       },
     },
     {

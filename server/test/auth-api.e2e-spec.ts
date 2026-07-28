@@ -24,6 +24,11 @@ const CSRF_HEADERS = {
 } as const
 const MANAGEMENT_PERMISSION_CODES = [
   'audit:read',
+  'regions:create',
+  'regions:disable',
+  'regions:enable',
+  'regions:read',
+  'regions:update',
   'roles:assign-permissions',
   'roles:create',
   'roles:read',

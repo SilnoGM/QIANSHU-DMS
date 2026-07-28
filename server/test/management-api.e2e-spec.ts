@@ -723,7 +723,7 @@ describe('Management API with PostgreSQL', () => {
     const permissionCatalog = readResponseBody<PermissionBody[]>(
       permissionsResponse,
     )
-    expect(permissionCatalog).toHaveLength(12)
+    expect(permissionCatalog).toHaveLength(17)
     expect(permissionCatalog.map(({ code }) => code)).toEqual(
       [...permissionCatalog.map(({ code }) => code)].sort(),
     )

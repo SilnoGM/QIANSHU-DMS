@@ -3,6 +3,7 @@ import { AuthModule } from './modules/auth/auth.module'
 import { HealthModule } from './modules/health/health.module'
 import { PermissionsModule } from './modules/permissions/permissions.module'
 import { ProfileModule } from './modules/profile/profile.module'
+import { RegionsModule } from './modules/regions/regions.module'
 import { RolesModule } from './modules/roles/roles.module'
 import { UsersModule } from './modules/users/users.module'
 
@@ -14,5 +15,6 @@ export const HTTP_MODULES = [
   UsersModule,
   RolesModule,
   PermissionsModule,
+  RegionsModule,
   AuditModule,
 ] as const

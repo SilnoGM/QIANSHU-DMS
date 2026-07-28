@@ -24,6 +24,11 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'roles:update',
   'roles:assign-permissions',
   'audit:read',
+  'regions:read',
+  'regions:create',
+  'regions:update',
+  'regions:enable',
+  'regions:disable',
 ] as const
 
 export type ManagementPermissionCode =

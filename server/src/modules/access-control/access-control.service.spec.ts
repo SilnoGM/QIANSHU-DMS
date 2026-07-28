@@ -43,8 +43,13 @@ describe('permission constants', () => {
       'roles:update',
       'roles:assign-permissions',
       'audit:read',
+      'regions:read',
+      'regions:create',
+      'regions:update',
+      'regions:enable',
+      'regions:disable',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 12)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 17)
   })
 })
 

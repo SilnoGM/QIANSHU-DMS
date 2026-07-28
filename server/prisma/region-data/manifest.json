@@ -1,0 +1,184 @@
+{
+  "transformVersion": "1.0.0",
+  "uuidNamespace": "9acbca9a-32e2-4d7c-b00f-26a2e0dc5c1e",
+  "sources": {
+    "chinaMainland": {
+      "file": "sources/china-mainland-codes.json",
+      "repository": "yescallop/areacodes",
+      "url": "https://raw.githubusercontent.com/yescallop/areacodes/e2c2b2e1fb4ce1fb76e879aa0b80e229adaf950c/codes.json",
+      "commit": "e2c2b2e1fb4ce1fb76e879aa0b80e229adaf950c",
+      "snapshotDate": "2026-07-27",
+      "license": {
+        "name": "CC0-1.0",
+        "url": "https://github.com/yescallop/areacodes/blob/e2c2b2e1fb4ce1fb76e879aa0b80e229adaf950c/LICENSE"
+      },
+      "attribution": "上游说明其行政区划代码来源包括国家地名信息库、民政部和中国政府网。",
+      "sha256": "8c4e8afc5dfc16b77d34cf39b2547d07ab6a46e46b414679d494e50353970edc"
+    },
+    "taiwan": {
+      "file": "sources/taiwan-counties.xml",
+      "dataset": "ListCounty",
+      "catalogueUrl": "https://data.gov.tw/dataset/101905",
+      "url": "https://api.nlsc.gov.tw/other/ListCounty",
+      "datasetUpdatedAt": "2026-06-02",
+      "snapshotDate": "2026-07-27",
+      "license": {
+        "name": "政府資料開放授權條款第1版",
+        "url": "https://data.gov.tw/license"
+      },
+      "attribution": "資料來源：內政部國土測繪中心。",
+      "sha256": "5e9dfa16d989e569179f02375775ac5f0036d866305a4e11456e989ff59504f1"
+    },
+    "malaysia": {
+      "file": "sources/malaysia-state-district.csv",
+      "repository": "dosm-malaysia/data-open",
+      "url": "https://raw.githubusercontent.com/dosm-malaysia/data-open/b057365ccbf26cbe3db1c043668f6a0efe811cb2/datasets/geodata/state_district.csv",
+      "catalogueUrl": "https://data.gov.my/data-catalogue/population_district",
+      "commit": "b057365ccbf26cbe3db1c043668f6a0efe811cb2",
+      "catalogueYear": 2025,
+      "snapshotDate": "2026-07-27",
+      "license": {
+        "name": "DOSM Open Data License",
+        "url": "https://github.com/dosm-malaysia/data-open/blob/b057365ccbf26cbe3db1c043668f6a0efe811cb2/LICENSE.md"
+      },
+      "attribution": "Source: Department of Statistics Malaysia (DOSM), OpenDOSM and data.gov.my.",
+      "nonEndorsementNotice": "本项目使用该公开数据，不得暗示 DOSM、OpenDOSM 或马来西亚政府提供官方背书。",
+      "sha256": "6ed9f08a88e3bd93a3cfe697b2135352688c495ae4595c6a37ae0980fffe7995"
+    }
+  },
+  "transformRules": {
+    "chinaMainland": [
+      "active-mainland-provinces-before-710000",
+      "municipality-synthetic-city",
+      "active-direct-children",
+      "direct-admin-county-level-keeps-real-type"
+    ],
+    "taiwan": [
+      "synthetic-taiwan-province-state",
+      "all-list-county-items",
+      "reviewed-traditional-to-simplified",
+      "reversible-dual-source-code"
+    ],
+    "malaysia": [
+      "reviewed-state-display-names",
+      "all-state-district-rows",
+      "same-name-leaf-for-no-district",
+      "official-latin-district-display"
+    ]
+  },
+  "reviewedMappings": {
+    "taiwanCountyNames": {
+      "臺北市": "台北市",
+      "臺中市": "台中市",
+      "基隆市": "基隆市",
+      "臺南市": "台南市",
+      "高雄市": "高雄市",
+      "新北市": "新北市",
+      "宜蘭縣": "宜兰县",
+      "桃園市": "桃园市",
+      "嘉義市": "嘉义市",
+      "新竹縣": "新竹县",
+      "苗栗縣": "苗栗县",
+      "南投縣": "南投县",
+      "彰化縣": "彰化县",
+      "新竹市": "新竹市",
+      "雲林縣": "云林县",
+      "嘉義縣": "嘉义县",
+      "屏東縣": "屏东县",
+      "花蓮縣": "花莲县",
+      "臺東縣": "台东县",
+      "金門縣": "金门县",
+      "澎湖縣": "澎湖县",
+      "連江縣": "连江县"
+    },
+    "malaysiaStateNames": {
+      "Johor": "柔佛",
+      "Kedah": "吉打",
+      "Kelantan": "吉兰丹",
+      "Melaka": "马六甲",
+      "Negeri Sembilan": "森美兰",
+      "Pahang": "彭亨",
+      "Pulau Pinang": "槟城",
+      "Perak": "霹雳",
+      "Perlis": "玻璃市",
+      "Selangor": "雪兰莪",
+      "Terengganu": "登嘉楼",
+      "Sabah": "沙巴",
+      "Sarawak": "砂拉越",
+      "W.P. Kuala Lumpur": "吉隆坡联邦直辖区",
+      "W.P. Labuan": "纳闽联邦直辖区",
+      "W.P. Putrajaya": "布城联邦直辖区"
+    }
+  },
+  "expectedCounts": {
+    "byDomain": {
+      "CN": {
+        "COUNTRY_REGION": 1,
+        "PROVINCE_STATE": 31,
+        "CITY": 369,
+        "total": 401
+      },
+      "TW": {
+        "COUNTRY_REGION": 1,
+        "PROVINCE_STATE": 1,
+        "CITY": 22,
+        "total": 24
+      },
+      "MY": {
+        "COUNTRY_REGION": 1,
+        "PROVINCE_STATE": 16,
+        "CITY": 160,
+        "total": 177
+      }
+    },
+    "byLevel": {
+      "COUNTRY_REGION": 3,
+      "PROVINCE_STATE": 48,
+      "CITY": 551
+    },
+    "total": 602
+  },
+  "criticalPaths": [
+    {
+      "names": [
+        "中国",
+        "北京市",
+        "北京市"
+      ],
+      "codes": [
+        "CN",
+        "CN-110000",
+        "CN-110000-CITY"
+      ]
+    },
+    {
+      "names": [
+        "中国台湾",
+        "台湾",
+        "高雄市"
+      ],
+      "codes": [
+        "TW",
+        "TW-TAIWAN",
+        "TW-64000"
+      ],
+      "sourceCodes": {
+        "countycode": "E",
+        "countycode01": "64000",
+        "stored": "E/64000"
+      }
+    },
+    {
+      "names": [
+        "马来西亚",
+        "柔佛",
+        "Batu Pahat"
+      ],
+      "codes": [
+        "MY",
+        "MY-01",
+        "MY-01-01"
+      ]
+    }
+  ]
+}

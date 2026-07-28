@@ -8,6 +8,7 @@ export const MANAGEMENT_READ_PERMISSIONS = [
   'users:read',
   'roles:read',
   'audit:read',
+  'regions:read',
 ]
 
 /**

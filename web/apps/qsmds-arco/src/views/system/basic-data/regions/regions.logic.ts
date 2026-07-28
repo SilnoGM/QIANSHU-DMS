@@ -1,0 +1,639 @@
+import type { TableSortingState } from '@fantastic-admin/components'
+import type {
+  CreateRegionRequestDto,
+  RegionDto,
+  RegionNavigationNodeDto,
+  RegionsListData,
+  UpdateRegionRequestDto,
+} from '@/api/generated/types.gen'
+
+export const ROOT_SCOPE_ID = '__region_root__'
+
+export type RegionLevel = RegionDto['level']
+export type RegionDisplayStatus
+  = | 'ANCESTOR_DISABLED'
+    | 'EFFECTIVE'
+    | 'SELF_DISABLED'
+export type RegionOwnStatus = 'DISABLED' | 'ENABLED'
+export type RegionAvailability = 'ANCESTOR_DISABLED' | 'EFFECTIVE'
+export type RegionSortBy = 'code' | 'name' | 'sortOrder' | 'updatedAt'
+
+export interface RegionScopePathNode {
+  readonly code: string
+  readonly effectiveEnabled: boolean
+  readonly enabled: boolean
+  readonly englishName: string | null
+  readonly id: string
+  readonly level: 'COUNTRY_REGION' | 'PROVINCE_STATE'
+  readonly name: string
+  readonly parentId: string | null
+}
+
+export type RegionScope
+  = | {
+    readonly id: null
+    readonly kind: 'ROOT'
+    readonly label: '全部地区'
+    readonly path: readonly []
+  }
+  | {
+    readonly id: string
+    readonly kind: 'COUNTRY_REGION' | 'PROVINCE_STATE'
+    readonly label: string
+    readonly path: readonly RegionScopePathNode[]
+  }
+
+export interface RegionScopeTreeNode {
+  readonly children?: RegionScopeTreeNode[]
+  readonly disabled: false
+  readonly id: string
+  readonly label: string
+  readonly scope: RegionScope
+  readonly searchText: string
+  readonly status: RegionDisplayStatus
+}
+
+export interface RegionFilterValues {
+  readonly availability?: unknown
+  readonly ownStatus?: unknown
+}
+
+export interface BuildRegionListQueryInput {
+  readonly filters: RegionFilterValues
+  readonly page: number
+  readonly pageSize: number
+  readonly scope: RegionScope
+  readonly search: string
+  readonly sorting: TableSortingState
+}
+
+export interface RegionResponseGuardInput {
+  readonly aborted: boolean
+  readonly authorized: boolean
+  readonly authEpoch: number
+  readonly currentAuthEpoch: number
+  readonly currentScopeId: string
+  readonly latestRequestVersion: number
+  readonly requestVersion: number
+  readonly scopeId: string
+}
+
+export interface RegionQueryRefreshScheduler {
+  dispose: () => void
+  schedule: () => void
+}
+
+export interface RegionApiFailure {
+  readonly message: string
+  readonly requestId: string | undefined
+}
+
+export interface RegionMutationFailure extends RegionApiFailure {
+  readonly code: string | undefined
+  readonly fieldErrors: Readonly<Record<string, string>>
+  readonly unknownResult: boolean
+}
+
+export interface RegionAdminActions {
+  readonly canDisable: boolean
+  readonly canEdit: boolean
+  readonly canEnable: boolean
+  readonly hasAny: boolean
+}
+
+export interface ResolveRegionAdminActionsInput {
+  readonly canDisable: boolean
+  readonly canEnable: boolean
+  readonly canUpdate: boolean
+  readonly enabled: boolean
+}
+
+type RegionListQuery = NonNullable<RegionsListData['query']>
+
+const REGION_PAGE_SIZES = new Set([20, 50, 100])
+const REGION_SORT_FIELDS = new Set<RegionSortBy>([
+  'code',
+  'name',
+  'sortOrder',
+  'updatedAt',
+])
+const REGION_MUTATION_FIELDS = new Set([
+  'code',
+  'enabled',
+  'englishName',
+  'name',
+  'sortOrder',
+])
+
+export function createRootRegionScope(): RegionScope {
+  return {
+    id: null,
+    kind: 'ROOT',
+    label: '全部地区',
+    path: [],
+  }
+}
+
+export function regionScopeKey(scope: RegionScope): string {
+  return scope.id ?? ROOT_SCOPE_ID
+}
+
+/**
+ * 页面只允许根、国家/地区和省/州成为查询范围，因此目标直属层级可由 scope
+ * 完整推导，不接受调用方额外传入 level。
+ */
+export function childLevelForScope(scope: RegionScope): RegionLevel {
+  switch (scope.kind) {
+    case 'ROOT':
+      return 'COUNTRY_REGION'
+    case 'COUNTRY_REGION':
+      return 'PROVINCE_STATE'
+    case 'PROVINCE_STATE':
+      return 'CITY'
+  }
+}
+
+export function regionLevelLabel(level: RegionLevel): string {
+  return {
+    CITY: '城市',
+    COUNTRY_REGION: '国家/地区',
+    PROVINCE_STATE: '省/州',
+  }[level]
+}
+
+export function regionDisplayStatus(
+  region: Pick<RegionDto, 'effectiveEnabled' | 'enabled'>,
+): RegionDisplayStatus {
+  if (!region.enabled) {
+    return 'SELF_DISABLED'
+  }
+  if (!region.effectiveEnabled) {
+    return 'ANCESTOR_DISABLED'
+  }
+  return 'EFFECTIVE'
+}
+
+export function regionDisplayStatusLabel(status: RegionDisplayStatus): string {
+  return {
+    ANCESTOR_DISABLED: '继承停用',
+    EFFECTIVE: '有效',
+    SELF_DISABLED: '自身停用',
+  }[status]
+}
+
+export function ownStatusLabel(enabled: boolean): string {
+  return enabled ? '启用' : '停用'
+}
+
+export function administrativeTypeLabel(value: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    ADMINISTRATIVE_DISTRICT: '行政区',
+    AUTONOMOUS_REGION: '自治区',
+    CITY: '城市',
+    COUNTRY_REGION: '国家/地区',
+    DIRECT_ADMIN_COUNTY_LEVEL: '省直辖县级行政区',
+    FEDERAL_TERRITORY: '联邦直辖区',
+    MUNICIPALITY: '直辖市',
+    PROVINCE: '省',
+    PROVINCE_STATE: '省/州',
+    SPECIAL_ADMINISTRATIVE_REGION: '特别行政区',
+    STATE: '州',
+  }
+  return labels[value] ?? value
+}
+
+function toScopePathNode(
+  node: RegionNavigationNodeDto,
+): RegionScopePathNode | null {
+  if (node.level !== 'COUNTRY_REGION' && node.level !== 'PROVINCE_STATE') {
+    return null
+  }
+  return {
+    code: node.code,
+    effectiveEnabled: node.effectiveEnabled,
+    enabled: node.enabled,
+    englishName: node.englishName,
+    id: node.id,
+    level: node.level,
+    name: node.name,
+    parentId: node.parentId,
+  }
+}
+
+function normalizeSearchText(...values: Array<null | string>): string {
+  return values
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .normalize('NFC')
+    .replaceAll(/\s+/gu, ' ')
+    .trim()
+    .toLocaleLowerCase('en-US')
+}
+
+function createProvinceTreeNode(
+  countryPath: readonly RegionScopePathNode[],
+  node: RegionNavigationNodeDto,
+): RegionScopeTreeNode | null {
+  const provincePathNode = toScopePathNode(node)
+  if (
+    provincePathNode === null
+    || provincePathNode.level !== 'PROVINCE_STATE'
+    || provincePathNode.parentId !== countryPath[0]?.id
+  ) {
+    return null
+  }
+  const path = [...countryPath, provincePathNode]
+  return {
+    disabled: false,
+    id: node.id,
+    label: node.name,
+    scope: {
+      id: node.id,
+      kind: 'PROVINCE_STATE',
+      label: node.name,
+      path,
+    },
+    searchText: normalizeSearchText(node.name, node.englishName, node.code),
+    status: regionDisplayStatus(node),
+  }
+}
+
+function createCountryTreeNode(
+  node: RegionNavigationNodeDto,
+): RegionScopeTreeNode | null {
+  const countryPathNode = toScopePathNode(node)
+  if (
+    countryPathNode === null
+    || countryPathNode.level !== 'COUNTRY_REGION'
+    || countryPathNode.parentId !== null
+  ) {
+    return null
+  }
+  const path = [countryPathNode]
+  return {
+    children: node.children.flatMap((child) => {
+      const province = createProvinceTreeNode(path, child)
+      return province === null ? [] : [province]
+    }),
+    disabled: false,
+    id: node.id,
+    label: node.name,
+    scope: {
+      id: node.id,
+      kind: 'COUNTRY_REGION',
+      label: node.name,
+      path,
+    },
+    searchText: normalizeSearchText(node.name, node.englishName, node.code),
+    status: regionDisplayStatus(node),
+  }
+}
+
+/**
+ * 导航接口只承载前两级；任何意外 CITY 或断裂 parent 都被本地丢弃，避免城市进入
+ * 深度监听树。所有合法停用节点仍保持 disabled=false，允许管理员继续选择维护。
+ */
+export function createRegionScopeTree(
+  navigation: readonly RegionNavigationNodeDto[],
+): RegionScopeTreeNode[] {
+  const children = navigation.flatMap((node) => {
+    const country = createCountryTreeNode(node)
+    return country === null ? [] : [country]
+  })
+  return [{
+    children,
+    disabled: false,
+    id: ROOT_SCOPE_ID,
+    label: '全部地区',
+    scope: createRootRegionScope(),
+    searchText: normalizeSearchText('全部地区', 'root'),
+    status: 'EFFECTIVE',
+  }]
+}
+
+export function normalizeRegionFilters(
+  filters: RegionFilterValues,
+  changedKey?: 'availability' | 'ownStatus',
+): {
+  availability?: RegionAvailability
+  ownStatus?: RegionOwnStatus
+} {
+  const ownStatus = filters.ownStatus === 'ENABLED' || filters.ownStatus === 'DISABLED'
+    ? filters.ownStatus
+    : undefined
+  const availability
+    = filters.availability === 'EFFECTIVE'
+      || filters.availability === 'ANCESTOR_DISABLED'
+      ? filters.availability
+      : undefined
+
+  if (ownStatus !== undefined && availability !== undefined) {
+    return changedKey === 'availability'
+      ? { availability }
+      : { ownStatus }
+  }
+  return {
+    ...(availability === undefined ? {} : { availability }),
+    ...(ownStatus === undefined ? {} : { ownStatus }),
+  }
+}
+
+export function normalizeRegionSorting(
+  sorting: TableSortingState,
+): Pick<RegionListQuery, 'sortBy' | 'sortOrder'> | undefined {
+  const firstValid = sorting.find(item => REGION_SORT_FIELDS.has(item.id as RegionSortBy))
+  if (firstValid === undefined) {
+    return undefined
+  }
+  return {
+    sortBy: firstValid.id as RegionSortBy,
+    sortOrder: firstValid.desc ? 'desc' : 'asc',
+  }
+}
+
+export function buildRegionListQuery(
+  input: BuildRegionListQueryInput,
+): RegionListQuery {
+  const normalizedSearch = input.search
+    .normalize('NFC')
+    .replaceAll(/\s+/gu, ' ')
+    .trim()
+  const filters = normalizeRegionFilters(input.filters)
+  const sorting = normalizeRegionSorting(input.sorting)
+  return {
+    ...(input.scope.id === null ? {} : { parentId: input.scope.id }),
+    page: Number.isSafeInteger(input.page) && input.page > 0 ? input.page : 1,
+    pageSize: REGION_PAGE_SIZES.has(input.pageSize) ? input.pageSize : 20,
+    ...(normalizedSearch === '' ? {} : { query: normalizedSearch }),
+    ...filters,
+    ...sorting,
+  }
+}
+
+/**
+ * create 的网络结果未知对账必须复用管理列表的 exact code 参数。根节点不能传
+ * `parentId: null`，否则会与 OpenAPI 的“参数省略表示根级”契约漂移。
+ */
+export function buildRegionReconciliationQuery(
+  scope: RegionScope,
+  code: string,
+): RegionListQuery {
+  return {
+    ...(scope.id === null ? {} : { parentId: scope.id }),
+    code: code.normalize('NFC').trim().toLocaleUpperCase('en-US'),
+    page: 1,
+    pageSize: 20,
+  }
+}
+
+function normalizedNullableEnglishName(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  const normalized = value.normalize('NFC').trim()
+  return normalized === '' ? null : normalized
+}
+
+function matchesCreatedRegion(
+  region: RegionDto,
+  scope: RegionScope,
+  request: CreateRegionRequestDto,
+): boolean {
+  return region.parentId === scope.id
+    && region.parentId === request.parentId
+    && region.level === childLevelForScope(scope)
+    && region.code === request.code
+    && region.name === request.name
+    && region.englishName === normalizedNullableEnglishName(request.englishName)
+    && region.sortOrder === request.sortOrder
+    && region.enabled === request.enabled
+}
+
+/**
+ * code 在数据库全局唯一，正常情况下 exact code 最多返回一项。若响应异常地包含
+ * 多个完整匹配项则拒绝猜测，继续保留弹窗让管理员人工核查。
+ */
+export function findMatchingCreatedRegion(
+  regions: readonly RegionDto[],
+  scope: RegionScope,
+  request: CreateRegionRequestDto,
+): RegionDto | undefined {
+  const matches = regions.filter(region =>
+    matchesCreatedRegion(region, scope, request))
+  return matches.length === 1 ? matches[0] : undefined
+}
+
+export function matchesRegionUpdate(
+  region: RegionDto,
+  request: UpdateRegionRequestDto,
+): boolean {
+  return (
+    (request.name === undefined || region.name === request.name)
+    && (
+      request.englishName === undefined
+      || region.englishName === normalizedNullableEnglishName(request.englishName)
+    )
+    && (
+      request.sortOrder === undefined
+      || region.sortOrder === request.sortOrder
+    )
+  )
+}
+
+export function matchesRegionStatus(
+  region: RegionDto,
+  enabled: boolean,
+): boolean {
+  return region.enabled === enabled
+}
+
+export function requiresRegionNavigationRefresh(level: RegionLevel): boolean {
+  return level === 'COUNTRY_REGION' || level === 'PROVINCE_STATE'
+}
+
+export function resolveRegionAdminActions(
+  input: ResolveRegionAdminActionsInput,
+): RegionAdminActions {
+  const canEdit = input.canUpdate
+  const canEnable = !input.enabled && input.canEnable
+  const canDisable = input.enabled && input.canDisable
+  return {
+    canDisable,
+    canEdit,
+    canEnable,
+    hasAny: canEdit || canEnable || canDisable,
+  }
+}
+
+export function canApplyRegionResponse(
+  input: RegionResponseGuardInput,
+): boolean {
+  return input.authorized
+    && !input.aborted
+    && input.requestVersion === input.latestRequestVersion
+    && input.scopeId === input.currentScopeId
+    && input.authEpoch === input.currentAuthEpoch
+}
+
+/**
+ * QsGenericTable 同一次“清除全部条件”会连续发出搜索与筛选事件。微任务调度器把
+ * 这类同步事件合并成一次请求，dispose 后即使旧 microtask 到达也不会执行。
+ */
+export function createRegionQueryRefreshScheduler(
+  refresh: () => void,
+): RegionQueryRefreshScheduler {
+  let disposed = false
+  let pending = false
+  return {
+    dispose() {
+      disposed = true
+      pending = false
+    },
+    schedule() {
+      if (disposed || pending) {
+        return
+      }
+      pending = true
+      queueMicrotask(() => {
+        if (disposed) {
+          return
+        }
+        pending = false
+        refresh()
+      })
+    },
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/**
+ * Axios 失败在页面边界仍按不可信值读取。只展示稳定 message/requestId，
+ * 不把 SQL、constraint、stack 或驱动 message 拼进业务页面。
+ */
+export function getRegionApiFailure(error: unknown): RegionApiFailure {
+  try {
+    if (!isRecord(error)) {
+      return {
+        message: '地区数据加载失败，请稍后重试',
+        requestId: undefined,
+      }
+    }
+    const body = isRecord(error.body) ? error.body : undefined
+    return {
+      message: typeof body?.message === 'string'
+        ? body.message
+        : typeof error.message === 'string'
+          ? error.message
+          : '地区数据加载失败，请稍后重试',
+      requestId: typeof body?.requestId === 'string'
+        ? body.requestId
+        : typeof error.requestId === 'string'
+          ? error.requestId
+          : undefined,
+    }
+  }
+  catch {
+    return {
+      message: '地区数据加载失败，请稍后重试',
+      requestId: undefined,
+    }
+  }
+}
+
+/**
+ * Mutation 不自动重试。只有标准化 API client 明确标记的 `network` 错误代表请求
+ * 可能已到达 Server，因而需要读回最终状态；任何 HTTP 状态（包括 500）都有确定
+ * 响应，不能再用一次查询把失败误判成成功。
+ */
+export function getRegionMutationFailure(error: unknown): RegionMutationFailure {
+  const fallback: RegionMutationFailure = {
+    code: undefined,
+    fieldErrors: {},
+    message: '操作失败，请稍后重试',
+    requestId: undefined,
+    unknownResult: false,
+  }
+
+  try {
+    if (!isRecord(error)) {
+      return fallback
+    }
+    if (error.kind === 'network') {
+      return {
+        code: undefined,
+        fieldErrors: {},
+        message: typeof error.message === 'string'
+          ? error.message
+          : '网络连接失败，请稍后重试',
+        requestId: undefined,
+        unknownResult: true,
+      }
+    }
+    if (error.kind !== 'http' || !isRecord(error.body)) {
+      return {
+        ...fallback,
+        message: typeof error.message === 'string'
+          ? error.message
+          : '服务器返回了无法识别的错误响应',
+        requestId: typeof error.requestId === 'string'
+          ? error.requestId
+          : undefined,
+      }
+    }
+
+    const body = error.body
+    const code = typeof body.code === 'string' ? body.code : undefined
+    const message = typeof body.message === 'string'
+      ? body.message
+      : fallback.message
+    const fieldErrors: Record<string, string> = {}
+    if (isRecord(body.fieldErrors)) {
+      for (const [field, messages] of Object.entries(body.fieldErrors)) {
+        if (
+          REGION_MUTATION_FIELDS.has(field)
+          && Array.isArray(messages)
+          && typeof messages[0] === 'string'
+        ) {
+          fieldErrors[field] = messages[0]
+        }
+      }
+    }
+    if (code === 'REGION_CODE_ALREADY_EXISTS' && fieldErrors.code === undefined) {
+      fieldErrors.code = message
+    }
+    if (code === 'REGION_NAME_ALREADY_EXISTS' && fieldErrors.name === undefined) {
+      fieldErrors.name = message
+    }
+
+    return {
+      code,
+      fieldErrors,
+      message,
+      requestId: typeof body.requestId === 'string'
+        ? body.requestId
+        : undefined,
+      unknownResult: false,
+    }
+  }
+  catch {
+    return fallback
+  }
+}
+
+export function isRegionAbortError(error: unknown): boolean {
+  try {
+    return (
+      error instanceof DOMException
+      && error.name === 'AbortError'
+    ) || (
+      isRecord(error)
+      && error.code === 'ERR_CANCELED'
+    )
+  }
+  catch {
+    return false
+  }
+}
