@@ -147,7 +147,7 @@ export class CdpConnection {
       let unsubscribe = () => {}
       const timeout = setTimeout(() => {
         unsubscribe()
-        reject(new Error('Browser DevTools event timed out'))
+        reject(new Error(`Browser DevTools event timed out: ${method}`))
       }, timeoutMilliseconds)
       unsubscribe = this.on(method, (params) => {
         if (!predicate(params)) {

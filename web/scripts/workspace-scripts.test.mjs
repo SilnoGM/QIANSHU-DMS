@@ -50,13 +50,30 @@ test('脚本测试同时运行 Node 与 TypeScript 测试', () => {
   const { scripts } = readJson('package.json')
 
   assert.equal(scripts['test:scripts'], 'run-s test:scripts:node test:scripts:tsx test:api')
-  assert.equal(scripts['test:scripts:node'], 'node --test scripts/*.test.mjs')
+  assert.equal(
+    scripts['test:scripts:node'],
+    'node --test scripts/*.test.mjs apps/qsmds-arco/test/browser/chrome-driver.test.mjs',
+  )
   assert.equal(scripts['test:scripts:tsx'], 'tsx --test scripts/*.test.ts')
   assert.equal(scripts['pretest:api'], 'pnpm run api:generate')
   assert.equal(
     scripts['test:api'],
     'tsx --test apps/qsmds-arco/test/api/*.test.ts apps/qsmds-arco/test/views/*.test.ts',
   )
+})
+
+test('认证与地区 Browser E2E 使用互不扩张的显式场景文件', () => {
+  const { scripts } = readJson('package.json')
+
+  assert.equal(
+    scripts['test:browser:auth'],
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/management.browser.test.mjs',
+  )
+  assert.equal(
+    scripts['test:browser:regions'],
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/regions.browser.test.mjs',
+  )
+  assert.equal(scripts['test:browser:auth'].includes('*.browser.test.mjs'), false)
 })
 
 test('参考应用通过稳定 package name 显式检查和构建', () => {

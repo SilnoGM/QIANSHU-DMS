@@ -2,6 +2,7 @@ import type { RouteRecordRaw } from 'vue-router'
 
 interface ComponentLibraryEnvironment {
   DEV: boolean
+  MODE?: string
   VITE_ENABLE_COMPONENT_LIBRARY?: boolean
 }
 
@@ -15,6 +16,48 @@ function Layout() {
  */
 export function shouldEnableComponentLibrary(environment: ComponentLibraryEnvironment): boolean {
   return environment.DEV || environment.VITE_ENABLE_COMPONENT_LIBRARY === true
+}
+
+/**
+ * 真实 Provider 验收入口只进入显式 test build，且始终从菜单隐藏。
+ *
+ * Showcase 必须继续使用本地 fixture；这个入口专门让隔离 Browser E2E 通过应用启动层
+ * 注入的默认 Provider 访问真实 HTTP。production/development 构建均不注册它。
+ */
+export function createRegionSelectorBrowserE2eRoutes(
+  environment: ComponentLibraryEnvironment,
+): RouteRecordRaw[] {
+  if (
+    environment.MODE !== 'test'
+    || environment.VITE_ENABLE_COMPONENT_LIBRARY !== true
+  ) {
+    return []
+  }
+
+  return [
+    {
+      path: '/__e2e/region-selector',
+      name: 'regionSelectorBrowserE2e',
+      component: Layout,
+      meta: {
+        title: '地区选择器浏览器验收',
+        menu: false,
+      },
+      children: [
+        {
+          path: '',
+          name: 'regionSelectorBrowserE2eIndex',
+          component: () => import(
+            '@/views/component_library/business/region-selector-browser-harness.vue'
+          ),
+          meta: {
+            title: '地区选择器浏览器验收',
+            menu: false,
+          },
+        },
+      ],
+    },
+  ]
 }
 
 /**

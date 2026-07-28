@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 14）
+- 状态：Phase 4 实施中（Task 15）
 - 目标分支：`feat/region-selector-management`
 - 需求规格：[地区选择器与地区管理需求](./requirements.md)
 - 技术设计：[地区选择器与地区管理技术设计](./design.md)
@@ -12,8 +12,8 @@
 - Server：`server`
 - 真实业务入口：`/system/basic-data/regions`
 
-本清单只有在用户确认后才进入 Phase 4 实施。当前所有实现任务保持未勾选；不得因为
-文档已完成而提前修改 schema、公共 API、种子、组件或页面。
+本清单已在用户确认后进入 Phase 4 实施；Task 1-14 已按测试、实现、验证和提交结果
+实时勾选。尚未完成的 Task 15 保持未勾选，不得提前声明全量验收或交付完成。
 
 ## 2. 执行规则
 
@@ -451,16 +451,16 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 13.10 更新 Task 13 状态并创建提交：`feat: 添加地区管理维护流程`。
   - _Requirements: R5, R6, R7, R8, R9, R10_
 
-- [ ] 14. 建立隔离地区 Browser E2E 并完成真实交互验收
-  - [ ] 14.1 先扩展 root workflow 单元测试，固定新的
+- [x] 14. 建立隔离地区 Browser E2E 并完成真实交互验收
+  - [x] 14.1 先扩展 root workflow 单元测试，固定新的
     `ci:browser-regions-e2e` package script、隔离 PostgreSQL 生命周期、进程退出和敏感
     文本遮罩。
-  - [ ] 14.2 新增 `scripts/ci-browser-regions-e2e.mjs` 及其测试，复用现有固定
+  - [x] 14.2 新增 `scripts/ci-browser-regions-e2e.mjs` 及其测试，复用现有固定
     PostgreSQL 16、认证 fixture、Server 和 Web test build，不依赖开发数据库。
-  - [ ] 14.3 新增 `web/apps/qsmds-arco/test/browser/regions.browser.test.mjs`，浏览器
+  - [x] 14.3 新增 `web/apps/qsmds-arco/test/browser/regions.browser.test.mjs`，浏览器
     断言必须同时核对真实 HTTP 结果、DOM/Store 状态和最终数据库可观察结果，不能只
     检查 Toast。
-  - [ ] 14.4 选择器在真实浏览器覆盖：
+  - [x] 14.4 选择器在真实浏览器覆盖：
     - 打开、lazy、搜索、键盘三级导航、清空、Escape；
     - root/lazy/search/path 四类失败与 retry；
     - stale 响应不覆盖；
@@ -469,17 +469,17 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     - 真实 INPUT 的 id/name/aria/focus/required；
     - `FormData` 为 CITY UUID；
     - readonly、disabled、多实例 dedupe。
-  - [ ] 14.5 管理页覆盖无权限 403、只读和各部分写权限、导航、搜索、双状态筛选、
+  - [x] 14.5 管理页覆盖无权限 403、只读和各部分写权限、导航、搜索、双状态筛选、
     sorting、pagination、create、update、enable、disable、无 DELETE。
-  - [ ] 14.6 覆盖 mutation 成功后的当前 tab 立即失效、同源第二 tab 失效通知和迟到
+  - [x] 14.6 覆盖 mutation 成功后的当前 tab 立即失效、同源第二 tab 失效通知和迟到
     cache 响应不回写；广播载荷不得出现名称、code 或完整地区数据。
-  - [ ] 14.7 桌面和 `390x844` 验证一个主内容面板、Drawer 焦点恢复、移动卡片、Modal、
+  - [x] 14.7 桌面和 `390x844` 验证一个主内容面板、Drawer 焦点恢复、移动卡片、Modal、
     popup 内滚动和 `scrollWidth <= clientWidth`。
-  - [ ] 14.8 分别验证 light、dark、`prefers-reduced-motion: reduce`、键盘可见焦点、
+  - [x] 14.8 分别验证 light、dark、`prefers-reduced-motion: reduce`、键盘可见焦点、
     状态非颜色依赖和无新增 console warning/error。
-  - [ ] 14.9 运行 `node --run ci:browser-regions-e2e`；若发现缺陷，先增加最小失败回归
+  - [x] 14.9 运行 `node --run ci:browser-regions-e2e`；若发现缺陷，先增加最小失败回归
     测试，再使用独立 `fix: 中文描述` 提交修复并重跑受影响门禁。
-  - [ ] 14.10 更新 Task 14 状态并创建提交：`test: 添加地区功能浏览器验收`。
+  - [x] 14.10 更新 Task 14 状态并创建提交：`test: 添加地区功能浏览器验收`。
   - _Requirements: R3-R10_
 
 - [ ] 15. 完成全量门禁、数据审计和交付收口

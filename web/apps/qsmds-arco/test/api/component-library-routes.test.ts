@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import componentLibraryRoutes, {
+  createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from '../../src/router/modules/component.library'
 
@@ -22,6 +23,35 @@ test('组件库在开发环境默认开启，其他环境必须显式启用', ()
     DEV: false,
     VITE_ENABLE_COMPONENT_LIBRARY: true,
   }), true)
+})
+
+test('真实 Provider Browser harness 只在显式 test build 注册且不进入菜单', () => {
+  assert.deepEqual(createRegionSelectorBrowserE2eRoutes({
+    DEV: true,
+    MODE: 'development',
+    VITE_ENABLE_COMPONENT_LIBRARY: true,
+  }), [])
+  assert.deepEqual(createRegionSelectorBrowserE2eRoutes({
+    DEV: false,
+    MODE: 'production',
+    VITE_ENABLE_COMPONENT_LIBRARY: true,
+  }), [])
+  assert.deepEqual(createRegionSelectorBrowserE2eRoutes({
+    DEV: false,
+    MODE: 'test',
+    VITE_ENABLE_COMPONENT_LIBRARY: false,
+  }), [])
+
+  const [route] = createRegionSelectorBrowserE2eRoutes({
+    DEV: false,
+    MODE: 'test',
+    VITE_ENABLE_COMPONENT_LIBRARY: true,
+  })
+  assert.equal(route?.path, '/__e2e/region-selector')
+  assert.equal(route?.name, 'regionSelectorBrowserE2e')
+  assert.equal(route?.meta?.menu, false)
+  assert.equal(route?.children?.[0]?.path, '')
+  assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
 test('组件库按分类提供十个独立组件路由', () => {
@@ -139,11 +169,15 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
   assert.match(
     routesSource,
-    /const componentLibraryMainRoute:[\s\S]*?title: '组件库',[\s\S]*?children: ComponentLibraryRoutes/u,
+    /const componentLibraryMainRoute:[\s\S]*?title: '组件库',[\s\S]*?\.\.\.ComponentLibraryRoutes,[\s\S]*?createRegionSelectorBrowserE2eRoutes\(import\.meta\.env\)/u,
   )
   assert.match(
     routesSource,
     /shouldEnableComponentLibrary\(import\.meta\.env\)[\s\S]*?componentLibraryMainRoute/u,
+  )
+  assert.match(
+    routesSource,
+    /createRegionSelectorBrowserE2eRoutes\(import\.meta\.env\)/u,
   )
 })
 
@@ -214,6 +248,37 @@ test('十个组件页面与页面模板复用展示壳且不依赖业务 API 或
     assert.match(source, new RegExp(`title="${page.title}"`, 'u'))
     assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
   })
+})
+
+test('Browser harness 使用默认正式 Provider 并提供真实表单与多实例语义', () => {
+  const source = readFileSync(
+    new URL(
+      '../../src/views/component_library/business/region-selector-browser-harness.vue',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /defineOptions\(\{ name: 'RegionSelectorBrowserHarness' \}\)/u,
+  )
+  assert.match(source, /<form/u)
+  assert.match(source, /new FormData/u)
+  assert.match(source, /id="region-selector-e2e-primary"/u)
+  assert.match(source, /name="regionCityId"/u)
+  assert.match(source, /id="region-selector-e2e-secondary"/u)
+  assert.match(source, /readonly/u)
+  assert.match(source, /disabled/u)
+  assert.match(
+    source,
+    /v-if="scenario !== 'provider-only'"[\s\S]*?id="region-selector-e2e-primary"/u,
+  )
+  assert.match(
+    source,
+    /<QsRegionSelector[\s\S]*?:key="`primary-\$\{scenario\}-\$\{requestedCityId\}`"/u,
+  )
+  assert.doesNotMatch(source, /:provider=|@\/api|useApp\w*Store/u)
 })
 
 test('共享展示壳提供非对称桌面布局、窄屏回退和明确空状态', () => {
