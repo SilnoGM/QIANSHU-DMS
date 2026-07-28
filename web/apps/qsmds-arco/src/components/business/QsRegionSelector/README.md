@@ -158,13 +158,13 @@ Vue 表单仍应以 `v-model` 作为主状态。调用方必须提供真实 `<la
 
 ## Showcase 边界
 
-组件库路由 `/component-library/business/region-selector` 显式传入少量本地 fixture
-Provider，并醒目标注“交互样例，不是正式地区数据”。它覆盖标准选择、
-`中国台湾 / 台湾 / 高雄市`、停用历史路径、`readonly`、`disabled` 和一次失败后
-重试。
+组件库路由 `/component-library/business/region-selector` 的标准选择、
+`中国台湾 / 台湾 / 高雄市`、`readonly` 和 `disabled` 状态不传 `provider`，统一使用
+应用启动层注入的默认 Provider，从正式 selection API 按需读取数据库数据。
 
-Showcase 不 import 正式 API、Store 或默认 Provider，不代表数据库种子完整性，也不能
-替代真实业务页面或浏览器端 API 验收。
+停用历史路径和一次失败后重试属于数据库无法稳定制造的边界状态，因此只在对应示例
+显式传入隔离 fixture Provider。fixture 不得用于标准选择，也不能替代真实浏览器端
+API 验收。
 
 ## 调用方职责
 

@@ -8,24 +8,26 @@ import {
 
 defineOptions({ name: 'RegionSelectorShowcase' })
 
-const fixtureProvider = createRegionSelectorFixtureProvider()
+/*
+ * 这两个 UUID 模拟业务记录中已经保存的 CITY value。标准状态仍由应用默认
+ * Provider 根据 UUID 访问正式 selection API，不能把展示路径硬编码进组件。
+ */
+const TAIWAN_KAOHSIUNG_CITY_ID = '78f9134e-3d72-5f6e-9897-ca7e50004229'
+const MALAYSIA_KUALA_LUMPUR_CITY_ID = '5bb627db-828b-5dc3-8c42-ef2fdbbb2bb6'
+
+// 只有数据库无法稳定制造的停用、失败边界才使用隔离 fixture。
+const stoppedProvider = createRegionSelectorFixtureProvider()
 const retryProvider = createRegionSelectorFixtureProvider({
   failFirstRoot: true,
 })
 
 const standardValue = ref<string | null>(null)
-const taiwanValue = ref<string | null>(
-  REGION_SELECTOR_FIXTURE_IDS.taiwanKaohsiung,
-)
+const taiwanValue = ref<string | null>(TAIWAN_KAOHSIUNG_CITY_ID)
 const stoppedValue = ref<string | null>(
   REGION_SELECTOR_FIXTURE_IDS.stoppedCity,
 )
-const readonlyValue = ref<string | null>(
-  REGION_SELECTOR_FIXTURE_IDS.taiwanKaohsiung,
-)
-const disabledValue = ref<string | null>(
-  REGION_SELECTOR_FIXTURE_IDS.malaysiaKualaLumpur,
-)
+const readonlyValue = ref<string | null>(TAIWAN_KAOHSIUNG_CITY_ID)
+const disabledValue = ref<string | null>(MALAYSIA_KUALA_LUMPUR_CITY_ID)
 const retryValue = ref<string | null>(null)
 const lastEvent = ref('等待选择')
 
@@ -38,18 +40,6 @@ function handleStandardChange(change: RegionSelectorChange): void {
 
 <template>
   <section aria-labelledby="region-selector-showcase-title">
-    <FaAlert
-      icon="i-lucide:flask-conical"
-      class="mb-6 border-primary/30 bg-primary/5"
-    >
-      <p class="font-semibold m-0">
-        交互样例，不是正式地区数据
-      </p>
-      <p class="text-sm text-muted-foreground m-0 mt-1">
-        本页只使用少量本地 fixture，不访问正式 API、Store 或登录身份；真实业务数据以数据库为准。
-      </p>
-    </FaAlert>
-
     <div class="p-5 border border-border rounded-xl bg-background sm:p-7">
       <div class="flex flex-wrap gap-4 items-start justify-between">
         <div class="min-w-0">
@@ -64,7 +54,7 @@ function handleStandardChange(change: RegionSelectorChange): void {
             地区选择交互状态
           </h3>
           <p class="text-sm text-muted-foreground leading-6 m-0 mt-2 max-w-3xl">
-            逐级展开或搜索城市，观察完整路径、CITY UUID、停用回显和各类交互限制。
+            标准状态直接读取数据库；逐级展开或搜索城市，观察完整路径、CITY UUID 和各类交互限制。
           </p>
         </div>
         <FaTag variant="secondary">
@@ -90,7 +80,7 @@ function handleStandardChange(change: RegionSelectorChange): void {
                 标准选择
               </h4>
               <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-                支持逐级加载、远程式搜索、清空和原生 required。
+                通过正式地区 API 逐级加载，支持远程搜索、清空和原生 required。
               </p>
             </div>
             <FaTag variant="outline">
@@ -106,9 +96,8 @@ function handleStandardChange(change: RegionSelectorChange): void {
           <QsRegionSelector
             id="region-selector-showcase-standard"
             v-model="standardValue"
-            name="fixtureRegionId"
+            name="regionCityId"
             required
-            :provider="fixtureProvider"
             @change="handleStandardChange"
           />
         </form>
@@ -155,7 +144,6 @@ function handleStandardChange(change: RegionSelectorChange): void {
           <QsRegionSelector
             id="region-selector-showcase-taiwan"
             v-model="taiwanValue"
-            :provider="fixtureProvider"
           />
         </article>
 
@@ -164,7 +152,7 @@ function handleStandardChange(change: RegionSelectorChange): void {
             已停用历史路径
           </h4>
           <p class="qs-type-meta text-muted-foreground m-0 mt-1">
-            保留原 UUID 和完整路径供旧记录回显，但停用城市不能再次选中。
+            隔离 fixture 保留原 UUID 和完整路径供旧记录回显，但停用城市不能再次选中。
           </p>
           <label
             for="region-selector-showcase-stopped"
@@ -175,7 +163,7 @@ function handleStandardChange(change: RegionSelectorChange): void {
           <QsRegionSelector
             id="region-selector-showcase-stopped"
             v-model="stoppedValue"
-            :provider="fixtureProvider"
+            :provider="stoppedProvider"
           />
         </article>
 
@@ -196,7 +184,6 @@ function handleStandardChange(change: RegionSelectorChange): void {
             id="region-selector-showcase-readonly"
             v-model="readonlyValue"
             readonly
-            :provider="fixtureProvider"
           />
         </article>
 
@@ -217,7 +204,6 @@ function handleStandardChange(change: RegionSelectorChange): void {
             id="region-selector-showcase-disabled"
             v-model="disabledValue"
             disabled
-            :provider="fixtureProvider"
           />
         </article>
       </div>

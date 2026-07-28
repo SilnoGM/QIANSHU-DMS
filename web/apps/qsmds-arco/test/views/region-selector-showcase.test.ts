@@ -12,6 +12,15 @@ function readRelativeSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
+function readSelectorTag(source: string, inputId: string): string {
+  const tag = [...source.matchAll(/<QsRegionSelector\b[\s\S]*?\/>/gu)]
+    .map(match => match[0])
+    .find(candidate => candidate.includes(`id="${inputId}"`))
+
+  assert.ok(tag, `QsRegionSelector ${inputId} should exist`)
+  return tag
+}
+
 test('地区选择器拥有第十个独立展示页且不聚合其他业务组件', () => {
   const pageSource = readRelativeSource(
     '../../src/views/component_library/business/region-selector.vue',
@@ -29,16 +38,41 @@ test('地区选择器拥有第十个独立展示页且不聚合其他业务组�
   assert.doesNotMatch(tablePageSource, /RegionSelectorShowcase/u)
 })
 
-test('Showcase 显式使用本地 provider 并醒目标注数据边界', () => {
+test('Showcase 标准状态读取正式数据库且 fixture 只隔离异常边界', () => {
   const source = readRelativeSource(
     '../../src/views/component_library/business/components/RegionSelectorShowcase.vue',
+  )
+  const pageSource = readRelativeSource(
+    '../../src/views/component_library/business/region-selector.vue',
   )
 
   assert.match(source, /import QsRegionSelector from '@\/components\/business\/QsRegionSelector\/index\.vue'/u)
   assert.match(source, /createRegionSelectorFixtureProvider/u)
-  assert.match(source, /:provider="fixtureProvider"/u)
-  assert.match(source, /:provider="retryProvider"/u)
-  assert.match(source, /交互样例，不是正式地区数据/u)
+  for (const inputId of [
+    'region-selector-showcase-standard',
+    'region-selector-showcase-taiwan',
+    'region-selector-showcase-readonly',
+    'region-selector-showcase-disabled',
+  ]) {
+    assert.doesNotMatch(readSelectorTag(source, inputId), /:provider=/u)
+  }
+  assert.match(
+    readSelectorTag(source, 'region-selector-showcase-stopped'),
+    /:provider="stoppedProvider"/u,
+  )
+  assert.match(
+    readSelectorTag(source, 'region-selector-showcase-retry'),
+    /:provider="retryProvider"/u,
+  )
+  assert.equal(
+    source.match(/:provider="stoppedProvider"/gu)?.length,
+    1,
+  )
+  assert.doesNotMatch(
+    source,
+    /<FaAlert|flask-conical|交互样例，不是正式地区数据/u,
+  )
+  assert.match(pageSource, /标准状态直接读取数据库/u)
   assert.match(source, /中国台湾\s*\/\s*台湾\s*\/\s*高雄市/u)
   assert.match(source, /已停用历史路径/u)
   assert.match(source, /\breadonly\b/u)

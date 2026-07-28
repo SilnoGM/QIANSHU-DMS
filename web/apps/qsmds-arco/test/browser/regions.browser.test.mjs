@@ -72,6 +72,27 @@ async function waitForAfterAuthentication(page, expression) {
 }
 
 /**
+ * 级联弹层的每一列都是独立 menu。这里对某一列的完整文字数组做有序比较，
+ * 避免“目标节点存在”掩盖同级数据被截断或仍来自少量 fixture。
+ */
+async function waitForVisibleRegionMenu(page, expectedLabels) {
+  await page.waitFor(`(() => {
+    const expected = ${JSON.stringify(expectedLabels)}
+    return [...document.querySelectorAll(
+      '.qs-region-selector-popup [role="menu"]',
+    )]
+      .filter(menu => menu.getClientRects().length > 0)
+      .map(menu => [...menu.querySelectorAll('[role="menuitem"]')]
+        .filter(item => item.getClientRects().length > 0)
+        .map(item => item.textContent?.trim() ?? ''))
+      .some(labels => (
+        labels.length === expected.length
+        && labels.every((label, index) => label === expected[index])
+      ))
+  })()`)
+}
+
+/**
  * BroadcastChannel 的投递是异步任务。每个缓存失效断言先记录接收计数，再等待
  * 所有目标 tab 确认收到消息，避免测试误把旧缓存命中或迟到响应当作新一代结果。
  */
@@ -160,6 +181,14 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
   )
   assert.equal(rootsResponse.status, 200)
   assert.equal(rootsResponse.cacheControl, 'private, no-store')
+  const chinaCountry = rootsResponse.body?.find(region => region.code === 'CN')
+  assert.equal(chinaCountry?.name, '中国')
+  const chinaProvinceResponse = await page.evaluate(apiExpression(
+    `/api/region-selection/options?parentId=${encodeURIComponent(chinaCountry.id)}`,
+  ))
+  assert.equal(chinaProvinceResponse.status, 200)
+  assert.equal(chinaProvinceResponse.body?.length, 31)
+
   const taiwanCountry = rootsResponse.body?.find(region => region.code === 'TW')
   assert.equal(taiwanCountry?.name, '中国台湾')
 
@@ -167,10 +196,16 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
     `/api/region-selection/options?parentId=${encodeURIComponent(taiwanCountry.id)}`,
   ))
   assert.equal(taiwanProvinceResponse.status, 200)
+  assert.equal(taiwanProvinceResponse.body?.length, 1)
   const taiwanProvince = taiwanProvinceResponse.body?.find(
     region => region.code === 'TW-TAIWAN',
   )
   assert.equal(taiwanProvince?.name, '台湾')
+  const taiwanCityResponse = await page.evaluate(apiExpression(
+    `/api/region-selection/options?parentId=${encodeURIComponent(taiwanProvince.id)}`,
+  ))
+  assert.equal(taiwanCityResponse.status, 200)
+  assert.equal(taiwanCityResponse.body?.length, 22)
 
   const searchResponse = await page.evaluate(apiExpression(
     '/api/region-selection/search?query=%E9%AB%98%E9%9B%84%E5%B8%82&limit=50',
@@ -895,11 +930,38 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
     true,
   )
 
-  // Showcase 的停用历史路径只作为固定视觉契约，不冒充正式 HTTP。
+  /*
+   * 正式 Showcase 的标准状态必须使用应用注入 Provider。直接把弹层中的中国省州
+   * 与 selection API 完整结果逐项对齐，避免少量 fixture 再次冒充数据库数据。
+   */
+  await providerPage.setViewport(1280, 800, false)
   await providerPage.navigate(appRouteUrl(
     configuration.baseUrl,
     '/component-library/business/region-selector',
   ))
+  await providerPage.waitFor(`document.querySelector(
+    '#region-selector-showcase-standard',
+  ) !== null`)
+  assert.equal(
+    await providerPage.evaluate(`document.querySelector(
+      '[aria-labelledby="region-selector-showcase-title"] [data-slot="alert"]',
+    ) === null`),
+    true,
+  )
+  await openSelector(providerPage, 'region-selector-showcase-standard')
+  await clickVisibleMenuItem(providerPage, '中国')
+  const expectedProvinceNames = chinaProvinceResponse.body.map(
+    region => region.name,
+  )
+  await waitForVisibleRegionMenu(providerPage, expectedProvinceNames)
+  await clickVisibleMenuItem(providerPage, '中国台湾')
+  await clickVisibleMenuItem(providerPage, '台湾')
+  await waitForVisibleRegionMenu(
+    providerPage,
+    taiwanCityResponse.body.map(region => region.name),
+  )
+
+  // 停用历史路径继续由隔离 fixture 提供，只承担固定视觉契约。
   await providerPage.waitFor(`document.body.innerText.includes(
     '当前历史地区已停用，仅供回显',
   )`)
