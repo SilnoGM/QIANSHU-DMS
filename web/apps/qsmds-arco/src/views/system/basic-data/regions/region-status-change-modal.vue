@@ -76,6 +76,29 @@ async function handleSubmit(): Promise<void> {
   }
 }
 
+function handleStatusActionClick(event: MouseEvent): void {
+  const target = event.target
+  const actionRoot = event.currentTarget
+  if (!(target instanceof Element) || !(actionRoot instanceof HTMLElement)) {
+    return
+  }
+
+  const actionButton = target.closest<HTMLElement>('[data-region-status-action]')
+  if (actionButton === null || !actionRoot.contains(actionButton)) {
+    return
+  }
+
+  // 与地区表单使用同一原生祖先事件边界，确保 FaButton 多层透传后仍有稳定交互。
+  event.preventDefault()
+  if (actionButton.dataset.regionStatusAction === 'cancel') {
+    handleCancel()
+    return
+  }
+  if (actionButton.dataset.regionStatusAction === 'submit') {
+    void handleSubmit()
+  }
+}
+
 watch(
   () => props.submitting,
   (submitting) => {
@@ -179,27 +202,32 @@ watch(
       </FaAlert>
     </div>
 
-    <template #footer>
+    <!-- 与表单弹窗一致，操作节点留在默认 slot，保证点击事件落到真实 DOM。 -->
+    <div
+      data-slot="region-status-actions"
+      class="mt-6 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 border-t border-border/70 bg-muted/25 flex flex-col gap-2 -mx-4 -mb-4 sm:px-6 sm:flex-row sm:items-center sm:justify-end sm:-mx-6 sm:-mb-6"
+      @click="handleStatusActionClick"
+    >
       <FaButton
         type="button"
+        data-region-status-action="cancel"
         variant="outline"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-[44px] w-full sm:w-auto"
         :disabled="interactionLocked"
-        @click="handleCancel"
       >
         取消
       </FaButton>
       <FaButton
         type="button"
+        data-region-status-action="submit"
         :variant="isDisable ? 'destructive' : 'default'"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-[44px] w-full sm:w-auto"
         :loading="interactionLocked"
         :disabled="interactionLocked || region === null"
         :aria-label="`${copy.confirmLabel}${region?.name ?? '地区'}`"
-        @click="handleSubmit"
       >
         {{ copy.confirmLabel }}
       </FaButton>
-    </template>
+    </div>
   </QsGenericModal>
 </template>

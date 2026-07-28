@@ -53,6 +53,17 @@ test('字段错误保留安全摘要、requestId 并聚焦首个错误字段', (
 
 test('FaInput 清空统一回写空字符串且窄屏 footer 使用全宽按钮', () => {
   assert.equal(source.match(/@clear="model\.\w+ = ''"/gu)?.length, 4)
-  assert.match(source, /class="min-h-11 w-full sm:w-auto"/u)
+  assert.equal(
+    source.match(/class="min-h-\[44px\] w-full sm:w-auto"/gu)?.length,
+    2,
+  )
   assert.doesNotMatch(source, /gradient|#[\dA-Fa-f]{3,8}\b|rgba?\(/u)
+})
+
+test('操作区保留在默认内容与 FaForm 内，避免二次 footer slot 丢失交互', () => {
+  assert.doesNotMatch(source, /<template #footer>/u)
+  assert.match(
+    source,
+    /<FaForm[\s\S]*?@submit="submit"[\s\S]*?data-slot="region-form-actions"[\s\S]*?@click="handleFormActionClick"[\s\S]*?data-region-form-action="cancel"[\s\S]*?type="submit"[\s\S]*?data-region-form-action="submit"[\s\S]*?<\/FaForm>/u,
+  )
 })

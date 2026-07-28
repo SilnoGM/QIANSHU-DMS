@@ -126,6 +126,33 @@ function handleModalVisibleChange(visible: boolean): void {
   }
 }
 
+function handleFormActionClick(event: MouseEvent): void {
+  const target = event.target
+  const actionRoot = event.currentTarget
+  if (!(target instanceof Element) || !(actionRoot instanceof HTMLElement)) {
+    return
+  }
+
+  const actionButton = target.closest<HTMLElement>('[data-region-form-action]')
+  if (actionButton === null || !actionRoot.contains(actionButton)) {
+    return
+  }
+
+  /*
+   * FaButton 经过 Modal slot 与 Primitive 两层组件边界后，浏览器最终按钮仍能保留
+   * type/data 属性，但不能把业务提交依赖在 listener fallthrough 上。操作区作为
+   * 稳定原生祖先统一接管 click；键盘 Enter 仍由 FaForm 的 submit 事件处理。
+   */
+  event.preventDefault()
+  if (actionButton.dataset.regionFormAction === 'cancel') {
+    cancel()
+    return
+  }
+  if (actionButton.dataset.regionFormAction === 'submit') {
+    void submit()
+  }
+}
+
 async function submit(): Promise<void> {
   if (submitLocked.value) {
     return
@@ -339,27 +366,35 @@ watch(
           />
         </FaFormItem>
       </div>
-    </FaForm>
 
-    <template #footer>
-      <FaButton
-        type="button"
-        variant="outline"
-        class="min-h-11 w-full sm:w-auto"
-        :disabled="submitLocked"
-        @click="cancel"
+      <!--
+        操作区必须留在默认内容与 FaForm 的真实 DOM 子树内；经过两级 footer slot
+        转发会让组件事件失去稳定的原生落点。负边距保持 QsGenericModal footer 视觉。
+      -->
+      <div
+        data-slot="region-form-actions"
+        class="mt-6 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 border-t border-border/70 bg-muted/25 flex flex-col gap-2 -mx-4 -mb-4 sm:px-6 sm:flex-row sm:items-center sm:justify-end sm:-mx-6 sm:-mb-6"
+        @click="handleFormActionClick"
       >
-        取消
-      </FaButton>
-      <FaButton
-        type="button"
-        class="min-h-11 w-full sm:w-auto"
-        :disabled="submitDisabled"
-        :loading="submitLocked"
-        @click="submit"
-      >
-        {{ mode === 'create' ? '创建地区' : '保存修改' }}
-      </FaButton>
-    </template>
+        <FaButton
+          type="button"
+          data-region-form-action="cancel"
+          variant="outline"
+          class="min-h-[44px] w-full sm:w-auto"
+          :disabled="submitLocked"
+        >
+          取消
+        </FaButton>
+        <FaButton
+          type="submit"
+          data-region-form-action="submit"
+          class="min-h-[44px] w-full sm:w-auto"
+          :disabled="submitDisabled"
+          :loading="submitLocked"
+        >
+          {{ mode === 'create' ? '创建地区' : '保存修改' }}
+        </FaButton>
+      </div>
+    </FaForm>
   </QsGenericModal>
 </template>

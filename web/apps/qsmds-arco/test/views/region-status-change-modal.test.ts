@@ -81,7 +81,7 @@ test('启停确认框复用 QsGenericModal 且保持纯展示事件边界', () =
   assert.match(source, /当前操作对象/u)
   assert.match(source, /:variant="isDisable \? 'destructive' : 'default'"/u)
   assert.equal(
-    source.match(/class="min-h-11 w-full sm:w-auto"/gu)?.length,
+    source.match(/class="min-h-\[44px\] w-full sm:w-auto"/gu)?.length,
     2,
   )
   assert.doesNotMatch(
@@ -107,5 +107,17 @@ test('提交与关闭处理均使用本地提交锁，防止父级状态回写�
   assert.match(
     source,
     /watch\(\s*\(\) => props\.submitting,[\s\S]*?submitRequested\.value = false/u,
+  )
+})
+
+test('启停操作区保留在默认内容中，避免二次 footer slot 丢失交互', () => {
+  const source = readSource(
+    '../../src/views/system/basic-data/regions/region-status-change-modal.vue',
+  )
+
+  assert.doesNotMatch(source, /<template #footer>/u)
+  assert.match(
+    source,
+    /data-slot="region-status-actions"[\s\S]*?@click="handleStatusActionClick"[\s\S]*?data-region-status-action="cancel"[\s\S]*?data-region-status-action="submit"/u,
   )
 })
