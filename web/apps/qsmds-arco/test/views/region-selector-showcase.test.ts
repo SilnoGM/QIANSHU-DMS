@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-// eslint-disable-next-line test/no-import-node-test -- 展示页与 fixture 契约使用 Node.js 内置 runner。
+// eslint-disable-next-line test/no-import-node-test -- Showcase 与 fixture 契约使用 Node.js 内置 runner。
 import test from 'node:test'
-
 import {
   createRegionSelectorFixtureProvider,
   REGION_SELECTOR_FIXTURE_IDS,
@@ -21,7 +20,7 @@ function readSelectorTag(source: string, inputId: string): string {
   return tag
 }
 
-test('地区选择器拥有第十个独立展示页且不聚合其他业务组件', () => {
+test('地区选择器拥有独立展示页且不聚合其他业务组件', () => {
   const pageSource = readRelativeSource(
     '../../src/views/component_library/business/region-selector.vue',
   )
@@ -29,12 +28,25 @@ test('地区选择器拥有第十个独立展示页且不聚合其他业务组�
     '../../src/views/component_library/business/index.vue',
   )
 
-  assert.match(pageSource, /defineOptions\(\{ name: 'ComponentLibraryQsRegionSelector' \}\)/u)
-  assert.match(pageSource, /import RegionSelectorShowcase from '.\/components\/RegionSelectorShowcase\.vue'/u)
+  assert.match(
+    pageSource,
+    /defineOptions\(\{ name: 'ComponentLibraryQsRegionSelector' \}\)/u,
+  )
+  assert.match(
+    pageSource,
+    /import RegionSelectorShowcase from '.\/components\/RegionSelectorShowcase\.vue'/u,
+  )
   assert.match(pageSource, /title="地区选择器"/u)
-  assert.match(pageSource, /route-path="\/component-library\/business\/region-selector"/u)
+  assert.match(
+    pageSource,
+    /route-path="\/component-library\/business\/region-selector"/u,
+  )
   assert.match(pageSource, /<RegionSelectorShowcase\s*\/>/u)
-  assert.doesNotMatch(pageSource, /Generic(Table|Drawer|Modal)Showcase|GoodTooltipShowcase/u)
+  assert.match(pageSource, /原子绑定三级 ID/u)
+  assert.doesNotMatch(
+    pageSource,
+    /Generic(Table|Drawer|Modal)Showcase|GoodTooltipShowcase/u,
+  )
   assert.doesNotMatch(tablePageSource, /RegionSelectorShowcase/u)
 })
 
@@ -46,7 +58,10 @@ test('Showcase 标准状态读取正式数据库且 fixture 只隔离异常边�
     '../../src/views/component_library/business/region-selector.vue',
   )
 
-  assert.match(source, /import QsRegionSelector from '@\/components\/business\/QsRegionSelector\/index\.vue'/u)
+  assert.match(
+    source,
+    /import QsRegionSelector from '@\/components\/business\/QsRegionSelector\/index\.vue'/u,
+  )
   assert.match(source, /createRegionSelectorFixtureProvider/u)
   for (const inputId of [
     'region-selector-showcase-standard',
@@ -64,25 +79,61 @@ test('Showcase 标准状态读取正式数据库且 fixture 只隔离异常边�
     readSelectorTag(source, 'region-selector-showcase-retry'),
     /:provider="retryProvider"/u,
   )
-  assert.equal(
-    source.match(/:provider="stoppedProvider"/gu)?.length,
-    1,
-  )
+  assert.equal(source.match(/:provider="stoppedProvider"/gu)?.length, 1)
+  assert.match(pageSource, /标准状态直接读取数据库/u)
   assert.doesNotMatch(
     source,
-    /<FaAlert|flask-conical|交互样例，不是正式地区数据/u,
+    /@\/api|useApp\w*Store|regionSelectorProviderKey|createDefaultRegionSelectorProvider/u,
   )
-  assert.match(pageSource, /标准状态直接读取数据库/u)
-  assert.match(source, /中国台湾\s*\/\s*台湾\s*\/\s*高雄市/u)
-  assert.match(source, /已停用历史路径/u)
-  assert.match(source, /\breadonly\b/u)
-  assert.match(source, /\bdisabled\b/u)
-  assert.match(source, /一次失败后可重试/u)
-  assert.match(source, /390px|窄屏/u)
-  assert.doesNotMatch(source, /@\/api|useApp\w*Store|regionSelectorProviderKey|createDefaultRegionSelectorProvider/u)
 })
 
-test('fixture provider 固定台湾高雄与停用历史路径并支持一次失败后重试', async () => {
+test('Showcase 使用结构化三级 value 与空格完整路径', () => {
+  const source = readRelativeSource(
+    '../../src/views/component_library/business/components/RegionSelectorShowcase.vue',
+  )
+  const harnessSource = readRelativeSource(
+    '../../src/views/component_library/business/region-selector-browser-harness.vue',
+  )
+  const readmeSource = readRelativeSource(
+    '../../src/components/business/QsRegionSelector/README.md',
+  )
+
+  for (const candidate of [source, harnessSource, readmeSource]) {
+    assert.doesNotMatch(candidate, /中国台湾\s*\/\s*台湾\s*\/\s*高雄市/u)
+    assert.doesNotMatch(candidate, /join\(' \/ '\)/u)
+  }
+  assert.match(source, /RegionSelectorValue/u)
+  assert.match(harnessSource, /RegionSelectorValue/u)
+  assert.match(source, /中国台湾 台湾 高雄市/u)
+  assert.match(source, /countryRegionId/u)
+  assert.match(source, /provinceStateId/u)
+  assert.match(source, /cityId/u)
+  assert.match(source, /complete=\$\{change\.complete\}/u)
+  assert.doesNotMatch(source, /远程搜索|搜索城市/u)
+})
+
+test('Browser harness 暴露三个受控 UUID 与稳定的三级 DOM 入口', () => {
+  const source = readRelativeSource(
+    '../../src/views/component_library/business/region-selector-browser-harness.vue',
+  )
+
+  for (const testId of [
+    'region-selector-country-value',
+    'region-selector-province-value',
+    'region-selector-city-value',
+    'region-selector-e2e-primary',
+    'region-selector-e2e-secondary',
+    'region-selector-e2e-readonly',
+    'region-selector-e2e-disabled',
+  ]) {
+    assert.match(source, new RegExp(`data-testid="${testId}"`, 'u'))
+  }
+  assert.match(source, /createTaiwanValue/u)
+  assert.match(source, /TAIWAN_COUNTRY_REGION_ID/u)
+  assert.match(source, /TAIWAN_PROVINCE_STATE_ID/u)
+})
+
+test('fixture 固定台湾高雄与停用历史路径并支持一次失败后重试', async () => {
   const provider = createRegionSelectorFixtureProvider()
   const signal = new AbortController().signal
   const taiwanPath = await provider.resolvePath({
@@ -119,7 +170,7 @@ test('fixture provider 固定台湾高雄与停用历史路径并支持一次失
   )
 })
 
-test('fixture 只依赖公共领域类型且 README 写明调用方职责', () => {
+test('README 固定 Provider、缓存、错误、表单与调用方职责', () => {
   const fixtureSource = readRelativeSource(
     '../../src/views/component_library/business/fixtures/region-selector.fixture.ts',
   )
@@ -127,13 +178,19 @@ test('fixture 只依赖公共领域类型且 README 写明调用方职责', () =
     '../../src/components/business/QsRegionSelector/README.md',
   )
 
-  assert.match(fixtureSource, /import type \{[\s\S]*?RegionSelectorProvider[\s\S]*?\} from '@\/components\/business\/QsRegionSelector\/types'/u)
-  assert.doesNotMatch(fixtureSource, /@\/api|useApp\w*Store|\.\/provider|QsRegionSelector\/provider/u)
+  assert.match(
+    fixtureSource,
+    /import type \{[\s\S]*?RegionSelectorProvider[\s\S]*?\} from '@\/components\/business\/QsRegionSelector\/types'/u,
+  )
+  assert.doesNotMatch(
+    fixtureSource,
+    /@\/api|useApp\w*Store|\.\/provider|QsRegionSelector\/provider/u,
+  )
 
   for (const contract of [
     'Public API',
+    'RegionSelectorValue',
     'Provider',
-    'CITY UUID',
     '缓存与身份',
     '错误与重试',
     '原生表单与 FormData',
@@ -142,6 +199,7 @@ test('fixture 只依赖公共领域类型且 README 写明调用方职责', () =
   ]) {
     assert.match(readmeSource, new RegExp(contract, 'u'))
   }
-  assert.match(readmeSource, /不保存(?:地区)?展示名称/u)
-  assert.match(readmeSource, /中国台湾[\s\S]*台湾[\s\S]*高雄市/u)
+  assert.match(readmeSource, /不保存地区展示名称/u)
+  assert.match(readmeSource, /中国台湾 台湾 高雄市/u)
+  assert.match(readmeSource, /不下载全球完整地区树/u)
 })

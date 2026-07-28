@@ -1,32 +1,34 @@
+import type { RegionLevel } from './types'
+
 export type RegionSelectorRawAttrs = Readonly<Record<string, unknown>>
 
 export interface RegionSelectorAttrGroups {
   /**
-   * 只允许布局、样式与测试标记落到业务组件 wrapper。
-   * 控件语义必须由 bridge 写入 Cascader 的真实 input。
+   * 布局、测试标记和复合控件级可访问名称保留在 wrapper。
    */
   readonly wrapperAttrs: Readonly<Record<string, unknown>>
+  /**
+   * ID、tabindex 与状态型 ARIA 由 bridge 写入三个 FaSelect trigger。
+   */
   readonly controlAttrs: Readonly<Record<string, unknown>>
+  /**
+   * 原生表单属性只落到组件私有 proxy input；`name` 继续提交 CITY UUID。
+   */
+  readonly formAttrs: Readonly<Record<string, unknown>>
 }
 
-export interface RegionSelectorControlBridgeOptions {
-  readonly onBlur?: (event: FocusEvent) => void
-  readonly onClear?: () => void
-  readonly onFocus?: (event: FocusEvent) => void
+export interface RegionSelectorControlIds {
+  readonly COUNTRY_REGION: string
+  readonly PROVINCE_STATE: string
+  readonly CITY: string
 }
 
 export interface RegionSelectorControlBridgeUpdate {
   readonly attrs: RegionSelectorRawAttrs
-  readonly busy: boolean
-  readonly clearControl: HTMLElement | null
+  readonly busy: Readonly<Record<RegionLevel, boolean>>
+  readonly controlIds: RegionSelectorControlIds
   readonly describedBy?: readonly (null | string | undefined)[]
-  readonly expanded: boolean
-  /**
-   * 仅由组件经过严格三级 path 校验后置为 true；不能从 raw modelValue 是否非空推导。
-   */
-  readonly hasValidCitySelection: boolean
   readonly invalid: boolean
-  readonly modelValue: null | string
   readonly readonly: boolean
   /**
    * 传入 QsRegionSelector 自己的局部 wrapper，不接受 document 等全局查询根。
@@ -38,35 +40,42 @@ export interface RegionSelectorControlBridgeUpdate {
 export interface RegionSelectorControlBridge {
   readonly blur: () => void
   readonly dispose: () => void
-  readonly focus: () => void
+  readonly focus: (level?: RegionLevel) => void
   readonly update: (state: RegionSelectorControlBridgeUpdate) => void
 }
 
 const CONTROL_ATTR_NAMES = new Set([
-  'autocomplete',
   'id',
-  'name',
-  'required',
   'tabindex',
 ])
 
-const BRIDGE_ARIA_ATTR_NAMES = new Set([
-  'aria-busy',
+const CONTROL_ARIA_ATTR_NAMES = new Set([
   'aria-describedby',
-  'aria-expanded',
-  'aria-haspopup',
   'aria-invalid',
-  'aria-readonly',
   'aria-required',
 ])
 
-const CLEAR_CONTROL_ATTRS = new Map([
-  ['aria-label', '清空地区选择'],
-  ['role', 'button'],
-  ['tabindex', '0'],
+const FORM_ATTR_NAMES = new Set([
+  'form',
+  'name',
+  'required',
 ])
 
-const REQUIRED_VALIDITY_MESSAGE = '请选择地区'
+const TRIGGER_SELECTORS: Readonly<Record<RegionLevel, string>> = Object.freeze({
+  COUNTRY_REGION:
+    '[data-region-level="COUNTRY_REGION"] [data-slot="select-trigger"]',
+  PROVINCE_STATE:
+    '[data-region-level="PROVINCE_STATE"] [data-slot="select-trigger"]',
+  CITY:
+    '[data-region-level="CITY"] [data-slot="select-trigger"]',
+})
+
+const READONLY_SELECTOR = '[data-slot="qs-region-selector-readonly"]'
+const LEVELS = Object.freeze([
+  'COUNTRY_REGION',
+  'PROVINCE_STATE',
+  'CITY',
+] as const)
 
 function createAttributeRecord(): Record<string, unknown> {
   // 无原型记录可避免 `__proto__` 等特殊名称污染 v-bind 的属性容器。
@@ -90,37 +99,44 @@ export function splitRegionSelectorAttrs(
 ): RegionSelectorAttrGroups {
   const wrapperAttrs = createAttributeRecord()
   const controlAttrs = createAttributeRecord()
+  const formAttrs = createAttributeRecord()
 
   for (const [name, value] of Object.entries(attrs)) {
-    if (name === 'class' || name === 'style' || isDataAttribute(name)) {
+    if (
+      name === 'class'
+      || name === 'style'
+      || isDataAttribute(name)
+      || (
+        isAriaAttribute(name)
+        && !CONTROL_ARIA_ATTR_NAMES.has(name)
+      )
+    ) {
       wrapperAttrs[name] = value
       continue
     }
 
-    if (CONTROL_ATTR_NAMES.has(name) || isAriaAttribute(name)) {
+    if (
+      CONTROL_ATTR_NAMES.has(name)
+      || CONTROL_ARIA_ATTR_NAMES.has(name)
+    ) {
       controlAttrs[name] = value
+      continue
+    }
+
+    if (FORM_ATTR_NAMES.has(name)) {
+      formAttrs[name] = value
     }
   }
 
   return {
     controlAttrs,
+    formAttrs,
     wrapperAttrs,
   }
 }
 
 function normalizeTextAttribute(value: unknown): null | string {
   if (typeof value === 'string' || typeof value === 'number') {
-    return String(value)
-  }
-  return null
-}
-
-function normalizeAriaAttribute(value: unknown): null | string {
-  if (
-    typeof value === 'string'
-    || typeof value === 'number'
-    || typeof value === 'boolean'
-  ) {
     return String(value)
   }
   return null
@@ -163,275 +179,219 @@ function mergeDescribedBy(
   return tokens.length > 0 ? tokens.join(' ') : null
 }
 
-function setOrDelete(
-  attributes: Map<string, string>,
+function setManagedAttribute(
+  element: HTMLElement,
   name: string,
   value: null | string,
 ) {
   if (value === null) {
-    attributes.delete(name)
+    element.removeAttribute(name)
   }
   else {
-    attributes.set(name, value)
+    element.setAttribute(name, value)
   }
 }
 
-function resolveLocalInput(root: HTMLElement | null): HTMLInputElement | null {
-  if (root === null) {
-    return null
-  }
+function isButton(element: Element | null): element is HTMLButtonElement {
+  return element !== null
+    && String(element.tagName).toUpperCase() === 'BUTTON'
+}
 
-  const inputs = Array.from(root.querySelectorAll('input'))
-  if (
-    inputs.length !== 1
-    || String(inputs[0]?.tagName).toUpperCase() !== 'INPUT'
-  ) {
-    throw new Error(
-      'QsRegionSelector 的 Cascader root 必须包含且仅包含一个真实 input',
-    )
-  }
-
-  return inputs[0]
+function isHTMLElement(value: unknown): value is HTMLElement {
+  return typeof value === 'object'
+    && value !== null
+    && 'setAttribute' in value
+    && 'removeAttribute' in value
+    && 'focus' in value
 }
 
 /**
- * 对 ACascader@2.58 的真实 input 做版本受控桥接。
+ * 精确解析组件局部的三个 FaSelect trigger。
  *
- * Bridge 只持有调用方传入的局部 DOM 引用；当 Arco 内部结构变化而不再只有一个
- * input 时直接失败，使升级风险在测试阶段暴露，而不是静默把表单属性放错元素。
+ * `data-region-level` 由 QsRegionSelector 自己渲染，`data-slot=select-trigger`
+ * 来自受控 FaSelect。任一级缺失或重复都立即失败，避免升级后静默把 ARIA 写错控件。
  */
-export function createRegionSelectorControlBridge(
-  options: RegionSelectorControlBridgeOptions = {},
-): RegionSelectorControlBridge {
-  let currentClearControl: HTMLElement | null = null
-  let currentForm: HTMLFormElement | null = null
-  let currentFormName: null | string = null
-  let currentInput: HTMLInputElement | null = null
-  let currentModelValue: null | string = null
+function resolveLocalTriggers(
+  root: HTMLElement,
+): Readonly<Record<RegionLevel, HTMLButtonElement>> {
+  const triggers = createAttributeRecord() as Record<
+    RegionLevel,
+    HTMLButtonElement
+  >
+
+  for (const level of LEVELS) {
+    const matches = root.querySelectorAll(TRIGGER_SELECTORS[level])
+    const trigger = matches[0] ?? null
+    if (matches.length !== 1 || !isButton(trigger)) {
+      throw new Error(
+        'QsRegionSelector 必须包含三个 FaSelect trigger，且每一级只能有一个',
+      )
+    }
+    triggers[level] = trigger
+  }
+
+  return triggers
+}
+
+const MANAGED_TRIGGER_ATTRS = Object.freeze([
+  'aria-busy',
+  'aria-describedby',
+  'aria-invalid',
+  'aria-required',
+  'id',
+  'tabindex',
+])
+
+function cleanTrigger(trigger: HTMLElement): void {
+  for (const name of MANAGED_TRIGGER_ATTRS) {
+    trigger.removeAttribute(name)
+  }
+}
+
+export function createRegionSelectorControlBridge(): RegionSelectorControlBridge {
+  let currentTargets: Partial<Record<RegionLevel, HTMLElement>> = {}
+  let currentReadonlyTarget: HTMLElement | null = null
+  let lastFocusedTarget: HTMLElement | null = null
   let disposed = false
-  let managedInputAttrs = new Set<string>()
 
-  const handleFocus = (event: Event) => {
-    options.onFocus?.(event as FocusEvent)
-  }
-
-  const handleBlur = (event: Event) => {
-    options.onBlur?.(event as FocusEvent)
-  }
-
-  const runClear = (event: Event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    options.onClear?.()
-  }
-
-  const handleClearKeydown = (event: KeyboardEvent) => {
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return
-    }
-    runClear(event)
-  }
-
-  const handleFormData = (event: Event) => {
-    const formData = (
-      event as Event & { readonly formData?: Pick<FormData, 'set'> }
-    ).formData
-    if (!formData || currentFormName === null) {
-      return
-    }
-
-    // Cascader input.value 是搜索草稿；原生表单必须提交稳定的 CITY UUID。
-    formData.set(currentFormName, currentModelValue ?? '')
-  }
-
-  function detachFormListener() {
-    currentForm?.removeEventListener('formdata', handleFormData)
-    currentForm = null
-    currentFormName = null
-  }
-
-  function syncFormListener(input: HTMLInputElement) {
-    const nextForm = input.form
-    const nextName = input.getAttribute('name')
-    const usableName = nextName && nextName.length > 0 ? nextName : null
-
-    if (currentForm === nextForm && currentFormName === usableName) {
-      return
-    }
-
-    detachFormListener()
-    if (nextForm && usableName) {
-      currentForm = nextForm
-      currentFormName = usableName
-      currentForm.addEventListener('formdata', handleFormData)
+  const rememberFocusedTarget = (event: Event) => {
+    if (isHTMLElement(event.currentTarget)) {
+      lastFocusedTarget = event.currentTarget
     }
   }
 
-  function cleanInput(input: HTMLInputElement) {
-    input.removeEventListener('focus', handleFocus)
-    input.removeEventListener('blur', handleBlur)
-    for (const name of managedInputAttrs) {
-      input.removeAttribute(name)
+  function detachTargets(): void {
+    for (const target of Object.values(currentTargets)) {
+      target?.removeEventListener('focus', rememberFocusedTarget)
+      if (target) {
+        cleanTrigger(target)
+      }
     }
-    input.setCustomValidity('')
-    managedInputAttrs = new Set()
-  }
-
-  function detachInput() {
-    detachFormListener()
-    if (currentInput) {
-      cleanInput(currentInput)
-    }
-    currentInput = null
-  }
-
-  function attachInput(input: HTMLInputElement) {
-    currentInput = input
-    currentInput.addEventListener('focus', handleFocus)
-    currentInput.addEventListener('blur', handleBlur)
-  }
-
-  function detachClearControl() {
-    if (!currentClearControl) {
-      return
-    }
-    currentClearControl.removeEventListener('click', runClear)
-    currentClearControl.removeEventListener(
-      'keydown',
-      handleClearKeydown as EventListener,
+    currentReadonlyTarget?.removeEventListener(
+      'focus',
+      rememberFocusedTarget,
     )
-    for (const name of CLEAR_CONTROL_ATTRS.keys()) {
-      currentClearControl.removeAttribute(name)
-    }
-    currentClearControl = null
+    currentTargets = {}
+    currentReadonlyTarget = null
+    lastFocusedTarget = null
   }
 
-  function syncClearControl(nextClearControl: HTMLElement | null) {
-    if (currentClearControl !== nextClearControl) {
-      detachClearControl()
-      if (nextClearControl) {
-        currentClearControl = nextClearControl
-        currentClearControl.addEventListener('click', runClear)
-        currentClearControl.addEventListener(
-          'keydown',
-          handleClearKeydown as EventListener,
-        )
-      }
+  function update(state: RegionSelectorControlBridgeUpdate): void {
+    if (disposed) {
+      throw new Error('QsRegionSelector control bridge 已销毁')
     }
 
-    if (!currentClearControl) {
+    // loading、错误和 attrs 变化会在同一批 DOM trigger 上重复执行 update。
+    // 只有焦点目标确实被替换时才清空，保证公开 blur() 不因状态同步失效。
+    const previousFocusedTarget = lastFocusedTarget
+    detachTargets()
+    if (!state.root) {
       return
     }
-    for (const [name, value] of CLEAR_CONTROL_ATTRS) {
-      currentClearControl.setAttribute(name, value)
-    }
-  }
 
-  function syncInputAttributes(
-    input: HTMLInputElement,
-    state: RegionSelectorControlBridgeUpdate,
-    controlAttrs: Readonly<Record<string, unknown>>,
-  ) {
-    const nextAttrs = new Map<string, string>()
-
-    for (const [name, value] of Object.entries(controlAttrs)) {
-      if (!isAriaAttribute(name) || BRIDGE_ARIA_ATTR_NAMES.has(name)) {
-        continue
-      }
-      setOrDelete(nextAttrs, name, normalizeAriaAttribute(value))
-    }
-
-    for (const name of ['autocomplete', 'id', 'name', 'tabindex']) {
-      setOrDelete(nextAttrs, name, normalizeTextAttribute(controlAttrs[name]))
-    }
-
-    const required = hasBooleanAttribute(controlAttrs.required)
-    const hasSelectedCity = state.hasValidCitySelection
+    const { controlAttrs, formAttrs } = splitRegionSelectorAttrs(state.attrs)
+    const required = hasBooleanAttribute(formAttrs.required)
+      || isAriaTrue(controlAttrs['aria-required'])
+    const invalid = state.invalid
+      || isAriaTrue(controlAttrs['aria-invalid'])
     const describedBy = mergeDescribedBy(
       controlAttrs['aria-describedby'],
       state.describedBy ?? [],
     )
 
-    nextAttrs.set('role', 'combobox')
-    nextAttrs.set('aria-haspopup', 'menu')
-    nextAttrs.set('aria-expanded', String(state.expanded))
-    nextAttrs.set('aria-busy', String(state.busy))
-    nextAttrs.set('aria-readonly', String(state.readonly))
-    nextAttrs.set(
-      'aria-invalid',
-      String(state.invalid || isAriaTrue(controlAttrs['aria-invalid'])),
-    )
-    setOrDelete(nextAttrs, 'aria-describedby', describedBy)
-
-    if (required) {
-      nextAttrs.set('aria-required', 'true')
-      if (!hasSelectedCity) {
-        nextAttrs.set('required', '')
+    if (state.readonly) {
+      const readonlyTarget = state.root.querySelector(READONLY_SELECTOR)
+      if (!isHTMLElement(readonlyTarget)) {
+        throw new Error('QsRegionSelector readonly target 不存在')
       }
-    }
-    else {
-      setOrDelete(
-        nextAttrs,
-        'aria-required',
-        normalizeAriaAttribute(controlAttrs['aria-required']),
+      currentReadonlyTarget = readonlyTarget
+      currentReadonlyTarget.addEventListener('focus', rememberFocusedTarget)
+      if (previousFocusedTarget === currentReadonlyTarget) {
+        lastFocusedTarget = previousFocusedTarget
+      }
+      setManagedAttribute(
+        currentReadonlyTarget,
+        'id',
+        state.controlIds.COUNTRY_REGION,
       )
-    }
-
-    for (const name of managedInputAttrs) {
-      if (!nextAttrs.has(name)) {
-        input.removeAttribute(name)
-      }
-    }
-    for (const [name, value] of nextAttrs) {
-      input.setAttribute(name, value)
-    }
-    managedInputAttrs = new Set(nextAttrs.keys())
-
-    input.setCustomValidity(
-      required && !hasSelectedCity ? REQUIRED_VALIDITY_MESSAGE : '',
-    )
-  }
-
-  function update(state: RegionSelectorControlBridgeUpdate) {
-    if (disposed) {
-      throw new Error('QsRegionSelector control bridge 已销毁')
-    }
-
-    const nextInput = resolveLocalInput(state.root)
-    const { controlAttrs } = splitRegionSelectorAttrs(state.attrs)
-
-    if (nextInput !== currentInput) {
-      detachInput()
-      if (nextInput) {
-        attachInput(nextInput)
-      }
-    }
-
-    currentModelValue = state.modelValue
-    syncClearControl(state.clearControl)
-
-    if (!currentInput) {
+      setManagedAttribute(
+        currentReadonlyTarget,
+        'aria-describedby',
+        describedBy,
+      )
+      setManagedAttribute(
+        currentReadonlyTarget,
+        'aria-invalid',
+        String(invalid),
+      )
+      setManagedAttribute(
+        currentReadonlyTarget,
+        'aria-required',
+        required ? 'true' : null,
+      )
+      setManagedAttribute(
+        currentReadonlyTarget,
+        'tabindex',
+        normalizeTextAttribute(controlAttrs.tabindex) ?? '0',
+      )
       return
     }
 
-    syncInputAttributes(currentInput, state, controlAttrs)
-    syncFormListener(currentInput)
+    const triggers = resolveLocalTriggers(state.root)
+    const triggerTargets: readonly HTMLElement[] = Object.values(triggers)
+    currentTargets = triggers
+    if (
+      previousFocusedTarget
+      && triggerTargets.includes(previousFocusedTarget)
+    ) {
+      lastFocusedTarget = previousFocusedTarget
+    }
+    for (const level of LEVELS) {
+      const trigger = triggers[level]
+      trigger.addEventListener('focus', rememberFocusedTarget)
+      setManagedAttribute(trigger, 'id', state.controlIds[level])
+      setManagedAttribute(trigger, 'aria-describedby', describedBy)
+      setManagedAttribute(
+        trigger,
+        'aria-busy',
+        String(state.busy[level]),
+      )
+      setManagedAttribute(trigger, 'aria-invalid', String(invalid))
+      setManagedAttribute(
+        trigger,
+        'aria-required',
+        required ? 'true' : null,
+      )
+      setManagedAttribute(
+        trigger,
+        'tabindex',
+        level === 'COUNTRY_REGION'
+          ? normalizeTextAttribute(controlAttrs.tabindex)
+          : null,
+      )
+    }
   }
 
-  function dispose() {
+  function dispose(): void {
     if (disposed) {
       return
     }
     disposed = true
-    detachClearControl()
-    detachInput()
-    currentModelValue = null
+    detachTargets()
   }
 
   return {
-    blur: () => currentInput?.blur(),
+    blur: () => {
+      lastFocusedTarget?.blur()
+    },
     dispose,
-    focus: () => currentInput?.focus(),
+    focus: (level = 'COUNTRY_REGION') => {
+      if (currentReadonlyTarget) {
+        currentReadonlyTarget.focus()
+        return
+      }
+      currentTargets[level]?.focus()
+    },
     update,
   }
 }

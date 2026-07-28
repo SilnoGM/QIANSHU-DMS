@@ -55,7 +55,7 @@ export function formatRegionStatusPath(
 ): string {
   return [...ancestorPath, region]
     .map(node => node.name.normalize('NFC').trim() || node.code)
-    .join(' / ')
+    .join(' ')
 }
 
 export function regionStatusChangeCopy(

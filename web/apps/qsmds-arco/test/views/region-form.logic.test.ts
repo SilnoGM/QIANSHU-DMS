@@ -10,6 +10,7 @@ import {
   buildUpdateRegionFormSubmit,
   createRegionFormModel,
   firstRegionFormErrorField,
+  formatRegionFormParentPath,
   normalizeRegionFormCode,
   normalizeRegionFormText,
   resolveRegionFormFieldErrors,
@@ -49,6 +50,14 @@ test('地区表单按 Server 规则执行 NFC、Unicode 空白与 code 大写规
     'Café 上海',
   )
   assert.equal(normalizeRegionFormCode(' tw-64000 '), 'TW-64000')
+})
+
+test('地区表单父级路径使用空格分隔完整地址', () => {
+  assert.equal(formatRegionFormParentPath([]), '全部地区（根）')
+  assert.equal(
+    formatRegionFormParentPath(['中国台湾', '台湾']),
+    '中国台湾 台湾',
+  )
 })
 
 test('创建校验固定名称、code、整数排序和启用状态边界', () => {

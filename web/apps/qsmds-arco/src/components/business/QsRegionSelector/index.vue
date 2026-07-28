@@ -1,22 +1,20 @@
 <script setup lang="ts">
-import type { CascaderOption } from '@arco-design/web-vue/es/cascader/interface'
 import type {
-  RegionCascaderOption,
-  RegionRequestVersion,
-} from './logic'
-import type {
+  RegionLevel,
   RegionSelectorChange,
+  RegionSelectorNode,
   RegionSelectorProvider,
+  RegionSelectorSelectedPath,
+  RegionSelectorValue,
 } from './types'
-import { Cascader as ACascader } from '@arco-design/web-vue'
 import {
   computed,
   inject,
+  nextTick,
   onBeforeUnmount,
   onMounted,
   onUpdated,
   ref,
-  shallowReactive,
   useAttrs,
   useId,
   watch,
@@ -27,25 +25,22 @@ import {
   splitRegionSelectorAttrs,
 } from './control-attrs'
 import {
-  createRegionInteractiveTree,
-  createRegionOptions,
-  createRegionPathTree,
+  createEmptyRegionSelectorValue,
   createRegionRequestVersion,
-  createRegionSearchTree,
-  filterRegionOption,
-  findRegionPathByCityId,
+  createRegionSelectOptions,
+  createRegionSelectorChange,
   formatRegionPathLabel,
-  normalizeRegionSearchText,
-  replaceRegionChildren,
-  resolveRegionSelection,
+  isCompleteRegionSelectorValue,
+  mergeSelectedRegionNode,
+  normalizeRegionSelectorValue,
   validateRegionChildren,
+  validateRegionSelectorPath,
 } from './logic'
 import { regionSelectorProviderKey } from './provider'
 
 interface QsRegionSelectorProps {
-  modelValue?: string | null
+  modelValue?: RegionSelectorValue
   provider?: RegionSelectorProvider
-  placeholder?: string
   clearable?: boolean
   disabled?: boolean
   readonly?: boolean
@@ -55,17 +50,7 @@ interface QsRegionSelectorProps {
 interface VisibleRequestError {
   readonly message: string
   readonly requestId: string | null
-}
-
-interface LazyRetry {
-  readonly done: (children?: CascaderOption[]) => void
-  readonly option: RegionCascaderOption
-}
-
-interface LazyRequest extends LazyRetry {
-  readonly controller: AbortController
-  readonly version: number
-  readonly versionControl: RegionRequestVersion
+  readonly scope: 'path' | 'countries' | 'provinces' | 'cities'
 }
 
 interface QsRegionSelectorEvents {
@@ -75,7 +60,7 @@ interface QsRegionSelectorEvents {
 }
 
 interface QsRegionSelectorModelEvent {
-  'update:modelValue': [value: string | null]
+  'update:modelValue': [value: RegionSelectorValue]
 }
 
 defineOptions({
@@ -87,8 +72,7 @@ const props = withDefaults(defineProps<QsRegionSelectorProps>(), {
   clearable: true,
   disabled: false,
   error: false,
-  modelValue: null,
-  placeholder: '请选择国家/地区、省/州和城市',
+  modelValue: () => createEmptyRegionSelectorValue(),
   provider: undefined,
   readonly: false,
 })
@@ -97,130 +81,164 @@ const emit = defineEmits<
   QsRegionSelectorEvents & QsRegionSelectorModelEvent
 >()
 
-const REGION_SELECTOR_SEARCH_DELAY_MS = 250
-
 const attrs = useAttrs()
-// prop provider 的优先级高于应用注入；Showcase 和隔离测试因此不会接触正式 API。
+// prop provider 优先于应用注入，确保 Showcase 的故障 fixture 不接触正式 API。
 const provider = props.provider ?? inject(regionSelectorProviderKey)
 const selectorRoot = ref<HTMLElement | null>(null)
-const navigationTree = ref<RegionCascaderOption[]>([])
-const resolvedPathTree = ref<RegionCascaderOption[]>([])
-const searchTree = ref<RegionCascaderOption[]>([])
-const inputValue = ref('')
-const popupVisible = ref(false)
-const cascaderGeneration = ref(0)
+const formControl = ref<HTMLInputElement | null>(null)
+const errorStatus = ref<HTMLElement | null>(null)
 
-const pathRequestVersion = createRegionRequestVersion()
-const rootRequestVersion = createRegionRequestVersion()
-const searchRequestVersion = createRegionRequestVersion()
-const lazyVersions = new Map<string, RegionRequestVersion>()
-const lazyRequests = shallowReactive(new Map<string, LazyRequest>())
+const countries = ref<RegionSelectorNode<'COUNTRY_REGION'>[]>([])
+const provinceStates = ref<RegionSelectorNode<'PROVINCE_STATE'>[]>([])
+const cities = ref<RegionSelectorNode<'CITY'>[]>([])
+const selectedPath = ref<RegionSelectorSelectedPath>([])
+const currentValue = ref<RegionSelectorValue>(
+  normalizeRegionSelectorValue(props.modelValue),
+)
+const completePathVerified = ref(false)
+const nativeInvalid = ref(false)
 
-const pathController = ref<AbortController | null>(null)
-const rootController = ref<AbortController | null>(null)
-const searchController = ref<AbortController | null>(null)
+const countryLoaded = ref(false)
+const provinceParentId = ref<string | null>(null)
+const cityParentId = ref<string | null>(null)
+
+const countryLoading = ref(false)
+const provinceLoading = ref(false)
+const cityLoading = ref(false)
 const pathLoading = ref(false)
-const rootLoading = ref(false)
-const searchLoading = ref(false)
+
+const countryError = ref<VisibleRequestError | null>(null)
+const provinceError = ref<VisibleRequestError | null>(null)
+const cityError = ref<VisibleRequestError | null>(null)
 const pathError = ref<VisibleRequestError | null>(null)
-const rootError = ref<VisibleRequestError | null>(null)
-const searchError = ref<VisibleRequestError | null>(null)
-const lazyError = ref<(VisibleRequestError & LazyRetry) | null>(null)
-const searchHasMore = ref(false)
-const rootLoaded = ref(false)
-const searchCompleted = ref(false)
-const lastSearchQuery = ref('')
-const clearLocked = ref(false)
-let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+const countryController = ref<AbortController | null>(null)
+const provinceController = ref<AbortController | null>(null)
+const cityController = ref<AbortController | null>(null)
+const pathController = ref<AbortController | null>(null)
+const countryRequestVersion = createRegionRequestVersion()
+const provinceRequestVersion = createRegionRequestVersion()
+const cityRequestVersion = createRegionRequestVersion()
+const pathRequestVersion = createRegionRequestVersion()
+
 let unsubscribeInvalidation: (() => void) | undefined
 let bridgeMounted = false
+let compositeFocused = false
+let hydrationStarted = false
 
 const idPrefix = `qs-region-selector-${useId().replaceAll(':', '')}`
 const loadingStatusId = `${idPrefix}-loading`
 const errorStatusId = `${idPrefix}-error`
 const stateStatusId = `${idPrefix}-state`
-const popupContainer = 'body'
-const triggerProps = Object.freeze({
-  contentClass: 'qs-region-selector-popup',
-  unmountOnClose: true,
+const labelIds = Object.freeze({
+  CITY: `${idPrefix}-city-label`,
+  COUNTRY_REGION: `${idPrefix}-country-region-label`,
+  PROVINCE_STATE: `${idPrefix}-province-state-label`,
 })
 
-const interactiveOptions = computed(() =>
-  createRegionInteractiveTree(
-    navigationTree.value,
-    searchTree.value,
-    normalizeRegionSearchText(inputValue.value).length > 0,
-  ),
+const countryOptions = computed(() => createRegionSelectOptions(countries.value))
+const provinceStateOptions = computed(() =>
+  createRegionSelectOptions(provinceStates.value),
 )
-
-/*
- * Arco 的 Cascader loading 是整面板级状态：一旦为 true，会卸载全部已有列并
- * 替换为单个 loading column。节点懒加载已有行内 spinner，不能再进入该状态，
- * 否则二级滚动容器会被销毁并在请求结束后从 scrollTop=0 重新挂载。
- */
-const cascaderLoading = computed(() =>
-  pathLoading.value
-  || rootLoading.value
-  || searchLoading.value,
+const cityOptions = computed(() => createRegionSelectOptions(cities.value))
+// FaSelect 在 modelValue 不存在于 options 时会回退展示第一项。可见选择必须只来自
+// Provider 已验证的 path，不能把外部畸形 UUID 伪装成某个真实地区。
+const selectedCountryRegionId = computed(
+  () => selectedPath.value[0]?.id ?? null,
+)
+const selectedProvinceStateId = computed(
+  () => selectedPath.value[1]?.id ?? null,
+)
+const selectedCityId = computed(
+  () => selectedPath.value[2]?.id ?? null,
+)
+const countryEmpty = computed(() =>
+  countryLoaded.value
+  && !countryLoading.value
+  && countryError.value === null
+  && countries.value.length === 0,
+)
+const provinceStateEmpty = computed(() =>
+  provinceParentId.value !== null
+  && !provinceLoading.value
+  && provinceError.value === null
+  && provinceStates.value.length === 0,
+)
+const cityEmpty = computed(() =>
+  cityParentId.value !== null
+  && !cityLoading.value
+  && cityError.value === null
+  && cities.value.length === 0,
 )
 const busy = computed(() =>
-  cascaderLoading.value
-  || lazyRequests.size > 0,
+  countryLoading.value
+  || provinceLoading.value
+  || cityLoading.value
+  || pathLoading.value,
 )
 const visibleError = computed(() =>
   pathError.value
-  ?? rootError.value
-  ?? lazyError.value
-  ?? searchError.value,
+  ?? countryError.value
+  ?? provinceError.value
+  ?? cityError.value,
 )
-const resolvedPath = computed(() => {
-  if (!props.modelValue) {
-    return null
-  }
-  return findRegionPathByCityId(resolvedPathTree.value, props.modelValue)
-})
-const verifiedCityValue = computed(() => {
-  if (!props.modelValue) {
-    return null
-  }
-  const path = findRegionPathByCityId(
-    resolvedPathTree.value,
-    props.modelValue,
-  ) ?? findRegionPathByCityId(
-    interactiveOptions.value,
-    props.modelValue,
-  )
-  return path?.[2].id === props.modelValue ? props.modelValue : null
-})
+const requiredFeedbackVisible = computed(() =>
+  nativeInvalid.value
+  && hasRequiredAttr()
+  && !props.readonly
+  && !props.disabled
+  && !completePathVerified.value,
+)
 const stoppedPath = computed(() =>
-  resolvedPath.value?.some(node =>
+  selectedPath.value.some(node =>
     !node.enabled || !node.effectiveEnabled,
-  ) ?? false,
+  ),
 )
+const hasAnyValue = computed(() =>
+  currentValue.value.countryRegionId !== null
+  || currentValue.value.provinceStateId !== null
+  || currentValue.value.cityId !== null,
+)
+const provinceStateDisabled = computed(() =>
+  props.disabled
+  || countryLoading.value
+  || provinceLoading.value
+  || provinceStateEmpty.value
+  || selectedPath.value.length < 1,
+)
+const cityDisabled = computed(() =>
+  props.disabled
+  || provinceLoading.value
+  || cityLoading.value
+  || cityEmpty.value
+  || selectedPath.value.length < 2,
+)
+const readonlyPathLabel = computed(() => {
+  if (selectedPath.value.length > 0) {
+    return formatRegionPathLabel(selectedPath.value)
+  }
+  if (pathError.value) {
+    return '已选地区无法回显'
+  }
+  if (pathLoading.value) {
+    return '正在回显已选地区…'
+  }
+  return '未选择地区'
+})
 const describedBy = computed(() => [
   busy.value ? loadingStatusId : null,
-  visibleError.value ? errorStatusId : null,
-  (
-    stoppedPath.value
-    || props.readonly
-    || props.disabled
-    || searchHasMore.value
-  )
+  visibleError.value || requiredFeedbackVisible.value
+    ? errorStatusId
+    : null,
+  stoppedPath.value || props.readonly || props.disabled
     ? stateStatusId
     : null,
 ])
-
-function getWrapperAttrs(): Readonly<Record<string, unknown>> {
-  return splitRegionSelectorAttrs(attrs).wrapperAttrs
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-/**
- * 只提取公开 requestId，错误正文与底层异常均不进入界面。
- */
 function readRequestId(error: unknown): string | null {
   try {
     if (!isRecord(error)) {
@@ -234,18 +252,20 @@ function readRequestId(error: unknown): string | null {
     }
   }
   catch {
-    // 不可信错误对象的 getter 也不能破坏安全错误呈现。
+    // 不可信错误 getter 不能破坏安全错误呈现。
   }
   return null
 }
 
 function createVisibleError(
+  scope: VisibleRequestError['scope'],
   message: string,
   error: unknown,
 ): VisibleRequestError {
   return {
     message,
     requestId: readRequestId(error),
+    scope,
   }
 }
 
@@ -263,6 +283,27 @@ function isAbortError(error: unknown): boolean {
   }
 }
 
+function cancelCountryRequest(): void {
+  countryController.value?.abort()
+  countryController.value = null
+  countryRequestVersion.invalidate()
+  countryLoading.value = false
+}
+
+function cancelProvinceRequest(): void {
+  provinceController.value?.abort()
+  provinceController.value = null
+  provinceRequestVersion.invalidate()
+  provinceLoading.value = false
+}
+
+function cancelCityRequest(): void {
+  cityController.value?.abort()
+  cityController.value = null
+  cityRequestVersion.invalidate()
+  cityLoading.value = false
+}
+
 function cancelPathRequest(): void {
   pathController.value?.abort()
   pathController.value = null
@@ -270,65 +311,301 @@ function cancelPathRequest(): void {
   pathLoading.value = false
 }
 
-function cancelRootRequest(): void {
-  rootController.value?.abort()
-  rootController.value = null
-  rootRequestVersion.invalidate()
-  rootLoading.value = false
-}
-
-function cancelSearchRequest(): void {
-  if (searchTimer !== undefined) {
-    clearTimeout(searchTimer)
-    searchTimer = undefined
-  }
-  searchController.value?.abort()
-  searchController.value = null
-  searchRequestVersion.invalidate()
-  searchLoading.value = false
-}
-
-function cancelLazyRequests(): void {
-  for (const request of lazyRequests.values()) {
-    request.controller.abort()
-    request.versionControl.invalidate()
-    // 结束 Arco 内部 loading，但不传 []，保留之后再次加载的能力。
-    request.done()
-  }
-  lazyRequests.clear()
-  lazyVersions.clear()
-}
-
-async function resolveCurrentPath(cityId = props.modelValue): Promise<void> {
+function cancelAllRequests(): void {
+  cancelCountryRequest()
+  cancelProvinceRequest()
+  cancelCityRequest()
   cancelPathRequest()
-  resolvedPathTree.value = []
-  pathError.value = null
+}
 
-  if (!cityId) {
-    return
+function validateCountries(
+  nodes: readonly RegionSelectorNode[],
+): readonly RegionSelectorNode<'COUNTRY_REGION'>[] {
+  if (nodes.some(node =>
+    node.level !== 'COUNTRY_REGION' || node.parentId !== null,
+  )) {
+    throw new Error('Invalid region root hierarchy')
+  }
+  return nodes as readonly RegionSelectorNode<'COUNTRY_REGION'>[]
+}
+
+async function loadCountries(
+  force = false,
+  selected: RegionSelectorNode<'COUNTRY_REGION'> | null = null,
+): Promise<readonly RegionSelectorNode<'COUNTRY_REGION'>[] | null> {
+  if (!force && countryLoaded.value) {
+    countries.value = mergeSelectedRegionNode(countries.value, selected)
+    return countries.value
   }
 
+  cancelCountryRequest()
+  countryError.value = null
+  const controller = new AbortController()
+  const version = countryRequestVersion.next()
+  countryController.value = controller
+  countryLoading.value = true
+
+  try {
+    if (!provider) {
+      throw new Error('Region selector provider is unavailable')
+    }
+    const response = await provider.listChildren({
+      parentId: null,
+      signal: controller.signal,
+    })
+    if (
+      controller.signal.aborted
+      || !countryRequestVersion.isCurrent(version)
+    ) {
+      return null
+    }
+    const valid = validateCountries(response)
+    countries.value = mergeSelectedRegionNode(valid, selected)
+    countryLoaded.value = true
+    return countries.value
+  }
+  catch (error) {
+    if (
+      controller.signal.aborted
+      || !countryRequestVersion.isCurrent(version)
+      || isAbortError(error)
+    ) {
+      return null
+    }
+    countryError.value = createVisibleError(
+      'countries',
+      '国家/地区列表加载失败。',
+      error,
+    )
+    return null
+  }
+  finally {
+    if (countryRequestVersion.isCurrent(version)) {
+      countryLoading.value = false
+      countryController.value = null
+    }
+  }
+}
+
+async function loadProvinceStates(
+  country: RegionSelectorNode<'COUNTRY_REGION'>,
+  force = false,
+  selected: RegionSelectorNode<'PROVINCE_STATE'> | null = null,
+): Promise<readonly RegionSelectorNode<'PROVINCE_STATE'>[] | null> {
+  if (
+    !force
+    && provinceParentId.value === country.id
+  ) {
+    provinceStates.value = mergeSelectedRegionNode(
+      provinceStates.value,
+      selected,
+    )
+    return provinceStates.value
+  }
+
+  cancelProvinceRequest()
+  provinceError.value = null
+  provinceStates.value = []
+  provinceParentId.value = null
+  const controller = new AbortController()
+  const version = provinceRequestVersion.next()
+  provinceController.value = controller
+  provinceLoading.value = true
+
+  try {
+    if (!provider) {
+      throw new Error('Region selector provider is unavailable')
+    }
+    const response = await provider.listChildren({
+      parentId: country.id,
+      signal: controller.signal,
+    })
+    if (
+      controller.signal.aborted
+      || !provinceRequestVersion.isCurrent(version)
+      || currentValue.value.countryRegionId !== country.id
+    ) {
+      return null
+    }
+    const valid = validateRegionChildren(
+      country,
+      response,
+    ) as readonly RegionSelectorNode<'PROVINCE_STATE'>[]
+    provinceStates.value = mergeSelectedRegionNode(valid, selected)
+    provinceParentId.value = country.id
+    return provinceStates.value
+  }
+  catch (error) {
+    if (
+      controller.signal.aborted
+      || !provinceRequestVersion.isCurrent(version)
+      || isAbortError(error)
+    ) {
+      return null
+    }
+    provinceError.value = createVisibleError(
+      'provinces',
+      `${country.name}的省/州加载失败。`,
+      error,
+    )
+    return null
+  }
+  finally {
+    if (provinceRequestVersion.isCurrent(version)) {
+      provinceLoading.value = false
+      provinceController.value = null
+    }
+  }
+}
+
+async function loadCities(
+  province: RegionSelectorNode<'PROVINCE_STATE'>,
+  force = false,
+  selected: RegionSelectorNode<'CITY'> | null = null,
+): Promise<readonly RegionSelectorNode<'CITY'>[] | null> {
+  if (!force && cityParentId.value === province.id) {
+    cities.value = mergeSelectedRegionNode(cities.value, selected)
+    return cities.value
+  }
+
+  cancelCityRequest()
+  cityError.value = null
+  cities.value = []
+  cityParentId.value = null
+  const controller = new AbortController()
+  const version = cityRequestVersion.next()
+  cityController.value = controller
+  cityLoading.value = true
+
+  try {
+    if (!provider) {
+      throw new Error('Region selector provider is unavailable')
+    }
+    const response = await provider.listChildren({
+      parentId: province.id,
+      signal: controller.signal,
+    })
+    if (
+      controller.signal.aborted
+      || !cityRequestVersion.isCurrent(version)
+      || currentValue.value.provinceStateId !== province.id
+    ) {
+      return null
+    }
+    const valid = validateRegionChildren(
+      province,
+      response,
+    ) as readonly RegionSelectorNode<'CITY'>[]
+    cities.value = mergeSelectedRegionNode(valid, selected)
+    cityParentId.value = province.id
+    return cities.value
+  }
+  catch (error) {
+    if (
+      controller.signal.aborted
+      || !cityRequestVersion.isCurrent(version)
+      || isAbortError(error)
+    ) {
+      return null
+    }
+    cityError.value = createVisibleError(
+      'cities',
+      `${province.name}的城市加载失败。`,
+      error,
+    )
+    return null
+  }
+  finally {
+    if (cityRequestVersion.isCurrent(version)) {
+      cityLoading.value = false
+      cityController.value = null
+    }
+  }
+}
+
+function sameValue(
+  left: RegionSelectorValue,
+  right: RegionSelectorValue,
+): boolean {
+  return left.countryRegionId === right.countryRegionId
+    && left.provinceStateId === right.provinceStateId
+    && left.cityId === right.cityId
+}
+
+function hasValidValueShape(value: RegionSelectorValue): boolean {
+  if (value.countryRegionId === null) {
+    return value.provinceStateId === null && value.cityId === null
+  }
+  if (value.provinceStateId === null) {
+    return value.cityId === null
+  }
+  return true
+}
+
+function setResolvedPath(path: RegionSelectorSelectedPath): void {
+  selectedPath.value = Object.freeze([...path]) as RegionSelectorSelectedPath
+  completePathVerified.value = path.length === 3
+  if (completePathVerified.value) {
+    nativeInvalid.value = false
+  }
+}
+
+async function hydrateCompleteValue(
+  value: RegionSelectorValue,
+  countriesPromise: Promise<
+    readonly RegionSelectorNode<'COUNTRY_REGION'>[] | null
+  >,
+): Promise<void> {
+  cancelPathRequest()
   const controller = new AbortController()
   const version = pathRequestVersion.next()
   pathController.value = controller
   pathLoading.value = true
 
   try {
-    if (!provider) {
+    if (!provider || value.cityId === null) {
       throw new Error('Region selector provider is unavailable')
     }
     const path = await provider.resolvePath({
-      cityId,
+      cityId: value.cityId,
       signal: controller.signal,
     })
     if (
       controller.signal.aborted
       || !pathRequestVersion.isCurrent(version)
-      || props.modelValue !== cityId
+      || !sameValue(currentValue.value, value)
     ) {
       return
     }
-    resolvedPathTree.value = createRegionPathTree(path)
+    if (!validateRegionSelectorPath(path, value)) {
+      throw new Error('Invalid resolved region path')
+    }
+
+    setResolvedPath(path)
+    const [country, province, city] = path
+    countries.value = mergeSelectedRegionNode(countries.value, country)
+    provinceStates.value = mergeSelectedRegionNode(
+      provinceStates.value,
+      province,
+    )
+    cities.value = mergeSelectedRegionNode(cities.value, city)
+    /*
+     * root 与 path 独立并发：path 失败也不能阻断国家列表；root 较晚返回时
+     * 重新合并历史国家，避免正常 options 覆盖停用回显节点。
+     */
+    void countriesPromise.then((loadedCountries) => {
+      if (
+        loadedCountries
+        && sameValue(currentValue.value, value)
+      ) {
+        countries.value = mergeSelectedRegionNode(
+          loadedCountries,
+          country,
+        )
+      }
+    })
+    void loadProvinceStates(country, false, province)
+    void loadCities(province, false, city)
   }
   catch (error) {
     if (
@@ -339,6 +616,7 @@ async function resolveCurrentPath(cityId = props.modelValue): Promise<void> {
       return
     }
     pathError.value = createVisibleError(
+      'path',
       '已选地区回显失败，原值已保留。',
       error,
     )
@@ -351,402 +629,260 @@ async function resolveCurrentPath(cityId = props.modelValue): Promise<void> {
   }
 }
 
-async function loadRoot(force = false): Promise<void> {
-  if (!force && rootLoaded.value) {
+async function hydratePartialValue(
+  value: RegionSelectorValue,
+  countriesPromise: Promise<
+    readonly RegionSelectorNode<'COUNTRY_REGION'>[] | null
+  >,
+): Promise<void> {
+  const loadedCountries = await countriesPromise
+  if (
+    !loadedCountries
+    || !sameValue(currentValue.value, value)
+    || value.countryRegionId === null
+  ) {
+    return
+  }
+  const country = loadedCountries.find(
+    node => node.id === value.countryRegionId,
+  )
+  if (!country) {
+    pathError.value = createVisibleError(
+      'path',
+      '已选国家/地区无法回显，原值已保留。',
+      null,
+    )
+    return
+  }
+  setResolvedPath([country])
+
+  const loadedProvinces = await loadProvinceStates(country)
+  if (
+    value.provinceStateId === null
+    || !loadedProvinces
+    || !sameValue(currentValue.value, value)
+  ) {
+    return
+  }
+  const province = loadedProvinces.find(
+    node => node.id === value.provinceStateId,
+  )
+  if (!province) {
+    pathError.value = createVisibleError(
+      'path',
+      '已选省/州无法回显，原值已保留。',
+      null,
+    )
+    return
+  }
+  setResolvedPath([country, province])
+  await loadCities(province)
+}
+
+async function hydrateCurrentValue(force = false): Promise<void> {
+  const value = normalizeRegionSelectorValue(props.modelValue)
+  currentValue.value = value
+  setResolvedPath([])
+  pathError.value = null
+  provinceError.value = null
+  cityError.value = null
+
+  if (force) {
+    countryLoaded.value = false
+    provinceParentId.value = null
+    cityParentId.value = null
+  }
+
+  // 根列表对空值、部分值和完整值始终独立启动，不能被 path 成败门控。
+  const countriesPromise = loadCountries(force)
+
+  if (!hasValidValueShape(value)) {
+    pathError.value = createVisibleError(
+      'path',
+      '地区值层级不完整，原值已保留。',
+      null,
+    )
     return
   }
 
-  cancelRootRequest()
-  rootError.value = null
-  const controller = new AbortController()
-  const version = rootRequestVersion.next()
-  rootController.value = controller
-  rootLoading.value = true
+  if (isCompleteRegionSelectorValue(value)) {
+    await hydrateCompleteValue(value, countriesPromise)
+    return
+  }
 
-  try {
-    if (!provider) {
-      throw new Error('Region selector provider is unavailable')
-    }
-    const roots = await provider.listChildren({
-      parentId: null,
-      signal: controller.signal,
-    })
-    if (
-      controller.signal.aborted
-      || !rootRequestVersion.isCurrent(version)
-    ) {
-      return
-    }
-    navigationTree.value = replaceRegionChildren(
-      navigationTree.value,
-      null,
-      roots,
-    )
-    rootLoaded.value = true
+  if (value.countryRegionId !== null) {
+    await hydratePartialValue(value, countriesPromise)
+    return
   }
-  catch (error) {
-    if (
-      controller.signal.aborted
-      || !rootRequestVersion.isCurrent(version)
-      || isAbortError(error)
-    ) {
-      return
-    }
-    rootError.value = createVisibleError('地区列表加载失败。', error)
-  }
-  finally {
-    if (rootRequestVersion.isCurrent(version)) {
-      rootLoading.value = false
-      rootController.value = null
-    }
-  }
+
+  await countriesPromise
 }
 
-function asRegionOption(option: CascaderOption): RegionCascaderOption | null {
-  if (
-    !isRecord(option)
-    || typeof option.value !== 'string'
-    || !isRecord(option.region)
-    || option.region.id !== option.value
-  ) {
+function findActiveNode<L extends RegionLevel>(
+  nodes: readonly RegionSelectorNode<L>[],
+  value: unknown,
+): RegionSelectorNode<L> | null {
+  if (typeof value !== 'string') {
     return null
   }
-  return option as RegionCascaderOption
+  const node = nodes.find(candidate => candidate.id === value)
+  return node?.enabled && node.effectiveEnabled ? node : null
 }
 
-function loadChildren(
-  rawOption: CascaderOption,
-  done: (children?: CascaderOption[]) => void,
-): void {
-  const option = asRegionOption(rawOption)
-  if (!option || option.region.level === 'CITY') {
-    done()
+function emitUserChange(change: RegionSelectorChange): void {
+  currentValue.value = change.value
+  setResolvedPath(change.path)
+  emit('update:modelValue', change.value)
+  emit('change', change)
+}
+
+function handleCountryRegionChange(value: unknown): void {
+  const country = findActiveNode(countries.value, value)
+  if (!country || country.id === selectedCountryRegionId.value) {
     return
   }
 
-  const parentId = option.region.id
-  const versionControl = lazyVersions.get(parentId)
-    ?? createRegionRequestVersion()
-  lazyVersions.set(parentId, versionControl)
-
-  const previous = lazyRequests.get(parentId)
-  previous?.controller.abort()
-  previous?.versionControl.invalidate()
-  previous?.done()
-
-  const controller = new AbortController()
-  const version = versionControl.next()
-  const request: LazyRequest = {
-    controller,
-    done,
-    option,
-    version,
-    versionControl,
-  }
-  lazyRequests.set(parentId, request)
-  if (lazyError.value?.option.region.id === parentId) {
-    lazyError.value = null
-  }
-
-  // Provider 可能同步抛错；统一纳入 Promise 链，保证 Arco 的 done() 必定结束 loading。
-  const pending = Promise.resolve().then(() => {
-    if (!provider) {
-      throw new Error('Region selector provider is unavailable')
-    }
-    return provider.listChildren({
-      parentId,
-      signal: controller.signal,
-    })
-  })
-
-  pending
-    .then((children) => {
-      if (
-        controller.signal.aborted
-        || !versionControl.isCurrent(version)
-        || lazyRequests.get(parentId) !== request
-      ) {
-        done()
-        return
-      }
-
-      const validChildren = validateRegionChildren(option.region, children)
-      navigationTree.value = replaceRegionChildren(
-        navigationTree.value,
-        parentId,
-        validChildren,
-      )
-      done(createRegionOptions(validChildren))
-    })
-    .catch((error: unknown) => {
-      if (
-        !controller.signal.aborted
-        && versionControl.isCurrent(version)
-        && lazyRequests.get(parentId) === request
-        && !isAbortError(error)
-      ) {
-        lazyError.value = {
-          ...createVisibleError(
-            `${option.region.name}的下级地区加载失败。`,
-            error,
-          ),
-          done,
-          option,
-        }
-      }
-      // 失败或 stale 都必须结束 Arco loading；undefined 不会标记为“已加载空数组”。
-      done()
-    })
-    .finally(() => {
-      if (lazyRequests.get(parentId) === request) {
-        lazyRequests.delete(parentId)
-      }
-    })
+  cancelPathRequest()
+  cancelProvinceRequest()
+  cancelCityRequest()
+  provinceStates.value = []
+  cities.value = []
+  provinceParentId.value = null
+  cityParentId.value = null
+  provinceError.value = null
+  cityError.value = null
+  pathError.value = null
+  emitUserChange(createRegionSelectorChange('countryRegion', [country]))
+  void loadProvinceStates(country)
 }
 
-async function searchRegions(query = lastSearchQuery.value): Promise<void> {
-  const normalizedQuery = normalizeRegionSearchText(query)
-  cancelSearchRequest()
-  searchError.value = null
-  searchHasMore.value = false
-  searchCompleted.value = false
-
-  if (normalizedQuery.length < 1) {
-    searchTree.value = []
+function handleProvinceStateChange(value: unknown): void {
+  const country = selectedPath.value[0]
+  const province = findActiveNode(provinceStates.value, value)
+  if (
+    !country
+    || !province
+    || province.parentId !== country.id
+    || province.id === selectedProvinceStateId.value
+  ) {
     return
   }
 
-  const controller = new AbortController()
-  const version = searchRequestVersion.next()
-  searchController.value = controller
-  searchLoading.value = true
-  lastSearchQuery.value = normalizedQuery
-
-  try {
-    if (!provider) {
-      throw new Error('Region selector provider is unavailable')
-    }
-    const result = await provider.search({
-      query: normalizedQuery,
-      signal: controller.signal,
-    })
-    if (
-      controller.signal.aborted
-      || !searchRequestVersion.isCurrent(version)
-      || normalizeRegionSearchText(inputValue.value) !== normalizedQuery
-    ) {
-      return
-    }
-    // 每次搜索整树替换，不能把历史关键词的分支持续累积在内存中。
-    searchTree.value = createRegionSearchTree(result.paths)
-    searchHasMore.value = result.hasMore
-    searchCompleted.value = true
-  }
-  catch (error) {
-    if (
-      controller.signal.aborted
-      || !searchRequestVersion.isCurrent(version)
-      || isAbortError(error)
-    ) {
-      return
-    }
-    searchError.value = createVisibleError('地区搜索失败。', error)
-  }
-  finally {
-    if (searchRequestVersion.isCurrent(version)) {
-      searchLoading.value = false
-      searchController.value = null
-    }
-  }
+  cancelPathRequest()
+  cancelCityRequest()
+  cities.value = []
+  cityParentId.value = null
+  cityError.value = null
+  pathError.value = null
+  emitUserChange(
+    createRegionSelectorChange('provinceState', [country, province]),
+  )
+  void loadCities(province)
 }
 
-function retryPath(): void {
-  void resolveCurrentPath()
-}
-
-function retryRoot(): void {
-  void loadRoot(true)
-}
-
-function retryLazy(): void {
-  const retry = lazyError.value
-  if (!retry) {
-    return
-  }
-  loadChildren(retry.option, retry.done)
-}
-
-function retrySearch(): void {
-  void searchRegions()
-}
-
-function handleInputValueChange(value: string): void {
-  inputValue.value = value
-  cancelSearchRequest()
-  searchError.value = null
-  searchHasMore.value = false
-  searchCompleted.value = false
-  searchTree.value = []
-
-  const normalizedQuery = normalizeRegionSearchText(value)
-  lastSearchQuery.value = normalizedQuery
-  if (normalizedQuery.length < 1 || props.readonly || props.disabled) {
+function handleCityChange(value: unknown): void {
+  const [country, province] = selectedPath.value
+  const city = findActiveNode(cities.value, value)
+  if (
+    !country
+    || !province
+    || !city
+    || city.parentId !== province.id
+    || city.id === selectedCityId.value
+  ) {
     return
   }
 
-  searchTimer = setTimeout(() => {
-    searchTimer = undefined
-    void searchRegions(normalizedQuery)
-  }, REGION_SELECTOR_SEARCH_DELAY_MS)
-}
-
-function handlePopupVisibleChange(value: boolean): void {
-  if (props.readonly || props.disabled) {
-    popupVisible.value = false
-    return
-  }
-
-  popupVisible.value = value
-  if (value) {
-    void loadRoot()
-    return
-  }
-
-  handleInputValueChange('')
-}
-
-function filterOption(
-  value: string,
-  option: CascaderOption,
-): boolean {
-  const regionOption = asRegionOption(option)
-  return regionOption ? filterRegionOption(value, regionOption) : false
-}
-
-function formatLabel(options: CascaderOption[]): string {
-  const regionOptions = options
-    .map(asRegionOption)
-    .filter((option): option is RegionCascaderOption => option !== null)
-  return formatRegionPathLabel(regionOptions)
-}
-
-/**
- * 历史回显通过 fallback 安全呈现，不把单条 resolved path 塞入普通 options。
- * 未完成或失败时只显示固定本地文案，绝不把未知 UUID 暴露给用户。
- */
-function formatFallback(value: unknown): string {
-  if (typeof value !== 'string' || value !== props.modelValue) {
-    return ''
-  }
-
-  const tree = resolvedPathTree.value
-  const country = tree[0]
-  const province = country?.children?.[0]
-  const city = province?.children?.[0]
-  if (country && province && city) {
-    return formatRegionPathLabel([country, province, city])
-  }
-
-  return pathError.value
-    ? '已选地区无法回显'
-    : '正在回显已选地区…'
-}
-
-function handleChange(value: unknown): void {
-  // clear 只由 @clear / keyboard bridge 统一处理，避免 ACascader 同次交互双发 null。
-  if (value === '' || value === undefined || value === null) {
-    return
-  }
-  const selection = resolveRegionSelection(value, interactiveOptions.value)
-  if (!selection) {
-    return
-  }
-
-  if (selection.source === 'select') {
-    inputValue.value = ''
-    searchTree.value = []
-    searchHasMore.value = false
-    searchCompleted.value = false
-    popupVisible.value = false
-    emit('update:modelValue', selection.value)
-    emit('change', selection)
-  }
+  cancelPathRequest()
+  pathError.value = null
+  emitUserChange(
+    createRegionSelectorChange('city', [country, province, city]),
+  )
 }
 
 function handleClear(): void {
   if (
-    clearLocked.value
-    || props.readonly
+    props.readonly
     || props.disabled
+    || !hasAnyValue.value
   ) {
     return
   }
 
-  // Arco clear 和局部 keyboard bridge 可能响应同一个 DOM 事件，按一个 microtask 去重。
-  clearLocked.value = true
-  queueMicrotask(() => {
-    clearLocked.value = false
-  })
-
-  inputValue.value = ''
-  resolvedPathTree.value = []
-  searchTree.value = []
-  searchHasMore.value = false
-  searchCompleted.value = false
-  pathError.value = null
   cancelPathRequest()
-  emit('update:modelValue', null)
-  emit('change', {
-    source: 'clear',
-    value: null,
-    path: null,
-  })
+  cancelProvinceRequest()
+  cancelCityRequest()
+  provinceStates.value = []
+  cities.value = []
+  provinceParentId.value = null
+  cityParentId.value = null
+  provinceError.value = null
+  cityError.value = null
+  pathError.value = null
+  emitUserChange(createRegionSelectorChange('clear', []))
+}
+
+function retryVisibleError(): void {
+  const error = visibleError.value
+  if (!error) {
+    return
+  }
+  /*
+   * 重试必须从调用方仍持有的三级 UUID 重新进入 hydration，不能只补 options。
+   * 否则合法部分 value 在瞬时失败后会留下“原值存在、可见路径为空”的静默分叉。
+   * 只有根列表失败需要强制跳过 root 缓存；其余层级仍复用已验证的上级数据。
+   */
+  void hydrateCurrentValue(error.scope === 'countries')
 }
 
 function handleInvalidation(): void {
-  cancelPathRequest()
-  cancelRootRequest()
-  cancelSearchRequest()
-  cancelLazyRequests()
-  // ACascader 内部另存 lazyLoadOptions；仅清空外部 options 不足以移除旧 generation。
-  cascaderGeneration.value += 1
-  navigationTree.value = []
-  resolvedPathTree.value = []
-  searchTree.value = []
-  rootLoaded.value = false
-  searchCompleted.value = false
+  cancelAllRequests()
+  countries.value = []
+  provinceStates.value = []
+  cities.value = []
+  countryLoaded.value = false
+  provinceParentId.value = null
+  cityParentId.value = null
+  countryError.value = null
+  provinceError.value = null
+  cityError.value = null
   pathError.value = null
-  rootError.value = null
-  lazyError.value = null
-  searchError.value = null
-  searchHasMore.value = false
-
-  if (props.modelValue) {
-    void resolveCurrentPath()
-  }
-  if (popupVisible.value) {
-    void loadRoot()
-  }
-  if (normalizeRegionSearchText(inputValue.value).length > 0) {
-    void searchRegions(inputValue.value)
-  }
+  setResolvedPath([])
+  void hydrateCurrentValue(true)
 }
 
-// 必须早于 immediate model watch，避免 setup→mounted 窗口漏掉身份/cache 失效通知。
+// 先订阅失效，再启动 immediate hydration，避免 setup 到 mounted 的通知窗口。
 unsubscribeInvalidation = provider?.subscribeInvalidation?.(
   handleInvalidation,
 )
 
-const controlBridge = createRegionSelectorControlBridge({
-  onBlur: event => emit('blur', event),
-  onClear: handleClear,
-  onFocus: event => emit('focus', event),
-})
+const controlBridge = createRegionSelectorControlBridge()
 
-function getClearControl(): HTMLElement | null {
-  return selectorRoot.value?.querySelector<HTMLElement>(
-    '.arco-select-view-clear-btn',
-  ) ?? null
+function controlIds() {
+  const callerId = splitRegionSelectorAttrs(attrs).controlAttrs.id
+  const base = (
+    typeof callerId === 'string' || typeof callerId === 'number'
+  )
+    ? String(callerId)
+    : idPrefix
+  return {
+    CITY: `${base}-city`,
+    COUNTRY_REGION: base,
+    PROVINCE_STATE: `${base}-province-state`,
+  } as const
+}
+
+function getWrapperAttrs(): Readonly<Record<string, unknown>> {
+  return splitRegionSelectorAttrs(attrs).wrapperAttrs
+}
+
+function getFormAttrs(): Readonly<Record<string, unknown>> {
+  return splitRegionSelectorAttrs(attrs).formAttrs
+}
+
+function hasRequiredAttr(): boolean {
+  const required = getFormAttrs().required
+  return required !== false && required !== null && required !== undefined
 }
 
 function updateControlBridge(): void {
@@ -755,26 +891,114 @@ function updateControlBridge(): void {
   }
   controlBridge.update({
     attrs,
-    busy: busy.value,
-    clearControl: getClearControl(),
+    busy: {
+      CITY: cityLoading.value || pathLoading.value,
+      COUNTRY_REGION: countryLoading.value || pathLoading.value,
+      PROVINCE_STATE: provinceLoading.value || pathLoading.value,
+    },
+    controlIds: controlIds(),
     describedBy: describedBy.value,
-    expanded: popupVisible.value,
-    // root/lazy/search 属于可恢复加载错误，不应把已有表单值标记为 invalid。
-    invalid: props.error || pathError.value !== null,
-    // required/FormData 只承认已通过完整三级树校验的 CITY，不信任任意非空字符串。
-    hasValidCitySelection: verifiedCityValue.value !== null,
-    modelValue: props.modelValue ?? null,
+    invalid: props.error
+      || pathError.value !== null
+      || requiredFeedbackVisible.value,
     readonly: props.readonly,
     root: selectorRoot.value,
   })
+
+  const proxy = formControl.value
+  if (proxy) {
+    const required = hasRequiredAttr()
+    proxy.setCustomValidity(
+      required
+      && !props.readonly
+      && !props.disabled
+      && !completePathVerified.value
+        ? '请选择完整地区'
+        : '',
+    )
+  }
+}
+
+function firstIncompleteLevel(): RegionLevel {
+  if (selectedPath.value.length === 0) {
+    return 'COUNTRY_REGION'
+  }
+  if (selectedPath.value.length === 1) {
+    return 'PROVINCE_STATE'
+  }
+  if (selectedPath.value.length === 2) {
+    return 'CITY'
+  }
+  return 'COUNTRY_REGION'
 }
 
 function focus(): void {
-  controlBridge.focus()
+  if (!props.disabled) {
+    controlBridge.focus(firstIncompleteLevel())
+  }
 }
 
 function blur(): void {
   controlBridge.blur()
+}
+
+function focusInvalidTarget(): void {
+  const level = firstIncompleteLevel()
+  const unavailable = level === 'COUNTRY_REGION'
+    ? countryLoading.value || countryEmpty.value
+    : level === 'PROVINCE_STATE'
+      ? provinceStateDisabled.value
+      : cityDisabled.value
+
+  if (unavailable) {
+    errorStatus.value?.focus()
+    return
+  }
+  controlBridge.focus(level)
+}
+
+function handleInvalid(event: Event): void {
+  event.preventDefault()
+  nativeInvalid.value = true
+  /*
+   * validation alert 由本次状态变化渲染；nextTick 后才能在加载导致目标 Select
+   * 禁用时把焦点落到可见错误，否则浏览器只会静默阻止提交。
+   */
+  void nextTick(() => focusInvalidTarget())
+}
+
+function isOwnedPopupTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) {
+    return false
+  }
+  const content = target.closest('[data-slot="select-content"]')
+  if (!content?.id) {
+    return false
+  }
+  return Object.values(controlIds()).some((id) => {
+    const trigger = selectorRoot.value?.querySelector(`#${CSS.escape(id)}`)
+    return trigger?.getAttribute('aria-controls') === content.id
+  })
+}
+
+function handleFocusIn(event: FocusEvent): void {
+  if (compositeFocused) {
+    return
+  }
+  compositeFocused = true
+  emit('focus', event)
+}
+
+function handleFocusOut(event: FocusEvent): void {
+  const next = event.relatedTarget
+  if (
+    selectorRoot.value?.contains(next as Node)
+    || isOwnedPopupTarget(next)
+  ) {
+    return
+  }
+  compositeFocused = false
+  emit('blur', event)
 }
 
 defineExpose({
@@ -783,31 +1007,40 @@ defineExpose({
 })
 
 watch(
-  () => props.modelValue,
-  (value) => {
-    if (value === null) {
-      cancelPathRequest()
-      resolvedPathTree.value = []
-      pathError.value = null
+  () => [
+    props.modelValue?.countryRegionId,
+    props.modelValue?.provinceStateId,
+    props.modelValue?.cityId,
+  ] as const,
+  () => {
+    const next = normalizeRegionSelectorValue(props.modelValue)
+    if (hydrationStarted && sameValue(next, currentValue.value)) {
       return
     }
-    void resolveCurrentPath(value)
+    hydrationStarted = true
+    cancelProvinceRequest()
+    cancelCityRequest()
+    cancelPathRequest()
+    provinceStates.value = []
+    cities.value = []
+    provinceParentId.value = null
+    cityParentId.value = null
+    void hydrateCurrentValue()
   },
   { immediate: true },
 )
 
 watch(
   [() => props.readonly, () => props.disabled],
-  ([readonly, disabled]) => {
-    if (readonly || disabled) {
-      popupVisible.value = false
-      handleInputValueChange('')
+  () => {
+    compositeFocused = false
+    if (props.readonly || props.disabled) {
+      nativeInvalid.value = false
     }
   },
 )
 
 watchPostEffect(updateControlBridge)
-// `useAttrs()` 始终指向最新值但不是可 watch 的响应式对象；attrs-only 更新由此兜底。
 onUpdated(updateControlBridge)
 
 onMounted(() => {
@@ -819,10 +1052,7 @@ onBeforeUnmount(() => {
   bridgeMounted = false
   unsubscribeInvalidation?.()
   unsubscribeInvalidation = undefined
-  cancelPathRequest()
-  cancelRootRequest()
-  cancelSearchRequest()
-  cancelLazyRequests()
+  cancelAllRequests()
   controlBridge.dispose()
 })
 </script>
@@ -833,63 +1063,153 @@ onBeforeUnmount(() => {
     ref="selectorRoot"
     data-slot="qs-region-selector"
     class="qs-region-selector min-w-0 w-full"
+    role="group"
+    @focusin="handleFocusIn"
+    @focusout="handleFocusOut"
   >
-    <ACascader
-      :key="cascaderGeneration"
-      class="qs-region-selector__control min-w-0 w-full"
-      :model-value="modelValue ?? ''"
-      :options="interactiveOptions"
-      :multiple="false"
-      :path-mode="false"
-      :check-strictly="false"
-      expand-trigger="click"
-      :allow-search="!readonly"
-      :allow-clear="clearable && !readonly"
-      :search-option-only-label="false"
-      :search-delay="REGION_SELECTOR_SEARCH_DELAY_MS"
-      :fallback="formatFallback"
-      :input-value="inputValue"
-      :popup-visible="popupVisible"
-      :load-more="loadChildren"
-      :filter-option="filterOption"
-      :format-label="formatLabel"
-      :trigger-props="triggerProps"
-      :popup-container="popupContainer"
-      :placeholder="placeholder"
+    <input
+      v-if="readonly"
+      data-slot="qs-region-selector-readonly"
+      class="qs-region-selector__readonly text-sm px-3 py-2 border border-input rounded-md bg-muted/30 min-h-9 w-full"
+      type="text"
+      :value="readonlyPathLabel"
+      readonly
       :disabled="disabled"
-      :error="error || visibleError !== null"
-      :loading="cascaderLoading"
-      @input-value-change="handleInputValueChange"
-      @popup-visible-change="handlePopupVisibleChange"
-      @change="handleChange"
-      @clear="handleClear"
+      aria-readonly="true"
     >
-      <template #empty>
-        <div
-          data-slot="qs-region-selector-empty"
-          class="text-sm text-muted-foreground px-4 py-5 text-center"
-          role="status"
-          aria-live="polite"
+
+    <div
+      v-else
+      class="gap-3 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.15fr)]"
+    >
+      <div
+        data-region-level="COUNTRY_REGION"
+        class="min-w-0"
+      >
+        <label
+          :id="labelIds.COUNTRY_REGION"
+          :for="controlIds().COUNTRY_REGION"
+          class="qs-type-compact-label mb-1.5 block"
         >
-          <span v-if="rootLoading || searchLoading">正在加载地区…</span>
-          <span v-else-if="rootError || searchError">
-            地区数据暂不可用，请使用选择框下方的重试操作。
-          </span>
-          <span
-            v-else-if="
-              normalizeRegionSearchText(inputValue).length > 0
-                && searchCompleted
-            "
-          >
-            未找到匹配的城市。
-          </span>
-          <span v-else-if="rootLoaded && navigationTree.length === 0">
-            暂无可选地区。
-          </span>
-          <span v-else>暂无可选地区。</span>
-        </div>
-      </template>
-    </ACascader>
+          国家/地区
+        </label>
+        <FaSelect
+          class="w-full"
+          :model-value="selectedCountryRegionId ?? undefined"
+          :options="countryOptions"
+          :placeholder="
+            countryLoading
+              ? '正在加载国家/地区…'
+              : countryError
+                ? '加载失败，请重试'
+                : countryEmpty
+                  ? '暂无可选国家/地区'
+                  : '请选择国家/地区'
+          "
+          :disabled="disabled || countryLoading || countryEmpty"
+          @update:model-value="handleCountryRegionChange"
+        />
+      </div>
+
+      <div
+        data-region-level="PROVINCE_STATE"
+        class="min-w-0"
+      >
+        <label
+          :id="labelIds.PROVINCE_STATE"
+          :for="controlIds().PROVINCE_STATE"
+          class="qs-type-compact-label mb-1.5 block"
+        >
+          省/州
+        </label>
+        <FaSelect
+          class="w-full"
+          :model-value="selectedProvinceStateId ?? undefined"
+          :options="provinceStateOptions"
+          :placeholder="
+            selectedPath.length < 1
+              ? '请先选择国家/地区'
+              : provinceLoading
+                ? '正在加载省/州…'
+                : provinceError
+                  ? '加载失败，请重试'
+                  : provinceStateEmpty
+                    ? '暂无可选省/州'
+                    : '请选择省/州'
+          "
+          :disabled="provinceStateDisabled"
+          @update:model-value="handleProvinceStateChange"
+        />
+      </div>
+
+      <div
+        data-region-level="CITY"
+        class="min-w-0"
+      >
+        <label
+          :id="labelIds.CITY"
+          :for="controlIds().CITY"
+          class="qs-type-compact-label mb-1.5 block"
+        >
+          城市
+        </label>
+        <FaSelect
+          class="w-full"
+          :model-value="selectedCityId ?? undefined"
+          :options="cityOptions"
+          :placeholder="
+            selectedPath.length < 2
+              ? '请先选择省/州'
+              : cityLoading
+                ? '正在加载城市…'
+                : cityError
+                  ? '加载失败，请重试'
+                  : cityEmpty
+                    ? '暂无可选城市'
+                    : '请选择城市'
+          "
+          :disabled="cityDisabled"
+          @update:model-value="handleCityChange"
+        />
+      </div>
+    </div>
+
+    <input
+      v-bind="getFormAttrs()"
+      ref="formControl"
+      data-slot="qs-region-selector-form-control"
+      class="qs-region-selector__form-control"
+      type="text"
+      :value="currentValue.cityId ?? ''"
+      :readonly="readonly"
+      :disabled="disabled"
+      tabindex="-1"
+      aria-hidden="true"
+      @invalid="handleInvalid"
+    >
+
+    <p
+      v-if="selectedPath.length > 0 && !readonly"
+      data-slot="qs-region-selector-path"
+      class="text-xs text-muted-foreground m-0 mt-2 break-words"
+    >
+      {{ formatRegionPathLabel(selectedPath) }}
+    </p>
+
+    <div
+      v-if="clearable && !readonly && !disabled && hasAnyValue"
+      class="mt-2 flex justify-end"
+    >
+      <button
+        type="button"
+        data-slot="qs-region-selector-clear"
+        class="qs-region-selector__clear"
+        aria-label="清空地区选择"
+        @click="handleClear"
+      >
+        清空地区
+      </button>
+    </div>
 
     <p
       v-if="busy"
@@ -901,68 +1221,44 @@ onBeforeUnmount(() => {
     >
       {{
         pathLoading
-          ? '正在加载已选地区…'
-          : searchLoading
-            ? '正在搜索地区…'
-            : '正在加载地区…'
+          ? '正在回显已选地区…'
+          : countryLoading
+            ? '正在加载国家/地区…'
+            : provinceLoading
+              ? '正在加载省/州…'
+              : '正在加载城市…'
       }}
     </p>
 
     <div
-      v-if="visibleError"
+      v-if="visibleError || requiredFeedbackVisible"
       :id="errorStatusId"
+      ref="errorStatus"
       data-slot="qs-region-selector-error"
       class="text-xs text-destructive mt-1.5 flex flex-wrap gap-x-2 gap-y-1 items-center"
       role="alert"
+      tabindex="-1"
     >
-      <span>{{ visibleError.message }}</span>
+      <span v-if="requiredFeedbackVisible">请选择完整地区。</span>
+      <span v-if="visibleError">{{ visibleError.message }}</span>
       <code
-        v-if="visibleError.requestId"
+        v-if="visibleError?.requestId"
         class="qs-type-data-mono break-all"
       >
         requestId: {{ visibleError.requestId }}
       </code>
       <button
-        v-if="pathError"
+        v-if="visibleError"
         type="button"
         class="qs-region-selector__retry"
-        @click="retryPath"
-      >
-        重试回显
-      </button>
-      <button
-        v-else-if="rootError"
-        type="button"
-        class="qs-region-selector__retry"
-        @click="retryRoot"
+        @click="retryVisibleError"
       >
         重试加载
-      </button>
-      <button
-        v-else-if="lazyError"
-        type="button"
-        class="qs-region-selector__retry"
-        @click="retryLazy"
-      >
-        重试加载
-      </button>
-      <button
-        v-else-if="searchError"
-        type="button"
-        class="qs-region-selector__retry"
-        @click="retrySearch"
-      >
-        重试搜索
       </button>
     </div>
 
     <div
-      v-if="
-        stoppedPath
-          || readonly
-          || disabled
-          || searchHasMore
-      "
+      v-if="stoppedPath || readonly || disabled"
       :id="stateStatusId"
       data-slot="qs-region-selector-state"
       class="text-xs text-muted-foreground mt-1.5 flex flex-wrap gap-x-2 gap-y-1"
@@ -972,143 +1268,69 @@ onBeforeUnmount(() => {
       <span v-if="stoppedPath">当前历史地区已停用，仅供回显。</span>
       <span v-if="readonly">只读</span>
       <span v-if="disabled">已禁用</span>
-      <span v-if="searchHasMore">
-        结果较多，请继续输入以缩小范围。
-      </span>
     </div>
   </div>
 </template>
 
 <style scoped>
-.qs-region-selector__control {
+.qs-region-selector :deep([data-slot="select-trigger"]) {
   width: 100%;
   min-width: 0;
 }
 
-.qs-region-selector__control :deep(.arco-select-view) {
-  width: 100%;
-  min-width: 0;
+.qs-region-selector__form-control {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
 }
 
-/*
- * Arco 默认同时用 display:none 与 visibility:hidden 隐藏 clear control，键盘用户
- * 即使获得 tabindex 也无法 Tab 到达。已选值本就需要公开清空能力，因此以包含
- * single view 的局部高优先级选择器覆盖；未选择时 Arco 不渲染该节点。
- */
-.qs-region-selector :deep(.arco-select-view-single .arco-select-view-clear-btn) {
-  display: inline-flex;
-  visibility: visible;
+.qs-region-selector__readonly {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.qs-region-selector :deep(.arco-select-view-single .arco-select-view-clear-btn ~ *) {
-  display: none;
-}
-
+.qs-region-selector__clear,
 .qs-region-selector__retry {
   min-height: 28px;
   padding: 0 0.625rem;
   color: oklch(var(--foreground));
   cursor: pointer;
-  background: oklch(var(--background));
+  background: transparent;
   border: 1px solid oklch(var(--border));
   border-radius: var(--radius);
 }
 
+.qs-region-selector__clear:hover,
 .qs-region-selector__retry:hover {
   background: oklch(var(--muted));
 }
 
-.qs-region-selector__retry:focus-visible {
+.qs-region-selector__clear:focus-visible,
+.qs-region-selector__retry:focus-visible,
+.qs-region-selector__readonly:focus-visible {
   outline: 2px solid oklch(var(--ring));
   outline-offset: 2px;
 }
 
-:global(.qs-region-selector-popup) {
-  max-width: calc(100vw - 24px);
-}
-
-:global(.qs-region-selector-popup .arco-cascader-panel) {
-  max-width: calc(100vw - 24px);
-  max-height: min(18rem, calc(100dvh - 6rem));
-  overflow: auto hidden;
-}
-
-:global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)) {
-  --qs-region-selector-column-width: 11rem;
-
-  position: relative;
-  inline-size: min(33rem, calc(100vw - 24px));
-}
-
-:global(.qs-region-selector-popup .arco-cascader-panel-column) {
-  box-sizing: border-box;
-  flex: 0 0 var(--qs-region-selector-column-width);
-  inline-size: var(--qs-region-selector-column-width);
-  min-inline-size: var(--qs-region-selector-column-width);
-  max-height: min(18rem, calc(100dvh - 6rem));
-}
-
-/*
- * Arco 只渲染已展开的真实列。绝对定位的背景层把普通级联面板的 scroll area
- * 稳定为三列，并用第二个伪元素画出两条层级分隔线；二者不参与 TransitionGroup
- * 的 flex children，因此不会影响 loading column 的正常挂载与卸载。
- */
-:global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)::before) {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  z-index: 0;
-  box-sizing: border-box;
-  inline-size: calc(var(--qs-region-selector-column-width) + var(--qs-region-selector-column-width) + var(--qs-region-selector-column-width));
-  pointer-events: none;
-  content: "";
-  background-color: var(--color-bg-popup);
-}
-
-:global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)::after) {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: var(--qs-region-selector-column-width);
-  z-index: 0;
-  inline-size: 1px;
-  pointer-events: none;
-  content: "";
-  background-color: oklch(var(--border));
-  box-shadow:
-    var(--qs-region-selector-column-width)
-    0
-    0
-    oklch(var(--border));
-}
-
-:global(.qs-region-selector-popup .arco-cascader-column-content),
-:global(.qs-region-selector-popup .arco-cascader-search-panel) {
-  max-height: min(18rem, calc(100dvh - 6rem));
-  overflow-y: auto;
-}
-
 @media (width <= 640px) {
-  .qs-region-selector__control :deep(.arco-select-view-single),
+  .qs-region-selector :deep([data-slot="select-trigger"]),
+  .qs-region-selector__clear,
   .qs-region-selector__retry,
-  :global(.qs-region-selector-popup .arco-cascader-option) {
+  .qs-region-selector__readonly {
     min-height: 44px;
-  }
-
-  .qs-region-selector__control :deep(.arco-select-view-clear-btn) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  :global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)) {
-    --qs-region-selector-column-width: min(12rem, calc(100vw - 24px));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  :global(.qs-region-selector-popup *),
+  .qs-region-selector :deep(*),
+  .qs-region-selector__clear,
   .qs-region-selector__retry {
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;

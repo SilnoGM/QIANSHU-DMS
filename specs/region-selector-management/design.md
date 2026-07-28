@@ -14,6 +14,11 @@
 本文记录已经实施并通过验收的技术契约。后续变更不得在未更新并重新确认本文的情况下
 改变三级结构、种子数量、公共 value、公共 API、权限或缓存边界。
 
+2026-07-28 后续确认并实施一次组件内部重构：`QsRegionSelector` 从单个 Arco Cascader
+改为三个并列 `FaSelect`，公共 value 从单一 CITY UUID 调整为三级 UUID 对象。Server
+search API、Provider 的兼容 `search` 能力和地区管理页搜索保持不变；本次重构提交尚未
+完成，因此本文不记录未经 Git 验证的新 commit SHA。
+
 ## 2. 设计目标与边界
 
 ### 2.1 目标
@@ -22,9 +27,11 @@
    `COUNTRY_REGION → PROVINCE_STATE → CITY`，不能只依赖前端或 Service 自觉。
 2. 让空库和升级库通过不可变 migration 得到同一份 602 节点首期数据，并能追溯来源、
    许可证、摘要和转换过程。
-3. 为正常登录用户提供按需加载、搜索和历史路径回显接口；不要求地区管理权限。
+3. 为正常登录用户提供按需加载、搜索和历史路径回显接口；不要求地区管理权限。组件只
+   消费按父级 options 与 path，搜索继续供 Server API 和其他既有调用方使用。
 4. 为管理员提供受 `regions:*` 保护的查询、创建、编辑和启停接口，并在同一事务审计。
-5. 让 `QsRegionSelector` 只向业务调用方暴露 `CITY UUID | null`，组件不暴露 Arco
+5. 让 `QsRegionSelector` 向业务调用方暴露包含三级 UUID 的
+   `RegionSelectorValue`，原生表单代理仍只提交 `CITY UUID`；组件不暴露底层 Select
    类型、不读取页面 Store、不内置写操作。
 6. 把“地区管理”实现为真实业务页面，并继续复用现有 Fa、Arco、Qs 视觉与交互体系。
 7. 在首期仅 602 个节点时保持实现简单，同时确保未来增加其他国家/地区时不下载全量
@@ -343,9 +350,9 @@ server/scripts/region-data/
 强制关键路径至少包括：
 
 ```text
-中国 → 北京市 → 北京市
-中国台湾 → 台湾 → 高雄市
-马来西亚 → <固定州区> → <固定行政区>
+中国 北京市 北京市
+中国台湾 台湾 高雄市
+马来西亚 <固定州区> <固定行政区>
 ```
 
 台湾高雄节点保留来源代码 `E` / `64000`，技术编码固定为 `TW-64000`。
@@ -719,16 +726,45 @@ export type RegionSelectorPath = readonly [
   RegionSelectorNode<'CITY'>,
 ]
 
+export type RegionSelectorCountryPath = readonly [
+  RegionSelectorNode<'COUNTRY_REGION'>,
+]
+
+export type RegionSelectorProvincePath = readonly [
+  RegionSelectorNode<'COUNTRY_REGION'>,
+  RegionSelectorNode<'PROVINCE_STATE'>,
+]
+
+export interface RegionSelectorValue {
+  readonly countryRegionId: string | null
+  readonly provinceStateId: string | null
+  readonly cityId: string | null
+}
+
 export type RegionSelectorChange
   = | {
-    readonly source: 'select'
-    readonly value: string
+    readonly source: 'countryRegion'
+    readonly value: RegionSelectorValue
+    readonly path: RegionSelectorCountryPath
+    readonly complete: false
+  }
+  | {
+    readonly source: 'provinceState'
+    readonly value: RegionSelectorValue
+    readonly path: RegionSelectorProvincePath
+    readonly complete: false
+  }
+  | {
+    readonly source: 'city'
+    readonly value: RegionSelectorValue
     readonly path: RegionSelectorPath
+    readonly complete: true
   }
   | {
     readonly source: 'clear'
-    readonly value: null
-    readonly path: null
+    readonly value: RegionSelectorValue
+    readonly path: readonly []
+    readonly complete: false
   }
 
 export interface RegionSelectorSearchResult {
@@ -736,6 +772,10 @@ export interface RegionSelectorSearchResult {
   readonly hasMore: boolean
 }
 ```
+
+`RegionSelectorValue` 合法状态只能依次为全空、仅国家/地区、国家/地区加省/州和完整
+三级。每次用户选择一级都发出完整新对象；切换国家/地区清空后两级，切换省/州清空
+城市。调用方因此能直接双向绑定三个业务字段，不需要从 CITY UUID 再反推上级。
 
 Provider 收敛为读能力：
 
@@ -761,6 +801,10 @@ export interface RegionSelectorProvider {
   ): () => void
 }
 ```
+
+`search` 是既有 Server 能力的 Provider 映射，继续供兼容调用方与独立搜索场景使用；
+三个并列 `FaSelect` 的 `QsRegionSelector` 只调用 `listChildren`、`resolvePath` 和
+`subscribeInvalidation`，不得调用 `search`。
 
 `resolvePath` 必须在运行时校验：
 
@@ -807,8 +851,9 @@ Key 固定包含身份与规范化参数：
 立即执行本地失效并通知已挂载选择器；下一次读请求重新取得新 identity 与新 auth
 signal。
 
-组件自身对 path、root、search 以及每个 parent 另维护 request version，避免 provider
-之外的 UI 状态也被迟到响应覆盖。
+组件自身对 path、root、省/州列表和城市列表分别维护 request version，避免 provider
+之外的 UI 状态也被迟到响应覆盖。Provider 的 search cache 保留给既有 Server 搜索
+调用方，但不参与三个并列下拉的组件状态。
 
 ### 8.4 同标签和跨标签失效
 
@@ -851,7 +896,7 @@ sequenceDiagram
     Channel->>Other: REGIONS_CHANGED
     Other->>Other: generation++ / abort / clear
     Other-->>Selector: invalidation callback
-    Selector->>Selector: 清空本地 options/search tree
+    Selector->>Selector: 清空三级 options/path 状态并重新加载
     Note over Current,Other: 迟到响应不能写回旧 generation
 ```
 
@@ -862,29 +907,20 @@ sequenceDiagram
 `QsRegionSelector` 是带地区领域语义的应用级业务组件，放在
 `src/components/business/QsRegionSelector/`，不移动到 `web/packages/*`。
 
-内部采用项目已锁定的 `ACascader@2.58.0`，不使用现有 `FaCascader`：
+内部采用三个并列的 `FaSelect`：
 
-- `ACascader` 已具备 lazy `loadMore`、搜索输入、loading/error、完整 label 和键盘
-  导航。
-- `FaCascader` 当前面向一次性完整树，缺少远程搜索、lazy、错误重试和 readonly，
-  且固定 `200px` 宽度。
-- 扩大 `FaCascader` 公共 API 会同时影响共享 package，超出本需求。
+1. 国家/地区下拉只显示 `COUNTRY_REGION` roots；
+2. 省/州下拉只显示当前国家/地区的直属 `PROVINCE_STATE`；
+3. 城市下拉只显示当前省/州的直属 `CITY`。
 
-固定内核配置：
+选择上级后才启用并加载下一级；切换国家/地区立即清空省/州和城市，切换省/州立即清空
+城市。该结构保持三个面板和已选项滚动状态彼此独立，避免单个级联弹层在逐级选择时
+回缩、闪烁或重新打开后滚动位置回到顶部。
 
-```text
-multiple = false
-pathMode = false
-checkStrictly = false
-expandTrigger = "click"
-allowSearch = !readonly
-allowClear = clearable && !readonly
-searchOptionOnlyLabel = false
-```
-
-非 CITY 统一 `isLeaf=false`，只有 CITY 为 `isLeaf=true`。组件在 change handler
-再次校验完整三层，从结构和事件两侧共同禁止提交中间层。Arco 只作为私有内核，任何
-Arco props、option 或 event 类型都不进入公共 API。
+组件不使用 `ACascader` 或 `FaCascader`，不构造 Cascader option tree，也不在三个
+下拉中提供名称搜索。Server 的 `GET /api/region-selection/search`、Provider 的
+`search()` 和地区管理页搜索仍保留，不能因选择器内部取舍而删除。`FaSelect` 只作为
+私有显示内核；其 props、option 或 event 类型不得进入公共 API。
 
 ### 9.2 公共 API
 
@@ -892,20 +928,25 @@ Props：
 
 ```ts
 interface QsRegionSelectorProps {
-  modelValue?: string | null  // default null
+  modelValue?: RegionSelectorValue
   provider?: RegionSelectorProvider
-  placeholder?: string
   clearable?: boolean       // default true
   disabled?: boolean        // default false
   readonly?: boolean        // default false
   error?: boolean           // 调用方表单校验态
+}
+
+interface RegionSelectorValue {
+  readonly countryRegionId: string | null
+  readonly provinceStateId: string | null
+  readonly cityId: string | null
 }
 ```
 
 Events：
 
 ```ts
-update:modelValue: [value: string | null]
+update:modelValue: [value: RegionSelectorValue]
 change: [detail: RegionSelectorChange]
 focus: [event: FocusEvent]
 blur: [event: FocusEvent]
@@ -917,67 +958,59 @@ Attrs：
 id
 name
 required
-autocomplete
 tabindex
 aria-*
 class
 style
 data-*
+form
 ```
 
-组件默认 `w-full`。不开放 `pathMode`、`multiple`、`checkStrictly`、separator、
-search delay 或 popup 内核参数，不增加可写 `v-model:path`。路径只通过用户 change
-事件返回；外部 model path 回显不触发 change。
+组件默认 `w-full`。不开放底层 `FaSelect`、Reka popup、搜索、分隔符或 option
+渲染参数，不增加可写 `v-model:path`。外部 model 回显不触发 `change`。
 
-用户清空时统一发出：
+用户每次选择一级都发出新的完整 value 对象。事件是按 `source` 判别的联合类型：
 
 ```ts
-emit('update:modelValue', null)
-emit('change', {
-  source: 'clear',
-  value: null,
-  path: null,
-})
+source = 'countryRegion' // path 长度 1，complete=false
+source = 'provinceState' // path 长度 2，complete=false
+source = 'city'          // path 长度 3，complete=true
+source = 'clear'         // path 为空，complete=false
 ```
 
-不得把 Arco 的 `undefined` 或空字符串泄露给调用方。
+清空时三个字段全部为 `null`。不得把 `undefined`、空字符串或底层 Select value 类型
+泄露给调用方。
 
-### 9.3 数据树与交互状态
+### 9.3 逐级数据与交互状态
 
-组件内部保留三棵独立树：
+组件分别持有三个同层数组：
 
-- `navigationTree`：用户打开和逐级 lazy load 得到的有效 options；
-- `resolvedPathTree`：当前 `modelValue` 的完整路径，可包含已停用节点；
-- `searchTree`：当前一次远程搜索返回的完整路径。
+- `countries`：挂载时以 `listChildren(null)` 加载的有效 roots；
+- `provinceStates`：当前 `countryRegionId` 的直属 options；
+- `cities`：当前 `provinceStateId` 的直属 options。
 
-真正交给 `ACascader` 的交互树只合并 `navigationTree` 与当前搜索态的
-`searchTree`，并保持 Server 顺序；搜索词变化时整棵替换 `searchTree`，清空搜索后
-立即退出交互树，不能让历史搜索持续膨胀内存。`resolvedPathTree` 只用于当前值的严格
-校验和安全 fallback label，不进入普通 options；否则单条历史路径的部分 children 会
-让 Arco 误判父级已完成 lazy load，阻断同国省州或同省城市切换。
+`selectedPath` 独立保存当前 value 对应的零至三个只读节点，用于完整路径展示和
+typed change。每个数组进入状态前都校验 level 和 parentId；停用历史路径节点如果不在
+正常 options 中，只追加当前已选节点以供回显，并保持不可新选。
 
 行为：
 
-1. `modelValue=null` 时 mount 不下载地区；首次打开才加载 roots。
-2. 非空 model mount/watch 时只调 `resolvePath`，不下载全树。
-3. 历史停用路径进入 `resolvedPathTree`，leaf 设为不可新选，并在完整 label 后显示
-   “已停用”；它不能进入普通 options 或 search。
-4. 外部 value 不存在或不是 CITY 时保留原 value，显示本地错误和重试，不能擅自清空
-   业务记录。
-5. lazy 成功同时更新 `navigationTree` 并调用 `done(children)`。
-6. lazy 失败调用 `done()` 而不是 `done([])`；后者会让 Arco 误判已加载完成。组件显示
-   安全错误与“重试加载”。
-7. 远程搜索在归一化后一个有效字符开始，250ms debounce；固定请求最多 50 条，只保留
-   最新 request version。
-8. 搜索结果用完整 path 展示，名称相同的城市不能脱离上级；`hasMore=true` 时显示
-   “结果较多，请继续输入以缩小范围”。
-9. `readonly` 保持可聚焦和路径可读，但固定关闭 popup、搜索和清空。
-10. `disabled` 阻止交互，但非空 value 仍执行 path 回显。
-
-组件受控管理 Arco `inputValue`。每个合并后的 leaf 预计算包含三层 name、
-englishName、code 和完整路径的 normalized `searchText`，`filterOption` 只对 Server
-已经返回或已加载的路径做本地一致性过滤；它不能替代远程搜索，也不能从未加载树中
-推断结果。`formatLabel` 固定渲染完整三级路径。
+1. 无论 value 是否为空，mount 都独立发起 roots 请求；path 失败不能阻断国家/地区
+   下拉继续使用。
+2. 全空 value 只加载 roots；部分 value 先在已加载 options 中校验当前上级，再按父级
+   加载下一层。
+3. 完整 value 以 `cityId` 调用 `resolvePath`，必须同时核对返回 path 的结构和三个
+   UUID；path 与 roots 独立并发，任一失败不门控另一个。
+4. 外部 value 跳级、节点不存在、非 CITY 或三个 UUID 不一致时保留原对象，显示本地
+   错误和重试，不能擅自修正业务记录。
+5. 用户选择国家/地区时先发出仅保留国家 UUID 的 value，再加载省/州；选择省/州时先
+   清空城市并发出 value，再加载城市；选择城市后才标记 `complete=true`。
+6. 每个请求域持有独立 `AbortController` 和 request version。切换上级、重试、Provider
+   失效或卸载时取消旧请求；cancel 与 stale 不显示错误且不能落地。
+7. `readonly` 不渲染三个下拉，改用原生只读 `input` 展示完整路径；`disabled` 阻止
+   交互，但非空 value 仍执行 path 回显。
+8. 用户可见完整路径固定以单个 ASCII 空格连接，例如
+   `中国台湾 台湾 高雄市`；任一节点停用时在路径后追加“（已停用）”。
 
 ```mermaid
 sequenceDiagram
@@ -986,74 +1019,80 @@ sequenceDiagram
     participant Provider
     participant API
 
-    Caller->>Selector: modelValue = city UUID
+    Selector->>Provider: mount listChildren(null)
+    Provider-->>Selector: COUNTRY_REGION roots
+
+    Caller->>Selector: modelValue = three UUIDs
     Selector->>Provider: resolvePath(cityId, signal)
     Provider->>API: path cache miss
     API-->>Provider: exactly three nodes
-    Provider-->>Selector: validated readonly path
-    Selector-->>Caller: 展示完整路径，不触发 change
+    Provider-->>Selector: validated path
+    Selector->>Selector: 核对三个 UUID 并补齐同层 options
 
-    Caller->>Selector: 展开父级
+    Caller->>Selector: 选择国家/地区
+    Selector-->>Caller: update:modelValue(country, null, null)
     Selector->>Provider: listChildren(parentId, signal)
-    Provider-->>Selector: effective children
-    Selector->>Selector: update tree + done(children)
+    Provider-->>Selector: province/state options
 
-    Caller->>Selector: 选择 CITY
-    Selector-->>Caller: update:modelValue(cityId)
-    Selector-->>Caller: change({ source, value, path })
+    Caller->>Selector: 选择省/州
+    Selector-->>Caller: update:modelValue(country, province, null)
+    Selector->>Provider: listChildren(parentId, signal)
+    Provider-->>Selector: city options
+
+    Caller->>Selector: 选择城市
+    Selector-->>Caller: update:modelValue(country, province, city)
+    Selector-->>Caller: change({ source: "city", complete: true })
 ```
 
-### 9.4 真实输入属性桥接
+### 9.4 可见控件属性与原生表单代理
 
 这是已识别、必须被测试锁定的上游 DOM 风险。
 
-Arco 2.58.0 的 `InputLabel` 只把输入事件及 `name`、`required`、`autocomplete` 等
-白名单属性交给内部 `<input>`；`id` 和多数 `aria-*` 默认落到外层 `<span>`。仅对
-`ACascader` 执行 `v-bind="$attrs"` 不满足已确认的真实控件契约。
+`FaSelect` 的真实交互控件是 button-based combobox。`control-attrs.ts` 实现局部、
+版本受控的 bridge：
 
-`control-attrs.ts` 实现局部、版本受控的 bridge：
+1. 组件使用 `inheritAttrs:false`，把布局/测试 attrs、三个可见 trigger attrs 和原生
+   表单 attrs 分组。
+2. 从组件局部 root 精确取得每一级唯一的
+   `[data-slot="select-trigger"]` button；缺失、重复或元素类型变化立即失败。
+3. 调用方 `id` 写到国家/地区 trigger；省/州和城市使用稳定派生 ID，内部 label 通过
+   `for` 与各 trigger 关联。
+4. 三个 trigger 都合并调用方 `aria-describedby` 与内部 loading/error/status ID，并
+   同步 `aria-busy`、`aria-invalid`、`aria-required`；attrs 移除时清理旧值。
+5. 公开 `focus()` 定位首个未完成层级，`blur()` 操作最近聚焦的 trigger；bridge 更新
+   不得丢失仍存在的焦点目标。
+6. `readonly` 时 bridge 改为管理原生只读 `input`，保留调用方 label、描述、错误态和
+   可聚焦语义。
 
-1. 组件使用 `inheritAttrs:false`，区分 wrapper attrs 与 control attrs。
-2. mount 和相关 attrs 更新后，从当前 Cascader root 精确取得唯一内部 `<input>`。
-3. 同步并在移除时清理：
-   `id`、`name`、`tabindex`、`required`、`autocomplete` 和全部 `aria-*`。
-4. 合并而不是覆盖调用方的 `aria-describedby`，追加内部 loading/error/status ID。
-5. 组件同步 `role=combobox`、`aria-haspopup=menu`、`aria-expanded`、
-   `aria-busy`、`aria-readonly` 和最终 `aria-invalid`。
-6. focus/blur 与 `defineExpose({ focus, blur })` 都操作该真实 input。
+三个可见 trigger 不承担原生表单值。组件另渲染视觉隐藏的
+`input[type=text]` 作为表单代理：
 
-该 bridge 不扩散为全局补丁，也不暴露为公共 API。Arco 升级时，组件测试和真实浏览器
-测试必须断言 `document.getElementById(id).tagName === 'INPUT'`，内部 DOM 改变将直接
-导致测试失败。
+- `name`、`form`、`required` 只落到代理；
+- value 始终是 `cityId ?? ''`，不提交国家/地区、省/州 UUID 或路径文本；
+- 空值、部分值或完整 path 未验证时 `setCustomValidity('请选择完整地区')`；
+- 原生 `invalid` 被转换为可见 `role=alert` 反馈“请选择完整地区。”，并聚焦首个未完成
+  且可交互的下拉；加载阻断时聚焦可见错误；
+- 完整 path 验证成功后清除 custom validity；
+- disabled 遵循原生不提交语义；readonly 非空值仍提交 CITY UUID，但退出 required
+  约束。
 
-Arco 的真实 input value 是搜索草稿，已选路径显示在 sibling label，不能直接把它当作
-CITY UUID 做原生表单序列化。Bridge 因此同时定义复合控件语义：
-
-- 调用方传 `required` 时，真实 input 保留 `aria-required=true`；
-- `modelValue=null` 时设置 native `required` 和
-  `setCustomValidity('请选择地区')`，即使输入了搜索词但未选 CITY 仍无效；
-- 已选 CITY 时清除 custom validity，并移除 native `required`，避免 Arco 空搜索值
-  把有效选择误判为空；
-- 如 input 属于原生 form 且存在 `name`，监听该 form 的 `formdata` 事件，以
-  `formData.set(name, modelValue ?? '')` 覆盖搜索草稿；Vue 表单仍以 v-model 为首选。
-
-浏览器测试必须证明空值 required 无效、选中 CITY 后有效，并证明 `FormData` 中提交的
-是 CITY UUID 而不是搜索词或完整 label。
+浏览器测试必须证明空值和部分值 required 无效、有可见反馈，完整三级有效，并证明
+`FormData` 中调用方指定的 `name` 只对应 CITY UUID。
 
 ### 9.5 状态、响应式与可访问性
 
-- root、lazy、search、path 分别维护 loading/error/retry，取消和 stale 不显示错误。
+- roots、省/州、城市和 path 分别维护 loading/error/retry，取消和 stale 不显示错误。
 - loading 使用 `role=status`、`aria-live=polite` 和 `aria-busy=true`。
 - failure 使用 `role=alert`，只显示安全中文信息和可选 `requestId`。
-- 调用方 `error` 或组件不可恢复错误使真实 input `aria-invalid=true`。
-- 已选 label 使用完整三级路径，分隔符固定为 ` / `。
-- popup 最大宽度为 `calc(100vw - 24px)`；多列只允许 popup 内部滚动，不能形成页面级
-  横向滚动。
-- `390px` 下触控区域不小于 44px，弹层不超出可用视口。
-- 键盘复用 Arco 的 Enter、方向键和 Escape，并单独验证清空按钮键盘可达。
+- 调用方 `error`、组件不可恢复错误或原生 required 失败使三个 trigger 的
+  `aria-invalid=true`。
+- 完整路径分隔符固定为一个 ASCII 空格。
+- 桌面使用三列 grid；`390px` 下按国家/地区、省/州、城市顺序堆叠，触控区域不小于
+  44px，各 popup 不超出可用视口且页面无水平滚动。
+- 键盘复用 `FaSelect` 的 Enter、方向键和 Escape，并验证三个 trigger、清空按钮及
+  readonly input 的焦点行为。
 - 暗色模式只使用现有主题变量。
-- `prefers-reduced-motion: reduce` 下关闭 popup 内非必要 transition/animation，状态
-  不依赖动画表达。
+- `prefers-reduced-motion: reduce` 下状态不依赖动画表达。
 
 ### 9.6 README 与 Showcase
 
@@ -1063,18 +1102,19 @@ CITY UUID 做原生表单序列化。Bridge 因此同时定义复合控件语义
 /component-library/business/region-selector
 ```
 
-Showcase 必须显式传入本地 provider，数据仅保留少量中国、中国台湾、马来西亚路径，
-并标注“交互样例，不是正式地区数据”。至少展示：
+Showcase 的正式交互状态可使用应用默认 Provider；隔离错误/停用 fixture 必须显式传入
+本地 provider，并标注不是正式地区真相源。至少展示：
 
-- 标准选择；
-- `中国台湾 / 台湾 / 高雄市`；
+- 三个并列下拉的标准逐级选择；
+- `中国台湾 台湾 高雄市`；
 - 已停用历史路径；
 - readonly；
 - disabled；
 - 一次失败后可重试。
 
-README 说明 public API、provider、CITY UUID value、缓存/身份边界、错误状态、表单
-接入和不保存展示名称的规则。
+README 说明 public API、`RegionSelectorValue`、逐级清理、provider、缓存/身份边界、
+路径空格规则、错误状态、readonly input、required 可见反馈、CITY UUID 表单代理和不
+保存展示名称的规则。
 
 ## 10. 地区管理页面
 
@@ -1382,8 +1422,8 @@ canDisable
 
 - 空库两次 migrate deploy 后 `migrate status` clean；
 - 精确断言 3 / 48 / 551 / 602 及各数据域分项；
-- `中国台湾 → 台湾 → 高雄市`；
-- `中国 → 北京市 → 北京市`；
+- `中国台湾 台湾 高雄市`；
+- `中国 北京市 北京市`；
 - 马来西亚 16 个州区和固定路径；
 - code、根/同父名称唯一，并验证 partial unique 并发冲突映射；
 - 库内 `name`、`englishName`、`sourceName`、`normalizedName` 全量符合 canonical
@@ -1417,13 +1457,15 @@ canDisable
 - TTL、in-flight dedupe、单消费者取消、全部消费者取消；
 - failure 不缓存、identity/generation 迟到结果不回写；
 - BroadcastChannel 只发失效、收到后不回广播；
-- tree merge、lazy retry、search debounce/stale；
-- public props/events/value null；
-- 只提交 CITY，回显不触发 change；
-- 真实 input required 复合控件有效性与 FormData CITY UUID 序列化；
+- `RegionSelectorValue` 三字段、合法部分状态和逐级 typed change；
+- mount roots、按父级 `listChildren`、切上级清下级、请求 cancel/version；
+- 完整 value 的 path 结构及三个 UUID 核对，回显不触发 change；
+- 三个并列 `FaSelect`，组件不调用 search、不构造完整树；
+- 私有表单代理 required 有效性、可见反馈与 FormData CITY UUID 序列化；
+- trigger id/aria/label focus、公开 focus/blur 与 bridge 更新焦点保持；
 - 台湾路径、停用回显、readonly、disabled；
-- README 和 Showcase 显式 fixture provider；
-- `ACascader` 固定内核配置，不使用 `FaCascader`。
+- README 和 Showcase 的正式 Provider / 隔离 fixture 边界；
+- Server search API 与地区管理页搜索保持不变。
 
 ### 13.4 页面与路由
 
@@ -1442,10 +1484,12 @@ canDisable
 
 桌面和 390px 均覆盖：
 
-- 选择器打开、逐级 lazy、搜索、键盘选择、清空、失败重试；
-- 已有 city ID path 回显、停用标记；
-- `中国台湾 / 台湾 / 高雄市`；
-- 真实 input 的 id/name/aria/label focus、required validity 和 FormData city UUID；
+- 三个下拉逐级键盘选择、切上级清下级、清空和 Escape；
+- root/省州/城市/path 失败与重试，stale 响应不覆盖；
+- 完整三级 UUID value path 回显、停用标记和三个 UUID 不一致拒绝；
+- `中国台湾 台湾 高雄市`；
+- 三个 trigger 的 id/aria/label focus、required 可见反馈、readonly input 和
+  FormData CITY UUID；
 - 多实例 in-flight dedupe 与管理后缓存失效；
 - 管理页权限拒绝、导航、分页、创建、编辑、启停；
 - Drawer 焦点恢复、移动卡片和 Modal；
@@ -1489,7 +1533,8 @@ PostgreSQL 编排；浏览器结论必须对应当前 HEAD，不以“页面能�
 | 层级约束 | Service + DB trigger | 只做 DTO 校验 | 直接 SQL 与并发也必须安全 |
 | 种子 | 固定快照 + forward migration | 启动联网同步 | 可复现、可审计、部署无网络依赖 |
 | 搜索索引 | 现有索引 + bounded scan | 立即引入 `pg_trgm` | 首期规模小，避免无证据扩展 |
-| 组件内核 | 私有 `ACascader` adapter | 扩展 `FaCascader`、重写 Cascader | 保留完整交互，缩小公共变更 |
+| 组件内核 | 三个并列 `FaSelect` | 单个 Cascader、嵌套 Dropdown | 面板稳定、依赖关系直观，并复用现有基础组件 |
+| 组件搜索 | 不提供 | 在三个 Select 内复制 Server search | 逐级选择无需混合搜索状态，保留独立 Server/管理页搜索能力 |
 | 数据依赖 | provider 注入 | 组件直接 import API/Store | Showcase 可隔离，公共边界可测试 |
 | 缓存 | 轻量 memory cache | 新增查询库/全局 Store | 满足 TTL/dedupe/identity，控制范围 |
 | 页面 | 树 + 直属下级表格 | 全量三级树 | 全球城市不进入深度监听树 |
@@ -1497,16 +1542,19 @@ PostgreSQL 编排；浏览器结论必须对应当前 HEAD，不以“页面能�
 
 已知风险及控制：
 
-1. **Arco 内部 DOM 变化**：局部 input bridge 依赖单选 Cascader 内唯一 input；用源码
-   契约测试和真实浏览器 input 断言锁定，升级失败时在该 adapter 内修复。
+1. **FaSelect trigger DOM 变化**：局部 bridge 依赖每一级唯一的
+   `[data-slot="select-trigger"]` button；用组件结构测试和真实浏览器断言锁定，升级
+   失败时只在该 bridge 内修复。
 2. **名称归一化漂移**：Server 与 seed generator 共用规则和 golden vectors，DB 用
    canonical E2E scan 与 unique 兜底；正式环境不支持绕过 Service 的维护 SQL。
 3. **种子口径漂移**：固定源文件、commit/date、SHA、manifest、canonical JSON 和 SQL
    数量断言共同保护。
 4. **写成功但响应丢失**：不重试 mutation，按 code/ID 精确 read-after-write。
 5. **跨 tab 通知不可用**：当前 tab 总是立即失效，其他 tab 最迟在 5 分钟 TTL 后刷新。
-6. **未来全球搜索规模增长**：API 已有 lazy、bounded search 和稳定 value；性能证据
-   出现后可新增索引，不改变组件契约。
+6. **未来全球搜索规模增长**：Server API 仍有 bounded search；三个下拉只按父级加载
+   当前一级，性能证据出现后可新增索引，不改变 `RegionSelectorValue`。
+7. **外部 value 层级漂移**：完整 value 必须由 path 同时核对三个 UUID；部分 value
+   逐级核对 options。失败保留原对象并显示错误，不静默拼接不一致路径。
 
 ## 15. 需求追踪
 
@@ -1531,11 +1579,14 @@ PostgreSQL 编排；浏览器结论必须对应当前 HEAD，不以“页面能�
 2. `administrativeType` 为非 enum 技术字符串，`effectiveEnabled` 不落库。
 3. 首期数据为固定 602 节点，使用可审计快照、确定性 UUIDv5 和两段 migration。
 4. 选择接口只要求正常 Session；管理接口使用五项 `regions:*` 权限。
-5. `QsRegionSelector` 是业务组件，value 为 `CITY UUID | null`，使用注入 provider 和
-   私有 `ACascader` adapter。
-6. 通过局部 DOM bridge 保证真实 input 接收 id/name/aria，并用浏览器测试锁定。
-7. 地区管理使用前两层导航 + 当前直属下级 `QsGenericTable`，移动端导航进入 Drawer。
-8. mutation 不自动重试；确认成功后当前 tab 立即、其他 tab 通过失效广播清缓存。
+5. `QsRegionSelector` 是业务组件，value 为 `RegionSelectorValue` 三字段对象，内部为
+   三个并列 `FaSelect`；切上级清下级，完整值以 path 核对三个 UUID。
+6. 组件不提供搜索且不下载整树；Server search API 与地区管理页搜索继续保留。
+7. 通过局部 DOM bridge 保证三个 trigger 的 id/aria/label/focus，通过私有表单代理
+   保证 required 可见反馈，并让调用方指定的 `name` 只提交 CITY UUID；readonly 使用
+   原生只读 input。
+8. 地区管理使用前两层导航 + 当前直属下级 `QsGenericTable`，移动端导航进入 Drawer。
+9. mutation 不自动重试；确认成功后当前 tab 立即、其他 tab 通过失效广播清缓存。
 
 本文已按照 `tasks.md` 完成实施；最终门禁、数据审计与交付证据记录在该文档
 “Task 15 最新验收证据”一节。

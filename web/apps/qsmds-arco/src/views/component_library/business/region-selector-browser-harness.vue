@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
+import type {
+  RegionSelectorChange,
+  RegionSelectorValue,
+} from '@/components/business/QsRegionSelector/types'
 
 import { useRoute } from 'vue-router'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
@@ -7,14 +10,77 @@ import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
 defineOptions({ name: 'RegionSelectorBrowserHarness' })
 
 const TAIWAN_KAOHSIUNG_CITY_ID = '78f9134e-3d72-5f6e-9897-ca7e50004229'
+const TAIWAN_COUNTRY_REGION_ID = '2e30acdf-7559-5fc2-8e00-c5b069d3df8b'
+const TAIWAN_PROVINCE_STATE_ID = 'ee82c572-f653-51d2-98d4-f11ac5928aa1'
+const INVALID_COUNTRY_REGION_ID = '00000000-0000-4000-8000-000000000901'
+const INVALID_PROVINCE_STATE_ID = '00000000-0000-4000-8000-000000000902'
 const UUID_PATTERN
   = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 
 const route = useRoute()
-const primaryValue = ref<string | null>(null)
-const secondaryValue = ref<string | null>(null)
-const readonlyValue = ref<string | null>(TAIWAN_KAOHSIUNG_CITY_ID)
-const disabledValue = ref<string | null>(TAIWAN_KAOHSIUNG_CITY_ID)
+
+function createEmptyValue(): RegionSelectorValue {
+  return {
+    cityId: null,
+    countryRegionId: null,
+    provinceStateId: null,
+  }
+}
+
+function createTaiwanValue(cityId: string): RegionSelectorValue {
+  return {
+    cityId,
+    countryRegionId: TAIWAN_COUNTRY_REGION_ID,
+    provinceStateId: TAIWAN_PROVINCE_STATE_ID,
+  }
+}
+
+function createPrimaryValue(
+  currentScenario: string,
+  cityId: string,
+): RegionSelectorValue {
+  if (currentScenario === 'path') {
+    return createTaiwanValue(cityId)
+  }
+  if (currentScenario === 'partial-country') {
+    return {
+      cityId: null,
+      countryRegionId: TAIWAN_COUNTRY_REGION_ID,
+      provinceStateId: null,
+    }
+  }
+  if (currentScenario === 'partial-province') {
+    return {
+      cityId: null,
+      countryRegionId: TAIWAN_COUNTRY_REGION_ID,
+      provinceStateId: TAIWAN_PROVINCE_STATE_ID,
+    }
+  }
+  if (currentScenario === 'invalid-country') {
+    return {
+      cityId: null,
+      countryRegionId: INVALID_COUNTRY_REGION_ID,
+      provinceStateId: null,
+    }
+  }
+  if (currentScenario === 'invalid-province') {
+    return {
+      cityId: null,
+      countryRegionId: TAIWAN_COUNTRY_REGION_ID,
+      provinceStateId: INVALID_PROVINCE_STATE_ID,
+    }
+  }
+  return createEmptyValue()
+}
+
+const primaryValue = ref<RegionSelectorValue>(createEmptyValue())
+const secondaryValue = ref<RegionSelectorValue>(createEmptyValue())
+const readonlyValue = ref<RegionSelectorValue>(
+  createTaiwanValue(TAIWAN_KAOHSIUNG_CITY_ID),
+)
+const disabledValue = ref<RegionSelectorValue>(
+  createTaiwanValue(TAIWAN_KAOHSIUNG_CITY_ID),
+)
 const submittedValue = ref('未提交')
 const lastChange = ref('等待选择')
 
@@ -35,16 +101,17 @@ const requestedCityId = computed(() => {
 })
 
 /**
- * 每个 Browser 场景通过完整路由导航获得冷启动组件。只有 path/states 需要预置
- * CITY UUID；其余场景从 null 开始，便于分别观察 root、lazy 与 search 请求。
+ * 每个 Browser 场景通过完整路由导航获得冷启动组件。path/states 预置完整三级
+ * UUID；partial-* 固定合法部分值的失败恢复；invalid-* 用不存在的 UUID 固定
+ * 回显失败边界；其余场景从全空对象开始，便于观察每一级请求与依赖重置。
  */
 watch(
   [scenario, requestedCityId],
   ([currentScenario, cityId]) => {
-    primaryValue.value = currentScenario === 'path' ? cityId : null
-    secondaryValue.value = null
-    readonlyValue.value = cityId
-    disabledValue.value = cityId
+    primaryValue.value = createPrimaryValue(currentScenario, cityId)
+    secondaryValue.value = createEmptyValue()
+    readonlyValue.value = createTaiwanValue(cityId)
+    disabledValue.value = createTaiwanValue(cityId)
     submittedValue.value = '未提交'
     lastChange.value = '等待选择'
   },
@@ -53,8 +120,8 @@ watch(
 
 function handleChange(change: RegionSelectorChange): void {
   lastChange.value = change.source === 'clear'
-    ? 'clear · value=null'
-    : `select · ${change.path.map(node => node.name).join(' / ')}`
+    ? 'clear · complete=false'
+    : `${change.source} · ${change.path.map(node => node.name).join(' ')} · complete=${change.complete}`
 }
 
 function handleSubmit(event: Event): void {
@@ -110,8 +177,8 @@ function handleSubmit(event: Event): void {
             id="region-selector-e2e-primary"
             :key="`primary-${scenario}-${requestedCityId}`"
             v-model="primaryValue"
+            data-testid="region-selector-e2e-primary"
             name="regionCityId"
-            autocomplete="address-level2"
             aria-describedby="region-selector-e2e-help"
             required
             @change="handleChange"
@@ -129,13 +196,35 @@ function handleSubmit(event: Event): void {
           <dl class="text-sm m-0 gap-3 grid">
             <div>
               <dt class="qs-type-compact-label text-muted-foreground">
-                受控 CITY UUID
+                国家/地区 UUID
               </dt>
               <dd
-                data-testid="region-selector-controlled-value"
+                data-testid="region-selector-country-value"
                 class="qs-type-data-mono m-0 mt-1 break-all"
               >
-                {{ primaryValue ?? 'null' }}
+                {{ primaryValue.countryRegionId ?? 'null' }}
+              </dd>
+            </div>
+            <div class="pt-3 border-t border-border">
+              <dt class="qs-type-compact-label text-muted-foreground">
+                省/州 UUID
+              </dt>
+              <dd
+                data-testid="region-selector-province-value"
+                class="qs-type-data-mono m-0 mt-1 break-all"
+              >
+                {{ primaryValue.provinceStateId ?? 'null' }}
+              </dd>
+            </div>
+            <div class="pt-3 border-t border-border">
+              <dt class="qs-type-compact-label text-muted-foreground">
+                城市 UUID
+              </dt>
+              <dd
+                data-testid="region-selector-city-value"
+                class="qs-type-data-mono m-0 mt-1 break-all"
+              >
+                {{ primaryValue.cityId ?? 'null' }}
               </dd>
             </div>
             <div class="pt-3 border-t border-border">
@@ -181,6 +270,7 @@ function handleSubmit(event: Event): void {
         <QsRegionSelector
           id="region-selector-e2e-secondary"
           v-model="secondaryValue"
+          data-testid="region-selector-e2e-secondary"
           aria-describedby="region-selector-dedupe-title"
         />
       </section>
@@ -200,6 +290,7 @@ function handleSubmit(event: Event): void {
           <QsRegionSelector
             id="region-selector-e2e-readonly"
             v-model="readonlyValue"
+            data-testid="region-selector-e2e-readonly"
             readonly
           />
         </div>
@@ -213,6 +304,7 @@ function handleSubmit(event: Event): void {
           <QsRegionSelector
             id="region-selector-e2e-disabled"
             v-model="disabledValue"
+            data-testid="region-selector-e2e-disabled"
             disabled
           />
         </div>

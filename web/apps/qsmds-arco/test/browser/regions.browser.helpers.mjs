@@ -403,55 +403,151 @@ export async function waitForNoVisibleDialog(page, text) {
   ))`)
 }
 
-export async function openSelector(
-  page,
-  inputId = 'region-selector-e2e-primary',
-) {
-  const selector = JSON.stringify(`#${inputId}`)
-  await page.waitFor(`document.querySelector(${selector})?.getClientRects().length > 0`)
-  await page.evaluate(`(() => {
-    const input = document.querySelector(${selector})
-    if (!(input instanceof HTMLInputElement) || input.disabled) {
-      throw new Error('selector input unavailable')
-    }
-    input.focus({ preventScroll: true })
-    input.click()
-    return true
-  })()`)
-  await page.waitFor(`document.querySelector(${selector})?.getAttribute('aria-expanded') === 'true'`)
+function regionLevelTriggerExpression(rootTestId, level) {
+  return `document.querySelector(
+    ${JSON.stringify(`[data-testid="${rootTestId}"]`)}
+  )?.querySelector(
+    ${JSON.stringify(
+      `[data-region-level="${level}"] [data-slot="select-trigger"]`,
+    )}
+  )`
 }
 
-export async function clickVisibleMenuItem(page, text) {
-  const serialized = JSON.stringify(text)
+export async function openRegionLevelSelect(
+  page,
+  rootTestId,
+  level,
+) {
+  const trigger = regionLevelTriggerExpression(rootTestId, level)
   await page.waitFor(`(() => {
-    const candidates = [...document.querySelectorAll(
-      '.qs-region-selector-popup [role="menuitem"]',
-    )].filter(item => (
+    const target = ${trigger}
+    return target instanceof HTMLButtonElement
+      && target.getClientRects().length > 0
+      && !target.disabled
+  })()`)
+  await page.evaluate(`(() => {
+    const target = ${trigger}
+    if (!(target instanceof HTMLButtonElement) || target.disabled) {
+      throw new Error('region level trigger unavailable')
+    }
+    target.focus({ preventScroll: true })
+    /*
+     * Reka Select@2.10.1 公开支持 Enter 打开。直接把 keydown 发到已解析的
+     * trigger，避免移动设备模拟在同文档导航后丢失 window focus 的 CDP 竞态。
+     */
+    target.dispatchEvent(new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      code: 'Enter',
+      key: 'Enter',
+    }))
+    return true
+  })()`)
+  try {
+    await page.waitFor(`(() => {
+      const target = ${trigger}
+      const contentId = target?.getAttribute('aria-controls')
+      const content = contentId ? document.getElementById(contentId) : null
+      return target?.getAttribute('aria-expanded') === 'true'
+        && content?.getClientRects().length > 0
+    })()`, 5_000)
+  }
+  catch (error) {
+    /*
+     * 失败诊断只记录公开 DOM 状态，不采集选值、请求体或认证信息。
+     * 这样可以区分 trigger 未展开与 portal 已生成但不可见两类回归。
+     */
+    const diagnostic = await page.evaluate(`(() => {
+      const target = ${trigger}
+      const contentId = target?.getAttribute('aria-controls')
+      const content = contentId ? document.getElementById(contentId) : null
+      return {
+        active: document.activeElement === target,
+        contentFound: content !== null,
+        contentState: content?.getAttribute('data-state') ?? null,
+        contentVisible: Boolean(content?.getClientRects().length),
+        expanded: target?.getAttribute('aria-expanded') ?? null,
+        triggerState: target?.getAttribute('data-state') ?? null,
+        visibleOpenContentCount: [...document.querySelectorAll(
+          '[data-slot="select-content"][data-state="open"]',
+        )].filter(candidate => candidate.getClientRects().length > 0).length,
+      }
+    })()`)
+    throw new Error(
+      `Region select did not open: ${JSON.stringify(diagnostic)}`,
+      { cause: error },
+    )
+  }
+}
+
+export async function waitForRegionSelectOptions(
+  page,
+  rootTestId,
+  level,
+  expectedLabels,
+) {
+  const trigger = regionLevelTriggerExpression(rootTestId, level)
+  await page.waitFor(`(() => {
+    const expected = ${JSON.stringify(expectedLabels)}
+    const target = ${trigger}
+    const contentId = target?.getAttribute('aria-controls')
+    const content = contentId ? document.getElementById(contentId) : null
+    const labels = [...(content?.querySelectorAll(
+      '[data-slot="select-item"][role="option"]',
+    ) ?? [])]
+      .filter(item => item.getClientRects().length > 0)
+      .map(item => item.textContent?.trim() ?? '')
+    return labels.length === expected.length
+      && labels.every((label, index) => label === expected[index])
+  })()`)
+}
+
+export async function selectRegionOption(
+  page,
+  rootTestId,
+  level,
+  text,
+) {
+  const trigger = regionLevelTriggerExpression(rootTestId, level)
+  const serializedText = JSON.stringify(text)
+  const expanded = await page.evaluate(
+    `${trigger}?.getAttribute('aria-expanded') === 'true'`,
+  )
+  if (!expanded) {
+    await openRegionLevelSelect(page, rootTestId, level)
+  }
+  await page.waitFor(`(() => {
+    const target = ${trigger}
+    const contentId = target?.getAttribute('aria-controls')
+    const content = contentId ? document.getElementById(contentId) : null
+    const exact = [...(content?.querySelectorAll(
+      '[data-slot="select-item"][role="option"]',
+    ) ?? [])].filter(item => (
       item.getClientRects().length > 0
       && item.getAttribute('aria-disabled') !== 'true'
-    ))
-    const exact = candidates.filter(item => (
-      item.textContent?.trim() === ${serialized}
-      || item.title?.trim() === ${serialized}
+      && item.textContent?.trim() === ${serializedText}
     ))
     return exact.length === 1
   })()`)
   await page.evaluate(`(() => {
-    const candidates = [...document.querySelectorAll(
-      '.qs-region-selector-popup [role="menuitem"]',
-    )].filter(candidate => (
-      candidate.getClientRects().length > 0
-      && candidate.getAttribute('aria-disabled') !== 'true'
+    const target = ${trigger}
+    const contentId = target?.getAttribute('aria-controls')
+    const content = contentId ? document.getElementById(contentId) : null
+    const exact = [...(content?.querySelectorAll(
+      '[data-slot="select-item"][role="option"]',
+    ) ?? [])].filter(item => (
+      item.getClientRects().length > 0
+      && item.getAttribute('aria-disabled') !== 'true'
+      && item.textContent?.trim() === ${serializedText}
     ))
-    const exact = candidates.filter(candidate => (
-      candidate.textContent?.trim() === ${serialized}
-      || candidate.title?.trim() === ${serialized}
-    ))
-    const item = exact.length === 1 ? exact[0] : undefined
-    if (!item) throw new Error('menu item unavailable')
-    item.click()
+    if (exact.length !== 1) {
+      throw new Error('region option unavailable')
+    }
+    exact[0].focus({ preventScroll: true })
     return true
   })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`${trigger}?.getAttribute('aria-expanded') === 'false'`)
 }
 
 export async function pressKey(page, key, code = key) {

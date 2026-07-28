@@ -1,8 +1,9 @@
 # QsRegionSelector 地区选择器
 
-`QsRegionSelector` 是千树 DMS 的应用级业务组件，用于选择严格的
-`国家/地区 → 省/州 → 城市` 三级地区。组件按需读取数据库地区数据，对业务调用方只
-输出稳定的 `CITY UUID | null`，不请求写接口、不读取页面 Store，也不保存业务表单。
+`QsRegionSelector` 是千树 DMS 的应用级业务组件，以三个并列的 `FaSelect`
+选择严格的 `国家/地区 → 省/州 → 城市` 三级地区。组件内部通过 Provider
+按级读取数据库数据，对业务调用方双向绑定三个稳定 UUID，不读取页面 Store、
+不请求写接口，也不保存地区展示名称。
 
 ## 快速接入
 
@@ -10,23 +11,31 @@
 
 ```vue
 <script setup lang="ts">
-import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
+import type {
+  RegionSelectorChange,
+  RegionSelectorValue,
+} from '@/components/business/QsRegionSelector/types'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
 
-const cityId = ref<string | null>(null)
+const region = ref<RegionSelectorValue>({
+  countryRegionId: null,
+  provinceStateId: null,
+  cityId: null,
+})
 
 function handleRegionChange(change: RegionSelectorChange) {
-  if (change.source === 'select') {
-    console.info(change.path.map(node => node.name).join(' / '))
-  }
+  console.info(
+    change.complete,
+    change.path.map(node => node.name).join(' '),
+  )
 }
 </script>
 
 <template>
-  <label for="shipping-city">收货城市</label>
+  <label for="shipping-region">收货地区</label>
   <QsRegionSelector
-    id="shipping-city"
-    v-model="cityId"
+    id="shipping-region"
+    v-model="region"
     name="shippingCityId"
     required
     @change="handleRegionChange"
@@ -34,50 +43,71 @@ function handleRegionChange(change: RegionSelectorChange) {
 </template>
 ```
 
-`中国台湾 → 台湾 → 高雄市` 与其他地区使用同一契约，高雄市的 value 是对应
-`CITY UUID`，不是名称、路径文本或行政编码。
+中国台湾的完整展示固定为 `中国台湾 台湾 高雄市`。三个 value 分别是对应的
+国家/地区 UUID、省/州 UUID 与 CITY UUID，不是名称、路径文本或行政编码。
 
 ## Public API
+
+### Value
+
+```ts
+interface RegionSelectorValue {
+  countryRegionId: string | null
+  provinceStateId: string | null
+  cityId: string | null
+}
+```
+
+合法状态只能按层级递进：
+
+- 全空；
+- 仅 `countryRegionId`；
+- `countryRegionId + provinceStateId`；
+- 三个字段全部非空。
+
+切换国家/地区会清空省/州与城市；切换省/州会清空城市。
 
 ### Props
 
 | Prop | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
-| `modelValue` | `string \| null` | `null` | 已选 CITY UUID |
+| `modelValue` | `RegionSelectorValue` | 三级均为 `null` | 结构化三级 UUID |
 | `provider` | `RegionSelectorProvider` | 应用注入值 | 仅供隔离测试、Showcase 或明确嵌入环境覆盖 |
-| `placeholder` | `string` | `请选择国家/地区、省/州和城市` | 空值提示 |
-| `clearable` | `boolean` | `true` | 是否允许用户清空 |
-| `readonly` | `boolean` | `false` | 保持可聚焦和可读，关闭弹层、搜索与清空 |
-| `disabled` | `boolean` | `false` | 阻止交互，但仍解析非空历史 value |
+| `clearable` | `boolean` | `true` | 有值时显示“清空地区”操作 |
+| `readonly` | `boolean` | `false` | 显示可聚焦、可复制的完整路径，不打开下拉 |
+| `disabled` | `boolean` | `false` | 禁止三个下拉与清空，仍解析历史值 |
 | `error` | `boolean` | `false` | 调用方表单校验错误态 |
 
-组件固定为单选、完整三级、仅 CITY 可提交。不会开放 Arco 的 `multiple`、
-`pathMode`、`checkStrictly`、分隔符或搜索延时等内核参数。
+组件固定为单选、三级顺序选择。每级 placeholder 由组件根据未选择、加载、
+失败状态生成，不开放底层 Reka 或 FaSelect 参数。
 
 ### Events
 
 | Event | 参数 | 说明 |
 | --- | --- | --- |
-| `update:modelValue` | `string \| null` | 只返回 CITY UUID 或 `null` |
-| `change` | `RegionSelectorChange` | 只在用户选择或清空时触发，选择时包含严格三级 `path` |
-| `focus` | `FocusEvent` | 来自内部真实 input |
-| `blur` | `FocusEvent` | 来自内部真实 input |
+| `update:modelValue` | `RegionSelectorValue` | 每次用户选择一级或清空时发出完整对象 |
+| `change` | `RegionSelectorChange` | 包含操作来源、部分或完整 path、结构化 value、`complete` |
+| `focus` | `FocusEvent` | 焦点进入复合控件时触发 |
+| `blur` | `FocusEvent` | 焦点离开复合控件时触发 |
 
-外部设置 `modelValue` 只做路径回显，不触发 `change`。清空事件固定为
-`{ source: 'clear', value: null, path: null }`，不会泄露 Arco 的空字符串或
-`undefined`。
+`change.source` 为 `countryRegion`、`provinceState`、`city` 或 `clear`。
+只有城市选择完成时 `complete=true`。外部设置 `modelValue` 只做回显和校验，
+不会触发 `change`。
 
 ### Attrs 与公开方法
 
-组件支持 `id`、`name`、`required`、`autocomplete`、`tabindex`、`aria-*`、
-`class`、`style` 和 `data-*`。`id`、表单属性及 ARIA 属性会桥接到唯一真实
-`<input>`；`class`、`style`、`data-*` 保留在组件根节点。
+- `class`、`style`、`data-*` 和复合控件级 ARIA 保留在组件根节点。
+- 调用方 `id` 对应第一个国家/地区 combobox；省/州和城市使用派生 ID。
+- `name`、`required` 与 `form` 由组件私有原生表单代理承担。
+- `name` 继续提交 CITY UUID；另外两级通过 Vue `v-model` 获取，不隐式创造表单字段名。
+- 模板 ref 可调用 `focus()` 与 `blur()`；`focus()` 定位首个未完成层级。
 
-模板 ref 可调用 `focus()` 与 `blur()`，两者都操作真实 input。
+`autocomplete` 不再公开：三个可见控件是 button-based combobox，把浏览器自动填充
+写入不可见表单代理会产生错误状态。
 
 ## Provider
 
-公共 Provider 只有只读能力：
+公共 Provider 保持只读契约：
 
 ```ts
 interface RegionSelectorProvider {
@@ -100,98 +130,76 @@ interface RegionSelectorProvider {
 }
 ```
 
-正式页面通常不传 `provider`。应用启动层创建默认 Provider，负责访问只读选择 API、
-运行时校验并冻结响应。Prop 的优先级高于注入值，只用于组件库 fixture、隔离测试或
-明确不接入正式应用壳的环境。业务页面不得通过 Provider 写地区数据。
+新组件只调用 `listChildren`、`resolvePath` 与 `subscribeInvalidation`。
+`search()` 保留给其他业务和既有 Server API 使用，不在三个独立 `FaSelect` 中调用。
 
-## CITY UUID 与 path
+## 加载与回显
 
-- `modelValue` 只保存 CITY UUID；国家/地区和省/州永远不能成为 value。
-- 完整 path 固定为 `COUNTRY_REGION → PROVINCE_STATE → CITY`。
-- 用户选择时从 `change.path` 读取当次显示路径；不得把 path 作为第二份可写状态。
-- 非空 value 回显只解析对应的一条完整路径，不下载全量地区树。
-- 已停用历史路径仍保留原 value 并显示“当前历史地区已停用，仅供回显”，但不会进入
-  新选择 options 或搜索结果。
-- 业务数据只持久化 CITY UUID，**不保存地区展示名称**。名称、英文名和路径都可能由
-  地区管理员更新，展示时应按 ID 重新解析。
+- 挂载时只读取国家/地区。
+- 选择或回显国家/地区后，只读取其直属省/州。
+- 选择或回显省/州后，只读取其直属城市。
+- 完整外部 value 先按 CITY UUID 解析 path，并严格核对三个 UUID，再按级补齐 options。
+- 组件不下载全球完整地区树。
+- 某一级成功返回空列表时，对应下拉显示“暂无可选…”并保持禁用，不呈现空白弹层。
+- 可见选中项、下级启用状态和 `required` 焦点只依据已经验证的 path；畸形外部
+  UUID 仅保留给调用方处理，不会被 `FaSelect` 显示成第一条真实 option。
+- 已停用历史路径会追加到对应 options 供回显，但保持不可选，并显示
+  “当前历史地区已停用，仅供回显”。
+- 请求使用独立的取消与版本控制；切换上级、缓存失效或卸载后，迟到响应不能覆盖新状态。
+
+路径展示统一用一个 ASCII 空格连接，例如 `中国台湾 台湾 高雄市`；不得使用 `/`。
 
 ## 缓存与身份
 
-以下规则属于应用默认 Provider，不属于组件本体，也不适用于本地 fixture：
+以下规则属于应用默认 Provider：
 
 - 成功响应以内存缓存 5 分钟；失败、取消和畸形响应不缓存。
-- key 同时包含 `authEpoch`、`userId`、请求类型及规范化参数。
+- key 包含 `authEpoch`、`userId`、请求类型及规范化参数。
 - 同身份、同 key 的进行中请求合并；单个消费者取消不会中断其他消费者。
 - 登出、身份 epoch 变化或管理写成功会推进 generation、中止旧请求并清空缓存。
-- 管理写确认成功后通过 `qianshu-regions-v1` 的失效消息通知其他标签页；消息不携带
-  地区数据。
-- 迟到响应只有在 identity 与 generation 仍一致时才能写入缓存。
+- 管理写成功后通过 `qianshu-regions-v1` 通知其他标签页失效，消息不携带地区数据。
 
-调用方不应自行在 Pinia、localStorage 或页面常量中复制地区树；这会绕过身份与失效
-边界。
+调用方不得在 Pinia、localStorage 或页面常量中复制完整地区树。
 
 ## 错误与重试
 
-组件分别维护 path、root、lazy 和 search 的加载、取消、错误与重试状态。取消和过期
-响应不显示错误；其他失败只展示固定中文信息和后端已公开的可选 `requestId`，不会
-渲染底层异常或原始响应。
-
-- 历史 value 回显失败时保留原 CITY UUID，不擅自清空业务记录。
-- root、lazy、search 失败时在组件内提供对应重试入口。
-- lazy 失败不会把父节点误标记为空，重试后仍可继续展开。
-- `error` 只表达调用方校验态；业务保存失败、权限失败和领域错误仍由调用页面呈现。
+组件分别维护 path、国家/地区、省/州和城市请求状态。取消和过期响应不显示错误；
+其他失败只呈现固定中文信息与后端公开的可选 `requestId`，并提供局部“重试加载”。
+回显失败时保留原结构化 value，不擅自清空业务记录。
 
 ## 原生表单与 FormData
 
-Arco 内部 input 的可见 value 是搜索草稿，不是 CITY UUID。组件通过局部输入桥接保证
-复合控件的原生表单语义：
+三个 `FaSelect` 的真实控件是 button，不具备原生表单值。组件使用一个视觉隐藏的
+`input[type=text]` 作为表单代理：
 
-- `required` 在尚未确认完整三级 CITY 时保持无效；输入搜索词但未选择城市仍无效。
-- 选中有效 CITY 后清除自定义 validity，避免空搜索草稿误伤已有选择。
-- 有 `name` 且位于原生 `<form>` 内时，`formdata` 事件会以
-  `formData.set(name, modelValue ?? '')` 写入 CITY UUID。
-- 历史 UUID 在回显请求期间仍可进入 FormData，但 `required` 只有在完整三级路径确认
-  后才视为有效。
+- `name` 对应 CITY UUID；
+- optional 历史值在回显期间仍可进入 FormData；
+- `required` 只有在严格三级 path 验证完成后才有效；
+- 空值或部分值的校验消息为“请选择完整地区”；
+- disabled 遵循原生语义，不提交表单代理；
+- readonly 仍提交已有 CITY UUID，但退出约束校验。
 
-Vue 表单仍应以 `v-model` 作为主状态。调用方必须提供真实 `<label for="...">` 或
-等价可访问名称，不要依赖 placeholder 代替 label。
+Vue 表单应以结构化 `v-model` 为主状态；调用方仍需提供真实 label 或等价可访问名称。
 
-## Showcase 边界
+## Showcase 边界与调用方职责
 
-组件库路由 `/component-library/business/region-selector` 的标准选择、
-`中国台湾 / 台湾 / 高雄市`、`readonly` 和 `disabled` 状态不传 `provider`，统一使用
-应用启动层注入的默认 Provider，从正式 selection API 按需读取数据库数据。
+组件库路由 `/component-library/business/region-selector` 的标准选择、中国台湾路径、
+readonly 和 disabled 使用应用默认 Provider。停用历史路径和一次失败后重试才使用
+隔离 fixture。
 
-停用历史路径和一次失败后重试属于数据库无法稳定制造的边界状态，因此只在对应示例
-显式传入隔离 fixture Provider。fixture 不得用于标准选择，也不能替代真实浏览器端
-API 验收。
-
-## 调用方职责
-
-业务调用方负责：
-
-- 持有和保存 CITY UUID，并决定字段是否必填；
-- 提供 label、帮助文本和领域级校验错误；
-- 处理用户 `change` 后的业务联动；
-- 处理表单提交、权限、保存失败、未知写结果和页面级 loading；
-- 需要显示路径时按 ID 解析，不保存或拼接展示名称；
-- 地区管理写成功后调用受控缓存失效入口；普通选择表单不得主动清缓存。
-
-组件负责选择、完整路径显示、按需加载、搜索、请求取消、历史回显、局部重试与真实
-input 语义；它不负责业务 API 写入、权限判断、Store、表单提交或领域映射。
+调用方负责持有和保存三个 UUID、提供业务 label 与帮助文本、处理字段联动和提交错误。
+组件负责按级选择、依赖重置、完整路径显示、请求取消、历史回显、局部重试和表单代理；
+不负责地区写入、权限、Store 或页面级提交。
 
 ## 验证
 
 ```bash
 pnpm -C web exec node --import tsx --test \
-  apps/qsmds-arco/test/api/component-library-routes.test.ts \
-  apps/qsmds-arco/test/views/region-selector-showcase.test.ts \
   apps/qsmds-arco/test/views/region-selector.logic.test.ts \
-  apps/qsmds-arco/test/views/region-selector.test.ts \
   apps/qsmds-arco/test/views/region-selector-control-attrs.test.ts \
-  apps/qsmds-arco/test/views/region-selector-provider.test.ts
+  apps/qsmds-arco/test/views/region-selector-showcase.test.ts \
+  apps/qsmds-arco/test/views/region-selector.test.ts
 
-pnpm -C web typecheck
-pnpm -C web lint
-pnpm -C web build
+pnpm -C web check
+node --run ci:browser-regions-e2e
 ```

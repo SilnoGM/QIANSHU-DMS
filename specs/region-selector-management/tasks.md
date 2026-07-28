@@ -15,6 +15,11 @@
 本清单已按确认范围完成 Phase 4 实施；Task 1-15 均有对应测试、实现、验证和提交
 证据。未执行 push、merge、分支删除或 worktree 清理。
 
+2026-07-28 在 `refactor/region-selector-three-selects` 补充实施选择器重构：组件改为
+三个并列 `FaSelect`，公共 value 改为 `RegionSelectorValue` 三字段对象。本文把该
+补充并入 Task 10、11、14 和验收/提交说明；在 Git 提交真实完成前不记录新 commit
+SHA，也不改写原 Phase 4 提交历史。
+
 ## 2. 执行规则
 
 1. 新功能与复杂修改严格采用 TDD：
@@ -25,14 +30,15 @@
 2. 红测是过程证据，不提交失败状态。每个 Git 检查点必须恢复受影响基线为绿色。
 3. 实施过程中实时更新本文件 checkbox；代码、数据、验证或提交未完成时不得提前勾选。
 4. `requirements.md`、`design.md` 是已确认真相源。若必须改变三级结构、602 节点数量、
-   数据来源、CITY UUID value、API、权限或组件公共契约，立即暂停并重新确认。
+   数据来源、`RegionSelectorValue` 三字段、API、权限或组件公共契约，立即暂停并重新
+   确认。
 5. 数据固定为：
    - 3 个 `COUNTRY_REGION`；
    - 48 个 `PROVINCE_STATE`；
    - 551 个 `CITY`；
    - 总计 602 个节点。
-6. 强制验收路径为 `中国台湾 → 台湾 → 高雄市`；同时验证
-   `中国 → 北京市 → 北京市` 和一条固定马来西亚路径。
+6. 强制验收路径为 `中国台湾 台湾 高雄市`；同时验证
+   `中国 北京市 北京市` 和一条固定马来西亚路径；所有完整路径使用单个 ASCII 空格。
 7. 不修改既有 migration；所有 schema 和数据变化使用新的 forward migration。
 8. 不在运行时、构建、启动或 migration 中联网下载地区数据；不使用
    `ON CONFLICT DO NOTHING` 掩盖漂移。
@@ -120,7 +126,7 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 2.3 红测精确断言各数据域及 3/48/551/602 数量，不用“大于零”或少量样例代替。
   - [x] 2.4 红测固定中国 31/369、中国台湾 1/22、马来西亚 16/160，以及直辖市同名
     叶子、省直管业务叶子、同名马来西亚三级叶子。
-  - [x] 2.5 红测固定 `中国台湾 → 台湾 → 高雄市`，并断言
+  - [x] 2.5 红测固定 `中国台湾 台湾 高雄市`，并断言
     `sourceName` 为来源繁体、`sourceCode="E/64000"`、`code="TW-64000"`。
   - [x] 2.6 新增：
 
@@ -342,25 +348,30 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   - [x] 9.9 更新 Task 9 状态并创建提交：`feat: 添加地区选择数据提供层`。
   - _Requirements: R3, R4, R6, R8, R9, R10_
 
-- [x] 10. 以 TDD 实现 `QsRegionSelector`
+- [x] 10. 以 TDD 实现并重构 `QsRegionSelector`
   - [x] 10.1 先新增并运行失败的 `region-selector.logic.test.ts` 和
-    `region-selector.test.ts`，固定 `CITY UUID | null`、typed change 和只读 tuple。
-  - [x] 10.2 红测固定 navigation/resolved/search 三棵树隔离、交互树 UUID merge、
-    partial path 不阻断 lazy load、`done()` retry、250ms remote search 和 request
-    version stale 防护。
-  - [x] 10.3 红测固定 existing ID path 回显不触发 change、停用 path 标记、无效 path
-    保留原 value、只允许 CITY、clear 转 null。
-  - [x] 10.4 实现 `logic.ts`、`control-attrs.ts`、`index.vue`，以
-    `ACascader@2.58.0` 为私有内核；不得使用/扩展 `FaCascader` 或暴露 Arco 类型。
-  - [x] 10.5 固定 `multiple/pathMode/checkStrictly/expandTrigger` 等内核参数，控制
-    `inputValue`、`filterOption`、`formatLabel`、loading/error/retry。
-  - [x] 10.6 实现真实 input bridge：id/name/tabindex/required/autocomplete/aria、
-    focus/blur、describedby 合并、清理旧 attr 和 Arco DOM 唯一 input 断言。
-  - [x] 10.7 实现复合 required 与原生 form 语义：搜索词不能替代 CITY 选择，
-    `FormData` 必须写 CITY UUID。
-  - [x] 10.8 使用现有语义 token 实现 full width、完整 path、停用/错误文字、390px
-    popup 内部滚动、dark 和 reduced motion；不增加渐变、卡片堆叠或局部字体栈。
-  - [x] 10.9 定向运行：
+    `region-selector.test.ts`，固定 `RegionSelectorValue` 的
+    `countryRegionId/provinceStateId/cityId`、按来源判别的 typed change 和只读
+    path tuple。
+  - [x] 10.2 红测固定合法全空/部分/完整 value、每级选择立即双向更新、切国家清省州/
+    城市、切省州清城市、clear 三字段归空。
+  - [x] 10.3 红测固定 mount roots、按父级 `listChildren`、同层 level/parent 校验、
+    历史停用节点合并，以及 root/省州/城市/path 独立 cancel 与 request version。
+  - [x] 10.4 红测固定完整外部 value 以 `cityId` 执行 `resolvePath`，必须同时核对三个
+    UUID；path 失败保留原对象且不阻断 root options，回显不触发 change。
+  - [x] 10.5 实现 `logic.ts`、`control-attrs.ts`、`index.vue`，内部使用三个并列的
+    `FaSelect`；不得使用 `ACascader`、`FaCascader`、嵌套 Dropdown 或完整 option tree。
+  - [x] 10.6 组件只消费 `listChildren`、`resolvePath` 和失效订阅，不调用 `search()`；
+    Server search API、Provider search 能力和地区管理页搜索保持不变。
+  - [x] 10.7 实现 trigger bridge：国家/地区主 ID、省州/城市派生 ID、
+    tabindex/required/aria、describedby 合并、旧 attr 清理、focus/blur 和每级唯一
+    button 断言；bridge 更新不得丢失仍存在的焦点目标。
+  - [x] 10.8 实现私有 form proxy：`name` 只提交 CITY UUID；空值/部分值的 required
+    显示“请选择完整地区”，聚焦首个未完成层级；readonly 使用原生只读 input。
+  - [x] 10.9 使用现有语义 token 实现 full width、桌面三列、390px 顺序堆叠、完整
+    path 单个 ASCII 空格、停用/错误文字、dark 和 reduced motion；不增加渐变、卡片
+    堆叠或局部字体栈。
+  - [x] 10.10 定向运行：
 
     ```bash
     pnpm -C web exec node --import tsx --test \
@@ -374,9 +385,11 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     pnpm -C web build
     ```
 
-  - [x] 10.10 如 `tsx` CLI 在沙箱报 IPC `listen EPERM`，仅对上述
+  - [x] 10.11 如 `tsx` CLI 在沙箱报 IPC `listen EPERM`，仅对上述
     `node --import tsx --test` 窄命令授权重试，不修改 watcher 或测试语义。
-  - [x] 10.11 更新 Task 10 状态并创建提交：`feat: 添加地区选择器组件`。
+  - [x] 10.12 原始 Task 10 已创建 `feat: 添加地区选择器组件`；本次补充重构与同步
+    文档随最终 `refactor: 将地区选择器改为三级独立下拉` 提交，不在提交发生前填写
+    SHA。
   - _Requirements: R3, R4, R8, R9, R10_
 
 - [x] 11. 以 TDD 增加中文 README 与隔离 Showcase
@@ -384,12 +397,14 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     `region-selector-showcase.test.ts`，固定第 10 个独立组件叶子路由。
   - [x] 11.2 新增 `/component-library/business/region-selector`、页面和
     `RegionSelectorShowcase.vue`；不得把多个组件重新聚合到同一示例页。
-  - [x] 11.3 Showcase 显式传本地 fixture provider，醒目标注“交互样例，不是正式地区
-    数据”，不得 import 正式 API、Store 或默认 provider。
-  - [x] 11.4 覆盖标准、中国台湾高雄、停用历史路径、readonly、disabled、一次失败重试
-    和窄屏状态。
-  - [x] 11.5 完成 `QsRegionSelector/README.md`：public API、provider、value/path、
-    缓存/身份、错误、表单、FormData、示例边界和调用方职责。
+  - [x] 11.3 Showcase 的标准选择、中国台湾、readonly 和 disabled 使用应用默认
+    Provider；只有停用历史和一次失败重试显式传隔离 fixture，fixture 不得成为正式
+    地区真相源。
+  - [x] 11.4 覆盖三个并列下拉、中国台湾高雄、停用历史路径、readonly input、
+    disabled、一次失败重试和窄屏状态。
+  - [x] 11.5 完成 `QsRegionSelector/README.md`：`RegionSelectorValue`、逐级清理、
+    provider、路径空格、缓存/身份、错误、required、CITY UUID FormData、示例边界和
+    调用方职责。
   - [x] 11.6 运行组件路由/Showcase/选择器测试、Web typecheck/lint/build；更新
     Task 11 状态并创建提交：`feat: 添加地区选择器示例与文档`。
   - _Requirements: R4, R9, R10_
@@ -461,20 +476,22 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
     断言必须同时核对真实 HTTP 结果、DOM/Store 状态和最终数据库可观察结果，不能只
     检查 Toast。
   - [x] 14.4 选择器在真实浏览器覆盖：
-    - 打开、lazy、搜索、键盘三级导航、清空、Escape；
-    - root/lazy/search/path 四类失败与 retry；
+    - 三个 `FaSelect` 的逐级键盘选择、切上级清下级、清空和 Escape；
+    - mount root、按父级省州/城市加载，不调用 search 且不下载整树；
+    - root/省州/城市/path 四类失败与 retry；
     - stale 响应不覆盖；
-    - existing/disabled path；
-    - `中国台湾 / 台湾 / 高雄市`；
-    - 真实 INPUT 的 id/name/aria/focus/required；
-    - `FormData` 为 CITY UUID；
-    - readonly、disabled、多实例 dedupe。
+    - 完整三级 value 的 path 回显与三个 UUID 核对、停用历史 path；
+    - `中国台湾 台湾 高雄市`；
+    - 三个 trigger 的 id/aria/label/focus、required 可见反馈；
+    - `name` 的 `FormData` 值为 CITY UUID；
+    - readonly input、disabled、多实例 dedupe。
   - [x] 14.5 管理页覆盖无权限 403、只读和各部分写权限、导航、搜索、双状态筛选、
     sorting、pagination、create、update、enable、disable、无 DELETE。
   - [x] 14.6 覆盖 mutation 成功后的当前 tab 立即失效、同源第二 tab 失效通知和迟到
     cache 响应不回写；广播载荷不得出现名称、code 或完整地区数据。
-  - [x] 14.7 桌面和 `390x844` 验证一个主内容面板、Drawer 焦点恢复、移动卡片、Modal、
-    popup 内滚动和 `scrollWidth <= clientWidth`。
+  - [x] 14.7 桌面和 `390x844` 验证选择器三列/顺序堆叠、地区管理一个主内容面板、
+    Drawer 焦点恢复、移动卡片、Modal、Select popup 和
+    `scrollWidth <= clientWidth`。
   - [x] 14.8 分别验证 light、dark、`prefers-reduced-motion: reduce`、键盘可见焦点、
     状态非颜色依赖和无新增 console warning/error。
   - [x] 14.9 运行 `node --run ci:browser-regions-e2e`；若发现缺陷，先增加最小失败回归
@@ -532,19 +549,25 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
   完全一致，共 `602` 个节点；实际计数为 `3 COUNTRY_REGION`、
   `48 PROVINCE_STATE`、`551 CITY`，且 `602` 个技术 code 全部唯一。
 - 关键路径：
-  - `中国 → 北京市 → 北京市`
-  - `中国台湾 → 台湾 → 高雄市`
-  - `马来西亚 → 柔佛 → Batu Pahat`
+  - `中国 北京市 北京市`
+  - `中国台湾 台湾 高雄市`
+  - `马来西亚 柔佛 Batu Pahat`
 - Server：Prisma schema 有效，`pnpm -C server check` 为 `83 suites / 721 tests`；
   build 通过；隔离 PostgreSQL 16 从空库应用全部 5 条 migration、重复 deploy 无
   pending，Server E2E 为 `15 suites / 88 tests`。
 - OpenAPI：`contract:sync` 与 `contract:check` 均通过且生成资产无漂移。选择接口只要求
   正常 Session；管理接口逐 endpoint 使用 `regions:read/create/update/enable/disable`，
   写接口保留 CSRF，所有响应 `private, no-store`，且没有 DELETE。
-- Web：`pnpm -C web check` 中 Node `148`、TSX `49`、API/View `434` 项测试通过，
-  typecheck、ESLint、Stylelint 和 production build 均通过；字体零残留校验通过。
-- Browser：认证与系统管理基线 `2/2` 通过；地区专属选择器与管理场景 `2/2` 通过，
-  覆盖台湾路径、权限矩阵、写入、双标签缓存失效、桌面/窄屏及表单语义。
+- 原 Phase 4 Web 证据：`pnpm -C web check` 的 Node、TSX、API/View、typecheck、
+  ESLint、Stylelint 和 production build 均通过；字体零残留校验通过。测试项数量会随
+  本次重构回归增加，不继续复制旧的静态计数充当当前证据。
+- 本次重构 Web 证据必须来自最终工作树重跑：定向逻辑/结构/control attrs/Showcase
+  测试、`pnpm -C web check`、`node --run ci:browser-regions-e2e` 和
+  `git diff --check`。断言固定三个并列 `FaSelect`、`RegionSelectorValue`、逐级清理、
+  path 三 UUID 核对、required 可见反馈、readonly input、CITY UUID FormData 和
+  `中国台湾 台湾 高雄市`；最终命令结果在交付报告中记录，不在本文伪造 commit SHA。
+- Browser 地区专属选择器与管理场景均必须通过；组件场景不再包含选择器内搜索，而地区
+  管理场景继续覆盖搜索、权限矩阵、写入、双标签缓存失效、桌面/窄屏及表单语义。
 - 根级：`node --run test:root` 以 JUnit 复核 `608` 个 leaf testcases，无 failure、
   error 或 skip；最终 `node --run check` 和 `git diff --check` 均通过。
 - 只读审计未发现 P0/P1：README/Showcase fixture/正式业务页职责边界正确，缓存具备
@@ -570,7 +593,8 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
 | Task 7 | `feat: 添加地区管理查询接口` | navigation/list/detail/E2E/OpenAPI |
 | Task 8 | `feat: 添加地区管理维护接口` | create/update/status/transaction/Audit/OpenAPI |
 | Task 9 | `feat: 添加地区选择数据提供层` | Web API、provider、cache、identity/invalidation |
-| Task 10 | `feat: 添加地区选择器组件` | public component、Arco adapter、input bridge |
+| Task 10 原始实现 | `feat: 添加地区选择器组件` | 原始 public component 历史 |
+| Task 10 重构补充 | `refactor: 将地区选择器改为三级独立下拉` | 三个 FaSelect、结构化 value、form proxy、文档与回归 |
 | Task 11 | `feat: 添加地区选择器示例与文档` | README、fixture Showcase、组件路由 |
 | Task 12 | `feat: 添加地区管理查询页面` | 权限路由、导航、直属下级表格、响应式 |
 | Task 13 | `feat: 添加地区管理维护流程` | 表单、启停、未知结果、Toast、缓存联动 |
@@ -606,10 +630,12 @@ Task 2 和 Task 3 在逻辑上可独立推进，但 Seed migration 必须同时�
 出现以下任一情况必须暂停，不得自行扩大范围：
 
 1. 固定源 SHA、license、转换数量或关键路径与需求不一致。
-2. 需要改变 3/48/551/602、三级层级、CITY UUID value 或台湾路径。
+2. 需要改变 3/48/551/602、三级层级、`RegionSelectorValue` 三字段、CITY UUID 表单值
+   或台湾路径空格规则。
 3. 需要修改已经提交的 migration、提供 DELETE、移动 parent 或改变 code。
 4. 需要新增依赖、全局 Store、查询库、第二套视觉系统或修改第三方源码。
-5. `ACascader` 实际 DOM/键盘行为无法通过局部 adapter 满足已确认 input 契约。
+5. `FaSelect` trigger 的实际 DOM/键盘行为无法通过局部 bridge 满足三个可访问下拉、
+   required 可见反馈或 readonly input 契约。
 6. 需要改变公共 API、权限 code、错误 code 或缓存身份边界。
 7. 发现与当前任务重叠的用户未提交修改，无法安全绕开。
 8. 完成需要迁移共享开发/生产数据库、停止非本任务进程、push、merge、删除分支或其他

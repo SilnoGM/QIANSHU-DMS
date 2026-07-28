@@ -6,8 +6,8 @@ defineOptions({ name: 'ComponentLibraryQsRegionSelector' })
 
 const principles = [
   {
-    title: '只提交城市 ID',
-    description: '公共 value 始终是 CITY UUID 或 null，完整路径只用于显示和用户 change 事件。',
+    title: '原子绑定三级 ID',
+    description: '公共 value 同时携带国家/地区、省/州和城市 UUID，切换上级会原子清空下级。',
     icon: 'i-lucide:map-pin-check',
   },
   {
@@ -29,7 +29,7 @@ const principles = [
     description="独立验收 QsRegionSelector 的三级按需加载、完整路径、历史回显、错误重试和表单语义。"
     section-label="QsRegionSelector"
     headline="统一国家、地区与城市选择"
-    summary="地区选择器只向业务表单提交稳定的 CITY UUID；展示工作台的标准状态直接读取数据库，停用与失败边界使用隔离 fixture。"
+    summary="地区选择器向 Vue 表单双向绑定三个稳定 UUID；原生 name 仍提交 CITY UUID。标准状态直接读取数据库，停用与失败边界使用隔离 fixture。"
     route-path="/component-library/business/region-selector"
     icon="i-lucide:map-pinned"
     :principles="principles"

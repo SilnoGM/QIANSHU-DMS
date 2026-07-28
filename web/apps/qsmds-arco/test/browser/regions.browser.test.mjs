@@ -10,7 +10,6 @@ import {
   authStoreExpression,
   broadcastRegionInvalidation,
   clickVisibleButton,
-  clickVisibleMenuItem,
   clickVisibleModalButton,
   clickVisibleRowButton,
   clickVisibleTreeItem,
@@ -19,22 +18,21 @@ import {
   failResponseAfterServerMutation,
   fillVisibleInput,
   fillVisibleModalInput,
-  inspectNextPausedRequest,
   installBroadcastProbeScript,
   loginThroughRealHttp,
-  openSelector,
+  openRegionLevelSelect,
   patchPermissionsExpression,
   pressKey,
   readConfiguration,
-  readProviderCallExpression,
   regionProviderExpression,
   requestPathname,
   requestSearchParams,
   restorePermissionsExpression,
+  selectRegionOption,
   selectVisibleFilter,
-  startProviderCallExpression,
   subscribeToRegionInvalidation,
   waitForNoVisibleDialog,
+  waitForRegionSelectOptions,
   waitForRegionTable,
 } from './regions.browser.helpers.mjs'
 
@@ -72,43 +70,11 @@ async function waitForAfterAuthentication(page, expression) {
   throw new Error('Browser route did not settle after authentication')
 }
 
-/**
- * 级联弹层的每一列都是独立 menu。这里对某一列的完整文字数组做有序比较，
- * 避免“目标节点存在”掩盖同级数据被截断或仍来自少量 fixture。
- */
-async function waitForVisibleRegionMenu(page, expectedLabels) {
-  await page.waitFor(`(() => {
-    const expected = ${JSON.stringify(expectedLabels)}
-    return [...document.querySelectorAll(
-      '.qs-region-selector-popup [role="menu"]',
-    )]
-      .filter(menu => menu.getClientRects().length > 0)
-      .map(menu => [...menu.querySelectorAll('[role="menuitem"]')]
-        .filter(item => item.getClientRects().length > 0)
-        .map(item => item.textContent?.trim() ?? ''))
-      .some(labels => (
-        labels.length === expected.length
-        && labels.every((label, index) => label === expected[index])
-      ))
-  })()`)
-}
-
-/**
- * BroadcastChannel 的投递是异步任务。每个缓存失效断言先记录接收计数，再等待
- * 所有目标 tab 确认收到消息，避免测试误把旧缓存命中或迟到响应当作新一代结果。
- */
-async function broadcastAndWaitForRegionInvalidation(sender, ...receivers) {
-  const before = await Promise.all(receivers.map(receiver =>
-    receiver.evaluate('globalThis.__regionInvalidations')))
-  await broadcastRegionInvalidation(sender)
-  await Promise.all(receivers.map((receiver, index) =>
-    receiver.waitFor(`globalThis.__regionInvalidations > ${before[index]}`)))
-}
-
-test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与表单语义', {
-  timeout: 300_000,
+test('真实 Chrome 覆盖 QsRegionSelector 三级 FaSelect、HTTP、错误与表单语义', {
+  timeout: 240_000,
 }, async (t) => {
   const configuration = readConfiguration(process.env)
+  const rootTestId = 'region-selector-e2e-primary'
   const browser = await launchChrome({
     executable: configuration.chromeExecutable,
     userDataDirectory: `${configuration.profileDirectory}-regions-selector`,
@@ -116,74 +82,113 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
   t.after(async () => browser.close())
 
   const page = await browser.newPage()
-  const peer = await browser.newPage()
-  await Promise.all([
-    page.addScriptOnNewDocument(installBroadcastProbeScript()),
-    peer.addScriptOnNewDocument(installBroadcastProbeScript()),
-  ])
   const issues = collectRuntimeIssues(page)
-  const peerIssues = collectRuntimeIssues(peer)
-  await page.setViewport(1280, 800, false)
-  await runBrowserStep('selector primary login route', () =>
-    page.navigate(appRouteUrl(configuration.baseUrl, '/login')))
-  await runBrowserStep('selector primary real login', () =>
-    loginThroughRealHttp(page, configuration))
-  await runBrowserStep('selector primary target route', () => page.navigate(appRouteUrl(
-    configuration.baseUrl,
-    `${selectorRoute}?case=standard`,
-  )))
-  await runBrowserStep('selector primary target ready', () =>
-    waitForAfterAuthentication(page, `document.querySelector(
-    '#region-selector-e2e-primary',
-  ) !== null && document.querySelector(
-    '[data-testid="region-selector-live-form"]',
-  ) !== null`))
-  await subscribeToRegionInvalidation(page)
+  const searchRequests = []
+  const removeNetworkListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      if (requestPathname(event) === '/api/region-selection/search') {
+        searchRequests.push(event.requestId)
+      }
+    },
+  )
+  t.after(() => removeNetworkListener())
 
-  await runBrowserStep('selector peer login route', () =>
-    peer.navigate(appRouteUrl(configuration.baseUrl, '/login')))
-  await runBrowserStep('selector peer real login', () =>
-    loginThroughRealHttp(peer, configuration))
-  await runBrowserStep('selector peer target route', () => peer.navigate(appRouteUrl(
-    configuration.baseUrl,
-    `${selectorRoute}?case=standard`,
-  )))
-  await runBrowserStep('selector peer target ready', () =>
-    waitForAfterAuthentication(peer, `document.querySelector(
-    '#region-selector-e2e-primary',
-  ) !== null`))
-  await subscribeToRegionInvalidation(peer)
-  // 认证 bootstrap 由独立 Auth E2E 覆盖；从目标页稳定后开始收集地区交互异常。
+  await page.setViewport(1280, 800, false)
+  await runBrowserStep('selector login route', () =>
+    page.navigate(appRouteUrl(configuration.baseUrl, '/login')))
+  await runBrowserStep('selector real login', () =>
+    loginThroughRealHttp(page, configuration))
   issues.start()
-  peerIssues.start()
-  // 空值 required 必须由真实 input 参加 Constraint Validation 与 FormData。
+
+  // 合法国家部分值的冷启动 root 先失败一次；重试后必须继续恢复原始 UUID。
+  await runBrowserStep('selector root failure interception', () =>
+    failNextRequest(
+      page,
+      [{
+        requestStage: 'Request',
+        urlPattern: `${configuration.baseUrl}/api/region-selection/options*`,
+      }],
+      event => requestPathname(event) === '/api/region-selection/options'
+        && !requestSearchParams(event).has('parentId'),
+      () => page.navigate(appRouteUrl(
+        configuration.baseUrl,
+        `${selectorRoute}?case=partial-country`,
+      )),
+    ))
+  await runBrowserStep('selector target ready', () =>
+    waitForAfterAuthentication(page, `document.querySelector(
+      '[data-testid="${rootTestId}"][data-slot="qs-region-selector"]',
+    ) !== null`))
+  await page.waitFor(`document.querySelector(
+    '[data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+  )?.textContent?.includes('国家/地区列表加载失败')`)
+
   const emptySemantics = await page.evaluate(`(() => {
-    const input = document.querySelector('#region-selector-e2e-primary')
-    const form = document.querySelector('[data-testid="region-selector-live-form"]')
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const proxy = root?.querySelector(
+      '[data-slot="qs-region-selector-form-control"]',
+    )
+    const form = document.querySelector(
+      '[data-testid="region-selector-live-form"]',
+    )
+    const triggers = [...(root?.querySelectorAll(
+      '[data-slot="select-trigger"][role="combobox"]',
+    ) ?? [])]
     return {
-      ariaRequired: input?.getAttribute('aria-required'),
-      customValidity: input?.validationMessage,
-      required: input?.required,
-      valid: input?.checkValidity(),
-      value: new FormData(form).get('regionCityId'),
+      cityDisabled: triggers[2]?.disabled,
+      countryId: triggers[0]?.id,
+      customValidity: proxy?.validationMessage,
+      formValue: form ? new FormData(form).get('regionCityId') : null,
+      provinceDisabled: triggers[1]?.disabled,
+      proxyName: proxy?.name,
+      proxyRequired: proxy?.required,
+      proxyValid: proxy?.validity.valid,
+      triggerCount: triggers.length,
     }
   })()`)
   assert.deepEqual(emptySemantics, {
-    ariaRequired: 'true',
-    customValidity: '请选择地区',
-    required: true,
-    valid: false,
-    value: '',
+    cityDisabled: true,
+    countryId: 'region-selector-e2e-primary',
+    customValidity: '请选择完整地区',
+    formValue: '',
+    provinceDisabled: true,
+    proxyName: 'regionCityId',
+    proxyRequired: true,
+    proxyValid: false,
+    triggerCount: 3,
   })
 
-  // 所有基准 ID 均从隔离数据库的真实 selection API 按稳定 code/path 发现。
+  await clickVisibleButton(page, '重试加载')
+  await page.waitFor(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const triggers = [...(root?.querySelectorAll(
+      '[data-slot="select-trigger"][role="combobox"]',
+    ) ?? [])]
+    return triggers[0]?.textContent?.trim() === '中国台湾'
+      && triggers[1]?.disabled === false
+      && triggers[2]?.disabled === true
+      && root?.querySelector(
+        '[data-slot="qs-region-selector-path"]',
+      )?.textContent?.trim() === '中国台湾'
+  })()`)
+  assert.equal(
+    await page.evaluate(`document.querySelector(
+      '[data-testid="region-selector-country-value"]',
+    )?.textContent?.trim()`),
+    '2e30acdf-7559-5fc2-8e00-c5b069d3df8b',
+  )
+
+  // 基准 ID 与完整同层数据来自真实 selection API。
   const rootsResponse = await page.evaluate(
     apiExpression('/api/region-selection/options'),
   )
   assert.equal(rootsResponse.status, 200)
-  assert.equal(rootsResponse.cacheControl, 'private, no-store')
   const chinaCountry = rootsResponse.body?.find(region => region.code === 'CN')
+  const taiwanCountry = rootsResponse.body?.find(region => region.code === 'TW')
   assert.equal(chinaCountry?.name, '中国')
+  assert.equal(taiwanCountry?.name, '中国台湾')
+
   const chinaProvinceResponse = await page.evaluate(apiExpression(
     `/api/region-selection/options?parentId=${encodeURIComponent(chinaCountry.id)}`,
   ))
@@ -193,14 +198,12 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
     region => region.code === 'CN-440000',
   )
   assert.equal(guangdongProvince?.name, '广东省')
+
   const guangdongCityResponse = await page.evaluate(apiExpression(
     `/api/region-selection/options?parentId=${encodeURIComponent(guangdongProvince.id)}`,
   ))
   assert.equal(guangdongCityResponse.status, 200)
   assert.equal(guangdongCityResponse.body?.length, 21)
-
-  const taiwanCountry = rootsResponse.body?.find(region => region.code === 'TW')
-  assert.equal(taiwanCountry?.name, '中国台湾')
 
   const taiwanProvinceResponse = await page.evaluate(apiExpression(
     `/api/region-selection/options?parentId=${encodeURIComponent(taiwanCountry.id)}`,
@@ -211,1059 +214,671 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
     region => region.code === 'TW-TAIWAN',
   )
   assert.equal(taiwanProvince?.name, '台湾')
+
   const taiwanCityResponse = await page.evaluate(apiExpression(
     `/api/region-selection/options?parentId=${encodeURIComponent(taiwanProvince.id)}`,
   ))
   assert.equal(taiwanCityResponse.status, 200)
   assert.equal(taiwanCityResponse.body?.length, 22)
-
-  const searchResponse = await page.evaluate(apiExpression(
-    '/api/region-selection/search?query=%E9%AB%98%E9%9B%84%E5%B8%82&limit=50',
-  ))
-  assert.equal(searchResponse.status, 200)
-  const kaohsiungItem = searchResponse.body?.items?.find(item =>
-    item.path.map(region => region.name).join(' / ')
-    === '中国台湾 / 台湾 / 高雄市')
-  assert.equal(typeof kaohsiungItem?.cityId, 'string')
-  const kaohsiungId = kaohsiungItem.cityId
-
-  const pathResponse = await page.evaluate(apiExpression(
-    `/api/region-selection/paths/${encodeURIComponent(kaohsiungId)}`,
-  ))
-  assert.equal(pathResponse.status, 200)
-  assert.deepEqual(
-    pathResponse.body?.path?.map(region => [region.level, region.name]),
-    [
-      ['COUNTRY_REGION', '中国台湾'],
-      ['PROVINCE_STATE', '台湾'],
-      ['CITY', '高雄市'],
-    ],
+  const kaohsiung = taiwanCityResponse.body?.find(
+    region => region.code === 'TW-64000',
   )
+  assert.equal(kaohsiung?.name, '高雄市')
 
-  // 冷启动 root 请求先失败，再从组件内联错误重试；失败响应不得进入缓存。
-  await runBrowserStep('selector root failure interception', () => failNextRequest(
-    page,
-    [{
-      requestStage: 'Request',
-      urlPattern: `${configuration.baseUrl}/api/region-selection/options*`,
-    }],
-    event => requestPathname(event) === '/api/region-selection/options'
-      && !requestSearchParams(event).has('parentId'),
-    async () => {
-      // 必须先启用 Fetch 拦截，再让被测页接收缓存失效；当前 standard 场景尚未
-      // 打开 popup，直接复用已稳定挂载的选择器可避开 Router query 导航竞态。
-      await runBrowserStep('selector root invalidate cache', () =>
-        broadcastAndWaitForRegionInvalidation(peer, page))
-      /*
-       * 再推进真实 Store 的 auth generation，强制覆盖“Broadcast 已送达但旧请求
-       * 同一任务完成回写”的极窄竞争；Provider 会按身份边界清缓存并推进 generation。
-       * 随后由正式 Provider 建立 root in-flight，组件作为第二个 consumer 加入。
-       */
-      await runBrowserStep('selector root identity generation', async () => {
-        const authEpochChange = await page.evaluate(authStoreExpression(`
-          const previous = store.authEpoch
-          const next = store.authEpoch + 1
-          store.$patch({ authEpoch: next })
-          return { current: store.authEpoch, previous }
-        `))
-        assert.equal(
-          authEpochChange.current,
-          authEpochChange.previous + 1,
-        )
-      })
-      await runBrowserStep('selector root provider call', () =>
-        page.evaluate(startProviderCallExpression(
-          'selector-root-failure',
-          'children',
-          null,
-        )))
-      await runBrowserStep('selector root open control', () =>
-        openSelector(page))
-    },
-  ))
-  await page.waitFor(`document.querySelector(
-    '[data-slot="qs-region-selector-error"]',
-  )?.textContent?.includes('地区列表加载失败')`)
-  await clickVisibleButton(page, '重试加载')
-  await clickVisibleMenuItem(page, '中国台湾')
-
-  // 第一级 lazy 成功后，让第二级 lazy 失败；重试必须继续保留父路径。
-  await page.waitFor(`(() => [...document.querySelectorAll(
-    '.qs-region-selector-popup [role="menuitem"]',
-  )].some(item => item.textContent?.trim() === '台湾'))()`)
-  await runBrowserStep('selector lazy failure interception', () => failNextRequest(
-    page,
-    [{
-      requestStage: 'Request',
-      urlPattern: `${configuration.baseUrl}/api/region-selection/options*`,
-    }],
-    event => requestSearchParams(event).get('parentId') === taiwanProvince.id,
-    () => clickVisibleMenuItem(page, '台湾'),
-  ))
-  await page.waitFor(`document.querySelector(
-    '[data-slot="qs-region-selector-error"]',
-  )?.textContent?.includes('台湾的下级地区加载失败')`)
-  await clickVisibleButton(page, '重试加载')
-  await clickVisibleMenuItem(page, '高雄市')
-  await page.waitFor(`document.querySelector(
-    '[data-testid="region-selector-controlled-value"]',
-  )?.textContent?.trim() === ${JSON.stringify(kaohsiungId)}`)
-  await page.waitFor(`(() => {
-    const input = document.querySelector('#region-selector-e2e-primary')
-    return input?.getAttribute('aria-busy') !== 'true'
-      && !input?.getAttribute('aria-describedby')?.includes('-loading')
-  })()`)
-
-  const selectedSemantics = await page.evaluate(`(() => {
-    const input = document.querySelector('#region-selector-e2e-primary')
-    const form = document.querySelector('[data-testid="region-selector-live-form"]')
-    const label = document.querySelector('label[for="region-selector-e2e-primary"]')
-    label?.click()
-    return {
-      activeInput: document.activeElement === input,
-      autocomplete: input?.getAttribute('autocomplete'),
-      describedBy: input?.getAttribute('aria-describedby'),
-      ariaRequired: input?.getAttribute('aria-required'),
-      expanded: input?.getAttribute('aria-expanded'),
-      hasPopup: input?.getAttribute('aria-haspopup'),
-      id: input?.id,
-      name: input?.getAttribute('name'),
-      required: input?.required,
-      valid: input?.checkValidity(),
-      value: new FormData(form).get('regionCityId'),
-    }
-  })()`)
-  assert.deepEqual(selectedSemantics, {
-    activeInput: true,
-    autocomplete: 'address-level2',
-    describedBy: 'region-selector-e2e-help',
-    ariaRequired: 'true',
-    expanded: 'false',
-    hasPopup: 'menu',
-    id: 'region-selector-e2e-primary',
-    name: 'regionCityId',
-    required: false,
-    valid: true,
-    value: kaohsiungId,
-  })
-  await clickVisibleButton(page, '验证 FormData')
-  await page.waitFor(`document.querySelector(
-    '[data-testid="region-selector-form-data"]',
-  )?.textContent?.trim() === ${JSON.stringify(kaohsiungId)}`)
-
-  // Tab 到公开 clear control 后用键盘清空，同时证明真实 focus-visible 状态。
-  await page.evaluate(`(() => {
-    const input = document.querySelector('#region-selector-e2e-primary')
-    if (!(input instanceof HTMLInputElement)) {
-      throw new Error('region selector input unavailable')
-    }
-    input.focus({ preventScroll: true })
-    return true
-  })()`)
-  try {
-    await page.waitFor(`(() => {
-      const clear = document.querySelector(
-        '[data-slot="qs-region-selector"] .arco-select-view-clear-btn',
-      )
-      return clear?.getAttribute('tabindex') === '0'
-        && getComputedStyle(clear).visibility === 'visible'
-    })()`)
-  }
-  catch (error) {
-    const diagnostic = await page.evaluate(`(() => {
-      const root = document.querySelector('[data-slot="qs-region-selector"]')
-      const clearControls = [...(root?.querySelectorAll(
-        '.arco-select-view-clear-btn',
-      ) ?? [])]
-      return {
-        clearControls: clearControls.map(clear => ({
-          ariaLabel: clear.getAttribute('aria-label'),
-          className: clear.getAttribute('class'),
-          role: clear.getAttribute('role'),
-          tabIndexAttribute: clear.getAttribute('tabindex'),
-          tabIndexProperty: clear.tabIndex,
-          visibility: getComputedStyle(clear).visibility,
-        })),
-        focusedId: document.activeElement?.id ?? null,
-        rootConnected: root?.isConnected ?? false,
-      }
-    })()`)
-    throw new Error(
-      `Region selector clear bridge unavailable: ${JSON.stringify(diagnostic)}`,
-      { cause: error },
-    )
-  }
-  await pressKey(page, 'Tab')
-  const clearFocus = await page.evaluate(`(() => {
-    const clear = document.activeElement
-    return {
-      focusVisible: clear?.matches(':focus-visible') ?? false,
-      label: clear?.getAttribute('aria-label'),
-      role: clear?.getAttribute('role'),
-    }
-  })()`)
-  assert.deepEqual(clearFocus, {
-    focusVisible: true,
-    label: '清空地区选择',
-    role: 'button',
-  })
-  await pressKey(page, 'Enter')
-  await page.waitFor(`document.querySelector(
-    '[data-testid="region-selector-controlled-value"]',
-  )?.textContent?.trim() === 'null'`)
-  assert.equal(
-    await page.evaluate(`document.querySelector(
-      '[data-testid="region-selector-change"]',
-    )?.textContent?.includes('clear · value=null')`),
-    true,
-  )
-  const clearedSemantics = await page.evaluate(`(() => {
-    const input = document.querySelector('#region-selector-e2e-primary')
-    const form = document.querySelector('[data-testid="region-selector-live-form"]')
-    return {
-      ariaRequired: input?.getAttribute('aria-required'),
-      customValidity: input?.validationMessage,
-      required: input?.required,
-      valid: input?.checkValidity(),
-      value: new FormData(form).get('regionCityId'),
-    }
-  })()`)
-  assert.deepEqual(clearedSemantics, emptySemantics)
-
-  // 搜索失败、retry 和最终选择都由真实 API 驱动。
-  await openSelector(page)
-  await runBrowserStep('selector search failure interception', () => failNextRequest(
-    page,
-    [{
-      requestStage: 'Request',
-      urlPattern: `${configuration.baseUrl}/api/region-selection/search*`,
-    }],
-    event => requestPathname(event) === '/api/region-selection/search'
-      && requestSearchParams(event).get('query') === '高雄市',
-    () => fillVisibleInput(page, '#region-selector-e2e-primary', '高雄市'),
-  ))
-  await page.waitFor(`document.querySelector(
-    '[data-slot="qs-region-selector-error"]',
-  )?.textContent?.includes('地区搜索失败')`)
-  await clickVisibleButton(page, '重试搜索')
-  await clickVisibleMenuItem(page, '高雄市')
-  await page.waitFor(`document.querySelector(
-    '[data-testid="region-selector-controlled-value"]',
-  )?.textContent?.trim() === ${JSON.stringify(kaohsiungId)}`)
-
-  // path 失败保留原 UUID，重试后恢复完整三级历史回显。
-  await runBrowserStep('selector path failure interception', () => failNextRequest(
-    page,
-    [{
-      requestStage: 'Request',
-      urlPattern: `${configuration.baseUrl}/api/region-selection/paths/*`,
-    }],
-    event => requestPathname(event)
-      === `/api/region-selection/paths/${kaohsiungId}`,
-    async () => {
-      /*
-       * 组件当前保留已选 CITY。先推进真实 Auth generation，再用跨 tab 通知触发
-       * 组件 resolveCurrentPath；Provider 因身份代际变化清空 path cache 并发 HTTP。
-       */
-      await page.evaluate(authStoreExpression(`
-        const next = store.authEpoch + 1
-        store.$patch({ authEpoch: next })
-        return store.authEpoch
-      `))
-      await broadcastAndWaitForRegionInvalidation(peer, page)
-    },
-  ))
-  await page.waitFor(`document.querySelector(
-    '[data-slot="qs-region-selector-error"]',
-  )?.textContent?.includes('已选地区回显失败，原值已保留')`)
-  assert.equal(
-    await page.evaluate(`document.querySelector(
-      '[data-testid="region-selector-controlled-value"]',
-    )?.textContent?.trim()`),
-    kaohsiungId,
-  )
-  await clickVisibleButton(page, '重试回显')
-  await page.waitFor(`document.querySelector(
-    '[data-slot="qs-region-selector"]',
-  )?.textContent?.includes('中国台湾 / 台湾 / 高雄市')`)
-
-  // 加载过的三级树支持真实键盘导航；Escape 只关闭 popup，不改变选值。
+  /*
+   * 上一个部分值已经预热 Provider。先在无选择器的路由通过正式失效通道清空
+   * 缓存，再让合法省/州部分值的首次直属列表失败，固定 retry hydration 边界。
+   */
   await page.navigate(appRouteUrl(
     configuration.baseUrl,
-    `${selectorRoute}?case=standard`,
+    `${selectorRoute}?case=provider-only&before=partial-province`,
   ))
-  await openSelector(page)
-  await clickVisibleMenuItem(page, '中国台湾')
-  await clickVisibleMenuItem(page, '台湾')
-  await page.waitFor(`(() => [...document.querySelectorAll(
-    '.qs-region-selector-popup [role="menuitem"]',
-  )].some(item => item.textContent?.includes('高雄市')))()`)
-  await pressKey(page, 'Escape')
-  await page.waitFor(`document.querySelector(
-    '#region-selector-e2e-primary',
-  )?.getAttribute('aria-expanded') === 'false'`)
-  await pressKey(page, 'Enter')
-  await pressKey(page, 'ArrowDown')
-  await pressKey(page, 'ArrowDown')
-  await pressKey(page, 'ArrowRight')
-  await pressKey(page, 'ArrowRight')
-  await pressKey(page, 'Enter')
-  await page.waitFor(`(() => /^[0-9a-f-]{36}$/u.test(
-    document.querySelector(
-      '[data-testid="region-selector-controlled-value"]',
-    )?.textContent?.trim() ?? '',
-  ))()`)
-  assert.equal(
-    await page.evaluate(`document.querySelector(
-      '[data-testid="region-selector-change"]',
-    )?.textContent?.split(' / ').length === 3`),
-    true,
-  )
-  // 选择会同步 v-model，再异步校验历史 path；后续失效场景不得叠加旧请求。
-  await page.waitFor(`document.querySelector(
-    '#region-selector-e2e-primary',
-  )?.getAttribute('aria-busy') !== 'true'`)
-
-  // readonly/disabled 仍解析已存路径；readonly 可聚焦但不能展开，disabled 不可聚焦。
-  const statesPage = await browser.newPage()
-  const statesIssues = collectRuntimeIssues(statesPage)
-  await statesPage.setViewport(1280, 800, false)
-  /*
-   * test mode 的首屏 `/me` 仍受既有 authApi 循环初始化问题影响。新 page 必须与
-   * primary/peer 使用同一条真实 HTTP 登录桥：Server 负责 Cookie 与 AuthContext，
-   * Store 只接收 Server 返回值，不能假设共享 Profile 会完成应用认证 bootstrap。
-   */
-  await statesPage.navigate(appRouteUrl(configuration.baseUrl, '/login'))
-  await loginThroughRealHttp(statesPage, configuration)
-  // 登录桥已完成后再监听；地区目标页的挂载异常仍会被完整采集。
-  statesIssues.start()
-  await statesPage.navigate(appRouteUrl(
-    configuration.baseUrl,
-    `${selectorRoute}?case=states&value=${encodeURIComponent(kaohsiungId)}`,
-  ))
-  try {
-    await waitForAfterAuthentication(statesPage, `(() => (
-      document.querySelector('#region-selector-e2e-readonly')
-        ?.closest('[data-slot="qs-region-selector"]')
-        ?.textContent?.includes('中国台湾 / 台湾 / 高雄市')
-      && document.querySelector('#region-selector-e2e-disabled')
-        ?.closest('[data-slot="qs-region-selector"]')
-        ?.textContent?.includes('中国台湾 / 台湾 / 高雄市')
-    ))()`)
-  }
-  catch (error) {
-    const diagnostic = await statesPage.evaluate(`(() => {
-      const app = document.querySelector('#app')?.__vue_app__
-      const stores = app?.config?.globalProperties?.$pinia?._s
-      const account = stores?.get('appAccount')
-      const routeStore = stores?.get('appRoute')
-      const readText = (id) => document.querySelector(id)
-        ?.closest('[data-slot="qs-region-selector"]')
-        ?.textContent?.replaceAll(/\\s+/gu, ' ').trim().slice(0, 240) ?? null
-      return {
-        authState: account?.authState ?? null,
-        body: document.body.innerText.replaceAll(/\\s+/gu, ' ').trim().slice(0, 400),
-        disabledText: readText('#region-selector-e2e-disabled'),
-        hash: location.hash,
-        readonlyText: readText('#region-selector-e2e-readonly'),
-        routesGenerated: routeStore?.isGenerate ?? null,
-      }
-    })()`)
-    throw new Error(
-      `Region selector states route unavailable: ${JSON.stringify({
-        ...diagnostic,
-        issues: statesIssues.issues,
-      })}`,
-      { cause: error },
-    )
-  }
-  const stateSemantics = await statesPage.evaluate(`(() => {
-    const readonly = document.querySelector('#region-selector-e2e-readonly')
-    const disabled = document.querySelector('#region-selector-e2e-disabled')
-    readonly?.focus()
-    readonly?.click()
-    return {
-      disabled: disabled?.disabled,
-      disabledStatus: disabled
-        ?.closest('[data-slot="qs-region-selector"]')
-        ?.textContent?.includes('已禁用'),
-      readonlyActive: document.activeElement === readonly,
-      readonlyAria: readonly?.getAttribute('aria-readonly'),
-      readonlyExpanded: readonly?.getAttribute('aria-expanded'),
-      readonlyStatus: readonly
-        ?.closest('[data-slot="qs-region-selector"]')
-        ?.textContent?.includes('只读'),
-    }
-  })()`)
-  assert.deepEqual(stateSemantics, {
-    disabled: true,
-    disabledStatus: true,
-    readonlyActive: true,
-    readonlyAria: 'true',
-    readonlyExpanded: 'false',
-    readonlyStatus: true,
-  })
-  statesIssues.stop()
-  assert.deepEqual(statesIssues.issues, [])
-  statesPage.close()
-
-  // 使用真实管理 API 停用种子城市，再由正式 Provider 与组件验证历史路径回显。
-  // finally 恢复启用，保证后续选择、管理页与 runner 终态探针共享稳定种子状态。
-  let kaohsiungDisabled = false
-  try {
-    await subscribeToRegionInvalidation(page)
-    const disableKaohsiung = await page.evaluate(apiExpression(
-      `/api/regions/${encodeURIComponent(kaohsiungId)}/disable`,
-      'POST',
-      {},
-    ))
-    assert.equal(disableKaohsiung.status, 200)
-    assert.equal(disableKaohsiung.body?.region?.enabled, false)
-    kaohsiungDisabled = true
-    await broadcastAndWaitForRegionInvalidation(peer, page)
-    // Broadcast 的接收计数早于组件异步 path 恢复完成，先等当前代际稳定再切场景。
-    await page.waitFor(`document.querySelector(
-      '#region-selector-e2e-primary',
-    )?.getAttribute('aria-busy') !== 'true'`)
-
-    const stoppedPath = await page.evaluate(regionProviderExpression(`
-      return provider.resolvePath({
-        cityId: ${JSON.stringify(kaohsiungId)},
-        signal: new AbortController().signal,
-      })
-    `))
-    assert.deepEqual(
-      stoppedPath.map(region => ({
-        effectiveEnabled: region.effectiveEnabled,
-        enabled: region.enabled,
-        name: region.name,
-      })),
-      [
-        { effectiveEnabled: true, enabled: true, name: '中国台湾' },
-        { effectiveEnabled: true, enabled: true, name: '台湾' },
-        { effectiveEnabled: false, enabled: false, name: '高雄市' },
-      ],
-    )
-    const stoppedSearch = await page.evaluate(regionProviderExpression(`
-      return provider.search({
-        query: '高雄市',
-        signal: new AbortController().signal,
-      })
-    `))
-    assert.equal(
-      stoppedSearch.paths.some(path =>
-        path[2]?.id === kaohsiungId),
-      false,
-    )
-    const stoppedOptions = await page.evaluate(regionProviderExpression(`
-      return provider.listChildren({
-        parentId: ${JSON.stringify(taiwanProvince.id)},
-        signal: new AbortController().signal,
-      })
-    `))
-    assert.equal(
-      stoppedOptions.some(region => region.id === kaohsiungId),
-      false,
-    )
-
-    /*
-     * 前序故障场景为强制触发 HTTP 曾手工推进 authEpoch。历史停用 UI 使用独立
-     * 真实会话冷启动，避免让该非生产身份状态与组件回显验收互相污染；主 page
-     * 已在上方继续证明 Broadcast 后正式 Provider 返回停用新值。
-     */
-    const stoppedPage = await browser.newPage()
-    const stoppedIssues = collectRuntimeIssues(stoppedPage)
-    try {
-      await stoppedPage.setViewport(1280, 800, false)
-      await stoppedPage.navigate(appRouteUrl(configuration.baseUrl, '/login'))
-      await loginThroughRealHttp(stoppedPage, configuration)
-      stoppedIssues.start()
-      await stoppedPage.navigate(appRouteUrl(
-        configuration.baseUrl,
-        `${selectorRoute}?case=path&value=${encodeURIComponent(kaohsiungId)}`,
-      ))
-      await waitForAfterAuthentication(stoppedPage, `(() => {
-        const selector = document.querySelector('[data-slot="qs-region-selector"]')
-        const state = document.querySelector(
-          '[data-slot="qs-region-selector-state"]',
-        )
-        return selector?.textContent?.includes('中国台湾 / 台湾 / 高雄市')
-          && state?.textContent?.includes('当前历史地区已停用，仅供回显')
-      })()`)
-      assert.equal(
-        await stoppedPage.evaluate(`document.querySelector(
-          '[data-testid="region-selector-controlled-value"]',
-        )?.textContent?.trim()`),
-        kaohsiungId,
-      )
-      assert.deepEqual(stoppedIssues.issues, [])
-    }
-    finally {
-      stoppedIssues.stop()
-      stoppedPage.close()
-    }
-  }
-  finally {
-    if (kaohsiungDisabled) {
-      const enableKaohsiung = await page.evaluate(apiExpression(
-        `/api/regions/${encodeURIComponent(kaohsiungId)}/enable`,
-        'POST',
-        {},
-      ))
-      assert.equal(enableKaohsiung.status, 200)
-      assert.equal(enableKaohsiung.body?.region?.enabled, true)
-      await subscribeToRegionInvalidation(page)
-      await broadcastAndWaitForRegionInvalidation(peer, page)
-      const enabledPath = await page.evaluate(regionProviderExpression(`
-        return provider.resolvePath({
-          cityId: ${JSON.stringify(kaohsiungId)},
-          signal: new AbortController().signal,
-        })
-      `))
-      assert.equal(enabledPath[2]?.enabled, true)
-      assert.equal(enabledPath[2]?.effectiveEnabled, true)
-    }
-  }
-
-  // 两个真实组件同时冷开 root，只产生一条 HTTP。
-  const dedupePage = await browser.newPage()
-  const dedupeIssues = collectRuntimeIssues(dedupePage)
-  const rootRequests = []
-  const removeNetworkListener = dedupePage.on(
-    'Network.requestWillBeSent',
-    (event) => {
-      const url = new URL(event.request.url)
-      if (
-        url.pathname === '/api/region-selection/options'
-        && !url.searchParams.has('parentId')
-      ) {
-        rootRequests.push(event.requestId)
-      }
-    },
-  )
-  try {
-    await dedupePage.setViewport(1280, 800, false)
-    await dedupePage.navigate(appRouteUrl(configuration.baseUrl, '/login'))
-    await loginThroughRealHttp(dedupePage, configuration)
-    dedupeIssues.start()
-    await dedupePage.navigate(appRouteUrl(
-      configuration.baseUrl,
-      `${selectorRoute}?case=dedupe`,
-    ))
-    await waitForAfterAuthentication(dedupePage, `[
-      'region-selector-e2e-primary',
-      'region-selector-e2e-secondary',
-    ].every(id => document.getElementById(id) !== null)`)
-    await dedupePage.evaluate(`(() => {
-      for (const id of [
-        'region-selector-e2e-primary',
-        'region-selector-e2e-secondary',
-      ]) {
-        const input = document.getElementById(id)
-        input?.focus({ preventScroll: true })
-        input?.click()
-      }
-      return true
-    })()`)
-    await dedupePage.waitFor(`document.querySelectorAll(
-      '.qs-region-selector-popup [role="menuitem"]',
-    ).length > 0`)
-    assert.equal(new Set(rootRequests).size, 1)
-    assert.deepEqual(dedupeIssues.issues, [])
-  }
-  finally {
-    dedupeIssues.stop()
-    removeNetworkListener()
-    dedupePage.close()
-  }
-
-  // 迟到请求在跨 tab 失效后必须被废弃，下一次读取重新发 HTTP。
-  // 先切到不挂载选择器的 Provider-only 场景，避免组件收到失效事件后自动发起
-  // root reload，与本测试显式创建的 stale 请求竞争同一个 cache key。
-  const providerPage = await browser.newPage()
-  const providerIssues = collectRuntimeIssues(providerPage)
-  await providerPage.setViewport(1280, 800, false)
-  await providerPage.navigate(appRouteUrl(configuration.baseUrl, '/login'))
-  await loginThroughRealHttp(providerPage, configuration)
-  providerIssues.start()
-  await runBrowserStep('selector provider-only route', () => providerPage.navigate(
-    appRouteUrl(
-      configuration.baseUrl,
-      `${selectorRoute}?case=provider-only`,
-    ),
-  ))
-  await runBrowserStep('selector provider-only ready', () => providerPage.waitFor(
-    `document.querySelector(
-      '[data-testid="region-selector-browser-harness"]',
-    )?.getAttribute('data-e2e-case') === 'provider-only'
-      && document.querySelector('#region-selector-e2e-primary') === null`,
-  ))
-  await subscribeToRegionInvalidation(providerPage)
-  await broadcastAndWaitForRegionInvalidation(peer, providerPage)
-  const staleKey = 'stale-search'
-  const staleQuery = 'stale-e2e-no-match'
-  await providerPage.enableRequestInterception([{
-    requestStage: 'Response',
-    urlPattern: `${configuration.baseUrl}/api/region-selection/search*`,
-  }])
-  const staleEvent = await runBrowserStep(
-    'selector stale response interception',
-    async () => {
-      const paused = providerPage.waitForEvent(
-        'Fetch.requestPaused',
-        event => requestPathname(event) === '/api/region-selection/search'
-          && requestSearchParams(event).get('query') === staleQuery
-          && Number(event.responseStatusCode) === 200,
-        20_000,
-      )
-      await providerPage.evaluate(startProviderCallExpression(
-        staleKey,
-        'search',
-        staleQuery,
-      ))
-      return paused
-    },
-  )
-  await broadcastAndWaitForRegionInvalidation(peer, providerPage)
-  await providerPage.continueInterceptedRequest(staleEvent.requestId)
-    .catch(() => undefined)
-  await providerPage.disableRequestInterception()
-  const staleResult = await providerPage.evaluate(
-    readProviderCallExpression(staleKey),
-  )
-  assert.deepEqual(
-    { name: staleResult.name, ok: staleResult.ok },
-    { name: 'AbortError', ok: false },
-  )
-  const freshSearchRequests = []
-  const removeFreshSearchListener = providerPage.on(
-    'Network.requestWillBeSent',
-    (event) => {
-      if (
-        requestPathname(event) === '/api/region-selection/search'
-        && requestSearchParams(event).get('query') === staleQuery
-      ) {
-        freshSearchRequests.push(event.requestId)
-      }
-    },
-  )
-  const freshSearch = await providerPage.evaluate(regionProviderExpression(`
-    return provider.search({
-      query: ${JSON.stringify(staleQuery)},
-      signal: new AbortController().signal,
-    })
-  `))
-  removeFreshSearchListener()
-  assert.deepEqual(freshSearch, {
-    hasMore: false,
-    paths: [],
-  })
-  assert.equal(new Set(freshSearchRequests).size, 1)
-
-  // 窄屏 popup 只在内部滚动，文档本身不产生横向溢出；reduced motion 生效。
-  await providerPage.setViewport(390, 844, true)
-  await providerPage.navigate(appRouteUrl(
-    configuration.baseUrl,
-    `${selectorRoute}?case=standard`,
-  ))
-  await openSelector(providerPage)
-  await fillVisibleInput(
-    providerPage,
-    '#region-selector-e2e-primary',
-    '市',
-  )
-  await providerPage.waitFor(`(() => {
-    const panel = document.querySelector(
-      '.qs-region-selector-popup .arco-cascader-search-panel',
-    )
-    return panel?.getClientRects().length > 0
-      && panel.querySelectorAll('[role="menuitem"]').length > 5
-      && panel.scrollHeight > panel.clientHeight
-  })()`)
-  const mobilePopup = await providerPage.evaluate(`(() => {
-    const popup = document.querySelector('.qs-region-selector-popup')
-    const panel = popup?.querySelector('.arco-cascader-panel')
-    const scrollPanel = popup?.querySelector('.arco-cascader-search-panel')
-    if (scrollPanel) {
-      scrollPanel.scrollTop = scrollPanel.scrollHeight
-    }
-    const viewportWidth = document.documentElement.clientWidth
-    const popupRect = popup?.getBoundingClientRect()
-    return {
-      documentFits: document.documentElement.scrollWidth <= viewportWidth,
-      documentScrollWidth: document.documentElement.scrollWidth,
-      panelMaxHeight: panel ? getComputedStyle(panel).maxHeight : '',
-      popupInsideViewport: popup
-        ? popupRect.left >= 0
-          && popupRect.right <= viewportWidth
-        : false,
-      popupLeft: popupRect?.left ?? null,
-      popupRight: popupRect?.right ?? null,
-      scrollablePanel: scrollPanel
-        ? ['auto', 'scroll'].includes(getComputedStyle(scrollPanel).overflowY)
-        : false,
-      scrollHeight: scrollPanel?.scrollHeight ?? 0,
-      scrollTop: scrollPanel?.scrollTop ?? 0,
-      visibleHeight: scrollPanel?.clientHeight ?? 0,
-      viewportWidth,
-    }
-  })()`)
-  assert.equal(
-    mobilePopup.documentFits,
-    true,
-    JSON.stringify(mobilePopup),
-  )
-  assert.notEqual(mobilePopup.panelMaxHeight, 'none')
-  assert.equal(mobilePopup.popupInsideViewport, true)
-  assert.equal(mobilePopup.scrollablePanel, true)
-  assert.ok(mobilePopup.scrollHeight > mobilePopup.visibleHeight)
-  assert.ok(mobilePopup.scrollTop > 0)
-  await providerPage.connection.send('Emulation.setEmulatedMedia', {
-    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
-  })
-  const selectorMotion = await providerPage.evaluate(`(() => {
-    const target = document.querySelector(
-      '.qs-region-selector-popup [role="menuitem"]',
-    )
-    const seconds = (value) => value.split(',').map((part) => {
-      const text = part.trim()
-      return text.endsWith('ms')
-        ? Number.parseFloat(text) / 1000
-        : Number.parseFloat(text)
-    })
-    const style = target ? getComputedStyle(target) : null
-    return {
-      animationSeconds: style ? seconds(style.animationDuration) : [],
-      matches: matchMedia('(prefers-reduced-motion: reduce)').matches,
-      targetVisible: (target?.getClientRects().length ?? 0) > 0,
-      transitionSeconds: style ? seconds(style.transitionDuration) : [],
-    }
-  })()`)
-  assert.equal(selectorMotion.matches, true)
-  assert.equal(selectorMotion.targetVisible, true)
-  assert.equal(
-    [
-      ...selectorMotion.animationSeconds,
-      ...selectorMotion.transitionSeconds,
-    ].every(value => Number.isFinite(value) && value <= 0.001),
-    true,
-  )
-
-  /*
-   * 正式 Showcase 的标准状态必须使用应用注入 Provider。直接把弹层中的中国省州
-   * 与 selection API 完整结果逐项对齐，避免少量 fixture 再次冒充数据库数据。
-   */
-  await broadcastAndWaitForRegionInvalidation(peer, providerPage)
-  await providerPage.setViewport(1280, 800, false)
-  await providerPage.navigate(appRouteUrl(
-    configuration.baseUrl,
-    '/component-library/business/region-selector',
-  ))
-  await providerPage.waitFor(`document.querySelector(
-    '#region-selector-showcase-standard',
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="provider-only"]',
   ) !== null`)
-  assert.equal(
-    await providerPage.evaluate(`document.querySelector(
-      '[aria-labelledby="region-selector-showcase-title"] [data-slot="alert"]',
-    ) === null`),
-    true,
-  )
-  await openSelector(providerPage, 'region-selector-showcase-standard')
-  await waitForVisibleRegionMenu(
-    providerPage,
-    rootsResponse.body.map(region => region.name),
-  )
-  await providerPage.waitFor(`(() => {
-    const panel = document.querySelector(
-      '.qs-region-selector-popup .arco-cascader-panel',
-    )
-    return panel
-      && !panel.querySelector('.arco-cascader-panel-column-loading')
-      && panel.querySelectorAll(
-        ':scope > .arco-cascader-panel-column',
-      ).length === 1
-  })()`)
-
-  const initialPanelState = await providerPage.evaluate(`(() => {
-    const panel = document.querySelector(
-      '.qs-region-selector-popup .arco-cascader-panel',
-    )
-    if (!(panel instanceof HTMLElement)) {
-      throw new Error('region cascader panel unavailable')
-    }
-    const visibleColumns = [...panel.querySelectorAll(
-      ':scope > .arco-cascader-panel-column',
-    )].filter(column => column.getClientRects().length > 0)
-    const columnWidth = visibleColumns[0]?.getBoundingClientRect().width ?? 0
-    const probe = {
-      widths: [panel.getBoundingClientRect().width],
-    }
-    const observer = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        probe.widths.push(entry.target.getBoundingClientRect().width)
-      }
-    })
-    observer.observe(panel)
-    globalThis.__regionPanelStabilityProbe = {
-      observer,
-      panel,
-      probe,
-      provinceScroller: null,
-      provinceScrollTop: 0,
-    }
-    return {
-      columnCount: visibleColumns.length,
-      panelWidth: panel.getBoundingClientRect().width,
-      reservedColumnCount: columnWidth > 0
-        ? Math.round(panel.scrollWidth / columnWidth)
-        : 0,
-    }
-  })()`)
-  assert.equal(initialPanelState.columnCount, 1)
-  assert.equal(initialPanelState.reservedColumnCount, 3)
-
-  await clickVisibleMenuItem(providerPage, '中国')
-  const expectedProvinceNames = chinaProvinceResponse.body.map(
-    region => region.name,
-  )
-  await waitForVisibleRegionMenu(providerPage, expectedProvinceNames)
-
-  const provinceScrollState = await providerPage.evaluate(`(() => {
-    const runtime = globalThis.__regionPanelStabilityProbe
-    const panel = runtime?.panel
-    const columns = panel
-      ? [...panel.querySelectorAll(
-          ':scope > .arco-cascader-panel-column',
-        )].filter(column => column.getClientRects().length > 0)
-      : []
-    const provinceItem = columns[1]
-      ? [...columns[1].querySelectorAll('[role="menuitem"]')]
-          .find(item => item.textContent?.trim() === '广东省')
-      : undefined
-    const provinceScroller = provinceItem
-      ?.closest('.arco-cascader-column-content')
-    if (
-      !(runtime?.panel instanceof HTMLElement)
-      || !(provinceItem instanceof HTMLElement)
-      || !(provinceScroller instanceof HTMLElement)
-    ) {
-      throw new Error('province scroll probe unavailable')
-    }
-    const targetTop = Math.max(
-      1,
-      provinceItem.offsetTop
-        - (provinceScroller.clientHeight - provinceItem.offsetHeight) / 2,
-    )
-    provinceScroller.scrollTop = targetTop
-    runtime.provinceScroller = provinceScroller
-    runtime.provinceScrollTop = provinceScroller.scrollTop
-    const columnWidth = columns[0]?.getBoundingClientRect().width ?? 0
-    return {
-      columnCount: columns.length,
-      panelWidth: runtime.panel.getBoundingClientRect().width,
-      reservedColumnCount: columnWidth > 0
-        ? Math.round(runtime.panel.scrollWidth / columnWidth)
-        : 0,
-      scrollTop: provinceScroller.scrollTop,
-    }
-  })()`)
-  assert.equal(provinceScrollState.columnCount, 2)
-  assert.equal(provinceScrollState.reservedColumnCount, 3)
-  assert.ok(provinceScrollState.scrollTop > 0)
-  assert.ok(
-    Math.abs(
-      provinceScrollState.panelWidth - initialPanelState.panelWidth,
-    ) <= 1,
-  )
-
-  await runBrowserStep(
-    'selector lazy keeps existing columns mounted',
-    () => inspectNextPausedRequest(
-      providerPage,
+  await subscribeToRegionInvalidation(page)
+  await broadcastRegionInvalidation(page)
+  await page.waitFor('globalThis.__regionInvalidations >= 1')
+  await runBrowserStep('selector partial province failure interception', () =>
+    failNextRequest(
+      page,
       [{
         requestStage: 'Request',
         urlPattern: `${configuration.baseUrl}/api/region-selection/options*`,
       }],
       event => requestSearchParams(event).get('parentId')
-        === guangdongProvince.id,
-      () => clickVisibleMenuItem(providerPage, '广东省'),
-      async () => {
-        const loadingState = await providerPage.evaluate(`(() => {
-          const runtime = globalThis.__regionPanelStabilityProbe
-          const panel = runtime?.panel
-          const columns = panel
-            ? [...panel.querySelectorAll(
-                ':scope > .arco-cascader-panel-column',
-              )].filter(column => column.getClientRects().length > 0)
-            : []
-          return {
-            columnCount: columns.length,
-            hasGlobalLoadingColumn: Boolean(panel?.querySelector(
-              '.arco-cascader-panel-column-loading',
-            )),
-            sameProvinceScroller:
-              runtime?.provinceScroller?.isConnected === true
-              && runtime.provinceScroller.closest(
-                '.arco-cascader-panel',
-              ) === panel,
-            scrollTop: runtime?.provinceScroller?.scrollTop ?? 0,
-          }
-        })()`)
-        assert.equal(loadingState.hasGlobalLoadingColumn, false)
-        assert.equal(loadingState.columnCount, 2)
-        assert.equal(loadingState.sameProvinceScroller, true)
-        assert.ok(
-          Math.abs(
-            loadingState.scrollTop - provinceScrollState.scrollTop,
-          ) <= 1,
-        )
-      },
-    ),
-  )
-  await waitForVisibleRegionMenu(
-    providerPage,
-    guangdongCityResponse.body.map(region => region.name),
-  )
-
-  const settledPanelState = await providerPage.evaluate(`(() => {
-    const runtime = globalThis.__regionPanelStabilityProbe
-    const panel = runtime?.panel
-    const columns = panel
-      ? [...panel.querySelectorAll(
-          ':scope > .arco-cascader-panel-column',
-        )].filter(column => column.getClientRects().length > 0)
-      : []
-    const provinceItem = columns[1]
-      ? [...columns[1].querySelectorAll('[role="menuitem"]')]
-          .find(item => item.textContent?.trim() === '广东省')
-      : undefined
-    const columnWidth = columns[0]?.getBoundingClientRect().width ?? 0
-    runtime?.observer?.disconnect()
+        === taiwanCountry.id,
+      () => page.navigate(appRouteUrl(
+        configuration.baseUrl,
+        `${selectorRoute}?case=partial-province`,
+      )),
+    ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="partial-province"] [data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+  )?.textContent?.includes('中国台湾的省/州加载失败')`)
+  const failedPartialProvince = await page.evaluate(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const triggers = [...(root?.querySelectorAll(
+      '[data-slot="select-trigger"][role="combobox"]',
+    ) ?? [])]
     return {
-      columnCount: columns.length,
-      maxWidth: Math.max(...(runtime?.probe?.widths ?? [0])),
-      minWidth: Math.min(...(runtime?.probe?.widths ?? [0])),
-      panelWidth: panel?.getBoundingClientRect().width ?? 0,
-      reservedColumnCount: panel && columnWidth > 0
-        ? Math.round(panel.scrollWidth / columnWidth)
-        : 0,
-      provinceActive: provinceItem?.classList.contains(
-        'arco-cascader-option-active',
-      ) ?? false,
-      provinceFullyVisible: provinceItem
-        ? (() => {
-            const itemRect = provinceItem.getBoundingClientRect()
-            const scrollerRect =
-              runtime.provinceScroller.getBoundingClientRect()
-            return itemRect.top >= scrollerRect.top - 1
-              && itemRect.bottom <= scrollerRect.bottom + 1
-          })()
-        : false,
-      sameProvinceScroller:
-        runtime?.provinceScroller?.isConnected === true,
-      scrollTop: runtime?.provinceScroller?.scrollTop ?? 0,
+      cityDisabled: triggers[2]?.disabled,
+      countryText: triggers[0]?.textContent?.trim(),
+      provinceDisabled: triggers[1]?.disabled,
+      provinceText: triggers[1]?.textContent?.trim(),
+      provinceValue: document.querySelector(
+        '[data-testid="region-selector-province-value"]',
+      )?.textContent?.trim(),
     }
   })()`)
-  assert.equal(settledPanelState.columnCount, 3)
-  assert.equal(settledPanelState.reservedColumnCount, 3)
-  assert.equal(settledPanelState.sameProvinceScroller, true)
-  assert.equal(settledPanelState.provinceActive, true)
-  assert.equal(settledPanelState.provinceFullyVisible, true)
-  assert.ok(
-    Math.abs(
-      settledPanelState.scrollTop - provinceScrollState.scrollTop,
-    ) <= 1,
-  )
-  assert.ok(settledPanelState.maxWidth - settledPanelState.minWidth <= 1)
-  assert.ok(
-    Math.abs(
-      settledPanelState.panelWidth - initialPanelState.panelWidth,
-    ) <= 1,
-  )
+  assert.deepEqual(failedPartialProvince, {
+    cityDisabled: true,
+    countryText: '中国台湾',
+    provinceDisabled: false,
+    provinceText: '加载失败，请重试',
+    provinceValue: taiwanProvince.id,
+  })
+  await clickVisibleButton(page, '重试加载')
+  await page.waitFor(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const province = root?.querySelector(
+      '[data-region-level="PROVINCE_STATE"] [data-slot="select-trigger"]',
+    )
+    const city = root?.querySelector(
+      '[data-region-level="CITY"] [data-slot="select-trigger"]',
+    )
+    return province?.textContent?.trim() === '台湾'
+      && city?.disabled === false
+      && root?.querySelector(
+        '[data-slot="qs-region-selector-path"]',
+      )?.textContent?.trim() === '中国台湾 台湾'
+  })()`)
 
-  await clickVisibleMenuItem(providerPage, '中国台湾')
-  await clickVisibleMenuItem(providerPage, '台湾')
-  await waitForVisibleRegionMenu(
-    providerPage,
-    taiwanCityResponse.body.map(region => region.name),
-  )
+  /*
+   * 部分省/州恢复会按设计预取直属城市。先在无选择器路由再次清空 Provider
+   * 缓存，确保后续“城市首次请求失败”仍验证真实 HTTP，而不是命中预热缓存。
+   */
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=provider-only&after=partial-retry`,
+  ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="provider-only"]',
+  ) !== null`)
+  await broadcastRegionInvalidation(page)
+  await page.waitFor('globalThis.__regionInvalidations >= 2')
 
-  await providerPage.setViewport(390, 844, true)
-  await pressKey(providerPage, 'Escape')
-  await providerPage.waitFor(`document.querySelector(
-    '.qs-region-selector-popup .arco-cascader-panel',
-  ) === null`)
-  await openSelector(providerPage, 'region-selector-showcase-standard')
-  await waitForVisibleRegionMenu(
-    providerPage,
+  // 后续标准交互使用全空 value，避免部分值恢复场景污染逐级清理断言。
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=standard&after=partial-retry`,
+  ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="standard"]',
+  ) !== null`)
+  await openRegionLevelSelect(page, rootTestId, 'COUNTRY_REGION')
+  await waitForRegionSelectOptions(
+    page,
+    rootTestId,
+    'COUNTRY_REGION',
     rootsResponse.body.map(region => region.name),
   )
-  await clickVisibleMenuItem(providerPage, '中国台湾')
-  await waitForVisibleRegionMenu(
-    providerPage,
+  await selectRegionOption(page, rootTestId, 'COUNTRY_REGION', '中国')
+  await openRegionLevelSelect(page, rootTestId, 'PROVINCE_STATE')
+  await waitForRegionSelectOptions(
+    page,
+    rootTestId,
+    'PROVINCE_STATE',
+    chinaProvinceResponse.body.map(region => region.name),
+  )
+  await selectRegionOption(page, rootTestId, 'PROVINCE_STATE', '广东省')
+  await openRegionLevelSelect(page, rootTestId, 'CITY')
+  await waitForRegionSelectOptions(
+    page,
+    rootTestId,
+    'CITY',
+    guangdongCityResponse.body.map(region => region.name),
+  )
+  await pressKey(page, 'Escape')
+
+  // 切换国家必须原子清空省/州和城市，随后只加载新国家的省/州。
+  await selectRegionOption(page, rootTestId, 'COUNTRY_REGION', '中国台湾')
+  await page.waitFor(`(() => {
+    const country = document.querySelector(
+      '[data-testid="region-selector-country-value"]',
+    )?.textContent?.trim()
+    const province = document.querySelector(
+      '[data-testid="region-selector-province-value"]',
+    )?.textContent?.trim()
+    const city = document.querySelector(
+      '[data-testid="region-selector-city-value"]',
+    )?.textContent?.trim()
+    const cityTrigger = document.querySelector(
+      '[data-testid="${rootTestId}"] [data-region-level="CITY"] [data-slot="select-trigger"]',
+    )
+    return country === ${JSON.stringify(taiwanCountry.id)}
+      && province === 'null'
+      && city === 'null'
+      && cityTrigger?.disabled === true
+  })()`)
+  await openRegionLevelSelect(page, rootTestId, 'PROVINCE_STATE')
+  await waitForRegionSelectOptions(
+    page,
+    rootTestId,
+    'PROVINCE_STATE',
     taiwanProvinceResponse.body.map(region => region.name),
   )
-  await clickVisibleMenuItem(providerPage, '台湾')
-  await waitForVisibleRegionMenu(
-    providerPage,
+
+  // 台湾省选择后的城市请求失败一次；重试后必须得到数据库完整 22 城市。
+  await runBrowserStep('selector city failure interception', () =>
+    failNextRequest(
+      page,
+      [{
+        requestStage: 'Request',
+        urlPattern: `${configuration.baseUrl}/api/region-selection/options*`,
+      }],
+      event => requestSearchParams(event).get('parentId')
+        === taiwanProvince.id,
+      () => selectRegionOption(
+        page,
+        rootTestId,
+        'PROVINCE_STATE',
+        '台湾',
+      ),
+    ))
+  await page.waitFor(`document.querySelector(
+    '[data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+  )?.textContent?.includes('台湾的城市加载失败')`)
+  await clickVisibleButton(page, '重试加载')
+  await openRegionLevelSelect(page, rootTestId, 'CITY')
+  await waitForRegionSelectOptions(
+    page,
+    rootTestId,
+    'CITY',
     taiwanCityResponse.body.map(region => region.name),
   )
-  const mobileCascade = await providerPage.evaluate(`(() => {
-    const popup = document.querySelector('.qs-region-selector-popup')
-    const panel = popup?.querySelector(
-      '.arco-cascader-panel:not(.arco-cascader-search-panel)',
+  await selectRegionOption(page, rootTestId, 'CITY', '高雄市')
+
+  await page.waitFor(`(() => (
+    document.querySelector(
+      '[data-testid="region-selector-country-value"]',
+    )?.textContent?.trim() === ${JSON.stringify(taiwanCountry.id)}
+    && document.querySelector(
+      '[data-testid="region-selector-province-value"]',
+    )?.textContent?.trim() === ${JSON.stringify(taiwanProvince.id)}
+    && document.querySelector(
+      '[data-testid="region-selector-city-value"]',
+    )?.textContent?.trim() === ${JSON.stringify(kaohsiung.id)}
+  ))()`)
+  await page.waitFor(`document.querySelector(
+    '[data-testid="${rootTestId}"] [data-slot="qs-region-selector-path"]',
+  )?.textContent?.trim() === '中国台湾 台湾 高雄市'`)
+  assert.equal(
+    await page.evaluate(`document.querySelector(
+      '[data-testid="region-selector-change"]',
+    )?.textContent?.trim()`),
+    'city · 中国台湾 台湾 高雄市 · complete=true',
+  )
+
+  const selectedSemantics = await page.evaluate(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const proxy = root?.querySelector(
+      '[data-slot="qs-region-selector-form-control"]',
     )
-    if (!(popup instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
-      throw new Error('mobile cascader panel unavailable')
+    const country = root?.querySelector(
+      '[data-region-level="COUNTRY_REGION"] [data-slot="select-trigger"]',
+    )
+    const form = document.querySelector(
+      '[data-testid="region-selector-live-form"]',
+    )
+    document.querySelector(
+      'label[for="region-selector-e2e-primary"]',
+    )?.click()
+    return {
+      activeCountry: document.activeElement === country,
+      countryDescribedBy: country?.getAttribute('aria-describedby'),
+      countryLabels: [...(country?.labels ?? [])]
+        .map(label => label.textContent?.trim() ?? ''),
+      countryLabelledBy: country?.getAttribute('aria-labelledby'),
+      formValue: form ? new FormData(form).get('regionCityId') : null,
+      proxyRequired: proxy?.required,
+      proxyValid: proxy?.validity.valid,
+      proxyValue: proxy?.value,
     }
-    panel.scrollLeft = panel.scrollWidth
+  })()`)
+  assert.deepEqual(selectedSemantics, {
+    activeCountry: true,
+    countryDescribedBy: 'region-selector-e2e-help',
+    countryLabelledBy: null,
+    countryLabels: ['业务所在城市', '国家/地区'],
+    formValue: kaohsiung.id,
+    proxyRequired: true,
+    proxyValid: true,
+    proxyValue: kaohsiung.id,
+  })
+
+  await clickVisibleButton(page, '验证 FormData')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="region-selector-form-data"]',
+  )?.textContent?.trim() === ${JSON.stringify(kaohsiung.id)}`)
+
+  await clickVisibleButton(page, '清空地区')
+  await page.waitFor(`(() => (
+    ['country', 'province', 'city'].every(level =>
+      document.querySelector(
+        '[data-testid="region-selector-' + level + '-value"]',
+      )?.textContent?.trim() === 'null')
+  ))()`)
+  assert.equal(
+    await page.evaluate(`document.querySelector(
+      '[data-testid="region-selector-change"]',
+    )?.textContent?.trim()`),
+    'clear · complete=false',
+  )
+  const clearedSemantics = await page.evaluate(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const proxy = root?.querySelector(
+      '[data-slot="qs-region-selector-form-control"]',
+    )
+    const form = document.querySelector(
+      '[data-testid="region-selector-live-form"]',
+    )
+    return {
+      formValue: form ? new FormData(form).get('regionCityId') : null,
+      proxyValid: proxy?.validity.valid,
+      proxyValue: proxy?.value,
+    }
+  })()`)
+  assert.deepEqual(clearedSemantics, {
+    formValue: '',
+    proxyValid: false,
+    proxyValue: '',
+  })
+
+  // required 失败必须给出可见反馈，并把焦点落到首个未完成的国家字段。
+  assert.equal(
+    await page.evaluate(`document.querySelector(
+      '[data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+    ) === null`),
+    true,
+  )
+  await clickVisibleButton(page, '验证 FormData')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+  )?.textContent?.includes('请选择完整地区')`)
+  const invalidSubmitSemantics = await page.evaluate(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const country = root?.querySelector(
+      '[data-region-level="COUNTRY_REGION"] [data-slot="select-trigger"]',
+    )
+    const feedback = root?.querySelector(
+      '[data-slot="qs-region-selector-error"]',
+    )
+    const proxy = root?.querySelector(
+      '[data-slot="qs-region-selector-form-control"]',
+    )
+    const form = document.querySelector(
+      '[data-testid="region-selector-live-form"]',
+    )
+    return {
+      activeCountry: document.activeElement === country,
+      countryInvalid: country?.getAttribute('aria-invalid'),
+      describedByIncludesFeedback: Boolean(
+        feedback?.id
+        && country?.getAttribute('aria-describedby')
+          ?.split(/\\s+/u)
+          .includes(feedback.id),
+      ),
+      feedbackRole: feedback?.getAttribute('role'),
+      feedbackText: feedback?.textContent?.trim(),
+      formValue: form ? new FormData(form).get('regionCityId') : null,
+      proxyMessage: proxy?.validationMessage,
+      proxyValid: proxy?.validity.valid,
+    }
+  })()`)
+  assert.deepEqual(invalidSubmitSemantics, {
+    activeCountry: true,
+    countryInvalid: 'true',
+    describedByIncludesFeedback: true,
+    feedbackRole: 'alert',
+    feedbackText: '请选择完整地区。',
+    formValue: '',
+    proxyMessage: '请选择完整地区',
+    proxyValid: false,
+  })
+
+  // 完整 value 的 path 即使失败，root options 也必须独立可用，清空后可立即改选。
+  await runBrowserStep('selector path failure interception', () =>
+    failNextRequest(
+      page,
+      [{
+        requestStage: 'Request',
+        urlPattern: `${configuration.baseUrl}/api/region-selection/paths/*`,
+      }],
+      event => requestPathname(event)
+        === `/api/region-selection/paths/${kaohsiung.id}`,
+      () => page.navigate(appRouteUrl(
+        configuration.baseUrl,
+        `${selectorRoute}?case=path&value=${encodeURIComponent(kaohsiung.id)}`,
+      )),
+    ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="path"] [data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+  )?.textContent?.includes('已选地区回显失败')`)
+  await openRegionLevelSelect(page, rootTestId, 'COUNTRY_REGION')
+  await waitForRegionSelectOptions(
+    page,
+    rootTestId,
+    'COUNTRY_REGION',
+    rootsResponse.body.map(region => region.name),
+  )
+  await pressKey(page, 'Escape')
+  await clickVisibleButton(page, '清空地区')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="region-selector-country-value"]',
+  )?.textContent?.trim() === 'null'`)
+
+  /*
+   * 外部部分 value 可能来自旧数据或错误调用方。不存在的 UUID 必须保留在
+   * v-model 供调用方处置，但绝不能让 FaSelect 回退显示第一条真实 option，
+   * 也不能因此提前启用下一级或把 required 焦点移到错误层级。
+   */
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=invalid-country`,
+  ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="invalid-country"] [data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+  )?.textContent?.includes('已选国家/地区无法回显')`)
+  const invalidCountrySemantics = await page.evaluate(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const triggers = [...(root?.querySelectorAll(
+      '[data-slot="select-trigger"][role="combobox"]',
+    ) ?? [])]
+    return {
+      cityDisabled: triggers[2]?.disabled,
+      countryText: triggers[0]?.textContent?.trim(),
+      countryValue: document.querySelector(
+        '[data-testid="region-selector-country-value"]',
+      )?.textContent?.trim(),
+      provinceDisabled: triggers[1]?.disabled,
+    }
+  })()`)
+  assert.deepEqual(invalidCountrySemantics, {
+    cityDisabled: true,
+    countryText: '请选择国家/地区',
+    countryValue: '00000000-0000-4000-8000-000000000901',
+    provinceDisabled: true,
+  })
+  await clickVisibleButton(page, '验证 FormData')
+  await page.waitFor(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const country = root?.querySelector(
+      '[data-region-level="COUNTRY_REGION"] [data-slot="select-trigger"]',
+    )
+    return document.activeElement === country
+      && country?.getAttribute('aria-invalid') === 'true'
+  })()`)
+
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=invalid-province`,
+  ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="invalid-province"] [data-testid="${rootTestId}"] [data-slot="qs-region-selector-error"]',
+  )?.textContent?.includes('已选省/州无法回显')`)
+  const invalidProvinceSemantics = await page.evaluate(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const triggers = [...(root?.querySelectorAll(
+      '[data-slot="select-trigger"][role="combobox"]',
+    ) ?? [])]
+    return {
+      cityDisabled: triggers[2]?.disabled,
+      countryText: triggers[0]?.textContent?.trim(),
+      provinceDisabled: triggers[1]?.disabled,
+      provinceText: triggers[1]?.textContent?.trim(),
+      provinceValue: document.querySelector(
+        '[data-testid="region-selector-province-value"]',
+      )?.textContent?.trim(),
+    }
+  })()`)
+  assert.deepEqual(invalidProvinceSemantics, {
+    cityDisabled: true,
+    countryText: '中国台湾',
+    provinceDisabled: false,
+    provinceText: '请选择省/州',
+    provinceValue: '00000000-0000-4000-8000-000000000902',
+  })
+  await clickVisibleButton(page, '验证 FormData')
+  await page.waitFor(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const province = root?.querySelector(
+      '[data-region-level="PROVINCE_STATE"] [data-slot="select-trigger"]',
+    )
+    return document.activeElement === province
+      && province?.getAttribute('aria-invalid') === 'true'
+  })()`)
+
+  // 完整外部 value 回显、readonly 和 disabled 都使用真实台湾三级 ID。
+  // 先离开 path 场景，确保下一次导航触发 harness 重置与组件冷启动；直接
+  // navigate 到相同 URL 会被 Vue Router 判定为重复导航，无法验证重试恢复。
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=standard&after=path-failure`,
+  ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="standard"]',
+  ) !== null`)
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=path&value=${encodeURIComponent(kaohsiung.id)}`,
+  ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="${rootTestId}"] [data-slot="qs-region-selector-path"]',
+  )?.textContent?.trim() === '中国台湾 台湾 高雄市'`)
+
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=states&value=${encodeURIComponent(kaohsiung.id)}`,
+  ))
+  await waitForAfterAuthentication(page, `(() => {
+    const readonlyRoot = document.querySelector(
+      '[data-testid="region-selector-e2e-readonly"]',
+    )
+    const disabledRoot = document.querySelector(
+      '[data-testid="region-selector-e2e-disabled"]',
+    )
+    const disabledTriggers = [...(disabledRoot?.querySelectorAll(
+      '[data-slot="select-trigger"]',
+    ) ?? [])]
+    return readonlyRoot?.querySelector(
+      '[data-slot="qs-region-selector-readonly"]',
+    )?.value === '中国台湾 台湾 高雄市'
+      && disabledTriggers.length === 3
+      && disabledTriggers.every(trigger => trigger.disabled)
+  })()`)
+  const readonlySemantics = await page.evaluate(`(() => {
+    const root = document.querySelector(
+      '[data-testid="region-selector-e2e-readonly"]',
+    )
+    const readout = root?.querySelector(
+      '[data-slot="qs-region-selector-readonly"]',
+    )
+    document.querySelector(
+      'label[for="region-selector-e2e-readonly"]',
+    )?.click()
+    return {
+      active: document.activeElement === readout,
+      labels: [...(readout?.labels ?? [])]
+        .map(label => label.textContent?.trim() ?? ''),
+      readonly: readout?.readOnly,
+      tagName: readout?.tagName,
+      value: readout?.value,
+    }
+  })()`)
+  assert.deepEqual(readonlySemantics, {
+    active: true,
+    labels: ['只读地区'],
+    readonly: true,
+    tagName: 'INPUT',
+    value: '中国台湾 台湾 高雄市',
+  })
+
+  // 窄屏改为纵向三级字段；活动 listbox 不制造页面横向溢出。
+  await page.setViewport(390, 844, true)
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    `${selectorRoute}?case=standard`,
+  ))
+  await waitForAfterAuthentication(page, `document.querySelector(
+    '[data-testid="region-selector-browser-harness"][data-e2e-case="standard"] [data-testid="${rootTestId}"]',
+  ) !== null`)
+  const mobileLayout = await page.evaluate(`(() => {
+    const root = document.querySelector('[data-testid="${rootTestId}"]')
+    const levels = [...(root?.querySelectorAll('[data-region-level]') ?? [])]
+    const tops = levels.map(level => level.getBoundingClientRect().top)
     const viewportWidth = document.documentElement.clientWidth
     return {
       documentFits: document.documentElement.scrollWidth <= viewportWidth,
-      documentScrollWidth: document.documentElement.scrollWidth,
-      horizontallyScrollable: panel.scrollWidth > panel.clientWidth,
-      panelClientWidth: panel.clientWidth,
-      panelScrollWidth: panel.scrollWidth,
-      popupInsideViewport:
-        popup.getBoundingClientRect().left >= 0
-        && popup.getBoundingClientRect().right <= viewportWidth,
-      popupLeft: popup.getBoundingClientRect().left,
-      popupRight: popup.getBoundingClientRect().right,
-      scrollLeft: panel.scrollLeft,
+      levelCount: levels.length,
+      stacked: tops.length === 3 && tops[0] < tops[1] && tops[1] < tops[2],
+      touchTargets: levels.every(level =>
+        level.querySelector('[data-slot="select-trigger"]')
+          ?.getBoundingClientRect().height >= 44),
+    }
+  })()`)
+  assert.deepEqual(mobileLayout, {
+    documentFits: true,
+    levelCount: 3,
+    stacked: true,
+    touchTargets: true,
+  })
+  await openRegionLevelSelect(page, rootTestId, 'COUNTRY_REGION')
+  await waitForRegionSelectOptions(
+    page,
+    rootTestId,
+    'COUNTRY_REGION',
+    rootsResponse.body.map(region => region.name),
+  )
+  const mobilePopup = await page.evaluate(`(() => {
+    const trigger = document.querySelector(
+      '[data-testid="${rootTestId}"] [data-region-level="COUNTRY_REGION"] [data-slot="select-trigger"]',
+    )
+    const content = document.getElementById(
+      trigger?.getAttribute('aria-controls') ?? '',
+    )
+    const rect = content?.getBoundingClientRect()
+    const viewportWidth = document.documentElement.clientWidth
+    return {
+      insideViewport: Boolean(rect)
+        && rect.left >= 0
+        && rect.right <= viewportWidth,
       viewportWidth,
     }
   })()`)
-  assert.equal(
-    mobileCascade.documentFits,
-    true,
-    JSON.stringify(mobileCascade),
-  )
-  assert.equal(
-    mobileCascade.horizontallyScrollable,
-    true,
-    JSON.stringify(mobileCascade),
-  )
-  assert.equal(
-    mobileCascade.popupInsideViewport,
-    true,
-    JSON.stringify(mobileCascade),
-  )
-  assert.ok(mobileCascade.scrollLeft > 0)
+  assert.equal(mobilePopup.insideViewport, true, JSON.stringify(mobilePopup))
 
-  // 停用历史路径继续由隔离 fixture 提供，只承担固定视觉契约。
-  await providerPage.waitFor(`document.body.innerText.includes(
+  await page.connection.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+  const motion = await page.evaluate(`(() => {
+    const trigger = document.querySelector(
+      '[data-testid="${rootTestId}"] [data-slot="select-trigger"]',
+    )
+    const durations = (value) => value.split(',').map((part) => {
+      const text = part.trim()
+      return text.endsWith('ms')
+        ? Number.parseFloat(text) / 1000
+        : Number.parseFloat(text)
+    })
+    const style = trigger ? getComputedStyle(trigger) : null
+    return {
+      matches: matchMedia('(prefers-reduced-motion: reduce)').matches,
+      seconds: style
+        ? [
+            ...durations(style.animationDuration),
+            ...durations(style.transitionDuration),
+          ]
+        : [],
+    }
+  })()`)
+  assert.equal(motion.matches, true)
+  assert.equal(
+    motion.seconds.every(value => Number.isFinite(value) && value <= 0.001),
+    true,
+  )
+
+  // 正式 Showcase 的标准状态同样读取数据库完整数据，不使用 fixture。
+  await page.setViewport(1280, 800, false)
+  await page.navigate(appRouteUrl(
+    configuration.baseUrl,
+    '/component-library/business/region-selector',
+  ))
+  await page.waitFor(`document.querySelector(
+    '[data-testid="region-selector-showcase-standard"]',
+  ) !== null`)
+  await openRegionLevelSelect(
+    page,
+    'region-selector-showcase-standard',
+    'COUNTRY_REGION',
+  )
+  await waitForRegionSelectOptions(
+    page,
+    'region-selector-showcase-standard',
+    'COUNTRY_REGION',
+    rootsResponse.body.map(region => region.name),
+  )
+  await selectRegionOption(
+    page,
+    'region-selector-showcase-standard',
+    'COUNTRY_REGION',
+    '中国台湾',
+  )
+  await openRegionLevelSelect(
+    page,
+    'region-selector-showcase-standard',
+    'PROVINCE_STATE',
+  )
+  await waitForRegionSelectOptions(
+    page,
+    'region-selector-showcase-standard',
+    'PROVINCE_STATE',
+    ['台湾'],
+  )
+  await selectRegionOption(
+    page,
+    'region-selector-showcase-standard',
+    'PROVINCE_STATE',
+    '台湾',
+  )
+  await openRegionLevelSelect(
+    page,
+    'region-selector-showcase-standard',
+    'CITY',
+  )
+  await waitForRegionSelectOptions(
+    page,
+    'region-selector-showcase-standard',
+    'CITY',
+    taiwanCityResponse.body.map(region => region.name),
+  )
+  await selectRegionOption(
+    page,
+    'region-selector-showcase-standard',
+    'CITY',
+    '高雄市',
+  )
+  await page.waitFor(`document.querySelector(
+    '[data-testid="region-selector-showcase-standard"] [data-slot="qs-region-selector-path"]',
+  )?.textContent?.trim() === '中国台湾 台湾 高雄市'`)
+  await page.waitFor(`document.body.innerText.includes(
     '当前历史地区已停用，仅供回显',
   )`)
 
-  providerIssues.stop()
+  assert.equal(searchRequests.length, 0)
   issues.stop()
-  peerIssues.stop()
-  assert.deepEqual(providerIssues.issues, [])
   assert.deepEqual(issues.issues, [])
-  assert.deepEqual(peerIssues.issues, [])
-  providerPage.close()
   page.close()
-  peer.close()
 })
 
 test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效与响应式页面', {

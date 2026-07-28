@@ -32,7 +32,7 @@ function readSource(relativePath: string): string {
 test('启停确认纯逻辑生成完整路径且提交只携带动作与目标 ID', () => {
   assert.equal(
     formatRegionStatusPath([country, province], city),
-    '中国 / 广东省 / 广州市',
+    '中国 广东省 广州市',
   )
   assert.equal(formatRegionStatusPath([], country), '中国')
   assert.deepEqual(

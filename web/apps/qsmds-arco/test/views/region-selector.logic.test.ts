@@ -1,27 +1,24 @@
-import type { RegionCascaderOption } from '../../src/components/business/QsRegionSelector/logic'
 import type {
+  RegionSelectorChange,
+  RegionSelectorCountryPath,
   RegionSelectorNode,
   RegionSelectorPath,
+  RegionSelectorProvincePath,
 } from '../../src/components/business/QsRegionSelector/types'
-
 import assert from 'node:assert/strict'
-// eslint-disable-next-line test/no-import-node-test -- 组件纯逻辑使用 Node.js 内置 runner，避免引入浏览器测试依赖。
+// eslint-disable-next-line test/no-import-node-test -- 组件纯逻辑使用 Node.js 内置 runner。
 import test from 'node:test'
-
 import {
-  createRegionInteractiveTree,
-  createRegionOptions,
-  createRegionPathTree,
+  createEmptyRegionSelectorValue,
   createRegionRequestVersion,
-  createRegionSearchTree,
-  filterRegionOption,
-  findRegionPathByCityId,
+  createRegionSelectOptions,
+  createRegionSelectorChange,
   formatRegionPathLabel,
-  mergeRegionTrees,
-  normalizeRegionSearchText,
-  replaceRegionChildren,
-  resolveRegionSelection,
+  isCompleteRegionSelectorValue,
+  mergeSelectedRegionNode,
+  normalizeRegionSelectorValue,
   validateRegionChildren,
+  validateRegionSelectorPath,
 } from '../../src/components/business/QsRegionSelector/logic'
 
 const IDS = {
@@ -29,11 +26,8 @@ const IDS = {
   beijingProvince: '00000000-0000-4000-8000-000000000112',
   china: '00000000-0000-4000-8000-000000000111',
   kaohsiung: '00000000-0000-4000-8000-000000000123',
-  kualaLumpur: '00000000-0000-4000-8000-000000000133',
-  malaysia: '00000000-0000-4000-8000-000000000131',
   taiwan: '00000000-0000-4000-8000-000000000121',
   taiwanProvince: '00000000-0000-4000-8000-000000000122',
-  wilayahPersekutuan: '00000000-0000-4000-8000-000000000132',
 } as const
 
 function node<L extends RegionSelectorNode['level']>(
@@ -42,11 +36,9 @@ function node<L extends RegionSelectorNode['level']>(
     readonly parentId: string | null
     readonly level: L
     readonly name: string
-    readonly englishName?: string | null
     readonly code: string
     readonly enabled?: boolean
     readonly effectiveEnabled?: boolean
-    readonly hasChildren?: boolean
   },
 ): RegionSelectorNode<L> {
   return Object.freeze({
@@ -60,7 +52,6 @@ function node<L extends RegionSelectorNode['level']>(
 
 const china = node({
   code: 'CN',
-  englishName: 'China',
   id: IDS.china,
   level: 'COUNTRY_REGION',
   name: '中国',
@@ -68,7 +59,6 @@ const china = node({
 })
 const beijingProvince = node({
   code: 'CN-11',
-  englishName: 'Beijing',
   id: IDS.beijingProvince,
   level: 'PROVINCE_STATE',
   name: '北京市',
@@ -76,7 +66,6 @@ const beijingProvince = node({
 })
 const beijingCity = node({
   code: 'CN-110100',
-  englishName: 'Beijing City',
   id: IDS.beijingCity,
   level: 'CITY',
   name: '北京市',
@@ -84,15 +73,13 @@ const beijingCity = node({
 })
 const taiwan = node({
   code: 'TW',
-  englishName: 'Taiwan, China',
   id: IDS.taiwan,
   level: 'COUNTRY_REGION',
   name: '中国台湾',
   parentId: null,
 })
 const taiwanProvince = node({
-  code: 'TW-TW',
-  englishName: 'Taiwan',
+  code: 'TW-TAIWAN',
   id: IDS.taiwanProvince,
   level: 'PROVINCE_STATE',
   name: '台湾',
@@ -101,212 +88,123 @@ const taiwanProvince = node({
 const stoppedKaohsiung = node({
   code: 'TW-64000',
   effectiveEnabled: false,
-  enabled: true,
-  englishName: 'Kaohsiung City',
+  enabled: false,
   id: IDS.kaohsiung,
   level: 'CITY',
   name: '高雄市',
   parentId: IDS.taiwanProvince,
 })
-const malaysia = node({
-  code: 'MY',
-  englishName: 'Malaysia',
-  id: IDS.malaysia,
-  level: 'COUNTRY_REGION',
-  name: '马来西亚',
-  parentId: null,
-})
-const wilayahPersekutuan = node({
-  code: 'MY-14',
-  englishName: 'Wilayah Persekutuan',
-  id: IDS.wilayahPersekutuan,
-  level: 'PROVINCE_STATE',
-  name: '联邦直辖区',
-  parentId: IDS.malaysia,
-})
-const kualaLumpur = node({
-  code: 'MY-14-KUL',
-  englishName: 'Kuala Lumpur',
-  id: IDS.kualaLumpur,
-  level: 'CITY',
-  name: '吉隆坡',
-  parentId: IDS.wilayahPersekutuan,
-})
-
-const beijingPath = Object.freeze([
-  china,
-  beijingProvince,
-  beijingCity,
-]) as RegionSelectorPath
-const stoppedTaiwanPath = Object.freeze([
+const taiwanPath = Object.freeze([
   taiwan,
   taiwanProvince,
   stoppedKaohsiung,
 ]) as RegionSelectorPath
-const malaysiaPath = Object.freeze([
-  malaysia,
-  wilayahPersekutuan,
-  kualaLumpur,
-]) as RegionSelectorPath
 
-function values(options: readonly RegionCascaderOption[]): string[] {
-  return options.map(option => option.value)
+/**
+ * 公共 change 必须能按 source 收窄 path 与 complete，调用方无需再次检查数组长度。
+ * 该函数同时由 Web typecheck 固定编译期契约，并在 Node 测试中覆盖四个运行时分支。
+ */
+function assertDiscriminatedChange(change: RegionSelectorChange): void {
+  if (change.source === 'countryRegion') {
+    const path: RegionSelectorCountryPath = change.path
+    const complete: false = change.complete
+    assert.equal(path.length, 1)
+    assert.equal(complete, false)
+  }
+  else if (change.source === 'provinceState') {
+    const path: RegionSelectorProvincePath = change.path
+    const complete: false = change.complete
+    assert.equal(path.length, 2)
+    assert.equal(complete, false)
+  }
+  else if (change.source === 'city') {
+    const path: RegionSelectorPath = change.path
+    const complete: true = change.complete
+    assert.equal(path.length, 3)
+    assert.equal(complete, true)
+  }
+  else {
+    const path: readonly [] = change.path
+    const complete: false = change.complete
+    assert.equal(path.length, 0)
+    assert.equal(complete, false)
+  }
 }
 
-test('navigation options 只使用领域字段并保持 Server 顺序与固定叶子语义', () => {
-  const options = createRegionOptions([malaysia, china, taiwan])
-
-  assert.deepEqual(values(options), [IDS.malaysia, IDS.china, IDS.taiwan])
-  assert.deepEqual(options.map(option => option.isLeaf), [false, false, false])
-  assert.equal(options[0]?.region, malaysia)
-  assert.equal(options[0]?.disabled, false)
-  assert.equal(options[0]?.children, undefined)
-
-  const cityOptions = createRegionOptions([beijingCity])
-  assert.equal(cityOptions[0]?.isLeaf, true)
-  assert.equal(cityOptions[0]?.disabled, false)
-})
-
-test('resolved path 转成完整树、完整 label 与可解释的停用状态', () => {
-  const tree = createRegionPathTree(stoppedTaiwanPath)
-  const province = tree[0]?.children?.[0]
-  const city = province?.children?.[0]
-
-  assert.equal(tree[0]?.value, IDS.taiwan)
-  assert.equal(province?.value, IDS.taiwanProvince)
-  assert.equal(city?.value, IDS.kaohsiung)
-  assert.equal(city?.isLeaf, true)
-  assert.equal(city?.disabled, true)
+test('结构化 value 使用稳定的三级字段并规范化运行时空值', () => {
+  assert.deepEqual(createEmptyRegionSelectorValue(), {
+    cityId: null,
+    countryRegionId: null,
+    provinceStateId: null,
+  })
+  assert.deepEqual(normalizeRegionSelectorValue(undefined), {
+    cityId: null,
+    countryRegionId: null,
+    provinceStateId: null,
+  })
+  assert.deepEqual(normalizeRegionSelectorValue({
+    cityId: '',
+    countryRegionId: IDS.taiwan,
+    provinceStateId: IDS.taiwanProvince,
+  }), {
+    cityId: null,
+    countryRegionId: IDS.taiwan,
+    provinceStateId: IDS.taiwanProvince,
+  })
   assert.equal(
-    formatRegionPathLabel([tree[0]!, province!, city!]),
-    '中国台湾 / 台湾 / 高雄市（已停用）',
-  )
-  assert.match(city?.searchText ?? '', /taiwan, china/u)
-  assert.match(city?.searchText ?? '', /kaohsiung city/u)
-  assert.match(city?.searchText ?? '', /tw-64000/u)
-})
-
-test('navigation 与 search 按 UUID 合并并保持各自 Server 顺序', () => {
-  const navigation = createRegionOptions([china, taiwan, malaysia])
-  const navigationWithChina = replaceRegionChildren(
-    navigation,
-    IDS.china,
-    [beijingProvince],
-  )
-  const navigationWithBeijing = replaceRegionChildren(
-    navigationWithChina,
-    IDS.beijingProvince,
-    [beijingCity],
-  )
-  const resolved = createRegionPathTree(stoppedTaiwanPath)
-  const search = createRegionSearchTree([malaysiaPath, beijingPath])
-
-  const merged = mergeRegionTrees(
-    navigationWithBeijing,
-    resolved,
-    search,
-  )
-
-  assert.deepEqual(values(merged), [IDS.china, IDS.taiwan, IDS.malaysia])
-  assert.equal(merged.filter(option => option.value === IDS.china).length, 1)
-  assert.deepEqual(values(merged[0]?.children ?? []), [IDS.beijingProvince])
-  assert.deepEqual(
-    values(merged[0]?.children?.[0]?.children ?? []),
-    [IDS.beijingCity],
-  )
-  assert.deepEqual(
-    values(merged[1]?.children?.[0]?.children ?? []),
-    [IDS.kaohsiung],
-  )
-  assert.deepEqual(
-    values(merged[2]?.children?.[0]?.children ?? []),
-    [IDS.kualaLumpur],
-  )
-})
-
-test('普通交互树不采纳 resolved 的部分 children，搜索分支只在搜索态出现', () => {
-  const navigation = createRegionOptions([china, taiwan, malaysia])
-  const resolved = createRegionPathTree(stoppedTaiwanPath)
-  const search = createRegionSearchTree([malaysiaPath])
-
-  const normalTree = createRegionInteractiveTree(
-    navigation,
-    search,
-    false,
-  )
-  assert.equal(normalTree[1]?.value, resolved[0]?.value)
-  assert.equal(
-    normalTree[1]?.children,
-    undefined,
-    '已有高雄回显不能让中国台湾被误判为已完整加载',
-  )
-
-  const searchTree = createRegionInteractiveTree(
-    navigation,
-    search,
+    isCompleteRegionSelectorValue({
+      cityId: IDS.kaohsiung,
+      countryRegionId: IDS.taiwan,
+      provinceStateId: IDS.taiwanProvince,
+    }),
     true,
   )
-  assert.deepEqual(
-    values(searchTree[2]?.children?.[0]?.children ?? []),
-    [IDS.kualaLumpur],
-  )
-
-  const afterSearchTree = createRegionInteractiveTree(
-    navigation,
-    search,
+  assert.equal(
+    isCompleteRegionSelectorValue({
+      cityId: null,
+      countryRegionId: IDS.taiwan,
+      provinceStateId: IDS.taiwanProvince,
+    }),
     false,
   )
-  assert.equal(
-    afterSearchTree[2]?.children,
-    undefined,
-    '清空搜索后必须恢复 navigation 的 lazy 未加载语义',
+})
+
+test('FaSelect options 保持 Server 顺序、UUID 与停用语义', () => {
+  assert.deepEqual(
+    createRegionSelectOptions([taiwan, stoppedKaohsiung, china]),
+    [
+      {
+        disabled: false,
+        label: '中国台湾',
+        value: IDS.taiwan,
+      },
+      {
+        disabled: true,
+        label: '高雄市',
+        value: IDS.kaohsiung,
+      },
+      {
+        disabled: false,
+        label: '中国',
+        value: IDS.china,
+      },
+    ],
   )
 })
 
-test('search paths 以本次 Server 顺序重建整棵树，不保留上次搜索分支', () => {
-  const firstTree = createRegionSearchTree([beijingPath, malaysiaPath])
-  const replacementTree = createRegionSearchTree([malaysiaPath])
-
-  assert.deepEqual(values(firstTree), [IDS.china, IDS.malaysia])
-  assert.deepEqual(values(replacementTree), [IDS.malaysia])
-  assert.equal(
-    findRegionPathByCityId(replacementTree, IDS.beijingCity),
-    null,
+test('停用历史节点只在 Server 结果缺失时追加且不制造重复 UUID', () => {
+  assert.deepEqual(
+    mergeSelectedRegionNode([beijingCity], stoppedKaohsiung),
+    [beijingCity, stoppedKaohsiung],
   )
   assert.deepEqual(
-    findRegionPathByCityId(replacementTree, IDS.kualaLumpur),
-    malaysiaPath,
+    mergeSelectedRegionNode([stoppedKaohsiung], stoppedKaohsiung),
+    [stoppedKaohsiung],
   )
+  assert.deepEqual(mergeSelectedRegionNode([beijingCity], null), [beijingCity])
 })
 
-test('lazy children 按父级整批替换，root 替换不会残留旧 Server 结果', () => {
-  const roots = createRegionOptions([china, taiwan])
-  const withInitialChildren = replaceRegionChildren(
-    roots,
-    IDS.china,
-    [beijingProvince],
-  )
-  const replacedChildren = replaceRegionChildren(
-    withInitialChildren,
-    IDS.china,
-    [taiwanProvince],
-  )
-
-  assert.deepEqual(
-    values(replacedChildren[0]?.children ?? []),
-    [IDS.taiwanProvince],
-  )
-  assert.equal(withInitialChildren[0]?.children?.[0]?.value, IDS.beijingProvince)
-
-  const replacedRoots = replaceRegionChildren(
-    replacedChildren,
-    null,
-    [malaysia, china],
-  )
-  assert.deepEqual(values(replacedRoots), [IDS.malaysia, IDS.china])
-})
-
-test('lazy children 必须严格符合 COUNTRY 到 PROVINCE、PROVINCE 到 CITY', () => {
+test('同层响应必须严格符合 COUNTRY 到 PROVINCE、PROVINCE 到 CITY', () => {
   assert.equal(
     validateRegionChildren(china, [beijingProvince])[0],
     beijingProvince,
@@ -315,7 +213,6 @@ test('lazy children 必须严格符合 COUNTRY 到 PROVINCE、PROVINCE 到 CITY'
     validateRegionChildren(beijingProvince, [beijingCity])[0],
     beijingCity,
   )
-
   assert.throws(
     () => validateRegionChildren(china, [beijingCity]),
     /Invalid region child hierarchy/u,
@@ -330,92 +227,105 @@ test('lazy children 必须严格符合 COUNTRY 到 PROVINCE、PROVINCE 到 CITY'
   )
 })
 
-test('搜索文本统一 NFC、Unicode 空白、en-US 小写并只匹配已加载 option', () => {
+test('外部完整 value 必须与连续 path 的三个 UUID 全部一致', () => {
+  const value = {
+    cityId: IDS.kaohsiung,
+    countryRegionId: IDS.taiwan,
+    provinceStateId: IDS.taiwanProvince,
+  }
+  assert.equal(validateRegionSelectorPath(taiwanPath, value), true)
   assert.equal(
-    normalizeRegionSearchText('  İSTANBUL\u3000A\u030A  '),
-    'i\u0307stanbul å',
-  )
-  assert.equal(normalizeRegionSearchText('\u3000\n\t'), '')
-
-  const city = createRegionPathTree(malaysiaPath)[0]!
-    .children![0]!
-    .children![0]!
-  assert.equal(filterRegionOption('  KUALA\u3000LUMPUR ', city), true)
-  assert.equal(filterRegionOption('MY-14-KUL', city), true)
-  assert.equal(filterRegionOption('未加载城市', city), false)
-
-  const stoppedCity = createRegionPathTree(stoppedTaiwanPath)[0]!
-    .children![0]!
-    .children![0]!
-  assert.equal(
-    filterRegionOption('高雄', stoppedCity),
+    validateRegionSelectorPath(taiwanPath, {
+      ...value,
+      countryRegionId: IDS.china,
+    }),
     false,
-    '历史停用路径只能回显，不能进入普通搜索结果',
+  )
+  assert.equal(
+    validateRegionSelectorPath([taiwan, stoppedKaohsiung], value),
+    false,
   )
 })
 
-test('request version 只允许当前请求落地，next 与 invalidate 都使旧响应 stale', () => {
+test('每一级用户选择发出原子 value、部分 path 与完成状态', () => {
+  const countryChange = createRegionSelectorChange(
+    'countryRegion',
+    [taiwan],
+  )
+  const provinceChange = createRegionSelectorChange(
+    'provinceState',
+    [taiwan, taiwanProvince],
+  )
+  const cityChange = createRegionSelectorChange('city', taiwanPath)
+  const clearChange = createRegionSelectorChange('clear', [])
+
+  assertDiscriminatedChange(countryChange)
+  assertDiscriminatedChange(provinceChange)
+  assertDiscriminatedChange(cityChange)
+  assertDiscriminatedChange(clearChange)
+
+  assert.deepEqual(countryChange, {
+    complete: false,
+    path: [taiwan],
+    source: 'countryRegion',
+    value: {
+      cityId: null,
+      countryRegionId: IDS.taiwan,
+      provinceStateId: null,
+    },
+  })
+  assert.deepEqual(provinceChange, {
+    complete: false,
+    path: [taiwan, taiwanProvince],
+    source: 'provinceState',
+    value: {
+      cityId: null,
+      countryRegionId: IDS.taiwan,
+      provinceStateId: IDS.taiwanProvince,
+    },
+  })
+  assert.deepEqual(cityChange, {
+    complete: true,
+    path: taiwanPath,
+    source: 'city',
+    value: {
+      cityId: IDS.kaohsiung,
+      countryRegionId: IDS.taiwan,
+      provinceStateId: IDS.taiwanProvince,
+    },
+  })
+  assert.deepEqual(clearChange, {
+    complete: false,
+    path: [],
+    source: 'clear',
+    value: {
+      cityId: null,
+      countryRegionId: null,
+      provinceStateId: null,
+    },
+  })
+  assert.throws(
+    () => createRegionSelectorChange('city', [taiwan]),
+    /Invalid region selection path/u,
+  )
+})
+
+test('完整地区以一个 ASCII 空格分隔并明确展示停用状态', () => {
+  assert.equal(
+    formatRegionPathLabel(taiwanPath),
+    '中国台湾 台湾 高雄市（已停用）',
+  )
+  assert.doesNotMatch(formatRegionPathLabel(taiwanPath), /\s\/\s/u)
+})
+
+test('request version 只允许当前请求落地', () => {
   const version = createRegionRequestVersion()
   const first = version.next()
   const second = version.next()
 
-  assert.equal(first, 1)
-  assert.equal(second, 2)
   assert.equal(version.isCurrent(first), false)
   assert.equal(version.isCurrent(second), true)
-
   version.invalidate()
   assert.equal(version.isCurrent(second), false)
   assert.equal(version.next(), 4)
-})
-
-test('只把完整、连续、有效的 CITY 转成 typed change', () => {
-  const tree = createRegionPathTree(beijingPath)
-
-  assert.deepEqual(resolveRegionSelection(IDS.beijingCity, tree), {
-    path: beijingPath,
-    source: 'select',
-    value: IDS.beijingCity,
-  })
-  assert.equal(resolveRegionSelection(IDS.beijingProvince, tree), null)
-  assert.equal(resolveRegionSelection('not-a-city', tree), null)
-  assert.equal(resolveRegionSelection(123, tree), null)
-
-  const stoppedTree = createRegionPathTree(stoppedTaiwanPath)
-  assert.equal(resolveRegionSelection(IDS.kaohsiung, stoppedTree), null)
-})
-
-test('畸形 tree 即使包含同 ID CITY 也不能绕过完整三级校验', () => {
-  const malformedCity: RegionCascaderOption = {
-    ...createRegionOptions([beijingCity])[0]!,
-  }
-  const malformedTree: readonly RegionCascaderOption[] = [{
-    ...createRegionOptions([china])[0]!,
-    children: [malformedCity],
-  }]
-
-  assert.equal(
-    findRegionPathByCityId(malformedTree, IDS.beijingCity),
-    null,
-  )
-  assert.equal(
-    resolveRegionSelection(IDS.beijingCity, malformedTree),
-    null,
-  )
-})
-
-test('Arco 清空值统一映射为公共 null，其他非法内核值不向外泄露', () => {
-  const tree = createRegionPathTree(beijingPath)
-
-  for (const value of ['', null, undefined]) {
-    assert.deepEqual(resolveRegionSelection(value, tree), {
-      path: null,
-      source: 'clear',
-      value: null,
-    })
-  }
-
-  for (const value of [[], {}, [IDS.beijingCity]]) {
-    assert.equal(resolveRegionSelection(value, tree), null)
-  }
 })

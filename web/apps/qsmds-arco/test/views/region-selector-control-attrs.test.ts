@@ -1,18 +1,36 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-// eslint-disable-next-line test/no-import-node-test -- 真实控件 bridge 使用无浏览器依赖的 DOM 契约桩验证。
+// eslint-disable-next-line test/no-import-node-test -- bridge 通过无浏览器依赖的局部 DOM 契约桩验证。
 import test from 'node:test'
-
 import {
   createRegionSelectorControlBridge,
   splitRegionSelectorAttrs,
 } from '../../src/components/business/QsRegionSelector/control-attrs'
 
+const SELECTORS = {
+  CITY: '[data-region-level="CITY"] [data-slot="select-trigger"]',
+  COUNTRY_REGION:
+    '[data-region-level="COUNTRY_REGION"] [data-slot="select-trigger"]',
+  PROVINCE_STATE:
+    '[data-region-level="PROVINCE_STATE"] [data-slot="select-trigger"]',
+} as const
+
 class FakeElement extends EventTarget {
   readonly attributes = new Map<string, string>()
+  blurCount = 0
+  focusCount = 0
 
   constructor(readonly tagName: string) {
     super()
+  }
+
+  blur(): void {
+    this.blurCount += 1
+  }
+
+  focus(): void {
+    this.focusCount += 1
+    this.dispatchEvent(new Event('focus'))
   }
 
   getAttribute(name: string): string | null {
@@ -32,97 +50,77 @@ class FakeElement extends EventTarget {
   }
 }
 
-class FakeForm extends EventTarget {}
-
-class FakeInput extends FakeElement {
-  blurCount = 0
-  customValidity = ''
-  focusCount = 0
-  form: FakeForm | null = null
-  value = ''
-
-  constructor() {
-    super('INPUT')
-  }
-
-  blur(): void {
-    this.blurCount += 1
-    this.dispatchEvent(new Event('blur'))
-  }
-
-  focus(): void {
-    this.focusCount += 1
-    this.dispatchEvent(new Event('focus'))
-  }
-
-  setCustomValidity(message: string): void {
-    this.customValidity = message
-  }
-}
-
 class FakeRoot {
-  queryCount = 0
+  readonly readonlyTarget = new FakeElement('DIV')
 
-  constructor(readonly inputs: FakeInput[]) {}
+  constructor(
+    readonly triggers: Partial<Record<keyof typeof SELECTORS, FakeElement[]>>,
+  ) {}
 
-  querySelectorAll(selector: string): FakeInput[] {
-    assert.equal(selector, 'input')
-    this.queryCount += 1
-    return this.inputs
+  querySelector(selector: string): FakeElement | null {
+    assert.equal(selector, '[data-slot="qs-region-selector-readonly"]')
+    return this.readonlyTarget
+  }
+
+  querySelectorAll(selector: string): FakeElement[] {
+    const level = Object.entries(SELECTORS).find(
+      ([, candidate]) => candidate === selector,
+    )?.[0] as keyof typeof SELECTORS | undefined
+    assert.ok(level, `unexpected selector: ${selector}`)
+    return this.triggers[level] ?? []
   }
 }
 
-function asElement(value: FakeElement): HTMLElement {
-  return value as unknown as HTMLElement
+function asRoot(root: FakeRoot): HTMLElement {
+  return root as unknown as HTMLElement
 }
 
-function asRoot(value: FakeRoot): HTMLElement {
-  return value as unknown as HTMLElement
+function createTriggers() {
+  return {
+    CITY: new FakeElement('BUTTON'),
+    COUNTRY_REGION: new FakeElement('BUTTON'),
+    PROVINCE_STATE: new FakeElement('BUTTON'),
+  }
 }
 
-function createFormDataEvent(): Event & { formData: FormData } {
-  const event = new Event('formdata')
-  Object.defineProperty(event, 'formData', {
-    configurable: false,
-    enumerable: true,
-    value: new FormData(),
-  })
-  return event as Event & { formData: FormData }
+function createState(root: FakeRoot) {
+  return {
+    attrs: {
+      'aria-describedby': 'caller-help shared-status',
+      'aria-invalid': false,
+      'id': 'shipping-region',
+      'name': 'shippingCityId',
+      'required': true,
+      'tabindex': 2,
+    },
+    busy: {
+      CITY: false,
+      COUNTRY_REGION: true,
+      PROVINCE_STATE: false,
+    },
+    controlIds: {
+      CITY: 'shipping-region-city',
+      COUNTRY_REGION: 'shipping-region',
+      PROVINCE_STATE: 'shipping-region-province-state',
+    },
+    describedBy: ['loading-status', 'shared-status'],
+    invalid: false,
+    readonly: false,
+    root: asRoot(root),
+  } as const
 }
 
-function createKeyboardEvent(key: string): KeyboardEvent {
-  const event = new Event('keydown', {
-    bubbles: true,
-    cancelable: true,
-  })
-  Object.defineProperty(event, 'key', {
-    configurable: false,
-    enumerable: true,
-    value: key,
-  })
-  return event as KeyboardEvent
-}
-
-const baseState = {
-  busy: false,
-  describedBy: [] as string[],
-  expanded: false,
-  hasValidCitySelection: false,
-  invalid: false,
-  modelValue: null,
-  readonly: false,
-}
-
-test('attrs 只把布局与测试标记交给 wrapper，把真实控件白名单交给 input', () => {
+test('attrs 分流到 wrapper、三个 trigger 与原生 form proxy', () => {
   const style = { minWidth: 0 }
   const groups = splitRegionSelectorAttrs({
     'aria-describedby': 'caller-help',
-    'aria-label': '收货城市',
-    'autocomplete': 'address-level2',
-    'class': ['w-full', 'min-w-0'],
+    'aria-label': '收货地区',
+    'autocomplete': '不得透传',
+    'class': ['w-full'],
     'data-testid': 'region-selector',
+    'form': 'shipping-form',
     'id': 'shipping-region',
-    'name': 'cityId',
+    'name': 'shippingCityId',
     'onClick': () => {},
     'required': true,
     'style': style,
@@ -131,43 +129,58 @@ test('attrs 只把布局与测试标记交给 wrapper，把真实控件白名单
   })
 
   assert.deepEqual({ ...groups.wrapperAttrs }, {
-    'class': ['w-full', 'min-w-0'],
+    'aria-label': '收货地区',
+    'class': ['w-full'],
     'data-testid': 'region-selector',
     'style': style,
   })
   assert.deepEqual({ ...groups.controlAttrs }, {
     'aria-describedby': 'caller-help',
-    'aria-label': '收货城市',
-    'autocomplete': 'address-level2',
     'id': 'shipping-region',
-    'name': 'cityId',
-    'required': true,
     'tabindex': 3,
+  })
+  assert.deepEqual({ ...groups.formAttrs }, {
+    form: 'shipping-form',
+    name: 'shippingCityId',
+    required: true,
   })
   assert.equal(Object.getPrototypeOf(groups.wrapperAttrs), null)
   assert.equal(Object.getPrototypeOf(groups.controlAttrs), null)
+  assert.equal(Object.getPrototypeOf(groups.formAttrs), null)
 })
 
-test('bridge 只从局部 root 获取精确一个真实 INPUT，上游 DOM 漂移时立即失败', () => {
+test('bridge 只从局部 root 精确解析三个 FaSelect trigger', () => {
   const bridge = createRegionSelectorControlBridge()
-
+  const missing = new FakeRoot({
+    CITY: [new FakeElement('BUTTON')],
+    COUNTRY_REGION: [new FakeElement('BUTTON')],
+  })
   assert.throws(
-    () => bridge.update({
-      ...baseState,
-      attrs: {},
-      clearControl: null,
-      root: asRoot(new FakeRoot([])),
-    }),
-    /必须包含且仅包含一个真实 input/u,
+    () => bridge.update(createState(missing)),
+    /必须包含三个 FaSelect trigger/u,
   )
+
+  const duplicate = new FakeRoot({
+    CITY: [new FakeElement('BUTTON')],
+    COUNTRY_REGION: [
+      new FakeElement('BUTTON'),
+      new FakeElement('BUTTON'),
+    ],
+    PROVINCE_STATE: [new FakeElement('BUTTON')],
+  })
   assert.throws(
-    () => bridge.update({
-      ...baseState,
-      attrs: {},
-      clearControl: null,
-      root: asRoot(new FakeRoot([new FakeInput(), new FakeInput()])),
-    }),
-    /必须包含且仅包含一个真实 input/u,
+    () => bridge.update(createState(duplicate)),
+    /每一级只能有一个/u,
+  )
+
+  const wrongTag = new FakeRoot({
+    CITY: [new FakeElement('BUTTON')],
+    COUNTRY_REGION: [new FakeElement('INPUT')],
+    PROVINCE_STATE: [new FakeElement('BUTTON')],
+  })
+  assert.throws(
+    () => bridge.update(createState(wrongTag)),
+    /必须包含三个 FaSelect trigger/u,
   )
 
   const source = readFileSync(
@@ -178,391 +191,129 @@ test('bridge 只从局部 root 获取精确一个真实 INPUT，上游 DOM 漂�
     'utf8',
   )
   assert.doesNotMatch(source, /document\.(?:querySelector|getElementById)/u)
+  assert.doesNotMatch(source, /Cascader root|arco-select-view-clear-btn/u)
+  assert.doesNotMatch(source, /formdata/u)
 })
 
-test('真实 input 同步白名单与 combobox 状态，更新时清理已移除属性', () => {
-  const input = new FakeInput()
-  input.value = '搜索草稿不能代替城市'
-  const root = new FakeRoot([input])
+test('三个 trigger 获得独立 ID、共享状态且保留原生 label 与 Reka 弹层语义', () => {
+  const triggers = createTriggers()
+  for (const trigger of Object.values(triggers)) {
+    trigger.setAttribute('aria-expanded', 'false')
+    trigger.setAttribute('aria-haspopup', 'listbox')
+  }
+  const root = new FakeRoot({
+    CITY: [triggers.CITY],
+    COUNTRY_REGION: [triggers.COUNTRY_REGION],
+    PROVINCE_STATE: [triggers.PROVINCE_STATE],
+  })
+  const bridge = createRegionSelectorControlBridge()
+  bridge.update(createState(root))
+
+  assert.deepEqual(Object.fromEntries(triggers.COUNTRY_REGION.attributes), {
+    'aria-busy': 'true',
+    'aria-describedby': 'caller-help shared-status loading-status',
+    'aria-expanded': 'false',
+    'aria-haspopup': 'listbox',
+    'aria-invalid': 'false',
+    'aria-required': 'true',
+    'id': 'shipping-region',
+    'tabindex': '2',
+  })
+  assert.deepEqual(Object.fromEntries(triggers.PROVINCE_STATE.attributes), {
+    'aria-busy': 'false',
+    'aria-describedby': 'caller-help shared-status loading-status',
+    'aria-expanded': 'false',
+    'aria-haspopup': 'listbox',
+    'aria-invalid': 'false',
+    'aria-required': 'true',
+    'id': 'shipping-region-province-state',
+  })
+  assert.equal(triggers.CITY.getAttribute('id'), 'shipping-region-city')
+  assert.equal(triggers.CITY.getAttribute('aria-labelledby'), null)
+})
+
+test('更新会清理旧受管属性，focus 可定位任一级且 dispose 无残留', () => {
+  const first = createTriggers()
+  const firstRoot = new FakeRoot({
+    CITY: [first.CITY],
+    COUNTRY_REGION: [first.COUNTRY_REGION],
+    PROVINCE_STATE: [first.PROVINCE_STATE],
+  })
+  const bridge = createRegionSelectorControlBridge()
+  bridge.update(createState(firstRoot))
+  bridge.focus('PROVINCE_STATE')
+  bridge.blur()
+  assert.equal(first.PROVINCE_STATE.focusCount, 1)
+  assert.equal(first.PROVINCE_STATE.blurCount, 1)
+
+  const second = createTriggers()
+  const secondRoot = new FakeRoot({
+    CITY: [second.CITY],
+    COUNTRY_REGION: [second.COUNTRY_REGION],
+    PROVINCE_STATE: [second.PROVINCE_STATE],
+  })
+  bridge.update({
+    ...createState(secondRoot),
+    attrs: {},
+    invalid: true,
+  })
+
+  assert.equal(first.COUNTRY_REGION.hasAttribute('id'), false)
+  assert.equal(first.CITY.hasAttribute('aria-describedby'), false)
+  assert.equal(second.COUNTRY_REGION.getAttribute('aria-invalid'), 'true')
+  assert.equal(second.COUNTRY_REGION.hasAttribute('aria-required'), false)
+
+  bridge.dispose()
+  assert.equal(second.COUNTRY_REGION.hasAttribute('id'), false)
+  assert.equal(second.CITY.hasAttribute('aria-invalid'), false)
+  assert.throws(
+    () => bridge.update(createState(secondRoot)),
+    /control bridge 已销毁/u,
+  )
+})
+
+test('同一 root 更新后 blur 仍作用于当前已聚焦 trigger', () => {
+  const triggers = createTriggers()
+  const root = new FakeRoot({
+    CITY: [triggers.CITY],
+    COUNTRY_REGION: [triggers.COUNTRY_REGION],
+    PROVINCE_STATE: [triggers.PROVINCE_STATE],
+  })
   const bridge = createRegionSelectorControlBridge()
 
+  bridge.update(createState(root))
+  bridge.focus('CITY')
   bridge.update({
-    attrs: {
-      'aria-controls': 'region-menu',
-      'aria-describedby': 'caller-help shared-status',
-      'aria-label': '收货城市',
-      'autocomplete': 'address-level2',
-      'class': 'wrapper-only',
-      'data-testid': 'wrapper-only',
-      'id': 'shipping-region',
-      'name': 'cityId',
-      'required': '',
-      'style': { width: '100%' },
-      'tabindex': 2,
-      'title': 'drop-me',
+    ...createState(root),
+    busy: {
+      CITY: true,
+      COUNTRY_REGION: false,
+      PROVINCE_STATE: false,
     },
-    busy: true,
-    clearControl: null,
-    describedBy: ['loading-status', 'shared-status', 'error-status'],
-    expanded: true,
-    invalid: false,
-    modelValue: null,
+  })
+  bridge.blur()
+
+  assert.equal(triggers.CITY.focusCount, 1)
+  assert.equal(triggers.CITY.blurCount, 1)
+})
+
+test('readonly 使用唯一可聚焦 readout，不解析三个 trigger', () => {
+  const root = new FakeRoot({})
+  const bridge = createRegionSelectorControlBridge()
+  bridge.update({
+    ...createState(root),
     readonly: true,
-    root: asRoot(root),
   })
 
-  assert.deepEqual(
-    Object.fromEntries(input.attributes),
-    {
-      'aria-busy': 'true',
-      'aria-controls': 'region-menu',
-      'aria-describedby':
-        'caller-help shared-status loading-status error-status',
-      'aria-expanded': 'true',
-      'aria-haspopup': 'menu',
-      'aria-invalid': 'false',
-      'aria-label': '收货城市',
-      'aria-readonly': 'true',
-      'aria-required': 'true',
-      'autocomplete': 'address-level2',
-      'id': 'shipping-region',
-      'name': 'cityId',
-      'required': '',
-      'role': 'combobox',
-      'tabindex': '2',
-    },
-  )
-  assert.equal(input.customValidity, '请选择地区')
-  assert.equal(input.hasAttribute('class'), false)
-  assert.equal(input.hasAttribute('data-testid'), false)
-  assert.equal(input.hasAttribute('style'), false)
-  assert.equal(input.hasAttribute('title'), false)
-
-  bridge.update({
-    attrs: {
-      'aria-describedby': 'replacement-help',
-      'required': true,
-    },
-    busy: false,
-    clearControl: null,
-    describedBy: ['ready-status'],
-    expanded: false,
-    hasValidCitySelection: true,
-    invalid: true,
-    modelValue: '78f9134e-3d72-5f6e-9897-ca7e50004229',
-    readonly: false,
-    root: asRoot(root),
+  assert.deepEqual(Object.fromEntries(root.readonlyTarget.attributes), {
+    'aria-describedby': 'caller-help shared-status loading-status',
+    'aria-invalid': 'false',
+    'aria-required': 'true',
+    'id': 'shipping-region',
+    'tabindex': '2',
   })
-
-  assert.deepEqual(
-    Object.fromEntries(input.attributes),
-    {
-      'aria-busy': 'false',
-      'aria-describedby': 'replacement-help ready-status',
-      'aria-expanded': 'false',
-      'aria-haspopup': 'menu',
-      'aria-invalid': 'true',
-      'aria-readonly': 'false',
-      'aria-required': 'true',
-      'role': 'combobox',
-    },
-  )
-  assert.equal(input.customValidity, '')
-
-  bridge.update({
-    ...baseState,
-    attrs: {},
-    clearControl: null,
-    root: asRoot(root),
-  })
-  assert.equal(input.hasAttribute('aria-required'), false)
-  assert.equal(input.customValidity, '')
-})
-
-test('调用方 aria-invalid=true 会并入最终错误态，内部状态不允许被 false 覆盖', () => {
-  const input = new FakeInput()
-  const root = asRoot(new FakeRoot([input]))
-  const bridge = createRegionSelectorControlBridge()
-
-  bridge.update({
-    ...baseState,
-    attrs: { 'aria-invalid': 'true' },
-    clearControl: null,
-    root,
-  })
-  assert.equal(input.getAttribute('aria-invalid'), 'true')
-
-  bridge.update({
-    ...baseState,
-    attrs: { 'aria-invalid': 'false' },
-    clearControl: null,
-    invalid: true,
-    root,
-  })
-  assert.equal(input.getAttribute('aria-invalid'), 'true')
-})
-
-test('required 只认可最终 CITY value，FormData 始终覆盖为 city UUID 而非搜索词', () => {
-  const form = new FakeForm()
-  const input = new FakeInput()
-  input.form = form
-  input.value = '高雄'
-  const root = asRoot(new FakeRoot([input]))
-  const bridge = createRegionSelectorControlBridge()
-
-  bridge.update({
-    ...baseState,
-    attrs: { name: 'cityId', required: true },
-    clearControl: null,
-    root,
-  })
-  assert.equal(input.hasAttribute('required'), true)
-  assert.equal(input.customValidity, '请选择地区')
-
-  const emptyEvent = createFormDataEvent()
-  form.dispatchEvent(emptyEvent)
-  assert.equal(emptyEvent.formData.get('cityId'), '')
-
-  const cityId = '78f9134e-3d72-5f6e-9897-ca7e50004229'
-  bridge.update({
-    ...baseState,
-    attrs: { name: 'cityId', required: true },
-    clearControl: null,
-    hasValidCitySelection: true,
-    modelValue: cityId,
-    root,
-  })
-  assert.equal(input.hasAttribute('required'), false)
-  assert.equal(input.customValidity, '')
-
-  const selectedEvent = createFormDataEvent()
-  selectedEvent.formData.set('cityId', 'search-draft')
-  form.dispatchEvent(selectedEvent)
-  assert.equal(selectedEvent.formData.get('cityId'), cityId)
-
-  bridge.update({
-    ...baseState,
-    attrs: { name: 'deliveryCityId' },
-    clearControl: null,
-    hasValidCitySelection: true,
-    modelValue: cityId,
-    root,
-  })
-  const renamedEvent = createFormDataEvent()
-  form.dispatchEvent(renamedEvent)
-  assert.equal(renamedEvent.formData.get('cityId'), null)
-  assert.equal(renamedEvent.formData.get('deliveryCityId'), cityId)
-
-  bridge.update({
-    ...baseState,
-    attrs: {},
-    clearControl: null,
-    hasValidCitySelection: true,
-    modelValue: cityId,
-    root,
-  })
-  const unnamedEvent = createFormDataEvent()
-  form.dispatchEvent(unnamedEvent)
-  assert.equal([...unnamedEvent.formData.entries()].length, 0)
-})
-
-test('raw 历史 UUID 在回显确认前继续写入 FormData，但 required 仍保持无效', () => {
-  const form = new FakeForm()
-  const input = new FakeInput()
-  input.form = form
-  const root = asRoot(new FakeRoot([input]))
-  const bridge = createRegionSelectorControlBridge()
-  const rawCityId = '78f9134e-3d72-5f6e-9897-ca7e50004229'
-
-  bridge.update({
-    ...baseState,
-    attrs: { name: 'cityId' },
-    clearControl: null,
-    modelValue: rawCityId,
-    root,
-  })
-  const optionalEvent = createFormDataEvent()
-  form.dispatchEvent(optionalEvent)
-  assert.equal(optionalEvent.formData.get('cityId'), rawCityId)
-  assert.equal(input.hasAttribute('required'), false)
-  assert.equal(input.customValidity, '')
-
-  bridge.update({
-    ...baseState,
-    attrs: { name: 'cityId', required: true },
-    clearControl: null,
-    modelValue: rawCityId,
-    root,
-  })
-  const requiredEvent = createFormDataEvent()
-  form.dispatchEvent(requiredEvent)
-  assert.equal(requiredEvent.formData.get('cityId'), rawCityId)
-  assert.equal(input.hasAttribute('required'), true)
-  assert.equal(input.customValidity, '请选择地区')
-
-  bridge.dispose()
-})
-
-test('focus/blur 操作真实 input，重复 update 不重复监听，切换与 dispose 会完整清理', () => {
-  const firstInput = new FakeInput()
-  const secondInput = new FakeInput()
-  let focusCount = 0
-  let blurCount = 0
-  const bridge = createRegionSelectorControlBridge({
-    onBlur: () => {
-      blurCount += 1
-    },
-    onFocus: () => {
-      focusCount += 1
-    },
-  })
-
-  const firstUpdate = {
-    ...baseState,
-    attrs: { id: 'first-control' },
-    clearControl: null,
-    root: asRoot(new FakeRoot([firstInput])),
-  }
-  bridge.update(firstUpdate)
-  bridge.update(firstUpdate)
   bridge.focus()
   bridge.blur()
-  assert.deepEqual(
-    {
-      blurCount,
-      inputBlurCount: firstInput.blurCount,
-      inputFocusCount: firstInput.focusCount,
-      focusCount,
-    },
-    {
-      blurCount: 1,
-      inputBlurCount: 1,
-      inputFocusCount: 1,
-      focusCount: 1,
-    },
-  )
-
-  bridge.update({
-    ...baseState,
-    attrs: { id: 'second-control' },
-    clearControl: null,
-    root: asRoot(new FakeRoot([secondInput])),
-  })
-  assert.equal(firstInput.hasAttribute('id'), false)
-  firstInput.dispatchEvent(new Event('focus'))
-  assert.equal(focusCount, 1)
-  secondInput.dispatchEvent(new Event('focus'))
-  assert.equal(focusCount, 2)
-
-  bridge.dispose()
-  assert.equal(secondInput.hasAttribute('id'), false)
-  assert.equal(secondInput.hasAttribute('role'), false)
-  secondInput.dispatchEvent(new Event('blur'))
-  assert.equal(blurCount, 1)
-  bridge.focus()
-  bridge.blur()
-  assert.equal(secondInput.focusCount, 0)
-  assert.equal(secondInput.blurCount, 0)
-})
-
-test('局部 clear span 具备按钮语义，点击、Enter 与 Space 清空且切换后无残留', () => {
-  const input = new FakeInput()
-  const root = asRoot(new FakeRoot([input]))
-  const firstClear = new FakeElement('SPAN')
-  const secondClear = new FakeElement('SPAN')
-  let clearCount = 0
-  const bridge = createRegionSelectorControlBridge({
-    onClear: () => {
-      clearCount += 1
-    },
-  })
-
-  const firstUpdate = {
-    ...baseState,
-    attrs: {},
-    clearControl: asElement(firstClear),
-    root,
-  }
-  bridge.update(firstUpdate)
-  bridge.update(firstUpdate)
-  assert.deepEqual(Object.fromEntries(firstClear.attributes), {
-    'aria-label': '清空地区选择',
-    'role': 'button',
-    'tabindex': '0',
-  })
-
-  const click = new Event('click', { bubbles: true, cancelable: true })
-  firstClear.dispatchEvent(click)
-  assert.equal(click.defaultPrevented, true)
-  assert.equal(clearCount, 1)
-
-  const enter = createKeyboardEvent('Enter')
-  firstClear.dispatchEvent(enter)
-  assert.equal(enter.defaultPrevented, true)
-  assert.equal(clearCount, 2)
-
-  const space = createKeyboardEvent(' ')
-  firstClear.dispatchEvent(space)
-  assert.equal(space.defaultPrevented, true)
-  assert.equal(clearCount, 3)
-
-  const escape = createKeyboardEvent('Escape')
-  firstClear.dispatchEvent(escape)
-  assert.equal(escape.defaultPrevented, false)
-  assert.equal(clearCount, 3)
-
-  bridge.update({
-    ...baseState,
-    attrs: {},
-    clearControl: asElement(secondClear),
-    root,
-  })
-  assert.deepEqual(Object.fromEntries(firstClear.attributes), {})
-  firstClear.dispatchEvent(new Event('click', { cancelable: true }))
-  assert.equal(clearCount, 3)
-
-  bridge.dispose()
-  assert.deepEqual(Object.fromEntries(secondClear.attributes), {})
-  secondClear.dispatchEvent(new Event('click', { cancelable: true }))
-  assert.equal(clearCount, 3)
-})
-
-test('form、name 与 input 切换后旧 formdata listener 不再写入，dispose 也不残留', () => {
-  const firstForm = new FakeForm()
-  const secondForm = new FakeForm()
-  const firstInput = new FakeInput()
-  const secondInput = new FakeInput()
-  firstInput.form = firstForm
-  secondInput.form = secondForm
-  const bridge = createRegionSelectorControlBridge()
-  const cityId = 'a4b24ca9-0704-564b-9de7-9ee28300b958'
-
-  bridge.update({
-    ...baseState,
-    attrs: { name: 'cityId' },
-    clearControl: null,
-    hasValidCitySelection: true,
-    modelValue: cityId,
-    root: asRoot(new FakeRoot([firstInput])),
-  })
-  bridge.update({
-    ...baseState,
-    attrs: { name: 'cityId' },
-    clearControl: null,
-    hasValidCitySelection: true,
-    modelValue: cityId,
-    root: asRoot(new FakeRoot([secondInput])),
-  })
-
-  const staleEvent = createFormDataEvent()
-  firstForm.dispatchEvent(staleEvent)
-  assert.equal(staleEvent.formData.get('cityId'), null)
-  const activeEvent = createFormDataEvent()
-  secondForm.dispatchEvent(activeEvent)
-  assert.equal(activeEvent.formData.get('cityId'), cityId)
-
-  bridge.dispose()
-  const disposedEvent = createFormDataEvent()
-  secondForm.dispatchEvent(disposedEvent)
-  assert.equal(disposedEvent.formData.get('cityId'), null)
+  assert.equal(root.readonlyTarget.focusCount, 1)
+  assert.equal(root.readonlyTarget.blurCount, 1)
 })

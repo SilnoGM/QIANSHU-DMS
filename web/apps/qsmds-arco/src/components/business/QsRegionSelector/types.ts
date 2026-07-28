@@ -29,17 +29,66 @@ export type RegionSelectorPath = readonly [
   RegionSelectorNode<'CITY'>,
 ]
 
+export type RegionSelectorCountryPath = readonly [
+  RegionSelectorNode<'COUNTRY_REGION'>,
+]
+
+export type RegionSelectorProvincePath = readonly [
+  RegionSelectorNode<'COUNTRY_REGION'>,
+  RegionSelectorNode<'PROVINCE_STATE'>,
+]
+
+/**
+ * 组件的双向绑定值始终同时携带三级字段。
+ *
+ * 未选择的层级使用 `null`；合法状态只能依次为全空、仅国家/地区、国家/地区加
+ * 省/州、完整三级，不能跳级。业务表单无需再从 CITY UUID 反推上级字段。
+ */
+export interface RegionSelectorValue {
+  readonly countryRegionId: string | null
+  readonly provinceStateId: string | null
+  readonly cityId: string | null
+}
+
+export type RegionSelectorSelectedPath
+  = | readonly []
+    | RegionSelectorCountryPath
+    | RegionSelectorProvincePath
+    | RegionSelectorPath
+
+/**
+ * `change` 只描述用户操作；调用方写入 `modelValue` 的回显过程不会触发。
+ *
+ * 四个分支固定 source、path 和 complete 的对应关系，使调用方只需判断 source
+ * 即可获得精确的 tuple 类型，不必再次检查 path 长度。
+ */
 export type RegionSelectorChange
   = | {
-    readonly source: 'select'
-    readonly value: string
+    readonly source: 'countryRegion'
+    readonly value: RegionSelectorValue
+    readonly path: RegionSelectorCountryPath
+    readonly complete: false
+  }
+  | {
+    readonly source: 'provinceState'
+    readonly value: RegionSelectorValue
+    readonly path: RegionSelectorProvincePath
+    readonly complete: false
+  }
+  | {
+    readonly source: 'city'
+    readonly value: RegionSelectorValue
     readonly path: RegionSelectorPath
+    readonly complete: true
   }
   | {
     readonly source: 'clear'
-    readonly value: null
-    readonly path: null
+    readonly value: RegionSelectorValue
+    readonly path: readonly []
+    readonly complete: false
   }
+
+export type RegionSelectorChangeSource = RegionSelectorChange['source']
 
 export interface RegionSelectorSearchResult {
   readonly paths: readonly RegionSelectorPath[]

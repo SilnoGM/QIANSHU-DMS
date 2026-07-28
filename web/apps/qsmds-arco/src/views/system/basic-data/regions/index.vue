@@ -121,7 +121,7 @@ const formParentPath = computed(() =>
   formScope.value.path.map(node => node.name))
 const scopePathLabel = computed(() => scope.value.kind === 'ROOT'
   ? scope.value.label
-  : scope.value.path.map(node => node.name).join(' / '))
+  : scope.value.path.map(node => node.name).join(' '))
 const listErrorDisplay = computed(() => listError.value === ''
   ? undefined
   : listRequestId.value === undefined

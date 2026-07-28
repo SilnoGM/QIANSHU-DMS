@@ -293,5 +293,5 @@ export function formatRegionFormParentPath(
 ): string {
   return parentPath.length === 0
     ? '全部地区（根）'
-    : parentPath.join(' / ')
+    : parentPath.join(' ')
 }
