@@ -101,6 +101,17 @@ test('创建提交只输出创建 DTO，规范化 code 且空英文名不进入�
   )
 })
 
+test('number input 回写有限 number 时仍按整数排序校验与提交', () => {
+  const model = validCreateModel()
+  model.sortOrder = 9900
+
+  assert.deepEqual(validateRegionForm(model, 'create'), {})
+  assert.equal(
+    buildCreateRegionFormSubmit(model, null).value.sortOrder,
+    9900,
+  )
+})
+
 test('编辑只提交实际变化的三个可变字段，规范化等价值不会制造 patch', () => {
   const unchanged = createRegionFormModel('edit', EDIT_REGION)
   unchanged.name = ' 高雄市 '

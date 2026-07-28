@@ -18,7 +18,7 @@ export interface RegionFormModel {
   enabled: boolean
   englishName: string
   name: string
-  sortOrder: string
+  sortOrder: number | string
 }
 
 export type RegionFormFieldErrorValue = readonly string[] | string
@@ -106,8 +106,19 @@ function normalizeOptionalRegionFormText(value: string): null | string {
   return normalized === '' ? null : normalized
 }
 
-function normalizedSortOrder(value: string): number {
-  return Number(normalizeRegionFormText(value))
+function normalizeSortOrderText(value: number | string): string {
+  /*
+   * FaInput 的 number 模式会在真实浏览器中把 v-model 回写为 number；测试与表单
+   * 初始化仍使用 string。两种形态统一成文本后再走同一整数规则，避免在用户点击
+   * 提交时对 number 调用 String.prototype.normalize。
+   */
+  return normalizeRegionFormText(
+    typeof value === 'number' ? String(value) : value,
+  )
+}
+
+function normalizedSortOrder(value: number | string): number {
+  return Number(normalizeSortOrderText(value))
 }
 
 export function createRegionFormModel(
@@ -163,7 +174,7 @@ export function validateRegionForm(
     }
   }
 
-  const sortOrderText = normalizeRegionFormText(model.sortOrder)
+  const sortOrderText = normalizeSortOrderText(model.sortOrder)
   const sortOrder = Number(sortOrderText)
   if (
     !/^\d+$/u.test(sortOrderText)
