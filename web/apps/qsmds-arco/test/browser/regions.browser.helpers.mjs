@@ -583,6 +583,52 @@ export async function failNextRequest(page, patterns, predicate, action) {
   }
 }
 
+/**
+ * 暂停一个真实 HTTP 请求，在响应到达前检查界面中间态，再原样放行。
+ * 目标请求无论断言成功或失败都会在 finally 中恢复，避免把共享测试页留在挂起状态。
+ */
+export async function inspectNextPausedRequest(
+  page,
+  patterns,
+  predicate,
+  action,
+  inspect,
+) {
+  await page.enableRequestInterception(patterns)
+  let targetRequestId
+  const removeListener = page.on('Fetch.requestPaused', (event) => {
+    if (predicate(event)) {
+      targetRequestId ??= event.requestId
+      return
+    }
+    void page.continueInterceptedRequest(event.requestId).catch(() => undefined)
+  })
+  try {
+    const paused = page.waitForEvent('Fetch.requestPaused', predicate, 20_000)
+      .then(
+        event => ({ event, ok: true }),
+        error => ({ error, ok: false }),
+      )
+    await action()
+    const outcome = await paused
+    if (!outcome.ok) {
+      throw outcome.error
+    }
+    targetRequestId = outcome.event.requestId
+    await inspect(outcome.event)
+    await page.continueInterceptedRequest(outcome.event.requestId)
+    targetRequestId = undefined
+  }
+  finally {
+    if (targetRequestId) {
+      await page.continueInterceptedRequest(targetRequestId)
+        .catch(() => undefined)
+    }
+    removeListener()
+    await page.disableRequestInterception()
+  }
+}
+
 export function collectRuntimeIssues(page) {
   const issues = []
   let enabled = false

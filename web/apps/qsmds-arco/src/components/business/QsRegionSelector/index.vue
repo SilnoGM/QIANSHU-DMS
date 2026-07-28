@@ -152,10 +152,19 @@ const interactiveOptions = computed(() =>
     normalizeRegionSearchText(inputValue.value).length > 0,
   ),
 )
-const busy = computed(() =>
+
+/*
+ * Arco 的 Cascader loading 是整面板级状态：一旦为 true，会卸载全部已有列并
+ * 替换为单个 loading column。节点懒加载已有行内 spinner，不能再进入该状态，
+ * 否则二级滚动容器会被销毁并在请求结束后从 scrollTop=0 重新挂载。
+ */
+const cascaderLoading = computed(() =>
   pathLoading.value
   || rootLoading.value
-  || searchLoading.value
+  || searchLoading.value,
+)
+const busy = computed(() =>
+  cascaderLoading.value
   || lazyRequests.size > 0,
 )
 const visibleError = computed(() =>
@@ -849,7 +858,7 @@ onBeforeUnmount(() => {
       :placeholder="placeholder"
       :disabled="disabled"
       :error="error || visibleError !== null"
-      :loading="busy"
+      :loading="cascaderLoading"
       @input-value-change="handleInputValueChange"
       @popup-visible-change="handlePopupVisibleChange"
       @change="handleChange"
@@ -1024,9 +1033,52 @@ onBeforeUnmount(() => {
   overflow: auto hidden;
 }
 
+:global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)) {
+  --qs-region-selector-column-width: 11rem;
+
+  position: relative;
+  inline-size: min(33rem, calc(100vw - 24px));
+}
+
 :global(.qs-region-selector-popup .arco-cascader-panel-column) {
-  min-width: 120px;
+  box-sizing: border-box;
+  flex: 0 0 var(--qs-region-selector-column-width);
+  inline-size: var(--qs-region-selector-column-width);
+  min-inline-size: var(--qs-region-selector-column-width);
   max-height: min(18rem, calc(100dvh - 6rem));
+}
+
+/*
+ * Arco 只渲染已展开的真实列。绝对定位的背景层把普通级联面板的 scroll area
+ * 稳定为三列，并用第二个伪元素画出两条层级分隔线；二者不参与 TransitionGroup
+ * 的 flex children，因此不会影响 loading column 的正常挂载与卸载。
+ */
+:global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)::before) {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 0;
+  box-sizing: border-box;
+  inline-size: calc(var(--qs-region-selector-column-width) + var(--qs-region-selector-column-width) + var(--qs-region-selector-column-width));
+  pointer-events: none;
+  content: "";
+  background-color: var(--color-bg-popup);
+}
+
+:global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)::after) {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: var(--qs-region-selector-column-width);
+  z-index: 0;
+  inline-size: 1px;
+  pointer-events: none;
+  content: "";
+  background-color: oklch(var(--border));
+  box-shadow:
+    var(--qs-region-selector-column-width)
+    0
+    0
+    oklch(var(--border));
 }
 
 :global(.qs-region-selector-popup .arco-cascader-column-content),
@@ -1050,8 +1102,8 @@ onBeforeUnmount(() => {
     min-height: 44px;
   }
 
-  :global(.qs-region-selector-popup .arco-cascader-panel-column) {
-    min-width: min(12rem, calc(100vw - 24px));
+  :global(.qs-region-selector-popup .arco-cascader-panel:not(.arco-cascader-search-panel)) {
+    --qs-region-selector-column-width: min(12rem, calc(100vw - 24px));
   }
 }
 

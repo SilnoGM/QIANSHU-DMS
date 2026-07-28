@@ -19,6 +19,7 @@ import {
   failResponseAfterServerMutation,
   fillVisibleInput,
   fillVisibleModalInput,
+  inspectNextPausedRequest,
   installBroadcastProbeScript,
   loginThroughRealHttp,
   openSelector,
@@ -188,6 +189,15 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
   ))
   assert.equal(chinaProvinceResponse.status, 200)
   assert.equal(chinaProvinceResponse.body?.length, 31)
+  const guangdongProvince = chinaProvinceResponse.body?.find(
+    region => region.code === 'CN-440000',
+  )
+  assert.equal(guangdongProvince?.name, '广东省')
+  const guangdongCityResponse = await page.evaluate(apiExpression(
+    `/api/region-selection/options?parentId=${encodeURIComponent(guangdongProvince.id)}`,
+  ))
+  assert.equal(guangdongCityResponse.status, 200)
+  assert.equal(guangdongCityResponse.body?.length, 21)
 
   const taiwanCountry = rootsResponse.body?.find(region => region.code === 'TW')
   assert.equal(taiwanCountry?.name, '中国台湾')
@@ -878,22 +888,31 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
       scrollPanel.scrollTop = scrollPanel.scrollHeight
     }
     const viewportWidth = document.documentElement.clientWidth
+    const popupRect = popup?.getBoundingClientRect()
     return {
       documentFits: document.documentElement.scrollWidth <= viewportWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
       panelMaxHeight: panel ? getComputedStyle(panel).maxHeight : '',
       popupInsideViewport: popup
-        ? popup.getBoundingClientRect().left >= 0
-          && popup.getBoundingClientRect().right <= viewportWidth
+        ? popupRect.left >= 0
+          && popupRect.right <= viewportWidth
         : false,
+      popupLeft: popupRect?.left ?? null,
+      popupRight: popupRect?.right ?? null,
       scrollablePanel: scrollPanel
         ? ['auto', 'scroll'].includes(getComputedStyle(scrollPanel).overflowY)
         : false,
       scrollHeight: scrollPanel?.scrollHeight ?? 0,
       scrollTop: scrollPanel?.scrollTop ?? 0,
       visibleHeight: scrollPanel?.clientHeight ?? 0,
+      viewportWidth,
     }
   })()`)
-  assert.equal(mobilePopup.documentFits, true)
+  assert.equal(
+    mobilePopup.documentFits,
+    true,
+    JSON.stringify(mobilePopup),
+  )
   assert.notEqual(mobilePopup.panelMaxHeight, 'none')
   assert.equal(mobilePopup.popupInsideViewport, true)
   assert.equal(mobilePopup.scrollablePanel, true)
@@ -934,6 +953,7 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
    * 正式 Showcase 的标准状态必须使用应用注入 Provider。直接把弹层中的中国省州
    * 与 selection API 完整结果逐项对齐，避免少量 fixture 再次冒充数据库数据。
    */
+  await broadcastAndWaitForRegionInvalidation(peer, providerPage)
   await providerPage.setViewport(1280, 800, false)
   await providerPage.navigate(appRouteUrl(
     configuration.baseUrl,
@@ -949,17 +969,286 @@ test('真实 Chrome 覆盖 QsRegionSelector HTTP、交互、错误、缓存与�
     true,
   )
   await openSelector(providerPage, 'region-selector-showcase-standard')
+  await waitForVisibleRegionMenu(
+    providerPage,
+    rootsResponse.body.map(region => region.name),
+  )
+  await providerPage.waitFor(`(() => {
+    const panel = document.querySelector(
+      '.qs-region-selector-popup .arco-cascader-panel',
+    )
+    return panel
+      && !panel.querySelector('.arco-cascader-panel-column-loading')
+      && panel.querySelectorAll(
+        ':scope > .arco-cascader-panel-column',
+      ).length === 1
+  })()`)
+
+  const initialPanelState = await providerPage.evaluate(`(() => {
+    const panel = document.querySelector(
+      '.qs-region-selector-popup .arco-cascader-panel',
+    )
+    if (!(panel instanceof HTMLElement)) {
+      throw new Error('region cascader panel unavailable')
+    }
+    const visibleColumns = [...panel.querySelectorAll(
+      ':scope > .arco-cascader-panel-column',
+    )].filter(column => column.getClientRects().length > 0)
+    const columnWidth = visibleColumns[0]?.getBoundingClientRect().width ?? 0
+    const probe = {
+      widths: [panel.getBoundingClientRect().width],
+    }
+    const observer = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        probe.widths.push(entry.target.getBoundingClientRect().width)
+      }
+    })
+    observer.observe(panel)
+    globalThis.__regionPanelStabilityProbe = {
+      observer,
+      panel,
+      probe,
+      provinceScroller: null,
+      provinceScrollTop: 0,
+    }
+    return {
+      columnCount: visibleColumns.length,
+      panelWidth: panel.getBoundingClientRect().width,
+      reservedColumnCount: columnWidth > 0
+        ? Math.round(panel.scrollWidth / columnWidth)
+        : 0,
+    }
+  })()`)
+  assert.equal(initialPanelState.columnCount, 1)
+  assert.equal(initialPanelState.reservedColumnCount, 3)
+
   await clickVisibleMenuItem(providerPage, '中国')
   const expectedProvinceNames = chinaProvinceResponse.body.map(
     region => region.name,
   )
   await waitForVisibleRegionMenu(providerPage, expectedProvinceNames)
+
+  const provinceScrollState = await providerPage.evaluate(`(() => {
+    const runtime = globalThis.__regionPanelStabilityProbe
+    const panel = runtime?.panel
+    const columns = panel
+      ? [...panel.querySelectorAll(
+          ':scope > .arco-cascader-panel-column',
+        )].filter(column => column.getClientRects().length > 0)
+      : []
+    const provinceItem = columns[1]
+      ? [...columns[1].querySelectorAll('[role="menuitem"]')]
+          .find(item => item.textContent?.trim() === '广东省')
+      : undefined
+    const provinceScroller = provinceItem
+      ?.closest('.arco-cascader-column-content')
+    if (
+      !(runtime?.panel instanceof HTMLElement)
+      || !(provinceItem instanceof HTMLElement)
+      || !(provinceScroller instanceof HTMLElement)
+    ) {
+      throw new Error('province scroll probe unavailable')
+    }
+    const targetTop = Math.max(
+      1,
+      provinceItem.offsetTop
+        - (provinceScroller.clientHeight - provinceItem.offsetHeight) / 2,
+    )
+    provinceScroller.scrollTop = targetTop
+    runtime.provinceScroller = provinceScroller
+    runtime.provinceScrollTop = provinceScroller.scrollTop
+    const columnWidth = columns[0]?.getBoundingClientRect().width ?? 0
+    return {
+      columnCount: columns.length,
+      panelWidth: runtime.panel.getBoundingClientRect().width,
+      reservedColumnCount: columnWidth > 0
+        ? Math.round(runtime.panel.scrollWidth / columnWidth)
+        : 0,
+      scrollTop: provinceScroller.scrollTop,
+    }
+  })()`)
+  assert.equal(provinceScrollState.columnCount, 2)
+  assert.equal(provinceScrollState.reservedColumnCount, 3)
+  assert.ok(provinceScrollState.scrollTop > 0)
+  assert.ok(
+    Math.abs(
+      provinceScrollState.panelWidth - initialPanelState.panelWidth,
+    ) <= 1,
+  )
+
+  await runBrowserStep(
+    'selector lazy keeps existing columns mounted',
+    () => inspectNextPausedRequest(
+      providerPage,
+      [{
+        requestStage: 'Request',
+        urlPattern: `${configuration.baseUrl}/api/region-selection/options*`,
+      }],
+      event => requestSearchParams(event).get('parentId')
+        === guangdongProvince.id,
+      () => clickVisibleMenuItem(providerPage, '广东省'),
+      async () => {
+        const loadingState = await providerPage.evaluate(`(() => {
+          const runtime = globalThis.__regionPanelStabilityProbe
+          const panel = runtime?.panel
+          const columns = panel
+            ? [...panel.querySelectorAll(
+                ':scope > .arco-cascader-panel-column',
+              )].filter(column => column.getClientRects().length > 0)
+            : []
+          return {
+            columnCount: columns.length,
+            hasGlobalLoadingColumn: Boolean(panel?.querySelector(
+              '.arco-cascader-panel-column-loading',
+            )),
+            sameProvinceScroller:
+              runtime?.provinceScroller?.isConnected === true
+              && runtime.provinceScroller.closest(
+                '.arco-cascader-panel',
+              ) === panel,
+            scrollTop: runtime?.provinceScroller?.scrollTop ?? 0,
+          }
+        })()`)
+        assert.equal(loadingState.hasGlobalLoadingColumn, false)
+        assert.equal(loadingState.columnCount, 2)
+        assert.equal(loadingState.sameProvinceScroller, true)
+        assert.ok(
+          Math.abs(
+            loadingState.scrollTop - provinceScrollState.scrollTop,
+          ) <= 1,
+        )
+      },
+    ),
+  )
+  await waitForVisibleRegionMenu(
+    providerPage,
+    guangdongCityResponse.body.map(region => region.name),
+  )
+
+  const settledPanelState = await providerPage.evaluate(`(() => {
+    const runtime = globalThis.__regionPanelStabilityProbe
+    const panel = runtime?.panel
+    const columns = panel
+      ? [...panel.querySelectorAll(
+          ':scope > .arco-cascader-panel-column',
+        )].filter(column => column.getClientRects().length > 0)
+      : []
+    const provinceItem = columns[1]
+      ? [...columns[1].querySelectorAll('[role="menuitem"]')]
+          .find(item => item.textContent?.trim() === '广东省')
+      : undefined
+    const columnWidth = columns[0]?.getBoundingClientRect().width ?? 0
+    runtime?.observer?.disconnect()
+    return {
+      columnCount: columns.length,
+      maxWidth: Math.max(...(runtime?.probe?.widths ?? [0])),
+      minWidth: Math.min(...(runtime?.probe?.widths ?? [0])),
+      panelWidth: panel?.getBoundingClientRect().width ?? 0,
+      reservedColumnCount: panel && columnWidth > 0
+        ? Math.round(panel.scrollWidth / columnWidth)
+        : 0,
+      provinceActive: provinceItem?.classList.contains(
+        'arco-cascader-option-active',
+      ) ?? false,
+      provinceFullyVisible: provinceItem
+        ? (() => {
+            const itemRect = provinceItem.getBoundingClientRect()
+            const scrollerRect =
+              runtime.provinceScroller.getBoundingClientRect()
+            return itemRect.top >= scrollerRect.top - 1
+              && itemRect.bottom <= scrollerRect.bottom + 1
+          })()
+        : false,
+      sameProvinceScroller:
+        runtime?.provinceScroller?.isConnected === true,
+      scrollTop: runtime?.provinceScroller?.scrollTop ?? 0,
+    }
+  })()`)
+  assert.equal(settledPanelState.columnCount, 3)
+  assert.equal(settledPanelState.reservedColumnCount, 3)
+  assert.equal(settledPanelState.sameProvinceScroller, true)
+  assert.equal(settledPanelState.provinceActive, true)
+  assert.equal(settledPanelState.provinceFullyVisible, true)
+  assert.ok(
+    Math.abs(
+      settledPanelState.scrollTop - provinceScrollState.scrollTop,
+    ) <= 1,
+  )
+  assert.ok(settledPanelState.maxWidth - settledPanelState.minWidth <= 1)
+  assert.ok(
+    Math.abs(
+      settledPanelState.panelWidth - initialPanelState.panelWidth,
+    ) <= 1,
+  )
+
   await clickVisibleMenuItem(providerPage, '中国台湾')
   await clickVisibleMenuItem(providerPage, '台湾')
   await waitForVisibleRegionMenu(
     providerPage,
     taiwanCityResponse.body.map(region => region.name),
   )
+
+  await providerPage.setViewport(390, 844, true)
+  await pressKey(providerPage, 'Escape')
+  await providerPage.waitFor(`document.querySelector(
+    '.qs-region-selector-popup .arco-cascader-panel',
+  ) === null`)
+  await openSelector(providerPage, 'region-selector-showcase-standard')
+  await waitForVisibleRegionMenu(
+    providerPage,
+    rootsResponse.body.map(region => region.name),
+  )
+  await clickVisibleMenuItem(providerPage, '中国台湾')
+  await waitForVisibleRegionMenu(
+    providerPage,
+    taiwanProvinceResponse.body.map(region => region.name),
+  )
+  await clickVisibleMenuItem(providerPage, '台湾')
+  await waitForVisibleRegionMenu(
+    providerPage,
+    taiwanCityResponse.body.map(region => region.name),
+  )
+  const mobileCascade = await providerPage.evaluate(`(() => {
+    const popup = document.querySelector('.qs-region-selector-popup')
+    const panel = popup?.querySelector(
+      '.arco-cascader-panel:not(.arco-cascader-search-panel)',
+    )
+    if (!(popup instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
+      throw new Error('mobile cascader panel unavailable')
+    }
+    panel.scrollLeft = panel.scrollWidth
+    const viewportWidth = document.documentElement.clientWidth
+    return {
+      documentFits: document.documentElement.scrollWidth <= viewportWidth,
+      documentScrollWidth: document.documentElement.scrollWidth,
+      horizontallyScrollable: panel.scrollWidth > panel.clientWidth,
+      panelClientWidth: panel.clientWidth,
+      panelScrollWidth: panel.scrollWidth,
+      popupInsideViewport:
+        popup.getBoundingClientRect().left >= 0
+        && popup.getBoundingClientRect().right <= viewportWidth,
+      popupLeft: popup.getBoundingClientRect().left,
+      popupRight: popup.getBoundingClientRect().right,
+      scrollLeft: panel.scrollLeft,
+      viewportWidth,
+    }
+  })()`)
+  assert.equal(
+    mobileCascade.documentFits,
+    true,
+    JSON.stringify(mobileCascade),
+  )
+  assert.equal(
+    mobileCascade.horizontallyScrollable,
+    true,
+    JSON.stringify(mobileCascade),
+  )
+  assert.equal(
+    mobileCascade.popupInsideViewport,
+    true,
+    JSON.stringify(mobileCascade),
+  )
+  assert.ok(mobileCascade.scrollLeft > 0)
 
   // 停用历史路径继续由隔离 fixture 提供，只承担固定视觉契约。
   await providerPage.waitFor(`document.body.innerText.includes(

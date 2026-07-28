@@ -238,9 +238,37 @@ test('状态、真实 input bridge 与私有 popup 样式覆盖可访问响应�
   assert.match(source, /已禁用/u)
   assert.match(source, /requestId/u)
   assert.match(source, /w-full/u)
+  assert.match(
+    source,
+    /const cascaderLoading = computed\(\(\) =>[\s\S]*?pathLoading\.value[\s\S]*?rootLoading\.value[\s\S]*?searchLoading\.value[\s\S]*?\)/u,
+    '整面板 loading 必须排除 lazyRequests，避免 Arco 销毁已有级联列',
+  )
+  assert.match(
+    source,
+    /const busy = computed\(\(\) =>[\s\S]*?cascaderLoading\.value[\s\S]*?lazyRequests\.size > 0[\s\S]*?\)/u,
+    '无障碍 busy 状态仍需覆盖单节点懒加载',
+  )
+  assert.match(source, /:loading="cascaderLoading"/u)
+  assert.doesNotMatch(source, /:loading="busy"/u)
   assert.match(source, /max-width:\s*calc\(100vw - 24px\)/u)
   assert.match(source, /max-height:\s*min\(18rem, calc\(100dvh - 6rem\)\)/u)
   assert.match(source, /overflow:\s*auto hidden/u)
+  assert.match(source, /--qs-region-selector-column-width:\s*11rem/u)
+  assert.match(
+    source,
+    /inline-size:\s*min\(33rem, calc\(100vw - 24px\)\)/u,
+    '普通级联面板应始终预留三个固定列宽',
+  )
+  assert.match(
+    source,
+    /\.arco-cascader-panel:not\(\.arco-cascader-search-panel\)::before\)/u,
+  )
+  assert.match(
+    source,
+    /inline-size:\s*calc\(var\(--qs-region-selector-column-width\) \+ var\(--qs-region-selector-column-width\) \+ var\(--qs-region-selector-column-width\)\)/u,
+    '纯视觉背景层应扩展为三个列宽且不参与 Arco TransitionGroup',
+  )
+  assert.match(source, /box-shadow:[\s\S]*?--qs-region-selector-column-width/u)
   assert.match(source, /min-height:\s*44px/u)
   assert.match(
     source,
