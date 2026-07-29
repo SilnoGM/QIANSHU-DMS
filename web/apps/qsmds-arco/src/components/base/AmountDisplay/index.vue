@@ -1,25 +1,39 @@
 <script setup lang="ts">
-import type { CurrencyAmountValue, CurrencyCode } from './format'
+import type { CurrencyDescriptor } from '../currency'
+import type { CurrencyAmountValue } from './format'
+import { findCurrencyDescriptor } from '../currency'
 import { EMPTY_AMOUNT_TEXT, formatCurrencyAmount } from './format'
 
 defineOptions({ name: 'AmountDisplay' })
 
 const props = defineProps<{
-  currency: CurrencyCode
+  currencies: readonly CurrencyDescriptor[]
+  currency: string
   value: CurrencyAmountValue
 }>()
 
-const formattedAmount = computed(() => formatCurrencyAmount(props.value, props.currency))
-// 有效金额已经包含币种代码，aria-label 直接复用展示文本，避免重复朗读 CNY 等代码。
+const currencyDescriptor = computed(() => findCurrencyDescriptor(
+  props.currencies,
+  props.currency,
+))
+const formattedAmount = computed(() => formatCurrencyAmount(
+  props.value,
+  props.currency,
+  props.currencies,
+))
+// 未解析币种仍保留可审计的原始金额，同时通过 aria-label 明确告知辅助技术。
 const ariaLabel = computed(() => formattedAmount.value === EMPTY_AMOUNT_TEXT
   ? `${props.currency} 金额不可用`
-  : formattedAmount.value)
+  : currencyDescriptor.value
+    ? formattedAmount.value
+    : `${formattedAmount.value}，货币资料未解析`)
 </script>
 
 <template>
   <span
     :aria-label="ariaLabel"
     :data-currency="currency"
+    :data-currency-resolved="Boolean(currencyDescriptor)"
     :data-empty="formattedAmount === EMPTY_AMOUNT_TEXT"
     class="qs-type-data-emphasis text-right inline-flex whitespace-nowrap items-baseline justify-end"
   >

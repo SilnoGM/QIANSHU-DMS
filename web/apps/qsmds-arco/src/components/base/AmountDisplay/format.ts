@@ -1,17 +1,11 @@
-export const CURRENCY_SYMBOLS = {
-  CNY: '¥',
-  TWD: 'NT$',
-  MYR: 'RM',
-  USD: '$',
-} as const
+import type { CurrencyDescriptor, CurrencyMinorUnit } from '../currency'
+import { findCurrencyDescriptor } from '../currency'
 
 export const EMPTY_AMOUNT_TEXT = '—'
 
-export type CurrencyCode = keyof typeof CURRENCY_SYMBOLS
 export type CurrencyAmountValue = number | string | null | undefined
 
 const DECIMAL_INPUT_PATTERN = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u
-const MINOR_UNIT_DIGITS = 2
 
 /**
  * 将有限 number 转为不带分组符的十进制文本。
@@ -66,21 +60,29 @@ interface RoundedAmount {
 /**
  * 使用十进制字符串执行 half-up 舍入，确保大额 decimal 字符串不会因浮点转换丢失末位。
  */
-function roundToMinorUnit(value: string): RoundedAmount {
+function roundToMinorUnit(
+  value: string,
+  minorUnitDigits: CurrencyMinorUnit,
+): RoundedAmount {
   const negative = value.startsWith('-')
   const unsignedValue = value.replace(/^[+-]/u, '')
   const [rawInteger = '0', rawFraction = ''] = unsignedValue.split('.')
   const integer = (rawInteger || '0').replace(/^0+(?=\d)/u, '')
-  const fraction = rawFraction.padEnd(MINOR_UNIT_DIGITS + 1, '0')
-  const minorUnit = fraction.slice(0, MINOR_UNIT_DIGITS)
-  const shouldRoundUp = fraction[MINOR_UNIT_DIGITS] >= '5'
+  const fraction = rawFraction.padEnd(minorUnitDigits + 1, '0')
+  const minorUnit = fraction.slice(0, minorUnitDigits)
+  const shouldRoundUp = fraction[minorUnitDigits] >= '5'
   const combined = shouldRoundUp
     ? incrementDigits(`${integer}${minorUnit}`)
     : `${integer}${minorUnit}`
-  const padded = combined.padStart(MINOR_UNIT_DIGITS + 1, '0')
-  const roundedInteger = padded.slice(0, -MINOR_UNIT_DIGITS)
-  const roundedFraction = padded.slice(-MINOR_UNIT_DIGITS)
-  const isZero = /^0+$/u.test(roundedInteger) && /^0+$/u.test(roundedFraction)
+  const padded = combined.padStart(minorUnitDigits + 1, '0')
+  const roundedInteger = minorUnitDigits === 0
+    ? padded
+    : padded.slice(0, -minorUnitDigits)
+  const roundedFraction = minorUnitDigits === 0
+    ? ''
+    : padded.slice(-minorUnitDigits)
+  const isZero = /^0+$/u.test(roundedInteger)
+    && (roundedFraction.length === 0 || /^0+$/u.test(roundedFraction))
 
   return {
     fraction: roundedFraction,
@@ -90,21 +92,31 @@ function roundToMinorUnit(value: string): RoundedAmount {
 }
 
 /**
- * 格式化组件唯一使用的纯函数：固定两位小数、千分位，并在金额末尾附加币种代码。
+ * 已知币种按描述符的符号与 minorUnit 格式化；未知币种保留有效的原始十进制
+ * 文本与代码，不猜测符号和精度，也不把可审计数据吞成空占位符。
  */
 export function formatCurrencyAmount(
   value: CurrencyAmountValue,
-  currency: CurrencyCode,
+  currency: string,
+  currencies: readonly CurrencyDescriptor[],
 ): string {
   const normalized = normalizeInput(value)
-  const symbol = CURRENCY_SYMBOLS[currency]
+  const normalizedCurrency = currency.trim()
 
-  if (!normalized || !symbol) {
+  if (!normalized || normalizedCurrency.length === 0) {
     return EMPTY_AMOUNT_TEXT
   }
 
-  const rounded = roundToMinorUnit(normalized)
-  const groupedInteger = rounded.integer.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
+  const descriptor = findCurrencyDescriptor(currencies, normalizedCurrency)
+  if (!descriptor) {
+    return `${normalized} ${normalizedCurrency}`
+  }
 
-  return `${rounded.negative ? '-' : ''}${symbol}${groupedInteger}.${rounded.fraction} ${currency}`
+  const rounded = roundToMinorUnit(normalized, descriptor.minorUnit)
+  const groupedInteger = rounded.integer.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
+  const fraction = descriptor.minorUnit === 0
+    ? ''
+    : `.${rounded.fraction}`
+
+  return `${rounded.negative ? '-' : ''}${descriptor.symbol ?? ''}${groupedInteger}${fraction} ${descriptor.code}`
 }

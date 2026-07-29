@@ -1,19 +1,17 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
-import type { CurrencyCode } from '../AmountDisplay/format'
+import type { CurrencyDescriptor } from '../currency'
 import type {
   MoneyAmount,
   MoneyValidationOptions,
   MoneyValidationResult,
 } from './logic'
-import { CURRENCY_SYMBOLS } from '../AmountDisplay/format'
+import { findCurrencyDescriptor } from '../currency'
 import {
-  DEFAULT_MONEY_CURRENCY,
-  isMoneyCurrencyCode,
-  MONEY_CURRENCY_OPTIONS,
+  createMoneyCurrencyOptions,
+  EMPTY_MONEY_CURRENCY_VALUE,
 } from './currency'
 import {
-  DEFAULT_MONEY_PRECISION,
   normalizeMoneyString,
   validateMoneyString,
 } from './logic'
@@ -26,18 +24,17 @@ defineOptions({
 const props = withDefaults(defineProps<{
   allowNegative?: boolean
   clearable?: boolean
+  currencies: readonly CurrencyDescriptor[]
   disabled?: boolean
   inputClass?: HTMLAttributes['class']
   max?: string
   min?: string
   placeholder?: string
-  precision?: number
   readonly?: boolean
 }>(), {
   allowNegative: false,
   clearable: true,
   disabled: false,
-  precision: DEFAULT_MONEY_PRECISION,
   readonly: false,
 })
 
@@ -49,8 +46,8 @@ const emits = defineEmits<{
 const modelValue = defineModel<MoneyAmount>({
   default: null,
 })
-const currency = defineModel<CurrencyCode>('currency', {
-  default: DEFAULT_MONEY_CURRENCY,
+const currency = defineModel<string | null>('currency', {
+  default: null,
 })
 
 const attrs = useAttrs()
@@ -59,21 +56,41 @@ const draftValue = ref(modelValue.value ?? '')
 const emptyDraftMeansNull = ref(modelValue.value === null)
 const touched = ref(false)
 
+const currentCurrency = computed(() => findCurrencyDescriptor(
+  props.currencies,
+  currency.value,
+))
+const currencyOptions = computed(() => createMoneyCurrencyOptions(
+  props.currencies,
+  currency.value,
+))
+const hasEnabledCurrencies = computed(() => props.currencies.some(option => option.enabled))
 const validationOptions = computed<MoneyValidationOptions>(() => ({
   allowNegative: props.allowNegative,
   max: props.max,
   min: props.min,
-  precision: props.precision,
+  precision: currentCurrency.value?.minorUnit,
 }))
 const currentMoneyValue = computed<MoneyAmount>(() => (
   draftValue.value === '' && emptyDraftMeansNull.value
     ? null
     : draftValue.value
 ))
-const validationResult = computed(() => validateMoneyString(
-  currentMoneyValue.value,
-  validationOptions.value,
-))
+const validationResult = computed<MoneyValidationResult>(() => {
+  if (!currentCurrency.value) {
+    return {
+      code: 'CURRENCY_REQUIRED',
+      message: '请选择有效货币',
+      normalizedValue: null,
+      valid: false,
+    }
+  }
+
+  return validateMoneyString(
+    currentMoneyValue.value,
+    validationOptions.value,
+  )
+})
 const validationCode = computed(() => (
   touched.value && !validationResult.value.valid
     ? validationResult.value.code
@@ -85,9 +102,11 @@ const ariaInvalid = computed(() => (
   || Boolean(validationCode.value)
 ))
 const resolvedPlaceholder = computed(() => props.placeholder ?? (
-  props.precision === 0
-    ? '0'
-    : `0.${'0'.repeat(props.precision)}`
+  currentCurrency.value === null
+    ? '请先选择币种'
+    : currentCurrency.value.minorUnit === 0
+      ? '0'
+      : `0.${'0'.repeat(currentCurrency.value.minorUnit)}`
 ))
 
 watch(modelValue, (value) => {
@@ -115,8 +134,14 @@ function handleDraftUpdate(value: number | string | undefined): void {
 }
 
 function handleCurrencyUpdate(value: unknown): void {
-  if (isMoneyCurrencyCode(value)) {
-    currency.value = value
+  if (typeof value !== 'string') {
+    return
+  }
+
+  const nextCurrency = findCurrencyDescriptor(props.currencies, value)
+  if (nextCurrency?.enabled) {
+    // 切换币种只更新币种模型；金额原文及草稿必须由调用方显式决定是否换算。
+    currency.value = nextCurrency.code
   }
 }
 
@@ -165,7 +190,8 @@ defineExpose({
     :model-value="draftValue"
     :aria-invalid="ariaInvalid"
     :clearable="clearable && !readonly"
-    :data-currency="currency"
+    :data-currency="currency ?? undefined"
+    :data-currency-enabled="currentCurrency?.enabled"
     :data-validation-code="validationCode"
     :disabled="disabled"
     end-class="pe-1.5"
@@ -180,7 +206,7 @@ defineExpose({
   >
     <template #start>
       <span aria-hidden="true" class="text-muted-foreground font-medium">
-        {{ CURRENCY_SYMBOLS[currency] }}
+        {{ currentCurrency?.symbol ?? '' }}
       </span>
     </template>
     <template #end>
@@ -190,9 +216,9 @@ defineExpose({
         class="flex shrink-0 items-center"
       >
         <FaSelect
-          :model-value="currency"
-          :options="MONEY_CURRENCY_OPTIONS"
-          :disabled="disabled || readonly"
+          :model-value="currency ?? EMPTY_MONEY_CURRENCY_VALUE"
+          :options="currencyOptions"
+          :disabled="disabled || readonly || !hasEnabledCurrencies"
           class="text-xs font-mono px-2 py-0 border-0 bg-transparent shrink-0 w-[5rem] shadow-none dark:bg-transparent data-[size=default]:h-8 dark:hover:bg-transparent"
           position="popper"
           @update:model-value="handleCurrencyUpdate"

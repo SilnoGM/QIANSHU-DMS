@@ -61,12 +61,12 @@
   - 覆盖身份隔离、Abort、慢响应及失败不缓存。
   - _Requirement: 5, 8_
 
-- [ ] 9. 以 TDD 动态化 MoneyInput
+- [x] 9. 以 TDD 动态化 MoneyInput
   - 删除静态货币和隐式默认值。
   - 支持动态 options、minorUnit、停用当前值和异常状态。
   - _Requirement: 5, 6_
 
-- [ ] 10. 以 TDD 动态化 AmountDisplay
+- [x] 10. 以 TDD 动态化 AmountDisplay
   - 动态 symbol、minorUnit、code 和未解析回退。
   - 验证 0、2、4 位及大整数 half-up。
   - _Requirement: 5, 6_
@@ -151,3 +151,13 @@
   有 2 个既有 system_admin 单例场景因本地库已有活动管理员而失败
   （预期 409 实际 200、预期单一成功实际两个成功），与本期货币写入无关，
   未隐藏或改写该环境前置条件。
+
+### Task 9-10
+
+- MoneyInput、AmountDisplay 与 Currency Catalog 内核联合定向测试通过，
+  41 tests；其中组件相关用例覆盖 `minorUnit` 0..4、half-up、大整数、
+  停用当前值与未知币种回退。
+- `pnpm --filter qsmds-arco exec vue-tsc -b`：通过。
+- 金额组件、Showcase 与相关测试定向 ESLint：通过。
+- 基础组件只消费中立 `CurrencyDescriptor`，未引入 API、Store、权限或
+  Catalog provider 依赖。

@@ -17,6 +17,7 @@ import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import { SHOWCASE_CURRENCIES } from '../../shared/currency.fixture'
 
 defineOptions({ name: 'GenericTableShowcase' })
 
@@ -151,6 +152,7 @@ const columns: QsGenericTableColumn<SettlementRow>[] = [
       component: AmountDisplay,
       componentProps: {
         currency: 'CNY',
+        currencies: SHOWCASE_CURRENCIES,
       },
       type: 'sum',
     },
@@ -377,14 +379,22 @@ function recordEvent(message: string) {
               nowrap
               tone="success"
             >
-              <AmountDisplay :value="row.original.amount" currency="CNY" />
+              <AmountDisplay
+                :value="row.original.amount"
+                :currencies="SHOWCASE_CURRENCIES"
+                currency="CNY"
+              />
             </QsTableStackedLine>
             <QsTableStackedLine
               content-class="ml-auto flex justify-end text-right"
               label="标准"
               nowrap
             >
-              <AmountDisplay :value="row.original.standardAmount" currency="CNY" />
+              <AmountDisplay
+                :value="row.original.standardAmount"
+                :currencies="SHOWCASE_CURRENCIES"
+                currency="CNY"
+              />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -396,13 +406,21 @@ function recordEvent(message: string) {
               label="实际"
               tone="success"
             >
-              <AmountDisplay :value="value" currency="CNY" />
+              <AmountDisplay
+                :value="value"
+                :currencies="SHOWCASE_CURRENCIES"
+                currency="CNY"
+              />
             </QsTableStackedLine>
             <QsTableStackedLine
               content-class="ml-auto flex justify-end text-right"
               label="标准"
             >
-              <AmountDisplay :value="pageStandardAmount" currency="CNY" />
+              <AmountDisplay
+                :value="pageStandardAmount"
+                :currencies="SHOWCASE_CURRENCIES"
+                currency="CNY"
+              />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -488,13 +506,21 @@ function recordEvent(message: string) {
                     label="实际"
                     tone="success"
                   >
-                    <AmountDisplay :value="row.amount" currency="CNY" />
+                    <AmountDisplay
+                      :value="row.amount"
+                      :currencies="SHOWCASE_CURRENCIES"
+                      currency="CNY"
+                    />
                   </QsTableStackedLine>
                   <QsTableStackedLine
                     content-class="ml-auto flex justify-end text-right"
                     label="标准"
                   >
-                    <AmountDisplay :value="row.standardAmount" currency="CNY" />
+                    <AmountDisplay
+                      :value="row.standardAmount"
+                      :currencies="SHOWCASE_CURRENCIES"
+                      currency="CNY"
+                    />
                   </QsTableStackedLine>
                 </QsTableStackedCell>
               </dd>
