@@ -125,6 +125,34 @@ const REGION_MUTATION_FIELDS = new Set([
   'sortOrder',
 ])
 
+/**
+ * `administrativeType` 是可扩展的稳定技术字符串，不是数据库 enum。这里同时覆盖
+ * 首期种子数据的来源类型，以及管理员创建节点时可能生成的三级通用类型。
+ *
+ * 地区管理表格会在中文标签下方单独展示原始技术码，因此未知类型不能再次返回原值，
+ * 否则两行内容完全重复，移动端也只会暴露未本地化的英文标识。
+ */
+const ADMINISTRATIVE_TYPE_LABELS: Readonly<Record<string, string>> = {
+  ADMINISTRATIVE_DISTRICT: '行政区',
+  AUTONOMOUS_PREFECTURE: '自治州',
+  AUTONOMOUS_REGION: '自治区',
+  CITY: '城市',
+  COUNTRY_REGION: '国家/地区',
+  COUNTY_CITY: '县市',
+  DIRECT_ADMIN_COUNTY_LEVEL: '省直辖县级行政区',
+  FEDERAL_TERRITORY: '联邦直辖区',
+  LEAGUE: '盟',
+  MUNICIPALITY: '直辖市',
+  MUNICIPALITY_CITY: '直辖市城市节点',
+  PREFECTURE: '地区',
+  PREFECTURE_LEVEL_CITY: '地级市',
+  PROVINCE: '省',
+  PROVINCE_STATE: '省/州',
+  SPECIAL_ADMINISTRATIVE_REGION: '特别行政区',
+  STATE: '州',
+  SYNTHETIC_PROVINCE_STATE: '补齐省/州层',
+}
+
 export function createRootRegionScope(): RegionScope {
   return {
     id: null,
@@ -186,20 +214,7 @@ export function ownStatusLabel(enabled: boolean): string {
 }
 
 export function administrativeTypeLabel(value: string): string {
-  const labels: Readonly<Record<string, string>> = {
-    ADMINISTRATIVE_DISTRICT: '行政区',
-    AUTONOMOUS_REGION: '自治区',
-    CITY: '城市',
-    COUNTRY_REGION: '国家/地区',
-    DIRECT_ADMIN_COUNTY_LEVEL: '省直辖县级行政区',
-    FEDERAL_TERRITORY: '联邦直辖区',
-    MUNICIPALITY: '直辖市',
-    PROVINCE: '省',
-    PROVINCE_STATE: '省/州',
-    SPECIAL_ADMINISTRATIVE_REGION: '特别行政区',
-    STATE: '州',
-  }
-  return labels[value] ?? value
+  return ADMINISTRATIVE_TYPE_LABELS[value] ?? '未配置中文名称'
 }
 
 function toScopePathNode(

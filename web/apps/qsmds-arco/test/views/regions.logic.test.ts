@@ -10,6 +10,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  administrativeTypeLabel,
   buildRegionListQuery,
   buildRegionReconciliationQuery,
   canApplyRegionResponse,
@@ -190,6 +191,38 @@ test('自身和有效状态映射为三个互斥文字状态', () => {
   assert.equal(regionDisplayStatusLabel('SELF_DISABLED'), '自身停用')
   assert.equal(regionDisplayStatusLabel('ANCESTOR_DISABLED'), '继承停用')
   assert.equal(regionDisplayStatusLabel('EFFECTIVE'), '有效')
+})
+
+test('首期种子数据的全部行政类型均映射为中文标签', () => {
+  const expectedLabels: Readonly<Record<string, string>> = {
+    ADMINISTRATIVE_DISTRICT: '行政区',
+    AUTONOMOUS_PREFECTURE: '自治州',
+    AUTONOMOUS_REGION: '自治区',
+    COUNTRY_REGION: '国家/地区',
+    COUNTY_CITY: '县市',
+    DIRECT_ADMIN_COUNTY_LEVEL: '省直辖县级行政区',
+    FEDERAL_TERRITORY: '联邦直辖区',
+    LEAGUE: '盟',
+    MUNICIPALITY: '直辖市',
+    MUNICIPALITY_CITY: '直辖市城市节点',
+    PREFECTURE: '地区',
+    PREFECTURE_LEVEL_CITY: '地级市',
+    PROVINCE: '省',
+    STATE: '州',
+    SYNTHETIC_PROVINCE_STATE: '补齐省/州层',
+  }
+
+  for (const [value, label] of Object.entries(expectedLabels)) {
+    assert.equal(administrativeTypeLabel(value), label)
+    assert.notEqual(administrativeTypeLabel(value), value)
+  }
+})
+
+test('未知行政类型显示中文缺失提示，避免与下方技术码重复', () => {
+  assert.equal(
+    administrativeTypeLabel('FUTURE_ADMINISTRATIVE_TYPE'),
+    '未配置中文名称',
+  )
 })
 
 test('迟到响应必须同时通过 version、scope、authEpoch 和 abort 保护', () => {
