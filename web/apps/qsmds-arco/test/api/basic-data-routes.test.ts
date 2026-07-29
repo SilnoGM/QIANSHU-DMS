@@ -10,30 +10,35 @@ import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
 const basicDataPageContracts = [
   {
+    auth: 'regions:read',
     file: '../../src/views/system/basic-data/regions/index.vue',
     name: 'systemBasicDataRegions',
     path: 'regions',
     title: '地区管理',
   },
   {
+    auth: 'currencies:read',
     file: '../../src/views/system/basic-data/currencies/index.vue',
     name: 'systemBasicDataCurrencies',
     path: 'currencies',
     title: '货币管理',
   },
   {
+    auth: 'exchange-rates:read',
     file: '../../src/views/system/basic-data/exchange-rates/index.vue',
     name: 'systemBasicDataExchangeRates',
     path: 'exchange-rates',
     title: '汇率管理',
   },
   {
+    auth: undefined,
     file: '../../src/views/system/basic-data/numbering/index.vue',
     name: 'systemBasicDataNumbering',
     path: 'numbering',
     title: '编号管理',
   },
   {
+    auth: undefined,
     file: '../../src/views/system/basic-data/dictionaries/index.vue',
     name: 'systemBasicDataDictionaries',
     path: 'dictionaries',
@@ -57,7 +62,7 @@ test('基础数据父路由保持权限中立并由叶子路由独立鉴权', ()
       title: route.meta?.title,
     })),
     basicDataPageContracts.map(page => ({
-      auth: page.name === 'systemBasicDataRegions' ? 'regions:read' : undefined,
+      auth: page.auth,
       name: page.name,
       path: page.path,
       title: page.title,
@@ -72,7 +77,7 @@ test('基础数据父路由保持权限中立并由叶子路由独立鉴权', ()
   )
 })
 
-test('无地区读取权限时仍保留其余四个基础数据菜单', () => {
+test('无基础数据读取权限时仍保留两个权限中立菜单', () => {
   const permissions = ['users:read']
   const menuFixture: MenuRecordRaw[] = [{
     path: basicDataRoutes.path,
@@ -89,7 +94,7 @@ test('无地区读取权限时仍保留其余四个基础数据菜单', () => {
     })),
   }]
 
-  // 使用生产递归过滤函数验证父项保留、地区隐藏及四个权限中立叶子的顺序。
+  // 使用生产递归过滤函数验证父项保留、三个受保护叶子隐藏及权限中立叶子的顺序。
   const [visibleBasicData] = filterAccessibleMenus(
     menuFixture,
     value => matchesAuthorization(permissions, value),
@@ -99,11 +104,44 @@ test('无地区读取权限时仍保留其余四个基础数据菜单', () => {
   assert.equal(visibleBasicData?.path, '/system/basic-data')
   assert.deepEqual(
     visibleBasicData?.children?.map(menu => menu.path),
-    ['currencies', 'exchange-rates', 'numbering', 'dictionaries'],
+    ['numbering', 'dictionaries'],
   )
-  assert.equal(
-    visibleBasicData?.children?.some(menu => menu.path === 'regions'),
-    false,
+  assert.ok(
+    visibleBasicData?.children?.every(
+      menu => !['regions', 'currencies', 'exchange-rates'].includes(menu.path),
+    ),
+  )
+})
+
+test('货币与汇率菜单分别受各自读取权限保护', () => {
+  const menuFixture: MenuRecordRaw[] = [{
+    path: basicDataRoutes.path,
+    meta: {
+      auth: basicDataRoutes.meta?.auth,
+      title: basicDataRoutes.meta?.title,
+    },
+    children: (basicDataRoutes.children ?? []).map(route => ({
+      path: route.path,
+      meta: {
+        auth: route.meta?.auth,
+        title: route.meta?.title,
+      },
+    })),
+  }]
+
+  const visiblePaths = (permissions: string[]) => filterAccessibleMenus(
+    menuFixture,
+    value => matchesAuthorization(permissions, value),
+    () => true,
+  )[0]?.children?.map(menu => menu.path)
+
+  assert.deepEqual(
+    visiblePaths(['currencies:read']),
+    ['currencies', 'numbering', 'dictionaries'],
+  )
+  assert.deepEqual(
+    visiblePaths(['exchange-rates:read']),
+    ['exchange-rates', 'numbering', 'dictionaries'],
   )
 })
 

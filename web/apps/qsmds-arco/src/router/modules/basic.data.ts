@@ -34,6 +34,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '货币管理',
         icon: 'i-lucide:coins',
+        auth: 'currencies:read',
       },
     },
     {
@@ -43,6 +44,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '汇率管理',
         icon: 'i-lucide:arrow-left-right',
+        auth: 'exchange-rates:read',
       },
     },
     {
