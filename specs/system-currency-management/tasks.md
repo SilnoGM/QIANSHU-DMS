@@ -30,7 +30,7 @@
   - 导入四币种且保持零汇率。
   - _Requirement: 1, 2, 3, 4, 7, 8_
 
-- [ ] 3. 以 TDD 实现严格 DTO 与 Decimal 边界
+- [x] 3. 以 TDD 实现严格 DTO 与 Decimal 边界
   - 校验 code、minorUnit、文本和 expectedVersion。
   - 校验、规范化 `foreignUnitsPerCny` decimal string。
   - 建立稳定错误码与持久化错误映射。
@@ -121,3 +121,11 @@
 - `git diff --check`：通过。
 - 本阶段只验证 migration 静态契约；live migration replay 与数据库 E2E 保留到
   Task 7 执行。
+
+### Task 3
+
+- DTO、文本与 decimal string 规范化、持久化错误映射定向测试通过，
+  6 suites / 29 tests。
+- Task 3 文件定向 ESLint：通过。
+- 汇率规范化不经过 JavaScript `number`；未知数据库错误固定收口为安全
+  `INTERNAL_ERROR`。
