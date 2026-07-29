@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+
 defineOptions({
   name: 'AppCheckUpdates',
 })
@@ -6,7 +8,8 @@ defineOptions({
 const { t } = useI18n()
 const appSettingsStore = useAppSettingsStore()
 
-const visible = ref(false)
+const updateNoticeVisible = ref(false)
+const updateNoticeHandled = ref(false)
 const lastVersionTag = ref('')
 const checkUpdatesInterval = ref(Number.NaN)
 
@@ -24,6 +27,10 @@ async function getVersionTag() {
 }
 
 async function checkUpdates() {
+  if (updateNoticeHandled.value) {
+    return
+  }
+
   const versionTag = await getVersionTag()
   if (!versionTag) {
     return
@@ -32,24 +39,22 @@ async function checkUpdates() {
     lastVersionTag.value = versionTag
     return
   }
-  if (visible.value) {
+  if (updateNoticeVisible.value || updateNoticeHandled.value) {
     return
   }
   if (lastVersionTag.value !== versionTag && versionTag) {
     stopInterval()
-    visible.value = true
-    useFaModal().confirm({
-      title: t('app.components.checkUpdates.message'),
-      content: t('app.components.checkUpdates.description'),
-      confirmButtonText: t('app.components.checkUpdates.confirm'),
-      cancelButtonText: t('app.components.checkUpdates.cancel'),
-      onConfirm: () => location.reload(),
-    })
+    // handled 是一次性提示锁，用户取消或按 Escape 后也不能在本次会话反复打扰。
+    updateNoticeHandled.value = true
+    updateNoticeVisible.value = true
   }
 }
 
 function startInterval() {
-  checkUpdates()
+  if (updateNoticeHandled.value) {
+    return
+  }
+  void checkUpdates()
   checkUpdatesInterval.value = window.setInterval(checkUpdates, 60_000)
 }
 
@@ -64,6 +69,14 @@ function handleVisibilitychange() {
   else {
     startInterval()
   }
+}
+
+function closeUpdateNotice() {
+  updateNoticeVisible.value = false
+}
+
+function reloadPage() {
+  location.reload()
 }
 
 onMounted(() => {
@@ -82,5 +95,33 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div />
+  <QsGenericModal
+    v-model="updateNoticeVisible"
+    :title="t('app.components.checkUpdates.message')"
+    size="sm"
+    :closable="false"
+    :dismiss-on-overlay="false"
+  >
+    <p class="text-sm text-muted-foreground leading-6 m-0">
+      {{ t('app.components.checkUpdates.description') }}
+    </p>
+
+    <template #footer>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        @click="closeUpdateNotice"
+      >
+        {{ t('app.components.checkUpdates.cancel') }}
+      </FaButton>
+      <FaButton
+        type="button"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        @click="reloadPage"
+      >
+        {{ t('app.components.checkUpdates.confirm') }}
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>

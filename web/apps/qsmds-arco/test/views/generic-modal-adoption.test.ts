@@ -155,6 +155,21 @@ test('全局布局弹窗统一使用 QsGenericModal', () => {
   assert.match(menuSearchSource, /<template v-if="appSettingsStore\.mode === 'pc'" #footer>/u)
 })
 
-test.skip('版本更新确认改为声明式 QsGenericModal', () => {
+test('版本更新确认改为声明式 QsGenericModal', () => {
   programmaticModalContracts.forEach(assertUsesOnlyGenericModal)
+
+  const source = readRelativeSource(
+    '../../src/components/AppCheckUpdates/index.vue',
+  )
+  assert.match(source, /const updateNoticeVisible = ref\(false\)/u)
+  assert.match(source, /const updateNoticeHandled = ref\(false\)/u)
+  assert.match(source, /if \(updateNoticeHandled\.value\)/u)
+  assert.ok(
+    source.indexOf('updateNoticeHandled.value = true')
+    < source.indexOf('updateNoticeVisible.value = true'),
+    '发现版本变化后应先锁定本次提示，再打开声明式弹窗',
+  )
+  assert.match(source, /:closable="false"/u)
+  assert.match(source, /:dismiss-on-overlay="false"/u)
+  assert.match(source, /location\.reload\(\)/u)
 })
