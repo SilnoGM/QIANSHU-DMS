@@ -138,15 +138,15 @@ test('地区管理是受权限保护的真实业务页面', () => {
 test('地区以外的四个基础数据叶子路由仍只承载空页面', () => {
   for (const page of basicDataPageContracts.slice(1)) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
-    const renderedMarkup = source
-      .replaceAll(/<\/?template>/gu, '')
-      .replaceAll(/<!--[\s\S]*?-->/gu, '')
-      .trim()
+    const templateMatch = source.match(/<template>([\s\S]*?)<\/template>/u)
 
+    assert.ok(templateMatch, `${page.title}必须保留 Vue template`)
+    // 必须检查原始模板内容，不能先删除顶层注释；否则 Vue 会把空页面编译为
+    // Fragment，离开该页面时会让外层 out-in Transition 永久停在占位节点。
     assert.equal(
-      renderedMarkup,
+      templateMatch[1]?.trim(),
       '<div />',
-      `${page.title}只允许保留满足 Vue 模板约束的空根元素`,
+      `${page.title}只允许保留单一空根元素，说明注释必须位于 template 外部`,
     )
     assert.doesNotMatch(
       source,
