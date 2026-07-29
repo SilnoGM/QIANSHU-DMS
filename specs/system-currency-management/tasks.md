@@ -36,17 +36,17 @@
   - 建立稳定错误码与持久化错误映射。
   - _Requirement: 2, 3, 8_
 
-- [ ] 4. 以 TDD 实现货币查询与 Catalog
+- [x] 4. 以 TDD 实现货币查询与 Catalog
   - 实现管理查询与正常 Session 可用的全量 Catalog。
   - 注册 Module、Controller、operationId 和 OpenAPI 错误矩阵。
   - _Requirement: 2, 5, 8_
 
-- [ ] 5. 以 TDD 实现货币写操作
+- [x] 5. 以 TDD 实现货币写操作
   - 创建默认停用、受控编辑、启停、version、锁序和 Audit。
   - 无汇率启用与 CNY 停用必须失败。
   - _Requirement: 1, 2, 4, 8_
 
-- [ ] 6. 以 TDD 实现当前汇率管理
+- [x] 6. 以 TDD 实现当前汇率管理
   - 实现 LEFT JOIN 列表、创建、更新、version 和 Audit。
   - 允许停用外币配置汇率，禁止 CNY 与重复当前行。
   - _Requirement: 3, 4, 8_
@@ -129,3 +129,11 @@
 - Task 3 文件定向 ESLint：通过。
 - 汇率规范化不经过 JavaScript `number`；未知数据库错误固定收口为安全
   `INTERNAL_ERROR`。
+
+### Task 4-6
+
+- Currency / ExchangeRate 全部模块定向测试通过，15 suites / 81 tests。
+- `pnpm -C server check`：通过，99 suites / 808 tests。
+- 服务端完整 TypeScript、ESLint、Prisma validate 与 `git diff --check`：通过。
+- Catalog 返回全量货币；管理读取和八项写权限分离；写事务固定
+  Currency → ExchangeRate 锁序，并以 `expectedVersion` 与同事务 Audit 收口。

@@ -1,5 +1,7 @@
 import { AuditModule } from './modules/audit/audit.module'
 import { AuthModule } from './modules/auth/auth.module'
+import { CurrencyModule } from './modules/currencies/currency.module'
+import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module'
 import { HealthModule } from './modules/health/health.module'
 import { PermissionsModule } from './modules/permissions/permissions.module'
 import { ProfileModule } from './modules/profile/profile.module'
@@ -15,6 +17,8 @@ export const HTTP_MODULES = [
   UsersModule,
   RolesModule,
   PermissionsModule,
+  CurrencyModule,
+  ExchangeRatesModule,
   RegionsModule,
   AuditModule,
 ] as const
