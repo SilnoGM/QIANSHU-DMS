@@ -5,6 +5,7 @@ import type {
   UpdateCurrentUserProfileRequestDto,
 } from '@/api/generated/types.gen'
 
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import {
   buildCurrentUserProfilePatch,
   getProfileConflictField,
@@ -192,6 +193,9 @@ async function submit(): Promise<void> {
     const profile = await appAccountStore.updateProfile(patch)
     resetModel(profile)
     useFaToast().success(t('accountProfile.saved'))
+    // QsGenericModal 在提交态拒绝程序化关闭，先释放锁并等待属性同步。
+    submitting.value = false
+    await nextTick()
     emits('update:modelValue', false)
   }
   catch (error) {
@@ -236,16 +240,12 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <FaModal
+  <QsGenericModal
     :model-value="modelValue"
     :title="t('accountProfile.title')"
     :description="t('accountProfile.description')"
-    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[720px]"
-    :closable="!submitting"
-    :close-on-click-overlay="!submitting"
-    :close-on-press-escape="!submitting"
-    :footer="false"
-    destroy-on-close
+    size="lg"
+    :submitting="submitting"
     @update:model-value="updateVisible"
   >
     <FaAlert
@@ -310,6 +310,7 @@ watch(() => props.modelValue, (visible) => {
 
         <FaForm
           v-else
+          id="account-profile-form"
           ref="formRef"
           :model="model"
           :disabled="submitting || loadFailed || initialProfile === null"
@@ -352,17 +353,29 @@ watch(() => props.modelValue, (visible) => {
               @clear="model.avatarUrl = ''"
             />
           </FaFormItem>
-
-          <div class="mt-2 flex gap-3 justify-end">
-            <FaButton type="button" variant="outline" :disabled="submitting" @click="close">
-              {{ t('accountProfile.cancel') }}
-            </FaButton>
-            <FaButton type="submit" :loading="submitting" :disabled="!canSubmit">
-              {{ t('accountProfile.save') }}
-            </FaButton>
-          </div>
         </FaForm>
       </section>
     </div>
-  </FaModal>
+
+    <template #footer>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="submitting"
+        @click="close"
+      >
+        {{ t('accountProfile.cancel') }}
+      </FaButton>
+      <FaButton
+        type="submit"
+        form="account-profile-form"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="submitting"
+        :disabled="!canSubmit"
+      >
+        {{ t('accountProfile.save') }}
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>

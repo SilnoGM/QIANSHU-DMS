@@ -98,8 +98,38 @@ test('系统管理业务弹窗统一使用 QsGenericModal', () => {
   systemModalContracts.forEach(assertUsesOnlyGenericModal)
 })
 
-test.skip('账户相关弹窗统一使用 QsGenericModal', () => {
+test('账户相关弹窗统一使用 QsGenericModal', () => {
   accountModalContracts.forEach(assertUsesOnlyGenericModal)
+
+  const accountButtonSource = readRelativeSource(
+    '../../src/components/AppAccountButton/index.vue',
+  )
+  assert.match(accountButtonSource, /const feedbackVisible = ref\(false\)/u)
+  assert.match(accountButtonSource, /:dismiss-on-overlay="false"/u)
+  assert.match(accountButtonSource, /:dismiss-on-escape="false"/u)
+  assert.match(accountButtonSource, /<Feedback @close="feedbackVisible = false"/u)
+  assert.match(accountButtonSource, /:submitting="logoutPending"/u)
+
+  const profileSource = readRelativeSource(
+    '../../src/components/AppAccountButton/profile.vue',
+  )
+  assert.match(profileSource, /:submitting="submitting"/u)
+  assert.ok(
+    profileSource.indexOf('submitting.value = false')
+    < profileSource.indexOf(`emits('update:modelValue', false)`, profileSource.indexOf('async function submit')),
+    '个人资料保存成功后必须先释放提交锁再关闭',
+  )
+
+  const passwordSource = readRelativeSource(
+    '../../src/components/AppAccountForm/edit-password.vue',
+  )
+  assert.match(passwordSource, /:before-close="canCloseModal"/u)
+  assert.match(passwordSource, /:submitting="loading"/u)
+  assert.ok(
+    passwordSource.indexOf('loading.value = false')
+    < passwordSource.indexOf(`emits('update:modelValue', false)`, passwordSource.indexOf('async function submit')),
+    '修改密码成功后必须先释放提交锁再关闭',
+  )
 })
 
 test.skip('全局布局弹窗统一使用 QsGenericModal', () => {

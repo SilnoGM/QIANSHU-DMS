@@ -19,10 +19,17 @@ test('个人资料组件使用 Fantastic Admin 组件、语义 token 与响应�
     'FaForm',
     'FaFormItem',
     'FaInput',
-    'FaModal',
+    'QsGenericModal',
   ]) {
     assert.match(source, new RegExp(`<${component}\\b`, 'u'))
   }
+  assert.match(
+    source,
+    /import QsGenericModal from '@\/components\/business\/QsGenericModal\/index\.vue'/u,
+  )
+  assert.match(source, /<QsGenericModal[\s\S]+?size="lg"/u)
+  assert.match(source, /:submitting="submitting"/u)
+  assert.doesNotMatch(source, /<FaModal\b/u)
   assert.doesNotMatch(source, /<A[A-Z][A-Za-z0-9]*\b/u)
   assert.doesNotMatch(
     source,
@@ -31,8 +38,6 @@ test('个人资料组件使用 Fantastic Admin 组件、语义 token 与响应�
   assert.match(source, /(?:bg|text|border)-(?:background|foreground|card|muted|primary|secondary|accent|destructive|border)/u)
   assert.match(source, /grid-cols-1/u)
   assert.match(source, /md:grid-cols-\[160px_minmax\(0,1fr\)\]/u)
-  assert.match(source, /max-w-\[calc\(100%-1\.5rem\)\]/u)
-  assert.match(source, /sm:max-w-\[720px\]/u)
   assert.doesNotMatch(source, /overflow-x-(?:auto|scroll)/u)
 })
 

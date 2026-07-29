@@ -231,8 +231,13 @@ async function fillPasswordModal(page, values) {
       input.dispatchEvent(new Event('change', { bubbles: true }))
     }
     const modal = [...document.querySelectorAll('[role="dialog"]')]
-      .find(candidate => candidate.getClientRects().length > 0
-        && candidate.getAttribute('aria-label')?.includes('密码'))
+      .find((candidate) => {
+        const titleId = candidate.getAttribute('aria-labelledby')
+        const accessibleName = candidate.getAttribute('aria-label')
+          ?? (titleId ? document.getElementById(titleId)?.textContent : '')
+        return candidate.getClientRects().length > 0
+          && accessibleName?.includes('密码')
+      })
     const current = [...(modal?.querySelectorAll('input[autocomplete="current-password"]') ?? [])]
       .find(input => input.getClientRects().length > 0)
     const next = [...(modal?.querySelectorAll('input[autocomplete="new-password"]') ?? [])]
@@ -719,8 +724,9 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
       .find(candidate => candidate.getClientRects().length > 0
         && candidate.textContent?.includes('请先修改密码'))
-    const closeButtons = [...(dialog?.querySelectorAll('[aria-label="Close"], button') ?? [])]
+    const closeButtons = [...(dialog?.querySelectorAll('[aria-label="Close"], [aria-label="关闭模态框"], button') ?? [])]
       .filter(candidate => candidate.getAttribute('aria-label') === 'Close'
+        || candidate.getAttribute('aria-label') === '关闭模态框'
         || candidate.textContent?.trim() === 'Close')
     return {
       closeButtons: closeButtons.length,
@@ -990,16 +996,20 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   await clickVisibleButtonContaining(restartedPage, limitedCredentials.username)
   await clickVisibleText(restartedPage, '修改密码')
   await restartedPage.waitFor(`(() => (
-    [...document.querySelectorAll('[role="dialog"]')].some((modal) => (
-      modal.getClientRects().length > 0
-      && modal.getAttribute('aria-label') === '修改密码'
-      && modal.querySelector('input[autocomplete="current-password"]')?.getClientRects().length > 0
-    ))
+    [...document.querySelectorAll('[role="dialog"]')].some((modal) => {
+      const titleId = modal.getAttribute('aria-labelledby')
+      return modal.getClientRects().length > 0
+        && document.getElementById(titleId)?.textContent === '修改密码'
+        && modal.querySelector('input[autocomplete="current-password"]')?.getClientRects().length > 0
+    })
   ))()`)
   const activeModal = await restartedPage.evaluate(`(() => {
     const modal = [...document.querySelectorAll('[role="dialog"]')]
-      .find(candidate => candidate.getClientRects().length > 0
-        && candidate.getAttribute('aria-label') === '修改密码')
+      .find((candidate) => {
+        const titleId = candidate.getAttribute('aria-labelledby')
+        return candidate.getClientRects().length > 0
+          && document.getElementById(titleId)?.textContent === '修改密码'
+      })
     return {
       currentPasswordInputs: [...(modal?.querySelectorAll('input[autocomplete="current-password"]') ?? [])]
         .filter(input => input.getClientRects().length > 0).length,
@@ -1023,10 +1033,11 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   assert.equal((await activePasswordResponse).response?.status, 200)
   await waitForAuthState(restartedPage, 'authenticated')
   await restartedPage.waitFor(`(() => (
-    ![...document.querySelectorAll('[role="dialog"]')].some((modal) => (
-      modal.getClientRects().length > 0
-      && modal.getAttribute('aria-label') === '修改密码'
-    ))
+    ![...document.querySelectorAll('[role="dialog"]')].some((modal) => {
+      const titleId = modal.getAttribute('aria-labelledby')
+      return modal.getClientRects().length > 0
+        && document.getElementById(titleId)?.textContent === '修改密码'
+    })
   ))()`)
   assert.equal(
     await restartedPage.evaluate('location.hash'),

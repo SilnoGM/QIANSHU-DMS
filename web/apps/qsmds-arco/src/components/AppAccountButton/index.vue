@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { HTMLAttributes } from 'vue'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { cn } from '@/utils'
 import eventBus from '@/utils/eventBus'
 import Feedback from './feedback.vue'
@@ -36,19 +37,9 @@ const accountUsername = computed(() => {
 const { t } = useI18n()
 const { generateI18nTitle } = useAppMenu()
 
-const feedbackModal = useFaModal().create({
-  title: () => t('app.components.accountButton.index.feedback'),
-  footer: false,
-  closeOnClickOverlay: false,
-  closeOnPressEscape: false,
-  class: 'sm:max-w-[800px]',
-  content: () => h(Feedback, {
-    onClose: () => feedbackModal.close(),
-  }),
-})
-
 type LogoutScope = 'current' | 'all'
 
+const feedbackVisible = ref(false)
 const logoutDialogVisible = ref(false)
 const logoutAction = ref<LogoutScope | null>(null)
 const logoutPending = computed(() => logoutAction.value !== null)
@@ -77,6 +68,9 @@ async function submitLogout(scope: LogoutScope) {
     else {
       await appAccountStore.logout()
     }
+    // QsGenericModal 的提交锁会拒绝程序化关闭，先释放锁并等待属性同步。
+    logoutAction.value = null
+    await nextTick()
     logoutDialogVisible.value = false
   }
   catch {
@@ -101,7 +95,7 @@ async function submitLogout(scope: LogoutScope) {
           ? [{ label: t('app.components.accountButton.index.preferences'), icon: 'i-mdi:cog', handle: () => eventBus.emit('global-app-setting-toggle', 'preferences') }]
           : []),
         ...(appSettingsStore.settings.app.feedback
-          ? [{ label: t('app.components.accountButton.index.feedback'), icon: 'i-mdi:comment-processing', handle: () => feedbackModal.open() }]
+          ? [{ label: t('app.components.accountButton.index.feedback'), icon: 'i-mdi:comment-processing', handle: () => feedbackVisible = true }]
           : []),
       ],
       [
@@ -155,15 +149,22 @@ async function submitLogout(scope: LogoutScope) {
     </FaButton>
   </FaDropdown>
 
-  <FaModal
+  <QsGenericModal
+    v-model="feedbackVisible"
+    :title="t('app.components.accountButton.index.feedback')"
+    size="xl"
+    :dismiss-on-overlay="false"
+    :dismiss-on-escape="false"
+  >
+    <Feedback @close="feedbackVisible = false" />
+  </QsGenericModal>
+
+  <QsGenericModal
     v-model="logoutDialogVisible"
     title="退出登录"
     description="请选择本次要退出的登录范围。"
-    align-center
-    :closable="!logoutPending"
-    :close-on-click-overlay="!logoutPending"
-    :close-on-press-escape="!logoutPending"
-    class="sm:max-w-[560px]"
+    size="md"
+    :submitting="logoutPending"
   >
     <div class="space-y-3">
       <section class="p-4 border rounded-lg space-y-1.5">
@@ -188,26 +189,34 @@ async function submitLogout(scope: LogoutScope) {
     </div>
 
     <template #footer>
-      <div class="gap-2 grid w-full sm:flex sm:justify-end">
-        <FaButton variant="outline" :disabled="logoutPending" @click="closeLogoutDialog">
-          取消
-        </FaButton>
-        <FaButton
-          :loading="logoutAction === 'current'"
-          :disabled="logoutPending"
-          @click="submitLogout('current')"
-        >
-          退出当前登录
-        </FaButton>
-        <FaButton
-          variant="destructive"
-          :loading="logoutAction === 'all'"
-          :disabled="logoutPending"
-          @click="submitLogout('all')"
-        >
-          退出所有登录
-        </FaButton>
-      </div>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="logoutPending"
+        @click="closeLogoutDialog"
+      >
+        取消
+      </FaButton>
+      <FaButton
+        type="button"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="logoutAction === 'current'"
+        :disabled="logoutPending"
+        @click="submitLogout('current')"
+      >
+        退出当前登录
+      </FaButton>
+      <FaButton
+        type="button"
+        variant="destructive"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="logoutAction === 'all'"
+        :disabled="logoutPending"
+        @click="submitLogout('all')"
+      >
+        退出所有登录
+      </FaButton>
     </template>
-  </FaModal>
+  </QsGenericModal>
 </template>
