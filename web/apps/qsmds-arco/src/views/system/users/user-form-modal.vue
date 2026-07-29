@@ -7,6 +7,7 @@ import type {
 } from '@/utils/user-profile'
 
 import managementApi from '@/api/modules/management'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import {
   buildAdminUserProfilePatch,
   getProfileConflictField,
@@ -219,6 +220,9 @@ async function submit(): Promise<void> {
     clearErrors()
     useFaToast().success(submissionMode === 'create' ? '用户创建成功' : '用户信息已更新')
     emits('success', responseData)
+    // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
+    loading.value = false
+    await nextTick()
     emits('update:modelValue', false)
   }
   catch (error) {
@@ -260,15 +264,11 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <FaModal
+  <QsGenericModal
     :model-value="modelValue"
     :title="mode === 'create' ? '新建用户' : '编辑用户'"
-    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[720px]"
-    :closable="!loading"
-    :close-on-click-overlay="!loading"
-    :close-on-press-escape="!loading"
-    :footer="false"
-    destroy-on-close
+    size="lg"
+    :submitting="loading"
     @update:model-value="updateVisible"
   >
     <FaAlert v-if="errorMessage" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">
@@ -377,19 +377,27 @@ watch(() => props.modelValue, (visible) => {
           </FaFormItem>
         </template>
       </div>
-
-      <div class="mt-6 flex gap-3 justify-end">
-        <FaButton type="button" variant="outline" :disabled="loading" @click="close">
-          取消
-        </FaButton>
-        <FaButton
-          type="submit"
-          :loading="loading"
-          :disabled="loading || (mode === 'edit' && !hasEditChanges)"
-        >
-          {{ mode === 'create' ? '创建用户' : '保存修改' }}
-        </FaButton>
-      </div>
     </FaForm>
-  </FaModal>
+
+    <template #footer>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="loading"
+        @click="close"
+      >
+        取消
+      </FaButton>
+      <FaButton
+        type="button"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="loading"
+        :disabled="loading || (mode === 'edit' && !hasEditChanges)"
+        @click="submit"
+      >
+        {{ mode === 'create' ? '创建用户' : '保存修改' }}
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>

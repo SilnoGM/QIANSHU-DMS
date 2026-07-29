@@ -43,11 +43,11 @@ const systemViewContracts = [
       'FaForm',
       'FaFormItem',
       'FaInput',
-      'FaModal',
       'FaPageHeader',
       'FaPageMain',
       'FaTag',
       'FaTextarea',
+      'QsGenericModal',
       'QsGenericTable',
     ],
   },
@@ -66,12 +66,12 @@ const systemViewContracts = [
       'FaForm',
       'FaFormItem',
       'FaInput',
-      'FaModal',
       'FaPageHeader',
       'FaPageMain',
       'FaTag',
       'FaTextarea',
       'QsGenericDrawer',
+      'QsGenericModal',
       'QsGenericTable',
     ],
   },
@@ -376,23 +376,22 @@ test('管理员编辑本人后刷新 AuthContext 与 Profile，移动端使用�
   assert.doesNotMatch(source, />\s*编辑显示名称\s*</u)
 })
 
-test('管理员资料表单使用 720px 响应式布局和 FaTextarea 备注', () => {
+test('管理员资料表单使用 QsGenericModal lg 响应式布局和 FaTextarea 备注', () => {
   const source = readRelativeSource(
     '../../src/views/system/users/user-form-modal.vue',
   )
 
-  assert.match(source, /sm:max-w-\[720px\]/u)
+  assert.match(
+    source,
+    /import QsGenericModal from '@\/components\/business\/QsGenericModal\/index\.vue'/u,
+  )
+  assert.match(source, /<QsGenericModal[\s\S]+?size="lg"/u)
+  assert.match(source, /:submitting="loading"/u)
   assert.match(source, /grid-cols-1/u)
   assert.match(source, /md:grid-cols-2/u)
   assert.match(source, /<FaTextarea[^>]+v-model="model\.remark"/u)
   assert.doesNotMatch(source, /overflow-x-(?:auto|scroll)/u)
-  for (const closeGuard of [
-    ':closable="!loading"',
-    ':close-on-click-overlay="!loading"',
-    ':close-on-press-escape="!loading"',
-  ]) {
-    assert.ok(source.includes(closeGuard))
-  }
+  assert.doesNotMatch(source, /<FaModal\b/u)
 })
 
 test('自由文本输入不使用会拆分 Emoji 的原生 maxlength，角色说明按字素簇显示计数', () => {

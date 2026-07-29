@@ -5,6 +5,7 @@ import type {
   UpdateRoleRequestDto,
 } from '@/api/generated/types.gen'
 
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { countGraphemes } from '@/utils/grapheme'
 
 defineOptions({ name: 'RoleEditorModal' })
@@ -119,14 +120,11 @@ watch(() => [props.visible, props.role] as const, ([visible]) => {
 </script>
 
 <template>
-  <FaModal
+  <QsGenericModal
     :model-value="visible"
     :title="isEditing ? '编辑角色' : '创建角色'"
-    class="sm:max-w-[520px]"
-    :closable="!loading"
-    :close-on-click-overlay="!loading"
-    :close-on-press-escape="!loading"
-    :footer="false"
+    size="md"
+    :submitting="loading"
     @update:model-value="handleVisibleChange"
   >
     <FaAlert
@@ -179,15 +177,27 @@ watch(() => [props.visible, props.role] as const, ([visible]) => {
           placeholder="可选；清空后保存将移除原说明"
         />
       </FaFormItem>
-
-      <div class="mt-2 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <FaButton type="button" variant="outline" :disabled="loading" @click="close">
-          取消
-        </FaButton>
-        <FaButton type="submit" :loading="loading">
-          {{ isEditing ? '保存修改' : '创建角色' }}
-        </FaButton>
-      </div>
     </FaForm>
-  </FaModal>
+
+    <template #footer>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="loading"
+        @click="close"
+      >
+        取消
+      </FaButton>
+      <FaButton
+        type="button"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="loading"
+        :disabled="loading"
+        @click="submit"
+      >
+        {{ isEditing ? '保存修改' : '创建角色' }}
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>

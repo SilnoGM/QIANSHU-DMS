@@ -156,6 +156,9 @@ async function saveRole(payload:
       ? await managementApi.roles.create(payload.data)
       : await managementApi.roles.update(payload.roleId, payload.data)
     replaceRole(response.data)
+    // QsGenericModal 在提交态会拒绝程序化关闭；先释放锁并等待属性同步。
+    editorLoading.value = false
+    await nextTick()
     editorVisible.value = false
     useFaToast().success(payload.mode === 'create' ? '角色创建成功' : '角色修改成功')
   }

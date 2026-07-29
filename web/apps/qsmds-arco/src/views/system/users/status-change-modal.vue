@@ -2,6 +2,7 @@
 import type { UserDto } from '@/api/generated/types.gen'
 
 import managementApi from '@/api/modules/management'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import { getApiFailure } from './users.logic'
 
@@ -43,6 +44,9 @@ async function submit(): Promise<void> {
       : await managementApi.users.enable(props.user.id)
     useFaToast().success(isDisable.value ? '用户已禁用' : '用户已启用')
     emits('success', response.data)
+    // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
+    loading.value = false
+    await nextTick()
     emits('update:modelValue', false)
   }
   catch (error) {
@@ -74,15 +78,11 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <FaModal
+  <QsGenericModal
     :model-value="modelValue"
     :title="isDisable ? '确认禁用用户' : '确认启用用户'"
-    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[480px]"
-    :closable="!loading"
-    :close-on-click-overlay="!loading"
-    :close-on-press-escape="!loading"
-    :footer="false"
-    destroy-on-close
+    size="sm"
+    :submitting="loading"
     @update:model-value="updateVisible"
   >
     <FaAlert v-if="errorMessage" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">
@@ -101,18 +101,26 @@ watch(() => props.modelValue, (visible) => {
       禁用后，该用户的全部现有 Session 将立即撤销。
     </p>
 
-    <div class="mt-6 flex gap-3 justify-end">
-      <FaButton variant="outline" :disabled="loading" @click="close">
+    <template #footer>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="loading"
+        @click="close"
+      >
         取消
       </FaButton>
       <FaButton
+        type="button"
         :variant="isDisable ? 'destructive' : 'default'"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :loading="loading"
         :disabled="loading"
         @click="submit"
       >
         确认{{ isDisable ? '禁用' : '启用' }}
       </FaButton>
-    </div>
-  </FaModal>
+    </template>
+  </QsGenericModal>
 </template>

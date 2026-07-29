@@ -3,6 +3,7 @@ import type { FormExpose } from '@fantastic-admin/components'
 import type { UserDto } from '@/api/generated/types.gen'
 
 import managementApi from '@/api/modules/management'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import {
   clearPasswordFields,
@@ -92,6 +93,9 @@ async function submit(): Promise<void> {
     clearErrors()
     useFaToast().success('密码已设置，用户现有登录已失效。')
     emits('success', response.data)
+    // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
+    loading.value = false
+    await nextTick()
     emits('update:modelValue', false)
   }
   catch (error) {
@@ -135,15 +139,11 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <FaModal
+  <QsGenericModal
     :model-value="modelValue"
     title="设置或重置密码"
-    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[520px]"
-    :closable="!loading"
-    :close-on-click-overlay="!loading"
-    :close-on-press-escape="!loading"
-    :footer="false"
-    destroy-on-close
+    size="md"
+    :submitting="loading"
     @update:model-value="updateVisible"
   >
     <FaAlert icon="i-lucide:triangle-alert" class="mb-4 border-primary/30 bg-primary/5">
@@ -191,15 +191,27 @@ watch(() => props.modelValue, (visible) => {
           下次登录必须修改密码
         </FaCheckbox>
       </FaFormItem>
-
-      <div class="mt-2 flex gap-3 justify-end">
-        <FaButton type="button" variant="outline" :disabled="loading" @click="close">
-          取消
-        </FaButton>
-        <FaButton type="submit" :loading="loading" :disabled="loading">
-          设置密码
-        </FaButton>
-      </div>
     </FaForm>
-  </FaModal>
+
+    <template #footer>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="loading"
+        @click="close"
+      >
+        取消
+      </FaButton>
+      <FaButton
+        type="button"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="loading"
+        :disabled="loading"
+        @click="submit"
+      >
+        设置密码
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>

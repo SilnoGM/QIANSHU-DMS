@@ -2,6 +2,7 @@
 import type { RoleDto, UserDto } from '@/api/generated/types.gen'
 
 import managementApi from '@/api/modules/management'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import { canSubmitRoleAssignment, getApiFailure } from './users.logic'
 
@@ -78,6 +79,9 @@ async function submit(): Promise<void> {
     model.roleIds = []
     useFaToast().success('用户角色已更新')
     emits('success', response.data)
+    // QsGenericModal 在提交态拒绝程序化关闭，必须先让提交锁完成一次渲染。
+    loading.value = false
+    await nextTick()
     emits('update:modelValue', false)
   }
   catch (error) {
@@ -113,15 +117,11 @@ watch(() => props.modelValue, (visible) => {
 </script>
 
 <template>
-  <FaModal
+  <QsGenericModal
     :model-value="modelValue"
     title="分配角色"
-    class="max-w-[calc(100%-1.5rem)] min-h-auto sm:max-w-[560px]"
-    :closable="!loading"
-    :close-on-click-overlay="!loading"
-    :close-on-press-escape="!loading"
-    :footer="false"
-    destroy-on-close
+    size="md"
+    :submitting="loading"
     @update:model-value="updateVisible"
   >
     <FaAlert v-if="errorMessage" variant="destructive" icon="i-lucide:circle-alert" class="mb-4">
@@ -183,19 +183,27 @@ watch(() => props.modelValue, (visible) => {
           />
         </div>
       </FaFormItem>
-
-      <div class="mt-2 flex gap-3 justify-end">
-        <FaButton type="button" variant="outline" :disabled="loading" @click="close">
-          取消
-        </FaButton>
-        <FaButton
-          type="submit"
-          :loading="loading"
-          :disabled="loading || !canSubmitRoleAssignment(rolesLoading ?? false, rolesErrorMessage ?? '')"
-        >
-          替换角色集合
-        </FaButton>
-      </div>
     </FaForm>
-  </FaModal>
+
+    <template #footer>
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :disabled="loading"
+        @click="close"
+      >
+        取消
+      </FaButton>
+      <FaButton
+        type="button"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+        :loading="loading"
+        :disabled="loading || !canSubmitRoleAssignment(rolesLoading ?? false, rolesErrorMessage ?? '')"
+        @click="submit"
+      >
+        替换角色集合
+      </FaButton>
+    </template>
+  </QsGenericModal>
 </template>
