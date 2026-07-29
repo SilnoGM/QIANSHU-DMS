@@ -69,6 +69,12 @@ enum AuditEventType {
   REGION_UPDATED
   REGION_ENABLED
   REGION_DISABLED
+  CURRENCY_CREATED
+  CURRENCY_UPDATED
+  CURRENCY_ENABLED
+  CURRENCY_DISABLED
+  EXCHANGE_RATE_CREATED
+  EXCHANGE_RATE_UPDATED
   SYSTEM_BOOTSTRAP
   SYSTEM_ADMIN_RECOVERED
   AUTH_RETENTION_PURGED
@@ -257,4 +263,37 @@ model Region {
   @@index([parentId, sortOrder, normalizedName, id], map: "regions_parent_id_sort_order_name_id_idx")
   @@index([level, enabled, normalizedName, id], map: "regions_level_enabled_name_id_idx")
   @@map("regions")
+}
+
+model Currency {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique(map: "currencies_code_key") @db.VarChar(3)
+  name        String   @db.VarChar(128)
+  englishName String?  @map("english_name") @db.VarChar(128)
+  symbol      String?  @db.VarChar(16)
+  minorUnit   Int      @default(2) @map("minor_unit") @db.SmallInt
+  enabled     Boolean  @default(false)
+  sortOrder   Int      @default(0) @map("sort_order")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  exchangeRate ExchangeRate?
+
+  @@index([enabled, sortOrder, code, id], map: "currencies_enabled_sort_order_code_id_idx")
+  @@map("currencies")
+}
+
+model ExchangeRate {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  currencyId         String   @unique(map: "exchange_rates_currency_id_key") @map("currency_id") @db.Uuid
+  foreignUnitsPerCny Decimal  @map("foreign_units_per_cny") @db.Decimal(30, 12)
+  version            Int      @default(1)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  currency Currency @relation(fields: [currencyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "exchange_rates_updated_at_id_idx")
+  @@map("exchange_rates")
 }

@@ -29,6 +29,14 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'regions:update',
   'regions:enable',
   'regions:disable',
+  'currencies:read',
+  'currencies:create',
+  'currencies:update',
+  'currencies:enable',
+  'currencies:disable',
+  'exchange-rates:read',
+  'exchange-rates:create',
+  'exchange-rates:update',
 ] as const
 
 export type ManagementPermissionCode =

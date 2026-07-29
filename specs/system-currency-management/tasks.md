@@ -24,7 +24,7 @@
   - 复核分支、工作区和现有相关测试。
   - _Requirement: 1-9_
 
-- [ ] 2. 以 TDD 建立数据库模型与迁移
+- [x] 2. 以 TDD 建立数据库模型与迁移
   - 先补 schema、migration、permission、Audit 和 seed 失败测试。
   - 新增 Currency、ExchangeRate、数据库约束及跨表 trigger。
   - 导入四币种且保持零汇率。
@@ -113,3 +113,11 @@
   `listen EPERM .../tsx-501/*.pipe`。相同 TypeScript 测试通过
   `node --import tsx --test` 执行；仍会在三个测试内部再次启动 `tsx` CLI 时复现
   同一环境错误，未发现业务断言失败。
+
+### Task 2
+
+- 数据库结构与权限定向测试通过，14 tests。
+- `pnpm -C server prisma:validate`：通过。
+- `git diff --check`：通过。
+- 本阶段只验证 migration 静态契约；live migration replay 与数据库 E2E 保留到
+  Task 7 执行。
