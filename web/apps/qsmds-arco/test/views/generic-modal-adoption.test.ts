@@ -132,8 +132,27 @@ test('账户相关弹窗统一使用 QsGenericModal', () => {
   )
 })
 
-test.skip('全局布局弹窗统一使用 QsGenericModal', () => {
+test('全局布局弹窗统一使用 QsGenericModal', () => {
   layoutModalContracts.forEach(assertUsesOnlyGenericModal)
+
+  const appSettingSource = readRelativeSource(
+    '../../src/layouts/components/AppSetting/index.vue',
+  )
+  assert.match(appSettingSource, /size="xl"/u)
+  assert.match(appSettingSource, /:destroy-on-close="false"/u)
+
+  const hotkeysSource = readRelativeSource(
+    '../../src/layouts/components/Hotkeys/index.vue',
+  )
+  assert.match(hotkeysSource, /size="md"/u)
+  assert.doesNotMatch(hotkeysSource, /<template #footer>/u)
+
+  const menuSearchSource = readRelativeSource(
+    '../../src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue',
+  )
+  assert.match(menuSearchSource, /ref="searchInputRef"/u)
+  assert.match(menuSearchSource, /searchInputRef\.value\?\.focus\(\)/u)
+  assert.match(menuSearchSource, /<template v-if="appSettingsStore\.mode === 'pc'" #footer>/u)
 })
 
 test.skip('版本更新确认改为声明式 QsGenericModal', () => {

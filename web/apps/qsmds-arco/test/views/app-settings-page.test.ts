@@ -21,7 +21,12 @@ test('应用配置弹窗和独立页面复用同一个配置面板', () => {
     '../../src/views/system/application-settings/index.vue',
   )
 
-  assert.match(modalSource, /<FaModal/u)
+  assert.match(
+    modalSource,
+    /import QsGenericModal from '@\/components\/business\/QsGenericModal\/index\.vue'/u,
+  )
+  assert.match(modalSource, /<QsGenericModal/u)
+  assert.doesNotMatch(modalSource, /<FaModal/u)
   assert.match(modalSource, /<AppSettingsPanel[\s\S]*?:active="isShow"[\s\S]*?:mode="mode"/u)
   assert.match(modalSource, /<AppSettingsActions :mode="mode"/u)
   assert.match(modalSource, /global-app-setting-toggle/u)

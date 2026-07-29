@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { hotkeyBindings } from '@/hotkeys'
 import eventBus from '@/utils/eventBus'
 
@@ -82,8 +83,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <FaModal v-model="isShow" :title="t('app.layouts.hotkeys.title')" :footer="false">
-    <div class="px-4">
+  <QsGenericModal
+    v-model="isShow"
+    :title="t('app.layouts.hotkeys.title')"
+    size="md"
+  >
+    <div>
       <div class="gap-4 grid sm-grid-cols-2">
         <div v-for="group in helpGroups" :key="group.id">
           <h2 class="text-lg font-bold m-0">
@@ -102,5 +107,5 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
-  </FaModal>
+  </QsGenericModal>
 </template>

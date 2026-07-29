@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppSettingsActions from '@/components/business/AppSettingsPanel/AppSettingsActions.vue'
 import AppSettingsPanel from '@/components/business/AppSettingsPanel/index.vue'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import eventBus from '@/utils/eventBus'
 
 defineOptions({
@@ -28,18 +29,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <FaModal
+  <QsGenericModal
     v-model="isShow"
     :title="mode === 'settings' ? t('app.layouts.appSetting.titleSettings') : t('app.layouts.appSetting.titlePreferences')"
     :description="mode === 'settings' ? t('app.layouts.appSetting.description') : undefined"
+    size="xl"
     :destroy-on-close="false"
-    class="sm:max-w-4xl"
-    content-class="bg-[var(--g-main-area-bg)] transition-background-color"
   >
-    <AppSettingsPanel :active="isShow" :mode="mode" />
+    <div class="p-4 bg-[var(--g-main-area-bg)] transition-background-color -m-4 sm:p-6 sm:-m-6">
+      <AppSettingsPanel :active="isShow" :mode="mode" />
+    </div>
 
     <template #footer>
       <AppSettingsActions :mode="mode" />
     </template>
-  </FaModal>
+  </QsGenericModal>
 </template>

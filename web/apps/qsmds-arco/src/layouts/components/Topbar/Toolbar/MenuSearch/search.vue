@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { MenuRecordRaw } from '@fantastic-admin/types'
 import { match } from 'pinyin-pro'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useHotkeyBindings } from '@/hotkeys'
 import Breadcrumb from '@/layouts/components/Breadcrumb/index.vue'
 import BreadcrumbItem from '@/layouts/components/Breadcrumb/item.vue'
@@ -33,6 +34,7 @@ const searchInput = ref('')
 const sourceList = ref<listTypes[]>([])
 const actived = ref(0)
 
+const searchInputRef = useTemplateRef<HTMLInputElement>('searchInputRef')
 const searchResultRef = useTemplateRef('searchResultRef')
 const searchResultItemRef = useTemplateRef<HTMLElement[]>('searchResultItemRef')
 
@@ -75,10 +77,13 @@ useHotkeyBindings({
   },
 }, () => isShow.value)
 
-watch(() => isShow.value, (val) => {
+watch(() => isShow.value, async (val) => {
   if (val) {
     searchInput.value = ''
     actived.value = 0
+    // QsGenericModal 统一自动聚焦；显式落到搜索框，保留命令面板打开即输入的效率。
+    await nextTick()
+    searchInputRef.value?.focus()
   }
 })
 watch(() => resultList.value, () => {
@@ -193,20 +198,41 @@ function pageJump(path: listTypes['path'], query: listTypes['query'], link: list
 </script>
 
 <template>
-  <FaModal v-model="isShow" :title="t('app.layouts.topbar.toolbar.menuSearch.welcome')" :footer="appSettingsStore.mode === 'pc'" :closable="false" open-auto-focus border class="w-full lg-max-w-2xl" content-class="flex flex-col p-0 min-h-auto" header-class="p-0" footer-class="p-0">
-    <template #header>
-      <div class="flex flex-shrink-0 h-12 items-center">
-        <div class="flex-center h-full w-14">
-          <FaIcon name="i-ri:search-line" class="text-foreground/30 size-4" />
-        </div>
-        <input v-model="searchInput" :placeholder="t('app.layouts.topbar.toolbar.menuSearch.input')" class="text-base text-foreground border-0 rounded-md bg-transparent h-full w-full focus-outline-none placeholder-foreground/30" @keydown.esc.prevent="isShow = false" @keydown.up.prevent="keyUp" @keydown.down.prevent="keyDown" @keydown.enter.prevent="keyEnter">
-        <div v-if="appSettingsStore.mode === 'mobile'" class="border-s flex-center h-full w-14">
-          <FaIcon name="i-carbon:close" class="size-4" @click="isShow = false" />
-        </div>
+  <QsGenericModal
+    v-model="isShow"
+    :title="t('app.layouts.topbar.toolbar.menuSearch.welcome')"
+    size="lg"
+    :closable="false"
+  >
+    <div class="mb-4 border border-border rounded-lg bg-muted/25 flex flex-shrink-0 h-11 items-center">
+      <div class="flex-center h-full w-11">
+        <FaIcon name="i-ri:search-line" class="text-foreground/50 size-4" />
       </div>
-    </template>
-    <template #footer>
-      <div class="px-4 py-3 flex w-full justify-between">
+      <input
+        ref="searchInputRef"
+        v-model="searchInput"
+        :placeholder="t('app.layouts.topbar.toolbar.menuSearch.input')"
+        class="text-base text-foreground border-0 rounded-md bg-transparent flex-1 h-full min-w-0 focus-outline-none placeholder-foreground/40"
+        @keydown.esc.prevent="isShow = false"
+        @keydown.up.prevent="keyUp"
+        @keydown.down.prevent="keyDown"
+        @keydown.enter.prevent="keyEnter"
+      >
+      <FaButton
+        v-if="appSettingsStore.mode === 'mobile'"
+        type="button"
+        variant="ghost"
+        size="icon"
+        class="border-s rounded-none h-full w-11"
+        aria-label="关闭菜单搜索"
+        @click="isShow = false"
+      >
+        <FaIcon name="i-carbon:close" class="size-4" />
+      </FaButton>
+    </div>
+
+    <template v-if="appSettingsStore.mode === 'pc'" #footer>
+      <div class="flex w-full items-center justify-between">
         <div class="flex gap-8">
           <div class="text-xs inline-flex gap-1 items-center">
             <FaKbd>⏎</FaKbd>
@@ -228,7 +254,8 @@ function pageJump(path: listTypes['path'], query: listTypes['query'], link: list
         </div>
       </div>
     </template>
-    <FaScrollArea ref="searchResultRef">
+
+    <FaScrollArea ref="searchResultRef" class="h-[min(50dvh,28rem)]">
       <template v-if="resultList.length > 0">
         <div v-for="(item, index) in resultList" ref="searchResultItemRef" :key="item.path" class="p-4" :data-index="index" @click="pageJump(item.path, item.query, item.link)" @mouseover="actived = index">
           <a class="border rounded-lg flex cursor-pointer items-center" :class="{ '-mt-4': index !== 0, 'bg-accent border-primary shadow-[0_0_0_1px_oklch(var(--primary))]': index === actived, 'op-50': index !== actived }">
@@ -263,5 +290,5 @@ function pageJump(path: listTypes['path'], query: listTypes['query'], link: list
         </div>
       </template>
     </FaScrollArea>
-  </FaModal>
+  </QsGenericModal>
 </template>
