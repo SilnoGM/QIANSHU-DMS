@@ -5,7 +5,8 @@ export const MAX_MONEY_PRECISION = 100
 
 export type MoneyAmount = string | null
 export type MoneyValidationCode
-  = | 'INVALID_FORMAT'
+  = | 'CURRENCY_REQUIRED'
+    | 'INVALID_FORMAT'
     | 'PRECISION_EXCEEDED'
     | 'NEGATIVE_NOT_ALLOWED'
     | 'BELOW_MIN'

@@ -539,7 +539,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(managedRole?.name, editedRoleName)
 
   /*
-   * 地区权限是首批可分配的业务权限，既要能勾选，也不能让普通角色越权勾选
+   * 地区、货币和当前汇率权限均可分配给普通角色，同时不能让普通角色越权勾选
    * users/roles/audit 等系统专用权限。保存后以真实 API 结果确认完整替换已落库。
    */
   const permissionsResponse = await page.evaluate(
@@ -596,6 +596,14 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(permissionDrawerState.showsUsersRead, true)
   assert.ok(permissionDrawerState.optionCount > 0)
   assert.deepEqual(permissionDrawerState.enabledPermissionCodes, [
+    'currencies:create',
+    'currencies:disable',
+    'currencies:enable',
+    'currencies:read',
+    'currencies:update',
+    'exchange-rates:create',
+    'exchange-rates:read',
+    'exchange-rates:update',
     'regions:create',
     'regions:disable',
     'regions:enable',

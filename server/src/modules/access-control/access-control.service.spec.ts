@@ -48,8 +48,16 @@ describe('permission constants', () => {
       'regions:update',
       'regions:enable',
       'regions:disable',
+      'currencies:read',
+      'currencies:create',
+      'currencies:update',
+      'currencies:enable',
+      'currencies:disable',
+      'exchange-rates:read',
+      'exchange-rates:create',
+      'exchange-rates:update',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 17)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 25)
   })
 })
 

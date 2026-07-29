@@ -1,30 +1,71 @@
-import type { CurrencyCode } from '../AmountDisplay/format'
-import { CURRENCY_SYMBOLS } from '../AmountDisplay/format'
+import type { CurrencyDescriptor } from '../currency'
+import { isCurrencyMinorUnit } from '../currency'
 
 export interface MoneyCurrencyOption {
-  label: CurrencyCode
-  value: CurrencyCode
+  disabled?: boolean
+  label: string
+  value: string
 }
 
-export const DEFAULT_MONEY_CURRENCY: CurrencyCode = 'CNY'
+/**
+ * FaSelect 在 modelValue 找不到对应选项时会展示第一项。以不可选择的哨兵项承接
+ * null，确保“尚未选择币种”不会在视觉上被误报为第一个真实币种。
+ */
+export const EMPTY_MONEY_CURRENCY_VALUE = '__money_input_empty_currency__'
 
 /**
- * 币种集合只从 AmountDisplay 的符号映射派生，避免金额输入与金额展示分别维护枚举。
- * 选项标签使用稳定技术代码，确保紧凑下拉在中文、英文界面中都不会发生宽度跳变。
+ * 仅启用币种可用于新选择；当前值即使已经停用也必须保留为 disabled 选项，
+ * 以便历史数据真实回显。未知当前值同样保留，但不得伪装成可选择币种。
  */
-export const MONEY_CURRENCY_OPTIONS: MoneyCurrencyOption[]
-  = (Object.keys(CURRENCY_SYMBOLS) as CurrencyCode[]).map(currency => ({
-    label: currency,
-    value: currency,
-  }))
+export function createMoneyCurrencyOptions(
+  currencies: readonly CurrencyDescriptor[],
+  currentCurrency: null | string,
+): MoneyCurrencyOption[] {
+  const options: MoneyCurrencyOption[] = [{
+    disabled: true,
+    label: '请选择币种',
+    value: EMPTY_MONEY_CURRENCY_VALUE,
+  }]
+  const seenCodes = new Set<string>()
+  let currentCurrencyFound = false
 
-/**
- * FaSelect 的公共值类型比 CurrencyCode 更宽。运行时只接收当前展示组件已支持的
- * 字符串币种，避免 undefined、数字或未来未知代码污染金额表单模型。
- */
-export function isMoneyCurrencyCode(value: unknown): value is CurrencyCode {
-  return typeof value === 'string'
-    && Object.hasOwn(CURRENCY_SYMBOLS, value)
+  for (const currency of currencies) {
+    if (
+      seenCodes.has(currency.code)
+      || !isCurrencyMinorUnit(currency.minorUnit)
+    ) {
+      continue
+    }
+
+    seenCodes.add(currency.code)
+    if (currency.code === currentCurrency) {
+      currentCurrencyFound = true
+    }
+
+    if (currency.enabled) {
+      options.push({
+        label: currency.code,
+        value: currency.code,
+      })
+    }
+    else if (currency.code === currentCurrency) {
+      options.push({
+        disabled: true,
+        label: `${currency.code}（已停用）`,
+        value: currency.code,
+      })
+    }
+  }
+
+  if (currentCurrency && !currentCurrencyFound) {
+    options.push({
+      disabled: true,
+      label: `${currentCurrency}（未知币种）`,
+      value: currentCurrency,
+    })
+  }
+
+  return options
 }
 
 /**
@@ -32,8 +73,8 @@ export function isMoneyCurrencyCode(value: unknown): value is CurrencyCode {
  * 由调用方分别提供空状态或“混合币种”提示，禁止借用首行币种伪装汇总结果。
  */
 export function resolveCommonMoneyCurrency(
-  currencies: readonly CurrencyCode[],
-): CurrencyCode | null {
+  currencies: readonly (null | string)[],
+): string | null {
   const firstCurrency = currencies[0]
   if (!firstCurrency) {
     return null

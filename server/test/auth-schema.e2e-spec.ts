@@ -4,6 +4,14 @@ import { Client } from 'pg'
 
 const MANAGEMENT_PERMISSION_CODES = [
   'audit:read',
+  'currencies:create',
+  'currencies:disable',
+  'currencies:enable',
+  'currencies:read',
+  'currencies:update',
+  'exchange-rates:create',
+  'exchange-rates:read',
+  'exchange-rates:update',
   'regions:create',
   'regions:disable',
   'regions:enable',

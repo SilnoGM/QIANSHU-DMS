@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { CurrencyCode } from '@/components/base/AmountDisplay/format'
 import type {
   MoneyAmount,
   MoneyValidationResult,
 } from '@/components/base/MoneyInput/logic'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import { findCurrencyDescriptor } from '@/components/base/currency'
 import { resolveCommonMoneyCurrency } from '@/components/base/MoneyInput/currency'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import {
@@ -12,16 +12,17 @@ import {
   sumMoneyValues,
   validateMoneyString,
 } from '@/components/base/MoneyInput/logic'
+import { SHOWCASE_CURRENCIES } from '../../shared/currency.fixture'
 
 interface SettlementLine {
   amount: MoneyAmount
-  currency: CurrencyCode
+  currency: null | string
   id: string
   label: string
 }
 
 const amount = ref<MoneyAmount>('12846.37')
-const currency = ref<CurrencyCode>('CNY')
+const currency = ref<string | null>('CNY')
 const lines = reactive<SettlementLine[]>([
   {
     amount: '12846.37',
@@ -43,14 +44,29 @@ const lines = reactive<SettlementLine[]>([
   },
 ])
 
-const amountValidation = computed<MoneyValidationResult>(() => validateMoneyString(
-  amount.value,
-  {
-    max: '9999999999999999.99',
-    min: '0.00',
-    precision: 2,
-  },
+const currentCurrency = computed(() => findCurrencyDescriptor(
+  SHOWCASE_CURRENCIES,
+  currency.value,
 ))
+const amountValidation = computed<MoneyValidationResult>(() => {
+  if (!currentCurrency.value) {
+    return {
+      code: 'CURRENCY_REQUIRED',
+      message: '请选择有效货币',
+      normalizedValue: null,
+      valid: false,
+    }
+  }
+
+  return validateMoneyString(
+    amount.value,
+    {
+      max: '9999999999999999',
+      min: '0',
+      precision: currentCurrency.value.minorUnit,
+    },
+  )
+})
 const normalizedAmount = computed(() => (
   amountValidation.value.valid
     ? amountValidation.value.normalizedValue
@@ -59,8 +75,12 @@ const normalizedAmount = computed(() => (
 const summaryCurrency = computed(() => (
   resolveCommonMoneyCurrency(lines.map(line => line.currency))
 ))
+const summaryCurrencyDescriptor = computed(() => findCurrencyDescriptor(
+  SHOWCASE_CURRENCIES,
+  summaryCurrency.value,
+))
 const summary = computed(() => {
-  if (!summaryCurrency.value) {
+  if (!summaryCurrency.value || !summaryCurrencyDescriptor.value) {
     return {
       error: '不同币种不能直接汇总，请先统一币种或完成业务汇率换算',
       value: null,
@@ -72,7 +92,7 @@ const summary = computed(() => {
       error: '',
       value: sumMoneyValues(
         lines.map(line => line.amount),
-        { precision: 2 },
+        { precision: summaryCurrencyDescriptor.value.minorUnit },
       ),
     }
   }
@@ -85,6 +105,21 @@ const summary = computed(() => {
     }
   }
 })
+
+function resolveLineDisplayValue(line: SettlementLine): MoneyAmount {
+  const descriptor = findCurrencyDescriptor(
+    SHOWCASE_CURRENCIES,
+    line.currency,
+  )
+  if (!descriptor) {
+    return null
+  }
+
+  const result = validateMoneyString(line.amount, {
+    precision: descriptor.minorUnit,
+  })
+  return result.valid ? result.normalizedValue : null
+}
 </script>
 
 <template>
@@ -100,7 +135,7 @@ const summary = computed(() => {
             精确金额录入
           </h3>
           <p class="text-sm text-muted-foreground leading-6 m-0 mt-2 max-w-3xl">
-            输入值始终使用十进制字符串；失焦后补齐两位小数，并直接交给金额显示与 Decimal 列汇总。
+            输入值始终使用十进制字符串；失焦后按币种 minorUnit 补齐小数，并直接交给金额显示与 Decimal 列汇总。
           </p>
         </div>
         <FaTag variant="secondary">
@@ -122,8 +157,9 @@ const summary = computed(() => {
             v-model:currency="currency"
             aria-describedby="money-input-description money-input-feedback"
             class="mt-3"
-            max="9999999999999999.99"
-            min="0.00"
+            :currencies="SHOWCASE_CURRENCIES"
+            max="9999999999999999"
+            min="0"
           />
           <p
             id="money-input-feedback"
@@ -144,10 +180,13 @@ const summary = computed(() => {
           <div class="mt-4 flex gap-3 items-baseline justify-between">
             <span class="text-xs text-muted-foreground">AmountDisplay</span>
             <AmountDisplay
+              v-if="currency"
               :value="normalizedAmount"
               :currency="currency"
+              :currencies="SHOWCASE_CURRENCIES"
               class="text-lg"
             />
+            <span v-else class="text-lg text-muted-foreground font-mono">—</span>
           </div>
           <dl class="text-xs m-0 mt-5 space-y-3">
             <div class="pb-3 border-b border-border">
@@ -198,10 +237,12 @@ const summary = computed(() => {
               :id="`money-line-${line.id}`"
               v-model="line.amount"
               v-model:currency="line.currency"
+              :currencies="SHOWCASE_CURRENCIES"
             />
             <AmountDisplay
-              :value="validateMoneyString(line.amount).valid ? line.amount : null"
-              :currency="line.currency"
+              :value="resolveLineDisplayValue(line)"
+              :currency="line.currency ?? ''"
+              :currencies="SHOWCASE_CURRENCIES"
             />
           </div>
         </div>
@@ -219,6 +260,7 @@ const summary = computed(() => {
             v-if="summaryCurrency"
             :value="summary.value"
             :currency="summaryCurrency"
+            :currencies="SHOWCASE_CURRENCIES"
             class="text-xl"
           />
           <span

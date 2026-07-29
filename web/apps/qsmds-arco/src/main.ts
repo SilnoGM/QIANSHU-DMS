@@ -8,6 +8,12 @@ import {
   installDefaultRegionSelectorProvider,
   regionSelectorProviderKey,
 } from '@/components/business/QsRegionSelector/provider'
+import {
+  installDefaultCurrencyCatalogProvider,
+} from '@/currency-catalog/default-provider'
+import {
+  currencyCatalogProviderKey,
+} from '@/currency-catalog/injection'
 // 加载 iconify 图标
 import { downloadAndInstall } from '@/iconify'
 import icons from '@/iconify/index.json'
@@ -86,4 +92,28 @@ const regionSelectorController = installDefaultRegionSelectorProvider({
     : name => new BroadcastChannel(name),
 })
 app.provide(regionSelectorProviderKey, regionSelectorController.provider)
+
+/*
+ * 货币目录与地区目录采用同一应用生命周期和身份隔离策略。动态装载 API 可以避免
+ * Client -> Account Store -> Router 与启动入口形成同步求值环；金额组件只消费注入
+ * 的中立目录，不直接读取 generated DTO 或维护本地静态币种。
+ */
+const currencyCatalogController = installDefaultCurrencyCatalogProvider({
+  loader: async (signal) => {
+    const { default: currenciesApi } = await import('@/api/modules/currencies')
+    return currenciesApi.catalog
+      .list(signal)
+      .then(response => response.data)
+  },
+  getAuthSignal: () => appAccountStore.getAuthSignal(),
+  getIdentity: () => ({
+    authEpoch: appAccountStore.authEpoch,
+    userId: appAccountStore.authContext?.user.id ?? null,
+  }),
+  now: () => Date.now(),
+  channelFactory: typeof BroadcastChannel === 'undefined'
+    ? undefined
+    : name => new BroadcastChannel(name),
+})
+app.provide(currencyCatalogProviderKey, currencyCatalogController.provider)
 app.mount('#app')

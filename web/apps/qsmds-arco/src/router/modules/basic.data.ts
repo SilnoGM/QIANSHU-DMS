@@ -30,19 +30,30 @@ const routes: RouteRecordRaw = {
     {
       path: 'currencies',
       name: 'systemBasicDataCurrencies',
-      component: () => import('@/views/system/basic-data/currencies/index.vue'),
+      component: () => import(
+        '@/views/system/basic-data/currency-exchange-rate/index.vue'
+      ),
       meta: {
-        title: '货币管理',
+        title: '货币汇率',
         icon: 'i-lucide:coins',
+        auth: ['currencies:read', 'exchange-rates:read'],
+        tabMerge: 'routeName',
       },
     },
     {
       path: 'exchange-rates',
       name: 'systemBasicDataExchangeRates',
-      component: () => import('@/views/system/basic-data/exchange-rates/index.vue'),
+      redirect: {
+        name: 'systemBasicDataCurrencies',
+        query: {
+          tab: 'exchange-rates',
+        },
+      },
       meta: {
-        title: '汇率管理',
-        icon: 'i-lucide:arrow-left-right',
+        title: '当前汇率',
+        auth: 'exchange-rates:read',
+        activeMenu: '/system/basic-data/currencies',
+        menu: false,
       },
     },
     {

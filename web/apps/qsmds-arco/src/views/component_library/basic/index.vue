@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { CurrencyAmountValue, CurrencyCode } from '@/components/base/AmountDisplay/format'
+import type { CurrencyAmountValue } from '@/components/base/AmountDisplay/format'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import ComponentCatalogPage from '../shared/ComponentCatalogPage.vue'
+import { SHOWCASE_CURRENCIES } from '../shared/currency.fixture'
 
 defineOptions({ name: 'ComponentLibraryAmountDisplay' })
 
@@ -24,7 +25,7 @@ const principles = [
 ] as const
 
 interface CurrencyExample {
-  currency: CurrencyCode
+  currency: string
   description: string
   label: string
   value: CurrencyAmountValue
@@ -38,30 +39,30 @@ const currencyExamples: readonly CurrencyExample[] = [
     value: '12846.37',
   },
   {
-    currency: 'TWD',
-    description: '台币渠道金额',
-    label: '台币',
-    value: '384590',
+    currency: 'JPY',
+    description: 'minorUnit=0，half-up 后不显示小数',
+    label: '日元',
+    value: '384590.5',
   },
   {
-    currency: 'MYR',
-    description: '马来西亚林吉特金额',
-    label: '林吉特',
+    currency: 'BHD',
+    description: 'minorUnit=3，固定保留三位小数',
+    label: '巴林第纳尔',
     value: '27518.4',
   },
   {
-    currency: 'USD',
-    description: '美元调整金额',
-    label: '美元',
-    value: '-864.72',
+    currency: 'CLF',
+    description: 'minorUnit=4，第四位执行 half-up',
+    label: '智利记账单位',
+    value: '-864.72345',
   },
 ]
 
 const stateExamples: readonly CurrencyExample[] = [
-  { currency: 'CNY', description: '固定补齐两位小数', label: '零值', value: 0 },
+  { currency: 'CNY', description: '按描述符补齐两位小数', label: '零值', value: 0 },
   { currency: 'USD', description: '负号位于货币符号之前', label: '负数', value: '-4287.65' },
-  { currency: 'TWD', description: '字符串输入保持安全整数外精度', label: '大额', value: '9007199254740993.21' },
-  { currency: 'MYR', description: '第三位小数执行 half-up', label: '舍入', value: '128.345' },
+  { currency: 'TWD', description: '停用币种仍可真实展示历史值', label: '已停用', value: '9007199254740993.21' },
+  { currency: 'XYZ', description: '未知币种保留原始小数和代码', label: '未知', value: '128.3456' },
   { currency: 'CNY', description: '空值统一显示占位符', label: '空值', value: null },
 ]
 </script>
@@ -71,8 +72,8 @@ const stateExamples: readonly CurrencyExample[] = [
     title="金额显示"
     description="独立验收 AmountDisplay 的多币种、精度、舍入和空值边界。"
     section-label="AmountDisplay"
-    headline="稳定显示四种结算币种"
-    summary="金额组件只负责格式化展示，不读取业务 Store 或调用 API。精确金额优先传入十进制字符串，统一输出币种符号、千分位和两位小数。"
+    headline="按货币资料动态显示金额"
+    summary="金额组件只负责格式化展示，不读取业务 Store 或调用 API。精确金额优先传入十进制字符串，符号与小数位由调用方描述符决定。"
     route-path="/component-library/basic/amount-display"
     icon="i-lucide:badge-dollar-sign"
     :principles="principles"
@@ -91,7 +92,7 @@ const stateExamples: readonly CurrencyExample[] = [
               金额格式化显示
             </h3>
             <p class="text-sm text-muted-foreground leading-6 m-0 mt-2 max-w-2xl">
-              统一币种符号、千分位和两位小数。精确金额优先传入十进制字符串，组件只负责展示，不读取业务状态。
+              统一币种符号、千分位和动态 minorUnit。精确金额优先传入十进制字符串，组件只负责展示，不读取业务状态。
             </p>
           </div>
           <FaTag variant="secondary">
@@ -118,6 +119,7 @@ const stateExamples: readonly CurrencyExample[] = [
               <AmountDisplay
                 :value="example.value"
                 :currency="example.currency"
+                :currencies="SHOWCASE_CURRENCIES"
                 class="text-xl sm-text-2xl"
               />
             </article>
@@ -141,7 +143,7 @@ const stateExamples: readonly CurrencyExample[] = [
                   currency
                 </dt>
                 <dd class="text-xs font-mono m-0 mt-1 break-all">
-                  CNY | TWD | MYR | USD
+                  string
                 </dd>
               </div>
               <div class="pb-4 border-b border-border">
@@ -149,7 +151,7 @@ const stateExamples: readonly CurrencyExample[] = [
                   小数位与舍入
                 </dt>
                 <dd class="text-xs leading-5 m-0 mt-1">
-                  固定两位，十进制 half-up
+                  descriptor.minorUnit，十进制 half-up
                 </dd>
               </div>
               <div>
@@ -188,6 +190,7 @@ const stateExamples: readonly CurrencyExample[] = [
               <AmountDisplay
                 :value="example.value"
                 :currency="example.currency"
+                :currencies="SHOWCASE_CURRENCIES"
                 class="text-base"
               />
             </div>

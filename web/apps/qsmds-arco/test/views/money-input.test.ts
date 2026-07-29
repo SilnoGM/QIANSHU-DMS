@@ -1,12 +1,16 @@
+import type { CurrencyDescriptor } from '../../src/components/base/currency'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 金额输入组件的纯逻辑与源码契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
 import {
-  DEFAULT_MONEY_CURRENCY,
-  isMoneyCurrencyCode,
-  MONEY_CURRENCY_OPTIONS,
+  findCurrencyDescriptor,
+  isCurrencyMinorUnit,
+} from '../../src/components/base/currency'
+import {
+  createMoneyCurrencyOptions,
+  EMPTY_MONEY_CURRENCY_VALUE,
   resolveCommonMoneyCurrency,
 } from '../../src/components/base/MoneyInput/currency'
 import {
@@ -19,6 +23,37 @@ import {
 function readRelativeSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
+
+const TEST_CURRENCIES = [
+  {
+    code: 'CNY',
+    enabled: true,
+    minorUnit: 2,
+    name: '人民币',
+    symbol: '¥',
+  },
+  {
+    code: 'JPY',
+    enabled: true,
+    minorUnit: 0,
+    name: '日元',
+    symbol: 'JP¥',
+  },
+  {
+    code: 'BHD',
+    enabled: true,
+    minorUnit: 3,
+    name: '巴林第纳尔',
+    symbol: 'BD',
+  },
+  {
+    code: 'TWD',
+    enabled: false,
+    minorUnit: 2,
+    name: '新台币',
+    symbol: 'NT$',
+  },
+] as const satisfies readonly CurrencyDescriptor[]
 
 test('严格金额字符串可规范化为空值或固定精度十进制文本', () => {
   assert.deepEqual(validateMoneyString(null), {
@@ -40,21 +75,37 @@ test('严格金额字符串可规范化为空值或固定精度十进制文本',
   assert.equal(normalizeMoneyString('-0.00', { allowNegative: true }), '0.00')
 })
 
-test('金额输入默认使用 CNY，并从金额展示真相源派生四个可选币种', () => {
-  assert.equal(DEFAULT_MONEY_CURRENCY, 'CNY')
-  assert.deepEqual(MONEY_CURRENCY_OPTIONS, [
+test('币种描述符支持 0 到 4 位小数，并按调用方选项动态解析', () => {
+  for (const minorUnit of [0, 1, 2, 3, 4]) {
+    assert.equal(isCurrencyMinorUnit(minorUnit), true)
+  }
+  for (const minorUnit of [-1, 5, 2.5, '2', null]) {
+    assert.equal(isCurrencyMinorUnit(minorUnit), false)
+  }
+
+  assert.deepEqual(findCurrencyDescriptor(TEST_CURRENCIES, 'JPY'), TEST_CURRENCIES[1])
+  assert.equal(findCurrencyDescriptor(TEST_CURRENCIES, 'USD'), null)
+  assert.equal(findCurrencyDescriptor(TEST_CURRENCIES, null), null)
+})
+
+test('币种选项由 props 描述符生成，并保留当前停用或未知币种用于真实回显', () => {
+  assert.deepEqual(createMoneyCurrencyOptions(TEST_CURRENCIES, 'TWD'), [
+    { disabled: true, label: '请选择币种', value: EMPTY_MONEY_CURRENCY_VALUE },
     { label: 'CNY', value: 'CNY' },
-    { label: 'TWD', value: 'TWD' },
-    { label: 'MYR', value: 'MYR' },
-    { label: 'USD', value: 'USD' },
+    { label: 'JPY', value: 'JPY' },
+    { label: 'BHD', value: 'BHD' },
+    { disabled: true, label: 'TWD（已停用）', value: 'TWD' },
   ])
 
-  for (const currency of ['CNY', 'TWD', 'MYR', 'USD']) {
-    assert.equal(isMoneyCurrencyCode(currency), true)
-  }
-  for (const currency of [undefined, null, '', 'EUR', 12]) {
-    assert.equal(isMoneyCurrencyCode(currency), false)
-  }
+  assert.deepEqual(createMoneyCurrencyOptions(TEST_CURRENCIES, 'USD').at(-1), {
+    disabled: true,
+    label: 'USD（未知币种）',
+    value: 'USD',
+  })
+  assert.equal(
+    createMoneyCurrencyOptions(TEST_CURRENCIES, null)[0]?.value,
+    EMPTY_MONEY_CURRENCY_VALUE,
+  )
 })
 
 test('币种汇总只接受同一币种，空集合与混合币种都不伪造汇总币种', () => {
@@ -206,13 +257,14 @@ test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍
   assert.match(source, /defineModel<MoneyAmount>/u)
   assert.match(
     source,
-    /defineModel<CurrencyCode>\('currency', \{[\s\S]*?default: DEFAULT_MONEY_CURRENCY/u,
+    /defineModel<string \| null>\('currency', \{[\s\S]*?default: null/u,
   )
+  assert.match(source, /currencies: readonly CurrencyDescriptor\[\]/u)
+  assert.match(source, /currentCurrency[\s\S]*?minorUnit/u)
   assert.match(source, /<FaInput/u)
   assert.match(source, /<FaSelect/u)
-  assert.match(source, /:model-value="currency"/u)
-  assert.match(source, /:options="MONEY_CURRENCY_OPTIONS"/u)
-  assert.match(source, /:disabled="disabled \|\| readonly"/u)
+  assert.match(source, /:options="currencyOptions"/u)
+  assert.match(source, /:disabled="disabled \|\| readonly \|\| !hasEnabledCurrencies"/u)
   assert.match(source, /@update:model-value="handleCurrencyUpdate"/u)
   assert.match(source, /role="group"[\s\S]*?aria-label="币种选择"/u)
   assert.match(source, /inputmode="decimal"/u)
@@ -224,13 +276,17 @@ test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍
   assert.match(source, /\bfont-mono\b/u)
   assert.match(source, /\btabular-nums\b/u)
   assert.match(source, /\btext-right\b/u)
-  assert.match(source, /CURRENCY_SYMBOLS\[currency\]/u)
-  assert.match(source, /isMoneyCurrencyCode/u)
+  assert.match(source, /currentCurrency\?\.symbol \?\? ''/u)
   assert.match(source, /result\.valid && !props\.readonly/u)
+  assert.match(
+    source,
+    /function handleCurrencyUpdate[\s\S]*?currency\.value = nextCurrency\.code[\s\S]*?\n\}/u,
+  )
   assert.doesNotMatch(
     source,
-    /defineProps<\{[\s\S]*?\bcurrency: CurrencyCode/u,
+    /CurrencyCode|CURRENCY_SYMBOLS|DEFAULT_MONEY_CURRENCY|MONEY_CURRENCY_OPTIONS/u,
   )
+  assert.doesNotMatch(source, /\bprecision\?: number/u)
   assert.doesNotMatch(source, /type="number"|FaNumberField|@\/api|useApp\w*Store/u)
 
   // FaInput 必须只把 id、aria-* 与原生事件下传给真实 input，不能再自动复制到 InputGroup。
@@ -259,11 +315,13 @@ test('金额输入独立页面串联输入、显示、严格校验与精确汇�
 
   assert.match(showcaseSource, /import MoneyInput from '@\/components\/base\/MoneyInput\/index\.vue'/u)
   assert.match(showcaseSource, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
+  assert.match(showcaseSource, /SHOWCASE_CURRENCIES/u)
   assert.match(showcaseSource, /sumMoneyValues/u)
-  assert.match(showcaseSource, /const currency = ref<CurrencyCode>\('CNY'\)/u)
+  assert.match(showcaseSource, /const currency = ref<string \| null>\('CNY'\)/u)
   assert.match(showcaseSource, /v-model:currency="currency"/u)
   assert.match(showcaseSource, /v-model:currency="line\.currency"/u)
   assert.match(showcaseSource, /:currency="currency"/u)
+  assert.match(showcaseSource, /:currencies="SHOWCASE_CURRENCIES"/u)
   assert.match(showcaseSource, /resolveCommonMoneyCurrency/u)
   assert.match(showcaseSource, /不同币种不能直接汇总/u)
   assert.match(showcaseSource, /summaryCurrency \?\? '混合币种'/u)
@@ -276,7 +334,10 @@ test('金额输入独立页面串联输入、显示、严格校验与精确汇�
   assert.match(readmeSource, /decimal\.js/u)
   assert.match(readmeSource, /INVALID_FORMAT/u)
   assert.match(readmeSource, /v-model:currency/u)
-  assert.match(readmeSource, /默认.*CNY/u)
+  assert.match(readmeSource, /CurrencyDescriptor/u)
+  assert.match(readmeSource, /minorUnit/u)
+  assert.match(readmeSource, /当前停用币种/u)
   assert.match(readmeSource, /不同币种/u)
   assert.match(readmeSource, /MoneyInput[\s\S]*AmountDisplay[\s\S]*sumMoneyValues/u)
+  assert.doesNotMatch(readmeSource, /默认.*CNY/u)
 })
