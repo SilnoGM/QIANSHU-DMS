@@ -31,19 +31,24 @@ async function handleReset() {
 </script>
 
 <template>
-  <div v-if="isSupported" class="w-full">
+  <!-- 桌面端横向压缩 Footer 高度；窄屏仍保留 44px 全宽触控按钮。 -->
+  <div
+    v-if="isSupported"
+    class="flex flex-col gap-3 w-full sm:flex-row sm:items-center"
+    :class="mode === 'settings' ? 'sm:justify-between' : 'sm:justify-end'"
+  >
     <template v-if="mode === 'settings'">
-      <i18n-t class="text-sm/6 c-rose mb-2 px-4 py-2 text-center rounded-lg bg-rose/20" keypath="app.layouts.appSetting.warning" tag="div">
+      <i18n-t class="text-sm/6 text-muted-foreground min-w-0 sm:flex-1" keypath="app.layouts.appSetting.warning" tag="div">
         <template #path>
-          <code class="text-sm font-mono font-semibold px-[0.3rem] py-[0.2rem] rounded bg-muted relative">src/settings.ts</code>
+          <code class="text-xs font-mono font-semibold px-1 py-0.5 rounded bg-muted relative">src/settings.ts</code>
         </template>
       </i18n-t>
-      <FaButton class="w-full" @click="handleCopy">
+      <FaButton class="shrink-0 min-h-11 w-full sm:min-h-9 sm:w-auto" @click="handleCopy">
         <FaIcon :name="copied ? 'i-tabler:clipboard-check' : 'i-tabler:clipboard'" class="size-5" />
         {{ t('app.layouts.appSetting.copy') }}
       </FaButton>
     </template>
-    <FaButton v-else class="w-full" @click="handleReset">
+    <FaButton v-else class="shrink-0 min-h-11 w-full sm:min-h-9 sm:w-auto" @click="handleReset">
       {{ t('app.layouts.appSetting.reset') }}
     </FaButton>
   </div>

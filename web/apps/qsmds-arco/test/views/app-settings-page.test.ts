@@ -53,6 +53,8 @@ test('共享配置面板保留临时配置、复制配置和多实例会话契�
   assert.match(actionsSource, /src\/settings\.ts/u)
   assert.match(actionsSource, /app\.layouts\.appSetting\.warning/u)
   assert.match(actionsSource, /app\.layouts\.appSetting\.copy/u)
+  assert.match(actionsSource, /flex flex-col gap-3 w-full sm:flex-row/u)
+  assert.match(actionsSource, /shrink-0 min-h-11 w-full sm:min-h-9 sm:w-auto/u)
   assert.match(panelSource, /activeSettingsPanels/u)
   assert.match(panelSource, /immediateUpdate: activeSettingsPanels\.size === 0/u)
 

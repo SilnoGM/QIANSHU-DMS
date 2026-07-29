@@ -202,6 +202,7 @@ function pageJump(path: listTypes['path'], query: listTypes['query'], link: list
     v-model="isShow"
     :title="t('app.layouts.topbar.toolbar.menuSearch.welcome')"
     size="lg"
+    class="menu-search-modal"
     :closable="false"
   >
     <div class="mb-4 border border-border rounded-lg bg-muted/25 flex flex-shrink-0 h-11 items-center">
@@ -292,3 +293,14 @@ function pageJump(path: listTypes['path'], query: listTypes['query'], link: list
     </FaScrollArea>
   </QsGenericModal>
 </template>
+
+<style scoped>
+/*
+ * Vue 会保留带 v-if 的命名插槽函数；移动端虽然不渲染快捷键内容，
+ * QsGenericModal 仍会收到一个空 Footer。隐藏本调用方的外层 Footer，
+ * 同时移除其内边距和顶部分隔线，不改变通用弹窗的公共契约。
+ */
+:global(.menu-search-modal [data-slot="dialog-footer"]:has(> [data-slot="qs-generic-modal-footer"]:empty)) {
+  display: none;
+}
+</style>

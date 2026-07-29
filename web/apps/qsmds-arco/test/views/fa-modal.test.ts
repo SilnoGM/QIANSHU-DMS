@@ -116,14 +116,23 @@ test('FaModal 确定关闭路径在守卫异常后恢复内部 loading', () => {
   assert.match(confirmSource, /isConfirmButtonLoading\.value = false/u)
 })
 
-test('正式自定义 Header 调用方为隐藏标题提供非空文案', () => {
+test('菜单搜索通过 QsGenericModal 提供可访问标题并恢复搜索框首焦点', () => {
   const source = readRelativeSource(
     '../../src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue',
   )
-  const modalTag = source.slice(
-    source.indexOf('<FaModal'),
-    source.indexOf('>', source.indexOf('<FaModal')) + 1,
-  )
 
-  assert.match(modalTag, /:title=/u)
+  assert.match(
+    source,
+    /import QsGenericModal from '@\/components\/business\/QsGenericModal\/index\.vue'/u,
+  )
+  assert.match(source, /<QsGenericModal[\s\S]+?:title=/u)
+  assert.match(source, /<QsGenericModal[\s\S]+?class="menu-search-modal"/u)
+  assert.match(source, /ref="searchInputRef"/u)
+  assert.match(source, /searchInputRef\.value\?\.focus\(\)/u)
+  assert.match(
+    source,
+    /\[data-slot="dialog-footer"\]:has\(> \[data-slot="qs-generic-modal-footer"\]:empty\)/u,
+  )
+  assert.match(source, /display:\s*none/u)
+  assert.doesNotMatch(source, /<FaModal\b/u)
 })
