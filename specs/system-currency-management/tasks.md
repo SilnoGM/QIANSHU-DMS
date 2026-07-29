@@ -51,7 +51,7 @@
   - 允许停用外币配置汇率，禁止 CNY 与重复当前行。
   - _Requirement: 3, 4, 8_
 
-- [ ] 7. 完成 Server E2E 与 OpenAPI
+- [x] 7. 完成 Server E2E 与 OpenAPI
   - 验证 migration replay、seed、约束、并发和 Audit 回滚。
   - 生成 OpenAPI 并同步 Web 契约。
   - _Requirement: 1-8_
@@ -137,3 +137,17 @@
 - 服务端完整 TypeScript、ESLint、Prisma validate 与 `git diff --check`：通过。
 - Catalog 返回全量货币；管理读取和八项写权限分离；写事务固定
   Currency → ExchangeRate 锁序，并以 `expectedVersion` 与同事务 Audit 收口。
+
+### Task 7
+
+- `currency-schema.e2e-spec.ts`：通过，临时 PostgreSQL schema 完整重放，
+  1 test。
+- `currency-management-api.e2e-spec.ts`：通过，Catalog 权限、完整生命周期、
+  并发版本冲突与 Audit 失败回滚共 2 tests。
+- 本地开发库 migration deploy：两段货币 migration 成功应用。
+- `node --run contract:sync` 与 `node --run contract:check`：通过；
+  Server/Web OpenAPI 快照字节一致，Web generated DTO 成功生成。
+- `management-api.e2e-spec.ts` 中新增权限目录断言所在场景通过；整套 8 tests
+  有 2 个既有 system_admin 单例场景因本地库已有活动管理员而失败
+  （预期 409 实际 200、预期单一成功实际两个成功），与本期货币写入无关，
+  未隐藏或改写该环境前置条件。

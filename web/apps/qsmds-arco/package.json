@@ -4,7 +4,7 @@
   "version": "0.1.4",
   "private": true,
   "scripts": {
-    "api:generate": "pnpm --dir ../.. exec tsx scripts/generate-api.ts",
+    "api:generate": "pnpm --dir ../.. exec node --import tsx scripts/generate-api.ts",
     "prebuild": "pnpm run api:generate",
     "prebuild:test": "pnpm run api:generate",
     "prelint": "pnpm run api:generate",

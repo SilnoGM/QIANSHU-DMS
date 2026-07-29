@@ -105,7 +105,10 @@ test('OpenAPI 生成由 Web root 委托正式应用，并只在受控检查前�
   const appScripts = appManifest.scripts
 
   assert.equal(scripts['api:generate'], 'pnpm --filter qsmds-arco run api:generate')
-  assert.equal(appScripts['api:generate'], 'pnpm --dir ../.. exec tsx scripts/generate-api.ts')
+  assert.equal(
+    appScripts['api:generate'],
+    'pnpm --dir ../.. exec node --import tsx scripts/generate-api.ts',
+  )
   assert.equal(appScripts.prebuild, 'pnpm run api:generate')
   assert.equal(appScripts['prebuild:test'], 'pnpm run api:generate')
   assert.equal(appScripts.pretypecheck, 'pnpm run api:generate')
