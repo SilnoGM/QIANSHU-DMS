@@ -18,8 +18,9 @@ flowchart LR
     API --> Catalog["应用层 Currency Catalog"]
     Catalog --> Input["MoneyInput：启用货币"]
     Catalog --> Display["AmountDisplay：启用及停用货币"]
-    API --> CurrencyPage["货币管理页"]
-    API --> RatePage["汇率管理页"]
+    API --> ManagementPage["货币汇率单页"]
+    ManagementPage --> CurrencyPanel["货币管理 Tab"]
+    ManagementPage --> RatePanel["当前汇率 Tab"]
 ```
 
 基础组件保持 API、Store 和权限无关。应用层 Catalog 负责读取、校验、缓存及映射 Server DTO，组件只消费中立数据。
@@ -270,14 +271,22 @@ interface CurrencyDescriptor {
 
 ## 12. 管理页面
 
-### 12.1 货币管理
+### 12.1 单页容器
 
-- `FaPageHeader + FaPageMain + QsGenericTable`。
+- 菜单名称固定为“货币汇率”，页面只创建一个 `FaPageHeader` 和一个 `FaPageMain`。
+- 使用现有 `FaTabs`，Tab 固定为“货币管理”和“当前汇率”。
+- 容器只协调权限、活动 Tab 与 route query，不读取业务 API，也不持有两个领域的分页或 mutation 状态。
+- 两个面板使用 `defineAsyncComponent`；`FaTabs` 默认只挂载活动内容，因此隐藏 Tab 不发请求。
+- `meta.auth` 使用 `['currencies:read', 'exchange-rates:read']` 的 any-of 语义；Tab 继续按各自读取权限过滤。
+
+### 12.2 货币管理面板
+
+- 使用 `QsGenericTable`，页面级 Header/Main 由外层单页统一提供。
 - 列：名称、code、符号、minorUnit、基准币、汇率状态、启停状态、排序、更新时间、操作。
 - 创建/编辑使用 `QsGenericModal`，启停使用独立确认 Modal。
 - 无删除入口。
 
-### 12.2 汇率管理
+### 12.3 当前汇率面板
 
 - 顶部固定说明 `1 CNY = X CODE`。
 - 比例使用 `FaInput type="text"`。
@@ -287,8 +296,10 @@ interface CurrencyDescriptor {
 
 ## 13. 路由与视觉
 
-- `/system/basic-data/currencies` 使用 `currencies:read`。
-- `/system/basic-data/exchange-rates` 使用 `exchange-rates:read`。
+- `/system/basic-data/currencies` 是唯一可见菜单，标题为“货币汇率”，使用 `currencies:read OR exchange-rates:read`。
+- `/system/basic-data/exchange-rates` 保留为隐藏兼容路由，重定向到 `/system/basic-data/currencies?tab=exchange-rates`。
+- canonical 路由使用 `tabMerge: 'routeName'`，避免 query 切换制造两个应用标签页。
+- 货币 Tab 使用无 `tab` 参数的规范地址；当前汇率 Tab 使用 `tab=exchange-rates`，刷新后保持选择。
 - Basic Data 父路由保持权限中立。
 - 复用现有 Noto 字体、语义颜色 Token、Fa 组件与 Lucide 图标。
 - 不增加装饰性渐变、统计卡堆叠或第二套设计系统。
@@ -302,7 +313,7 @@ interface CurrencyDescriptor {
 3. Server query、mutation、事务、并发和 E2E。
 4. OpenAPI 与 Web contract。
 5. Web API、Catalog、MoneyInput、AmountDisplay。
-6. 两个管理页面、路由、权限和 Audit 展示。
+6. 货币汇率单页、两个业务面板、路由、权限和 Audit 展示。
 7. 浏览器与全量门禁。
 
 最终命令：

@@ -72,7 +72,7 @@ function close(): void {
             v-if="errorCode === 'CURRENCY_EXCHANGE_RATE_REQUIRED'"
             class="font-medium"
           >
-            请先到“汇率管理”配置当前汇率，再返回启用该货币。
+            请先到“货币汇率”的“当前汇率”标签页配置，再返回启用该货币。
           </span>
           <code v-if="requestId" class="qs-type-meta break-all">
             requestId: {{ requestId }}
@@ -86,7 +86,7 @@ function close(): void {
       class="mb-4"
       icon="i-lucide:circle-alert"
       title="尚未配置当前汇率"
-      description="请先到“汇率管理”配置当前汇率，再返回启用该货币。"
+      description="请先到“货币汇率”的“当前汇率”标签页配置，再返回启用该货币。"
       role="status"
     />
 

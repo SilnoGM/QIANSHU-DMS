@@ -7,11 +7,11 @@ function readSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
-test('货币管理页复用标准页框架和通用表格', () => {
+test('货币管理面板只承载工具栏和通用表格', () => {
   const source = readSource('../../src/views/system/basic-data/currencies/index.vue')
 
-  assert.equal(source.match(/<FaPageMain\b/gu)?.length, 1)
-  assert.match(source, /<FaPageHeader\b/u)
+  assert.doesNotMatch(source, /<FaPageMain\b|<FaPageHeader\b/u)
+  assert.match(source, /新增货币/u)
   assert.match(source, /<QsGenericTable\b/u)
   assert.doesNotMatch(source, /<Fa(?:Table|Pagination|Card)\b|gradient|#[\dA-Fa-f]{3,8}\b/u)
 })
@@ -85,7 +85,7 @@ test('启用弹窗就地呈现汇率未配置错误且提交 expectedVersion', (
 
   assert.match(pageSource, /expectedVersion:\s*target\.version/u)
   assert.match(pageSource, /CURRENCY_EXCHANGE_RATE_REQUIRED/u)
-  assert.match(modalSource, /请先到“汇率管理”配置当前汇率/u)
+  assert.match(modalSource, /请先到“货币汇率”的“当前汇率”标签页配置/u)
   assert.match(modalSource, /errorCode === 'CURRENCY_EXCHANGE_RATE_REQUIRED'/u)
 })
 

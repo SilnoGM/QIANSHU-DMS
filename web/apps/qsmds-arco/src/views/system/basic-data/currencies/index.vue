@@ -29,7 +29,7 @@ import {
 } from './currency-management.logic'
 import CurrencyStatusChangeModal from './currency-status-change-modal.vue'
 
-defineOptions({ name: 'SystemBasicDataCurrencies' })
+defineOptions({ name: 'CurrencyManagementPanel' })
 
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
@@ -455,11 +455,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="currency-management-page">
-    <FaPageHeader
-      title="货币管理"
-      description="维护系统可引用的货币资料。新增货币默认停用，非人民币货币必须配置当前汇率后才能启用。"
-    >
-      <div class="flex flex-wrap gap-2">
+    <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <p class="qs-type-description m-0 max-w-3xl">
+        维护系统可引用的货币资料。新增货币默认停用，非人民币货币必须配置当前汇率后才能启用。
+      </p>
+      <div class="flex flex-wrap gap-2 sm:shrink-0">
         <FaButton
           v-if="canRead"
           variant="outline"
@@ -474,220 +474,218 @@ onBeforeUnmount(() => {
           新增货币
         </FaButton>
       </div>
-    </FaPageHeader>
+    </div>
 
-    <FaPageMain>
-      <FaAlert
-        v-if="!canRead"
-        icon="i-lucide:shield-alert"
-        title="暂无查看权限"
-        description="当前账号缺少 currencies:read，无法查看货币资料。"
-      />
+    <FaAlert
+      v-if="!canRead"
+      icon="i-lucide:shield-alert"
+      title="暂无查看权限"
+      description="当前账号缺少 currencies:read，无法查看货币资料。"
+    />
 
-      <QsGenericTable
-        v-else
-        v-model:page="page"
-        v-model:page-size="pageSize"
-        v-model:search="search"
-        v-model:filters="filters"
-        data-testid="currency-table"
-        row-key="id"
-        :action-column="{ width: 200 }"
-        :addable="false"
-        :columns="columns"
-        :data="rows"
-        empty-title="暂无货币"
-        empty-description="当前查询条件下没有可展示的货币。"
-        :error="listErrorDisplay"
-        :filter-definitions="filterDefinitions"
-        :loading="listLoading"
-        :page-size-options="[20, 50, 100]"
-        search-placeholder="搜索货币名称、英文名或三位代码"
-        :total="total"
-        table-class="min-w-[1120px]"
-        @filter-change="handleFilterChange"
-        @pagination-change="handlePaginationChange"
-        @retry="loadCurrencies"
-        @search="scheduleListRefresh"
-      >
-        <template #cell-currency="{ row }">
-          <div class="gap-0.5 grid min-w-0">
-            <div class="flex flex-wrap gap-2 items-center">
-              <strong class="qs-type-body-medium break-words">
-                {{ row.original.name }}
-              </strong>
-              <FaTag v-if="row.original.isBase" variant="secondary" class="qs-type-status-tag">
-                基准币
-              </FaTag>
-            </div>
-            <div class="flex flex-wrap gap-x-2 gap-y-0.5 items-center">
-              <code class="qs-type-data-emphasis">{{ row.original.code }}</code>
-              <span class="qs-type-meta break-words">
-                {{ row.original.englishName || '暂无英文名' }}
-              </span>
-            </div>
+    <QsGenericTable
+      v-else
+      v-model:page="page"
+      v-model:page-size="pageSize"
+      v-model:search="search"
+      v-model:filters="filters"
+      data-testid="currency-table"
+      row-key="id"
+      :action-column="{ width: 200 }"
+      :addable="false"
+      :columns="columns"
+      :data="rows"
+      empty-title="暂无货币"
+      empty-description="当前查询条件下没有可展示的货币。"
+      :error="listErrorDisplay"
+      :filter-definitions="filterDefinitions"
+      :loading="listLoading"
+      :page-size-options="[20, 50, 100]"
+      search-placeholder="搜索货币名称、英文名或三位代码"
+      :total="total"
+      table-class="min-w-[1120px]"
+      @filter-change="handleFilterChange"
+      @pagination-change="handlePaginationChange"
+      @retry="loadCurrencies"
+      @search="scheduleListRefresh"
+    >
+      <template #cell-currency="{ row }">
+        <div class="gap-0.5 grid min-w-0">
+          <div class="flex flex-wrap gap-2 items-center">
+            <strong class="qs-type-body-medium break-words">
+              {{ row.original.name }}
+            </strong>
+            <FaTag v-if="row.original.isBase" variant="secondary" class="qs-type-status-tag">
+              基准币
+            </FaTag>
           </div>
-        </template>
-
-        <template #cell-symbol="{ row }">
-          <span class="qs-type-data-emphasis">{{ row.original.symbol || '—' }}</span>
-        </template>
-
-        <template #cell-minorUnit="{ row }">
-          <span class="qs-type-data tabular-nums">{{ row.original.minorUnit }} 位</span>
-        </template>
-
-        <template #cell-enabled="{ row }">
-          <FaTag
-            variant="outline"
-            class="qs-type-status-tag"
-            :class="row.original.enabled
-              ? 'border-primary/30 bg-primary/10 text-primary'
-              : 'border-border bg-muted text-muted-foreground'"
-          >
-            {{ row.original.enabled ? '启用' : '停用' }}
-          </FaTag>
-        </template>
-
-        <template #cell-rate="{ row }">
-          <span v-if="row.original.isBase" class="qs-type-meta">固定 1:1</span>
-          <FaTag
-            v-else
-            variant="outline"
-            class="qs-type-status-tag"
-            :class="row.original.exchangeRateConfigured
-              ? 'border-primary/30 bg-primary/10 text-primary'
-              : 'border-destructive/30 bg-destructive/5 text-destructive'"
-          >
-            {{ row.original.exchangeRateConfigured ? '已配置' : '未配置' }}
-          </FaTag>
-        </template>
-
-        <template #cell-sortOrder="{ row }">
-          <span class="qs-type-data tabular-nums">{{ row.original.sortOrder }}</span>
-        </template>
-
-        <template #cell-updatedAt="{ row }">
-          <DateTimeDisplay :value="row.original.updatedAt" />
-        </template>
-
-        <template #actions="{ row: currency }">
-          <div
-            v-if="currencyActions(currency).hasAny"
-            class="flex flex-wrap gap-1 items-center"
-          >
-            <FaButton
-              v-if="currencyActions(currency).canEdit"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 w-full md:min-h-8 md:w-auto"
-              :aria-label="`编辑货币 ${currency.code}`"
-              @click="openEdit(currency)"
-            >
-              编辑
-            </FaButton>
-            <FaButton
-              v-if="currencyActions(currency).canEnable"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 w-full md:min-h-8 md:w-auto"
-              :aria-label="`启用货币 ${currency.code}`"
-              @click="openStatusChange(currency, 'enable')"
-            >
-              启用
-            </FaButton>
-            <FaButton
-              v-if="currencyActions(currency).canDisable"
-              variant="ghost"
-              size="sm"
-              class="text-destructive min-h-11 w-full md:min-h-8 md:w-auto"
-              :aria-label="`停用货币 ${currency.code}`"
-              @click="openStatusChange(currency, 'disable')"
-            >
-              停用
-            </FaButton>
+          <div class="flex flex-wrap gap-x-2 gap-y-0.5 items-center">
+            <code class="qs-type-data-emphasis">{{ row.original.code }}</code>
+            <span class="qs-type-meta break-words">
+              {{ row.original.englishName || '暂无英文名' }}
+            </span>
           </div>
-          <span v-else class="qs-type-meta">
-            {{ currency.isBase ? '基准币只读' : '仅查看' }}
-          </span>
-        </template>
+        </div>
+      </template>
 
-        <!-- 移动卡片只组合业务字段，列显隐和操作区继续由 QsGenericTable 统一管理。 -->
-        <template #mobile-row="{ columns: visibleColumns, row: currency, rowNumber }">
-          <div data-testid="currency-card" class="gap-4 grid min-w-0">
-            <div class="flex gap-3 min-w-0 items-start justify-between">
-              <div
-                v-if="hasVisibleTableColumn(visibleColumns, 'currency')"
-                class="min-w-0"
-              >
-                <div class="flex flex-wrap gap-2 items-center">
-                  <strong class="qs-type-body-medium break-words">{{ currency.name }}</strong>
-                  <FaTag v-if="currency.isBase" variant="secondary" class="qs-type-status-tag">
-                    基准币
-                  </FaTag>
-                </div>
-                <code class="qs-type-data-emphasis mt-1 block">{{ currency.code }}</code>
+      <template #cell-symbol="{ row }">
+        <span class="qs-type-data-emphasis">{{ row.original.symbol || '—' }}</span>
+      </template>
+
+      <template #cell-minorUnit="{ row }">
+        <span class="qs-type-data tabular-nums">{{ row.original.minorUnit }} 位</span>
+      </template>
+
+      <template #cell-enabled="{ row }">
+        <FaTag
+          variant="outline"
+          class="qs-type-status-tag"
+          :class="row.original.enabled
+            ? 'border-primary/30 bg-primary/10 text-primary'
+            : 'border-border bg-muted text-muted-foreground'"
+        >
+          {{ row.original.enabled ? '启用' : '停用' }}
+        </FaTag>
+      </template>
+
+      <template #cell-rate="{ row }">
+        <span v-if="row.original.isBase" class="qs-type-meta">固定 1:1</span>
+        <FaTag
+          v-else
+          variant="outline"
+          class="qs-type-status-tag"
+          :class="row.original.exchangeRateConfigured
+            ? 'border-primary/30 bg-primary/10 text-primary'
+            : 'border-destructive/30 bg-destructive/5 text-destructive'"
+        >
+          {{ row.original.exchangeRateConfigured ? '已配置' : '未配置' }}
+        </FaTag>
+      </template>
+
+      <template #cell-sortOrder="{ row }">
+        <span class="qs-type-data tabular-nums">{{ row.original.sortOrder }}</span>
+      </template>
+
+      <template #cell-updatedAt="{ row }">
+        <DateTimeDisplay :value="row.original.updatedAt" />
+      </template>
+
+      <template #actions="{ row: currency }">
+        <div
+          v-if="currencyActions(currency).hasAny"
+          class="flex flex-wrap gap-1 items-center"
+        >
+          <FaButton
+            v-if="currencyActions(currency).canEdit"
+            variant="ghost"
+            size="sm"
+            class="min-h-11 w-full md:min-h-8 md:w-auto"
+            :aria-label="`编辑货币 ${currency.code}`"
+            @click="openEdit(currency)"
+          >
+            编辑
+          </FaButton>
+          <FaButton
+            v-if="currencyActions(currency).canEnable"
+            variant="ghost"
+            size="sm"
+            class="min-h-11 w-full md:min-h-8 md:w-auto"
+            :aria-label="`启用货币 ${currency.code}`"
+            @click="openStatusChange(currency, 'enable')"
+          >
+            启用
+          </FaButton>
+          <FaButton
+            v-if="currencyActions(currency).canDisable"
+            variant="ghost"
+            size="sm"
+            class="text-destructive min-h-11 w-full md:min-h-8 md:w-auto"
+            :aria-label="`停用货币 ${currency.code}`"
+            @click="openStatusChange(currency, 'disable')"
+          >
+            停用
+          </FaButton>
+        </div>
+        <span v-else class="qs-type-meta">
+          {{ currency.isBase ? '基准币只读' : '仅查看' }}
+        </span>
+      </template>
+
+      <!-- 移动卡片只组合业务字段，列显隐和操作区继续由 QsGenericTable 统一管理。 -->
+      <template #mobile-row="{ columns: visibleColumns, row: currency, rowNumber }">
+        <div data-testid="currency-card" class="gap-4 grid min-w-0">
+          <div class="flex gap-3 min-w-0 items-start justify-between">
+            <div
+              v-if="hasVisibleTableColumn(visibleColumns, 'currency')"
+              class="min-w-0"
+            >
+              <div class="flex flex-wrap gap-2 items-center">
+                <strong class="qs-type-body-medium break-words">{{ currency.name }}</strong>
+                <FaTag v-if="currency.isBase" variant="secondary" class="qs-type-status-tag">
+                  基准币
+                </FaTag>
               </div>
-              <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
+              <code class="qs-type-data-emphasis mt-1 block">{{ currency.code }}</code>
             </div>
-
-            <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2 max-[479px]:grid-cols-1">
-              <div v-if="hasVisibleTableColumn(visibleColumns, 'symbol')">
-                <dt class="qs-type-compact-label mb-1">
-                  符号
-                </dt>
-                <dd class="qs-type-data-emphasis m-0">
-                  {{ currency.symbol || '—' }}
-                </dd>
-              </div>
-              <div v-if="hasVisibleTableColumn(visibleColumns, 'minorUnit')">
-                <dt class="qs-type-compact-label mb-1">
-                  金额小数位
-                </dt>
-                <dd class="qs-type-data m-0 tabular-nums">
-                  {{ currency.minorUnit }} 位
-                </dd>
-              </div>
-              <div v-if="hasVisibleTableColumn(visibleColumns, 'enabled')">
-                <dt class="qs-type-compact-label mb-1">
-                  状态
-                </dt>
-                <dd class="qs-type-body m-0">
-                  {{ currency.enabled ? '启用' : '停用' }}
-                </dd>
-              </div>
-              <div v-if="hasVisibleTableColumn(visibleColumns, 'rate')">
-                <dt class="qs-type-compact-label mb-1">
-                  当前汇率
-                </dt>
-                <dd class="qs-type-body m-0">
-                  {{ currency.isBase ? '固定 1:1' : currency.exchangeRateConfigured ? '已配置' : '未配置' }}
-                </dd>
-              </div>
-              <div v-if="hasVisibleTableColumn(visibleColumns, 'sortOrder')">
-                <dt class="qs-type-compact-label mb-1">
-                  排序
-                </dt>
-                <dd class="qs-type-data m-0 tabular-nums">
-                  {{ currency.sortOrder }}
-                </dd>
-              </div>
-              <div
-                v-if="hasVisibleTableColumn(visibleColumns, 'updatedAt')"
-                class="col-span-full max-[479px]:col-span-1"
-              >
-                <dt class="qs-type-compact-label mb-1">
-                  更新时间
-                </dt>
-                <dd class="m-0">
-                  <DateTimeDisplay :value="currency.updatedAt" />
-                </dd>
-              </div>
-            </dl>
+            <span class="qs-type-meta shrink-0 tabular-nums">#{{ rowNumber }}</span>
           </div>
-        </template>
-      </QsGenericTable>
-    </FaPageMain>
+
+          <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2 max-[479px]:grid-cols-1">
+            <div v-if="hasVisibleTableColumn(visibleColumns, 'symbol')">
+              <dt class="qs-type-compact-label mb-1">
+                符号
+              </dt>
+              <dd class="qs-type-data-emphasis m-0">
+                {{ currency.symbol || '—' }}
+              </dd>
+            </div>
+            <div v-if="hasVisibleTableColumn(visibleColumns, 'minorUnit')">
+              <dt class="qs-type-compact-label mb-1">
+                金额小数位
+              </dt>
+              <dd class="qs-type-data m-0 tabular-nums">
+                {{ currency.minorUnit }} 位
+              </dd>
+            </div>
+            <div v-if="hasVisibleTableColumn(visibleColumns, 'enabled')">
+              <dt class="qs-type-compact-label mb-1">
+                状态
+              </dt>
+              <dd class="qs-type-body m-0">
+                {{ currency.enabled ? '启用' : '停用' }}
+              </dd>
+            </div>
+            <div v-if="hasVisibleTableColumn(visibleColumns, 'rate')">
+              <dt class="qs-type-compact-label mb-1">
+                当前汇率
+              </dt>
+              <dd class="qs-type-body m-0">
+                {{ currency.isBase ? '固定 1:1' : currency.exchangeRateConfigured ? '已配置' : '未配置' }}
+              </dd>
+            </div>
+            <div v-if="hasVisibleTableColumn(visibleColumns, 'sortOrder')">
+              <dt class="qs-type-compact-label mb-1">
+                排序
+              </dt>
+              <dd class="qs-type-data m-0 tabular-nums">
+                {{ currency.sortOrder }}
+              </dd>
+            </div>
+            <div
+              v-if="hasVisibleTableColumn(visibleColumns, 'updatedAt')"
+              class="col-span-full max-[479px]:col-span-1"
+            >
+              <dt class="qs-type-compact-label mb-1">
+                更新时间
+              </dt>
+              <dd class="m-0">
+                <DateTimeDisplay :value="currency.updatedAt" />
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </template>
+    </QsGenericTable>
 
     <CurrencyFormModal
       v-if="canRead"

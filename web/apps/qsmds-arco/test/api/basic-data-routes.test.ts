@@ -17,18 +17,19 @@ const basicDataPageContracts = [
     title: '地区管理',
   },
   {
-    auth: 'currencies:read',
-    file: '../../src/views/system/basic-data/currencies/index.vue',
+    auth: ['currencies:read', 'exchange-rates:read'],
+    file: '../../src/views/system/basic-data/currency-exchange-rate/index.vue',
     name: 'systemBasicDataCurrencies',
     path: 'currencies',
-    title: '货币管理',
+    title: '货币汇率',
   },
   {
     auth: 'exchange-rates:read',
-    file: '../../src/views/system/basic-data/exchange-rates/index.vue',
+    file: undefined,
+    menu: false,
     name: 'systemBasicDataExchangeRates',
     path: 'exchange-rates',
-    title: '汇率管理',
+    title: '当前汇率',
   },
   {
     auth: undefined,
@@ -57,20 +58,43 @@ test('基础数据父路由保持权限中立并由叶子路由独立鉴权', ()
   assert.deepEqual(
     basicDataRoutes.children?.map(route => ({
       auth: route.meta?.auth,
+      menu: route.meta?.menu,
       name: route.name,
       path: route.path,
       title: route.meta?.title,
     })),
     basicDataPageContracts.map(page => ({
       auth: page.auth,
+      menu: 'menu' in page ? page.menu : undefined,
       name: page.name,
       path: page.path,
       title: page.title,
     })),
   )
-  assert.ok(
-    basicDataRoutes.children?.every(route => typeof route.component === 'function'),
+  const pageRoutes = basicDataRoutes.children?.filter(
+    route => route.name !== 'systemBasicDataExchangeRates',
   )
+  assert.ok(pageRoutes?.every(route => typeof route.component === 'function'))
+  const legacyExchangeRateRoute = basicDataRoutes.children?.find(
+    route => route.name === 'systemBasicDataExchangeRates',
+  )
+  const currencyExchangeRateRoute = basicDataRoutes.children?.find(
+    route => route.name === 'systemBasicDataCurrencies',
+  )
+  assert.deepEqual(currencyExchangeRateRoute?.meta?.auth, [
+    'currencies:read',
+    'exchange-rates:read',
+  ])
+  assert.equal(currencyExchangeRateRoute?.meta?.tabMerge, 'routeName')
+  assert.equal(legacyExchangeRateRoute?.component, undefined)
+  assert.equal(legacyExchangeRateRoute?.meta?.activeMenu, '/system/basic-data/currencies')
+  assert.equal(legacyExchangeRateRoute?.meta?.menu, false)
+  assert.deepEqual(legacyExchangeRateRoute?.redirect, {
+    name: 'systemBasicDataCurrencies',
+    query: {
+      tab: 'exchange-rates',
+    },
+  })
   assert.equal(
     new Set(basicDataRoutes.children?.map(route => route.name)).size,
     basicDataPageContracts.length,
@@ -89,6 +113,7 @@ test('无基础数据读取权限时仍保留两个权限中立菜单', () => {
       path: route.path,
       meta: {
         auth: route.meta?.auth,
+        menu: route.meta?.menu,
         title: route.meta?.title,
       },
     })),
@@ -113,7 +138,7 @@ test('无基础数据读取权限时仍保留两个权限中立菜单', () => {
   )
 })
 
-test('货币与汇率菜单分别受各自读取权限保护', () => {
+test('货币汇率单一菜单使用任一读取权限并隐藏兼容路由', () => {
   const menuFixture: MenuRecordRaw[] = [{
     path: basicDataRoutes.path,
     meta: {
@@ -124,16 +149,21 @@ test('货币与汇率菜单分别受各自读取权限保护', () => {
       path: route.path,
       meta: {
         auth: route.meta?.auth,
+        menu: route.meta?.menu,
         title: route.meta?.title,
       },
     })),
   }]
 
-  const visiblePaths = (permissions: string[]) => filterAccessibleMenus(
-    menuFixture,
-    value => matchesAuthorization(permissions, value),
-    () => true,
-  )[0]?.children?.map(menu => menu.path)
+  const visiblePaths = (permissions: string[]) => {
+    return filterAccessibleMenus(
+      menuFixture,
+      value => matchesAuthorization(permissions, value),
+      () => true,
+    )[0]?.children
+      ?.filter(menu => menu.meta?.menu !== false)
+      .map(menu => menu.path)
+  }
 
   assert.deepEqual(
     visiblePaths(['currencies:read']),
@@ -141,7 +171,7 @@ test('货币与汇率菜单分别受各自读取权限保护', () => {
   )
   assert.deepEqual(
     visiblePaths(['exchange-rates:read']),
-    ['exchange-rates', 'numbering', 'dictionaries'],
+    ['currencies', 'numbering', 'dictionaries'],
   )
 })
 
@@ -173,13 +203,24 @@ test('地区管理是受权限保护的真实业务页面', () => {
   assert.match(source, /<QsGenericTable\b/u)
 })
 
-test('货币与汇率路由已承载真实管理页面', () => {
-  for (const page of basicDataPageContracts.slice(1, 3)) {
-    const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
+test('货币汇率单页组合两个真实管理面板', () => {
+  const pageSource = readFileSync(
+    new URL(
+      '../../src/views/system/basic-data/currency-exchange-rate/index.vue',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+  assert.match(pageSource, /<FaTabs\b/u)
 
-    assert.match(source, /<script setup lang="ts">/u)
-    assert.match(source, /currenciesApi\.(?:currencies|exchangeRates)\.list/u)
-    assert.match(source, /<QsGenericTable\b/u)
+  for (const file of [
+    '../../src/views/system/basic-data/currencies/index.vue',
+    '../../src/views/system/basic-data/exchange-rates/index.vue',
+  ]) {
+    const panelSource = readFileSync(new URL(file, import.meta.url), 'utf8')
+    assert.match(panelSource, /<script setup lang="ts">/u)
+    assert.match(panelSource, /currenciesApi\.(?:currencies|exchangeRates)\.list/u)
+    assert.match(panelSource, /<QsGenericTable\b/u)
   }
 })
 

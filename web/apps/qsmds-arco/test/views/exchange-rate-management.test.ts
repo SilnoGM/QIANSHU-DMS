@@ -88,14 +88,13 @@ test('换算说明不把需求示例作为表单默认值', () => {
   assert.match(modalSource, /外币金额\s*÷\s*比例\s*=\s*人民币/u)
 })
 
-test('汇率管理页复用统一页面骨架、表格与权限守卫', () => {
+test('当前汇率面板复用通用表格并保留权限守卫', () => {
   const source = readSource(
     '../../src/views/system/basic-data/exchange-rates/index.vue',
   )
   const tableTag = source.match(/<QsGenericTable\b[\s\S]*?>/u)?.[0]
 
-  assert.equal(source.match(/<FaPageMain\b/gu)?.length, 1)
-  assert.match(source, /<FaPageHeader\b/u)
+  assert.doesNotMatch(source, /<FaPageMain\b|<FaPageHeader\b/u)
   assert.ok(tableTag)
   assert.match(tableTag, /v-model:page="page"/u)
   assert.match(tableTag, /v-model:page-size="pageSize"/u)

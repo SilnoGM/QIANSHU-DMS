@@ -87,6 +87,12 @@
   - 运行全部检查、构建、数据库 E2E、contract 和 diff 门禁。
   - _Requirement: 1-9_
 
+- [x] 14. 合并货币汇率单页
+  - 将两个可见菜单合并为单一“货币汇率”入口。
+  - 使用 `FaTabs` 组合“货币管理”和“当前汇率”，保留独立权限与请求边界。
+  - 保留旧汇率地址兼容跳转，验证首次活动 Tab 加载、移动端和完整门禁。
+  - _Requirement: 8, 9_
+
 ## 4. Git 提交边界
 
 建议提交顺序：
@@ -204,3 +210,17 @@
   `100 TWD ÷ 0.65 = 153.846154 CNY`，验收过程未提交数据库写操作。
 - `pnpm -C server build`、`pnpm -C web build`、`node --run contract:sync`、
   `node --run contract:check` 与 `git diff --check`：通过。
+
+### Task 14
+
+- 基础数据只保留一个可见“货币汇率”菜单；页面使用现有 `FaTabs` 组合
+  “货币管理”和“当前汇率”，两类读取与操作权限仍独立生效。
+- 旧 `/system/basic-data/exchange-rates` 地址隐藏并兼容跳转到
+  `/system/basic-data/currencies?tab=exchange-rates`，Server API 与数据库
+  schema 均未修改。
+- 活动面板按需挂载；浏览器验证首次切换每类列表只发一个 GET，并覆盖
+  KeepAlive 返回、键盘切换、390px 无横向溢出和亮暗主题。
+- `node --run check`：通过，覆盖根目录、Server、Web、OpenAPI、生产构建、
+  隔离 PostgreSQL migration replay 与真实 Chrome 身份/管理 E2E。
+- `node --run ci:browser-regions-e2e`：最终独立运行 2 tests 通过；权限清空时
+  跳过受保护的地区与货币汇率页面，回落到“编号管理”。

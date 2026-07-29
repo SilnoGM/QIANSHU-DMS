@@ -155,11 +155,15 @@ foreignAmount = cnyAmount * foreignUnitsPerCny
 
 #### Acceptance Criteria
 
-1. 当用户访问货币管理页时，系统应展示名称、code、符号、小数位、汇率状态、启停状态、排序与更新时间。
-2. 当用户访问汇率管理页时，系统应明确展示 `1 CNY = X CODE` 和外币除以比例的公式。
-3. 当比例未配置时，页面应显示“未配置”，不得使用 `0` 或 `1` 代替。
-4. 当页面在 1440px 或 390px 视口下使用时，关键操作应可用且不得出现横向溢出。
-5. 当用户使用键盘或暗色主题时，页面应保持可访问和可辨识。
+1. 当用户进入基础数据时，系统应只提供一个“货币汇率”菜单，并在同一页面使用“货币管理”和“当前汇率”两个 Tab。
+2. 当用户拥有 `currencies:read` 或 `exchange-rates:read` 任一权限时，系统应允许进入“货币汇率”页面，并且只展示当前身份可读的 Tab。
+3. 当用户打开货币管理 Tab 时，系统应展示名称、code、符号、小数位、汇率状态、启停状态、排序与更新时间。
+4. 当用户打开当前汇率 Tab 时，系统应明确展示 `1 CNY = X CODE` 和外币除以比例的公式。
+5. 当比例未配置时，页面应显示“未配置”，不得使用 `0` 或 `1` 代替。
+6. 当用户首次进入页面时，系统应只挂载活动 Tab；切换到另一 Tab 后才加载对应业务面板。
+7. 当用户访问历史 `/system/basic-data/exchange-rates` 地址时，系统应跳转到“货币汇率”的当前汇率 Tab。
+8. 当页面在 1440px 或 390px 视口下使用时，关键操作应可用且不得出现横向溢出。
+9. 当用户使用键盘或暗色主题时，页面应保持可访问和可辨识。
 
 ## 6. 权限目录
 
@@ -180,7 +184,7 @@ exchange-rates:update
 - Aesthetic Direction：Industrial/utilitarian。
 - Color Palette：复用项目 `background`、`foreground`、`muted`、`border`、`destructive` 语义 Token。
 - Typography：正文使用 `Noto Sans SC`，金额、比例和 code 使用 `Noto Sans Mono`。
-- Layout：复用 `FaPageHeader + FaPageMain + QsGenericTable`，公式说明靠左、管理操作靠右。
+- Layout：单一 `FaPageHeader + FaPageMain + FaTabs` 组合两个独立 `QsGenericTable` 业务面板；公式说明靠左、管理操作靠右。
 - 禁止引入装饰性渐变、堆叠统计卡或第二套设计系统。
 
 ## 8. 明确不做

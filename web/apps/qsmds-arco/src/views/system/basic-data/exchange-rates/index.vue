@@ -23,7 +23,7 @@ import {
   isExchangeRateAbortError,
 } from './exchange-rates.logic'
 
-defineOptions({ name: 'SystemBasicDataExchangeRates' })
+defineOptions({ name: 'ExchangeRateManagementPanel' })
 
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
@@ -360,197 +360,194 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="exchange-rate-management-page">
-    <FaPageHeader
-      title="汇率管理"
-      description="维护非人民币货币当前兑人民币的换算比例；首期不记录有效期或历史版本。"
+    <p class="qs-type-description mb-5 mt-0 max-w-3xl">
+      维护非人民币货币当前兑人民币的换算比例；首期不记录有效期或历史版本。
+    </p>
+
+    <FaEmpty
+      v-if="!canRead"
+      icon="i-lucide:shield-alert"
+      title="无权查看汇率"
+      description="当前身份缺少 exchange-rates:read 权限。"
+      class="min-h-64"
     />
 
-    <FaPageMain>
-      <FaEmpty
-        v-if="!canRead"
-        icon="i-lucide:shield-alert"
-        title="无权查看汇率"
-        description="当前身份缺少 exchange-rates:read 权限。"
-        class="min-h-64"
+    <template v-else>
+      <FaAlert
+        icon="i-lucide:calculator"
+        title="换算口径"
+        description="统一口径：1 CNY = X CODE；人民币金额 = 外币金额 ÷ 比例。页面不会预设任何生产汇率。"
+        class="mb-5"
       />
 
-      <template v-else>
-        <FaAlert
-          icon="i-lucide:calculator"
-          title="换算口径"
-          description="统一口径：1 CNY = X CODE；人民币金额 = 外币金额 ÷ 比例。页面不会预设任何生产汇率。"
-          class="mb-5"
-        />
-
-        <QsGenericTable
-          v-model:page="page"
-          v-model:page-size="pageSize"
-          v-model:search="search"
-          v-model:filters="filters"
-          data-testid="exchange-rate-table"
-          :row-key="item => item.currency.id"
-          :addable="false"
-          :columns="columns"
-          :data="rows"
-          :empty-description="search.trim() || filters.status
-            ? '没有符合当前搜索与筛选条件的非人民币货币。'
-            : '请先在货币管理中建立非人民币货币。'"
-          :empty-title="search.trim() || filters.status ? '未找到匹配汇率' : '暂无可维护汇率'"
-          :error="listErrorDisplay"
-          :filter-definitions="filterDefinitions"
-          :loading="loading"
-          :page-size-options="[20, 50, 100]"
-          search-placeholder="搜索货币名称、英文名或 Currency Code"
-          :total="total"
-          table-class="min-w-[1120px]"
-          @filter-change="handleFilterChange"
-          @pagination-change="handlePaginationChange"
-          @retry="loadExchangeRates"
-          @search="scheduleQueryRefresh"
-        >
-          <template #cell-currency="{ row }">
-            <div class="gap-0.5 grid min-w-0">
-              <strong class="qs-type-body-medium break-words">
-                {{ row.original.currency.name }}
-              </strong>
-              <span class="qs-type-meta break-words">
-                {{ row.original.currency.englishName || '暂无英文名' }}
-              </span>
-              <code class="qs-type-data-emphasis break-all">
-                {{ row.original.currency.code }}
-              </code>
-            </div>
-          </template>
-
-          <template #cell-status="{ row }">
-            <FaTag
-              variant="outline"
-              class="qs-type-status-tag"
-              :class="row.original.currentRate === null
-                ? 'border-border bg-muted text-muted-foreground'
-                : 'border-primary/30 bg-primary/10 text-primary'"
-            >
-              {{ exchangeRateStatusLabel(row.original) }}
-            </FaTag>
-          </template>
-
-          <template #cell-foreignUnitsPerCny="{ row }">
-            <span
-              v-if="row.original.currentRate"
-              class="flex flex-wrap gap-1 items-baseline"
-            >
-              <span class="qs-type-meta">1 CNY =</span>
-              <code class="qs-type-data-emphasis break-all tabular-nums">
-                {{ row.original.currentRate.foreignUnitsPerCny }}
-              </code>
-              <code class="qs-type-data-emphasis">
-                {{ row.original.currency.code }}
-              </code>
+      <QsGenericTable
+        v-model:page="page"
+        v-model:page-size="pageSize"
+        v-model:search="search"
+        v-model:filters="filters"
+        data-testid="exchange-rate-table"
+        :row-key="item => item.currency.id"
+        :addable="false"
+        :columns="columns"
+        :data="rows"
+        :empty-description="search.trim() || filters.status
+          ? '没有符合当前搜索与筛选条件的非人民币货币。'
+          : '请先在货币管理中建立非人民币货币。'"
+        :empty-title="search.trim() || filters.status ? '未找到匹配汇率' : '暂无可维护汇率'"
+        :error="listErrorDisplay"
+        :filter-definitions="filterDefinitions"
+        :loading="loading"
+        :page-size-options="[20, 50, 100]"
+        search-placeholder="搜索货币名称、英文名或 Currency Code"
+        :total="total"
+        table-class="min-w-[1120px]"
+        @filter-change="handleFilterChange"
+        @pagination-change="handlePaginationChange"
+        @retry="loadExchangeRates"
+        @search="scheduleQueryRefresh"
+      >
+        <template #cell-currency="{ row }">
+          <div class="gap-0.5 grid min-w-0">
+            <strong class="qs-type-body-medium break-words">
+              {{ row.original.currency.name }}
+            </strong>
+            <span class="qs-type-meta break-words">
+              {{ row.original.currency.englishName || '暂无英文名' }}
             </span>
-            <span v-else class="qs-type-meta">未配置</span>
-          </template>
+            <code class="qs-type-data-emphasis break-all">
+              {{ row.original.currency.code }}
+            </code>
+          </div>
+        </template>
 
-          <template #cell-formula="{ row }">
-            <span v-if="row.original.currentRate" class="qs-type-body">
-              {{ row.original.currency.code }} 金额 ÷
-              <code class="qs-type-data-emphasis tabular-nums">
-                {{ row.original.currentRate.foreignUnitsPerCny }}
-              </code>
-              = CNY
-            </span>
-            <span v-else class="qs-type-meta">配置比例后可换算</span>
-          </template>
+        <template #cell-status="{ row }">
+          <FaTag
+            variant="outline"
+            class="qs-type-status-tag"
+            :class="row.original.currentRate === null
+              ? 'border-border bg-muted text-muted-foreground'
+              : 'border-primary/30 bg-primary/10 text-primary'"
+          >
+            {{ exchangeRateStatusLabel(row.original) }}
+          </FaTag>
+        </template>
 
-          <template #cell-updatedAt="{ row }">
-            <DateTimeDisplay
-              v-if="row.original.currentRate"
-              :value="row.original.currentRate.updatedAt"
-            />
-            <span v-else class="qs-type-meta">—</span>
-          </template>
+        <template #cell-foreignUnitsPerCny="{ row }">
+          <span
+            v-if="row.original.currentRate"
+            class="flex flex-wrap gap-1 items-baseline"
+          >
+            <span class="qs-type-meta">1 CNY =</span>
+            <code class="qs-type-data-emphasis break-all tabular-nums">
+              {{ row.original.currentRate.foreignUnitsPerCny }}
+            </code>
+            <code class="qs-type-data-emphasis">
+              {{ row.original.currency.code }}
+            </code>
+          </span>
+          <span v-else class="qs-type-meta">未配置</span>
+        </template>
 
-          <template #actions="{ row: item }">
-            <FaButton
-              v-if="canConfigure(item)"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 w-full md:min-h-8 md:w-auto"
-              :aria-label="`${item.currentRate === null ? '配置' : '编辑'} ${item.currency.name} 当前汇率`"
-              @click="openForm(item)"
-            >
-              {{ item.currentRate === null ? '配置' : '编辑' }}
-            </FaButton>
-            <span v-else class="qs-type-meta">当前身份仅可查看</span>
-          </template>
+        <template #cell-formula="{ row }">
+          <span v-if="row.original.currentRate" class="qs-type-body">
+            {{ row.original.currency.code }} 金额 ÷
+            <code class="qs-type-data-emphasis tabular-nums">
+              {{ row.original.currentRate.foreignUnitsPerCny }}
+            </code>
+            = CNY
+          </span>
+          <span v-else class="qs-type-meta">配置比例后可换算</span>
+        </template>
 
-          <template #mobile-row="{ columns: visibleColumns, row: item, rowNumber }">
-            <div data-testid="exchange-rate-card" class="gap-4 grid min-w-0">
-              <div class="flex gap-3 min-w-0 items-start justify-between">
-                <div
-                  v-if="hasVisibleTableColumn(visibleColumns, 'currency')"
-                  class="min-w-0"
-                >
-                  <strong class="qs-type-body-medium block break-words">
-                    {{ item.currency.name }}
-                  </strong>
-                  <code class="qs-type-data-emphasis break-all">
-                    {{ item.currency.code }}
-                  </code>
-                </div>
-                <div class="flex shrink-0 flex-col gap-1 items-end">
-                  <FaTag
-                    v-if="hasVisibleTableColumn(visibleColumns, 'status')"
-                    variant="outline"
-                    class="qs-type-status-tag"
-                  >
-                    {{ exchangeRateStatusLabel(item) }}
-                  </FaTag>
-                  <span class="qs-type-meta tabular-nums">#{{ rowNumber }}</span>
-                </div>
+        <template #cell-updatedAt="{ row }">
+          <DateTimeDisplay
+            v-if="row.original.currentRate"
+            :value="row.original.currentRate.updatedAt"
+          />
+          <span v-else class="qs-type-meta">—</span>
+        </template>
+
+        <template #actions="{ row: item }">
+          <FaButton
+            v-if="canConfigure(item)"
+            variant="ghost"
+            size="sm"
+            class="min-h-11 w-full md:min-h-8 md:w-auto"
+            :aria-label="`${item.currentRate === null ? '配置' : '编辑'} ${item.currency.name} 当前汇率`"
+            @click="openForm(item)"
+          >
+            {{ item.currentRate === null ? '配置' : '编辑' }}
+          </FaButton>
+          <span v-else class="qs-type-meta">当前身份仅可查看</span>
+        </template>
+
+        <template #mobile-row="{ columns: visibleColumns, row: item, rowNumber }">
+          <div data-testid="exchange-rate-card" class="gap-4 grid min-w-0">
+            <div class="flex gap-3 min-w-0 items-start justify-between">
+              <div
+                v-if="hasVisibleTableColumn(visibleColumns, 'currency')"
+                class="min-w-0"
+              >
+                <strong class="qs-type-body-medium block break-words">
+                  {{ item.currency.name }}
+                </strong>
+                <code class="qs-type-data-emphasis break-all">
+                  {{ item.currency.code }}
+                </code>
               </div>
-
-              <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2 max-[479px]:grid-cols-1">
-                <div v-if="hasVisibleTableColumn(visibleColumns, 'foreignUnitsPerCny')">
-                  <dt class="qs-type-compact-label mb-1">
-                    外币单位数 / 1 CNY
-                  </dt>
-                  <dd class="qs-type-data-emphasis m-0 break-all tabular-nums">
-                    {{ item.currentRate
-                      ? `1 CNY = ${item.currentRate.foreignUnitsPerCny} ${item.currency.code}`
-                      : '未配置' }}
-                  </dd>
-                </div>
-                <div v-if="hasVisibleTableColumn(visibleColumns, 'formula')">
-                  <dt class="qs-type-compact-label mb-1">
-                    人民币换算
-                  </dt>
-                  <dd class="qs-type-body m-0 break-words">
-                    {{ item.currentRate
-                      ? `${item.currency.code} 金额 ÷ ${item.currentRate.foreignUnitsPerCny} = CNY`
-                      : '配置比例后可换算' }}
-                  </dd>
-                </div>
-                <div
-                  v-if="hasVisibleTableColumn(visibleColumns, 'updatedAt')"
-                  class="col-span-full max-[479px]:col-span-1"
+              <div class="flex shrink-0 flex-col gap-1 items-end">
+                <FaTag
+                  v-if="hasVisibleTableColumn(visibleColumns, 'status')"
+                  variant="outline"
+                  class="qs-type-status-tag"
                 >
-                  <dt class="qs-type-compact-label mb-1">
-                    更新时间
-                  </dt>
-                  <dd class="m-0">
-                    <DateTimeDisplay
-                      v-if="item.currentRate"
-                      :value="item.currentRate.updatedAt"
-                    />
-                    <span v-else class="qs-type-meta">—</span>
-                  </dd>
-                </div>
-              </dl>
+                  {{ exchangeRateStatusLabel(item) }}
+                </FaTag>
+                <span class="qs-type-meta tabular-nums">#{{ rowNumber }}</span>
+              </div>
             </div>
-          </template>
-        </QsGenericTable>
-      </template>
-    </FaPageMain>
+
+            <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-2 max-[479px]:grid-cols-1">
+              <div v-if="hasVisibleTableColumn(visibleColumns, 'foreignUnitsPerCny')">
+                <dt class="qs-type-compact-label mb-1">
+                  外币单位数 / 1 CNY
+                </dt>
+                <dd class="qs-type-data-emphasis m-0 break-all tabular-nums">
+                  {{ item.currentRate
+                    ? `1 CNY = ${item.currentRate.foreignUnitsPerCny} ${item.currency.code}`
+                    : '未配置' }}
+                </dd>
+              </div>
+              <div v-if="hasVisibleTableColumn(visibleColumns, 'formula')">
+                <dt class="qs-type-compact-label mb-1">
+                  人民币换算
+                </dt>
+                <dd class="qs-type-body m-0 break-words">
+                  {{ item.currentRate
+                    ? `${item.currency.code} 金额 ÷ ${item.currentRate.foreignUnitsPerCny} = CNY`
+                    : '配置比例后可换算' }}
+                </dd>
+              </div>
+              <div
+                v-if="hasVisibleTableColumn(visibleColumns, 'updatedAt')"
+                class="col-span-full max-[479px]:col-span-1"
+              >
+                <dt class="qs-type-compact-label mb-1">
+                  更新时间
+                </dt>
+                <dd class="m-0">
+                  <DateTimeDisplay
+                    v-if="item.currentRate"
+                    :value="item.currentRate.updatedAt"
+                  />
+                  <span v-else class="qs-type-meta">—</span>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </template>
+      </QsGenericTable>
+    </template>
 
     <ExchangeRateFormModal
       v-if="canRead"
