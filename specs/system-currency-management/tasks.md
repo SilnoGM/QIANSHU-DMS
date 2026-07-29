@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：执行中
+- 状态：已完成
 - 开始日期：2026-07-29
 - 分支：`feat/currency-system`
 - 需求文档：`specs/system-currency-management/requirements.md`
@@ -81,7 +81,7 @@
   - 不增加历史、有效期或删除能力。
   - _Requirement: 3, 4, 8, 9_
 
-- [ ] 13. 完成审计、浏览器与总体验收
+- [x] 13. 完成审计、浏览器与总体验收
   - 同步 Web Audit 事件和中文文案。
   - 验证 1440px、390px、亮暗主题、键盘、权限撤销和完整状态流。
   - 运行全部检查、构建、数据库 E2E、contract 和 diff 门禁。
@@ -187,3 +187,20 @@
 - 两页 mutation 均禁用自动重试；网络未知结果或 version 冲突会重新查询并替换
   弹窗上下文，不复用过期 `expectedVersion`。
 - 页面目标 ESLint、`pnpm run typecheck` 与 `git diff --check`：通过。
+
+### Task 13
+
+- `node --run check`：最终独立全量运行通过，覆盖根目录 627 tests、
+  Server 99 suites / 808 tests、Web 689 tests、OpenAPI contract、生产构建、
+  隔离 PostgreSQL migration replay 与 Server E2E。
+- `node --run ci:server-e2e`：全新隔离数据库 7 migrations 全部应用，
+  17 suites / 91 tests 通过；货币种子保持零汇率。
+- `node --run ci:browser-auth-e2e`：真实 Chrome 2 tests 通过，覆盖身份边界与
+  系统管理权限目录；新增八项货币/汇率权限已纳入精确期望。
+- 人工浏览器验收覆盖 1440px 与 390px、亮色与暗色主题、桌面表格与移动卡片；
+  390px 页面无横向溢出，控制台无错误。
+- 启用 TWD 时能就地说明缺少当前汇率并禁用确认；汇率表单初始为空，
+  未写入示例 `4.8`。输入 `0` 显示严格校验，输入 `0.65` 正确预览
+  `100 TWD ÷ 0.65 = 153.846154 CNY`，验收过程未提交数据库写操作。
+- `pnpm -C server build`、`pnpm -C web build`、`node --run contract:sync`、
+  `node --run contract:check` 与 `git diff --check`：通过。
