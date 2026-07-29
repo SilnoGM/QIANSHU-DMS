@@ -847,6 +847,17 @@ test('真实 Chrome 覆盖 Cookie、持久 Session、多标签和缓存边界', 
   })()`)
 
   await restartedPage.setViewport(390, 844, true)
+  // CDP 的设备指标命令返回时，浏览器仍可能处于响应式布局更新的中间帧。
+  // 等待视口、弹窗宽度和文档边界同时稳定，避免把过渡帧误判为真实溢出。
+  await restartedPage.waitFor(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('个人资料'))
+    return innerWidth === 390
+      && dialog
+      && dialog.getBoundingClientRect().width <= innerWidth
+      && document.documentElement.scrollWidth <= innerWidth
+  })()`)
   const mobileProfileLayout = await restartedPage.evaluate(`(() => {
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
       .find(candidate => candidate.getClientRects().length > 0

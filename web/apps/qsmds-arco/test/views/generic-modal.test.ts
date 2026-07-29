@@ -30,7 +30,9 @@ test('通用模态框默认使用 md，并提供四档响应式宽度与动态�
     )
 
     assert.match(contentClass, /qs-generic-modal-panel/u)
-    assert.match(contentClass, /w-\[calc\(100vw-1\.5rem\)\]/u)
+    assert.match(contentClass, /\bw-full\b/u)
+    assert.match(contentClass, /max-w-\[calc\(100%-1\.5rem\)\]/u)
+    assert.doesNotMatch(contentClass, /100vw/u)
     assert.match(contentClass, /max-h-\[calc\(100dvh-1\.5rem\)\]/u)
     assert.match(contentClass, /rounded-xl/u)
     assert.match(contentClass, /outline-none/u)

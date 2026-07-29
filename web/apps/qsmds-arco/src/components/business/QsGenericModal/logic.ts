@@ -34,14 +34,16 @@ const SIZE_CLASSES: Record<QsGenericModalSize, string> = {
 }
 
 const BASE_CONTENT_CLASS = [
-  'qs-generic-modal-panel w-[calc(100vw-1.5rem)] min-h-auto max-h-[calc(100dvh-1.5rem)]',
+  'qs-generic-modal-panel w-full max-w-[calc(100%-1.5rem)] min-h-auto max-h-[calc(100dvh-1.5rem)]',
   'overflow-hidden rounded-xl border-border bg-background shadow-xl outline-none',
   'data-[state=open]:duration-220 data-[state=closed]:duration-180',
 ].join(' ')
 
 /**
  * 尺寸类保持为静态字符串，确保 UnoCSS 在构建时生成全部四档样式。
- * 窄屏统一保留 12px 视口边距，桌面再按业务内容密度限制最大宽度。
+ * 窄屏宽度相对 fixed containing block 计算，统一保留 12px 视口边距；
+ * 不使用 vw，避免运行中切换设备指标时布局视口单位晚一帧更新而产生横向溢出。
+ * 桌面端再按业务内容密度限制最大宽度。
  */
 export function createGenericModalContentClass(
   size: QsGenericModalSize,
