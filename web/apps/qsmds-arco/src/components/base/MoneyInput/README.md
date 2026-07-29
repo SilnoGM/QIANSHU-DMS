@@ -33,7 +33,8 @@ interface CurrencyDescriptor {
 推荐数据流：
 
 ```text
-API / Store -> map CurrencyDescriptor[] -> MoneyInput / AmountDisplay
+Server Currency -> Currency Catalog Provider -> useCurrencyCatalog().currencies
+                                       -> MoneyInput / AmountDisplay
 MoneyInput -> { amount: "1234.50", currency: "CNY" }
            -> AmountDisplay / 同币种 sumMoneyValues
 ```
@@ -42,28 +43,22 @@ MoneyInput -> { amount: "1234.50", currency: "CNY" }
 
 ```vue
 <script setup lang="ts">
-import type { CurrencyDescriptor } from '@/components/base/currency'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
+import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
-const currencies = [
-  {
-    code: 'CNY',
-    enabled: true,
-    minorUnit: 2,
-    name: '人民币',
-    symbol: '¥',
-  },
-] as const satisfies readonly CurrencyDescriptor[]
+const { currencies, errorMessage, loading } = useCurrencyCatalog()
 const amount = ref<string | null>(null)
 const currency = ref<string | null>(null)
 </script>
 
 <template>
+  <FaAlert v-if="errorMessage" :description="errorMessage" />
   <MoneyInput
     v-model="amount"
     v-model:currency="currency"
     :currencies="currencies"
+    :disabled="loading"
     min="0"
   />
   <AmountDisplay
@@ -94,9 +89,10 @@ const currency = ref<string | null>(null)
 转交给 `FaInput` 内的真实 `<input>`，不会重复落到输入组外层，可以直接作为
 `FaFormItem` 的第一个控件使用。
 
-基础组件不得直接调用货币 API、读取 Store 或依赖 provider。页面层负责把 DTO
-映射为 `CurrencyDescriptor[]`。切换币种只更新 `currency`，不会换算或改写金额
-字符串；需要汇率换算时必须在业务层显式完成。调用方应把二者分别提交：
+基础组件不得直接调用货币 API、读取 Store 或依赖 provider。正式业务页面统一
+通过 `useCurrencyCatalog()` 获取 `CurrencyDescriptor[]`；独立测试与 Showcase
+才注入局部 fixture。切换币种只更新 `currency`，不会换算或改写金额字符串；
+需要汇率换算时必须在业务层显式完成。调用方应把二者分别提交：
 
 ```ts
 {

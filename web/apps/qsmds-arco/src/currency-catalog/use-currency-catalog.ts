@@ -1,4 +1,7 @@
-import type { CurrencyCatalogItem } from './types'
+import type {
+  CurrencyCatalogItem,
+  CurrencyCatalogProvider,
+} from './types'
 import { toCurrencyDescriptors } from './adapter'
 import { currencyCatalogProviderKey } from './injection'
 
@@ -17,10 +20,12 @@ function isAbortError(error: unknown): boolean {
  * unavailable 状态且不泄漏服务端错误细节。
  */
 export function useCurrencyCatalog() {
-  const provider = inject(currencyCatalogProviderKey, null)
-  if (provider === null) {
+  const injectedProvider = inject(currencyCatalogProviderKey, null)
+  if (injectedProvider === null) {
     throw new Error('CurrencyCatalogProvider is not installed')
   }
+  // 显式收窄后再由内部异步函数捕获，避免 Vue inject overload 在闭包中恢复 nullable。
+  const provider: CurrencyCatalogProvider = injectedProvider
 
   const catalog = shallowRef<readonly CurrencyCatalogItem[]>([])
   const loading = ref(false)
@@ -29,9 +34,16 @@ export function useCurrencyCatalog() {
   let requestSequence = 0
 
   const currencies = computed(() => toCurrencyDescriptors(catalog.value))
-  const enabledCurrencies = computed(() => currencies.value.filter(
+  const selectableCurrencies = computed(() => currencies.value.filter(
     currency => currency.enabled,
   ))
+
+  function resolve(code: string | null | undefined) {
+    if (typeof code !== 'string' || code.length === 0) {
+      return null
+    }
+    return currencies.value.find(currency => currency.code === code) ?? null
+  }
 
   async function reload(): Promise<void> {
     const sequence = ++requestSequence
@@ -80,9 +92,10 @@ export function useCurrencyCatalog() {
   return {
     catalog: readonly(catalog),
     currencies,
-    enabledCurrencies,
     errorMessage: readonly(errorMessage),
     loading: readonly(loading),
     reload,
+    resolve,
+    selectableCurrencies,
   }
 }

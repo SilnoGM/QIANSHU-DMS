@@ -173,8 +173,18 @@ test('地区管理是受权限保护的真实业务页面', () => {
   assert.match(source, /<QsGenericTable\b/u)
 })
 
-test('地区以外的四个基础数据叶子路由仍只承载空页面', () => {
-  for (const page of basicDataPageContracts.slice(1)) {
+test('货币与汇率路由已承载真实管理页面', () => {
+  for (const page of basicDataPageContracts.slice(1, 3)) {
+    const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
+
+    assert.match(source, /<script setup lang="ts">/u)
+    assert.match(source, /currenciesApi\.(?:currencies|exchangeRates)\.list/u)
+    assert.match(source, /<QsGenericTable\b/u)
+  }
+})
+
+test('编号与字典两个未实施叶子路由仍只承载空页面', () => {
+  for (const page of basicDataPageContracts.slice(3)) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
     const templateMatch = source.match(/<template>([\s\S]*?)<\/template>/u)
 

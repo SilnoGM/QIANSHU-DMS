@@ -71,12 +71,12 @@
   - 验证 0、2、4 位及大整数 half-up。
   - _Requirement: 5, 6_
 
-- [ ] 11. 以 TDD 实现货币管理页面
+- [x] 11. 以 TDD 实现货币管理页面
   - 实现路由权限、查询、表格、创建/编辑和启停确认。
   - 无汇率时禁止启用，无删除入口。
   - _Requirement: 2, 4, 8, 9_
 
-- [ ] 12. 以 TDD 实现汇率管理页面
+- [x] 12. 以 TDD 实现汇率管理页面
   - 实现未配置状态、严格输入、公式预览和并发恢复。
   - 不增加历史、有效期或删除能力。
   - _Requirement: 3, 4, 8, 9_
@@ -174,3 +174,16 @@
 - 目标文件 ESLint 通过；`vue-tsc --noEmit --ignoreDeprecations 6.0` 通过。
   未带兼容参数的 `vue-tsc --noEmit` 会被当前 TypeScript 6 以既有
   `baseUrl` 弃用诊断 `TS5101` 阻断，未掩盖该配置门禁。
+
+### Task 11-12
+
+- 货币/汇率页面、查询逻辑、路由权限与 API adapter 联合定向测试通过；
+  页面使用 Server 分页、搜索与筛选，并覆盖加载、空、错误和无权限状态。
+- 货币页支持创建、展示字段编辑和启停；CNY 可维护名称/符号/排序，但 code、
+  minorUnit 和启用状态固定。非 CNY 缺少汇率时启用入口就地说明依赖。
+- 汇率页只列非 CNY，明确展示 `1 CNY = X CODE` 与
+  `外币金额 ÷ 比例 = 人民币`；比例始终按 decimal string 处理，未配置不使用
+  `0`/`1` 占位，也未把说明示例 `4.8` 写入默认表单。
+- 两页 mutation 均禁用自动重试；网络未知结果或 version 冲突会重新查询并替换
+  弹窗上下文，不复用过期 `expectedVersion`。
+- 页面目标 ESLint、`pnpm run typecheck` 与 `git diff --check`：通过。
