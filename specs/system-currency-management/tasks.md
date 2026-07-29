@@ -56,7 +56,7 @@
   - 生成 OpenAPI 并同步 Web 契约。
   - _Requirement: 1-8_
 
-- [ ] 8. 以 TDD 实现 Web API 与 Currency Catalog
+- [x] 8. 以 TDD 实现 Web API 与 Currency Catalog
   - 实现 generated DTO adapter、runtime validation、缓存和失效。
   - 覆盖身份隔离、Abort、慢响应及失败不缓存。
   - _Requirement: 5, 8_
@@ -161,3 +161,16 @@
 - 金额组件、Showcase 与相关测试定向 ESLint：通过。
 - 基础组件只消费中立 `CurrencyDescriptor`，未引入 API、Store、权限或
   Catalog provider 依赖。
+
+### Task 8
+
+- Currency API、Catalog adapter、默认 Provider 与应用注入定向测试通过，
+  25 tests。
+- Catalog 对 generated DTO 响应执行白名单 clone 与运行时验证，按
+  `authEpoch + userId` 隔离 5 分钟缓存，覆盖 Abort、请求合并、迟到响应、
+  失败不缓存与 BroadcastChannel 精确消息。
+- MoneyInput 与 AmountDisplay 通过 `useCurrencyCatalog` 消费同一
+  `CurrencyDescriptor` 真相源；Catalog 保留停用货币以解析历史业务金额。
+- 目标文件 ESLint 通过；`vue-tsc --noEmit --ignoreDeprecations 6.0` 通过。
+  未带兼容参数的 `vue-tsc --noEmit` 会被当前 TypeScript 6 以既有
+  `baseUrl` 弃用诊断 `TS5101` 阻断，未掩盖该配置门禁。
