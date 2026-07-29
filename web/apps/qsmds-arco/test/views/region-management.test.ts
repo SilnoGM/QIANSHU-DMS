@@ -9,9 +9,13 @@ function readSource(relativePath: string): string {
 
 test('地区管理查询页使用单一 FaPageMain 和现有业务组件', () => {
   const source = readSource('../../src/views/system/basic-data/regions/index.vue')
+  const pageHeader = source.match(/<FaPageHeader\b[\s\S]*?<\/FaPageHeader>/u)?.[0]
 
   assert.equal(source.match(/<FaPageMain\b/gu)?.length, 1)
-  assert.match(source, /<FaPageHeader\b/u)
+  assert.ok(pageHeader)
+  assert.equal(pageHeader.match(/<FaButton\b/gu)?.length, 1)
+  assert.match(pageHeader, /@click="openCreate"/u)
+  assert.doesNotMatch(pageHeader, /refresh-cw|>\s*刷新\s*</u)
   assert.match(source, /<RegionScopeTree\b/u)
   assert.match(source, /<QsGenericDrawer\b/u)
   assert.match(source, /<QsGenericTable\b/u)

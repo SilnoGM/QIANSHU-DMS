@@ -877,15 +877,6 @@ onBeforeUnmount(() => {
         <FaIcon name="i-lucide:plus" />
         新增{{ targetLevelLabel }}
       </FaButton>
-      <FaButton
-        v-if="canRead"
-        variant="outline"
-        :loading="navigationLoading || listLoading"
-        @click="refreshAll"
-      >
-        <FaIcon name="i-lucide:refresh-cw" />
-        刷新
-      </FaButton>
     </FaPageHeader>
 
     <FaPageMain>
