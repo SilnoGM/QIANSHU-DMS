@@ -380,7 +380,7 @@ watch(
           type="button"
           data-region-form-action="cancel"
           variant="outline"
-          class="min-h-[44px] w-full sm:w-auto"
+          class="min-h-11 w-full sm:min-h-9 sm:w-auto"
           :disabled="submitLocked"
         >
           取消
@@ -388,7 +388,7 @@ watch(
         <FaButton
           type="submit"
           data-region-form-action="submit"
-          class="min-h-[44px] w-full sm:w-auto"
+          class="min-h-11 w-full sm:min-h-9 sm:w-auto"
           :disabled="submitDisabled"
           :loading="submitLocked"
         >

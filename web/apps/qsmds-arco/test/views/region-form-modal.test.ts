@@ -51,10 +51,10 @@ test('字段错误保留安全摘要、requestId 并聚焦首个错误字段', (
   assert.match(source, /await nextTick\(\)/u)
 })
 
-test('FaInput 清空统一回写空字符串且窄屏 footer 使用全宽按钮', () => {
+test('FaInput 清空统一回写空字符串且 footer 按钮按断点恢复桌面默认高度', () => {
   assert.equal(source.match(/@clear="model\.\w+ = ''"/gu)?.length, 4)
   assert.equal(
-    source.match(/class="min-h-\[44px\] w-full sm:w-auto"/gu)?.length,
+    source.match(/class="min-h-11 w-full sm:min-h-9 sm:w-auto"/gu)?.length,
     2,
   )
   assert.doesNotMatch(source, /gradient|#[\dA-Fa-f]{3,8}\b|rgba?\(/u)

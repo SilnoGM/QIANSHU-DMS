@@ -81,7 +81,7 @@ test('启停确认框复用 QsGenericModal 且保持纯展示事件边界', () =
   assert.match(source, /当前操作对象/u)
   assert.match(source, /:variant="isDisable \? 'destructive' : 'default'"/u)
   assert.equal(
-    source.match(/class="min-h-\[44px\] w-full sm:w-auto"/gu)?.length,
+    source.match(/class="min-h-11 w-full sm:min-h-9 sm:w-auto"/gu)?.length,
     2,
   )
   assert.doesNotMatch(

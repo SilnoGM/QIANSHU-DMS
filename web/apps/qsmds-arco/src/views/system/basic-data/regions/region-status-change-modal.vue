@@ -212,7 +212,7 @@ watch(
         type="button"
         data-region-status-action="cancel"
         variant="outline"
-        class="min-h-[44px] w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :disabled="interactionLocked"
       >
         取消
@@ -221,7 +221,7 @@ watch(
         type="button"
         data-region-status-action="submit"
         :variant="isDisable ? 'destructive' : 'default'"
-        class="min-h-[44px] w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :loading="interactionLocked"
         :disabled="interactionLocked || region === null"
         :aria-label="`${copy.confirmLabel}${region?.name ?? '地区'}`"
