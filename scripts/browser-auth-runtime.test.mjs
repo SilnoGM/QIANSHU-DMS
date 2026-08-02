@@ -228,12 +228,10 @@ test('Chrome 页面导航同时支持完整加载与 hash 内部导航', async (
       assert.equal(method, 'Page.navigate')
       return {}
     },
-    waitForEvent: (method) => {
-      waitedEvents.push(method)
-      if (method === 'Page.navigatedWithinDocument') {
-        return Promise.resolve({})
-      }
-      return new Promise(() => {})
+    waitForAnyEvent: (events) => {
+      waitedEvents.push(...events.map(event => event.method))
+      assert.equal(events.every(event => event.predicate({}) === true), true)
+      return Promise.resolve({})
     },
   }
   const page = new ChromePage(connection)
