@@ -15,6 +15,7 @@ import {
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { ApiException } from '../src/infrastructure/http/api.exception'
 import { PasswordProvider } from '../src/modules/auth/providers/password.provider'
+import { MANAGEMENT_PERMISSION_CODES } from '../src/modules/access-control/permission.constants'
 import {
   UsersService,
   type UsersCommandContext,
@@ -723,9 +724,9 @@ describe('Management API with PostgreSQL', () => {
     const permissionCatalog = readResponseBody<PermissionBody[]>(
       permissionsResponse,
     )
-    expect(permissionCatalog).toHaveLength(25)
+    expect(permissionCatalog).toHaveLength(32)
     expect(permissionCatalog.map(({ code }) => code)).toEqual(
-      [...permissionCatalog.map(({ code }) => code)].sort(),
+      [...MANAGEMENT_PERMISSION_CODES].sort(),
     )
     const systemOnlyPermission = permissionCatalog.find(
       ({ systemOnly }) => systemOnly,

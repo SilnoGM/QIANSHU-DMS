@@ -56,8 +56,15 @@ describe('permission constants', () => {
       'exchange-rates:read',
       'exchange-rates:create',
       'exchange-rates:update',
+      'numbering-rules:read',
+      'numbering-rules:create',
+      'numbering-rules:update',
+      'numbering-rules:publish',
+      'numbering-rules:enable',
+      'numbering-rules:disable',
+      'numbering-rules:read-issuances',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 25)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 32)
   })
 })
 

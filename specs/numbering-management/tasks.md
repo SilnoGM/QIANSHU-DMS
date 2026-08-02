@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 3）
+- 状态：Phase 4 实施中（Task 4）
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
@@ -161,10 +161,10 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 2.10 实现最小纯函数并重构；不得提前引入 Repository 或独立 domain package。
   - _Requirements: R2-R7, R13_
 
-- [ ] 3. 以 TDD 建立 Prisma Schema、forward migration、权限与审计
-  - [ ] 3.1 确认 Gate B 后，先新增 `server/src/infrastructure/database/numbering-schema.spec.ts` 和 `server/test/numbering-schema.e2e-spec.ts` 的失败测试。
-  - [ ] 3.2 新增 `NumberingRule`、`NumberingRuleVersion`、`NumberingRuleSegment`、`NumberingPeriodState` 和 `NumberingIssuance`。
-  - [ ] 3.3 固定数据库约束：
+- [x] 3. 以 TDD 建立 Prisma Schema、forward migration、权限与审计
+  - [x] 3.1 确认 Gate B 后，先新增 `server/src/infrastructure/database/numbering-schema.spec.ts` 和 `server/test/numbering-schema.e2e-spec.ts` 的失败测试。
+  - [x] 3.2 新增 `NumberingRule`、`NumberingRuleVersion`、`NumberingRuleSegment`、`NumberingPeriodState` 和 `NumberingIssuance`。
+  - [x] 3.3 固定数据库约束：
     - `ruleCode` 唯一且不可修改；
     - 每规则最多一个 ACTIVE 和一个 DRAFT；
     - `(versionId, position)` 唯一；
@@ -178,12 +178,12 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
     - `(consumerCode, idempotencyKeyHash)` 唯一；
     - Hash 固定 `32` bytes；
     - 所有业务 FK 使用 `RESTRICT`。
-  - [ ] 3.4 新增 trigger，阻止修改/删除 issuance、修改 ruleCode、非法版本迁移，并阻止对非 DRAFT 父版本的 segment 执行 INSERT/UPDATE/DELETE。
-  - [ ] 3.5 建立规则列表、版本历史、period 和 issuance 倒序查询索引；issuance 至少覆盖 rule+period、rule+consumer 和 rule+generatedNumber 前缀查询，不建立跨规则 generated number 唯一索引。
-  - [ ] 3.6 新增七项权限并授权 `system_admin`，将管理权限精确集合测试由 `25` 更新为 `32`。
-  - [ ] 3.7 新增五类管理 AuditEventType；clone 复用 created 并记录来源。
-  - [ ] 3.8 migration 不插入默认规则，不使用 `ON CONFLICT DO NOTHING` 掩盖结构漂移。
-  - [ ] 3.9 验证空库 replay、重复 deploy、Prisma validate、约束、trigger 和权限目录。
+  - [x] 3.4 新增 trigger，阻止修改/删除 issuance、修改 ruleCode、非法版本迁移，并阻止对非 DRAFT 父版本的 segment 执行 INSERT/UPDATE/DELETE。
+  - [x] 3.5 建立规则列表、版本历史、period 和 issuance 倒序查询索引；issuance 至少覆盖 rule+period、rule+consumer 和 rule+generatedNumber 前缀查询，不建立跨规则 generated number 唯一索引。
+  - [x] 3.6 新增七项权限并授权 `system_admin`，将管理权限精确集合测试由 `25` 更新为 `32`。
+  - [x] 3.7 新增五类管理 AuditEventType；clone 复用 created 并记录来源。
+  - [x] 3.8 migration 不插入默认规则，不使用 `ON CONFLICT DO NOTHING` 掩盖结构漂移。
+  - [x] 3.9 验证空库 replay、重复 deploy、Prisma validate、约束、trigger 和权限目录。
   - _Requirements: R1-R8, R11, R13_
 
 - [ ] 4. 以 TDD 实现 DTO、normalizer、decimal-string 和持久化错误边界
