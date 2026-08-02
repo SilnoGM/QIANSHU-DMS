@@ -238,6 +238,7 @@ export function useNumberingMaintenance(
   async function fetchRuleForEditor(
     ruleId: string,
     mode: Extract<NumberingEditorMode, 'clone' | 'edit'>,
+    { replaceFormModel = true }: { replaceFormModel?: boolean } = {},
   ): Promise<void> {
     editorAbortController?.abort()
     const controller = new AbortController()
@@ -258,12 +259,14 @@ export function useNumberingMaintenance(
         return
       }
       editorRule.value = response.data
-      const model = createNumberingRuleFormModel(response.data)
-      if (mode === 'clone') {
-        model.ruleCode = ''
-        model.name = `${response.data.name}副本`
+      if (replaceFormModel) {
+        const model = createNumberingRuleFormModel(response.data)
+        if (mode === 'clone') {
+          model.ruleCode = ''
+          model.name = `${response.data.name}副本`
+        }
+        editorFormModel.value = cloneFormModel(model)
       }
-      editorFormModel.value = cloneFormModel(model)
     }
     catch (error) {
       if (isNumberingAbortError(error) || !contextIsCurrent({
@@ -397,10 +400,13 @@ export function useNumberingMaintenance(
     if (current === null || editorMode.value === 'create') {
       return
     }
-    // 保留用户表单模型，只刷新 expectedVersion 所需的 Server 快照。
-    const preserved = cloneFormModel(editorFormModel.value)
-    await fetchRuleForEditor(current.id, editorMode.value)
-    editorFormModel.value = preserved
+    /*
+     * 只刷新 expectedVersion 所需的 Server 快照。若先用 Server 模型覆盖再恢复，
+     * Drawer 会把恢复后的未保存输入误认成新 baseline，导致保存按钮被禁用。
+     */
+    await fetchRuleForEditor(current.id, editorMode.value, {
+      replaceFormModel: false,
+    })
   }
 
   async function submitEditor(model: NumberingRuleFormModel): Promise<boolean> {

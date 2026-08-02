@@ -150,3 +150,39 @@ test('预览与 GET 均使用 AbortController 和单调 request version，mutati
   assert.match(source, /操作结果未知/u)
   assert.doesNotMatch(source, /unknownResult[\s\S]{0,240}numberingApi\.rules\.(?:create|update|clone|publish|enable|disable)\(/u)
 })
+
+test('冲突与未知结果只刷新规则快照，不把未保存表单重置为基线', () => {
+  const source = readPageSource()
+
+  assert.match(source, /replaceFormModel\?:\s*boolean/u)
+  assert.match(source, /replaceFormModel\s*=\s*true/u)
+  assert.match(
+    source,
+    /fetchRuleForEditor\(current\.id, editorMode\.value,\s*\{\s*replaceFormModel:\s*false,?\s*\}\)/u,
+  )
+  assert.doesNotMatch(
+    source,
+    /function refreshEditorRuleContext[\s\S]{0,400}editorFormModel\.value\s*=/u,
+  )
+})
+
+test('页面放弃流程不依赖动画回调且移动端主操作保持 44px', () => {
+  const source = readPageSource()
+
+  assert.match(
+    source,
+    /data-testid="numbering-create-rule"[\s\S]{0,120}class="min-h-11"/u,
+  )
+  assert.doesNotMatch(
+    source,
+    /data-testid="numbering-create-rule"[\s\S]{0,120}md:min-h-9/u,
+  )
+  assert.match(
+    source,
+    /async function discardEditorChanges[\s\S]{0,500}await nextTick\(\)[\s\S]{0,160}closeWithoutDirtyGuard\(\)/u,
+  )
+  assert.doesNotMatch(
+    source,
+    /data-testid="numbering-discard-confirm"[\s\S]{0,180}@closed=/u,
+  )
+})

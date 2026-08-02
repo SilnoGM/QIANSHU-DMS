@@ -507,7 +507,11 @@ watch(
             </FaFormItem>
           </div>
 
-          <FaFormItem name="segments" hide-label>
+          <!--
+            复合片段编辑器内部包含多个原生控件，必须关闭 FormItem 的事件自动绑定；
+            否则冒泡的 input/change 会被误判为整个 segments 字段值并覆盖数组。
+          -->
+          <FaFormItem name="segments" hide-label :auto-bind="false">
             <NumberingSegmentEditor
               :model-value="form.segments"
               :disabled="submitLocked || effectiveConfigurationLocked"

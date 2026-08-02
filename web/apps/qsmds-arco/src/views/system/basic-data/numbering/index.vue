@@ -95,7 +95,6 @@ let listDisposed = false
 
 const editorDrawerRef = useTemplateRef<NumberingRuleEditorDrawerExpose>('editorDrawerRef')
 const discardConfirmVisible = ref(false)
-const discardEditorAfterModalClose = ref(false)
 const mobileActionsVisible = ref(false)
 const mobileActionTarget = ref<NumberingRuleListItemDto | null>(null)
 const pendingMobileAction = ref<PendingRowAction | null>(null)
@@ -409,23 +408,18 @@ function handleEditorClosed(): void {
   }
 }
 
-function discardEditorChanges(): void {
-  discardEditorAfterModalClose.value = true
+async function discardEditorChanges(): Promise<void> {
   discardConfirmVisible.value = false
-}
-
-async function handleDiscardConfirmClosed(): Promise<void> {
-  if (!discardEditorAfterModalClose.value) {
-    return
-  }
-  discardEditorAfterModalClose.value = false
-  await nextTick()
+  /*
+   * “放弃修改”是用户已经确认的业务动作，不能依赖 Modal 的退出动画回调。
+   * 减少动画环境下同一个 Modal 重复打开时，closed 可能因动画状态去重而不再触发；
+   * 先提交 Modal 的关闭状态，再用 Drawer 的一次性 bypass 确定性完成退出。
+   */
   await nextTick()
   editorDrawerRef.value?.closeWithoutDirtyGuard()
 }
 
 function closeEditorForPermissionChange(): void {
-  discardEditorAfterModalClose.value = false
   discardConfirmVisible.value = false
   editorDrawerRef.value?.closeForAuthorityLoss()
   clearEditorContext()
@@ -608,7 +602,6 @@ watch(
     if (identityChanged || !next.canRead) {
       closeMobileActions()
       pendingDetailEditorAction.value = null
-      discardEditorAfterModalClose.value = false
       discardConfirmVisible.value = false
       if (editorVisible.value) {
         editorDrawerRef.value?.closeForAuthorityLoss()
@@ -656,13 +649,18 @@ onBeforeUnmount(() => {
 <template>
   <div class="numbering-management-page min-w-0">
     <FaPageHeader
-      title="编号管理"
       description="集中查看后续业务域的编号结构、规则状态、版本与当前周期容量；所有时间均按 Asia/Shanghai 展示。"
     >
+      <template #title>
+        <h1 class="m-0">
+          编号管理
+        </h1>
+      </template>
+
       <FaButton
         v-if="canRead && canCreate"
         data-testid="numbering-create-rule"
-        class="min-h-11 md:min-h-9"
+        class="min-h-11"
         @click="openCreateEditor"
       >
         <FaIcon name="i-lucide:plus" />
@@ -670,7 +668,7 @@ onBeforeUnmount(() => {
       </FaButton>
       <FaButton
         v-if="canRead"
-        class="min-h-11 md:min-h-9"
+        class="min-h-11"
         variant="outline"
         :loading="listLoading"
         @click="loadNumberingRules"
@@ -1106,7 +1104,6 @@ onBeforeUnmount(() => {
       description="当前编号规则表单仍有未保存内容。"
       size="sm"
       data-testid="numbering-discard-confirm"
-      @closed="handleDiscardConfirmClosed"
     >
       <FaAlert
         icon="i-lucide:triangle-alert"

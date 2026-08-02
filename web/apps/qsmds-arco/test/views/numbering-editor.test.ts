@@ -171,6 +171,7 @@ test('编辑抽屉契约覆盖 xl、隔离模型、预览提交、错误和一�
   assert.match(source, /hasIssuances/)
   assert.match(source, /Server 只接受名称、说明或自增数字位数扩大/)
   assert.match(source, /:disabled="submitLocked \|\| effectiveConfigurationLocked"/)
+  assert.match(source, /<FaFormItem name="segments" hide-label :auto-bind="false">/)
   assert.match(source, /lg:grid-cols-/)
   assert.match(source, /lg:sticky/)
   assert.doesNotMatch(source, /timezone[^\n]*(?:select|option)/i)
