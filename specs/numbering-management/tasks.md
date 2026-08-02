@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 12）
+- 状态：Phase 4 实施中（Task 13-15）
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
@@ -257,7 +257,7 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 9.13 generator 不调用 `AuditService`，发号只写永久 ledger。
   - _Requirements: R3-R9, R11, R13_
 
-- [ ] 10. 以 TDD 发布 `NumberingModule`、内部生成服务、管理 API 与 OpenAPI
+- [x] 10. 以 TDD 发布 `NumberingModule`、内部生成服务、管理 API 与 OpenAPI
   - [x] 10.1 实现并只导出已确认的 `NumberingGeneratorService`：
 
     ```text
@@ -269,7 +269,7 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 10.3 Controller 暴露已确认的 list/detail/preview/create/update/versions/publish/enable/disable/clone/issuances。
   - [x] 10.4 每个 operation 固定 permission、CSRF、`private, no-store`、`X-Request-Id`、成功 response 和精确错误矩阵。
   - [x] 10.5 OpenAPI 测试明确断言不存在 `/generate` 或等价 path。
-  - [ ] 10.6 Server E2E 覆盖 create -> preview -> publish -> enable -> internal generate -> disable -> clone。
+  - [x] 10.6 Server E2E 覆盖 create -> preview -> publish -> enable -> internal generate -> disable -> clone。
   - [x] 10.7 只通过正式链路生成 `server/openapi/openapi.json` 并执行根 `contract:sync`；不手工编辑 snapshot。
   - _Requirements: R1-R13_
 
@@ -328,16 +328,16 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
 
 - [ ] 15. 完成隔离 PostgreSQL 容量、周期、幂等和并发 E2E
   - [ ] 15.1 从空 PostgreSQL 应用全部 migration，验证二次 deploy 无 pending。
-  - [ ] 15.2 验证 schema、partial unique、CHECK、trigger、FK、权限和永久 issuance。
-  - [ ] 15.3 验证 sequence、pure random、mixed、NEVER/YEARLY/MONTHLY/DAILY、最后容量和耗尽。
-  - [ ] 15.4 `100` 个不同幂等键并发得到 `100` 个唯一编号；sequence 值精确连续。
-  - [ ] 15.5 `100` 个相同幂等键并发只创建一条 issuance、只消费一次容量。
-  - [ ] 15.6 最后一个容量位并发竞争时恰好一个成功，其余返回 `NUMBERING_CAPACITY_EXHAUSTED`。
-  - [ ] 15.7 publish 与 generate 并发时，每次生成只观察完整旧版本或完整新版本，period 计数连续。
-  - [ ] 15.8 构造同一幂等 retry 初查未命中、随后排在 disable 排他锁之后的竞态，验证其取得 rule lock 后仍返回已提交原编号，而不是 `NUMBERING_RULE_UNAVAILABLE`。
-  - [ ] 15.9 固定随机碰撞前 31 次后成功，以及 32 次全部碰撞后完整回滚。
-  - [ ] 15.10 验证在线 `lifetimeUsedCount = SUM(period state.usedCount)`，并与 issuance count 一致；通用 Audit 清理不影响发号记录。
-  - [ ] 15.11 验证 Server 没有 HTTP generate endpoint。
+  - [x] 15.2 验证 schema、partial unique、CHECK、trigger、FK、权限和永久 issuance。
+  - [x] 15.3 验证 sequence、pure random、mixed、NEVER/YEARLY/MONTHLY/DAILY、最后容量和耗尽。
+  - [x] 15.4 `100` 个不同幂等键并发得到 `100` 个唯一编号；sequence 值精确连续。
+  - [x] 15.5 `100` 个相同幂等键并发只创建一条 issuance、只消费一次容量。
+  - [x] 15.6 最后一个容量位并发竞争时恰好一个成功，其余返回 `NUMBERING_CAPACITY_EXHAUSTED`。
+  - [x] 15.7 publish 与 generate 并发时，每次生成只观察完整旧版本或完整新版本，period 计数连续。
+  - [x] 15.8 构造同一幂等 retry 初查未命中、随后排在 disable 排他锁之后的竞态，验证其取得 rule lock 后仍返回已提交原编号，而不是 `NUMBERING_RULE_UNAVAILABLE`。
+  - [x] 15.9 固定随机碰撞前 31 次后成功，以及 32 次全部碰撞后完整回滚。
+  - [x] 15.10 验证在线 `lifetimeUsedCount = SUM(period state.usedCount)`，并与 issuance count 一致；通用 Audit 清理不影响发号记录。
+  - [x] 15.11 验证 Server 没有 HTTP generate endpoint。
   - _Requirements: R1-R11, R13_
 
 - [ ] 16. 建立 Browser E2E 并完成真实交互验收
