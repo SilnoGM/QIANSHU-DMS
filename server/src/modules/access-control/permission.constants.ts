@@ -37,6 +37,13 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'exchange-rates:read',
   'exchange-rates:create',
   'exchange-rates:update',
+  'numbering-rules:read',
+  'numbering-rules:create',
+  'numbering-rules:update',
+  'numbering-rules:publish',
+  'numbering-rules:enable',
+  'numbering-rules:disable',
+  'numbering-rules:read-issuances',
 ] as const
 
 export type ManagementPermissionCode =

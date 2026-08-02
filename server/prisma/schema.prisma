@@ -75,6 +75,11 @@ enum AuditEventType {
   CURRENCY_DISABLED
   EXCHANGE_RATE_CREATED
   EXCHANGE_RATE_UPDATED
+  NUMBERING_RULE_CREATED
+  NUMBERING_RULE_UPDATED
+  NUMBERING_RULE_VERSION_PUBLISHED
+  NUMBERING_RULE_ENABLED
+  NUMBERING_RULE_DISABLED
   SYSTEM_BOOTSTRAP
   SYSTEM_ADMIN_RECOVERED
   AUTH_RETENTION_PURGED
@@ -88,6 +93,60 @@ enum RegionLevel {
   CITY
 
   @@map("region_level")
+}
+
+enum NumberingRuleStatus {
+  DRAFT
+  ENABLED
+  DISABLED
+
+  @@map("numbering_rule_status")
+}
+
+enum NumberingRuleVersionStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+
+  @@map("numbering_rule_version_status")
+}
+
+enum NumberingSegmentType {
+  FIXED
+  DATE
+  SEPARATOR
+  SEQUENCE
+  RANDOM
+
+  @@map("numbering_segment_type")
+}
+
+enum NumberingResetPolicy {
+  NEVER
+  YEARLY
+  MONTHLY
+  DAILY
+
+  @@map("numbering_reset_policy")
+}
+
+enum NumberingDateFormat {
+  YYYY
+  YY
+  MM
+  DD
+  YYYYMM
+  YYYYMMDD
+  YYMMDD
+
+  @@map("numbering_date_format")
+}
+
+enum NumberingRandomMode {
+  LETTERS_THEN_DIGITS
+  SHUFFLED
+
+  @@map("numbering_random_mode")
 }
 
 model User {
@@ -296,4 +355,106 @@ model ExchangeRate {
 
   @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "exchange_rates_updated_at_id_idx")
   @@map("exchange_rates")
+}
+
+model NumberingRule {
+  id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleCode    String              @unique(map: "numbering_rules_rule_code_key") @map("rule_code") @db.VarChar(64)
+  name        String              @db.VarChar(128)
+  description String?             @db.VarChar(500)
+  status      NumberingRuleStatus @default(DRAFT)
+  version     Int                 @default(1)
+  createdAt   DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  versions     NumberingRuleVersion[]
+  periodStates NumberingPeriodState[]
+  issuances    NumberingIssuance[]
+
+  @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "numbering_rules_status_updated_at_id_idx")
+  @@map("numbering_rules")
+}
+
+model NumberingRuleVersion {
+  id                String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId            String                     @map("rule_id") @db.Uuid
+  revision          Int
+  status            NumberingRuleVersionStatus @default(DRAFT)
+  resetPolicy       NumberingResetPolicy       @map("reset_policy")
+  timezone          String                     @default("Asia/Shanghai") @db.VarChar(64)
+  configFingerprint String                     @map("config_fingerprint") @db.Char(64)
+  createdAt         DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  publishedAt       DateTime?                  @map("published_at") @db.Timestamptz(6)
+
+  rule      NumberingRule          @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  segments  NumberingRuleSegment[]
+  issuances NumberingIssuance[]
+
+  @@unique([ruleId, revision], map: "numbering_rule_versions_rule_id_revision_key")
+  @@unique([id, ruleId], map: "numbering_rule_versions_id_rule_id_key")
+  @@index([ruleId, revision(sort: Desc), id(sort: Desc)], map: "numbering_rule_versions_rule_id_revision_id_idx")
+  @@map("numbering_rule_versions")
+}
+
+model NumberingRuleSegment {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  versionId          String               @map("version_id") @db.Uuid
+  position           Int
+  type               NumberingSegmentType
+  fixedValue         String?              @map("fixed_value") @db.VarChar(64)
+  dateFormat         NumberingDateFormat? @map("date_format")
+  separatorValue     String?              @map("separator_value") @db.Char(1)
+  sequenceWidth      Int?                 @map("sequence_width") @db.SmallInt
+  sequenceStartValue BigInt?              @map("sequence_start_value") @db.BigInt
+  sequenceStep       BigInt?              @map("sequence_step") @db.BigInt
+  randomLetterLength Int?                 @map("random_letter_length") @db.SmallInt
+  randomDigitLength  Int?                 @map("random_digit_length") @db.SmallInt
+  randomMode         NumberingRandomMode? @map("random_mode")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  version NumberingRuleVersion @relation(fields: [versionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([versionId, position], map: "numbering_rule_segments_version_id_position_key")
+  @@map("numbering_rule_segments")
+}
+
+model NumberingPeriodState {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId            String   @map("rule_id") @db.Uuid
+  periodKey         String   @map("period_key") @db.VarChar(16)
+  nextSequenceValue BigInt?  @map("next_sequence_value") @db.BigInt
+  usedCount         BigInt   @default(0) @map("used_count") @db.BigInt
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rule      NumberingRule       @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  issuances NumberingIssuance[]
+
+  @@unique([ruleId, periodKey], map: "numbering_period_states_rule_id_period_key_key")
+  @@map("numbering_period_states")
+}
+
+model NumberingIssuance {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId                 String   @map("rule_id") @db.Uuid
+  ruleVersionId          String   @map("rule_version_id") @db.Uuid
+  periodKey              String   @map("period_key") @db.VarChar(16)
+  generatedNumber        String   @map("generated_number") @db.VarChar(64)
+  sequenceValue          BigInt?  @map("sequence_value") @db.BigInt
+  consumerCode           String   @map("consumer_code") @db.VarChar(64)
+  idempotencyKeyHash     Bytes    @map("idempotency_key_hash") @db.ByteA
+  requestFingerprintHash Bytes    @map("request_fingerprint_hash") @db.ByteA
+  issuedAt               DateTime @default(now()) @map("issued_at") @db.Timestamptz(6)
+
+  rule        NumberingRule        @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ruleVersion NumberingRuleVersion @relation(fields: [ruleVersionId, ruleId], references: [id, ruleId], onDelete: Restrict, onUpdate: Restrict)
+  periodState NumberingPeriodState @relation(fields: [ruleId, periodKey], references: [ruleId, periodKey], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([ruleId, generatedNumber], map: "numbering_issuances_rule_id_generated_number_key")
+  @@unique([consumerCode, idempotencyKeyHash], map: "numbering_issuances_consumer_code_idempotency_key_hash_key")
+  @@index([ruleId, periodKey, issuedAt(sort: Desc), id(sort: Desc)], map: "numbering_issuances_rule_id_period_key_issued_at_id_idx")
+  @@index([ruleId, issuedAt(sort: Desc), id(sort: Desc)], map: "numbering_issuances_rule_id_issued_at_id_idx")
+  @@index([ruleId, consumerCode, issuedAt(sort: Desc), id(sort: Desc)], map: "numbering_issuances_rule_id_consumer_code_issued_at_id_idx")
+  @@index([ruleId, generatedNumber(ops: raw("varchar_pattern_ops"))], map: "numbering_issuances_rule_id_generated_number_prefix_idx")
+  @@map("numbering_issuances")
 }

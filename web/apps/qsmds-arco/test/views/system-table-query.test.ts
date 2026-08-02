@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 页面查询逻辑是无浏览器依赖的纯函数，使用 Node.js 内置 runner 验证。
 import test from 'node:test'
 
+import { groupPermissions } from '../../src/views/system/permissions/catalog'
 import {
   filterPermissionTableRows,
   filterRoleTableRows,
@@ -61,6 +62,22 @@ const permissions: PermissionDto[] = [
     systemOnly: true,
   },
 ]
+
+const numberingPermissions: PermissionDto[] = [
+  ['read', '查看编号规则'],
+  ['create', '创建编号规则'],
+  ['update', '修改编号规则'],
+  ['publish', '发布编号规则'],
+  ['enable', '启用编号规则'],
+  ['disable', '停用编号规则'],
+  ['read-issuances', '查看发号记录'],
+].map(([action, name], index) => ({
+  code: `numbering-rules:${action}`,
+  description: `${name}权限`,
+  id: `permission-numbering-${index + 1}`,
+  name: name!,
+  systemOnly: false,
+}))
 
 test('角色表格搜索覆盖名称、编码和说明，并与角色类型筛选共同生效', () => {
   assert.deepEqual(
@@ -125,6 +142,33 @@ test('权限资源筛选项按资源键稳定排序且复用面向用户的中�
     { label: '角色管理', value: 'roles' },
     { label: '用户管理', value: 'users' },
   ])
+})
+
+test('编号规则七项权限可通过中文资源名搜索并聚合到同一权限目录分组', () => {
+  const expectedCodes = [
+    'numbering-rules:create',
+    'numbering-rules:disable',
+    'numbering-rules:enable',
+    'numbering-rules:publish',
+    'numbering-rules:read',
+    'numbering-rules:read-issuances',
+    'numbering-rules:update',
+  ]
+
+  assert.deepEqual(
+    filterPermissionTableRows(numberingPermissions, '编号规则', {})
+      .map(permission => permission.code)
+      .sort(),
+    expectedCodes,
+  )
+  assert.deepEqual(permissionResourceOptions(numberingPermissions), [
+    { label: '编号规则', value: 'numbering-rules' },
+  ])
+
+  const [group] = groupPermissions(numberingPermissions)
+  assert.equal(group?.key, 'numbering-rules')
+  assert.equal(group?.label, '编号规则')
+  assert.deepEqual(group?.permissions.map(permission => permission.code), expectedCodes)
 })
 
 test('自定义移动卡片根据通用表格传入的可见列决定字段显隐', () => {

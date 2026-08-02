@@ -32,7 +32,7 @@ const basicDataPageContracts = [
     title: '当前汇率',
   },
   {
-    auth: undefined,
+    auth: 'numbering-rules:read',
     file: '../../src/views/system/basic-data/numbering/index.vue',
     name: 'systemBasicDataNumbering',
     path: 'numbering',
@@ -101,7 +101,7 @@ test('基础数据父路由保持权限中立并由叶子路由独立鉴权', ()
   )
 })
 
-test('无基础数据读取权限时仍保留两个权限中立菜单', () => {
+test('无基础数据读取权限时只保留权限中立的字典菜单', () => {
   const permissions = ['users:read']
   const menuFixture: MenuRecordRaw[] = [{
     path: basicDataRoutes.path,
@@ -119,7 +119,7 @@ test('无基础数据读取权限时仍保留两个权限中立菜单', () => {
     })),
   }]
 
-  // 使用生产递归过滤函数验证父项保留、三个受保护叶子隐藏及权限中立叶子的顺序。
+  // 使用生产递归过滤函数验证父项保留、所有受保护叶子隐藏及权限中立叶子的顺序。
   const [visibleBasicData] = filterAccessibleMenus(
     menuFixture,
     value => matchesAuthorization(permissions, value),
@@ -129,11 +129,11 @@ test('无基础数据读取权限时仍保留两个权限中立菜单', () => {
   assert.equal(visibleBasicData?.path, '/system/basic-data')
   assert.deepEqual(
     visibleBasicData?.children?.map(menu => menu.path),
-    ['numbering', 'dictionaries'],
+    ['dictionaries'],
   )
   assert.ok(
     visibleBasicData?.children?.every(
-      menu => !['regions', 'currencies', 'exchange-rates'].includes(menu.path),
+      menu => !['regions', 'currencies', 'exchange-rates', 'numbering'].includes(menu.path),
     ),
   )
 })
@@ -167,12 +167,25 @@ test('货币汇率单一菜单使用任一读取权限并隐藏兼容路由', ()
 
   assert.deepEqual(
     visiblePaths(['currencies:read']),
-    ['currencies', 'numbering', 'dictionaries'],
+    ['currencies', 'dictionaries'],
   )
   assert.deepEqual(
     visiblePaths(['exchange-rates:read']),
-    ['currencies', 'numbering', 'dictionaries'],
+    ['currencies', 'dictionaries'],
   )
+})
+
+test('编号管理菜单与页面都要求 numbering-rules:read', () => {
+  const numberingRoute = basicDataRoutes.children?.find(
+    route => route.name === 'systemBasicDataNumbering',
+  )
+
+  assert.equal(numberingRoute?.meta?.auth, 'numbering-rules:read')
+  assert.equal(
+    matchesAuthorization(['numbering-rules:read'], numberingRoute?.meta?.auth),
+    true,
+  )
+  assert.equal(matchesAuthorization([], numberingRoute?.meta?.auth), false)
 })
 
 test('基础数据作为一级菜单注册在系统管理顶部主路由内', () => {
@@ -224,8 +237,19 @@ test('货币汇率单页组合两个真实管理面板', () => {
   }
 })
 
-test('编号与字典两个未实施叶子路由仍只承载空页面', () => {
-  for (const page of basicDataPageContracts.slice(3)) {
+test('编号管理已升级为真实业务页面', () => {
+  const source = readFileSync(
+    new URL('../../src/views/system/basic-data/numbering/index.vue', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(source, /<script setup lang="ts">/u)
+  assert.match(source, /numberingApi\.rules\.list/u)
+  assert.match(source, /<QsGenericTable\b/u)
+})
+
+test('字典管理未实施叶子路由仍只承载空页面', () => {
+  for (const page of basicDataPageContracts.slice(4)) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
     const templateMatch = source.match(/<template>([\s\S]*?)<\/template>/u)
 

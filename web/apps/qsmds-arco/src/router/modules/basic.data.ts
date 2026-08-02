@@ -63,6 +63,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '编号管理',
         icon: 'i-lucide:list-ordered',
+        auth: 'numbering-rules:read',
       },
     },
     {
