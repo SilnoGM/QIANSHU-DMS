@@ -4,11 +4,12 @@
 
 - 状态：已确认
 - 确认日期：2026-07-29
+- Gate B 实施边界确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
 - 固定业务时区：`Asia/Shanghai`
 - 目标页面：`/system/basic-data/numbering`
 
-本设计确认了目标结构和实施边界，但不替代仓库对数据库 Schema、公共 API、公共数据结构、权限码和错误码实际修改的单独授权。
+用户已在 Gate B 单独确认数据库 Schema、公共 API、公共数据结构、权限码、错误码和内部服务契约；任何超出已确认基线的变化仍须重新确认。
 
 ## 2. 设计目标、边界与真相源
 
@@ -713,7 +714,7 @@ interface UpdateNumberingRuleRequestDto {
 Preview 是无状态管理 API：
 
 - 输入未保存的 config。
-- 返回规范化模板、最大长度、固定 `5` 个样例和容量。
+- 返回规范化模板、最大长度、容量和最多 `5` 个样例。样例数统一为 `min(5, remainingCount)`；包含 sequence 时从当前 next 开始，pure random 返回同一剩余空间内的格式样例，耗尽时为空，不制造重复补位或越界样例。
 - 对已存在规则编辑场景可携带 `ruleId`，用于执行发号后兼容性校验。
 - 不创建 rule、version、segment、state 或 issuance。
 - 纯随机规则的 `nextNumberPreview` 为 null，但 samples 仍可展示随机格式。

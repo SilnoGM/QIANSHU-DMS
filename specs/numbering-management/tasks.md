@@ -2,16 +2,18 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 3 已生成，待确认进入 Phase 4
+- 状态：Phase 4 实施中（Task 3）
 - 生成日期：2026-07-29
+- Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
 - 技术设计：[编号管理技术设计](./design.md)
 - 正式 Web 应用：`web/apps/qsmds-arco`
 - Server：`server`
 - 真实业务入口：`/system/basic-data/numbering`
-- 当前规划基线：`main...origin/main`，生成文档前工作区干净
+- 实施分支：`feat/numbering-management`
+- 实施起点：`6cf9629740281920906708912a7132497366dcc3`，Gate A 工作区干净
 
-本文件是实施任务清单，不代表已经获得数据库 Schema、公共 API、公共数据结构、权限码、错误码或内部公共服务契约的实际修改授权。任务清单经用户确认后才能进入 Phase 4。
+用户已确认 Gate A 与 Gate B，允许按已冻结的数据库 Schema、公共 API、公共数据结构、权限码、错误码和内部公共服务契约进入 Phase 4。任何超出该基线的公共边界变化仍须重新确认。
 
 ## 2. 执行规则
 
@@ -112,18 +114,18 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
 
 ## 5. 实施任务
 
-- [ ] 1. 取得实施授权并建立绿色基线
-  - [ ] 1.1 按 Gate A 确认 Phase 4 范围、目标分支、提交节奏和禁止事项。
-  - [ ] 1.2 根据最新代码形成 Gate B 精确审批包，包含 Prisma/SQL、完整 OpenAPI DTO/状态码/错误矩阵、权限/Audit 和内部服务对象参数签名。
-  - [ ] 1.3 向用户提交审批包，并取得 Schema、migration、权限、Audit enum、公共 API、DTO、错误码和内部服务契约的单独确认。
-  - [ ] 1.4 检查 `git status --short --branch`、HEAD、worktree 和未提交差异，不覆盖用户已有文件。
-  - [ ] 1.5 确认当前基线事实：
+- [x] 1. 取得实施授权并建立绿色基线
+  - [x] 1.1 按 Gate A 确认 Phase 4 范围、目标分支、提交节奏和禁止事项。
+  - [x] 1.2 根据最新代码形成 Gate B 精确审批包，包含 Prisma/SQL、完整 OpenAPI DTO/状态码/错误矩阵、权限/Audit 和内部服务对象参数签名。
+  - [x] 1.3 向用户提交审批包，并取得 Schema、migration、权限、Audit enum、公共 API、DTO、错误码和内部服务契约的单独确认。
+  - [x] 1.4 检查 `git status --short --branch`、HEAD、worktree 和未提交差异，不覆盖用户已有文件。
+  - [x] 1.5 确认当前基线事实：
     - `/system/basic-data/numbering` 无 `meta.auth`；
     - 编号页面仍为 `<div />`；
     - `server/src/http.modules.ts` 尚无 `NumberingModule`；
     - Prisma 尚无编号五表；
     - OpenAPI 尚无 numbering path。
-  - [ ] 1.6 运行并记录绿色基线：
+  - [x] 1.6 运行并记录绿色基线：
 
     ```bash
     pnpm -C server check
@@ -135,28 +137,28 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
     node --run test:root
     ```
 
-  - [ ] 1.7 若无关基线失败，停止功能修改并如实报告；未经确认不把无关修复混入编号分支。
-  - [ ] 1.8 将本文状态改为“实施中（Task 2）”；Task 1 状态随第一个功能绿色提交记录，不制造只改 checkbox 的空提交。
+  - [x] 1.7 若无关基线失败，停止功能修改并如实报告；未经确认不把无关修复混入编号分支。
+  - [x] 1.8 将本文状态改为“实施中（Task 2）”；Task 1 状态随第一个功能绿色提交记录，不制造只改 checkbox 的空提交。
   - _Requirements: R1-R13_
 
-- [ ] 2. 以 TDD 实现规则语法、容量、周期和预览纯计算内核
-  - [ ] 2.1 先在 `server/src/modules/numbering/` 增加纯逻辑失败测试，固定五类 segment discriminated shape、最多 `32` 个片段、最多一个 sequence/random 和至少一个容量片段。
-  - [ ] 2.2 红测固定 `FIXED` 的 `[A-Z0-9]`、separator 白名单、日期格式白名单、总输出长度 `1..64` 和类型字段互斥。
-  - [ ] 2.3 红测固定 sequence：
+- [x] 2. 以 TDD 实现规则语法、容量、周期和预览纯计算内核
+  - [x] 2.1 先在 `server/src/modules/numbering/` 增加纯逻辑失败测试，固定五类 segment discriminated shape、最多 `32` 个片段、最多一个 sequence/random 和至少一个容量片段。
+  - [x] 2.2 红测固定 `FIXED` 的 `[A-Z0-9]`、separator 白名单、日期格式白名单、总输出长度 `1..64` 和类型字段互斥。
+  - [x] 2.3 红测固定 sequence：
     - `capacity = floor((10^width - 1 - start) / step) + 1`；
     - `next = start + usedCount * step`；
     - start/step 必须落在当前宽度允许范围；
     - 左侧补零、最后一个值、耗尽和不回绕。
-  - [ ] 2.4 红测固定 random：
+  - [x] 2.4 红测固定 random：
     - `LETTERS_THEN_DIGITS = 26^L * 10^D`；
     - `SHUFFLED = C(L+D,L) * 26^L * 10^D`；
     - sequence + random 的有效容量取 sequence。
-  - [ ] 2.5 使用 `bigint` 和 decimal string 覆盖超过 `Number.MAX_SAFE_INTEGER`、18 位 sequence 和最大 random 容量，不通过浮点数计算。
-  - [ ] 2.6 将数据库时间作为参数传入 period/date 纯函数，固定 `Asia/Shanghai`，覆盖上海零点、月末和年末。
-  - [ ] 2.7 红测 reset 与日期粒度：非 NEVER 必须使用四位年且不得包含 `YY`/`YYMMDD`；YEARLY 需要年、MONTHLY 需要年/月、DAILY 需要年/月/日。
-  - [ ] 2.8 红测 pure random 的日期变化粒度必须与 period 完全一致，保证每个 period 对应一个稳定随机编号空间。
-  - [ ] 2.9 红测 preview 不推进任何状态；pure random 和已耗尽 sequence 的 `nextSequenceValue`、`nextNumberPreview` 为 null。
-  - [ ] 2.10 实现最小纯函数并重构；不得提前引入 Repository 或独立 domain package。
+  - [x] 2.5 使用 `bigint` 和 decimal string 覆盖超过 `Number.MAX_SAFE_INTEGER`、18 位 sequence 和最大 random 容量，不通过浮点数计算。
+  - [x] 2.6 将数据库时间作为参数传入 period/date 纯函数，固定 `Asia/Shanghai`，覆盖上海零点、月末和年末。
+  - [x] 2.7 红测 reset 与日期粒度：非 NEVER 必须使用四位年且不得包含 `YY`/`YYMMDD`；YEARLY 需要年、MONTHLY 需要年/月、DAILY 需要年/月/日。
+  - [x] 2.8 红测 pure random 的日期变化粒度必须与 period 完全一致，保证每个 period 对应一个稳定随机编号空间。
+  - [x] 2.9 红测 preview 不推进任何状态；pure random 和已耗尽 sequence 的 `nextSequenceValue`、`nextNumberPreview` 为 null；样例数统一为 `min(5, remainingCount)`，耗尽为空且不重复补位。
+  - [x] 2.10 实现最小纯函数并重构；不得提前引入 Repository 或独立 domain package。
   - _Requirements: R2-R7, R13_
 
 - [ ] 3. 以 TDD 建立 Prisma Schema、forward migration、权限与审计
@@ -320,7 +322,7 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [ ] 14.4 clone 同时要求 read 与 create 权限；publish/enable/disable 使用各自权限。
   - [ ] 14.5 `NUMBERING_RULE_STATE_CHANGED` 时重新读取最新版本，保留上下文并提示，不静默覆盖。
   - [ ] 14.6 mutation 网络结果未知时不自动重放，重新读取列表/详情后要求用户核查。
-  - [ ] 14.7 根据最终 AuditEventType 增加 `zh-cn`、`zh-tw`、`en` 文案和测试，不顺带重构其他页面。
+  - [ ] 14.7 根据最终 AuditEventType 按现有审计页架构增加五个中文事件标签和测试，不引入未被消费的多语言映射，也不顺带重构其他页面。
   - [ ] 14.8 页面始终不提供正式发号按钮。
   - _Requirements: R1, R6-R13_
 
