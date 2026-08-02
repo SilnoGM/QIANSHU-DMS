@@ -204,7 +204,7 @@ function fieldError(index: number, field?: string): string | undefined {
 
 <template>
   <section aria-labelledby="numbering-segment-editor-title">
-    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div class="mb-4 gap-4 grid min-w-0">
       <div class="min-w-0">
         <h3 id="numbering-segment-editor-title" class="qs-type-section-title m-0">
           编号片段
@@ -214,15 +214,15 @@ function fieldError(index: number, field?: string): string | undefined {
         </p>
       </div>
 
-      <div class="flex flex-col gap-2 min-[390px]:flex-row min-[390px]:items-end">
-        <label class="gap-1.5 grid min-w-48">
+      <div class="gap-2 grid grid-cols-1 min-w-0 min-[390px]:grid-cols-[minmax(0,1fr)_auto] min-[390px]:items-end">
+        <label class="gap-1.5 grid min-w-0">
           <span class="qs-type-compact-label">新片段类型</span>
           <FaSelect
             :model-value="segmentType"
             :options="SEGMENT_TYPE_OPTIONS"
             :disabled="disabled"
             aria-label="新片段类型"
-            class="w-full"
+            class="min-w-0 w-full"
             @update:model-value="handleSegmentType"
           />
         </label>
@@ -318,7 +318,7 @@ function fieldError(index: number, field?: string): string | undefined {
           </div>
         </div>
 
-        <div v-if="segment.type === 'FIXED'" class="gap-1.5 grid">
+        <div v-if="segment.type === 'FIXED'" class="gap-1.5 grid min-w-0">
           <label :for="`numbering-fixed-${index}`" class="qs-type-compact-label">
             固定字符
           </label>
@@ -327,7 +327,7 @@ function fieldError(index: number, field?: string): string | undefined {
             :model-value="segment.value"
             autocapitalize="characters"
             autocomplete="off"
-            class="font-mono w-full uppercase"
+            class="font-mono min-w-0 w-full uppercase"
             :disabled="disabled"
             maxlength="64"
             placeholder="例如 SO"
@@ -339,7 +339,7 @@ function fieldError(index: number, field?: string): string | undefined {
           </p>
         </div>
 
-        <div v-else-if="segment.type === 'DATE'" class="gap-1.5 grid">
+        <div v-else-if="segment.type === 'DATE'" class="gap-1.5 grid min-w-0">
           <label :for="`numbering-date-${index}`" class="qs-type-compact-label">
             日期格式
           </label>
@@ -348,7 +348,7 @@ function fieldError(index: number, field?: string): string | undefined {
             :model-value="segment.format"
             :options="DATE_FORMAT_OPTIONS"
             :disabled="disabled"
-            class="w-full"
+            class="min-w-0 w-full"
             @update:model-value="value => updateDate(index, segment, value)"
           />
           <p v-if="fieldError(index, 'format')" class="qs-type-meta text-destructive m-0" role="alert">
@@ -356,7 +356,7 @@ function fieldError(index: number, field?: string): string | undefined {
           </p>
         </div>
 
-        <div v-else-if="segment.type === 'SEPARATOR'" class="gap-1.5 grid">
+        <div v-else-if="segment.type === 'SEPARATOR'" class="gap-1.5 grid min-w-0">
           <label :for="`numbering-separator-${index}`" class="qs-type-compact-label">
             分隔符
           </label>
@@ -365,7 +365,7 @@ function fieldError(index: number, field?: string): string | undefined {
             :model-value="segment.value"
             :options="SEPARATOR_OPTIONS"
             :disabled="disabled"
-            class="w-full"
+            class="min-w-0 w-full"
             @update:model-value="value => updateSeparator(index, segment, value)"
           />
           <p v-if="fieldError(index, 'value')" class="qs-type-meta text-destructive m-0" role="alert">
@@ -375,13 +375,14 @@ function fieldError(index: number, field?: string): string | undefined {
 
         <div
           v-else-if="segment.type === 'SEQUENCE'"
-          class="gap-4 grid grid-cols-1 sm:grid-cols-3"
+          class="gap-4 grid grid-cols-1 min-w-0 sm:grid-cols-3"
         >
-          <label class="gap-1.5 grid">
+          <label class="gap-1.5 grid min-w-0">
             <span class="qs-type-compact-label">位数</span>
             <FaInput
               :model-value="segment.width"
               :disabled="disabled"
+              class="min-w-0 w-full"
               inputmode="numeric"
               min="1"
               max="18"
@@ -393,12 +394,12 @@ function fieldError(index: number, field?: string): string | undefined {
               {{ fieldError(index, 'width') }}
             </span>
           </label>
-          <label class="gap-1.5 grid">
+          <label class="gap-1.5 grid min-w-0">
             <span class="qs-type-compact-label">起始值</span>
             <FaInput
               :model-value="segment.startValue"
               :disabled="disabled"
-              class="font-mono"
+              class="font-mono min-w-0 w-full"
               inputmode="numeric"
               placeholder="1"
               @update:model-value="value => updateSequence(index, segment, 'startValue', value)"
@@ -407,12 +408,12 @@ function fieldError(index: number, field?: string): string | undefined {
               {{ fieldError(index, 'startValue') }}
             </span>
           </label>
-          <label class="gap-1.5 grid">
+          <label class="gap-1.5 grid min-w-0">
             <span class="qs-type-compact-label">步长</span>
             <FaInput
               :model-value="segment.step"
               :disabled="disabled"
-              class="font-mono"
+              class="font-mono min-w-0 w-full"
               inputmode="numeric"
               placeholder="1"
               @update:model-value="value => updateSequence(index, segment, 'step', value)"
@@ -425,13 +426,14 @@ function fieldError(index: number, field?: string): string | undefined {
 
         <div
           v-else-if="segment.type === 'RANDOM'"
-          class="gap-4 grid grid-cols-1 sm:grid-cols-3"
+          class="gap-4 grid grid-cols-1 min-w-0 sm:grid-cols-3"
         >
-          <label class="gap-1.5 grid">
+          <label class="gap-1.5 grid min-w-0">
             <span class="qs-type-compact-label">大写字母长度</span>
             <FaInput
               :model-value="segment.letterLength"
               :disabled="disabled"
+              class="min-w-0 w-full"
               inputmode="numeric"
               min="0"
               max="32"
@@ -443,11 +445,12 @@ function fieldError(index: number, field?: string): string | undefined {
               {{ fieldError(index, 'letterLength') }}
             </span>
           </label>
-          <label class="gap-1.5 grid">
+          <label class="gap-1.5 grid min-w-0">
             <span class="qs-type-compact-label">数字长度</span>
             <FaInput
               :model-value="segment.digitLength"
               :disabled="disabled"
+              class="min-w-0 w-full"
               inputmode="numeric"
               min="0"
               max="32"
@@ -459,13 +462,13 @@ function fieldError(index: number, field?: string): string | undefined {
               {{ fieldError(index, 'digitLength') }}
             </span>
           </label>
-          <label class="gap-1.5 grid">
+          <label class="gap-1.5 grid min-w-0">
             <span class="qs-type-compact-label">组合方式</span>
             <FaSelect
               :model-value="segment.mode"
               :options="RANDOM_MODE_OPTIONS"
               :disabled="disabled"
-              class="w-full"
+              class="min-w-0 w-full"
               @update:model-value="value => updateRandomMode(index, segment, value)"
             />
             <span v-if="fieldError(index, 'mode')" class="qs-type-meta text-destructive" role="alert">

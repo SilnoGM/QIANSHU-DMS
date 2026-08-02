@@ -166,17 +166,19 @@ test('冲突与未知结果只刷新规则快照，不把未保存表单重置�
   )
 })
 
-test('页面放弃流程不依赖动画回调且移动端主操作保持 44px', () => {
+test('页头只保留响应式主操作且放弃流程不依赖动画回调', () => {
   const source = readPageSource()
 
   assert.match(
     source,
-    /data-testid="numbering-create-rule"[\s\S]{0,120}class="min-h-11"/u,
+    /data-testid="numbering-create-rule"[\s\S]{0,120}class="min-h-11 md:min-h-9"/u,
   )
   assert.doesNotMatch(
     source,
-    /data-testid="numbering-create-rule"[\s\S]{0,120}md:min-h-9/u,
+    /<FaButton[\s\S]{0,180}@click="loadNumberingRules"[\s\S]{0,120}>[\s\S]{0,80}刷新/u,
   )
+  assert.doesNotMatch(source, /i-lucide:refresh-cw/u)
+  assert.match(source, /async function loadNumberingRules/u)
   assert.match(
     source,
     /async function discardEditorChanges[\s\S]{0,500}await nextTick\(\)[\s\S]{0,160}closeWithoutDirtyGuard\(\)/u,

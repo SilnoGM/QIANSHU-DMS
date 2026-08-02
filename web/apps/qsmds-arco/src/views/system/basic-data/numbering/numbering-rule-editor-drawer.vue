@@ -379,9 +379,11 @@ watch(
       <FaIcon :name="mode === 'clone' ? 'i-lucide:copy-plus' : 'i-lucide:binary'" />
     </template>
 
-    <div
-      class="gap-6 grid min-w-0 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,0.72fr)] lg:items-start"
-    >
+    <!--
+      xl Drawer 固定为 48rem，内部不能继续按 viewport 的 lg 断点强制分栏；
+      否则宽屏设备会把有限的抽屉内容区切成两个窄列，造成表单控件互相挤压。
+    -->
+    <div class="gap-6 grid min-w-0">
       <div class="gap-6 grid min-w-0">
         <FaAlert
           v-if="visibleError"
@@ -522,7 +524,7 @@ watch(
         </FaForm>
       </div>
 
-      <aside class="min-w-0 lg:top-4 lg:sticky">
+      <aside class="min-w-0">
         <NumberingRulePreview
           :preview="preview"
           :loading="previewLoading"

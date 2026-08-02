@@ -172,8 +172,10 @@ test('编辑抽屉契约覆盖 xl、隔离模型、预览提交、错误和一�
   assert.match(source, /Server 只接受名称、说明或自增数字位数扩大/)
   assert.match(source, /:disabled="submitLocked \|\| effectiveConfigurationLocked"/)
   assert.match(source, /<FaFormItem name="segments" hide-label :auto-bind="false">/)
-  assert.match(source, /lg:grid-cols-/)
-  assert.match(source, /lg:sticky/)
+  assert.match(source, /class="gap-6 grid min-w-0"/)
+  assert.match(source, /<aside class="min-w-0">/)
+  assert.doesNotMatch(source, /lg:grid-cols-/)
+  assert.doesNotMatch(source, /lg:sticky/)
   assert.doesNotMatch(source, /timezone[^\n]*(?:select|option)/i)
   assert.doesNotMatch(source, /<FaCard\b/)
   assert.doesNotMatch(source, /gradient/i)
@@ -193,6 +195,40 @@ test('片段编辑器支持五类有序片段和可访问的上移、下移、�
   assert.match(source, /moveNumberingSegment/)
   assert.match(source, /removeNumberingSegment/)
   assert.match(source, /update:modelValue/)
+  assert.match(
+    source,
+    /id="numbering-segment-editor-title"[\s\S]{0,260}<\/div>[\s\S]{0,180}grid-cols-\[minmax\(0,1fr\)_auto\]/,
+  )
+  assert.doesNotMatch(
+    source,
+    /id="numbering-segment-editor-title"[\s\S]{0,420}sm:flex-row/,
+  )
+
+  const sequenceBlock = source.match(
+    /v-else-if="segment\.type === 'SEQUENCE'"[\s\S]+?v-else-if="segment\.type === 'RANDOM'"/,
+  )?.[0]
+  const randomBlock = source.match(
+    /v-else-if="segment\.type === 'RANDOM'"[\s\S]+?<\/div>\s*<\/li>/,
+  )?.[0]
+
+  assert.ok(sequenceBlock)
+  assert.ok(randomBlock)
+  const constrainedControlCount = (block: string): number =>
+    [...block.matchAll(/class="([^"]+)"/g)].filter(([, className]) => {
+      const tokens = className?.split(/\s+/u) ?? []
+      return tokens.includes('min-w-0') && tokens.includes('w-full')
+    }).length
+
+  assert.equal(
+    sequenceBlock.match(/<label class="gap-1\.5 grid min-w-0">/g)?.length,
+    3,
+  )
+  assert.equal(constrainedControlCount(sequenceBlock), 3)
+  assert.equal(
+    randomBlock.match(/<label class="gap-1\.5 grid min-w-0">/g)?.length,
+    3,
+  )
+  assert.equal(constrainedControlCount(randomBlock), 3)
   assert.doesNotMatch(source, /sortable|draggable|drag-handle/i)
   assert.doesNotMatch(source, /<FaCard\b/)
   assert.doesNotMatch(source, /gradient/i)

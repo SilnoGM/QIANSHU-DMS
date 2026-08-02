@@ -660,21 +660,11 @@ onBeforeUnmount(() => {
       <FaButton
         v-if="canRead && canCreate"
         data-testid="numbering-create-rule"
-        class="min-h-11"
+        class="min-h-11 md:min-h-9"
         @click="openCreateEditor"
       >
         <FaIcon name="i-lucide:plus" />
         新建编号规则
-      </FaButton>
-      <FaButton
-        v-if="canRead"
-        class="min-h-11"
-        variant="outline"
-        :loading="listLoading"
-        @click="loadNumberingRules"
-      >
-        <FaIcon v-if="!listLoading" name="i-lucide:refresh-cw" />
-        刷新
       </FaButton>
     </FaPageHeader>
 
