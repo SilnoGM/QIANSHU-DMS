@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 4）
+- 状态：Phase 4 实施中（Task 5）
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
@@ -186,16 +186,16 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 3.9 验证空库 replay、重复 deploy、Prisma validate、约束、trigger 和权限目录。
   - _Requirements: R1-R8, R11, R13_
 
-- [ ] 4. 以 TDD 实现 DTO、normalizer、decimal-string 和持久化错误边界
-  - [ ] 4.1 确认 Gate B 后，为 rule code、名称、说明、UUID、分页、排序、状态、`expectedVersion` 和空 PATCH 增加失败测试。
-  - [ ] 4.2 实现 discriminated segment DTO，启用白名单并拒绝额外字段、错误类型字段和非法长度。
-  - [ ] 4.3 `startValue`、`step`、capacity、usedCount、remainingCount 和 next sequence 在公共 DTO 中全部使用十进制字符串。
-  - [ ] 4.4 DTO 不接受 timezone；response 固定返回 `Asia/Shanghai`。
-  - [ ] 4.5 管理 DTO normalizer 处理 Unicode NFC、空白折叠、rule code 大写和 code-point 长度；不得复用于不透明 `idempotencyKey`。
-  - [ ] 4.6 为内部输入增加失败测试：`consumerCode` 只接受 `^[A-Z][A-Z0-9._-]{0,63}$` 且不静默规范化；`idempotencyKey` 按原始 UTF-8 bytes 校验 `1..200` 并计算 Hash，不 trim、不转大小写、不做 Unicode 规范化。
-  - [ ] 4.7 原始 idempotency key 只存在于内部 service input；HTTP DTO、日志、错误和 Audit metadata 不得包含。
-  - [ ] 4.8 持久化错误只读取结构化 code/constraint，覆盖 `P2002/23505`、`P2034/40001/40P01/55P03/57014` 和命名 CHECK。
-  - [ ] 4.9 固定九个编号错误码；未知错误映射为安全 `INTERNAL_ERROR`。
+- [x] 4. 以 TDD 实现 DTO、normalizer、decimal-string 和持久化错误边界
+  - [x] 4.1 确认 Gate B 后，为 rule code、名称、说明、UUID、分页、排序、状态、`expectedVersion` 和空 PATCH 增加失败测试。
+  - [x] 4.2 实现 discriminated segment DTO，启用白名单并拒绝额外字段、错误类型字段和非法长度。
+  - [x] 4.3 `startValue`、`step`、capacity、usedCount、remainingCount 和 next sequence 在公共 DTO 中全部使用十进制字符串。
+  - [x] 4.4 DTO 不接受 timezone；response 固定返回 `Asia/Shanghai`。
+  - [x] 4.5 管理 DTO normalizer 处理 Unicode NFC、空白折叠、rule code 大写和 code-point 长度；不得复用于不透明 `idempotencyKey`。
+  - [x] 4.6 为内部输入增加失败测试：`consumerCode` 只接受 `^[A-Z][A-Z0-9._-]{0,63}$` 且不静默规范化；`idempotencyKey` 按原始 UTF-8 bytes 校验 `1..200` 并计算 Hash，不 trim、不转大小写、不做 Unicode 规范化。
+  - [x] 4.7 原始 idempotency key 只存在于内部 service input；HTTP DTO、日志、错误和 Audit metadata 不得包含。
+  - [x] 4.8 持久化错误只读取结构化 code/constraint，覆盖 `P2002/23505`、`P2034/40001/40P01/55P03/57014` 和命名 CHECK。
+  - [x] 4.9 固定九个编号错误码；未知错误映射为安全 `INTERNAL_ERROR`。
   - _Requirements: R1-R11, R13_
 
 - [ ] 5. 以 TDD 实现规则查询、统计、预览、创建、编辑和克隆
