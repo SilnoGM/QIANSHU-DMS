@@ -6,6 +6,7 @@ import {
   AUDIT_EVENT_TYPES,
   buildAuditEventListQuery,
 } from '../../src/views/system/audit/audit.logic'
+import { formatAuditEvent } from '../../src/views/system/audit/presentation'
 
 test('审计列表发送分页、规范化后的精确请求 ID 和已应用筛选', () => {
   assert.deepEqual(buildAuditEventListQuery(
@@ -72,8 +73,24 @@ test('审计事件筛选选项覆盖当前公开契约的全部事件类型', ()
     'CURRENCY_DISABLED',
     'EXCHANGE_RATE_CREATED',
     'EXCHANGE_RATE_UPDATED',
+    'NUMBERING_RULE_CREATED',
+    'NUMBERING_RULE_UPDATED',
+    'NUMBERING_RULE_VERSION_PUBLISHED',
+    'NUMBERING_RULE_ENABLED',
+    'NUMBERING_RULE_DISABLED',
     'SYSTEM_BOOTSTRAP',
     'SYSTEM_ADMIN_RECOVERED',
     'AUTH_RETENTION_PURGED',
   ])
+})
+
+test('编号规则审计事件使用现有中文展示管道', () => {
+  assert.equal(formatAuditEvent('NUMBERING_RULE_CREATED'), '编号规则已创建')
+  assert.equal(formatAuditEvent('NUMBERING_RULE_UPDATED'), '编号规则已更新')
+  assert.equal(
+    formatAuditEvent('NUMBERING_RULE_VERSION_PUBLISHED'),
+    '编号规则版本已发布',
+  )
+  assert.equal(formatAuditEvent('NUMBERING_RULE_ENABLED'), '编号规则已启用')
+  assert.equal(formatAuditEvent('NUMBERING_RULE_DISABLED'), '编号规则已停用')
 })
