@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 10）
+- 状态：Phase 4 实施中（Task 12）
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
@@ -273,12 +273,12 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 10.7 只通过正式链路生成 `server/openapi/openapi.json` 并执行根 `contract:sync`；不手工编辑 snapshot。
   - _Requirements: R1-R13_
 
-- [ ] 11. 以 TDD 实现 Web API adapter 与编号领域纯逻辑
-  - [ ] 11.1 等待 Task 10 契约同步后新增 `src/api/modules/numbering.ts` 和 `test/api/numbering.test.ts`。
-  - [ ] 11.2 只导入 generated types，固定 list/detail/versions/issuances 的 method、path、query、URL 编码和 `AbortSignal`。
-  - [ ] 11.3 preview/create/update/clone/publish/enable/disable 全部使用 `retry: false` 和 `errorPresentation: 'local'`。
-  - [ ] 11.4 capacity、used、remaining 和 next 保持 decimal string，不经 `Number`。
-  - [ ] 11.5 建立页面纯逻辑测试：
+- [x] 11. 以 TDD 实现 Web API adapter 与编号领域纯逻辑
+  - [x] 11.1 等待 Task 10 契约同步后新增 `src/api/modules/numbering.ts` 和 `test/api/numbering.test.ts`。
+  - [x] 11.2 只导入 generated types，固定 list/detail/versions/issuances 的 method、path、query、URL 编码和 `AbortSignal`。
+  - [x] 11.3 preview/create/update/clone/publish/enable/disable 全部使用 `retry: false` 和 `errorPresentation: 'local'`。
+  - [x] 11.4 capacity、used、remaining 和 next 保持 decimal string，不经 `Number`。
+  - [x] 11.5 建立页面纯逻辑测试：
     - 查询参数规范化；
     - 生命周期/版本/EXHAUSTED 中文展示；
     - 权限与状态动作矩阵；
@@ -286,7 +286,7 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
     - 本地快速校验；
     - `expectedVersion` request 构造；
     - 网络未知结果和错误码映射。
-  - [ ] 11.6 表单模型不包含可编辑 timezone。
+  - [x] 11.6 表单模型不包含可编辑 timezone。
   - _Requirements: R1-R7, R10-R13_
 
 - [ ] 12. 以 TDD 实现权限路由、规则列表和统计展示
