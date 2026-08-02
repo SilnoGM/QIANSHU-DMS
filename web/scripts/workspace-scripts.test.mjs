@@ -52,7 +52,7 @@ test('脚本测试同时运行 Node 与 TypeScript 测试', () => {
   assert.equal(scripts['test:scripts'], 'run-s test:scripts:node test:scripts:tsx test:api')
   assert.equal(
     scripts['test:scripts:node'],
-    'node --test scripts/*.test.mjs apps/qsmds-arco/test/browser/chrome-driver.test.mjs',
+    'node --test scripts/*.test.mjs apps/qsmds-arco/test/browser/chrome-driver.test.mjs apps/qsmds-arco/test/browser/regions.browser.helpers.test.mjs',
   )
   assert.equal(scripts['test:scripts:tsx'], 'tsx --test scripts/*.test.ts')
   assert.equal(scripts['pretest:api'], 'pnpm run api:generate')
