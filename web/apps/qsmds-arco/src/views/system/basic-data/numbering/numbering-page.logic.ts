@@ -4,6 +4,9 @@ import type {
 
 export type NumberingEditorMode = 'clone' | 'create' | 'edit'
 
+/** 合并连续输入，避免每次按键都请求 Server，同时保持用户可感知的实时反馈。 */
+export const NUMBERING_PREVIEW_DEBOUNCE_MS = 300
+
 export interface NumberingContextResponseGuardInput {
   readonly aborted: boolean
   readonly authorized: boolean

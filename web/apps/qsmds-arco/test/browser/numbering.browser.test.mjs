@@ -212,6 +212,27 @@ async function readVisiblePreview(page) {
   })()`)
 }
 
+/** 捕获页面下一次真实 Preview DTO，不记录请求头、Cookie 或其他敏感信息。 */
+async function observeNextPreviewRequest(page, action) {
+  const controller = new AbortController()
+  const request = page.waitForEvent(
+    'Network.requestWillBeSent',
+    event => event.request?.method === 'POST'
+      && requestPathname(event) === '/api/numbering-rules/preview',
+    20_000,
+    { signal: controller.signal },
+  )
+  try {
+    await action()
+    const event = await request
+    return JSON.parse(event.request.postData ?? '{}')
+  }
+  finally {
+    controller.abort()
+    await request.catch(() => undefined)
+  }
+}
+
 /** FaTabs 由 Reka 管理，使用真实键盘激活并以 aria-selected 作为稳定完成边界。 */
 async function activateDetailTab(page, label) {
   const serialized = JSON.stringify(label)
@@ -298,24 +319,111 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await waitForNumberingTable(page)
   issues.start()
 
-  const desktop = await page.evaluate(`(() => ({
-    documentFits: document.documentElement.scrollWidth
-      <= document.documentElement.clientWidth,
-    heading: [...document.querySelectorAll('h1, h2')]
-      .some(item => item.textContent?.trim() === '编号管理'),
-    tableVisible: (document.querySelector(
-      '[data-testid="numbering-rule-table"]',
-    )?.getClientRects().length ?? 0) > 0,
-  }))()`)
-  assert.deepEqual(desktop, {
+  const desktop = await page.evaluate(`(() => {
+    const visibleButton = label => [...document.querySelectorAll('button')]
+      .find(button => button.getClientRects().length > 0
+        && button.textContent?.trim() === label)
+    const createButton = visibleButton('新建编号规则')
+    const queryButton = visibleButton('查询')
+    return {
+      createHeight: createButton?.getBoundingClientRect().height ?? 0,
+      documentFits: document.documentElement.scrollWidth
+        <= document.documentElement.clientWidth,
+      heading: [...document.querySelectorAll('h1, h2')]
+        .some(item => item.textContent?.trim() === '编号管理'),
+      queryHeight: queryButton?.getBoundingClientRect().height ?? 0,
+      refreshVisible: Boolean(visibleButton('刷新')),
+      tableVisible: (document.querySelector(
+        '[data-testid="numbering-rule-table"]',
+      )?.getClientRects().length ?? 0) > 0,
+    }
+  })()`)
+  assert.deepEqual({
+    documentFits: desktop.documentFits,
+    heading: desktop.heading,
+    refreshVisible: desktop.refreshVisible,
+    tableVisible: desktop.tableVisible,
+  }, {
     documentFits: true,
     heading: true,
+    refreshVisible: false,
     tableVisible: true,
   })
+  assert.ok(
+    desktop.createHeight >= 35 && desktop.createHeight <= 37,
+    `桌面新建按钮应为 36px: ${desktop.createHeight}`,
+  )
+  assert.ok(
+    Math.abs(desktop.createHeight - desktop.queryHeight) <= 1,
+    `页头主按钮与查询按钮高度不一致: ${JSON.stringify(desktop)}`,
+  )
 
   // Escape、overlay、显式关闭、dirty 确认与 opener 焦点恢复共享同一真实 Drawer。
   await clickVisibleButton(page, '新建编号规则')
   await waitForVisibleDialog(page, '新建编号规则')
+  await page.waitFor(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('新建编号规则'))
+    return Boolean(dialog)
+      && dialog.getAnimations({ subtree: true })
+        .every(animation => animation.playState !== 'running')
+  })()`)
+  const desktopEditor = await page.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('新建编号规则'))
+    const body = dialog?.querySelector('[data-slot="qs-generic-drawer-body"]')
+    const section = document.getElementById('numbering-segment-editor-title')
+      ?.closest('section')
+    const description = section?.querySelector(
+      '#numbering-segment-editor-title + p',
+    )
+    const card = section?.querySelector('ol > li')
+    const cardRect = card?.getBoundingClientRect()
+    const descriptionRect = description?.getBoundingClientRect()
+    const descriptionStyle = description ? getComputedStyle(description) : null
+    const lineHeight = descriptionStyle
+      ? Number.parseFloat(descriptionStyle.lineHeight)
+      : 0
+    const controls = [...(card?.querySelectorAll(
+      '[data-slot="input-group"], [data-slot="select-trigger"]',
+    ) ?? [])].filter(control => control.getClientRects().length > 0)
+    const fits = element => element.scrollWidth <= element.clientWidth + 1
+    return {
+      bodyFits: body ? fits(body) : false,
+      cardFits: card ? fits(card) : false,
+      controlsInside: Boolean(cardRect) && controls.length > 0
+        && controls.every((control) => {
+          const rect = control.getBoundingClientRect()
+          return rect.left >= cardRect.left - 1
+            && rect.right <= cardRect.right + 1
+        }),
+      descriptionLines: descriptionRect && lineHeight > 0
+        ? Math.ceil(descriptionRect.height / lineHeight)
+        : Number.POSITIVE_INFINITY,
+      descriptionRatio: descriptionRect && section
+        ? descriptionRect.width / section.getBoundingClientRect().width
+        : 0,
+      sectionFits: section ? fits(section) : false,
+    }
+  })()`)
+  assert.deepEqual({
+    bodyFits: desktopEditor.bodyFits,
+    cardFits: desktopEditor.cardFits,
+    controlsInside: desktopEditor.controlsInside,
+    sectionFits: desktopEditor.sectionFits,
+  }, {
+    bodyFits: true,
+    cardFits: true,
+    controlsInside: true,
+    sectionFits: true,
+  })
+  assert.ok(
+    desktopEditor.descriptionRatio >= 0.6
+    && desktopEditor.descriptionLines <= 3,
+    `片段说明布局异常: ${JSON.stringify(desktopEditor)}`,
+  )
   await pressKey(page, 'Escape')
   await waitForNoVisibleDialog(page, '新建编号规则')
   await page.waitFor(`document.activeElement?.textContent?.trim()
@@ -368,7 +476,6 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await selectDialogOption(page, '新建编号规则', '日期格式', 'YYYYMMDD')
   await selectDialogOption(page, '新建编号规则', '新片段类型', '分隔符')
   await clickDialogButton(page, '新建编号规则', '添加片段')
-  await selectDialogOption(page, '新建编号规则', '分隔符', '-（短横线）')
   await selectDialogOption(page, '新建编号规则', '新片段类型', '随机字符串')
   await clickDialogButton(page, '新建编号规则', '添加片段')
   await fillDialogControl(page, '新建编号规则', '大写字母长度', '2')
@@ -402,6 +509,122 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
       ?.closest('section')
     return section?.getAttribute('aria-busy') === 'false'
       && section.textContent?.includes('周期容量')
+  })()`)
+
+  /*
+   * DAILY + YYMMDD 是无效配置。变化必须立即废弃旧预览且不得请求 Server；
+   * 恢复 YYYYMMDD 后应自动重新请求，不能让旧的 18 位结果继续伪装成当前配置。
+   */
+  let invalidPreviewRequestCount = 0
+  const removeInvalidPreviewListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      if (
+        event.request?.method === 'POST'
+        && requestPathname(event) === '/api/numbering-rules/preview'
+      ) {
+        invalidPreviewRequestCount += 1
+      }
+    },
+  )
+  try {
+    await selectDialogOption(page, '新建编号规则', '日期格式', 'YYMMDD')
+    await page.waitFor(`(() => {
+      const section = document.getElementById('numbering-preview-title')
+        ?.closest('section')
+      return section?.getAttribute('aria-busy') === 'false'
+        && section.textContent?.includes('等待有效配置')
+        && section.textContent?.includes('重置规则不能使用两位年份日期格式')
+        && !section.textContent?.includes('周期容量')
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 650))
+    assert.equal(invalidPreviewRequestCount, 0)
+
+    await selectDialogOption(page, '新建编号规则', '日期格式', 'YYYYMMDD')
+    await page.waitFor(`(() => {
+      const section = document.getElementById('numbering-preview-title')
+        ?.closest('section')
+      return section?.getAttribute('aria-busy') === 'false'
+        && section.textContent?.includes('周期容量')
+    })()`)
+    assert.equal(invalidPreviewRequestCount, 1)
+  }
+  finally {
+    removeInvalidPreviewListener()
+  }
+
+  // 快速输入只提交最后一个宽度；Server 结果必须实时收敛到 4 位序列。
+  const widthPreviewRequestWidths = []
+  const removeWidthPreviewListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      if (
+        event.request?.method === 'POST'
+        && requestPathname(event) === '/api/numbering-rules/preview'
+      ) {
+        const body = JSON.parse(event.request.postData ?? '{}')
+        const sequence = body.segments?.find(segment => segment.type === 'SEQUENCE')
+        widthPreviewRequestWidths.push(sequence?.width ?? null)
+      }
+    },
+  )
+  try {
+    // 同一事件循环内连续输入，稳定证明 300ms debounce 只保留最后一个快照。
+    await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('新建编号规则'))
+      const label = [...(dialog?.querySelectorAll('label') ?? [])]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.trim().startsWith('位数'))
+      const control = label?.querySelector('input')
+      if (!(control instanceof HTMLInputElement)) {
+        throw new Error('numbering sequence width unavailable')
+      }
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      if (!setter) throw new Error('numbering input setter unavailable')
+      for (const value of ['4', '5', '4']) {
+        setter.call(control, value)
+        control.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+        }))
+        control.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const section = document.getElementById('numbering-preview-title')
+        ?.closest('section')
+      const values = Object.fromEntries(
+        [...(section?.querySelectorAll('dl > div') ?? [])].map(item => [
+          item.querySelector('dt')?.textContent?.trim() ?? '',
+          item.querySelector('dd')?.textContent?.trim() ?? '',
+        ]),
+      )
+      return section?.getAttribute('aria-busy') === 'false'
+        && values['周期容量'] === '9,999'
+        && values['下一序列值'] === '1'
+        && [...(section?.querySelectorAll('code') ?? [])]
+          .some(code => code.textContent?.trim().includes('SO0001'))
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    assert.deepEqual(widthPreviewRequestWidths, [4])
+  }
+  finally {
+    removeWidthPreviewListener()
+  }
+
+  // 后续精确大数与乱序场景仍使用 18 位序列。
+  await fillDialogControl(page, '新建编号规则', '位数', '18')
+  await page.waitFor(`(() => {
+    const section = document.getElementById('numbering-preview-title')
+      ?.closest('section')
+    return section?.getAttribute('aria-busy') === 'false'
+      && section.textContent?.includes('999,999,999,999,999,999')
   })()`)
 
   // 两次真实 preview 响应按新后旧释放；旧响应不得覆盖 startValue=3。
@@ -601,7 +824,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     }],
     event => event.request?.method === 'GET'
       && requestPathname(event) === '/api/numbering-rules',
-    () => clickVisibleButton(page, '刷新'),
+    () => clickVisibleButton(page, '查询'),
   )
   await page.waitFor(`(() => [...document.querySelectorAll('button')]
     .some(button => (
@@ -612,17 +835,52 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await waitForRuleRow(page, mixedRuleCode)
   await waitForRuleRow(page, randomRuleCode)
 
-  // clone 首次提交复用既有 Rule Code，真实 409 必须落到字段；纠正后再成功。
-  await clickRuleAction(page, mainRuleCode, '克隆')
-  await waitForVisibleDialog(page, '克隆编号规则')
-  await waitForDialogControlValue(
+  // clone 只能在 Server 详情落地后预览来源配置，不能抢跑默认 SEQUENCE。
+  const cloneInitialPreviewRequest = await observeNextPreviewRequest(
     page,
-    '克隆编号规则',
-    '规则名称',
-    '浏览器主编号规则副本',
+    async () => {
+      await clickRuleAction(page, mainRuleCode, '克隆')
+      await waitForVisibleDialog(page, '克隆编号规则')
+      await waitForDialogControlValue(
+        page,
+        '克隆编号规则',
+        '规则名称',
+        '浏览器主编号规则副本',
+      )
+    },
   )
-  await fillDialogControl(page, '克隆编号规则', '规则编码', mainRuleCode)
-  await fillDialogControl(page, '克隆编号规则', '规则名称', '浏览器主编号规则副本')
+  assert.equal('ruleId' in cloneInitialPreviewRequest, false)
+  assert.equal(
+    cloneInitialPreviewRequest.resetPolicy,
+    mainDetail.draftVersion.config.resetPolicy,
+  )
+  assert.deepEqual(
+    cloneInitialPreviewRequest.segments,
+    mainDetail.draftVersion.config.segments,
+  )
+
+  // clone 首次提交复用既有 Rule Code，真实 409 必须落到字段；纠正后再成功。
+  let identityPreviewRequestCount = 0
+  const removeIdentityPreviewListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      if (
+        event.request?.method === 'POST'
+        && requestPathname(event) === '/api/numbering-rules/preview'
+      ) {
+        identityPreviewRequestCount += 1
+      }
+    },
+  )
+  try {
+    await fillDialogControl(page, '克隆编号规则', '规则编码', mainRuleCode)
+    await fillDialogControl(page, '克隆编号规则', '规则名称', '浏览器主编号规则副本')
+    await new Promise(resolve => setTimeout(resolve, 650))
+    assert.equal(identityPreviewRequestCount, 0)
+  }
+  finally {
+    removeIdentityPreviewListener()
+  }
   await clickDialogButton(page, '克隆编号规则', '创建副本')
   await page.waitFor(`(() => {
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
@@ -711,13 +969,27 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
 
   // Drawer 持有旧 expectedVersion 时，另一个真实 PATCH 先提交，随后 UI 得到 409。
   mainDetail = await getRuleByCode(page, mainRuleCode)
-  await clickRuleAction(page, mainRuleCode, '编辑')
-  await waitForVisibleDialog(page, '编辑编号规则')
-  await waitForDialogControlValue(
+  const editInitialPreviewRequest = await observeNextPreviewRequest(
     page,
-    '编辑编号规则',
-    '规则名称',
-    '浏览器主编号规则',
+    async () => {
+      await clickRuleAction(page, mainRuleCode, '编辑')
+      await waitForVisibleDialog(page, '编辑编号规则')
+      await waitForDialogControlValue(
+        page,
+        '编辑编号规则',
+        '规则名称',
+        '浏览器主编号规则',
+      )
+    },
+  )
+  assert.equal(editInitialPreviewRequest.ruleId, mainDetail.id)
+  assert.equal(
+    editInitialPreviewRequest.resetPolicy,
+    mainDetail.draftVersion.config.resetPolicy,
+  )
+  assert.deepEqual(
+    editInitialPreviewRequest.segments,
+    mainDetail.draftVersion.config.segments,
   )
   const competingUpdate = await page.evaluate(apiExpression(
     `/api/numbering-rules/${encodeURIComponent(mainDetail.id)}`,
@@ -802,7 +1074,6 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   const reconciled = await getRuleByCode(page, mainRuleCode)
   assert.equal(reconciled.name, '浏览器未知结果已落库')
   await closeDirtyEditorIfVisible(page, '编辑编号规则')
-  await clickVisibleButton(page, '刷新')
   await waitForRuleRow(page, '浏览器未知结果已落库')
 
   // 发布、启用、停用均通过页面确认弹窗，最终状态供独立数据库核验复查。
@@ -842,12 +1113,20 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await page.setViewport(390, 844, true)
   await waitForRuleRow(page, mainRuleCode)
   // CDP 先更新布局视口，matchMedia 驱动的操作区会在随后一次 Vue flush 收敛。
-  await page.waitFor(`(() => window.innerWidth === 390
-    && [...document.querySelectorAll('button')].some(button => (
-      button.getClientRects().length > 0
-      && button.getAttribute('aria-label')
-        ?.startsWith('编号规则操作 · ')
-    )))()`)
+  await page.waitFor(`(() => {
+    const buttons = [...document.querySelectorAll('button')]
+      .filter(button => button.getClientRects().length > 0)
+    const createButton = buttons.find(
+      button => button.textContent?.trim() === '新建编号规则',
+    )
+    return window.innerWidth === 390
+      && matchMedia('(max-width: 767px)').matches
+      && document.documentElement.scrollWidth
+        <= document.documentElement.clientWidth
+      && (createButton?.getBoundingClientRect().height ?? 0) >= 44
+      && buttons.some(button => button.getAttribute('aria-label')
+        ?.startsWith('编号规则操作 · '))
+  })()`)
   const mobile = await page.evaluate(`(() => {
     const row = [...document.querySelectorAll(
       '[data-testid="numbering-mobile-row"]',
@@ -859,7 +1138,6 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     ].filter(button => button.getClientRects().length > 0
       && (
         button.textContent?.trim() === '新建编号规则'
-        || button.textContent?.trim() === '刷新'
         || button.getAttribute('aria-label')
           ?.startsWith('编号规则操作 · ')
       ))
@@ -870,9 +1148,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
       buttonKinds: buttons.map(button => (
         button.textContent?.trim() === '新建编号规则'
           ? 'create'
-          : button.textContent?.trim() === '刷新'
-            ? 'refresh'
-            : 'row-action'
+          : 'row-action'
       )),
       cardInside: card
         ? card.getBoundingClientRect().left >= 0
@@ -882,7 +1158,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
       documentFits: document.documentElement.scrollWidth
         <= document.documentElement.clientWidth,
       hasStatusText: row?.textContent?.includes('停用') ?? false,
-      touchTargets: buttons.length >= 3
+      touchTargets: buttons.length >= 2
         && buttons.every(button => button.getBoundingClientRect().height >= 44),
     }
   })()`)

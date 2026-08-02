@@ -6,6 +6,7 @@ import test from 'node:test'
 import {
   canApplyNumberingContextResponse,
   canApplyNumberingMutationResult,
+  NUMBERING_PREVIEW_DEBOUNCE_MS,
   shouldCloseNumberingEditor,
   shouldLoadNumberingIssuances,
 } from '../../src/views/system/basic-data/numbering/numbering-page.logic'
@@ -142,8 +143,17 @@ test('页面持有七项权限、所有 API 副作用与同级 Drawer/Modal 上�
 test('预览与 GET 均使用 AbortController 和单调 request version，mutation 结果未知不自动重放', () => {
   const source = readPageSource()
 
+  assert.equal(NUMBERING_PREVIEW_DEBOUNCE_MS, 300)
   assert.match(source, /previewAbortController\?\.abort\(\)/u)
   assert.match(source, /previewRequestVersion/u)
+  assert.match(
+    source,
+    /previewTimer\s*=\s*setTimeout\([\s\S]{0,180}NUMBERING_PREVIEW_DEBOUNCE_MS/u,
+  )
+  assert.match(
+    source,
+    /function requestPreview[\s\S]{0,900}previewAbortController\?\.abort\(\)[\s\S]{0,180}previewRequestVersion \+= 1/u,
+  )
   assert.match(source, /detailAbortController\?\.abort\(\)/u)
   assert.match(source, /detailRequestVersion/u)
   assert.match(source, /unknownResult/u)
@@ -166,17 +176,32 @@ test('冲突与未知结果只刷新规则快照，不把未保存表单重置�
   )
 })
 
-test('页面放弃流程不依赖动画回调且移动端主操作保持 44px', () => {
+test('编辑与克隆等待 Server 模型落地后才预览真实配置', () => {
   const source = readPageSource()
 
   assert.match(
     source,
-    /data-testid="numbering-create-rule"[\s\S]{0,120}class="min-h-11"/u,
+    /function requestPreview[\s\S]{0,420}editorMode\.value !== 'create'[\s\S]{0,120}editorRule\.value === null[\s\S]{0,120}resetPreview\(\)/u,
+  )
+  assert.match(
+    source,
+    /if \(replaceFormModel\)[\s\S]{0,320}editorFormModel\.value = cloneFormModel\(model\)[\s\S]{0,120}requestPreview\(model\)/u,
+  )
+})
+
+test('页头只保留响应式主操作且放弃流程不依赖动画回调', () => {
+  const source = readPageSource()
+
+  assert.match(
+    source,
+    /data-testid="numbering-create-rule"[\s\S]{0,120}class="min-h-11 md:min-h-9"/u,
   )
   assert.doesNotMatch(
     source,
-    /data-testid="numbering-create-rule"[\s\S]{0,120}md:min-h-9/u,
+    /<FaButton[\s\S]{0,180}@click="loadNumberingRules"[\s\S]{0,120}>[\s\S]{0,80}刷新/u,
   )
+  assert.doesNotMatch(source, /i-lucide:refresh-cw/u)
+  assert.match(source, /async function loadNumberingRules/u)
   assert.match(
     source,
     /async function discardEditorChanges[\s\S]{0,500}await nextTick\(\)[\s\S]{0,160}closeWithoutDirtyGuard\(\)/u,
