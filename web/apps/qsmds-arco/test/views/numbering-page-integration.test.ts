@@ -6,6 +6,7 @@ import test from 'node:test'
 import {
   canApplyNumberingContextResponse,
   canApplyNumberingMutationResult,
+  NUMBERING_PREVIEW_DEBOUNCE_MS,
   shouldCloseNumberingEditor,
   shouldLoadNumberingIssuances,
 } from '../../src/views/system/basic-data/numbering/numbering-page.logic'
@@ -142,8 +143,17 @@ test('页面持有七项权限、所有 API 副作用与同级 Drawer/Modal 上�
 test('预览与 GET 均使用 AbortController 和单调 request version，mutation 结果未知不自动重放', () => {
   const source = readPageSource()
 
+  assert.equal(NUMBERING_PREVIEW_DEBOUNCE_MS, 300)
   assert.match(source, /previewAbortController\?\.abort\(\)/u)
   assert.match(source, /previewRequestVersion/u)
+  assert.match(
+    source,
+    /previewTimer\s*=\s*setTimeout\([\s\S]{0,180}NUMBERING_PREVIEW_DEBOUNCE_MS/u,
+  )
+  assert.match(
+    source,
+    /function requestPreview[\s\S]{0,900}previewAbortController\?\.abort\(\)[\s\S]{0,180}previewRequestVersion \+= 1/u,
+  )
   assert.match(source, /detailAbortController\?\.abort\(\)/u)
   assert.match(source, /detailRequestVersion/u)
   assert.match(source, /unknownResult/u)
@@ -163,6 +173,19 @@ test('冲突与未知结果只刷新规则快照，不把未保存表单重置�
   assert.doesNotMatch(
     source,
     /function refreshEditorRuleContext[\s\S]{0,400}editorFormModel\.value\s*=/u,
+  )
+})
+
+test('编辑与克隆等待 Server 模型落地后才预览真实配置', () => {
+  const source = readPageSource()
+
+  assert.match(
+    source,
+    /function requestPreview[\s\S]{0,420}editorMode\.value !== 'create'[\s\S]{0,120}editorRule\.value === null[\s\S]{0,120}resetPreview\(\)/u,
+  )
+  assert.match(
+    source,
+    /if \(replaceFormModel\)[\s\S]{0,320}editorFormModel\.value = cloneFormModel\(model\)[\s\S]{0,120}requestPreview\(model\)/u,
   )
 })
 

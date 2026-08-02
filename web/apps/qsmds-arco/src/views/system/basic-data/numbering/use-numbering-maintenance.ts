@@ -36,10 +36,12 @@ import {
   createNumberingRuleFormModel,
   getNumberingMutationFailure,
   validateNumberingRuleForm,
+  validateNumberingRulePreview,
 } from './numbering-management.logic'
 import {
   canApplyNumberingContextResponse,
   canApplyNumberingMutationResult,
+  NUMBERING_PREVIEW_DEBOUNCE_MS,
   shouldLoadNumberingIssuances,
 } from './numbering-page.logic'
 
@@ -151,16 +153,17 @@ export function useNumberingMaintenance(
     editorFieldErrors.value = {}
   }
 
-  function resetPreview(): void {
+  function resetPreview(error: null | string = null): void {
     if (previewTimer !== undefined) {
       clearTimeout(previewTimer)
       previewTimer = undefined
     }
     previewAbortController?.abort()
+    previewAbortController = null
     previewRequestVersion += 1
     editorPreview.value = null
     editorPreviewLoading.value = false
-    editorPreviewError.value = null
+    editorPreviewError.value = error
     editorPreviewRequestId.value = null
   }
 
@@ -266,6 +269,8 @@ export function useNumberingMaintenance(
           model.name = `${response.data.name}副本`
         }
         editorFormModel.value = cloneFormModel(model)
+        // Drawer 初始使用占位模型；只有 Server 详情落地后才能预览真实配置。
+        requestPreview(model)
       }
     }
     catch (error) {
@@ -373,26 +378,46 @@ export function useNumberingMaintenance(
     }).finally(() => {
       if (requestVersion === previewRequestVersion) {
         editorPreviewLoading.value = false
+        previewAbortController = null
       }
     })
   }
 
-  /** 组件负责本地校验和触发，页面用单一计时器合并快速输入。 */
+  /** 页面统一校验 Preview DTO，并用单一计时器合并快速输入。 */
   function requestPreview(model: NumberingRuleFormModel): void {
-    if (!permissions.value.canRead || Object.keys(
-      validateNumberingRuleForm(model),
-    ).length > 0) {
+    if (!permissions.value.canRead) {
       resetPreview()
+      return
+    }
+    if (editorMode.value !== 'create' && editorRule.value === null) {
+      resetPreview()
+      return
+    }
+
+    const validationErrors = validateNumberingRulePreview(model)
+    if (Object.keys(validationErrors).length > 0) {
+      resetPreview(Object.values(validationErrors)[0] ?? '当前配置暂不可预览')
       return
     }
     if (previewTimer !== undefined) {
       clearTimeout(previewTimer)
     }
+    /*
+     * 新快照到达时立即废弃在途请求，不能等 debounce 到期后才取消；否则旧响应
+     * 可能在这 300ms 内回填，让用户短暂看到与当前片段不一致的结果。
+     */
+    previewAbortController?.abort()
+    previewAbortController = null
+    previewRequestVersion += 1
     const snapshot = cloneFormModel(model)
+    editorPreview.value = null
+    editorPreviewLoading.value = true
+    editorPreviewError.value = null
+    editorPreviewRequestId.value = null
     previewTimer = setTimeout(() => {
       previewTimer = undefined
       runPreview(snapshot)
-    }, 250)
+    }, NUMBERING_PREVIEW_DEBOUNCE_MS)
   }
 
   async function refreshEditorRuleContext(): Promise<void> {

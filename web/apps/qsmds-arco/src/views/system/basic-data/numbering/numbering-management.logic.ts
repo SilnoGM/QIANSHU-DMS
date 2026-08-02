@@ -390,23 +390,10 @@ function dateParts(
  * Web 只做快速、确定且无副作用的校验；发布兼容性、周期容量和最终 preview
  * 仍以 Server 为真相源。十进制边界只使用字符串与 bigint，不经过浮点数。
  */
-export function validateNumberingRuleForm(
-  model: NumberingRuleFormModel,
-): Readonly<Record<string, string>> {
-  const errors: Record<string, string> = {}
-  const ruleCode = normalizeField(model.ruleCode).toUpperCase()
-  const name = normalizeField(model.name)
-  const description = normalizeField(model.description)
-
-  if (!/^[A-Z][A-Z0-9_]{0,63}$/u.test(ruleCode)) {
-    setError(errors, 'ruleCode', '规则编码须以字母开头且只包含大写字母、数字和下划线')
-  }
-  if (name === '' || codePointLength(name) > 128) {
-    setError(errors, 'name', '名称应为 1 到 128 个字符且不能全为空白')
-  }
-  if (codePointLength(description) > 500) {
-    setError(errors, 'description', '说明不能超过 500 个字符')
-  }
+function validateNumberingRuleConfiguration(
+  model: Pick<NumberingRuleFormModel, 'resetPolicy' | 'segments'>,
+  errors: Record<string, string>,
+): void {
   if (model.segments.length < 1 || model.segments.length > MAX_SEGMENTS) {
     setError(errors, 'segments', '片段数量必须是 1 到 32')
   }
@@ -476,6 +463,38 @@ export function validateNumberingRuleForm(
   if (missingPeriodDate) {
     setError(errors, 'segments', '日期片段不足以区分当前重置周期')
   }
+}
+
+/**
+ * Preview DTO 只包含 resetPolicy 与 segments。ruleCode/name/description 尚未填写时，
+ * 只要片段配置有效，仍应允许 Server 计算容量与样例。
+ */
+export function validateNumberingRulePreview(
+  model: Pick<NumberingRuleFormModel, 'resetPolicy' | 'segments'>,
+): Readonly<Record<string, string>> {
+  const errors: Record<string, string> = {}
+  validateNumberingRuleConfiguration(model, errors)
+  return errors
+}
+
+export function validateNumberingRuleForm(
+  model: NumberingRuleFormModel,
+): Readonly<Record<string, string>> {
+  const errors: Record<string, string> = {}
+  const ruleCode = normalizeField(model.ruleCode).toUpperCase()
+  const name = normalizeField(model.name)
+  const description = normalizeField(model.description)
+
+  if (!/^[A-Z][A-Z0-9_]{0,63}$/u.test(ruleCode)) {
+    setError(errors, 'ruleCode', '规则编码须以字母开头且只包含大写字母、数字和下划线')
+  }
+  if (name === '' || codePointLength(name) > 128) {
+    setError(errors, 'name', '名称应为 1 到 128 个字符且不能全为空白')
+  }
+  if (codePointLength(description) > 500) {
+    setError(errors, 'description', '说明不能超过 500 个字符')
+  }
+  validateNumberingRuleConfiguration(model, errors)
 
   return errors
 }

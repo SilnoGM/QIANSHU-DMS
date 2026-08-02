@@ -162,13 +162,6 @@ async function applyFieldErrors(
   }
 }
 
-function emitPreviewIfValid(model: NumberingRuleFormModel): void {
-  if (Object.keys(validateNumberingRuleForm(model)).length === 0) {
-    // 节流、AbortController 与乱序保护由持有 preview API 的父页面负责。
-    emit('preview', cloneNumberingRuleFormModel(model))
-  }
-}
-
 async function initialize(): Promise<void> {
   replaceForm(props.formModel)
   baseline.value = cloneNumberingRuleFormModel(props.formModel)
@@ -178,7 +171,8 @@ async function initialize(): Promise<void> {
   closeBypass.reset()
   await nextTick()
   await applyFieldErrors(props.fieldErrors, true)
-  emitPreviewIfValid(form)
+  // 父页面统一校验 Preview DTO，并负责清空无效快照及取消旧请求。
+  emit('preview', cloneNumberingRuleFormModel(form))
 }
 
 function handleResetPolicy(value: unknown): void {
@@ -298,7 +292,19 @@ watch(
       await applyFieldErrors(visibleFieldErrors.value, false)
     }
     emit('update:formModel', isolated)
-    emitPreviewIfValid(isolated)
+  },
+  { deep: true, flush: 'sync' },
+)
+
+watch(
+  () => [form.resetPolicy, form.segments] as const,
+  () => {
+    if (replacingForm.value || !props.modelValue) {
+      return
+    }
+
+    // Preview DTO 只包含重置周期与片段，身份及说明字段变化不得重复请求。
+    emit('preview', cloneNumberingRuleFormModel(form))
   },
   { deep: true, flush: 'sync' },
 )

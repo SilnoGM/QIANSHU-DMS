@@ -27,6 +27,7 @@ import {
   removeNumberingSegment,
   resolveNumberingRuleActions,
   validateNumberingRuleForm,
+  validateNumberingRulePreview,
 } from '../../src/views/system/basic-data/numbering/numbering-management.logic'
 
 const ACTIVE_VERSION = {
@@ -274,6 +275,27 @@ test('本地快速校验覆盖身份、片段形状、容量来源和大整数�
   assert.equal(typeof errors['segments[1].startValue'], 'string')
   assert.equal(typeof errors['segments[1].step'], 'string')
   assert.equal(errors.segments, '最多只能添加一个自增数字片段')
+})
+
+test('Server 预览只校验请求字段并拒绝重置规则使用两位年份', () => {
+  const model = createNumberingRuleFormModel(null)
+
+  // ruleCode/name 不属于 Preview DTO，不能阻止合法片段请求 Server。
+  assert.deepEqual(validateNumberingRulePreview(model), {})
+
+  model.resetPolicy = 'YEARLY'
+  model.segments = [
+    { type: 'DATE', format: 'YYMMDD' },
+    { type: 'SEQUENCE', width: 4, startValue: '1', step: '1' },
+  ]
+  const errors = validateNumberingRulePreview(model)
+
+  assert.equal(
+    errors['segments[0].format'],
+    '重置规则不能使用两位年份日期格式',
+  )
+  assert.equal('ruleCode' in errors, false)
+  assert.equal('name' in errors, false)
 })
 
 test('请求构造保持 decimal string、携带 expectedVersion 且没有可编辑 timezone', () => {

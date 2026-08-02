@@ -212,6 +212,27 @@ async function readVisiblePreview(page) {
   })()`)
 }
 
+/** 捕获页面下一次真实 Preview DTO，不记录请求头、Cookie 或其他敏感信息。 */
+async function observeNextPreviewRequest(page, action) {
+  const controller = new AbortController()
+  const request = page.waitForEvent(
+    'Network.requestWillBeSent',
+    event => event.request?.method === 'POST'
+      && requestPathname(event) === '/api/numbering-rules/preview',
+    20_000,
+    { signal: controller.signal },
+  )
+  try {
+    await action()
+    const event = await request
+    return JSON.parse(event.request.postData ?? '{}')
+  }
+  finally {
+    controller.abort()
+    await request.catch(() => undefined)
+  }
+}
+
 /** FaTabs 由 Reka 管理，使用真实键盘激活并以 aria-selected 作为稳定完成边界。 */
 async function activateDetailTab(page, label) {
   const serialized = JSON.stringify(label)
@@ -455,7 +476,6 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await selectDialogOption(page, '新建编号规则', '日期格式', 'YYYYMMDD')
   await selectDialogOption(page, '新建编号规则', '新片段类型', '分隔符')
   await clickDialogButton(page, '新建编号规则', '添加片段')
-  await selectDialogOption(page, '新建编号规则', '分隔符', '-（短横线）')
   await selectDialogOption(page, '新建编号规则', '新片段类型', '随机字符串')
   await clickDialogButton(page, '新建编号规则', '添加片段')
   await fillDialogControl(page, '新建编号规则', '大写字母长度', '2')
@@ -489,6 +509,122 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
       ?.closest('section')
     return section?.getAttribute('aria-busy') === 'false'
       && section.textContent?.includes('周期容量')
+  })()`)
+
+  /*
+   * DAILY + YYMMDD 是无效配置。变化必须立即废弃旧预览且不得请求 Server；
+   * 恢复 YYYYMMDD 后应自动重新请求，不能让旧的 18 位结果继续伪装成当前配置。
+   */
+  let invalidPreviewRequestCount = 0
+  const removeInvalidPreviewListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      if (
+        event.request?.method === 'POST'
+        && requestPathname(event) === '/api/numbering-rules/preview'
+      ) {
+        invalidPreviewRequestCount += 1
+      }
+    },
+  )
+  try {
+    await selectDialogOption(page, '新建编号规则', '日期格式', 'YYMMDD')
+    await page.waitFor(`(() => {
+      const section = document.getElementById('numbering-preview-title')
+        ?.closest('section')
+      return section?.getAttribute('aria-busy') === 'false'
+        && section.textContent?.includes('等待有效配置')
+        && section.textContent?.includes('重置规则不能使用两位年份日期格式')
+        && !section.textContent?.includes('周期容量')
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 650))
+    assert.equal(invalidPreviewRequestCount, 0)
+
+    await selectDialogOption(page, '新建编号规则', '日期格式', 'YYYYMMDD')
+    await page.waitFor(`(() => {
+      const section = document.getElementById('numbering-preview-title')
+        ?.closest('section')
+      return section?.getAttribute('aria-busy') === 'false'
+        && section.textContent?.includes('周期容量')
+    })()`)
+    assert.equal(invalidPreviewRequestCount, 1)
+  }
+  finally {
+    removeInvalidPreviewListener()
+  }
+
+  // 快速输入只提交最后一个宽度；Server 结果必须实时收敛到 4 位序列。
+  const widthPreviewRequestWidths = []
+  const removeWidthPreviewListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      if (
+        event.request?.method === 'POST'
+        && requestPathname(event) === '/api/numbering-rules/preview'
+      ) {
+        const body = JSON.parse(event.request.postData ?? '{}')
+        const sequence = body.segments?.find(segment => segment.type === 'SEQUENCE')
+        widthPreviewRequestWidths.push(sequence?.width ?? null)
+      }
+    },
+  )
+  try {
+    // 同一事件循环内连续输入，稳定证明 300ms debounce 只保留最后一个快照。
+    await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('新建编号规则'))
+      const label = [...(dialog?.querySelectorAll('label') ?? [])]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.trim().startsWith('位数'))
+      const control = label?.querySelector('input')
+      if (!(control instanceof HTMLInputElement)) {
+        throw new Error('numbering sequence width unavailable')
+      }
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      if (!setter) throw new Error('numbering input setter unavailable')
+      for (const value of ['4', '5', '4']) {
+        setter.call(control, value)
+        control.dispatchEvent(new InputEvent('input', {
+          bubbles: true,
+          inputType: 'insertText',
+        }))
+        control.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const section = document.getElementById('numbering-preview-title')
+        ?.closest('section')
+      const values = Object.fromEntries(
+        [...(section?.querySelectorAll('dl > div') ?? [])].map(item => [
+          item.querySelector('dt')?.textContent?.trim() ?? '',
+          item.querySelector('dd')?.textContent?.trim() ?? '',
+        ]),
+      )
+      return section?.getAttribute('aria-busy') === 'false'
+        && values['周期容量'] === '9,999'
+        && values['下一序列值'] === '1'
+        && [...(section?.querySelectorAll('code') ?? [])]
+          .some(code => code.textContent?.trim().includes('SO0001'))
+    })()`)
+    await new Promise(resolve => setTimeout(resolve, 400))
+    assert.deepEqual(widthPreviewRequestWidths, [4])
+  }
+  finally {
+    removeWidthPreviewListener()
+  }
+
+  // 后续精确大数与乱序场景仍使用 18 位序列。
+  await fillDialogControl(page, '新建编号规则', '位数', '18')
+  await page.waitFor(`(() => {
+    const section = document.getElementById('numbering-preview-title')
+      ?.closest('section')
+    return section?.getAttribute('aria-busy') === 'false'
+      && section.textContent?.includes('999,999,999,999,999,999')
   })()`)
 
   // 两次真实 preview 响应按新后旧释放；旧响应不得覆盖 startValue=3。
@@ -699,17 +835,52 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await waitForRuleRow(page, mixedRuleCode)
   await waitForRuleRow(page, randomRuleCode)
 
-  // clone 首次提交复用既有 Rule Code，真实 409 必须落到字段；纠正后再成功。
-  await clickRuleAction(page, mainRuleCode, '克隆')
-  await waitForVisibleDialog(page, '克隆编号规则')
-  await waitForDialogControlValue(
+  // clone 只能在 Server 详情落地后预览来源配置，不能抢跑默认 SEQUENCE。
+  const cloneInitialPreviewRequest = await observeNextPreviewRequest(
     page,
-    '克隆编号规则',
-    '规则名称',
-    '浏览器主编号规则副本',
+    async () => {
+      await clickRuleAction(page, mainRuleCode, '克隆')
+      await waitForVisibleDialog(page, '克隆编号规则')
+      await waitForDialogControlValue(
+        page,
+        '克隆编号规则',
+        '规则名称',
+        '浏览器主编号规则副本',
+      )
+    },
   )
-  await fillDialogControl(page, '克隆编号规则', '规则编码', mainRuleCode)
-  await fillDialogControl(page, '克隆编号规则', '规则名称', '浏览器主编号规则副本')
+  assert.equal('ruleId' in cloneInitialPreviewRequest, false)
+  assert.equal(
+    cloneInitialPreviewRequest.resetPolicy,
+    mainDetail.draftVersion.config.resetPolicy,
+  )
+  assert.deepEqual(
+    cloneInitialPreviewRequest.segments,
+    mainDetail.draftVersion.config.segments,
+  )
+
+  // clone 首次提交复用既有 Rule Code，真实 409 必须落到字段；纠正后再成功。
+  let identityPreviewRequestCount = 0
+  const removeIdentityPreviewListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      if (
+        event.request?.method === 'POST'
+        && requestPathname(event) === '/api/numbering-rules/preview'
+      ) {
+        identityPreviewRequestCount += 1
+      }
+    },
+  )
+  try {
+    await fillDialogControl(page, '克隆编号规则', '规则编码', mainRuleCode)
+    await fillDialogControl(page, '克隆编号规则', '规则名称', '浏览器主编号规则副本')
+    await new Promise(resolve => setTimeout(resolve, 650))
+    assert.equal(identityPreviewRequestCount, 0)
+  }
+  finally {
+    removeIdentityPreviewListener()
+  }
   await clickDialogButton(page, '克隆编号规则', '创建副本')
   await page.waitFor(`(() => {
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
@@ -798,13 +969,27 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
 
   // Drawer 持有旧 expectedVersion 时，另一个真实 PATCH 先提交，随后 UI 得到 409。
   mainDetail = await getRuleByCode(page, mainRuleCode)
-  await clickRuleAction(page, mainRuleCode, '编辑')
-  await waitForVisibleDialog(page, '编辑编号规则')
-  await waitForDialogControlValue(
+  const editInitialPreviewRequest = await observeNextPreviewRequest(
     page,
-    '编辑编号规则',
-    '规则名称',
-    '浏览器主编号规则',
+    async () => {
+      await clickRuleAction(page, mainRuleCode, '编辑')
+      await waitForVisibleDialog(page, '编辑编号规则')
+      await waitForDialogControlValue(
+        page,
+        '编辑编号规则',
+        '规则名称',
+        '浏览器主编号规则',
+      )
+    },
+  )
+  assert.equal(editInitialPreviewRequest.ruleId, mainDetail.id)
+  assert.equal(
+    editInitialPreviewRequest.resetPolicy,
+    mainDetail.draftVersion.config.resetPolicy,
+  )
+  assert.deepEqual(
+    editInitialPreviewRequest.segments,
+    mainDetail.draftVersion.config.segments,
   )
   const competingUpdate = await page.evaluate(apiExpression(
     `/api/numbering-rules/${encodeURIComponent(mainDetail.id)}`,
