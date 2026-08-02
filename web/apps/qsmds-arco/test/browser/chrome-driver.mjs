@@ -47,14 +47,16 @@ function waitForExit(child, timeoutMilliseconds) {
 
 export class CdpConnection {
   constructor(socket) {
+    this.closed = false
+    this.eventWaiters = new Set()
     this.socket = socket
     this.nextId = 1
     this.pending = new Map()
     this.listeners = new Map()
 
     socket.addEventListener('message', event => this.handleMessage(event.data))
-    socket.addEventListener('close', () => this.rejectPending())
-    socket.addEventListener('error', () => this.rejectPending())
+    socket.addEventListener('close', () => this.handleConnectionClosed())
+    socket.addEventListener('error', () => this.handleConnectionClosed())
   }
 
   static async connect(webSocketUrl) {
@@ -122,14 +124,33 @@ export class CdpConnection {
     this.pending.clear()
   }
 
+  handleConnectionClosed() {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
+    this.rejectPending()
+    for (const waiter of [...this.eventWaiters]) {
+      waiter.reject(new Error('Browser DevTools connection closed'))
+    }
+  }
+
   on(method, listener) {
     const listeners = this.listeners.get(method) ?? new Set()
     listeners.add(listener)
     this.listeners.set(method, listeners)
-    return () => listeners.delete(listener)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.listeners.get(method) === listeners) {
+        this.listeners.delete(method)
+      }
+    }
   }
 
   send(method, params = {}) {
+    if (this.closed) {
+      return Promise.reject(new Error('Browser DevTools connection closed'))
+    }
     const id = this.nextId
     this.nextId += 1
     return new Promise((resolve, reject) => {
@@ -138,29 +159,102 @@ export class CdpConnection {
         reject(new Error('Browser DevTools command timed out'))
       }, commandTimeoutMilliseconds)
       this.pending.set(id, { reject, resolve, timeout })
-      this.socket.send(JSON.stringify({ id, method, params }))
+      try {
+        this.socket.send(JSON.stringify({ id, method, params }))
+      }
+      catch {
+        clearTimeout(timeout)
+        this.pending.delete(id)
+        this.handleConnectionClosed()
+        reject(new Error('Browser DevTools connection closed'))
+      }
     })
   }
 
-  waitForEvent(method, predicate = () => true, timeoutMilliseconds = commandTimeoutMilliseconds) {
+  waitForEvent(
+    method,
+    predicate = () => true,
+    timeoutMilliseconds = commandTimeoutMilliseconds,
+    options = {},
+  ) {
+    return this.waitForAnyEvent(
+      [{ method, predicate }],
+      timeoutMilliseconds,
+      method,
+      options,
+    )
+  }
+
+  waitForAnyEvent(
+    events,
+    timeoutMilliseconds = commandTimeoutMilliseconds,
+    timeoutLabel,
+    options = {},
+  ) {
+    if (this.closed) {
+      return Promise.reject(new Error('Browser DevTools connection closed'))
+    }
+    const awaitedMethods = timeoutLabel ?? events.map(event => event.method).join(' | ')
+    if (options.signal?.aborted) {
+      return Promise.reject(
+        new Error(`Browser DevTools event cancelled: ${awaitedMethods}`),
+      )
+    }
     return new Promise((resolve, reject) => {
-      let unsubscribe = () => {}
-      const timeout = setTimeout(() => {
-        unsubscribe()
-        reject(new Error(`Browser DevTools event timed out: ${method}`))
-      }, timeoutMilliseconds)
-      unsubscribe = this.on(method, (params) => {
-        if (!predicate(params)) {
+      let settled = false
+      let handleAbort = () => {}
+      let timeout
+      let waiter
+      const unsubscribes = []
+      const cleanup = () => {
+        clearTimeout(timeout)
+        for (const unsubscribe of unsubscribes) {
+          unsubscribe()
+        }
+        options.signal?.removeEventListener('abort', handleAbort)
+        this.eventWaiters.delete(waiter)
+      }
+      const settle = (callback) => {
+        if (settled) {
           return
         }
-        clearTimeout(timeout)
-        unsubscribe()
-        resolve(params)
-      })
+        settled = true
+        cleanup()
+        callback()
+      }
+      waiter = {
+        reject: error => settle(() => reject(error)),
+      }
+      handleAbort = () => waiter.reject(
+        new Error(`Browser DevTools event cancelled: ${awaitedMethods}`),
+      )
+      timeout = setTimeout(() => {
+        settle(() => reject(
+          new Error(`Browser DevTools event timed out: ${awaitedMethods}`),
+        ))
+      }, timeoutMilliseconds)
+      this.eventWaiters.add(waiter)
+      options.signal?.addEventListener('abort', handleAbort, { once: true })
+      for (const event of events) {
+        unsubscribes.push(this.on(event.method, (params) => {
+          let matches
+          try {
+            matches = event.predicate(params)
+          }
+          catch (error) {
+            waiter.reject(error)
+            return
+          }
+          if (matches) {
+            settle(() => resolve(params))
+          }
+        }))
+      }
     })
   }
 
   close() {
+    this.handleConnectionClosed()
     this.socket.close()
   }
 }
@@ -186,10 +280,11 @@ export class ChromePage {
 
   async navigate(url) {
     // hash history 只触发同文档导航；同时监听两类事件，才能覆盖首次加载和
-    // `/#/path` 路由切换，且不把同文档导航误判为页面加载超时。
-    const navigated = Promise.race([
-      this.connection.waitForEvent('Page.loadEventFired'),
-      this.connection.waitForEvent('Page.navigatedWithinDocument'),
+    // `/#/path` 路由切换。复用同一个可清理等待器，任一事件命中后会同时
+    // 注销另一监听器，避免 Promise.race loser 遗留长 timer。
+    const navigated = this.connection.waitForAnyEvent([
+      { method: 'Page.loadEventFired', predicate: () => true },
+      { method: 'Page.navigatedWithinDocument', predicate: () => true },
     ])
     await this.connection.send('Page.navigate', { url })
     await navigated
@@ -255,11 +350,12 @@ export class ChromePage {
     })
   }
 
-  waitForEvent(method, predicate, timeoutMilliseconds) {
+  waitForEvent(method, predicate, timeoutMilliseconds, options) {
     return this.connection.waitForEvent(
       method,
       predicate,
       timeoutMilliseconds,
+      options,
     )
   }
 
@@ -278,6 +374,7 @@ export class ChromeBrowser {
     this.browserConnection = browserConnection
     this.debuggingPort = debuggingPort
     this.executable = executable
+    this.pageConnections = new Set()
     this.userDataDirectory = userDataDirectory
   }
 
@@ -293,14 +390,29 @@ export class ChromeBrowser {
     if (typeof target.webSocketDebuggerUrl !== 'string') {
       throw new TypeError('Browser page target is invalid')
     }
-    const page = new ChromePage(
-      await CdpConnection.connect(target.webSocketDebuggerUrl),
+    const pageConnection = await CdpConnection.connect(
+      target.webSocketDebuggerUrl,
     )
-    await page.initialize()
-    return page
+    this.pageConnections.add(pageConnection)
+    const page = new ChromePage(pageConnection)
+    try {
+      await page.initialize()
+      return page
+    }
+    catch (error) {
+      pageConnection.close()
+      this.pageConnections.delete(pageConnection)
+      throw error
+    }
   }
 
   async close() {
+    // 页面 CDP WebSocket 不依赖 Browser.close 的进程退出事件自行回收；先逐一
+    // 关闭可确保失败路径也不会留下活动 socket 让 node:test 长时间悬挂。
+    for (const pageConnection of this.pageConnections) {
+      pageConnection.close()
+    }
+    this.pageConnections.clear()
     try {
       await this.browserConnection.send('Browser.close')
     }

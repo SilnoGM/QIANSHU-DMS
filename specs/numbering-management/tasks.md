@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 16-17）
+- 状态：Phase 4 实施中（Task 17）
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
@@ -340,17 +340,17 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 15.11 验证 Server 没有 HTTP generate endpoint。
   - _Requirements: R1-R11, R13_
 
-- [ ] 16. 建立 Browser E2E 并完成真实交互验收
-  - [ ] 16.1 新增独立 `numbering.browser.test.mjs` 和根 `ci:browser-numbering-e2e` 编排，不把编号场景塞入地区文件。
-  - [ ] 16.2 覆盖 `1280x800` 桌面表格和 `390x844` 移动卡片。
-  - [ ] 16.3 覆盖创建五类 segment、顺序调整、preview、保存、编辑、克隆、发布和启停。
-  - [ ] 16.4 覆盖 sequence、random、mixed 的 capacity、used 和 next 显示。
-  - [ ] 16.5 使用超过 `Number.MAX_SAFE_INTEGER` 的 fixture 验证精确展示。
-  - [ ] 16.6 覆盖 preview 取消/乱序、列表失败重试、字段错误、版本冲突和未知 mutation 结果。
-  - [ ] 16.7 覆盖七项权限矩阵、动态撤权和相邻 Server API 真实 `403`；clone 分别验证只有 read、只有 create 均为 `403`；issuance history 分别验证只有 read、只有 read-issuances 均为 `403`；对应两项权限同时具备才成功。
-  - [ ] 16.8 覆盖 Escape、遮罩、关闭按钮、未保存确认、提交锁和关闭后焦点恢复。
-  - [ ] 16.9 验证按钮触控高度、`aria-live`、`aria-busy`、状态非颜色单一表达和 reduced motion。
-  - [ ] 16.10 验证 light/dark、无横向溢出、无 console error/page error、无敏感日志。
+- [x] 16. 建立 Browser E2E 并完成真实交互验收
+  - [x] 16.1 新增独立 `numbering.browser.test.mjs` 和根 `ci:browser-numbering-e2e` 编排，不把编号场景塞入地区文件。
+  - [x] 16.2 覆盖 `1280x800` 桌面表格和 `390x844` 移动卡片。
+  - [x] 16.3 覆盖创建五类 segment、顺序调整、preview、保存、编辑、克隆、发布和启停。
+  - [x] 16.4 覆盖 sequence、random、mixed 的 capacity、used 和 next 显示。
+  - [x] 16.5 使用超过 `Number.MAX_SAFE_INTEGER` 的 fixture 验证精确展示。
+  - [x] 16.6 覆盖 preview 取消/乱序、列表失败重试、字段错误、版本冲突和未知 mutation 结果。
+  - [x] 16.7 覆盖七项权限矩阵、动态撤权和相邻 Server API 真实 `403`；clone 分别验证只有 read、只有 create 均为 `403`；issuance history 分别验证只有 read、只有 read-issuances 均为 `403`；对应两项权限同时具备才成功。
+  - [x] 16.8 覆盖 Escape、遮罩、关闭按钮、未保存确认、提交锁和关闭后焦点恢复。
+  - [x] 16.9 验证按钮触控高度、`aria-live`、`aria-busy`、状态非颜色单一表达和 reduced motion。
+  - [x] 16.10 验证 light/dark、无横向溢出、无 console error/page error、无敏感日志。
   - _Requirements: R1-R13_
 
 - [ ] 17. 完成全量门禁与交付收口

@@ -725,9 +725,24 @@ export async function inspectNextPausedRequest(
   }
 }
 
-export function collectRuntimeIssues(page) {
+export function collectRuntimeIssues(page, { sensitiveValues = [] } = {}) {
   const issues = []
   let enabled = false
+  /*
+   * 凭据必须在归一化、截断和写入 issues 之前被替换。使用字符串 replaceAll
+   * 而非动态正则，既保证重复出现的值全部遮罩，也避免密码中的正则元字符改变
+   * 匹配语义；较长值优先可避免其前缀先被替换后残留后半段。
+   */
+  const secrets = [...new Set(sensitiveValues)]
+    .filter(value => typeof value === 'string' && value.length > 0)
+    .sort((left, right) => right.length - left.length)
+  const redact = (value) => {
+    let redacted = String(value)
+    for (const secret of secrets) {
+      redacted = redacted.replaceAll(secret, '[REDACTED]')
+    }
+    return redacted
+  }
   const removeConsole = page.on('Runtime.consoleAPICalled', (event) => {
     if (enabled && ['error', 'warning'].includes(event.type)) {
       // 保留有界、单行的 DevTools 摘要，失败时能定位真实前端异常；不采集
@@ -742,9 +757,10 @@ export function collectRuntimeIssues(page) {
         ))
         .filter(Boolean)
         .join(' ')
+      const redactedDetail = redact(detail)
         .replaceAll(/\s+/gu, ' ')
         .slice(0, 360)
-      issues.push(`console:${event.type}${detail ? `:${detail}` : ''}`)
+      issues.push(`console:${event.type}${redactedDetail ? `:${redactedDetail}` : ''}`)
     }
   })
   const removeException = page.on('Runtime.exceptionThrown', (event) => {
@@ -752,9 +768,10 @@ export function collectRuntimeIssues(page) {
       const detail = event.exceptionDetails?.exception?.description
         ?? event.exceptionDetails?.text
         ?? ''
+      const redactedDetail = redact(detail).replaceAll(/\s+/gu, ' ').slice(0, 360)
       issues.push(
-        `exception${detail
-          ? `:${String(detail).replaceAll(/\s+/gu, ' ').slice(0, 360)}`
+        `exception${redactedDetail
+          ? `:${redactedDetail}`
           : ''}`,
       )
     }

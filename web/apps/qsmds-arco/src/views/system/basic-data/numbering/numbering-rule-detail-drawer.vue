@@ -252,7 +252,6 @@ watch(() => props.issuanceFilters, (filters) => {
     size="xl"
     :loading="detailLoading"
     :error="detailError"
-    data-testid="numbering-detail-drawer"
     @update:model-value="handleVisibleChange"
     @closed="emit('closed')"
   >
@@ -279,7 +278,7 @@ watch(() => props.issuanceFilters, (filters) => {
       class="min-h-64"
     />
 
-    <div v-else class="gap-4 grid min-w-0">
+    <div v-else data-testid="numbering-detail-drawer" class="gap-4 grid min-w-0">
       <FaAlert
         v-if="actionError"
         role="alert"
