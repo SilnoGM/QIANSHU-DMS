@@ -258,17 +258,17 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - _Requirements: R3-R9, R11, R13_
 
 - [ ] 10. 以 TDD 发布 `NumberingModule`、内部生成服务、管理 API 与 OpenAPI
-  - [ ] 10.1 实现并只导出已确认的 `NumberingGeneratorService`：
+  - [x] 10.1 实现并只导出已确认的 `NumberingGeneratorService`：
 
     ```text
     generate({ ruleCode, consumerCode, idempotencyKey })
       -> number, ruleCode, ruleRevision, issuedAt, idempotentReplay
     ```
 
-  - [ ] 10.2 `NumberingModule` 精确导入 `PrismaModule` 与 `AuthModule`，复用后者导出的 `AuditService`，注册 query、command、generator 和 Controller，并加入 `server/src/http.modules.ts`。
-  - [ ] 10.3 Controller 暴露已确认的 list/detail/preview/create/update/versions/publish/enable/disable/clone/issuances。
-  - [ ] 10.4 每个 operation 固定 permission、CSRF、`private, no-store`、`X-Request-Id`、成功 response 和精确错误矩阵。
-  - [ ] 10.5 OpenAPI 测试明确断言不存在 `/generate` 或等价 path。
+  - [x] 10.2 `NumberingModule` 精确导入 `PrismaModule` 与 `AuthModule`，复用后者导出的 `AuditService`，注册 query、command、generator 和 Controller，并加入 `server/src/http.modules.ts`。
+  - [x] 10.3 Controller 暴露已确认的 list/detail/preview/create/update/versions/publish/enable/disable/clone/issuances。
+  - [x] 10.4 每个 operation 固定 permission、CSRF、`private, no-store`、`X-Request-Id`、成功 response 和精确错误矩阵。
+  - [x] 10.5 OpenAPI 测试明确断言不存在 `/generate` 或等价 path。
   - [ ] 10.6 Server E2E 覆盖 create -> preview -> publish -> enable -> internal generate -> disable -> clone。
   - [ ] 10.7 只通过正式链路生成 `server/openapi/openapi.json` 并执行根 `contract:sync`；不手工编辑 snapshot。
   - _Requirements: R1-R13_
