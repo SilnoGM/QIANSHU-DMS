@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 9）
+- 状态：Phase 4 实施中（Task 10）
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
@@ -241,20 +241,20 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 8.6 随机候选生成失败不得推进 period state。
   - _Requirements: R2, R5-R9, R13_
 
-- [ ] 9. 以 TDD 实现 period state、永久 issuance、幂等和并发发号
-  - [ ] 9.1 生成事务设置既有 timeout 并读取一次 `transaction_timestamp()`，后续日期、period key 和 issuedAt 复用该时间点。
-  - [ ] 9.2 校验内部输入，计算 `consumerCode + idempotencyKeyHash` 唯一键和 request fingerprint；在规则当前状态校验之前查询幂等记录。
-  - [ ] 9.3 首次调用未命中后，generate 对 rule 使用 `FOR SHARE`。
-  - [ ] 9.4 取得 rule shared lock 后、判断 status 和 active version 前立刻再次查询幂等记录，覆盖 retry 排在 disable/publish 排他锁之后的竞态。
-  - [ ] 9.5 第二次仍未命中时才校验 rule 为 ENABLED 且存在完整 active snapshot，并创建/锁定 `(ruleId, periodKey)` state。
-  - [ ] 9.6 获取 period state lock 后第三次检查幂等记录；同规则竞态命中不得调用随机源或推进 state。
-  - [ ] 9.7 同语义幂等命中返回历史结果，即使规则已停用或换版也不再次消耗容量。
-  - [ ] 9.8 同一幂等键用于不同规则时返回 `NUMBERING_IDEMPOTENCY_CONFLICT`。
-  - [ ] 9.9 pure random insert 使用 `(ruleId, generatedNumber)` 显式 conflict target 和 `ON CONFLICT DO NOTHING RETURNING`。
-  - [ ] 9.10 sequence 输出冲突作为状态损坏返回 `NUMBERING_OUTPUT_CONFLICT`。
-  - [ ] 9.11 issuance insert、usedCount 和 next sequence 在同一事务原子提交。
-  - [ ] 9.12 任意失败、timeout 或冲突回滚时不留下部分 state/issuance。
-  - [ ] 9.13 generator 不调用 `AuditService`，发号只写永久 ledger。
+- [x] 9. 以 TDD 实现 period state、永久 issuance、幂等和并发发号
+  - [x] 9.1 生成事务设置既有 timeout 并读取一次 `transaction_timestamp()`，后续日期、period key 和 issuedAt 复用该时间点。
+  - [x] 9.2 校验内部输入，计算 `consumerCode + idempotencyKeyHash` 唯一键和 request fingerprint；在规则当前状态校验之前查询幂等记录。
+  - [x] 9.3 首次调用未命中后，generate 对 rule 使用 `FOR SHARE`。
+  - [x] 9.4 取得 rule shared lock 后、判断 status 和 active version 前立刻再次查询幂等记录，覆盖 retry 排在 disable/publish 排他锁之后的竞态。
+  - [x] 9.5 第二次仍未命中时才校验 rule 为 ENABLED 且存在完整 active snapshot，并创建/锁定 `(ruleId, periodKey)` state。
+  - [x] 9.6 获取 period state lock 后第三次检查幂等记录；同规则竞态命中不得调用随机源或推进 state。
+  - [x] 9.7 同语义幂等命中返回历史结果，即使规则已停用或换版也不再次消耗容量。
+  - [x] 9.8 同一幂等键用于不同规则时返回 `NUMBERING_IDEMPOTENCY_CONFLICT`。
+  - [x] 9.9 pure random insert 使用 `(ruleId, generatedNumber)` 显式 conflict target 和 `ON CONFLICT DO NOTHING RETURNING`。
+  - [x] 9.10 sequence 输出冲突作为状态损坏返回 `NUMBERING_OUTPUT_CONFLICT`。
+  - [x] 9.11 issuance insert、usedCount 和 next sequence 在同一事务原子提交。
+  - [x] 9.12 任意失败、timeout 或冲突回滚时不留下部分 state/issuance。
+  - [x] 9.13 generator 不调用 `AuditService`，发号只写永久 ledger。
   - _Requirements: R3-R9, R11, R13_
 
 - [ ] 10. 以 TDD 发布 `NumberingModule`、内部生成服务、管理 API 与 OpenAPI
