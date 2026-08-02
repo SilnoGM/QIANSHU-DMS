@@ -8,10 +8,12 @@ import {
   type NumberingRuleConfig,
   NumberingRuleConfigError,
 } from './rule-types'
+import { validateNumberingRuleConfig } from './rule-validation'
 
 /**
- * 渲染器只消费已经校验的配置、显式数据库时间和显式序列值；它本身不读取
- * 系统时钟，也不读取或推进 period state。
+ * 渲染器只消费显式数据库时间和显式序列值；它本身不读取系统时钟，也不
+ * 读取或推进 period state。入口重验配置是对损坏持久化快照的 fail-closed
+ * 保护，正常调用仍应在保存/发布阶段先完成同一套校验。
  */
 export function renderNumberingCandidate(
   config: NumberingRuleConfig,
@@ -19,7 +21,8 @@ export function renderNumberingCandidate(
   sequenceValue: bigint | null,
   randomSource: NumberingRandomSource | undefined,
 ): string {
-  const output = config.segments.map((segment) => {
+  const validatedConfig = validateNumberingRuleConfig(config)
+  const output = validatedConfig.segments.map((segment) => {
     switch (segment.type) {
       case 'FIXED':
         return segment.value

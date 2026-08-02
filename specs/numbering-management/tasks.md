@@ -223,13 +223,13 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [ ] 6.9 不实现 DELETE。
   - _Requirements: R1, R3, R6-R8, R10-R11, R13_
 
-- [ ] 7. 以 TDD 实现固定、日期、分隔符和序列渲染
-  - [ ] 7.1 为片段顺序、ASCII 输出、日期格式和 sequence 补零增加失败测试。
-  - [ ] 7.2 渲染器只消费已规范化 config、数据库时间和显式 sequence value，不读取系统时钟。
-  - [ ] 7.3 period key 与日期片段使用同一 `Asia/Shanghai` 时间。
-  - [ ] 7.4 sequence 检查起始值、步长、宽度、最后一个值和耗尽，不回绕。
-  - [ ] 7.5 sequence-only preview 返回确定样例但不占号。
-  - [ ] 7.6 输出长度在运行时再次保护，异常配置返回 `NUMBERING_RULE_CONFIG_INVALID`。
+- [x] 7. 以 TDD 实现固定、日期、分隔符和序列渲染
+  - [x] 7.1 为片段顺序、ASCII 输出、日期格式和 sequence 补零增加失败测试。
+  - [x] 7.2 渲染器只消费已规范化 config、数据库时间和显式 sequence value，不读取系统时钟。
+  - [x] 7.3 period key 与日期片段使用同一 `Asia/Shanghai` 时间。
+  - [x] 7.4 sequence 检查起始值、步长、宽度、最后一个值和耗尽，不回绕。
+  - [x] 7.5 sequence-only preview 返回确定样例但不占号。
+  - [x] 7.6 输出长度在运行时再次保护，异常配置返回 `NUMBERING_RULE_CONFIG_INVALID`。
   - _Requirements: R2-R4, R6-R9, R13_
 
 - [ ] 8. 以 TDD 实现安全随机渲染、容量和碰撞策略
