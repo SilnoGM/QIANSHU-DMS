@@ -191,7 +191,11 @@ export function createBrowserNumberingPlan(input) {
     runner: Object.freeze({
       ...basePlan.runner,
       args: Object.freeze(['-C', 'web', 'test:browser:numbering']),
-      env: Object.freeze({ ...basePlan.runner.env }),
+      env: Object.freeze({
+        ...basePlan.runner.env,
+        QIANSHU_BROWSER_NUMBERING_LIMITED_PASSWORD:
+          input.secrets.limitedPassword,
+      }),
     }),
     verify: Object.freeze([
       Object.freeze({
@@ -207,6 +211,17 @@ export function createBrowserNumberingPlan(input) {
       }),
     ]),
   })
+}
+
+/** 外层进程 relay 必须遮罩本次隔离运行创建的全部数据库与登录凭据。 */
+export function createBrowserNumberingSensitiveValues(databaseUrl, secrets) {
+  return Object.freeze([
+    databaseUrl,
+    new URL(databaseUrl).password,
+    secrets.adminPassword,
+    secrets.limitedPassword,
+    ...secrets.hmacKeys,
+  ])
 }
 
 /** 任何阶段失败都保留首错，并逆序停止本次拥有的服务。 */
@@ -556,13 +571,12 @@ export async function runProductionBrowserNumberingE2e() {
       adminPassword: `Bn-${randomBytes(9).toString('base64url')}!8`,
       hmacKeys: [0, 1, 2]
         .map(() => randomBytes(32).toString('base64url')),
+      limitedPassword: `Nl-${randomBytes(8).toString('base64url')}!7`,
     }
-    const sensitiveValues = [
+    const sensitiveValues = createBrowserNumberingSensitiveValues(
       databaseUrl,
-      new URL(databaseUrl).password,
-      secrets.adminPassword,
-      ...secrets.hmacKeys,
-    ]
+      secrets,
+    )
     const plan = createBrowserNumberingPlan({
       chromeExecutable,
       databaseUrl,

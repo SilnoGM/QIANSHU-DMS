@@ -47,6 +47,18 @@ const cloneRuleCode = 'E2E_BROWSER_CLONE'
 const permissionTargetRuleCode = 'E2E_PERMISSION_TARGET'
 const permissionCloneRuleCode = 'E2E_PERMISSION_CLONE'
 
+/** 普通用户密码由根级编排器独立生成，避免测试端派生后脱离外层日志遮罩。 */
+function readLimitedPassword(environment) {
+  const password = environment.QIANSHU_BROWSER_NUMBERING_LIMITED_PASSWORD
+  const passwordLength = typeof password === 'string'
+    ? Array.from(password.normalize('NFC')).length
+    : 0
+  if (passwordLength < 8 || passwordLength > 20) {
+    throw new Error('Browser numbering limited credential is invalid')
+  }
+  return password
+}
+
 const allNumberingPermissions = [
   'numbering-rules:create',
   'numbering-rules:disable',
@@ -1075,9 +1087,7 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
 }, async (t) => {
   const configuration = readConfiguration(process.env)
   const limitedUsername = 'browser_numbering_limited'
-  const limitedPassword = `${
-    Array.from(configuration.password.normalize('NFC')).slice(0, 8).join('')
-  }-N7`
+  const limitedPassword = readLimitedPassword(process.env)
 
   const adminBrowser = await launchChrome({
     executable: configuration.chromeExecutable,

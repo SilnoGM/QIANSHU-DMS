@@ -74,6 +74,7 @@ test('编号计划复用地区可信运行时但只执行编号 runner 与编号
     secrets: {
       adminPassword: 'fixture-password',
       hmacKeys: ['a'.repeat(43), 'b'.repeat(43), 'c'.repeat(43)],
+      limitedPassword: 'limited-fixture-password',
     },
     sessionDirectory: '/tmp/qianshu-browser-numbering-session',
     sourceEnv: {
@@ -99,6 +100,10 @@ test('编号计划复用地区可信运行时但只执行编号 runner 与编号
   assert.deepEqual(
     [plan.runner.command, plan.runner.args],
     ['pnpm', ['-C', 'web', 'test:browser:numbering']],
+  )
+  assert.equal(
+    plan.runner.env.QIANSHU_BROWSER_NUMBERING_LIMITED_PASSWORD,
+    'limited-fixture-password',
   )
   assert.equal(plan.verify.length, 1)
   assert.equal(plan.verify[0]?.name, 'numbering-database-verification')
@@ -151,6 +156,26 @@ test('编号计划复用地区可信运行时但只执行编号 runner 与编号
     [...plan.prepare, ...plan.services, plan.runner, ...plan.verify]
       .some(step => step.env.DATABASE_URL === leakedDatabaseUrl),
     false,
+  )
+})
+
+test('外层日志脱敏覆盖编号 Browser 的全部临时凭据', async () => {
+  const { createBrowserNumberingSensitiveValues } = await loadSubject()
+  const secrets = {
+    adminPassword: 'fixture-password',
+    hmacKeys: ['a'.repeat(43), 'b'.repeat(43), 'c'.repeat(43)],
+    limitedPassword: 'limited-fixture-password',
+  }
+
+  assert.deepEqual(
+    createBrowserNumberingSensitiveValues(databaseUrl, secrets),
+    [
+      databaseUrl,
+      'test-password',
+      secrets.adminPassword,
+      secrets.limitedPassword,
+      ...secrets.hmacKeys,
+    ],
   )
 })
 
