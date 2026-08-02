@@ -269,7 +269,19 @@ function closeWithoutDirtyGuard(): void {
   emit('update:modelValue', false)
 }
 
+/**
+ * 身份切换或动态撤权属于安全边界，不得被提交锁或 dirty guard 阻止。
+ * mutation 本身不能安全取消，父页面会先废弃其 operation generation；这里只负责
+ * arm 一次关闭旁路并立即移除敏感表单上下文。
+ */
+function closeForAuthorityLoss(): void {
+  closeBypass.arm()
+  submitRequested.value = false
+  emit('update:modelValue', false)
+}
+
 defineExpose<NumberingRuleEditorDrawerExpose>({
+  closeForAuthorityLoss,
   closeWithoutDirtyGuard,
 })
 

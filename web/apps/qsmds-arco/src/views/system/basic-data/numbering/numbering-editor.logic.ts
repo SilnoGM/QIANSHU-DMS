@@ -8,6 +8,7 @@ export type NumberingRuleEditorMode = 'clone' | 'create' | 'edit'
 export type NumberingSegmentAction = 'down' | 'remove' | 'up'
 
 export interface NumberingRuleEditorDrawerExpose {
+  closeForAuthorityLoss: () => void
   closeWithoutDirtyGuard: () => void
 }
 

@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { TableSortingState } from '@fantastic-admin/components'
+import type { NumberingDetailAction, NumberingLifecycleAction } from './numbering-detail.logic'
+import type { NumberingRuleEditorDrawerExpose } from './numbering-editor.logic'
+import type { NumberingActionPermissions, NumberingRuleFormModel } from './numbering-management.logic'
+import type { NumberingRuleDetailDto } from '@/api/generated/types.gen'
 import type { NumberingRuleListItemDto } from '@/api/modules/numbering'
 import type {
   QsGenericTableColumn,
@@ -7,11 +11,15 @@ import type {
   QsGenericTableFilterValues,
 } from '@/components/business/QsGenericTable/logic'
 
+import { useMediaQuery } from '@vueuse/core'
+
 import numberingApi from '@/api/modules/numbering'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 
 import { hasVisibleTableColumn } from '../../shared/table-query'
+import NumberingLifecycleModal from './numbering-lifecycle-modal.vue'
 import {
   buildNumberingTableListQuery,
   canApplyNumberingRuleListResponse,
@@ -24,14 +32,50 @@ import {
   formatNumberingDecimal,
   numberingPeriodStatusLabel,
   numberingRuleStatusLabel,
+  resolveNumberingRuleActions,
 } from './numbering-management.logic'
+import {
+  shouldCloseNumberingEditor,
+  shouldLoadNumberingIssuances,
+} from './numbering-page.logic'
+import NumberingRuleDetailDrawer from './numbering-rule-detail-drawer.vue'
+import NumberingRuleEditorDrawer from './numbering-rule-editor-drawer.vue'
+import { useNumberingMaintenance } from './use-numbering-maintenance'
 
 defineOptions({ name: 'SystemBasicDataNumbering' })
 
+type NumberingRowAction = NumberingDetailAction | 'detail'
+
+interface PendingDetailEditorAction {
+  action: Extract<NumberingDetailAction, 'clone' | 'edit'>
+  detail: NumberingRuleDetailDto
+}
+
+interface PendingRowAction {
+  action: NumberingRowAction
+  rule: NumberingRuleListItemDto
+}
+
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
+const isNarrow = useMediaQuery('(max-width: 767px)')
 
 const canRead = computed(() => auth('numbering-rules:read'))
+const canCreate = computed(() => auth('numbering-rules:create'))
+const canUpdate = computed(() => auth('numbering-rules:update'))
+const canPublish = computed(() => auth('numbering-rules:publish'))
+const canEnable = computed(() => auth('numbering-rules:enable'))
+const canDisable = computed(() => auth('numbering-rules:disable'))
+const canReadIssuances = computed(() => auth('numbering-rules:read-issuances'))
+const permissions = computed<NumberingActionPermissions>(() => ({
+  canCreate: canCreate.value,
+  canDisable: canDisable.value,
+  canEnable: canEnable.value,
+  canPublish: canPublish.value,
+  canRead: canRead.value,
+  canReadIssuances: canReadIssuances.value,
+  canUpdate: canUpdate.value,
+}))
 const rows = ref<NumberingRuleListItemDto[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -48,6 +92,91 @@ let listRequestVersion = 0
 let listAbortController: AbortController | null = null
 let queryRefreshQueued = false
 let listDisposed = false
+
+const editorDrawerRef = useTemplateRef<NumberingRuleEditorDrawerExpose>('editorDrawerRef')
+const discardConfirmVisible = ref(false)
+const discardEditorAfterModalClose = ref(false)
+const mobileActionsVisible = ref(false)
+const mobileActionTarget = ref<NumberingRuleListItemDto | null>(null)
+const pendingMobileAction = ref<PendingRowAction | null>(null)
+const pendingDetailEditorAction = ref<PendingDetailEditorAction | null>(null)
+
+async function reloadNumberingRules(resetPage = false): Promise<void> {
+  if (resetPage) {
+    page.value = 1
+  }
+  await loadNumberingRules()
+}
+
+const {
+  clearDetailContext,
+  clearEditorContext,
+  clearIssuanceContext,
+  clearLifecycleContext,
+  clearMaintenanceContexts,
+  detail,
+  detailActionError,
+  detailActionRequestId,
+  detailError,
+  detailLoading,
+  detailRequestId,
+  detailVisible,
+  editorError,
+  editorFieldErrors,
+  editorFormModel,
+  editorLoading,
+  editorMode,
+  editorPreview,
+  editorPreviewError,
+  editorPreviewLoading,
+  editorPreviewRequestId,
+  editorRequestId,
+  editorRule,
+  editorSubmitting,
+  editorVisible,
+  issuanceFilters,
+  issuances,
+  issuancesError,
+  issuancesLoading,
+  issuancesPage,
+  issuancesPageSize,
+  issuancesRequestId,
+  issuancesTotal,
+  lifecycleAction,
+  lifecycleDetail,
+  lifecycleError,
+  lifecycleRequestId,
+  lifecycleSubmitting,
+  lifecycleVisible,
+  loadDetail,
+  loadIssuances,
+  loadVersions,
+  openCreateEditor,
+  openDetail,
+  openLifecycle,
+  openRuleEditor,
+  requestPreview,
+  submitEditor,
+  submitLifecycle,
+  updateEditorFormModel,
+  versions,
+  versionsError,
+  versionsLoading,
+  versionsPage,
+  versionsPageSize,
+  versionsRequestId,
+  versionsTotal,
+} = useNumberingMaintenance(permissions, {
+  reloadList: reloadNumberingRules,
+})
+
+const editorConfigurationLocked = computed(() => editorMode.value === 'clone')
+const editorHasIssuances = computed(() =>
+  editorRule.value !== null
+  && editorRule.value.statistics.lifetimeUsedCount !== '0')
+const mobileDrawerTitle = computed(() => mobileActionTarget.value === null
+  ? '编号规则操作'
+  : `编号规则操作 · ${mobileActionTarget.value.name}`)
 
 const listErrorDisplay = computed(() => listError.value === ''
   ? undefined
@@ -127,6 +256,186 @@ const filterDefinitions: QsGenericTableFilterDefinition[] = [
     ],
   },
 ]
+
+interface NumberingActionMenuItem {
+  handle: () => void
+  label: string
+  variant?: 'default' | 'destructive'
+}
+
+function ruleActions(rule: NumberingRuleListItemDto) {
+  return resolveNumberingRuleActions(rule, permissions.value)
+}
+
+function closeMobileActions(): void {
+  pendingMobileAction.value = null
+  mobileActionsVisible.value = false
+}
+
+function openMobileActions(rule: NumberingRuleListItemDto): void {
+  mobileActionTarget.value = rule
+  mobileActionsVisible.value = true
+}
+
+function performRuleAction(
+  rule: NumberingRuleListItemDto,
+  action: NumberingRowAction,
+): void {
+  if (action === 'detail') {
+    openDetail(rule)
+    return
+  }
+  if (action === 'edit' || action === 'clone') {
+    openRuleEditor(rule, action)
+    return
+  }
+  openLifecycle(rule, action)
+}
+
+function requestRuleAction(
+  rule: NumberingRuleListItemDto,
+  action: NumberingRowAction,
+): void {
+  if (mobileActionsVisible.value) {
+    pendingMobileAction.value = { action, rule }
+    mobileActionsVisible.value = false
+    return
+  }
+  performRuleAction(rule, action)
+}
+
+async function handleMobileActionsClosed(): Promise<void> {
+  mobileActionTarget.value = null
+  const pending = pendingMobileAction.value
+  pendingMobileAction.value = null
+  if (pending !== null && permissions.value.canRead) {
+    // 等待底部 Drawer 完成自身焦点恢复，再打开下一层业务上下文。
+    await nextTick()
+    await nextTick()
+    performRuleAction(pending.rule, pending.action)
+  }
+}
+
+function handleDetailDrawerAction(
+  action: NumberingDetailAction,
+  selected: NumberingRuleDetailDto,
+): void {
+  if (action === 'edit' || action === 'clone') {
+    pendingDetailEditorAction.value = { action, detail: selected }
+    detailVisible.value = false
+    return
+  }
+  openLifecycle(selected, action)
+}
+
+async function handleDetailClosed(): Promise<void> {
+  const pending = pendingDetailEditorAction.value
+  pendingDetailEditorAction.value = null
+  clearDetailContext()
+  if (pending !== null) {
+    // QsGenericDrawer 在 closed 后的 nextTick 恢复 opener；随后再打开 editor。
+    await nextTick()
+    await nextTick()
+    openRuleEditor(pending.detail, pending.action)
+  }
+}
+
+function moreActionItems(rule: NumberingRuleListItemDto): NumberingActionMenuItem[][] {
+  const actions = ruleActions(rule)
+  const items: NumberingActionMenuItem[] = []
+  if (actions.canClone) {
+    items.push({
+      handle: () => requestRuleAction(rule, 'clone'),
+      label: '克隆',
+    })
+  }
+  if (actions.canPublish) {
+    items.push({
+      handle: () => requestRuleAction(rule, 'publish'),
+      label: '发布',
+    })
+  }
+  if (actions.canEnable) {
+    items.push({
+      handle: () => requestRuleAction(rule, 'enable'),
+      label: '启用',
+    })
+  }
+  if (actions.canDisable) {
+    items.push({
+      handle: () => requestRuleAction(rule, 'disable'),
+      label: '停用',
+      variant: 'destructive',
+    })
+  }
+  return [items]
+}
+
+function hasMoreAction(rule: NumberingRuleListItemDto): boolean {
+  const actions = ruleActions(rule)
+  return actions.canClone
+    || actions.canPublish
+    || actions.canEnable
+    || actions.canDisable
+}
+
+function canRunLifecycleAction(
+  action: NumberingLifecycleAction,
+  currentPermissions: NumberingActionPermissions,
+): boolean {
+  return action === 'publish'
+    ? currentPermissions.canPublish
+    : action === 'enable'
+      ? currentPermissions.canEnable
+      : currentPermissions.canDisable
+}
+
+async function handleEditorSubmit(model: NumberingRuleFormModel): Promise<void> {
+  if (!await submitEditor(model)) {
+    return
+  }
+  // 先解除 composable 的提交锁，再让 Drawer 消费一次性 dirty bypass。
+  await nextTick()
+  editorDrawerRef.value?.closeWithoutDirtyGuard()
+}
+
+function requestDiscardConfirmation(): void {
+  discardConfirmVisible.value = true
+}
+
+function handleEditorClosed(): void {
+  if (!editorVisible.value) {
+    clearEditorContext()
+  }
+}
+
+function discardEditorChanges(): void {
+  discardEditorAfterModalClose.value = true
+  discardConfirmVisible.value = false
+}
+
+async function handleDiscardConfirmClosed(): Promise<void> {
+  if (!discardEditorAfterModalClose.value) {
+    return
+  }
+  discardEditorAfterModalClose.value = false
+  await nextTick()
+  await nextTick()
+  editorDrawerRef.value?.closeWithoutDirtyGuard()
+}
+
+function closeEditorForPermissionChange(): void {
+  discardEditorAfterModalClose.value = false
+  discardConfirmVisible.value = false
+  editorDrawerRef.value?.closeForAuthorityLoss()
+  clearEditorContext()
+}
+
+function handleLifecycleClosed(): void {
+  if (!lifecycleVisible.value) {
+    clearLifecycleContext()
+  }
+}
 
 function listResponseIsCurrent(
   requestVersion: number,
@@ -281,6 +590,55 @@ watch(
   },
 )
 
+watch(
+  () => ({
+    authEpoch: appAccountStore.authEpoch,
+    canCreate: canCreate.value,
+    canDisable: canDisable.value,
+    canEnable: canEnable.value,
+    canPublish: canPublish.value,
+    canRead: canRead.value,
+    canReadIssuances: canReadIssuances.value,
+    canUpdate: canUpdate.value,
+  }),
+  (next, previous) => {
+    const identityChanged = next.authEpoch !== previous.authEpoch
+    const nextPermissions: NumberingActionPermissions = next
+
+    if (identityChanged || !next.canRead) {
+      closeMobileActions()
+      pendingDetailEditorAction.value = null
+      discardEditorAfterModalClose.value = false
+      discardConfirmVisible.value = false
+      if (editorVisible.value) {
+        editorDrawerRef.value?.closeForAuthorityLoss()
+      }
+      clearMaintenanceContexts()
+      return
+    }
+
+    if (
+      editorVisible.value
+      && shouldCloseNumberingEditor(editorMode.value, nextPermissions)
+    ) {
+      closeEditorForPermissionChange()
+      void reloadNumberingRules(false)
+    }
+    if (!shouldLoadNumberingIssuances(nextPermissions)) {
+      clearIssuanceContext()
+    }
+    if (
+      lifecycleVisible.value
+      && !canRunLifecycleAction(lifecycleAction.value, nextPermissions)
+    ) {
+      clearLifecycleContext()
+      void reloadNumberingRules(false)
+    }
+    // 移动端操作面板不保留旧权限快照，权限变化后要求用户重新选择。
+    closeMobileActions()
+  },
+)
+
 onMounted(() => {
   if (canRead.value) {
     void loadNumberingRules()
@@ -291,6 +649,7 @@ onBeforeUnmount(() => {
   listDisposed = true
   listRequestVersion += 1
   listAbortController?.abort()
+  clearMaintenanceContexts()
 })
 </script>
 
@@ -301,7 +660,17 @@ onBeforeUnmount(() => {
       description="集中查看后续业务域的编号结构、规则状态、版本与当前周期容量；所有时间均按 Asia/Shanghai 展示。"
     >
       <FaButton
+        v-if="canRead && canCreate"
+        data-testid="numbering-create-rule"
+        class="min-h-11 md:min-h-9"
+        @click="openCreateEditor"
+      >
+        <FaIcon name="i-lucide:plus" />
+        新建编号规则
+      </FaButton>
+      <FaButton
         v-if="canRead"
+        class="min-h-11 md:min-h-9"
         variant="outline"
         :loading="listLoading"
         @click="loadNumberingRules"
@@ -339,6 +708,7 @@ onBeforeUnmount(() => {
           data-testid="numbering-rule-table"
           row-key="id"
           :addable="false"
+          :action-column="{ align: 'right', title: '操作', width: 220 }"
           :columns="columns"
           :data="rows"
           empty-title="暂无编号规则"
@@ -437,6 +807,52 @@ onBeforeUnmount(() => {
               :value="row.original.updatedAt"
               time-zone="Asia/Shanghai"
             />
+          </template>
+
+          <template #actions="{ row: item }">
+            <FaButton
+              v-if="isNarrow"
+              class="min-h-11 w-full"
+              variant="outline"
+              size="sm"
+              :aria-label="`编号规则操作 · ${item.name}`"
+              @click="openMobileActions(item)"
+            >
+              操作
+            </FaButton>
+            <div v-else class="flex gap-1 items-center justify-end">
+              <FaButton
+                variant="ghost"
+                size="sm"
+                :aria-label="`查看详情 · ${item.name}`"
+                @click="requestRuleAction(item, 'detail')"
+              >
+                查看详情
+              </FaButton>
+              <FaButton
+                v-if="ruleActions(item).canEdit"
+                variant="ghost"
+                size="sm"
+                :aria-label="`编辑 · ${item.name}`"
+                @click="requestRuleAction(item, 'edit')"
+              >
+                编辑
+              </FaButton>
+              <FaDropdown
+                v-if="hasMoreAction(item)"
+                :items="moreActionItems(item)"
+                align="end"
+              >
+                <FaButton
+                  variant="ghost"
+                  size="sm"
+                  :aria-label="`更多操作 · ${item.name}`"
+                >
+                  更多
+                  <FaIcon name="i-lucide:chevron-down" />
+                </FaButton>
+              </FaDropdown>
+            </div>
           </template>
 
           <template #mobile-row="{ columns: visibleColumns, row: item, rowNumber }">
@@ -556,6 +972,165 @@ onBeforeUnmount(() => {
         </QsGenericTable>
       </section>
     </FaPageMain>
+
+    <FaDrawer
+      v-model="mobileActionsVisible"
+      :title="mobileDrawerTitle"
+      side="bottom"
+      :footer="false"
+      content-class="h-[min(31rem,calc(100dvh-1.5rem))]"
+      destroy-on-close
+      @closed="handleMobileActionsClosed"
+    >
+      <div
+        v-if="mobileActionTarget"
+        data-testid="numbering-actions-drawer"
+        class="pb-[max(0.75rem,env(safe-area-inset-bottom))] gap-3 grid"
+      >
+        <FaButton
+          class="min-h-11 w-full"
+          variant="outline"
+          @click="requestRuleAction(mobileActionTarget, 'detail')"
+        >
+          查看详情
+        </FaButton>
+        <FaButton
+          v-if="ruleActions(mobileActionTarget).canEdit"
+          class="min-h-11 w-full"
+          variant="outline"
+          @click="requestRuleAction(mobileActionTarget, 'edit')"
+        >
+          编辑
+        </FaButton>
+        <FaButton
+          v-if="ruleActions(mobileActionTarget).canClone"
+          class="min-h-11 w-full"
+          variant="outline"
+          @click="requestRuleAction(mobileActionTarget, 'clone')"
+        >
+          克隆
+        </FaButton>
+        <FaButton
+          v-if="ruleActions(mobileActionTarget).canPublish"
+          class="min-h-11 w-full"
+          @click="requestRuleAction(mobileActionTarget, 'publish')"
+        >
+          发布
+        </FaButton>
+        <FaButton
+          v-if="ruleActions(mobileActionTarget).canEnable"
+          class="min-h-11 w-full"
+          @click="requestRuleAction(mobileActionTarget, 'enable')"
+        >
+          启用
+        </FaButton>
+        <FaButton
+          v-if="ruleActions(mobileActionTarget).canDisable"
+          class="min-h-11 w-full"
+          variant="destructive"
+          @click="requestRuleAction(mobileActionTarget, 'disable')"
+        >
+          停用
+        </FaButton>
+      </div>
+    </FaDrawer>
+
+    <NumberingRuleEditorDrawer
+      ref="editorDrawerRef"
+      v-model="editorVisible"
+      :mode="editorMode"
+      :form-model="editorFormModel"
+      :configuration-locked="editorConfigurationLocked"
+      :has-issuances="editorHasIssuances"
+      :loading="editorLoading"
+      :error="editorError"
+      :field-errors="editorFieldErrors"
+      :request-id="editorRequestId"
+      :preview="editorPreview"
+      :preview-loading="editorPreviewLoading"
+      :preview-error="editorPreviewError"
+      :preview-request-id="editorPreviewRequestId"
+      :submitting="editorSubmitting"
+      @update:form-model="updateEditorFormModel"
+      @preview="requestPreview"
+      @submit="handleEditorSubmit"
+      @close-request="requestDiscardConfirmation"
+      @closed="handleEditorClosed"
+    />
+
+    <NumberingRuleDetailDrawer
+      v-model="detailVisible"
+      :detail="detail"
+      :detail-loading="detailLoading"
+      :detail-error="detailError"
+      :detail-request-id="detailRequestId ?? undefined"
+      :versions="versions"
+      :versions-loading="versionsLoading"
+      :versions-error="versionsError"
+      :versions-request-id="versionsRequestId ?? undefined"
+      :versions-page="versionsPage"
+      :versions-page-size="versionsPageSize"
+      :versions-total="versionsTotal"
+      :issuances="issuances"
+      :issuances-loading="issuancesLoading"
+      :issuances-error="issuancesError"
+      :issuances-request-id="issuancesRequestId ?? undefined"
+      :issuances-page="issuancesPage"
+      :issuances-page-size="issuancesPageSize"
+      :issuances-total="issuancesTotal"
+      :issuance-filters="issuanceFilters"
+      :permissions="permissions"
+      :action-error="detailActionError"
+      :action-request-id="detailActionRequestId ?? undefined"
+      @reload-detail="loadDetail"
+      @load-versions="loadVersions"
+      @load-issuances="loadIssuances"
+      @action="handleDetailDrawerAction"
+      @closed="handleDetailClosed"
+    />
+
+    <NumberingLifecycleModal
+      v-model="lifecycleVisible"
+      :action="lifecycleAction"
+      :detail="lifecycleDetail"
+      :submitting="lifecycleSubmitting"
+      :error-message="lifecycleError"
+      :request-id="lifecycleRequestId ?? undefined"
+      @confirm="submitLifecycle"
+      @closed="handleLifecycleClosed"
+    />
+
+    <QsGenericModal
+      v-model="discardConfirmVisible"
+      title="放弃未保存修改？"
+      description="当前编号规则表单仍有未保存内容。"
+      size="sm"
+      data-testid="numbering-discard-confirm"
+      @closed="handleDiscardConfirmClosed"
+    >
+      <FaAlert
+        icon="i-lucide:triangle-alert"
+        title="修改不会被保留"
+        description="放弃后，当前表单及尚未完成的预览请求会被清理。"
+      />
+
+      <template #footer>
+        <FaButton
+          class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+          variant="outline"
+          @click="discardConfirmVisible = false"
+        >
+          继续编辑
+        </FaButton>
+        <FaButton
+          class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+          variant="destructive"
+          @click="discardEditorChanges"
+        >
+          放弃修改
+        </FaButton>
+      </template>
+    </QsGenericModal>
   </div>
 </template>
 
