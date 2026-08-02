@@ -270,7 +270,7 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 10.4 每个 operation 固定 permission、CSRF、`private, no-store`、`X-Request-Id`、成功 response 和精确错误矩阵。
   - [x] 10.5 OpenAPI 测试明确断言不存在 `/generate` 或等价 path。
   - [ ] 10.6 Server E2E 覆盖 create -> preview -> publish -> enable -> internal generate -> disable -> clone。
-  - [ ] 10.7 只通过正式链路生成 `server/openapi/openapi.json` 并执行根 `contract:sync`；不手工编辑 snapshot。
+  - [x] 10.7 只通过正式链路生成 `server/openapi/openapi.json` 并执行根 `contract:sync`；不手工编辑 snapshot。
   - _Requirements: R1-R13_
 
 - [ ] 11. 以 TDD 实现 Web API adapter 与编号领域纯逻辑

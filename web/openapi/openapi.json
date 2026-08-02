@@ -10338,6 +10338,3067 @@
         }
       }
     },
+    "/api/numbering-rules": {
+      "get": {
+        "operationId": "numbering_rules_list",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "ENABLED",
+                "DISABLED"
+              ]
+            }
+          },
+          {
+            "name": "sortBy",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "updatedAt",
+              "type": "string",
+              "enum": [
+                "updatedAt"
+              ]
+            }
+          },
+          {
+            "name": "sortOrder",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "desc",
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRulePageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      },
+      "post": {
+        "operationId": "numbering_rules_create",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNumberingRuleRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "NUMBERING_RULE_CODE_ALREADY_EXISTS",
+                "NUMBERING_RULE_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "NUMBERING_RULE_CONFIG_INVALID",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/preview": {
+      "post": {
+        "operationId": "numbering_rules_preview",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewNumberingRuleRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewNumberingRuleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "NUMBERING_RULE_CONFIG_INVALID",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/{ruleId}": {
+      "get": {
+        "operationId": "numbering_rules_get",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      },
+      "patch": {
+        "operationId": "numbering_rules_update",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNumberingRuleRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "NUMBERING_RULE_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "NUMBERING_RULE_CONFIG_INVALID",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/{ruleId}/versions": {
+      "get": {
+        "operationId": "numbering_rule_versions_list",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleVersionPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/{ruleId}/publish": {
+      "post": {
+        "operationId": "numbering_rules_publish",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishNumberingRuleRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "NUMBERING_RULE_STATE_CHANGED",
+                "NUMBERING_RULE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "NUMBERING_RULE_CONFIG_INVALID",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/{ruleId}/enable": {
+      "post": {
+        "operationId": "numbering_rules_enable",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeNumberingRuleStatusRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "NUMBERING_RULE_STATE_CHANGED",
+                "NUMBERING_RULE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/{ruleId}/disable": {
+      "post": {
+        "operationId": "numbering_rules_disable",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeNumberingRuleStatusRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "NUMBERING_RULE_STATE_CHANGED",
+                "NUMBERING_RULE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/{ruleId}/clone": {
+      "post": {
+        "operationId": "numbering_rules_clone",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CloneNumberingRuleRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingRuleDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "NUMBERING_RULE_CODE_ALREADY_EXISTS",
+                "NUMBERING_RULE_STATE_CHANGED",
+                "NUMBERING_RULE_UNAVAILABLE"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/numbering-rules/{ruleId}/issuances": {
+      "get": {
+        "operationId": "numbering_rule_issuances_list",
+        "parameters": [
+          {
+            "name": "ruleId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "periodKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "pattern": "^(?:ALL|\\d{4}|\\d{6}|\\d{8})$",
+              "type": "string"
+            }
+          },
+          {
+            "name": "consumerCode",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "generatedNumber",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "generatedNumberMatch",
+            "required": false,
+            "in": "query",
+            "description": "省略时由查询服务按 EXACT 处理",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "EXACT",
+                "PREFIX"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NumberingIssuancePageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "numbering-rules"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "NUMBERING_RULE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/audit-events": {
       "get": {
         "operationId": "audit_events_list",
@@ -10404,6 +13465,11 @@
                 "CURRENCY_DISABLED",
                 "EXCHANGE_RATE_CREATED",
                 "EXCHANGE_RATE_UPDATED",
+                "NUMBERING_RULE_CREATED",
+                "NUMBERING_RULE_UPDATED",
+                "NUMBERING_RULE_VERSION_PUBLISHED",
+                "NUMBERING_RULE_ENABLED",
+                "NUMBERING_RULE_DISABLED",
                 "SYSTEM_BOOTSTRAP",
                 "SYSTEM_ADMIN_RECOVERED",
                 "AUTH_RETENTION_PURGED"
@@ -12103,6 +15169,942 @@
           }
         }
       },
+      "NumberingFixedSegmentInputDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "FIXED"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "NumberingDateSegmentInputDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "DATE"
+            ]
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "YYYY",
+              "YY",
+              "MM",
+              "DD",
+              "YYYYMM",
+              "YYYYMMDD",
+              "YYMMDD"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "format"
+        ]
+      },
+      "NumberingSeparatorSegmentInputDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "SEPARATOR"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "enum": [
+              "-",
+              "_",
+              ".",
+              "/"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ]
+      },
+      "NumberingSequenceSegmentInputDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "SEQUENCE"
+            ]
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 18
+          },
+          "startValue": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "step": {
+            "type": "string",
+            "pattern": "^[1-9]\\d*$"
+          }
+        },
+        "required": [
+          "type",
+          "width",
+          "startValue",
+          "step"
+        ]
+      },
+      "NumberingRandomSegmentInputDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "RANDOM"
+            ]
+          },
+          "letterLength": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32
+          },
+          "digitLength": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 32
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "LETTERS_THEN_DIGITS",
+              "SHUFFLED"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "letterLength",
+          "digitLength",
+          "mode"
+        ]
+      },
+      "NumberingRuleConfigResponseDto": {
+        "type": "object",
+        "properties": {
+          "resetPolicy": {
+            "type": "string",
+            "enum": [
+              "NEVER",
+              "YEARLY",
+              "MONTHLY",
+              "DAILY"
+            ]
+          },
+          "timezone": {
+            "type": "string",
+            "enum": [
+              "Asia/Shanghai"
+            ],
+            "default": "Asia/Shanghai"
+          },
+          "maxOutputLength": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 64
+          },
+          "segments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/NumberingFixedSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingDateSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSeparatorSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSequenceSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "FIXED": "#/components/schemas/NumberingFixedSegmentInputDto",
+                  "DATE": "#/components/schemas/NumberingDateSegmentInputDto",
+                  "SEPARATOR": "#/components/schemas/NumberingSeparatorSegmentInputDto",
+                  "SEQUENCE": "#/components/schemas/NumberingSequenceSegmentInputDto",
+                  "RANDOM": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "resetPolicy",
+          "timezone",
+          "maxOutputLength",
+          "segments"
+        ]
+      },
+      "NumberingRuleVersionDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "RETIRED"
+            ]
+          },
+          "config": {
+            "$ref": "#/components/schemas/NumberingRuleConfigResponseDto"
+          },
+          "capacity": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "revision",
+          "status",
+          "config",
+          "capacity",
+          "createdAt",
+          "publishedAt"
+        ]
+      },
+      "NumberingRuleStatisticsDto": {
+        "type": "object",
+        "properties": {
+          "statisticsSource": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "DRAFT"
+            ]
+          },
+          "periodKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "capacity": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "usedCount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "remainingCount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "lifetimeUsedCount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "nextSequenceValue": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$",
+            "nullable": true
+          },
+          "nextNumberPreview": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "nullable": true
+          },
+          "nextNumberDeterministic": {
+            "type": "boolean"
+          },
+          "periodStatus": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "EXHAUSTED"
+            ]
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "statisticsSource",
+          "periodKey",
+          "capacity",
+          "usedCount",
+          "remainingCount",
+          "lifetimeUsedCount",
+          "nextSequenceValue",
+          "nextNumberPreview",
+          "nextNumberDeterministic",
+          "periodStatus",
+          "asOf"
+        ]
+      },
+      "NumberingRuleListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ruleCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ENABLED",
+              "DISABLED"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "activeRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "draftRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "displayVersion": {
+            "$ref": "#/components/schemas/NumberingRuleVersionDto"
+          },
+          "statistics": {
+            "$ref": "#/components/schemas/NumberingRuleStatisticsDto"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "ruleCode",
+          "name",
+          "description",
+          "status",
+          "version",
+          "activeRevision",
+          "draftRevision",
+          "displayVersion",
+          "statistics",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "NumberingRulePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberingRuleListItemDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "PreviewNumberingRuleRequestDto": {
+        "type": "object",
+        "properties": {
+          "resetPolicy": {
+            "type": "string",
+            "enum": [
+              "NEVER",
+              "YEARLY",
+              "MONTHLY",
+              "DAILY"
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/NumberingFixedSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingDateSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSeparatorSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSequenceSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "FIXED": "#/components/schemas/NumberingFixedSegmentInputDto",
+                  "DATE": "#/components/schemas/NumberingDateSegmentInputDto",
+                  "SEPARATOR": "#/components/schemas/NumberingSeparatorSegmentInputDto",
+                  "SEQUENCE": "#/components/schemas/NumberingSequenceSegmentInputDto",
+                  "RANDOM": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              }
+            }
+          },
+          "ruleId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "resetPolicy",
+          "segments"
+        ]
+      },
+      "PreviewNumberingRuleResponseDto": {
+        "type": "object",
+        "properties": {
+          "normalizedConfig": {
+            "$ref": "#/components/schemas/NumberingRuleConfigResponseDto"
+          },
+          "periodKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "capacity": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "usedCount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "remainingCount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$"
+          },
+          "nextSequenceValue": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$",
+            "nullable": true
+          },
+          "nextNumberPreview": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "nullable": true
+          },
+          "nextNumberDeterministic": {
+            "type": "boolean"
+          },
+          "periodStatus": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "EXHAUSTED"
+            ]
+          },
+          "samples": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "maxItems": 5
+          },
+          "asOf": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "normalizedConfig",
+          "periodKey",
+          "capacity",
+          "usedCount",
+          "remainingCount",
+          "nextSequenceValue",
+          "nextNumberPreview",
+          "nextNumberDeterministic",
+          "periodStatus",
+          "samples",
+          "asOf"
+        ]
+      },
+      "CreateNumberingRuleRequestDto": {
+        "type": "object",
+        "properties": {
+          "resetPolicy": {
+            "type": "string",
+            "enum": [
+              "NEVER",
+              "YEARLY",
+              "MONTHLY",
+              "DAILY"
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/NumberingFixedSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingDateSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSeparatorSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSequenceSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "FIXED": "#/components/schemas/NumberingFixedSegmentInputDto",
+                  "DATE": "#/components/schemas/NumberingDateSegmentInputDto",
+                  "SEPARATOR": "#/components/schemas/NumberingSeparatorSegmentInputDto",
+                  "SEQUENCE": "#/components/schemas/NumberingSequenceSegmentInputDto",
+                  "RANDOM": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              }
+            }
+          },
+          "ruleCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "nullable": true,
+            "description": "null 或规范化为空白表示不设置说明"
+          }
+        },
+        "required": [
+          "resetPolicy",
+          "segments",
+          "ruleCode",
+          "name"
+        ]
+      },
+      "NumberingRuleDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ruleCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ENABLED",
+              "DISABLED"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "activeVersion": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NumberingRuleVersionDto"
+              }
+            ]
+          },
+          "draftVersion": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NumberingRuleVersionDto"
+              }
+            ]
+          },
+          "statistics": {
+            "$ref": "#/components/schemas/NumberingRuleStatisticsDto"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "ruleCode",
+          "name",
+          "description",
+          "status",
+          "version",
+          "activeVersion",
+          "draftVersion",
+          "statistics",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateNumberingRuleRequestDto": {
+        "type": "object",
+        "properties": {
+          "resetPolicy": {
+            "type": "string",
+            "enum": [
+              "NEVER",
+              "YEARLY",
+              "MONTHLY",
+              "DAILY"
+            ]
+          },
+          "segments": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/NumberingFixedSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingDateSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSeparatorSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingSequenceSegmentInputDto"
+                },
+                {
+                  "$ref": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "type",
+                "mapping": {
+                  "FIXED": "#/components/schemas/NumberingFixedSegmentInputDto",
+                  "DATE": "#/components/schemas/NumberingDateSegmentInputDto",
+                  "SEPARATOR": "#/components/schemas/NumberingSeparatorSegmentInputDto",
+                  "SEQUENCE": "#/components/schemas/NumberingSequenceSegmentInputDto",
+                  "RANDOM": "#/components/schemas/NumberingRandomSegmentInputDto"
+                }
+              }
+            }
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "nullable": true,
+            "description": "null 或规范化为空白表示清空说明"
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "NumberingRuleVersionPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberingRuleVersionDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
+      "PublishNumberingRuleRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "draftRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "draftRevision"
+        ]
+      },
+      "ChangeNumberingRuleStatusRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "expectedVersion"
+        ]
+      },
+      "CloneNumberingRuleRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "ruleCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 500,
+            "nullable": true
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "ruleCode",
+          "name"
+        ]
+      },
+      "NumberingIssuanceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ruleRevision": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "periodKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 16
+          },
+          "generatedNumber": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "sequenceValue": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d*)$",
+            "nullable": true
+          },
+          "consumerCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "ruleRevision",
+          "periodKey",
+          "generatedNumber",
+          "sequenceValue",
+          "consumerCode",
+          "issuedAt"
+        ]
+      },
+      "NumberingIssuancePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberingIssuanceDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total"
+        ]
+      },
       "AuditEventDto": {
         "type": "object",
         "properties": {
@@ -12137,6 +16139,11 @@
               "CURRENCY_DISABLED",
               "EXCHANGE_RATE_CREATED",
               "EXCHANGE_RATE_UPDATED",
+              "NUMBERING_RULE_CREATED",
+              "NUMBERING_RULE_UPDATED",
+              "NUMBERING_RULE_VERSION_PUBLISHED",
+              "NUMBERING_RULE_ENABLED",
+              "NUMBERING_RULE_DISABLED",
               "SYSTEM_BOOTSTRAP",
               "SYSTEM_ADMIN_RECOVERED",
               "AUTH_RETENTION_PURGED"
