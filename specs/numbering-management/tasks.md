@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 5）
+- 状态：Phase 4 实施中（Task 9）
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
@@ -198,29 +198,29 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 4.9 固定九个编号错误码；未知错误映射为安全 `INTERNAL_ERROR`。
   - _Requirements: R1-R11, R13_
 
-- [ ] 5. 以 TDD 实现规则查询、统计、预览、创建、编辑和克隆
-  - [ ] 5.1 红测列表 keyword、状态、分页、白名单排序和 UUID tie-breaker；periodStatus 首期只展示、不作为筛选参数。
-  - [ ] 5.2 红测详情同时返回 active/draft、segments 和同一数据库 `asOf` 的统计；active 优先，只有 draft 时返回不落库的 draft 理论统计。
-  - [ ] 5.3 红测 capacity、used、remaining、lifetime 和 next 大整数保持字符串；在线 lifetime 固定为永久 period state 的 usedCount 之和并与 issuance count 核对，pure random next 为 null。
-  - [ ] 5.4 红测版本历史按 revision DESC、id DESC，issuance 按 issuedAt DESC、id DESC。
-  - [ ] 5.5 红测 issuance response 不包含 idempotency Hash 或 request fingerprint。
-  - [ ] 5.6 红测无状态 preview 完整校验和渲染，但五张表行数均不变化。
-  - [ ] 5.7 create 原子创建 DRAFT rule、revision 1 draft、segments 和同事务 Audit。
-  - [ ] 5.8 update 将 name/description 写 rule metadata，只有配置变化才创建或更新 draft；纯元数据更新不得制造 draft。
-  - [ ] 5.9 metadata 和配置可在同一事务提交；无实际变化不增加 version、不写 Audit。
-  - [ ] 5.10 clone 复制配置到新 `ruleCode` 的 DRAFT，不复制 state/issuance，Audit metadata 记录来源。
+- [x] 5. 以 TDD 实现规则查询、统计、预览、创建、编辑和克隆
+  - [x] 5.1 红测列表 keyword、状态、分页、白名单排序和 UUID tie-breaker；periodStatus 首期只展示、不作为筛选参数。
+  - [x] 5.2 红测详情同时返回 active/draft、segments 和同一数据库 `asOf` 的统计；active 优先，只有 draft 时返回不落库的 draft 理论统计。
+  - [x] 5.3 红测 capacity、used、remaining、lifetime 和 next 大整数保持字符串；在线 lifetime 固定为永久 period state 的 usedCount 之和并与 issuance count 核对，pure random next 为 null。
+  - [x] 5.4 红测版本历史按 revision DESC、id DESC，issuance 按 issuedAt DESC、id DESC。
+  - [x] 5.5 红测 issuance response 不包含 idempotency Hash 或 request fingerprint。
+  - [x] 5.6 红测无状态 preview 完整校验和渲染，但五张表行数均不变化。
+  - [x] 5.7 create 原子创建 DRAFT rule、revision 1 draft、segments 和同事务 Audit。
+  - [x] 5.8 update 将 name/description 写 rule metadata，只有配置变化才创建或更新 draft；纯元数据更新不得制造 draft。
+  - [x] 5.9 metadata 和配置可在同一事务提交；无实际变化不增加 version、不写 Audit。
+  - [x] 5.10 clone 复制配置到新 `ruleCode` 的 DRAFT，不复制 state/issuance，Audit metadata 记录来源。
   - _Requirements: R1-R7, R10-R11, R13_
 
-- [ ] 6. 以 TDD 实现版本发布、启停、不可变约束、并发和审计
-  - [ ] 6.1 publish 对 rule 使用 `FOR UPDATE`，完整校验后原子执行 ACTIVE -> RETIRED、DRAFT -> ACTIVE。
-  - [ ] 6.2 所有 mutation 校验 `expectedVersion`；过期状态返回 `NUMBERING_RULE_STATE_CHANGED`。
-  - [ ] 6.3 首次 issuance 后拒绝修改 segment 结构、固定/日期/分隔符/random、reset、start 和 step；sequence width 只允许扩大。
-  - [ ] 6.4 发布后的 capacity 不得小于已使用量。
-  - [ ] 6.5 enable 要求存在 active；disable 不删除 state、version 或 issuance。
-  - [ ] 6.6 每个事务第一条业务 SQL 前调用现有 `applyTransactionTimeouts()`，保持 `2s/5s`。
-  - [ ] 6.7 锁顺序固定为 rule -> version/segment -> period state。
-  - [ ] 6.8 管理 Audit 与业务写同事务；Audit 失败时完整回滚。
-  - [ ] 6.9 不实现 DELETE。
+- [x] 6. 以 TDD 实现版本发布、启停、不可变约束、并发和审计
+  - [x] 6.1 publish 对 rule 使用 `FOR UPDATE`，完整校验后原子执行 ACTIVE -> RETIRED、DRAFT -> ACTIVE。
+  - [x] 6.2 所有 mutation 校验 `expectedVersion`；过期状态返回 `NUMBERING_RULE_STATE_CHANGED`。
+  - [x] 6.3 首次 issuance 后拒绝修改 segment 结构、固定/日期/分隔符/random、reset、start 和 step；sequence width 只允许扩大。
+  - [x] 6.4 发布后的 capacity 不得小于已使用量。
+  - [x] 6.5 enable 要求存在 active；disable 不删除 state、version 或 issuance。
+  - [x] 6.6 每个事务第一条业务 SQL 前调用现有 `applyTransactionTimeouts()`，保持 `2s/5s`。
+  - [x] 6.7 锁顺序固定为 rule -> version/segment -> period state。
+  - [x] 6.8 管理 Audit 与业务写同事务；Audit 失败时完整回滚。
+  - [x] 6.9 不实现 DELETE。
   - _Requirements: R1, R3, R6-R8, R10-R11, R13_
 
 - [x] 7. 以 TDD 实现固定、日期、分隔符和序列渲染

@@ -52,11 +52,31 @@ export interface ReplaceNumberingDraftVersionInput {
 export interface UpdateNumberingRuleRecordInput {
   name?: string
   description?: string | null
+  status?: NumberingRuleStatusValue
 }
+
+export type NumberingRuleVersionStatusTransitionInput =
+  | {
+      readonly versionId: string
+      readonly fromStatus: typeof NumberingRuleVersionStatus.ACTIVE
+      readonly toStatus: typeof NumberingRuleVersionStatus.RETIRED
+    }
+  | {
+      readonly versionId: string
+      readonly fromStatus: typeof NumberingRuleVersionStatus.DRAFT
+      readonly toStatus: typeof NumberingRuleVersionStatus.ACTIVE
+      readonly publishedAt: Date
+    }
 
 interface TransactionTimestampRow {
   readonly asOf: Date
 }
+
+interface LifetimeUsedCountRow {
+  readonly lifetimeUsedCount: string
+}
+
+const NON_NEGATIVE_DECIMAL_PATTERN = /^(?:0|[1-9]\d*)$/u
 
 interface StoredSegmentRow {
   readonly position: number
@@ -208,6 +228,29 @@ export async function readNumberingRuleForClone(
   return rows[0] ?? null
 }
 
+/**
+ * 调用方必须先持有 rule 的排他锁，使 period state 的 SUM 与随后的版本切换处于
+ * 同一稳定生命周期快照。数据库直接返回 decimal text，禁止经过 JS number。
+ */
+export async function readNumberingLifetimeUsedCount(
+  transaction: Prisma.TransactionClient,
+  ruleId: string,
+): Promise<string> {
+  const rows = await transaction.$queryRaw<LifetimeUsedCountRow[]>(Prisma.sql`
+    SELECT COALESCE(SUM("used_count"), 0)::text AS "lifetimeUsedCount"
+    FROM "numbering_period_states"
+    WHERE "rule_id" = CAST(${ruleId} AS uuid)
+  `)
+  const lifetimeUsedCount = rows[0]?.lifetimeUsedCount
+  if (
+    typeof lifetimeUsedCount !== 'string'
+    || !NON_NEGATIVE_DECIMAL_PATTERN.test(lifetimeUsedCount)
+  ) {
+    throw new Error('Numbering lifetime usage invariant violated')
+  }
+  return lifetimeUsedCount
+}
+
 export async function createNumberingRuleRecord(
   transaction: Prisma.TransactionClient,
   input: CreateNumberingRuleRecordInput,
@@ -316,6 +359,29 @@ export async function readNumberingRuleVersionSnapshots(
       }),
     }
   })
+}
+
+/**
+ * 生命周期状态变更以来源状态作为条件，避免把陈旧快照静默覆盖。返回 false
+ * 表示锁内不变量已经变化，由 command 映射为稳定的 state-changed 冲突。
+ */
+export async function transitionNumberingRuleVersionStatus(
+  transaction: Prisma.TransactionClient,
+  input: NumberingRuleVersionStatusTransitionInput,
+): Promise<boolean> {
+  const result = await transaction.numberingRuleVersion.updateMany({
+    where: {
+      id: input.versionId,
+      status: input.fromStatus,
+    },
+    data: input.toStatus === NumberingRuleVersionStatus.ACTIVE
+      ? {
+          status: input.toStatus,
+          publishedAt: input.publishedAt,
+        }
+      : { status: input.toStatus },
+  })
+  return result.count === 1
 }
 
 export async function updateNumberingRuleRecord(

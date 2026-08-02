@@ -20,9 +20,11 @@ import {
   hasNumberingIssuance,
   readNumberingRuleForClone,
   readNumberingRuleForUpdate,
+  readNumberingLifetimeUsedCount,
   readNumberingRuleVersionSnapshots,
   readNumberingTransactionTimestamp,
   replaceNumberingDraftVersion,
+  transitionNumberingRuleVersionStatus,
   updateNumberingRuleRecord,
 } from './numbering-command.persistence'
 import { NumberingCommandService } from './numbering-command.service'
@@ -39,9 +41,11 @@ jest.mock('./numbering-command.persistence', () => ({
   hasNumberingIssuance: jest.fn(),
   readNumberingRuleForClone: jest.fn(),
   readNumberingRuleForUpdate: jest.fn(),
+  readNumberingLifetimeUsedCount: jest.fn(),
   readNumberingRuleVersionSnapshots: jest.fn(),
   readNumberingTransactionTimestamp: jest.fn(),
   replaceNumberingDraftVersion: jest.fn(),
+  transitionNumberingRuleVersionStatus: jest.fn(),
   updateNumberingRuleRecord: jest.fn(),
 }))
 
@@ -51,9 +55,13 @@ const mockedCreateRule = jest.mocked(createNumberingRuleRecord)
 const mockedHasIssuance = jest.mocked(hasNumberingIssuance)
 const mockedReadForClone = jest.mocked(readNumberingRuleForClone)
 const mockedReadForUpdate = jest.mocked(readNumberingRuleForUpdate)
+const mockedReadLifetimeUsed = jest.mocked(readNumberingLifetimeUsedCount)
 const mockedReadVersions = jest.mocked(readNumberingRuleVersionSnapshots)
 const mockedReadTimestamp = jest.mocked(readNumberingTransactionTimestamp)
 const mockedReplaceDraft = jest.mocked(replaceNumberingDraftVersion)
+const mockedTransitionVersion = jest.mocked(
+  transitionNumberingRuleVersionStatus,
+)
 const mockedUpdateRule = jest.mocked(updateNumberingRuleRecord)
 
 const ACTOR_ID = '10000000-0000-4000-8000-000000000001'
@@ -181,8 +189,10 @@ beforeEach(() => {
   mockedReadVersions.mockResolvedValue([
     versionSnapshot(NumberingRuleVersionStatus.ACTIVE),
   ])
+  mockedReadLifetimeUsed.mockResolvedValue('0')
   mockedHasIssuance.mockResolvedValue(false)
   mockedReplaceDraft.mockResolvedValue(undefined)
+  mockedTransitionVersion.mockResolvedValue(true)
   mockedUpdateRule.mockResolvedValue(undefined)
 })
 
@@ -579,6 +589,23 @@ describe('NumberingCommandService', () => {
     })
   })
 
+  it('returns unavailable when clone source has no copyable version', async () => {
+    mockedReadVersions.mockResolvedValue([])
+    const { service } = createFixture()
+
+    await expect(service.clone(context, SOURCE_ID, {
+      ruleCode: 'CLONED_EMPTY',
+      name: '空版本克隆',
+      expectedVersion: 1,
+    })).rejects.toMatchObject({
+      code: 'NUMBERING_RULE_UNAVAILABLE',
+      status: 409,
+    })
+
+    expect(mockedCreateRule).not.toHaveBeenCalled()
+    expect(mockedCreateDraft).not.toHaveBeenCalled()
+  })
+
   it('rejects missing or stale clone source before creating target rows', async () => {
     mockedReadForClone.mockResolvedValueOnce(null)
     const missing = createFixture()
@@ -614,5 +641,382 @@ describe('NumberingCommandService', () => {
     })
 
     expect(query.getDetailInTransaction).not.toHaveBeenCalled()
+  })
+
+  describe('lifecycle', () => {
+    it('publishes by retiring ACTIVE before activating DRAFT and audits once', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+        versionSnapshot(NumberingRuleVersionStatus.ACTIVE),
+      ])
+      mockedHasIssuance.mockResolvedValue(true)
+      mockedReadLifetimeUsed.mockResolvedValue('10')
+      const { audit, query, service, transaction } = createFixture()
+
+      await expect(service.publish(context, RULE_ID, {
+        draftRevision: 4,
+        expectedVersion: 1,
+      })).resolves.toEqual(detailDto())
+
+      expect(mockedTransitionVersion).toHaveBeenNthCalledWith(
+        1,
+        transaction,
+        {
+          versionId: VERSION_ID,
+          fromStatus: NumberingRuleVersionStatus.ACTIVE,
+          toStatus: NumberingRuleVersionStatus.RETIRED,
+        },
+      )
+      expect(mockedTransitionVersion).toHaveBeenNthCalledWith(
+        2,
+        transaction,
+        {
+          versionId: DRAFT_ID,
+          fromStatus: NumberingRuleVersionStatus.DRAFT,
+          toStatus: NumberingRuleVersionStatus.ACTIVE,
+          publishedAt: AS_OF,
+        },
+      )
+      expect(
+        mockedTransitionVersion.mock.invocationCallOrder[1],
+      ).toBeLessThan(mockedUpdateRule.mock.invocationCallOrder[0])
+      expect(mockedUpdateRule).toHaveBeenCalledWith(transaction, RULE_ID, {})
+      expect(audit.record.mock.calls[0]?.[1]).toEqual({
+        eventType: AuditEventType.NUMBERING_RULE_VERSION_PUBLISHED,
+        outcome: AuditOutcome.SUCCESS,
+        actorType: AuditActorType.USER,
+        actorUserId: ACTOR_ID,
+        targetType: 'NumberingRule',
+        targetId: RULE_ID,
+        requestId: REQUEST_ID,
+        metadata: {
+          ruleCode: 'SALES_ORDER',
+          revision: 4,
+          previousVersion: 1,
+          version: 2,
+          changedFields: 'activeVersion,draftVersion',
+        },
+      })
+      expect(query.getDetailInTransaction).toHaveBeenCalledWith(
+        transaction,
+        RULE_ID,
+        AS_OF,
+      )
+    })
+
+    it('publishes the first draft without manufacturing a retired version', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+      ])
+      const { service, transaction } = createFixture()
+
+      await service.publish(context, RULE_ID, {
+        draftRevision: 4,
+        expectedVersion: 1,
+      })
+
+      expect(mockedTransitionVersion).toHaveBeenCalledTimes(1)
+      expect(mockedTransitionVersion).toHaveBeenCalledWith(
+        transaction,
+        expect.objectContaining({
+          versionId: DRAFT_ID,
+          fromStatus: NumberingRuleVersionStatus.DRAFT,
+          toStatus: NumberingRuleVersionStatus.ACTIVE,
+        }),
+      )
+    })
+
+    it('maps a stale guarded version transition to state change', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+        versionSnapshot(NumberingRuleVersionStatus.ACTIVE),
+      ])
+      mockedTransitionVersion.mockResolvedValueOnce(false)
+      const { audit, service } = createFixture()
+
+      await expect(service.publish(context, RULE_ID, {
+        draftRevision: 4,
+        expectedVersion: 1,
+      })).rejects.toMatchObject({
+        code: 'NUMBERING_RULE_STATE_CHANGED',
+        status: 409,
+      })
+
+      expect(mockedTransitionVersion).toHaveBeenCalledTimes(1)
+      expect(mockedUpdateRule).not.toHaveBeenCalled()
+      expect(audit.record).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['missing draft', [versionSnapshot(NumberingRuleVersionStatus.ACTIVE)], 4],
+      ['wrong draft revision', [
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+      ], 3],
+    ] as const)(
+      'rejects publish with %s before capacity or writes',
+      async (_label, versions, draftRevision) => {
+        mockedReadVersions.mockResolvedValue([...versions])
+        const { audit, service } = createFixture()
+
+        await expect(service.publish(context, RULE_ID, {
+          draftRevision,
+          expectedVersion: 1,
+        })).rejects.toMatchObject({
+          code: 'NUMBERING_RULE_STATE_CHANGED',
+          status: 409,
+        })
+
+        expect(mockedReadLifetimeUsed).not.toHaveBeenCalled()
+        expect(mockedTransitionVersion).not.toHaveBeenCalled()
+        expect(mockedUpdateRule).not.toHaveBeenCalled()
+        expect(audit.record).not.toHaveBeenCalled()
+      },
+    )
+
+    it('requires an active snapshot when a rule has already issued numbers', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+      ])
+      mockedHasIssuance.mockResolvedValue(true)
+      const { service } = createFixture()
+
+      await expect(service.publish(context, RULE_ID, {
+        draftRevision: 4,
+        expectedVersion: 1,
+      })).rejects.toMatchObject({
+        code: 'NUMBERING_RULE_CONFIG_INVALID',
+        status: 422,
+      })
+
+      expect(mockedReadLifetimeUsed).not.toHaveBeenCalled()
+      expect(mockedTransitionVersion).not.toHaveBeenCalled()
+    })
+
+    it('reuses issued-config compatibility before publishing', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.ACTIVE),
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT, {
+          config: {
+            ...BASE_CONFIG,
+            segments: [
+              { type: 'FIXED', value: 'PO' },
+              { type: 'SEQUENCE', width: 6, startValue: '1', step: '1' },
+            ],
+          },
+        }),
+      ])
+      mockedHasIssuance.mockResolvedValue(true)
+      const { service } = createFixture()
+
+      await expect(service.publish(context, RULE_ID, {
+        draftRevision: 4,
+        expectedVersion: 1,
+      })).rejects.toMatchObject({
+        code: 'NUMBERING_RULE_CONFIG_INVALID',
+        status: 422,
+      })
+
+      expect(mockedReadLifetimeUsed).not.toHaveBeenCalled()
+      expect(mockedTransitionVersion).not.toHaveBeenCalled()
+    })
+
+    it('compares capacity and lifetime usage as exact decimal integers', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+      ])
+      mockedReadLifetimeUsed.mockResolvedValue('1000000000000000000')
+      const { service } = createFixture()
+
+      await expect(service.publish(context, RULE_ID, {
+        draftRevision: 4,
+        expectedVersion: 1,
+      })).rejects.toMatchObject({
+        code: 'NUMBERING_RULE_CONFIG_INVALID',
+        status: 422,
+      })
+
+      expect(mockedTransitionVersion).not.toHaveBeenCalled()
+      expect(mockedUpdateRule).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['publish', NumberingRuleStatus.DRAFT, (service: NumberingCommandService) =>
+        service.publish(context, RULE_ID, {
+          draftRevision: 4,
+          expectedVersion: 1,
+        })],
+      ['enable', NumberingRuleStatus.ENABLED, (service: NumberingCommandService) =>
+        service.enable(context, RULE_ID, { expectedVersion: 1 })],
+      ['disable', NumberingRuleStatus.DISABLED, (service: NumberingCommandService) =>
+        service.disable(context, RULE_ID, { expectedVersion: 1 })],
+    ] as const)(
+      'rejects stale expectedVersion before %s lifecycle reads or writes',
+      async (_label, status, invoke) => {
+        mockedReadForUpdate.mockResolvedValue(ruleRecord({
+          status,
+          version: 2,
+        }))
+        const { audit, service } = createFixture()
+
+        await expect(invoke(service)).rejects.toMatchObject({
+          code: 'NUMBERING_RULE_STATE_CHANGED',
+          status: 409,
+        })
+
+        expect(mockedReadVersions).not.toHaveBeenCalled()
+        expect(mockedTransitionVersion).not.toHaveBeenCalled()
+        expect(mockedUpdateRule).not.toHaveBeenCalled()
+        expect(audit.record).not.toHaveBeenCalled()
+      },
+    )
+
+    it.each([
+      [
+        'enable',
+        NumberingRuleStatus.ENABLED,
+        (service: NumberingCommandService) =>
+          service.enable(context, RULE_ID, { expectedVersion: 1 }),
+      ],
+      [
+        'disable',
+        NumberingRuleStatus.DISABLED,
+        (service: NumberingCommandService) =>
+          service.disable(context, RULE_ID, { expectedVersion: 1 }),
+      ],
+    ] as const)(
+      'returns %s same-state as a zero-write no-op',
+      async (_label, status, invoke) => {
+        mockedReadForUpdate.mockResolvedValue(ruleRecord({ status }))
+        const { audit, query, service, transaction } = createFixture()
+
+        await expect(invoke(service)).resolves.toEqual(detailDto())
+
+        expect(mockedReadVersions).not.toHaveBeenCalled()
+        expect(mockedUpdateRule).not.toHaveBeenCalled()
+        expect(audit.record).not.toHaveBeenCalled()
+        expect(query.getDetailInTransaction).toHaveBeenCalledWith(
+          transaction,
+          RULE_ID,
+          AS_OF,
+        )
+      },
+    )
+
+    it.each([
+      NumberingRuleStatus.DRAFT,
+      NumberingRuleStatus.DISABLED,
+    ])('enables %s only when a complete ACTIVE version exists', async status => {
+      mockedReadForUpdate.mockResolvedValue(ruleRecord({ status }))
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.ACTIVE),
+      ])
+      const { audit, service, transaction } = createFixture()
+
+      await service.enable(context, RULE_ID, { expectedVersion: 1 })
+
+      expect(mockedUpdateRule).toHaveBeenCalledWith(transaction, RULE_ID, {
+        status: NumberingRuleStatus.ENABLED,
+      })
+      expect(audit.record.mock.calls[0]?.[1]).toMatchObject({
+        eventType: AuditEventType.NUMBERING_RULE_ENABLED,
+        metadata: {
+          ruleCode: 'SALES_ORDER',
+          revision: 3,
+          previousVersion: 1,
+          version: 2,
+          changedFields: 'status',
+        },
+      })
+    })
+
+    it('rejects enable when no complete ACTIVE version exists', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+      ])
+      const { service } = createFixture()
+
+      await expect(service.enable(context, RULE_ID, {
+        expectedVersion: 1,
+      })).rejects.toMatchObject({
+        code: 'NUMBERING_RULE_UNAVAILABLE',
+        status: 409,
+      })
+
+      expect(mockedUpdateRule).not.toHaveBeenCalled()
+    })
+
+    it('disables ENABLED without touching versions, state or issuances', async () => {
+      mockedReadForUpdate.mockResolvedValue(ruleRecord({
+        status: NumberingRuleStatus.ENABLED,
+      }))
+      const { audit, service, transaction } = createFixture()
+
+      await service.disable(context, RULE_ID, { expectedVersion: 1 })
+
+      expect(mockedReadVersions).not.toHaveBeenCalled()
+      expect(mockedHasIssuance).not.toHaveBeenCalled()
+      expect(mockedTransitionVersion).not.toHaveBeenCalled()
+      expect(mockedUpdateRule).toHaveBeenCalledWith(transaction, RULE_ID, {
+        status: NumberingRuleStatus.DISABLED,
+      })
+      expect(audit.record.mock.calls[0]?.[1]).toMatchObject({
+        eventType: AuditEventType.NUMBERING_RULE_DISABLED,
+        metadata: {
+          ruleCode: 'SALES_ORDER',
+          previousVersion: 1,
+          version: 2,
+          changedFields: 'status',
+        },
+      })
+    })
+
+    it('returns fixed unavailable conflict when disabling DRAFT', async () => {
+      const { audit, service } = createFixture()
+
+      await expect(service.disable(context, RULE_ID, {
+        expectedVersion: 1,
+      })).rejects.toMatchObject({
+        code: 'NUMBERING_RULE_UNAVAILABLE',
+        status: 409,
+      })
+
+      expect(mockedUpdateRule).not.toHaveBeenCalled()
+      expect(audit.record).not.toHaveBeenCalled()
+    })
+
+    it('keeps publish writes and Audit in one rollback boundary', async () => {
+      mockedReadVersions.mockResolvedValue([
+        versionSnapshot(NumberingRuleVersionStatus.DRAFT),
+        versionSnapshot(NumberingRuleVersionStatus.ACTIVE),
+      ])
+      const { audit, query, service } = createFixture()
+      audit.record.mockRejectedValue(new Error('must-not-leak audit'))
+
+      await expect(service.publish(context, RULE_ID, {
+        draftRevision: 4,
+        expectedVersion: 1,
+      })).rejects.toMatchObject({ code: 'INTERNAL_ERROR', status: 500 })
+
+      expect(mockedTransitionVersion).toHaveBeenCalledTimes(2)
+      expect(mockedUpdateRule).toHaveBeenCalledTimes(1)
+      expect(query.getDetailInTransaction).not.toHaveBeenCalled()
+    })
+
+    it('maps a lifecycle P2034 transaction conflict to stable state change', async () => {
+      const { prisma, service } = createFixture()
+      prisma.$transaction.mockImplementationOnce(() =>
+        Promise.reject(Object.assign(
+          new Error('transaction conflict'),
+          { code: 'P2034' },
+        )),
+      )
+
+      await expect(service.enable(context, RULE_ID, {
+        expectedVersion: 1,
+      })).rejects.toMatchObject({
+        code: 'NUMBERING_RULE_STATE_CHANGED',
+        status: 409,
+      })
+    })
   })
 })
