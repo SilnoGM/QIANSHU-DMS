@@ -271,8 +271,9 @@ test('权限目录合并为一个带资源列的通用表格', () => {
   assert.match(source, /<template #cell-resource=/u)
 })
 
-test('权限目录以中文展示地区管理资源', () => {
+test('权限目录以中文展示地区与编号规则资源', () => {
   assert.equal(permissionResourceLabel('regions'), '地区管理')
+  assert.equal(permissionResourceLabel('numbering-rules'), '编号规则')
 })
 
 test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {

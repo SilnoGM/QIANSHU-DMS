@@ -1373,14 +1373,14 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
 
     /*
      * 基础数据父级保持权限中立。账号同时失去地区、货币与汇率读取权限后，
-     * Router 应跳过所有受保护叶子并进入第一个仍可访问的编号管理页面。
+     * Router 应跳过所有受保护叶子并进入仍保持权限中立的字典管理页面。
      */
     await page.navigate(appRouteUrl(configuration.baseUrl, '/system/basic-data'))
     await page.waitFor(`(() => {
       const body = document.body.innerText
-      return location.hash === '#/system/basic-data/numbering'
-        && ['编号管理', '字典管理']
-          .every(title => body.includes(title))
+      return location.hash === '#/system/basic-data/dictionaries'
+        && body.includes('字典管理')
+        && !body.includes('编号管理')
         && !body.includes('货币汇率')
         && !body.includes('地区管理')
     })()`)

@@ -290,16 +290,16 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - _Requirements: R1-R7, R10-R13_
 
 - [ ] 12. 以 TDD 实现权限路由、规则列表和统计展示
-  - [ ] 12.1 先修改 `basic-data-routes.test.ts` 失败断言，再为 numbering route 增加 `numbering-rules:read`。
-  - [ ] 12.2 将“权限中立空页面”断言缩小到字典页；零基础数据权限时不再回退到受保护 numbering 页。
-  - [ ] 12.3 更新地区 Browser E2E 的零权限回退预期和系统管理权限目录。
-  - [ ] 12.4 权限目录增加“编号规则”中文资源名及七项权限搜索/分组测试。
-  - [ ] 12.5 使用单一 `FaPageHeader + FaPageMain + QsGenericTable` 实现列表。
-  - [ ] 12.6 展示名称/code、结构、状态、revision、capacity、used、remaining、next 和 updatedAt。
-  - [ ] 12.7 GET 使用 AbortController、request version、`authEpoch` 防止迟到响应和跨身份污染。
+  - [x] 12.1 先修改 `basic-data-routes.test.ts` 失败断言，再为 numbering route 增加 `numbering-rules:read`。
+  - [x] 12.2 将“权限中立空页面”断言缩小到字典页；零基础数据权限时不再回退到受保护 numbering 页。
+  - [x] 12.3 更新地区 Browser E2E 的零权限回退预期和系统管理权限目录。
+  - [x] 12.4 权限目录增加“编号规则”中文资源名及七项权限搜索/分组测试。
+  - [x] 12.5 使用单一 `FaPageHeader + FaPageMain + QsGenericTable` 实现列表。
+  - [x] 12.6 展示名称/code、结构、状态、revision、capacity、used、remaining、next 和 updatedAt。
+  - [x] 12.7 GET 使用 AbortController、request version、`authEpoch` 防止迟到响应和跨身份污染。
   - [ ] 12.8 动态撤销 read 权限时中止请求、清空数据并关闭维护上下文。
-  - [ ] 12.9 自定义 `mobile-row` 保持列显隐语义，390px 不横向溢出。
-  - [ ] 12.10 不使用有精度风险的百分比进度条，不引入 `FaCard` 堆叠或硬编码颜色。
+  - [x] 12.9 自定义 `mobile-row` 保持列显隐语义，390px 不横向溢出。
+  - [x] 12.10 不使用有精度风险的百分比进度条，不引入 `FaCard` 堆叠或硬编码颜色。
   - _Requirements: R1, R7, R10-R13_
 
 - [ ] 13. 以 TDD 实现规则编排、服务端预览和关闭保护
