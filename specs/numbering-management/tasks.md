@@ -2,9 +2,10 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 17）
+- 状态：Phase 4 已完成
 - 生成日期：2026-07-29
 - Gate A / Gate B 确认日期：2026-08-02
+- 完成日期：2026-08-02
 - 需求规格：[编号管理需求规格](./requirements.md)
 - 技术设计：[编号管理技术设计](./design.md)
 - 正式 Web 应用：`web/apps/qsmds-arco`
@@ -353,8 +354,8 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 16.10 验证 light/dark、无横向溢出、无 console error/page error、无敏感日志。
   - _Requirements: R1-R13_
 
-- [ ] 17. 完成全量门禁与交付收口
-  - [ ] 17.1 重新运行 Server 与数据库门禁：
+- [x] 17. 完成全量门禁与交付收口
+  - [x] 17.1 重新运行 Server 与数据库门禁：
 
     ```bash
     pnpm -C server prisma:validate
@@ -363,14 +364,14 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
     node --run ci:server-e2e
     ```
 
-  - [ ] 17.2 重新生成并验证跨端契约：
+  - [x] 17.2 重新生成并验证跨端契约：
 
     ```bash
     node --run contract:sync
     node --run contract:check
     ```
 
-  - [ ] 17.3 运行 Web、Browser 和根级门禁：
+  - [x] 17.3 运行 Web、Browser 和根级门禁：
 
     ```bash
     pnpm -C web test:api
@@ -382,11 +383,11 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
     git diff --check
     ```
 
-  - [ ] 17.4 复核 OpenAPI 只有管理 endpoint、七项权限逐 operation 生效、没有 DELETE 和 generate。
-  - [ ] 17.5 复核固定时区、容量公式、100 并发、幂等、永久 ledger 和 rule 内唯一证据来自最终 HEAD。
-  - [ ] 17.6 检查 staged/unstaged/untracked，无 `.env`、密钥、日志、构建产物、Prisma generated client、Web generated types、根依赖产物或无关用户修改。
-  - [ ] 17.7 将所有真实完成项勾选，状态改为“已完成”，记录最新验证输出和真实 commit SHA，不伪造证据。
-  - [ ] 17.8 检查 Git 历史和工作区；不 push、不 merge、不删除分支，等待后续 Git 生命周期要求。
+  - [x] 17.4 复核 OpenAPI 只有管理 endpoint、七项权限逐 operation 生效、没有 DELETE 和 generate。
+  - [x] 17.5 复核固定时区、容量公式、100 并发、幂等、永久 ledger 和 rule 内唯一证据来自最终 HEAD。
+  - [x] 17.6 检查 staged/unstaged/untracked，无 `.env`、密钥、日志、构建产物、Prisma generated client、Web generated types、根依赖产物或无关用户修改。
+  - [x] 17.7 将所有真实完成项勾选，状态改为“已完成”，记录最新验证输出和真实 commit SHA，不伪造证据。
+  - [x] 17.8 检查 Git 历史和工作区；不 push、不 merge、不删除分支，等待后续 Git 生命周期要求。
   - _Requirements: R1-R13_
 
 ## 6. Git 提交计划
@@ -451,3 +452,18 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
 10. `QsGenericDrawer` 或 `QsGenericTable` 的真实行为无法满足窄屏、焦点、提交锁或可访问性契约。
 11. 发现与当前任务重叠的用户未提交修改，无法安全绕开。
 12. 完成需要迁移共享开发/生产数据库、停止非本任务进程、push、merge、创建 PR、删除分支或其他尚未授权的外部状态变更。
+
+## 9. 2026-08-02 验收记录
+
+- 最终功能与门禁 HEAD：`16fcf0033ffdf5eac67a30441cae3343083e8477`。其后只提交本验收记录，不再修改运行时代码或契约。
+- Server 门禁：`pnpm -C server prisma:validate`、`pnpm -C server check` 和 `pnpm -C server build` 均通过；共 `123/123` 个测试套件、`1125/1125` 个测试通过。
+- PostgreSQL E2E：隔离空库成功应用 `8` 个 migration，第二次 deploy 无待执行 migration；共 `20/20` 个测试套件、`102/102` 个测试通过。`server/test/numbering-generator.e2e-spec.ts` 覆盖 100 并发不同幂等键、100 并发相同幂等键、最后容量位、publish/generate 竞态、disable/replay、永久 ledger 和生命周期边界。
+- 跨端契约：`node --run contract:sync` 与 `node --run contract:check` 均通过，OpenAPI snapshot 和 Web generated types 无漂移。
+- Web 门禁：Node scripts `156/156`、TypeScript scripts `49/49`、API/View `546/546` 通过；typecheck、ESLint、Stylelint、build 和 font-zero-residue 均通过。
+- 编号管理 Browser E2E：`2/2` 通过，包含桌面与移动端、light/dark、规则生命周期、权限矩阵、异常恢复、无障碍和数据库最终状态校验。
+- 根级门禁：`node --run test:root` 共 `633/633` 通过；最终 `node --run check` 在上述功能 HEAD 退出码为 `0`，并包含 auth/management Chrome `2/2` 验收。
+- 公共契约审计：编号管理 OpenAPI 为 `9` 个 path、`11` 个 operation、`11` 个唯一 `operationId`；七项权限逐 operation 生效，复合权限采用 AND；不存在 DELETE 或 HTTP generate，`NumberingGeneratorService` 仅作为 Server 内部服务导出。
+- 时区与发号审计：请求不接受自定义时区，DTO、响应、日期周期、持久化、发号校验和数据库约束均固定 `Asia/Shanghai`；容量、使用量、下一编号和超大整数均按十进制字符串处理。
+- 交付卫生审计：无新增 `.env`、密钥、日志、构建产物、生成物漂移、根依赖产物、测试 skip/only 或 `TODO/FIXME/HACK`；Browser 临时凭据在页面和外层编排日志中均已脱敏。
+- 环境说明：受限沙箱首次运行 `tsx` IPC、Unix socket 和进程树用例时出现 `EPERM`/timeout；在允许对应运行边界后，同一门禁均已成功重跑。Web build 仍有既有 `INVALID_ANNOTATION` 和 chunk size 非阻断 warning，不影响退出码和验收结果。
+- Git 边界：未 push、未 merge、未创建 PR、未删除分支；后续 Git 生命周期动作等待单独指令。
