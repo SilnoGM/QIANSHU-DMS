@@ -11,6 +11,16 @@ class ZeroRandomSource implements NumberingRandomSource {
   }
 }
 
+class IncrementingRandomSource implements NumberingRandomSource {
+  private value = 0
+
+  nextInt(maxExclusive: number): number {
+    const current = this.value % maxExclusive
+    this.value += 1
+    return current
+  }
+}
+
 const DATABASE_TIME = new Date('2026-07-28T16:00:00.000Z')
 
 describe('numbering pure preview', () => {
@@ -113,7 +123,7 @@ describe('numbering pure preview', () => {
     }))
   })
 
-  it('uses the next sequence in mixed non-reserving random samples', () => {
+  it('reuses the same next sequence in mixed non-reserving random samples', () => {
     const result = previewNumberingRule({
       config: {
         resetPolicy: 'NEVER',
@@ -134,14 +144,14 @@ describe('numbering pure preview', () => {
       },
       databaseTime: DATABASE_TIME,
       usedCount: '1',
-      randomSource: new ZeroRandomSource(),
+      randomSource: new IncrementingRandomSource(),
     })
 
     expect(result).toEqual(expect.objectContaining({
       nextSequenceValue: '3',
       nextNumberPreview: '03A',
       nextNumberDeterministic: false,
-      samples: ['03A', '05A', '07A', '09A', '11A'],
+      samples: ['03A', '03B', '03C', '03D', '03E'],
     }))
   })
 

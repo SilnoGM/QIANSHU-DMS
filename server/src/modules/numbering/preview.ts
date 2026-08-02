@@ -64,7 +64,10 @@ export function previewNumberingRule(
       || sequenceState === null
       || sequenceState.nextSequenceValue === null
       ? null
-      : sequenceState.nextSequenceValue + BigInt(index) * BigInt(sequence.step)
+      // mixed preview 展示同一个尚未占用的 next sequence，仅改变随机部分；
+      // sequence-only 才展示后续流水值，且两条路径都不推进真实 state。
+      : sequenceState.nextSequenceValue
+        + (hasRandom ? 0n : BigInt(index) * BigInt(sequence.step))
 
     samples.push(renderNumberingCandidate(
       config,

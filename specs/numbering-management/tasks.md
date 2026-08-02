@@ -232,13 +232,13 @@ Task 5-8 中互不依赖的纯逻辑和服务测试可在不冲突文件上并�
   - [x] 7.6 输出长度在运行时再次保护，异常配置返回 `NUMBERING_RULE_CONFIG_INVALID`。
   - _Requirements: R2-R4, R6-R9, R13_
 
-- [ ] 8. 以 TDD 实现安全随机渲染、容量和碰撞策略
-  - [ ] 8.1 用确定性测试随机源固定 letter/digit 精确数量、全大写和两种排列模式。
-  - [ ] 8.2 生产实现使用 `node:crypto`，源码和测试明确拒绝 `Math.random()`。
-  - [ ] 8.3 random-only preview 返回 samples，但 next number 为 null。
-  - [ ] 8.4 sequence + random preview 使用下一 sequence 生成非保留样例并标记非确定。
-  - [ ] 8.5 将冲突重试上限固定为 `32`，测试第 1..31 次冲突后成功和 32 次全失败。
-  - [ ] 8.6 随机候选生成失败不得推进 period state。
+- [x] 8. 以 TDD 实现安全随机渲染、容量和碰撞策略
+  - [x] 8.1 用确定性测试随机源固定 letter/digit 精确数量、全大写和两种排列模式。
+  - [x] 8.2 生产实现使用 `node:crypto`，源码和测试明确拒绝 `Math.random()`。
+  - [x] 8.3 random-only preview 返回 samples，但 next number 为 null。
+  - [x] 8.4 sequence + random preview 使用下一 sequence 生成非保留样例并标记非确定。
+  - [x] 8.5 将冲突重试上限固定为 `32`，测试第 1..31 次冲突后成功和 32 次全失败。
+  - [x] 8.6 随机候选生成失败不得推进 period state。
   - _Requirements: R2, R5-R9, R13_
 
 - [ ] 9. 以 TDD 实现 period state、永久 issuance、幂等和并发发号
