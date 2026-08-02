@@ -154,6 +154,17 @@ export class NumberingRandomSegmentInputDto
   mode!: NumberingRandomMode
 }
 
+/**
+ * 编号片段的公开判别联合。属性仍由五个具体 DTO 承载，既让 TypeScript
+ * 调用方能够按 `type` 安全收窄，也不改变运行时转换与 OpenAPI discriminator。
+ */
+export type NumberingRuleSegmentInput =
+  | NumberingFixedSegmentInputDto
+  | NumberingDateSegmentInputDto
+  | NumberingSeparatorSegmentInputDto
+  | NumberingSequenceSegmentInputDto
+  | NumberingRandomSegmentInputDto
+
 const SEGMENT_DISCRIMINATOR_MAPPING = {
   FIXED: getSchemaPath(NumberingFixedSegmentInputDto),
   DATE: getSchemaPath(NumberingDateSegmentInputDto),
@@ -209,5 +220,5 @@ export class NumberingRuleConfigInputDto {
     },
     keepDiscriminatorProperty: true,
   })
-  segments!: NumberingRuleSegmentInputDto[]
+  segments!: NumberingRuleSegmentInput[]
 }

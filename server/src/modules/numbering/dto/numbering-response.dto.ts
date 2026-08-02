@@ -12,9 +12,9 @@ import {
   NumberingDateSegmentInputDto,
   NumberingFixedSegmentInputDto,
   NumberingRandomSegmentInputDto,
-  NumberingRuleSegmentInputDto,
   NumberingSeparatorSegmentInputDto,
   NumberingSequenceSegmentInputDto,
+  type NumberingRuleSegmentInput,
 } from './numbering-segment.dto'
 import {
   NumberingRuleStatus,
@@ -72,7 +72,7 @@ export class NumberingRuleConfigResponseDto {
   maxOutputLength!: number
 
   @ApiNumberingRuleSegments()
-  segments!: NumberingRuleSegmentInputDto[]
+  segments!: NumberingRuleSegmentInput[]
 }
 
 export class NumberingRuleStatisticsDto {

@@ -45,7 +45,27 @@ import {
   NumberingRuleVersionDto,
   NumberingRuleVersionPageDto,
 } from './numbering-response.dto'
-import { NumberingSequenceSegmentInputDto } from './numbering-segment.dto'
+import {
+  NumberingRuleConfigInputDto,
+  NumberingSequenceSegmentInputDto,
+  type NumberingRuleSegmentInput,
+} from './numbering-segment.dto'
+
+function readTypedSegmentField(segment: NumberingRuleSegmentInput): string {
+  // 该 exhaustive switch 是编译期合同：五类 DTO 必须能按 type 收窄并暴露各自字段。
+  switch (segment.type) {
+    case 'FIXED':
+      return segment.value
+    case 'DATE':
+      return segment.format
+    case 'SEPARATOR':
+      return segment.value
+    case 'SEQUENCE':
+      return `${segment.width}:${segment.startValue}:${segment.step}`
+    case 'RANDOM':
+      return `${segment.letterLength}:${segment.digitLength}:${segment.mode}`
+  }
+}
 
 async function validatePlain<T extends object>(
   dtoType: new () => T,
@@ -377,6 +397,31 @@ describe('numbering OpenAPI DTO contract', () => {
       },
     })
     expect(segmentItems.oneOf).toHaveLength(5)
+  })
+
+  it('exposes all five segment fields through a discriminated union', () => {
+    const inputSegments: NumberingRuleConfigInputDto['segments'] = [
+      { type: 'FIXED', value: 'SO' },
+      { type: 'DATE', format: 'YYYYMMDD' },
+      { type: 'SEPARATOR', value: '-' },
+      { type: 'SEQUENCE', width: 6, startValue: '1', step: '1' },
+      {
+        type: 'RANDOM',
+        letterLength: 2,
+        digitLength: 2,
+        mode: 'SHUFFLED',
+      },
+    ]
+    const responseSegments: NumberingRuleConfigResponseDto['segments'] =
+      inputSegments
+
+    expect(responseSegments.map(readTypedSegmentField)).toEqual([
+      'SO',
+      'YYYYMMDD',
+      '-',
+      '6:1:1',
+      '2:2:SHUFFLED',
+    ])
   })
 
   it('keeps decimal counters as strings and fixes response timezone', () => {
