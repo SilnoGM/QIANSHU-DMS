@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 11 已完成；Task 12 未开始
+- 状态：Task 12 已完成；Task 13 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -242,7 +242,7 @@ TDD：先覆盖 JSON tuple cache key、5 分钟 TTL、lazy load、同 Key 合并
 
 ### Task 12 - 权限路由与管理页面骨架
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R7、R10。
 
@@ -635,4 +635,26 @@ Task 10 只交付 Web Dictionary API Adapter、独立 Catalog domain、运行时
 | Generated / scope audit | Git 只包含三份规格文档、Dictionary Catalog Provider 的三个新增实现文件、`types.ts`、`main.ts` 与两份目标测试；Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、路由、页面与公共组件均无漂移 |
 | `git diff --check` | 通过 |
 
-Task 11 只交付 Web 内部 Dictionary Catalog Provider 契约、身份隔离内存缓存、single/batch ownership、正负 TTL、精确失效、跨标签广播、默认实例、Vue InjectionKey、`main.ts` 生命周期组装、对应测试及本验证记录。未新增 Pinia Store 或持久化，不在登录时预取，不实现 `useDictionaryCatalog`、options/resolve 历史值语义、管理 Mutation 失效接线、页面、路由、UI 或公共组件；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit 或依赖，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。Task 12 与后续任务保持未开始。
+Task 11 只交付 Web 内部 Dictionary Catalog Provider 契约、身份隔离内存缓存、single/batch ownership、正负 TTL、精确失效、跨标签广播、默认实例、Vue InjectionKey、`main.ts` 生命周期组装、对应测试及本验证记录。未新增 Pinia Store 或持久化，不在登录时预取，不实现 `useDictionaryCatalog`、options/resolve 历史值语义、管理 Mutation 失效接线、页面、路由、UI 或公共组件；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit 或依赖，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。该段记录 Task 11 交付时状态；当时 Task 12 与后续任务尚未开始。
+
+## 20. Task 12 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Initial target RED | 首次目标命令退出 `1`，`16` tests 中 `6` 通过、`10` 失败；路由断言证明字典叶子尚无 `dictionaries:read`、零权限时仍错误保留空父菜单且页面仍为空骨架，logic tests 则因缺少 `dictionary-management.logic.ts` 报 `ERR_MODULE_NOT_FOUND` |
+| Initial target GREEN | 路由、状态机与页面骨架三组目标测试退出 `0`，`27/27` 通过 |
+| Cross-review RED / GREEN | 两路只读对抗审查发现结果未知 Mutation 可从 `error` 重新 `submit`，以及桌面 Type 按钮的 `role=listitem` 覆盖原生按钮语义；分别新增失败测试并得到 `10/11`、`5/6` 的 RED，再收紧 `editing -> submitting` 唯一路径并改为 `ul > li > button`，单组复跑分别 `11/11`、`6/6` 通过；另补齐非空 target 不一致守卫断言 |
+| Final target GREEN | 路由、状态机与页面骨架三组目标测试退出 `0`，`27/27` 通过 |
+| Target lint / typecheck | a11y 修正后首次目标 ESLint 如实发现 `regexp/no-contradiction-with-assertion` 的 `1` 个 error 与 `unocss/order` 的 `1` 个 warning；修正正则并机械排序 utility 后，目标 ESLint `--max-warnings=0` 与 `pnpm -C web --filter qsmds-arco run typecheck` 均退出 `0` |
+| `pnpm -C web check` | 受限环境中 Node tests 已 `156/156` 通过，随后 `tsx` 因 Unix socket `EPERM` 退出 `1`；在具备 IPC 权限的环境以原命令复跑退出 `0`，Node、TS scripts、API/View `644/644`、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C web build` | 退出 `0`；生产构建、Noto 字体快照与 zero-residue 校验通过，仅输出既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run ci:browser-regions-e2e` | 受限环境因 Docker socket 权限退出 `1`；在允许连接本机 Docker 的环境以原命令复跑退出 `0`，真实 Chrome `2/2` 通过，并覆盖字典无权限直达保持原地址、统一 `403` 且受保护工作区不挂载 |
+| `node --run contract:check` | 退出 `0`；公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境以原命令复跑退出 `0`，`633/633` 通过 |
+| UI / scope audit | 恰好一个 `FaPageHeader` 与一个 `FaPageMain`；桌面为 `18rem minmax(0,1fr)` 非对称主从布局，移动端复用底部 `QsGenericDrawer`；无禁用色族、替代字体、Emoji、`?code=`、Router query、公共选择器、`QsGenericTable` 或后续任务领域表单 |
+| Cross-review closeout | 最终只读复核 P0=`0`、P1=`0`、P2=`0`；权限撤销、authEpoch、Type/Item 独立 Abort/version、A-B-A 迟到响应、Mutation target/version 与 Drawer 清理边界均已冻结 |
+| `git diff --check` | 通过 |
+
+Task 12 只交付字典叶子 `dictionaries:read` 路由权限、空父菜单与统一 `403` 回归、管理页面 access/query/selection/mutation 状态机、Type/Item 独立请求归属守卫、只读主从页面骨架、移动端底部 Drawer、Regions Browser 反向断言、对应测试及本验证记录。未实现 Task 13 的 Type 搜索、筛选、分页、创建/编辑、启停和首次自动选择，未实现 Task 14 的 Item 管理、`QsGenericTable` 与领域表单，未实现 Task 15 的历史值、完整响应式/可访问性收口，未新增 Task 16 字典专属 Browser/CI；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限数据、Audit、依赖、Store 或公共 Qs/Fa 组件，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。Task 13 与后续任务保持未开始。

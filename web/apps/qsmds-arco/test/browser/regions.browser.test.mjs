@@ -1372,17 +1372,16 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
     })()`)
 
     /*
-     * 基础数据父级保持权限中立。账号同时失去地区、货币与汇率读取权限后，
-     * Router 应跳过所有受保护叶子并进入仍保持权限中立的字典管理页面。
+     * 字典叶子与其他基础数据入口一样受独立读取权限保护。直接访问时保持原地址，
+     * 由 App 的统一权限边界展示 403，且不能挂载字典受保护工作区。
      */
-    await page.navigate(appRouteUrl(configuration.baseUrl, '/system/basic-data'))
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/system/basic-data/dictionaries'))
     await page.waitFor(`(() => {
       const body = document.body.innerText
       return location.hash === '#/system/basic-data/dictionaries'
-        && body.includes('字典管理')
-        && !body.includes('编号管理')
-        && !body.includes('货币汇率')
-        && !body.includes('地区管理')
+        && body.includes('403')
+        && body.includes('无权访问该页面')
+        && document.querySelector('[data-testid="dictionary-management-workspace"]') === null
     })()`)
   })
   await page.evaluate(restorePermissionsExpression())
