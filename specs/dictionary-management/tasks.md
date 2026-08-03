@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 3 已完成；Task 4 待开始
+- 状态：Task 4 已完成；Task 5 待开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -146,7 +146,7 @@ TDD：先覆盖 code/value ASCII 边界、NFC/空白、大小写规范化、Unic
 
 ### Task 4 - Query 与 Persistence 基础层
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认。
 
 需求覆盖：R4、R5、R6、R8。
 
@@ -455,4 +455,28 @@ Task 2 仅交付 Schema、单事务 forward migration、数据库治理、5 项�
 | `node --run test:root` | 在具备所需 process/socket 权限的环境退出 `0`，`633/633` 通过 |
 | `git diff --check` | 通过 |
 
-Task 3 只交付 request/query/response DTO、Normalizer、稳定领域错误、相应单元与 OpenAPI schema 测试，以及本验证记录。未新增 Controller、Module、endpoint、HTTP module registration、Query/Persistence/Command/Lookup、Schema、migration、权限、Audit、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`，Task 4 与 Task 8 均未开始。由于本任务不修改数据库、HTTP 注册或 Web，未运行 PostgreSQL、Server API 或 Browser E2E。
+Task 3 只交付 request/query/response DTO、Normalizer、稳定领域错误、相应单元与 OpenAPI schema 测试，以及本验证记录。未新增 Controller、Module、endpoint、HTTP module registration、Query/Persistence/Command/Lookup、Schema、migration、权限、Audit、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`。该段记录 Task 3 交付时状态；当时 Task 4 与 Task 8 均未开始。由于本任务不修改数据库、HTTP 注册或 Web，未运行 PostgreSQL、Server API 或 Browser E2E。
+
+## 12. Task 4 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Query RED / initial GREEN | 首次目标测试因缺少 `dictionary-query.service.ts` 报 `TS2307`，`0` tests；最小实现后 `20/20` 通过 |
+| Persistence RED / initial GREEN | 首次目标测试因缺少 `dictionary-command.persistence.ts` 报 `TS2307`，`0` tests；最小实现后 `12/12` 通过 |
+| Error mapper RED / initial GREEN | 首次目标测试因缺少 `dictionary.persistence-error.mapper.ts` 报 `TS2307`，`0` tests；最小实现后 `10/10` 通过 |
+| Initial combined GREEN | 三组目标测试 `3/3` suites、`42/42` tests 通过 |
+| Cross-review RED | 针对运行时输入字段污染、Item parent 覆盖、错误 context 误映射与 UUID 显式 cast 新增回归断言后，`5` failed、`39` passed、`44` total，证明修复前确实存在缺口 |
+| Cross-review GREEN | 写入数据改为逐字段白名单、唯一约束映射改为 context 与 target 精确匹配、统计 SQL 增加 UUID 显式 cast 后，`44/44` 通过 |
+| Final target GREEN | `pnpm -C server exec jest --runInBand --runTestsByPath src/modules/dictionaries/dictionary-query.service.spec.ts src/modules/dictionaries/dictionary-command.persistence.spec.ts src/modules/dictionaries/dictionary.persistence-error.mapper.spec.ts` 退出 `0`，`3/3` suites、`52/52` tests 通过 |
+| Target lint | `pnpm -C server exec eslint src/modules/dictionaries --max-warnings=0` 退出 `0` |
+| Cross-review | 最终复核未发现 P0-P2；确认 Type -> Item 锁序、timeout 首 SQL、稳定排序、同事务统计、路径隔离、错误 fail-closed 与输入白名单边界 |
+| `pnpm -C server check` | 退出 `0`；Prisma validate、typecheck、lint 通过，`130/130` suites、`1251/1251` tests 通过 |
+| `pnpm -C server build` | 退出 `0` |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 snapshot/generated tree 无漂移 |
+| `node --run test:root` | 在具备所需 process/socket 权限的环境退出 `0`，`633/633` 通过 |
+| Optional local read-only SQL probe | 通用 UUID cast/CTE 探针通过；直接查询 `dictionary_items` 因本地开发库尚未部署 Task 2 migration 报 Prisma `P2010` / PostgreSQL `42P01`。探针未写库，不作为 Task 4 验收条件；隔离 PostgreSQL E2E 由 Task 9 负责 |
+| `git diff --check` | 通过 |
+
+Task 4 只交付 Query Service、Command Persistence helper、Persistence Error Mapper、对应单元测试及本验证记录。未新增 Command 生命周期业务规则、Catalog/Lookup、Controller、Module、endpoint、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`。Task 5 与 Task 8 均未开始。由于本任务不注册 HTTP 或修改 Web，未运行 Server API 或 Browser E2E；数据库集成验收继续由 Task 9 在隔离 PostgreSQL 中完成。
