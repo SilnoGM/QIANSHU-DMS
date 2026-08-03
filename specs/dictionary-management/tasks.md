@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 8 已完成；Task 9 未开始
+- 状态：Task 9 已完成；Task 10 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -206,7 +206,7 @@ TDD：先为 14 个 endpoint 编写 Controller/contract tests，覆盖 Guard、C
 
 ### Task 9 - Server PostgreSQL 与 API E2E
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R2、R3、R4、R5、R6、R7、R8、R11、R12。
 
@@ -566,4 +566,29 @@ Task 7 只交付 `DictionaryQueryService` 的单个/批量 Consumer Catalog 核�
 | `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境以原命令复跑退出 `0`，`633/633` 通过 |
 | `git diff --check` | 通过 |
 
-Task 8 只交付管理 12 个与 Catalog 2 个 Controller endpoint、`DictionaryModule`/HTTP 注册、权限与 Session/CSRF/OpenAPI 元数据、三份生成契约，以及读取异常口径所需的 Query 修正与测试。管理读取保留领域 `404/422`，数据库与事务异常统一收敛为 `500 INTERNAL_ERROR`；Mutation 的既有 `409` 映射未改变。未修改 Schema、migration、权限数据、Audit enum、DTO 字段、第三方依赖、公共组件、Web API adapter、Catalog Provider、cache 或页面；未执行开发数据库 write，也未运行真实 API、PostgreSQL 或 Browser E2E，这些继续由 Task 9 及后续任务负责。
+Task 8 只交付管理 12 个与 Catalog 2 个 Controller endpoint、`DictionaryModule`/HTTP 注册、权限与 Session/CSRF/OpenAPI 元数据、三份生成契约，以及读取异常口径所需的 Query 修正与测试。管理读取保留领域 `404/422`，数据库与事务异常统一收敛为 `500 INTERNAL_ERROR`；Mutation 的既有 `409` 映射未改变。未修改 Schema、migration、权限数据、Audit enum、DTO 字段、第三方依赖、公共组件、Web API adapter、Catalog Provider、cache 或页面；未执行开发数据库 write。该段记录 Task 8 交付时状态；当时尚未运行的真实 API 与 PostgreSQL 验证现已由 Task 9 完成，Browser E2E 仍由后续任务负责。
+
+## 17. Task 9 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| API E2E RED | 冻结目标命令首次运行因 `dictionary-management-api.e2e-spec.ts` 与 `dictionary-catalog-api.e2e-spec.ts` 尚不存在而以 `ENOENT` 失败，`2/2` suites 失败、`0` tests，证明本任务能力缺失 |
+| Isolated PostgreSQL baseline | Docker Desktop 初始未运行，Docker socket 不存在；启动后受限环境仍无 socket 权限，转入已授权环境运行。既有 `dictionary-schema.e2e-spec.ts` 在一次性 PostgreSQL 16 中 `1/1` 通过 |
+| Isolation helper review | 确认冻结目标 wrapper 只提供空 PostgreSQL、不会自动部署 migration；新增仅限 E2E 的 helper，严格接受 `qianshu_ci` loopback URL，为每个 suite 创建随机 schema、顺序重放 9 条正式 migration，并在成功或失败后幂等回收 schema、Prisma adapter 与连接池 |
+| Catalog first run / GREEN | 首次真实运行有 `2` 个 fixture 因测试密码超过 20 个 Unicode code point 失败；修正为合规夹具后定向 suite `4/4` 通过，覆盖 Session、must-change-password、Catalog 单/批量、全部 missing、无效输入、Lookup 四类不可用原因、历史 raw value 及真实 Type -> Item `FOR SHARE` 持锁顺序 |
+| Management first run | 双 suite 首次组合运行中 Catalog 通过，Management 首个权限测试因提前构造未执行的 SuperTest 请求导致临时 HTTP server 端口关闭，得到 `ECONNREFUSED`；结果为 `9/10` 通过。单独复跑 Management 仍为 `5/6`，确认问题可重复且不属于 PostgreSQL |
+| Management fix / GREEN | 将 8 条缺失 CSRF Mutation 改为逐条创建并立即等待的 request factory，消除临时 HTTP server 生命周期竞争；Management 定向 suite `6/6` 通过 |
+| Final frozen target | `node ./scripts/ci-postgres.mjs -- pnpm -C server exec jest --config test/jest-e2e.json --runInBand --runTestsByPath test/dictionary-management-api.e2e-spec.ts test/dictionary-catalog-api.e2e-spec.ts` 退出 `0`，`2/2` suites、`10/10` tests 通过 |
+| Runtime coverage | 真实 Session、五项独立权限、八个 Mutation 的 CSRF、完整 Type/Item 生命周期、no-op/stale version、Audit metadata/request ID/rollback、无 DELETE、稳定身份 Trigger、`private, no-store`、Catalog/Lookup 与三类 PostgreSQL 并发竞争均已覆盖；并发结果及数据库最终态同时断言 |
+| Cross-review | 最终只读复核为 P0=`0`、P1=`0`；按审查意见把 Audit `500` 响应收紧为仅 `code/message/requestId`，并使用无 Item 的独立 Type 验证 delete Trigger，排除外键 `RESTRICT` 误绿 |
+| Target lint / typecheck | 三个 E2E 文件的 ESLint、`pnpm -C server typecheck` 均退出 `0` |
+| `node --run ci:server-e2e` | 退出 `0`；9 条 migration 首次 deploy、二次无待处理 migration 与 schema status 均通过，`23/23` suites、`113/113` tests 通过 |
+| `pnpm -C server check` | 退出 `0`；Prisma validate、typecheck、lint 通过，`137/137` suites、`1355/1355` tests 通过 |
+| `pnpm -C server build` | 退出 `0` |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `listen EPERM`；在具备 process/socket 权限的环境以原命令复跑退出 `0`，`633/633` 通过 |
+| `git diff --check` | 通过 |
+
+Task 9 只交付三个 Server E2E 文件与本验证记录，不修改生产代码、公共 API、DTO、Schema、migration、权限、Audit enum、依赖、Web 或公共组件。所有数据库写入仅发生在一次性 `qianshu_ci` PostgreSQL 容器的随机 schema 中；未连接或写入开发、测试共享或生产数据库。Task 10 与后续任务保持未开始，未运行 Browser E2E，未执行 push、PR、merge、发布或分支删除。
