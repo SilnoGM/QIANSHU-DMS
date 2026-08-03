@@ -3,12 +3,12 @@ import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 页面骨架使用 Node.js 内置 runner 检查静态组合契约。
 import test from 'node:test'
 
-const pageSource = readFileSync(
-  new URL(
-    '../../src/views/system/basic-data/dictionaries/index.vue',
-    import.meta.url,
-  ),
-  'utf8',
+function readSource(relativePath: string): string {
+  return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+}
+
+const pageSource = readSource(
+  '../../src/views/system/basic-data/dictionaries/index.vue',
 )
 
 test('字典管理只使用一层 Fa 页面容器与非对称主从骨架', () => {
@@ -18,8 +18,28 @@ test('字典管理只使用一层 Fa 页面容器与非对称主从骨架', () =
   assert.match(pageSource, /Noto Sans SC|qs-type-/u)
   assert.doesNotMatch(pageSource, /(?:violet|purple|indigo|fuchsia)/iu)
   assert.doesNotMatch(pageSource, /\p{Extended_Pictographic}/gu)
-  assert.match(pageSource, /<ul[^>]*aria-label="字典类型"/u)
-  assert.doesNotMatch(pageSource, /<button[^>]+role="listitem"/u)
+  assert.doesNotMatch(pageSource, /sm:min-h-9/u)
+})
+
+test('Type 列表组件组合服务端搜索、状态筛选、分页与原生按钮语义', () => {
+  const source = readSource(
+    '../../src/views/system/basic-data/dictionaries/dictionary-type-list.vue',
+  )
+
+  assert.match(source, /<FaInput\b/u)
+  assert.match(source, /const searchDraft = ref\(props\.search\)/u)
+  assert.match(source, /emit\('search', searchDraft\.value\)/u)
+  assert.doesNotMatch(source, /const searchModel = computed/u)
+  assert.match(source, /<FaSelect\b/u)
+  assert.match(source, /<FaPagination\b/u)
+  assert.match(source, /<FaTag\b/u)
+  assert.match(source, /border-primary\/30 bg-primary\/10 text-primary/u)
+  assert.match(source, /border-border bg-muted text-muted-foreground/u)
+  assert.match(source, /<ul[^>]*aria-label="字典类型"/u)
+  assert.doesNotMatch(source, /<button[^>]+role="listitem"/u)
+  assert.match(source, /系统尚未配置字典类型/u)
+  assert.match(source, /没有匹配当前条件的字典类型/u)
+  assert.match(pageSource, /<FaTag[\s\S]{0,400}selectedType\.enabled/u)
 })
 
 test('页面读取权限与身份 epoch 共同形成受保护数据边界', () => {
@@ -55,6 +75,12 @@ test('切换 Type 先作废旧 Item 请求且选择只保存在页面本地状�
   )
   assert.doesNotMatch(pageSource, /\?code=/u)
   assert.doesNotMatch(pageSource, /route\.query|router\.(?:push|replace)/u)
+  assert.match(pageSource, /selectDictionaryType\(nextTypeId, false\)/u)
+  assert.match(pageSource, /if \(closeDrawer\) \{\s*typeDrawerOpen\.value = false/u)
+  assert.match(
+    pageSource,
+    /if \(typeId === selectedTypeId\.value\)[\s\S]{0,180}return/u,
+  )
 })
 
 test('撤权与身份切换会清空受保护数据并关闭真实底部 Drawer', () => {
@@ -65,12 +91,71 @@ test('撤权与身份切换会清空受保护数据并关闭真实底部 Drawer'
   assert.match(pageSource, /<QsGenericDrawer\b/u)
   assert.match(pageSource, /v-model="typeDrawerOpen"/u)
   assert.match(pageSource, /placement="bottom"/u)
+  assert.match(pageSource, /aria-controls="dictionary-type-drawer"/u)
+  assert.match(pageSource, /:aria-expanded="typeDrawerOpen"/u)
+  assert.match(pageSource, /id="dictionary-type-drawer"/u)
 })
 
-test('页面骨架不越界实现后续表单、公共选择器或 QsGenericTable', () => {
-  assert.doesNotMatch(pageSource, /DictionaryTypeFormModal/u)
+test('Type 创建编辑启停按四项权限双重守卫并使用领域 Modal', () => {
+  for (const permission of [
+    'dictionaries:create',
+    'dictionaries:update',
+    'dictionaries:enable',
+    'dictionaries:disable',
+  ]) {
+    assert.match(pageSource, new RegExp(`auth\\('${permission}'\\)`, 'u'))
+  }
+
+  assert.match(pageSource, /import DictionaryTypeFormModal/u)
+  assert.match(pageSource, /import DictionaryStatusChangeModal/u)
+  assert.match(pageSource, /<DictionaryTypeFormModal\b/u)
+  assert.match(pageSource, /<DictionaryStatusChangeModal\b/u)
+  assert.equal(
+    pageSource.match(/:submission-blocked="managementState\.mutation === 'error'"/gu)?.length,
+    2,
+  )
+  assert.match(pageSource, /dictionariesApi\.types\.create/u)
+  assert.match(pageSource, /dictionariesApi\.types\.update/u)
+  assert.match(pageSource, /dictionariesApi\.types\.enable/u)
+  assert.match(pageSource, /dictionariesApi\.types\.disable/u)
+  assert.match(pageSource, /resolveDictionaryTypeActions/u)
+})
+
+test('可信成功与可能已提交的网络未知结果都精确失效 Catalog', () => {
+  assert.match(pageSource, /DICTIONARY_TYPE_STATE_CHANGED/u)
+  assert.match(pageSource, /reconcileUnknownTypeCreate/u)
+  assert.match(pageSource, /reconcileUnknownTypeMutation/u)
+  assert.match(pageSource, /dictionariesApi\.types\.get/u)
+  assert.match(pageSource, /invalidateDictionaryCatalogCache\(\{[\s\S]*?broadcast: true,[\s\S]*?code,[\s\S]*?\}\)/u)
+  assert.match(pageSource, /canApplyDictionaryMutationResult/u)
+  assert.equal(
+    pageSource.match(/invalidateMutationCatalog\(context, response\.data\.code\)/gu)?.length,
+    2,
+  )
+  assert.match(
+    pageSource,
+    /invalidateMutationCatalog\(context, response\.data\.code\)[\s\S]{0,160}mutationResultIsCurrent/u,
+  )
+  assert.equal(
+    pageSource.match(/invalidatePossiblyChangedCatalog\(\s*context,/gu)?.length,
+    2,
+  )
+  assert.equal(
+    pageSource.match(/invalidateMutationCatalog\(context, confirmed\.code\)/gu)?.length,
+    2,
+  )
+  assert.match(
+    pageSource,
+    /const confirmed = submission\.mode === 'edit'[\s\S]{0,500}invalidateMutationCatalog\(context, confirmed\.code\)/u,
+  )
+  assert.doesNotMatch(
+    pageSource,
+    /catch[\s\S]{0,500}dictionariesApi\.types\.(?:create|update|enable|disable)/u,
+  )
+})
+
+test('Task 13 仍不越界实现 Item 表单、公共选择器或 QsGenericTable', () => {
   assert.doesNotMatch(pageSource, /DictionaryItemFormModal/u)
-  assert.doesNotMatch(pageSource, /DictionaryStatusChangeModal/u)
   assert.doesNotMatch(pageSource, /QsDictionarySelect/u)
   assert.doesNotMatch(pageSource, /<QsGenericTable\b/u)
 })

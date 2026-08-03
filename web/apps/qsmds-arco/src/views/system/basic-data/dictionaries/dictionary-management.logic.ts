@@ -1,3 +1,5 @@
+import type { DictionaryTypeListQuery } from '@/api/modules/dictionaries'
+
 export type DictionaryAccessState = 'active' | 'forbidden'
 export type DictionaryQueryState
   = | 'empty'
@@ -55,9 +57,20 @@ export type DictionaryMutationEvent
     | 'cancel'
     | 'complete'
     | 'fail'
+    | 'known-failure'
     | 'open'
+    | 'resume-editing'
     | 'submit'
     | 'unknown-result'
+
+export type DictionaryTypeEmptyKind = 'filtered' | 'system'
+
+export interface BuildDictionaryTypeListQueryInput {
+  readonly page: number
+  readonly pageSize: number
+  readonly search: string
+  readonly status: unknown
+}
 
 export interface DictionaryQueryResponseGuardInput {
   readonly aborted: boolean
@@ -82,6 +95,84 @@ export interface DictionaryMutationResultGuardInput {
   readonly latestMutationVersion: number
   readonly mutationVersion: number
   readonly targetId: string | null
+}
+
+const TYPE_PAGE_SIZES = new Set([20, 50, 100])
+const UNICODE_WHITESPACE_PATTERN = /\p{White_Space}+/gu
+
+/**
+ * Type 查询始终走 Server；这里只规范化用户输入和受控分页，不做前端过滤。
+ * Unicode 空白折叠与 Server 查询 normalizer 保持相同展示文本口径。
+ */
+export function buildDictionaryTypeListQuery(
+  input: BuildDictionaryTypeListQueryInput,
+): DictionaryTypeListQuery {
+  const page = Number.isSafeInteger(input.page) && input.page > 0
+    ? input.page
+    : 1
+  const pageSize = TYPE_PAGE_SIZES.has(input.pageSize)
+    ? input.pageSize
+    : 20
+  const query = input.search
+    .normalize('NFC')
+    .replace(UNICODE_WHITESPACE_PATTERN, ' ')
+    .trim()
+  const status = input.status === 'ENABLED' || input.status === 'DISABLED'
+    ? input.status
+    : undefined
+
+  return {
+    page,
+    pageSize,
+    ...(query === '' ? {} : { query }),
+    sortBy: 'sortOrder',
+    sortOrder: 'asc',
+    ...(status === undefined ? {} : { status }),
+  }
+}
+
+/** 当前选择仍可见时保留，否则迁移到首个可见 Type；空页必须清空 Item 上下文。 */
+export function resolveDictionaryTypeSelection(
+  visibleTypes: readonly { readonly id: string }[],
+  currentTypeId: string | null,
+): DictionarySelectionState {
+  if (
+    currentTypeId !== null
+    && visibleTypes.some(type => type.id === currentTypeId)
+  ) {
+    return createDictionarySelection(currentTypeId)
+  }
+  return createDictionarySelection(visibleTypes[0]?.id ?? null)
+}
+
+/** 带搜索或状态条件的零结果不能伪装成系统从未配置过字典。 */
+export function resolveDictionaryTypeEmptyKind(input: {
+  readonly search: string
+  readonly status: unknown
+}): DictionaryTypeEmptyKind {
+  return input.search
+    .replace(UNICODE_WHITESPACE_PATTERN, '') !== ''
+    || input.status === 'ENABLED'
+    || input.status === 'DISABLED'
+    ? 'filtered'
+    : 'system'
+}
+
+/**
+ * 状态写入可能把筛选末页的最后一项移出结果集。Server 返回 total 后仅在当前页
+ * 已空且确实越界时回退，避免把仍有数据的筛选误显示为空态。
+ */
+export function resolveDictionaryTypeResponsePage(input: {
+  readonly itemCount: number
+  readonly page: number
+  readonly pageSize: number
+  readonly total: number
+}): number {
+  if (input.itemCount > 0 || input.total <= 0 || input.pageSize <= 0) {
+    return input.page
+  }
+  const lastPage = Math.max(1, Math.ceil(input.total / input.pageSize))
+  return input.page > lastPage ? lastPage : input.page
 }
 
 export function createDictionarySelection(
@@ -186,9 +277,15 @@ export function transitionDictionaryMutationState(
   switch (event) {
     case 'open':
       return current === 'closed' ? 'editing' : current
+    case 'resume-editing':
+      // 只供页面在成功读取最新冲突快照后显式恢复；未知结果本身不能直接重提。
+      return current === 'error' ? 'editing' : current
     case 'submit':
       // error 可能来自结果未知后的 reconciliation 失败，不能把通用重试解释为重放写请求。
       return current === 'editing' ? 'submitting' : current
+    case 'known-failure':
+      // Server 已明确拒绝写入时可安全修正后重提，不等同于网络结果未知。
+      return current === 'submitting' ? 'editing' : current
     case 'unknown-result':
       return current === 'submitting' ? 'reconciling' : current
     case 'fail':

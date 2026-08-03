@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildDictionaryTypeListQuery,
   canApplyDictionaryItemResponse,
   canApplyDictionaryMutationResult,
   canApplyDictionaryQueryResponse,
@@ -10,9 +11,88 @@ import {
   createDictionarySelection,
   isDictionaryAbortError,
   resolveDictionaryAccessTransition,
+  resolveDictionaryTypeEmptyKind,
+  resolveDictionaryTypeResponsePage,
+  resolveDictionaryTypeSelection,
   transitionDictionaryMutationState,
   transitionDictionaryQueryState,
 } from '../../src/views/system/basic-data/dictionaries/dictionary-management.logic'
+
+test('Type 查询规范化 Unicode 空白、状态与分页并保持稳定排序', () => {
+  assert.deepEqual(buildDictionaryTypeListQuery({
+    page: 2,
+    pageSize: 50,
+    search: '\u0085  sales\u00A0 channel  ',
+    status: 'DISABLED',
+  }), {
+    page: 2,
+    pageSize: 50,
+    query: 'sales channel',
+    sortBy: 'sortOrder',
+    sortOrder: 'asc',
+    status: 'DISABLED',
+  })
+
+  assert.deepEqual(buildDictionaryTypeListQuery({
+    page: 0,
+    pageSize: 500,
+    search: ' \u00A0 ',
+    status: 'UNKNOWN',
+  }), {
+    page: 1,
+    pageSize: 20,
+    sortBy: 'sortOrder',
+    sortOrder: 'asc',
+  })
+})
+
+test('Type 列表首次、跨页和空结果都按可见集合迁移本地选择', () => {
+  const visibleTypes = [{ id: 'type-a' }, { id: 'type-b' }]
+
+  assert.deepEqual(resolveDictionaryTypeSelection(visibleTypes, null), {
+    kind: 'selected',
+    typeId: 'type-a',
+  })
+  assert.deepEqual(resolveDictionaryTypeSelection(visibleTypes, 'type-b'), {
+    kind: 'selected',
+    typeId: 'type-b',
+  })
+  assert.deepEqual(resolveDictionaryTypeSelection(visibleTypes, 'type-old'), {
+    kind: 'selected',
+    typeId: 'type-a',
+  })
+  assert.deepEqual(resolveDictionaryTypeSelection([], 'type-a'), {
+    kind: 'none',
+    typeId: null,
+  })
+})
+
+test('Type 空态区分系统无数据与搜索或状态筛选无结果', () => {
+  assert.equal(resolveDictionaryTypeEmptyKind({ search: '', status: undefined }), 'system')
+  assert.equal(resolveDictionaryTypeEmptyKind({ search: 'sales', status: undefined }), 'filtered')
+  assert.equal(resolveDictionaryTypeEmptyKind({ search: '', status: 'ENABLED' }), 'filtered')
+})
+
+test('Type 状态筛选写入后若当前页越界则回退最后有效页', () => {
+  assert.equal(resolveDictionaryTypeResponsePage({
+    itemCount: 0,
+    page: 2,
+    pageSize: 20,
+    total: 20,
+  }), 1)
+  assert.equal(resolveDictionaryTypeResponsePage({
+    itemCount: 20,
+    page: 2,
+    pageSize: 20,
+    total: 40,
+  }), 2)
+  assert.equal(resolveDictionaryTypeResponsePage({
+    itemCount: 0,
+    page: 1,
+    pageSize: 20,
+    total: 0,
+  }), 1)
+})
 
 test('初始状态按读取权限建立且不携带受保护上下文', () => {
   assert.deepEqual(createDictionaryManagementState(true), {
@@ -163,6 +243,10 @@ test('mutation 只允许合法生命周期且撤权可绕过提交关闭保护',
     'reconciling',
   )
   assert.equal(
+    transitionDictionaryMutationState('submitting', 'known-failure'),
+    'editing',
+  )
+  assert.equal(
     transitionDictionaryMutationState('reconciling', 'complete'),
     'closed',
   )
@@ -184,6 +268,14 @@ test('mutation 只允许合法生命周期且撤权可绕过提交关闭保护',
   assert.equal(
     transitionDictionaryMutationState(failedReconciliation, 'submit'),
     'error',
+  )
+  assert.equal(
+    transitionDictionaryMutationState(failedReconciliation, 'resume-editing'),
+    'editing',
+  )
+  assert.equal(
+    transitionDictionaryMutationState('submitting', 'resume-editing'),
+    'submitting',
   )
   assert.equal(
     transitionDictionaryMutationState('submitting', 'authority-loss'),

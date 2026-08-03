@@ -1,33 +1,50 @@
 <script setup lang="ts">
 import type {
+  DictionaryStatusChangeRequest,
+  DictionaryTypeStatusAction,
+} from './dictionary-status.logic'
+import type {
+  CreateDictionaryTypeRequestDto,
   DictionaryItemDto,
   DictionaryTypeDto,
+  UpdateDictionaryTypeRequestDto,
 } from '@/api/generated/types.gen'
 import type {
   DictionaryItemListQuery,
-  DictionaryTypeListQuery,
 } from '@/api/modules/dictionaries'
 
 import dictionariesApi from '@/api/modules/dictionaries'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import { invalidateDictionaryCatalogCache } from '@/dictionary-catalog/default-provider'
 import {
+  buildDictionaryTypeListQuery,
   canApplyDictionaryItemResponse,
+  canApplyDictionaryMutationResult,
   canApplyDictionaryQueryResponse,
   createDictionaryManagementState,
   createDictionarySelection,
   isDictionaryAbortError,
   resolveDictionaryAccessTransition,
+  resolveDictionaryTypeEmptyKind,
+  resolveDictionaryTypeResponsePage,
+  resolveDictionaryTypeSelection,
   transitionDictionaryMutationState,
   transitionDictionaryQueryState,
 } from './dictionary-management.logic'
+import DictionaryStatusChangeModal from './dictionary-status-change-modal.vue'
+import {
+  buildDictionaryTypeCreateReconciliationQuery,
+  findMatchingCreatedDictionaryType,
+  getDictionaryTypeMutationFailure,
+  matchesDictionaryTypeStatus,
+  matchesDictionaryTypeUpdate,
+  resolveDictionaryTypeActions,
+} from './dictionary-status.logic'
+import DictionaryTypeFormModal from './dictionary-type-form-modal.vue'
+import DictionaryTypeList from './dictionary-type-list.vue'
 
 defineOptions({ name: 'SystemBasicDataDictionaries' })
 
-const TYPE_QUERY: DictionaryTypeListQuery = {
-  page: 1,
-  pageSize: 20,
-  sortBy: 'sortOrder',
-  sortOrder: 'asc',
-}
 const ITEM_QUERY: DictionaryItemListQuery = {
   page: 1,
   pageSize: 20,
@@ -37,7 +54,12 @@ const ITEM_QUERY: DictionaryItemListQuery = {
 
 const appAccountStore = useAppAccountStore()
 const { auth } = useAppAuth()
+const toast = useQsToast()
 const canRead = computed(() => auth('dictionaries:read'))
+const canCreate = computed(() => auth('dictionaries:create'))
+const canUpdate = computed(() => auth('dictionaries:update'))
+const canEnable = computed(() => auth('dictionaries:enable'))
+const canDisable = computed(() => auth('dictionaries:disable'))
 
 const managementState = ref(createDictionaryManagementState(canRead.value))
 const dictionaryTypes = ref<DictionaryTypeDto[]>([])
@@ -47,12 +69,55 @@ const itemTotal = ref(0)
 const typeError = ref('')
 const itemError = ref('')
 const typeDrawerOpen = ref(false)
+const typePage = ref(1)
+const typePageSize = ref(20)
+const typeSearch = ref('')
+const typeStatus = ref<'DISABLED' | 'ENABLED'>()
+
+const formVisible = ref(false)
+const formMode = ref<'create' | 'edit'>('create')
+const formTarget = ref<DictionaryTypeDto | null>(null)
+const formSubmitting = ref(false)
+const formError = ref<string | null>(null)
+const formRequestId = ref<string | null>(null)
+const formFieldErrors = ref<Readonly<Record<string, string>>>({})
+
+const statusVisible = ref(false)
+const statusAction = ref<DictionaryTypeStatusAction>('disable')
+const statusTarget = ref<DictionaryTypeDto | null>(null)
+const statusSubmitting = ref(false)
+const statusError = ref<string | null>(null)
+const statusErrorCode = ref<string>()
+const statusRequestId = ref<string>()
 
 let typeAbortController: AbortController | null = null
 let itemAbortController: AbortController | null = null
+let reconciliationAbortController: AbortController | null = null
 let typeRequestVersion = 0
 let itemRequestVersion = 0
+let mutationVersion = 0
+let mutationTargetKey: string | null = null
 let disposed = false
+
+type DictionaryTypeMutationKind = 'create' | 'disable' | 'enable' | 'update'
+
+interface DictionaryTypeMutationContext {
+  readonly authEpoch: number
+  readonly kind: DictionaryTypeMutationKind
+  readonly targetKey: string
+  readonly version: number
+}
+
+type DictionaryTypeFormSubmission
+  = | {
+    readonly data: CreateDictionaryTypeRequestDto
+    readonly mode: 'create'
+  }
+  | {
+    readonly data: UpdateDictionaryTypeRequestDto
+    readonly mode: 'edit'
+    readonly typeId: string
+  }
 
 const selectedTypeId = computed(() => {
   return managementState.value.selection.kind === 'selected'
@@ -70,6 +135,17 @@ const itemBusy = computed(() => {
   return managementState.value.itemQuery === 'loading'
     || managementState.value.itemQuery === 'refreshing'
 })
+const typeEmptyKind = computed(() => resolveDictionaryTypeEmptyKind({
+  search: typeSearch.value,
+  status: typeStatus.value,
+}))
+const selectedTypeActions = computed(() => selectedType.value === null
+  ? null
+  : resolveDictionaryTypeActions(selectedType.value, {
+      canDisable: canDisable.value,
+      canEnable: canEnable.value,
+      canUpdate: canUpdate.value,
+    }))
 
 function setTypeQuery(event: Parameters<typeof transitionDictionaryQueryState>[1]): void {
   managementState.value = {
@@ -89,6 +165,211 @@ function setItemQuery(event: Parameters<typeof transitionDictionaryQueryState>[1
       event,
     ),
   }
+}
+
+function setMutation(
+  event: Parameters<typeof transitionDictionaryMutationState>[1],
+): void {
+  managementState.value = {
+    ...managementState.value,
+    mutation: transitionDictionaryMutationState(
+      managementState.value.mutation,
+      event,
+    ),
+  }
+}
+
+function mutationPermissionIsCurrent(kind: DictionaryTypeMutationKind): boolean {
+  if (!canRead.value) {
+    return false
+  }
+  switch (kind) {
+    case 'create':
+      return canCreate.value
+    case 'update':
+      return canUpdate.value
+    case 'enable':
+      return canEnable.value
+    case 'disable':
+      return canDisable.value
+    default:
+      return false
+  }
+}
+
+function mutationResultIsCurrent(input: {
+  readonly authEpoch: number
+  readonly kind: DictionaryTypeMutationKind
+  readonly targetKey: string
+  readonly version: number
+}): boolean {
+  return !disposed && canApplyDictionaryMutationResult({
+    authorized: mutationPermissionIsCurrent(input.kind),
+    authEpoch: input.authEpoch,
+    currentAuthEpoch: appAccountStore.authEpoch,
+    currentTargetId: mutationTargetKey,
+    latestMutationVersion: mutationVersion,
+    mutationVersion: input.version,
+    targetId: input.targetKey,
+  })
+}
+
+function abortReconciliation(): void {
+  reconciliationAbortController?.abort()
+  reconciliationAbortController = null
+}
+
+function resetFormFailure(): void {
+  formError.value = null
+  formRequestId.value = null
+  formFieldErrors.value = {}
+}
+
+function resetStatusFailure(): void {
+  statusError.value = null
+  statusErrorCode.value = undefined
+  statusRequestId.value = undefined
+}
+
+/**
+ * Mutation 请求本身没有安全的取消语义。关闭浮层时只作废回写所有权，并取消
+ * reconciliation GET；已经发出的写请求仍由 Server 决定最终结果。
+ */
+function invalidateMutationContext(
+  event: 'authority-loss' | 'cancel',
+): void {
+  mutationVersion += 1
+  mutationTargetKey = null
+  abortReconciliation()
+  setMutation(event)
+}
+
+function beginMutationOverlay(targetKey: string): void {
+  mutationVersion += 1
+  mutationTargetKey = targetKey
+  abortReconciliation()
+  setMutation('open')
+}
+
+function beginMutationRequest(
+  kind: DictionaryTypeMutationKind,
+  targetKey: string,
+): DictionaryTypeMutationContext | null {
+  if (
+    managementState.value.mutation !== 'editing'
+    || !mutationPermissionIsCurrent(kind)
+  ) {
+    return null
+  }
+
+  mutationVersion += 1
+  mutationTargetKey = targetKey
+  abortReconciliation()
+  setMutation('submit')
+  return {
+    authEpoch: appAccountStore.authEpoch,
+    kind,
+    targetKey,
+    version: mutationVersion,
+  }
+}
+
+function replaceDictionaryTypeSnapshot(type: DictionaryTypeDto): void {
+  dictionaryTypes.value = dictionaryTypes.value.map(current =>
+    current.id === type.id ? type : current)
+  if (formTarget.value?.id === type.id) {
+    formTarget.value = type
+  }
+  if (statusTarget.value?.id === type.id) {
+    statusTarget.value = type
+  }
+}
+
+function dictionaryTypeActions(type: DictionaryTypeDto) {
+  return resolveDictionaryTypeActions(type, {
+    canDisable: canDisable.value,
+    canEnable: canEnable.value,
+    canUpdate: canUpdate.value,
+  })
+}
+
+function openCreateType(): void {
+  if (
+    !canRead.value
+    || !canCreate.value
+    || formVisible.value
+    || statusVisible.value
+  ) {
+    return
+  }
+  formMode.value = 'create'
+  formTarget.value = null
+  resetFormFailure()
+  beginMutationOverlay('create:new')
+  formVisible.value = true
+}
+
+function openEditType(type: DictionaryTypeDto): void {
+  if (
+    !canRead.value
+    || !dictionaryTypeActions(type).canEdit
+    || formVisible.value
+    || statusVisible.value
+  ) {
+    return
+  }
+  formMode.value = 'edit'
+  formTarget.value = type
+  resetFormFailure()
+  beginMutationOverlay(`update:${type.id}`)
+  formVisible.value = true
+}
+
+function openTypeStatusChange(
+  type: DictionaryTypeDto,
+  action: DictionaryTypeStatusAction,
+): void {
+  const actions = dictionaryTypeActions(type)
+  if (
+    !canRead.value
+    || (action === 'enable' && !actions.canEnable)
+    || (action === 'disable' && !actions.canDisable)
+    || formVisible.value
+    || statusVisible.value
+  ) {
+    return
+  }
+  statusAction.value = action
+  statusTarget.value = type
+  resetStatusFailure()
+  beginMutationOverlay(`${action}:${type.id}`)
+  statusVisible.value = true
+}
+
+function cancelForm(): void {
+  if (formSubmitting.value) {
+    return
+  }
+  formVisible.value = false
+  formTarget.value = null
+  resetFormFailure()
+  invalidateMutationContext('cancel')
+}
+
+function handleFormVisibilityChange(visible: boolean): void {
+  if (!visible) {
+    cancelForm()
+  }
+}
+
+function cancelStatusChange(): void {
+  if (statusSubmitting.value) {
+    return
+  }
+  statusVisible.value = false
+  statusTarget.value = null
+  resetStatusFailure()
+  invalidateMutationContext('cancel')
 }
 
 /**
@@ -166,23 +447,55 @@ async function loadDictionaryTypes(): Promise<void> {
   })
 
   try {
-    const response = await dictionariesApi.types.list(TYPE_QUERY, controller.signal)
+    const response = await dictionariesApi.types.list(
+      buildDictionaryTypeListQuery({
+        page: typePage.value,
+        pageSize: typePageSize.value,
+        search: typeSearch.value,
+        status: typeStatus.value,
+      }),
+      controller.signal,
+    )
     if (!typeResponseIsCurrent(requestVersion, authEpoch, controller)) {
       return
     }
 
+    const resolvedPage = resolveDictionaryTypeResponsePage({
+      itemCount: response.data.items.length,
+      page: response.data.page,
+      pageSize: response.data.pageSize,
+      total: response.data.total,
+    })
+    if (resolvedPage !== response.data.page) {
+      typePage.value = resolvedPage
+      void loadDictionaryTypes()
+      return
+    }
+
     dictionaryTypes.value = response.data.items
+    typePage.value = response.data.page
+    typePageSize.value = response.data.pageSize
     typeTotal.value = response.data.total
     setTypeQuery({
       type: 'success',
       itemCount: response.data.items.length,
     })
 
-    if (
-      selectedTypeId.value !== null
-      && !response.data.items.some(type => type.id === selectedTypeId.value)
-    ) {
-      selectDictionaryType(null)
+    const nextSelection = resolveDictionaryTypeSelection(
+      response.data.items,
+      selectedTypeId.value,
+    )
+    const nextTypeId = nextSelection.kind === 'selected'
+      ? nextSelection.typeId
+      : null
+    if (nextTypeId !== selectedTypeId.value) {
+      selectDictionaryType(nextTypeId, false)
+    }
+    else {
+      managementState.value = {
+        ...managementState.value,
+        selection: nextSelection,
+      }
     }
   }
   catch (error) {
@@ -202,6 +515,488 @@ async function loadDictionaryTypes(): Promise<void> {
     ) {
       typeAbortController = null
     }
+  }
+}
+
+function searchDictionaryTypes(search: string): void {
+  typeSearch.value = search
+  typePage.value = 1
+  void loadDictionaryTypes()
+}
+
+function filterDictionaryTypes(
+  status: 'DISABLED' | 'ENABLED' | undefined,
+): void {
+  typeStatus.value = status
+  typePage.value = 1
+  void loadDictionaryTypes()
+}
+
+function changeDictionaryTypePage(page: number): void {
+  typePage.value = page
+  void loadDictionaryTypes()
+}
+
+function changeDictionaryTypePageSize(pageSize: number): void {
+  typePageSize.value = pageSize
+  typePage.value = 1
+  void loadDictionaryTypes()
+}
+
+const UNKNOWN_MUTATION_RESULT_MESSAGE
+  = '操作结果未知，已停止自动处理。请关闭弹窗并刷新列表后人工确认，系统不会自动重放本次写入。'
+
+async function reconcileUnknownTypeCreate(
+  context: DictionaryTypeMutationContext,
+  request: CreateDictionaryTypeRequestDto,
+): Promise<DictionaryTypeDto | undefined> {
+  abortReconciliation()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const response = await dictionariesApi.types.list(
+      buildDictionaryTypeCreateReconciliationQuery(request.code),
+      controller.signal,
+    )
+    if (
+      reconciliationAbortController !== controller
+      || controller.signal.aborted
+      || !mutationResultIsCurrent(context)
+    ) {
+      return undefined
+    }
+    return findMatchingCreatedDictionaryType(response.data.items, request)
+  }
+  catch {
+    return undefined
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+/** edit/status 的网络未知结果只读取当前 Type；调用方再做精确最终状态匹配。 */
+async function reconcileUnknownTypeMutation(
+  context: DictionaryTypeMutationContext,
+  typeId: string,
+): Promise<DictionaryTypeDto | undefined> {
+  abortReconciliation()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const response = await dictionariesApi.types.get(typeId, controller.signal)
+    if (
+      reconciliationAbortController !== controller
+      || controller.signal.aborted
+      || !mutationResultIsCurrent(context)
+    ) {
+      return undefined
+    }
+    return response.data
+  }
+  catch {
+    return undefined
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+async function refreshStateChangedType(
+  context: DictionaryTypeMutationContext,
+  typeId: string,
+  surface: 'form' | 'status',
+): Promise<void> {
+  if (!mutationResultIsCurrent(context)) {
+    return
+  }
+  setMutation('fail')
+  abortReconciliation()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+
+  try {
+    const response = await dictionariesApi.types.get(typeId, controller.signal)
+    if (
+      reconciliationAbortController !== controller
+      || controller.signal.aborted
+      || !mutationResultIsCurrent(context)
+    ) {
+      return
+    }
+
+    replaceDictionaryTypeSnapshot(response.data)
+    setMutation('resume-editing')
+    if (surface === 'form') {
+      formError.value
+        = '数据已被其他操作更新。未编辑字段已合并最新值；双方同时修改的字段已标记，请核对后重新提交。'
+      formRequestId.value = null
+      formFieldErrors.value = {}
+    }
+    else {
+      statusError.value
+        = '数据已被其他操作更新，已载入最新版本。请核对当前状态后重新提交。'
+      statusErrorCode.value = 'DICTIONARY_TYPE_STATE_CHANGED'
+      statusRequestId.value = undefined
+    }
+
+    if (selectedTypeId.value === typeId) {
+      void loadDictionaryItems(typeId)
+    }
+  }
+  catch (error) {
+    if (
+      isDictionaryAbortError(error)
+      || reconciliationAbortController !== controller
+      || !mutationResultIsCurrent(context)
+    ) {
+      return
+    }
+    const message
+      = '数据已发生变化，但暂时无法读取最新版本。请关闭弹窗并刷新列表后重试。'
+    if (surface === 'form') {
+      formError.value = message
+    }
+    else {
+      statusError.value = message
+      statusErrorCode.value = 'DICTIONARY_TYPE_STATE_CHANGED'
+    }
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+    if (mutationResultIsCurrent(context)) {
+      if (surface === 'form') {
+        formSubmitting.value = false
+      }
+      else {
+        statusSubmitting.value = false
+      }
+    }
+  }
+}
+
+/**
+ * 只有可信成功响应或可证明的最终状态才失效 Catalog。该操作不回写受保护
+ * DTO，因此只绑定原 authEpoch，不受浮层关闭或细粒度撤权影响。
+ */
+function invalidateMutationCatalog(
+  context: DictionaryTypeMutationContext,
+  code: string,
+): void {
+  if (context.authEpoch !== appAccountStore.authEpoch) {
+    return
+  }
+  invalidateDictionaryCatalogCache({
+    broadcast: true,
+    code,
+  })
+}
+
+/**
+ * Network error 无法证明请求没有在 Server 提交。失效只会清除受影响 code 的
+ * 只读缓存，不代表写入成功；在 UI ownership 判定前执行可覆盖撤权和卸载竞态。
+ */
+function invalidatePossiblyChangedCatalog(
+  context: DictionaryTypeMutationContext,
+  code: string,
+): void {
+  invalidateMutationCatalog(context, code)
+}
+
+async function finishDictionaryTypeMutation(input: {
+  readonly confirmedAfterNetworkFailure: boolean
+  readonly context: DictionaryTypeMutationContext
+  readonly surface: 'form' | 'status'
+  readonly type: DictionaryTypeDto
+}): Promise<void> {
+  if (!mutationResultIsCurrent(input.context)) {
+    return
+  }
+
+  replaceDictionaryTypeSnapshot(input.type)
+  setMutation('complete')
+  if (input.surface === 'form') {
+    formSubmitting.value = false
+  }
+  else {
+    statusSubmitting.value = false
+  }
+  await nextTick()
+  if (!mutationResultIsCurrent(input.context)) {
+    return
+  }
+
+  if (input.surface === 'form') {
+    formVisible.value = false
+    formTarget.value = null
+    resetFormFailure()
+  }
+  else {
+    statusVisible.value = false
+    statusTarget.value = null
+    resetStatusFailure()
+  }
+
+  mutationVersion += 1
+  mutationTargetKey = null
+
+  const labels: Readonly<Record<DictionaryTypeMutationKind, string>> = {
+    create: '字典类型已创建',
+    disable: '字典类型已停用',
+    enable: '字典类型已启用',
+    update: '字典类型已更新',
+  }
+  toast.success(labels[input.context.kind], {
+    description: input.confirmedAfterNetworkFailure
+      ? `${input.type.name} 已通过最终状态核对确认。`
+      : input.type.name,
+  })
+
+  const shouldRefreshItems = selectedTypeId.value === input.type.id
+  await loadDictionaryTypes()
+  if (shouldRefreshItems && selectedTypeId.value === input.type.id) {
+    await loadDictionaryItems(input.type.id)
+  }
+}
+
+function applyKnownFormFailure(error: unknown): void {
+  const failure = getDictionaryTypeMutationFailure(error)
+  formError.value = failure.message
+  formRequestId.value = failure.requestId ?? null
+  formFieldErrors.value = failure.fieldErrors
+  formSubmitting.value = false
+  setMutation('known-failure')
+}
+
+async function handleTypeFormSubmit(
+  submission: DictionaryTypeFormSubmission,
+): Promise<void> {
+  if (
+    !canRead.value
+    || !formVisible.value
+    || formSubmitting.value
+    || submission.mode !== formMode.value
+  ) {
+    return
+  }
+
+  const operationTarget = formTarget.value
+  if (submission.mode === 'edit' && (
+    operationTarget === null
+    || submission.typeId !== operationTarget.id
+  )) {
+    formError.value = '未找到待编辑字典类型，请关闭弹窗后重试。'
+    return
+  }
+
+  const kind: DictionaryTypeMutationKind
+    = submission.mode === 'create' ? 'create' : 'update'
+  const targetKey = submission.mode === 'create'
+    ? `create:${submission.data.code}`
+    : `update:${submission.typeId}`
+  const context = beginMutationRequest(kind, targetKey)
+  if (context === null) {
+    formError.value = '当前身份已无权执行该操作，或当前操作上下文已经失效。'
+    return
+  }
+
+  resetFormFailure()
+  formSubmitting.value = true
+  try {
+    const response = submission.mode === 'create'
+      ? await dictionariesApi.types.create(submission.data)
+      : await dictionariesApi.types.update(
+          submission.typeId,
+          submission.data,
+        )
+    invalidateMutationCatalog(context, response.data.code)
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    await finishDictionaryTypeMutation({
+      confirmedAfterNetworkFailure: false,
+      context,
+      surface: 'form',
+      type: response.data,
+    })
+  }
+  catch (error) {
+    const failure = getDictionaryTypeMutationFailure(error)
+    if (failure.unknownResult) {
+      invalidatePossiblyChangedCatalog(
+        context,
+        submission.mode === 'create'
+          ? submission.data.code
+          : operationTarget!.code,
+      )
+    }
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    if (failure.stateChanged && submission.mode === 'edit') {
+      formError.value = failure.message
+      formRequestId.value = failure.requestId ?? null
+      await refreshStateChangedType(
+        context,
+        submission.typeId,
+        'form',
+      )
+      return
+    }
+    if (!failure.unknownResult) {
+      applyKnownFormFailure(error)
+      return
+    }
+
+    setMutation('unknown-result')
+    const reconciled = submission.mode === 'create'
+      ? await reconcileUnknownTypeCreate(context, submission.data)
+      : await reconcileUnknownTypeMutation(context, submission.typeId)
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    // Create 没有 idempotency/operation identity；同字段对象可能早已存在，
+    // 因此只可作为人工核对候选，不能据此宣告本次请求成功。
+    const confirmed = submission.mode === 'edit'
+      && reconciled !== undefined
+      && matchesDictionaryTypeUpdate(
+        reconciled,
+        submission.typeId,
+        submission.data,
+      )
+      ? reconciled
+      : undefined
+    if (confirmed !== undefined) {
+      invalidateMutationCatalog(context, confirmed.code)
+      await finishDictionaryTypeMutation({
+        confirmedAfterNetworkFailure: true,
+        context,
+        surface: 'form',
+        type: confirmed,
+      })
+      return
+    }
+
+    if (reconciled !== undefined) {
+      replaceDictionaryTypeSnapshot(reconciled)
+    }
+    formError.value = UNKNOWN_MUTATION_RESULT_MESSAGE
+    formSubmitting.value = false
+    setMutation('fail')
+  }
+}
+
+async function handleTypeStatusSubmit(
+  request: DictionaryStatusChangeRequest,
+): Promise<void> {
+  const operationTarget = statusTarget.value
+  if (
+    !canRead.value
+    || !statusVisible.value
+    || statusSubmitting.value
+    || operationTarget === null
+    || request.typeId !== operationTarget.id
+    || request.action !== statusAction.value
+  ) {
+    return
+  }
+
+  const context = beginMutationRequest(
+    request.action,
+    `${request.action}:${request.typeId}`,
+  )
+  if (context === null) {
+    statusError.value = '当前身份已无权执行该操作，或当前操作上下文已经失效。'
+    return
+  }
+
+  resetStatusFailure()
+  statusSubmitting.value = true
+  const data = { expectedVersion: operationTarget.version }
+  try {
+    const response = request.action === 'enable'
+      ? await dictionariesApi.types.enable(request.typeId, data)
+      : await dictionariesApi.types.disable(request.typeId, data)
+    invalidateMutationCatalog(context, response.data.code)
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    await finishDictionaryTypeMutation({
+      confirmedAfterNetworkFailure: false,
+      context,
+      surface: 'status',
+      type: response.data,
+    })
+  }
+  catch (error) {
+    const failure = getDictionaryTypeMutationFailure(error)
+    if (failure.unknownResult) {
+      invalidatePossiblyChangedCatalog(context, operationTarget.code)
+    }
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    if (failure.stateChanged) {
+      statusError.value = failure.message
+      statusErrorCode.value = failure.code
+      statusRequestId.value = failure.requestId
+      await refreshStateChangedType(
+        context,
+        request.typeId,
+        'status',
+      )
+      return
+    }
+    if (!failure.unknownResult) {
+      statusError.value = failure.message
+      statusErrorCode.value = failure.code
+      statusRequestId.value = failure.requestId
+      statusSubmitting.value = false
+      setMutation('known-failure')
+      return
+    }
+
+    setMutation('unknown-result')
+    const reconciled = await reconcileUnknownTypeMutation(
+      context,
+      request.typeId,
+    )
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    const confirmed = reconciled !== undefined
+      && matchesDictionaryTypeStatus(
+        reconciled,
+        request.typeId,
+        request.action === 'enable',
+      )
+      ? reconciled
+      : undefined
+    if (confirmed !== undefined) {
+      invalidateMutationCatalog(context, confirmed.code)
+      await finishDictionaryTypeMutation({
+        confirmedAfterNetworkFailure: true,
+        context,
+        surface: 'status',
+        type: confirmed,
+      })
+      return
+    }
+
+    if (reconciled !== undefined) {
+      replaceDictionaryTypeSnapshot(reconciled)
+    }
+    statusError.value = UNKNOWN_MUTATION_RESULT_MESSAGE
+    statusErrorCode.value = undefined
+    statusRequestId.value = undefined
+    statusSubmitting.value = false
+    setMutation('fail')
   }
 }
 
@@ -269,7 +1064,16 @@ async function loadDictionaryItems(requestedTypeId: string): Promise<void> {
 }
 
 /** Type 选择只写页面本地状态；先作废旧 Item，再建立新选择的请求归属。 */
-function selectDictionaryType(typeId: string | null): void {
+function selectDictionaryType(
+  typeId: string | null,
+  closeDrawer = true,
+): void {
+  if (typeId === selectedTypeId.value) {
+    if (closeDrawer) {
+      typeDrawerOpen.value = false
+    }
+    return
+  }
   abortItemQuery()
   dictionaryItems.value = []
   itemTotal.value = 0
@@ -277,10 +1081,11 @@ function selectDictionaryType(typeId: string | null): void {
   managementState.value = {
     ...managementState.value,
     itemQuery: 'idle',
-    mutation: 'closed',
     selection: createDictionarySelection(typeId),
   }
-  typeDrawerOpen.value = false
+  if (closeDrawer) {
+    typeDrawerOpen.value = false
+  }
 
   if (typeId !== null) {
     void loadDictionaryItems(typeId)
@@ -304,13 +1109,15 @@ function clearProtectedData(): void {
 
 function closeProtectedOverlays(): void {
   typeDrawerOpen.value = false
-  managementState.value = {
-    ...managementState.value,
-    mutation: transitionDictionaryMutationState(
-      managementState.value.mutation,
-      'authority-loss',
-    ),
-  }
+  formVisible.value = false
+  statusVisible.value = false
+  formSubmitting.value = false
+  statusSubmitting.value = false
+  formTarget.value = null
+  statusTarget.value = null
+  resetFormFailure()
+  resetStatusFailure()
+  invalidateMutationContext('authority-loss')
 }
 
 function applyAccessBoundary(
@@ -345,6 +1152,29 @@ watch(
   },
 )
 
+watch(
+  [canCreate, canUpdate, canEnable, canDisable],
+  ([createAllowed, updateAllowed, enableAllowed, disableAllowed]) => {
+    const formPermissionLost = formVisible.value
+      && (
+        (formMode.value === 'create' && !createAllowed)
+        || (formMode.value === 'edit' && !updateAllowed)
+      )
+    const statusPermissionLost = statusVisible.value
+      && (
+        (statusAction.value === 'enable' && !enableAllowed)
+        || (statusAction.value === 'disable' && !disableAllowed)
+      )
+    if (formPermissionLost || statusPermissionLost) {
+      /*
+       * 细粒度权限撤销不一定推进 authEpoch。立即作废写响应归属并关闭领域浮层，
+       * 但保留仍可读取的列表，避免把 mutation 权限变化误判为 read 撤权。
+       */
+      closeProtectedOverlays()
+    }
+  },
+)
+
 onMounted(() => {
   if (canRead.value) {
     void loadDictionaryTypes()
@@ -354,6 +1184,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true
   abortProtectedQueries()
+  abortReconciliation()
   clearProtectedData()
   closeProtectedOverlays()
 })
@@ -364,7 +1195,16 @@ onBeforeUnmount(() => {
     <FaPageHeader
       title="字典管理"
       description="维护全局、平铺且低风险的业务选项；类型码与条目值作为稳定身份，不随展示名称变化。"
-    />
+    >
+      <FaButton
+        v-if="canRead && canCreate"
+        class="min-h-11"
+        @click="openCreateType"
+      >
+        <FaIcon name="i-lucide:plus" />
+        新增类型
+      </FaButton>
+    </FaPageHeader>
 
     <FaPageMain>
       <FaEmpty
@@ -382,74 +1222,28 @@ onBeforeUnmount(() => {
       >
         <aside
           class="min-w-0 hidden md:pr-5 md:border-r md:border-border md:block"
-          aria-labelledby="dictionary-type-list-title"
+          aria-label="字典类型目录"
           data-testid="dictionary-type-panel"
         >
-          <div class="mb-4 flex gap-3 items-start justify-between">
-            <div class="min-w-0">
-              <p class="qs-type-meta m-0">
-                配置目录
-              </p>
-              <h2 id="dictionary-type-list-title" class="qs-type-compact-title mb-0 mt-1">
-                字典类型
-              </h2>
-            </div>
-            <span class="qs-type-meta tabular-nums">{{ typeTotal }} 项</span>
-          </div>
-
-          <div
-            v-if="typeBusy && dictionaryTypes.length === 0"
-            class="text-muted-foreground flex gap-2 min-h-40 items-center justify-center"
-            role="status"
-            aria-busy="true"
-          >
-            <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
-            <span>正在读取类型…</span>
-          </div>
-
-          <FaAlert
-            v-else-if="managementState.typeQuery === 'error'"
-            variant="destructive"
-            icon="i-lucide:circle-alert"
-            title="字典类型读取失败"
-            :description="typeError"
-            role="alert"
-          >
-            <template #action>
-              <FaButton variant="outline" class="min-h-11" @click="loadDictionaryTypes">
-                重试
-              </FaButton>
-            </template>
-          </FaAlert>
-
-          <FaEmpty
-            v-else-if="managementState.typeQuery === 'empty'"
-            icon="i-lucide:book-dashed"
-            title="暂无字典类型"
-            description="当前系统尚未配置业务字典。"
-            class="min-h-40"
+          <DictionaryTypeList
+            v-model:page="typePage"
+            v-model:page-size="typePageSize"
+            v-model:search="typeSearch"
+            :busy="typeBusy"
+            :empty-kind="typeEmptyKind"
+            :error="typeError"
+            :items="dictionaryTypes"
+            :query-state="managementState.typeQuery"
+            :selected-type-id="selectedTypeId"
+            :status="typeStatus"
+            :total="typeTotal"
+            @page-change="changeDictionaryTypePage"
+            @page-size-change="changeDictionaryTypePageSize"
+            @retry="loadDictionaryTypes"
+            @search="searchDictionaryTypes"
+            @select="selectDictionaryType"
+            @status-change="filterDictionaryTypes"
           />
-
-          <ul v-else class="m-0 p-0 list-none gap-2 grid" aria-label="字典类型">
-            <li
-              v-for="type in dictionaryTypes"
-              :key="type.id"
-            >
-              <button
-                type="button"
-                class="p-3 text-left border border-border rounded-lg bg-background min-h-11 w-full transition-colors focus-visible:outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary/50"
-                :class="selectedTypeId === type.id ? 'border-primary bg-primary/5' : ''"
-                :aria-current="selectedTypeId === type.id ? 'true' : undefined"
-                @click="selectDictionaryType(type.id)"
-              >
-                <span class="qs-type-compact-title block break-words">{{ type.name }}</span>
-                <code class="qs-type-data mt-1 block break-all">{{ type.code }}</code>
-                <span class="qs-type-meta mt-2 block">
-                  {{ type.enabled ? '已启用' : '已停用' }} · {{ type.itemCount }} 个条目
-                </span>
-              </button>
-            </li>
-          </ul>
         </aside>
 
         <section class="min-w-0" aria-labelledby="dictionary-item-panel-title">
@@ -470,12 +1264,103 @@ onBeforeUnmount(() => {
               variant="outline"
               class="min-h-11 md:hidden"
               data-testid="dictionary-open-type-drawer"
+              aria-controls="dictionary-type-drawer"
+              :aria-expanded="typeDrawerOpen"
               @click="typeDrawerOpen = true"
             >
               <FaIcon name="i-lucide:list-filter" />
               选择类型
             </FaButton>
           </div>
+
+          <section
+            v-if="selectedType"
+            class="mb-4 p-4 border border-border rounded-lg bg-muted/10 gap-4 grid"
+            aria-label="当前字典类型摘要"
+          >
+            <dl class="m-0 gap-x-6 gap-y-3 grid grid-cols-2 sm:grid-cols-4">
+              <div class="gap-1 grid">
+                <dt class="qs-type-label text-muted-foreground">
+                  自身状态
+                </dt>
+                <dd class="m-0">
+                  <FaTag
+                    variant="outline"
+                    class="qs-type-status-tag"
+                    :class="selectedType.enabled
+                      ? 'border-primary/30 bg-primary/10 text-primary'
+                      : 'border-border bg-muted text-muted-foreground'"
+                  >
+                    {{ selectedType.enabled ? '已启用' : '已停用' }}
+                  </FaTag>
+                </dd>
+              </div>
+              <div class="gap-1 grid">
+                <dt class="qs-type-label text-muted-foreground">
+                  全部条目
+                </dt>
+                <dd class="qs-type-data m-0 tabular-nums">
+                  {{ selectedType.itemCount }}
+                </dd>
+              </div>
+              <div class="gap-1 grid">
+                <dt class="qs-type-label text-muted-foreground">
+                  自身启用条目
+                </dt>
+                <dd class="qs-type-data m-0 tabular-nums">
+                  {{ selectedType.enabledItemCount }}
+                </dd>
+              </div>
+              <div class="gap-1 grid">
+                <dt class="qs-type-label text-muted-foreground">
+                  版本
+                </dt>
+                <dd class="qs-type-data m-0 tabular-nums">
+                  v{{ selectedType.version }}
+                </dd>
+              </div>
+            </dl>
+
+            <p v-if="selectedType.description" class="qs-type-body m-0 break-words">
+              {{ selectedType.description }}
+            </p>
+
+            <div class="flex flex-wrap gap-2 items-center justify-end" aria-label="字典类型操作">
+              <span
+                v-if="selectedTypeActions && !selectedTypeActions.hasAny"
+                class="qs-type-meta"
+              >
+                {{ selectedTypeActions.readonlyReason }}
+              </span>
+              <FaButton
+                v-if="selectedTypeActions?.canEdit"
+                variant="outline"
+                class="min-h-11"
+                @click="openEditType(selectedType)"
+              >
+                <FaIcon name="i-lucide:pencil" />
+                编辑类型
+              </FaButton>
+              <FaButton
+                v-if="selectedTypeActions?.canEnable"
+                variant="outline"
+                class="min-h-11"
+                @click="openTypeStatusChange(selectedType, 'enable')"
+              >
+                <FaIcon name="i-lucide:circle-play" />
+                启用类型
+              </FaButton>
+              <FaButton
+                v-if="selectedTypeActions?.canDisable"
+                variant="destructive"
+                class="min-h-11"
+                @click="openTypeStatusChange(selectedType, 'disable')"
+              >
+                <FaIcon name="i-lucide:circle-pause" />
+                停用类型
+              </FaButton>
+            </div>
+          </section>
 
           <FaEmpty
             v-if="managementState.selection.kind === 'none'"
@@ -558,51 +1443,56 @@ onBeforeUnmount(() => {
       placement="bottom"
       size="lg"
     >
-      <div class="pb-[max(0.75rem,env(safe-area-inset-bottom))] gap-2 grid">
-        <div
-          v-if="typeBusy && dictionaryTypes.length === 0"
-          class="text-muted-foreground flex gap-2 min-h-40 items-center justify-center"
-          role="status"
-          aria-busy="true"
-        >
-          <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
-          <span>正在读取类型…</span>
-        </div>
-        <FaAlert
-          v-else-if="managementState.typeQuery === 'error'"
-          variant="destructive"
-          icon="i-lucide:circle-alert"
-          title="字典类型读取失败"
-          :description="typeError"
-          role="alert"
-        >
-          <template #action>
-            <FaButton variant="outline" class="min-h-11" @click="loadDictionaryTypes">
-              重试
-            </FaButton>
-          </template>
-        </FaAlert>
-        <FaEmpty
-          v-else-if="managementState.typeQuery === 'empty'"
-          icon="i-lucide:book-dashed"
-          title="暂无字典类型"
-          description="当前系统尚未配置业务字典。"
-          class="min-h-40"
+      <div
+        id="dictionary-type-drawer"
+        class="pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+      >
+        <DictionaryTypeList
+          v-model:page="typePage"
+          v-model:page-size="typePageSize"
+          v-model:search="typeSearch"
+          :busy="typeBusy"
+          :empty-kind="typeEmptyKind"
+          :error="typeError"
+          :items="dictionaryTypes"
+          :query-state="managementState.typeQuery"
+          :selected-type-id="selectedTypeId"
+          :status="typeStatus"
+          :total="typeTotal"
+          @page-change="changeDictionaryTypePage"
+          @page-size-change="changeDictionaryTypePageSize"
+          @retry="loadDictionaryTypes"
+          @search="searchDictionaryTypes"
+          @select="selectDictionaryType"
+          @status-change="filterDictionaryTypes"
         />
-        <template v-else>
-          <button
-            v-for="type in dictionaryTypes"
-            :key="type.id"
-            type="button"
-            class="p-3 text-left border border-border rounded-lg bg-background min-h-11"
-            :class="selectedTypeId === type.id ? 'border-primary bg-primary/5' : ''"
-            @click="selectDictionaryType(type.id)"
-          >
-            <span class="qs-type-compact-title block break-words">{{ type.name }}</span>
-            <code class="qs-type-data mt-1 block break-all">{{ type.code }}</code>
-          </button>
-        </template>
       </div>
     </QsGenericDrawer>
+
+    <DictionaryTypeFormModal
+      :model-value="formVisible"
+      :mode="formMode"
+      :dictionary-type="formTarget"
+      :submitting="formSubmitting"
+      :error="formError"
+      :field-errors="formFieldErrors"
+      :request-id="formRequestId"
+      :submission-blocked="managementState.mutation === 'error'"
+      @update:model-value="handleFormVisibilityChange"
+      @submit="handleTypeFormSubmit"
+    />
+
+    <DictionaryStatusChangeModal
+      :model-value="statusVisible"
+      :action="statusAction"
+      :type="statusTarget"
+      :submitting="statusSubmitting"
+      :error="statusError"
+      :error-code="statusErrorCode"
+      :request-id="statusRequestId"
+      :submission-blocked="managementState.mutation === 'error'"
+      @cancel="cancelStatusChange"
+      @submit="handleTypeStatusSubmit"
+    />
   </div>
 </template>

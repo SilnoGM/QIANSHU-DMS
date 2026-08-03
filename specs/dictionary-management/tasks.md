@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 12 已完成；Task 13 未开始
+- 状态：Task 13 已完成；Task 14 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -254,7 +254,7 @@ TDD：先反向更新基础数据路由测试，覆盖 `dictionaries:read`、空
 
 ### Task 13 - DictionaryType 管理 UI
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R2、R4、R7、R10。
 
@@ -658,3 +658,27 @@ Task 11 只交付 Web 内部 Dictionary Catalog Provider 契约、身份隔离�
 | `git diff --check` | 通过 |
 
 Task 12 只交付字典叶子 `dictionaries:read` 路由权限、空父菜单与统一 `403` 回归、管理页面 access/query/selection/mutation 状态机、Type/Item 独立请求归属守卫、只读主从页面骨架、移动端底部 Drawer、Regions Browser 反向断言、对应测试及本验证记录。未实现 Task 13 的 Type 搜索、筛选、分页、创建/编辑、启停和首次自动选择，未实现 Task 14 的 Item 管理、`QsGenericTable` 与领域表单，未实现 Task 15 的历史值、完整响应式/可访问性收口，未新增 Task 16 字典专属 Browser/CI；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限数据、Audit、依赖、Store 或公共 Qs/Fa 组件，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。Task 13 与后续任务保持未开始。
+
+## 21. Task 13 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Initial TDD RED | Type 查询/选择测试先因列表能力与分页修正函数缺失而失败；表单与启停测试分别因 `dictionary-type-form.logic.ts`、`dictionary-status.logic.ts` 及领域 Modal 尚不存在而失败，证明 Task 13 能力缺口 |
+| Core implementation GREEN | 完成服务端搜索、状态筛选、分页、稳定本地选择、Type 创建/编辑、不可变 code、四项权限动作和启停确认；创建默认停用，Item 区域保持只读 |
+| Concurrency / mutation RED-GREEN | 对抗测试依次暴露 known failure 无法重试、终端未知结果仍可提交、分页越界、搜索 draft/applied 混用、同 Type 重复 Item GET、409 覆盖用户草稿及创建候选误报成功；逐项修正后，409 使用三方 rebase，Create unknown 始终保留人工确认且不自动重放 Mutation |
+| Catalog race RED-GREEN | 首轮补测以 `8/9` 失败证明 unknown catch 的失效顺序不符合新断言；进一步复核发现撤权/卸载可能漏失效。最终把可能已提交的 network unknown 按原 `authEpoch + code` 在 UI ownership guard 前精确 eviction/broadcast，同时不推进成功态；定向两组 `20/20` 通过 |
+| Accessibility RED-GREEN | 移动端 Drawer 触发器关联补测先以 `8/9` 失败；补齐 `aria-controls`、`aria-expanded` 与内容 `id` 后 `9/9` 通过 |
+| Final target GREEN | `pnpm -C web exec node --import tsx --test apps/qsmds-arco/test/api/dictionaries.test.ts apps/qsmds-arco/test/views/dictionary-management.logic.test.ts apps/qsmds-arco/test/views/dictionary-type-form.logic.test.ts apps/qsmds-arco/test/views/dictionary-status-change-modal.test.ts apps/qsmds-arco/test/views/dictionary-management.test.ts apps/qsmds-arco/test/views/dictionary-catalog-integration.test.ts` 退出 `0`，`52/52` 通过 |
+| Target lint / typecheck | Task 13 的实现与测试执行 ESLint `--max-warnings=0` 退出 `0`；`pnpm -C web typecheck` 退出 `0`，OpenAPI generated tree 无漂移 |
+| Cross-review closeout | 表单并发/未知结果、启停权限与缓存竞态、响应式与 Accessibility 三路最终只读复核均为 `no findings`；P0=`0`、P1=`0`、P2=`0` |
+| `pnpm -C web check` | 受限环境先在 `156/156` Node tests 后因 `tsx` IPC pipe 报 `listen EPERM`；在具备 IPC 权限的环境以最终代码原命令复跑退出 `0`，`156` 个 Node tests、`49` 个 TS script tests、`671` 个 API/View tests、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C web build` | 以最终代码退出 `0`；生产构建、Noto 字体快照与 zero-residue 校验通过，仅输出既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run ci:browser-regions-e2e` | 在一次性 PostgreSQL 16、真实 Server/Web/Chrome 环境退出 `0`，地区选择器与管理回归 `2/2` 通过；本任务未新增字典专属 Browser 场景 |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次因真实进程树 fixture 超时与 Unix socket `EPERM` 失败；在具备 process/socket 权限的环境原命令复跑退出 `0`，`633/633` 通过 |
+| Scope audit | 仅修改三份规格、字典管理页面私有 logic/Type list/领域 Modal 及对应测试；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、Provider kernel、路由或公共 Qs/Fa 组件 |
+| `git diff --check` | 通过 |
+
+Task 13 只交付 DictionaryType 的搜索、状态筛选、分页、本地选择、创建/编辑、不可变 code、权限动作、启停确认、409 三方 rebase、网络未知结果核对与 Catalog 精确失效，以及移动端 Type Drawer 的必要可访问性关联。Task 14 的 DictionaryItem 管理、`QsGenericTable` 与 Item 领域表单，Task 15 的完整历史值/移动端/Accessibility 收口，以及 Task 16 的字典专属 Browser/CI 均未开始；未执行 push、PR、merge、发布或分支删除。
