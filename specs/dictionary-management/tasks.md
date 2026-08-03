@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 7 已完成；Task 8 未开始
+- 状态：Task 8 已完成；Task 9 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -194,7 +194,7 @@ TDD：先覆盖单查、最多 20 个 code 批量查询、部分 missing、全�
 
 ### Task 8 - Controller、权限与 OpenAPI 契约
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R4、R5、R7、R8、R12。
 
@@ -542,4 +542,28 @@ Task 6 只交付既有 `DictionaryCommandService` 的 Item create/update/enable/
 | `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境原命令重跑退出 `0`，`633/633` 通过 |
 | `git diff --check` | 通过 |
 
-Task 7 只交付 `DictionaryQueryService` 的单个/批量 Consumer Catalog 核心、`DictionaryLookupService`、对应单元测试及本验证记录。Catalog 返回全部状态的 Type/Item 并严格白名单映射；`requireEffectiveValue` 复用调用方事务并按 Type -> Item `FOR SHARE` 锁序校验；`resolveStoredValue` 只规范化 code，不改写历史 raw value。未新增 Controller、Module、endpoint、Session/Guard 运行时注册、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit、seed、Web、cache、第三方依赖或公共组件；未运行 `contract:sync`。Catalog 的 Session HTTP 保护待 Task 8 注册，真实 PostgreSQL 事务阻塞与锁语义待 Task 9 在隔离数据库验证；本任务未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。
+Task 7 只交付 `DictionaryQueryService` 的单个/批量 Consumer Catalog 核心、`DictionaryLookupService`、对应单元测试及本验证记录。Catalog 返回全部状态的 Type/Item 并严格白名单映射；`requireEffectiveValue` 复用调用方事务并按 Type -> Item `FOR SHARE` 锁序校验；`resolveStoredValue` 只规范化 code，不改写历史 raw value。未新增 Controller、Module、endpoint、Session/Guard 运行时注册、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit、seed、Web、cache、第三方依赖或公共组件；未运行 `contract:sync`。该段记录 Task 7 交付时状态；当时 Catalog 的 Session HTTP 保护尚待 Task 8 注册，该保护现已由 Task 8 完成。真实 PostgreSQL 事务阻塞与锁语义仍待 Task 9 在隔离数据库验证；Task 7 未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。
+
+## 16. Task 8 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Controller / Module RED | Management Controller、Catalog Controller 与 Module 三组测试首次均因目标文件不存在报 `TS2307`；管理测试 fixture 补齐时另暴露一次缺少 `sortBy/sortOrder` 的 `TS2345`，修正测试输入后继续进入实现 |
+| Query read-error RED | 管理读取注入 Prisma `P2034` 时预期 `500 INTERNAL_ERROR`、实际得到 `409`；目标测试退出 `1`，`1` failed、`23` passed，证明读取与 Mutation 冲突口径尚未分离 |
+| Initial target GREEN | Controller、Module、Query 与既有 Dictionary 目标回归退出 `0`，`8/8` suites、`116/116` tests 通过 |
+| Cross-review coverage | 三组并行只读审查发现并补齐 14 个 operation 精确集合、全部 HTTP method、管理 path/query 绑定、Type/Item 独立 `sortBy` enum、Catalog repeated `codes` 的 `form + explode=true`、六个读取入口 `P2034 -> 500` 以及 Update DTO component 引用测试；最终复核无剩余 P0-P2、无 DELETE、无范围越界 |
+| Final target GREEN | 八组 Dictionary Controller、Module、Query、Command 与 DTO 目标测试退出 `0`，`8/8` suites、`123/123` tests 通过 |
+| Target lint / typecheck | Dictionary 目录 ESLint 与 `pnpm -C server typecheck` 均退出 `0`；过程中先后发现 Catalog spec `1` 个、Update component 测试 `2` 个 `no-unsafe-assignment`，均修正后复跑通过 |
+| Contract RED / first sync | 实施前 `node --run contract:check` 按预期因公开契约陈旧退出 `1`；首次 `node --run contract:sync` 又因 Update DTO local `$ref` 未注册而以 `Unresolved local $ref` 失败，原子发布保证三份公开产物未变化 |
+| Contract GREEN | 先以失败测试冻结两个 Update DTO component，再通过 `ApiExtraModels` 注册；第二次 `node --run contract:sync` 与随后 `node --run contract:check` 均退出 `0` |
+| Snapshot audit | Server/Web OpenAPI snapshot 字节与 SHA-256 一致；精确包含管理 `12` 个、Catalog `2` 个字典 operation，`0` 个 DELETE。相对基线只新增 `10` 个 Dictionary path 与 `12` 个 Dictionary schema；Web generated types 已重生成且 Git 字节无变化 |
+| `pnpm -C server check` | 退出 `0`；Prisma validate、typecheck、lint 通过，`137/137` suites、`1355/1355` tests 通过 |
+| `pnpm -C web check` | 受限环境中 Node scripts 已 `156/156` 通过，随后 `tsx` 因 Unix socket `EPERM` 退出 `1`；在具备 IPC 权限的环境以原命令复跑退出 `0`，scripts、API、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C server build` | 退出 `0` |
+| `pnpm -C web build` | 退出 `0`；字体快照与物理零残留校验通过，仅输出既有第三方 pure annotation 与 chunk size 警告 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境以原命令复跑退出 `0`，`633/633` 通过 |
+| `git diff --check` | 通过 |
+
+Task 8 只交付管理 12 个与 Catalog 2 个 Controller endpoint、`DictionaryModule`/HTTP 注册、权限与 Session/CSRF/OpenAPI 元数据、三份生成契约，以及读取异常口径所需的 Query 修正与测试。管理读取保留领域 `404/422`，数据库与事务异常统一收敛为 `500 INTERNAL_ERROR`；Mutation 的既有 `409` 映射未改变。未修改 Schema、migration、权限数据、Audit enum、DTO 字段、第三方依赖、公共组件、Web API adapter、Catalog Provider、cache 或页面；未执行开发数据库 write，也未运行真实 API、PostgreSQL 或 Browser E2E，这些继续由 Task 9 及后续任务负责。

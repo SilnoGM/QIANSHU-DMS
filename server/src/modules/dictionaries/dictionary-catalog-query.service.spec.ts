@@ -359,19 +359,27 @@ describe('DictionaryQueryService Consumer Catalog', () => {
     },
   )
 
-  it('fails closed instead of exposing an undeclared Catalog conflict', async () => {
-    const fixture = createFixture()
-    const sensitiveValue = 'must-not-leak Catalog database state'
-    fixture.transaction.mockRejectedValue({
-      code: 'P2034',
-      message: sensitiveValue,
-    })
+  it.each([
+    ['single', (service: DictionaryQueryService) =>
+      service.getCatalogByCode('order.status')],
+    ['batch', (service: DictionaryQueryService) =>
+      service.listCatalogs(['order.status'])],
+  ] as const)(
+    'fails closed instead of exposing an undeclared %s Catalog conflict',
+    async (_caseName, action) => {
+      const fixture = createFixture()
+      const sensitiveValue = 'must-not-leak Catalog database state'
+      fixture.transaction.mockRejectedValue({
+        code: 'P2034',
+        message: sensitiveValue,
+      })
 
-    await expectApiException(
-      () => fixture.service.getCatalogByCode('order.status'),
-      HttpStatus.INTERNAL_SERVER_ERROR,
-      'INTERNAL_ERROR',
-      sensitiveValue,
-    )
-  })
+      await expectApiException(
+        () => action(fixture.service),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'INTERNAL_ERROR',
+        sensitiveValue,
+      )
+    },
+  )
 })

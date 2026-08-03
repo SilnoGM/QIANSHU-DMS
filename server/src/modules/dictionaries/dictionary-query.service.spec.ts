@@ -571,21 +571,26 @@ describe('DictionaryQueryService direct boundary and safe errors', () => {
     )
   })
 
-  it('maps structured transaction conflicts using the queried resource context', async () => {
-    const typeFixture = createFixture()
-    typeFixture.transaction.mockRejectedValue({ code: 'P2034' })
-    await expectApiException(
-      () => typeFixture.service.listTypes({}),
-      HttpStatus.CONFLICT,
-      'DICTIONARY_TYPE_STATE_CHANGED',
-    )
+  it.each([
+    ['Type list', (service: DictionaryQueryService) =>
+      service.listTypes({})],
+    ['Type detail', (service: DictionaryQueryService) =>
+      service.getTypeById(TYPE_ID)],
+    ['Item list', (service: DictionaryQueryService) =>
+      service.listItems(TYPE_ID, {})],
+    ['Item detail', (service: DictionaryQueryService) =>
+      service.getItemById(TYPE_ID, ITEM_ID)],
+  ] as const)(
+    'fails closed when the %s snapshot has a transaction conflict',
+    async (_caseName, action) => {
+      const fixture = createFixture()
+      fixture.transaction.mockRejectedValue({ code: 'P2034' })
 
-    const itemFixture = createFixture()
-    itemFixture.transaction.mockRejectedValue({ code: 'P2034' })
-    await expectApiException(
-      () => itemFixture.service.listItems(TYPE_ID, {}),
-      HttpStatus.CONFLICT,
-      'DICTIONARY_ITEM_STATE_CHANGED',
-    )
-  })
+      await expectApiException(
+        () => action(fixture.service),
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'INTERNAL_ERROR',
+      )
+    },
+  )
 })

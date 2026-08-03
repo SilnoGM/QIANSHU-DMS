@@ -15,7 +15,6 @@ import {
   normalizeDictionaryQuery,
   normalizeDictionaryTypeCode,
 } from './dictionary.normalizer'
-import { mapDictionaryPersistenceError } from './dictionary.persistence-error.mapper'
 import {
   DictionaryItemSortBy,
   type DictionaryItemListQueryDto,
@@ -200,7 +199,7 @@ export class DictionaryQueryService {
         }
       })
     } catch (error) {
-      throw mapDictionaryPersistenceError(error, 'TYPE')
+      return rethrowDictionaryReadError(error)
     }
   }
 
@@ -223,7 +222,7 @@ export class DictionaryQueryService {
         return mapDictionaryType(row, stats[0])
       })
     } catch (error) {
-      throw mapDictionaryPersistenceError(error, 'TYPE')
+      return rethrowDictionaryReadError(error)
     }
   }
 
@@ -283,7 +282,7 @@ export class DictionaryQueryService {
         }
       })
     } catch (error) {
-      throw mapDictionaryPersistenceError(error, 'ITEM')
+      return rethrowDictionaryReadError(error)
     }
   }
 
@@ -310,7 +309,7 @@ export class DictionaryQueryService {
         return mapDictionaryItem(row, row.dictionaryType.enabled)
       })
     } catch (error) {
-      throw mapDictionaryPersistenceError(error, 'ITEM')
+      return rethrowDictionaryReadError(error)
     }
   }
 
@@ -330,7 +329,7 @@ export class DictionaryQueryService {
         return catalog
       })
     } catch (error) {
-      return rethrowCatalogQueryError(error)
+      return rethrowDictionaryReadError(error)
     }
   }
 
@@ -344,7 +343,7 @@ export class DictionaryQueryService {
         readCatalogs(transaction, normalizedCodes),
       )
     } catch (error) {
-      return rethrowCatalogQueryError(error)
+      return rethrowDictionaryReadError(error)
     }
   }
 
@@ -361,10 +360,11 @@ export class DictionaryQueryService {
 }
 
 /**
- * Catalog 的公共矩阵没有事务冲突 409。保留明确的输入/资源 ApiException，
- * 其余读错误全部失败关闭为固定 500，避免数据库事实与未声明错误泄露到 HTTP。
+ * 管理读取与 Catalog 公共矩阵都没有事务冲突 409。保留明确的
+ * 输入/资源 ApiException，其余读错误全部失败关闭为固定 500；Mutation
+ * 仍由 Persistence mapper 对并发冲突返回已声明的稳定 409。
  */
-function rethrowCatalogQueryError(error: unknown): never {
+function rethrowDictionaryReadError(error: unknown): never {
   if (error instanceof ApiException) {
     throw error
   }
