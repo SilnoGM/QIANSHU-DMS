@@ -1,30 +1,42 @@
 <script setup lang="ts">
+import type { TableSortingState } from '@fantastic-admin/components'
 import type {
   DictionaryStatusChangeRequest,
   DictionaryTypeStatusAction,
 } from './dictionary-status.logic'
 import type {
+  CreateDictionaryItemRequestDto,
   CreateDictionaryTypeRequestDto,
   DictionaryItemDto,
   DictionaryTypeDto,
+  UpdateDictionaryItemRequestDto,
   UpdateDictionaryTypeRequestDto,
 } from '@/api/generated/types.gen'
 import type {
-  DictionaryItemListQuery,
-} from '@/api/modules/dictionaries'
+  QsGenericTableFilterValues,
+} from '@/components/business/QsGenericTable/logic'
 
 import dictionariesApi from '@/api/modules/dictionaries'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import { invalidateDictionaryCatalogCache } from '@/dictionary-catalog/default-provider'
+import DictionaryItemFormModal from './dictionary-item-form-modal.vue'
 import {
+  findMatchingCreatedDictionaryItem,
+  matchesDictionaryItemUpdateResult,
+} from './dictionary-item-form.logic'
+import DictionaryItemTable from './dictionary-item-table.vue'
+import {
+  buildDictionaryItemListQuery,
   buildDictionaryTypeListQuery,
   canApplyDictionaryItemResponse,
   canApplyDictionaryMutationResult,
   canApplyDictionaryQueryResponse,
+  createDictionaryItemQueryRefreshScheduler,
   createDictionaryManagementState,
   createDictionarySelection,
   isDictionaryAbortError,
   resolveDictionaryAccessTransition,
+  resolveDictionaryItemResponsePage,
   resolveDictionaryTypeEmptyKind,
   resolveDictionaryTypeResponsePage,
   resolveDictionaryTypeSelection,
@@ -35,22 +47,18 @@ import DictionaryStatusChangeModal from './dictionary-status-change-modal.vue'
 import {
   buildDictionaryTypeCreateReconciliationQuery,
   findMatchingCreatedDictionaryType,
+  getDictionaryItemMutationFailure,
   getDictionaryTypeMutationFailure,
+  matchesDictionaryItemStatus,
   matchesDictionaryTypeStatus,
   matchesDictionaryTypeUpdate,
+  resolveDictionaryItemActions,
   resolveDictionaryTypeActions,
 } from './dictionary-status.logic'
 import DictionaryTypeFormModal from './dictionary-type-form-modal.vue'
 import DictionaryTypeList from './dictionary-type-list.vue'
 
 defineOptions({ name: 'SystemBasicDataDictionaries' })
-
-const ITEM_QUERY: DictionaryItemListQuery = {
-  page: 1,
-  pageSize: 20,
-  sortBy: 'sortOrder',
-  sortOrder: 'asc',
-}
 
 const appAccountStore = useAppAccountStore()
 const { auth } = useAppAuth()
@@ -73,6 +81,13 @@ const typePage = ref(1)
 const typePageSize = ref(20)
 const typeSearch = ref('')
 const typeStatus = ref<'DISABLED' | 'ENABLED'>()
+const itemPage = ref(1)
+const itemPageSize = ref(20)
+const itemSearch = ref('')
+const itemFilters = ref<QsGenericTableFilterValues>({})
+const itemSorting = ref<TableSortingState>([
+  { id: 'sortOrder', desc: false },
+])
 
 const formVisible = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
@@ -82,9 +97,19 @@ const formError = ref<string | null>(null)
 const formRequestId = ref<string | null>(null)
 const formFieldErrors = ref<Readonly<Record<string, string>>>({})
 
+const itemFormVisible = ref(false)
+const itemFormMode = ref<'create' | 'edit'>('create')
+const itemFormTarget = ref<DictionaryItemDto | null>(null)
+const itemFormSubmitting = ref(false)
+const itemFormError = ref<string | null>(null)
+const itemFormRequestId = ref<string | null>(null)
+const itemFormFieldErrors = ref<Readonly<Record<string, string>>>({})
+
 const statusVisible = ref(false)
 const statusAction = ref<DictionaryTypeStatusAction>('disable')
 const statusTarget = ref<DictionaryTypeDto | null>(null)
+const statusTargetKind = ref<'item' | 'type'>('type')
+const statusItemTarget = ref<DictionaryItemDto | null>(null)
 const statusSubmitting = ref(false)
 const statusError = ref<string | null>(null)
 const statusErrorCode = ref<string>()
@@ -119,6 +144,19 @@ type DictionaryTypeFormSubmission
     readonly typeId: string
   }
 
+type DictionaryItemFormSubmission
+  = | {
+    readonly data: CreateDictionaryItemRequestDto
+    readonly mode: 'create'
+    readonly typeId: string
+  }
+  | {
+    readonly data: UpdateDictionaryItemRequestDto
+    readonly itemId: string
+    readonly mode: 'edit'
+    readonly typeId: string
+  }
+
 const selectedTypeId = computed(() => {
   return managementState.value.selection.kind === 'selected'
     ? managementState.value.selection.typeId
@@ -126,6 +164,12 @@ const selectedTypeId = computed(() => {
 })
 const selectedType = computed(() => {
   return dictionaryTypes.value.find(type => type.id === selectedTypeId.value) ?? null
+})
+const itemQueryScheduler = createDictionaryItemQueryRefreshScheduler(() => {
+  const typeId = selectedTypeId.value
+  if (!disposed && typeId !== null) {
+    void loadDictionaryItems(typeId)
+  }
 })
 const typeBusy = computed(() => {
   return managementState.value.typeQuery === 'loading'
@@ -146,6 +190,22 @@ const selectedTypeActions = computed(() => selectedType.value === null
       canEnable: canEnable.value,
       canUpdate: canUpdate.value,
     }))
+
+function dictionaryItemActions(item: DictionaryItemDto) {
+  const type = selectedType.value
+  if (type === null) {
+    return null
+  }
+  return resolveDictionaryItemActions(item, type, {
+    canDisable: canDisable.value,
+    canEnable: canEnable.value,
+    canUpdate: canUpdate.value,
+  })
+}
+
+function mutationOverlayIsOpen(): boolean {
+  return formVisible.value || itemFormVisible.value || statusVisible.value
+}
 
 function setTypeQuery(event: Parameters<typeof transitionDictionaryQueryState>[1]): void {
   managementState.value = {
@@ -225,6 +285,12 @@ function resetFormFailure(): void {
   formFieldErrors.value = {}
 }
 
+function resetItemFormFailure(): void {
+  itemFormError.value = null
+  itemFormRequestId.value = null
+  itemFormFieldErrors.value = {}
+}
+
 function resetStatusFailure(): void {
   statusError.value = null
   statusErrorCode.value = undefined
@@ -285,6 +351,24 @@ function replaceDictionaryTypeSnapshot(type: DictionaryTypeDto): void {
   }
 }
 
+function replaceDictionaryItemSnapshot(item: DictionaryItemDto): void {
+  const itemIndex = dictionaryItems.value.findIndex(current =>
+    current.id === item.id)
+  if (itemIndex === -1) {
+    dictionaryItems.value = [...dictionaryItems.value, item]
+  }
+  else {
+    dictionaryItems.value = dictionaryItems.value.map(current =>
+      current.id === item.id ? item : current)
+  }
+  if (itemFormTarget.value?.id === item.id) {
+    itemFormTarget.value = item
+  }
+  if (statusItemTarget.value?.id === item.id) {
+    statusItemTarget.value = item
+  }
+}
+
 function dictionaryTypeActions(type: DictionaryTypeDto) {
   return resolveDictionaryTypeActions(type, {
     canDisable: canDisable.value,
@@ -297,8 +381,7 @@ function openCreateType(): void {
   if (
     !canRead.value
     || !canCreate.value
-    || formVisible.value
-    || statusVisible.value
+    || mutationOverlayIsOpen()
   ) {
     return
   }
@@ -313,8 +396,7 @@ function openEditType(type: DictionaryTypeDto): void {
   if (
     !canRead.value
     || !dictionaryTypeActions(type).canEdit
-    || formVisible.value
-    || statusVisible.value
+    || mutationOverlayIsOpen()
   ) {
     return
   }
@@ -334,15 +416,77 @@ function openTypeStatusChange(
     !canRead.value
     || (action === 'enable' && !actions.canEnable)
     || (action === 'disable' && !actions.canDisable)
-    || formVisible.value
-    || statusVisible.value
+    || mutationOverlayIsOpen()
   ) {
     return
   }
   statusAction.value = action
+  statusTargetKind.value = 'type'
   statusTarget.value = type
+  statusItemTarget.value = null
   resetStatusFailure()
   beginMutationOverlay(`${action}:${type.id}`)
+  statusVisible.value = true
+}
+
+function openCreateItem(): void {
+  const type = selectedType.value
+  if (
+    !canRead.value
+    || !canCreate.value
+    || type === null
+    || mutationOverlayIsOpen()
+  ) {
+    return
+  }
+  itemFormMode.value = 'create'
+  itemFormTarget.value = null
+  resetItemFormFailure()
+  beginMutationOverlay(`item:create:${type.id}`)
+  itemFormVisible.value = true
+}
+
+function openEditItem(item: DictionaryItemDto): void {
+  const type = selectedType.value
+  const actions = dictionaryItemActions(item)
+  if (
+    !canRead.value
+    || type === null
+    || item.dictionaryTypeId !== type.id
+    || actions?.canEdit !== true
+    || mutationOverlayIsOpen()
+  ) {
+    return
+  }
+  itemFormMode.value = 'edit'
+  itemFormTarget.value = item
+  resetItemFormFailure()
+  beginMutationOverlay(`item:update:${type.id}:${item.id}`)
+  itemFormVisible.value = true
+}
+
+function openItemStatusChange(
+  item: DictionaryItemDto,
+  action: DictionaryTypeStatusAction,
+): void {
+  const type = selectedType.value
+  const actions = dictionaryItemActions(item)
+  if (
+    !canRead.value
+    || type === null
+    || item.dictionaryTypeId !== type.id
+    || (action === 'enable' && actions?.canEnable !== true)
+    || (action === 'disable' && actions?.canDisable !== true)
+    || mutationOverlayIsOpen()
+  ) {
+    return
+  }
+  statusAction.value = action
+  statusTargetKind.value = 'item'
+  statusTarget.value = type
+  statusItemTarget.value = item
+  resetStatusFailure()
+  beginMutationOverlay(`item:${action}:${type.id}:${item.id}`)
   statusVisible.value = true
 }
 
@@ -362,12 +506,30 @@ function handleFormVisibilityChange(visible: boolean): void {
   }
 }
 
+function cancelItemForm(): void {
+  if (itemFormSubmitting.value) {
+    return
+  }
+  itemFormVisible.value = false
+  itemFormTarget.value = null
+  resetItemFormFailure()
+  invalidateMutationContext('cancel')
+}
+
+function handleItemFormVisibilityChange(visible: boolean): void {
+  if (!visible) {
+    cancelItemForm()
+  }
+}
+
 function cancelStatusChange(): void {
   if (statusSubmitting.value) {
     return
   }
   statusVisible.value = false
   statusTarget.value = null
+  statusItemTarget.value = null
+  statusTargetKind.value = 'type'
   resetStatusFailure()
   invalidateMutationContext('cancel')
 }
@@ -897,12 +1059,15 @@ async function handleTypeStatusSubmit(
 ): Promise<void> {
   const operationTarget = statusTarget.value
   if (
-    !canRead.value
+    request.targetKind !== 'type'
+    || !canRead.value
     || !statusVisible.value
+    || statusTargetKind.value !== 'type'
     || statusSubmitting.value
     || operationTarget === null
     || request.typeId !== operationTarget.id
     || request.action !== statusAction.value
+    || request.expectedVersion !== operationTarget.version
   ) {
     return
   }
@@ -918,7 +1083,7 @@ async function handleTypeStatusSubmit(
 
   resetStatusFailure()
   statusSubmitting.value = true
-  const data = { expectedVersion: operationTarget.version }
+  const data = { expectedVersion: request.expectedVersion }
   try {
     const response = request.action === 'enable'
       ? await dictionariesApi.types.enable(request.typeId, data)
@@ -1000,6 +1165,563 @@ async function handleTypeStatusSubmit(
   }
 }
 
+async function reconcileUnknownItemCreate(
+  context: DictionaryTypeMutationContext,
+  typeId: string,
+  request: CreateDictionaryItemRequestDto,
+): Promise<DictionaryItemDto | undefined> {
+  abortReconciliation()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const response = await dictionariesApi.items.list(
+      typeId,
+      buildDictionaryItemListQuery({
+        page: 1,
+        pageSize: 20,
+        search: request.value,
+        sorting: [{ id: 'value', desc: false }],
+        status: undefined,
+      }),
+      controller.signal,
+    )
+    if (
+      reconciliationAbortController !== controller
+      || controller.signal.aborted
+      || !mutationResultIsCurrent(context)
+    ) {
+      return undefined
+    }
+    return findMatchingCreatedDictionaryItem(
+      response.data.items,
+      typeId,
+      request,
+    )
+  }
+  catch {
+    return undefined
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+async function reconcileUnknownItemMutation(
+  context: DictionaryTypeMutationContext,
+  typeId: string,
+  itemId: string,
+): Promise<DictionaryItemDto | undefined> {
+  abortReconciliation()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const response = await dictionariesApi.items.get(
+      typeId,
+      itemId,
+      controller.signal,
+    )
+    if (
+      reconciliationAbortController !== controller
+      || controller.signal.aborted
+      || !mutationResultIsCurrent(context)
+    ) {
+      return undefined
+    }
+    return response.data
+  }
+  catch {
+    return undefined
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+async function refreshStateChangedItem(
+  context: DictionaryTypeMutationContext,
+  typeId: string,
+  itemId: string,
+  surface: 'form' | 'status',
+): Promise<void> {
+  if (!mutationResultIsCurrent(context)) {
+    return
+  }
+  setMutation('fail')
+  abortReconciliation()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+
+  try {
+    const [itemResponse, typeResponse] = await Promise.all([
+      dictionariesApi.items.get(
+        typeId,
+        itemId,
+        controller.signal,
+      ),
+      dictionariesApi.types.get(typeId, controller.signal),
+    ])
+    if (
+      reconciliationAbortController !== controller
+      || controller.signal.aborted
+      || !mutationResultIsCurrent(context)
+    ) {
+      return
+    }
+
+    replaceDictionaryTypeSnapshot(typeResponse.data)
+    replaceDictionaryItemSnapshot(itemResponse.data)
+    setMutation('resume-editing')
+    if (surface === 'form') {
+      itemFormError.value
+        = '数据已被其他操作更新。未编辑字段已合并最新值；双方同时修改的字段已标记，请核对后重新提交。'
+      itemFormRequestId.value = null
+      itemFormFieldErrors.value = {}
+    }
+    else {
+      statusError.value
+        = '条目已被其他操作更新，已载入最新版本。请核对当前状态后重新提交。'
+      statusErrorCode.value = 'DICTIONARY_ITEM_STATE_CHANGED'
+      statusRequestId.value = undefined
+    }
+  }
+  catch (error) {
+    if (
+      isDictionaryAbortError(error)
+      || reconciliationAbortController !== controller
+      || !mutationResultIsCurrent(context)
+    ) {
+      return
+    }
+    const message
+      = '条目已发生变化，但暂时无法读取最新版本。请关闭弹窗并刷新列表后重试。'
+    if (surface === 'form') {
+      itemFormError.value = message
+    }
+    else {
+      statusError.value = message
+      statusErrorCode.value = 'DICTIONARY_ITEM_STATE_CHANGED'
+    }
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+    if (mutationResultIsCurrent(context)) {
+      if (surface === 'form') {
+        itemFormSubmitting.value = false
+      }
+      else {
+        statusSubmitting.value = false
+      }
+    }
+  }
+}
+
+/**
+ * 最后启用条目约束失败通常表示父 Type 统计已在别处变化。错误码本身先禁用重提，
+ * 再以 exact Type/Item GET 刷新动作依据；读取失败也不能自动重放 Mutation。
+ */
+async function refreshItemStatusConstraint(
+  context: DictionaryTypeMutationContext,
+  typeId: string,
+  itemId: string,
+): Promise<void> {
+  abortReconciliation()
+  const controller = new AbortController()
+  reconciliationAbortController = controller
+  try {
+    const [itemResponse, typeResponse] = await Promise.all([
+      dictionariesApi.items.get(typeId, itemId, controller.signal),
+      dictionariesApi.types.get(typeId, controller.signal),
+    ])
+    if (
+      reconciliationAbortController !== controller
+      || controller.signal.aborted
+      || !mutationResultIsCurrent(context)
+    ) {
+      return
+    }
+    replaceDictionaryTypeSnapshot(typeResponse.data)
+    replaceDictionaryItemSnapshot(itemResponse.data)
+  }
+  catch {
+    // 稳定领域错误已在 Modal 展示并禁用重提；读取失败保持 fail-closed。
+  }
+  finally {
+    if (reconciliationAbortController === controller) {
+      reconciliationAbortController = null
+    }
+  }
+}
+
+async function finishDictionaryItemMutation(input: {
+  readonly confirmedAfterNetworkFailure: boolean
+  readonly context: DictionaryTypeMutationContext
+  readonly item: DictionaryItemDto
+  readonly surface: 'form' | 'status'
+  readonly type: DictionaryTypeDto
+}): Promise<void> {
+  if (!mutationResultIsCurrent(input.context)) {
+    return
+  }
+
+  replaceDictionaryItemSnapshot(input.item)
+  setMutation('complete')
+  if (input.surface === 'form') {
+    itemFormSubmitting.value = false
+  }
+  else {
+    statusSubmitting.value = false
+  }
+  await nextTick()
+  if (!mutationResultIsCurrent(input.context)) {
+    return
+  }
+
+  if (input.surface === 'form') {
+    itemFormVisible.value = false
+    itemFormTarget.value = null
+    resetItemFormFailure()
+  }
+  else {
+    statusVisible.value = false
+    statusTarget.value = null
+    statusItemTarget.value = null
+    statusTargetKind.value = 'type'
+    resetStatusFailure()
+  }
+
+  mutationVersion += 1
+  mutationTargetKey = null
+
+  const labels: Readonly<Record<DictionaryTypeMutationKind, string>> = {
+    create: '字典条目已创建',
+    disable: '字典条目已停用',
+    enable: '字典条目已启用',
+    update: '字典条目已更新',
+  }
+  toast.success(labels[input.context.kind], {
+    description: input.confirmedAfterNetworkFailure
+      ? `${input.item.label} 已通过最终状态核对确认。`
+      : `${input.type.name} · ${input.item.label}`,
+  })
+
+  await loadDictionaryTypes()
+  if (selectedTypeId.value === input.type.id) {
+    await loadDictionaryItems(input.type.id)
+  }
+}
+
+function applyKnownItemFormFailure(error: unknown): void {
+  const failure = getDictionaryItemMutationFailure(error)
+  itemFormError.value = failure.message
+  itemFormRequestId.value = failure.requestId ?? null
+  itemFormFieldErrors.value = failure.fieldErrors
+  itemFormSubmitting.value = false
+  setMutation('known-failure')
+}
+
+function dictionaryItemUpdateHasChanges(
+  request: UpdateDictionaryItemRequestDto,
+): boolean {
+  return ['description', 'label', 'sortOrder', 'tone']
+    .some(field => Object.hasOwn(request, field))
+}
+
+async function handleItemFormSubmit(
+  submission: DictionaryItemFormSubmission,
+): Promise<void> {
+  const operationType = selectedType.value
+  const operationTarget = itemFormTarget.value
+  if (
+    !canRead.value
+    || !itemFormVisible.value
+    || itemFormSubmitting.value
+    || submission.mode !== itemFormMode.value
+    || operationType === null
+    || submission.typeId !== operationType.id
+    || (
+      submission.mode === 'edit'
+      && (
+        operationTarget === null
+        || submission.itemId !== operationTarget.id
+        || operationTarget.dictionaryTypeId !== operationType.id
+        || submission.data.expectedVersion !== operationTarget.version
+        || !dictionaryItemUpdateHasChanges(submission.data)
+      )
+    )
+  ) {
+    return
+  }
+
+  const kind: DictionaryTypeMutationKind
+    = submission.mode === 'create' ? 'create' : 'update'
+  const targetKey = submission.mode === 'create'
+    ? `item:create:${operationType.id}:${submission.data.value}`
+    : `item:update:${operationType.id}:${submission.itemId}`
+  const context = beginMutationRequest(kind, targetKey)
+  if (context === null) {
+    itemFormError.value
+      = '当前身份已无权执行该操作，或当前操作上下文已经失效。'
+    return
+  }
+
+  resetItemFormFailure()
+  itemFormSubmitting.value = true
+  try {
+    const response = submission.mode === 'create'
+      ? await dictionariesApi.items.create(operationType.id, submission.data)
+      : await dictionariesApi.items.update(
+          operationType.id,
+          submission.itemId,
+          submission.data,
+        )
+    invalidateMutationCatalog(context, operationType.code)
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    await finishDictionaryItemMutation({
+      confirmedAfterNetworkFailure: false,
+      context,
+      item: response.data,
+      surface: 'form',
+      type: operationType,
+    })
+  }
+  catch (error) {
+    const failure = getDictionaryItemMutationFailure(error)
+    if (failure.unknownResult) {
+      invalidatePossiblyChangedCatalog(context, operationType.code)
+    }
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    if (failure.stateChanged && submission.mode === 'edit') {
+      itemFormError.value = failure.message
+      itemFormRequestId.value = failure.requestId ?? null
+      await refreshStateChangedItem(
+        context,
+        operationType.id,
+        submission.itemId,
+        'form',
+      )
+      return
+    }
+    if (!failure.unknownResult) {
+      applyKnownItemFormFailure(error)
+      return
+    }
+
+    setMutation('unknown-result')
+    const reconciled = submission.mode === 'create'
+      ? await reconcileUnknownItemCreate(
+          context,
+          operationType.id,
+          submission.data,
+        )
+      : await reconcileUnknownItemMutation(
+          context,
+          operationType.id,
+          submission.itemId,
+        )
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    const confirmed = submission.mode === 'edit'
+      && reconciled !== undefined
+      && matchesDictionaryItemUpdateResult(
+        reconciled,
+        operationType.id,
+        submission.itemId,
+        submission.data,
+      )
+      ? reconciled
+      : undefined
+    if (confirmed !== undefined) {
+      invalidateMutationCatalog(context, operationType.code)
+      await finishDictionaryItemMutation({
+        confirmedAfterNetworkFailure: true,
+        context,
+        item: confirmed,
+        surface: 'form',
+        type: operationType,
+      })
+      return
+    }
+
+    if (reconciled !== undefined) {
+      replaceDictionaryItemSnapshot(reconciled)
+    }
+    itemFormError.value = UNKNOWN_MUTATION_RESULT_MESSAGE
+    itemFormSubmitting.value = false
+    setMutation('fail')
+  }
+}
+
+async function handleItemStatusSubmit(
+  request: DictionaryStatusChangeRequest,
+): Promise<void> {
+  const operationType = statusTarget.value
+  const operationTarget = statusItemTarget.value
+  if (
+    request.targetKind !== 'item'
+    || !canRead.value
+    || !statusVisible.value
+    || statusTargetKind.value !== 'item'
+    || statusSubmitting.value
+    || operationType === null
+    || operationTarget === null
+    || request.typeId !== operationType.id
+    || request.itemId !== operationTarget.id
+    || operationTarget.dictionaryTypeId !== operationType.id
+    || request.action !== statusAction.value
+    || request.expectedVersion !== operationTarget.version
+  ) {
+    return
+  }
+
+  const actions = resolveDictionaryItemActions(operationTarget, operationType, {
+    canDisable: canDisable.value,
+    canEnable: canEnable.value,
+    canUpdate: canUpdate.value,
+  })
+  if (
+    (request.action === 'enable' && !actions.canEnable)
+    || (request.action === 'disable' && !actions.canDisable)
+  ) {
+    statusError.value = actions.disableBlockedReason
+      ?? '当前身份已无权执行该操作，或目标状态已经变化。'
+    return
+  }
+
+  const context = beginMutationRequest(
+    request.action,
+    `item:${request.action}:${request.typeId}:${request.itemId}`,
+  )
+  if (context === null) {
+    statusError.value = '当前身份已无权执行该操作，或当前操作上下文已经失效。'
+    return
+  }
+
+  resetStatusFailure()
+  statusSubmitting.value = true
+  const data = { expectedVersion: request.expectedVersion }
+  try {
+    const response = request.action === 'enable'
+      ? await dictionariesApi.items.enable(
+          request.typeId,
+          request.itemId,
+          data,
+        )
+      : await dictionariesApi.items.disable(
+          request.typeId,
+          request.itemId,
+          data,
+        )
+    invalidateMutationCatalog(context, operationType.code)
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    await finishDictionaryItemMutation({
+      confirmedAfterNetworkFailure: false,
+      context,
+      item: response.data,
+      surface: 'status',
+      type: operationType,
+    })
+  }
+  catch (error) {
+    const failure = getDictionaryItemMutationFailure(error)
+    if (failure.unknownResult) {
+      invalidatePossiblyChangedCatalog(context, operationType.code)
+    }
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    if (failure.stateChanged) {
+      statusError.value = failure.message
+      statusErrorCode.value = failure.code
+      statusRequestId.value = failure.requestId
+      await refreshStateChangedItem(
+        context,
+        request.typeId,
+        request.itemId,
+        'status',
+      )
+      return
+    }
+    if (!failure.unknownResult) {
+      statusError.value = failure.message
+      statusErrorCode.value = failure.code
+      statusRequestId.value = failure.requestId
+      statusSubmitting.value = false
+      setMutation('known-failure')
+      if (failure.code === 'DICTIONARY_TYPE_ENABLED_ITEM_REQUIRED') {
+        await refreshItemStatusConstraint(
+          context,
+          request.typeId,
+          request.itemId,
+        )
+      }
+      return
+    }
+
+    setMutation('unknown-result')
+    const reconciled = await reconcileUnknownItemMutation(
+      context,
+      request.typeId,
+      request.itemId,
+    )
+    if (!mutationResultIsCurrent(context)) {
+      return
+    }
+    const confirmed = reconciled !== undefined
+      && matchesDictionaryItemStatus(
+        reconciled,
+        request.typeId,
+        request.itemId,
+        request.action === 'enable',
+        operationType.enabled,
+      )
+      ? reconciled
+      : undefined
+    if (confirmed !== undefined) {
+      invalidateMutationCatalog(context, operationType.code)
+      await finishDictionaryItemMutation({
+        confirmedAfterNetworkFailure: true,
+        context,
+        item: confirmed,
+        surface: 'status',
+        type: operationType,
+      })
+      return
+    }
+
+    if (reconciled !== undefined) {
+      replaceDictionaryItemSnapshot(reconciled)
+    }
+    statusError.value = UNKNOWN_MUTATION_RESULT_MESSAGE
+    statusErrorCode.value = undefined
+    statusRequestId.value = undefined
+    statusSubmitting.value = false
+    setMutation('fail')
+  }
+}
+
+function handleDictionaryStatusSubmit(
+  request: DictionaryStatusChangeRequest,
+): void {
+  if (request.targetKind === 'item') {
+    void handleItemStatusSubmit(request)
+    return
+  }
+  void handleTypeStatusSubmit(request)
+}
+
 async function loadDictionaryItems(requestedTypeId: string): Promise<void> {
   if (!canRead.value || disposed || requestedTypeId !== selectedTypeId.value) {
     return
@@ -1019,7 +1741,13 @@ async function loadDictionaryItems(requestedTypeId: string): Promise<void> {
   try {
     const response = await dictionariesApi.items.list(
       requestedTypeId,
-      ITEM_QUERY,
+      buildDictionaryItemListQuery({
+        page: itemPage.value,
+        pageSize: itemPageSize.value,
+        search: itemSearch.value,
+        sorting: itemSorting.value,
+        status: itemFilters.value.ownStatus,
+      }),
       controller.signal,
     )
     if (!itemResponseIsCurrent(
@@ -1031,7 +1759,21 @@ async function loadDictionaryItems(requestedTypeId: string): Promise<void> {
       return
     }
 
+    const resolvedPage = resolveDictionaryItemResponsePage({
+      itemCount: response.data.items.length,
+      page: response.data.page,
+      pageSize: response.data.pageSize,
+      total: response.data.total,
+    })
+    if (resolvedPage !== response.data.page) {
+      itemPage.value = resolvedPage
+      void loadDictionaryItems(requestedTypeId)
+      return
+    }
+
     dictionaryItems.value = response.data.items
+    itemPage.value = response.data.page
+    itemPageSize.value = response.data.pageSize
     itemTotal.value = response.data.total
     setItemQuery({
       type: 'success',
@@ -1050,6 +1792,9 @@ async function loadDictionaryItems(requestedTypeId: string): Promise<void> {
     ) {
       return
     }
+    // 查询模型已切到新条件/新页码；失败时不能让旧行继续以新上下文可操作。
+    dictionaryItems.value = []
+    itemTotal.value = 0
     itemError.value = '暂时无法读取字典条目，请稍后重试。'
     setItemQuery({ type: 'failure' })
   }
@@ -1063,6 +1808,64 @@ async function loadDictionaryItems(requestedTypeId: string): Promise<void> {
   }
 }
 
+/**
+ * QsGenericTable 清除条件时会在同一轮连续发出 search/filter 事件；合并到一个
+ * microtask，只请求最终受控状态，避免重复 GET 与闪烁。
+ */
+function scheduleDictionaryItemRefresh(): void {
+  itemPage.value = 1
+  itemQueryScheduler.schedule()
+}
+
+function searchDictionaryItems(search: string): void {
+  itemSearch.value = search
+  scheduleDictionaryItemRefresh()
+}
+
+function filterDictionaryItems(filters: QsGenericTableFilterValues): void {
+  itemFilters.value = { ...filters }
+  scheduleDictionaryItemRefresh()
+}
+
+function sortDictionaryItems(sorting: TableSortingState): void {
+  itemSorting.value = sorting
+  scheduleDictionaryItemRefresh()
+}
+
+function paginateDictionaryItems(input: {
+  page: number
+  pageSize: number
+}): void {
+  itemPage.value = input.page
+  itemPageSize.value = input.pageSize
+  const typeId = selectedTypeId.value
+  if (typeId !== null) {
+    void loadDictionaryItems(typeId)
+  }
+}
+
+/** Type 切换只关闭 Item 领域浮层；Type 自身浮层继续由各自操作上下文管理。 */
+function closeItemOverlaysForTypeSwitch(): void {
+  const itemStatusOpen = statusVisible.value && statusTargetKind.value === 'item'
+  if (!itemFormVisible.value && !itemStatusOpen) {
+    return
+  }
+
+  itemFormVisible.value = false
+  itemFormSubmitting.value = false
+  itemFormTarget.value = null
+  resetItemFormFailure()
+  if (itemStatusOpen) {
+    statusVisible.value = false
+    statusSubmitting.value = false
+    statusTarget.value = null
+    statusItemTarget.value = null
+    statusTargetKind.value = 'type'
+    resetStatusFailure()
+  }
+  invalidateMutationContext('cancel')
+}
+
 /** Type 选择只写页面本地状态；先作废旧 Item，再建立新选择的请求归属。 */
 function selectDictionaryType(
   typeId: string | null,
@@ -1074,10 +1877,13 @@ function selectDictionaryType(
     }
     return
   }
+  itemQueryScheduler.invalidate()
   abortItemQuery()
+  closeItemOverlaysForTypeSwitch()
   dictionaryItems.value = []
   itemTotal.value = 0
   itemError.value = ''
+  itemPage.value = 1
   managementState.value = {
     ...managementState.value,
     itemQuery: 'idle',
@@ -1093,12 +1899,14 @@ function selectDictionaryType(
 }
 
 function clearProtectedData(): void {
+  itemQueryScheduler.invalidate()
   dictionaryTypes.value = []
   dictionaryItems.value = []
   typeTotal.value = 0
   itemTotal.value = 0
   typeError.value = ''
   itemError.value = ''
+  itemPage.value = 1
   managementState.value = {
     ...managementState.value,
     itemQuery: 'idle',
@@ -1110,12 +1918,18 @@ function clearProtectedData(): void {
 function closeProtectedOverlays(): void {
   typeDrawerOpen.value = false
   formVisible.value = false
+  itemFormVisible.value = false
   statusVisible.value = false
   formSubmitting.value = false
+  itemFormSubmitting.value = false
   statusSubmitting.value = false
   formTarget.value = null
+  itemFormTarget.value = null
   statusTarget.value = null
+  statusItemTarget.value = null
+  statusTargetKind.value = 'type'
   resetFormFailure()
+  resetItemFormFailure()
   resetStatusFailure()
   invalidateMutationContext('authority-loss')
 }
@@ -1155,17 +1969,26 @@ watch(
 watch(
   [canCreate, canUpdate, canEnable, canDisable],
   ([createAllowed, updateAllowed, enableAllowed, disableAllowed]) => {
-    const formPermissionLost = formVisible.value
+    const typeFormPermissionLost = formVisible.value
       && (
         (formMode.value === 'create' && !createAllowed)
         || (formMode.value === 'edit' && !updateAllowed)
+      )
+    const itemFormPermissionLost = itemFormVisible.value
+      && (
+        (itemFormMode.value === 'create' && !createAllowed)
+        || (itemFormMode.value === 'edit' && !updateAllowed)
       )
     const statusPermissionLost = statusVisible.value
       && (
         (statusAction.value === 'enable' && !enableAllowed)
         || (statusAction.value === 'disable' && !disableAllowed)
       )
-    if (formPermissionLost || statusPermissionLost) {
+    if (
+      typeFormPermissionLost
+      || itemFormPermissionLost
+      || statusPermissionLost
+    ) {
       /*
        * 细粒度权限撤销不一定推进 authEpoch。立即作废写响应归属并关闭领域浮层，
        * 但保留仍可读取的列表，避免把 mutation 权限变化误判为 read 撤权。
@@ -1183,6 +2006,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   disposed = true
+  itemQueryScheduler.dispose()
   abortProtectedQueries()
   abortReconciliation()
   clearProtectedData()
@@ -1370,67 +2194,31 @@ onBeforeUnmount(() => {
             class="border border-border rounded-lg bg-muted/10 min-h-64"
           />
 
-          <div
-            v-else-if="itemBusy && dictionaryItems.length === 0"
-            class="text-muted-foreground border border-border rounded-lg flex gap-2 min-h-64 items-center justify-center"
-            role="status"
-            aria-busy="true"
-          >
-            <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
-            <span>正在读取条目…</span>
-          </div>
-
-          <FaAlert
-            v-else-if="managementState.itemQuery === 'error'"
-            variant="destructive"
-            icon="i-lucide:circle-alert"
-            title="字典条目读取失败"
-            :description="itemError"
-            role="alert"
-          >
-            <template #action>
-              <FaButton
-                v-if="selectedTypeId"
-                variant="outline"
-                class="min-h-11"
-                @click="loadDictionaryItems(selectedTypeId)"
-              >
-                重试
-              </FaButton>
-            </template>
-          </FaAlert>
-
-          <FaEmpty
-            v-else-if="managementState.itemQuery === 'empty'"
-            icon="i-lucide:list-x"
-            title="该类型暂无条目"
-            description="该字典类型尚未配置任何条目。"
-            class="border border-border rounded-lg bg-muted/10 min-h-64"
+          <DictionaryItemTable
+            v-else-if="selectedType"
+            v-model:page="itemPage"
+            v-model:page-size="itemPageSize"
+            v-model:search="itemSearch"
+            v-model:filters="itemFilters"
+            v-model:sorting="itemSorting"
+            :can-create="canCreate"
+            :can-disable="canDisable"
+            :can-enable="canEnable"
+            :can-update="canUpdate"
+            :dictionary-type="selectedType"
+            :error="itemError"
+            :items="dictionaryItems"
+            :loading="itemBusy"
+            :total="itemTotal"
+            @add="openCreateItem"
+            @edit="openEditItem"
+            @filter-change="filterDictionaryItems"
+            @pagination-change="paginateDictionaryItems"
+            @retry="selectedTypeId && loadDictionaryItems(selectedTypeId)"
+            @search="searchDictionaryItems"
+            @sorting-change="sortDictionaryItems"
+            @status="openItemStatusChange"
           />
-
-          <div v-else class="gap-3 grid" aria-live="polite">
-            <div class="p-4 border border-border rounded-lg bg-muted/10 flex flex-wrap gap-3 items-center justify-between">
-              <p class="qs-type-meta m-0">
-                当前读取 {{ dictionaryItems.length }} 项，共 {{ itemTotal }} 项
-              </p>
-              <span class="qs-type-meta">条目概览</span>
-            </div>
-            <ul class="m-0 p-0 list-none gap-2 grid" aria-label="字典条目">
-              <li
-                v-for="item in dictionaryItems"
-                :key="item.id"
-                class="p-3 border border-border rounded-lg bg-background flex flex-wrap gap-3 items-start justify-between"
-              >
-                <span class="min-w-0">
-                  <strong class="qs-type-compact-title block break-words">{{ item.label }}</strong>
-                  <code class="qs-type-data mt-1 block break-all">{{ item.value }}</code>
-                </span>
-                <span class="qs-type-meta">
-                  {{ item.effectiveEnabled ? '有效' : item.enabled ? '随类型停用' : '已停用' }}
-                </span>
-              </li>
-            </ul>
-          </div>
         </section>
       </div>
     </FaPageMain>
@@ -1482,17 +2270,33 @@ onBeforeUnmount(() => {
       @submit="handleTypeFormSubmit"
     />
 
+    <DictionaryItemFormModal
+      :model-value="itemFormVisible"
+      :mode="itemFormMode"
+      :dictionary-type="selectedType"
+      :dictionary-item="itemFormTarget"
+      :submitting="itemFormSubmitting"
+      :error="itemFormError"
+      :field-errors="itemFormFieldErrors"
+      :request-id="itemFormRequestId"
+      :submission-blocked="managementState.mutation === 'error'"
+      @update:model-value="handleItemFormVisibilityChange"
+      @submit="handleItemFormSubmit"
+    />
+
     <DictionaryStatusChangeModal
       :model-value="statusVisible"
       :action="statusAction"
+      :target-kind="statusTargetKind"
       :type="statusTarget"
+      :item="statusItemTarget"
       :submitting="statusSubmitting"
       :error="statusError"
       :error-code="statusErrorCode"
       :request-id="statusRequestId"
       :submission-blocked="managementState.mutation === 'error'"
       @cancel="cancelStatusChange"
-      @submit="handleTypeStatusSubmit"
+      @submit="handleDictionaryStatusSubmit"
     />
   </div>
 </template>

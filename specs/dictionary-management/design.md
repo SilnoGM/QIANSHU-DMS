@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 与 Gate B 精确边界已确认，Task 5 至 Task 13 已完成，Task 14 未开始
+- 状态：Phase 2 与 Gate B 精确边界已确认，Task 5 至 Task 14 已完成，Task 15 待确认
 - 技术设计确认日期：2026-08-02
 - 本次固化日期：2026-08-03
 - Gate B 确认日期：2026-08-03
@@ -776,6 +776,7 @@ web/apps/qsmds-arco/src/views/system/basic-data/dictionaries/
 ├── dictionary-type-form.logic.ts
 ├── dictionary-item-form-modal.vue
 ├── dictionary-item-form.logic.ts
+├── dictionary-item-table.vue
 ├── dictionary-status.logic.ts
 └── dictionary-status-change-modal.vue
 ```

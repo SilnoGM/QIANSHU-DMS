@@ -1,4 +1,8 @@
-import type { DictionaryTypeListQuery } from '@/api/modules/dictionaries'
+import type { TableSortingState } from '@fantastic-admin/components'
+import type {
+  DictionaryItemListQuery,
+  DictionaryTypeListQuery,
+} from '@/api/modules/dictionaries'
 
 export type DictionaryAccessState = 'active' | 'forbidden'
 export type DictionaryQueryState
@@ -64,12 +68,27 @@ export type DictionaryMutationEvent
     | 'unknown-result'
 
 export type DictionaryTypeEmptyKind = 'filtered' | 'system'
+export type DictionaryItemEmptyKind = DictionaryTypeEmptyKind
 
 export interface BuildDictionaryTypeListQueryInput {
   readonly page: number
   readonly pageSize: number
   readonly search: string
   readonly status: unknown
+}
+
+export interface BuildDictionaryItemListQueryInput {
+  readonly page: number
+  readonly pageSize: number
+  readonly search: string
+  readonly sorting: TableSortingState
+  readonly status: unknown
+}
+
+export interface DictionaryItemQueryRefreshScheduler {
+  readonly dispose: () => void
+  readonly invalidate: () => void
+  readonly schedule: () => void
 }
 
 export interface DictionaryQueryResponseGuardInput {
@@ -98,6 +117,13 @@ export interface DictionaryMutationResultGuardInput {
 }
 
 const TYPE_PAGE_SIZES = new Set([20, 50, 100])
+const ITEM_PAGE_SIZES = new Set([20, 50, 100])
+const ITEM_SORT_FIELDS = new Set<NonNullable<DictionaryItemListQuery['sortBy']>>([
+  'label',
+  'sortOrder',
+  'updatedAt',
+  'value',
+])
 const UNICODE_WHITESPACE_PATTERN = /\p{White_Space}+/gu
 
 /**
@@ -131,6 +157,80 @@ export function buildDictionaryTypeListQuery(
   }
 }
 
+/**
+ * Item 查询与 QsGenericTable 的受控状态一一映射。无效列不能透传给 Server，
+ * 而是回到领域默认的 `sortOrder asc`，保证首次进入和清空列排序后的结果稳定。
+ */
+export function buildDictionaryItemListQuery(
+  input: BuildDictionaryItemListQueryInput,
+): DictionaryItemListQuery {
+  const page = Number.isSafeInteger(input.page) && input.page > 0
+    ? input.page
+    : 1
+  const pageSize = ITEM_PAGE_SIZES.has(input.pageSize)
+    ? input.pageSize
+    : 20
+  const query = input.search
+    .normalize('NFC')
+    .replace(UNICODE_WHITESPACE_PATTERN, ' ')
+    .trim()
+  const status = input.status === 'ENABLED' || input.status === 'DISABLED'
+    ? input.status
+    : undefined
+  const firstValidSort = input.sorting.find(sort =>
+    ITEM_SORT_FIELDS.has(sort.id as NonNullable<DictionaryItemListQuery['sortBy']>))
+  const sortBy = firstValidSort?.id as DictionaryItemListQuery['sortBy']
+    ?? 'sortOrder'
+  const sortOrder = firstValidSort?.desc === true ? 'desc' : 'asc'
+
+  return {
+    page,
+    pageSize,
+    ...(query === '' ? {} : { query }),
+    sortBy,
+    sortOrder,
+    ...(status === undefined ? {} : { status }),
+  }
+}
+
+/**
+ * QsGenericTable 清除条件时会同步发出多个查询事件。调度器将同一轮事件合并为
+ * 一次 GET；Type 切换可 invalidate 旧 microtask，卸载后 dispose 永久停止回调。
+ */
+export function createDictionaryItemQueryRefreshScheduler(
+  refresh: () => void,
+): DictionaryItemQueryRefreshScheduler {
+  let disposed = false
+  let generation = 0
+  let pending = false
+
+  return {
+    dispose() {
+      disposed = true
+      generation += 1
+      pending = false
+    },
+    invalidate() {
+      generation += 1
+      pending = false
+    },
+    schedule() {
+      if (disposed || pending) {
+        return
+      }
+      pending = true
+      const scheduledGeneration = generation
+      queueMicrotask(() => {
+        if (disposed || scheduledGeneration !== generation) {
+          return
+        }
+        pending = false
+        refresh()
+      })
+    },
+  }
+}
+
 /** 当前选择仍可见时保留，否则迁移到首个可见 Type；空页必须清空 Item 上下文。 */
 export function resolveDictionaryTypeSelection(
   visibleTypes: readonly { readonly id: string }[],
@@ -158,6 +258,14 @@ export function resolveDictionaryTypeEmptyKind(input: {
     : 'system'
 }
 
+/** Item 的系统空态是“当前 Type 尚无条目”，判定规则与 Type 查询保持一致。 */
+export function resolveDictionaryItemEmptyKind(input: {
+  readonly search: string
+  readonly status: unknown
+}): DictionaryItemEmptyKind {
+  return resolveDictionaryTypeEmptyKind(input)
+}
+
 /**
  * 状态写入可能把筛选末页的最后一项移出结果集。Server 返回 total 后仅在当前页
  * 已空且确实越界时回退，避免把仍有数据的筛选误显示为空态。
@@ -168,11 +276,21 @@ export function resolveDictionaryTypeResponsePage(input: {
   readonly pageSize: number
   readonly total: number
 }): number {
-  if (input.itemCount > 0 || input.total <= 0 || input.pageSize <= 0) {
+  if (input.itemCount > 0 || input.pageSize <= 0) {
     return input.page
+  }
+  if (input.total <= 0) {
+    return 1
   }
   const lastPage = Math.max(1, Math.ceil(input.total / input.pageSize))
   return input.page > lastPage ? lastPage : input.page
+}
+
+/** Item Mutation 同样可能让筛选末页越界，复用已验证的页码收敛规则。 */
+export function resolveDictionaryItemResponsePage(
+  input: Parameters<typeof resolveDictionaryTypeResponsePage>[0],
+): number {
+  return resolveDictionaryTypeResponsePage(input)
 }
 
 export function createDictionarySelection(

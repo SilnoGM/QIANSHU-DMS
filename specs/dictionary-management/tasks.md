@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 13 已完成；Task 14 未开始
+- 状态：Task 14 已完成；Task 15 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -266,7 +266,7 @@ TDD：先覆盖 Type 搜索、状态筛选、分页、选择、创建/编辑表�
 
 ### Task 14 - DictionaryItem 管理 UI
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R3、R4、R7、R10。
 
@@ -682,3 +682,24 @@ Task 12 只交付字典叶子 `dictionaries:read` 路由权限、空父菜单与
 | `git diff --check` | 通过 |
 
 Task 13 只交付 DictionaryType 的搜索、状态筛选、分页、本地选择、创建/编辑、不可变 code、权限动作、启停确认、409 三方 rebase、网络未知结果核对与 Catalog 精确失效，以及移动端 Type Drawer 的必要可访问性关联。Task 14 的 DictionaryItem 管理、`QsGenericTable` 与 Item 领域表单，Task 15 的完整历史值/移动端/Accessibility 收口，以及 Task 16 的字典专属 Browser/CI 均未开始；未执行 push、PR、merge、发布或分支删除。
+
+## 22. Task 14 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Initial TDD RED | Item 表单测试先因 `dictionary-item-form.logic.ts` 与领域 Modal 尚不存在而失败；Item 查询/分页/排序测试先因对应 logic export 缺失而失败；启停测试先因 Item request helper 缺失而失败；页面静态测试以缺少 `QsGenericTable`、Item 表单和 Item 状态 Modal 证明管理能力缺口 |
+| Core implementation GREEN | 完成 Item 服务端搜索、自身状态筛选、稳定排序与分页；桌面表格和移动卡片由私有 `dictionary-item-table.vue` 共享同一字段语义；创建默认停用，编辑保持 value/type 身份不可变，启停只经领域确认 Modal |
+| Concurrency / mutation RED-GREEN | 对抗测试依次暴露空 Patch、陈旧 `expectedVersion`、unknown update 未要求版本前进、Item `409` 未同步 Type 汇总、最后启用项 `422` 可重复提交、`total=0` 页码残留及新查询失败保留旧行；逐项收紧后，Mutation 不自动重放，409 精确刷新 Type/Item，稳定 422 fail-closed，迟到响应受 authEpoch/request version/Type identity 三重约束 |
+| Final target GREEN | Task 14 四组目标测试退出 `0`，`57/57` 通过；独立复核补跑其余管理回归 `39/39`，合计 `96/96`；提交前最终执行全部 Dictionary API/View 测试 `143/143` 通过 |
+| Target lint / typecheck | Task 14 实现与测试的 ESLint `--max-warnings=0` 退出 `0`；`pnpm -C web typecheck` 退出 `0` |
+| Cross-review closeout | 并发/Mutation、权限/范围、UI/Accessibility 三路最终只读复核均为 P0=`0`、P1=`0`、P2=`0`；保留一个 P3：`QsGenericTable` 的既有 error 与 empty 文案可同时显示，不产生陈旧操作，需跨公共组件边界评估，留待 Task 15 或另行确认 |
+| `pnpm -C web check` | 受限环境先在 `156/156` Node tests 后因 `tsx` IPC pipe 报 `listen EPERM`；在具备 IPC 权限的环境以最终代码原命令复跑退出 `0`，`156` 个 Node tests、`49` 个 TS script tests、`693` 个 API/View tests、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C web build` | 以最终代码退出 `0`；生产构建、Noto 字体快照与 zero-residue 校验通过，仅输出既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境以最终代码原命令复跑退出 `0`，`633/633` 通过 |
+| UI / scope audit | 继续复用一个 `FaPageHeader + FaPageMain`、既有 `18rem minmax(0,1fr)` 主从布局和移动端 Type Drawer；Item 操作目标为 `44px`，状态均有文字语义；无禁用色族、替代字体、Emoji、渐变或公共组件修改 |
+| `git diff --check` | 通过 |
+
+Task 14 只交付 DictionaryItem 搜索、自身状态筛选、分页、排序、桌面表格与移动卡片、创建/编辑、不可变 value、自身/有效状态、Tone、权限动作、启停不变量、409 三方 rebase、网络未知结果核对、Catalog 精确失效、Type 切换 Abort 及对应测试。Task 15 的完整历史值、`390x844`、焦点恢复、Reduced Motion、亮暗主题与浏览器 Accessibility 收口，以及 Task 16 的字典专属 Browser/CI 均未开始；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限数据、Audit、依赖、Store、Provider kernel、路由或公共 Qs/Fa 组件，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。

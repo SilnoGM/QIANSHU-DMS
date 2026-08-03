@@ -10,6 +10,9 @@ function readSource(relativePath: string): string {
 const pageSource = readSource(
   '../../src/views/system/basic-data/dictionaries/index.vue',
 )
+const itemTableSource = readSource(
+  '../../src/views/system/basic-data/dictionaries/dictionary-item-table.vue',
+)
 
 test('字典管理只使用一层 Fa 页面容器与非对称主从骨架', () => {
   assert.equal(pageSource.match(/<FaPageHeader\b/gu)?.length, 1)
@@ -112,7 +115,7 @@ test('Type 创建编辑启停按四项权限双重守卫并使用领域 Modal', 
   assert.match(pageSource, /<DictionaryStatusChangeModal\b/u)
   assert.equal(
     pageSource.match(/:submission-blocked="managementState\.mutation === 'error'"/gu)?.length,
-    2,
+    3,
   )
   assert.match(pageSource, /dictionariesApi\.types\.create/u)
   assert.match(pageSource, /dictionariesApi\.types\.update/u)
@@ -138,7 +141,7 @@ test('可信成功与可能已提交的网络未知结果都精确失效 Catalog
   )
   assert.equal(
     pageSource.match(/invalidatePossiblyChangedCatalog\(\s*context,/gu)?.length,
-    2,
+    4,
   )
   assert.equal(
     pageSource.match(/invalidateMutationCatalog\(context, confirmed\.code\)/gu)?.length,
@@ -154,8 +157,69 @@ test('可信成功与可能已提交的网络未知结果都精确失效 Catalog
   )
 })
 
-test('Task 13 仍不越界实现 Item 表单、公共选择器或 QsGenericTable', () => {
-  assert.doesNotMatch(pageSource, /DictionaryItemFormModal/u)
+test('Task 14 使用 QsGenericTable 完成 Item 查询、桌面列与移动卡片组合', () => {
+  assert.match(pageSource, /import DictionaryItemTable/u)
+  assert.match(pageSource, /<DictionaryItemTable\b/u)
+  assert.match(itemTableSource, /import QsGenericTable/u)
+  assert.match(itemTableSource, /<QsGenericTable\b/u)
+  assert.match(pageSource, /v-model:page="itemPage"/u)
+  assert.match(pageSource, /v-model:page-size="itemPageSize"/u)
+  assert.match(pageSource, /v-model:search="itemSearch"/u)
+  assert.match(pageSource, /v-model:filters="itemFilters"/u)
+  assert.match(pageSource, /v-model:sorting="itemSorting"/u)
+  assert.match(itemTableSource, /#cell-value/u)
+  assert.match(itemTableSource, /#cell-ownStatus/u)
+  assert.match(itemTableSource, /#cell-effectiveStatus/u)
+  assert.match(itemTableSource, /#mobile-row/u)
+  assert.match(itemTableSource, /effectiveEnabled/u)
+  assert.match(itemTableSource, /resolveDictionaryItemEmptyKind/u)
+  assert.match(itemTableSource, /:page-size-options="\[20, 50, 100\]"/u)
+  assert.match(itemTableSource, /:addable="canCreate"/u)
+  assert.match(itemTableSource, /add-label="新增条目"/u)
+  assert.match(itemTableSource, /@filter-change=/u)
+  assert.match(itemTableSource, /@pagination-change=/u)
+  assert.match(itemTableSource, /@sorting-change=/u)
+  assert.match(itemTableSource, /hasVisibleTableColumn/u)
+  assert.match(itemTableSource, /import CopyCellButton/u)
+  assert.match(itemTableSource, /\[&_button\]:size-11/u)
+  assert.doesNotMatch(itemTableSource, /md:min-h-8/u)
+  assert.doesNotMatch(itemTableSource, /(?:border|bg|text)-warning/u)
+  assert.doesNotMatch(itemTableSource, /<FaSwitch|<ASwitch|<Switch\b/iu)
+})
+
+test('Task 14 Item 创建编辑启停复用权限、版本与领域 Modal', () => {
+  assert.match(pageSource, /import DictionaryItemFormModal/u)
+  assert.match(pageSource, /<DictionaryItemFormModal\b/u)
+  assert.match(pageSource, /<DictionaryStatusChangeModal\b/u)
+  assert.match(pageSource, /dictionariesApi\.items\.create/u)
+  assert.match(pageSource, /dictionariesApi\.items\.update/u)
+  assert.match(pageSource, /dictionariesApi\.items\.enable/u)
+  assert.match(pageSource, /dictionariesApi\.items\.disable/u)
+  assert.match(pageSource, /expectedVersion/u)
+  assert.match(
+    pageSource,
+    /submission\.data\.expectedVersion !== operationTarget\.version/u,
+  )
+  assert.match(pageSource, /dictionaryItemUpdateHasChanges/u)
+  assert.match(pageSource, /matchesDictionaryItemUpdateResult/u)
+  assert.match(pageSource, /refreshStateChangedItem/u)
+  assert.match(pageSource, /refreshItemStatusConstraint/u)
+  assert.match(
+    pageSource,
+    /dictionaryItems\.value = \[\][\s\S]{0,120}itemTotal\.value = 0[\s\S]{0,160}setItemQuery\(\{ type: 'failure' \}\)/u,
+  )
+  assert.match(
+    pageSource,
+    /failure\.code === 'DICTIONARY_TYPE_ENABLED_ITEM_REQUIRED'/u,
+  )
+  assert.match(pageSource, /openCreateItem/u)
+  assert.match(pageSource, /openEditItem/u)
+  assert.match(pageSource, /openItemStatusChange/u)
+})
+
+test('Task 14 仍不越界实现公共选择器、删除或 Task 15 历史值适配', () => {
   assert.doesNotMatch(pageSource, /QsDictionarySelect/u)
-  assert.doesNotMatch(pageSource, /<QsGenericTable\b/u)
+  assert.doesNotMatch(pageSource, /dictionariesApi\.items\.delete/u)
+  assert.doesNotMatch(pageSource, /deleteDictionaryItem|removeDictionaryItem/u)
+  assert.doesNotMatch(pageSource, /historicalValue|unknownValueAdapter/u)
 })

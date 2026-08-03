@@ -7,7 +7,9 @@ import type {
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import {
+  createDictionaryItemStatusChangeRequest,
   createDictionaryStatusChangeRequest,
+  dictionaryItemStatusChangeCopy,
   dictionaryStatusChangeCopy,
 } from './dictionary-status.logic'
 
@@ -16,9 +18,11 @@ defineOptions({ name: 'DictionaryStatusChangeModal' })
 const props = withDefaults(defineProps<DictionaryStatusChangeModalProps>(), {
   error: null,
   errorCode: undefined,
+  item: null,
   requestId: undefined,
   submissionBlocked: false,
   submitting: false,
+  targetKind: 'type',
 })
 
 const emit = defineEmits<{
@@ -30,20 +34,42 @@ const submitRequested = ref(false)
 const interactionLocked = computed(
   () => props.submitting || submitRequested.value,
 )
+const isItem = computed(() => props.targetKind === 'item')
 const isDisable = computed(() => props.action === 'disable')
-const copy = computed(() => dictionaryStatusChangeCopy(props.action))
+const copy = computed(() => isItem.value
+  ? dictionaryItemStatusChangeCopy(props.action, props.type)
+  : dictionaryStatusChangeCopy(props.action))
 const hasEnabledItems = computed(() =>
   props.type !== null && props.type.enabledItemCount > 0)
 const targetAlreadyReached = computed(() =>
-  props.type !== null && props.type.enabled === !isDisable.value)
+  isItem.value
+    ? props.item !== null && props.item.enabled === !isDisable.value
+    : props.type !== null && props.type.enabled === !isDisable.value)
+const itemIdentityInvalid = computed(() => isItem.value && (
+  props.type === null
+  || props.item === null
+  || props.item.dictionaryTypeId !== props.type.id
+))
+const lastEnabledItemBlocked = computed(() =>
+  isItem.value
+  && isDisable.value
+  && props.item?.enabled === true
+  && props.type?.enabled === true
+  && props.type.enabledItemCount <= 1)
+const enabledItemRequired = computed(() =>
+  props.errorCode === 'DICTIONARY_TYPE_ENABLED_ITEM_REQUIRED')
 const submitDisabled = computed(() =>
   interactionLocked.value
   || props.submissionBlocked
+  || enabledItemRequired.value
   || props.type === null
+  || itemIdentityInvalid.value
   || targetAlreadyReached.value
-  || (!isDisable.value && !hasEnabledItems.value))
-const enabledItemRequired = computed(() =>
-  props.errorCode === 'DICTIONARY_TYPE_ENABLED_ITEM_REQUIRED')
+  || lastEnabledItemBlocked.value
+  || (!isItem.value && !isDisable.value && !hasEnabledItems.value))
+const targetLabel = computed(() => isItem.value
+  ? props.item?.label ?? '字典条目'
+  : props.type?.name ?? '字典类型')
 
 function handleCancel(): void {
   if (interactionLocked.value) {
@@ -65,11 +91,18 @@ async function handleSubmit(): Promise<void> {
     return
   }
 
-  const request = createDictionaryStatusChangeRequest(
-    props.action,
-    props.type,
-    props.submitting,
-  )
+  const request = isItem.value
+    ? createDictionaryItemStatusChangeRequest(
+        props.action,
+        props.type,
+        props.item,
+        props.submitting,
+      )
+    : createDictionaryStatusChangeRequest(
+        props.action,
+        props.type,
+        props.submitting,
+      )
   if (request === null) {
     return
   }
@@ -96,7 +129,13 @@ watch(
 )
 
 watch(
-  [() => props.modelValue, () => props.action, () => props.type?.id],
+  [
+    () => props.modelValue,
+    () => props.action,
+    () => props.targetKind,
+    () => props.type?.id,
+    () => props.item?.id,
+  ],
   ([visible]) => {
     if (!visible) {
       submitRequested.value = false
@@ -134,7 +173,12 @@ watch(
           <div class="gap-2 grid">
             <span class="break-words">{{ error }}</span>
             <span v-if="enabledItemRequired" class="font-medium">
-              请先为该类型配置并启用至少一个自身启用条目，再重新发起启用。
+              <template v-if="isItem">
+                类型启用期间至少保留一个自身启用条目；请先启用其他条目，或先停用类型。
+              </template>
+              <template v-else>
+                请先为该类型配置并启用至少一个自身启用条目，再重新发起启用。
+              </template>
             </span>
             <code v-if="requestId" class="qs-type-data break-all">
               requestId: {{ requestId }}
@@ -143,10 +187,24 @@ watch(
         </template>
       </FaAlert>
 
-      <dl class="m-0 gap-3 grid">
+      <dl class="m-0 gap-3 grid sm:grid-cols-2">
+        <div v-if="isItem" class="gap-1 grid">
+          <dt class="qs-type-label text-muted-foreground">
+            字典条目
+          </dt>
+          <dd class="m-0 flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+            <strong class="qs-type-body-medium break-words">
+              {{ item?.label ?? '未选择字典条目' }}
+            </strong>
+            <code v-if="item" class="qs-type-data-emphasis break-all">
+              {{ item.value }}
+            </code>
+          </dd>
+        </div>
+
         <div class="gap-1 grid">
           <dt class="qs-type-label text-muted-foreground">
-            字典类型
+            {{ isItem ? '所属字典类型' : '字典类型' }}
           </dt>
           <dd class="m-0 flex flex-wrap gap-x-2 gap-y-1 items-baseline">
             <strong class="qs-type-body-medium break-words">
@@ -158,7 +216,7 @@ watch(
           </dd>
         </div>
 
-        <div v-if="type" class="gap-1 grid">
+        <div v-if="type && !isItem" class="gap-1 grid sm:col-span-2">
           <dt class="qs-type-label text-muted-foreground">
             条目状态
           </dt>
@@ -166,10 +224,67 @@ watch(
             自身启用 {{ type.enabledItemCount }} / 全部 {{ type.itemCount }}
           </dd>
         </div>
+
+        <template v-if="isItem && item">
+          <div class="gap-1 grid">
+            <dt class="qs-type-label text-muted-foreground">
+              自身状态
+            </dt>
+            <dd class="m-0">
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag"
+                :class="item.enabled
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-border bg-muted text-muted-foreground'"
+              >
+                {{ item.enabled ? '已启用' : '已停用' }}
+              </FaTag>
+            </dd>
+          </div>
+
+          <div class="gap-1 grid">
+            <dt class="qs-type-label text-muted-foreground">
+              有效状态
+            </dt>
+            <dd class="m-0">
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag"
+                :class="item.effectiveEnabled
+                  ? 'border-primary/30 bg-primary/10 text-primary'
+                  : 'border-border bg-muted text-muted-foreground'"
+              >
+                {{ item.effectiveEnabled ? '当前有效' : '当前无效' }}
+              </FaTag>
+            </dd>
+          </div>
+        </template>
       </dl>
 
       <FaAlert
-        v-if="isDisable"
+        v-if="isItem"
+        :variant="lastEnabledItemBlocked || isDisable ? 'destructive' : 'default'"
+        :icon="lastEnabledItemBlocked || isDisable
+          ? 'i-lucide:triangle-alert'
+          : 'i-lucide:info'"
+        :title="lastEnabledItemBlocked
+          ? '暂不可停用'
+          : isDisable ? '停用影响' : '启用结果'"
+        :role="lastEnabledItemBlocked ? 'alert' : 'status'"
+      >
+        <template #description>
+          <span>{{ copy.consequence }}</span>
+          <span v-if="type && !type.enabled" class="font-medium">
+            所属类型当前停用，有效状态由类型与条目的自身状态共同决定。
+          </span>
+          <span v-if="lastEnabledItemBlocked" class="font-medium">
+            类型启用期间必须至少保留一个自身启用条目；请先启用其他条目，或先停用类型。
+          </span>
+        </template>
+      </FaAlert>
+      <FaAlert
+        v-else-if="isDisable"
         variant="destructive"
         icon="i-lucide:triangle-alert"
         title="停用影响"
@@ -179,7 +294,7 @@ watch(
         </template>
       </FaAlert>
       <FaAlert
-        v-else
+        v-else-if="!isItem"
         :variant="hasEnabledItems ? 'default' : 'destructive'"
         :icon="hasEnabledItems ? 'i-lucide:info' : 'i-lucide:circle-alert'"
         title="启用条件"
@@ -210,7 +325,7 @@ watch(
         class="min-h-11 w-full sm:w-auto"
         :loading="interactionLocked"
         :disabled="submitDisabled"
-        :aria-label="`${copy.confirmLabel}${type?.name ?? '字典类型'}`"
+        :aria-label="`${copy.confirmLabel}${targetLabel}`"
         @click="handleSubmit"
       >
         {{ copy.confirmLabel }}

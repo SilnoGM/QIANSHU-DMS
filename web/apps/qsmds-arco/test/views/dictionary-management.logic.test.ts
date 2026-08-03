@@ -3,20 +3,107 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildDictionaryItemListQuery,
   buildDictionaryTypeListQuery,
   canApplyDictionaryItemResponse,
   canApplyDictionaryMutationResult,
   canApplyDictionaryQueryResponse,
+  createDictionaryItemQueryRefreshScheduler,
   createDictionaryManagementState,
   createDictionarySelection,
   isDictionaryAbortError,
   resolveDictionaryAccessTransition,
+  resolveDictionaryItemEmptyKind,
+  resolveDictionaryItemResponsePage,
   resolveDictionaryTypeEmptyKind,
   resolveDictionaryTypeResponsePage,
   resolveDictionaryTypeSelection,
   transitionDictionaryMutationState,
   transitionDictionaryQueryState,
 } from '../../src/views/system/basic-data/dictionaries/dictionary-management.logic'
+
+test('Item 查询规范化搜索、状态、分页与受控 Server 排序', () => {
+  assert.deepEqual(buildDictionaryItemListQuery({
+    page: 3,
+    pageSize: 50,
+    search: '\u0085  pending\u00A0 state  ',
+    sorting: [{ id: 'updatedAt', desc: true }],
+    status: 'ENABLED',
+  }), {
+    page: 3,
+    pageSize: 50,
+    query: 'pending state',
+    sortBy: 'updatedAt',
+    sortOrder: 'desc',
+    status: 'ENABLED',
+  })
+
+  assert.deepEqual(buildDictionaryItemListQuery({
+    page: 0,
+    pageSize: 200,
+    search: ' \u00A0 ',
+    sorting: [{ id: 'tone', desc: true }],
+    status: 'UNKNOWN',
+  }), {
+    page: 1,
+    pageSize: 20,
+    sortBy: 'sortOrder',
+    sortOrder: 'asc',
+  })
+})
+
+test('Item 空态区分类型无条目与搜索或状态筛选无结果', () => {
+  assert.equal(resolveDictionaryItemEmptyKind({ search: '', status: undefined }), 'system')
+  assert.equal(resolveDictionaryItemEmptyKind({ search: 'pending', status: undefined }), 'filtered')
+  assert.equal(resolveDictionaryItemEmptyKind({ search: '', status: 'DISABLED' }), 'filtered')
+})
+
+test('Item 写入后若当前页越界则回退最后有效页', () => {
+  assert.equal(resolveDictionaryItemResponsePage({
+    itemCount: 0,
+    page: 3,
+    pageSize: 20,
+    total: 21,
+  }), 2)
+  assert.equal(resolveDictionaryItemResponsePage({
+    itemCount: 1,
+    page: 3,
+    pageSize: 20,
+    total: 41,
+  }), 3)
+  assert.equal(resolveDictionaryItemResponsePage({
+    itemCount: 0,
+    page: 3,
+    pageSize: 20,
+    total: 0,
+  }), 1)
+})
+
+test('Item 查询调度合并同步事件并在 Type 切换或卸载后拒绝旧回调', async () => {
+  let refreshCount = 0
+  const scheduler = createDictionaryItemQueryRefreshScheduler(() => {
+    refreshCount += 1
+  })
+
+  scheduler.schedule()
+  scheduler.schedule()
+  assert.equal(refreshCount, 0)
+  await Promise.resolve()
+  assert.equal(refreshCount, 1)
+
+  scheduler.schedule()
+  scheduler.invalidate()
+  scheduler.schedule()
+  await Promise.resolve()
+  assert.equal(refreshCount, 2)
+
+  scheduler.schedule()
+  scheduler.dispose()
+  await Promise.resolve()
+  scheduler.schedule()
+  await Promise.resolve()
+  assert.equal(refreshCount, 2)
+})
 
 test('Type 查询规范化 Unicode 空白、状态与分页并保持稳定排序', () => {
   assert.deepEqual(buildDictionaryTypeListQuery({
