@@ -5,11 +5,16 @@ import { Prisma } from '../../generated/prisma/client'
 import type { DictionaryTone } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
+import { ApiException } from '../../infrastructure/http/api.exception'
 import {
   createDictionaryApiException,
   DICTIONARY_ERROR_CODES,
 } from './dictionary.errors'
-import { normalizeDictionaryQuery } from './dictionary.normalizer'
+import {
+  normalizeDictionaryBatchCodes,
+  normalizeDictionaryQuery,
+  normalizeDictionaryTypeCode,
+} from './dictionary.normalizer'
 import { mapDictionaryPersistenceError } from './dictionary.persistence-error.mapper'
 import {
   DictionaryItemSortBy,
@@ -24,6 +29,8 @@ import {
   type DictionaryTypeSortBy as DictionaryTypeSortByValue,
 } from './dto/dictionary-management.dto'
 import type {
+  DictionaryCatalogBatchDto,
+  DictionaryCatalogDto,
   DictionaryItemDto,
   DictionaryItemPageDto,
   DictionaryTypeDto,
@@ -63,12 +70,36 @@ const DICTIONARY_ITEM_DETAIL_SELECT = {
   },
 } satisfies Prisma.DictionaryItemSelect
 
+const DICTIONARY_CATALOG_SELECT = {
+  code: true,
+  name: true,
+  enabled: true,
+  items: {
+    orderBy: [
+      { sortOrder: 'asc' },
+      { value: 'asc' },
+      { id: 'asc' },
+    ],
+    select: {
+      value: true,
+      label: true,
+      tone: true,
+      enabled: true,
+      sortOrder: true,
+    },
+  },
+} satisfies Prisma.DictionaryTypeSelect
+
 type DictionaryTypeRow = Prisma.DictionaryTypeGetPayload<{
   select: typeof DICTIONARY_TYPE_PUBLIC_SELECT
 }>
 
 type DictionaryItemDetailRow = Prisma.DictionaryItemGetPayload<{
   select: typeof DICTIONARY_ITEM_DETAIL_SELECT
+}>
+
+type DictionaryCatalogRow = Prisma.DictionaryTypeGetPayload<{
+  select: typeof DICTIONARY_CATALOG_SELECT
 }>
 
 interface DictionaryItemRow {
@@ -283,6 +314,40 @@ export class DictionaryQueryService {
     }
   }
 
+  async getCatalogByCode(code: string): Promise<DictionaryCatalogDto> {
+    try {
+      const normalizedCode = normalizeDictionaryTypeCode(code)
+
+      return await this.inRepeatableReadSnapshot(async (transaction) => {
+        const result = await readCatalogs(transaction, [normalizedCode])
+        const catalog = result.dictionaries[0]
+        if (catalog === undefined) {
+          throw createDictionaryApiException(
+            DICTIONARY_ERROR_CODES.TYPE_NOT_FOUND,
+          )
+        }
+
+        return catalog
+      })
+    } catch (error) {
+      return rethrowCatalogQueryError(error)
+    }
+  }
+
+  async listCatalogs(
+    codes: readonly string[],
+  ): Promise<DictionaryCatalogBatchDto> {
+    try {
+      const normalizedCodes = normalizeDictionaryBatchCodes(codes)
+
+      return await this.inRepeatableReadSnapshot(transaction =>
+        readCatalogs(transaction, normalizedCodes),
+      )
+    } catch (error) {
+      return rethrowCatalogQueryError(error)
+    }
+  }
+
   private async inRepeatableReadSnapshot<T>(
     reader: (transaction: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
@@ -292,6 +357,66 @@ export class DictionaryQueryService {
     }, {
       isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead,
     })
+  }
+}
+
+/**
+ * Catalog 的公共矩阵没有事务冲突 409。保留明确的输入/资源 ApiException，
+ * 其余读错误全部失败关闭为固定 500，避免数据库事实与未声明错误泄露到 HTTP。
+ */
+function rethrowCatalogQueryError(error: unknown): never {
+  if (error instanceof ApiException) {
+    throw error
+  }
+
+  throw createDictionaryApiException(
+    DICTIONARY_ERROR_CODES.INTERNAL_ERROR,
+  )
+}
+
+async function readCatalogs(
+  transaction: Prisma.TransactionClient,
+  normalizedCodes: readonly string[],
+): Promise<DictionaryCatalogBatchDto> {
+  const rows = await transaction.dictionaryType.findMany({
+    where: { code: { in: [...normalizedCodes] } },
+    select: DICTIONARY_CATALOG_SELECT,
+  })
+  const catalogsByCode = new Map(
+    rows.map(row => [row.code, mapDictionaryCatalog(row)] as const),
+  )
+  const dictionaries: DictionaryCatalogDto[] = []
+  const missingCodes: string[] = []
+
+  /*
+   * SQL 的 IN 不承诺输入顺序；这里按规范化请求顺序重组 found/missing，
+   * 同时避免把数据库内部 UUID 当作公开排序依据输出。
+   */
+  for (const code of normalizedCodes) {
+    const catalog = catalogsByCode.get(code)
+    if (catalog === undefined) {
+      missingCodes.push(code)
+    } else {
+      dictionaries.push(catalog)
+    }
+  }
+
+  return { dictionaries, missingCodes }
+}
+
+function mapDictionaryCatalog(row: DictionaryCatalogRow): DictionaryCatalogDto {
+  return {
+    code: row.code,
+    name: row.name,
+    enabled: row.enabled,
+    items: row.items.map(item => ({
+      value: item.value,
+      label: item.label,
+      tone: item.tone,
+      enabled: item.enabled,
+      effectiveEnabled: row.enabled && item.enabled,
+      sortOrder: item.sortOrder,
+    })),
   }
 }
 

@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 6 已完成；Task 7 未开始
+- 状态：Task 7 已完成；Task 8 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -182,7 +182,7 @@ TDD：先覆盖创建默认停用、类型内 value 唯一、编辑白名单、�
 
 ### Task 7 - Consumer Catalog 与 DictionaryLookupService
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R5、R6、R8。
 
@@ -522,4 +522,24 @@ Task 5 只交付 `DictionaryCommandService` 的 Type create/update/enable/disabl
 | `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境原命令重跑退出 `0`，`633/633` 通过 |
 | `git diff --check` | 通过 |
 
-Task 6 只交付既有 `DictionaryCommandService` 的 Item create/update/enable/disable、Create Item 双错误 context、对应单元测试及本验证记录；交叉审查同时修正 Type/Item Create 在真实 DTO 上判断 description 是否显式提交的同源 Audit 缺陷。未实现 Catalog/Lookup、Controller、Module、endpoint、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit enum、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`，Task 7 与 Task 8 均未开始。当前并发与 Audit 失败测试只证明 serializing transaction fixture 下的 Service 版本语义和安全错误收敛；真实 PostgreSQL `[200,409]`、两个最后候选 Item 并发停用、Trigger、无死锁与 Audit rollback 继续由 Task 9 在隔离数据库中验证，本任务未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。
+Task 6 只交付既有 `DictionaryCommandService` 的 Item create/update/enable/disable、Create Item 双错误 context、对应单元测试及本验证记录；交叉审查同时修正 Type/Item Create 在真实 DTO 上判断 description 是否显式提交的同源 Audit 缺陷。未实现 Catalog/Lookup、Controller、Module、endpoint、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit enum、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`。该段记录 Task 6 交付时状态；当时 Task 7 与 Task 8 均未开始。当前并发与 Audit 失败测试只证明 serializing transaction fixture 下的 Service 版本语义和安全错误收敛；真实 PostgreSQL `[200,409]`、两个最后候选 Item 并发停用、Trigger、无死锁与 Audit rollback 继续由 Task 9 在隔离数据库中验证，本任务未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。
+
+## 15. Task 7 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Catalog / Lookup RED | 首次目标测试因 `DictionaryQueryService` 缺少 `getCatalogByCode/listCatalogs` 报 `TS2339`，且缺少 `dictionary-lookup.service.ts` 报 `TS2307`；退出 `1`，`2/2` suites 失败、`0` tests |
+| Initial target GREEN | Catalog、Lookup、Query、Normalizer 与 DTO 五组目标测试退出 `0`，`5/5` suites、`104/104` tests 通过 |
+| Initial target lint | 首次目录 ESLint 因 Lookup 的多余类型断言报 `1` error；移除断言与无用 interface 后退出 `0` |
+| Cross-review coverage | 三组只读审查未发现生产实现 P0-P2 或越界；测试审查发现 Catalog `effectiveEnabled`、历史 known resolution 布尔矩阵与批量 missing code 规范化回显的误绿缺口，补测后复核全部关闭 |
+| Final target GREEN | `pnpm -C server exec jest --runInBand --runTestsByPath src/modules/dictionaries/dictionary-catalog-query.service.spec.ts src/modules/dictionaries/dictionary-lookup.service.spec.ts src/modules/dictionaries/dictionary-query.service.spec.ts src/modules/dictionaries/dictionary.normalizer.spec.ts src/modules/dictionaries/dto/dictionary-dtos.spec.ts` 退出 `0`，`5/5` suites、`106/106` tests 通过 |
+| Target lint | `pnpm -C server exec eslint src/modules/dictionaries --max-warnings=0` 退出 `0` |
+| `pnpm -C server check` | 退出 `0`；Prisma validate、typecheck、lint 通过，`134/134` suites、`1325/1325` tests 通过 |
+| `pnpm -C server build` | 退出 `0` |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 snapshot/generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境原命令重跑退出 `0`，`633/633` 通过 |
+| `git diff --check` | 通过 |
+
+Task 7 只交付 `DictionaryQueryService` 的单个/批量 Consumer Catalog 核心、`DictionaryLookupService`、对应单元测试及本验证记录。Catalog 返回全部状态的 Type/Item 并严格白名单映射；`requireEffectiveValue` 复用调用方事务并按 Type -> Item `FOR SHARE` 锁序校验；`resolveStoredValue` 只规范化 code，不改写历史 raw value。未新增 Controller、Module、endpoint、Session/Guard 运行时注册、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit、seed、Web、cache、第三方依赖或公共组件；未运行 `contract:sync`。Catalog 的 Session HTTP 保护待 Task 8 注册，真实 PostgreSQL 事务阻塞与锁语义待 Task 9 在隔离数据库验证；本任务未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。
