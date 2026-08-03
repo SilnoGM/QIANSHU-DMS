@@ -1,3 +1,7 @@
+import type {
+  DictionaryCatalogIdentitySource,
+} from '@/dictionary-catalog/types'
+
 // 此副作用导入必须先于 App、Router、Pinia 与 Storage proxy 的模块求值。
 import '@/auth/legacy-auth-bootstrap'
 
@@ -14,6 +18,12 @@ import {
 import {
   currencyCatalogProviderKey,
 } from '@/currency-catalog/injection'
+import {
+  installDefaultDictionaryCatalogProvider,
+} from '@/dictionary-catalog/default-provider'
+import {
+  dictionaryCatalogProviderKey,
+} from '@/dictionary-catalog/injection'
 // 加载 iconify 图标
 import { downloadAndInstall } from '@/iconify'
 import icons from '@/iconify/index.json'
@@ -116,4 +126,50 @@ const currencyCatalogController = installDefaultCurrencyCatalogProvider({
     : name => new BroadcastChannel(name),
 })
 app.provide(currencyCatalogProviderKey, currencyCatalogController.provider)
+
+/*
+ * 字典目录的身份真相源只暴露 authEpoch 和 userId。同步 watch 保证身份
+ * 边界变化在当前调用栈内通知 Provider，不留出旧身份缓存可被重用的窗口。
+ */
+const dictionaryCatalogIdentitySource: DictionaryCatalogIdentitySource = {
+  getSnapshot: () => ({
+    authEpoch: appAccountStore.authEpoch,
+    userId: appAccountStore.authContext?.user.id ?? null,
+  }),
+  subscribe: listener => watch(
+    () => dictionaryCatalogIdentitySource.getSnapshot(),
+    identity => listener(identity),
+    { flush: 'sync' },
+  ),
+}
+
+/*
+ * 应用启动只同步安装中立 Provider，不预取任何字典。真正读取时才动态
+ * 装载 API，避免 API Client -> Account Store -> Router 形成启动求值环。
+ */
+const dictionaryCatalogController = installDefaultDictionaryCatalogProvider({
+  identitySource: dictionaryCatalogIdentitySource,
+  loader: {
+    get: async ({ code, signal }) => {
+      const { default: dictionariesApi }
+        = await import('@/api/modules/dictionaries')
+      return dictionariesApi.catalog
+        .get(code, signal)
+        .then(response => response.data)
+    },
+    batch: async ({ codes: readonlyCodes, signal }) => {
+      const codes = [...readonlyCodes]
+      const { default: dictionariesApi }
+        = await import('@/api/modules/dictionaries')
+      return dictionariesApi.catalog
+        .batch(codes, signal)
+        .then(response => response.data)
+    },
+  },
+  now: () => Date.now(),
+  createBroadcastChannel: typeof BroadcastChannel === 'undefined'
+    ? undefined
+    : name => new BroadcastChannel(name),
+})
+app.provide(dictionaryCatalogProviderKey, dictionaryCatalogController.provider)
 app.mount('#app')

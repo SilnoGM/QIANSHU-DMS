@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 10 已完成；Task 11 未开始
+- 状态：Task 11 已完成；Task 12 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -230,7 +230,7 @@ TDD：先用 API Recorder 覆盖 generated DTO 使用、path encode、repeated `
 
 ### Task 11 - Identity-scoped Catalog Provider
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R5、R9。
 
@@ -614,3 +614,25 @@ Task 9 只交付三个 Server E2E 文件与本验证记录，不修改生产代�
 | `git diff --check` | 通过 |
 
 Task 10 只交付 Web Dictionary API Adapter、独立 Catalog domain、运行时白名单校验与 deep-freeze、对应测试及本验证记录。未实现 Identity-scoped Provider、cache、TTL、inflight 合并、Pinia、BroadcastChannel、注入、管理页面、路由或 Browser E2E；未修改 Server、公共 API/DTO、Schema、migration、权限、Audit、OpenAPI snapshot、generated tree、依赖或公共组件，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。Task 11 与后续任务保持未开始。
+
+## 19. Task 11 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Provider / Integration RED | 首次目标命令退出 `1`；两个测试文件分别因缺少 `src/dictionary-catalog/provider` 与 `default-provider` 报 `ERR_MODULE_NOT_FOUND`，`0` tests 通过，证明 Identity-scoped Provider 与应用组装能力尚未存在 |
+| Initial target GREEN | Provider 与应用组装的初始目标测试退出 `0`，`23/23` 通过；覆盖身份拒绝、JSON tuple cache key、5 分钟正负缓存、single/batch、独立 Abort、generation、精确失效、BroadcastChannel、默认实例与 `main.ts` 注入 |
+| Typecheck convergence | 首轮 `vue-tsc` 如实发现 default Provider type import、loader 参数及 listener 的 `7` 个类型错误；修正后第二轮发现 union in-flight 的 `1` 个推导错误，按 single/batch 分支收窄后 `pnpm -C web --filter qsmds-arco run typecheck` 退出 `0` |
+| Cross-review RED | 两路只读审查先发现 event identity 未被使用；新增单测后目标 `0/1` 失败。继续补齐 invalid snapshot、同步 reload、稳定 404 body、batch joined get 与 exact own-key 后，定向输出 `12` tests 中 `8` 个失败结果，逐项证明旧缓存、迟到 ownership 和宽松消息/错误守卫缺口 |
+| Cross-review GREEN | Provider 增加 event/snapshot pending guard、invalid identity fail-closed、完整稳定 404 最小结构、`Reflect.ownKeys`、batch code consumer 中止与迟到 reject 证明；默认实例补齐创建失败保留旧实例，`main.ts` 静态 API/preload/sync watch 门禁收紧。最终复核 P0=`0`、P1=`0`、P2=`0` |
+| Final target GREEN | `pnpm -C web exec node --import tsx --test apps/qsmds-arco/test/views/dictionary-catalog-provider.test.ts apps/qsmds-arco/test/views/dictionary-catalog-integration.test.ts` 退出 `0`，`30/30` 通过 |
+| Target lint | Task 11 的 Provider、types、default、injection、`main.ts` 与两份测试执行 ESLint `--max-warnings=0`，退出 `0` |
+| `pnpm -C web check` | 受限环境先在 `156/156` Node tests 后因 `tsx` IPC pipe 报 `listen EPERM`；在具备 IPC 权限的环境以原命令复跑退出 `0`，`156` 个 Node tests、`49` 个 TS script tests、`626` 个 API/View tests、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C web build` | 退出 `0`；生产构建、Noto 字体快照与 zero-residue 校验通过，仅有既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `listen EPERM`；在具备 process/socket 权限的环境以原命令复跑退出 `0`，`633/633` 通过 |
+| Generated / scope audit | Git 只包含三份规格文档、Dictionary Catalog Provider 的三个新增实现文件、`types.ts`、`main.ts` 与两份目标测试；Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、路由、页面与公共组件均无漂移 |
+| `git diff --check` | 通过 |
+
+Task 11 只交付 Web 内部 Dictionary Catalog Provider 契约、身份隔离内存缓存、single/batch ownership、正负 TTL、精确失效、跨标签广播、默认实例、Vue InjectionKey、`main.ts` 生命周期组装、对应测试及本验证记录。未新增 Pinia Store 或持久化，不在登录时预取，不实现 `useDictionaryCatalog`、options/resolve 历史值语义、管理 Mutation 失效接线、页面、路由、UI 或公共组件；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit 或依赖，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。Task 12 与后续任务保持未开始。
