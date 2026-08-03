@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 9 已完成；Task 10 未开始
+- 状态：Task 10 已完成；Task 11 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -218,7 +218,7 @@ TDD：补齐真实 Session/CSRF/角色矩阵、完整生命周期、版本冲突
 
 ### Task 10 - Web API Adapter 与运行时可信边界
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R5、R8、R9、R12。
 
@@ -592,3 +592,25 @@ Task 8 只交付管理 12 个与 Catalog 2 个 Controller endpoint、`Dictionary
 | `git diff --check` | 通过 |
 
 Task 9 只交付三个 Server E2E 文件与本验证记录，不修改生产代码、公共 API、DTO、Schema、migration、权限、Audit enum、依赖、Web 或公共组件。所有数据库写入仅发生在一次性 `qianshu_ci` PostgreSQL 容器的随机 schema 中；未连接或写入开发、测试共享或生产数据库。Task 10 与后续任务保持未开始，未运行 Browser E2E，未执行 push、PR、merge、发布或分支删除。
+
+## 18. Task 10 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| TDD RED 环境辨析 | 首次目标命令通过 `tsx` CLI 启动时因受限环境禁止创建 IPC pipe 报 `listen EPERM`，该次不作为功能 RED；改用同一运行时的 `node --import tsx --test` 后退出 `1`，两个测试文件分别因缺少 `src/api/modules/dictionaries` 与 `src/dictionary-catalog/validation` 报 `ERR_MODULE_NOT_FOUND`，`0` tests 通过 |
+| API Adapter initial GREEN | API Recorder 目标测试退出 `0`，`3/3` 通过；覆盖 Catalog `2` 个、Type `6` 个、Item `6` 个 operation，逐段 path encode、repeated `codes`、六个读取的 AbortSignal/local error presentation、八个 Mutation 的 `retry:false` 及完整 `AxiosResponse` 身份 |
+| Catalog boundary initial GREEN | Catalog 领域目标测试 `33/33` 通过；首次 ESLint 因两处 `regexp/prefer-w` 报 `2` errors，等价修正正则后目标 ESLint 与 `vue-tsc` 均退出 `0` |
+| Cross-review hardening | 两层只读审查最终确认 P0=`0`、P1=`0`；补齐精确有效上界与越界、非法标识字符、NFC 漂移、稀疏数组、已知 getter、Proxy trap、非枚举 `cause`、双向 `effectiveEnabled` 关系、Batch 输入边界、14 个响应身份及更强的 DTO 镜像/Domain 依赖静态守卫 |
+| Final target GREEN | `pnpm -C web exec node --import tsx --test apps/qsmds-arco/test/api/dictionaries.test.ts apps/qsmds-arco/test/api/dictionary-catalog-validation.test.ts` 退出 `0`，`47/47` 通过 |
+| Target lint | 五个 Task 10 实现/测试文件的 ESLint `--max-warnings=0` 退出 `0` |
+| `pnpm -C web check` | P2 补测前，受限环境先在 `156/156` Node tests 后因 `tsx` IPC pipe 报 `listen EPERM`；在具备 IPC 权限的环境原命令重跑退出 `0`，`156` 个 Node tests、`49` 个 TS script tests、`585` 个 API/View tests 及 typecheck、ESLint、Stylelint 全部通过 |
+| Final sandbox-safe Web regression | P2 仅增加测试后，再次请求 IPC 权限因审批服务连接中断而未执行；首次沙箱兼容全量 API/View 命令因 shell 在错误工作目录展开 glob 报 `no matches found`，修正工作目录后退出 `0`，`596/596` 通过；随后 `pnpm -C web typecheck` 与 `pnpm -C web lint` 均退出 `0` |
+| `pnpm -C web build` | 退出 `0`；生产构建、Noto 字体快照和 zero-residue 校验通过，仅有既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `listen EPERM`；在具备 process/socket 权限的环境原命令重跑退出 `0`，`633/633` 通过 |
+| Generated / scope audit | Git 只包含三个 Web 实现文件、两个目标测试与三份规格文档；Server、Schema、migration、权限、Audit、OpenAPI snapshot、Web generated tree、依赖、公共组件、页面和路由均无漂移 |
+| `git diff --check` | 通过 |
+
+Task 10 只交付 Web Dictionary API Adapter、独立 Catalog domain、运行时白名单校验与 deep-freeze、对应测试及本验证记录。未实现 Identity-scoped Provider、cache、TTL、inflight 合并、Pinia、BroadcastChannel、注入、管理页面、路由或 Browser E2E；未修改 Server、公共 API/DTO、Schema、migration、权限、Audit、OpenAPI snapshot、generated tree、依赖或公共组件，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。Task 11 与后续任务保持未开始。
