@@ -179,6 +179,31 @@ describe('Dictionary persistence error mapper', () => {
     },
   )
 
+  it('keeps Item-create uniqueness in ITEM context while mapping transaction conflicts to TYPE', () => {
+    const duplicate = mapDictionaryPersistenceError(
+      {
+        code: 'P2002',
+        meta: { target: ['dictionaryTypeId', 'value'] },
+      },
+      'ITEM',
+      'TYPE',
+    )
+    const transactionConflict = mapDictionaryPersistenceError(
+      { code: 'P2034' },
+      'ITEM',
+      'TYPE',
+    )
+
+    expect(duplicate).toMatchObject({
+      code: DICTIONARY_ERROR_CODES.ITEM_VALUE_ALREADY_EXISTS,
+      status: HttpStatus.CONFLICT,
+    })
+    expect(transactionConflict).toMatchObject({
+      code: DICTIONARY_ERROR_CODES.TYPE_STATE_CHANGED,
+      status: HttpStatus.CONFLICT,
+    })
+  })
+
   it('preserves an existing safe ApiException by identity', () => {
     const existing = new ApiException(
       HttpStatus.NOT_FOUND,

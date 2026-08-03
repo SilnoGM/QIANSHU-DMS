@@ -28,6 +28,7 @@ const TRANSACTION_CONFLICT_CODES = [
 export function mapDictionaryPersistenceError(
   error: unknown,
   context: DictionaryPersistenceErrorContext,
+  transactionConflictContext: DictionaryPersistenceErrorContext = context,
 ): ApiException {
   if (error instanceof ApiException) {
     return error
@@ -105,7 +106,7 @@ export function mapDictionaryPersistenceError(
     )
   ) {
     return createDictionaryApiException(
-      context === 'TYPE'
+      transactionConflictContext === 'TYPE'
         ? DICTIONARY_ERROR_CODES.TYPE_STATE_CHANGED
         : DICTIONARY_ERROR_CODES.ITEM_STATE_CHANGED,
     )

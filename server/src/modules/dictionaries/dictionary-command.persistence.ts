@@ -96,6 +96,7 @@ export async function runDictionaryCommandTransaction<T>(
   prisma: PrismaService,
   context: DictionaryPersistenceErrorContext,
   operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  transactionConflictContext: DictionaryPersistenceErrorContext = context,
 ): Promise<T> {
   try {
     return await prisma.$transaction(async (transaction) => {
@@ -104,7 +105,15 @@ export async function runDictionaryCommandTransaction<T>(
       return operation(transaction)
     })
   } catch (error) {
-    throw mapDictionaryPersistenceError(error, context)
+    /*
+     * Create Item 的唯一键属于 Item，但它首先等待父 Type 行锁。仅允许该入口
+     * 覆盖事务冲突的资源归属；唯一键与 CHECK 映射仍严格使用原始 context。
+     */
+    throw mapDictionaryPersistenceError(
+      error,
+      context,
+      transactionConflictContext,
+    )
   }
 }
 

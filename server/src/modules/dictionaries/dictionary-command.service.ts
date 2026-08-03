@@ -4,15 +4,21 @@ import {
   AuditActorType,
   AuditEventType,
   AuditOutcome,
+  DictionaryTone,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { AuditService } from '../audit/audit.service'
 import {
+  createDictionaryItemRecord,
   createDictionaryTypeRecord,
+  readDictionaryItemCommandDto,
+  readDictionaryItemMutationContext,
   readDictionaryTypeCommandDto,
   readDictionaryTypeForMutation,
   runDictionaryCommandTransaction,
+  updateDictionaryItemRecord,
   updateDictionaryTypeRecord,
+  type UpdateDictionaryItemRecordInput,
   type UpdateDictionaryTypeRecordInput,
 } from './dictionary-command.persistence'
 import {
@@ -21,16 +27,23 @@ import {
 } from './dictionary.errors'
 import {
   normalizeDictionaryDescription,
+  normalizeDictionaryItemValue,
+  normalizeDictionaryLabel,
   normalizeDictionaryName,
   normalizeOptionalDictionaryDescription,
   normalizeDictionaryTypeCode,
 } from './dictionary.normalizer'
 import type {
   ChangeDictionaryStatusRequestDto,
+  CreateDictionaryItemRequestDto,
   CreateDictionaryTypeRequestDto,
+  UpdateDictionaryItemRequestDto,
   UpdateDictionaryTypeRequestDto,
 } from './dto/dictionary-command.dto'
-import type { DictionaryTypeDto } from './dto/dictionary-response.dto'
+import type {
+  DictionaryItemDto,
+  DictionaryTypeDto,
+} from './dto/dictionary-response.dto'
 
 export interface DictionaryCommandContext {
   /** 只接受 AuthenticationGuard 写入的可信 Session User id。 */
@@ -40,6 +53,7 @@ export interface DictionaryCommandContext {
 }
 
 type DictionaryTypeStatusOperation = 'enable' | 'disable'
+type DictionaryItemStatusOperation = 'enable' | 'disable'
 
 function requireDictionaryTypeDto(
   value: DictionaryTypeDto | null,
@@ -55,6 +69,20 @@ function requireDictionaryTypeDto(
   return value
 }
 
+function requireDictionaryItemDto(
+  value: DictionaryItemDto | null,
+): DictionaryItemDto {
+  if (value === null) {
+    /*
+     * 成功写入或已持有组合锁后，Item 必须仍可由原 typeId + itemId 定位。
+     * 失败时保持 INTERNAL_ERROR，不能把持久化不变量破坏伪装为业务 404。
+     */
+    throw new Error('Dictionary Item mutation response invariant violated')
+  }
+
+  return value
+}
+
 function assertExpectedVersion(
   currentVersion: number,
   expectedVersion: number,
@@ -62,6 +90,17 @@ function assertExpectedVersion(
   if (currentVersion !== expectedVersion) {
     throw createDictionaryApiException(
       DICTIONARY_ERROR_CODES.TYPE_STATE_CHANGED,
+    )
+  }
+}
+
+function assertItemExpectedVersion(
+  currentVersion: number,
+  expectedVersion: number,
+): void {
+  if (currentVersion !== expectedVersion) {
+    throw createDictionaryApiException(
+      DICTIONARY_ERROR_CODES.ITEM_STATE_CHANGED,
     )
   }
 }
@@ -90,7 +129,7 @@ export class DictionaryCommandService {
       'enabled',
       'name',
       'sortOrder',
-      ...(Object.hasOwn(input, 'description') ? ['description'] : []),
+      ...(input.description === undefined ? [] : ['description']),
     ].sort().join(',')
 
     return runDictionaryCommandTransaction(
@@ -123,6 +162,76 @@ export class DictionaryCommandService {
           await readDictionaryTypeCommandDto(transaction, created.id),
         )
       },
+    )
+  }
+
+  async createItem(
+    context: DictionaryCommandContext,
+    dictionaryTypeId: string,
+    input: CreateDictionaryItemRequestDto,
+  ): Promise<DictionaryItemDto> {
+    const normalizedTypeId = dictionaryTypeId.toLowerCase()
+    const value = normalizeDictionaryItemValue(input.value)
+    const label = normalizeDictionaryLabel(input.label)
+    const description = normalizeDictionaryDescription(input.description)
+    const tone = input.tone ?? DictionaryTone.DEFAULT
+    const changedFields = [
+      'dictionaryTypeId',
+      'enabled',
+      'label',
+      'sortOrder',
+      'tone',
+      'value',
+      ...(input.description === undefined ? [] : ['description']),
+    ].sort().join(',')
+
+    return runDictionaryCommandTransaction(
+      this.prisma,
+      'ITEM',
+      async (transaction) => {
+        const created = await createDictionaryItemRecord(
+          transaction,
+          normalizedTypeId,
+          {
+            value,
+            label,
+            description,
+            tone,
+            sortOrder: input.sortOrder,
+          },
+        )
+        if (created === null) {
+          throw createDictionaryApiException(
+            DICTIONARY_ERROR_CODES.TYPE_NOT_FOUND,
+          )
+        }
+
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.DICTIONARY_ITEM_CREATED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: context.actorUserId.toLowerCase(),
+          targetType: 'DictionaryItem',
+          targetId: created.itemId,
+          requestId: context.requestId,
+          metadata: {
+            dictionaryCode: created.dictionaryType.code,
+            itemValue: value,
+            changedFields,
+            version: 1,
+          },
+        })
+
+        return requireDictionaryItemDto(
+          await readDictionaryItemCommandDto(
+            transaction,
+            normalizedTypeId,
+            created.itemId,
+          ),
+        )
+      },
+      /* Create Item 先等待父 Type 锁，所以事务冲突归属于 Type。 */
+      'TYPE',
     )
   }
 
@@ -233,6 +342,139 @@ export class DictionaryCommandService {
     )
   }
 
+  async updateItem(
+    context: DictionaryCommandContext,
+    dictionaryTypeId: string,
+    dictionaryItemId: string,
+    input: UpdateDictionaryItemRequestDto,
+  ): Promise<DictionaryItemDto> {
+    /*
+     * Service 以 own-property 再建 Item 可变字段白名单；即使内部调用带入 id、
+     * dictionaryTypeId、value 或 enabled，也不会进入 Persistence。
+     */
+    const updatesLabel =
+      Object.hasOwn(input, 'label') && input.label !== undefined
+    const updatesDescription =
+      Object.hasOwn(input, 'description') && input.description !== undefined
+    const updatesTone =
+      Object.hasOwn(input, 'tone') && input.tone !== undefined
+    const updatesSortOrder =
+      Object.hasOwn(input, 'sortOrder') && input.sortOrder !== undefined
+
+    if (
+      !updatesLabel
+      && !updatesDescription
+      && !updatesTone
+      && !updatesSortOrder
+    ) {
+      throw createDictionaryApiException(
+        DICTIONARY_ERROR_CODES.VALIDATION_FAILED,
+      )
+    }
+
+    const label = updatesLabel
+      ? normalizeDictionaryLabel(input.label)
+      : undefined
+    const description = updatesDescription
+      ? normalizeOptionalDictionaryDescription(input.description)
+      : undefined
+    const tone = updatesTone ? input.tone : undefined
+    const sortOrder = updatesSortOrder ? input.sortOrder : undefined
+    const normalizedTypeId = dictionaryTypeId.toLowerCase()
+    const normalizedItemId = dictionaryItemId.toLowerCase()
+
+    return runDictionaryCommandTransaction(
+      this.prisma,
+      'ITEM',
+      async (transaction) => {
+        const mutationContext = await readDictionaryItemMutationContext(
+          transaction,
+          normalizedTypeId,
+          normalizedItemId,
+        )
+        const dictionaryType = mutationContext.dictionaryType
+        const dictionaryItem = mutationContext.dictionaryItem
+        if (dictionaryType === null || dictionaryItem === null) {
+          throw createDictionaryApiException(
+            DICTIONARY_ERROR_CODES.ITEM_NOT_FOUND,
+          )
+        }
+
+        // stale version 必须先于规范化后的字段比较，不能被 no-op 吞掉。
+        assertItemExpectedVersion(
+          dictionaryItem.version,
+          input.expectedVersion,
+        )
+
+        const data: UpdateDictionaryItemRecordInput = {}
+        const changedFields: string[] = []
+        if (label !== undefined && label !== dictionaryItem.label) {
+          data.label = label
+          changedFields.push('label')
+        }
+        if (
+          description !== undefined
+          && description !== dictionaryItem.description
+        ) {
+          data.description = description
+          changedFields.push('description')
+        }
+        if (tone !== undefined && tone !== dictionaryItem.tone) {
+          data.tone = tone
+          changedFields.push('tone')
+        }
+        if (
+          sortOrder !== undefined
+          && sortOrder !== dictionaryItem.sortOrder
+        ) {
+          data.sortOrder = sortOrder
+          changedFields.push('sortOrder')
+        }
+
+        if (changedFields.length === 0) {
+          return requireDictionaryItemDto(
+            await readDictionaryItemCommandDto(
+              transaction,
+              normalizedTypeId,
+              normalizedItemId,
+            ),
+          )
+        }
+
+        await updateDictionaryItemRecord(
+          transaction,
+          normalizedItemId,
+          data,
+        )
+        changedFields.sort()
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.DICTIONARY_ITEM_UPDATED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: context.actorUserId.toLowerCase(),
+          targetType: 'DictionaryItem',
+          targetId: normalizedItemId,
+          requestId: context.requestId,
+          metadata: {
+            dictionaryCode: dictionaryType.code,
+            itemValue: dictionaryItem.value,
+            changedFields: changedFields.join(','),
+            previousVersion: dictionaryItem.version,
+            version: dictionaryItem.version + 1,
+          },
+        })
+
+        return requireDictionaryItemDto(
+          await readDictionaryItemCommandDto(
+            transaction,
+            normalizedTypeId,
+            normalizedItemId,
+          ),
+        )
+      },
+    )
+  }
+
   enableType(
     context: DictionaryCommandContext,
     dictionaryTypeId: string,
@@ -254,6 +496,36 @@ export class DictionaryCommandService {
     return this.setTypeEnabled(
       context,
       dictionaryTypeId,
+      input,
+      'disable',
+    )
+  }
+
+  enableItem(
+    context: DictionaryCommandContext,
+    dictionaryTypeId: string,
+    dictionaryItemId: string,
+    input: ChangeDictionaryStatusRequestDto,
+  ): Promise<DictionaryItemDto> {
+    return this.setItemEnabled(
+      context,
+      dictionaryTypeId,
+      dictionaryItemId,
+      input,
+      'enable',
+    )
+  }
+
+  disableItem(
+    context: DictionaryCommandContext,
+    dictionaryTypeId: string,
+    dictionaryItemId: string,
+    input: ChangeDictionaryStatusRequestDto,
+  ): Promise<DictionaryItemDto> {
+    return this.setItemEnabled(
+      context,
+      dictionaryTypeId,
+      dictionaryItemId,
       input,
       'disable',
     )
@@ -338,6 +610,102 @@ export class DictionaryCommandService {
           await readDictionaryTypeCommandDto(
             transaction,
             normalizedTypeId,
+          ),
+        )
+      },
+    )
+  }
+
+  private setItemEnabled(
+    context: DictionaryCommandContext,
+    dictionaryTypeId: string,
+    dictionaryItemId: string,
+    input: ChangeDictionaryStatusRequestDto,
+    operation: DictionaryItemStatusOperation,
+  ): Promise<DictionaryItemDto> {
+    const normalizedTypeId = dictionaryTypeId.toLowerCase()
+    const normalizedItemId = dictionaryItemId.toLowerCase()
+    const desiredEnabled = operation === 'enable'
+
+    return runDictionaryCommandTransaction(
+      this.prisma,
+      'ITEM',
+      async (transaction) => {
+        const mutationContext = await readDictionaryItemMutationContext(
+          transaction,
+          normalizedTypeId,
+          normalizedItemId,
+        )
+        const dictionaryType = mutationContext.dictionaryType
+        const dictionaryItem = mutationContext.dictionaryItem
+        if (dictionaryType === null || dictionaryItem === null) {
+          throw createDictionaryApiException(
+            DICTIONARY_ERROR_CODES.ITEM_NOT_FOUND,
+          )
+        }
+
+        // 与 Type 一致：相同状态也必须先拒绝 stale expectedVersion。
+        assertItemExpectedVersion(
+          dictionaryItem.version,
+          input.expectedVersion,
+        )
+        if (dictionaryItem.enabled === desiredEnabled) {
+          return requireDictionaryItemDto(
+            await readDictionaryItemCommandDto(
+              transaction,
+              normalizedTypeId,
+              normalizedItemId,
+            ),
+          )
+        }
+
+        if (!desiredEnabled && dictionaryType.enabled) {
+          /*
+           * 已持有父 Type 锁，其他 Item 状态写不能越过这里。聚合读只用于给出
+           * 稳定 422；数据库 Trigger 在 Task 9 真实并发验证中仍是最终防线。
+           */
+          const dictionaryTypeDto = requireDictionaryTypeDto(
+            await readDictionaryTypeCommandDto(
+              transaction,
+              normalizedTypeId,
+            ),
+          )
+          if (dictionaryTypeDto.enabledItemCount <= 1) {
+            throw createDictionaryApiException(
+              DICTIONARY_ERROR_CODES.TYPE_ENABLED_ITEM_REQUIRED,
+            )
+          }
+        }
+
+        await updateDictionaryItemRecord(
+          transaction,
+          normalizedItemId,
+          { enabled: desiredEnabled },
+        )
+        await this.audit.record(transaction, {
+          eventType: desiredEnabled
+            ? AuditEventType.DICTIONARY_ITEM_ENABLED
+            : AuditEventType.DICTIONARY_ITEM_DISABLED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: context.actorUserId.toLowerCase(),
+          targetType: 'DictionaryItem',
+          targetId: normalizedItemId,
+          requestId: context.requestId,
+          metadata: {
+            dictionaryCode: dictionaryType.code,
+            itemValue: dictionaryItem.value,
+            changedFields: 'enabled',
+            previousVersion: dictionaryItem.version,
+            version: dictionaryItem.version + 1,
+          },
+        })
+
+        return requireDictionaryItemDto(
+          await readDictionaryItemCommandDto(
+            transaction,
+            normalizedTypeId,
+            normalizedItemId,
           ),
         )
       },

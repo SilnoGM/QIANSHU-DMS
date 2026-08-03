@@ -12,6 +12,7 @@ import {
   updateDictionaryTypeRecord,
 } from './dictionary-command.persistence'
 import { DictionaryCommandService } from './dictionary-command.service'
+import { CreateDictionaryTypeRequestDto } from './dto/dictionary-command.dto'
 import type { DictionaryTypeDto } from './dto/dictionary-response.dto'
 
 jest.mock('../../infrastructure/database/transaction-timeouts', () => ({
@@ -179,12 +180,16 @@ describe('DictionaryCommandService Type lifecycle', () => {
 
   it('omits description from create changedFields when the request did not contain it', async () => {
     const { audit, service, transaction } = createFixture()
-
-    await service.createType(context, {
+    const input = Object.assign(new CreateDictionaryTypeRequestDto(), {
       code: 'sales.channel',
       name: '销售渠道',
       sortOrder: 10,
     })
+
+    // ValidationPipe transform 后 optional class field 存在，但未提交值仍为 undefined。
+    expect(Object.hasOwn(input, 'description')).toBe(true)
+    expect(input.description).toBeUndefined()
+    await service.createType(context, input)
 
     expect(mockedCreateDictionaryTypeRecord).toHaveBeenCalledWith(
       transaction,

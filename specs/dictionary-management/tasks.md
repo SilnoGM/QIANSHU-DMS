@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 5 已完成；Task 6 待开始
+- 状态：Task 6 已完成；Task 7 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -170,7 +170,7 @@ TDD：先覆盖创建默认停用、编辑白名单、启用前至少一个自�
 
 ### Task 6 - DictionaryItem 生命周期
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认并交付。
 
 需求覆盖：R3、R4、R7、R8。
 
@@ -501,4 +501,25 @@ Task 4 只交付 Query Service、Command Persistence helper、Persistence Error 
 | `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境重跑退出 `0`，`633/633` 通过 |
 | `git diff --check` | 通过 |
 
-Task 5 只交付 `DictionaryCommandService` 的 Type create/update/enable/disable、对应单元测试及本验证记录，并复用 Task 4 已有事务、锁、Persistence 与错误映射原语。未实现 Item 生命周期、Catalog/Lookup、Controller、Module、endpoint、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit enum、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`。Task 6 与 Task 8 均未开始。当前并发测试只证明 serializing transaction fixture 下的 Service 版本语义；真实 PostgreSQL `[200,409]`、Trigger 与 Audit rollback 继续由 Task 9 在隔离数据库中验证，本任务未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。
+Task 5 只交付 `DictionaryCommandService` 的 Type create/update/enable/disable、对应单元测试及本验证记录，并复用 Task 4 已有事务、锁、Persistence 与错误映射原语。未实现 Item 生命周期、Catalog/Lookup、Controller、Module、endpoint、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit enum、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`。该段记录 Task 5 交付时状态；当时 Task 6 与 Task 8 均未开始。当前并发测试只证明 serializing transaction fixture 下的 Service 版本语义；真实 PostgreSQL `[200,409]`、Trigger 与 Audit rollback 继续由 Task 9 在隔离数据库中验证，本任务未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。
+
+## 14. Task 6 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Item Command RED | 新增 Item 生命周期测试首次运行因 `DictionaryCommandService` 缺少 `createItem/updateItem/enableItem/disableItem` 报 `TS2551`；修正一处 `it.each` 测试参数顺序后，失败只指向四个缺失能力 |
+| Error-context RED | Persistence runner 与 mapper 测试首次分别因缺少第 4、3 个冲突 context 参数报 `TS2554`，证明 Create Item 尚不能同时区分 Item 唯一冲突与 Type 父锁事务冲突 |
+| Initial target GREEN | Item/Type Service、Persistence、Error Mapper 四组目标测试退出 `0`，`4/4` suites、`77/77` tests 通过 |
+| Cross-review RED | 只读审查发现 ValidationPipe 转换后的 optional DTO class field 即使未提交也为 own property；改用真实 Type/Item DTO instance 后 `2` 个 Audit `changedFields` 断言按预期失败、`45` 个通过，证明 plain-object 测试曾误绿 |
+| Cross-review GREEN | Type 与 Item Create 改按 `description !== undefined` 判断显式提交；真实 DTO 回归及全部目标测试恢复 `77/77` 通过，复核未发现剩余 P0-P2 |
+| Target lint | `pnpm -C server exec eslint src/modules/dictionaries` 退出 `0` |
+| `pnpm -C server typecheck` | 退出 `0` |
+| `pnpm -C server check` | 修复后首次复跑与只读审查中的 Prisma generate 重叠，`openapi.module.spec.ts` 因 generated `internal/class.ts` 瞬时缺失失败，其余 `131` suites 通过；审查结束后串行原命令重跑退出 `0`，Prisma validate、typecheck、lint 通过，`132/132` suites、`1300/1300` tests 通过 |
+| `pnpm -C server build` | 退出 `0` |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 snapshot/generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境原命令重跑退出 `0`，`633/633` 通过 |
+| `git diff --check` | 通过 |
+
+Task 6 只交付既有 `DictionaryCommandService` 的 Item create/update/enable/disable、Create Item 双错误 context、对应单元测试及本验证记录；交叉审查同时修正 Type/Item Create 在真实 DTO 上判断 description 是否显式提交的同源 Audit 缺陷。未实现 Catalog/Lookup、Controller、Module、endpoint、HTTP/OpenAPI snapshot、Schema、migration、权限、Audit enum、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`，Task 7 与 Task 8 均未开始。当前并发与 Audit 失败测试只证明 serializing transaction fixture 下的 Service 版本语义和安全错误收敛；真实 PostgreSQL `[200,409]`、两个最后候选 Item 并发停用、Trigger、无死锁与 Audit rollback 继续由 Task 9 在隔离数据库中验证，本任务未对开发数据库执行 migration/write，也未运行 Server API 或 Browser E2E。

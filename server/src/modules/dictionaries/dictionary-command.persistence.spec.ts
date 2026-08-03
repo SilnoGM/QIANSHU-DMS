@@ -155,6 +155,27 @@ describe('Dictionary command persistence', () => {
         publicMessage: '字典条目状态已变化，请刷新后重试',
       })
     })
+
+    it('allows Item create to override only transaction conflicts to TYPE context', async () => {
+      const fixture = createTransactionFixture([[]])
+      const prisma = createPrismaFixture(fixture.transaction)
+      const driverError = Object.assign(
+        new Error('must-not-leak create Item parent lock'),
+        { code: 'P2034' },
+      )
+
+      await expect(
+        runDictionaryCommandTransaction(
+          prisma.prisma,
+          'ITEM',
+          () => Promise.reject(driverError),
+          'TYPE',
+        ),
+      ).rejects.toMatchObject({
+        code: 'DICTIONARY_TYPE_STATE_CHANGED',
+        publicMessage: '字典类型状态已变化，请刷新后重试',
+      })
+    })
   })
 
   describe('Type primitives', () => {
