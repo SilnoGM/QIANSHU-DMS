@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 与 Gate B 精确边界已确认，Task 2 已完成，Task 3 待开始
+- 状态：Phase 2 与 Gate B 精确边界已确认，Task 3 已完成，Task 4 待开始
 - 技术设计确认日期：2026-08-02
 - 本次固化日期：2026-08-03
 - Gate B 确认日期：2026-08-03
@@ -327,6 +327,7 @@ server/src/modules/dictionaries/
 ├── dictionary-command.persistence.ts
 ├── dictionary-lookup.service.ts
 ├── dictionary.normalizer.ts
+├── dictionary.errors.ts
 ├── dictionary.persistence-error.mapper.ts
 └── dto/
     ├── dictionary-command.dto.ts

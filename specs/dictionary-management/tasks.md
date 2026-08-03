@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 2 已完成；Task 3 待开始
+- 状态：Task 3 已完成；Task 4 待开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -134,7 +134,7 @@ TDD：先新增 `dictionary-schema.spec.ts` 和隔离 PostgreSQL `dictionary-sch
 
 ### Task 3 - DTO、Normalizer 与稳定错误
 
-状态：未开始。
+状态：已完成；已于 2026-08-03 确认。
 
 需求覆盖：R2、R3、R4、R8、R12。
 
@@ -433,4 +433,26 @@ git status --short --branch
 | `node --run ci:browser-auth-e2e` | 退出 `0`；隔离 PostgreSQL 应用 9 条 migration，真实 Chrome `2/2` 通过，覆盖认证边界及管理员用户、角色、`25` 项可分配权限和 `40` 项 Audit UI |
 | `node --run test:root` | 受限环境首次因真实 process/socket fixture 权限失败；在具备所需权限的环境串行重跑退出 `0`，`633/633` 通过 |
 
-Task 2 仅交付 Schema、单事务 forward migration、数据库治理、5 项权限、8 项 Audit event 及既有 Web 治理清单兼容；两张字典业务表保持零数据。未新增 Dictionary Controller、endpoint、DTO、Module、页面实现、API adapter、业务 seed、第三方依赖或公共组件变更，Task 3 及后续任务仍未开始。
+Task 2 仅交付 Schema、单事务 forward migration、数据库治理、5 项权限、8 项 Audit event 及既有 Web 治理清单兼容；两张字典业务表保持零数据。未新增 Dictionary Controller、endpoint、DTO、Module、页面实现、API adapter、业务 seed、第三方依赖或公共组件变更。该段记录 Task 2 交付时状态；当时 Task 3 及后续任务尚未开始。
+
+## 11. Task 3 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Normalizer RED | 首次目标测试因缺少 `dictionary.normalizer.ts` 报 `TS2307`；实现后 `44/44` 通过 |
+| DTO RED | 首次目标测试因缺少 3 个 DTO module 报 `TS2307`；实现后 `10/10` 通过 |
+| Stable errors RED | 首次目标测试因缺少 `dictionary.errors.ts` 报 `TS2307`；实现后 `11/11` 通过 |
+| Cross-review RED | 新增完整 Unicode `White_Space` 与 OpenAPI 空 Patch 约束后，Normalizer 有 `2` 个预期失败，DTO 因缺少两个 request-body schema export 报 `TS2305`；该次合计 `2` failed、`42` passed |
+| Cross-review implementation check | 首次实现误从 `@nestjs/swagger` 根导入未导出的 `SchemaObject`，目标测试报 `TS2305`；移除该显式类型并保留 TypeScript 推断后转绿 |
+| Target GREEN | `pnpm -C server exec jest --runInBand --runTestsByPath src/modules/dictionaries/dictionary.normalizer.spec.ts src/modules/dictionaries/dto/dictionary-dtos.spec.ts src/modules/dictionaries/dictionary.errors.spec.ts` 退出 `0`，`3/3` suites、`68/68` tests 通过 |
+| Target lint | `pnpm -C server exec eslint src/modules/dictionaries --max-warnings=0` 退出 `0` |
+| Formatting attempt | `pnpm -C server exec prettier --write ...` 因 Server 未安装 Prettier 退出 `1`；未新增依赖，改用项目既有 ESLint `--fix`，随后目标 lint 与全量 lint 均通过 |
+| `pnpm -C server check` | 退出 `0`；Prisma validate、typecheck、lint 通过，`127/127` suites、`1199/1199` tests 通过 |
+| `pnpm -C server build` | 退出 `0` |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，未同步或改动公开 snapshot/generated tree |
+| `node --run test:root` | 在具备所需 process/socket 权限的环境退出 `0`，`633/633` 通过 |
+| `git diff --check` | 通过 |
+
+Task 3 只交付 request/query/response DTO、Normalizer、稳定领域错误、相应单元与 OpenAPI schema 测试，以及本验证记录。未新增 Controller、Module、endpoint、HTTP module registration、Query/Persistence/Command/Lookup、Schema、migration、权限、Audit、seed、Web 代码、第三方依赖或公共组件；未运行 `contract:sync`，Task 4 与 Task 8 均未开始。由于本任务不修改数据库、HTTP 注册或 Web，未运行 PostgreSQL、Server API 或 Browser E2E。
