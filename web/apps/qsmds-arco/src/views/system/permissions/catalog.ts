@@ -8,6 +8,7 @@ export interface PermissionGroup {
 
 const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'audit': '安全审计',
+  'dictionaries': '字典管理',
   'numbering-rules': '编号规则',
   'regions': '地区管理',
   'roles': '角色管理',

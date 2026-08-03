@@ -2,9 +2,10 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 1 已确认，Gate B 精确公共边界待确认
+- 状态：Phase 1 与 Gate B 精确公共边界已确认，Task 2 已完成，Task 3 待开始
 - 需求确认日期：2026-08-02
 - Phase 3 任务确认日期：2026-08-03
+- Gate B 确认日期：2026-08-03
 - 适用范围：千树 DMS Server 与 `web/apps/qsmds-arco`
 - 正式入口：`/system/basic-data/dictionaries`
 - 实施分支：`feat/dictionary-management`
@@ -267,11 +268,13 @@ Layout Strategy:
 - 不在首期创建公共 `QsDictionarySelect`。
 - 不在首期修改全局路由 key 或提供字典类型 URL 深链。
 
-## 10. 当前审批边界
+## 10. 已确认边界与持续门禁
 
-本需求、技术方向和任务拆解已经确认。以下实际修改仍属于 Gate B，必须在实施前单独确认：
+本需求、技术方向、任务拆解以及以下 Gate B 公共边界已于 2026-08-03 整体确认，实施仍须按 `tasks.md` 的任务顺序逐项推进：
 
 1. Prisma model、enum 和 forward migration。
 2. 公共 API、DTO、response、operationId 和错误码。
 3. 五项权限、八项 Audit enum 和管理员授权。
 4. `DictionaryLookupService` 的内部公共契约。
+
+Gate B 不授权 Gate C 范围；公共 Qs/Fa 组件 API、第三方依赖、Pinia、全局路由 key、公共 Dictionary Select、生产变更及 Git 发布动作仍须按任务计划暂停并单独确认。

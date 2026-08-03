@@ -80,6 +80,14 @@ enum AuditEventType {
   NUMBERING_RULE_VERSION_PUBLISHED
   NUMBERING_RULE_ENABLED
   NUMBERING_RULE_DISABLED
+  DICTIONARY_TYPE_CREATED
+  DICTIONARY_TYPE_UPDATED
+  DICTIONARY_TYPE_ENABLED
+  DICTIONARY_TYPE_DISABLED
+  DICTIONARY_ITEM_CREATED
+  DICTIONARY_ITEM_UPDATED
+  DICTIONARY_ITEM_ENABLED
+  DICTIONARY_ITEM_DISABLED
   SYSTEM_BOOTSTRAP
   SYSTEM_ADMIN_RECOVERED
   AUTH_RETENTION_PURGED
@@ -147,6 +155,17 @@ enum NumberingRandomMode {
   SHUFFLED
 
   @@map("numbering_random_mode")
+}
+
+enum DictionaryTone {
+  DEFAULT
+  PRIMARY
+  SUCCESS
+  WARNING
+  DANGER
+  INFO
+
+  @@map("dictionary_tone")
 }
 
 model User {
@@ -355,6 +374,45 @@ model ExchangeRate {
 
   @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "exchange_rates_updated_at_id_idx")
   @@map("exchange_rates")
+}
+
+model DictionaryType {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique(map: "dictionary_types_code_key") @db.VarChar(64)
+  name        String   @db.VarChar(128)
+  description String?  @db.VarChar(500)
+  enabled     Boolean  @default(false)
+  sortOrder   Int      @default(0) @map("sort_order")
+  version     Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  items DictionaryItem[]
+
+  @@index([sortOrder, code, id], map: "dictionary_types_sort_order_code_id_idx")
+  @@index([enabled, sortOrder, code, id], map: "dictionary_types_enabled_sort_order_code_id_idx")
+  @@map("dictionary_types")
+}
+
+model DictionaryItem {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dictionaryTypeId String         @map("dictionary_type_id") @db.Uuid
+  value            String         @db.VarChar(64)
+  label            String         @db.VarChar(128)
+  description      String?        @db.VarChar(500)
+  tone             DictionaryTone @default(DEFAULT)
+  enabled          Boolean        @default(false)
+  sortOrder        Int            @default(0) @map("sort_order")
+  version          Int            @default(1)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  dictionaryType DictionaryType @relation(fields: [dictionaryTypeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([dictionaryTypeId, value], map: "dictionary_items_dictionary_type_id_value_key")
+  @@index([dictionaryTypeId, sortOrder, value, id], map: "dictionary_items_type_id_sort_order_value_id_idx")
+  @@index([dictionaryTypeId, enabled, sortOrder, value, id], map: "dictionary_items_type_id_enabled_sort_order_value_id_idx")
+  @@map("dictionary_items")
 }
 
 model NumberingRule {

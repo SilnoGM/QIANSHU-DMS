@@ -2,18 +2,19 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 已确认，Gate B 精确边界待确认
+- 状态：Phase 2 与 Gate B 精确边界已确认，Task 2 已完成，Task 3 待开始
 - 技术设计确认日期：2026-08-02
 - 本次固化日期：2026-08-03
+- Gate B 确认日期：2026-08-03
 - 需求文档：`specs/dictionary-management/requirements.md`
 - 实施起点：`9832d0a5e9415a9ef814776d00958c865c870da4`
 - 实施分支：`feat/dictionary-management`
 
-本文第 5 至 12 节包含即将提交 Gate B 的精确 Prisma、SQL、API、权限、Audit 和内部服务契约。在用户单独确认 Gate B 前，这些内容是待审批草案，不构成修改授权。
+本文第 5 至 12 节包含已确认的精确 Prisma、SQL、API、权限、Audit 和内部服务契约。Gate B 已于 2026-08-03 单独确认；实施仍按 `tasks.md` 的任务边界逐项推进，后续任务内容不会因 Gate B 确认而提前落地。
 
-## 2. 当前仓库真相源
+## 2. Task 1 冻结时的仓库真相源
 
-执行前已重新核对当前 checkout，不沿用早期审计中已经变化的状态：
+Task 1 执行前已重新核对当时的 checkout，不沿用更早审计中已经变化的状态。以下条目用于记录设计冻结时的实施起点；Task 2 的完成状态与验证证据以 `tasks.md` 为准：
 
 - 正式 Web 应用是 `web/apps/qsmds-arco`。
 - 字典路由位于 `web/apps/qsmds-arco/src/router/modules/basic.data.ts`，当前尚无 `meta.auth`。
@@ -891,7 +892,7 @@ meta: {
 
 ## 18. Gate B 精确审批清单
 
-用户必须逐项确认以下整体包，才能开始 Task 2 及后续运行时代码：
+用户已于 2026-08-03 整体确认以下 Gate B 包；Task 2 可以实施，后续运行时代码仍按 `tasks.md` 的依赖和任务边界逐项推进：
 
 1. 第 5 节的两个 Prisma model 和一个 enum。
 2. 第 6 至 7 节的字段、规范化、13 个 PK/FK/CHECK constraint、6 个业务 index（含 2 个唯一身份 index）、2 个 function、2 个 Trigger、migration 和零种子。

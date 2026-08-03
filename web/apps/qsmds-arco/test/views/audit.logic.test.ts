@@ -78,6 +78,14 @@ test('审计事件筛选选项覆盖当前公开契约的全部事件类型', ()
     'NUMBERING_RULE_VERSION_PUBLISHED',
     'NUMBERING_RULE_ENABLED',
     'NUMBERING_RULE_DISABLED',
+    'DICTIONARY_TYPE_CREATED',
+    'DICTIONARY_TYPE_UPDATED',
+    'DICTIONARY_TYPE_ENABLED',
+    'DICTIONARY_TYPE_DISABLED',
+    'DICTIONARY_ITEM_CREATED',
+    'DICTIONARY_ITEM_UPDATED',
+    'DICTIONARY_ITEM_ENABLED',
+    'DICTIONARY_ITEM_DISABLED',
     'SYSTEM_BOOTSTRAP',
     'SYSTEM_ADMIN_RECOVERED',
     'AUTH_RETENTION_PURGED',
@@ -93,4 +101,15 @@ test('编号规则审计事件使用现有中文展示管道', () => {
   )
   assert.equal(formatAuditEvent('NUMBERING_RULE_ENABLED'), '编号规则已启用')
   assert.equal(formatAuditEvent('NUMBERING_RULE_DISABLED'), '编号规则已停用')
+})
+
+test('系统字典审计事件使用现有中文展示管道', () => {
+  assert.equal(formatAuditEvent('DICTIONARY_TYPE_CREATED'), '字典类型已创建')
+  assert.equal(formatAuditEvent('DICTIONARY_TYPE_UPDATED'), '字典类型已更新')
+  assert.equal(formatAuditEvent('DICTIONARY_TYPE_ENABLED'), '字典类型已启用')
+  assert.equal(formatAuditEvent('DICTIONARY_TYPE_DISABLED'), '字典类型已停用')
+  assert.equal(formatAuditEvent('DICTIONARY_ITEM_CREATED'), '字典项已创建')
+  assert.equal(formatAuditEvent('DICTIONARY_ITEM_UPDATED'), '字典项已更新')
+  assert.equal(formatAuditEvent('DICTIONARY_ITEM_ENABLED'), '字典项已启用')
+  assert.equal(formatAuditEvent('DICTIONARY_ITEM_DISABLED'), '字典项已停用')
 })

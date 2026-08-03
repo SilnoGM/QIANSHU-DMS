@@ -539,7 +539,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(managedRole?.name, editedRoleName)
 
   /*
-   * 地区、货币、当前汇率和编号规则权限均可分配给普通角色，同时不能让普通
+   * 地区、货币、当前汇率、编号规则和系统字典权限均可分配给普通角色，同时不能让普通
    * 角色越权勾选 users/roles/audit 等系统专用权限。保存后以真实 API 结果确认
    * 完整替换已落库。
    */
@@ -602,6 +602,11 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'currencies:enable',
     'currencies:read',
     'currencies:update',
+    'dictionaries:create',
+    'dictionaries:disable',
+    'dictionaries:enable',
+    'dictionaries:read',
+    'dictionaries:update',
     'exchange-rates:create',
     'exchange-rates:read',
     'exchange-rates:update',

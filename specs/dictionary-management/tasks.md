@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 3 与 Task 1 已完成；Gate B 待单独确认
+- 状态：Task 2 已完成；Task 3 待开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -49,11 +49,11 @@
 
 开始 Task 2 前，用户必须整体确认 Design 第 5 至 12 节：
 
-- [ ] 两个 Prisma model、一个 enum、13 个 PK/FK/CHECK 约束、6 个业务索引（含 2 个唯一身份索引）、2 个函数、2 个 Trigger。
-- [ ] 单事务 forward migration、零业务 seed、5 项权限和 system_admin 授权。
-- [ ] 8 个 Audit event、metadata 白名单和事务回滚语义。
-- [ ] 14 个 endpoint、DTO、operationId、status/error matrix 和无 DELETE 边界。
-- [ ] `DictionaryLookupService`、内部异常与 transaction ownership。
+- [x] 两个 Prisma model、一个 enum、13 个 PK/FK/CHECK 约束、6 个业务索引（含 2 个唯一身份索引）、2 个函数、2 个 Trigger。
+- [x] 单事务 forward migration、零业务 seed、5 项权限和 system_admin 授权。
+- [x] 8 个 Audit event、metadata 白名单和事务回滚语义。
+- [x] 14 个 endpoint、DTO、operationId、status/error matrix 和无 DELETE 边界。
+- [x] `DictionaryLookupService`、内部异常与 transaction ownership。
 
 Gate B 未确认时，Task 2 至 Task 17 均保持未开始。
 
@@ -100,7 +100,7 @@ flowchart TD
 
 ### Task 1 - 固化规格、审计与基线
 
-状态：已完成；在 Gate B 确认前暂停。
+状态：已完成。
 
 目标：把已确认的需求、设计和任务拆解落盘，并形成可单独审批的 Gate B 包，不修改运行时代码。
 
@@ -122,7 +122,7 @@ flowchart TD
 
 ### Task 2 - Schema、Migration、权限与 Audit
 
-状态：未开始，受 Gate B 阻塞。
+状态：已完成；Gate B 已于 2026-08-03 确认。
 
 需求覆盖：R1、R2、R3、R7、R8、R11。
 
@@ -408,4 +408,29 @@ git status --short --branch
 | `git diff --check` | 通过 |
 | `git status --short --branch` | 提交前除 `specs/dictionary-management/` 三个新文档外无变化；`main...HEAD = 0/0` |
 
-以上两次受限环境失败均保留真实结论，并通过相同命令在具备所需 IPC/socket 权限的环境复核为绿色；未把环境错误当作代码通过。Task 2 仍受 Gate B 阻塞。
+以上两次受限环境失败均保留真实结论，并通过相同命令在具备所需 IPC/socket 权限的环境复核为绿色；未把环境错误当作代码通过。该段记录的是 Task 1 交付时状态；Gate B 后于 2026-08-03 单独确认。
+
+## 10. Task 2 验证记录
+
+验证日期：2026-08-03。
+
+| Command / Check | Result |
+| --- | --- |
+| Static schema test RED | 新增静态测试首次运行 `6/6` 失败，原因精确为缺少 Dictionary models、migration、权限与 Audit enum |
+| Static schema test GREEN | `server/src/infrastructure/database/dictionary-schema.spec.ts` 退出 `0`，`6/6` 通过 |
+| Web compatibility RED | 目标测试首次运行 `47` tests 中 `3` 个失败，原因精确为缺少 8 个 Audit action/中文 label 与字典权限资源文案 |
+| Web compatibility GREEN | 目标测试退出 `0`，`47/47` 通过；权限管理回归另行确认 `43/43` 通过 |
+| `pnpm -C server exec prisma validate` | 退出 `0` |
+| `pnpm -C server prisma:generate` | 退出 `0` |
+| Dictionary PostgreSQL E2E | 隔离 PostgreSQL 16 中目标 suite 退出 `0`；覆盖 9 条 migration replay、表/约束/索引/函数/Trigger、权限/Audit、零业务 seed、稳定身份与并发最后启用 Item 不变量 |
+| `node --run ci:server-e2e` | 退出 `0`；9 条 migration 首次 deploy 与二次无待处理 migration 均通过，`21/21` suites、`103/103` tests 通过 |
+| `pnpm -C server check` | 退出 `0`；`124/124` suites、`1131/1131` tests 通过，Prisma validate、typecheck、lint 均通过 |
+| `pnpm -C server build` | 退出 `0` |
+| `node --run contract:sync` | 退出 `0`；只同步 Server/Web OpenAPI 中既有 Audit enum，未新增字典 endpoint 或 Web generated DTO |
+| `node --run contract:check` | 退出 `0` |
+| `pnpm -C web check` | 受限环境在 Node tests 通过后因 `tsx` IPC pipe 报 `listen EPERM`；在具备 IPC 权限的环境原命令重跑退出 `0`，`156` 个 Node tests、`49` 个 TS script tests、`549` 个 API/View tests 及 typecheck、ESLint、Stylelint 全部通过 |
+| `pnpm -C web build` | 退出 `0`；Noto 与 zero-residue 校验通过；仅有既有 Rolldown pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run ci:browser-auth-e2e` | 退出 `0`；隔离 PostgreSQL 应用 9 条 migration，真实 Chrome `2/2` 通过，覆盖认证边界及管理员用户、角色、`25` 项可分配权限和 `40` 项 Audit UI |
+| `node --run test:root` | 受限环境首次因真实 process/socket fixture 权限失败；在具备所需权限的环境串行重跑退出 `0`，`633/633` 通过 |
+
+Task 2 仅交付 Schema、单事务 forward migration、数据库治理、5 项权限、8 项 Audit event 及既有 Web 治理清单兼容；两张字典业务表保持零数据。未新增 Dictionary Controller、endpoint、DTO、Module、页面实现、API adapter、业务 seed、第三方依赖或公共组件变更，Task 3 及后续任务仍未开始。
