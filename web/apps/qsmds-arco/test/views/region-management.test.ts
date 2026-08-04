@@ -36,6 +36,14 @@ test('桌面为加宽范围树加两个右侧面板，移动端使用底部抽�
   assert.match(source, /2xl:grid-cols-\[22rem_minmax\(0,1fr\)\]/u)
   assert.match(source, /gap-4[\s\S]{0,160}xl:gap-5/u)
   assert.match(source, /md:row-span-2/u)
+  assert.match(source, /region-scope-panel-size-contained/u)
+  assert.match(source, /main-class="min-h-0 min-w-0 flex-1"/u)
+  assert.match(source, /data-testid="region-scope-panel-scroll"/u)
+  assert.match(source, /overflow-y-auto/u)
+  assert.match(
+    source,
+    /@media \(width >= 768px\)[\s\S]*?\.region-scope-panel-size-contained\s*\{[\s\S]*?contain:\s*size/u,
+  )
   assert.match(source, /md:flex/u)
   assert.match(source, /md:hidden/u)
   assert.doesNotMatch(source, /md:pr-5|md:border-r/u)

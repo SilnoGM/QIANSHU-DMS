@@ -66,6 +66,10 @@ function assertRegionManagementLayout(layout, { mobile }) {
     assert.equal(layout.visiblePanelCount, 2)
     assert.equal(layout.cards > 0, true)
     assert.equal(layout.desktopTables, 0)
+    assert.equal(layout.workspaceHeightDelta, null)
+    assert.equal(layout.rightStackHeightDelta, null)
+    assert.equal(layout.leftPanelHeightIsolated, null)
+    assert.equal(layout.leftPanelScrolls, null)
   }
   else {
     assert.equal(typeof layout.scopePanelWidth, 'number')
@@ -75,6 +79,10 @@ function assertRegionManagementLayout(layout, { mobile }) {
     assert.equal(layout.horizontalPanelGap >= 12, true)
     assert.equal(layout.horizontalPanelGap <= 24, true)
     assert.equal(layout.scopeSpansRightStack, true)
+    assert.equal(layout.workspaceHeightDelta <= 1, true)
+    assert.equal(layout.rightStackHeightDelta <= 1, true)
+    assert.equal(layout.leftPanelHeightIsolated, true)
+    assert.equal(layout.leftPanelScrolls, true)
     assert.equal(layout.desktopTables, 1)
   }
 }

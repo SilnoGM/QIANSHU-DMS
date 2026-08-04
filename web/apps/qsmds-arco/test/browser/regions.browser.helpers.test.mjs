@@ -38,9 +38,18 @@ test('地区管理布局审计固定三面板、间距、对齐与窄屏抽屉�
   assert.match(desktop, /rightPanelsAligned/u)
   assert.match(desktop, /scopeSpansRightStack/u)
   assert.match(desktop, /panelsFitWorkspace/u)
+  assert.match(desktop, /region-scope-panel-scroll/u)
+  assert.match(desktop, /height: 2000px/u)
+  assert.match(desktop, /aria-hidden/u)
+  assert.match(desktop, /workspaceHeightDelta/u)
+  assert.match(desktop, /rightStackHeightDelta/u)
+  assert.match(desktop, /leftPanelHeightIsolated/u)
+  assert.match(desktop, /leftPanelScrolls/u)
+  assert.match(desktop, /stressProbe\.remove\(\)/u)
   assert.match(desktop, /document\.documentElement\.scrollWidth <= viewportWidth/u)
 
   const mobile = regionManagementLayoutAuditExpression({ mobile: true })
+  assert.match(mobile, /if \([\s\S]*!mobile[\s\S]*height: 2000px/u)
   assert.match(mobile, /viewportWidth === 390/u)
   assert.match(mobile, /scopePanelWidth/u)
   assert.throws(

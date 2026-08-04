@@ -829,6 +829,9 @@ export function regionManagementLayoutAuditExpression({ mobile }) {
     const tablePanel = document.querySelector(
       '[data-testid="region-table-panel"]',
     )
+    const scopePanelScroll = document.querySelector(
+      '[data-testid="region-scope-panel-scroll"]',
+    )
     const scopeDrawerTrigger = document.querySelector(
       '[data-testid="region-open-scope-drawer"]',
     )
@@ -873,6 +876,43 @@ export function regionManagementLayoutAuditExpression({ mobile }) {
         && rect.top >= workspaceRect.top - 1
         && rect.bottom <= workspaceRect.bottom + 1
     })
+    let leftPanelHeightIsolated = null
+    let leftPanelScrolls = null
+    let rightStackHeightDelta = null
+    let workspaceHeightDelta = null
+    if (
+      !mobile
+      && isVisible(workspace)
+      && isVisible(scopePanelScroll)
+      && scopeSummaryPanelRect
+      && tablePanelRect
+    ) {
+      const workspaceHeightBefore = workspace.getBoundingClientRect().height
+      const rightStackHeightBefore = tablePanelRect.bottom
+        - scopeSummaryPanelRect.top
+      const stressProbe = document.createElement('div')
+      stressProbe.setAttribute('aria-hidden', 'true')
+      stressProbe.style.cssText = 'height: 2000px; width: 1px; flex: none;'
+      scopePanelScroll.append(stressProbe)
+
+      // 强制同步布局，确保测量覆盖左侧内容异常增高后的真实 Grid 几何。
+      stressProbe.getBoundingClientRect()
+      const stressedSummaryRect = scopeSummaryPanel.getBoundingClientRect()
+      const stressedTableRect = tablePanel.getBoundingClientRect()
+      workspaceHeightDelta = Math.abs(
+        workspace.getBoundingClientRect().height - workspaceHeightBefore,
+      )
+      rightStackHeightDelta = Math.abs(
+        stressedTableRect.bottom
+          - stressedSummaryRect.top
+          - rightStackHeightBefore,
+      )
+      leftPanelHeightIsolated = workspaceHeightDelta <= 1
+        && rightStackHeightDelta <= 1
+      leftPanelScrolls = scopePanelScroll.scrollHeight
+        > scopePanelScroll.clientHeight
+      stressProbe.remove()
+    }
     const cards = [...document.querySelectorAll('[data-testid="region-card"]')]
       .filter(isVisible)
     const desktopTables = [...document.querySelectorAll(
@@ -885,6 +925,8 @@ export function regionManagementLayoutAuditExpression({ mobile }) {
       documentFits: document.documentElement.scrollWidth <= viewportWidth,
       documentWidth: document.documentElement.scrollWidth,
       horizontalPanelGap,
+      leftPanelHeightIsolated,
+      leftPanelScrolls,
       modeMatches: mobile
         ? viewportWidth === 390
           && !isVisible(scopePanel)
@@ -894,12 +936,14 @@ export function regionManagementLayoutAuditExpression({ mobile }) {
           && !isVisible(scopeDrawerTrigger),
       panelsFitWorkspace,
       rightPanelsAligned,
+      rightStackHeightDelta,
       scopePanelWidth: scopePanelRect?.width ?? null,
       scopeSpansRightStack,
       tableVisible: isVisible(table),
       verticalPanelGap,
       viewportWidth,
       visiblePanelCount: visiblePanels.length,
+      workspaceHeightDelta,
       workspaceMounted: isVisible(workspace),
     }
   })()`

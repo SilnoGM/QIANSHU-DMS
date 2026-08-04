@@ -42,6 +42,10 @@ const typeListScopedStyles = compileScopedStyles(
   typeListSource,
   'dictionary-type-list.vue',
 )
+const pageScopedStyles = compileScopedStyles(
+  pageSource,
+  'dictionary-management.vue',
+)
 
 test('字典管理在页头下使用三个独立面板与适中间距', () => {
   assert.equal(pageSource.match(/<FaPageHeader\b/gu)?.length, 1)
@@ -54,6 +58,11 @@ test('字典管理在页头下使用三个独立面板与适中间距', () => {
   assert.match(pageSource, /data-testid="dictionary-type-summary-panel"/u)
   assert.match(pageSource, /data-testid="dictionary-item-table-panel"/u)
   assert.match(pageSource, /md:row-span-2/u)
+  assert.match(pageSource, /dictionary-type-panel-size-contained/u)
+  assert.match(pageSource, /main-class="min-h-0 min-w-0 flex-1"/u)
+  assert.match(pageSource, /data-testid="dictionary-type-panel-scroll"/u)
+  assert.match(pageSource, /overflow-y-auto/u)
+  assert.match(pageScopedStyles, /\.dictionary-type-panel-size-contained[^}]*contain:\s*size/iu)
   assert.doesNotMatch(pageSource, /md:pr-5 md:border-r/u)
   assert.doesNotMatch(pageSource, /bg-muted\/10/u)
   assert.match(pageSource, /Noto Sans SC|qs-type-/u)

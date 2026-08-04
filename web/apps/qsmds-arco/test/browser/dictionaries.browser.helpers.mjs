@@ -99,6 +99,9 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
     const typePanel = document.querySelector(
       '[data-testid="dictionary-type-panel"]',
     )
+    const typePanelScroll = document.querySelector(
+      '[data-testid="dictionary-type-panel-scroll"]',
+    )
     const typeSummaryPanel = document.querySelector(
       '[data-testid="dictionary-type-summary-panel"]',
     )
@@ -201,6 +204,49 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
     const itemTablePanelRect = itemTablePanel?.getClientRects().length > 0
       ? itemTablePanel.getBoundingClientRect()
       : null
+    let leftPanelHeightIsolated = null
+    let leftPanelRightStackHeightDelta = null
+    let leftPanelScrolls = null
+    let leftPanelWorkspaceHeightDelta = null
+    /*
+     * 桌面端同步注入超高内容，直接验证左侧面板的固有高度不会参与 Grid
+     * 行高计算。Probe 必须在同一次 evaluate 内完成测量和清理，避免污染后续
+     * 交互；移动端左面板隐藏，因此不执行这组桌面专属断言。
+     */
+    if (
+      !mobile
+      && workspaceRect
+      && typeSummaryPanelRect
+      && itemTablePanelRect
+      && typePanelScroll?.getClientRects().length > 0
+    ) {
+      const workspaceHeightBefore = workspaceRect.height
+      const rightStackHeightBefore
+        = itemTablePanelRect.bottom - typeSummaryPanelRect.top
+      const heightProbe = document.createElement('div')
+      heightProbe.setAttribute('aria-hidden', 'true')
+      heightProbe.style.cssText
+        = 'height:2000px;min-height:2000px;width:1px;pointer-events:none;'
+      typePanelScroll.append(heightProbe)
+
+      const workspaceHeightAfter = workspace.getBoundingClientRect().height
+      const typeSummaryPanelRectAfter
+        = typeSummaryPanel.getBoundingClientRect()
+      const itemTablePanelRectAfter = itemTablePanel.getBoundingClientRect()
+      const rightStackHeightAfter
+        = itemTablePanelRectAfter.bottom - typeSummaryPanelRectAfter.top
+      leftPanelWorkspaceHeightDelta = Math.abs(
+        workspaceHeightAfter - workspaceHeightBefore,
+      )
+      leftPanelRightStackHeightDelta = Math.abs(
+        rightStackHeightAfter - rightStackHeightBefore,
+      )
+      leftPanelHeightIsolated = leftPanelWorkspaceHeightDelta <= 1
+        && leftPanelRightStackHeightDelta <= 1
+      leftPanelScrolls
+        = typePanelScroll.scrollHeight > typePanelScroll.clientHeight
+      heightProbe.remove()
+    }
     const horizontalPanelGap = typePanelRect && typeSummaryPanelRect
       ? typeSummaryPanelRect.left - typePanelRect.right
       : null
@@ -227,6 +273,10 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
       documentFits: document.documentElement.scrollWidth <= viewportWidth,
       documentWidth: document.documentElement.scrollWidth,
       horizontalPanelGap,
+      leftPanelHeightIsolated,
+      leftPanelRightStackHeightDelta,
+      leftPanelScrolls,
+      leftPanelWorkspaceHeightDelta,
       modeMatches: mobile
         ? viewportWidth === 390
           && typePanel?.getClientRects().length === 0

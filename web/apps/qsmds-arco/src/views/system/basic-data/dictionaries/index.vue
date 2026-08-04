@@ -2047,11 +2047,15 @@ onBeforeUnmount(() => {
       data-testid="dictionary-management-workspace"
     >
       <FaPageMain
-        class="m-0 min-w-0 hidden md:flex md:row-span-2 md:self-stretch"
-        main-class="min-w-0 flex-1"
+        class="dictionary-type-panel-size-contained m-0 min-h-0 min-w-0 hidden md:flex md:row-span-2 md:self-stretch"
+        main-class="min-h-0 min-w-0 flex-1"
         data-testid="dictionary-type-panel"
       >
-        <aside class="h-full min-w-0" aria-label="字典类型目录">
+        <aside
+          class="overscroll-contain h-full min-w-0 overflow-y-auto"
+          aria-label="字典类型目录"
+          data-testid="dictionary-type-panel-scroll"
+        >
           <DictionaryTypeList
             v-model:page="typePage"
             v-model:page-size="typePageSize"
@@ -2320,6 +2324,16 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@media (width >= 768px) {
+  /*
+   * 左侧目录跨越右侧两行，但其列表长度不能反向参与 Grid 行高计算。
+   * size containment 让右侧摘要与表格决定页面高度，超出的目录内容在面板内部滚动。
+   */
+  .dictionary-type-panel-size-contained {
+    contain: size;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dictionary-management-page :deep(.qs-generic-table .animate-pulse) {
     animation: none !important;

@@ -895,11 +895,15 @@ onBeforeUnmount(() => {
       data-testid="region-management-workspace"
     >
       <FaPageMain
-        class="m-0 min-w-0 hidden md:flex md:row-span-2 md:self-stretch"
-        main-class="min-w-0 flex-1"
+        class="region-scope-panel-size-contained m-0 min-h-0 min-w-0 hidden md:flex md:row-span-2 md:self-stretch"
+        main-class="min-h-0 min-w-0 flex-1"
         data-testid="region-scope-panel"
       >
-        <aside class="h-full min-w-0" aria-label="地区范围导航">
+        <aside
+          class="overscroll-contain h-full min-w-0 overflow-y-auto"
+          aria-label="地区范围导航"
+          data-testid="region-scope-panel-scroll"
+        >
           <RegionScopeTree
             :model-value="scope"
             :nodes="navigationTree"
@@ -1224,6 +1228,16 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@media (width >= 768px) {
+  /*
+   * 范围树跨越右侧两行，但树的内容高度不能继续撑大 Grid 行轨道。
+   * size containment 把共享高度交给右侧面板栈，较长的范围树只在左面板内部滚动。
+   */
+  .region-scope-panel-size-contained {
+    contain: size;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /*
    * QsGenericTable 的骨架位于子组件内部；仅在本业务页关闭其无限 pulse，

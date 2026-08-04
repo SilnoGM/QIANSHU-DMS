@@ -442,6 +442,10 @@ function assertLayout(layout, { cards, desktopTables, mobile }) {
     assert.equal(layout.typePanelWidth, null)
     assert.equal(layout.visiblePanelCount, 2)
     assert.deepEqual(layout.touchTargetViolations, [])
+    assert.equal(layout.leftPanelHeightIsolated, null)
+    assert.equal(layout.leftPanelRightStackHeightDelta, null)
+    assert.equal(layout.leftPanelScrolls, null)
+    assert.equal(layout.leftPanelWorkspaceHeightDelta, null)
   }
   else {
     assert.equal(typeof layout.typePanelWidth, 'number')
@@ -450,6 +454,10 @@ function assertLayout(layout, { cards, desktopTables, mobile }) {
     assert.equal(layout.visiblePanelCount, 3)
     assert.equal(layout.horizontalPanelGap >= 12, true)
     assert.equal(layout.horizontalPanelGap <= 24, true)
+    assert.equal(layout.leftPanelHeightIsolated, true)
+    assert.equal(layout.leftPanelWorkspaceHeightDelta <= 1, true)
+    assert.equal(layout.leftPanelRightStackHeightDelta <= 1, true)
+    assert.equal(layout.leftPanelScrolls, true)
   }
   assert.equal(layout.verticalPanelGap >= 12, true)
   assert.equal(layout.verticalPanelGap <= 24, true)

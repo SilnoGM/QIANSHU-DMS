@@ -77,6 +77,17 @@ test('布局审计脚本固定桌面与 390x844 的溢出、可见表面和 44px
   assert.match(desktop, /verticalPanelGap/u)
   assert.match(desktop, /rightPanelsAligned/u)
   assert.match(desktop, /panelsFitWorkspace/u)
+  assert.match(desktop, /dictionary-type-panel-scroll/u)
+  assert.match(desktop, /document\.createElement\('div'\)/u)
+  assert.match(desktop, /height:2000px/u)
+  assert.match(desktop, /setAttribute\('aria-hidden', 'true'\)/u)
+  assert.match(desktop, /leftPanelWorkspaceHeightDelta <= 1/u)
+  assert.match(desktop, /leftPanelRightStackHeightDelta <= 1/u)
+  assert.match(
+    desktop,
+    /typePanelScroll\.scrollHeight > typePanelScroll\.clientHeight/u,
+  )
+  assert.match(desktop, /heightProbe\.remove\(\)/u)
   assert.match(
     desktop,
     /typeDrawerTrigger\?\.getClientRects\(\)\.length === 0/u,
@@ -102,6 +113,7 @@ test('布局审计脚本固定桌面与 390x844 的溢出、可见表面和 44px
     mobile,
     /rect\.width \+ touchTargetTolerance >= 44[\s\S]*rect\.height \+ touchTargetTolerance >= 44/u,
   )
+  assert.match(mobile, /if \([\s\S]*!mobile[\s\S]*height:2000px/u)
   assert.match(mobile, /viewportWidth === 390/u)
 })
 
