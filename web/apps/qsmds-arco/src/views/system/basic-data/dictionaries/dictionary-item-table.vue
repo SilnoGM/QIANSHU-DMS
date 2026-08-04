@@ -273,13 +273,13 @@ function dictionaryItemActions(item: DictionaryItemDto) {
       <div
         v-if="dictionaryItemActions(item).hasAny
           || (dictionaryItemActions(item).disableBlockedReason && canDisable)"
-        class="flex flex-wrap gap-1 items-center"
+        class="flex flex-wrap gap-1 min-w-0 w-full items-center"
       >
         <FaButton
           v-if="dictionaryItemActions(item).canEdit"
           variant="ghost"
           size="sm"
-          class="min-h-11 w-full md:w-auto"
+          class="min-h-11 w-full md:min-h-8 md:w-auto"
           :aria-label="`编辑条目 ${item.value}`"
           @click="emit('edit', item)"
         >
@@ -289,7 +289,7 @@ function dictionaryItemActions(item: DictionaryItemDto) {
           v-if="dictionaryItemActions(item).canEnable"
           variant="ghost"
           size="sm"
-          class="min-h-11 w-full md:w-auto"
+          class="min-h-11 w-full md:min-h-8 md:w-auto"
           :aria-label="`启用条目 ${item.value}`"
           @click="emit('status', item, 'enable')"
         >
@@ -299,7 +299,7 @@ function dictionaryItemActions(item: DictionaryItemDto) {
           v-if="dictionaryItemActions(item).canDisable"
           variant="ghost"
           size="sm"
-          class="text-destructive min-h-11 w-full md:w-auto"
+          class="text-destructive min-h-11 w-full md:min-h-8 md:w-auto"
           :aria-label="`停用条目 ${item.value}`"
           @click="emit('status', item, 'disable')"
         >
@@ -307,7 +307,7 @@ function dictionaryItemActions(item: DictionaryItemDto) {
         </FaButton>
         <span
           v-else-if="dictionaryItemActions(item).disableBlockedReason && canDisable"
-          class="qs-type-meta max-w-52 break-words"
+          class="qs-type-meta min-w-0 w-full whitespace-normal [overflow-wrap:anywhere]"
           role="status"
         >
           暂不可停用：{{ dictionaryItemActions(item).disableBlockedReason }}

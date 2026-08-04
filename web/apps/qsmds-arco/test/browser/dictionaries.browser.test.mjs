@@ -249,6 +249,21 @@ async function createTypeThroughUi(page) {
 async function createItemThroughUi(page, value, label, sortOrder) {
   await clickScopedButton(page, '[data-testid="dictionary-item-table"]', '新增条目')
   await waitForVisibleDialog(page, '新增字典条目')
+  await waitForDialogControlValue(
+    page,
+    '新增字典条目',
+    '所属类型',
+    `${typeInitialName} · ${typeCode}`,
+  )
+  await waitForVisibleDialogGeometry(page, '新增字典条目')
+  await page.waitFor(visibleDialogExpression('新增字典条目', `
+    const buttons = [...dialog.querySelectorAll('button')]
+      .filter(button => ['取消', '创建条目'].includes(button.textContent?.trim()))
+    return buttons.length === 2 && buttons.every(button => {
+      const height = button.getBoundingClientRect().height
+      return height >= 35 && height <= 37
+    })
+  `))
   await fillDialogControl(page, '新增字典条目', '条目值', value)
   await fillDialogControl(page, '新增字典条目', '条目标签', label)
   await fillDialogControl(page, '新增字典条目', '排序', String(sortOrder))
@@ -608,6 +623,27 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
   await runDictionaryBrowserStep('enable dictionary type', () =>
     changeTypeStatusThroughUi(page, 'enable'))
 
+  await runDictionaryBrowserStep('desktop compact action heights', async () => {
+    const heights = await page.evaluate(`(() => {
+      const visibleButton = (text, root = document) =>
+        [...root.querySelectorAll('button')].find(button => (
+          button.getClientRects().length > 0
+          && button.textContent?.trim() === text
+        ))
+      const summary = document.querySelector('[aria-label="当前字典类型摘要"]')
+      const itemEdit = [...document.querySelectorAll('button')].find(button =>
+        button.getAttribute('aria-label') === ${JSON.stringify(`编辑条目 ${primaryValue}`)})
+      return {
+        createType: visibleButton('新增类型')?.getBoundingClientRect().height,
+        editType: visibleButton('编辑类型', summary)?.getBoundingClientRect().height,
+        itemEdit: itemEdit?.getBoundingClientRect().height,
+      }
+    })()`)
+    assert.equal(heights.createType >= 35 && heights.createType <= 37, true)
+    assert.equal(heights.editType >= 35 && heights.editType <= 37, true)
+    assert.equal(heights.itemEdit >= 31 && heights.itemEdit <= 33, true)
+  })
+
   await runDictionaryBrowserStep('peer real admin session', async () => {
     await peer.navigate(appRouteUrl(configuration.baseUrl, '/login'))
     await loginThroughRealHttp(peer, configuration)
@@ -937,6 +973,12 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
       '条目标签',
       primaryFinalLabel,
     )
+    await waitForDialogControlValue(
+      page,
+      '编辑字典条目',
+      '所属类型',
+      `${typeFinalName} · ${typeCode}`,
+    )
     await waitForVisibleDialogGeometry(page, '编辑字典条目')
     await page.waitFor(visibleDialogExpression('编辑字典条目', `
       const buttons = [...dialog.querySelectorAll('button')]
@@ -1019,6 +1061,21 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
 
   await runDictionaryBrowserStep('disable secondary while primary remains enabled', () =>
     changeItemStatusThroughUi(page, secondaryValue, 'disable'))
+  await runDictionaryBrowserStep('blocked action stays inside table column', async () => {
+    await page.waitFor(`(() => {
+      const table = document.querySelector('[data-testid="dictionary-item-table"]')
+      const blocked = [...(table?.querySelectorAll('[role="status"]') ?? [])]
+        .find(node => node.textContent?.includes('暂不可停用'))
+      const cell = blocked?.closest('[data-slot="table-cell"]')
+      const container = table?.querySelector('[data-slot="table-container"]')
+      if (!blocked || !cell || !container) return false
+      const cellRect = cell.getBoundingClientRect()
+      const containerRect = container.getBoundingClientRect()
+      return blocked.scrollWidth <= blocked.clientWidth + 1
+        && cell.scrollWidth <= cell.clientWidth + 1
+        && cellRect.right <= containerRect.right + 1
+    })()`)
+  })
   await runDictionaryBrowserStep('disable dictionary type', () =>
     changeTypeStatusThroughUi(page, 'disable'))
 

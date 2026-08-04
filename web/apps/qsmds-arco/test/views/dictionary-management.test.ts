@@ -213,7 +213,22 @@ test('Task 14 使用 QsGenericTable 完成 Item 查询、桌面列与移动卡�
   assert.match(itemTableSource, /hasVisibleTableColumn/u)
   assert.match(itemTableSource, /import CopyCellButton/u)
   assert.match(itemTableSource, /\[&_button\]:size-11/u)
-  assert.doesNotMatch(itemTableSource, /md:min-h-8/u)
+  assert.equal(
+    itemTableSource.match(/min-h-11 w-full md:min-h-8 md:w-auto/gu)?.length,
+    3,
+  )
+  assert.equal(
+    pageSource.match(/class="min-h-11 md:min-h-9"/gu)?.length,
+    4,
+  )
+  assert.match(
+    itemTableSource,
+    /class="flex flex-wrap gap-1 min-w-0 w-full items-center"/u,
+  )
+  assert.match(
+    itemTableSource,
+    /class="qs-type-meta min-w-0 w-full whitespace-normal \[overflow-wrap:anywhere\]"/u,
+  )
   assert.doesNotMatch(itemTableSource, /(?:border|bg|text)-warning/u)
   assert.doesNotMatch(itemTableSource, /<FaSwitch|<ASwitch|<Switch\b/iu)
 })

@@ -450,9 +450,11 @@ watch(
     >
       <FaFormItem
         name="dictionaryType"
+        :auto-bind="false"
         label="所属类型"
         description="Type 由当前配置目录确定。"
       >
+        <!-- 该字段只展示当前目录上下文，不属于可提交 model，禁止 FormItem 覆盖显式值。 -->
         <FaInput
           :model-value="dictionaryTypeDisplay"
           class="font-mono w-full"
@@ -553,7 +555,7 @@ watch(
       <FaButton
         type="button"
         variant="outline"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :disabled="submitLocked"
         @click="close"
       >
@@ -561,7 +563,7 @@ watch(
       </FaButton>
       <FaButton
         type="button"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :disabled="submitDisabled"
         :loading="submitLocked"
         @click="submit"

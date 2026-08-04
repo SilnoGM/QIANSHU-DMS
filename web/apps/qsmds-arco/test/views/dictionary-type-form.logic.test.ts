@@ -279,7 +279,7 @@ test('字典类型 Modal 复用项目组件并在提交窗口加锁', () => {
   assert.match(modalSource, /expectedVersion/u)
   assert.match(modalSource, /:disabled="isEditing \|\| submitLocked"/u)
   assert.equal(
-    modalSource.match(/class="min-h-11 w-full sm:w-auto"/gu)?.length,
+    modalSource.match(/class="min-h-11 w-full sm:min-h-9 sm:w-auto"/gu)?.length,
     2,
   )
   assert.equal(

@@ -604,7 +604,7 @@ test('启停确认框复用 QsGenericModal，展示 name/code、稳定错误与�
   )
 })
 
-test('Modal 本地提交锁禁止重复、关闭且 Footer 触控高度不少于 44px', () => {
+test('Modal 本地提交锁禁止重复、关闭且 Footer 使用响应式按钮高度', () => {
   const source = readSource(
     '../../src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue',
   )
@@ -643,7 +643,7 @@ test('Modal 本地提交锁禁止重复、关闭且 Footer 触控高度不少于
   )
   assert.match(source, /<template #footer>/u)
   assert.equal(
-    source.match(/class="min-h-11 w-full sm:w-auto"/gu)?.length,
+    source.match(/class="min-h-11 w-full sm:min-h-9 sm:w-auto"/gu)?.length,
     2,
   )
 })

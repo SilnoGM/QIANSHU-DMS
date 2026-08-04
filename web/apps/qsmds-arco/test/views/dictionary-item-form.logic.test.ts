@@ -390,8 +390,12 @@ test('字典条目 Modal 锁定 Type 与 value，复用项目组件并在提交�
     /<QsGenericModal\s+v-if="modelValue"\s+:model-value="modelValue"/u,
   )
   assert.match(modalSource, /requestId:/u)
+  assert.match(
+    modalSource,
+    /<FaFormItem\s+name="dictionaryType"\s+:auto-bind="false"/u,
+  )
   assert.equal(
-    modalSource.match(/class="min-h-11 w-full sm:w-auto"/gu)?.length,
+    modalSource.match(/class="min-h-11 w-full sm:min-h-9 sm:w-auto"/gu)?.length,
     2,
   )
   assert.equal(

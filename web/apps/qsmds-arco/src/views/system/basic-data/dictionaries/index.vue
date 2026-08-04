@@ -2023,7 +2023,7 @@ onBeforeUnmount(() => {
     >
       <FaButton
         v-if="canRead && canCreate"
-        class="min-h-11"
+        class="min-h-11 md:min-h-9"
         @click="openCreateType"
       >
         <FaIcon name="i-lucide:plus" />
@@ -2160,7 +2160,7 @@ onBeforeUnmount(() => {
               <FaButton
                 v-if="selectedTypeActions?.canEdit"
                 variant="outline"
-                class="min-h-11"
+                class="min-h-11 md:min-h-9"
                 @click="openEditType(selectedType)"
               >
                 <FaIcon name="i-lucide:pencil" />
@@ -2169,7 +2169,7 @@ onBeforeUnmount(() => {
               <FaButton
                 v-if="selectedTypeActions?.canEnable"
                 variant="outline"
-                class="min-h-11"
+                class="min-h-11 md:min-h-9"
                 @click="openTypeStatusChange(selectedType, 'enable')"
               >
                 <FaIcon name="i-lucide:circle-play" />
@@ -2178,7 +2178,7 @@ onBeforeUnmount(() => {
               <FaButton
                 v-if="selectedTypeActions?.canDisable"
                 variant="destructive"
-                class="min-h-11"
+                class="min-h-11 md:min-h-9"
                 @click="openTypeStatusChange(selectedType, 'disable')"
               >
                 <FaIcon name="i-lucide:circle-pause" />

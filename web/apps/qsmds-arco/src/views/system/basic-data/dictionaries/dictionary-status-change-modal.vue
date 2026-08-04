@@ -314,7 +314,7 @@ watch(
       <FaButton
         type="button"
         variant="outline"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :disabled="interactionLocked"
         @click="handleCancel"
       >
@@ -323,7 +323,7 @@ watch(
       <FaButton
         type="button"
         :variant="isDisable ? 'destructive' : 'default'"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :loading="interactionLocked"
         :disabled="submitDisabled"
         :aria-label="`${copy.confirmLabel}${targetLabel}`"

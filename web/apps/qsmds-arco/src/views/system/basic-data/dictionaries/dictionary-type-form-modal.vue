@@ -433,7 +433,7 @@ watch(
       <FaButton
         type="button"
         variant="outline"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :disabled="submitLocked"
         @click="close"
       >
@@ -441,7 +441,7 @@ watch(
       </FaButton>
       <FaButton
         type="button"
-        class="min-h-11 w-full sm:w-auto"
+        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
         :disabled="submitDisabled"
         :loading="submitLocked"
         @click="submit"
