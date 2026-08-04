@@ -266,13 +266,17 @@ test('编号管理已升级为真实业务页面', () => {
   assert.match(source, /<QsGenericTable\b/u)
 })
 
-test('字典管理叶子已升级为受权限保护的单页骨架', () => {
+test('字典管理叶子已升级为受权限保护的三面板单页骨架', () => {
   for (const page of basicDataPageContracts.slice(4)) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
 
     assert.match(source, /<script setup lang="ts">/u)
     assert.match(source, /auth\('dictionaries:read'\)/u)
     assert.equal(source.match(/<FaPageHeader\b/gu)?.length, 1)
-    assert.equal(source.match(/<FaPageMain\b/gu)?.length, 1)
+    // 无权态单独一个面板，正常态为目录、摘要和条目表格三个面板。
+    assert.equal(source.match(/<FaPageMain\b/gu)?.length, 4)
+    assert.match(source, /data-testid="dictionary-type-panel"/u)
+    assert.match(source, /data-testid="dictionary-type-summary-panel"/u)
+    assert.match(source, /data-testid="dictionary-item-table-panel"/u)
   }
 })

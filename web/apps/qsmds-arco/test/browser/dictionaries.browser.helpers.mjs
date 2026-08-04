@@ -99,6 +99,12 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
     const typePanel = document.querySelector(
       '[data-testid="dictionary-type-panel"]',
     )
+    const typeSummaryPanel = document.querySelector(
+      '[data-testid="dictionary-type-summary-panel"]',
+    )
+    const itemTablePanel = document.querySelector(
+      '[data-testid="dictionary-item-table-panel"]',
+    )
     const typeDrawerTrigger = document.querySelector(
       '[data-testid="dictionary-open-type-drawer"]',
     )
@@ -183,12 +189,44 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
     const typePanelWidth = typePanel?.getClientRects().length > 0
       ? typePanel.getBoundingClientRect().width
       : null
+    const visiblePanels = [typePanel, typeSummaryPanel, itemTablePanel]
+      .filter(panel => panel?.getClientRects().length > 0)
+    const workspaceRect = workspace?.getBoundingClientRect()
+    const typePanelRect = typePanel?.getClientRects().length > 0
+      ? typePanel.getBoundingClientRect()
+      : null
+    const typeSummaryPanelRect = typeSummaryPanel?.getClientRects().length > 0
+      ? typeSummaryPanel.getBoundingClientRect()
+      : null
+    const itemTablePanelRect = itemTablePanel?.getClientRects().length > 0
+      ? itemTablePanel.getBoundingClientRect()
+      : null
+    const horizontalPanelGap = typePanelRect && typeSummaryPanelRect
+      ? typeSummaryPanelRect.left - typePanelRect.right
+      : null
+    const verticalPanelGap = typeSummaryPanelRect && itemTablePanelRect
+      ? itemTablePanelRect.top - typeSummaryPanelRect.bottom
+      : null
+    const rightPanelsAligned = !!(
+      typeSummaryPanelRect
+      && itemTablePanelRect
+      && Math.abs(typeSummaryPanelRect.left - itemTablePanelRect.left) <= 1
+      && Math.abs(typeSummaryPanelRect.right - itemTablePanelRect.right) <= 1
+    )
+    const panelsFitWorkspace = !!workspaceRect && visiblePanels.every((panel) => {
+      const rect = panel.getBoundingClientRect()
+      return rect.left >= workspaceRect.left - 1
+        && rect.right <= workspaceRect.right + 1
+        && rect.top >= workspaceRect.top - 1
+        && rect.bottom <= workspaceRect.bottom + 1
+    })
     return {
       bodyWidth: document.body.scrollWidth,
       cards: cards.length,
       desktopTables: desktopTables.length,
       documentFits: document.documentElement.scrollWidth <= viewportWidth,
       documentWidth: document.documentElement.scrollWidth,
+      horizontalPanelGap,
       modeMatches: mobile
         ? viewportWidth === 390
           && typePanel?.getClientRects().length === 0
@@ -199,7 +237,11 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
       touchTargetViolations: mobile
         ? touchTargets.filter(target => !target.pass)
         : [],
+      panelsFitWorkspace,
+      rightPanelsAligned,
       typePanelWidth,
+      verticalPanelGap,
+      visiblePanelCount: visiblePanels.length,
       viewportWidth,
       workspaceMounted: workspace?.getClientRects().length > 0,
     }

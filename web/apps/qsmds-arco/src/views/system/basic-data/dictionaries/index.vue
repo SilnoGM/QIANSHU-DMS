@@ -2031,25 +2031,27 @@ onBeforeUnmount(() => {
       </FaButton>
     </FaPageHeader>
 
-    <FaPageMain>
+    <FaPageMain v-if="managementState.access === 'forbidden'">
       <FaEmpty
-        v-if="managementState.access === 'forbidden'"
         icon="i-lucide:shield-alert"
         title="无权查看字典"
         description="当前身份缺少 dictionaries:read 权限。"
         class="min-h-64"
       />
+    </FaPageMain>
 
-      <div
-        v-else
-        class="gap-5 grid min-w-0 md:grid-cols-[18rem_minmax(0,1fr)]"
-        data-testid="dictionary-management-workspace"
+    <!-- 桌面端左侧目录跨越右侧两行；窄屏隐藏目录后，两个右侧面板会自然收敛为单列。 -->
+    <div
+      v-else
+      class="m-4 gap-4 grid min-w-0 xl:gap-5 2xl:grid-cols-[22rem_minmax(0,1fr)] md:grid-cols-[20rem_minmax(0,1fr)]"
+      data-testid="dictionary-management-workspace"
+    >
+      <FaPageMain
+        class="m-0 min-w-0 hidden md:flex md:row-span-2 md:self-stretch"
+        main-class="min-w-0 flex-1"
+        data-testid="dictionary-type-panel"
       >
-        <aside
-          class="min-w-0 hidden md:pr-5 md:border-r md:border-border md:block"
-          aria-label="字典类型目录"
-          data-testid="dictionary-type-panel"
-        >
+        <aside class="h-full min-w-0" aria-label="字典类型目录">
           <DictionaryTypeList
             v-model:page="typePage"
             v-model:page-size="typePageSize"
@@ -2070,9 +2072,15 @@ onBeforeUnmount(() => {
             @status-change="filterDictionaryTypes"
           />
         </aside>
+      </FaPageMain>
 
-        <section class="min-w-0" aria-labelledby="dictionary-item-panel-title">
-          <div class="mb-4 flex flex-wrap gap-3 items-start justify-between">
+      <FaPageMain
+        class="m-0 min-w-0"
+        main-class="min-w-0"
+        data-testid="dictionary-type-summary-panel"
+      >
+        <section class="min-w-0" aria-label="当前字典类型摘要">
+          <div class="flex flex-wrap gap-3 items-start justify-between">
             <div class="min-w-0">
               <p class="qs-type-meta m-0">
                 当前类型
@@ -2085,23 +2093,60 @@ onBeforeUnmount(() => {
               </code>
             </div>
 
-            <FaButton
-              variant="outline"
-              class="min-h-11 md:hidden"
-              data-testid="dictionary-open-type-drawer"
-              aria-controls="dictionary-type-drawer"
-              :aria-expanded="typeDrawerOpen"
-              @click="typeDrawerOpen = true"
-            >
-              <FaIcon name="i-lucide:list-filter" />
-              选择类型
-            </FaButton>
+            <div class="flex flex-wrap gap-2 items-center justify-end" aria-label="字典类型操作">
+              <FaButton
+                variant="outline"
+                class="min-h-11 md:hidden"
+                data-testid="dictionary-open-type-drawer"
+                aria-controls="dictionary-type-drawer"
+                :aria-expanded="typeDrawerOpen"
+                @click="typeDrawerOpen = true"
+              >
+                <FaIcon name="i-lucide:list-filter" />
+                选择类型
+              </FaButton>
+
+              <template v-if="selectedType">
+                <span
+                  v-if="selectedTypeActions && !selectedTypeActions.hasAny"
+                  class="qs-type-meta"
+                >
+                  {{ selectedTypeActions.readonlyReason }}
+                </span>
+                <FaButton
+                  v-if="selectedTypeActions?.canEdit"
+                  variant="outline"
+                  class="min-h-11 md:min-h-9"
+                  @click="openEditType(selectedType)"
+                >
+                  <FaIcon name="i-lucide:pencil" />
+                  编辑类型
+                </FaButton>
+                <FaButton
+                  v-if="selectedTypeActions?.canEnable"
+                  variant="outline"
+                  class="min-h-11 md:min-h-9"
+                  @click="openTypeStatusChange(selectedType, 'enable')"
+                >
+                  <FaIcon name="i-lucide:circle-play" />
+                  启用类型
+                </FaButton>
+                <FaButton
+                  v-if="selectedTypeActions?.canDisable"
+                  variant="destructive"
+                  class="min-h-11 md:min-h-9"
+                  @click="openTypeStatusChange(selectedType, 'disable')"
+                >
+                  <FaIcon name="i-lucide:circle-pause" />
+                  停用类型
+                </FaButton>
+              </template>
+            </div>
           </div>
 
-          <section
+          <div
             v-if="selectedType"
-            class="mb-4 p-4 border border-border rounded-lg bg-muted/10 gap-4 grid"
-            aria-label="当前字典类型摘要"
+            class="mt-4 pt-4 border-t border-border/70 gap-4 grid"
           >
             <dl class="m-0 gap-x-6 gap-y-3 grid grid-cols-2 sm:grid-cols-4">
               <div class="gap-1 grid">
@@ -2149,50 +2194,22 @@ onBeforeUnmount(() => {
             <p v-if="selectedType.description" class="qs-type-body m-0 break-words">
               {{ selectedType.description }}
             </p>
+          </div>
+        </section>
+      </FaPageMain>
 
-            <div class="flex flex-wrap gap-2 items-center justify-end" aria-label="字典类型操作">
-              <span
-                v-if="selectedTypeActions && !selectedTypeActions.hasAny"
-                class="qs-type-meta"
-              >
-                {{ selectedTypeActions.readonlyReason }}
-              </span>
-              <FaButton
-                v-if="selectedTypeActions?.canEdit"
-                variant="outline"
-                class="min-h-11 md:min-h-9"
-                @click="openEditType(selectedType)"
-              >
-                <FaIcon name="i-lucide:pencil" />
-                编辑类型
-              </FaButton>
-              <FaButton
-                v-if="selectedTypeActions?.canEnable"
-                variant="outline"
-                class="min-h-11 md:min-h-9"
-                @click="openTypeStatusChange(selectedType, 'enable')"
-              >
-                <FaIcon name="i-lucide:circle-play" />
-                启用类型
-              </FaButton>
-              <FaButton
-                v-if="selectedTypeActions?.canDisable"
-                variant="destructive"
-                class="min-h-11 md:min-h-9"
-                @click="openTypeStatusChange(selectedType, 'disable')"
-              >
-                <FaIcon name="i-lucide:circle-pause" />
-                停用类型
-              </FaButton>
-            </div>
-          </section>
-
+      <FaPageMain
+        class="m-0 min-w-0"
+        main-class="min-w-0"
+        data-testid="dictionary-item-table-panel"
+      >
+        <section class="min-w-0" aria-labelledby="dictionary-item-panel-title">
           <FaEmpty
             v-if="managementState.selection.kind === 'none'"
             icon="i-lucide:mouse-pointer-click"
             title="请选择字典类型"
             description="从类型目录中选择一项后查看其条目。"
-            class="border border-border rounded-lg bg-muted/10 min-h-64"
+            class="min-h-64"
           />
 
           <DictionaryItemTable
@@ -2221,8 +2238,8 @@ onBeforeUnmount(() => {
             @status="openItemStatusChange"
           />
         </section>
-      </div>
-    </FaPageMain>
+      </FaPageMain>
+    </div>
 
     <QsGenericDrawer
       v-if="managementState.access === 'active'"

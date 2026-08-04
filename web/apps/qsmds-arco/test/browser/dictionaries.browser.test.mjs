@@ -439,12 +439,22 @@ function assertLayout(layout, { cards, desktopTables, mobile }) {
     assert.equal(layout.desktopTables, desktopTables)
   }
   if (mobile) {
+    assert.equal(layout.typePanelWidth, null)
+    assert.equal(layout.visiblePanelCount, 2)
     assert.deepEqual(layout.touchTargetViolations, [])
   }
   else {
     assert.equal(typeof layout.typePanelWidth, 'number')
-    assert.equal(Math.abs(layout.typePanelWidth - 288) <= 1, true)
+    assert.equal(layout.typePanelWidth >= 320, true)
+    assert.equal(layout.typePanelWidth <= 360, true)
+    assert.equal(layout.visiblePanelCount, 3)
+    assert.equal(layout.horizontalPanelGap >= 12, true)
+    assert.equal(layout.horizontalPanelGap <= 24, true)
   }
+  assert.equal(layout.verticalPanelGap >= 12, true)
+  assert.equal(layout.verticalPanelGap <= 24, true)
+  assert.equal(layout.rightPanelsAligned, true)
+  assert.equal(layout.panelsFitWorkspace, true)
 }
 
 async function auditMobileLayout(page) {

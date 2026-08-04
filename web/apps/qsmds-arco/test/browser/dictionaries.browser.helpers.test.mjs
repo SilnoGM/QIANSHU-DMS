@@ -63,6 +63,8 @@ test('布局审计脚本固定桌面与 390x844 的溢出、可见表面和 44px
   const desktop = dictionaryLayoutAuditExpression({ mobile: false })
   assert.match(desktop, /dictionary-management-workspace/u)
   assert.match(desktop, /dictionary-type-panel/u)
+  assert.match(desktop, /dictionary-type-summary-panel/u)
+  assert.match(desktop, /dictionary-item-table-panel/u)
   assert.match(
     desktop,
     /document\.documentElement\.scrollWidth <= viewportWidth/u,
@@ -70,6 +72,11 @@ test('布局审计脚本固定桌面与 390x844 的溢出、可见表面和 44px
   assert.match(desktop, /viewportWidth >= 768/u)
   assert.match(desktop, /typePanelWidth/u)
   assert.match(desktop, /typePanel\.getBoundingClientRect\(\)\.width/u)
+  assert.match(desktop, /visiblePanelCount/u)
+  assert.match(desktop, /horizontalPanelGap/u)
+  assert.match(desktop, /verticalPanelGap/u)
+  assert.match(desktop, /rightPanelsAligned/u)
+  assert.match(desktop, /panelsFitWorkspace/u)
   assert.match(
     desktop,
     /typeDrawerTrigger\?\.getClientRects\(\)\.length === 0/u,

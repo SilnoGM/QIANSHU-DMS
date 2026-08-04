@@ -43,10 +43,19 @@ const typeListScopedStyles = compileScopedStyles(
   'dictionary-type-list.vue',
 )
 
-test('字典管理只使用一层 Fa 页面容器与非对称主从骨架', () => {
+test('字典管理在页头下使用三个独立面板与适中间距', () => {
   assert.equal(pageSource.match(/<FaPageHeader\b/gu)?.length, 1)
-  assert.equal(pageSource.match(/<FaPageMain\b/gu)?.length, 1)
-  assert.match(pageSource, /md:grid-cols-\[18rem_minmax\(0,1fr\)\]/u)
+  // 无权态单独使用一个面板；有权态由左一右二三个同级面板构成。
+  assert.equal(pageSource.match(/<FaPageMain\b/gu)?.length, 4)
+  assert.match(pageSource, /md:grid-cols-\[20rem_minmax\(0,1fr\)\]/u)
+  assert.match(pageSource, /2xl:grid-cols-\[22rem_minmax\(0,1fr\)\]/u)
+  assert.match(pageSource, /gap-4[\s\S]{0,160}xl:gap-5/u)
+  assert.match(pageSource, /data-testid="dictionary-type-panel"/u)
+  assert.match(pageSource, /data-testid="dictionary-type-summary-panel"/u)
+  assert.match(pageSource, /data-testid="dictionary-item-table-panel"/u)
+  assert.match(pageSource, /md:row-span-2/u)
+  assert.doesNotMatch(pageSource, /md:pr-5 md:border-r/u)
+  assert.doesNotMatch(pageSource, /bg-muted\/10/u)
   assert.match(pageSource, /Noto Sans SC|qs-type-/u)
   assert.doesNotMatch(pageSource, /(?:violet|purple|indigo|fuchsia)/iu)
   assert.doesNotMatch(pageSource, /\p{Extended_Pictographic}/gu)
