@@ -41,6 +41,7 @@ const requiredJobIds = Object.freeze([
   'contract',
   'web-check-build',
   'browser-auth-e2e',
+  'browser-dictionaries-e2e',
   'ci-gate',
 ])
 const validationJobIds = requiredJobIds.slice(0, -1)
@@ -316,11 +317,11 @@ test('ci.yml Required Job、runner、timeout 与 tracked diff 精确', async () 
 test('ci.yml 只使用固定 Action SHA 且 cache owner 唯一', async () => {
   const source = await readCiWorkflow()
   const references = usesFrom(source)
-  assert.equal(references.filter(value => value === checkoutAction).length, 6)
-  assert.equal(references.filter(value => value === pnpmSetupAction).length, 5)
-  assert.equal(references.filter(value => value === setupNodeAction).length, 6)
-  assert.equal(references.length, 17)
-  assert.equal((source.match(/          cache: pnpm$/gmu) ?? []).length, 5)
+  assert.equal(references.filter(value => value === checkoutAction).length, 7)
+  assert.equal(references.filter(value => value === pnpmSetupAction).length, 6)
+  assert.equal(references.filter(value => value === setupNodeAction).length, 7)
+  assert.equal(references.length, 20)
+  assert.equal((source.match(/          cache: pnpm$/gmu) ?? []).length, 6)
   assert.equal(source.includes('services:'), false)
   assert.equal(source.includes('postgres:'), false)
 })
@@ -342,11 +343,11 @@ test('root-governance 不安装依赖并保持根依赖域为空', async () => {
   ], 'root-governance')
 })
 
-test('ci-gate always 汇总六个 Job 且拒绝所有非 success 状态', async () => {
+test('ci-gate always 汇总七个 Job 且拒绝所有非 success 状态', async () => {
   const gate = extractJobs(await readCiWorkflow()).get('ci-gate')
   assert.match(
     gate,
-    /\n    needs: \[root-governance, server-check-build, server-e2e, contract, web-check-build, browser-auth-e2e\](?:\n|$)/u,
+    /\n    needs: \[root-governance, server-check-build, server-e2e, contract, web-check-build, browser-auth-e2e, browser-dictionaries-e2e\](?:\n|$)/u,
   )
   assert.match(gate, /\n    if: always\(\)(?:\n|$)/u)
   assert.match(gate, /\n          NEEDS_JSON: \$\{\{ toJSON\(needs\) \}\}(?:\n|$)/u)
@@ -357,7 +358,7 @@ test('ci-gate always 汇总六个 Job 且拒绝所有非 success 状态', async 
 
   for (const result of ['failure', 'cancelled', 'skipped']) {
     const needs = successfulNeeds()
-    needs.contract.result = result
+    needs['browser-dictionaries-e2e'].result = result
     const rejected = runGate(program, needs)
     assert.equal(rejected.error, undefined)
     assert.equal(rejected.status, 1, `ci-gate 必须拒绝 ${result}`)
@@ -482,6 +483,23 @@ test('browser-auth-e2e 安装双依赖域并只调用隔离根入口', async () 
     'run: node --run ci:browser-auth-e2e',
     'run: git diff --exit-code -- .',
   ], 'browser-auth-e2e')
+  assert.equal(job.includes('services:'), false)
+  assert.equal(job.includes('DATABASE_URL'), false)
+  assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)
+})
+
+test('browser-dictionaries-e2e 安装双依赖域并只调用字典隔离根入口', async () => {
+  const job = extractJobs(await readCiWorkflow()).get('browser-dictionaries-e2e')
+  assertDependencySetup(job, [
+    'server/pnpm-lock.yaml',
+    'web/pnpm-lock.yaml',
+  ])
+  assertTextOrder(job, [
+    'run: pnpm -C server install --frozen-lockfile',
+    'run: pnpm -C web install --frozen-lockfile',
+    'run: node --run ci:browser-dictionaries-e2e',
+    'run: git diff --exit-code -- .',
+  ], 'browser-dictionaries-e2e')
   assert.equal(job.includes('services:'), false)
   assert.equal(job.includes('DATABASE_URL'), false)
   assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)

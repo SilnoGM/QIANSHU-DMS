@@ -608,7 +608,20 @@ test('Modal 本地提交锁禁止重复、关闭且 Footer 触控高度不少于
   const source = readSource(
     '../../src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue',
   )
+  const modelValueWatcherStart = source.indexOf(
+    'watch(\n  [\n    () => props.modelValue,',
+  )
+  const modelValueWatcherEnd = source.indexOf(
+    '\n</script>',
+    modelValueWatcherStart + 1,
+  )
+  const modelValueWatcher = source.slice(
+    modelValueWatcherStart,
+    modelValueWatcherEnd,
+  )
 
+  assert.notEqual(modelValueWatcherStart, -1)
+  assert.notEqual(modelValueWatcherEnd, -1)
   assert.match(source, /const interactionLocked = computed\([\s\S]*?props\.submitting \|\| submitRequested\.value/u)
   assert.match(source, /if \(interactionLocked\.value\) \{\s*return\s*\}/u)
   assert.match(source, /submitRequested\.value = true/u)
@@ -619,7 +632,14 @@ test('Modal 本地提交锁禁止重复、关闭且 Footer 触控高度不少于
   )
   assert.match(
     source,
-    /watch\(\s*\(\) => props\.submitting,[\s\S]*?submitRequested\.value = false/u,
+    /watch\(\s*\(\) => props\.submitting,\s*\(submitting\) => \{\s*if \(!submitting\) \{\s*submitRequested\.value = false\s*\}\s*\},\s*\)/u,
+  )
+  assert.match(modelValueWatcher, /\(\[visible\]\) => \{\s*if \(!visible\) \{\s*submitRequested\.value = false/u)
+  assert.doesNotMatch(modelValueWatcher, /flush:/u)
+  assert.doesNotMatch(modelValueWatcher, /props\.submitting/u)
+  assert.match(
+    source,
+    /<QsGenericModal\s+v-if="modelValue"\s+:model-value="modelValue"/u,
   )
   assert.match(source, /<template #footer>/u)
   assert.equal(

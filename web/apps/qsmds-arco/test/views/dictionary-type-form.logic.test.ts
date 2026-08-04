@@ -237,6 +237,20 @@ test('409 rebase 合并未编辑字段并标记双方同时修改的字段', () 
 })
 
 test('字典类型 Modal 复用项目组件并在提交窗口加锁', () => {
+  const modelValueWatcherStart = modalSource.indexOf(
+    'watch(\n  () => props.modelValue,',
+  )
+  const modelValueWatcherEnd = modalSource.indexOf(
+    '\n\nwatch(',
+    modelValueWatcherStart + 1,
+  )
+  const modelValueWatcher = modalSource.slice(
+    modelValueWatcherStart,
+    modelValueWatcherEnd,
+  )
+
+  assert.notEqual(modelValueWatcherStart, -1)
+  assert.notEqual(modelValueWatcherEnd, -1)
   assert.match(
     modalSource,
     /import QsGenericModal from '@\/components\/business\/QsGenericModal\/index\.vue'/u,
@@ -251,6 +265,14 @@ test('字典类型 Modal 复用项目组件并在提交窗口加锁', () => {
   assert.match(modalSource, /dictionaryType\?\.version/u)
   assert.match(modalSource, /并发字段需要核对/u)
   assert.match(modalSource, /:submitting="submitLocked"/u)
+  assert.match(modelValueWatcher, /submitRequested\.value = false/u)
+  assert.match(modelValueWatcher, /\{ immediate: true \}/u)
+  assert.doesNotMatch(modelValueWatcher, /flush:/u)
+  assert.doesNotMatch(modelValueWatcher, /props\.submitting/u)
+  assert.match(
+    modalSource,
+    /<QsGenericModal\s+v-if="modelValue"\s+:model-value="modelValue"/u,
+  )
   assert.match(modalSource, /if \(submitLocked\.value\)/u)
   assert.match(modalSource, /requestId:/u)
   assert.match(modalSource, /typeId: editType\.id/u)
@@ -259,6 +281,10 @@ test('字典类型 Modal 复用项目组件并在提交窗口加锁', () => {
   assert.equal(
     modalSource.match(/class="min-h-11 w-full sm:w-auto"/gu)?.length,
     2,
+  )
+  assert.equal(
+    modalSource.match(/input-class="min-h-11 sm:min-h-9"/gu)?.length,
+    3,
   )
   assert.doesNotMatch(modalSource, /#[\dA-Fa-f]{3,8}\b/u)
   assert.doesNotMatch(modalSource, /(?:Inter|Roboto|Arial|system-ui)/u)

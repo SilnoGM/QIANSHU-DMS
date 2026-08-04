@@ -383,6 +383,7 @@ watch(
 
 <template>
   <QsGenericModal
+    v-if="modelValue"
     :model-value="modelValue"
     :title="isEditing ? '编辑字典条目' : '新增字典条目'"
     :description="isEditing
@@ -444,7 +445,7 @@ watch(
       ref="formRef"
       :model="form"
       :disabled="submitLocked"
-      class="gap-x-5 gap-y-4 grid grid-cols-1 sm:grid-cols-2"
+      class="dictionary-item-form-modal-surface gap-x-5 gap-y-4 grid grid-cols-1 sm:grid-cols-2"
       @submit="submit"
     >
       <FaFormItem
@@ -455,6 +456,7 @@ watch(
         <FaInput
           :model-value="dictionaryTypeDisplay"
           class="font-mono w-full"
+          input-class="min-h-11 sm:min-h-9"
           disabled
           readonly
         />
@@ -472,6 +474,7 @@ watch(
           autocapitalize="characters"
           clearable
           class="font-mono w-full uppercase"
+          input-class="min-h-11 sm:min-h-9"
           :disabled="isEditing || submitLocked"
           maxlength="64"
           placeholder="例如 PENDING"
@@ -486,6 +489,7 @@ watch(
           autocomplete="off"
           clearable
           class="w-full"
+          input-class="min-h-11 sm:min-h-9"
           maxlength="256"
           placeholder="例如 待处理"
           @clear="form.label = ''"
@@ -502,7 +506,7 @@ watch(
           :model-value="form.tone"
           :options="toneOptions"
           :disabled="submitLocked"
-          class="w-full"
+          class="min-h-11 w-full sm:min-h-9"
           @update:model-value="handleTone"
         />
       </FaFormItem>
@@ -533,6 +537,7 @@ watch(
           autocomplete="off"
           clearable
           class="w-full"
+          input-class="min-h-11 sm:min-h-9"
           inputmode="numeric"
           max="2147483647"
           min="0"
@@ -566,3 +571,15 @@ watch(
     </template>
   </QsGenericModal>
 </template>
+
+<style scoped>
+@media (width <= 767px) {
+  /*
+   * FaSelect 的选项列表 Teleport 到 body。用本字典条目表单中已展开的 trigger
+   * 作为归属条件，只扩大 Tone 选择器的选项，不修改 FaSelect 的公共契约。
+   */
+  :global(body:has(.dictionary-item-form-modal-surface [data-slot="select-trigger"][aria-expanded="true"]) [data-slot="select-content"] [role="option"]) {
+    min-height: 2.75rem;
+  }
+}
+</style>

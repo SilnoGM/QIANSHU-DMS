@@ -146,6 +146,7 @@ watch(
 
 <template>
   <QsGenericModal
+    v-if="modelValue"
     :model-value="modelValue"
     :title="copy.title"
     :description="copy.description"

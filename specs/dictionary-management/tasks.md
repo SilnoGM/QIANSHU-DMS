@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 15 已完成；Task 16 未开始
+- 状态：Task 16 已完成；Task 17 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -290,7 +290,7 @@ TDD：先覆盖 ACTIVE/DISABLED/UNKNOWN/missing、新选择过滤、raw value �
 
 ### Task 16 - Browser E2E 与 CI Gate
 
-状态：未开始。
+状态：已完成；已于 2026-08-04 确认并交付。
 
 需求覆盖：R7、R9、R10、R12。
 
@@ -725,3 +725,25 @@ Task 14 只交付 DictionaryItem 搜索、自身状态筛选、分页、排序�
 | `git diff --check` | 通过 |
 
 Task 15 只交付 Web 历史值消费适配、字典页面完整移动端/Accessibility 收口、Reduced Motion，以及 Gate C 已单独确认的 `QsGenericTable` 窄屏 `44px` 内部修复。Task 16 的字典专属 Browser E2E、root runner 与 CI Gate 均未开始；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、Provider kernel 或路由，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。
+
+## 24. Task 16 验证记录
+
+验证日期：2026-08-04。
+
+| Command / Check | Result |
+| --- | --- |
+| Initial Task 16 TDD RED | root runner/workflow/governance 目标先以 `68/79`、共 `11` 个失败证明独立 runner、入口、Job 与七 Job gate 缺失；Web workspace/helper 目标先以 `7/10`、共 `3` 个失败证明字典 Browser 脚本和 helper 缺失 |
+| Modal lifecycle RED-GREEN | 真实创建 Type 的 `POST` 已返回 `201` 且父页面已显示 version `1`，但 Modal 仍可见，证明单次 `modelValue=false` 边沿会在共享 Modal 提交关闭窗口被拒绝；两轮 watcher flush 尝试在真实 Chrome 中仍失败，最终在三个字典私有 Modal 使用受控 `v-if="modelValue"` 生命周期，目标测试先 `33/36` RED、实现后 `36/36` GREEN，未修改共享 `QsGenericModal` |
+| Responsive / audit RED-GREEN | 列设置先暴露 20px Checkbox 图标重复审计，改为以可见、可点击、关联 enabled Checkbox 的 `label[for]` 作为同一触控目标；稳定 44px 在 Chromium 返回 `43.99994px` 时只使用 `0.001px` 浮点容差，`41.8px` 动画帧仍失败；Item Modal 控件先以 `10/11` RED 证明 36px 缺口，Type Modal 输入先以 `8/9` RED 证明同类缺口，最终三个私有 Modal 目标 `36/36` GREEN；真实移动端进一步打开 Item Tone Teleport options，并审计 Type、Item、Status Modal 的控件、Footer 与焦点恢复 |
+| Runner / helper GREEN | `scripts/ci-browser-dictionaries-e2e.test.mjs` 的 `9/9`、共享 Regions runner/relay 的 `14/14` 与 Browser helper 的 `6/6` 通过；runner/relay 合计 `23/23`，三组目标合计 `29/29`；runner 只接受隔离 loopback PostgreSQL URL，净化继承凭据，随机生成临时密码/HMAC，并在成功、失败和 signal 路径逆序停止服务、清理临时目录 |
+| Runner safety RED-GREEN | 交叉审查依次以失败测试证明 EOF secret 前缀、嵌套 password、cross-secret 前后缀碰撞、secret 自重叠及 LF/CR/CRLF 行尾截断会泄露凭据片段，以及 active 子进程被清理为 `SIGTERM` 时可能覆盖原始 `SIGINT`；relay 最终使用 `maxSecretLength - 1` 有界 lookahead、完整 occurrence 区间并集与跨 drain 的 `maskRunOpen`，并在 EOF 和可安全结算的换行边界对未决 proper prefix fail-closed；`DATABASE_URL` 全部二段切分、自重叠/嵌套/多行任意 chunk partition 均与独立离线 oracle 一致，最终清理后统一归一化 `SIGINT=130`、`SIGTERM=143` |
+| `node --run ci:browser-dictionaries-e2e` | 以最终代码在一次性 PostgreSQL 16、真实 migration、Server、Web 与 Chrome 环境退出 `0`，Browser `1/1` 通过；覆盖 Type/两个 Item 创建、编辑、启停、双标签 Catalog 失效、亮暗主题、`390x844`、Drawer/Select/分页、Type/Item/Status Modal、焦点恢复、44px、无横向溢出、只读与无权限独立身份、动态前端撤权、无 DELETE；Server-domain verifier 精确确认最终 Type/Item 状态及 `10` 条、`8` 类 Audit event |
+| Browser stabilization | CDP 动态 viewport 不稳定派发 `MediaQueryList change`，测试使用同源完整文档 remount 建立 390px 响应式真相源；主 UI 标签显式 `bringToFront`；Select 与 Dialog 都等待 `zoom-in-95` 最终缩放矩阵，动画误差收紧为 `0.00001`，触控几何仍只允许 `0.001px` 浮点误差；admin、peer 与 limited runtime collector 均在各自首次导航前启动 |
+| `pnpm -C web check` | 受限环境先在 `162/162` Node tests 后因 `tsx` IPC pipe 报 `listen EPERM`；在具备 IPC 权限的环境以最终代码原命令复跑退出 `0`，`162/162` Node tests、`49/49` TS script tests、`703/703` API/View tests、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C web build` | 退出 `0`；生产构建、Noto 字体快照与 zero-residue 校验通过，仅输出既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run test:root` | 受限环境因真实进程树 fixture 超时且 Unix socket 报 `listen EPERM` 保留两项环境失败；在具备 process/socket 权限的环境以最终代码原命令复跑退出 `0`，`649/649` 通过 |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| Local check boundary | `git diff --exit-code 1d6e238abe9ba3fb8a53f3fd90ac8e759c3f7fcb -- scripts/check.mjs scripts/check.test.mjs` 与 `git diff --check` 均通过；字典 Browser 保持独立，未扩张本地根 `check` |
+| CI / scope audit | 新增独立 `browser-dictionaries-e2e` Job，双依赖域分别冻结安装，`ci-gate.needs` 与运行时结果数量精确为 `7`；共享 Browser 输出 relay 只做 fail-closed 凭据遮罩修复并由跨 chunk、EOF、多行、嵌套与重叠 secret 回归及独立 oracle/fuzz 覆盖；三路最终只读复核均为 P0=`0`、P1=`0`、P2=`0`；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、Provider kernel、路由或公共 Qs/Fa 组件，未提交 `.env`、构建产物或日志 |
+
+Task 16 只交付字典专属 Browser helper/E2E、隔离 root runner、Web/root scripts、独立 GitHub Actions Job、七 Job `CI gate`、三个字典私有 Modal 生命周期与移动端 44px 回归、共享 Browser 输出 relay 的 fail-closed 安全修复，以及对应测试和本验证记录。当前只完成本地实现与验证，尚未 push，未运行远端 GitHub Actions，因此不声称远端 CI 已通过；Task 17 仍未开始，未执行 PR、merge、发布或分支删除。

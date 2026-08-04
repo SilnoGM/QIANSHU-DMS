@@ -293,6 +293,7 @@ watch(
 
 <template>
   <QsGenericModal
+    v-if="modelValue"
     :model-value="modelValue"
     :title="isEditing ? '编辑字典类型' : '新增字典类型'"
     :description="isEditing
@@ -368,6 +369,7 @@ watch(
           autocapitalize="none"
           clearable
           class="font-mono w-full"
+          input-class="min-h-11 sm:min-h-9"
           :disabled="isEditing || submitLocked"
           maxlength="64"
           placeholder="例如 order.status"
@@ -382,6 +384,7 @@ watch(
           autocomplete="off"
           clearable
           class="w-full"
+          input-class="min-h-11 sm:min-h-9"
           maxlength="256"
           placeholder="例如 订单状态"
           @clear="form.name = ''"
@@ -414,6 +417,7 @@ watch(
           autocomplete="off"
           clearable
           class="w-full"
+          input-class="min-h-11 sm:min-h-9"
           inputmode="numeric"
           max="2147483647"
           min="0"
