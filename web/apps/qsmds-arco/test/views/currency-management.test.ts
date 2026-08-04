@@ -7,11 +7,15 @@ function readSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
-test('货币管理面板只承载工具栏和通用表格', () => {
+test('货币管理面板只承载说明、通用表格与可供页头调用的创建动作', () => {
   const source = readSource('../../src/views/system/basic-data/currencies/index.vue')
+  const tableStart = source.indexOf('<QsGenericTable')
+  const preTableTemplate = source.slice(source.indexOf('<template>'), tableStart)
 
+  assert.notEqual(tableStart, -1)
   assert.doesNotMatch(source, /<FaPageMain\b|<FaPageHeader\b/u)
-  assert.match(source, /新增货币/u)
+  assert.doesNotMatch(preTableTemplate, /<FaButton\b|i-lucide:refresh-cw/u)
+  assert.match(source, /defineExpose\(\{\s*openCreate,?\s*\}\)/u)
   assert.match(source, /<QsGenericTable\b/u)
   assert.doesNotMatch(source, /<Fa(?:Table|Pagination|Card)\b|gradient|#[\dA-Fa-f]{3,8}\b/u)
 })

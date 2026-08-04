@@ -9,6 +9,10 @@ import {
 
 defineOptions({ name: 'SystemBasicDataCurrencyExchangeRate' })
 
+interface CurrencyManagementPanelExpose {
+  openCreate: () => void
+}
+
 const CurrencyManagementPanel = defineAsyncComponent(
   () => import('../currencies/index.vue'),
 )
@@ -21,6 +25,7 @@ const router = useRouter()
 const { auth } = useAppAuth()
 
 const canReadCurrencies = computed(() => auth('currencies:read'))
+const canCreateCurrencies = computed(() => auth('currencies:create'))
 const canReadExchangeRates = computed(() => auth('exchange-rates:read'))
 const access = computed(() => ({
   canReadCurrencies: canReadCurrencies.value,
@@ -33,6 +38,25 @@ const tabs = computed(() => {
   }))
 })
 const activeTab = ref<CurrencyExchangeRateTab | null>(null)
+const currencyManagementPanelRef
+  = useTemplateRef<CurrencyManagementPanelExpose>('currencyManagementPanelRef')
+const canShowCurrencyCreate = computed(() =>
+  activeTab.value === 'currencies'
+  && canReadCurrencies.value
+  && canCreateCurrencies.value)
+const currencyCreateReady = computed(() =>
+  currencyManagementPanelRef.value !== null)
+
+/**
+ * FaPageHeader 负责页面级操作；货币子面板只暴露已带权限守卫的打开动作。
+ * 异步面板尚未挂载时按钮保持禁用，避免用户点击后没有任何反馈。
+ */
+function openCurrencyCreate(): void {
+  if (!canShowCurrencyCreate.value) {
+    return
+  }
+  currencyManagementPanelRef.value?.openCreate()
+}
 
 function queryMatchesTab(tab: CurrencyExchangeRateTab): boolean {
   return tab === 'currencies'
@@ -105,7 +129,18 @@ watch(
     <FaPageHeader
       title="货币汇率"
       description="统一维护系统货币与当前兑人民币汇率；两类数据继续使用独立权限、查询和操作边界。"
-    />
+    >
+      <FaButton
+        v-if="canShowCurrencyCreate"
+        size="sm"
+        class="min-h-11 md:min-h-8"
+        :disabled="!currencyCreateReady"
+        @click="openCurrencyCreate"
+      >
+        <FaIcon name="i-lucide:plus" />
+        新增货币
+      </FaButton>
+    </FaPageHeader>
 
     <FaPageMain>
       <FaEmpty
@@ -127,7 +162,10 @@ watch(
         @update:model-value="handleTabChange"
       >
         <template #currencies>
-          <CurrencyManagementPanel v-if="activeTab === 'currencies'" />
+          <CurrencyManagementPanel
+            v-if="activeTab === 'currencies'"
+            ref="currencyManagementPanelRef"
+          />
         </template>
         <template #exchange-rates>
           <ExchangeRateManagementPanel v-if="activeTab === 'exchange-rates'" />

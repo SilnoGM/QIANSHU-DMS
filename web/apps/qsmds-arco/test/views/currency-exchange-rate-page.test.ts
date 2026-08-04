@@ -130,7 +130,7 @@ test('合并页只保留一个页面骨架并使用 FaTabs 懒加载两个业务
   )
   assert.match(
     source,
-    /<template #currencies>\s*<CurrencyManagementPanel v-if="activeTab === 'currencies'"/u,
+    /<template #currencies>\s*<CurrencyManagementPanel[\s\S]{0,160}v-if="activeTab === 'currencies'"[\s\S]{0,120}ref="currencyManagementPanelRef"/u,
   )
   assert.match(
     source,
@@ -139,6 +139,28 @@ test('合并页只保留一个页面骨架并使用 FaTabs 懒加载两个业务
   assert.match(source, /@update:model-value="handleTabChange"/u)
   assert.doesNotMatch(source, /currenciesApi|<Fa(?:Table|Pagination|Card)\b/u)
   assert.doesNotMatch(source, /gradient|#[\dA-Fa-f]{3,8}\b|rgba?\(/u)
+})
+
+test('新增货币只在货币 Tab 的唯一页头展示紧凑操作', () => {
+  const source = readSource(
+    '../../src/views/system/basic-data/currency-exchange-rate/index.vue',
+  )
+  const pageHeader = source.match(
+    /<FaPageHeader\b[\s\S]*?<\/FaPageHeader>/u,
+  )?.[0]
+
+  assert.ok(pageHeader)
+  assert.match(pageHeader, /新增货币/u)
+  assert.match(pageHeader, /size="sm"/u)
+  assert.match(pageHeader, /class="min-h-11 md:min-h-8"/u)
+  assert.doesNotMatch(pageHeader, /刷新|i-lucide:refresh-cw/u)
+  assert.match(source, /auth\('currencies:create'\)/u)
+  assert.match(
+    source,
+    /activeTab\.value === 'currencies'[\s\S]{0,160}canReadCurrencies\.value[\s\S]{0,160}canCreateCurrencies\.value/u,
+  )
+  assert.match(source, /useTemplateRef<CurrencyManagementPanelExpose>/u)
+  assert.match(source, /currencyManagementPanelRef\.value\?\.openCreate\(\)/u)
 })
 
 test('两个业务面板不再各自创建页面骨架', () => {
