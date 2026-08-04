@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 16 已完成；Task 17 未开始
+- 状态：Task 1 至 Task 17 已完成
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -302,7 +302,7 @@ TDD：先为 root runner、workflow governance 和 Browser helper 写失败测�
 
 ### Task 17 - 全量验收、文档与 Git 收口
 
-状态：未开始。
+状态：已完成；已于 2026-08-04 确认并交付。
 
 需求覆盖：R1 至 R12。
 
@@ -746,4 +746,32 @@ Task 15 只交付 Web 历史值消费适配、字典页面完整移动端/Access
 | Local check boundary | `git diff --exit-code 1d6e238abe9ba3fb8a53f3fd90ac8e759c3f7fcb -- scripts/check.mjs scripts/check.test.mjs` 与 `git diff --check` 均通过；字典 Browser 保持独立，未扩张本地根 `check` |
 | CI / scope audit | 新增独立 `browser-dictionaries-e2e` Job，双依赖域分别冻结安装，`ci-gate.needs` 与运行时结果数量精确为 `7`；共享 Browser 输出 relay 只做 fail-closed 凭据遮罩修复并由跨 chunk、EOF、多行、嵌套与重叠 secret 回归及独立 oracle/fuzz 覆盖；三路最终只读复核均为 P0=`0`、P1=`0`、P2=`0`；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、Provider kernel、路由或公共 Qs/Fa 组件，未提交 `.env`、构建产物或日志 |
 
-Task 16 只交付字典专属 Browser helper/E2E、隔离 root runner、Web/root scripts、独立 GitHub Actions Job、七 Job `CI gate`、三个字典私有 Modal 生命周期与移动端 44px 回归、共享 Browser 输出 relay 的 fail-closed 安全修复，以及对应测试和本验证记录。当前只完成本地实现与验证，尚未 push，未运行远端 GitHub Actions，因此不声称远端 CI 已通过；Task 17 仍未开始，未执行 PR、merge、发布或分支删除。
+Task 16 只交付字典专属 Browser helper/E2E、隔离 root runner、Web/root scripts、独立 GitHub Actions Job、七 Job `CI gate`、三个字典私有 Modal 生命周期与移动端 44px 回归、共享 Browser 输出 relay 的 fail-closed 安全修复，以及对应测试和本验证记录。Task 16 交付时只完成本地实现与验证，尚未 push，未运行远端 GitHub Actions，因此不声称远端 CI 已通过；最终全量验收与 Git 收口见 Task 17，未执行 PR、merge、发布或分支删除。
+
+## 25. Task 17 验证记录
+
+验证日期：2026-08-04。
+
+| Command / Check | Result |
+| --- | --- |
+| `node --run test:root` | 在具备真实进程树与 Unix socket 权限的环境退出 `0`，`649/649` 通过 |
+| `pnpm -C server check` | Prisma validate、typecheck、ESLint 与 Jest 全部通过；Jest `137/137` suites、`1355/1355` tests |
+| `pnpm -C server build` | 退出 `0`，Server 生产构建通过 |
+| `node --run contract:check` | 退出 `0`；只使用临时产物比较，Server/Web OpenAPI snapshot 与临时重生成 snapshot 字节一致，Web generated types 可从该 snapshot 成功重建 |
+| `pnpm -C web check` | 在具备 `tsx` IPC 权限的环境退出 `0`；`162/162` Node tests、`49/49` TS script tests、`703/703` API/View tests、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C web build` | 退出 `0`；生产构建、Noto 字体 `101 + 7 = 108` shards 与 zero-residue 校验通过；仅有既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run ci:server-e2e` | 一次性 PostgreSQL 16 上从空库顺序部署全部 `9` 条 migration、二次 deploy 无待执行项且 schema up to date；Server E2E `23/23` suites、`113/113` tests 通过 |
+| `node --run ci:browser-auth-e2e` | 真实 Chrome `2/2` 通过；覆盖 Cookie、持久 Session、多标签、缓存边界及管理员用户、角色、权限与 Audit UI |
+| `node --run ci:browser-numbering-e2e` | 真实 Chrome `2/2` 通过；覆盖编号规则生命周期、精确统计、恢复、响应式语义、七权限组合、动态撤权与相邻 Server `403` |
+| `node --run ci:browser-regions-e2e` | 真实 Chrome `2/2` 通过；覆盖三级地区选择器 HTTP/错误/表单语义，以及管理查询、权限、写入、双标签失效与响应式页面 |
+| `node --run ci:browser-dictionaries-e2e` | 真实 Chrome `1/1` 通过；覆盖 Type/Item 生命周期、双标签精确失效、独立 read-only/no-permission 身份、动态撤权、亮暗主题、`390x844`、Drawer/Select/Modal、焦点恢复、44px、无横向溢出、无 DELETE 与最终 DB/Audit 对账 |
+| Schema / migration audit | `schema.prisma` 精确 `19` 个持久化 model；历史 `9` 条 migration 的名称、顺序与内容未改写；字典 migration 保持单事务、五项权限及 system_admin 授权，`DictionaryType`/`DictionaryItem` 业务 seed 均为 `0` |
+| OpenAPI / generated audit | Server/Web snapshot 字节一致；系统字典精确 `14` 个 endpoint（`12 management + 2 catalog`）、DELETE=`0`；generated 目录保持 ignored/rebuild 边界 |
+| Permission / Audit / cache audit | 五项字典权限、叶子 `dictionaries:read`、权限中立的基础数据父路由与八类 Audit event 在 migration、Server、Web 和测试间一致；Catalog 缓存保持 identity-scoped JSON tuple key、`300000ms` TTL、generation/Abort/in-flight 守卫及严格无回播 BroadcastChannel 失效语义 |
+| CI / runner safety audit | 独立 `browser-dictionaries-e2e` 使用 Server/Web 双 frozen install；`ci-gate.needs` 与运行时结果数量精确为 `7`；runner 仅接受 loopback `qianshu_ci`，净化继承凭据并 fail-closed 遮罩日志，成功/失败/signal 路径均逆序清理 |
+| Migration documentation audit | `docs/后端文档/数据库迁移规范.md` 已精确记录全部 `9` 条 migration、`19` 个持久化 model、字典两表/权限/Audit 与零业务 seed，因此本任务不制造无语义文档差异 |
+| Git / workspace / scope audit | Task 1 至 Task 16 保持 `16` 个独立提交；Task 17 开始时 HEAD=`e6f859b35a202b30df6b560e7eb16a937de7cdeb`、工作区干净；无依赖/lockfile、`.env`、根依赖违规、构建物、日志、Schema、migration、公共 API、权限或运行时代码变更 |
+| Cross-review closeout | Migration/Schema、Server/契约/缓存、Web/Browser/CI/Git 三路只读复核均为 P0=`0`、P1=`0`、P2=`0` |
+| `git diff --check` / final status | 文档更新后重新执行并通过；最终只暂存三份规格文档，提交后工作区保持干净 |
+
+Task 17 只完成全量本地门禁、一次性 PostgreSQL/真实 Chrome 验收、OpenAPI/generated/migration/权限/Audit/缓存/CI/Git 边界审计，以及三份规格状态和本验证记录收口。未修改 `docs/后端文档/数据库迁移规范.md`，因为其现有 `9` 条 migration、`19` 个持久化 model 和字典零业务 seed 记录已经精确；未修改运行时代码、Schema、migration、公共 API、权限、依赖、lockfile、Store、Provider kernel、路由或公共 Qs/Fa 组件。当前分支仍未 push，未运行远端 GitHub Actions，因此不声称远端 CI 已通过；未执行 PR、merge、发布或分支删除。
