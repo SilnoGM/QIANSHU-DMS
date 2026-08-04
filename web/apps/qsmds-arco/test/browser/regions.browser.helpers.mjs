@@ -807,6 +807,104 @@ export function requestSearchParams(event) {
   }
 }
 
+/**
+ * 生成地区管理页的响应式布局审计。只依赖稳定 testid 和实际几何，
+ * 避免把 FaPageMain 的实现 class 或表格内部 DOM 当成业务契约。
+ */
+export function regionManagementLayoutAuditExpression({ mobile }) {
+  if (typeof mobile !== 'boolean') {
+    throw new TypeError('Region management layout audit mode is invalid')
+  }
+  return `(() => {
+    const mobile = ${mobile}
+    const workspace = document.querySelector(
+      '[data-testid="region-management-workspace"]',
+    )
+    const scopePanel = document.querySelector(
+      '[data-testid="region-scope-panel"]',
+    )
+    const scopeSummaryPanel = document.querySelector(
+      '[data-testid="region-scope-summary-panel"]',
+    )
+    const tablePanel = document.querySelector(
+      '[data-testid="region-table-panel"]',
+    )
+    const scopeDrawerTrigger = document.querySelector(
+      '[data-testid="region-open-scope-drawer"]',
+    )
+    const isVisible = element =>
+      (element?.getClientRects().length ?? 0) > 0
+    const visiblePanels = [scopePanel, scopeSummaryPanel, tablePanel]
+      .filter(isVisible)
+    const workspaceRect = workspace?.getBoundingClientRect()
+    const scopePanelRect = isVisible(scopePanel)
+      ? scopePanel.getBoundingClientRect()
+      : null
+    const scopeSummaryPanelRect = isVisible(scopeSummaryPanel)
+      ? scopeSummaryPanel.getBoundingClientRect()
+      : null
+    const tablePanelRect = isVisible(tablePanel)
+      ? tablePanel.getBoundingClientRect()
+      : null
+    const viewportWidth = document.documentElement.clientWidth
+    const horizontalPanelGap = scopePanelRect && scopeSummaryPanelRect
+      ? scopeSummaryPanelRect.left - scopePanelRect.right
+      : null
+    const verticalPanelGap = scopeSummaryPanelRect && tablePanelRect
+      ? tablePanelRect.top - scopeSummaryPanelRect.bottom
+      : null
+    const rightPanelsAligned = !!(
+      scopeSummaryPanelRect
+      && tablePanelRect
+      && Math.abs(scopeSummaryPanelRect.left - tablePanelRect.left) <= 1
+      && Math.abs(scopeSummaryPanelRect.right - tablePanelRect.right) <= 1
+    )
+    const scopeSpansRightStack = !!(
+      scopePanelRect
+      && scopeSummaryPanelRect
+      && tablePanelRect
+      && Math.abs(scopePanelRect.top - scopeSummaryPanelRect.top) <= 1
+      && Math.abs(scopePanelRect.bottom - tablePanelRect.bottom) <= 1
+    )
+    const panelsFitWorkspace = !!workspaceRect && visiblePanels.every((panel) => {
+      const rect = panel.getBoundingClientRect()
+      return rect.left >= workspaceRect.left - 1
+        && rect.right <= workspaceRect.right + 1
+        && rect.top >= workspaceRect.top - 1
+        && rect.bottom <= workspaceRect.bottom + 1
+    })
+    const cards = [...document.querySelectorAll('[data-testid="region-card"]')]
+      .filter(isVisible)
+    const desktopTables = [...document.querySelectorAll(
+      '[data-testid="region-table"] table',
+    )].filter(isVisible)
+    const table = document.querySelector('[data-testid="region-table"]')
+    return {
+      cards: cards.length,
+      desktopTables: desktopTables.length,
+      documentFits: document.documentElement.scrollWidth <= viewportWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      horizontalPanelGap,
+      modeMatches: mobile
+        ? viewportWidth === 390
+          && !isVisible(scopePanel)
+          && isVisible(scopeDrawerTrigger)
+        : viewportWidth >= 768
+          && isVisible(scopePanel)
+          && !isVisible(scopeDrawerTrigger),
+      panelsFitWorkspace,
+      rightPanelsAligned,
+      scopePanelWidth: scopePanelRect?.width ?? null,
+      scopeSpansRightStack,
+      tableVisible: isVisible(table),
+      verticalPanelGap,
+      viewportWidth,
+      visiblePanelCount: visiblePanels.length,
+      workspaceMounted: isVisible(workspace),
+    }
+  })()`
+}
+
 export async function waitForRegionTable(page) {
   await page.waitFor(`(() => {
     const table = document.querySelector('[data-testid="region-table"]')

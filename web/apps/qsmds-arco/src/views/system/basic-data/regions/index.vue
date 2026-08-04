@@ -879,20 +879,27 @@ onBeforeUnmount(() => {
       </FaButton>
     </FaPageHeader>
 
-    <FaPageMain>
+    <FaPageMain v-if="!canRead">
       <FaEmpty
-        v-if="!canRead"
         icon="i-lucide:shield-alert"
         title="无权查看地区"
         description="当前身份缺少 regions:read 权限。"
         class="min-h-64"
       />
+    </FaPageMain>
 
-      <div
-        v-else
-        class="gap-5 grid min-w-0 md:grid-cols-[18rem_minmax(0,1fr)]"
+    <!-- 桌面端范围树跨越右侧两行；窄屏隐藏范围树后，摘要与表格自然收敛为单列。 -->
+    <div
+      v-else
+      class="m-4 gap-4 grid min-w-0 xl:gap-5 2xl:grid-cols-[22rem_minmax(0,1fr)] md:grid-cols-[20rem_minmax(0,1fr)]"
+      data-testid="region-management-workspace"
+    >
+      <FaPageMain
+        class="m-0 min-w-0 hidden md:flex md:row-span-2 md:self-stretch"
+        main-class="min-w-0 flex-1"
+        data-testid="region-scope-panel"
       >
-        <aside class="min-w-0 hidden md:pr-5 md:border-r md:border-border md:block">
+        <aside class="h-full min-w-0" aria-label="地区范围导航">
           <RegionScopeTree
             :model-value="scope"
             :nodes="navigationTree"
@@ -903,9 +910,15 @@ onBeforeUnmount(() => {
             @select="selectScope"
           />
         </aside>
+      </FaPageMain>
 
-        <section class="min-w-0" aria-labelledby="region-list-title">
-          <div class="mb-4 flex flex-wrap gap-3 items-start justify-between">
+      <FaPageMain
+        class="m-0 min-w-0"
+        main-class="min-w-0"
+        data-testid="region-scope-summary-panel"
+      >
+        <section class="min-w-0" aria-label="当前地区范围摘要">
+          <div class="flex flex-wrap gap-3 items-start justify-between">
             <div class="min-w-0">
               <p class="qs-type-meta m-0">
                 当前范围
@@ -921,6 +934,7 @@ onBeforeUnmount(() => {
             <FaButton
               variant="outline"
               class="max-w-full min-h-11 md:hidden"
+              data-testid="region-open-scope-drawer"
               aria-controls="region-scope-drawer"
               :aria-expanded="scopeDrawerVisible"
               @click="scopeDrawerVisible = true"
@@ -929,7 +943,15 @@ onBeforeUnmount(() => {
               <span class="truncate">选择地区范围 · {{ scope.label }}</span>
             </FaButton>
           </div>
+        </section>
+      </FaPageMain>
 
+      <FaPageMain
+        class="m-0 min-w-0"
+        main-class="min-w-0"
+        data-testid="region-table-panel"
+      >
+        <section class="min-w-0" aria-labelledby="region-list-title">
           <QsGenericTable
             v-model:page="page"
             v-model:page-size="pageSize"
@@ -1144,8 +1166,8 @@ onBeforeUnmount(() => {
             </template>
           </QsGenericTable>
         </section>
-      </div>
-    </FaPageMain>
+      </FaPageMain>
+    </div>
 
     <QsGenericDrawer
       v-model="scopeDrawerVisible"

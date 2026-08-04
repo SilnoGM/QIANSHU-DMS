@@ -24,6 +24,7 @@ import {
   patchPermissionsExpression,
   pressKey,
   readConfiguration,
+  regionManagementLayoutAuditExpression,
   regionProviderExpression,
   requestPathname,
   requestSearchParams,
@@ -46,6 +47,35 @@ async function runBrowserStep(label, action) {
   }
   catch (error) {
     throw new Error(`Browser step failed: ${label}`, { cause: error })
+  }
+}
+
+function assertRegionManagementLayout(layout, { mobile }) {
+  assert.equal(layout.workspaceMounted, true)
+  assert.equal(layout.modeMatches, true)
+  assert.equal(layout.documentFits, true)
+  assert.equal(layout.documentWidth <= layout.viewportWidth, true)
+  assert.equal(layout.panelsFitWorkspace, true)
+  assert.equal(layout.rightPanelsAligned, true)
+  assert.equal(layout.verticalPanelGap >= 12, true)
+  assert.equal(layout.verticalPanelGap <= 24, true)
+  assert.equal(layout.tableVisible, true)
+
+  if (mobile) {
+    assert.equal(layout.scopePanelWidth, null)
+    assert.equal(layout.visiblePanelCount, 2)
+    assert.equal(layout.cards > 0, true)
+    assert.equal(layout.desktopTables, 0)
+  }
+  else {
+    assert.equal(typeof layout.scopePanelWidth, 'number')
+    assert.equal(layout.scopePanelWidth >= 320, true)
+    assert.equal(layout.scopePanelWidth <= 360, true)
+    assert.equal(layout.visiblePanelCount, 3)
+    assert.equal(layout.horizontalPanelGap >= 12, true)
+    assert.equal(layout.horizontalPanelGap <= 24, true)
+    assert.equal(layout.scopeSpansRightStack, true)
+    assert.equal(layout.desktopTables, 1)
   }
 }
 
@@ -977,24 +1007,10 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
   await page.navigate(appRouteUrl(configuration.baseUrl, managementRoute))
   await waitForRegionTable(page)
   await subscribeToRegionInvalidation(page)
-  const desktopLayout = await page.evaluate(`(() => {
-    const pageRoot = document.querySelector('.region-management-page')
-    const mainPanels = [...(pageRoot?.children ?? [])].filter(element =>
-      element.querySelector('[data-testid="region-table"]'))
-    const viewportWidth = document.documentElement.clientWidth
-    return {
-      documentFits: document.documentElement.scrollWidth <= viewportWidth,
-      mainPanelCount: mainPanels.length,
-      tableVisible: (document.querySelector(
-        '[data-testid="region-table"]',
-      )?.getClientRects().length ?? 0) > 0,
-    }
-  })()`)
-  assert.deepEqual(desktopLayout, {
-    documentFits: true,
-    mainPanelCount: 1,
-    tableVisible: true,
-  })
+  const desktopLayout = await page.evaluate(
+    regionManagementLayoutAuditExpression({ mobile: false }),
+  )
+  assertRegionManagementLayout(desktopLayout, { mobile: false })
 
   const requestLog = []
   const removeRequestListener = page.on('Network.requestWillBeSent', (event) => {
@@ -1442,6 +1458,10 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
     && ![...document.querySelectorAll('[data-testid="region-table"] table')]
       .some(table => table.getClientRects().length > 0)
   ))()`)
+  const mobileLayout = await page.evaluate(
+    regionManagementLayoutAuditExpression({ mobile: true }),
+  )
+  assertRegionManagementLayout(mobileLayout, { mobile: true })
   await page.evaluate(`(() => {
     const button = [...document.querySelectorAll('button')].find(candidate => (
       candidate.textContent?.includes('选择地区范围')
@@ -1533,9 +1553,6 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
       .filter(button => ['取消', '保存修改'].includes(button.textContent?.trim()))
     const rect = dialog?.getBoundingClientRect()
     const viewportWidth = document.documentElement.clientWidth
-    const pageRoot = document.querySelector('.region-management-page')
-    const mainPanels = [...(pageRoot?.children ?? [])].filter(element =>
-      element.querySelector('[data-testid="region-table"]'))
     return {
       buttonHeights: buttons.map(button => button.getBoundingClientRect().height),
       buttonWidths: buttons.map(button => button.getBoundingClientRect().width),
@@ -1543,12 +1560,10 @@ test('真实 Chrome 覆盖地区管理查询、权限、写入、双标签失效
         ? rect.left >= 0 && rect.right <= viewportWidth
         : false,
       documentFits: document.documentElement.scrollWidth <= viewportWidth,
-      mainPanelCount: mainPanels.length,
     }
   })()`)
   assert.equal(mobileModal.dialogInsideViewport, true)
   assert.equal(mobileModal.documentFits, true)
-  assert.equal(mobileModal.mainPanelCount, 1)
   assert.deepEqual(
     mobileModal.buttonHeights.map(value => value >= 44),
     [true, true],
