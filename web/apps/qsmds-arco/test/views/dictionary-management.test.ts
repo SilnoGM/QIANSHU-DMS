@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 页面骨架使用 Node.js 内置 runner 检查静态组合契约。
 import test from 'node:test'
+import { compileStyle, parse } from '@vue/compiler-sfc'
 
 function readSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
@@ -12,6 +13,34 @@ const pageSource = readSource(
 )
 const itemTableSource = readSource(
   '../../src/views/system/basic-data/dictionaries/dictionary-item-table.vue',
+)
+const typeListSource = readSource(
+  '../../src/views/system/basic-data/dictionaries/dictionary-type-list.vue',
+)
+
+function compileScopedStyles(source: string, filename: string): string {
+  const { descriptor, errors } = parse(source, { filename })
+  assert.deepEqual(errors, [])
+
+  return descriptor.styles.map((style) => {
+    const result = compileStyle({
+      filename,
+      id: 'data-v-task15',
+      scoped: style.scoped,
+      source: style.content,
+    })
+    assert.deepEqual(result.errors, [])
+    return result.code
+  }).join('\n')
+}
+
+const itemTableScopedStyles = compileScopedStyles(
+  itemTableSource,
+  'dictionary-item-table.vue',
+)
+const typeListScopedStyles = compileScopedStyles(
+  typeListSource,
+  'dictionary-type-list.vue',
 )
 
 test('字典管理只使用一层 Fa 页面容器与非对称主从骨架', () => {
@@ -25,9 +54,7 @@ test('字典管理只使用一层 Fa 页面容器与非对称主从骨架', () =
 })
 
 test('Type 列表组件组合服务端搜索、状态筛选、分页与原生按钮语义', () => {
-  const source = readSource(
-    '../../src/views/system/basic-data/dictionaries/dictionary-type-list.vue',
-  )
+  const source = typeListSource
 
   assert.match(source, /<FaInput\b/u)
   assert.match(source, /const searchDraft = ref\(props\.search\)/u)
@@ -91,6 +118,10 @@ test('撤权与身份切换会清空受保护数据并关闭真实底部 Drawer'
   assert.match(pageSource, /dictionaryTypes\.value = \[\]/u)
   assert.match(pageSource, /dictionaryItems\.value = \[\]/u)
   assert.match(pageSource, /typeDrawerOpen\.value = false/u)
+  assert.match(
+    pageSource,
+    /import QsGenericDrawer from '@\/components\/business\/QsGenericDrawer\/index\.vue'/u,
+  )
   assert.match(pageSource, /<QsGenericDrawer\b/u)
   assert.match(pageSource, /v-model="typeDrawerOpen"/u)
   assert.match(pageSource, /placement="bottom"/u)
@@ -222,4 +253,107 @@ test('Task 14 仍不越界实现公共选择器、删除或 Task 15 历史值适
   assert.doesNotMatch(pageSource, /dictionariesApi\.items\.delete/u)
   assert.doesNotMatch(pageSource, /deleteDictionaryItem|removeDictionaryItem/u)
   assert.doesNotMatch(pageSource, /historicalValue|unknownValueAdapter/u)
+})
+
+test('Task 15 Type 状态筛选提供真实的全部状态入口', () => {
+  assert.match(
+    typeListSource,
+    /const DICTIONARY_TYPE_ALL_STATUS = ['"]ALL['"]/u,
+  )
+  assert.match(
+    typeListSource,
+    /\{ label: ['"]全部状态['"], value: DICTIONARY_TYPE_ALL_STATUS \}/u,
+  )
+  assert.match(
+    typeListSource,
+    /value === DICTIONARY_TYPE_ALL_STATUS[\s\S]{0,160}undefined/u,
+  )
+  assert.doesNotMatch(typeListSource, /<FaSelect[\s\S]{1,180}\bclearable\b/u)
+  assert.match(
+    typeListSource,
+    /<label class="min-w-0">[\s\S]{0,100}<span class="sr-only">筛选字典类型状态<\/span>[\s\S]{0,160}<FaSelect/u,
+  )
+  assert.doesNotMatch(
+    typeListSource,
+    /<FaSelect[\s\S]{0,180}aria-label="筛选字典类型状态"/u,
+  )
+})
+
+test('Task 15 在 Reduced Motion 下停止字典私有无限动画', () => {
+  assert.match(typeListSource, /dictionary-type-loading-indicator/u)
+  assert.match(typeListSource, /@media \(prefers-reduced-motion: reduce\)/u)
+  assert.match(
+    typeListSource,
+    /\.dictionary-type-loading-indicator[\s\S]{0,180}animation: none !important/u,
+  )
+  assert.match(pageSource, /@media \(prefers-reduced-motion: reduce\)/u)
+  assert.match(
+    pageSource,
+    /\.dictionary-management-page :deep\(\.qs-generic-table \.animate-pulse\)[\s\S]{0,180}animation: none !important/u,
+  )
+  assert.doesNotMatch(
+    pageSource,
+    /\.dictionary-management-page :deep\(\.dictionary-type-loading-indicator\)/u,
+  )
+})
+
+test('Task 15 Item 复用 Table 错误能力并在私有边界隐藏重复空态', () => {
+  assert.match(
+    itemTableSource,
+    /<QsGenericTable[\s\S]{0,700}:error="error \|\| undefined"/u,
+  )
+  assert.match(itemTableSource, /@retry="emit\('retry'\)"/u)
+  assert.match(itemTableSource, /dictionary-item-table-error/u)
+  assert.match(
+    itemTableSource,
+    /\.dictionary-item-table-error:deep\(> \[aria-busy\]\)[\s\S]{0,120}display: none/u,
+  )
+  assert.doesNotMatch(
+    itemTableSource,
+    /:deep\(\.dictionary-item-table-error > \[aria-busy\]\)/u,
+  )
+  assert.match(
+    itemTableScopedStyles,
+    /\.dictionary-item-table-error\[data-v-task15\] > \[aria-busy\]/u,
+  )
+  assert.doesNotMatch(itemTableSource, /<FaAlert[\s\S]{0,120}v-if="error"/u)
+})
+
+test('Task 15 私有移动边界固定 44px 触控目标并宣告刷新 busy', () => {
+  assert.match(
+    typeListSource,
+    /<section[\s\S]{0,160}:aria-busy="busy"/u,
+  )
+  assert.match(typeListSource, /input-class="min-h-11"/u)
+  assert.match(
+    typeListSource,
+    /<FaSelect[\s\S]{0,180}class="min-h-11/u,
+  )
+  assert.match(typeListSource, /@media \(width <= 767px\)/u)
+  assert.match(
+    typeListSource,
+    /\.dictionary-type-list-surface :deep\(button\)[\s\S]{0,160}min-width: 2\.75rem[\s\S]{0,80}min-height: 2\.75rem/u,
+  )
+  assert.match(
+    typeListSource,
+    /:global\(body:has\(\.dictionary-type-list-surface \[data-slot="select-trigger"\]\[aria-expanded="true"\]\) \[data-slot="select-content"\] \[role="option"\]\)[\s\S]{0,120}min-height: 2\.75rem/u,
+  )
+  assert.match(
+    typeListScopedStyles,
+    /body:has\(\.dictionary-type-list-surface \[data-slot="select-trigger"\]\[aria-expanded="true"\]\) \[data-slot="select-content"\] \[role="option"\]/u,
+  )
+  assert.match(itemTableSource, /dictionary-item-table-surface/u)
+  assert.match(itemTableSource, /@media \(width <= 767px\)/u)
+  assert.match(
+    itemTableSource,
+    /\.dictionary-item-table-surface:deep\(button\)[\s\S]{0,160}min-width: 2\.75rem[\s\S]{0,80}min-height: 2\.75rem/u,
+  )
+  assert.doesNotMatch(
+    itemTableSource,
+    /:deep\(\.dictionary-item-table-surface (?:button|\[data-slot=)/u,
+  )
+  assert.match(
+    itemTableScopedStyles,
+    /\.dictionary-item-table-surface\[data-v-task15\] button[\s\S]{0,160}min-width: 2\.75rem[\s\S]{0,80}min-height: 2\.75rem/u,
+  )
 })

@@ -38,11 +38,16 @@ const emit = defineEmits<{
   'update:search': [search: string]
 }>()
 
+// FaSelect 当前不提供可清空契约，因此用显式 sentinel 表达“全部状态”，
+// 再在领域事件边界还原为 undefined，避免 UI 值泄漏进查询参数。
+const DICTIONARY_TYPE_ALL_STATUS = 'ALL'
 const statusOptions = [
+  { label: '全部状态', value: DICTIONARY_TYPE_ALL_STATUS },
   { label: '已启用', value: 'ENABLED' },
   { label: '已停用', value: 'DISABLED' },
 ]
 const searchDraft = ref(props.search)
+const statusModel = computed(() => props.status ?? DICTIONARY_TYPE_ALL_STATUS)
 
 const pageModel = computed({
   get: () => props.page,
@@ -73,7 +78,9 @@ function clearSearch(): void {
 function changeStatus(value: unknown): void {
   emit(
     'statusChange',
-    value === 'ENABLED' || value === 'DISABLED' ? value : undefined,
+    value === DICTIONARY_TYPE_ALL_STATUS
+      ? undefined
+      : value === 'ENABLED' || value === 'DISABLED' ? value : undefined,
   )
 }
 
@@ -86,7 +93,11 @@ watch(
 </script>
 
 <template>
-  <section class="gap-4 grid min-w-0" aria-label="字典类型目录">
+  <section
+    class="dictionary-type-list-surface gap-4 grid min-w-0"
+    aria-label="字典类型目录"
+    :aria-busy="busy"
+  >
     <div class="flex gap-3 items-start justify-between">
       <div class="min-w-0">
         <p class="qs-type-meta m-0">
@@ -104,7 +115,8 @@ watch(
         v-model="searchDraft"
         aria-label="搜索字典类型"
         autocomplete="off"
-        class="w-full"
+        class="min-h-11 w-full"
+        input-class="min-h-11"
         placeholder="搜索 code、名称或说明"
         @clear="clearSearch"
       >
@@ -113,14 +125,15 @@ watch(
         </template>
       </FaInput>
       <div class="gap-2 grid grid-cols-[minmax(0,1fr)_auto]">
-        <FaSelect
-          :model-value="status"
-          :options="statusOptions"
-          aria-label="筛选字典类型状态"
-          clearable
-          placeholder="全部状态"
-          @update:model-value="changeStatus"
-        />
+        <label class="min-w-0">
+          <span class="sr-only">筛选字典类型状态</span>
+          <FaSelect
+            :model-value="statusModel"
+            :options="statusOptions"
+            class="min-h-11 w-full"
+            @update:model-value="changeStatus"
+          />
+        </label>
         <FaButton type="submit" variant="outline" class="px-3 min-h-11">
           查询
         </FaButton>
@@ -133,7 +146,10 @@ watch(
       role="status"
       aria-busy="true"
     >
-      <FaIcon name="i-lucide:loader-circle" class="size-5 animate-spin" />
+      <FaIcon
+        name="i-lucide:loader-circle"
+        class="dictionary-type-loading-indicator size-5 animate-spin"
+      />
       <span>正在读取类型…</span>
     </div>
 
@@ -211,3 +227,32 @@ watch(
     />
   </section>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: reduce) {
+  .dictionary-type-loading-indicator {
+    animation: none !important;
+  }
+}
+
+@media (width <= 767px) {
+  .dictionary-type-list-surface :deep(button) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .dictionary-type-list-surface :deep([data-slot="input-group"]),
+  .dictionary-type-list-surface :deep([data-slot="input-group-control"]),
+  .dictionary-type-list-surface :deep([data-slot="select-trigger"]) {
+    min-height: 2.75rem;
+  }
+
+  /*
+   * FaSelect 的选项列表 Teleport 到 body。用当前 Type 列表中已展开的 trigger
+   * 作为归属条件，只扩大该交互时出现的选项，不修改 FaSelect 的公共契约。
+   */
+  :global(body:has(.dictionary-type-list-surface [data-slot="select-trigger"][aria-expanded="true"]) [data-slot="select-content"] [role="option"]) {
+    min-height: 2.75rem;
+  }
+}
+</style>

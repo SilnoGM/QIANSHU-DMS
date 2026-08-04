@@ -183,6 +183,8 @@ function dictionaryItemActions(item: DictionaryItemDto) {
     v-model:search="search"
     v-model:filters="filters"
     v-model:sorting="sorting"
+    class="dictionary-item-table-surface"
+    :class="{ 'dictionary-item-table-error': Boolean(error) }"
     data-testid="dictionary-item-table"
     row-key="id"
     :action-column="{ width: 210 }"
@@ -425,3 +427,23 @@ function dictionaryItemActions(item: DictionaryItemDto) {
     </template>
   </QsGenericTable>
 </template>
+
+<style scoped>
+/* QsGenericTable 继续拥有错误呈现；调用方只在失败态隐藏其数据空态区域。 */
+.dictionary-item-table-error:deep(> [aria-busy]) {
+  display: none;
+}
+
+@media (width <= 767px) {
+  .dictionary-item-table-surface:deep(button) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+
+  .dictionary-item-table-surface:deep([data-slot="input-group"]),
+  .dictionary-item-table-surface:deep([data-slot="input-group-control"]),
+  .dictionary-item-table-surface:deep([data-slot="select-trigger"]) {
+    min-height: 2.75rem;
+  }
+}
+</style>

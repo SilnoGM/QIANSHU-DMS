@@ -18,6 +18,7 @@ import type {
 
 import dictionariesApi from '@/api/modules/dictionaries'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import { invalidateDictionaryCatalogCache } from '@/dictionary-catalog/default-provider'
 import DictionaryItemFormModal from './dictionary-item-form-modal.vue'
 import {
@@ -2300,3 +2301,11 @@ onBeforeUnmount(() => {
     />
   </div>
 </template>
+
+<style scoped>
+@media (prefers-reduced-motion: reduce) {
+  .dictionary-management-page :deep(.qs-generic-table .animate-pulse) {
+    animation: none !important;
+  }
+}
+</style>

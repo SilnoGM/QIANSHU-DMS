@@ -300,8 +300,10 @@ test('Catalog 组装边界不依赖页面、路由、Pinia 模块或持久化能
   const catalogSource = [
     'default-provider.ts',
     'injection.ts',
+    'options.ts',
     'provider.ts',
     'types.ts',
+    'use-dictionary-catalog.ts',
   ].map(readCatalogSource).join('\n')
   const storeModuleFiles = readdirSync(
     new URL('../../src/store/modules', import.meta.url),
@@ -310,7 +312,7 @@ test('Catalog 组装边界不依赖页面、路由、Pinia 模块或持久化能
 
   assert.doesNotMatch(
     catalogSource,
-    /from ['"][^'"]*(?:\/store|\/router|\/views)[/'"]/u,
+    /from ['"][^'"]*(?:\/api|\/store|\/router|\/views)[/'"]/u,
   )
   assert.doesNotMatch(catalogSource, /\bdefineStore\s*\(/u)
   assert.doesNotMatch(

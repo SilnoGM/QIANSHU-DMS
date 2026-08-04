@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Task 14 已完成；Task 15 未开始
+- 状态：Task 15 已完成；Task 16 未开始
 - 计划确认日期：2026-08-03
 - 实施分支：`feat/dictionary-management`
 - 基线分支：`main`
@@ -278,7 +278,7 @@ TDD：先覆盖 Item 搜索/筛选/分页、`QsGenericTable` 状态、创建/编
 
 ### Task 15 - 历史值、移动端与 Accessibility
 
-状态：未开始。
+状态：已完成；已于 2026-08-04 确认并交付。
 
 需求覆盖：R5、R9、R10。
 
@@ -703,3 +703,25 @@ Task 13 只交付 DictionaryType 的搜索、状态筛选、分页、本地选�
 | `git diff --check` | 通过 |
 
 Task 14 只交付 DictionaryItem 搜索、自身状态筛选、分页、排序、桌面表格与移动卡片、创建/编辑、不可变 value、自身/有效状态、Tone、权限动作、启停不变量、409 三方 rebase、网络未知结果核对、Catalog 精确失效、Type 切换 Abort 及对应测试。Task 15 的完整历史值、`390x844`、焦点恢复、Reduced Motion、亮暗主题与浏览器 Accessibility 收口，以及 Task 16 的字典专属 Browser/CI 均未开始；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限数据、Audit、依赖、Store、Provider kernel、路由或公共 Qs/Fa 组件，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。
+
+## 23. Task 15 验证记录
+
+验证日期：2026-08-04。
+
+| Command / Check | Result |
+| --- | --- |
+| Historical-value TDD RED-GREEN | 先以缺少 consumer options/resolve/composable 证明能力缺口；随后实现 ACTIVE/DISABLED/UNKNOWN 判别、raw value 原样保留、仅有效项可新选、无隐式默认值，以及身份域失效、迟到响应、卸载、中止和一次有界重试守卫 |
+| Responsive / Accessibility TDD RED-GREEN | 字典私有目标先覆盖真实 Type 状态筛选、Reduced Motion、错误/空态去重、`aria-busy` 与 `44px`；Gate C 目标再依次以失败测试证明窄屏 Table Drawer、`640-767px` breakpoint、Teleport Select option 和 Type combobox 可访问名称缺口，逐项修正后全部转绿 |
+| Final target GREEN | Catalog consumer/integration、字典管理与 `QsGenericTable` 四组目标测试退出 `0`，`47/47` 通过；其中 Gate C 最终两组定向回归 `37/37` 通过 |
+| Local migration / runtime precondition | 本地开发库执行 `pnpm -C server exec prisma migrate deploy` 精确应用 `20260803090000_dictionary_management_schema_and_permissions`；`prisma migrate status` 确认共 `9` 条 migration 且 schema up to date，未创建或修改字典业务数据 |
+| Browser runtime | 真实页面覆盖 `1920x810`、`1024px`、`700px` 与 `390x844`；桌面保持 `18rem` 主从布局与紧凑 popover，窄屏 Type/Filter/Column bottom Drawer、关闭按钮、Select trigger/option、操作按钮及 checkbox label 均达到 `44px`，各宽度均无横向溢出 |
+| Browser Accessibility | Type 状态 combobox 具有唯一可访问名称；Escape 关闭 Drawer 后焦点回到“选择类型”触发器且 `aria-expanded=false`；状态同时包含文字语义；亮暗主题与 `prefers-reduced-motion: reduce` 均通过，最终干净 reload 无 console error/page error，仅保留既有 intlify global-scope warning |
+| Gate C / cross-review closeout | 用户单独确认最小共享修复；仅调整 `QsGenericTable` 内部 Filter/Column Drawer 响应式结构、触控尺寸和受展开状态约束的 Teleport option 样式，未改变 props、emits、models、logic 或 `FaDrawer` API；最终只读复核 P0=`0`、P1=`0`、P2=`0` |
+| `pnpm -C web check` | 受限环境先在 `156/156` Node tests 后因 `tsx` IPC pipe 报 `listen EPERM`；在具备 IPC 权限的环境以最终代码原命令复跑退出 `0`，`156` 个 Node tests、`49` 个 TS script tests、`703` 个 API/View tests、typecheck、ESLint 与 Stylelint 全部通过 |
+| `pnpm -C web build` | 以最终代码退出 `0`；生产构建、Noto 字体快照与 zero-residue 校验通过，仅输出既有第三方 pure annotation、chunk-size 与 plugin timing 非阻断 warning |
+| `node --run contract:check` | 退出 `0`；只使用临时产物验证，公开 OpenAPI snapshot 与 Web generated tree 无漂移 |
+| `node --run test:root` | 受限环境首次 `631/633`，真实进程树 fixture 超时且 Unix socket 报 `EPERM`；在具备 process/socket 权限的环境以最终代码原命令复跑退出 `0`，`633/633` 通过 |
+| Scope audit | 修改范围仅含三份规格、Web 内部 consumer、字典私有页面/测试，以及 Gate C 已确认的 `QsGenericTable` 内部实现/测试；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、Provider kernel 或路由 |
+| `git diff --check` | 通过 |
+
+Task 15 只交付 Web 历史值消费适配、字典页面完整移动端/Accessibility 收口、Reduced Motion，以及 Gate C 已单独确认的 `QsGenericTable` 窄屏 `44px` 内部修复。Task 16 的字典专属 Browser E2E、root runner 与 CI Gate 均未开始；未修改 Server、公共 API/DTO、OpenAPI snapshot、generated tree、Schema、migration、权限、Audit、依赖、Store、Provider kernel 或路由，未运行 `contract:sync`，未执行 push、PR、merge、发布或分支删除。
