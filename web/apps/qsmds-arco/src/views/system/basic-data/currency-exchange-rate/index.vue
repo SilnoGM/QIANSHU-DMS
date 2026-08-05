@@ -31,10 +31,12 @@ const access = computed(() => ({
   canReadCurrencies: canReadCurrencies.value,
   canReadExchangeRates: canReadExchangeRates.value,
 }))
+// FaTabs 会为每个 Trigger 注入 w-full 与 flex-1。窄屏保留这套等分布局和
+// 44px 触控高度；桌面端必须同时解除宽度与弹性增长，页签才能按内容自然收敛。
 const tabs = computed(() => {
   return buildCurrencyExchangeRateTabs(access.value).map(tab => ({
     ...tab,
-    class: 'min-h-11 px-4 sm:min-w-36',
+    class: 'min-h-11 px-3 text-sm text-muted-foreground [&>div>i]:size-4 md:flex-none md:min-h-9 md:w-auto md:px-3.5 data-[state=active]:border-border/70 data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=inactive]:hover:bg-background/60 data-[state=inactive]:hover:text-foreground',
   }))
 })
 const activeTab = ref<CurrencyExchangeRateTab | null>(null)
@@ -156,8 +158,8 @@ watch(
         :list="tabs"
         data-testid="currency-exchange-rate-tabs"
         class="min-w-0"
-        list-class="h-auto min-h-11 w-full sm:w-fit"
-        content-class="mt-5 min-w-0"
+        list-class="h-auto w-full gap-1 border border-border/60 bg-muted/60 p-1 md:w-fit"
+        content-class="mt-4 min-w-0"
         @update:model-value="handleTabChange"
       >
         <template #currencies>
