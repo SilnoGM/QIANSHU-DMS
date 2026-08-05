@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 14 已完成，Task 15 待执行
+- 状态：Phase 4 Task 15 已完成，Task 16 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -260,11 +260,22 @@
   - `pnpm -C web check`：通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `739/739`、typecheck、ESLint 与 Stylelint。
   - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
 
-- [ ] 15. 添加真实 Browser E2E 与隔离编排
+- [x] 15. 添加真实 Browser E2E 与隔离编排
   - 使用真实 Chrome、Server、Cookie/CSRF 和隔离 PostgreSQL。
   - 覆盖 unknown create、权限、生命周期、响应式和数据库终态。
   - 提交 `test: 添加供应商浏览器端到端验证`。
   - _Requirements: R1-R10_
+
+  验证记录（2026-08-05）：
+
+  - 编排与 Browser helper 红测先因供应商入口、隔离计划和场景缺失而 `0/6`；实现后定向测试 `6/6` 通过，并锁定严格数据库 URL、最小 secret 注入、unknown create、权限、生命周期与 390px 审计边界。
+  - 首轮真实 Chrome 运行先暴露 remark 定位不唯一，随后进一步发现嵌套 `FaFormItem` 自动绑定覆盖显式 `v-model` 的真实表单缺陷；为嵌套字段关闭 `auto-bind` 并增加回归测试后，联系人姓名、电话和微信号完整落库。
+  - 390px 实机审计发现表格工具栏和移动操作抽屉关闭按钮不足 44px；页面范围内修正后，桌面表格、移动卡片、深色、reduced motion、焦点和横向溢出审计全部通过。
+  - `node --run ci:browser-suppliers-e2e`：真实构建、双 Server、同源代理、Cookie/CSRF、隔离 PostgreSQL 与真实 Chrome `1/1` 通过；覆盖响应未知后的同 key 同 payload 人工重放、读写权限隔离、动态撤权、编辑和启停。
+  - 数据库终态核验严格确认唯一 Supplier、`version = 4`、唯一永久创建意图、唯一发号账本和按序四类 Supplier Audit；最终禁用状态保留联系人三字段，登记、地址和邮编均为空。
+  - `pnpm -C web check`：非受限环境通过，包含 Node `166/166`、TS 脚本 `49/49`、API/页面 `739/739`、typecheck、ESLint 与 Stylelint；受限环境的 `tsx` IPC `EPERM` 已复验排除。
+  - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
+  - `node --run test:root`：非受限环境 `653/653` 通过；受限环境的真实 FIFO/Unix socket `EPERM` 已复验排除。
 
 - [ ] 16. 接入 CI Gate 并完成交付收口
   - 新增 `browser-suppliers-e2e`，CI gate 从 7 精确变为 8。

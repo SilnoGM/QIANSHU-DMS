@@ -708,6 +708,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'ci:browser-dictionaries-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-dictionaries-e2e.mjs',
     'ci:browser-numbering-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-numbering-e2e.mjs',
     'ci:browser-regions-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-regions-e2e.mjs',
+    'ci:browser-suppliers-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-suppliers-e2e.mjs',
     'ci:contract': 'node ./scripts/ci-contract-baseline.mjs',
     'release:check': 'node ./scripts/release-version.mjs',
     'release:package:web': 'node ./scripts/release-package.mjs web',

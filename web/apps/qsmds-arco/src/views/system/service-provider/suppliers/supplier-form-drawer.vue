@@ -428,7 +428,7 @@ watch(
                 :error="visibleFieldErrors['registration.countryRegionId'] !== undefined"
               />
             </FaFormItem>
-            <FaFormItem name="registration.number" label="登记号">
+            <FaFormItem name="registration.number" label="登记号" :auto-bind="false">
               <FaInput
                 v-model="form.registrationNumber"
                 autocomplete="off"
@@ -446,7 +446,7 @@ watch(
             主要联系人
           </legend>
           <div class="gap-4 grid grid-cols-1 sm:grid-cols-2">
-            <FaFormItem name="primaryContact.name" label="联系人姓名">
+            <FaFormItem name="primaryContact.name" label="联系人姓名" :auto-bind="false">
               <FaInput
                 v-model="form.primaryContactName"
                 autocomplete="name"
@@ -455,7 +455,7 @@ watch(
                 @clear="form.primaryContactName = ''"
               />
             </FaFormItem>
-            <FaFormItem name="primaryContact.phone" label="联系人电话">
+            <FaFormItem name="primaryContact.phone" label="联系人电话" :auto-bind="false">
               <FaInput
                 v-model="form.primaryContactPhone"
                 autocomplete="tel"
@@ -465,7 +465,7 @@ watch(
                 @clear="form.primaryContactPhone = ''"
               />
             </FaFormItem>
-            <FaFormItem name="primaryContact.wechatId" label="微信号">
+            <FaFormItem name="primaryContact.wechatId" label="微信号" :auto-bind="false">
               <FaInput
                 v-model="form.primaryContactWechatId"
                 autocomplete="off"
@@ -497,7 +497,7 @@ watch(
             />
           </FaFormItem>
           <div class="gap-4 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_12rem]">
-            <FaFormItem name="primaryAddress.addressLine" label="详细地址">
+            <FaFormItem name="primaryAddress.addressLine" label="详细地址" :auto-bind="false">
               <FaInput
                 v-model="form.primaryAddressLine"
                 autocomplete="street-address"
@@ -506,7 +506,7 @@ watch(
                 @clear="form.primaryAddressLine = ''"
               />
             </FaFormItem>
-            <FaFormItem name="primaryAddress.postalCode" label="邮编（可选）">
+            <FaFormItem name="primaryAddress.postalCode" label="邮编（可选）" :auto-bind="false">
               <FaInput
                 v-model="form.primaryAddressPostalCode"
                 autocomplete="postal-code"

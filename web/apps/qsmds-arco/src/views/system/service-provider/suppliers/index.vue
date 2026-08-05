@@ -1118,6 +1118,7 @@ onBeforeUnmount(() => {
       :title="mobileDrawerTitle"
       side="bottom"
       :footer="false"
+      :closable="false"
       content-class="h-[min(26rem,calc(100dvh-1.5rem))]"
       destroy-on-close
       @closed="handleMobileActionsClosed"
@@ -1152,6 +1153,9 @@ onBeforeUnmount(() => {
           @click="requestRowAction(mobileActionTarget, 'disable')"
         >
           停用供应商
+        </FaButton>
+        <FaButton class="min-h-11 w-full" variant="ghost" @click="closeMobileActions">
+          关闭
         </FaButton>
       </div>
     </FaDrawer>
@@ -1230,6 +1234,21 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+@media (width <= 767px) {
+  .supplier-management-page :deep([data-testid="supplier-table"] button),
+  .supplier-management-page :deep([data-testid="supplier-table"] input),
+  .supplier-management-page :deep([data-testid="supplier-table"] textarea),
+  .supplier-management-page :deep([data-testid="supplier-table"] [role="combobox"]),
+  .supplier-management-page :deep([data-testid="supplier-table"] [role="checkbox"]) {
+    min-height: 2.75rem;
+  }
+
+  .supplier-management-page :deep([data-testid="supplier-table"] button),
+  .supplier-management-page :deep([data-testid="supplier-table"] [role="checkbox"]) {
+    min-width: 2.75rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .supplier-management-page :deep(.animate-pulse) {
     animation: none !important;

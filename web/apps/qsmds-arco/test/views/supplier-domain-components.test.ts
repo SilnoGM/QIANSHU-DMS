@@ -116,6 +116,22 @@ test('表单抽屉组合 xl、真实表单和地区选择器，副作用留在�
   assert.match(source, /label="微信号"/u)
   assert.match(source, /label="邮编（可选）"/u)
   assert.match(source, /label="备注"/u)
+  for (const field of [
+    'registration.number',
+    'primaryContact.name',
+    'primaryContact.phone',
+    'primaryContact.wechatId',
+    'primaryAddress.addressLine',
+    'primaryAddress.postalCode',
+  ]) {
+    assert.match(
+      source,
+      new RegExp(
+        `<FaFormItem[^>]*name="${field.replaceAll('.', '\\.')}"[^>]*:auto-bind="false"`,
+        'su',
+      ),
+    )
+  }
   assert.match(source, /供应商编号由 SUPPLIER 规则自动生成/u)
   assert.doesNotMatch(source, /网站|website|email|银行|账期/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store|useAuth|usePermission|useQsToast/u)
