@@ -84,7 +84,7 @@ test('首页复用管理读取权限门槛，使无业务页面的身份进入�
   )
   assert.match(
     routesSource,
-    /path: ''[\s\S]*?meta: \{[\s\S]*?auth: \[\.\.\.MANAGEMENT_READ_PERMISSIONS\]/u,
+    /path: ''[\s\S]*?meta: \{[\s\S]*?auth: \[[\s\S]*?\.\.\.MANAGEMENT_READ_PERMISSIONS,[\s\S]*?\.\.\.SERVICE_PROVIDER_READ_PERMISSIONS,[\s\S]*?\]/u,
   )
 })
 

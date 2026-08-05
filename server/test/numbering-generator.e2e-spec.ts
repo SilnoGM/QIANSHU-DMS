@@ -310,6 +310,7 @@ describe('NumberingGeneratorService concurrency and capacity with PostgreSQL', (
       const issuance = await prisma.numberingIssuance.findFirstOrThrow({
         where: { ruleId: rule.id },
       })
+      expect(issuance.id).toBe(result.issuanceId)
       expect(issuance.periodKey).toBe(expected)
       expect(issuance.issuedAt.toISOString()).toBe(result.issuedAt)
     },
@@ -331,14 +332,19 @@ describe('NumberingGeneratorService concurrency and capacity with PostgreSQL', (
       }),
     ))
     expect(new Set(distinctResults.map(result => result.number)).size).toBe(100)
+    expect(new Set(distinctResults.map(result => result.issuanceId)).size)
+      .toBe(100)
     expect(distinctResults.every(result => !result.idempotentReplay)).toBe(true)
     const distinctLedger = await prisma.numberingIssuance.findMany({
       where: { ruleId: distinctRule.id },
       orderBy: { sequenceValue: 'asc' },
-      select: { sequenceValue: true },
+      select: { id: true, sequenceValue: true },
     })
     expect(distinctLedger.map(row => row.sequenceValue)).toEqual(
       Array.from({ length: 100 }, (_value, index) => BigInt(index + 1)),
+    )
+    expect(new Set(distinctLedger.map(row => row.id))).toEqual(
+      new Set(distinctResults.map(result => result.issuanceId)),
     )
     await expect(prisma.numberingPeriodState.findUniqueOrThrow({
       where: {
@@ -365,6 +371,7 @@ describe('NumberingGeneratorService concurrency and capacity with PostgreSQL', (
       }),
     ))
     expect(new Set(sameResults.map(result => result.number)).size).toBe(1)
+    expect(new Set(sameResults.map(result => result.issuanceId)).size).toBe(1)
     expect(sameResults.filter(result => !result.idempotentReplay)).toHaveLength(1)
     expect(sameResults.filter(result => result.idempotentReplay)).toHaveLength(99)
     await expect(prisma.numberingIssuance.count({
@@ -698,6 +705,7 @@ describe('NumberingGeneratorService concurrency and capacity with PostgreSQL', (
       consumerCode: 'PUBLISH.E2E',
       idempotencyKey: racingKey,
     })).resolves.toMatchObject({
+      issuanceId: racingResult.issuanceId,
       number: racingResult.number,
       ruleRevision: racingResult.ruleRevision,
       idempotentReplay: true,
@@ -831,6 +839,9 @@ describe('NumberingGeneratorService concurrency and capacity with PostgreSQL', (
         ruleRevision: 1,
         idempotentReplay: true,
       })
+      const committedIssuance = await prisma.numberingIssuance
+        .findFirstOrThrow({ where: { ruleId: rule.id } })
+      expect(replay.issuanceId).toBe(committedIssuance.id)
       await expect(prisma.numberingPeriodState.findUniqueOrThrow({
         where: {
           ruleId_periodKey: { ruleId: rule.id, periodKey: 'ALL' },

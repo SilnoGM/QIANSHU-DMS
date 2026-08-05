@@ -68,8 +68,13 @@ describe('permission constants', () => {
       'dictionaries:update',
       'dictionaries:enable',
       'dictionaries:disable',
+      'suppliers:read',
+      'suppliers:create',
+      'suppliers:update',
+      'suppliers:enable',
+      'suppliers:disable',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 37)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 42)
   })
 })
 

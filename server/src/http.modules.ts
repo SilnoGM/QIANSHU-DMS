@@ -9,6 +9,7 @@ import { PermissionsModule } from './modules/permissions/permissions.module'
 import { ProfileModule } from './modules/profile/profile.module'
 import { RegionsModule } from './modules/regions/regions.module'
 import { RolesModule } from './modules/roles/roles.module'
+import { SuppliersModule } from './modules/suppliers/suppliers.module'
 import { UsersModule } from './modules/users/users.module'
 
 // 正式运行应用与 OpenAPI preview 必须消费同一清单，避免路由和快照随两份手工列表漂移。
@@ -25,4 +26,5 @@ export const HTTP_MODULES = [
   RegionsModule,
   NumberingModule,
   AuditModule,
+  SuppliersModule,
 ] as const

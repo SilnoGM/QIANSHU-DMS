@@ -252,7 +252,7 @@ describe('dictionary management database schema', () => {
         `ALTER TYPE "audit_event_type" ADD VALUE '${eventType}'`,
       )
     }
-    expect(auditEventTypes).toHaveLength(40)
+    expect(auditEventTypes).toHaveLength(44)
     expect(
       auditEventTypes.filter(eventType => eventType.startsWith('DICTIONARY_')),
     ).toEqual(DICTIONARY_AUDIT_EVENT_TYPES)
@@ -264,7 +264,15 @@ describe('dictionary management database schema', () => {
         ),
       )
     }
-    expect(MANAGEMENT_PERMISSION_CODES.slice(-5)).toEqual(
+    const dictionaryPermissionStart = MANAGEMENT_PERMISSION_CODES.indexOf(
+      'dictionaries:read',
+    )
+    expect(
+      MANAGEMENT_PERMISSION_CODES.slice(
+        dictionaryPermissionStart,
+        dictionaryPermissionStart + DICTIONARY_PERMISSION_SEEDS.length,
+      ),
+    ).toEqual(
       DICTIONARY_PERMISSION_SEEDS.map(([, code]) => code),
     )
     expect(migration).toMatch(
