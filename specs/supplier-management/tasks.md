@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 8 已完成，Task 9 待执行
+- 状态：Phase 4 Task 9 已完成，Task 10 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -175,11 +175,19 @@
   - `pnpm -C server check`：`146` 个测试套件、`1435` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 9. 发布六个 API 与 OpenAPI
+- [x] 9. 发布六个 API 与 OpenAPI
   - Controller tests 先锁定 operationId、权限、CSRF、状态码、错误矩阵和 Header。
   - 注册 `SupplierModule`，只通过 `contract:sync` 同步生成资产。
   - 提交 `feat: 发布供应商管理接口`。
   - _Requirements: R1, R4, R5, R7, R8, R10_
+
+  验证记录（2026-08-05）：
+
+  - Controller 红测先因 `SuppliersController` 缺失失败；最小实现后六个操作的 delegation、operationId、权限、HTTP status、CSRF、错误矩阵、`Idempotency-Key` 和禁止路由共 `5/5` 通过。
+  - `SuppliersModule` 元数据测试锁定 `PrismaModule`、`AuthModule`、`NumberingModule`、`RegionsModule` 依赖、三个领域 Service 和唯一 HTTP/OpenAPI 注册，模块定向测试 `2/2` 通过。
+  - 仅通过 `node --run contract:sync` 同步 Server/Web OpenAPI 快照；`node --run contract:check` 通过，两个快照逐字节一致。
+  - `pnpm -C server check`：`148` 个测试套件、`1442` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 10. 补齐 Server PostgreSQL 与 API E2E
   - 隔离库创建 `SUPPLIER` fixture。
