@@ -266,12 +266,14 @@ test('权限目录合并为一个带资源列的通用表格', () => {
   assert.equal(source.match(/<QsGenericTable\b/gu)?.length, 1)
   assert.doesNotMatch(source, /v-for="group in groups"/u)
   assert.doesNotMatch(source, /data-testid="permission-section"/u)
-  assert.match(source, /:data="filteredPermissionRows"/u)
+  assert.match(source, /:data="paginatedPermissionRows"/u)
   assert.match(source, /id:\s*'resource'/u)
   assert.match(source, /<template #cell-resource=/u)
 })
 
 test('权限目录以中文展示现有业务资源', () => {
+  assert.equal(permissionResourceLabel('currencies'), '货币管理')
+  assert.equal(permissionResourceLabel('exchange-rates'), '当前汇率')
   assert.equal(permissionResourceLabel('regions'), '地区管理')
   assert.equal(permissionResourceLabel('numbering-rules'), '编号规则')
   assert.equal(permissionResourceLabel('dictionaries'), '字典管理')
@@ -293,7 +295,18 @@ test('系统管理页面按现有业务能力配置通用表格操作列与分�
   assert.match(roleSource, /:show-pagination="false"/u)
   assert.doesNotMatch(roleSource, /id:\s*'actions'/u)
 
-  assert.match(permissionSource, /:show-pagination="false"/u)
+  assert.match(permissionSource, /const paginationPage = ref\(1\)/u)
+  assert.match(permissionSource, /const paginationSize = ref\(20\)/u)
+  assert.match(
+    permissionSource,
+    /const paginatedPermissionRows = computed\(\(\) => \{[\s\S]*?filteredPermissionRows\.value\.slice\(start, start \+ paginationSize\.value\)/u,
+  )
+  assert.match(permissionSource, /v-model:page="paginationPage"/u)
+  assert.match(permissionSource, /v-model:page-size="paginationSize"/u)
+  assert.match(permissionSource, /:data="paginatedPermissionRows"/u)
+  assert.match(permissionSource, /:total="filteredPermissionRows\.length"/u)
+  assert.match(permissionSource, /:page-size-options="\[20, 50, 100, 200\]"/u)
+  assert.doesNotMatch(permissionSource, /:show-pagination="false"/u)
   assert.doesNotMatch(permissionSource, /<template #actions=/u)
 
   assert.match(auditSource, /v-model:page="currentPage"/u)
