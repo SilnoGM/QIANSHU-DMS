@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 4 已完成，Task 5 待执行
+- 状态：Phase 4 Task 5 已完成，Task 6 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -119,11 +119,19 @@
   - `pnpm -C server check`：`139` 个测试套件、`1366` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 5. 定义 DTO、规范化、错误与幂等摘要
+- [x] 5. 定义 DTO、规范化、错误与幂等摘要
   - 覆盖嵌套分组、Unicode、长度、PATCH 三态、canonical key 和 HMAC 指纹。
   - 不新增环境密钥或平行公共 DTO。
   - 提交 `feat: 定义供应商输入与幂等契约`。
   - _Requirements: R2-R8_
+
+  验证记录（2026-08-05）：
+
+  - 四个定向红测套件先因 Supplier DTO、Normalizer、错误与幂等实现缺失而失败；最小实现及 Unicode 派生值二次限长后 `36/36` 通过。
+  - DTO 覆盖完整嵌套替换、创建可空草稿、PATCH 省略/null/对象三态、空 PATCH 和 `expectedVersion`；Normalizer 覆盖 NFC/NFKC、Unicode 空白、固定 locale 大小写与列长边界。
+  - 幂等测试核对 canonical lowercase UUID v4、固定键序序列化、SHA-256 scope、HMAC-SHA-256 fingerprint、语义等价 replay 和 actor 隔离。
+  - `pnpm -C server check`：`143` 个测试套件、`1402` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 6. 实现列表与详情查询
   - 覆盖搜索、筛选、分页、稳定排序、列表最小化和详情 readiness。
