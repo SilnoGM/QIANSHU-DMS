@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 2 已完成，Task 3 待执行
+- 状态：Phase 4 Task 3 已完成，Task 4 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -93,11 +93,18 @@
   - `pnpm -C server check`：`138` 个测试套件、`1360` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 3. 扩展内部发号结果身份
+- [x] 3. 扩展内部发号结果身份
   - 先让首次生成、随机生成、历史 replay 和竞态恢复要求 `issuanceId`。
   - 最小扩展 persistence 和 `GenerateNumberResult`。
   - 提交 `feat: 扩展内部发号结果标识`。
   - _Requirements: R2, R5, R8_
+
+  验证记录（2026-08-05）：
+
+  - 首次生成、历史 replay、纯随机和唯一竞态恢复红测因缺少 `issuanceId` 失败，最小实现后 generator/persistence `43/43` 通过。
+  - 隔离 PostgreSQL `numbering-generator.e2e-spec.ts`：`9/9` 通过，并核对返回 `issuanceId` 与真实 ledger 行一致。
+  - `pnpm -C server check`：`138` 个测试套件、`1360` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 4. 添加事务内 RegionLookupService
   - 先覆盖稳定 UUID 锁序、`FOR KEY SHARE`、层级、父子关系和有效状态。
