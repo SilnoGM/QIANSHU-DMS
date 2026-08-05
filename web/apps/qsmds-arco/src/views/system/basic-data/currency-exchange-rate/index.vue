@@ -132,8 +132,7 @@ watch(
     >
       <FaButton
         v-if="canShowCurrencyCreate"
-        size="sm"
-        class="min-h-11 md:min-h-8"
+        class="min-h-11 md:min-h-9"
         :disabled="!currencyCreateReady"
         @click="openCurrencyCreate"
       >

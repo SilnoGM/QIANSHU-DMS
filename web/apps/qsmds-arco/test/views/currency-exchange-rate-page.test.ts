@@ -141,7 +141,7 @@ test('合并页只保留一个页面骨架并使用 FaTabs 懒加载两个业务
   assert.doesNotMatch(source, /gradient|#[\dA-Fa-f]{3,8}\b|rgba?\(/u)
 })
 
-test('新增货币只在货币 Tab 的唯一页头展示紧凑操作', () => {
+test('新增货币只在货币 Tab 的唯一页头展示标准尺寸操作', () => {
   const source = readSource(
     '../../src/views/system/basic-data/currency-exchange-rate/index.vue',
   )
@@ -151,8 +151,8 @@ test('新增货币只在货币 Tab 的唯一页头展示紧凑操作', () => {
 
   assert.ok(pageHeader)
   assert.match(pageHeader, /新增货币/u)
-  assert.match(pageHeader, /size="sm"/u)
-  assert.match(pageHeader, /class="min-h-11 md:min-h-8"/u)
+  assert.doesNotMatch(pageHeader, /size="sm"/u)
+  assert.match(pageHeader, /class="min-h-11 md:min-h-9"/u)
   assert.doesNotMatch(pageHeader, /刷新|i-lucide:refresh-cw/u)
   assert.match(source, /auth\('currencies:create'\)/u)
   assert.match(
