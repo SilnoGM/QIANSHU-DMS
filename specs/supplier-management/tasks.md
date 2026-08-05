@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 9 已完成，Task 10 待执行
+- 状态：Phase 4 Task 10 已完成，Task 11 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -189,11 +189,19 @@
   - `pnpm -C server check`：`148` 个测试套件、`1442` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 10. 补齐 Server PostgreSQL 与 API E2E
+- [x] 10. 补齐 Server PostgreSQL 与 API E2E
   - 隔离库创建 `SUPPLIER` fixture。
   - 覆盖权限、CSRF、生命周期、并发、幂等、Region、Audit 和最小化响应。
   - 提交 `test: 补齐供应商服务端端到端覆盖`。
   - _Requirements: R1-R8, R10_
+
+  验证记录（2026-08-05）：
+
+  - 首轮红测因 Supplier 隔离数据库夹具缺失失败；实现随机 schema、正式 migration replay 和测试专用 `SUPPLIER` 规则后，定向 PostgreSQL/API E2E `4/4` 通过。
+  - 覆盖 Session、独立权限、CSRF、六接口边界、Region 三层引用、创建/编辑/启停/no-op/版本冲突、列表最小化、四类 Audit、同键重放、异 payload 冲突、并发收敛、登记唯一及 Region invalid/unavailable。
+  - 完整 E2E 首次发现三处旧权限数量预期未包含新增五项 Supplier 权限，以及隔离 enum 查询未限定 namespace；修正契约预期后 `25/25` suites、`118/118` tests 通过，migration deploy 二次重放通过。
+  - `pnpm -C server check`：`148` 个测试套件、`1442` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 11. 接入 Web API、路由与权限
   - 先写 API Recorder 和 route 红测。

@@ -172,7 +172,10 @@ describe('supplier schema migration replay against PostgreSQL', () => {
             FROM pg_enum AS enum_entry
             JOIN pg_type AS type_entry
               ON type_entry.oid = enum_entry.enumtypid
+            JOIN pg_namespace AS namespace_entry
+              ON namespace_entry.oid = type_entry.typnamespace
             WHERE type_entry.typname = 'audit_event_type'
+              AND namespace_entry.nspname = current_schema()
               AND enum_entry.enumlabel LIKE 'SUPPLIER_%'
             ORDER BY enum_entry.enumlabel
           ) AS "auditTypes",
