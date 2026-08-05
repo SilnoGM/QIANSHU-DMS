@@ -73,6 +73,7 @@ const routes: RouteRecordRaw = {
       meta: {
         title: '字典管理',
         icon: 'i-lucide:book-open',
+        auth: 'dictionaries:read',
       },
     },
   ],

@@ -792,7 +792,7 @@ watch([tableColumns, isNarrow], () => {
       title="筛选数据"
       side="bottom"
       :footer="false"
-      content-class="h-[min(30rem,calc(100dvh-1.5rem))]"
+      content-class="qs-generic-table-filter-drawer h-[min(30rem,calc(100dvh-1.5rem))] [&>button]:size-11 [&>button]:inline-flex [&>button]:items-center [&>button]:justify-center"
       destroy-on-close
     >
       <FilterPanel
@@ -810,7 +810,7 @@ watch([tableColumns, isNarrow], () => {
       title="列设置"
       side="bottom"
       :footer="false"
-      content-class="h-[min(34rem,calc(100dvh-1.5rem))]"
+      content-class="qs-generic-table-column-drawer h-[min(34rem,calc(100dvh-1.5rem))] [&>button]:size-11 [&>button]:inline-flex [&>button]:items-center [&>button]:justify-center"
       destroy-on-close
     >
       <ColumnSettingsPanel
@@ -937,5 +937,17 @@ watch([tableColumns, isNarrow], () => {
 .qs-generic-table :deep([data-slot="pagination"]) {
   font-feature-settings: "tnum" 1;
   font-variant-numeric: tabular-nums;
+}
+
+@media (width <= 767px) {
+  /*
+   * Reka Select 会把选项列表再次 Teleport 到 body，无法通过表格或 Drawer 的
+   * 后代选择器命中。仅当本表格或其筛选 Drawer 中的 trigger 正在展开时放大
+   * 当前 Select 选项，避免影响页面上不属于 QsGenericTable 的其他下拉列表。
+   */
+  :global(body:has(.qs-generic-table [data-slot="select-trigger"][aria-expanded="true"]) [data-slot="select-content"] [role="option"]),
+  :global(body:has(.qs-generic-table-filter-drawer [data-slot="select-trigger"][aria-expanded="true"]) [data-slot="select-content"] [role="option"]) {
+    min-height: 2.75rem;
+  }
 }
 </style>

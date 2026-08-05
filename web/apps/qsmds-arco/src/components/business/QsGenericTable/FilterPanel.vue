@@ -57,17 +57,17 @@ function updateValue(key: string, value: unknown) {
           :model-value="values[definition.key]"
           :options="getOptions(definition)"
           :placeholder="definition.placeholder ?? `请选择${definition.label}`"
-          class="w-full"
+          class="min-h-11 w-full md:min-h-9"
           @update:model-value="value => updateValue(definition.key, value)"
         />
       </label>
     </div>
 
     <div class="p-3 border-t border-border bg-muted/20 flex gap-2 items-center justify-end">
-      <FaButton variant="outline" class="flex-1 sm-flex-none" @click="emit('reset')">
+      <FaButton variant="outline" class="flex-1 min-h-11 md:flex-none md:min-h-9" @click="emit('reset')">
         重置
       </FaButton>
-      <FaButton class="flex-1 sm-flex-none" @click="emit('apply')">
+      <FaButton class="flex-1 min-h-11 md:flex-none md:min-h-9" @click="emit('apply')">
         应用筛选
       </FaButton>
     </div>

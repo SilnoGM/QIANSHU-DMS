@@ -18,6 +18,7 @@ const migrationPaths = [
   '20260729090000_currency_exchange_rate_schema_and_permissions',
   '20260729100000_currency_seed',
   '20260802090000_numbering_management_schema_and_permissions',
+  '20260803090000_dictionary_management_schema_and_permissions',
 ].map(directory => resolve(
   serverRoot,
   `prisma/migrations/${directory}/migration.sql`,

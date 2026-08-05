@@ -539,7 +539,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   assert.equal(managedRole?.name, editedRoleName)
 
   /*
-   * 地区、货币、当前汇率和编号规则权限均可分配给普通角色，同时不能让普通
+   * 地区、货币、当前汇率、编号规则和系统字典权限均可分配给普通角色，同时不能让普通
    * 角色越权勾选 users/roles/audit 等系统专用权限。保存后以真实 API 结果确认
    * 完整替换已落库。
    */
@@ -602,6 +602,11 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'currencies:enable',
     'currencies:read',
     'currencies:update',
+    'dictionaries:create',
+    'dictionaries:disable',
+    'dictionaries:enable',
+    'dictionaries:read',
+    'dictionaries:update',
     'exchange-rates:create',
     'exchange-rates:read',
     'exchange-rates:update',
@@ -882,6 +887,10 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/permissions'))
   await waitForTableTools(page, 'permission-table', '搜索权限码、名称、说明或资源')
+  await waitForCardsInsideViewport(page, '[data-testid="permission-card"]')
+  // 权限目录分页后 users:read 不保证位于第一页；通过公开搜索交互定位目标卡片后再验证窄屏布局。
+  await fillVisibleInput(page, 'input[placeholder="搜索权限码、名称、说明或资源"]', 'users:read')
+  await clickVisibleButton(page, '查询')
   await waitForCardsInsideViewport(page, '[data-testid="permission-card"]', 'users:read')
   const narrowPermissionCatalog = await page.evaluate(`(() => {
     const cards = [...document.querySelectorAll('[data-testid="permission-card"]')]

@@ -23,6 +23,8 @@ const loading = ref(false)
 const pageError = ref('')
 const tableSearch = ref('')
 const tableFilters = ref<QsGenericTableFilterValues>({})
+const paginationPage = ref(1)
+const paginationSize = ref(20)
 
 const canRead = computed(() => auth('roles:read'))
 const columns: QsGenericTableColumn<PermissionDto>[] = [
@@ -54,6 +56,12 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
 ])
 const filteredPermissionRows = computed(() =>
   filterPermissionTableRows(permissions.value, tableSearch.value, tableFilters.value))
+// 权限接口一次返回完整目录。先在全量数据上完成搜索和筛选，再切当前页，
+// 避免资源筛选项、过滤总数或中文资源搜索被当前页数据误导。
+const paginatedPermissionRows = computed(() => {
+  const start = (paginationPage.value - 1) * paginationSize.value
+  return filteredPermissionRows.value.slice(start, start + paginationSize.value)
+})
 
 function safeErrorMessage(error: unknown): string {
   if (typeof error !== 'object' || error === null) {
@@ -137,6 +145,8 @@ onMounted(loadPermissions)
         </FaAlert>
 
         <QsGenericTable
+          v-model:page="paginationPage"
+          v-model:page-size="paginationSize"
           v-model:search="tableSearch"
           v-model:filters="tableFilters"
           data-testid="permission-table"
@@ -144,13 +154,14 @@ onMounted(loadPermissions)
           row-key="id"
           aria-label="权限目录列表"
           :columns="columns"
-          :data="filteredPermissionRows"
+          :data="paginatedPermissionRows"
           :filter-definitions="filterDefinitions"
           :loading="loading"
+          :page-size-options="[20, 50, 100, 200]"
           :searchable="true"
           :addable="false"
           :show-column-settings="true"
-          :show-pagination="false"
+          :total="filteredPermissionRows.length"
           empty-title="暂无权限"
           empty-description="当前权限目录没有可展示的数据。"
           search-placeholder="搜索权限码、名称、说明或资源"

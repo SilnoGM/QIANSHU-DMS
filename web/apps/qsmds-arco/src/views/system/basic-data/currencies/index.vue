@@ -255,6 +255,10 @@ function openCreate(): void {
   formVisible.value = true
 }
 
+defineExpose({
+  openCreate,
+})
+
 function openEdit(currency: CurrencyDto): void {
   if (!canRead.value || !currencyActions(currency).canEdit) {
     return
@@ -455,26 +459,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="currency-management-page">
-    <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-      <p class="qs-type-description m-0 max-w-3xl">
-        维护系统可引用的货币资料。新增货币默认停用，非人民币货币必须配置当前汇率后才能启用。
-      </p>
-      <div class="flex flex-wrap gap-2 sm:shrink-0">
-        <FaButton
-          v-if="canRead"
-          variant="outline"
-          :loading="listLoading"
-          @click="loadCurrencies"
-        >
-          <FaIcon v-if="!listLoading" name="i-lucide:refresh-cw" />
-          刷新
-        </FaButton>
-        <FaButton v-if="canRead && canCreate" @click="openCreate">
-          <FaIcon name="i-lucide:plus" />
-          新增货币
-        </FaButton>
-      </div>
-    </div>
+    <p class="qs-type-description mb-5 mt-0 max-w-3xl">
+      维护系统可引用的货币资料。新增货币默认停用，非人民币货币必须配置当前汇率后才能启用。
+    </p>
 
     <FaAlert
       v-if="!canRead"

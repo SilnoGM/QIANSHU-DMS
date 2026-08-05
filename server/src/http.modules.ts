@@ -1,6 +1,7 @@
 import { AuditModule } from './modules/audit/audit.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { CurrencyModule } from './modules/currencies/currency.module'
+import { DictionaryModule } from './modules/dictionaries/dictionary.module'
 import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module'
 import { HealthModule } from './modules/health/health.module'
 import { NumberingModule } from './modules/numbering/numbering.module'
@@ -18,6 +19,7 @@ export const HTTP_MODULES = [
   UsersModule,
   RolesModule,
   PermissionsModule,
+  DictionaryModule,
   CurrencyModule,
   ExchangeRatesModule,
   RegionsModule,

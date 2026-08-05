@@ -63,8 +63,13 @@ describe('permission constants', () => {
       'numbering-rules:enable',
       'numbering-rules:disable',
       'numbering-rules:read-issuances',
+      'dictionaries:read',
+      'dictionaries:create',
+      'dictionaries:update',
+      'dictionaries:enable',
+      'dictionaries:disable',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 32)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 37)
   })
 })
 

@@ -52,7 +52,7 @@ test('脚本测试同时运行 Node 与 TypeScript 测试', () => {
   assert.equal(scripts['test:scripts'], 'run-s test:scripts:node test:scripts:tsx test:api')
   assert.equal(
     scripts['test:scripts:node'],
-    'node --test scripts/*.test.mjs apps/qsmds-arco/test/browser/chrome-driver.test.mjs apps/qsmds-arco/test/browser/regions.browser.helpers.test.mjs',
+    'node --test scripts/*.test.mjs apps/qsmds-arco/test/browser/chrome-driver.test.mjs apps/qsmds-arco/test/browser/regions.browser.helpers.test.mjs apps/qsmds-arco/test/browser/dictionaries.browser.helpers.test.mjs',
   )
   assert.equal(scripts['test:scripts:tsx'], 'tsx --test scripts/*.test.ts')
   assert.equal(scripts['pretest:api'], 'pnpm run api:generate')
@@ -62,7 +62,7 @@ test('脚本测试同时运行 Node 与 TypeScript 测试', () => {
   )
 })
 
-test('认证与地区 Browser E2E 使用互不扩张的显式场景文件', () => {
+test('认证、地区与字典 Browser E2E 使用互不扩张的显式场景文件', () => {
   const { scripts } = readJson('package.json')
 
   assert.equal(
@@ -73,7 +73,12 @@ test('认证与地区 Browser E2E 使用互不扩张的显式场景文件', () =
     scripts['test:browser:regions'],
     'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/regions.browser.test.mjs',
   )
+  assert.equal(
+    scripts['test:browser:dictionaries'],
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/dictionaries.browser.test.mjs',
+  )
   assert.equal(scripts['test:browser:auth'].includes('*.browser.test.mjs'), false)
+  assert.equal(scripts['test:browser:dictionaries'].includes('*.browser.test.mjs'), false)
 })
 
 test('参考应用通过稳定 package name 显式检查和构建', () => {

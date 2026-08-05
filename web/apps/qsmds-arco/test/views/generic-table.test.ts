@@ -56,6 +56,13 @@ function readRelativeSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
+function countClassAttributesWithTokens(source: string, tokens: readonly string[]): number {
+  return [...source.matchAll(/class="([^"]*)"/gu)].filter((match) => {
+    const classNames = match[1]?.split(/\s+/u) ?? []
+    return tokens.every(token => classNames.includes(token))
+  }).length
+}
+
 test('通用表格默认使用20条每页并提供四档页容量', () => {
   assert.equal(DEFAULT_PAGE_SIZE, 20)
   assert.deepEqual(DEFAULT_PAGE_SIZE_OPTIONS, [20, 50, 100, 200])
@@ -286,6 +293,49 @@ test('筛选入口使用面板并根据已应用条件呈现按钮状态', () =>
   assert.match(panelSource, /重置/u)
 })
 
+test('窄屏筛选与列设置 Drawer 为可操作控件提供至少 44px 触控目标', () => {
+  const tableSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const filterPanelSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/FilterPanel.vue',
+  )
+  const columnPanelSource = readRelativeSource(
+    '../../src/components/business/QsGenericTable/ColumnSettingsPanel.vue',
+  )
+
+  // 两个 Teleport Drawer 必须有稳定私有 marker，且只放大各自直接子级的关闭按钮。
+  assert.match(tableSource, /content-class="[^"]*qs-generic-table-filter-drawer[^"]*\[&>button\]:size-11[^"]*"/u)
+  assert.match(tableSource, /content-class="[^"]*qs-generic-table-column-drawer[^"]*\[&>button\]:size-11[^"]*"/u)
+
+  // FaSelect 和底部操作在窄屏达到 44px，桌面仍恢复既有紧凑高度。
+  assert.equal(countClassAttributesWithTokens(filterPanelSource, ['md:min-h-9', 'min-h-11', 'w-full']), 1)
+  assert.equal(countClassAttributesWithTokens(filterPanelSource, ['md:min-h-9', 'min-h-11']), 3)
+
+  // 列设置在窄屏改为两列控制组；每个实际按钮至少 44px，桌面继续使用 28px。
+  assert.match(columnPanelSource, /grid-cols-2[^"]*md:grid-cols-\[minmax\(0,1fr\)_auto_auto\]/u)
+  assert.equal(countClassAttributesWithTokens(columnPanelSource, [
+    'flex-1',
+    'h-11',
+    'md:flex-none',
+    'md:min-w-0',
+    'md:size-7',
+    'min-w-11',
+  ]), 6)
+  assert.match(columnPanelSource, /label-class="[^"]*min-h-11[^"]*md:min-h-0[^"]*"/u)
+  assert.match(columnPanelSource, /class="[^"]*min-h-11[^"]*md:min-h-8[^"]*"[^>]*>\s*恢复默认/u)
+
+  // Select 的选项会再次 Teleport；仅在当前表格或筛选 Drawer 的触发器展开时放大选项。
+  assert.match(
+    tableSource,
+    /:global\(body:has\(\.qs-generic-table \[data-slot="select-trigger"\]\[aria-expanded="true"\]\) \[data-slot="select-content"\] \[role="option"\]\)/u,
+  )
+  assert.match(
+    tableSource,
+    /:global\(body:has\(\.qs-generic-table-filter-drawer \[data-slot="select-trigger"\]\[aria-expanded="true"\]\) \[data-slot="select-content"\] \[role="option"\]\)[\s\S]{0,200}min-height: 2\.75rem/u,
+  )
+})
+
 test('桌面汇总行使用统一背景且自定义汇总组件跟随列对齐', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',
@@ -446,7 +496,14 @@ test('列设置面板使用紧凑矩阵区分固定与对齐操作', () => {
   assert.match(source, /i-lucide:align-left/u)
   assert.match(source, /i-lucide:align-center/u)
   assert.match(source, /i-lucide:align-right/u)
-  assert.match(source, /class="(?:p-0 size-7|size-7 p-0)"/u)
+  assert.equal(countClassAttributesWithTokens(source, [
+    'flex-1',
+    'h-11',
+    'md:flex-none',
+    'md:min-w-0',
+    'md:size-7',
+    'min-w-11',
+  ]), 6)
 })
 
 test('列级 copyable 配置为桌面与窄屏提供剪贴板复制反馈', () => {

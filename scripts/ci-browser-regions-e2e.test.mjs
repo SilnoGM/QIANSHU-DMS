@@ -368,3 +368,290 @@ test('子进程输出可流式诊断且跨 chunk secret 仍只输出遮罩', () 
   assert.equal(outputs.join('').includes(databaseUrl), false)
   assert.equal(outputs.join('').includes('test-password'), false)
 })
+
+test('子进程在 secret 前缀处结束时 fail-closed 遮罩尾串', () => {
+  const outputs = []
+  const secret = 'TOPSECRET123'
+  const relay = createBrowserRegionsOutputRelay(
+    value => outputs.push(value),
+    [secret],
+  )
+
+  relay.push('safe:TOPSEC')
+  relay.flush()
+
+  assert.equal(outputs.join(''), 'safe:***')
+  assert.equal(outputs.join('').includes('TOPSEC'), false)
+})
+
+test('完整行在 secret 前缀处截断时同样 fail-closed 且安全行仍即时输出', () => {
+  for (const lineEnding of ['\n', '\r', '\r\n']) {
+    const outputs = []
+    const relay = createBrowserRegionsOutputRelay(
+      value => outputs.push(value),
+      ['TOPSECRET123'],
+    )
+
+    relay.push(`safe-line${lineEnding}`)
+    assert.equal(outputs.join(''), `safe-line${lineEnding}`)
+    relay.push(`safe:TOPSEC${lineEnding}`)
+
+    assert.equal(
+      outputs.join(''),
+      `safe-line${lineEnding}safe:***${lineEnding}`,
+    )
+    assert.equal(outputs.join('').includes('TOPSEC'), false)
+  }
+
+  const databaseOutputs = []
+  const databaseRelay = createBrowserRegionsOutputRelay(
+    value => databaseOutputs.push(value),
+    [databaseUrl, 'test-password'],
+  )
+  const databasePrefix = databaseUrl.slice(
+    0,
+    databaseUrl.indexOf('test-password') + 5,
+  )
+  databaseRelay.push(`error:${databasePrefix}\n`)
+
+  assert.equal(databaseOutputs.join(''), 'error:***\n')
+  assert.equal(databaseOutputs.join('').includes('postgresql://'), false)
+
+  const mixedOutputs = []
+  const mixedRelay = createBrowserRegionsOutputRelay(
+    value => mixedOutputs.push(value),
+    ['TOPSECRET123', 'bridge\nsecret'],
+  )
+  mixedRelay.push('safe:TOPSEC\nordinary-tail-that-settles~')
+  mixedRelay.flush()
+  assert.equal(
+    mixedOutputs.join(''),
+    'safe:***\nordinary-tail-that-settles~',
+  )
+
+  const embeddedLineEndingOutputs = []
+  const embeddedLineEndingRelay = createBrowserRegionsOutputRelay(
+    value => embeddedLineEndingOutputs.push(value),
+    ['TOPSECRET123', 'bridge\nsecret'],
+  )
+  for (const character of 'before:bridge\nsecret:after') {
+    embeddedLineEndingRelay.push(character)
+  }
+  embeddedLineEndingRelay.flush()
+  assert.equal(embeddedLineEndingOutputs.join(''), 'before:***:after')
+})
+
+test('重叠 password 不会破坏任一 DATABASE_URL 跨 chunk 遮罩', () => {
+  for (let splitIndex = 1; splitIndex < databaseUrl.length; splitIndex += 1) {
+    const outputs = []
+    const relay = createBrowserRegionsOutputRelay(
+      value => outputs.push(value),
+      [databaseUrl, 'test-password'],
+    )
+
+    relay.push(`before:${databaseUrl.slice(0, splitIndex)}`)
+    relay.push(`${databaseUrl.slice(splitIndex)}:after`)
+    relay.flush()
+
+    assert.equal(
+      outputs.join(''),
+      'before:***:after',
+      `DATABASE_URL split ${splitIndex}`,
+    )
+    assert.equal(outputs.join('').includes('postgresql://'), false)
+    assert.equal(outputs.join('').includes('test-password'), false)
+  }
+})
+
+test('不同 secret 的前后缀碰撞不会拆开已完整到达的 DATABASE_URL', () => {
+  const collisionSecret = 'cHmacFixture'
+  const value = `before:${databaseUrl}:after`
+
+  for (let splitIndex = 1; splitIndex < value.length; splitIndex += 1) {
+    const outputs = []
+    const relay = createBrowserRegionsOutputRelay(
+      output => outputs.push(output),
+      [databaseUrl, 'test-password', collisionSecret],
+    )
+
+    relay.push(value.slice(0, splitIndex))
+    relay.push(value.slice(splitIndex))
+    relay.flush()
+
+    assert.equal(
+      outputs.join(''),
+      'before:***:after',
+      `cross-secret split ${splitIndex}`,
+    )
+    assert.equal(outputs.join('').includes('postgresql://'), false)
+  }
+
+  const eofOutputs = []
+  const eofRelay = createBrowserRegionsOutputRelay(
+    output => eofOutputs.push(output),
+    [databaseUrl, 'test-password', collisionSecret],
+  )
+  eofRelay.push(databaseUrl)
+  eofRelay.flush()
+  assert.equal(eofOutputs.join(''), '***')
+})
+
+test('secret 自身前后缀重叠时每个完整 occurrence 都作为同一遮罩区间输出', () => {
+  const cases = [
+    {
+      input: 'TOPSECRETTOPSECRET',
+      secrets: ['TOPSECRETTOPSECRET'],
+    },
+    { input: 'aaaaa', secrets: ['aaaa'] },
+    { input: 'ababa', secrets: ['aba'] },
+    { input: 'abcabx', secrets: ['abcab', 'abx'] },
+    { input: 'abcd', secrets: ['abc', 'abcd'] },
+  ]
+
+  for (const { input, secrets } of cases) {
+    const value = `before:${input}:after`
+    for (let splitIndex = 1; splitIndex < value.length; splitIndex += 1) {
+      const outputs = []
+      const relay = createBrowserRegionsOutputRelay(
+        output => outputs.push(output),
+        secrets,
+      )
+
+      relay.push(value.slice(0, splitIndex))
+      relay.push(value.slice(splitIndex))
+      relay.flush()
+
+      assert.equal(
+        outputs.join(''),
+        'before:***:after',
+        `${secrets.join(',')} split ${splitIndex}`,
+      )
+    }
+
+    const eofOutputs = []
+    const eofRelay = createBrowserRegionsOutputRelay(
+      output => eofOutputs.push(output),
+      secrets,
+    )
+    for (const character of input) {
+      eofRelay.push(character)
+    }
+    eofRelay.flush()
+    assert.equal(eofOutputs.join(''), '***', `${secrets.join(',')} EOF`)
+  }
+})
+
+test('流式 relay 对任意 chunk partition 都与离线区间并集 oracle 一致', () => {
+  const redactWithIntervalOracle = (input, sensitiveValues) => {
+    const secrets = [...new Set(sensitiveValues.filter(
+      value => typeof value === 'string' && value.length > 0,
+    ))]
+    const mask = Array.from({ length: input.length }, () => false)
+
+    for (const secret of secrets) {
+      let searchIndex = 0
+      while (searchIndex <= input.length - secret.length) {
+        const matchIndex = input.indexOf(secret, searchIndex)
+        if (matchIndex === -1) {
+          break
+        }
+        mask.fill(true, matchIndex, matchIndex + secret.length)
+        searchIndex = matchIndex + 1
+      }
+    }
+
+    const markProtectedSuffix = (endIndex, protectedSecrets = secrets) => {
+      let protectedSuffixLength = 0
+      for (const secret of protectedSecrets) {
+        for (
+          let length = Math.min(secret.length - 1, endIndex);
+          length > protectedSuffixLength;
+          length -= 1
+        ) {
+          if (input.endsWith(secret.slice(0, length), endIndex)) {
+            protectedSuffixLength = length
+            break
+          }
+        }
+      }
+      mask.fill(true, endIndex - protectedSuffixLength, endIndex)
+    }
+    const newlineProtectedSecrets = secrets.filter(
+      secret => !secret.includes('\n'),
+    )
+    const carriageReturnProtectedSecrets = secrets.filter(
+      secret => !secret.includes('\r'),
+    )
+    for (let index = 0; index < input.length; index += 1) {
+      if (input[index] === '\n') {
+        markProtectedSuffix(index, newlineProtectedSecrets)
+      }
+      else if (input[index] === '\r') {
+        markProtectedSuffix(index, carriageReturnProtectedSecrets)
+      }
+    }
+    markProtectedSuffix(input.length)
+
+    let output = ''
+    let maskRunOpen = false
+    for (let index = 0; index < input.length; index += 1) {
+      if (mask[index]) {
+        if (!maskRunOpen) {
+          output += '***'
+          maskRunOpen = true
+        }
+      }
+      else {
+        maskRunOpen = false
+        output += input[index]
+      }
+    }
+    return output
+  }
+
+  const cases = [
+    { input: 'xxabcabxyy', secrets: ['abcab', 'abx'] },
+    { input: 'ababa', secrets: ['aba'] },
+    { input: 'aaaaa', secrets: ['aaaa'] },
+    { input: 'abcX', secrets: ['abc', 'abcd'] },
+    { input: 'safe:TOP', secrets: ['TOPSECRET'] },
+    { input: 'safe:TOP\nok', secrets: ['TOPSECRET'] },
+    { input: 'safe:TOP\r\nok', secrets: ['TOPSECRET'] },
+    { input: 'ab\nzzzz', secrets: ['abcd', 'x\ny'] },
+    { input: 'x\ny', secrets: ['abcd', 'x\ny'] },
+    { input: 'plain', secrets: ['', undefined] },
+  ]
+
+  for (const { input, secrets } of cases) {
+    const partitionCount = 2 ** Math.max(0, input.length - 1)
+    const expected = redactWithIntervalOracle(input, secrets)
+    for (let partition = 0; partition < partitionCount; partition += 1) {
+      const chunks = []
+      let chunkStart = 0
+      for (let index = 1; index <= input.length; index += 1) {
+        const hasBoundary = index === input.length
+          || (partition & (2 ** (index - 1))) !== 0
+        if (hasBoundary) {
+          chunks.push(input.slice(chunkStart, index))
+          chunkStart = index
+        }
+      }
+
+      const outputs = []
+      const relay = createBrowserRegionsOutputRelay(
+        output => outputs.push(output),
+        secrets,
+      )
+      for (const chunk of chunks) {
+        relay.push(chunk)
+      }
+      relay.flush()
+
+      assert.equal(
+        outputs.join(''),
+        expected,
+        `${input} partition ${partition}`,
+      )
+    }
+  }
+})

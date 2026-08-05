@@ -44,6 +44,11 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'numbering-rules:enable',
   'numbering-rules:disable',
   'numbering-rules:read-issuances',
+  'dictionaries:read',
+  'dictionaries:create',
+  'dictionaries:update',
+  'dictionaries:enable',
+  'dictionaries:disable',
 ] as const
 
 export type ManagementPermissionCode =

@@ -39,7 +39,7 @@ const basicDataPageContracts = [
     title: '编号管理',
   },
   {
-    auth: undefined,
+    auth: 'dictionaries:read',
     file: '../../src/views/system/basic-data/dictionaries/index.vue',
     name: 'systemBasicDataDictionaries',
     path: 'dictionaries',
@@ -101,7 +101,7 @@ test('基础数据父路由保持权限中立并由叶子路由独立鉴权', ()
   )
 })
 
-test('无基础数据读取权限时只保留权限中立的字典菜单', () => {
+test('无基础数据读取权限时隐藏空的基础数据父菜单', () => {
   const permissions = ['users:read']
   const menuFixture: MenuRecordRaw[] = [{
     path: basicDataRoutes.path,
@@ -119,23 +119,14 @@ test('无基础数据读取权限时只保留权限中立的字典菜单', () =>
     })),
   }]
 
-  // 使用生产递归过滤函数验证父项保留、所有受保护叶子隐藏及权限中立叶子的顺序。
-  const [visibleBasicData] = filterAccessibleMenus(
+  // 使用生产递归过滤函数验证所有受保护叶子隐藏后，空父项也会一并移除。
+  const visibleMenus = filterAccessibleMenus(
     menuFixture,
     value => matchesAuthorization(permissions, value),
     () => true,
   )
 
-  assert.equal(visibleBasicData?.path, '/system/basic-data')
-  assert.deepEqual(
-    visibleBasicData?.children?.map(menu => menu.path),
-    ['dictionaries'],
-  )
-  assert.ok(
-    visibleBasicData?.children?.every(
-      menu => !['regions', 'currencies', 'exchange-rates', 'numbering'].includes(menu.path),
-    ),
-  )
+  assert.deepEqual(visibleMenus, [])
 })
 
 test('货币汇率单一菜单使用任一读取权限并隐藏兼容路由', () => {
@@ -167,12 +158,39 @@ test('货币汇率单一菜单使用任一读取权限并隐藏兼容路由', ()
 
   assert.deepEqual(
     visiblePaths(['currencies:read']),
-    ['currencies', 'dictionaries'],
+    ['currencies'],
   )
   assert.deepEqual(
     visiblePaths(['exchange-rates:read']),
+    ['currencies'],
+  )
+  assert.deepEqual(
+    visiblePaths(['currencies:read', 'dictionaries:read']),
     ['currencies', 'dictionaries'],
   )
+})
+
+test('字典菜单与直接访问都精确要求 dictionaries:read', () => {
+  const dictionaryRoute = basicDataRoutes.children?.find(
+    route => route.name === 'systemBasicDataDictionaries',
+  )
+
+  assert.equal(dictionaryRoute?.meta?.auth, 'dictionaries:read')
+  assert.equal(
+    matchesAuthorization(['dictionaries:read'], dictionaryRoute?.meta?.auth ?? ''),
+    true,
+  )
+  assert.equal(
+    matchesAuthorization([], dictionaryRoute?.meta?.auth ?? ''),
+    false,
+  )
+
+  const appSource = readFileSync(
+    new URL('../../src/App.vue', import.meta.url),
+    'utf8',
+  )
+  assert.match(appSource, /route\.matched\.every/u)
+  assert.match(appSource, /<AppNotAllowed v-else\s*\/>/u)
 })
 
 test('编号管理菜单与页面都要求 numbering-rules:read', () => {
@@ -248,23 +266,17 @@ test('编号管理已升级为真实业务页面', () => {
   assert.match(source, /<QsGenericTable\b/u)
 })
 
-test('字典管理未实施叶子路由仍只承载空页面', () => {
+test('字典管理叶子已升级为受权限保护的三面板单页骨架', () => {
   for (const page of basicDataPageContracts.slice(4)) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
-    const templateMatch = source.match(/<template>([\s\S]*?)<\/template>/u)
 
-    assert.ok(templateMatch, `${page.title}必须保留 Vue template`)
-    // 必须检查原始模板内容，不能先删除顶层注释；否则 Vue 会把空页面编译为
-    // Fragment，离开该页面时会让外层 out-in Transition 永久停在占位节点。
-    assert.equal(
-      templateMatch[1]?.trim(),
-      '<div />',
-      `${page.title}只允许保留单一空根元素，说明注释必须位于 template 外部`,
-    )
-    assert.doesNotMatch(
-      source,
-      /<script\b|<style\b|@\/api|useApp\w*Store/u,
-      `${page.title}当前不得包含脚本、样式、API 或 Store 依赖`,
-    )
+    assert.match(source, /<script setup lang="ts">/u)
+    assert.match(source, /auth\('dictionaries:read'\)/u)
+    assert.equal(source.match(/<FaPageHeader\b/gu)?.length, 1)
+    // 无权态单独一个面板，正常态为目录、摘要和条目表格三个面板。
+    assert.equal(source.match(/<FaPageMain\b/gu)?.length, 4)
+    assert.match(source, /data-testid="dictionary-type-panel"/u)
+    assert.match(source, /data-testid="dictionary-type-summary-panel"/u)
+    assert.match(source, /data-testid="dictionary-item-table-panel"/u)
   }
 })

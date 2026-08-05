@@ -9,6 +9,10 @@ import {
 
 defineOptions({ name: 'SystemBasicDataCurrencyExchangeRate' })
 
+interface CurrencyManagementPanelExpose {
+  openCreate: () => void
+}
+
 const CurrencyManagementPanel = defineAsyncComponent(
   () => import('../currencies/index.vue'),
 )
@@ -21,18 +25,40 @@ const router = useRouter()
 const { auth } = useAppAuth()
 
 const canReadCurrencies = computed(() => auth('currencies:read'))
+const canCreateCurrencies = computed(() => auth('currencies:create'))
 const canReadExchangeRates = computed(() => auth('exchange-rates:read'))
 const access = computed(() => ({
   canReadCurrencies: canReadCurrencies.value,
   canReadExchangeRates: canReadExchangeRates.value,
 }))
+// FaTabs 会为每个 Trigger 注入 w-full 与 flex-1。窄屏保留这套等分布局和
+// 44px 触控高度；桌面端必须同时解除宽度与弹性增长，页签才能按内容自然收敛。
 const tabs = computed(() => {
   return buildCurrencyExchangeRateTabs(access.value).map(tab => ({
     ...tab,
-    class: 'min-h-11 px-4 sm:min-w-36',
+    class: 'min-h-11 px-3 text-sm text-muted-foreground [&>div>i]:size-4 md:flex-none md:min-h-9 md:w-auto md:px-3.5 data-[state=active]:border-border/70 data-[state=active]:text-foreground data-[state=active]:shadow-xs data-[state=inactive]:hover:bg-background/60 data-[state=inactive]:hover:text-foreground',
   }))
 })
 const activeTab = ref<CurrencyExchangeRateTab | null>(null)
+const currencyManagementPanelRef
+  = useTemplateRef<CurrencyManagementPanelExpose>('currencyManagementPanelRef')
+const canShowCurrencyCreate = computed(() =>
+  activeTab.value === 'currencies'
+  && canReadCurrencies.value
+  && canCreateCurrencies.value)
+const currencyCreateReady = computed(() =>
+  currencyManagementPanelRef.value !== null)
+
+/**
+ * FaPageHeader 负责页面级操作；货币子面板只暴露已带权限守卫的打开动作。
+ * 异步面板尚未挂载时按钮保持禁用，避免用户点击后没有任何反馈。
+ */
+function openCurrencyCreate(): void {
+  if (!canShowCurrencyCreate.value) {
+    return
+  }
+  currencyManagementPanelRef.value?.openCreate()
+}
 
 function queryMatchesTab(tab: CurrencyExchangeRateTab): boolean {
   return tab === 'currencies'
@@ -105,7 +131,17 @@ watch(
     <FaPageHeader
       title="货币汇率"
       description="统一维护系统货币与当前兑人民币汇率；两类数据继续使用独立权限、查询和操作边界。"
-    />
+    >
+      <FaButton
+        v-if="canShowCurrencyCreate"
+        class="min-h-11 md:min-h-9"
+        :disabled="!currencyCreateReady"
+        @click="openCurrencyCreate"
+      >
+        <FaIcon name="i-lucide:plus" />
+        新增货币
+      </FaButton>
+    </FaPageHeader>
 
     <FaPageMain>
       <FaEmpty
@@ -122,12 +158,15 @@ watch(
         :list="tabs"
         data-testid="currency-exchange-rate-tabs"
         class="min-w-0"
-        list-class="h-auto min-h-11 w-full sm:w-fit"
-        content-class="mt-5 min-w-0"
+        list-class="h-auto w-full gap-1 border border-border/60 bg-muted/60 p-1 md:w-fit"
+        content-class="mt-4 min-w-0"
         @update:model-value="handleTabChange"
       >
         <template #currencies>
-          <CurrencyManagementPanel v-if="activeTab === 'currencies'" />
+          <CurrencyManagementPanel
+            v-if="activeTab === 'currencies'"
+            ref="currencyManagementPanelRef"
+          />
         </template>
         <template #exchange-rates>
           <ExchangeRateManagementPanel v-if="activeTab === 'exchange-rates'" />

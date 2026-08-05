@@ -189,8 +189,10 @@ export function redactBrowserRegionsOutput(value, sensitiveValues) {
 }
 
 /**
- * 子进程的 stdout/stderr chunk 边界与 secret 无关。先完整缓冲单个进程流，进程
- * close 后一次性遮罩，避免连接串或密码恰好被拆成两个 chunk 时残留明文片段。
+ * 子进程的 stdout/stderr chunk 边界与 secret 无关。这里为最长 secret 保留有界
+ * lookahead，并对所有完整 occurrence 的区间取并集。字符只有在未来输入已不可能
+ * 改变其敏感性后才输出，因此自重叠、不同 secret 前后缀重叠和跨 chunk 都不会
+ * 把同一个凭据拆成可见片段；不含 secret 字符的完整行仍可立即输出诊断。
  */
 export function createBrowserRegionsOutputRelay(
   outputWriter,
@@ -203,8 +205,126 @@ export function createBrowserRegionsOutputRelay(
     sensitiveValues.filter(value =>
       typeof value === 'string' && value.length > 0),
   )]
+  const maximumSecretLength = secrets.reduce(
+    (maximum, secret) => Math.max(maximum, secret.length),
+    0,
+  )
+  const newlineProtectedSecrets = secrets.filter(
+    secret => !secret.includes('\n'),
+  )
+  const carriageReturnProtectedSecrets = secrets.filter(
+    secret => !secret.includes('\r'),
+  )
+  const newlineIsBoundary = newlineProtectedSecrets.length === secrets.length
+  const carriageReturnIsBoundary =
+    carriageReturnProtectedSecrets.length === secrets.length
   let pending = ''
+  let pendingMask = []
+  let maskRunOpen = false
   let flushed = false
+
+  /**
+   * 同一个 secret 可能在自身内部重叠，例如 `aba` 在 `ababa` 中出现两次。
+   * 搜索游标每次只前进一个 code unit，确保所有 occurrence 都进入遮罩区间并集。
+   */
+  const markCompleteSecrets = () => {
+    for (const secret of secrets) {
+      let searchIndex = 0
+      while (searchIndex <= pending.length - secret.length) {
+        const matchIndex = pending.indexOf(secret, searchIndex)
+        if (matchIndex === -1) {
+          break
+        }
+        for (
+          let index = matchIndex;
+          index < matchIndex + secret.length;
+          index += 1
+        ) {
+          pendingMask[index] = true
+        }
+        searchIndex = matchIndex + 1
+      }
+    }
+  }
+
+  /**
+   * EOF 或已证明不会被 secret 跨越的换行边界，都可能停在凭据前缀中间。
+   * 对该边界前的最长非空 proper prefix 做 fail-closed，避免截断日志或自动
+   * 换行把连接串、密码的可识别片段直接写入 CI 日志。
+   */
+  const markProtectedSuffix = (endIndex, protectedSecrets = secrets) => {
+    let protectedSuffixLength = 0
+    for (const secret of protectedSecrets) {
+      const maximum = Math.min(secret.length - 1, endIndex)
+      for (
+        let length = maximum;
+        length > protectedSuffixLength;
+        length -= 1
+      ) {
+        if (pending.endsWith(secret.slice(0, length), endIndex)) {
+          protectedSuffixLength = length
+          break
+        }
+      }
+    }
+    for (
+      let index = endIndex - protectedSuffixLength;
+      index < endIndex;
+      index += 1
+    ) {
+      pendingMask[index] = true
+    }
+  }
+
+  /**
+   * 连续敏感区间只写一个 `***`。若一个 occurrence 横跨输出边界，保留
+   * maskRunOpen 可阻止后半段重复写遮罩，更重要的是绝不会重新写回原始字符。
+   */
+  const writeSettledPrefix = (length) => {
+    if (length <= 0) {
+      return
+    }
+    let output = ''
+    for (let index = 0; index < length; index += 1) {
+      if (pendingMask[index] === true) {
+        if (!maskRunOpen) {
+          output += '***'
+          maskRunOpen = true
+        }
+      }
+      else {
+        maskRunOpen = false
+        output += pending[index]
+      }
+    }
+    pending = pending.slice(length)
+    pendingMask = pendingMask.slice(length)
+    if (output.length > 0) {
+      outputWriter(output)
+    }
+  }
+
+  const markLineSuffixesAndGetBoundary = () => {
+    let boundary = 0
+    for (let index = 0; index < pending.length; index += 1) {
+      const character = pending[index]
+      if (character === '\n') {
+        // 即使另一个 secret 自身含 LF、导致整行不能提前结算，也必须对所有
+        // 不含 LF 的 secret 独立保护行尾前缀；CR 同理。
+        markProtectedSuffix(index, newlineProtectedSecrets)
+        if (newlineIsBoundary) {
+          boundary = index + 1
+        }
+      }
+      else if (character === '\r') {
+        markProtectedSuffix(index, carriageReturnProtectedSecrets)
+        if (carriageReturnIsBoundary) {
+          boundary = index + 1
+        }
+      }
+    }
+    return boundary
+  }
 
   return Object.freeze({
     flush() {
@@ -212,38 +332,37 @@ export function createBrowserRegionsOutputRelay(
         return
       }
       flushed = true
-      const value = redactBrowserRegionsOutput(pending, secrets)
-      pending = ''
-      if (value.length > 0) {
-        outputWriter(value)
-      }
+      markCompleteSecrets()
+
+      // 进程可能恰好在任意 secret 的非空 proper prefix 处退出。此时无法证明
+      // 尾串是普通文本，必须与完整 occurrence 一并 fail-closed。
+      markProtectedSuffix(pending.length)
+      writeSettledPrefix(pending.length)
     },
     push(value) {
       if (flushed) {
         return
       }
-      pending += String(value)
-      const redacted = redactBrowserRegionsOutput(pending, secrets)
+      const chunk = String(value)
+      pending += chunk
+      for (let index = 0; index < chunk.length; index += 1) {
+        pendingMask.push(false)
+      }
 
-      // 只保留可能是任一 secret 开头的最长尾部。其他文本已经不可能与后续 chunk
-      // 组成 secret，可立即输出，既避免无界缓冲也保留实时构建/测试诊断。
-      let protectedLength = 0
-      for (const secret of secrets) {
-        const maximum = Math.min(secret.length - 1, redacted.length)
-        for (let length = maximum; length > protectedLength; length -= 1) {
-          if (redacted.endsWith(secret.slice(0, length))) {
-            protectedLength = length
-            break
-          }
-        }
+      if (maximumSecretLength === 0) {
+        writeSettledPrefix(pending.length)
+        return
       }
-      const outputLength = redacted.length - protectedLength
-      if (outputLength > 0) {
-        outputWriter(redacted.slice(0, outputLength))
-      }
-      pending = protectedLength > 0
-        ? redacted.slice(outputLength)
-        : ''
+
+      markCompleteSecrets()
+      const lookaheadBoundary = Math.max(
+        0,
+        pending.length - maximumSecretLength + 1,
+      )
+      writeSettledPrefix(Math.max(
+        lookaheadBoundary,
+        markLineSuffixesAndGetBoundary(),
+      ))
     },
   })
 }

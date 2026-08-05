@@ -7,11 +7,16 @@ function readSource(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
-test('地区管理查询页使用单一 FaPageMain 和现有业务组件', () => {
+test('地区管理查询页使用无权面板与三个独立业务面板', () => {
   const source = readSource('../../src/views/system/basic-data/regions/index.vue')
   const pageHeader = source.match(/<FaPageHeader\b[\s\S]*?<\/FaPageHeader>/u)?.[0]
 
-  assert.equal(source.match(/<FaPageMain\b/gu)?.length, 1)
+  // 无权态单独一个面板，正常态为范围树、范围摘要和地区表格三个面板。
+  assert.equal(source.match(/<FaPageMain\b/gu)?.length, 4)
+  assert.match(source, /data-testid="region-management-workspace"/u)
+  assert.match(source, /data-testid="region-scope-panel"/u)
+  assert.match(source, /data-testid="region-scope-summary-panel"/u)
+  assert.match(source, /data-testid="region-table-panel"/u)
   assert.ok(pageHeader)
   assert.equal(pageHeader.match(/<FaButton\b/gu)?.length, 1)
   assert.match(pageHeader, /@click="openCreate"/u)
@@ -23,13 +28,25 @@ test('地区管理查询页使用单一 FaPageMain 和现有业务组件', () =>
   assert.doesNotMatch(source, /(?:gradient|#[\dA-Fa-f]{3,8}\b|rgba?\()/u)
 })
 
-test('桌面为 18rem 范围树加弹性列表，移动端使用底部抽屉', () => {
+test('桌面为加宽范围树加两个右侧面板，移动端使用底部抽屉', () => {
   const source = readSource('../../src/views/system/basic-data/regions/index.vue')
   const drawerTag = source.match(/<QsGenericDrawer\b[\s\S]*?>/u)?.[0]
 
-  assert.match(source, /md:grid-cols-\[18rem_minmax\(0,1fr\)\]/u)
-  assert.match(source, /md:block/u)
+  assert.match(source, /md:grid-cols-\[20rem_minmax\(0,1fr\)\]/u)
+  assert.match(source, /2xl:grid-cols-\[22rem_minmax\(0,1fr\)\]/u)
+  assert.match(source, /gap-4[\s\S]{0,160}xl:gap-5/u)
+  assert.match(source, /md:row-span-2/u)
+  assert.match(source, /region-scope-panel-size-contained/u)
+  assert.match(source, /main-class="min-h-0 min-w-0 flex-1"/u)
+  assert.match(source, /data-testid="region-scope-panel-scroll"/u)
+  assert.match(source, /overflow-y-auto/u)
+  assert.match(
+    source,
+    /@media \(width >= 768px\)[\s\S]*?\.region-scope-panel-size-contained\s*\{[\s\S]*?contain:\s*size/u,
+  )
+  assert.match(source, /md:flex/u)
   assert.match(source, /md:hidden/u)
+  assert.doesNotMatch(source, /md:pr-5|md:border-r/u)
   assert.ok(drawerTag)
   assert.match(drawerTag, /\bplacement="bottom"/u)
   assert.match(source, /aria-controls="region-scope-drawer"/u)

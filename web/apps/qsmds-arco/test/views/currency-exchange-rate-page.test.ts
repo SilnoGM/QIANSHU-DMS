@@ -130,7 +130,7 @@ test('合并页只保留一个页面骨架并使用 FaTabs 懒加载两个业务
   )
   assert.match(
     source,
-    /<template #currencies>\s*<CurrencyManagementPanel v-if="activeTab === 'currencies'"/u,
+    /<template #currencies>\s*<CurrencyManagementPanel[\s\S]{0,160}v-if="activeTab === 'currencies'"[\s\S]{0,120}ref="currencyManagementPanelRef"/u,
   )
   assert.match(
     source,
@@ -139,6 +139,76 @@ test('合并页只保留一个页面骨架并使用 FaTabs 懒加载两个业务
   assert.match(source, /@update:model-value="handleTabChange"/u)
   assert.doesNotMatch(source, /currenciesApi|<Fa(?:Table|Pagination|Card)\b/u)
   assert.doesNotMatch(source, /gradient|#[\dA-Fa-f]{3,8}\b|rgba?\(/u)
+})
+
+test('货币汇率 Tabs 使用紧凑分段样式并保留移动端触控尺寸', () => {
+  const source = readSource(
+    '../../src/views/system/basic-data/currency-exchange-rate/index.vue',
+  )
+  const tabItemClass = source.match(
+    /class: '([^']+)',\n\s*\}\)\)/u,
+  )?.[1]
+  const tabListClass = source.match(/list-class="([^"]+)"/u)?.[1]
+
+  assert.ok(tabItemClass)
+  const tabItemClassTokens = tabItemClass.split(/\s+/u)
+  for (const token of [
+    'min-h-11',
+    'px-3',
+    'text-sm',
+    'text-muted-foreground',
+    '[&>div>i]:size-4',
+    'md:flex-none',
+    'md:min-h-9',
+    'md:w-auto',
+    'md:px-3.5',
+    'data-[state=active]:border-border/70',
+    'data-[state=active]:text-foreground',
+    'data-[state=active]:shadow-xs',
+    'data-[state=inactive]:hover:bg-background/60',
+    'data-[state=inactive]:hover:text-foreground',
+  ]) {
+    assert.ok(tabItemClassTokens.includes(token), `missing tab item class: ${token}`)
+  }
+  assert.equal(tabItemClassTokens.includes('sm:min-w-36'), false)
+
+  assert.ok(tabListClass)
+  const tabListClassTokens = tabListClass.split(/\s+/u)
+  for (const token of [
+    'h-auto',
+    'w-full',
+    'gap-1',
+    'border',
+    'border-border/60',
+    'bg-muted/60',
+    'p-1',
+    'md:w-fit',
+  ]) {
+    assert.ok(tabListClassTokens.includes(token), `missing tab list class: ${token}`)
+  }
+  assert.match(source, /content-class="mt-4 min-w-0"/u)
+})
+
+test('新增货币只在货币 Tab 的唯一页头展示标准尺寸操作', () => {
+  const source = readSource(
+    '../../src/views/system/basic-data/currency-exchange-rate/index.vue',
+  )
+  const pageHeader = source.match(
+    /<FaPageHeader\b[\s\S]*?<\/FaPageHeader>/u,
+  )?.[0]
+
+  assert.ok(pageHeader)
+  assert.match(pageHeader, /新增货币/u)
+  assert.doesNotMatch(pageHeader, /size="sm"/u)
+  assert.match(pageHeader, /class="min-h-11 md:min-h-9"/u)
+  assert.doesNotMatch(pageHeader, /刷新|i-lucide:refresh-cw/u)
+  assert.match(source, /auth\('currencies:create'\)/u)
+  assert.match(
+    source,
+    /activeTab\.value === 'currencies'[\s\S]{0,160}canReadCurrencies\.value[\s\S]{0,160}canCreateCurrencies\.value/u,
+  )
+  assert.match(source, /useTemplateRef<CurrencyManagementPanelExpose>/u)
+  assert.match(source, /currencyManagementPanelRef\.value\?\.openCreate\(\)/u)
 })
 
 test('两个业务面板不再各自创建页面骨架', () => {
