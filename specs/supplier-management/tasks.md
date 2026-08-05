@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 3 已完成，Task 4 待执行
+- 状态：Phase 4 Task 4 已完成，Task 5 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -106,11 +106,18 @@
   - `pnpm -C server check`：`138` 个测试套件、`1360` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 4. 添加事务内 RegionLookupService
+- [x] 4. 添加事务内 RegionLookupService
   - 先覆盖稳定 UUID 锁序、`FOR KEY SHARE`、层级、父子关系和有效状态。
   - 实现业务无关服务并由 `RegionsModule` 导出。
   - 提交 `feat: 添加事务内地区引用校验服务`。
   - _Requirements: R3, R6_
+
+  验证记录（2026-08-05）：
+
+  - 定向红测因缺少 `RegionLookupService` 与模块导出失败；最小实现后稳定 UUID 锁序、单条递归 SQL、`FOR KEY SHARE`、祖先有效状态和异常结果校验共 `8/8` 通过。
+  - 首次完整检查发现一处 `@typescript-eslint/no-unnecessary-type-assertion`；移除不改变类型的断言后复验通过。
+  - `pnpm -C server check`：`139` 个测试套件、`1366` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 5. 定义 DTO、规范化、错误与幂等摘要
   - 覆盖嵌套分组、Unicode、长度、PATCH 三态、canonical key 和 HMAC 指纹。
