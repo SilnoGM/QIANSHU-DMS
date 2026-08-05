@@ -16,8 +16,8 @@ export type {
   SupplierListItemDto,
   SupplierPrimaryAddressDto,
   SupplierPrimaryContactDto,
-  SupplierRegistrationDto,
   SupplierRegionReferenceDto,
+  SupplierRegistrationDto,
   UpdateSupplierRequestDto,
 } from '../generated/types.gen'
 

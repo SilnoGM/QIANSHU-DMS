@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 11 已完成，Task 12 待执行
+- 状态：Phase 4 Task 12 已完成，Task 13 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -217,11 +217,19 @@
   - `pnpm -C web check`：非受限环境通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `712/712`、typecheck 与 lint；受限环境首次运行的 `tsx` IPC `EPERM` 已复验排除。
   - `pnpm -C web build`：通过，字体快照与零残留校验通过。
 
-- [ ] 12. 实现 Web 纯逻辑与创建意图
+- [x] 12. 实现 Web 纯逻辑与创建意图
   - 覆盖表单、查询、readiness、权限、错误和 unknown result 手动重放。
   - 明确登记和地址为空仍可启用。
   - 提交 `feat: 实现供应商表单与创建幂等逻辑`。
   - _Requirements: R3-R5, R7-R9_
+
+  验证记录（2026-08-05）：
+
+  - 纯逻辑红测先因 `supplier-management.logic.ts` 缺失失败；实现后查询、表单、分组归一化、readiness、权限、错误与创建意图共 `12/12` 通过。
+  - 创建与编辑只输出 generated DTO 字段；登记保持成对语义，地址保持合法前缀，邮编可空，已启用记录编辑继续校验最小联系人条件。
+  - 创建意图在首次发送前冻结 canonical lowercase UUID v4 与规范化 payload；网络结果未知后只允许显式调用同 key、同 payload 的人工重放函数，不提供自动重试路径。
+  - `pnpm -C web check`：通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `724/724`、typecheck 与 lint。
+  - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
 
 - [ ] 13. 添加表单、详情与状态领域组件
   - 使用现有 QsGenericDrawer/QsGenericModal/QsRegionSelector。
