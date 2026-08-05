@@ -49,6 +49,11 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:update',
   'dictionaries:enable',
   'dictionaries:disable',
+  'suppliers:read',
+  'suppliers:create',
+  'suppliers:update',
+  'suppliers:enable',
+  'suppliers:disable',
 ] as const
 
 export type ManagementPermissionCode =

@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 1 已完成，Task 2 待执行
+- 状态：Phase 4 Task 2 已完成，Task 3 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -79,12 +79,19 @@
   - `pnpm -C web check`：非受限环境通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `707/707`、typecheck 和 lint；受限环境首次运行的 `tsx` IPC `EPERM` 已复验排除。
   - `pnpm -C server build`、`pnpm -C web build`：通过；Web 字体零残留校验通过。
 
-- [ ] 2. 建立 Schema、Migration、权限与 Audit
+- [x] 2. 建立 Schema、Migration、权限与 Audit
   - 先写 static schema 与隔离 PostgreSQL migration replay 红测。
   - 实现两个 Model、一个 enum、约束、索引、Trigger、权限和 Audit。
   - 明确零 Supplier 业务 seed、零 `SUPPLIER` 规则变更。
   - 提交 `feat: 建立供应商数据与权限契约`。
   - _Requirements: R2-R6, R8, R10_
+
+  验证记录（2026-08-05）：
+
+  - static schema 红测因缺少 Model、migration 和权限目录失败，最小实现后 `5/5` 通过。
+  - 隔离 PostgreSQL 首次因测试夹具重复创建 `SUPPLIER` Rule 被唯一约束拒绝；修正为独立错误来源 Rule 后 migration replay `1/1` 通过。
+  - `pnpm -C server check`：`138` 个测试套件、`1360` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 3. 扩展内部发号结果身份
   - 先让首次生成、随机生成、历史 replay 和竞态恢复要求 `issuanceId`。

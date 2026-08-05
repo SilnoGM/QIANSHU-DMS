@@ -81,7 +81,9 @@ describe('region database schema', () => {
     expect(region).toMatch(
       /parent\s+Region\?\s+@relation\("RegionHierarchy", fields: \[parentId\], references: \[id\], onDelete: Restrict, onUpdate: Restrict\)/u,
     )
-    expect(region).toContain('children Region[] @relation("RegionHierarchy")')
+    expect(region).toMatch(
+      /children\s+Region\[\]\s+@relation\("RegionHierarchy"\)/u,
+    )
     expect(region).toContain('@@map("regions")')
   })
 
