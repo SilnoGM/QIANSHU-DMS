@@ -7,6 +7,8 @@ import type {
 } from '@/api/modules/suppliers'
 import type { RegionSelectorValue } from '@/components/business/QsRegionSelector/types'
 
+export type { SupplierDto } from '@/api/modules/suppliers'
+
 export type SupplierFormMode = 'create' | 'edit'
 export type SupplierEntityType = SupplierDto['entityType']
 export type SupplierMutationKind = 'create' | 'status' | 'update'
@@ -42,6 +44,20 @@ export type SupplierFormField
     | 'shortName'
 
 export type SupplierFormErrors = Partial<Record<SupplierFormField, string>>
+export type SupplierFormFieldErrorValue = readonly string[] | string
+export type SupplierFormFieldErrors = Readonly<
+  Partial<Record<SupplierFormField, SupplierFormFieldErrorValue>>
+>
+export type SupplierStatusAction = 'disable' | 'enable'
+
+export interface SupplierStatusPresentation {
+  readonly action: SupplierStatusAction
+  readonly canConfirm: boolean
+  readonly confirmLabel: string
+  readonly destructive: boolean
+  readonly impact: string
+  readonly title: string
+}
 
 export interface BuildSupplierListQueryInput {
   readonly entityType: unknown
@@ -117,6 +133,21 @@ const MUTATION_FIELDS = new Set<SupplierFormField>([
   'remark',
   'shortName',
 ])
+const FORM_FIELD_ORDER = [
+  'legalName',
+  'shortName',
+  'entityType',
+  'registration.countryRegionId',
+  'registration.number',
+  'primaryContact.name',
+  'primaryContact.phone',
+  'primaryContact.wechatId',
+  'primaryContact.channel',
+  'primaryAddress.region',
+  'primaryAddress.addressLine',
+  'primaryAddress.postalCode',
+  'remark',
+] as const satisfies readonly SupplierFormField[]
 const CANONICAL_UUID_V4
   = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const UUID
@@ -229,6 +260,47 @@ export function createSupplierFormModel(
     remark: '',
     shortName: '',
   }
+}
+
+/** 抽屉始终编辑隔离副本，尤其不能与父页面共享地区对象引用。 */
+export function cloneSupplierFormModel(
+  model: SupplierFormModel,
+): SupplierFormModel {
+  return {
+    ...model,
+    primaryAddressRegion: { ...model.primaryAddressRegion },
+  }
+}
+
+function resolveFieldErrorMessage(
+  value: SupplierFormFieldErrorValue | undefined,
+): string | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value
+  return typeof candidate === 'string' && candidate.trim() !== ''
+    ? candidate
+    : undefined
+}
+
+export function resolveSupplierFormFieldErrors(
+  errors: SupplierFormFieldErrors | undefined,
+): SupplierFormErrors {
+  if (errors === undefined) {
+    return {}
+  }
+  const resolved: SupplierFormErrors = {}
+  for (const field of FORM_FIELD_ORDER) {
+    const message = resolveFieldErrorMessage(errors[field])
+    if (message !== undefined) {
+      resolved[field] = message
+    }
+  }
+  return resolved
+}
+
+export function firstSupplierFormErrorField(
+  errors: SupplierFormErrors,
+): SupplierFormField | undefined {
+  return FORM_FIELD_ORDER.find(field => errors[field] !== undefined)
 }
 
 export function resolveSupplierEnableReadiness(
@@ -404,6 +476,43 @@ export function resolveSupplierActions(
     canEnable,
     canView,
     hasAny: canView || canEdit || canEnable || canDisable,
+  }
+}
+
+export function buildSupplierStatusRequest(
+  supplier: SupplierDto,
+): { readonly expectedVersion: number } {
+  return { expectedVersion: supplier.version }
+}
+
+export function buildSupplierStatusPresentation(
+  action: SupplierStatusAction,
+  supplier: SupplierDto,
+): SupplierStatusPresentation {
+  if (action === 'disable') {
+    return {
+      action,
+      canConfirm: supplier.enabled,
+      confirmLabel: '确认停用',
+      destructive: true,
+      impact: '停用后该供应商不再进入后续业务使用范围；历史资料继续保留，不删除任何数据。',
+      title: '确认停用供应商',
+    }
+  }
+
+  const missingLabels = supplier.enableReadiness.missingFields.map(field => ({
+    'primaryContact.channel': '联系人电话或微信号',
+    'primaryContact.name': '联系人姓名',
+  })[field])
+  return {
+    action,
+    canConfirm: !supplier.enabled && supplier.enableReadiness.ready,
+    confirmLabel: '确认启用',
+    destructive: false,
+    impact: supplier.enableReadiness.ready
+      ? '启用后该供应商可进入后续业务使用范围；登记、地址和邮编仍可为空。'
+      : `暂不能启用，请先补充${missingLabels.join('、')}。`,
+    title: '确认启用供应商',
   }
 }
 

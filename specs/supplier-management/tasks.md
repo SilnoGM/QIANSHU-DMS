@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 12 已完成，Task 13 待执行
+- 状态：Phase 4 Task 13 已完成，Task 14 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -231,11 +231,19 @@
   - `pnpm -C web check`：通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `724/724`、typecheck 与 lint。
   - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
 
-- [ ] 13. 添加表单、详情与状态领域组件
+- [x] 13. 添加表单、详情与状态领域组件
   - 使用现有 QsGenericDrawer/QsGenericModal/QsRegionSelector。
   - 子组件不拥有 API、Store 或权限。
   - 提交 `feat: 添加供应商维护与状态组件`。
   - _Requirements: R3, R4, R8, R9_
+
+  验证记录（2026-08-05）：
+
+  - 组件红测先因 Supplier 展示辅助函数及三个领域组件缺失失败；实现后 Supplier 逻辑与组件定向测试 `19/19` 通过。
+  - 表单使用 `QsGenericDrawer xl + QsRegionSelector`，详情使用 `QsGenericDrawer lg`，状态确认使用 `QsGenericModal sm`；子组件不导入 API、Store、权限或 Toast。
+  - 表单覆盖隔离模型、提交锁、首错聚焦、脏表单关闭保护和动态撤权安全关闭；详情完整展示敏感资料与 Server readiness，状态确认始终携带 `expectedVersion`。
+  - `pnpm -C web check`：通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `731/731`、typecheck、ESLint 与 Stylelint。
+  - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
 
 - [ ] 14. 实现页面编排、响应式与无障碍
   - 页面拥有 API、权限、Abort、authEpoch 和 mutation 对账。
