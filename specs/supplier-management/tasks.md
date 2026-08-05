@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 6 已完成，Task 7 待执行
+- 状态：Phase 4 Task 7 已完成，Task 8 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -147,11 +147,19 @@
   - `pnpm -C server check`：`144` 个测试套件、`1412` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 7. 实现三事务幂等创建
+- [x] 7. 实现三事务幂等创建
   - 覆盖 Tx-A/Tx-B/Tx-C、两个崩溃窗口、响应丢失、同键并发和异 payload。
   - Supplier、Audit、账本完成在 Tx-C 原子提交。
   - 提交 `feat: 实现供应商幂等创建流程`。
   - _Requirements: R2-R8_
+
+  验证记录（2026-08-05）：
+
+  - Command Service 红测先因三事务编排与 persistence 原语缺失而失败；实现后创建/持久化定向测试共 `13/13` 通过，Supplier 全部定向测试 `59/59` 通过。
+  - 覆盖 Tx-A 永久 intent、Tx-B 内部发号、Tx-C 原子 Supplier/Audit/intent 完成，以及 Tx-A 后中断、发号后中断、并发 winner、同键异 payload 和登记唯一冲突。
+  - Tx-C 按 intent → Region → NumberingIssuance 顺序加锁；完整覆盖 Region 合法链、缺失引用、错误层级、停用引用和发号 provenance，并修复“地址国家 ID 缺失被误认为地区全空”的回归边界。
+  - `pnpm -C server check`：`146` 个测试套件、`1425` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 8. 实现编辑与启停生命周期
   - 覆盖 expectedVersion、no-op、Region 历史值、登记唯一和最小启用条件。

@@ -49,7 +49,7 @@ const SUPPLIER_LIST_SELECT = {
   addressCity: { select: REGION_REFERENCE_SELECT },
 } as const satisfies Prisma.SupplierSelect
 
-const SUPPLIER_DETAIL_SELECT = {
+export const SUPPLIER_DETAIL_SELECT = {
   id: true,
   code: true,
   legalName: true,
@@ -79,7 +79,7 @@ const SUPPLIER_DETAIL_SELECT = {
 type SupplierListRecord = Prisma.SupplierGetPayload<{
   select: typeof SUPPLIER_LIST_SELECT
 }>
-type SupplierDetailRecord = Prisma.SupplierGetPayload<{
+export type SupplierDetailRecord = Prisma.SupplierGetPayload<{
   select: typeof SUPPLIER_DETAIL_SELECT
 }>
 
@@ -204,7 +204,7 @@ function mapListItem(record: SupplierListRecord): SupplierListItemDto {
   }
 }
 
-function mapDetail(record: SupplierDetailRecord): SupplierDto {
+export function mapSupplierDetail(record: SupplierDetailRecord): SupplierDto {
   const missingFields: SupplierDto['enableReadiness']['missingFields'] = []
   if (record.contactName === null) missingFields.push('primaryContact.name')
   if (record.contactPhone === null && record.contactWechatId === null) {
@@ -307,7 +307,7 @@ export class SupplierQueryService {
       if (supplier === null) {
         throw createSupplierApiException(SUPPLIER_ERROR_CODES.NOT_FOUND)
       }
-      return mapDetail(supplier)
+      return mapSupplierDetail(supplier)
     } catch (error) {
       rethrowSupplierQueryError(error)
     }
