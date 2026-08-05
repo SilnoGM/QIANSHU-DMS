@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 15 已完成，Task 16 待执行
+- 状态：Phase 4 全部完成，待用户决定后续 Git 操作
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -277,11 +277,21 @@
   - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
   - `node --run test:root`：非受限环境 `653/653` 通过；受限环境的真实 FIFO/Unix socket `EPERM` 已复验排除。
 
-- [ ] 16. 接入 CI Gate 并完成交付收口
+- [x] 16. 接入 CI Gate 并完成交付收口
   - 新增 `browser-suppliers-e2e`，CI gate 从 7 精确变为 8。
   - 运行全量检查并审计契约、migration、权限、Audit、敏感信息和 Git。
   - 提交 `ci: 接入供应商浏览器端到端门禁`。
   - _Requirements: R1-R10_
+
+  验证记录（2026-08-05）：
+
+  - CI workflow 红测先以 `21/25` 暴露缺少 `browser-suppliers-e2e`、Action 数量和七 Job gate；最小实现后 `25/25` 通过，供应商 Job 使用固定 Action SHA、双 lock cache、冻结安装、隔离根入口和 tracked diff。
+  - `ci-gate` 由七 Job 精确升级为八 Job，并以 `always()` 汇总；任一 `failure`、`cancelled` 或 `skipped` 均返回非零。
+  - 首轮 `node --run check` 在真实管理页 Browser E2E 发现权限目录预期遗漏五项 `suppliers:*`；补齐既有契约后，定向真实 Chrome `2/2` 及完整 `node --run check` 均通过。
+  - 最终完整检查包含 Root `653/653`、Server `148` suites / `1442` tests、Contract、Web Node `166/166`、TS `49/49`、API/页面 `739/739`、typecheck、ESLint、Stylelint，以及认证/管理真实 Chrome `2/2`。
+  - `node --run ci:server-e2e`：migration 首次部署与二次重放通过，`25/25` suites、`118/118` tests 通过。
+  - `node --run ci:browser-suppliers-e2e`：真实 Chrome `1/1` 通过，隔离数据库终态核验通过；仅有既有依赖 pure annotation、chunk size 和测试夹具 `pg` 并行查询 deprecation warning，不影响结果。
+  - 已审计 Prisma migration、OpenAPI 双快照、五项权限、四类 Audit、环境密钥、generated tree 和 Git 范围；未修改真实 `SUPPLIER` 规则，未执行 push、PR、merge 或部署。
 
 ## 5. 验证矩阵
 
