@@ -195,21 +195,39 @@ watch(
             class="p-3 text-left border border-border rounded-lg bg-background min-h-11 w-full transition-colors focus-visible:outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-primary/50"
             :class="selectedTypeId === type.id ? 'border-primary bg-primary/5' : ''"
             :aria-current="selectedTypeId === type.id ? 'true' : undefined"
+            data-testid="dictionary-type-card"
             @click="emit('select', type.id)"
           >
-            <span class="qs-type-compact-title block break-words">{{ type.name }}</span>
-            <code class="qs-type-data mt-1 block break-all">{{ type.code }}</code>
-            <span class="mt-2 flex flex-wrap gap-2 items-center">
-              <FaTag
-                variant="outline"
-                class="qs-type-status-tag"
-                :class="type.enabled
-                  ? 'border-primary/30 bg-primary/10 text-primary'
-                  : 'border-border bg-muted text-muted-foreground'"
+            <span class="gap-3 grid grid-cols-[minmax(0,1fr)_auto] min-w-0 items-center">
+              <span
+                class="min-w-0"
+                data-testid="dictionary-type-card-identity"
               >
-                {{ type.enabled ? '已启用' : '已停用' }}
-              </FaTag>
-              <span class="qs-type-meta">{{ type.itemCount }} 个条目</span>
+                <span class="qs-type-compact-title block break-words">{{ type.name }}</span>
+                <code class="qs-type-data mt-1 block break-all">{{ type.code }}</code>
+              </span>
+              <span
+                data-testid="dictionary-type-card-meta"
+                class="flex gap-2 min-w-max items-center justify-end"
+              >
+                <FaTag
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="type.enabled
+                    ? 'border-primary/30 bg-primary/10 text-primary'
+                    : 'border-border bg-muted text-muted-foreground'"
+                >
+                  {{ type.enabled ? '已启用' : '已停用' }}
+                </FaTag>
+                <span class="qs-type-meta flex gap-1 whitespace-nowrap items-baseline">
+                  <!-- 仅保留两位数字的最小对齐空间，三位及以上数量仍按真实内容扩展。 -->
+                  <span
+                    data-testid="dictionary-type-item-count"
+                    class="text-right min-w-[2ch] inline-block tabular-nums"
+                  >{{ type.itemCount }}</span>
+                  <span>个条目</span>
+                </span>
+              </span>
             </span>
           </button>
         </li>

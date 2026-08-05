@@ -2043,7 +2043,7 @@ onBeforeUnmount(() => {
     <!-- 桌面端左侧目录跨越右侧两行；窄屏隐藏目录后，两个右侧面板会自然收敛为单列。 -->
     <div
       v-else
-      class="m-4 gap-4 grid min-w-0 xl:gap-5 2xl:grid-cols-[22rem_minmax(0,1fr)] md:grid-cols-[20rem_minmax(0,1fr)]"
+      class="m-4 gap-4 grid min-w-0 xl:gap-5 2xl:grid-cols-[24rem_minmax(0,1fr)] md:grid-cols-[22rem_minmax(0,1fr)]"
       data-testid="dictionary-management-workspace"
     >
       <FaPageMain

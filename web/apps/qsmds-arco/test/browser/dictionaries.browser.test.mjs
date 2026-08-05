@@ -8,6 +8,7 @@ import {
   collectDictionaryRuntimeErrors,
   dictionaryCatalogProviderExpression,
   dictionaryLayoutAuditExpression,
+  dictionaryTypeCardStressAuditExpression,
   installDictionaryBroadcastProbeScript,
   readDictionaryBrowserConfiguration,
   waitForDictionaryWorkspace,
@@ -440,6 +441,7 @@ function assertLayout(layout, { cards, desktopTables, mobile }) {
   }
   if (mobile) {
     assert.equal(layout.typePanelWidth, null)
+    assert.equal(layout.typeCardGeometry, null)
     assert.equal(layout.visiblePanelCount, 2)
     assert.deepEqual(layout.touchTargetViolations, [])
     assert.equal(layout.leftPanelHeightIsolated, null)
@@ -449,8 +451,15 @@ function assertLayout(layout, { cards, desktopTables, mobile }) {
   }
   else {
     assert.equal(typeof layout.typePanelWidth, 'number')
-    assert.equal(layout.typePanelWidth >= 320, true)
-    assert.equal(layout.typePanelWidth <= 360, true)
+    // 1280px 桌面视口下左栏采用 22rem（352px），只容忍浏览器亚像素舍入。
+    assert.equal(layout.typePanelWidth >= 350, true)
+    assert.equal(layout.typePanelWidth <= 354, true)
+    assert.equal(typeof layout.typeCardGeometry, 'object')
+    assert.equal(layout.typeCardGeometry.metaLeft > layout.typeCardGeometry.identityRight, true)
+    assert.equal(layout.typeCardGeometry.horizontalGap >= 8, true)
+    assert.equal(layout.typeCardGeometry.rightInset >= 10, true)
+    assert.equal(layout.typeCardGeometry.rightInset <= 16, true)
+    assert.equal(layout.typeCardGeometry.overlaps, false)
     assert.equal(layout.visiblePanelCount, 3)
     assert.equal(layout.horizontalPanelGap >= 12, true)
     assert.equal(layout.horizontalPanelGap <= 24, true)
@@ -927,6 +936,18 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
       return true
     })()`)
     await waitForVisibleDialog(page, '选择字典类型')
+    const typeCardStress = await page.evaluate(
+      dictionaryTypeCardStressAuditExpression(),
+    )
+    assert.equal(typeCardStress.documentFits, true)
+    assert.equal(typeCardStress.cardFitsDrawer, true)
+    assert.equal(typeCardStress.cardContentFits, true)
+    assert.equal(typeCardStress.identityContentFits, true)
+    assert.equal(typeCardStress.metaFitsCard, true)
+    assert.equal(typeCardStress.horizontalGap >= 8, true)
+    assert.equal(typeCardStress.overlaps, false)
+    assert.equal(typeCardStress.countText, '123')
+    assert.equal(typeCardStress.countFits, true)
     await auditMobileLayout(page)
     await openSelectTrigger(page, `(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]

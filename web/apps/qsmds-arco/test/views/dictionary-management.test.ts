@@ -51,8 +51,8 @@ test('字典管理在页头下使用三个独立面板与适中间距', () => {
   assert.equal(pageSource.match(/<FaPageHeader\b/gu)?.length, 1)
   // 无权态单独使用一个面板；有权态由左一右二三个同级面板构成。
   assert.equal(pageSource.match(/<FaPageMain\b/gu)?.length, 4)
-  assert.match(pageSource, /md:grid-cols-\[20rem_minmax\(0,1fr\)\]/u)
-  assert.match(pageSource, /2xl:grid-cols-\[22rem_minmax\(0,1fr\)\]/u)
+  assert.match(pageSource, /md:grid-cols-\[22rem_minmax\(0,1fr\)\]/u)
+  assert.match(pageSource, /2xl:grid-cols-\[24rem_minmax\(0,1fr\)\]/u)
   assert.match(pageSource, /gap-4[\s\S]{0,160}xl:gap-5/u)
   assert.match(pageSource, /data-testid="dictionary-type-panel"/u)
   assert.match(pageSource, /data-testid="dictionary-type-summary-panel"/u)
@@ -88,6 +88,50 @@ test('Type 列表组件组合服务端搜索、状态筛选、分页与原生按
   assert.match(source, /系统尚未配置字典类型/u)
   assert.match(source, /没有匹配当前条件的字典类型/u)
   assert.match(pageSource, /<FaTag[\s\S]{0,400}selectedType\.enabled/u)
+})
+
+test('Type 卡片使用左右两列布局并将状态与条目数紧凑放在右侧', () => {
+  const typeCard = typeListSource.match(
+    /<button[\s\S]*?data-testid="dictionary-type-card"[\s\S]*?<\/button>/u,
+  )?.[0]
+  const itemCountClass = typeListSource.match(
+    /data-testid="dictionary-type-item-count"[^>]*class="([^"]*)"/u,
+  )?.[1]
+
+  assert.ok(typeCard)
+  assert.match(typeCard, /grid-cols-\[minmax\(0,1fr\)_auto\]/u)
+  assert.match(typeListSource, /data-testid="dictionary-type-card-identity"/u)
+  assert.match(
+    typeListSource,
+    /data-testid="dictionary-type-card-meta"[^>]*class="[^"]*flex[^"]*items-center[^"]*"/u,
+  )
+  assert.match(
+    typeListSource,
+    /data-testid="dictionary-type-card-meta"[\s\S]{0,500}<FaTag[\s\S]{0,500}data-testid="dictionary-type-item-count"/u,
+  )
+  assert.match(
+    typeListSource,
+    /data-testid="dictionary-type-item-count"[^>]*>\s*\{\{ type\.itemCount \}\}/u,
+  )
+  // 两字符是最小对齐空间，不得固定宽度或截断真实的三位数。
+  assert.ok(itemCountClass)
+  const itemCountClassTokens = itemCountClass.split(/\s+/u)
+  assert.ok(itemCountClassTokens.includes('min-w-[2ch]'))
+  assert.ok(itemCountClassTokens.includes('tabular-nums'))
+  assert.equal(itemCountClassTokens.includes('w-[2ch]'), false)
+  assert.equal(itemCountClassTokens.includes('truncate'), false)
+  assert.equal(itemCountClassTokens.includes('overflow-hidden'), false)
+})
+
+test('Item 表格收紧 Label 与 Value 列的最小宽度', () => {
+  assert.match(
+    itemTableSource,
+    /accessorKey: 'label',[\s\S]{0,160}minWidth: 190,/u,
+  )
+  assert.match(
+    itemTableSource,
+    /accessorKey: 'value',[\s\S]{0,180}minWidth: 160,/u,
+  )
 })
 
 test('页面读取权限与身份 epoch 共同形成受保护数据边界', () => {

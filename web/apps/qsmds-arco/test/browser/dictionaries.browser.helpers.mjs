@@ -111,6 +111,15 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
     const typeDrawerTrigger = document.querySelector(
       '[data-testid="dictionary-open-type-drawer"]',
     )
+    const visibleTypeCard = [...document.querySelectorAll(
+      '[data-testid="dictionary-type-card"]',
+    )].find(element => element.getClientRects().length > 0)
+    const typeCardIdentity = visibleTypeCard?.querySelector(
+      '[data-testid="dictionary-type-card-identity"]',
+    )
+    const typeCardMeta = visibleTypeCard?.querySelector(
+      '[data-testid="dictionary-type-card-meta"]',
+    )
     const cards = [...document.querySelectorAll(
       '[data-testid="dictionary-item-card"]',
     )].filter(element => element.getClientRects().length > 0)
@@ -204,6 +213,33 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
     const itemTablePanelRect = itemTablePanel?.getClientRects().length > 0
       ? itemTablePanel.getBoundingClientRect()
       : null
+    /*
+     * 类型卡片的桌面布局必须通过稳定测试边界量取，不能依赖 Tailwind 类名或
+     * 文案定位。移动端继续由 Drawer 和 44px 触控审计负责，因此明确返回 null。
+     */
+    const typeCardGeometry = !mobile
+      && visibleTypeCard?.getClientRects().length > 0
+      && typeCardIdentity?.getClientRects().length > 0
+      && typeCardMeta?.getClientRects().length > 0
+      ? (() => {
+          const cardRect = visibleTypeCard.getBoundingClientRect()
+          const identityRect = typeCardIdentity.getBoundingClientRect()
+          const metaRect = typeCardMeta.getBoundingClientRect()
+          const horizontallyOverlaps = Math.min(identityRect.right, metaRect.right)
+            - Math.max(identityRect.left, metaRect.left) > 1
+          const verticallyOverlaps = Math.min(identityRect.bottom, metaRect.bottom)
+            - Math.max(identityRect.top, metaRect.top) > 1
+          return {
+            cardRight: cardRect.right,
+            horizontalGap: metaRect.left - identityRect.right,
+            identityRight: identityRect.right,
+            metaLeft: metaRect.left,
+            metaRight: metaRect.right,
+            overlaps: horizontallyOverlaps && verticallyOverlaps,
+            rightInset: cardRect.right - metaRect.right,
+          }
+        })()
+      : null
     let leftPanelHeightIsolated = null
     let leftPanelRightStackHeightDelta = null
     let leftPanelScrolls = null
@@ -289,11 +325,75 @@ export function dictionaryLayoutAuditExpression({ mobile }) {
         : [],
       panelsFitWorkspace,
       rightPanelsAligned,
+      typeCardGeometry,
       typePanelWidth,
       verticalPanelGap,
       visiblePanelCount: visiblePanels.length,
       viewportWidth,
       workspaceMounted: workspace?.getClientRects().length > 0,
+    }
+  })()`
+}
+
+/**
+ * 在已经打开的移动端类型 Drawer 内同步注入极端文案，验证卡片的真实收缩与
+ * 换行能力。探针只暂时替换文本，所有 DOM 内容都会在同一次 evaluate 中恢复。
+ */
+export function dictionaryTypeCardStressAuditExpression() {
+  return `(() => {
+    const visibleTypeCard = [...document.querySelectorAll(
+      '[data-testid="dictionary-type-card"]',
+    )].find(element => element.getClientRects().length > 0)
+    const identity = visibleTypeCard?.querySelector(
+      '[data-testid="dictionary-type-card-identity"]',
+    )
+    const meta = visibleTypeCard?.querySelector(
+      '[data-testid="dictionary-type-card-meta"]',
+    )
+    const count = visibleTypeCard?.querySelector(
+      '[data-testid="dictionary-type-item-count"]',
+    )
+    const name = identity?.querySelector('.qs-type-compact-title')
+    const code = identity?.querySelector('code')
+    const drawer = visibleTypeCard?.closest('[role="dialog"]')
+    if (!visibleTypeCard || !identity || !meta || !count || !name || !code || !drawer) {
+      throw new Error('Dictionary mobile type card stress target unavailable')
+    }
+
+    const originalName = name.textContent
+    const originalCode = code.textContent
+    const originalCount = count.textContent
+    try {
+      name.textContent = '移动端超长字典类型名称'.repeat(8)
+      code.textContent = 'mobile.extremely_long_dictionary_code_segment_'.repeat(6)
+      count.textContent = '123'
+
+      const cardRect = visibleTypeCard.getBoundingClientRect()
+      const identityRect = identity.getBoundingClientRect()
+      const metaRect = meta.getBoundingClientRect()
+      const drawerRect = drawer.getBoundingClientRect()
+      const horizontalOverlap = Math.min(identityRect.right, metaRect.right)
+        - Math.max(identityRect.left, metaRect.left) > 1
+      const verticalOverlap = Math.min(identityRect.bottom, metaRect.bottom)
+        - Math.max(identityRect.top, metaRect.top) > 1
+      return {
+        cardContentFits: visibleTypeCard.scrollWidth <= visibleTypeCard.clientWidth + 1,
+        cardFitsDrawer: cardRect.left >= drawerRect.left - 1
+          && cardRect.right <= drawerRect.right + 1,
+        countFits: count.scrollWidth <= count.clientWidth + 1,
+        countText: count.textContent,
+        documentFits: document.documentElement.scrollWidth
+          <= document.documentElement.clientWidth,
+        horizontalGap: metaRect.left - identityRect.right,
+        identityContentFits: identity.scrollWidth <= identity.clientWidth + 1,
+        metaFitsCard: metaRect.right <= cardRect.right - 10,
+        overlaps: horizontalOverlap && verticalOverlap,
+      }
+    }
+    finally {
+      name.textContent = originalName
+      code.textContent = originalCode
+      count.textContent = originalCount
     }
   })()`
 }

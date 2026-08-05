@@ -7,6 +7,7 @@ import {
   collectDictionaryRuntimeErrors,
   dictionaryCatalogProviderExpression,
   dictionaryLayoutAuditExpression,
+  dictionaryTypeCardStressAuditExpression,
   installDictionaryBroadcastProbeScript,
   readDictionaryBrowserConfiguration,
   waitForDictionaryWorkspace,
@@ -72,6 +73,13 @@ test('布局审计脚本固定桌面与 390x844 的溢出、可见表面和 44px
   assert.match(desktop, /viewportWidth >= 768/u)
   assert.match(desktop, /typePanelWidth/u)
   assert.match(desktop, /typePanel\.getBoundingClientRect\(\)\.width/u)
+  assert.match(desktop, /dictionary-type-card/u)
+  assert.match(desktop, /dictionary-type-card-identity/u)
+  assert.match(desktop, /dictionary-type-card-meta/u)
+  assert.match(desktop, /const typeCardGeometry = !mobile/u)
+  assert.match(desktop, /metaRect\.left - identityRect\.right/u)
+  assert.match(desktop, /cardRect\.right - metaRect\.right/u)
+  assert.match(desktop, /overlaps: horizontallyOverlaps && verticallyOverlaps/u)
   assert.match(desktop, /visiblePanelCount/u)
   assert.match(desktop, /horizontalPanelGap/u)
   assert.match(desktop, /verticalPanelGap/u)
@@ -114,7 +122,21 @@ test('布局审计脚本固定桌面与 390x844 的溢出、可见表面和 44px
     /rect\.width \+ touchTargetTolerance >= 44[\s\S]*rect\.height \+ touchTargetTolerance >= 44/u,
   )
   assert.match(mobile, /if \([\s\S]*!mobile[\s\S]*height:2000px/u)
+  assert.match(mobile, /const typeCardGeometry = !mobile/u)
   assert.match(mobile, /viewportWidth === 390/u)
+})
+
+test('移动端类型卡片压力探针覆盖长文本、三位数与 DOM 恢复', () => {
+  const expression = dictionaryTypeCardStressAuditExpression()
+
+  assert.match(expression, /移动端超长字典类型名称'\.repeat\(8\)/u)
+  assert.match(expression, /extremely_long_dictionary_code_segment_'\.repeat\(6\)/u)
+  assert.match(expression, /count\.textContent = '123'/u)
+  assert.match(expression, /scrollWidth <= visibleTypeCard\.clientWidth \+ 1/u)
+  assert.match(expression, /identity\.scrollWidth <= identity\.clientWidth \+ 1/u)
+  assert.match(expression, /count\.scrollWidth <= count\.clientWidth \+ 1/u)
+  assert.match(expression, /finally \{/u)
+  assert.match(expression, /count\.textContent = originalCount/u)
 })
 
 test('Broadcast probe 只记录字典频道并保留 exact plain payload', () => {
