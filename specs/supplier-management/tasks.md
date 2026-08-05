@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 7 已完成，Task 8 待执行
+- 状态：Phase 4 Task 8 已完成，Task 9 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -161,11 +161,19 @@
   - `pnpm -C server check`：`146` 个测试套件、`1425` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 8. 实现编辑与启停生命周期
+- [x] 8. 实现编辑与启停生命周期
   - 覆盖 expectedVersion、no-op、Region 历史值、登记唯一和最小启用条件。
   - 已启用记录不得编辑成不满足联系人条件。
   - 提交 `feat: 实现供应商编辑与状态管理`。
   - _Requirements: R3, R4, R6, R8_
+
+  验证记录（2026-08-05）：
+
+  - 更新/启停红测先因 Supplier 行锁、版本更新和生命周期方法缺失而失败；实现后 Supplier 定向测试 `69/69` 通过。
+  - 覆盖 `expectedVersion` 先于 no-op、规范化 no-op 不增版/不 Audit、字段级完整替换、登记唯一、真实 enable/disable 和同状态 no-op。
+  - 仅当 Region ID 变化时校验新完整路径，未变化的历史停用引用可保留；已启用 Supplier 不得编辑成缺少联系人姓名或渠道。
+  - `pnpm -C server check`：`146` 个测试套件、`1435` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 9. 发布六个 API 与 OpenAPI
   - Controller tests 先锁定 operationId、权限、CSRF、状态码、错误矩阵和 Header。

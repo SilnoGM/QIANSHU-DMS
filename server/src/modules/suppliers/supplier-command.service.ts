@@ -6,7 +6,6 @@ import {
   AuditActorType,
   AuditEventType,
   AuditOutcome,
-  RegionLevel,
 } from '../../generated/prisma/enums'
 import {
   hasPersistenceCode,
@@ -18,10 +17,7 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
-import {
-  type LockedRegionReference,
-  RegionLookupService,
-} from '../regions/region-lookup.service'
+import { RegionLookupService } from '../regions/region-lookup.service'
 import {
   completeSupplierCreateRequest,
   createSupplierRecord,
@@ -49,6 +45,7 @@ import {
   normalizeCreateSupplierInput,
   type NormalizedCreateSupplierInput,
 } from './supplier.normalizer'
+import { validateSupplierRegionReferences } from './supplier-region-validation'
 
 const REGISTRATION_UNIQUE_CONSTRAINT =
   'suppliers_registration_country_number_key'
@@ -101,92 +98,6 @@ function rethrowCreateError(error: unknown): never {
     )
   }
   throw createSupplierApiException(SUPPLIER_ERROR_CODES.INTERNAL_ERROR)
-}
-
-function collectRegionIds(input: NormalizedCreateSupplierInput): string[] {
-  return [
-    input.registration?.countryRegionId,
-    input.primaryAddress?.countryRegionId,
-    input.primaryAddress?.provinceStateId,
-    input.primaryAddress?.cityId,
-  ].filter((value): value is string => value !== null && value !== undefined)
-}
-
-async function validateCreateRegions(
-  regionLookup: RegionLookupService,
-  transaction: Parameters<RegionLookupService['lockReferences']>[0],
-  input: NormalizedCreateSupplierInput,
-): Promise<void> {
-  const regions = await regionLookup.lockReferences(
-    transaction,
-    collectRegionIds(input),
-  )
-  const registration = input.registration
-  if (registration !== null) {
-    const country = regions.get(registration.countryRegionId)
-    if (
-      country === undefined
-      || country.level !== RegionLevel.COUNTRY_REGION
-      || country.parentId !== null
-    ) {
-      throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_INVALID)
-    }
-    if (!country.effectiveEnabled) {
-      throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_UNAVAILABLE)
-    }
-  }
-
-  const address = input.primaryAddress
-  if (address === null) return
-  if (address.countryRegionId === null) {
-    if (address.provinceStateId !== null || address.cityId !== null) {
-      throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_INVALID)
-    }
-    return
-  }
-  const country = regions.get(address.countryRegionId)
-  if (
-    country === undefined
-    || country.level !== RegionLevel.COUNTRY_REGION
-    || country.parentId !== null
-  ) {
-    throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_INVALID)
-  }
-
-  let province: LockedRegionReference | undefined
-  if (address.provinceStateId === null) {
-    if (address.cityId !== null) {
-      throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_INVALID)
-    }
-  } else {
-    province = regions.get(address.provinceStateId)
-    if (
-      province === undefined
-      || province.level !== RegionLevel.PROVINCE_STATE
-      || province.parentId !== country.id
-    ) {
-      throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_INVALID)
-    }
-  }
-
-  let city: LockedRegionReference | undefined
-  if (address.cityId !== null) {
-    city = regions.get(address.cityId)
-    if (
-      province === undefined
-      || city === undefined
-      || city.level !== RegionLevel.CITY
-      || city.parentId !== province.id
-    ) {
-      throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_INVALID)
-    }
-  }
-  if (!country.effectiveEnabled
-    || (province !== undefined && !province.effectiveEnabled)
-    || (city !== undefined && !city.effectiveEnabled)
-  ) {
-    throw createSupplierApiException(SUPPLIER_ERROR_CODES.REGION_UNAVAILABLE)
-  }
 }
 
 function toCreateRecordInput(
@@ -315,7 +226,11 @@ export class SupplierCommandService {
           ))
         }
 
-        await validateCreateRegions(this.regionLookup, transaction, normalized)
+        await validateSupplierRegionReferences(
+          this.regionLookup,
+          transaction,
+          normalized,
+        )
         const source = await lockSupplierNumberingIssuance(
           transaction,
           issuance.issuanceId,
@@ -378,4 +293,5 @@ export class SupplierCommandService {
       rethrowCreateError(error)
     }
   }
+
 }

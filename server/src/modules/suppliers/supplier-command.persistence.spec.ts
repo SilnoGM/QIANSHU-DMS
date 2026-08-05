@@ -5,8 +5,10 @@ import {
   createSupplierRecord,
   lockSupplierCreateRequest,
   lockSupplierNumberingIssuance,
+  readSupplierForMutation,
   readSupplierRegistrationDuplicate,
   upsertAndLockSupplierCreateRequest,
+  updateSupplierRecord,
 } from './supplier-command.persistence'
 
 const REQUEST_ID = '29a605c9-04e3-4099-91eb-63fa1e8c1961'
@@ -31,17 +33,19 @@ function transactionFixture() {
   const queryRaw = jest.fn<Promise<unknown[]>, [unknown]>()
   const findFirst = jest.fn().mockResolvedValue(null)
   const create = jest.fn().mockResolvedValue({ id: SUPPLIER_ID })
+  const supplierUpdateMany = jest.fn().mockResolvedValue({ count: 1 })
   const updateMany = jest.fn().mockResolvedValue({ count: 1 })
   return {
     executeRaw,
     queryRaw,
     findFirst,
     create,
+    supplierUpdateMany,
     updateMany,
     transaction: {
       $executeRaw: executeRaw,
       $queryRaw: queryRaw,
-      supplier: { findFirst, create },
+      supplier: { findFirst, create, updateMany: supplierUpdateMany },
       supplierCreateRequest: { updateMany },
     } as unknown as Prisma.TransactionClient,
   }
@@ -187,5 +191,66 @@ describe('supplier create persistence', () => {
       REQUEST_ID,
       SUPPLIER_ID,
     )).rejects.toThrow('Supplier create intent completion invariant violated')
+  })
+
+  it('locks Supplier before mutation and increments only the expected version', async () => {
+    const fixture = transactionFixture()
+    fixture.queryRaw.mockResolvedValue([{
+      id: SUPPLIER_ID,
+      code: 'SUP-0001',
+      legalName: '示例供应商',
+      normalizedLegalName: '示例供应商',
+      shortName: null,
+      normalizedShortName: null,
+      entityType: SupplierEntityType.ORGANIZATION,
+      registrationCountryRegionId: null,
+      registrationNumber: null,
+      normalizedRegistrationNumber: null,
+      contactName: null,
+      normalizedContactName: null,
+      contactPhone: null,
+      normalizedContactPhone: null,
+      contactWechatId: null,
+      normalizedContactWechatId: null,
+      addressCountryRegionId: null,
+      addressProvinceStateId: null,
+      addressCityId: null,
+      addressLine: null,
+      postalCode: null,
+      remark: null,
+      enabled: false,
+      version: 3,
+    }])
+
+    await expect(readSupplierForMutation(
+      fixture.transaction,
+      SUPPLIER_ID,
+    )).resolves.toMatchObject({ id: SUPPLIER_ID, version: 3 })
+    const lockSql = fixture.queryRaw.mock.calls[0]?.[0]
+    expect(sqlText(lockSql)).toContain('FROM "suppliers"')
+    expect(sqlText(lockSql)).toContain('FOR UPDATE')
+    expect(sqlValues(lockSql)).toEqual([SUPPLIER_ID])
+
+    await updateSupplierRecord(
+      fixture.transaction,
+      SUPPLIER_ID,
+      { remark: '新备注' },
+      3,
+    )
+    expect(fixture.supplierUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: SUPPLIER_ID, version: 3 },
+      data: { remark: '新备注', version: { increment: 1 } },
+    })
+  })
+
+  it('treats a lost expected-version update as an invariant violation', async () => {
+    const fixture = transactionFixture()
+    fixture.supplierUpdateMany.mockResolvedValue({ count: 0 })
+    await expect(updateSupplierRecord(
+      fixture.transaction,
+      SUPPLIER_ID,
+      { enabled: true },
+      3,
+    )).rejects.toThrow('Supplier locked update invariant violated')
   })
 })
