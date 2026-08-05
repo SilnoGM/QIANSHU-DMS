@@ -26,6 +26,7 @@ import {
 defineOptions({ name: 'SupplierFormDrawer' })
 
 const props = withDefaults(defineProps<{
+  createResultUnknown?: boolean
   error?: null | string
   fieldErrors?: SupplierFormFieldErrors
   loading?: boolean
@@ -35,6 +36,7 @@ const props = withDefaults(defineProps<{
   submitting?: boolean
   supplier?: null | SupplierDto
 }>(), {
+  createResultUnknown: false,
   error: null,
   fieldErrors: undefined,
   loading: false,
@@ -49,6 +51,7 @@ const emit = defineEmits<{
     reason: QsGenericDrawerCloseReason
   }]
   'closed': []
+  'retryCreate': []
   'submit': [submission:
     | {
       mode: 'create'
@@ -82,6 +85,8 @@ const title = computed(() => props.mode === 'create'
   : '编辑供应商')
 const submitLocked = computed(() =>
   props.loading || props.submitting || submitRequested.value)
+const contextLocked = computed(() =>
+  submitLocked.value || props.createResultUnknown)
 const dirty = computed(() => props.mode === 'edit' && props.supplier !== null
   ? hasSupplierFormChanges(form, props.supplier)
   : JSON.stringify(form) !== JSON.stringify(baseline.value))
@@ -97,7 +102,7 @@ const visibleError = computed(() => {
     ? '部分字段未通过校验，请检查后重试'
     : ''
 })
-const submitDisabled = computed(() => submitLocked.value
+const submitDisabled = computed(() => contextLocked.value
   || (props.mode === 'edit' && !dirty.value)
   || (props.mode === 'edit' && props.supplier === null))
 
@@ -193,6 +198,9 @@ async function handleBeforeClose(
     closeBypass.value = false
     return true
   }
+  if (props.createResultUnknown) {
+    return false
+  }
   if (submitLocked.value) {
     return false
   }
@@ -204,7 +212,7 @@ async function handleBeforeClose(
 }
 
 function requestClose(): void {
-  if (!submitLocked.value) {
+  if (!contextLocked.value) {
     emit('update:modelValue', false)
   }
 }
@@ -315,6 +323,31 @@ watch(
         </template>
       </FaAlert>
 
+      <FaAlert
+        v-if="createResultUnknown"
+        role="alert"
+        variant="destructive"
+        icon="i-lucide:cloud-alert"
+        title="创建结果未知"
+      >
+        <template #description>
+          <div class="gap-3 grid">
+            <p class="m-0">
+              已冻结首次提交的供应商资料和 Idempotency-Key。请使用原请求确认结果，系统不会自动重放。
+            </p>
+            <FaButton
+              type="button"
+              variant="outline"
+              class="min-h-11 w-full sm:min-h-9 sm:w-fit"
+              :loading="submitting"
+              @click="emit('retryCreate')"
+            >
+              使用原请求确认结果
+            </FaButton>
+          </div>
+        </template>
+      </FaAlert>
+
       <section class="p-4 border border-border rounded-lg bg-muted/25">
         <div class="flex gap-3 min-w-0 items-start">
           <FaIcon name="i-lucide:badge-info" class="mt-0.5 shrink-0 size-4" />
@@ -332,7 +365,7 @@ watch(
       <FaForm
         ref="formRef"
         :model="form"
-        :disabled="submitLocked"
+        :disabled="contextLocked"
         class="gap-6 grid"
         @submit="submit"
       >
@@ -391,7 +424,7 @@ watch(
               <QsRegionSelector
                 v-model="registrationRegion"
                 class="supplier-registration-region"
-                :disabled="submitLocked"
+                :disabled="contextLocked"
                 :error="visibleFieldErrors['registration.countryRegionId'] !== undefined"
               />
             </FaFormItem>
@@ -459,7 +492,7 @@ watch(
           <FaFormItem name="primaryAddress.region" label="国家/地区、省/州、城市" :auto-bind="false">
             <QsRegionSelector
               v-model="form.primaryAddressRegion"
-              :disabled="submitLocked"
+              :disabled="contextLocked"
               :error="visibleFieldErrors['primaryAddress.region'] !== undefined"
             />
           </FaFormItem>
@@ -503,7 +536,7 @@ watch(
         type="button"
         variant="outline"
         class="min-h-11 w-full sm:min-h-9 sm:w-auto"
-        :disabled="submitLocked"
+        :disabled="contextLocked"
         @click="requestClose"
       >
         取消

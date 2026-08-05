@@ -102,6 +102,16 @@ export interface SupplierQueryResponseGuardInput {
   readonly requestVersion: number
 }
 
+export interface SupplierMutationResultGuardInput {
+  readonly authorized: boolean
+  readonly authEpoch: number
+  readonly currentAuthEpoch: number
+  readonly currentGeneration: number
+  readonly currentTargetId: string | null
+  readonly generation: number
+  readonly targetId: string | null
+}
+
 export interface SupplierCreateIntent {
   readonly idempotencyKey: string
   readonly payload: Readonly<CreateSupplierRequestDto>
@@ -607,9 +617,31 @@ function freezeCreatePayload(
   return Object.freeze(payload)
 }
 
-/** 创建意图在首次发送前冻结，页面状态变化不得改变后续人工确认的 payload/key。 */
-export function createSupplierCreateIntent(
-  model: SupplierFormModel,
+function cloneCreatePayload(
+  payload: CreateSupplierRequestDto,
+): CreateSupplierRequestDto {
+  return {
+    ...payload,
+    registration: payload.registration === undefined
+      ? undefined
+      : payload.registration === null
+        ? null
+        : { ...payload.registration },
+    primaryContact: payload.primaryContact === undefined
+      ? undefined
+      : payload.primaryContact === null
+        ? null
+        : { ...payload.primaryContact },
+    primaryAddress: payload.primaryAddress === undefined
+      ? undefined
+      : payload.primaryAddress === null
+        ? null
+        : { ...payload.primaryAddress },
+  }
+}
+
+export function createSupplierCreateIntentFromPayload(
+  payload: CreateSupplierRequestDto,
   idempotencyKey: string = crypto.randomUUID(),
 ): SupplierCreateIntent {
   if (!CANONICAL_UUID_V4.test(idempotencyKey)) {
@@ -617,9 +649,20 @@ export function createSupplierCreateIntent(
   }
   return Object.freeze({
     idempotencyKey,
-    payload: freezeCreatePayload(buildCreateSupplierRequest(model)),
+    payload: freezeCreatePayload(cloneCreatePayload(payload)),
     state: 'ready' as const,
   })
+}
+
+/** 创建意图在首次发送前冻结，页面状态变化不得改变后续人工确认的 payload/key。 */
+export function createSupplierCreateIntent(
+  model: SupplierFormModel,
+  idempotencyKey: string = crypto.randomUUID(),
+): SupplierCreateIntent {
+  return createSupplierCreateIntentFromPayload(
+    buildCreateSupplierRequest(model),
+    idempotencyKey,
+  )
 }
 
 export function markSupplierCreateIntentUnknown(
@@ -651,4 +694,41 @@ export function canApplySupplierQueryResponse(
     && input.authorized
     && input.authEpoch === input.currentAuthEpoch
     && input.requestVersion === input.latestRequestVersion
+}
+
+export function canApplySupplierMutationResult(
+  input: SupplierMutationResultGuardInput,
+): boolean {
+  return input.authorized
+    && input.authEpoch === input.currentAuthEpoch
+    && input.generation === input.currentGeneration
+    && input.targetId === input.currentTargetId
+}
+
+export function isSupplierAbortError(error: unknown): boolean {
+  try {
+    return (
+      error instanceof DOMException
+      && error.name === 'AbortError'
+    ) || (
+      isRecord(error)
+      && error.code === 'ERR_CANCELED'
+    )
+  }
+  catch {
+    return false
+  }
+}
+
+export function getSupplierApiFailure(error: unknown): {
+  readonly message: string
+  readonly requestId: string | undefined
+} {
+  const failure = getSupplierMutationFailure(error)
+  return {
+    message: failure.message === '供应商操作失败，请稍后重试'
+      ? '供应商资料加载失败，请稍后重试'
+      : failure.message,
+    requestId: failure.requestId,
+  }
 }

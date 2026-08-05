@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 13 已完成，Task 14 待执行
+- 状态：Phase 4 Task 14 已完成，Task 15 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -245,11 +245,20 @@
   - `pnpm -C web check`：通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `731/731`、typecheck、ESLint 与 Stylelint。
   - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
 
-- [ ] 14. 实现页面编排、响应式与无障碍
+- [x] 14. 实现页面编排、响应式与无障碍
   - 页面拥有 API、权限、Abort、authEpoch 和 mutation 对账。
   - 覆盖桌面、390px、键盘、焦点、深色和 reduced motion。
   - 提交 `feat: 实现响应式供应商管理页面`。
   - _Requirements: R1, R7-R9_
+
+  验证记录（2026-08-05）：
+
+  - 页面集成红测先因 mutation 对账辅助函数缺失失败；实现后 Supplier 逻辑、领域组件与页面集成定向测试 `27/27` 通过。
+  - 页面使用 `FaPageHeader + FaPageMain + QsGenericTable` 编排六个 API 与五项权限，并以 `AbortController`、request version、`authEpoch` 和 mutation generation/context 防止陈旧结果回写。
+  - 创建请求在首次发送前冻结同一 UUID v4 `Idempotency-Key` 与同一 payload；网络结果未知时锁定表单且只开放人工同 key、同 payload 重放，列表继续保持最小字段响应。
+  - 桌面表格、移动卡片与底部操作抽屉共享领域动作；覆盖关闭后焦点恢复、详情到编辑/状态的顺序切换、动态撤权安全收口及 `prefers-reduced-motion`。
+  - `pnpm -C web check`：通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `739/739`、typecheck、ESLint 与 Stylelint。
+  - `pnpm -C web build`：通过，字体快照与零残留校验通过；仅保留既有依赖 pure annotation 与 chunk size 警告。
 
 - [ ] 15. 添加真实 Browser E2E 与隔离编排
   - 使用真实 Chrome、Server、Cookie/CSRF 和隔离 PostgreSQL。
