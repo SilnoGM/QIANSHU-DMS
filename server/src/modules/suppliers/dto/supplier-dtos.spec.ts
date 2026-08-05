@@ -7,6 +7,13 @@ import {
   CreateSupplierRequestDto,
   UpdateSupplierRequestDto,
 } from './supplier-command.dto'
+import {
+  SupplierIdParamDto,
+  SupplierListQueryDto,
+  SupplierSortBy,
+  SupplierSortOrder,
+  SupplierStatusFilter,
+} from './supplier-management.dto'
 
 const COUNTRY_ID = '42ad40d4-7fa5-46fb-81e4-1986bcebf8f1'
 
@@ -121,5 +128,52 @@ describe('supplier command DTO validation', () => {
     expect(await errorPaths(ChangeSupplierStatusRequestDto, {
       expectedVersion: 2_147_483_648,
     })).toContain('expectedVersion')
+  })
+})
+
+describe('supplier management query DTO validation', () => {
+  it('defaults pagination and accepts the complete filter/sort contract', async () => {
+    const defaults = plainToInstance(SupplierListQueryDto, {})
+    expect(await validate(defaults)).toEqual([])
+    expect(defaults).toMatchObject({ page: 1, pageSize: 20 })
+
+    expect(await errorPaths(SupplierListQueryDto, {
+      query: '  示例供方  ',
+      status: SupplierStatusFilter.ENABLED,
+      entityType: SupplierEntityType.ORGANIZATION,
+      page: '2',
+      pageSize: '100',
+      sortBy: SupplierSortBy.LEGAL_NAME,
+      sortOrder: SupplierSortOrder.ASC,
+    })).toEqual([])
+  })
+
+  it('rejects whitespace queries, unknown filters and invalid pagination', async () => {
+    expect(await errorPaths(SupplierListQueryDto, {
+      query: ' \u0085 ',
+      status: 'ARCHIVED',
+      entityType: 'PUBLIC_BODY',
+      page: '0',
+      pageSize: '101',
+      sortBy: 'registrationNumber',
+      sortOrder: 'sideways',
+    })).toEqual([
+      'entityType',
+      'page',
+      'pageSize',
+      'query',
+      'sortBy',
+      'sortOrder',
+      'status',
+    ])
+  })
+
+  it('requires a valid supplier UUID path parameter', async () => {
+    expect(await errorPaths(SupplierIdParamDto, {
+      supplierId: COUNTRY_ID,
+    })).toEqual([])
+    expect(await errorPaths(SupplierIdParamDto, {
+      supplierId: 'not-a-uuid',
+    })).toEqual(['supplierId'])
   })
 })

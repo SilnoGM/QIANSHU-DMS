@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 5 已完成，Task 6 待执行
+- 状态：Phase 4 Task 6 已完成，Task 7 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -133,11 +133,19 @@
   - `pnpm -C server check`：`143` 个测试套件、`1402` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 6. 实现列表与详情查询
+- [x] 6. 实现列表与详情查询
   - 覆盖搜索、筛选、分页、稳定排序、列表最小化和详情 readiness。
   - 使用显式 list/detail select，无 Catalog。
   - 提交 `feat: 添加供应商查询服务`。
   - _Requirements: R2-R4, R6-R8_
+
+  验证记录（2026-08-05）：
+
+  - DTO 与 Query Service 红测先因管理查询/响应 DTO 和服务缺失而失败；最小实现后 Supplier 定向测试 `46/46` 通过。
+  - 列表在单个带 timeout 的事务中串行执行 count/rows，覆盖五类搜索索引、状态/主体筛选、分页和白名单稳定排序；显式 select 不读取或返回登记号、详细地址、邮编、备注及内部字段。
+  - 详情使用独立显式 select 返回完整业务字段，并仅以联系人姓名和电话/微信渠道计算 `enableReadiness`，登记和地址不参与 readiness。
+  - `pnpm -C server check`：`144` 个测试套件、`1412` 个测试通过。
+  - `pnpm -C server build`：通过。
 
 - [ ] 7. 实现三事务幂等创建
   - 覆盖 Tx-A/Tx-B/Tx-C、两个崩溃窗口、响应丢失、同键并发和异 payload。

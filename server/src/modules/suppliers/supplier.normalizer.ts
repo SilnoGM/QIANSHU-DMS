@@ -116,6 +116,14 @@ export type NormalizedUpdateSupplierInput = Partial<
   NormalizedCreateSupplierInput
 > & { readonly expectedVersion: number }
 
+export interface NormalizedSupplierSearchQuery {
+  readonly code: string
+  readonly name: string
+  readonly registrationNumber: string
+  readonly contactPhone: string
+  readonly contactWechatId: string
+}
+
 function validationFailure(field: string, message: string): never {
   throw new ApiException(
     HttpStatus.UNPROCESSABLE_ENTITY,
@@ -445,6 +453,41 @@ export function normalizeUpdateSupplierInput(
     return validationFailure('legalName', '至少提交一个可修改字段')
   }
   return result as NormalizedUpdateSupplierInput
+}
+
+/**
+ * 一个公开搜索框同时覆盖五类索引。先 NFKC 统一全角兼容字符，再分别生成与各列
+ * 完全一致的大小写、空白和电话分隔符形式，查询层不得临时发明另一套规则。
+ */
+export function normalizeSupplierSearchQuery(
+  value: unknown,
+): NormalizedSupplierSearchQuery {
+  const display = normalizeDisplayText(value, 'query').normalize('NFKC')
+  if (codePointLength(display) < 1 || codePointLength(display) > 200) {
+    return validationFailure('query', '规范化后长度必须为 1 到 200 个字符')
+  }
+  const name = display
+    .replace(UNICODE_WHITESPACE_PATTERN, ' ')
+    .toLocaleLowerCase('en-US')
+    .normalize('NFC')
+  return {
+    code: display.toLocaleUpperCase('en-US'),
+    name,
+    registrationNumber: display
+      .replace(UNICODE_WHITESPACE_PATTERN, '')
+      .toLocaleUpperCase('en-US'),
+    contactPhone: display.replace(PHONE_DISPLAY_SEPARATOR_PATTERN, ''),
+    contactWechatId: display.toLocaleLowerCase('en-US').normalize('NFC'),
+  }
+}
+
+export function isNormalizableSupplierSearchQuery(value: unknown): boolean {
+  try {
+    normalizeSupplierSearchQuery(value)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function canNormalizeText(
