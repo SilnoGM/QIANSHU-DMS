@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 Task 10 已完成，Task 11 待执行
+- 状态：Phase 4 Task 11 已完成，Task 12 待执行
 - 需求确认日期：2026-08-05
 - 设计确认日期：2026-08-05
 - 计划确认日期：2026-08-05
@@ -203,11 +203,19 @@
   - `pnpm -C server check`：`148` 个测试套件、`1442` 个测试通过。
   - `pnpm -C server build`：通过。
 
-- [ ] 11. 接入 Web API、路由与权限
+- [x] 11. 接入 Web API、路由与权限
   - 先写 API Recorder 和 route 红测。
   - 路由固定 `/system/service-provider/suppliers`，只消费 generated types。
   - 提交 `feat: 接入供应商接口与权限路由`。
   - _Requirements: R1, R5, R7, R9_
+
+  验证记录（2026-08-05）：
+
+  - API Recorder 与 route 红测先因 Supplier API/route module 缺失失败；实现后六接口、URL 编码、AbortSignal、mutation 禁止重试、创建 `Idempotency-Key`、禁止 delete/catalog/generate 与三级菜单契约共 `5/5` 通过。
+  - 路由固定 `/system/service-provider/suppliers`；“合作供方”父级权限中立，供应商叶子精确要求 `suppliers:read`，并由独立 `SERVICE_PROVIDER_READ_PERMISSIONS` 参与首页门槛。
+  - API module 只消费 OpenAPI generated types；权限目录新增 Supplier 中文资源分组，未修改共享组件 API。
+  - `pnpm -C web check`：非受限环境通过，包含 Node `164/164`、TS 脚本 `49/49`、API/页面 `712/712`、typecheck 与 lint；受限环境首次运行的 `tsx` IPC `EPERM` 已复验排除。
+  - `pnpm -C web build`：通过，字体快照与零残留校验通过。
 
 - [ ] 12. 实现 Web 纯逻辑与创建意图
   - 覆盖表单、查询、readiness、权限、错误和 unknown result 手动重放。
