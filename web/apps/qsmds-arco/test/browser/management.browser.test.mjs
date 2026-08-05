@@ -887,6 +887,10 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   await page.navigate(appRouteUrl(configuration.baseUrl, '/system/permissions'))
   await waitForTableTools(page, 'permission-table', '搜索权限码、名称、说明或资源')
+  await waitForCardsInsideViewport(page, '[data-testid="permission-card"]')
+  // 权限目录分页后 users:read 不保证位于第一页；通过公开搜索交互定位目标卡片后再验证窄屏布局。
+  await fillVisibleInput(page, 'input[placeholder="搜索权限码、名称、说明或资源"]', 'users:read')
+  await clickVisibleButton(page, '查询')
   await waitForCardsInsideViewport(page, '[data-testid="permission-card"]', 'users:read')
   const narrowPermissionCatalog = await page.evaluate(`(() => {
     const cards = [...document.querySelectorAll('[data-testid="permission-card"]')]

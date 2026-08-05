@@ -105,9 +105,10 @@ test('Type 卡片使用左右两列布局并将状态与条目数紧凑放在右
     typeListSource,
     /data-testid="dictionary-type-card-meta"[^>]*class="[^"]*flex[^"]*items-center[^"]*"/u,
   )
+  // typeCard 已限定在单张卡片内，按节点顺序校验，避免模板属性增长触发字符上限误报。
   assert.match(
-    typeListSource,
-    /data-testid="dictionary-type-card-meta"[\s\S]{0,500}<FaTag[\s\S]{0,500}data-testid="dictionary-type-item-count"/u,
+    typeCard,
+    /data-testid="dictionary-type-card-meta"[\s\S]*?<FaTag[\s\S]*?data-testid="dictionary-type-item-count"/u,
   )
   assert.match(
     typeListSource,
