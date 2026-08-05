@@ -320,13 +320,13 @@ function missingFieldLabel(
 .supplier-detail-grid > div {
   min-width: 0;
   padding: 0.75rem;
-  background: hsl(var(--background));
-  border: 1px solid hsl(var(--border));
+  background: oklch(var(--background));
+  border: 1px solid oklch(var(--border));
   border-radius: 0.5rem;
 }
 
 .supplier-detail-grid dt {
-  color: hsl(var(--muted-foreground));
+  color: oklch(var(--muted-foreground));
 }
 
 .supplier-detail-grid dd {

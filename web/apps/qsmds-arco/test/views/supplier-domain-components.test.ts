@@ -172,6 +172,15 @@ test('详情抽屉以 lg 只读展示完整资料、启用就绪度和文字状�
   assert.doesNotMatch(source, /@\/api|useApp\w*Store|useAuth|usePermission|useQsToast/u)
 })
 
+test('详情抽屉信息卡片使用项目 OKLCH 主题 Token', () => {
+  const source = readSource('supplier-detail-drawer.vue')
+
+  assert.match(source, /background: oklch\(var\(--background\)\)/u)
+  assert.match(source, /border: 1px solid oklch\(var\(--border\)\)/u)
+  assert.match(source, /color: oklch\(var\(--muted-foreground\)\)/u)
+  assert.doesNotMatch(source, /hsl\(var\(--(?:background|border|muted-foreground)\)\)/u)
+})
+
 test('状态确认使用 sm 通用 Modal，启用未就绪时禁止确认', () => {
   const source = readSource('supplier-status-change-modal.vue')
 
