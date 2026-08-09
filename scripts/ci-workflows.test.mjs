@@ -505,12 +505,6 @@ test('browser-dictionaries-e2e 安装双依赖域并只调用字典隔离根入�
   assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)
 })
 
-test('主 CI 不再注册供应商 Browser Job 或 Root 入口', async () => {
-  const source = await readCiWorkflow()
-  assert.equal(source.includes('browser-suppliers-e2e'), false)
-  assert.equal(source.includes('ci:browser-suppliers-e2e'), false)
-})
-
 test('examples.yml 只声明手动与每月定时触发并保持只读权限', async () => {
   const source = await readExamplesWorkflow()
   assert.equal(source.endsWith('\n'), true, 'examples.yml 必须以 LF 结尾')

@@ -728,9 +728,6 @@ describe('Management API with PostgreSQL', () => {
     expect(permissionCatalog.map(({ code }) => code)).toEqual(
       [...MANAGEMENT_PERMISSION_CODES].sort(),
     )
-    expect(
-      permissionCatalog.some(({ code }) => code.startsWith('suppliers:')),
-    ).toBe(false)
     const systemOnlyPermission = permissionCatalog.find(
       ({ systemOnly }) => systemOnly,
     )

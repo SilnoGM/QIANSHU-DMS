@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 // eslint-disable-next-line test/no-import-node-test -- 路由契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
@@ -43,25 +43,6 @@ test('系统管理主导航下的一级菜单显示权限体系且不改变路�
     /const asyncRoutes:[\s\S]*?meta: \{[\s\S]*?title: '系统管理',[\s\S]*?children: \[[\s\S]*?SystemManagement/u,
   )
   assert.match(routesSource, /import SystemManagement,[\s\S]*?from '\.\/modules\/system\.management'/u)
-})
-
-test('系统管理主导航不再注册已退役的合作供方路由', () => {
-  const routesSource = readFileSync(
-    new URL('../../src/router/routes.ts', import.meta.url),
-    'utf8',
-  )
-
-  assert.doesNotMatch(routesSource, /\bServiceProvider\b/u)
-  assert.doesNotMatch(routesSource, /\bSERVICE_PROVIDER_READ_PERMISSIONS\b/u)
-  assert.equal(
-    existsSync(
-      new URL(
-        '../../src/router/modules/service.provider.ts',
-        import.meta.url,
-      ),
-    ),
-    false,
-  )
 })
 
 test('系统管理主导航始终注册独立应用配置页面且不受环境变量控制', () => {

@@ -1,9 +1,5 @@
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { APP_GUARD } from '@nestjs/core'
 
-import { HTTP_MODULES } from './http.modules'
 import { AuditModule } from './modules/audit/audit.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { AuthenticationGuard } from './modules/auth/guards/authentication.guard'
@@ -50,15 +46,6 @@ describe('AppModule authentication composition', () => {
         RegionsModule,
       ]),
     )
-  })
-
-  it('does not register or retain the retired Suppliers module', () => {
-    expect(HTTP_MODULES.map((moduleClass) => moduleClass.name)).not.toContain(
-      'SuppliersModule',
-    )
-    expect(
-      existsSync(join(__dirname, 'modules/suppliers/suppliers.module.ts')),
-    ).toBe(false)
   })
 
   it('registers the four global guards in the required order', () => {

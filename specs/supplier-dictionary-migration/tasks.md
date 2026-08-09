@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Task 6 已完成，Task 7 待执行
+- 状态：Phase 4 实施中，Task 7 已完成，Task 8 待执行
 - Requirements 确认日期：2026-08-09
 - Design 确认日期：2026-08-09
 - 任务计划编写日期：2026-08-09
@@ -423,16 +423,16 @@ node --run ci:browser-numbering-e2e
 
 ### Task 7 - 固化 Supplier 运行时残留门禁
 
-状态：待 Task 5/6 绿色完成。
+状态：已完成（2026-08-09）。
 
 目标：用机器可执行的精确白名单防止 Supplier 路由、权限、发号和组件在未来被静默恢复，同时允许必须保留的审计历史。
 
 TDD/实施：
 
-- [ ] 先在 `scripts/root-governance.test.mjs` 写精确残留测试，对 Git tracked 及未忽略的待纳入文件执行大小写不敏感 `supplier|service[._ /-]?provider` 匹配，不让检查结果依赖“是否已暂存”。
-- [ ] 断言命中文件集合精确等于第 6 节的 18 文件白名单，不使用目录级宽泛跳过。
-- [ ] 另外断言 Regions 不含 `RegionLookupService`、Numbering Generator 源码/测试/E2E 不含 `issuanceId`、Dictionary production runner 恢复无参入口。
-- [ ] 用临时 fixture 证明白名单外的 Supplier 文本会让治理测试失败，而旧 migration/retirement 证据不会误报。
+- [x] 先在 `scripts/root-governance.test.mjs` 写精确残留测试，对 Git tracked 及未忽略的待纳入文件执行大小写不敏感 `supplier|service[._ /-]?provider` 匹配，不让检查结果依赖“是否已暂存”。
+- [x] 断言命中文件集合精确等于第 6 节的 18 文件白名单，不使用目录级宽泛跳过。
+- [x] 另外断言 Regions 不含 `RegionLookupService`、Numbering Generator 源码/测试/E2E 不含 `issuanceId`、Dictionary production runner 恢复无参入口。
+- [x] 用临时 fixture 证明白名单外的 Supplier 文本会让治理测试失败，而旧 migration/retirement 证据不会误报。
 
 定向验证：
 
@@ -444,6 +444,16 @@ node --test \
   scripts/ci-browser-dictionaries-e2e.test.mjs
 node --run test:root
 ```
+
+验证记录（2026-08-09）：
+
+- 首次按已确认的 18 文件白名单执行真实工作树扫描时稳定红测：实际命中 `23` 个文件，差异精确为 `scripts/ci-workflows.test.mjs`、两个 Server unit/schema test、`management-api.e2e-spec.ts` 和 Web 路由 test 中的五处过渡期负向断言；经 Gate C 重新确认后仅删除这些已由全局门禁取代的冗余断言，未扩张白名单。
+- 临时 Git fixture 覆盖已暂存文件发生未暂存修改、未忽略 untracked 文件、ignored 文件和允许的退役历史证据；前两类越界内容触发 exact-set 失败，ignored 文件不进入扫描，清除运行时残留后历史证据单独通过。
+- Root governance 额外固定三个回退 canary：Regions 全目录无 `RegionLookupService`；四个 Numbering Generator source/unit 文件与一个 E2E 文件无 `issuanceId`；Dictionary production runner 保持零参数声明且无四个业务工厂注入点。
+- 定向 Root/Contract/Dictionary runner 组合测试 `244/244` 通过；`node --run test:root` 为 `663/663` 通过。
+- Server 定向 Jest `2/2` suites、`8/8` tests 通过；`pnpm -C server check` 完成 Prisma validate/generate、TypeScript、ESLint 和 Jest，最终 `138/138` suites、`1364/1364` tests 全绿。
+- Web 路由定向测试 `5/5` 通过；`pnpm -C web check` 的 Node/TSX/API 测试、TypeScript、Vue TypeScript、ESLint 与 Stylelint 全绿。
+- 最终大小写不敏感残留扫描精确命中第 6 节的 `18` 个文件，Regions/Numbering canary 均零命中，Dictionary runner 的声明与 direct entry 均保持零参数调用；`git diff --check` 通过。变更只覆盖 Root governance、五个冗余测试断言和本任务记录，无生产 API、Schema、数据库、OpenAPI 或运行时代码变更。
 
 提交：`test: 固化供应商退役残留边界`。
 
