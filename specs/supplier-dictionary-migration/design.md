@@ -2,9 +2,10 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 已确认
+- 状态：已实施并通过本地验收
 - 编写日期：2026-08-09
 - Phase 2 确认日期：2026-08-09
+- 实施验收日期：2026-08-09
 - Requirements：`specs/supplier-dictionary-migration/requirements.md`
 - 实施分支：`refactor/supplier-to-dictionary`
 - 基线 SHA：`a41e7014709ce3adf46ba1c768f653c5de2c34d4`

@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Task 7 已完成，Task 8 待执行
+- 状态：Phase 4 已完成，Task 1 至 Task 9 已通过本地验收
 - Requirements 确认日期：2026-08-09
 - Design 确认日期：2026-08-09
 - 任务计划编写日期：2026-08-09
@@ -459,16 +459,16 @@ node --run test:root
 
 ### Task 8 - 受控应用本地开发库 migration
 
-状态：Gate C 代码修复已完成并验证，待精确恢复本地 failed ledger 后重新执行。
+状态：已完成；本地 forward migration 已在精确恢复 failed ledger 后单次成功应用，并通过完整只读后置验收。
 
 目标：仅对 `qianshu-dms-dev-postgres` 应用已验证的 forward migration，丢弃用户已确认的本地 Supplier、Numbering 和 Audit 数据。
 
 执行前：
 
-- [ ] 停止本地 Server 写流量，确认没有运行中的编辑/发号请求。
-- [ ] 只读确认容器名、PostgreSQL 16、loopback 端口、当前 database/schema 和 `prisma migrate status`，不输出连接串或密码。
-- [ ] 重新计数 Supplier、Request、Permission/Grant、Rule 层级、Issuance、Audit 和目标 Dictionary，与 Gate B 快照不同则停止。
-- [ ] 确认 Task 4 的隔离 replay、回滚矩阵、Server check/build 和 `ci:server-e2e`，以及 Task 5/6/7 验证全部绿色。
+- [x] 停止本地 Server 写流量，确认没有运行中的编辑/发号请求。
+- [x] 只读确认容器名、PostgreSQL 16、loopback 端口、当前 database/schema 和 `prisma migrate status`，不输出连接串或密码。
+- [x] 重新计数 Supplier、Request、Permission/Grant、Rule 层级、Issuance、Audit 和目标 Dictionary，与 Gate B 快照不同则停止。
+- [x] 确认 Task 4 的隔离 replay、回滚矩阵、Server check/build 和 `ci:server-e2e`，以及 Task 5/6/7 验证全部绿色。
 
 执行：
 
@@ -480,7 +480,7 @@ pnpm -C server exec prisma migrate status
 
 执行边界：
 
-- 不使用 `migrate dev`、`db push`、`migrate reset`、`migrate resolve`、手工改 ledger 或 SQL 绕过。
+- 不使用 `migrate dev`、`db push`、`migrate reset`、手工改 ledger 或 SQL 绕过；首次失败后仅按 Gate C 的独立授权，对精确目标执行一次 Prisma 官方 `migrate resolve --rolled-back` 恢复流程。
 - 命令超时、连接中断或结果不明时，先只读确定事务与 `_prisma_migrations` 状态，不盲目重跑。
 - 不创建 Supplier 归档表、JSON 副本或专属备份；成功提交后没有 down migration，Git revert 不能恢复被删数据，只能依赖执行前已存在的数据库备份。
 - Task 8 不创建 Git 提交；只把不含敏感信息的计数和 migration 状态记入验收文档。
@@ -494,16 +494,21 @@ pnpm -C server exec prisma migrate status
 - TDD 红测：static test 为 `1` 失败、`8` 通过；一次性 PostgreSQL E2E 为 `2` 失败、`20` 通过，分别证明目标 Rule 的合法 legacy Audit 被错误拒绝、其他 Rule 的 legacy metadata 被错误放行。
 - 最小修复仅允许同时满足五类 Numbering lifecycle event、`target_type='NumberingRule'`、`target_id` 精确等于当前 Supplier Rule 的 `ruleCode='SUP'`；DELETE 仍只按目标 Rule identity 删除。错误事件、错误 target type 或其他 Rule 继续 fail-closed。
 - 修复后 static test `9/9`、一次性 PostgreSQL migration/回滚矩阵 `22/22` 通过；`pnpm -C server check` 全绿，Jest `138/138` suites、`1365/1365` tests 通过；`pnpm -C server build` 通过。修复后 migration SHA-256 为 `12ce453743a56a04b707f833d5c014caa068298172b4584a51b98c73469a55fc`。
+- 恢复前再次确认数据库身份、无写流量、失败事务完整回滚、目标计数与十组控制组指纹均未漂移；随后只执行一次 `prisma migrate resolve --rolled-back 20260809090000_supplier_domain_retirement`。恢复后 ledger 为 `10 successful / 1 rolled back / 0 unresolved`，旧失败记录仍保留原 checksum、`finished=false`、`rolled_back=true`、`applied_steps=0`。
+- Prisma `7.8.0` 的 `migrate status` 在仅有同名 rolled-back 记录时会报告 `Database schema is up to date!`。因此在一次性 PostgreSQL 中精确复刻 `10 successful + 1 rolled back` ledger：`status` 仍退出 `0`，但 `migrate deploy` 正确重新应用当前 migration；后态为 `11 successful + 1 rolled back + 0 unresolved`、新旧 checksum 各一条，Supplier Schema 已退役。该隔离复现退出码为 `0`。
+- 本地执行前第三次只读硬门禁再次确认容器 `qianshu-dms-dev-postgres`、`qianshu_dms_dev/public`、PostgreSQL `16.14`、system identifier、无 Server 监听、无其他客户端/事务、合法 legacy `SUP` Audit 恰好一条且无身份漂移；十组控制组 count/fingerprint 与首次执行前逐字一致。
+- 本地只执行一次 `pnpm -C server db:migrate:deploy`，退出码为 `0`，CLI 明确报告已应用 `20260809090000_supplier_domain_retirement`；执行后 `migrate status` 退出码为 `0`。
 
 执行后必须只读验证：
 
-- 新 migration 恰好一条 `finished_at` 非空、`rolled_back_at` 为空的 ledger 记录。
-- 空且停用字典 Type 存在，Supplier/Permission/Numbering/Audit 目标均归零。
-- 其他 Numbering/Audit 计数与执行前控制组一致，四个 Numbering Trigger 仍 enabled。
+- [x] 当前 checksum 恰好一条 `finished_at` 非空、`rolled_back_at` 为空且 `applied_steps=1` 的成功记录；原失败 checksum 恰好一条 `rolled_back_at` 非空且 `applied_steps=0` 的历史记录。总 ledger 为 `12 total / 11 successful / 1 rolled back / 0 unresolved`。
+- [x] 固定 ID、code 为 `service_provider.supplier` 的空且停用字典 Type 精确存在一条，Item 为 `0`；Supplier Schema/enum/function、五项 Permission/Grant、`SUPPLIER` Numbering hierarchy/consumer 和相关 Audit 均为 `0`。
+- [x] `audit_event_type` 物理顺序精确保留 40 项，四个 Supplier label 与临时 enum 均为 `0`，Audit index valid/ready；四个 Numbering Trigger 的表、函数映射和 `tgenabled='O'` 均正确。
+- [x] 十组非 Supplier 控制组 count/fingerprint 与执行前逐字一致；数据库身份未变，后置验收时其他客户端、活动连接和未结束事务仍为 `0 / 0 / 0`。
 
 ### Task 9 - 全量验收、残留审计与 Git 收口
 
-状态：待 Task 8 成功并确认本地数据库终态。
+状态：已完成（2026-08-09）；本地实现、数据库终态、全量验证与残留审计均已通过，未执行 push、PR、merge、部署或分支删除。
 
 目标：证明最终代码、契约、Schema、CI 和本地开发库一致，且不影响字典、认证及其他管理能力。
 
@@ -529,17 +534,30 @@ git status --short --branch
 
 残留审计：
 
-- [ ] 运行时 Server/Web、Prisma Schema、package scripts 和 Workflow 不含 Supplier 模块、路由、权限、发号或 Audit 能力。
-- [ ] Supplier 文本只允许出现在：旧 migration、已取代规格、新 retirement migration/测试/规格，以及六个 retired operationId 治理证据。
-- [ ] 旧 Supplier migration SHA-256 仍为 `9f18a1f0e980fadd384e27985a872b099e1f210fd729b96eeed0872f5e8b284e`。
-- [ ] Server/Web OpenAPI snapshot 逐字节一致，不含 Supplier path/schema 和四个 Supplier Audit label。
-- [ ] `CI gate` 只汇总七个 validation jobs，Supplier Browser script/Job 不存在。
-- [ ] 无 `.env`、密钥、连接串、日志、生成目录、构建产物或根依赖违规产物被纳入。
+- [x] 运行时 Server/Web、Prisma Schema、package scripts 和 Workflow 不含 Supplier 模块、路由、权限、发号或 Audit 能力。
+- [x] Supplier 文本只允许出现在：旧 migration、已取代规格、新 retirement migration/测试/规格，以及六个 retired operationId 治理证据。
+- [x] 旧 Supplier migration SHA-256 仍为 `9f18a1f0e980fadd384e27985a872b099e1f210fd729b96eeed0872f5e8b284e`。
+- [x] Server/Web OpenAPI snapshot 逐字节一致，不含 Supplier path/schema 和四个 Supplier Audit label。
+- [x] `CI gate` 只汇总七个 validation jobs，Supplier Browser script/Job 不存在。
+- [x] 无 `.env`、密钥、连接串、日志、生成目录、构建产物或根依赖违规产物被纳入。
 
 文档收口：
 
-- [ ] 把 Requirements/Design/Tasks 状态和任务验证记录更新为实际结果。
-- [ ] 不将 push、PR、merge、部署或分支删除记为完成。
+- [x] 把 Requirements/Design/Tasks 状态和任务验证记录更新为实际结果。
+- [x] 不将 push、PR、merge、部署或分支删除记为完成。
+
+验证记录（2026-08-09）：
+
+- `node --run contract:sync` 退出码为 `0` 且未产生契约差异；`node --run contract:check` 退出码为 `0`。Server/Web OpenAPI snapshot 逐字节一致，SHA-256 均为 `7709d908c61cb28568851f310d1b7c6742546062870775fccc6fa9cb148f7ee9`，精确为 `52 paths / 69 operations / 80 schemas`，Supplier path/schema、六个 retired operationId 和四个 Supplier Audit label 均为零。
+- `node --run test:root` 为 `663/663` 通过；`pnpm -C server check` 完成 Prisma validate、TypeScript、ESLint 与 Jest，`138/138` suites、`1365/1365` tests 通过；`pnpm -C server build` 通过。
+- `node --run ci:server-e2e` 在一次性 PostgreSQL 16 中完成 11 条 migration 的首次 deploy、二次 deploy 和 status 检查，Jest `24/24` suites、`142/142` tests 通过，未连接本地开发数据库。
+- `pnpm -C web check` 的 Node `164/164`、TSX `49/49`、API/View `707/707`，共 `920/920` 通过；TypeScript、Vue TypeScript、ESLint、Stylelint 全绿。`pnpm -C web build` 的 Vite production build、Noto 字体和 zero-residue 校验通过，仅保留既有第三方 annotation、chunk size 与 timing 非阻断提示。
+- `node --run ci:browser-auth-e2e` 真实 Chrome `2/2` 通过；`node --run ci:browser-numbering-e2e` 为 `2/2`；`node --run ci:browser-regions-e2e` 为 `2/2`。
+- `node --run ci:browser-dictionaries-e2e` 首次为 `0/1`：创建 Type 的 HTTP `201` 和 Dialog 关闭已通过，但测试仍依赖“空库中新 Type 自动成为当前 Type”的旧前提，在摘要等待处超时。退役 migration 预置停用字典 Type 后，生产页面按设计保留当前选择，因此只调整 Browser 场景，在新建及每次 remount 后按 exact code 显式选择测试 Type，不修改生产选择语义。
+- Dictionary Browser helper 初稿再次为 `0/1`：桌面列表刷新窗口被错误当作移动布局，隐藏的“选择类型”按钮等待超时。修复为只在 Drawer trigger 真实可见且可用时进入移动选择路径，桌面直接等待目标卡片；最终 Dictionary Browser 真实 Chrome `1/1` 通过，覆盖生命周期、双标签失效、桌面/移动端和只读权限场景。
+- 首次最终 `node --run check` 在 Root 阶段按预期失败：Browser 测试新增注释使冻结 Supplier 文本残留从 `18` 个变为 `19` 个。注释改为业务无关表述后，`node --test scripts/root-governance.test.mjs` 为 `54/54` 通过，第二次 `node --run check` 退出码为 `0`，完整 Root、Server、Contract、Web 与 Auth Browser 链路全绿。
+- 最终残留扫描精确命中冻结的 `18` 个审计文件；旧 Supplier migration SHA-256 未变；Workflow 仍为七个 validation jobs 加唯一 `ci-gate`，Supplier Browser runner/Job 不存在。tracked 与未忽略文件中没有真实 `.env`、密钥、日志、生成目录、构建产物或根依赖违规产物。
+- Task 8 的本地数据库后态继续满足 `12 total / 11 successful / 1 rolled back / 0 unresolved` ledger、空且停用的 `service_provider.supplier` Type、Supplier 专属对象与数据为零、Audit enum 40 项和十组非 Supplier 控制组指纹不变。
 
 提交：`docs: 记录供应商退役验收结果`。
 
@@ -583,12 +601,13 @@ specs/supplier-dictionary-migration/tasks.md
 
 ### 修改
 
-删除 Supplier delta 并恢复合入前运行边界的 26 个文件：
+删除 Supplier delta 并恢复合入前运行边界的 27 个文件：
 
 ```text
 .github/workflows/ci.yml
 package.json
 scripts/ci-browser-dictionaries-e2e.mjs
+scripts/ci-browser-dictionaries-e2e.test.mjs
 scripts/ci-workflows.test.mjs
 server/openapi/openapi.json
 server/prisma/schema.prisma
@@ -614,7 +633,7 @@ web/package.json
 web/scripts/workspace-scripts.test.mjs
 ```
 
-保留通用健壮性改进或新增退役治理的 14 个文件：
+保留通用健壮性改进或新增退役治理的 13 个文件：
 
 ```text
 docs/后端文档/数据库迁移规范.md
@@ -623,17 +642,16 @@ scripts/openapi-contract.mjs
 scripts/openapi-contract.test.mjs
 scripts/contract-check.test.mjs
 server/src/infrastructure/database/dictionary-schema.spec.ts
-server/src/infrastructure/database/region-schema.spec.ts
 server/test/app.e2e-spec.ts
-server/test/management-api.e2e-spec.ts
 server/test/dictionary-e2e-database.ts
 server/test/dictionary-catalog-api.e2e-spec.ts
+web/apps/qsmds-arco/test/browser/dictionaries.browser.test.mjs
 specs/supplier-management/requirements.md
 specs/supplier-management/design.md
 specs/supplier-management/tasks.md
 ```
 
-其中 `region-schema.spec.ts` 保留通用 regex 健壮化，`management-api.e2e-spec.ts` 保留动态权限数量断言，`dictionary-schema.spec.ts` 保留 permission slice 写法并只将 Audit 总数恢复为 40；不为了“看起来像回退”而删除这些与 Supplier 运行时无关的改进。
+其中 `dictionary-schema.spec.ts` 保留 permission slice 写法并只将 Audit 总数恢复为 40；Dictionary Browser 测试在 migration 预置业务字典 Type 后显式选择测试 Type，不改变生产选择语义。其余文件不为了“看起来像回退”而删除与 Supplier 运行时无关的改进。
 
 ### 必须保留
 
@@ -687,7 +705,8 @@ specs/supplier-dictionary-migration/tasks.md
 | 5 | `refactor: 移除供应商专属地区查询扩展` | RegionLookupService | Region unit + Server check/build |
 | 6 | `refactor: 恢复发号器通用返回边界` | Numbering `issuanceId` 回收 | Numbering unit/E2E/Browser + Server check/build |
 | 7 | `test: 固化供应商退役残留边界` | 18 文件白名单 + 3 个回退 canary | Root governance + Contract + Dictionary runner |
-| 8 | `docs: 记录供应商退役验收结果` | 真实验证记录与规格状态 | 第 8 节全部绿色 |
+| 8 | `test: 适配预置供应商字典类型的浏览器场景` | Dictionary Browser 显式 Type 选择 | Dictionary Browser + Web check + Root governance |
+| 9 | `docs: 记录供应商退役验收结果` | 真实验证记录与规格状态 | 第 8 节全部绿色 |
 
 Task 8 的本地数据库 migration 不单独创建 Git commit。任何提交都不授权 push、PR、merge 或部署。
 
