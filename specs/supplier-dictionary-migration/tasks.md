@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Task 2 已完成，Task 3 待执行
+- 状态：Phase 4 实施中，Task 3 已完成，Task 4 待执行
 - Requirements 确认日期：2026-08-09
 - Design 确认日期：2026-08-09
 - 任务计划编写日期：2026-08-09
@@ -210,23 +210,23 @@ node --run test:root
 
 ### Task 3 - 退役 Supplier Server 运行时、公共 API 与 Contract
 
-状态：待 Task 2 绿色完成。
+状态：已完成（2026-08-09）。
 
 目标：删除可执行 Supplier 领域服务和六个 API；本任务不删除数据库对象，也不同时修改 Region/Numbering 通用模块。
 
 TDD：
 
-- [ ] 先让 App/HTTP 模块测试要求 `SuppliersModule` 不存在，在 `server/test/app.e2e-spec.ts` 要求六个匿名旧请求均为 unknown-route `404`。
-- [ ] 先为六个 retired operationId 写 Contract 红测：允许从 baseline 缺失、拒绝其他缺失、拒绝 retired ID 重现。
+- [x] 先让 App/HTTP 模块测试要求 `SuppliersModule` 不存在，在 `server/test/app.e2e-spec.ts` 要求六个匿名旧请求均为 unknown-route `404`。
+- [x] 先为六个 retired operationId 写 Contract 红测：允许从 baseline 缺失、拒绝其他缺失、拒绝 retired ID 重现。
 
 实施：
 
-- [ ] 删除 `server/src/modules/suppliers/` 全目录。
-- [ ] 删除 `server/test/supplier-management-api.e2e-spec.ts` 和 `server/test/supplier-e2e-database.ts`；保留 Supplier Schema 测试到 Task 4 替换。
-- [ ] 从 `server/src/http.modules.ts` 删除 Supplier 模块注册。
-- [ ] 在 `scripts/openapi-contract.mjs` 中增加六项精确 retired operationId 治理，并更新 unit/integration tests；不使用 wildcard、prefix、环境变量或 CI-only waiver。
-- [ ] 在 `scripts/openapi-contract.test.mjs` 和 `scripts/contract-check.test.mjs` 验证无 baseline/有 baseline 两条真实命令链。
-- [ ] 通过 `node --run contract:sync` 删除四条 Supplier path、六个 operationId 和 14 个 Supplier Schema。
+- [x] 删除 `server/src/modules/suppliers/` 全目录。
+- [x] 删除 `server/test/supplier-management-api.e2e-spec.ts` 和 `server/test/supplier-e2e-database.ts`；保留 Supplier Schema 测试到 Task 4 替换。
+- [x] 从 `server/src/http.modules.ts` 删除 Supplier 模块注册。
+- [x] 在 `scripts/openapi-contract.mjs` 中增加六项精确 retired operationId 治理，并更新 unit/integration tests；不使用 wildcard、prefix、环境变量或 CI-only waiver。
+- [x] 在 `scripts/openapi-contract.test.mjs` 和 `scripts/contract-check.test.mjs` 验证无 baseline/有 baseline 两条真实命令链。
+- [x] 通过 `node --run contract:sync` 删除四条 Supplier path、六个 operationId 和 14 个 Supplier Schema。
 
 验收：
 
@@ -256,6 +256,18 @@ pnpm -C server build
 pnpm -C web check
 pnpm -C web build
 ```
+
+验证记录（2026-08-09）：
+
+- TDD 红测：模块单测因 `HTTP_MODULES` 仍注册 `SuppliersModule` 失败；六个旧 API 分别返回 `401/403` 而非 `404`；Contract 六项退役/重现测试按预期失败。
+- App module 单测 `3/3`、隔离 App E2E `9/9` 通过；六个匿名旧 URL 均返回精确 `404 NOT_FOUND`。
+- Contract 定向测试 `180/180` 通过；退役清单冻结且由独立字面量锁死为六项，近似名称与清单外删除仍失败。
+- `node --run contract:sync` 与 `node --run contract:check` 通过；Server/Web snapshot 字节一致。
+- 生成契约精确为 `52 paths / 69 operations / 80 schemas`，无四条 Supplier path、六个 operationId 或 14 个 Supplier Schema；四个 `SUPPLIER_*` Audit label 仍保留到 Task 4。
+- `pnpm -C server check`：`139/139` suites、`1367/1367` tests 通过；Server build 通过。
+- `node --run ci:server-e2e`：全部 10 条现有 migration 首次重放、二次 deploy、status 及 `24/24` suites、`120/120` tests 通过。
+- `node --run test:root`：`660/660` 通过；`pnpm -C web check`：`921/921` 通过；Web build 通过。
+- 独立 code review 无阻断；Region、Numbering、Prisma、permission 与旧 Supplier migration 均未修改。
 
 提交：`refactor: 退役供应商服务端与公共接口`。
 

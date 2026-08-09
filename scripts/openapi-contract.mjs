@@ -69,6 +69,16 @@ const API_ERROR_FORBIDDEN_KEYWORDS = [
   'not',
   'items',
 ]
+// 供应商独立 API 已正式退役。清单使用精确字符串比较，既不接受前缀或通配符，
+// 也不通过环境变量、CI 事件或调用方参数扩大公共契约的删除边界。
+export const RETIRED_OPERATION_IDS = Object.freeze([
+  'suppliers_list',
+  'suppliers_create',
+  'suppliers_get_by_id',
+  'suppliers_update',
+  'suppliers_enable',
+  'suppliers_disable',
+])
 
 export class ContractValidationError extends Error {
   constructor(message) {
@@ -228,10 +238,28 @@ export function assertSnapshotBytesEqual({
   }
 }
 
+function isRetiredOperationId(operationId) {
+  return RETIRED_OPERATION_IDS.includes(operationId)
+}
+
+function assertNoRetiredOperationIds(document) {
+  for (const operationId of collectOperationIds(document)) {
+    if (isRetiredOperationId(operationId)) {
+      fail(
+        `Retired operationId is forbidden in current contract: ${operationId}`,
+      )
+    }
+  }
+}
+
 export function assertOperationIdBaseline(currentDocument, baselineDocument) {
+  assertNoRetiredOperationIds(currentDocument)
   const currentOperationIds = new Set(collectOperationIds(currentDocument))
   for (const baselineOperationId of collectOperationIds(baselineDocument)) {
-    if (!currentOperationIds.has(baselineOperationId)) {
+    if (
+      !currentOperationIds.has(baselineOperationId)
+      && !isRetiredOperationId(baselineOperationId)
+    ) {
       fail(`Missing baseline operationId: ${baselineOperationId}`)
     }
   }
@@ -926,6 +954,7 @@ export function assertOpenApiContract(
     fail('OpenAPI paths must be an object')
   }
 
+  assertNoRetiredOperationIds(document)
   assertHealthRoute(document)
   assertAllLocalReferencesResolve(document)
   assertApiErrorShape(document)

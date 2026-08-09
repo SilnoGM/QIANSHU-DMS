@@ -4,6 +4,7 @@ import test from 'node:test'
 import { createValidContractFixture } from './fixtures/openapi-contract-fixture.mjs'
 import {
   ContractValidationError,
+  RETIRED_OPERATION_IDS,
   applyContractFailureToProcess,
   assertOpenApiContract,
   assertOperationIdBaseline,
@@ -27,6 +28,11 @@ function cloneDocument(document = createValidContractFixture()) {
 
 function operation(document, path, method) {
   return document.paths[path][method]
+}
+
+function addGetOperation(document, path, operationId) {
+  document.paths[path] = cloneDocument(document.paths['/api/reports'])
+  document.paths[path].get.operationId = operationId
 }
 
 function apiError(document) {
@@ -80,6 +86,18 @@ test('快照基础 API 使用稳定字节、hash 与安全解析行为', () => {
       expectedLabel: 'committed',
     }),
   )
+})
+
+test('已退役 operationId 公开清单冻结且精确为六个供应商操作', () => {
+  assert.equal(Object.isFrozen(RETIRED_OPERATION_IDS), true)
+  assert.deepEqual(RETIRED_OPERATION_IDS, [
+    'suppliers_list',
+    'suppliers_create',
+    'suppliers_get_by_id',
+    'suppliers_update',
+    'suppliers_enable',
+    'suppliers_disable',
+  ])
 })
 
 test('parseOpenApiSnapshot 拒绝无效 JSON 且不回显内容', () => {
@@ -320,6 +338,75 @@ test('operationId baseline 允许新增 operationId', () => {
   assert.doesNotThrow(() =>
     assertOpenApiContract(currentDocument, { baselineDocument }),
   )
+})
+
+test('operationId baseline 仅允许六个供应商 operationId 退役', () => {
+  const baselineDocument = createValidContractFixture()
+  const currentDocument = createValidContractFixture()
+  RETIRED_OPERATION_IDS.forEach((operationId, index) => {
+    addGetOperation(
+      baselineDocument,
+      `/api/retired-supplier-operation-${index}`,
+      operationId,
+    )
+  })
+
+  assert.doesNotThrow(() =>
+    assertOperationIdBaseline(currentDocument, baselineDocument),
+  )
+  assert.doesNotThrow(() =>
+    assertOpenApiContract(currentDocument, { baselineDocument }),
+  )
+})
+
+test('operationId baseline 不把供应商前缀或近似名称当作退役豁免', () => {
+  for (const operationId of [
+    'suppliers_list_v2',
+    'suppliers_archive',
+  ]) {
+    const baselineDocument = createValidContractFixture()
+    const currentDocument = createValidContractFixture()
+    addGetOperation(
+      baselineDocument,
+      '/api/non-retired-supplier-operation',
+      operationId,
+    )
+
+    expectContractError(
+      () => assertOperationIdBaseline(currentDocument, baselineDocument),
+      new RegExp(operationId, 'u'),
+    )
+  }
+})
+
+test('当前契约无 baseline 时拒绝任一已退役供应商 operationId', () => {
+  for (const operationId of RETIRED_OPERATION_IDS) {
+    const document = createValidContractFixture()
+    operation(document, '/api/reports', 'get').operationId = operationId
+
+    expectContractError(
+      () => assertOpenApiContract(document),
+      new RegExp(`Retired operationId.*${operationId}`, 'u'),
+    )
+  }
+})
+
+test('当前契约有 baseline 时仍拒绝已退役供应商 operationId', () => {
+  for (const operationId of RETIRED_OPERATION_IDS) {
+    const currentDocument = createValidContractFixture()
+    operation(currentDocument, '/api/reports', 'get').operationId = operationId
+    const baselineDocument = cloneDocument(currentDocument)
+    const pattern = new RegExp(`Retired operationId.*${operationId}`, 'u')
+
+    expectContractError(
+      () => assertOperationIdBaseline(currentDocument, baselineDocument),
+      pattern,
+    )
+    expectContractError(
+      () => assertOpenApiContract(currentDocument, { baselineDocument }),
+      pattern,
+    )
+  }
 })
 
 test('operationId baseline 拒绝删除', () => {
