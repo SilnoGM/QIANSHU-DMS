@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Task 4 已完成，Task 5 待执行
+- 状态：Phase 4 实施中，Task 5 已完成，Task 6 待执行
 - Requirements 确认日期：2026-08-09
 - Design 确认日期：2026-08-09
 - 任务计划编写日期：2026-08-09
@@ -345,16 +345,16 @@ node --run ci:server-e2e
 
 ### Task 5 - 删除无调用方的 RegionLookupService
 
-状态：待执行（Task 4 已于 2026-08-09 绿色完成）。
+状态：已完成（2026-08-09）。
 
 目标：在 Supplier 调用方已全部删除后，回收只为 Supplier 引入的事务内地区查询扩展，不改变其他 Region 契约。
 
 TDD/实施：
 
-- [ ] 先修改 `regions.module.spec.ts`，要求 providers/exports 不再包含 `RegionLookupService`。
-- [ ] 确认生产调用方数量为零；若发现非 Supplier 调用方，触发 Gate C 而不删除。
-- [ ] 删除 `region-lookup.service.ts` 和 `region-lookup.service.spec.ts`，更新 `regions.module.ts` 与模块测试。
-- [ ] 保留 Region Controller、Query、Command、Schema、Selector 和全部现有公共 API。
+- [x] 先修改 `regions.module.spec.ts`，要求 providers/exports 不再包含 `RegionLookupService`。
+- [x] 确认生产调用方数量为零；若发现非 Supplier 调用方，触发 Gate C 而不删除。
+- [x] 删除 `region-lookup.service.ts` 和 `region-lookup.service.spec.ts`，更新 `regions.module.ts` 与模块测试。
+- [x] 保留 Region Controller、Query、Command、Schema、Selector 和全部现有公共 API。
 
 定向验证：
 
@@ -366,6 +366,15 @@ pnpm -C server exec jest --runInBand --runTestsByPath \
 pnpm -C server check
 pnpm -C server build
 ```
+
+验证记录（2026-08-09）：
+
+- 只读调用面审计确认生产调用方为 `0`，历史消费者仅位于已在 Task 3 删除的 Supplier 模块；未发现触发 Gate C 的非 Supplier 调用方。
+- TDD 红测精确为 `2` 项失败、`1` 项通过：失败项分别证明 `RegionsModule` 仍注册该 provider、源文件仍存在；HTTP 模块注册保持绿色。
+- 删除后 Region 定向验证 `2/2` suites、`9/9` tests 通过；模块只保留 `RegionQueryService`、`RegionCommandService` 和两个既有 Controller，不再声明 exports。
+- `pnpm -C server check` 通过：Prisma validate、TypeScript、ESLint 全绿，Jest `138/138` suites、`1366/1366` tests 通过；减少的测试恰好来自删除的专属 lookup spec。
+- `pnpm -C server build` 与 `node --run contract:check` 通过；构建产物无已删除 lookup 文件，Prisma、数据库 Schema、权限与 OpenAPI 均未修改，Region 公共契约保持不变。
+- `node --run test:root`：`660/660` 通过；生产源码和 Server 测试均无 `RegionLookupService`、`LockedRegionReference` 或 `lockReferences(...)` 残留，diff 精确为两个删除、两个模块修改和本任务记录。
 
 提交：`refactor: 移除供应商专属地区查询扩展`。
 

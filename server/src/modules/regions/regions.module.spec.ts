@@ -1,8 +1,10 @@
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { HTTP_MODULES } from '../../http.modules'
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
 import { RegionCommandService } from './region-command.service'
-import { RegionLookupService } from './region-lookup.service'
 import { RegionQueryService } from './region-query.service'
 import { RegionSelectionController } from './region-selection.controller'
 import { RegionsController } from './regions.controller'
@@ -21,11 +23,14 @@ describe('RegionsModule metadata', () => {
     expect(Reflect.getMetadata('providers', RegionsModule)).toEqual([
       RegionQueryService,
       RegionCommandService,
-      RegionLookupService,
     ])
-    expect(Reflect.getMetadata('exports', RegionsModule)).toEqual([
-      RegionLookupService,
-    ])
+    expect(Reflect.getMetadata('exports', RegionsModule)).toBeUndefined()
+  })
+
+  it('does not retain the retired lookup extension', () => {
+    expect(
+      existsSync(join(__dirname, 'region-lookup.service.ts')),
+    ).toBe(false)
   })
 
   it('is registered in the single live HTTP/OpenAPI module list', () => {
