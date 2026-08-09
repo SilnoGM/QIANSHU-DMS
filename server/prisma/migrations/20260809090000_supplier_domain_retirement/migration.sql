@@ -731,7 +731,26 @@ BEGIN
       audit_entry."target_type" = 'NumberingRule'
       AND audit_entry."target_id" = supplier_rule_id::text
       AND audit_entry."metadata" ->> 'ruleCode' IS NOT NULL
-      AND audit_entry."metadata" ->> 'ruleCode' <> 'SUPPLIER'
+      AND audit_entry."metadata" ->> 'ruleCode'
+        NOT IN ('SUPPLIER', 'SUP')
+    )
+    -- `SUP` 仅代表目标 Rule 在改码前留下的历史 Audit 身份；事件类型、
+    -- target type 与 target ID 任一不精确匹配时仍必须失败关闭。
+    OR (
+      audit_entry."metadata" ->> 'ruleCode' = 'SUP'
+      AND (
+        supplier_rule_id IS NULL
+        OR audit_entry."event_type"::text NOT IN (
+          'NUMBERING_RULE_CREATED',
+          'NUMBERING_RULE_UPDATED',
+          'NUMBERING_RULE_VERSION_PUBLISHED',
+          'NUMBERING_RULE_ENABLED',
+          'NUMBERING_RULE_DISABLED'
+        )
+        OR audit_entry."target_type" IS DISTINCT FROM 'NumberingRule'
+        OR audit_entry."target_id"
+          IS DISTINCT FROM supplier_rule_id::text
+      )
     )
     OR (
       supplier_rule_id IS NOT NULL

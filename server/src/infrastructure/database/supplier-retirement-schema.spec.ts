@@ -212,6 +212,21 @@ describe('supplier domain retirement database schema', () => {
     }
   })
 
+  it('bounds the legacy SUP Audit alias to the exact Supplier Rule lifecycle', () => {
+    const migration = readRetirementMigration()
+    const auditIdentityPreflight = migration.match(
+      /FROM "audit_events" AS audit_entry[\s\S]*?supplier retirement precondition mismatch: audit identity drift/u,
+    )?.[0]
+
+    expect(auditIdentityPreflight).toBeDefined()
+    expect(auditIdentityPreflight).toMatch(
+      /"metadata" ->> 'ruleCode'[\s\S]*?NOT IN \('SUPPLIER', 'SUP'\)/u,
+    )
+    expect(auditIdentityPreflight).toMatch(
+      /"metadata" ->> 'ruleCode' = 'SUP'[\s\S]*?supplier_rule_id IS NULL[\s\S]*?"event_type"::text NOT IN[\s\S]*?"target_type" IS DISTINCT FROM 'NumberingRule'[\s\S]*?"target_id"[\s\S]*?IS DISTINCT FROM supplier_rule_id::text/u,
+    )
+  })
+
   it('rejects rewrite rules on every table mutated by retirement', () => {
     const migration = readRetirementMigration()
     const rulePreflight = migration.match(

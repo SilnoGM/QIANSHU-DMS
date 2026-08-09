@@ -935,6 +935,24 @@ describe('supplier retirement migration replay against PostgreSQL', () => {
     })
   })
 
+  it('discards a legacy SUP lifecycle Audit that targets the Supplier Rule', async () => {
+    await withPreRetirementSchema(async (client) => {
+      const fixture = await seedSupplierAndCanaries(client)
+      await insertAudit(client, {
+        eventType: 'NUMBERING_RULE_CREATED',
+        targetType: 'NumberingRule',
+        targetId: fixture.supplierRuleId,
+        metadata: { ruleCode: 'SUP' },
+      })
+      const protectedBefore = await readProtectedCanarySnapshot(client, fixture)
+
+      await applyRetirementMigration(client)
+      await expectRetiredState(client, fixture)
+      await expect(readProtectedCanarySnapshot(client, fixture))
+        .resolves.toEqual(protectedBefore)
+    })
+  })
+
   it.each([
     {
       id: randomUUID(),
@@ -1365,6 +1383,32 @@ describe('supplier retirement migration replay against PostgreSQL', () => {
         eventType: 'USER_UPDATED',
         targetType: 'NumberingRule',
         targetId: hierarchy.ruleId,
+        metadata: { ruleCode: 'SUP' },
+      })
+      const before = await readRollbackSnapshot(client)
+
+      await expectRetirementFailure(client, 'P0001')
+      await expect(readRollbackSnapshot(client)).resolves.toEqual(before)
+    })
+  })
+
+  it('rolls back when legacy SUP metadata targets another Rule', async () => {
+    await withPreRetirementSchema(async (client) => {
+      await insertNumberingHierarchy(
+        client,
+        'SUPPLIER',
+        'SUPPLIER.CREATE',
+      )
+      const otherHierarchy = await insertNumberingHierarchy(
+        client,
+        'ORDER_AUDIT',
+        'ORDER.CREATE',
+      )
+      await insertAudit(client, {
+        eventType: 'NUMBERING_RULE_CREATED',
+        targetType: 'NumberingRule',
+        targetId: otherHierarchy.ruleId,
+        metadata: { ruleCode: 'SUP' },
       })
       const before = await readRollbackSnapshot(client)
 

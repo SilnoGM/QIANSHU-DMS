@@ -459,7 +459,7 @@ node --run test:root
 
 ### Task 8 - 受控应用本地开发库 migration
 
-状态：待 Task 7 绿色完成，且 Gate B 明确授权。
+状态：Gate C 代码修复已完成并验证，待精确恢复本地 failed ledger 后重新执行。
 
 目标：仅对 `qianshu-dms-dev-postgres` 应用已验证的 forward migration，丢弃用户已确认的本地 Supplier、Numbering 和 Audit 数据。
 
@@ -484,6 +484,16 @@ pnpm -C server exec prisma migrate status
 - 命令超时、连接中断或结果不明时，先只读确定事务与 `_prisma_migrations` 状态，不盲目重跑。
 - 不创建 Supplier 归档表、JSON 副本或专属备份；成功提交后没有 down migration，Git revert 不能恢复被删数据，只能依赖执行前已存在的数据库备份。
 - Task 8 不创建 Git 提交；只把不含敏感信息的计数和 migration 状态记入验收文档。
+
+首次执行与 Gate C 修复记录（2026-08-09）：
+
+- 执行前已确认本地容器、loopback 端口、`qianshu_dms_dev/public`、PostgreSQL `16.14`、无 Server 写流量和无其他数据库事务；Gate B 冻结目标计数及十组非 Supplier 控制组指纹全部精确匹配。
+- 首次 `prisma migrate status` 退出码 `1`，唯一原因是目标 retirement migration 待应用；首次 `db:migrate:deploy` 随后退出码 `1`，PostgreSQL 首错为 `supplier retirement precondition mismatch: audit identity drift`。
+- 失败事务已完整回滚：Supplier、Permission、Numbering、Audit、Dictionary 和全部控制组均与执行前一致；唯一持久状态是一条 `finished=false`、`rolled_back=false`、`applied_steps=0` 的 failed migration ledger。未盲目重跑，未执行 `migrate resolve` 或手工数据修复。
+- 只读定位到唯一历史差异：`NUMBERING_RULE_CREATED` Audit 精确指向当前 `SUPPLIER` Rule，但 `metadata.ruleCode='SUP'`。Gate C 已明确授权只把该旧值视为目标 Rule 的历史别名，不授权 metadata-only 全局删除。
+- TDD 红测：static test 为 `1` 失败、`8` 通过；一次性 PostgreSQL E2E 为 `2` 失败、`20` 通过，分别证明目标 Rule 的合法 legacy Audit 被错误拒绝、其他 Rule 的 legacy metadata 被错误放行。
+- 最小修复仅允许同时满足五类 Numbering lifecycle event、`target_type='NumberingRule'`、`target_id` 精确等于当前 Supplier Rule 的 `ruleCode='SUP'`；DELETE 仍只按目标 Rule identity 删除。错误事件、错误 target type 或其他 Rule 继续 fail-closed。
+- 修复后 static test `9/9`、一次性 PostgreSQL migration/回滚矩阵 `22/22` 通过；`pnpm -C server check` 全绿，Jest `138/138` suites、`1365/1365` tests 通过；`pnpm -C server build` 通过。修复后 migration SHA-256 为 `12ce453743a56a04b707f833d5c014caa068298172b4584a51b98c73469a55fc`。
 
 执行后必须只读验证：
 
