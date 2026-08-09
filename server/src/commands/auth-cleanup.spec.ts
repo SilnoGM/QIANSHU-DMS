@@ -263,6 +263,7 @@ describe('cleanupAuthenticationData', () => {
       expect(fixture.observedQueries[beginIndex + 1]?.text).toContain(
         "set_config('statement_timeout'",
       )
+      expect(fixture.observedQueries[beginIndex + 1]?.values).toEqual(['5s'])
       expect(fixture.observedQueries[beginIndex + 2]?.text).toContain(
         'DELETE FROM',
       )
@@ -274,6 +275,9 @@ describe('cleanupAuthenticationData', () => {
     expect(fixture.observedQueries[auditBeginIndex! + 1]?.text).toContain(
       "set_config('statement_timeout'",
     )
+    expect(fixture.observedQueries[auditBeginIndex! + 1]?.values).toEqual([
+      '5s',
+    ])
     expect(fixture.observedQueries[auditBeginIndex! + 2]?.text).toContain(
       'AUTH_RETENTION_PURGED',
     )

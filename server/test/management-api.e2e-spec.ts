@@ -109,6 +109,25 @@ interface AuditPageBody {
   total: number
 }
 
+interface Deferred {
+  readonly promise: Promise<void>
+  resolve(): void
+}
+
+function createDeferred(): Deferred {
+  let resolvePromise: (() => void) | undefined
+  const promise = new Promise<void>((resolve) => {
+    resolvePromise = resolve
+  })
+
+  return {
+    promise,
+    resolve() {
+      resolvePromise?.()
+    },
+  }
+}
+
 function readResponseBody<T>(response: { body: unknown }): T {
   return response.body as T
 }
@@ -974,15 +993,55 @@ describe('Management API with PostgreSQL', () => {
       { length: 4 },
       () => createTestPassword('Concurrent'),
     )
-    const responses = await Promise.all(
-      candidatePasswords.map((newPassword) =>
-        request(application.getHttpServer())
-          .post(`/api/users/${target.user.id}/password-reset`)
-          .set(CSRF_HEADERS)
-          .set('Cookie', adminCookie)
-          .send({ newPassword, mustChangePassword: false }),
-      ),
+    const candidatePasswordSet = new Set(candidatePasswords)
+    const arrivedPasswords = new Set<string>()
+    const allCandidatesAtHash = createDeferred()
+    const releaseCandidateHashes = createDeferred()
+    const originalHash = passwordProvider.hash.bind(passwordProvider)
+    const hashSpy = jest
+      .spyOn(passwordProvider, 'hash')
+      .mockImplementation(async (password) => {
+        if (!candidatePasswordSet.has(password)) {
+          return originalHash(password)
+        }
+
+        arrivedPasswords.add(password)
+        if (arrivedPasswords.size === candidatePasswordSet.size) {
+          allCandidatesAtHash.resolve()
+        }
+
+        // resetPassword 在调用 hash 前已读取快照。四个候选全部停在这里后再
+        // 放行，才能确定性验证同一代快照只有一个事务可以提交。
+        await releaseCandidateHashes.promise
+        return originalHash(password)
+      })
+    const pendingResponses = candidatePasswords.map((newPassword) =>
+      request(application.getHttpServer())
+        .post(`/api/users/${target.user.id}/password-reset`)
+        .set(CSRF_HEADERS)
+        .set('Cookie', adminCookie)
+        .send({ newPassword, mustChangePassword: false })
+        .then((response) => response),
     )
+    const responses = await (async () => {
+      try {
+        const barrierResult = await Promise.race([
+          allCandidatesAtHash.promise.then(() => 'all-candidates-at-hash'),
+          Promise.race(pendingResponses).then(() => 'response-completed'),
+        ])
+        expect(barrierResult).toBe('all-candidates-at-hash')
+        expect(arrivedPasswords).toEqual(candidatePasswordSet)
+        releaseCandidateHashes.resolve()
+        return await Promise.all(pendingResponses)
+      }
+      finally {
+        // 断言失败时也必须释放并收割全部请求，避免悬挂 HTTP/Argon2 任务污染
+        // afterEach 或后续 E2E。
+        releaseCandidateHashes.resolve()
+        await Promise.allSettled(pendingResponses)
+        hashSpy.mockRestore()
+      }
+    })()
 
     const successfulIndexes = responses
       .map((response, index) => ({ index, status: response.status }))
