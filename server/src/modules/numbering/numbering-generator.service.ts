@@ -53,7 +53,6 @@ import {
 } from './rule-engine'
 
 export interface GenerateNumberResult {
-  readonly issuanceId: string
   readonly number: string
   readonly ruleCode: string
   readonly ruleRevision: number
@@ -150,7 +149,6 @@ function resolveIdempotentRecord(
   }
 
   return {
-    issuanceId: record.issuanceId,
     number: record.generatedNumber,
     ruleCode: record.ruleCode,
     ruleRevision: record.revision,
@@ -295,7 +293,7 @@ export class NumberingGeneratorService {
         sequenceState.nextSequenceValue,
         this.randomSource,
       )
-      const issuanceId = await insertSequenceIssuance(transaction, {
+      await insertSequenceIssuance(transaction, {
         ...issuanceBase,
         generatedNumber: number,
         sequenceValue: sequenceState.nextSequenceValue,
@@ -310,7 +308,6 @@ export class NumberingGeneratorService {
       })
 
       return {
-        issuanceId,
         number,
         ruleCode: request.ruleCode,
         ruleRevision: snapshot.revision,
@@ -327,7 +324,6 @@ export class NumberingGeneratorService {
       return generationFailure(NUMBERING_ERROR_CODES.CAPACITY_EXHAUSTED)
     }
 
-    let issuanceId: string | null = null
     const number = await retryRandomCandidate(
       () => renderNumberingCandidate(
         snapshot.config,
@@ -335,29 +331,18 @@ export class NumberingGeneratorService {
         null,
         this.randomSource,
       ),
-      async (candidate) => {
-        const claimedIssuanceId = await tryInsertRandomIssuance(
-          transaction,
-          {
-            ...issuanceBase,
-            generatedNumber: candidate,
-            sequenceValue: null,
-          },
-        )
-        issuanceId = claimedIssuanceId
-        return claimedIssuanceId !== null
-      },
+      candidate => tryInsertRandomIssuance(transaction, {
+        ...issuanceBase,
+        generatedNumber: candidate,
+        sequenceValue: null,
+      }),
     )
-    if (issuanceId === null) {
-      return generationFailure(NUMBERING_BOUNDARY_ERROR_CODES.INTERNAL_ERROR)
-    }
     await advancePeriodState(transaction, {
       periodStateId: state.id,
       nextSequenceValue: null,
     })
 
     return {
-      issuanceId,
       number,
       ruleCode: request.ruleCode,
       ruleRevision: snapshot.revision,

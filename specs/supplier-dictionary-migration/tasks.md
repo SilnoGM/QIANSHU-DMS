@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Task 5 已完成，Task 6 待执行
+- 状态：Phase 4 实施中，Task 6 已完成，Task 7 待执行
 - Requirements 确认日期：2026-08-09
 - Design 确认日期：2026-08-09
 - 任务计划编写日期：2026-08-09
@@ -380,16 +380,16 @@ pnpm -C server build
 
 ### Task 6 - 恢复 NumberingGenerator 通用返回边界
 
-状态：待执行；可与 Task 5 并行开发，但顺序提交。
+状态：已完成（2026-08-09）。
 
 目标：移除只为 Supplier 回传的 ledger UUID，保留发号器的顺序/随机生成、幂等 replay、并发恢复和永久 ledger。
 
 TDD/实施：
 
-- [ ] 先让 Generator/Persistence unit 与 E2E 要求返回结果只包含生成编号和 replay 状态，不暴露 `issuanceId`。
-- [ ] 从 `GenerateNumberResult` 和 idempotent read result 移除 `issuanceId`。
-- [ ] 将 `insertSequenceIssuance` 恢复为 `void`，`tryInsertRandomIssuance` 恢复为 `boolean`。
-- [ ] 删除只验证 ledger UUID 返回的 fixture/断言，保留真实 ledger 行、幂等、唯一竞态和周期状态断言。
+- [x] 先让 Generator/Persistence unit 与 E2E 要求返回结果只包含生成编号和 replay 状态，不暴露 `issuanceId`。
+- [x] 从 `GenerateNumberResult` 和 idempotent read result 移除 `issuanceId`。
+- [x] 将 `insertSequenceIssuance` 恢复为 `void`，`tryInsertRandomIssuance` 恢复为 `boolean`。
+- [x] 删除只验证 ledger UUID 返回的 fixture/断言，保留真实 ledger 行、幂等、唯一竞态和周期状态断言。
 
 定向验证：
 
@@ -407,6 +407,17 @@ pnpm -C server check
 pnpm -C server build
 node --run ci:browser-numbering-e2e
 ```
+
+验证记录（2026-08-09）：
+
+- 只读调用面与历史 diff 审计确认该返回扩展只服务已删除的 Supplier 模块；四个 Generator source/unit 文件精确恢复至 Supplier 合入前 `0b7af7ada20ce0b2510776b2cfc0bc538079327d`，E2E 仅额外保留通用结果五键的精确断言。
+- TDD 红测为两个 suite 失败：Service spec 因生产类型仍要求 UUID、Persistence spec 因 replay 查询和 insert 返回值仍为旧契约而失败；已执行的测试中 `4` 项失败、`13` 项通过，原因均与目标边界一致。
+- Generator/Persistence 定向单测最终 `2/2` suites、`43/43` tests 通过；结果只含 `number`、`ruleCode`、`ruleRevision`、`issuedAt` 和 `idempotentReplay`。
+- 一次性 PostgreSQL Numbering E2E 最终 `9/9` 通过，覆盖 100 路不同 key 并发、100 路相同 key 幂等收敛、永久 ledger、容量耗尽、随机碰撞、发布/停用竞态与 replay recovery；补强结果五键断言后已再次全绿。
+- `pnpm -C server check` 通过：Prisma validate、TypeScript、ESLint 全绿，Jest `138/138` suites、`1366/1366` tests 通过；`pnpm -C server build` 通过。
+- `node --run ci:browser-numbering-e2e` 退出码 `0`：11 条 migration 在一次性 PostgreSQL 重放成功，真实 Chrome `2/2` 通过，覆盖管理员规则全生命周期与普通用户七权限、动态撤权和相邻 Server `403`。
+- `node --run test:root`：`660/660` 通过；`node --run contract:check` 通过，生成契约与双端 snapshot 保持一致。
+- 五个 Generator source/unit/E2E 文件无退役返回字段残留；迁移 E2E 中作为数据库夹具主键的同名字段按边界保留。未修改公共 API、Prisma、数据库 migration、OpenAPI 或 Web 运行时。
 
 提交：`refactor: 恢复发号器通用返回边界`。
 

@@ -57,7 +57,6 @@ type StoredSegmentValueField =
   (typeof STORED_SEGMENT_VALUE_FIELDS)[number]
 
 interface IdempotentIssuanceDatabaseRow {
-  readonly issuanceId: string
   readonly ruleCode: string
   readonly revision: number
   readonly generatedNumber: string
@@ -84,7 +83,6 @@ interface InsertedIssuanceRow {
 }
 
 export interface IdempotentIssuanceRecord {
-  readonly issuanceId: string
   readonly ruleCode: string
   readonly revision: number
   readonly generatedNumber: string
@@ -264,7 +262,6 @@ export async function readIdempotentIssuance(
   const rows = await transaction.$queryRaw<IdempotentIssuanceDatabaseRow[]>(
     Prisma.sql`
       SELECT
-        i."id" AS "issuanceId",
         r."rule_code" AS "ruleCode",
         v."revision",
         i."generated_number" AS "generatedNumber",
@@ -287,8 +284,7 @@ export async function readIdempotentIssuance(
     return null
   }
   if (
-    typeof row.issuanceId !== 'string'
-    || typeof row.ruleCode !== 'string'
+    typeof row.ruleCode !== 'string'
     || !Number.isInteger(row.revision)
     || row.revision < 1
     || typeof row.generatedNumber !== 'string'
@@ -301,7 +297,6 @@ export async function readIdempotentIssuance(
   }
 
   return {
-    issuanceId: row.issuanceId,
     ruleCode: row.ruleCode,
     revision: row.revision,
     generatedNumber: row.generatedNumber,
@@ -445,8 +440,8 @@ export async function lockOrCreatePeriodState(
 export async function insertSequenceIssuance(
   transaction: Prisma.TransactionClient,
   input: SequenceIssuanceInsertInput,
-): Promise<string> {
-  const row = await transaction.numberingIssuance.create({
+): Promise<void> {
+  await transaction.numberingIssuance.create({
     data: {
       ...input,
       idempotencyKeyHash: Uint8Array.from(input.idempotencyKeyHash),
@@ -454,10 +449,6 @@ export async function insertSequenceIssuance(
     },
     select: { id: true },
   })
-  if (typeof row.id !== 'string') {
-    return persistenceInvariant('Numbering issuance insert invariant violated')
-  }
-  return row.id
 }
 
 /**
@@ -467,7 +458,7 @@ export async function insertSequenceIssuance(
 export async function tryInsertRandomIssuance(
   transaction: Prisma.TransactionClient,
   input: RandomIssuanceInsertInput,
-): Promise<string | null> {
+): Promise<boolean> {
   const rows = await transaction.$queryRaw<InsertedIssuanceRow[]>(Prisma.sql`
     INSERT INTO "numbering_issuances" (
       "rule_id",
@@ -497,14 +488,7 @@ export async function tryInsertRandomIssuance(
   if (rows.length > 1) {
     return persistenceInvariant('Numbering issuance insert invariant violated')
   }
-  const row = rows[0]
-  if (row === undefined) {
-    return null
-  }
-  if (typeof row.id !== 'string') {
-    return persistenceInvariant('Numbering issuance insert invariant violated')
-  }
-  return row.id
+  return rows.length === 1
 }
 
 /**
