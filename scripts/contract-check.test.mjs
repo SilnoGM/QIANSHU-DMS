@@ -18,6 +18,19 @@ import {
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
 const entrypoint = path.join(scriptsDirectory, 'contract-check.mjs')
+const RETIRED_SUPPLIER_OPERATION_IDS = Object.freeze([
+  'suppliers_list',
+  'suppliers_create',
+  'suppliers_get_by_id',
+  'suppliers_update',
+  'suppliers_enable',
+  'suppliers_disable',
+])
+
+function addGetOperation(document, pathName, operationId) {
+  document.paths[pathName] = structuredClone(document.paths['/api/reports'])
+  document.paths[pathName].get.operationId = operationId
+}
 
 async function createSandbox(t, prefix = 'qianshu-contract-check-test-') {
   const canonicalTemporaryRoot = await fs.realpath(os.tmpdir())
@@ -345,6 +358,68 @@ for (const mutation of ['delete', 'rename']) {
         run: harness.run,
       }),
       /report_download/u,
+    )
+
+    await assertTemporaryRootEmpty(fixture.temporaryRoot)
+  })
+}
+
+test('contractCheck baseline 允许精确六个供应商 operationId 退役', async (t) => {
+  const baseline = createValidContractFixture()
+  RETIRED_SUPPLIER_OPERATION_IDS.forEach((operationId, index) => {
+    addGetOperation(
+      baseline,
+      `/api/retired-supplier-operation-${index}`,
+      operationId,
+    )
+  })
+  const currentBytes = snapshotBytes()
+  const fixture = await createFixture(t, {
+    serverBytes: currentBytes,
+    webBytes: currentBytes,
+  })
+  const baselinePath = path.join(fixture.sandbox, 'baseline.json')
+  await fs.writeFile(baselinePath, snapshotBytes(baseline))
+  const harness = createRunHarness({ generatedBytes: currentBytes })
+
+  await contractCheck({
+    argv: ['--baseline', path.relative(fixture.sandbox, baselinePath)],
+    invocationCwd: fixture.sandbox,
+    repositoryRoot: fixture.fixtureRepositoryRoot,
+    temporaryRoot: fixture.temporaryRoot,
+    run: harness.run,
+  })
+
+  assertGenerationCalls(harness.calls, fixture.fixtureRepositoryRoot)
+  await assertTemporaryRootEmpty(fixture.temporaryRoot)
+})
+
+for (const baselineMode of ['without-baseline', 'with-baseline']) {
+  test(`contractCheck ${baselineMode} 拒绝当前契约重现退役 operationId`, async (t) => {
+    const current = createValidContractFixture()
+    current.paths['/api/reports'].get.operationId = 'suppliers_list'
+    const currentBytes = snapshotBytes(current)
+    const fixture = await createFixture(t, {
+      serverBytes: currentBytes,
+      webBytes: currentBytes,
+    })
+    const harness = createRunHarness({ generatedBytes: currentBytes })
+    const argv = []
+    if (baselineMode === 'with-baseline') {
+      const baselinePath = path.join(fixture.sandbox, 'baseline.json')
+      await fs.writeFile(baselinePath, currentBytes)
+      argv.push('--baseline', path.relative(fixture.sandbox, baselinePath))
+    }
+
+    await assert.rejects(
+      contractCheck({
+        argv,
+        invocationCwd: fixture.sandbox,
+        repositoryRoot: fixture.fixtureRepositoryRoot,
+        temporaryRoot: fixture.temporaryRoot,
+        run: harness.run,
+      }),
+      /Retired operationId.*suppliers_list/u,
     )
 
     await assertTemporaryRootEmpty(fixture.temporaryRoot)

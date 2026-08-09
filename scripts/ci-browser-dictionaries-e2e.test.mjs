@@ -37,6 +37,30 @@ test('Root 与 Web package 通过独立入口执行字典 Browser E2E', async ()
   assert.equal('devDependencies' in rootManifest, false)
 })
 
+test('生产入口保持无参字典边界且不接受业务场景工厂注入', async () => {
+  const source = await readFile(
+    path.join(repositoryRoot, 'scripts/ci-browser-dictionaries-e2e.mjs'),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /export async function runProductionBrowserDictionariesE2e\(\) \{/u,
+  )
+  for (const retiredOption of [
+    'databaseValidator',
+    'planFactory',
+    'sensitiveValuesFactory',
+    'sessionPrefix',
+  ]) {
+    assert.equal(
+      source.includes(retiredOption),
+      false,
+      `字典生产入口不得保留 ${retiredOption} 注入点`,
+    )
+  }
+})
+
 test('只接受 ci-postgres 注入的隔离字典 PostgreSQL URL', async () => {
   const { validateBrowserDictionariesDatabaseUrl } = await loadSubject()
   assert.equal(validateBrowserDictionariesDatabaseUrl(databaseUrl), databaseUrl)

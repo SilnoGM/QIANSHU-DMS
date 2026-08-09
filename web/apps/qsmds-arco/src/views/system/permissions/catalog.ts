@@ -14,7 +14,6 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'numbering-rules': '编号规则',
   'regions': '地区管理',
   'roles': '角色管理',
-  'suppliers': '供应商管理',
   'users': '用户管理',
 }
 

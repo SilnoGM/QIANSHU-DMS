@@ -252,7 +252,7 @@ describe('dictionary management database schema', () => {
         `ALTER TYPE "audit_event_type" ADD VALUE '${eventType}'`,
       )
     }
-    expect(auditEventTypes).toHaveLength(44)
+    expect(auditEventTypes).toHaveLength(40)
     expect(
       auditEventTypes.filter(eventType => eventType.startsWith('DICTIONARY_')),
     ).toEqual(DICTIONARY_AUDIT_EVENT_TYPES)

@@ -30,12 +30,27 @@ const decodedDatabasePassword = decodeURIComponent(databasePassword)
 
 const FAILURE_CANARY = 'health-e2e-sensitive-canary'
 const CLIENT_REQUEST_ID = 'req_00000000-0000-4000-8000-000000000000'
+const RETIRED_SUPPLIER_ID = '00000000-0000-4000-8000-000000000001'
 const REQUEST_ID_PATTERN =
   /^req_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const FAILURE_MESSAGE =
   `postgresql://fake-user:fake-health-password@localhost/test ` +
   `DATABASE_URL SELECT 1 stack ${FAILURE_CANARY}`
 const URL_SCHEME_PATTERN = /[a-z][a-z\d+.-]*:\/\//i
+const RETIRED_SUPPLIER_ROUTES = [
+  { method: 'get', path: '/api/suppliers' },
+  { method: 'post', path: '/api/suppliers' },
+  { method: 'get', path: `/api/suppliers/${RETIRED_SUPPLIER_ID}` },
+  { method: 'patch', path: `/api/suppliers/${RETIRED_SUPPLIER_ID}` },
+  {
+    method: 'post',
+    path: `/api/suppliers/${RETIRED_SUPPLIER_ID}/enable`,
+  },
+  {
+    method: 'post',
+    path: `/api/suppliers/${RETIRED_SUPPLIER_ID}/disable`,
+  },
+] as const
 
 function requireApplication(
   application: INestApplication | undefined,
@@ -138,6 +153,25 @@ describe('database health route with a real PostgreSQL connection', () => {
 
     expectServerGeneratedRequestId(response)
   })
+
+  it.each(RETIRED_SUPPLIER_ROUTES)(
+    'returns an exact anonymous 404 for retired supplier route $method $path',
+    async ({ method, path }) => {
+      const anonymousRequest = request(
+        requireApplication(application).getHttpServer(),
+      )
+      const response = await anonymousRequest[method](path)
+        .set(REQUEST_ID_HEADER, CLIENT_REQUEST_ID)
+        .expect(404)
+
+      expectServerGeneratedRequestId(response)
+      expect(response.body).toEqual({
+        code: 'NOT_FOUND',
+        message: '请求的资源不存在',
+        requestId: response.headers[REQUEST_ID_HEADER.toLowerCase()],
+      })
+    },
+  )
 })
 
 describe('database health route with a failed database probe', () => {

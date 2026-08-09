@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstat, readFile, readdir } from 'node:fs/promises'
+import { lstat, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -9,6 +10,28 @@ import { fileURLToPath } from 'node:url'
 // 测试以自身位置推导仓库根目录，避免调用者从其他工作目录执行时误读同名文件。
 const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
+
+const supplierResiduePattern = 'supplier|service[._ /-]?provider'
+const supplierResidueAllowlist = Object.freeze([
+  'docs/后端文档/数据库迁移规范.md',
+  'scripts/contract-check.test.mjs',
+  'scripts/openapi-contract.mjs',
+  'scripts/openapi-contract.test.mjs',
+  'scripts/root-governance.test.mjs',
+  'server/prisma/migrations/20260805090000_supplier_management_schema_and_permissions/migration.sql',
+  'server/prisma/migrations/20260809090000_supplier_domain_retirement/migration.sql',
+  'server/src/infrastructure/database/supplier-retirement-schema.spec.ts',
+  'server/test/app.e2e-spec.ts',
+  'server/test/dictionary-catalog-api.e2e-spec.ts',
+  'server/test/dictionary-e2e-database.ts',
+  'server/test/supplier-retirement-migration.e2e-spec.ts',
+  'specs/supplier-dictionary-migration/design.md',
+  'specs/supplier-dictionary-migration/requirements.md',
+  'specs/supplier-dictionary-migration/tasks.md',
+  'specs/supplier-management/design.md',
+  'specs/supplier-management/requirements.md',
+  'specs/supplier-management/tasks.md',
+].sort())
 
 const currentGlobalDocuments = Object.freeze([
   '发布与版本管理.md',
@@ -550,6 +573,74 @@ function assertBashCodeLine(section, expectedLine) {
   assert.equal(hasExactLine, true, `bash 代码块缺少独立命令：${expectedLine}`)
 }
 
+// `git grep --untracked` 同时读取 tracked 工作树内容和未被 ignore 的待纳入文件；
+// NUL 分隔关闭 Git 的路径转义，确保中文路径和空格不会改变白名单比较结果。
+function gitGrepPaths({
+  root = repositoryRoot,
+  pattern,
+  pathspecs = ['.'],
+  ignoreCase = false,
+}) {
+  const result = spawnSync(
+    'git',
+    [
+      '-c',
+      'core.quotepath=false',
+      'grep',
+      '--untracked',
+      '-I',
+      '-l',
+      '-z',
+      '-E',
+      ...(ignoreCase ? ['-i'] : []),
+      pattern,
+      '--',
+      ...pathspecs,
+    ],
+    { cwd: root, encoding: 'utf8' },
+  )
+
+  assert.equal(result.error, undefined, '无法执行 Git 残留扫描')
+  assert.ok(
+    result.status === 0 || result.status === 1,
+    `Git 残留扫描异常退出：${result.status ?? 'unknown'}`,
+  )
+  if (result.status === 1) return []
+  return result.stdout
+    .split('\0')
+    .filter(Boolean)
+    .map(relativePath => relativePath.replace(/^\.\//u, ''))
+    .sort()
+}
+
+function runFixtureGit(root, args) {
+  const result = spawnSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+  })
+
+  assert.equal(result.error, undefined, '无法执行临时 Git fixture 命令')
+  assert.equal(
+    result.status,
+    0,
+    `临时 Git fixture 命令失败：git ${args.join(' ')}\n${result.stderr}`,
+  )
+}
+
+function assertSupplierResidueBoundary({
+  root = repositoryRoot,
+  allowlist = supplierResidueAllowlist,
+}) {
+  assert.deepEqual(
+    gitGrepPaths({
+      root,
+      pattern: supplierResiduePattern,
+      ignoreCase: true,
+    }),
+    [...allowlist].sort(),
+  )
+}
+
 function checkIgnore(relativePath) {
   // 明确固定 Git 的工作目录，使忽略规则回归测试不依赖调用测试时所在的 cwd。
   const result = spawnSync(
@@ -708,7 +799,6 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'ci:browser-dictionaries-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-dictionaries-e2e.mjs',
     'ci:browser-numbering-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-numbering-e2e.mjs',
     'ci:browser-regions-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-regions-e2e.mjs',
-    'ci:browser-suppliers-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-suppliers-e2e.mjs',
     'ci:contract': 'node ./scripts/ci-contract-baseline.mjs',
     'release:check': 'node ./scripts/release-version.mjs',
     'release:package:web': 'node ./scripts/release-package.mjs web',
@@ -724,6 +814,143 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'build:server': 'pnpm -C server build',
     'build:web': 'pnpm -C web build',
   })
+})
+
+test('供应商残留只允许出现在冻结审计文件集合', () => {
+  assertSupplierResidueBoundary({})
+})
+
+test('供应商残留门禁读取工作树与未忽略文件并允许冻结历史证据', async () => {
+  const fixtureRoot = await mkdtemp(
+    path.join(tmpdir(), 'qianshu-supplier-residue-'),
+  )
+
+  try {
+    runFixtureGit(fixtureRoot, ['init', '--quiet'])
+    await writeFile(
+      path.join(fixtureRoot, '.gitignore'),
+      'ignored-*\n',
+      'utf8',
+    )
+    await writeFile(
+      path.join(fixtureRoot, 'history.sql'),
+      '-- Supplier retirement audit evidence\n',
+      'utf8',
+    )
+    await writeFile(
+      path.join(fixtureRoot, 'runtime.ts'),
+      'export const active = true\n',
+      'utf8',
+    )
+    runFixtureGit(fixtureRoot, ['add', '.gitignore', 'history.sql', 'runtime.ts'])
+
+    // 已暂存文件随后发生的工作树修改也必须被识别，不能只检查 Git index。
+    await writeFile(
+      path.join(fixtureRoot, 'runtime.ts'),
+      'export const supplierRuntime = true\n',
+      'utf8',
+    )
+    await writeFile(
+      path.join(fixtureRoot, 'new-feature.ts'),
+      'export const serviceProviderRuntime = true\n',
+      'utf8',
+    )
+    await writeFile(
+      path.join(fixtureRoot, 'ignored-residue.txt'),
+      'Supplier ignored by repository policy\n',
+      'utf8',
+    )
+
+    assert.deepEqual(
+      gitGrepPaths({
+        root: fixtureRoot,
+        pattern: supplierResiduePattern,
+        ignoreCase: true,
+      }),
+      ['history.sql', 'new-feature.ts', 'runtime.ts'],
+    )
+    assert.throws(
+      () => assertSupplierResidueBoundary({
+        root: fixtureRoot,
+        allowlist: ['history.sql'],
+      }),
+      { name: 'AssertionError' },
+    )
+
+    // 清除两个运行时残留后，冻结的退役历史证据应成为唯一合法命中。
+    await writeFile(
+      path.join(fixtureRoot, 'runtime.ts'),
+      'export const active = true\n',
+      'utf8',
+    )
+    await rm(path.join(fixtureRoot, 'new-feature.ts'))
+    assertSupplierResidueBoundary({
+      root: fixtureRoot,
+      allowlist: ['history.sql'],
+    })
+  }
+  finally {
+    await rm(fixtureRoot, { force: true, recursive: true })
+  }
+})
+
+test('退役扩展不会重新进入 Regions 与 Numbering Generator', () => {
+  assert.deepEqual(
+    gitGrepPaths({
+      pattern: 'RegionLookupService',
+      pathspecs: ['server/src/modules/regions'],
+    }),
+    [],
+  )
+  assert.deepEqual(
+    gitGrepPaths({
+      pattern: 'issuanceId',
+      pathspecs: [
+        'server/src/modules/numbering/numbering-generator.persistence.spec.ts',
+        'server/src/modules/numbering/numbering-generator.persistence.ts',
+        'server/src/modules/numbering/numbering-generator.service.spec.ts',
+        'server/src/modules/numbering/numbering-generator.service.ts',
+        'server/test/numbering-generator.e2e-spec.ts',
+      ],
+    }),
+    [],
+  )
+})
+
+test('Dictionary production runner 保持无参且无业务工厂注入', async () => {
+  const source = await readFile(
+    fromRoot('scripts/ci-browser-dictionaries-e2e.mjs'),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /export async function runProductionBrowserDictionariesE2e\(\) \{/u,
+  )
+  assert.match(
+    source,
+    /if \(isDirectEntry\(import\.meta\.url\)\) \{\s+runProductionBrowserDictionariesE2e\(\)\.catch/u,
+  )
+  for (const retiredOption of [
+    'databaseValidator',
+    'planFactory',
+    'sensitiveValuesFactory',
+    'sessionPrefix',
+  ]) {
+    assert.equal(
+      source.includes(retiredOption),
+      false,
+      `Dictionary production runner 不得保留 ${retiredOption} 注入点`,
+    )
+  }
+})
+
+test('供应商 Browser Root 入口与专属 runner 已退役', async () => {
+  const manifest = JSON.parse(await readFile(fromRoot('package.json'), 'utf8'))
+
+  assert.equal('ci:browser-suppliers-e2e' in manifest.scripts, false)
+  assert.equal(await exists('scripts/ci-browser-suppliers-e2e.mjs'), false)
+  assert.equal(await exists('scripts/ci-browser-suppliers-e2e.test.mjs'), false)
 })
 
 test('根目录不创建 workspace、lockfile 或依赖目录', async () => {

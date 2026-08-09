@@ -54,7 +54,6 @@ jest.mock('./numbering-generator.persistence', () => ({
 const RULE_ID = '10000000-0000-4000-8000-000000000001'
 const VERSION_ID = '20000000-0000-4000-8000-000000000001'
 const PERIOD_STATE_ID = '30000000-0000-4000-8000-000000000001'
-const ISSUANCE_ID = '40000000-0000-4000-8000-000000000001'
 const AS_OF = new Date('2026-08-02T15:59:59.123Z')
 const REPLAY_ISSUED_AT = new Date('2026-07-31T02:03:04.567Z')
 const MAIN_TRANSACTION = { name: 'main' } as unknown as Prisma.TransactionClient
@@ -68,7 +67,6 @@ const REQUEST = {
 } as const
 const VALIDATED_REQUEST = validateGenerateNumberRequest(REQUEST)
 const REPLAY_RECORD = {
-  issuanceId: ISSUANCE_ID,
   ruleCode: REQUEST.ruleCode,
   revision: 2,
   generatedNumber: 'SO00',
@@ -161,9 +159,9 @@ describe('NumberingGeneratorService', () => {
       nextSequenceValue: 1n,
       usedCount: 0n,
     })
-    mockedInsertSequence.mockResolvedValue(ISSUANCE_ID)
+    mockedInsertSequence.mockResolvedValue(undefined)
     mockedAdvanceState.mockResolvedValue(undefined)
-    mockedTryRandom.mockResolvedValue(ISSUANCE_ID)
+    mockedTryRandom.mockResolvedValue(true)
   })
 
   it('keeps the frozen one-input internal service contract', () => {
@@ -184,7 +182,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: 'SALES_ORDER',
       ruleRevision: 3,
       issuedAt: AS_OF.toISOString(),
-      issuanceId: ISSUANCE_ID,
       idempotentReplay: false,
     })
 
@@ -249,7 +246,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REPLAY_RECORD.ruleCode,
       ruleRevision: REPLAY_RECORD.revision,
       issuedAt: REPLAY_ISSUED_AT.toISOString(),
-      issuanceId: REPLAY_RECORD.issuanceId,
       idempotentReplay: true,
     })
 
@@ -276,7 +272,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REPLAY_RECORD.ruleCode,
       ruleRevision: REPLAY_RECORD.revision,
       issuedAt: REPLAY_ISSUED_AT.toISOString(),
-      issuanceId: REPLAY_RECORD.issuanceId,
       idempotentReplay: true,
     })
 
@@ -307,7 +302,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REPLAY_RECORD.ruleCode,
       ruleRevision: REPLAY_RECORD.revision,
       issuedAt: REPLAY_ISSUED_AT.toISOString(),
-      issuanceId: REPLAY_RECORD.issuanceId,
       idempotentReplay: true,
     })
     expect(mockedReadActive).not.toHaveBeenCalled()
@@ -326,7 +320,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REPLAY_RECORD.ruleCode,
       ruleRevision: REPLAY_RECORD.revision,
       issuedAt: REPLAY_ISSUED_AT.toISOString(),
-      issuanceId: REPLAY_RECORD.issuanceId,
       idempotentReplay: true,
     })
 
@@ -420,7 +413,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REQUEST.ruleCode,
       ruleRevision: 5,
       issuedAt: AS_OF.toISOString(),
-      issuanceId: ISSUANCE_ID,
       idempotentReplay: false,
     })
 
@@ -461,7 +453,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REQUEST.ruleCode,
       ruleRevision: 9,
       issuedAt: AS_OF.toISOString(),
-      issuanceId: ISSUANCE_ID,
       idempotentReplay: false,
     })
     expect(mockedAdvanceState).toHaveBeenCalledWith(MAIN_TRANSACTION, {
@@ -499,7 +490,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REQUEST.ruleCode,
       ruleRevision: 10,
       issuedAt: AS_OF.toISOString(),
-      issuanceId: ISSUANCE_ID,
       idempotentReplay: false,
     })
     expect(mockedInsertSequence.mock.calls[0]?.[1].sequenceValue)
@@ -598,7 +588,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REQUEST.ruleCode,
       ruleRevision: 4,
       issuedAt: AS_OF.toISOString(),
-      issuanceId: ISSUANCE_ID,
       idempotentReplay: false,
     })
     expect(mockedInsertSequence).toHaveBeenCalledTimes(1)
@@ -629,16 +618,15 @@ describe('NumberingGeneratorService', () => {
       usedCount: 0n,
     })
     for (let attempt = 1; attempt <= 31; attempt += 1) {
-      mockedTryRandom.mockResolvedValueOnce(null)
+      mockedTryRandom.mockResolvedValueOnce(false)
     }
-    mockedTryRandom.mockResolvedValueOnce(ISSUANCE_ID)
+    mockedTryRandom.mockResolvedValueOnce(true)
 
     await expect(fixture.service.generate(REQUEST)).resolves.toEqual({
       number: '0',
       ruleCode: REQUEST.ruleCode,
       ruleRevision: 6,
       issuedAt: AS_OF.toISOString(),
-      issuanceId: ISSUANCE_ID,
       idempotentReplay: false,
     })
 
@@ -671,7 +659,7 @@ describe('NumberingGeneratorService', () => {
       nextSequenceValue: null,
       usedCount: 0n,
     })
-    mockedTryRandom.mockResolvedValue(null)
+    mockedTryRandom.mockResolvedValue(false)
 
     await expectGenerationError(
       fixture.service.generate(REQUEST),
@@ -808,7 +796,6 @@ describe('NumberingGeneratorService', () => {
       ruleCode: REPLAY_RECORD.ruleCode,
       ruleRevision: REPLAY_RECORD.revision,
       issuedAt: REPLAY_ISSUED_AT.toISOString(),
-      issuanceId: REPLAY_RECORD.issuanceId,
       idempotentReplay: true,
     })
 

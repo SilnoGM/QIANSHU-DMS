@@ -100,6 +100,53 @@ async function clickVisibleExactButton(page, text) {
   await page.evaluate(expression)
 }
 
+/**
+ * fresh migration 现在会预置停用的业务字典 Type，页面按稳定选择语义继续保留
+ * 当前 Type。Browser 场景必须像真实用户一样按 exact code 选择测试 Type，不能再
+ * 依赖“数据库初始为空，所以新建项自动成为首项”的历史前提。移动端目录位于
+ * bottom Drawer；仅以真实可见的 Drawer trigger 判断移动布局，避免把桌面列表的
+ * 短暂刷新窗口误判为移动端，再复用同一精确选择路径。
+ */
+async function selectDictionaryTypeByCode(page, code) {
+  const visibleCardExpression = `(() => [...document.querySelectorAll(
+    '[data-testid="dictionary-type-card"]',
+  )].some(card => (
+    card.getClientRects().length > 0
+    && !card.disabled
+    && card.querySelector('code')?.textContent?.trim() === ${JSON.stringify(code)}
+  )))()`
+  const mobileDrawerTriggerVisible = await page.evaluate(`(() => {
+    const trigger = document.querySelector(
+      '[data-testid="dictionary-open-type-drawer"]',
+    )
+    return trigger?.getClientRects().length > 0 && !trigger.disabled
+  })()`)
+  if (mobileDrawerTriggerVisible) {
+    await clickVisibleExactButton(page, '选择类型')
+    await waitForVisibleDialog(page, '选择字典类型')
+  }
+  await page.waitFor(visibleCardExpression)
+  await page.evaluate(`(() => {
+    const card = [...document.querySelectorAll(
+      '[data-testid="dictionary-type-card"]',
+    )].find(candidate => (
+      candidate.getClientRects().length > 0
+      && !candidate.disabled
+      && candidate.querySelector('code')?.textContent?.trim()
+        === ${JSON.stringify(code)}
+    ))
+    if (!card) throw new Error('dictionary type card unavailable')
+    card.focus({ preventScroll: true })
+    card.click()
+    return true
+  })()`)
+  await page.waitFor(`(() => {
+    const title = document.querySelector('#dictionary-item-panel-title')
+    const selectedCode = title?.parentElement?.querySelector('code')
+    return selectedCode?.textContent?.trim() === ${JSON.stringify(code)}
+  })()`)
+}
+
 async function clickItemAction(page, value, action) {
   const ariaLabel = `${action}条目 ${value}`
   const expression = `(() => {
@@ -151,6 +198,7 @@ async function remountDictionaryWorkspace(page, baseUrl, itemMarker) {
     '[data-testid="dictionary-management-workspace"]',
   ) !== null`)
   await waitForDictionaryWorkspace(page)
+  await selectDictionaryTypeByCode(page, typeCode)
   await waitForItemTable(page, itemMarker)
 }
 
@@ -237,6 +285,7 @@ async function createTypeThroughUi(page) {
       { cause: error },
     )
   }
+  await selectDictionaryTypeByCode(page, typeCode)
   await page.waitFor(`(() => {
     const title = document.querySelector('#dictionary-item-panel-title')
     const code = title?.parentElement?.querySelector('code')
@@ -1265,6 +1314,7 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
         '[data-testid="dictionary-management-workspace"]',
       ) !== null`)
       await waitForDictionaryWorkspace(limitedPage)
+      await selectDictionaryTypeByCode(limitedPage, typeCode)
       await waitForItemTable(limitedPage, primaryValue)
       const surface = await limitedPage.evaluate(`(() => {
         const visibleButtons = [...document.querySelectorAll('button')]

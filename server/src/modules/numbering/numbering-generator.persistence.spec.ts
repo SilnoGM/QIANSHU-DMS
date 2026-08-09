@@ -172,7 +172,6 @@ describe('numbering generator persistence', () => {
   it('reads an internal idempotency record by hashes without selecting the idempotency hash', async () => {
     const fixture = createTransactionFixture()
     fixture.mocks.queryRaw.mockResolvedValueOnce([{
-      issuanceId: ISSUANCE_ID,
       ruleCode: RULE_CODE,
       revision: 7,
       generatedNumber: SEQUENCE_ISSUANCE_INPUT.generatedNumber,
@@ -187,7 +186,6 @@ describe('numbering generator persistence', () => {
     )
 
     expect(result).toEqual({
-      issuanceId: ISSUANCE_ID,
       ruleCode: RULE_CODE,
       revision: 7,
       generatedNumber: SEQUENCE_ISSUANCE_INPUT.generatedNumber,
@@ -199,7 +197,6 @@ describe('numbering generator persistence', () => {
     const sql = requireSql(fixture.mocks.queryRaw.mock.calls[0]?.[0])
     const text = sql.strings.join('?')
     expect(text).toContain('FROM "numbering_issuances"')
-    expect(text).toContain('i."id" AS "issuanceId"')
     expect(text).toContain('"numbering_rules"')
     expect(text).toContain('"numbering_rule_versions"')
     expect(text).not.toMatch(/SELECT[\s\S]*idempotency_key_hash[\s\S]*FROM/iu)
@@ -407,7 +404,7 @@ describe('numbering generator persistence', () => {
     await expect(insertSequenceIssuance(
       fixture.transaction,
       SEQUENCE_ISSUANCE_INPUT,
-    )).resolves.toBe(ISSUANCE_ID)
+    )).resolves.toBeUndefined()
 
     expect(fixture.mocks.issuanceCreate).toHaveBeenCalledWith({
       data: {
@@ -427,7 +424,7 @@ describe('numbering generator persistence', () => {
     await expect(tryInsertRandomIssuance(
       fixture.transaction,
       RANDOM_ISSUANCE_INPUT,
-    )).resolves.toBe(ISSUANCE_ID)
+    )).resolves.toBe(true)
 
     const sql = requireSql(fixture.mocks.queryRaw.mock.calls[0]?.[0])
     const text = sql.strings.join('?')
@@ -461,7 +458,7 @@ describe('numbering generator persistence', () => {
     await expect(tryInsertRandomIssuance(
       fixture.transaction,
       RANDOM_ISSUANCE_INPUT,
-    )).resolves.toBeNull()
+    )).resolves.toBe(false)
   })
 
   it('does not swallow database errors from other pure-random unique constraints', async () => {

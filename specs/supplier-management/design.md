@@ -1,8 +1,11 @@
 # 供应商管理技术设计
 
+> 历史规格：本方案已于 2026-08-09 被 `specs/supplier-dictionary-migration/design.md` 取代。本文件仅保留原始决策与交付证据，不再代表当前技术架构。
+
 ## 1. 文档状态
 
 - 状态：已确认
+- 取代状态：已由供应商字典化与独立模块退役设计取代
 - 确认日期：2026-08-05
 - Requirements：`specs/supplier-management/requirements.md`
 - Server：NestJS + Prisma + PostgreSQL
