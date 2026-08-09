@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Task 3 已完成，Task 4 待执行
+- 状态：Phase 4 实施中，Task 4 已完成，Task 5 待执行
 - Requirements 确认日期：2026-08-09
 - Design 确认日期：2026-08-09
 - 任务计划编写日期：2026-08-09
@@ -273,26 +273,26 @@ pnpm -C web build
 
 ### Task 4 - 退役 Prisma Schema、物理数据与 Supplier 治理契约
 
-状态：待 Task 3 绿色完成。
+状态：已完成（2026-08-09）。
 
 目标：在隔离 PostgreSQL 中实现和验证单事务 forward migration，使最终 Prisma/DB 只保留空且停用的供应商字典 Type。
 
 TDD：
 
-- [ ] 将旧 static Supplier Schema 测试替换为 `supplier-retirement-schema.spec.ts`，先证明新 migration 缺失、Prisma 仍有 Supplier、旧 migration 指纹未被锁定。
-- [ ] 将旧 PostgreSQL Supplier Schema E2E 替换为 `supplier-retirement-migration.e2e-spec.ts`，先覆盖空库 replay、有数据升级、Type 冲突回滚和未知依赖晚期回滚。
-- [ ] 先让 Auth/AccessControl/Dictionary schema 测试要求权限 `42 → 37`、Audit enum `44 → 40` 和五个 Supplier 权限消失。
-- [ ] 在 `dictionary-catalog-api.e2e-spec.ts` 先要求 Catalog 可读取停用且零 Item 的 `service_provider.supplier`。
+- [x] 将旧 static Supplier Schema 测试替换为 `supplier-retirement-schema.spec.ts`，先证明新 migration 缺失、Prisma 仍有 Supplier、旧 migration 指纹未被锁定。
+- [x] 将旧 PostgreSQL Supplier Schema E2E 替换为 `supplier-retirement-migration.e2e-spec.ts`，先覆盖空库 replay、有数据升级、Type 冲突回滚和未知依赖晚期回滚。
+- [x] 先让 Auth/AccessControl/Dictionary schema 测试要求权限 `42 → 37`、Audit enum `44 → 40` 和五个 Supplier 权限消失。
+- [x] 在 `dictionary-catalog-api.e2e-spec.ts` 先要求 Catalog 可读取停用且零 Item 的 `service_provider.supplier`。
 
 实施：
 
-- [ ] 新增 `server/prisma/migrations/20260809090000_supplier_domain_retirement/migration.sql`，严格实现 Design 第 5 节的锁序、前置检查、精确删除、Trigger 恢复、enum 重建和最终自检。
-- [ ] 从 Prisma 删除 `SupplierEntityType`、`Supplier`、`SupplierCreateRequest`、Region 反向关系、NumberingIssuance 关系和四个 `SUPPLIER_*` Audit label。
-- [ ] 删除五个 Server Supplier 权限常量，同步 Auth/AccessControl 与 Dictionary schema 测试。
-- [ ] 删除旧 `supplier-schema` static/E2E，新增退役 static/E2E；旧 Supplier migration 必须保留且 SHA-256 严格为 `9f18a1f0e980fadd384e27985a872b099e1f210fd729b96eeed0872f5e8b284e`。
-- [ ] 把旧 Supplier 与新 retirement migration 追加到 Dictionary 隔离数据库的完整重放集合，并通过 Catalog API 验证目标 Type。
-- [ ] 更新 `docs/后端文档/数据库迁移规范.md`：11 条 migration、19 个最终 model，同时记录旧 Supplier migration 与新 retirement migration。
-- [ ] 再次运行 `contract:sync`，从 Audit API/OpenAPI 移除四个 Supplier enum label。
+- [x] 新增 `server/prisma/migrations/20260809090000_supplier_domain_retirement/migration.sql`，严格实现 Design 第 5 节的锁序、前置检查、精确删除、Trigger 恢复、enum 重建和最终自检。
+- [x] 从 Prisma 删除 `SupplierEntityType`、`Supplier`、`SupplierCreateRequest`、Region 反向关系、NumberingIssuance 关系和四个 `SUPPLIER_*` Audit label。
+- [x] 删除五个 Server Supplier 权限常量，同步 Auth/AccessControl 与 Dictionary schema 测试。
+- [x] 删除旧 `supplier-schema` static/E2E，新增退役 static/E2E；旧 Supplier migration 必须保留且 SHA-256 严格为 `9f18a1f0e980fadd384e27985a872b099e1f210fd729b96eeed0872f5e8b284e`。
+- [x] 把旧 Supplier 与新 retirement migration 追加到 Dictionary 隔离数据库的完整重放集合，并通过 Catalog API 验证目标 Type。
+- [x] 更新 `docs/后端文档/数据库迁移规范.md`：11 条 migration、19 个最终 model，同时记录旧 Supplier migration 与新 retirement migration。
+- [x] 再次运行 `contract:sync`，从 Audit API/OpenAPI 移除四个 Supplier enum label。
 
 PostgreSQL 成功验收：
 
@@ -328,11 +328,24 @@ node --run contract:check
 node --run ci:server-e2e
 ```
 
+验证记录（2026-08-09）：
+
+- 初始 static 红测因退役 migration 尚不存在、Prisma 仍有 `21` 个 model/`44` 个 Audit label、权限仍为 `42` 项而按预期失败；初始隔离 DB 红测 `5/5` 因 migration 缺失而失败，Catalog 对目标 code 返回 `404`。
+- 安全复审新增 rewrite-rule 失败关闭场景：static 红测 `2/8`、真实 `ON DELETE DO ALSO` E2E 红测 `1/1`，证明原实现会放过外部副作用；补充 `pg_rewrite` 门禁后 static `8/8` 和完整回滚场景转绿。
+- 退役 static、Dictionary schema 与 AccessControl 定向验证共 `23/23` 通过；旧 Supplier migration SHA-256 保持 `9f18a1f0e980fadd384e27985a872b099e1f210fd729b96eeed0872f5e8b284e`。
+- `supplier-retirement-migration.e2e-spec.ts` 在一次性 PostgreSQL 16 中 `20/20` 通过，覆盖空库 replay、有数据升级、精确舍弃 Supplier 数据、Type/权限/Trigger/enum/consumer/provenance/Audit 漂移、跨 Schema FK、未知依赖、rewrite rule 和晚期失败的整事务回滚。
+- 完整 E2E 首次运行暴露测试隔离缺陷：Dictionary Type 冲突回滚断言未按 Schema 限定同名 enum，得到 `84` 而非当前隔离 Schema 的 `44`；加入 `current_schema()` 限定后，退役 E2E 重新 `20/20` 通过。
+- `node --run ci:server-e2e` 最终通过：11 条 migration 首次部署、二次 deploy 无待执行项、status 最新，Jest `24/24` suites、`140/140` tests 通过；全程只使用一次性隔离 PostgreSQL，未写本地持久数据库。
+- `pnpm -C server check`：Prisma validate、TypeScript、ESLint 通过，Jest `139/139` suites、`1371/1371` tests 通过；Server build 通过。
+- `node --run contract:sync` 与 `node --run contract:check` 通过；Server/Web snapshot 字节一致，仍为 `52 paths / 69 operations / 80 schemas`，diff 仅从两处 Audit enum 精确移除四个 `SUPPLIER_*` label。
+- `node --run test:root`：`660/660` 通过；`pnpm -C web check`：`921/921` 通过；Server/Web build 均通过，Web 仅有既有第三方 annotation、chunk size 和 timing 非阻断提示。
+- 独立 SQL 终审无阻断；最终 Prisma 为 `19` 个 model、Audit enum `40` 项、管理权限 `37` 项，目标字典 Type 固定为空且停用。
+
 提交：`refactor: 退役供应商数据结构与关联数据`。
 
 ### Task 5 - 删除无调用方的 RegionLookupService
 
-状态：待 Task 4 绿色完成。
+状态：待执行（Task 4 已于 2026-08-09 绿色完成）。
 
 目标：在 Supplier 调用方已全部删除后，回收只为 Supplier 引入的事务内地区查询扩展，不改变其他 Region 契约。
 
@@ -358,7 +371,7 @@ pnpm -C server build
 
 ### Task 6 - 恢复 NumberingGenerator 通用返回边界
 
-状态：待 Task 4 绿色完成；可与 Task 5 并行开发，但顺序提交。
+状态：待执行；可与 Task 5 并行开发，但顺序提交。
 
 目标：移除只为 Supplier 回传的 ledger UUID，保留发号器的顺序/随机生成、幂等 replay、并发恢复和永久 ledger。
 

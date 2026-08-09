@@ -88,10 +88,6 @@ enum AuditEventType {
   DICTIONARY_ITEM_UPDATED
   DICTIONARY_ITEM_ENABLED
   DICTIONARY_ITEM_DISABLED
-  SUPPLIER_CREATED
-  SUPPLIER_UPDATED
-  SUPPLIER_ENABLED
-  SUPPLIER_DISABLED
   SYSTEM_BOOTSTRAP
   SYSTEM_ADMIN_RECOVERED
   AUTH_RETENTION_PURGED
@@ -105,13 +101,6 @@ enum RegionLevel {
   CITY
 
   @@map("region_level")
-}
-
-enum SupplierEntityType {
-  ORGANIZATION
-  INDIVIDUAL
-
-  @@map("supplier_entity_type")
 }
 
 enum NumberingRuleStatus {
@@ -345,12 +334,8 @@ model Region {
   createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  parent                   Region?    @relation("RegionHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  children                 Region[]   @relation("RegionHierarchy")
-  supplierRegistrations    Supplier[] @relation("SupplierRegistrationCountry")
-  supplierAddressCountries Supplier[] @relation("SupplierAddressCountry")
-  supplierAddressProvinces Supplier[] @relation("SupplierAddressProvince")
-  supplierAddressCities    Supplier[] @relation("SupplierAddressCity")
+  parent   Region?  @relation("RegionHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  children Region[] @relation("RegionHierarchy")
 
   @@unique([parentId, normalizedName], map: "regions_parent_id_normalized_name_key")
   @@index([parentId, sortOrder, normalizedName, id], map: "regions_parent_id_sort_order_name_id_idx")
@@ -522,7 +507,6 @@ model NumberingIssuance {
   rule        NumberingRule        @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   ruleVersion NumberingRuleVersion @relation(fields: [ruleVersionId, ruleId], references: [id, ruleId], onDelete: Restrict, onUpdate: Restrict)
   periodState NumberingPeriodState @relation(fields: [ruleId, periodKey], references: [ruleId, periodKey], onDelete: Restrict, onUpdate: Restrict)
-  supplier    Supplier?
 
   @@unique([ruleId, generatedNumber], map: "numbering_issuances_rule_id_generated_number_key")
   @@unique([consumerCode, idempotencyKeyHash], map: "numbering_issuances_consumer_code_idempotency_key_hash_key")
@@ -531,60 +515,4 @@ model NumberingIssuance {
   @@index([ruleId, consumerCode, issuedAt(sort: Desc), id(sort: Desc)], map: "numbering_issuances_rule_id_consumer_code_issued_at_id_idx")
   @@index([ruleId, generatedNumber(ops: raw("varchar_pattern_ops"))], map: "numbering_issuances_rule_id_generated_number_prefix_idx")
   @@map("numbering_issuances")
-}
-
-model Supplier {
-  id                           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code                         String             @unique(map: "suppliers_code_key") @db.VarChar(64)
-  numberingIssuanceId          String             @unique(map: "suppliers_numbering_issuance_id_key") @map("numbering_issuance_id") @db.Uuid
-  legalName                    String             @map("legal_name") @db.VarChar(200)
-  normalizedLegalName          String             @map("normalized_legal_name") @db.VarChar(200)
-  shortName                    String?            @map("short_name") @db.VarChar(100)
-  normalizedShortName          String?            @map("normalized_short_name") @db.VarChar(100)
-  entityType                   SupplierEntityType @map("entity_type")
-  registrationCountryRegionId  String?            @map("registration_country_region_id") @db.Uuid
-  registrationNumber           String?            @map("registration_number") @db.VarChar(64)
-  normalizedRegistrationNumber String?            @map("normalized_registration_number") @db.VarChar(64)
-  contactName                  String?            @map("contact_name") @db.VarChar(128)
-  normalizedContactName        String?            @map("normalized_contact_name") @db.VarChar(128)
-  contactPhone                 String?            @map("contact_phone") @db.VarChar(32)
-  normalizedContactPhone       String?            @map("normalized_contact_phone") @db.VarChar(32)
-  contactWechatId              String?            @map("contact_wechat_id") @db.VarChar(64)
-  normalizedContactWechatId    String?            @map("normalized_contact_wechat_id") @db.VarChar(64)
-  addressCountryRegionId       String?            @map("address_country_region_id") @db.Uuid
-  addressProvinceStateId       String?            @map("address_province_state_id") @db.Uuid
-  addressCityId                String?            @map("address_city_id") @db.Uuid
-  addressLine                  String?            @map("address_line") @db.VarChar(500)
-  postalCode                   String?            @map("postal_code") @db.VarChar(32)
-  remark                       String?            @db.VarChar(1000)
-  enabled                      Boolean            @default(false)
-  version                      Int                @default(1)
-  createdAt                    DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt                    DateTime           @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  numberingIssuance         NumberingIssuance      @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  registrationCountryRegion Region?                @relation("SupplierRegistrationCountry", fields: [registrationCountryRegionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  addressCountryRegion      Region?                @relation("SupplierAddressCountry", fields: [addressCountryRegionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  addressProvinceState      Region?                @relation("SupplierAddressProvince", fields: [addressProvinceStateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  addressCity               Region?                @relation("SupplierAddressCity", fields: [addressCityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  createRequest             SupplierCreateRequest?
-
-  @@unique([registrationCountryRegionId, normalizedRegistrationNumber], map: "suppliers_registration_country_number_key")
-  @@index([enabled, updatedAt(sort: Desc), id(sort: Desc)], map: "suppliers_enabled_updated_at_id_idx")
-  @@index([entityType, updatedAt(sort: Desc), id(sort: Desc)], map: "suppliers_entity_type_updated_at_id_idx")
-  @@index([normalizedLegalName(ops: raw("varchar_pattern_ops"))], map: "suppliers_normalized_legal_name_pattern_idx")
-  @@index([normalizedShortName(ops: raw("varchar_pattern_ops"))], map: "suppliers_normalized_short_name_pattern_idx")
-  @@map("suppliers")
-}
-
-model SupplierCreateRequest {
-  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  idempotencyScopeHash   Bytes    @unique(map: "supplier_create_requests_idempotency_scope_hash_key") @map("idempotency_scope_hash") @db.ByteA
-  requestFingerprintHash Bytes    @map("request_fingerprint_hash") @db.ByteA
-  supplierId             String?  @unique(map: "supplier_create_requests_supplier_id_key") @map("supplier_id") @db.Uuid
-  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-
-  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-
-  @@map("supplier_create_requests")
 }

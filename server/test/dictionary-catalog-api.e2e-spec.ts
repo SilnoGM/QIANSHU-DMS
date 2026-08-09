@@ -30,6 +30,9 @@ const CSRF_HEADERS = {
 } as const
 const LOCK_OBSERVATION_TIMEOUT_MS = 1_000
 const ASYNC_ASSERTION_TIMEOUT_MS = 3_000
+const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
+const SUPPLIER_DICTIONARY_TYPE_ID =
+  '00000000-0000-4000-8000-000000002001'
 
 interface ApiErrorBody {
   readonly code: string
@@ -280,6 +283,39 @@ describe('Dictionary Catalog API and Lookup with PostgreSQL', () => {
       loginBody: readResponseBody<AuthContextBody>(loginResponse),
     }
   }
+
+  it('reads the retired Supplier domain as one disabled empty Catalog', async () => {
+    const { browser } = await createOrdinaryBrowser()
+    const response = await browser
+      .get(`/api/dictionary-catalog/${SUPPLIER_DICTIONARY_CODE}`)
+      .expect(200)
+
+    expectPrivateRequestId(response)
+    expect(readResponseBody<DictionaryCatalogBody>(response)).toEqual({
+      code: SUPPLIER_DICTIONARY_CODE,
+      name: '供应商',
+      enabled: false,
+      items: [],
+    })
+    await expect(prisma.dictionaryType.findUniqueOrThrow({
+      where: { code: SUPPLIER_DICTIONARY_CODE },
+      select: {
+        id: true,
+        description: true,
+        enabled: true,
+        sortOrder: true,
+        version: true,
+        _count: { select: { items: true } },
+      },
+    })).resolves.toEqual({
+      id: SUPPLIER_DICTIONARY_TYPE_ID,
+      description: '合作供方中的供应商列表',
+      enabled: false,
+      sortOrder: 0,
+      version: 1,
+      _count: { items: 0 },
+    })
+  })
 
   it('requires Session but lets an ordinary user read the complete single Catalog without management permission', async () => {
     const anonymousEndpoints = [

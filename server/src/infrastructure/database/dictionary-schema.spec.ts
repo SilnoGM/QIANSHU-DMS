@@ -88,6 +88,24 @@ function extractEnumValues(schema: string, enumName: string): string[] {
 }
 
 describe('dictionary management database schema', () => {
+  it('keeps the retired Supplier schema surface absent', () => {
+    const schema = readSchema()
+    const modelNames = [...schema.matchAll(/^model (\w+) \{/gmu)]
+      .map(match => match[1])
+
+    expect(modelNames).toHaveLength(19)
+    expect(modelNames).not.toEqual(
+      expect.arrayContaining(['Supplier', 'SupplierCreateRequest']),
+    )
+    expect(schema).not.toMatch(
+      /\b(?:Supplier|SupplierCreateRequest|SupplierEntityType)\b/u,
+    )
+    expect(
+      extractEnumValues(schema, 'AuditEventType')
+        .filter(eventType => eventType.startsWith('SUPPLIER_')),
+    ).toEqual([])
+  })
+
   it('defines the confirmed tone and two flat Prisma models', () => {
     const schema = readSchema()
     const dictionaryType = extractBlock(schema, 'model', 'DictionaryType')
@@ -252,7 +270,7 @@ describe('dictionary management database schema', () => {
         `ALTER TYPE "audit_event_type" ADD VALUE '${eventType}'`,
       )
     }
-    expect(auditEventTypes).toHaveLength(44)
+    expect(auditEventTypes).toHaveLength(40)
     expect(
       auditEventTypes.filter(eventType => eventType.startsWith('DICTIONARY_')),
     ).toEqual(DICTIONARY_AUDIT_EVENT_TYPES)

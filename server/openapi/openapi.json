@@ -17391,10 +17391,6 @@
                 "DICTIONARY_ITEM_UPDATED",
                 "DICTIONARY_ITEM_ENABLED",
                 "DICTIONARY_ITEM_DISABLED",
-                "SUPPLIER_CREATED",
-                "SUPPLIER_UPDATED",
-                "SUPPLIER_ENABLED",
-                "SUPPLIER_DISABLED",
                 "SYSTEM_BOOTSTRAP",
                 "SYSTEM_ADMIN_RECOVERED",
                 "AUTH_RETENTION_PURGED"
@@ -20522,10 +20518,6 @@
               "DICTIONARY_ITEM_UPDATED",
               "DICTIONARY_ITEM_ENABLED",
               "DICTIONARY_ITEM_DISABLED",
-              "SUPPLIER_CREATED",
-              "SUPPLIER_UPDATED",
-              "SUPPLIER_ENABLED",
-              "SUPPLIER_DISABLED",
               "SYSTEM_BOOTSTRAP",
               "SYSTEM_ADMIN_RECOVERED",
               "AUTH_RETENTION_PURGED"
