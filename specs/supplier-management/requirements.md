@@ -1,8 +1,11 @@
 # 供应商管理需求规格
 
+> 历史规格：本方案已于 2026-08-09 被 `specs/supplier-dictionary-migration/requirements.md` 取代。本文件仅保留原始决策与交付证据，不再代表当前运行时需求。
+
 ## 1. 文档状态
 
 - 状态：已确认
+- 取代状态：已由供应商字典化与独立模块退役规格取代
 - 确认日期：2026-08-05
 - 正式入口：`/system/service-provider/suppliers`
 - 菜单层级：系统管理 → 合作供方 → 供应商管理
