@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Task 1 已完成，Task 2 待执行
+- 状态：Phase 4 实施中，Task 2 已完成，Task 3 待执行
 - Requirements 确认日期：2026-08-09
 - Design 确认日期：2026-08-09
 - 任务计划编写日期：2026-08-09
@@ -152,25 +152,25 @@ git diff --check
 
 ### Task 2 - 退役 Web 入口、领域页面与 Supplier Browser CI
 
-状态：待 Task 1 绿色完成。
+状态：已完成（2026-08-09）。
 
 目标：先删除 Supplier Web 消费方和专属 Browser Job，保留字典页面与其他七个 validation jobs。
 
 TDD：
 
-- [ ] 先新增/更新反回归测试，使其因 ServiceProvider 路由、Supplier 页面/权限、package script 和第八个 Browser Job 仍存在而失败。
-- [ ] 记录红测只指向旧 Supplier Web/CI 能力，不修改字典 UI 或其他 Browser Job。
+- [x] 先新增/更新反回归测试，使其因 ServiceProvider 路由、Supplier 页面/权限、package script 和第八个 Browser Job 仍存在而失败。
+- [x] 记录红测只指向旧 Supplier Web/CI 能力，不修改字典 UI 或其他 Browser Job。
 
 实施：
 
-- [ ] 删除 `web/apps/qsmds-arco/src/api/modules/suppliers.ts`。
-- [ ] 删除 `web/apps/qsmds-arco/src/router/modules/service.provider.ts`。
-- [ ] 删除 `web/apps/qsmds-arco/src/views/system/service-provider/suppliers/` 全目录。
-- [ ] 删除 Supplier API、Route、View、logic、component、Browser 和 helper 测试文件。
-- [ ] 从 `router/routes.ts` 删除 ServiceProvider 注册和首页权限展开，从 Web 权限目录删除五个 Supplier label。
-- [ ] 删除根/Web Supplier scripts、`scripts/ci-browser-suppliers-e2e.mjs`、其测试和 Workflow Job。
-- [ ] 恢复 `ci-browser-dictionaries-e2e.mjs` 无参数 runner 边界，删除只为 Supplier runner 增加的注入选项。
-- [ ] 更新 workflow/root/workspace/system-management 治理测试，精确断言七个 validation jobs 加 `ci-gate`。
+- [x] 删除 `web/apps/qsmds-arco/src/api/modules/suppliers.ts`。
+- [x] 删除 `web/apps/qsmds-arco/src/router/modules/service.provider.ts`。
+- [x] 删除 `web/apps/qsmds-arco/src/views/system/service-provider/suppliers/` 全目录。
+- [x] 删除 Supplier API、Route、View、logic、component、Browser 和 helper 测试文件。
+- [x] 从 `router/routes.ts` 删除 ServiceProvider 注册和首页权限展开，从 Web 权限目录删除一个 Supplier resource label；五个仍由 Server 暴露的 permission code 留到 Task 4 原子删除。
+- [x] 删除根/Web Supplier scripts、`scripts/ci-browser-suppliers-e2e.mjs`、其测试和 Workflow Job。
+- [x] 恢复 `ci-browser-dictionaries-e2e.mjs` 无参数 runner 边界，删除只为 Supplier runner 增加的注入选项。
+- [x] 更新 workflow/root/workspace/system-management 治理测试，精确断言七个 validation jobs 加 `ci-gate`。
 
 验收：
 
@@ -194,6 +194,17 @@ pnpm -C web check
 pnpm -C web build
 node --run test:root
 ```
+
+验证记录（2026-08-09）：
+
+- TDD 红测：Root 定向 `85` 项中 `7` 项按预期失败；Web route/view `2` 项、workspace script `2` 项按预期失败，原因仅为旧 Supplier 路由、资源、脚本、runner 与 CI Job 仍存在。
+- Root 定向测试：`85/85` 通过；`node --run test:root`：`652/652` 通过。
+- Web 定向测试：route/view `49/49`、workspace scripts `9/9` 通过。
+- `pnpm -C web check`：共 `921/921` 通过，TypeScript、Vue TypeScript、ESLint、Stylelint 通过。
+- `pnpm -C web build`：Vite production build、Noto 字体和 zero-residue 通过，正式产物无 Supplier/ServiceProvider 残留。
+- `node --run ci:browser-auth-e2e`：真实 Chrome `2/2` 通过；Task 4 前暂留的五个 Server Supplier permission code 与当前 API 一致。
+- `node --run ci:browser-dictionaries-e2e`：真实 Chrome `1/1` 通过，既有字典生命周期、权限、移动端与无障碍能力保持绿色。
+- `git diff --check` 通过；Server、Prisma、OpenAPI 和 lockfile 均无变更。
 
 提交：`refactor: 退役供应商前端入口与专属门禁`。
 

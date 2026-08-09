@@ -734,19 +734,12 @@ async function runManagedRunner(definition, registry, sensitiveValues) {
   }
 }
 
-export async function runProductionBrowserDictionariesE2e(options = {}) {
-  const databaseValidator = options.databaseValidator
-    ?? validateBrowserDictionariesDatabaseUrl
-  const planFactory = options.planFactory ?? createBrowserDictionariesPlan
-  const sensitiveValuesFactory = options.sensitiveValuesFactory
-    ?? createBrowserDictionariesSensitiveValues
-  const sessionPrefix = options.sessionPrefix
-    ?? 'qianshu-browser-dictionaries-e2e-'
-  const databaseUrl = databaseValidator(
+export async function runProductionBrowserDictionariesE2e() {
+  const databaseUrl = validateBrowserDictionariesDatabaseUrl(
     process.env.DATABASE_URL,
   )
   const sessionDirectory = await mkdtemp(
-    path.join(os.tmpdir(), sessionPrefix),
+    path.join(os.tmpdir(), 'qianshu-browser-dictionaries-e2e-'),
   )
   const registry = createBrowserRegionsProcessRegistry(stopManagedProcess)
   let listenersRegistered = false
@@ -789,11 +782,11 @@ export async function runProductionBrowserDictionariesE2e(options = {}) {
       limitedPassword:
         'Dl-' + randomBytes(8).toString('base64url') + '!7',
     }
-    const sensitiveValues = sensitiveValuesFactory(
+    const sensitiveValues = createBrowserDictionariesSensitiveValues(
       databaseUrl,
       secrets,
     )
-    const plan = planFactory({
+    const plan = createBrowserDictionariesPlan({
       chromeExecutable,
       databaseUrl,
       ports,

@@ -708,7 +708,6 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'ci:browser-dictionaries-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-dictionaries-e2e.mjs',
     'ci:browser-numbering-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-numbering-e2e.mjs',
     'ci:browser-regions-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-regions-e2e.mjs',
-    'ci:browser-suppliers-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-suppliers-e2e.mjs',
     'ci:contract': 'node ./scripts/ci-contract-baseline.mjs',
     'release:check': 'node ./scripts/release-version.mjs',
     'release:package:web': 'node ./scripts/release-package.mjs web',
@@ -724,6 +723,14 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'build:server': 'pnpm -C server build',
     'build:web': 'pnpm -C web build',
   })
+})
+
+test('供应商 Browser Root 入口与专属 runner 已退役', async () => {
+  const manifest = JSON.parse(await readFile(fromRoot('package.json'), 'utf8'))
+
+  assert.equal('ci:browser-suppliers-e2e' in manifest.scripts, false)
+  assert.equal(await exists('scripts/ci-browser-suppliers-e2e.mjs'), false)
+  assert.equal(await exists('scripts/ci-browser-suppliers-e2e.test.mjs'), false)
 })
 
 test('根目录不创建 workspace、lockfile 或依赖目录', async () => {

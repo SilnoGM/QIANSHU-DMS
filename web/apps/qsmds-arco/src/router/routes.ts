@@ -8,9 +8,6 @@ import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
-import ServiceProvider, {
-  SERVICE_PROVIDER_READ_PERMISSIONS,
-} from './modules/service.provider'
 import SystemManagement, {
   MANAGEMENT_READ_PERMISSIONS,
 } from './modules/system.management'
@@ -52,11 +49,7 @@ const systemRoutes: RouteRecordRaw[] = [
           title: $t(useAppSettingsStore(pinia).settings.app.home.title),
           icon: 'i-ant-design:home-twotone',
           breadcrumb: false,
-          // 首页只聚合各独立业务域的读取权限，不把新域污染到权限体系父级。
-          auth: [
-            ...MANAGEMENT_READ_PERMISSIONS,
-            ...SERVICE_PROVIDER_READ_PERMISSIONS,
-          ],
+          auth: [...MANAGEMENT_READ_PERMISSIONS],
         },
       },
       {
@@ -93,7 +86,6 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     children: [
       SystemManagement,
       BasicData,
-      ServiceProvider,
       ApplicationSettings,
     ],
   },

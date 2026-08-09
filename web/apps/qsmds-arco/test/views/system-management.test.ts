@@ -272,12 +272,28 @@ test('权限目录合并为一个带资源列的通用表格', () => {
 })
 
 test('权限目录以中文展示现有业务资源', () => {
+  const catalogSource = readRelativeSource(
+    '../../src/views/system/permissions/catalog.ts',
+  )
+  const resourceKeys = [...catalogSource.matchAll(/^ {2}'([^']+)':/gmu)]
+    .map(match => match[1])
+
+  // 资源目录采用精确集合，避免已经退役的领域继续以孤立中文标签残留在权限 UI。
+  assert.deepEqual(resourceKeys, [
+    'audit',
+    'currencies',
+    'dictionaries',
+    'exchange-rates',
+    'numbering-rules',
+    'regions',
+    'roles',
+    'users',
+  ])
   assert.equal(permissionResourceLabel('currencies'), '货币管理')
   assert.equal(permissionResourceLabel('exchange-rates'), '当前汇率')
   assert.equal(permissionResourceLabel('regions'), '地区管理')
   assert.equal(permissionResourceLabel('numbering-rules'), '编号规则')
   assert.equal(permissionResourceLabel('dictionaries'), '字典管理')
-  assert.equal(permissionResourceLabel('suppliers'), '供应商管理')
 })
 
 test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {
