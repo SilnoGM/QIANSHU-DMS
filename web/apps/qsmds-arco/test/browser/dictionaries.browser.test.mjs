@@ -56,6 +56,247 @@ async function runDictionaryBrowserStep(label, action) {
   }
 }
 
+const dictionarySelectRoute = '/component-library/business/dictionary-select'
+
+function dictionarySelectRootSelector(testId) {
+  return `[data-testid="${testId}"]`
+}
+
+function dictionarySelectInputExpression(testId) {
+  return `document.querySelector(${JSON.stringify(
+    `${dictionarySelectRootSelector(testId)} [data-slot="combobox-input"]`,
+  )})`
+}
+
+async function readDictionarySelectActionLayout(page, testId) {
+  return page.evaluate(`(() => {
+    const input = ${dictionarySelectInputExpression(testId)}
+    const root = input?.closest(${JSON.stringify(
+      dictionarySelectRootSelector(testId),
+    )})
+    const control = input?.parentElement
+    const action = root?.querySelector(
+      '[data-slot="combobox-clear"], [data-slot="combobox-trigger"]',
+    )
+    if (!input || !control || !action) {
+      throw new Error('dictionary select action layout unavailable')
+    }
+    const controlStyle = getComputedStyle(control)
+    const controlRect = control.getBoundingClientRect()
+    const inputRect = input.getBoundingClientRect()
+    const actionRect = action.getBoundingClientRect()
+    return {
+      actionAtInlineEnd: controlStyle.direction === 'rtl'
+        ? actionRect.right <= inputRect.left + 1
+        : actionRect.left >= inputRect.right - 1,
+      actionInsideControl: actionRect.top >= controlRect.top - 0.001
+        && actionRect.bottom <= controlRect.bottom + 0.001
+        && actionRect.left >= controlRect.left - 0.001
+        && actionRect.right <= controlRect.right + 0.001,
+      actionSlot: action.getAttribute('data-slot'),
+      controlDisplay: controlStyle.display,
+      controlHeight: controlRect.height,
+      sameRow: Math.abs(
+        (inputRect.top + inputRect.height / 2)
+        - (actionRect.top + actionRect.height / 2),
+      ) <= 1,
+    }
+  })()`)
+}
+
+async function openDictionarySelectBrowserSession(
+  t,
+  profileSuffix,
+  { height = 800, mobile = false, width = 1280 } = {},
+) {
+  const configuration = readDictionaryBrowserConfiguration(process.env)
+  const browser = await launchChrome({
+    executable: configuration.chromeExecutable,
+    userDataDirectory:
+      `${configuration.profileDirectory}-dictionary-select-${profileSuffix}`,
+  })
+  t.after(async () => browser.close())
+  const page = await browser.newPage()
+  const runtime = collectDictionaryRuntimeErrors(page, {
+    sensitiveValues: [configuration.password, configuration.limitedPassword],
+  })
+  runtime.start()
+  t.after(() => {
+    runtime.stop()
+    assert.deepEqual(runtime.issues, [])
+  })
+  await page.setViewport(width, height, mobile)
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/login'))
+  await loginThroughRealHttp(page, configuration)
+  const dictionaryRequests = []
+  const removeDictionaryRequestListener = page.on(
+    'Network.requestWillBeSent',
+    (event) => {
+      const pathname = requestPathname(event)
+      if (
+        pathname.startsWith('/api/dictionary-catalog')
+        || pathname.startsWith('/api/dictionary-types')
+      ) {
+        dictionaryRequests.push({
+          method: event.request?.method ?? '',
+          pathname,
+        })
+      }
+    },
+  )
+  t.after(() => removeDictionaryRequestListener())
+  await page.navigate(appRouteUrl(configuration.baseUrl, dictionarySelectRoute))
+  await waitForAfterAuthentication(page, `(() => {
+    const showcase = document.querySelector(
+      '[data-testid="dictionary-select-showcase"]',
+    )
+    const input = ${dictionarySelectInputExpression('dictionary-select-standard')}
+    return location.hash === '#${dictionarySelectRoute}'
+      && showcase?.getClientRects().length > 0
+      && input?.getClientRects().length > 0
+      && !input.disabled
+      && input.getAttribute('aria-busy') !== 'true'
+  })()`)
+  // App loading 依赖前台页面的 transitionend 清理。真实鼠标验收开始前必须
+  // 激活标签页并等待透明 loading 外层真正移除，不能用 JS click 绕过遮挡。
+  await page.bringToFront()
+  await page.waitFor(`document.querySelector('[data-app-loading]') === null`)
+  return { configuration, dictionaryRequests, page }
+}
+
+async function openDictionaryCombobox(page, testId) {
+  const input = dictionarySelectInputExpression(testId)
+  await page.waitFor(`(() => {
+    const target = ${input}
+    return target?.getClientRects().length > 0 && !target.disabled
+  })()`)
+  await page.evaluate(`(() => {
+    const target = ${input}
+    if (!target) throw new Error('dictionary select input unavailable')
+    target.scrollIntoView({ block: 'center', inline: 'nearest' })
+    target.focus({ preventScroll: true })
+    target.click()
+    return true
+  })()`)
+  await page.waitFor(`(() => {
+    const target = ${input}
+    const content = target?.getAttribute('aria-controls')
+      ? document.getElementById(target.getAttribute('aria-controls'))
+      : null
+    return target?.getAttribute('aria-expanded') === 'true'
+      && content?.getClientRects().length > 0
+  })()`)
+  await page.waitFor(`(() => {
+    const target = ${input}
+    const content = target?.getAttribute('aria-controls')
+      ? document.getElementById(target.getAttribute('aria-controls'))
+      : null
+    if (!content || content.getClientRects().length === 0) return false
+    const transform = getComputedStyle(content).transform
+    if (transform === 'none') return true
+    const matrix = new DOMMatrixReadOnly(transform)
+    return Math.abs(Math.hypot(matrix.a, matrix.b) - 1) < 0.00001
+      && Math.abs(Math.hypot(matrix.c, matrix.d) - 1) < 0.00001
+  })()`)
+}
+
+async function setDictionaryComboboxSearch(page, testId, value) {
+  const input = dictionarySelectInputExpression(testId)
+  await openDictionaryCombobox(page, testId)
+  await page.evaluate(`(() => {
+    const target = ${input}
+    if (!target) throw new Error('dictionary select input unavailable')
+    target.focus({ preventScroll: true })
+    target.select()
+    return document.activeElement === target
+  })()`)
+  if (value !== '') {
+    await page.connection.send('Input.insertText', { text: value })
+  }
+  else {
+    await pressKey(page, 'Backspace')
+  }
+  await page.waitFor(`${input}?.value === ${JSON.stringify(value)}`)
+}
+
+async function clickDictionaryComboboxOption(page, testId, text, index = 0) {
+  const input = dictionarySelectInputExpression(testId)
+  await page.bringToFront()
+  const available = `(() => {
+    const target = ${input}
+    const content = target?.getAttribute('aria-controls')
+      ? document.getElementById(target.getAttribute('aria-controls'))
+      : null
+    return [...(content?.querySelectorAll('[data-slot="combobox-item"]') ?? [])]
+      .filter(item => (
+        item.getClientRects().length > 0
+        && item.getAttribute('data-disabled') === null
+        && item.getAttribute('aria-disabled') !== 'true'
+        && item.textContent?.trim() === ${JSON.stringify(text)}
+      ))
+  })()`
+  await page.waitFor(`${available}.length > ${index}`)
+  const center = await page.evaluate(`(() => {
+    const matches = ${available}
+    const option = matches[${index}]
+    if (!option) throw new Error('dictionary combobox option unavailable')
+    const rect = option.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const hit = document.elementFromPoint(x, y)
+    return {
+      hit: Boolean(hit && option.contains(hit)),
+      hitSlot: hit?.closest?.('[data-slot]')?.getAttribute('data-slot') ?? null,
+      hitTag: hit?.tagName ?? null,
+      hitText: hit?.textContent?.trim().slice(0, 80) ?? null,
+      x,
+      y,
+    }
+  })()`)
+  assert.equal(
+    center.hit,
+    true,
+    `dictionary option center is obstructed: ${JSON.stringify(center)}`,
+  )
+  // Chrome 的 PointerEvent 命中测试依赖当前真实指针位置；先移动再按下，
+  // 并显式维护 buttons/pointerType，避免只关闭 Popover 却没有激活 option。
+  await page.connection.send('Input.dispatchMouseEvent', {
+    button: 'none',
+    buttons: 0,
+    pointerType: 'mouse',
+    type: 'mouseMoved',
+    x: center.x,
+    y: center.y,
+  })
+  await page.connection.send('Input.dispatchMouseEvent', {
+    button: 'left',
+    buttons: 1,
+    clickCount: 1,
+    pointerType: 'mouse',
+    type: 'mousePressed',
+    x: center.x,
+    y: center.y,
+  })
+  await page.connection.send('Input.dispatchMouseEvent', {
+    button: 'left',
+    buttons: 0,
+    clickCount: 1,
+    pointerType: 'mouse',
+    type: 'mouseReleased',
+    x: center.x,
+    y: center.y,
+  })
+  await page.waitFor(`${input}?.getAttribute('aria-expanded') !== 'true'`)
+}
+
+async function clickDictionaryShowcaseButton(page, text) {
+  await clickScopedButton(
+    page,
+    '[data-testid="dictionary-select-showcase"]',
+    text,
+  )
+}
+
 function visibleDialogExpression(title, body) {
   return `(() => {
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
@@ -1407,4 +1648,619 @@ test('真实 Chrome 覆盖系统字典生命周期、双标签失效、权限与
 
   runtime.stop()
   assert.deepEqual(runtime.issues, [])
+})
+
+test('真实 Chrome 覆盖字典选择器搜索、重复 Label、清空与错误恢复', {
+  timeout: 120_000,
+}, async (t) => {
+  const { dictionaryRequests, page } = await openDictionarySelectBrowserSession(
+    t,
+    'interaction',
+  )
+
+  const initialUpdateCount = await page.evaluate(`Number(
+    document.querySelector(
+      '[data-testid="dictionary-select-standard-update-count"]',
+    )?.textContent,
+  )`)
+  assert.equal(initialUpdateCount, 0)
+
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-standard',
+    'WAIT',
+  )
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-standard')}
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    return content?.textContent?.includes('待处理')
+      && !content.textContent.includes('无匹配选项')
+  })()`)
+  await pressKey(page, 'ArrowDown')
+  await pressKey(page, 'Enter')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-standard-value"]',
+  )?.textContent?.trim() === 'WAITING'`)
+
+  await openDictionaryCombobox(page, 'dictionary-select-standard')
+  await page.waitFor(`(() => {
+    const root = document.querySelector(
+      '[data-testid="dictionary-select-standard"]',
+    )
+    return [...(root?.querySelectorAll('button') ?? [])].some(button => (
+      button.getClientRects().length > 0
+      && button.getAttribute('aria-label') === '清空字典选择'
+    ))
+  })()`)
+  const clearLayout = await readDictionarySelectActionLayout(
+    page,
+    'dictionary-select-standard',
+  )
+  assert.equal(clearLayout.actionSlot, 'combobox-clear')
+  assert.equal(clearLayout.controlDisplay, 'flex')
+  assert.equal(clearLayout.actionInsideControl, true)
+  assert.equal(clearLayout.sameRow, true)
+  assert.equal(clearLayout.actionAtInlineEnd, true)
+  await page.evaluate(`(() => {
+    const root = document.querySelector(
+      '[data-testid="dictionary-select-standard"]',
+    )
+    const button = [...(root?.querySelectorAll('button') ?? [])].find(
+      candidate => candidate.getAttribute('aria-label') === '清空字典选择',
+    )
+    if (!button) throw new Error('dictionary clear button unavailable')
+    button.click()
+    return true
+  })()`)
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-standard-value"]',
+  )?.textContent?.trim() === 'null'`)
+  const updateCountAfterClear = await page.evaluate(`Number(
+    document.querySelector(
+      '[data-testid="dictionary-select-standard-update-count"]',
+    )?.textContent,
+  )`)
+  assert.equal(updateCountAfterClear, 2)
+
+  await clickDictionaryShowcaseButton(page, '外部设为第二个“处理中”')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-standard-value"]',
+  )?.textContent?.trim() === 'RUNNING_ALTERNATE'`)
+  assert.equal(await page.evaluate(`Number(
+    document.querySelector(
+      '[data-testid="dictionary-select-standard-update-count"]',
+    )?.textContent,
+  )`), updateCountAfterClear)
+
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-standard',
+    'NOT_A_DICTIONARY_VALUE',
+  )
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-standard')}
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    return content?.textContent?.includes('无匹配选项')
+  })()`)
+  await pressKey(page, 'Escape')
+  await page.waitFor(`${dictionarySelectInputExpression(
+    'dictionary-select-standard',
+  )}?.getAttribute('aria-expanded') !== 'true'`)
+  await openDictionaryCombobox(page, 'dictionary-select-standard')
+  await pressKey(page, 'Tab')
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-standard')}
+    return document.activeElement !== input
+      && document.querySelector(
+        '[data-testid="dictionary-select-focus-summary"]',
+      )?.textContent?.trim() === 'blur'
+  })()`)
+
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-duplicate-label',
+    '处理中',
+  )
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-duplicate-label')}
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    return [...(content?.querySelectorAll('[data-slot="combobox-item"]') ?? [])]
+      .filter(item => item.getClientRects().length > 0
+        && item.textContent?.trim() === '处理中').length === 2
+  })()`)
+  await clickDictionaryComboboxOption(
+    page,
+    'dictionary-select-duplicate-label',
+    '处理中',
+    0,
+  )
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-duplicate-value"]',
+  )?.textContent?.trim() === 'RUNNING'`)
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-duplicate-label',
+    '处理中',
+  )
+  await clickDictionaryComboboxOption(
+    page,
+    'dictionary-select-duplicate-label',
+    '处理中',
+    1,
+  )
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-duplicate-value"]',
+  )?.textContent?.trim() === 'RUNNING_ALTERNATE'`)
+
+  await openDictionaryCombobox(page, 'dictionary-select-empty')
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-empty')}
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    return content?.textContent?.includes('暂无可用选项')
+  })()`)
+  await pressKey(page, 'Escape')
+
+  await page.waitFor(`(() => {
+    const root = document.querySelector('[data-testid="dictionary-select-retry"]')
+    return root?.textContent?.includes('字典选项暂时不可用，请稍后重试')
+      && root.querySelector('button[aria-label="重试加载字典选项"]')
+  })()`)
+  await page.evaluate(`document.querySelector(
+    '[data-testid="dictionary-select-retry"] button[aria-label="重试加载字典选项"]',
+  ).click()`)
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-retry')}
+    return input?.getClientRects().length > 0 && !input.disabled
+  })()`)
+  assert.deepEqual(await page.evaluate(`(() => ({
+    invalid: document.querySelector(
+      '[data-testid="dictionary-select-invalid"]',
+    )?.textContent?.includes('字典编码配置无效'),
+    missing: document.querySelector(
+      '[data-testid="dictionary-select-missing"]',
+    )?.textContent?.includes('未配置该字典类型'),
+  }))()`), { invalid: true, missing: true })
+  assert.deepEqual(dictionaryRequests, [])
+})
+
+test('真实 Chrome 覆盖字典选择器 code session、迟到响应与 invalid 恢复', {
+  timeout: 120_000,
+}, async (t) => {
+  const { page } = await openDictionarySelectBrowserSession(t, 'session')
+
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-code-switch"]',
+  )?.textContent?.includes('正在加载字典选项')`)
+  await clickDictionaryShowcaseButton(page, '切换到 status')
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-code-switch')}
+    return !input?.disabled && input?.value === '待处理'
+  })()`)
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-code-switch',
+    '处理',
+  )
+  await page.evaluate(`(() => {
+    globalThis.__dictionarySameCodeInput = ${dictionarySelectInputExpression(
+      'dictionary-select-code-switch',
+    )}
+    return true
+  })()`)
+  await page.evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find(candidate => (
+      candidate.textContent?.trim() === '改为等价 code'
+    ))
+    if (!button) throw new Error('equivalent code button unavailable')
+    button.click()
+    return true
+  })()`)
+  await page.waitFor(`${dictionarySelectInputExpression(
+    'dictionary-select-code-switch',
+  )}?.value === '处理'`)
+  assert.deepEqual(await page.evaluate(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-code-switch')}
+    return {
+      active: document.activeElement === input,
+      expanded: input?.getAttribute('aria-expanded'),
+      sameNode: globalThis.__dictionarySameCodeInput === input,
+    }
+  })()`), { active: true, expanded: 'true', sameNode: true })
+
+  await clickDictionaryShowcaseButton(page, '切换为 invalid')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-code-switch"]',
+  )?.textContent?.includes('字典编码配置无效')`)
+  await clickDictionaryShowcaseButton(page, '恢复为 status')
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-code-switch')}
+    return !input?.disabled && input?.value === '待处理'
+  })()`)
+  await clickDictionaryShowcaseButton(page, '释放迟到 phase')
+  await openDictionaryCombobox(page, 'dictionary-select-code-switch')
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-code-switch')}
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    return content?.textContent?.includes('待处理')
+      && !content.textContent.includes('阶段 Alpha')
+  })()`)
+})
+
+test('真实 Chrome 覆盖字典选择器原生 FormData 与 FaForm 焦点语义', {
+  timeout: 120_000,
+}, async (t) => {
+  const { page } = await openDictionarySelectBrowserSession(t, 'forms')
+
+  const nativeInput = dictionarySelectInputExpression(
+    'dictionary-select-native-form',
+  )
+  assert.deepEqual(await page.evaluate(`(() => {
+    const input = ${nativeInput}
+    const form = input?.closest('form')
+    return {
+      inputName: input?.getAttribute('name'),
+      labelled: document.querySelector(
+        'label[for="dictionary-select-showcase-native-form"]',
+      ) !== null,
+      required: input?.getAttribute('aria-required'),
+      submissionNames: [...(form?.elements ?? [])]
+        .filter(element => element.getAttribute?.('name') === 'workflowStatus')
+        .length,
+    }
+  })()`), {
+    inputName: null,
+    labelled: true,
+    required: 'true',
+    submissionNames: 0,
+  })
+
+  await clickDictionaryShowcaseButton(page, '读取 FormData')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-form-data"]',
+  )?.textContent?.trim() === '[]'`)
+  assert.deepEqual(await page.evaluate(`(() => {
+    const input = ${nativeInput}
+    const proxy = input?.closest('form')?.querySelector(
+      '[data-qs-dictionary-validation-proxy]',
+    )
+    return {
+      disabled: proxy?.disabled,
+      exists: proxy !== null,
+      required: proxy?.required,
+      valid: proxy?.checkValidity(),
+      value: proxy?.value,
+      willValidate: proxy?.willValidate,
+    }
+  })()`), {
+    disabled: false,
+    exists: true,
+    required: true,
+    valid: false,
+    value: '',
+    willValidate: true,
+  })
+  await page.evaluate(`(() => {
+    const input = ${nativeInput}
+    const form = input?.closest('form')
+    if (!form) throw new Error('dictionary native form unavailable')
+    form.requestSubmit()
+    return true
+  })()`)
+  await page.waitFor(`(() => {
+    const root = document.querySelector(
+      '[data-testid="dictionary-select-native-form"]',
+    )
+    return root?.textContent?.includes('请选择字典选项')
+  })()`)
+  await page.waitFor(`document.activeElement === ${nativeInput}`)
+
+  await clickDictionaryShowcaseButton(page, '设为空字符串')
+  await clickDictionaryShowcaseButton(page, '读取 FormData')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-form-data"]',
+  )?.textContent?.includes('["workflowStatus",""]')`)
+  await clickDictionaryShowcaseButton(page, '设为未知 raw')
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-native-form',
+    '待处理',
+  )
+  await pressKey(page, 'Escape')
+  await clickDictionaryShowcaseButton(page, '读取 FormData')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-form-data"]',
+  )?.textContent?.includes('["workflowStatus","LEGACY_UNKNOWN"]')`)
+  await clickDictionaryShowcaseButton(page, '切换 caller disabled')
+  await clickDictionaryShowcaseButton(page, '读取 FormData')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-form-data"]',
+  )?.textContent?.trim() === '[]'`)
+
+  await clickDictionaryShowcaseButton(page, 'scrollToField(status)')
+  await page.waitFor(`document.activeElement === ${dictionarySelectInputExpression(
+    'dictionary-select-form-item',
+  )}`)
+  await clickDictionaryShowcaseButton(page, '提交 FaForm')
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-form-item')}
+    return document.activeElement === input
+      && input.getAttribute('aria-invalid') === 'true'
+  })()`)
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-form-item',
+    'WAIT',
+  )
+  await pressKey(page, 'ArrowDown')
+  await pressKey(page, 'Enter')
+  await clickDictionaryShowcaseButton(page, '提交 FaForm')
+  await page.waitFor(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-form-item')}
+    const result = document.querySelector(
+      '[data-testid="dictionary-select-fa-form-result"]',
+    )
+    return input?.getAttribute('aria-invalid') !== 'true'
+      && result?.textContent?.trim() === '{"status":"WAITING"}'
+  })()`)
+})
+
+test('真实 Chrome 覆盖 FaCombobox primitive、对象、分组与 virtual identity', {
+  timeout: 120_000,
+}, async (t) => {
+  const { page } = await openDictionarySelectBrowserSession(t, 'combobox')
+  const duplicateKeyWarnings = []
+  const removeWarningListener = page.on(
+    'Runtime.consoleAPICalled',
+    (event) => {
+      if (event.type !== 'warning') {
+        return
+      }
+      const text = (event.args ?? [])
+        .map(argument => argument.value ?? argument.description ?? '')
+        .join(' ')
+      if (text.includes('Duplicate keys found')) {
+        duplicateKeyWarnings.push(text)
+      }
+    },
+  )
+  t.after(() => removeWarningListener())
+
+  await openDictionaryCombobox(page, 'dictionary-select-primitive-values')
+  const primitiveInputContract = await page.evaluate(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-primitive-values')}
+    const trigger = input?.parentElement?.querySelector(
+      '[data-slot="combobox-trigger"]',
+    )
+    return {
+      autocomplete: input?.getAttribute('aria-autocomplete'),
+      controls: Boolean(input?.getAttribute('aria-controls')),
+      describedBy: input?.getAttribute('aria-describedby'),
+      expanded: input?.getAttribute('aria-expanded'),
+      id: input?.id,
+      label: input?.getAttribute('aria-label'),
+      required: input?.getAttribute('aria-required'),
+      triggerLabel: trigger?.getAttribute('aria-label'),
+    }
+  })()`)
+  assert.deepEqual(primitiveInputContract, {
+    autocomplete: 'list',
+    controls: true,
+    describedBy: 'dictionary-select-primitive-description',
+    expanded: 'true',
+    id: 'dictionary-select-showcase-primitive-values',
+    label: 'Primitive value',
+    required: 'true',
+    triggerLabel: '展开或收起选项',
+  })
+  await pressKey(page, 'Escape')
+
+  const primitiveCases = [
+    ['字符串 1', 'string:1'],
+    ['数字 1', 'number:1'],
+    ['大整数 1', 'bigint:1'],
+    ['空值 null', 'null'],
+  ]
+  for (const [label, expected] of primitiveCases) {
+    await openDictionaryCombobox(page, 'dictionary-select-primitive-values')
+    await clickDictionaryComboboxOption(
+      page,
+      'dictionary-select-primitive-values',
+      label,
+    )
+    await page.waitFor(`document.querySelector(
+      '[data-testid="dictionary-select-primitive-summary"]',
+    )?.textContent?.trim() === ${JSON.stringify(expected)}`)
+  }
+  await openDictionaryCombobox(page, 'dictionary-select-primitive-values')
+  await page.waitFor(`(() => {
+    const root = document.querySelector(
+      '[data-testid="dictionary-select-primitive-values"]',
+    )
+    const clear = root?.querySelector('[data-slot="combobox-clear"]')
+    return clear?.getClientRects().length > 0
+      && clear.getAttribute('aria-label') === '清空选择'
+  })()`)
+  await page.evaluate(`document.querySelector(
+    '[data-testid="dictionary-select-primitive-values"] [data-slot="combobox-clear"]',
+  ).click()`)
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-primitive-summary"]',
+  )?.textContent?.trim() === 'undefined'`)
+  const primitiveEventCounts = await page.evaluate(`(() => {
+    const text = document.querySelector(
+      '[data-testid="dictionary-select-primitive-events"]',
+    )?.textContent ?? ''
+    return Object.fromEntries(text.trim().split(';').map(part => {
+      const [key, value] = part.split('=')
+      return [key, Number(value)]
+    }))
+  })()`)
+  assert.equal(primitiveEventCounts.change, 5)
+  assert.equal(primitiveEventCounts.clear, 1)
+  assert.equal(primitiveEventCounts.focus > 0, true)
+  assert.equal(primitiveEventCounts.blur > 0, true)
+
+  for (const [label, expected] of [
+    ['相同显示名', 'object-a · north'],
+    ['相同显示名', 'object-b · south'],
+  ]) {
+    await openDictionaryCombobox(page, 'dictionary-select-object-values')
+    await clickDictionaryComboboxOption(
+      page,
+      'dictionary-select-object-values',
+      label,
+      expected.startsWith('object-a') ? 0 : 1,
+    )
+    await page.waitFor(`document.querySelector(
+      '[data-testid="dictionary-select-object-summary"]',
+    )?.textContent?.trim() === ${JSON.stringify(expected)}`)
+  }
+
+  await openDictionaryCombobox(page, 'dictionary-select-group-values')
+  assert.deepEqual(await page.evaluate(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-group-values')}
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    return [...(content?.querySelectorAll('[data-slot="combobox-label"]') ?? [])]
+      .map(label => label.textContent?.trim())
+  })()`), ['首选分组', '备用分组'])
+  await pressKey(page, 'Escape')
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-group-values',
+    '跳过禁用',
+  )
+  await pressKey(page, 'ArrowDown')
+  await pressKey(page, 'Enter')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-group-summary"]',
+  )?.textContent?.trim() === 'GROUP_ENABLED'`)
+
+  await openDictionaryCombobox(page, 'dictionary-select-virtual-values')
+  assert.equal(await page.evaluate(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-virtual-values')}
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    return content?.textContent?.includes('虚拟条目 080')
+  })()`), false)
+  await pressKey(page, 'Escape')
+  await setDictionaryComboboxSearch(
+    page,
+    'dictionary-select-virtual-values',
+    '虚拟条目 080',
+  )
+  await pressKey(page, 'ArrowDown')
+  await pressKey(page, 'Enter')
+  await page.waitFor(`document.querySelector(
+    '[data-testid="dictionary-select-virtual-summary"]',
+  )?.textContent?.trim() === 'VIRTUAL_080'`)
+  assert.deepEqual(duplicateKeyWarnings, [])
+})
+
+test('真实 Chrome 覆盖字典选择器主题、Reduced Motion 与移动触控', {
+  timeout: 120_000,
+}, async (t) => {
+  const { page } = await openDictionarySelectBrowserSession(t, 'responsive')
+
+  const desktopLayout = await readDictionarySelectActionLayout(
+    page,
+    'dictionary-select-standard',
+  )
+  assert.equal(desktopLayout.actionSlot, 'combobox-trigger')
+  assert.equal(desktopLayout.controlDisplay, 'flex')
+  assert.equal(
+    desktopLayout.controlHeight >= 35.999
+    && desktopLayout.controlHeight <= 36.001,
+    true,
+  )
+  assert.equal(desktopLayout.actionInsideControl, true)
+  assert.equal(desktopLayout.sameRow, true)
+  assert.equal(desktopLayout.actionAtInlineEnd, true)
+  const lightBackground = await page.evaluate(`getComputedStyle(
+    ${dictionarySelectInputExpression('dictionary-select-standard')}
+      ?.parentElement,
+  ).backgroundColor`)
+  const darkBackground = await page.evaluate(`(() => {
+    document.documentElement.classList.add('dark')
+    return getComputedStyle(
+      ${dictionarySelectInputExpression('dictionary-select-standard')}
+        ?.parentElement,
+    ).backgroundColor
+  })()`)
+  assert.notEqual(darkBackground, lightBackground)
+
+  await page.connection.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+  await openDictionaryCombobox(page, 'dictionary-select-standard')
+  const reducedMotion = await page.evaluate(`(() => {
+    const loader = document.querySelector('.qs-dictionary-select__loader')
+    const content = document.querySelector(
+      '.qs-dictionary-select__content[data-state="open"]',
+    )
+    return {
+      contentAnimationDuration: getComputedStyle(content).animationDuration,
+      contentAnimationIterationCount:
+        getComputedStyle(content).animationIterationCount,
+      loaderAnimationDuration: getComputedStyle(loader).animationDuration,
+      loaderAnimationIterationCount:
+        getComputedStyle(loader).animationIterationCount,
+    }
+  })()`)
+  const durationMilliseconds = value => value.endsWith('ms')
+    ? Number.parseFloat(value)
+    : Number.parseFloat(value) * 1000
+  assert.equal(
+    durationMilliseconds(reducedMotion.contentAnimationDuration) <= 0.011,
+    true,
+  )
+  assert.equal(reducedMotion.contentAnimationIterationCount, '1')
+  assert.equal(
+    durationMilliseconds(reducedMotion.loaderAnimationDuration) <= 0.011,
+    true,
+  )
+  assert.equal(reducedMotion.loaderAnimationIterationCount, '1')
+  await pressKey(page, 'Escape')
+
+  await page.setViewport(390, 844, true)
+  await page.waitFor(`document.documentElement.clientWidth === 390`)
+  await openDictionaryCombobox(page, 'dictionary-select-standard')
+  const mobileLayout = await page.evaluate(`(() => {
+    const input = ${dictionarySelectInputExpression('dictionary-select-standard')}
+    const root = input?.closest('[data-testid="dictionary-select-standard"]')
+    const trigger = root?.querySelector('[data-slot="combobox-trigger"]')
+    const content = input?.getAttribute('aria-controls')
+      ? document.getElementById(input.getAttribute('aria-controls'))
+      : null
+    const option = [...(content?.querySelectorAll(
+      '[data-slot="combobox-item"]',
+    ) ?? [])].find(item => item.getClientRects().length > 0)
+    const contentRect = content?.getBoundingClientRect()
+    return {
+      contentInsideViewport: contentRect.left >= -0.001
+        && contentRect.right <= innerWidth + 0.001,
+      documentFits: document.documentElement.scrollWidth
+        <= document.documentElement.clientWidth,
+      inputHeight: input?.getBoundingClientRect().height,
+      optionHeight: option?.getBoundingClientRect().height,
+      triggerHeight: trigger?.getBoundingClientRect().height,
+    }
+  })()`)
+  assert.equal(mobileLayout.documentFits, true)
+  assert.equal(mobileLayout.contentInsideViewport, true)
+  assert.equal(mobileLayout.inputHeight >= 43.999, true)
+  assert.equal(mobileLayout.optionHeight >= 43.999, true)
+  assert.equal(mobileLayout.triggerHeight >= 43.999, true)
 })

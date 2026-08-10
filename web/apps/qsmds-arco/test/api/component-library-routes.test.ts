@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供十个独立组件路由', () => {
+test('组件库按分类提供十一个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -138,6 +138,11 @@ test('组件库按分类提供十个独立组件路由', () => {
         path: 'region-selector',
         title: '地区选择器',
       },
+      {
+        name: 'componentLibraryQsDictionarySelect',
+        path: 'dictionary-select',
+        title: '字典选择器',
+      },
     ],
   )
 
@@ -150,7 +155,7 @@ test('组件库按分类提供十个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 10)
+  assert.equal(new Set(componentRouteNames).size, 11)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -181,7 +186,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('十个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('十一个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -234,6 +239,11 @@ test('十个组件页面与页面模板复用展示壳且不依赖业务 API 或
       title: '地区选择器',
     },
     {
+      componentName: 'ComponentLibraryQsDictionarySelect',
+      file: '../../src/views/component_library/business/dictionary-select.vue',
+      title: '字典选择器',
+    },
+    {
       componentName: 'ComponentLibraryPageTemplates',
       file: '../../src/views/component_library/page_templates/index.vue',
       title: '页面模板',
@@ -248,6 +258,18 @@ test('十个组件页面与页面模板复用展示壳且不依赖业务 API 或
     assert.match(source, new RegExp(`title="${page.title}"`, 'u'))
     assert.doesNotMatch(source, /@\/api|useApp\w*Store/u)
   })
+})
+
+test('字典选择器叶子路由固定图标与独立动态页面', () => {
+  const source = readFileSync(
+    new URL('../../src/router/modules/component.library.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /path: 'dictionary-select',[\s\S]*?name: 'componentLibraryQsDictionarySelect',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/dictionary-select\.vue'\),[\s\S]*?title: '字典选择器',[\s\S]*?icon: 'i-lucide:list-filter'/u,
+  )
 })
 
 test('Browser harness 使用默认正式 Provider 并提供真实表单与多实例语义', () => {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { AcceptableValue, ComboboxContentProps } from 'reka-ui'
-import type { HTMLAttributes } from 'vue'
+import type { HTMLAttributes, InputHTMLAttributes } from 'vue'
 import { useTextDirection } from '@vueuse/core'
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useTemplateRef, watch } from 'vue'
 import { cn } from '#utils'
 import Button from '../../basic/button/index.vue'
 import Icon from '../../basic/icon/index.vue'
@@ -29,16 +29,41 @@ export interface ComboboxGroupOption {
   options: ComboboxOption[]
 }
 
+type ComboboxInputAttrs = Pick<
+  InputHTMLAttributes,
+  | 'id'
+  | 'tabindex'
+  | 'aria-label'
+  | 'aria-labelledby'
+  | 'aria-describedby'
+  | 'aria-invalid'
+  | 'aria-required'
+  | 'aria-errormessage'
+  | 'aria-busy'
+>
+
+interface ComboboxInputComponentRef {
+  readonly $el?: unknown
+}
+
+interface ComboboxInputComponentExpose {
+  readonly ref?: ComboboxInputComponentRef | HTMLInputElement | null
+}
+
 export interface ComboboxProps {
   disabled?: boolean
   clearable?: boolean
+  clearAriaLabel?: string
   position?: ComboboxContentProps['position']
   options: (ComboboxOption | ComboboxGroupOption)[]
   placeholder?: string
   emptyText?: string
   filter?: (searchValue: string, option: ComboboxOption) => boolean
+  inputAttrs?: ComboboxInputAttrs
+  triggerAriaLabel?: string
   virtualList?: boolean
   class?: HTMLAttributes['class']
+  contentClass?: HTMLAttributes['class']
 }
 
 defineOptions({
@@ -48,19 +73,64 @@ defineOptions({
 const props = withDefaults(defineProps<ComboboxProps>(), {
   disabled: false,
   clearable: false,
+  clearAriaLabel: '清空选择',
   position: 'popper',
+  triggerAriaLabel: '展开或收起选项',
   virtualList: false,
 })
 
 const emits = defineEmits<{
+  blur: [event: FocusEvent]
   change: [value: AcceptableValue | undefined]
   clear: []
+  focus: [event: FocusEvent]
 }>()
 
 const value = defineModel<AcceptableValue | undefined>()
 const searchValue = ref('')
 const isFocused = ref(false)
 const isHovered = ref(false)
+const comboboxInputRef = useTemplateRef<ComboboxInputComponentExpose>(
+  'comboboxInputRef',
+)
+
+/*
+ * inputAttrs 同时保留类型白名单和运行时白名单。后者防止 JavaScript 调用方
+ * 绕过类型后把业务 name、搜索 value、事件或 Reka 自己维护的组合框 ARIA
+ * 覆盖到真实 input，确保搜索文本永远不被误当成业务字段提交。
+ */
+const safeInputAttrs = computed<ComboboxInputAttrs>(() => ({
+  'id': props.inputAttrs?.id,
+  'tabindex': props.inputAttrs?.tabindex,
+  'aria-label': props.inputAttrs?.['aria-label'],
+  'aria-labelledby': props.inputAttrs?.['aria-labelledby'],
+  'aria-describedby': props.inputAttrs?.['aria-describedby'],
+  'aria-invalid': props.inputAttrs?.['aria-invalid'],
+  'aria-required': props.inputAttrs?.['aria-required'],
+  'aria-errormessage': props.inputAttrs?.['aria-errormessage'],
+  'aria-busy': props.inputAttrs?.['aria-busy'],
+}))
+
+/*
+ * primitive value 由“类型 + 值”区分；对象 value 则只能使用组件实例内的
+ * identity。WeakMap 不延长对象生命周期，也避免不同对象都退化成同一个
+ * `[object Object]` key。
+ */
+const objectValueKeys = new WeakMap<object, number>()
+let nextObjectValueKey = 0
+
+function getOptionValueKey(optionValue: AcceptableValue): string {
+  if (typeof optionValue === 'object' && optionValue !== null) {
+    const existingKey = objectValueKeys.get(optionValue)
+    if (existingKey !== undefined) {
+      return `object:${existingKey}`
+    }
+    const objectKey = ++nextObjectValueKey
+    objectValueKeys.set(optionValue, objectKey)
+    return `object:${objectKey}`
+  }
+  return `${typeof optionValue}:${String(optionValue)}`
+}
 
 const dir = useTextDirection({
   observe: true,
@@ -158,11 +228,52 @@ function displayValue(val: AcceptableValue | undefined) {
   return findLabelByValue(val)
 }
 
+function handleInputFocus(event: FocusEvent) {
+  isFocused.value = true
+  emits('focus', event)
+}
+
+function handleInputBlur(event: FocusEvent) {
+  isFocused.value = false
+  emits('blur', event)
+}
+
+/**
+ * 内层包装器的 `ref` 在当前 Reka 版本中是组件实例，而不是原生 input。
+ * 兼容包装器未来直接暴露元素的形态，并只沿组件公开的 `$el` 解析真实 input；
+ * 不使用全局 DOM 查询，也不依赖调用方传入的 id。
+ */
+function resolveComboboxInputElement(): HTMLInputElement | null {
+  const candidate = comboboxInputRef.value?.ref
+  if (candidate instanceof HTMLInputElement) {
+    return candidate
+  }
+  if (candidate?.$el instanceof HTMLInputElement) {
+    return candidate.$el
+  }
+  return null
+}
+
+/** 只操作 ComboboxInput 对应的真实 input，不跨组件查询 DOM。 */
+function focus() {
+  resolveComboboxInputElement()?.focus()
+}
+
+/** 与 focus() 对称，供表单和上层领域组件显式释放真实 input 焦点。 */
+function blur() {
+  resolveComboboxInputElement()?.blur()
+}
+
 function handleClear() {
   value.value = undefined
   searchValue.value = ''
   emits('clear')
 }
+
+defineExpose({
+  blur,
+  focus,
+})
 </script>
 
 <template>
@@ -183,15 +294,19 @@ function handleClear() {
         @mouseleave="isHovered = false"
       >
         <ComboboxInput
+          ref="comboboxInputRef"
           v-model="searchValue"
+          v-bind="safeInputAttrs"
           :display-value="displayValue"
           :placeholder="props.placeholder"
           class="p-0 border-0 bg-transparent flex-1 h-full shadow-none focus-visible:border-transparent focus-visible:ring-0"
-          @focus="isFocused = true"
-          @blur="isFocused = false"
+          @focus="handleInputFocus"
+          @blur="handleInputBlur"
         />
         <Button
           v-if="showClear"
+          :aria-label="clearAriaLabel"
+          data-slot="combobox-clear"
           variant="ghost"
           size="icon"
           type="button"
@@ -202,13 +317,17 @@ function handleClear() {
         </Button>
         <ComboboxTrigger
           v-else
+          :aria-label="triggerAriaLabel"
           as="button"
           type="button"
         />
       </div>
     </ComboboxAnchor>
 
-    <ComboboxContent :position="position" class="z-2000">
+    <ComboboxContent
+      :position="position"
+      :class="cn('z-2000', contentClass)"
+    >
       <template v-if="virtualList">
         <ComboboxVirtualizer
           v-if="filteredVirtualValues.length > 0"
@@ -233,12 +352,15 @@ function handleClear() {
       </template>
       <template v-else>
         <template v-if="filteredOptions.length > 0">
-          <template v-for="option in filteredOptions" :key="option.label">
+          <template
+            v-for="option in filteredOptions"
+            :key="isGroup(option) ? `group:${option.label}` : getOptionValueKey(option.value)"
+          >
             <ComboboxGroup v-if="isGroup(option)">
               <ComboboxLabel>{{ option.label }}</ComboboxLabel>
               <ComboboxItem
                 v-for="item in option.options"
-                :key="String(item.value)"
+                :key="getOptionValueKey(item.value)"
                 :value="item.value"
                 :disabled="item.disabled"
                 :text-value="item.label"

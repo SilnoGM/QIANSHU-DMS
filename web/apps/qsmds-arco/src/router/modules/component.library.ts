@@ -182,6 +182,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:map-pinned',
         },
       },
+      {
+        path: 'dictionary-select',
+        name: 'componentLibraryQsDictionarySelect',
+        component: () => import('@/views/component_library/business/dictionary-select.vue'),
+        meta: {
+          title: '字典选择器',
+          icon: 'i-lucide:list-filter',
+        },
+      },
     ],
   },
   {
