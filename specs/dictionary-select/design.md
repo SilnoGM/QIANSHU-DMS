@@ -432,7 +432,7 @@ div.qs-dictionary-select (root, class/style/data-*)
     └── error alert + retry button
 ```
 
-组件 root 使用 `min-w-0 w-full`；FaCombobox control class 覆盖为全宽，并在组件局部通过 `[data-slot="combobox"]` 把其现有 `inline-block` root 收敛为 `display:block;width:100%`。Desktop 沿用 `h-9`，窄屏通过 `[data-slot="combobox-clear"]`、`[data-slot="combobox-trigger"]` 和所属 Popover 的局部响应式规则把 control、按钮和 option 的最小高度提升到 `44px`。Popover 继续 Teleport，并只对本组件打开时的内容应用局部触控规则，避免影响所有 Combobox。
+组件 root 使用 `min-w-0 w-full`；组件局部只通过 `[data-slot="combobox"]` 把 `FaCombobox` 现有 `inline-block` root 收敛为 `display:block;width:100%;min-width:0`。`.qs-dictionary-select__control` 只约束 width、min-width 和高度，必须保留 `FaCombobox` 原有的 `display:flex`：clear/trigger 始终位于 input 的 inline-end、与 input 同行且完整位于 control 边界内。Desktop 沿用 `h-9`，窄屏通过 `[data-slot="combobox-clear"]`、`[data-slot="combobox-trigger"]` 和所属 Popover 的局部响应式规则把 control、按钮和 option 的最小高度提升到 `44px`。Popover 继续 Teleport，并只对本组件打开时的内容应用局部触控规则，避免影响所有 Combobox。
 
 加载反馈使用现有 Lucide loader 图标和文字；在 `prefers-reduced-motion: reduce` 下移除旋转。样式只使用 `background/foreground/muted/border/input/ring/primary/destructive` 等项目语义 Token。
 
@@ -539,12 +539,15 @@ Browser E2E 使用现有一次性 PostgreSQL、双 Server、test build 和真实
 - `id/aria-*` 位于真实 combobox input，显式 required 与 `FaFormItem` 两条路径都派生 `aria-required=true`，search input 无业务 name。
 - FormData 分别覆盖 null、空字符串、非空 raw 和 caller disabled：null 省略字段，任意字符串精确提交；原生 required 只拦截 null 并把焦点转回可见 input；FaForm 的 scroll-to-field 焦点也转发到真实 input；禁用字段不提交。
 - clear/trigger/retry 都有 accessible name；focus/blur 指向真实 input。
+- 默认 trigger 与有值 clear 两态都校验 `controlDisplay=flex`、`sameRow`、`actionAtInlineEnd` 和 `actionInsideControl`，防止 Qs 局部样式再次覆盖 Fa control 布局。
 - `390x844` 无横向溢出且交互目标至少 44px。
 - light/dark、Reduced Motion 无 console error 或 page error。
 
 ### 13.5 最终验证结果
 
-2026-08-10 在生产、测试和 Showcase 源码冻结于 `d67cd4c` 后，严格按第 13.2、13.3 节串行完成本地验证：定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用 production build、三个参考应用 check/build 与 `git diff --check` 均成功。
+2026-08-10 首轮生产、测试和 Showcase 源码冻结于 `d67cd4c`，并由 `f58ced6` 完成文档收口。随后手动验收发现 Qs scoped CSS 同时把 `FaCombobox` control 覆盖为 block，导致 input 占满一行、clear/trigger 换行到左下方。`fe485a8` 只修改 `QsDictionarySelect` 与对应静态、Browser 回归测试，恢复 Fa-owned flex control 并固定右侧操作按钮同行布局；生产、测试和 Showcase 源码最终冻结于 `fe485a8`。
+
+基于最终冻结源码严格按第 13.2、13.3 节重新串行完成本地验证：定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用 production build、三个参考应用 check/build 与 `git diff --check` 均成功。
 
 正式应用构建完成 2893 个模块转换，并通过 Noto 108 个字体资产及零残留校验。构建只出现既有第三方 `@vueuse/core` pure annotation、chunk size 和 plugin timing 非阻断警告。最终文件矩阵为 12 个新增、9 个修改、0 删除、0 重命名；Browser 使用一次性隔离 PostgreSQL，未访问本地开发数据库。
 

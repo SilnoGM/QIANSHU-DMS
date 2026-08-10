@@ -274,7 +274,9 @@ Task 2、Task 3、Task 4 在逻辑上可独立，但共享同一 Git worktree，
   - [x] 8.9 未获得单独授权时，不 push、不创建 PR、不 merge、不部署、不删除分支。
   - _Requirements: R1-R10_
 
-  Task 8 证据：生产、测试与 Showcase 源码冻结于 `d67cd4c` 后，最终定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用 production build、三个参考应用 check/build 与首轮 `git diff --check` 均成功。正式应用 build 转换 2893 个模块，Noto 108 个字体资产和零残留校验通过；仅保留既有 `@vueuse/core` annotation、chunk size 与 plugin timing 非阻断警告。最终矩阵为 12 新增、9 修改、0 删除、0 重命名，无禁止路径、依赖、生成物、敏感文件或领域残留。最终文档提交 SHA 不回写、不 amend；提交后的状态与序列作为交付证据报告。
+  Task 8 首轮证据：生产、测试与 Showcase 源码冻结于 `d67cd4c` 后，最终定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用 production build、三个参考应用 check/build 与首轮 `git diff --check` 均成功。正式应用 build 转换 2893 个模块，Noto 108 个字体资产和零残留校验通过；仅保留既有 `@vueuse/core` annotation、chunk size 与 plugin timing 非阻断警告。最终矩阵为 12 新增、9 修改、0 删除、0 重命名，无禁止路径、依赖、生成物、敏感文件或领域残留。最终文档提交 SHA 不回写、不 amend；提交后的状态与序列作为交付证据报告。
+
+  后置图标布局回归收口证据：`f58ced6` 文档收口后的手动验收发现 clear/trigger 被 Qs scoped CSS 覆盖为 block 并换行。静态 contract 首次 RED 为 12 pass / 1 fail；真实 Chrome 中 12/12 个 control 均测得 `display:block`、操作按钮越出 control 且未与 input 同行。`fe485a8` 只修改 `QsDictionarySelect`、其静态测试与 Dictionary Browser 测试，恢复 Fa-owned flex control，并同时固定默认 trigger 与有值 clear 的 `controlDisplay=flex`、同行、inline-end 和边界内几何断言。生产、测试和 Showcase 最终冻结于 `fe485a8` 后，定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6、正式应用 production build、三个参考应用 check/build 与 `git diff --check` 全部成功；正式应用仍转换 2893 个模块并通过 Noto 108 个字体资产与零残留校验，仅保留既有 `@vueuse/core` annotation、chunk size 与 plugin timing 非阻断警告。文件矩阵仍为 12 新增、9 修改、0 删除、0 重命名。
 
 ## 6. 精确文件矩阵
 
@@ -330,7 +332,7 @@ web/apps/qsmds-arco/src/types/components.d.ts
 具体业务页面
 ```
 
-## 7. 计划提交序列
+## 7. 最终提交序列
 
 ```text
 docs: 固化通用字典下拉组件规格
@@ -343,6 +345,8 @@ feat: 添加字典选择器组件库示例
 fix: 修复 FaCombobox 程序化焦点
 test: 补齐字典选择器浏览器验收
 docs: 完成通用字典下拉组件验收
+fix: 修复字典下拉图标布局
+docs: 补充字典下拉图标布局修复验收
 ```
 
 实际实现中只有对应任务全部绿色后才创建该提交。若某任务没有形成独立变更，不创建空提交；若需要跨任务修复，提交仍按真实职责归属，不使用模糊的 `misc` 或 `wip`。

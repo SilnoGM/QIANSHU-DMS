@@ -190,6 +190,7 @@
 5. 当用户启用 Reduced Motion 时，加载和状态反馈应停止非必要动画，同时保留明确的文字状态。
 6. 当组件展示状态时，系统应同时使用文字和语义视觉，不得只依赖颜色。
 7. 当组件展示图标时，系统应使用项目现有 Lucide/FaIcon 能力，不得使用 Emoji。
+8. 当 clear 或 trigger 操作按钮出现时，组件只应把 `FaCombobox` 外层 root 收敛为全宽 block，不得覆盖 control 由 Fa 所有的 flex 布局；操作按钮应位于输入的 inline-end、保持同行并完整位于 control 边界内。
 
 ### Requirement 9 - 安全、性能与失败边界
 
@@ -250,6 +251,8 @@ Layout Strategy:
 
 ## 9. Phase 4 本地验收结果
 
-2026-08-10 基于冻结源码完成最终本地验收：定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用和三个参考应用的检查与构建均成功。构建仅保留既有第三方 pure annotation、chunk size 与 plugin timing 非阻断警告。
+2026-08-10 首轮文档收口后的手动验收发现右侧 clear/trigger 被 Qs 局部样式覆盖为 block 后换行；提交 `fe485a8` 以最小边界恢复 Fa-owned flex control，增加静态 CSS ownership 契约，并为默认 trigger 与有值 clear 两态增加真实浏览器几何回归断言。生产、测试和 Showcase 源码最终冻结于该提交。
+
+基于 `fe485a8` 重新完成最终本地验收：定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用和三个参考应用的检查与构建均成功。构建仅保留既有第三方 `@vueuse/core` pure annotation、chunk size 与 plugin timing 非阻断警告。
 
 最终文件矩阵为 12 个新增、9 个修改、0 删除、0 重命名；未修改 Server、OpenAPI、数据库、权限、字典数据、依赖或具体业务页面。Browser 只使用一次性隔离 PostgreSQL，不访问或修改本地开发数据库。
