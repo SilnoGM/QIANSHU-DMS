@@ -72,6 +72,16 @@ export interface DictionarySelectFormProxies {
   readonly validationProxy: DictionarySelectValidationProxy | null
 }
 
+export type DictionarySelectDisplayPhase = 'raw' | 'trusted'
+
+export interface BuildDictionarySelectInputAttrsInput {
+  readonly callerInputAttrs: DictionarySelectInputAttrs
+  readonly describedBy: readonly (null | string | undefined)[]
+  readonly effectiveAriaRequired: DictionarySelectInputAttrs['aria-required']
+  readonly internallyInvalid: boolean
+  readonly loading: boolean
+}
+
 const FORM_ATTR_NAMES = new Set([
   'form',
   'name',
@@ -122,6 +132,53 @@ function normalizeBooleanish(
     return 'true'
   }
   return undefined
+}
+
+/** 同一交互 epoch 内，raw/trusted 阶段也必须拥有不同的 FaCombobox 实例。 */
+export function buildDictionarySelectInteractionKey(
+  epoch: number,
+  phase: DictionarySelectDisplayPhase,
+): string {
+  return `${epoch}:${phase}`
+}
+
+/** 合并 caller 与内部说明 ID；caller 在前，重复 token 只保留首次出现。 */
+export function mergeDictionarySelectDescribedBy(
+  ...values: readonly (null | string | undefined)[]
+): string | undefined {
+  const tokens: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    for (const token of value?.trim().split(/\s+/u) ?? []) {
+      if (token && !seen.has(token)) {
+        seen.add(token)
+        tokens.push(token)
+      }
+    }
+  }
+  return tokens.length > 0 ? tokens.join(' ') : undefined
+}
+
+/**
+ * 内部状态只能提高 ARIA 严格度；状态恢复后必须还原 caller/FaForm 原值。
+ */
+export function buildDictionarySelectInputAttrs(
+  input: BuildDictionarySelectInputAttrsInput,
+): DictionarySelectInputAttrs {
+  return {
+    ...input.callerInputAttrs,
+    'aria-busy': input.loading
+      ? 'true'
+      : input.callerInputAttrs['aria-busy'],
+    'aria-describedby': mergeDictionarySelectDescribedBy(
+      input.callerInputAttrs['aria-describedby'],
+      ...input.describedBy,
+    ),
+    'aria-invalid': input.internallyInvalid
+      ? 'true'
+      : input.callerInputAttrs['aria-invalid'],
+    'aria-required': input.effectiveAriaRequired,
+  }
 }
 
 function setInputAttribute(

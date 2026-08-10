@@ -4,11 +4,14 @@ import type {
   DictionaryCatalogItem,
 } from '../../src/dictionary-catalog/types'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 // eslint-disable-next-line test/no-import-node-test -- 字典选择纯逻辑不依赖浏览器，使用 Node runner 可快速固定契约。
 import test from 'node:test'
 import {
   buildDictionarySelectFormProxies,
+  buildDictionarySelectInputAttrs,
+  buildDictionarySelectInteractionKey,
   buildDictionarySelectOptions,
   filterDictionarySelectOption,
   fromDictionarySelectInnerValue,
@@ -16,6 +19,26 @@ import {
   splitDictionarySelectAttrs,
   toDictionarySelectInnerValue,
 } from '../../src/components/business/QsDictionarySelect/logic'
+
+function readRelativeSource(relativePath: string): string {
+  return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+}
+
+function readCssRule(source: string, selectorStart: string): {
+  body: string
+  selectors: string
+} {
+  const ruleStart = source.indexOf(selectorStart)
+  assert.ok(ruleStart >= 0, `缺少 CSS selector: ${selectorStart}`)
+  const bodyStart = source.indexOf('{', ruleStart)
+  const bodyEnd = source.indexOf('}', bodyStart)
+  assert.ok(bodyStart > ruleStart)
+  assert.ok(bodyEnd > bodyStart)
+  return {
+    body: source.slice(bodyStart + 1, bodyEnd),
+    selectors: source.slice(ruleStart, bodyStart),
+  }
+}
 
 function item(input: Partial<DictionaryCatalogItem> & {
   label: string
@@ -290,6 +313,49 @@ test('纯逻辑结果可直接绑定 FaCombobox，不需要调用方类型断言
   assert.deepEqual({ ...invalidAria }, {})
 })
 
+test('交互 key 同时包含 epoch 与显示阶段，ARIA 内部状态恢复后还原 caller', () => {
+  assert.equal(buildDictionarySelectInteractionKey(3, 'raw'), '3:raw')
+  assert.equal(buildDictionarySelectInteractionKey(3, 'trusted'), '3:trusted')
+  assert.equal(buildDictionarySelectInteractionKey(4, 'trusted'), '4:trusted')
+
+  const callerInputAttrs = splitDictionarySelectAttrs({
+    'aria-busy': false,
+    'aria-describedby': 'caller-help shared-status',
+    'aria-invalid': 'grammar',
+    'aria-required': false,
+    'id': 'workflow-status',
+  }).inputAttrs
+  const internalState = buildDictionarySelectInputAttrs({
+    callerInputAttrs,
+    describedBy: ['shared-status loading-status', 'required-status'],
+    effectiveAriaRequired: 'true',
+    internallyInvalid: true,
+    loading: true,
+  })
+  assert.deepEqual({ ...internalState }, {
+    'aria-busy': 'true',
+    'aria-describedby': 'caller-help shared-status loading-status required-status',
+    'aria-invalid': 'true',
+    'aria-required': 'true',
+    'id': 'workflow-status',
+  })
+
+  const recovered = buildDictionarySelectInputAttrs({
+    callerInputAttrs,
+    describedBy: [],
+    effectiveAriaRequired: false,
+    internallyInvalid: false,
+    loading: false,
+  })
+  assert.deepEqual({ ...recovered }, {
+    'aria-busy': false,
+    'aria-describedby': 'caller-help shared-status',
+    'aria-invalid': 'grammar',
+    'aria-required': false,
+    'id': 'workflow-status',
+  })
+})
+
 test('required 合并与双代理精确区分 null、空字符串和普通 raw', () => {
   const requiredGroups = splitDictionarySelectAttrs({
     'aria-required': false,
@@ -374,4 +440,171 @@ test('aria-required 可独立启用验证代理，缺少 name 时不创建提交
   assert.equal(optionalState.nativeRequired, false)
   assert.equal(optionalState.effectiveAriaRequired, false)
   assert.equal(optionalState.validationProxy, null)
+})
+
+test('QsDictionarySelect 固定最小公共契约并接线响应式 Consumer 与 FaCombobox', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsDictionarySelect/index.vue',
+  )
+
+  assert.match(source, /<script setup lang="ts">/u)
+  assert.match(source, /name:\s*'QsDictionarySelect'/u)
+  assert.match(source, /inheritAttrs:\s*false/u)
+  assert.match(source, /const attrsSnapshot = shallowRef\(\{ \.\.\.attrs \}\)/u)
+  assert.match(source, /onBeforeUpdate\(\(\) => \{/u)
+  assert.match(source, /attrsSnapshot\.value = \{ \.\.\.attrs \}/u)
+  assert.match(source, /splitDictionarySelectAttrs\(attrsSnapshot\.value\)/u)
+  assert.match(source, /dictionaryCode:\s*string/u)
+  assert.match(source, /modelValue\?:\s*string \| null/u)
+  assert.match(source, /placeholder\?:\s*string/u)
+  assert.match(source, /clearable\?:\s*boolean/u)
+  assert.match(source, /disabled\?:\s*boolean/u)
+  assert.match(source, /modelValue:\s*null/u)
+  assert.match(source, /placeholder:\s*'请选择'/u)
+  assert.match(source, /clearable:\s*false/u)
+  assert.match(source, /'update:modelValue':\s*\[value:\s*string \| null\]/u)
+  assert.match(source, /'focus':\s*\[event:\s*FocusEvent\]/u)
+  assert.match(source, /'blur':\s*\[event:\s*FocusEvent\]/u)
+  assert.match(source, /useDictionaryCatalog\(\(\) => props\.dictionaryCode\)/u)
+  assert.match(source, /normalizeDictionaryCatalogCode/u)
+  assert.match(source, /interactionSessionEpoch/u)
+  assert.match(source, /\{ flush: 'sync' \}/u)
+  assert.match(source, /interactionDisplayPhase/u)
+  assert.match(source, /catalog\.catalog\.value !== null/u)
+  assert.match(source, /buildDictionarySelectInteractionKey\(\s*interactionSessionEpoch\.value,\s*interactionDisplayPhase\.value/u)
+  assert.match(source, /<FaCombobox/u)
+  assert.match(source, /:key="interactionSessionKey"/u)
+  assert.match(source, /@update:model-value="handleInnerValueUpdate"/u)
+  assert.match(source, /defineExpose\(\{[\s\S]*blur,[\s\S]*focus,[\s\S]*\}\)/u)
+})
+
+test('QsDictionarySelect 状态、ARIA、焦点转发与双表单代理保持单一职责', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsDictionarySelect/index.vue',
+  )
+
+  assert.match(source, /v-bind="attrGroups\.rootAttrs"/u)
+  const rootOpeningTag = source.match(
+    /<div\s+v-bind="attrGroups\.rootAttrs"[\s\S]*?>/u,
+  )?.[0]
+  assert.ok(rootOpeningTag)
+  assert.doesNotMatch(rootOpeningTag, /data-slot=/u)
+  assert.match(source, /tabindex="-1"/u)
+  assert.match(source, /@focus="handleRootFocus"/u)
+  assert.match(source, /mergedInputAttrs/u)
+  assert.match(source, /buildDictionarySelectInputAttrs/u)
+  assert.match(source, /localNativeInvalid/u)
+  assert.match(source, /role="status"/u)
+  assert.match(source, /正在加载字典选项/u)
+  assert.match(source, /role="alert"/u)
+  assert.match(source, /字典编码配置无效/u)
+  assert.match(source, /未配置该字典类型/u)
+  assert.match(source, /暂无可用选项/u)
+  assert.match(source, /无匹配选项/u)
+  assert.match(source, /重试加载/u)
+  assert.match(source, /@click="retry"/u)
+  assert.match(source, /v-if="formProxies\.submissionProxy"/u)
+  assert.match(source, /v-bind="formProxies\.submissionProxy"/u)
+  assert.match(source, /v-if="formProxies\.validationProxy"/u)
+  assert.match(source, /v-bind="formProxies\.validationProxy"/u)
+  assert.match(source, /@invalid="handleNativeInvalid"/u)
+  const updateHandlerStart = source.indexOf('function handleInnerValueUpdate')
+  const updateHandlerEnd = source.indexOf('function handleInputFocus')
+  assert.ok(updateHandlerStart >= 0)
+  assert.ok(updateHandlerEnd > updateHandlerStart)
+  const updateHandler = source.slice(updateHandlerStart, updateHandlerEnd)
+  assert.doesNotMatch(updateHandler, /localNativeInvalid\.value\s*=/u)
+  assert.match(source, /\(\) => formProxies\.value\.nativeRequired/u)
+  assert.match(source, /\(\) => props\.disabled/u)
+  assert.match(source, /value !== null \|\| !nativeRequired \|\| disabled/u)
+})
+
+test('QsDictionarySelect 样式与 README 固定响应式、Reduced Motion 和安全边界', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsDictionarySelect/index.vue',
+  )
+  const readme = readRelativeSource(
+    '../../src/components/business/QsDictionarySelect/README.md',
+  )
+
+  assert.match(source, /class="qs-dictionary-select min-w-0 w-full"/u)
+  assert.doesNotMatch(source, /data-slot="qs-dictionary-select"/u)
+  assert.match(source, /\[data-slot="combobox"\]/u)
+  assert.match(source, /\[data-slot="combobox-clear"\]/u)
+  assert.match(source, /\[data-slot="combobox-trigger"\]/u)
+  assert.match(source, /content-class="qs-dictionary-select__content"/u)
+  assert.match(source, /@media \(width <= 640px\)/u)
+  const mobileStylesStart = source.indexOf('@media (width <= 640px)')
+  const reducedMotionStylesStart = source.indexOf(
+    '@media (prefers-reduced-motion: reduce)',
+    mobileStylesStart,
+  )
+  assert.ok(mobileStylesStart >= 0)
+  assert.ok(reducedMotionStylesStart > mobileStylesStart)
+  const mobileStyles = source.slice(
+    mobileStylesStart,
+    reducedMotionStylesStart,
+  )
+  const inputTouchRule = readCssRule(
+    mobileStyles,
+    '.qs-dictionary-select :deep([data-slot="combobox-input"]),',
+  )
+  assert.match(inputTouchRule.body, /min-height:\s*44px/u)
+  const mobileControlRule = readCssRule(
+    mobileStyles,
+    '.qs-dictionary-select :deep(.qs-dictionary-select__control) {',
+  )
+  assert.match(mobileControlRule.body, /padding-block:\s*0/u)
+  const mobileOptionRule = readCssRule(
+    mobileStyles,
+    ':global(.qs-dictionary-select__content [data-slot="combobox-item"]) {',
+  )
+  assert.match(mobileOptionRule.body, /min-height:\s*44px/u)
+  const contentRule = readCssRule(
+    source,
+    ':global(.qs-dictionary-select__content) {',
+  )
+  assert.match(contentRule.body, /max-width:\s*calc\(100vw - 1\.5rem\)/u)
+  const wrappingRule = readCssRule(
+    source,
+    ':global(.qs-dictionary-select__content [data-slot="combobox-item"]) {',
+  )
+  assert.match(wrappingRule.body, /overflow-wrap:\s*anywhere/u)
+  assert.match(wrappingRule.body, /white-space:\s*normal/u)
+  assert.doesNotMatch(source, /:global\(\[data-slot="combobox-(?:content|item)"\]\)/u)
+  assert.match(source, /@media \(prefers-reduced-motion: reduce\)/u)
+  const reducedMotionStyles = source.slice(reducedMotionStylesStart)
+  const loaderMotionRule = readCssRule(
+    reducedMotionStyles,
+    '.qs-dictionary-select__loader,',
+  )
+  assert.match(loaderMotionRule.body, /animation-duration:\s*0\.01ms\s*!important/u)
+  assert.match(loaderMotionRule.body, /animation-iteration-count:\s*1\s*!important/u)
+  const contentMotionRule = readCssRule(
+    reducedMotionStyles,
+    ':global(.qs-dictionary-select__content),',
+  )
+  assert.match(
+    contentMotionRule.selectors,
+    /:global\(\.qs-dictionary-select__content \*\)/u,
+  )
+  assert.match(contentMotionRule.body, /transition-duration:\s*0\.01ms\s*!important/u)
+  assert.match(contentMotionRule.body, /animation-duration:\s*0\.01ms\s*!important/u)
+  assert.match(contentMotionRule.body, /animation-iteration-count:\s*1\s*!important/u)
+  assert.doesNotMatch(source, /#[\da-f]{3,8}\b/iu)
+  for (const emoji of ['🚀', '⭐', '❤️', '👍', '🔥', '💡', '🎉', '✨']) {
+    assert.equal(source.includes(emoji), false)
+  }
+
+  for (const contract of [
+    'dictionaryCode',
+    'modelValue',
+    '显式导入',
+    '历史值',
+    'FormData',
+    'Server',
+    '重试',
+  ]) {
+    assert.match(readme, new RegExp(contract, 'u'))
+  }
 })
