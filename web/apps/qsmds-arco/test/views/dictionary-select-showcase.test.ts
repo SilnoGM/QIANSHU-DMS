@@ -131,7 +131,7 @@ test('独立页面组合真实组件与中性 fixture，不读取 API、Store �
     ['dictionary-select-retry', 'retryValue', 'DICTIONARY_SELECT_FIXTURE_CODES.retry'],
     ['dictionary-select-code-switch', 'codeSwitchValue', 'codeSwitchCode'],
     ['dictionary-select-native-form', 'nativeFormValue', 'DICTIONARY_SELECT_FIXTURE_CODES.status'],
-    ['dictionary-select-form-item', 'faFormModel.status', 'DICTIONARY_SELECT_FIXTURE_CODES.status'],
+    ['dictionary-select-form-item', null, 'DICTIONARY_SELECT_FIXTURE_CODES.status'],
   ] as const
   assert.equal(selectTags.length, scenarios.length)
   for (const [testId, model, code] of scenarios) {
@@ -140,7 +140,14 @@ test('独立页面组合真实组件与中性 fixture，不读取 API、Store �
     ))
     assert.equal(matchingTags.length, 1, `${testId} 必须唯一落在真实组件标签`)
     const [tag] = matchingTags
-    assert.ok(tag?.includes(`v-model="${model}"`), `${testId} 缺少目标 model`)
+    if (model !== null) {
+      assert.equal(
+        tag?.includes(`v-model="${model}"`)
+        || tag?.includes(`:model-value="${model}"`),
+        true,
+        `${testId} 缺少目标 model`,
+      )
+    }
     assert.ok(tag?.includes(code), `${testId} 缺少目标 dictionary code`)
   }
   const disabledTag = selectTags.find(tag => (
@@ -178,6 +185,41 @@ test('独立页面组合真实组件与中性 fixture，不读取 API、Store �
     )
   }
   assert.doesNotMatch(fixtureSource, /DictionaryCatalogProviderController/u)
+})
+
+test('Showcase 为真实 Browser 提供 primitive、分组、virtual 与表单可观测夹具', () => {
+  const source = readRelativeSource(
+    '../../src/views/component_library/business/components/DictionarySelectShowcase.vue',
+  )
+
+  for (const testId of [
+    'dictionary-select-standard-update-count',
+    'dictionary-select-duplicate-value',
+    'dictionary-select-primitive-values',
+    'dictionary-select-primitive-summary',
+    'dictionary-select-primitive-events',
+    'dictionary-select-group-values',
+    'dictionary-select-group-summary',
+    'dictionary-select-virtual-values',
+    'dictionary-select-virtual-summary',
+  ]) {
+    assert.match(source, new RegExp(`data-testid="${testId}"`, 'u'))
+  }
+  assert.match(source, /value: '1'/u)
+  assert.match(source, /value: 1[,\s]/u)
+  assert.match(source, /value: 1n/u)
+  assert.match(source, /value: null/u)
+  assert.match(source, /virtualListOptions/u)
+  assert.match(source, /virtual-list/u)
+  assert.match(source, /groupedOptions/u)
+  assert.match(source, /disabled: true/u)
+  assert.match(source, /scroll-to-error/u)
+  assert.match(source, /scrollToField\('status'\)/u)
+  assert.match(source, /faFormValidationSchema/u)
+  assert.match(source, /设为空字符串/u)
+  assert.match(source, /切换 caller disabled/u)
+  assert.match(source, /切换为 invalid/u)
+  assert.match(source, /恢复为 status/u)
 })
 
 test('组件库文档记录真实十一个叶子页面与字典选择器边界', () => {

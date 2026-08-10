@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { ComboboxOption } from '@fantastic-admin/components'
+import type {
+  ComboboxGroupOption,
+  ComboboxOption,
+  FormExpose,
+} from '@fantastic-admin/components'
 import { FaCombobox } from '@fantastic-admin/components'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import { dictionaryCatalogProviderKey } from '@/dictionary-catalog/injection'
@@ -15,6 +19,8 @@ const fixtureController = createDictionarySelectFixtureController()
 provide(dictionaryCatalogProviderKey, fixtureController.provider)
 
 const standardValue = ref<string | null>(null)
+const standardUpdateCount = ref(0)
+const standardLastUpdate = ref('尚未回写')
 const disabledHistoryValue = ref<string | null>(
   DICTIONARY_SELECT_FIXTURE_VALUES.archived,
 )
@@ -34,11 +40,76 @@ const codeSwitchValue = ref<string | null>(
 )
 const codeSwitchCode = ref<string>(DICTIONARY_SELECT_FIXTURE_CODES.phase)
 const nativeFormValue = ref<string | null>(null)
+const nativeFormDisabled = ref(false)
 const nativeFormRef = useTemplateRef<HTMLFormElement>('nativeFormRef')
 const nativeFormSnapshot = ref('尚未提交')
 const faFormModel = reactive({ status: null as string | null })
+const faFormRef = useTemplateRef<FormExpose>('faFormRef')
 const faFormSnapshot = ref('尚未提交')
 const focusSummary = ref('等待焦点事件')
+
+const faFormValidationSchema = {
+  status(value: unknown) {
+    return typeof value === 'string' ? true : '请选择表单状态'
+  },
+}
+
+const primitiveOptions: ComboboxOption[] = [
+  { label: '字符串 1', value: '1' },
+  { label: '数字 1', value: 1 },
+  { label: '大整数 1', value: 1n },
+  { label: '空值 null', value: null },
+]
+const primitiveValue = shallowRef<ComboboxOption['value']>()
+const primitiveEvents = reactive({ blur: 0, change: 0, clear: 0, focus: 0 })
+const primitiveValueSummary = computed(() => {
+  if (primitiveValue.value === undefined) {
+    return 'undefined'
+  }
+  if (primitiveValue.value === null) {
+    return 'null'
+  }
+  return `${typeof primitiveValue.value}:${String(primitiveValue.value)}`
+})
+const primitiveEventSummary = computed(() => (
+  `change=${primitiveEvents.change};clear=${primitiveEvents.clear};focus=${primitiveEvents.focus};blur=${primitiveEvents.blur}`
+))
+
+const groupedOptions: ComboboxGroupOption[] = [
+  {
+    label: '首选分组',
+    options: [
+      { disabled: true, label: '跳过禁用', value: 'GROUP_DISABLED' },
+      { label: '跳过禁用', value: 'GROUP_ENABLED' },
+    ],
+  },
+  {
+    label: '备用分组',
+    options: [
+      { label: '备用 Alpha', value: 'GROUP_ALPHA' },
+      { label: '备用 Beta', value: 'GROUP_BETA' },
+    ],
+  },
+]
+const groupedValue = shallowRef<ComboboxOption['value']>()
+const groupedValueSummary = computed(() => (
+  groupedValue.value === undefined ? 'undefined' : String(groupedValue.value)
+))
+
+const virtualListOptions: ComboboxOption[] = Array.from(
+  { length: 100 },
+  (_, index) => {
+    const ordinal = String(index + 1).padStart(3, '0')
+    return {
+      label: `虚拟条目 ${ordinal}`,
+      value: `VIRTUAL_${ordinal}`,
+    }
+  },
+)
+const virtualValue = shallowRef<ComboboxOption['value']>()
+const virtualValueSummary = computed(() => (
+  virtualValue.value === undefined ? 'undefined' : String(virtualValue.value)
+))
 
 const FIRST_OBJECT_VALUE = Object.freeze({ id: 'object-a', lane: 'north' })
 const SECOND_OBJECT_VALUE = Object.freeze({ id: 'object-b', lane: 'south' })
@@ -75,6 +146,12 @@ function handleFaFormSubmit(): void {
   faFormSnapshot.value = JSON.stringify(faFormModel)
 }
 
+function handleStandardUpdate(value: string | null): void {
+  standardUpdateCount.value += 1
+  standardLastUpdate.value = value === null ? 'null' : value
+  standardValue.value = value
+}
+
 function setExternalValue(value: string | null): void {
   standardValue.value = value
 }
@@ -88,6 +165,14 @@ function switchToEquivalentStatusCode(): void {
   codeSwitchCode.value = ' WORKFLOW.STATUS '
 }
 
+function switchToInvalidCode(): void {
+  codeSwitchCode.value = 'invalid-code'
+}
+
+function recoverStatusCode(): void {
+  switchToStatusCode()
+}
+
 function releasePendingPhase(): void {
   fixtureController.releasePendingPhase()
 }
@@ -98,6 +183,34 @@ function handleFocus(): void {
 
 function handleBlur(): void {
   focusSummary.value = 'blur'
+}
+
+function setNativeFormValue(value: string | null): void {
+  nativeFormValue.value = value
+}
+
+function toggleNativeFormDisabled(): void {
+  nativeFormDisabled.value = !nativeFormDisabled.value
+}
+
+function focusFaFormField(): void {
+  faFormRef.value?.scrollToField('status')
+}
+
+function handlePrimitiveChange(): void {
+  primitiveEvents.change += 1
+}
+
+function handlePrimitiveClear(): void {
+  primitiveEvents.clear += 1
+}
+
+function handlePrimitiveFocus(): void {
+  primitiveEvents.focus += 1
+}
+
+function handlePrimitiveBlur(): void {
+  primitiveEvents.blur += 1
 }
 </script>
 
@@ -155,10 +268,11 @@ function handleBlur(): void {
           </label>
           <QsDictionarySelect
             id="dictionary-select-showcase-standard"
-            v-model="standardValue"
+            :model-value="standardValue"
             data-testid="dictionary-select-standard"
             :dictionary-code="DICTIONARY_SELECT_FIXTURE_CODES.status"
             clearable
+            @update:model-value="handleStandardUpdate"
             @focus="handleFocus"
             @blur="handleBlur"
           />
@@ -189,6 +303,22 @@ function handleBlur(): void {
               </dt>
               <dd class="qs-type-data-mono m-0 text-end break-all" data-testid="dictionary-select-standard-value">
                 {{ standardValue === null ? 'null' : standardValue }}
+              </dd>
+            </div>
+            <div class="pt-3 border-t border-border flex gap-4 items-start justify-between">
+              <dt class="text-muted-foreground">
+                update count
+              </dt>
+              <dd class="qs-type-data-mono m-0 text-end" data-testid="dictionary-select-standard-update-count">
+                {{ standardUpdateCount }}
+              </dd>
+            </div>
+            <div class="pt-3 border-t border-border flex gap-4 items-start justify-between">
+              <dt class="text-muted-foreground">
+                last update
+              </dt>
+              <dd class="qs-type-data-mono m-0 text-end break-all" data-testid="dictionary-select-standard-last-update">
+                {{ standardLastUpdate }}
               </dd>
             </div>
             <div class="pt-3 border-t border-border flex gap-4 items-start justify-between">
@@ -252,6 +382,9 @@ function handleBlur(): void {
             :dictionary-code="DICTIONARY_SELECT_FIXTURE_CODES.status"
             aria-label="重复标签状态"
           />
+          <output class="qs-type-data-mono text-xs mt-3 block break-all" data-testid="dictionary-select-duplicate-value">
+            {{ duplicateLabelValue === null ? 'null' : duplicateLabelValue }}
+          </output>
         </article>
 
         <article class="dictionary-showcase-card">
@@ -342,6 +475,12 @@ function handleBlur(): void {
               <button class="dictionary-showcase-button" type="button" @click="switchToEquivalentStatusCode">
                 改为等价 code
               </button>
+              <button class="dictionary-showcase-button" type="button" @click="switchToInvalidCode">
+                切换为 invalid
+              </button>
+              <button class="dictionary-showcase-button" type="button" @click="recoverStatusCode">
+                恢复为 status
+              </button>
               <button class="dictionary-showcase-button" type="button" @click="releasePendingPhase">
                 释放迟到 phase
               </button>
@@ -379,13 +518,35 @@ function handleBlur(): void {
             v-model="nativeFormValue"
             data-testid="dictionary-select-native-form"
             :dictionary-code="DICTIONARY_SELECT_FIXTURE_CODES.status"
+            :disabled="nativeFormDisabled"
             name="workflowStatus"
             required
             clearable
           />
-          <button class="dictionary-showcase-button mt-4" type="submit">
-            读取 FormData
-          </button>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button class="dictionary-showcase-button" type="button" @click="captureNativeForm">
+              读取 FormData
+            </button>
+            <button class="dictionary-showcase-button" type="submit">
+              原生提交校验
+            </button>
+            <button class="dictionary-showcase-button" type="button" @click="setNativeFormValue('')">
+              设为空字符串
+            </button>
+            <button
+              class="dictionary-showcase-button"
+              type="button"
+              @click="setNativeFormValue(DICTIONARY_SELECT_FIXTURE_VALUES.unknownHistory)"
+            >
+              设为未知 raw
+            </button>
+            <button class="dictionary-showcase-button" type="button" @click="setNativeFormValue(null)">
+              设为 null
+            </button>
+            <button class="dictionary-showcase-button" type="button" @click="toggleNativeFormDisabled">
+              切换 caller disabled
+            </button>
+          </div>
           <output class="qs-type-data-mono text-xs mt-3 block break-all" data-testid="dictionary-select-form-data">
             {{ nativeFormSnapshot }}
           </output>
@@ -395,15 +556,24 @@ function handleBlur(): void {
           <h4 class="qs-type-compact-title m-0">
             FaFormItem auto-bind
           </h4>
-          <FaForm :model="faFormModel" class="mt-4 gap-4" @submit="handleFaFormSubmit">
+          <FaForm
+            ref="faFormRef"
+            :model="faFormModel"
+            :validation-schema="faFormValidationSchema"
+            class="mt-4 gap-4"
+            scroll-to-error
+            @submit="handleFaFormSubmit"
+          >
             <FaFormItem name="status" label="表单状态" required>
               <QsDictionarySelect
-                v-model="faFormModel.status"
                 data-testid="dictionary-select-form-item"
                 :dictionary-code="DICTIONARY_SELECT_FIXTURE_CODES.status"
                 clearable
               />
             </FaFormItem>
+            <button class="dictionary-showcase-button" type="button" @click="focusFaFormField">
+              scrollToField(status)
+            </button>
             <button class="dictionary-showcase-button" type="submit">
               提交 FaForm
             </button>
@@ -412,6 +582,98 @@ function handleBlur(): void {
             {{ faFormSnapshot }}
           </output>
         </div>
+      </div>
+
+      <!--
+        下列夹具只验证共享 FaCombobox 的 value identity 与底层 ARIA/事件契约。
+        它们不经过字典 Provider，也不扩大 QsDictionarySelect 的 string 模型。
+      -->
+      <div class="mt-5 gap-4 grid lg:grid-cols-3">
+        <article class="dictionary-showcase-card">
+          <h4 class="qs-type-compact-title m-0">
+            primitive identity
+          </h4>
+          <p id="dictionary-select-primitive-description" class="qs-type-meta text-muted-foreground m-0 mt-1">
+            同一个可读值分别保留 string、number、bigint、null 与 clear 后 undefined。
+          </p>
+          <div class="mt-4" data-testid="dictionary-select-primitive-values">
+            <label for="dictionary-select-showcase-primitive-values" class="qs-type-compact-label mb-2 block">
+              Primitive value
+            </label>
+            <FaCombobox
+              v-model="primitiveValue"
+              :options="primitiveOptions"
+              :input-attrs="{
+                'id': 'dictionary-select-showcase-primitive-values',
+                'aria-label': 'Primitive value',
+                'aria-describedby': 'dictionary-select-primitive-description',
+                'aria-required': 'true',
+              }"
+              clearable
+              class="w-full"
+              placeholder="选择 primitive"
+              @change="handlePrimitiveChange"
+              @clear="handlePrimitiveClear"
+              @focus="handlePrimitiveFocus"
+              @blur="handlePrimitiveBlur"
+            />
+          </div>
+          <output class="qs-type-data-mono text-xs mt-3 block break-all" data-testid="dictionary-select-primitive-summary">
+            {{ primitiveValueSummary }}
+          </output>
+          <output class="qs-type-data-mono text-xs mt-1 block break-all" data-testid="dictionary-select-primitive-events">
+            {{ primitiveEventSummary }}
+          </output>
+        </article>
+
+        <article class="dictionary-showcase-card">
+          <h4 class="qs-type-compact-title m-0">
+            grouped identity
+          </h4>
+          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+            分组标题、重复 Label 与 disabled skip 继续回写原始 value。
+          </p>
+          <div class="mt-4" data-testid="dictionary-select-group-values">
+            <label for="dictionary-select-showcase-group-values" class="qs-type-compact-label mb-2 block">
+              分组 value
+            </label>
+            <FaCombobox
+              v-model="groupedValue"
+              :options="groupedOptions"
+              :input-attrs="{ id: 'dictionary-select-showcase-group-values' }"
+              class="w-full"
+              placeholder="选择分组条目"
+            />
+          </div>
+          <output class="qs-type-data-mono text-xs mt-3 block break-all" data-testid="dictionary-select-group-summary">
+            {{ groupedValueSummary }}
+          </output>
+        </article>
+
+        <article class="dictionary-showcase-card">
+          <h4 class="qs-type-compact-title m-0">
+            virtual identity
+          </h4>
+          <p class="qs-type-meta text-muted-foreground m-0 mt-1">
+            一百个稳定 value 使用 virtual list，搜索后仍以键盘选择原始条目。
+          </p>
+          <div class="mt-4" data-testid="dictionary-select-virtual-values">
+            <label for="dictionary-select-showcase-virtual-values" class="qs-type-compact-label mb-2 block">
+              Virtual value
+            </label>
+            <FaCombobox
+              v-model="virtualValue"
+              :options="virtualListOptions"
+              :input-attrs="{ id: 'dictionary-select-showcase-virtual-values' }"
+              class="w-full"
+              placeholder="搜索虚拟条目"
+              virtual-list
+            />
+          </div>
+          <output class="qs-type-data-mono text-xs mt-3 block break-all" data-testid="dictionary-select-virtual-summary">
+            {{ virtualValueSummary }}
+          </output>
+        </article>
       </div>
 
       <article class="dictionary-showcase-card mt-5">
