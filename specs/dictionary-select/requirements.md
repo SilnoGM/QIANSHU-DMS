@@ -2,9 +2,10 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 1、Phase 2 Gate B 与 Phase 3 已确认，Phase 4 实施中（Task 2）
+- 状态：Phase 1、Phase 2 Gate B 与 Phase 3 已确认，Phase 4 本地验收已完成
 - 需求确认日期：2026-08-10
 - Gate B 确认日期：2026-08-10
+- 本地最终验收日期：2026-08-10
 - 适用范围：`web/apps/qsmds-arco`
 - 组件名称：`QsDictionarySelect`
 - 实施分支：`feat/dictionary-select`
@@ -235,13 +236,20 @@ Layout Strategy:
 
 该需求是原子表单控件，不适用页面级打破网格要求；项目现有表单密度、主题 Token、Popover 规则和可访问性优先于装饰性布局。组件不使用渐变、Emoji、持续动画或额外视觉依赖。
 
-## 8. Gate B 待确认公共边界
+## 8. 已确认公共边界
 
-为完整满足 Requirement 4、Requirement 7 和 Requirement 8，Phase 2 推荐对共享 `FaCombobox` 做以下最小、向后兼容的公共能力加固：
+为完整满足 Requirement 4、Requirement 7 和 Requirement 8，Gate B 已确认对共享 `FaCombobox` 做以下最小、向后兼容的公共能力加固：
 
 1. 平铺选项使用稳定 value 身份而不是 Label 作为 Vue key。
 2. 提供白名单化的真实 input 属性入口，支持 `id`、`tabindex` 与必要 `aria-*`，但不允许搜索 input 承担业务 `name`。
 3. 为清空和展开按钮提供可配置的 accessible label。
 4. 向上透传真实 input 的 `focus`、`blur`，并公开 `focus()`、`blur()`。
+5. Task 5 经单独确认追加可选 `contentClass`，且只作用于 Teleport 的内容层，用于领域组件局部拥有移动触控、长文本和 Reduced Motion 样式。
 
-该公共能力修改必须在 `design.md` Gate B 明确确认后才能进入实现；若不确认，则应重新选择仍能完整满足 Requirement 7 和 Requirement 8 的底层方案。若确需降低已确认验收，必须返回 Phase 1 重新确认，不使用脆弱的全局 DOM 查询作为默认方案。
+上述能力均已在确认边界内实施；`ComboboxInputAttrs` 保持私有类型，`contentClass` 未传入时不改变既有 DOM 和样式，不使用全局 DOM 查询作为默认方案。
+
+## 9. Phase 4 本地验收结果
+
+2026-08-10 基于冻结源码完成最终本地验收：定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用和三个参考应用的检查与构建均成功。构建仅保留既有第三方 pure annotation、chunk size 与 plugin timing 非阻断警告。
+
+最终文件矩阵为 12 个新增、9 个修改、0 删除、0 重命名；未修改 Server、OpenAPI、数据库、权限、字典数据、依赖或具体业务页面。Browser 只使用一次性隔离 PostgreSQL，不访问或修改本地开发数据库。

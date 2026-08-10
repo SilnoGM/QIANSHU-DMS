@@ -2,8 +2,9 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 Gate B 与 Phase 3 已确认，Phase 4 实施中（Task 2）
+- 状态：Phase 2 Gate B 与 Phase 3 已确认，Phase 4 本地验收已完成
 - Gate B 确认日期：2026-08-10
+- 本地最终验收日期：2026-08-10
 - 对应需求：`specs/dictionary-select/requirements.md`
 - 适用范围：`web/apps/qsmds-arco` 与满足组件契约所需的最小 `FaCombobox` 加固
 - 实施分支：`feat/dictionary-select`
@@ -345,7 +346,7 @@ stateDiagram-v2
 在现有 `ComboboxProps` 上只增加以下可选项：
 
 ```ts
-import type { InputHTMLAttributes } from 'vue'
+import type { HTMLAttributes, InputHTMLAttributes } from 'vue'
 
 type ComboboxInputAttrs = Pick<
   InputHTMLAttributes,
@@ -363,6 +364,7 @@ type ComboboxInputAttrs = Pick<
 export interface ComboboxProps {
   // existing props unchanged
   inputAttrs?: ComboboxInputAttrs
+  contentClass?: HTMLAttributes['class']
   clearAriaLabel?: string
   triggerAriaLabel?: string
 }
@@ -392,6 +394,11 @@ interface AddedComboboxExpose {
 所有字段均为 additive optional；既有 `v-model`、`change`、`clear`、搜索、虚拟列表和默认尺寸行为保持不变。
 
 `ComboboxInputAttrs` 是 `index.vue` 内部类型，只用于约束公开 `ComboboxProps.inputAttrs` 的结构，不作为新的 named package export。因此无需修改 `pro/combobox/index.ts` 或 `packages/components/src/index.ts`，也避免扩大公共类型数量。
+
+Task 5 实施期间经单独 Gate C 确认，追加可选 `contentClass`。它只合并到
+Teleport 的 `ComboboxContent`，不传给 control、真实 input 或按钮，也不新增
+`contentAttrs`。该入口让领域组件以唯一 ownership 类局部约束移动端 option、长文本
+和 Reduced Motion；未传入时默认 DOM 与样式保持不变。
 
 ### 10.2 DOM 与 key 加固
 
@@ -511,6 +518,8 @@ pnpm -C web exec node --test scripts/fa-combobox-contract.test.mjs
 pnpm -C web test:api
 pnpm -C web check
 pnpm -C web build
+pnpm -C web check:examples
+pnpm -C web build:examples
 node --run test:root
 node --run ci:browser-dictionaries-e2e
 git diff --check
@@ -533,6 +542,12 @@ Browser E2E 使用现有一次性 PostgreSQL、双 Server、test build 和真实
 - `390x844` 无横向溢出且交互目标至少 44px。
 - light/dark、Reduced Motion 无 console error 或 page error。
 
+### 13.5 最终验证结果
+
+2026-08-10 在生产、测试和 Showcase 源码冻结于 `d67cd4c` 后，严格按第 13.2、13.3 节串行完成本地验证：定向测试 44/44、`FaCombobox` 契约 7/7、Web API/View 738/738、完整 Web 检查 958/958、Root governance 663/663、真实 Chrome Dictionary Browser 6/6；正式应用 production build、三个参考应用 check/build 与 `git diff --check` 均成功。
+
+正式应用构建完成 2893 个模块转换，并通过 Noto 108 个字体资产及零残留校验。构建只出现既有第三方 `@vueuse/core` pure annotation、chunk size 和 plugin timing 非阻断警告。最终文件矩阵为 12 个新增、9 个修改、0 删除、0 重命名；Browser 使用一次性隔离 PostgreSQL，未访问本地开发数据库。
+
 ## 14. 安全、性能与兼容性
 
 ### 14.1 安全
@@ -552,7 +567,7 @@ Browser E2E 使用现有一次性 PostgreSQL、双 Server、test build 和真实
 ### 14.3 向后兼容
 
 - `useDictionaryCatalog('workflow.status')` 的静态字符串调用继续成立；返回值只 additive 增加只读 `invalid`。
-- `FaCombobox` 新 props、emits 和 expose 全部 additive optional；既有调用无需修改。
+- `FaCombobox` 新 props、emits 和 expose 全部 additive optional；`contentClass` 只影响显式传入它的 Teleport 内容层，既有调用无需修改。
 - 不改变 `FaCombobox` 的 model、change/clear 语义、默认尺寸、默认搜索或虚拟列表。
 - 不修改现有 Catalog Provider、API response 或 OpenAPI。
 
@@ -577,7 +592,7 @@ Browser E2E 使用现有一次性 PostgreSQL、双 Server、test build 和真实
 
 1. 新增应用级公共组件 `QsDictionarySelect`，其 Props、Emits、Expose 和 Attr 路由以第 6 节为准。
 2. 将 `useDictionaryCatalog` 参数从静态 `string` 扩展为向后兼容的 `MaybeRefOrGetter<string>`，并 additive 增加只读 `invalid` 状态。
-3. 按第 10 节对共享 `FaCombobox` 新增可选 `inputAttrs`、两个 accessible label、focus/blur events 与 methods，并修正 value-based key。
+3. 按第 10 节对共享 `FaCombobox` 新增可选 `inputAttrs`、`contentClass`、两个 accessible label、focus/blur events 与 methods，并修正 value-based key；其中 `contentClass` 为 Task 5 实施期间单独确认的窄幅公共增量。
 4. 新增组件库第 11 个组件叶子路由、fixture Showcase 和对应自动化测试。
 5. 不新增依赖，不修改 Server/API/OpenAPI/数据库/权限/字典数据，不接入具体业务页面。
 
