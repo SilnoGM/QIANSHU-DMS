@@ -26,6 +26,7 @@
 | `triggerAriaLabel` | `string` | `'展开或收起选项'` | 展开/收起图标按钮的可访问名称 |
 | `virtualList` | `boolean` | `false` | 是否启用虚拟化列表 |
 | `class` | `HTMLAttributes['class']` | - | 自定义 CSS 类 |
+| `contentClass` | `HTMLAttributes['class']` | - | 只传给 Teleport 下拉内容层的自定义 CSS 类 |
 
 `ComboboxInputAttrs` 是 `index.vue` 内部的结构类型，不是新的包级 named export。它只允许以下属性：
 
@@ -104,3 +105,4 @@ interface GroupOption {
 13. **按钮名称**：清空按钮使用 `data-slot="combobox-clear"`，清空和展开按钮始终具有可配置的显式可访问名称
 14. **选项身份**：primitive value 使用“类型 + 值”作为渲染身份，对象 value 使用组件实例内 `WeakMap` identity；重复 Label 不会复用同一个 Vue key
 15. **焦点方法**：`focus()`、`blur()` 与同名事件都只操作或报告真实 input，不使用全局 DOM 查询
+16. **内容样式边界**：`contentClass` 只作用于 Teleport 下拉内容层，不会传给输入控件；领域组件可用唯一类名局部约束移动端条目与动效

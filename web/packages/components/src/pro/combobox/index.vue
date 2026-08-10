@@ -55,6 +55,7 @@ export interface ComboboxProps {
   triggerAriaLabel?: string
   virtualList?: boolean
   class?: HTMLAttributes['class']
+  contentClass?: HTMLAttributes['class']
 }
 
 defineOptions({
@@ -297,7 +298,10 @@ defineExpose({
       </div>
     </ComboboxAnchor>
 
-    <ComboboxContent :position="position" class="z-2000">
+    <ComboboxContent
+      :position="position"
+      :class="cn('z-2000', contentClass)"
+    >
       <template v-if="virtualList">
         <ComboboxVirtualizer
           v-if="filteredVirtualValues.length > 0"

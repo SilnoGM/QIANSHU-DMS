@@ -124,6 +124,28 @@ test('FaCombobox 接入按钮名称、真实 input 焦点事件与公开焦点�
   assert.doesNotMatch(source, /querySelector/u)
 })
 
+test('FaCombobox 只把 contentClass 透传给 Teleport 内容层', () => {
+  const propsType = source.match(
+    /export interface ComboboxProps \{([\s\S]*?)\n\}/u,
+  )?.[1] ?? ''
+  assert.match(propsType, /contentClass\?: HTMLAttributes\['class'\]/u)
+
+  const content = source.match(/<ComboboxContent[\s\S]*?>/u)?.[0] ?? ''
+  assert.match(content, /:class="cn\('z-2000', contentClass\)"/u)
+  assert.doesNotMatch(content, /v-bind="(?:props\.)?contentAttrs"/u)
+
+  const templateStart = source.indexOf('\n<template>')
+  const templateEnd = source.lastIndexOf('\n</template>')
+  assert.ok(templateStart >= 0)
+  assert.ok(templateEnd > templateStart)
+  const template = source.slice(templateStart, templateEnd)
+  assert.equal(
+    [...template.matchAll(/\bcontentClass\b/gu)].length,
+    1,
+    'contentClass 在 template 中必须只有 Teleport 内容层一个运行时落点',
+  )
+})
+
 test('FaCombobox 加固不改变既有 props、模型与选择接线', () => {
   const propsType = source.match(
     /export interface ComboboxProps \{([\s\S]*?)\n\}/u,
@@ -193,6 +215,7 @@ test('FaCombobox 文档记录 additive API 与 Reka owned ARIA 边界', () => {
     'inputAttrs',
     'clearAriaLabel',
     'triggerAriaLabel',
+    'contentClass',
     'focus()',
     'blur()',
     'aria-expanded',
@@ -205,4 +228,12 @@ test('FaCombobox 文档记录 additive API 与 Reka owned ARIA 边界', () => {
 
   assert.match(readme, /搜索 input 不承载业务 `name`/u)
   assert.match(handbookComboboxSection, /搜索 input 不承载业务 `name`/u)
+  assert.match(
+    readme,
+    /contentClass[^。\n]*只作用于 Teleport 下拉内容层[^。\n]*不会传给输入控件/u,
+  )
+  assert.match(
+    handbookComboboxSection,
+    /contentClass[^。\n]*只传给 Teleport 下拉内容层[^。\n]*不改变输入控件默认样式/u,
+  )
 })
