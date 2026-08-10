@@ -68,6 +68,42 @@ function dictionarySelectInputExpression(testId) {
   )})`
 }
 
+async function readDictionarySelectActionLayout(page, testId) {
+  return page.evaluate(`(() => {
+    const input = ${dictionarySelectInputExpression(testId)}
+    const root = input?.closest(${JSON.stringify(
+      dictionarySelectRootSelector(testId),
+    )})
+    const control = input?.parentElement
+    const action = root?.querySelector(
+      '[data-slot="combobox-clear"], [data-slot="combobox-trigger"]',
+    )
+    if (!input || !control || !action) {
+      throw new Error('dictionary select action layout unavailable')
+    }
+    const controlStyle = getComputedStyle(control)
+    const controlRect = control.getBoundingClientRect()
+    const inputRect = input.getBoundingClientRect()
+    const actionRect = action.getBoundingClientRect()
+    return {
+      actionAtInlineEnd: controlStyle.direction === 'rtl'
+        ? actionRect.right <= inputRect.left + 1
+        : actionRect.left >= inputRect.right - 1,
+      actionInsideControl: actionRect.top >= controlRect.top - 0.001
+        && actionRect.bottom <= controlRect.bottom + 0.001
+        && actionRect.left >= controlRect.left - 0.001
+        && actionRect.right <= controlRect.right + 0.001,
+      actionSlot: action.getAttribute('data-slot'),
+      controlDisplay: controlStyle.display,
+      controlHeight: controlRect.height,
+      sameRow: Math.abs(
+        (inputRect.top + inputRect.height / 2)
+        - (actionRect.top + actionRect.height / 2),
+      ) <= 1,
+    }
+  })()`)
+}
+
 async function openDictionarySelectBrowserSession(
   t,
   profileSuffix,
@@ -1658,6 +1694,15 @@ test('真实 Chrome 覆盖字典选择器搜索、重复 Label、清空与错误
       && button.getAttribute('aria-label') === '清空字典选择'
     ))
   })()`)
+  const clearLayout = await readDictionarySelectActionLayout(
+    page,
+    'dictionary-select-standard',
+  )
+  assert.equal(clearLayout.actionSlot, 'combobox-clear')
+  assert.equal(clearLayout.controlDisplay, 'flex')
+  assert.equal(clearLayout.actionInsideControl, true)
+  assert.equal(clearLayout.sameRow, true)
+  assert.equal(clearLayout.actionAtInlineEnd, true)
   await page.evaluate(`(() => {
     const root = document.querySelector(
       '[data-testid="dictionary-select-standard"]',
@@ -2129,11 +2174,20 @@ test('真实 Chrome 覆盖字典选择器主题、Reduced Motion 与移动触控
 }, async (t) => {
   const { page } = await openDictionarySelectBrowserSession(t, 'responsive')
 
-  const desktopHeight = await page.evaluate(
-    `${dictionarySelectInputExpression('dictionary-select-standard')}
-      ?.parentElement?.getBoundingClientRect().height`,
+  const desktopLayout = await readDictionarySelectActionLayout(
+    page,
+    'dictionary-select-standard',
   )
-  assert.equal(desktopHeight >= 35.999 && desktopHeight <= 36.001, true)
+  assert.equal(desktopLayout.actionSlot, 'combobox-trigger')
+  assert.equal(desktopLayout.controlDisplay, 'flex')
+  assert.equal(
+    desktopLayout.controlHeight >= 35.999
+    && desktopLayout.controlHeight <= 36.001,
+    true,
+  )
+  assert.equal(desktopLayout.actionInsideControl, true)
+  assert.equal(desktopLayout.sameRow, true)
+  assert.equal(desktopLayout.actionAtInlineEnd, true)
   const lightBackground = await page.evaluate(`getComputedStyle(
     ${dictionarySelectInputExpression('dictionary-select-standard')}
       ?.parentElement,

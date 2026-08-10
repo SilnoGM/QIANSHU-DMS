@@ -533,6 +533,16 @@ test('QsDictionarySelect 样式与 README 固定响应式、Reduced Motion 和�
   assert.match(source, /\[data-slot="combobox-clear"\]/u)
   assert.match(source, /\[data-slot="combobox-trigger"\]/u)
   assert.match(source, /content-class="qs-dictionary-select__content"/u)
+  const comboboxRootRule = readCssRule(
+    source,
+    '.qs-dictionary-select :deep([data-slot="combobox"]) {',
+  )
+  assert.match(comboboxRootRule.body, /display:\s*block/u)
+  const controlLayoutRule = readCssRule(
+    source,
+    '.qs-dictionary-select :deep(.qs-dictionary-select__control) {',
+  )
+  assert.doesNotMatch(controlLayoutRule.body, /display\s*:/u)
   assert.match(source, /@media \(width <= 640px\)/u)
   const mobileStylesStart = source.indexOf('@media (width <= 640px)')
   const reducedMotionStylesStart = source.indexOf(

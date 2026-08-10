@@ -420,14 +420,19 @@ defineExpose({
 </template>
 
 <style scoped>
-.qs-dictionary-select :deep([data-slot="combobox"]),
-.qs-dictionary-select :deep(.qs-dictionary-select__control) {
+.qs-dictionary-select :deep([data-slot="combobox"]) {
   display: block;
   width: 100%;
   min-width: 0;
 }
 
+/*
+ * input 与右侧操作按钮的横向排列由 FaCombobox 统一负责；领域组件只约束尺寸，
+ * 不能覆盖 control 的 display，否则 flex 子项会退回普通文档流并发生换行。
+ */
 .qs-dictionary-select :deep(.qs-dictionary-select__control) {
+  width: 100%;
+  min-width: 0;
   height: 36px;
 }
 
