@@ -64,16 +64,16 @@ test('FaCombobox 保持既有 barrel 导出边界', () => {
   ]
   const comboboxBarrelLines = comboboxBarrel.trim().split('\n')
   assert.deepEqual(comboboxBarrelLines, [
-    "export { default as Combobox } from './index.vue'",
-    "export type { ComboboxGroupOption, ComboboxOption, ComboboxProps } from './index.vue'",
+    'export { default as Combobox } from \'./index.vue\'',
+    'export type { ComboboxGroupOption, ComboboxOption, ComboboxProps } from \'./index.vue\'',
   ])
 
   const componentsComboboxLines = componentsBarrel
     .split('\n')
-    .filter(line => line.includes("from './pro/combobox'"))
+    .filter(line => line.includes('from \'./pro/combobox\''))
   assert.deepEqual(componentsComboboxLines, [
-    "export { Combobox as FaCombobox } from './pro/combobox'",
-    "export type { ComboboxGroupOption, ComboboxOption, ComboboxProps } from './pro/combobox'",
+    'export { Combobox as FaCombobox } from \'./pro/combobox\'',
+    'export type { ComboboxGroupOption, ComboboxOption, ComboboxProps } from \'./pro/combobox\'',
   ])
 
   for (const [barrelName, barrelSource, typeExportPattern] of [
@@ -105,7 +105,11 @@ test('FaCombobox 接入按钮名称、真实 input 焦点事件与公开焦点�
   assert.match(clearButton, /data-slot="combobox-clear"/u)
   assert.match(clearButton, /:aria-label="clearAriaLabel"/u)
 
-  const trigger = source.match(/<ComboboxTrigger\s+[\s\S]*?\/>/u)?.[0] ?? ''
+  const triggerStart = source.indexOf('<ComboboxTrigger')
+  const triggerEnd = source.indexOf('/>', triggerStart)
+  const trigger = triggerStart >= 0 && triggerEnd > triggerStart
+    ? source.slice(triggerStart, triggerEnd + 2)
+    : ''
   assert.match(trigger, /:aria-label="triggerAriaLabel"/u)
 
   assert.match(source, /focus:\s*\[event: FocusEvent\]/u)
@@ -118,8 +122,10 @@ test('FaCombobox 接入按钮名称、真实 input 焦点事件与公开焦点�
   )?.[1] ?? ''
   assert.match(focusHandler, /isFocused\.value = true\s+emits\('focus', event\)/u)
   assert.match(blurHandler, /isFocused\.value = false\s+emits\('blur', event\)/u)
-  assert.match(source, /function focus\(\)[\s\S]*?comboboxInputRef\.value\?\.ref\?\.focus\(\)/u)
-  assert.match(source, /function blur\(\)[\s\S]*?comboboxInputRef\.value\?\.ref\?\.blur\(\)/u)
+  assert.match(source, /function resolveComboboxInputElement\(\): HTMLInputElement \| null/u)
+  assert.match(source, /candidate\?\.\$el instanceof HTMLInputElement/u)
+  assert.match(source, /function focus\(\)[\s\S]*?resolveComboboxInputElement\(\)\?\.focus\(\)/u)
+  assert.match(source, /function blur\(\)[\s\S]*?resolveComboboxInputElement\(\)\?\.blur\(\)/u)
   assert.match(source, /defineExpose\(\{\s*blur,\s*focus,?\s*\}\)/u)
   assert.doesNotMatch(source, /querySelector/u)
 })

@@ -42,6 +42,14 @@ type ComboboxInputAttrs = Pick<
   | 'aria-busy'
 >
 
+interface ComboboxInputComponentRef {
+  readonly $el?: unknown
+}
+
+interface ComboboxInputComponentExpose {
+  readonly ref?: ComboboxInputComponentRef | HTMLInputElement | null
+}
+
 export interface ComboboxProps {
   disabled?: boolean
   clearable?: boolean
@@ -82,7 +90,9 @@ const value = defineModel<AcceptableValue | undefined>()
 const searchValue = ref('')
 const isFocused = ref(false)
 const isHovered = ref(false)
-const comboboxInputRef = useTemplateRef('comboboxInputRef')
+const comboboxInputRef = useTemplateRef<ComboboxInputComponentExpose>(
+  'comboboxInputRef',
+)
 
 /*
  * inputAttrs 同时保留类型白名单和运行时白名单。后者防止 JavaScript 调用方
@@ -228,14 +238,30 @@ function handleInputBlur(event: FocusEvent) {
   emits('blur', event)
 }
 
-/** 只操作 ComboboxInput 已公开的真实 input ref，不跨组件查询 DOM。 */
+/**
+ * 内层包装器的 `ref` 在当前 Reka 版本中是组件实例，而不是原生 input。
+ * 兼容包装器未来直接暴露元素的形态，并只沿组件公开的 `$el` 解析真实 input；
+ * 不使用全局 DOM 查询，也不依赖调用方传入的 id。
+ */
+function resolveComboboxInputElement(): HTMLInputElement | null {
+  const candidate = comboboxInputRef.value?.ref
+  if (candidate instanceof HTMLInputElement) {
+    return candidate
+  }
+  if (candidate?.$el instanceof HTMLInputElement) {
+    return candidate.$el
+  }
+  return null
+}
+
+/** 只操作 ComboboxInput 对应的真实 input，不跨组件查询 DOM。 */
 function focus() {
-  comboboxInputRef.value?.ref?.focus()
+  resolveComboboxInputElement()?.focus()
 }
 
 /** 与 focus() 对称，供表单和上层领域组件显式释放真实 input 焦点。 */
 function blur() {
-  comboboxInputRef.value?.ref?.blur()
+  resolveComboboxInputElement()?.blur()
 }
 
 function handleClear() {
