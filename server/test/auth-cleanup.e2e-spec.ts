@@ -12,6 +12,7 @@ import {
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1_000
 const FIXED_CUTOFF_MARGIN_MILLISECONDS = 250
 const FIXED_CUTOFF_DELAY_MILLISECONDS = 600
+const BATCH_FAILURE_STATEMENT_TIMEOUT = '30s'
 const TEST_PREFIX = `cln-${randomUUID()}`
 
 jest.setTimeout(30_000)
@@ -61,6 +62,8 @@ interface CleanupClientHooks {
   readonly afterCutoff?: (cutoff: Date) => Promise<void>
   readonly beforeSessionDelete?: (invocation: number) => Promise<void>
   readonly observedDeleteCutoffs?: Date[]
+  readonly observedStatementTimeouts?: string[]
+  readonly statementTimeoutOverride?: string
 }
 
 /**
@@ -87,6 +90,25 @@ class HookedCleanupClient implements AuthCleanupPgClient {
     values: readonly unknown[] = [],
   ): Promise<{ rows: Row[]; rowCount: number | null }> {
     const normalizedSql = text.replace(/\s+/gu, ' ').trim()
+    const isStatementTimeoutConfiguration = normalizedSql.includes(
+      "set_config('statement_timeout'",
+    )
+    const forwardedValues = [...values]
+
+    // 该覆盖只属于测试 Client，用于确保“大批次已提交、第二批失败”场景命中
+    // 预定 failpoint；生产 Client 仍由单元测试锁定为 5s。
+    if (
+      isStatementTimeoutConfiguration &&
+      this.hooks.statementTimeoutOverride !== undefined
+    ) {
+      forwardedValues[0] = this.hooks.statementTimeoutOverride
+    }
+    if (
+      isStatementTimeoutConfiguration &&
+      typeof forwardedValues[0] === 'string'
+    ) {
+      this.hooks.observedStatementTimeouts?.push(forwardedValues[0])
+    }
 
     if (
       normalizedSql.startsWith('DELETE FROM "auth_sessions"') &&
@@ -96,7 +118,7 @@ class HookedCleanupClient implements AuthCleanupPgClient {
       await this.hooks.beforeSessionDelete(this.sessionDeleteInvocation)
     }
 
-    const result = await this.client.query<Row>(text, [...values])
+    const result = await this.client.query<Row>(text, forwardedValues)
 
     if (normalizedSql.startsWith('DELETE FROM')) {
       const cutoff = values[0]
@@ -525,6 +547,8 @@ describe('auth cleanup against isolated PostgreSQL', () => {
   it('commits full batches, releases the lock after failure and continues on retry', async () => {
     const userId = await createUser('batch-failure')
     const tokenSeed = randomUUID()
+    const deleteInvocations: number[] = []
+    const observedStatementTimeouts: string[] = []
     await controlClient.query(
       `
         INSERT INTO auth_sessions (
@@ -556,6 +580,7 @@ describe('auth cleanup against isolated PostgreSQL', () => {
       createClient: (connectionString) =>
         new HookedCleanupClient(connectionString, {
           beforeSessionDelete(invocation) {
+            deleteInvocations.push(invocation)
             if (invocation === 2) {
               return Promise.reject(
                 new Error('Injected cleanup batch failure'),
@@ -563,9 +588,16 @@ describe('auth cleanup against isolated PostgreSQL', () => {
             }
             return Promise.resolve()
           },
+          observedStatementTimeouts,
+          statementTimeoutOverride: BATCH_FAILURE_STATEMENT_TIMEOUT,
         }),
     }).catch((error: unknown) => error)
 
+    expect(deleteInvocations).toEqual([1, 2])
+    expect(observedStatementTimeouts).toEqual([
+      BATCH_FAILURE_STATEMENT_TIMEOUT,
+      BATCH_FAILURE_STATEMENT_TIMEOUT,
+    ])
     expect(failure).toBeInstanceOf(AuthCleanupExecutionError)
     expect(failure).toMatchObject({
       message: 'Authentication cleanup failed',
@@ -599,7 +631,7 @@ describe('auth cleanup against isolated PostgreSQL', () => {
       [userId],
     )
     expect(afterRetry.rows[0]?.count).toBe('0')
-  })
+  }, 60_000)
 
   it('allows only one of two concurrent cleanup instances to execute deletion', async () => {
     const now = await databaseNow()
