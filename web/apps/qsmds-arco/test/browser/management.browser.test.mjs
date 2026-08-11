@@ -474,6 +474,22 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await waitForAuthState(page, 'anonymous')
   await loginThroughUi(page, configuration)
 
+  // 管理员权限迁移必须在真实 AuthContext 中生效，并驱动顶部导航与两个叶子页面。
+  await page.waitFor(`document.body.innerText.includes('管理员工作台')`)
+  for (const [routePath, buttonText] of [
+    ['/admin/products/create', '新增产品'],
+    ['/admin/products/list', '产品列表'],
+  ]) {
+    await page.navigate(appRouteUrl(configuration.baseUrl, routePath))
+    await page.waitFor(`(() => (
+      location.hash === ${JSON.stringify(`#${routePath}`)}
+      && [...document.querySelectorAll('button')].some(button => (
+        button.textContent?.trim() === ${JSON.stringify(buttonText)}
+        && button.getClientRects().length > 0
+      ))
+    ))()`)
+  }
+
   // 测试目标用户由受保护 API 准备；本场景关注的是管理员后续每项 UI 管理操作。
   const createdUser = await page.evaluate(apiExpression('/api/users', 'POST', {
     displayName: 'Browser UI Managed',
@@ -617,6 +633,8 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'numbering-rules:read',
     'numbering-rules:read-issuances',
     'numbering-rules:update',
+    'products:create',
+    'products:read',
     'regions:create',
     'regions:disable',
     'regions:enable',

@@ -6,6 +6,17 @@
 export const SYSTEM_ADMIN_ROLE_CODE = 'system_admin' as const
 
 /**
+ * 产品管理占位阶段的完整权限边界。
+ *
+ * 当前只存在“产品列表”和“新增产品”两个页面，因此只声明读取与创建权限；
+ * 等产品领域 API 获得确认后，再随真实业务动作扩展更新、启停等权限。
+ */
+export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
+  'products:read',
+  'products:create',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -49,6 +60,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:update',
   'dictionaries:enable',
   'dictionaries:disable',
+  ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

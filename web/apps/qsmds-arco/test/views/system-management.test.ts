@@ -285,6 +285,7 @@ test('权限目录以中文展示现有业务资源', () => {
     'dictionaries',
     'exchange-rates',
     'numbering-rules',
+    'products',
     'regions',
     'roles',
     'users',
@@ -294,6 +295,7 @@ test('权限目录以中文展示现有业务资源', () => {
   assert.equal(permissionResourceLabel('regions'), '地区管理')
   assert.equal(permissionResourceLabel('numbering-rules'), '编号规则')
   assert.equal(permissionResourceLabel('dictionaries'), '字典管理')
+  assert.equal(permissionResourceLabel('products'), '产品管理')
 })
 
 test('系统管理页面按现有业务能力配置通用表格操作列与分页', () => {

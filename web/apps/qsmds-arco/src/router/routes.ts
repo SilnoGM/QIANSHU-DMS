@@ -8,6 +8,9 @@ import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
+import ProductManagement, {
+  PRODUCT_MANAGEMENT_PERMISSIONS,
+} from './modules/product.management'
 import SystemManagement, {
   MANAGEMENT_READ_PERMISSIONS,
 } from './modules/system.management'
@@ -87,6 +90,16 @@ const asyncRoutes: RouteRecordMainRaw[] = [
       SystemManagement,
       BasicData,
       ApplicationSettings,
+    ],
+  },
+  {
+    meta: {
+      title: '管理员工作台',
+      icon: 'i-lucide:layout-dashboard',
+      auth: [...PRODUCT_MANAGEMENT_PERMISSIONS],
+    },
+    children: [
+      ProductManagement,
     ],
   },
   ...(shouldEnableComponentLibrary(import.meta.env)
