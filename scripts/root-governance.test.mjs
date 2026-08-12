@@ -40,6 +40,8 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/products/dto/product-list-query.dto.ts',
   'server/src/modules/products/dto/product-response.dto.ts',
   'server/src/modules/products/products.controller.spec.ts',
+  'server/test/product-list-api.e2e-spec.ts',
+  'server/test/product-schema.e2e-spec.ts',
   'specs/product-list/design.md',
   'specs/product-list/requirements.md',
   'specs/product-list/tasks.md',

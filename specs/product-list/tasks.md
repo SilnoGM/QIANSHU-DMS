@@ -132,14 +132,16 @@
 
   Task 5 证据：Controller、Module 与 DTO 测试先因对应模块不存在而 RED；补齐 `GET /api/products` 后，反射与 OpenAPI 前置门禁精确限定 Controller 只有 `list` 方法、Path Item 只有 `get`，operationId 为 `products_list`，并固定 `products:read`、private no-store、403/422 与白名单响应 DTO。最终定向测试 10/10、Server typecheck 与串行 ESLint 通过；一次将 ESLint 与 `prisma generate` 并发执行导致 Prisma 类型瞬态不可解析，移除真实的冗余断言后串行复验全绿。
 
-- [ ] 6. 完成 Product 数据库与 HTTP E2E
-  - [ ] 6.1 先建立失败的隔离数据库/API E2E，测试 fixture 只在测试数据库直接插入受控 Product，不新增生产 seed 或创建 API。
-  - [ ] 6.2 覆盖权限拒绝、password-change-required、分页、稳定排序、精确供应商筛选、空结果、停用/未知历史值和三组 Decimal string/null。
-  - [ ] 6.3 覆盖 Product 约束：状态、金额、币种、attributes、`ACTIVE` supplier 非空、`id/productNo` 不可更新和唯一编号。
-  - [ ] 6.4 使用查询观测或 mock 边界证明供应商批量解析无逐行 N+1，actor 响应没有越权字段。
-  - [ ] 6.5 运行隔离 PostgreSQL migration replay 和 Server E2E；不得在本任务中对本地持久数据库执行 migration。
-  - [ ] 6.6 更新 Task 6 状态；若只有测试变更则创建提交：`test: 补齐产品列表服务端验收`，若暴露生产缺陷则以对应 `fix:` 提交最小修复与回归测试。
+- [x] 6. 完成 Product 数据库与 HTTP E2E
+  - [x] 6.1 先建立失败的隔离数据库/API E2E，测试 fixture 只在测试数据库直接插入受控 Product，不新增生产 seed 或创建 API。
+  - [x] 6.2 覆盖权限拒绝、password-change-required、分页、稳定排序、精确供应商筛选、空结果、停用/未知历史值和三组 Decimal string/null。
+  - [x] 6.3 覆盖 Product 约束：状态、金额、币种、attributes、`ACTIVE` supplier 非空、`id/productNo` 不可更新和唯一编号。
+  - [x] 6.4 使用查询观测或 mock 边界证明供应商批量解析无逐行 N+1，actor 响应没有越权字段。
+  - [x] 6.5 运行隔离 PostgreSQL migration replay 和 Server E2E；不得在本任务中对本地持久数据库执行 migration。
+  - [x] 6.6 更新 Task 6 状态；若只有测试变更则创建提交：`test: 补齐产品列表服务端验收`，若暴露生产缺陷则以对应 `fix:` 提交最小修复与回归测试。
   - _Requirements: R1-R8, R15_
+
+  Task 6 证据：API E2E 首轮因夹具先启用空字典 Type 而 RED，第二轮业务断言已执行但清理阶段被登录审计外键阻断；分别改为合法的 Item→Type 原子顺序和 AuditEvent→User 精确清理后转绿，未修改生产代码。定向 Product E2E 2 suites / 4 tests 通过，Schema 用 12 个 savepoint 覆盖枚举、金额、币种、attributes、ACTIVE supplier、唯一编号和不可变身份；HTTP 覆盖认证、权限、强制改密、稳定分页、精确筛选、空页、有效/停用/未知供应商、Decimal string/null、单次 batch lookup 和 actor 白名单。完整 `ci:server-e2e` 连续 deploy 两次并确认 migration up to date，最终 26 suites / 146 tests 全绿；仅使用并自动回收临时 PostgreSQL，本地持久数据库未迁移。
 
 - [ ] 7. 同步 OpenAPI 与 Web generated contract
   - [ ] 7.1 先运行 `contract:check` 记录 Product operation 尚未同步的 RED，不手工修改任何 snapshot 或 generated type。
