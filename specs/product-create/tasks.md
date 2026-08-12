@@ -2,14 +2,15 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 3 已确认，Phase 4 实施中
+- 状态：Phase 4 本地实施与验收已完成
 - Requirements 确认日期：2026-08-12
 - Design 确认日期：2026-08-12
 - 编写日期：2026-08-12
+- 完成日期：2026-08-12
 - 实施分支：`feat/admin-product-management`
 - Requirements：`specs/product-create/requirements.md`
 - Design：`specs/product-create/design.md`
-- 当前门禁：Gate T 已于 2026-08-12 确认；Phase 4 只按 Gate R/D/T 边界实施，Gate DB 与 Gate E 仍未授权
+- 当前门禁：Gate R/D/T 范围已实施并完成本地验收；Gate DB 仅完成隔离验证，持久数据库与 Gate E 外部动作仍未授权
 
 本计划把产品创建拆为 14 个可独立验证、保持绿色并形成小步提交的任务。任务顺序固定为：绿色基线 -> Schema/Audit -> 编号 scoped 幂等 -> Currency Lookup -> Product 纯逻辑 -> Product Command -> 公共 API -> Server E2E -> OpenAPI 同步 -> Web API/状态机 -> 表单组件 -> 页面编排 -> Browser 验收 -> 全量收口。
 
@@ -69,7 +70,7 @@
 
 ### Gate DB - 持久开发数据库
 
-- [ ] 创建 migration 文件和隔离 PostgreSQL 验证不等于持久数据库授权。
+- [x] migration 文件已创建，并随全部 14 个 migration 在可销毁隔离 PostgreSQL 中验证；这不等于持久数据库授权。
 - [ ] 若后续需要应用，必须先展示唯一 migration、目标数据库、只读影响检查和备份/恢复边界，再取得独立明确确认。
 
 ### Gate E - 外部发布
@@ -272,15 +273,21 @@
   - GREEN：根 `node --run ci:browser-auth-e2e` 在应用 14 个 migration 的一次性 PostgreSQL 中通过 `2/2`（认证场景约 `10660ms`，管理场景约 `12083ms`，总计约 `32676ms`）；runner 完成容器与临时状态回收。未连接、修改或迁移持久开发数据库。
   - _Requirements: R1-R14_
 
-- [ ] 14. 完成全量验证、规格状态与 Git 收口
-  - [ ] 14.1 冻结生产/测试源码，汇总 Task 2-13 的真实 RED/GREEN、提交 SHA、失败与非阻断警告；不得预写结果。
-  - [ ] 14.2 串行执行第 5 节完整矩阵，确认 Schema、Server unit/E2E、OpenAPI、Web API/View、Browser、build、root governance 和 diff-check 全绿。
-  - [ ] 14.3 复核最终文件矩阵：无禁止路径、删除、旧 migration 改写、额外 Schema、依赖/lockfile、持久数据、Supplier 领域复活、未授权 Product operation 或敏感文件。
-  - [ ] 14.4 明确记录 Gate DB 状态；未获独立授权时，新 migration 只能存在于代码并已在隔离 PostgreSQL 验证，不得部署到持久开发库。
-  - [ ] 14.5 将 Requirements、Design、Tasks 更新为实际完成状态和真实提交证据；文档收口后不再修改生产/测试源码。
-  - [ ] 14.6 暂存精确文件并核对 secrets/staged diff，创建提交：`docs: 完成产品创建实施验收`。
-  - [ ] 14.7 核对 `git status --short --branch`、相对基线提交序列和每个提交范围，向用户交付本地结果后暂停。
-  - [ ] 14.8 不执行 push、PR、merge、deploy、持久数据库 migration 或分支清理。
+- [x] 14. 完成全量验证、规格状态与 Git 收口
+  - [x] 14.1 冻结生产/测试源码，汇总 Task 2-13 的真实 RED/GREEN、提交 SHA、失败与非阻断警告；不得预写结果。
+  - [x] 14.2 串行执行第 5 节完整矩阵，确认 Schema、Server unit/E2E、OpenAPI、Web API/View、Browser、build、root governance 和 diff-check 全绿。
+  - [x] 14.3 复核最终文件矩阵：无禁止路径、删除、旧 migration 改写、额外 Schema、依赖/lockfile、持久数据、Supplier 领域复活、未授权 Product operation 或敏感文件。
+  - [x] 14.4 明确记录 Gate DB 状态；未获独立授权时，新 migration 只能存在于代码并已在隔离 PostgreSQL 验证，不得部署到持久开发库。
+  - [x] 14.5 将 Requirements、Design、Tasks 更新为实际完成状态和真实提交证据；文档收口后不再修改生产/测试源码。
+  - [x] 14.6 暂存精确文件并核对 secrets/staged diff，创建提交：`docs: 完成产品创建实施验收`。
+  - [x] 14.7 核对 `git status --short --branch`、相对基线提交序列和每个提交范围，向用户交付本地结果后暂停。
+  - [x] 14.8 不执行 push、PR、merge、deploy、持久数据库 migration 或分支清理。
+  - 提交证据：Task 2-13 依次落在 `1cd0fa0`、`986b94f`、`580ab77`、`a9b1298`、`4f01e30`、`d8adf29`、`48e290b`、`fd3b219`、`e04a080`、`a77e8a2`、`cac78c8`、`9472105`、`ccc9f2a`、`1f1827a`；两个 `fix:` 分别独立记录大额金额响应与 Browser 暴露的金额表单同步缺陷，没有藏入验收或文档提交。
+  - Server：Prisma validate、typecheck、ESLint、生产 build 通过；完整 unit 为 `152/152` suites、`1513/1513` tests。首次隔离 E2E 为 `25/27` suites、`158/160` tests，失败为与本功能无关的字典并发 `socket hang up` 和认证清理第二批时序断言；未修改源码重跑同一 `ci:server-e2e` 后应用 14 个 migration 并以 `27/27` suites、`160/160` tests 全绿。
+  - Contract/Web：`contract:sync` 后无 tracked 漂移，`contract:check` 通过；Web `test:api` 为 `774/774`，typecheck、ESLint、Stylelint、生产 build 全绿。构建仅输出既有 `@vueuse/core` pure annotation、chunk size 与 plugin timing 警告，均未阻断产物及字体零残留校验。
+  - Browser/Root：最终独立 Chrome Job 为 `2/2`（认证约 `9424ms`、管理约 `12280ms`、总计约 `31611ms`）；根聚合 `check` 内再次为 `2/2`。Root `test:root` 为 `663/663`，根 `check`、`build`、`git diff --check` 均通过。
+  - 文件矩阵：相对产品创建基线 `c700733` 共 53 个文件、9525 additions/97 deletions（行级修改），没有删除文件；没有 package/lockfile、`.env`、独立 Supplier 领域或公共组件契约变更。Schema 只有 `AuditEventType.PRODUCT_CREATED`，唯一新 migration 只执行对应 enum 扩展。
+  - Gate DB/E：14 个 migration 只部署到多次一次性 PostgreSQL，未连接、修改或迁移持久开发数据库；未执行 push、PR、merge、deploy、分支删除或清理。
   - _Requirements: R1-R14_
 
 ## 5. 验证矩阵
@@ -441,23 +448,25 @@ package.json / lockfiles
 
 若实现证明必须越过上述边界、修改 Product/Numbering/Currency/Dictionary 表、增加依赖或增加其他公共 Product operation，立即暂停，回到 Requirements/Design 并重新取得明确确认。
 
-## 7. 建议提交序列
+## 7. 实际提交序列
 
-1. `feat: 增加产品创建审计事件`
-2. `feat: 增加编号作用域幂等入口`
-3. `feat: 增加币种有效性查询服务`
-4. `feat: 建立产品创建输入规范`
-5. `feat: 实现产品创建命令`
-6. `feat: 添加产品创建接口`
-7. `test: 补齐产品创建服务端验收`
-8. `chore: 同步产品创建接口契约`
-9. `feat: 建立产品创建前端状态`
-10. `feat: 实现产品创建表单`
-11. `feat: 完成产品创建页面流程`
-12. `test: 补齐产品创建浏览器验收`
-13. `docs: 完成产品创建实施验收`
+1. `1cd0fa0 feat: 增加产品创建审计事件`
+2. `986b94f feat: 增加编号作用域幂等入口`
+3. `580ab77 feat: 增加币种有效性查询服务`
+4. `a9b1298 feat: 建立产品创建输入规范`
+5. `4f01e30 feat: 实现产品创建命令`
+6. `d8adf29 feat: 添加产品创建接口`
+7. `48e290b fix: 修正产品大额金额响应格式`
+8. `fd3b219 test: 补齐产品创建服务端验收`
+9. `e04a080 chore: 同步产品创建接口契约`
+10. `a77e8a2 feat: 建立产品创建前端状态`
+11. `cac78c8 feat: 实现产品创建表单`
+12. `9472105 feat: 完成产品创建页面流程`
+13. `ccc9f2a fix: 修正产品创建表单金额同步`
+14. `1f1827a test: 补齐产品创建浏览器验收`
+15. `docs: 完成产品创建实施验收`（本次规格收口提交）
 
-只有对应任务全部绿色后才提交。若任务没有独立变更，不创建空提交；若测试暴露生产缺陷，用职责明确的 `fix:` 小步提交，不把修复藏入 `test:` 或 `docs:`。
+全部功能提交均在对应任务绿色后创建；Browser 验收暴露的两个生产缺陷使用独立 `fix:` 小步提交，没有混入 `test:` 或 `docs:`。
 
 ## 8. Phase 3 确认门
 
@@ -468,4 +477,4 @@ package.json / lockfiles
 3. 允许在不改变职责和行为边界的前提下合并相邻绿色任务或减少没有独立价值的文件，不允许扩大功能。
 4. 不授权把 migration 应用到持久开发数据库，不授权 push、PR、merge、deploy、删除或任何外部发布动作。
 
-请用户明确确认 Gate T 后，才把本文件状态改为已确认、提交 Phase 3 文档并开始 Task 1。
+Gate T 已于 2026-08-12 明确确认；Phase 4 已按上述边界完成。后续若申请 Gate DB 或 Gate E，必须作为新的独立授权处理，不能由本次完成状态推导。

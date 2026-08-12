@@ -2,12 +2,13 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 已确认
+- 状态：Phase 4 本地实施与验收已完成
 - 编写日期：2026-08-12
 - Requirements：`specs/product-create/requirements.md`
 - 实施分支：`feat/admin-product-management`
 - 设计范围：产品创建 API、编号幂等桥接、Product Command、审计 enum migration、正式创建页面与自动化验证
-- 当前门禁：Design 已于 2026-08-12 确认；Tasks 与正式实施尚未授权，持久开发数据库 migration 仍需独立确认
+- 完成日期：2026-08-12
+- 当前门禁：设计范围已实施并完成本地全量验收；持久开发数据库 migration 与外部发布仍需独立确认
 
 ## 2. 当前真相源与审计结论
 
@@ -707,3 +708,11 @@ Gate D 确认本设计时，需要明确授权后续 Tasks 可以包含以下高
 6. 更新 OpenAPI snapshot 与 generated Web types。
 
 即使 Gate D 与后续 Tasks 均确认，migration 也只允许在隔离 PostgreSQL 验证；应用到持久开发数据库需要用户另行明确授权。
+
+## 13. 实施结果
+
+本设计已按确认边界实现。`NumberingGeneratorService.generateScoped()` 保持业务中立，Product Command 使用稳定 actor/payload 指纹协调 issuance 与幂等重放；供应商继续保存 `service_provider.supplier` 的稳定 value，Currency Lookup 与 Dictionary Lookup 在 Product 写入事务内重验。Product 与 `PRODUCT_CREATED` Audit 同事务提交，失败不会产生半成品 Product。
+
+Web 创建页使用扁平权威表单模型、Catalog 可信门禁、冻结的 Key/Payload、人工 unknown-result 重放与身份/权限/请求版本/Abort 四重守卫。真实 Browser 验收还发现并修复了金额表单项注册路径与页面扁平模型不一致的问题；修复后 Server 字段错误显式映射到三个金额字段，移动端触控目标保持在页面作用域内，不修改共享组件契约。
+
+最终验证证明 Schema、Server、OpenAPI、Web、Browser、构建与根治理均通过。一次 Server 隔离 E2E 首跑出现与产品无关的字典并发 `socket hang up` 和认证清理时序断言失败；未改源码重跑同一 Job 后 `27/27` suites、`160/160` tests 全绿，并在后续根聚合检查中保持绿色。构建只保留既有依赖 pure annotation、chunk size 与 plugin timing 非阻断警告。

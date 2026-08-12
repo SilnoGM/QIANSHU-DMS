@@ -2,12 +2,13 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 1 已确认
+- 状态：Phase 4 本地实施与验收已完成
 - 编写日期：2026-08-12
 - 适用范围：`server/`、`web/apps/qsmds-arco`
 - 实施分支：`feat/admin-product-management`
 - 关联规格：`specs/product-list/requirements.md`
-- 当前门禁：Requirements 已于 2026-08-12 确认；Design、Tasks、Schema/API 实施、本地持久数据库 migration 与外部发布均未授权
+- 完成日期：2026-08-12
+- 当前门禁：Requirements、Design、Tasks 与本地实施已完成；migration 仅在可销毁隔离 PostgreSQL 验证，持久开发数据库 migration 与外部发布仍未授权
 
 ## 2. 背景与目标
 
@@ -325,23 +326,31 @@ updatedByUserId = current user id
 
 ### Gate R - Requirements
 
-- [ ] 用户确认本文字段、校验、幂等、失败恢复、页面结构和非目标。
+- [x] 用户确认本文字段、校验、幂等、失败恢复、页面结构和非目标。
 
 ### Gate D - Design
 
-- [ ] Requirements 确认后编写 `specs/product-create/design.md`。
-- [ ] 单独确认公共 API、审计枚举 migration、编号/Product 幂等事务和 Web 状态机设计。
+- [x] Requirements 确认后编写 `specs/product-create/design.md`。
+- [x] 单独确认公共 API、审计枚举 migration、编号/Product 幂等事务和 Web 状态机设计。
 
 ### Gate T - Tasks
 
-- [ ] Design 确认后编写 `specs/product-create/tasks.md`。
-- [ ] Tasks 确认后才进入 TDD 实施。
+- [x] Design 确认后编写 `specs/product-create/tasks.md`。
+- [x] Tasks 确认后才进入 TDD 实施。
 
 ### Gate DB - 持久数据库
 
-- [ ] 新 migration 只在可销毁隔离 PostgreSQL 中自动验证。
+- [x] 新 migration 只在可销毁隔离 PostgreSQL 中自动验证。
 - [ ] 应用到 `qianshu_dms_dev` 或其他持久数据库前必须重新展示影响并取得明确确认。
 
 ### Gate E - 外部动作
 
 - [ ] push、PR、merge、部署与非本地数据库变更继续需要独立授权。
+
+## 11. 实施验收状态
+
+2026-08-12 已在 `feat/admin-product-management` 完成本规格范围：受保护的 `POST /api/products`、PRODUCT 编号派发、供应商与币种写时校验、三组可空金额、有序属性、Product/Audit 原子写入、OpenAPI/Web 接入、正式创建页及真实 Chrome 验收均已落地。
+
+最终本地验证覆盖 Prisma Schema、Server unit/E2E、OpenAPI drift、Web API/View、类型与规范检查、生产构建、Root governance 和 Browser E2E。Server unit 为 `1513/1513`，隔离 Server E2E 最终为 `160/160`，Web 为 `774/774`，Root 为 `663/663`，Browser 为 `2/2`。图片与视频上传、产品查看/编辑和所有外部动作继续保持在非目标内。
+
+Gate DB 仍未打开：`20260812100000_product_created_audit_event` 已随全部 14 个 migration 在多次一次性 PostgreSQL 中验证，但未连接、修改或迁移持久开发数据库。
