@@ -1,7 +1,29 @@
+import { ValidationPipe } from '@nestjs/common'
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
+import { createValidationException } from '../../../infrastructure/http/validation-exception.factory'
+import { CreateProductRequestDto } from './product-create.dto'
 import { ProductListQueryDto } from './product-list-query.dto'
+
+const createDtoPipe = new ValidationPipe({
+  transform: true,
+  whitelist: true,
+  forbidNonWhitelisted: true,
+  exceptionFactory: createValidationException,
+})
+
+function validCreateBody(): Record<string, unknown> {
+  return {
+    name: '测试产品',
+    status: 'DRAFT',
+    supplierValue: null,
+    twdSalePrice: { amount: null, currency: 'TWD' },
+    myrSalePrice: { amount: '10.20', currency: 'MYR' },
+    purchaseCost: { amount: '5', currency: 'CNY' },
+    attributes: [{ title: '颜色', value: '红色' }],
+  }
+}
 
 describe('ProductListQueryDto', () => {
   it('coerces pagination, trims keyword and preserves exact supplier raw value', async () => {
@@ -35,5 +57,54 @@ describe('ProductListQueryDto', () => {
   ])('rejects invalid public query input: %j', async (input) => {
     expect(await validate(plainToInstance(ProductListQueryDto, input)))
       .not.toHaveLength(0)
+  })
+})
+
+describe('CreateProductRequestDto', () => {
+  it('accepts the exact create body including nullable amounts and supplier', async () => {
+    const transformed = await createDtoPipe.transform(validCreateBody(), {
+      type: 'body',
+      metatype: CreateProductRequestDto,
+    }) as unknown
+
+    expect(transformed).toEqual(validCreateBody())
+    expect(transformed).toBeInstanceOf(CreateProductRequestDto)
+  })
+
+  it.each([
+    ['name', { name: undefined }],
+    ['status', { status: 'UNKNOWN' }],
+    ['supplierValue', { supplierValue: undefined }],
+    ['twdSalePrice', { twdSalePrice: undefined }],
+    ['twdSalePrice.amount', { twdSalePrice: { amount: -1, currency: 'TWD' } }],
+    ['twdSalePrice.currency', { twdSalePrice: { amount: null, currency: 'USD' } }],
+    ['myrSalePrice.currency', { myrSalePrice: { amount: null, currency: 'TWD' } }],
+    ['purchaseCost.currency', { purchaseCost: { amount: null, currency: 'cny' } }],
+    ['attributes', { attributes: 'not-an-array' }],
+  ])('rejects invalid create DTO field %s', async (_field, override) => {
+    await expect(createDtoPipe.transform({
+      ...validCreateBody(),
+      ...override,
+    }, {
+      type: 'body',
+      metatype: CreateProductRequestDto,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+  })
+
+  it.each([
+    { mainImage: 'https://example.invalid/image.png' },
+    { images: [] },
+    { videos: [] },
+    { unknown: true },
+    { attributes: [{ title: '颜色', value: '红色', extra: true }] },
+    { twdSalePrice: { amount: null, currency: 'TWD', extra: true } },
+  ])('rejects non-whitelisted create fields: %j', async (extra) => {
+    await expect(createDtoPipe.transform({
+      ...validCreateBody(),
+      ...extra,
+    }, {
+      type: 'body',
+      metatype: CreateProductRequestDto,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
   })
 })

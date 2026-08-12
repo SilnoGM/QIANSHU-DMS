@@ -130,15 +130,20 @@
   - 静态检查：`pnpm typecheck`、`pnpm lint`、`git diff --check` 全部通过，根治理 `663/663`。
   - _Requirements: R5, R8, R13-R14_
 
-- [ ] 5. 以 TDD 建立 Product 创建 DTO、规范化与作用域指纹
-  - [ ] 5.1 先建立 Create DTO RED，覆盖所有必填字段、nested Money/Attribute、未知字段拒绝、状态和 nullable 的精确语义。
-  - [ ] 5.2 建立 normalizer RED：trim/NFC、Unicode code points、Active supplier、固定 `TWD/MYR`、采购币种格式、严格金额 grammar、26+4 边界和属性上限/顺序/重复。
-  - [ ] 5.3 建立 Header RED：缺失、合并重复值、非 lowercase、非 v4 和合法 canonical UUID。
-  - [ ] 5.4 建立 fingerprint 固定向量 RED，覆盖等价金额、NFC、actor、null、属性顺序和 Payload 变化。
-  - [ ] 5.5 最小实现纯函数与安全错误类型；规范化结果深复制/冻结，不持有调用方可变对象。
-  - [ ] 5.6 证明任何 DTO/normalizer 失败都发生在发号前，错误只含白名单字段路径，不回显输入。
-  - [ ] 5.7 运行 Product DTO/normalizer/fingerprint 定向测试、Server typecheck/lint 和 diff-check。
-  - [ ] 5.8 更新 Task 5 真实证据，创建提交：`feat: 建立产品创建输入规范`。
+- [x] 5. 以 TDD 建立 Product 创建 DTO、规范化与作用域指纹
+  - [x] 5.1 先建立 Create DTO RED，覆盖所有必填字段、nested Money/Attribute、未知字段拒绝、状态和 nullable 的精确语义。
+  - [x] 5.2 建立 normalizer RED：trim/NFC、Unicode code points、Active supplier、固定 `TWD/MYR`、采购币种格式、严格金额 grammar、26+4 边界和属性上限/顺序/重复。
+  - [x] 5.3 建立 Header RED：缺失、合并重复值、非 lowercase、非 v4 和合法 canonical UUID。
+  - [x] 5.4 建立 fingerprint 固定向量 RED，覆盖等价金额、NFC、actor、null、属性顺序和 Payload 变化。
+  - [x] 5.5 最小实现纯函数与安全错误类型；规范化结果深复制/冻结，不持有调用方可变对象。
+  - [x] 5.6 证明任何 DTO/normalizer 失败都发生在发号前，错误只含白名单字段路径，不回显输入。
+  - [x] 5.7 运行 Product DTO/normalizer/fingerprint 定向测试、Server typecheck/lint 和 diff-check。
+  - [x] 5.8 更新 Task 5 真实证据，创建提交：`feat: 建立产品创建输入规范`。
+  - RED（2026-08-12）：DTO、normalizer、fingerprint 三个 suite 因目标模块尚不存在在 TypeScript 编译阶段失败，`0 tests` 执行；失败边界精确为三个待实现文件。
+  - GREEN：三个定向 suite `3 suites / 60 tests`；固定指纹向量为 `f1a460b2...4b47112`，覆盖 actor、null、属性顺序、NFC 与等价金额。DTO 严格拒绝未知/媒体字段，Header 只接受 lowercase canonical UUID v4。
+  - 安全/边界：normalizer 为纯函数，输出深复制并递归冻结；错误只返回受控字段路径和固定消息，不回显输入；本任务源码不依赖 Numbering、Prisma、Controller 或网络，因此所有输入失败在后续发号编排前完成。
+  - 验证插曲：首次 GREEN 的两个失败均为测试断言写法，修正后通过；并行运行 `typecheck`/`lint` 曾因两条命令同时执行 `prisma generate` 产生生成目录竞争，改为串行后验证成功。期间 lint 报告的两处测试类型问题均已修正。
+  - 静态检查：`pnpm typecheck`、`pnpm lint`、`git diff --check` 全部通过。
   - _Requirements: R2-R7, R9, R13-R14_
 
 - [ ] 6. 以 TDD 实现 Product Command 与原子审计
