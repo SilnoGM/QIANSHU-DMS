@@ -143,12 +143,14 @@
 
   Task 6 证据：API E2E 首轮因夹具先启用空字典 Type 而 RED，第二轮业务断言已执行但清理阶段被登录审计外键阻断；分别改为合法的 Item→Type 原子顺序和 AuditEvent→User 精确清理后转绿，未修改生产代码。定向 Product E2E 2 suites / 4 tests 通过，Schema 用 12 个 savepoint 覆盖枚举、金额、币种、attributes、ACTIVE supplier、唯一编号和不可变身份；HTTP 覆盖认证、权限、强制改密、稳定分页、精确筛选、空页、有效/停用/未知供应商、Decimal string/null、单次 batch lookup 和 actor 白名单。完整 `ci:server-e2e` 连续 deploy 两次并确认 migration up to date，最终 26 suites / 146 tests 全绿；仅使用并自动回收临时 PostgreSQL，本地持久数据库未迁移。
 
-- [ ] 7. 同步 OpenAPI 与 Web generated contract
-  - [ ] 7.1 先运行 `contract:check` 记录 Product operation 尚未同步的 RED，不手工修改任何 snapshot 或 generated type。
-  - [ ] 7.2 运行根 `contract:sync`，生成 Server/Web OpenAPI snapshot 和 Web API types；核对 diff 只包含已确认的 Product list 契约。
-  - [ ] 7.3 运行 `contract:check`、contract baseline 测试、Server build 和 Web generated typecheck，确认两份 snapshot 字节一致且无写 API。
-  - [ ] 7.4 更新 Task 7 状态并将生成产物与对应门禁测试纳入 Product API 提交；若 Task 5 已提交源契约，则创建独立提交：`chore: 同步产品列表接口契约`。
+- [x] 7. 同步 OpenAPI 与 Web generated contract
+  - [x] 7.1 先运行 `contract:check` 记录 Product operation 尚未同步的 RED，不手工修改任何 snapshot 或 generated type。
+  - [x] 7.2 运行根 `contract:sync`，生成 Server/Web OpenAPI snapshot 和 Web API types；核对 diff 只包含已确认的 Product list 契约。
+  - [x] 7.3 运行 `contract:check`、contract baseline 测试、Server build 和 Web generated typecheck，确认两份 snapshot 字节一致且无写 API。
+  - [x] 7.4 更新 Task 7 状态并将生成产物与对应门禁测试纳入 Product API 提交；若 Task 5 已提交源契约，则创建独立提交：`chore: 同步产品列表接口契约`。
   - _Requirements: R8, R15_
+
+  Task 7 证据：同步前 `contract:check` 因 tracked snapshot 缺少运行时 Product operation 而按计划 RED；仅通过 `contract:sync` 生成后，两份 OpenAPI snapshot 字节一致，diff 只新增 `/api/products` 的 `get`、`products_list` 与只读 DTO，Web generated types 在本地重建但继续遵守不跟踪规则。同步后 `contract:check`、baseline/contract 199/199、Server build、Web typecheck 与 diff-check 全绿。本地直接运行 GitHub 事件专用 `ci:contract` 因缺少 event/base/current SHA 固定失败，已使用其本地 baseline 测试完整验证相同逻辑，未伪造 CI 环境。
 
 - [ ] 8. 以 TDD 实现 Web Product API adapter 与纯逻辑
   - [ ] 8.1 先建立 API/logic RED，覆盖 generated DTO adapter、query 编码、AbortSignal、分页、筛选应用/清空回第一页和不 trim `supplierValue`。
