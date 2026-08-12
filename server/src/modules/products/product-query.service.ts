@@ -19,6 +19,7 @@ import {
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
 export interface ProductListQuery {
+  readonly keyword?: string
   readonly page?: number
   readonly pageSize?: number
   readonly supplierValue?: string
@@ -63,9 +64,22 @@ export class ProductQueryService {
 
   async list(input: ProductListQuery): Promise<ProductPage> {
     const query = normalizeProductListQuery(input)
-    const where: Prisma.ProductWhereInput = query.supplierValue === undefined
-      ? {}
-      : { supplierValue: query.supplierValue }
+    const where: Prisma.ProductWhereInput = {}
+    if (query.supplierValue !== undefined) {
+      where.supplierValue = query.supplierValue
+    }
+    if (query.keyword !== undefined) {
+      // supplierValue 位于顶层、名称和编号位于 OR；Prisma 会把两者组合为
+      // AND，并让 count/findMany 复用同一个 where，避免分页总数与行集漂移。
+      const contains = {
+        contains: query.keyword,
+        mode: 'insensitive' as const,
+      }
+      where.OR = [
+        { name: contains },
+        { productNo: contains },
+      ]
+    }
 
     try {
       const { total, rows } = await this.prisma.$transaction(

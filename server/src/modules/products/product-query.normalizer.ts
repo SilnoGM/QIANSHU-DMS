@@ -3,12 +3,14 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 20
 const MAXIMUM_PAGE_SIZE = 100
+const MAXIMUM_KEYWORD_LENGTH = 128
 const MAXIMUM_SUPPLIER_VALUE_LENGTH = 64
 
 export interface NormalizedProductListQuery {
   readonly page: number
   readonly pageSize: number
   readonly skip: number
+  readonly keyword?: string
   readonly supplierValue?: string
 }
 
@@ -26,7 +28,11 @@ export function normalizeProductListQuery(
   const query = input as Readonly<Record<string, unknown>>
   const page = query.page ?? DEFAULT_PAGE
   const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
+  const rawKeyword = query.keyword
   const supplierValue = query.supplierValue
+  const keyword = typeof rawKeyword === 'string'
+    ? rawKeyword.trim()
+    : rawKeyword
 
   if (
     !Number.isSafeInteger(page)
@@ -34,6 +40,14 @@ export function normalizeProductListQuery(
     || !Number.isSafeInteger(pageSize)
     || (pageSize as number) < 1
     || (pageSize as number) > MAXIMUM_PAGE_SIZE
+    || (
+      keyword !== undefined
+      && (
+        typeof keyword !== 'string'
+        || keyword.length === 0
+        || Array.from(keyword).length > MAXIMUM_KEYWORD_LENGTH
+      )
+    )
     || (
       supplierValue !== undefined
       && (
@@ -55,6 +69,7 @@ export function normalizeProductListQuery(
     page: normalizedPage,
     pageSize: normalizedPageSize,
     skip,
+    ...(keyword === undefined ? {} : { keyword }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
   }
 }

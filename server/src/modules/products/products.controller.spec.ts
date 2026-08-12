@@ -39,7 +39,12 @@ class ProductsControllerContractModule {}
 describe('ProductsController', () => {
   it('delegates only the confirmed list query and requires products:read', async () => {
     const fixture = createController()
-    const query = { page: 2, pageSize: 50, supplierValue: 'SUPPLIER_A' }
+    const query = {
+      keyword: 'Product-001',
+      page: 2,
+      pageSize: 50,
+      supplierValue: 'SUPPLIER_A',
+    }
 
     await fixture.controller.list(query)
 
@@ -74,6 +79,19 @@ describe('ProductsController OpenAPI contract', () => {
       '500',
     ])
     expect(operation?.security).toEqual([{ sessionCookie: [] }])
+    const keywordParameter = operation?.parameters?.find(parameter =>
+      'name' in parameter && parameter.name === 'keyword')
+    expect(keywordParameter).toEqual({
+      description: '产品名称或产品编号，不区分大小写的包含匹配',
+      in: 'query',
+      name: 'keyword',
+      required: false,
+      schema: {
+        maxLength: 128,
+        minLength: 1,
+        type: 'string',
+      },
+    })
     expect(operation?.['x-qianshu-contract']).toEqual({
       kind: 'application',
       authentication: true,

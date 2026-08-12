@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger'
-import { Type } from 'class-transformer'
+import { Transform, Type } from 'class-transformer'
 import {
   IsInt,
   IsString,
@@ -12,6 +12,22 @@ import {
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 export class ProductListQueryDto {
+  @ApiPropertyOptional({
+    type: 'string',
+    minLength: 1,
+    maxLength: 128,
+    description: '产品名称或产品编号，不区分大小写的包含匹配',
+  })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value)
+  @ValidateIf((_object: ProductListQueryDto, value: unknown) =>
+    value !== undefined,
+  )
+  @IsString({ message: '必须是字符串' })
+  @IsUnicodeCodePointLength(1, 128, { message: '长度必须为 1 到 128 个字符' })
+  @Matches(/\S/u, { message: '不能为空白文本' })
+  keyword?: string
+
   @ApiPropertyOptional({
     type: 'string',
     minLength: 1,

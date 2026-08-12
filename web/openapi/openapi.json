@@ -17317,6 +17317,17 @@
         "operationId": "products_list",
         "parameters": [
           {
+            "name": "keyword",
+            "required": false,
+            "in": "query",
+            "description": "产品名称或产品编号，不区分大小写的包含匹配",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 128,
+              "type": "string"
+            }
+          },
+          {
             "name": "supplierValue",
             "required": false,
             "in": "query",

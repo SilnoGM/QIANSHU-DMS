@@ -80,7 +80,7 @@ function createFixture(rows: ProductQueryRow[] = []): {
 }
 
 describe('ProductQueryService', () => {
-  it('shares exact where, applies stable order and resolves unique suppliers once', async () => {
+  it('combines name/number search with exact supplier filtering and shares the where', async () => {
     const fixture = createFixture([
       createRow('1', 'SUPPLIER_A'),
       createRow('2', null),
@@ -89,6 +89,7 @@ describe('ProductQueryService', () => {
     ])
 
     const result = await fixture.service.list({
+      keyword: 'product-001',
       page: 2,
       pageSize: 10,
       supplierValue: 'SUPPLIER_A',
@@ -104,7 +105,23 @@ describe('ProductQueryService', () => {
       take: number
       select: Record<string, unknown>
     }
-    expect(countInput.where).toEqual({ supplierValue: 'SUPPLIER_A' })
+    expect(countInput.where).toEqual({
+      supplierValue: 'SUPPLIER_A',
+      OR: [
+        {
+          name: {
+            contains: 'product-001',
+            mode: 'insensitive',
+          },
+        },
+        {
+          productNo: {
+            contains: 'product-001',
+            mode: 'insensitive',
+          },
+        },
+      ],
+    })
     expect(findManyInput.where).toBe(countInput.where)
     expect(findManyInput).toMatchObject({
       orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],

@@ -4,9 +4,10 @@ import { validate } from 'class-validator'
 import { ProductListQueryDto } from './product-list-query.dto'
 
 describe('ProductListQueryDto', () => {
-  it('coerces pagination defaults and preserves exact supplier raw value', async () => {
+  it('coerces pagination, trims keyword and preserves exact supplier raw value', async () => {
     const defaults = plainToInstance(ProductListQueryDto, {})
     const complete = plainToInstance(ProductListQueryDto, {
+      keyword: '  Product-001  ',
       page: '2',
       pageSize: '100',
       supplierValue: ' raw-value ',
@@ -14,6 +15,7 @@ describe('ProductListQueryDto', () => {
 
     expect(defaults).toMatchObject({ page: 1, pageSize: 20 })
     expect(complete).toMatchObject({
+      keyword: 'Product-001',
       page: 2,
       pageSize: 100,
       supplierValue: ' raw-value ',
@@ -25,6 +27,8 @@ describe('ProductListQueryDto', () => {
   it.each([
     { page: '0' },
     { pageSize: '101' },
+    { keyword: '   ' },
+    { keyword: '😀'.repeat(129) },
     { supplierValue: '' },
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },

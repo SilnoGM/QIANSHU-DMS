@@ -12,10 +12,12 @@ describe('normalizeProductListQuery', () => {
 
   it('preserves the exact supplier raw value and calculates pagination', () => {
     expect(normalizeProductListQuery({
+      keyword: '  product-001  ',
       page: 3,
       pageSize: 50,
       supplierValue: ' raw-value ',
     })).toEqual({
+      keyword: 'product-001',
       page: 3,
       pageSize: 50,
       skip: 100,
@@ -36,6 +38,10 @@ describe('normalizeProductListQuery', () => {
     { pageSize: 0 },
     { pageSize: 101 },
     { page: Number.MAX_SAFE_INTEGER, pageSize: 100 },
+    { keyword: '' },
+    { keyword: '   ' },
+    { keyword: '😀'.repeat(129) },
+    { keyword: 123 },
     { supplierValue: '' },
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },

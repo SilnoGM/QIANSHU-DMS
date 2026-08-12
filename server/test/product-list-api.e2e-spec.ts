@@ -469,7 +469,13 @@ describe('Product list API with isolated PostgreSQL', () => {
       total: 4,
     })
 
-    for (const query of ['page=0', 'pageSize=101', 'supplierValue=%20%20%20']) {
+    for (const query of [
+      'page=0',
+      'pageSize=101',
+      'keyword=%20%20%20',
+      `keyword=${encodeURIComponent('😀'.repeat(129))}`,
+      'supplierValue=%20%20%20',
+    ]) {
       await reader.browser
         .get(`/api/products?${query}`)
         .expect(422)
@@ -479,5 +485,40 @@ describe('Product list API with isolated PostgreSQL', () => {
           )
         })
     }
+  })
+
+  it('searches product names or numbers and combines keyword with supplier', async () => {
+    const reader = await createLoggedInBrowser({ productsRead: true })
+    await seedProducts(reader.account.user.id)
+
+    const byNameResponse = await reader.browser
+      .get('/api/products')
+      .query({ keyword: '  草稿  ' })
+      .expect(200)
+    expect(readResponseBody<ProductPageBody>(byNameResponse)).toMatchObject({
+      total: 1,
+      items: [{ productNo: `${PRODUCT_NO_PREFIX}004` }],
+    })
+
+    const byNumberResponse = await reader.browser
+      .get('/api/products')
+      .query({ keyword: 'product-e2e-001' })
+      .expect(200)
+    expect(readResponseBody<ProductPageBody>(byNumberResponse)).toMatchObject({
+      total: 1,
+      items: [{ productNo: `${PRODUCT_NO_PREFIX}001` }],
+    })
+
+    const combinedResponse = await reader.browser
+      .get('/api/products')
+      .query({
+        keyword: '001',
+        supplierValue: supplierValues.disabled,
+      })
+      .expect(200)
+    expect(readResponseBody<ProductPageBody>(combinedResponse)).toMatchObject({
+      items: [],
+      total: 0,
+    })
   })
 })
