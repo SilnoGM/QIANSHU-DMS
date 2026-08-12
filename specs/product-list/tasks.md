@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中（Task 1 已完成）
+- 状态：Phase 4 本地实施与验收完成（Task 1-12 已完成）
 - Requirements 确认日期：2026-08-12
 - Design 确认日期：2026-08-12
 - 编写日期：2026-08-12
@@ -11,7 +11,7 @@
 - Requirements：`specs/product-list/requirements.md`
 - Design：`specs/product-list/design.md`
 
-本计划把产品列表拆为 12 个可独立验证、保持绿色并形成小步提交的任务。当前只完成任务拆分；本文件经用户确认且高风险实施门禁获得单独授权前，不得开始 Phase 4。
+本计划把产品列表拆为 12 个可独立验证、保持绿色并形成小步提交的任务。Task 1-12 已在用户确认的 Gate D1 边界内完成；Gate D2 与 Gate E 仍未授权。
 
 ## 2. 执行纪律
 
@@ -200,15 +200,19 @@
 
   Task 11 证据：fixture helper 先因缺少供应商字典与 Product 数据断言而 8/9 RED，补入仅作用于隔离数据库的有效/停用/未知供应商、21 条分页产品、空金额、多图、属性与安全/危险协议视频后 9/9 GREEN。真实 Chrome 首轮已成功加载同源 Product 数据，但在 390x844 下发现移动图片入口只有 32px，Browser 以 `allTouchTargetsMeetMinimum: false` RED；最小修复把两个移动端 ImageGroup 调整为 44px，并以 `a810398 fix: 保证产品列表移动端图片触控尺寸` 独立提交。最终根 `ci:browser-auth-e2e` 在全新隔离 PostgreSQL 上应用 13 个 migration、构建 Server/Web 后 2/2 通过，覆盖 1440x900 Desktop、390x844 Mobile、权限可见性、供应商筛选/清空、分页回第一页、列显隐/固定、三个占位 Toast、四图 `+2` 与整组预览、金额格式及未知币种回退、属性/视频弹窗、危险协议不生成链接、Escape/焦点恢复、light/dark、Reduced Motion、44px 触控目标和无页面级横向溢出。隔离容器与 Chrome 均由现有 runner 回收，未修改持久开发数据库；build 只保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
 
-- [ ] 12. 完成全量验证、文档与 Git 收口
-  - [ ] 12.1 冻结生产和测试源码，汇总 Tasks 2-11 的真实 RED/GREEN、提交 SHA、失败与非阻断警告；不得预写未运行结果。
-  - [ ] 12.2 运行第 5 节完整矩阵，确认 Schema、Server、API E2E、OpenAPI、Web API/View、Browser、build、root governance 和 diff-check 全绿。
-  - [ ] 12.3 复核最终文件矩阵：无禁止路径、删除、旧 migration 修改、依赖变化、Product seed、Supplier 领域复活、写 API/权限或敏感文件。
-  - [ ] 12.4 若获 Gate D2 授权，按展示过的 migration 对本地持久数据库执行一次受控 deploy，并核对 migration 行、Product 结构、约束与未被修改的基础数据；未获授权则明确记录“未应用”。
-  - [ ] 12.5 将 Requirements、Design 和本计划更新为实际完成状态，只记录最新输出；文档收口后不得再修改生产/测试源码。
-  - [ ] 12.6 暂存精确文件，核对 staged diff 与 secrets，创建提交：`docs: 完成产品列表实施验收`。
-  - [ ] 12.7 核对 `git status --short --branch`、相对基线的提交序列和每个提交范围，向用户交付本地结果后暂停，不 push、不建 PR。
+- [x] 12. 完成全量验证、文档与 Git 收口
+  - [x] 12.1 冻结生产和测试源码，汇总 Tasks 2-11 的真实 RED/GREEN、提交 SHA、失败与非阻断警告；不得预写未运行结果。
+  - [x] 12.2 运行第 5 节完整矩阵，确认 Schema、Server、API E2E、OpenAPI、Web API/View、Browser、build、root governance 和 diff-check 全绿。
+  - [x] 12.3 复核最终文件矩阵：无禁止路径、删除、旧 migration 修改、依赖变化、Product seed、Supplier 领域复活、写 API/权限或敏感文件。
+  - [x] 12.4 若获 Gate D2 授权，按展示过的 migration 对本地持久数据库执行一次受控 deploy，并核对 migration 行、Product 结构、约束与未被修改的基础数据；未获授权则明确记录“未应用”。
+  - [x] 12.5 将 Requirements、Design 和本计划更新为实际完成状态，只记录最新输出；文档收口后不得再修改生产/测试源码。
+  - [x] 12.6 暂存精确文件，核对 staged diff 与 secrets，创建提交：`docs: 完成产品列表实施验收`。
+  - [x] 12.7 核对 `git status --short --branch`、相对基线的提交序列和每个提交范围，向用户交付本地结果后暂停，不 push、不建 PR。
   - _Requirements: R1-R15_
+
+  Task 12 证据：生产与测试源码冻结在 `e755878`；功能提交依次为 `84bc213`、`2620910`、`6f08eae`、`f4ff045`、`924a547`、`fdd2fec`、`fcfed26`、`01acd2f`、`53f7623`、`a810398`、`e755878`。最终 Server 的 Prisma validate、typecheck、lint 通过，unit 为 146/146 suites、1410/1410 tests；官方隔离 `ci:server-e2e` 最终为 26/26 suites、146/146 tests。该入口前两轮曾分别在既有地区登录用例出现 403、既有字典生命周期用例出现 404，Product schema/API 两轮均通过；两个漂移套件随后在相同隔离包装器下定向 2/2 suites、12/12 tests 通过，官方入口再次完整执行后全绿。计划中旧命令 `pnpm -C server test -- --runInBand` 因多余 `--` 被 Jest 当作 Pattern 而报告无测试，已纠正为 `pnpm -C server test --runInBand`。
+
+  OpenAPI `contract:sync`、`contract:check` 与 tracked diff 通过；GitHub event 专用 `ci:contract` 未伪造本地事件，其 baseline 选择与失败关闭由 Root 单测覆盖。Web API/View 756/756、typecheck、ESLint、Stylelint、production build、Noto/font-zero-residue 通过；根治理 663/663、根聚合 `check`、根 `build` 与真实 Chrome 2/2 通过。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。最终文件审计未发现删除、依赖/lockfile、旧 migration 改写、Product seed、Supplier 领域复活、Product 写 API/权限、敏感文件或禁止公共组件修改。Gate D2 未授权，Product migration 明确“未应用”到本地持久数据库；Gate E 未授权，未 push、未建 PR、未 merge、未部署。
 
 ## 5. 验证矩阵
 
@@ -227,20 +231,20 @@ git status --short --branch
 pnpm -C server prisma:validate
 pnpm -C server typecheck
 pnpm -C server lint
-pnpm -C server test -- --runInBand
+pnpm -C server test --runInBand
 node --run ci:server-e2e
 
 # OpenAPI
 node --run contract:sync
 node --run contract:check
-node --run ci:contract
+# 仅真实 GitHub event context：node --run ci:contract
 
 # Web
 pnpm -C web test:api
 pnpm -C web typecheck
 pnpm -C web lint
 pnpm -C web build
-pnpm -C web test:browser:auth
+node --run ci:browser-auth-e2e
 
 # Repository
 node --run test:root
@@ -254,10 +258,10 @@ git status --short --branch
 
 ## 6. 精确文件边界
 
-### 6.1 计划新增
+### 6.1 实际新增
 
 ```text
-server/prisma/migrations/<timestamp>_product_list_schema/migration.sql
+server/prisma/migrations/20260812090000_product_list_schema/migration.sql
 server/src/modules/products/**
 server/test/product-list-api.e2e-spec.ts
 server/src/infrastructure/database/product-list-schema.spec.ts
@@ -271,7 +275,7 @@ web/apps/qsmds-arco/test/views/product-list.test.ts
 web/apps/qsmds-arco/test/views/product-list.logic.test.ts
 ```
 
-### 6.2 计划修改
+### 6.2 实际修改
 
 ```text
 server/prisma/schema.prisma
@@ -288,8 +292,6 @@ web/apps/qsmds-arco/test/browser/management.browser.test.mjs
 scripts/browser-auth/provision-admin.mjs
 scripts/browser-auth-runtime.test.mjs
 scripts/root-governance.test.mjs
-scripts/ci-contract-baseline.mjs
-scripts/ci-contract-baseline.test.mjs
 docs/后端文档/数据库迁移规范.md
 
 specs/product-list/requirements.md
@@ -297,7 +299,7 @@ specs/product-list/design.md
 specs/product-list/tasks.md
 ```
 
-测试文件可按当前模块命名收敛，但职责与范围不得改变；任何新增生产文件应先补入本矩阵。
+Web generated types 已由正式命令重建但按仓库规则不跟踪；实际文件职责与范围均未改变。
 
 ### 6.3 禁止修改或删除
 
@@ -341,4 +343,4 @@ package.json / lockfiles
 3. Product 列表继续保持只读，Supplier 字典、金额 string、共享组件和页面/API 边界不变。
 4. Gate D1、D2、E 继续独立生效；Phase 3 确认本身不授权任何高风险变更或外部动作。
 
-本文件确认后，下一步仍需先取得 Gate D1 的明确授权，才能开始 Product 数据结构、Schema、migration 和 `GET /api/products` 公共 API 的 Phase 4 实施。
+Gate D1 已完成并按本文件收口。后续若需应用本地持久数据库 migration，必须先取得 Gate D2；push、PR、merge、部署或非本地数据库变更必须先取得 Gate E。

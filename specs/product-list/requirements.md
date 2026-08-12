@@ -2,17 +2,17 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中
+- 状态：Phase 4 本地实施与验收完成
 - 需求确认日期：2026-08-12
 - 技术方案确认日期：2026-08-12
 - 适用范围：`server/`、`web/apps/qsmds-arco`
 - 实施分支：`feat/admin-product-management`
-- 当前基线：产品权限与 Web 占位路由已经存在，Product Schema、产品 API 与正式列表尚不存在
-- 当前门禁：Phase 3 与 Gate D1 已确认；本地持久数据库 migration 仍需 Gate D2 单独授权
+- 当前基线：Product Schema、只读列表 API、正式列表页面与自动化验收均已实现
+- 当前门禁：Gate D1 已完成；本地持久数据库 migration 未应用，仍需 Gate D2 单独授权；push、PR、merge 与部署仍需 Gate E
 
 ## 2. 背景与目标
 
-管理员工作台已经注册“产品管理”下的“产品列表”和“新增产品”占位入口，并建立 `products:read`、`products:create` 两项最小权限。当前系统尚未建立 Product 持久化模型、产品 HTTP API 或正式产品列表。
+管理员工作台原有“产品管理”导航与 `products:read`、`products:create` 两项最小权限。本期已在该边界内建立 Product 持久化模型、唯一只读列表 API 与正式产品列表；“新增产品”路由继续保持占位语义。
 
 本需求建立产品数据的首期只读管理切片：新增能够承载产品基础资料、供应商、媒体、价格、属性和审计信息的数据结构；提供受权限保护的分页列表接口；使用 `FaPageHeader + FaPageMain + QsGenericTable` 实现正式列表页面。真实新增、查看和编辑流程不在本期实现，相关入口只提供明确的轻提示。
 
@@ -291,3 +291,9 @@ Layout Strategy:
 ## 9. Phase 1 冻结结论
 
 本文件第 4 节的八项业务决策以及第 6 节全部 Acceptance Criteria 已于 2026-08-12 确认。Phase 2 技术方案只能在这些边界内选择实现方式；若技术设计需要新增真实写接口、扩大权限、改变供应商存储口径、改变金额协议、删除现有路由或扩展 Product 领域模型，必须回到 Phase 1 重新确认。
+
+## 10. Phase 4 验收结论
+
+本规格的首期只读切片已于 2026-08-12 在 `feat/admin-product-management` 完成本地实现与自动化验收：Product Schema、`GET /api/products`、供应商历史解析、OpenAPI/Web generated contract、正式列表、响应式卡片、媒体/金额/属性展示、供应商筛选和占位动作均已落地。最终验证覆盖隔离 PostgreSQL migration/API E2E、Server/Web 全量检查、production build、根治理和真实 Chrome。
+
+Gate D2 未获得授权，因此 migration 只在自动销毁的隔离 PostgreSQL 中验证，没有应用到 `qianshu-dms-dev-postgres` 或其他持久数据库。Gate E 同样未授权；本地结果没有 push、PR、merge 或部署。

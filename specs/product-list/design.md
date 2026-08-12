@@ -2,23 +2,23 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中
+- 状态：Phase 4 本地实施与验收完成
 - 编写日期：2026-08-12
 - 确认日期：2026-08-12
 - Requirements：`specs/product-list/requirements.md`
 - 实施分支：`feat/admin-product-management`
 - 设计基线 SHA：`a033832`
 - 设计范围：Product Schema、新增只读列表 API、正式产品列表页面与自动化验证
-- 实施边界：Gate D1 已授权按本设计新增 Product 数据结构、Schema、forward migration 和只读公共 API；本地持久数据库 migration 仍需 Gate D2
+- 实施边界：Gate D1 范围已实现；本地持久数据库 migration 未应用，仍需 Gate D2；外部 Git 与部署动作仍需 Gate E
 
 ## 2. 当前真相源与审计结论
 
-### 2.1 仓库事实
+### 2.1 实施后仓库事实
 
-1. `server/prisma/schema.prisma` 当前没有 `Product` Model 或 `ProductStatus` enum。
-2. Server 当前没有 ProductModule、Controller、DTO、Query Service 或产品 OpenAPI operation。
+1. `server/prisma/schema.prisma` 已包含 `Product` Model 与 `ProductStatus` enum，并由新的 forward migration 建立数据库结构。
+2. Server 已注册 ProductModule、Controller、DTO 与 Query Service，OpenAPI 只新增 `products_list` 读取 operation。
 3. 已有 `products:read`、`products:create` 权限，并由 migration `20260811090000_product_management_permissions` 授予 `system_admin`。
-4. Web 已注册 `/admin/products/list` 与 `/admin/products/create` 两个占位路由；两个页面均未接入 API。
+4. Web `/admin/products/list` 已接入正式只读 API；`/admin/products/create` 继续保持原占位边界。
 5. `QsGenericTable` 已提供分页、筛选、列显隐、固定、对齐、操作列、桌面表格、窄屏卡片和稳定状态。
 6. `ImageGroup`、`AmountDisplay`、`DateTimeDisplay`、`QsToast`、`QsGenericModal` 与 Dictionary/Currency Catalog 均可直接复用。
 7. Supplier 独立领域已经退役；当前唯一允许的供应商来源是 `service_provider.supplier` Dictionary Type。
@@ -145,7 +145,7 @@ productsCreated Product[] @relation("ProductCreatedBy")
 productsUpdated Product[] @relation("ProductUpdatedBy")
 ```
 
-以上是 Phase 2 结构草案，不是已授权 Schema 变更。
+以上结构已按 Gate D1 授权实现，并通过 Schema contract 与隔离 PostgreSQL 重放验证。
 
 ### 5.2 字段设计
 
@@ -687,7 +687,7 @@ catalog.items.map(item => ({
 
 ## 8. OpenAPI 与契约同步
 
-实施时新增：
+已新增：
 
 ```text
 operationId:
@@ -718,10 +718,10 @@ Server source + DTO tests
 
 ## 9. 文件变更矩阵
 
-### 9.1 计划新增
+### 9.1 实际新增
 
 ```text
-server/prisma/migrations/<timestamp>_product_list_schema/migration.sql
+server/prisma/migrations/20260812090000_product_list_schema/migration.sql
 server/src/modules/products/**
 server/test/product-list-api.e2e-spec.ts
 server/src/infrastructure/database/product-list-schema.spec.ts
@@ -735,7 +735,7 @@ web/apps/qsmds-arco/test/views/product-list.test.ts
 web/apps/qsmds-arco/test/views/product-list.logic.test.ts
 ```
 
-### 9.2 计划修改
+### 9.2 实际修改
 
 ```text
 server/prisma/schema.prisma
@@ -749,11 +749,13 @@ web/apps/qsmds-arco/src/api/generated/**          # generated only
 web/apps/qsmds-arco/src/views/admin/product-management/list/index.vue
 web/apps/qsmds-arco/test/api/product-management-routes.test.ts
 web/apps/qsmds-arco/test/browser/management.browser.test.mjs
-scripts/ci-contract-baseline.mjs
-scripts/ci-contract-baseline.test.mjs
+scripts/browser-auth/provision-admin.mjs
+scripts/browser-auth-runtime.test.mjs
+scripts/root-governance.test.mjs
+docs/后端文档/数据库迁移规范.md
 ```
 
-具体测试文件可能按当前模块命名收敛，但不得越过 Requirements 范围。
+Web generated types 已由 `contract:sync` 重建，但按仓库规则不跟踪；上述实际文件均未越过 Requirements 范围。
 
 ### 9.3 明确不修改或删除
 
@@ -823,14 +825,14 @@ Browser fixture 可以在隔离测试数据库直接插入受控 Product 数据�
 
 ## 11. 实施验证命令
 
-Phase 4 的预期验证矩阵如下；当前文档阶段只运行文档与 Git 检查：
+Phase 4 使用以下本地验证矩阵；`ci:contract` 只在真实 GitHub event context 中运行，本地使用 `contract:check` 与对应 baseline 单测：
 
 ```bash
 # Schema / Server
 pnpm -C server prisma:validate
 pnpm -C server typecheck
 pnpm -C server lint
-pnpm -C server test -- --runInBand
+pnpm -C server test --runInBand
 node --run ci:server-e2e
 
 # OpenAPI
@@ -842,7 +844,7 @@ pnpm -C web test:api
 pnpm -C web typecheck
 pnpm -C web lint
 pnpm -C web build
-pnpm -C web test:browser:auth
+node --run ci:browser-auth-e2e
 
 # Repository
 node --run test:root
@@ -881,7 +883,7 @@ git status --short
 - 实施阶段小步提交，Commit 类型使用英文、描述使用中文。
 - 本地完成不代表 push、PR、merge、部署或数据库发布授权。
 
-## 14. Phase 2 确认门
+## 14. Phase 2 确认边界与 Phase 4 结论
 
 确认本设计意味着接受以下技术方向：
 
@@ -893,4 +895,4 @@ git status --short
 6. 不修改公共 Qs 组件；页面通过 slots、Catalog 和局部 Modal 组合。
 7. 通过现有 management Browser Job 覆盖产品列表，不新增独立 CI Job。
 
-Phase 2 确认只允许进入 Phase 3 任务拆分，不自动授权 Phase 4 实施。进入 Phase 4 前，新增 Product Schema、migration 和 `products_list` 公共 API 仍需按仓库规则获得一次明确确认。
+上述方向已完成 Phase 2、Phase 3 与 Gate D1 确认，并在 Phase 4 按原边界实现。Gate D2 未授权，因此本地持久数据库仍未应用 Product migration；Gate E 未授权，因此没有 push、PR、merge 或部署。
