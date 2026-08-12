@@ -569,7 +569,7 @@ onBeforeUnmount(() => {
                   :items="buildProductMainImageItems(row)"
                   :max-count="1"
                   radius="lg"
-                  size="sm"
+                  :size="44"
                 />
               </dd>
             </div>
@@ -581,7 +581,7 @@ onBeforeUnmount(() => {
                   :items="buildProductImageItems(row)"
                   :max-count="3"
                   radius="lg"
-                  size="sm"
+                  :size="44"
                 />
               </dd>
             </div>

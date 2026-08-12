@@ -85,6 +85,7 @@ test('窄屏复用 QsGenericTable mobile-row 并保留同一行身份和操作',
   assert.match(source, /创建时间/u)
   assert.match(source, /查看/u)
   assert.match(source, /编辑/u)
+  assert.equal((source.match(/:size="44"/gu) ?? []).length, 2)
 })
 
 test('特殊单元格复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗', () => {
