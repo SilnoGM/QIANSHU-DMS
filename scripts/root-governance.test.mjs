@@ -25,8 +25,11 @@ const supplierResidueAllowlist = Object.freeze([
   'server/test/dictionary-catalog-api.e2e-spec.ts',
   'server/test/dictionary-e2e-database.ts',
   'server/test/supplier-retirement-migration.e2e-spec.ts',
-  // 已确认的产品规格必须记录当前供应商字典消费边界；这里只允许三份规格证据，
-  // 不向任何 Product 运行时代码开放旧 Supplier 领域残留。
+  // 产品规格与已授权的数据结构必须记录当前供应商字典消费边界；精确文件白名单
+  // 只允许 supplierValue stable-value 语义，不恢复旧 Supplier 领域入口。
+  'server/prisma/migrations/20260812090000_product_list_schema/migration.sql',
+  'server/prisma/schema.prisma',
+  'server/src/infrastructure/database/product-list-schema.spec.ts',
   'specs/product-list/design.md',
   'specs/product-list/requirements.md',
   'specs/product-list/tasks.md',

@@ -88,15 +88,17 @@
 
   Task 1 证据：当前 HEAD `a7be399`、工作树无既有改动，Product Schema、模块、operation 与正式页面均不存在；本地只读快照中 `PRODUCT` Rule 为 `ENABLED`/version 3，`service_provider.supplier` Type 启用/version 3，1 个 Item 且启用。`prisma:validate`、`contract:check`、Server 定向 10/10、Server/Web typecheck、Web 产品路由 4/4 与 Root governance 663/663 全部通过；未执行数据库写入或 migration。
 
-- [ ] 2. 以 TDD 建立 Product Schema 与 forward migration
-  - [ ] 2.1 先新增失败的 Schema/migration 合约测试，覆盖 `ProductStatus`、UUID、唯一不可变 `productNo`、nullable `supplierValue`、有序媒体、JSONB 属性、三组金额/币种、审计字段、索引和命名约束。
-  - [ ] 2.2 运行 RED，确认失败原因仅为 Product 结构尚不存在；不得以放宽断言或 allowlist 方式制造通过。
-  - [ ] 2.3 在 Gate D1 已授权范围内修改 Prisma Schema，新增唯一 forward migration；不得修改任何既有 migration。
-  - [ ] 2.4 建立非空、状态、`ACTIVE` 供应商非空、固定 `TWD/MYR`、采购币种三位大写、金额非负、attributes array 和正 version 等数据库约束。
-  - [ ] 2.5 通过精确 trigger 保证 `id` 与 `productNo` 更新失败；trigger 不查询字典、不执行业务状态流。
-  - [ ] 2.6 在隔离 PostgreSQL 中验证空库全量 replay 与当前 migration 集升级，验证约束、索引、回滚隔离和无数据 seed。
-  - [ ] 2.7 更新 Task 2 状态并在目标测试、Prisma validate、Server typecheck 与 diff-check 绿色后创建提交：`feat: 建立产品列表数据结构`。
+- [x] 2. 以 TDD 建立 Product Schema 与 forward migration
+  - [x] 2.1 先新增失败的 Schema/migration 合约测试，覆盖 `ProductStatus`、UUID、唯一不可变 `productNo`、nullable `supplierValue`、有序媒体、JSONB 属性、三组金额/币种、审计字段、索引和命名约束。
+  - [x] 2.2 运行 RED，确认失败原因仅为 Product 结构尚不存在；不得以放宽断言或 allowlist 方式制造通过。
+  - [x] 2.3 在 Gate D1 已授权范围内修改 Prisma Schema，新增唯一 forward migration；不得修改任何既有 migration。
+  - [x] 2.4 建立非空、状态、`ACTIVE` 供应商非空、固定 `TWD/MYR`、采购币种三位大写、金额非负、attributes array 和正 version 等数据库约束。
+  - [x] 2.5 通过精确 trigger 保证 `id` 与 `productNo` 更新失败；trigger 不查询字典、不执行业务状态流。
+  - [x] 2.6 在隔离 PostgreSQL 中验证空库全量 replay 与当前 migration 集升级，验证约束、索引、回滚隔离和无数据 seed。
+  - [x] 2.7 更新 Task 2 状态并在目标测试、Prisma validate、Server typecheck 与 diff-check 绿色后创建提交：`feat: 建立产品列表数据结构`。
   - _Requirements: R1-R7, R15_
+
+  Task 2 证据：Schema RED 为 4/4 失败，原因精确为缺少 `Product` Model 与新 migration。最小实现后 Schema/migration 合约 4/4、Prisma validate、Server typecheck、Root governance 663/663 与 diff-check 通过。隔离 PostgreSQL 16 首次按顺序应用 13 条 migration，第二次 deploy 无待应用项，status 为 up to date；migration 未 seed Product、编号规则或字典数据，未应用到本地持久数据库。Root 首轮因数据库迁移规范缺少新基线而 662/663，补齐真实第 13 条历史后恢复全绿。
 
 - [ ] 3. 以 TDD 增加通用字典批量历史解析
   - [ ] 3.1 先为 `DictionaryLookupService.resolveStoredValues()` 建立失败测试，覆盖空输入、null、去重、顺序、同 Label 不同 value、Type disabled、Item disabled 与 unknown。
@@ -267,6 +269,7 @@ web/apps/qsmds-arco/test/api/product-management-routes.test.ts
 web/apps/qsmds-arco/test/browser/management.browser.test.mjs
 scripts/ci-contract-baseline.mjs
 scripts/ci-contract-baseline.test.mjs
+docs/后端文档/数据库迁移规范.md
 
 specs/product-list/requirements.md
 specs/product-list/design.md
