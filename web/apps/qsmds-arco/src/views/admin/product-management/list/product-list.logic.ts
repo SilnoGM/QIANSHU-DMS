@@ -112,7 +112,9 @@ export function buildProductListQuery(input: {
   readonly filters: QsGenericTableFilterValues
   readonly page: number
   readonly pageSize: number
+  readonly search: string
 }): ProductListQuery {
+  const keyword = input.search.trim()
   const supplierValue = typeof input.filters.supplierValue === 'string'
     && input.filters.supplierValue.trim() !== ''
     ? input.filters.supplierValue
@@ -121,6 +123,7 @@ export function buildProductListQuery(input: {
   return {
     page: Number.isSafeInteger(input.page) && input.page > 0 ? input.page : 1,
     pageSize: ALLOWED_PAGE_SIZES.has(input.pageSize) ? input.pageSize : 20,
+    ...(keyword === '' ? {} : { keyword }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
   }
 }

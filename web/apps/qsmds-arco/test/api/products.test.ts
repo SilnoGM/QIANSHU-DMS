@@ -24,6 +24,7 @@ test('产品 API 只暴露一个带精确 query、AbortSignal 与局部呈错的
   const products = createProductsApi(client)
   const controller = new AbortController()
   const query = {
+    keyword: 'Product-001',
     page: 2,
     pageSize: 50,
     supplierValue: ' raw-supplier ',

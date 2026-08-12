@@ -8,13 +8,16 @@ const source = readFileSync(new URL(
   import.meta.url,
 ), 'utf8')
 
-test('产品列表使用标准页头、主体和通用表格，关闭未确认的内建新增与搜索', () => {
+test('产品列表使用标准页头、主体和通用表格，并启用服务端搜索', () => {
   assert.match(source, /<FaPageHeader\b/u)
   assert.match(source, /title="产品列表"/u)
   assert.match(source, /<FaPageMain\b/u)
   assert.match(source, /<QsGenericTable\b/u)
   assert.match(source, /:addable="false"/u)
-  assert.match(source, /:searchable="false"/u)
+  assert.match(source, /v-model:search="searchKeyword"/u)
+  assert.match(source, /:searchable="true"/u)
+  assert.match(source, /search-placeholder="搜索产品名称或产品编号"/u)
+  assert.match(source, /@search="handleSearch"/u)
   assert.match(source, /:show-column-settings="true"/u)
   assert.doesNotMatch(source, /<Fa(?:Table|Pagination)\b|<A[A-Z]\w*\b/u)
   assert.doesNotMatch(source, /(?:gradient|#[\dA-Fa-f]{3,8}\b|rgba?\()/u)
@@ -61,7 +64,16 @@ test('产品数据只在可信权限与身份内请求，并清理过期响应',
   assert.match(source, /canApplyProductListResponse/u)
   assert.match(source, /listAbortController\?\.abort\(\)/u)
   assert.match(source, /rows\.value = \[\]/u)
+  assert.match(source, /searchKeyword\.value = ''/u)
   assert.match(source, /v-if="canCreate"/u)
+})
+
+test('搜索与供应商筛选都回到第一页并共用单次请求调度', () => {
+  assert.match(source, /function handleSearch\(keyword: string\)/u)
+  assert.match(source, /searchKeyword\.value = keyword/u)
+  assert.match(source, /page\.value = 1/u)
+  assert.match(source, /scheduleQueryRefresh\(\)/u)
+  assert.match(source, /search: searchKeyword\.value/u)
 })
 
 test('供应商筛选复用 Catalog 与表格筛选，并和列表状态独立', () => {

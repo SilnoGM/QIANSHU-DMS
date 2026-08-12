@@ -44,6 +44,7 @@ const rows = ref<ProductListItemViewModel[]>([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const searchKeyword = ref('')
 const filters = ref<QsGenericTableFilterValues>({})
 const loading = ref(false)
 const listError = ref('')
@@ -168,6 +169,7 @@ async function loadProducts(): Promise<void> {
       filters: filters.value,
       page: page.value,
       pageSize: pageSize.value,
+      search: searchKeyword.value,
     }), controller.signal)
     if (!listResponseIsCurrent(requestVersion, authEpoch, controller)) {
       return
@@ -216,6 +218,13 @@ function handleFilterChange(nextFilters: QsGenericTableFilterValues): void {
   const nextState = applyProductSupplierFilter(nextFilters, supplierValue)
   filters.value = nextState.filters
   page.value = nextState.page
+  scheduleQueryRefresh()
+}
+
+/** 搜索由 QsGenericTable 在显式提交/清空时触发，不对输入过程逐键请求。 */
+function handleSearch(keyword: string): void {
+  searchKeyword.value = keyword
+  page.value = 1
   scheduleQueryRefresh()
 }
 
@@ -312,6 +321,7 @@ watch(
     listRequestId.value = undefined
     if (identityChanged) {
       filters.value = {}
+      searchKeyword.value = ''
       page.value = 1
     }
     if (nextCanRead) {
@@ -378,6 +388,7 @@ onBeforeUnmount(() => {
       <QsGenericTable
         v-model:page="page"
         v-model:page-size="pageSize"
+        v-model:search="searchKeyword"
         v-model:filters="filters"
         data-testid="product-list-table"
         :row-key="item => item.id"
@@ -391,13 +402,15 @@ onBeforeUnmount(() => {
         :filter-definitions="filterDefinitions"
         :loading="loading"
         :page-size-options="[20, 50, 100]"
-        :searchable="false"
+        search-placeholder="搜索产品名称或产品编号"
+        :searchable="true"
         :show-column-settings="true"
         :total="total"
         table-class="min-w-[2360px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="loadProducts"
+        @search="handleSearch"
       >
         <template #cell-productNo="{ row }">
           <span class="qs-type-data font-mono">{{ row.original.productNo }}</span>

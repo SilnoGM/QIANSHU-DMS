@@ -59,7 +59,9 @@ test('查询归一化分页并原样保留供应商 stable value', () => {
     filters: { supplierValue: ' raw-supplier ' },
     page: 2,
     pageSize: 50,
+    search: '  Product-001  ',
   }), {
+    keyword: 'Product-001',
     page: 2,
     pageSize: 50,
     supplierValue: ' raw-supplier ',
@@ -68,6 +70,7 @@ test('查询归一化分页并原样保留供应商 stable value', () => {
     filters: { supplierValue: '   ' },
     page: 0,
     pageSize: 200,
+    search: '   ',
   }), { page: 1, pageSize: 20 })
 
   assert.deepEqual(applyProductSupplierFilter(

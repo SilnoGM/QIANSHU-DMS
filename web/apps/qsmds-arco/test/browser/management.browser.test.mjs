@@ -360,6 +360,7 @@ async function verifyProductList(page, baseUrl) {
     await page.navigate(appRouteUrl(baseUrl, '/admin/products/list'))
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 21 条')`)
+    await waitForTableTools(page, 'product-list-table', '搜索产品名称或产品编号')
 
     const desktopState = await page.evaluate(`(() => {
       const root = document.querySelector('[data-testid="product-list-table"]')
@@ -478,7 +479,8 @@ async function verifyProductList(page, baseUrl) {
     await clickVisibleModalButton(page, '关闭视频')
     await waitForNoVisibleModal(page, '产品视频')
 
-    // 第二页请求必须保持 Server 分页；从第二页应用供应商筛选时回到第一页。
+    // 第二页请求必须保持 Server 分页；从第二页搜索时回到第一页，并允许继续
+    // 与供应商 stable value 组合为同一次 Server 查询。
     await page.evaluate(`(() => {
       const button = [...document.querySelectorAll('[data-slot="pagination-next"]')]
         .find(candidate => candidate.getClientRects().length > 0 && !candidate.disabled)
@@ -487,6 +489,14 @@ async function verifyProductList(page, baseUrl) {
       return true
     })()`)
     await waitForProductList(page, 'PRODUCT-BROWSER-FILLER-01')
+    await fillVisibleInput(
+      page,
+      'input[placeholder="搜索产品名称或产品编号"]',
+      productNo.toLowerCase(),
+    )
+    await clickVisibleButton(page, '查询')
+    await waitForProductList(page, productNo)
+    await page.waitFor(`document.body.innerText.includes('共 1 条')`)
     await clickVisibleButton(page, '筛选')
     await selectVisibleFilter(page, '供应商', 'Browser 有效供应商')
     await clickVisibleButton(page, '应用筛选')
@@ -501,9 +511,18 @@ async function verifyProductList(page, baseUrl) {
     )), true)
     assert.equal(productRequests.some(url => (
       url.searchParams.get('page') === '1'
+      && url.searchParams.get('keyword') === productNo.toLowerCase()
       && url.searchParams.get('supplierValue') === 'BROWSER_SUPPLIER_EFFECTIVE'
     )), true)
     await clickVisibleButton(page, '清空筛选')
+    await waitForProductList(page, productNo)
+    await page.waitFor(`document.body.innerText.includes('共 1 条')`)
+    await fillVisibleInput(
+      page,
+      'input[placeholder="搜索产品名称或产品编号"]',
+      '',
+    )
+    await clickVisibleButton(page, '查询')
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 21 条')`)
 
