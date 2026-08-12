@@ -209,15 +209,19 @@
   - GREEN：`node --run contract:check` 通过；OpenAPI/contract baseline `180/180`；`pnpm -C server build` 与 `pnpm -C web typecheck` 全部通过，`git diff --check` 通过。
   - _Requirements: R9, R14_
 
-- [ ] 10. 以 TDD 实现 Web Product mutation adapter 与纯状态逻辑
-  - [ ] 10.1 先建立 API RED，覆盖 generated Create DTO、POST URL、`Idempotency-Key`、AbortSignal、`retry:false`、local error presentation 和 201 类型。
-  - [ ] 10.2 先建立 logic RED，覆盖默认 model、stable row key、dirty、trim/NFC DTO、MoneyInput validation 结果和属性映射。
-  - [ ] 10.3 建立字段错误白名单 parser RED，覆盖 nested money、`attributes.0..49`、未知/恶意路径降级和 requestId。
-  - [ ] 10.4 建立页面状态机 RED，覆盖 editing/submitting/deterministic failure/unknown/success、冻结 snapshot/key、人工同请求重放和显式放弃。
-  - [ ] 10.5 实现 `crypto.randomUUID()` 延迟建 Key，不把 DTO/Key 写入 Store、Storage、URL 或日志；深复制冻结 unknown snapshot。
-  - [ ] 10.6 HTTP `4xx` 解锁并使下一次提交使用新 Key；network/`5xx` 保留同 Key/Payload，禁止自动重试。
-  - [ ] 10.7 运行 Web Product API/logic 定向测试、typecheck、ESLint 和 diff-check。
-  - [ ] 10.8 更新 Task 10 真实证据，创建提交：`feat: 建立产品创建前端状态`。
+- [x] 10. 以 TDD 实现 Web Product mutation adapter 与纯状态逻辑
+  - [x] 10.1 先建立 API RED，覆盖 generated Create DTO、POST URL、`Idempotency-Key`、AbortSignal、`retry:false`、local error presentation 和 201 类型。
+  - [x] 10.2 先建立 logic RED，覆盖默认 model、stable row key、dirty、trim/NFC DTO、MoneyInput validation 结果和属性映射。
+  - [x] 10.3 建立字段错误白名单 parser RED，覆盖 nested money、`attributes.0..49`、未知/恶意路径降级和 requestId。
+  - [x] 10.4 建立页面状态机 RED，覆盖 editing/submitting/deterministic failure/unknown/success、冻结 snapshot/key、人工同请求重放和显式放弃。
+  - [x] 10.5 实现 `crypto.randomUUID()` 延迟建 Key，不把 DTO/Key 写入 Store、Storage、URL 或日志；深复制冻结 unknown snapshot。
+  - [x] 10.6 HTTP `4xx` 解锁并使下一次提交使用新 Key；network/`5xx` 保留同 Key/Payload，禁止自动重试。
+  - [x] 10.7 运行 Web Product API/logic 定向测试、typecheck、ESLint 和 diff-check。
+  - [x] 10.8 更新 Task 10 真实证据，创建提交：`feat: 建立产品创建前端状态`。
+  - RED（2026-08-12）：Product API 定向测试以 `products.create is not a function` 与暴露 key 集合不匹配失败；Create logic suite 因 `product-create.logic` 尚不存在以 `ERR_MODULE_NOT_FOUND` 失败，边界精确落在待实现 adapter 与纯逻辑。
+  - GREEN：Product API/logic 定向 `9/9`；API 使用 generated Create/201 DTO，显式携带 `Idempotency-Key`/AbortSignal/局部呈错并设置 `retry:false`。DTO builder 执行 trim/NFC、复用 `MoneyInput` 严格金额结果、保持 decimal 字符串与属性顺序，Vue row key 不进入请求。
+  - 状态/安全：Key 只在首次有效提交时由 `crypto.randomUUID()` 生成；DTO 被深复制冻结。明确 4xx 清除 Key/snapshot，network/5xx 保留同一冻结请求且只允许人工重放或显式放弃。逻辑无 Store/Storage/URL/log 依赖，字段错误只接受固定路径与 `attributes.0..49`，未知/恶意路径降级为表单级错误。
+  - 验证：Web `typecheck`、完整 `lint:eslint`、`git diff --check` 全绿。Root 首次检查精确报告两个新 Product Create 文件未进入供应商残留白名单；仅追加这两个文件后 `663/663` 通过，没有恢复 Supplier 领域或扩大目录白名单。
   - _Requirements: R1-R7, R9, R11-R14_
 
 - [ ] 11. 以 TDD 实现产品表单与属性编辑器
