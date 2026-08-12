@@ -1,3 +1,4 @@
+import type { Prisma } from '../../generated/prisma/client'
 import type {
   DictionaryTone as DictionaryToneValue,
   ProductStatus as ProductStatusValue,
@@ -6,7 +7,7 @@ import type {
   StoredDictionaryValueResolution,
 } from '../dictionaries/dictionary-lookup.service'
 
-interface DecimalStringSource {
+export interface DecimalStringSource {
   toString(): string
 }
 
@@ -61,6 +62,33 @@ export interface ProductActor {
   readonly id: string
   readonly displayName: string
 }
+
+/**
+ * Product 查询与创建响应共用同一份白名单 select，避免 Command 另建一套响应
+ * 协议或漏选审计用户。它只描述读模型，不包含任何写入能力。
+ */
+export const PRODUCT_RESPONSE_SELECT = {
+  id: true,
+  name: true,
+  productNo: true,
+  status: true,
+  supplierValue: true,
+  mainImage: true,
+  images: true,
+  videos: true,
+  twdSalePriceAmount: true,
+  twdSalePriceCurrency: true,
+  myrSalePriceAmount: true,
+  myrSalePriceCurrency: true,
+  purchaseCostAmount: true,
+  purchaseCostCurrency: true,
+  attributes: true,
+  createdBy: { select: { id: true, displayName: true } },
+  updatedBy: { select: { id: true, displayName: true } },
+  version: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.ProductSelect
 
 export interface ProductListItem {
   readonly id: string

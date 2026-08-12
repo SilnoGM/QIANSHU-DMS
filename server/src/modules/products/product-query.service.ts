@@ -10,6 +10,7 @@ import {
 } from '../dictionaries/dictionary-lookup.service'
 import {
   mapProductListItem,
+  PRODUCT_RESPONSE_SELECT,
   type ProductListItem,
 } from './product-query.mapper'
 import {
@@ -31,29 +32,6 @@ export interface ProductPage {
   readonly pageSize: number
   readonly total: number
 }
-
-const PRODUCT_LIST_SELECT = {
-  id: true,
-  name: true,
-  productNo: true,
-  status: true,
-  supplierValue: true,
-  mainImage: true,
-  images: true,
-  videos: true,
-  twdSalePriceAmount: true,
-  twdSalePriceCurrency: true,
-  myrSalePriceAmount: true,
-  myrSalePriceCurrency: true,
-  purchaseCostAmount: true,
-  purchaseCostCurrency: true,
-  attributes: true,
-  createdBy: { select: { id: true, displayName: true } },
-  updatedBy: { select: { id: true, displayName: true } },
-  version: true,
-  createdAt: true,
-  updatedAt: true,
-} satisfies Prisma.ProductSelect
 
 @Injectable()
 export class ProductQueryService {
@@ -91,7 +69,7 @@ export class ProductQueryService {
             orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
             skip: query.skip,
             take: query.pageSize,
-            select: PRODUCT_LIST_SELECT,
+            select: PRODUCT_RESPONSE_SELECT,
           })
           return { total, rows }
         },

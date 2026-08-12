@@ -146,18 +146,24 @@
   - 静态检查：`pnpm typecheck`、`pnpm lint`、`git diff --check` 全部通过。
   - _Requirements: R2-R7, R9, R13-R14_
 
-- [ ] 6. 以 TDD 实现 Product Command 与原子审计
-  - [ ] 6.1 先为 persistence 与 Command 建立 RED，固定 preflight -> scoped generate -> replay/read -> Product transaction 的调用顺序。
-  - [ ] 6.2 实现 preflight transaction，第一条 SQL 设置 timeout，按 Supplier Type/Item -> Currency code 的稳定锁序验证有效性和 `minorUnit`。
-  - [ ] 6.3 调用 `generateScoped({ ruleCode: 'PRODUCT', consumerCode: 'PRODUCT.CREATE' })`；映射 Rule 不可用、容量、状态和 scope 冲突为 Product 公共错误。
-  - [ ] 6.4 实现 replay：既有 Product 必须与 actor/规范化 Payload 精确一致；一致返回同一 Product 且不写新 Audit，不一致返回幂等冲突。
-  - [ ] 6.5 实现 Product write transaction：timeout 第一条 SQL、再次校验依赖、固定媒体空值、insert Product、同事务 `PRODUCT_CREATED` Audit。
-  - [ ] 6.6 Audit 只包含 `productNo/status`、供应商/价格存在性和 attribute count，不含金额、属性内容、supplier value、Key、fingerprint 或请求体。
-  - [ ] 6.7 精确处理 `products_product_no_key` 并发竞态；事务失败后重读匹配才转幂等成功，其他持久化异常固定脱敏。
-  - [ ] 6.8 覆盖 Audit 失败整体回滚、编号已提交但 Product 失败保留间隙、相同 Key/Payload 恢复原编号、配置二次校验变化。
-  - [ ] 6.9 复用 Product 响应 mapper 与历史 supplier 解析，避免创建第二份响应协议或 N+1。
-  - [ ] 6.10 运行 Product Command/Mapper、Numbering/Currency/Dictionary/Audit 相关回归、Server typecheck/lint 和 diff-check。
-  - [ ] 6.11 更新 Task 6 真实证据，创建提交：`feat: 实现产品创建命令`。
+- [x] 6. 以 TDD 实现 Product Command 与原子审计
+  - [x] 6.1 先为 persistence 与 Command 建立 RED，固定 preflight -> scoped generate -> replay/read -> Product transaction 的调用顺序。
+  - [x] 6.2 实现 preflight transaction，第一条 SQL 设置 timeout，按 Supplier Type/Item -> Currency code 的稳定锁序验证有效性和 `minorUnit`。
+  - [x] 6.3 调用 `generateScoped({ ruleCode: 'PRODUCT', consumerCode: 'PRODUCT.CREATE' })`；映射 Rule 不可用、容量、状态和 scope 冲突为 Product 公共错误。
+  - [x] 6.4 实现 replay：既有 Product 必须与 actor/规范化 Payload 精确一致；一致返回同一 Product 且不写新 Audit，不一致返回幂等冲突。
+  - [x] 6.5 实现 Product write transaction：timeout 第一条 SQL、再次校验依赖、固定媒体空值、insert Product、同事务 `PRODUCT_CREATED` Audit。
+  - [x] 6.6 Audit 只包含 `productNo/status`、供应商/价格存在性和 attribute count，不含金额、属性内容、supplier value、Key、fingerprint 或请求体。
+  - [x] 6.7 精确处理 `products_product_no_key` 并发竞态；事务失败后重读匹配才转幂等成功，其他持久化异常固定脱敏。
+  - [x] 6.8 覆盖 Audit 失败整体回滚、编号已提交但 Product 失败保留间隙、相同 Key/Payload 恢复原编号、配置二次校验变化。
+  - [x] 6.9 复用 Product 响应 mapper 与历史 supplier 解析，避免创建第二份响应协议或 N+1。
+  - [x] 6.10 运行 Product Command/Mapper、Numbering/Currency/Dictionary/Audit 相关回归、Server typecheck/lint 和 diff-check。
+  - [x] 6.11 更新 Task 6 真实证据，创建提交：`feat: 实现产品创建命令`。
+  - RED（2026-08-12）：Persistence 与 Command 两个 suite 因目标模块不存在在 TypeScript 编译阶段失败，`0 tests` 执行；RED 精确锁定两个待实现文件。
+  - GREEN：Persistence/Command 定向 `2 suites / 27 tests`；Product Command/Mapper 定向 `4 suites / 37 tests`；Product、Numbering、Currency、Dictionary、Audit 相关回归 `60 suites / 766 tests`。
+  - 事务/恢复：preflight 与 Product transaction 均以 timeout 为第一条 SQL，并保持 Supplier Type/Item -> Currency 稳定锁序；发号位于独立事务。重放逐字段核对 actor、固定媒体、三组金额/币种、有序属性与 version；可信同 Key 唯一竞态才恢复，其他冲突失败关闭。Audit 被等待且响应 mapper 位于 Product transaction 内，任一失败均使业务事务拒绝，数据库最终回滚由 Task 8 隔离 E2E 再做实体计数证明。
+  - 安全/契约：Audit 仅记录获准元数据；编号、字典、货币、Prisma 错误按可信类型/code/constraint 映射，未知错误固定脱敏。创建与列表共用 `PRODUCT_RESPONSE_SELECT` 和 `mapProductListItem()`；新建路径复用锁定供应商快照，历史重放只进行一次历史解析。
+  - 全量修复：首次根入口先暴露 Product 新文件未进入供应商残留精确白名单，修复后 Root `663/663`；随后 Server 全量暴露 Dictionary 旧 Audit enum 总数仍为 `40`，更新为已确认的 `41` 并显式断言 `PRODUCT_CREATED`。最终 Server `152 suites / 1507 tests`，Prisma validate、typecheck、lint 全部通过。
+  - 预期待办：提交前 `node --run check` 已通过 Root 与 Server，随后在 Contract 阶段以 `OpenAPI contract check failed` 停止；tracked snapshot 尚未同步已确认 enum，且 `products_create` 尚待 Task 7 实现，按 Task 9 统一执行 `contract:sync`，本任务不提前修改生成产物。
   - _Requirements: R3-R8, R13-R14_
 
 - [ ] 7. 以 TDD 暴露受保护的 Product 创建公共 API
