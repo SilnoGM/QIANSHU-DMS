@@ -122,13 +122,15 @@
 
   Task 4 证据：三个测试文件最初因 normalizer、mapper、service 缺失而 RED；两处测试类型噪声随生产类型同步收敛。实现后 Product 定向 23/23、Server typecheck、目标 ESLint、Root governance 663/663 与 diff-check 通过。Service 在同一受限事务内串行 count/findMany，共用精确 where 与稳定排序，只选择 actor `id/displayName`；页面供应商值去重后调用一次 batch resolver，Decimal 仅 `toString()`，非法 attributes 与底层异常统一脱敏为固定 500。首次 lint 发现 11 处测试 mock `any`/无必要 async，明确类型后转绿。
 
-- [ ] 5. 以 TDD 暴露受保护的 Product 列表公共 API
-  - [ ] 5.1 在 Gate D1 已授权范围内，先建立 Controller metadata 与 OpenAPI RED，精确要求 `GET /api/products`、operationId `products_list`、`products:read`、private no-store、分页 DTO 和 403/422 错误。
-  - [ ] 5.2 注册 `ProductsModule`，实现只读 Controller 和白名单响应 DTO；不得添加 POST、detail、update、status 或 delete 路由。
-  - [ ] 5.3 复用 Session、PasswordChangeRequired、Permission Guard 和既有异常映射；未授权请求不得查询或返回 Product 数据。
-  - [ ] 5.4 扩展契约门禁，使 Product operation allowlist 只接受 `products_list`，并证明未生成写 operation。
-  - [ ] 5.5 更新 Task 5 状态并在 Controller/metadata/OpenAPI 生成前置测试绿色后创建提交：`feat: 添加产品列表查询接口`。
+- [x] 5. 以 TDD 暴露受保护的 Product 列表公共 API
+  - [x] 5.1 在 Gate D1 已授权范围内，先建立 Controller metadata 与 OpenAPI RED，精确要求 `GET /api/products`、operationId `products_list`、`products:read`、private no-store、分页 DTO 和 403/422 错误。
+  - [x] 5.2 注册 `ProductsModule`，实现只读 Controller 和白名单响应 DTO；不得添加 POST、detail、update、status 或 delete 路由。
+  - [x] 5.3 复用 Session、PasswordChangeRequired、Permission Guard 和既有异常映射；未授权请求不得查询或返回 Product 数据。
+  - [x] 5.4 扩展契约门禁，使 Product operation allowlist 只接受 `products_list`，并证明未生成写 operation。
+  - [x] 5.5 更新 Task 5 状态并在 Controller/metadata/OpenAPI 生成前置测试绿色后创建提交：`feat: 添加产品列表查询接口`。
   - _Requirements: R1, R8, R15_
+
+  Task 5 证据：Controller、Module 与 DTO 测试先因对应模块不存在而 RED；补齐 `GET /api/products` 后，反射与 OpenAPI 前置门禁精确限定 Controller 只有 `list` 方法、Path Item 只有 `get`，operationId 为 `products_list`，并固定 `products:read`、private no-store、403/422 与白名单响应 DTO。最终定向测试 10/10、Server typecheck 与串行 ESLint 通过；一次将 ESLint 与 `prisma generate` 并发执行导致 Prisma 类型瞬态不可解析，移除真实的冗余断言后串行复验全绿。
 
 - [ ] 6. 完成 Product 数据库与 HTTP E2E
   - [ ] 6.1 先建立失败的隔离数据库/API E2E，测试 fixture 只在测试数据库直接插入受控 Product，不新增生产 seed 或创建 API。
