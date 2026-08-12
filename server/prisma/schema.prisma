@@ -91,6 +91,7 @@ enum AuditEventType {
   SYSTEM_BOOTSTRAP
   SYSTEM_ADMIN_RECOVERED
   AUTH_RETENTION_PURGED
+  PRODUCT_CREATED
 
   @@map("audit_event_type")
 }

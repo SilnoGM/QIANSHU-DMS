@@ -78,22 +78,29 @@
 
 ## 4. 实施任务
 
-- [ ] 1. 建立 Phase 4 绿色基线并复核可变真相源
-  - [ ] 1.1 复核当前 branch、HEAD、工作树和三份规格状态，确认没有用户未提交修改与本功能重叠。
-  - [ ] 1.2 只读确认 Product Schema、ProductsModule、现有 `products_list`、创建占位页、路由权限和产品列表按钮仍符合 Design 基线。
-  - [ ] 1.3 只读确认开发环境 `PRODUCT` Rule、Active Version、`service_provider.supplier`、`TWD/MYR/CNY` 当前状态；只记录环境快照，不写入、不把数量编码为契约。
-  - [ ] 1.4 运行 Product/Numbering/Currency/Dictionary/Audit、Web 产品页、OpenAPI 和根治理的现有绿色基线。
-  - [ ] 1.5 核对 Gate R、Gate D 与 Gate T 已通过；任一缺失则不得进入 Task 2。
-  - [ ] 1.6 记录基线 SHA、命令和结果；本任务无源码变更时不创建空提交。
+- [x] 1. 建立 Phase 4 绿色基线并复核可变真相源
+  - [x] 1.1 复核当前 branch、HEAD、工作树和三份规格状态，确认没有用户未提交修改与本功能重叠。
+  - [x] 1.2 只读确认 Product Schema、ProductsModule、现有 `products_list`、创建占位页、路由权限和产品列表按钮仍符合 Design 基线。
+  - [x] 1.3 只读确认开发环境 `PRODUCT` Rule、Active Version、`service_provider.supplier`、`TWD/MYR/CNY` 当前状态；只记录环境快照，不写入、不把数量编码为契约。
+  - [x] 1.4 运行 Product/Numbering/Currency/Dictionary/Audit、Web 产品页、OpenAPI 和根治理的现有绿色基线。
+  - [x] 1.5 核对 Gate R、Gate D 与 Gate T 已通过；任一缺失则不得进入 Task 2。
+  - [x] 1.6 记录基线 SHA、命令和结果；本任务无源码变更时不创建空提交。
+  - 证据（2026-08-12）：基线为 `feat/admin-product-management@0092f42`，初始 `git status --short --branch` 只有分支行且 `git diff --check` 通过；三份规格均为已确认状态，Gate R/D/T 已通过。
+  - 代码快照：Product Schema 仍为既有字段；ProductsModule 仅注册 Query，Controller 仅有 `products_list`；Web 创建页仍为单按钮占位，路由精确要求 `products:create`，列表 API 仍只有 GET。
+  - 开发库只读快照：`PRODUCT=ENABLED/version 3/Active Version 1`；`service_provider.supplier` 已启用且有效 Item 1；`CNY/MYR/TWD` 均启用且 `minorUnit=2`；Product 0 行；只存在已应用的产品列表 migration，本功能 migration 未应用。数量只作为本次环境证据，不是代码契约。
+  - 绿色命令：Server 定向 Jest `14 suites / 147 tests`；Web 定向 Node tests `19/19`；`node --run contract:check` 通过；`node --run test:root` 为 `663/663`。只读检索曾有两次错误：zsh 不存在通配符退出码 1、猜测目录不存在令 `rg` 退出码 2，修正路径后完成核对，均无写入。
   - _Requirements: R1-R14_
 
-- [ ] 2. 以 TDD 增加 `PRODUCT_CREATED` Audit enum 与 forward migration
-  - [ ] 2.1 先为 Prisma Schema 和 migration 建立失败测试，精确要求新 enum value、唯一新 migration、无其他表 DDL、无 seed、无旧 migration 改写。
-  - [ ] 2.2 运行 RED，确认失败仅因 `PRODUCT_CREATED` 尚不存在。
-  - [ ] 2.3 在已确认 Gate D 范围内修改 `schema.prisma`，新增 `20260812100000_product_created_audit_event/migration.sql`。
-  - [ ] 2.4 用隔离 PostgreSQL 验证从当前 migration 集升级和空库全量 replay；不得应用到持久开发库。
-  - [ ] 2.5 运行 Prisma validate/generate、Schema 测试、Audit 相关单测、Server typecheck 和 root governance。
-  - [ ] 2.6 更新 Task 2 真实证据，创建提交：`feat: 增加产品创建审计事件`。
+- [x] 2. 以 TDD 增加 `PRODUCT_CREATED` Audit enum 与 forward migration
+  - [x] 2.1 先为 Prisma Schema 和 migration 建立失败测试，精确要求新 enum value、唯一新 migration、无其他表 DDL、无 seed、无旧 migration 改写。
+  - [x] 2.2 运行 RED，确认失败仅因 `PRODUCT_CREATED` 尚不存在。
+  - [x] 2.3 在已确认 Gate D 范围内修改 `schema.prisma`，新增 `20260812100000_product_created_audit_event/migration.sql`。
+  - [x] 2.4 用隔离 PostgreSQL 验证从当前 migration 集升级和空库全量 replay；不得应用到持久开发库。
+  - [x] 2.5 运行 Prisma validate/generate、Schema 测试、Audit 相关单测、Server typecheck 和 root governance。
+  - [x] 2.6 更新 Task 2 真实证据，创建提交：`feat: 增加产品创建审计事件`。
+  - RED（2026-08-12）：`pnpm exec jest --runInBand src/infrastructure/database/product-create-audit-schema.spec.ts` 为 `1 suite failed / 2 tests failed`；失败精确为 Prisma enum 缺少 `PRODUCT_CREATED` 与目标 migration 目录不存在。
+  - GREEN：Schema/Audit 定向 Jest `3 suites / 31 tests`；`pnpm prisma:validate`、`pnpm prisma:generate`、`pnpm typecheck`、`pnpm lint`、`git diff --check` 全部通过；根治理 `663/663`。
+  - 隔离数据库：临时 PostgreSQL 16 先逐条执行旧 migration 再单独执行新 migration，并以数据库内断言确认 enum；官方 `node --run ci:server-e2e` 从空库应用 14 条 migration、二次 deploy 无待执行项、status up to date，E2E `26 suites / 147 tests`。两个临时容器均由 wrapper 清理；持久开发库未写入。
   - _Requirements: R8, R14_
 
 - [ ] 3. 以 TDD 扩展 Numbering scoped 幂等入口
