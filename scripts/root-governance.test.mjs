@@ -45,6 +45,7 @@ const supplierResidueAllowlist = Object.freeze([
   'server/test/product-schema.e2e-spec.ts',
   'scripts/browser-auth-runtime.test.mjs',
   'scripts/browser-auth/provision-admin.mjs',
+  'specs/product-create/requirements.md',
   'specs/product-list/design.md',
   'specs/product-list/requirements.md',
   'specs/product-list/tasks.md',
