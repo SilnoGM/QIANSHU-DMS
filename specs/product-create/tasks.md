@@ -224,16 +224,20 @@
   - 验证：Web `typecheck`、完整 `lint:eslint`、`git diff --check` 全绿。Root 首次检查精确报告两个新 Product Create 文件未进入供应商残留白名单；仅追加这两个文件后 `663/663` 通过，没有恢复 Supplier 领域或扩大目录白名单。
   - _Requirements: R1-R7, R9, R11-R14_
 
-- [ ] 11. 以 TDD 实现产品表单与属性编辑器
-  - [ ] 11.1 先建立 View RED，固定基础资料、状态/供应商、三组 MoneyInput、属性、媒体延期说明和操作按钮。
-  - [ ] 11.2 实现 `product-attributes-editor.vue`：最多 50 项，稳定 key、增删、上移/下移、序号、边界 disabled 和可访问名称。
-  - [ ] 11.3 实现 `product-create-form.vue`：真实 label/description/error 关联、动态 Active supplier required、提交锁和首个错误滚动聚焦。
-  - [ ] 11.4 `TWD/MYR` 传单一当前有效 descriptor，采购成本传有效货币集合；切币种不得修改 amount。
-  - [ ] 11.5 Catalog loading/error/empty、金额错误和 Attribute 错误都用文字呈现，不只依赖颜色或图标。
-  - [ ] 11.6 实现桌面 8/4 grid、窄屏单列、44px 移动触控、light/dark Token、Noto 字体和 Reduced Motion 边界。
-  - [ ] 11.7 不修改公共组件，不增加媒体 URL/上传控件或装饰性新依赖。
-  - [ ] 11.8 运行表单/属性 View 测试、Web typecheck、ESLint、Stylelint、build 和 diff-check。
-  - [ ] 11.9 更新 Task 11 真实证据，创建提交：`feat: 实现产品创建表单`。
+- [x] 11. 以 TDD 实现产品表单与属性编辑器
+  - [x] 11.1 先建立 View RED，固定基础资料、状态/供应商、三组 MoneyInput、属性、媒体延期说明和操作按钮。
+  - [x] 11.2 实现 `product-attributes-editor.vue`：最多 50 项，稳定 key、增删、上移/下移、序号、边界 disabled 和可访问名称。
+  - [x] 11.3 实现 `product-create-form.vue`：真实 label/description/error 关联、动态 Active supplier required、提交锁和首个错误滚动聚焦。
+  - [x] 11.4 `TWD/MYR` 传单一当前有效 descriptor，采购成本传有效货币集合；切币种不得修改 amount。
+  - [x] 11.5 Catalog loading/error/empty、金额错误和 Attribute 错误都用文字呈现，不只依赖颜色或图标。
+  - [x] 11.6 实现桌面 8/4 grid、窄屏单列、44px 移动触控、light/dark Token、Noto 字体和 Reduced Motion 边界。
+  - [x] 11.7 不修改公共组件，不增加媒体 URL/上传控件或装饰性新依赖。
+  - [x] 11.8 运行表单/属性 View 测试、Web typecheck、ESLint、Stylelint、build 和 diff-check。
+  - [x] 11.9 更新 Task 11 真实证据，创建提交：`feat: 实现产品创建表单`。
+  - RED（2026-08-12）：View suite 因 `product-attributes-editor.vue` 和 `product-create-form.vue` 不存在以 `ENOENT` 失败；扩展后的 logic suite 因属性 append/update/move/remove 函数尚未导出以 `SyntaxError` 失败。
+  - GREEN：表单/属性与既有状态纯逻辑定向 `12/12`。属性以不变数组操作保留 stable key/顺序，限制 50 项；上移、下移、删除均有序号化可访问名称与边界 disabled。字段错误使用真实 label/description/`aria-invalid`/`role=alert`，首错在 `nextTick()` 后通过受控字段映射滚动聚焦，不拼接不可信 selector。
+  - 表单/UI：一页组合默认 DRAFT、Active 动态供应商必填、单一 TWD/MYR descriptor、可选采购币种与三个 `MoneyInput`；Catalog loading/error/empty 以文字与可聚焦重试呈现。DOM 移动顺序为基础资料 -> 状态/供应商 -> 价格 -> 属性 -> 媒体，桌面使用 8/4 grid 与右侧 sticky；使用语义 Token、44px 移动操作和 Reduced Motion 滚动降级。
+  - 边界/验证：公共组件、依赖与 lockfile 未修改，没有媒体上传或 URL 控件。首次 typecheck 精确暴露 frozen status options 与 `FaSelect` mutable options 不兼容，改为组件本地非共享数组后通过。最终 Web `typecheck`、ESLint、Stylelint、build、`git diff --check` 全绿，Root `663/663`；build 仅保留既有依赖 pure annotation 与 chunk-size 非阻断警告。
   - _Requirements: R2-R7, R10-R11, R14_
 
 - [ ] 12. 以 TDD 完成创建页面编排、权限与导航

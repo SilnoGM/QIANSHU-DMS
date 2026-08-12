@@ -6,6 +6,7 @@ import test from 'node:test'
 
 import {
   abandonUnknownProductCreate,
+  appendProductAttribute,
   beginProductCreateSubmission,
   buildCreateProductRequest,
   canApplyProductCreateResponse,
@@ -14,9 +15,12 @@ import {
   createProductCreateSubmissionState,
   getProductCreateApiFailure,
   hasProductCreateChanges,
+  moveProductAttribute,
+  removeProductAttribute,
   replayUnknownProductCreate,
   resolveProductCreateFailure,
   resolveProductCreateSuccess,
+  updateProductAttribute,
 } from '../../src/views/admin/product-management/create/product-create.logic'
 
 const FIRST_KEY = '3e076569-95f2-4fce-8341-70bad4013da6'
@@ -66,6 +70,36 @@ test('默认 model 符合创建契约，属性 row key 稳定且 dirty 比较不
   model.attributes = []
   model.purchaseCostCurrency = 'USD'
   assert.equal(hasProductCreateChanges(model), true)
+})
+
+test('属性编辑保持稳定 key、不变更新与顺序，并严格限制 50 项', () => {
+  const first = createProductAttributeRow('row-1', '颜色', '黑色')
+  const second = createProductAttributeRow('row-2', '尺寸', 'XL')
+  const rows = [first, second]
+  const updated = updateProductAttribute(rows, 0, 'value', '白色')
+  const moved = moveProductAttribute(updated, 0, 'down')
+  const removed = removeProductAttribute(moved, 0)
+
+  assert.deepEqual(updated, [
+    { key: 'row-1', title: '颜色', value: '白色' },
+    second,
+  ])
+  assert.notEqual(updated, rows)
+  assert.notEqual(updated[0], first)
+  assert.deepEqual(moved.map(row => row.key), ['row-2', 'row-1'])
+  assert.deepEqual(removed.map(row => row.key), ['row-1'])
+  assert.equal(moveProductAttribute(rows, 0, 'up'), rows)
+  assert.equal(moveProductAttribute(rows, 1, 'down'), rows)
+  assert.equal(removeProductAttribute(rows, -1), rows)
+
+  const maximum = Array.from({ length: 50 }, (_value, index) =>
+    createProductAttributeRow(`row-${index}`))
+  assert.equal(appendProductAttribute(maximum, () => 'overflow'), maximum)
+  assert.deepEqual(appendProductAttribute([], () => 'new-row'), [{
+    key: 'new-row',
+    title: '',
+    value: '',
+  }])
 })
 
 test('DTO builder 执行 trim/NFC、严格 MoneyInput 校验并丢弃 Vue row key', () => {

@@ -6,6 +6,7 @@ import type {
 import { validateMoneyString } from '../../../../components/base/MoneyInput/logic'
 
 export type ProductCreateStatus = CreateProductRequestDto['status']
+export const MAX_PRODUCT_ATTRIBUTES = 50
 
 export interface ProductCreateAttributeRow {
   key: string
@@ -211,6 +212,66 @@ export function createProductAttributeRow(
   value = '',
 ): ProductCreateAttributeRow {
   return { key, title, value }
+}
+
+export function appendProductAttribute(
+  rows: readonly ProductCreateAttributeRow[],
+  keyFactory: () => string = () => crypto.randomUUID(),
+): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
+  if (rows.length >= MAX_PRODUCT_ATTRIBUTES) {
+    return rows
+  }
+  return [...rows, createProductAttributeRow(keyFactory())]
+}
+
+export function updateProductAttribute(
+  rows: readonly ProductCreateAttributeRow[],
+  index: number,
+  field: 'title' | 'value',
+  value: string,
+): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
+  if (!Number.isInteger(index) || index < 0 || index >= rows.length) {
+    return rows
+  }
+  return rows.map((row, rowIndex) => rowIndex === index
+    ? { ...row, [field]: value }
+    : row)
+}
+
+export function moveProductAttribute(
+  rows: readonly ProductCreateAttributeRow[],
+  index: number,
+  direction: 'down' | 'up',
+): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
+  const targetIndex = direction === 'up' ? index - 1 : index + 1
+  if (
+    !Number.isInteger(index)
+    || index < 0
+    || index >= rows.length
+    || targetIndex < 0
+    || targetIndex >= rows.length
+  ) {
+    return rows
+  }
+  const next = [...rows]
+  const source = next[index]
+  const target = next[targetIndex]
+  if (source === undefined || target === undefined) {
+    return rows
+  }
+  next[index] = target
+  next[targetIndex] = source
+  return next
+}
+
+export function removeProductAttribute(
+  rows: readonly ProductCreateAttributeRow[],
+  index: number,
+): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
+  if (!Number.isInteger(index) || index < 0 || index >= rows.length) {
+    return rows
+  }
+  return rows.filter((_row, rowIndex) => rowIndex !== index)
 }
 
 export function hasProductCreateChanges(model: ProductCreateFormModel): boolean {
