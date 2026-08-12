@@ -115,15 +115,15 @@ test('特殊单元格复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗',
   assert.match(source, /<ProductVideosModal/u)
 })
 
-test('属性和视频入口可聚焦且占位动作只使用 QsToast info', () => {
+test('属性和视频入口可聚焦，新增导航与查看编辑占位边界清晰', () => {
   assert.match(source, /项属性/u)
   assert.match(source, /个视频/u)
   assert.match(source, /i-lucide:list-tree/u)
   assert.match(source, /i-lucide:video/u)
-  assert.match(source, /toast\.info\('新增产品功能将在后续版本开放'\)/u)
+  assert.match(source, /router\.push\(\{ name: 'adminProductCreate' \}\)/u)
   assert.match(source, /toast\.info\('产品详情功能将在后续版本开放'\)/u)
   assert.match(source, /toast\.info\('产品编辑功能将在后续版本开放'\)/u)
-  assert.doesNotMatch(source, /router\.(?:push|replace)|productsApi\.(?:create|update|delete)/u)
+  assert.doesNotMatch(source, /productsApi\.(?:create|update|delete)/u)
 })
 
 test('属性弹窗完整有序展示，视频弹窗选择单一预览并保留安全外链', () => {

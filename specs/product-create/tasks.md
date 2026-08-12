@@ -240,17 +240,21 @@
   - 边界/验证：公共组件、依赖与 lockfile 未修改，没有媒体上传或 URL 控件。首次 typecheck 精确暴露 frozen status options 与 `FaSelect` mutable options 不兼容，改为组件本地非共享数组后通过。最终 Web `typecheck`、ESLint、Stylelint、build、`git diff --check` 全绿，Root `663/663`；build 仅保留既有依赖 pure annotation 与 chunk-size 非阻断警告。
   - _Requirements: R2-R7, R10-R11, R14_
 
-- [ ] 12. 以 TDD 完成创建页面编排、权限与导航
-  - [ ] 12.1 先建立页面 RED，覆盖 `FaPageHeader + FaPageMain`、Catalog 状态、API 调用、提交锁、错误摘要和成功分支。
-  - [ ] 12.2 把产品列表“新增产品”从 Toast 改为 `adminProductCreate` 导航；查看/编辑轻提示保持不变。
-  - [ ] 12.3 实现 Supplier/Currency Catalog 提交门禁：DRAFT/INACTIVE supplier null 可降级，ACTIVE 或已选 supplier 必须可信；Currency 失败始终阻止提交并保留草稿。
-  - [ ] 12.4 实现 requestVersion/authEpoch/permission/Abort 竞态守卫，身份域变化清除草稿与幂等上下文，迟到响应不能更新新身份。
-  - [ ] 12.5 实现 success：有 `products:read` Toast 后返回列表；create-only 显示产品编号与“继续新增”。
-  - [ ] 12.6 实现 unknown-result：冻结表单、相同 Key/Payload 人工确认和明确放弃。
-  - [ ] 12.7 使用同级 `QsGenericModal` 实现页面取消/路由离开确认；刷新关闭用 `beforeunload`，成功/放弃后不再提示。
-  - [ ] 12.8 覆盖键盘操作、焦点恢复、busy/alert 语义、窄屏无横向滚动和权限按钮可见性。
-  - [ ] 12.9 运行产品页面/路由/API 定向测试、完整 Web `test:api`、typecheck、lint、build 和 diff-check。
-  - [ ] 12.10 更新 Task 12 真实证据，创建提交：`feat: 完成产品创建页面流程`。
+- [x] 12. 以 TDD 完成创建页面编排、权限与导航
+  - [x] 12.1 先建立页面 RED，覆盖 `FaPageHeader + FaPageMain`、Catalog 状态、API 调用、提交锁、错误摘要和成功分支。
+  - [x] 12.2 把产品列表“新增产品”从 Toast 改为 `adminProductCreate` 导航；查看/编辑轻提示保持不变。
+  - [x] 12.3 实现 Supplier/Currency Catalog 提交门禁：DRAFT/INACTIVE supplier null 可降级，ACTIVE 或已选 supplier 必须可信；Currency 失败始终阻止提交并保留草稿。
+  - [x] 12.4 实现 requestVersion/authEpoch/permission/Abort 竞态守卫，身份域变化清除草稿与幂等上下文，迟到响应不能更新新身份。
+  - [x] 12.5 实现 success：有 `products:read` Toast 后返回列表；create-only 显示产品编号与“继续新增”。
+  - [x] 12.6 实现 unknown-result：冻结表单、相同 Key/Payload 人工确认和明确放弃。
+  - [x] 12.7 使用同级 `QsGenericModal` 实现页面取消/路由离开确认；刷新关闭用 `beforeunload`，成功/放弃后不再提示。
+  - [x] 12.8 覆盖键盘操作、焦点恢复、busy/alert 语义、窄屏无横向滚动和权限按钮可见性。
+  - [x] 12.9 运行产品页面/路由/API 定向测试、完整 Web `test:api`、typecheck、lint、build 和 diff-check。
+  - [x] 12.10 更新 Task 12 真实证据，创建提交：`feat: 完成产品创建页面流程`。
+  - RED（2026-08-12）：页面、路由与列表源码测试先以创建页仍是占位、列表新增仍发 Toast、缺少 Abort 错误识别而失败；实现后的首轮定向测试仅剩一条测试过度绑定 `submitState.value` 变量名，调整为验证实际冻结 `submission` 后转绿。完整 Web 测试曾因按钮 loading 收窄为真实 `submitting` 而命中旧断言，更新交互契约后全绿。
+  - 页面流程：创建页组合真实 Catalog、表单和 `productsApi.create`；供应商按状态/选择情况失败关闭，货币始终要求可信。请求由 `requestVersion + authEpoch + permission + AbortSignal` 四重守卫，network/5xx 冻结同 Key/Payload 等待人工重放，明确放弃才清除上下文。
+  - 导航/可访问性：列表新增进入 `adminProductCreate`，查看/编辑仍为轻提示；成功按 `products:read` 分流至列表或 create-only 摘要。未保存导航和 unknown 放弃复用 `QsGenericModal`，刷新用 `beforeunload`；提交锁、`aria-busy`、`role=alert`、焦点定位与窄屏 44px 操作均已落地。
+  - GREEN：产品页面/路由/API 定向 `29/29`；Web 完整 `test:api` 为 `774/774`；Web typecheck、完整 ESLint/Stylelint、生产 build 与 `git diff --check` 通过。build 仅有既有依赖 pure annotation 与 chunk-size 警告。Root 首次为 `662/663`，精确缺少创建页供应商残留白名单；只追加该文件后定向治理转绿，未扩大目录或恢复 Supplier 领域。
   - _Requirements: R1, R3-R7, R10-R14_
 
 - [ ] 13. 扩展现有管理 Browser 真实验收

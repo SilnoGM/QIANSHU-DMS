@@ -63,6 +63,7 @@ const supplierResidueAllowlist = Object.freeze([
   'specs/product-list/design.md',
   'specs/product-list/requirements.md',
   'specs/product-list/tasks.md',
+  'web/apps/qsmds-arco/src/views/admin/product-management/create/index.vue',
   'web/apps/qsmds-arco/src/views/admin/product-management/create/product-create-form.vue',
   'web/apps/qsmds-arco/src/views/admin/product-management/create/product-create.logic.ts',
   'web/apps/qsmds-arco/src/views/admin/product-management/list/product-list.logic.ts',

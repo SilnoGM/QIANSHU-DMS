@@ -15,6 +15,7 @@ import {
   createProductCreateSubmissionState,
   getProductCreateApiFailure,
   hasProductCreateChanges,
+  isProductCreateAbortError,
   moveProductAttribute,
   removeProductAttribute,
   replayUnknownProductCreate,
@@ -297,4 +298,8 @@ test('成功状态保留返回 Product，迟到响应同时受身份、权限、
   assert.equal(canApplyProductCreateResponse({ ...current, authorized: false }), false)
   assert.equal(canApplyProductCreateResponse({ ...current, currentAuthEpoch: 5 }), false)
   assert.equal(canApplyProductCreateResponse({ ...current, latestRequestVersion: 9 }), false)
+  assert.equal(isProductCreateAbortError(new DOMException('aborted', 'AbortError')), true)
+  assert.equal(isProductCreateAbortError({ code: 'ERR_CANCELED' }), true)
+  assert.equal(isProductCreateAbortError({ name: 'CanceledError' }), true)
+  assert.equal(isProductCreateAbortError(new Error('failed')), false)
 })

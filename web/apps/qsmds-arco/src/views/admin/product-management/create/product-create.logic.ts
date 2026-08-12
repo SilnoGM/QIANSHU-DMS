@@ -524,3 +524,21 @@ export function canApplyProductCreateResponse(
     && input.authEpoch === input.currentAuthEpoch
     && input.requestVersion === input.latestRequestVersion
 }
+
+export function isProductCreateAbortError(error: unknown): boolean {
+  try {
+    return (
+      error instanceof DOMException
+      && error.name === 'AbortError'
+    ) || (
+      isRecord(error)
+      && (
+        error.code === 'ERR_CANCELED'
+        || error.name === 'CanceledError'
+      )
+    )
+  }
+  catch {
+    return false
+  }
+}

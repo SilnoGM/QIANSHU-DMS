@@ -34,6 +34,7 @@ defineOptions({ name: 'AdminProductList' })
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
+const router = useRouter()
 const toast = useQsToast()
 const supplierCatalog = useDictionaryCatalog(SUPPLIER_DICTIONARY_CODE)
 const { currencies } = useCurrencyCatalog()
@@ -296,8 +297,8 @@ function showVideos(product: ProductListItemViewModel): void {
   videosVisible.value = true
 }
 
-function showCreatePlaceholder(): void {
-  toast.info('新增产品功能将在后续版本开放')
+function navigateToCreate(): void {
+  void router.push({ name: 'adminProductCreate' })
 }
 
 function showViewPlaceholder(): void {
@@ -348,7 +349,7 @@ onBeforeUnmount(() => {
       title="产品列表"
       description="集中查看产品基础资料、供应商、媒体、价格与审计信息。"
     >
-      <FaButton v-if="canCreate" class="min-h-11 sm:min-h-9" @click="showCreatePlaceholder">
+      <FaButton v-if="canCreate" class="min-h-11 sm:min-h-9" @click="navigateToCreate">
         <FaIcon name="i-lucide:plus" />
         新增产品
       </FaButton>

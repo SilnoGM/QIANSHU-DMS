@@ -95,14 +95,17 @@ test('产品权限精确控制菜单和直接访问资格', () => {
   assert.deepEqual(visiblePaths([]), [])
 })
 
-test('仅新增产品页面继续保持单按钮占位边界', () => {
+test('新增产品页面已接入正式表单与写入编排', () => {
   const source = readFileSync(new URL(
     '../../src/views/admin/product-management/create/index.vue',
     import.meta.url,
   ), 'utf8')
 
-  assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
-  assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
-  assert.match(source, />新增产品<\/FaButton>/u)
-  assert.doesNotMatch(source, /<script|<style/u)
+  assert.match(source, /<script setup lang="ts">/u)
+  assert.match(source, /<FaPageHeader/u)
+  assert.match(source, /<FaPageMain/u)
+  assert.match(source, /<ProductCreateForm/u)
+  assert.match(source, /productsApi\.create/u)
+  assert.match(source, /products:create/u)
+  assert.doesNotMatch(source, /新增产品功能将在后续版本开放/u)
 })

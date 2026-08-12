@@ -37,6 +37,7 @@ const props = withDefaults(defineProps<{
   modelValue: ProductCreateFormModel
   myrCurrencies: readonly CurrencyDescriptor[]
   purchaseCurrencies: readonly CurrencyDescriptor[]
+  showActions?: boolean
   submitting?: boolean
   supplierCatalogState?: ProductCreateCatalogState
   twdCurrencies: readonly CurrencyDescriptor[]
@@ -44,6 +45,7 @@ const props = withDefaults(defineProps<{
   currencyCatalogState: 'ready',
   disabled: false,
   fieldErrors: () => ({}),
+  showActions: true,
   submitting: false,
   supplierCatalogState: 'ready',
 })
@@ -365,12 +367,15 @@ defineExpose<ProductCreateFormExpose>({
           </div>
         </FaCard>
 
-        <div class="p-4 border border-border rounded-xl bg-card gap-3 grid">
+        <div
+          v-if="showActions"
+          class="p-4 border border-border rounded-xl bg-card gap-3 grid"
+        >
           <FaButton
             type="submit"
             class="min-h-11 w-full sm:min-h-9"
             :disabled="submitLocked"
-            :loading="submitLocked"
+            :loading="submitting"
           >
             创建产品
           </FaButton>
