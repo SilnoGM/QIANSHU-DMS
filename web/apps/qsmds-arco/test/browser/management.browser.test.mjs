@@ -245,9 +245,366 @@ async function clickVisibleTableRowButton(page, marker, text) {
       && !candidate.disabled
     ))
     if (!button) throw new Error('table row button unavailable')
+    button.focus({ preventScroll: true })
     button.click()
     return true
   })()`)
+}
+
+async function pressKey(page, key, code = key) {
+  await page.connection.send('Input.dispatchKeyEvent', {
+    code,
+    key,
+    type: 'keyDown',
+  })
+  await page.connection.send('Input.dispatchKeyEvent', {
+    code,
+    key,
+    type: 'keyUp',
+  })
+}
+
+async function clickVisibleAriaButton(page, label) {
+  const serializedLabel = JSON.stringify(label)
+  await page.waitFor(`(() => [...document.querySelectorAll('button')].some(button => (
+    button.getAttribute('aria-label') === ${serializedLabel}
+    && button.getClientRects().length > 0
+    && !button.disabled
+  )))()`)
+  await page.evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find(candidate => (
+      candidate.getAttribute('aria-label') === ${serializedLabel}
+      && candidate.getClientRects().length > 0
+      && !candidate.disabled
+    ))
+    if (!button) throw new Error('visible aria button unavailable')
+    button.focus({ preventScroll: true })
+    button.click()
+    return true
+  })()`)
+}
+
+/** 产品和地区筛选共享 QsGenericTable 的公开 label/combobox/option 键盘契约。 */
+async function selectVisibleFilter(page, label, option) {
+  const serializedLabel = JSON.stringify(label)
+  const serializedOption = JSON.stringify(option)
+  await page.waitFor(`(() => [...document.querySelectorAll('label')].some(candidate => (
+    candidate.getClientRects().length > 0
+    && candidate.textContent?.includes(${serializedLabel})
+    && candidate.querySelector('[role="combobox"]')
+  )))()`)
+  await page.evaluate(`(() => {
+    const label = [...document.querySelectorAll('label')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.includes(${serializedLabel})
+      && candidate.querySelector('[role="combobox"]')
+    ))
+    const trigger = label?.querySelector('[role="combobox"]')
+    if (!trigger) throw new Error('filter trigger unavailable')
+    trigger.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
+    .some(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.trim() === ${serializedOption}
+      && candidate.getAttribute('aria-disabled') !== 'true'
+    )))()`)
+  await page.evaluate(`(() => {
+    const option = [...document.querySelectorAll('[role="option"]')]
+      .find(candidate => (
+        candidate.getClientRects().length > 0
+        && candidate.textContent?.trim() === ${serializedOption}
+        && candidate.getAttribute('aria-disabled') !== 'true'
+      ))
+    if (!option) throw new Error('filter option unavailable')
+    option.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`(() => [...document.querySelectorAll('label')].some(candidate => (
+    candidate.getClientRects().length > 0
+    && candidate.textContent?.includes(${serializedLabel})
+    && candidate.querySelector('[role="combobox"]')
+      ?.textContent?.trim() === ${serializedOption}
+  )))()`)
+}
+
+async function waitForProductList(page, expectedText) {
+  const serializedText = JSON.stringify(expectedText)
+  await page.waitFor(`(() => {
+    const root = document.querySelector('[data-testid="product-list-table"]')
+    return root?.getClientRects().length > 0
+      && root.querySelector('[aria-busy="false"]') !== null
+      && root.textContent?.includes(${serializedText})
+  })()`)
+}
+
+async function verifyProductList(page, baseUrl) {
+  const productNo = 'PRODUCT-BROWSER-001'
+  const productRequests = []
+  const stopRequestProbe = page.on('Network.requestWillBeSent', (event) => {
+    try {
+      const url = new URL(event.request?.url)
+      if (url.pathname === '/api/products') {
+        productRequests.push(url)
+      }
+    }
+    catch {
+      // 非 URL 的 DevTools 事件不属于产品请求，忽略且不进入诊断输出。
+    }
+  })
+
+  try {
+    await page.navigate(appRouteUrl(baseUrl, '/admin/products/list'))
+    await waitForProductList(page, productNo)
+    await page.waitFor(`document.body.innerText.includes('共 21 条')`)
+
+    const desktopState = await page.evaluate(`(() => {
+      const root = document.querySelector('[data-testid="product-list-table"]')
+      const headers = [...(root?.querySelectorAll('[data-slot="table-head"]') ?? [])]
+      const header = text => headers.find(candidate => candidate.textContent?.includes(text))
+      return {
+        actionPinned: header('操作')?.getAttribute('data-pinned') ?? null,
+        createVisible: [...document.querySelectorAll('button')].some(button => (
+          button.textContent?.trim() === '新增产品'
+          && button.getClientRects().length > 0
+        )),
+        productNoPinned: header('产品编号')?.getAttribute('data-pinned') ?? null,
+        visibleDesktopTables: [...(root?.querySelectorAll('table') ?? [])]
+          .filter(table => table.getClientRects().length > 0).length,
+      }
+    })()`)
+    assert.deepEqual(desktopState, {
+      actionPinned: 'right',
+      createVisible: true,
+      productNoPinned: 'left',
+      visibleDesktopTables: 1,
+    })
+
+    // 列设置必须允许业务列显隐/固定，同时保持产品编号和操作列默认边界。
+    await clickVisibleButton(page, '列设置')
+    await page.waitFor(`document.querySelector(
+      '[aria-label="产品编号：固定在左侧"][aria-pressed="true"]',
+    ) !== null`)
+    await clickVisibleAriaButton(page, '产品图片：固定在右侧')
+    await page.waitFor(`document.querySelector(
+      '[aria-label="产品图片：固定在右侧"][aria-pressed="true"]',
+    ) !== null`)
+    await clickVisibleButton(page, '恢复默认')
+
+    const visibleText = await page.evaluate('document.body.innerText')
+    for (const text of [
+      'Browser 有效供应商',
+      'Browser 停用供应商',
+      '未知',
+      'NT$1,234.57 TWD',
+      '¥88.90 CNY',
+      '10.5 ZZZ',
+    ]) {
+      assert.equal(visibleText.includes(text), true, `缺少产品展示文本：${text}`)
+    }
+
+    // 三个尚未接入业务流程的动作只能发轻提示，不导航或写入数据。
+    await clickVisibleButton(page, '新增产品')
+    await page.waitFor(`document.body.innerText.includes('新增产品功能将在后续版本开放')`)
+    await clickVisibleTableRowButton(page, productNo, '查看')
+    await page.waitFor(`document.body.innerText.includes('产品详情功能将在后续版本开放')`)
+    await clickVisibleTableRowButton(page, productNo, '编辑')
+    await page.waitFor(`document.body.innerText.includes('产品编辑功能将在后续版本开放')`)
+    assert.equal(locationHashPath(await page.evaluate('location.hash')), '/admin/products/list')
+
+    // ImageGroup 第三个可见位是 +2，点击后从第三张进入完整四图预览。
+    await clickVisibleAriaButton(page, '查看其余 2 张图片')
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
+      dialog.getClientRects().length > 0
+      && dialog.textContent?.includes('3 / 4')
+    )))()`)
+    await pressKey(page, 'Escape')
+    await waitForNoVisibleModal(page, '3 / 4')
+
+    await clickVisibleTableRowButton(page, productNo, '2 项属性')
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
+      dialog.getClientRects().length > 0
+      && dialog.textContent?.includes('颜色')
+      && dialog.textContent?.includes('墨黑')
+      && dialog.textContent?.includes('尺寸')
+      && dialog.textContent?.includes('XL')
+    )))()`)
+    await pressKey(page, 'Escape')
+    await waitForNoVisibleModal(page, '产品属性')
+    await page.waitFor(`document.activeElement?.textContent?.trim() === '2 项属性'`)
+
+    await clickVisibleTableRowButton(page, productNo, '2 个视频')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('产品视频'))
+      const link = dialog?.querySelector('a[target="_blank"]')
+      return dialog?.querySelector('video[controls]') !== null
+        && link?.getAttribute('rel') === 'noopener noreferrer'
+    })()`)
+    await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('产品视频'))
+      dialog?.querySelector('video')?.dispatchEvent(new Event('error'))
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('产品视频'))
+      return dialog?.textContent?.includes('视频暂不可预览')
+        && dialog.querySelector('a[target="_blank"]') !== null
+    })()`)
+    await clickVisibleModalButton(page, '视频 2')
+    const unsafeVideoState = await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('产品视频'))
+      return {
+        hasExternalLink: dialog?.querySelector('a[target="_blank"]') !== null,
+        hasVideo: dialog?.querySelector('video') !== null,
+        showsRawValue: dialog?.textContent?.includes('javascript:alert(1)') ?? false,
+      }
+    })()`)
+    assert.deepEqual(unsafeVideoState, {
+      hasExternalLink: false,
+      hasVideo: false,
+      showsRawValue: true,
+    })
+    await clickVisibleModalButton(page, '关闭视频')
+    await waitForNoVisibleModal(page, '产品视频')
+
+    // 第二页请求必须保持 Server 分页；从第二页应用供应商筛选时回到第一页。
+    await page.evaluate(`(() => {
+      const button = [...document.querySelectorAll('[data-slot="pagination-next"]')]
+        .find(candidate => candidate.getClientRects().length > 0 && !candidate.disabled)
+      if (!button) throw new Error('product next page unavailable')
+      button.click()
+      return true
+    })()`)
+    await waitForProductList(page, 'PRODUCT-BROWSER-FILLER-01')
+    await clickVisibleButton(page, '筛选')
+    await selectVisibleFilter(page, '供应商', 'Browser 有效供应商')
+    await clickVisibleButton(page, '应用筛选')
+    await waitForProductList(page, productNo)
+    await page.waitFor(`document.body.innerText.includes('共 1 条')`)
+    assert.equal(await page.evaluate(`document.body.innerText.includes(
+      'Browser 停用供应商产品',
+    )`), false)
+    assert.equal(productRequests.some(url => (
+      url.searchParams.get('page') === '2'
+      && url.searchParams.get('pageSize') === '20'
+    )), true)
+    assert.equal(productRequests.some(url => (
+      url.searchParams.get('page') === '1'
+      && url.searchParams.get('supplierValue') === 'BROWSER_SUPPLIER_EFFECTIVE'
+    )), true)
+    await clickVisibleButton(page, '清空筛选')
+    await waitForProductList(page, productNo)
+    await page.waitFor(`document.body.innerText.includes('共 21 条')`)
+
+    // 移动端复用同一行数据，禁止页面级横向溢出，并维持 44px 触控下限。
+    await page.setViewport(390, 844, true)
+    await page.waitFor(`(() => {
+      const actions = [...document.querySelectorAll(
+        '[data-slot="qs-generic-table-mobile-actions"]',
+      )].find(candidate => candidate.parentElement?.textContent?.includes(${JSON.stringify(productNo)}))
+      const card = actions?.parentElement
+      const rect = card?.getBoundingClientRect()
+      return rect && rect.left >= 0 && rect.right <= innerWidth
+    })()`)
+    const lightBackground = await page.evaluate(`getComputedStyle(document.body).backgroundColor`)
+    const mobileState = await page.evaluate(`(() => {
+      const root = document.querySelector('[data-testid="product-list-table"]')
+      const actions = [...document.querySelectorAll(
+        '[data-slot="qs-generic-table-mobile-actions"]',
+      )].find(candidate => candidate.parentElement?.textContent?.includes(${JSON.stringify(productNo)}))
+      const card = actions?.parentElement
+      const buttons = [...(card?.querySelectorAll('button') ?? [])]
+        .filter(button => button.getClientRects().length > 0)
+      return {
+        allTouchTargetsMeetMinimum: buttons.every(button => (
+          button.getBoundingClientRect().height >= 44
+        )),
+        documentFits: document.documentElement.scrollWidth <= innerWidth,
+        hasFourImages: card?.querySelector('[aria-label="图片组，共 4 张"]') !== null,
+        hasMainImage: card?.querySelector('[aria-label="图片组，共 1 张"]') !== null,
+        hasProductData: card?.textContent?.includes('2 项属性')
+          && card.textContent?.includes('2 个视频')
+          && card.textContent?.includes('NT$1,234.57 TWD'),
+        visibleDesktopTables: [...(root?.querySelectorAll('table') ?? [])]
+          .filter(table => table.getClientRects().length > 0).length,
+      }
+    })()`)
+    assert.deepEqual(mobileState, {
+      allTouchTargetsMeetMinimum: true,
+      documentFits: true,
+      hasFourImages: true,
+      hasMainImage: true,
+      hasProductData: true,
+      visibleDesktopTables: 0,
+    })
+
+    await page.evaluate(`(() => {
+      document.documentElement.classList.remove('light')
+      document.documentElement.classList.add('dark')
+      return true
+    })()`)
+    const darkState = await page.evaluate(`(() => ({
+      background: getComputedStyle(document.body).backgroundColor,
+      documentFits: document.documentElement.scrollWidth <= innerWidth,
+      theme: document.documentElement.classList.contains('dark'),
+    }))()`)
+    assert.equal(darkState.theme, true)
+    assert.equal(darkState.documentFits, true)
+    assert.notEqual(darkState.background, lightBackground)
+
+    await page.connection.send('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    })
+    assert.equal(await page.evaluate(`matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches`), true)
+    await page.evaluate(`(() => {
+      const actions = [...document.querySelectorAll(
+        '[data-slot="qs-generic-table-mobile-actions"]',
+      )].find(candidate => candidate.parentElement?.textContent?.includes(${JSON.stringify(productNo)}))
+      const button = [...(actions?.parentElement?.querySelectorAll('button') ?? [])]
+        .find(candidate => candidate.textContent?.trim() === '2 项属性')
+      if (!button) throw new Error('mobile attributes button unavailable')
+      button.focus({ preventScroll: true })
+      button.click()
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('产品属性'))
+      return dialog?.querySelector('[aria-label="关闭模态框"]')
+        ?.getBoundingClientRect().height >= 44
+    })()`)
+    await pressKey(page, 'Escape')
+    await waitForNoVisibleModal(page, '产品属性')
+    await page.waitFor(`document.activeElement?.textContent?.trim() === '2 项属性'`)
+    await page.connection.send('Emulation.setEmulatedMedia', { features: [] })
+    await page.evaluate(`(() => {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.classList.add('light')
+      return true
+    })()`)
+    await page.setViewport(1280, 800, false)
+  }
+  finally {
+    stopRequestProbe()
+  }
+}
+
+function locationHashPath(hash) {
+  return typeof hash === 'string' ? hash.replace(/^#/u, '') : ''
 }
 
 /** 只在当前可见对话框中点击按钮，避免绑定具体组件库的私有 DOM class。 */
@@ -469,26 +826,22 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   const page = await browser.newPage()
   // 角色编辑先验证桌面表格；Chrome 默认视口可能落入移动端断点，只渲染卡片。
-  await page.setViewport(1280, 800, false)
+  await page.setViewport(1440, 900, false)
   await page.navigate(appRouteUrl(configuration.baseUrl, '/login'))
   await waitForAuthState(page, 'anonymous')
   await loginThroughUi(page, configuration)
 
   // 管理员权限迁移必须在真实 AuthContext 中生效，并驱动顶部导航与两个叶子页面。
   await page.waitFor(`document.body.innerText.includes('管理员工作台')`)
-  for (const [routePath, buttonText] of [
-    ['/admin/products/create', '新增产品'],
-    ['/admin/products/list', '产品列表'],
-  ]) {
-    await page.navigate(appRouteUrl(configuration.baseUrl, routePath))
-    await page.waitFor(`(() => (
-      location.hash === ${JSON.stringify(`#${routePath}`)}
-      && [...document.querySelectorAll('button')].some(button => (
-        button.textContent?.trim() === ${JSON.stringify(buttonText)}
-        && button.getClientRects().length > 0
-      ))
-    ))()`)
-  }
+  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/products/create'))
+  await page.waitFor(`(() => (
+    location.hash === '#/admin/products/create'
+    && [...document.querySelectorAll('button')].some(button => (
+      button.textContent?.trim() === '新增产品'
+      && button.getClientRects().length > 0
+    ))
+  ))()`)
+  await verifyProductList(page, configuration.baseUrl)
 
   // 测试目标用户由受保护 API 准备；本场景关注的是管理员后续每项 UI 管理操作。
   const createdUser = await page.evaluate(apiExpression('/api/users', 'POST', {

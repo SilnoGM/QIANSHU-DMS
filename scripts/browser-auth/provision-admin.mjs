@@ -52,6 +52,95 @@ const { Client } = require('pg')
       'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)',
       [user.rows[0].id, role.rows[0].id],
     )
+
+    // 产品列表浏览器验收只向本次隔离数据库写夹具。供应商沿用正式字典身份，
+    // 先创建 Item 再启用 Type，以满足数据库的“启用字典至少一个启用项”约束。
+    const supplierType = await client.query(
+      'SELECT id FROM dictionary_types WHERE code = $1 FOR UPDATE',
+      ['service_provider.supplier'],
+    )
+    if (supplierType.rowCount !== 1) throw new Error('supplier_dictionary')
+    await client.query(
+      [
+        'INSERT INTO dictionary_items (',
+        'dictionary_type_id, value, label, tone, enabled, sort_order',
+        ') VALUES',
+        '($1, \'BROWSER_SUPPLIER_EFFECTIVE\', \'Browser 有效供应商\', \'SUCCESS\', true, 10),',
+        '($1, \'BROWSER_SUPPLIER_DISABLED\', \'Browser 停用供应商\', \'WARNING\', false, 20)',
+      ].join(' '),
+      [supplierType.rows[0].id],
+    )
+    await client.query(
+      'UPDATE dictionary_types SET enabled = true, updated_at = clock_timestamp() WHERE id = $1',
+      [supplierType.rows[0].id],
+    )
+
+    const browserImage = [
+      'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22',
+      ' width=%2280%22 height=%2280%22 viewBox=%220 0 80 80%22%3E',
+      '%3Crect width=%2280%22 height=%2280%22 rx=%2212%22 fill=%22%232563eb%22/%3E',
+      '%3Ccircle cx=%2240%22 cy=%2240%22 r=%2218%22 fill=%22white%22/%3E%3C/svg%3E',
+    ].join('')
+    await client.query(
+      [
+        'INSERT INTO products (',
+        'name, product_no, status, supplier_value, main_image, images, videos,',
+        'twd_sale_price_amount, twd_sale_price_currency,',
+        'myr_sale_price_amount, myr_sale_price_currency,',
+        'purchase_cost_amount, purchase_cost_currency, attributes,',
+        'created_by_user_id, updated_by_user_id, created_at, updated_at',
+        ') VALUES (',
+        '$1, \'PRODUCT-BROWSER-001\', \'ACTIVE\', \'BROWSER_SUPPLIER_EFFECTIVE\',',
+        '$2, $3, $4, 1234.5678, \'TWD\', NULL, \'MYR\', 88.9, \'CNY\', $5::jsonb,',
+        '$6, $6, clock_timestamp(), clock_timestamp()',
+        ')',
+      ].join(' '),
+      [
+        'Browser 多媒体产品',
+        browserImage,
+        [browserImage, browserImage, browserImage, browserImage],
+        ['https://example.test/browser-product.mp4', 'javascript:alert(1)'],
+        JSON.stringify([
+          { title: '颜色', value: '墨黑' },
+          { title: '尺寸', value: 'XL' },
+        ]),
+        user.rows[0].id,
+      ],
+    )
+    await client.query(
+      [
+        'INSERT INTO products (',
+        'name, product_no, status, supplier_value, purchase_cost_amount,',
+        'purchase_cost_currency, created_by_user_id, updated_by_user_id, created_at, updated_at',
+        ') VALUES',
+        '(\'Browser 停用供应商产品\', \'PRODUCT-BROWSER-002\', \'INACTIVE\',',
+        '\'BROWSER_SUPPLIER_DISABLED\', 10.5, \'ZZZ\', $1, $1,',
+        'clock_timestamp() - interval \'1 minute\', clock_timestamp() - interval \'1 minute\'),',
+        '(\'Browser 未知供应商产品\', \'PRODUCT-BROWSER-003\', \'INACTIVE\',',
+        '\'BROWSER_SUPPLIER_UNKNOWN\', NULL, \'CNY\', $1, $1,',
+        'clock_timestamp() - interval \'2 minutes\', clock_timestamp() - interval \'2 minutes\'),',
+        '(\'Browser 草稿产品\', \'PRODUCT-BROWSER-004\', \'DRAFT\',',
+        'NULL, NULL, \'CNY\', $1, $1,',
+        'clock_timestamp() - interval \'3 minutes\', clock_timestamp() - interval \'3 minutes\')',
+      ].join(' '),
+      [user.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO products (',
+        'name, product_no, status, supplier_value, created_by_user_id, updated_by_user_id,',
+        'created_at, updated_at',
+        ') SELECT',
+        '\'Browser 填充分页产品 \' || lpad(series_no::text, 2, \'0\'),',
+        '\'PRODUCT-BROWSER-FILLER-\' || lpad(series_no::text, 2, \'0\'),',
+        '\'DRAFT\', NULL, $1, $1,',
+        'clock_timestamp() - (interval \'4 minutes\' + (18 - series_no) * interval \'1 minute\'),',
+        'clock_timestamp() - (interval \'4 minutes\' + (18 - series_no) * interval \'1 minute\')',
+        'FROM generate_series(1, 17) AS fixture(series_no)',
+      ].join(' '),
+      [user.rows[0].id],
+    )
+
     await client.query(
       [
         'INSERT INTO audit_events (',

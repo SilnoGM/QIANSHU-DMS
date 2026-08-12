@@ -85,6 +85,11 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   ])
   assert.equal(command.args.includes(input.password), false)
   assert.match(command.args.at(-1), /INSERT INTO user_profiles/u)
+  assert.match(command.args.at(-1), /service_provider\.supplier/u)
+  assert.match(command.args.at(-1), /BROWSER_SUPPLIER_EFFECTIVE/u)
+  assert.match(command.args.at(-1), /INSERT INTO products/u)
+  assert.match(command.args.at(-1), /PRODUCT-BROWSER-001/u)
+  assert.match(command.args.at(-1), /generate_series\(1, 17\)/u)
   assert.equal(command.env.QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD, input.password)
   assert.equal(command.env.DATABASE_URL, input.databaseUrl)
   assert.throws(

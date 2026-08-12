@@ -188,15 +188,17 @@
 
   Task 10 证据：页面/弹窗契约先以既有骨架 5/8 通过、特殊字段与两个局部弹窗 3/8 RED；最小实现接入单项/三项 `ImageGroup`、三列 `AmountDisplay`、状态与供应商历史 `FaTag`、有序属性弹窗和单一视频预览弹窗，危险协议不生成预览或外链，关闭与卸载均暂停媒体。桌面与移动端入口保留可访问名称和 44px 触控下限，Escape、焦点恢复、light/dark 与 Reduced Motion 继续由既有 `QsGenericModal`/Fa/语义 Token 契约统一承载；新增、查看、编辑仅发 `QsToast.info`。定向页面测试最终 8/8，连同路由回归 12/12；全量 Web 首轮发现旧测试仍把正式列表误判为单按钮占位页（`10 !== 1`），收窄为仅约束未实施的新增页后，Node 脚本 171/171、TS 脚本 49/49、API/View 756/756、typecheck、ESLint、Stylelint、production build、Noto 字体和 font-zero-residue 全绿。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
 
-- [ ] 11. 扩展现有管理 Browser 回归
-  - [ ] 11.1 先扩展 `management.browser.test.mjs` 建立真实 Chrome RED；不新建 Product 专属 CI Job。
-  - [ ] 11.2 在隔离测试数据库准备有效、停用、未知供应商、空金额、多图、属性和视频 Product fixture；测试结束必须可靠清理。
-  - [ ] 11.3 覆盖 `products:read/products:create` 权限、供应商筛选应用/清空、分页归一、列设置、左右固定列和占位 Toast。
-  - [ ] 11.4 覆盖主图、多图 `+N`/整组预览、金额格式/回退、属性弹窗、视频弹窗、安全链接和键盘关闭。
-  - [ ] 11.5 覆盖 1440px Desktop、390x844 Mobile、light/dark、Reduced Motion、触控目标和无页面级横向溢出。
-  - [ ] 11.6 运行现有 `test:browser:auth` 与对应根 CI 编排；若 Browser 暴露生产缺陷，以 `fix:` 提交最小生产修复和回归测试。
-  - [ ] 11.7 更新 Task 11 状态并在 Browser 与相关 helper 测试绿色后创建提交：`test: 补齐产品列表浏览器验收`。
+- [x] 11. 扩展现有管理 Browser 回归
+  - [x] 11.1 先扩展 `management.browser.test.mjs` 建立真实 Chrome RED；不新建 Product 专属 CI Job。
+  - [x] 11.2 在隔离测试数据库准备有效、停用、未知供应商、空金额、多图、属性和视频 Product fixture；测试结束必须可靠清理。
+  - [x] 11.3 覆盖 `products:read/products:create` 权限、供应商筛选应用/清空、分页归一、列设置、左右固定列和占位 Toast。
+  - [x] 11.4 覆盖主图、多图 `+N`/整组预览、金额格式/回退、属性弹窗、视频弹窗、安全链接和键盘关闭。
+  - [x] 11.5 覆盖 1440px Desktop、390x844 Mobile、light/dark、Reduced Motion、触控目标和无页面级横向溢出。
+  - [x] 11.6 运行现有 `test:browser:auth` 与对应根 CI 编排；若 Browser 暴露生产缺陷，以 `fix:` 提交最小生产修复和回归测试。
+  - [x] 11.7 更新 Task 11 状态并在 Browser 与相关 helper 测试绿色后创建提交：`test: 补齐产品列表浏览器验收`。
   - _Requirements: R9-R15_
+
+  Task 11 证据：fixture helper 先因缺少供应商字典与 Product 数据断言而 8/9 RED，补入仅作用于隔离数据库的有效/停用/未知供应商、21 条分页产品、空金额、多图、属性与安全/危险协议视频后 9/9 GREEN。真实 Chrome 首轮已成功加载同源 Product 数据，但在 390x844 下发现移动图片入口只有 32px，Browser 以 `allTouchTargetsMeetMinimum: false` RED；最小修复把两个移动端 ImageGroup 调整为 44px，并以 `a810398 fix: 保证产品列表移动端图片触控尺寸` 独立提交。最终根 `ci:browser-auth-e2e` 在全新隔离 PostgreSQL 上应用 13 个 migration、构建 Server/Web 后 2/2 通过，覆盖 1440x900 Desktop、390x844 Mobile、权限可见性、供应商筛选/清空、分页回第一页、列显隐/固定、三个占位 Toast、四图 `+2` 与整组预览、金额格式及未知币种回退、属性/视频弹窗、危险协议不生成链接、Escape/焦点恢复、light/dark、Reduced Motion、44px 触控目标和无页面级横向溢出。隔离容器与 Chrome 均由现有 runner 回收，未修改持久开发数据库；build 只保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
 
 - [ ] 12. 完成全量验证、文档与 Git 收口
   - [ ] 12.1 冻结生产和测试源码，汇总 Tasks 2-11 的真实 RED/GREEN、提交 SHA、失败与非阻断警告；不得预写未运行结果。
@@ -283,6 +285,9 @@ web/apps/qsmds-arco/src/api/generated/**          # generated only
 web/apps/qsmds-arco/src/views/admin/product-management/list/index.vue
 web/apps/qsmds-arco/test/api/product-management-routes.test.ts
 web/apps/qsmds-arco/test/browser/management.browser.test.mjs
+scripts/browser-auth/provision-admin.mjs
+scripts/browser-auth-runtime.test.mjs
+scripts/root-governance.test.mjs
 scripts/ci-contract-baseline.mjs
 scripts/ci-contract-baseline.test.mjs
 docs/后端文档/数据库迁移规范.md
