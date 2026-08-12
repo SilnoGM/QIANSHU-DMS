@@ -100,14 +100,16 @@
 
   Task 2 证据：Schema RED 为 4/4 失败，原因精确为缺少 `Product` Model 与新 migration。最小实现后 Schema/migration 合约 4/4、Prisma validate、Server typecheck、Root governance 663/663 与 diff-check 通过。隔离 PostgreSQL 16 首次按顺序应用 13 条 migration，第二次 deploy 无待应用项，status 为 up to date；migration 未 seed Product、编号规则或字典数据，未应用到本地持久数据库。Root 首轮因数据库迁移规范缺少新基线而 662/663，补齐真实第 13 条历史后恢复全绿。
 
-- [ ] 3. 以 TDD 增加通用字典批量历史解析
-  - [ ] 3.1 先为 `DictionaryLookupService.resolveStoredValues()` 建立失败测试，覆盖空输入、null、去重、顺序、同 Label 不同 value、Type disabled、Item disabled 与 unknown。
-  - [ ] 3.2 运行 RED，确认现有单值 resolver 无法满足一页 Product 的无 N+1 批量契约。
-  - [ ] 3.3 提取业务中立的纯映射内核，以一次 Type/Item 查询解析去重后的 raw values，并让单值与批量入口复用同一状态语义。
-  - [ ] 3.4 返回 `EFFECTIVE/DISABLED/UNKNOWN`、raw value 和已知 Label；不得创建 Product/Supplier 专用字典服务，也不得吞掉未知值。
-  - [ ] 3.5 证明一页重复 `supplierValue` 不会产生逐行查询，异常信息不泄露 SQL 或不可信内容。
-  - [ ] 3.6 更新 Task 3 状态并在字典服务定向测试与 Server 检查绿色后创建提交：`feat: 增加字典值批量历史解析`。
+- [x] 3. 以 TDD 增加通用字典批量历史解析
+  - [x] 3.1 先为 `DictionaryLookupService.resolveStoredValues()` 建立失败测试，覆盖空输入、null、去重、顺序、同 Label 不同 value、Type disabled、Item disabled 与 unknown。
+  - [x] 3.2 运行 RED，确认现有单值 resolver 无法满足一页 Product 的无 N+1 批量契约。
+  - [x] 3.3 提取业务中立的纯映射内核，以一次 Type/Item 查询解析去重后的 raw values，并让单值与批量入口复用同一状态语义。
+  - [x] 3.4 返回 `EFFECTIVE/DISABLED/UNKNOWN`、raw value 和已知 Label；不得创建 Product/Supplier 专用字典服务，也不得吞掉未知值。
+  - [x] 3.5 证明一页重复 `supplierValue` 不会产生逐行查询，异常信息不泄露 SQL 或不可信内容。
+  - [x] 3.6 更新 Task 3 状态并在字典服务定向测试与 Server 检查绿色后创建提交：`feat: 增加字典值批量历史解析`。
   - _Requirements: R3, R8, R12, R15_
+
+  Task 3 证据：RED 在 TypeScript 编译期精确报告 `resolveStoredValues` 与 `values` 校验字段不存在。最小实现使用一次 `findMany` 查询去重后的精确 raw values，以 Map 恢复输入顺序和重复项，并与单值入口复用同一映射函数。最终字典 Lookup 22/22、Server typecheck、目标 ESLint 与 diff-check 通过；lint 曾发现并阻断 `any[]` unsafe return，改为逐项收敛到 `string[]` 后转绿。
 
 - [ ] 4. 以 TDD 实现 Product 列表查询内核
   - [ ] 4.1 先为 Query DTO、mapper 和 Query Service 建立失败测试，覆盖 `page/pageSize/supplierValue`、空白/超长输入、精确 raw 筛选、稳定排序与 count/items 共用 where。
