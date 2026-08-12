@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 3 草案，等待确认
+- 状态：Phase 4 实施中（Task 1 已完成）
 - Requirements 确认日期：2026-08-12
 - Design 确认日期：2026-08-12
 - 编写日期：2026-08-12
@@ -59,13 +59,13 @@
 
 ### Gate C - Phase 3 任务清单
 
-- [ ] 用户确认本任务顺序、文件边界、验证矩阵和提交边界。
-- [ ] Gate C 确认只允许申请进入 Phase 4，不自动授权下列高风险变更。
+- [x] 用户已于 2026-08-12 确认本任务顺序、文件边界、验证矩阵和提交边界。
+- [x] Gate C 确认只允许申请进入 Phase 4，不自动授权下列高风险变更。
 
 ### Gate D1 - 数据结构、Schema、migration 与公共 API 实施授权
 
-- [ ] 在修改 `server/prisma/schema.prisma`、新增 Product migration、建立 Product 公共 DTO 或新增 `GET /api/products` 前，向用户精确陈述字段、约束、路由、查询和响应范围并取得单独明确确认。
-- [ ] 授权范围只包括已确认 Design，不得顺手增加写 API、权限、搜索、状态筛选、排序参数或额外 Product 领域模型。
+- [x] 用户已于 2026-08-12 单独授权修改 `server/prisma/schema.prisma`、新增 Product migration、建立 Product 公共 DTO 和 `GET /api/products`。
+- [x] 授权范围只包括已确认 Design，不得顺手增加写 API、权限、搜索、状态筛选、排序参数或额外 Product 领域模型。
 
 ### Gate D2 - 本地持久数据库变更授权
 
@@ -78,13 +78,15 @@
 
 ## 4. 实施任务
 
-- [ ] 1. 建立 Phase 4 绿色基线并复核可变真相源
-  - [ ] 1.1 复核当前分支、HEAD、工作树和三份规格状态，确认没有用户未提交改动与任务范围重叠。
-  - [ ] 1.2 只读确认当前 Prisma Schema、Product 模块、OpenAPI operation 和 Web 正式页面仍未被其他提交新增；若事实漂移，停止并更新 Design/Tasks 后重新确认。
-  - [ ] 1.3 只读确认 `PRODUCT` Rule 与 `service_provider.supplier` Type/Items 的当前状态；只记录环境快照，不写入、不 seed、不把当前数量编码为契约。
-  - [ ] 1.4 运行 Schema、Server、Web、OpenAPI 和根治理相关的现有绿色基线；真实记录任何既有失败，避免把基线缺陷归因于 Product。
-  - [ ] 1.5 核对 Gate C 与 Gate D1 已明确通过；任一未通过则不得进入 Task 2。
+- [x] 1. 建立 Phase 4 绿色基线并复核可变真相源
+  - [x] 1.1 复核当前分支、HEAD、工作树和三份规格状态，确认没有用户未提交改动与任务范围重叠。
+  - [x] 1.2 只读确认当前 Prisma Schema、Product 模块、OpenAPI operation 和 Web 正式页面仍未被其他提交新增；若事实漂移，停止并更新 Design/Tasks 后重新确认。
+  - [x] 1.3 只读确认 `PRODUCT` Rule 与 `service_provider.supplier` Type/Items 的当前状态；只记录环境快照，不写入、不 seed、不把当前数量编码为契约。
+  - [x] 1.4 运行 Schema、Server、Web、OpenAPI 和根治理相关的现有绿色基线；真实记录任何既有失败，避免把基线缺陷归因于 Product。
+  - [x] 1.5 核对 Gate C 与 Gate D1 已明确通过；任一未通过则不得进入 Task 2。
   - _Requirements: R1, R3, R4, R15_
+
+  Task 1 证据：当前 HEAD `a7be399`、工作树无既有改动，Product Schema、模块、operation 与正式页面均不存在；本地只读快照中 `PRODUCT` Rule 为 `ENABLED`/version 3，`service_provider.supplier` Type 启用/version 3，1 个 Item 且启用。`prisma:validate`、`contract:check`、Server 定向 10/10、Server/Web typecheck、Web 产品路由 4/4 与 Root governance 663/663 全部通过；未执行数据库写入或 migration。
 
 - [ ] 2. 以 TDD 建立 Product Schema 与 forward migration
   - [ ] 2.1 先新增失败的 Schema/migration 合约测试，覆盖 `ProductStatus`、UUID、唯一不可变 `productNo`、nullable `supplierValue`、有序媒体、JSONB 属性、三组金额/币种、审计字段、索引和命名约束。
