@@ -164,15 +164,17 @@
 
   Task 8 证据：API/logic 测试先因 `products.ts` 与 `product-list.logic.ts` 缺失而 2/2 RED。最小实现只暴露一个 GET adapter，并以 generated DTO 为传输来源建立只读 view model；decimal 保持 string/null，媒体与属性只克隆不排序，supplier raw/state 及 nullable actor 保留，且在页面边界补足 OpenAPI generator 对 nullable enum 的运行时 null。最终定向测试 6/6、Web typecheck、目标 ESLint 与 diff-check 通过；lint 首轮仅发现 4 个排序/格式问题，按规则修正后全绿。未创建 Store、mutation adapter 或重复 DTO。
 
-- [ ] 9. 以 TDD 实现页面结构、查询状态与表格列
-  - [ ] 9.1 先建立 View RED，固定 `FaPageHeader + FaPageMain + QsGenericTable`、权限、加载/错误/重试/空态、供应商 Catalog 独立状态和单次最终请求。
-  - [ ] 9.2 实现确认顺序的全部业务/审计列，不展示 `id/version`；行号最左，`productNo` 默认 left-fixed，actions right-fixed 且不可隐藏。
-  - [ ] 9.3 让业务列复用 QsGenericTable 的显隐、左右固定与对齐配置；关闭表格内 create/search，不修改共享表格内核。
-  - [ ] 9.4 页头新增按钮只在 `products:create` 权限下展示；页面数据请求只在 `products:read` 可信时执行。
-  - [ ] 9.5 供应商筛选使用 QsGenericTable filter definition；Catalog loading/error/retry 与 Product list loading/error 分离，已有 raw 条件始终可清除。
-  - [ ] 9.6 覆盖 768px 桌面/窄屏切换、表格区域滚动、固定列边界、无页面级横向溢出和移动卡片字段/操作一致性。
-  - [ ] 9.7 更新 Task 9 状态并在页面定向测试、typecheck、lint 与 build 绿色后创建提交：`feat: 实现产品列表页面骨架`。
+- [x] 9. 以 TDD 实现页面结构、查询状态与表格列
+  - [x] 9.1 先建立 View RED，固定 `FaPageHeader + FaPageMain + QsGenericTable`、权限、加载/错误/重试/空态、供应商 Catalog 独立状态和单次最终请求。
+  - [x] 9.2 实现确认顺序的全部业务/审计列，不展示 `id/version`；行号最左，`productNo` 默认 left-fixed，actions right-fixed 且不可隐藏。
+  - [x] 9.3 让业务列复用 QsGenericTable 的显隐、左右固定与对齐配置；关闭表格内 create/search，不修改共享表格内核。
+  - [x] 9.4 页头新增按钮只在 `products:create` 权限下展示；页面数据请求只在 `products:read` 可信时执行。
+  - [x] 9.5 供应商筛选使用 QsGenericTable filter definition；Catalog loading/error/retry 与 Product list loading/error 分离，已有 raw 条件始终可清除。
+  - [x] 9.6 覆盖 768px 桌面/窄屏切换、表格区域滚动、固定列边界、无页面级横向溢出和移动卡片字段/操作一致性。
+  - [x] 9.7 更新 Task 9 状态并在页面定向测试、typecheck、lint 与 build 绿色后创建提交：`feat: 实现产品列表页面骨架`。
   - _Requirements: R9-R10, R12, R14-R15_
+
+  Task 9 证据：当前占位页对结构、列、权限、Catalog 和移动视图五组断言全部 RED；实现后与 Task 8 合并的定向测试 11/11 通过。页面只使用 `FaPageHeader + FaPageMain + QsGenericTable`，按确认顺序声明 15 个业务/审计列，编号默认 left-fixed、actions right-fixed，未显示 id/version，且关闭表格内 add/search。列表与供应商 Catalog 各自呈现状态，authEpoch/permission/requestVersion/Abort 共同保护结果；窄屏由 `mobile-row` 显式保持同源字段和操作。Web typecheck、目标 ESLint/Stylelint、production build、Noto 字体与 font-zero-residue 验证通过；首次 lint 的 21 个强制花括号/排序错误和 52 个格式警告经项目 formatter 修正，build 仅保留既有第三方 PURE 注释与 chunk size 警告。
 
 - [ ] 10. 以 TDD 完成特殊单元格、只读弹窗与占位动作
   - [ ] 10.1 先建立 View RED，覆盖状态 `FaTag` 文字语义、供应商历史标识、主图/图片 `ImageGroup`、三列 `AmountDisplay`、日期和 actor 空态。
