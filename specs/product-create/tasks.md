@@ -198,12 +198,15 @@
   - 静态/治理：Server typecheck、lint、`git diff --check` 全绿；Root 供应商残留门禁只精确新增两个 Product E2E 文件后定向 `2/2` 通过。
   - _Requirements: R1-R9, R13-R14_
 
-- [ ] 9. 同步 OpenAPI 与 Web generated contract
-  - [ ] 9.1 先运行 `contract:check` 记录 tracked snapshot 尚缺 `products_create` 的预期 RED，不手改任何产物。
-  - [ ] 9.2 串行运行根 `contract:sync`，生成 Server/Web snapshot 与 Web API types。
-  - [ ] 9.3 核对 diff 只新增已确认的 POST、Header、Create DTO、201 响应和错误矩阵；既有 GET 不得漂移。
-  - [ ] 9.4 运行 `contract:check`、contract baseline、Server build 和 Web typecheck，证明两份 snapshot 字节一致。
-  - [ ] 9.5 更新 Task 9 真实证据，创建提交：`chore: 同步产品创建接口契约`。
+- [x] 9. 同步 OpenAPI 与 Web generated contract
+  - [x] 9.1 先运行 `contract:check` 记录 tracked snapshot 尚缺 `products_create` 的预期 RED，不手改任何产物。
+  - [x] 9.2 串行运行根 `contract:sync`，生成 Server/Web snapshot 与 Web API types。
+  - [x] 9.3 核对 diff 只新增已确认的 POST、Header、Create DTO、201 响应和错误矩阵；既有 GET 不得漂移。
+  - [x] 9.4 运行 `contract:check`、contract baseline、Server build 和 Web typecheck，证明两份 snapshot 字节一致。
+  - [x] 9.5 更新 Task 9 真实证据，创建提交：`chore: 同步产品创建接口契约`。
+  - RED（2026-08-12）：Task 7/8 完成后首次 `node --run contract:check` 以 `OpenAPI contract check failed` 退出，原因是 tracked Server/Web snapshots 尚未包含已实现的 `products_create`；检查过程只写临时目录，没有改动 tracked generated tree。
+  - 生成：仅运行根 `node --run contract:sync`；两份 OpenAPI snapshot 各增加已确认的 POST、`Idempotency-Key`、Create DTO、201/错误矩阵与 `PRODUCT_CREATED` enum，既有 GET operation 保持。Server/Web snapshot 经 `cmp` 证明字节一致。Web `types.gen.ts` 按现有约定位于 `.gitignore`，由 `api:generate` 在 typecheck/build 前从 tracked Web snapshot 重建，不作为提交资产。
+  - GREEN：`node --run contract:check` 通过；OpenAPI/contract baseline `180/180`；`pnpm -C server build` 与 `pnpm -C web typecheck` 全部通过，`git diff --check` 通过。
   - _Requirements: R9, R14_
 
 - [ ] 10. 以 TDD 实现 Web Product mutation adapter 与纯状态逻辑

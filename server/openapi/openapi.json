@@ -17552,6 +17552,274 @@
             }
           ]
         }
+      },
+      "post": {
+        "operationId": "products_create",
+        "parameters": [
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductListItemDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "products"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PRODUCT_CREATE_IDEMPOTENCY_CONFLICT",
+                "PRODUCT_NUMBERING_UNAVAILABLE",
+                "PRODUCT_NUMBER_CONFLICT",
+                "PRODUCT_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "PRODUCT_CURRENCY_UNAVAILABLE",
+                "PRODUCT_SUPPLIER_REQUIRED",
+                "PRODUCT_SUPPLIER_UNAVAILABLE",
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
       }
     },
     "/api/audit-events": {
@@ -17635,7 +17903,8 @@
                 "DICTIONARY_ITEM_DISABLED",
                 "SYSTEM_BOOTSTRAP",
                 "SYSTEM_ADMIN_RECOVERED",
-                "AUTH_RETENTION_PURGED"
+                "AUTH_RETENTION_PURGED",
+                "PRODUCT_CREATED"
               ]
             }
           },
@@ -20942,6 +21211,133 @@
           "total"
         ]
       },
+      "ProductTwdSalePriceInputDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "TWD"
+            ]
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ]
+      },
+      "ProductMyrSalePriceInputDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "MYR"
+            ]
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ]
+      },
+      "ProductPurchaseCostInputDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^(?:0|[1-9]\\d*)(?:\\.\\d+)?$"
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "example": "CNY"
+          }
+        },
+        "required": [
+          "amount",
+          "currency"
+        ]
+      },
+      "ProductAttributeInputDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          }
+        },
+        "required": [
+          "title",
+          "value"
+        ]
+      },
+      "CreateProductRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "ACTIVE",
+              "INACTIVE"
+            ]
+          },
+          "supplierValue": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "twdSalePrice": {
+            "$ref": "#/components/schemas/ProductTwdSalePriceInputDto"
+          },
+          "myrSalePrice": {
+            "$ref": "#/components/schemas/ProductMyrSalePriceInputDto"
+          },
+          "purchaseCost": {
+            "$ref": "#/components/schemas/ProductPurchaseCostInputDto"
+          },
+          "attributes": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductAttributeInputDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "supplierValue",
+          "twdSalePrice",
+          "myrSalePrice",
+          "purchaseCost",
+          "attributes"
+        ]
+      },
       "AuditEventDto": {
         "type": "object",
         "properties": {
@@ -20991,7 +21387,8 @@
               "DICTIONARY_ITEM_DISABLED",
               "SYSTEM_BOOTSTRAP",
               "SYSTEM_ADMIN_RECOVERED",
-              "AUTH_RETENTION_PURGED"
+              "AUTH_RETENTION_PURGED",
+              "PRODUCT_CREATED"
             ]
           },
           "outcome": {
