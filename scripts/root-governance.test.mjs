@@ -24,6 +24,8 @@ const supplierResidueAllowlist = Object.freeze([
   'server/test/app.e2e-spec.ts',
   'server/test/dictionary-catalog-api.e2e-spec.ts',
   'server/test/dictionary-e2e-database.ts',
+  'server/test/product-create-api.e2e-spec.ts',
+  'server/test/product-create-e2e-harness.ts',
   'server/test/supplier-retirement-migration.e2e-spec.ts',
   // 产品规格与已授权的数据结构必须记录当前供应商字典消费边界；精确文件白名单
   // 只允许 supplierValue stable-value 语义，不恢复旧 Supplier 领域入口。

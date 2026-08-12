@@ -181,15 +181,21 @@
   - Root 边界：新增 Controller 中已确认的 `PRODUCT_SUPPLIER_*` 错误码触发供应商残留精确门禁；仅加入 `products.controller.ts` 后定向 `2/2` 通过，没有扩大目录或恢复 Supplier 领域。
   - _Requirements: R1, R4, R8-R9, R13-R14_
 
-- [ ] 8. 完成 Product 创建隔离 PostgreSQL 与 API E2E
-  - [ ] 8.1 先建立 `product-create-api.e2e-spec.ts` RED，只在隔离测试数据库准备受控 `PRODUCT` Rule、Active Version、供应商与币种 fixture。
-  - [ ] 8.2 覆盖认证、`products:create`、CSRF、Header、未知字段、Active supplier、金额精度/边界和有序属性。
-  - [ ] 8.3 覆盖成功 201、自动编号、固定媒体、三组 Decimal/币种、actor/version/timestamp 和 `PRODUCT_CREATED` Audit metadata。
-  - [ ] 8.4 覆盖相同 actor/Key/Payload 重放、不同 Payload/actor 冲突、编号后 Product 失败恢复以及相同 Key 并发只落一条 Product/Audit/issuance。
-  - [ ] 8.5 覆盖 Rule 缺失/停用/无 Active Version/容量耗尽、Supplier/Currency 提交期间变化和安全错误脱敏。
-  - [ ] 8.6 证明新 migration 可全量 replay 且无 Product/业务配置 seed；测试结束可靠清理，不触碰持久开发库。
-  - [ ] 8.7 运行 Product 定向 E2E 和官方隔离 `node --run ci:server-e2e`；如有既有套件漂移，报告并以最新完整结果为准。
-  - [ ] 8.8 更新 Task 8 真实证据；只有测试变更时创建 `test: 补齐产品创建服务端验收`，若暴露生产缺陷则用独立 `fix:` 提交最小修复。
+- [x] 8. 完成 Product 创建隔离 PostgreSQL 与 API E2E
+  - [x] 8.1 先建立 `product-create-api.e2e-spec.ts` RED，只在隔离测试数据库准备受控 `PRODUCT` Rule、Active Version、供应商与币种 fixture。
+  - [x] 8.2 覆盖认证、`products:create`、CSRF、Header、未知字段、Active supplier、金额精度/边界和有序属性。
+  - [x] 8.3 覆盖成功 201、自动编号、固定媒体、三组 Decimal/币种、actor/version/timestamp 和 `PRODUCT_CREATED` Audit metadata。
+  - [x] 8.4 覆盖相同 actor/Key/Payload 重放、不同 Payload/actor 冲突、编号后 Product 失败恢复以及相同 Key 并发只落一条 Product/Audit/issuance。
+  - [x] 8.5 覆盖 Rule 缺失/停用/无 Active Version/容量耗尽、Supplier/Currency 提交期间变化和安全错误脱敏。
+  - [x] 8.6 证明新 migration 可全量 replay 且无 Product/业务配置 seed；测试结束可靠清理，不触碰持久开发库。
+  - [x] 8.7 运行 Product 定向 E2E 和官方隔离 `node --run ci:server-e2e`；如有既有套件漂移，报告并以最新完整结果为准。
+  - [x] 8.8 更新 Task 8 真实证据；只有测试变更时创建 `test: 补齐产品创建服务端验收`，若暴露生产缺陷则用独立 `fix:` 提交最小修复。
+  - RED（2026-08-12）：首个 suite 先因缺少 E2E harness 在 TypeScript 编译阶段失败；夹具建立后依次暴露错误 segment 类型、固定字符含分隔符、测试库 `TWD/MYR` 默认停用及启用外币缺少汇率约束。夹具按真实 Numbering/Currency 约束修正后，首个完整 Product/Audit/issuance 闭环转绿。
+  - 缺陷 RED/GREEN：26 位整数金额在数据库中正确持久化，但响应 mapper 曾返回科学计数法；新增 mapper 失败测试后，以 `toFixed(4)` 展开并安全移除尾零，定向 `2 suites / 28 tests` 转绿，独立提交 `48e290b fix: 修正产品大额金额响应格式`。
+  - 隔离验收：官方 `node --run ci:server-e2e` 从空库应用 14 条 migration、二次 deploy 无待执行项、status up to date，最终 `27 suites / 160 tests` 全绿。新增 12 个 Product 创建 E2E 覆盖认证/权限/强制改密/CSRF、Header/未知字段、Active supplier、金额精度与 26 位边界、DRAFT null supplier、创建与安全 Audit、同 Key 重放/冲突、Audit 失败编号间隙恢复、同 Key 并发、Supplier/Currency 二次校验以及 Rule 缺失、DRAFT、无 Active Version 与容量耗尽。
+  - 数据边界：harness 启动前断言 Product、PRODUCT Rule 与 PRODUCT_CREATED Audit 为零，证明 migration 未 seed 业务数据；供应商、外币/测试汇率、用户和 Product 均只存在于官方一次性 PostgreSQL，并在 suite 结束恢复/清理。编号 ledger/rule 随容器销毁，持久开发库未写入。
+  - 伴随失败：首次扩展全量 E2E 除科学计数法外，既有 Dictionary suite 曾一次 `socket hang up`；修复后完整重跑该 suite 与全部 27 suite 均通过，未复现，因此未修改 Dictionary 生产代码。
+  - 静态/治理：Server typecheck、lint、`git diff --check` 全绿；Root 供应商残留门禁只精确新增两个 Product E2E 文件后定向 `2/2` 通过。
   - _Requirements: R1-R9, R13-R14_
 
 - [ ] 9. 同步 OpenAPI 与 Web generated contract
