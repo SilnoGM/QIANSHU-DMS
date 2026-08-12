@@ -1,9 +1,19 @@
 import { HttpStatus, Module } from '@nestjs/common'
+import { HTTP_CODE_METADATA } from '@nestjs/common/constants'
 import { Reflector } from '@nestjs/core'
 import type { OpenAPIObject } from '@nestjs/swagger'
 
+import { requestIdMiddleware } from '../../infrastructure/http/request-id.middleware'
 import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
-import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
+import { attachRequestAuthContext } from '../auth/auth-context'
+import {
+  REQUIRE_AUTHENTICATED_SESSION_METADATA,
+  REQUIRED_PERMISSIONS_METADATA,
+} from '../auth/decorators/auth.decorators'
+import {
+  ProductCommandService,
+  type ProductCommandContext,
+} from './product-command.service'
 import { ProductQueryService } from './product-query.service'
 import { ProductsController } from './products.controller'
 
@@ -11,9 +21,34 @@ type ContractOperation = NonNullable<
   OpenAPIObject['paths'][string]['get']
 > & { 'x-qianshu-contract'?: unknown }
 
+const ACTOR_ID = '11111111-1111-4111-8111-111111111111'
+const SESSION_ID = '22222222-2222-4222-8222-222222222222'
+const IDEMPOTENCY_KEY = '33333333-3333-4333-8333-333333333333'
+
+function createRequest(): object {
+  const request = {}
+  requestIdMiddleware(request, { setHeader: jest.fn() }, jest.fn())
+  attachRequestAuthContext(request, {
+    id: SESSION_ID,
+    userId: ACTOR_ID,
+    username: 'product_operator',
+    displayName: '产品管理员',
+    mustChangePassword: false,
+    createdAt: new Date('2026-08-12T00:00:00.000Z'),
+    lastActivityAt: new Date('2026-08-12T00:00:00.000Z'),
+    idleExpiresAt: new Date('2026-08-13T00:00:00.000Z'),
+    absoluteExpiresAt: new Date('2026-09-12T00:00:00.000Z'),
+  })
+  return request
+}
+
 function createController(): {
   readonly controller: ProductsController
   readonly list: jest.Mock
+  readonly create: jest.Mock<
+    Promise<{ productNo: string }>,
+    [ProductCommandContext, unknown]
+  >
 } {
   const list = jest.fn().mockResolvedValue({
     items: [],
@@ -21,9 +56,17 @@ function createController(): {
     pageSize: 20,
     total: 0,
   })
+  const create = jest.fn<
+    Promise<{ productNo: string }>,
+    [ProductCommandContext, unknown]
+  >().mockResolvedValue({ productNo: 'P0001' })
   return {
-    controller: new ProductsController({ list } as unknown as ProductQueryService),
+    controller: new ProductsController(
+      { list } as unknown as ProductQueryService,
+      { create } as unknown as ProductCommandService,
+    ),
     list,
+    create,
   }
 }
 
@@ -32,12 +75,15 @@ function createController(): {
   providers: [{
     provide: ProductQueryService,
     useValue: { list: jest.fn() },
+  }, {
+    provide: ProductCommandService,
+    useValue: { create: jest.fn() },
   }],
 })
 class ProductsControllerContractModule {}
 
 describe('ProductsController', () => {
-  it('delegates only the confirmed list query and requires products:read', async () => {
+  it('delegates the confirmed list and create operations with trusted context', async () => {
     const fixture = createController()
     const query = {
       keyword: 'Product-001',
@@ -47,14 +93,61 @@ describe('ProductsController', () => {
     }
 
     await fixture.controller.list(query)
+    const dto = {
+      name: 'Product',
+      status: 'DRAFT' as const,
+      supplierValue: null,
+      twdSalePrice: { amount: null, currency: 'TWD' as const },
+      myrSalePrice: { amount: null, currency: 'MYR' as const },
+      purchaseCost: { amount: null, currency: 'CNY' },
+      attributes: [],
+    }
+    const request = createRequest()
+    await fixture.controller.create(dto, request, IDEMPOTENCY_KEY)
 
     expect(fixture.list).toHaveBeenCalledWith(query)
-    expect(new Reflector().get(
+    const createContext = fixture.create.mock.calls[0]?.[0]
+    expect(createContext).toMatchObject({
+      actorUserId: ACTOR_ID,
+      idempotencyKey: IDEMPOTENCY_KEY,
+    })
+    expect(typeof createContext?.requestId).toBe('string')
+    expect(fixture.create.mock.calls[0]?.[1]).toBe(dto)
+    const reflector = new Reflector()
+    expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
       ProductsController.prototype.list,
     )).toEqual(['products:read'])
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      ProductsController.prototype.create,
+    )).toEqual(['products:create'])
+    expect(reflector.get(
+      REQUIRE_AUTHENTICATED_SESSION_METADATA,
+      ProductsController,
+    )).toBeUndefined()
+    expect(Reflect.getMetadata(
+      HTTP_CODE_METADATA,
+      ProductsController.prototype.create,
+    )).toBe(HttpStatus.CREATED)
     expect(Object.getOwnPropertyNames(ProductsController.prototype).sort())
-      .toEqual(['constructor', 'list'])
+      .toEqual(['constructor', 'create', 'list'])
+  })
+
+  it.each([
+    undefined,
+    '',
+    '33333333-3333-4333-8333-333333333333,44444444-4444-4444-8444-444444444444',
+    '33333333-3333-4333-8333-33333333333A',
+    '33333333-3333-3333-8333-333333333333',
+  ])('rejects invalid Idempotency-Key before command delegation: %s', (key) => {
+    const fixture = createController()
+    expect(() => fixture.controller.create({} as never, createRequest(), key))
+      .toThrow(expect.objectContaining({
+        status: HttpStatus.UNPROCESSABLE_ENTITY,
+        code: 'VALIDATION_FAILED',
+      }))
+    expect(fixture.create).not.toHaveBeenCalled()
   })
 })
 
@@ -65,11 +158,13 @@ describe('ProductsController OpenAPI contract', () => {
     document = await createOpenApiDocument(ProductsControllerContractModule)
   })
 
-  it('publishes one private no-store GET with exact errors and no mutations', () => {
+  it('publishes the private GET and the single confirmed POST only', () => {
+    expect(Object.keys(document.paths).filter(path =>
+      path.startsWith('/api/products'))).toEqual(['/api/products'])
     const path = document.paths['/api/products']
     const operation: ContractOperation | undefined = path?.get
     expect(operation?.operationId).toBe('products_list')
-    expect(Object.keys(path ?? {}).sort()).toEqual(['get'])
+    expect(Object.keys(path ?? {}).sort()).toEqual(['get', 'post'])
     expect(Object.keys(operation?.responses ?? {}).sort()).toEqual([
       '200',
       '400',
@@ -107,5 +202,120 @@ describe('ProductsController OpenAPI contract', () => {
       ],
     })
     expect(operation?.responses?.[String(HttpStatus.OK)]).toBeDefined()
+
+    const createOperation: ContractOperation | undefined = path?.post
+    expect(createOperation?.operationId).toBe('products_create')
+    expect(Object.keys(createOperation?.responses ?? {}).sort()).toEqual([
+      '201',
+      '400',
+      '401',
+      '403',
+      '409',
+      '422',
+      '500',
+    ])
+    expect(createOperation?.security).toEqual([{ sessionCookie: [] }])
+    expect(createOperation?.parameters).toEqual(expect.arrayContaining([
+      {
+        in: 'header',
+        name: 'Idempotency-Key',
+        required: true,
+        schema: {
+          format: 'uuid',
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          type: 'string',
+        },
+      },
+      {
+        in: 'header',
+        name: 'X-Qianshu-CSRF',
+        required: true,
+        schema: { type: 'string', enum: ['1'] },
+      },
+    ]))
+    expect(createOperation?.['x-qianshu-contract']).toEqual({
+      kind: 'application',
+      authentication: true,
+      authorization: true,
+      resourceLocator: false,
+      conflict: true,
+      validation: true,
+      session: 'required',
+      csrf: true,
+      privateNoStore: true,
+      errors: [
+        {
+          status: 403,
+          codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+        },
+        {
+          status: 409,
+          codes: [
+            'PRODUCT_CREATE_IDEMPOTENCY_CONFLICT',
+            'PRODUCT_NUMBERING_UNAVAILABLE',
+            'PRODUCT_NUMBER_CONFLICT',
+            'PRODUCT_STATE_CHANGED',
+          ],
+        },
+        {
+          status: 422,
+          codes: [
+            'PRODUCT_CURRENCY_UNAVAILABLE',
+            'PRODUCT_SUPPLIER_REQUIRED',
+            'PRODUCT_SUPPLIER_UNAVAILABLE',
+            'VALIDATION_FAILED',
+          ],
+        },
+      ],
+    })
+    expect(createOperation?.requestBody).toBeDefined()
+    expect(createOperation?.responses?.[String(HttpStatus.CREATED)])
+      .toBeDefined()
+    expect(createOperation?.requestBody).toEqual({
+      required: true,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/CreateProductRequestDto' },
+        },
+      },
+    })
+    const createSchema = document.components?.schemas
+      ?.CreateProductRequestDto
+    if (createSchema === undefined || '$ref' in createSchema) {
+      throw new Error('Missing inline CreateProductRequestDto schema')
+    }
+    expect(createSchema).toMatchObject({
+      type: 'object',
+      required: [
+        'name',
+        'status',
+        'supplierValue',
+        'twdSalePrice',
+        'myrSalePrice',
+        'purchaseCost',
+        'attributes',
+      ],
+    })
+    expect(Object.keys(createSchema.properties ?? {})).toEqual([
+      'name',
+      'status',
+      'supplierValue',
+      'twdSalePrice',
+      'myrSalePrice',
+      'purchaseCost',
+      'attributes',
+    ])
+    for (const response of Object.values(createOperation?.responses ?? {})) {
+      if (response && !('$ref' in response)) {
+        expect(response.headers).toMatchObject({
+          'Cache-Control': {
+            schema: { enum: ['private, no-store'] },
+          },
+          'X-Request-Id': {
+            schema: { type: 'string' },
+          },
+        })
+      }
+    }
   })
 })

@@ -50,6 +50,7 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/products/product-query.service.spec.ts',
   'server/src/modules/products/product-query.service.ts',
   'server/src/modules/products/products.controller.spec.ts',
+  'server/src/modules/products/products.controller.ts',
   'server/test/product-list-api.e2e-spec.ts',
   'server/test/product-schema.e2e-spec.ts',
   'scripts/browser-auth-runtime.test.mjs',

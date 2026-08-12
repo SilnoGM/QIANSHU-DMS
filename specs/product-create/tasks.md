@@ -166,14 +166,19 @@
   - 预期待办：提交前 `node --run check` 已通过 Root 与 Server，随后在 Contract 阶段以 `OpenAPI contract check failed` 停止；tracked snapshot 尚未同步已确认 enum，且 `products_create` 尚待 Task 7 实现，按 Task 9 统一执行 `contract:sync`，本任务不提前修改生成产物。
   - _Requirements: R3-R8, R13-R14_
 
-- [ ] 7. 以 TDD 暴露受保护的 Product 创建公共 API
-  - [ ] 7.1 先建立 Controller metadata/OpenAPI RED，精确要求 `POST /api/products`、operationId `products_create`、`products:create`、CSRF、private no-store、201 和必填 Header。
-  - [ ] 7.2 实现 Controller 从可信 Auth/Request ID/Header 构造 Command context，Body 只接收 Create DTO。
-  - [ ] 7.3 在 ProductsModule 注册已确认的依赖和 ProductCommandService；不得新增其他 Product 写 operation。
-  - [ ] 7.4 固定 403/409/422/500 错误矩阵和安全中文消息，证明无权/强制改密/CSRF 失败不调用 Command。
-  - [ ] 7.5 扩展 Product operation allowlist，只新增 `products_create`，保留 `products_list`，拒绝 detail/update/status/delete/media/generate 路由。
-  - [ ] 7.6 运行 Controller/Module/OpenAPI 前置测试、Server typecheck/lint/build 和 diff-check。
-  - [ ] 7.7 更新 Task 7 真实证据，创建提交：`feat: 添加产品创建接口`。
+- [x] 7. 以 TDD 暴露受保护的 Product 创建公共 API
+  - [x] 7.1 先建立 Controller metadata/OpenAPI RED，精确要求 `POST /api/products`、operationId `products_create`、`products:create`、CSRF、private no-store、201 和必填 Header。
+  - [x] 7.2 实现 Controller 从可信 Auth/Request ID/Header 构造 Command context，Body 只接收 Create DTO。
+  - [x] 7.3 在 ProductsModule 注册已确认的依赖和 ProductCommandService；不得新增其他 Product 写 operation。
+  - [x] 7.4 固定 403/409/422/500 错误矩阵和安全中文消息，证明无权/强制改密/CSRF 失败不调用 Command。
+  - [x] 7.5 扩展 Product operation allowlist，只新增 `products_create`，保留 `products_list`，拒绝 detail/update/status/delete/media/generate 路由。
+  - [x] 7.6 运行 Controller/Module/OpenAPI 前置测试、Server typecheck/lint/build 和 diff-check。
+  - [x] 7.7 更新 Task 7 真实证据，创建提交：`feat: 添加产品创建接口`。
+  - RED（2026-08-12）：Controller suite 在 TypeScript 编译阶段因第二个构造依赖和 `create` handler 不存在失败；Module suite 精确显示缺少 Auth/Currency/Numbering imports，`2 suites failed`。
+  - GREEN：Controller/Module/Command 定向 `3 suites / 29 tests`；Product + App/OpenAPI 前置回归 `16 suites / 162 tests`；Server 全量 `152 suites / 1512 tests`，Prisma validate、typecheck、lint 全绿，`pnpm build` 通过。
+  - 契约实测：临时生成 OpenAPI（未修改 tracked snapshot）确认 `/api/products` 只含 GET/POST，POST operationId、201/400/401/403/409/422/500、Session、CSRF/Idempotency 两个必填 Header、七个全部 required Create 字段和 private no-store 响应头均符合设计；Controller prototype 仅 `list/create`，不存在其他 Product operation。
+  - 准入/安全：handler 精确声明 `products:create`，全局 Authentication/PasswordChange/Permission/CSRF Guards 的既有回归包含 403 固定错误；框架在 Guard 拒绝时不会进入 handler。Controller 在委托 Command 前同步拒绝缺失、重复合并、非小写与非 v4 Key，并只从可信 request context 构造 actor/requestId。Task 8 再通过真实 HTTP 证明四类拒绝下数据库与 Command 最终无写入。
+  - Root 边界：新增 Controller 中已确认的 `PRODUCT_SUPPLIER_*` 错误码触发供应商残留精确门禁；仅加入 `products.controller.ts` 后定向 `2/2` 通过，没有扩大目录或恢复 Supplier 领域。
   - _Requirements: R1, R4, R8-R9, R13-R14_
 
 - [ ] 8. 完成 Product 创建隔离 PostgreSQL 与 API E2E
