@@ -23,7 +23,9 @@ import {
 } from './numbering-generator.service'
 import {
   type GenerateNumberRequest,
+  type GenerateScopedNumberRequest,
   validateGenerateNumberRequest,
+  validateGenerateScopedNumberRequest,
 } from './numbering-internal-input'
 import {
   NUMBERING_BOUNDARY_ERROR_CODES,
@@ -66,6 +68,15 @@ const REQUEST = {
   idempotencyKey: 'raw-key-never-persisted',
 } as const
 const VALIDATED_REQUEST = validateGenerateNumberRequest(REQUEST)
+const SCOPED_REQUEST = {
+  ...REQUEST,
+  ruleCode: 'PRODUCT',
+  consumerCode: 'PRODUCT.CREATE',
+  requestFingerprint: 'ab'.repeat(32),
+} as const
+const VALIDATED_SCOPED_REQUEST = validateGenerateScopedNumberRequest(
+  SCOPED_REQUEST,
+)
 const REPLAY_RECORD = {
   ruleCode: REQUEST.ruleCode,
   revision: 2,
@@ -164,7 +175,7 @@ describe('NumberingGeneratorService', () => {
     mockedTryRandom.mockResolvedValue(true)
   })
 
-  it('keeps the frozen one-input internal service contract', () => {
+  it('keeps both internal service methods as one-input contracts', () => {
     const fixture = createService()
     const generate: (
       input: Readonly<GenerateNumberRequest>,
@@ -172,6 +183,64 @@ describe('NumberingGeneratorService', () => {
       fixture.service.generate.bind(fixture.service)
 
     expect(generate).toHaveLength(1)
+
+    const generateScoped: (
+      input: Readonly<GenerateScopedNumberRequest>,
+    ) => Promise<GenerateNumberResult> =
+      fixture.service.generateScoped.bind(fixture.service)
+
+    expect(generateScoped).toHaveLength(1)
+  })
+
+  it('runs scoped requests through the same state machine with the supplied hash', async () => {
+    const fixture = createService()
+
+    await expect(fixture.service.generateScoped(SCOPED_REQUEST)).resolves
+      .toMatchObject({
+        number: 'SO01',
+        ruleCode: 'PRODUCT',
+        idempotentReplay: false,
+      })
+
+    expect(fixture.transaction).toHaveBeenCalledTimes(1)
+    expect(mockedReadIdempotent).toHaveBeenCalledTimes(3)
+    expect(mockedInsertSequence).toHaveBeenCalledWith(
+      MAIN_TRANSACTION,
+      expect.objectContaining({
+        idempotencyKeyHash: VALIDATED_SCOPED_REQUEST.idempotencyKeyHash,
+        requestFingerprintHash:
+          VALIDATED_SCOPED_REQUEST.requestFingerprintHash,
+      }),
+    )
+  })
+
+  it('replays the same scoped request and rejects a different scope', async () => {
+    const fixture = createService()
+    mockedReadIdempotent.mockResolvedValueOnce({
+      ...REPLAY_RECORD,
+      ruleCode: SCOPED_REQUEST.ruleCode,
+      requestFingerprintHash:
+        VALIDATED_SCOPED_REQUEST.requestFingerprintHash,
+    })
+
+    await expect(fixture.service.generateScoped(SCOPED_REQUEST)).resolves
+      .toMatchObject({ number: REPLAY_RECORD.generatedNumber, idempotentReplay: true })
+
+    jest.clearAllMocks()
+    mockedTimeouts.mockResolvedValue(undefined)
+    mockedTimestamp.mockResolvedValue(AS_OF)
+    mockedReadIdempotent.mockResolvedValueOnce({
+      ...REPLAY_RECORD,
+      ruleCode: SCOPED_REQUEST.ruleCode,
+      requestFingerprintHash: Buffer.alloc(32, 0xff),
+    })
+    const conflictFixture = createService()
+
+    await expectGenerationError(
+      conflictFixture.service.generateScoped(SCOPED_REQUEST),
+      NUMBERING_ERROR_CODES.IDEMPOTENCY_CONFLICT,
+    )
+    expect(mockedReadRule).not.toHaveBeenCalled()
   })
 
   it('runs the frozen three-lookup lock order and advances only after issuance', async () => {

@@ -103,14 +103,18 @@
   - 隔离数据库：临时 PostgreSQL 16 先逐条执行旧 migration 再单独执行新 migration，并以数据库内断言确认 enum；官方 `node --run ci:server-e2e` 从空库应用 14 条 migration、二次 deploy 无待执行项、status up to date，E2E `26 suites / 147 tests`。两个临时容器均由 wrapper 清理；持久开发库未写入。
   - _Requirements: R8, R14_
 
-- [ ] 3. 以 TDD 扩展 Numbering scoped 幂等入口
-  - [ ] 3.1 先建立 `numbering-internal-input` 与 generator RED，覆盖 64 位小写 SHA-256 摘要校验、raw Key Hash、scoped 重放和 fingerprint 冲突。
-  - [ ] 3.2 用历史固定向量证明既有 `generate()` 的 v1 request fingerprint 完全不漂移，历史 issuance 仍可重放。
-  - [ ] 3.3 实现 `GenerateScopedNumberRequest` 与 `generateScoped()`，两个入口复用同一发号状态机、唯一竞态恢复和安全错误映射。
-  - [ ] 3.4 证明 scoped 入口不接收 Product Payload/User/Audit，不把 raw Key、scope digest 或底层错误写入日志/异常。
-  - [ ] 3.5 覆盖相同 Consumer/Key/scope 返回同一编号，相同 Key 不同 scope 返回 `NUMBERING_IDEMPOTENCY_CONFLICT`，包括并发唯一竞态。
-  - [ ] 3.6 运行 Numbering unit/E2E 回归、Server typecheck/lint 和 diff-check。
-  - [ ] 3.7 更新 Task 3 真实证据，创建提交：`feat: 增加编号作用域幂等入口`。
+- [x] 3. 以 TDD 扩展 Numbering scoped 幂等入口
+  - [x] 3.1 先建立 `numbering-internal-input` 与 generator RED，覆盖 64 位小写 SHA-256 摘要校验、raw Key Hash、scoped 重放和 fingerprint 冲突。
+  - [x] 3.2 用历史固定向量证明既有 `generate()` 的 v1 request fingerprint 完全不漂移，历史 issuance 仍可重放。
+  - [x] 3.3 实现 `GenerateScopedNumberRequest` 与 `generateScoped()`，两个入口复用同一发号状态机、唯一竞态恢复和安全错误映射。
+  - [x] 3.4 证明 scoped 入口不接收 Product Payload/User/Audit，不把 raw Key、scope digest 或底层错误写入日志/异常。
+  - [x] 3.5 覆盖相同 Consumer/Key/scope 返回同一编号，相同 Key 不同 scope 返回 `NUMBERING_IDEMPOTENCY_CONFLICT`，包括并发唯一竞态。
+  - [x] 3.6 运行 Numbering unit/E2E 回归、Server typecheck/lint 和 diff-check。
+  - [x] 3.7 更新 Task 3 真实证据，创建提交：`feat: 增加编号作用域幂等入口`。
+  - RED（2026-08-12）：两个定向 suite 因缺少 `GenerateScopedNumberRequest`、`validateGenerateScopedNumberRequest()` 和 `generateScoped()` 在 TypeScript 编译阶段失败，`0 tests` 执行；缺失边界明确。
+  - GREEN：scoped input/service/persistence `3 suites / 52 tests`；完整 Numbering unit `23 suites / 315 tests`；历史 `numbering.generate.v1` 固定向量继续为 `5a7fc999...bbf4772`，既有 replay 测试全绿。
+  - 隔离 E2E：首次遗漏 wrapper 的直跑因 `DATABASE_URL is required for Numbering E2E tests` 导致 10 个 case 同一前置失败；改用官方临时 PostgreSQL wrapper 后 `1 suite / 10 tests` 全绿，包含 20 个相同 scoped 并发请求只写一条 issuance/state、不同 scope 冲突。
+  - 静态检查：首次 lint 因测试对对象调用 `String()` 命中 `no-base-to-string` 退出码 1；收窄为字符串断言后 `pnpm typecheck`、`pnpm lint`、`git diff --check` 全部通过，根治理 `663/663`。
   - _Requirements: R4, R8, R13-R14_
 
 - [ ] 4. 以 TDD 增加事务内 Currency Lookup
