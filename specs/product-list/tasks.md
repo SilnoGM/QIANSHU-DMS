@@ -111,14 +111,16 @@
 
   Task 3 证据：RED 在 TypeScript 编译期精确报告 `resolveStoredValues` 与 `values` 校验字段不存在。最小实现使用一次 `findMany` 查询去重后的精确 raw values，以 Map 恢复输入顺序和重复项，并与单值入口复用同一映射函数。最终字典 Lookup 22/22、Server typecheck、目标 ESLint 与 diff-check 通过；lint 曾发现并阻断 `any[]` unsafe return，改为逐项收敛到 `string[]` 后转绿。
 
-- [ ] 4. 以 TDD 实现 Product 列表查询内核
-  - [ ] 4.1 先为 Query DTO、mapper 和 Query Service 建立失败测试，覆盖 `page/pageSize/supplierValue`、空白/超长输入、精确 raw 筛选、稳定排序与 count/items 共用 where。
-  - [ ] 4.2 先固定响应映射：Decimal 只输出 `string | null`，媒体/属性保持顺序，actor 只选择 `id/displayName`，非法 attributes fail-closed。
-  - [ ] 4.3 实现 `updatedAt DESC, id DESC` 稳定分页和单次批量供应商解析；不得加入未确认的搜索、状态筛选或自定义排序。
-  - [ ] 4.4 对空结果返回 `items=[]`、`total=0`；对 nullable actor/supplier/money/media 提供确认过的稳定 shape。
-  - [ ] 4.5 证明列表、筛选和 mapper 不调用 `NumberingGeneratorService`，不创建 Product，不写 AuditEvent。
-  - [ ] 4.6 更新 Task 4 状态并在 Product 模块定向单元测试、typecheck、lint 与 diff-check 绿色后创建提交：`feat: 实现产品列表查询内核`。
+- [x] 4. 以 TDD 实现 Product 列表查询内核
+  - [x] 4.1 先为 Query DTO、mapper 和 Query Service 建立失败测试，覆盖 `page/pageSize/supplierValue`、空白/超长输入、精确 raw 筛选、稳定排序与 count/items 共用 where。
+  - [x] 4.2 先固定响应映射：Decimal 只输出 `string | null`，媒体/属性保持顺序，actor 只选择 `id/displayName`，非法 attributes fail-closed。
+  - [x] 4.3 实现 `updatedAt DESC, id DESC` 稳定分页和单次批量供应商解析；不得加入未确认的搜索、状态筛选或自定义排序。
+  - [x] 4.4 对空结果返回 `items=[]`、`total=0`；对 nullable actor/supplier/money/media 提供确认过的稳定 shape。
+  - [x] 4.5 证明列表、筛选和 mapper 不调用 `NumberingGeneratorService`，不创建 Product，不写 AuditEvent。
+  - [x] 4.6 更新 Task 4 状态并在 Product 模块定向单元测试、typecheck、lint 与 diff-check 绿色后创建提交：`feat: 实现产品列表查询内核`。
   - _Requirements: R1-R8, R15_
+
+  Task 4 证据：三个测试文件最初因 normalizer、mapper、service 缺失而 RED；两处测试类型噪声随生产类型同步收敛。实现后 Product 定向 23/23、Server typecheck、目标 ESLint、Root governance 663/663 与 diff-check 通过。Service 在同一受限事务内串行 count/findMany，共用精确 where 与稳定排序，只选择 actor `id/displayName`；页面供应商值去重后调用一次 batch resolver，Decimal 仅 `toString()`，非法 attributes 与底层异常统一脱敏为固定 500。首次 lint 发现 11 处测试 mock `any`/无必要 async，明确类型后转绿。
 
 - [ ] 5. 以 TDD 暴露受保护的 Product 列表公共 API
   - [ ] 5.1 在 Gate D1 已授权范围内，先建立 Controller metadata 与 OpenAPI RED，精确要求 `GET /api/products`、operationId `products_list`、`products:read`、private no-store、分页 DTO 和 403/422 错误。
