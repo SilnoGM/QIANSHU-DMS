@@ -257,15 +257,19 @@
   - GREEN：产品页面/路由/API 定向 `29/29`；Web 完整 `test:api` 为 `774/774`；Web typecheck、完整 ESLint/Stylelint、生产 build 与 `git diff --check` 通过。build 仅有既有依赖 pure annotation 与 chunk-size 警告。Root 首次为 `662/663`，精确缺少创建页供应商残留白名单；只追加该文件后定向治理转绿，未扩大目录或恢复 Supplier 领域。
   - _Requirements: R1, R3-R7, R10-R14_
 
-- [ ] 13. 扩展现有管理 Browser 真实验收
-  - [ ] 13.1 先扩展 `management.browser.test.mjs` 建立 Chrome RED，不新建 Product 专属 CI Job。
-  - [ ] 13.2 在 `provision-admin.mjs` 仅为隔离 Browser 数据库准备有效 `PRODUCT` Rule/Version/Segment、供应商和币种前置；不得修改生产 seed 或持久数据库。
-  - [ ] 13.3 覆盖列表入口导航、默认 DRAFT、Active supplier、三组金额、币种切换不换算、属性增删排序和媒体延期说明。
-  - [ ] 13.4 提交真实 Product，核对成功 Toast/产品编号/列表搜索、数据库 Product/Audit/issuance 最终态。
-  - [ ] 13.5 覆盖同步重复点击锁、Server 字段错误、Catalog retry、未保存离开确认和 unknown-result 人工重放；网络故障必须通过受控请求拦截产生。
-  - [ ] 13.6 覆盖 1440x900 Desktop、390x844 Mobile、light/dark、Reduced Motion、44px targets、键盘和无页面级横向溢出。
-  - [ ] 13.7 运行根 `node --run ci:browser-auth-e2e`，确保容器、Chrome 和临时状态由现有 runner 回收。
-  - [ ] 13.8 更新 Task 13 真实证据；纯验收创建 `test: 补齐产品创建浏览器验收`，若暴露缺陷使用独立 `fix:` 提交。
+- [x] 13. 扩展现有管理 Browser 真实验收
+  - [x] 13.1 先扩展 `management.browser.test.mjs` 建立 Chrome RED，不新建 Product 专属 CI Job。
+  - [x] 13.2 在 `provision-admin.mjs` 仅为隔离 Browser 数据库准备有效 `PRODUCT` Rule/Version/Segment、供应商和币种前置；不得修改生产 seed 或持久数据库。
+  - [x] 13.3 覆盖列表入口导航、默认 DRAFT、Active supplier、三组金额、币种切换不换算、属性增删排序和媒体延期说明。
+  - [x] 13.4 提交真实 Product，核对成功 Toast/产品编号/列表搜索、数据库 Product/Audit/issuance 最终态。
+  - [x] 13.5 覆盖同步重复点击锁、Server 字段错误、Catalog retry、未保存离开确认和 unknown-result 人工重放；网络故障必须通过受控请求拦截产生。
+  - [x] 13.6 覆盖 1440x900 Desktop、390x844 Mobile、light/dark、Reduced Motion、44px targets、键盘和无页面级横向溢出。
+  - [x] 13.7 运行根 `node --run ci:browser-auth-e2e`，确保容器、Chrome 和临时状态由现有 runner 回收。
+  - [x] 13.8 更新 Task 13 真实证据；纯验收创建 `test: 补齐产品创建浏览器验收`，若暴露缺陷使用独立 `fix:` 提交。
+  - RED（2026-08-12）：初始 Browser 用例确认创建页仍是占位流程后失败；随后依次暴露隔离数据库缺少有效 PRODUCT 编号规则、原生下拉交互和 Catalog 就绪等待不稳定等验收夹具问题，并逐项收紧为真实 DOM/HTTP 条件。真实提交最终定位到生产缺陷：`FaFormItem.name` 使用 Server 嵌套错误路径，而页面模型使用扁平金额字段，导致表单同步把三组金额覆盖为 `null`。
+  - 缺陷修复：金额表单项注册改用 `twdSalePriceAmount`、`myrSalePriceAmount`、`purchaseCostAmount`，Server 的 `*.amount`/`*.currency` 错误路径显式映射到扁平字段；表单改为发送局部 `patch`，由页面合并权威模型，避免无关字段被覆盖。页面级移动端按钮补足 44px 触控目标，不修改共享组件语义；定向 View/Logic 回归 `16/16`、Web typecheck 通过。
+  - Browser 覆盖：隔离 PostgreSQL 内准备并激活 PRODUCT Rule/Version/Segment、启用 TWD/MYR 与测试汇率；覆盖默认值、Active supplier、三组金额、属性顺序、媒体延期、Catalog retry、Server 字段错误、同步双击锁、unknown-result 同 Key/Payload 重放、成功列表与数据库 Product/Audit/issuance 最终态，以及 Desktop/Mobile、dark、Reduced Motion、44px target、未保存离开和无横向溢出。
+  - GREEN：根 `node --run ci:browser-auth-e2e` 在应用 14 个 migration 的一次性 PostgreSQL 中通过 `2/2`（认证场景约 `10660ms`，管理场景约 `12083ms`，总计约 `32676ms`）；runner 完成容器与临时状态回收。未连接、修改或迁移持久开发数据库。
   - _Requirements: R1-R14_
 
 - [ ] 14. 完成全量验证、规格状态与 Git 收口

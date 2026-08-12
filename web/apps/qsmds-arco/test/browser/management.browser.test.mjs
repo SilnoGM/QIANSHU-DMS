@@ -1,5 +1,6 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
 import path from 'node:path'
 import process from 'node:process'
 import test from 'node:test'
@@ -331,6 +332,488 @@ async function selectVisibleFilter(page, label, option) {
   )))()`)
 }
 
+function requestPathname(event) {
+  try {
+    return new URL(event.request?.url).pathname
+  }
+  catch {
+    return ''
+  }
+}
+
+/**
+ * 原生 setter 驱动当前可见控件，避免依赖 FaInput/FaSelect 的私有 class。
+ * Browser 场景只使用公开 placeholder、data-currency 与 label 文本定位。
+ */
+async function fillVisibleProductControl(page, selector, value, visibleIndex = 0) {
+  const serializedSelector = JSON.stringify(selector)
+  const serializedValue = JSON.stringify(value)
+  const serializedVisibleIndex = JSON.stringify(visibleIndex)
+  await page.waitFor(`(() => [...document.querySelectorAll(${serializedSelector})]
+    .filter(control => control.getClientRects().length > 0 && !control.disabled)
+    .length > ${serializedVisibleIndex})()`)
+  await page.evaluate(`(() => {
+    const control = [...document.querySelectorAll(${serializedSelector})]
+      .filter(candidate => candidate.getClientRects().length > 0 && !candidate.disabled)
+      [${serializedVisibleIndex}]
+    if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) {
+      throw new Error('visible product control unavailable')
+    }
+    control.focus({ preventScroll: true })
+    control.select()
+    return document.activeElement === control
+  })()`)
+  await page.connection.send('Input.insertText', { text: value })
+  await page.waitFor(`(() => [...document.querySelectorAll(${serializedSelector})]
+    .filter(control => control.getClientRects().length > 0 && !control.disabled)
+    [${serializedVisibleIndex}]?.value === ${serializedValue})()`)
+  // FaInput 的 passive useVModel 经 watcher 向上提交；等待两帧保证嵌套
+  // MoneyInput 与页面 formModel 都已消费更新，不能只把原生 DOM 值当成完成。
+  await page.evaluate(`new Promise(resolve => requestAnimationFrame(
+    () => requestAnimationFrame(resolve),
+  ))`)
+}
+
+async function selectVisibleComboboxOption(page, labelText, optionText) {
+  const serializedLabel = JSON.stringify(labelText)
+  const serializedOption = JSON.stringify(optionText)
+  await page.waitFor(`(() => [...document.querySelectorAll('label')].some(label => (
+    label.getClientRects().length > 0
+    && label.textContent?.includes(${serializedLabel})
+    && label.parentElement?.querySelector('[role="combobox"]')
+  )))()`)
+  await page.evaluate(`(() => {
+    const label = [...document.querySelectorAll('label')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.includes(${serializedLabel})
+      && candidate.parentElement?.querySelector('[role="combobox"]')
+    ))
+    const trigger = label?.parentElement?.querySelector('[role="combobox"]')
+    if (!trigger) throw new Error('product combobox unavailable')
+    trigger.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
+    .some(option => option.getClientRects().length > 0
+      && option.textContent?.trim() === ${serializedOption}
+      && option.getAttribute('aria-disabled') !== 'true'))()`)
+  await page.evaluate(`(() => {
+    const option = [...document.querySelectorAll('[role="option"]')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.trim() === ${serializedOption}
+      && candidate.getAttribute('aria-disabled') !== 'true'
+    ))
+    if (!option) throw new Error('product option unavailable')
+    option.focus({ preventScroll: true })
+    return true
+  })()`)
+  await pressKey(page, 'Enter')
+  await page.waitFor(`(() => [...document.querySelectorAll('label')].some(label => (
+    label.getClientRects().length > 0
+    && label.textContent?.includes(${serializedLabel})
+    && (() => {
+      const trigger = label.parentElement?.querySelector('[role="combobox"]')
+      const displayValue = trigger instanceof HTMLInputElement
+        ? trigger.value
+        : trigger?.textContent?.trim()
+      return displayValue === ${serializedOption}
+    })()
+  )))()`)
+}
+
+async function verifyProductCreate(page, baseUrl) {
+  const productName = 'Browser 创建产品'
+
+  // 受控失败首个 Currency Catalog 请求，页面必须进入可恢复错误态且保留草稿。
+  await page.enableRequestInterception([{
+    requestStage: 'Request',
+    urlPattern: `${baseUrl}/api/currency-catalog`,
+  }])
+  let rejectCatalogRequests = true
+  const removeCatalogListener = page.on('Fetch.requestPaused', (event) => {
+    if (rejectCatalogRequests && requestPathname(event) === '/api/currency-catalog') {
+      void page.failInterceptedRequest(event.requestId).catch(() => undefined)
+      return
+    }
+    void page.continueInterceptedRequest(event.requestId).catch(() => undefined)
+  })
+  try {
+    await page.navigate(appRouteUrl(baseUrl, '/admin/products/create'))
+    await page.waitFor(`document.body.innerText.includes('货币资料加载失败')`)
+    rejectCatalogRequests = false
+    await fillVisibleProductControl(
+      page,
+      'input[placeholder="请输入产品名称"]',
+      productName,
+    )
+    await clickVisibleButton(page, '重试货币资料')
+    await page.waitFor(`(() => {
+      const input = document.querySelector('input[placeholder="请输入产品名称"]')
+      const currencyReady = code => document.querySelector(
+        'input[data-currency="' + code + '"][data-currency-enabled="true"]',
+      ) !== null
+      return input?.value === ${JSON.stringify(productName)}
+        && !document.body.innerText.includes('货币资料加载失败')
+        && !document.body.innerText.includes('正在加载货币资料')
+        && ['CNY', 'MYR', 'TWD'].every(currencyReady)
+    })()`)
+  }
+  finally {
+    removeCatalogListener()
+    await page.disableRequestInterception()
+  }
+
+  const defaultState = await page.evaluate(`(() => ({
+    documentFits: document.documentElement.scrollWidth <= innerWidth,
+    hasMediaInput: [...document.querySelectorAll('input')].some(input => (
+      input.type === 'file' || input.placeholder?.includes('图片') || input.placeholder?.includes('视频')
+    )),
+    name: document.querySelector('input[placeholder="请输入产品名称"]')?.value ?? null,
+    purchaseCurrency: document.querySelector('input[data-currency="CNY"]') !== null,
+    showsDraft: document.body.innerText.includes('草稿（DRAFT）'),
+    showsMediaDelay: document.body.innerText.includes('本阶段暂不处理媒体上传'),
+  }))()`)
+  assert.deepEqual(defaultState, {
+    documentFits: true,
+    hasMediaInput: false,
+    name: productName,
+    purchaseCurrency: true,
+    showsDraft: true,
+    showsMediaDelay: true,
+  })
+
+  await selectVisibleComboboxOption(page, '产品状态', '启用（ACTIVE）')
+  await selectVisibleComboboxOption(page, '供应商', 'Browser 有效供应商')
+  await fillVisibleProductControl(page, 'input[data-currency="TWD"]', '1280.50')
+  await fillVisibleProductControl(page, 'input[data-currency="MYR"]', '42.25')
+  await fillVisibleProductControl(page, 'input[data-currency="CNY"]', '88.10')
+  await clickVisibleAriaButton(page, '新增一项产品属性')
+  await fillVisibleProductControl(page, 'input[placeholder="例如：颜色"]', '尺寸')
+  await fillVisibleProductControl(page, 'input[placeholder="例如：墨黑"]', 'XL')
+  await clickVisibleAriaButton(page, '新增一项产品属性')
+  const titleInputs = await page.evaluate(`(() => [...document.querySelectorAll(
+    'input[placeholder="例如：颜色"]',
+  )].filter(input => input.getClientRects().length > 0).length)()`)
+  assert.equal(titleInputs, 2)
+  // 两个字段必须跨 Vue 的渲染周期写入；同栈连续写会让后一笔基于旧 props
+  // 覆盖前一笔，浏览器验收必须遵循真实用户逐项输入的更新时序。
+  await fillVisibleProductControl(page, 'input[placeholder="例如：颜色"]', '颜色', 1)
+  await fillVisibleProductControl(page, 'input[placeholder="例如：墨黑"]', '墨黑', 1)
+  await clickVisibleAriaButton(page, '上移第 2 项属性')
+
+  // 提交前先核对用户可见值，避免把前端校验未通过误诊为网络超时。
+  const filledForm = await page.evaluate(`(() => {
+    const visibleValues = selector => [...document.querySelectorAll(selector)]
+      .filter(input => input.getClientRects().length > 0)
+      .map(input => input.value)
+    const selectedValue = labelText => {
+      const label = [...document.querySelectorAll('label')].find(candidate => (
+        candidate.getClientRects().length > 0
+        && candidate.textContent?.includes(labelText)
+        && candidate.parentElement?.querySelector('[role="combobox"]')
+      ))
+      const trigger = label?.parentElement?.querySelector('[role="combobox"]')
+      return trigger instanceof HTMLInputElement
+        ? trigger.value
+        : trigger?.textContent?.trim() ?? null
+    }
+    return {
+      attributeTitles: visibleValues('input[placeholder="例如：颜色"]'),
+      attributeValues: visibleValues('input[placeholder="例如：墨黑"]'),
+      catalogErrors: ['货币资料加载失败', '供应商资料加载失败']
+        .filter(message => document.body.innerText.includes(message)),
+      money: {
+        CNY: visibleValues('input[data-currency="CNY"]'),
+        MYR: visibleValues('input[data-currency="MYR"]'),
+        TWD: visibleValues('input[data-currency="TWD"]'),
+      },
+      name: visibleValues('input[placeholder="请输入产品名称"]'),
+      status: selectedValue('产品状态'),
+      supplier: selectedValue('供应商'),
+    }
+  })()`)
+  assert.deepEqual(filledForm, {
+    attributeTitles: ['颜色', '尺寸'],
+    attributeValues: ['墨黑', 'XL'],
+    catalogErrors: [],
+    money: {
+      CNY: ['88.10'],
+      MYR: ['42.25'],
+      TWD: ['1280.50'],
+    },
+    name: [productName],
+    status: '启用（ACTIVE）',
+    supplier: 'Browser 有效供应商',
+  })
+
+  // 请求拦截只把本次真实 HTTP body 的金额改为非法值；页面 snapshot 仍保持合法。
+  // 这样可验证真实 Server 422 fieldErrors 被映射回金额控件并完整保留草稿。
+  await page.enableRequestInterception([{
+    requestStage: 'Request',
+    urlPattern: `${baseUrl}/api/products`,
+  }])
+  let fieldErrorRequestId
+  let fieldErrorOriginalBody
+  const removeFieldErrorListener = page.on('Fetch.requestPaused', (event) => {
+    if (
+      fieldErrorRequestId === undefined
+      && event.request?.method === 'POST'
+      && requestPathname(event) === '/api/products'
+    ) {
+      fieldErrorRequestId = event.requestId
+      const body = JSON.parse(event.request.postData)
+      fieldErrorOriginalBody = structuredClone(body)
+      body.twdSalePrice.amount = '-1'
+      void page.connection.send('Fetch.continueRequest', {
+        postData: Buffer.from(JSON.stringify(body)).toString('base64'),
+        requestId: event.requestId,
+      }).catch(() => undefined)
+      return
+    }
+    void page.continueInterceptedRequest(event.requestId).catch(() => undefined)
+  })
+  try {
+    const fieldErrorResponse = page.waitForEvent(
+      'Network.responseReceived',
+      event => requestPathname({ request: { url: event.response?.url } }) === '/api/products',
+      20_000,
+    )
+    await clickVisibleButton(page, '创建产品')
+    const response = await fieldErrorResponse
+    assert.equal(response.response?.status, 422)
+    assert.deepEqual({
+      myrSalePrice: fieldErrorOriginalBody?.myrSalePrice,
+      purchaseCost: fieldErrorOriginalBody?.purchaseCost,
+      twdSalePrice: fieldErrorOriginalBody?.twdSalePrice,
+    }, {
+      myrSalePrice: { amount: '42.25', currency: 'MYR' },
+      purchaseCost: { amount: '88.10', currency: 'CNY' },
+      twdSalePrice: { amount: '1280.50', currency: 'TWD' },
+    })
+    await page.waitFor(`(() => {
+      const input = document.querySelector('input[data-currency="TWD"]')
+      return document.body.innerText.includes('请求参数校验失败')
+        && input?.getAttribute('aria-invalid') === 'true'
+    })()`)
+  }
+  finally {
+    removeFieldErrorListener()
+    await page.disableRequestInterception()
+  }
+  assert.equal(await page.evaluate(`document.querySelector(
+    'input[placeholder="请输入产品名称"]',
+  )?.value`), productName)
+
+  // 暂停真实 POST，在同一事件循环同步点击两次；按钮锁应保证只发出一条请求。
+  await page.enableRequestInterception([{
+    requestStage: 'Request',
+    urlPattern: `${baseUrl}/api/products`,
+  }])
+  const heldProductRequests = new Map()
+  const removeProductListener = page.on('Fetch.requestPaused', (event) => {
+    if (event.request?.method === 'POST' && requestPathname(event) === '/api/products') {
+      heldProductRequests.set(event.requestId, event)
+      return
+    }
+    void page.continueInterceptedRequest(event.requestId).catch(() => undefined)
+  })
+  try {
+    const firstPaused = page.waitForEvent(
+      'Fetch.requestPaused',
+      event => event.request?.method === 'POST'
+        && requestPathname(event) === '/api/products',
+      20_000,
+    )
+    await page.evaluate(`(() => {
+      const button = [...document.querySelectorAll('button')].find(candidate => (
+        candidate.textContent?.trim() === '创建产品'
+        && candidate.getClientRects().length > 0
+        && !candidate.disabled
+      ))
+      if (!button) throw new Error('create product button unavailable')
+      button.click()
+      button.click()
+      return true
+    })()`)
+    const first = await firstPaused
+    const firstBody = JSON.parse(first.request.postData)
+    assert.deepEqual({
+      myrSalePrice: firstBody.myrSalePrice,
+      purchaseCost: firstBody.purchaseCost,
+      twdSalePrice: firstBody.twdSalePrice,
+    }, {
+      myrSalePrice: { amount: '42.25', currency: 'MYR' },
+      purchaseCost: { amount: '88.10', currency: 'CNY' },
+      twdSalePrice: { amount: '1280.50', currency: 'TWD' },
+    })
+    await page.waitFor(`(() => {
+      const button = [...document.querySelectorAll('button')]
+        .find(candidate => candidate.textContent?.trim() === '创建产品')
+      return button?.disabled === true && document.querySelector('[aria-busy="true"]') !== null
+    })()`)
+    assert.equal(heldProductRequests.size, 1)
+    await page.failInterceptedRequest(first.requestId)
+    heldProductRequests.delete(first.requestId)
+    await page.waitFor(`document.body.innerText.includes('创建结果暂时无法确认')`)
+    const frozenState = await page.evaluate(`(() => ({
+      createButtonVisible: [...document.querySelectorAll('button')].some(button => (
+        button.textContent?.trim() === '创建产品' && button.getClientRects().length > 0
+      )),
+      inputDisabled: document.querySelector('input[placeholder="请输入产品名称"]')?.disabled,
+      name: document.querySelector('input[placeholder="请输入产品名称"]')?.value,
+    }))()`)
+    assert.deepEqual(frozenState, {
+      createButtonVisible: false,
+      inputDisabled: true,
+      name: productName,
+    })
+
+    const replayPaused = page.waitForEvent(
+      'Fetch.requestPaused',
+      event => event.request?.method === 'POST'
+        && requestPathname(event) === '/api/products',
+      20_000,
+    )
+    await clickVisibleButton(page, '使用相同请求重新确认')
+    const replay = await replayPaused
+    const header = (event, name) => Object.entries(event.request.headers)
+      .find(([headerName]) => headerName.toLowerCase() === name.toLowerCase())?.[1]
+    assert.equal(header(replay, 'Idempotency-Key'), header(first, 'Idempotency-Key'))
+    assert.equal(replay.request.postData, first.request.postData)
+    await page.continueInterceptedRequest(replay.requestId)
+    heldProductRequests.delete(replay.requestId)
+  }
+  finally {
+    for (const requestId of heldProductRequests.keys()) {
+      await page.continueInterceptedRequest(requestId).catch(() => undefined)
+    }
+    removeProductListener()
+    await page.disableRequestInterception()
+  }
+
+  await page.waitFor(`(() => location.hash === '#/admin/products/list'
+    && document.body.innerText.includes(${JSON.stringify(productName)}))()`)
+  await page.waitFor(`document.body.innerText.includes('PRD-BRW-00000001')`)
+
+  const productResponse = await page.evaluate(apiExpression(
+    `/api/products?page=1&pageSize=20&keyword=${encodeURIComponent(productName)}`,
+    'GET',
+  ))
+  assert.equal(productResponse.status, 200)
+  const product = productResponse.body?.items?.find(item => item.name === productName)
+  assert.deepEqual({
+    attributes: product?.attributes,
+    images: product?.images,
+    mainImage: product?.mainImage,
+    myrSalePrice: product?.myrSalePrice,
+    productNo: product?.productNo,
+    purchaseCost: product?.purchaseCost,
+    status: product?.status,
+    supplierValue: product?.supplier?.value,
+    twdSalePrice: product?.twdSalePrice,
+    videos: product?.videos,
+  }, {
+    attributes: [
+      { title: '颜色', value: '墨黑' },
+      { title: '尺寸', value: 'XL' },
+    ],
+    images: [],
+    mainImage: null,
+    myrSalePrice: { amount: '42.25', currency: 'MYR' },
+    productNo: 'PRD-BRW-00000001',
+    purchaseCost: { amount: '88.1', currency: 'CNY' },
+    status: 'ACTIVE',
+    supplierValue: 'BROWSER_SUPPLIER_EFFECTIVE',
+    twdSalePrice: { amount: '1280.5', currency: 'TWD' },
+    videos: [],
+  })
+  assert.equal(typeof product?.id, 'string')
+
+  const audits = await page.evaluate(apiExpression(
+    '/api/audit-events?page=1&pageSize=100',
+    'GET',
+  ))
+  const productAudits = audits.body?.items?.filter(event => (
+    event.eventType === 'PRODUCT_CREATED' && event.targetId === product.id
+  ))
+  assert.equal(productAudits?.length, 1)
+  assert.deepEqual(productAudits[0]?.metadata, {
+    attributeCount: 2,
+    myrSalePriceProvided: true,
+    productNo: product.productNo,
+    purchaseCostProvided: true,
+    status: 'ACTIVE',
+    supplierSelected: true,
+    twdSalePriceProvided: true,
+  })
+
+  const rules = await page.evaluate(apiExpression(
+    '/api/numbering-rules?page=1&pageSize=20&keyword=PRODUCT',
+    'GET',
+  ))
+  const productRule = rules.body?.items?.find(rule => rule.ruleCode === 'PRODUCT')
+  assert.equal(typeof productRule?.id, 'string')
+  const issuances = await page.evaluate(apiExpression(
+    `/api/numbering-rules/${productRule.id}/issuances?page=1&pageSize=20&consumerCode=PRODUCT.CREATE`,
+    'GET',
+  ))
+  assert.deepEqual(issuances.body?.items?.map(item => item.generatedNumber), [
+    product.productNo,
+  ])
+
+  // 未保存离开、窄屏、dark 与 reduced-motion 在真实页面上共同验收。
+  await page.setViewport(390, 844, true)
+  await page.navigate(appRouteUrl(baseUrl, '/admin/products/create'))
+  await page.connection.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+  await fillVisibleProductControl(
+    page,
+    'input[placeholder="请输入产品名称"]',
+    'Browser 未保存草稿',
+  )
+  await page.evaluate(`(() => {
+    document.documentElement.classList.remove('light')
+    document.documentElement.classList.add('dark')
+    return true
+  })()`)
+  const mobileState = await page.evaluate(`(() => ({
+    dark: document.documentElement.classList.contains('dark'),
+    documentFits: document.documentElement.scrollWidth <= innerWidth,
+    reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    touchTargets: [...document.querySelectorAll('[data-testid="product-create-page"] button')]
+      .filter(button => button.getClientRects().length > 0)
+      .every(button => button.getBoundingClientRect().height >= 44),
+  }))()`)
+  assert.deepEqual(mobileState, {
+    dark: true,
+    documentFits: true,
+    reducedMotion: true,
+    touchTargets: true,
+  })
+  await clickVisibleButton(page, '取消')
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+    .some(dialog => dialog.getClientRects().length > 0
+      && dialog.textContent?.includes('放弃未保存的产品？')))()`)
+  assert.equal(locationHashPath(await page.evaluate('location.hash')), '/admin/products/create')
+  await clickVisibleModalButton(page, '继续编辑')
+  await waitForNoVisibleModal(page, '放弃未保存的产品？')
+  assert.equal(await page.evaluate(`document.querySelector(
+    'input[placeholder="请输入产品名称"]',
+  )?.value`), 'Browser 未保存草稿')
+  await clickVisibleButton(page, '取消')
+  await clickVisibleModalButton(page, '确认放弃')
+  await page.waitFor(`location.hash === '#/admin/products/list'`)
+  await page.connection.send('Emulation.setEmulatedMedia', { features: [] })
+  await page.evaluate(`(() => {
+    document.documentElement.classList.remove('dark')
+    document.documentElement.classList.add('light')
+    return true
+  })()`)
+  await page.setViewport(1440, 900, false)
+}
+
 async function waitForProductList(page, expectedText) {
   const serializedText = JSON.stringify(expectedText)
   await page.waitFor(`(() => {
@@ -359,7 +842,7 @@ async function verifyProductList(page, baseUrl) {
   try {
     await page.navigate(appRouteUrl(baseUrl, '/admin/products/list'))
     await waitForProductList(page, productNo)
-    await page.waitFor(`document.body.innerText.includes('共 21 条')`)
+    await page.waitFor(`document.body.innerText.includes('共 22 条')`)
     await waitForTableTools(page, 'product-list-table', '搜索产品名称或产品编号')
 
     const desktopState = await page.evaluate(`(() => {
@@ -407,9 +890,14 @@ async function verifyProductList(page, baseUrl) {
       assert.equal(visibleText.includes(text), true, `缺少产品展示文本：${text}`)
     }
 
-    // 三个尚未接入业务流程的动作只能发轻提示，不导航或写入数据。
+    // 新增已接入真实路由；查看与编辑仍保持本阶段的轻提示边界。
     await clickVisibleButton(page, '新增产品')
-    await page.waitFor(`document.body.innerText.includes('新增产品功能将在后续版本开放')`)
+    await page.waitFor(`(() => location.hash === '#/admin/products/create'
+      && [...document.querySelectorAll('button')].some(button => (
+        button.textContent?.trim() === '创建产品' && button.getClientRects().length > 0
+      )))()`)
+    await clickVisibleButton(page, '返回产品列表')
+    await waitForProductList(page, productNo)
     await clickVisibleTableRowButton(page, productNo, '查看')
     await page.waitFor(`document.body.innerText.includes('产品详情功能将在后续版本开放')`)
     await clickVisibleTableRowButton(page, productNo, '编辑')
@@ -524,7 +1012,7 @@ async function verifyProductList(page, baseUrl) {
     )
     await clickVisibleButton(page, '查询')
     await waitForProductList(page, productNo)
-    await page.waitFor(`document.body.innerText.includes('共 21 条')`)
+    await page.waitFor(`document.body.innerText.includes('共 22 条')`)
 
     // 移动端复用同一行数据，禁止页面级横向溢出，并维持 44px 触控下限。
     await page.setViewport(390, 844, true)
@@ -852,14 +1340,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
 
   // 管理员权限迁移必须在真实 AuthContext 中生效，并驱动顶部导航与两个叶子页面。
   await page.waitFor(`document.body.innerText.includes('管理员工作台')`)
-  await page.navigate(appRouteUrl(configuration.baseUrl, '/admin/products/create'))
-  await page.waitFor(`(() => (
-    location.hash === '#/admin/products/create'
-    && [...document.querySelectorAll('button')].some(button => (
-      button.textContent?.trim() === '新增产品'
-      && button.getClientRects().length > 0
-    ))
-  ))()`)
+  await verifyProductCreate(page, configuration.baseUrl)
   await verifyProductList(page, configuration.baseUrl)
 
   // 测试目标用户由受保护 API 准备；本场景关注的是管理员后续每项 UI 管理操作。

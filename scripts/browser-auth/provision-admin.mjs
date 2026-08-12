@@ -75,6 +75,87 @@ const { Client } = require('pg')
       [supplierType.rows[0].id],
     )
 
+    // 创建页必须从真实 Currency Catalog 取得 TWD/MYR/CNY。外币先建立当前汇率
+    // 再启用，严格遵守数据库 trigger 的顺序约束；数据只存在于一次性 Browser 库。
+    const productCurrencies = await client.query(
+      'SELECT id, code FROM currencies WHERE code IN (\'TWD\', \'MYR\') ORDER BY code FOR UPDATE',
+    )
+    if (productCurrencies.rowCount !== 2) throw new Error('product_currencies')
+    await client.query(
+      [
+        'INSERT INTO exchange_rates (currency_id, foreign_units_per_cny)',
+        'SELECT id, 1 FROM currencies WHERE code IN (\'TWD\', \'MYR\')',
+      ].join(' '),
+    )
+    await client.query(
+      [
+        'UPDATE currencies SET enabled = true, updated_at = clock_timestamp()',
+        'WHERE code IN (\'TWD\', \'MYR\')',
+      ].join(' '),
+    )
+
+    // PRODUCT 创建只能消费已发布且启用的真实编号规则。先在 DRAFT 父版本下写入
+    // 片段，再按 DRAFT -> ACTIVE 与规则 ENABLED 的合法顺序完成 fixture。
+    const productRule = await client.query(
+      [
+        'INSERT INTO numbering_rules (rule_code, name, status, version)',
+        'VALUES (\'PRODUCT\', \'Browser Product Rule\', \'DRAFT\', 1)',
+        'RETURNING id',
+      ].join(' '),
+    )
+    const productRuleVersion = await client.query(
+      [
+        'INSERT INTO numbering_rule_versions (',
+        'rule_id, revision, status, reset_policy, timezone, config_fingerprint',
+        ') VALUES ($1, 1, \'DRAFT\', \'NEVER\', \'Asia/Shanghai\', repeat(\'a\', 64))',
+        'RETURNING id',
+      ].join(' '),
+      [productRule.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, fixed_value',
+        ') VALUES',
+        '($1, 0, \'FIXED\', \'PRD\'),',
+        '($1, 2, \'FIXED\', \'BRW\')',
+      ].join(' '),
+      [productRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, separator_value',
+        ') VALUES',
+        '($1, 1, \'SEPARATOR\', \'-\'),',
+        '($1, 3, \'SEPARATOR\', \'-\')',
+      ].join(' '),
+      [productRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, sequence_width, sequence_start_value, sequence_step',
+        ') VALUES ($1, 4, \'SEQUENCE\', 8, 1, 1)',
+      ].join(' '),
+      [productRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rule_versions',
+        'SET status = \'ACTIVE\', published_at = clock_timestamp()',
+        'WHERE id = $1',
+      ].join(' '),
+      [productRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rules SET status = \'ENABLED\', version = 3,',
+        'updated_at = clock_timestamp() WHERE id = $1',
+      ].join(' '),
+      [productRule.rows[0].id],
+    )
+
     const browserImage = [
       'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22',
       ' width=%2280%22 height=%2280%22 viewBox=%220 0 80 80%22%3E',
