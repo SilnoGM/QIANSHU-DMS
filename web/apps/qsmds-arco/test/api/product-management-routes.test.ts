@@ -95,16 +95,14 @@ test('产品权限精确控制菜单和直接访问资格', () => {
   assert.deepEqual(visiblePaths([]), [])
 })
 
-test('两个占位页面都只渲染一个 FaButton', () => {
-  for (const [relativePath, label] of [
-    ['../../src/views/admin/product-management/create/index.vue', '新增产品'],
-    ['../../src/views/admin/product-management/list/index.vue', '产品列表'],
-  ] as const) {
-    const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+test('仅新增产品页面继续保持单按钮占位边界', () => {
+  const source = readFileSync(new URL(
+    '../../src/views/admin/product-management/create/index.vue',
+    import.meta.url,
+  ), 'utf8')
 
-    assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
-    assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
-    assert.match(source, new RegExp(`>${label}<\\/FaButton>`, 'u'))
-    assert.doesNotMatch(source, /<script|<style/u)
-  }
+  assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
+  assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
+  assert.match(source, />新增产品<\/FaButton>/u)
+  assert.doesNotMatch(source, /<script|<style/u)
 })

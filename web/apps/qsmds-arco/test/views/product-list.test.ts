@@ -86,3 +86,54 @@ test('窄屏复用 QsGenericTable mobile-row 并保留同一行身份和操作',
   assert.match(source, /查看/u)
   assert.match(source, /编辑/u)
 })
+
+test('特殊单元格复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗', () => {
+  assert.match(source, /<ImageGroup\b[\s\S]*?:max-count="3"/u)
+  assert.match(source, /buildProductMainImageItems/u)
+  assert.match(source, /buildProductImageItems/u)
+  assert.equal((source.match(/<AmountDisplay\b/gu) ?? []).length >= 6, true)
+  assert.match(source, /useCurrencyCatalog\(\)/u)
+  assert.match(source, /<FaTag\b/u)
+  assert.match(source, /草稿/u)
+  assert.match(source, /启用/u)
+  assert.match(source, /停用/u)
+  assert.match(source, /未知/u)
+  assert.match(source, /<ProductAttributesModal/u)
+  assert.match(source, /<ProductVideosModal/u)
+})
+
+test('属性和视频入口可聚焦且占位动作只使用 QsToast info', () => {
+  assert.match(source, /项属性/u)
+  assert.match(source, /个视频/u)
+  assert.match(source, /i-lucide:list-tree/u)
+  assert.match(source, /i-lucide:video/u)
+  assert.match(source, /toast\.info\('新增产品功能将在后续版本开放'\)/u)
+  assert.match(source, /toast\.info\('产品详情功能将在后续版本开放'\)/u)
+  assert.match(source, /toast\.info\('产品编辑功能将在后续版本开放'\)/u)
+  assert.doesNotMatch(source, /router\.(?:push|replace)|productsApi\.(?:create|update|delete)/u)
+})
+
+test('属性弹窗完整有序展示，视频弹窗选择单一预览并保留安全外链', () => {
+  const attributesModal = readFileSync(new URL(
+    '../../src/views/admin/product-management/list/product-attributes-modal.vue',
+    import.meta.url,
+  ), 'utf8')
+  const videosModal = readFileSync(new URL(
+    '../../src/views/admin/product-management/list/product-videos-modal.vue',
+    import.meta.url,
+  ), 'utf8')
+
+  assert.match(attributesModal, /<QsGenericModal/u)
+  assert.match(attributesModal, /v-for="\(attribute, index\) in product\.attributes"/u)
+  assert.match(attributesModal, /关闭属性/u)
+  assert.match(videosModal, /<QsGenericModal/u)
+  assert.match(videosModal, /<video/u)
+  assert.match(videosModal, /controls/u)
+  assert.match(videosModal, /selectedVideo/u)
+  assert.match(videosModal, /target="_blank"/u)
+  assert.match(videosModal, /rel="noopener noreferrer"/u)
+  assert.match(videosModal, /url\.username === ''/u)
+  assert.match(videosModal, /url\.password === ''/u)
+  assert.match(videosModal, /pauseActiveVideo/u)
+  assert.match(videosModal, /关闭视频/u)
+})

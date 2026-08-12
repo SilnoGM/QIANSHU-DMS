@@ -176,15 +176,17 @@
 
   Task 9 证据：当前占位页对结构、列、权限、Catalog 和移动视图五组断言全部 RED；实现后与 Task 8 合并的定向测试 11/11 通过。页面只使用 `FaPageHeader + FaPageMain + QsGenericTable`，按确认顺序声明 15 个业务/审计列，编号默认 left-fixed、actions right-fixed，未显示 id/version，且关闭表格内 add/search。列表与供应商 Catalog 各自呈现状态，authEpoch/permission/requestVersion/Abort 共同保护结果；窄屏由 `mobile-row` 显式保持同源字段和操作。Web typecheck、目标 ESLint/Stylelint、production build、Noto 字体与 font-zero-residue 验证通过；首次 lint 的 21 个强制花括号/排序错误和 52 个格式警告经项目 formatter 修正，build 仅保留既有第三方 PURE 注释与 chunk size 警告。
 
-- [ ] 10. 以 TDD 完成特殊单元格、只读弹窗与占位动作
-  - [ ] 10.1 先建立 View RED，覆盖状态 `FaTag` 文字语义、供应商历史标识、主图/图片 `ImageGroup`、三列 `AmountDisplay`、日期和 actor 空态。
-  - [ ] 10.2 主图使用单项 `ImageGroup`，附加图片使用 `maxCount=3` 并保持整组预览；不得修改 ImageGroup 或把业务字段下沉到共享组件。
-  - [ ] 10.3 属性空值显示 `—`，非空显示可聚焦“`N 项属性`”按钮；使用局部 `QsGenericModal` 完整只读展示有序属性。
-  - [ ] 10.4 视频空值显示 `—`，非空显示图标和“`N 个视频`”按钮；弹窗提供地址选择、单一预览、加载失败安全外链，并在关闭时停止播放。
-  - [ ] 10.5 新增、查看、编辑分别调用确认文案的 `QsToast.info`；证明不导航、不发 API、不发号、不写数据。
-  - [ ] 10.6 覆盖 Escape、关闭按钮、焦点约束/恢复、44px 触控目标、light/dark、键盘和 Reduced Motion。
-  - [ ] 10.7 更新 Task 10 状态并在页面/组件定向测试和 Web 检查绿色后创建提交：`feat: 完善产品列表特殊字段展示`。
+- [x] 10. 以 TDD 完成特殊单元格、只读弹窗与占位动作
+  - [x] 10.1 先建立 View RED，覆盖状态 `FaTag` 文字语义、供应商历史标识、主图/图片 `ImageGroup`、三列 `AmountDisplay`、日期和 actor 空态。
+  - [x] 10.2 主图使用单项 `ImageGroup`，附加图片使用 `maxCount=3` 并保持整组预览；不得修改 ImageGroup 或把业务字段下沉到共享组件。
+  - [x] 10.3 属性空值显示 `—`，非空显示可聚焦“`N 项属性`”按钮；使用局部 `QsGenericModal` 完整只读展示有序属性。
+  - [x] 10.4 视频空值显示 `—`，非空显示图标和“`N 个视频`”按钮；弹窗提供地址选择、单一预览、加载失败安全外链，并在关闭时停止播放。
+  - [x] 10.5 新增、查看、编辑分别调用确认文案的 `QsToast.info`；证明不导航、不发 API、不发号、不写数据。
+  - [x] 10.6 覆盖 Escape、关闭按钮、焦点约束/恢复、44px 触控目标、light/dark、键盘和 Reduced Motion。
+  - [x] 10.7 更新 Task 10 状态并在页面/组件定向测试和 Web 检查绿色后创建提交：`feat: 完善产品列表特殊字段展示`。
   - _Requirements: R5-R6, R9-R11, R13-R15_
+
+  Task 10 证据：页面/弹窗契约先以既有骨架 5/8 通过、特殊字段与两个局部弹窗 3/8 RED；最小实现接入单项/三项 `ImageGroup`、三列 `AmountDisplay`、状态与供应商历史 `FaTag`、有序属性弹窗和单一视频预览弹窗，危险协议不生成预览或外链，关闭与卸载均暂停媒体。桌面与移动端入口保留可访问名称和 44px 触控下限，Escape、焦点恢复、light/dark 与 Reduced Motion 继续由既有 `QsGenericModal`/Fa/语义 Token 契约统一承载；新增、查看、编辑仅发 `QsToast.info`。定向页面测试最终 8/8，连同路由回归 12/12；全量 Web 首轮发现旧测试仍把正式列表误判为单按钮占位页（`10 !== 1`），收窄为仅约束未实施的新增页后，Node 脚本 171/171、TS 脚本 49/49、API/View 756/756、typecheck、ESLint、Stylelint、production build、Noto 字体和 font-zero-residue 全绿。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
 
 - [ ] 11. 扩展现有管理 Browser 回归
   - [ ] 11.1 先扩展 `management.browser.test.mjs` 建立真实 Chrome RED；不新建 Product 专属 CI Job。

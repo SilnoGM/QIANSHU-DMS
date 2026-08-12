@@ -7,20 +7,27 @@ import type {
 } from '@/components/business/QsGenericTable/logic'
 
 import productsApi from '@/api/modules/products'
+import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
+import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
+import ProductAttributesModal from './product-attributes-modal.vue'
 import {
   adaptProductPageDto,
   applyProductSupplierFilter,
+  buildProductImageItems,
   buildProductListQuery,
+  buildProductMainImageItems,
   buildSupplierFilterOptions,
   canApplyProductListResponse,
   getProductListApiFailure,
   isProductListAbortError,
 } from './product-list.logic'
+import ProductVideosModal from './product-videos-modal.vue'
 
 defineOptions({ name: 'AdminProductList' })
 
@@ -29,6 +36,7 @@ const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const toast = useQsToast()
 const supplierCatalog = useDictionaryCatalog(SUPPLIER_DICTIONARY_CODE)
+const { currencies } = useCurrencyCatalog()
 
 const canRead = computed(() => auth('products:read'))
 const canCreate = computed(() => auth('products:create'))
@@ -40,6 +48,10 @@ const filters = ref<QsGenericTableFilterValues>({})
 const loading = ref(false)
 const listError = ref('')
 const listRequestId = ref<string>()
+const attributesTarget = ref<ProductListItemViewModel | null>(null)
+const attributesVisible = ref(false)
+const videosTarget = ref<ProductListItemViewModel | null>(null)
+const videosVisible = ref(false)
 let listRequestVersion = 0
 let listAbortController: AbortController | null = null
 let queryRefreshPending = false
@@ -235,6 +247,46 @@ function statusLabel(status: ProductListItemViewModel['status']): string {
   }[status]
 }
 
+function statusClass(status: ProductListItemViewModel['status']): string {
+  return {
+    ACTIVE: 'border-primary/30 bg-primary/10 text-primary',
+    DRAFT: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
+    INACTIVE: 'border-border bg-muted text-muted-foreground',
+  }[status]
+}
+
+function supplierStateLabel(item: ProductListItemViewModel): string | null {
+  if (item.supplier?.state === 'DISABLED') {
+    return '已停用'
+  }
+  if (item.supplier?.state === 'UNKNOWN') {
+    return '未知'
+  }
+  return null
+}
+
+function supplierStateClass(item: ProductListItemViewModel): string {
+  return item.supplier?.state === 'UNKNOWN'
+    ? 'border-destructive/30 bg-destructive/5 text-destructive'
+    : 'border-border bg-muted text-muted-foreground'
+}
+
+function showAttributes(product: ProductListItemViewModel): void {
+  if (product.attributes.length === 0) {
+    return
+  }
+  attributesTarget.value = product
+  attributesVisible.value = true
+}
+
+function showVideos(product: ProductListItemViewModel): void {
+  if (product.videos.length === 0) {
+    return
+  }
+  videosTarget.value = product
+  videosVisible.value = true
+}
+
 function showCreatePlaceholder(): void {
   toast.info('新增产品功能将在后续版本开放')
 }
@@ -351,31 +403,91 @@ onBeforeUnmount(() => {
           <span class="qs-type-data font-mono">{{ row.original.productNo }}</span>
         </template>
         <template #cell-status="{ row }">
-          {{ statusLabel(row.original.status) }}
+          <FaTag
+            variant="outline"
+            class="qs-type-status-tag"
+            :class="statusClass(row.original.status)"
+          >
+            {{ statusLabel(row.original.status) }}
+          </FaTag>
         </template>
         <template #cell-supplier="{ row }">
-          {{ supplierDisplay(row.original) }}
+          <div class="flex flex-wrap gap-2 items-center">
+            <span class="break-all">{{ row.original.supplier?.label ?? row.original.supplier?.value ?? '—' }}</span>
+            <FaTag
+              v-if="supplierStateLabel(row.original)"
+              variant="outline"
+              class="qs-type-status-tag"
+              :class="supplierStateClass(row.original)"
+            >
+              {{ supplierStateLabel(row.original) }}
+            </FaTag>
+          </div>
         </template>
         <template #cell-mainImage="{ row }">
-          {{ row.original.mainImage ? '1 张' : '—' }}
+          <ImageGroup
+            :items="buildProductMainImageItems(row.original)"
+            :max-count="1"
+            radius="lg"
+            size="sm"
+          />
         </template>
         <template #cell-images="{ row }">
-          {{ row.original.images.length ? `${row.original.images.length} 张` : '—' }}
+          <ImageGroup
+            :items="buildProductImageItems(row.original)"
+            :max-count="3"
+            radius="lg"
+            size="sm"
+          />
         </template>
         <template #cell-videos="{ row }">
-          {{ row.original.videos.length ? `${row.original.videos.length} 个视频` : '—' }}
+          <FaButton
+            v-if="row.original.videos.length"
+            variant="ghost"
+            size="sm"
+            class="min-h-11 sm:min-h-9"
+            :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.videos.length} 个视频`"
+            @click="showVideos(row.original)"
+          >
+            <FaIcon name="i-lucide:video" />
+            {{ row.original.videos.length }} 个视频
+          </FaButton>
+          <span v-else>—</span>
         </template>
         <template #cell-twdSalePrice="{ row }">
-          {{ row.original.twdSalePrice.amount ?? '—' }} {{ row.original.twdSalePrice.currency }}
+          <AmountDisplay
+            :value="row.original.twdSalePrice.amount"
+            :currency="row.original.twdSalePrice.currency"
+            :currencies="currencies"
+          />
         </template>
         <template #cell-myrSalePrice="{ row }">
-          {{ row.original.myrSalePrice.amount ?? '—' }} {{ row.original.myrSalePrice.currency }}
+          <AmountDisplay
+            :value="row.original.myrSalePrice.amount"
+            :currency="row.original.myrSalePrice.currency"
+            :currencies="currencies"
+          />
         </template>
         <template #cell-purchaseCost="{ row }">
-          {{ row.original.purchaseCost.amount ?? '—' }} {{ row.original.purchaseCost.currency }}
+          <AmountDisplay
+            :value="row.original.purchaseCost.amount"
+            :currency="row.original.purchaseCost.currency"
+            :currencies="currencies"
+          />
         </template>
         <template #cell-attributes="{ row }">
-          {{ row.original.attributes.length ? `${row.original.attributes.length} 项属性` : '—' }}
+          <FaButton
+            v-if="row.original.attributes.length"
+            variant="ghost"
+            size="sm"
+            class="min-h-11 sm:min-h-9"
+            :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.attributes.length} 项属性`"
+            @click="showAttributes(row.original)"
+          >
+            <FaIcon name="i-lucide:list-tree" />
+            {{ row.original.attributes.length }} 项属性
+          </FaButton>
+          <span v-else>—</span>
         </template>
         <template #cell-createdAt="{ row }">
           <DateTimeDisplay :value="row.original.createdAt" />
@@ -437,7 +549,9 @@ onBeforeUnmount(() => {
               <dt class="qs-type-compact-label">
                 产品状态
               </dt><dd class="m-0">
-                {{ statusLabel(row.status) }}
+                <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row.status)">
+                  {{ statusLabel(row.status) }}
+                </FaTag>
               </dd>
             </div>
             <div class="col-span-2">
@@ -448,24 +562,94 @@ onBeforeUnmount(() => {
               </dd>
             </div>
             <div>
+              <dt class="qs-type-compact-label mb-1">
+                产品主图
+              </dt><dd class="m-0">
+                <ImageGroup
+                  :items="buildProductMainImageItems(row)"
+                  :max-count="1"
+                  radius="lg"
+                  size="sm"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt class="qs-type-compact-label mb-1">
+                产品图片
+              </dt><dd class="m-0">
+                <ImageGroup
+                  :items="buildProductImageItems(row)"
+                  :max-count="3"
+                  radius="lg"
+                  size="sm"
+                />
+              </dd>
+            </div>
+            <div>
+              <dt class="qs-type-compact-label">
+                产品视频
+              </dt><dd class="m-0">
+                <FaButton
+                  v-if="row.videos.length"
+                  variant="ghost"
+                  class="min-h-11"
+                  :aria-label="`查看产品 ${row.productNo} 的 ${row.videos.length} 个视频`"
+                  @click="showVideos(row)"
+                >
+                  <FaIcon name="i-lucide:video" />
+                  {{ row.videos.length }} 个视频
+                </FaButton>
+                <span v-else>—</span>
+              </dd>
+            </div>
+            <div>
+              <dt class="qs-type-compact-label">
+                产品属性
+              </dt><dd class="m-0">
+                <FaButton
+                  v-if="row.attributes.length"
+                  variant="ghost"
+                  class="min-h-11"
+                  :aria-label="`查看产品 ${row.productNo} 的 ${row.attributes.length} 项属性`"
+                  @click="showAttributes(row)"
+                >
+                  <FaIcon name="i-lucide:list-tree" />
+                  {{ row.attributes.length }} 项属性
+                </FaButton>
+                <span v-else>—</span>
+              </dd>
+            </div>
+            <div>
               <dt class="qs-type-compact-label">
                 台币销售价
               </dt><dd class="m-0">
-                {{ row.twdSalePrice.amount ?? '—' }} {{ row.twdSalePrice.currency }}
+                <AmountDisplay
+                  :value="row.twdSalePrice.amount"
+                  :currency="row.twdSalePrice.currency"
+                  :currencies="currencies"
+                />
               </dd>
             </div>
             <div>
               <dt class="qs-type-compact-label">
                 马币销售价
               </dt><dd class="m-0">
-                {{ row.myrSalePrice.amount ?? '—' }} {{ row.myrSalePrice.currency }}
+                <AmountDisplay
+                  :value="row.myrSalePrice.amount"
+                  :currency="row.myrSalePrice.currency"
+                  :currencies="currencies"
+                />
               </dd>
             </div>
             <div>
               <dt class="qs-type-compact-label">
                 采购成本价
               </dt><dd class="m-0">
-                {{ row.purchaseCost.amount ?? '—' }} {{ row.purchaseCost.currency }}
+                <AmountDisplay
+                  :value="row.purchaseCost.amount"
+                  :currency="row.purchaseCost.currency"
+                  :currencies="currencies"
+                />
               </dd>
             </div>
             <div>
@@ -508,5 +692,14 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
+
+    <ProductAttributesModal
+      v-model="attributesVisible"
+      :product="attributesTarget"
+    />
+    <ProductVideosModal
+      v-model="videosVisible"
+      :product="videosTarget"
+    />
   </div>
 </template>
