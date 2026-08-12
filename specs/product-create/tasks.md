@@ -1,0 +1,415 @@
+# 产品创建实施任务
+
+## 1. 文档状态
+
+- 状态：Phase 3 已确认，Phase 4 实施中
+- Requirements 确认日期：2026-08-12
+- Design 确认日期：2026-08-12
+- 编写日期：2026-08-12
+- 实施分支：`feat/admin-product-management`
+- Requirements：`specs/product-create/requirements.md`
+- Design：`specs/product-create/design.md`
+- 当前门禁：Gate T 已于 2026-08-12 确认；Phase 4 只按 Gate R/D/T 边界实施，Gate DB 与 Gate E 仍未授权
+
+本计划把产品创建拆为 14 个可独立验证、保持绿色并形成小步提交的任务。任务顺序固定为：绿色基线 -> Schema/Audit -> 编号 scoped 幂等 -> Currency Lookup -> Product 纯逻辑 -> Product Command -> 公共 API -> Server E2E -> OpenAPI 同步 -> Web API/状态机 -> 表单组件 -> 页面编排 -> Browser 验收 -> 全量收口。
+
+## 2. 执行纪律
+
+每个功能任务遵循同一 TDD 闭环：
+
+```text
+确认任务边界与前置门禁
+-> 添加因目标能力缺失而失败的测试
+-> 运行并记录预期 RED 原因
+-> 实现最小正确能力
+-> 重构并补齐失败/并发/安全路径
+-> 运行任务级 GREEN 验证
+-> 更新 tasks.md 的状态与真实证据
+-> 检查 staged diff、secrets 与 generated 边界
+-> 创建绿色小步提交
+```
+
+执行规则：
+
+1. 不提交永久红测、不能 typecheck 或不能构建的状态；RED 只作为实施过程证据。
+2. 命令错误或测试失败必须记录真实命令、退出码和原因；未转绿前不得勾选任务。
+3. 只使用 `apply_patch` 编辑源码和手写文档；OpenAPI/generated 产物只由根脚本生成。
+4. 不手工修改 `server/openapi/openapi.json`、`web/openapi/openapi.json` 或 `web/apps/qsmds-arco/src/api/generated/**`。
+5. 不修改任何既有 migration；唯一新 migration 只增加 `PRODUCT_CREATED` enum value。
+6. 不修改 Product、Numbering、Currency 或 Dictionary 表结构，不新增 Product 幂等表，不 seed 持久环境业务数据。
+7. 不恢复独立 Supplier Model/API/Store/权限或专用选择器；产品只保存 `service_provider.supplier` 的稳定 `supplierValue`。
+8. 不修改 `MoneyInput`、`QsDictionarySelect`、`QsGenericModal`、`QsGenericTable` 等公共组件契约；业务规则留在 Product 调用方。
+9. 不实现媒体输入/上传、Product 查看/编辑/状态变更/删除、SKU/SPU 或新权限。
+10. 不新增第三方依赖，不在根目录创建依赖资产，不让 Web/Server 跨目录引用源码。
+11. Numbering scoped 入口只能接收固定摘要，不能让 Numbering 模块认识 Product Payload、User 或 Audit。
+12. Product mutation 必须 `retry:false`；原始 Key/Payload 不进入日志、Audit、持久浏览器存储或错误正文。
+13. Prisma generate、Server check、contract sync/check 必须串行执行，避免并发改写 generated tree。
+14. 每次提交前运行范围匹配的测试和 `git diff --check`，核对暂存范围、`.env`、密钥、日志与构建产物。
+15. Commit Message 类型使用英文、描述使用中文；不使用 amend、rebase、force push 或历史重写。
+16. 未经后续明确授权，不把 migration 应用到持久开发库，不执行 push、PR、merge、部署、分支删除或 worktree 清理。
+
+## 3. 阶段与高风险门禁
+
+### Gate R - Requirements
+
+- [x] Product 字段、状态、供应商、金额、属性、媒体延期、权限、幂等、页面与验收标准已确认。
+- [x] `ACTIVE` 供应商要求、价格币种、属性上限与未知结果人工重放语义已确认。
+
+### Gate D - Design 与高风险变更方向
+
+- [x] 用户已于 2026-08-12 确认 `POST /api/products` / `products_create`、Create DTO 和必填 `Idempotency-Key` Header。
+- [x] 用户已确认内部 `GenerateScopedNumberRequest` / `generateScoped()`，复用既有 issuance 指纹列且不新增幂等表。
+- [x] 用户已确认 Prisma `AuditEventType.PRODUCT_CREATED` 与只扩展 enum 的 append-only migration。
+- [x] 用户已确认 OpenAPI/generated types 更新与正式 Web 创建页面方向。
+
+### Gate T - Phase 3 任务清单与正式实施
+
+- [x] 用户已于 2026-08-12 确认本任务顺序、TDD 证据、文件边界、提交序列和验证矩阵。
+- [x] Gate T 已确认，Phase 4 只实施 Gate R/D 已确认的精确范围。
+
+### Gate DB - 持久开发数据库
+
+- [ ] 创建 migration 文件和隔离 PostgreSQL 验证不等于持久数据库授权。
+- [ ] 若后续需要应用，必须先展示唯一 migration、目标数据库、只读影响检查和备份/恢复边界，再取得独立明确确认。
+
+### Gate E - 外部发布
+
+- [ ] 本地完成后暂停；push、PR、merge、部署和非本地数据库变更均需新的明确授权。
+
+## 4. 实施任务
+
+- [ ] 1. 建立 Phase 4 绿色基线并复核可变真相源
+  - [ ] 1.1 复核当前 branch、HEAD、工作树和三份规格状态，确认没有用户未提交修改与本功能重叠。
+  - [ ] 1.2 只读确认 Product Schema、ProductsModule、现有 `products_list`、创建占位页、路由权限和产品列表按钮仍符合 Design 基线。
+  - [ ] 1.3 只读确认开发环境 `PRODUCT` Rule、Active Version、`service_provider.supplier`、`TWD/MYR/CNY` 当前状态；只记录环境快照，不写入、不把数量编码为契约。
+  - [ ] 1.4 运行 Product/Numbering/Currency/Dictionary/Audit、Web 产品页、OpenAPI 和根治理的现有绿色基线。
+  - [ ] 1.5 核对 Gate R、Gate D 与 Gate T 已通过；任一缺失则不得进入 Task 2。
+  - [ ] 1.6 记录基线 SHA、命令和结果；本任务无源码变更时不创建空提交。
+  - _Requirements: R1-R14_
+
+- [ ] 2. 以 TDD 增加 `PRODUCT_CREATED` Audit enum 与 forward migration
+  - [ ] 2.1 先为 Prisma Schema 和 migration 建立失败测试，精确要求新 enum value、唯一新 migration、无其他表 DDL、无 seed、无旧 migration 改写。
+  - [ ] 2.2 运行 RED，确认失败仅因 `PRODUCT_CREATED` 尚不存在。
+  - [ ] 2.3 在已确认 Gate D 范围内修改 `schema.prisma`，新增 `20260812100000_product_created_audit_event/migration.sql`。
+  - [ ] 2.4 用隔离 PostgreSQL 验证从当前 migration 集升级和空库全量 replay；不得应用到持久开发库。
+  - [ ] 2.5 运行 Prisma validate/generate、Schema 测试、Audit 相关单测、Server typecheck 和 root governance。
+  - [ ] 2.6 更新 Task 2 真实证据，创建提交：`feat: 增加产品创建审计事件`。
+  - _Requirements: R8, R14_
+
+- [ ] 3. 以 TDD 扩展 Numbering scoped 幂等入口
+  - [ ] 3.1 先建立 `numbering-internal-input` 与 generator RED，覆盖 64 位小写 SHA-256 摘要校验、raw Key Hash、scoped 重放和 fingerprint 冲突。
+  - [ ] 3.2 用历史固定向量证明既有 `generate()` 的 v1 request fingerprint 完全不漂移，历史 issuance 仍可重放。
+  - [ ] 3.3 实现 `GenerateScopedNumberRequest` 与 `generateScoped()`，两个入口复用同一发号状态机、唯一竞态恢复和安全错误映射。
+  - [ ] 3.4 证明 scoped 入口不接收 Product Payload/User/Audit，不把 raw Key、scope digest 或底层错误写入日志/异常。
+  - [ ] 3.5 覆盖相同 Consumer/Key/scope 返回同一编号，相同 Key 不同 scope 返回 `NUMBERING_IDEMPOTENCY_CONFLICT`，包括并发唯一竞态。
+  - [ ] 3.6 运行 Numbering unit/E2E 回归、Server typecheck/lint 和 diff-check。
+  - [ ] 3.7 更新 Task 3 真实证据，创建提交：`feat: 增加编号作用域幂等入口`。
+  - _Requirements: R4, R8, R13-R14_
+
+- [ ] 4. 以 TDD 增加事务内 Currency Lookup
+  - [ ] 4.1 先为 `CurrencyLookupService.requireEnabledCodes()` 建立 RED，覆盖输入去重、code 稳定排序、`FOR SHARE`、缺失、停用和非法 `minorUnit`。
+  - [ ] 4.2 实现调用方事务内单 SQL 读取，返回冻结的 `{ code, minorUnit }`；Service 不创建嵌套事务。
+  - [ ] 4.3 错误类型只暴露稳定 reason/code，Prisma/PostgreSQL 异常统一脱敏，不携带整份输入。
+  - [ ] 4.4 从 CurrencyModule 只导出 Lookup，Query/Command 继续保持模块私有；不修改 Currency 表或 Catalog HTTP 契约。
+  - [ ] 4.5 运行 Currency 定向单测、既有管理回归、Server typecheck/lint 和 diff-check。
+  - [ ] 4.6 更新 Task 4 真实证据，创建提交：`feat: 增加币种有效性查询服务`。
+  - _Requirements: R5, R8, R13-R14_
+
+- [ ] 5. 以 TDD 建立 Product 创建 DTO、规范化与作用域指纹
+  - [ ] 5.1 先建立 Create DTO RED，覆盖所有必填字段、nested Money/Attribute、未知字段拒绝、状态和 nullable 的精确语义。
+  - [ ] 5.2 建立 normalizer RED：trim/NFC、Unicode code points、Active supplier、固定 `TWD/MYR`、采购币种格式、严格金额 grammar、26+4 边界和属性上限/顺序/重复。
+  - [ ] 5.3 建立 Header RED：缺失、合并重复值、非 lowercase、非 v4 和合法 canonical UUID。
+  - [ ] 5.4 建立 fingerprint 固定向量 RED，覆盖等价金额、NFC、actor、null、属性顺序和 Payload 变化。
+  - [ ] 5.5 最小实现纯函数与安全错误类型；规范化结果深复制/冻结，不持有调用方可变对象。
+  - [ ] 5.6 证明任何 DTO/normalizer 失败都发生在发号前，错误只含白名单字段路径，不回显输入。
+  - [ ] 5.7 运行 Product DTO/normalizer/fingerprint 定向测试、Server typecheck/lint 和 diff-check。
+  - [ ] 5.8 更新 Task 5 真实证据，创建提交：`feat: 建立产品创建输入规范`。
+  - _Requirements: R2-R7, R9, R13-R14_
+
+- [ ] 6. 以 TDD 实现 Product Command 与原子审计
+  - [ ] 6.1 先为 persistence 与 Command 建立 RED，固定 preflight -> scoped generate -> replay/read -> Product transaction 的调用顺序。
+  - [ ] 6.2 实现 preflight transaction，第一条 SQL 设置 timeout，按 Supplier Type/Item -> Currency code 的稳定锁序验证有效性和 `minorUnit`。
+  - [ ] 6.3 调用 `generateScoped({ ruleCode: 'PRODUCT', consumerCode: 'PRODUCT.CREATE' })`；映射 Rule 不可用、容量、状态和 scope 冲突为 Product 公共错误。
+  - [ ] 6.4 实现 replay：既有 Product 必须与 actor/规范化 Payload 精确一致；一致返回同一 Product 且不写新 Audit，不一致返回幂等冲突。
+  - [ ] 6.5 实现 Product write transaction：timeout 第一条 SQL、再次校验依赖、固定媒体空值、insert Product、同事务 `PRODUCT_CREATED` Audit。
+  - [ ] 6.6 Audit 只包含 `productNo/status`、供应商/价格存在性和 attribute count，不含金额、属性内容、supplier value、Key、fingerprint 或请求体。
+  - [ ] 6.7 精确处理 `products_product_no_key` 并发竞态；事务失败后重读匹配才转幂等成功，其他持久化异常固定脱敏。
+  - [ ] 6.8 覆盖 Audit 失败整体回滚、编号已提交但 Product 失败保留间隙、相同 Key/Payload 恢复原编号、配置二次校验变化。
+  - [ ] 6.9 复用 Product 响应 mapper 与历史 supplier 解析，避免创建第二份响应协议或 N+1。
+  - [ ] 6.10 运行 Product Command/Mapper、Numbering/Currency/Dictionary/Audit 相关回归、Server typecheck/lint 和 diff-check。
+  - [ ] 6.11 更新 Task 6 真实证据，创建提交：`feat: 实现产品创建命令`。
+  - _Requirements: R3-R8, R13-R14_
+
+- [ ] 7. 以 TDD 暴露受保护的 Product 创建公共 API
+  - [ ] 7.1 先建立 Controller metadata/OpenAPI RED，精确要求 `POST /api/products`、operationId `products_create`、`products:create`、CSRF、private no-store、201 和必填 Header。
+  - [ ] 7.2 实现 Controller 从可信 Auth/Request ID/Header 构造 Command context，Body 只接收 Create DTO。
+  - [ ] 7.3 在 ProductsModule 注册已确认的依赖和 ProductCommandService；不得新增其他 Product 写 operation。
+  - [ ] 7.4 固定 403/409/422/500 错误矩阵和安全中文消息，证明无权/强制改密/CSRF 失败不调用 Command。
+  - [ ] 7.5 扩展 Product operation allowlist，只新增 `products_create`，保留 `products_list`，拒绝 detail/update/status/delete/media/generate 路由。
+  - [ ] 7.6 运行 Controller/Module/OpenAPI 前置测试、Server typecheck/lint/build 和 diff-check。
+  - [ ] 7.7 更新 Task 7 真实证据，创建提交：`feat: 添加产品创建接口`。
+  - _Requirements: R1, R4, R8-R9, R13-R14_
+
+- [ ] 8. 完成 Product 创建隔离 PostgreSQL 与 API E2E
+  - [ ] 8.1 先建立 `product-create-api.e2e-spec.ts` RED，只在隔离测试数据库准备受控 `PRODUCT` Rule、Active Version、供应商与币种 fixture。
+  - [ ] 8.2 覆盖认证、`products:create`、CSRF、Header、未知字段、Active supplier、金额精度/边界和有序属性。
+  - [ ] 8.3 覆盖成功 201、自动编号、固定媒体、三组 Decimal/币种、actor/version/timestamp 和 `PRODUCT_CREATED` Audit metadata。
+  - [ ] 8.4 覆盖相同 actor/Key/Payload 重放、不同 Payload/actor 冲突、编号后 Product 失败恢复以及相同 Key 并发只落一条 Product/Audit/issuance。
+  - [ ] 8.5 覆盖 Rule 缺失/停用/无 Active Version/容量耗尽、Supplier/Currency 提交期间变化和安全错误脱敏。
+  - [ ] 8.6 证明新 migration 可全量 replay 且无 Product/业务配置 seed；测试结束可靠清理，不触碰持久开发库。
+  - [ ] 8.7 运行 Product 定向 E2E 和官方隔离 `node --run ci:server-e2e`；如有既有套件漂移，报告并以最新完整结果为准。
+  - [ ] 8.8 更新 Task 8 真实证据；只有测试变更时创建 `test: 补齐产品创建服务端验收`，若暴露生产缺陷则用独立 `fix:` 提交最小修复。
+  - _Requirements: R1-R9, R13-R14_
+
+- [ ] 9. 同步 OpenAPI 与 Web generated contract
+  - [ ] 9.1 先运行 `contract:check` 记录 tracked snapshot 尚缺 `products_create` 的预期 RED，不手改任何产物。
+  - [ ] 9.2 串行运行根 `contract:sync`，生成 Server/Web snapshot 与 Web API types。
+  - [ ] 9.3 核对 diff 只新增已确认的 POST、Header、Create DTO、201 响应和错误矩阵；既有 GET 不得漂移。
+  - [ ] 9.4 运行 `contract:check`、contract baseline、Server build 和 Web typecheck，证明两份 snapshot 字节一致。
+  - [ ] 9.5 更新 Task 9 真实证据，创建提交：`chore: 同步产品创建接口契约`。
+  - _Requirements: R9, R14_
+
+- [ ] 10. 以 TDD 实现 Web Product mutation adapter 与纯状态逻辑
+  - [ ] 10.1 先建立 API RED，覆盖 generated Create DTO、POST URL、`Idempotency-Key`、AbortSignal、`retry:false`、local error presentation 和 201 类型。
+  - [ ] 10.2 先建立 logic RED，覆盖默认 model、stable row key、dirty、trim/NFC DTO、MoneyInput validation 结果和属性映射。
+  - [ ] 10.3 建立字段错误白名单 parser RED，覆盖 nested money、`attributes.0..49`、未知/恶意路径降级和 requestId。
+  - [ ] 10.4 建立页面状态机 RED，覆盖 editing/submitting/deterministic failure/unknown/success、冻结 snapshot/key、人工同请求重放和显式放弃。
+  - [ ] 10.5 实现 `crypto.randomUUID()` 延迟建 Key，不把 DTO/Key 写入 Store、Storage、URL 或日志；深复制冻结 unknown snapshot。
+  - [ ] 10.6 HTTP `4xx` 解锁并使下一次提交使用新 Key；network/`5xx` 保留同 Key/Payload，禁止自动重试。
+  - [ ] 10.7 运行 Web Product API/logic 定向测试、typecheck、ESLint 和 diff-check。
+  - [ ] 10.8 更新 Task 10 真实证据，创建提交：`feat: 建立产品创建前端状态`。
+  - _Requirements: R1-R7, R9, R11-R14_
+
+- [ ] 11. 以 TDD 实现产品表单与属性编辑器
+  - [ ] 11.1 先建立 View RED，固定基础资料、状态/供应商、三组 MoneyInput、属性、媒体延期说明和操作按钮。
+  - [ ] 11.2 实现 `product-attributes-editor.vue`：最多 50 项，稳定 key、增删、上移/下移、序号、边界 disabled 和可访问名称。
+  - [ ] 11.3 实现 `product-create-form.vue`：真实 label/description/error 关联、动态 Active supplier required、提交锁和首个错误滚动聚焦。
+  - [ ] 11.4 `TWD/MYR` 传单一当前有效 descriptor，采购成本传有效货币集合；切币种不得修改 amount。
+  - [ ] 11.5 Catalog loading/error/empty、金额错误和 Attribute 错误都用文字呈现，不只依赖颜色或图标。
+  - [ ] 11.6 实现桌面 8/4 grid、窄屏单列、44px 移动触控、light/dark Token、Noto 字体和 Reduced Motion 边界。
+  - [ ] 11.7 不修改公共组件，不增加媒体 URL/上传控件或装饰性新依赖。
+  - [ ] 11.8 运行表单/属性 View 测试、Web typecheck、ESLint、Stylelint、build 和 diff-check。
+  - [ ] 11.9 更新 Task 11 真实证据，创建提交：`feat: 实现产品创建表单`。
+  - _Requirements: R2-R7, R10-R11, R14_
+
+- [ ] 12. 以 TDD 完成创建页面编排、权限与导航
+  - [ ] 12.1 先建立页面 RED，覆盖 `FaPageHeader + FaPageMain`、Catalog 状态、API 调用、提交锁、错误摘要和成功分支。
+  - [ ] 12.2 把产品列表“新增产品”从 Toast 改为 `adminProductCreate` 导航；查看/编辑轻提示保持不变。
+  - [ ] 12.3 实现 Supplier/Currency Catalog 提交门禁：DRAFT/INACTIVE supplier null 可降级，ACTIVE 或已选 supplier 必须可信；Currency 失败始终阻止提交并保留草稿。
+  - [ ] 12.4 实现 requestVersion/authEpoch/permission/Abort 竞态守卫，身份域变化清除草稿与幂等上下文，迟到响应不能更新新身份。
+  - [ ] 12.5 实现 success：有 `products:read` Toast 后返回列表；create-only 显示产品编号与“继续新增”。
+  - [ ] 12.6 实现 unknown-result：冻结表单、相同 Key/Payload 人工确认和明确放弃。
+  - [ ] 12.7 使用同级 `QsGenericModal` 实现页面取消/路由离开确认；刷新关闭用 `beforeunload`，成功/放弃后不再提示。
+  - [ ] 12.8 覆盖键盘操作、焦点恢复、busy/alert 语义、窄屏无横向滚动和权限按钮可见性。
+  - [ ] 12.9 运行产品页面/路由/API 定向测试、完整 Web `test:api`、typecheck、lint、build 和 diff-check。
+  - [ ] 12.10 更新 Task 12 真实证据，创建提交：`feat: 完成产品创建页面流程`。
+  - _Requirements: R1, R3-R7, R10-R14_
+
+- [ ] 13. 扩展现有管理 Browser 真实验收
+  - [ ] 13.1 先扩展 `management.browser.test.mjs` 建立 Chrome RED，不新建 Product 专属 CI Job。
+  - [ ] 13.2 在 `provision-admin.mjs` 仅为隔离 Browser 数据库准备有效 `PRODUCT` Rule/Version/Segment、供应商和币种前置；不得修改生产 seed 或持久数据库。
+  - [ ] 13.3 覆盖列表入口导航、默认 DRAFT、Active supplier、三组金额、币种切换不换算、属性增删排序和媒体延期说明。
+  - [ ] 13.4 提交真实 Product，核对成功 Toast/产品编号/列表搜索、数据库 Product/Audit/issuance 最终态。
+  - [ ] 13.5 覆盖同步重复点击锁、Server 字段错误、Catalog retry、未保存离开确认和 unknown-result 人工重放；网络故障必须通过受控请求拦截产生。
+  - [ ] 13.6 覆盖 1440x900 Desktop、390x844 Mobile、light/dark、Reduced Motion、44px targets、键盘和无页面级横向溢出。
+  - [ ] 13.7 运行根 `node --run ci:browser-auth-e2e`，确保容器、Chrome 和临时状态由现有 runner 回收。
+  - [ ] 13.8 更新 Task 13 真实证据；纯验收创建 `test: 补齐产品创建浏览器验收`，若暴露缺陷使用独立 `fix:` 提交。
+  - _Requirements: R1-R14_
+
+- [ ] 14. 完成全量验证、规格状态与 Git 收口
+  - [ ] 14.1 冻结生产/测试源码，汇总 Task 2-13 的真实 RED/GREEN、提交 SHA、失败与非阻断警告；不得预写结果。
+  - [ ] 14.2 串行执行第 5 节完整矩阵，确认 Schema、Server unit/E2E、OpenAPI、Web API/View、Browser、build、root governance 和 diff-check 全绿。
+  - [ ] 14.3 复核最终文件矩阵：无禁止路径、删除、旧 migration 改写、额外 Schema、依赖/lockfile、持久数据、Supplier 领域复活、未授权 Product operation 或敏感文件。
+  - [ ] 14.4 明确记录 Gate DB 状态；未获独立授权时，新 migration 只能存在于代码并已在隔离 PostgreSQL 验证，不得部署到持久开发库。
+  - [ ] 14.5 将 Requirements、Design、Tasks 更新为实际完成状态和真实提交证据；文档收口后不再修改生产/测试源码。
+  - [ ] 14.6 暂存精确文件并核对 secrets/staged diff，创建提交：`docs: 完成产品创建实施验收`。
+  - [ ] 14.7 核对 `git status --short --branch`、相对基线提交序列和每个提交范围，向用户交付本地结果后暂停。
+  - [ ] 14.8 不执行 push、PR、merge、deploy、持久数据库 migration 或分支清理。
+  - _Requirements: R1-R14_
+
+## 5. 验证矩阵
+
+### 5.1 Phase 3 文档验证
+
+```bash
+node --run test:root
+git diff --check
+git status --short --branch
+```
+
+### 5.2 Phase 4 任务级验证
+
+实际文件建立后使用下列定向入口；每次 RED/GREEN 都在对应 Task 证据中记录：
+
+```bash
+# Server unit（按任务选择精确 spec；命令必须串行）
+pnpm -C server test --runInBand \
+  src/modules/numbering/numbering-internal-input.spec.ts \
+  src/modules/numbering/numbering-generator.service.spec.ts
+
+pnpm -C server test --runInBand \
+  src/modules/currencies/currency-lookup.service.spec.ts \
+  src/modules/products/dto/product-dtos.spec.ts \
+  src/modules/products/product-command.normalizer.spec.ts \
+  src/modules/products/product-create-fingerprint.spec.ts \
+  src/modules/products/product-command.persistence.spec.ts \
+  src/modules/products/product-command.service.spec.ts \
+  src/modules/products/products.controller.spec.ts \
+  src/modules/products/products.module.spec.ts
+
+# Server isolated E2E
+pnpm -C server test:e2e product-create-api.e2e-spec.ts
+node --run ci:server-e2e
+
+# Web unit/view
+pnpm -C web exec tsx --test \
+  apps/qsmds-arco/test/api/products.test.ts \
+  apps/qsmds-arco/test/views/product-create.logic.test.ts \
+  apps/qsmds-arco/test/views/product-create-page.test.ts
+
+# Browser
+node --run ci:browser-auth-e2e
+```
+
+若 Jest/tsx 的过滤参数与当前 runner 不兼容，必须先核对 package script 后使用项目真实支持的精确入口，不能用“0 tests”冒充通过。若 `tsx --test` 在受限 shell 出现 `listen EPERM ...*.pipe`，改用项目已验证的 `node --import tsx --test` 或在允许 IPC 的环境重跑，并报告环境错误。
+
+### 5.3 Phase 4 最终验证
+
+```bash
+# 串行执行，避免 Prisma/generated 竞态
+pnpm -C server prisma:validate
+pnpm -C server typecheck
+pnpm -C server lint
+pnpm -C server test --runInBand
+node --run ci:server-e2e
+
+node --run contract:sync
+node --run contract:check
+
+pnpm -C web test:api
+pnpm -C web typecheck
+pnpm -C web lint
+pnpm -C web build
+node --run ci:browser-auth-e2e
+
+node --run test:root
+node --run check
+node --run build
+git diff --check
+git status --short --branch
+```
+
+`contract:sync` 只在 Task 9 和最终复核受控运行。`ci:contract` 依赖真实 GitHub event context，本地不伪造 event；其 baseline 逻辑由根测试覆盖。
+
+## 6. 精确文件边界
+
+### 6.1 计划新增
+
+```text
+server/prisma/migrations/20260812100000_product_created_audit_event/migration.sql
+server/src/infrastructure/database/product-create-schema.spec.ts
+server/src/modules/currencies/currency-lookup.service.ts
+server/src/modules/currencies/currency-lookup.service.spec.ts
+server/src/modules/products/dto/product-create.dto.ts
+server/src/modules/products/product-command.normalizer.ts
+server/src/modules/products/product-command.normalizer.spec.ts
+server/src/modules/products/product-create-fingerprint.ts
+server/src/modules/products/product-create-fingerprint.spec.ts
+server/src/modules/products/product-command.persistence.ts
+server/src/modules/products/product-command.persistence.spec.ts
+server/src/modules/products/product-command.service.ts
+server/src/modules/products/product-command.service.spec.ts
+server/src/modules/products/product.errors.ts
+server/src/modules/products/product.persistence-error.mapper.ts
+server/src/modules/products/product.persistence-error.mapper.spec.ts
+server/test/product-create-api.e2e-spec.ts
+
+web/apps/qsmds-arco/src/views/admin/product-management/create/product-create.logic.ts
+web/apps/qsmds-arco/src/views/admin/product-management/create/product-create-form.vue
+web/apps/qsmds-arco/src/views/admin/product-management/create/product-attributes-editor.vue
+web/apps/qsmds-arco/test/views/product-create.logic.test.ts
+web/apps/qsmds-arco/test/views/product-create-page.test.ts
+```
+
+测试过程中若证明某个拆分文件没有独立职责，可在不扩大行为范围的前提下合并；不得为满足文件清单制造空壳抽象。
+
+### 6.2 计划修改
+
+```text
+server/prisma/schema.prisma
+server/src/modules/audit/**                         # enum 回归或查询测试，非新 writer
+server/src/modules/currencies/currency.module.ts
+server/src/modules/numbering/numbering-internal-input.ts
+server/src/modules/numbering/numbering-generator.service.ts
+server/src/modules/numbering/*spec.ts
+server/src/modules/products/dto/product-dtos.spec.ts
+server/src/modules/products/product-query.mapper.ts  # 只允许复用/扩展 mapper
+server/src/modules/products/product-query.mapper.spec.ts
+server/src/modules/products/products.controller.ts
+server/src/modules/products/products.controller.spec.ts
+server/src/modules/products/products.module.ts
+server/src/modules/products/products.module.spec.ts
+server/openapi/openapi.json                          # generated only
+
+web/openapi/openapi.json                             # generated only
+web/apps/qsmds-arco/src/api/generated/**             # generated only
+web/apps/qsmds-arco/src/api/modules/products.ts
+web/apps/qsmds-arco/test/api/products.test.ts
+web/apps/qsmds-arco/src/views/admin/product-management/create/index.vue
+web/apps/qsmds-arco/src/views/admin/product-management/list/index.vue
+web/apps/qsmds-arco/test/api/product-management-routes.test.ts
+web/apps/qsmds-arco/test/browser/management.browser.test.mjs
+scripts/browser-auth/provision-admin.mjs
+scripts/browser-auth-runtime.test.mjs
+scripts/root-governance.test.mjs
+
+specs/product-create/requirements.md
+specs/product-create/design.md
+specs/product-create/tasks.md
+```
+
+### 6.3 禁止修改或删除
+
+```text
+existing prisma migrations
+server/src/modules/suppliers/**
+web/apps/qsmds-arco/src/api/modules/suppliers.ts
+web/apps/qsmds-arco/src/components/base/MoneyInput/**
+web/apps/qsmds-arco/src/components/business/QsDictionarySelect/**
+web/apps/qsmds-arco/src/components/business/QsGenericModal/**
+web/apps/qsmds-arco/src/components/business/QsGenericTable/**
+web/apps/qsmds-arco/src/router/modules/product.management.ts
+package.json / lockfiles
+.env files
+```
+
+若实现证明必须越过上述边界、修改 Product/Numbering/Currency/Dictionary 表、增加依赖或增加其他公共 Product operation，立即暂停，回到 Requirements/Design 并重新取得明确确认。
+
+## 7. 建议提交序列
+
+1. `feat: 增加产品创建审计事件`
+2. `feat: 增加编号作用域幂等入口`
+3. `feat: 增加币种有效性查询服务`
+4. `feat: 建立产品创建输入规范`
+5. `feat: 实现产品创建命令`
+6. `feat: 添加产品创建接口`
+7. `test: 补齐产品创建服务端验收`
+8. `chore: 同步产品创建接口契约`
+9. `feat: 建立产品创建前端状态`
+10. `feat: 实现产品创建表单`
+11. `feat: 完成产品创建页面流程`
+12. `test: 补齐产品创建浏览器验收`
+13. `docs: 完成产品创建实施验收`
+
+只有对应任务全部绿色后才提交。若任务没有独立变更，不创建空提交；若测试暴露生产缺陷，用职责明确的 `fix:` 小步提交，不把修复藏入 `test:` 或 `docs:`。
+
+## 8. Phase 3 确认门
+
+确认 Gate T 表示：
+
+1. 接受 Task 1-14 的顺序、TDD 证据、隔离数据库、真实 Browser、生成产物和最终矩阵作为完成条件。
+2. 授权进入 Phase 4，并在 Gate R/D 已确认的精确范围内实施公共 `POST /api/products`、Create DTO/Header、内部 Numbering scoped 数据结构、`PRODUCT_CREATED` Prisma enum/migration、OpenAPI/generated types 和正式创建页面。
+3. 允许在不改变职责和行为边界的前提下合并相邻绿色任务或减少没有独立价值的文件，不允许扩大功能。
+4. 不授权把 migration 应用到持久开发数据库，不授权 push、PR、merge、deploy、删除或任何外部发布动作。
+
+请用户明确确认 Gate T 后，才把本文件状态改为已确认、提交 Phase 3 文档并开始 Task 1。

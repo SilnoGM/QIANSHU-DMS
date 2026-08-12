@@ -445,7 +445,7 @@ web/apps/qsmds-arco/src/views/admin/product-management/create/
   product-create.logic.ts
 
 web/apps/qsmds-arco/src/api/modules/products.ts
-web/apps/qsmds-arco/test/api/products-api.test.ts
+web/apps/qsmds-arco/test/api/products.test.ts
 web/apps/qsmds-arco/test/views/product-create.logic.test.ts
 web/apps/qsmds-arco/test/views/product-create-page.test.ts
 ```
