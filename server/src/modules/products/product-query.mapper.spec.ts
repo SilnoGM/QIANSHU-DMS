@@ -41,6 +41,21 @@ function createRow(
 }
 
 describe('mapProductListItem', () => {
+  it('serializes a maximum Product decimal without scientific notation', () => {
+    const maximumDecimal = {
+      toFixed: () => '99999999999999999999999999.1200',
+      toString: () => '9.999999999999999999999999912e+25',
+    }
+
+    expect(mapProductListItem(createRow({
+      twdSalePriceAmount: maximumDecimal,
+    }), {
+      known: false,
+      dictionaryCode: 'service_provider.supplier',
+      value: 'SUPPLIER_A',
+    }).twdSalePrice.amount).toBe('99999999999999999999999999.12')
+  })
+
   it('returns strict money strings, ordered attributes and whitelisted actors', () => {
     expect(mapProductListItem(createRow(), {
       known: true,
@@ -65,9 +80,9 @@ describe('mapProductListItem', () => {
       mainImage: 'https://example.test/main.jpg',
       images: ['https://example.test/1.jpg', 'https://example.test/2.jpg'],
       videos: ['https://example.test/1.mp4'],
-      twdSalePrice: { amount: '1280.5000', currency: 'TWD' },
+      twdSalePrice: { amount: '1280.5', currency: 'TWD' },
       myrSalePrice: { amount: null, currency: 'MYR' },
-      purchaseCost: { amount: '88.1250', currency: 'CNY' },
+      purchaseCost: { amount: '88.125', currency: 'CNY' },
       attributes: [
         { title: '容量', value: '30ml' },
         { title: '产地', value: '中国台湾' },
