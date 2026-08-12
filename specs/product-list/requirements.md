@@ -2,13 +2,13 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 本地实施与验收完成
+- 状态：Phase 4 与搜索增量本地实施完成
 - 需求确认日期：2026-08-12
 - 技术方案确认日期：2026-08-12
 - 适用范围：`server/`、`web/apps/qsmds-arco`
 - 实施分支：`feat/admin-product-management`
-- 当前基线：Product Schema、只读列表 API、正式列表页面与自动化验收均已实现
-- 当前门禁：Gate D1 已完成；本地持久数据库 migration 未应用，仍需 Gate D2 单独授权；push、PR、merge 与部署仍需 Gate E
+- 当前基线：Product Schema、只读列表 API、名称/编号搜索、正式列表页面与自动化验收均已实现
+- 当前门禁：Gate D1 与 Gate D2 已完成；push、PR、merge 与部署仍需 Gate E
 
 ## 2. 背景与目标
 
@@ -22,7 +22,7 @@
 
 ### 3.1 产品运营人员
 
-作为产品运营人员，我希望在统一列表中查看产品编号、名称、状态、供应商、媒体、价格、属性和审计信息，并按供应商筛选，以便快速确认产品资料。
+作为产品运营人员，我希望在统一列表中查看产品编号、名称、状态、供应商、媒体、价格、属性和审计信息，并按产品名称/编号搜索、按供应商筛选，以便快速确认产品资料。
 
 ### 3.2 产品维护人员
 
@@ -42,6 +42,7 @@
 6. 视频列使用“图标 + 数量”入口，点击后在只读弹窗中显示地址列表和预览。
 7. 产品图片列使用 `ImageGroup maxCount=3`；接受超过三个位置时展示两张缩略图和一个 `+N` 溢出入口的既有语义。
 8. 产品编号只能由编号管理的 `PRODUCT` Rule 派发。
+9. 产品列表搜索只覆盖产品名称与产品编号，使用不区分大小写的包含匹配；不得伪造当前页本地搜索。
 
 ## 5. 术语与数据口径
 
@@ -161,11 +162,14 @@
 2. 当用户缺少 `products:read` 权限或需要修改密码时，Server 应拒绝列表访问且不得返回产品数据。
 3. 当请求包含 `supplierValue` 时，Server 应按精确 raw value 过滤，不得按 Label 模糊匹配或将值规范化为另一个供应商。
 4. 当请求未包含 `supplierValue` 时，Server 应返回所有供应商范围内的数据。
-5. 当 Server 返回供应商时，应同时返回 raw value、当前 Label（若已知）及 `EFFECTIVE/DISABLED/UNKNOWN` 解析状态。
-6. 当一页包含重复供应商值时，Server 应批量解析去重后的值，不得对每一行产生一次独立字典查询。
-7. 当列表没有记录时，Server 应返回空 `items` 和 `total=0`，不得返回 `null` 或 404。
-8. 当请求分页参数或供应商筛选值不合法时，Server 应返回稳定的输入校验错误。
-9. 当返回结果顺序未由用户指定时，Server 应按 `updatedAt DESC, id DESC` 提供稳定顺序。
+5. 当请求包含 `keyword` 时，Server 应先去除首尾空白，再对 `name` 或 `productNo` 执行不区分大小写的包含匹配。
+6. 当 `keyword` 与 `supplierValue` 同时存在时，Server 应按 `keyword AND supplierValue` 组合条件，不得扩大结果集。
+7. 当请求未包含 `keyword` 时，Server 不应增加隐式搜索条件。
+8. 当 Server 返回供应商时，应同时返回 raw value、当前 Label（若已知）及 `EFFECTIVE/DISABLED/UNKNOWN` 解析状态。
+9. 当一页包含重复供应商值时，Server 应批量解析去重后的值，不得对每一行产生一次独立字典查询。
+10. 当列表没有记录时，Server 应返回空 `items` 和 `total=0`，不得返回 `null` 或 404。
+11. 当请求分页、关键词或供应商筛选值不合法时，Server 应返回稳定的输入校验错误；`keyword` 应为 1 到 128 个 Unicode code points 的非空白字符串。
+12. 当返回结果顺序未由用户指定时，Server 应按 `updatedAt DESC, id DESC` 提供稳定顺序。
 
 ### Requirement 9 - 页面结构与权限
 
@@ -175,7 +179,7 @@
 2. 当用户具有 `products:read` 权限时，页面应加载列表；失去权限或身份域变化后，页面应停止旧请求并清除不再可信的产品数据。
 3. 当用户同时具有 `products:create` 权限时，页头应显示带 Lucide Plus 图标的“新增产品”按钮；没有创建权限时不得显示该按钮。
 4. 当页头已经提供新增入口时，`QsGenericTable` 自身的新增入口应关闭。
-5. 当本期未确认全文搜索时，页面不得伪造本地搜索结果；表格搜索入口应关闭。
+5. 当用户提交或清空搜索时，页面应使用 `QsGenericTable` 内建搜索入口、回到第一页并只发起一次最终 Server 请求。
 6. 当列表加载、刷新、失败、重试、空数据或无筛选结果时，页面应复用 `QsGenericTable` 的稳定状态。
 
 ### Requirement 10 - 表格列与列设置
@@ -232,7 +236,7 @@
 2. 当视口宽度小于 `768px` 时，`QsGenericTable` 应使用其既有结构化卡片表现，并保留同一组业务数据与底部操作区。
 3. 当视口宽度小于 `640px` 时，按钮、筛选项、弹窗操作和媒体入口的触控目标应至少为 `44px`。
 4. 当系统处于暗色主题时，表格、固定列、Tag、弹窗、图片、视频、错误和空态应保持可读对比度。
-5. 当用户仅使用键盘时，应能操作列设置、供应商筛选、图片预览、属性弹窗、视频弹窗和占位按钮，不得形成焦点陷阱。
+5. 当用户仅使用键盘时，应能提交/清空搜索、操作列设置、供应商筛选、图片预览、属性弹窗、视频弹窗和占位按钮，不得形成焦点陷阱。
 6. 当用户启用 Reduced Motion 时，页面与复用组件应停止非必要持续动画。
 7. 当界面展示图标时，系统应使用项目现有 Lucide/FaIcon，不得使用 Emoji。
 
@@ -283,17 +287,17 @@ Layout Strategy:
 - 不创建 Supplier 专用下拉组件；未来表单复用 `QsDictionarySelect`。
 - 不实现媒体上传、转码、对象存储签名、封面抽帧或视频编辑。
 - 不实现价格换算、汇率快照、税价或多币种汇总。
-- 不实现全文搜索、状态筛选、批量操作、导入导出或列设置服务端持久化。
+- 不引入 PostgreSQL 全文检索、拼音/分词搜索、状态筛选、批量操作、导入导出或列设置服务端持久化。
 - 不插入演示产品，不从已删除的历史产品方案恢复任何数据或代码。
 - 不修改或删除既有 migration，不手工编辑 OpenAPI 生成产物。
 - 不自动 push、创建 PR、merge、部署或对非本地数据库执行 migration。
 
 ## 9. Phase 1 冻结结论
 
-本文件第 4 节的八项业务决策以及第 6 节全部 Acceptance Criteria 已于 2026-08-12 确认。Phase 2 技术方案只能在这些边界内选择实现方式；若技术设计需要新增真实写接口、扩大权限、改变供应商存储口径、改变金额协议、删除现有路由或扩展 Product 领域模型，必须回到 Phase 1 重新确认。
+本文件第 4 节的前八项业务决策以及首期 Acceptance Criteria 已于 2026-08-12 确认；同日另行确认第九项名称/编号搜索增量。若技术设计需要新增真实写接口、扩大权限、改变供应商存储口径、改变金额协议、删除现有路由或扩展 Product 领域模型，必须重新确认。
 
 ## 10. Phase 4 验收结论
 
-本规格的首期只读切片已于 2026-08-12 在 `feat/admin-product-management` 完成本地实现与自动化验收：Product Schema、`GET /api/products`、供应商历史解析、OpenAPI/Web generated contract、正式列表、响应式卡片、媒体/金额/属性展示、供应商筛选和占位动作均已落地。最终验证覆盖隔离 PostgreSQL migration/API E2E、Server/Web 全量检查、production build、根治理和真实 Chrome。
+本规格的首期只读切片及搜索增量已于 2026-08-12 在 `feat/admin-product-management` 完成本地实现与自动化验收：Product Schema、带 `keyword`/`supplierValue` 的 `GET /api/products`、供应商历史解析、OpenAPI/Web generated contract、正式列表、响应式卡片、媒体/金额/属性展示、名称/编号搜索、供应商筛选和占位动作均已落地。最终验证覆盖隔离 PostgreSQL migration/API E2E、Server/Web 全量检查、production build、根治理和真实 Chrome。
 
-Gate D2 未获得授权，因此 migration 只在自动销毁的隔离 PostgreSQL 中验证，没有应用到 `qianshu-dms-dev-postgres` 或其他持久数据库。Gate E 同样未授权；本地结果没有 push、PR、merge 或部署。
+Gate D2 已获得单独授权，`20260812090000_product_list_schema` 已成功应用到 `qianshu-dms-dev-postgres`，迁移后 Prisma 状态、表、枚举、约束、索引、触发器、函数和健康检查均通过。Gate E 未授权；本地结果没有 push、PR、merge 或部署。

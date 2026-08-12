@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 本地实施与验收完成（Task 1-12 已完成）
+- 状态：Phase 4 与搜索增量本地实施完成（Task 1-13 已完成）
 - Requirements 确认日期：2026-08-12
 - Design 确认日期：2026-08-12
 - 编写日期：2026-08-12
@@ -11,7 +11,7 @@
 - Requirements：`specs/product-list/requirements.md`
 - Design：`specs/product-list/design.md`
 
-本计划把产品列表拆为 12 个可独立验证、保持绿色并形成小步提交的任务。Task 1-12 已在用户确认的 Gate D1 边界内完成；Gate D2 与 Gate E 仍未授权。
+本计划把产品列表拆为 13 个可独立验证、保持绿色并形成小步提交的任务。Task 1-12 完成首期只读列表，Task 13 完成另行确认的名称/编号搜索增量；Gate D2 已完成，Gate E 仍未授权。
 
 ## 2. 执行纪律
 
@@ -66,11 +66,12 @@
 
 - [x] 用户已于 2026-08-12 单独授权修改 `server/prisma/schema.prisma`、新增 Product migration、建立 Product 公共 DTO 和 `GET /api/products`。
 - [x] 授权范围只包括已确认 Design，不得顺手增加写 API、权限、搜索、状态筛选、排序参数或额外 Product 领域模型。
+- [x] 用户已于 2026-08-12 另行授权为既有 `GET /api/products` 增加 `keyword`，范围只包括 `name/productNo` 的不区分大小写包含匹配及 Web 搜索接入。
 
 ### Gate D2 - 本地持久数据库变更授权
 
-- [ ] 在对本地开发数据库执行 `prisma migrate deploy/dev` 或任何 Product DDL 前，展示待应用 migration、目标数据库的非敏感身份、当前 migration 状态和只读影响检查，并再次取得明确确认。
-- [ ] 隔离 CI/Test PostgreSQL 的可丢弃式 migration replay 属自动化测试范围；不得把测试成功解释为已授权修改本地持久数据库。
+- [x] 在执行前已展示唯一待应用的 `20260812090000_product_list_schema`、目标 `qianshu_dms_dev@127.0.0.1:15433`、迁移状态和完整 SQL 只读影响检查，并取得明确确认。
+- [x] 已通过 `prisma migrate deploy` 应用 migration；迁移后 13 条 migration 全部最新，Product 表、枚举、约束、索引、触发器、函数、空表查询与数据库健康检查通过。
 
 ### Gate E - 外部发布授权
 
@@ -214,6 +215,20 @@
 
   OpenAPI `contract:sync`、`contract:check` 与 tracked diff 通过；GitHub event 专用 `ci:contract` 未伪造本地事件，其 baseline 选择与失败关闭由 Root 单测覆盖。Web API/View 756/756、typecheck、ESLint、Stylelint、production build、Noto/font-zero-residue 通过；根治理 663/663、根聚合 `check`、根 `build` 与真实 Chrome 2/2 通过。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。最终文件审计未发现删除、依赖/lockfile、旧 migration 改写、Product seed、Supplier 领域复活、Product 写 API/权限、敏感文件或禁止公共组件修改。Gate D2 未授权，Product migration 明确“未应用”到本地持久数据库；Gate E 未授权，未 push、未建 PR、未 merge、未部署。
 
+  Task 12 完成后，用户另行通过 Gate D2；`20260812090000_product_list_schema` 已应用到 `qianshu_dms_dev@127.0.0.1:15433`，Prisma、结构对象、0 行 Product 查询、Server/Database 健康检查均通过。该后续授权不改变 Task 12 当时的历史证据。
+
+- [x] 13. 以 TDD 增加产品名称与编号搜索
+  - [x] 13.1 单独确认公共 API 增量：`keyword` trim 后为 1..128 Unicode code points，只搜索 `name/productNo`，与 `supplierValue` 按 AND 组合。
+  - [x] 13.2 先建立 Server RED，覆盖 DTO trim/长度、Normalizer、名称/编号 OR、供应商 AND、Controller/OpenAPI 与隔离 API E2E。
+  - [x] 13.3 最小实现 Server 查询与 OpenAPI，并通过根 `contract:sync` 生成两份 snapshot；不修改 Schema、migration、数据或 Product 写边界。
+  - [x] 13.4 先建立 Web RED，再启用 `QsGenericTable` 既有 `v-model:search/@search`，搜索/清空回第一页并通过微任务调度只请求一次。
+  - [x] 13.5 扩展现有 management Browser，用小写产品编号从第二页搜索、叠加供应商筛选，并验证最终请求同时携带 `keyword/supplierValue`。
+  - [x] 13.6 保持公共 `QsGenericTable`、主题、字体、图标、布局和移动卡片不变，不新增依赖或本地当前页搜索。
+  - [x] 13.7 完成 Server/Web/OpenAPI/隔离 E2E/真实 Chrome/根检查与构建验收，记录失败重跑和非阻断警告，创建文档收口提交。
+  - _Requirements: R8-R9, R12, R14-R15_
+
+  Task 13 证据：Server 红灯为 DTO 未 trim/校验、Normalizer 忽略 `keyword` 和 Service 类型缺失；实现后定向 4 suites / 30 tests、Server 全量 146 suites / 1416 tests、Product 隔离 API E2E 1 suite / 4 tests、OpenAPI contract check 通过。Web 红灯为 query/页面绑定/身份清理/handler 四项缺失；实现后定向 15/15、Web Node 171/171、TS 49/49、API/View 757/757、typecheck、ESLint、Stylelint 和真实 Chrome 2/2 通过。首次官方 Server E2E 为 25/26 suites、146/147 tests，仅既有 Profile PATCH 偶发返回 404；Product 套件同轮通过，随后官方全套重跑为 26/26 suites、147/147 tests。根 `node --run check` 与 `node --run build` 均通过。验证中曾把两个会执行 `prisma generate` 的命令并行运行，造成生成目录竞态和临时 TypeScript 缺文件；改为串行后 Server check 与 contract check 全绿。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
+
 ## 5. 验证矩阵
 
 ### 5.1 Phase 3 文档验证
@@ -331,6 +346,9 @@ package.json / lockfiles
 9. `feat: 完善产品列表特殊字段展示`
 10. `test: 补齐产品列表浏览器验收`
 11. `docs: 完成产品列表实施验收`
+12. `feat: 增加产品列表服务端搜索`
+13. `feat: 接入产品表格搜索`
+14. `docs: 完成产品列表搜索验收`
 
 只有对应任务全部绿色后才创建提交。若某任务没有形成独立变更，不创建空提交；若跨任务发现缺陷，提交类型与描述必须反映真实职责，不使用 `misc`、`wip` 或掩盖失败的提交。
 
@@ -338,9 +356,9 @@ package.json / lockfiles
 
 确认本计划意味着接受：
 
-1. 按 Task 1-12 顺序实施，允许在不改变职责的前提下合并相邻绿色提交。
+1. 首期按 Task 1-12 实施；另行确认的搜索增量按 Task 13 实施，允许在不改变职责的前提下合并相邻绿色提交。
 2. TDD 证据、生成产物、隔离数据库 E2E、真实 Browser 与最终矩阵均属于完成条件。
 3. Product 列表继续保持只读，Supplier 字典、金额 string、共享组件和页面/API 边界不变。
-4. Gate D1、D2、E 继续独立生效；Phase 3 确认本身不授权任何高风险变更或外部动作。
+4. Gate D1、D2、E 独立生效；搜索增量确认不授权新的 Schema、数据库写入或外部动作。
 
-Gate D1 已完成并按本文件收口。后续若需应用本地持久数据库 migration，必须先取得 Gate D2；push、PR、merge、部署或非本地数据库变更必须先取得 Gate E。
+Gate D1 与 Gate D2 已完成并按本文件收口；push、PR、merge、部署或非本地数据库变更必须先取得 Gate E。
