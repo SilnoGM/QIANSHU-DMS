@@ -129,11 +129,15 @@ function resetDraft(): void {
   clearFeedback()
 }
 
-function handleModelUpdate(model: ProductCreateFormModel): void {
+function handleModelPatch(patch: Partial<ProductCreateFormModel>): void {
   if (submitState.value.phase !== 'editing') {
     return
   }
-  formModel.value = model
+  // 页面持有唯一权威模型；异步到达的字段补丁必须在此基于最新值累积。
+  formModel.value = {
+    ...formModel.value,
+    ...patch,
+  }
   if (formError.value !== '' || Object.keys(fieldErrors.value).length > 0) {
     clearFeedback()
   }
@@ -420,7 +424,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="min-w-0">
+  <div class="product-create-page min-w-0" data-testid="product-create-page">
     <FaPageHeader
       title="新增产品"
       description="创建产品基础资料、价格与属性，产品编号由系统自动派发。"
@@ -544,7 +548,7 @@ onBeforeUnmount(() => {
         :submitting="submitState.phase === 'submitting'"
         :disabled="submitState.phase === 'unknown'"
         :show-actions="submitState.phase !== 'unknown'"
-        @update:model-value="handleModelUpdate"
+        @patch="handleModelPatch"
         @submit="submitProduct"
         @cancel="requestCancel"
         @retry-currency-catalog="currencyCatalog.reload"
@@ -586,3 +590,12 @@ onBeforeUnmount(() => {
     </QsGenericModal>
   </div>
 </template>
+
+<style scoped>
+@media (width <= 639px) {
+  /* 页面组合层统一抬高嵌套选择器的内部按钮，不改变共享组件桌面语义。 */
+  .product-create-page :deep(button) {
+    min-height: 2.75rem;
+  }
+}
+</style>

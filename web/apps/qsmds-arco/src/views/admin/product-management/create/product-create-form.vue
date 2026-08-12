@@ -51,11 +51,11 @@ const props = withDefaults(defineProps<{
 })
 
 const emit = defineEmits<{
-  'cancel': []
-  'retryCurrencyCatalog': []
-  'retrySupplierCatalog': []
-  'submit': []
-  'update:modelValue': [value: ProductCreateFormModel]
+  cancel: []
+  retryCurrencyCatalog: []
+  retrySupplierCatalog: []
+  submit: []
+  patch: [value: Partial<ProductCreateFormModel>]
 }>()
 
 const formRef = useTemplateRef<FormExpose<ProductCreateFormModel>>('formRef')
@@ -100,10 +100,12 @@ function updateModel(patch: Partial<ProductCreateFormModel>): void {
   if (submitLocked.value) {
     return
   }
-  emit('update:modelValue', {
-    ...props.modelValue,
-    ...patch,
-  })
+  /*
+   * FaInput 的 passive v-model 会在 watcher 阶段向上提交。这里只报告当前字段
+   * 补丁，由页面基于自己的最新 formModel 合并，避免子组件从陈旧 props 复制
+   * 整个对象并覆盖同一批次内已经到达的金额或属性更新。
+   */
+  emit('patch', patch)
 }
 
 function handleStatusUpdate(value: unknown): void {
@@ -128,14 +130,14 @@ function handleMoneyValidation(
 }
 
 function resolveRegisteredField(path: string): string | undefined {
-  if (path === 'twdSalePrice.currency') {
-    return 'twdSalePrice.amount'
+  if (path === 'twdSalePrice.amount' || path === 'twdSalePrice.currency') {
+    return 'twdSalePriceAmount'
   }
-  if (path === 'myrSalePrice.currency') {
-    return 'myrSalePrice.amount'
+  if (path === 'myrSalePrice.amount' || path === 'myrSalePrice.currency') {
+    return 'myrSalePriceAmount'
   }
-  if (path === 'purchaseCost.currency') {
-    return 'purchaseCost.amount'
+  if (path === 'purchaseCost.amount' || path === 'purchaseCost.currency') {
+    return 'purchaseCostAmount'
   }
   if (path === 'idempotencyKey' || path.startsWith('attributes.')) {
     return undefined
@@ -445,7 +447,7 @@ defineExpose<ProductCreateFormExpose>({
       />
 
       <FaFormItem
-        name="twdSalePrice.amount"
+        name="twdSalePriceAmount"
         label="台币销售价"
         description="可留空；币种固定为 TWD。"
       >
@@ -461,7 +463,7 @@ defineExpose<ProductCreateFormExpose>({
       </FaFormItem>
 
       <FaFormItem
-        name="myrSalePrice.amount"
+        name="myrSalePriceAmount"
         label="马币销售价"
         description="可留空；币种固定为 MYR。"
       >
@@ -477,7 +479,7 @@ defineExpose<ProductCreateFormExpose>({
       </FaFormItem>
 
       <FaFormItem
-        name="purchaseCost.amount"
+        name="purchaseCostAmount"
         label="采购成本价"
         description="可留空；默认 CNY，可选择其他当前有效币种。"
         class="md:col-span-2"
