@@ -152,15 +152,17 @@
 
   Task 7 证据：同步前 `contract:check` 因 tracked snapshot 缺少运行时 Product operation 而按计划 RED；仅通过 `contract:sync` 生成后，两份 OpenAPI snapshot 字节一致，diff 只新增 `/api/products` 的 `get`、`products_list` 与只读 DTO，Web generated types 在本地重建但继续遵守不跟踪规则。同步后 `contract:check`、baseline/contract 199/199、Server build、Web typecheck 与 diff-check 全绿。本地直接运行 GitHub 事件专用 `ci:contract` 因缺少 event/base/current SHA 固定失败，已使用其本地 baseline 测试完整验证相同逻辑，未伪造 CI 环境。
 
-- [ ] 8. 以 TDD 实现 Web Product API adapter 与纯逻辑
-  - [ ] 8.1 先建立 API/logic RED，覆盖 generated DTO adapter、query 编码、AbortSignal、分页、筛选应用/清空回第一页和不 trim `supplierValue`。
-  - [ ] 8.2 建立 Product 页面只读 view model，严格保留 decimal string、媒体/属性顺序、supplier raw/label/state 与 actor nullable 状态。
-  - [ ] 8.3 从 Dictionary Catalog 构建供应商筛选选项，包含已停用已知项，Label 用于展示、stable value 用于查询；Catalog 失败不阻断 Product 请求。
-  - [ ] 8.4 建立主图单项与 images 整组的 `ImageGroup` 输入映射，过滤空 URL 但不重排有效媒体。
-  - [ ] 8.5 覆盖 requestVersion、authEpoch、permission 和 Abort 竞态，迟到响应不得覆盖新身份或新筛选结果。
-  - [ ] 8.6 不创建 Product Pinia Store，不复制 generated DTO，不实现任何 mutation adapter。
-  - [ ] 8.7 更新 Task 8 状态并在 Web API/logic 定向测试、typecheck 与 lint 绿色后创建提交：`feat: 建立产品列表前端数据适配`。
+- [x] 8. 以 TDD 实现 Web Product API adapter 与纯逻辑
+  - [x] 8.1 先建立 API/logic RED，覆盖 generated DTO adapter、query 编码、AbortSignal、分页、筛选应用/清空回第一页和不 trim `supplierValue`。
+  - [x] 8.2 建立 Product 页面只读 view model，严格保留 decimal string、媒体/属性顺序、supplier raw/label/state 与 actor nullable 状态。
+  - [x] 8.3 从 Dictionary Catalog 构建供应商筛选选项，包含已停用已知项，Label 用于展示、stable value 用于查询；Catalog 失败不阻断 Product 请求。
+  - [x] 8.4 建立主图单项与 images 整组的 `ImageGroup` 输入映射，过滤空 URL 但不重排有效媒体。
+  - [x] 8.5 覆盖 requestVersion、authEpoch、permission 和 Abort 竞态，迟到响应不得覆盖新身份或新筛选结果。
+  - [x] 8.6 不创建 Product Pinia Store，不复制 generated DTO，不实现任何 mutation adapter。
+  - [x] 8.7 更新 Task 8 状态并在 Web API/logic 定向测试、typecheck 与 lint 绿色后创建提交：`feat: 建立产品列表前端数据适配`。
   - _Requirements: R3, R5-R6, R8-R9, R12, R15_
+
+  Task 8 证据：API/logic 测试先因 `products.ts` 与 `product-list.logic.ts` 缺失而 2/2 RED。最小实现只暴露一个 GET adapter，并以 generated DTO 为传输来源建立只读 view model；decimal 保持 string/null，媒体与属性只克隆不排序，supplier raw/state 及 nullable actor 保留，且在页面边界补足 OpenAPI generator 对 nullable enum 的运行时 null。最终定向测试 6/6、Web typecheck、目标 ESLint 与 diff-check 通过；lint 首轮仅发现 4 个排序/格式问题，按规则修正后全绿。未创建 Store、mutation adapter 或重复 DTO。
 
 - [ ] 9. 以 TDD 实现页面结构、查询状态与表格列
   - [ ] 9.1 先建立 View RED，固定 `FaPageHeader + FaPageMain + QsGenericTable`、权限、加载/错误/重试/空态、供应商 Catalog 独立状态和单次最终请求。
