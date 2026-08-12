@@ -2,13 +2,14 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 草案，等待确认
+- 状态：Phase 2 已确认，Phase 3 任务拆分中
 - 编写日期：2026-08-12
+- 确认日期：2026-08-12
 - Requirements：`specs/product-list/requirements.md`
 - 实施分支：`feat/admin-product-management`
 - 设计基线 SHA：`a033832`
 - 设计范围：Product Schema、新增只读列表 API、正式产品列表页面与自动化验证
-- 实施边界：本文件不授权修改 Schema、公共 API、数据库或业务代码；Phase 2 确认后先进入 Phase 3 任务拆分
+- 实施边界：本文件只授权进入 Phase 3 任务拆分；不授权修改 Schema、公共 API、数据库或业务代码
 
 ## 2. 当前真相源与审计结论
 

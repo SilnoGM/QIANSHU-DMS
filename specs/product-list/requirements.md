@@ -2,12 +2,13 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 1 已确认，等待 Phase 2 技术方案确认
+- 状态：Phase 1、Phase 2 已确认，Phase 3 任务拆分中
 - 需求确认日期：2026-08-12
+- 技术方案确认日期：2026-08-12
 - 适用范围：`server/`、`web/apps/qsmds-arco`
 - 实施分支：`feat/admin-product-management`
 - 当前基线：产品权限与 Web 占位路由已经存在，Product Schema、产品 API 与正式列表尚不存在
-- 下一阶段门禁：Phase 2 技术方案确认后才能拆分任务；Schema、公共 API 和数据库 migration 在实施前仍需单独确认
+- 下一阶段门禁：Phase 3 任务清单确认后才能申请进入 Phase 4；Product 数据结构、Schema、migration 和 `GET /api/products` 公共 API 在实施前仍需单独确认
 
 ## 2. 背景与目标
 

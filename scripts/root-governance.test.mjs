@@ -25,10 +25,11 @@ const supplierResidueAllowlist = Object.freeze([
   'server/test/dictionary-catalog-api.e2e-spec.ts',
   'server/test/dictionary-e2e-database.ts',
   'server/test/supplier-retirement-migration.e2e-spec.ts',
-  // 已确认的产品规格必须记录当前供应商字典消费边界；这里只允许两份设计证据，
+  // 已确认的产品规格必须记录当前供应商字典消费边界；这里只允许三份规格证据，
   // 不向任何 Product 运行时代码开放旧 Supplier 领域残留。
   'specs/product-list/design.md',
   'specs/product-list/requirements.md',
+  'specs/product-list/tasks.md',
   'specs/supplier-dictionary-migration/design.md',
   'specs/supplier-dictionary-migration/requirements.md',
   'specs/supplier-dictionary-migration/tasks.md',
