@@ -83,6 +83,16 @@ const componentLibraryMainRoute: RouteRecordMainRaw = {
 const asyncRoutes: RouteRecordMainRaw[] = [
   {
     meta: {
+      title: '管理员工作台',
+      icon: 'i-lucide:layout-dashboard',
+      auth: [...PRODUCT_MANAGEMENT_PERMISSIONS],
+    },
+    children: [
+      ProductManagement,
+    ],
+  },
+  {
+    meta: {
       title: '系统管理',
       icon: 'i-lucide:settings-2',
     },
@@ -90,16 +100,6 @@ const asyncRoutes: RouteRecordMainRaw[] = [
       SystemManagement,
       BasicData,
       ApplicationSettings,
-    ],
-  },
-  {
-    meta: {
-      title: '管理员工作台',
-      icon: 'i-lucide:layout-dashboard',
-      auth: [...PRODUCT_MANAGEMENT_PERMISSIONS],
-    },
-    children: [
-      ProductManagement,
     ],
   },
   ...(shouldEnableComponentLibrary(import.meta.env)

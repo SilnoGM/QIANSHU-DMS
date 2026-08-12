@@ -46,15 +46,22 @@ test('管理员工作台注册产品管理的两个权限隔离页面', () => {
   )
 })
 
-test('管理员工作台是独立顶部导航并挂载产品管理', () => {
+test('管理员工作台是第一项独立顶部导航并挂载产品管理', () => {
   const routesSource = readFileSync(
     new URL('../../src/router/routes.ts', import.meta.url),
     'utf8',
   )
+  const asyncRoutesSource = routesSource.slice(
+    routesSource.indexOf('const asyncRoutes'),
+  )
 
   assert.match(
-    routesSource,
+    asyncRoutesSource,
     /title: '管理员工作台'[\s\S]*?auth: \[\.\.\.PRODUCT_MANAGEMENT_PERMISSIONS\][\s\S]*?children: \[[\s\S]*?ProductManagement/u,
+  )
+  assert.ok(
+    asyncRoutesSource.indexOf('title: \'管理员工作台\'')
+    < asyncRoutesSource.indexOf('title: \'系统管理\''),
   )
 })
 
