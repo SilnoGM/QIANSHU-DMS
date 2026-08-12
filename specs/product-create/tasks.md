@@ -117,13 +117,17 @@
   - 静态检查：首次 lint 因测试对对象调用 `String()` 命中 `no-base-to-string` 退出码 1；收窄为字符串断言后 `pnpm typecheck`、`pnpm lint`、`git diff --check` 全部通过，根治理 `663/663`。
   - _Requirements: R4, R8, R13-R14_
 
-- [ ] 4. 以 TDD 增加事务内 Currency Lookup
-  - [ ] 4.1 先为 `CurrencyLookupService.requireEnabledCodes()` 建立 RED，覆盖输入去重、code 稳定排序、`FOR SHARE`、缺失、停用和非法 `minorUnit`。
-  - [ ] 4.2 实现调用方事务内单 SQL 读取，返回冻结的 `{ code, minorUnit }`；Service 不创建嵌套事务。
-  - [ ] 4.3 错误类型只暴露稳定 reason/code，Prisma/PostgreSQL 异常统一脱敏，不携带整份输入。
-  - [ ] 4.4 从 CurrencyModule 只导出 Lookup，Query/Command 继续保持模块私有；不修改 Currency 表或 Catalog HTTP 契约。
-  - [ ] 4.5 运行 Currency 定向单测、既有管理回归、Server typecheck/lint 和 diff-check。
-  - [ ] 4.6 更新 Task 4 真实证据，创建提交：`feat: 增加币种有效性查询服务`。
+- [x] 4. 以 TDD 增加事务内 Currency Lookup
+  - [x] 4.1 先为 `CurrencyLookupService.requireEnabledCodes()` 建立 RED，覆盖输入去重、code 稳定排序、`FOR SHARE`、缺失、停用和非法 `minorUnit`。
+  - [x] 4.2 实现调用方事务内单 SQL 读取，返回冻结的 `{ code, minorUnit }`；Service 不创建嵌套事务。
+  - [x] 4.3 错误类型只暴露稳定 reason/code，Prisma/PostgreSQL 异常统一脱敏，不携带整份输入。
+  - [x] 4.4 从 CurrencyModule 只导出 Lookup，Query/Command 继续保持模块私有；不修改 Currency 表或 Catalog HTTP 契约。
+  - [x] 4.5 运行 Currency 定向单测、既有管理回归、Server typecheck/lint 和 diff-check。
+  - [x] 4.6 更新 Task 4 真实证据，创建提交：`feat: 增加币种有效性查询服务`。
+  - RED（2026-08-12）：Lookup 与 Module 两个 suite 因 `currency-lookup.service.ts` 不存在在 TypeScript 编译阶段失败，`0 tests` 执行；implicit-any 是缺失返回类型的连带诊断。
+  - GREEN：Lookup/Module/Query 定向 `3 suites / 15 tests`；Currency + Exchange Rate 完整回归 `16 suites / 87 tests`。单 SQL 使用去重后的 ASCII code 稳定序、`ORDER BY code ASC FOR SHARE`，返回数组与元素均冻结。
+  - 安全/边界：缺失、停用、非法 `minorUnit`、输入与 persistence 各自使用固定 reason，错误不附加 code 集合或底层异常；Lookup 无 PrismaService/事务创建能力，CurrencyModule 仅导出 Lookup，既有 Query/Command 与 HTTP 契约保持私有/不变。
+  - 静态检查：`pnpm typecheck`、`pnpm lint`、`git diff --check` 全部通过，根治理 `663/663`。
   - _Requirements: R5, R8, R13-R14_
 
 - [ ] 5. 以 TDD 建立 Product 创建 DTO、规范化与作用域指纹

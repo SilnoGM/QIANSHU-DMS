@@ -4,6 +4,7 @@ import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
 import { CurrencyCatalogController } from './currency-catalog.controller'
 import { CurrencyCommandService } from './currency-command.service'
+import { CurrencyLookupService } from './currency-lookup.service'
 import { CurrencyQueryService } from './currency-query.service'
 import { CurrenciesController } from './currencies.controller'
 
@@ -11,6 +12,11 @@ import { CurrenciesController } from './currencies.controller'
 @Module({
   imports: [PrismaModule, AuthModule],
   controllers: [CurrencyCatalogController, CurrenciesController],
-  providers: [CurrencyQueryService, CurrencyCommandService],
+  providers: [
+    CurrencyQueryService,
+    CurrencyCommandService,
+    CurrencyLookupService,
+  ],
+  exports: [CurrencyLookupService],
 })
 export class CurrencyModule {}
