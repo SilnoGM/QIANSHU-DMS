@@ -68,11 +68,12 @@ describe('permission constants', () => {
       'dictionaries:update',
       'dictionaries:enable',
       'dictionaries:disable',
+      'product-media:read',
       'products:read',
       'products:create',
       'products:update',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 40)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 41)
   })
 })
 

@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 已授权并暂停于 Gate DEP，Task 1 只读基线审计已完成
+- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-2 已完成
 - 编写日期：2026-08-13
 - 实施分支：`feat/media-asset-product-media`
 - Requirements：`specs/product-media/requirements.md`
@@ -11,7 +11,7 @@
 - Phase D：已于 2026-08-13 确认
 - Phase T：已于 2026-08-13 确认
 - Phase 4 / Gate I：已于 2026-08-13 确认
-- Gate DEP：等待精确依赖与安全限额确认
+- Gate DEP：已于 2026-08-13 确认精确依赖、系统依赖与安全限额；实际安装仍受 Gate OPS 约束
 - 持久开发数据库、生产部署、push、PR 和 merge：均未授权
 
 本计划把统一 MediaAsset 基础设施和首个 ProductMedia 领域切片拆为 18 个任务。任务顺序固定为：
@@ -115,9 +115,10 @@
 
 - [x] Task 1 已确认当前直接/传递依赖和 Node.js 标准库能力，并在 4.1 节形成最小候选清单、精确版本、用途、
   许可证、维护状态、原生构建风险与 lockfile 影响。
-- [ ] 未经用户确认精确候选，不修改 `server/package.json` 或 lockfile。
+- [x] 用户已于 2026-08-13 确认 4.1 节全部精确候选；Task 2 不需要也没有修改 package 或 lockfile。
 - [x] `ffprobe` 是已确认的生产系统依赖；Task 1 已记录本地版本和 Ubuntu 24.04 获取证据。
-- [ ] `qpdf` 作为 PDF 受限结构/加密检查的系统依赖，连同精确版本策略等待用户确认。
+- [x] `qpdf` 作为 PDF 受限结构/加密检查的系统依赖及 Ubuntu 24.04 精确版本策略已确认；
+  实际安装仍须通过 Gate OPS。
 
 ### Gate DB - 持久开发数据库
 
@@ -242,17 +243,47 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
 - 本任务没有修改源码、Schema、API、依赖或 lockfile，没有写数据库或真实媒体目录；下一步停在
   Gate DEP，Gate DB、Gate OPS、Gate E 仍未授权。
 
-- [ ] 2. 以 TDD 建立 additive MediaAsset/ProductMedia Schema 与权限
+- [x] 2. 以 TDD 建立 additive MediaAsset/ProductMedia Schema 与权限
   - 前置：Gate I、Gate DEP 中与 Schema 测试有关的部分已通过。
-  - [ ] 2.1 先建立 Prisma/migration RED，精确锁定三个 enum、两张表、User/Product relations、具名
+  - [x] 2.1 先建立 Prisma/migration RED，精确锁定三个 enum、两张表、User/Product relations、具名
     CHECK/FK/index/partial unique、类型/主图/有效引用/deferred READY Trigger 和权限 seed。
-  - [ ] 2.2 RED 必须证明 DOCUMENT 无法进入 ProductMedia、READY 不能孤立提交、被引用 READY 不能转出。
-  - [ ] 2.3 新增 additive migration：保留 Product 三个旧 URL 列，不改旧列、不 seed MediaAsset。
-  - [ ] 2.4 新增稳定 `product-media:read` Permission ID、中文名称、资源 catalog 与真实角色授权自检。
-  - [ ] 2.5 用一次性 PostgreSQL 验证空库全量 replay、基线升级、重复 deploy、约束正反例和无业务数据 seed。
-  - [ ] 2.6 运行 Prisma validate/generate、Schema/Permission tests、Server typecheck/lint 和根治理。
-  - [ ] 2.7 更新证据并提交：`feat: 建立媒体资产数据结构`。
+  - [x] 2.2 RED 必须证明 DOCUMENT 无法进入 ProductMedia、READY 不能孤立提交、被引用 READY 不能转出。
+  - [x] 2.3 新增 additive migration：保留 Product 三个旧 URL 列，不改旧列、不 seed MediaAsset。
+  - [x] 2.4 新增稳定 `product-media:read` Permission ID、中文名称、资源 catalog 与真实角色授权自检。
+  - [x] 2.5 用一次性 PostgreSQL 验证空库全量 replay、基线升级、重复 deploy、约束正反例和无业务数据 seed。
+  - [x] 2.6 运行 Prisma validate/generate、Schema/Permission tests、Server typecheck/lint 和根治理。
+  - [x] 2.7 更新证据并提交：`feat: 建立媒体资产数据结构`。
   - _Requirements: R1-R3, R6, R8, R11-R12_
+
+### 4.2 Task 2 实施证据
+
+- TDD RED：Server 静态 Schema/Permission 测试先因 `PRODUCT_MEDIA_PERMISSION_CODES` 和媒体结构缺失退出
+  `1`；Web 权限目录为 42/43，唯一失败是缺少产品媒体资源。补齐基础结构后，又先增加具名 Trigger
+  错误契约并确认 RED，再实现数据库约束；一处测试正则遗漏 SQL 双引号导致 3/4，修正测试读取规则后
+  未放宽任何业务断言。
+- 最小实现新增 `MediaType`、`MediaAssetStatus`、`ProductMediaKind`、`MediaAsset`、`ProductMedia` 和
+  User/Product relations；migration `20260813120000_media_asset_product_media_schema` 建立具名 CHECK、
+  Restrict FK、partial unique/index 与 deferred READY 引用 Trigger。`MediaAsset` 支持 IMAGE/VIDEO/DOCUMENT，
+  `ProductMediaKind` 只有 IMAGE/VIDEO；旧 `mainImage/images/videos` 全部保留，migration 未 seed
+  MediaAsset/ProductMedia。
+- 权限使用稳定 ID `00000000-0000-4000-8000-000000000146`，code 为 `product-media:read`、名称为
+  `读取产品媒体`，精确授予 `system_admin`；Server 权限常量、认证 E2E 固定契约与 Web 中文资源目录同步。
+- 一次性 PostgreSQL 16 从空库按顺序应用 17 条 migration，第二次 deploy 无待应用项；媒体 E2E 覆盖
+  DOCUMENT/类型不匹配、孤立 READY、引用状态退出、最后关联分离、内容身份不可变、排序/资产/主图唯一、
+  VIDEO 主图和物理删除拒绝等正反例，最终目标套件 3/3 suites、21/21 tests 通过。另从前 16 条基线升级，
+  升级前后 1 条 Product 及三个旧媒体字段的零计数保持不变，两张新表存在且零业务数据。
+- 最终验证：Prisma validate/generate 通过；Server unit 157/157 suites、1553/1553 tests，typecheck/lint
+  通过；隔离 `ci:server-e2e` 完整重放、重复 deploy、status 和 29/29 suites、169/169 tests 全部通过；
+  Web 权限目录 43/43、typecheck/lint 通过；`contract:check` 无公共 API 漂移；根治理在同步第 17 条 migration
+  基线后通过。
+- 异常均如实保留：`prisma migrate diff --from-migrations` 因当前 Prisma 要求显式 shadow database URL
+  退出 `1`；改用隔离实际 datasource 比对只显示两个实施前已存在且与媒体无关的差异（编号索引等价重建、
+  `user_profiles.updated_at` 默认值），没有媒体差异，未越界修复。一次 Jest 命令多传 `--` 被当成 pattern，
+  一次隔离测试遗漏 migration、一次从 `server/` 寻找根脚本均失败，均以正确命令复跑转绿。一次误在根目录
+  调用 `pnpm exec` 产生受治理禁止的根 lockfile/node_modules，已立即通过预授权 `node --run cleanup:root`
+  精确移除；没有删除其他文件。
+- 本任务未修改依赖或 lockfile，未安装 `ffprobe/qpdf`，未创建真实媒体目录，未修改公共 API/OpenAPI，
+  未删除 Product 旧列，未应用持久开发数据库 migration，未 push、PR、merge 或部署。
 
 - [ ] 3. 以 TDD 建立 Local storage 配置和安全文件操作
   - [ ] 3.1 先建立 config/storage RED，覆盖绝对 root、禁用源码/release/tmp/root、realpath、symlink、

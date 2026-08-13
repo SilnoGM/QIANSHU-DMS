@@ -178,6 +178,31 @@ enum ProductStatus {
   @@map("product_status")
 }
 
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+
+  @@map("media_type")
+}
+
+enum MediaAssetStatus {
+  UPLOADING
+  READY
+  FAILED
+  TRASHED
+  PURGED
+
+  @@map("media_asset_status")
+}
+
+enum ProductMediaKind {
+  IMAGE
+  VIDEO
+
+  @@map("product_media_kind")
+}
+
 model User {
   id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   username           String     @db.VarChar(128)
@@ -195,16 +220,19 @@ model User {
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdBy     User?         @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  createdUsers  User[]        @relation("UserCreatedBy")
-  disabledBy    User?         @relation("UserDisabledBy", fields: [disabledByUserId], references: [id], onDelete: Restrict)
-  disabledUsers User[]        @relation("UserDisabledBy")
-  roles         UserRole[]
-  sessions      AuthSession[]
-  auditEvents   AuditEvent[]  @relation("AuditActor")
-  profile       UserProfile?
-  productsCreated Product[]   @relation("ProductCreatedBy")
-  productsUpdated Product[]   @relation("ProductUpdatedBy")
+  createdBy            User?          @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdUsers         User[]         @relation("UserCreatedBy")
+  disabledBy           User?          @relation("UserDisabledBy", fields: [disabledByUserId], references: [id], onDelete: Restrict)
+  disabledUsers        User[]         @relation("UserDisabledBy")
+  roles                UserRole[]
+  sessions             AuthSession[]
+  auditEvents          AuditEvent[]   @relation("AuditActor")
+  profile              UserProfile?
+  productsCreated      Product[]      @relation("ProductCreatedBy")
+  productsUpdated      Product[]      @relation("ProductUpdatedBy")
+  mediaAssetsCreated   MediaAsset[]   @relation("MediaAssetCreatedBy")
+  productMediaCreated  ProductMedia[] @relation("ProductMediaCreatedBy")
+  productMediaDetached ProductMedia[] @relation("ProductMediaDetachedBy")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -437,25 +465,78 @@ model Product {
   images               String[]      @default([])
   videos               String[]      @default([])
   twdSalePriceAmount   Decimal?      @map("twd_sale_price_amount") @db.Decimal(30, 4)
-  twdSalePriceCurrency String         @default("TWD") @map("twd_sale_price_currency") @db.Char(3)
+  twdSalePriceCurrency String        @default("TWD") @map("twd_sale_price_currency") @db.Char(3)
   myrSalePriceAmount   Decimal?      @map("myr_sale_price_amount") @db.Decimal(30, 4)
-  myrSalePriceCurrency String         @default("MYR") @map("myr_sale_price_currency") @db.Char(3)
+  myrSalePriceCurrency String        @default("MYR") @map("myr_sale_price_currency") @db.Char(3)
   purchaseCostAmount   Decimal?      @map("purchase_cost_amount") @db.Decimal(30, 4)
-  purchaseCostCurrency String         @default("CNY") @map("purchase_cost_currency") @db.Char(3)
-  attributes           Json           @default("[]") @db.JsonB
-  createdByUserId      String?        @map("created_by_user_id") @db.Uuid
-  updatedByUserId      String?        @map("updated_by_user_id") @db.Uuid
-  version              Int            @default(1)
-  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  purchaseCostCurrency String        @default("CNY") @map("purchase_cost_currency") @db.Char(3)
+  attributes           Json          @default("[]") @db.JsonB
+  createdByUserId      String?       @map("created_by_user_id") @db.Uuid
+  updatedByUserId      String?       @map("updated_by_user_id") @db.Uuid
+  version              Int           @default(1)
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdBy User? @relation("ProductCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  updatedBy User? @relation("ProductUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User?          @relation("ProductCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User?          @relation("ProductUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  media     ProductMedia[]
 
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "products_status_updated_at_id_idx")
   @@index([supplierValue, updatedAt(sort: Desc), id(sort: Desc)], map: "products_supplier_value_updated_at_id_idx")
   @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "products_updated_at_id_idx")
   @@map("products")
+}
+
+model MediaAsset {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  mediaType        MediaType        @map("media_type")
+  status           MediaAssetStatus @default(UPLOADING)
+  storageDriver    String           @default("local") @map("storage_driver") @db.VarChar(32)
+  objectKey        String?          @unique(map: "media_assets_object_key_key") @map("object_key") @db.VarChar(512)
+  originalFilename String           @map("original_filename") @db.VarChar(255)
+  mimeType         String?          @map("mime_type") @db.VarChar(127)
+  sizeBytes        BigInt?          @map("size_bytes")
+  checksumSha256   String?          @map("checksum_sha256") @db.Char(64)
+  width            Int?
+  height           Int?
+  durationMs       Int?             @map("duration_ms")
+  videoCodec       String?          @map("video_codec") @db.VarChar(32)
+  audioCodec       String?          @map("audio_codec") @db.VarChar(32)
+  uploadExpiresAt  DateTime?        @map("upload_expires_at") @db.Timestamptz(6)
+  retentionUntil   DateTime?        @map("retention_until") @db.Timestamptz(6)
+  failureCode      String?          @map("failure_code") @db.VarChar(64)
+  createdByUserId  String           @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
+
+  createdBy    User           @relation("MediaAssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  productMedia ProductMedia[]
+
+  @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
+  @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
+  @@map("media_assets")
+}
+
+model ProductMedia {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  productId        String           @map("product_id") @db.Uuid
+  mediaAssetId     String           @map("media_asset_id") @db.Uuid
+  kind             ProductMediaKind
+  sortOrder        Int              @map("sort_order")
+  isPrimary        Boolean          @default(false) @map("is_primary")
+  createdByUserId  String           @map("created_by_user_id") @db.Uuid
+  detachedByUserId String?          @map("detached_by_user_id") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  detachedAt       DateTime?        @map("detached_at") @db.Timestamptz(6)
+
+  product    Product    @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User       @relation("ProductMediaCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  detachedBy User?      @relation("ProductMediaDetachedBy", fields: [detachedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@map("product_media")
 }
 
 model NumberingRule {
