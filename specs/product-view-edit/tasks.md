@@ -59,18 +59,21 @@
   - GREEN：空差异不 PATCH，409 不覆盖，网络/5xx 只 GET 对账且不自动重放。
   - _Requirement: R2-R5, R7-R8_
 
-- [ ] 10. Server 隔离 E2E 与 Web/Chrome 验收
+- [x] 10. Server 隔离 E2E 与 Web/Chrome 验收
   - 覆盖权限、CSRF、历史引用、并发、回滚、响应式和中文审计。
   - Server：16 条 Migration 从零/重复部署和状态检查通过，28 suites / 167 tests 全绿。
-  - Web：定向逻辑/源码契约与静态检查通过；真实浏览器验收待执行。
+  - Web：定向逻辑/源码契约与静态检查通过；隔离真实 Chrome 2/2 全绿。
+  - 持久开发数据：两条真实产品的列表、详情与编辑回填只读验收通过；发现并修复异步详情导致 Drawer 编辑入口缺失的问题。
   - _Requirement: R1-R9_
 
-- [ ] 11. 应用持久开发数据库
+- [x] 11. 应用持久开发数据库
   - 精确检查待迁移集合，执行 deploy 并验证权限、授权、enum 和 Product 行数不变量。
+  - GREEN：仅两条目标 Migration 被应用；状态 up to date，Product 行数保持 2，四项结构/授权计数符合预期。
   - _Requirement: R6, R9_
 
-- [ ] 12. 全量验证、重启与 Git 收口
-  - Server/Web/Root/OpenAPI/build/browser 全绿，更新证据，小步提交，不 push。
+- [x] 12. 全量验证、重启与 Git 收口
+  - Root 663/663、Server 156 suites / 1549 tests、Web 784/784、OpenAPI、生产构建与真实 Chrome 2/2 全绿。
+  - 前后端已从根入口重启；Web/Server HTTP 200，数据库健康为 `up`，完成小步提交且不 push。
   - _Requirement: R1-R9_
 
 ## 停止条件
