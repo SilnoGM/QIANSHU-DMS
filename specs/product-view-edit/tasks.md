@@ -38,8 +38,10 @@
   - GREEN：Product 与字典目标回归 14 suites / 178 tests 通过，目标 ESLint 与 TypeScript 通过。
   - _Requirement: R2, R4-R6, R8_
 
-- [ ] 6. Controller、OpenAPI 与生成契约
+- [x] 6. Controller、OpenAPI 与生成契约
   - 精确新增 `products_get_by_id/products_update` 并同步 generated types。
+  - RED：Controller 缺少第三个依赖与两个 handler，Module 未注册更新服务。
+  - GREEN：Controller/Module 9 tests、目标 ESLint/TypeScript 与 `contract:check` 通过。
   - _Requirement: R1-R7_
 
 - [ ] 7. Web API、路由与共享表单

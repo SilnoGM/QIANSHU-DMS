@@ -15,6 +15,10 @@ import {
   type ProductCommandContext,
 } from './product-command.service'
 import { ProductQueryService } from './product-query.service'
+import {
+  type ProductUpdateContext,
+  ProductUpdateService,
+} from './product-update.service'
 import { ProductsController } from './products.controller'
 
 type ContractOperation = NonNullable<
@@ -45,9 +49,14 @@ function createRequest(): object {
 function createController(): {
   readonly controller: ProductsController
   readonly list: jest.Mock
+  readonly getById: jest.Mock<Promise<{ id: string }>, [string]>
   readonly create: jest.Mock<
     Promise<{ productNo: string }>,
     [ProductCommandContext, unknown]
+  >
+  readonly update: jest.Mock<
+    Promise<{ id: string; version: number }>,
+    [ProductUpdateContext, string, unknown]
   >
 } {
   const list = jest.fn().mockResolvedValue({
@@ -60,13 +69,25 @@ function createController(): {
     Promise<{ productNo: string }>,
     [ProductCommandContext, unknown]
   >().mockResolvedValue({ productNo: 'P0001' })
+  const getById = jest.fn<Promise<{ id: string }>, [string]>()
+    .mockResolvedValue({ id: '44444444-4444-4444-8444-444444444444' })
+  const update = jest.fn<
+    Promise<{ id: string; version: number }>,
+    [ProductUpdateContext, string, unknown]
+  >().mockResolvedValue({
+    id: '44444444-4444-4444-8444-444444444444',
+    version: 2,
+  })
   return {
     controller: new ProductsController(
-      { list } as unknown as ProductQueryService,
+      { list, getById } as unknown as ProductQueryService,
       { create } as unknown as ProductCommandService,
+      { update } as unknown as ProductUpdateService,
     ),
     list,
+    getById,
     create,
+    update,
   }
 }
 
@@ -74,16 +95,19 @@ function createController(): {
   controllers: [ProductsController],
   providers: [{
     provide: ProductQueryService,
-    useValue: { list: jest.fn() },
+    useValue: { list: jest.fn(), getById: jest.fn() },
   }, {
     provide: ProductCommandService,
     useValue: { create: jest.fn() },
+  }, {
+    provide: ProductUpdateService,
+    useValue: { update: jest.fn() },
   }],
 })
 class ProductsControllerContractModule {}
 
 describe('ProductsController', () => {
-  it('delegates the confirmed list and create operations with trusted context', async () => {
+  it('delegates all confirmed operations with trusted context', async () => {
     const fixture = createController()
     const query = {
       keyword: 'Product-001',
@@ -104,6 +128,10 @@ describe('ProductsController', () => {
     }
     const request = createRequest()
     await fixture.controller.create(dto, request, IDEMPOTENCY_KEY)
+    const productId = '44444444-4444-4444-8444-444444444444'
+    await fixture.controller.getById({ productId })
+    const updateDto = { name: '新产品', expectedVersion: 1 }
+    await fixture.controller.update({ productId }, updateDto, request)
 
     expect(fixture.list).toHaveBeenCalledWith(query)
     const createContext = fixture.create.mock.calls[0]?.[0]
@@ -113,6 +141,15 @@ describe('ProductsController', () => {
     })
     expect(typeof createContext?.requestId).toBe('string')
     expect(fixture.create.mock.calls[0]?.[1]).toBe(dto)
+    expect(fixture.getById).toHaveBeenCalledWith(productId)
+    const updateContext = fixture.update.mock.calls[0]?.[0]
+    expect(updateContext).toMatchObject({ actorUserId: ACTOR_ID })
+    expect(typeof updateContext?.requestId).toBe('string')
+    expect(fixture.update).toHaveBeenCalledWith(
+      updateContext,
+      productId,
+      updateDto,
+    )
     const reflector = new Reflector()
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
@@ -123,6 +160,14 @@ describe('ProductsController', () => {
       ProductsController.prototype.create,
     )).toEqual(['products:create'])
     expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      ProductsController.prototype.getById,
+    )).toEqual(['products:read'])
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      ProductsController.prototype.update,
+    )).toEqual(['products:update'])
+    expect(reflector.get(
       REQUIRE_AUTHENTICATED_SESSION_METADATA,
       ProductsController,
     )).toBeUndefined()
@@ -131,7 +176,7 @@ describe('ProductsController', () => {
       ProductsController.prototype.create,
     )).toBe(HttpStatus.CREATED)
     expect(Object.getOwnPropertyNames(ProductsController.prototype).sort())
-      .toEqual(['constructor', 'create', 'list'])
+      .toEqual(['constructor', 'create', 'getById', 'list', 'update'])
   })
 
   it.each([
@@ -158,9 +203,12 @@ describe('ProductsController OpenAPI contract', () => {
     document = await createOpenApiDocument(ProductsControllerContractModule)
   })
 
-  it('publishes the private GET and the single confirmed POST only', () => {
+  it('publishes the list, create, detail and update operations only', () => {
     expect(Object.keys(document.paths).filter(path =>
-      path.startsWith('/api/products'))).toEqual(['/api/products'])
+      path.startsWith('/api/products'))).toEqual([
+      '/api/products',
+      '/api/products/{productId}',
+    ])
     const path = document.paths['/api/products']
     const operation: ContractOperation | undefined = path?.get
     expect(operation?.operationId).toBe('products_list')
@@ -317,5 +365,111 @@ describe('ProductsController OpenAPI contract', () => {
         })
       }
     }
+
+    const resourcePath = document.paths['/api/products/{productId}']
+    expect(Object.keys(resourcePath ?? {}).sort()).toEqual(['get', 'patch'])
+    const detailOperation = resourcePath?.get
+    expect(detailOperation?.operationId).toBe('products_get_by_id')
+    expect(Object.keys(detailOperation?.responses ?? {}).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+      '404',
+      '422',
+      '500',
+    ])
+    expect(detailOperation?.parameters).toContainEqual({
+      in: 'path',
+      name: 'productId',
+      required: true,
+      schema: { type: 'string', format: 'uuid' },
+    })
+    expect(Reflect.get(
+      detailOperation ?? {},
+      'x-qianshu-contract',
+    )).toEqual({
+      kind: 'application',
+      authentication: true,
+      authorization: true,
+      resourceLocator: true,
+      conflict: false,
+      validation: true,
+      session: 'required',
+      privateNoStore: true,
+      errors: [
+        { status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+        { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+        { status: 422, codes: ['VALIDATION_FAILED'] },
+      ],
+    })
+
+    const updateOperation = resourcePath?.patch
+    expect(updateOperation?.operationId).toBe('products_update')
+    expect(Object.keys(updateOperation?.responses ?? {}).sort()).toEqual([
+      '200',
+      '400',
+      '401',
+      '403',
+      '404',
+      '409',
+      '422',
+      '500',
+    ])
+    expect(Reflect.get(
+      updateOperation ?? {},
+      'x-qianshu-contract',
+    )).toEqual({
+      kind: 'application',
+      authentication: true,
+      authorization: true,
+      resourceLocator: true,
+      conflict: true,
+      validation: true,
+      session: 'required',
+      csrf: true,
+      privateNoStore: true,
+      errors: [
+        {
+          status: 403,
+          codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+        },
+        { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+        { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+        {
+          status: 422,
+          codes: [
+            'PRODUCT_CURRENCY_UNAVAILABLE',
+            'PRODUCT_SUPPLIER_REQUIRED',
+            'PRODUCT_SUPPLIER_UNAVAILABLE',
+            'VALIDATION_FAILED',
+          ],
+        },
+      ],
+    })
+    expect(updateOperation?.requestBody).toEqual({
+      required: true,
+      content: {
+        'application/json': {
+          schema: { $ref: '#/components/schemas/UpdateProductRequestDto' },
+        },
+      },
+    })
+    const updateSchema = document.components?.schemas
+      ?.UpdateProductRequestDto
+    if (updateSchema === undefined || '$ref' in updateSchema) {
+      throw new Error('Missing inline UpdateProductRequestDto schema')
+    }
+    expect(updateSchema.required).toEqual(['expectedVersion'])
+    expect(Object.keys(updateSchema.properties ?? {})).toEqual([
+      'name',
+      'status',
+      'supplierValue',
+      'twdSalePrice',
+      'myrSalePrice',
+      'purchaseCost',
+      'attributes',
+      'expectedVersion',
+    ])
   })
 })

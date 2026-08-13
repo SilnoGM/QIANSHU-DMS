@@ -5,6 +5,8 @@ import {
   Headers,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -19,6 +21,10 @@ import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { CreateProductRequestDto } from './dto/product-create.dto'
 import { ProductListQueryDto } from './dto/product-list-query.dto'
 import {
+  ProductIdParamDto,
+  UpdateProductRequestDto,
+} from './dto/product-update.dto'
+import {
   ProductListItemDto,
   ProductPageDto,
 } from './dto/product-response.dto'
@@ -29,6 +35,7 @@ import {
   ProductQueryService,
   type ProductPage,
 } from './product-query.service'
+import { ProductUpdateService } from './product-update.service'
 
 @ApiTags('products')
 @Controller('products')
@@ -36,6 +43,7 @@ export class ProductsController {
   constructor(
     private readonly products: ProductQueryService,
     private readonly commands: ProductCommandService,
+    private readonly updates: ProductUpdateService,
   ) {}
 
   @Get()
@@ -129,5 +137,75 @@ export class ProductsController {
       requestId: getRequestId(request),
       idempotencyKey,
     }, dto)
+  }
+
+  @Get(':productId')
+  @RequirePermissions('products:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
+  @ApiApplicationContract({
+    operationId: 'products_get_by_id',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    resourceLocator: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+      { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  getById(@Param() params: ProductIdParamDto): Promise<ProductListItem> {
+    return this.products.getById(params.productId)
+  }
+
+  @Patch(':productId')
+  @RequirePermissions('products:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
+  @ApiApplicationContract({
+    operationId: 'products_update',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: [
+          'CSRF_REJECTED',
+          'FORBIDDEN',
+          'PASSWORD_CHANGE_REQUIRED',
+        ],
+      },
+      { status: 404, codes: ['PRODUCT_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+      {
+        status: 422,
+        codes: [
+          'PRODUCT_CURRENCY_UNAVAILABLE',
+          'PRODUCT_SUPPLIER_REQUIRED',
+          'PRODUCT_SUPPLIER_UNAVAILABLE',
+          'VALIDATION_FAILED',
+        ],
+      },
+    ],
+  })
+  update(
+    @Param() params: ProductIdParamDto,
+    @Body() dto: UpdateProductRequestDto,
+    @Req() request: object,
+  ): Promise<ProductListItem> {
+    return this.updates.update({
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }, params.productId, dto)
   }
 }

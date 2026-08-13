@@ -6,11 +6,12 @@ import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { ProductCommandService } from './product-command.service'
 import { ProductQueryService } from './product-query.service'
+import { ProductUpdateService } from './product-update.service'
 import { ProductsController } from './products.controller'
 import { ProductsModule } from './products.module'
 
 describe('ProductsModule metadata', () => {
-  it('registers the confirmed query/create dependencies only', () => {
+  it('registers the confirmed query/create/update dependencies only', () => {
     expect(Reflect.getMetadata('imports', ProductsModule)).toEqual([
       PrismaModule,
       DictionaryModule,
@@ -24,6 +25,7 @@ describe('ProductsModule metadata', () => {
     expect(Reflect.getMetadata('providers', ProductsModule)).toEqual([
       ProductQueryService,
       ProductCommandService,
+      ProductUpdateService,
     ])
   })
 
