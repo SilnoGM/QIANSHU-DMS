@@ -2,8 +2,9 @@
 
 ## 1. 文档状态
 
-- 状态：Design 已编写，等待 Phase 2 确认
+- 状态：Design 已确认，等待 Phase 3 任务清单确认
 - 编写日期：2026-08-13
+- 确认日期：2026-08-13
 - Requirements：`specs/product-media/requirements.md`
 - 规划分支：`feat/media-asset-product-media`
 - 设计范围：MediaAsset 基础设施、ProductMedia 关联、产品媒体 API 与 Web、单机本地存储、私有访问和运维合同

@@ -2,8 +2,9 @@
 
 ## 1. 文档状态
 
-- 状态：Requirements 与 Design 已编写，等待 Phase 2 确认
+- 状态：Requirements 与 Design 已确认，等待 Phase 3 任务清单确认
 - 编写日期：2026-08-13
+- 确认日期：2026-08-13
 - 适用范围：`server/`、`web/apps/qsmds-arco`、单机生产部署配置
 - 规划分支：`feat/media-asset-product-media`
 - 关联规格：`specs/product-list/`、`specs/product-create/`、`specs/product-view-edit/`
@@ -307,9 +308,9 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 - 根据 SHA-256 自动跨业务去重或让多个上传共享同一资产。
 - Product 删除、批量媒体操作、外部分享链接或面向消费者的公开商品图库。
 
-## 9. Phase 2 确认点
+## 9. 已确认的 Phase 2 固定合同
 
-进入任务拆分和实施前，需要确认以下合同作为首期固定值：
+以下合同已于 2026-08-13 确认为首期固定值：
 
 1. 图片 JPEG/PNG/WebP、10MiB、每产品最多 20 张。
 2. 视频 MP4 + H.264/AAC、500MiB、每产品最多 5 个，并要求生产机提供 `ffprobe`。
