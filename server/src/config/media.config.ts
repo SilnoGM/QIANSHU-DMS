@@ -3,6 +3,8 @@ import { isAbsolute, parse, resolve } from 'node:path'
 import { registerAs } from '@nestjs/config'
 
 export const DEFAULT_MEDIA_STORAGE_ROOT = '/var/lib/qianshu-dms/media'
+export const DEFAULT_MEDIA_FFPROBE_PATH = '/usr/bin/ffprobe'
+export const DEFAULT_MEDIA_QPDF_PATH = '/usr/bin/qpdf'
 const DEFAULT_MEDIA_STAGING_TTL_HOURS = 24
 const DEFAULT_MEDIA_TRASH_RETENTION_DAYS = 7
 const MIN_MEDIA_STAGING_TTL_HOURS = 1
@@ -12,6 +14,8 @@ const MAX_MEDIA_TRASH_RETENTION_DAYS = 3_650
 
 export interface MediaConfiguration {
   readonly driver: 'local'
+  readonly ffprobePath: string
+  readonly qpdfPath: string
   readonly storageRoot: string
   readonly stagingTtlHours: number
   readonly trashRetentionDays: number
@@ -19,9 +23,27 @@ export interface MediaConfiguration {
 
 export interface NormalizedMediaEnvironment {
   readonly MEDIA_STORAGE_DRIVER: 'local'
+  readonly MEDIA_FFPROBE_PATH: string
+  readonly MEDIA_QPDF_PATH: string
   readonly MEDIA_STORAGE_ROOT: string
   readonly MEDIA_STAGING_TTL_HOURS: number
   readonly MEDIA_TRASH_RETENTION_DAYS: number
+}
+
+function normalizeExecutablePath(
+  key: 'MEDIA_FFPROBE_PATH' | 'MEDIA_QPDF_PATH',
+  value: unknown,
+  fallback: string,
+): string {
+  const rawValue = value === undefined || value === '' ? fallback : value
+  if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
+    throw mediaConfigurationError(key, 'must be an absolute executable path')
+  }
+  const normalized = resolve(rawValue.trim())
+  if (!isAbsolute(rawValue.trim()) || normalized === parse(normalized).root) {
+    throw mediaConfigurationError(key, 'must be an absolute executable path')
+  }
+  return normalized
 }
 
 function mediaConfigurationError(key: string, constraint: string): Error {
@@ -108,6 +130,16 @@ export function normalizeMediaEnvironment(
 ): NormalizedMediaEnvironment {
   return {
     MEDIA_STORAGE_DRIVER: normalizeDriver(environment.MEDIA_STORAGE_DRIVER),
+    MEDIA_FFPROBE_PATH: normalizeExecutablePath(
+      'MEDIA_FFPROBE_PATH',
+      environment.MEDIA_FFPROBE_PATH,
+      DEFAULT_MEDIA_FFPROBE_PATH,
+    ),
+    MEDIA_QPDF_PATH: normalizeExecutablePath(
+      'MEDIA_QPDF_PATH',
+      environment.MEDIA_QPDF_PATH,
+      DEFAULT_MEDIA_QPDF_PATH,
+    ),
     MEDIA_STORAGE_ROOT: normalizeStorageRoot(environment.MEDIA_STORAGE_ROOT),
     MEDIA_STAGING_TTL_HOURS: normalizeBoundedInteger(
       'MEDIA_STAGING_TTL_HOURS',
@@ -132,6 +164,8 @@ export function createMediaConfiguration(
   const normalized = normalizeMediaEnvironment(environment)
   return Object.freeze({
     driver: normalized.MEDIA_STORAGE_DRIVER,
+    ffprobePath: normalized.MEDIA_FFPROBE_PATH,
+    qpdfPath: normalized.MEDIA_QPDF_PATH,
     storageRoot: normalized.MEDIA_STORAGE_ROOT,
     stagingTtlHours: normalized.MEDIA_STAGING_TTL_HOURS,
     trashRetentionDays: normalized.MEDIA_TRASH_RETENTION_DAYS,

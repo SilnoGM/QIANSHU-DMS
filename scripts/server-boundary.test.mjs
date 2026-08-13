@@ -24,6 +24,8 @@ allowBuilds:
   # argon2 通过 node-gyp-build 选择已发布的 N-API 预构建二进制；密码 Hash/verify 需要其原生实现。
   argon2: true
   prisma: true
+  # sharp 通过已发布的 libvips 平台预构建包完成图片完整解码，不允许其他未审查依赖执行 build script。
+  sharp: true
 `
 
 function fromRoot(...segments) {

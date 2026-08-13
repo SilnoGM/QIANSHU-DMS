@@ -37,6 +37,8 @@ allowBuilds:
   # argon2 通过 node-gyp-build 选择已发布的 N-API 预构建二进制；密码 Hash/verify 需要其原生实现。
   argon2: true
   prisma: true
+  # sharp 通过已发布的 libvips 平台预构建包完成图片完整解码。
+  sharp: true
 ```
 
 - 文件不声明 `packages`，因此不会形成多 package dependency graph。
@@ -66,6 +68,8 @@ allowBuilds:
 | `MEDIA_STORAGE_ROOT` | release、源码和系统临时目录之外的绝对持久路径 | `/var/lib/qianshu-dms/media` |
 | `MEDIA_STAGING_TTL_HOURS` | 未完成 staging 的回收期限，只允许 `1` 到 `168` | `24` |
 | `MEDIA_TRASH_RETENTION_DAYS` | 软删除保留天数，只允许 `7` 到 `3650` | `7` |
+| `MEDIA_FFPROBE_PATH` | 受限 MP4 探测器的绝对可执行路径 | `/usr/bin/ffprobe` |
+| `MEDIA_QPDF_PATH` | 受限 PDF 结构探测器的绝对可执行路径 | `/usr/bin/qpdf` |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
 

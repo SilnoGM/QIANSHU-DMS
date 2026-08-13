@@ -34,6 +34,8 @@ const TRASH_KEY = `trash/2026/08/${ASSET_ID}.webp`
 function configuration(storageRoot: string): MediaConfiguration {
   return {
     driver: 'local',
+    ffprobePath: '/usr/bin/ffprobe',
+    qpdfPath: '/usr/bin/qpdf',
     storageRoot,
     stagingTtlHours: 24,
     trashRetentionDays: 7,

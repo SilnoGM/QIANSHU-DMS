@@ -266,6 +266,8 @@ export function validateEnvironment(
   AUTH_ARGON2_CONCURRENCY: number
   AUTH_ARGON2_QUEUE_LIMIT: number
   MEDIA_STORAGE_DRIVER: 'local'
+  MEDIA_FFPROBE_PATH: string
+  MEDIA_QPDF_PATH: string
   MEDIA_STORAGE_ROOT: string
   MEDIA_STAGING_TTL_HOURS: number
   MEDIA_TRASH_RETENTION_DAYS: number
@@ -285,6 +287,8 @@ export function validateEnvironment(
     AUTH_ARGON2_CONCURRENCY: number
     AUTH_ARGON2_QUEUE_LIMIT: number
     MEDIA_STORAGE_DRIVER: 'local'
+    MEDIA_FFPROBE_PATH: string
+    MEDIA_QPDF_PATH: string
     MEDIA_STORAGE_ROOT: string
     MEDIA_STAGING_TTL_HOURS: number
     MEDIA_TRASH_RETENTION_DAYS: number

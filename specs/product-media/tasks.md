@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-3 已完成
+- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-4 已完成
 - 编写日期：2026-08-13
 - 实施分支：`feat/media-asset-product-media`
 - Requirements：`specs/product-media/requirements.md`
@@ -320,18 +320,62 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
 - 本任务未修改 Prisma Schema、migration、公共 API/OpenAPI、package 或 lockfile，未安装系统依赖，
   未连接持久数据库，未 push、PR、merge 或部署。
 
-- [ ] 4. 以 TDD 实现可信内容验证器
+- [x] 4. 以 TDD 实现可信内容验证器
   - 前置：Gate DEP 已确认精确 package 和 lockfile 变化。
-  - [ ] 4.1 先为通用流式计数/SHA-256/上限和 extension/MIME/magic/parser 冲突建立 RED。
-  - [ ] 4.2 实现 IMAGE validator：JPEG/PNG/WebP、完整解码、width/height、10MiB，拒绝 SVG、损坏和伪装。
-  - [ ] 4.3 实现 VIDEO validator：MP4、H.264、AAC/无音轨、duration/dimensions、500MiB；`ffprobe`
+  - [x] 4.1 先为通用流式计数/SHA-256/上限和 extension/MIME/magic/parser 冲突建立 RED。
+  - [x] 4.2 实现 IMAGE validator：JPEG/PNG/WebP、完整解码、width/height、10MiB，拒绝 SVG、损坏和伪装。
+  - [x] 4.3 实现 VIDEO validator：MP4、H.264、AAC/无音轨、duration/dimensions、500MiB；`ffprobe`
     固定 argv、无 shell、禁网络、超时、输出上限和安全 stderr。
-  - [ ] 4.4 实现 DOCUMENT validator：PDF/DOCX/XLSX、50MiB、OOXML content types、entry/展开限制，
+  - [x] 4.4 实现 DOCUMENT validator：PDF/DOCX/XLSX、50MiB、OOXML content types、entry/展开限制，
     拒绝宏、加密、zip bomb、脚本和伪装；不新增 HTTP 入口。
-  - [ ] 4.5 使用最小自有二进制 fixtures 和边界 fixtures；不得提交含敏感内容或不明版权的大文件。
-  - [ ] 4.6 运行 validator unit/integration、依赖安全/许可证检查、Server typecheck/lint 和 diff-check。
-  - [ ] 4.7 更新证据并提交：`feat: 实现媒体内容验证`。
+  - [x] 4.5 使用最小自有二进制 fixtures 和边界 fixtures；不得提交含敏感内容或不明版权的大文件。
+  - [x] 4.6 运行 validator unit/integration、依赖安全/许可证检查、Server typecheck/lint 和 diff-check。
+  - [x] 4.7 更新证据并提交：`feat: 实现媒体内容验证`。
   - _Requirements: R2, R4-R5, R11_
+
+### 4.4 Task 4 实施证据
+
+- 初始 TDD RED 为 5 suites / 0 tests：通用流式 guard、受限子进程、IMAGE、VIDEO、DOCUMENT 目标模块与
+  `sharp` 直接依赖均尚不存在，Jest exit `1`。后续安全 RED 分别证明 OOXML 根关系、主 part 根元素、
+  嵌套脚本及验证期间 staging 改写原本会通过；每项均以最小生产改动转绿。
+- 精确新增 runtime `file-type@21.3.4`、`sharp@0.35.3`、`yauzl@3.4.0` 和 dev
+  `@types/yauzl@3.4.0`；只在 pnpm `allowBuilds` 精确增加 `sharp: true`。`busboy/@types/busboy`
+  留到真实 multipart Task 9，不提前引入。lockfile 同时锁定 macOS arm64 与 Linux x64 glibc 的
+  sharp/libvips optional packages。
+- 通用 guard 对 pipeline streaming 计算 bigint 字节数和 SHA-256，超限 chunk 不向 staging 下游转发；
+  受限进程只接受绝对 executable、固定 argv、`shell:false`、closed stdin、最小 locale env、15 秒 timeout
+  及 stdout/stderr byte cap，公开错误不含路径、命令参数或 stderr。
+- IMAGE 只接受 JPEG/PNG/WebP 且 extension、声明 MIME、`file-type` magic 与 sharp parser 必须一致；
+  `metadata + stats` 完整解码但不返回像素 Buffer，限制 10MiB、40M pixels、16,384 单边与单帧，返回
+  浏览器 EXIF orientation 后的 width/height，不重编码原文件。
+- VIDEO 只接受 MP4/H.264 `avc1`，且最多一个 AAC 音轨、不得有未知额外 stream；限制 500MiB，使用
+  `ffprobe -protocol_whitelist file` 固定 JSON 字段取得可信 duration/dimensions/codec。本机编译产物通过
+  `ffprobe 8.1.1` 真实 16x16 H.264/200ms smoke。
+- DOCUMENT 只接受 PDF/DOCX/XLSX、50MiB。PDF 先验证 header/trailer 和危险 name，再以 qpdf 执行
+  `--check`、`--show-encryption` 与受限 JSON object/attachment 扫描；Ubuntu 24.04 x64 容器以
+  `qpdf 11.9.0` 实证 `--json=1` 参数兼容。OOXML 按 central directory lazy/streaming 逐 entry 验证 CRC，
+  限制 2,000 entries、单 entry 50MiB、总展开 200MiB、100:1 ratio、受检 XML heap 4MiB；拒绝 encrypted、
+  traversal、portable duplicate、special file、macro/embedded executable、external relationship、DTD/entity、
+  script，以及错误 content type、根关系、主 part 根元素/namespace。
+- 所有 parser 返回后复核 staging 的 `dev/inode/size/mtime/ctime`，验证期间替换或改写立即失败关闭。
+  测试 ZIP/PDF/image/video 均为测试内生成的最小项目自有 fixture，全部位于 `mkdtemp` 并可靠清理，
+  未提交二进制或大文件，未写真实媒体目录。
+- fresh frozen install 与 Node 24 load 通过：`sharp 0.35.3/libvips 8.18.3`、`file-type` 与 `yauzl` 均可加载；
+  许可证分别为 Apache-2.0、MIT、MIT，`@types/yauzl` 为 MIT。正式参数 `pnpm --filter ... --prod deploy`
+  的进程已结束且临时发布目录由 `finally` 清理，但终端回传丢失，因此不把它计为发布产物加载成功证据；
+  最初误用无 filter 的 `pnpm deploy --prod` 退出 `1` 并报告 `ERR_PNPM_NOTHING_TO_DEPLOY`，未留下产物。
+- `pnpm audit --prod --audit-level high` exit `1`：10 vulnerabilities（1 low / 6 moderate / 3 high）。
+  `pnpm why` 证明 high 为既有 Prisma/Nest Swagger 链的 `fast-uri/js-yaml`，没有路径经过本任务新增三项
+  runtime parser；本任务未越界升级框架依赖，也未将该既有风险误报为通过。
+- 最终定向验证 8 suites / 137 tests，Server 全量 164 suites / 1645 tests；`pnpm typecheck`、`pnpm lint`、
+  `pnpm build`、`node --run contract:check` 均 exit `0`，根治理在精确更新 sharp allowlist 快照后
+  663/663 通过。根治理首次为 662/663，仅因该精确安全配置尚未同步测试期望，未放宽治理规则。
+- Ubuntu 容器首次 arm64 HTTP 更新源 502，HTTPS 又因基础镜像没有 CA bundle安全拒绝；改用生产目标
+  `linux/amd64` 后索引成功，但安装完整 ffmpeg 依赖集合再次遇到若干官方 `.deb` 502，因此 Ubuntu ffprobe
+  smoke 未完成。容器均使用 `--rm` 且已清理；qpdf x64 smoke 和本机 ffprobe 真实 smoke 均已通过，
+  没有关闭 TLS、禁用签名或安装任何主机/生产系统包。
+- 本任务未修改 Prisma Schema、migration、公共 API/OpenAPI 或数据库，未创建 Product Document 分支，
+  未连接持久数据库，未 push、PR、merge 或部署。
 
 - [ ] 5. 以 TDD 实现 MediaAsset prepare/activate 状态机
   - [ ] 5.1 先建立 persistence/service RED，覆盖 UPLOADING 可空元数据、24h expiry、可信元数据 finalize、
