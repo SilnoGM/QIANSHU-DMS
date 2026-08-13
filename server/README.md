@@ -62,8 +62,16 @@ allowBuilds:
 | `AUTH_USERNAME_HMAC_KEY` | username 限流主体 Hash key；production 必填 | development 留空时进程随机生成 |
 | `AUTH_USER_ID_HMAC_KEY` | user ID 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
 | `AUTH_IP_HMAC_KEY` | IP 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
+| `MEDIA_STORAGE_DRIVER` | 媒体存储驱动；首期只允许 `local` | `local` |
+| `MEDIA_STORAGE_ROOT` | release、源码和系统临时目录之外的绝对持久路径 | `/var/lib/qianshu-dms/media` |
+| `MEDIA_STAGING_TTL_HOURS` | 未完成 staging 的回收期限，只允许 `1` 到 `168` | `24` |
+| `MEDIA_TRASH_RETENTION_DAYS` | 软删除保留天数，只允许 `7` 到 `3650` | `7` |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
+
+Local media root 由部署侧预创建并设置运行用户/Nginx 读取组权限；Server 会在实际启用存储时校验
+realpath、symlink、可写性、同一文件系统和剩余空间。不得把示例路径改为源码、release 或系统临时目录，
+也不得把实际 root 或其下文件名写入日志。
 
 ## 常用命令
 

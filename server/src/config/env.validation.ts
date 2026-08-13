@@ -1,3 +1,5 @@
+import { normalizeMediaEnvironment } from './media.config'
+
 const NODE_ENV_VALUES = ['development', 'test', 'production'] as const
 const DEFAULT_APP_ORIGIN = 'http://127.0.0.1:9000'
 const DEFAULT_TRUST_PROXY_HOPS = 0
@@ -263,12 +265,17 @@ export function validateEnvironment(
   TRUST_PROXY_HOPS: number
   AUTH_ARGON2_CONCURRENCY: number
   AUTH_ARGON2_QUEUE_LIMIT: number
+  MEDIA_STORAGE_DRIVER: 'local'
+  MEDIA_STORAGE_ROOT: string
+  MEDIA_STAGING_TTL_HOURS: number
+  MEDIA_TRASH_RETENTION_DAYS: number
   AUTH_USERNAME_HMAC_KEY?: string
   AUTH_USER_ID_HMAC_KEY?: string
   AUTH_IP_HMAC_KEY?: string
 } {
   const nodeEnvironment = normalizeNodeEnvironment(input.NODE_ENV)
   const hmacKeys = normalizeAuthHmacKeys(input, nodeEnvironment)
+  const mediaEnvironment = normalizeMediaEnvironment(input)
   const normalized: Record<string, unknown> & {
     NODE_ENV: NodeEnvironment
     PORT: number
@@ -277,6 +284,10 @@ export function validateEnvironment(
     TRUST_PROXY_HOPS: number
     AUTH_ARGON2_CONCURRENCY: number
     AUTH_ARGON2_QUEUE_LIMIT: number
+    MEDIA_STORAGE_DRIVER: 'local'
+    MEDIA_STORAGE_ROOT: string
+    MEDIA_STAGING_TTL_HOURS: number
+    MEDIA_TRASH_RETENTION_DAYS: number
   } = {
     ...input,
     NODE_ENV: nodeEnvironment,
@@ -304,6 +315,7 @@ export function validateEnvironment(
       0,
       MAX_ARGON2_QUEUE_LIMIT,
     ),
+    ...mediaEnvironment,
     ...hmacKeys,
   }
 

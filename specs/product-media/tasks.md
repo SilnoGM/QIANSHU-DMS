@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-2 已完成
+- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-3 已完成
 - 编写日期：2026-08-13
 - 实施分支：`feat/media-asset-product-media`
 - Requirements：`specs/product-media/requirements.md`
@@ -285,16 +285,40 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
 - 本任务未修改依赖或 lockfile，未安装 `ffprobe/qpdf`，未创建真实媒体目录，未修改公共 API/OpenAPI，
   未删除 Product 旧列，未应用持久开发数据库 migration，未 push、PR、merge 或部署。
 
-- [ ] 3. 以 TDD 建立 Local storage 配置和安全文件操作
-  - [ ] 3.1 先建立 config/storage RED，覆盖绝对 root、禁用源码/release/tmp/root、realpath、symlink、
+- [x] 3. 以 TDD 建立 Local storage 配置和安全文件操作
+  - [x] 3.1 先建立 config/storage RED，覆盖绝对 root、禁用源码/release/tmp/root、realpath、symlink、
     同文件系统、权限、不可写、磁盘不足、path traversal 和 objectKey 规范化。
-  - [ ] 3.2 实现业务中立 `MediaStorage` 和唯一 `LocalMediaStorage`，使用随机 staging、受限权限、
+  - [x] 3.2 实现业务中立 `MediaStorage` 和唯一 `LocalMediaStorage`，使用随机 staging、受限权限、
     atomic rename、stat、trash、restore、purge；不得认识 Product。
-  - [ ] 3.3 使用测试临时目录验证 partial write、取消、目标冲突、磁盘/权限错误与可靠清理，不写真实媒体目录。
-  - [ ] 3.4 增加配置 DTO/示例和可测试健康结果，不记录 root 下的用户文件名或敏感环境值。
-  - [ ] 3.5 运行 storage/config tests、Server typecheck/lint、根配置安全测试和 diff-check。
-  - [ ] 3.6 更新证据并提交：`feat: 建立本地媒体存储`。
+  - [x] 3.3 使用测试临时目录验证 partial write、取消、目标冲突、磁盘/权限错误与可靠清理，不写真实媒体目录。
+  - [x] 3.4 增加配置 DTO/示例和可测试健康结果，不记录 root 下的用户文件名或敏感环境值。
+  - [x] 3.5 运行 storage/config tests、Server typecheck/lint、根配置安全测试和 diff-check。
+  - [x] 3.6 更新证据并提交：`feat: 建立本地媒体存储`。
   - _Requirements: R2, R5, R11-R12_
+
+### 4.3 Task 3 实施证据
+
+- TDD 初始 RED：`media.config.spec.ts` 与 `local-media-storage.spec.ts` 因目标模块尚不存在退出 `1`；
+  配置接入 RED 又以 6 个 `env.validation` 断言失败证明缺少媒体环境变量合同。安全补测分别证明运行期
+  替换 staging symlink、非法 Range 未关闭 handle、宽松目录权限以及未知 storage namespace 会失败。
+- 新增 `MEDIA_STORAGE_DRIVER`、`MEDIA_STORAGE_ROOT`、`MEDIA_STAGING_TTL_HOURS` 和
+  `MEDIA_TRASH_RETENTION_DAYS` 的固定默认值、范围及脱敏校验；root 必须是非根绝对路径，真实 canonical
+  路径必须位于源码、release 和系统临时目录之外。示例只写占位部署路径，不写真实环境或敏感值。
+- `MediaStorage` 保持业务中立；唯一 `LocalMediaStorage` 只管理 `staging/assets/trash`，使用随机 staging key、
+  streaming handle、`0750/0640` 受限权限、同设备 atomic rename，并实现 range open、stat、trash、restore
+  和幂等 purge。每次操作都拒绝 traversal、非 canonical key、未知 namespace、symlink、设备漂移、宽松权限
+  和不可信文件类型；公开异常与健康结果只包含固定低基数 code/message，不含路径或文件名。
+- 文件系统测试全部使用 `mkdtemp` 一次性 sandbox 并可靠清理，覆盖 partial write/cancel、目标冲突、
+  rename 失败保留 source、磁盘不足、不可写、跨设备、运行期 symlink 替换、Range handle 关闭和安全 purge；
+  没有创建或写入真实 `/var/lib/qianshu-dms/media`。
+- 最终定向验证为 4 suites / 81 tests，Server 全量为 159 suites / 1587 tests；`pnpm typecheck`、
+  `pnpm lint`、`pnpm build`、`node --run contract:check` 和根治理 663/663 均 exit `0`。
+- 一次并行运行 `typecheck` 与 `lint` 同时改写 Prisma generated 目录，分别出现缺失类型和 `ENOTEMPTY`；
+  按共享生成目录串行约束重新执行 `pnpm prisma:generate` 后，全部命令已逐项复跑转绿。早期两个测试断言
+  还分别受 macOS `/var -> /private/var` canonical 路径和数值字符串 canary 干扰，只修正测试取证方式，
+  未放宽生产合同。
+- 本任务未修改 Prisma Schema、migration、公共 API/OpenAPI、package 或 lockfile，未安装系统依赖，
+  未连接持久数据库，未 push、PR、merge 或部署。
 
 - [ ] 4. 以 TDD 实现可信内容验证器
   - 前置：Gate DEP 已确认精确 package 和 lockfile 变化。
