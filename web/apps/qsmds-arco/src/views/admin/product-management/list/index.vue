@@ -10,13 +10,14 @@ import productsApi from '@/api/modules/products'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
-import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
 import ProductAttributesModal from './product-attributes-modal.vue'
+import ProductDetailDrawer from './product-detail-drawer.vue'
 import {
+  adaptProductListItemDto,
   adaptProductPageDto,
   applyProductSupplierFilter,
   buildProductImageItems,
@@ -35,12 +36,12 @@ const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const router = useRouter()
-const toast = useQsToast()
 const supplierCatalog = useDictionaryCatalog(SUPPLIER_DICTIONARY_CODE)
 const { currencies } = useCurrencyCatalog()
 
 const canRead = computed(() => auth('products:read'))
 const canCreate = computed(() => auth('products:create'))
+const canUpdate = computed(() => auth('products:update'))
 const rows = ref<ProductListItemViewModel[]>([])
 const page = ref(1)
 const pageSize = ref(20)
@@ -54,8 +55,16 @@ const attributesTarget = ref<ProductListItemViewModel | null>(null)
 const attributesVisible = ref(false)
 const videosTarget = ref<ProductListItemViewModel | null>(null)
 const videosVisible = ref(false)
+const detailVisible = ref(false)
+const detailProductId = ref<string>()
+const detailProduct = ref<ProductListItemViewModel | null>(null)
+const detailLoading = ref(false)
+const detailError = ref('')
+const detailRequestId = ref<string>()
 let listRequestVersion = 0
 let listAbortController: AbortController | null = null
+let detailRequestVersion = 0
+let detailAbortController: AbortController | null = null
 let queryRefreshPending = false
 
 const supplierCatalogLoading = computed(() => supplierCatalog.loading.value)
@@ -301,12 +310,93 @@ function navigateToCreate(): void {
   void router.push({ name: 'adminProductCreate' })
 }
 
-function showViewPlaceholder(): void {
-  toast.info('产品详情功能将在后续版本开放')
+function detailResponseIsCurrent(
+  productId: string,
+  requestVersion: number,
+  authEpoch: number,
+  controller: AbortController,
+): boolean {
+  return canApplyProductListResponse({
+    aborted: controller.signal.aborted,
+    authorized: canRead.value && detailProductId.value === productId,
+    authEpoch,
+    currentAuthEpoch: appAccountStore.authEpoch,
+    latestRequestVersion: detailRequestVersion,
+    requestVersion,
+  })
 }
 
-function showEditPlaceholder(): void {
-  toast.info('产品编辑功能将在后续版本开放')
+async function loadProductDetail(): Promise<void> {
+  const productId = detailProductId.value
+  if (!canRead.value || productId === undefined) {
+    return
+  }
+
+  detailAbortController?.abort()
+  const controller = new AbortController()
+  detailAbortController = controller
+  const requestVersion = ++detailRequestVersion
+  const authEpoch = appAccountStore.authEpoch
+  detailLoading.value = true
+  detailError.value = ''
+  detailRequestId.value = undefined
+
+  try {
+    const response = await productsApi.getById(productId, controller.signal)
+    if (!detailResponseIsCurrent(
+      productId,
+      requestVersion,
+      authEpoch,
+      controller,
+    )) {
+      return
+    }
+    detailProduct.value = adaptProductListItemDto(response.data)
+  }
+  catch (error) {
+    if (
+      isProductListAbortError(error)
+      || !detailResponseIsCurrent(
+        productId,
+        requestVersion,
+        authEpoch,
+        controller,
+      )
+    ) {
+      return
+    }
+    const failure = getProductListApiFailure(error)
+    detailProduct.value = null
+    detailError.value = failure.message
+    detailRequestId.value = failure.requestId
+  }
+  finally {
+    if (requestVersion === detailRequestVersion) {
+      detailLoading.value = false
+    }
+  }
+}
+
+function showProductDetail(product: ProductListItemViewModel): void {
+  detailProductId.value = product.id
+  // 先用列表快照提供稳定布局，再立即 GET 替换为服务端最新详情。
+  detailProduct.value = product
+  detailVisible.value = true
+  void loadProductDetail()
+}
+
+function closeProductDetail(): void {
+  detailRequestVersion += 1
+  detailAbortController?.abort()
+  detailLoading.value = false
+}
+
+function navigateToEdit(productId: string): void {
+  if (!canUpdate.value) {
+    return
+  }
+  detailVisible.value = false
+  void router.push({ name: 'adminProductEdit', params: { productId } })
 }
 
 watch(
@@ -315,11 +405,19 @@ watch(
     const identityChanged = nextAuthEpoch !== previousAuthEpoch
     listRequestVersion += 1
     listAbortController?.abort()
+    detailRequestVersion += 1
+    detailAbortController?.abort()
     loading.value = false
     rows.value = []
     total.value = 0
     listError.value = ''
     listRequestId.value = undefined
+    detailVisible.value = false
+    detailProductId.value = undefined
+    detailProduct.value = null
+    detailLoading.value = false
+    detailError.value = ''
+    detailRequestId.value = undefined
     if (identityChanged) {
       filters.value = {}
       searchKeyword.value = ''
@@ -340,6 +438,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   listRequestVersion += 1
   listAbortController?.abort()
+  detailRequestVersion += 1
+  detailAbortController?.abort()
 })
 </script>
 
@@ -522,17 +622,18 @@ onBeforeUnmount(() => {
             size="sm"
             class="min-h-11 sm:min-h-9"
             :aria-label="`查看第 ${rowNumber} 行产品 ${row.productNo}`"
-            @click="showViewPlaceholder"
+            @click="showProductDetail(row)"
           >
             <FaIcon name="i-lucide:eye" />
             查看
           </FaButton>
           <FaButton
+            v-if="canUpdate"
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-9"
             :aria-label="`编辑第 ${rowNumber} 行产品 ${row.productNo}`"
-            @click="showEditPlaceholder"
+            @click="navigateToEdit(row.id)"
           >
             <FaIcon name="i-lucide:pencil" />
             编辑
@@ -696,10 +797,10 @@ onBeforeUnmount(() => {
             </div>
           </dl>
           <div class="mt-4 pt-3 border-t border-border flex gap-2 justify-end">
-            <FaButton variant="outline" class="min-h-11" @click="showViewPlaceholder">
+            <FaButton variant="outline" class="min-h-11" @click="showProductDetail(row)">
               <FaIcon name="i-lucide:eye" />查看
             </FaButton>
-            <FaButton variant="outline" class="min-h-11" @click="showEditPlaceholder">
+            <FaButton v-if="canUpdate" variant="outline" class="min-h-11" @click="navigateToEdit(row.id)">
               <FaIcon name="i-lucide:pencil" />编辑
             </FaButton>
           </div>
@@ -714,6 +815,18 @@ onBeforeUnmount(() => {
     <ProductVideosModal
       v-model="videosVisible"
       :product="videosTarget"
+    />
+    <ProductDetailDrawer
+      v-model="detailVisible"
+      :product="detailProduct"
+      :currencies="currencies"
+      :can-edit="canUpdate"
+      :loading="detailLoading"
+      :error="detailError"
+      :request-id="detailRequestId"
+      @retry="loadProductDetail"
+      @edit="navigateToEdit"
+      @closed="closeProductDetail"
     />
   </div>
 </template>

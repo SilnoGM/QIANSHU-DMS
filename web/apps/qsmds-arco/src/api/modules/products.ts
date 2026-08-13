@@ -4,6 +4,7 @@ import type {
   ProductListItemDto,
   ProductPageDto,
   ProductsListData,
+  UpdateProductRequestDto,
 } from '../generated/types.gen'
 
 import api from '../index'
@@ -23,6 +24,14 @@ export function createProductsApi(client: AxiosInstance) {
         params: query,
         signal,
       }),
+    getById: (productId: string, signal: AbortSignal) =>
+      client.get<ProductListItemDto>(
+        `products/${encodeURIComponent(productId)}`,
+        {
+          errorPresentation: 'local',
+          signal,
+        },
+      ),
     create: (
       data: CreateProductRequestDto,
       idempotencyKey: string,
@@ -33,6 +42,20 @@ export function createProductsApi(client: AxiosInstance) {
       retry: false,
       signal,
     }),
+    update: (
+      productId: string,
+      data: UpdateProductRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<ProductListItemDto>(
+      `products/${encodeURIComponent(productId)}`,
+      data,
+      {
+        errorPresentation: 'local',
+        // PATCH 没有幂等键；网络/5xx 后只能 GET 对账，绝不自动重放写请求。
+        retry: false,
+        signal,
+      },
+    ),
   }
 }
 

@@ -115,14 +115,16 @@ test('特殊单元格复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗',
   assert.match(source, /<ProductVideosModal/u)
 })
 
-test('属性和视频入口可聚焦，新增导航与查看编辑占位边界清晰', () => {
+test('属性和视频入口可聚焦，新增、查看与编辑接入精确路由', () => {
   assert.match(source, /项属性/u)
   assert.match(source, /个视频/u)
   assert.match(source, /i-lucide:list-tree/u)
   assert.match(source, /i-lucide:video/u)
   assert.match(source, /router\.push\(\{ name: 'adminProductCreate' \}\)/u)
-  assert.match(source, /toast\.info\('产品详情功能将在后续版本开放'\)/u)
-  assert.match(source, /toast\.info\('产品编辑功能将在后续版本开放'\)/u)
+  assert.match(source, /productsApi\.getById/u)
+  assert.match(source, /<ProductDetailDrawer/u)
+  assert.match(source, /name: 'adminProductEdit'/u)
+  assert.match(source, /v-if="canUpdate"/u)
   assert.doesNotMatch(source, /productsApi\.(?:create|update|delete)/u)
 })
 

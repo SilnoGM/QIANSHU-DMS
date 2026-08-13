@@ -7,10 +7,14 @@ const VIEW_ROOT = new URL(
   '../../src/views/admin/product-management/create/',
   import.meta.url,
 )
+const FORM_ROOT = new URL(
+  '../../src/views/admin/product-management/form/',
+  import.meta.url,
+)
 
 test('属性编辑器覆盖 50 项、稳定 key、有序操作与可访问错误', async () => {
   const source = await readFile(
-    new URL('product-attributes-editor.vue', VIEW_ROOT),
+    new URL('product-attributes-editor.vue', FORM_ROOT),
     'utf8',
   )
 
@@ -37,7 +41,7 @@ test('属性编辑器覆盖 50 项、稳定 key、有序操作与可访问错误
 
 test('产品表单组合基础资料、状态供应商、三组金额、属性和媒体延期说明', async () => {
   const source = await readFile(
-    new URL('product-create-form.vue', VIEW_ROOT),
+    new URL('product-form.vue', FORM_ROOT),
     'utf8',
   )
 
@@ -59,7 +63,7 @@ test('产品表单组合基础资料、状态供应商、三组金额、属性�
   assert.match(source, /:currencies="myrCurrencies"/)
   assert.match(source, /:currencies="purchaseCurrencies"/)
   assert.match(source, /ProductAttributesEditor/)
-  assert.match(source, /patch: \[value: Partial<ProductCreateFormModel>\]/)
+  assert.match(source, /patch: \[value: Partial<ProductFormModel>\]/)
   assert.match(source, /emit\('patch', patch\)/)
   assert.doesNotMatch(source, /\.\.\.props\.modelValue,\s*\.\.\.patch/u)
   assert.match(source, /图片与视频将在后续版本接入/)
@@ -68,11 +72,11 @@ test('产品表单组合基础资料、状态供应商、三组金额、属性�
 
 test('表单显式呈现 Catalog 和字段失败，并可滚动聚焦首个真实控件', async () => {
   const source = await readFile(
-    new URL('product-create-form.vue', VIEW_ROOT),
+    new URL('product-form.vue', FORM_ROOT),
     'utf8',
   )
 
-  assert.match(source, /ProductCreateCatalogState/)
+  assert.match(source, /ProductFormCatalogState/)
   assert.match(source, /正在加载货币资料/)
   assert.match(source, /货币资料加载失败/)
   assert.match(source, /暂无可用货币/)
@@ -94,7 +98,7 @@ test('表单显式呈现 Catalog 和字段失败，并可滚动聚焦首个真�
 
 test('表单使用桌面 8\/4 信息结构、移动单列和语义 Token，不引入装饰性风格', async () => {
   const source = await readFile(
-    new URL('product-create-form.vue', VIEW_ROOT),
+    new URL('product-form.vue', FORM_ROOT),
     'utf8',
   )
 
@@ -120,7 +124,7 @@ test('创建页编排页头、Catalog、表单、真实 API 与成功分流', as
   assert.match(source, /data-testid="product-create-page"/)
   assert.match(source, /title="新增产品"/)
   assert.match(source, /<FaPageMain/)
-  assert.match(source, /<ProductCreateForm/)
+  assert.match(source, /<ProductForm/)
   assert.match(source, /useCurrencyCatalog\(\)/)
   assert.match(source, /useDictionaryCatalog\(SUPPLIER_DICTIONARY_CODE\)/)
   assert.match(source, /productsApi\.create/)

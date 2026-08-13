@@ -1,47 +1,40 @@
 import type {
+  ProductAttributeRow,
+  ProductFieldErrors,
+  ProductFormModel,
+  ProductFormStatus,
+  ProductMoneyPrecisions,
+} from '../form/product-form.logic'
+import type {
   CreateProductRequestDto,
   ProductListItemDto,
 } from '@/api/generated/types.gen'
 
-import { validateMoneyString } from '../../../../components/base/MoneyInput/logic'
+import {
+  appendProductAttribute,
+  buildProductFormRequest,
+  createProductAttributeRow,
+  createProductFormModel,
+  hasProductFormChanges,
+  MAX_PRODUCT_ATTRIBUTES,
+  moveProductAttribute,
+  removeProductAttribute,
+  updateProductAttribute,
+} from '../form/product-form.logic'
 
-export type ProductCreateStatus = CreateProductRequestDto['status']
-export const MAX_PRODUCT_ATTRIBUTES = 50
-
-export interface ProductCreateAttributeRow {
-  key: string
-  title: string
-  value: string
+export type ProductCreateStatus = ProductFormStatus
+export type ProductCreateAttributeRow = ProductAttributeRow
+export type ProductCreateFormModel = ProductFormModel
+export type ProductCreateMoneyPrecisions = ProductMoneyPrecisions
+export type ProductCreateFieldErrors = ProductFieldErrors
+export {
+  appendProductAttribute,
+  createProductAttributeRow,
+  MAX_PRODUCT_ATTRIBUTES,
+  moveProductAttribute,
+  removeProductAttribute,
+  updateProductAttribute,
 }
-
-export interface ProductCreateFormModel {
-  attributes: ProductCreateAttributeRow[]
-  myrSalePriceAmount: string | null
-  name: string
-  purchaseCostAmount: string | null
-  purchaseCostCurrency: string
-  status: ProductCreateStatus
-  supplierValue: string | null
-  twdSalePriceAmount: string | null
-}
-
-export interface ProductCreateMoneyPrecisions {
-  myrSalePricePrecision: number
-  purchaseCostPrecision: number
-  twdSalePricePrecision: number
-}
-
-export type ProductCreateFieldErrors = Readonly<Record<string, string>>
-
-export type BuildCreateProductRequestResult
-  = | {
-    readonly request: CreateProductRequestDto
-    readonly valid: true
-  }
-  | {
-    readonly fieldErrors: ProductCreateFieldErrors
-    readonly valid: false
-  }
 
 export interface ProductCreateApiFailure {
   readonly code: string | undefined
@@ -93,12 +86,6 @@ export interface ProductCreateResponseGuardInput {
   readonly requestVersion: number
 }
 
-const PRODUCT_STATUSES = new Set<ProductCreateStatus>([
-  'DRAFT',
-  'ACTIVE',
-  'INACTIVE',
-])
-const CURRENCY_CODE_PATTERN = /^[A-Z]{3}$/u
 const ATTRIBUTE_FIELD_PATTERN = /^attributes\.(?:\d|[1-4]\d)\.(?:title|value)$/u
 const SIMPLE_FIELD_PATHS = new Set([
   'idempotencyKey',
@@ -112,17 +99,7 @@ const SIMPLE_FIELD_PATHS = new Set([
   'twdSalePrice.amount',
   'twdSalePrice.currency',
 ])
-const MAXIMUM_AMOUNT_BY_PRECISION = Array.from({ length: 5 }, (_value, precision) =>
-  `${'9'.repeat(26)}${precision === 0 ? '' : `.${'9'.repeat(precision)}`}`)
 const DEFAULT_FAILURE_MESSAGE = '操作失败，请稍后重试'
-
-function codePointLength(value: string): number {
-  return [...value].length
-}
-
-function normalizeText(value: string): string {
-  return value.trim().normalize('NFC')
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -136,44 +113,6 @@ function readFirstMessage(value: unknown): string | undefined {
   return Array.isArray(value) && typeof value[0] === 'string'
     ? value[0]
     : undefined
-}
-
-function addTextError(
-  errors: Record<string, string>,
-  field: string,
-  value: string,
-  maximumCodePoints: number,
-  label: string,
-): string {
-  const normalized = normalizeText(value)
-  const length = codePointLength(normalized)
-  if (length === 0) {
-    errors[field] = `${label}不能为空`
-  }
-  else if (length > maximumCodePoints) {
-    errors[field] = `${label}不能超过 ${maximumCodePoints} 个字符`
-  }
-  return normalized
-}
-
-function normalizeMoney(
-  errors: Record<string, string>,
-  field: string,
-  amount: string | null,
-  precision: number,
-): string | null {
-  const max = MAXIMUM_AMOUNT_BY_PRECISION[precision]
-  // Currency minorUnit 来自服务端 Catalog，非法配置必须失败关闭。
-  if (max === undefined) {
-    errors[field] = '货币精度配置无效'
-    return null
-  }
-  const result = validateMoneyString(amount, { max, precision })
-  if (!result.valid) {
-    errors[field] = result.message
-    return null
-  }
-  return result.normalizedValue
 }
 
 function cloneAndFreezeRequest(
@@ -193,96 +132,11 @@ function cloneAndFreezeRequest(
 }
 
 export function createProductCreateFormModel(): ProductCreateFormModel {
-  return {
-    attributes: [],
-    myrSalePriceAmount: null,
-    name: '',
-    purchaseCostAmount: null,
-    purchaseCostCurrency: 'CNY',
-    status: 'DRAFT',
-    supplierValue: null,
-    twdSalePriceAmount: null,
-  }
-}
-
-/** row key 只服务于 Vue 就地编辑，不参与 dirty 基线或 API DTO。 */
-export function createProductAttributeRow(
-  key: string,
-  title = '',
-  value = '',
-): ProductCreateAttributeRow {
-  return { key, title, value }
-}
-
-export function appendProductAttribute(
-  rows: readonly ProductCreateAttributeRow[],
-  keyFactory: () => string = () => crypto.randomUUID(),
-): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
-  if (rows.length >= MAX_PRODUCT_ATTRIBUTES) {
-    return rows
-  }
-  return [...rows, createProductAttributeRow(keyFactory())]
-}
-
-export function updateProductAttribute(
-  rows: readonly ProductCreateAttributeRow[],
-  index: number,
-  field: 'title' | 'value',
-  value: string,
-): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
-  if (!Number.isInteger(index) || index < 0 || index >= rows.length) {
-    return rows
-  }
-  return rows.map((row, rowIndex) => rowIndex === index
-    ? { ...row, [field]: value }
-    : row)
-}
-
-export function moveProductAttribute(
-  rows: readonly ProductCreateAttributeRow[],
-  index: number,
-  direction: 'down' | 'up',
-): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
-  const targetIndex = direction === 'up' ? index - 1 : index + 1
-  if (
-    !Number.isInteger(index)
-    || index < 0
-    || index >= rows.length
-    || targetIndex < 0
-    || targetIndex >= rows.length
-  ) {
-    return rows
-  }
-  const next = [...rows]
-  const source = next[index]
-  const target = next[targetIndex]
-  if (source === undefined || target === undefined) {
-    return rows
-  }
-  next[index] = target
-  next[targetIndex] = source
-  return next
-}
-
-export function removeProductAttribute(
-  rows: readonly ProductCreateAttributeRow[],
-  index: number,
-): ProductCreateAttributeRow[] | readonly ProductCreateAttributeRow[] {
-  if (!Number.isInteger(index) || index < 0 || index >= rows.length) {
-    return rows
-  }
-  return rows.filter((_row, rowIndex) => rowIndex !== index)
+  return createProductFormModel()
 }
 
 export function hasProductCreateChanges(model: ProductCreateFormModel): boolean {
-  return model.name !== ''
-    || model.status !== 'DRAFT'
-    || model.supplierValue !== null
-    || model.twdSalePriceAmount !== null
-    || model.myrSalePriceAmount !== null
-    || model.purchaseCostAmount !== null
-    || model.purchaseCostCurrency !== 'CNY'
-    || model.attributes.length > 0
+  return hasProductFormChanges(model)
 }
 
 /**
@@ -292,87 +146,8 @@ export function hasProductCreateChanges(model: ProductCreateFormModel): boolean 
 export function buildCreateProductRequest(
   model: ProductCreateFormModel,
   precisions: ProductCreateMoneyPrecisions,
-): BuildCreateProductRequestResult {
-  const fieldErrors: Record<string, string> = {}
-  const name = addTextError(fieldErrors, 'name', model.name, 128, '产品名称')
-  if (!PRODUCT_STATUSES.has(model.status)) {
-    fieldErrors.status = '产品状态不在白名单内'
-  }
-
-  const supplierValue = model.supplierValue === null
-    ? null
-    : model.supplierValue.trim()
-  if (supplierValue !== null) {
-    const supplierLength = codePointLength(supplierValue)
-    if (supplierLength === 0 || supplierLength > 64) {
-      fieldErrors.supplierValue = '请选择有效供应商'
-    }
-  }
-  if (model.status === 'ACTIVE' && supplierValue === null) {
-    fieldErrors.supplierValue = '启用产品必须选择供应商'
-  }
-
-  const twdSalePriceAmount = normalizeMoney(
-    fieldErrors,
-    'twdSalePrice.amount',
-    model.twdSalePriceAmount,
-    precisions.twdSalePricePrecision,
-  )
-  const myrSalePriceAmount = normalizeMoney(
-    fieldErrors,
-    'myrSalePrice.amount',
-    model.myrSalePriceAmount,
-    precisions.myrSalePricePrecision,
-  )
-  const purchaseCostAmount = normalizeMoney(
-    fieldErrors,
-    'purchaseCost.amount',
-    model.purchaseCostAmount,
-    precisions.purchaseCostPrecision,
-  )
-  if (!CURRENCY_CODE_PATTERN.test(model.purchaseCostCurrency)) {
-    fieldErrors['purchaseCost.currency'] = '请选择有效货币'
-  }
-
-  if (model.attributes.length > 50) {
-    fieldErrors.attributes = '产品属性不能超过 50 项'
-  }
-  const attributes = model.attributes.map((attribute, index) => ({
-    title: addTextError(
-      fieldErrors,
-      `attributes.${index}.title`,
-      attribute.title,
-      64,
-      '属性标题',
-    ),
-    value: addTextError(
-      fieldErrors,
-      `attributes.${index}.value`,
-      attribute.value,
-      512,
-      '属性值',
-    ),
-  }))
-
-  if (Object.keys(fieldErrors).length > 0) {
-    return { fieldErrors: Object.freeze(fieldErrors), valid: false }
-  }
-
-  return {
-    request: {
-      attributes,
-      myrSalePrice: { amount: myrSalePriceAmount, currency: 'MYR' },
-      name,
-      purchaseCost: {
-        amount: purchaseCostAmount,
-        currency: model.purchaseCostCurrency,
-      },
-      status: model.status,
-      supplierValue,
-      twdSalePrice: { amount: twdSalePriceAmount, currency: 'TWD' },
-    },
-    valid: true,
-  }
+) {
+  return buildProductFormRequest(model, precisions)
 }
 
 /** HTTP body 仍是不可信输入；未知字段路径只降级为表单级错误。 */

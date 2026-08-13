@@ -1,5 +1,8 @@
 import type { AxiosInstance } from 'axios'
-import type { CreateProductRequestDto } from '../../src/api/generated/types.gen'
+import type {
+  CreateProductRequestDto,
+  UpdateProductRequestDto,
+} from '../../src/api/generated/types.gen'
 
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- Web API 契约测试使用 Node.js 内置 runner。
@@ -10,7 +13,7 @@ import { createProductsApi } from '../../src/api/modules/products'
 interface Call {
   readonly config?: unknown
   readonly data?: unknown
-  readonly method: 'get' | 'post'
+  readonly method: 'get' | 'patch' | 'post'
   readonly url: string
 }
 
@@ -24,6 +27,10 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     },
     post(url: string, data?: unknown, config?: unknown) {
       calls.push({ config, data, method: 'post', url })
+      return response
+    },
+    patch(url: string, data?: unknown, config?: unknown) {
+      calls.push({ config, data, method: 'patch', url })
       return response
     },
   } as unknown as AxiosInstance
@@ -47,7 +54,56 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     method: 'get',
     url: 'products',
   }])
-  assert.deepEqual(Object.keys(products), ['list', 'create'])
+  assert.deepEqual(Object.keys(products), ['list', 'getById', 'create', 'update'])
+})
+
+test('产品详情与编辑使用资源路径、AbortSignal、局部呈错且 PATCH 禁止自动重试', async () => {
+  const calls: Call[] = []
+  const response = Promise.resolve({ data: {} })
+  const client = {
+    get(url: string, config?: unknown) {
+      calls.push({ config, method: 'get', url })
+      return response
+    },
+    patch(url: string, data?: unknown, config?: unknown) {
+      calls.push({ config, data, method: 'patch', url })
+      return response
+    },
+    post() {
+      return response
+    },
+  } as unknown as AxiosInstance
+  const products = createProductsApi(client)
+  const controller = new AbortController()
+  const productId = '11111111-1111-4111-8111-111111111111'
+  const update: UpdateProductRequestDto = {
+    expectedVersion: 1,
+    name: '新产品',
+  }
+
+  await products.getById(productId, controller.signal)
+  await products.update(productId, update, controller.signal)
+
+  assert.deepEqual(calls, [
+    {
+      config: {
+        errorPresentation: 'local',
+        signal: controller.signal,
+      },
+      method: 'get',
+      url: `products/${productId}`,
+    },
+    {
+      config: {
+        errorPresentation: 'local',
+        retry: false,
+        signal: controller.signal,
+      },
+      data: update,
+      method: 'patch',
+      url: `products/${productId}`,
+    },
+  ])
 })
 
 test('产品创建使用 generated DTO、内存幂等 Key、AbortSignal 且禁止自动重试', async () => {

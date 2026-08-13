@@ -69,7 +69,7 @@ function cloneActor(value: ProductActorDto | null): ProductActorDto | null {
     : { displayName: value.displayName, id: value.id }
 }
 
-function adaptProductListItem(
+export function adaptProductListItemDto(
   value: ProductListItemDto,
 ): ProductListItemViewModel {
   const supplier = value.supplier === null
@@ -101,7 +101,7 @@ export function adaptProductPageDto(
   value: ProductPageDto,
 ): ProductPageViewModel {
   return {
-    items: value.items.map(adaptProductListItem),
+    items: value.items.map(adaptProductListItemDto),
     page: value.page,
     pageSize: value.pageSize,
     total: value.total,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ProductCreateAttributeRow, ProductCreateFieldErrors } from './product-create.logic'
+import type { ProductAttributeRow, ProductFieldErrors } from './product-form.logic'
 
 import {
   appendProductAttribute,
@@ -7,21 +7,21 @@ import {
   moveProductAttribute,
   removeProductAttribute,
   updateProductAttribute,
-} from './product-create.logic'
+} from './product-form.logic'
 
 defineOptions({ name: 'ProductAttributesEditor' })
 
 const props = withDefaults(defineProps<{
   disabled?: boolean
-  fieldErrors?: ProductCreateFieldErrors
-  modelValue: readonly ProductCreateAttributeRow[]
+  fieldErrors?: ProductFieldErrors
+  modelValue: readonly ProductAttributeRow[]
 }>(), {
   disabled: false,
   fieldErrors: () => ({}),
 })
 
 const emit = defineEmits<{
-  'update:modelValue': [value: ProductCreateAttributeRow[]]
+  'update:modelValue': [value: ProductAttributeRow[]]
 }>()
 
 const rootRef = useTemplateRef<HTMLElement>('rootRef')

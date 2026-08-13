@@ -9,10 +9,11 @@ import productManagementRoutes, {
 } from '../../src/router/modules/product.management'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('管理员工作台注册产品管理的两个权限隔离页面', () => {
+test('管理员工作台注册产品管理的创建、列表与隐藏编辑路由', () => {
   assert.deepEqual(PRODUCT_MANAGEMENT_PERMISSIONS, [
     'products:read',
     'products:create',
+    'products:update',
   ])
   assert.equal(productManagementRoutes.path, '/admin/products')
   assert.equal(productManagementRoutes.name, 'adminProductManagement')
@@ -37,8 +38,19 @@ test('管理员工作台注册产品管理的两个权限隔离页面', () => {
         path: 'list',
         title: '产品列表',
       },
+      {
+        auth: 'products:update',
+        name: 'adminProductEdit',
+        path: ':productId/edit',
+        title: '编辑产品',
+      },
     ],
   )
+  const editRoute = productManagementRoutes.children?.find(
+    route => route.name === 'adminProductEdit',
+  )
+  assert.equal(editRoute?.meta?.menu, false)
+  assert.equal(editRoute?.meta?.activeMenu, '/admin/products/list')
   assert.ok(
     productManagementRoutes.children?.every(
       route => typeof route.component === 'function',
@@ -72,13 +84,15 @@ test('产品权限精确控制菜单和直接访问资格', () => {
       auth: productManagementRoutes.meta?.auth,
       title: productManagementRoutes.meta?.title,
     },
-    children: (productManagementRoutes.children ?? []).map(route => ({
-      path: route.path,
-      meta: {
-        auth: route.meta?.auth,
-        title: route.meta?.title,
-      },
-    })),
+    children: (productManagementRoutes.children ?? [])
+      .filter(route => route.meta?.menu !== false)
+      .map(route => ({
+        path: route.path,
+        meta: {
+          auth: route.meta?.auth,
+          title: route.meta?.title,
+        },
+      })),
   }]
   const visiblePaths = (permissions: string[]) => filterAccessibleMenus(
     menuFixture,
@@ -88,8 +102,9 @@ test('产品权限精确控制菜单和直接访问资格', () => {
 
   assert.deepEqual(visiblePaths(['products:create']), ['create'])
   assert.deepEqual(visiblePaths(['products:read']), ['list'])
+  assert.deepEqual(visiblePaths(['products:update']), [])
   assert.deepEqual(
-    visiblePaths(['products:read', 'products:create']),
+    visiblePaths(['products:read', 'products:create', 'products:update']),
     ['create', 'list'],
   )
   assert.deepEqual(visiblePaths([]), [])
@@ -104,7 +119,7 @@ test('新增产品页面已接入正式表单与写入编排', () => {
   assert.match(source, /<script setup lang="ts">/u)
   assert.match(source, /<FaPageHeader/u)
   assert.match(source, /<FaPageMain/u)
-  assert.match(source, /<ProductCreateForm/u)
+  assert.match(source, /<ProductForm/u)
   assert.match(source, /productsApi\.create/u)
   assert.match(source, /products:create/u)
   assert.doesNotMatch(source, /新增产品功能将在后续版本开放/u)

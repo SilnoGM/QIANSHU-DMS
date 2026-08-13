@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+// eslint-disable-next-line test/no-import-node-test -- 产品查看编辑 View 契约使用 Node.js 内置 runner。
+import test from 'node:test'
+
+const ROOT = new URL(
+  '../../src/views/admin/product-management/',
+  import.meta.url,
+)
+
+test('详情 Drawer 使用真实详情、完整组件语义、恢复错误和权限化编辑入口', async () => {
+  const source = await readFile(
+    new URL('list/product-detail-drawer.vue', ROOT),
+    'utf8',
+  )
+
+  assert.match(source, /<QsGenericDrawer/u)
+  assert.match(source, /size="xl"/u)
+  assert.match(source, /<ImageGroup/u)
+  assert.match(source, /<AmountDisplay/u)
+  assert.match(source, /<DateTimeDisplay/u)
+  assert.match(source, /supplierStateLabel/u)
+  assert.match(source, /requestId:/u)
+  assert.match(source, /重新加载/u)
+  assert.match(source, /v-if="[^"]*canEdit[^"]*"/u)
+  assert.match(source, /编辑产品/u)
+  assert.doesNotMatch(source, /productsApi/u)
+})
+
+test('列表拥有详情请求竞态并将查看与编辑操作接入真实目标', async () => {
+  const source = await readFile(new URL('list/index.vue', ROOT), 'utf8')
+
+  assert.match(source, /productsApi\.getById/u)
+  assert.match(source, /detailRequestVersion/u)
+  assert.match(source, /detailAbortController/u)
+  assert.match(source, /authEpoch/u)
+  assert.match(source, /<ProductDetailDrawer/u)
+  assert.match(source, /showProductDetail\(row\)/u)
+  assert.match(source, /navigateToEdit\(row\.id\)/u)
+  assert.doesNotMatch(source, /详情功能将在后续版本开放/u)
+  assert.doesNotMatch(source, /编辑功能将在后续版本开放/u)
+})
+
+test('编辑页要求 read+update、GET 初始化、差异 PATCH、对账和离开守卫', async () => {
+  const source = await readFile(new URL('edit/index.vue', ROOT), 'utf8')
+
+  assert.match(source, /authAll\(\['products:read', 'products:update'\]\)/u)
+  assert.match(source, /productsApi\.getById/u)
+  assert.match(source, /productsApi\.update/u)
+  assert.match(source, /buildProductUpdateRequest/u)
+  assert.match(source, /reconcileProductUpdateResult/u)
+  assert.match(source, /phase === 'conflict'/u)
+  assert.match(source, /phase === 'unknown'/u)
+  assert.match(source, /onBeforeRouteLeave/u)
+  assert.match(source, /beforeunload/u)
+  assert.match(source, /<ProductForm/u)
+  assert.match(source, /<QsGenericModal/u)
+  assert.doesNotMatch(source, /setTimeout\([\s\S]{0,120}productsApi\.update/u)
+})

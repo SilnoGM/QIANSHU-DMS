@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import type { FormExpose } from '@fantastic-admin/components'
 import type {
-  ProductCreateFieldErrors,
-  ProductCreateFormModel,
-  ProductCreateStatus,
-} from './product-create.logic'
+  ProductFieldErrors,
+  ProductFormModel,
+  ProductFormStatus,
+} from './product-form.logic'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import type { MoneyValidationResult } from '@/components/base/MoneyInput/logic'
 
@@ -13,11 +13,11 @@ import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.v
 
 import ProductAttributesEditor from './product-attributes-editor.vue'
 
-export type ProductCreateCatalogState = 'empty' | 'error' | 'loading' | 'ready'
+export type ProductFormCatalogState = 'empty' | 'error' | 'loading' | 'ready'
 
-export interface ProductCreateFormExpose {
+export interface ProductFormExpose {
   applyFieldErrors: (
-    errors: ProductCreateFieldErrors,
+    errors: ProductFieldErrors,
     focusFirst?: boolean,
   ) => Promise<void>
   focusFirstError: () => Promise<boolean>
@@ -28,23 +28,27 @@ interface ProductAttributesEditorExpose {
   focusField: (path: string) => boolean
 }
 
-defineOptions({ name: 'ProductCreateForm' })
+defineOptions({ name: 'ProductForm' })
 
 const props = withDefaults(defineProps<{
-  currencyCatalogState?: ProductCreateCatalogState
+  currencyCatalogState?: ProductFormCatalogState
   disabled?: boolean
-  fieldErrors?: ProductCreateFieldErrors
-  modelValue: ProductCreateFormModel
+  fieldErrors?: ProductFieldErrors
+  modelValue: ProductFormModel
   myrCurrencies: readonly CurrencyDescriptor[]
+  mode?: 'create' | 'edit'
+  productNo?: string
   purchaseCurrencies: readonly CurrencyDescriptor[]
   showActions?: boolean
   submitting?: boolean
-  supplierCatalogState?: ProductCreateCatalogState
+  supplierCatalogState?: ProductFormCatalogState
   twdCurrencies: readonly CurrencyDescriptor[]
 }>(), {
   currencyCatalogState: 'ready',
   disabled: false,
   fieldErrors: () => ({}),
+  mode: 'create',
+  productNo: undefined,
   showActions: true,
   submitting: false,
   supplierCatalogState: 'ready',
@@ -55,12 +59,12 @@ const emit = defineEmits<{
   retryCurrencyCatalog: []
   retrySupplierCatalog: []
   submit: []
-  patch: [value: Partial<ProductCreateFormModel>]
+  patch: [value: Partial<ProductFormModel>]
 }>()
 
-const formRef = useTemplateRef<FormExpose<ProductCreateFormModel>>('formRef')
+const formRef = useTemplateRef<FormExpose<ProductFormModel>>('formRef')
 const attributesRef = useTemplateRef<ProductAttributesEditorExpose>('attributesRef')
-const localMoneyErrors = ref<ProductCreateFieldErrors>({})
+const localMoneyErrors = ref<ProductFieldErrors>({})
 const twdCurrency = ref('TWD')
 const myrCurrency = ref('MYR')
 
@@ -83,7 +87,7 @@ const SIMPLE_FIELD_ORDER = Object.freeze([
 ])
 
 const submitLocked = computed(() => props.disabled || props.submitting)
-const visibleFieldErrors = computed<ProductCreateFieldErrors>(() => ({
+const visibleFieldErrors = computed<ProductFieldErrors>(() => ({
   ...props.fieldErrors,
   ...localMoneyErrors.value,
 }))
@@ -95,8 +99,9 @@ const fixedCurrencyUnavailable = computed(() => (
     || props.purchaseCurrencies.length === 0
   )
 ))
+const isEdit = computed(() => props.mode === 'edit')
 
-function updateModel(patch: Partial<ProductCreateFormModel>): void {
+function updateModel(patch: Partial<ProductFormModel>): void {
   if (submitLocked.value) {
     return
   }
@@ -110,7 +115,7 @@ function updateModel(patch: Partial<ProductCreateFormModel>): void {
 
 function handleStatusUpdate(value: unknown): void {
   if (value === 'DRAFT' || value === 'ACTIVE' || value === 'INACTIVE') {
-    updateModel({ status: value as ProductCreateStatus })
+    updateModel({ status: value as ProductFormStatus })
   }
 }
 
@@ -145,7 +150,7 @@ function resolveRegisteredField(path: string): string | undefined {
   return path
 }
 
-function orderedErrorPaths(errors: ProductCreateFieldErrors): readonly string[] {
+function orderedErrorPaths(errors: ProductFieldErrors): readonly string[] {
   const paths = Object.keys(errors)
   const simple = SIMPLE_FIELD_ORDER.filter(path => paths.includes(path))
   const attributes = paths
@@ -159,7 +164,7 @@ function orderedErrorPaths(errors: ProductCreateFieldErrors): readonly string[] 
 }
 
 async function applyFieldErrors(
-  errors: ProductCreateFieldErrors,
+  errors: ProductFieldErrors,
   focusFirst = true,
 ): Promise<void> {
   formRef.value?.clearValidate()
@@ -184,7 +189,7 @@ async function applyFieldErrors(
 }
 
 async function focusFirstErrorFor(
-  errors: ProductCreateFieldErrors,
+  errors: ProductFieldErrors,
 ): Promise<boolean> {
   const [firstPath] = orderedErrorPaths(errors)
   if (firstPath === undefined) {
@@ -228,7 +233,7 @@ watch(
   { deep: true, flush: 'post' },
 )
 
-defineExpose<ProductCreateFormExpose>({
+defineExpose<ProductFormExpose>({
   applyFieldErrors,
   focusFirstError,
   resetValidation,
@@ -246,7 +251,9 @@ defineExpose<ProductCreateFormExpose>({
   >
     <FaCard
       title="基础资料"
-      description="录入用于识别产品的基本信息，产品编号将由 PRODUCT 规则自动派发。"
+      :description="isEdit
+        ? '修改产品基础资料；产品编号是只读身份，不会随编辑改变。'
+        : '录入用于识别产品的基本信息，产品编号将由 PRODUCT 规则自动派发。'"
       class="min-w-0 lg:col-span-8"
       content-class="gap-4 grid"
     >
@@ -267,10 +274,12 @@ defineExpose<ProductCreateFormExpose>({
           产品编号
         </p>
         <p class="text-sm text-muted-foreground leading-6 m-0 mt-1">
-          提交成功后由系统自动派发，无需手工填写。
+          {{ isEdit
+            ? '产品编号由系统维护，编辑时不可修改。'
+            : '提交成功后由系统自动派发，无需手工填写。' }}
         </p>
         <code class="text-sm text-muted-foreground font-mono mt-2 block">
-          PRODUCT · AUTO
+          {{ isEdit ? productNo : 'PRODUCT · AUTO' }}
         </code>
       </div>
     </FaCard>
@@ -344,7 +353,7 @@ defineExpose<ProductCreateFormExpose>({
           <FaAlert
             v-else-if="supplierCatalogState === 'empty'"
             title="暂无可用供应商"
-            description="当前不能创建 ACTIVE 产品。"
+            description="当前不能保存为 ACTIVE 产品。"
             variant="destructive"
             role="alert"
           />
@@ -356,7 +365,9 @@ defineExpose<ProductCreateFormExpose>({
               自动编号
             </p>
             <p class="text-xs text-muted-foreground leading-5 m-0 mt-1">
-              仅在有效提交后由 PRODUCT 规则派发，不回收已派发号码。
+              {{ isEdit
+                ? '沿用已有产品编号，不重新发号。'
+                : '仅在有效提交后由 PRODUCT 规则派发，不回收已派发号码。' }}
             </p>
           </div>
           <div class="p-3 border border-border rounded-lg bg-muted/25">
@@ -364,7 +375,9 @@ defineExpose<ProductCreateFormExpose>({
               审计留痕
             </p>
             <p class="text-xs text-muted-foreground leading-5 m-0 mt-1">
-              创建成功后记录操作人与产品编号，不记录金额或属性内容。
+              {{ isEdit
+                ? '真实变更成功后记录版本与变更字段，不记录金额或属性内容。'
+                : '创建成功后记录操作人与产品编号，不记录金额或属性内容。' }}
             </p>
           </div>
         </FaCard>
@@ -379,7 +392,7 @@ defineExpose<ProductCreateFormExpose>({
             :disabled="submitLocked"
             :loading="submitting"
           >
-            创建产品
+            {{ isEdit ? '保存修改' : '创建产品' }}
           </FaButton>
           <FaButton
             type="button"
@@ -441,7 +454,7 @@ defineExpose<ProductCreateFormExpose>({
         v-else-if="fixedCurrencyUnavailable"
         class="md:col-span-2"
         title="必要货币不可用"
-        description="创建产品需要当前有效的 TWD、MYR 以及至少一种采购币种。"
+        description="保存产品需要当前有效的 TWD、MYR 以及至少一种采购币种。"
         variant="destructive"
         role="alert"
       />

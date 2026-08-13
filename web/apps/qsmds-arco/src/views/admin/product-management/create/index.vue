@@ -16,7 +16,7 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
-import ProductCreateForm from './product-create-form.vue'
+import ProductForm from '../form/product-form.vue'
 import {
   abandonUnknownProductCreate,
   beginProductCreateSubmission,
@@ -535,7 +535,7 @@ onBeforeUnmount(() => {
         </FaButton>
       </section>
 
-      <ProductCreateForm
+      <ProductForm
         v-else
         ref="formRef"
         :model-value="formModel"

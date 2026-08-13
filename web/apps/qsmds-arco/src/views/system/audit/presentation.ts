@@ -57,6 +57,7 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SYSTEM_ADMIN_RECOVERED: '系统管理员已恢复',
   AUTH_RETENTION_PURGED: '认证保留数据已清理',
   PRODUCT_CREATED: '产品已创建',
+  PRODUCT_UPDATED: '产品已更新',
 }
 
 export function auditMetadataEntries(
