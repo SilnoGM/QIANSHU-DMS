@@ -906,6 +906,32 @@ async function verifyProductList(page, baseUrl) {
         && drawer.textContent?.includes('价格资料')
         && drawer.textContent?.includes('数据版本')
     })()`)
+    const productDetailLayout = await page.evaluate(`(() => {
+      const drawer = document.querySelector('[data-testid="product-detail-drawer"]')
+      const dialog = drawer?.closest('[role="dialog"]')
+      const sections = [...(drawer?.querySelectorAll(':scope > section') ?? [])]
+      const labels = sections.map(section => section.querySelector('h3, p')?.textContent?.trim())
+      const leftEdges = sections.map(section => Math.round(section.getBoundingClientRect().left))
+      const scrollContainer = [...(dialog?.querySelectorAll('*') ?? [])].find(element => {
+        const overflowY = getComputedStyle(element).overflowY
+        return ['auto', 'scroll'].includes(overflowY)
+          && element.scrollHeight > element.clientHeight
+      })
+      return {
+        fitsHorizontally: dialog !== null && dialog.scrollWidth <= dialog.clientWidth,
+        labels,
+        sectionCount: sections.length,
+        singleColumn: new Set(leftEdges).size === 1,
+        verticallyScrollable: scrollContainer !== undefined,
+      }
+    })()`)
+    assert.deepEqual(productDetailLayout, {
+      fitsHorizontally: true,
+      labels: ['产品身份', '供应商', '价格资料', '产品属性（2）', '媒体资料', '审计信息'],
+      sectionCount: 6,
+      singleColumn: true,
+      verticallyScrollable: true,
+    })
     // Drawer 的 footer slot 必须从首次挂载起保持稳定，否则详情加载后会遗失
     // “编辑产品”入口；直接从真实详情进入编辑页覆盖该运行时边界。
     await clickVisibleButton(page, '编辑产品')

@@ -28,6 +28,38 @@ test('详情 Drawer 使用真实详情、完整组件语义、恢复错误和权
   assert.doesNotMatch(source, /productsApi/u)
 })
 
+test('详情 Drawer 使用单列区块顺序并交由通用 Drawer 负责纵向滚动', async () => {
+  const source = await readFile(
+    new URL('list/product-detail-drawer.vue', ROOT),
+    'utf8',
+  )
+  const detailStart = source.indexOf(
+    '<div v-else data-testid="product-detail-drawer"',
+  )
+  const detailEnd = source.indexOf('<template #footer>', detailStart)
+  assert.ok(detailStart >= 0 && detailEnd > detailStart)
+  const detailSource = source.slice(detailStart, detailEnd)
+
+  assert.match(
+    detailSource,
+    /data-testid="product-detail-drawer" class="gap-4 grid min-w-0"/u,
+  )
+  assert.doesNotMatch(detailSource, /(?:grid-cols-12|col-span-|<aside)/u)
+  assert.doesNotMatch(detailSource, /overflow-y-(?:auto|scroll)/u)
+
+  const sectionOrder = [
+    '产品身份',
+    '供应商',
+    '价格资料',
+    '产品属性',
+    '媒体资料',
+    '审计信息',
+  ]
+  const positions = sectionOrder.map(label => detailSource.indexOf(label))
+  assert.equal(positions.every(position => position >= 0), true)
+  assert.deepEqual([...positions].sort((left, right) => left - right), positions)
+})
+
 test('列表拥有详情请求竞态并将查看与编辑操作接入真实目标', async () => {
   const source = await readFile(new URL('list/index.vue', ROOT), 'utf8')
 
