@@ -14,8 +14,10 @@
   - 落盘已确认范围、恢复性状态规则、UI 设计和数据库授权。
   - _Requirement: R1-R9_
 
-- [ ] 2. 权限和审计 Migration
+- [x] 2. 权限和审计 Migration
   - TDD 新增 `products:update`、`PRODUCT_UPDATED`、`system_admin` 授权和结构自检。
+  - RED：缺少权限常量、两条 Migration 和 enum，目标测试 5 项按预期失败。
+  - GREEN：Prisma validate/generate、相关 Server 目标测试 21/21 与目标 ESLint 通过。
   - _Requirement: R6, R9_
 
 - [ ] 3. Product 更新输入契约

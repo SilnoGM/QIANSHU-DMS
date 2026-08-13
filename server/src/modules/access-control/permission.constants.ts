@@ -6,14 +6,15 @@
 export const SYSTEM_ADMIN_ROLE_CODE = 'system_admin' as const
 
 /**
- * 产品管理占位阶段的完整权限边界。
+ * 产品管理当前完整权限边界。
  *
- * 当前只存在“产品列表”和“新增产品”两个页面，因此只声明读取与创建权限；
- * 等产品领域 API 获得确认后，再随真实业务动作扩展更新、启停等权限。
+ * 查看详情复用读取权限；独立编辑页面和 PATCH operation 使用更新权限。状态仍随
+ * 产品资料一并编辑，本期不拆分启停权限。
  */
 export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
   'products:read',
   'products:create',
+  'products:update',
 ] as const
 
 /**

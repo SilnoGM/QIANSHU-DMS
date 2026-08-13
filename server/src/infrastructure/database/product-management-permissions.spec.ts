@@ -18,10 +18,11 @@ const PRODUCT_PERMISSION_SEEDS = [
 ] as const
 
 describe('product management permission migration', () => {
-  it('registers the complete product permission contract', () => {
+  it('retains the initial read/create permission migration within the current contract', () => {
     expect(PRODUCT_MANAGEMENT_PERMISSION_CODES).toEqual([
       'products:read',
       'products:create',
+      'products:update',
     ])
     expect(MANAGEMENT_PERMISSION_CODES).toEqual(
       expect.arrayContaining([...PRODUCT_MANAGEMENT_PERMISSION_CODES]),

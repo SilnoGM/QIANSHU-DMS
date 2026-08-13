@@ -70,8 +70,9 @@ describe('permission constants', () => {
       'dictionaries:disable',
       'products:read',
       'products:create',
+      'products:update',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 39)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 40)
   })
 })
 
