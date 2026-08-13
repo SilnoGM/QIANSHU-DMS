@@ -33,6 +33,16 @@ export class MediaValidationError extends Error {
 
 export type MediaContentType = 'DOCUMENT' | 'IMAGE' | 'VIDEO'
 
+const MEBIBYTE = 1024n * 1024n
+
+/** 流式写入和最终 parser 必须复用同一份上限，避免两个边界随维护产生漂移。 */
+export const MEDIA_CONTENT_SIZE_LIMITS: Readonly<Record<MediaContentType, bigint>> =
+  Object.freeze({
+    DOCUMENT: 50n * MEBIBYTE,
+    IMAGE: 10n * MEBIBYTE,
+    VIDEO: 500n * MEBIBYTE,
+  })
+
 export interface MediaContentValidationInput {
   readonly declaredMimeType: string
   readonly expectedMediaType: MediaContentType
@@ -42,6 +52,7 @@ export interface MediaContentValidationInput {
 
 interface BaseValidatedMediaContent {
   readonly canonicalExtension: '.docx' | '.jpg' | '.mp4' | '.pdf' | '.png' | '.webp' | '.xlsx'
+  readonly checksumSha256: string
   readonly mediaType: MediaContentType
   readonly mimeType: string
   readonly sizeBytes: bigint

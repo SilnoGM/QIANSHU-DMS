@@ -8,6 +8,7 @@ import {
   type FileHandle,
   readFile,
   readdir,
+  realpath,
   rm,
   stat,
   symlink,
@@ -138,6 +139,36 @@ describe('LocalMediaStorage', () => {
       expect(metadata.isDirectory()).toBe(true)
       expect(metadata.mode & 0o777).toBe(0o750)
     }
+  })
+
+  it('exposes only a verified staging path inside the validation callback', async () => {
+    const storage = await LocalMediaStorage.create(
+      configuration(storageRoot),
+      testDependencies(),
+    )
+    const staging = await storage.createStagingWrite(ASSET_ID)
+    staging.stream.end('trusted')
+    await finished(staging.stream)
+
+    const result = await storage.withStagingValidationSource(
+      staging.key,
+      async (sourcePath) => {
+        expect(sourcePath).toBe(join(
+          await realpath(storageRoot),
+          ...staging.key.split('/'),
+        ))
+        return readFile(sourcePath, 'utf8')
+      },
+    )
+    expect(result).toBe('trusted')
+
+    await expectStorageError(
+      () => storage.withStagingValidationSource(
+        OBJECT_KEY,
+        () => Promise.resolve(undefined),
+      ),
+      'MEDIA_STORAGE_INVALID_KEY',
+    )
   })
 
   it('fails closed when the root or a managed directory is writable by untrusted users', async () => {

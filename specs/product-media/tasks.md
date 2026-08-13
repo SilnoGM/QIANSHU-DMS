@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-4 已完成
+- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-5 已完成
 - 编写日期：2026-08-13
 - 实施分支：`feat/media-asset-product-media`
 - Requirements：`specs/product-media/requirements.md`
@@ -377,17 +377,49 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
 - 本任务未修改 Prisma Schema、migration、公共 API/OpenAPI 或数据库，未创建 Product Document 分支，
   未连接持久数据库，未 push、PR、merge 或部署。
 
-- [ ] 5. 以 TDD 实现 MediaAsset prepare/activate 状态机
-  - [ ] 5.1 先建立 persistence/service RED，覆盖 UPLOADING 可空元数据、24h expiry、可信元数据 finalize、
+- [x] 5. 以 TDD 实现 MediaAsset prepare/activate 状态机
+  - [x] 5.1 先建立 persistence/service RED，覆盖 UPLOADING 可空元数据、24h expiry、可信元数据 finalize、
     READY 必需字段、条件状态迁移和内容身份不可变。
-  - [ ] 5.2 实现 streaming `prepare()`：staging 写入、hash/size、validator、可信 metadata、final rename；
+  - [x] 5.2 实现 streaming `prepare()`：staging 写入、hash/size、validator、可信 metadata、final rename；
     返回 PreparedMediaAsset 但保持不可见 UPLOADING。
-  - [ ] 5.3 实现调用方 transaction 内 `activate()`、失败收敛和幂等状态条件；不接收 owner 多态字段。
-  - [ ] 5.4 Product policy 固定 `allowedTypes=[IMAGE, VIDEO]`；DOCUMENT prepare contract 由内部测试真实覆盖。
-  - [ ] 5.5 覆盖每个 crash window、Audit/DB rollback 后 final 残留、重复调用和公开错误脱敏。
-  - [ ] 5.6 运行 state machine/storage/validator 回归、Server typecheck/lint 和 diff-check。
-  - [ ] 5.7 更新证据并提交：`feat: 实现媒体资产生命周期`。
+  - [x] 5.3 实现调用方 transaction 内 `activate()`、失败收敛和幂等状态条件；不接收 owner 多态字段。
+  - [x] 5.4 Product policy 固定 `allowedTypes=[IMAGE, VIDEO]`；DOCUMENT prepare contract 由内部测试真实覆盖。
+  - [x] 5.5 覆盖每个 crash window、Audit/DB rollback 后 final 残留、重复调用和公开错误脱敏。
+  - [x] 5.6 运行 state machine/storage/validator 回归、Server typecheck/lint 和 diff-check。
+  - [x] 5.7 更新证据并提交：`feat: 实现媒体资产生命周期`。
   - _Requirements: R1-R5, R7-R8, R11_
+
+### 4.5 Task 5 实施证据
+
+- 初始 TDD RED 为 2 suites / 0 tests：`MediaAssetPersistence` 与 `MediaAssetService` 目标模块尚不存在，
+  Jest exit `1`。随后同大小 staging 替换的安全测试真实 RED，证明仅比较 size 与文件 stat 无法把上传流
+  checksum 绑定到 validator 实际读取内容；实现 validator 独立 streaming SHA-256 后转绿。
+- `MediaAssetPersistence` 明确创建 UPLOADING 记录和 24 小时 expiry，尚未取得的内容元数据保持 null；
+  `markPrepared()` 只在 `status=UPLOADING AND objectKey IS NULL` 时写服务端可信元数据，不切 READY。
+  `activate(transaction, assetId)` 复用调用方 `Prisma.TransactionClient`，只允许完整 UPLOADING 条件更新，
+  重复 READY 幂等，FAILED/TRASHED/PURGED/不存在均失败关闭；`failUploading()` 只允许 UPLOADING → FAILED。
+- `prepare()` 顺序固定为创建数据库事实、流式 staging/size/SHA-256、受控本地验证源、magic/parser、独立
+  validator checksum、条件元数据写、atomic rename、final stat 和 final streaming checksum 复核。只有上传摘要、
+  validator 摘要与最终对象摘要三者一致才返回 PreparedMediaAsset，且返回时数据库仍为 UPLOADING。
+- `LocalMediaStorage.withStagingValidationSource()` 只在 callback 生命周期提供经过 canonical realpath、设备号、
+  文件类型和权限检查的 staging path；绝对路径不进入返回对象、数据库、日志或错误。canonical objectKey 只用
+  Server UTC 年/月、MediaAsset UUID 和 parser canonical extension，原始文件名只保留去路径/控制字符且最多
+  255 Unicode code points 的展示值。
+- Product policy 固定为 `IMAGE/VIDEO`，DOCUMENT 不能进入 ProductMedia；集成测试使用真实 LocalMediaStorage、
+  streaming、MediaContentValidator、atomic rename 和最终读取，分别真实覆盖 WebP 完整解码与内部 PDF prepare，
+  persistence input 不包含 `productId/ownerType/ownerId`，本任务没有通用 Controller 或 Web 入口。
+- crash-window 覆盖：初始 DB create 失败、staging 创建失败、上传中断、validator 拒绝、size/checksum 不一致、
+  元数据条件竞争/写入失败、rename/stat/final checksum 失败，以及 final 成功后领域事务回滚。失败后只使用固定
+  低基数 failureCode，拒绝任意运行时字符串；不删除或误标 READY 的 final 残留，留给 Task 6 reconciler。
+- 最终定向验证为 8 suites / 97 tests；Server 全量为 167 suites / 1673 tests；`pnpm typecheck`、`pnpm lint`、
+  `pnpm build`、`node --run contract:check` 与根治理 663/663 均 exit `0`。
+- 一次并行执行 typecheck/lint 同时运行 Prisma generate，lint 报 `ENOTEMPTY`、typecheck 看到不完整 generated
+  类型产生连带错误；单独恢复 `pnpm prisma:generate` 后全部严格串行转绿。首次全量命令误用
+  `pnpm test -- --runInBand`，Jest 把参数当 pattern 并以 No tests found 退出 `1`；改为项目实际参数
+  `pnpm test --runInBand` 后全量通过。Local validation callback 测试还因 macOS `/var → /private/var`
+  canonical 映射首次失败，只修正测试比较 realpath，未放宽生产路径合同。
+- 本任务未修改 Prisma Schema、migration、公共 API/OpenAPI、Web、依赖或数据库，未注册会访问真实生产路径的
+  AppModule provider，未创建 Product Document 分支，未 push、PR、merge 或部署。
 
 - [ ] 6. 以 TDD 实现引用安全、回收和对账
   - [ ] 6.1 先建立 `MediaAssetReferenceRepository` RED，本期只能显式查询有效 ProductMedia。

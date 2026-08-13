@@ -80,6 +80,14 @@ export interface MediaStorage {
   restoreFromTrash(trashKey: string, objectKey: string): Promise<void>
   purge(key: string): Promise<void>
   stat(key: string): Promise<StoredObjectStat | null>
+  /**
+   * 只在 storage callback 生命周期内把受控 staging 文件交给内容验证器。
+   * 绝对路径不得由调用方保存、记录或写入数据库；未来对象存储可用临时本地验证源实现同一合同。
+   */
+  withStagingValidationSource<T>(
+    stagingKey: string,
+    operation: (sourcePath: string) => Promise<T>,
+  ): Promise<T>
 }
 
 const OBJECT_KEY_PATTERN = /^[A-Za-z0-9._/-]+$/u

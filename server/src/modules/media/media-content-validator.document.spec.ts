@@ -1,4 +1,5 @@
-import { mkdtemp, open, rm, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { deflateRawSync } from 'node:zlib'
@@ -203,6 +204,9 @@ describe('MediaContentValidator DOCUMENT', () => {
     const runProcess = jest.fn(qpdfSuccess)
     const validator = createDocumentValidator(runProcess)
     const sourceStat = await stat(sourcePath)
+    const checksumSha256 = createHash('sha256')
+      .update(await readFile(sourcePath))
+      .digest('hex')
 
     await expect(
       validator.validate({
@@ -213,6 +217,7 @@ describe('MediaContentValidator DOCUMENT', () => {
       }),
     ).resolves.toEqual({
       canonicalExtension: '.pdf',
+      checksumSha256,
       mediaType: 'DOCUMENT',
       mimeType: 'application/pdf',
       sizeBytes: BigInt(sourceStat.size),
@@ -260,6 +265,9 @@ describe('MediaContentValidator DOCUMENT', () => {
       const sourcePath = join(sandbox, originalFilename)
       await writeFile(sourcePath, createZipFixture(minimalOoxmlEntries(kind)))
       const sourceStat = await stat(sourcePath)
+      const checksumSha256 = createHash('sha256')
+        .update(await readFile(sourcePath))
+        .digest('hex')
       const validator = createDocumentValidator(jest.fn(qpdfSuccess))
 
       await expect(
@@ -271,6 +279,7 @@ describe('MediaContentValidator DOCUMENT', () => {
         }),
       ).resolves.toEqual({
         canonicalExtension,
+        checksumSha256,
         mediaType: 'DOCUMENT',
         mimeType: declaredMimeType,
         sizeBytes: BigInt(sourceStat.size),

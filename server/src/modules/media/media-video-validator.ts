@@ -49,6 +49,7 @@ function mapProcessFailure(error: unknown): never {
 export async function validateVideoContent(
   sourcePath: string,
   sizeBytes: bigint,
+  checksumSha256: string,
   ffprobePath: string,
   runProcess: RunRestrictedMediaProcess,
 ): Promise<ValidatedVideoContent> {
@@ -121,6 +122,7 @@ export async function validateVideoContent(
     return Object.freeze({
       audioCodec: audioStreams.length === 1 ? 'aac' : null,
       canonicalExtension: '.mp4',
+      checksumSha256,
       durationMs,
       height,
       mediaType: 'VIDEO',

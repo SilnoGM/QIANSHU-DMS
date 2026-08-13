@@ -541,6 +541,7 @@ export async function validatePdfDocument(
 export function documentValidationResult(
   kind: 'DOCX' | 'PDF' | 'XLSX',
   sizeBytes: bigint,
+  checksumSha256: string,
 ): ValidatedDocumentContent {
   const identities = {
     DOCX: { canonicalExtension: '.docx' as const, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
@@ -549,6 +550,7 @@ export function documentValidationResult(
   }
   return Object.freeze({
     ...identities[kind],
+    checksumSha256,
     mediaType: 'DOCUMENT',
     sizeBytes,
   })

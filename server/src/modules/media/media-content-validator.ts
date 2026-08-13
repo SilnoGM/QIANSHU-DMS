@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto'
 import type { BigIntStats } from 'node:fs'
+import { createReadStream } from 'node:fs'
 import { lstat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 
@@ -14,6 +16,7 @@ import {
   validateImageContent,
 } from './media-image-validator'
 import {
+  MEDIA_CONTENT_SIZE_LIMITS,
   MediaValidationError,
   type MediaContentValidationInput,
   type ValidatedMediaContent,
@@ -23,13 +26,6 @@ import {
   type RunRestrictedMediaProcess,
   validateVideoContent,
 } from './media-video-validator'
-
-const MEBIBYTE = 1024n * 1024n
-const MEDIA_SIZE_LIMITS = {
-  DOCUMENT: 50n * MEBIBYTE,
-  IMAGE: 10n * MEBIBYTE,
-  VIDEO: 500n * MEBIBYTE,
-} as const
 
 const requireFromRuntime = createRequire(__filename)
 
@@ -134,7 +130,7 @@ export class MediaContentValidator {
   async validate(input: MediaContentValidationInput): Promise<ValidatedMediaContent> {
     const initialMetadata = await this.readSafeMetadata(input.sourcePath)
     const sizeBytes = initialMetadata.size
-    if (sizeBytes > MEDIA_SIZE_LIMITS[input.expectedMediaType]) {
+    if (sizeBytes > MEDIA_CONTENT_SIZE_LIMITS[input.expectedMediaType]) {
       throw new MediaValidationError('MEDIA_CONTENT_TOO_LARGE')
     }
     if (sizeBytes === 0n) {
@@ -163,7 +159,13 @@ export class MediaContentValidator {
       ) {
         throw new MediaValidationError('MEDIA_CONTENT_TYPE_MISMATCH')
       }
-      const result = await validateImageContent(input.sourcePath, sizeBytes, identity)
+      const checksumSha256 = await this.readChecksum(input.sourcePath, initialMetadata)
+      const result = await validateImageContent(
+        input.sourcePath,
+        sizeBytes,
+        checksumSha256,
+        identity,
+      )
       await this.requireUnchangedSource(input.sourcePath, initialMetadata)
       return result
     }
@@ -177,9 +179,11 @@ export class MediaContentValidator {
       ) {
         throw new MediaValidationError('MEDIA_CONTENT_TYPE_MISMATCH')
       }
+      const checksumSha256 = await this.readChecksum(input.sourcePath, initialMetadata)
       const result = await validateVideoContent(
         input.sourcePath,
         sizeBytes,
+        checksumSha256,
         this.configuration.ffprobePath,
         this.dependencies.runProcess,
       )
@@ -198,6 +202,7 @@ export class MediaContentValidator {
       ) {
         throw new MediaValidationError('MEDIA_CONTENT_TYPE_MISMATCH')
       }
+      const checksumSha256 = await this.readChecksum(input.sourcePath, initialMetadata)
       if (identity.kind === 'PDF') {
         if (detected?.mime !== 'application/pdf') {
           throw new MediaValidationError('MEDIA_CONTENT_TYPE_MISMATCH')
@@ -213,7 +218,7 @@ export class MediaContentValidator {
         await validateOoxmlPackage(input.sourcePath, identity.kind)
       }
       await this.requireUnchangedSource(input.sourcePath, initialMetadata)
-      return documentValidationResult(identity.kind, sizeBytes)
+      return documentValidationResult(identity.kind, sizeBytes, checksumSha256)
     }
 
     throw new MediaValidationError('MEDIA_CONTENT_UNSUPPORTED')
@@ -247,5 +252,32 @@ export class MediaContentValidator {
     ) {
       throw new MediaValidationError('MEDIA_CONTENT_INVALID')
     }
+  }
+
+  private async readChecksum(
+    sourcePath: string,
+    initial: BigIntStats,
+  ): Promise<string> {
+    const hash = createHash('sha256')
+    let sizeBytes = 0n
+    try {
+      for await (const chunk of createReadStream(sourcePath)) {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        sizeBytes += BigInt(buffer.length)
+        if (sizeBytes > initial.size) {
+          throw new MediaValidationError('MEDIA_CONTENT_INVALID')
+        }
+        hash.update(buffer)
+      }
+    }
+    catch (error) {
+      if (error instanceof MediaValidationError) throw error
+      throw new MediaValidationError('MEDIA_CONTENT_INVALID')
+    }
+    if (sizeBytes !== initial.size) {
+      throw new MediaValidationError('MEDIA_CONTENT_INVALID')
+    }
+    await this.requireUnchangedSource(sourcePath, initial)
+    return hash.digest('hex')
   }
 }

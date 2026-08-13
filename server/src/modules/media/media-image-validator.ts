@@ -32,6 +32,7 @@ function browserOrientedDimensions(
 export async function validateImageContent(
   sourcePath: string,
   sizeBytes: bigint,
+  checksumSha256: string,
   identity: ImageContentIdentity,
 ): Promise<ValidatedImageContent> {
   const options = {
@@ -67,6 +68,7 @@ export async function validateImageContent(
     )
     return Object.freeze({
       canonicalExtension: identity.canonicalExtension,
+      checksumSha256,
       height: dimensions.height,
       mediaType: 'IMAGE',
       mimeType: identity.mimeType,

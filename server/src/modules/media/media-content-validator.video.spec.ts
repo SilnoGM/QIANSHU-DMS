@@ -1,4 +1,5 @@
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -77,6 +78,9 @@ describe('MediaContentValidator VIDEO', () => {
       .mockResolvedValue(ffprobeOutput())
     const validator = createVideoValidator(runProcess)
     const sourceStat = await stat(sourcePath)
+    const checksumSha256 = createHash('sha256')
+      .update(await readFile(sourcePath))
+      .digest('hex')
 
     await expect(
       validator.validate({
@@ -88,6 +92,7 @@ describe('MediaContentValidator VIDEO', () => {
     ).resolves.toEqual({
       audioCodec: null,
       canonicalExtension: '.mp4',
+      checksumSha256,
       durationMs: 1_250,
       height: 1080,
       mediaType: 'VIDEO',

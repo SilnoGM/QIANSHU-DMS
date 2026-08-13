@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtemp, open, readFile, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -73,6 +74,9 @@ describe('MediaContentValidator IMAGE', () => {
       })
       await image[format]().toFile(sourcePath)
       const sourceStat = await stat(sourcePath)
+      const checksumSha256 = createHash('sha256')
+        .update(await readFile(sourcePath))
+        .digest('hex')
 
       await expect(
         validator.validate({
@@ -83,6 +87,7 @@ describe('MediaContentValidator IMAGE', () => {
         }),
       ).resolves.toEqual({
         canonicalExtension,
+        checksumSha256,
         height: 3,
         mediaType: 'IMAGE',
         mimeType: declaredMimeType,

@@ -557,6 +557,18 @@ export class LocalMediaStorage implements MediaStorage {
     })
   }
 
+  async withStagingValidationSource<T>(
+    stagingKey: string,
+    operation: (sourcePath: string) => Promise<T>,
+  ): Promise<T> {
+    const key = requireMediaObjectKeyNamespace(stagingKey, 'staging')
+    const inspected = await this.inspectObject(key)
+    if (!inspected) throw new MediaStorageError('MEDIA_STORAGE_NOT_FOUND')
+
+    // path 只能活在 callback 能力内；MediaAssetService 不得把它放进返回值、数据库或错误。
+    return operation(inspected.path)
+  }
+
   private async requireAvailableCapacity(minimumFreeBytes: bigint): Promise<void> {
     let capacity: LocalFileSystemCapacity
     try {
