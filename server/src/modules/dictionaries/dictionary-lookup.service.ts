@@ -195,6 +195,27 @@ export class DictionaryLookupService {
     return mapStoredDictionaryValue(normalizedCode, rawValue, item)
   }
 
+  /**
+   * 写服务完成行锁和变更后，必须在同一事务快照内解析历史字典值，避免先提交
+   * Product 再从另一个快照拼装响应。该方法只读、不加锁，也不创建嵌套事务。
+   */
+  async resolveStoredValueInTransaction(
+    transaction: Prisma.TransactionClient,
+    input: DictionaryLookupInput,
+  ): Promise<StoredDictionaryValueResolution> {
+    const normalizedCode = normalizeLookupCode(input)
+    const rawValue = readRawStoredValue(input)
+    const item = await transaction.dictionaryItem.findFirst({
+      where: {
+        value: rawValue,
+        dictionaryType: { code: normalizedCode },
+      },
+      select: storedDictionaryValueSelect,
+    })
+
+    return mapStoredDictionaryValue(normalizedCode, rawValue, item)
+  }
+
   async resolveStoredValues(
     input: DictionaryStoredValuesLookupInput,
   ): Promise<readonly StoredDictionaryValueResolution[]> {

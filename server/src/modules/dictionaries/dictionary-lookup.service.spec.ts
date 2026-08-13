@@ -20,6 +20,7 @@ type FindManyMock = jest.Mock<Promise<unknown[]>, [unknown]>
 
 interface LookupTransactionFixture {
   readonly $queryRaw: QueryRawMock
+  readonly dictionaryItem: { readonly findFirst: FindFirstMock }
 }
 
 function getSqlShape(value: unknown): SqlShape {
@@ -54,6 +55,7 @@ function createFixture(): {
   } as unknown as PrismaService
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>(),
+    dictionaryItem: { findFirst },
   }
 
   return {
@@ -223,6 +225,36 @@ describe('DictionaryLookupService requireEffectiveValue', () => {
 })
 
 describe('DictionaryLookupService resolveStoredValue', () => {
+  it('can resolve a raw historical value in the caller transaction', async () => {
+    const fixture = createFixture()
+    fixture.findFirst.mockResolvedValue(null)
+
+    await expect(fixture.service.resolveStoredValueInTransaction(
+      fixture.transaction as unknown as Prisma.TransactionClient,
+      {
+        dictionaryCode: ' Order.Status ',
+        value: ' historical ',
+      },
+    )).resolves.toEqual({
+      known: false,
+      dictionaryCode: 'order.status',
+      value: ' historical ',
+    })
+    expect(fixture.findFirst).toHaveBeenCalledWith({
+      where: {
+        value: ' historical ',
+        dictionaryType: { code: 'order.status' },
+      },
+      select: {
+        value: true,
+        label: true,
+        tone: true,
+        enabled: true,
+        dictionaryType: { select: { enabled: true } },
+      },
+    })
+  })
+
   it.each([
     [false, true, false],
     [true, true, true],

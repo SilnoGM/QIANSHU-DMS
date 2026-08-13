@@ -12,6 +12,7 @@ import {
   mapProductListItem,
   PRODUCT_RESPONSE_SELECT,
   type ProductListItem,
+  type ProductQueryRow,
 } from './product-query.mapper'
 import {
   normalizeProductListQuery,
@@ -39,6 +40,37 @@ export class ProductQueryService {
     private readonly prisma: PrismaService,
     private readonly dictionaryLookup: DictionaryLookupService,
   ) {}
+
+  async getById(productId: string): Promise<ProductListItem> {
+    let row: ProductQueryRow | null
+    try {
+      row = await this.prisma.product.findUnique({
+        where: { id: productId },
+        select: PRODUCT_RESPONSE_SELECT,
+      })
+    }
+    catch {
+      throw new ApiException(500, 'INTERNAL_ERROR', '服务器内部错误')
+    }
+
+    if (row === null) {
+      throw new ApiException(404, 'PRODUCT_NOT_FOUND', '产品不存在')
+    }
+
+    try {
+      const supplierResolution = row.supplierValue === null
+        ? null
+        : await this.dictionaryLookup.resolveStoredValue({
+            dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+            value: row.supplierValue,
+          })
+      return mapProductListItem(row, supplierResolution)
+    }
+    catch {
+      // 字典和持久化 JSON 解析错误都可能携带内部数据，公共边界固定脱敏。
+      throw new ApiException(500, 'INTERNAL_ERROR', '服务器内部错误')
+    }
+  }
 
   async list(input: ProductListQuery): Promise<ProductPage> {
     const query = normalizeProductListQuery(input)

@@ -20,16 +20,22 @@
   - GREEN：Prisma validate/generate、相关 Server 目标测试 21/21 与目标 ESLint 通过。
   - _Requirement: R6, R9_
 
-- [ ] 3. Product 更新输入契约
+- [x] 3. Product 更新输入契约
   - TDD 新增 Product UUID、Update DTO、白名单和规范化 Patch。
+  - RED：目标测试只因 `product-update.dto` 与 `product-update.normalizer` 缺失失败。
+  - GREEN：DTO、白名单、深复制冻结与完整目标差异计算测试通过。
   - _Requirement: R2-R5, R8_
 
-- [ ] 4. Product 详情读取
+- [x] 4. Product 详情读取
   - TDD 实现 `getById()`、历史供应商解析、404 和脱敏。
+  - RED：`getById()` 与事务内历史字典解析能力缺失。
+  - GREEN：详情、404、历史供应商及固定内部错误边界测试通过。
   - _Requirement: R1, R3, R8_
 
-- [ ] 5. Product 更新持久化与服务
+- [x] 5. Product 更新持久化与服务
   - TDD 实现 `FOR UPDATE`、no-op、依赖规则、并发、版本和原子审计。
+  - RED：行锁持久化与 `ProductUpdateService` 模块缺失。
+  - GREEN：Product 与字典目标回归 14 suites / 178 tests 通过，目标 ESLint 与 TypeScript 通过。
   - _Requirement: R2, R4-R6, R8_
 
 - [ ] 6. Controller、OpenAPI 与生成契约

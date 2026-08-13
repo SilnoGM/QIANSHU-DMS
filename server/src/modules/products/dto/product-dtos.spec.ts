@@ -5,6 +5,10 @@ import { validate } from 'class-validator'
 import { createValidationException } from '../../../infrastructure/http/validation-exception.factory'
 import { CreateProductRequestDto } from './product-create.dto'
 import { ProductListQueryDto } from './product-list-query.dto'
+import {
+  ProductIdParamDto,
+  UpdateProductRequestDto,
+} from './product-update.dto'
 
 const createDtoPipe = new ValidationPipe({
   transform: true,
@@ -105,6 +109,60 @@ describe('CreateProductRequestDto', () => {
     }, {
       type: 'body',
       metatype: CreateProductRequestDto,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+  })
+})
+
+describe('Product detail and update DTOs', () => {
+  it('accepts a UUID Product locator and a partial update with expectedVersion', async () => {
+    expect(await validate(plainToInstance(ProductIdParamDto, {
+      productId: '11111111-1111-4111-8111-111111111111',
+    }))).toEqual([])
+
+    const transformed = await createDtoPipe.transform({
+      name: '  更新产品  ',
+      supplierValue: null,
+      expectedVersion: 2,
+    }, {
+      type: 'body',
+      metatype: UpdateProductRequestDto,
+    }) as UpdateProductRequestDto
+    expect(transformed).toMatchObject({
+      name: '更新产品',
+      supplierValue: null,
+      expectedVersion: 2,
+    })
+  })
+
+  it.each([
+    { expectedVersion: 1 },
+    { name: '产品' },
+    { name: '产品', expectedVersion: 0 },
+    { status: 'UNKNOWN', expectedVersion: 1 },
+    { twdSalePrice: { amount: '1', currency: 'USD' }, expectedVersion: 1 },
+    { attributes: Array.from({ length: 51 }, () => ({ title: 'a', value: 'b' })), expectedVersion: 1 },
+  ])('rejects invalid update body: %j', async (body) => {
+    await expect(createDtoPipe.transform(body, {
+      type: 'body',
+      metatype: UpdateProductRequestDto,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+  })
+
+  it.each([
+    { productNo: 'P001' },
+    { mainImage: null },
+    { images: [] },
+    { videos: [] },
+    { version: 2 },
+    { updatedByUserId: '11111111-1111-4111-8111-111111111111' },
+  ])('rejects immutable or media update fields: %j', async (extra) => {
+    await expect(createDtoPipe.transform({
+      name: '产品',
+      expectedVersion: 1,
+      ...extra,
+    }, {
+      type: 'body',
+      metatype: UpdateProductRequestDto,
     })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
   })
 })
