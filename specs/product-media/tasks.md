@@ -2,15 +2,16 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 3 任务清单已编写，等待确认
+- 状态：Phase 4 已授权并暂停于 Gate DEP，Task 1 只读基线审计已完成
 - 编写日期：2026-08-13
 - 实施分支：`feat/media-asset-product-media`
 - Requirements：`specs/product-media/requirements.md`
 - Design：`specs/product-media/design.md`
 - Phase R：已于 2026-08-13 确认
 - Phase D：已于 2026-08-13 确认
-- Phase T：等待确认
-- Phase 4：尚未授权实施
+- Phase T：已于 2026-08-13 确认
+- Phase 4 / Gate I：已于 2026-08-13 确认
+- Gate DEP：等待精确依赖与安全限额确认
 - 持久开发数据库、生产部署、push、PR 和 merge：均未授权
 
 本计划把统一 MediaAsset 基础设施和首个 ProductMedia 领域切片拆为 18 个任务。任务顺序固定为：
@@ -98,24 +99,25 @@
 
 ### Gate T - Phase 3 任务清单
 
-- [ ] 用户确认本任务顺序、TDD 纪律、提交序列、停止条件和需求追踪矩阵。
+- [x] 用户已于 2026-08-13 确认本任务顺序、TDD 纪律、提交序列、停止条件和需求追踪矩阵。
 
 ### Gate I - Phase 4 与高风险代码变更
 
-- [ ] 在实施 Task 2 前，必须由用户明确授权 Phase 4，并再次明确授权以下实际修改：
+- [x] 用户已于 2026-08-13 授权 Phase 4，并再次明确授权以下实际修改：
   - Prisma 新增 `MediaType`、`MediaAssetStatus`、`ProductMediaKind`、`MediaAsset`、`ProductMedia`、
     Product/User relations、约束 Trigger、索引和新 migration。
   - 新增真实权限 `product-media:read` 并授予已确认角色。
   - 新增 Product media upload/layout/detach/content/HEAD 公共 API，替换 Product 响应媒体结构。
   - 在零旧媒体数据门禁下删除 Product 的 `mainImage/images/videos` 列。
-- [ ] 仅确认 Gate T 不自动授权 Gate I；未确认 Gate I 时只允许 Task 1 的只读基线审计。
+- [x] Gate T 与 Gate I 已分别确认；Task 1 仍严格保持只读审计和文档取证边界。
 
 ### Gate DEP - 第三方与系统依赖
 
-- [ ] Task 1 先确认当前直接/传递依赖和 Node.js 标准库能力，再提交最小候选清单、精确版本、用途、
+- [x] Task 1 已确认当前直接/传递依赖和 Node.js 标准库能力，并在 4.1 节形成最小候选清单、精确版本、用途、
   许可证、维护状态、原生构建风险与 lockfile 影响。
 - [ ] 未经用户确认精确候选，不修改 `server/package.json` 或 lockfile。
-- [x] `ffprobe` 是已确认的生产系统依赖，但本地/CI 获取方式仍需在 Task 1 给出可复现证据。
+- [x] `ffprobe` 是已确认的生产系统依赖；Task 1 已记录本地版本和 Ubuntu 24.04 获取证据。
+- [ ] `qpdf` 作为 PDF 受限结构/加密检查的系统依赖，连同精确版本策略等待用户确认。
 
 ### Gate DB - 持久开发数据库
 
@@ -135,17 +137,110 @@
 
 ## 4. 实施任务
 
-- [ ] 1. 建立 Phase 4 绿色基线并完成实施前只读审计
-  - [ ] 1.1 复核 branch、HEAD、工作树、三份规格和 Gate R/D/T/I，发现重叠用户修改时停止。
-  - [ ] 1.2 只读核对 Product Schema、Controller/DTO/mapper、`PRODUCT_UPDATED`、权限、Web 产品页面、
+- [x] 1. 建立 Phase 4 绿色基线并完成实施前只读审计
+  - [x] 1.1 复核 branch、HEAD、工作树、三份规格和 Gate R/D/T/I，发现重叠用户修改时停止。
+  - [x] 1.2 只读核对 Product Schema、Controller/DTO/mapper、`PRODUCT_UPDATED`、权限、Web 产品页面、
     `FaImageUpload/FaFileUpload`、Nginx/release 模板和健康检查现状。
-  - [ ] 1.3 对目标数据库仅执行只读查询，记录 Product 行数以及 `mainImage/images/videos` 非空计数和
+  - [x] 1.3 对目标数据库仅执行只读查询，记录 Product 行数以及 `mainImage/images/videos` 非空计数和
     有限样例 ID；不输出完整 URL，不修改任何数据。
-  - [ ] 1.4 审计 Server 当前 direct/transitive dependencies、Node 24 能力、Multer 行为、图片/OOXML/PDF
+  - [x] 1.4 审计 Server 当前 direct/transitive dependencies、Node 24 能力、Multer 行为、图片/OOXML/PDF
     parser 候选和本地/CI `ffprobe` 可用性，形成 Gate DEP 精确候选。
-  - [ ] 1.5 运行 Product/Audit/Permission/OpenAPI、Web 产品视图和根治理的现有绿色基线。
-  - [ ] 1.6 记录基线 SHA、命令、退出码、测试数量、可变环境快照和停止条件；无代码变化不创建空提交。
+  - [x] 1.5 运行 Product/Audit/Permission/OpenAPI、Web 产品视图和根治理的现有绿色基线。
+  - [x] 1.6 记录基线 SHA、命令、退出码、测试数量、可变环境快照和停止条件；本任务只提交审计文档。
   - _Requirements: R1-R12_
+
+### 4.1 Task 1 基线证据与 Gate DEP 候选
+
+#### 仓库与现有合同
+
+- 审计基线为分支 `feat/media-asset-product-media`、SHA
+  `5c9220fc8c7c5b00dc2600dbdecceb4b79f216a2`；审计开始时工作树清洁，未发现重叠用户修改。
+- Prisma `Product` 仍包含 `mainImage String?`、`images String[]`、`videos String[]`；仓库尚无
+  `MediaAsset`、`ProductMedia`、媒体 migration 或媒体公共 API。
+- Product Controller 现有 list/detail/create/update 合同和 `PRODUCT_UPDATED` 审计事件保持不变；Web
+  list/detail/video 仍消费 URL 字符串。本任务未运行 `contract:sync`，`contract:check` 证明 tracked
+  OpenAPI 和 generated types 无漂移。
+- 当前真实产品权限为 `products:create/read/update`，均只授予 `system_admin`；尚无
+  `product-media:read`。仓库有 release package 和 health 能力，但没有 Nginx/systemd 媒体模板。
+- `FaImageUpload` 的业务模型是 `string[]` URL，`FaFileUpload` 的业务模型是上传 FileItem；二者可提供预览、
+  进度和 custom request 原语，但不能持有 ProductMedia ID、主图、排序、version 或领域生命周期。因此继续
+  采用业务层组合组件，不修改公共 Fa/Qs 契约。
+
+#### 只读数据库与运行环境
+
+- 目标为本机容器 `qianshu-dms-dev-postgres` / PostgreSQL 16。查询使用显式 read-only transaction；
+  `product_count=2`、`main_image_count=0`、`images_count=0`、`videos_count=0`，因此没有样例 ID 可输出。
+  零旧媒体前置条件当前满足，但删除旧列前必须再次查询，不能把本快照当成未来事实。
+- 本机为 macOS arm64、Node.js `v24.16.0`、pnpm `11.9.0`；Server engine 为 `^24.15.0`。生产目标为
+  Ubuntu 24.04 / glibc / x64 / Node.js 24，GitHub Actions 使用 `ubuntu-24.04`。
+- 本机 `ffprobe` 为 `/opt/homebrew/bin/ffprobe`、`8.1.1`，具备 MP4/H.264/AAC 解析能力；其协议列表也
+  包含网络协议，所以实现必须使用固定 argv、协议白名单/禁网络、无 shell、超时和输出上限。
+- Ubuntu 24.04 `ffmpeg` 包当前为 `7:6.1.1-3ubuntu5` 并提供 `ffprobe`；现有 CI workflow 未安装它，
+  runner 清单也未声明预装，因此后续必须在 CI/runtime 显式安装并记录 `ffprobe -version`。
+- 本机没有 `qpdf`。Ubuntu 24.04 `noble-updates` 当前提供 `qpdf 11.9.0-1.1ubuntu0.1`；在 Gate DEP/OPS
+  允许前不得安装。若获确认，CI/runtime 必须显式安装并记录版本，不能依赖 runner 偶然预装。
+
+#### 当前依赖与精确候选
+
+Server 当前没有媒体直接依赖；传递树已有 `multer@2.2.0 -> busboy@1.6.0`，以及
+`@nestjs/common@11.1.28 -> file-type@21.3.4`。Multer 默认 memory storage 会把完整文件放入 heap，
+不满足 500MiB 视频合同，因此产品媒体上传不使用默认 Multer buffering。
+
+以下是等待 Gate DEP 确认的完整候选；未确认前不得改 package、lockfile 或安装系统包：
+
+| 位置 | 精确候选 | 许可证 | 唯一用途与取舍 |
+|---|---|---|---|
+| runtime | `busboy@1.6.0` | MIT | 直接依赖流式 multipart 和 parser limits，不依赖 Nest 的传递实现细节 |
+| dev | `@types/busboy@1.5.4` | MIT | 锁定 Busboy TypeScript 合同 |
+| runtime | `file-type@21.3.4` | MIT | magic-byte hint；与当前 Nest 传递版本对齐，不能替代完整解析 |
+| runtime | `sharp@0.35.3` | Apache-2.0 | 完整解码 JPEG/PNG/WebP 并读取可信尺寸；拒绝动画和解码错误 |
+| runtime | `yauzl@3.4.0` | MIT | 异步读取 OOXML central directory/entry stream，限制内存和不安全路径 |
+| dev | `@types/yauzl@3.4.0` | MIT | `yauzl` 本体不自带声明，锁定当前 3.4 API 类型 |
+| system | Ubuntu `ffmpeg 7:6.1.1-3ubuntu5` | GPL/LGPL 组合 | 提供 `/usr/bin/ffprobe`；只探测 MP4/H.264/AAC，不转码 |
+| system | Ubuntu `qpdf 11.9.0-1.1ubuntu0.1` | Apache-2.0 | 独立进程执行 PDF 结构、stream encoding 与加密检查，避免整文件进入 Node heap |
+
+不引入 `pdfjs-dist`：本期不渲染、不提取文本，结构验证交给 `qpdf`，可减少 JS heap、DOM/worker
+兼容和大体积依赖风险。`sharp` 带平台预构建可选包，预计 lockfile 会新增 macOS arm64 与 Linux x64
+glibc 的 optional dependency 记录，并需把 `sharp: true` 加入 `server/pnpm-workspace.yaml` 的
+`allowBuilds`；Gate DEP 后仍要用一次性目录做 frozen fresh install、Node 24 load、release archive 和
+Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
+
+官方取证入口：
+[Busboy](https://github.com/mscdex/busboy)、
+[file-type](https://www.npmjs.com/package/file-type)、
+[sharp install](https://sharp.pixelplumbing.com/install/)、
+[yauzl](https://github.com/thejoshwolfe/yauzl)、
+[@types/yauzl](https://www.npmjs.com/package/%40types/yauzl)、
+[Ubuntu ffmpeg](https://packages.ubuntu.com/noble/ffmpeg)、
+[Ubuntu qpdf](https://packages.ubuntu.com/noble-updates/qpdf)、
+[qpdf inspection](https://qpdf.readthedocs.io/en/stable/cli.html#pdf-inspection)。
+
+#### 等待一并确认的安全限额
+
+这些是解析器的技术防滥用常量，不扩大业务类型或文件大小合同：
+
+- multipart：`files=1`、`fields=2`、`parts=3`、`fieldNameSize=64B`、`fieldSize=4KiB`、
+  `headerPairs=100`；binary `fileSize` 仍按 IMAGE 10MiB / VIDEO 500MiB，超限立即销毁流。
+- IMAGE：`maxInputPixels=40_000_000`、单边不超过 `16_384`、只允许单帧；完整 decode 失败即拒绝。
+- OOXML：最多 `2_000` entries、单 entry 展开不超过 `50MiB`、总展开不超过 `200MiB`、任一 entry
+  或总压缩比不超过 `100:1`；拒绝 encrypted、path traversal、宏 content type 和外部可执行内容。
+- `ffprobe`：15 秒 timeout、stdout/stderr 各 256KiB；`qpdf`：15 秒 timeout、stdout/stderr 各 64KiB；
+  均使用绝对可执行路径、固定 argv、`shell:false`，stderr 只转内部低基数错误，不进入公开响应或 Audit。
+
+#### 基线验证与异常记录
+
+- Server 定向 Jest：exit `0`，30 suites / 267 tests 全部通过。
+- Web 产品定向 Node tests：exit `0`，46 tests 全部通过。
+- `node --run contract:check`：exit `0`；Prisma generate、Server build、临时 OpenAPI/Web API 生成成功，
+  tracked 合同无漂移，生成目录均受既有 ignore 保护。
+- `node --run test:root` 首次为 662/663：冻结的历史词汇 allowlist 检测到本任务文档一处无关表述。
+  已删除该表述而未修改 allowlist；修正文档后复跑 exit `0`，663/663 全部通过。
+- 一次本地 package manifest 读取命令因 shell quote 错误触发 Node `SyntaxError`；两次数据库查询分别因
+  SQL label/separator quote 错误在 `BEGIN` 后解析失败；修正后使用拆分的 read-only 查询取得上述结果。
+  `pnpm view`/`npm view` registry 查询无响应后以 Ctrl-C 结束（exit `130`），改查官方包/仓库资料。
+  这些失败均未产生 package、lockfile、数据库或业务文件写入。
+- 本任务没有修改源码、Schema、API、依赖或 lockfile，没有写数据库或真实媒体目录；下一步停在
+  Gate DEP，Gate DB、Gate OPS、Gate E 仍未授权。
 
 - [ ] 2. 以 TDD 建立 additive MediaAsset/ProductMedia Schema 与权限
   - 前置：Gate I、Gate DEP 中与 Schema 测试有关的部分已通过。
@@ -453,7 +548,7 @@ config/package/smoke tests。`contract:sync` 是生成动作，只在公共 API 
 - 需要建立 ProductMedia 以外的领域表、通用媒体库/Controller 或 `ownerType + ownerId`。
 - 需要让 ProductMedia 接受 DOCUMENT，或增加产品说明书/证书入口。
 - 需要实现云存储、多机共享、CDN、转码、抽帧、病毒扫描、OCR、自动跨资产去重或公开分享。
-- 必须修改公共 Fa/Qs 组件业务契约、恢复独立 Supplier 领域或跨 Web/Server 源码依赖。
+- 必须修改公共 Fa/Qs 组件业务契约、恢复已退役的历史业务领域或跨 Web/Server 源码依赖。
 - exact dependency 候选未获确认、许可证/原生构建/Node 24/Ubuntu 24 x64 证据不满足发布要求。
 - migration 待执行集合不精确、Schema drift、隔离 replay/rollback 失败、备份或恢复验证失败。
 - 存储 root 无法证明安全、同文件系统、可写和不经过不受信任 symlink。
