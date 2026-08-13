@@ -890,7 +890,7 @@ async function verifyProductList(page, baseUrl) {
       assert.equal(visibleText.includes(text), true, `缺少产品展示文本：${text}`)
     }
 
-    // 新增已接入真实路由；查看与编辑仍保持本阶段的轻提示边界。
+    // 新增、查看与编辑都必须进入真实交互，不允许回退到占位轻提示。
     await clickVisibleButton(page, '新增产品')
     await page.waitFor(`(() => location.hash === '#/admin/products/create'
       && [...document.querySelectorAll('button')].some(button => (
@@ -899,10 +899,37 @@ async function verifyProductList(page, baseUrl) {
     await clickVisibleButton(page, '返回产品列表')
     await waitForProductList(page, productNo)
     await clickVisibleTableRowButton(page, productNo, '查看')
-    await page.waitFor(`document.body.innerText.includes('产品详情功能将在后续版本开放')`)
-    await clickVisibleTableRowButton(page, productNo, '编辑')
-    await page.waitFor(`document.body.innerText.includes('产品编辑功能将在后续版本开放')`)
-    assert.equal(locationHashPath(await page.evaluate('location.hash')), '/admin/products/list')
+    await page.waitFor(`(() => {
+      const drawer = document.querySelector('[data-testid="product-detail-drawer"]')
+      return drawer?.getClientRects().length > 0
+        && drawer.textContent?.includes(${JSON.stringify(productNo)})
+        && drawer.textContent?.includes('价格资料')
+        && drawer.textContent?.includes('数据版本')
+    })()`)
+    // Drawer 的 footer slot 必须从首次挂载起保持稳定，否则详情加载后会遗失
+    // “编辑产品”入口；直接从真实详情进入编辑页覆盖该运行时边界。
+    await clickVisibleButton(page, '编辑产品')
+    await page.waitFor(`(() => (
+      location.hash.startsWith('#/admin/products/')
+      && location.hash.endsWith('/edit')
+      && document.querySelector('[data-testid="product-edit-page"]')?.textContent?.includes(
+        ${JSON.stringify(productNo)},
+      )
+      && [...document.querySelectorAll('button')].some(button => (
+        button.textContent?.trim() === '保存修改'
+        && button.getClientRects().length > 0
+        && !button.disabled
+      ))
+    ))()`)
+    // 该多媒体夹具刻意保留一项历史缺失金额，用于列表容错展示；编辑页应能
+    // 真实读取它，但本场景不提交修复。当前表单无法规范化该历史快照时按
+    // 保守脏状态处理，离开必须经过明确确认，避免误以为资料已安全保存。
+    await clickVisibleButton(page, '返回产品列表')
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes('放弃未保存的产品修改？')))()`)
+    await clickVisibleModalButton(page, '确认放弃')
+    await waitForProductList(page, productNo)
 
     // ImageGroup 第三个可见位是 +2，点击后从第三张进入完整四图预览。
     await clickVisibleAriaButton(page, '查看其余 2 张图片')
@@ -1488,6 +1515,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'numbering-rules:update',
     'products:create',
     'products:read',
+    'products:update',
     'regions:create',
     'regions:disable',
     'regions:enable',

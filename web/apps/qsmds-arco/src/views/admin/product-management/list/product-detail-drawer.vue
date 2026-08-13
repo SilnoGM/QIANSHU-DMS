@@ -266,8 +266,16 @@ function supplierDisplay(product: ProductListItemViewModel): string {
       </aside>
     </div>
 
-    <template v-if="product !== null && canEdit" #footer>
-      <FaButton class="min-h-11 w-full md:min-h-9 md:w-auto" @click="emit('edit', product.id)">
+    <template #footer>
+      <!--
+        footer slot 必须从首次挂载起稳定存在。详情数据是异步填充的；若把 v-if
+        放在 slot template 上，QsGenericDrawer 初次看到空 slot 后不会补出 footer。
+      -->
+      <FaButton
+        v-if="product !== null && canEdit"
+        class="min-h-11 w-full md:min-h-9 md:w-auto"
+        @click="emit('edit', product.id)"
+      >
         <FaIcon name="i-lucide:pencil" aria-hidden="true" />
         编辑产品
       </FaButton>
