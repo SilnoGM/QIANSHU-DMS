@@ -30,9 +30,13 @@ import {
 } from './numbering-generator.persistence'
 import type {
   GenerateNumberRequest,
+  GenerateScopedNumberRequest,
   ValidatedGenerateNumberRequest,
 } from './numbering-internal-input'
-import { validateGenerateNumberRequest } from './numbering-internal-input'
+import {
+  validateGenerateNumberRequest,
+  validateGenerateScopedNumberRequest,
+} from './numbering-internal-input'
 import { getNumberingPeriodKey } from './period'
 import { NUMBERING_RANDOM_SOURCE } from './numbering-query.service'
 import {
@@ -182,8 +186,19 @@ export class NumberingGeneratorService {
   async generate(
     input: Readonly<GenerateNumberRequest>,
   ): Promise<GenerateNumberResult> {
-    const request = validateGenerateNumberRequest(input)
+    return this.generateValidated(validateGenerateNumberRequest(input))
+  }
 
+  async generateScoped(
+    input: Readonly<GenerateScopedNumberRequest>,
+  ): Promise<GenerateNumberResult> {
+    return this.generateValidated(validateGenerateScopedNumberRequest(input))
+  }
+
+  /** 两个公开内部入口只负责各自输入规范，之后必须共用同一状态机。 */
+  private async generateValidated(
+    request: ValidatedGenerateNumberRequest,
+  ): Promise<GenerateNumberResult> {
     try {
       return await this.prisma.$transaction(transaction =>
         this.generateInTransaction(transaction, request),

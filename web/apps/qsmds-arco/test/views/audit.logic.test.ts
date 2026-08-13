@@ -89,7 +89,12 @@ test('审计事件筛选选项覆盖当前公开契约的全部事件类型', ()
     'SYSTEM_BOOTSTRAP',
     'SYSTEM_ADMIN_RECOVERED',
     'AUTH_RETENTION_PURGED',
+    'PRODUCT_CREATED',
   ])
+})
+
+test('产品创建审计事件使用中文名称并保留稳定事件代码', () => {
+  assert.equal(formatAuditEvent('PRODUCT_CREATED'), '产品已创建')
 })
 
 test('编号规则审计事件使用现有中文展示管道', () => {

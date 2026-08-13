@@ -1,0 +1,5 @@
+BEGIN;
+
+ALTER TYPE "audit_event_type" ADD VALUE 'PRODUCT_UPDATED';
+
+COMMIT;

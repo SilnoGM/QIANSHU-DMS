@@ -56,6 +56,7 @@ export const AUDIT_EVENT_TYPES = [
   'SYSTEM_BOOTSTRAP',
   'SYSTEM_ADMIN_RECOVERED',
   'AUTH_RETENTION_PURGED',
+  'PRODUCT_CREATED',
 ] as const satisfies readonly AuditEventType[]
 
 const AUDIT_EVENT_TYPE_SET = new Set<string>(AUDIT_EVENT_TYPES)

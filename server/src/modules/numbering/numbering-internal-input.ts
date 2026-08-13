@@ -9,6 +9,7 @@ const CANONICAL_RULE_CODE_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/u
 const CONSUMER_CODE_PATTERN = /^[A-Z][A-Z0-9._-]{0,63}$/u
 const IDEMPOTENCY_KEY_MINIMUM_BYTES = 1
 const IDEMPOTENCY_KEY_MAXIMUM_BYTES = 200
+const SCOPED_REQUEST_FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/u
 
 export const NUMBERING_REQUEST_FINGERPRINT_VERSION =
   'numbering.generate.v1' as const
@@ -17,6 +18,14 @@ export interface GenerateNumberRequest {
   readonly ruleCode: string
   readonly consumerCode: string
   readonly idempotencyKey: string
+}
+
+/**
+ * 业务域只能传入已经计算完成的固定摘要。该边界不接受 Payload、actor、JSON
+ * 或 Buffer，避免 Numbering 模块感知任何调用方业务结构。
+ */
+export interface GenerateScopedNumberRequest extends GenerateNumberRequest {
+  readonly requestFingerprint: string
 }
 
 export interface ValidatedGenerateNumberRequest {
@@ -44,6 +53,37 @@ function assertCanonicalRuleCode(value: unknown): asserts value is string {
 function assertConsumerCode(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !CONSUMER_CODE_PATTERN.test(value)) {
     validationFailure()
+  }
+}
+
+function decodeScopedRequestFingerprint(value: unknown): Buffer {
+  if (
+    typeof value !== 'string'
+    || !SCOPED_REQUEST_FINGERPRINT_PATTERN.test(value)
+  ) {
+    return validationFailure()
+  }
+
+  return Buffer.from(value, 'hex')
+}
+
+function validateRequestIdentity(input: unknown): {
+  readonly ruleCode: string
+  readonly consumerCode: string
+  readonly idempotencyKeyHash: Buffer
+} {
+  if (typeof input !== 'object' || input === null) {
+    return validationFailure()
+  }
+
+  const request = input as Readonly<Record<string, unknown>>
+  assertCanonicalRuleCode(request.ruleCode)
+  assertConsumerCode(request.consumerCode)
+
+  return {
+    ruleCode: request.ruleCode,
+    consumerCode: request.consumerCode,
+    idempotencyKeyHash: calculateIdempotencyKeyHash(request.idempotencyKey),
   }
 }
 
@@ -83,18 +123,24 @@ export function calculateNumberingRequestFingerprintHash(
 export function validateGenerateNumberRequest(
   input: GenerateNumberRequest,
 ): ValidatedGenerateNumberRequest {
-  if (typeof input !== 'object' || input === null) {
-    return validationFailure()
-  }
-
-  assertCanonicalRuleCode(input.ruleCode)
-  assertConsumerCode(input.consumerCode)
+  const identity = validateRequestIdentity(input)
 
   return {
-    ruleCode: input.ruleCode,
-    consumerCode: input.consumerCode,
-    idempotencyKeyHash: calculateIdempotencyKeyHash(input.idempotencyKey),
+    ...identity,
     requestFingerprintHash:
-      calculateNumberingRequestFingerprintHash(input.ruleCode),
+      calculateNumberingRequestFingerprintHash(identity.ruleCode),
+  }
+}
+
+/** 校验 scoped 摘要后只返回两个 32-byte Hash，不保留摘要文本或原始幂等键。 */
+export function validateGenerateScopedNumberRequest(
+  input: GenerateScopedNumberRequest,
+): ValidatedGenerateNumberRequest {
+  const identity = validateRequestIdentity(input)
+
+  return {
+    ...identity,
+    requestFingerprintHash:
+      decodeScopedRequestFingerprint(input.requestFingerprint),
   }
 }

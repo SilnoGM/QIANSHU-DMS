@@ -16,9 +16,11 @@ interface SqlShape {
 
 type QueryRawMock = jest.Mock<Promise<unknown[]>, [unknown]>
 type FindFirstMock = jest.Mock<Promise<unknown>, [unknown]>
+type FindManyMock = jest.Mock<Promise<unknown[]>, [unknown]>
 
 interface LookupTransactionFixture {
   readonly $queryRaw: QueryRawMock
+  readonly dictionaryItem: { readonly findFirst: FindFirstMock }
 }
 
 function getSqlShape(value: unknown): SqlShape {
@@ -44,19 +46,23 @@ function createFixture(): {
   readonly service: DictionaryLookupService
   readonly transaction: LookupTransactionFixture
   readonly findFirst: FindFirstMock
+  readonly findMany: FindManyMock
 } {
   const findFirst = jest.fn<Promise<unknown>, [unknown]>()
+  const findMany = jest.fn<Promise<unknown[]>, [unknown]>()
   const prisma = {
-    dictionaryItem: { findFirst },
+    dictionaryItem: { findFirst, findMany },
   } as unknown as PrismaService
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>(),
+    dictionaryItem: { findFirst },
   }
 
   return {
     service: new DictionaryLookupService(prisma),
     transaction,
     findFirst,
+    findMany,
   }
 }
 
@@ -219,6 +225,36 @@ describe('DictionaryLookupService requireEffectiveValue', () => {
 })
 
 describe('DictionaryLookupService resolveStoredValue', () => {
+  it('can resolve a raw historical value in the caller transaction', async () => {
+    const fixture = createFixture()
+    fixture.findFirst.mockResolvedValue(null)
+
+    await expect(fixture.service.resolveStoredValueInTransaction(
+      fixture.transaction as unknown as Prisma.TransactionClient,
+      {
+        dictionaryCode: ' Order.Status ',
+        value: ' historical ',
+      },
+    )).resolves.toEqual({
+      known: false,
+      dictionaryCode: 'order.status',
+      value: ' historical ',
+    })
+    expect(fixture.findFirst).toHaveBeenCalledWith({
+      where: {
+        value: ' historical ',
+        dictionaryType: { code: 'order.status' },
+      },
+      select: {
+        value: true,
+        label: true,
+        tone: true,
+        enabled: true,
+        dictionaryType: { select: { enabled: true } },
+      },
+    })
+  })
+
   it.each([
     [false, true, false],
     [true, true, true],
@@ -304,6 +340,133 @@ describe('DictionaryLookupService resolveStoredValue', () => {
         field,
       )
       expect(fixture.findFirst).not.toHaveBeenCalled()
+    },
+  )
+})
+
+describe('DictionaryLookupService resolveStoredValues', () => {
+  it('returns an empty result without querying for an empty values array', async () => {
+    const fixture = createFixture()
+
+    await expect(fixture.service.resolveStoredValues({
+      dictionaryCode: ' Order.Status ',
+      values: [],
+    })).resolves.toEqual([])
+
+    expect(fixture.findMany).not.toHaveBeenCalled()
+  })
+
+  it('deduplicates the query while preserving duplicate input order and raw unknown values', async () => {
+    const fixture = createFixture()
+    fixture.findMany.mockResolvedValue([
+      {
+        value: 'ACTIVE',
+        label: '启用',
+        tone: DictionaryTone.SUCCESS,
+        enabled: true,
+        dictionaryType: { enabled: true },
+      },
+      {
+        value: 'DISABLED',
+        label: '停用',
+        tone: DictionaryTone.DEFAULT,
+        enabled: false,
+        dictionaryType: { enabled: true },
+      },
+    ])
+
+    await expect(fixture.service.resolveStoredValues({
+      dictionaryCode: ' Order.Status ',
+      values: ['ACTIVE', ' missing ', 'DISABLED', 'ACTIVE'],
+    })).resolves.toEqual([
+      {
+        known: true,
+        dictionaryCode: 'order.status',
+        value: 'ACTIVE',
+        label: '启用',
+        tone: DictionaryTone.SUCCESS,
+        typeEnabled: true,
+        itemEnabled: true,
+        effectiveEnabled: true,
+      },
+      {
+        known: false,
+        dictionaryCode: 'order.status',
+        value: ' missing ',
+      },
+      {
+        known: true,
+        dictionaryCode: 'order.status',
+        value: 'DISABLED',
+        label: '停用',
+        tone: DictionaryTone.DEFAULT,
+        typeEnabled: true,
+        itemEnabled: false,
+        effectiveEnabled: false,
+      },
+      {
+        known: true,
+        dictionaryCode: 'order.status',
+        value: 'ACTIVE',
+        label: '启用',
+        tone: DictionaryTone.SUCCESS,
+        typeEnabled: true,
+        itemEnabled: true,
+        effectiveEnabled: true,
+      },
+    ])
+
+    expect(fixture.findMany).toHaveBeenCalledTimes(1)
+    expect(fixture.findMany).toHaveBeenCalledWith({
+      where: {
+        value: { in: ['ACTIVE', ' missing ', 'DISABLED'] },
+        dictionaryType: { code: 'order.status' },
+      },
+      select: {
+        value: true,
+        label: true,
+        tone: true,
+        enabled: true,
+        dictionaryType: { select: { enabled: true } },
+      },
+    })
+  })
+
+  it('keeps a disabled Type known but ineffective', async () => {
+    const fixture = createFixture()
+    fixture.findMany.mockResolvedValue([{
+      value: 'ACTIVE',
+      label: '启用',
+      tone: DictionaryTone.SUCCESS,
+      enabled: true,
+      dictionaryType: { enabled: false },
+    }])
+
+    await expect(fixture.service.resolveStoredValues({
+      dictionaryCode: 'order.status',
+      values: ['ACTIVE'],
+    })).resolves.toEqual([expect.objectContaining({
+      known: true,
+      typeEnabled: false,
+      itemEnabled: true,
+      effectiveEnabled: false,
+    })])
+  })
+
+  it.each([
+    ['dictionaryCode', null],
+    ['values', { dictionaryCode: 'order.status', values: null }],
+    ['values', { dictionaryCode: 'order.status', values: ['ACTIVE', null] }],
+  ] as const)(
+    'rejects invalid batch %s before querying',
+    async (field, input) => {
+      const fixture = createFixture()
+
+      await expectValidationError(
+        () => fixture.service.resolveStoredValues(input as never),
+        field,
+      )
+      expect(fixture.findMany).not.toHaveBeenCalled()
     },
   )
 })

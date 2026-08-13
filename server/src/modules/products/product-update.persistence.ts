@@ -1,0 +1,106 @@
+import { Prisma } from '../../generated/prisma/client'
+import type {
+  ProductStatus as ProductStatusValue,
+} from '../../generated/prisma/enums'
+import {
+  PRODUCT_RESPONSE_SELECT,
+  type ProductQueryRow,
+} from './product-query.mapper'
+
+export interface ProductUpdateLockRecord {
+  readonly id: string
+  readonly name: string
+  readonly productNo: string
+  readonly status: ProductStatusValue
+  readonly supplierValue: string | null
+  readonly twdSalePriceAmount: string | null
+  readonly twdSalePriceCurrency: string
+  readonly myrSalePriceAmount: string | null
+  readonly myrSalePriceCurrency: string
+  readonly purchaseCostAmount: string | null
+  readonly purchaseCostCurrency: string
+  readonly attributes: unknown
+  readonly version: number
+}
+
+export interface ProductUpdateRecordData {
+  readonly name?: string
+  readonly status?: ProductStatusValue
+  readonly supplierValue?: string | null
+  readonly twdSalePriceAmount?: string | null
+  readonly twdSalePriceCurrency?: string
+  readonly myrSalePriceAmount?: string | null
+  readonly myrSalePriceCurrency?: string
+  readonly purchaseCostAmount?: string | null
+  readonly purchaseCostCurrency?: string
+  readonly attributes?: readonly Readonly<{ title: string; value: string }>[]
+}
+
+/**
+ * 乐观锁比较前先锁定 Product。`trim_scale` 只移除数据库 DECIMAL(30,4) 的无意义
+ * 尾零，使后续 minorUnit 校验看到金额的真实有效小数位，而不是存储列固定 scale。
+ */
+export async function readProductForUpdate(
+  transaction: Prisma.TransactionClient,
+  productId: string,
+): Promise<ProductUpdateLockRecord | null> {
+  const rows = await transaction.$queryRaw<ProductUpdateLockRecord[]>(Prisma.sql`
+    SELECT
+      "id",
+      "name",
+      "product_no" AS "productNo",
+      "status",
+      "supplier_value" AS "supplierValue",
+      CASE WHEN "twd_sale_price_amount" IS NULL THEN NULL
+        ELSE trim_scale("twd_sale_price_amount")::text END AS "twdSalePriceAmount",
+      "twd_sale_price_currency" AS "twdSalePriceCurrency",
+      CASE WHEN "myr_sale_price_amount" IS NULL THEN NULL
+        ELSE trim_scale("myr_sale_price_amount")::text END AS "myrSalePriceAmount",
+      "myr_sale_price_currency" AS "myrSalePriceCurrency",
+      CASE WHEN "purchase_cost_amount" IS NULL THEN NULL
+        ELSE trim_scale("purchase_cost_amount")::text END AS "purchaseCostAmount",
+      "purchase_cost_currency" AS "purchaseCostCurrency",
+      "attributes",
+      "version"
+    FROM "products"
+    WHERE "id" = CAST(${productId} AS uuid)
+    FOR UPDATE
+  `)
+  return rows[0] ?? null
+}
+
+/** 只写调用方显式选出的差异字段；审计操作者和 version 始终由服务端维护。 */
+export async function updateProductRecord(
+  transaction: Prisma.TransactionClient,
+  input: {
+    readonly productId: string
+    readonly actorUserId: string
+    readonly data: ProductUpdateRecordData
+  },
+): Promise<void> {
+  const data: Prisma.ProductUncheckedUpdateInput = {
+    ...input.data,
+    attributes: input.data.attributes?.map(attribute => ({
+      title: attribute.title,
+      value: attribute.value,
+    })),
+    updatedByUserId: input.actorUserId,
+    version: { increment: 1 },
+  }
+
+  await transaction.product.update({
+    where: { id: input.productId },
+    data,
+    select: { id: true },
+  })
+}
+
+export async function readProductUpdateResponse(
+  transaction: Prisma.TransactionClient,
+  productId: string,
+): Promise<ProductQueryRow | null> {
+  return transaction.product.findUnique({
+    where: { id: productId },
+    select: PRODUCT_RESPONSE_SELECT,
+  })
+}

@@ -91,6 +91,8 @@ enum AuditEventType {
   SYSTEM_BOOTSTRAP
   SYSTEM_ADMIN_RECOVERED
   AUTH_RETENTION_PURGED
+  PRODUCT_CREATED
+  PRODUCT_UPDATED
 
   @@map("audit_event_type")
 }
@@ -168,6 +170,14 @@ enum DictionaryTone {
   @@map("dictionary_tone")
 }
 
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+
+  @@map("product_status")
+}
+
 model User {
   id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   username           String     @db.VarChar(128)
@@ -193,6 +203,8 @@ model User {
   sessions      AuthSession[]
   auditEvents   AuditEvent[]  @relation("AuditActor")
   profile       UserProfile?
+  productsCreated Product[]   @relation("ProductCreatedBy")
+  productsUpdated Product[]   @relation("ProductUpdatedBy")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -413,6 +425,37 @@ model DictionaryItem {
   @@index([dictionaryTypeId, sortOrder, value, id], map: "dictionary_items_type_id_sort_order_value_id_idx")
   @@index([dictionaryTypeId, enabled, sortOrder, value, id], map: "dictionary_items_type_id_enabled_sort_order_value_id_idx")
   @@map("dictionary_items")
+}
+
+model Product {
+  id                   String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                 String        @db.VarChar(128)
+  productNo            String        @unique(map: "products_product_no_key") @map("product_no") @db.VarChar(64)
+  status               ProductStatus @default(DRAFT)
+  supplierValue        String?       @map("supplier_value") @db.VarChar(64)
+  mainImage            String?       @map("main_image") @db.VarChar(2048)
+  images               String[]      @default([])
+  videos               String[]      @default([])
+  twdSalePriceAmount   Decimal?      @map("twd_sale_price_amount") @db.Decimal(30, 4)
+  twdSalePriceCurrency String         @default("TWD") @map("twd_sale_price_currency") @db.Char(3)
+  myrSalePriceAmount   Decimal?      @map("myr_sale_price_amount") @db.Decimal(30, 4)
+  myrSalePriceCurrency String         @default("MYR") @map("myr_sale_price_currency") @db.Char(3)
+  purchaseCostAmount   Decimal?      @map("purchase_cost_amount") @db.Decimal(30, 4)
+  purchaseCostCurrency String         @default("CNY") @map("purchase_cost_currency") @db.Char(3)
+  attributes           Json           @default("[]") @db.JsonB
+  createdByUserId      String?        @map("created_by_user_id") @db.Uuid
+  updatedByUserId      String?        @map("updated_by_user_id") @db.Uuid
+  version              Int            @default(1)
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  createdBy User? @relation("ProductCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User? @relation("ProductUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "products_status_updated_at_id_idx")
+  @@index([supplierValue, updatedAt(sort: Desc), id(sort: Desc)], map: "products_supplier_value_updated_at_id_idx")
+  @@index([updatedAt(sort: Desc), id(sort: Desc)], map: "products_updated_at_id_idx")
+  @@map("products")
 }
 
 model NumberingRule {

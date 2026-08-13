@@ -387,6 +387,53 @@ describe('NumberingGeneratorService concurrency and capacity with PostgreSQL', (
     })
   })
 
+  it('persists scoped fingerprints and collapses concurrent scoped replays', async () => {
+    const ruleCode = uniqueRuleCode('SCOPED')
+    const rule = await createEnabledRule({
+      resetPolicy: 'NEVER',
+      ruleCode,
+      segments: [sequence()],
+    })
+    const idempotencyKey = `scoped-${randomUUID()}`
+    const requestFingerprint = 'ab'.repeat(32)
+
+    const results = await Promise.all(Array.from(
+      { length: 20 },
+      () => generator.generateScoped({
+        ruleCode,
+        consumerCode: 'SCOPED.E2E',
+        idempotencyKey,
+        requestFingerprint,
+      }),
+    ))
+
+    expect(new Set(results.map(result => result.number)).size).toBe(1)
+    expect(results.filter(result => !result.idempotentReplay)).toHaveLength(1)
+    expect(results.filter(result => result.idempotentReplay)).toHaveLength(19)
+
+    const issuance = await prisma.numberingIssuance.findFirstOrThrow({
+      where: { ruleId: rule.id },
+    })
+    expect(Buffer.from(issuance.requestFingerprintHash)).toEqual(
+      Buffer.from(requestFingerprint, 'hex'),
+    )
+    await expect(prisma.numberingIssuance.count({
+      where: { ruleId: rule.id },
+    })).resolves.toBe(1)
+    await expect(prisma.numberingPeriodState.findUniqueOrThrow({
+      where: {
+        ruleId_periodKey: { ruleId: rule.id, periodKey: 'ALL' },
+      },
+    })).resolves.toMatchObject({ usedCount: 1n, nextSequenceValue: 2n })
+
+    await expectGenerationError(generator.generateScoped({
+      ruleCode,
+      consumerCode: 'SCOPED.E2E',
+      idempotencyKey,
+      requestFingerprint: 'cd'.repeat(32),
+    }), NUMBERING_ERROR_CODES.IDEMPOTENCY_CONFLICT)
+  })
+
   it('issues the last sequence capacity exactly once and never advances after exhaustion', async () => {
     const ruleCode = uniqueRuleCode('LAST_CAPACITY')
     const rule = await createEnabledRule({

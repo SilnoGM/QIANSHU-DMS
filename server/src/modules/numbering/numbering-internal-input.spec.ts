@@ -2,6 +2,7 @@ import {
   calculateIdempotencyKeyHash,
   calculateNumberingRequestFingerprintHash,
   validateGenerateNumberRequest,
+  validateGenerateScopedNumberRequest,
 } from './numbering-internal-input'
 import { NumberingGenerationError } from './numbering.errors'
 
@@ -85,6 +86,44 @@ describe('numbering internal generator input', () => {
       .toBe('5a7fc999ab7fdee3632710e189c3e41dce3805064db9df4d2e10f7cafbbf4772')
   })
 
+  it('accepts only an exact 64-character lowercase scoped fingerprint', () => {
+    const fingerprint = 'ab'.repeat(32)
+
+    expect(validateGenerateScopedNumberRequest({
+      ruleCode: 'PRODUCT',
+      consumerCode: 'PRODUCT.CREATE',
+      idempotencyKey: 'product-request-1',
+      requestFingerprint: fingerprint,
+    })).toMatchObject({
+      ruleCode: 'PRODUCT',
+      consumerCode: 'PRODUCT.CREATE',
+      requestFingerprintHash: Buffer.from(fingerprint, 'hex'),
+    })
+
+    for (const requestFingerprint of [
+      'A'.repeat(64),
+      'a'.repeat(63),
+      'a'.repeat(65),
+      `${'a'.repeat(63)}g`,
+      Buffer.alloc(32),
+      { digest: fingerprint },
+    ]) {
+      const error = captureGenerationError(
+        () => validateGenerateScopedNumberRequest({
+          ruleCode: 'PRODUCT',
+          consumerCode: 'PRODUCT.CREATE',
+          idempotencyKey: 'product-request-1',
+          requestFingerprint,
+        } as never),
+      )
+
+      expect(error.code).toBe('VALIDATION_FAILED')
+      if (typeof requestFingerprint === 'string') {
+        expect(JSON.stringify(error)).not.toContain(requestFingerprint)
+      }
+    }
+  })
+
   it('returns only hashes after validating the opaque key', () => {
     const input = validateGenerateNumberRequest({
       ruleCode: 'ORDER_NO',
@@ -98,5 +137,24 @@ describe('numbering internal generator input', () => {
     expect(input.requestFingerprintHash).toHaveLength(32)
     expect(input).not.toHaveProperty('idempotencyKey')
     expect(JSON.stringify(input)).not.toContain('raw-secret-key')
+  })
+
+  it('drops both raw key and scoped fingerprint after validation', () => {
+    const requestFingerprint = '12'.repeat(32)
+    const input = validateGenerateScopedNumberRequest({
+      ruleCode: 'PRODUCT',
+      consumerCode: 'PRODUCT.CREATE',
+      idempotencyKey: 'raw-product-key',
+      requestFingerprint,
+    })
+
+    expect(input.idempotencyKeyHash).toHaveLength(32)
+    expect(input.requestFingerprintHash).toEqual(
+      Buffer.from(requestFingerprint, 'hex'),
+    )
+    expect(input).not.toHaveProperty('idempotencyKey')
+    expect(input).not.toHaveProperty('requestFingerprint')
+    expect(JSON.stringify(input)).not.toContain('raw-product-key')
+    expect(JSON.stringify(input)).not.toContain(requestFingerprint)
   })
 })

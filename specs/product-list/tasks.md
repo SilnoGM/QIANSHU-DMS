@@ -1,0 +1,364 @@
+# 产品列表实施任务
+
+## 1. 文档状态
+
+- 状态：Phase 4 与搜索增量本地实施完成（Task 1-13 已完成）
+- Requirements 确认日期：2026-08-12
+- Design 确认日期：2026-08-12
+- 编写日期：2026-08-12
+- 实施分支：`feat/admin-product-management`
+- Phase 3 基线 SHA：`0b93d76f6fdb`
+- Requirements：`specs/product-list/requirements.md`
+- Design：`specs/product-list/design.md`
+
+本计划把产品列表拆为 13 个可独立验证、保持绿色并形成小步提交的任务。Task 1-12 完成首期只读列表，Task 13 完成另行确认的名称/编号搜索增量；Gate D2 已完成，Gate E 仍未授权。
+
+## 2. 执行纪律
+
+每个功能任务遵循同一 TDD 闭环：
+
+```text
+确认任务文件边界和前置门禁
+-> 写因目标能力缺失而失败的测试
+-> 运行并记录预期 RED 原因
+-> 最小实现
+-> 重构和补齐异常路径
+-> 运行任务级 GREEN 验证
+-> 更新 tasks.md 状态与真实证据
+-> 检查 staged diff / secrets / generated 边界
+-> 创建绿色小步提交
+```
+
+执行规则：
+
+1. 不提交永久红测、无法独立 typecheck 或无法构建的状态；RED 只作为实施过程证据。
+2. 命令失败必须记录真实命令、退出码和原因，未转绿前不得勾选对应任务。
+3. 只使用 `apply_patch` 编辑源文件；生成产物必须由项目脚本生成。
+4. 不手工编辑 `server/openapi/openapi.json`、`web/openapi/openapi.json` 或 `web/apps/qsmds-arco/src/api/generated/**`。
+5. 不修改既有 migration，不 seed Product，不修改 `PRODUCT` Rule、Currency Catalog 或 `service_provider.supplier` 字典数据。
+6. 不恢复 Supplier Model、API、Store、路由、权限、编号规则或专用选择器；Product 只保存稳定 `supplierValue`。
+7. 不修改公共 `QsGenericTable`、`ImageGroup`、`AmountDisplay` 或 `QsDictionarySelect`；领域映射留在产品页面和 slots。
+8. 不实现创建、详情、编辑、状态变更或删除 API/页面，不新增 `products:update` 等写权限。
+9. 不新增依赖，不在仓库根创建 pnpm 依赖资产，不跨 `server/` 与 `web/` 引用源码。
+10. 每次提交前运行与范围匹配的测试、`git diff --check`，并核对暂存文件、`.env`、密钥、日志、构建产物和根依赖违规产物。
+11. Commit Message 类型使用英文、描述使用中文；不使用 amend、rebase、force push 或历史重写。
+12. 未经后续明确授权，不执行本地持久数据库 migration、push、PR、merge、部署、分支删除或 worktree 清理。
+
+## 3. 阶段与高风险门禁
+
+### Gate A - Requirements
+
+- [x] 产品数据口径、状态、供应商、金额、媒体、属性、列表、权限、响应式和验收标准已确认。
+- [x] 本期只读边界与新增/查看/编辑 Toast 占位语义已确认。
+
+### Gate B - Design
+
+- [x] Product 扁平表、媒体数组、属性 JSONB、金额/币种列和审计字段方向已确认。
+- [x] `supplierValue` 写时校验、读时批量历史解析与无 Supplier FK 方向已确认。
+- [x] `GET /api/products`、OpenAPI、Web 页面组合与既有 Browser Job 方向已确认。
+
+### Gate C - Phase 3 任务清单
+
+- [x] 用户已于 2026-08-12 确认本任务顺序、文件边界、验证矩阵和提交边界。
+- [x] Gate C 确认只允许申请进入 Phase 4，不自动授权下列高风险变更。
+
+### Gate D1 - 数据结构、Schema、migration 与公共 API 实施授权
+
+- [x] 用户已于 2026-08-12 单独授权修改 `server/prisma/schema.prisma`、新增 Product migration、建立 Product 公共 DTO 和 `GET /api/products`。
+- [x] 授权范围只包括已确认 Design，不得顺手增加写 API、权限、搜索、状态筛选、排序参数或额外 Product 领域模型。
+- [x] 用户已于 2026-08-12 另行授权为既有 `GET /api/products` 增加 `keyword`，范围只包括 `name/productNo` 的不区分大小写包含匹配及 Web 搜索接入。
+
+### Gate D2 - 本地持久数据库变更授权
+
+- [x] 在执行前已展示唯一待应用的 `20260812090000_product_list_schema`、目标 `qianshu_dms_dev@127.0.0.1:15433`、迁移状态和完整 SQL 只读影响检查，并取得明确确认。
+- [x] 已通过 `prisma migrate deploy` 应用 migration；迁移后 13 条 migration 全部最新，Product 表、枚举、约束、索引、触发器、函数、空表查询与数据库健康检查通过。
+
+### Gate E - 外部发布授权
+
+- [ ] 本地完成后暂停；push、PR、merge、部署和非本地数据库 migration 均需新的明确授权。
+
+## 4. 实施任务
+
+- [x] 1. 建立 Phase 4 绿色基线并复核可变真相源
+  - [x] 1.1 复核当前分支、HEAD、工作树和三份规格状态，确认没有用户未提交改动与任务范围重叠。
+  - [x] 1.2 只读确认当前 Prisma Schema、Product 模块、OpenAPI operation 和 Web 正式页面仍未被其他提交新增；若事实漂移，停止并更新 Design/Tasks 后重新确认。
+  - [x] 1.3 只读确认 `PRODUCT` Rule 与 `service_provider.supplier` Type/Items 的当前状态；只记录环境快照，不写入、不 seed、不把当前数量编码为契约。
+  - [x] 1.4 运行 Schema、Server、Web、OpenAPI 和根治理相关的现有绿色基线；真实记录任何既有失败，避免把基线缺陷归因于 Product。
+  - [x] 1.5 核对 Gate C 与 Gate D1 已明确通过；任一未通过则不得进入 Task 2。
+  - _Requirements: R1, R3, R4, R15_
+
+  Task 1 证据：当前 HEAD `a7be399`、工作树无既有改动，Product Schema、模块、operation 与正式页面均不存在；本地只读快照中 `PRODUCT` Rule 为 `ENABLED`/version 3，`service_provider.supplier` Type 启用/version 3，1 个 Item 且启用。`prisma:validate`、`contract:check`、Server 定向 10/10、Server/Web typecheck、Web 产品路由 4/4 与 Root governance 663/663 全部通过；未执行数据库写入或 migration。
+
+- [x] 2. 以 TDD 建立 Product Schema 与 forward migration
+  - [x] 2.1 先新增失败的 Schema/migration 合约测试，覆盖 `ProductStatus`、UUID、唯一不可变 `productNo`、nullable `supplierValue`、有序媒体、JSONB 属性、三组金额/币种、审计字段、索引和命名约束。
+  - [x] 2.2 运行 RED，确认失败原因仅为 Product 结构尚不存在；不得以放宽断言或 allowlist 方式制造通过。
+  - [x] 2.3 在 Gate D1 已授权范围内修改 Prisma Schema，新增唯一 forward migration；不得修改任何既有 migration。
+  - [x] 2.4 建立非空、状态、`ACTIVE` 供应商非空、固定 `TWD/MYR`、采购币种三位大写、金额非负、attributes array 和正 version 等数据库约束。
+  - [x] 2.5 通过精确 trigger 保证 `id` 与 `productNo` 更新失败；trigger 不查询字典、不执行业务状态流。
+  - [x] 2.6 在隔离 PostgreSQL 中验证空库全量 replay 与当前 migration 集升级，验证约束、索引、回滚隔离和无数据 seed。
+  - [x] 2.7 更新 Task 2 状态并在目标测试、Prisma validate、Server typecheck 与 diff-check 绿色后创建提交：`feat: 建立产品列表数据结构`。
+  - _Requirements: R1-R7, R15_
+
+  Task 2 证据：Schema RED 为 4/4 失败，原因精确为缺少 `Product` Model 与新 migration。最小实现后 Schema/migration 合约 4/4、Prisma validate、Server typecheck、Root governance 663/663 与 diff-check 通过。隔离 PostgreSQL 16 首次按顺序应用 13 条 migration，第二次 deploy 无待应用项，status 为 up to date；migration 未 seed Product、编号规则或字典数据，未应用到本地持久数据库。Root 首轮因数据库迁移规范缺少新基线而 662/663，补齐真实第 13 条历史后恢复全绿。
+
+- [x] 3. 以 TDD 增加通用字典批量历史解析
+  - [x] 3.1 先为 `DictionaryLookupService.resolveStoredValues()` 建立失败测试，覆盖空输入、null、去重、顺序、同 Label 不同 value、Type disabled、Item disabled 与 unknown。
+  - [x] 3.2 运行 RED，确认现有单值 resolver 无法满足一页 Product 的无 N+1 批量契约。
+  - [x] 3.3 提取业务中立的纯映射内核，以一次 Type/Item 查询解析去重后的 raw values，并让单值与批量入口复用同一状态语义。
+  - [x] 3.4 返回 `EFFECTIVE/DISABLED/UNKNOWN`、raw value 和已知 Label；不得创建 Product/Supplier 专用字典服务，也不得吞掉未知值。
+  - [x] 3.5 证明一页重复 `supplierValue` 不会产生逐行查询，异常信息不泄露 SQL 或不可信内容。
+  - [x] 3.6 更新 Task 3 状态并在字典服务定向测试与 Server 检查绿色后创建提交：`feat: 增加字典值批量历史解析`。
+  - _Requirements: R3, R8, R12, R15_
+
+  Task 3 证据：RED 在 TypeScript 编译期精确报告 `resolveStoredValues` 与 `values` 校验字段不存在。最小实现使用一次 `findMany` 查询去重后的精确 raw values，以 Map 恢复输入顺序和重复项，并与单值入口复用同一映射函数。最终字典 Lookup 22/22、Server typecheck、目标 ESLint 与 diff-check 通过；lint 曾发现并阻断 `any[]` unsafe return，改为逐项收敛到 `string[]` 后转绿。
+
+- [x] 4. 以 TDD 实现 Product 列表查询内核
+  - [x] 4.1 先为 Query DTO、mapper 和 Query Service 建立失败测试，覆盖 `page/pageSize/supplierValue`、空白/超长输入、精确 raw 筛选、稳定排序与 count/items 共用 where。
+  - [x] 4.2 先固定响应映射：Decimal 只输出 `string | null`，媒体/属性保持顺序，actor 只选择 `id/displayName`，非法 attributes fail-closed。
+  - [x] 4.3 实现 `updatedAt DESC, id DESC` 稳定分页和单次批量供应商解析；不得加入未确认的搜索、状态筛选或自定义排序。
+  - [x] 4.4 对空结果返回 `items=[]`、`total=0`；对 nullable actor/supplier/money/media 提供确认过的稳定 shape。
+  - [x] 4.5 证明列表、筛选和 mapper 不调用 `NumberingGeneratorService`，不创建 Product，不写 AuditEvent。
+  - [x] 4.6 更新 Task 4 状态并在 Product 模块定向单元测试、typecheck、lint 与 diff-check 绿色后创建提交：`feat: 实现产品列表查询内核`。
+  - _Requirements: R1-R8, R15_
+
+  Task 4 证据：三个测试文件最初因 normalizer、mapper、service 缺失而 RED；两处测试类型噪声随生产类型同步收敛。实现后 Product 定向 23/23、Server typecheck、目标 ESLint、Root governance 663/663 与 diff-check 通过。Service 在同一受限事务内串行 count/findMany，共用精确 where 与稳定排序，只选择 actor `id/displayName`；页面供应商值去重后调用一次 batch resolver，Decimal 仅 `toString()`，非法 attributes 与底层异常统一脱敏为固定 500。首次 lint 发现 11 处测试 mock `any`/无必要 async，明确类型后转绿。
+
+- [x] 5. 以 TDD 暴露受保护的 Product 列表公共 API
+  - [x] 5.1 在 Gate D1 已授权范围内，先建立 Controller metadata 与 OpenAPI RED，精确要求 `GET /api/products`、operationId `products_list`、`products:read`、private no-store、分页 DTO 和 403/422 错误。
+  - [x] 5.2 注册 `ProductsModule`，实现只读 Controller 和白名单响应 DTO；不得添加 POST、detail、update、status 或 delete 路由。
+  - [x] 5.3 复用 Session、PasswordChangeRequired、Permission Guard 和既有异常映射；未授权请求不得查询或返回 Product 数据。
+  - [x] 5.4 扩展契约门禁，使 Product operation allowlist 只接受 `products_list`，并证明未生成写 operation。
+  - [x] 5.5 更新 Task 5 状态并在 Controller/metadata/OpenAPI 生成前置测试绿色后创建提交：`feat: 添加产品列表查询接口`。
+  - _Requirements: R1, R8, R15_
+
+  Task 5 证据：Controller、Module 与 DTO 测试先因对应模块不存在而 RED；补齐 `GET /api/products` 后，反射与 OpenAPI 前置门禁精确限定 Controller 只有 `list` 方法、Path Item 只有 `get`，operationId 为 `products_list`，并固定 `products:read`、private no-store、403/422 与白名单响应 DTO。最终定向测试 10/10、Server typecheck 与串行 ESLint 通过；一次将 ESLint 与 `prisma generate` 并发执行导致 Prisma 类型瞬态不可解析，移除真实的冗余断言后串行复验全绿。
+
+- [x] 6. 完成 Product 数据库与 HTTP E2E
+  - [x] 6.1 先建立失败的隔离数据库/API E2E，测试 fixture 只在测试数据库直接插入受控 Product，不新增生产 seed 或创建 API。
+  - [x] 6.2 覆盖权限拒绝、password-change-required、分页、稳定排序、精确供应商筛选、空结果、停用/未知历史值和三组 Decimal string/null。
+  - [x] 6.3 覆盖 Product 约束：状态、金额、币种、attributes、`ACTIVE` supplier 非空、`id/productNo` 不可更新和唯一编号。
+  - [x] 6.4 使用查询观测或 mock 边界证明供应商批量解析无逐行 N+1，actor 响应没有越权字段。
+  - [x] 6.5 运行隔离 PostgreSQL migration replay 和 Server E2E；不得在本任务中对本地持久数据库执行 migration。
+  - [x] 6.6 更新 Task 6 状态；若只有测试变更则创建提交：`test: 补齐产品列表服务端验收`，若暴露生产缺陷则以对应 `fix:` 提交最小修复与回归测试。
+  - _Requirements: R1-R8, R15_
+
+  Task 6 证据：API E2E 首轮因夹具先启用空字典 Type 而 RED，第二轮业务断言已执行但清理阶段被登录审计外键阻断；分别改为合法的 Item→Type 原子顺序和 AuditEvent→User 精确清理后转绿，未修改生产代码。定向 Product E2E 2 suites / 4 tests 通过，Schema 用 12 个 savepoint 覆盖枚举、金额、币种、attributes、ACTIVE supplier、唯一编号和不可变身份；HTTP 覆盖认证、权限、强制改密、稳定分页、精确筛选、空页、有效/停用/未知供应商、Decimal string/null、单次 batch lookup 和 actor 白名单。完整 `ci:server-e2e` 连续 deploy 两次并确认 migration up to date，最终 26 suites / 146 tests 全绿；仅使用并自动回收临时 PostgreSQL，本地持久数据库未迁移。
+
+- [x] 7. 同步 OpenAPI 与 Web generated contract
+  - [x] 7.1 先运行 `contract:check` 记录 Product operation 尚未同步的 RED，不手工修改任何 snapshot 或 generated type。
+  - [x] 7.2 运行根 `contract:sync`，生成 Server/Web OpenAPI snapshot 和 Web API types；核对 diff 只包含已确认的 Product list 契约。
+  - [x] 7.3 运行 `contract:check`、contract baseline 测试、Server build 和 Web generated typecheck，确认两份 snapshot 字节一致且无写 API。
+  - [x] 7.4 更新 Task 7 状态并将生成产物与对应门禁测试纳入 Product API 提交；若 Task 5 已提交源契约，则创建独立提交：`chore: 同步产品列表接口契约`。
+  - _Requirements: R8, R15_
+
+  Task 7 证据：同步前 `contract:check` 因 tracked snapshot 缺少运行时 Product operation 而按计划 RED；仅通过 `contract:sync` 生成后，两份 OpenAPI snapshot 字节一致，diff 只新增 `/api/products` 的 `get`、`products_list` 与只读 DTO，Web generated types 在本地重建但继续遵守不跟踪规则。同步后 `contract:check`、baseline/contract 199/199、Server build、Web typecheck 与 diff-check 全绿。本地直接运行 GitHub 事件专用 `ci:contract` 因缺少 event/base/current SHA 固定失败，已使用其本地 baseline 测试完整验证相同逻辑，未伪造 CI 环境。
+
+- [x] 8. 以 TDD 实现 Web Product API adapter 与纯逻辑
+  - [x] 8.1 先建立 API/logic RED，覆盖 generated DTO adapter、query 编码、AbortSignal、分页、筛选应用/清空回第一页和不 trim `supplierValue`。
+  - [x] 8.2 建立 Product 页面只读 view model，严格保留 decimal string、媒体/属性顺序、supplier raw/label/state 与 actor nullable 状态。
+  - [x] 8.3 从 Dictionary Catalog 构建供应商筛选选项，包含已停用已知项，Label 用于展示、stable value 用于查询；Catalog 失败不阻断 Product 请求。
+  - [x] 8.4 建立主图单项与 images 整组的 `ImageGroup` 输入映射，过滤空 URL 但不重排有效媒体。
+  - [x] 8.5 覆盖 requestVersion、authEpoch、permission 和 Abort 竞态，迟到响应不得覆盖新身份或新筛选结果。
+  - [x] 8.6 不创建 Product Pinia Store，不复制 generated DTO，不实现任何 mutation adapter。
+  - [x] 8.7 更新 Task 8 状态并在 Web API/logic 定向测试、typecheck 与 lint 绿色后创建提交：`feat: 建立产品列表前端数据适配`。
+  - _Requirements: R3, R5-R6, R8-R9, R12, R15_
+
+  Task 8 证据：API/logic 测试先因 `products.ts` 与 `product-list.logic.ts` 缺失而 2/2 RED。最小实现只暴露一个 GET adapter，并以 generated DTO 为传输来源建立只读 view model；decimal 保持 string/null，媒体与属性只克隆不排序，supplier raw/state 及 nullable actor 保留，且在页面边界补足 OpenAPI generator 对 nullable enum 的运行时 null。最终定向测试 6/6、Web typecheck、目标 ESLint 与 diff-check 通过；lint 首轮仅发现 4 个排序/格式问题，按规则修正后全绿。未创建 Store、mutation adapter 或重复 DTO。
+
+- [x] 9. 以 TDD 实现页面结构、查询状态与表格列
+  - [x] 9.1 先建立 View RED，固定 `FaPageHeader + FaPageMain + QsGenericTable`、权限、加载/错误/重试/空态、供应商 Catalog 独立状态和单次最终请求。
+  - [x] 9.2 实现确认顺序的全部业务/审计列，不展示 `id/version`；行号最左，`productNo` 默认 left-fixed，actions right-fixed 且不可隐藏。
+  - [x] 9.3 让业务列复用 QsGenericTable 的显隐、左右固定与对齐配置；关闭表格内 create/search，不修改共享表格内核。
+  - [x] 9.4 页头新增按钮只在 `products:create` 权限下展示；页面数据请求只在 `products:read` 可信时执行。
+  - [x] 9.5 供应商筛选使用 QsGenericTable filter definition；Catalog loading/error/retry 与 Product list loading/error 分离，已有 raw 条件始终可清除。
+  - [x] 9.6 覆盖 768px 桌面/窄屏切换、表格区域滚动、固定列边界、无页面级横向溢出和移动卡片字段/操作一致性。
+  - [x] 9.7 更新 Task 9 状态并在页面定向测试、typecheck、lint 与 build 绿色后创建提交：`feat: 实现产品列表页面骨架`。
+  - _Requirements: R9-R10, R12, R14-R15_
+
+  Task 9 证据：当前占位页对结构、列、权限、Catalog 和移动视图五组断言全部 RED；实现后与 Task 8 合并的定向测试 11/11 通过。页面只使用 `FaPageHeader + FaPageMain + QsGenericTable`，按确认顺序声明 15 个业务/审计列，编号默认 left-fixed、actions right-fixed，未显示 id/version，且关闭表格内 add/search。列表与供应商 Catalog 各自呈现状态，authEpoch/permission/requestVersion/Abort 共同保护结果；窄屏由 `mobile-row` 显式保持同源字段和操作。Web typecheck、目标 ESLint/Stylelint、production build、Noto 字体与 font-zero-residue 验证通过；首次 lint 的 21 个强制花括号/排序错误和 52 个格式警告经项目 formatter 修正，build 仅保留既有第三方 PURE 注释与 chunk size 警告。
+
+- [x] 10. 以 TDD 完成特殊单元格、只读弹窗与占位动作
+  - [x] 10.1 先建立 View RED，覆盖状态 `FaTag` 文字语义、供应商历史标识、主图/图片 `ImageGroup`、三列 `AmountDisplay`、日期和 actor 空态。
+  - [x] 10.2 主图使用单项 `ImageGroup`，附加图片使用 `maxCount=3` 并保持整组预览；不得修改 ImageGroup 或把业务字段下沉到共享组件。
+  - [x] 10.3 属性空值显示 `—`，非空显示可聚焦“`N 项属性`”按钮；使用局部 `QsGenericModal` 完整只读展示有序属性。
+  - [x] 10.4 视频空值显示 `—`，非空显示图标和“`N 个视频`”按钮；弹窗提供地址选择、单一预览、加载失败安全外链，并在关闭时停止播放。
+  - [x] 10.5 新增、查看、编辑分别调用确认文案的 `QsToast.info`；证明不导航、不发 API、不发号、不写数据。
+  - [x] 10.6 覆盖 Escape、关闭按钮、焦点约束/恢复、44px 触控目标、light/dark、键盘和 Reduced Motion。
+  - [x] 10.7 更新 Task 10 状态并在页面/组件定向测试和 Web 检查绿色后创建提交：`feat: 完善产品列表特殊字段展示`。
+  - _Requirements: R5-R6, R9-R11, R13-R15_
+
+  Task 10 证据：页面/弹窗契约先以既有骨架 5/8 通过、特殊字段与两个局部弹窗 3/8 RED；最小实现接入单项/三项 `ImageGroup`、三列 `AmountDisplay`、状态与供应商历史 `FaTag`、有序属性弹窗和单一视频预览弹窗，危险协议不生成预览或外链，关闭与卸载均暂停媒体。桌面与移动端入口保留可访问名称和 44px 触控下限，Escape、焦点恢复、light/dark 与 Reduced Motion 继续由既有 `QsGenericModal`/Fa/语义 Token 契约统一承载；新增、查看、编辑仅发 `QsToast.info`。定向页面测试最终 8/8，连同路由回归 12/12；全量 Web 首轮发现旧测试仍把正式列表误判为单按钮占位页（`10 !== 1`），收窄为仅约束未实施的新增页后，Node 脚本 171/171、TS 脚本 49/49、API/View 756/756、typecheck、ESLint、Stylelint、production build、Noto 字体和 font-zero-residue 全绿。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
+
+- [x] 11. 扩展现有管理 Browser 回归
+  - [x] 11.1 先扩展 `management.browser.test.mjs` 建立真实 Chrome RED；不新建 Product 专属 CI Job。
+  - [x] 11.2 在隔离测试数据库准备有效、停用、未知供应商、空金额、多图、属性和视频 Product fixture；测试结束必须可靠清理。
+  - [x] 11.3 覆盖 `products:read/products:create` 权限、供应商筛选应用/清空、分页归一、列设置、左右固定列和占位 Toast。
+  - [x] 11.4 覆盖主图、多图 `+N`/整组预览、金额格式/回退、属性弹窗、视频弹窗、安全链接和键盘关闭。
+  - [x] 11.5 覆盖 1440px Desktop、390x844 Mobile、light/dark、Reduced Motion、触控目标和无页面级横向溢出。
+  - [x] 11.6 运行现有 `test:browser:auth` 与对应根 CI 编排；若 Browser 暴露生产缺陷，以 `fix:` 提交最小生产修复和回归测试。
+  - [x] 11.7 更新 Task 11 状态并在 Browser 与相关 helper 测试绿色后创建提交：`test: 补齐产品列表浏览器验收`。
+  - _Requirements: R9-R15_
+
+  Task 11 证据：fixture helper 先因缺少供应商字典与 Product 数据断言而 8/9 RED，补入仅作用于隔离数据库的有效/停用/未知供应商、21 条分页产品、空金额、多图、属性与安全/危险协议视频后 9/9 GREEN。真实 Chrome 首轮已成功加载同源 Product 数据，但在 390x844 下发现移动图片入口只有 32px，Browser 以 `allTouchTargetsMeetMinimum: false` RED；最小修复把两个移动端 ImageGroup 调整为 44px，并以 `a810398 fix: 保证产品列表移动端图片触控尺寸` 独立提交。最终根 `ci:browser-auth-e2e` 在全新隔离 PostgreSQL 上应用 13 个 migration、构建 Server/Web 后 2/2 通过，覆盖 1440x900 Desktop、390x844 Mobile、权限可见性、供应商筛选/清空、分页回第一页、列显隐/固定、三个占位 Toast、四图 `+2` 与整组预览、金额格式及未知币种回退、属性/视频弹窗、危险协议不生成链接、Escape/焦点恢复、light/dark、Reduced Motion、44px 触控目标和无页面级横向溢出。隔离容器与 Chrome 均由现有 runner 回收，未修改持久开发数据库；build 只保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
+
+- [x] 12. 完成全量验证、文档与 Git 收口
+  - [x] 12.1 冻结生产和测试源码，汇总 Tasks 2-11 的真实 RED/GREEN、提交 SHA、失败与非阻断警告；不得预写未运行结果。
+  - [x] 12.2 运行第 5 节完整矩阵，确认 Schema、Server、API E2E、OpenAPI、Web API/View、Browser、build、root governance 和 diff-check 全绿。
+  - [x] 12.3 复核最终文件矩阵：无禁止路径、删除、旧 migration 修改、依赖变化、Product seed、Supplier 领域复活、写 API/权限或敏感文件。
+  - [x] 12.4 若获 Gate D2 授权，按展示过的 migration 对本地持久数据库执行一次受控 deploy，并核对 migration 行、Product 结构、约束与未被修改的基础数据；未获授权则明确记录“未应用”。
+  - [x] 12.5 将 Requirements、Design 和本计划更新为实际完成状态，只记录最新输出；文档收口后不得再修改生产/测试源码。
+  - [x] 12.6 暂存精确文件，核对 staged diff 与 secrets，创建提交：`docs: 完成产品列表实施验收`。
+  - [x] 12.7 核对 `git status --short --branch`、相对基线的提交序列和每个提交范围，向用户交付本地结果后暂停，不 push、不建 PR。
+  - _Requirements: R1-R15_
+
+  Task 12 证据：生产与测试源码冻结在 `e755878`；功能提交依次为 `84bc213`、`2620910`、`6f08eae`、`f4ff045`、`924a547`、`fdd2fec`、`fcfed26`、`01acd2f`、`53f7623`、`a810398`、`e755878`。最终 Server 的 Prisma validate、typecheck、lint 通过，unit 为 146/146 suites、1410/1410 tests；官方隔离 `ci:server-e2e` 最终为 26/26 suites、146/146 tests。该入口前两轮曾分别在既有地区登录用例出现 403、既有字典生命周期用例出现 404，Product schema/API 两轮均通过；两个漂移套件随后在相同隔离包装器下定向 2/2 suites、12/12 tests 通过，官方入口再次完整执行后全绿。计划中旧命令 `pnpm -C server test -- --runInBand` 因多余 `--` 被 Jest 当作 Pattern 而报告无测试，已纠正为 `pnpm -C server test --runInBand`。
+
+  OpenAPI `contract:sync`、`contract:check` 与 tracked diff 通过；GitHub event 专用 `ci:contract` 未伪造本地事件，其 baseline 选择与失败关闭由 Root 单测覆盖。Web API/View 756/756、typecheck、ESLint、Stylelint、production build、Noto/font-zero-residue 通过；根治理 663/663、根聚合 `check`、根 `build` 与真实 Chrome 2/2 通过。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。最终文件审计未发现删除、依赖/lockfile、旧 migration 改写、Product seed、Supplier 领域复活、Product 写 API/权限、敏感文件或禁止公共组件修改。Gate D2 未授权，Product migration 明确“未应用”到本地持久数据库；Gate E 未授权，未 push、未建 PR、未 merge、未部署。
+
+  Task 12 完成后，用户另行通过 Gate D2；`20260812090000_product_list_schema` 已应用到 `qianshu_dms_dev@127.0.0.1:15433`，Prisma、结构对象、0 行 Product 查询、Server/Database 健康检查均通过。该后续授权不改变 Task 12 当时的历史证据。
+
+- [x] 13. 以 TDD 增加产品名称与编号搜索
+  - [x] 13.1 单独确认公共 API 增量：`keyword` trim 后为 1..128 Unicode code points，只搜索 `name/productNo`，与 `supplierValue` 按 AND 组合。
+  - [x] 13.2 先建立 Server RED，覆盖 DTO trim/长度、Normalizer、名称/编号 OR、供应商 AND、Controller/OpenAPI 与隔离 API E2E。
+  - [x] 13.3 最小实现 Server 查询与 OpenAPI，并通过根 `contract:sync` 生成两份 snapshot；不修改 Schema、migration、数据或 Product 写边界。
+  - [x] 13.4 先建立 Web RED，再启用 `QsGenericTable` 既有 `v-model:search/@search`，搜索/清空回第一页并通过微任务调度只请求一次。
+  - [x] 13.5 扩展现有 management Browser，用小写产品编号从第二页搜索、叠加供应商筛选，并验证最终请求同时携带 `keyword/supplierValue`。
+  - [x] 13.6 保持公共 `QsGenericTable`、主题、字体、图标、布局和移动卡片不变，不新增依赖或本地当前页搜索。
+  - [x] 13.7 完成 Server/Web/OpenAPI/隔离 E2E/真实 Chrome/根检查与构建验收，记录失败重跑和非阻断警告，创建文档收口提交。
+  - _Requirements: R8-R9, R12, R14-R15_
+
+  Task 13 证据：Server 红灯为 DTO 未 trim/校验、Normalizer 忽略 `keyword` 和 Service 类型缺失；实现后定向 4 suites / 30 tests、Server 全量 146 suites / 1416 tests、Product 隔离 API E2E 1 suite / 4 tests、OpenAPI contract check 通过。Web 红灯为 query/页面绑定/身份清理/handler 四项缺失；实现后定向 15/15、Web Node 171/171、TS 49/49、API/View 757/757、typecheck、ESLint、Stylelint 和真实 Chrome 2/2 通过。首次官方 Server E2E 为 25/26 suites、146/147 tests，仅既有 Profile PATCH 偶发返回 404；Product 套件同轮通过，随后官方全套重跑为 26/26 suites、147/147 tests。根 `node --run check` 与 `node --run build` 均通过。验证中曾把两个会执行 `prisma generate` 的命令并行运行，造成生成目录竞态和临时 TypeScript 缺文件；改为串行后 Server check 与 contract check 全绿。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
+
+## 5. 验证矩阵
+
+### 5.1 Phase 3 文档验证
+
+```bash
+node --run test:root
+git diff --check
+git status --short --branch
+```
+
+### 5.2 Phase 4 任务级与最终验证
+
+```bash
+# Schema / Server
+pnpm -C server prisma:validate
+pnpm -C server typecheck
+pnpm -C server lint
+pnpm -C server test --runInBand
+node --run ci:server-e2e
+
+# OpenAPI
+node --run contract:sync
+node --run contract:check
+# 仅真实 GitHub event context：node --run ci:contract
+
+# Web
+pnpm -C web test:api
+pnpm -C web typecheck
+pnpm -C web lint
+pnpm -C web build
+node --run ci:browser-auth-e2e
+
+# Repository
+node --run test:root
+node --run check
+node --run build
+git diff --check
+git status --short --branch
+```
+
+定向 RED/GREEN 命令应在实施时写入对应任务证据，最终矩阵不能替代任务级失败测试。若 `tsx --test` 在受限 shell 出现 `listen EPERM ...*.pipe`，使用项目已验证的 `node --import tsx --test` 入口或在允许 IPC 的环境重跑，并如实报告环境错误。
+
+## 6. 精确文件边界
+
+### 6.1 实际新增
+
+```text
+server/prisma/migrations/20260812090000_product_list_schema/migration.sql
+server/src/modules/products/**
+server/test/product-list-api.e2e-spec.ts
+server/src/infrastructure/database/product-list-schema.spec.ts
+
+web/apps/qsmds-arco/src/api/modules/products.ts
+web/apps/qsmds-arco/src/views/admin/product-management/list/product-list.logic.ts
+web/apps/qsmds-arco/src/views/admin/product-management/list/product-attributes-modal.vue
+web/apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue
+web/apps/qsmds-arco/test/api/products.test.ts
+web/apps/qsmds-arco/test/views/product-list.test.ts
+web/apps/qsmds-arco/test/views/product-list.logic.test.ts
+```
+
+### 6.2 实际修改
+
+```text
+server/prisma/schema.prisma
+server/src/http.modules.ts
+server/src/modules/dictionaries/dictionary-lookup.service.ts
+server/src/modules/dictionaries/dictionary-lookup.service.spec.ts
+server/openapi/openapi.json                       # generated only
+
+web/openapi/openapi.json                          # generated only
+web/apps/qsmds-arco/src/api/generated/**          # generated only
+web/apps/qsmds-arco/src/views/admin/product-management/list/index.vue
+web/apps/qsmds-arco/test/api/product-management-routes.test.ts
+web/apps/qsmds-arco/test/browser/management.browser.test.mjs
+scripts/browser-auth/provision-admin.mjs
+scripts/browser-auth-runtime.test.mjs
+scripts/root-governance.test.mjs
+docs/后端文档/数据库迁移规范.md
+
+specs/product-list/requirements.md
+specs/product-list/design.md
+specs/product-list/tasks.md
+```
+
+Web generated types 已由正式命令重建但按仓库规则不跟踪；实际文件职责与范围均未改变。
+
+### 6.3 禁止修改或删除
+
+```text
+server/src/modules/suppliers/**
+web/apps/qsmds-arco/src/api/modules/suppliers.ts
+web/apps/qsmds-arco/src/components/business/QsGenericTable/**
+web/apps/qsmds-arco/src/components/base/ImageGroup/**
+web/apps/qsmds-arco/src/components/base/AmountDisplay/**
+web/apps/qsmds-arco/src/components/business/QsDictionarySelect/**
+web/apps/qsmds-arco/src/views/admin/product-management/create/index.vue
+web/apps/qsmds-arco/src/router/modules/product.management.ts
+existing prisma migrations
+package.json / lockfiles
+```
+
+若实现发现必须修改、删除或越过上述对象，立即暂停并回到 Design/Gate D1 重新确认。
+
+## 7. 建议提交序列
+
+1. `feat: 建立产品列表数据结构`
+2. `feat: 增加字典值批量历史解析`
+3. `feat: 实现产品列表查询内核`
+4. `feat: 添加产品列表查询接口`
+5. `test: 补齐产品列表服务端验收`
+6. `chore: 同步产品列表接口契约`
+7. `feat: 建立产品列表前端数据适配`
+8. `feat: 实现产品列表页面骨架`
+9. `feat: 完善产品列表特殊字段展示`
+10. `test: 补齐产品列表浏览器验收`
+11. `docs: 完成产品列表实施验收`
+12. `feat: 增加产品列表服务端搜索`
+13. `feat: 接入产品表格搜索`
+14. `docs: 完成产品列表搜索验收`
+
+只有对应任务全部绿色后才创建提交。若某任务没有形成独立变更，不创建空提交；若跨任务发现缺陷，提交类型与描述必须反映真实职责，不使用 `misc`、`wip` 或掩盖失败的提交。
+
+## 8. Phase 3 确认门
+
+确认本计划意味着接受：
+
+1. 首期按 Task 1-12 实施；另行确认的搜索增量按 Task 13 实施，允许在不改变职责的前提下合并相邻绿色提交。
+2. TDD 证据、生成产物、隔离数据库 E2E、真实 Browser 与最终矩阵均属于完成条件。
+3. Product 列表继续保持只读，Supplier 字典、金额 string、共享组件和页面/API 边界不变。
+4. Gate D1、D2、E 独立生效；搜索增量确认不授权新的 Schema、数据库写入或外部动作。
+
+Gate D1 与 Gate D2 已完成并按本文件收口；push、PR、merge、部署或非本地数据库变更必须先取得 Gate E。

@@ -15,7 +15,7 @@ const SUCCESS_TAG_CLASS = [
   'dark:border-green-400/30 dark:bg-green-400/10 dark:text-green-400',
 ].join(' ')
 
-const EVENT_LABELS: Readonly<Record<string, string>> = {
+const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   AUTH_LOGIN_SUCCEEDED: '登录成功',
   AUTH_LOGIN_FAILED: '登录失败',
   AUTH_LOGOUT: '退出登录',
@@ -56,6 +56,8 @@ const EVENT_LABELS: Readonly<Record<string, string>> = {
   SYSTEM_BOOTSTRAP: '系统管理员已初始化',
   SYSTEM_ADMIN_RECOVERED: '系统管理员已恢复',
   AUTH_RETENTION_PURGED: '认证保留数据已清理',
+  PRODUCT_CREATED: '产品已创建',
+  PRODUCT_UPDATED: '产品已更新',
 }
 
 export function auditMetadataEntries(
@@ -70,7 +72,10 @@ export function auditMetadataEntries(
 }
 
 export function formatAuditEvent(eventType: string): string {
-  return EVENT_LABELS[eventType] ?? eventType
+  // 公开契约内的事件必须具备中文名称；未知历史值仍保留原文，便于管理员排查数据漂移。
+  return Object.hasOwn(EVENT_LABELS, eventType)
+    ? EVENT_LABELS[eventType as AuditEventDto['eventType']]
+    : eventType
 }
 
 export function formatAuditOutcome(outcome: string): string {

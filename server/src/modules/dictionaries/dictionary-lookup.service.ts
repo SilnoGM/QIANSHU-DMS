@@ -21,10 +21,16 @@ export type DictionaryValueUnavailableReason =
 export type DictionaryLookupValidationField =
   | 'dictionaryCode'
   | 'value'
+  | 'values'
 
 export interface DictionaryLookupInput {
   readonly dictionaryCode: string
   readonly value: string
+}
+
+export interface DictionaryStoredValuesLookupInput {
+  readonly dictionaryCode: string
+  readonly values: readonly string[]
 }
 
 export interface EffectiveDictionaryValue {
@@ -89,6 +95,22 @@ interface NormalizedEffectiveLookupInput {
   readonly dictionaryCode: string
   readonly value: string
 }
+
+interface StoredDictionaryValueRow {
+  readonly value: string
+  readonly label: string
+  readonly tone: DictionaryToneValue
+  readonly enabled: boolean
+  readonly dictionaryType: { readonly enabled: boolean }
+}
+
+const storedDictionaryValueSelect = {
+  value: true,
+  label: true,
+  tone: true,
+  enabled: true,
+  dictionaryType: { select: { enabled: true } },
+} as const
 
 /**
  * Server 业务模块的字典消费边界。有效性校验复用调用方事务并显式锁行；
@@ -167,33 +189,80 @@ export class DictionaryLookupService {
         value: rawValue,
         dictionaryType: { code: normalizedCode },
       },
-      select: {
-        value: true,
-        label: true,
-        tone: true,
-        enabled: true,
-        dictionaryType: { select: { enabled: true } },
-      },
+      select: storedDictionaryValueSelect,
     })
 
-    if (item === null) {
-      return {
-        known: false,
-        dictionaryCode: normalizedCode,
-        value: rawValue,
-      }
-    }
+    return mapStoredDictionaryValue(normalizedCode, rawValue, item)
+  }
 
+  /**
+   * 写服务完成行锁和变更后，必须在同一事务快照内解析历史字典值，避免先提交
+   * Product 再从另一个快照拼装响应。该方法只读、不加锁，也不创建嵌套事务。
+   */
+  async resolveStoredValueInTransaction(
+    transaction: Prisma.TransactionClient,
+    input: DictionaryLookupInput,
+  ): Promise<StoredDictionaryValueResolution> {
+    const normalizedCode = normalizeLookupCode(input)
+    const rawValue = readRawStoredValue(input)
+    const item = await transaction.dictionaryItem.findFirst({
+      where: {
+        value: rawValue,
+        dictionaryType: { code: normalizedCode },
+      },
+      select: storedDictionaryValueSelect,
+    })
+
+    return mapStoredDictionaryValue(normalizedCode, rawValue, item)
+  }
+
+  async resolveStoredValues(
+    input: DictionaryStoredValuesLookupInput,
+  ): Promise<readonly StoredDictionaryValueResolution[]> {
+    const normalizedCode = normalizeLookupCode(input)
+    const rawValues = readRawStoredValues(input)
+    const uniqueValues = [...new Set(rawValues)]
+    if (uniqueValues.length === 0) return []
+
+    const items = await this.prisma.dictionaryItem.findMany({
+      where: {
+        value: { in: uniqueValues },
+        dictionaryType: { code: normalizedCode },
+      },
+      select: storedDictionaryValueSelect,
+    })
+    const itemsByValue = new Map(items.map(item => [item.value, item]))
+
+    return rawValues.map(rawValue => mapStoredDictionaryValue(
+      normalizedCode,
+      rawValue,
+      itemsByValue.get(rawValue) ?? null,
+    ))
+  }
+}
+
+function mapStoredDictionaryValue(
+  dictionaryCode: string,
+  rawValue: string,
+  item: StoredDictionaryValueRow | null,
+): StoredDictionaryValueResolution {
+  if (item === null) {
     return {
-      known: true,
-      dictionaryCode: normalizedCode,
-      value: item.value,
-      label: item.label,
-      tone: item.tone,
-      typeEnabled: item.dictionaryType.enabled,
-      itemEnabled: item.enabled,
-      effectiveEnabled: item.dictionaryType.enabled && item.enabled,
+      known: false,
+      dictionaryCode,
+      value: rawValue,
     }
+  }
+
+  return {
+    known: true,
+    dictionaryCode,
+    value: item.value,
+    label: item.label,
+    tone: item.tone,
+    typeEnabled: item.dictionaryType.enabled,
+    itemEnabled: item.enabled,
+    effectiveEnabled: item.dictionaryType.enabled && item.enabled,
   }
 }
 
@@ -237,4 +306,22 @@ function readRawStoredValue(input: unknown): string {
   }
 
   return input.value
+}
+
+/** 批量历史值与单值边界一致：只接受 string，且从不 trim、改大小写或重排。 */
+function readRawStoredValues(input: unknown): readonly string[] {
+  requireLookupInputRecord(input)
+  if (!Array.isArray(input.values)) {
+    throw new DictionaryLookupValidationError('values')
+  }
+
+  const rawValues: string[] = []
+  for (const value of input.values as readonly unknown[]) {
+    if (typeof value !== 'string') {
+      throw new DictionaryLookupValidationError('values')
+    }
+    rawValues.push(value)
+  }
+
+  return rawValues
 }

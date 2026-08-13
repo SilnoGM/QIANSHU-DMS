@@ -6,6 +6,18 @@
 export const SYSTEM_ADMIN_ROLE_CODE = 'system_admin' as const
 
 /**
+ * 产品管理当前完整权限边界。
+ *
+ * 查看详情复用读取权限；独立编辑页面和 PATCH operation 使用更新权限。状态仍随
+ * 产品资料一并编辑，本期不拆分启停权限。
+ */
+export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
+  'products:read',
+  'products:create',
+  'products:update',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -49,6 +61,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:update',
   'dictionaries:enable',
   'dictionaries:disable',
+  ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =
