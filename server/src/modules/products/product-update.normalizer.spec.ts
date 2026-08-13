@@ -1,4 +1,5 @@
 import { ProductStatus } from '../../generated/prisma/enums'
+import { UpdateProductRequestDto } from './dto/product-update.dto'
 import {
   buildProductUpdateTarget,
   normalizeProductUpdatePatch,
@@ -42,6 +43,23 @@ describe('product update normalizer', () => {
     })
     expect(buildProductUpdateTarget(current, patch).changedFields).toEqual([])
     expect(patch.expectedVersion).toBe(2)
+  })
+
+  it('accepts the validated DTO instance produced by the global ValidationPipe', () => {
+    const dto = Object.assign(new UpdateProductRequestDto(), {
+      name: ' DTO 产品 ',
+      expectedVersion: 4,
+    })
+
+    const patch = normalizeProductUpdatePatch(dto)
+    expect(patch).toEqual({
+      name: ' DTO 产品 ',
+      expectedVersion: 4,
+    })
+    expect(buildProductUpdateTarget(current, patch)).toMatchObject({
+      changedFields: ['name'],
+      command: { name: 'DTO 产品', status: ProductStatus.DRAFT },
+    })
   })
 
   it.each([

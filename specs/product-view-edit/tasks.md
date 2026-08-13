@@ -44,20 +44,25 @@
   - GREEN：Controller/Module 9 tests、目标 ESLint/TypeScript 与 `contract:check` 通过。
   - _Requirement: R1-R7_
 
-- [ ] 7. Web API、路由与共享表单
+- [x] 7. Web API、路由与共享表单
   - TDD 扩展 adapter/route，受控移动创建表单并保持创建回归。
+  - GREEN：Web 产品定向测试 32/32、TypeScript、ESLint 与 Stylelint 通过。
   - _Requirement: R1-R5, R7-R8_
 
-- [ ] 8. 产品详情 Drawer
+- [x] 8. 产品详情 Drawer
   - 接入真实详情、完整字段、权限、重试和编辑入口。
+  - GREEN：列表快照先稳定布局，fresh GET 受 Abort/Auth epoch 防竞态保护。
   - _Requirement: R1, R3, R7-R8_
 
-- [ ] 9. 产品编辑页面
+- [x] 9. 产品编辑页面
   - 实现 diff、dirty、并发冲突、GET 对账、离开守卫和成功返回列表。
+  - GREEN：空差异不 PATCH，409 不覆盖，网络/5xx 只 GET 对账且不自动重放。
   - _Requirement: R2-R5, R7-R8_
 
 - [ ] 10. Server 隔离 E2E 与 Web/Chrome 验收
   - 覆盖权限、CSRF、历史引用、并发、回滚、响应式和中文审计。
+  - Server：16 条 Migration 从零/重复部署和状态检查通过，28 suites / 167 tests 全绿。
+  - Web：定向逻辑/源码契约与静态检查通过；真实浏览器验收待执行。
   - _Requirement: R1-R9_
 
 - [ ] 11. 应用持久开发数据库

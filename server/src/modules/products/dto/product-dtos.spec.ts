@@ -132,6 +132,18 @@ describe('Product detail and update DTOs', () => {
       supplierValue: null,
       expectedVersion: 2,
     })
+
+    const nameOnly = await createDtoPipe.transform({
+      name: '  仅更新名称  ',
+      expectedVersion: 3,
+    }, {
+      type: 'body',
+      metatype: UpdateProductRequestDto,
+    }) as UpdateProductRequestDto
+    expect(nameOnly).toMatchObject({
+      name: '仅更新名称',
+      expectedVersion: 3,
+    })
   })
 
   it.each([

@@ -55,12 +55,16 @@ function validationFailure(field = 'body'): never {
   )
 }
 
-function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-  const prototype = Object.getPrototypeOf(value) as unknown
-  return prototype === Object.prototype || prototype === null
+function hasSubmittedField(
+  input: Readonly<Record<string, unknown>>,
+  field: ProductMutableField,
+): boolean {
+  // JSON 无法表达 undefined；DTO class field 的 undefined 只代表“调用方未提交”。
+  return Object.hasOwn(input, field) && input[field] !== undefined
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** 防御性复制并冻结未知 Patch 值，避免校验、锁行和写入之间被调用方修改。 */
@@ -68,7 +72,7 @@ function cloneAndFreeze(value: unknown): unknown {
   if (Array.isArray(value)) {
     return Object.freeze(value.map(item => cloneAndFreeze(item)))
   }
-  if (isPlainRecord(value)) {
+  if (isRecord(value)) {
     return Object.freeze(Object.fromEntries(
       Object.entries(value).map(([key, item]) => [key, cloneAndFreeze(item)]),
     ))
@@ -79,13 +83,18 @@ function cloneAndFreeze(value: unknown): unknown {
 export function normalizeProductUpdatePatch(
   input: unknown,
 ): NormalizedProductUpdatePatch {
-  if (!isPlainRecord(input)) return validationFailure()
+  /*
+   * HTTP 边界开启了 transform，合法 Body 在进入 Service 时是 DTO class instance，
+   * 不是 Object.prototype 的 plain object。这里仍以 own enumerable keys 白名单和
+   * 深复制约束输入，同时允许 ValidationPipe 产出的受信 DTO 容器。
+   */
+  if (!isRecord(input)) return validationFailure()
 
   const allowedKeys = new Set<string>([...MUTABLE_FIELDS, 'expectedVersion'])
   if (Object.keys(input).some(key => !allowedKeys.has(key))) {
     return validationFailure()
   }
-  if (!MUTABLE_FIELDS.some(field => Object.hasOwn(input, field))) {
+  if (!MUTABLE_FIELDS.some(field => hasSubmittedField(input, field))) {
     return validationFailure()
   }
 
@@ -101,7 +110,9 @@ export function normalizeProductUpdatePatch(
 
   const patch: Record<string, unknown> = { expectedVersion }
   for (const field of MUTABLE_FIELDS) {
-    if (Object.hasOwn(input, field)) patch[field] = cloneAndFreeze(input[field])
+    if (hasSubmittedField(input, field)) {
+      patch[field] = cloneAndFreeze(input[field])
+    }
   }
   return Object.freeze(patch) as unknown as NormalizedProductUpdatePatch
 }
