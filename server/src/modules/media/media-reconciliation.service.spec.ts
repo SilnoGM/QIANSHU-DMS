@@ -20,6 +20,7 @@ function asset(
   overrides: Partial<ReconciliationAssetRecord> = {},
 ): ReconciliationAssetRecord {
   return {
+    checksumSha256: status === MediaAssetStatus.UPLOADING ? null : 'a'.repeat(64),
     id: ASSET_ID,
     objectKey: status === MediaAssetStatus.UPLOADING ? null : OBJECT_KEY,
     retentionUntil: status === MediaAssetStatus.TRASHED ? NOW : null,
@@ -68,9 +69,15 @@ function createFixture(options: {
   const hasActiveReferences = jest.fn().mockResolvedValue(false)
   const references = { hasActiveReferences } as unknown as MediaAssetReferenceRepository
   const inventory = jest.fn().mockResolvedValue({ nextCursor: null, objects: [] })
+  const checksumSha256 = jest.fn().mockResolvedValue('a'.repeat(64))
   const purge = jest.fn().mockResolvedValue(undefined)
   const stat = jest.fn().mockResolvedValue(null)
-  const storage = { inventory, purge, stat } as unknown as MediaStorage
+  const storage = {
+    checksumSha256,
+    inventory,
+    purge,
+    stat,
+  } as unknown as MediaStorage
   const service = new MediaReconciliationService(
     persistence,
     references,
@@ -82,6 +89,7 @@ function createFixture(options: {
   )
 
   return {
+    checksumSha256,
     hasActiveReferences,
     inventory,
     listAssets,
@@ -276,6 +284,7 @@ describe('MediaReconciliationService', () => {
       complete: true,
       databaseScanned: 1,
       issues: {
+        checksumMismatch: 0,
         duplicateLocation: 0,
         missing: 0,
         orphanObject: 1,
@@ -292,5 +301,26 @@ describe('MediaReconciliationService', () => {
     expect(fixture.purge).not.toHaveBeenCalled()
     expect(fixture.markExpiredPurged).not.toHaveBeenCalled()
     expect(fixture.markTrashPurged).not.toHaveBeenCalled()
+  })
+
+  it('verifies SHA-256 after exact size and reports only a mismatch count', async () => {
+    const fixture = createFixture()
+    fixture.listAssets.mockResolvedValueOnce({
+      nextCursor: null,
+      records: [asset(MediaAssetStatus.READY)],
+    })
+    fixture.stat.mockImplementation((key: string) => Promise.resolve(
+      key === OBJECT_KEY ? { modifiedAt: NOW, sizeBytes: 321n } : null,
+    ))
+    fixture.checksumSha256.mockResolvedValue('b'.repeat(64))
+
+    const result = await fixture.service.dryRun({ batchSize: 100, maxBatches: 10 })
+
+    expect(result.issues).toMatchObject({ checksumMismatch: 1 })
+    expect(result.matched).toBe(0)
+    expect(fixture.checksumSha256).toHaveBeenCalledWith(OBJECT_KEY)
+    expect(JSON.stringify(result)).not.toContain(ASSET_ID)
+    expect(JSON.stringify(result)).not.toContain(OBJECT_KEY)
+    expect(fixture.purge).not.toHaveBeenCalled()
   })
 })

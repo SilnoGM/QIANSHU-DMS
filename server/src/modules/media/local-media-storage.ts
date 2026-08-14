@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   constants as fileSystemConstants,
   type Dirent,
@@ -51,6 +51,7 @@ const SERVER_ROOT = resolve(__dirname, '../../..')
 export interface LocalFileSystemCapacity {
   readonly availableBlocks: bigint
   readonly blockSize: bigint
+  readonly totalBlocks: bigint
 }
 
 export interface LocalMediaStorageDependencies {
@@ -93,6 +94,7 @@ const DEFAULT_DEPENDENCIES: Omit<LocalMediaStorageDependencies, 'forbiddenRoots'
     return {
       availableBlocks: metadata.bavail,
       blockSize: metadata.bsize,
+      totalBlocks: metadata.blocks,
     }
   },
   unlink,
@@ -193,6 +195,31 @@ function storageErrorFromFileSystem(error: unknown): MediaStorageError {
     return new MediaStorageError('MEDIA_STORAGE_CONFLICT')
   }
   return new MediaStorageError('MEDIA_STORAGE_UNAVAILABLE')
+}
+
+const MEDIA_CAPACITY_CRITICAL_PERCENT = 10n
+
+function requireSufficientCapacity(
+  capacity: LocalFileSystemCapacity,
+  minimumFreeBytes: bigint,
+): void {
+  if (
+    capacity.availableBlocks < 0n ||
+    capacity.blockSize <= 0n ||
+    capacity.totalBlocks <= 0n ||
+    capacity.availableBlocks > capacity.totalBlocks
+  ) {
+    throw new MediaStorageError('MEDIA_STORAGE_UNAVAILABLE')
+  }
+
+  const availableBytes = capacity.availableBlocks * capacity.blockSize
+  if (
+    availableBytes < minimumFreeBytes ||
+    capacity.availableBlocks * 100n <
+      capacity.totalBlocks * MEDIA_CAPACITY_CRITICAL_PERCENT
+  ) {
+    throw new MediaStorageError('MEDIA_STORAGE_INSUFFICIENT_SPACE')
+  }
 }
 
 async function canonicalizeForbiddenRoot(
@@ -343,13 +370,7 @@ async function inspectStorage(
   catch {
     throw new MediaStorageError('MEDIA_STORAGE_UNAVAILABLE')
   }
-  if (
-    capacity.availableBlocks < 0n ||
-    capacity.blockSize <= 0n ||
-    capacity.availableBlocks * capacity.blockSize < minimumFreeBytes
-  ) {
-    throw new MediaStorageError('MEDIA_STORAGE_INSUFFICIENT_SPACE')
-  }
+  requireSufficientCapacity(capacity, minimumFreeBytes)
 
   return Object.freeze({
     device: rootMetadata.dev,
@@ -413,6 +434,65 @@ export class LocalMediaStorage implements MediaStorage {
     }
     catch (error) {
       return downHealthFrom(error)
+    }
+  }
+
+  async checksumSha256(objectKey: string): Promise<string> {
+    const key = normalizeMediaObjectKey(objectKey)
+    if (!key.startsWith('assets/') && !key.startsWith('trash/')) {
+      throw new MediaStorageError('MEDIA_STORAGE_INVALID_KEY')
+    }
+    const inspected = await this.inspectObject(key)
+    if (!inspected) throw new MediaStorageError('MEDIA_STORAGE_NOT_FOUND')
+
+    let handle: FileHandle
+    try {
+      handle = await this.dependencies.open(
+        inspected.path,
+        fileSystemConstants.O_RDONLY | (fileSystemConstants.O_NOFOLLOW ?? 0),
+      )
+    }
+    catch (error) {
+      if (isMissingError(error)) {
+        throw new MediaStorageError('MEDIA_STORAGE_NOT_FOUND')
+      }
+      throw storageErrorFromFileSystem(error)
+    }
+
+    try {
+      const opened = await handle.stat()
+      if (
+        !opened.isFile() ||
+        opened.dev !== this.rootDevice ||
+        opened.ino !== inspected.metadata.ino ||
+        !hasTrustedFilePermissions(opened)
+      ) {
+        throw new MediaStorageError('MEDIA_STORAGE_PATH_UNSAFE')
+      }
+
+      const hash = createHash('sha256')
+      const stream = handle.createReadStream({ autoClose: false })
+      for await (const chunk of stream) hash.update(Buffer.from(chunk))
+
+      // checksum 只对稳定的同一 inode 有意义；读完后再次核对元数据，变化即按不可用处理。
+      const completed = await handle.stat()
+      if (
+        completed.dev !== opened.dev ||
+        completed.ino !== opened.ino ||
+        completed.size !== opened.size ||
+        completed.mtimeMs !== opened.mtimeMs ||
+        completed.ctimeMs !== opened.ctimeMs
+      ) {
+        throw new MediaStorageError('MEDIA_STORAGE_UNAVAILABLE')
+      }
+      return hash.digest('hex')
+    }
+    catch (error) {
+      if (error instanceof MediaStorageError) throw error
+      throw new MediaStorageError('MEDIA_STORAGE_UNAVAILABLE')
+    }
+    finally {
+      await handle.close().catch(() => undefined)
     }
   }
 
@@ -624,13 +704,7 @@ export class LocalMediaStorage implements MediaStorage {
     catch {
       throw new MediaStorageError('MEDIA_STORAGE_UNAVAILABLE')
     }
-    if (
-      capacity.availableBlocks < 0n ||
-      capacity.blockSize <= 0n ||
-      capacity.availableBlocks * capacity.blockSize < minimumFreeBytes
-    ) {
-      throw new MediaStorageError('MEDIA_STORAGE_INSUFFICIENT_SPACE')
-    }
+    requireSufficientCapacity(capacity, minimumFreeBytes)
   }
 
   private resolveNormalizedKey(key: string): string {

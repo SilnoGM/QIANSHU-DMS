@@ -1,0 +1,27 @@
+[Unit]
+Description=Qianshu DMS Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qianshu-dms
+Group=qianshu-media
+UMask=0027
+WorkingDirectory=/opt/qianshu-dms/server/current
+EnvironmentFile=/etc/qianshu-dms/server.env
+ExecStartPre=/usr/bin/node dist/commands/media-operations.js preflight
+ExecStart=/usr/bin/node dist/main.js
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/qianshu-dms/server
+ReadWritePaths=/var/lib/qianshu-dms/media
+
+[Install]
+WantedBy=multi-user.target

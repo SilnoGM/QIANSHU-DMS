@@ -9,6 +9,7 @@ import { MediaAssetPersistence } from './media-asset.persistence'
 import { MediaAssetService } from './media-asset.service'
 import { MediaContentValidator } from './media-content-validator'
 import { MediaReconciliationPersistence } from './media-reconciliation.persistence'
+import { MediaReconciliationService } from './media-reconciliation.service'
 import { MediaAssetReferenceRepository } from './media-reference.repository'
 import { MediaAssetRetentionService } from './media-retention.service'
 import type { MediaStorage } from './media-storage'
@@ -86,12 +87,31 @@ const providers = [{
     storage,
     { trashRetentionDays: configuration.trashRetentionDays },
   ),
+}, {
+  provide: MediaReconciliationService,
+  inject: [
+    MediaReconciliationPersistence,
+    MediaAssetReferenceRepository,
+    MEDIA_STORAGE,
+  ],
+  useFactory: (
+    persistence: MediaReconciliationPersistence,
+    references: MediaAssetReferenceRepository,
+    storage: MediaStorage,
+  ): MediaReconciliationService => new MediaReconciliationService(
+    persistence,
+    references,
+    storage,
+  ),
 }]
 
 /** 统一媒体基础设施模块保持业务中立，只向领域模块输出生命周期服务。 */
 @Module({
   imports: [ConfigModule, PrismaModule],
   providers,
-  exports: [MediaAssetService, MediaAssetRetentionService],
+  exports: [
+    MediaAssetService,
+    MediaAssetRetentionService,
+  ],
 })
 export class MediaModule {}

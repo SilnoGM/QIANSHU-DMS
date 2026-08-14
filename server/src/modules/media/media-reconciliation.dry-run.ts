@@ -28,6 +28,7 @@ export interface MediaReconciliationDryRunOptions {
 }
 
 export interface MediaReconciliationIssueCounts {
+  readonly checksumMismatch: number
   readonly duplicateLocation: number
   readonly missing: number
   readonly orphanObject: number
@@ -45,6 +46,7 @@ export interface MediaReconciliationDryRunResult {
 }
 
 interface MutableIssueCounts {
+  checksumMismatch: number
   duplicateLocation: number
   missing: number
   orphanObject: number
@@ -113,6 +115,25 @@ async function inspectDatabaseRecord(
   }
   if (expected === null) {
     issues.unexpectedLocation += 1
+    return 'SKIPPED'
+  }
+  if (
+    record.checksumSha256 === null ||
+    !/^[0-9a-f]{64}$/u.test(record.checksumSha256)
+  ) {
+    issues.checksumMismatch += 1
+    return 'SKIPPED'
+  }
+  try {
+    const checksum = await storage.checksumSha256(expectedKey)
+    if (checksum !== record.checksumSha256) {
+      issues.checksumMismatch += 1
+      return 'SKIPPED'
+    }
+  }
+  catch {
+    // dry run 不输出底层路径或异常；无法完整读取也归入 checksum 不一致计数，且绝不执行修复。
+    issues.checksumMismatch += 1
     return 'SKIPPED'
   }
   return 'MATCHED'
@@ -185,6 +206,7 @@ export async function runMediaReconciliationDryRun(
   const maxBatches = requireMaximumBatches(options.maxBatches)
   const startedAt = options.monotonicNow()
   const issues: MutableIssueCounts = {
+    checksumMismatch: 0,
     duplicateLocation: 0,
     missing: 0,
     orphanObject: 0,

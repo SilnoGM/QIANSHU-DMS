@@ -73,6 +73,7 @@ test('Server 是具备独立 lockfile 的单一私有 pnpm package', async () =>
   assert.equal(manifest.engines?.node, '^24.15.0')
   assert.equal('workspaces' in manifest, false)
   assert.deepEqual(manifest.files, [
+    'deploy/',
     'dist/',
     'prisma/schema.prisma',
     'prisma/migrations/',

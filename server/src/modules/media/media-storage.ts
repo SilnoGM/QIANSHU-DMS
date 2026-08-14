@@ -91,6 +91,7 @@ export interface MediaStorageInventoryPage {
 
 export interface MediaStorage {
   checkHealth(minimumFreeBytes?: bigint): Promise<MediaStorageHealthResult>
+  checksumSha256(objectKey: string): Promise<string>
   createStagingWrite(assetId: string): Promise<StagingWrite>
   finalize(stagingKey: string, objectKey: string): Promise<void>
   inventory(request: MediaStorageInventoryRequest): Promise<MediaStorageInventoryPage>

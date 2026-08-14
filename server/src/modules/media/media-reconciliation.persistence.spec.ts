@@ -134,6 +134,7 @@ describe('MediaReconciliationPersistence', () => {
 
   it('pages database inventory and resolves bounded storage asset identifiers', async () => {
     const first = {
+      checksumSha256: null,
       id: ASSET_ID,
       objectKey: null,
       retentionUntil: null,
@@ -156,6 +157,7 @@ describe('MediaReconciliationPersistence', () => {
     expect(findMany).toHaveBeenNthCalledWith(1, {
       orderBy: { id: 'asc' },
       select: {
+        checksumSha256: true,
         id: true,
         objectKey: true,
         retentionUntil: true,
@@ -167,6 +169,7 @@ describe('MediaReconciliationPersistence', () => {
     })
     expect(findMany).toHaveBeenNthCalledWith(2, {
       select: {
+        checksumSha256: true,
         id: true,
         objectKey: true,
         retentionUntil: true,

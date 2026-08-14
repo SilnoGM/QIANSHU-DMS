@@ -3,6 +3,7 @@
   "version": "0.1.4",
   "private": true,
   "files": [
+    "deploy/",
     "dist/",
     "prisma/schema.prisma",
     "prisma/migrations/"
@@ -20,6 +21,8 @@
     "auth:bootstrap-admin": "node dist/cli/auth-admin/bootstrap-admin.js",
     "auth:cleanup": "node dist/commands/auth-cleanup.js",
     "auth:recover-admin": "node dist/cli/auth-admin/recover-admin.js",
+    "media:ops:health": "node dist/commands/media-operations.js health",
+    "media:recovery:dry-run": "node dist/commands/media-operations.js recovery-dry-run",
     "typecheck": "pnpm prisma:generate && tsc --noEmit",
     "lint": "pnpm prisma:generate && eslint \"{src,test}/**/*.ts\" \"*.ts\"",
     "lint:fix": "pnpm prisma:generate && eslint \"{src,test}/**/*.ts\" \"*.ts\" --fix",

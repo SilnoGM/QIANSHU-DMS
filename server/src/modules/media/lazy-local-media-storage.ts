@@ -35,6 +35,10 @@ export class LazyLocalMediaStorage implements MediaStorage {
     return this.withStorage(storage => storage.checkHealth(minimumFreeBytes))
   }
 
+  checksumSha256(objectKey: string): Promise<string> {
+    return this.withStorage(storage => storage.checksumSha256(objectKey))
+  }
+
   createStagingWrite(assetId: string): Promise<StagingWrite> {
     return this.withStorage(storage => storage.createStagingWrite(assetId))
   }

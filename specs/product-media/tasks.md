@@ -851,18 +851,53 @@ Task 15 evidence（2026-08-14）：
 - 本任务未修改 Server、OpenAPI、数据库 Schema/migration、共享组件公共契约、路由或依赖；未写数据库，未执行
   Browser/真实文件验收（仍属 Task 17），未 push、PR、merge 或部署。
 
-- [ ] 16. 建立部署模板、健康检查、容量与恢复 dry run
+- [x] 16. 建立部署模板、健康检查、容量与恢复 dry run
   - 前置：Gate OPS 只授权仓库内模板；不得修改真实主机。
-  - [ ] 16.1 根据仓库真实部署结构新增/更新 Local root、Nginx internal location、body limit、Range、运行用户/组、
+  - [x] 16.1 根据仓库真实部署结构新增/更新 Local root、Nginx internal location、body limit、Range、运行用户/组、
     systemd Environment 与 `ffprobe` preflight 模板；不提交 `.env`。
-  - [ ] 16.2 健康检查区分 read/write/video validator，磁盘 critical 时写失败关闭、已有媒体读取继续。
-  - [ ] 16.3 增加容量、staging age、FAILED、reconciliation mismatch、上传失败率和清理结果的低基数指标/告警合同。
-  - [ ] 16.4 实现只读 reconciliation/backup-restore validation dry run，校验 DB 引用、文件存在、size/checksum，
+  - [x] 16.2 健康检查区分 read/write/video validator，磁盘 critical 时写失败关闭、已有媒体读取继续。
+  - [x] 16.3 增加容量、staging age、FAILED、reconciliation mismatch、上传失败率和清理结果的低基数指标/告警合同。
+  - [x] 16.4 实现只读 reconciliation/backup-restore validation dry run，校验 DB 引用、文件存在、size/checksum，
     不删除、不修复、不输出敏感文件名。
-  - [ ] 16.5 文档明确 30GB minimum/50GB recommended、离机备份、同一恢复点、恢复顺序和生产授权边界。
-  - [ ] 16.6 运行 release/package/config/security tests、shell/script tests、Server checks 和 diff-check。
-  - [ ] 16.7 更新证据并提交：`ops: 增加媒体存储部署合同`。
+  - [x] 16.5 文档明确 30GB minimum/50GB recommended、离机备份、同一恢复点、恢复顺序和生产授权边界。
+  - [x] 16.6 运行 release/package/config/security tests、shell/script tests、Server checks 和 diff-check。
+  - [x] 16.7 更新证据并提交：`ops: 增加媒体存储部署合同`。
   - _Requirements: R5-R6, R8, R11-R12_
+
+### 4.16 Task 16 实施证据
+
+- TDD 初始 RED 同时证明四个缺口：`media-operational-health` 尚不存在而报 `TS2307`；9% 可用空间仍可
+  创建 staging；`ReconciliationAssetRecord` 尚无 checksum 而报 `TS2353`；部署模板、监控合同和恢复
+  runbook 均不存在。实现后定向 5 suites / 46 tests 全部通过。
+- Server release 新增 `deploy/environment`、`deploy/nginx`、`deploy/systemd` 与 `deploy/monitoring`，并由
+  `package.json files` 精确纳入归档。Nginx 保持 internal alias、单 Range、501MiB multipart 边界和
+  request buffering 关闭；systemd 固定受限 User/Group、`UMask=0027`、release 只读、媒体 root 单独可写，
+  `ExecStartPre` 调用同一媒体 preflight。模板没有 Secret，也不会被 release pipeline 自动安装。
+- 独立媒体 health 命令不修改公开 `/api/health` 或 OpenAPI，固定区分 read、write、video validator。
+  容量 warning/critical 分别为 20%/10%；Local storage 在低于 10% 时拒绝新 staging，而已打开的 assets
+  读取仍成功。编译后命令使用 canonical 一次性 root 与本机 `ffprobe 8.1.1` smoke，三项 capability 均 up；
+  首次使用 macOS `/tmp` alias 被 canonical 检查按预期拒绝，改用 `/private/tmp` 后 exit `0`，未放宽规则。
+- `media-observability.json` 固定容量、staging age、FAILED、reconciliation mismatch、上传失败率和清理
+  结果的 metric/type/Label/alert 合同，禁止 assetId、productId、objectKey、filename、requestId 等高基数
+  Label。health CLI 实际输出 capability/capacity，恢复 CLI 实际输出各类 mismatch；其他运行采集器只能按
+  该固定合同接入，不能自行扩张 Label。
+- 现有 reconciliation dry run 增加数据库 `checksumSha256` 只读投影，并以受控 no-follow FileHandle 对
+  READY/TRASHED 文件流式计算 SHA-256；读前后复核 inode/size/time，结果仍只含低基数计数。新增
+  `media:recovery:dry-run` 在恢复数据库与 `assets/trash` 后校验 DB 引用、location、存在性、size/checksum，
+  任一 mismatch 或未完成均非零退出；代码路径没有 purge、repair 或数据库 mutation。
+- 运维文档明确目标卷最低 30GB、建议 50GB、加密离机备份、数据库与媒体同一恢复点、固定恢复顺序、
+  staging 非业务备份、只读 dry run 和生产授权/回退边界。仓库验证没有创建真实 `/var/lib`、修改 `/etc`、
+  安装系统包、重启服务、运行恢复或写数据库。
+- 最终 Server 全量为 186/186 suites、1779/1779 tests；typecheck、lint、build、`contract:check` 和
+  `git diff --check` 通过；release/package/package-boundary 加媒体合同定向 89/89、根脚本 675/675 通过。真实
+  `pnpm deploy --prod` 只在受限一次性目录验证四个模板进入产物，268 个 production packages 全部复用本地
+  store，随后可靠清理。
+- 失败均如实保留并修正：一次全量 Jest 多传 `--` 被当成 pattern 而报 no tests，改用正确入口后全绿；
+  一次 checksum 测试变量作用域导致 typecheck 失败、一次 lint 报 unsafe return/无 await、一次根 package
+  精确清单仍为旧三项，均只修正对应测试或类型表达后复跑。一次带 `rm -rf` 的临时 package 清理命令在
+  执行前被工具策略拒绝，确认无产物后改为带固定前缀断言的 Node 清理并通过。
+- 本任务未修改数据库 Schema/migration、公共 API/OpenAPI、Web、依赖或 lockfile，未提交 `.env`，未输出
+  真实媒体文件名或存储路径，未 push、PR、merge、部署或修改真实主机。
 
 - [ ] 17. 完成 Browser、全量测试和本地运行验收
   - [ ] 17.1 真实 Chrome 覆盖桌面/窄屏、Dark、Reduced Motion、键盘排序、上传进度、主图、视频、删除和冲突。

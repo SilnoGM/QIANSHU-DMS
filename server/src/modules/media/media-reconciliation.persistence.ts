@@ -3,6 +3,7 @@ import { MediaAssetStatus } from '../../generated/prisma/enums'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 
 export interface ReconciliationAssetRecord {
+  readonly checksumSha256: string | null
   readonly id: string
   readonly objectKey: string | null
   readonly retentionUntil: Date | null
@@ -43,6 +44,7 @@ export class MediaReconciliationPersistence {
     return this.prisma.$transaction(async (transaction) => {
       const rows = await transaction.$queryRaw<ReconciliationAssetRecord[]>(Prisma.sql`
         SELECT
+          "checksum_sha256" AS "checksumSha256",
           "id",
           "object_key" AS "objectKey",
           "retention_until" AS "retentionUntil",
@@ -75,6 +77,7 @@ export class MediaReconciliationPersistence {
     return this.prisma.$transaction(async (transaction) => {
       const rows = await transaction.$queryRaw<ReconciliationAssetRecord[]>(Prisma.sql`
         SELECT
+          "checksum_sha256" AS "checksumSha256",
           "id",
           "object_key" AS "objectKey",
           "retention_until" AS "retentionUntil",
@@ -99,6 +102,7 @@ export class MediaReconciliationPersistence {
   ): Promise<ReconciliationAssetRecord | null> {
     const rows = await transaction.$queryRaw<ReconciliationAssetRecord[]>(Prisma.sql`
       SELECT
+        "checksum_sha256" AS "checksumSha256",
         "id",
         "object_key" AS "objectKey",
         "retention_until" AS "retentionUntil",
@@ -194,6 +198,7 @@ export class MediaReconciliationPersistence {
       orderBy: { id: 'asc' },
       take: limit + 1,
       select: {
+        checksumSha256: true,
         id: true,
         objectKey: true,
         retentionUntil: true,
@@ -216,6 +221,7 @@ export class MediaReconciliationPersistence {
     const records = await this.prisma.mediaAsset.findMany({
       where: { id: { in: [...assetIds] } },
       select: {
+        checksumSha256: true,
         id: true,
         objectKey: true,
         retentionUntil: true,

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { finished } from 'node:stream/promises'
 import {
   chmod,
@@ -236,6 +237,7 @@ describe('LocalMediaStorage', () => {
         statFileSystem: jest.fn().mockResolvedValue({
           availableBlocks: 1n,
           blockSize: 4_096n,
+          totalBlocks: 100n,
         }),
       }),
       4_097n,
@@ -260,6 +262,41 @@ describe('LocalMediaStorage', () => {
     await stagingWrite.cancel()
 
     await expect(storage.stat(stagingWrite.key)).resolves.toBeNull()
+  })
+
+  it('fails closed for new writes below 10 percent free space while existing reads continue', async () => {
+    let capacity = {
+      availableBlocks: 50n,
+      blockSize: 4_096n,
+      totalBlocks: 100n,
+    }
+    const storage = await LocalMediaStorage.create(
+      configuration(storageRoot),
+      testDependencies({
+        statFileSystem: jest.fn(() => Promise.resolve(capacity)),
+      }),
+    )
+    const stagingWrite = await storage.createStagingWrite(ASSET_ID)
+    stagingWrite.stream.end(Buffer.from('readable-after-critical'))
+    await finished(stagingWrite.stream)
+    await storage.finalize(stagingWrite.key, OBJECT_KEY)
+
+    capacity = {
+      availableBlocks: 9n,
+      blockSize: 4_096n,
+      totalBlocks: 100n,
+    }
+
+    await expectStorageError(
+      () => storage.createStagingWrite(SECOND_ASSET_ID),
+      'MEDIA_STORAGE_INSUFFICIENT_SPACE',
+    )
+    const readable = await storage.open(OBJECT_KEY)
+    const chunks: Buffer[] = []
+    for await (const chunk of readable.stream) chunks.push(Buffer.from(chunk))
+    expect(Buffer.concat(chunks).toString('utf8')).toBe(
+      'readable-after-critical',
+    )
   })
 
   it('finalizes without buffering, preserves file mode and refuses a target conflict', async () => {
@@ -304,6 +341,13 @@ describe('LocalMediaStorage', () => {
     await finished(stagingWrite.stream)
     await storage.finalize(stagingWrite.key, OBJECT_KEY)
 
+    const expectedChecksum = createHash('sha256')
+      .update(Buffer.from('0123456789'))
+      .digest('hex')
+    await expect(storage.checksumSha256(OBJECT_KEY)).resolves.toBe(
+      expectedChecksum,
+    )
+
     const readable = await storage.open(OBJECT_KEY, { end: 6, start: 3 })
     const chunks: Buffer[] = []
     for await (const chunk of readable.stream) {
@@ -316,6 +360,9 @@ describe('LocalMediaStorage', () => {
     })
 
     await storage.moveToTrash(OBJECT_KEY, TRASH_KEY)
+    await expect(storage.checksumSha256(TRASH_KEY)).resolves.toBe(
+      expectedChecksum,
+    )
     await expect(storage.stat(OBJECT_KEY)).resolves.toBeNull()
     await expect(storage.stat(TRASH_KEY)).resolves.toMatchObject({ sizeBytes: 10n })
 
@@ -326,6 +373,11 @@ describe('LocalMediaStorage', () => {
     await storage.purge(OBJECT_KEY)
     await storage.purge(OBJECT_KEY)
     await expect(storage.stat(OBJECT_KEY)).resolves.toBeNull()
+
+    await expectStorageError(
+      () => storage.checksumSha256(stagingWrite.key),
+      'MEDIA_STORAGE_INVALID_KEY',
+    )
   })
 
   it('inventories managed objects with a bounded opaque cursor and namespace prefix', async () => {
