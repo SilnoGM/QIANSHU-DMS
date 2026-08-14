@@ -643,15 +643,53 @@ Task 10 evidence（2026-08-14）：
 - 本任务未修改 Prisma Schema/migration、未写持久数据库或真实 media root、未修改 Web、未执行
   `contract:sync`、未实现 Task 11/16、未 push、PR、merge 或部署。
 
-- [ ] 11. 补齐 Server 隔离 PostgreSQL 与文件系统 E2E
-  - [ ] 11.1 建立一次性 PostgreSQL + 临时 Local root harness，启动前证明无 ProductMedia/MediaAsset seed。
-  - [ ] 11.2 覆盖图片上传、视频 metadata、Product Document 拒绝、排序、主图、解除、版本并发和 Audit 原子性。
-  - [ ] 11.3 覆盖上传中断、final rename 后 DB 失败、staging expiry、trash/restore/purge、仍被引用禁止清理。
-  - [ ] 11.4 覆盖 RBAC、CSRF、强制改密、GET/HEAD/Range header、404 anti-enumeration 和隐私字段。
-  - [ ] 11.5 覆盖 Migration 空库 replay、旧媒体三种非空停止、重复 deploy、Product 行数与权限授权不变量。
-  - [ ] 11.6 运行定向 E2E 与官方 `node --run ci:server-e2e`，可靠清理容器、临时文件和子进程。
-  - [ ] 11.7 更新证据；仅测试变更提交 `test: 补齐媒体资产服务端验收`，生产缺陷使用独立 `fix:` 提交。
+- [x] 11. 补齐 Server 隔离 PostgreSQL 与文件系统 E2E
+  - [x] 11.1 建立一次性 PostgreSQL + 临时 Local root harness，启动前证明无 ProductMedia/MediaAsset seed。
+  - [x] 11.2 覆盖图片上传、视频 metadata、Product Document 拒绝、排序、主图、解除、版本并发和 Audit 原子性。
+  - [x] 11.3 覆盖上传中断、final rename 后 DB 失败、staging expiry、trash/restore/purge、仍被引用禁止清理。
+  - [x] 11.4 覆盖 RBAC、CSRF、强制改密、GET/HEAD/Range header、404 anti-enumeration 和隐私字段。
+  - [x] 11.5 覆盖 Migration 空库 replay、旧媒体三种非空停止、重复 deploy、Product 行数与权限授权不变量。
+  - [x] 11.6 运行定向 E2E 与官方 `node --run ci:server-e2e`，可靠清理容器、临时文件和子进程。
+  - [x] 11.7 更新证据；仅测试变更提交 `test: 补齐媒体资产服务端验收`，生产缺陷使用独立 `fix:` 提交。
   - _Requirements: R1-R9, R11-R12_
+
+Task 11 evidence（2026-08-14）：
+
+- `ci-postgres` 现在把本次私有 `0700` session 作为 `QIANSHU_CI_TEMP_ROOT` 传给 child，并仍在正常退出、
+  child 失败和信号路径中统一清理容器、session 与子进程组。媒体夹具只接受系统临时目录内、非 symlink、
+  权限无 group/other 位且带 CI session 标识的 canonical root；其内再创建独立 sandbox 与 `0750` Local
+  media root。macOS `/var` 到 `/private/var` 的合法 canonical alias 已在真实运行中验证，未放宽 canonical
+  containment、目录权限或 session 标识。
+- `ProductMediaE2eHarness` 组合真实 `PrismaService`、`MediaAssetService`、`LocalMediaStorage`、
+  `ProductMediaService`、Retention、Reference Repository 与 Reconciliation；图片执行真实 WebP decode，视频执行
+  真实 MP4 identity/metadata 规则并只把外部 `ffprobe` 进程替换为确定性受控输出。suite 在创建 actor 前证明
+  `MediaAsset=0`、`ProductMedia=0`，并证明 `product-media:read` 仍精确授权给 `system_admin`。
+- 真实 lifecycle 专属 E2E 为 4/4 tests，数据库并发/Audit 专属 E2E 为 2/2 tests：真实 IMAGE/VIDEO 文件、
+  H.264/AAC/duration/dimensions、完整排序与主图、同版本并发唯一成功、no-op layout、解除、Audit 成功/失败
+  原子性均通过；上传 stream 中断会留下受控 FAILED 且无
+  staging，final rename 后 Product version 竞争会留下可对账 FAILED 文件，过期 worker 能清除它和独立过期
+  staging。真实文件还覆盖 active reference 禁止回收、trash、事务内 restore/re-reference、再次 trash 与 purge。
+- Runtime HTTP 专属 E2E 为 3/3 tests：授权 multipart 图片写入真实 DB/文件并只返回公开快照；Product
+  `DOCUMENT`、缺 CSRF、缺 `products:update` 与强制改密均在 DB/文件变化前拒绝。只有
+  `product-media:read` 时 GET/HEAD/Range、opaque ETag/304、private no-store、nosniff 与内部转发 header
+  通过；missing 与 detached 返回相同稳定 404，响应不泄露 object key、checksum、driver、detached 状态。
+- Cutover 专属 E2E 为 1/1 test：逐一证明 legacy `main_image`、`images`、`videos` 非空时 fail-closed，全部清空
+  后 migration 成功；Product 行保留、恢复演练和重复执行通过。专属 runner 还对空库连续执行两次
+  `migrate deploy` 与 `migrate status`，证明 19 migrations 可从零重放且二次 deploy 无 pending migration。
+- 官方 `node --run ci:server-e2e` 已串联公共 E2E、媒体服务、Runtime HTTP 与 cutover。首次运行在既有
+  `dictionary-management-api.e2e-spec.ts` 出现一次 Node HTTP parser `Parse Error: Expected HTTP/`，公共阶段按
+  设计 fail-closed，媒体阶段未启动；精确重跑未复现且未修改该领域代码。最终公共 E2E 为 31 passed suites、
+  186 passed tests（另 4 suites / 10 tests 按独占门禁 skip），随后 lifecycle 4/4、并发/Audit 2/2、HTTP
+  3/3、cutover 1/1 全绿。
+- Server `prisma:validate`、typecheck、lint、build 均通过；unit 为 184/184 suites、1770/1770 tests，根治理为
+  667/667 tests，`git diff --check` 通过。一次验证命令误写成 `pnpm -C server test -- --runInBand`，Jest 把
+  flag 当 pattern 并报告 `No tests found`；已用正确的 `pnpm -C server test --runInBand` 完整重跑并转绿。
+- `contract:check` 按 Task 8–11 窗口预期 exit `1`。临时生成的结构化对比再次证明 tracked Server/Web snapshot
+  字节一致，generated 只新增 4 个媒体 paths、6 个媒体 DTO，并只变更 `ProductListItemDto`；无 path/schema
+  删除、无既有 path 变化、其他顶层合同完全一致，Task 12 前没有执行 `contract:sync`。
+- 本任务没有发现或修改生产业务缺陷，没有修改公共 API、Prisma Schema/migration、Web、真实数据库或真实
+  media root；未执行 push、PR、merge 或部署。全部变更均为测试夹具、CI 验收编排与本证据，使用单一
+  `test: 补齐媒体资产服务端验收` 提交。
 
 - [ ] 12. 同步 OpenAPI 与 Web generated contract
   - [ ] 12.1 先运行 `node --run contract:check`，记录 tracked snapshot 缺少新 operations/DTO 的预期 RED。

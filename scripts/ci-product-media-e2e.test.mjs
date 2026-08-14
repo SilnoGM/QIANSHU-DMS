@@ -20,12 +20,40 @@ const expectedCommands = [
       'test/jest-e2e.json',
       '--runInBand',
       '--runTestsByPath',
+      'test/product-media-lifecycle.e2e-spec.ts',
+    ],
+  ],
+  [
+    'pnpm',
+    [
+      '-C',
+      'server',
+      'exec',
+      'jest',
+      '--config',
+      'test/jest-e2e.json',
+      '--runInBand',
+      '--runTestsByPath',
       'test/product-media-service.e2e-spec.ts',
+    ],
+  ],
+  [
+    'pnpm',
+    [
+      '-C',
+      'server',
+      'exec',
+      'jest',
+      '--config',
+      'test/jest-e2e.json',
+      '--runInBand',
+      '--runTestsByPath',
+      'test/product-media-runtime-api.e2e-spec.ts',
     ],
   ],
 ]
 
-test('ProductMedia E2E 使用独占门禁执行固定 migration 与单 suite', async () => {
+test('ProductMedia E2E 使用独占门禁执行 migration 与 lifecycle、service、HTTP suites', async () => {
   const calls = []
   const sourceEnv = {
     DATABASE_URL: databaseUrl,

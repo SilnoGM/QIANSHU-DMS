@@ -22,7 +22,35 @@ const EXPECTED_COMMANDS = [
       'test/jest-e2e.json',
       '--runInBand',
       '--runTestsByPath',
+      'test/product-media-lifecycle.e2e-spec.ts',
+    ],
+  ],
+  [
+    'pnpm',
+    [
+      '-C',
+      'server',
+      'exec',
+      'jest',
+      '--config',
+      'test/jest-e2e.json',
+      '--runInBand',
+      '--runTestsByPath',
       'test/product-media-service.e2e-spec.ts',
+    ],
+  ],
+  [
+    'pnpm',
+    [
+      '-C',
+      'server',
+      'exec',
+      'jest',
+      '--config',
+      'test/jest-e2e.json',
+      '--runInBand',
+      '--runTestsByPath',
+      'test/product-media-runtime-api.e2e-spec.ts',
     ],
   ],
 ]
@@ -42,7 +70,8 @@ function createSafeChildEnv(sourceEnv, databaseUrl) {
 
 /**
  * ProductMedia 历史关联不可删除，因此该 suite 必须独占 ci-postgres 创建的一次性数据库。
- * runner 固定 migration 重放、幂等 deploy、status 和唯一测试文件，避免污染其他 E2E。
+ * runner 固定 migration 重放、幂等 deploy、status 及真实服务与 HTTP suites，
+ * 避免不可删除的历史关联污染其他 E2E。
  */
 export async function runProductMediaE2e({
   env = process.env,

@@ -16,9 +16,9 @@ import {
   AuditWriteFailedError,
 } from '../src/modules/audit/audit.service'
 import { MediaAssetPersistence } from '../src/modules/media/media-asset.persistence'
-import type {
+import {
   MediaAssetService,
-  PreparedMediaAsset,
+  type PreparedMediaAsset,
 } from '../src/modules/media/media-asset.service'
 import type { MediaAssetRetentionService } from '../src/modules/media/media-retention.service'
 import { ProductMediaPersistence } from '../src/modules/products/media/product-media.persistence'
@@ -354,4 +354,5 @@ describeExclusive('ProductMediaService with isolated PostgreSQL', () => {
       where: { targetId: productId, eventType: 'PRODUCT_UPDATED' },
     })).resolves.toBe(0)
   })
+
 })
