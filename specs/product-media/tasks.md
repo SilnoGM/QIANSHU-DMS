@@ -421,16 +421,49 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
 - 本任务未修改 Prisma Schema、migration、公共 API/OpenAPI、Web、依赖或数据库，未注册会访问真实生产路径的
   AppModule provider，未创建 Product Document 分支，未 push、PR、merge 或部署。
 
-- [ ] 6. 以 TDD 实现引用安全、回收和对账
-  - [ ] 6.1 先建立 `MediaAssetReferenceRepository` RED，本期只能显式查询有效 ProductMedia。
-  - [ ] 6.2 实现最后引用解除后的 TRASHED/7 天保留、保留期内 restore、到期后二次零引用检查和 PURGED。
-  - [ ] 6.3 实现 UPLOADING/FAILED 24h 清理、staging/final/trash/database 差异 dry run 和安全批次处理。
-  - [ ] 6.4 使用 `FOR UPDATE SKIP LOCKED`、状态条件更新和固定锁顺序验证重复 worker 不重复清理。
-  - [ ] 6.5 对 missing/size mismatch 只隔离告警，不自动伪造 READY、解除引用或删除数据库事实。
-  - [ ] 6.6 建立未来领域扩展 contract test，要求新增关联表时同步修改 reference repository 与 Trigger。
-  - [ ] 6.7 运行 reconciler/reference/storage tests、Server typecheck/lint 和 diff-check。
-  - [ ] 6.8 更新证据并提交：`feat: 增加媒体回收与对账`。
+- [x] 6. 以 TDD 实现引用安全、回收和对账
+  - [x] 6.1 先建立 `MediaAssetReferenceRepository` RED，本期只能显式查询有效 ProductMedia。
+  - [x] 6.2 实现最后引用解除后的 TRASHED/7 天保留、保留期内 restore、到期后二次零引用检查和 PURGED。
+  - [x] 6.3 实现 UPLOADING/FAILED 24h 清理、staging/final/trash/database 差异 dry run 和安全批次处理。
+  - [x] 6.4 使用 `FOR UPDATE SKIP LOCKED`、状态条件更新和固定锁顺序验证重复 worker 不重复清理。
+  - [x] 6.5 对 missing/size mismatch 只隔离告警，不自动伪造 READY、解除引用或删除数据库事实。
+  - [x] 6.6 建立未来领域扩展 contract test，要求新增关联表时同步修改 reference repository 与 Trigger。
+  - [x] 6.7 运行 reconciler/reference/storage tests、Server typecheck/lint 和 diff-check。
+  - [x] 6.8 更新证据并提交：`feat: 增加媒体回收与对账`。
   - _Requirements: R1, R5, R8, R11-R12_
+
+### 4.6 Task 6 实施证据
+
+- 首批 TDD RED 为 5 suites：引用仓库、retention service、reconciliation persistence 尚不存在，Local storage
+  缺少 inventory，且 corrective migration 缺失；Jest exit `1`。第二批 reconciler RED 同样因 service 不存在
+  退出 `1`；时间预算 RED 精确证明合同尚未实现。实现后新增隔离候选继续处理测试，首次发现可变 exclusion
+  数组改变已传入参数的观察值，改为边界快照后转绿，未放宽 SQL 或并发断言。
+- `MediaAssetReferenceRepository` 本期只显式查询 `ProductMedia.mediaAssetId` 且 `detachedAt=null`；contract test
+  从 Prisma Schema 识别全部带 `mediaAssetId/detachedAt` 的实际关联 model，并要求表集合与 repository 常量、
+  数据库 active-reference Trigger 同步。没有 owner 多态字段、动态插件注册表或假设中的其他领域关联。
+- `MediaAssetRetentionService` 固定调用合同为调用方先锁 Product、再锁 MediaAsset、再查全部引用；最后引用
+  解除后验证 assets/trash 单一位置与可信 size，执行 atomic move 后用旧状态条件进入 TRASHED，保留期固定
+  7 天。保留期内恢复先验证文件位置与 size、restore 后条件回到 READY，关联仍必须由调用方同一事务建立；
+  到期边界、active reference、missing、size mismatch 和双位置均失败关闭。
+- `MediaReconciliationPersistence` 每次在交互事务中使用 `FOR UPDATE SKIP LOCKED LIMIT 1` 领取候选；当前批次
+  使用参数化 exclusion 使隔离行不阻塞后续候选。UPLOADING 先以固定 `MEDIA_ASSET_UPLOAD_EXPIRED` 收敛为
+  FAILED，再条件转 PURGED；FAILED/TRASHED 同样使用旧状态条件。批次最大 100，默认时间预算 5 秒、最大
+  60 秒，单候选文件失败不阻塞后续候选。
+- 新增向前 migration `20260814120000_media_asset_reconciliation_constraints`，不改旧 migration、不写业务行：
+  已物化资产 PURGED 后保留完整 objectKey/MIME/size/checksum；从未物化的超期上传只允许全部内容身份与类型
+  元数据为 null，并要求 failureCode，拒绝部分或伪造元数据。隔离 PostgreSQL 16 从空库重放 18 条 migration、
+  重复 deploy 和 status 成功；真实 E2E 覆盖两种 PURGED、部分元数据拒绝和两个连接 SKIP LOCKED 唯一领取。
+- `MediaStorage.inventory()` 只接受 staging/assets/trash、受控 prefix、1–500 limit 与同 namespace cursor；Local
+  driver 对目录和文件逐级检查 canonical realpath、设备、类型、权限和 symlink，按 key 稳定分页且不暴露绝对
+  路径。dry run 分批比较 database/assets/trash/staging，只返回 matched 与 missing/sizeMismatch/duplicate/
+  unexpected/orphan/unmappable 低基数计数，不返回 assetId、objectKey、filename 或 checksum，也不执行任何写入。
+- 最终定向验证为 7 suites / 50 tests；Server 全量为 172 suites / 1697 tests；Prisma validate、typecheck、lint、
+  build、`contract:check` 与根治理 663/663 均 exit `0`。隔离 Server E2E 首轮 29 suites 中媒体 suite 通过，
+  仅既有 management suite 一次 `socket hang up`，结果为 28/29 suites、170/171 tests；按失败范围在全新隔离
+  数据库定向复跑该 suite 为 8/8 tests、exit `0`，未修改业务实现或放宽测试。
+- 本任务未修改公共 API/OpenAPI、Web、依赖或 lockfile，未应用持久开发数据库，未访问真实
+  `/var/lib/qianshu-dms/media`，未注册 scheduler/AppModule provider，未实现 ProductMedia 命令或 Product
+  Document，未 push、PR、merge 或部署。
 
 - [ ] 7. 以 TDD 实现 ProductMedia 领域命令
   - [ ] 7.1 先建立 ProductMedia persistence/service RED，覆盖 Product `FOR UPDATE`、expectedVersion、

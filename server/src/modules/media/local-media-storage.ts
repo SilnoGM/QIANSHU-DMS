@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   constants as fileSystemConstants,
+  type Dirent,
   type Stats,
 } from 'node:fs'
 import {
@@ -9,6 +10,7 @@ import {
   mkdir,
   open,
   type FileHandle,
+  readdir,
   realpath,
   rename,
   statfs,
@@ -31,6 +33,8 @@ import {
   type MediaStorage,
   MediaStorageError,
   type MediaStorageHealthResult,
+  type MediaStorageInventoryPage,
+  type MediaStorageInventoryRequest,
   normalizeMediaObjectKey,
   type ReadableStoredObject,
   requireMediaObjectKeyNamespace,
@@ -56,6 +60,7 @@ export interface LocalMediaStorageDependencies {
   readonly mkdir: (path: string, mode: number) => Promise<void>
   readonly open: (path: string, flags: number, mode?: number) => Promise<FileHandle>
   readonly randomUuid: () => string
+  readonly readDirectory: (path: string) => Promise<readonly Dirent[]>
   readonly realpath: (path: string) => Promise<string>
   readonly rename: (source: string, target: string) => Promise<void>
   readonly statFileSystem: (path: string) => Promise<LocalFileSystemCapacity>
@@ -80,6 +85,7 @@ const DEFAULT_DEPENDENCIES: Omit<LocalMediaStorageDependencies, 'forbiddenRoots'
   },
   open,
   randomUuid: randomUUID,
+  readDirectory: path => readdir(path, { withFileTypes: true }),
   realpath,
   rename,
   statFileSystem: async (path) => {
@@ -466,6 +472,47 @@ export class LocalMediaStorage implements MediaStorage {
     )
   }
 
+  async inventory(
+    request: MediaStorageInventoryRequest,
+  ): Promise<MediaStorageInventoryPage> {
+    if (!Number.isSafeInteger(request.limit) || request.limit < 1 || request.limit > 500) {
+      throw new MediaStorageError('MEDIA_STORAGE_INVALID_KEY')
+    }
+    const namespacePrefix = `${request.namespace}/`
+    const prefix = request.prefix === undefined
+      ? namespacePrefix
+      : normalizeMediaObjectKey(request.prefix)
+    if (!prefix.startsWith(namespacePrefix)) {
+      throw new MediaStorageError('MEDIA_STORAGE_INVALID_KEY')
+    }
+    const cursor = request.cursor === undefined
+      ? undefined
+      : requireMediaObjectKeyNamespace(request.cursor, request.namespace)
+    if (cursor !== undefined && !cursor.startsWith(prefix)) {
+      throw new MediaStorageError('MEDIA_STORAGE_INVALID_KEY')
+    }
+
+    const objects: Array<{
+      key: string
+      modifiedAt: Date
+      sizeBytes: bigint
+    }> = []
+    await this.collectInventoryObjects(
+      request.namespace,
+      prefix,
+      cursor,
+      request.limit + 1,
+      objects,
+    )
+    const hasNextPage = objects.length > request.limit
+    const pageObjects = objects.slice(0, request.limit).map(object =>
+      Object.freeze({ ...object }))
+    return Object.freeze({
+      nextCursor: hasNextPage ? (pageObjects.at(-1)?.key ?? null) : null,
+      objects: Object.freeze(pageObjects),
+    })
+  }
+
   async open(
     objectKey: string,
     range?: MediaByteRange,
@@ -635,6 +682,80 @@ export class LocalMediaStorage implements MediaStorage {
     }
 
     throw new MediaStorageError('MEDIA_STORAGE_PATH_UNSAFE')
+  }
+
+  private async inspectDirectory(key: string): Promise<string> {
+    const normalized = normalizeMediaObjectKey(key)
+    const segments = normalized.split('/')
+    let current = this.root
+
+    for (const segment of segments) {
+      current = join(current, segment)
+      let metadata: Stats
+      let canonical: string
+      try {
+        metadata = await this.dependencies.lstat(current)
+        canonical = await this.dependencies.realpath(current)
+      }
+      catch (error) {
+        if (isMissingError(error)) throw new MediaStorageError('MEDIA_STORAGE_NOT_FOUND')
+        throw storageErrorFromFileSystem(error)
+      }
+      if (
+        metadata.isSymbolicLink() ||
+        !metadata.isDirectory() ||
+        canonical !== current ||
+        metadata.dev !== this.rootDevice ||
+        !hasTrustedDirectoryPermissions(metadata)
+      ) {
+        throw new MediaStorageError('MEDIA_STORAGE_PATH_UNSAFE')
+      }
+    }
+    return current
+  }
+
+  private async collectInventoryObjects(
+    directoryKey: string,
+    prefix: string,
+    cursor: string | undefined,
+    maximum: number,
+    output: Array<{ key: string; modifiedAt: Date; sizeBytes: bigint }>,
+  ): Promise<void> {
+    if (output.length >= maximum) return
+    const directoryPath = await this.inspectDirectory(directoryKey)
+    let entries: readonly Dirent[]
+    try {
+      entries = await this.dependencies.readDirectory(directoryPath)
+    }
+    catch {
+      throw new MediaStorageError('MEDIA_STORAGE_UNAVAILABLE')
+    }
+
+    // Cursor 比较同样使用 JavaScript code-point 顺序；目录项必须采用完全一致的排序，
+    // 不能依赖主机 locale/ICU，否则跨页时可能重复或遗漏对象。
+    for (const entry of [...entries].sort((left, right) =>
+      left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {
+      if (output.length >= maximum) return
+      const key = normalizeMediaObjectKey(`${directoryKey}/${entry.name}`)
+      if (entry.isSymbolicLink()) {
+        throw new MediaStorageError('MEDIA_STORAGE_PATH_UNSAFE')
+      }
+      if (entry.isDirectory()) {
+        await this.collectInventoryObjects(key, prefix, cursor, maximum, output)
+        continue
+      }
+      if (!entry.isFile()) {
+        throw new MediaStorageError('MEDIA_STORAGE_PATH_UNSAFE')
+      }
+      if (!key.startsWith(prefix) || (cursor !== undefined && key <= cursor)) continue
+      const inspected = await this.inspectObject(key)
+      if (!inspected) continue
+      output.push({
+        key,
+        modifiedAt: new Date(inspected.metadata.mtimeMs),
+        sizeBytes: BigInt(inspected.metadata.size),
+      })
+    }
   }
 
   private async ensureTargetParent(key: string): Promise<string> {

@@ -121,9 +121,11 @@ model MediaAsset {
 - `size_bytes >= 0`，`width/height/duration_ms` 在非空时必须为正数。
 - SHA-256 必须为 64 位小写十六进制；`object_key` 只能是规范化相对 key，禁止 `..`、反斜线、
   前导斜线、NUL 和空 segment。
-- `UPLOADING/FAILED` 允许尚未产生的 `objectKey/mimeType/sizeBytes/checksum` 为 null；`READY/TRASHED/PURGED`
-  必须保留可信 objectKey、MIME、字节数和 checksum。READY IMAGE 必须具有 width/height；READY VIDEO
-  必须具有 width/height/duration/videoCodec，audioCodec 可空。
+- `UPLOADING/FAILED` 允许尚未产生的 `objectKey/mimeType/sizeBytes/checksum` 为 null；`READY/TRASHED`
+  必须保留可信 objectKey、MIME、字节数和 checksum。已物化内容进入 `PURGED` 后继续保留这些内容身份；
+  从未完成物化的超期上传则必须让全部内容身份与类型元数据保持 null，并保留固定 failureCode，不得伪造
+  objectKey、MIME、字节数或 checksum。READY IMAGE 必须具有 width/height；READY VIDEO 必须具有
+  width/height/duration/videoCodec，audioCodec 可空。
 - `UPLOADING` 必须具有 `uploadExpiresAt`；`TRASHED` 必须具有 `retentionUntil/deletedAt`；
   `PURGED` 必须具有 `deletedAt`。
 - `mediaType`、`storageDriver`、`objectKey`、内容元数据在 READY 后不可由业务操作原地修改；未来如需
@@ -215,7 +217,7 @@ stateDiagram-v2
 ```
 
 状态转换必须使用带旧状态条件的更新，避免清理任务和用户操作相互覆盖。`PURGED` 保留数据库最小
-事实，不再提供内容；objectKey 永不复用。
+事实，不再提供内容；已生成的 objectKey 永不复用，从未生成 objectKey 的超期上传保持 null。
 
 ## 6. 存储设计
 
@@ -243,7 +245,7 @@ MEDIA_FFPROBE_PATH=/usr/bin/ffprobe
 
 ```text
 /var/lib/qianshu-dms/media/
-  staging/{mediaAssetId}.part
+  staging/{mediaAssetId}.{randomUuid}.part
   assets/YYYY/MM/{mediaAssetId}.{canonicalExtension}
   trash/YYYY/MM/{mediaAssetId}.{canonicalExtension}
 ```
@@ -257,6 +259,7 @@ Server 内容识别，不使用客户端后缀。
 interface MediaStorage {
   createStagingWrite(assetId: string): Promise<Writable>
   finalize(stagingKey: string, objectKey: string): Promise<void>
+  inventory(input: InventoryInput): Promise<InventoryPage>
   open(objectKey: string, range?: ByteRange): Promise<ReadableObject>
   moveToTrash(objectKey: string, trashKey: string): Promise<void>
   restoreFromTrash(trashKey: string, objectKey: string): Promise<void>
@@ -265,8 +268,9 @@ interface MediaStorage {
 }
 ```
 
-接口不包含 Product ID、权限或 HTTP 响应。首期仅实现 `LocalMediaStorage`；未来对象存储驱动必须
-通过另一个已确认设计加入，不在本期创建空实现。
+接口不包含 Product ID、权限或 HTTP 响应。`inventory` 只接受受控 namespace、可选 prefix、最多 500
+条的 limit 和上页 cursor，并只返回 canonical key、size 与 modifiedAt；绝对路径不会离开 Local driver。
+首期仅实现 `LocalMediaStorage`；未来对象存储驱动必须通过另一个已确认设计加入，不在本期创建空实现。
 
 ### 6.4 流式上传
 

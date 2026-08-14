@@ -71,10 +71,29 @@ export interface StagingWrite {
   cancel(): Promise<void>
 }
 
+export type MediaStorageNamespace = 'assets' | 'staging' | 'trash'
+
+export interface MediaStorageInventoryRequest {
+  readonly cursor?: string
+  readonly limit: number
+  readonly namespace: MediaStorageNamespace
+  readonly prefix?: string
+}
+
+export interface StoredObjectInventoryEntry extends StoredObjectStat {
+  readonly key: string
+}
+
+export interface MediaStorageInventoryPage {
+  readonly nextCursor: string | null
+  readonly objects: readonly StoredObjectInventoryEntry[]
+}
+
 export interface MediaStorage {
   checkHealth(minimumFreeBytes?: bigint): Promise<MediaStorageHealthResult>
   createStagingWrite(assetId: string): Promise<StagingWrite>
   finalize(stagingKey: string, objectKey: string): Promise<void>
+  inventory(request: MediaStorageInventoryRequest): Promise<MediaStorageInventoryPage>
   open(objectKey: string, range?: MediaByteRange): Promise<ReadableStoredObject>
   moveToTrash(objectKey: string, trashKey: string): Promise<void>
   restoreFromTrash(trashKey: string, objectKey: string): Promise<void>

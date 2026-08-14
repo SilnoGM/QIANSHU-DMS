@@ -10,6 +10,8 @@ const serverRoot = resolve(__dirname, '../../..')
 const schemaPath = resolve(serverRoot, 'prisma/schema.prisma')
 const migrationsRoot = resolve(serverRoot, 'prisma/migrations')
 const migrationDirectory = '20260813120000_media_asset_product_media_schema'
+const reconciliationMigrationDirectory =
+  '20260814120000_media_asset_reconciliation_constraints'
 const permissionId = '00000000-0000-4000-8000-000000000146'
 
 function extractPrismaBlock(source: string, kind: 'enum' | 'model', name: string): string {
@@ -96,12 +98,18 @@ describe('media asset and product media schema', () => {
     expect(user).toMatch(/^\s*productMediaDetached\s+ProductMedia\[\]/mu)
   })
 
-  it('creates one append-only migration with exact named checks, foreign keys and indexes', () => {
+  it('keeps append-only media migrations with exact named checks, foreign keys and indexes', () => {
     const matchingDirectories = readdirSync(migrationsRoot, { withFileTypes: true })
-      .filter(entry => entry.isDirectory() && entry.name.includes('media_asset_product_media'))
+      .filter(entry => entry.isDirectory() && (
+        entry.name.includes('media_asset_product_media') ||
+        entry.name.includes('media_asset_reconciliation_constraints')
+      ))
       .map(entry => entry.name)
       .sort()
-    expect(matchingDirectories).toEqual([migrationDirectory])
+    expect(matchingDirectories).toEqual([
+      migrationDirectory,
+      reconciliationMigrationDirectory,
+    ])
 
     const migration = readMigration()
     expect(migration.trimStart()).toMatch(/^BEGIN;/u)
@@ -155,6 +163,30 @@ describe('media asset and product media schema', () => {
     ]) {
       expect(migration).toContain(`INDEX "${indexName}"`)
     }
+  })
+
+  it('allows a never-materialized expired upload to retain a truthful PURGED fact', () => {
+    const migration = readFileSync(
+      resolve(
+        migrationsRoot,
+        reconciliationMigrationDirectory,
+        'migration.sql',
+      ),
+      'utf8',
+    )
+
+    expect(migration.trimStart()).toMatch(/^BEGIN;/u)
+    expect(migration.trimEnd()).toMatch(/COMMIT;$/u)
+    expect(migration).toContain('DROP CONSTRAINT "media_assets_state_metadata_check"')
+    expect(migration).toContain('DROP CONSTRAINT "media_assets_type_metadata_check"')
+    expect(migration).toMatch(
+      /"status" = 'PURGED'[\s\S]*?"object_key" IS NULL[\s\S]*?"checksum_sha256" IS NULL/u,
+    )
+    expect(migration).toMatch(
+      /"status" = 'PURGED'[\s\S]*?"object_key" IS NOT NULL[\s\S]*?"checksum_sha256" IS NOT NULL/u,
+    )
+    expect(migration).not.toMatch(/UPDATE "media_assets"/u)
+    expect(migration).not.toMatch(/DELETE FROM "media_assets"/u)
   })
 
   it('enforces READY reference safety and ProductMedia type matching in PostgreSQL', () => {

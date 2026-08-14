@@ -28,6 +28,7 @@ import {
 } from './local-media-storage'
 
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
+const SECOND_ASSET_ID = '00000000-0000-4000-8000-000000000322'
 const RANDOM_ID = '00000000-0000-4000-8000-000000000654'
 const OBJECT_KEY = `assets/2026/08/${ASSET_ID}.webp`
 const TRASH_KEY = `trash/2026/08/${ASSET_ID}.webp`
@@ -325,6 +326,57 @@ describe('LocalMediaStorage', () => {
     await storage.purge(OBJECT_KEY)
     await storage.purge(OBJECT_KEY)
     await expect(storage.stat(OBJECT_KEY)).resolves.toBeNull()
+  })
+
+  it('inventories managed objects with a bounded opaque cursor and namespace prefix', async () => {
+    const storage = await LocalMediaStorage.create(
+      configuration(storageRoot),
+      testDependencies(),
+    )
+    const staging = await storage.createStagingWrite(ASSET_ID)
+    staging.stream.end('inventory')
+    await finished(staging.stream)
+    const secondKey = `staging/${SECOND_ASSET_ID}.${RANDOM_ID}.part`
+    await writeFile(join(storageRoot, secondKey), 'next', { mode: 0o640 })
+
+    const first = await storage.inventory({
+      limit: 1,
+      namespace: 'staging',
+      prefix: `staging/${ASSET_ID}.`,
+    })
+    expect(first.objects).toHaveLength(1)
+    expect(first.objects[0]).toMatchObject({
+      key: staging.key,
+      sizeBytes: 9n,
+    })
+    expect(first.objects[0]?.modifiedAt).toBeInstanceOf(Date)
+    expect(first.nextCursor).toBeNull()
+
+    const firstPage = await storage.inventory({
+      limit: 1,
+      namespace: 'staging',
+    })
+    expect(firstPage.objects.map(object => object.key)).toEqual([staging.key])
+    expect(firstPage.nextCursor).toBe(staging.key)
+    const nextCursor = firstPage.nextCursor
+    if (nextCursor === null) throw new Error('Expected inventory cursor')
+    const secondPage = await storage.inventory({
+      cursor: nextCursor,
+      limit: 1,
+      namespace: 'staging',
+    })
+    expect(secondPage.objects.map(object => object.key)).toEqual([secondKey])
+    expect(secondPage.nextCursor).toBeNull()
+
+    await expect(storage.inventory({
+      cursor: OBJECT_KEY,
+      limit: 1,
+      namespace: 'staging',
+    })).rejects.toMatchObject({ code: 'MEDIA_STORAGE_INVALID_KEY' })
+    await expect(storage.inventory({
+      limit: 0,
+      namespace: 'staging',
+    })).rejects.toMatchObject({ code: 'MEDIA_STORAGE_INVALID_KEY' })
   })
 
   it.each([

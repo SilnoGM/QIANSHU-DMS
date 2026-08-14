@@ -597,4 +597,215 @@ describe('media schema constraints with isolated PostgreSQL', () => {
       await client.query('ROLLBACK')
     }
   })
+
+  it('retains truthful PURGED facts for both unmaterialized and prepared expired uploads', async () => {
+    await client.query('BEGIN')
+    try {
+      const actorUserId = randomUUID()
+      const username = `media_purge_e2e_${randomUUID().replaceAll('-', '')}`
+      await client.query(
+        `
+          INSERT INTO "users" (
+            "id",
+            "username",
+            "username_normalized",
+            "display_name",
+            "password_hash",
+            "password_changed_at",
+            "updated_at"
+          )
+          VALUES ($1, $2, $2, 'Media Purge E2E', 'not-used', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `,
+        [actorUserId, username],
+      )
+
+      const unmaterializedId = await insertUploadingAsset(
+        client,
+        actorUserId,
+        'IMAGE',
+      )
+      await client.query(
+        `
+          UPDATE "media_assets"
+          SET "status" = 'FAILED', "failure_code" = 'MEDIA_ASSET_UPLOAD_EXPIRED'
+          WHERE "id" = $1
+        `,
+        [unmaterializedId],
+      )
+      await client.query(
+        `
+          UPDATE "media_assets"
+          SET
+            "status" = 'PURGED',
+            "deleted_at" = CURRENT_TIMESTAMP,
+            "upload_expires_at" = NULL
+          WHERE "id" = $1
+        `,
+        [unmaterializedId],
+      )
+
+      const preparedId = await insertUploadingAsset(client, actorUserId, 'IMAGE')
+      await client.query(
+        `
+          UPDATE "media_assets"
+          SET
+            "object_key" = $2,
+            "mime_type" = 'image/webp',
+            "size_bytes" = 321,
+            "checksum_sha256" = $3,
+            "width" = 640,
+            "height" = 480,
+            "status" = 'FAILED',
+            "failure_code" = 'MEDIA_ASSET_STORAGE_FAILED'
+          WHERE "id" = $1
+        `,
+        [preparedId, `assets/2026/08/${preparedId}.webp`, 'b'.repeat(64)],
+      )
+      await client.query(
+        `
+          UPDATE "media_assets"
+          SET
+            "status" = 'PURGED',
+            "deleted_at" = CURRENT_TIMESTAMP,
+            "upload_expires_at" = NULL
+          WHERE "id" = $1
+        `,
+        [preparedId],
+      )
+
+      const purged = await client.query<{
+        checksumSha256: string | null
+        objectKey: string | null
+        status: string
+      }>(
+        `
+          SELECT
+            "status"::text,
+            "object_key" AS "objectKey",
+            "checksum_sha256" AS "checksumSha256"
+          FROM "media_assets"
+          WHERE "id" IN ($1, $2)
+          ORDER BY "id"
+        `,
+        [unmaterializedId, preparedId],
+      )
+      expect(purged.rows).toEqual(expect.arrayContaining([
+        {
+          checksumSha256: null,
+          objectKey: null,
+          status: 'PURGED',
+        },
+        {
+          checksumSha256: 'b'.repeat(64),
+          objectKey: `assets/2026/08/${preparedId}.webp`,
+          status: 'PURGED',
+        },
+      ]))
+
+      await expectDatabaseRejection(
+        client,
+        () => client.query(
+          `
+            INSERT INTO "media_assets" (
+              "media_type",
+              "status",
+              "original_filename",
+              "object_key",
+              "failure_code",
+              "deleted_at",
+              "created_by_user_id"
+            )
+            VALUES (
+              'IMAGE',
+              'PURGED',
+              'partial.webp',
+              'assets/2026/08/partial.webp',
+              'MEDIA_ASSET_UPLOAD_EXPIRED',
+              CURRENT_TIMESTAMP,
+              $1
+            )
+          `,
+          [actorUserId],
+        ),
+        '23514',
+        'media_assets_state_metadata_check',
+        0,
+      )
+    }
+    finally {
+      await client.query('ROLLBACK')
+    }
+  })
+
+  it('lets only one worker claim the same expired asset with SKIP LOCKED', async () => {
+    const actorUserId = randomUUID()
+    const assetId = randomUUID()
+    const username = `media_claim_e2e_${randomUUID().replaceAll('-', '')}`
+    const firstWorker = new Client({ connectionString: requireDatabaseUrl() })
+    const secondWorker = new Client({ connectionString: requireDatabaseUrl() })
+    const claimSql = `
+      SELECT "id"
+      FROM "media_assets"
+      WHERE "status" IN ('UPLOADING', 'FAILED')
+        AND COALESCE(
+          "upload_expires_at",
+          "updated_at" + INTERVAL '24 hours'
+        ) <= CURRENT_TIMESTAMP
+      ORDER BY
+        COALESCE("upload_expires_at", "updated_at" + INTERVAL '24 hours'),
+        "id"
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    `
+
+    try {
+      await client.query(
+        `
+          INSERT INTO "users" (
+            "id",
+            "username",
+            "username_normalized",
+            "display_name",
+            "password_hash",
+            "password_changed_at",
+            "updated_at"
+          )
+          VALUES ($1, $2, $2, 'Media Claim E2E', 'not-used', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `,
+        [actorUserId, username],
+      )
+      await client.query(
+        `
+          INSERT INTO "media_assets" (
+            "id",
+            "media_type",
+            "original_filename",
+            "upload_expires_at",
+            "created_by_user_id"
+          )
+          VALUES ($1, 'IMAGE', 'claim.webp', CURRENT_TIMESTAMP - INTERVAL '1 hour', $2)
+        `,
+        [assetId, actorUserId],
+      )
+
+      await Promise.all([firstWorker.connect(), secondWorker.connect()])
+      await firstWorker.query('BEGIN')
+      const firstClaim = await firstWorker.query<{ id: string }>(claimSql)
+      await secondWorker.query('BEGIN')
+      const secondClaim = await secondWorker.query<{ id: string }>(claimSql)
+
+      expect(firstClaim.rows).toEqual([{ id: assetId }])
+      expect(secondClaim.rows).toEqual([])
+    }
+    finally {
+      await firstWorker.query('ROLLBACK').catch(() => undefined)
+      await secondWorker.query('ROLLBACK').catch(() => undefined)
+      await Promise.all([
+        firstWorker.end().catch(() => undefined),
+        secondWorker.end().catch(() => undefined),
+      ])
+      await client.query('DELETE FROM "media_assets" WHERE "id" = $1', [assetId])
+      await client.query('DELETE FROM "users" WHERE "id" = $1', [actorUserId])
+    }
+  })
 })
