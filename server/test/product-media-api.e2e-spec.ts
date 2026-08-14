@@ -16,6 +16,7 @@ import { CsrfProtectionGuard } from '../src/modules/auth/guards/csrf-protection.
 import { PasswordChangeRequiredGuard } from '../src/modules/auth/guards/password-change-required.guard'
 import { PermissionGuard } from '../src/modules/auth/guards/permission.guard'
 import { SessionCookieProvider } from '../src/modules/auth/providers/session-cookie.provider'
+import { ProductMediaContentService } from '../src/modules/products/media/product-media-content.service'
 import { ProductMediaHttpService } from '../src/modules/products/media/product-media-http.service'
 import { ProductMediaMultipartParser } from '../src/modules/products/media/product-media-multipart.parser'
 import { ProductMediaService } from '../src/modules/products/media/product-media.service'
@@ -157,6 +158,9 @@ describe('Product media mutation API security and parsing', () => {
       }, {
         provide: ProductMediaService,
         useValue: { upload, updateLayout, detach },
+      }, {
+        provide: ProductMediaContentService,
+        useValue: { resolve: jest.fn() },
       }, {
         provide: ProductMediaMultipartParser,
         useFactory: () => new ProductMediaMultipartParser({ maximumFileBytes: 3 }),

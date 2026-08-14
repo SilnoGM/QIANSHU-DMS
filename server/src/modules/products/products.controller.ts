@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Head,
   Headers,
   HttpCode,
   HttpStatus,
@@ -12,6 +13,7 @@ import {
   Put,
   Query,
   Req,
+  Res,
 } from '@nestjs/common'
 import {
   ApiBody,
@@ -44,6 +46,11 @@ import {
 } from './dto/product-response.dto'
 import { ProductCommandService } from './product-command.service'
 import { parseProductIdempotencyKey } from './product-command.normalizer'
+import { ApiProductMediaContentContract } from './media/product-media-content.contract'
+import {
+  ProductMediaContentService,
+  type ProductMediaContentResponse,
+} from './media/product-media-content.service'
 import {
   ProductMediaHttpService,
   type ProductMediaUploadResponse,
@@ -56,6 +63,21 @@ import {
 } from './product-query.service'
 import { ProductUpdateService } from './product-update.service'
 
+interface ProductMediaContentHttpResponse {
+  setHeader(name: string, value: string): unknown
+  status(statusCode: number): unknown
+}
+
+function applyProductMediaContentResponse(
+  response: ProductMediaContentHttpResponse,
+  result: ProductMediaContentResponse,
+): void {
+  response.status(result.status)
+  for (const [name, value] of Object.entries(result.headers)) {
+    if (value !== undefined) response.setHeader(name, value)
+  }
+}
+
 @ApiTags('products')
 @Controller('products')
 export class ProductsController {
@@ -64,6 +86,7 @@ export class ProductsController {
     private readonly commands: ProductCommandService,
     private readonly updates: ProductUpdateService,
     private readonly productMedia: ProductMediaHttpService,
+    private readonly productMediaContent: ProductMediaContentService,
   ) {}
 
   @Get()
@@ -181,6 +204,38 @@ export class ProductsController {
   })
   getById(@Param() params: ProductIdParamDto): Promise<ProductListItem> {
     return this.products.getById(params.productId)
+  }
+
+  @Head(':productId/media/:productMediaId/content')
+  @RequirePermissions('product-media:read')
+  @ApiProductMediaContentContract('HEAD')
+  async headMediaContent(
+    @Param() params: ProductMediaIdParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productMediaContent.resolve(
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get(':productId/media/:productMediaId/content')
+  @RequirePermissions('product-media:read')
+  @ApiProductMediaContentContract('GET')
+  async getMediaContent(
+    @Param() params: ProductMediaIdParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productMediaContent.resolve(
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+    )
+    applyProductMediaContentResponse(response, result)
   }
 
   @Patch(':productId')

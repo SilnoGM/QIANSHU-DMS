@@ -14,6 +14,7 @@ import {
   ProductCommandService,
   type ProductCommandContext,
 } from './product-command.service'
+import { ProductMediaContentService } from './media/product-media-content.service'
 import { ProductMediaHttpService } from './media/product-media-http.service'
 import { ProductQueryService } from './product-query.service'
 import {
@@ -89,6 +90,7 @@ function createController(): {
         updateLayout: jest.fn(),
         detach: jest.fn(),
       } as unknown as ProductMediaHttpService,
+      { resolve: jest.fn() } as unknown as ProductMediaContentService,
     ),
     list,
     getById,
@@ -111,6 +113,9 @@ function createController(): {
   }, {
     provide: ProductMediaHttpService,
     useValue: { upload: jest.fn(), updateLayout: jest.fn(), detach: jest.fn() },
+  }, {
+    provide: ProductMediaContentService,
+    useValue: { resolve: jest.fn() },
   }],
 })
 class ProductsControllerContractModule {}
@@ -190,6 +195,8 @@ describe('ProductsController', () => {
         'create',
         'detachMedia',
         'getById',
+        'getMediaContent',
+        'headMediaContent',
         'list',
         'update',
         'updateMediaLayout',
@@ -229,6 +236,7 @@ describe('ProductsController OpenAPI contract', () => {
       '/api/products/{productId}/media',
       '/api/products/{productId}/media/layout',
       '/api/products/{productId}/media/{productMediaId}',
+      '/api/products/{productId}/media/{productMediaId}/content',
     ].sort())
     const path = document.paths['/api/products']
     const operation: ContractOperation | undefined = path?.get

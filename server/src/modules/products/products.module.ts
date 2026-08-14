@@ -6,6 +6,7 @@ import { CurrencyModule } from '../currencies/currency.module'
 import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { MediaModule } from '../media/media.module'
+import { ProductMediaContentService } from './media/product-media-content.service'
 import { ProductMediaHttpService } from './media/product-media-http.service'
 import { ProductMediaMultipartParser } from './media/product-media-multipart.parser'
 import { ProductMediaPersistence } from './media/product-media.persistence'
@@ -33,6 +34,7 @@ import { ProductsController } from './products.controller'
     ProductMediaPersistence,
     ProductMediaService,
     ProductMediaHttpService,
+    ProductMediaContentService,
     {
       provide: ProductMediaMultipartParser,
       useFactory: (): ProductMediaMultipartParser =>

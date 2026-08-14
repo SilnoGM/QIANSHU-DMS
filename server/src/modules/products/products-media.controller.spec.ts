@@ -15,6 +15,7 @@ import { ProductUpdateService } from './product-update.service'
 import {
   ProductMediaHttpService,
 } from './media/product-media-http.service'
+import { ProductMediaContentService } from './media/product-media-content.service'
 import { ProductsController } from './products.controller'
 
 type ContractOperation = NonNullable<
@@ -60,6 +61,7 @@ function createController() {
     { create: jest.fn() } as unknown as ProductCommandService,
     { update: jest.fn() } as unknown as ProductUpdateService,
     { upload, updateLayout, detach } as unknown as ProductMediaHttpService,
+    { resolve: jest.fn() } as unknown as ProductMediaContentService,
   )
   return { controller, detach, updateLayout, upload }
 }
@@ -78,6 +80,9 @@ function createController() {
   }, {
     provide: ProductMediaHttpService,
     useValue: { upload: jest.fn(), updateLayout: jest.fn(), detach: jest.fn() },
+  }, {
+    provide: ProductMediaContentService,
+    useValue: { resolve: jest.fn() },
   }],
 })
 class ProductsMediaControllerContractModule {}

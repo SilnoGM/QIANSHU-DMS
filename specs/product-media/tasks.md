@@ -597,16 +597,51 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
 - 本任务未修改 Prisma Schema/migration，未写持久开发数据库或真实 media root，未实现 Task 10
   内容读取，未同步 OpenAPI/Web，未修改 Web，未 push、PR、merge 或部署。
 
-- [ ] 10. 以 TDD 实现私有内容 GET/HEAD 授权与内部转发
-  - [ ] 10.1 先建立内容 Controller RED，要求独立 `product-media:read`，不隐式要求 `products:read`。
-  - [ ] 10.2 实现 Product/ProductMedia/READY 关联验证和安全 404，禁止直接按 MediaAsset ID 下载。
-  - [ ] 10.3 返回可信 MIME、sanitized filename、private no-store、nosniff、opaque ETag、Accept-Ranges 和
+- [x] 10. 以 TDD 实现私有内容 GET/HEAD 授权与内部转发
+  - [x] 10.1 先建立内容 Controller RED，要求独立 `product-media:read`，不隐式要求 `products:read`。
+  - [x] 10.2 实现 Product/ProductMedia/READY 关联验证和安全 404，禁止直接按 MediaAsset ID 下载。
+  - [x] 10.3 返回可信 MIME、sanitized filename、private no-store、nosniff、opaque ETag、Accept-Ranges 和
     安全编码的 X-Accel-Redirect；GET/HEAD 权限一致，HEAD 无 body。
-  - [ ] 10.4 建立 Nginx 等价 header contract test，证明内部 location 不能由外部 URL 直接访问且无 path traversal。
-  - [ ] 10.5 覆盖有/无 `products:read` 的媒体角色、已解除/非 READY、条件请求、Range/HEAD 和 anti-enumeration。
-  - [ ] 10.6 运行 content/RBAC/security tests、Server typecheck/lint 和 diff-check。
-  - [ ] 10.7 更新证据并提交：`feat: 增加产品媒体私有访问`。
+  - [x] 10.4 建立 Nginx 等价 header contract test，证明内部 location 不能由外部 URL 直接访问且无 path traversal。
+  - [x] 10.5 覆盖有/无 `products:read` 的媒体角色、已解除/非 READY、条件请求、Range/HEAD 和 anti-enumeration。
+  - [x] 10.6 运行 content/RBAC/security tests、Server typecheck/lint 和 diff-check。
+  - [x] 10.7 更新证据并提交：`feat: 增加产品媒体私有访问`。
   - _Requirements: R5-R6, R8-R9, R11_
+
+Task 10 evidence（2026-08-14）：
+
+- TDD 首轮用内容 Service/Controller 契约测试锁定 `GET/HEAD
+  /api/products/{productId}/media/{productMediaId}/content`、独立 `product-media:read`、无 Nest body、
+  OpenAPI binary/header matrix 与防枚举错误；因生产模块和第五个 Controller 依赖尚不存在，2 个 suite 在编译期
+  RED、0 tests。最小实现后 2 suites / 12 tests 转绿；复核再建立 `VIDEO + image/webp` 异常组合 RED，确认旧实现
+  错误返回 200，随后把 ProductMedia kind、MediaAsset mediaType 与可信 MIME 三者绑定并转绿。
+- 新增 `ProductMediaContentService`，只按 `productId + productMediaId + detachedAt IS NULL + MediaAsset READY`
+  查询领域关联；缺失、解除、非 READY、DOCUMENT、kind/type/MIME 不一致、checksum 缺失或不安全 `objectKey`
+  全部固定为 `PRODUCT_MEDIA_NOT_FOUND`。数据库异常固定为 `INTERNAL_ERROR`，查询与公开路由均不接受
+  MediaAsset ID，也不注入或调用 `MediaStorage.open()`，Nest 进程不读取、不流式传输媒体文件。
+- 200 响应只从受信元数据生成四种 MIME、ASCII inline filename、`Accept-Ranges: bytes`、`nosniff`、
+  带命名空间二次摘要的 opaque ETag 与逐段编码的 `/_qianshu_internal_media/assets/...`；全局边界补充
+  `private, no-store` 和 `X-Request-Id`。strong/weak/list/wildcard `If-None-Match` 命中后只返回无 body 304，
+  不下发 `X-Accel-Redirect`；Range 不在应用层解析或改写，由内部代理负责字节区间与最终 HEAD 行为。显式
+  HEAD 路由先于同路径 GET 注册，并有顺序断言防止 Express 的 GET fallback 抢先处理 HEAD。
+- object key 复用 canonical `assets` namespace 校验，拒绝绝对路径、反斜杠、空 segment 和 `.`/`..`；HTTP
+  E2E 证明内部 URI 不是 Nest 公开路由。真实 Nginx `location ... internal`、真实文件映射、生产打包与配置验收
+  仍严格留在 Task 16，本任务没有伪造或提前落地生产 Nginx 配置。
+- 最终内容 Service 为 11/11 tests；内容 Controller/OpenAPI 与同域回归合计 5 suites / 24 tests；Server 全量
+  unit 为 184/184 suites、1770/1770 tests。内容与既有媒体共享 E2E 为 2/2 suites、15/15 tests，覆盖
+  匿名、只有 `products:read`、只有 `product-media:read`、强制改密、统一 404、304、GET/HEAD、Range、
+  非法 UUID 和内部 URI 直连拒绝。Prisma validate、typecheck、lint、build、根治理 667/667 与
+  `git diff --check` 均通过。
+- 额外运行全量 `pnpm test:e2e` 时因当前 shell 没有 `DATABASE_URL` 而 exit `1`：21 个 PostgreSQL suite
+  缺少隔离数据库并产生后续共享状态失败；本任务没有绕过或写入本地数据库，Task 10 的无数据库定向/共享
+  E2E 保持全绿，官方隔离 PostgreSQL 与文件系统全套验收仍由 Task 11 承担。
+- `contract:check` 按 Task 8–11 公共契约窗口预期 exit `1`。一次性生成对比证明 tracked snapshot 仅缺少
+  Task 8–10 的 4 个媒体 path、6 个媒体 DTO，并只更新 `ProductListItemDto`；无 path/schema 删除、无既有
+  path 内容变化，其他顶层合同字节一致。Task 10 新增的 content path 只包含
+  `products_get_media_content` 与 `products_head_media_content`，tracked OpenAPI/Web generated 继续留待
+  Task 12 原子同步。
+- 本任务未修改 Prisma Schema/migration、未写持久数据库或真实 media root、未修改 Web、未执行
+  `contract:sync`、未实现 Task 11/16、未 push、PR、merge 或部署。
 
 - [ ] 11. 补齐 Server 隔离 PostgreSQL 与文件系统 E2E
   - [ ] 11.1 建立一次性 PostgreSQL + 临时 Local root harness，启动前证明无 ProductMedia/MediaAsset seed。
