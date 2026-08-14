@@ -200,7 +200,7 @@ function supplierDisplay(product: ProductListItemViewModel): string {
           </div>
           <div>
             <dt class="qs-type-compact-label mb-2">
-              产品图片（{{ product.images.length }}）
+              产品图片（{{ product.media.images.length }}）
             </dt>
             <dd class="m-0">
               <ImageGroup :items="buildProductImageItems(product)" :max-count="3" radius="lg" :size="64" />
@@ -208,13 +208,13 @@ function supplierDisplay(product: ProductListItemViewModel): string {
           </div>
           <div>
             <dt class="qs-type-compact-label">
-              产品视频（{{ product.videos.length }}）
+              产品视频（{{ product.media.videos.length }}）
             </dt>
             <dd class="m-0 mt-1">
-              <span v-if="product.videos.length === 0">—</span>
+              <span v-if="product.media.videos.length === 0">—</span>
               <ol v-else class="m-0 ps-5 gap-1 grid">
-                <li v-for="(video, index) in product.videos" :key="`${index}-${video}`">
-                  <code class="qs-type-meta break-all">{{ video }}</code>
+                <li v-for="video in product.media.videos" :key="video.id">
+                  <span class="qs-type-meta break-all">{{ video.originalFilename }}</span>
                 </li>
               </ol>
             </dd>

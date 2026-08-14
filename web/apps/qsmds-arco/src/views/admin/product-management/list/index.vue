@@ -104,9 +104,24 @@ const columns: QsGenericTableColumn<ProductListItemViewModel>[] = [
     minWidth: 180,
     title: '供应商',
   },
-  { accessorKey: 'mainImage', id: 'mainImage', title: '产品主图', width: 130 },
-  { accessorKey: 'images', id: 'images', minWidth: 180, title: '产品图片' },
-  { accessorKey: 'videos', id: 'videos', title: '产品视频', width: 130 },
+  {
+    accessorFn: item => item.media.mainImage?.id ?? null,
+    id: 'mainImage',
+    title: '产品主图',
+    width: 130,
+  },
+  {
+    accessorFn: item => item.media.images,
+    id: 'images',
+    minWidth: 180,
+    title: '产品图片',
+  },
+  {
+    accessorFn: item => item.media.videos,
+    id: 'videos',
+    title: '产品视频',
+    width: 130,
+  },
   {
     accessorFn: item => item.twdSalePrice.amount,
     align: 'right',
@@ -299,7 +314,7 @@ function showAttributes(product: ProductListItemViewModel): void {
 }
 
 function showVideos(product: ProductListItemViewModel): void {
-  if (product.videos.length === 0) {
+  if (product.media.videos.length === 0) {
     return
   }
   videosTarget.value = product
@@ -556,15 +571,15 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-videos="{ row }">
           <FaButton
-            v-if="row.original.videos.length"
+            v-if="row.original.media.videos.length"
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-9"
-            :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.videos.length} 个视频`"
+            :aria-label="`查看产品 ${row.original.productNo} 的 ${row.original.media.videos.length} 个视频`"
             @click="showVideos(row.original)"
           >
             <FaIcon name="i-lucide:video" />
-            {{ row.original.videos.length }} 个视频
+            {{ row.original.media.videos.length }} 个视频
           </FaButton>
           <span v-else>—</span>
         </template>
@@ -705,14 +720,14 @@ onBeforeUnmount(() => {
                 产品视频
               </dt><dd class="m-0">
                 <FaButton
-                  v-if="row.videos.length"
+                  v-if="row.media.videos.length"
                   variant="ghost"
                   class="min-h-11"
-                  :aria-label="`查看产品 ${row.productNo} 的 ${row.videos.length} 个视频`"
+                  :aria-label="`查看产品 ${row.productNo} 的 ${row.media.videos.length} 个视频`"
                   @click="showVideos(row)"
                 >
                   <FaIcon name="i-lucide:video" />
-                  {{ row.videos.length }} 个视频
+                  {{ row.media.videos.length }} 个视频
                 </FaButton>
                 <span v-else>—</span>
               </dd>

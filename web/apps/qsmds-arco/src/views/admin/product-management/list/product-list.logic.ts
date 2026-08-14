@@ -2,6 +2,8 @@ import type {
   ProductActorDto,
   ProductAttributeDto,
   ProductListItemDto,
+  ProductMediaDto,
+  ProductMediaItemDto,
   ProductMoneyDto,
   ProductPageDto,
   ProductsListData,
@@ -29,14 +31,24 @@ export type ProductSupplierViewModel = Omit<ProductSupplierDto, 'tone'> & {
 
 export type ProductListItemViewModel = Omit<
   ProductListItemDto,
-  'attributes' | 'createdBy' | 'images' | 'supplier' | 'updatedBy' | 'videos'
+  'attributes' | 'createdBy' | 'media' | 'supplier' | 'updatedBy'
 > & {
   readonly attributes: readonly ProductAttributeDto[]
   readonly createdBy: ProductActorDto | null
-  readonly images: readonly string[]
+  readonly media: ProductMediaViewModel
   readonly supplier: ProductSupplierViewModel | null
   readonly updatedBy: ProductActorDto | null
-  readonly videos: readonly string[]
+}
+
+export type ProductMediaItemViewModel = Readonly<ProductMediaItemDto>
+
+export type ProductMediaViewModel = Omit<
+  ProductMediaDto,
+  'images' | 'mainImage' | 'videos'
+> & {
+  readonly images: readonly ProductMediaItemViewModel[]
+  readonly mainImage: ProductMediaItemViewModel | null
+  readonly videos: readonly ProductMediaItemViewModel[]
 }
 
 export type ProductPageViewModel = Omit<ProductPageDto, 'items'> & {
@@ -69,6 +81,26 @@ function cloneActor(value: ProductActorDto | null): ProductActorDto | null {
     : { displayName: value.displayName, id: value.id }
 }
 
+function cloneMediaItem(
+  value: ProductMediaItemDto,
+): ProductMediaItemViewModel {
+  return { ...value }
+}
+
+/**
+ * DTO 中的 mainImage 是 images 主图项的投影，二者在 JSON 中仍是独立对象。
+ * Adapter 逐项复制，避免页面状态意外改写 Axios response 或共享数组。
+ */
+function cloneMedia(value: ProductMediaDto): ProductMediaViewModel {
+  return {
+    images: value.images.map(cloneMediaItem),
+    mainImage: value.mainImage === null
+      ? null
+      : cloneMediaItem(value.mainImage),
+    videos: value.videos.map(cloneMediaItem),
+  }
+}
+
 export function adaptProductListItemDto(
   value: ProductListItemDto,
 ): ProductListItemViewModel {
@@ -86,13 +118,12 @@ export function adaptProductListItemDto(
     ...value,
     attributes: value.attributes.map(attribute => ({ ...attribute })),
     createdBy: cloneActor(value.createdBy),
-    images: [...value.images],
+    media: cloneMedia(value.media),
     myrSalePrice: cloneMoney(value.myrSalePrice),
     purchaseCost: cloneMoney(value.purchaseCost),
     supplier,
     twdSalePrice: cloneMoney(value.twdSalePrice),
     updatedBy: cloneActor(value.updatedBy),
-    videos: [...value.videos],
   }
 }
 
@@ -156,20 +187,35 @@ export function buildSupplierFilterOptions(
   }))
 }
 
+/**
+ * ProductMedia 的 contentUrl 是受保护的同源领域路由，不是任意外部 URL。
+ * 这里按当前 Product 与媒体 stable ID 重建唯一合法路径；服务端响应若漂移，
+ * 页面宁可不加载内容，也不会把不可信 scheme 或其他资源地址交给 DOM。
+ */
+export function resolveProductMediaContentUrl(
+  productId: string,
+  media: ProductMediaItemViewModel,
+): string | null {
+  const expected = `/api/products/${encodeURIComponent(productId)}/media/${encodeURIComponent(media.id)}/content`
+  return media.contentUrl === expected ? expected : null
+}
+
 function buildImageItem(
   product: ProductListItemViewModel,
-  src: string,
+  media: ProductMediaItemViewModel,
   kind: 'image' | 'main',
   sourceIndex: number,
-): ImageGroupItem {
+): ImageGroupItem | null {
+  const src = resolveProductMediaContentUrl(product.id, media)
+  if (src === null) {
+    return null
+  }
   const label = kind === 'main'
     ? `${product.name}主图`
     : `${product.name}图片 ${sourceIndex + 1}`
   return {
     alt: label,
-    key: kind === 'main'
-      ? `${product.id}-main`
-      : `${product.id}-image-${sourceIndex}`,
+    key: media.id,
     src,
     tooltip: label,
   }
@@ -178,18 +224,20 @@ function buildImageItem(
 export function buildProductMainImageItems(
   product: ProductListItemViewModel,
 ): readonly ImageGroupItem[] {
-  return product.mainImage === null || product.mainImage.trim() === ''
-    ? []
-    : [buildImageItem(product, product.mainImage, 'main', 0)]
+  if (product.media.mainImage === null) {
+    return []
+  }
+  const item = buildImageItem(product, product.media.mainImage, 'main', 0)
+  return item === null ? [] : [item]
 }
 
 export function buildProductImageItems(
   product: ProductListItemViewModel,
 ): readonly ImageGroupItem[] {
-  return product.images.flatMap((src, sourceIndex) =>
-    src.trim() === ''
-      ? []
-      : [buildImageItem(product, src, 'image', sourceIndex)])
+  return product.media.images.flatMap((media, sourceIndex) => {
+    const item = buildImageItem(product, media, 'image', sourceIndex)
+    return item === null ? [] : [item]
+  })
 }
 
 export function canApplyProductListResponse(

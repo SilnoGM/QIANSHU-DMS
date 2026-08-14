@@ -100,10 +100,14 @@ test('窄屏复用 QsGenericTable mobile-row 并保留同一行身份和操作',
   assert.equal((source.match(/:size="44"/gu) ?? []).length, 2)
 })
 
-test('特殊单元格复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗', () => {
+test('特殊单元格从结构化 media 读取，并复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗', () => {
   assert.match(source, /<ImageGroup\b[\s\S]*?:max-count="3"/u)
   assert.match(source, /buildProductMainImageItems/u)
   assert.match(source, /buildProductImageItems/u)
+  assert.match(source, /item\.media\.mainImage/u)
+  assert.match(source, /item\.media\.images/u)
+  assert.match(source, /item\.media\.videos/u)
+  assert.doesNotMatch(source, /row\.(?:original\.)?videos\.length/u)
   assert.equal((source.match(/<AmountDisplay\b/gu) ?? []).length >= 6, true)
   assert.match(source, /useCurrencyCatalog\(\)/u)
   assert.match(source, /<FaTag\b/u)
@@ -128,7 +132,7 @@ test('属性和视频入口可聚焦，新增、查看与编辑接入精确路�
   assert.doesNotMatch(source, /productsApi\.(?:create|update|delete)/u)
 })
 
-test('属性弹窗完整有序展示，视频弹窗选择单一预览并保留安全外链', () => {
+test('属性弹窗完整有序展示，视频弹窗消费领域 contentUrl 并保留安全外链', () => {
   const attributesModal = readFileSync(new URL(
     '../../src/views/admin/product-management/list/product-attributes-modal.vue',
     import.meta.url,
@@ -147,8 +151,10 @@ test('属性弹窗完整有序展示，视频弹窗选择单一预览并保留�
   assert.match(videosModal, /selectedVideo/u)
   assert.match(videosModal, /target="_blank"/u)
   assert.match(videosModal, /rel="noopener noreferrer"/u)
-  assert.match(videosModal, /url\.username === ''/u)
-  assert.match(videosModal, /url\.password === ''/u)
+  assert.match(videosModal, /product\.media\.videos/u)
+  assert.match(videosModal, /resolveProductMediaContentUrl/u)
+  assert.match(videosModal, /video\.originalFilename/u)
+  assert.doesNotMatch(videosModal, /new URL\(|url\.protocol|url\.username|url\.password/u)
   assert.match(videosModal, /pauseActiveVideo/u)
   assert.match(videosModal, /关闭视频/u)
 })

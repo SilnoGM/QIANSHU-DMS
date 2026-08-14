@@ -31,6 +31,7 @@ const CONTRACT_OPTIONAL_METADATA_FIELDS = [
   'session',
   'csrf',
   'privateNoStore',
+  'retry',
   'errors',
 ]
 const CONTRACT_ALLOWED_METADATA_FIELDS = new Set([
@@ -48,6 +49,8 @@ const CONTRACT_ERROR_STATUSES = new Set([
   403,
   404,
   409,
+  413,
+  415,
   422,
   429,
   500,
@@ -496,7 +499,7 @@ function assertMetadata(record, metadata) {
       fail(`session requirement conflicts with authentication ${context}`)
     }
   }
-  for (const field of ['csrf', 'privateNoStore']) {
+  for (const field of ['csrf', 'privateNoStore', 'retry']) {
     if (hasOwn(metadata, field) && typeof metadata[field] !== 'boolean') {
       fail(`x-qianshu-contract ${field} must be boolean ${context}`)
     }
@@ -763,6 +766,15 @@ function assertSuccessResponses(document, record, responses) {
     if (status === '204') {
       if (hasOwn(response, 'content')) {
         fail(`204 response cannot declare content ${context}`)
+      }
+      continue
+    }
+
+    if (record.method === 'head') {
+      // HEAD 与对应 GET 共享响应头语义，但 HTTP body 必须为空；允许无 content
+      // 的成功响应，同时拒绝用 GET schema 掩盖错误的 HEAD 契约。
+      if (hasOwn(response, 'content')) {
+        fail(`HEAD response cannot declare content ${context}`)
       }
       continue
     }

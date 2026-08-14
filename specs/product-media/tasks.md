@@ -691,14 +691,42 @@ Task 11 evidence（2026-08-14）：
   media root；未执行 push、PR、merge 或部署。全部变更均为测试夹具、CI 验收编排与本证据，使用单一
   `test: 补齐媒体资产服务端验收` 提交。
 
-- [ ] 12. 同步 OpenAPI 与 Web generated contract
-  - [ ] 12.1 先运行 `node --run contract:check`，记录 tracked snapshot 缺少新 operations/DTO 的预期 RED。
-  - [ ] 12.2 串行运行根 `node --run contract:sync`，不得手工编辑 snapshot 或 generated types。
-  - [ ] 12.3 核对 diff 只包含已确认的结构化 Product media、POST/PUT/DELETE/GET/HEAD、multipart 和错误合同。
-  - [ ] 12.4 证明 Server/Web OpenAPI snapshot 字节一致，旧 Product URL 字段和未授权 Document API 均不存在。
-  - [ ] 12.5 运行 `contract:check`、`ci:contract`、Server build、Web typecheck 和 diff-check。
-  - [ ] 12.6 更新证据并提交：`chore: 同步产品媒体接口契约`。
+- [x] 12. 同步 OpenAPI 与 Web generated contract
+  - [x] 12.1 先运行 `node --run contract:check`，记录 tracked snapshot 缺少新 operations/DTO 的预期 RED。
+  - [x] 12.2 串行运行根 `node --run contract:sync`，不得手工编辑 snapshot 或 generated types。
+  - [x] 12.3 核对 diff 只包含已确认的结构化 Product media、POST/PUT/DELETE/GET/HEAD、multipart 和错误合同。
+  - [x] 12.4 证明 Server/Web OpenAPI snapshot 字节一致，旧 Product URL 字段和未授权 Document API 均不存在。
+  - [x] 12.5 运行 `contract:check`、`ci:contract`、Server build、Web typecheck 和 diff-check。
+  - [x] 12.6 更新证据并提交：`chore: 同步产品媒体接口契约`。
   - _Requirements: R6-R7, R9, R11_
+
+Task 12 evidence（2026-08-14）：
+
+- 首轮 `node --run contract:check` 按预期 exit `1`，证明 tracked snapshot 尚未包含 Task 8–10 已确认的媒体
+  operations/DTO。首次 `contract:sync` 继续 fail-closed，定位到根契约校验器尚不认识已确认的 `retry:false`、
+  上传 `413/415` 与 HEAD 无 body 契约；没有修改 Controller/DTO 绕过失败。
+- 按 TDD 先增加可选 `retry` 必须为 boolean、`413/415` error metadata 和 HEAD 禁止声明 content 的测试，
+  首轮新增场景 3 项 RED；最小更新 `openapi-contract` 后专属测试 165/165、根治理 671/671 转绿。该变更只让
+  仓库契约校验器识别已经确认的公共合同，没有放宽其他 method、成功响应或错误 envelope 规则。
+- 第二次串行 `node --run contract:sync` 成功；Server/Web snapshot 和 Web generated types 均由正式生成器原子
+  发布，未手工编辑。两份 snapshot 字节一致，SHA-256 均为
+  `c15b69a1da8c6a3ec78108fb0339de7157dd232c1737a7efef01d231ea34ba8a`；generated 目录仍精确包含唯一
+  非空 regular file `types.gen.ts`。
+- 相对同步前基线精确新增 4 个 path：媒体集合、layout、单项解除和内容路由；新增 6 个
+  `ProductMedia*Dto`，只变更既有 `ProductListItemDto`。无 path/schema 删除、无既有 path 内容变化；POST 保持
+  multipart，PUT/DELETE 保持 JSON，GET binary、HEAD 无 body，错误 matrix 与 `retry:false` 均通过结构化核对。
+  Product 旧顶层 `mainImage/images/videos` URL 字段和 Product Document API 均不存在，ProductMedia 只允许
+  IMAGE/VIDEO。
+- Web typecheck 首次暴露 5 个旧 URL 消费点后，获得确认提前完成 Task 13.6。Web TDD 先以结构化 fixture、stable
+  media ID、领域 `contentUrl` 和拒绝外部 URL 建立 3 项 RED，再更新列表/详情 adapter、ImageGroup 与视频弹窗；
+  定向 19/19、Web 全量 785/785 tests 转绿。页面只接受与当前 product/media ID 精确匹配的受保护同源内容路由，
+  未增加临时顶层 URL 兼容字段、上传队列或 ProductMediaPanel。
+- 最终 `contract:check`、Server build、Web typecheck、ESLint、Stylelint、Web build 和 `git diff --check` 均通过；
+  Web build 只有既有第三方 Rolldown annotation 与 chunk-size warning，exit `0`。直接本地运行 `ci:contract`
+  因缺少 GitHub event 环境按设计 exit `1`；使用当前 HEAD 作为精确 base 的受控 `pull_request` 事件环境执行同一
+  `ci:contract` 已通过，没有关闭或绕过 baseline 门禁。
+- 本任务未修改 Prisma Schema/migration、Controller、DTO 或真实 media root，未实现 Task 13 其余状态机、Task 14
+  上传维护界面或 Task 16 部署模板，未写数据库，未 push、PR、merge 或部署。
 
 - [ ] 13. 以 TDD 建立 Web ProductMedia API 与纯状态逻辑
   - [ ] 13.1 先建立 API adapter RED，覆盖 generated DTO、multipart progress/Abort、layout/detach、contentUrl 和 retry:false。
@@ -706,7 +734,7 @@ Task 11 evidence（2026-08-14）：
   - [ ] 13.3 实现上传队列状态、真实 bytes progress、取消、finalizing、显式 retry 和单项安全错误。
   - [ ] 13.4 实现 dirty snapshot、conflict、reconciling/unknown；网络/5xx 只 GET 最新 Product，不自动重放。
   - [ ] 13.5 身份/权限变化必须 Abort 并清除跨用户文件引用、Object URL、snapshot 和错误；Object URL 及时 revoke。
-  - [ ] 13.6 更新产品列表/详情 adapter 消费结构化 media，删除 URL 字段映射和仅 HTTP(S) URL 的旧视频逻辑。
+  - [x] 13.6 更新产品列表/详情 adapter 消费结构化 media，删除 URL 字段映射和仅 HTTP(S) URL 的旧视频逻辑。
   - [ ] 13.7 运行 Web API/logic/adapter tests、typecheck、ESLint 和 diff-check。
   - [ ] 13.8 更新证据并提交：`feat: 建立产品媒体前端状态`。
   - _Requirements: R3-R4, R6-R7, R9-R11_

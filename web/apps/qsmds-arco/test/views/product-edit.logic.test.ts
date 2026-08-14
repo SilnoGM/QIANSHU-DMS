@@ -18,8 +18,11 @@ function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDt
     createdAt: '2026-08-13T01:00:00.000Z',
     createdBy: null,
     id: '11111111-1111-4111-8111-111111111111',
-    images: [],
-    mainImage: null,
+    media: {
+      images: [],
+      mainImage: null,
+      videos: [],
+    },
     myrSalePrice: { amount: null, currency: 'MYR' },
     name: '原产品',
     productNo: 'P202608130001',
@@ -35,7 +38,6 @@ function product(overrides: Partial<ProductListItemDto> = {}): ProductListItemDt
     updatedAt: '2026-08-13T01:00:00.000Z',
     updatedBy: null,
     version: 3,
-    videos: [],
     ...overrides,
   }
 }
