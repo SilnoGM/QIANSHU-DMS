@@ -465,17 +465,51 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
   `/var/lib/qianshu-dms/media`，未注册 scheduler/AppModule provider，未实现 ProductMedia 命令或 Product
   Document，未 push、PR、merge 或部署。
 
-- [ ] 7. 以 TDD 实现 ProductMedia 领域命令
-  - [ ] 7.1 先建立 ProductMedia persistence/service RED，覆盖 Product `FOR UPDATE`、expectedVersion、
+- [x] 7. 以 TDD 实现 ProductMedia 领域命令
+  - [x] 7.1 先建立 ProductMedia persistence/service RED，覆盖 Product `FOR UPDATE`、expectedVersion、
     20/5 上限、类型一致、重复关联、连续排序、唯一主图和软解除。
-  - [ ] 7.2 实现上传前快速版本检查和上传后最终事务复核；长上传不得持有 Product 锁。
-  - [ ] 7.3 最终事务内 activate MediaAsset、创建 ProductMedia、更新 Product version/actor/time、记录
+  - [x] 7.2 实现上传前快速版本检查和上传后最终事务复核；长上传不得持有 Product 锁。
+  - [x] 7.3 最终事务内 activate MediaAsset、创建 ProductMedia、更新 Product version/actor/time、记录
     `PRODUCT_UPDATED changedFields=media`，Audit 失败整体回滚。
-  - [ ] 7.4 实现完整 layout 快照更新、无变化 no-op、主图只来自 images、解除主图后不自动替代。
-  - [ ] 7.5 覆盖同版本并发、排序交换、上传最终冲突、解除/清理竞态、Document 双重拒绝和安全错误映射。
-  - [ ] 7.6 运行 ProductMedia/Product/Audit tests、Server typecheck/lint 和 diff-check。
-  - [ ] 7.7 更新证据并提交：`feat: 实现产品媒体领域服务`。
+  - [x] 7.4 实现完整 layout 快照更新、无变化 no-op、主图只来自 images、解除主图后不自动替代。
+  - [x] 7.5 覆盖同版本并发、排序交换、上传最终冲突、解除/清理竞态、Document 双重拒绝和安全错误映射。
+  - [x] 7.6 运行 ProductMedia/Product/Audit tests、Server typecheck/lint 和 diff-check。
+  - [x] 7.7 更新证据并提交：`feat: 实现产品媒体领域服务`。
   - _Requirements: R1-R3, R7-R8, R11_
+
+### 4.7 Task 7 实施证据
+
+- 初始 TDD RED 为 2 suites / 0 tests：`ProductMediaPersistence` 与 `ProductMediaService` 目标模块尚不存在，
+  TypeScript 编译失败且 Jest exit `1`。最小实现后的首轮静态验证中 typecheck 通过，但 ESLint 真实发现
+  4 个 unsafe mock/数组问题；收紧后又发现 1 个测试夹具允许非 Error Promise rejection，进一步限定为
+  Error 后转绿，未关闭或放宽规则。最终把 command 规范化、固定错误映射和事务编排拆为独立文件。
+- `readUploadPreflight()` 使用单条无锁参数化 SELECT 同时读取 Product version 和同类型有效关联数；只有早期
+  version/20 张图片/5 个视频检查通过后才调用 streaming `prepare()`。文件准备期间不打开 Product 事务；最终
+  事务仍以 timeout → Product `FOR UPDATE` → expectedVersion → active snapshot 的顺序重新验证版本、数量、
+  连续排序和重复资产，冲突资产固定收敛为 `MEDIA_ASSET_DOMAIN_TRANSACTION_FAILED`，等待 reconciler 清理。
+- 上传最终事务按 Product-first 锁序执行 MediaAsset activate、非主图 ProductMedia 创建、Product version/actor/time
+  更新和 `PRODUCT_UPDATED` Audit。metadata 固定为 `changedFields=media`、productNo、前后状态/版本、action、
+  productMediaId 和 mediaType，不包含 filename、objectKey、checksum、URL 或布局；Audit 失败时数据库整体回滚，
+  已准备资产在事务外条件进入 FAILED。
+- layout 要求无重复且精确覆盖当前全部有效 image/video ID；主图只能来自 imageIds。写入先将所有有效行移动到
+  高于最终 `0..n-1` 的安全排序区并清空主图，再写回连续排序和唯一主图，因此真实 PostgreSQL 的 0/1 交换不
+  触发 partial unique。完整顺序和主图都不变时直接返回当前快照，不更新 Product version 或重复写 Audit。
+- 解除关联只写 detached actor/time，随后以完整剩余快照恢复连续排序；解除主图时 primary 变为 null，不自动
+  选择替代图片。数据库 Audit 成功后才调用同事务 retention，减少 Audit 失败先移动物理文件的窗口；调用时仍
+  保持 Product → MediaAsset 锁序，`TRASHED/ACTIVE_REFERENCE` 成功，其余隔离或状态竞态安全失败并整体回滚。
+- Product Service 在 preflight 前只允许 IMAGE/VIDEO，合法 DOCUMENT 不能进入 MediaAsset prepare；既有数据库
+  `ProductMediaKind`/type Trigger 同样拒绝 DOCUMENT。错误只依据固定生命周期码、约束名和 SQLSTATE 映射为
+  413/415/422/409/503 或固定 INTERNAL_ERROR，不解析底层 message、路径、SQL 或文件内容。
+- 专用一次性 PostgreSQL 16 runner 从空库重放 18 条 migration、重复 deploy 和 status 成功；真实 1 suite /
+  2 tests 覆盖两个同版本上传只有一个提交、失败资产进入 FAILED、排序交换、唯一主图、layout no-op、解除主图、
+  retention 和 Audit rollback。专用 suite 的首次共享 E2E 尝试自身通过，但不可删除 ProductMedia 历史行污染了
+  后续假设空业务表的 suites，最终为 25/30 suites、155/173 tests；改为显式独占数据库门禁后，共享 E2E 在
+  全新数据库为 29 passed / 1 skipped suites、171 passed / 2 skipped tests，未放宽任何业务或数据库约束。
+- 最终定向验证为 2 suites / 19 tests；Server 全量为 174 suites / 1716 tests；Prisma validate、typecheck、
+  lint、build、`contract:check`、`git diff --check` 和统一 `node --run check` 均 exit `0`，根治理 665/665 通过。
+- 本任务未修改 Prisma Schema、migration、公共 API/OpenAPI、Products Controller/Module、Web、依赖或 lockfile，
+  未应用持久开发数据库，未访问真实 `/var/lib/qianshu-dms/media`，未注册 scheduler/AppModule provider，未提供
+  Product Document 分支，未 push、PR、merge 或部署。
 
 - [ ] 8. 以 TDD 切换 Product 查询到结构化媒体并删除旧列
   - 前置：Task 7 GREEN；旧媒体只读计数精确为零；Gate I 仍有效。
