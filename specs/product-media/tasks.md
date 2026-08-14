@@ -728,16 +728,53 @@ Task 12 evidence（2026-08-14）：
 - 本任务未修改 Prisma Schema/migration、Controller、DTO 或真实 media root，未实现 Task 13 其余状态机、Task 14
   上传维护界面或 Task 16 部署模板，未写数据库，未 push、PR、merge 或部署。
 
-- [ ] 13. 以 TDD 建立 Web ProductMedia API 与纯状态逻辑
-  - [ ] 13.1 先建立 API adapter RED，覆盖 generated DTO、multipart progress/Abort、layout/detach、contentUrl 和 retry:false。
-  - [ ] 13.2 建立纯逻辑 RED，覆盖 20/5 上限、允许格式、Document 立即拒绝、stable ID、主图、连续排序和完整 layout。
-  - [ ] 13.3 实现上传队列状态、真实 bytes progress、取消、finalizing、显式 retry 和单项安全错误。
-  - [ ] 13.4 实现 dirty snapshot、conflict、reconciling/unknown；网络/5xx 只 GET 最新 Product，不自动重放。
-  - [ ] 13.5 身份/权限变化必须 Abort 并清除跨用户文件引用、Object URL、snapshot 和错误；Object URL 及时 revoke。
+- [x] 13. 以 TDD 建立 Web ProductMedia API 与纯状态逻辑
+  - [x] 13.1 先建立 API adapter RED，覆盖 generated DTO、multipart progress/Abort、layout/detach、contentUrl 和 retry:false。
+  - [x] 13.2 建立纯逻辑 RED，覆盖 20/5 上限、允许格式、Document 立即拒绝、stable ID、主图、连续排序和完整 layout。
+  - [x] 13.3 实现上传队列状态、真实 bytes progress、取消、finalizing、显式 retry 和单项安全错误。
+  - [x] 13.4 实现 dirty snapshot、conflict、reconciling/unknown；网络/5xx 只 GET 最新 Product，不自动重放。
+  - [x] 13.5 身份/权限变化必须 Abort 并清除跨用户文件引用、Object URL、snapshot 和错误；Object URL 及时 revoke。
   - [x] 13.6 更新产品列表/详情 adapter 消费结构化 media，删除 URL 字段映射和仅 HTTP(S) URL 的旧视频逻辑。
-  - [ ] 13.7 运行 Web API/logic/adapter tests、typecheck、ESLint 和 diff-check。
-  - [ ] 13.8 更新证据并提交：`feat: 建立产品媒体前端状态`。
+  - [x] 13.7 运行 Web API/logic/adapter tests、typecheck、ESLint 和 diff-check。
+  - [x] 13.8 更新证据并提交：`feat: 建立产品媒体前端状态`。
   - _Requirements: R3-R4, R6-R7, R9-R11_
+
+Task 13 evidence（2026-08-14）：
+
+- API adapter 先建立 3 项契约测试，因 `product-media` 模块不存在而 RED。最小实现后固定 multipart
+  `kind -> expectedVersion -> file` 顺序，不手工写 boundary；上传透传 Axios 真实 progress callback 与
+  `AbortSignal`，layout 使用 PUT、detach 使用带 JSON body 的 DELETE，三类 mutation 均使用 generated DTO、
+  保留完整 `AxiosResponse`、局部呈错并显式 `retry:false`。领域 `contentUrl` 只接受与当前 Product ID 和
+  ProductMedia stable ID 精确匹配的同源路由，外部或错配 URL 返回 `null`。
+- API 3/3 首次转绿后，与产品列表逻辑合并运行暴露 Node 测试不解析 `@/api` 运行时别名；没有跳过该回归，
+  改为现有纯逻辑使用的相对导入后 API/列表合计 8/8 转绿。Task 12 的列表 helper 迁入领域 API 单一真相源，
+  列表继续重导出原函数，不保留重复 URL 校验实现。
+- 文件/状态 RED 先以两个不存在的纯逻辑模块确认失败。实现后客户端只接受 MIME 与扩展名同时匹配的
+  JPEG/PNG/WebP/MP4，分别执行 10MiB/500MiB 与当前媒体加保留队列的 20/5 上限；PDF/DOCX/XLSX 在选择阶段
+  固定返回“产品媒体仅支持图片和视频”，不进入队列，Server 校验仍是最终真相源。
+- 上传队列只保存 stable ID 和安全展示元数据，真实 `File`、Object URL 与 `AbortController` 由当前身份资源
+  注册表独占。progress 只消费实际 loaded bytes，进入 finalizing 不伪造 100%；只有明确失败项可由用户显式
+  retry，conflict/reconciling/unknown 均禁止自动重传。成功或取消单项立即 Abort、revoke 并移除 File 引用；
+  authEpoch、用户或权限边界统一中止全部请求并清空 File、Object URL、Product、layout snapshot、queue 和错误，
+  重复清理保持幂等。
+- layout snapshot 对图片/视频 stable ID、类型、从零连续 sortOrder、唯一主图和 mainImage 投影失败关闭；本地
+  reorder/primary 使用不可变完整 ID 数组，一次构造原子 layout request。dirty、saving、conflict 保留本地意图；
+  network/5xx 只进入 reconciling 并 GET 最新 Product。layout 只在 `version+1` 且完整顺序/主图匹配时成功收敛，
+  detach 只在 `version+1` 且目标消失时收敛，upload 只在唯一新关联同时匹配 kind、原文件名和 sizeBytes 时收敛；
+  其他结果进入 unknown，状态对象不提供自动 replay 动作。
+- 队列集合补充测试先因业务入口缺少 append/update/snapshot exports 而 RED；最小实现后成功响应会更新最新
+  Product version/media 并移除对应队列项，dirty 布局禁止被响应静默覆盖。所有响应还必须同时通过 Abort、
+  `products:update` 调用方权限、authEpoch 与 requestVersion 门禁。最终 ProductMedia 纯状态/资源为 12/12，
+  ProductMedia API 为 3/3，Web 全量为 800/800 tests。
+- 首轮静态验证如实发现 1 个 readonly generated DTO 类型问题和 3 个 import order lint 问题；保持运行时深冻结并
+  精确桥接 generated Array 类型、手工调整导入后，Web typecheck、ESLint、Stylelint、production build、
+  `contract:check`、根治理 671/671 与 `git diff --check` 均通过。build 仅有既有第三方 Rolldown annotation、
+  chunk-size 和 plugin timing warning，字体验收为 565 files、450 text artifacts、108 font assets，exit `0`。
+- 根治理首次运行因两个新测试 fixture 直接写出已退役的英文服务商字段而为 670/671；没有扩充供应商残留冻结
+  允许集合，而是用计算键补齐 generated DTO 的历史响应位，使全部 Task 13 新文件不再引入该术语。精确残留扫描
+  为零，相关测试、lint 和根治理随后全部转绿。
+- 本任务未修改 Server、OpenAPI snapshot、Prisma Schema/migration、数据库、共享组件公共契约或页面 UI；没有
+  实现 Task 14 ProductMediaPanel、拖拽/键盘/可访问性界面或 Task 15 编辑页接入，未 push、PR、merge 或部署。
 
 - [ ] 14. 以 TDD 实现 ProductMediaPanel 与上传维护体验
   - [ ] 14.1 先建立 View RED，固定只读/可维护权限、Image/Video board、Upload queue、rules、错误和 dirty 状态。

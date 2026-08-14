@@ -18,6 +18,7 @@ import type {
   DictionaryCatalog,
   DictionaryCatalogTone,
 } from '@/dictionary-catalog/types'
+import { resolveProductMediaContentUrl } from '../../../../api/modules/product-media'
 
 type ProductListQuery = NonNullable<ProductsListData['query']>
 
@@ -50,6 +51,8 @@ export type ProductMediaViewModel = Omit<
   readonly mainImage: ProductMediaItemViewModel | null
   readonly videos: readonly ProductMediaItemViewModel[]
 }
+
+export { resolveProductMediaContentUrl }
 
 export type ProductPageViewModel = Omit<ProductPageDto, 'items'> & {
   readonly items: readonly ProductListItemViewModel[]
@@ -185,19 +188,6 @@ export function buildSupplierFilterOptions(
     label: item.effectiveEnabled ? item.label : `${item.label}（已停用）`,
     value: item.value,
   }))
-}
-
-/**
- * ProductMedia 的 contentUrl 是受保护的同源领域路由，不是任意外部 URL。
- * 这里按当前 Product 与媒体 stable ID 重建唯一合法路径；服务端响应若漂移，
- * 页面宁可不加载内容，也不会把不可信 scheme 或其他资源地址交给 DOM。
- */
-export function resolveProductMediaContentUrl(
-  productId: string,
-  media: ProductMediaItemViewModel,
-): string | null {
-  const expected = `/api/products/${encodeURIComponent(productId)}/media/${encodeURIComponent(media.id)}/content`
-  return media.contentUrl === expected ? expected : null
 }
 
 function buildImageItem(
