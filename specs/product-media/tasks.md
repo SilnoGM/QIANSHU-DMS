@@ -776,16 +776,45 @@ Task 13 evidence（2026-08-14）：
 - 本任务未修改 Server、OpenAPI snapshot、Prisma Schema/migration、数据库、共享组件公共契约或页面 UI；没有
   实现 Task 14 ProductMediaPanel、拖拽/键盘/可访问性界面或 Task 15 编辑页接入，未 push、PR、merge 或部署。
 
-- [ ] 14. 以 TDD 实现 ProductMediaPanel 与上传维护体验
-  - [ ] 14.1 先建立 View RED，固定只读/可维护权限、Image/Video board、Upload queue、rules、错误和 dirty 状态。
-  - [ ] 14.2 实现桌面 7/5、图片 3–4 列、窄屏 1–2 列/单列，无横向滚动；只消费既有 semantic tokens。
-  - [ ] 14.3 图片支持预览、主图、拖拽增强、键盘前移/后移和解除；视频支持预览/排序/解除且无主图操作。
-  - [ ] 14.4 上传 input 有可见 label，dropzone 非唯一入口；队列暴露 progress、取消、失败、显式 retry 和 live region。
-  - [ ] 14.5 实现 dirty 离开确认、冲突对照、首错聚焦、焦点恢复、44px 触控、Dark 和 Reduced Motion。
-  - [ ] 14.6 复用/组合 Fa 上传 primitive；若必须改变公共契约，停止并请求新确认，不把 Product 规则下沉。
-  - [ ] 14.7 运行 View/accessibility tests、Web typecheck、ESLint、Stylelint、build 和 diff-check。
-  - [ ] 14.8 更新证据并提交：`feat: 实现产品媒体维护界面`。
+- [x] 14. 以 TDD 实现 ProductMediaPanel 与上传维护体验
+  - [x] 14.1 先建立 View RED，固定只读/可维护权限、Image/Video board、Upload queue、rules、错误和 dirty 状态。
+  - [x] 14.2 实现桌面 7/5、图片 3–4 列、窄屏 1–2 列/单列，无横向滚动；只消费既有 semantic tokens。
+  - [x] 14.3 图片支持预览、主图、拖拽增强、键盘前移/后移和解除；视频支持预览/排序/解除且无主图操作。
+  - [x] 14.4 上传 input 有可见 label，dropzone 非唯一入口；队列暴露 progress、取消、失败、显式 retry 和 live region。
+  - [x] 14.5 实现 dirty 离开确认、冲突对照、首错聚焦、焦点恢复、44px 触控、Dark 和 Reduced Motion。
+  - [x] 14.6 复用/组合 Fa 上传 primitive；若必须改变公共契约，停止并请求新确认，不把 Product 规则下沉。
+  - [x] 14.7 运行 View/accessibility tests、Web typecheck、ESLint、Stylelint、build 和 diff-check。
+  - [x] 14.8 更新证据并提交：`feat: 实现产品媒体维护界面`。
   - _Requirements: R3-R4, R7, R9-R10_
+
+Task 14 evidence（2026-08-14）：
+
+- View/accessibility 合同先新增 7 项测试，首次因展示辅助模块不存在而稳定 RED；最小实现后固定
+  `ProductMediaPanel`、Image/Video board、Upload queue、rules、权限、错误、dirty、布局和无障碍边界，定向
+  7/7、Web 全量 807/807 tests 转绿。测试同时禁止硬编码颜色、gradient 和横向滚动，并证明产品媒体规则没有
+  PDF/DOCX/XLSX、说明书或证书入口。
+- `ProductMediaPanel` 按桌面约 7/5 非对称布局组合媒体画布与窄侧栏，图片网格从单列、窄屏双列到桌面 3–4 列；
+  全部界面只使用现有 semantic tokens、Noto 类型类和 Fa/Lucide 图标。图片按真实比例 `object-contain` 展示，
+  支持文本化主图状态、预览、键盘前移/后移和同 board 拖拽增强；视频保留原生 keyboard controls，支持预览、
+  排序和解除且不存在主图动作。外部拖放的非本 board stable ID 失败关闭。
+- 上传区域保留与原生 input 关联的可见 label 和独立“浏览本机文件”按钮，并组合 `FaFileUpload` 的拖放、粘贴与
+  选择能力；`beforeUpload` 只把 File 交给 Product 领域队列并返回 false，共享组件不会自行发出缺少 Product
+  version 的请求。上传按队列串行执行，进度只来自 Axios `loaded` bytes；取消在途上传后先 Abort/revoke，再 GET
+  对账，不把取消误报成确定失败。明确失败才显示显式 retry，conflict/reconciling/unknown 均不自动重放。
+- 布局变更保留完整本地 draft，并通过一次原子 layout mutation 保存；冲突或未知结果展示本地/最新布局对照，
+  只有用户明确选择才采用最新状态或基于最新版本恢复本地布局。解除操作显示文件名和媒体类型确认；成功后焦点
+  回到相邻卡片或上传入口。上传选择/服务端错误聚焦关联标题的队列项，状态通过 polite live region 通知；主要
+  操作为 44px，Dark 使用 semantic tokens，动画遵守 Reduced Motion。
+- 面板副作用拆为布局/解除主控制器和独立上传控制器；File、Object URL、AbortController、authEpoch、request
+  version 与权限边界集中管理。身份或维护权限变化会 Abort/revoke 并清空跨用户队列、错误和本地快照；受保护
+  `contentUrl` 只在 `contentReadable` 为 true 且精确匹配 Product/ProductMedia stable ID 时交给 DOM。
+- 首轮静态校验如实发现 `FaBadge` 公共契约不适合作为普通状态标签、脚本事件命名和媒体查询语法问题，改用既有
+  `FaTag` 并按项目规则修正；生产 build 首次又发现外部拖放 `sourceId` 可能为 undefined，补充字符串与 board
+  归属收窄后复跑通过。最终 Web typecheck、ESLint、Stylelint、production build、`contract:check`、根治理
+  671/671 与 `git diff --check` 均通过；build 仅有既有第三方 Rolldown annotation、chunk-size 和 plugin timing
+  warning，字体验收为 599 files、484 text artifacts、108 font assets，exit `0`。
+- 本任务未修改 Server、OpenAPI、数据库 Schema/migration、共享组件公共契约或依赖；没有接入产品编辑页、路由
+  和最终 RBAC 组合，这些仍属于 Task 15。未写数据库，未 push、PR、merge 或部署。
 
 - [ ] 15. 接入产品编辑、列表和详情并完成 Web 回归
   - [ ] 15.1 产品编辑页接入 ProductMediaPanel，共享 Product version，但基础表单提交和媒体上传状态机保持独立。
