@@ -39,7 +39,7 @@ test('属性编辑器覆盖 50 项、稳定 key、有序操作与可访问错误
   assert.doesNotMatch(source, /gradient|#[\dA-F]{3,8}/i)
 })
 
-test('产品表单组合基础资料、状态供应商、三组金额、属性和媒体延期说明', async () => {
+test('产品表单组合基础资料、状态供应商、三组金额、属性和创建后媒体说明', async () => {
   const source = await readFile(
     new URL('product-form.vue', FORM_ROOT),
     'utf8',
@@ -66,7 +66,8 @@ test('产品表单组合基础资料、状态供应商、三组金额、属性�
   assert.match(source, /patch: \[value: Partial<ProductFormModel>\]/)
   assert.match(source, /emit\('patch', patch\)/)
   assert.doesNotMatch(source, /\.\.\.props\.modelValue,\s*\.\.\.patch/u)
-  assert.match(source, /图片与视频将在后续版本接入/)
+  assert.match(source, /<FaCard\s+v-if="!isEdit"\s+title="媒体资料"/)
+  assert.match(source, /创建产品后可在编辑页上传和维护图片与视频/)
   assert.doesNotMatch(source, /type="file"|上传图片|上传视频|媒体 URL/i)
 })
 

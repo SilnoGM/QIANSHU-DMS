@@ -42,6 +42,7 @@ const { currencies } = useCurrencyCatalog()
 const canRead = computed(() => auth('products:read'))
 const canCreate = computed(() => auth('products:create'))
 const canUpdate = computed(() => auth('products:update'))
+const canReadProductMedia = computed(() => auth('product-media:read'))
 const rows = ref<ProductListItemViewModel[]>([])
 const page = ref(1)
 const pageSize = ref(20)
@@ -314,7 +315,7 @@ function showAttributes(product: ProductListItemViewModel): void {
 }
 
 function showVideos(product: ProductListItemViewModel): void {
-  if (product.media.videos.length === 0) {
+  if (!canReadProductMedia.value || product.media.videos.length === 0) {
     return
   }
   videosTarget.value = product
@@ -555,23 +556,31 @@ onBeforeUnmount(() => {
         </template>
         <template #cell-mainImage="{ row }">
           <ImageGroup
-            :items="buildProductMainImageItems(row.original)"
+            v-if="canReadProductMedia"
+            :items="buildProductMainImageItems(row.original, canReadProductMedia)"
             :max-count="1"
             radius="lg"
             size="sm"
           />
+          <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+            <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+          </span>
         </template>
         <template #cell-images="{ row }">
           <ImageGroup
-            :items="buildProductImageItems(row.original)"
+            v-if="canReadProductMedia"
+            :items="buildProductImageItems(row.original, canReadProductMedia)"
             :max-count="3"
             radius="lg"
             size="sm"
           />
+          <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+            <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+          </span>
         </template>
         <template #cell-videos="{ row }">
           <FaButton
-            v-if="row.original.media.videos.length"
+            v-if="canReadProductMedia && row.original.media.videos.length"
             variant="ghost"
             size="sm"
             class="min-h-11 sm:min-h-9"
@@ -581,6 +590,9 @@ onBeforeUnmount(() => {
             <FaIcon name="i-lucide:video" />
             {{ row.original.media.videos.length }} 个视频
           </FaButton>
+          <span v-else-if="!canReadProductMedia" class="qs-type-meta inline-flex gap-1 items-center">
+            <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+          </span>
           <span v-else>—</span>
         </template>
         <template #cell-twdSalePrice="{ row }">
@@ -696,11 +708,15 @@ onBeforeUnmount(() => {
                 产品主图
               </dt><dd class="m-0">
                 <ImageGroup
-                  :items="buildProductMainImageItems(row)"
+                  v-if="canReadProductMedia"
+                  :items="buildProductMainImageItems(row, canReadProductMedia)"
                   :max-count="1"
                   radius="lg"
                   :size="44"
                 />
+                <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+                  <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+                </span>
               </dd>
             </div>
             <div>
@@ -708,11 +724,15 @@ onBeforeUnmount(() => {
                 产品图片
               </dt><dd class="m-0">
                 <ImageGroup
-                  :items="buildProductImageItems(row)"
+                  v-if="canReadProductMedia"
+                  :items="buildProductImageItems(row, canReadProductMedia)"
                   :max-count="3"
                   radius="lg"
                   :size="44"
                 />
+                <span v-else class="qs-type-meta inline-flex gap-1 items-center">
+                  <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+                </span>
               </dd>
             </div>
             <div>
@@ -720,7 +740,7 @@ onBeforeUnmount(() => {
                 产品视频
               </dt><dd class="m-0">
                 <FaButton
-                  v-if="row.media.videos.length"
+                  v-if="canReadProductMedia && row.media.videos.length"
                   variant="ghost"
                   class="min-h-11"
                   :aria-label="`查看产品 ${row.productNo} 的 ${row.media.videos.length} 个视频`"
@@ -729,6 +749,9 @@ onBeforeUnmount(() => {
                   <FaIcon name="i-lucide:video" />
                   {{ row.media.videos.length }} 个视频
                 </FaButton>
+                <span v-else-if="!canReadProductMedia" class="qs-type-meta inline-flex gap-1 items-center">
+                  <FaIcon name="i-lucide:shield-alert" aria-hidden="true" />无权读取
+                </span>
                 <span v-else>—</span>
               </dd>
             </div>
@@ -830,12 +853,14 @@ onBeforeUnmount(() => {
     <ProductVideosModal
       v-model="videosVisible"
       :product="videosTarget"
+      :content-readable="canReadProductMedia"
     />
     <ProductDetailDrawer
       v-model="detailVisible"
       :product="detailProduct"
       :currencies="currencies"
       :can-edit="canUpdate"
+      :content-readable="canReadProductMedia"
       :loading="detailLoading"
       :error="detailError"
       :request-id="detailRequestId"

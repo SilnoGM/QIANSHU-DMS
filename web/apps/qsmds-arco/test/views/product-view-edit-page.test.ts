@@ -90,3 +90,77 @@ test('编辑页要求 read+update、GET 初始化、差异 PATCH、对账和离�
   assert.match(source, /<QsGenericModal/u)
   assert.doesNotMatch(source, /setTimeout\([\s\S]{0,120}productsApi\.update/u)
 })
+
+test('Task 15 编辑页共享产品版本并让基础表单与媒体状态机保持独立', async () => {
+  const source = await readFile(new URL('edit/index.vue', ROOT), 'utf8')
+  const formSource = await readFile(
+    new URL('form/product-form.vue', ROOT),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /import ProductMediaPanel from '\.\.\/media\/product-media-panel\.vue'/u,
+  )
+  assert.match(source, /const \{ auth, authAll \} = useAppAuth\(\)/u)
+  assert.match(
+    source,
+    /const canReadProductMedia = computed\(\(\) => auth\('product-media:read'\)\)/u,
+  )
+  assert.match(
+    source,
+    /const canUpdate = computed\(\(\) => auth\('products:update'\)\)/u,
+  )
+  assert.match(
+    source,
+    /function handleMediaProductChange\(product: ProductListItemDto\)[\s\S]{0,320}source\.value = product/u,
+  )
+  assert.match(
+    source,
+    /const response = await productsApi\.update[\s\S]{0,520}source\.value = response\.data/u,
+  )
+  assert.match(
+    source,
+    /<ProductMediaPanel[\s\S]{0,420}:product="source"[\s\S]{0,420}:editable="canUpdate"[\s\S]{0,420}:content-readable="canReadProductMedia"[\s\S]{0,420}:auth-epoch="appAccountStore\.authEpoch"[\s\S]{0,420}@product-change="handleMediaProductChange"/u,
+  )
+  assert.doesNotMatch(
+    source,
+    /function handleMediaProductChange[\s\S]{0,320}formModel\.value/u,
+  )
+  assert.match(
+    formSource,
+    /<FaCard\s+v-if="!isEdit"\s+title="媒体资料"/u,
+  )
+  assert.match(formSource, /创建产品后可在编辑页上传和维护图片与视频/u)
+})
+
+test('Task 15 详情和视频预览缺少内容权限时失败关闭且不生成内容地址', async () => {
+  const detailSource = await readFile(
+    new URL('list/product-detail-drawer.vue', ROOT),
+    'utf8',
+  )
+  const videosSource = await readFile(
+    new URL('list/product-videos-modal.vue', ROOT),
+    'utf8',
+  )
+
+  assert.match(detailSource, /contentReadable\?: boolean/u)
+  assert.match(detailSource, /contentReadable: false/u)
+  assert.match(detailSource, /v-if="!contentReadable"[\s\S]{0,240}无权读取媒体内容/u)
+  assert.match(
+    detailSource,
+    /buildProductMainImageItems\(product, contentReadable\)/u,
+  )
+  assert.match(
+    detailSource,
+    /buildProductImageItems\(product, contentReadable\)/u,
+  )
+
+  assert.match(videosSource, /contentReadable\?: boolean/u)
+  assert.match(videosSource, /contentReadable: false/u)
+  assert.match(
+    videosSource,
+    /if \(!props\.contentReadable\) \{[\s\S]{0,100}return \[\]/u,
+  )
+  assert.match(videosSource, /v-if="!contentReadable"[\s\S]{0,240}无权读取媒体内容/u)
+})

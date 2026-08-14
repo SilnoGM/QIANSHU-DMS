@@ -12,10 +12,13 @@ interface ProductVideoItem {
   readonly safeUrl: string | null
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  contentReadable?: boolean
   modelValue: boolean
   product: ProductListItemViewModel | null
-}>()
+}>(), {
+  contentReadable: false,
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -29,6 +32,9 @@ const title = computed(() => props.product === null
   ? '产品视频'
   : `${props.product.name} · 产品视频`)
 const videos = computed<readonly ProductVideoItem[]>(() => {
+  if (!props.contentReadable) {
+    return []
+  }
   const product = props.product
   if (product === null) {
     return []
@@ -89,7 +95,14 @@ onBeforeUnmount(pauseActiveVideo)
     @closed="pauseActiveVideo"
     @update:model-value="updateVisible"
   >
-    <div v-if="product && videos.length" class="gap-5 grid lg:grid-cols-[minmax(0,1fr)_16rem]">
+    <FaEmpty
+      v-if="!contentReadable"
+      icon="i-lucide:shield-alert"
+      title="无权读取媒体内容"
+      description="当前身份不能加载或打开产品视频。"
+      class="py-8"
+    />
+    <div v-else-if="product && videos.length" class="gap-5 grid lg:grid-cols-[minmax(0,1fr)_16rem]">
       <section aria-label="视频预览" class="min-w-0">
         <div class="border border-border rounded-lg bg-muted/30 overflow-hidden">
           <video

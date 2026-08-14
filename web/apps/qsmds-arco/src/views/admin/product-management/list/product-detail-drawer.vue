@@ -16,6 +16,7 @@ defineOptions({ name: 'ProductDetailDrawer' })
 
 const props = withDefaults(defineProps<{
   canEdit?: boolean
+  contentReadable?: boolean
   currencies: readonly CurrencyDescriptor[]
   error?: string
   loading?: boolean
@@ -24,6 +25,7 @@ const props = withDefaults(defineProps<{
   requestId?: string
 }>(), {
   canEdit: false,
+  contentReadable: false,
   error: '',
   loading: false,
   requestId: undefined,
@@ -189,13 +191,20 @@ function supplierDisplay(product: ProductListItemViewModel): string {
         <h3 class="qs-type-section-title m-0 mb-3">
           媒体资料
         </h3>
-        <dl class="m-0 gap-4 grid">
+        <FaEmpty
+          v-if="!contentReadable"
+          icon="i-lucide:shield-alert"
+          title="无权读取媒体内容"
+          description="当前身份可以查看产品资料，但不能加载图片或视频内容。"
+          class="py-6"
+        />
+        <dl v-else class="m-0 gap-4 grid">
           <div>
             <dt class="qs-type-compact-label mb-2">
               产品主图
             </dt>
             <dd class="m-0">
-              <ImageGroup :items="buildProductMainImageItems(product)" :max-count="1" radius="lg" :size="72" />
+              <ImageGroup :items="buildProductMainImageItems(product, contentReadable)" :max-count="1" radius="lg" :size="72" />
             </dd>
           </div>
           <div>
@@ -203,7 +212,7 @@ function supplierDisplay(product: ProductListItemViewModel): string {
               产品图片（{{ product.media.images.length }}）
             </dt>
             <dd class="m-0">
-              <ImageGroup :items="buildProductImageItems(product)" :max-count="3" radius="lg" :size="64" />
+              <ImageGroup :items="buildProductImageItems(product, contentReadable)" :max-count="3" radius="lg" :size="64" />
             </dd>
           </div>
           <div>

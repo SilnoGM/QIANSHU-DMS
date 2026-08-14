@@ -195,7 +195,11 @@ function buildImageItem(
   media: ProductMediaItemViewModel,
   kind: 'image' | 'main',
   sourceIndex: number,
+  contentReadable: boolean,
 ): ImageGroupItem | null {
+  if (!contentReadable) {
+    return null
+  }
   const src = resolveProductMediaContentUrl(product.id, media)
   if (src === null) {
     return null
@@ -213,19 +217,33 @@ function buildImageItem(
 
 export function buildProductMainImageItems(
   product: ProductListItemViewModel,
+  contentReadable: boolean,
 ): readonly ImageGroupItem[] {
   if (product.media.mainImage === null) {
     return []
   }
-  const item = buildImageItem(product, product.media.mainImage, 'main', 0)
+  const item = buildImageItem(
+    product,
+    product.media.mainImage,
+    'main',
+    0,
+    contentReadable,
+  )
   return item === null ? [] : [item]
 }
 
 export function buildProductImageItems(
   product: ProductListItemViewModel,
+  contentReadable: boolean,
 ): readonly ImageGroupItem[] {
   return product.media.images.flatMap((media, sourceIndex) => {
-    const item = buildImageItem(product, media, 'image', sourceIndex)
+    const item = buildImageItem(
+      product,
+      media,
+      'image',
+      sourceIndex,
+      contentReadable,
+    )
     return item === null ? [] : [item]
   })
 }

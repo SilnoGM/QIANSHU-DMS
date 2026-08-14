@@ -132,6 +132,28 @@ test('属性和视频入口可聚焦，新增、查看与编辑接入精确路�
   assert.doesNotMatch(source, /productsApi\.(?:create|update|delete)/u)
 })
 
+test('Task 15 列表以独立内容权限控制所有媒体 DOM 和预览入口', () => {
+  assert.match(
+    source,
+    /const canReadProductMedia = computed\(\(\) => auth\('product-media:read'\)\)/u,
+  )
+  assert.match(source, /buildProductMainImageItems\([^)]*, canReadProductMedia\)/u)
+  assert.match(source, /buildProductImageItems\([^)]*, canReadProductMedia\)/u)
+  assert.match(source, /无权读取/u)
+  assert.match(
+    source,
+    /<ProductVideosModal[\s\S]{0,220}:content-readable="canReadProductMedia"/u,
+  )
+  assert.match(
+    source,
+    /<ProductDetailDrawer[\s\S]{0,260}:content-readable="canReadProductMedia"/u,
+  )
+  assert.match(
+    source,
+    /function showVideos\([\s\S]{0,180}!canReadProductMedia\.value/u,
+  )
+})
+
 test('属性弹窗完整有序展示，视频弹窗消费领域 contentUrl 并保留安全外链', () => {
   const attributesModal = readFileSync(new URL(
     '../../src/views/admin/product-management/list/product-attributes-modal.vue',

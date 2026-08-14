@@ -816,15 +816,40 @@ Task 14 evidence（2026-08-14）：
 - 本任务未修改 Server、OpenAPI、数据库 Schema/migration、共享组件公共契约或依赖；没有接入产品编辑页、路由
   和最终 RBAC 组合，这些仍属于 Task 15。未写数据库，未 push、PR、merge 或部署。
 
-- [ ] 15. 接入产品编辑、列表和详情并完成 Web 回归
-  - [ ] 15.1 产品编辑页接入 ProductMediaPanel，共享 Product version，但基础表单提交和媒体上传状态机保持独立。
-  - [ ] 15.2 `products:update` 控制维护；`product-media:read` 控制内容；缺少内容权限时显示稳定无泄露占位。
-  - [ ] 15.3 产品列表继续使用 ImageGroup 和视频弹窗，改用结构化 item/contentUrl，保持分页/search/filter 不回归。
-  - [ ] 15.4 产品详情 Drawer 展示结构化媒体和安全错误，不恢复 URL 文本或 Product Document。
-  - [ ] 15.5 覆盖上传后 Product version 刷新、基础编辑冲突、路由离开、auth epoch、迟到响应和创建流程回归。
-  - [ ] 15.6 运行产品全套 Web tests、`test:api`、typecheck、lint、build 和 diff-check。
-  - [ ] 15.7 更新证据并提交：`feat: 接入产品媒体业务流程`。
+- [x] 15. 接入产品编辑、列表和详情并完成 Web 回归
+  - [x] 15.1 产品编辑页接入 ProductMediaPanel，共享 Product version，但基础表单提交和媒体上传状态机保持独立。
+  - [x] 15.2 `products:update` 控制维护；`product-media:read` 控制内容；缺少内容权限时显示稳定无泄露占位。
+  - [x] 15.3 产品列表继续使用 ImageGroup 和视频弹窗，改用结构化 item/contentUrl，保持分页/search/filter 不回归。
+  - [x] 15.4 产品详情 Drawer 展示结构化媒体和安全错误，不恢复 URL 文本或 Product Document。
+  - [x] 15.5 覆盖上传后 Product version 刷新、基础编辑冲突、路由离开、auth epoch、迟到响应和创建流程回归。
+  - [x] 15.6 运行产品全套 Web tests、`test:api`、typecheck、lint、build 和 diff-check。
+  - [x] 15.7 更新证据并提交：`feat: 接入产品媒体业务流程`。
   - _Requirements: R6-R7, R9-R10_
+
+Task 15 evidence（2026-08-14）：
+
+- 先扩展产品 View/logic 合同，目标集首次 29 项中 24 项通过、5 项稳定 RED，分别锁定编辑页接入、列表内容权限、
+  详情/视频失败关闭、创建说明和只读媒体辅助逻辑；最小实现后目标集 29/29、产品域完整测试 71/71、Web 全量
+  `test:api` 810/810 转绿。
+- 编辑页直接组合 `ProductMediaPanel`，`products:update` 只决定媒体维护，`product-media:read` 独立决定内容读取，
+  `authEpoch` 直接来自当前账户身份域。媒体 mutation 返回的新 Product 只更新共享 snapshot/version，不重建
+  `formModel`，因此未保存的基础字段不会被上传、布局或解除响应覆盖；基础 PATCH 成功也立即回写最新 Product，
+  后续媒体请求继续使用最新版本。两套状态机继续各自处理提交、上传、冲突、unknown 和离开保护。
+- 列表桌面与移动视图继续复用 `ImageGroup` 和视频弹窗，分页、search、供应商筛选与详情请求编排未改变；
+  图片辅助逻辑新增显式 `contentReadable` 参数并默认由调用方失败关闭。缺少 `product-media:read` 时，列表、详情
+  Drawer 和视频弹窗只渲染带 shield icon 的稳定占位，不调用内容 URL resolver、不创建 `<img>`、`<video>` 或
+  外链。详情仍使用结构化 media，不恢复 URL 文本或 Product Document。
+- 创建流程仍不接受媒体文件；共享表单只在 create 模式提示“创建后进入编辑页维护媒体”，edit 模式由真实
+  `ProductMediaPanel` 取代旧延期说明。既有产品冲突、路由离开、auth epoch、迟到响应、上传 version 和创建
+  unknown 回归均包含在 71 项产品域测试中。
+- Web typecheck、ESLint、Stylelint、production build、`contract:check`、根治理 671/671、`git diff --check`
+  与视觉规则扫描全部通过；build 仅有既有第三方 Rolldown annotation、chunk-size 和 plugin timing warning，
+  字体验收为 599 files、484 text artifacts、108 font assets。首次视觉扫描把 TypeScript `interface` 误判为字体
+  `Inter` 并以 `1` 退出，修正为单词边界后复跑无命中。
+- 补充任务证据后的首次根治理复跑为 670/671，原因是证据文字新引入退役英文服务商术语；未扩充残留冻结
+  允许集合，改用当前中文术语后再次复跑 671/671。
+- 本任务未修改 Server、OpenAPI、数据库 Schema/migration、共享组件公共契约、路由或依赖；未写数据库，未执行
+  Browser/真实文件验收（仍属 Task 17），未 push、PR、merge 或部署。
 
 - [ ] 16. 建立部署模板、健康检查、容量与恢复 dry run
   - 前置：Gate OPS 只授权仓库内模板；不得修改真实主机。

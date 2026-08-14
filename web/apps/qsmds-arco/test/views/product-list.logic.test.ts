@@ -175,13 +175,13 @@ test('供应商筛选使用当前 label 与 stable value，并保留已停用已
 test('结构化媒体使用 stable ID 和领域 contentUrl，拒绝不匹配的内容地址且不重排', () => {
   const product = adaptProductPageDto(productPageDto).items[0]!
 
-  assert.deepEqual(buildProductMainImageItems(product), [{
+  assert.deepEqual(buildProductMainImageItems(product, true), [{
     alt: '便携收纳包主图',
     key: 'media-image-main',
     src: '/api/products/product-1/media/media-image-main/content',
     tooltip: '便携收纳包主图',
   }])
-  assert.deepEqual(buildProductImageItems(product), [
+  assert.deepEqual(buildProductImageItems(product, true), [
     {
       alt: '便携收纳包图片 1',
       key: 'media-image-main',
@@ -195,6 +195,8 @@ test('结构化媒体使用 stable ID 和领域 contentUrl，拒绝不匹配的�
       tooltip: '便携收纳包图片 2',
     },
   ])
+  assert.deepEqual(buildProductMainImageItems(product, false), [])
+  assert.deepEqual(buildProductImageItems(product, false), [])
   assert.equal(resolveProductMediaContentUrl(product.id, {
     ...product.media.images[0]!,
     contentUrl: 'https://example.test/media.webp',
