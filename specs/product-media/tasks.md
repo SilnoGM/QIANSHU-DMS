@@ -511,18 +511,39 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
   未应用持久开发数据库，未访问真实 `/var/lib/qianshu-dms/media`，未注册 scheduler/AppModule provider，未提供
   Product Document 分支，未 push、PR、merge 或部署。
 
-- [ ] 8. 以 TDD 切换 Product 查询到结构化媒体并删除旧列
+- [x] 8. 以 TDD 切换 Product 查询到结构化媒体并删除旧列
   - 前置：Task 7 GREEN；旧媒体只读计数精确为零；Gate I 仍有效。
-  - [ ] 8.1 先建立 mapper/DTO/query RED，要求 `media.mainImage/images/videos` 稳定结构、顺序、空值和
+  - [x] 8.1 先建立 mapper/DTO/query RED，要求 `media.mainImage/images/videos` 稳定结构、顺序、空值和
     领域 contentUrl，且不泄露 MediaAsset ID/objectKey/checksum/storageDriver。
-  - [ ] 8.2 实现列表/详情批量加载 ProductMedia，避免 N+1；主图从 images 的 `isPrimary` 投影且仍保留在 images。
-  - [ ] 8.3 建立 cutover migration RED：非空旧媒体数据必须在 DROP 前 fail-closed；删除三列且不触碰其他 Product 字段。
-  - [ ] 8.4 原子更新 Prisma、Product select/mapper/DTO/tests 和所有 Server caller，移除新代码中的旧 URL 语义，
+  - [x] 8.2 实现列表/详情批量加载 ProductMedia，避免 N+1；主图从 images 的 `isPrimary` 投影且仍保留在 images。
+  - [x] 8.3 建立 cutover migration RED：非空旧媒体数据必须在 DROP 前 fail-closed；删除三列且不触碰其他 Product 字段。
+  - [x] 8.4 原子更新 Prisma、Product select/mapper/DTO/tests 和所有 Server caller，移除新代码中的旧 URL 语义，
     不建立双写或兼容字段。
-  - [ ] 8.5 用隔离 PostgreSQL 覆盖空旧数据成功、三类非空数据分别停止、Product 行数不变量和回滚演练。
-  - [ ] 8.6 运行 Product query/schema tests、Prisma validate/generate、Server typecheck/lint 和 diff-check。
-  - [ ] 8.7 更新证据并提交：`refactor: 切换产品媒体数据结构`。
+  - [x] 8.5 用隔离 PostgreSQL 覆盖空旧数据成功、三类非空数据分别停止、Product 行数不变量和回滚演练。
+  - [x] 8.6 运行 Product query/schema tests、Prisma validate/generate、Server typecheck/lint 和 diff-check。
+  - [x] 8.7 更新证据并提交：`refactor: 切换产品媒体数据结构`。
   - _Requirements: R3, R6, R9, R12_
+
+### 4.8 Task 8 实施证据
+
+- 持久开发库只读事务预检为 `product_count=2`、`main_image_count=0`、`images_count=0`、
+  `videos_count=0`；未对持久开发库执行 migration 或任何写操作。
+- RED 先由 4 suites 建立：缺失媒体 mapper、Product 查询仍返回旧 URL 字段、Controller 缺少结构化 DTO、
+  Prisma 与 migration 尚未删除旧列；结果为 4 failed suites、3 failed / 6 passed tests。
+- Product 列表与详情在同一事务中读取 Product 和有效 ProductMedia；列表对当前页全部 Product ID 只执行一次
+  ProductMedia `IN` 查询。mapper 固定按 `sortOrder/id` 排序，主图仍保留于 images，并对非 READY、类型/metadata、
+  重复布局和多个主图等持久化异常失败关闭；公开结构不选择或返回 MediaAsset ID、objectKey、checksum、storageDriver。
+- cutover migration 先以 `ACCESS EXCLUSIVE` 锁定 Product，再精确检查三类旧字段；任一非空即以固定 `P0001`
+  停止并保留抽样 Product ID，全部为空才在同一事务删除 `main_image/images/videos`，不读写其他 Product 字段。
+- 隔离 PostgreSQL 为 1 suite / 1 test，通过三类非空分别停止、空数据成功、Product 名称/编号/version 不变量、
+  恢复旧空列和再次 cutover 演练；独占 ProductMedia E2E 为 1 suite / 2 tests，共享 E2E 为 29 passed /
+  2 skipped suites、171 passed / 3 skipped tests，19 条 migration 的 deploy、重复 deploy 和 status 均通过。
+- 最终定向验证为 10 suites / 71 tests，Server 全量为 176 suites / 1725 tests；Prisma generate、typecheck、
+  lint、build、根治理 667/667、`git diff --check` 均通过。`contract:check` 按 Task 8-11 窗口预期 RED；临时生成
+  快照证明 paths 与全部非 Schema 契约不变，差异精确为新增 `ProductMediaDto`/`ProductMediaItemDto` 和修改
+  `ProductListItemDto`，tracked OpenAPI 与 Web generated contract 留待 Task 12 同步。
+- 本任务未实现上传/布局/解除关联或私有内容 API，未同步 OpenAPI/Web contract，未改 Web、依赖或 lockfile，
+  未访问真实媒体根目录，未 push、PR、merge 或部署。
 
 - [ ] 9. 以 TDD 实现上传、布局和解除关联 API
   - [ ] 9.1 先建立 DTO/Controller RED，锁定三个 operation、Session/RBAC/CSRF、private no-store、

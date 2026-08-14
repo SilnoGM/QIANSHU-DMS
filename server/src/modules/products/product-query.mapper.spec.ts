@@ -6,6 +6,8 @@ import {
   type ProductQueryRow,
 } from './product-query.mapper'
 
+const EMPTY_MEDIA = { mainImage: null, images: [], videos: [] } as const
+
 function createRow(
   overrides: Partial<ProductQueryRow> = {},
 ): ProductQueryRow {
@@ -15,9 +17,6 @@ function createRow(
     productNo: 'P202608120001',
     status: ProductStatus.DRAFT,
     supplierValue: 'SUPPLIER_A',
-    mainImage: 'https://example.test/main.jpg',
-    images: ['https://example.test/1.jpg', 'https://example.test/2.jpg'],
-    videos: ['https://example.test/1.mp4'],
     twdSalePriceAmount: { toString: () => '1280.5000' },
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -53,7 +52,7 @@ describe('mapProductListItem', () => {
       known: false,
       dictionaryCode: 'service_provider.supplier',
       value: 'SUPPLIER_A',
-    }).twdSalePrice.amount).toBe('99999999999999999999999999.12')
+    }, EMPTY_MEDIA).twdSalePrice.amount).toBe('99999999999999999999999999.12')
   })
 
   it('returns strict money strings, ordered attributes and whitelisted actors', () => {
@@ -66,7 +65,7 @@ describe('mapProductListItem', () => {
       typeEnabled: true,
       itemEnabled: true,
       effectiveEnabled: true,
-    })).toEqual({
+    }, EMPTY_MEDIA)).toEqual({
       id: 'fd830f03-2b45-4e75-9857-06beea6513ba',
       name: '山茶精华',
       productNo: 'P202608120001',
@@ -77,9 +76,7 @@ describe('mapProductListItem', () => {
         tone: 'SUCCESS',
         state: 'EFFECTIVE',
       },
-      mainImage: 'https://example.test/main.jpg',
-      images: ['https://example.test/1.jpg', 'https://example.test/2.jpg'],
-      videos: ['https://example.test/1.mp4'],
+      media: EMPTY_MEDIA,
       twdSalePrice: { amount: '1280.5', currency: 'TWD' },
       myrSalePrice: { amount: null, currency: 'MYR' },
       purchaseCost: { amount: '88.125', currency: 'CNY' },
@@ -99,7 +96,11 @@ describe('mapProductListItem', () => {
   })
 
   it('maps null, disabled and unknown supplier history without changing raw values', () => {
-    expect(mapProductListItem(createRow({ supplierValue: null }), null).supplier)
+    expect(mapProductListItem(
+      createRow({ supplierValue: null }),
+      null,
+      EMPTY_MEDIA,
+    ).supplier)
       .toBeNull()
     expect(mapProductListItem(createRow(), {
       known: true,
@@ -110,7 +111,7 @@ describe('mapProductListItem', () => {
       typeEnabled: true,
       itemEnabled: false,
       effectiveEnabled: false,
-    }).supplier).toEqual({
+    }, EMPTY_MEDIA).supplier).toEqual({
       value: 'SUPPLIER_A',
       label: '供应商 A',
       tone: 'DEFAULT',
@@ -120,7 +121,7 @@ describe('mapProductListItem', () => {
       known: false,
       dictionaryCode: 'service_provider.supplier',
       value: ' raw ',
-    }).supplier).toEqual({
+    }, EMPTY_MEDIA).supplier).toEqual({
       value: ' raw ',
       label: null,
       tone: null,
@@ -138,6 +139,7 @@ describe('mapProductListItem', () => {
     expect(() => mapProductListItem(
       createRow({ attributes }),
       null,
+      EMPTY_MEDIA,
     )).toThrow(ProductDataIntegrityError)
   })
 })

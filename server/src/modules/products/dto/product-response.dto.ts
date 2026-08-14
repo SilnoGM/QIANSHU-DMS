@@ -1,6 +1,10 @@
 import { ApiProperty } from '@nestjs/swagger'
 
-import { DictionaryTone, ProductStatus } from '../../../generated/prisma/enums'
+import {
+  DictionaryTone,
+  ProductMediaKind,
+  ProductStatus,
+} from '../../../generated/prisma/enums'
 
 export const ProductSupplierState = {
   EFFECTIVE: 'EFFECTIVE',
@@ -49,6 +53,55 @@ export class ProductActorDto {
   readonly displayName!: string
 }
 
+export class ProductMediaItemDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  readonly id!: string
+
+  @ApiProperty({ enum: ProductMediaKind })
+  readonly kind!: ProductMediaKind
+
+  @ApiProperty({ type: 'string' })
+  readonly originalFilename!: string
+
+  @ApiProperty({ type: 'string' })
+  readonly mimeType!: string
+
+  @ApiProperty({ type: 'string', pattern: '^\\d+$' })
+  readonly sizeBytes!: string
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  readonly width!: number
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  readonly height!: number
+
+  @ApiProperty({ type: 'integer', minimum: 1, nullable: true })
+  readonly durationMs!: number | null
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly sortOrder!: number
+
+  @ApiProperty({ type: 'boolean' })
+  readonly isPrimary!: boolean
+
+  @ApiProperty({ type: 'string', example: '/api/products/{productId}/media/{productMediaId}/content' })
+  readonly contentUrl!: string
+
+  @ApiProperty({ type: 'string', format: 'date-time' })
+  readonly createdAt!: string
+}
+
+export class ProductMediaDto {
+  @ApiProperty({ type: () => ProductMediaItemDto, nullable: true })
+  readonly mainImage!: ProductMediaItemDto | null
+
+  @ApiProperty({ type: () => [ProductMediaItemDto] })
+  readonly images!: readonly ProductMediaItemDto[]
+
+  @ApiProperty({ type: () => [ProductMediaItemDto] })
+  readonly videos!: readonly ProductMediaItemDto[]
+}
+
 export class ProductListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   readonly id!: string
@@ -65,14 +118,8 @@ export class ProductListItemDto {
   @ApiProperty({ type: () => ProductSupplierDto, nullable: true })
   readonly supplier!: ProductSupplierDto | null
 
-  @ApiProperty({ type: 'string', nullable: true })
-  readonly mainImage!: string | null
-
-  @ApiProperty({ type: [String] })
-  readonly images!: readonly string[]
-
-  @ApiProperty({ type: [String] })
-  readonly videos!: readonly string[]
+  @ApiProperty({ type: () => ProductMediaDto })
+  readonly media!: ProductMediaDto
 
   @ApiProperty({ type: () => ProductMoneyDto })
   readonly twdSalePrice!: ProductMoneyDto

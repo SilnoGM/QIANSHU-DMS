@@ -471,5 +471,57 @@ describe('ProductsController OpenAPI contract', () => {
       'attributes',
       'expectedVersion',
     ])
+
+    const responseSchema = document.components?.schemas?.ProductListItemDto
+    const mediaSchema = document.components?.schemas?.ProductMediaDto
+    const mediaItemSchema = document.components?.schemas?.ProductMediaItemDto
+    if (
+      responseSchema === undefined
+      || mediaSchema === undefined
+      || mediaItemSchema === undefined
+      || '$ref' in responseSchema
+      || '$ref' in mediaSchema
+      || '$ref' in mediaItemSchema
+    ) {
+      throw new Error('Missing structured Product media response schemas')
+    }
+    expect(Object.keys(responseSchema.properties ?? {})).not.toEqual(
+      expect.arrayContaining(['mainImage', 'images', 'videos']),
+    )
+    expect(responseSchema.properties?.media).toEqual({
+      $ref: '#/components/schemas/ProductMediaDto',
+    })
+    expect(mediaSchema).toMatchObject({
+      type: 'object',
+      required: ['mainImage', 'images', 'videos'],
+      properties: {
+        mainImage: {
+          allOf: [{ $ref: '#/components/schemas/ProductMediaItemDto' }],
+          nullable: true,
+        },
+        images: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ProductMediaItemDto' },
+        },
+        videos: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ProductMediaItemDto' },
+        },
+      },
+    })
+    expect(Object.keys(mediaItemSchema.properties ?? {})).toEqual([
+      'id',
+      'kind',
+      'originalFilename',
+      'mimeType',
+      'sizeBytes',
+      'width',
+      'height',
+      'durationMs',
+      'sortOrder',
+      'isPrimary',
+      'contentUrl',
+      'createdAt',
+    ])
   })
 })

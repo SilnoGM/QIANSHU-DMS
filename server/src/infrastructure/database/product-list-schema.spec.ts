@@ -39,9 +39,6 @@ describe('product list database schema', () => {
       'productNo',
       'status',
       'supplierValue',
-      'mainImage',
-      'images',
-      'videos',
       'twdSalePriceAmount',
       'twdSalePriceCurrency',
       'myrSalePriceAmount',
@@ -56,13 +53,14 @@ describe('product list database schema', () => {
       'updatedAt',
       'createdBy',
       'updatedBy',
+      'media',
     ]) {
       expect(product).toMatch(new RegExp(`\\n\\s*${field}\\s`, 'u'))
     }
 
     expect(product).toContain('@unique(map: "products_product_no_key")')
     expect(product).toContain('@map("supplier_value") @db.VarChar(64)')
-    expect(product).toContain('@map("main_image") @db.VarChar(2048)')
+    expect(product).not.toContain('@map("main_image")')
     expect(product).toContain('@map("twd_sale_price_amount") @db.Decimal(30, 4)')
     expect(product).toContain('@map("myr_sale_price_amount") @db.Decimal(30, 4)')
     expect(product).toContain('@map("purchase_cost_amount") @db.Decimal(30, 4)')

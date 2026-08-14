@@ -48,6 +48,11 @@ import {
   PRODUCT_NUMBERING_RULE_CODE,
 } from './product-create-fingerprint'
 import {
+  mapProductMedia,
+  readActiveProductMedia,
+  type ProductMediaQueryRow,
+} from './media/product-media-query.mapper'
+import {
   mapProductListItem,
   type DecimalStringSource,
   type ProductListItem,
@@ -75,6 +80,11 @@ export interface ProductCommandContext {
 
 interface EffectiveProductDependencies {
   readonly supplier: EffectiveDictionaryValue | null
+}
+
+interface IssuedProductSnapshot {
+  readonly mediaRows: readonly ProductMediaQueryRow[]
+  readonly row: ProductQueryRow
 }
 
 function productException(
@@ -271,9 +281,6 @@ function productMatchesCommand(
   return row.name === command.name
     && row.status === command.status
     && row.supplierValue === command.supplierValue
-    && row.mainImage === null
-    && row.images.length === 0
-    && row.videos.length === 0
     && persistedDecimalToCanonical(row.twdSalePriceAmount)
       === command.twdSalePrice.amount
     && row.twdSalePriceCurrency === command.twdSalePrice.currency
@@ -332,7 +339,7 @@ export class ProductCommandService {
     if (issuance.idempotentReplay) {
       const existing = await this.readIssuedProduct(issuance.number)
       if (existing !== null) {
-        if (!productMatchesCommand(existing, command, trusted.actorUserId)) {
+        if (!productMatchesCommand(existing.row, command, trusted.actorUserId)) {
           throw productException(
             HttpStatus.CONFLICT,
             'PRODUCT_CREATE_IDEMPOTENCY_CONFLICT',
@@ -374,6 +381,7 @@ export class ProductCommandService {
         return mapProductListItem(
           row,
           effectiveSupplierResolution(dependencies.supplier),
+          mapProductMedia(row.id, []),
         )
       })
     }
@@ -446,11 +454,14 @@ export class ProductCommandService {
     return { supplier }
   }
 
-  private async readIssuedProduct(productNo: string): Promise<ProductQueryRow | null> {
+  private async readIssuedProduct(productNo: string): Promise<IssuedProductSnapshot | null> {
     try {
       return await this.prisma.$transaction(async (transaction) => {
         await applyTransactionTimeouts(transaction)
-        return readProductByNumber(transaction, productNo)
+        const row = await readProductByNumber(transaction, productNo)
+        if (row === null) return null
+        const mediaRows = await readActiveProductMedia(transaction, [row.id])
+        return { row, mediaRows }
       })
     }
     catch (error) {
@@ -459,15 +470,22 @@ export class ProductCommandService {
     }
   }
 
-  private async mapHistoricalProduct(row: ProductQueryRow): Promise<ProductListItem> {
+  private async mapHistoricalProduct(
+    snapshot: IssuedProductSnapshot,
+  ): Promise<ProductListItem> {
     try {
+      const { row } = snapshot
       const supplierResolution = row.supplierValue === null
         ? null
         : await this.dictionaryLookup.resolveStoredValue({
             dictionaryCode: SUPPLIER_DICTIONARY_CODE,
             value: row.supplierValue,
           })
-      return mapProductListItem(row, supplierResolution)
+      return mapProductListItem(
+        row,
+        supplierResolution,
+        mapProductMedia(row.id, snapshot.mediaRows),
+      )
     }
     catch {
       throw internalProductError()
@@ -484,7 +502,7 @@ export class ProductCommandService {
     if (
       idempotentReplay
       && existing !== null
-      && productMatchesCommand(existing, command, actorUserId)
+      && productMatchesCommand(existing.row, command, actorUserId)
     ) {
       return this.mapHistoricalProduct(existing)
     }

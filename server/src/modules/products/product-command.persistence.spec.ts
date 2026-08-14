@@ -35,7 +35,7 @@ function normalizedCommand(): NormalizedProductCreateCommand {
 }
 
 describe('product command persistence', () => {
-  it('creates the exact Product shape with fixed media and audit fields', async () => {
+  it('creates the exact Product shape with audit fields and no legacy media writes', async () => {
     const created = { id: 'product-id' }
     const create = jest.fn<Promise<typeof created>, [unknown]>()
       .mockResolvedValue(created)
@@ -59,9 +59,6 @@ describe('product command persistence', () => {
       productNo: 'P202608120001',
       status: ProductStatus.DRAFT,
       supplierValue: 'SUPPLIER_A',
-      mainImage: null,
-      images: [],
-      videos: [],
       twdSalePriceAmount: '1280.5000',
       twdSalePriceCurrency: 'TWD',
       myrSalePriceAmount: null,

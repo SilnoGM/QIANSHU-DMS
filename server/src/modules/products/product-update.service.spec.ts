@@ -56,9 +56,6 @@ function createResponse(
     productNo: 'P202608130001',
     status: ProductStatus.ACTIVE,
     supplierValue: 'SUPPLIER_A',
-    mainImage: null,
-    images: [],
-    videos: [],
     twdSalePriceAmount: { toString: () => '10.0000' },
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -128,9 +125,14 @@ function createFixture(options: {
       ? null
       : options.response ?? createResponse())
   })
+  const productMediaFindMany = jest.fn<Promise<unknown[]>, [unknown]>(() => {
+    events.push('product.media')
+    return Promise.resolve([])
+  })
   const transactionClient = {
     $queryRaw: queryRaw,
     product: { update: productUpdate, findUnique: productFindUnique },
+    productMedia: { findMany: productMediaFindMany },
   } as unknown as Prisma.TransactionClient
   const transaction = jest.fn<
     Promise<unknown>,
@@ -238,6 +240,7 @@ describe('ProductUpdateService', () => {
       'audit',
       'product.response',
       'supplier.resolve',
+      'product.media',
     ])
     expect(fixture.requireEnabledCodes).toHaveBeenCalledWith(
       expect.anything(),
@@ -313,6 +316,7 @@ describe('ProductUpdateService', () => {
       'product.lock',
       'product.response',
       'supplier.resolve',
+      'product.media',
     ])
   })
 

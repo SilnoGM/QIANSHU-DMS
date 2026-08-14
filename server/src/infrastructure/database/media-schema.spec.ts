@@ -30,7 +30,7 @@ function readMigration(): string {
 }
 
 describe('media asset and product media schema', () => {
-  it('adds the exact additive Prisma enums and relations while retaining legacy URL fields', () => {
+  it('keeps the exact media enums and relations after the Product query cutover', () => {
     const schema = readFileSync(schemaPath, 'utf8')
 
     expect(extractPrismaBlock(schema, 'enum', 'MediaType')).toMatch(
@@ -89,9 +89,9 @@ describe('media asset and product media schema', () => {
     }
     expect(productMedia).toContain('@@map("product_media")')
 
-    expect(product).toMatch(/^\s*mainImage\s+String\?/mu)
-    expect(product).toMatch(/^\s*images\s+String\[\]/mu)
-    expect(product).toMatch(/^\s*videos\s+String\[\]/mu)
+    expect(product).not.toMatch(/^\s*mainImage\s/mu)
+    expect(product).not.toMatch(/^\s*images\s/mu)
+    expect(product).not.toMatch(/^\s*videos\s/mu)
     expect(product).toMatch(/^\s*media\s+ProductMedia\[\]/mu)
     expect(user).toMatch(/^\s*mediaAssetsCreated\s+MediaAsset\[\]/mu)
     expect(user).toMatch(/^\s*productMediaCreated\s+ProductMedia\[\]/mu)

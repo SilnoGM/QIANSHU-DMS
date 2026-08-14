@@ -9,6 +9,11 @@ import {
   type StoredDictionaryValueResolution,
 } from '../dictionaries/dictionary-lookup.service'
 import {
+  mapProductMedia,
+  mapProductMediaByProduct,
+  readActiveProductMedia,
+} from './media/product-media-query.mapper'
+import {
   mapProductListItem,
   PRODUCT_RESPONSE_SELECT,
   type ProductListItem,
@@ -42,17 +47,29 @@ export class ProductQueryService {
   ) {}
 
   async getById(productId: string): Promise<ProductListItem> {
-    let row: ProductQueryRow | null
+    let snapshot: {
+      readonly media: ReturnType<typeof mapProductMedia>
+      readonly row: ProductQueryRow | null
+    }
     try {
-      row = await this.prisma.product.findUnique({
-        where: { id: productId },
-        select: PRODUCT_RESPONSE_SELECT,
+      snapshot = await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        const row = await transaction.product.findUnique({
+          where: { id: productId },
+          select: PRODUCT_RESPONSE_SELECT,
+        })
+        if (row === null) {
+          return { row, media: mapProductMedia(productId, []) }
+        }
+        const mediaRows = await readActiveProductMedia(transaction, [productId])
+        return { row, media: mapProductMedia(productId, mediaRows) }
       })
     }
     catch {
       throw new ApiException(500, 'INTERNAL_ERROR', '服务器内部错误')
     }
 
+    const { row, media } = snapshot
     if (row === null) {
       throw new ApiException(404, 'PRODUCT_NOT_FOUND', '产品不存在')
     }
@@ -64,7 +81,7 @@ export class ProductQueryService {
             dictionaryCode: SUPPLIER_DICTIONARY_CODE,
             value: row.supplierValue,
           })
-      return mapProductListItem(row, supplierResolution)
+      return mapProductListItem(row, supplierResolution, media)
     }
     catch {
       // 字典和持久化 JSON 解析错误都可能携带内部数据，公共边界固定脱敏。
@@ -92,7 +109,7 @@ export class ProductQueryService {
     }
 
     try {
-      const { total, rows } = await this.prisma.$transaction(
+      const { total, rows, mediaRows } = await this.prisma.$transaction(
         async (transaction) => {
           await applyTransactionTimeouts(transaction)
           const total = await transaction.product.count({ where })
@@ -103,7 +120,11 @@ export class ProductQueryService {
             take: query.pageSize,
             select: PRODUCT_RESPONSE_SELECT,
           })
-          return { total, rows }
+          const mediaRows = await readActiveProductMedia(
+            transaction,
+            rows.map(row => row.id),
+          )
+          return { total, rows, mediaRows }
         },
       )
 
@@ -118,6 +139,10 @@ export class ProductQueryService {
       const resolutionsByValue = new Map<string, StoredDictionaryValueResolution>(
         resolutions.map(resolution => [resolution.value, resolution]),
       )
+      const mediaByProduct = mapProductMediaByProduct(
+        rows.map(row => row.id),
+        mediaRows,
+      )
 
       return {
         items: rows.map(row => mapProductListItem(
@@ -125,6 +150,7 @@ export class ProductQueryService {
           row.supplierValue === null
             ? null
             : resolutionsByValue.get(row.supplierValue) ?? null,
+          mediaByProduct.get(row.id) ?? mapProductMedia(row.id, []),
         )),
         page: query.page,
         pageSize: query.pageSize,

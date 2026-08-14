@@ -48,9 +48,11 @@ interface ProductBody {
     readonly tone: DictionaryTone | null
     readonly state: 'DISABLED' | 'EFFECTIVE' | 'UNKNOWN'
   } | null
-  readonly mainImage: string | null
-  readonly images: string[]
-  readonly videos: string[]
+  readonly media: {
+    readonly mainImage: null
+    readonly images: readonly unknown[]
+    readonly videos: readonly unknown[]
+  }
   readonly twdSalePrice: { readonly amount: string | null; readonly currency: string }
   readonly myrSalePrice: { readonly amount: string | null; readonly currency: string }
   readonly purchaseCost: { readonly amount: string | null; readonly currency: string }
@@ -353,9 +355,6 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
         productNo: `${PRODUCT_NO_PREFIX}${randomUUID()}`,
         status: ProductStatus.DRAFT,
         supplierValue: supplierValues.effective,
-        mainImage: 'https://example.test/product-main.webp',
-        images: ['https://example.test/product-1.webp'],
-        videos: ['https://example.test/product-1.mp4'],
         twdSalePriceAmount: '1280.50',
         twdSalePriceCurrency: 'TWD',
         myrSalePriceAmount: null,
@@ -406,9 +405,7 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
         label: '产品编辑停用供应商',
         state: 'DISABLED',
       },
-      mainImage: 'https://example.test/product-main.webp',
-      images: ['https://example.test/product-1.webp'],
-      videos: ['https://example.test/product-1.mp4'],
+      media: { mainImage: null, images: [], videos: [] },
       version: 1,
     })
 
@@ -511,7 +508,7 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
       .toMatchObject({ name: '产品查看编辑 E2E', version: 1 })
   })
 
-  it('atomically updates allowed fields, preserves immutable media and records safe audit metadata', async () => {
+  it('atomically updates allowed fields, preserves structured media and records safe audit metadata', async () => {
     const product = await createProduct()
     const response = await updateProduct(administrator.browser, product.id, {
       expectedVersion: 1,
@@ -530,9 +527,7 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
       name: '更新后的产品',
       status: ProductStatus.ACTIVE,
       supplier: { value: supplierValues.effective, state: 'EFFECTIVE' },
-      mainImage: 'https://example.test/product-main.webp',
-      images: ['https://example.test/product-1.webp'],
-      videos: ['https://example.test/product-1.mp4'],
+      media: { mainImage: null, images: [], videos: [] },
       twdSalePrice: { amount: '1688', currency: 'TWD' },
       myrSalePrice: { amount: '25.5', currency: 'MYR' },
       purchaseCost: { amount: '66', currency: 'CNY' },
@@ -547,13 +542,13 @@ describe('Product detail and update API with isolated PostgreSQL', () => {
     expect(stored).toMatchObject({
       name: '更新后的产品',
       productNo: product.productNo,
-      mainImage: product.mainImage,
-      images: product.images,
-      videos: product.videos,
       createdByUserId: administrator.userId,
       updatedByUserId: administrator.userId,
       version: 2,
     })
+    expect(stored).not.toHaveProperty('mainImage')
+    expect(stored).not.toHaveProperty('images')
+    expect(stored).not.toHaveProperty('videos')
 
     const audits = await prisma.auditEvent.findMany({
       where: {

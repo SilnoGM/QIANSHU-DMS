@@ -33,6 +33,7 @@ const supplierResidueAllowlist = Object.freeze([
   'server/prisma/migrations/20260812090000_product_list_schema/migration.sql',
   'server/prisma/schema.prisma',
   'server/src/infrastructure/database/product-list-schema.spec.ts',
+  'server/src/infrastructure/database/product-media-cutover-schema.spec.ts',
   'server/src/modules/products/dto/product-create.dto.ts',
   'server/src/modules/products/dto/product-dtos.spec.ts',
   'server/src/modules/products/dto/product-list-query.dto.ts',
