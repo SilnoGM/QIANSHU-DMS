@@ -5,7 +5,7 @@ import type {
   ProductMediaKind as ProductMediaKindValue,
   ProductStatus as ProductStatusValue,
 } from '../../../generated/prisma/enums'
-import type { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { PrismaService } from '../../../infrastructure/database/prisma.service'
 
 export interface ProductMediaUploadPreflight {
   readonly mediaCount: number

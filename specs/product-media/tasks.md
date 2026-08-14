@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-5 已完成
+- 状态：Phase 4 实施中，Gate DEP 已确认，Task 1-9 已完成
 - 编写日期：2026-08-13
 - 实施分支：`feat/media-asset-product-media`
 - Requirements：`specs/product-media/requirements.md`
@@ -545,17 +545,57 @@ Ubuntu 24.04 smoke，实证不满足时立即停止，不放宽合同。
 - 本任务未实现上传/布局/解除关联或私有内容 API，未同步 OpenAPI/Web contract，未改 Web、依赖或 lockfile，
   未访问真实媒体根目录，未 push、PR、merge 或部署。
 
-- [ ] 9. 以 TDD 实现上传、布局和解除关联 API
-  - [ ] 9.1 先建立 DTO/Controller RED，锁定三个 operation、Session/RBAC/CSRF、private no-store、
+- [x] 9. 以 TDD 实现上传、布局和解除关联 API
+  - [x] 9.1 先建立 DTO/Controller RED，锁定三个 operation、Session/RBAC/CSRF、private no-store、
     multipart 单文件、field allowlist、limit、expectedVersion 和 `retry:false` 合同。
-  - [ ] 9.2 实现 `POST /api/products/{productId}/media`，仅接受 IMAGE/VIDEO，流式接入 prepare/领域事务。
-  - [ ] 9.3 实现 `PUT /api/products/{productId}/media/layout`，要求完整无重复 imageIds/videoIds 快照。
-  - [ ] 9.4 实现 `DELETE /api/products/{productId}/media/{productMediaId}`，Body 只接受 expectedVersion。
-  - [ ] 9.5 覆盖 multipart malformed、超限早拒绝、413/415/422、409、404 anti-enumeration、权限、
+  - [x] 9.2 实现 `POST /api/products/{productId}/media`，仅接受 IMAGE/VIDEO，流式接入 prepare/领域事务。
+  - [x] 9.3 实现 `PUT /api/products/{productId}/media/layout`，要求完整无重复 imageIds/videoIds 快照。
+  - [x] 9.4 实现 `DELETE /api/products/{productId}/media/{productMediaId}`，Body 只接受 expectedVersion。
+  - [x] 9.5 覆盖 multipart malformed、超限早拒绝、413/415/422、409、404 anti-enumeration、权限、
     CSRF、强制改密、unknown fields 和日志脱敏。
-  - [ ] 9.6 运行 DTO/Controller/Module/API tests、Server typecheck/lint 和 diff-check。
-  - [ ] 9.7 更新证据并提交：`feat: 增加产品媒体维护接口`。
+  - [x] 9.6 运行 DTO/Controller/Module/API tests、Server typecheck/lint 和 diff-check。
+  - [x] 9.7 更新证据并提交：`feat: 增加产品媒体维护接口`。
   - _Requirements: R3-R5, R7, R9, R11_
+
+### 4.9 Task 9 实施证据
+
+- TDD RED 分层锁定了 DTO/OpenAPI 错误状态、Busboy 流式 parser、Controller/HTTP adapter、
+  Module/lazy storage 和 CSRF multipart 边界；初始目标文件缺失时多个 suite 按预期在编译阶段 RED。
+  实现中又真实暴露 Busboy 在精确 limit 值时的截断语义、PassThrough error listener 时序、失败的
+  lazy initialization Promise 缓存以及 OpenAPI preview DI metadata 问题；均先由测试复现再最小修正。
+- Server 将 `busboy@1.6.0` 和 `@types/busboy@1.5.4` 锁定为直接依赖。parser 只允许
+  `kind`/`expectedVersion` 两个字段和一个 `file`，小字段必须先于 file part；OpenAPI 显式
+  记录该顺序。文件直接流入 MediaAsset，并延迟文件 EOF 到完整 multipart framing 验证后，
+  因此尾部未知字段、第二文件或截断请求不会形成“HTTP 报错但领域已提交”。
+- 新增三个经确认的 mutation：`POST /api/products/{productId}/media`、
+  `PUT /api/products/{productId}/media/layout` 和
+  `DELETE /api/products/{productId}/media/{productMediaId}`。全部要求 Session、`products:update`、
+  CSRF、`expectedVersion`、private no-store 与 `retry:false`；上传只接受 IMAGE/VIDEO，Product Document 在
+  parser/DTO/领域三层被拒绝。响应只返回最新 Product 和领域 ProductMedia，不泄露 MediaAsset ID、
+  objectKey、checksum、storage driver 或绝对路径。
+- 错误合同覆盖 `MEDIA_MULTIPART_INVALID`、`MEDIA_FILE_TOO_LARGE`、
+  `MEDIA_TYPE_UNSUPPORTED`、`MEDIA_CONTENT_INVALID`、`PRODUCT_MEDIA_LIMIT_EXCEEDED`、
+  `PRODUCT_STATE_CHANGED`、`PRODUCT_MEDIA_LAYOUT_CHANGED`、`PRODUCT_MEDIA_NOT_FOUND` 和
+  `MEDIA_STORAGE_UNAVAILABLE`；API E2E 同时证明 anonymous、缺权限、强制改密、缺 CSRF、
+  unknown fields、DOCUMENT 和超限都在领域提交前失败关闭。
+- 新增业务中立 `MediaModule`，只导出 `MediaAssetService` 与 `MediaAssetRetentionService`；
+  `LazyLocalMediaStorage` 保证 OpenAPI preview/应用启动不访问真实 media root，首个媒体操作才创建与
+  验证 Local driver，并允许运维修复后重试失败的首次初始化。本任务没有新增通用上传
+  Controller、ProductMedia 以外的领域关联或云存储空实现。
+- 最终 Server unit 为 182/182 suites、1757/1757 tests；产品媒体 HTTP E2E 为 1 suite / 8 tests；
+  隔离 PostgreSQL 16 完整重放 19 条 migration，重复 deploy/status 成功，共享 E2E 为 30 passed /
+  2 skipped suites、179 passed / 3 skipped tests。Prisma validate、typecheck、lint、build、根治理 667/667 和
+  `git diff --check` 均通过。
+- `contract:check` 按 Task 8–11 公共契约窗口预期 exit `1`。临时生成快照证明只新增上述
+  3 paths 和 6 个媒体 DTO、只修改 `ProductListItemDto`；已有 path 无任何变化，非 path/schema
+  合同字节一致，也没有 GET/HEAD content 或 Product Document operation。tracked OpenAPI 与 Web generated
+  仍留待 Task 12 同步。
+- 异常如实保留：一次将 typecheck/test 并行触发 Prisma generate 目录竞态，改为串行后全绿；
+  一次全量 Jest 在无断言失败时 exit `139`/`SIGSEGV`，同命令后续两次均完整通过；根治理首次
+  666/667 发现新测试夹具含冻结历史词汇，删除无关夹具字段后转绿，未修改 allowlist。
+  还有一次 multipart OpenAPI 属性顺序断言在明确流式顺序合同后按预期失败，收紧断言后 22/22 通过。
+- 本任务未修改 Prisma Schema/migration，未写持久开发数据库或真实 media root，未实现 Task 10
+  内容读取，未同步 OpenAPI/Web，未修改 Web，未 push、PR、merge 或部署。
 
 - [ ] 10. 以 TDD 实现私有内容 GET/HEAD 授权与内部转发
   - [ ] 10.1 先建立内容 Controller RED，要求独立 `product-media:read`，不隐式要求 `products:read`。

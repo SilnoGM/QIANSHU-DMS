@@ -30,8 +30,8 @@ type HeaderReadResult =
 const MEDIA_TYPE_TOKEN = "[!#$%&'*+.^_`|~0-9A-Za-z-]+"
 const QUOTED_STRING =
   '"(?:[\\t\\x20\\x21\\x23-\\x5b\\x5d-\\x7e\\x80-\\xff]|\\\\[\\t\\x20-\\x7e\\x80-\\xff])*"'
-const JSON_CONTENT_TYPE_PATTERN = new RegExp(
-  `^[\\t ]*application/json[\\t ]*(?:;[\\t ]*${MEDIA_TYPE_TOKEN}[\\t ]*=[\\t ]*(?:${MEDIA_TYPE_TOKEN}|${QUOTED_STRING})[\\t ]*)*$`,
+const MUTATION_CONTENT_TYPE_PATTERN = new RegExp(
+  `^[\\t ]*(?:application/json|multipart/form-data)[\\t ]*(?:;[\\t ]*${MEDIA_TYPE_TOKEN}[\\t ]*=[\\t ]*(?:${MEDIA_TYPE_TOKEN}|${QUOTED_STRING})[\\t ]*)*$`,
   'i',
 )
 const HTTP_TOKEN_PATTERN = new RegExp(`^${MEDIA_TYPE_TOKEN}$`)
@@ -150,8 +150,8 @@ function readRelevantHeaders(request: unknown): HeaderReadResult {
   return { ok: true, headers: snapshot }
 }
 
-function isJsonContentType(value: string | undefined): boolean {
-  return value !== undefined && JSON_CONTENT_TYPE_PATTERN.test(value)
+function isMutationContentType(value: string | undefined): boolean {
+  return value !== undefined && MUTATION_CONTENT_TYPE_PATTERN.test(value)
 }
 
 function isCrossSiteOrMalformed(value: string | undefined): boolean {
@@ -205,7 +205,7 @@ export class CsrfProtectionGuard implements CanActivate {
       headers.origin === 'null' ||
       headers.origin !== this.appOrigin ||
       headers['x-qianshu-csrf'] !== '1' ||
-      !isJsonContentType(headers['content-type']) ||
+      !isMutationContentType(headers['content-type']) ||
       isCrossSiteOrMalformed(headers['sec-fetch-site'])
     ) {
       return this.reject()

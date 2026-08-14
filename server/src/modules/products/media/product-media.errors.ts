@@ -54,6 +54,22 @@ export function productMediaNotFoundError(): ApiException {
   )
 }
 
+export function productMediaMultipartInvalidError(): ApiException {
+  return mediaException(
+    HttpStatus.BAD_REQUEST,
+    'MEDIA_MULTIPART_INVALID',
+    '媒体上传请求格式无效',
+  )
+}
+
+export function productMediaFileTooLargeError(): ApiException {
+  return mediaException(
+    HttpStatus.PAYLOAD_TOO_LARGE,
+    'MEDIA_FILE_TOO_LARGE',
+    '媒体文件超过大小限制',
+  )
+}
+
 export function productStateChangedError(): ApiException {
   return mediaException(
     HttpStatus.CONFLICT,
@@ -104,11 +120,7 @@ export function productMediaValidationError(): ApiException {
 
 function mapLifecycleError(error: MediaAssetLifecycleError): never {
   if (error.code === 'MEDIA_ASSET_CONTENT_TOO_LARGE') {
-    throw mediaException(
-      HttpStatus.PAYLOAD_TOO_LARGE,
-      'MEDIA_FILE_TOO_LARGE',
-      '媒体文件超过大小限制',
-    )
+    throw productMediaFileTooLargeError()
   }
   if (
     error.code === 'MEDIA_ASSET_CONTENT_TYPE_MISMATCH'

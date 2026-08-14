@@ -1,3 +1,5 @@
+import { Inject, Injectable, Optional } from '@nestjs/common'
+
 import type { Prisma } from '../../../generated/prisma/client'
 import {
   AuditActorType,
@@ -6,17 +8,17 @@ import {
   ProductMediaKind,
   type ProductMediaKind as ProductMediaKindValue,
 } from '../../../generated/prisma/enums'
-import type { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
-import type { AuditService } from '../../audit/audit.service'
+import { AuditService } from '../../audit/audit.service'
 import {
-  type MediaAssetService,
+  MediaAssetService,
   type PreparedMediaAsset,
 } from '../../media/media-asset.service'
 import type {
   MediaAssetRetentionResult,
-  MediaAssetRetentionService,
 } from '../../media/media-retention.service'
+import { MediaAssetRetentionService } from '../../media/media-retention.service'
 import {
   assertContinuousProductMediaKind,
   currentPrimaryImageId,
@@ -46,7 +48,7 @@ import {
   productStateChangedError,
 } from './product-media.errors'
 import {
-  type ProductMediaPersistence,
+  ProductMediaPersistence,
   type ProductMediaProductLock,
 } from './product-media.persistence'
 import { PRODUCT_MEDIA_ALLOWED_TYPES } from './product-media.policy'
@@ -67,10 +69,15 @@ const DEFAULT_DEPENDENCIES: ProductMediaServiceDependencies = {
   now: () => new Date(),
 }
 
+const PRODUCT_MEDIA_SERVICE_DEPENDENCIES = Symbol(
+  'qianshu.product-media.service-dependencies',
+)
+
 /**
  * Product 媒体领域服务拥有 Product 锁、版本、数量、排序、主图和审计策略。
  * MediaAsset 只负责物理内容生命周期，不能自行决定 Product 归属。
  */
+@Injectable()
 export class ProductMediaService {
   private readonly dependencies: ProductMediaServiceDependencies
 
@@ -80,6 +87,9 @@ export class ProductMediaService {
     private readonly mediaAsset: MediaAssetService,
     private readonly retention: MediaAssetRetentionService,
     private readonly audit: AuditService,
+    // 仅测试可直接传入稳定时钟；生产容器不注册此内部 token 时使用默认实现。
+    @Optional()
+    @Inject(PRODUCT_MEDIA_SERVICE_DEPENDENCIES)
     dependencyOverrides: Partial<ProductMediaServiceDependencies> = {},
   ) {
     this.dependencies = Object.freeze({

@@ -14,6 +14,7 @@ import {
   ProductCommandService,
   type ProductCommandContext,
 } from './product-command.service'
+import { ProductMediaHttpService } from './media/product-media-http.service'
 import { ProductQueryService } from './product-query.service'
 import {
   type ProductUpdateContext,
@@ -83,6 +84,11 @@ function createController(): {
       { list, getById } as unknown as ProductQueryService,
       { create } as unknown as ProductCommandService,
       { update } as unknown as ProductUpdateService,
+      {
+        upload: jest.fn(),
+        updateLayout: jest.fn(),
+        detach: jest.fn(),
+      } as unknown as ProductMediaHttpService,
     ),
     list,
     getById,
@@ -102,6 +108,9 @@ function createController(): {
   }, {
     provide: ProductUpdateService,
     useValue: { update: jest.fn() },
+  }, {
+    provide: ProductMediaHttpService,
+    useValue: { upload: jest.fn(), updateLayout: jest.fn(), detach: jest.fn() },
   }],
 })
 class ProductsControllerContractModule {}
@@ -176,7 +185,16 @@ describe('ProductsController', () => {
       ProductsController.prototype.create,
     )).toBe(HttpStatus.CREATED)
     expect(Object.getOwnPropertyNames(ProductsController.prototype).sort())
-      .toEqual(['constructor', 'create', 'getById', 'list', 'update'])
+      .toEqual([
+        'constructor',
+        'create',
+        'detachMedia',
+        'getById',
+        'list',
+        'update',
+        'updateMediaLayout',
+        'uploadMedia',
+      ])
   })
 
   it.each([
@@ -205,10 +223,13 @@ describe('ProductsController OpenAPI contract', () => {
 
   it('publishes the list, create, detail and update operations only', () => {
     expect(Object.keys(document.paths).filter(path =>
-      path.startsWith('/api/products'))).toEqual([
+      path.startsWith('/api/products')).sort()).toEqual([
       '/api/products',
       '/api/products/{productId}',
-    ])
+      '/api/products/{productId}/media',
+      '/api/products/{productId}/media/layout',
+      '/api/products/{productId}/media/{productMediaId}',
+    ].sort())
     const path = document.paths['/api/products']
     const operation: ContractOperation | undefined = path?.get
     expect(operation?.operationId).toBe('products_list')

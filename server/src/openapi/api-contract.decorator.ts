@@ -176,6 +176,10 @@ export function ApiApplicationContract(
     metadata.privateNoStore = options.privateNoStore
   }
 
+  if (options.retry !== undefined) {
+    metadata.retry = options.retry
+  }
+
   if (errors !== undefined) {
     metadata.errors = errors
   }

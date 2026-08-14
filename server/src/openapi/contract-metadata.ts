@@ -6,6 +6,8 @@ export const API_CONTRACT_ERROR_STATUSES = [
   403,
   404,
   409,
+  413,
+  415,
   422,
   429,
   500,
@@ -35,6 +37,7 @@ export interface QianshuContractMetadata {
   session?: ApiSessionRequirement
   csrf?: boolean
   privateNoStore?: boolean
+  retry?: boolean
   errors?: ApiContractErrorMetadata[]
 }
 
@@ -49,5 +52,6 @@ export interface ApiApplicationContractOptions {
   session?: ApiSessionRequirement
   csrf?: boolean
   privateNoStore?: boolean
+  retry?: boolean
   errors?: readonly ApiContractErrorOptions[]
 }
