@@ -8,6 +8,8 @@ import {
 } from './browser-auth/static-server.mjs'
 import {
   createUpstreamRequest,
+  parseSingleByteRange,
+  resolveInternalMediaPath,
 } from './browser-auth/reverse-proxy.mjs'
 import {
   createProvisionCommand,
@@ -69,6 +71,38 @@ test('同源代理按 /api 边界路由并保留浏览器 Origin/CSRF Header', (
   assert.equal(request.headers.host, '127.0.0.1:41002')
 })
 
+test('同源代理只把受控内部媒体路径映射到根目录并实现单 Range', () => {
+  assert.equal(
+    resolveInternalMediaPath(
+      '/srv/qianshu-media',
+      '/_qianshu_internal_media/assets/2026/08/example.webp',
+    ),
+    '/srv/qianshu-media/assets/2026/08/example.webp',
+  )
+  for (const value of [
+    '/_qianshu_internal_media/../secret',
+    '/_qianshu_internal_media/assets/%2e%2e/secret',
+    '/_qianshu_internal_media/assets//secret',
+    '/public/assets/example.webp',
+  ]) {
+    assert.throws(
+      () => resolveInternalMediaPath('/srv/qianshu-media', value),
+      { message: 'Browser auth internal media path is invalid' },
+    )
+  }
+
+  assert.deepEqual(parseSingleByteRange(undefined, 10), null)
+  assert.deepEqual(parseSingleByteRange('bytes=2-5', 10), { end: 5, start: 2 })
+  assert.deepEqual(parseSingleByteRange('bytes=7-', 10), { end: 9, start: 7 })
+  assert.deepEqual(parseSingleByteRange('bytes=-3', 10), { end: 9, start: 7 })
+  for (const value of ['bytes=10-11', 'bytes=5-4', 'bytes=0-1,3-4']) {
+    assert.throws(
+      () => parseSingleByteRange(value, 10),
+      { message: 'Browser auth media range is invalid' },
+    )
+  }
+})
+
 test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验', () => {
   const environment = {
     DATABASE_URL:
@@ -85,11 +119,22 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   ])
   assert.equal(command.args.includes(input.password), false)
   assert.match(command.args.at(-1), /INSERT INTO user_profiles/u)
+  assert.match(command.args.at(-1), /browser_products_read/u)
+  assert.match(command.args.at(-1), /browser_products_update/u)
+  assert.match(command.args.at(-1), /browser_media_read/u)
+  assert.match(command.args.at(-1), /browser_products_manage_no_media/u)
+  assert.match(command.args.at(-1), /product-media:read/u)
   assert.match(command.args.at(-1), /service_provider\.supplier/u)
   assert.match(command.args.at(-1), /BROWSER_SUPPLIER_EFFECTIVE/u)
   assert.match(command.args.at(-1), /INSERT INTO products/u)
   assert.match(command.args.at(-1), /PRODUCT-BROWSER-001/u)
-  assert.match(command.args.at(-1), /generate_series\(1, 17\)/u)
+  assert.match(command.args.at(-1), /PRODUCT-MEDIA-BROWSER-001/u)
+  assert.match(command.args.at(-1), /INSERT INTO media_assets/u)
+  assert.match(command.args.at(-1), /INSERT INTO product_media/u)
+  assert.doesNotMatch(command.args.at(-1), /\bmain_image\b/u)
+  assert.doesNotMatch(command.args.at(-1), /\bimages\b/u)
+  assert.doesNotMatch(command.args.at(-1), /\bvideos\b/u)
+  assert.match(command.args.at(-1), /generate_series\(1, 16\)/u)
   assert.match(command.args.at(-1), /INSERT INTO exchange_rates/u)
   assert.match(command.args.at(-1), /UPDATE currencies SET enabled = true/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rules/u)

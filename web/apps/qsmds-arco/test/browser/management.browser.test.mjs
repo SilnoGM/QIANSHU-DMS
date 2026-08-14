@@ -472,7 +472,6 @@ async function verifyProductCreate(page, baseUrl) {
     name: document.querySelector('input[placeholder="请输入产品名称"]')?.value ?? null,
     purchaseCurrency: document.querySelector('input[data-currency="CNY"]') !== null,
     showsDraft: document.body.innerText.includes('草稿（DRAFT）'),
-    showsMediaDelay: document.body.innerText.includes('本阶段暂不处理媒体上传'),
   }))()`)
   assert.deepEqual(defaultState, {
     documentFits: true,
@@ -480,7 +479,6 @@ async function verifyProductCreate(page, baseUrl) {
     name: productName,
     purchaseCurrency: true,
     showsDraft: true,
-    showsMediaDelay: true,
   })
 
   await selectVisibleComboboxOption(page, '产品状态', '启用（ACTIVE）')
@@ -704,29 +702,25 @@ async function verifyProductCreate(page, baseUrl) {
   const product = productResponse.body?.items?.find(item => item.name === productName)
   assert.deepEqual({
     attributes: product?.attributes,
-    images: product?.images,
-    mainImage: product?.mainImage,
+    media: product?.media,
     myrSalePrice: product?.myrSalePrice,
     productNo: product?.productNo,
     purchaseCost: product?.purchaseCost,
     status: product?.status,
     supplierValue: product?.supplier?.value,
     twdSalePrice: product?.twdSalePrice,
-    videos: product?.videos,
   }, {
     attributes: [
       { title: '颜色', value: '墨黑' },
       { title: '尺寸', value: 'XL' },
     ],
-    images: [],
-    mainImage: null,
+    media: { images: [], mainImage: null, videos: [] },
     myrSalePrice: { amount: '42.25', currency: 'MYR' },
     productNo: 'PRD-BRW-00000001',
     purchaseCost: { amount: '88.1', currency: 'CNY' },
     status: 'ACTIVE',
     supplierValue: 'BROWSER_SUPPLIER_EFFECTIVE',
     twdSalePrice: { amount: '1280.5', currency: 'TWD' },
-    videos: [],
   })
   assert.equal(typeof product?.id, 'string')
 
@@ -1001,21 +995,21 @@ async function verifyProductList(page, baseUrl) {
       return dialog?.textContent?.includes('视频暂不可预览')
         && dialog.querySelector('a[target="_blank"]') !== null
     })()`)
-    await clickVisibleModalButton(page, '视频 2')
-    const unsafeVideoState = await page.evaluate(`(() => {
+    await clickVisibleModalButton(page, 'browser-management-detail.mp4')
+    const secondVideoState = await page.evaluate(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
       return {
         hasExternalLink: dialog?.querySelector('a[target="_blank"]') !== null,
         hasVideo: dialog?.querySelector('video') !== null,
-        showsRawValue: dialog?.textContent?.includes('javascript:alert(1)') ?? false,
+        showsRawValue: dialog?.textContent?.includes('javascript:') ?? false,
       }
     })()`)
-    assert.deepEqual(unsafeVideoState, {
-      hasExternalLink: false,
-      hasVideo: false,
-      showsRawValue: true,
+    assert.deepEqual(secondVideoState, {
+      hasExternalLink: true,
+      hasVideo: true,
+      showsRawValue: false,
     })
     await clickVisibleModalButton(page, '关闭视频')
     await waitForNoVisibleModal(page, '产品视频')
@@ -1539,6 +1533,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'numbering-rules:read',
     'numbering-rules:read-issuances',
     'numbering-rules:update',
+    'product-media:read',
     'products:create',
     'products:read',
     'products:update',

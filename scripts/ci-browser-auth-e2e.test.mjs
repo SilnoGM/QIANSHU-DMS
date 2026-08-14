@@ -39,6 +39,8 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
   const plan = createBrowserAuthPlan({
     chromeExecutable: '/opt/google/chrome/chrome',
     databaseUrl,
+    ffprobePath: '/opt/media/bin/ffprobe',
+    mediaStorageRoot: '/var/tmp/qianshu-browser-media',
     ports: {
       devProxy: 41001,
       devServer: 41002,
@@ -91,6 +93,21 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
   )
   assert.equal(plan.runner.env.QIANSHU_BROWSER_AUTH_BASE_URL, 'https://127.0.0.1:41003')
   assert.equal(plan.runner.env.QIANSHU_BROWSER_AUTH_HTTP_BASE_URL, 'http://127.0.0.1:41001')
+  assert.equal(
+    plan.runner.env.QIANSHU_BROWSER_AUTH_FIXTURE_DIRECTORY,
+    '/tmp/qianshu-browser-auth-session/media-fixtures',
+  )
+  for (const server of plan.services.filter(service => service.name.startsWith('server-'))) {
+    assert.equal(server.env.MEDIA_FFPROBE_PATH, '/opt/media/bin/ffprobe')
+    assert.equal(server.env.MEDIA_STORAGE_DRIVER, 'local')
+    assert.equal(server.env.MEDIA_STORAGE_ROOT, '/var/tmp/qianshu-browser-media')
+  }
+  for (const proxy of plan.services.filter(service => service.name.startsWith('proxy-'))) {
+    assert.equal(
+      proxy.env.QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT,
+      '/var/tmp/qianshu-browser-media',
+    )
+  }
   assert.equal(
     [...plan.prepare, ...plan.services, plan.runner]
       .flatMap(step => step.args)

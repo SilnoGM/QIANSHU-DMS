@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
+import { isAbsolute } from 'node:path'
 import process from 'node:process'
 
 const devtoolsReadyTimeoutMilliseconds = 20_000
@@ -347,6 +348,37 @@ export class ChromePage {
       height,
       mobile,
       width,
+    })
+  }
+
+  async setFiles(selector, files) {
+    if (
+      typeof selector !== 'string'
+      || selector.length === 0
+      || !Array.isArray(files)
+      || files.length === 0
+      || files.some(file => typeof file !== 'string' || !isAbsolute(file))
+    ) {
+      throw new Error('Browser file fixture path is invalid')
+    }
+    const document = await this.connection.send('DOM.getDocument', {
+      depth: 0,
+      pierce: true,
+    })
+    const rootNodeId = document.root?.nodeId
+    if (!Number.isInteger(rootNodeId) || rootNodeId < 1) {
+      throw new Error('Browser file input is unavailable')
+    }
+    const match = await this.connection.send('DOM.querySelector', {
+      nodeId: rootNodeId,
+      selector,
+    })
+    if (!Number.isInteger(match.nodeId) || match.nodeId < 1) {
+      throw new Error('Browser file input is unavailable')
+    }
+    await this.connection.send('DOM.setFileInputFiles', {
+      files,
+      nodeId: match.nodeId,
     })
   }
 

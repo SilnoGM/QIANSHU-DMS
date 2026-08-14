@@ -96,6 +96,8 @@ export function createBrowserAuthPlan(input) {
   const {
     chromeExecutable,
     databaseUrl,
+    ffprobePath,
+    mediaStorageRoot,
     ports,
     secrets,
     sessionDirectory,
@@ -116,6 +118,9 @@ export function createBrowserAuthPlan(input) {
     AUTH_USER_ID_HMAC_KEY: userIdHmacKey,
     AUTH_IP_HMAC_KEY: ipHmacKey,
     DATABASE_URL: databaseUrl,
+    MEDIA_FFPROBE_PATH: ffprobePath,
+    MEDIA_STORAGE_DRIVER: 'local',
+    MEDIA_STORAGE_ROOT: mediaStorageRoot,
     TRUST_PROXY_HOPS: '0',
   }
   const prepareEnvironment = safeEnvironment(sourceEnv, {
@@ -212,6 +217,7 @@ export function createBrowserAuthPlan(input) {
         QIANSHU_BROWSER_AUTH_API_ORIGIN: devServerOrigin,
         QIANSHU_BROWSER_AUTH_HOST: '127.0.0.1',
         QIANSHU_BROWSER_AUTH_PORT: String(ports.devProxy),
+        QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT: mediaStorageRoot,
         QIANSHU_BROWSER_AUTH_WEB_ORIGIN: webOrigin,
       }),
       `${devBaseUrl}/api/health`,
@@ -223,6 +229,7 @@ export function createBrowserAuthPlan(input) {
         QIANSHU_BROWSER_AUTH_API_ORIGIN: prodServerOrigin,
         QIANSHU_BROWSER_AUTH_HOST: '127.0.0.1',
         QIANSHU_BROWSER_AUTH_PORT: String(ports.prodProxy),
+        QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT: mediaStorageRoot,
         QIANSHU_BROWSER_AUTH_TLS_CERT: tlsCertificatePath,
         QIANSHU_BROWSER_AUTH_TLS_KEY: tlsKeyPath,
         QIANSHU_BROWSER_AUTH_WEB_ORIGIN: webOrigin,
@@ -241,6 +248,10 @@ export function createBrowserAuthPlan(input) {
       QIANSHU_BROWSER_AUTH_BASE_URL: prodBaseUrl,
       QIANSHU_BROWSER_AUTH_CHROME_EXECUTABLE: chromeExecutable,
       QIANSHU_BROWSER_AUTH_HTTP_BASE_URL: devBaseUrl,
+      QIANSHU_BROWSER_AUTH_FIXTURE_DIRECTORY: path.join(
+        sessionDirectory,
+        'media-fixtures',
+      ),
       QIANSHU_BROWSER_AUTH_PROFILE_DIRECTORY: path.join(
         sessionDirectory,
         'chrome-profile',
@@ -362,6 +373,25 @@ async function resolveChromeExecutable(environment = process.env) {
     }
   }
   throw fixedError('Browser auth E2E Chrome executable is unavailable')
+}
+
+async function resolveFfprobeExecutable(environment = process.env) {
+  const configured = environment.MEDIA_FFPROBE_PATH
+  const candidates = [
+    configured,
+    process.platform === 'darwin' ? '/opt/homebrew/bin/ffprobe' : undefined,
+    '/usr/bin/ffprobe',
+  ].filter(value => typeof value === 'string' && path.isAbsolute(value))
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, filesystemConstants.X_OK)
+      return candidate
+    }
+    catch {
+      // 只检查固定候选，不输出主机路径或底层权限错误。
+    }
+  }
+  throw fixedError('Browser auth E2E ffprobe executable is unavailable')
 }
 
 function startManagedProcess(definition) {
@@ -488,6 +518,12 @@ async function runProductionBrowserAuthE2e() {
     path.join(os.tmpdir(), 'qianshu-browser-auth-e2e-'),
   )
   await chmod(sessionDirectory, 0o700)
+  // LocalMediaStorage 主动拒绝系统 tmp 与仓库目录；单独在当前用户目录建立
+  // 0700 的一次性媒体根，并在所有成功/失败/信号路径统一清理。
+  const mediaStorageRoot = await mkdtemp(
+    path.join(os.homedir(), '.qianshu-browser-media-e2e-'),
+  )
+  await chmod(mediaStorageRoot, 0o700)
   const state = { runner: undefined }
   let requestedSignal
   const signalHandler = (signal) => {
@@ -504,10 +540,13 @@ async function runProductionBrowserAuthE2e() {
 
   try {
     const chromeExecutable = await resolveChromeExecutable()
+    const ffprobePath = await resolveFfprobeExecutable()
     const ports = await allocatePorts()
     const plan = createBrowserAuthPlan({
       chromeExecutable,
       databaseUrl,
+      ffprobePath,
+      mediaStorageRoot,
       ports,
       secrets: {
         adminPassword: `Br-${randomBytes(9).toString('base64url')}!7`,
@@ -518,7 +557,12 @@ async function runProductionBrowserAuthE2e() {
     await runBrowserAuthE2e({
       plan,
       dependencies: {
-        cleanup: () => rm(sessionDirectory, { force: true, recursive: true }),
+        cleanup: async () => {
+          await Promise.all([
+            rm(sessionDirectory, { force: true, recursive: true }),
+            rm(mediaStorageRoot, { force: true, recursive: true }),
+          ])
+        },
         prepare: step => runCommand(step.command, step.args, {
           cwd: repositoryRoot,
           env: step.env,
@@ -540,6 +584,10 @@ async function runProductionBrowserAuthE2e() {
   finally {
     process.off('SIGINT', handleSigint)
     process.off('SIGTERM', handleSigterm)
+    await Promise.all([
+      rm(sessionDirectory, { force: true, recursive: true }),
+      rm(mediaStorageRoot, { force: true, recursive: true }),
+    ])
   }
 }
 

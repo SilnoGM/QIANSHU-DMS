@@ -53,6 +53,64 @@ const { Client } = require('pg')
       [user.rows[0].id, role.rows[0].id],
     )
 
+    // 产品媒体 Browser 验收使用四个固定最小权限身份。账号、角色和关联只存在
+    // 于一次性 PostgreSQL，全部复用本次随机密码 hash，日志不输出任何凭据。
+    const roleFixtures = [
+      {
+        code: 'browser_products_read',
+        permissions: ['products:read', 'product-media:read'],
+      },
+      {
+        code: 'browser_products_update',
+        permissions: ['products:update'],
+      },
+      {
+        code: 'browser_media_read',
+        permissions: ['product-media:read'],
+      },
+      {
+        code: 'browser_products_manage_no_media',
+        permissions: ['products:read', 'products:update'],
+      },
+    ]
+    for (const fixture of roleFixtures) {
+      const fixtureRole = await client.query(
+        [
+          'INSERT INTO roles (code, name, description)',
+          'VALUES ($1, $2, $3) RETURNING id',
+        ].join(' '),
+        [fixture.code, fixture.code, 'Browser ProductMedia RBAC fixture'],
+      )
+      const permissionRows = await client.query(
+        [
+          'INSERT INTO role_permissions (role_id, permission_id)',
+          'SELECT $1, id FROM permissions WHERE code = ANY($2::text[])',
+        ].join(' '),
+        [fixtureRole.rows[0].id, fixture.permissions],
+      )
+      if (permissionRows.rowCount !== fixture.permissions.length) {
+        throw new Error('product_media_permissions')
+      }
+      const fixtureUser = await client.query(
+        [
+          'INSERT INTO users (',
+          'username, username_normalized, display_name, password_hash,',
+          'status, must_change_password, password_changed_at, auth_version, updated_at',
+          ') VALUES ($1, $1, $2, $3, \'ACTIVE\', false, clock_timestamp(), 0,',
+          'clock_timestamp()) RETURNING id',
+        ].join(' '),
+        [fixture.code, fixture.code, passwordHash],
+      )
+      await client.query(
+        'INSERT INTO user_profiles (user_id) VALUES ($1)',
+        [fixtureUser.rows[0].id],
+      )
+      await client.query(
+        'INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)',
+        [fixtureUser.rows[0].id, fixtureRole.rows[0].id],
+      )
+    }
+
     // 产品列表浏览器验收只向本次隔离数据库写夹具。供应商沿用正式字典身份，
     // 先创建 Item 再启用 Type，以满足数据库的“启用字典至少一个启用项”约束。
     const supplierType = await client.query(
@@ -156,37 +214,152 @@ const { Client } = require('pg')
       [productRule.rows[0].id],
     )
 
-    const browserImage = [
-      'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22',
-      ' width=%2280%22 height=%2280%22 viewBox=%220 0 80 80%22%3E',
-      '%3Crect width=%2280%22 height=%2280%22 rx=%2212%22 fill=%22%232563eb%22/%3E',
-      '%3Ccircle cx=%2240%22 cy=%2240%22 r=%2218%22 fill=%22white%22/%3E%3C/svg%3E',
-    ].join('')
-    await client.query(
+    // 管理域 Browser 场景保留独立的 4 图 2 视频只读样本；产品媒体专属场景使用
+    // 另一条空媒体 Product，通过真实 API 写入，避免测试文件顺序影响验收结果。
+    const managementProduct = await client.query(
       [
         'INSERT INTO products (',
-        'name, product_no, status, supplier_value, main_image, images, videos,',
+        'name, product_no, status, supplier_value,',
         'twd_sale_price_amount, twd_sale_price_currency,',
         'myr_sale_price_amount, myr_sale_price_currency,',
         'purchase_cost_amount, purchase_cost_currency, attributes,',
         'created_by_user_id, updated_by_user_id, created_at, updated_at',
         ') VALUES (',
         '$1, \'PRODUCT-BROWSER-001\', \'ACTIVE\', \'BROWSER_SUPPLIER_EFFECTIVE\',',
-        '$2, $3, $4, 1234.5678, \'TWD\', NULL, \'MYR\', 88.9, \'CNY\', $5::jsonb,',
-        '$6, $6, clock_timestamp(), clock_timestamp()',
-        ')',
+        '1234.5678, \'TWD\', NULL, \'MYR\', 88.9, \'CNY\', $2::jsonb,',
+        '$3, $3, clock_timestamp(), clock_timestamp()',
+        ') RETURNING id',
       ].join(' '),
       [
         'Browser 多媒体产品',
-        browserImage,
-        [browserImage, browserImage, browserImage, browserImage],
-        ['https://example.test/browser-product.mp4', 'javascript:alert(1)'],
         JSON.stringify([
           { title: '颜色', value: '墨黑' },
           { title: '尺寸', value: 'XL' },
         ]),
         user.rows[0].id,
       ],
+    )
+    const managementMedia = [
+      {
+        checksum: '1'.repeat(64),
+        extension: 'png',
+        filename: 'browser-management-main.png',
+        id: '11111111-1111-4111-8111-111111111111',
+        kind: 'IMAGE',
+        mimeType: 'image/png',
+        sizeBytes: 106,
+        sortOrder: 0,
+      },
+      {
+        checksum: '2'.repeat(64),
+        extension: 'png',
+        filename: 'browser-management-detail.png',
+        id: '22222222-2222-4222-8222-222222222222',
+        kind: 'IMAGE',
+        mimeType: 'image/png',
+        sizeBytes: 106,
+        sortOrder: 1,
+      },
+      {
+        checksum: '3'.repeat(64),
+        extension: 'webp',
+        filename: 'browser-management-side.webp',
+        id: '33333333-3333-4333-8333-333333333333',
+        kind: 'IMAGE',
+        mimeType: 'image/webp',
+        sizeBytes: 44,
+        sortOrder: 2,
+      },
+      {
+        checksum: '4'.repeat(64),
+        extension: 'webp',
+        filename: 'browser-management-package.webp',
+        id: '44444444-4444-4444-8444-444444444444',
+        kind: 'IMAGE',
+        mimeType: 'image/webp',
+        sizeBytes: 44,
+        sortOrder: 3,
+      },
+      {
+        checksum: '5'.repeat(64),
+        durationMs: 1000,
+        extension: 'mp4',
+        filename: 'browser-management-overview.mp4',
+        id: '55555555-5555-4555-8555-555555555555',
+        kind: 'VIDEO',
+        mimeType: 'video/mp4',
+        sizeBytes: 1695,
+        sortOrder: 0,
+        videoCodec: 'h264',
+      },
+      {
+        checksum: '6'.repeat(64),
+        durationMs: 1000,
+        extension: 'mp4',
+        filename: 'browser-management-detail.mp4',
+        id: '66666666-6666-4666-8666-666666666666',
+        kind: 'VIDEO',
+        mimeType: 'video/mp4',
+        sizeBytes: 1695,
+        sortOrder: 1,
+        videoCodec: 'h264',
+      },
+    ]
+    for (const fixture of managementMedia) {
+      await client.query(
+        [
+          'INSERT INTO media_assets (',
+          'id, media_type, status, storage_driver, object_key, original_filename,',
+          'mime_type, size_bytes, checksum_sha256, width, height, duration_ms,',
+          'video_codec, created_by_user_id, created_at, updated_at',
+          ') VALUES ($1, $2, \'READY\', \'local\', $3, $4, $5, $6, $7,',
+          '16, 16, $8, $9, $10, clock_timestamp(), clock_timestamp())',
+        ].join(' '),
+        [
+          fixture.id,
+          fixture.kind,
+          'assets/2026/08/' + fixture.id + '.' + fixture.extension,
+          fixture.filename,
+          fixture.mimeType,
+          fixture.sizeBytes,
+          fixture.checksum,
+          fixture.durationMs ?? null,
+          fixture.videoCodec ?? null,
+          user.rows[0].id,
+        ],
+      )
+      await client.query(
+        [
+          'INSERT INTO product_media (',
+          'product_id, media_asset_id, kind, sort_order, is_primary,',
+          'created_by_user_id, created_at, updated_at',
+          ') VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp(), clock_timestamp())',
+        ].join(' '),
+        [
+          managementProduct.rows[0].id,
+          fixture.id,
+          fixture.kind,
+          fixture.sortOrder,
+          fixture.kind === 'IMAGE' && fixture.sortOrder === 0,
+          user.rows[0].id,
+        ],
+      )
+    }
+    await client.query(
+      [
+        'INSERT INTO products (',
+        'name, product_no, status, supplier_value,',
+        'twd_sale_price_amount, twd_sale_price_currency,',
+        'myr_sale_price_amount, myr_sale_price_currency,',
+        'purchase_cost_amount, purchase_cost_currency,',
+        'created_by_user_id, updated_by_user_id, created_at, updated_at',
+        ') VALUES (',
+        '\'Browser ProductMedia E2E\', \'PRODUCT-MEDIA-BROWSER-001\', \'ACTIVE\',',
+        '\'BROWSER_SUPPLIER_EFFECTIVE\', 100, \'TWD\', 10, \'MYR\', 20, \'CNY\',',
+        '$1, $1, clock_timestamp() - interval \'30 seconds\',',
+        'clock_timestamp() - interval \'30 seconds\')',
+      ].join(' '),
+      [user.rows[0].id],
     )
     await client.query(
       [
@@ -215,9 +388,9 @@ const { Client } = require('pg')
         '\'Browser 填充分页产品 \' || lpad(series_no::text, 2, \'0\'),',
         '\'PRODUCT-BROWSER-FILLER-\' || lpad(series_no::text, 2, \'0\'),',
         '\'DRAFT\', NULL, $1, $1,',
-        'clock_timestamp() - (interval \'4 minutes\' + (18 - series_no) * interval \'1 minute\'),',
-        'clock_timestamp() - (interval \'4 minutes\' + (18 - series_no) * interval \'1 minute\')',
-        'FROM generate_series(1, 17) AS fixture(series_no)',
+        'clock_timestamp() - (interval \'4 minutes\' + (17 - series_no) * interval \'1 minute\'),',
+        'clock_timestamp() - (interval \'4 minutes\' + (17 - series_no) * interval \'1 minute\')',
+        'FROM generate_series(1, 16) AS fixture(series_no)',
       ].join(' '),
       [user.rows[0].id],
     )
