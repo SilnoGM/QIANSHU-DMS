@@ -899,15 +899,31 @@ Task 15 evidence（2026-08-14）：
 - 本任务未修改数据库 Schema/migration、公共 API/OpenAPI、Web、依赖或 lockfile，未提交 `.env`，未输出
   真实媒体文件名或存储路径，未 push、PR、merge、部署或修改真实主机。
 
-- [ ] 17. 完成 Browser、全量测试和本地运行验收
-  - [ ] 17.1 真实 Chrome 覆盖桌面/窄屏、Dark、Reduced Motion、键盘排序、上传进度、主图、视频、删除和冲突。
-  - [ ] 17.2 覆盖 read-only、update-only、media-read-only 等真实 RBAC 组合，证明未来内部页面可只读产品媒体。
-  - [ ] 17.3 使用自有小 fixtures 覆盖 JPEG/PNG/WebP/MP4 和 Product Document 拒绝；浏览器产物可靠清理。
-  - [ ] 17.4 运行完整 Server test/typecheck/lint/build、Web test/typecheck/lint/build、OpenAPI、隔离 E2E 和 root check。
-  - [ ] 17.5 从根 `node --run dev` 重启本地服务，验证 Web HTTP、`/api/health`、数据库、图片、视频 Range 和清洁 Git。
-  - [ ] 17.6 如发现失败，先增加失败测试再最小修复；每个修复独立提交，不把已知失败描述成完成。
-  - [ ] 17.7 更新 tasks 真实总数、命令、warning、运行环境和 commit 列表，提交：`test: 完成产品媒体全量验收`。
+- [x] 17. 完成 Browser、全量测试和本地运行验收
+  - [x] 17.1 真实 Chrome 覆盖桌面/窄屏、Dark、Reduced Motion、键盘排序、上传进度、主图、视频、删除和冲突。
+  - [x] 17.2 覆盖 read-only、update-only、media-read-only 等真实 RBAC 组合，证明未来内部页面可只读产品媒体。
+  - [x] 17.3 使用自有小 fixtures 覆盖 JPEG/PNG/WebP/MP4 和 Product Document 拒绝；浏览器产物可靠清理。
+  - [x] 17.4 运行完整 Server test/typecheck/lint/build、Web test/typecheck/lint/build、OpenAPI、隔离 E2E 和 root check。
+  - [x] 17.5 从根 `node --run dev` 重启本地服务，验证 Web HTTP、`/api/health`、数据库、图片、视频 Range 和清洁 Git。
+  - [x] 17.6 如发现失败，先增加失败测试再最小修复；每个修复独立提交，不把已知失败描述成完成。
+  - [x] 17.7 更新 tasks 真实总数、命令、warning、运行环境和 commit 列表，提交：`test: 完成产品媒体全量验收`。
   - _Requirements: R1-R12_
+
+  Task 17 evidence（2026-08-16 收口复核）：原始全量验收提交为
+  `f32d43d test: 完成产品媒体全量验收`；后续多格式 Browser/E2E、卡片交互和筛选修复继续扩大覆盖。本轮在
+  `6ba6bc8 fix: 修复服务端依赖安全漏洞` 后重新执行 `node --run check` 并 exit `0`：Root 677/677、
+  Server 186/186 suites 与 1825/1825 tests、Web Node 172/172、TypeScript 49/49、API/views 815/815、
+  真实 Chrome 3/3；Server/Web typecheck、lint、OpenAPI 临时生成与字节一致检查均通过。
+
+  `node --run ci:server-e2e` exit `0`：公共集合 31 suites、191 tests passed（按配置 4 suites、10 tests
+  skipped），媒体 lifecycle/service/runtime HTTP/cutover 四个附加集合 10/10 passed。`node --run build`
+  exit `0`，只保留既有第三方 `@vueuse/core` pure annotation、大 chunk 与 plugin timing warning；字体验证
+  108 个资产，zero-residue 验证 604 个文件、489 个文本产物和 108 个字体资产。
+
+  构建后旧 Server watcher 因 `dist` 生命周期退出，已优雅停止旧根编排，并从根 `node --run dev` 恢复唯一
+  实例；Server 3000 `/api/health` 为 `ok`、数据库 `up`，Web 9000 为 HTTP 200。图片与视频 Range、私有内容、
+  响应式和 RBAC 由同轮 Chrome 与隔离 runtime E2E 复核。依赖 high 阈值审计 exit `0`；Task 18、Gate DB、
+  Gate OPS 与 Gate E 仍未执行，未写持久开发数据，未 push、PR、merge 或部署。
 
 - [ ] 18. 持久开发数据库、真实部署与 Git 收口
   - 前置：Task 1–17 GREEN；Gate DB、Gate OPS、Gate E 分别按实际动作授权。
