@@ -985,14 +985,21 @@ async function verifyProductList(page, baseUrl) {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
-      dialog?.querySelector('video')?.dispatchEvent(new Event('error'))
+      const video = dialog?.querySelector('video')
+      if (!(video instanceof HTMLVideoElement)) throw new Error('preview video unavailable')
+      Object.defineProperty(video, 'error', {
+        configurable: true,
+        value: { code: MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED },
+      })
+      video.dispatchEvent(new Event('error'))
       return true
     })()`)
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
-      return dialog?.textContent?.includes('视频暂不可预览')
+      return dialog?.textContent?.includes('当前浏览器不支持此视频')
+        && dialog.querySelector('[aria-label="下载视频 browser-management-overview.mp4"]') !== null
         && dialog.querySelector('a[target="_blank"]') !== null
     })()`)
     await clickVisibleModalButton(page, 'browser-management-detail.mp4')
