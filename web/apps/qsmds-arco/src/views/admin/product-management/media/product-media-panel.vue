@@ -128,6 +128,14 @@ const detachVisible = computed({
     }
   },
 })
+const detachFailure = computed(() => {
+  if (detachTarget.value === null || panelFailure.value === null) {
+    return null
+  }
+  return panelFailure.value.requestId
+    ? `${panelFailure.value.message} requestId: ${panelFailure.value.requestId}`
+    : panelFailure.value.message
+})
 const previewUrl = computed(() => previewItem.value === null
   ? null
   : contentUrls.value[previewItem.value.id] ?? null)
@@ -439,6 +447,7 @@ defineExpose({ hasUnsavedChanges: dirty, unknown })
     v-model="detachVisible"
     title="解除产品媒体"
     description="此操作只解除当前产品关联；文件进入保留期后再由服务端清理。"
+    :error="detachFailure"
     :submitting="mutationPhase === 'detach'"
   >
     <FaAlert

@@ -596,7 +596,26 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
       await page.disableRequestInterception()
     }
 
-    // 解除关联后重新上传，既覆盖删除交互，也为后续管理 Browser 回归保留 4/5。
+    // 视频解除成功后，确认弹窗必须真实关闭；随后重新上传，继续保留 5/5 的媒体上限场景。
+    await clickVisibleAriaButton(page, '解除视频 browser-detail.mp4')
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes('解除产品媒体')
+        && dialog.textContent?.includes('browser-detail.mp4')))()`)
+    await clickVisibleButton(page, '确认解除')
+    await page.waitFor(`document.body.innerText.includes('4 / 5 个')`)
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .every(dialog => dialog.getClientRects().length === 0))()`)
+    await selectFileAndWait(
+      page,
+      configuration.baseUrl,
+      product.id,
+      fixtures['browser-detail.mp4'],
+      'browser-detail.mp4',
+    )
+    await page.waitFor(`document.body.innerText.includes('5 / 5 个')`)
+
+    // 图片解除关联后重新上传，继续为后续管理 Browser 回归保留 4/20。
     await clickVisibleAriaButton(page, '解除图片 browser-package.webp')
     await page.waitFor(`document.body.innerText.includes('解除产品媒体')`)
     await clickVisibleButton(page, '确认解除')

@@ -356,6 +356,8 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
     if (!options.editable.value || boardLocked.value || layout.value.phase !== 'ready') {
       return
     }
+    // 新的解除确认不继承上一项媒体操作的失败信息。
+    panelFailure.value = null
     const ids = item.kind === 'IMAGE'
       ? orderedImages.value.map(current => current.id)
       : orderedVideos.value.map(current => current.id)
@@ -368,12 +370,12 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
     expectedVersion: number,
     version: number,
     authEpoch: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const signal = resources.beginRequest('detach-reconcile')
     try {
       const response = await productsApi.getById(product.value.id, signal)
       if (!requestContextIsCurrent(version, authEpoch) || signal.aborted) {
-        return
+        return false
       }
       latestProduct.value = response.data
       if (reconcileProductMediaDetachResult({
@@ -383,18 +385,18 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
         replaceProduct(response.data)
         panelFailure.value = null
         latestProduct.value = null
-        await nextTick()
-        await options.focusAfterDetach(detachFocusTargetId.value)
-        return
+        return true
       }
       unknownMutation.value = true
       conflictSource.value = 'detach'
+      return false
     }
     catch {
       if (requestContextIsCurrent(version, authEpoch) && !signal.aborted) {
         unknownMutation.value = true
         conflictSource.value = 'detach'
       }
+      return false
     }
     finally {
       resources.completeRequest('detach-reconcile', signal)
@@ -417,6 +419,7 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
     const version = ++operationVersion
     const authEpoch = options.authEpoch.value
     const signal = resources.beginRequest('detach')
+    let shouldClose = false
     try {
       const response = await productMediaApi.detach(
         product.value.id,
@@ -427,10 +430,8 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
       if (!uploadResponseIsCurrent(version, authEpoch, signal)) {
         return
       }
-      detachTarget.value = null
       replaceProduct(response.data)
-      await nextTick()
-      await options.focusAfterDetach(detachFocusTargetId.value)
+      shouldClose = true
     }
     catch (error) {
       if (!requestContextIsCurrent(version, authEpoch)) {
@@ -438,17 +439,28 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
       }
       const failure = getProductMediaMutationFailure(error)
       panelFailure.value = failure
-      detachTarget.value = null
       if (failure.outcome === 'conflict') {
         await loadLatestProductForConflict('detach')
       }
       else if (failure.outcome === 'unknown') {
-        await reconcileDetach(target, expectedVersion, version, authEpoch)
+        shouldClose = await reconcileDetach(target, expectedVersion, version, authEpoch)
       }
     }
     finally {
       resources.completeRequest('detach', signal)
       mutationPhase.value = 'idle'
+      if (
+        shouldClose
+        && requestContextIsCurrent(version, authEpoch)
+        && detachTarget.value?.id === target.id
+      ) {
+        // QsGenericModal 会按契约拒绝 submitting 期间的所有关闭请求。先让
+        // submitting=false 完成一次渲染，再清空目标触发受控关闭，避免弹窗
+        // 回写打开状态后永久残留。
+        await nextTick()
+        detachTarget.value = null
+        await options.focusAfterDetach(detachFocusTargetId.value)
+      }
     }
   }
 
