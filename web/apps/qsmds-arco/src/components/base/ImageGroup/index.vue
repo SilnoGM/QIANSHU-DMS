@@ -6,6 +6,7 @@ import type {
   ImageGroupItem,
   ImageGroupPreviewEvent,
   ImageGroupProps,
+  NormalizedImageGroupItem,
 } from './types'
 import { useFaImagePreview } from '@fantastic-admin/components'
 import { computed, nextTick, ref, watch } from 'vue'
@@ -16,7 +17,9 @@ import {
   resolveImageGroupOverlap,
   resolveImageGroupRadius,
   resolveImageGroupSize,
+  resolveImageGroupStateKey,
   resolveImageGroupTooltip,
+  retainImageGroupStateKeys,
 } from './logic'
 
 defineOptions({ name: 'ImageGroup' })
@@ -73,28 +76,29 @@ const groupStyle = computed<CSSProperties>(() => ({
 watch(
   () => props.items,
   () => {
-    // 数据源更新后重新计算加载与失败状态，避免相同 key 更换 URL 时沿用旧结果。
-    loadedKeys.value = new Set()
-    failedKeys.value = new Set()
+    // 查询刷新可能返回新的数组实例，但 URL 未变化的缓存图片不会再次触发 load。
+    // 仅清除已移除或同 key 换 URL 的状态，避免缩略图永久停留在透明 loading 态。
+    loadedKeys.value = retainImageGroupStateKeys(loadedKeys.value, normalizedItems.value)
+    failedKeys.value = retainImageGroupStateKeys(failedKeys.value, normalizedItems.value)
     focusedEntryIndex.value = 0
     triggerElements.value = []
   },
   { deep: true },
 )
 
-function isImageLoaded(key: string): boolean {
-  return loadedKeys.value.has(key)
+function isImageLoaded(image: NormalizedImageGroupItem): boolean {
+  return loadedKeys.value.has(resolveImageGroupStateKey(image))
 }
 
-function isImageFailed(key: string): boolean {
-  return failedKeys.value.has(key)
+function isImageFailed(image: NormalizedImageGroupItem): boolean {
+  return failedKeys.value.has(resolveImageGroupStateKey(image))
 }
 
-function getImageState(key: string): 'error' | 'loaded' | 'loading' {
-  if (isImageFailed(key)) {
+function getImageState(image: NormalizedImageGroupItem): 'error' | 'loaded' | 'loading' {
+  if (isImageFailed(image)) {
     return 'error'
   }
-  return isImageLoaded(key) ? 'loaded' : 'loading'
+  return isImageLoaded(image) ? 'loaded' : 'loading'
 }
 
 function getEntryStyle(displayIndex: number): CSSProperties {
@@ -137,15 +141,15 @@ function getTriggerRef(index: number): (value: unknown) => void {
   return value => setTriggerElement(value, index)
 }
 
-function handleImageLoad(key: string) {
+function handleImageLoad(image: NormalizedImageGroupItem) {
   const nextLoadedKeys = new Set(loadedKeys.value)
-  nextLoadedKeys.add(key)
+  nextLoadedKeys.add(resolveImageGroupStateKey(image))
   loadedKeys.value = nextLoadedKeys
 }
 
 function handleImageError(image: ImageGroupEntry & { type: 'image' }) {
   const nextFailedKeys = new Set(failedKeys.value)
-  nextFailedKeys.add(image.image.key)
+  nextFailedKeys.add(resolveImageGroupStateKey(image.image))
   failedKeys.value = nextFailedKeys
   emit('imageError', {
     index: image.image.index,
@@ -159,7 +163,7 @@ function openPreview(index: number) {
   }
 
   const image = normalizedItems.value[index]
-  if (!image || isImageFailed(image.key)) {
+  if (!image || isImageFailed(image)) {
     return
   }
 
@@ -248,7 +252,7 @@ function getTriggerAriaLabel(entry: ImageGroupEntry): string {
         :class="resolvedRadius.className"
         :style="getEntryStyle(displayIndex)"
         class="qs-image-group__item"
-        :data-image-state="entry.type === 'image' ? getImageState(entry.image.key) : 'overflow'"
+        :data-image-state="entry.type === 'image' ? getImageState(entry.image) : 'overflow'"
         @click.stop="handleEntryClick(entry)"
         @focus="focusedEntryIndex = displayIndex"
         @keydown="handleTriggerKeydown($event, displayIndex)"
@@ -263,16 +267,16 @@ function getTriggerAriaLabel(entry: ImageGroupEntry): string {
             class="size-full transition-opacity duration-180"
             :class="[
               fitClass,
-              isImageLoaded(entry.image.key) && !isImageFailed(entry.image.key)
+              isImageLoaded(entry.image) && !isImageFailed(entry.image)
                 ? 'opacity-100'
                 : 'opacity-0',
             ]"
-            @load="handleImageLoad(entry.image.key)"
+            @load="handleImageLoad(entry.image)"
             @error="handleImageError(entry)"
           >
 
           <span
-            v-if="isImageFailed(entry.image.key)"
+            v-if="isImageFailed(entry.image)"
             data-image-state="error"
             class="text-muted-foreground bg-muted/35 flex-center inset-0 absolute"
           >
@@ -285,7 +289,7 @@ function getTriggerAriaLabel(entry: ImageGroupEntry): string {
             </slot>
           </span>
           <span
-            v-else-if="!isImageLoaded(entry.image.key)"
+            v-else-if="!isImageLoaded(entry.image)"
             data-image-state="loading"
             class="bg-muted/45 inset-0 absolute animate-pulse"
             aria-hidden="true"
@@ -315,7 +319,7 @@ function getTriggerAriaLabel(entry: ImageGroupEntry): string {
                 :style="getTooltipImageStyle()"
               >
                 <img
-                  v-if="!isImageFailed(entry.image.key)"
+                  v-if="!isImageFailed(entry.image)"
                   :src="entry.image.item.src"
                   alt=""
                   decoding="async"
@@ -328,7 +332,7 @@ function getTriggerAriaLabel(entry: ImageGroupEntry): string {
               </div>
               <div class="mt-2 flex gap-2 min-w-0 items-center justify-between">
                 <span class="truncate">
-                  {{ isImageFailed(entry.image.key)
+                  {{ isImageFailed(entry.image)
                     ? '图片加载失败'
                     : resolveImageGroupTooltip(entry.image.item, entry.image.index) }}
                 </span>

@@ -818,6 +818,24 @@ async function waitForProductList(page, expectedText) {
   })()`)
 }
 
+/**
+ * 产品查询刷新会复用相同行内的 ImageGroup。管理场景的历史媒体夹具刻意没有
+ * 物理文件，因此 loaded/error 都是合法终态，但刷新后绝不能永久退回 loading。
+ */
+async function waitForProductImagesSettled(page, productNo) {
+  const serializedProductNo = JSON.stringify(productNo)
+  await page.waitFor(`(() => {
+    const row = [...document.querySelectorAll('tbody tr')].find(candidate => (
+      candidate.textContent?.includes(${serializedProductNo})
+    ))
+    const images = [...(row?.querySelectorAll('[data-slot="image-group"] img') ?? [])]
+      .filter(image => image.getClientRects().length > 0)
+    return images.length > 0 && images.every(image => (
+      ['loaded', 'error'].includes(image.parentElement?.getAttribute('data-image-state'))
+    ))
+  })()`)
+}
+
 async function verifyProductList(page, baseUrl) {
   const productNo = 'PRODUCT-BROWSER-001'
   const productRequests = []
@@ -1045,6 +1063,7 @@ async function verifyProductList(page, baseUrl) {
     await clickVisibleButton(page, '应用筛选')
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 1 条')`)
+    await waitForProductImagesSettled(page, productNo)
     assert.equal(await page.evaluate(`document.body.innerText.includes(
       'Browser 停用供应商产品',
     )`), false)
@@ -1061,6 +1080,7 @@ async function verifyProductList(page, baseUrl) {
     await clickVisibleButton(page, '清空筛选')
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 1 条')`)
+    await waitForProductImagesSettled(page, productNo)
     const clearedFilterRequest = productRequests.at(-1)
     assert.equal(clearedFilterRequest?.searchParams.get('keyword'), productNo.toLowerCase())
     assert.equal(clearedFilterRequest?.searchParams.has('status'), false)

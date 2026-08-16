@@ -10,7 +10,9 @@ import {
   resolveImageGroupOverlap,
   resolveImageGroupRadius,
   resolveImageGroupSize,
+  resolveImageGroupStateKey,
   resolveImageGroupTooltip,
+  retainImageGroupStateKeys,
 } from '../../src/components/base/ImageGroup/logic'
 
 function readRelativeSource(relativePath: string): string {
@@ -130,6 +132,24 @@ test('Tooltip 文案依次回退到 tooltip、alt 和图片序号', () => {
   assert.equal(resolveImageGroupTooltip(images[2], 2), '第 3 张图片')
 })
 
+test('图片数据刷新时保留 URL 未变化项的加载状态并清除已变化项', () => {
+  const previous = normalizeImageGroupItems([images[0], images[1]])
+  const previousLoadedKeys = new Set(previous.map(resolveImageGroupStateKey))
+  const refreshed = normalizeImageGroupItems([
+    { ...images[0] },
+    { ...images[1], src: '/fixtures/product-side-updated.svg' },
+  ])
+
+  assert.deepEqual(
+    [...retainImageGroupStateKeys(previousLoadedKeys, refreshed)],
+    [resolveImageGroupStateKey(refreshed[0]!)],
+  )
+  assert.notEqual(
+    resolveImageGroupStateKey(previous[1]!),
+    resolveImageGroupStateKey(refreshed[1]!),
+  )
+})
+
 test('ImageGroup 复用 FaTooltip 和整组图片预览，并覆盖完整交互状态', () => {
   const source = readRelativeSource(
     '../../src/components/base/ImageGroup/index.vue',
@@ -160,6 +180,9 @@ test('ImageGroup 复用 FaTooltip 和整组图片预览，并覆盖完整交互�
   assert.match(source, /data-image-state="error"/u)
   assert.match(source, /data-image-state="loading"/u)
   assert.match(source, /data-image-state="loaded"/u)
+  assert.match(source, /loadedKeys\.value = retainImageGroupStateKeys/u)
+  assert.match(source, /failedKeys\.value = retainImageGroupStateKeys/u)
+  assert.match(source, /resolveImageGroupStateKey\(image\)/u)
   assert.doesNotMatch(
     source,
     /@\/api|@\/components\/business\/QsGoodTooltip|useApp\w*Store|linear-gradient|radial-gradient|purple|violet|indigo|fuchsia|system-ui|-apple-system|Inter|Roboto|Arial/u,
