@@ -22,6 +22,10 @@ test('Server release 包含媒体部署模板且模板不携带真实 Secret', a
     packageJson.scripts['media:recovery:dry-run'],
     'node dist/commands/media-operations.js recovery-dry-run',
   )
+  assert.equal(
+    packageJson.scripts['media:cleanup:expired-trash'],
+    'node dist/commands/media-operations.js cleanup-expired-trash',
+  )
 
   const environment = await read(
     'server/deploy/environment/server.env.example',
@@ -62,6 +66,32 @@ test('Nginx 与 systemd 模板固定 internal、Range、body limit 和运行身�
     systemd,
     /^ExecStartPre=\/usr\/bin\/node dist\/commands\/media-operations\.js preflight$/mu,
   )
+
+  const cleanupService = await read(
+    'server/deploy/systemd/qianshu-dms-media-cleanup.service',
+  )
+  for (const expected of [
+    'Type=oneshot',
+    'User=qianshu-dms',
+    'Group=qianshu-media',
+    'UMask=0027',
+    'EnvironmentFile=/etc/qianshu-dms/server.env',
+    'ReadWritePaths=/var/lib/qianshu-dms/media',
+    'ExecStart=/usr/bin/node dist/commands/media-operations.js cleanup-expired-trash',
+  ]) {
+    assert.match(cleanupService, new RegExp(`^${expected}$`, 'mu'))
+  }
+
+  const cleanupTimer = await read(
+    'server/deploy/systemd/qianshu-dms-media-cleanup.timer',
+  )
+  assert.match(cleanupTimer, /^OnCalendar=hourly$/mu)
+  assert.match(cleanupTimer, /^Persistent=true$/mu)
+  assert.match(
+    cleanupTimer,
+    /^Unit=qianshu-dms-media-cleanup\.service$/mu,
+  )
+  assert.match(cleanupTimer, /^WantedBy=timers\.target$/mu)
 })
 
 test('媒体指标与告警合同只允许固定低基数 Label', async () => {
@@ -100,6 +130,10 @@ test('媒体指标与告警合同只允许固定低基数 Label', async () => {
     criticalBelowPercent: 10,
     warningBelowPercent: 20,
   })
+  assert.equal(
+    contract.alerts.find(alert => alert.name === 'MediaCleanupFailure')?.condition,
+    'increase(media_cleanup_total{result=~"failed|isolated"}[1h]) > 0',
+  )
 })
 
 test('恢复 runbook 固定容量、离机备份、同一恢复点和只读恢复顺序', async () => {

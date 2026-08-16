@@ -1067,6 +1067,36 @@ Task 15 evidence（2026-08-14）：
   staged/unstaged/untracked 与提交范围复核通过；未出现 `.env`、Schema/migration、package/lock、日志或 build
   产物，未写持久数据、未 push、未 merge。
 
+### 4.19 2026-08-16 到期媒体自动物理清理
+
+- [x] 24. 接通到期 TRASHED 媒体的生产自动清理
+  - [x] 24.1 在现有 `media-operations` 运维 CLI 增加有界、低敏感度的 `cleanup-expired-trash` 命令，
+    复用 `MediaReconciliationService.cleanupExpiredTrash()`，不新增 HTTP API。
+  - [x] 24.2 对 completed/failed/isolated 输出固定低基数事件与指标；failed 或 isolated 必须非零退出，
+    原始异常、assetId、objectKey 和 filename 不得进入输出。
+  - [x] 24.3 新增受限 oneshot systemd service 与 hourly timer；使用服务相同身份、EnvironmentFile 和媒体目录
+    写权限，启用 `Persistent=true` 补执行停机期间错过的周期。
+  - [x] 24.4 更新 release 部署合同与运维文档，明确启用、检查、手动执行、失败处置和不可逆 PURGED 边界；
+    不修改真实主机或生产数据。
+  - [x] 24.5 运行定向 RED/GREEN、Server typecheck/lint/build、root deployment contract 和 diff-check，
+    更新真实证据并提交 `feat: 增加媒体过期资源自动清理任务`。
+  - _Requirements: R5, R8, R11-R12_
+
+  Task 24 evidence（2026-08-16）：首轮 RED 精确证明执行入口和部署调度缺失：CLI suite 因
+  `runExpiredTrashCleanup` 合同不存在产生 3 个 TypeScript 编译错误；部署合同因 package script 和两个
+  systemd unit 不存在产生 2 个失败。GREEN 后 CLI 7/7、部署合同 4/4、CLI + reconciler 定向 16/16；
+  Server typecheck、lint、build、`git diff --check` 全部通过。Server 全量为 186/186 suites、1822/1822 tests，
+  Root 为 676/676 tests。官方隔离 PostgreSQL 与临时媒体目录 E2E 主集合为 31 suites、191 tests passed
+  （按配置 4 suites、10 tests skipped），媒体 lifecycle/service/runtime/cutover 附加集合 10/10 passed；
+  lifecycle 真实覆盖有引用禁止清理、trash、restore、再次 trash、物理 purge 和 `PURGED`。
+
+  清理命令固定每轮最多 100 条、60 秒，只输出 scanned/completed/failed/isolated 和低基数指标；任一 failed
+  或 isolated 非零退出。oneshot service 与 hourly/Persistent timer 均进入 release 的 `deploy/`，但本次没有
+  安装或启用真实主机 unit，也没有写持久开发/生产数据库或媒体文件。当前 macOS 验证机没有
+  `systemd-analyze`，因此只完成 4/4 仓库静态部署合同；Ubuntu 主机的 `systemd-analyze verify` 仍保留为
+  runbook 上线门禁。未修改 Schema/migration、公共 API/OpenAPI、Web、依赖或 lockfile，未提交 `.env`、
+  日志、媒体或构建产物。
+
 Phase 4 停止条件：若实现需要新增依赖、Schema/migration、支持 MKV/AVI、转码/remux、加载整段 Blob、
 修改公共 Fa/Qs 组件业务契约、扩大 ProductMedia 到 Document，或必须写入持久开发/生产数据，应停止并
 重新取得对应确认。`file-type` 或真实 `ffprobe` 若不能稳定区分已承诺容器，也不得以扩展名猜测降级。
@@ -1104,12 +1134,15 @@ flowchart TD
   T20 --> T21["21 Content API and OpenAPI"]
   T21 --> T22["22 Web preview fallback"]
   T22 --> T23["23 Multi-container acceptance"]
+  T6 --> T24["24 Automatic trash cleanup"]
+  T16 --> T24
 ```
 
 Task 2 与 Task 3 可在 Gate DEP/I 已满足后并行研究，但同一共享 Prisma/generated/lockfile 文件不得并发写。
 Task 6 与 Task 7 在 Task 5 后可并行开发各自测试；Task 8–12 涉及公共 Product/OpenAPI 契约，必须串行。
 Web Task 13 可在 OpenAPI 同步后开始；Task 14/15 不与 generated sync 并发。
 本次扩展 Task 19–23 严格串行：先锁定 RED，再实现 Validator、内容契约、Web 和最终验收。
+Task 24 复用 Task 6 的清理状态机与 Task 16 的部署边界，只增加运维 CLI 和外部 systemd 调度。
 
 ## 6. 需求追踪矩阵
 
@@ -1119,14 +1152,14 @@ Web Task 13 可在 OpenAPI 同步后开始；Task 14/15 不与 generated sync �
 | R2 MediaAsset 数据完整性 | 2, 4, 5, 20 | 11, 17, 23 |
 | R3 ProductMedia 与主图 | 2, 7, 8, 14 | 11, 17 |
 | R4 文件类型与内容验证 | 4, 5, 9, 13, 19–20 | 11, 17, 23 |
-| R5 本地存储与故障恢复 | 3, 5, 6, 16 | 11, 17, 18 |
+| R5 本地存储与故障恢复 | 3, 5, 6, 16, 24 | 11, 17, 18, 24 |
 | R6 私有访问与未来订单使用 | 2, 10, 15, 16, 21 | 11, 17, 23 |
 | R7 产品媒体写入与并发 | 7, 9, 13, 15, 20 | 11, 17, 23 |
-| R8 生命周期、保留与引用安全 | 2, 5, 6 | 11, 16, 17 |
+| R8 生命周期、保留与引用安全 | 2, 5, 6, 24 | 11, 16, 17, 24 |
 | R9 产品 API 数据合同 | 8, 9, 10, 12, 13, 21–22 | 11, 17, 23 |
 | R10 Product Web 维护体验 | 13, 14, 15, 22 | 17, 23 |
-| R11 审计、安全与可观测性 | 2–7, 9–10, 16, 19–22 | 11, 17, 23 |
-| R12 数据迁移、备份与验收 | 1–2, 6, 8, 11, 16 | 17–18, 23 |
+| R11 审计、安全与可观测性 | 2–7, 9–10, 16, 19–22, 24 | 11, 17, 23–24 |
+| R12 数据迁移、备份与验收 | 1–2, 6, 8, 11, 16, 24 | 17–18, 23–24 |
 
 每项 Requirement 至少有一个实现任务和一个后置验收任务。Phase 4 更新 tasks 时应把真实 RED/GREEN
 证据写入对应任务，不得只凭代码存在勾选。

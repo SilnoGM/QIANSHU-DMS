@@ -95,7 +95,7 @@
     },
     {
       "name": "MediaCleanupFailure",
-      "condition": "increase(media_cleanup_total{result=failed}[1h]) > 0",
+      "condition": "increase(media_cleanup_total{result=~\"failed|isolated\"}[1h]) > 0",
       "severity": "warning"
     }
   ]

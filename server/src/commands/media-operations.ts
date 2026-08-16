@@ -7,6 +7,7 @@ import {
   type MediaOperationalHealthResult,
 } from '../modules/media/media-operational-health'
 import type {
+  MediaReconciliationCleanupResult,
   MediaReconciliationDryRunResult,
   MediaReconciliationService,
 } from '../modules/media/media-reconciliation.service'
@@ -24,15 +25,25 @@ export interface MediaOperationsCliDependencies {
   readonly collectHealth: () => Promise<MediaOperationalHealthResult>
   readonly output: MediaOperationsOutput
   readonly processRef: MediaOperationsProcess
+  readonly runExpiredTrashCleanup: () => Promise<MediaReconciliationCleanupResult>
   readonly runRecoveryDryRun: () => Promise<MediaReconciliationDryRunResult>
 }
 
-type MediaOperationsCommand = 'health' | 'preflight' | 'recovery-dry-run'
+type MediaOperationsCommand =
+  | 'cleanup-expired-trash'
+  | 'health'
+  | 'preflight'
+  | 'recovery-dry-run'
 
 function parseCommand(argv: readonly string[]): MediaOperationsCommand {
   if (
     argv.length !== 1 ||
-    !['health', 'preflight', 'recovery-dry-run'].includes(argv[0] ?? '')
+    ![
+      'cleanup-expired-trash',
+      'health',
+      'preflight',
+      'recovery-dry-run',
+    ].includes(argv[0] ?? '')
   ) {
     throw new Error('Media operations command is invalid')
   }
@@ -43,8 +54,14 @@ async function collectDefaultHealth(): Promise<MediaOperationalHealthResult> {
   return collectMediaOperationalHealth(createMediaConfiguration(process.env))
 }
 
-async function runDefaultRecoveryDryRun(): Promise<MediaReconciliationDryRunResult> {
-  // 动态加载 Nest 应用，health/preflight 因此不会初始化数据库或 HTTP 模块。
+/**
+ * 只有需要数据库和 Media provider 的命令才创建一次性 Nest application context。
+ * health/preflight 继续走无数据库的轻量路径；finally 必须关闭连接池，确保 oneshot
+ * systemd service 可以在完成一轮有界清理后真实退出。
+ */
+async function withDefaultReconciler<T>(
+  operation: (reconciler: MediaReconciliationService) => Promise<T>,
+): Promise<T> {
   const [{ NestFactory }, { AppModule }, { MediaReconciliationService }] =
     await Promise.all([
       import('@nestjs/core'),
@@ -59,15 +76,27 @@ async function runDefaultRecoveryDryRun(): Promise<MediaReconciliationDryRunResu
     const reconciler = application.get<MediaReconciliationService>(
       MediaReconciliationService,
     )
-    return await reconciler.dryRun({
-      batchSize: 100,
-      maxBatches: 10_000,
-      timeBudgetMs: 60_000,
-    })
+    return await operation(reconciler)
   }
   finally {
     await application.close().catch(() => undefined)
   }
+}
+
+async function runDefaultRecoveryDryRun(): Promise<MediaReconciliationDryRunResult> {
+  return withDefaultReconciler(reconciler => reconciler.dryRun({
+      batchSize: 100,
+      maxBatches: 10_000,
+      timeBudgetMs: 60_000,
+    }))
+}
+
+async function runDefaultExpiredTrashCleanup(): Promise<MediaReconciliationCleanupResult> {
+  // 每次 timer 激活最多处理 100 条且最多占用 60 秒，避免单机清理无限占用数据库和磁盘。
+  return withDefaultReconciler(reconciler => reconciler.cleanupExpiredTrash({
+    batchSize: 100,
+    timeBudgetMs: 60_000,
+  }))
 }
 
 function defaultDependencies(): MediaOperationsCliDependencies {
@@ -75,6 +104,7 @@ function defaultDependencies(): MediaOperationsCliDependencies {
     collectHealth: collectDefaultHealth,
     output: console,
     processRef: process,
+    runExpiredTrashCleanup: runDefaultExpiredTrashCleanup,
     runRecoveryDryRun: runDefaultRecoveryDryRun,
   }
 }
@@ -156,6 +186,30 @@ function emitRecovery(
   return status
 }
 
+function emitExpiredTrashCleanup(
+  result: MediaReconciliationCleanupResult,
+  output: MediaOperationsOutput,
+): 'issues' | 'passed' {
+  const status = result.failed > 0 || result.isolated > 0 ? 'issues' : 'passed'
+  output.log(JSON.stringify({
+    ...result,
+    kind: 'media_cleanup',
+    operation: 'expired_trash',
+    status,
+  }))
+  for (const [resultName, value] of [
+    ['completed', result.completed],
+    ['failed', result.failed],
+    ['isolated', result.isolated],
+  ] as const) {
+    output.log(metric('media_cleanup_total', value, {
+      operation: 'expired_trash',
+      result: resultName,
+    }))
+  }
+  return status
+}
+
 /**
  * 运维 CLI 只输出固定 JSON 合同。原始异常可能包含连接串、root 或文件名，因此所有失败
  * 都收敛为同一个固定事件；调用方依赖 exitCode 和低基数计数定位，不依赖异常文本。
@@ -169,6 +223,14 @@ export async function runMediaOperationsCli(
     if (command === 'recovery-dry-run') {
       const status = emitRecovery(
         await dependencies.runRecoveryDryRun(),
+        dependencies.output,
+      )
+      if (status !== 'passed') dependencies.processRef.exitCode = 1
+      return
+    }
+    if (command === 'cleanup-expired-trash') {
+      const status = emitExpiredTrashCleanup(
+        await dependencies.runExpiredTrashCleanup(),
         dependencies.output,
       )
       if (status !== 'passed') dependencies.processRef.exitCode = 1

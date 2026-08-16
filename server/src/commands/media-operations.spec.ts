@@ -1,4 +1,7 @@
-import type { MediaReconciliationDryRunResult } from '../modules/media/media-reconciliation.service'
+import type {
+  MediaReconciliationCleanupResult,
+  MediaReconciliationDryRunResult,
+} from '../modules/media/media-reconciliation.service'
 import type { MediaOperationalHealthResult } from '../modules/media/media-operational-health'
 import {
   runMediaOperationsCli,
@@ -31,6 +34,13 @@ const recovery: MediaReconciliationDryRunResult = {
   storageScanned: 2,
 }
 
+const cleanup: MediaReconciliationCleanupResult = {
+  completed: 2,
+  failed: 0,
+  isolated: 0,
+  scanned: 2,
+}
+
 function fixture(
   overrides: Partial<MediaOperationsCliDependencies> = {},
 ) {
@@ -41,6 +51,7 @@ function fixture(
     collectHealth: jest.fn().mockResolvedValue(healthy),
     output: { error, log },
     processRef,
+    runExpiredTrashCleanup: jest.fn().mockResolvedValue(cleanup),
     runRecoveryDryRun: jest.fn().mockResolvedValue(recovery),
     ...overrides,
   }
@@ -107,6 +118,64 @@ describe('runMediaOperationsCli', () => {
       matched: 2,
       status: 'issues',
       storageScanned: 2,
+    })
+    expect(JSON.stringify(parsedCalls(log))).not.toContain(sensitiveCanary)
+  })
+
+  it('runs bounded expired-trash cleanup and emits only fixed low-cardinality results', async () => {
+    const { dependencies, log, processRef } = fixture()
+
+    await runMediaOperationsCli(['cleanup-expired-trash'], dependencies)
+
+    expect(dependencies.runExpiredTrashCleanup).toHaveBeenCalledTimes(1)
+    expect(processRef.exitCode).toBeUndefined()
+    expect(parsedCalls(log)).toEqual([
+      {
+        completed: 2,
+        failed: 0,
+        isolated: 0,
+        kind: 'media_cleanup',
+        operation: 'expired_trash',
+        scanned: 2,
+        status: 'passed',
+      },
+      {
+        kind: 'metric',
+        labels: { operation: 'expired_trash', result: 'completed' },
+        metric: 'media_cleanup_total',
+        value: 2,
+      },
+      {
+        kind: 'metric',
+        labels: { operation: 'expired_trash', result: 'failed' },
+        metric: 'media_cleanup_total',
+        value: 0,
+      },
+      {
+        kind: 'metric',
+        labels: { operation: 'expired_trash', result: 'isolated' },
+        metric: 'media_cleanup_total',
+        value: 0,
+      },
+    ])
+  })
+
+  it.each([
+    ['failed', { ...cleanup, completed: 0, failed: 1, scanned: 1 }],
+    ['isolated', { ...cleanup, completed: 0, isolated: 1, scanned: 1 }],
+  ] as const)('returns non-zero when expired-trash cleanup has %s assets', async (_, result) => {
+    const sensitiveCanary = 'trash/2026/08/customer-secret.mov'
+    const { dependencies, log, processRef } = fixture({
+      runExpiredTrashCleanup: jest.fn().mockResolvedValue(result),
+    })
+
+    await runMediaOperationsCli(['cleanup-expired-trash'], dependencies)
+
+    expect(processRef.exitCode).toBe(1)
+    expect(parsedCalls(log)[0]).toMatchObject({
+      kind: 'media_cleanup',
+      operation: 'expired_trash',
+      status: 'issues',
     })
     expect(JSON.stringify(parsedCalls(log))).not.toContain(sensitiveCanary)
   })
