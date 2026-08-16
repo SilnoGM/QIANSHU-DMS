@@ -27,16 +27,17 @@ const MINIMAL_MP4_SIGNATURE = Buffer.from([
   0x6d, 0x70, 0x34, 0x31,
 ])
 
-const detectMp4FileType = jest.fn().mockResolvedValue({
+const MP4_FILE_TYPE = {
   ext: 'mp4',
   mime: 'video/mp4',
-})
+} as const
 
 function createVideoValidator(
   runProcess: (request: RestrictedMediaProcessRequest) => Promise<RestrictedMediaProcessResult>,
+  detectedFileType: { readonly ext: string; readonly mime: string } = MP4_FILE_TYPE,
 ): MediaContentValidator {
   return new MediaContentValidator(VALIDATOR_CONFIGURATION, {
-    detectFileType: detectMp4FileType,
+    detectFileType: jest.fn().mockResolvedValue(detectedFileType),
     runProcess,
   })
 }
@@ -146,6 +147,125 @@ describe('MediaContentValidator VIDEO', () => {
   })
 
   it.each([
+    [
+      'MOV detected behind an MP4 declaration',
+      'camera.mp4',
+      'video/mp4',
+      { ext: 'mov', mime: 'video/quicktime' },
+      'mov,mp4,m4a,3gp,3g2,mj2',
+      'h264',
+      'avc1',
+      'aac',
+      '.mov',
+      'video/quicktime',
+    ],
+    [
+      'M4V detected behind a MOV declaration',
+      'camera.mov',
+      'video/quicktime',
+      { ext: 'm4v', mime: 'video/x-m4v' },
+      'mov,mp4,m4a,3gp,3g2,mj2',
+      'hevc',
+      'hvc1',
+      'aac',
+      '.m4v',
+      'video/x-m4v',
+    ],
+    [
+      'MP4 detected behind an M4V declaration',
+      'camera.m4v',
+      'video/x-m4v',
+      MP4_FILE_TYPE,
+      'mov,mp4,m4a,3gp,3g2,mj2',
+      'h264',
+      'avc3',
+      null,
+      '.mp4',
+      'video/mp4',
+    ],
+    [
+      'strict WebM identity',
+      'camera.webm',
+      'video/webm',
+      { ext: 'webm', mime: 'video/webm' },
+      'matroska,webm',
+      'vp9',
+      '[0][0][0][0]',
+      'opus',
+      '.webm',
+      'video/webm',
+    ],
+  ] as const)(
+    'accepts %s and persists the detected canonical identity',
+    async (
+      _caseName,
+      originalFilename,
+      declaredMimeType,
+      detectedFileType,
+      formatName,
+      videoCodec,
+      codecTag,
+      audioCodec,
+      canonicalExtension,
+      trustedMimeType,
+    ) => {
+      const streams: Record<string, unknown>[] = [{
+        codec_name: videoCodec,
+        codec_tag_string: codecTag,
+        codec_type: 'video',
+        height: 1080,
+        width: 1920,
+      }]
+      if (audioCodec !== null) {
+        streams.push({ codec_name: audioCodec, codec_type: 'audio' })
+      }
+      const runProcess = jest.fn().mockResolvedValue(ffprobeOutput(
+        streams,
+        { duration: '1.250', format_name: formatName },
+      ))
+      const validator = createVideoValidator(runProcess, detectedFileType)
+
+      await expect(validator.validate({
+        declaredMimeType,
+        expectedMediaType: 'VIDEO',
+        originalFilename,
+        sourcePath,
+      })).resolves.toMatchObject({
+        audioCodec,
+        canonicalExtension,
+        mimeType: trustedMimeType,
+        videoCodec,
+      })
+    },
+  )
+
+  it.each([
+    ['M4A brand', 'camera.mp4', 'video/mp4', { ext: 'm4a', mime: 'audio/x-m4a' }],
+    ['M4P brand', 'camera.m4v', 'video/x-m4v', { ext: 'm4p', mime: 'video/mp4' }],
+    ['F4V brand', 'camera.mov', 'video/quicktime', { ext: 'f4v', mime: 'video/mp4' }],
+    ['3GP brand', 'camera.mp4', 'video/mp4', { ext: '3gp', mime: 'video/3gpp' }],
+    ['HEIC brand', 'camera.mov', 'video/quicktime', { ext: 'heic', mime: 'image/heic' }],
+    ['WebM disguised as MP4', 'camera.mp4', 'video/mp4', { ext: 'webm', mime: 'video/webm' }],
+    ['MP4 disguised as WebM', 'camera.webm', 'video/webm', MP4_FILE_TYPE],
+  ] as const)('rejects %s before ffprobe', async (
+    _caseName,
+    originalFilename,
+    declaredMimeType,
+    detectedFileType,
+  ) => {
+    const runProcess = jest.fn().mockResolvedValue(ffprobeOutput())
+    const validator = createVideoValidator(runProcess, detectedFileType)
+
+    await expect(validator.validate({
+      declaredMimeType,
+      expectedMediaType: 'VIDEO',
+      originalFilename,
+      sourcePath,
+    })).rejects.toMatchObject({ code: 'MEDIA_CONTENT_TYPE_MISMATCH' })
+    expect(runProcess).not.toHaveBeenCalled()
+  })
+
+  it.each([
     ['H.264 avc3', 'h264', 'avc3', 'h264'],
     ['HEVC hvc1', 'hevc', 'hvc1', 'hevc'],
     ['HEVC hev1', 'hevc', 'hev1', 'hevc'],
@@ -169,6 +289,43 @@ describe('MediaContentValidator VIDEO', () => {
         sourcePath,
       }),
     ).resolves.toMatchObject({ videoCodec: expectedCodec })
+  })
+
+  it.each([
+    ['VP8 without audio', 'vp8', null],
+    ['VP9 with Opus', 'vp9', 'opus'],
+    ['AV1 with Vorbis', 'av1', 'vorbis'],
+  ] as const)('accepts WebM %s', async (_caseName, codecName, audioCodec) => {
+    const streams: Record<string, unknown>[] = [{
+      codec_name: codecName,
+      codec_tag_string: '[0][0][0][0]',
+      codec_type: 'video',
+      height: 720,
+      width: 1280,
+    }]
+    if (audioCodec !== null) {
+      streams.push({ codec_name: audioCodec, codec_type: 'audio' })
+    }
+    const runProcess = jest.fn().mockResolvedValue(ffprobeOutput(
+      streams,
+      { duration: '2.500', format_name: 'matroska,webm' },
+    ))
+    const validator = createVideoValidator(runProcess, {
+      ext: 'webm',
+      mime: 'video/webm',
+    })
+
+    await expect(validator.validate({
+      declaredMimeType: 'video/webm',
+      expectedMediaType: 'VIDEO',
+      originalFilename: 'compatible.webm',
+      sourcePath,
+    })).resolves.toMatchObject({
+      audioCodec,
+      canonicalExtension: '.webm',
+      mimeType: 'video/webm',
+      videoCodec: codecName,
+    })
   })
 
   it('accepts common auxiliary data streams while preserving the primary video metadata', async () => {
@@ -232,11 +389,7 @@ describe('MediaContentValidator VIDEO', () => {
         { codec_name: 'h264', codec_tag_string: 'avc1', codec_type: 'video', height: 360, width: 640 },
       ],
     ],
-    [
-      'invalid dimensions',
-      [{ codec_name: 'h264', codec_tag_string: 'avc1', codec_type: 'video', height: 0, width: 1280 }],
-    ],
-  ])('rejects %s', async (_caseName, streams) => {
+  ])('rejects unsupported %s with a policy error', async (_caseName, streams) => {
     const runProcess = jest.fn().mockResolvedValue(ffprobeOutput(streams))
     const validator = createVideoValidator(runProcess)
 
@@ -247,7 +400,52 @@ describe('MediaContentValidator VIDEO', () => {
         originalFilename: 'invalid.mp4',
         sourcePath,
       }),
-    ).rejects.toMatchObject({ code: 'MEDIA_CONTENT_INVALID' })
+    ).rejects.toMatchObject({ code: 'MEDIA_CONTENT_UNSUPPORTED' })
+  })
+
+  it('rejects invalid dimensions as malformed content', async () => {
+    const runProcess = jest.fn().mockResolvedValue(ffprobeOutput([{
+      codec_name: 'h264',
+      codec_tag_string: 'avc1',
+      codec_type: 'video',
+      height: 0,
+      width: 1280,
+    }]))
+    const validator = createVideoValidator(runProcess)
+
+    await expect(validator.validate({
+      declaredMimeType: 'video/mp4',
+      expectedMediaType: 'VIDEO',
+      originalFilename: 'invalid.mp4',
+      sourcePath,
+    })).rejects.toMatchObject({ code: 'MEDIA_CONTENT_INVALID' })
+  })
+
+  it('rejects WebM data streams with an unsupported policy error', async () => {
+    const runProcess = jest.fn().mockResolvedValue(ffprobeOutput(
+      [
+        {
+          codec_name: 'vp9',
+          codec_tag_string: '[0][0][0][0]',
+          codec_type: 'video',
+          height: 720,
+          width: 1280,
+        },
+        { codec_name: 'bin_data', codec_type: 'data' },
+      ],
+      { duration: '1.5', format_name: 'matroska,webm' },
+    ))
+    const validator = createVideoValidator(runProcess, {
+      ext: 'webm',
+      mime: 'video/webm',
+    })
+
+    await expect(validator.validate({
+      declaredMimeType: 'video/webm',
+      expectedMediaType: 'VIDEO',
+      originalFilename: 'invalid.webm',
+      sourcePath,
+    })).rejects.toMatchObject({ code: 'MEDIA_CONTENT_UNSUPPORTED' })
   })
 
   it.each([

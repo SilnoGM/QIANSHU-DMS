@@ -26,6 +26,7 @@ import {
   type RunRestrictedMediaProcess,
   validateVideoContent,
 } from './media-video-validator'
+import { resolveTrustedVideoContainer } from './media-video-container'
 
 const requireFromRuntime = createRequire(__filename)
 
@@ -171,12 +172,12 @@ export class MediaContentValidator {
     }
 
     if (input.expectedMediaType === 'VIDEO') {
-      if (
-        extension !== '.mp4' ||
-        declaredMime !== 'video/mp4' ||
-        !matchesDetectedType(detected, ['mp4']) ||
-        detected?.mime !== 'video/mp4'
-      ) {
+      const container = resolveTrustedVideoContainer(
+        extension,
+        declaredMime,
+        detected,
+      )
+      if (container === null) {
         throw new MediaValidationError('MEDIA_CONTENT_TYPE_MISMATCH')
       }
       const checksumSha256 = await this.readChecksum(input.sourcePath, initialMetadata)
@@ -184,6 +185,7 @@ export class MediaContentValidator {
         input.sourcePath,
         sizeBytes,
         checksumSha256,
+        container,
         this.configuration.ffprobePath,
         this.dependencies.runProcess,
       )

@@ -933,6 +933,96 @@ Task 15 evidence（2026-08-14）：
   - GREEN：本地媒体健康检查显示 read/write/videoValidator 均为 up，H.264 `avc3` 与 HEVC `hvc1`
     真实 `ffprobe` 冒烟通过；开发 Web/Server 分别返回 HTTP 200 和数据库 up。
 
+### 4.18 2026-08-16 多视频容器扩展
+
+- [x] Phase 1 需求确认：MP4/MOV/M4V 受控兼容家族、WebM 严格身份、明确 codec/轨道矩阵，
+  不转码、不自动 remux。
+- [x] Phase 2 设计确认：复用 `file-type@21.3.4` 与受限 `ffprobe`，不修改 Prisma Schema、不新增依赖，
+  内容交付返回可信 MIME，Web 按 `MediaError` 降级。
+
+- [x] 19. 建立多容器扩展基线和 RED 证据
+  - [x] 19.1 记录 exact HEAD、Git staged/unstaged/untracked、当前依赖和相关专项测试基线；确认没有待提交的
+    重叠用户修改，且本任务不触及 schema、migration、package 或 lockfile。
+  - [x] 19.2 在 `media-content-validator.video.spec.ts` 先增加 RED：MP4/MOV/M4V identity、ISO 家族受控
+    别名、WebM 精确匹配，以及 M4A/M4P/F4V/3GP/HEIC/伪后缀拒绝。
+  - [x] 19.3 增加 RED：H.264/HEVC/VP8/VP9/AV1、AAC/Opus/Vorbis、ISO data stream、WebM data、
+    字幕、附件、多视频轨、多音轨、format token 与 415/422/503 分流。
+  - [x] 19.4 运行目标测试并保留预期失败名称和断言；不得用类型错误、fixture 读取失败或错误测试命令冒充 RED。
+  - _Requirements: R2, R4, R11_
+
+  Task 19 evidence（2026-08-16）：exact HEAD `a4dc41d964b4f49218304b6275f2fb57e4c8e04c`；基线
+  Server 3/3 suites、40/40 tests，Web 16/16 tests 绿色。新增 Validator RED 可编译执行，32 项中
+  19 项通过、13 项按预期失败；失败仅为 MOV/M4V/WebM identity、VP8/VP9/AV1、Opus/Vorbis 与
+  `MEDIA_CONTENT_UNSUPPORTED` 尚未实现，不包含 fixture、类型或命令错误。依赖固定
+  `file-type@21.3.4`，本机 `ffprobe 8.1.1`；未触及 schema/migration/package/lockfile。
+
+- [x] 20. GREEN 实现业务中立的容器身份和 codec 策略
+  - [x] 20.1 在 Media 模块建立最小 `TrustedVideoContainer` 判别边界；仅允许
+    `.mp4/.mov/.m4v + video/mp4|video/quicktime|video/x-m4v` 家族互认，WebM 保持严格一致。
+  - [x] 20.2 扩展 `ValidatedVideoContent`：canonical extension `.mp4/.mov/.m4v/.webm`，视频 codec
+    `h264/hevc/vp8/vp9/av1`，音频 codec `aac/opus/vorbis/null`；不创建数据库 enum。
+  - [x] 20.3 `MediaContentValidator` 将 magic identity 显式传给 `validateVideoContent`；`ffprobe` 继续固定参数、
+    file-only protocol、15s timeout 和 256KiB 输出上限，不经过 shell。
+  - [x] 20.4 按容器执行 format/codec/tag/轨道矩阵；策略不允许映射为 `MEDIA_CONTENT_UNSUPPORTED`，
+    损坏/元数据缺失映射为 `MEDIA_CONTENT_INVALID`，运行时不可用保持 fail-closed。
+  - [x] 20.5 运行 Validator 单测、MediaAsset integration、typecheck 和 lint；GREEN 后提交
+    `feat: 扩展视频容器与编码验证`。
+  - _Requirements: R1-R2, R4, R7, R11_
+
+  Task 20 evidence（2026-08-16）：新增 `TrustedVideoContainer` 只从可信 magic identity 建立 canonical
+  extension/MIME；ISO 家族仅在已确认的三个后缀和三个 MIME 间互认，WebM 仍要求 extension、MIME 与 magic
+  三者一致。`ffprobe` 进程约束未变，容器、codec、tag、轨道矩阵按确认合同分流为 unsupported、invalid 或
+  runtime unavailable。Validator 32/32 tests、MediaAsset 回归 3/3 suites、53/53 tests、`tsc --noEmit`、
+  changed-files ESLint 与 `git diff --check` 均通过；未修改 Schema/migration、公共 API、Web、依赖或 lockfile。
+  首轮并行运行 `typecheck`/`lint` 时两个 `prisma generate` 竞争同一输出目录，分别报 `EEXIST` 并造成两组
+  回归测试因生成入口短暂缺失退出 `1`；已将不完整生成物可逆移动到独立临时备份，串行重新生成后按上述
+  范围全部转绿，未改 Schema 或业务数据。
+
+- [ ] 21. 扩展产品视频私有内容交付与 OpenAPI
+  - [ ] 21.1 先在 `product-media-content.service.spec.ts`、Controller contract 和 API E2E 增加 RED：
+    MOV/M4V/WebM 可信 MIME、canonical objectKey、GET/HEAD、Range、ETag、304/416 与 anti-enumeration。
+  - [ ] 21.2 扩展 Content-Type/extension 白名单；Product JSON 继续只返回结构化媒体和可信 `mimeType`，
+    不增加 objectKey、checksum、绝对路径或新 DTO 字段。
+  - [ ] 21.3 原始文件名继续用于界面显示；视频内容响应将下载后缀校正为可信 canonical extension，
+    防止 MOV 再以伪 `.mp4` 落盘。图片文件名行为不在本任务中改变。
+  - [ ] 21.4 更新 `product-media-content.contract.ts` 的 header enum 和 200/206 binary content，正式运行
+    `contract:sync`，验证 Server/Web snapshot 字节一致并通过 `contract:check`。
+  - [ ] 21.5 运行专项 API/E2E、Server typecheck/lint/build；GREEN 后提交
+    `feat: 扩展产品视频交付格式`。
+  - _Requirements: R6, R9, R11_
+
+- [ ] 22. 扩展 Web 文件选择、规则说明和预览降级
+  - [ ] 22.1 先在 `product-media.logic.test.ts` 与 `product-media-panel.test.ts` 增加 RED：accept 白名单、
+    ISO 家族选择、WebM 严格匹配、规则文案，以及 `MediaError` 1/2/3/4 分流和状态复位。
+  - [ ] 22.2 文件 input 增加 `.mov,.m4v,.webm`；客户端逻辑与 Server 容器家族对齐，但保持 Server 为
+    magic/codec 最终真相源，并继续即时拒绝 Product Document。
+  - [ ] 22.3 `ProductVideoBoard`、编辑预览 Modal、列表视频 Modal 统一处理：decode/src-not-supported
+    显示浏览器不支持，network 显示加载失败，aborted 不持久报错；切换内容/authEpoch 时复位。
+  - [ ] 22.4 预览降级提供同源私有下载动作，不创建最大 500MiB Blob、不打开 objectKey、不改变 upload queue、
+    Product dirty 或 version；下载按钮具备明确可访问名称和至少 44px 目标。
+  - [ ] 22.5 `ProductMediaRules` 使用两行容器矩阵；仅消费现有 semantic token、Noto 字体和 Lucide 图标，
+    不修改公共 Fa/Qs 组件。对 changed hunks 执行禁用颜色/字体/emoji 和可访问性审计。
+  - [ ] 22.6 运行 Web 专项测试、`test:api`、typecheck、lint、build；GREEN 后提交
+    `feat: 增加多格式视频预览降级`。
+  - _Requirements: R9-R10, R11_
+
+- [ ] 23. 真实样例、浏览器和全量收口
+  - [ ] 23.1 对用户样例 `4月2日-微耕機01.mp4` 运行只读当前 Validator，证明结果为 MOV、
+    `video/quicktime`、H.264 `avc1`、AAC、1080×1920、约 11.93s；不得复制、改写或提交该文件。
+  - [ ] 23.2 在安全临时目录生成最小 M4V/WebM 冒烟样例并运行真实 `file-type + ffprobe + Validator`；
+    临时产物可靠清理且不进入 Git。CI 自动化仍使用自有可复现 mock/临时 fixtures，不依赖用户文件。
+  - [ ] 23.3 在隔离 Browser/E2E 环境覆盖成功上传、真实 Content-Type/Range、可播放预览、模拟解码失败、
+    私有下载、窄屏、Dark、键盘和 RBAC；不得写入当前持久开发产品或媒体数据。
+  - [ ] 23.4 运行 Server 全量、`ci:server-e2e`、Web 全量、OpenAPI、root tests 和最终
+    `node --run check`；报告全部 test/suite 数、warning 和任何纠正后的失败命令。
+  - [ ] 23.5 复核媒体健康、Web/Server HTTP、Git diff/staged 范围、无 `.env`/schema/migration/lock/build
+    产物；更新本节真实 RED/GREEN 证据并创建必要的收口提交，不 push、不 merge。
+  - _Requirements: R4, R6, R9-R12_
+
+Phase 4 停止条件：若实现需要新增依赖、Schema/migration、支持 MKV/AVI、转码/remux、加载整段 Blob、
+修改公共 Fa/Qs 组件业务契约、扩大 ProductMedia 到 Document，或必须写入持久开发/生产数据，应停止并
+重新取得对应确认。`file-type` 或真实 `ffprobe` 若不能稳定区分已承诺容器，也不得以扩展名猜测降级。
+
 ## 5. 任务依赖与可并行边界
 
 ```mermaid
@@ -960,28 +1050,35 @@ flowchart TD
   T15 --> T17["17 Full validation"]
   T16 --> T17
   T17 --> T18["18 DB, deploy, Git closeout"]
+  T10 --> T19["19 Multi-container RED"]
+  T14 --> T19
+  T19 --> T20["20 Container and codec GREEN"]
+  T20 --> T21["21 Content API and OpenAPI"]
+  T21 --> T22["22 Web preview fallback"]
+  T22 --> T23["23 Multi-container acceptance"]
 ```
 
 Task 2 与 Task 3 可在 Gate DEP/I 已满足后并行研究，但同一共享 Prisma/generated/lockfile 文件不得并发写。
 Task 6 与 Task 7 在 Task 5 后可并行开发各自测试；Task 8–12 涉及公共 Product/OpenAPI 契约，必须串行。
 Web Task 13 可在 OpenAPI 同步后开始；Task 14/15 不与 generated sync 并发。
+本次扩展 Task 19–23 严格串行：先锁定 RED，再实现 Validator、内容契约、Web 和最终验收。
 
 ## 6. 需求追踪矩阵
 
 | Requirement | 核心任务 | 最终验收 |
 |---|---|---|
-| R1 统一媒体资产边界 | 2, 5, 6, 7 | 11, 17 |
-| R2 MediaAsset 数据完整性 | 2, 4, 5 | 11, 17 |
+| R1 统一媒体资产边界 | 2, 5, 6, 7, 20 | 11, 17, 23 |
+| R2 MediaAsset 数据完整性 | 2, 4, 5, 20 | 11, 17, 23 |
 | R3 ProductMedia 与主图 | 2, 7, 8, 14 | 11, 17 |
-| R4 文件类型与内容验证 | 4, 5, 9, 13 | 11, 17 |
+| R4 文件类型与内容验证 | 4, 5, 9, 13, 19–20 | 11, 17, 23 |
 | R5 本地存储与故障恢复 | 3, 5, 6, 16 | 11, 17, 18 |
-| R6 私有访问与未来订单使用 | 2, 10, 15, 16 | 11, 17 |
-| R7 产品媒体写入与并发 | 7, 9, 13, 15 | 11, 17 |
+| R6 私有访问与未来订单使用 | 2, 10, 15, 16, 21 | 11, 17, 23 |
+| R7 产品媒体写入与并发 | 7, 9, 13, 15, 20 | 11, 17, 23 |
 | R8 生命周期、保留与引用安全 | 2, 5, 6 | 11, 16, 17 |
-| R9 产品 API 数据合同 | 8, 9, 10, 12, 13 | 11, 17 |
-| R10 Product Web 维护体验 | 13, 14, 15 | 17 |
-| R11 审计、安全与可观测性 | 2–7, 9–10, 16 | 11, 17 |
-| R12 数据迁移、备份与验收 | 1–2, 6, 8, 11, 16 | 17, 18 |
+| R9 产品 API 数据合同 | 8, 9, 10, 12, 13, 21–22 | 11, 17, 23 |
+| R10 Product Web 维护体验 | 13, 14, 15, 22 | 17, 23 |
+| R11 审计、安全与可观测性 | 2–7, 9–10, 16, 19–22 | 11, 17, 23 |
+| R12 数据迁移、备份与验收 | 1–2, 6, 8, 11, 16 | 17–18, 23 |
 
 每项 Requirement 至少有一个实现任务和一个后置验收任务。Phase 4 更新 tasks 时应把真实 RED/GREEN
 证据写入对应任务，不得只凭代码存在勾选。
@@ -1036,6 +1133,9 @@ config/package/smoke tests。`contract:sync` 是生成动作，只在公共 API 
 14. `feat: 接入产品媒体业务流程`
 15. `ops: 增加媒体存储部署合同`
 16. `test: 完成产品媒体全量验收`
+17. `feat: 扩展视频容器与编码验证`
+18. `feat: 扩展产品视频交付格式`
+19. `feat: 增加多格式视频预览降级`
 
 任务中途暴露的独立缺陷使用单独 `fix:` 提交。若一个任务没有产生文件变更，不创建空提交；任务范围因
 真实代码结构需要合并或拆分提交时，先更新 tasks 说明原因。每个提交必须在其任务级验证范围内绿色、

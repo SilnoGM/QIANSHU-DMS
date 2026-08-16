@@ -310,21 +310,18 @@ interface MediaStorage {
 
 ### 7.3 Video
 
-只接受：
+只接受下列矩阵：
 
-```text
-container = MP4
-video codec = H.264 / avc1|avc3 or HEVC / hvc1|hev1
-audio codec = AAC or no audio track
-auxiliary stream = data allowed; subtitle/attachment rejected
-size <= 500MiB
-```
+| 容器 | 视频编码 | 音频编码 | 其他轨道 | 上限 |
+|---|---|---|---|---:|
+| MP4 / MOV / M4V | H.264 `avc1/avc3`、HEVC `hvc1/hev1` | 无或单 AAC | data 可保留；字幕/附件拒绝 | 500MiB |
+| WebM | VP8、VP9、AV1 | 无或单 Opus/Vorbis | data、字幕、附件拒绝 | 500MiB |
 
 生产运行时使用受限子进程调用配置的 `ffprobe`：不经过 shell、固定参数、关闭网络协议、设置超时和
-输出上限，只解析 JSON。允许播放器可忽略的辅助 data stream；字幕、附件、多视频轨、多音频轨、
-无法解析 duration/dimensions 或 codec/tag 不匹配均失败。
+输出上限，只解析 JSON。MP4/MOV/M4V 允许播放器可忽略的辅助 data stream；字幕、附件、多视频轨、
+多音频轨、无法解析 duration/dimensions 或 codec/tag 不匹配均失败。WebM 不接受辅助 data stream。
 本期不调用 `ffmpeg` 转码，不生成 poster；列表可使用 `<video preload="metadata">` 的第一帧表现，
-失败时显示稳定视频占位图标。
+解码失败时显示稳定视频占位和私有下载入口。
 
 ### 7.4 Document
 
@@ -522,7 +519,7 @@ Server 校验：Session → permission → ProductMedia 属于 Product 且有效
 
 ```text
 Content-Type: <trusted mime>
-Content-Disposition: inline; filename="<sanitized ASCII fallback>"
+Content-Disposition: inline; filename="<sanitized ASCII filename; video suffix reconciled to trusted extension>"
 Cache-Control: private, no-store
 X-Content-Type-Options: nosniff
 ETag: "sha256-<opaque digest>"
@@ -660,7 +657,7 @@ Product edit page
 
 - `ProductMediaPanel`：领域 API、权限、Product version、dirty/unknown 状态拥有者。
 - `ProductImageBoard`：图片选择、主图、键盘排序和视觉反馈，不请求 API。
-- `ProductVideoBoard`：视频预览和排序，不请求 API。
+- `ProductVideoBoard`：视频预览、预览降级和排序，不请求 API；下载动作只向父层发出领域事件。
 - `ProductMediaUploadQueue`：文件级进度、取消、失败和 retry 按钮；retry 必须由用户显式触发。
 - `ProductMediaRules`：允许格式、上限和剩余数量。
 
@@ -674,7 +671,7 @@ Product 领域组件，并通过 `customRequest` 接入 API；如确需修改公
 - Purpose：高密度、低误操作地维护内部产品媒体。
 - Aesthetic：`Industrial/utilitarian`，使用清晰边框、克制阴影和稳定信息层级，不使用渐变或营销卡片。
 - Palette：Ink `#0F172A`、Paper `#FFFFFF`、Mist `#F1F5F9`、Teal `#0F766E`、
-  Amber `#B45309`、Red `#DC2626`；代码只引用现有 semantic tokens。
+  Amber `#B45309`；代码只引用现有 semantic tokens。
 - Typography：`Noto Sans SC`；尺寸、时长、文件大小、顺序号使用 `Noto Sans Mono`。
 - Layout：桌面 7/5，图片网格根据容器 3–4 列，窄屏 1–2 列；卡片比例来自真实媒体，不强制裁切原图。
 - Iconography：使用项目图标库的 Upload、Star、Grip、Play、Trash、Retry；不用 emoji 或文字字符代替图标。
@@ -699,6 +696,8 @@ ready-editable
 - 删除使用明确文件名/类型确认；成功后从有效列表移除，Undo 不在首期承诺。
 - 冲突时保留本地布局快照用于对照，但必须重新加载并由用户决定重新应用。
 - Document 文件在选择阶段显示“产品媒体仅支持图片和视频”，不进入上传队列。
+- 视频 `MediaError` 为 decode/source-not-supported 时保留上传成功状态，显示浏览器预览降级和下载；
+  network error 显示加载失败，aborted 不误报为格式问题。
 
 ### 12.5 可访问性
 
@@ -730,12 +729,14 @@ ready-editable
 实施采用 TDD，至少覆盖：
 
 - Schema：enum、FK、partial unique、type trigger、主图、排序、软解除和旧数据预检。
-- Validator：允许格式、magic/MIME/extension 冲突、大小边界、损坏文件、codec、OOXML zip bomb。
+- Validator：MP4/MOV/M4V 受控别名、WebM 严格身份、magic/MIME/extension 冲突、大小边界、
+  损坏文件、容器/codec/轨道矩阵、OOXML zip bomb。
 - Storage：path traversal、symlink、partial write、atomic rename、磁盘满、trash/restore/purge。
 - Service：version conflict、上传最终冲突、20/5 上限、Document 拒绝、no-op、Audit rollback。
 - Reconciler：crash window、零引用检查、未来引用 contract、批次并发和 dry run。
 - API：RBAC、CSRF、multipart、413/415/422、Range/HEAD、404 anti-enumeration、OpenAPI。
 - Web：权限、结构化 mapper、进度、取消、排序、主图、冲突、unknown、窄屏和 accessibility。
+- Web video：文件选择白名单、decode/network/aborted 分流、预览失败状态复位、私有下载和不泄露 objectKey。
 - E2E：真实 PostgreSQL、临时 Local storage、Nginx 等价 header contract 和恢复对账。
 
 计划验证命令需在 tasks 阶段结合仓库脚本最终确认，至少包括：
@@ -761,6 +762,7 @@ git diff --check
 | 单机磁盘故障同时影响数据库和媒体 | 持久卷、离机备份、恢复校验；不声称本期高可用 |
 | DB 与文件系统无法原子提交 | 非 READY 不可见、atomic rename、状态机、定期对账 |
 | 视频大文件阻塞或耗尽内存 | streaming、Nginx/Server 双层上限、ffprobe timeout，不转码 |
+| 允许上传但浏览器不能解码 | 上传成功与预览能力解耦；按 MediaError 降级并提供同一授权内容下载 |
 | Document 扩大攻击面 | 严格 allowlist、受限 parser、无公开入口、Product 双重拒绝 |
 | 未来域引用导致误删 | 显式关联表、统一 zero-reference 查询、保留期、回归合同 |
 | 新旧产品 API 类型不兼容 | 同阶段更新 Server/OpenAPI/Web，不长期双写；上线前检查调用方 |
@@ -771,3 +773,117 @@ git diff --check
 
 与 Requirements 一致：不实现 Product Document、通用媒体库、假设领域关联、多态 owner、转码、
 抽帧、图片编辑、CDN、多机存储、自动跨资产去重、公开分享和批量维护。
+
+## 17. 2026-08-16 多视频容器扩展设计
+
+### 17.1 容器身份与信任边界
+
+`file-type@21.3.4` 是 magic-byte 身份真相源，`ffprobe` 是容器可解析性、轨道和 codec 真相源；文件名和
+multipart MIME 只参与受控一致性判断。不得单独依赖任意一方。
+
+| 检测身份 | `file-type` | 输入扩展名/MIME 规则 | canonical extension | trusted MIME |
+|---|---|---|---|---|
+| MP4 | `mp4 / video/mp4` | 扩展名和声明 MIME 均属于 ISO 家族 | `.mp4` | `video/mp4` |
+| MOV | `mov / video/quicktime` | 扩展名和声明 MIME 均属于 ISO 家族 | `.mov` | `video/quicktime` |
+| M4V | `m4v / video/x-m4v` | 扩展名和声明 MIME 均属于 ISO 家族 | `.m4v` | `video/x-m4v` |
+| WebM | `webm / video/webm` | 必须精确为 `.webm / video/webm` | `.webm` | `video/webm` |
+
+ISO 家族扩展名仅为 `.mp4/.mov/.m4v`，声明 MIME 仅为 `video/mp4`、`video/quicktime`、
+`video/x-m4v`。它允许样例 `.mp4 + video/mp4 + ftypqt` 归一为可信 MOV，但不接受 `M4P`、`M4A`、
+`F4V`、3GP、HEIC 或其他同样使用 ISO Base Media File Format 的类型。WebM 不参与家族互认。
+
+```mermaid
+flowchart LR
+  U["multipart file"] --> S["stream to staging and hash"]
+  S --> F["file-type magic detection"]
+  F --> I{"trusted container identity"}
+  I -->|"MP4/MOV/M4V"| A["validate ISO family declaration"]
+  I -->|"WebM"| W["validate exact WebM declaration"]
+  I -->|"other"| R["415 MEDIA_TYPE_UNSUPPORTED"]
+  A --> P["restricted ffprobe"]
+  W --> P
+  P --> C["container codec and track policy"]
+  C --> M["trusted metadata and canonical object key"]
+```
+
+### 17.2 Validator 类型和数据流
+
+在媒体模块内部新增业务中立的 `TrustedVideoContainer` 判别联合，不进入公共 DTO：
+
+```ts
+type TrustedVideoContainer =
+  | { kind: 'MP4'; canonicalExtension: '.mp4'; mimeType: 'video/mp4' }
+  | { kind: 'MOV'; canonicalExtension: '.mov'; mimeType: 'video/quicktime' }
+  | { kind: 'M4V'; canonicalExtension: '.m4v'; mimeType: 'video/x-m4v' }
+  | { kind: 'WEBM'; canonicalExtension: '.webm'; mimeType: 'video/webm' }
+```
+
+`MediaContentValidator` 先建立该身份，再把身份传给 `validateVideoContent`。`ffprobe.format_name` 对
+MP4/MOV/M4V 使用组合 demuxer 名，因此 ISO 家族只要求命中受控 `mov/mp4` 格式集合，并依赖先前的
+magic identity 区分 canonical 类型；WebM 必须包含 `webm` token。
+
+`ValidatedVideoContent` 扩展为：
+
+```text
+canonicalExtension = .mp4 | .mov | .m4v | .webm
+mimeType = video/mp4 | video/quicktime | video/x-m4v | video/webm
+videoCodec = h264 | hevc | vp8 | vp9 | av1
+audioCodec = aac | opus | vorbis | null
+```
+
+现有数据库列均为字符串，`objectKey` 也已允许 canonical extension，因此不改 Prisma Schema、不新增
+migration。`originalFilename` 保留用户输入用于界面显示；内容响应的下载文件名使用净化后的 stem 加
+可信 canonical extension，避免把 MOV 再下载成伪 `.mp4`。
+
+### 17.3 失败语义
+
+| 阶段 | 内部错误 | HTTP |
+|---|---|---:|
+| 扩展名/MIME/magic 不属于同一已确认家族 | `MEDIA_CONTENT_TYPE_MISMATCH` | 415 |
+| 容器受支持但 codec、tag 或轨道策略不允许 | `MEDIA_CONTENT_UNSUPPORTED` | 415 |
+| 文件损坏、ffprobe 非零、可信时长/尺寸缺失或源文件发生变化 | `MEDIA_CONTENT_INVALID` | 422 |
+| ffprobe 缺失、超时或受限进程不可用 | `MEDIA_VALIDATOR_UNAVAILABLE` | 503 |
+
+公开响应继续只返回低基数错误和 requestId；不得包含探测结果、原路径或 ffprobe stderr。FAILED
+MediaAsset 保留对应稳定 failureCode，staging 文件仍按现有失败路径取消。
+
+### 17.4 内容交付与 OpenAPI
+
+`ProductMediaContentService` 的可信 MIME/extension 表增加 MOV、M4V、WebM。GET/HEAD、Range、ETag、
+RBAC、application/internal_redirect 行为不变；响应使用真实 `Content-Type` 和 canonical 下载扩展名。
+OpenAPI 200/206 binary content 与 Content-Type enum 同步增加：
+
+```text
+video/quicktime
+video/x-m4v
+video/webm
+```
+
+`ProductMediaItemDto.mimeType` 已为 string，Product JSON 结构不变；Server/Web 快照仍通过正式
+`contract:sync` 生成，不手工修改。
+
+### 17.5 Web 行为
+
+- 文件 input `accept` 增加 `.mov,.m4v,.webm`；客户端选择校验复用与 Server 对齐的 ISO 家族和 WebM
+  精确规则，但仍明确声明 Server 是最终真相源。
+- `ProductMediaRules` 用两行容器矩阵说明编码，不使用“任意视频格式”等模糊文案。
+- 产品编辑卡片、编辑预览 Modal 和产品列表视频 Modal 都监听 `<video>` error。错误码 3/4 显示
+  “当前浏览器不支持预览”，错误码 2 显示“视频加载失败”，错误码 1 不形成持久失败状态。
+- 只要存在经过 `resolveProductMediaContentUrl` 校验的同源私有 URL，预览降级区就提供下载动作；使用
+  原生同源 `download` 导航，不先读成 Blob，避免在浏览器内复制最多 500MiB 内容。
+- 切换视频、关闭 Modal、内容 URL 或 authEpoch 改变时清理预览失败状态；下载不改变 Product dirty、
+  upload queue 或 Product version。
+- UI 仅消费现有语义 Token、Noto 字体和 Lucide 图标，不修改公共 Fa/Qs 组件契约。
+
+### 17.6 测试与交付策略
+
+1. RED：以表驱动测试锁定四种容器 identity、ISO 别名、WebM 严格匹配和禁止品牌。
+2. RED：mock `ffprobe` JSON 覆盖五种视频 codec、三种音频 codec、格式 token、字幕/附件/data/
+   多轨及 415/422/503 分流。
+3. GREEN：最小扩展 Validator 类型和容器策略；不引入新依赖或 Schema。
+4. RED/GREEN：扩展内容服务、Controller/OpenAPI 测试，验证真实 MIME、canonical extension 和 Range。
+5. RED/GREEN：扩展 Web 选择规则、三处预览降级、下载、状态复位和可访问名称测试。
+6. 本地冒烟：用用户样例 MOV 验证 READY 元数据；用临时 ffmpeg 产物验证 M4V/WebM，临时文件不得提交。
+7. 收口：专项测试、Server/Web 全量、`contract:sync/check`、真实 Chrome 和根 `node --run check`。
+
+本设计不授权修改数据库、安装依赖、转码、remux、部署、push 或 merge。

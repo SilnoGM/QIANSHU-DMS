@@ -51,7 +51,17 @@ export interface MediaContentValidationInput {
 }
 
 interface BaseValidatedMediaContent {
-  readonly canonicalExtension: '.docx' | '.jpg' | '.mp4' | '.pdf' | '.png' | '.webp' | '.xlsx'
+  readonly canonicalExtension:
+    | '.docx'
+    | '.jpg'
+    | '.m4v'
+    | '.mov'
+    | '.mp4'
+    | '.pdf'
+    | '.png'
+    | '.webm'
+    | '.webp'
+    | '.xlsx'
   readonly checksumSha256: string
   readonly mediaType: MediaContentType
   readonly mimeType: string
@@ -66,12 +76,12 @@ export interface ValidatedImageContent extends BaseValidatedMediaContent {
 }
 
 export interface ValidatedVideoContent extends BaseValidatedMediaContent {
-  readonly audioCodec: 'aac' | null
-  readonly canonicalExtension: '.mp4'
+  readonly audioCodec: 'aac' | 'opus' | 'vorbis' | null
+  readonly canonicalExtension: '.m4v' | '.mov' | '.mp4' | '.webm'
   readonly durationMs: number
   readonly height: number
   readonly mediaType: 'VIDEO'
-  readonly videoCodec: 'h264' | 'hevc'
+  readonly videoCodec: 'av1' | 'h264' | 'hevc' | 'vp8' | 'vp9'
   readonly width: number
 }
 

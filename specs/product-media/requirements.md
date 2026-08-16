@@ -137,17 +137,27 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 #### Acceptance Criteria
 
 1. 当上传图片时，系统应只接受 JPEG、PNG、WebP，单文件不得超过 10MiB。
-2. 当上传视频时，系统应只接受 MP4 容器，以及 H.264 `avc1/avc3` 或 HEVC `hvc1/hev1` 视频；
-   音轨存在时只能有一个 AAC 音轨，可保留常见辅助 data stream，单文件不得超过 500MiB。
-3. 当内部服务接收 Document 时，应只接受 PDF、DOCX、XLSX，单文件不得超过 50MiB。
-4. 当文件扩展名、客户端 MIME、magic bytes 或可解析内容互相冲突时，Server 应拒绝文件。
-5. 当图片无法完整解码，或视频无法取得可信容器、codec、时长和尺寸时，Server 应拒绝文件。
-6. 当 OOXML Document 不是对应的有效 ZIP 包结构、包含宏、加密内容或异常解压规模时，
+2. 当上传视频时，系统应只接受 MP4、QuickTime MOV、M4V 或 WebM 容器，单文件不得超过 500MiB。
+3. 当上传 MP4、MOV 或 M4V 时，系统应只接受 H.264 `avc1/avc3` 或 HEVC `hvc1/hev1` 视频；
+   音轨存在时只能有一个 AAC 音轨，可保留常见辅助 data stream。
+4. 当上传 WebM 时，系统应只接受 VP8、VP9 或 AV1 视频；音轨存在时只能有一个 Opus 或 Vorbis
+   音轨，且不得包含 data、字幕或附件轨。
+5. 当文件名、客户端 MIME 与 magic bytes 分别落在 MP4/MOV/M4V 兼容家族内时，系统应以文件头
+   和 `ffprobe` 结果确定可信容器及 MIME，不得因 `.mp4`、`.mov`、`.m4v` 三者之间的受控别名
+   差异拒绝文件。
+6. 当文件声称为 WebM 时，扩展名、客户端 MIME 与 magic bytes 应分别为 `.webm`、`video/webm`
+   和 WebM；任一不一致时系统应拒绝文件。
+7. 当文件扩展名、客户端 MIME 或 magic bytes 与已确认容器家族冲突，或文件仅通过改后缀伪装时，
+   Server 应拒绝文件；不得把兼容家族扩展为任意视频容器互认。
+8. 当视频包含多个视频轨、多个音轨、字幕轨或附件轨时，Server 应拒绝文件。
+9. 当内部服务接收 Document 时，应只接受 PDF、DOCX、XLSX，单文件不得超过 50MiB。
+10. 当图片无法完整解码，或视频无法取得可信容器、codec、时长和尺寸时，Server 应拒绝文件。
+11. 当 OOXML Document 不是对应的有效 ZIP 包结构、包含宏、加密内容或异常解压规模时，
    Server 应拒绝文件。
-7. 当收到 SVG、HTML、脚本、可执行文件、压缩包、宏文档或仅靠改后缀伪装的文件时，
+12. 当收到 SVG、HTML、脚本、可执行文件、压缩包、宏文档或仅靠改后缀伪装的文件时，
    Server 应拒绝。
-8. 当客户端校验通过但 Server 校验失败时，应以 Server 结果为准，并返回安全、可定位的错误码。
-9. 当本期 Product 上传入口被调用时，即使文件本身是合法 Document，也应因 ProductMedia
+13. 当客户端校验通过但 Server 校验失败时，应以 Server 结果为准，并返回安全、可定位的错误码。
+14. 当本期 Product 上传入口被调用时，即使文件本身是合法 Document，也应因 ProductMedia
    类型策略而拒绝。
 
 ### Requirement 5 - 本地存储与故障恢复
@@ -237,6 +247,8 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
    create/update DTO 接收媒体字段。
 6. 当公共 API 或生成客户端发生结构替换时，Server、OpenAPI、Web 适配器和测试应在同一实施阶段更新，
    不得手工修改生成快照掩盖差异。
+7. 当视频容器被服务端识别后，API 应返回基于文件头和 `ffprobe` 的可信 MIME；内容响应不得回显
+   客户端伪造的 MIME，也不得把 MOV 或 WebM 统一伪装为 `video/mp4`。
 
 ### Requirement 10 - Product Web 维护体验
 
@@ -255,6 +267,12 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 8. 当媒体加载失败时，单项应显示可恢复错误态且不破坏其他媒体；不得展示内部对象路径。
 9. 当屏幕变窄时，媒体卡片应使用单列或双列自适应布局，不得依赖横向滚动桌面表格。
 10. 当用户只使用键盘或辅助技术时，应能上传、选择主图、调整顺序、删除和读取进度/错误状态。
+11. 当用户选择视频时，Web 文件选择器应明确允许 `.mp4`、`.mov`、`.m4v` 和 `.webm`，并在规则区
+    按容器说明允许的视频与音频编码，不得承诺任意视频格式均可上传。
+12. 当浏览器能够原生播放已上传视频时，Web 应继续提供内联预览；当浏览器触发媒体加载或解码失败时，
+    Web 应保留已上传成功状态，显示“当前浏览器不支持预览”，并提供经过同一私有授权的下载入口。
+13. 当视频仅因浏览器预览能力不足而无法播放时，Web 不得把资产标记为上传失败、自动解除关联或泄露
+    objectKey；预览降级状态应同时提供文字和专业图标，不得只依赖颜色。
 
 ### Requirement 11 - 审计、安全与可观测性
 
@@ -291,13 +309,16 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 
 ## 7. UI Design Specification
 
-- Purpose：在产品编辑上下文中完成私有图片与视频维护，同时清楚表达主图、顺序、进度和失败恢复。
+- Purpose：在产品编辑上下文中完成私有图片与多容器视频维护，同时清楚表达主图、顺序、进度、
+  失败恢复和浏览器预览能力边界。
 - Aesthetic Direction：`Industrial/utilitarian`，延续现有 Fantastic-admin/Fa/Qs 管理后台，不使用营销型视觉。
 - Color Palette：Ink `#0F172A`、Paper `#FFFFFF`、Mist `#F1F5F9`、
-  Functional teal `#0F766E`、Warning `#B45309`、Destructive `#DC2626`；实现只消费既有语义 Token。
+  Functional teal `#0F766E`、Warning `#B45309`；实现只消费既有语义 Token。
 - Typography：正文使用 `Noto Sans SC`；文件大小、时长、尺寸、序号和技术状态使用 `Noto Sans Mono`。
 - Layout：桌面采用约 `7/5` 非对称布局，左侧为媒体画布和排序，右侧为上传队列与规则；窄屏收敛为单列。
 - Interaction：图标使用项目既有图标库；状态不能只依赖颜色；主要触控目标不小于 44px；支持 Dark、键盘和 Reduced Motion。
+- Preview fallback：不改变现有媒体卡片层级；在预览区域内使用 Mist 背景、Warning 语义色、Lucide
+  `circle-alert` 与 `download` 图标呈现浏览器能力提示，下载仍使用现有按钮层级和焦点样式。
 
 ## 8. 非目标
 
@@ -315,8 +336,9 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 以下合同已于 2026-08-13 确认为首期固定值：
 
 1. 图片 JPEG/PNG/WebP、10MiB、每产品最多 20 张。
-2. 视频 MP4 + H.264 `avc1/avc3` 或 HEVC `hvc1/hev1`、可选单 AAC 音轨、500MiB、
-   每产品最多 5 个，并要求运行机提供 `ffprobe`；此项于 2026-08-16 经确认放宽。
+2. 视频 MP4/MOV/M4V + H.264 `avc1/avc3` 或 HEVC `hvc1/hev1`、可选单 AAC 音轨；WebM +
+   VP8/VP9/AV1、可选单 Opus/Vorbis 音轨；统一为 500MiB、每产品最多 5 个，并要求运行机提供
+   `ffprobe`。不转码、不自动 remux；浏览器不支持时降级为私有下载。此项于 2026-08-16 经确认扩展。
 3. Document 仅为 MediaAsset 内部能力，允许 PDF/DOCX/XLSX、50MiB；Product 无任何 Document 入口。
 4. 新增独立权限 `product-media:read`；媒体写入继续使用 `products:update`。
 5. Product API 使用结构化 `media` 替换三个 URL 字段，不保留双写或长期兼容字段。
