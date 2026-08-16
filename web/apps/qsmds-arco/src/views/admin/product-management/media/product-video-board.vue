@@ -17,6 +17,14 @@ interface ProductVideoBoardProps {
   locked: boolean
 }
 
+interface VideoActionMenuItem {
+  disabled?: boolean
+  handle: () => void
+  icon: string
+  label: string
+  variant?: 'default' | 'destructive'
+}
+
 defineOptions({ name: 'ProductVideoBoard' })
 
 const props = defineProps<ProductVideoBoardProps>()
@@ -64,12 +72,6 @@ watch(
   clearPreviewFailures,
 )
 
-function mediaAspectRatio(item: ProductMediaItemDto): string {
-  return item.width > 0 && item.height > 0
-    ? `${item.width} / ${item.height}`
-    : '16 / 9'
-}
-
 function canMove(index: number, offset: -1 | 1): boolean {
   return props.editable
     && !props.locked
@@ -81,6 +83,41 @@ function move(item: ProductMediaItemDto, index: number, offset: -1 | 1): void {
   if (canMove(index, offset)) {
     emit('move', item.id, index + offset)
   }
+}
+
+/**
+ * 视频与图片使用同一低频操作模型：卡片只保留一个明确的更多入口，
+ * 排序和解除仍由既有领域事件处理，避免视觉收敛意外改变业务状态。
+ */
+function videoActionItems(
+  item: ProductMediaItemDto,
+  index: number,
+): VideoActionMenuItem[][] {
+  return [
+    [
+      {
+        disabled: !canMove(index, -1),
+        handle: () => move(item, index, -1),
+        icon: 'i-lucide:arrow-left',
+        label: '前移',
+      },
+      {
+        disabled: !canMove(index, 1),
+        handle: () => move(item, index, 1),
+        icon: 'i-lucide:arrow-right',
+        label: '后移',
+      },
+    ],
+    [
+      {
+        disabled: props.detachLocked,
+        handle: () => emit('detach', item),
+        icon: 'i-lucide:trash-2',
+        label: '解除视频',
+        variant: 'destructive',
+      },
+    ],
+  ]
 }
 
 function handleDragStart(event: DragEvent, item: ProductMediaItemDto): void {
@@ -122,7 +159,7 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
           产品视频
         </h3>
         <p class="text-sm text-muted-foreground m-0 mt-1">
-          视频保留原生播放控件，排序方式与图片一致。
+          悬停或聚焦可快速预览；排序与解除收纳在更多操作中。
         </p>
       </div>
       <span class="qs-type-meta">{{ items.length }} / 5 个</span>
@@ -151,19 +188,35 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
         @drop="handleDrop($event, index)"
       >
         <div
-          class="border-b bg-muted/40 flex w-full items-center justify-center overflow-hidden"
-          :style="{ aspectRatio: mediaAspectRatio(item) }"
+          class="border-b bg-muted/40 flex w-full aspect-video items-center justify-center relative overflow-hidden"
         >
-          <video
+          <button
             v-if="contentUrls[item.id] && previewFailures[item.id] === undefined"
-            :src="contentUrls[item.id]!"
-            :aria-label="`播放视频 ${item.originalFilename}`"
-            class="h-full w-full object-contain"
-            controls
-            preload="metadata"
-            @error="handleVideoError($event, item.id)"
-            @loadedmetadata="delete previewFailures[item.id]"
-          />
+            type="button"
+            class="product-video-preview-trigger group p-0 border-0 bg-transparent h-full w-full cursor-pointer relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            :aria-label="`预览视频 ${item.originalFilename}`"
+            @click="emit('preview', item)"
+          >
+            <video
+              :src="contentUrls[item.id]!"
+              class="h-full w-full object-contain"
+              aria-hidden="true"
+              muted
+              playsinline
+              preload="metadata"
+              tabindex="-1"
+              @error="handleVideoError($event, item.id)"
+              @loadedmetadata="delete previewFailures[item.id]"
+            />
+            <span
+              class="product-video-preview-overlay text-background bg-foreground/55 opacity-0 flex pointer-events-none items-center inset-0 justify-center absolute group-focus-visible:opacity-100 group-focus:opacity-100 group-hover:opacity-100"
+              aria-hidden="true"
+            >
+              <span class="product-video-preview-indicator text-foreground rounded-full bg-background/90 flex size-11 shadow-sm items-center justify-center">
+                <FaIcon name="i-lucide:play" class="ml-0.5 size-5" />
+              </span>
+            </span>
+          </button>
           <div
             v-else-if="contentUrls[item.id] && previewFailures[item.id]"
             class="text-sm p-5 text-center gap-2 grid place-items-center"
@@ -190,8 +243,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
           </div>
         </div>
 
-        <div class="p-3 gap-3 grid">
-          <div class="min-w-0">
+        <div class="p-3 flex gap-2 min-w-0 items-start justify-between">
+          <div class="pt-1 min-w-0">
             <div class="flex gap-2 items-center">
               <span class="qs-type-meta shrink-0">#{{ index + 1 }}</span>
               <strong class="text-sm truncate" :title="item.originalFilename">
@@ -205,52 +258,21 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
             </div>
           </div>
 
-          <div class="gap-2 grid grid-cols-2">
+          <FaDropdown
+            v-if="editable"
+            :items="videoActionItems(item, index)"
+            align="end"
+          >
             <FaButton
-              variant="outline"
-              class="min-h-11"
-              :disabled="contentUrls[item.id] === null"
-              :aria-label="`预览视频 ${item.originalFilename}`"
-              @click="emit('preview', item)"
-            >
-              <FaIcon name="i-lucide:play" class="shrink-0 size-4" aria-hidden="true" />
-              <span>预览视频</span>
-            </FaButton>
-            <FaButton
-              v-if="editable"
-              variant="outline"
-              class="min-h-11"
-              :disabled="!canMove(index, -1)"
-              :aria-label="`前移视频 ${item.originalFilename}`"
-              @click="move(item, index, -1)"
-            >
-              <FaIcon name="i-lucide:arrow-left" class="shrink-0 size-4" aria-hidden="true" />
-              <span>前移</span>
-            </FaButton>
-            <FaButton
-              v-if="editable"
-              variant="outline"
-              class="min-h-11"
-              :disabled="!canMove(index, 1)"
-              :aria-label="`后移视频 ${item.originalFilename}`"
-              @click="move(item, index, 1)"
-            >
-              <FaIcon name="i-lucide:arrow-right" class="shrink-0 size-4" aria-hidden="true" />
-              <span>后移</span>
-            </FaButton>
-            <FaButton
-              v-if="editable"
-              variant="outline"
-              class="min-h-11"
-              :disabled="detachLocked"
-              :aria-label="`解除视频 ${item.originalFilename}`"
+              variant="ghost"
+              size="icon"
+              class="min-h-11 min-w-11"
+              :aria-label="`更多视频操作 ${item.originalFilename}`"
               data-focus-anchor
-              @click="emit('detach', item)"
             >
-              <FaIcon name="i-lucide:trash-2" class="shrink-0 size-4" aria-hidden="true" />
-              <span>解除视频</span>
+              <FaIcon name="i-lucide:ellipsis" class="size-5" aria-hidden="true" />
             </FaButton>
-          </div>
+          </FaDropdown>
         </div>
       </article>
     </div>
@@ -258,7 +280,30 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
 </template>
 
 <style scoped>
+.product-video-preview-overlay {
+  transition: opacity 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 显式覆盖鼠标与键盘状态，确保预览入口和图片卡片具有相同的可发现性。 */
+.product-video-preview-trigger:hover .product-video-preview-overlay,
+.product-video-preview-trigger:focus .product-video-preview-overlay,
+.product-video-preview-trigger:focus-visible .product-video-preview-overlay {
+  opacity: 1;
+}
+
+/* 触控设备没有 Hover，右下角常驻播放入口，同时避免遮挡视频主体。 */
+@media (hover: none) {
+  .product-video-preview-overlay {
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 0.75rem;
+    background: transparent;
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .product-video-preview-overlay,
   .product-media-card {
     transition: none;
   }

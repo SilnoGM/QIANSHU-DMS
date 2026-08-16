@@ -1097,6 +1097,29 @@ Task 15 evidence（2026-08-14）：
   runbook 上线门禁。未修改 Schema/migration、公共 API/OpenAPI、Web、依赖或 lockfile，未提交 `.env`、
   日志、媒体或构建产物。
 
+### 4.20 2026-08-16 产品视频卡片 UI 统一
+
+- [x] 25. 参考产品图片卡片优化产品视频卡片
+  - [x] 25.1 以 TDD 增加视频固定 16:9 预览面、Hover/Focus 遮罩、单一更多操作入口和无外露实体按钮合同。
+  - [x] 25.2 复用图片卡片结构实现播放遮罩、紧凑元信息与 `FaDropdown`；前移、后移、解除继续调用既有领域事件。
+  - [x] 25.3 更新真实 Browser 回归，通过视频菜单执行解除并验证二次确认关闭、桌面 Hover、移动端和 Dark。
+  - [x] 25.4 运行 Web 定向与全量 test/typecheck/lint/build、Browser、视觉规则和 `git diff --check`。
+  - [x] 25.5 更新真实证据并提交 `feat: 优化产品视频卡片交互`。
+  - _Requirements: R7, R9-R11_
+
+  Task 25 evidence（2026-08-16）：定向组件测试首轮 RED 为 7/8 passed，唯一失败精确证明视频卡片缺少
+  固定 `aspect-video` 预览面；GREEN 后为 8/8 passed。视频卡片现在使用与图片卡片一致的紧凑信息区、
+  Hover/Focus 播放遮罩和单一 `FaDropdown`，前移、后移、解除视频继续复用既有事件；触控设备保留常驻
+  播放提示，`prefers-reduced-motion` 下禁用非必要过渡，没有增加主图动作、依赖或硬编码颜色。
+
+  Web `check` exit 0，其中 API/views 为 814/814，并通过 typecheck、ESLint 与 Stylelint；production build
+  exit 0，字体检查为 108 个资产，零残留检查覆盖 604 个文件、489 个文本产物和 108 个字体资产。
+  官方隔离 Browser/E2E runner 3/3 passed；产品媒体场景真实覆盖视频 Hover 遮罩、菜单解除、二次确认成功后
+  关闭、390px 移动端、Dark、Reduced Motion、44px 点击目标与 RBAC。构建仅保留既有第三方
+  `@vueuse/core` pure annotation、大 chunk 和 plugin timing warning，无 error。`git diff --check` 与敏感范围
+  扫描通过；未修改 Server、公共 API/OpenAPI、Schema/migration、共享 Fa/Qs 组件、package/lockfile，未写入
+  持久开发数据，未提交 `.env`、日志、媒体或构建产物。
+
 Phase 4 停止条件：若实现需要新增依赖、Schema/migration、支持 MKV/AVI、转码/remux、加载整段 Blob、
 修改公共 Fa/Qs 组件业务契约、扩大 ProductMedia 到 Document，或必须写入持久开发/生产数据，应停止并
 重新取得对应确认。`file-type` 或真实 `ffprobe` 若不能稳定区分已承诺容器，也不得以扩展名猜测降级。

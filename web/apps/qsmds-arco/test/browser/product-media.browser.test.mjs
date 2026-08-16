@@ -217,6 +217,27 @@ async function clickImageAction(page, filename, actionLabel) {
   })()`)
 }
 
+async function openVideoActionMenu(page, filename) {
+  await clickVisibleAriaButton(page, `更多视频操作 ${filename}`)
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="menuitem"]')].some((item) => (
+    item.getClientRects().length > 0
+  )))()`)
+}
+
+async function clickVideoAction(page, filename, actionLabel) {
+  await openVideoActionMenu(page, filename)
+  await page.evaluate(`(() => {
+    const menuItem = [...document.querySelectorAll('[role="menuitem"]')].find(candidate => (
+      candidate.textContent?.trim() === ${JSON.stringify(actionLabel)}
+      && candidate.getClientRects().length > 0
+      && candidate.getAttribute('data-disabled') === null
+    ))
+    if (!(menuItem instanceof HTMLElement)) throw new Error('video action unavailable')
+    menuItem.click()
+    return true
+  })()`)
+}
+
 async function selectFileAndWait(
   page,
   baseUrl,
@@ -455,6 +476,32 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
     await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
       .every(dialog => dialog.getClientRects().length === 0))()`)
 
+    // 视频卡片与图片卡片保持同一 Hover/Focus 预览语言，不再在卡片外露播放和管理实体按钮。
+    const videoPreviewState = await page.evaluate(`(() => {
+      const button = document.querySelector('[aria-label="预览视频 browser-camera.webm"]')
+      const overlay = button?.querySelector('.product-video-preview-overlay')
+      if (!(button instanceof HTMLButtonElement) || !(overlay instanceof HTMLElement)) {
+        throw new Error('video preview trigger unavailable')
+      }
+      const initialOpacity = getComputedStyle(overlay).opacity
+      button.scrollIntoView({ block: 'center', inline: 'center' })
+      const bounds = button.getBoundingClientRect()
+      return {
+        centerX: bounds.left + bounds.width / 2,
+        centerY: bounds.top + bounds.height / 2,
+        initialOpacity,
+      }
+    })()`)
+    assert.equal(videoPreviewState.initialOpacity, '0')
+    await page.connection.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: videoPreviewState.centerX,
+      y: videoPreviewState.centerY,
+    })
+    await page.waitFor(`getComputedStyle(document.querySelector(
+      '[aria-label="预览视频 browser-camera.webm"] .product-video-preview-overlay',
+    )).opacity === '1'`)
+
     // 统一操作菜单保留键盘排序能力，设置主图后保存真实布局。
     await openImageActionMenu(page, 'browser-package.webp')
     await page.waitFor(`(() => {
@@ -658,7 +705,7 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
     }
 
     // 视频解除成功后，确认弹窗必须真实关闭；随后重新上传，继续保留 5/5 的媒体上限场景。
-    await clickVisibleAriaButton(page, '解除视频 browser-detail.mp4')
+    await clickVideoAction(page, 'browser-detail.mp4', '解除视频')
     await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
       .some(dialog => dialog.getClientRects().length > 0
         && dialog.textContent?.includes('解除产品媒体')
