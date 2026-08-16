@@ -196,18 +196,66 @@ async function clickVisibleAriaButton(page, label) {
   })()`)
 }
 
-async function selectFileAndWait(page, baseUrl, productId, filePath, filename) {
+async function selectFileAndWait(
+  page,
+  baseUrl,
+  productId,
+  filePath,
+  filename,
+  submissionFilename = filename,
+) {
+  await page.evaluate('performance.clearResourceTimings()')
+  await page.setFiles('#product-media-upload-input', [filePath])
+  await page.waitFor(`(() => {
+    const panel = document.querySelector('.product-media-panel')
+    const input = panel?.querySelector('input[id^="product-media-filename-"]')
+    return panel?.textContent?.includes('待确认文件名')
+      && input instanceof HTMLInputElement
+      && panel.querySelector('[aria-label^="开始上传 "]') !== null
+      && panel.querySelector('[aria-label$=" 上传进度"]') === null
+  })()`)
+  const requestCountBeforeConfirmation = await page.evaluate(`performance
+    .getEntriesByType('resource')
+    .filter(entry => new URL(entry.name).pathname === ${JSON.stringify(`/api/products/${productId}/media`)})
+    .length`)
+  assert.equal(requestCountBeforeConfirmation, 0)
+
+  const separator = submissionFilename.lastIndexOf('.')
+  const filenameStem = submissionFilename.slice(0, separator)
+  if (submissionFilename !== filename) {
+    await page.evaluate(`(() => {
+      const input = document.querySelector('input[id^="product-media-filename-"]')
+      if (!(input instanceof HTMLInputElement)) throw new Error('filename input unavailable')
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+      setValue.call(input, '../invalid-name')
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }))
+      return true
+    })()`)
+    await page.waitFor(`document.body.innerText.includes('文件名不能包含路径分隔符')
+      && document.querySelector('[aria-label^="开始上传 "]')?.disabled === true`)
+  }
+  await page.evaluate(`(() => {
+    const input = document.querySelector('input[id^="product-media-filename-"]')
+    if (!(input instanceof HTMLInputElement)) throw new Error('filename input unavailable')
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    setValue.call(input, ${JSON.stringify(filenameStem)})
+    input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }))
+    return true
+  })()`)
+  await page.waitFor(`document.querySelector(${JSON.stringify(`[aria-label="开始上传 ${submissionFilename}"]`)})
+    ?.disabled === false`)
+
   const response = page.waitForEvent(
     'Network.responseReceived',
     event => requestPathname(event) === `/api/products/${productId}/media`
       && event.response?.status === 201,
     30_000,
   )
-  await page.setFiles('#product-media-upload-input', [filePath])
+  await clickVisibleAriaButton(page, `开始上传 ${submissionFilename}`)
   await response
   await page.waitFor(`(() => {
     const panel = document.querySelector('.product-media-panel')
-    return panel?.textContent?.includes(${JSON.stringify(filename)})
+    return panel?.textContent?.includes(${JSON.stringify(submissionFilename)})
       && !panel.textContent?.includes('正在上传')
       && !panel.textContent?.includes('服务端验证中')
   })()`, 30_000)
@@ -290,6 +338,9 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
         30_000,
       )
       await page.setFiles('#product-media-upload-input', [fixtures['browser-main.jpg']])
+      await page.waitFor(`document.querySelector('[aria-label="开始上传 browser-main.jpg"]')
+        ?.disabled === false`)
+      await clickVisibleAriaButton(page, '开始上传 browser-main.jpg')
       await page.waitFor(`(() => {
         const text = document.querySelector('.product-media-panel')?.textContent ?? ''
         return text.includes('browser-main.jpg')
@@ -326,7 +377,14 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
       'browser-camera.mov',
       'browser-camera.webm',
     ]) {
-      await selectFileAndWait(page, configuration.baseUrl, product.id, fixtures[name], name)
+      await selectFileAndWait(
+        page,
+        configuration.baseUrl,
+        product.id,
+        fixtures[name],
+        name,
+        name === 'browser-overview.mp4' ? '微耕机演示.mp4' : name,
+      )
     }
     await page.waitFor(`document.body.innerText.includes('4 / 20 张')
       && document.body.innerText.includes('5 / 5 个')`)
@@ -379,11 +437,12 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
     const primary = latest.body?.media?.mainImage
     const firstVideo = latest.body?.media?.videos?.[0]
     assert.equal(primary?.originalFilename, 'browser-detail.png')
+    assert.equal(firstVideo?.originalFilename, '微耕机演示.mp4')
     assert.equal(typeof firstVideo?.contentUrl, 'string')
     const range = await page.evaluate(contentRequestExpression(firstVideo.contentUrl, 'bytes=0-3'))
     assert.deepEqual(range, {
       acceptRanges: 'bytes',
-      contentDisposition: 'inline; filename="browser-overview.mp4"',
+      contentDisposition: `inline; filename="_.mp4"; filename*=UTF-8''${encodeURIComponent('微耕机演示.mp4')}`,
       contentRange: `bytes 0-3/${firstVideo.sizeBytes}`,
       contentType: 'video/mp4',
       length: 4,

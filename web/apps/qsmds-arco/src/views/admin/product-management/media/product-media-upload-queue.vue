@@ -4,6 +4,10 @@ import type { ProductMediaUploadQueueItem } from './product-media-upload.logic'
 import type { ProductMediaSelectionFeedback } from './product-media-view.logic'
 
 import {
+  getProductMediaFilenameParts,
+  validateProductMediaFilenameStem,
+} from './product-media-upload.logic'
+import {
   formatProductMediaBytes,
   getProductMediaProgressPercent,
 } from './product-media-view.logic'
@@ -22,11 +26,63 @@ const emit = defineEmits<{
   cancel: [queueId: string]
   filesSelected: [files: File[]]
   retry: [queueId: string]
+  start: [queueId: string, filenameStem: string]
 }>()
 
 const inputRef = useTemplateRef<HTMLInputElement>('inputRef')
 const rootRef = useTemplateRef<HTMLElement>('rootRef')
 const uploadPrimitiveItems = ref<FileItem[]>([])
+const filenameDrafts = ref<Record<string, string>>({})
+
+watch(
+  () => props.queue,
+  (items) => {
+    const activeIds = new Set(items.map(item => item.id))
+    for (const item of items) {
+      if (item.phase === 'staged' && filenameDrafts.value[item.id] === undefined) {
+        filenameDrafts.value[item.id] = getProductMediaFilenameParts(item.originalFilename).stem
+      }
+    }
+    for (const queueId of Object.keys(filenameDrafts.value)) {
+      if (!activeIds.has(queueId)) {
+        delete filenameDrafts.value[queueId]
+      }
+    }
+  },
+  { immediate: true },
+)
+
+function filenameDraft(item: ProductMediaUploadQueueItem): string {
+  return filenameDrafts.value[item.id]
+    ?? getProductMediaFilenameParts(item.originalFilename).stem
+}
+
+function filenameExtension(item: ProductMediaUploadQueueItem): string {
+  return getProductMediaFilenameParts(item.originalFilename).extension
+}
+
+function filenameError(item: ProductMediaUploadQueueItem): string | null {
+  return item.phase === 'staged'
+    ? validateProductMediaFilenameStem(item.originalFilename, filenameDraft(item))
+    : null
+}
+
+function displayFilename(item: ProductMediaUploadQueueItem): string {
+  return item.phase === 'staged'
+    ? `${filenameDraft(item)}${filenameExtension(item)}`
+    : item.originalFilename
+}
+
+function updateFilenameDraft(item: ProductMediaUploadQueueItem, event: Event): void {
+  filenameDrafts.value[item.id] = (event.target as HTMLInputElement).value
+}
+
+function startUpload(item: ProductMediaUploadQueueItem): void {
+  const draft = filenameDraft(item)
+  if (filenameError(item) === null) {
+    emit('start', item.id, draft)
+  }
+}
 
 function phaseLabel(item: ProductMediaUploadQueueItem): string {
   const labels: Record<ProductMediaUploadQueueItem['phase'], string> = {
@@ -35,6 +91,7 @@ function phaseLabel(item: ProductMediaUploadQueueItem): string {
     finalizing: '服务端验证中',
     queued: '等待上传',
     reconciling: '正在确认结果',
+    staged: '待确认文件名',
     unknown: '结果未知',
     uploading: '正在上传',
   }
@@ -48,6 +105,9 @@ function phaseIcon(item: ProductMediaUploadQueueItem): string {
   if (item.phase === 'queued') {
     return 'i-lucide:clock-3'
   }
+  if (item.phase === 'staged') {
+    return 'i-lucide:file-pen-line'
+  }
   if (item.phase === 'uploading' || item.phase === 'finalizing' || item.phase === 'reconciling') {
     return 'i-lucide:loader-circle'
   }
@@ -55,7 +115,8 @@ function phaseIcon(item: ProductMediaUploadQueueItem): string {
 }
 
 function canCancel(item: ProductMediaUploadQueueItem): boolean {
-  return item.phase === 'queued'
+  return item.phase === 'staged'
+    || item.phase === 'queued'
     || item.phase === 'uploading'
     || item.phase === 'failed'
 }
@@ -115,7 +176,7 @@ defineExpose({ focusFirstError, focusUpload })
         上传队列
       </h3>
       <p class="text-sm text-muted-foreground m-0 mt-1">
-        文件按顺序上传，避免多个写入争用同一产品版本。
+        选择后可先修改文件名主体；确认后按顺序上传，避免多个写入争用同一产品版本。
       </p>
     </div>
 
@@ -193,7 +254,7 @@ defineExpose({ focusFirstError, focusUpload })
       <li
         v-for="item in queue"
         :key="item.id"
-        :data-queue-error="['failed', 'conflict', 'unknown'].includes(item.phase) || undefined"
+        :data-queue-error="['failed', 'conflict', 'unknown'].includes(item.phase) || filenameError(item) !== null || undefined"
         tabindex="-1"
         :aria-labelledby="`product-media-queue-title-${item.id}`"
         class="p-3 outline-none border rounded-lg bg-card focus:ring-2 focus:ring-primary"
@@ -213,9 +274,9 @@ defineExpose({ focusFirstError, focusUpload })
             <strong
               :id="`product-media-queue-title-${item.id}`"
               class="text-sm block truncate"
-              :title="item.originalFilename"
+              :title="displayFilename(item)"
             >
-              {{ item.originalFilename }}
+              {{ displayFilename(item) }}
             </strong>
             <div class="qs-type-meta mt-1 flex gap-2 items-center">
               <FaIcon
@@ -227,6 +288,49 @@ defineExpose({ focusFirstError, focusUpload })
               <span>{{ formatProductMediaBytes(String(item.totalBytes)) }}</span>
             </div>
           </div>
+        </div>
+
+        <div v-if="item.phase === 'staged'" class="mt-3">
+          <label
+            :for="`product-media-filename-${item.id}`"
+            class="text-sm font-medium mb-2 block"
+          >
+            文件名主体
+          </label>
+          <div class="flex min-w-0 items-stretch">
+            <input
+              :id="`product-media-filename-${item.id}`"
+              :value="filenameDraft(item)"
+              type="text"
+              autocomplete="off"
+              :spellcheck="false"
+              :aria-invalid="filenameError(item) !== null"
+              :aria-describedby="`product-media-filename-help-${item.id} product-media-filename-error-${item.id}`"
+              class="text-sm px-3 outline-none border border-input rounded-s-md bg-background flex-1 min-h-11 min-w-0 focus-visible:ring-2 focus-visible:ring-ring"
+              @input="updateFilenameDraft(item, $event)"
+              @keydown.enter.prevent="startUpload(item)"
+            >
+            <span
+              :aria-label="`固定扩展名 ${filenameExtension(item)}`"
+              class="qs-type-meta px-3 border border-s-0 rounded-e-md bg-muted flex shrink-0 items-center"
+            >
+              {{ filenameExtension(item) }}
+            </span>
+          </div>
+          <p
+            :id="`product-media-filename-help-${item.id}`"
+            class="qs-type-meta m-0 mt-1"
+          >
+            固定扩展名由原文件类型决定，不会随重命名改变。
+          </p>
+          <p
+            v-if="filenameError(item)"
+            :id="`product-media-filename-error-${item.id}`"
+            class="text-sm text-destructive m-0 mt-1"
+            role="alert"
+          >
+            {{ filenameError(item) }}
+          </p>
         </div>
 
         <div v-if="item.phase === 'uploading' || item.phase === 'finalizing'" class="mt-3">
@@ -247,6 +351,16 @@ defineExpose({ focusFirstError, focusUpload })
 
         <div v-if="editable && (canCancel(item) || item.phase === 'failed')" class="mt-3 flex flex-wrap gap-2">
           <FaButton
+            v-if="item.phase === 'staged'"
+            class="min-h-11"
+            :disabled="locked || filenameError(item) !== null"
+            :aria-label="`开始上传 ${displayFilename(item)}`"
+            @click="startUpload(item)"
+          >
+            <FaIcon name="i-lucide:upload" class="shrink-0 size-4" aria-hidden="true" />
+            <span>开始上传</span>
+          </FaButton>
+          <FaButton
             v-if="item.phase === 'failed'"
             variant="outline"
             class="min-h-11"
@@ -260,7 +374,7 @@ defineExpose({ focusFirstError, focusUpload })
             v-if="canCancel(item)"
             variant="outline"
             class="min-h-11"
-            :aria-label="`取消上传 ${item.originalFilename}`"
+            :aria-label="`取消上传 ${displayFilename(item)}`"
             @click="emit('cancel', item.id)"
           >
             <FaIcon name="i-lucide:x" class="shrink-0 size-4" aria-hidden="true" />

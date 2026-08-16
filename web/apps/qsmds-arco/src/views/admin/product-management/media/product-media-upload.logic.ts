@@ -14,6 +14,7 @@ export type ProductMediaUploadPhase
     | 'finalizing'
     | 'queued'
     | 'reconciling'
+    | 'staged'
     | 'unknown'
     | 'uploading'
 
@@ -37,6 +38,11 @@ export interface ProductMediaUploadReconciliationContext {
   readonly sizeBytes: number
 }
 
+export interface ProductMediaFilenameParts {
+  readonly extension: string
+  readonly stem: string
+}
+
 export type ProductMediaUploadReconciliationResult
   = | {
     readonly media: ProductMediaItemDto
@@ -50,6 +56,61 @@ function freezeQueueItem(
   item: ProductMediaUploadQueueItem,
 ): ProductMediaUploadQueueItem {
   return Object.freeze(item)
+}
+
+/**
+ * 上传前只允许编辑文件名主体，扩展名始终来自已通过 MIME/extension 配对校验的
+ * 原始 File。这样用户无法通过重命名把 MOV 伪装为 WebM，也不会改变二进制内容。
+ */
+export function getProductMediaFilenameParts(filename: string): ProductMediaFilenameParts {
+  const separator = filename.lastIndexOf('.')
+  if (separator <= 0 || separator === filename.length - 1) {
+    throw new TypeError('上传文件必须包含有效扩展名')
+  }
+  return Object.freeze({
+    extension: filename.slice(separator),
+    stem: filename.slice(0, separator),
+  })
+}
+
+export function validateProductMediaFilenameStem(
+  originalFilename: string,
+  filenameStem: string,
+): string | null {
+  const normalized = filenameStem.normalize('NFC').trim()
+  if (normalized.length === 0 || normalized === '.' || normalized === '..') {
+    return '文件名不能为空'
+  }
+  if (/[\\/]/u.test(normalized)) {
+    return '文件名不能包含路径分隔符'
+  }
+  if (/[\p{Cc}\p{Cf}]/u.test(normalized)) {
+    return '文件名不能包含控制字符'
+  }
+  const { extension } = getProductMediaFilenameParts(originalFilename)
+  if (Array.from(`${normalized}${extension}`).length > 255) {
+    return '文件名与扩展名合计不能超过 255 个字符'
+  }
+  return null
+}
+
+export function confirmProductMediaUpload(
+  item: ProductMediaUploadQueueItem,
+  filenameStem: string,
+): ProductMediaUploadQueueItem {
+  if (item.phase !== 'staged') {
+    throw new TypeError('只有待确认文件可以设置上传名称')
+  }
+  const failure = validateProductMediaFilenameStem(item.originalFilename, filenameStem)
+  if (failure !== null) {
+    throw new TypeError(failure)
+  }
+  const { extension } = getProductMediaFilenameParts(item.originalFilename)
+  return freezeQueueItem({
+    ...item,
+    originalFilename: `${filenameStem.normalize('NFC').trim()}${extension}`,
+    phase: 'queued',
+  })
 }
 
 export function createProductMediaUploadQueueItem(input: {
@@ -70,7 +131,7 @@ export function createProductMediaUploadQueueItem(input: {
     loadedBytes: 0,
     mimeType: input.file.type,
     originalFilename: input.file.name,
-    phase: 'queued',
+    phase: 'staged',
     previewUrl: input.previewUrl,
     totalBytes: input.file.size,
   })
@@ -80,7 +141,7 @@ export function beginProductMediaUpload(
   item: ProductMediaUploadQueueItem,
 ): ProductMediaUploadQueueItem {
   if (item.phase !== 'queued') {
-    throw new TypeError('只有排队中的文件可以开始上传')
+    throw new TypeError('只有已确认名称并排队的文件可以开始上传')
   }
   return freezeQueueItem({ ...item, phase: 'uploading' })
 }

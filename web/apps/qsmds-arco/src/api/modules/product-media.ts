@@ -17,6 +17,7 @@ import api from '../index'
 export interface ProductMediaUploadOptions {
   readonly onUploadProgress: (event: AxiosProgressEvent) => void
   readonly signal: AbortSignal
+  readonly submissionFilename: string
 }
 
 type ProductMediaContentIdentity = Pick<
@@ -52,7 +53,8 @@ export function createProductMediaApi(client: AxiosInstance) {
       // Server 的 streaming parser 要求两个小字段先于 file part，顺序不可交换。
       formData.append('kind', data.kind)
       formData.append('expectedVersion', data.expectedVersion)
-      formData.append('file', data.file)
+      // 第三个参数只覆盖 multipart filename，不复制或改写 File 二进制内容。
+      formData.append('file', data.file, options.submissionFilename)
       return client.post<ProductMediaUploadResponseDto>(
         `products/${encodeURIComponent(productId)}/media`,
         formData,

@@ -172,6 +172,62 @@ function sanitizeAsciiFilename(
   return `${stem.length === 0 ? 'media' : stem}${extension}`
 }
 
+/**
+ * filename* 使用持久化展示名的安全叶节点，并在视频场景校正可信容器后缀。
+ * 值最终只会经过 RFC 5987 percent-encoding 进入 Header，绝不直接拼接原始输入。
+ */
+function sanitizeUnicodeFilename(
+  originalFilename: string,
+  extension: TrustedContentType['extension'],
+  enforceCanonicalExtension: boolean,
+): string {
+  const leaf = originalFilename.split(/[\\/]/u).at(-1) ?? ''
+  const normalized = leaf
+    .normalize('NFC')
+    .replace(/[\p{Cc}\p{Cf}]/gu, '')
+    .trim()
+  const safe = normalized.length === 0 || normalized === '.' || normalized === '..'
+    ? `media${extension}`
+    : Array.from(normalized).slice(0, 255).join('')
+
+  if (!enforceCanonicalExtension) return safe
+
+  const lastDot = safe.lastIndexOf('.')
+  const rawStem = lastDot > 0 ? safe.slice(0, lastDot) : safe
+  const maximumStemLength = 255 - Array.from(extension).length
+  const stem = Array.from(rawStem)
+    .slice(0, maximumStemLength)
+    .join('')
+    .replace(/[. ]+$/gu, '')
+  return `${stem.length === 0 ? 'media' : stem}${extension}`
+}
+
+function encodeRfc5987Filename(value: string): string {
+  return encodeURIComponent(value).replace(/['()*]/gu, character =>
+    `%${character.codePointAt(0)!.toString(16).toUpperCase()}`)
+}
+
+function buildContentDisposition(
+  originalFilename: string,
+  contentType: TrustedContentType,
+): string {
+  const enforceCanonicalExtension = contentType.mediaType === MediaType.VIDEO
+  const asciiFilename = sanitizeAsciiFilename(
+    originalFilename,
+    contentType.extension,
+    enforceCanonicalExtension,
+  )
+  const unicodeFilename = sanitizeUnicodeFilename(
+    originalFilename,
+    contentType.extension,
+    enforceCanonicalExtension,
+  )
+  const fallback = `inline; filename="${asciiFilename}"`
+  return unicodeFilename === asciiFilename
+    ? fallback
+    : `${fallback}; filename*=UTF-8''${encodeRfc5987Filename(unicodeFilename)}`
+}
+
 function buildOpaqueEtag(checksumSha256: string): string {
   // 对数据库 checksum 再做带命名空间的单向摘要，避免把内容摘要本身作为公开标识。
   const digest = createHash('sha256')
@@ -336,15 +392,12 @@ export class ProductMediaContentService {
       }
     }
 
-    const filename = sanitizeAsciiFilename(
-      row.mediaAsset.originalFilename,
-      contentType.extension,
-      contentType.mediaType === MediaType.VIDEO,
-    )
-
     const contentHeaders = {
       ...commonHeaders,
-      'Content-Disposition': `inline; filename="${filename}"`,
+      'Content-Disposition': buildContentDisposition(
+        row.mediaAsset.originalFilename,
+        contentType,
+      ),
       'Content-Type': contentType.mimeType,
     }
 

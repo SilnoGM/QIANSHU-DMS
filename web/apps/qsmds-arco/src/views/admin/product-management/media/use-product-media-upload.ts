@@ -11,6 +11,7 @@ import {
   appendProductMediaUploadQueueItem,
   applyProductMediaServerSnapshot,
   beginProductMediaUpload,
+  confirmProductMediaUpload,
   createProductMediaUploadQueueItem,
   getProductMediaMutationFailure,
   markProductMediaUploadFinalizing,
@@ -207,6 +208,7 @@ export function useProductMediaUpload(options: UseProductMediaUploadOptions) {
             : progressed)
         },
         signal,
+        submissionFilename: queued.originalFilename,
       })
       if (!options.responseIsCurrent(operation, signal)) {
         return
@@ -335,6 +337,18 @@ export function useProductMediaUpload(options: UseProductMediaUploadOptions) {
     if (failures.length > 0) {
       await focusCurrentError()
     }
+  }
+
+  function startUpload(queueId: string, filenameStem: string): void {
+    const item = currentQueueItem(queueId)
+    if (
+      item?.phase !== 'staged'
+      || !options.editable.value
+      || uploadLocked.value
+    ) {
+      return
+    }
+    updateQueueItem(confirmProductMediaUpload(item, filenameStem))
     scheduleUploads()
   }
 
@@ -348,7 +362,7 @@ export function useProductMediaUpload(options: UseProductMediaUploadOptions) {
       options.resources.releaseFile(queueId)
       return
     }
-    if (item.phase === 'queued' || item.phase === 'failed') {
+    if (item.phase === 'staged' || item.phase === 'queued' || item.phase === 'failed') {
       options.resources.releaseFile(queueId)
       options.session.value = removeProductMediaUploadQueueItem(
         options.session.value,
@@ -385,6 +399,7 @@ export function useProductMediaUpload(options: UseProductMediaUploadOptions) {
     retryUpload,
     scheduleUploads,
     selectionErrors,
+    startUpload,
     uploadLocked,
   }
 }

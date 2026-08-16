@@ -146,7 +146,7 @@ test('三个视频预览入口按 MediaError 降级、身份切换复位并提�
   assert.match(implementation, /aria-label="`下载视频/u)
 })
 
-test('上传队列拥有可见 label、非唯一拖放入口、真实进度、取消和显式重试', async () => {
+test('上传队列拥有可见 label、上传前重命名、显式开始、真实进度、取消和重试', async () => {
   const source = await readComponent('product-media-upload-queue.vue')
 
   assert.match(source, /<label[^>]+for="product-media-upload-input"/u)
@@ -158,6 +158,11 @@ test('上传队列拥有可见 label、非唯一拖放入口、真实进度、�
   assert.match(source, /<FaFileUpload/u)
   assert.match(source, /:before-upload="interceptPrimitiveFile"/u)
   assert.match(source, /<FaProgress/u)
+  assert.match(source, /文件名主体/u)
+  assert.match(source, /固定扩展名/u)
+  assert.match(source, /开始上传/u)
+  assert.match(source, /filenameDraft/u)
+  assert.match(source, /emit\('start'/u)
   assert.match(source, /loadedBytes/u)
   assert.match(source, /totalBytes/u)
   assert.match(source, /aria-live="polite"/u)
@@ -165,7 +170,8 @@ test('上传队列拥有可见 label、非唯一拖放入口、真实进度、�
   assert.match(source, /重试上传/u)
   assert.match(source, /取消上传/u)
   assert.match(source, /min-h-11/u)
-  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 2)
+  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 3)
+  assert.match(source, /<span>开始上传<\/span>/u)
   assert.match(source, /<span>重试上传<\/span>/u)
   assert.match(source, /<span>取消上传<\/span>/u)
   assert.doesNotMatch(source, /(?:gradient|#[\dA-Fa-f]{3,8}\b|rgba?\()/u)

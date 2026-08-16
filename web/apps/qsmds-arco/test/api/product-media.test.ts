@@ -65,6 +65,7 @@ test('上传按字段顺序构造 multipart，并透传真实进度、AbortSigna
   const result = await api.upload('product/1', request, {
     onUploadProgress,
     signal: controller.signal,
+    submissionFilename: '微耕机演示.webp',
   })
 
   assert.equal(result, await response)
@@ -80,7 +81,10 @@ test('上传按字段顺序构造 multipart，并透传真实进度、AbortSigna
   ])
   assert.equal(call.data.get('kind'), 'IMAGE')
   assert.equal(call.data.get('expectedVersion'), '7')
-  assert.equal(call.data.get('file'), file)
+  const submittedFile = call.data.get('file')
+  assert.ok(submittedFile instanceof File)
+  assert.equal(submittedFile.name, '微耕机演示.webp')
+  assert.equal(await submittedFile.text(), 'image-bytes')
   assert.deepEqual(call.config, {
     errorPresentation: 'local',
     onUploadProgress,

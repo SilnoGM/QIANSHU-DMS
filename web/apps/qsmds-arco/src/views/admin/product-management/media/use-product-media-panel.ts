@@ -119,6 +119,7 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
     retryUpload,
     scheduleUploads,
     selectionErrors,
+    startUpload,
     uploadLocked,
   } = useProductMediaUpload({
     editable: options.editable,
@@ -615,6 +616,7 @@ export function useProductMediaPanel(options: UseProductMediaPanelOptions) {
     retryUpload,
     saveLayout,
     selectionErrors,
+    startUpload,
     setPrimary,
     totalSizeBytes,
     unknown,

@@ -95,6 +95,24 @@ describe('ProductMediaMultipartParser', () => {
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
+  it('decodes browser multipart filenames as UTF-8 before the media asset safety boundary', async () => {
+    const filename = '4月2日-微耕機01.mp4'
+    const parts = validParts()
+    parts[2] = {
+      ...parts[2],
+      filename,
+      mimeType: 'video/mp4',
+    }
+
+    await expect(new ProductMediaMultipartParser().parse(
+      requestFor(parts),
+      async (input) => {
+        for await (const chunk of input.stream) void chunk
+        return input.originalFilename
+      },
+    )).resolves.toBe(filename)
+  })
+
   it.each([
     ['file before fields', [validParts()[2], validParts()[0], validParts()[1]]],
     ['unknown field', [...validParts(), { name: 'extra', value: 'secret' }]],

@@ -120,7 +120,7 @@ describe('ProductMediaContentService', () => {
       'X-Content-Type-Options': 'nosniff',
     })
     expect(result.headers['Content-Disposition']).toMatch(
-      /^inline; filename="[\x20-\x21\x23-\x7e]+"$/u,
+      /^inline; filename="[\x20-\x21\x23-\x7e]+"; filename\*=UTF-8''[A-Za-z0-9!#$&+.^_`|~%'-]+$/u,
     )
     expect(result.headers['Content-Disposition']).not.toMatch(/[\r\n]/u)
     expect(result.headers.ETag).toMatch(/^"sha256-[A-Za-z0-9_-]{43}"$/u)
@@ -209,6 +209,27 @@ describe('ProductMediaContentService', () => {
       )
     },
   )
+
+  it('uses an ASCII fallback and RFC 5987 UTF-8 filename for renamed video downloads', async () => {
+    const fixture = createFixture(
+      videoContentRow(
+        'video/quicktime',
+        '.mov',
+        '4月2日-微耕機01.mp4',
+      ),
+      'application',
+    )
+
+    const result = await fixture.service.resolve(
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+    )
+
+    expect(result.headers['Content-Disposition']).toBe(
+      'inline; filename="4_2_-_01.mov"; filename*=UTF-8\'\'4%E6%9C%882%E6%97%A5-%E5%BE%AE%E8%80%95%E6%A9%9F01.mov',
+    )
+  })
 
   it('describes application HEAD ranges without opening a body stream', async () => {
     const fixture = createFixture(contentRow(), 'application')

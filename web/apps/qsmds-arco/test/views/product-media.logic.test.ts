@@ -14,10 +14,12 @@ import {
   beginProductMediaUpload,
   buildProductMediaLayoutRequest,
   canApplyProductMediaResponse,
+  confirmProductMediaUpload,
   createProductMediaLayoutEditor,
   createProductMediaLayoutSnapshot,
   createProductMediaSessionState,
   createProductMediaUploadQueueItem,
+  getProductMediaFilenameParts,
   getProductMediaMutationFailure,
   markProductMediaUploadFinalizing,
   markProductMediaUploadUnknown,
@@ -212,7 +214,9 @@ test('上传队列保留 stable ID 与实际 bytes，finalizing 不伪造满进�
     kind: 'IMAGE',
     previewUrl: 'blob:preview-1',
   })
-  const uploading = beginProductMediaUpload(queued)
+  assert.equal(queued.phase, 'staged')
+  assert.throws(() => beginProductMediaUpload(queued), /确认/u)
+  const uploading = beginProductMediaUpload(confirmProductMediaUpload(queued, '商品主图'))
   const progressed = recordProductMediaUploadProgress(uploading, 4)
   const finalizing = markProductMediaUploadFinalizing(progressed)
 
@@ -220,7 +224,7 @@ test('上传队列保留 stable ID 与实际 bytes，finalizing 不伪造满进�
   assert.equal(finalizing.loadedBytes, 4)
   assert.equal(finalizing.totalBytes, 10)
   assert.equal(finalizing.phase, 'finalizing')
-  assert.equal(finalizing.originalFilename, 'main.webp')
+  assert.equal(finalizing.originalFilename, '商品主图.webp')
   assert.equal(finalizing.previewUrl, 'blob:preview-1')
 
   const failure = getProductMediaMutationFailure({
@@ -244,6 +248,25 @@ test('上传队列保留 stable ID 与实际 bytes，finalizing 不伪造满进�
   assert.equal(markProductMediaUploadUnknown(reconciling).phase, 'unknown')
 })
 
+test('上传前仅编辑文件名主体并固定原扩展名，空名称、路径和控制字符失败关闭', () => {
+  assert.deepEqual(getProductMediaFilenameParts('4月2日-微耕機01.mp4'), {
+    extension: '.mp4',
+    stem: '4月2日-微耕機01',
+  })
+  const item = createProductMediaUploadQueueItem({
+    file: new File(['video'], '4月2日-微耕機01.mp4', { type: 'video/mp4' }),
+    id: 'queue-video-1',
+    kind: 'VIDEO',
+    previewUrl: 'blob:video-1',
+  })
+
+  assert.equal(confirmProductMediaUpload(item, '微耕机演示').originalFilename, '微耕机演示.mp4')
+  assert.throws(() => confirmProductMediaUpload(item, '   '), /文件名不能为空/u)
+  assert.throws(() => confirmProductMediaUpload(item, '../demo'), /路径分隔符/u)
+  assert.throws(() => confirmProductMediaUpload(item, 'demo\u0000name'), /控制字符/u)
+  assert.throws(() => confirmProductMediaUpload(item, '名'.repeat(252)), /255/u)
+})
+
 test('Session 队列不可变更新，成功快照刷新 Product version/media 并移除对应队列项', () => {
   const file = new File(['new-image'], 'new.webp', { type: 'image/webp' })
   const queued = createProductMediaUploadQueueItem({
@@ -254,7 +277,7 @@ test('Session 队列不可变更新，成功快照刷新 Product version/media �
   })
   const initial = createProductMediaSessionState(product())
   const withQueue = appendProductMediaUploadQueueItem(initial, queued)
-  const uploading = beginProductMediaUpload(queued)
+  const uploading = beginProductMediaUpload(confirmProductMediaUpload(queued, 'new'))
   const inProgress = updateProductMediaUploadQueueItem(withQueue, uploading)
   const uploaded = mediaItem('image-new', 'IMAGE', 2, {
     originalFilename: 'new.webp',

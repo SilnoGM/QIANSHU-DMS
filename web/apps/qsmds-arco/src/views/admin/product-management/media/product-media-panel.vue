@@ -94,6 +94,7 @@ const {
   retryUpload,
   saveLayout,
   selectionErrors,
+  startUpload,
   setPrimary,
   totalSizeBytes,
   unknown,
@@ -361,6 +362,7 @@ defineExpose({ hasUnsavedChanges: dirty, unknown })
             @files-selected="handleFilesSelected"
             @cancel="cancelUpload"
             @retry="retryUpload"
+            @start="startUpload"
           />
         </FaCard>
 

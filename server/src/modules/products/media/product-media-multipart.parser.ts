@@ -99,6 +99,10 @@ export class ProductMediaMultipartParser {
     let multipart: busboy.Busboy
     try {
       multipart = busboy({
+        // Chromium/Firefox/Safari 均把 multipart filename 参数写成 UTF-8 bytes。
+        // Busboy 默认按 Latin-1 解码会把中文持久化为 mojibake，且后续安全净化
+        // 会移除其中的 C1 控制字符而不可逆；必须在最外层解析边界先正确解码。
+        defParamCharset: 'utf8',
         headers: request.headers,
         limits: {
           fieldNameSize: MAXIMUM_FIELD_NAME_BYTES,
