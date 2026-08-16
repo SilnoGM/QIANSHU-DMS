@@ -80,12 +80,23 @@ test('媒体面板使用 7/5 主辅布局并在窄屏回落为无横向滚动的
   }
 })
 
-test('图片工作区提供预览、文本化主图、拖拽增强、键盘排序和解除操作', async () => {
+test('图片工作区通过预览遮罩和统一菜单提供主图、排序与解除操作', async () => {
   const source = await readComponent('product-image-board.vue')
 
   assert.match(source, /<img\b/u)
   assert.match(source, /object-contain/u)
-  assert.match(source, /aria-pressed/u)
+  assert.match(source, /product-image-preview-trigger/u)
+  assert.match(source, /product-image-preview-overlay/u)
+  assert.match(source, /group-hover:opacity-100/u)
+  assert.match(source, /group-focus-visible:opacity-100/u)
+  assert.match(source, /product-image-preview-trigger:focus-visible/u)
+  assert.match(source, /i-lucide:eye/u)
+  assert.match(source, /<FaDropdown/u)
+  assert.match(source, /imageActionItems/u)
+  assert.match(source, /i-lucide:ellipsis/u)
+  assert.match(source, /更多图片操作/u)
+  assert.match(source, />\s*主图\s*</u)
+  assert.match(source, /当前主图/u)
   assert.match(source, /设为主图/u)
   assert.match(source, /前移/u)
   assert.match(source, /后移/u)
@@ -96,9 +107,9 @@ test('图片工作区提供预览、文本化主图、拖拽增强、键盘排�
   assert.match(source, /@drop/u)
   assert.match(source, /data-focus-anchor/u)
   assert.match(source, /min-h-11/u)
-  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 5)
-  assert.match(source, /<span>预览图片<\/span>/u)
-  assert.match(source, /<span>解除图片<\/span>/u)
+  assert.equal((source.match(/<FaButton\b/gu) ?? []).length, 1)
+  assert.doesNotMatch(source, /<span>预览图片<\/span>/u)
+  assert.doesNotMatch(source, /<span>解除图片<\/span>/u)
   assert.match(source, /prefers-reduced-motion:\s*reduce/u)
 })
 

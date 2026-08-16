@@ -196,6 +196,27 @@ async function clickVisibleAriaButton(page, label) {
   })()`)
 }
 
+async function openImageActionMenu(page, filename) {
+  await clickVisibleAriaButton(page, `更多图片操作 ${filename}`)
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="menuitem"]')].some((item) => (
+    item.getClientRects().length > 0
+  )))()`)
+}
+
+async function clickImageAction(page, filename, actionLabel) {
+  await openImageActionMenu(page, filename)
+  await page.evaluate(`(() => {
+    const menuItem = [...document.querySelectorAll('[role="menuitem"]')].find(candidate => (
+      candidate.textContent?.trim() === ${JSON.stringify(actionLabel)}
+      && candidate.getClientRects().length > 0
+      && candidate.getAttribute('data-disabled') === null
+    ))
+    if (!(menuItem instanceof HTMLElement)) throw new Error('image action unavailable')
+    menuItem.click()
+    return true
+  })()`)
+}
+
 async function selectFileAndWait(
   page,
   baseUrl,
@@ -389,18 +410,66 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
     await page.waitFor(`document.body.innerText.includes('4 / 20 张')
       && document.body.innerText.includes('5 / 5 个')`)
 
-    // 键盘触发排序，设置主图并保存真实布局。
+    // 真实指针悬停图片时显示预览遮罩，并可直接打开现有预览器。
+    const imagePreviewState = await page.evaluate(`(() => {
+      const button = document.querySelector('[aria-label="预览图片 browser-main.jpg"]')
+      const overlay = button?.querySelector('.product-image-preview-overlay')
+      if (!(button instanceof HTMLButtonElement) || !(overlay instanceof HTMLElement)) {
+        throw new Error('image preview trigger unavailable')
+      }
+      const initialOpacity = getComputedStyle(overlay).opacity
+      button.scrollIntoView({ block: 'center', inline: 'center' })
+      const bounds = button.getBoundingClientRect()
+      return {
+        centerX: bounds.left + bounds.width / 2,
+        centerY: bounds.top + bounds.height / 2,
+        initialOpacity,
+      }
+    })()`)
+    assert.equal(imagePreviewState.initialOpacity, '0')
+    await page.connection.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: imagePreviewState.centerX,
+      y: imagePreviewState.centerY,
+    })
+    await page.waitFor(`getComputedStyle(document.querySelector(
+      '[aria-label="预览图片 browser-main.jpg"] .product-image-preview-overlay',
+    )).opacity === '1'`)
+    await clickVisibleAriaButton(page, '预览图片 browser-main.jpg')
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes('预览图片')
+        && dialog.textContent?.includes('browser-main.jpg')))()`)
+    await page.connection.send('Input.dispatchKeyEvent', {
+      code: 'Escape',
+      key: 'Escape',
+      type: 'keyDown',
+      windowsVirtualKeyCode: 27,
+    })
+    await page.connection.send('Input.dispatchKeyEvent', {
+      code: 'Escape',
+      key: 'Escape',
+      type: 'keyUp',
+      windowsVirtualKeyCode: 27,
+    })
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .every(dialog => dialog.getClientRects().length === 0))()`)
+
+    // 统一操作菜单保留键盘排序能力，设置主图后保存真实布局。
+    await openImageActionMenu(page, 'browser-package.webp')
     await page.waitFor(`(() => {
-      const button = document.querySelector('[aria-label="前移图片 browser-package.webp"]')
-      return button instanceof HTMLButtonElement && !button.disabled
+      const item = [...document.querySelectorAll('[role="menuitem"]')]
+        .find(candidate => candidate.textContent?.trim() === '前移')
+      return item instanceof HTMLElement && item.getAttribute('data-disabled') === null
     })()`)
     await page.evaluate(`(() => {
-      const button = document.querySelector('[aria-label="前移图片 browser-package.webp"]')
-      if (!(button instanceof HTMLButtonElement) || button.disabled) {
-        throw new Error('keyboard sort button unavailable')
+      const item = [...document.querySelectorAll('[role="menuitem"]')]
+        .find(candidate => candidate.textContent?.trim() === '前移')
+      if (!(item instanceof HTMLElement) || item.getAttribute('data-disabled') !== null) {
+        throw new Error('keyboard sort menu item unavailable')
       }
-      button.focus({ preventScroll: true })
-      return document.activeElement === button
+      item.focus({ preventScroll: true })
+      return document.activeElement === item
     })()`)
     await page.connection.send('Input.dispatchKeyEvent', {
       code: 'Enter',
@@ -419,15 +488,7 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
       windowsVirtualKeyCode: 13,
     })
     await page.waitFor(`document.body.innerText.includes('媒体布局尚未保存')`)
-    await page.evaluate(`(() => {
-      const card = [...document.querySelectorAll('[data-media-id]')]
-        .find(candidate => candidate.textContent?.includes('browser-detail.png'))
-      const button = [...(card?.querySelectorAll('button') ?? [])]
-        .find(candidate => candidate.textContent?.trim() === '设为主图')
-      if (!button) throw new Error('primary button unavailable')
-      button.click()
-      return true
-    })()`)
+    await clickImageAction(page, 'browser-detail.png', '设为主图')
     await clickVisibleButton(page, '保存媒体布局')
     await page.waitFor(`document.body.innerText.includes('已同步')
       && !document.body.innerText.includes('媒体布局尚未保存')`)
@@ -566,7 +627,7 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
       windowsVirtualKeyCode: 27,
     })
     // 伪造 stale expectedVersion 触发真实 409，界面必须保留本地布局并人工收敛。
-    await clickVisibleAriaButton(page, '前移图片 browser-side.webp')
+    await clickImageAction(page, 'browser-side.webp', '前移')
     await page.enableRequestInterception([{
       requestStage: 'Request',
       urlPattern: `${configuration.baseUrl}/api/products/${product.id}/media/layout`,
@@ -616,7 +677,7 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
     await page.waitFor(`document.body.innerText.includes('5 / 5 个')`)
 
     // 图片解除关联后重新上传，继续为后续管理 Browser 回归保留 4/20。
-    await clickVisibleAriaButton(page, '解除图片 browser-package.webp')
+    await clickImageAction(page, 'browser-package.webp', '解除图片')
     await page.waitFor(`document.body.innerText.includes('解除产品媒体')`)
     await clickVisibleButton(page, '确认解除')
     await page.waitFor(`document.body.innerText.includes('3 / 20 张')`)
