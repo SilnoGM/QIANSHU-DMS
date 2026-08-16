@@ -252,6 +252,14 @@ jobs:
             server/pnpm-lock.yaml
             web/pnpm-lock.yaml
 
+      # Browser auth E2E 会启动真实 Server；即使认证场景不上传视频，媒体配置仍必须指向真实 ffprobe。
+      - name: Install FFmpeg dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg
+          test -x /usr/bin/ffprobe
+          /usr/bin/ffprobe -version
+
       - name: Install Server dependencies
         run: pnpm -C server install --frozen-lockfile
 
