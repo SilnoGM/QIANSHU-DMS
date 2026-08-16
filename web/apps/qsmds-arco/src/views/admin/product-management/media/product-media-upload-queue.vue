@@ -128,7 +128,7 @@ defineExpose({ focusFirstError, focusUpload })
           id="product-media-upload-input"
           ref="inputRef"
           type="file"
-          accept=".jpg,.jpeg,.png,.webp,.mp4"
+          accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.m4v,.webm"
           multiple
           class="sr-only"
           :disabled="locked"
@@ -156,7 +156,7 @@ defineExpose({ focusFirstError, focusUpload })
         <FaIcon name="i-lucide:upload-cloud" class="text-muted-foreground mb-2 size-6" aria-hidden="true" />
         <strong class="text-sm">拖放文件到这里</strong>
         <p id="product-media-upload-help" class="text-xs text-muted-foreground m-0 mt-1">
-          支持 JPEG、PNG、WebP 图片和 MP4 视频
+          支持 JPEG、PNG、WebP 图片和 MP4、MOV、M4V、WebM 视频
         </p>
       </FaFileUpload>
     </div>

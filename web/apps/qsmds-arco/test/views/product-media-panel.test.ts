@@ -114,9 +114,36 @@ test('视频工作区保留原生键盘控件、排序和解除，且不会提�
   assert.match(source, /@dragstart/u)
   assert.match(source, /@drop/u)
   assert.match(source, /min-h-11/u)
-  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 4)
+  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 5)
   assert.match(source, /<span>预览视频<\/span>/u)
   assert.doesNotMatch(source, /主图|aria-pressed/u)
+})
+
+test('三个视频预览入口按 MediaError 降级、身份切换复位并提供私有原链接下载', async () => {
+  const panel = await readComponent('product-media-panel.vue')
+  const board = await readComponent('product-video-board.vue')
+  const listModal = await readFile(new URL(
+    '../list/product-videos-modal.vue',
+    ROOT,
+  ), 'utf8')
+  const listPage = await readFile(new URL('../list/index.vue', ROOT), 'utf8')
+  const implementation = `${panel}\n${board}\n${listModal}\n${listPage}`
+
+  for (const source of [panel, board, listModal]) {
+    assert.match(source, /resolveProductVideoPreviewFailure/u)
+    assert.match(source, /@error=/u)
+    assert.match(source, /download/u)
+    assert.match(source, /min-h-11/u)
+    assert.match(source, /浏览器不支持/u)
+    assert.match(source, /视频加载失败/u)
+    assert.doesNotMatch(source, /\bBlob\b|createObjectURL/u)
+  }
+  assert.match(panel, /props\.authEpoch/u)
+  assert.match(board, /authEpoch:\s*number/u)
+  assert.match(listModal, /authEpoch/u)
+  assert.match(listPage, /:auth-epoch="appAccountStore\.authEpoch"/u)
+  assert.match(implementation, /i-lucide:download/u)
+  assert.match(implementation, /aria-label="`下载视频/u)
 })
 
 test('上传队列拥有可见 label、非唯一拖放入口、真实进度、取消和显式重试', async () => {
@@ -127,7 +154,7 @@ test('上传队列拥有可见 label、非唯一拖放入口、真实进度、�
   assert.match(source, /id="product-media-upload-input"/u)
   assert.match(source, /type="file"/u)
   assert.match(source, /multiple/u)
-  assert.match(source, /accept="\.jpg,\.jpeg,\.png,\.webp,\.mp4"/u)
+  assert.match(source, /accept="\.jpg,\.jpeg,\.png,\.webp,\.mp4,\.mov,\.m4v,\.webm"/u)
   assert.match(source, /<FaFileUpload/u)
   assert.match(source, /:before-upload="interceptPrimitiveFile"/u)
   assert.match(source, /<FaProgress/u)
@@ -151,9 +178,17 @@ test('媒体规则明确图片、视频限制和剩余容量，不出现产品�
   assert.match(source, /PNG/u)
   assert.match(source, /WebP/u)
   assert.match(source, /MP4/u)
+  assert.match(source, /MOV/u)
+  assert.match(source, /M4V/u)
+  assert.match(source, /WebM/u)
   assert.match(source, /H\.264/u)
   assert.match(source, /HEVC/u)
   assert.match(source, /AAC/u)
+  assert.match(source, /VP8/u)
+  assert.match(source, /VP9/u)
+  assert.match(source, /AV1/u)
+  assert.match(source, /Opus/u)
+  assert.match(source, /Vorbis/u)
   assert.match(source, /10 MiB/u)
   assert.match(source, /500 MiB/u)
   assert.match(source, /20 张/u)

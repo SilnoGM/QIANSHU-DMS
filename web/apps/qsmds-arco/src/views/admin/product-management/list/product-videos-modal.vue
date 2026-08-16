@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import type { ProductVideoPreviewFailure } from '../media/product-media-common.logic'
 import type { ProductListItemViewModel } from './product-list.logic'
 
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
+import { resolveProductVideoPreviewFailure } from '../media/product-media-common.logic'
 import { resolveProductMediaContentUrl } from './product-list.logic'
 
 interface ProductVideoItem {
@@ -13,6 +15,7 @@ interface ProductVideoItem {
 }
 
 const props = withDefaults(defineProps<{
+  authEpoch: number
   contentReadable?: boolean
   modelValue: boolean
   product: ProductListItemViewModel | null
@@ -25,7 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const activeIndex = ref(0)
-const previewFailed = ref(false)
+const previewFailure = ref<ProductVideoPreviewFailure | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
 
 const title = computed(() => props.product === null
@@ -52,10 +55,25 @@ function pauseActiveVideo(): void {
   videoElement.value?.pause()
 }
 
+function handlePreviewVideoError(event: Event): void {
+  const video = event.currentTarget as HTMLVideoElement
+  previewFailure.value = resolveProductVideoPreviewFailure(video.error?.code)
+}
+
+function previewFailureTitle(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability' ? '当前浏览器不支持此视频' : '视频加载失败'
+}
+
+function previewFailureDescription(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability'
+    ? '可以下载原文件后使用本地播放器查看。'
+    : '请检查网络后重试，或直接下载原文件。'
+}
+
 async function selectVideo(index: number): Promise<void> {
   pauseActiveVideo()
   activeIndex.value = index
-  previewFailed.value = false
+  previewFailure.value = null
   await nextTick()
   videoElement.value?.load()
 }
@@ -73,13 +91,18 @@ function close(): void {
 }
 
 watch(
-  [() => props.modelValue, () => props.product?.id],
+  [
+    () => props.modelValue,
+    () => props.product?.id,
+    () => props.contentReadable,
+    () => props.authEpoch,
+  ],
   ([visible]) => {
     if (!visible) {
       pauseActiveVideo()
     }
     activeIndex.value = 0
-    previewFailed.value = false
+    previewFailure.value = null
   },
 )
 
@@ -106,22 +129,43 @@ onBeforeUnmount(pauseActiveVideo)
       <section aria-label="视频预览" class="min-w-0">
         <div class="border border-border rounded-lg bg-muted/30 overflow-hidden">
           <video
-            v-if="selectedVideo?.safeUrl && !previewFailed"
+            v-if="selectedVideo?.safeUrl && previewFailure === null"
             ref="videoElement"
             :key="selectedVideo.id"
             :src="selectedVideo.safeUrl"
             controls
             preload="metadata"
             class="bg-foreground/5 h-auto w-full aspect-video block"
-            @error="previewFailed = true"
+            @error="handlePreviewVideoError"
+            @loadedmetadata="previewFailure = null"
           >
             当前浏览器不支持视频播放。
           </video>
+          <div
+            v-else-if="selectedVideo?.safeUrl && previewFailure"
+            class="p-6 text-center gap-3 grid min-h-52 aspect-video place-items-center"
+            role="status"
+          >
+            <FaIcon name="i-lucide:circle-alert" class="text-muted-foreground size-8" aria-hidden="true" />
+            <strong>{{ previewFailureTitle(previewFailure) }}</strong>
+            <p class="text-sm text-muted-foreground m-0">
+              {{ previewFailureDescription(previewFailure) }}
+            </p>
+            <a
+              :href="selectedVideo.safeUrl"
+              download
+              :aria-label="`下载视频 ${selectedVideo.originalFilename}`"
+              class="text-sm font-medium px-4 border rounded-md inline-flex gap-2 min-h-11 items-center focus-visible:outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <FaIcon name="i-lucide:download" class="shrink-0 size-4" aria-hidden="true" />
+              <span>下载原视频</span>
+            </a>
+          </div>
           <FaEmpty
             v-else
             icon="i-lucide:video-off"
             title="视频暂不可预览"
-            description="内容地址与当前产品不匹配，或媒体加载失败。"
+            description="内容地址与当前产品不匹配。"
             class="min-h-52 aspect-video justify-center"
           />
         </div>

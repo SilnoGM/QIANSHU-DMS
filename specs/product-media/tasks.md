@@ -1000,20 +1000,30 @@ Task 15 evidence（2026-08-14）：
   `555895700ef24caa3264e63121cf984ed1063198e683665abdae4fb66344e980`。未增加 DTO 字段，未暴露
   objectKey/checksum/绝对路径，未修改 Schema/migration、依赖、lockfile 或持久开发数据。
 
-- [ ] 22. 扩展 Web 文件选择、规则说明和预览降级
-  - [ ] 22.1 先在 `product-media.logic.test.ts` 与 `product-media-panel.test.ts` 增加 RED：accept 白名单、
+- [x] 22. 扩展 Web 文件选择、规则说明和预览降级
+  - [x] 22.1 先在 `product-media.logic.test.ts` 与 `product-media-panel.test.ts` 增加 RED：accept 白名单、
     ISO 家族选择、WebM 严格匹配、规则文案，以及 `MediaError` 1/2/3/4 分流和状态复位。
-  - [ ] 22.2 文件 input 增加 `.mov,.m4v,.webm`；客户端逻辑与 Server 容器家族对齐，但保持 Server 为
+  - [x] 22.2 文件 input 增加 `.mov,.m4v,.webm`；客户端逻辑与 Server 容器家族对齐，但保持 Server 为
     magic/codec 最终真相源，并继续即时拒绝 Product Document。
-  - [ ] 22.3 `ProductVideoBoard`、编辑预览 Modal、列表视频 Modal 统一处理：decode/src-not-supported
+  - [x] 22.3 `ProductVideoBoard`、编辑预览 Modal、列表视频 Modal 统一处理：decode/src-not-supported
     显示浏览器不支持，network 显示加载失败，aborted 不持久报错；切换内容/authEpoch 时复位。
-  - [ ] 22.4 预览降级提供同源私有下载动作，不创建最大 500MiB Blob、不打开 objectKey、不改变 upload queue、
+  - [x] 22.4 预览降级提供同源私有下载动作，不创建最大 500MiB Blob、不打开 objectKey、不改变 upload queue、
     Product dirty 或 version；下载按钮具备明确可访问名称和至少 44px 目标。
-  - [ ] 22.5 `ProductMediaRules` 使用两行容器矩阵；仅消费现有 semantic token、Noto 字体和 Lucide 图标，
+  - [x] 22.5 `ProductMediaRules` 使用两行容器矩阵；仅消费现有 semantic token、Noto 字体和 Lucide 图标，
     不修改公共 Fa/Qs 组件。对 changed hunks 执行禁用颜色/字体/emoji 和可访问性审计。
-  - [ ] 22.6 运行 Web 专项测试、`test:api`、typecheck、lint、build；GREEN 后提交
+  - [x] 22.6 运行 Web 专项测试、`test:api`、typecheck、lint、build；GREEN 后提交
     `feat: 增加多格式视频预览降级`。
   - _Requirements: R9-R10, R11_
+
+  Task 22 evidence（2026-08-16）：首轮 RED 为 4 failed、5 passed，精确覆盖尚未导出的 MediaError 分类、
+  三个视频入口降级、input accept 与容器矩阵。实现后专项 18/18、完整 `test:api` 813/813 tests、Web
+  正式 typecheck、ESLint、Stylelint 与 production build 均通过；Noto 验证包含 108 个字体分片，zero-residue
+  验证 602 个文件。初次专项 GREEN 后既有源码合同仍期待 4 个视频按钮图标，新增下载动作使实际为 5，更新
+  已确认 UI 合同后 18/18；首轮 lint 发现 6 个格式错误和 6 个 class-order warning，机械修正后全绿。
+  一次直接执行非仓库入口 `vue-tsc --noEmit -p tsconfig.json` 因 TypeScript 7 `baseUrl` deprecation 退出 `2`；
+  改用正式 `pnpm typecheck` 后通过，未修改 tsconfig。build 保留既有 `@vueuse/core` pure annotation 与大 chunk
+  warning，但 exit `0`。changed-hunk 审计未发现硬编码颜色/字体/Emoji、Blob/createObjectURL、公共 Fa/Qs
+  改动或业务状态写入；下载只使用当前同源私有 content URL，并提供明确 aria-label 与 44px 目标。
 
 - [ ] 23. 真实样例、浏览器和全量收口
   - [ ] 23.1 对用户样例 `4月2日-微耕機01.mp4` 运行只读当前 Validator，证明结果为 MOV、

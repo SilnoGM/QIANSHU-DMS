@@ -32,6 +32,8 @@ export interface ProductMediaSelectionError {
   readonly message: string
 }
 
+export type ProductVideoPreviewFailure = 'capability' | 'network'
+
 export type ProductMediaSelectionResult
   = | {
     readonly accepted: true
@@ -53,6 +55,7 @@ const DOCUMENT_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ])
+const ISO_VIDEO_EXTENSIONS = new Set(['m4v', 'mov', 'mp4'])
 const ALLOWED_TYPE_PAIRS = new Map<string, {
   readonly extensions: ReadonlySet<string>
   readonly kind: ProductMediaKind
@@ -74,7 +77,22 @@ const ALLOWED_TYPE_PAIRS = new Map<string, {
     maxBytes: MAX_PRODUCT_IMAGE_BYTES,
   }],
   ['video/mp4', {
-    extensions: new Set(['mp4']),
+    extensions: ISO_VIDEO_EXTENSIONS,
+    kind: 'VIDEO',
+    maxBytes: MAX_PRODUCT_VIDEO_BYTES,
+  }],
+  ['video/quicktime', {
+    extensions: ISO_VIDEO_EXTENSIONS,
+    kind: 'VIDEO',
+    maxBytes: MAX_PRODUCT_VIDEO_BYTES,
+  }],
+  ['video/x-m4v', {
+    extensions: ISO_VIDEO_EXTENSIONS,
+    kind: 'VIDEO',
+    maxBytes: MAX_PRODUCT_VIDEO_BYTES,
+  }],
+  ['video/webm', {
+    extensions: new Set(['webm']),
     kind: 'VIDEO',
     maxBytes: MAX_PRODUCT_VIDEO_BYTES,
   }],
@@ -132,7 +150,7 @@ export function validateProductMediaSelection(
   if (rule === undefined || !rule.extensions.has(extension)) {
     return selectionError(
       'MEDIA_TYPE_UNSUPPORTED',
-      '仅支持 JPEG、PNG、WebP 图片或 MP4 视频',
+      '仅支持 JPEG、PNG、WebP 图片或 MP4、MOV、M4V、WebM 视频',
     )
   }
   if (!Number.isSafeInteger(file.size) || file.size <= 0) {
@@ -163,6 +181,23 @@ export function validateProductMediaSelection(
   }
 
   return Object.freeze({ accepted: true, kind: rule.kind })
+}
+
+/**
+ * HTMLMediaElement error code 只用于展示降级，不改变媒体事实或上传状态。
+ * aborted(1) 常由切换视频、关闭 Modal 或身份清理主动触发，因此不能残留为错误；
+ * decode(3)/src-not-supported(4) 属于浏览器播放能力问题，其余值按加载失败安全处理。
+ */
+export function resolveProductVideoPreviewFailure(
+  mediaErrorCode: unknown,
+): ProductVideoPreviewFailure | null {
+  if (mediaErrorCode === 1) {
+    return null
+  }
+  if (mediaErrorCode === 3 || mediaErrorCode === 4) {
+    return 'capability'
+  }
+  return 'network'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

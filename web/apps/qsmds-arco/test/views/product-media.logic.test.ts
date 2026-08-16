@@ -28,6 +28,7 @@ import {
   recordProductMediaUploadProgress,
   resolveProductMediaLayoutFailure,
   resolveProductMediaUploadFailure,
+  resolveProductVideoPreviewFailure,
   retryProductMediaUpload,
   setProductMediaPrimaryImage,
   updateProductMediaLayoutDraft,
@@ -95,12 +96,16 @@ const emptyCapacity = {
   queuedVideoCount: 0,
 }
 
-test('文件选择只接受 JPEG/PNG/WebP/MP4，Document 立即使用产品领域错误拒绝', () => {
+test('文件选择接受图片、ISO 视频家族和严格 WebM，Document 立即使用产品领域错误拒绝', () => {
   const accepted = [
     ['photo.JPG', 'image/jpeg', 'IMAGE'],
     ['photo.png', 'image/png', 'IMAGE'],
     ['photo.webp', 'image/webp', 'IMAGE'],
     ['clip.mp4', 'video/mp4', 'VIDEO'],
+    ['camera.mp4', 'video/quicktime', 'VIDEO'],
+    ['camera.mov', 'video/x-m4v', 'VIDEO'],
+    ['camera.m4v', 'video/mp4', 'VIDEO'],
+    ['camera.webm', 'video/webm', 'VIDEO'],
   ] as const
 
   for (const [name, type, kind] of accepted) {
@@ -134,6 +139,35 @@ test('文件选择只接受 JPEG/PNG/WebP/MP4，Document 立即使用产品领�
   if (!disguised.accepted) {
     assert.equal(disguised.error.code, 'MEDIA_TYPE_UNSUPPORTED')
   }
+
+  for (const [name, type] of [
+    ['camera.webm', 'video/mp4'],
+    ['camera.mp4', 'video/webm'],
+    ['camera.mkv', 'video/webm'],
+    ['camera.m4a', 'video/mp4'],
+  ]) {
+    const result = validateProductMediaSelection(
+      new File(['video'], name, { type }),
+      emptyCapacity,
+    )
+    assert.equal(result.accepted, false)
+    if (!result.accepted) {
+      assert.equal(result.error.code, 'MEDIA_TYPE_UNSUPPORTED')
+      assert.equal(
+        result.error.message,
+        '仅支持 JPEG、PNG、WebP 图片或 MP4、MOV、M4V、WebM 视频',
+      )
+    }
+  }
+})
+
+test('视频 MediaError 仅持久化网络或播放能力失败，主动中止保持无错误', () => {
+  assert.equal(resolveProductVideoPreviewFailure(1), null)
+  assert.equal(resolveProductVideoPreviewFailure(2), 'network')
+  assert.equal(resolveProductVideoPreviewFailure(3), 'capability')
+  assert.equal(resolveProductVideoPreviewFailure(4), 'capability')
+  assert.equal(resolveProductVideoPreviewFailure(0), 'network')
+  assert.equal(resolveProductVideoPreviewFailure(undefined), 'network')
 })
 
 test('客户端按当前媒体与保留队列共同执行 20/5 上限和单文件大小边界', () => {

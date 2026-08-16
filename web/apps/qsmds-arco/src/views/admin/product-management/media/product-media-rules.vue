@@ -54,8 +54,16 @@ const remainingVideoCount = computed(() => Math.max(
         <dt class="text-sm font-medium">
           视频
         </dt>
-        <dd class="text-sm text-muted-foreground m-0 mt-1">
-          MP4（H.264 / HEVC，可选 AAC 音轨）；单个不超过 500 MiB；最多 5 个。
+        <dd class="text-sm text-muted-foreground m-0 mt-2 gap-2 grid">
+          <div class="p-2 border rounded-md bg-background/60">
+            <strong class="text-foreground block">MP4 / MOV / M4V</strong>
+            <span>H.264 或 HEVC；可选一条 AAC 音轨。</span>
+          </div>
+          <div class="p-2 border rounded-md bg-background/60">
+            <strong class="text-foreground block">WebM</strong>
+            <span>VP8、VP9 或 AV1；可选一条 Opus 或 Vorbis 音轨。</span>
+          </div>
+          <span>单个视频不超过 500 MiB；最多 5 个。</span>
         </dd>
         <dd class="qs-type-meta m-0 mt-2">
           已占用 {{ currentVideoCount }}，队列 {{ queuedVideoCount }}，剩余 {{ remainingVideoCount }}

@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import type { ProductMediaItemDto } from '../../../../api/generated/types.gen'
+import type { ProductVideoPreviewFailure } from './product-media-common.logic'
 
+import { resolveProductVideoPreviewFailure } from './product-media-common.logic'
 import {
   formatProductMediaBytes,
   formatProductMediaDuration,
 } from './product-media-view.logic'
 
 interface ProductVideoBoardProps {
+  authEpoch: number
   contentUrls: Readonly<Record<string, string | null>>
   detachLocked: boolean
   editable: boolean
@@ -24,6 +27,42 @@ const emit = defineEmits<{
 }>()
 
 const draggedId = ref<string | null>(null)
+const previewFailures = reactive<Record<string, ProductVideoPreviewFailure>>({})
+
+function clearPreviewFailures(): void {
+  for (const productMediaId of Object.keys(previewFailures)) {
+    delete previewFailures[productMediaId]
+  }
+}
+
+function previewFailureTitle(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability' ? '当前浏览器不支持此视频' : '视频加载失败'
+}
+
+function previewFailureDescription(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability'
+    ? '可以下载原文件后使用本地播放器查看。'
+    : '请检查网络后重试，或直接下载原文件。'
+}
+
+function handleVideoError(event: Event, productMediaId: string): void {
+  const video = event.currentTarget as HTMLVideoElement
+  const failure = resolveProductVideoPreviewFailure(video.error?.code)
+  if (failure === null) {
+    delete previewFailures[productMediaId]
+    return
+  }
+  previewFailures[productMediaId] = failure
+}
+
+watch(
+  [
+    () => props.authEpoch,
+    () => props.items.map(item => item.id).join('\0'),
+    () => props.items.map(item => props.contentUrls[item.id] ?? '').join('\0'),
+  ],
+  clearPreviewFailures,
+)
 
 function mediaAspectRatio(item: ProductMediaItemDto): string {
   return item.width > 0 && item.height > 0
@@ -93,7 +132,7 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
       v-if="items.length === 0"
       icon="i-lucide:video-off"
       title="暂无产品视频"
-      description="可上传 MP4 视频展示产品细节。"
+      description="可上传 MP4、MOV、M4V 或 WebM 视频展示产品细节。"
       class="py-10 border rounded-lg border-dashed"
     />
 
@@ -116,13 +155,35 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
           :style="{ aspectRatio: mediaAspectRatio(item) }"
         >
           <video
-            v-if="contentUrls[item.id]"
+            v-if="contentUrls[item.id] && previewFailures[item.id] === undefined"
             :src="contentUrls[item.id]!"
             :aria-label="`播放视频 ${item.originalFilename}`"
             class="h-full w-full object-contain"
             controls
             preload="metadata"
+            @error="handleVideoError($event, item.id)"
+            @loadedmetadata="delete previewFailures[item.id]"
           />
+          <div
+            v-else-if="contentUrls[item.id] && previewFailures[item.id]"
+            class="text-sm p-5 text-center gap-2 grid place-items-center"
+            role="status"
+          >
+            <FaIcon name="i-lucide:circle-alert" class="text-muted-foreground size-6" aria-hidden="true" />
+            <strong>{{ previewFailureTitle(previewFailures[item.id]!) }}</strong>
+            <p class="text-muted-foreground m-0">
+              {{ previewFailureDescription(previewFailures[item.id]!) }}
+            </p>
+            <a
+              :href="contentUrls[item.id]!"
+              download
+              :aria-label="`下载视频 ${item.originalFilename}`"
+              class="text-sm font-medium px-3 border rounded-md inline-flex gap-2 min-h-11 items-center focus-visible:outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <FaIcon name="i-lucide:download" class="shrink-0 size-4" aria-hidden="true" />
+              <span>下载原视频</span>
+            </a>
+          </div>
           <div v-else class="text-sm text-muted-foreground p-5 text-center">
             <FaIcon name="i-lucide:video-off" class="mx-auto mb-2 size-6" aria-hidden="true" />
             当前身份不可读取视频内容

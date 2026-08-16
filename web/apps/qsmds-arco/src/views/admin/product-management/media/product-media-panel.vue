@@ -3,11 +3,13 @@ import type {
   ProductListItemDto,
   ProductMediaItemDto,
 } from '../../../../api/generated/types.gen'
+import type { ProductVideoPreviewFailure } from './product-media-common.logic'
 
-import { computed, nextTick, toRef, useTemplateRef } from 'vue'
+import { computed, nextTick, shallowRef, toRef, useTemplateRef, watch } from 'vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import ProductImageBoard from './product-image-board.vue'
+import { resolveProductVideoPreviewFailure } from './product-media-common.logic'
 import ProductMediaRules from './product-media-rules.vue'
 import ProductMediaUploadQueue from './product-media-upload-queue.vue'
 import { formatProductMediaBytes } from './product-media-view.logic'
@@ -128,6 +130,29 @@ const detachVisible = computed({
 const previewUrl = computed(() => previewItem.value === null
   ? null
   : contentUrls.value[previewItem.value.id] ?? null)
+const previewFailure = shallowRef<ProductVideoPreviewFailure | null>(null)
+
+function handlePreviewVideoError(event: Event): void {
+  const video = event.currentTarget as HTMLVideoElement
+  previewFailure.value = resolveProductVideoPreviewFailure(video.error?.code)
+}
+
+function previewFailureTitle(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability' ? '当前浏览器不支持此视频' : '视频加载失败'
+}
+
+function previewFailureDescription(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability'
+    ? '可以下载原文件后使用本地播放器查看。'
+    : '请检查网络后重试，或直接下载原文件。'
+}
+
+watch(
+  [() => previewItem.value?.id, previewUrl, () => props.authEpoch],
+  () => {
+    previewFailure.value = null
+  },
+)
 const statusLabel = computed(() => {
   if (!props.editable) {
     return '只读'
@@ -312,6 +337,7 @@ defineExpose({ hasUnsavedChanges: dirty, unknown })
 
         <FaCard content-class="min-w-0">
           <ProductVideoBoard
+            :auth-epoch="authEpoch"
             :items="orderedVideos"
             :content-urls="contentUrls"
             :editable="editable"
@@ -369,13 +395,35 @@ defineExpose({ hasUnsavedChanges: dirty, unknown })
         class="max-h-[70vh] max-w-full object-contain"
       >
       <video
-        v-else-if="previewItem?.kind === 'VIDEO' && previewUrl"
+        v-else-if="previewItem?.kind === 'VIDEO' && previewUrl && previewFailure === null"
         :src="previewUrl"
         :aria-label="`播放视频 ${previewItem.originalFilename}`"
         class="max-h-[70vh] max-w-full"
         controls
         autoplay
+        @error="handlePreviewVideoError"
+        @loadedmetadata="previewFailure = null"
       />
+      <div
+        v-else-if="previewItem?.kind === 'VIDEO' && previewUrl && previewFailure"
+        class="p-6 text-center gap-3 grid place-items-center"
+        role="status"
+      >
+        <FaIcon name="i-lucide:circle-alert" class="text-muted-foreground size-8" aria-hidden="true" />
+        <strong>{{ previewFailureTitle(previewFailure) }}</strong>
+        <p class="text-sm text-muted-foreground m-0">
+          {{ previewFailureDescription(previewFailure) }}
+        </p>
+        <a
+          :href="previewUrl"
+          download
+          :aria-label="`下载视频 ${previewItem.originalFilename}`"
+          class="text-sm font-medium px-4 border rounded-md inline-flex gap-2 min-h-11 items-center focus-visible:outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <FaIcon name="i-lucide:download" class="shrink-0 size-4" aria-hidden="true" />
+          <span>下载原视频</span>
+        </a>
+      </div>
       <FaEmpty v-else icon="i-lucide:shield-alert" title="媒体内容不可读取" />
     </div>
     <div v-if="previewItem" class="qs-type-meta mt-3 flex flex-wrap gap-3">

@@ -852,6 +852,7 @@ onBeforeUnmount(() => {
     />
     <ProductVideosModal
       v-model="videosVisible"
+      :auth-epoch="appAccountStore.authEpoch"
       :product="videosTarget"
       :content-readable="canReadProductMedia"
     />
