@@ -1025,18 +1025,47 @@ Task 15 evidence（2026-08-14）：
   warning，但 exit `0`。changed-hunk 审计未发现硬编码颜色/字体/Emoji、Blob/createObjectURL、公共 Fa/Qs
   改动或业务状态写入；下载只使用当前同源私有 content URL，并提供明确 aria-label 与 44px 目标。
 
-- [ ] 23. 真实样例、浏览器和全量收口
-  - [ ] 23.1 对用户样例 `4月2日-微耕機01.mp4` 运行只读当前 Validator，证明结果为 MOV、
+- [x] 23. 真实样例、浏览器和全量收口
+  - [x] 23.1 对用户样例 `4月2日-微耕機01.mp4` 运行只读当前 Validator，证明结果为 MOV、
     `video/quicktime`、H.264 `avc1`、AAC、1080×1920、约 11.93s；不得复制、改写或提交该文件。
-  - [ ] 23.2 在安全临时目录生成最小 M4V/WebM 冒烟样例并运行真实 `file-type + ffprobe + Validator`；
+  - [x] 23.2 在安全临时目录生成最小 M4V/WebM 冒烟样例并运行真实 `file-type + ffprobe + Validator`；
     临时产物可靠清理且不进入 Git。CI 自动化仍使用自有可复现 mock/临时 fixtures，不依赖用户文件。
-  - [ ] 23.3 在隔离 Browser/E2E 环境覆盖成功上传、真实 Content-Type/Range、可播放预览、模拟解码失败、
+  - [x] 23.3 在隔离 Browser/E2E 环境覆盖成功上传、真实 Content-Type/Range、可播放预览、模拟解码失败、
     私有下载、窄屏、Dark、键盘和 RBAC；不得写入当前持久开发产品或媒体数据。
-  - [ ] 23.4 运行 Server 全量、`ci:server-e2e`、Web 全量、OpenAPI、root tests 和最终
+  - [x] 23.4 运行 Server 全量、`ci:server-e2e`、Web 全量、OpenAPI、root tests 和最终
     `node --run check`；报告全部 test/suite 数、warning 和任何纠正后的失败命令。
-  - [ ] 23.5 复核媒体健康、Web/Server HTTP、Git diff/staged 范围、无 `.env`/schema/migration/lock/build
+  - [x] 23.5 复核媒体健康、Web/Server HTTP、Git diff/staged 范围、无 `.env`/schema/migration/lock/build
     产物；更新本节真实 RED/GREEN 证据并创建必要的收口提交，不 push、不 merge。
   - _Requirements: R4, R6, R9-R12_
+
+  Task 23 evidence（2026-08-16）：对用户目录中的 `4月2日-微耕機01.mp4` 仅作只读验证，未复制、改写或
+  提交；真实探测结果为 MOV/QuickTime、`video/quicktime`、H.264 `avc1`、AAC、1080×1920、11933ms，
+  Validator canonical extension 为 `.mov`，文件 SHA-256 为
+  `4231f380fa8bc6bd5137736f0a14ba2cb74809e4575784957bde739c755d685c`。安全临时目录中的真实 M4V
+  样例为 3518 bytes、H.264/AAC、1000ms，WebM 样例为 1769 bytes、VP9/Opus、1008ms；两者均经
+  `file-type + ffprobe + Validator` 通过并按精确路径清理，未进入 Git。浏览器自动化内嵌自有 M4V、MOV、
+  WebM fixtures，写入前后均校验 SHA-256，不依赖用户样例。
+
+  隔离 Browser/E2E runner 3/3 passed；产品媒体场景覆盖 MP4/M4V/MOV/WebM 成功上传、真实 MIME、Range、
+  canonical Content-Disposition、WebM `readyState`、模拟 `MediaError` code 4、同源私有下载、44px 点击目标、
+  状态复位、移动端、Dark、键盘和 RBAC，测试资源随隔离数据库销毁，未写入持久开发数据。浏览器用例首轮
+  纠正了三处测试本身问题：CDP IIFE 未调用、boolean `download` 属性断言方式，以及 Modal scale 动画期间过早
+  测量；管理用例同步采用新的能力降级文案。Base64 fixture 首次生成时发现 hash 不一致，重新使用可靠编码并
+  在落盘前验证 exact hash 后才进入自动化，未放宽生产断言。
+
+  Server `check` 为 186/186 suites、1817/1817 tests；`ci:server-e2e` 主集合 31 suites、191 tests passed
+  （按配置 4 suites/10 tests skipped），附加 lifecycle 4/4、transaction 2/2、runtime HTTP 3/3、cutover 1/1；
+  Web `check` 为 Node 172/172、TypeScript 49/49、API/views 813/813，并通过 typecheck、ESLint、Stylelint；
+  `contract:check`、Server build 和 OpenAPI 字节一致检查通过，两份快照 SHA-256 均为
+  `555895700ef24caa3264e63121cf984ed1063198e683665abdae4fb66344e980`。最终 `node --run check` exit 0：
+  Root 676/676、Server 186/186 suites 与 1817/1817 tests、Web 172+49+813、真实 Chrome 3/3。production
+  build 仅保留既有 `@vueuse/core` pure annotation 与大 chunk warning，无 error 或构建残留。
+
+  收口时先发现旧根编排只残留 Web 9000、Server 已退出；已优雅停止旧编排和临时新编排，确认端口释放后
+  由根 `node --run dev` 恢复唯一实例。Server 3000 `/api/health` 与 Web 9000 均为 HTTP 200；
+  `media:ops:health` 为 `healthy`，read/write/videoValidator 全部 `up`，磁盘余量 43.95%。Git diff/check、
+  staged/unstaged/untracked 与提交范围复核通过；未出现 `.env`、Schema/migration、package/lock、日志或 build
+  产物，未写持久数据、未 push、未 merge。
 
 Phase 4 停止条件：若实现需要新增依赖、Schema/migration、支持 MKV/AVI、转码/remux、加载整段 Blob、
 修改公共 Fa/Qs 组件业务契约、扩大 ProductMedia 到 Document，或必须写入持久开发/生产数据，应停止并
@@ -1155,6 +1184,7 @@ config/package/smoke tests。`contract:sync` 是生成动作，只在公共 API 
 17. `feat: 扩展视频容器与编码验证`
 18. `feat: 扩展产品视频交付格式`
 19. `feat: 增加多格式视频预览降级`
+20. `test: 完成多格式视频全量验收`
 
 任务中途暴露的独立缺陷使用单独 `fix:` 提交。若一个任务没有产生文件变更，不创建空提交；任务范围因
 真实代码结构需要合并或拆分提交时，先更新 tasks 说明原因。每个提交必须在其任务级验证范围内绿色、
