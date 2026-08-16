@@ -57,6 +57,7 @@ allowBuilds:
 | `NODE_ENV` | 运行环境；production 会启用严格来源、Cookie 与 HMAC 校验 | `development` |
 | `PORT` | HTTP 监听端口 | `3000` |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | 模板保持为空 |
+| `SHADOW_DATABASE_URL` | 仅 `prisma:drift:check` 使用的独立临时 PostgreSQL 数据库 | 数据库名必须以 `qianshu_dms_shadow_` 开头 |
 | `APP_ORIGIN` | Web 的精确 origin；production 必须使用 HTTPS | `http://127.0.0.1:9000` |
 | `TRUST_PROXY_HOPS` | 可信反向代理跳数，只允许 `0` 到 `2` | `0` |
 | `AUTH_ARGON2_CONCURRENCY` | 单实例同时执行的 Argon2 上限 | `2` |
@@ -99,6 +100,7 @@ pnpm -C server media:recovery:dry-run
 
 - `check` 与 `build` 只验证工程和单元测试，不连接数据库；它们在未设置 `DATABASE_URL` 时也应可执行。
 - `test:e2e` 面向真实 PostgreSQL，调用前必须通过当前进程环境提供测试数据库连接，且测试数据库必须与个人或生产数据库隔离。
+- `prisma:drift:check` 使用 migration history 重放后的物理结构与 `DATABASE_URL` 比较。执行前必须临时提供 `SHADOW_DATABASE_URL`；Prisma 会重置该数据库，因此它不得指向业务库，且使用后应删除。wrapper 会拒绝同库目标和不符合 `qianshu_dms_shadow_` 命名边界的数据库，并原样传播 drift 退出码。
 - `dev` 与 `start` 会先生成 Prisma Client，再启动 NestJS。
 - `start:prod` 直接执行已经构建的 `dist/main.js`，不会生成 Prisma Client；部署流程必须先完成安装、生成与构建。
 - `auth:bootstrap-admin` 只用于首次创建 `system_admin`；`auth:recover-admin` 只用于已有 `system_admin` 的离线密码恢复。两者都要求本机交互式 TTY，密码不得通过 argv、环境变量或脚本传入。

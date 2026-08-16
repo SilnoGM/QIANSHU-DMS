@@ -246,7 +246,7 @@ model UserProfile {
   avatarUrl       String?  @map("avatar_url") @db.VarChar(2048)
   remark          String?  @db.Text
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

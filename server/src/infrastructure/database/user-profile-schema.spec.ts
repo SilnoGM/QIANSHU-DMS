@@ -53,7 +53,7 @@ describe('user profile database schema', () => {
       'createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)',
     )
     expect(profile).toContain(
-      'updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)',
+      'updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)',
     )
     expect(profile).toContain(
       'user User @relation(fields: [userId], references: [id], onDelete: Cascade)',

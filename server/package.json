@@ -29,9 +29,11 @@
     "lint:fix": "pnpm prisma:generate && eslint \"{src,test}/**/*.ts\" \"*.ts\" --fix",
     "test": "pnpm prisma:generate && jest",
     "test:e2e": "pnpm prisma:generate && jest --config test/jest-e2e.json --runInBand",
-    "check": "pnpm prisma:validate && pnpm typecheck && pnpm lint && pnpm test",
+    "check": "pnpm prisma:validate && pnpm test:prisma-drift-gate && pnpm typecheck && pnpm lint && pnpm test",
     "prisma:generate": "prisma generate",
     "prisma:validate": "prisma validate",
+    "prisma:drift:check": "pnpm prisma:validate && node scripts/check-prisma-drift.mjs",
+    "test:prisma-drift-gate": "node --test scripts/check-prisma-drift.test.mjs",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy"
   },
