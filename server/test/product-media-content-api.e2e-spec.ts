@@ -60,6 +60,24 @@ function readyContentRow() {
   }
 }
 
+function readyVideoContentRow(
+  mimeType: string,
+  extension: string,
+  originalFilename: string,
+) {
+  return {
+    kind: ProductMediaKind.VIDEO,
+    mediaAsset: {
+      checksumSha256: 'b'.repeat(64),
+      mediaType: MediaType.VIDEO,
+      mimeType,
+      objectKey: `assets/2026/08/${MEDIA_ID}${extension}`,
+      originalFilename,
+      status: MediaAssetStatus.READY,
+    },
+  }
+}
+
 describe('Product media private content API', () => {
   let application: INestApplication
   let permissions: string[]
@@ -312,6 +330,79 @@ describe('Product media private content API', () => {
     expect(unsatisfied.text).toBe('')
     expect(unsatisfied.headers['content-range']).toBe(
       `bytes */${PRIVATE_CONTENT.length}`,
+    )
+  })
+
+  it.each([
+    ['MOV', 'video/quicktime', '.mov', 'camera.mp4', 'camera.mov'],
+    ['M4V', 'video/x-m4v', '.m4v', 'camera.mov', 'camera.m4v'],
+    ['WebM', 'video/webm', '.webm', 'camera.webm', 'camera.webm'],
+  ] as const)(
+    'serves private %s using trusted MIME and canonical filename for GET/HEAD/range/cache',
+    async (_label, mimeType, extension, originalFilename, downloadFilename) => {
+      const objectKey = `assets/2026/08/${MEDIA_ID}${extension}`
+      findFirst.mockResolvedValue(
+        readyVideoContentRow(mimeType, extension, originalFilename),
+      )
+
+      const full = await contentRequest().expect(HttpStatus.OK)
+      expect(full.headers).toMatchObject({
+        'content-disposition': `inline; filename="${downloadFilename}"`,
+        'content-length': String(PRIVATE_CONTENT.length),
+        'content-type': mimeType,
+      })
+      expect(full.body).toEqual(PRIVATE_CONTENT)
+
+      const partial = await contentRequest()
+        .set('Range', 'bytes=1-3')
+        .expect(HttpStatus.PARTIAL_CONTENT)
+      expect(partial.headers).toMatchObject({
+        'content-length': '3',
+        'content-range': `bytes 1-3/${PRIVATE_CONTENT.length}`,
+        'content-type': mimeType,
+      })
+      expect(openObject).toHaveBeenLastCalledWith(objectKey, { end: 3, start: 1 })
+
+      const head = await contentRequest('head')
+        .set('Range', 'bytes=0-0')
+        .expect(HttpStatus.PARTIAL_CONTENT)
+      expect(head.text).toBeUndefined()
+      expect(head.headers).toMatchObject({
+        'content-length': '1',
+        'content-range': `bytes 0-0/${PRIVATE_CONTENT.length}`,
+        'content-type': mimeType,
+      })
+
+      const conditional = await contentRequest()
+        .set('If-None-Match', full.headers.etag)
+        .expect(HttpStatus.NOT_MODIFIED)
+      expect(conditional.text).toBe('')
+
+      const unsatisfied = await contentRequest()
+        .set('Range', `bytes=${PRIVATE_CONTENT.length}-`)
+        .expect(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+      expect(unsatisfied.headers['content-range']).toBe(
+        `bytes */${PRIVATE_CONTENT.length}`,
+      )
+    },
+  )
+
+  it('returns the same anti-enumeration 404 for conflicting video MIME and object suffix', async () => {
+    findFirst.mockResolvedValue({
+      ...readyVideoContentRow('video/quicktime', '.mov', 'camera.mov'),
+      mediaAsset: {
+        ...readyVideoContentRow('video/quicktime', '.mov', 'camera.mov').mediaAsset,
+        objectKey: `assets/2026/08/${MEDIA_ID}.mp4`,
+      },
+    })
+
+    const response = await contentRequest().expect(HttpStatus.NOT_FOUND)
+    expect(response.body).toMatchObject({
+      code: 'PRODUCT_MEDIA_NOT_FOUND',
+      message: '产品或媒体不存在',
+    })
+    expect(JSON.stringify(response.body)).not.toMatch(
+      /objectKey|mimeType|video\/quicktime|\.mp4/u,
     )
   })
 

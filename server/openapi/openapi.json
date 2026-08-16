@@ -18439,7 +18439,10 @@
                     "image/jpeg",
                     "image/png",
                     "image/webp",
-                    "video/mp4"
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
                   ]
                 }
               },
@@ -18519,7 +18522,10 @@
                     "image/jpeg",
                     "image/png",
                     "image/webp",
-                    "video/mp4"
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
                   ]
                 }
               },
@@ -18960,7 +18966,10 @@
                     "image/jpeg",
                     "image/png",
                     "image/webp",
-                    "video/mp4"
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
                   ]
                 }
               },
@@ -19019,6 +19028,24 @@
                 }
               },
               "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/x-m4v": {
                 "schema": {
                   "type": "string",
                   "format": "binary"
@@ -19066,7 +19093,10 @@
                     "image/jpeg",
                     "image/png",
                     "image/webp",
-                    "video/mp4"
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
                   ]
                 }
               },
@@ -19125,6 +19155,24 @@
                 }
               },
               "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/x-m4v": {
                 "schema": {
                   "type": "string",
                   "format": "binary"

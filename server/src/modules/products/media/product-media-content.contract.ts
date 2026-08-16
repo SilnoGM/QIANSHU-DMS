@@ -27,7 +27,15 @@ const PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS: NonNullable<
     description: 'Trusted media type derived from validated persisted metadata.',
     schema: {
       type: 'string',
-      enum: ['image/jpeg', 'image/png', 'image/webp', 'video/mp4'],
+      enum: [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+        'video/mp4',
+        'video/quicktime',
+        'video/webm',
+        'video/x-m4v',
+      ],
     },
   },
   ETag: {
@@ -48,6 +56,9 @@ const PRODUCT_MEDIA_CONTENT = {
   'image/png': { schema: { type: 'string', format: 'binary' } },
   'image/webp': { schema: { type: 'string', format: 'binary' } },
   'video/mp4': { schema: { type: 'string', format: 'binary' } },
+  'video/quicktime': { schema: { type: 'string', format: 'binary' } },
+  'video/webm': { schema: { type: 'string', format: 'binary' } },
+  'video/x-m4v': { schema: { type: 'string', format: 'binary' } },
 } as const
 
 /**

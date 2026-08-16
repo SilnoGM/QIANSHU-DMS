@@ -64,9 +64,16 @@ export interface ProductMediaContentResponse {
 }
 
 interface TrustedContentType {
-  readonly extension: '.jpg' | '.mp4' | '.png' | '.webp'
+  readonly extension: '.jpg' | '.m4v' | '.mov' | '.mp4' | '.png' | '.webm' | '.webp'
   readonly mediaType: (typeof MediaType)['IMAGE' | 'VIDEO']
-  readonly mimeType: 'image/jpeg' | 'image/png' | 'image/webp' | 'video/mp4'
+  readonly mimeType:
+    | 'image/jpeg'
+    | 'image/png'
+    | 'image/webp'
+    | 'video/mp4'
+    | 'video/quicktime'
+    | 'video/webm'
+    | 'video/x-m4v'
 }
 
 const CHECKSUM_PATTERN = /^[a-f0-9]{64}$/u
@@ -91,6 +98,21 @@ const CONTENT_TYPES = new Map<string, TrustedContentType>([
     extension: '.mp4',
     mediaType: MediaType.VIDEO,
     mimeType: 'video/mp4',
+  }],
+  ['video/quicktime', {
+    extension: '.mov',
+    mediaType: MediaType.VIDEO,
+    mimeType: 'video/quicktime',
+  }],
+  ['video/webm', {
+    extension: '.webm',
+    mediaType: MediaType.VIDEO,
+    mimeType: 'video/webm',
+  }],
+  ['video/x-m4v', {
+    extension: '.m4v',
+    mediaType: MediaType.VIDEO,
+    mimeType: 'video/x-m4v',
   }],
 ])
 
@@ -123,6 +145,7 @@ function requireTrustedContentType(
 function sanitizeAsciiFilename(
   originalFilename: string,
   extension: TrustedContentType['extension'],
+  enforceCanonicalExtension: boolean,
 ): string {
   const leaf = originalFilename.split(/[\\/]/u).at(-1) ?? ''
   const normalized = leaf
@@ -139,7 +162,14 @@ function sanitizeAsciiFilename(
     return `media${extension}`
   }
 
-  return normalized
+  if (!enforceCanonicalExtension) return normalized
+
+  // 视频原始文件名可能与 magic bytes 得出的 canonical 容器不一致，下载时必须校正后缀。
+  const lastDot = normalized.lastIndexOf('.')
+  const stem = (lastDot > 0 ? normalized.slice(0, lastDot) : normalized)
+    .slice(0, 180 - extension.length)
+    .replace(/[. ]+$/gu, '')
+  return `${stem.length === 0 ? 'media' : stem}${extension}`
 }
 
 function buildOpaqueEtag(checksumSha256: string): string {
@@ -309,6 +339,7 @@ export class ProductMediaContentService {
     const filename = sanitizeAsciiFilename(
       row.mediaAsset.originalFilename,
       contentType.extension,
+      contentType.mediaType === MediaType.VIDEO,
     )
 
     const contentHeaders = {

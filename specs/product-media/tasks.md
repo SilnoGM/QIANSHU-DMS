@@ -978,18 +978,27 @@ Task 15 evidence（2026-08-14）：
   回归测试因生成入口短暂缺失退出 `1`；已将不完整生成物可逆移动到独立临时备份，串行重新生成后按上述
   范围全部转绿，未改 Schema 或业务数据。
 
-- [ ] 21. 扩展产品视频私有内容交付与 OpenAPI
-  - [ ] 21.1 先在 `product-media-content.service.spec.ts`、Controller contract 和 API E2E 增加 RED：
+- [x] 21. 扩展产品视频私有内容交付与 OpenAPI
+  - [x] 21.1 先在 `product-media-content.service.spec.ts`、Controller contract 和 API E2E 增加 RED：
     MOV/M4V/WebM 可信 MIME、canonical objectKey、GET/HEAD、Range、ETag、304/416 与 anti-enumeration。
-  - [ ] 21.2 扩展 Content-Type/extension 白名单；Product JSON 继续只返回结构化媒体和可信 `mimeType`，
+  - [x] 21.2 扩展 Content-Type/extension 白名单；Product JSON 继续只返回结构化媒体和可信 `mimeType`，
     不增加 objectKey、checksum、绝对路径或新 DTO 字段。
-  - [ ] 21.3 原始文件名继续用于界面显示；视频内容响应将下载后缀校正为可信 canonical extension，
+  - [x] 21.3 原始文件名继续用于界面显示；视频内容响应将下载后缀校正为可信 canonical extension，
     防止 MOV 再以伪 `.mp4` 落盘。图片文件名行为不在本任务中改变。
-  - [ ] 21.4 更新 `product-media-content.contract.ts` 的 header enum 和 200/206 binary content，正式运行
+  - [x] 21.4 更新 `product-media-content.contract.ts` 的 header enum 和 200/206 binary content，正式运行
     `contract:sync`，验证 Server/Web snapshot 字节一致并通过 `contract:check`。
-  - [ ] 21.5 运行专项 API/E2E、Server typecheck/lint/build；GREEN 后提交
+  - [x] 21.5 运行专项 API/E2E、Server typecheck/lint/build；GREEN 后提交
     `feat: 扩展产品视频交付格式`。
   - _Requirements: R6, R9, R11_
+
+  Task 21 evidence（2026-08-16）：首批可编译 RED 为 Unit/Contract 4 failed、25 passed，API E2E
+  3 failed、9 passed；失败精确对应 MOV/M4V/WebM 尚未进入交付与 OpenAPI 白名单。GREEN 后 Unit/Contract
+  2/2 suites、29/29 tests，API E2E 1/1 suite、12/12 tests；覆盖可信 MIME/canonical objectKey、GET、HEAD、
+  Range、ETag/304、416、错误后缀 anti-enumeration 404 和视频下载后缀校正，图片文件名路径未改。
+  `contract:sync`、`contract:check`、Server build/typecheck/full lint、`git diff --check` 均通过；Server/Web
+  OpenAPI 快照 `cmp` 字节一致，SHA-256 均为
+  `555895700ef24caa3264e63121cf984ed1063198e683665abdae4fb66344e980`。未增加 DTO 字段，未暴露
+  objectKey/checksum/绝对路径，未修改 Schema/migration、依赖、lockfile 或持久开发数据。
 
 - [ ] 22. 扩展 Web 文件选择、规则说明和预览降级
   - [ ] 22.1 先在 `product-media.logic.test.ts` 与 `product-media-panel.test.ts` 增加 RED：accept 白名单、

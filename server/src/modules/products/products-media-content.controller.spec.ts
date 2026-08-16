@@ -228,7 +228,13 @@ describe('ProductsController private media content OpenAPI', () => {
       throw new Error('Missing product media content response contract')
     }
     expect(Object.keys(getOk.content ?? {}).sort()).toEqual([
-      'image/jpeg', 'image/png', 'image/webp', 'video/mp4',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'video/mp4',
+      'video/quicktime',
+      'video/webm',
+      'video/x-m4v',
     ])
     expect(headOk).not.toHaveProperty('content')
     for (const response of [getOk, headOk]) {

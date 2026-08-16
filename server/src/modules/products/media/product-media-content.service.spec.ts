@@ -33,6 +33,23 @@ function contentRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function videoContentRow(
+  mimeType: string,
+  extension: string,
+  originalFilename: string,
+) {
+  return contentRow({
+    kind: ProductMediaKind.VIDEO,
+    mediaAsset: {
+      ...contentRow().mediaAsset,
+      mediaType: MediaType.VIDEO,
+      mimeType,
+      objectKey: `assets/2026/08/${PRODUCT_MEDIA_ID}${extension}`,
+      originalFilename,
+    },
+  })
+}
+
 function createFixture(
   row: unknown = contentRow(),
   mode: 'application' | 'internal_redirect' = 'internal_redirect',
@@ -320,6 +337,101 @@ describe('ProductMediaContentService', () => {
         `/_qianshu_internal_media/assets/2026/08/${PRODUCT_MEDIA_ID}.mp4`,
     })
   })
+
+  it.each([
+    ['MOV', 'video/quicktime', '.mov', 'camera.mp4', 'camera.mov'],
+    ['M4V', 'video/x-m4v', '.m4v', 'camera.mov', 'camera.m4v'],
+    ['WebM', 'video/webm', '.webm', 'camera.webm', 'camera.webm'],
+  ] as const)(
+    'serves trusted %s content with canonical download suffix across GET/HEAD/range/cache flows',
+    async (_label, mimeType, extension, originalFilename, downloadFilename) => {
+      const fixture = createFixture(
+        videoContentRow(mimeType, extension, originalFilename),
+        'application',
+      )
+
+      const partial = await fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        undefined,
+        'bytes=1-3',
+        'GET',
+      )
+      expect(partial.status).toBe(HttpStatus.PARTIAL_CONTENT)
+      expect(partial.headers).toMatchObject({
+        'Content-Disposition': `inline; filename="${downloadFilename}"`,
+        'Content-Length': '3',
+        'Content-Range': 'bytes 1-3/6',
+        'Content-Type': mimeType,
+      })
+      expect(fixture.open).toHaveBeenLastCalledWith(
+        `assets/2026/08/${PRODUCT_MEDIA_ID}${extension}`,
+        { end: 3, start: 1 },
+      )
+
+      const head = await fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        undefined,
+        undefined,
+        'HEAD',
+      )
+      expect(head.status).toBe(HttpStatus.OK)
+      expect(head.stream).toBeUndefined()
+      expect(head.headers).toMatchObject({
+        'Content-Length': '6',
+        'Content-Type': mimeType,
+      })
+
+      const notModified = await fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        partial.headers.ETag,
+      )
+      expect(notModified.status).toBe(HttpStatus.NOT_MODIFIED)
+      expect(notModified.stream).toBeUndefined()
+
+      const unsatisfied = await fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        undefined,
+        'bytes=6-',
+      )
+      expect(unsatisfied).toMatchObject({
+        status: HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+        headers: { 'Content-Range': 'bytes */6' },
+      })
+    },
+  )
+
+  it.each([
+    ['video/quicktime', '.mp4'],
+    ['video/x-m4v', '.mov'],
+    ['video/webm', '.mp4'],
+  ] as const)(
+    'returns anti-enumeration 404 when trusted %s metadata conflicts with object suffix %s',
+    async (mimeType, wrongExtension) => {
+      const fixture = createFixture(contentRow({
+        kind: ProductMediaKind.VIDEO,
+        mediaAsset: {
+          ...contentRow().mediaAsset,
+          mediaType: MediaType.VIDEO,
+          mimeType,
+          objectKey: `assets/2026/08/${PRODUCT_MEDIA_ID}${wrongExtension}`,
+          originalFilename: 'camera.mp4',
+        },
+      }))
+
+      await expect(fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        undefined,
+      )).rejects.toMatchObject({
+        code: 'PRODUCT_MEDIA_NOT_FOUND',
+        status: HttpStatus.NOT_FOUND,
+      })
+    },
+  )
 
   it('maps database failures to one fixed safe internal error', async () => {
     const fixture = createFixture()
