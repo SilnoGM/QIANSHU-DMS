@@ -11,6 +11,8 @@ import {
 const PROCESS_TIMEOUT_MS = 15_000
 const PROCESS_OUTPUT_LIMIT_BYTES = 256 * 1024
 const MAX_DATABASE_DURATION_MS = 2_147_483_647
+const H264_CODEC_TAGS = new Set(['avc1', 'avc3'])
+const HEVC_CODEC_TAGS = new Set(['hvc1', 'hev1'])
 
 export type RunRestrictedMediaProcess = (
   request: RestrictedMediaProcessRequest,
@@ -41,6 +43,27 @@ function mapProcessFailure(error: unknown): never {
     throw new MediaValidationError('MEDIA_CONTENT_INVALID')
   }
   throw new MediaValidationError('MEDIA_VALIDATOR_UNAVAILABLE')
+}
+
+function resolveVideoCodec(
+  codecName: unknown,
+  codecTag: unknown,
+): ValidatedVideoContent['videoCodec'] | null {
+  if (
+    codecName === 'h264' &&
+    typeof codecTag === 'string' &&
+    H264_CODEC_TAGS.has(codecTag)
+  ) {
+    return 'h264'
+  }
+  if (
+    codecName === 'hevc' &&
+    typeof codecTag === 'string' &&
+    HEVC_CODEC_TAGS.has(codecTag)
+  ) {
+    return 'hevc'
+  }
+  return null
 }
 
 /**
@@ -98,8 +121,9 @@ export async function validateVideoContent(
     const streams = payload.streams
     const videoStreams = streams.filter(stream => stream.codec_type === 'video')
     const audioStreams = streams.filter(stream => stream.codec_type === 'audio')
+    const dataStreams = streams.filter(stream => stream.codec_type === 'data')
     if (
-      streams.length !== videoStreams.length + audioStreams.length ||
+      streams.length !== videoStreams.length + audioStreams.length + dataStreams.length ||
       videoStreams.length !== 1 ||
       audioStreams.length > 1
     ) {
@@ -109,9 +133,12 @@ export async function validateVideoContent(
     const video = videoStreams[0]
     const width = parsePositiveInteger(video.width)
     const height = parsePositiveInteger(video.height)
+    const videoCodec = resolveVideoCodec(
+      video.codec_name,
+      video.codec_tag_string,
+    )
     if (
-      video.codec_name !== 'h264' ||
-      video.codec_tag_string !== 'avc1' ||
+      videoCodec === null ||
       width === null ||
       height === null ||
       (audioStreams.length === 1 && audioStreams[0].codec_name !== 'aac')
@@ -128,7 +155,7 @@ export async function validateVideoContent(
       mediaType: 'VIDEO',
       mimeType: 'video/mp4',
       sizeBytes,
-      videoCodec: 'h264',
+      videoCodec,
       width,
     })
   }

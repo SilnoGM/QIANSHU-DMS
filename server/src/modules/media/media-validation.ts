@@ -71,7 +71,7 @@ export interface ValidatedVideoContent extends BaseValidatedMediaContent {
   readonly durationMs: number
   readonly height: number
   readonly mediaType: 'VIDEO'
-  readonly videoCodec: 'h264'
+  readonly videoCodec: 'h264' | 'hevc'
   readonly width: number
 }
 

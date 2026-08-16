@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream'
+
 import { HttpStatus } from '@nestjs/common'
 
 import {
@@ -6,6 +8,8 @@ import {
   ProductMediaKind,
 } from '../../../generated/prisma/enums'
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
+import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
+import type { MediaStorage } from '../../media/media-storage'
 import {
   ProductMediaContentService,
 } from './product-media-content.service'
@@ -29,12 +33,34 @@ function contentRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function createFixture(row: unknown = contentRow()) {
+function createFixture(
+  row: unknown = contentRow(),
+  mode: 'application' | 'internal_redirect' = 'internal_redirect',
+) {
   const findFirst = jest.fn().mockResolvedValue(row)
+  const stat = jest.fn().mockResolvedValue({
+    modifiedAt: new Date('2026-08-16T00:00:00.000Z'),
+    sizeBytes: 6n,
+  })
+  const open = jest.fn().mockImplementation(
+    (_objectKey: string, range?: { start: number, end: number }) => Promise.resolve({
+      contentLength: BigInt(range === undefined ? 6 : range.end - range.start + 1),
+      modifiedAt: new Date('2026-08-16T00:00:00.000Z'),
+      sizeBytes: 6n,
+      stream: Readable.from(Buffer.from('abcdef').subarray(
+        range?.start ?? 0,
+        (range?.end ?? 5) + 1,
+      )),
+    }),
+  )
+  const delivery = new MediaContentDeliveryService({
+    open,
+    stat,
+  } as unknown as MediaStorage, mode)
   const service = new ProductMediaContentService({
     productMedia: { findFirst },
-  } as unknown as PrismaService)
-  return { findFirst, service }
+  } as unknown as PrismaService, delivery)
+  return { findFirst, open, service, stat }
 }
 
 describe('ProductMediaContentService', () => {
@@ -109,6 +135,105 @@ describe('ProductMediaContentService', () => {
       })
     }
   })
+
+  it('streams complete application content with an explicit length and no internal redirect', async () => {
+    const fixture = createFixture(contentRow(), 'application')
+
+    const result = await fixture.service.resolve(
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+      undefined,
+      'GET',
+    )
+
+    expect(result.status).toBe(HttpStatus.OK)
+    expect(result.headers).toMatchObject({
+      'Accept-Ranges': 'bytes',
+      'Content-Length': '6',
+      'Content-Type': 'image/webp',
+    })
+    expect(result.headers).not.toHaveProperty('X-Accel-Redirect')
+    expect(result.stream).toBeInstanceOf(Readable)
+    expect(fixture.stat).toHaveBeenCalledWith(
+      `assets/2026/08/${PRODUCT_MEDIA_ID}.webp`,
+    )
+    expect(fixture.open).toHaveBeenCalledWith(
+      `assets/2026/08/${PRODUCT_MEDIA_ID}.webp`,
+      undefined,
+    )
+  })
+
+  it.each([
+    ['bytes=1-3', { end: 3, start: 1 }, 'bytes 1-3/6', '3'],
+    ['bytes=2-', { end: 5, start: 2 }, 'bytes 2-5/6', '4'],
+    ['bytes=-2', { end: 5, start: 4 }, 'bytes 4-5/6', '2'],
+  ] as const)(
+    'normalizes application range %s and returns a partial stream',
+    async (rangeHeader, expectedRange, contentRange, contentLength) => {
+      const fixture = createFixture(contentRow(), 'application')
+
+      const result = await fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        undefined,
+        rangeHeader,
+        'GET',
+      )
+
+      expect(result.status).toBe(HttpStatus.PARTIAL_CONTENT)
+      expect(result.headers).toMatchObject({
+        'Content-Length': contentLength,
+        'Content-Range': contentRange,
+      })
+      expect(fixture.open).toHaveBeenCalledWith(
+        `assets/2026/08/${PRODUCT_MEDIA_ID}.webp`,
+        expectedRange,
+      )
+    },
+  )
+
+  it('describes application HEAD ranges without opening a body stream', async () => {
+    const fixture = createFixture(contentRow(), 'application')
+
+    const result = await fixture.service.resolve(
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+      'bytes=0-0',
+      'HEAD',
+    )
+
+    expect(result.status).toBe(HttpStatus.PARTIAL_CONTENT)
+    expect(result.headers).toMatchObject({
+      'Content-Length': '1',
+      'Content-Range': 'bytes 0-0/6',
+    })
+    expect(result.stream).toBeUndefined()
+    expect(fixture.open).not.toHaveBeenCalled()
+  })
+
+  it.each(['bytes=6-', 'bytes=-0', 'bytes=0-1,3-4', 'items=0-1'])(
+    'returns a bodyless 416 for invalid or unsatisfied application ranges',
+    async (rangeHeader) => {
+      const fixture = createFixture(contentRow(), 'application')
+
+      const result = await fixture.service.resolve(
+        PRODUCT_ID,
+        PRODUCT_MEDIA_ID,
+        undefined,
+        rangeHeader,
+        'GET',
+      )
+
+      expect(result).toMatchObject({
+        status: HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+        headers: { 'Content-Range': 'bytes */6' },
+      })
+      expect(result.stream).toBeUndefined()
+      expect(fixture.open).not.toHaveBeenCalled()
+    },
+  )
 
   it('ignores malformed or non-matching If-None-Match values', async () => {
     const fixture = createFixture()

@@ -919,6 +919,20 @@ Task 15 evidence（2026-08-14）：
   - [ ] 18.6 未获 Gate E 时停在本地清洁分支；获授权后才 push/PR/merge，且用 exact HEAD SHA 验证 CI。
   - _Requirements: R5-R6, R8, R11-R12_
 
+### 4.17 2026-08-16 媒体显示与视频兼容修复
+
+- [x] 确认本地图片请求返回 200 但无响应体，根因为只有 `X-Accel-Redirect` 且开发环境无 Nginx。
+- [x] 增加 `application | internal_redirect` 私有内容交付配置；非 production 默认应用直出，production
+  默认内部转发，单机部署可显式选择应用直出。
+- [x] 应用直出覆盖 GET/HEAD、完整内容、单 Range、206、416、304、可信 Header 与存储故障固定错误。
+- [x] 媒体按钮为宽度 0 的 FaIcon 显式设置尺寸并包裹文字，修复图片、视频和上传队列按钮重叠。
+- [x] 视频放宽为 MP4 + H.264 `avc1/avc3` 或 HEVC `hvc1/hev1`，允许单 AAC 和辅助 data stream；
+  字幕、附件及多音视频轨继续失败关闭，不增加转码。
+- [x] 完成全量 Server/Web 验证、真实浏览器验收和标准 Git 提交。
+  - GREEN：`node --run check` 退出码为 0；真实 Chrome 的认证、产品媒体和管理页面共 3 项通过。
+  - GREEN：本地媒体健康检查显示 read/write/videoValidator 均为 up，H.264 `avc3` 与 HEVC `hvc1`
+    真实 `ffprobe` 冒烟通过；开发 Web/Server 分别返回 HTTP 200 和数据库 up。
+
 ## 5. 任务依赖与可并行边界
 
 ```mermaid

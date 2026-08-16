@@ -152,7 +152,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               :aria-label="`预览视频 ${item.originalFilename}`"
               @click="emit('preview', item)"
             >
-              <FaIcon name="i-lucide:play" aria-hidden="true" />预览视频
+              <FaIcon name="i-lucide:play" class="shrink-0 size-4" aria-hidden="true" />
+              <span>预览视频</span>
             </FaButton>
             <FaButton
               v-if="editable"
@@ -162,7 +163,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               :aria-label="`前移视频 ${item.originalFilename}`"
               @click="move(item, index, -1)"
             >
-              <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />前移
+              <FaIcon name="i-lucide:arrow-left" class="shrink-0 size-4" aria-hidden="true" />
+              <span>前移</span>
             </FaButton>
             <FaButton
               v-if="editable"
@@ -172,7 +174,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               :aria-label="`后移视频 ${item.originalFilename}`"
               @click="move(item, index, 1)"
             >
-              <FaIcon name="i-lucide:arrow-right" aria-hidden="true" />后移
+              <FaIcon name="i-lucide:arrow-right" class="shrink-0 size-4" aria-hidden="true" />
+              <span>后移</span>
             </FaButton>
             <FaButton
               v-if="editable"
@@ -183,7 +186,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               data-focus-anchor
               @click="emit('detach', item)"
             >
-              <FaIcon name="i-lucide:trash-2" aria-hidden="true" />解除视频
+              <FaIcon name="i-lucide:trash-2" class="shrink-0 size-4" aria-hidden="true" />
+              <span>解除视频</span>
             </FaButton>
           </div>
         </div>

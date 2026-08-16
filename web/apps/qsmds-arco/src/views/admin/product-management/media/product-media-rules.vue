@@ -55,7 +55,7 @@ const remainingVideoCount = computed(() => Math.max(
           视频
         </dt>
         <dd class="text-sm text-muted-foreground m-0 mt-1">
-          MP4；单个不超过 500 MiB；最多 5 个。
+          MP4（H.264 / HEVC，可选 AAC 音轨）；单个不超过 500 MiB；最多 5 个。
         </dd>
         <dd class="qs-type-meta m-0 mt-2">
           已占用 {{ currentVideoCount }}，队列 {{ queuedVideoCount }}，剩余 {{ remainingVideoCount }}

@@ -314,13 +314,15 @@ interface MediaStorage {
 
 ```text
 container = MP4
-video codec = H.264 / avc1
+video codec = H.264 / avc1|avc3 or HEVC / hvc1|hev1
 audio codec = AAC or no audio track
+auxiliary stream = data allowed; subtitle/attachment rejected
 size <= 500MiB
 ```
 
 生产运行时使用受限子进程调用配置的 `ffprobe`：不经过 shell、固定参数、关闭网络协议、设置超时和
-输出上限，只解析 JSON。任何未知额外流、无法解析 duration/dimensions 或 codec 不匹配均失败。
+输出上限，只解析 JSON。允许播放器可忽略的辅助 data stream；字幕、附件、多视频轨、多音频轨、
+无法解析 duration/dimensions 或 codec/tag 不匹配均失败。
 本期不调用 `ffmpeg` 转码，不生成 poster；列表可使用 `<video preload="metadata">` 的第一帧表现，
 失败时显示稳定视频占位图标。
 
@@ -510,10 +512,15 @@ operationId: products_get_media_content
 但不返回响应体。
 
 Server 校验：Session → permission → ProductMedia 属于 Product 且有效 → MediaAsset READY → objectKey
-规范化。成功不由 Nest 读取文件，而返回：
+规范化。之后根据 `MEDIA_CONTENT_DELIVERY_MODE` 选择交付：
+
+- `application`：Server 使用 MediaStorage 打开对象，GET 流式输出，HEAD 只返回元数据；支持单个
+  `bytes=start-end`、`bytes=start-` 或 `bytes=-suffix`，返回 206/416、Content-Length/Content-Range。
+- `internal_redirect`：Server 不读取文件，返回下列内部转发 Header，由 Nginx 完成 Range/HEAD。
+
+两种模式共享：
 
 ```text
-X-Accel-Redirect: /_qianshu_internal_media/<encoded objectKey>
 Content-Type: <trusted mime>
 Content-Disposition: inline; filename="<sanitized ASCII fallback>"
 Cache-Control: private, no-store
@@ -522,8 +529,15 @@ ETag: "sha256-<opaque digest>"
 Accept-Ranges: bytes
 ```
 
-Nginx `location /_qianshu_internal_media/` 必须 `internal` 并通过安全 alias 映射 media root。Nginx
-负责 Range/HEAD；不存在、已解除或非 READY 对外统一为安全 404，避免资产枚举。
+仅 `internal_redirect` 额外返回：
+
+```text
+X-Accel-Redirect: /_qianshu_internal_media/<encoded objectKey>
+```
+
+Nginx `location /_qianshu_internal_media/` 必须 `internal` 并通过安全 alias 映射 media root。
+不存在、已解除或非 READY 对外统一为安全 404，避免资产枚举；READY 但对象不可读返回固定
+`MEDIA_STORAGE_UNAVAILABLE`，不得泄露绝对路径。
 
 ### 9.6 权限
 

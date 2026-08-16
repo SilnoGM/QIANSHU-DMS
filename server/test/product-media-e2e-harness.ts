@@ -17,6 +17,7 @@ import { LocalMediaStorage } from '../src/modules/media/local-media-storage'
 import { MediaAssetPersistence } from '../src/modules/media/media-asset.persistence'
 import { MediaAssetService } from '../src/modules/media/media-asset.service'
 import { MediaContentValidator } from '../src/modules/media/media-content-validator'
+import { MediaContentDeliveryService } from '../src/modules/media/media-content-delivery.service'
 import { MediaReconciliationPersistence } from '../src/modules/media/media-reconciliation.persistence'
 import { MediaReconciliationService } from '../src/modules/media/media-reconciliation.service'
 import { MediaAssetReferenceRepository } from '../src/modules/media/media-reference.repository'
@@ -191,6 +192,7 @@ export class ProductMediaE2eHarness {
     this.reconciliationPersistence = new MediaReconciliationPersistence(prisma)
     this.references = new MediaAssetReferenceRepository()
     const configuration: MediaConfiguration = {
+      contentDeliveryMode: 'application',
       driver: 'local',
       ffprobePath: '/e2e/ffprobe',
       qpdfPath: '/e2e/qpdf',
@@ -232,7 +234,10 @@ export class ProductMediaE2eHarness {
       new AuditService(),
       { now },
     )
-    this.content = new ProductMediaContentService(prisma)
+    this.content = new ProductMediaContentService(
+      prisma,
+      new MediaContentDeliveryService(storage, 'application'),
+    )
   }
 
   static async create(): Promise<ProductMediaE2eHarness> {
@@ -271,6 +276,7 @@ export class ProductMediaE2eHarness {
         select: { id: true },
       })
       const configuration: MediaConfiguration = {
+        contentDeliveryMode: 'application',
         driver: 'local',
         ffprobePath: '/e2e/ffprobe',
         qpdfPath: '/e2e/qpdf',

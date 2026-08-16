@@ -317,9 +317,12 @@ describeExclusive('Product media runtime HTTP with isolated PostgreSQL and local
       'accept-ranges': 'bytes',
       'cache-control': 'private, no-store',
       'content-type': 'image/webp',
-      'x-accel-redirect': `/_qianshu_internal_media/${association.mediaAsset.objectKey}`,
       'x-content-type-options': 'nosniff',
     })
+    expect(response.headers['content-length']).toEqual(expect.any(String))
+    expect(response.headers['x-accel-redirect']).toBeUndefined()
+    expect(response.body).toBeInstanceOf(Buffer)
+    expect((response.body as Buffer).length).toBeGreaterThan(0)
     expect(response.headers.etag).toMatch(/^"sha256-[A-Za-z0-9_-]{43}"$/u)
 
     const conditional = await contentRequest(productId, mediaId)
@@ -330,12 +333,19 @@ describeExclusive('Product media runtime HTTP with isolated PostgreSQL and local
 
     const head = await contentRequest(productId, mediaId, 'head')
       .set('Range', 'bytes=0-0')
-      .expect(HttpStatus.OK)
+      .expect(HttpStatus.PARTIAL_CONTENT)
     expect(observedRange).toBe('bytes=0-0')
     expect(head.text).toBeUndefined()
-    expect(head.headers['x-accel-redirect']).toBe(
-      `/_qianshu_internal_media/${association.mediaAsset.objectKey}`,
+    expect(head.headers['content-length']).toBe('1')
+    expect(head.headers['content-range']).toBe(
+      `bytes 0-0/${String((response.body as Buffer).length)}`,
     )
+    expect(head.headers['x-accel-redirect']).toBeUndefined()
+
+    const partial = await contentRequest(productId, mediaId)
+      .set('Range', 'bytes=0-0')
+      .expect(HttpStatus.PARTIAL_CONTENT)
+    expect(partial.body).toEqual((response.body as Buffer).subarray(0, 1))
 
     const missing = await contentRequest(productId, randomUUID())
       .expect(HttpStatus.NOT_FOUND)

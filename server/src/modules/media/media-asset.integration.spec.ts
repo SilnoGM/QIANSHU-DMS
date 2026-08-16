@@ -26,6 +26,7 @@ const NOW = new Date('2026-08-13T08:09:10.000Z')
 
 function configuration(storageRoot: string): MediaConfiguration {
   return {
+    contentDeliveryMode: 'application',
     driver: 'local',
     ffprobePath: '/usr/bin/ffprobe',
     qpdfPath: '/usr/bin/qpdf',

@@ -37,6 +37,7 @@ interface Fixture {
 
 function configuration(): MediaConfiguration {
   return {
+    contentDeliveryMode: 'application',
     driver: 'local',
     ffprobePath: '/usr/bin/ffprobe',
     qpdfPath: '/usr/bin/qpdf',

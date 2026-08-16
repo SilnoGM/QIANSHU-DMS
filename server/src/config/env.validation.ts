@@ -265,6 +265,7 @@ export function validateEnvironment(
   TRUST_PROXY_HOPS: number
   AUTH_ARGON2_CONCURRENCY: number
   AUTH_ARGON2_QUEUE_LIMIT: number
+  MEDIA_CONTENT_DELIVERY_MODE: 'application' | 'internal_redirect'
   MEDIA_STORAGE_DRIVER: 'local'
   MEDIA_FFPROBE_PATH: string
   MEDIA_QPDF_PATH: string
@@ -286,6 +287,7 @@ export function validateEnvironment(
     TRUST_PROXY_HOPS: number
     AUTH_ARGON2_CONCURRENCY: number
     AUTH_ARGON2_QUEUE_LIMIT: number
+    MEDIA_CONTENT_DELIVERY_MODE: 'application' | 'internal_redirect'
     MEDIA_STORAGE_DRIVER: 'local'
     MEDIA_FFPROBE_PATH: string
     MEDIA_QPDF_PATH: string

@@ -137,7 +137,8 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 #### Acceptance Criteria
 
 1. 当上传图片时，系统应只接受 JPEG、PNG、WebP，单文件不得超过 10MiB。
-2. 当上传视频时，系统应只接受 MP4 容器、H.264 视频；音轨存在时只能为 AAC，单文件不得超过 500MiB。
+2. 当上传视频时，系统应只接受 MP4 容器，以及 H.264 `avc1/avc3` 或 HEVC `hvc1/hev1` 视频；
+   音轨存在时只能有一个 AAC 音轨，可保留常见辅助 data stream，单文件不得超过 500MiB。
 3. 当内部服务接收 Document 时，应只接受 PDF、DOCX、XLSX，单文件不得超过 50MiB。
 4. 当文件扩展名、客户端 MIME、magic bytes 或可解析内容互相冲突时，Server 应拒绝文件。
 5. 当图片无法完整解码，或视频无法取得可信容器、codec、时长和尺寸时，Server 应拒绝文件。
@@ -180,8 +181,9 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 3. 当用户具有 `product-media:read` 但不具有 `products:read` 时，领域内容路由仍可在验证有效
    ProductMedia 关联后返回文件，以支持未来订单等内部场景。
 4. 当用户读取 Product 列表或详情 JSON 时，仍应分别满足既有 `products:read` 权限。
-5. 当 Nginx 提供文件时，只能消费 Server 返回的内部重定向；内部 location 不得允许外部直接访问。
-6. 当读取视频时，服务链路应支持标准 byte Range；图片与视频应返回可信 Content-Type、
+5. 当使用 `internal_redirect` 时，Nginx 只能消费 Server 返回的内部重定向，内部 location 不得允许
+   外部直接访问；当使用 `application` 时，Server 应在完成同一授权后直接流式输出对象。
+6. 两种交付模式都应支持标准单 byte Range；图片与视频应返回可信 Content-Type、
    `X-Content-Type-Options: nosniff` 和私有缓存策略。
 7. 当未来业务需要冻结产品主图时，应通过该业务域自己的 MediaAsset 关联表达快照引用；
    不得复制 ProductMedia ID 到无外键字符串，也不得假设产品后来解除关联即可物理删文件。
@@ -313,7 +315,8 @@ Document 是 `MediaAsset` 的基础类型。本期只验证、持久化并提供
 以下合同已于 2026-08-13 确认为首期固定值：
 
 1. 图片 JPEG/PNG/WebP、10MiB、每产品最多 20 张。
-2. 视频 MP4 + H.264/AAC、500MiB、每产品最多 5 个，并要求生产机提供 `ffprobe`。
+2. 视频 MP4 + H.264 `avc1/avc3` 或 HEVC `hvc1/hev1`、可选单 AAC 音轨、500MiB、
+   每产品最多 5 个，并要求运行机提供 `ffprobe`；此项于 2026-08-16 经确认放宽。
 3. Document 仅为 MediaAsset 内部能力，允许 PDF/DOCX/XLSX、50MiB；Product 无任何 Document 入口。
 4. 新增独立权限 `product-media:read`；媒体写入继续使用 `products:update`。
 5. Product API 使用结构化 `media` 替换三个 URL 字段，不保留双写或长期兼容字段。

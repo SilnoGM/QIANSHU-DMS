@@ -14,6 +14,7 @@ import {
   Query,
   Req,
   Res,
+  StreamableFile,
 } from '@nestjs/common'
 import {
   ApiBody,
@@ -212,12 +213,15 @@ export class ProductsController {
   async headMediaContent(
     @Param() params: ProductMediaIdParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
     const result = await this.productMediaContent.resolve(
       params.productId,
       params.productMediaId,
       ifNoneMatch,
+      range,
+      'HEAD',
     )
     applyProductMediaContentResponse(response, result)
   }
@@ -228,14 +232,20 @@ export class ProductsController {
   async getMediaContent(
     @Param() params: ProductMediaIdParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
-  ): Promise<void> {
+  ): Promise<StreamableFile | undefined> {
     const result = await this.productMediaContent.resolve(
       params.productId,
       params.productMediaId,
       ifNoneMatch,
+      range,
+      'GET',
     )
     applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
   }
 
   @Patch(':productId')

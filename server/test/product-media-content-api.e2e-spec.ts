@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common'
 import { HttpStatus, Module } from '@nestjs/common'
+import { Readable } from 'node:stream'
 import { ConfigService } from '@nestjs/config'
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
@@ -20,6 +21,8 @@ import { CsrfProtectionGuard } from '../src/modules/auth/guards/csrf-protection.
 import { PasswordChangeRequiredGuard } from '../src/modules/auth/guards/password-change-required.guard'
 import { PermissionGuard } from '../src/modules/auth/guards/permission.guard'
 import { SessionCookieProvider } from '../src/modules/auth/providers/session-cookie.provider'
+import { MediaContentDeliveryService } from '../src/modules/media/media-content-delivery.service'
+import type { MediaByteRange, MediaStorage } from '../src/modules/media/media-storage'
 import { ProductMediaContentService } from '../src/modules/products/media/product-media-content.service'
 import { ProductMediaHttpService } from '../src/modules/products/media/product-media-http.service'
 import { ProductCommandService } from '../src/modules/products/product-command.service'
@@ -32,6 +35,7 @@ const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
 const MEDIA_ID = '22222222-2222-4222-8222-222222222222'
 const ACTOR_ID = '33333333-3333-4333-8333-333333333333'
 const OBJECT_KEY = `assets/2026/08/${MEDIA_ID}.webp`
+const PRIVATE_CONTENT = Buffer.from('private-image')
 
 interface ApiErrorBody {
   readonly code: string
@@ -62,11 +66,34 @@ describe('Product media private content API', () => {
   let mustChangePassword: boolean
   let observedRange: string | undefined
   let findFirst: jest.Mock
+  let openObject: jest.Mock
+  let statObject: jest.Mock
 
   beforeAll(async () => {
     permissions = ['product-media:read']
     mustChangePassword = false
     findFirst = jest.fn().mockResolvedValue(readyContentRow())
+    statObject = jest.fn().mockResolvedValue({
+      modifiedAt: new Date('2026-08-16T00:00:00.000Z'),
+      sizeBytes: BigInt(PRIVATE_CONTENT.length),
+    })
+    openObject = jest.fn().mockImplementation(
+      (_objectKey: string, range?: MediaByteRange) => {
+        const content = range === undefined
+          ? PRIVATE_CONTENT
+          : PRIVATE_CONTENT.subarray(range.start, range.end + 1)
+        return Promise.resolve({
+          contentLength: BigInt(content.length),
+          modifiedAt: new Date('2026-08-16T00:00:00.000Z'),
+          sizeBytes: BigInt(PRIVATE_CONTENT.length),
+          stream: Readable.from(content),
+        })
+      },
+    )
+    const delivery = new MediaContentDeliveryService({
+      open: openObject,
+      stat: statObject,
+    } as unknown as MediaStorage, 'application')
 
     @Module({
       controllers: [ProductsController],
@@ -109,6 +136,9 @@ describe('Product media private content API', () => {
       }, {
         provide: PrismaService,
         useValue: { productMedia: { findFirst } },
+      }, {
+        provide: MediaContentDeliveryService,
+        useValue: delivery,
       }, ProductMediaContentService, {
         provide: ProductQueryService,
         useValue: { list: jest.fn(), getById: jest.fn() },
@@ -145,7 +175,7 @@ describe('Product media private content API', () => {
     }).compile()
     application = moduleRef.createNestApplication()
     application.use((incoming: { headers: { range?: string } }, _response: unknown, next: () => void) => {
-      // 仅记录测试请求，证明应用层没有改写 Range；生产字节区间由内部代理处理。
+      // 仅记录原始 Header，区间规范化结果通过 storage.open 的结构化参数另行断言。
       observedRange = incoming.headers.range
       next()
     })
@@ -162,6 +192,8 @@ describe('Product media private content API', () => {
     mustChangePassword = false
     observedRange = undefined
     findFirst.mockReset().mockResolvedValue(readyContentRow())
+    statObject.mockClear()
+    openObject.mockClear()
   })
 
   function contentRequest(method: 'get' | 'head' = 'get') {
@@ -171,17 +203,19 @@ describe('Product media private content API', () => {
     return pendingRequest.set('Cookie', 'qs_session=valid')
   }
 
-  it('allows product-media:read without products:read and returns only safe proxy headers', async () => {
+  it('allows product-media:read without products:read and streams only safe application content', async () => {
     const response = await contentRequest().expect(HttpStatus.OK)
 
     expect(response.headers).toMatchObject({
       'accept-ranges': 'bytes',
       'cache-control': 'private, no-store',
       'content-disposition': 'inline; filename="front.webp"',
+      'content-length': String(PRIVATE_CONTENT.length),
       'content-type': 'image/webp',
-      'x-accel-redirect': `/_qianshu_internal_media/${OBJECT_KEY}`,
       'x-content-type-options': 'nosniff',
     })
+    expect(response.headers['x-accel-redirect']).toBeUndefined()
+    expect(response.body).toEqual(PRIVATE_CONTENT)
     expect(response.headers.etag).toMatch(/^"sha256-[A-Za-z0-9_-]{43}"$/u)
     expect(response.headers['x-request-id']).toEqual(expect.any(String))
     expect(findFirst).toHaveBeenCalledTimes(1)
@@ -241,19 +275,44 @@ describe('Product media private content API', () => {
     expect(findFirst).toHaveBeenCalledTimes(2)
   })
 
-  it('keeps HEAD bodyless and leaves Range untouched for the internal proxy', async () => {
+  it('returns bodyless application HEAD range metadata without opening a stream', async () => {
     const response = await contentRequest('head')
       .set('Range', 'bytes=0-0')
-      .expect(HttpStatus.OK)
+      .expect(HttpStatus.PARTIAL_CONTENT)
 
     expect(observedRange).toBe('bytes=0-0')
     expect(response.text).toBeUndefined()
     expect(response.headers).toMatchObject({
       'accept-ranges': 'bytes',
+      'content-length': '1',
+      'content-range': `bytes 0-0/${PRIVATE_CONTENT.length}`,
       'content-type': 'image/webp',
-      'x-accel-redirect': `/_qianshu_internal_media/${OBJECT_KEY}`,
     })
+    expect(response.headers['x-accel-redirect']).toBeUndefined()
+    expect(openObject).not.toHaveBeenCalled()
     expect(findFirst).toHaveBeenCalledTimes(1)
+  })
+
+  it('streams a normalized application byte range and rejects multi-range requests', async () => {
+    const partial = await contentRequest()
+      .set('Range', 'bytes=1-3')
+      .expect(HttpStatus.PARTIAL_CONTENT)
+
+    expect(observedRange).toBe('bytes=1-3')
+    expect(partial.headers).toMatchObject({
+      'content-length': '3',
+      'content-range': `bytes 1-3/${PRIVATE_CONTENT.length}`,
+    })
+    expect(partial.body).toEqual(PRIVATE_CONTENT.subarray(1, 4))
+    expect(openObject).toHaveBeenLastCalledWith(OBJECT_KEY, { end: 3, start: 1 })
+
+    const unsatisfied = await contentRequest()
+      .set('Range', 'bytes=0-1,3-4')
+      .expect(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+    expect(unsatisfied.text).toBe('')
+    expect(unsatisfied.headers['content-range']).toBe(
+      `bytes */${PRIVATE_CONTENT.length}`,
+    )
   })
 
   it('does not expose the protected internal redirect URI as an application route', async () => {

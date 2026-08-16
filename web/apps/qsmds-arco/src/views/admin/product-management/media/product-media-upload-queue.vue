@@ -253,7 +253,8 @@ defineExpose({ focusFirstError, focusUpload })
             :aria-label="`重试上传 ${item.originalFilename}`"
             @click="emit('retry', item.id)"
           >
-            <FaIcon name="i-lucide:rotate-cw" aria-hidden="true" />重试上传
+            <FaIcon name="i-lucide:rotate-cw" class="shrink-0 size-4" aria-hidden="true" />
+            <span>重试上传</span>
           </FaButton>
           <FaButton
             v-if="canCancel(item)"
@@ -262,7 +263,8 @@ defineExpose({ focusFirstError, focusUpload })
             :aria-label="`取消上传 ${item.originalFilename}`"
             @click="emit('cancel', item.id)"
           >
-            <FaIcon name="i-lucide:x" aria-hidden="true" />取消上传
+            <FaIcon name="i-lucide:x" class="shrink-0 size-4" aria-hidden="true" />
+            <span>取消上传</span>
           </FaButton>
         </div>
       </li>

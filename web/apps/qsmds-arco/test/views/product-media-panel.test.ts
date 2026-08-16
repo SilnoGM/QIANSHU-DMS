@@ -96,6 +96,9 @@ test('图片工作区提供预览、文本化主图、拖拽增强、键盘排�
   assert.match(source, /@drop/u)
   assert.match(source, /data-focus-anchor/u)
   assert.match(source, /min-h-11/u)
+  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 5)
+  assert.match(source, /<span>预览图片<\/span>/u)
+  assert.match(source, /<span>解除图片<\/span>/u)
   assert.match(source, /prefers-reduced-motion:\s*reduce/u)
 })
 
@@ -111,6 +114,8 @@ test('视频工作区保留原生键盘控件、排序和解除，且不会提�
   assert.match(source, /@dragstart/u)
   assert.match(source, /@drop/u)
   assert.match(source, /min-h-11/u)
+  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 4)
+  assert.match(source, /<span>预览视频<\/span>/u)
   assert.doesNotMatch(source, /主图|aria-pressed/u)
 })
 
@@ -133,6 +138,9 @@ test('上传队列拥有可见 label、非唯一拖放入口、真实进度、�
   assert.match(source, /重试上传/u)
   assert.match(source, /取消上传/u)
   assert.match(source, /min-h-11/u)
+  assert.equal((source.match(/<FaIcon[^>]+class="shrink-0 size-4"/gu) ?? []).length, 2)
+  assert.match(source, /<span>重试上传<\/span>/u)
+  assert.match(source, /<span>取消上传<\/span>/u)
   assert.doesNotMatch(source, /(?:gradient|#[\dA-Fa-f]{3,8}\b|rgba?\()/u)
 })
 
@@ -143,6 +151,9 @@ test('媒体规则明确图片、视频限制和剩余容量，不出现产品�
   assert.match(source, /PNG/u)
   assert.match(source, /WebP/u)
   assert.match(source, /MP4/u)
+  assert.match(source, /H\.264/u)
+  assert.match(source, /HEVC/u)
+  assert.match(source, /AAC/u)
   assert.match(source, /10 MiB/u)
   assert.match(source, /500 MiB/u)
   assert.match(source, /20 张/u)

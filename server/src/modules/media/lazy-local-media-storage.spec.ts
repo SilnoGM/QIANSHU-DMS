@@ -7,6 +7,7 @@ import type { MediaStorage } from './media-storage'
 import { MediaStorageError } from './media-storage'
 
 const configuration: MediaConfiguration = {
+  contentDeliveryMode: 'application',
   driver: 'local',
   ffprobePath: '/usr/bin/ffprobe',
   qpdfPath: '/usr/bin/qpdf',

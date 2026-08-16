@@ -157,8 +157,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
             :disabled="locked || item.id === primaryImageId"
             @click="emit('primary', item.id)"
           >
-            <FaIcon name="i-lucide:star" aria-hidden="true" />
-            {{ item.id === primaryImageId ? '当前主图' : '设为主图' }}
+            <FaIcon name="i-lucide:star" class="shrink-0 size-4" aria-hidden="true" />
+            <span>{{ item.id === primaryImageId ? '当前主图' : '设为主图' }}</span>
           </FaButton>
 
           <div class="gap-2 grid grid-cols-2">
@@ -169,7 +169,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               :aria-label="`预览图片 ${item.originalFilename}`"
               @click="emit('preview', item)"
             >
-              <FaIcon name="i-lucide:scan-search" aria-hidden="true" />预览图片
+              <FaIcon name="i-lucide:scan-search" class="shrink-0 size-4" aria-hidden="true" />
+              <span>预览图片</span>
             </FaButton>
             <FaButton
               v-if="editable"
@@ -179,7 +180,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               :aria-label="`前移图片 ${item.originalFilename}`"
               @click="move(item, index, -1)"
             >
-              <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />前移
+              <FaIcon name="i-lucide:arrow-left" class="shrink-0 size-4" aria-hidden="true" />
+              <span>前移</span>
             </FaButton>
             <FaButton
               v-if="editable"
@@ -189,7 +191,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               :aria-label="`后移图片 ${item.originalFilename}`"
               @click="move(item, index, 1)"
             >
-              <FaIcon name="i-lucide:arrow-right" aria-hidden="true" />后移
+              <FaIcon name="i-lucide:arrow-right" class="shrink-0 size-4" aria-hidden="true" />
+              <span>后移</span>
             </FaButton>
             <FaButton
               v-if="editable"
@@ -200,7 +203,8 @@ function handleDrop(event: DragEvent, targetIndex: number): void {
               data-focus-anchor
               @click="emit('detach', item)"
             >
-              <FaIcon name="i-lucide:trash-2" aria-hidden="true" />解除图片
+              <FaIcon name="i-lucide:trash-2" class="shrink-0 size-4" aria-hidden="true" />
+              <span>解除图片</span>
             </FaButton>
           </div>
         </div>

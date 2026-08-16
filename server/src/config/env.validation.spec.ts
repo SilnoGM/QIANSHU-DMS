@@ -22,6 +22,7 @@ describe('validateEnvironment', () => {
       TRUST_PROXY_HOPS: 0,
       AUTH_ARGON2_CONCURRENCY: 2,
       AUTH_ARGON2_QUEUE_LIMIT: 32,
+      MEDIA_CONTENT_DELIVERY_MODE: 'application',
       MEDIA_STORAGE_DRIVER: 'local',
       MEDIA_FFPROBE_PATH: '/usr/bin/ffprobe',
       MEDIA_QPDF_PATH: '/usr/bin/qpdf',
@@ -42,6 +43,7 @@ describe('validateEnvironment', () => {
         AUTH_ARGON2_CONCURRENCY: '3',
         AUTH_ARGON2_QUEUE_LIMIT: '48',
         MEDIA_STORAGE_DRIVER: 'local',
+        MEDIA_CONTENT_DELIVERY_MODE: 'internal_redirect',
         MEDIA_FFPROBE_PATH: '/opt/media/bin/ffprobe',
         MEDIA_QPDF_PATH: '/opt/media/bin/qpdf',
         MEDIA_STORAGE_ROOT: '  /srv/qianshu-media/  ',
@@ -57,6 +59,7 @@ describe('validateEnvironment', () => {
       TRUST_PROXY_HOPS: 1,
       AUTH_ARGON2_CONCURRENCY: 3,
       AUTH_ARGON2_QUEUE_LIMIT: 48,
+      MEDIA_CONTENT_DELIVERY_MODE: 'internal_redirect',
       MEDIA_STORAGE_DRIVER: 'local',
       MEDIA_FFPROBE_PATH: '/opt/media/bin/ffprobe',
       MEDIA_QPDF_PATH: '/opt/media/bin/qpdf',
@@ -225,6 +228,7 @@ describe('validateEnvironment', () => {
 
   describe('media storage environment', () => {
     it.each([
+      ['MEDIA_CONTENT_DELIVERY_MODE', 'public', 'must be one of application, internal_redirect'],
       ['MEDIA_STORAGE_DRIVER', 's3', 'must be local'],
       ['MEDIA_STORAGE_ROOT', 'relative/media', 'must be an absolute non-root path'],
       ['MEDIA_FFPROBE_PATH', 'ffprobe', 'must be an absolute executable path'],

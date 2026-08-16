@@ -8,6 +8,7 @@ import {
 describe('media configuration', () => {
   it('uses the confirmed local storage lifecycle defaults', () => {
     expect(createMediaConfiguration({})).toEqual({
+      contentDeliveryMode: 'application',
       driver: 'local',
       ffprobePath: '/usr/bin/ffprobe',
       qpdfPath: '/usr/bin/qpdf',
@@ -22,6 +23,7 @@ describe('media configuration', () => {
 
     expect(
       createMediaConfiguration({
+        MEDIA_CONTENT_DELIVERY_MODE: 'internal_redirect',
         MEDIA_STORAGE_DRIVER: 'local',
         MEDIA_FFPROBE_PATH: '  /opt/media/bin/ffprobe  ',
         MEDIA_QPDF_PATH: '/opt/media/bin/qpdf',
@@ -30,6 +32,7 @@ describe('media configuration', () => {
         MEDIA_TRASH_RETENTION_DAYS: 30,
       }),
     ).toEqual({
+      contentDeliveryMode: 'internal_redirect',
       driver: 'local',
       ffprobePath: '/opt/media/bin/ffprobe',
       qpdfPath: '/opt/media/bin/qpdf',
@@ -39,7 +42,17 @@ describe('media configuration', () => {
     })
   })
 
+  it('defaults production to internal redirect while allowing an explicit application override', () => {
+    expect(createMediaConfiguration({ NODE_ENV: 'production' }))
+      .toMatchObject({ contentDeliveryMode: 'internal_redirect' })
+    expect(createMediaConfiguration({
+      NODE_ENV: 'production',
+      MEDIA_CONTENT_DELIVERY_MODE: 'application',
+    })).toMatchObject({ contentDeliveryMode: 'application' })
+  })
+
   it.each([
+    ['MEDIA_CONTENT_DELIVERY_MODE', 'public', 'must be one of application, internal_redirect'],
     ['MEDIA_STORAGE_DRIVER', 's3', 'must be local'],
     ['MEDIA_STORAGE_ROOT', 'relative/media', 'must be an absolute non-root path'],
     ['MEDIA_STORAGE_ROOT', '/', 'must be an absolute non-root path'],

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import type { Readable } from 'node:stream'
 
 import { HttpStatus, Injectable } from '@nestjs/common'
 import type { Prisma } from '../../../generated/prisma/client'
@@ -9,10 +10,15 @@ import {
   ProductMediaKind,
 } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
-import { requireMediaObjectKeyNamespace } from '../../media/media-storage'
+import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
+import {
+  type MediaByteRange,
+  requireMediaObjectKeyNamespace,
+} from '../../media/media-storage'
 import {
   productMediaInternalError,
   productMediaNotFoundError,
+  productMediaStorageUnavailableError,
 } from './product-media.errors'
 
 const PRODUCT_MEDIA_CONTENT_SELECT = {
@@ -36,18 +42,25 @@ type ProductMediaContentRow = Prisma.ProductMediaGetPayload<{
 type ProductMediaContentHeaderName =
   | 'Accept-Ranges'
   | 'Content-Disposition'
+  | 'Content-Length'
+  | 'Content-Range'
   | 'Content-Type'
   | 'ETag'
   | 'X-Accel-Redirect'
   | 'X-Content-Type-Options'
 
 export interface ProductMediaContentResponse {
-  readonly status: HttpStatus.OK | HttpStatus.NOT_MODIFIED
+  readonly status:
+    | HttpStatus.NOT_MODIFIED
+    | HttpStatus.OK
+    | HttpStatus.PARTIAL_CONTENT
+    | HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE
   readonly headers: Partial<Record<ProductMediaContentHeaderName, string>> & {
     readonly 'Accept-Ranges': 'bytes'
     readonly ETag: string
     readonly 'X-Content-Type-Options': 'nosniff'
   }
+  readonly stream?: Readable
 }
 
 interface TrustedContentType {
@@ -57,6 +70,7 @@ interface TrustedContentType {
 }
 
 const CHECKSUM_PATTERN = /^[a-f0-9]{64}$/u
+const INVALID_RANGE = Symbol('qianshu.product-media.invalid-range')
 const CONTENT_TYPES = new Map<string, TrustedContentType>([
   ['image/jpeg', {
     extension: '.jpg',
@@ -158,14 +172,76 @@ function buildInternalRedirect(objectKey: string): string {
   return `/_qianshu_internal_media/${encodedKey}`
 }
 
+interface NormalizedApplicationRange {
+  readonly contentLength: bigint
+  readonly range: MediaByteRange
+}
+
+/**
+ * 应用直出只接受单个 bytes range，并完整支持 start-end、start- 和 -suffix。
+ * 多区间响应需要 multipart/byteranges，当前没有产品媒体消费方需要，因此明确返回 416。
+ */
+function normalizeApplicationRange(
+  value: unknown,
+  sizeBytes: bigint,
+): NormalizedApplicationRange | typeof INVALID_RANGE | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string') return INVALID_RANGE
+
+  const match = /^bytes=(\d*)-(\d*)$/u.exec(value.trim())
+  if (match === null) return INVALID_RANGE
+  const startToken = match[1] ?? ''
+  const endToken = match[2] ?? ''
+  if (startToken.length === 0 && endToken.length === 0) return INVALID_RANGE
+
+  let start: bigint
+  let end: bigint
+  if (startToken.length === 0) {
+    const suffixLength = BigInt(endToken)
+    if (suffixLength <= 0n) return INVALID_RANGE
+    start = suffixLength >= sizeBytes ? 0n : sizeBytes - suffixLength
+    end = sizeBytes - 1n
+  }
+  else {
+    start = BigInt(startToken)
+    if (start >= sizeBytes) return INVALID_RANGE
+    end = endToken.length === 0
+      ? sizeBytes - 1n
+      : BigInt(endToken)
+    if (end < start) return INVALID_RANGE
+    if (end >= sizeBytes) end = sizeBytes - 1n
+  }
+
+  if (
+    start < 0n ||
+    end < start ||
+    end > BigInt(Number.MAX_SAFE_INTEGER)
+  ) {
+    return INVALID_RANGE
+  }
+
+  return Object.freeze({
+    contentLength: end - start + 1n,
+    range: Object.freeze({
+      end: Number(end),
+      start: Number(start),
+    }),
+  })
+}
+
 @Injectable()
 export class ProductMediaContentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly delivery: MediaContentDeliveryService,
+  ) {}
 
   async resolve(
     productId: string,
     productMediaId: string,
     ifNoneMatch: unknown,
+    range: unknown = undefined,
+    method: 'GET' | 'HEAD' = 'GET',
   ): Promise<ProductMediaContentResponse> {
     let row: ProductMediaContentRow | null
 
@@ -235,14 +311,87 @@ export class ProductMediaContentService {
       contentType.extension,
     )
 
-    return {
-      status: HttpStatus.OK,
-      headers: {
-        ...commonHeaders,
-        'Content-Disposition': `inline; filename="${filename}"`,
-        'Content-Type': contentType.mimeType,
-        'X-Accel-Redirect': buildInternalRedirect(objectKey),
-      },
+    const contentHeaders = {
+      ...commonHeaders,
+      'Content-Disposition': `inline; filename="${filename}"`,
+      'Content-Type': contentType.mimeType,
+    }
+
+    if (this.delivery.mode === 'internal_redirect') {
+      return {
+        status: HttpStatus.OK,
+        headers: {
+          ...contentHeaders,
+          'X-Accel-Redirect': buildInternalRedirect(objectKey),
+        },
+      }
+    }
+
+    let sizeBytes: bigint
+    try {
+      const storedObject = await this.delivery.stat(objectKey)
+      if (
+        storedObject === null ||
+        storedObject.sizeBytes <= 0n ||
+        storedObject.sizeBytes > BigInt(Number.MAX_SAFE_INTEGER)
+      ) {
+        throw productMediaStorageUnavailableError()
+      }
+      sizeBytes = storedObject.sizeBytes
+    }
+    catch {
+      // READY 关联对应的对象不可读取属于存储故障，不伪装成用户可修复的媒体 404。
+      throw productMediaStorageUnavailableError()
+    }
+
+    const normalizedRange = normalizeApplicationRange(range, sizeBytes)
+    if (normalizedRange === INVALID_RANGE) {
+      return {
+        status: HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+        headers: {
+          ...commonHeaders,
+          'Content-Range': `bytes */${sizeBytes.toString()}`,
+        },
+      }
+    }
+
+    const responseRange = normalizedRange?.range
+    const contentLength = normalizedRange?.contentLength ?? sizeBytes
+    const applicationHeaders = {
+      ...contentHeaders,
+      'Content-Length': contentLength.toString(),
+      ...(responseRange === undefined
+        ? {}
+        : {
+            'Content-Range':
+              `bytes ${responseRange.start}-${responseRange.end}/${sizeBytes.toString()}`,
+          }),
+    }
+    const status = responseRange === undefined
+      ? HttpStatus.OK
+      : HttpStatus.PARTIAL_CONTENT
+
+    if (method === 'HEAD') {
+      return { status, headers: applicationHeaders }
+    }
+
+    try {
+      const storedObject = await this.delivery.open(objectKey, responseRange)
+      if (
+        storedObject.sizeBytes !== sizeBytes ||
+        storedObject.contentLength !== contentLength
+      ) {
+        storedObject.stream.destroy()
+        throw productMediaStorageUnavailableError()
+      }
+      return {
+        status,
+        headers: applicationHeaders,
+        stream: storedObject.stream,
+      }
+    }
+    catch {
+      throw productMediaStorageUnavailableError()
     }
   }
 }

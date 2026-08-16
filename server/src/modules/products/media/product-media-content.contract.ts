@@ -8,12 +8,20 @@ const PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS: NonNullable<
   ApiResponseOptions['headers']
 > = {
   'Accept-Ranges': {
-    description: 'Byte-range capability is implemented by the internal proxy.',
+    description: 'Byte-range capability is implemented by the selected private delivery mode.',
     schema: { type: 'string', enum: ['bytes'] },
   },
   'Content-Disposition': {
     description: 'Inline disposition with a sanitized ASCII filename.',
     schema: { type: 'string' },
+  },
+  'Content-Length': {
+    description: 'Selected representation length for application delivery.',
+    schema: { type: 'string', pattern: '^\\d+$' },
+  },
+  'Content-Range': {
+    description: 'Selected or unsatisfied byte range for application delivery.',
+    schema: { type: 'string', pattern: '^bytes ' },
   },
   'Content-Type': {
     description: 'Trusted media type derived from validated persisted metadata.',
@@ -27,7 +35,7 @@ const PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS: NonNullable<
     schema: { type: 'string' },
   },
   'X-Accel-Redirect': {
-    description: 'Protected internal proxy location selected after authorization.',
+    description: 'Optional protected internal proxy location selected after authorization.',
     schema: { type: 'string' },
   },
   'X-Content-Type-Options': {
@@ -43,8 +51,8 @@ const PRODUCT_MEDIA_CONTENT = {
 } as const
 
 /**
- * GET 与 HEAD 共享同一授权、条件请求及代理响应契约；仅 GET 声明 binary body。
- * Range Header 会原样抵达 Nginx，Nest 只声明能力，不在应用进程中解释或读取文件。
+ * GET 与 HEAD 共享同一授权、条件请求及私有交付契约；仅 GET 声明 binary body。
+ * application 模式由 Nest 返回完整或单区间内容，internal_redirect 模式继续交给 Nginx。
  */
 export function ApiProductMediaContentContract(
   method: 'GET' | 'HEAD',
@@ -67,10 +75,27 @@ export function ApiProductMediaContentContract(
       ...(method === 'GET' ? { content: PRODUCT_MEDIA_CONTENT } : {}),
     }),
     ApiContractResponse({
+      status: HttpStatus.PARTIAL_CONTENT,
+      description: 'Authorized private product media byte range.',
+      headers: PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS,
+      ...(method === 'GET' ? { content: PRODUCT_MEDIA_CONTENT } : {}),
+    }),
+    ApiContractResponse({
       status: HttpStatus.NOT_MODIFIED,
       description: 'The current opaque ETag matches If-None-Match.',
       headers: {
         'Accept-Ranges': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Accept-Ranges'],
+        ETag: PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS.ETag,
+        'X-Content-Type-Options':
+          PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['X-Content-Type-Options'],
+      },
+    }),
+    ApiContractResponse({
+      status: HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+      description: 'The requested application-delivery byte range is invalid or unsatisfied.',
+      headers: {
+        'Accept-Ranges': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Accept-Ranges'],
+        'Content-Range': PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['Content-Range'],
         ETag: PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS.ETag,
         'X-Content-Type-Options':
           PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS['X-Content-Type-Options'],
@@ -93,6 +118,7 @@ export function ApiProductMediaContentContract(
         },
         { status: 404, codes: ['PRODUCT_MEDIA_NOT_FOUND'] },
         { status: 422, codes: ['VALIDATION_FAILED'] },
+        { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
       ],
     }),
   )

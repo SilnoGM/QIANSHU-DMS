@@ -1,4 +1,6 @@
-import { HttpStatus, Module } from '@nestjs/common'
+import { Readable } from 'node:stream'
+
+import { HttpStatus, Module, StreamableFile } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import type { OpenAPIObject } from '@nestjs/swagger'
 
@@ -33,8 +35,8 @@ const READY_RESPONSE = {
   },
 } as const
 
-function createController() {
-  const resolve = jest.fn().mockResolvedValue(READY_RESPONSE)
+function createController(result: unknown = READY_RESPONSE) {
+  const resolve = jest.fn().mockResolvedValue(result)
   const controller = new ProductsController(
     { list: jest.fn(), getById: jest.fn() } as unknown as ProductQueryService,
     { create: jest.fn() } as unknown as ProductCommandService,
@@ -82,11 +84,13 @@ describe('ProductsController private media content', () => {
     await expect(fixture.controller.getMediaContent(
       params,
       undefined,
+      undefined,
       fixture.response,
     )).resolves.toBeUndefined()
     await expect(fixture.controller.headMediaContent(
       params,
       '"known"',
+      'bytes=0-0',
       fixture.response,
     )).resolves.toBeUndefined()
 
@@ -95,12 +99,16 @@ describe('ProductsController private media content', () => {
       PRODUCT_ID,
       PRODUCT_MEDIA_ID,
       undefined,
+      undefined,
+      'GET',
     )
     expect(fixture.resolve).toHaveBeenNthCalledWith(
       2,
       PRODUCT_ID,
       PRODUCT_MEDIA_ID,
       '"known"',
+      'bytes=0-0',
+      'HEAD',
     )
     expect(fixture.response.status).toHaveBeenCalledWith(HttpStatus.OK)
     for (const [name, value] of Object.entries(READY_RESPONSE.headers)) {
@@ -121,6 +129,29 @@ describe('ProductsController private media content', () => {
     expect(registeredMethods.indexOf('headMediaContent')).toBeLessThan(
       registeredMethods.indexOf('getMediaContent'),
     )
+  })
+
+  it('returns a StreamableFile only for an application GET body', async () => {
+    const stream = Readable.from(Buffer.from('image'))
+    const fixture = createController({
+      ...READY_RESPONSE,
+      headers: {
+        ...READY_RESPONSE.headers,
+        'Content-Length': '5',
+        'X-Accel-Redirect': undefined,
+      },
+      stream,
+    })
+
+    const result = await fixture.controller.getMediaContent(
+      { productId: PRODUCT_ID, productMediaId: PRODUCT_MEDIA_ID },
+      undefined,
+      undefined,
+      fixture.response,
+    )
+
+    expect(result).toBeInstanceOf(StreamableFile)
+    expect((result as StreamableFile).getStream()).toBe(stream)
   })
 })
 
@@ -143,10 +174,10 @@ describe('ProductsController private media content OpenAPI', () => {
     expect(get?.operationId).toBe('products_get_media_content')
     expect(head?.operationId).toBe('products_head_media_content')
     expect(Object.keys(get?.responses ?? {}).sort()).toEqual([
-      '200', '304', '400', '401', '403', '404', '422', '500',
+      '200', '206', '304', '400', '401', '403', '404', '416', '422', '500', '503',
     ])
     expect(Object.keys(head?.responses ?? {}).sort()).toEqual([
-      '200', '304', '400', '401', '403', '404', '422', '500',
+      '200', '206', '304', '400', '401', '403', '404', '416', '422', '500', '503',
     ])
 
     for (const operation of [get, head]) {
@@ -183,6 +214,9 @@ describe('ProductsController private media content OpenAPI', () => {
         }, {
           status: 422,
           codes: ['VALIDATION_FAILED'],
+        }, {
+          status: 503,
+          codes: ['MEDIA_STORAGE_UNAVAILABLE'],
         }],
       })
       expect(operation?.responses['304']).not.toHaveProperty('content')
@@ -202,6 +236,8 @@ describe('ProductsController private media content OpenAPI', () => {
         'Accept-Ranges',
         'Cache-Control',
         'Content-Disposition',
+        'Content-Length',
+        'Content-Range',
         'Content-Type',
         'ETag',
         'X-Accel-Redirect',

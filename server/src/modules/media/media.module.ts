@@ -8,6 +8,7 @@ import { LazyLocalMediaStorage } from './lazy-local-media-storage'
 import { MediaAssetPersistence } from './media-asset.persistence'
 import { MediaAssetService } from './media-asset.service'
 import { MediaContentValidator } from './media-content-validator'
+import { MediaContentDeliveryService } from './media-content-delivery.service'
 import { MediaReconciliationPersistence } from './media-reconciliation.persistence'
 import { MediaReconciliationService } from './media-reconciliation.service'
 import { MediaAssetReferenceRepository } from './media-reference.repository'
@@ -27,6 +28,14 @@ const providers = [{
   inject: [MEDIA_CONFIGURATION],
   useFactory: (configuration: MediaConfiguration): MediaStorage =>
     new LazyLocalMediaStorage(configuration),
+}, {
+  provide: MediaContentDeliveryService,
+  inject: [MEDIA_STORAGE, MEDIA_CONFIGURATION],
+  useFactory: (
+    storage: MediaStorage,
+    configuration: MediaConfiguration,
+  ): MediaContentDeliveryService =>
+    MediaContentDeliveryService.fromConfiguration(storage, configuration),
 }, {
   provide: MediaAssetPersistence,
   inject: [PrismaService],
@@ -111,6 +120,7 @@ const providers = [{
   providers,
   exports: [
     MediaAssetService,
+    MediaContentDeliveryService,
     MediaAssetRetentionService,
   ],
 })

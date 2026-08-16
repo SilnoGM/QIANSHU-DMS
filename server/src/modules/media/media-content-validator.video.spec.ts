@@ -146,13 +146,70 @@ describe('MediaContentValidator VIDEO', () => {
   })
 
   it.each([
+    ['H.264 avc3', 'h264', 'avc3', 'h264'],
+    ['HEVC hvc1', 'hevc', 'hvc1', 'hevc'],
+    ['HEVC hev1', 'hevc', 'hev1', 'hevc'],
+  ] as const)('accepts %s video', async (_caseName, codecName, codecTag, expectedCodec) => {
+    const runProcess = jest.fn().mockResolvedValue(
+      ffprobeOutput([{
+        codec_name: codecName,
+        codec_tag_string: codecTag,
+        codec_type: 'video',
+        height: 720,
+        width: 1280,
+      }]),
+    )
+    const validator = createVideoValidator(runProcess)
+
+    await expect(
+      validator.validate({
+        declaredMimeType: 'video/mp4',
+        expectedMediaType: 'VIDEO',
+        originalFilename: 'compatible.mp4',
+        sourcePath,
+      }),
+    ).resolves.toMatchObject({ videoCodec: expectedCodec })
+  })
+
+  it('accepts common auxiliary data streams while preserving the primary video metadata', async () => {
+    const runProcess = jest.fn().mockResolvedValue(
+      ffprobeOutput([
+        {
+          codec_name: 'hevc',
+          codec_tag_string: 'hvc1',
+          codec_type: 'video',
+          height: 2160,
+          width: 3840,
+        },
+        { codec_name: 'aac', codec_type: 'audio' },
+        { codec_name: 'bin_data', codec_tag_string: 'tmcd', codec_type: 'data' },
+      ]),
+    )
+    const validator = createVideoValidator(runProcess)
+
+    await expect(
+      validator.validate({
+        declaredMimeType: 'video/mp4',
+        expectedMediaType: 'VIDEO',
+        originalFilename: 'camera.mp4',
+        sourcePath,
+      }),
+    ).resolves.toMatchObject({
+      audioCodec: 'aac',
+      height: 2160,
+      videoCodec: 'hevc',
+      width: 3840,
+    })
+  })
+
+  it.each([
     [
-      'non-H.264 video',
-      [{ codec_name: 'hevc', codec_tag_string: 'hvc1', codec_type: 'video', height: 720, width: 1280 }],
+      'mismatched H.264 tag',
+      [{ codec_name: 'h264', codec_tag_string: 'hvc1', codec_type: 'video', height: 720, width: 1280 }],
     ],
     [
-      'non-avc1 tag',
-      [{ codec_name: 'h264', codec_tag_string: 'avc3', codec_type: 'video', height: 720, width: 1280 }],
+      'mismatched HEVC tag',
+      [{ codec_name: 'hevc', codec_tag_string: 'avc1', codec_type: 'video', height: 720, width: 1280 }],
     ],
     [
       'non-AAC audio',
