@@ -155,7 +155,7 @@ describe('ProductQueryService', () => {
     expect(fixture.resolveStoredValue).not.toHaveBeenCalled()
   })
 
-  it('combines name/number search with exact supplier filtering and shares the where', async () => {
+  it('combines name/number search with exact status and supplier filtering and shares the where', async () => {
     const fixture = createFixture([
       createRow('1', 'SUPPLIER_A'),
       createRow('2', null),
@@ -167,6 +167,7 @@ describe('ProductQueryService', () => {
       keyword: 'product-001',
       page: 2,
       pageSize: 10,
+      status: ProductStatus.ACTIVE,
       supplierValue: 'SUPPLIER_A',
     })
 
@@ -181,6 +182,7 @@ describe('ProductQueryService', () => {
       select: Record<string, unknown>
     }
     expect(countInput.where).toEqual({
+      status: ProductStatus.ACTIVE,
       supplierValue: 'SUPPLIER_A',
       OR: [
         {

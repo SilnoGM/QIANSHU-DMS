@@ -19,6 +19,7 @@ import ProductDetailDrawer from './product-detail-drawer.vue'
 import {
   adaptProductListItemDto,
   adaptProductPageDto,
+  applyProductStatusFilter,
   applyProductSupplierFilter,
   buildProductImageItems,
   buildProductListQuery,
@@ -74,12 +75,23 @@ const supplierCatalogMissing = computed(() => supplierCatalog.missing.value)
 const supplierFilterOptions = computed(() => buildSupplierFilterOptions(
   supplierCatalog.catalog.value,
 ))
-const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
-  key: 'supplierValue',
-  label: '供应商',
-  options: supplierFilterOptions.value,
-  placeholder: '选择供应商',
-}])
+const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
+  {
+    key: 'status',
+    label: '启用状态',
+    options: [
+      { label: '已启用', value: 'ACTIVE' },
+      { label: '已停用', value: 'INACTIVE' },
+    ],
+    placeholder: '选择启用状态',
+  },
+  {
+    key: 'supplierValue',
+    label: '供应商',
+    options: supplierFilterOptions.value,
+    placeholder: '选择供应商',
+  },
+])
 const listErrorDisplay = computed(() => {
   if (listError.value === '') {
     return undefined
@@ -238,10 +250,14 @@ function scheduleQueryRefresh(): void {
 }
 
 function handleFilterChange(nextFilters: QsGenericTableFilterValues): void {
+  const status = nextFilters.status === 'ACTIVE' || nextFilters.status === 'INACTIVE'
+    ? nextFilters.status
+    : undefined
   const supplierValue = typeof nextFilters.supplierValue === 'string'
     ? nextFilters.supplierValue
     : undefined
-  const nextState = applyProductSupplierFilter(nextFilters, supplierValue)
+  const supplierState = applyProductSupplierFilter(nextFilters, supplierValue)
+  const nextState = applyProductStatusFilter(supplierState.filters, status)
   filters.value = nextState.filters
   page.value = nextState.page
   scheduleQueryRefresh()

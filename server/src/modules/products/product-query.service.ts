@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common'
 
 import type { Prisma } from '../../generated/prisma/client'
+import type { ProductStatus } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
@@ -29,6 +30,7 @@ export interface ProductListQuery {
   readonly keyword?: string
   readonly page?: number
   readonly pageSize?: number
+  readonly status?: ProductStatus
   readonly supplierValue?: string
 }
 
@@ -92,12 +94,15 @@ export class ProductQueryService {
   async list(input: ProductListQuery): Promise<ProductPage> {
     const query = normalizeProductListQuery(input)
     const where: Prisma.ProductWhereInput = {}
+    if (query.status !== undefined) {
+      where.status = query.status
+    }
     if (query.supplierValue !== undefined) {
       where.supplierValue = query.supplierValue
     }
     if (query.keyword !== undefined) {
-      // supplierValue 位于顶层、名称和编号位于 OR；Prisma 会把两者组合为
-      // AND，并让 count/findMany 复用同一个 where，避免分页总数与行集漂移。
+      // status/supplierValue 位于顶层、名称和编号位于 OR；Prisma 会把这些
+      // 条件组合为 AND，并让 count/findMany 复用同一个 where，避免分页总数与行集漂移。
       const contains = {
         contains: query.keyword,
         mode: 'insensitive' as const,

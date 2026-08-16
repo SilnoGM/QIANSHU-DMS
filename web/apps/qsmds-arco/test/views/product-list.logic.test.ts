@@ -7,6 +7,7 @@ import test from 'node:test'
 
 import {
   adaptProductPageDto,
+  applyProductStatusFilter,
   applyProductSupplierFilter,
   buildProductImageItems,
   buildProductListQuery,
@@ -90,9 +91,9 @@ const productPageDto = {
   total: 51,
 } as unknown as ProductPageDto
 
-test('查询归一化分页并原样保留供应商 stable value', () => {
+test('查询归一化分页并保留启用状态与供应商 stable value', () => {
   assert.deepEqual(buildProductListQuery({
-    filters: { supplierValue: ' raw-supplier ' },
+    filters: { status: 'ACTIVE', supplierValue: ' raw-supplier ' },
     page: 2,
     pageSize: 50,
     search: '  Product-001  ',
@@ -100,6 +101,7 @@ test('查询归一化分页并原样保留供应商 stable value', () => {
     keyword: 'Product-001',
     page: 2,
     pageSize: 50,
+    status: 'ACTIVE',
     supplierValue: ' raw-supplier ',
   })
   assert.deepEqual(buildProductListQuery({
@@ -120,6 +122,21 @@ test('查询归一化分页并原样保留供应商 stable value', () => {
     { supplierValue: 'supplier-a' },
     undefined,
   ), { filters: {}, page: 1 })
+
+  assert.deepEqual(applyProductStatusFilter(
+    { status: 'ACTIVE', supplierValue: 'supplier-a' },
+    'INACTIVE',
+  ), {
+    filters: { status: 'INACTIVE', supplierValue: 'supplier-a' },
+    page: 1,
+  })
+  assert.deepEqual(applyProductStatusFilter(
+    { status: 'ACTIVE', supplierValue: 'supplier-a' },
+    undefined,
+  ), {
+    filters: { supplierValue: 'supplier-a' },
+    page: 1,
+  })
 })
 
 test('generated DTO adapter 保留 Decimal 字符串、顺序、raw 与 nullable actor', () => {

@@ -1022,7 +1022,7 @@ async function verifyProductList(page, baseUrl) {
     await waitForNoVisibleModal(page, '产品视频')
 
     // 第二页请求必须保持 Server 分页；从第二页搜索时回到第一页，并允许继续
-    // 与供应商 stable value 组合为同一次 Server 查询。
+    // 与启用状态、供应商 stable value 组合为同一次 Server 查询。
     await page.evaluate(`(() => {
       const button = [...document.querySelectorAll('[data-slot="pagination-next"]')]
         .find(candidate => candidate.getClientRects().length > 0 && !candidate.disabled)
@@ -1040,6 +1040,7 @@ async function verifyProductList(page, baseUrl) {
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 1 条')`)
     await clickVisibleButton(page, '筛选')
+    await selectVisibleFilter(page, '启用状态', '已启用')
     await selectVisibleFilter(page, '供应商', 'Browser 有效供应商')
     await clickVisibleButton(page, '应用筛选')
     await waitForProductList(page, productNo)
@@ -1054,11 +1055,16 @@ async function verifyProductList(page, baseUrl) {
     assert.equal(productRequests.some(url => (
       url.searchParams.get('page') === '1'
       && url.searchParams.get('keyword') === productNo.toLowerCase()
+      && url.searchParams.get('status') === 'ACTIVE'
       && url.searchParams.get('supplierValue') === 'BROWSER_SUPPLIER_EFFECTIVE'
     )), true)
     await clickVisibleButton(page, '清空筛选')
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 1 条')`)
+    const clearedFilterRequest = productRequests.at(-1)
+    assert.equal(clearedFilterRequest?.searchParams.get('keyword'), productNo.toLowerCase())
+    assert.equal(clearedFilterRequest?.searchParams.has('status'), false)
+    assert.equal(clearedFilterRequest?.searchParams.has('supplierValue'), false)
     await fillVisibleInput(
       page,
       'input[placeholder="搜索产品名称或产品编号"]',

@@ -22,7 +22,7 @@
 
 ### 3.1 产品运营人员
 
-作为产品运营人员，我希望在统一列表中查看产品编号、名称、状态、供应商、媒体、价格、属性和审计信息，并按产品名称/编号搜索、按供应商筛选，以便快速确认产品资料。
+作为产品运营人员，我希望在统一列表中查看产品编号、名称、状态、供应商、媒体、价格、属性和审计信息，并按产品名称/编号搜索、按启用状态和供应商筛选，以便快速确认产品资料。
 
 ### 3.2 产品维护人员
 
@@ -170,6 +170,9 @@
 10. 当列表没有记录时，Server 应返回空 `items` 和 `total=0`，不得返回 `null` 或 404。
 11. 当请求分页、关键词或供应商筛选值不合法时，Server 应返回稳定的输入校验错误；`keyword` 应为 1 到 128 个 Unicode code points 的非空白字符串。
 12. 当返回结果顺序未由用户指定时，Server 应按 `updatedAt DESC, id DESC` 提供稳定顺序。
+13. 当请求包含 `status` 时，Server 应只接受 `DRAFT/ACTIVE/INACTIVE` 并按状态精确过滤。
+14. 当 `status` 与 `keyword/supplierValue` 同时存在时，Server 应按 AND 组合全部条件。
+15. 当 `status` 不在产品状态白名单内时，Server 应返回稳定的输入校验错误。
 
 ### Requirement 9 - 页面结构与权限
 
@@ -236,7 +239,7 @@
 2. 当视口宽度小于 `768px` 时，`QsGenericTable` 应使用其既有结构化卡片表现，并保留同一组业务数据与底部操作区。
 3. 当视口宽度小于 `640px` 时，按钮、筛选项、弹窗操作和媒体入口的触控目标应至少为 `44px`。
 4. 当系统处于暗色主题时，表格、固定列、Tag、弹窗、图片、视频、错误和空态应保持可读对比度。
-5. 当用户仅使用键盘时，应能提交/清空搜索、操作列设置、供应商筛选、图片预览、属性弹窗、视频弹窗和占位按钮，不得形成焦点陷阱。
+5. 当用户仅使用键盘时，应能提交/清空搜索、操作列设置、启用状态与供应商筛选、图片预览、属性弹窗、视频弹窗和占位按钮，不得形成焦点陷阱。
 6. 当用户启用 Reduced Motion 时，页面与复用组件应停止非必要持续动画。
 7. 当界面展示图标时，系统应使用项目现有 Lucide/FaIcon，不得使用 Emoji。
 
@@ -251,6 +254,16 @@
 5. 当数据库 Schema 实施时，应使用新的 forward migration 并在隔离 PostgreSQL 中完成空库重放、约束和权限验证，不得修改既有 migration。
 6. 当本期交付验收时，Schema、Server 单元测试、API E2E、Web API/View 测试、真实 Browser 回归、OpenAPI 契约、构建、根治理和 `git diff --check` 应全部通过。
 7. 当任一验证失败时，维护者应如实报告，不得跳过失败后声称完成。
+
+### Requirement 16 - 产品启用状态筛选
+
+#### Acceptance Criteria
+
+1. 当筛选面板打开时，页面应提供“启用状态”条件，候选项仅为“已启用”和“已停用”。
+2. 当用户选择“已启用”时，Web 应提交 `status=ACTIVE`；选择“已停用”时应提交 `status=INACTIVE`。
+3. 当用户未选择或清空启用状态时，Web 不应提交 `status`，结果应继续包含 `DRAFT/ACTIVE/INACTIVE`。
+4. 当用户应用或清空启用状态时，页面应回到第一页，并与搜索、供应商筛选合并为一次最终列表请求。
+5. 当前 UI 不提供“草稿”筛选项，但不得把 `DRAFT` 归入已启用或已停用。
 
 ## 7. UI Design Specification
 
@@ -287,7 +300,7 @@ Layout Strategy:
 - 不创建 Supplier 专用下拉组件；未来表单复用 `QsDictionarySelect`。
 - 不实现媒体上传、转码、对象存储签名、封面抽帧或视频编辑。
 - 不实现价格换算、汇率快照、税价或多币种汇总。
-- 不引入 PostgreSQL 全文检索、拼音/分词搜索、状态筛选、批量操作、导入导出或列设置服务端持久化。
+- 不引入 PostgreSQL 全文检索、拼音/分词搜索、批量操作、导入导出或列设置服务端持久化。
 - 不插入演示产品，不从已删除的历史产品方案恢复任何数据或代码。
 - 不修改或删除既有 migration，不手工编辑 OpenAPI 生成产物。
 - 不自动 push、创建 PR、merge、部署或对非本地数据库执行 migration。
@@ -299,5 +312,7 @@ Layout Strategy:
 ## 10. Phase 4 验收结论
 
 本规格的首期只读切片及搜索增量已于 2026-08-12 在 `feat/admin-product-management` 完成本地实现与自动化验收：Product Schema、带 `keyword`/`supplierValue` 的 `GET /api/products`、供应商历史解析、OpenAPI/Web generated contract、正式列表、响应式卡片、媒体/金额/属性展示、名称/编号搜索、供应商筛选和占位动作均已落地。最终验证覆盖隔离 PostgreSQL migration/API E2E、Server/Web 全量检查、production build、根治理和真实 Chrome。
+
+2026-08-16 已另行确认产品启用状态筛选增量：`GET /api/products` 增加可选 `status` 精确匹配参数；Web 仅提供“已启用/已停用”，未筛选时继续包含草稿。该增量不修改 Schema、状态流或 Product 写接口。
 
 Gate D2 已获得单独授权，`20260812090000_product_list_schema` 已成功应用到 `qianshu-dms-dev-postgres`，迁移后 Prisma 状态、表、枚举、约束、索引、触发器、函数和健康检查均通过。Gate E 未授权；本地结果没有 push、PR、merge 或部署。

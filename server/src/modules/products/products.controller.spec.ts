@@ -264,6 +264,18 @@ describe('ProductsController OpenAPI contract', () => {
         type: 'string',
       },
     })
+    const statusParameter = operation?.parameters?.find(parameter =>
+      'name' in parameter && parameter.name === 'status')
+    expect(statusParameter).toEqual({
+      description: '产品状态精确匹配',
+      in: 'query',
+      name: 'status',
+      required: false,
+      schema: {
+        enum: ['DRAFT', 'ACTIVE', 'INACTIVE'],
+        type: 'string',
+      },
+    })
     expect(operation?.['x-qianshu-contract']).toEqual({
       kind: 'application',
       authentication: true,

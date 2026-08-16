@@ -229,6 +229,17 @@
 
   Task 13 证据：Server 红灯为 DTO 未 trim/校验、Normalizer 忽略 `keyword` 和 Service 类型缺失；实现后定向 4 suites / 30 tests、Server 全量 146 suites / 1416 tests、Product 隔离 API E2E 1 suite / 4 tests、OpenAPI contract check 通过。Web 红灯为 query/页面绑定/身份清理/handler 四项缺失；实现后定向 15/15、Web Node 171/171、TS 49/49、API/View 757/757、typecheck、ESLint、Stylelint 和真实 Chrome 2/2 通过。首次官方 Server E2E 为 25/26 suites、146/147 tests，仅既有 Profile PATCH 偶发返回 404；Product 套件同轮通过，随后官方全套重跑为 26/26 suites、147/147 tests。根 `node --run check` 与 `node --run build` 均通过。验证中曾把两个会执行 `prisma generate` 的命令并行运行，造成生成目录竞态和临时 TypeScript 缺文件；改为串行后 Server check 与 contract check 全绿。build 仅保留既有第三方 PURE annotation、chunk size 与 plugin timing 非阻断警告。
 
+- [x] 14. 以 TDD 增加产品启用状态筛选
+  - [x] 14.1 单独确认公共 API 增量：`status` 只接受 `DRAFT/ACTIVE/INACTIVE` 并精确匹配；Web 仅提供 `ACTIVE/INACTIVE`，不筛选时包含草稿。
+  - [x] 14.2 建立 Server/OpenAPI/Web RED，覆盖 DTO 白名单、Normalizer、共享 Prisma where、生成契约、筛选定义、分页归一和组合查询。
+  - [x] 14.3 最小实现 Server 查询，通过 `contract:sync` 同步两份 OpenAPI snapshot 与 Web generated type；不修改 Schema/migration。
+  - [x] 14.4 复用 `QsGenericTable` 筛选面板增加“启用状态”，与搜索和供应商筛选合并为单次最终请求。
+  - [x] 14.5 扩展 Product API E2E 与现有 management Browser，覆盖 ACTIVE/INACTIVE、非法状态、组合条件、清空和真实请求参数。
+  - [x] 14.6 完成 Server/Web/OpenAPI/隔离 E2E/真实 Chrome/构建与 diff 检查，记录真实证据并提交 `feat: 添加产品启用状态筛选`。
+  - _Requirements: R8-R9, R12, R14-R16_
+
+  Task 14 证据：Server 定向 RED 为 4/4 suites 失败、5 failed / 59 passed，分别证明 OpenAPI 参数、DTO 白名单、Normalizer 与 Service 类型/where 尚未实现；Web 定向 RED 为 3 failed / 11 passed，证明查询 helper、筛选定义和页面绑定缺失。实现后 Server 定向 4 suites / 70 tests、Web 定向 18/18 通过，`contract:sync` 生成的 Server/Web OpenAPI snapshot 字节一致（SHA-256 `e2233855f71a083eb1a78ff25049f72212c71dbcfc0e432ce8f12e1cd6ed3a3e`），`contract:check` 通过。最终 `pnpm -C server check` 为 186 suites / 1825 tests，隔离 `ci:server-e2e` 主套件为 31 passed / 4 skipped suites、191 passed / 10 skipped tests，附加媒体套件 10/10；`pnpm -C web check` 为 Node 172/172、TypeScript 49/49、API/View 814/814，typecheck、ESLint、Stylelint 全绿；真实 Chrome 3/3（含产品状态筛选组合请求）、根测试 676/676、生产 Web build 和 `git diff --check` 均通过。未修改 Schema/migration，未写入持久开发数据库。
+
 ## 5. 验证矩阵
 
 ### 5.1 Phase 3 文档验证

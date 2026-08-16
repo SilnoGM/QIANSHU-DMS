@@ -438,7 +438,7 @@ describe('Product list API with isolated PostgreSQL', () => {
       .toMatchObject({ supplier: null })
   })
 
-  it('applies exact supplier filters, resets empty pages and rejects invalid queries', async () => {
+  it('applies exact status and supplier filters, resets empty pages and rejects invalid queries', async () => {
     const reader = await createLoggedInBrowser({ productsRead: true })
     await seedProducts(reader.account.user.id)
 
@@ -451,6 +451,27 @@ describe('Product list API with isolated PostgreSQL', () => {
     expect(filtered.items.map(item => item.productNo)).toEqual([
       `${PRODUCT_NO_PREFIX}001`,
     ])
+
+    const inactiveResponse = await reader.browser
+      .get('/api/products')
+      .query({ status: ProductStatus.INACTIVE })
+      .expect(200)
+    const inactive = readResponseBody<ProductPageBody>(inactiveResponse)
+    expect(inactive).toMatchObject({ total: 2 })
+    expect(inactive.items.every(item => item.status === ProductStatus.INACTIVE))
+      .toBe(true)
+
+    const combinedResponse = await reader.browser
+      .get('/api/products')
+      .query({
+        status: ProductStatus.ACTIVE,
+        supplierValue: supplierValues.effective,
+      })
+      .expect(200)
+    expect(readResponseBody<ProductPageBody>(combinedResponse)).toMatchObject({
+      total: 1,
+      items: [{ productNo: `${PRODUCT_NO_PREFIX}001` }],
+    })
 
     const wrongCase = await reader.browser
       .get('/api/products')
@@ -476,6 +497,7 @@ describe('Product list API with isolated PostgreSQL', () => {
       'pageSize=101',
       'keyword=%20%20%20',
       `keyword=${encodeURIComponent('😀'.repeat(129))}`,
+      'status=UNKNOWN',
       'supplierValue=%20%20%20',
     ]) {
       await reader.browser

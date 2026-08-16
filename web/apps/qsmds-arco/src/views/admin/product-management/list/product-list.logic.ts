@@ -21,6 +21,9 @@ import type {
 import { resolveProductMediaContentUrl } from '../../../../api/modules/product-media'
 
 type ProductListQuery = NonNullable<ProductsListData['query']>
+type ProductListStatus = NonNullable<ProductListQuery['status']>
+
+const PRODUCT_LIST_STATUSES = new Set<unknown>(['DRAFT', 'ACTIVE', 'INACTIVE'])
 
 /**
  * generated OpenAPI 3 nullable enum 当前不会把 null 写进 TS union；页面 view model
@@ -149,6 +152,9 @@ export function buildProductListQuery(input: {
   readonly search: string
 }): ProductListQuery {
   const keyword = input.search.trim()
+  const status = PRODUCT_LIST_STATUSES.has(input.filters.status)
+    ? input.filters.status as ProductListStatus
+    : undefined
   const supplierValue = typeof input.filters.supplierValue === 'string'
     && input.filters.supplierValue.trim() !== ''
     ? input.filters.supplierValue
@@ -158,8 +164,24 @@ export function buildProductListQuery(input: {
     page: Number.isSafeInteger(input.page) && input.page > 0 ? input.page : 1,
     pageSize: ALLOWED_PAGE_SIZES.has(input.pageSize) ? input.pageSize : 20,
     ...(keyword === '' ? {} : { keyword }),
+    ...(status === undefined ? {} : { status }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
   }
+}
+
+/** 应用或清空产品状态条件都回到第一页；草稿属于 API 合法值，但当前 UI 不提供该筛选项。 */
+export function applyProductStatusFilter(
+  current: QsGenericTableFilterValues,
+  status: ProductListStatus | undefined,
+): { readonly filters: QsGenericTableFilterValues, readonly page: 1 } {
+  const filters = { ...current }
+  if (status === undefined) {
+    delete filters.status
+  }
+  else {
+    filters.status = status
+  }
+  return { filters, page: 1 }
 }
 
 /** 应用或清空供应商条件都回到第一页；stable value 不做 trim。 */

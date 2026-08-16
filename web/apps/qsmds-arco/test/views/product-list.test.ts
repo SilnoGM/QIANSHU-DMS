@@ -68,15 +68,20 @@ test('产品数据只在可信权限与身份内请求，并清理过期响应',
   assert.match(source, /v-if="canCreate"/u)
 })
 
-test('搜索与供应商筛选都回到第一页并共用单次请求调度', () => {
+test('搜索、启用状态与供应商筛选都回到第一页并共用单次请求调度', () => {
   assert.match(source, /function handleSearch\(keyword: string\)/u)
   assert.match(source, /searchKeyword\.value = keyword/u)
   assert.match(source, /page\.value = 1/u)
   assert.match(source, /scheduleQueryRefresh\(\)/u)
   assert.match(source, /search: searchKeyword\.value/u)
+  assert.match(source, /applyProductStatusFilter/u)
 })
 
-test('供应商筛选复用 Catalog 与表格筛选，并和列表状态独立', () => {
+test('启用状态与供应商筛选复用表格筛选，供应商候选继续来自 Catalog', () => {
+  assert.match(source, /key: 'status'/u)
+  assert.match(source, /label: '启用状态'/u)
+  assert.match(source, /label: '已启用', value: 'ACTIVE'/u)
+  assert.match(source, /label: '已停用', value: 'INACTIVE'/u)
   assert.match(source, /useDictionaryCatalog\(SUPPLIER_DICTIONARY_CODE\)/u)
   assert.match(source, /buildSupplierFilterOptions/u)
   assert.match(source, /key: 'supplierValue'/u)
