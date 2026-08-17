@@ -72,8 +72,9 @@ describe('permission constants', () => {
       'products:read',
       'products:create',
       'products:update',
+      'fund-accounts:read',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 41)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 42)
   })
 })
 

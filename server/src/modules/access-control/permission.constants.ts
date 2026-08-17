@@ -26,6 +26,14 @@ export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
 export const PRODUCT_MEDIA_PERMISSION_CODES = ['product-media:read'] as const
 
 /**
+ * 资金账户空白入口的专属读取权限。
+ *
+ * 数据库将其标记为 systemOnly，确保普通角色不能通过角色权限维护接口获得该权限；
+ * 当前仅由 system_admin 持有，用于同时保护资金账户列表与流水路由。
+ */
+export const FUND_ACCOUNT_PERMISSION_CODES = ['fund-accounts:read'] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -71,6 +79,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:disable',
   ...PRODUCT_MEDIA_PERMISSION_CODES,
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
+  ...FUND_ACCOUNT_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

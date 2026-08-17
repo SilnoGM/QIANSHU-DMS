@@ -284,6 +284,7 @@ test('权限目录以中文展示现有业务资源', () => {
     'currencies',
     'dictionaries',
     'exchange-rates',
+    'fund-accounts',
     'numbering-rules',
     'product-media',
     'products',
@@ -293,6 +294,7 @@ test('权限目录以中文展示现有业务资源', () => {
   ])
   assert.equal(permissionResourceLabel('currencies'), '货币管理')
   assert.equal(permissionResourceLabel('exchange-rates'), '当前汇率')
+  assert.equal(permissionResourceLabel('fund-accounts'), '资金账户管理')
   assert.equal(permissionResourceLabel('regions'), '地区管理')
   assert.equal(permissionResourceLabel('numbering-rules'), '编号规则')
   assert.equal(permissionResourceLabel('dictionaries'), '字典管理')
