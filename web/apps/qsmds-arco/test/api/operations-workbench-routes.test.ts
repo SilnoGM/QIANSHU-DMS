@@ -100,13 +100,27 @@ test('销售与采购订单页面各只提供一个新增按钮并跳转到对�
   }
 })
 
-test('两个新增订单页面保持空白', () => {
-  for (const relativePath of [
-    '../../src/views/operations/sales-orders/create.vue',
-    '../../src/views/operations/purchase-orders/create.vue',
-  ]) {
+test('两个新增订单页面各只提供一个返回按钮并跳转到对应订单页面', () => {
+  for (const [relativePath, targetRouteName] of [
+    [
+      '../../src/views/operations/sales-orders/create.vue',
+      'operationsSalesOrders',
+    ],
+    [
+      '../../src/views/operations/purchase-orders/create.vue',
+      'operationsPurchaseOrders',
+    ],
+  ] as const) {
     const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 
-    assert.match(source, /^<template>\s*<FaPageMain\s*\/>\s*<\/template>\s*$/u)
+    assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
+    assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
+    assert.match(source, /<FaButton\s+variant="outline"\s+@click="navigateBack">/u)
+    assert.match(source, />\s*返回\s*<\/FaButton>/u)
+    assert.match(
+      source,
+      new RegExp(`router\\.push\\(\\{ name: '${targetRouteName}' \\}\\)`, 'u'),
+    )
+    assert.doesNotMatch(source, /<Fa(?:Alert|Card|Empty|Icon|PageHeader)/u)
   }
 })
