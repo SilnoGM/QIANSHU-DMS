@@ -8,6 +8,7 @@ import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
+import FundAccountManagement from './modules/fund-account.management'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement, {
   PRODUCT_MANAGEMENT_PERMISSIONS,
@@ -99,6 +100,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     },
     children: [
       ProductManagement,
+      FundAccountManagement,
     ],
   },
   {
