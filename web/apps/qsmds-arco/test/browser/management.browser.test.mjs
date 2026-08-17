@@ -1020,22 +1020,21 @@ async function verifyProductList(page, baseUrl) {
         && dialog.querySelector('[aria-label="下载视频 browser-management-overview.mp4"]') !== null
         && dialog.querySelector('a[target="_blank"]') !== null
     })()`)
+    // 历史媒体夹具只有数据库记录，没有物理文件。切换后应等待真实 404 驱动的
+    // 用户可见失败态；瞬时 <video> 是否赶在 error 事件前被采样与机器速度有关，
+    // 不能作为最终契约。下载入口和安全外链仍必须切换到第二个视频。
     await clickVisibleModalButton(page, 'browser-management-detail.mp4')
-    const secondVideoState = await page.evaluate(`(() => {
+    await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
-      return {
-        hasExternalLink: dialog?.querySelector('a[target="_blank"]') !== null,
-        hasVideo: dialog?.querySelector('video') !== null,
-        showsRawValue: dialog?.textContent?.includes('javascript:') ?? false,
-      }
+      const hasFailure = ['当前浏览器不支持此视频', '视频加载失败']
+        .some(message => dialog?.textContent?.includes(message))
+      return hasFailure
+        && dialog.querySelector('[aria-label="下载视频 browser-management-detail.mp4"]') !== null
+        && dialog.querySelector('a[target="_blank"]') !== null
+        && !dialog.textContent?.includes('javascript:')
     })()`)
-    assert.deepEqual(secondVideoState, {
-      hasExternalLink: true,
-      hasVideo: true,
-      showsRawValue: false,
-    })
     await clickVisibleModalButton(page, '关闭视频')
     await waitForNoVisibleModal(page, '产品视频')
 
