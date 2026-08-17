@@ -40,6 +40,7 @@ test('产品 API 列表读取带精确 query、AbortSignal 与局部呈错', asy
     keyword: 'Product-001',
     page: 2,
     pageSize: 50,
+    status: 'ACTIVE' as const,
     supplierValue: ' raw-supplier ',
   }
 

@@ -1,62 +1,79 @@
 <script setup lang="ts">
+import type { ProductVideoPreviewFailure } from '../media/product-media-common.logic'
 import type { ProductListItemViewModel } from './product-list.logic'
 
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
+import { resolveProductVideoPreviewFailure } from '../media/product-media-common.logic'
+import { resolveProductMediaContentUrl } from './product-list.logic'
+
 interface ProductVideoItem {
+  readonly id: string
   readonly index: number
+  readonly originalFilename: string
   readonly safeUrl: string | null
-  readonly url: string
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  authEpoch: number
+  contentReadable?: boolean
   modelValue: boolean
   product: ProductListItemViewModel | null
-}>()
+}>(), {
+  contentReadable: false,
+})
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
 
 const activeIndex = ref(0)
-const previewFailed = ref(false)
+const previewFailure = ref<ProductVideoPreviewFailure | null>(null)
 const videoElement = ref<HTMLVideoElement | null>(null)
 
 const title = computed(() => props.product === null
   ? '产品视频'
   : `${props.product.name} · 产品视频`)
-const videos = computed<readonly ProductVideoItem[]>(() => (
-  props.product?.videos.map((url, index) => ({
+const videos = computed<readonly ProductVideoItem[]>(() => {
+  if (!props.contentReadable) {
+    return []
+  }
+  const product = props.product
+  if (product === null) {
+    return []
+  }
+  return product.media.videos.map((video, index) => ({
+    id: video.id,
     index,
-    safeUrl: resolveSafeVideoUrl(url),
-    url,
-  })) ?? []
-))
+    originalFilename: video.originalFilename,
+    safeUrl: resolveProductMediaContentUrl(product.id, video),
+  }))
+})
 const selectedVideo = computed(() => videos.value[activeIndex.value] ?? null)
-
-/** 只允许无内嵌凭据的 HTTP(S) 地址，拒绝 javascript/data 等协议。 */
-function resolveSafeVideoUrl(value: string): string | null {
-  try {
-    const url = new URL(value)
-    return (url.protocol === 'http:' || url.protocol === 'https:')
-      && url.username === ''
-      && url.password === ''
-      ? url.href
-      : null
-  }
-  catch {
-    return null
-  }
-}
 
 function pauseActiveVideo(): void {
   videoElement.value?.pause()
 }
 
+function handlePreviewVideoError(event: Event): void {
+  const video = event.currentTarget as HTMLVideoElement
+  previewFailure.value = resolveProductVideoPreviewFailure(video.error?.code)
+}
+
+function previewFailureTitle(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability' ? '当前浏览器不支持此视频' : '视频加载失败'
+}
+
+function previewFailureDescription(failure: ProductVideoPreviewFailure): string {
+  return failure === 'capability'
+    ? '可以下载原文件后使用本地播放器查看。'
+    : '请检查网络后重试，或直接下载原文件。'
+}
+
 async function selectVideo(index: number): Promise<void> {
   pauseActiveVideo()
   activeIndex.value = index
-  previewFailed.value = false
+  previewFailure.value = null
   await nextTick()
   videoElement.value?.load()
 }
@@ -74,13 +91,18 @@ function close(): void {
 }
 
 watch(
-  [() => props.modelValue, () => props.product?.id],
+  [
+    () => props.modelValue,
+    () => props.product?.id,
+    () => props.contentReadable,
+    () => props.authEpoch,
+  ],
   ([visible]) => {
     if (!visible) {
       pauseActiveVideo()
     }
     activeIndex.value = 0
-    previewFailed.value = false
+    previewFailure.value = null
   },
 )
 
@@ -91,31 +113,59 @@ onBeforeUnmount(pauseActiveVideo)
   <QsGenericModal
     :model-value="modelValue"
     :title="title"
-    description="选择一个视频进行预览，也可在新窗口打开已验证的 HTTP(S) 地址。"
+    description="选择一个视频进行预览，也可在新窗口打开受保护的领域内容。"
     size="xl"
     @closed="pauseActiveVideo"
     @update:model-value="updateVisible"
   >
-    <div v-if="product && videos.length" class="gap-5 grid lg:grid-cols-[minmax(0,1fr)_16rem]">
+    <FaEmpty
+      v-if="!contentReadable"
+      icon="i-lucide:shield-alert"
+      title="无权读取媒体内容"
+      description="当前身份不能加载或打开产品视频。"
+      class="py-8"
+    />
+    <div v-else-if="product && videos.length" class="gap-5 grid lg:grid-cols-[minmax(0,1fr)_16rem]">
       <section aria-label="视频预览" class="min-w-0">
         <div class="border border-border rounded-lg bg-muted/30 overflow-hidden">
           <video
-            v-if="selectedVideo?.safeUrl && !previewFailed"
+            v-if="selectedVideo?.safeUrl && previewFailure === null"
             ref="videoElement"
-            :key="selectedVideo.url"
+            :key="selectedVideo.id"
             :src="selectedVideo.safeUrl"
             controls
             preload="metadata"
             class="bg-foreground/5 h-auto w-full aspect-video block"
-            @error="previewFailed = true"
+            @error="handlePreviewVideoError"
+            @loadedmetadata="previewFailure = null"
           >
             当前浏览器不支持视频播放。
           </video>
+          <div
+            v-else-if="selectedVideo?.safeUrl && previewFailure"
+            class="p-6 text-center gap-3 grid min-h-52 aspect-video place-items-center"
+            role="status"
+          >
+            <FaIcon name="i-lucide:circle-alert" class="text-muted-foreground size-8" aria-hidden="true" />
+            <strong>{{ previewFailureTitle(previewFailure) }}</strong>
+            <p class="text-sm text-muted-foreground m-0">
+              {{ previewFailureDescription(previewFailure) }}
+            </p>
+            <a
+              :href="selectedVideo.safeUrl"
+              download
+              :aria-label="`下载视频 ${selectedVideo.originalFilename}`"
+              class="text-sm font-medium px-4 border rounded-md inline-flex gap-2 min-h-11 items-center focus-visible:outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <FaIcon name="i-lucide:download" class="shrink-0 size-4" aria-hidden="true" />
+              <span>下载原视频</span>
+            </a>
+          </div>
           <FaEmpty
             v-else
             icon="i-lucide:video-off"
             title="视频暂不可预览"
-            description="地址无效、协议不受支持，或媒体加载失败。"
+            description="内容地址与当前产品不匹配。"
             class="min-h-52 aspect-video justify-center"
           />
         </div>
@@ -131,7 +181,7 @@ onBeforeUnmount(pauseActiveVideo)
             <span class="truncate">在新窗口打开当前视频</span>
           </a>
           <p class="qs-type-meta mb-0 mt-2 [overflow-wrap:anywhere]">
-            {{ selectedVideo.url }}
+            {{ selectedVideo.originalFilename }}
           </p>
         </div>
       </section>
@@ -143,7 +193,7 @@ onBeforeUnmount(pauseActiveVideo)
         <div class="pr-1 gap-2 grid max-h-[24rem] overflow-y-auto">
           <FaButton
             v-for="video in videos"
-            :key="`${video.index}-${video.url}`"
+            :key="video.id"
             type="button"
             variant="outline"
             class="px-3 py-2 h-auto min-h-11 w-full justify-start"
@@ -152,7 +202,7 @@ onBeforeUnmount(pauseActiveVideo)
             @click="selectVideo(video.index)"
           >
             <FaIcon name="i-lucide:play" class="shrink-0" />
-            <span class="truncate">视频 {{ video.index + 1 }}</span>
+            <span class="truncate">{{ video.originalFilename }}</span>
           </FaButton>
         </div>
       </nav>

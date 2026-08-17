@@ -1,0 +1,34 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+
+import { MEDIA_ASSET_REFERENCE_TABLES } from './media-reference.repository'
+
+const serverRoot = resolve(__dirname, '../../..')
+
+function modelBlocks(schema: string): readonly string[] {
+  return [...schema.matchAll(/model\s+\w+\s+\{[\s\S]*?\n\}/gu)]
+    .map(match => match[0])
+}
+
+describe('media reference extension contract', () => {
+  it('keeps every implemented active-reference model explicit in repository and Trigger', () => {
+    const schema = readFileSync(resolve(serverRoot, 'prisma/schema.prisma'), 'utf8')
+    const migration = readFileSync(resolve(
+      serverRoot,
+      'prisma/migrations/20260813120000_media_asset_product_media_schema/migration.sql',
+    ), 'utf8')
+    const referenceTables = modelBlocks(schema)
+      .filter(block => /\bmediaAssetId\b/u.test(block) && /\bdetachedAt\b/u.test(block))
+      .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
+      .filter((value): value is string => value !== undefined)
+      .sort()
+
+    expect(referenceTables).toEqual([...MEDIA_ASSET_REFERENCE_TABLES].sort())
+    for (const table of MEDIA_ASSET_REFERENCE_TABLES) {
+      expect(migration).toContain(`FROM "${table}" AS reference`)
+      expect(migration).toMatch(
+        new RegExp(`FROM "${table}" AS reference[\\s\\S]*?reference\\."detached_at" IS NULL`, 'u'),
+      )
+    }
+  })
+})

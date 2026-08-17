@@ -68,15 +68,20 @@ test('产品数据只在可信权限与身份内请求，并清理过期响应',
   assert.match(source, /v-if="canCreate"/u)
 })
 
-test('搜索与供应商筛选都回到第一页并共用单次请求调度', () => {
+test('搜索、启用状态与供应商筛选都回到第一页并共用单次请求调度', () => {
   assert.match(source, /function handleSearch\(keyword: string\)/u)
   assert.match(source, /searchKeyword\.value = keyword/u)
   assert.match(source, /page\.value = 1/u)
   assert.match(source, /scheduleQueryRefresh\(\)/u)
   assert.match(source, /search: searchKeyword\.value/u)
+  assert.match(source, /applyProductStatusFilter/u)
 })
 
-test('供应商筛选复用 Catalog 与表格筛选，并和列表状态独立', () => {
+test('启用状态与供应商筛选复用表格筛选，供应商候选继续来自 Catalog', () => {
+  assert.match(source, /key: 'status'/u)
+  assert.match(source, /label: '启用状态'/u)
+  assert.match(source, /label: '已启用', value: 'ACTIVE'/u)
+  assert.match(source, /label: '已停用', value: 'INACTIVE'/u)
   assert.match(source, /useDictionaryCatalog\(SUPPLIER_DICTIONARY_CODE\)/u)
   assert.match(source, /buildSupplierFilterOptions/u)
   assert.match(source, /key: 'supplierValue'/u)
@@ -100,10 +105,14 @@ test('窄屏复用 QsGenericTable mobile-row 并保留同一行身份和操作',
   assert.equal((source.match(/:size="44"/gu) ?? []).length, 2)
 })
 
-test('特殊单元格复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗', () => {
+test('特殊单元格从结构化 media 读取，并复用 ImageGroup、AmountDisplay、FaTag 与只读弹窗', () => {
   assert.match(source, /<ImageGroup\b[\s\S]*?:max-count="3"/u)
   assert.match(source, /buildProductMainImageItems/u)
   assert.match(source, /buildProductImageItems/u)
+  assert.match(source, /item\.media\.mainImage/u)
+  assert.match(source, /item\.media\.images/u)
+  assert.match(source, /item\.media\.videos/u)
+  assert.doesNotMatch(source, /row\.(?:original\.)?videos\.length/u)
   assert.equal((source.match(/<AmountDisplay\b/gu) ?? []).length >= 6, true)
   assert.match(source, /useCurrencyCatalog\(\)/u)
   assert.match(source, /<FaTag\b/u)
@@ -128,7 +137,29 @@ test('属性和视频入口可聚焦，新增、查看与编辑接入精确路�
   assert.doesNotMatch(source, /productsApi\.(?:create|update|delete)/u)
 })
 
-test('属性弹窗完整有序展示，视频弹窗选择单一预览并保留安全外链', () => {
+test('Task 15 列表以独立内容权限控制所有媒体 DOM 和预览入口', () => {
+  assert.match(
+    source,
+    /const canReadProductMedia = computed\(\(\) => auth\('product-media:read'\)\)/u,
+  )
+  assert.match(source, /buildProductMainImageItems\([^)]*, canReadProductMedia\)/u)
+  assert.match(source, /buildProductImageItems\([^)]*, canReadProductMedia\)/u)
+  assert.match(source, /无权读取/u)
+  assert.match(
+    source,
+    /<ProductVideosModal[\s\S]{0,220}:content-readable="canReadProductMedia"/u,
+  )
+  assert.match(
+    source,
+    /<ProductDetailDrawer[\s\S]{0,260}:content-readable="canReadProductMedia"/u,
+  )
+  assert.match(
+    source,
+    /function showVideos\([\s\S]{0,180}!canReadProductMedia\.value/u,
+  )
+})
+
+test('属性弹窗完整有序展示，视频弹窗消费领域 contentUrl 并保留安全外链', () => {
   const attributesModal = readFileSync(new URL(
     '../../src/views/admin/product-management/list/product-attributes-modal.vue',
     import.meta.url,
@@ -147,8 +178,10 @@ test('属性弹窗完整有序展示，视频弹窗选择单一预览并保留�
   assert.match(videosModal, /selectedVideo/u)
   assert.match(videosModal, /target="_blank"/u)
   assert.match(videosModal, /rel="noopener noreferrer"/u)
-  assert.match(videosModal, /url\.username === ''/u)
-  assert.match(videosModal, /url\.password === ''/u)
+  assert.match(videosModal, /product\.media\.videos/u)
+  assert.match(videosModal, /resolveProductMediaContentUrl/u)
+  assert.match(videosModal, /video\.originalFilename/u)
+  assert.doesNotMatch(videosModal, /new URL\(|url\.protocol|url\.username|url\.password/u)
   assert.match(videosModal, /pauseActiveVideo/u)
   assert.match(videosModal, /关闭视频/u)
 })

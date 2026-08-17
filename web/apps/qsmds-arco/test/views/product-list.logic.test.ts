@@ -7,6 +7,7 @@ import test from 'node:test'
 
 import {
   adaptProductPageDto,
+  applyProductStatusFilter,
   applyProductSupplierFilter,
   buildProductImageItems,
   buildProductListQuery,
@@ -14,7 +15,46 @@ import {
   buildSupplierFilterOptions,
   canApplyProductListResponse,
   isProductListAbortError,
+  resolveProductMediaContentUrl,
 } from '../../src/views/admin/product-management/list/product-list.logic'
+
+const mainImage = {
+  id: 'media-image-main',
+  kind: 'IMAGE' as const,
+  originalFilename: 'main.webp',
+  mimeType: 'image/webp',
+  sizeBytes: '1024',
+  width: 1200,
+  height: 1200,
+  durationMs: null,
+  sortOrder: 0,
+  isPrimary: true,
+  contentUrl: '/api/products/product-1/media/media-image-main/content',
+  createdAt: '2026-08-12T04:00:00.000Z',
+}
+
+const secondaryImage = {
+  ...mainImage,
+  id: 'media-image-secondary',
+  originalFilename: 'detail.webp',
+  sortOrder: 1,
+  isPrimary: false,
+  contentUrl: '/api/products/product-1/media/media-image-secondary/content',
+}
+
+const video = {
+  ...mainImage,
+  id: 'media-video-1',
+  kind: 'VIDEO' as const,
+  originalFilename: 'overview.mp4',
+  mimeType: 'video/mp4',
+  sizeBytes: '4096',
+  width: 1920,
+  height: 1080,
+  durationMs: 30_000,
+  isPrimary: false,
+  contentUrl: '/api/products/product-1/media/media-video-1/content',
+}
 
 const productPageDto = {
   items: [{
@@ -28,14 +68,11 @@ const productPageDto = {
       tone: null,
       state: 'UNKNOWN',
     },
-    mainImage: 'https://example.test/main.webp',
-    images: [
-      'https://example.test/1.webp',
-      '',
-      '   ',
-      'https://example.test/2.webp',
-    ],
-    videos: ['https://example.test/1.mp4'],
+    media: {
+      mainImage,
+      images: [mainImage, secondaryImage],
+      videos: [video],
+    },
     twdSalePrice: { amount: '12345678901234567890.1234', currency: 'TWD' },
     myrSalePrice: { amount: null, currency: 'MYR' },
     purchaseCost: { amount: '10.5', currency: 'CNY' },
@@ -54,9 +91,9 @@ const productPageDto = {
   total: 51,
 } as unknown as ProductPageDto
 
-test('查询归一化分页并原样保留供应商 stable value', () => {
+test('查询归一化分页并保留启用状态与供应商 stable value', () => {
   assert.deepEqual(buildProductListQuery({
-    filters: { supplierValue: ' raw-supplier ' },
+    filters: { status: 'ACTIVE', supplierValue: ' raw-supplier ' },
     page: 2,
     pageSize: 50,
     search: '  Product-001  ',
@@ -64,6 +101,7 @@ test('查询归一化分页并原样保留供应商 stable value', () => {
     keyword: 'Product-001',
     page: 2,
     pageSize: 50,
+    status: 'ACTIVE',
     supplierValue: ' raw-supplier ',
   })
   assert.deepEqual(buildProductListQuery({
@@ -84,6 +122,21 @@ test('查询归一化分页并原样保留供应商 stable value', () => {
     { supplierValue: 'supplier-a' },
     undefined,
   ), { filters: {}, page: 1 })
+
+  assert.deepEqual(applyProductStatusFilter(
+    { status: 'ACTIVE', supplierValue: 'supplier-a' },
+    'INACTIVE',
+  ), {
+    filters: { status: 'INACTIVE', supplierValue: 'supplier-a' },
+    page: 1,
+  })
+  assert.deepEqual(applyProductStatusFilter(
+    { status: 'ACTIVE', supplierValue: 'supplier-a' },
+    undefined,
+  ), {
+    filters: { supplierValue: 'supplier-a' },
+    page: 1,
+  })
 })
 
 test('generated DTO adapter 保留 Decimal 字符串、顺序、raw 与 nullable actor', () => {
@@ -92,6 +145,11 @@ test('generated DTO adapter 保留 Decimal 字符串、顺序、raw 与 nullable
   assert.deepEqual(adapted, productPageDto)
   assert.notEqual(adapted, productPageDto)
   assert.notEqual(adapted.items, productPageDto.items)
+  assert.notEqual(adapted.items[0]?.media, productPageDto.items[0]?.media)
+  assert.notEqual(adapted.items[0]?.media.mainImage, productPageDto.items[0]?.media.mainImage)
+  assert.notEqual(adapted.items[0]?.media.images, productPageDto.items[0]?.media.images)
+  assert.notEqual(adapted.items[0]?.media.images[0], productPageDto.items[0]?.media.images[0])
+  assert.notEqual(adapted.items[0]?.media.videos, productPageDto.items[0]?.media.videos)
   assert.equal(adapted.items[0]?.twdSalePrice.amount, '12345678901234567890.1234')
   assert.deepEqual(adapted.items[0]?.attributes.map(item => item.title), ['颜色', '尺寸'])
   assert.equal(adapted.items[0]?.supplier?.value, 'supplier-a')
@@ -131,29 +189,35 @@ test('供应商筛选使用当前 label 与 stable value，并保留已停用已
   assert.deepEqual(buildSupplierFilterOptions(null), [])
 })
 
-test('ImageGroup 输入过滤空 URL 但不重排有效媒体', () => {
+test('结构化媒体使用 stable ID 和领域 contentUrl，拒绝不匹配的内容地址且不重排', () => {
   const product = adaptProductPageDto(productPageDto).items[0]!
 
-  assert.deepEqual(buildProductMainImageItems(product), [{
+  assert.deepEqual(buildProductMainImageItems(product, true), [{
     alt: '便携收纳包主图',
-    key: 'product-1-main',
-    src: 'https://example.test/main.webp',
+    key: 'media-image-main',
+    src: '/api/products/product-1/media/media-image-main/content',
     tooltip: '便携收纳包主图',
   }])
-  assert.deepEqual(buildProductImageItems(product), [
+  assert.deepEqual(buildProductImageItems(product, true), [
     {
       alt: '便携收纳包图片 1',
-      key: 'product-1-image-0',
-      src: 'https://example.test/1.webp',
+      key: 'media-image-main',
+      src: '/api/products/product-1/media/media-image-main/content',
       tooltip: '便携收纳包图片 1',
     },
     {
-      alt: '便携收纳包图片 4',
-      key: 'product-1-image-3',
-      src: 'https://example.test/2.webp',
-      tooltip: '便携收纳包图片 4',
+      alt: '便携收纳包图片 2',
+      key: 'media-image-secondary',
+      src: '/api/products/product-1/media/media-image-secondary/content',
+      tooltip: '便携收纳包图片 2',
     },
   ])
+  assert.deepEqual(buildProductMainImageItems(product, false), [])
+  assert.deepEqual(buildProductImageItems(product, false), [])
+  assert.equal(resolveProductMediaContentUrl(product.id, {
+    ...product.media.images[0]!,
+    contentUrl: 'https://example.test/media.webp',
+  }), null)
 })
 
 test('迟到响应同时受 Abort、权限、authEpoch 与 requestVersion 约束', () => {

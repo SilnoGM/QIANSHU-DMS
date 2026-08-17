@@ -53,9 +53,6 @@ function createRow(overrides: Partial<ProductQueryRow> = {}): ProductQueryRow {
     productNo: 'P202608120001',
     status: ProductStatus.DRAFT,
     supplierValue: 'SUPPLIER_A',
-    mainImage: null,
-    images: [],
-    videos: [],
     twdSalePriceAmount: { toString: () => '10.2000' },
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -123,6 +120,10 @@ function createFixture(options: {
     events.push('product.findUnique')
     return Promise.resolve(existingRows.shift() ?? null)
   })
+  const productMediaFindMany = jest.fn<Promise<unknown[]>, [unknown]>(() => {
+    events.push('product.media')
+    return Promise.resolve([])
+  })
   const transactionClient = {
     $queryRaw: jest.fn(() => {
       events.push('timeout')
@@ -132,6 +133,7 @@ function createFixture(options: {
       create: productCreate,
       findUnique: productFindUnique,
     },
+    productMedia: { findMany: productMediaFindMany },
   } as unknown as Prisma.TransactionClient
   const transactions = jest.fn<
     Promise<unknown>,
@@ -345,6 +347,7 @@ describe('ProductCommandService', () => {
       'transaction',
       'timeout',
       'product.findUnique',
+      'product.media',
     ])
     expect(fixture.resolveStoredValue).toHaveBeenCalledTimes(1)
     expect(fixture.productCreate).not.toHaveBeenCalled()

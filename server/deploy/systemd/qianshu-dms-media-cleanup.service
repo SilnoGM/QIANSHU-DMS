@@ -1,0 +1,20 @@
+[Unit]
+Description=Qianshu DMS Expired Media Trash Cleanup
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=qianshu-dms
+Group=qianshu-media
+UMask=0027
+WorkingDirectory=/opt/qianshu-dms/server/current
+EnvironmentFile=/etc/qianshu-dms/server.env
+ExecStart=/usr/bin/node dist/commands/media-operations.js cleanup-expired-trash
+TimeoutStartSec=90s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/qianshu-dms/server
+ReadWritePaths=/var/lib/qianshu-dms/media

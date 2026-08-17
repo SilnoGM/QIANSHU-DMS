@@ -37,6 +37,8 @@ allowBuilds:
   # argon2 通过 node-gyp-build 选择已发布的 N-API 预构建二进制；密码 Hash/verify 需要其原生实现。
   argon2: true
   prisma: true
+  # sharp 通过已发布的 libvips 平台预构建包完成图片完整解码。
+  sharp: true
 ```
 
 - 文件不声明 `packages`，因此不会形成多 package dependency graph。
@@ -55,6 +57,7 @@ allowBuilds:
 | `NODE_ENV` | 运行环境；production 会启用严格来源、Cookie 与 HMAC 校验 | `development` |
 | `PORT` | HTTP 监听端口 | `3000` |
 | `DATABASE_URL` | PostgreSQL 连接字符串 | 模板保持为空 |
+| `SHADOW_DATABASE_URL` | 仅 `prisma:drift:check` 使用的独立临时 PostgreSQL 数据库 | 数据库名必须以 `qianshu_dms_shadow_` 开头 |
 | `APP_ORIGIN` | Web 的精确 origin；production 必须使用 HTTPS | `http://127.0.0.1:9000` |
 | `TRUST_PROXY_HOPS` | 可信反向代理跳数，只允许 `0` 到 `2` | `0` |
 | `AUTH_ARGON2_CONCURRENCY` | 单实例同时执行的 Argon2 上限 | `2` |
@@ -62,8 +65,20 @@ allowBuilds:
 | `AUTH_USERNAME_HMAC_KEY` | username 限流主体 Hash key；production 必填 | development 留空时进程随机生成 |
 | `AUTH_USER_ID_HMAC_KEY` | user ID 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
 | `AUTH_IP_HMAC_KEY` | IP 限流与审计主体 Hash key；production 必填且不得与其他 key 相同 | development 留空时进程随机生成 |
+| `MEDIA_STORAGE_DRIVER` | 媒体存储驱动；首期只允许 `local` | `local` |
+| `MEDIA_STORAGE_ROOT` | release、源码和系统临时目录之外的绝对持久路径 | `/var/lib/qianshu-dms/media` |
+| `MEDIA_CONTENT_DELIVERY_MODE` | 私有内容交付；`application` 由 Server 流式输出，`internal_redirect` 交给 Nginx | development 使用 `application`，production 默认 `internal_redirect` |
+| `MEDIA_STAGING_TTL_HOURS` | 未完成 staging 的回收期限，只允许 `1` 到 `168` | `24` |
+| `MEDIA_TRASH_RETENTION_DAYS` | 软删除保留天数，只允许 `7` 到 `3650` | `7` |
+| `MEDIA_FFPROBE_PATH` | 受限 MP4 探测器的绝对可执行路径 | `/usr/bin/ffprobe` |
+| `MEDIA_QPDF_PATH` | 受限 PDF 结构探测器的绝对可执行路径 | `/usr/bin/qpdf` |
 
 三个 HMAC key 在 production 必须分别使用独立的 32-byte canonical base64url 值。具体必填条件与边界以 `.env.example` 和 `src/config/env.validation.ts` 为真相源；README 不保存真实值。
+
+Local media root 由部署侧预创建并设置运行用户权限；`internal_redirect` 模式还需配置 Nginx 读取组。
+Server 会在实际启用存储时校验
+realpath、symlink、可写性、同一文件系统和剩余空间。不得把示例路径改为源码、release 或系统临时目录，
+也不得把实际 root 或其下文件名写入日志。
 
 ## 常用命令
 
@@ -78,14 +93,23 @@ pnpm -C server db:migrate:deploy
 pnpm -C server auth:bootstrap-admin
 pnpm -C server auth:recover-admin
 pnpm -C server auth:cleanup
+pnpm -C server media:cleanup:expired-trash
+pnpm -C server media:ops:health
+pnpm -C server media:recovery:dry-run
 ```
 
 - `check` 与 `build` 只验证工程和单元测试，不连接数据库；它们在未设置 `DATABASE_URL` 时也应可执行。
 - `test:e2e` 面向真实 PostgreSQL，调用前必须通过当前进程环境提供测试数据库连接，且测试数据库必须与个人或生产数据库隔离。
+- `prisma:drift:check` 使用 migration history 重放后的物理结构与 `DATABASE_URL` 比较。执行前必须临时提供 `SHADOW_DATABASE_URL`；Prisma 会重置该数据库，因此它不得指向业务库，且使用后应删除。wrapper 会拒绝同库目标和不符合 `qianshu_dms_shadow_` 命名边界的数据库，并原样传播 drift 退出码。
 - `dev` 与 `start` 会先生成 Prisma Client，再启动 NestJS。
 - `start:prod` 直接执行已经构建的 `dist/main.js`，不会生成 Prisma Client；部署流程必须先完成安装、生成与构建。
 - `auth:bootstrap-admin` 只用于首次创建 `system_admin`；`auth:recover-admin` 只用于已有 `system_admin` 的离线密码恢复。两者都要求本机交互式 TTY，密码不得通过 argv、环境变量或脚本传入。
 - `auth:cleanup` 由单一外部 Cron 定期调用，用于小批清理过期 Session 和限流数据；API 实例不会自行启动清理定时器。
+- `media:cleanup:expired-trash`、`media:ops:health` 与 `media:recovery:dry-run` 运行已构建的 `dist`；清理命令
+  仅处理已经超过保留期且再次确认零引用的 `TRASHED` 文件，任一 failed/isolated 均非零退出；health 输出
+  read/write/video validator 与容量健康合同，dry run 只读校验恢复后的数据库引用、文件位置、size 和
+  checksum。完整部署、监控、备份与恢复边界见
+  [`媒体存储部署与恢复`](../docs/后端文档/媒体存储部署与恢复.md)。
 
 ## 接口契约
 

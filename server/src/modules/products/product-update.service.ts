@@ -30,6 +30,10 @@ import {
   type NormalizedProductCreateMoney,
 } from './product-command.normalizer'
 import {
+  mapProductMedia,
+  readActiveProductMedia,
+} from './media/product-media-query.mapper'
+import {
   mapProductListItem,
   type ProductListItem,
   type ProductQueryRow,
@@ -351,7 +355,12 @@ export class ProductUpdateService {
       transaction,
       row,
     )
-    return mapProductListItem(row, supplierResolution)
+    const mediaRows = await readActiveProductMedia(transaction, [productId])
+    return mapProductListItem(
+      row,
+      supplierResolution,
+      mapProductMedia(productId, mediaRows),
+    )
   }
 
   private async resolveResponseSupplier(

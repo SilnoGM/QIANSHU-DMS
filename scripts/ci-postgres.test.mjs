@@ -409,6 +409,10 @@ test('session、password、mask、Docker argv、动态端口与 cleanup 保持�
     databaseUrl,
     `postgresql://qianshu_ci:${harness.password}@127.0.0.1:54321/qianshu_ci?schema=public`,
   )
+  assert.equal(
+    child.env.QIANSHU_CI_TEMP_ROOT,
+    harness.observed.sessionDirectory,
+  )
   assert.deepEqual(harness.masks, [harness.password, databaseUrl])
 
   const maskPasswordIndex = harness.events.findIndex(

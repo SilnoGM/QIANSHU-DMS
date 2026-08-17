@@ -5,7 +5,12 @@ import type {
 } from '../dictionaries/dictionary-lookup.service'
 import { ProductQueryService } from './product-query.service'
 import type { ProductQueryRow } from './product-query.mapper'
-import { ProductStatus } from '../../generated/prisma/enums'
+import {
+  MediaAssetStatus,
+  MediaType,
+  ProductMediaKind,
+  ProductStatus,
+} from '../../generated/prisma/enums'
 
 function createRow(
   id: string,
@@ -17,9 +22,6 @@ function createRow(
     productNo: `NO-${id}`,
     status: ProductStatus.DRAFT,
     supplierValue,
-    mainImage: null,
-    images: [],
-    videos: [],
     twdSalePriceAmount: null,
     twdSalePriceCurrency: 'TWD',
     myrSalePriceAmount: null,
@@ -40,6 +42,7 @@ function createFixture(rows: ProductQueryRow[] = []): {
   readonly count: jest.Mock<Promise<number>, [unknown]>
   readonly findMany: jest.Mock<Promise<ProductQueryRow[]>, [unknown]>
   readonly findUnique: jest.Mock<Promise<ProductQueryRow | null>, [unknown]>
+  readonly productMediaFindMany: jest.Mock<Promise<unknown[]>, [unknown]>
   readonly resolveStoredValue: jest.Mock<
     Promise<StoredDictionaryValueResolution>,
     [{ readonly dictionaryCode: string; readonly value: string }]
@@ -58,11 +61,14 @@ function createFixture(rows: ProductQueryRow[] = []): {
     .mockResolvedValue(rows[0] ?? null)
   const queryRaw = jest.fn<Promise<unknown[]>, [unknown]>()
     .mockResolvedValue([])
+  const productMediaFindMany = jest.fn<Promise<unknown[]>, [unknown]>()
+    .mockResolvedValue([])
   const transaction = jest.fn<
     Promise<unknown>,
     [(client: unknown) => Promise<unknown>]
   >((operation) => operation({
-    product: { count, findMany },
+    product: { count, findMany, findUnique },
+    productMedia: { findMany: productMediaFindMany },
     $queryRaw: queryRaw,
   }))
   const resolveStoredValues = jest.fn<
@@ -87,6 +93,7 @@ function createFixture(rows: ProductQueryRow[] = []): {
       {
         $transaction: transaction,
         product: { findUnique },
+        productMedia: { findMany: productMediaFindMany },
       } as unknown as PrismaService,
       {
         resolveStoredValue,
@@ -96,6 +103,7 @@ function createFixture(rows: ProductQueryRow[] = []): {
     count,
     findMany,
     findUnique,
+    productMediaFindMany,
     resolveStoredValue,
     resolveStoredValues,
     queryRaw,
@@ -108,6 +116,7 @@ describe('ProductQueryService', () => {
 
     await expect(fixture.service.getById('product-1')).resolves.toMatchObject({
       id: 'product-1',
+      media: { mainImage: null, images: [], videos: [] },
       supplier: {
         value: 'HISTORICAL',
         state: 'UNKNOWN',
@@ -127,6 +136,13 @@ describe('ProductQueryService', () => {
       dictionaryCode: 'service_provider.supplier',
       value: 'HISTORICAL',
     })
+    expect(fixture.productMediaFindMany).toHaveBeenCalledTimes(1)
+    expect(fixture.productMediaFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        productId: { in: ['product-1'] },
+        detachedAt: null,
+      },
+    }))
   })
 
   it('returns PRODUCT_NOT_FOUND without resolving a supplier', async () => {
@@ -139,7 +155,7 @@ describe('ProductQueryService', () => {
     expect(fixture.resolveStoredValue).not.toHaveBeenCalled()
   })
 
-  it('combines name/number search with exact supplier filtering and shares the where', async () => {
+  it('combines name/number search with exact status and supplier filtering and shares the where', async () => {
     const fixture = createFixture([
       createRow('1', 'SUPPLIER_A'),
       createRow('2', null),
@@ -151,6 +167,7 @@ describe('ProductQueryService', () => {
       keyword: 'product-001',
       page: 2,
       pageSize: 10,
+      status: ProductStatus.ACTIVE,
       supplierValue: 'SUPPLIER_A',
     })
 
@@ -165,6 +182,7 @@ describe('ProductQueryService', () => {
       select: Record<string, unknown>
     }
     expect(countInput.where).toEqual({
+      status: ProductStatus.ACTIVE,
       supplierValue: 'SUPPLIER_A',
       OR: [
         {
@@ -205,6 +223,24 @@ describe('ProductQueryService', () => {
       'SUPPLIER_A',
       ' raw ',
     ])
+    expect(result.items.every(item => (
+      item.media.mainImage === null
+      && item.media.images.length === 0
+      && item.media.videos.length === 0
+    ))).toBe(true)
+    expect(fixture.productMediaFindMany).toHaveBeenCalledTimes(1)
+    expect(fixture.productMediaFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        productId: { in: ['1', '2', '3', '4'] },
+        detachedAt: null,
+      },
+      orderBy: [
+        { productId: 'asc' },
+        { kind: 'asc' },
+        { sortOrder: 'asc' },
+        { id: 'asc' },
+      ],
+    }))
     expect(fixture.queryRaw).toHaveBeenCalledTimes(1)
   })
 
@@ -218,6 +254,64 @@ describe('ProductQueryService', () => {
       total: 0,
     })
     expect(fixture.resolveStoredValues).not.toHaveBeenCalled()
+    expect(fixture.productMediaFindMany).not.toHaveBeenCalled()
+  })
+
+  it('groups one batch of active ProductMedia into the matching products', async () => {
+    const fixture = createFixture([
+      createRow('1', null),
+      createRow('2', null),
+    ])
+    fixture.productMediaFindMany.mockResolvedValue([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        productId: '2',
+        kind: ProductMediaKind.IMAGE,
+        sortOrder: 0,
+        isPrimary: true,
+        createdAt: new Date('2026-08-14T01:00:00.000Z'),
+        mediaAsset: {
+          mediaType: MediaType.IMAGE,
+          status: MediaAssetStatus.READY,
+          originalFilename: 'front.jpg',
+          mimeType: 'image/jpeg',
+          sizeBytes: 2048n,
+          width: 1200,
+          height: 800,
+          durationMs: null,
+        },
+      },
+    ])
+
+    const result = await fixture.service.list({})
+
+    expect(result.items[0]?.media).toEqual({
+      mainImage: null,
+      images: [],
+      videos: [],
+    })
+    expect(result.items[1]?.media).toMatchObject({
+      mainImage: {
+        id: '11111111-1111-4111-8111-111111111111',
+        contentUrl: '/api/products/2/media/11111111-1111-4111-8111-111111111111/content',
+      },
+      images: [{ id: '11111111-1111-4111-8111-111111111111' }],
+      videos: [],
+    })
+    expect(fixture.productMediaFindMany).toHaveBeenCalledTimes(1)
+    const input = fixture.productMediaFindMany.mock.calls[0]?.[0] as {
+      select: { mediaAsset: { select: Record<string, unknown> } }
+    }
+    expect(Object.keys(input.select.mediaAsset.select).sort()).toEqual([
+      'durationMs',
+      'height',
+      'mediaType',
+      'mimeType',
+      'originalFilename',
+      'sizeBytes',
+      'status',
+      'width',
+    ])
   })
 
   it('maps database or dictionary failures to a fixed internal error', async () => {

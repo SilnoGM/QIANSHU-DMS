@@ -60,9 +60,11 @@ interface ProductResponseBody {
     readonly tone: DictionaryTone | null
     readonly state: string
   } | null
-  readonly mainImage: string | null
-  readonly images: string[]
-  readonly videos: string[]
+  readonly media: {
+    readonly mainImage: null
+    readonly images: readonly unknown[]
+    readonly videos: readonly unknown[]
+  }
   readonly twdSalePrice: { readonly amount: string | null; readonly currency: string }
   readonly myrSalePrice: { readonly amount: string | null; readonly currency: string }
   readonly purchaseCost: { readonly amount: string | null; readonly currency: string }
@@ -453,9 +455,7 @@ export class ProductCreateE2eHarness {
         tone: DictionaryTone.SUCCESS,
         state: 'EFFECTIVE',
       },
-      mainImage: null,
-      images: [],
-      videos: [],
+      media: { mainImage: null, images: [], videos: [] },
       twdSalePrice: { amount: '1280.5', currency: 'TWD' },
       myrSalePrice: { amount: null, currency: 'MYR' },
       purchaseCost: { amount: '88.1', currency: 'CNY' },
@@ -479,9 +479,6 @@ export class ProductCreateE2eHarness {
       productNo: body.productNo,
       status: 'ACTIVE',
       supplierValue: this.supplierValue,
-      mainImage: null,
-      images: [],
-      videos: [],
       twdSalePriceCurrency: 'TWD',
       myrSalePriceAmount: null,
       myrSalePriceCurrency: 'MYR',
@@ -494,6 +491,9 @@ export class ProductCreateE2eHarness {
       updatedByUserId: input.expectedActorId,
       version: 1,
     })
+    expect(product).not.toHaveProperty('mainImage')
+    expect(product).not.toHaveProperty('images')
+    expect(product).not.toHaveProperty('videos')
     expect(product.twdSalePriceAmount?.toFixed(4)).toBe('1280.5000')
     expect(product.purchaseCostAmount?.toFixed(4)).toBe('88.1000')
 

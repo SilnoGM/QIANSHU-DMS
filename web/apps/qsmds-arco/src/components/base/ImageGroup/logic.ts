@@ -44,6 +44,26 @@ export function normalizeImageGroupItems(
 }
 
 /**
+ * 加载状态必须同时绑定稳定业务 key 与当前 URL。只使用业务 key 会让同 key 换图时
+ * 沿用旧状态，只使用 URL 又无法区分调用方有意提供的不同图片项。
+ */
+export function resolveImageGroupStateKey(item: NormalizedImageGroupItem): string {
+  return JSON.stringify([item.key, item.item.src])
+}
+
+/**
+ * 数据刷新时只丢弃已移除或 URL 已变化图片的状态。若列表查询返回同一批媒体，
+ * 浏览器通常复用已完成的 img 且不会再次触发 load，因此必须保留对应 loaded 状态。
+ */
+export function retainImageGroupStateKeys(
+  stateKeys: ReadonlySet<string>,
+  items: readonly NormalizedImageGroupItem[],
+): Set<string> {
+  const activeKeys = new Set(items.map(resolveImageGroupStateKey))
+  return new Set([...stateKeys].filter(key => activeKeys.has(key)))
+}
+
+/**
  * 数字尺寸限制在 24–96px。下限保证失败图标和键盘焦点环仍可辨识，上限避免
  * 通用基础组件被误用成大幅画廊并破坏表格或窄屏卡片布局。
  */

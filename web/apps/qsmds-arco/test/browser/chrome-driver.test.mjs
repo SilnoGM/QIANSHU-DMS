@@ -194,3 +194,39 @@ test('Page navigation removes the event waiter that loses the navigation race', 
   assert.equal(loadListenerCount, 0)
   assert.equal(withinDocumentListenerCount, 0)
 })
+
+test('页面文件选择只把绝对 fixture 路径交给唯一输入框', async () => {
+  const calls = []
+  const page = new ChromePage({
+    async send(method, params) {
+      calls.push([method, params])
+      if (method === 'DOM.getDocument') {
+        return { root: { nodeId: 1 } }
+      }
+      if (method === 'DOM.querySelector') {
+        return { nodeId: 9 }
+      }
+      return {}
+    },
+  })
+
+  await page.setFiles('#product-media-upload-input', [
+    '/var/tmp/qianshu-fixtures/main.webp',
+  ])
+
+  assert.deepEqual(calls, [
+    ['DOM.getDocument', { depth: 0, pierce: true }],
+    ['DOM.querySelector', {
+      nodeId: 1,
+      selector: '#product-media-upload-input',
+    }],
+    ['DOM.setFileInputFiles', {
+      files: ['/var/tmp/qianshu-fixtures/main.webp'],
+      nodeId: 9,
+    }],
+  ])
+  await assert.rejects(
+    page.setFiles('#product-media-upload-input', ['relative.webp']),
+    { message: 'Browser file fixture path is invalid' },
+  )
+})

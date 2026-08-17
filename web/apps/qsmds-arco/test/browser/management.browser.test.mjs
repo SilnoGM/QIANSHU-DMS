@@ -472,7 +472,6 @@ async function verifyProductCreate(page, baseUrl) {
     name: document.querySelector('input[placeholder="请输入产品名称"]')?.value ?? null,
     purchaseCurrency: document.querySelector('input[data-currency="CNY"]') !== null,
     showsDraft: document.body.innerText.includes('草稿（DRAFT）'),
-    showsMediaDelay: document.body.innerText.includes('本阶段暂不处理媒体上传'),
   }))()`)
   assert.deepEqual(defaultState, {
     documentFits: true,
@@ -480,7 +479,6 @@ async function verifyProductCreate(page, baseUrl) {
     name: productName,
     purchaseCurrency: true,
     showsDraft: true,
-    showsMediaDelay: true,
   })
 
   await selectVisibleComboboxOption(page, '产品状态', '启用（ACTIVE）')
@@ -704,29 +702,25 @@ async function verifyProductCreate(page, baseUrl) {
   const product = productResponse.body?.items?.find(item => item.name === productName)
   assert.deepEqual({
     attributes: product?.attributes,
-    images: product?.images,
-    mainImage: product?.mainImage,
+    media: product?.media,
     myrSalePrice: product?.myrSalePrice,
     productNo: product?.productNo,
     purchaseCost: product?.purchaseCost,
     status: product?.status,
     supplierValue: product?.supplier?.value,
     twdSalePrice: product?.twdSalePrice,
-    videos: product?.videos,
   }, {
     attributes: [
       { title: '颜色', value: '墨黑' },
       { title: '尺寸', value: 'XL' },
     ],
-    images: [],
-    mainImage: null,
+    media: { images: [], mainImage: null, videos: [] },
     myrSalePrice: { amount: '42.25', currency: 'MYR' },
     productNo: 'PRD-BRW-00000001',
     purchaseCost: { amount: '88.1', currency: 'CNY' },
     status: 'ACTIVE',
     supplierValue: 'BROWSER_SUPPLIER_EFFECTIVE',
     twdSalePrice: { amount: '1280.5', currency: 'TWD' },
-    videos: [],
   })
   assert.equal(typeof product?.id, 'string')
 
@@ -821,6 +815,24 @@ async function waitForProductList(page, expectedText) {
     return root?.getClientRects().length > 0
       && root.querySelector('[aria-busy="false"]') !== null
       && root.textContent?.includes(${serializedText})
+  })()`)
+}
+
+/**
+ * 产品查询刷新会复用相同行内的 ImageGroup。管理场景的历史媒体夹具刻意没有
+ * 物理文件，因此 loaded/error 都是合法终态，但刷新后绝不能永久退回 loading。
+ */
+async function waitForProductImagesSettled(page, productNo) {
+  const serializedProductNo = JSON.stringify(productNo)
+  await page.waitFor(`(() => {
+    const row = [...document.querySelectorAll('tbody tr')].find(candidate => (
+      candidate.textContent?.includes(${serializedProductNo})
+    ))
+    const images = [...(row?.querySelectorAll('[data-slot="image-group"] img') ?? [])]
+      .filter(image => image.getClientRects().length > 0)
+    return images.length > 0 && images.every(image => (
+      ['loaded', 'error'].includes(image.parentElement?.getAttribute('data-image-state'))
+    ))
   })()`)
 }
 
@@ -991,37 +1003,44 @@ async function verifyProductList(page, baseUrl) {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
-      dialog?.querySelector('video')?.dispatchEvent(new Event('error'))
+      const video = dialog?.querySelector('video')
+      if (!(video instanceof HTMLVideoElement)) throw new Error('preview video unavailable')
+      Object.defineProperty(video, 'error', {
+        configurable: true,
+        value: { code: MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED },
+      })
+      video.dispatchEvent(new Event('error'))
       return true
     })()`)
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
-      return dialog?.textContent?.includes('视频暂不可预览')
+      return dialog?.textContent?.includes('当前浏览器不支持此视频')
+        && dialog.querySelector('[aria-label="下载视频 browser-management-overview.mp4"]') !== null
         && dialog.querySelector('a[target="_blank"]') !== null
     })()`)
-    await clickVisibleModalButton(page, '视频 2')
-    const unsafeVideoState = await page.evaluate(`(() => {
+    await clickVisibleModalButton(page, 'browser-management-detail.mp4')
+    const secondVideoState = await page.evaluate(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('产品视频'))
       return {
         hasExternalLink: dialog?.querySelector('a[target="_blank"]') !== null,
         hasVideo: dialog?.querySelector('video') !== null,
-        showsRawValue: dialog?.textContent?.includes('javascript:alert(1)') ?? false,
+        showsRawValue: dialog?.textContent?.includes('javascript:') ?? false,
       }
     })()`)
-    assert.deepEqual(unsafeVideoState, {
-      hasExternalLink: false,
-      hasVideo: false,
-      showsRawValue: true,
+    assert.deepEqual(secondVideoState, {
+      hasExternalLink: true,
+      hasVideo: true,
+      showsRawValue: false,
     })
     await clickVisibleModalButton(page, '关闭视频')
     await waitForNoVisibleModal(page, '产品视频')
 
     // 第二页请求必须保持 Server 分页；从第二页搜索时回到第一页，并允许继续
-    // 与供应商 stable value 组合为同一次 Server 查询。
+    // 与启用状态、供应商 stable value 组合为同一次 Server 查询。
     await page.evaluate(`(() => {
       const button = [...document.querySelectorAll('[data-slot="pagination-next"]')]
         .find(candidate => candidate.getClientRects().length > 0 && !candidate.disabled)
@@ -1039,10 +1058,12 @@ async function verifyProductList(page, baseUrl) {
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 1 条')`)
     await clickVisibleButton(page, '筛选')
+    await selectVisibleFilter(page, '启用状态', '已启用')
     await selectVisibleFilter(page, '供应商', 'Browser 有效供应商')
     await clickVisibleButton(page, '应用筛选')
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 1 条')`)
+    await waitForProductImagesSettled(page, productNo)
     assert.equal(await page.evaluate(`document.body.innerText.includes(
       'Browser 停用供应商产品',
     )`), false)
@@ -1053,11 +1074,17 @@ async function verifyProductList(page, baseUrl) {
     assert.equal(productRequests.some(url => (
       url.searchParams.get('page') === '1'
       && url.searchParams.get('keyword') === productNo.toLowerCase()
+      && url.searchParams.get('status') === 'ACTIVE'
       && url.searchParams.get('supplierValue') === 'BROWSER_SUPPLIER_EFFECTIVE'
     )), true)
     await clickVisibleButton(page, '清空筛选')
     await waitForProductList(page, productNo)
     await page.waitFor(`document.body.innerText.includes('共 1 条')`)
+    await waitForProductImagesSettled(page, productNo)
+    const clearedFilterRequest = productRequests.at(-1)
+    assert.equal(clearedFilterRequest?.searchParams.get('keyword'), productNo.toLowerCase())
+    assert.equal(clearedFilterRequest?.searchParams.has('status'), false)
+    assert.equal(clearedFilterRequest?.searchParams.has('supplierValue'), false)
     await fillVisibleInput(
       page,
       'input[placeholder="搜索产品名称或产品编号"]',
@@ -1539,6 +1566,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'numbering-rules:read',
     'numbering-rules:read-issuances',
     'numbering-rules:update',
+    'product-media:read',
     'products:create',
     'products:read',
     'products:update',

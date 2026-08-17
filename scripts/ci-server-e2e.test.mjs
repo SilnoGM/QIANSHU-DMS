@@ -19,6 +19,8 @@ const expectedCommands = [
   ['pnpm', ['-C', 'server', 'db:migrate:deploy']],
   ['pnpm', ['-C', 'server', 'exec', 'prisma', 'migrate', 'status']],
   ['pnpm', ['-C', 'server', 'test:e2e']],
+  [process.execPath, ['./scripts/ci-product-media-e2e.mjs']],
+  [process.execPath, ['./scripts/ci-product-media-cutover-e2e.mjs']],
 ]
 
 test('URL 守卫接受 127.0.0.1 与 localhost 的精确 CI 数据库', () => {
@@ -72,7 +74,7 @@ test('URL 守卫拒绝隔离边界外的协议、凭据、主机、路径和参�
   }
 })
 
-test('Server E2E 固定四步顺序并复用唯一安全 child env', async () => {
+test('Server E2E 固定执行公共与媒体专属验收并复用唯一安全 child env', async () => {
   const sourceEnv = {
     DATABASE_URL: databaseUrl,
     DEBUG: 'unsafe-debug',

@@ -44,9 +44,11 @@ interface ProductListItemBody {
     readonly tone: DictionaryTone | null
     readonly state: 'DISABLED' | 'EFFECTIVE' | 'UNKNOWN'
   } | null
-  readonly mainImage: string | null
-  readonly images: string[]
-  readonly videos: string[]
+  readonly media: {
+    readonly mainImage: null
+    readonly images: readonly unknown[]
+    readonly videos: readonly unknown[]
+  }
   readonly twdSalePrice: { readonly amount: string | null; readonly currency: string }
   readonly myrSalePrice: { readonly amount: string | null; readonly currency: string }
   readonly purchaseCost: { readonly amount: string | null; readonly currency: string }
@@ -267,12 +269,6 @@ describe('Product list API with isolated PostgreSQL', () => {
           productNo: `${PRODUCT_NO_PREFIX}001`,
           status: ProductStatus.ACTIVE,
           supplierValue: supplierValues.effective,
-          mainImage: 'https://example.test/main-1.webp',
-          images: [
-            'https://example.test/1.webp',
-            'https://example.test/2.webp',
-          ],
-          videos: ['https://example.test/1.mp4'],
           twdSalePriceAmount: '12345678901234567890.1234',
           myrSalePriceAmount: null,
           purchaseCostAmount: '10.5000',
@@ -393,6 +389,7 @@ describe('Product list API with isolated PostgreSQL', () => {
         tone: DictionaryTone.SUCCESS,
         state: 'EFFECTIVE',
       },
+      media: { mainImage: null, images: [], videos: [] },
       twdSalePrice: {
         amount: '12345678901234567890.1234',
         currency: 'TWD',
@@ -413,6 +410,11 @@ describe('Product list API with isolated PostgreSQL', () => {
       },
     })
     expect(effective?.createdBy).not.toHaveProperty('username')
+    expect(page.items.every(item => (
+      item.media.mainImage === null
+      && item.media.images.length === 0
+      && item.media.videos.length === 0
+    ))).toBe(true)
     expect(page.items.find(item => item.id === products.disabledId))
       .toMatchObject({
         supplier: {
@@ -436,7 +438,7 @@ describe('Product list API with isolated PostgreSQL', () => {
       .toMatchObject({ supplier: null })
   })
 
-  it('applies exact supplier filters, resets empty pages and rejects invalid queries', async () => {
+  it('applies exact status and supplier filters, resets empty pages and rejects invalid queries', async () => {
     const reader = await createLoggedInBrowser({ productsRead: true })
     await seedProducts(reader.account.user.id)
 
@@ -449,6 +451,27 @@ describe('Product list API with isolated PostgreSQL', () => {
     expect(filtered.items.map(item => item.productNo)).toEqual([
       `${PRODUCT_NO_PREFIX}001`,
     ])
+
+    const inactiveResponse = await reader.browser
+      .get('/api/products')
+      .query({ status: ProductStatus.INACTIVE })
+      .expect(200)
+    const inactive = readResponseBody<ProductPageBody>(inactiveResponse)
+    expect(inactive).toMatchObject({ total: 2 })
+    expect(inactive.items.every(item => item.status === ProductStatus.INACTIVE))
+      .toBe(true)
+
+    const combinedResponse = await reader.browser
+      .get('/api/products')
+      .query({
+        status: ProductStatus.ACTIVE,
+        supplierValue: supplierValues.effective,
+      })
+      .expect(200)
+    expect(readResponseBody<ProductPageBody>(combinedResponse)).toMatchObject({
+      total: 1,
+      items: [{ productNo: `${PRODUCT_NO_PREFIX}001` }],
+    })
 
     const wrongCase = await reader.browser
       .get('/api/products')
@@ -474,6 +497,7 @@ describe('Product list API with isolated PostgreSQL', () => {
       'pageSize=101',
       'keyword=%20%20%20',
       `keyword=${encodeURIComponent('😀'.repeat(129))}`,
+      'status=UNKNOWN',
       'supplierValue=%20%20%20',
     ]) {
       await reader.browser

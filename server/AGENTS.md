@@ -24,9 +24,11 @@
     # argon2 通过 node-gyp-build 选择已发布的 N-API 预构建二进制；密码 Hash/verify 需要其原生实现。
     argon2: true
     prisma: true
+    # sharp 通过已发布的 libvips 平台预构建包完成图片完整解码。
+    sharp: true
   ```
 
-- `allowBuilds` 只允许已审查的 `prisma`、`@prisma/engines` 与 `argon2` 运行 build script；`@scarf/scarf` 被明确拒绝。
+- `allowBuilds` 只允许已审查的 `prisma`、`@prisma/engines`、`argon2` 与 `sharp` 运行 build script；`@scarf/scarf` 被明确拒绝。
 - `injectWorkspacePackages` 只服务现代 production deploy：正式 Server 归档使用 `pnpm deploy --prod`，不得使用 `--legacy`。
 - 该配置不得借机新增 `packages`、扩张 Server workspace 或把 Root / Web 纳入依赖图；Root、Server 与 Web 继续保持独立依赖域。
 - 新增带 build script 的依赖时，必须先审查固定版本、脚本内容和工程必要性，再精确添加包名。

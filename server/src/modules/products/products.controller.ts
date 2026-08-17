@@ -1,17 +1,27 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Head,
   Headers,
   HttpCode,
   HttpStatus,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Req,
+  Res,
+  StreamableFile,
 } from '@nestjs/common'
-import { ApiHeader, ApiTags } from '@nestjs/swagger'
+import {
+  ApiBody,
+  ApiConsumes,
+  ApiHeader,
+  ApiTags,
+} from '@nestjs/swagger'
 
 import { getRequestId } from '../../infrastructure/http/request-id.middleware'
 import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
@@ -20,6 +30,13 @@ import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { CreateProductRequestDto } from './dto/product-create.dto'
 import { ProductListQueryDto } from './dto/product-list-query.dto'
+import {
+  ProductMediaDetachRequestDto,
+  ProductMediaIdParamDto,
+  ProductMediaLayoutRequestDto,
+  ProductMediaUploadRequestDto,
+  ProductMediaUploadResponseDto,
+} from './dto/product-media.dto'
 import {
   ProductIdParamDto,
   UpdateProductRequestDto,
@@ -30,12 +47,37 @@ import {
 } from './dto/product-response.dto'
 import { ProductCommandService } from './product-command.service'
 import { parseProductIdempotencyKey } from './product-command.normalizer'
+import { ApiProductMediaContentContract } from './media/product-media-content.contract'
+import {
+  ProductMediaContentService,
+  type ProductMediaContentResponse,
+} from './media/product-media-content.service'
+import {
+  ProductMediaHttpService,
+  type ProductMediaUploadResponse,
+} from './media/product-media-http.service'
+import type { ProductMediaMultipartRequest } from './media/product-media-multipart.parser'
 import type { ProductListItem } from './product-query.mapper'
 import {
   ProductQueryService,
   type ProductPage,
 } from './product-query.service'
 import { ProductUpdateService } from './product-update.service'
+
+interface ProductMediaContentHttpResponse {
+  setHeader(name: string, value: string): unknown
+  status(statusCode: number): unknown
+}
+
+function applyProductMediaContentResponse(
+  response: ProductMediaContentHttpResponse,
+  result: ProductMediaContentResponse,
+): void {
+  response.status(result.status)
+  for (const [name, value] of Object.entries(result.headers)) {
+    if (value !== undefined) response.setHeader(name, value)
+  }
+}
 
 @ApiTags('products')
 @Controller('products')
@@ -44,6 +86,8 @@ export class ProductsController {
     private readonly products: ProductQueryService,
     private readonly commands: ProductCommandService,
     private readonly updates: ProductUpdateService,
+    private readonly productMedia: ProductMediaHttpService,
+    private readonly productMediaContent: ProductMediaContentService,
   ) {}
 
   @Get()
@@ -163,6 +207,47 @@ export class ProductsController {
     return this.products.getById(params.productId)
   }
 
+  @Head(':productId/media/:productMediaId/content')
+  @RequirePermissions('product-media:read')
+  @ApiProductMediaContentContract('HEAD')
+  async headMediaContent(
+    @Param() params: ProductMediaIdParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productMediaContent.resolve(
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get(':productId/media/:productMediaId/content')
+  @RequirePermissions('product-media:read')
+  @ApiProductMediaContentContract('GET')
+  async getMediaContent(
+    @Param() params: ProductMediaIdParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productMediaContent.resolve(
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
+  }
+
   @Patch(':productId')
   @RequirePermissions('products:update')
   @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
@@ -207,5 +292,132 @@ export class ProductsController {
       actorUserId: getRequestAuthContext(request).userId,
       requestId: getRequestId(request),
     }, params.productId, dto)
+  }
+
+  @Post(':productId/media')
+  @RequirePermissions('products:update')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: ProductMediaUploadRequestDto })
+  @ApiContractResponse({
+    status: HttpStatus.CREATED,
+    type: ProductMediaUploadResponseDto,
+  })
+  @ApiApplicationContract({
+    operationId: 'products_upload_media',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    retry: false,
+    privateNoStore: true,
+    errors: [
+      { status: 400, codes: ['MEDIA_MULTIPART_INVALID'] },
+      {
+        status: 403,
+        codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+      { status: 404, codes: ['PRODUCT_MEDIA_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+      { status: 413, codes: ['MEDIA_FILE_TOO_LARGE'] },
+      { status: 415, codes: ['MEDIA_TYPE_UNSUPPORTED'] },
+      {
+        status: 422,
+        codes: [
+          'MEDIA_CONTENT_INVALID',
+          'PRODUCT_MEDIA_LIMIT_EXCEEDED',
+          'VALIDATION_FAILED',
+        ],
+      },
+      { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
+    ],
+  })
+  uploadMedia(
+    @Param() params: ProductIdParamDto,
+    @Req() request: ProductMediaMultipartRequest,
+  ): Promise<ProductMediaUploadResponse> {
+    return this.productMedia.upload({
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }, params.productId, request)
+  }
+
+  @Put(':productId/media/layout')
+  @RequirePermissions('products:update')
+  @ApiBody({ type: ProductMediaLayoutRequestDto })
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
+  @ApiApplicationContract({
+    operationId: 'products_update_media_layout',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    retry: false,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+      { status: 404, codes: ['PRODUCT_MEDIA_NOT_FOUND'] },
+      {
+        status: 409,
+        codes: ['PRODUCT_MEDIA_LAYOUT_CHANGED', 'PRODUCT_STATE_CHANGED'],
+      },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  updateMediaLayout(
+    @Param() params: ProductIdParamDto,
+    @Body() dto: ProductMediaLayoutRequestDto,
+    @Req() request: object,
+  ): Promise<ProductListItem> {
+    return this.productMedia.updateLayout({
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }, params.productId, dto)
+  }
+
+  @Delete(':productId/media/:productMediaId')
+  @RequirePermissions('products:update')
+  @ApiBody({ type: ProductMediaDetachRequestDto })
+  @ApiContractResponse({ status: HttpStatus.OK, type: ProductListItemDto })
+  @ApiApplicationContract({
+    operationId: 'products_detach_media',
+    session: 'required',
+    authorization: true,
+    csrf: true,
+    badRequest: true,
+    resourceLocator: true,
+    conflict: true,
+    validation: true,
+    retry: false,
+    privateNoStore: true,
+    errors: [
+      {
+        status: 403,
+        codes: ['CSRF_REJECTED', 'FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
+      },
+      { status: 404, codes: ['PRODUCT_MEDIA_NOT_FOUND'] },
+      { status: 409, codes: ['PRODUCT_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+      { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
+    ],
+  })
+  detachMedia(
+    @Param() params: ProductMediaIdParamDto,
+    @Body() dto: ProductMediaDetachRequestDto,
+    @Req() request: object,
+  ): Promise<ProductListItem> {
+    return this.productMedia.detach({
+      actorUserId: getRequestAuthContext(request).userId,
+      requestId: getRequestId(request),
+    }, params.productId, params.productMediaId, dto)
   }
 }

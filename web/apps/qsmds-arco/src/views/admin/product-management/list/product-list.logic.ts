@@ -2,6 +2,8 @@ import type {
   ProductActorDto,
   ProductAttributeDto,
   ProductListItemDto,
+  ProductMediaDto,
+  ProductMediaItemDto,
   ProductMoneyDto,
   ProductPageDto,
   ProductsListData,
@@ -16,8 +18,12 @@ import type {
   DictionaryCatalog,
   DictionaryCatalogTone,
 } from '@/dictionary-catalog/types'
+import { resolveProductMediaContentUrl } from '../../../../api/modules/product-media'
 
 type ProductListQuery = NonNullable<ProductsListData['query']>
+type ProductListStatus = NonNullable<ProductListQuery['status']>
+
+const PRODUCT_LIST_STATUSES = new Set<unknown>(['DRAFT', 'ACTIVE', 'INACTIVE'])
 
 /**
  * generated OpenAPI 3 nullable enum 当前不会把 null 写进 TS union；页面 view model
@@ -29,15 +35,27 @@ export type ProductSupplierViewModel = Omit<ProductSupplierDto, 'tone'> & {
 
 export type ProductListItemViewModel = Omit<
   ProductListItemDto,
-  'attributes' | 'createdBy' | 'images' | 'supplier' | 'updatedBy' | 'videos'
+  'attributes' | 'createdBy' | 'media' | 'supplier' | 'updatedBy'
 > & {
   readonly attributes: readonly ProductAttributeDto[]
   readonly createdBy: ProductActorDto | null
-  readonly images: readonly string[]
+  readonly media: ProductMediaViewModel
   readonly supplier: ProductSupplierViewModel | null
   readonly updatedBy: ProductActorDto | null
-  readonly videos: readonly string[]
 }
+
+export type ProductMediaItemViewModel = Readonly<ProductMediaItemDto>
+
+export type ProductMediaViewModel = Omit<
+  ProductMediaDto,
+  'images' | 'mainImage' | 'videos'
+> & {
+  readonly images: readonly ProductMediaItemViewModel[]
+  readonly mainImage: ProductMediaItemViewModel | null
+  readonly videos: readonly ProductMediaItemViewModel[]
+}
+
+export { resolveProductMediaContentUrl }
 
 export type ProductPageViewModel = Omit<ProductPageDto, 'items'> & {
   readonly items: readonly ProductListItemViewModel[]
@@ -69,6 +87,26 @@ function cloneActor(value: ProductActorDto | null): ProductActorDto | null {
     : { displayName: value.displayName, id: value.id }
 }
 
+function cloneMediaItem(
+  value: ProductMediaItemDto,
+): ProductMediaItemViewModel {
+  return { ...value }
+}
+
+/**
+ * DTO 中的 mainImage 是 images 主图项的投影，二者在 JSON 中仍是独立对象。
+ * Adapter 逐项复制，避免页面状态意外改写 Axios response 或共享数组。
+ */
+function cloneMedia(value: ProductMediaDto): ProductMediaViewModel {
+  return {
+    images: value.images.map(cloneMediaItem),
+    mainImage: value.mainImage === null
+      ? null
+      : cloneMediaItem(value.mainImage),
+    videos: value.videos.map(cloneMediaItem),
+  }
+}
+
 export function adaptProductListItemDto(
   value: ProductListItemDto,
 ): ProductListItemViewModel {
@@ -86,13 +124,12 @@ export function adaptProductListItemDto(
     ...value,
     attributes: value.attributes.map(attribute => ({ ...attribute })),
     createdBy: cloneActor(value.createdBy),
-    images: [...value.images],
+    media: cloneMedia(value.media),
     myrSalePrice: cloneMoney(value.myrSalePrice),
     purchaseCost: cloneMoney(value.purchaseCost),
     supplier,
     twdSalePrice: cloneMoney(value.twdSalePrice),
     updatedBy: cloneActor(value.updatedBy),
-    videos: [...value.videos],
   }
 }
 
@@ -115,6 +152,9 @@ export function buildProductListQuery(input: {
   readonly search: string
 }): ProductListQuery {
   const keyword = input.search.trim()
+  const status = PRODUCT_LIST_STATUSES.has(input.filters.status)
+    ? input.filters.status as ProductListStatus
+    : undefined
   const supplierValue = typeof input.filters.supplierValue === 'string'
     && input.filters.supplierValue.trim() !== ''
     ? input.filters.supplierValue
@@ -124,8 +164,24 @@ export function buildProductListQuery(input: {
     page: Number.isSafeInteger(input.page) && input.page > 0 ? input.page : 1,
     pageSize: ALLOWED_PAGE_SIZES.has(input.pageSize) ? input.pageSize : 20,
     ...(keyword === '' ? {} : { keyword }),
+    ...(status === undefined ? {} : { status }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
   }
+}
+
+/** 应用或清空产品状态条件都回到第一页；草稿属于 API 合法值，但当前 UI 不提供该筛选项。 */
+export function applyProductStatusFilter(
+  current: QsGenericTableFilterValues,
+  status: ProductListStatus | undefined,
+): { readonly filters: QsGenericTableFilterValues, readonly page: 1 } {
+  const filters = { ...current }
+  if (status === undefined) {
+    delete filters.status
+  }
+  else {
+    filters.status = status
+  }
+  return { filters, page: 1 }
 }
 
 /** 应用或清空供应商条件都回到第一页；stable value 不做 trim。 */
@@ -158,18 +214,24 @@ export function buildSupplierFilterOptions(
 
 function buildImageItem(
   product: ProductListItemViewModel,
-  src: string,
+  media: ProductMediaItemViewModel,
   kind: 'image' | 'main',
   sourceIndex: number,
-): ImageGroupItem {
+  contentReadable: boolean,
+): ImageGroupItem | null {
+  if (!contentReadable) {
+    return null
+  }
+  const src = resolveProductMediaContentUrl(product.id, media)
+  if (src === null) {
+    return null
+  }
   const label = kind === 'main'
     ? `${product.name}主图`
     : `${product.name}图片 ${sourceIndex + 1}`
   return {
     alt: label,
-    key: kind === 'main'
-      ? `${product.id}-main`
-      : `${product.id}-image-${sourceIndex}`,
+    key: media.id,
     src,
     tooltip: label,
   }
@@ -177,19 +239,35 @@ function buildImageItem(
 
 export function buildProductMainImageItems(
   product: ProductListItemViewModel,
+  contentReadable: boolean,
 ): readonly ImageGroupItem[] {
-  return product.mainImage === null || product.mainImage.trim() === ''
-    ? []
-    : [buildImageItem(product, product.mainImage, 'main', 0)]
+  if (product.media.mainImage === null) {
+    return []
+  }
+  const item = buildImageItem(
+    product,
+    product.media.mainImage,
+    'main',
+    0,
+    contentReadable,
+  )
+  return item === null ? [] : [item]
 }
 
 export function buildProductImageItems(
   product: ProductListItemViewModel,
+  contentReadable: boolean,
 ): readonly ImageGroupItem[] {
-  return product.images.flatMap((src, sourceIndex) =>
-    src.trim() === ''
-      ? []
-      : [buildImageItem(product, src, 'image', sourceIndex)])
+  return product.media.images.flatMap((media, sourceIndex) => {
+    const item = buildImageItem(
+      product,
+      media,
+      'image',
+      sourceIndex,
+      contentReadable,
+    )
+    return item === null ? [] : [item]
+  })
 }
 
 export function canApplyProductListResponse(

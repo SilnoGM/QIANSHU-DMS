@@ -17,6 +17,7 @@ import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalo
 
 import { createProductFormModel } from '../form/product-form.logic'
 import ProductForm from '../form/product-form.vue'
+import ProductMediaPanel from '../media/product-media-panel.vue'
 import {
   buildProductUpdateRequest,
   createProductEditFormModel,
@@ -50,7 +51,7 @@ const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const route = useRoute()
 const router = useRouter()
 const appAccountStore = useAppAccountStore()
-const { authAll } = useAppAuth()
+const { auth, authAll } = useAppAuth()
 const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const supplierCatalog = useDictionaryCatalog(SUPPLIER_DICTIONARY_CODE)
@@ -71,6 +72,8 @@ const productId = computed(() => typeof route.params.productId === 'string'
   ? route.params.productId
   : '')
 const canManage = computed(() => authAll(['products:read', 'products:update']))
+const canUpdate = computed(() => auth('products:update'))
+const canReadProductMedia = computed(() => auth('product-media:read'))
 const purchaseCurrencies = computed<readonly CurrencyDescriptor[]>(() =>
   currencyCatalog.selectableCurrencies.value)
 const twdCurrencies = computed<readonly CurrencyDescriptor[]>(() =>
@@ -145,6 +148,17 @@ function handleModelPatch(patch: Partial<ProductFormModel>): void {
   if (pageError.value !== '' || Object.keys(fieldErrors.value).length > 0) {
     clearFeedback()
   }
+}
+
+/**
+ * 媒体 mutation 只推进共享 Product version 与媒体快照，不重建基础表单。
+ * 这样用户正在编辑的字段不会被上传、排序或解除关联的响应覆盖。
+ */
+function handleMediaProductChange(product: ProductListItemDto): void {
+  if (source.value?.id !== product.id) {
+    return
+  }
+  source.value = product
 }
 
 async function loadProduct(): Promise<void> {
@@ -298,6 +312,7 @@ async function submitProduct(): Promise<void> {
     if (!responseIsCurrent(version, authEpoch, controller)) {
       return
     }
+    source.value = response.data
     phase.value = 'success'
     toast.success(`产品 ${response.data.productNo} 已更新`)
     await router.push({ name: 'adminProductList' })
@@ -479,6 +494,15 @@ onBeforeUnmount(() => {
           @cancel="returnToList"
           @retry-currency-catalog="currencyCatalog.reload"
           @retry-supplier-catalog="supplierCatalog.retry"
+        />
+
+        <ProductMediaPanel
+          class="mt-6"
+          :product="source"
+          :editable="canUpdate"
+          :content-readable="canReadProductMedia"
+          :auth-epoch="appAccountStore.authEpoch"
+          @product-change="handleMediaProductChange"
         />
       </template>
     </FaPageMain>

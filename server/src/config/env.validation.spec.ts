@@ -22,6 +22,13 @@ describe('validateEnvironment', () => {
       TRUST_PROXY_HOPS: 0,
       AUTH_ARGON2_CONCURRENCY: 2,
       AUTH_ARGON2_QUEUE_LIMIT: 32,
+      MEDIA_CONTENT_DELIVERY_MODE: 'application',
+      MEDIA_STORAGE_DRIVER: 'local',
+      MEDIA_FFPROBE_PATH: '/usr/bin/ffprobe',
+      MEDIA_QPDF_PATH: '/usr/bin/qpdf',
+      MEDIA_STORAGE_ROOT: '/var/lib/qianshu-dms/media',
+      MEDIA_STAGING_TTL_HOURS: 24,
+      MEDIA_TRASH_RETENTION_DAYS: 7,
     })
   })
 
@@ -35,6 +42,13 @@ describe('validateEnvironment', () => {
         TRUST_PROXY_HOPS: '1',
         AUTH_ARGON2_CONCURRENCY: '3',
         AUTH_ARGON2_QUEUE_LIMIT: '48',
+        MEDIA_STORAGE_DRIVER: 'local',
+        MEDIA_CONTENT_DELIVERY_MODE: 'internal_redirect',
+        MEDIA_FFPROBE_PATH: '/opt/media/bin/ffprobe',
+        MEDIA_QPDF_PATH: '/opt/media/bin/qpdf',
+        MEDIA_STORAGE_ROOT: '  /srv/qianshu-media/  ',
+        MEDIA_STAGING_TTL_HOURS: '36',
+        MEDIA_TRASH_RETENTION_DAYS: '14',
         CUSTOM_SETTING: 'kept',
       }),
     ).toEqual({
@@ -45,6 +59,13 @@ describe('validateEnvironment', () => {
       TRUST_PROXY_HOPS: 1,
       AUTH_ARGON2_CONCURRENCY: 3,
       AUTH_ARGON2_QUEUE_LIMIT: 48,
+      MEDIA_CONTENT_DELIVERY_MODE: 'internal_redirect',
+      MEDIA_STORAGE_DRIVER: 'local',
+      MEDIA_FFPROBE_PATH: '/opt/media/bin/ffprobe',
+      MEDIA_QPDF_PATH: '/opt/media/bin/qpdf',
+      MEDIA_STORAGE_ROOT: '/srv/qianshu-media',
+      MEDIA_STAGING_TTL_HOURS: 36,
+      MEDIA_TRASH_RETENTION_DAYS: 14,
       CUSTOM_SETTING: 'kept',
     })
   })
@@ -203,6 +224,35 @@ describe('validateEnvironment', () => {
     ).toThrow(
       'Environment validation failed: NODE_ENV must be one of development, test, production',
     )
+  })
+
+  describe('media storage environment', () => {
+    it.each([
+      ['MEDIA_CONTENT_DELIVERY_MODE', 'public', 'must be one of application, internal_redirect'],
+      ['MEDIA_STORAGE_DRIVER', 's3', 'must be local'],
+      ['MEDIA_STORAGE_ROOT', 'relative/media', 'must be an absolute non-root path'],
+      ['MEDIA_FFPROBE_PATH', 'ffprobe', 'must be an absolute executable path'],
+      ['MEDIA_QPDF_PATH', 'qpdf', 'must be an absolute executable path'],
+      ['MEDIA_STAGING_TTL_HOURS', '0', 'must be an integer between 1 and 168'],
+      ['MEDIA_TRASH_RETENTION_DAYS', '6', 'must be an integer between 7 and 3650'],
+    ])('rejects invalid %s without echoing its value', (key, value, constraint) => {
+      try {
+        validateEnvironment({
+          DATABASE_URL: validDatabaseUrl,
+          [key]: value,
+        })
+        throw new Error('Expected media environment validation to fail')
+      }
+      catch (error) {
+        expect(error).toBeInstanceOf(Error)
+        expect((error as Error).message).toBe(
+          `Environment validation failed: ${key} ${constraint}`,
+        )
+        if (value.includes('/') || value === 's3') {
+          expect((error as Error).message).not.toContain(value)
+        }
+      }
+    })
   })
 
   describe('authentication environment', () => {

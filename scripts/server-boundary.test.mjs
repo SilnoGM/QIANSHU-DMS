@@ -17,6 +17,10 @@ const scriptsDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(scriptsDirectory, '..')
 const serverRoot = path.join(repositoryRoot, 'server')
 const expectedPnpmSecuritySettings = `injectWorkspacePackages: true
+overrides:
+  'fast-uri@^3.0.0': 3.1.5
+  'js-yaml@^4.0.0': 4.3.1
+  'js-yaml@^5.0.0': 5.2.2
 allowBuilds:
   '@prisma/engines': true
   # Swagger UI 的 Scarf 脚本仅用于安装分析；明确拒绝执行，保证 fresh install 可重复且不发送遥测。
@@ -24,6 +28,8 @@ allowBuilds:
   # argon2 通过 node-gyp-build 选择已发布的 N-API 预构建二进制；密码 Hash/verify 需要其原生实现。
   argon2: true
   prisma: true
+  # sharp 通过已发布的 libvips 平台预构建包完成图片完整解码，不允许其他未审查依赖执行 build script。
+  sharp: true
 `
 
 function fromRoot(...segments) {
@@ -71,6 +77,7 @@ test('Server 是具备独立 lockfile 的单一私有 pnpm package', async () =>
   assert.equal(manifest.engines?.node, '^24.15.0')
   assert.equal('workspaces' in manifest, false)
   assert.deepEqual(manifest.files, [
+    'deploy/',
     'dist/',
     'prisma/schema.prisma',
     'prisma/migrations/',
@@ -219,6 +226,32 @@ test('Server lockfile 只有单一 importer 且 specifier 与 manifest 一致', 
   assertLockfileMatchesManifest(manifest, importers)
 })
 
+test('Server lockfile 不再解析已知高危的 fast-uri 与 js-yaml 4.x 版本', async () => {
+  const lockfileContents = await readFile(
+    fromRoot('server', 'pnpm-lock.yaml'),
+    'utf8',
+  )
+  const manifest = JSON.parse(
+    await readFile(fromRoot('server', 'package.json'), 'utf8'),
+  )
+
+  // Swagger 保持原补丁版本，安全修复只通过限定主版本的 pnpm override 生效；
+  // 同时检查最终 lockfile，避免间接依赖继续解析到隐藏的重复漏洞版本。
+  assert.equal(manifest.dependencies?.['@nestjs/swagger'], '11.4.5')
+
+  const fastUriVersions = [...new Set(
+    [...lockfileContents.matchAll(/^  fast-uri@([^:]+):$/gmu)]
+      .map(match => match[1]),
+  )]
+  const jsYaml4Versions = [...new Set(
+    [...lockfileContents.matchAll(/^  js-yaml@(4\.[^:]+):$/gmu)]
+      .map(match => match[1]),
+  )]
+
+  assert.deepEqual(fastUriVersions, ['3.1.5'])
+  assert.deepEqual(jsYaml4Versions, ['4.3.1'])
+})
+
 test('Server lockfile 只在 settings 启用现代 deploy workspace 注入', async () => {
   const lockfileContents = await readFile(
     fromRoot('server', 'pnpm-lock.yaml'),
@@ -232,7 +265,7 @@ test('Server lockfile 只在 settings 启用现代 deploy workspace 注入', asy
   assert.equal(injectionSettings?.length, 1)
   assert.match(
     lockfileContents,
-    /^settings:\n  autoInstallPeers: true\n  excludeLinksFromLockfile: false\n  injectWorkspacePackages: true\n\nimporters:/mu,
+    /^settings:\n  autoInstallPeers: true\n  excludeLinksFromLockfile: false\n  injectWorkspacePackages: true\n\noverrides:\n  fast-uri@\^3\.0\.0: 3\.1\.5\n  js-yaml@\^4\.0\.0: 4\.3\.1\n  js-yaml@\^5\.0\.0: 5\.2\.2\n\nimporters:/mu,
   )
 })
 

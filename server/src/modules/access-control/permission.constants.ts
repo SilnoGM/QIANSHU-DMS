@@ -18,6 +18,14 @@ export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 产品媒体内容的独立读取权限。
+ *
+ * 该权限不隐式要求 products:read，使未来订单等已确认领域可以在自己的授权边界内读取产品媒体；
+ * 产品媒体写入仍由 products:update 控制。
+ */
+export const PRODUCT_MEDIA_PERMISSION_CODES = ['product-media:read'] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -61,6 +69,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:update',
   'dictionaries:enable',
   'dictionaries:disable',
+  ...PRODUCT_MEDIA_PERMISSION_CODES,
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
 ] as const
 

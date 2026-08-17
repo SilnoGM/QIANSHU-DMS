@@ -115,7 +115,17 @@ function refreshRequestConfig(
 
   const method = config.method?.toLowerCase()
   if (method !== undefined && ['delete', 'patch', 'post', 'put'].includes(method)) {
-    config.headers.set('Content-Type', 'application/json')
+    // FormData 的 multipart boundary 只能由浏览器生成。若通用 Client 强制写成
+    // application/json，Axios 还会把 FormData 序列化为 JSON，导致流式 parser
+    // 在读取边界前直接拒绝请求。其余写请求继续固定 JSON 语义。
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      // AxiosHeaders 的 false 是“不发送且不允许默认 transform 覆盖”；单纯 delete
+      // 会被 Axios 的 POST 默认值重新写成 application/x-www-form-urlencoded。
+      config.headers.set('Content-Type', false)
+    }
+    else {
+      config.headers.set('Content-Type', 'application/json')
+    }
     config.headers.set('X-Qianshu-CSRF', '1')
   }
 }

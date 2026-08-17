@@ -15,12 +15,14 @@ describe('normalizeProductListQuery', () => {
       keyword: '  product-001  ',
       page: 3,
       pageSize: 50,
+      status: 'INACTIVE',
       supplierValue: ' raw-value ',
     })).toEqual({
       keyword: 'product-001',
       page: 3,
       pageSize: 50,
       skip: 100,
+      status: 'INACTIVE',
       supplierValue: ' raw-value ',
     })
   })
@@ -42,6 +44,8 @@ describe('normalizeProductListQuery', () => {
     { keyword: '   ' },
     { keyword: '😀'.repeat(129) },
     { keyword: 123 },
+    { status: 'UNKNOWN' },
+    { status: 1 },
     { supplierValue: '' },
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },

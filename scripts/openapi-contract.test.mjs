@@ -747,6 +747,7 @@ test('application metadata 接受认证接口所需的可选契约字段', () =>
     session: 'none',
     csrf: true,
     privateNoStore: true,
+    retry: false,
     errors: [
       {
         status: 409,
@@ -757,6 +758,54 @@ test('application metadata 接受认证接口所需的可选契约字段', () =>
 
   assert.doesNotThrow(() => assertOpenApiContract(document))
 })
+
+mutationTest(
+  'metadata retry 必须是 boolean',
+  document => {
+    operation(document, '/api/widgets', 'post')[
+      'x-qianshu-contract'
+    ].retry = 'false'
+  },
+  /retry/,
+)
+
+test('application metadata 接受上传错误使用的 413 与 415 状态', () => {
+  const document = cloneDocument()
+  const widgetCreate = operation(document, '/api/widgets', 'post')
+  const metadata = widgetCreate['x-qianshu-contract']
+  const errorResponse = cloneDocument(widgetCreate.responses['500'])
+
+  metadata.errors = [
+    { status: 413, codes: ['MEDIA_FILE_TOO_LARGE'] },
+    { status: 415, codes: ['MEDIA_TYPE_UNSUPPORTED'] },
+  ]
+  widgetCreate.responses['413'] = cloneDocument(errorResponse)
+  widgetCreate.responses['415'] = cloneDocument(errorResponse)
+
+  assert.doesNotThrow(() => assertOpenApiContract(document))
+})
+
+test('HEAD 成功响应不要求 content', () => {
+  const document = cloneDocument()
+  const reportPath = document.paths['/api/reports']
+  reportPath.head = reportPath.get
+  delete reportPath.get
+  reportPath.head.operationId = 'report_head'
+  delete reportPath.head.responses['200'].content
+
+  assert.doesNotThrow(() => assertOpenApiContract(document))
+})
+
+mutationTest(
+  'HEAD 成功响应不得声明 content',
+  document => {
+    const reportPath = document.paths['/api/reports']
+    reportPath.head = reportPath.get
+    delete reportPath.get
+    reportPath.head.operationId = 'report_head'
+  },
+  /HEAD.*content/,
+)
 
 test('JSON success 接受顶层数组且 items 直接引用 component DTO', () => {
   const document = cloneDocument()

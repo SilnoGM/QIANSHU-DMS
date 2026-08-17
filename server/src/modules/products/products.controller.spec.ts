@@ -14,6 +14,8 @@ import {
   ProductCommandService,
   type ProductCommandContext,
 } from './product-command.service'
+import { ProductMediaContentService } from './media/product-media-content.service'
+import { ProductMediaHttpService } from './media/product-media-http.service'
 import { ProductQueryService } from './product-query.service'
 import {
   type ProductUpdateContext,
@@ -83,6 +85,12 @@ function createController(): {
       { list, getById } as unknown as ProductQueryService,
       { create } as unknown as ProductCommandService,
       { update } as unknown as ProductUpdateService,
+      {
+        upload: jest.fn(),
+        updateLayout: jest.fn(),
+        detach: jest.fn(),
+      } as unknown as ProductMediaHttpService,
+      { resolve: jest.fn() } as unknown as ProductMediaContentService,
     ),
     list,
     getById,
@@ -102,6 +110,12 @@ function createController(): {
   }, {
     provide: ProductUpdateService,
     useValue: { update: jest.fn() },
+  }, {
+    provide: ProductMediaHttpService,
+    useValue: { upload: jest.fn(), updateLayout: jest.fn(), detach: jest.fn() },
+  }, {
+    provide: ProductMediaContentService,
+    useValue: { resolve: jest.fn() },
   }],
 })
 class ProductsControllerContractModule {}
@@ -176,7 +190,18 @@ describe('ProductsController', () => {
       ProductsController.prototype.create,
     )).toBe(HttpStatus.CREATED)
     expect(Object.getOwnPropertyNames(ProductsController.prototype).sort())
-      .toEqual(['constructor', 'create', 'getById', 'list', 'update'])
+      .toEqual([
+        'constructor',
+        'create',
+        'detachMedia',
+        'getById',
+        'getMediaContent',
+        'headMediaContent',
+        'list',
+        'update',
+        'updateMediaLayout',
+        'uploadMedia',
+      ])
   })
 
   it.each([
@@ -205,10 +230,14 @@ describe('ProductsController OpenAPI contract', () => {
 
   it('publishes the list, create, detail and update operations only', () => {
     expect(Object.keys(document.paths).filter(path =>
-      path.startsWith('/api/products'))).toEqual([
+      path.startsWith('/api/products')).sort()).toEqual([
       '/api/products',
       '/api/products/{productId}',
-    ])
+      '/api/products/{productId}/media',
+      '/api/products/{productId}/media/layout',
+      '/api/products/{productId}/media/{productMediaId}',
+      '/api/products/{productId}/media/{productMediaId}/content',
+    ].sort())
     const path = document.paths['/api/products']
     const operation: ContractOperation | undefined = path?.get
     expect(operation?.operationId).toBe('products_list')
@@ -232,6 +261,18 @@ describe('ProductsController OpenAPI contract', () => {
       schema: {
         maxLength: 128,
         minLength: 1,
+        type: 'string',
+      },
+    })
+    const statusParameter = operation?.parameters?.find(parameter =>
+      'name' in parameter && parameter.name === 'status')
+    expect(statusParameter).toEqual({
+      description: '产品状态精确匹配',
+      in: 'query',
+      name: 'status',
+      required: false,
+      schema: {
+        enum: ['DRAFT', 'ACTIVE', 'INACTIVE'],
         type: 'string',
       },
     })
@@ -470,6 +511,58 @@ describe('ProductsController OpenAPI contract', () => {
       'purchaseCost',
       'attributes',
       'expectedVersion',
+    ])
+
+    const responseSchema = document.components?.schemas?.ProductListItemDto
+    const mediaSchema = document.components?.schemas?.ProductMediaDto
+    const mediaItemSchema = document.components?.schemas?.ProductMediaItemDto
+    if (
+      responseSchema === undefined
+      || mediaSchema === undefined
+      || mediaItemSchema === undefined
+      || '$ref' in responseSchema
+      || '$ref' in mediaSchema
+      || '$ref' in mediaItemSchema
+    ) {
+      throw new Error('Missing structured Product media response schemas')
+    }
+    expect(Object.keys(responseSchema.properties ?? {})).not.toEqual(
+      expect.arrayContaining(['mainImage', 'images', 'videos']),
+    )
+    expect(responseSchema.properties?.media).toEqual({
+      $ref: '#/components/schemas/ProductMediaDto',
+    })
+    expect(mediaSchema).toMatchObject({
+      type: 'object',
+      required: ['mainImage', 'images', 'videos'],
+      properties: {
+        mainImage: {
+          allOf: [{ $ref: '#/components/schemas/ProductMediaItemDto' }],
+          nullable: true,
+        },
+        images: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ProductMediaItemDto' },
+        },
+        videos: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/ProductMediaItemDto' },
+        },
+      },
+    })
+    expect(Object.keys(mediaItemSchema.properties ?? {})).toEqual([
+      'id',
+      'kind',
+      'originalFilename',
+      'mimeType',
+      'sizeBytes',
+      'width',
+      'height',
+      'durationMs',
+      'sortOrder',
+      'isPrimary',
+      'contentUrl',
+      'createdAt',
     ])
   })
 })

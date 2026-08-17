@@ -36,6 +36,7 @@ describe('ProductListQueryDto', () => {
       keyword: '  Product-001  ',
       page: '2',
       pageSize: '100',
+      status: 'ACTIVE',
       supplierValue: ' raw-value ',
     })
 
@@ -44,6 +45,7 @@ describe('ProductListQueryDto', () => {
       keyword: 'Product-001',
       page: 2,
       pageSize: 100,
+      status: 'ACTIVE',
       supplierValue: ' raw-value ',
     })
     expect(await validate(defaults)).toEqual([])
@@ -55,6 +57,7 @@ describe('ProductListQueryDto', () => {
     { pageSize: '101' },
     { keyword: '   ' },
     { keyword: '😀'.repeat(129) },
+    { status: 'UNKNOWN' },
     { supplierValue: '' },
     { supplierValue: '   ' },
     { supplierValue: '😀'.repeat(65) },

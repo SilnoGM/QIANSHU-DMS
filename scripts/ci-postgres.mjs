@@ -511,7 +511,13 @@ export async function runWithPostgres(input = {}) {
     childHandle = childRunner({
       argv: command,
       detached: true,
-      env: { ...environment, DATABASE_URL: databaseUrl },
+      env: {
+        ...environment,
+        DATABASE_URL: databaseUrl,
+        // 媒体 E2E 只允许在本次 CI session 内创建临时对象；父编排器在
+        // 正常退出、失败或信号中断时统一递归清理，避免污染真实媒体根目录。
+        QIANSHU_CI_TEMP_ROOT: sessionDirectory,
+      },
       onStderr: safeWrite,
       onStdout: safeWrite,
     })

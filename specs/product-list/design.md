@@ -43,7 +43,7 @@
 2. 图片与视频按有序 PostgreSQL `text[]` 保存；属性按有序 JSONB 数组保存。当前没有属性查询需求，不做关系化过度设计。
 3. 三组金额均以 `DECIMAL(30,4)` 金额列和独立三位币种列保存；金额可空，币种不可空。
 4. `supplier_value` 保存 `service_provider.supplier` Item 的稳定 `value`，不建 Supplier FK，也不复制 Label。
-5. 唯一读取接口 `GET /api/products` 支持分页、产品名称/编号 `keyword` 包含搜索和 `supplierValue` 精确筛选；不提供全文检索引擎、状态筛选或用户排序。
+5. 唯一读取接口 `GET /api/products` 支持分页、产品名称/编号 `keyword` 包含搜索、`status` 与 `supplierValue` 精确筛选；不提供全文检索引擎或用户排序。
 6. ProductQueryService 批量解析一页内去重后的供应商值，避免 N+1 查询，并在 DTO 中返回历史解析状态。
 7. Web 列表以页面局部逻辑组合现有组件；不修改 `QsGenericTable`、`ImageGroup`、`AmountDisplay` 或 `QsDictionarySelect` 公共契约。
 8. 页头新增、行查看和行编辑均只调用 `QsToast.info`；不发请求、不导航、不新增 `products:update`。
@@ -274,7 +274,7 @@ server/src/modules/products/
 ### 6.2 HTTP 契约
 
 ```http
-GET /api/products?page=1&pageSize=20&keyword=<name-or-number>&supplierValue=<exact-value>
+GET /api/products?page=1&pageSize=20&keyword=<name-or-number>&status=<DRAFT|ACTIVE|INACTIVE>&supplierValue=<exact-value>
 ```
 
 权限与应用契约：
@@ -307,6 +307,7 @@ DELETE /api/products/{productId}
 ```ts
 class ProductListQueryDto {
   keyword?: string       // trim 后 1..128 Unicode code points, name/productNo contains
+  status?: ProductStatus // DRAFT | ACTIVE | INACTIVE, exact match
   supplierValue?: string // 1..64 Unicode code points, nonblank, exact raw value
   page = 1               // integer >= 1
   pageSize = 20          // integer 1..100
@@ -315,7 +316,7 @@ class ProductListQueryDto {
 
 `keyword` 去除首尾空白后，对 `name/productNo` 执行不区分大小写的包含匹配；空白或超过 128 个 Unicode code points 时返回 `422 VALIDATION_FAILED`。`supplierValue` 不执行 trim、大小写转换或 Label 映射；读取过滤不要求供应商当前有效，否则无法查询历史记录。
 
-本期没有 `status`、`sortBy` 或 `sortOrder`，也不搜索供应商 Label、状态、价格、属性或审计字段。若后续需要扩大搜索或增加筛选，应先扩展 Requirements 与 OpenAPI，不能在实现中隐式增加。
+`status` 只接受 `DRAFT/ACTIVE/INACTIVE` 并执行精确匹配；没有 `sortBy` 或 `sortOrder`，也不搜索供应商 Label、状态、价格、属性或审计字段。筛选增量必须先扩展 Requirements 与 OpenAPI，不能在实现中隐式增加。
 
 ### 6.4 响应 DTO
 
@@ -381,6 +382,7 @@ ProductQueryService 使用同一 `where` 计算 count 和 rows：
 
 ```ts
 const where: Prisma.ProductWhereInput = {}
+if (status !== undefined) where.status = status
 if (supplierValue !== undefined) where.supplierValue = supplierValue
 if (keyword !== undefined) {
   where.OR = [
@@ -524,7 +526,7 @@ authEpoch snapshot
 
 1. 新请求前 Abort 旧请求。
 2. 响应仅在 permission、authEpoch、requestVersion 与 controller 均仍有效时提交。
-3. 搜索和供应商筛选事件使用最终显式状态；搜索提交/清空及筛选应用/清空都回第一页。
+3. 搜索、启用状态和供应商筛选事件使用最终显式状态；搜索提交/清空及筛选应用/清空都回第一页。
 4. 同一轮多个查询事件合并为一次 microtask 请求。
 5. 卸载或失去读取权限时 Abort 请求并清空产品数据。
 6. 错误通过本地 error presentation 显示安全文案和可选 requestId。
@@ -807,7 +809,7 @@ package.json / lockfiles
 ### 10.3 Web 覆盖
 
 - API adapter 只消费 generated types、正确编码 query、传递 AbortSignal。
-- Query builder trim/省略 `keyword` 但不 trim `supplierValue`，搜索、分页和筛选切换正确。
+- Query builder trim/省略 `keyword` 但不 trim `supplierValue`，`status` 只序列化生成契约允许的枚举值；搜索、分页和筛选切换正确。
 - Catalog options 包含已停用已知值并保留 stable value。
 - Product table 列顺序、默认 fixed、id/version 不可见、actions right-fixed。
 - `ImageGroup maxCount=1/3`、`AmountDisplay` 三列、DateTimeDisplay。
@@ -820,7 +822,7 @@ package.json / lockfiles
 优先扩展现有 `management.browser.test.mjs` 和 `test:browser:auth` Job，不新建 Product 专属 CI Job：
 
 - `products:read` 与 `products:create` 菜单/按钮权限。
-- 搜索提交/清空、供应商筛选应用/清空和分页归一，并验证组合请求。
+- 搜索提交/清空、启用状态与供应商筛选应用/清空和分页归一，并验证组合请求。
 - 产品编号左固定、操作列右固定、Column Settings。
 - 主图与多图预览、`+N` 行为。
 - 金额格式、未知 Catalog 回退。
@@ -895,10 +897,10 @@ git status --short
 
 1. `products` 扁平表、`text[]` 媒体列表、JSONB 属性与成对金额/币种列。
 2. `supplier_value` 不建 Supplier/Dictionary FK，写时校验、读时批量历史解析。
-3. 本期只新增 `GET /api/products`；查询参数为分页、名称/编号 `keyword` 和精确 `supplierValue`。
+3. 本期只新增 `GET /api/products`；查询参数为分页、名称/编号 `keyword`、精确 `status` 和 `supplierValue`。
 4. Product 列表不提供真实创建、详情、编辑、状态变更或删除。
 5. 现有 Create 占位路由保留不动；列表页新增、查看、编辑均只 Toast。
 6. 不修改公共 Qs 组件；页面通过 slots、Catalog 和局部 Modal 组合。
 7. 通过现有 management Browser Job 覆盖产品列表，不新增独立 CI Job。
 
-首期方向已完成 Phase 2、Phase 3 与 Gate D1 确认，并在 Phase 4 实现；`keyword` 搜索作为单独确认的公共 API 增量实施。Gate D2 已单独授权，`20260812090000_product_list_schema` 已应用到本地持久开发数据库并通过结构与健康检查；Gate E 未授权，因此没有 push、PR、merge 或部署。
+首期方向已完成 Phase 2、Phase 3 与 Gate D1 确认，并在 Phase 4 实现；`keyword` 搜索与 `status` 精确筛选分别作为单独确认的公共 API 增量实施。Gate D2 已单独授权，`20260812090000_product_list_schema` 已应用到本地持久开发数据库并通过结构与健康检查；Gate E 未授权，因此没有 push、PR、merge 或部署。

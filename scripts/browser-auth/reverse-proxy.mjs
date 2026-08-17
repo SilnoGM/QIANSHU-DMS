@@ -1,6 +1,8 @@
-import { readFile } from 'node:fs/promises'
+import { createReadStream } from 'node:fs'
+import { readFile, stat } from 'node:fs/promises'
 import { createServer as createHttpServer, request as httpRequest } from 'node:http'
 import { createServer as createHttpsServer } from 'node:https'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import process from 'node:process'
 
 import { isDirectEntry } from '../run-command.mjs'
@@ -15,6 +17,92 @@ const hopByHopHeaders = new Set([
   'transfer-encoding',
   'upgrade',
 ])
+const internalMediaPrefix = '/_qianshu_internal_media/'
+
+function invalidInternalMediaPath() {
+  return new Error('Browser auth internal media path is invalid')
+}
+
+/**
+ * Browser E2E 代理只模拟生产 Nginx 的 internal alias，不接受任意 URL、编码路径
+ * 或 traversal。返回值只用于本次隔离媒体根，绝不写入响应或日志。
+ */
+export function resolveInternalMediaPath(storageRoot, internalRedirect) {
+  if (
+    typeof storageRoot !== 'string'
+    || !isAbsolute(storageRoot)
+    || resolve(storageRoot) === resolve('/')
+    || typeof internalRedirect !== 'string'
+    || !internalRedirect.startsWith(`${internalMediaPrefix}assets/`)
+    || internalRedirect.includes('%')
+    || internalRedirect.includes('\\')
+    || internalRedirect.includes('//')
+    || internalRedirect.includes('?')
+    || internalRedirect.includes('#')
+  ) {
+    throw invalidInternalMediaPath()
+  }
+  const objectKey = internalRedirect.slice(internalMediaPrefix.length)
+  const segments = objectKey.split('/')
+  if (
+    segments.length < 2
+    || segments.some(segment => (
+      segment === ''
+      || segment === '.'
+      || segment === '..'
+      || !/^[A-Za-z0-9._-]+$/u.test(segment)
+    ))
+  ) {
+    throw invalidInternalMediaPath()
+  }
+  const root = resolve(storageRoot)
+  const target = resolve(join(root, ...segments))
+  const fromRoot = relative(root, target)
+  if (
+    fromRoot === ''
+    || fromRoot === '..'
+    || fromRoot.startsWith(`..${sep}`)
+    || isAbsolute(fromRoot)
+  ) {
+    throw invalidInternalMediaPath()
+  }
+  return target
+}
+
+export function parseSingleByteRange(value, size) {
+  if (value === undefined) return null
+  if (!Number.isSafeInteger(size) || size < 1 || typeof value !== 'string') {
+    throw new Error('Browser auth media range is invalid')
+  }
+  const match = /^bytes=(\d*)-(\d*)$/u.exec(value)
+  if (match === null || (match[1] === '' && match[2] === '')) {
+    throw new Error('Browser auth media range is invalid')
+  }
+  let start
+  let end
+  if (match[1] === '') {
+    const suffixLength = Number(match[2])
+    if (!Number.isSafeInteger(suffixLength) || suffixLength < 1) {
+      throw new Error('Browser auth media range is invalid')
+    }
+    start = Math.max(0, size - suffixLength)
+    end = size - 1
+  }
+  else {
+    start = Number(match[1])
+    end = match[2] === '' ? size - 1 : Number(match[2])
+  }
+  if (
+    !Number.isSafeInteger(start)
+    || !Number.isSafeInteger(end)
+    || start < 0
+    || start >= size
+    || end < start
+  ) {
+    throw new Error('Browser auth media range is invalid')
+  }
+  return { end: Math.min(end, size - 1), start }
+}
 
 function normalizeLoopbackOrigin(value) {
   let parsed
@@ -61,6 +149,73 @@ export function createUpstreamRequest(input) {
   }
 }
 
+function copyResponseHeaders(upstreamHeaders) {
+  const responseHeaders = {}
+  for (const [name, value] of Object.entries(upstreamHeaders)) {
+    if (
+      !hopByHopHeaders.has(name.toLowerCase())
+      && name.toLowerCase() !== 'x-accel-redirect'
+      && value !== undefined
+    ) {
+      responseHeaders[name] = value
+    }
+  }
+  return responseHeaders
+}
+
+async function serveInternalMedia(
+  configuration,
+  clientRequest,
+  clientResponse,
+  upstreamResponse,
+) {
+  const internalRedirect = upstreamResponse.headers['x-accel-redirect']
+  const filePath = resolveInternalMediaPath(
+    configuration.mediaStorageRoot,
+    internalRedirect,
+  )
+  const metadata = await stat(filePath)
+  if (!metadata.isFile() || !Number.isSafeInteger(metadata.size) || metadata.size < 1) {
+    throw invalidInternalMediaPath()
+  }
+  let range
+  try {
+    range = parseSingleByteRange(clientRequest.headers.range, metadata.size)
+  }
+  catch {
+    upstreamResponse.resume()
+    clientResponse.writeHead(416, {
+      'Cache-Control': 'no-store',
+      'Content-Range': `bytes */${metadata.size}`,
+    })
+    clientResponse.end()
+    return
+  }
+  upstreamResponse.resume()
+  const responseHeaders = copyResponseHeaders(upstreamResponse.headers)
+  delete responseHeaders['content-length']
+  delete responseHeaders['content-range']
+  responseHeaders['accept-ranges'] = 'bytes'
+  const start = range?.start ?? 0
+  const end = range?.end ?? metadata.size - 1
+  responseHeaders['content-length'] = String(end - start + 1)
+  if (range !== null) {
+    responseHeaders['content-range'] = `bytes ${start}-${end}/${metadata.size}`
+  }
+  clientResponse.writeHead(range === null ? 200 : 206, responseHeaders)
+  if (clientRequest.method === 'HEAD') {
+    clientResponse.end()
+    return
+  }
+  if (clientRequest.method !== 'GET') {
+    clientResponse.end()
+    return
+  }
+  const stream = createReadStream(filePath, { end, start })
+  stream.once('error', () => clientResponse.destroy())
+  stream.pipe(clientResponse)
+}
+
 function proxyRequest(configuration, clientRequest, clientResponse) {
   let upstreamDefinition
   try {
@@ -85,12 +240,28 @@ function proxyRequest(configuration, clientRequest, clientResponse) {
       method: upstreamDefinition.method,
     },
     (upstreamResponse) => {
-      const responseHeaders = {}
-      for (const [name, value] of Object.entries(upstreamResponse.headers)) {
-        if (!hopByHopHeaders.has(name.toLowerCase()) && value !== undefined) {
-          responseHeaders[name] = value
-        }
+      if (
+        configuration.mediaStorageRoot !== undefined
+        && typeof upstreamResponse.headers['x-accel-redirect'] === 'string'
+      ) {
+        void serveInternalMedia(
+          configuration,
+          clientRequest,
+          clientResponse,
+          upstreamResponse,
+        ).catch(() => {
+          upstreamResponse.resume()
+          if (!clientResponse.headersSent) {
+            clientResponse.writeHead(502, {
+              'Cache-Control': 'no-store',
+              'Content-Type': 'text/plain; charset=utf-8',
+            })
+          }
+          clientResponse.end()
+        })
+        return
       }
+      const responseHeaders = copyResponseHeaders(upstreamResponse.headers)
       clientResponse.writeHead(upstreamResponse.statusCode ?? 502, responseHeaders)
       upstreamResponse.pipe(clientResponse)
     },
@@ -126,6 +297,14 @@ function readRuntimeConfiguration(environment) {
     certificatePath: environment.QIANSHU_BROWSER_AUTH_TLS_CERT,
     host,
     keyPath: environment.QIANSHU_BROWSER_AUTH_TLS_KEY,
+    mediaStorageRoot: (() => {
+      const candidate = environment.QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT
+      if (candidate === undefined) return undefined
+      if (typeof candidate !== 'string' || !isAbsolute(candidate)) {
+        throw new Error('Browser auth proxy media configuration is invalid')
+      }
+      return resolve(candidate)
+    })(),
     port,
     webOrigin: normalizeLoopbackOrigin(
       environment.QIANSHU_BROWSER_AUTH_WEB_ORIGIN,

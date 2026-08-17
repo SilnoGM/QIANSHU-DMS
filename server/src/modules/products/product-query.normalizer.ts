@@ -1,16 +1,19 @@
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { ProductStatus } from '../../generated/prisma/enums'
 
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 20
 const MAXIMUM_PAGE_SIZE = 100
 const MAXIMUM_KEYWORD_LENGTH = 128
 const MAXIMUM_SUPPLIER_VALUE_LENGTH = 64
+const PRODUCT_STATUS_VALUES = new Set<unknown>(Object.values(ProductStatus))
 
 export interface NormalizedProductListQuery {
   readonly page: number
   readonly pageSize: number
   readonly skip: number
   readonly keyword?: string
+  readonly status?: ProductStatus
   readonly supplierValue?: string
 }
 
@@ -29,6 +32,7 @@ export function normalizeProductListQuery(
   const page = query.page ?? DEFAULT_PAGE
   const pageSize = query.pageSize ?? DEFAULT_PAGE_SIZE
   const rawKeyword = query.keyword
+  const status = query.status
   const supplierValue = query.supplierValue
   const keyword = typeof rawKeyword === 'string'
     ? rawKeyword.trim()
@@ -47,6 +51,10 @@ export function normalizeProductListQuery(
         || keyword.length === 0
         || Array.from(keyword).length > MAXIMUM_KEYWORD_LENGTH
       )
+    )
+    || (
+      status !== undefined
+      && !PRODUCT_STATUS_VALUES.has(status)
     )
     || (
       supplierValue !== undefined
@@ -70,6 +78,7 @@ export function normalizeProductListQuery(
     pageSize: normalizedPageSize,
     skip,
     ...(keyword === undefined ? {} : { keyword }),
+    ...(status === undefined ? {} : { status: status as ProductStatus }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
   }
 }

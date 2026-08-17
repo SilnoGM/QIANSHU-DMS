@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "capacityThresholds": {
+    "warningBelowPercent": 20,
+    "criticalBelowPercent": 10
+  },
+  "metrics": [
+    {
+      "name": "media_capability",
+      "type": "gauge",
+      "labels": {
+        "capability": ["read", "write", "video_validator"]
+      }
+    },
+    {
+      "name": "media_capacity_free_percent",
+      "type": "gauge",
+      "labels": {}
+    },
+    {
+      "name": "media_staging_oldest_age_seconds",
+      "type": "gauge",
+      "labels": {}
+    },
+    {
+      "name": "media_failed_assets",
+      "type": "gauge",
+      "labels": {
+        "mediaType": ["IMAGE", "VIDEO", "DOCUMENT"]
+      }
+    },
+    {
+      "name": "media_reconciliation_mismatch",
+      "type": "gauge",
+      "labels": {
+        "kind": [
+          "checksumMismatch",
+          "duplicateLocation",
+          "missing",
+          "orphanObject",
+          "sizeMismatch",
+          "unexpectedLocation",
+          "unmappableObject"
+        ]
+      }
+    },
+    {
+      "name": "media_upload_total",
+      "type": "counter",
+      "labels": {
+        "mediaType": ["IMAGE", "VIDEO", "DOCUMENT"],
+        "result": ["success", "failure"],
+        "sizeBucket": ["lt_1mib", "lt_10mib", "lt_100mib", "lt_500mib", "gte_500mib"]
+      }
+    },
+    {
+      "name": "media_cleanup_total",
+      "type": "counter",
+      "labels": {
+        "operation": ["expired_upload", "expired_trash"],
+        "result": ["completed", "failed", "isolated"]
+      }
+    }
+  ],
+  "alerts": [
+    {
+      "name": "MediaCapacityWarning",
+      "condition": "media_capacity_free_percent < 20",
+      "severity": "warning"
+    },
+    {
+      "name": "MediaCapacityCritical",
+      "condition": "media_capacity_free_percent < 10 OR media_capability{capability=write} == 0",
+      "severity": "critical"
+    },
+    {
+      "name": "MediaStagingExpired",
+      "condition": "media_staging_oldest_age_seconds > 86400",
+      "severity": "warning"
+    },
+    {
+      "name": "MediaFailedAssetsPresent",
+      "condition": "sum(media_failed_assets) > 0",
+      "severity": "warning"
+    },
+    {
+      "name": "MediaReconciliationMismatch",
+      "condition": "sum(media_reconciliation_mismatch) > 0",
+      "severity": "critical"
+    },
+    {
+      "name": "MediaUploadFailureRate",
+      "condition": "failure_rate(media_upload_total, 5m) > 0.05",
+      "severity": "warning"
+    },
+    {
+      "name": "MediaCleanupFailure",
+      "condition": "increase(media_cleanup_total{result=~\"failed|isolated\"}[1h]) > 0",
+      "severity": "warning"
+    }
+  ]
+}

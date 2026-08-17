@@ -520,10 +520,14 @@ defineExpose<ProductFormExpose>({
       />
     </FaCard>
 
-    <FaCard title="媒体资料" class="min-w-0 lg:col-span-8">
+    <FaCard
+      v-if="!isEdit"
+      title="媒体资料"
+      class="min-w-0 lg:col-span-8"
+    >
       <FaAlert
-        title="本阶段暂不处理媒体上传"
-        description="图片与视频将在后续版本接入；本次创建后主图为空，图片和视频列表为空数组。"
+        title="创建后维护媒体"
+        description="创建产品后可在编辑页上传和维护图片与视频；本次创建不会携带媒体文件。"
         icon="i-lucide:image-off"
       />
     </FaCard>

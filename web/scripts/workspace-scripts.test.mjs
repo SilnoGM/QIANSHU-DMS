@@ -62,7 +62,7 @@ test('脚本测试同时运行 Node 与 TypeScript 测试', () => {
   )
 })
 
-test('认证、地区与字典 Browser E2E 使用互不扩张的显式场景文件', () => {
+test('认证、产品媒体、地区与字典 Browser E2E 使用互不扩张的显式场景文件', () => {
   const { scripts } = readJson('package.json')
 
   assert.deepEqual(
@@ -79,7 +79,7 @@ test('认证、地区与字典 Browser E2E 使用互不扩张的显式场景文�
 
   assert.equal(
     scripts['test:browser:auth'],
-    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/management.browser.test.mjs',
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/auth.browser.test.mjs apps/qsmds-arco/test/browser/product-media.browser.test.mjs apps/qsmds-arco/test/browser/management.browser.test.mjs',
   )
   assert.equal(
     scripts['test:browser:regions'],

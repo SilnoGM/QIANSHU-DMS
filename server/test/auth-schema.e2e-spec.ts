@@ -24,6 +24,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'numbering-rules:read',
   'numbering-rules:read-issuances',
   'numbering-rules:update',
+  'product-media:read',
   'products:create',
   'products:read',
   'products:update',

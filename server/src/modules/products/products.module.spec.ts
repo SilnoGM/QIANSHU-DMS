@@ -4,6 +4,12 @@ import { AuthModule } from '../auth/auth.module'
 import { CurrencyModule } from '../currencies/currency.module'
 import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { NumberingModule } from '../numbering/numbering.module'
+import { MediaModule } from '../media/media.module'
+import { ProductMediaContentService } from './media/product-media-content.service'
+import { ProductMediaHttpService } from './media/product-media-http.service'
+import { ProductMediaMultipartParser } from './media/product-media-multipart.parser'
+import { ProductMediaPersistence } from './media/product-media.persistence'
+import { ProductMediaService } from './media/product-media.service'
 import { ProductCommandService } from './product-command.service'
 import { ProductQueryService } from './product-query.service'
 import { ProductUpdateService } from './product-update.service'
@@ -18,6 +24,7 @@ describe('ProductsModule metadata', () => {
       AuthModule,
       CurrencyModule,
       NumberingModule,
+      MediaModule,
     ])
     expect(Reflect.getMetadata('controllers', ProductsModule)).toEqual([
       ProductsController,
@@ -26,6 +33,11 @@ describe('ProductsModule metadata', () => {
       ProductQueryService,
       ProductCommandService,
       ProductUpdateService,
+      ProductMediaPersistence,
+      ProductMediaService,
+      ProductMediaHttpService,
+      ProductMediaContentService,
+      expect.objectContaining({ provide: ProductMediaMultipartParser }),
     ])
   })
 

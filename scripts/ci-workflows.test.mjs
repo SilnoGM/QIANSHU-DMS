@@ -477,7 +477,17 @@ test('browser-auth-e2e 安装双依赖域并只调用隔离根入口', async () 
     'server/pnpm-lock.yaml',
     'web/pnpm-lock.yaml',
   ])
+  const ffmpegDependency = findNamedStep(job, 'Install FFmpeg dependency')
+  assert.equal(ffmpegDependency, [
+    '      - name: Install FFmpeg dependency',
+    '        run: |',
+    '          sudo apt-get update',
+    '          sudo apt-get install --yes --no-install-recommends ffmpeg',
+    '          test -x /usr/bin/ffprobe',
+    '          /usr/bin/ffprobe -version',
+  ].join('\n'))
   assertTextOrder(job, [
+    'sudo apt-get update',
     'run: pnpm -C server install --frozen-lockfile',
     'run: pnpm -C web install --frozen-lockfile',
     'run: node --run ci:browser-auth-e2e',

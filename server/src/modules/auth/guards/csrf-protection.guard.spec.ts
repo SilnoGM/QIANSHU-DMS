@@ -102,6 +102,18 @@ describe('CsrfProtectionGuard', () => {
   })
 
   it.each([
+    'multipart/form-data; boundary=qianshu-media-boundary',
+    'MULTIPART/FORM-DATA ; boundary="qianshu-media-boundary"',
+  ])('accepts multipart/form-data while preserving every other CSRF signal: %s', (contentType) => {
+    const guard = createGuard()
+
+    expect(guard.canActivate(createContext({
+      method: 'POST',
+      headers: { ...validHeaders, 'content-type': contentType },
+    }))).toBe(true)
+  })
+
+  it.each([
     ['missing Origin', { ...validHeaders, origin: undefined }],
     ['null Origin', { ...validHeaders, origin: 'null' }],
     ['mismatched Origin', { ...validHeaders, origin: 'https://attacker.example' }],
@@ -110,6 +122,8 @@ describe('CsrfProtectionGuard', () => {
     ['missing Content-Type', { ...validHeaders, 'content-type': undefined }],
     ['non-JSON Content-Type', { ...validHeaders, 'content-type': 'text/plain' }],
     ['JSON-like Content-Type', { ...validHeaders, 'content-type': 'application/jsonp' }],
+    ['multipart-like Content-Type', { ...validHeaders, 'content-type': 'multipart/form-datax' }],
+    ['malformed multipart parameters', { ...validHeaders, 'content-type': 'multipart/form-data;' }],
     ['malformed JSON parameters', { ...validHeaders, 'content-type': 'application/json;' }],
     ['cross-site fetch', { ...validHeaders, 'sec-fetch-site': 'cross-site' }],
     ['case-varied cross-site fetch', { ...validHeaders, 'sec-fetch-site': 'Cross-Site' }],

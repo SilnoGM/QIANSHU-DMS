@@ -6,6 +6,7 @@ import type {
 import type {
   StoredDictionaryValueResolution,
 } from '../dictionaries/dictionary-lookup.service'
+import type { ProductMedia } from './media/product-media-query.mapper'
 
 export interface DecimalStringSource {
   toFixed?(decimalPlaces: number): string
@@ -23,9 +24,6 @@ export interface ProductQueryRow {
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplierValue: string | null
-  readonly mainImage: string | null
-  readonly images: readonly string[]
-  readonly videos: readonly string[]
   readonly twdSalePriceAmount: DecimalStringSource | null
   readonly twdSalePriceCurrency: string
   readonly myrSalePriceAmount: DecimalStringSource | null
@@ -74,9 +72,6 @@ export const PRODUCT_RESPONSE_SELECT = {
   productNo: true,
   status: true,
   supplierValue: true,
-  mainImage: true,
-  images: true,
-  videos: true,
   twdSalePriceAmount: true,
   twdSalePriceCurrency: true,
   myrSalePriceAmount: true,
@@ -97,9 +92,7 @@ export interface ProductListItem {
   readonly productNo: string
   readonly status: ProductStatusValue
   readonly supplier: ProductSupplier | null
-  readonly mainImage: string | null
-  readonly images: readonly string[]
-  readonly videos: readonly string[]
+  readonly media: ProductMedia
   readonly twdSalePrice: ProductMoney
   readonly myrSalePrice: ProductMoney
   readonly purchaseCost: ProductMoney
@@ -121,6 +114,7 @@ export class ProductDataIntegrityError extends Error {
 export function mapProductListItem(
   row: ProductQueryRow,
   supplierResolution: StoredDictionaryValueResolution | null,
+  media: ProductMedia,
 ): ProductListItem {
   return {
     id: row.id,
@@ -128,9 +122,7 @@ export function mapProductListItem(
     productNo: row.productNo,
     status: row.status,
     supplier: mapSupplier(row.supplierValue, supplierResolution),
-    mainImage: row.mainImage,
-    images: [...row.images],
-    videos: [...row.videos],
+    media,
     twdSalePrice: mapMoney(
       row.twdSalePriceAmount,
       row.twdSalePriceCurrency,

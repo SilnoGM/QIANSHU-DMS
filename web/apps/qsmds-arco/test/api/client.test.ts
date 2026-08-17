@@ -271,6 +271,27 @@ test('每次请求动态读取语言、移除 Token，并为 Cookie 与 unsafe m
   assert.equal(recorder.authEpochReads, 4)
 })
 
+test('multipart 写请求不被通用 Client 覆盖为 JSON Content-Type', async () => {
+  let captured: InternalAxiosRequestConfig | undefined
+  const client = createApiClient({
+    adapter: async (config) => {
+      captured = config
+      return createResponse(config, { ok: true })
+    },
+    baseURL: '/api/',
+    hooks: createHookRecorder().hooks,
+  })
+  const formData = new FormData()
+  formData.append('kind', 'IMAGE')
+  formData.append('file', new File(['image'], 'main.webp', { type: 'image/webp' }))
+
+  await client.post('/products/product-1/media', formData)
+
+  assert.equal(captured?.data, formData)
+  assert.equal(captured?.headers.get('Content-Type'), false)
+  assert.equal(captured?.headers.get('X-Qianshu-CSRF'), '1')
+})
+
 test('确定的 AUTHENTICATION_REQUIRED 才清理身份，403 只提示权限不足', async () => {
   for (const status of [401, 403]) {
     const recorder = createHookRecorder()
