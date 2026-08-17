@@ -8,6 +8,7 @@ import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
+import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement, {
   PRODUCT_MANAGEMENT_PERMISSIONS,
 } from './modules/product.management'
@@ -81,6 +82,15 @@ const componentLibraryMainRoute: RouteRecordMainRaw = {
 }
 
 const asyncRoutes: RouteRecordMainRaw[] = [
+  {
+    meta: {
+      title: '千树运营工作台',
+      icon: 'i-lucide:briefcase-business',
+    },
+    children: [
+      ...OperationsWorkbenchRoutes,
+    ],
+  },
   {
     meta: {
       title: '管理员工作台',
