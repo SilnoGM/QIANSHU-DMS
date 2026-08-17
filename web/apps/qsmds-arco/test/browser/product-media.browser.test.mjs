@@ -196,6 +196,98 @@ async function clickVisibleAriaButton(page, label) {
   })()`)
 }
 
+/**
+ * 将预览按钮恢复到可重复观测的静止状态，并按当前浏览器的真实 Hover 能力验收。
+ * Linux Headless Chrome 可能报告 `(hover: none)`，此时触控样式会让预览入口常驻；
+ * 测试必须验证这项产品契约，而不能把桌面鼠标环境的 `opacity: 0` 当成唯一真相。
+ */
+async function verifyPreviewInteraction(page, label, overlayClass) {
+  await page.connection.send('Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: 1,
+    y: 1,
+  })
+  await page.evaluate(`(() => {
+    const activeElement = document.activeElement
+    if (activeElement instanceof HTMLElement) activeElement.blur()
+    const button = [...document.querySelectorAll('button')].find(candidate => (
+      candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+      && candidate.getClientRects().length > 0
+    ))
+    if (!(button instanceof HTMLButtonElement)) throw new Error('preview trigger unavailable')
+    button.scrollIntoView({ block: 'center', inline: 'center' })
+    return true
+  })()`)
+  await page.waitFor(`(() => {
+    const button = [...document.querySelectorAll('button')].find(candidate => (
+      candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+      && candidate.getClientRects().length > 0
+    ))
+    const overlay = button?.querySelector(${JSON.stringify(`.${overlayClass}`)})
+    if (!(button instanceof HTMLButtonElement) || !(overlay instanceof HTMLElement)) return false
+    const expectedOpacity = matchMedia('(hover: hover)').matches ? '0' : '1'
+    return document.activeElement !== button
+      && !button.matches(':hover')
+      && getComputedStyle(overlay).opacity === expectedOpacity
+  })()`)
+  const state = await page.evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find(candidate => (
+      candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+      && candidate.getClientRects().length > 0
+    ))
+    const overlay = button?.querySelector(${JSON.stringify(`.${overlayClass}`)})
+    if (!(button instanceof HTMLButtonElement) || !(overlay instanceof HTMLElement)) {
+      throw new Error('preview trigger unavailable')
+    }
+    const bounds = button.getBoundingClientRect()
+    return {
+      centerX: bounds.left + bounds.width / 2,
+      centerY: bounds.top + bounds.height / 2,
+      focused: document.activeElement === button,
+      hoverCapable: matchMedia('(hover: hover)').matches,
+      hovered: button.matches(':hover'),
+      initialOpacity: getComputedStyle(overlay).opacity,
+    }
+  })()`)
+  assert.equal(state.focused, false)
+  assert.equal(state.hovered, false)
+  assert.equal(state.initialOpacity, state.hoverCapable ? '0' : '1')
+
+  if (state.hoverCapable) {
+    await page.connection.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: state.centerX,
+      y: state.centerY,
+    })
+    await page.waitFor(`(() => {
+      const button = [...document.querySelectorAll('button')].find(candidate => (
+        candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+      ))
+      const overlay = button?.querySelector(${JSON.stringify(`.${overlayClass}`)})
+      return overlay instanceof HTMLElement && getComputedStyle(overlay).opacity === '1'
+    })()`)
+  }
+
+  await page.evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find(candidate => (
+      candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+      && candidate.getClientRects().length > 0
+    ))
+    if (!(button instanceof HTMLButtonElement)) throw new Error('preview trigger unavailable')
+    button.focus()
+    return true
+  })()`)
+  await page.waitFor(`(() => {
+    const button = [...document.querySelectorAll('button')].find(candidate => (
+      candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+    ))
+    const overlay = button?.querySelector(${JSON.stringify(`.${overlayClass}`)})
+    return button === document.activeElement
+      && overlay instanceof HTMLElement
+      && getComputedStyle(overlay).opacity === '1'
+  })()`)
+}
+
 async function openImageActionMenu(page, filename) {
   await clickVisibleAriaButton(page, `更多图片操作 ${filename}`)
   await page.waitFor(`(() => [...document.querySelectorAll('[role="menuitem"]')].some((item) => (
@@ -432,30 +524,11 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
       && document.body.innerText.includes('5 / 5 个')`)
 
     // 真实指针悬停图片时显示预览遮罩，并可直接打开现有预览器。
-    const imagePreviewState = await page.evaluate(`(() => {
-      const button = document.querySelector('[aria-label="预览图片 browser-main.jpg"]')
-      const overlay = button?.querySelector('.product-image-preview-overlay')
-      if (!(button instanceof HTMLButtonElement) || !(overlay instanceof HTMLElement)) {
-        throw new Error('image preview trigger unavailable')
-      }
-      const initialOpacity = getComputedStyle(overlay).opacity
-      button.scrollIntoView({ block: 'center', inline: 'center' })
-      const bounds = button.getBoundingClientRect()
-      return {
-        centerX: bounds.left + bounds.width / 2,
-        centerY: bounds.top + bounds.height / 2,
-        initialOpacity,
-      }
-    })()`)
-    assert.equal(imagePreviewState.initialOpacity, '0')
-    await page.connection.send('Input.dispatchMouseEvent', {
-      type: 'mouseMoved',
-      x: imagePreviewState.centerX,
-      y: imagePreviewState.centerY,
-    })
-    await page.waitFor(`getComputedStyle(document.querySelector(
-      '[aria-label="预览图片 browser-main.jpg"] .product-image-preview-overlay',
-    )).opacity === '1'`)
+    await verifyPreviewInteraction(
+      page,
+      '预览图片 browser-main.jpg',
+      'product-image-preview-overlay',
+    )
     await clickVisibleAriaButton(page, '预览图片 browser-main.jpg')
     await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
       .some(dialog => dialog.getClientRects().length > 0
@@ -477,30 +550,11 @@ test('真实 Chrome 覆盖产品媒体上传、布局、私有内容、响应式
       .every(dialog => dialog.getClientRects().length === 0))()`)
 
     // 视频卡片与图片卡片保持同一 Hover/Focus 预览语言，不再在卡片外露播放和管理实体按钮。
-    const videoPreviewState = await page.evaluate(`(() => {
-      const button = document.querySelector('[aria-label="预览视频 browser-camera.webm"]')
-      const overlay = button?.querySelector('.product-video-preview-overlay')
-      if (!(button instanceof HTMLButtonElement) || !(overlay instanceof HTMLElement)) {
-        throw new Error('video preview trigger unavailable')
-      }
-      const initialOpacity = getComputedStyle(overlay).opacity
-      button.scrollIntoView({ block: 'center', inline: 'center' })
-      const bounds = button.getBoundingClientRect()
-      return {
-        centerX: bounds.left + bounds.width / 2,
-        centerY: bounds.top + bounds.height / 2,
-        initialOpacity,
-      }
-    })()`)
-    assert.equal(videoPreviewState.initialOpacity, '0')
-    await page.connection.send('Input.dispatchMouseEvent', {
-      type: 'mouseMoved',
-      x: videoPreviewState.centerX,
-      y: videoPreviewState.centerY,
-    })
-    await page.waitFor(`getComputedStyle(document.querySelector(
-      '[aria-label="预览视频 browser-camera.webm"] .product-video-preview-overlay',
-    )).opacity === '1'`)
+    await verifyPreviewInteraction(
+      page,
+      '预览视频 browser-camera.webm',
+      'product-video-preview-overlay',
+    )
 
     // 统一操作菜单保留键盘排序能力，设置主图后保存真实布局。
     await openImageActionMenu(page, 'browser-package.webp')
