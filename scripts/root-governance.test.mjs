@@ -103,6 +103,7 @@ const supplierResidueAllowlist = Object.freeze([
 const currentGlobalDocuments = Object.freeze([
   '发布与版本管理.md',
   '开发工作流.md',
+  '生产部署与Gate OPS检查清单.md',
   '用户认证与权限体系设计.md',
   '项目工程组织方案.md',
 ])
@@ -1106,6 +1107,7 @@ test('根治理入口和当前指导文档均为真实文件', async () => {
     'docs/全局文档/项目工程组织方案.md',
     'docs/全局文档/开发工作流.md',
     'docs/全局文档/发布与版本管理.md',
+    'docs/全局文档/生产部署与Gate OPS检查清单.md',
     'docs/全局文档/用户认证与权限体系设计.md',
     'docs/工程归档/归档索引.md',
   ]) {
@@ -1118,7 +1120,7 @@ test('Node.js 主版本配置为 24', async () => {
   assert.equal(nodeVersion.trim(), '24')
 })
 
-test('全局文档只保留四份当前指导文档', async () => {
+test('全局文档只保留五份当前指导文档', async () => {
   assert.deepEqual(
     await directoryEntryKinds(path.join('docs', '全局文档')),
     expectedDirectoryEntryKinds({ files: currentGlobalDocuments }),
@@ -1149,6 +1151,7 @@ test('文档索引只展开当前文档并通过唯一入口进入工程归档',
     './全局文档/项目工程组织方案.md',
     './全局文档/开发工作流.md',
     './全局文档/发布与版本管理.md',
+    './全局文档/生产部署与Gate OPS检查清单.md',
     './全局文档/用户认证与权限体系设计.md',
     './前端文档/前端架构.md',
     './前端文档/应用边界规范.md',

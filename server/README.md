@@ -130,5 +130,5 @@ Server 不通过 `file:`、`link:`、`portal:`、`workspace:*` 或源码路径�
 - 正式 Server 归档只承诺 `Ubuntu 24.04` / `glibc` / `x64` / `Node 24` 运行时兼容范围；不将 Alpine / `musl`、其他 CPU 架构或其他 Node.js 大版本视为已验证能力。
 - Release 流程仅验证、构建、归档、smoke test 和发布 GitHub Release，不会自动部署，不连接生产数据库，也不执行生产 migration。归档 smoke test 中的 `pnpm -C server db:migrate:deploy` 只作用于隔离的临时 CI PostgreSQL。
 - 实际生产部署和 production migration 由部署系统或运维流程在审查后单独执行，不属于当前 GitHub Release 的自动化边界。
-- 生产宿主机安全、运行依赖、备份恢复、放量和回滚必须先通过 [`生产部署与 Gate OPS 检查清单`](../docs/全局文档/生产部署与Gate OPS检查清单.md)；历史快照和 Release 成功不能替代实时生产证据。
+- 生产宿主机安全、运行依赖、备份恢复、放量和回滚必须先通过 [`生产部署与 Gate OPS 检查清单`](<../docs/全局文档/生产部署与Gate OPS检查清单.md>)；历史快照和 Release 成功不能替代实时生产证据。
 - 阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。
