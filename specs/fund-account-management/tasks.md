@@ -182,17 +182,17 @@ flowchart TD
   - [x] 5.9 创建提交：`feat: 实现资金账户与比例管理`。
   - _Requirements: R1-R2, R8-R9, R13-R15_
 
-- [ ] 6. 以 TDD 实现业务类型、规则版本和来源管理
-  - [ ] 6.1 红测类型/来源列表、搜索、启用状态、分页和稳定排序。
-  - [ ] 6.2 红测创建类型、DRAFT 规则、受控 legs 和来源允许类型范围。
-  - [ ] 6.3 红测规则发布：锁定类型、校验完整配置、ACTIVE -> RETIRED、DRAFT -> ACTIVE。
-  - [ ] 6.4 红测稳定 code、已发布版本和已使用分类不可原地修改。
-  - [ ] 6.5 红测启停对新动账生效但不影响历史查询。
-  - [ ] 6.6 红测管理员保留类型只允许两个调账模板，不能配置任意账户集合。
-  - [ ] 6.7 所有 mutation 使用 `expectedVersion`、事务超时和同事务 Audit。
-  - [ ] 6.8 不实现 DELETE 和任意脚本/公式解析。
-  - [ ] 6.9 运行配置 service/persistence 定向测试、typecheck、lint 和 diff-check。
-  - [ ] 6.10 创建提交：`feat: 实现资金业务配置管理`。
+- [x] 6. 以 TDD 实现业务类型、规则版本和来源管理
+  - [x] 6.1 红测类型/来源列表、搜索、启用状态、分页和稳定排序。
+  - [x] 6.2 红测创建类型、DRAFT 规则、受控 legs 和来源允许类型范围。
+  - [x] 6.3 红测规则发布：锁定类型、校验完整配置、ACTIVE -> RETIRED、DRAFT -> ACTIVE。
+  - [x] 6.4 红测稳定 code、已发布版本和已使用分类不可原地修改。
+  - [x] 6.5 红测启停对新动账生效但不影响历史查询。
+  - [x] 6.6 红测管理员保留类型只允许两个调账模板，不能配置任意账户集合。
+  - [x] 6.7 所有 mutation 使用 `expectedVersion`、事务超时和同事务 Audit。
+  - [x] 6.8 不实现 DELETE 和任意脚本/公式解析。
+  - [x] 6.9 运行配置 service/persistence 定向测试、typecheck、lint 和 diff-check。
+  - [x] 6.10 创建提交：`feat: 实现资金业务配置管理`。
   - _Requirements: R3-R4, R6-R9, R13-R15_
 
 - [ ] 7. 以 TDD 实现统一内部动账引擎
