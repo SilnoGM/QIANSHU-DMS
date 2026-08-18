@@ -110,7 +110,7 @@ test('资金账户专属权限精确控制分组、菜单和直接访问资格',
   assert.deepEqual(visiblePaths([]), [])
 })
 
-test('账户列表进入真实页面且流水页在 Task 14 前保持空白', () => {
+test('账户列表与流水路由均进入受权限保护的真实业务页面', () => {
   const listSource = readFileSync(new URL(
     '../../src/views/admin/fund-account-management/list/index.vue',
     import.meta.url,
@@ -119,16 +119,13 @@ test('账户列表进入真实页面且流水页在 Task 14 前保持空白', ()
     '../../src/views/admin/fund-account-management/transactions/index.vue',
     import.meta.url,
   ), 'utf8')
+  const transactionTableSource = readFileSync(new URL(
+    '../../src/views/admin/fund-account-management/transactions/fund-transaction-table.vue',
+    import.meta.url,
+  ), 'utf8')
 
   assert.match(listSource, /<QsGenericTable/u)
-  const templateStart = transactionSource.indexOf('<template>')
-  const templateEnd = transactionSource.indexOf('</template>', templateStart)
-  assert.notEqual(templateStart, -1)
-  assert.notEqual(templateEnd, -1)
-  assert.equal(
-    transactionSource
-      .slice(templateStart + '<template>'.length, templateEnd)
-      .trim(),
-    '<div />',
-  )
+  assert.match(transactionSource, /fundAccountsApi\.transactions\.list/u)
+  assert.match(transactionSource, /<FundTransactionTable/u)
+  assert.match(transactionTableSource, /<QsGenericTable/u)
 })
