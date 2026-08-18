@@ -118,3 +118,23 @@ test('系统字典审计事件使用现有中文展示管道', () => {
   assert.equal(formatAuditEvent('DICTIONARY_ITEM_ENABLED'), '字典项已启用')
   assert.equal(formatAuditEvent('DICTIONARY_ITEM_DISABLED'), '字典项已停用')
 })
+
+test('资金账户审计事件使用稳定中文名称', () => {
+  assert.equal(formatAuditEvent('FUND_ACCOUNT_CREATED'), '资金账户已创建')
+  assert.equal(
+    formatAuditEvent('FUND_ACCOUNT_SHARE_RATE_UPDATED'),
+    '资金账户分成比例已更新',
+  )
+  assert.equal(formatAuditEvent('FUND_POSTING_TYPE_CREATED'), '资金业务类型已创建')
+  assert.equal(formatAuditEvent('FUND_POSTING_TYPE_UPDATED'), '资金业务类型已更新')
+  assert.equal(formatAuditEvent('FUND_POSTING_TYPE_ENABLED'), '资金业务类型已启用')
+  assert.equal(formatAuditEvent('FUND_POSTING_TYPE_DISABLED'), '资金业务类型已停用')
+  assert.equal(formatAuditEvent('FUND_POSTING_RULE_PUBLISHED'), '资金动账规则已发布')
+  assert.equal(formatAuditEvent('FUND_BUSINESS_SOURCE_CREATED'), '资金业务来源已创建')
+  assert.equal(formatAuditEvent('FUND_BUSINESS_SOURCE_UPDATED'), '资金业务来源已更新')
+  assert.equal(formatAuditEvent('FUND_BUSINESS_SOURCE_ENABLED'), '资金业务来源已启用')
+  assert.equal(formatAuditEvent('FUND_BUSINESS_SOURCE_DISABLED'), '资金业务来源已停用')
+  assert.equal(formatAuditEvent('FUND_MANUAL_ADJUSTMENT_POSTED'), '管理员手动调账已记账')
+  assert.equal(formatAuditEvent('FUND_BUSINESS_POSTED'), '资金业务已记账')
+  assert.equal(formatAuditEvent('FUND_POSTING_REVERSED'), '资金动账已冲账')
+})

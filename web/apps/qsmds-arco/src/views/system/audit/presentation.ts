@@ -58,6 +58,20 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   AUTH_RETENTION_PURGED: '认证保留数据已清理',
   PRODUCT_CREATED: '产品已创建',
   PRODUCT_UPDATED: '产品已更新',
+  FUND_ACCOUNT_CREATED: '资金账户已创建',
+  FUND_ACCOUNT_SHARE_RATE_UPDATED: '资金账户分成比例已更新',
+  FUND_POSTING_TYPE_CREATED: '资金业务类型已创建',
+  FUND_POSTING_TYPE_UPDATED: '资金业务类型已更新',
+  FUND_POSTING_TYPE_ENABLED: '资金业务类型已启用',
+  FUND_POSTING_TYPE_DISABLED: '资金业务类型已停用',
+  FUND_POSTING_RULE_PUBLISHED: '资金动账规则已发布',
+  FUND_BUSINESS_SOURCE_CREATED: '资金业务来源已创建',
+  FUND_BUSINESS_SOURCE_UPDATED: '资金业务来源已更新',
+  FUND_BUSINESS_SOURCE_ENABLED: '资金业务来源已启用',
+  FUND_BUSINESS_SOURCE_DISABLED: '资金业务来源已停用',
+  FUND_MANUAL_ADJUSTMENT_POSTED: '管理员手动调账已记账',
+  FUND_BUSINESS_POSTED: '资金业务已记账',
+  FUND_POSTING_REVERSED: '资金动账已冲账',
 }
 
 export function auditMetadataEntries(

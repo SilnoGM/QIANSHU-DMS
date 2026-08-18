@@ -26,12 +26,20 @@ export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
 export const PRODUCT_MEDIA_PERMISSION_CODES = ['product-media:read'] as const
 
 /**
- * 资金账户空白入口的专属读取权限。
+ * 资金账户管理的完整人工权限边界。
  *
- * 数据库将其标记为 systemOnly，确保普通角色不能通过角色权限维护接口获得该权限；
- * 当前仅由 system_admin 持有，用于同时保护资金账户列表与流水路由。
+ * 数据库将全部权限标记为 systemOnly，确保普通角色不能通过角色权限维护接口获得；
+ * 同一 Server 内业务域动账不使用这些管理员权限，而由可信来源白名单约束。
  */
-export const FUND_ACCOUNT_PERMISSION_CODES = ['fund-accounts:read'] as const
+export const FUND_ACCOUNT_PERMISSION_CODES = [
+  'fund-accounts:read',
+  'fund-accounts:create',
+  'fund-accounts:update-share-rate',
+  'fund-accounts:manual-adjust',
+  'fund-transactions:reverse',
+  'fund-posting-types:manage',
+  'fund-business-sources:manage',
+] as const
 
 /**
  * 首期用户、角色与审计管理功能使用的完整权限目录。

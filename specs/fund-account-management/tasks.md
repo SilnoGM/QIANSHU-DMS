@@ -2,17 +2,20 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 执行中，Task 1-2 已完成
+- 状态：Phase 4 执行中，Task 1-3 已完成
 - 生成日期：2026-08-18
 - Requirements：`specs/fund-account-management/requirements.md`
 - Design：`specs/fund-account-management/design.md`
 - 正式 Web 应用：`web/apps/qsmds-arco`
 - Server：`server`
 - 实施分支：`feat/admin-fund-account-management`
-- 当前 HEAD：`8f6f4fa`，文档提交前工作区干净
-- 已有提交：
+- Task 3 开始时 HEAD：`2324f36`，工作区干净
+- Task 3 开始前已有提交：
   - `8ea2575 feat: 添加资金账户管理空白页面`
   - `8f6f4fa feat: 限制资金账户路由仅超级管理员访问`
+  - `b59761c docs: 固化资金账户管理规格`
+  - `f174f46 test: 补齐资金账户权限 E2E 预期`
+  - `2324f36 feat: 添加资金分账与冲账计算`
 
 用户已确认 Phase 1 需求、Phase 2 技术设计和 Phase 3 任务顺序。该确认允许固化规格，不自动授权修改数据库 Schema、Migration、公共 API、公共数据结构或持久开发数据库。
 
@@ -141,18 +144,18 @@ flowchart TD
   - [x] 2.10 创建提交：`feat: 添加资金分账与冲账计算`。
   - _Requirements: R2-R3, R6-R10, R14-R15_
 
-- [ ] 3. 以 TDD 建立 Schema、forward migration、权限和初始化数据
-  - [ ] 3.1 确认 Gate B 后先新增 Schema/migration 合约 RED。
-  - [ ] 3.2 新增 `FundAccount`、`FundBusinessSource`、`FundPostingType`、`FundPostingRuleVersion`、`FundPostingRuleLeg`、`FundBusinessSourcePostingType`、`FundPostingBatch` 和 `FundLedgerEntry`。
-  - [ ] 3.3 建立一用户一账户、单公司账户、固定 CNY、比例范围、正数流水金额和账户序号唯一约束。
-  - [ ] 3.4 建立批次幂等唯一、规则 ACTIVE/DRAFT 唯一、稳定编码和所有业务 FK `RESTRICT`。
-  - [ ] 3.5 建立 trigger，阻止账户主体、已使用稳定编码、批次、流水和已发布规则版本的非法修改或删除。
-  - [ ] 3.6 追加新 `systemOnly` 权限、AuditEventType 和 `system_admin` 排他授权自检。
-  - [ ] 3.7 初始化公司账户、九个业务类型、首个 ACTIVE 规则和管理员调账来源；不创建用户账户、批次或流水。
-  - [ ] 3.8 建立账户、流水、批次、业务标识、冲账关联和配置查询索引。
-  - [ ] 3.9 在一次性 PostgreSQL 验证空库 replay、第二次 deploy、status、约束、trigger、seed 和权限目录。
-  - [ ] 3.10 运行 Prisma validate、Schema tests、Server typecheck、lint 和 diff-check。
-  - [ ] 3.11 创建提交：`feat: 建立资金账户数据模型`。
+- [x] 3. 以 TDD 建立 Schema、forward migration、权限和初始化数据
+  - [x] 3.1 确认 Gate B 后先新增 Schema/migration 合约 RED。
+  - [x] 3.2 新增 `FundAccount`、`FundBusinessSource`、`FundPostingType`、`FundPostingRuleVersion`、`FundPostingRuleLeg`、`FundBusinessSourcePostingType`、`FundPostingBatch` 和 `FundLedgerEntry`。
+  - [x] 3.3 建立一用户一账户、单公司账户、固定 CNY、比例范围、正数流水金额和账户序号唯一约束。
+  - [x] 3.4 建立批次幂等唯一、规则 ACTIVE/DRAFT 唯一、稳定编码和所有业务 FK `RESTRICT`。
+  - [x] 3.5 建立 trigger，阻止账户主体、已使用稳定编码、批次、流水和已发布规则版本的非法修改或删除。
+  - [x] 3.6 追加新 `systemOnly` 权限、AuditEventType 和 `system_admin` 排他授权自检。
+  - [x] 3.7 初始化公司账户、九个业务类型、首个 ACTIVE 规则和管理员调账来源；不创建用户账户、批次或流水。
+  - [x] 3.8 建立账户、流水、批次、业务标识、冲账关联和配置查询索引。
+  - [x] 3.9 在一次性 PostgreSQL 验证空库 replay、第二次 deploy、status、约束、trigger、seed 和权限目录。
+  - [x] 3.10 运行 Prisma validate、Schema tests、Server typecheck、lint 和 diff-check。
+  - [x] 3.11 创建提交：`feat: 建立资金账户数据模型`。
   - _Requirements: R1-R4, R8-R10, R13-R15_
 
 - [ ] 4. 以 TDD 建立 DTO、错误码、幂等和输入安全边界

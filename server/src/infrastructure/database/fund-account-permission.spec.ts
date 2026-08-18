@@ -12,8 +12,10 @@ const migrationDirectory = '20260817090000_fund_account_read_permission'
 const permissionId = '00000000-0000-4000-8000-000000000147'
 
 describe('fund account read permission migration', () => {
-  it('registers one exact permission in the management catalog', () => {
-    expect(FUND_ACCOUNT_PERMISSION_CODES).toEqual(['fund-accounts:read'])
+  it('retains the read permission inside the complete fund catalog', () => {
+    expect(FUND_ACCOUNT_PERMISSION_CODES).toEqual(expect.arrayContaining([
+      'fund-accounts:read',
+    ]))
     expect(MANAGEMENT_PERMISSION_CODES).toEqual(
       expect.arrayContaining([...FUND_ACCOUNT_PERMISSION_CODES]),
     )

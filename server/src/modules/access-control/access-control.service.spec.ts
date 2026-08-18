@@ -73,8 +73,14 @@ describe('permission constants', () => {
       'products:create',
       'products:update',
       'fund-accounts:read',
+      'fund-accounts:create',
+      'fund-accounts:update-share-rate',
+      'fund-accounts:manual-adjust',
+      'fund-transactions:reverse',
+      'fund-posting-types:manage',
+      'fund-business-sources:manage',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 42)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 48)
   })
 })
 
