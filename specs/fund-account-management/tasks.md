@@ -237,13 +237,13 @@ flowchart TD
   - [x] 9.11 创建提交：`feat: 提供资金账户管理接口`。
   - _Requirements: R1-R4, R7, R10-R15_
 
-- [ ] 10. 同步 OpenAPI 与 Web generated contract
-  - [ ] 10.1 先运行 `contract:check`，记录 tracked snapshot 缺少新管理 operations 的预期 RED。
-  - [ ] 10.2 串行运行根 `contract:sync`，不得手工修改 snapshot 或 generated types。
-  - [ ] 10.3 核对 diff 只包含已确认的资金管理 endpoints、DTO、Header、状态码、权限相关错误和 Audit enum。
-  - [ ] 10.4 证明 Server/Web OpenAPI snapshot 字节一致，Web generated types 可重建。
-  - [ ] 10.5 运行 `contract:check`、contract baseline、Server build、Web typecheck 和 diff-check。
-  - [ ] 10.6 创建提交：`chore: 同步资金账户接口契约`。
+- [x] 10. 同步 OpenAPI 与 Web generated contract
+  - [x] 10.1 先运行 `contract:check`，记录 tracked snapshot 缺少新管理 operations 的预期 RED。
+  - [x] 10.2 串行运行根 `contract:sync`，不得手工修改 snapshot 或 generated types。
+  - [x] 10.3 核对 diff 只包含已确认的资金管理 endpoints、DTO、Header、状态码、权限相关错误和 Audit enum。
+  - [x] 10.4 证明 Server/Web OpenAPI snapshot 字节一致，Web generated types 可重建。
+  - [x] 10.5 运行 `contract:check`、contract baseline、Server build、Web typecheck 和 diff-check。
+  - [x] 10.6 创建提交：`chore: 同步资金账户接口契约`。
   - _Requirements: R5, R7, R10-R15_
 
 - [ ] 11. 以 TDD 实现 Web API adapter 与纯状态逻辑
