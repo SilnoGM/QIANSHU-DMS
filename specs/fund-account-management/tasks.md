@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 执行中，Task 1-3 已完成
+- 状态：Phase 4 执行中，Task 1-4 已完成
 - 生成日期：2026-08-18
 - Requirements：`specs/fund-account-management/requirements.md`
 - Design：`specs/fund-account-management/design.md`
@@ -158,16 +158,16 @@ flowchart TD
   - [x] 3.11 创建提交：`feat: 建立资金账户数据模型`。
   - _Requirements: R1-R4, R8-R10, R13-R15_
 
-- [ ] 4. 以 TDD 建立 DTO、错误码、幂等和输入安全边界
-  - [ ] 4.1 确认 Gate B 后为 UUID、分页、排序、金额、比例、业务标识、摘要、时间和 metadata 建立 DTO RED。
-  - [ ] 4.2 公共金额全部使用 decimal string，拒绝 number、科学计数法、空字符串、零金额和类型不允许的符号。
-  - [ ] 4.3 规范化可展示字段；原始幂等键按 UTF-8 bytes 校验，不 trim、不转大小写、不做 Unicode 规范化。
-  - [ ] 4.4 计算固定长度幂等 Hash 和版本化请求指纹；原始 key 不进入数据库、日志、错误和 Audit metadata。
-  - [ ] 4.5 限制 metadata 键数、键长、标量类型和总大小，拒绝 getter、symbol、嵌套对象和危险键。
-  - [ ] 4.6 建立账户、配置、幂等、冲账、状态变化和安全内部错误码。
-  - [ ] 4.7 持久化错误只读取结构化 code/constraint/target，覆盖 unique、check、lock timeout、deadlock 和 serialization failure。
-  - [ ] 4.8 运行 DTO/normalizer/error 定向测试、typecheck、lint 和 diff-check。
-  - [ ] 4.9 创建提交：`feat: 建立资金账户服务边界`。
+- [x] 4. 以 TDD 建立 DTO、错误码、幂等和输入安全边界
+  - [x] 4.1 确认 Gate B 后为 UUID、分页、排序、金额、比例、业务标识、摘要、时间和 metadata 建立 DTO RED。
+  - [x] 4.2 公共金额全部使用 decimal string，拒绝 number、科学计数法、空字符串、零金额和类型不允许的符号。
+  - [x] 4.3 规范化可展示字段；原始幂等键按 UTF-8 bytes 校验，不 trim、不转大小写、不做 Unicode 规范化。
+  - [x] 4.4 计算固定长度幂等 Hash 和版本化请求指纹；原始 key 不进入数据库、日志、错误和 Audit metadata。
+  - [x] 4.5 限制 metadata 键数、键长、标量类型和总大小，拒绝 getter、symbol、嵌套对象和危险键。
+  - [x] 4.6 建立账户、配置、幂等、冲账、状态变化和安全内部错误码。
+  - [x] 4.7 持久化错误只读取结构化 code/constraint/target，覆盖 unique、check、lock timeout、deadlock 和 serialization failure。
+  - [x] 4.8 运行 DTO/normalizer/error 定向测试、typecheck、lint 和 diff-check。
+  - [x] 4.9 创建提交：`feat: 建立资金账户服务边界`。
   - _Requirements: R3-R5, R7-R10, R13-R15_
 
 - [ ] 5. 以 TDD 实现账户查询、开户和比例管理
