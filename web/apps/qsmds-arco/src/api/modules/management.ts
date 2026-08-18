@@ -32,10 +32,11 @@ function resourcePath(resource: 'roles' | 'users', id: string): string {
 export function createManagementApi(client: AxiosInstance) {
   return {
     users: {
-      list: (query: UserListQuery = {}) =>
+      list: (query: UserListQuery = {}, signal?: AbortSignal) =>
         client.get<UserPageDto>('users', {
           errorPresentation: 'local',
           params: query,
+          ...(signal === undefined ? {} : { signal }),
         }),
       create: (data: CreateUserRequestDtoWritable) =>
         client.post<UserDto>('users', data, {

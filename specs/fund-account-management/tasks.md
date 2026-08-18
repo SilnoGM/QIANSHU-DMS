@@ -259,18 +259,18 @@ flowchart TD
   - [x] 11.10 创建提交：`feat: 建立资金账户前端状态`。
   - _Requirements: R1-R4, R7, R10-R15_
 
-- [ ] 12. 以 TDD 实现资金账户列表页面
-  - [ ] 12.1 先建立 View RED，固定 `FaPageHeader + FaPageMain + QsGenericTable`、权限和数据状态。
-  - [ ] 12.2 实现账户主体、实时余额、比例、时间和公司账户标识列；不展示内部 version 或技术字段。
-  - [ ] 12.3 使用 `AmountDisplay`、`DateTimeDisplay` 和语义数据排版；负余额同时展示负号和文字语义。
-  - [ ] 12.4 实现创建账户 Modal，选择未开户用户并输入初始比例。
-  - [ ] 12.5 实现比例修改 Modal，展示当前值、未来生效说明、原因和并发版本。
-  - [ ] 12.6 实现管理员调账 Modal，支持两种模式、正负金额、原因、比例和预计余额预览。
-  - [ ] 12.7 公司账户不显示用户比例修改和用户调账；行操作提供指定账户流水跳转。
-  - [ ] 12.8 覆盖窄屏卡片、44px target、键盘、light/dark、Reduced Motion 和无页面级横向溢出。
-  - [ ] 12.9 不修改共享组件契约，不实现全部用户批量调账。
-  - [ ] 12.10 运行 View/logic/API 定向测试、Web typecheck、lint、build 和 diff-check。
-  - [ ] 12.11 创建提交：`feat: 实现资金账户列表页面`。
+- [x] 12. 以 TDD 实现资金账户列表页面
+  - [x] 12.1 先建立 View RED，固定 `FaPageHeader + FaPageMain + QsGenericTable`、权限和数据状态。
+  - [x] 12.2 实现账户主体、实时余额、比例、时间和公司账户标识列；不展示内部 version 或技术字段。
+  - [x] 12.3 使用 `AmountDisplay`、`DateTimeDisplay` 和语义数据排版；负余额同时展示负号和文字语义。
+  - [x] 12.4 实现创建账户 Modal，选择未开户用户并输入初始比例。
+  - [x] 12.5 实现比例修改 Modal，展示当前值、未来生效说明、原因和并发版本。
+  - [x] 12.6 实现管理员调账 Modal，支持两种模式、正负金额、原因、比例和预计余额预览。
+  - [x] 12.7 公司账户不显示用户比例修改和用户调账；行操作提供指定账户流水跳转。
+  - [x] 12.8 覆盖窄屏卡片、44px target、键盘、light/dark、Reduced Motion 和无页面级横向溢出。
+  - [x] 12.9 不修改共享组件契约，不实现全部用户批量调账。
+  - [x] 12.10 运行 View/logic/API 定向测试、Web typecheck、lint、build 和 diff-check。
+  - [x] 12.11 创建提交：`feat: 实现资金账户列表页面`。
   - _Requirements: R1-R2, R7, R11, R13-R15_
 
 - [ ] 13. 以 TDD 实现业务类型与来源配置交互

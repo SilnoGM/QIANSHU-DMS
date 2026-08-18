@@ -142,6 +142,7 @@ test('开户、比例、两种调账和冲账请求只输出 generated DTO 可�
   }
   assert.throws(() => buildFundAccountCreateRequest('', '30'))
   assert.throws(() => buildFundAccountCreateRequest('user-id', '100.0001'))
+  assert.throws(() => buildFundShareRateRequest('30', 0, '原因'))
   assert.throws(() => buildFundShareRateRequest('30', -1, '原因'))
   assert.throws(() => buildFundReversalRequest('-1', '100', '原因'))
   assert.throws(() => buildFundReversalRequest('100.0001', '100', '原因'))

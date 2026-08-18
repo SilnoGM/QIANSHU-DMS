@@ -87,7 +87,8 @@ function normalizeFundShareRate(value: string): string {
 }
 
 function validVersion(value: number): boolean {
-  return Number.isSafeInteger(value) && value >= 0
+  // Server DTO 从 1 开始计版本；0 不是可提交的并发快照。
+  return Number.isSafeInteger(value) && value >= 1
 }
 
 export function buildFundAccountCreateRequest(

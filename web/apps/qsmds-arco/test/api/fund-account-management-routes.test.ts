@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-// eslint-disable-next-line test/no-import-node-test -- 路由与空白页面契约使用 Node.js 内置 runner。
+// eslint-disable-next-line test/no-import-node-test -- 路由与阶段页面契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
 import { matchesAuthorization } from '../../src/composables/app/auth'
@@ -110,21 +110,25 @@ test('资金账户专属权限精确控制分组、菜单和直接访问资格',
   assert.deepEqual(visiblePaths([]), [])
 })
 
-test('资金账户页面保持单一空白根节点', () => {
-  for (const relativePath of [
+test('账户列表进入真实页面且流水页在 Task 14 前保持空白', () => {
+  const listSource = readFileSync(new URL(
     '../../src/views/admin/fund-account-management/list/index.vue',
+    import.meta.url,
+  ), 'utf8')
+  const transactionSource = readFileSync(new URL(
     '../../src/views/admin/fund-account-management/transactions/index.vue',
-  ]) {
-    const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
-    const templateStart = source.indexOf('<template>')
-    const templateEnd = source.indexOf('</template>', templateStart)
+    import.meta.url,
+  ), 'utf8')
 
-    assert.notEqual(templateStart, -1)
-    assert.notEqual(templateEnd, -1)
-
-    const template = source
+  assert.match(listSource, /<QsGenericTable/u)
+  const templateStart = transactionSource.indexOf('<template>')
+  const templateEnd = transactionSource.indexOf('</template>', templateStart)
+  assert.notEqual(templateStart, -1)
+  assert.notEqual(templateEnd, -1)
+  assert.equal(
+    transactionSource
       .slice(templateStart + '<template>'.length, templateEnd)
-      .trim()
-    assert.equal(template, '<div />')
-  }
+      .trim(),
+    '<div />',
+  )
 })
