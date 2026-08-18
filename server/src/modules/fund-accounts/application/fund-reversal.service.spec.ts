@@ -462,7 +462,7 @@ describe('FundPostingApplicationService reversal idempotency and failures', () =
     const missing = fixture()
     await expectFundReject(
       missing.service.reversePostingBatch(CONTEXT, input()),
-      'FUND_REVERSAL_TARGET_INVALID',
+      'FUND_POSTING_BATCH_NOT_FOUND',
     )
 
     jest.clearAllMocks()

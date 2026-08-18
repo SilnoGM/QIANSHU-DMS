@@ -13,6 +13,7 @@ import {
   parseFundAmountMinor,
   parseFundShareRateUnits,
   type FundAccountTarget,
+  type FundAdjustmentMode,
   type FundAmountSignPolicy,
   type FundAmountStrategy,
   type FundBusinessCategory,
@@ -55,6 +56,12 @@ export interface FundPostingTypeRecord {
 export interface FundPostingAccountIdentities {
   readonly userAccountId: string | null
   readonly companyAccountId: string | null
+}
+
+export interface FundManualAdjustmentIdentities
+  extends FundPostingAccountIdentities {
+  readonly userId: string
+  readonly userAccountId: string
 }
 
 export interface FundLockedAccountRecord {
@@ -113,6 +120,37 @@ export interface FundPostingBatchInsert {
   readonly consumerCode: string
   readonly idempotencyKeyHash: Buffer
   readonly requestFingerprintHash: Buffer
+  readonly requestId: string
+  readonly correlationId: string | null
+  readonly postedAt: Date
+}
+
+export interface FundManualAdjustmentBatchInsert {
+  readonly id: string
+  readonly batchNo: string
+  readonly kind: 'MANUAL_ADJUSTMENT'
+  readonly postingTypeId: string
+  readonly postingTypeCodeSnapshot: string
+  readonly postingTypeNameSnapshot: string
+  readonly businessCategorySnapshot: 'ADJUSTMENT'
+  readonly businessSourceId: string
+  readonly businessSourceCodeSnapshot: string
+  readonly businessSourceNameSnapshot: string
+  readonly ruleVersionId: string
+  readonly ruleRevisionSnapshot: number
+  readonly userId: string
+  readonly businessAmount: string
+  readonly userShareRateSnapshot: string
+  readonly companyShareRateSnapshot: string
+  readonly businessId: string
+  readonly summary: string
+  readonly metadata: FundMetadata
+  readonly businessOccurredAt: Date
+  readonly consumerCode: string
+  readonly idempotencyKeyHash: Buffer
+  readonly requestFingerprintHash: Buffer
+  readonly adjustmentMode: FundAdjustmentMode
+  readonly actorUserId: string
   readonly requestId: string
   readonly correlationId: string | null
   readonly postedAt: Date
@@ -526,6 +564,62 @@ export async function readFundAccountIdentitiesForPosting(
   return Object.freeze({ userAccountId, companyAccountId })
 }
 
+/** 管理员调账从路径账户反查用户，绝不接受调用方自行声明 userId 或账户比例。 */
+export async function readFundManualAdjustmentIdentities(
+  transaction: Prisma.TransactionClient,
+  input: {
+    readonly userAccountId: string
+    readonly requireCompanyAccount: boolean
+  },
+): Promise<FundManualAdjustmentIdentities | null> {
+  const rows = await transaction.$queryRaw<AccountIdentityDatabaseRow[]>(
+    Prisma.sql`
+      SELECT
+        account."id",
+        account."owner_type"::text AS "ownerType",
+        account."user_id" AS "userId"
+      FROM "fund_accounts" AS account
+      WHERE account."id" = CAST(${input.userAccountId} AS uuid)
+        OR (
+          ${input.requireCompanyAccount}
+          AND account."owner_type" = 'COMPANY'::"fund_account_owner_type"
+        )
+      ORDER BY account."id" ASC
+    `,
+  )
+
+  let selectedUserId: string | null = null
+  let selectedUserAccountId: string | null = null
+  let companyAccountId: string | null = null
+  for (const row of rows) {
+    if (
+      !isUuidText(row.id)
+      || !isOneOf(row.ownerType, ['USER', 'COMPANY'] as const)
+      || (row.userId !== null && !isUuidText(row.userId))
+    ) {
+      return persistenceInvariant()
+    }
+    if (row.id === input.userAccountId) {
+      if (row.ownerType !== 'USER' || row.userId === null) return null
+      selectedUserAccountId = row.id
+      selectedUserId = row.userId
+      continue
+    }
+    if (row.ownerType !== 'COMPANY' || row.userId !== null) {
+      return persistenceInvariant()
+    }
+    if (companyAccountId !== null) return persistenceInvariant()
+    companyAccountId = row.id
+  }
+
+  if (selectedUserAccountId === null || selectedUserId === null) return null
+  return Object.freeze({
+    userId: selectedUserId,
+    userAccountId: selectedUserAccountId,
+    companyAccountId,
+  })
+}
+
 export async function lockFundAccountsForPosting(
   transaction: Prisma.TransactionClient,
   accountIds: readonly string[],
@@ -748,6 +842,62 @@ export async function insertFundPostingBatch(
       reversalOfBatchId: null,
       reversalReason: null,
       actorUserId: null,
+      requestId: input.requestId,
+      correlationId: input.correlationId,
+      postedAt: input.postedAt,
+    },
+    select: { id: true },
+  })
+  if (created.id !== input.id) return persistenceInvariant()
+}
+
+/** 管理员调账单独写入 actor 和模式；普通业务写账入口无法构造该批次类型。 */
+export async function insertFundManualAdjustmentBatch(
+  transaction: Prisma.TransactionClient,
+  input: FundManualAdjustmentBatchInsert,
+): Promise<void> {
+  if (
+    input.idempotencyKeyHash.byteLength !== 32
+    || input.requestFingerprintHash.byteLength !== 32
+  ) {
+    return persistenceInvariant()
+  }
+  const metadata = Object.fromEntries(
+    Object.entries(input.metadata),
+  ) as Prisma.InputJsonObject
+  const created = await transaction.fundPostingBatch.create({
+    data: {
+      id: input.id,
+      batchNo: input.batchNo,
+      kind: input.kind,
+      postingTypeId: input.postingTypeId,
+      postingTypeCodeSnapshot: input.postingTypeCodeSnapshot,
+      postingTypeNameSnapshot: input.postingTypeNameSnapshot,
+      businessCategorySnapshot: input.businessCategorySnapshot,
+      businessSourceId: input.businessSourceId,
+      businessSourceCodeSnapshot: input.businessSourceCodeSnapshot,
+      businessSourceNameSnapshot: input.businessSourceNameSnapshot,
+      ruleVersionId: input.ruleVersionId,
+      ruleRevisionSnapshot: input.ruleRevisionSnapshot,
+      userId: input.userId,
+      businessAmount: new Prisma.Decimal(input.businessAmount),
+      currency: 'CNY',
+      userShareRateSnapshot: new Prisma.Decimal(input.userShareRateSnapshot),
+      companyShareRateSnapshot: new Prisma.Decimal(
+        input.companyShareRateSnapshot,
+      ),
+      businessId: input.businessId,
+      businessNo: null,
+      summary: input.summary,
+      metadata,
+      businessOccurredAt: input.businessOccurredAt,
+      consumerCode: input.consumerCode,
+      idempotencyKeyHash: Uint8Array.from(input.idempotencyKeyHash),
+      requestFingerprintHash: Uint8Array.from(input.requestFingerprintHash),
+      adjustmentMode: input.adjustmentMode,
+      reversalOfBatchId: null,
+      reversalReason: null,
+      actorUserId: input.actorUserId,
       requestId: input.requestId,
       correlationId: input.correlationId,
       postedAt: input.postedAt,

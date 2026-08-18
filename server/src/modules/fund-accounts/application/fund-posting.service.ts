@@ -24,18 +24,22 @@ import {
 import type { FundAccountCommandContext } from './fund-account.contract'
 import { normalizeFundAccountCommandContext } from './fund-account.normalizer'
 import {
+  normalizeFundManualAdjustmentRequest,
   normalizeFundReversalRequest,
   normalizePostBusinessEventRequest,
+  type NormalizedFundManualAdjustmentRequest,
   type NormalizedFundReversalRequest,
   type NormalizedPostBusinessEventRequest,
 } from './fund-input.normalizer'
 import {
   insertFundLedgerEntries,
+  insertFundManualAdjustmentBatch,
   insertFundPostingBatch,
   lockFundAccountsForPosting,
   lockFundBusinessSourceForPosting,
   lockFundPostingTypeForPosting,
   readFundAccountIdentitiesForPosting,
+  readFundManualAdjustmentIdentities,
   readFundPostingTransactionTimestamp,
   readFundSourceTypeAuthorization,
   readIdempotentFundPosting,
@@ -48,6 +52,7 @@ import {
   type FundPostingTypeRecord,
 } from './fund-posting.persistence'
 import type {
+  FundManualAdjustmentInput,
   FundPostingContext,
   FundPostingResult,
   FundPostingResultEntry,
@@ -76,6 +81,9 @@ import {
 
 const MAX_POSTGRES_BIGINT = 9_223_372_036_854_775_807n
 const ADMIN_REVERSAL_CONSUMER_CODE = 'ADMIN_REVERSAL'
+const ADMIN_ADJUSTMENT_CONSUMER_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
+const ADMIN_ADJUSTMENT_SOURCE_CODE = 'ADMIN_CONSOLE'
+const ADMIN_ADJUSTMENT_POSTING_TYPE_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
 
 interface PlannedLedgerEntry {
   readonly persistence: FundLedgerEntryInsert
@@ -178,6 +186,38 @@ function requirePostingType(
   }
   return postingType as FundPostingTypeRecord & {
     readonly ruleVersion: NonNullable<FundPostingTypeRecord['ruleVersion']>
+  }
+}
+
+function requireManualAdjustmentPostingType(
+  postingType: FundPostingTypeRecord | null,
+): FundPostingTypeRecord & {
+  readonly ruleVersion: NonNullable<FundPostingTypeRecord['ruleVersion']>
+  readonly businessCategory: 'ADJUSTMENT'
+  readonly inputMode: 'ADMIN_ADJUSTMENT'
+} {
+  if (postingType === null) {
+    throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_FOUND)
+  }
+  if (!postingType.enabled) {
+    throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_DISABLED)
+  }
+  if (
+    postingType.code !== ADMIN_ADJUSTMENT_POSTING_TYPE_CODE
+    || postingType.businessCategory !== 'ADJUSTMENT'
+    || postingType.inputMode !== 'ADMIN_ADJUSTMENT'
+    || !postingType.requiresUser
+    || postingType.currentRuleVersionId === null
+    || postingType.ruleVersion === null
+    || postingType.ruleVersion.id !== postingType.currentRuleVersionId
+    || postingType.ruleVersion.status !== 'ACTIVE'
+  ) {
+    throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+  }
+  return postingType as FundPostingTypeRecord & {
+    readonly ruleVersion: NonNullable<FundPostingTypeRecord['ruleVersion']>
+    readonly businessCategory: 'ADJUSTMENT'
+    readonly inputMode: 'ADMIN_ADJUSTMENT'
   }
 }
 
@@ -309,7 +349,7 @@ function requireReversalIdentity(
   identity: FundReversalTargetIdentityRecord | null,
 ): FundReversalTargetIdentityRecord {
   if (identity === null) {
-    throw postingError(FUND_POSTING_ERROR_CODES.REVERSAL_TARGET_INVALID)
+    throw postingError(FUND_POSTING_ERROR_CODES.POSTING_BATCH_NOT_FOUND)
   }
   return identity
 }
@@ -407,6 +447,29 @@ export class FundPostingApplicationService extends FundPostingService {
   }
 
   /**
+   * 管理员调账只供受权限保护的管理 Controller 调用，不加入 FundPostingService。
+   * 路径账户决定用户身份，来源、类型和 consumer 均由资金模块固定。
+   */
+  async postManualAdjustment(
+    rawContext: FundAccountCommandContext,
+    rawInput: FundManualAdjustmentInput,
+  ): Promise<FundPostingResult> {
+    const context = normalizeFundAccountCommandContext(rawContext)
+    const request = normalizeFundManualAdjustmentRequest(rawInput)
+    try {
+      return await this.prisma.$transaction(transaction => (
+        this.postManualAdjustmentInTransaction(transaction, context, request)
+      ))
+    }
+    catch (error) {
+      if (isFundIdempotencyUniqueViolation(error)) {
+        return this.recoverManualAdjustmentIdempotencyRace(request)
+      }
+      throw toPostingError(error)
+    }
+  }
+
+  /**
    * 供后续受超级管理员权限保护的 HTTP Controller 使用。该方法不加入业务域公开
    * FundPostingService 端口，避免普通业务模块获得人工冲账能力。
    */
@@ -427,6 +490,205 @@ export class FundPostingApplicationService extends FundPostingService {
       }
       throw toPostingError(error)
     }
+  }
+
+  private async postManualAdjustmentInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: FundAccountCommandContext,
+    request: NormalizedFundManualAdjustmentRequest,
+  ): Promise<FundPostingResult> {
+    await applyTransactionTimeouts(transaction)
+    const asOf = await readFundPostingTransactionTimestamp(transaction)
+    const replayInput = {
+      consumerCode: ADMIN_ADJUSTMENT_CONSUMER_CODE,
+      sourceCode: ADMIN_ADJUSTMENT_SOURCE_CODE,
+      idempotencyKeyHash: request.idempotencyKeyHash,
+    } as const
+    const replay = resolveReplay(
+      await readIdempotentFundPosting(transaction, replayInput),
+      request.requestFingerprintHash,
+    )
+    if (replay !== null) return replay
+
+    const source = requireSource(await lockFundBusinessSourceForPosting(
+      transaction,
+      ADMIN_ADJUSTMENT_SOURCE_CODE,
+    ))
+    if (source.code !== ADMIN_ADJUSTMENT_SOURCE_CODE) {
+      throw postingError(FUND_POSTING_ERROR_CODES.BUSINESS_SOURCE_NOT_FOUND)
+    }
+    const postingType = requireManualAdjustmentPostingType(
+      await lockFundPostingTypeForPosting(
+        transaction,
+        ADMIN_ADJUSTMENT_POSTING_TYPE_CODE,
+      ),
+    )
+    if (!await readFundSourceTypeAuthorization(
+      transaction,
+      source.id,
+      postingType.id,
+    )) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
+    }
+
+    const requireCompanyAccount =
+      request.input.adjustmentMode === 'USER_AND_COMPANY_BY_SHARE'
+    const identities = await readFundManualAdjustmentIdentities(transaction, {
+      userAccountId: request.input.userAccountId,
+      requireCompanyAccount,
+    })
+    if (identities === null) {
+      throw postingError(FUND_POSTING_ERROR_CODES.ACCOUNT_NOT_FOUND)
+    }
+    const accountIds = requireAccountIds(
+      identities,
+      true,
+      requireCompanyAccount,
+    )
+    const accounts = await lockFundAccountsForPosting(transaction, accountIds)
+    const targetAccounts = mapTargetAccounts(
+      accounts,
+      identities,
+      identities.userId,
+    )
+    const userShareRate = targetAccounts.USER?.userShareRate
+    if (userShareRate === null || userShareRate === undefined) {
+      throw postingError(FUND_POSTING_ERROR_CODES.ACCOUNT_UNAVAILABLE)
+    }
+
+    // 账户行锁使同一账户的相同请求串行；锁后重读可直接复用先提交的赢家。
+    const lockedReplay = resolveReplay(
+      await readIdempotentFundPosting(transaction, replayInput),
+      request.requestFingerprintHash,
+    )
+    if (lockedReplay !== null) return lockedReplay
+
+    const plan = calculateFundPostingPlan({
+      rule: buildRule(postingType),
+      amount: request.input.amount,
+      userShareRate,
+      adjustmentMode: request.input.adjustmentMode,
+    })
+    const identity = createBatchIdentity()
+    const plannedEntries = plan.entries.map((entry, index) => (
+      planLedgerEntry(
+        entry,
+        index + 1,
+        identity.id,
+        targetAccounts,
+        asOf,
+      )
+    ))
+    if (plannedEntries.length === 0) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_INVALID)
+    }
+
+    await insertFundManualAdjustmentBatch(transaction, {
+      id: identity.id,
+      batchNo: identity.batchNo,
+      kind: 'MANUAL_ADJUSTMENT',
+      postingTypeId: postingType.id,
+      postingTypeCodeSnapshot: postingType.code,
+      postingTypeNameSnapshot: postingType.name,
+      businessCategorySnapshot: 'ADJUSTMENT',
+      businessSourceId: source.id,
+      businessSourceCodeSnapshot: source.code,
+      businessSourceNameSnapshot: source.name,
+      ruleVersionId: postingType.ruleVersion.id,
+      ruleRevisionSnapshot: postingType.ruleVersion.revision,
+      userId: identities.userId,
+      businessAmount: plan.businessAmount,
+      userShareRateSnapshot: plan.userShareRate ?? userShareRate,
+      companyShareRateSnapshot: plan.companyShareRate ?? '0.0000',
+      businessId: identity.id,
+      summary: request.input.reason,
+      metadata: request.input.metadata,
+      businessOccurredAt: asOf,
+      consumerCode: ADMIN_ADJUSTMENT_CONSUMER_CODE,
+      idempotencyKeyHash: request.idempotencyKeyHash,
+      requestFingerprintHash: request.requestFingerprintHash,
+      adjustmentMode: request.input.adjustmentMode,
+      actorUserId: context.actorUserId,
+      requestId: context.requestId,
+      correlationId: context.correlationId ?? null,
+      postedAt: asOf,
+    })
+
+    const entriesByAccountId = [...plannedEntries].sort((left, right) => (
+      left.account.id < right.account.id
+        ? -1
+        : left.account.id > right.account.id ? 1 : 0
+    ))
+    for (const entry of entriesByAccountId) {
+      const updated = await updateFundAccountForPosting(transaction, {
+        accountId: entry.account.id,
+        expectedVersion: entry.account.version,
+        expectedNextSequence: entry.account.nextSequence,
+        balanceAfter: entry.balanceAfter,
+        nextSequence: entry.account.nextSequence + 1n,
+        asOf,
+      })
+      if (!updated) {
+        throw postingError(FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED)
+      }
+    }
+    await insertFundLedgerEntries(
+      transaction,
+      plannedEntries.map(entry => entry.persistence),
+    )
+    await this.audit.record(transaction, {
+      eventType: AuditEventType.FUND_MANUAL_ADJUSTMENT_POSTED,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.USER,
+      actorUserId: context.actorUserId,
+      targetType: 'FundPostingBatch',
+      targetId: identity.id,
+      requestId: context.requestId,
+      correlationId: context.correlationId,
+      metadata: {
+        adjustmentMode: request.input.adjustmentMode,
+        batchNo: identity.batchNo,
+        businessAmount: plan.businessAmount,
+        entryCount: plannedEntries.length,
+        userAccountId: request.input.userAccountId,
+      },
+    })
+
+    return Object.freeze({
+      batchId: identity.id,
+      postingTypeCode: postingType.code,
+      businessCategory: 'ADJUSTMENT',
+      businessAmount: plan.businessAmount,
+      userShareRateSnapshot: plan.userShareRate,
+      companyShareRateSnapshot: plan.companyShareRate,
+      entries: Object.freeze(plannedEntries.map(entry => entry.result)),
+      postedAt: asOf.toISOString(),
+      idempotentReplay: false,
+    })
+  }
+
+  private async recoverManualAdjustmentIdempotencyRace(
+    request: NormalizedFundManualAdjustmentRequest,
+  ): Promise<FundPostingResult> {
+    let record: FundIdempotentPostingRecord | null
+    try {
+      record = await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        return readIdempotentFundPosting(transaction, {
+          consumerCode: ADMIN_ADJUSTMENT_CONSUMER_CODE,
+          sourceCode: ADMIN_ADJUSTMENT_SOURCE_CODE,
+          idempotencyKeyHash: request.idempotencyKeyHash,
+        })
+      })
+    }
+    catch (error) {
+      throw toPostingError(error)
+    }
+    const replay = resolveReplay(record, request.requestFingerprintHash)
+    if (replay === null) {
+      throw postingError(FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED)
+    }
+    return replay
   }
 
   private async reverseInTransaction(

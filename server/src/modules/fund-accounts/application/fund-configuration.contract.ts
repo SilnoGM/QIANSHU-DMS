@@ -108,7 +108,8 @@ export interface FundBusinessSourceEnabledUpdateInput {
 export interface FundPostingRuleLegView
   extends Omit<FundPostingRuleLeg, 'adjustmentMode'> {
   readonly id: string
-  readonly adjustmentMode: FundPostingRuleLeg['adjustmentMode'] | null
+  readonly adjustmentMode:
+    Exclude<FundPostingRuleLeg['adjustmentMode'], undefined> | null
 }
 
 export interface FundPostingRuleVersionView {

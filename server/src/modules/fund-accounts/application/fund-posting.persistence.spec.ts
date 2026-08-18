@@ -1,11 +1,13 @@
 import { Prisma } from '../../../generated/prisma/client'
 import {
   insertFundLedgerEntries,
+  insertFundManualAdjustmentBatch,
   insertFundPostingBatch,
   lockFundAccountsForPosting,
   lockFundBusinessSourceForPosting,
   lockFundPostingTypeForPosting,
   readFundAccountIdentitiesForPosting,
+  readFundManualAdjustmentIdentities,
   readFundPostingTransactionTimestamp,
   readFundSourceTypeAuthorization,
   readIdempotentFundPosting,
@@ -64,6 +66,43 @@ describe('fund posting persistence reads', () => {
     const invalid = fixture()
     invalid.queryRaw.mockResolvedValue([{ asOf: 'not-a-date' }])
     await expectInternal(readFundPostingTransactionTimestamp(invalid.client))
+  })
+
+  it('resolves a selected user account and optional company without trusting user input', async () => {
+    const transaction = fixture()
+    transaction.queryRaw.mockResolvedValue([
+      {
+        id: COMPANY_ACCOUNT_ID,
+        ownerType: 'COMPANY',
+        userId: null,
+      },
+      {
+        id: USER_ACCOUNT_ID,
+        ownerType: 'USER',
+        userId: USER_ID,
+      },
+    ])
+
+    await expect(readFundManualAdjustmentIdentities(
+      transaction.client,
+      { userAccountId: USER_ACCOUNT_ID, requireCompanyAccount: true },
+    )).resolves.toEqual({
+      userId: USER_ID,
+      userAccountId: USER_ACCOUNT_ID,
+      companyAccountId: COMPANY_ACCOUNT_ID,
+    })
+    expect(sqlText(transaction)).toContain('ORDER BY account."id" ASC')
+
+    const companySelected = fixture()
+    companySelected.queryRaw.mockResolvedValue([{
+      id: USER_ACCOUNT_ID,
+      ownerType: 'COMPANY',
+      userId: null,
+    }])
+    await expect(readFundManualAdjustmentIdentities(
+      companySelected.client,
+      { userAccountId: USER_ACCOUNT_ID, requireCompanyAccount: false },
+    )).resolves.toBeNull()
   })
 
   it('locks source and type configuration while mapping ACTIVE controlled legs', async () => {
@@ -366,6 +405,54 @@ describe('fund posting persistence writes', () => {
     expect(JSON.stringify(createInput)).not.toContain(
       'order-settlement:settlement-1',
     )
+  })
+
+  it('inserts a MANUAL_ADJUSTMENT batch with fixed actor and mode facts', async () => {
+    const transaction = fixture()
+    transaction.createBatch.mockResolvedValue({ id: BATCH_ID })
+
+    await insertFundManualAdjustmentBatch(transaction.client, {
+      id: BATCH_ID,
+      batchNo: 'FUND_AAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAA',
+      kind: 'MANUAL_ADJUSTMENT',
+      postingTypeId: TYPE_ID,
+      postingTypeCodeSnapshot: 'ADMIN_MANUAL_ADJUSTMENT',
+      postingTypeNameSnapshot: '管理员手动调账',
+      businessCategorySnapshot: 'ADJUSTMENT',
+      businessSourceId: SOURCE_ID,
+      businessSourceCodeSnapshot: 'ADMIN_CONSOLE',
+      businessSourceNameSnapshot: '管理员工作台',
+      ruleVersionId: RULE_ID,
+      ruleRevisionSnapshot: 1,
+      userId: USER_ID,
+      businessAmount: '-100.0000',
+      userShareRateSnapshot: '30.0000',
+      companyShareRateSnapshot: '70.0000',
+      businessId: BATCH_ID,
+      summary: '修正录入金额',
+      metadata: { ticketNo: 'FIN-1' },
+      businessOccurredAt: AS_OF,
+      consumerCode: 'ADMIN_MANUAL_ADJUSTMENT',
+      idempotencyKeyHash: IDEMPOTENCY_HASH,
+      requestFingerprintHash: FINGERPRINT_HASH,
+      adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
+      actorUserId: USER_ID,
+      requestId: 'request-1',
+      correlationId: null,
+      postedAt: AS_OF,
+    })
+
+    const createInput = transaction.createBatch.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>
+    }
+    expect(createInput.data).toMatchObject({
+      kind: 'MANUAL_ADJUSTMENT',
+      businessCategorySnapshot: 'ADJUSTMENT',
+      businessNo: null,
+      adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
+      actorUserId: USER_ID,
+      idempotencyKeyHash: Uint8Array.from(IDEMPOTENCY_HASH),
+    })
   })
 
   it('updates a locked account with optimistic guards and inserts supplied entries', async () => {

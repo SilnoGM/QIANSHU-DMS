@@ -223,18 +223,18 @@ flowchart TD
   - [x] 8.10 创建提交：`feat: 实现资金流水部分冲账`。
   - _Requirements: R8-R10, R13-R15_
 
-- [ ] 9. 以 TDD 实现查询与管理员管理 API
-  - [ ] 9.1 确认 Gate B 后建立 Controller metadata、DTO、operationId 和错误矩阵 RED。
-  - [ ] 9.2 实现账户列表、创建账户、修改比例和管理员调账 API。
-  - [ ] 9.3 实现流水分页、批次详情和批次冲账 API。
-  - [ ] 9.4 实现类型、规则版本、发布/启停和来源管理 API。
-  - [ ] 9.5 账户/流水查询使用稳定排序和 UUID tie-breaker；金额只返回 string。
-  - [ ] 9.6 流水支持账户、用户、类型、分类、来源、方向、业务单号、时间和冲账状态过滤。
-  - [ ] 9.7 所有 mutation 启用 session、password-change、CSRF、permission、private no-store 和局部错误矩阵。
-  - [ ] 9.8 注册 `FundAccountsModule` 到 `HTTP_MODULES`，同时向 Server 业务模块导出内部服务。
-  - [ ] 9.9 证明 OpenAPI 不包含远程业务动账 operation 和 DELETE operation。
-  - [ ] 9.10 运行 Controller/Module/Query tests、Server typecheck、lint、build 和 diff-check。
-  - [ ] 9.11 创建提交：`feat: 提供资金账户管理接口`。
+- [x] 9. 以 TDD 实现查询与管理员管理 API
+  - [x] 9.1 确认 Gate B 后建立 Controller metadata、DTO、operationId 和错误矩阵 RED。
+  - [x] 9.2 实现账户列表、创建账户、修改比例和管理员调账 API。
+  - [x] 9.3 实现流水分页、批次详情和批次冲账 API。
+  - [x] 9.4 实现类型、规则版本、发布/启停和来源管理 API。
+  - [x] 9.5 账户/流水查询使用稳定排序和 UUID tie-breaker；金额只返回 string。
+  - [x] 9.6 流水支持账户、用户、类型、分类、来源、方向、业务单号、时间和冲账状态过滤。
+  - [x] 9.7 所有 mutation 启用 session、password-change、CSRF、permission、private no-store 和局部错误矩阵。
+  - [x] 9.8 注册 `FundAccountsModule` 到 `HTTP_MODULES`，同时向 Server 业务模块导出内部服务。
+  - [x] 9.9 证明 OpenAPI 不包含远程业务动账 operation 和 DELETE operation。
+  - [x] 9.10 运行 Controller/Module/Query tests、Server typecheck、lint、build 和 diff-check。
+  - [x] 9.11 创建提交：`feat: 提供资金账户管理接口`。
   - _Requirements: R1-R4, R7, R10-R15_
 
 - [ ] 10. 同步 OpenAPI 与 Web generated contract
