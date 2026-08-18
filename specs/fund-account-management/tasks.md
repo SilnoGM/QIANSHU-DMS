@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 3 已确认，等待 Phase 4 Gate A/Gate B
+- 状态：Phase 4 执行中，Task 1-2 已完成
 - 生成日期：2026-08-18
 - Requirements：`specs/fund-account-management/requirements.md`
 - Design：`specs/fund-account-management/design.md`
@@ -107,13 +107,13 @@ flowchart TD
 
 ## 5. 实施任务
 
-- [ ] 1. 取得 Phase 4 授权并建立绿色基线
-  - [ ] 1.1 按 Gate A 确认 Phase 4 范围、目标分支、提交节奏和禁止事项。
-  - [ ] 1.2 复核当前 Schema、迁移、HTTP modules、权限目录、两个空白页面和 OpenAPI 中仍没有资金业务实现。
-  - [ ] 1.3 形成 Gate B 精确审批包：Prisma/SQL、权限/Audit、管理 API、错误矩阵和内部服务 TypeScript 契约。
-  - [ ] 1.4 向用户提交审批包并取得数据库 Schema、Migration、公共 API、公共数据结构和内部公共服务的单独确认。
-  - [ ] 1.5 检查 `git status --short --branch`、HEAD、worktree 和未提交差异，不覆盖用户已有工作。
-  - [ ] 1.6 运行并记录绿色基线：
+- [x] 1. 取得 Phase 4 授权并建立绿色基线
+  - [x] 1.1 按 Gate A 确认 Phase 4 范围、目标分支、提交节奏和禁止事项。
+  - [x] 1.2 复核当前 Schema、迁移、HTTP modules、权限目录、两个空白页面和 OpenAPI 中仍没有资金业务实现。
+  - [x] 1.3 形成 Gate B 精确审批包：Prisma/SQL、权限/Audit、管理 API、错误矩阵和内部服务 TypeScript 契约。
+  - [x] 1.4 向用户提交审批包并取得数据库 Schema、Migration、公共 API、公共数据结构和内部公共服务的单独确认。
+  - [x] 1.5 检查 `git status --short --branch`、HEAD、worktree 和未提交差异，不覆盖用户已有工作。
+  - [x] 1.6 运行并记录绿色基线：
 
     ```bash
     pnpm -C server check
@@ -125,25 +125,25 @@ flowchart TD
     node --run test:root
     ```
 
-  - [ ] 1.7 若存在无关基线失败，停止业务修改并如实报告；未经确认不得混入无关修复。
+  - [x] 1.7 若存在无关基线失败，停止业务修改并如实报告；未经确认不得混入无关修复。
   - _Requirements: R1-R15_
 
-- [ ] 2. 以 TDD 实现金额、规则和冲账纯计算
-  - [ ] 2.1 先为严格 decimal string、最大精度、正负号和非法输入建立失败测试。
-  - [ ] 2.2 红测固定用户比例 `0–100`、四位小数、`ROUND_HALF_UP` 和公司尾差守恒。
-  - [ ] 2.3 红测固定 `ORDER_SETTLEMENT` 正数 CREDIT、负数 DEBIT、零金额拒绝。
-  - [ ] 2.4 红测固定提款、采购付款、房租水电和四个费用类型的正数输入与账户目标。
-  - [ ] 2.5 红测固定管理员 `USER_ONLY` 与 `USER_AND_COMPANY_BY_SHARE` 两种有符号调账模式。
-  - [ ] 2.6 红测规则发布合法性：账户目标不重复、金额守恒、用户要求和符号策略匹配。
-  - [ ] 2.7 红测累计部分冲账、逐次舍入、最后精确闭合和超额拒绝。
-  - [ ] 2.8 使用纯函数实现最小 GREEN，不提前引入 Prisma 或 HTTP DTO。
-  - [ ] 2.9 运行定向测试、Server typecheck、ESLint 和 diff-check。
-  - [ ] 2.10 创建提交：`feat: 建立资金账户计算内核`。
+- [x] 2. 以 TDD 实现金额、规则和冲账纯计算
+  - [x] 2.1 先为严格 decimal string、最大精度、正负号和非法输入建立失败测试。
+  - [x] 2.2 红测固定用户比例 `0–100`、四位小数、`ROUND_HALF_UP` 和公司尾差守恒。
+  - [x] 2.3 红测固定 `ORDER_SETTLEMENT` 正数 CREDIT、负数 DEBIT、零金额拒绝。
+  - [x] 2.4 红测固定提款、采购付款、房租水电和四个费用类型的正数输入与账户目标。
+  - [x] 2.5 红测固定管理员 `USER_ONLY` 与 `USER_AND_COMPANY_BY_SHARE` 两种有符号调账模式。
+  - [x] 2.6 红测规则发布合法性：账户目标不重复、金额守恒、用户要求和符号策略匹配。
+  - [x] 2.7 红测累计部分冲账、逐次舍入、最后精确闭合和超额拒绝。
+  - [x] 2.8 使用纯函数实现最小 GREEN，不提前引入 Prisma 或 HTTP DTO。
+  - [x] 2.9 运行定向测试、Server typecheck、ESLint 和 diff-check。
+  - [x] 2.10 创建提交：`feat: 添加资金分账与冲账计算`。
   - _Requirements: R2-R3, R6-R10, R14-R15_
 
 - [ ] 3. 以 TDD 建立 Schema、forward migration、权限和初始化数据
   - [ ] 3.1 确认 Gate B 后先新增 Schema/migration 合约 RED。
-  - [ ] 3.2 新增 `FundAccount`、`FundBusinessSource`、`FundPostingType`、`FundPostingRuleVersion`、`FundPostingRuleLeg`、`FundPostingBatch` 和 `FundLedgerEntry`。
+  - [ ] 3.2 新增 `FundAccount`、`FundBusinessSource`、`FundPostingType`、`FundPostingRuleVersion`、`FundPostingRuleLeg`、`FundBusinessSourcePostingType`、`FundPostingBatch` 和 `FundLedgerEntry`。
   - [ ] 3.3 建立一用户一账户、单公司账户、固定 CNY、比例范围、正数流水金额和账户序号唯一约束。
   - [ ] 3.4 建立批次幂等唯一、规则 ACTIVE/DRAFT 唯一、稳定编码和所有业务 FK `RESTRICT`。
   - [ ] 3.5 建立 trigger，阻止账户主体、已使用稳定编码、批次、流水和已发布规则版本的非法修改或删除。
