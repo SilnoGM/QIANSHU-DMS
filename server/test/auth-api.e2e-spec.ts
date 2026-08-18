@@ -37,6 +37,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'exchange-rates:create',
   'exchange-rates:read',
   'exchange-rates:update',
+  'fund-accounts:read',
   'numbering-rules:create',
   'numbering-rules:disable',
   'numbering-rules:enable',
