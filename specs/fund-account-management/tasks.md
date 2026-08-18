@@ -210,17 +210,17 @@ flowchart TD
   - [x] 7.12 创建提交：`feat: 实现统一资金动账引擎`。
   - _Requirements: R3-R9, R13-R15_
 
-- [ ] 8. 以 TDD 实现批次级部分冲账
-  - [ ] 8.1 为正收益、负收益、成本、提款和两种管理员调账建立部分冲账 RED。
-  - [ ] 8.2 实现 `reversePostingBatch(context, input)` 幂等边界和原批次 `FOR UPDATE`。
-  - [ ] 8.3 汇总历史冲账，拒绝超额、零额度、无效目标和冲账批次再冲账。
-  - [ ] 8.4 使用原类型、分类、规则、比例、模式和分录快照生成相反方向流水。
-  - [ ] 8.5 使用累计目标法分配多次部分冲账金额，最终全额冲账与原分录精确闭合。
-  - [ ] 8.6 按原账户 UUID 升序加锁，在一个 transaction 写冲账批次、流水、余额和 Audit。
-  - [ ] 8.7 并发冲账最多提交合法剩余额度，失败事务不得产生半边账户变化。
-  - [ ] 8.8 通过聚合派生 `NONE/PARTIAL/FULL`，不更新原批次状态字段。
-  - [ ] 8.9 运行冲账 unit/persistence/concurrency 定向测试、typecheck、lint 和 diff-check。
-  - [ ] 8.10 创建提交：`feat: 实现资金流水部分冲账`。
+- [x] 8. 以 TDD 实现批次级部分冲账
+  - [x] 8.1 为正收益、负收益、成本、提款和两种管理员调账建立部分冲账 RED。
+  - [x] 8.2 实现 `reversePostingBatch(context, input)` 幂等边界和原批次 `FOR UPDATE`。
+  - [x] 8.3 汇总历史冲账，拒绝超额、零额度、无效目标和冲账批次再冲账。
+  - [x] 8.4 使用原类型、分类、规则、比例、模式和分录快照生成相反方向流水。
+  - [x] 8.5 使用累计目标法分配多次部分冲账金额，最终全额冲账与原分录精确闭合。
+  - [x] 8.6 按原账户 UUID 升序加锁，在一个 transaction 写冲账批次、流水、余额和 Audit。
+  - [x] 8.7 并发冲账最多提交合法剩余额度，失败事务不得产生半边账户变化。
+  - [x] 8.8 通过聚合派生 `NONE/PARTIAL/FULL`，不更新原批次状态字段。
+  - [x] 8.9 运行冲账 unit/persistence/concurrency 定向测试、typecheck、lint 和 diff-check。
+  - [x] 8.10 创建提交：`feat: 实现资金流水部分冲账`。
   - _Requirements: R8-R10, R13-R15_
 
 - [ ] 9. 以 TDD 实现查询与管理员管理 API

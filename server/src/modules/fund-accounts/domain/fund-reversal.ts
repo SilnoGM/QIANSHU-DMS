@@ -44,10 +44,12 @@ export interface FundReversalEntry {
   readonly amount: string
 }
 
+export type FundReversalState = 'NONE' | 'PARTIAL' | 'FULL'
+
 export interface FundReversalPlan {
   readonly reversalBusinessAmount: string
   readonly cumulativeReversedAmount: string
-  readonly reversalState: 'PARTIAL' | 'FULL'
+  readonly reversalState: Exclude<FundReversalState, 'NONE'>
   readonly entries: readonly FundReversalEntry[]
 }
 
@@ -67,6 +69,25 @@ function invalidSnapshot(): never {
 
 function oppositeDirection(direction: FundEntryDirection): FundEntryDirection {
   return direction === 'CREDIT' ? 'DEBIT' : 'CREDIT'
+}
+
+/**
+ * 冲账状态始终由原业务金额和关联冲账聚合派生，不在不可变原批次上保存状态。
+ * 查询路径可以直接复用该函数得到 NONE/PARTIAL/FULL。
+ */
+export function deriveFundReversalState(
+  originalBusinessAmount: string,
+  cumulativeReversedAmount: string,
+): FundReversalState {
+  const originalMinor = parseFundAmountMinor(originalBusinessAmount)
+  if (originalMinor === 0n) return invalidTarget()
+  const originalTotalMinor = originalMinor < 0n ? -originalMinor : originalMinor
+  const cumulativeMinor = parseFundAmountMinor(cumulativeReversedAmount)
+  if (cumulativeMinor < 0n || cumulativeMinor > originalTotalMinor) {
+    return invalidSnapshot()
+  }
+  if (cumulativeMinor === 0n) return 'NONE'
+  return cumulativeMinor === originalTotalMinor ? 'FULL' : 'PARTIAL'
 }
 
 function targetAmountForEntry(
@@ -216,6 +237,12 @@ export function calculateFundReversal(
   )
   if (reversalEntryTotalMinor !== reversalAmountMinor) return invalidSnapshot()
 
+  const reversalState = deriveFundReversalState(
+    input.originalBusinessAmount,
+    formatFundMinor(nextCumulativeMinor),
+  )
+  if (reversalState === 'NONE') return invalidSnapshot()
+
   return {
     reversalBusinessAmount: formatFundMinor(
       originalBusinessAmountMinor > 0n
@@ -223,7 +250,7 @@ export function calculateFundReversal(
         : reversalAmountMinor,
     ),
     cumulativeReversedAmount: formatFundMinor(nextCumulativeMinor),
-    reversalState: fullReversal ? 'FULL' : 'PARTIAL',
+    reversalState,
     entries,
   }
 }

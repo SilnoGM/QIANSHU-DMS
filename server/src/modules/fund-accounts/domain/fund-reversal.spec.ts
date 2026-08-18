@@ -1,6 +1,7 @@
 import {
   type FundOriginalEntryForReversal,
   calculateFundReversal,
+  deriveFundReversalState,
 } from './fund-reversal'
 
 function splitEntries(
@@ -28,6 +29,21 @@ function splitEntries(
 }
 
 describe('fund cumulative reversal calculation', () => {
+  it.each([
+    ['100', '0', 'NONE'],
+    ['100', '40', 'PARTIAL'],
+    ['100', '100', 'FULL'],
+    ['-100', '40', 'PARTIAL'],
+  ] as const)(
+    'derives %s / %s as %s without storing state on the original batch',
+    (originalAmount, cumulativeAmount, expected) => {
+      expect(deriveFundReversalState(
+        originalAmount,
+        cumulativeAmount,
+      )).toBe(expected)
+    },
+  )
+
   it.each([
     ['100', 'CREDIT', '-40.0000', 'DEBIT'],
     ['-100', 'DEBIT', '40.0000', 'CREDIT'],
