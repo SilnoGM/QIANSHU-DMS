@@ -9,7 +9,7 @@ import { createFundAccountsApi } from '../../src/api/modules/fund-accounts'
 interface Call {
   readonly config?: unknown
   readonly data?: unknown
-  readonly method: 'get' | 'patch' | 'post'
+  readonly method: 'get' | 'patch' | 'post' | 'put'
   readonly url: string
 }
 
@@ -27,6 +27,10 @@ function createClientRecorder(): { calls: Call[], client: AxiosInstance } {
     },
     post(url: string, data?: unknown, config?: unknown) {
       calls.push({ method: 'post', url, data, config })
+      return response
+    },
+    put(url: string, data?: unknown, config?: unknown) {
+      calls.push({ method: 'put', url, data, config })
       return response
     },
   } as unknown as AxiosInstance
@@ -257,7 +261,7 @@ test('十四个资金 mutation 均本地呈错且禁止自动重试', async () =
       config: localMutationConfig,
     },
     {
-      method: 'post',
+      method: 'put',
       url: 'fund-posting-types/type%2Fid/draft-rule',
       data: replaceRule,
       config: localMutationConfig,

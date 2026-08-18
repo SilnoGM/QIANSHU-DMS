@@ -146,7 +146,7 @@ export function createFundAccountsApi(client: AxiosInstance) {
       replaceDraftRule: (
         postingTypeId: string,
         data: ReplaceFundDraftRuleRequestDto,
-      ) => client.post<FundPostingTypeMutationResultDto>(
+      ) => client.put<FundPostingTypeMutationResultDto>(
         `${resourcePath('fund-posting-types', postingTypeId)}/draft-rule`,
         data,
         LOCAL_MUTATION_CONFIG,

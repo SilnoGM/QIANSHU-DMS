@@ -46,6 +46,7 @@ import {
   getFundBalanceState,
   withFundAccountPrecision,
 } from './fund-account-list.logic'
+import FundConfigurationDrawer from './fund-configuration-drawer.vue'
 import FundManualAdjustmentModal from './fund-manual-adjustment-modal.vue'
 import FundShareRateModal from './fund-share-rate-modal.vue'
 
@@ -60,6 +61,11 @@ const canRead = computed(() => auth('fund-accounts:read'))
 const canCreate = computed(() => auth('fund-accounts:create'))
 const canUpdateShareRate = computed(() => auth('fund-accounts:update-share-rate'))
 const canManualAdjust = computed(() => auth('fund-accounts:manual-adjust'))
+const canManagePostingTypes = computed(() => auth('fund-posting-types:manage'))
+const canManageBusinessSources = computed(() => auth('fund-business-sources:manage'))
+const canConfigure = computed(() => canRead.value && (
+  canManagePostingTypes.value || canManageBusinessSources.value
+))
 const fundCurrencies = computed(() => withFundAccountPrecision(
   currencyCatalog.currencies.value,
 ))
@@ -93,6 +99,7 @@ const adjustmentSubmitting = ref(false)
 const adjustmentSubmission = ref<FundIdempotentSubmissionState<CreateFundManualAdjustmentRequestDto>>(
   createFundIdempotentSubmissionState<CreateFundManualAdjustmentRequestDto>(),
 )
+const configurationVisible = ref(false)
 
 let listRequestVersion = 0
 let listAbortController: AbortController | null = null
@@ -683,6 +690,12 @@ function navigateToTransactions(account: FundAccountDto): void {
   })
 }
 
+function openConfigurationDrawer(): void {
+  if (canConfigure.value) {
+    configurationVisible.value = true
+  }
+}
+
 /** 身份或权限边界变化时，不允许列表、候选集、草稿或幂等快照跨边界存活。 */
 function clearFundPageState(): void {
   listRequestVersion += 1
@@ -714,6 +727,7 @@ function clearFundPageState(): void {
   adjustmentFailure.value = null
   adjustmentSubmitting.value = false
   adjustmentSubmission.value = clearFundIdempotentSubmission(adjustmentSubmission.value)
+  configurationVisible.value = false
 }
 
 watch(createVisible, (visible) => {
@@ -733,6 +747,8 @@ watch(
     canCreate,
     canUpdateShareRate,
     canManualAdjust,
+    canManagePostingTypes,
+    canManageBusinessSources,
   ],
   ([nextAuthEpoch, nextCanRead], [previousAuthEpoch]) => {
     const identityChanged = nextAuthEpoch !== previousAuthEpoch
@@ -768,6 +784,14 @@ onBeforeUnmount(() => {
       title="资金账户列表"
       description="核对用户与公司人民币账户的实时余额、分成比例和最近更新时间。"
     >
+      <FaButton
+        v-if="canConfigure"
+        variant="outline"
+        class="min-h-11 sm:min-h-9"
+        @click="openConfigurationDrawer"
+      >
+        <FaIcon name="i-lucide:sliders-horizontal" />业务配置
+      </FaButton>
       <FaButton v-if="canCreate" class="min-h-11 sm:min-h-9" @click="openCreateModal">
         <FaIcon name="i-lucide:plus" />创建资金账户
       </FaButton>
@@ -1018,6 +1042,11 @@ onBeforeUnmount(() => {
       @abandon="abandonManualAdjustment"
       @retry="retryManualAdjustment"
       @submit="submitManualAdjustment"
+    />
+    <FundConfigurationDrawer
+      v-model="configurationVisible"
+      :can-manage-posting-types="canManagePostingTypes"
+      :can-manage-business-sources="canManageBusinessSources"
     />
   </div>
 </template>
