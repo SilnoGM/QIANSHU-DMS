@@ -3,6 +3,7 @@ import { FUND_CALCULATION_ERROR_CODES } from '../domain'
 export const FUND_POSTING_ERROR_CODES = {
   ...FUND_CALCULATION_ERROR_CODES,
   VALIDATION_FAILED: 'FUND_VALIDATION_FAILED',
+  USER_NOT_FOUND: 'FUND_USER_NOT_FOUND',
   ACCOUNT_NOT_FOUND: 'FUND_ACCOUNT_NOT_FOUND',
   ACCOUNT_ALREADY_EXISTS: 'FUND_ACCOUNT_ALREADY_EXISTS',
   ACCOUNT_UNAVAILABLE: 'FUND_ACCOUNT_UNAVAILABLE',
@@ -32,6 +33,7 @@ export type FundPostingErrorCode =
 export type FundPostingErrorField =
   | 'body'
   | 'context'
+  | 'actorUserId'
   | 'consumerCode'
   | 'sourceCode'
   | 'requestId'
@@ -45,15 +47,19 @@ export type FundPostingErrorField =
   | 'metadata'
   | 'businessOccurredAt'
   | 'idempotencyKey'
+  | 'accountId'
   | 'userAccountId'
   | 'adjustmentMode'
   | 'reason'
   | 'originalBatchId'
   | 'page'
   | 'pageSize'
+  | 'search'
+  | 'ownerType'
   | 'sortBy'
   | 'sortOrder'
   | 'shareRate'
+  | 'expectedVersion'
 
 const FUND_POSTING_ERROR_MESSAGES: Readonly<Record<FundPostingErrorCode, string>> = {
   FUND_AMOUNT_INVALID: '资金金额格式无效',
@@ -65,6 +71,7 @@ const FUND_POSTING_ERROR_MESSAGES: Readonly<Record<FundPostingErrorCode, string>
   FUND_REVERSAL_SNAPSHOT_INVALID: '资金冲账快照无效',
   FUND_REVERSAL_EXCEEDS_REMAINING: '资金冲账金额超过可冲额度',
   FUND_VALIDATION_FAILED: '资金请求参数无效',
+  FUND_USER_NOT_FOUND: '用户不存在',
   FUND_ACCOUNT_NOT_FOUND: '资金账户不存在',
   FUND_ACCOUNT_ALREADY_EXISTS: '资金账户已存在',
   FUND_ACCOUNT_UNAVAILABLE: '资金账户当前不可用',

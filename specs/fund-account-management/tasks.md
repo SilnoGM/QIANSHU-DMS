@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 执行中，Task 1-4 已完成
+- 状态：Phase 4 执行中，Task 1-5 已完成
 - 生成日期：2026-08-18
 - Requirements：`specs/fund-account-management/requirements.md`
 - Design：`specs/fund-account-management/design.md`
@@ -170,16 +170,16 @@ flowchart TD
   - [x] 4.9 创建提交：`feat: 建立资金账户服务边界`。
   - _Requirements: R3-R5, R7-R10, R13-R15_
 
-- [ ] 5. 以 TDD 实现账户查询、开户和比例管理
-  - [ ] 5.1 红测账户列表分页、搜索、主体类型和稳定排序。
-  - [ ] 5.2 红测显式开户：用户存在、用户未开户、比例合法和初始余额为零。
-  - [ ] 5.3 红测并发重复开户只有一个成功，数据库唯一约束是最终保护。
-  - [ ] 5.4 红测比例修改的 `expectedVersion`、原因、审计、无变化和过期状态。
-  - [ ] 5.5 证明比例修改不更新任何历史批次、流水或比例快照。
-  - [ ] 5.6 每个 mutation transaction 第一条 SQL 调用 `applyTransactionTimeouts()`，Audit 失败完整回滚。
-  - [ ] 5.7 不实现自动开户、删除账户、修改公司比例或清零余额。
-  - [ ] 5.8 运行账户 service/persistence 定向测试、typecheck、lint 和 diff-check。
-  - [ ] 5.9 创建提交：`feat: 实现资金账户与比例管理`。
+- [x] 5. 以 TDD 实现账户查询、开户和比例管理
+  - [x] 5.1 红测账户列表分页、搜索、主体类型和稳定排序。
+  - [x] 5.2 红测显式开户：用户存在、用户未开户、比例合法和初始余额为零。
+  - [x] 5.3 红测并发重复开户只有一个成功，数据库唯一约束是最终保护。
+  - [x] 5.4 红测比例修改的 `expectedVersion`、原因、审计、无变化和过期状态。
+  - [x] 5.5 证明比例修改不更新任何历史批次、流水或比例快照。
+  - [x] 5.6 每个 mutation transaction 第一条 SQL 调用 `applyTransactionTimeouts()`，Audit 失败完整回滚。
+  - [x] 5.7 不实现自动开户、删除账户、修改公司比例或清零余额。
+  - [x] 5.8 运行账户 service/persistence 定向测试、typecheck、lint 和 diff-check。
+  - [x] 5.9 创建提交：`feat: 实现资金账户与比例管理`。
   - _Requirements: R1-R2, R8-R9, R13-R15_
 
 - [ ] 6. 以 TDD 实现业务类型、规则版本和来源管理
