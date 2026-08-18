@@ -62,7 +62,7 @@ test('脚本测试同时运行 Node 与 TypeScript 测试', () => {
   )
 })
 
-test('认证、产品媒体、地区与字典 Browser E2E 使用互不扩张的显式场景文件', () => {
+test('认证、产品媒体、地区、字典与资金账户 Browser E2E 使用互不扩张的显式场景文件', () => {
   const { scripts } = readJson('package.json')
 
   assert.deepEqual(
@@ -72,6 +72,7 @@ test('认证、产品媒体、地区与字典 Browser E2E 使用互不扩张的�
     [
       'test:browser:auth',
       'test:browser:dictionaries',
+      'test:browser:fund-accounts',
       'test:browser:numbering',
       'test:browser:regions',
     ],
@@ -89,8 +90,13 @@ test('认证、产品媒体、地区与字典 Browser E2E 使用互不扩张的�
     scripts['test:browser:dictionaries'],
     'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/dictionaries.browser.test.mjs',
   )
+  assert.equal(
+    scripts['test:browser:fund-accounts'],
+    'node --test --test-concurrency=1 apps/qsmds-arco/test/browser/fund-accounts.browser.test.mjs',
+  )
   assert.equal(scripts['test:browser:auth'].includes('*.browser.test.mjs'), false)
   assert.equal(scripts['test:browser:dictionaries'].includes('*.browser.test.mjs'), false)
+  assert.equal(scripts['test:browser:fund-accounts'].includes('*.browser.test.mjs'), false)
 })
 
 test('参考应用通过稳定 package name 显式检查和构建', () => {

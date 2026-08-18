@@ -865,6 +865,7 @@ test('根 package 保持无依赖且不是 workspace', async () => {
     'ci:server-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-server-e2e.mjs',
     'ci:browser-auth-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-auth-e2e.mjs',
     'ci:browser-dictionaries-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-dictionaries-e2e.mjs',
+    'ci:browser-fund-accounts-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-fund-accounts-e2e.mjs',
     'ci:browser-numbering-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-numbering-e2e.mjs',
     'ci:browser-regions-e2e': 'node ./scripts/ci-postgres.mjs -- node ./scripts/ci-browser-regions-e2e.mjs',
     'ci:contract': 'node ./scripts/ci-contract-baseline.mjs',

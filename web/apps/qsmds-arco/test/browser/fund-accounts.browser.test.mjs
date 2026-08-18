@@ -1,0 +1,451 @@
+/* eslint-disable test/no-import-node-test */
+import assert from 'node:assert/strict'
+import process from 'node:process'
+import test from 'node:test'
+
+import { launchChrome } from './chrome-driver.mjs'
+import {
+  clickDialogButton,
+  fillDialogControl,
+  runNumberingBrowserStep,
+  selectDialogOption,
+  waitForAfterAuthentication,
+  waitForNoVisibleDialog,
+  waitForVisibleDialog,
+} from './numbering.browser.helpers.mjs'
+import {
+  apiExpression,
+  appRouteUrl,
+  authStoreExpression,
+  clickVisibleButton,
+  clickVisibleRowButton,
+  collectRuntimeIssues,
+  fillVisibleInput,
+  loginThroughRealHttp,
+  readConfiguration,
+} from './regions.browser.helpers.mjs'
+
+const accountListRoute = '/admin/fund-accounts/list'
+const transactionRoute = '/admin/fund-accounts/transactions'
+const flowUsername = 'fund_browser_flow_user'
+const limitedUsername = 'fund_browser_limited'
+const profitBusinessNo = 'E2E-ORDER-PROFIT'
+
+const allFundPermissions = [
+  'fund-accounts:create',
+  'fund-accounts:manual-adjust',
+  'fund-accounts:read',
+  'fund-accounts:update-share-rate',
+  'fund-business-sources:manage',
+  'fund-posting-types:manage',
+  'fund-transactions:reverse',
+]
+
+function readLimitedPassword(environment) {
+  const password = environment.QIANSHU_BROWSER_FUND_LIMITED_PASSWORD
+  const length = typeof password === 'string'
+    ? Array.from(password.normalize('NFC')).length
+    : 0
+  if (length < 8 || length > 20) {
+    throw new Error('Browser fund account limited credential is invalid')
+  }
+  return password
+}
+
+/** 复用稳定步骤日志与敏感信息遮罩，但把失败边界改成资金账户语义。 */
+async function runFundBrowserStep(label, action) {
+  try {
+    return await runNumberingBrowserStep(`fund accounts · ${label}`, action)
+  }
+  catch (error) {
+    throw new Error(`Fund account browser step failed: ${label}`, {
+      cause: error,
+    })
+  }
+}
+
+async function waitForAccountSurface(page, marker) {
+  const serialized = JSON.stringify(marker)
+  await waitForAfterAuthentication(page, `(() => {
+    const root = document.querySelector('[data-testid="fund-account-list-table"]')
+    const records = [
+      ...document.querySelectorAll(
+        '[data-testid="fund-account-list-table"] tbody tr',
+      ),
+      ...document.querySelectorAll('[data-testid="fund-account-card"]'),
+    ]
+    return root?.getClientRects().length > 0
+      && !root.querySelector('[aria-busy="true"]')
+      && records.some(record => record.getClientRects().length > 0
+        && record.textContent?.includes(${serialized}))
+  })()`)
+}
+
+async function waitForAccountRowText(page, marker, expected) {
+  await page.waitFor(`(() => [
+    ...document.querySelectorAll(
+      '[data-testid="fund-account-list-table"] tbody tr',
+    ),
+    ...document.querySelectorAll('[data-testid="fund-account-card"]'),
+  ].some(record => record.getClientRects().length > 0
+    && record.textContent?.includes(${JSON.stringify(marker)})
+    && record.textContent?.includes(${JSON.stringify(expected)})))()`)
+}
+
+async function waitForTransactionSurface(page, marker) {
+  const serialized = JSON.stringify(marker)
+  await waitForAfterAuthentication(page, `(() => {
+    const root = document.querySelector('[data-testid="fund-transaction-table"]')
+    const records = [
+      ...document.querySelectorAll(
+        '[data-testid="fund-transaction-table"] tbody tr',
+      ),
+      ...document.querySelectorAll('[data-testid="fund-transaction-card"]'),
+    ]
+    return root?.getClientRects().length > 0
+      && !root.querySelector('[aria-busy="true"]')
+      && records.some(record => record.getClientRects().length > 0
+        && record.textContent?.includes(${serialized}))
+  })()`)
+}
+
+async function fillDialogPlaceholder(page, title, placeholder, value) {
+  const serializedTitle = JSON.stringify(title)
+  const serializedPlaceholder = JSON.stringify(placeholder)
+  const serializedValue = JSON.stringify(value)
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+    .some(dialog => dialog.getClientRects().length > 0
+      && dialog.textContent?.includes(${serializedTitle})
+      && [...dialog.querySelectorAll('input, textarea')].some(control => (
+        control.getClientRects().length > 0
+        && !control.disabled
+        && control.placeholder === ${serializedPlaceholder}
+      ))))()`)
+  await page.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .filter(candidate => candidate.getClientRects().length > 0)
+      .reverse()
+      .find(candidate => candidate.textContent?.includes(${serializedTitle}))
+    const control = [...(dialog?.querySelectorAll('input, textarea') ?? [])]
+      .find(candidate => candidate.getClientRects().length > 0
+        && !candidate.disabled
+        && candidate.placeholder === ${serializedPlaceholder})
+    if (!(control instanceof HTMLInputElement)
+      && !(control instanceof HTMLTextAreaElement)) {
+      throw new Error('fund dialog control unavailable')
+    }
+    const prototype = control instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype
+    Object.getOwnPropertyDescriptor(prototype, 'value')
+      .set.call(control, ${serializedValue})
+    control.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      inputType: 'insertText',
+    }))
+    control.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  })()`)
+}
+
+async function openManualAdjustment(page) {
+  await clickVisibleRowButton(page, flowUsername, '手动调账')
+  await waitForVisibleDialog(page, '管理员手动调账')
+}
+
+async function submitManualAdjustment(page, { amount, mode, reason }) {
+  await openManualAdjustment(page)
+  await selectDialogOption(
+    page,
+    '管理员手动调账',
+    '调账范围',
+    mode,
+  )
+  await fillDialogControl(
+    page,
+    '管理员手动调账',
+    '业务调账金额',
+    amount,
+  )
+  await fillDialogPlaceholder(
+    page,
+    '管理员手动调账',
+    '说明为什么需要进行本次独立调账',
+    reason,
+  )
+  await clickDialogButton(page, '管理员手动调账', '确认调账')
+  await waitForNoVisibleDialog(page, '管理员手动调账')
+  await waitForAccountSurface(page, flowUsername)
+}
+
+test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与响应式语义', {
+  timeout: 600_000,
+}, async (t) => {
+  const configuration = readConfiguration(process.env)
+  const limitedPassword = readLimitedPassword(process.env)
+  const browser = await launchChrome({
+    executable: configuration.chromeExecutable,
+    userDataDirectory: `${configuration.profileDirectory}-fund-accounts-admin`,
+  })
+  t.after(async () => browser.close())
+
+  const page = await browser.newPage()
+  await page.setViewport(1440, 900, false)
+  await page.connection.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+  await runFundBrowserStep('system admin real login', async () => {
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/login'))
+    await loginThroughRealHttp(page, configuration)
+    await page.navigate(appRouteUrl(configuration.baseUrl, accountListRoute))
+    await waitForAccountSurface(page, '公司资金账户')
+  })
+
+  const runtime = collectRuntimeIssues(page, {
+    sensitiveValues: [configuration.password, limitedPassword],
+  })
+  runtime.start()
+
+  await runFundBrowserStep('exclusive admin permission catalog', async () => {
+    const permissions = await page.evaluate(authStoreExpression(`
+      return [...store.permissions]
+        .filter(permission => permission.startsWith('fund-'))
+        .sort()
+    `))
+    assert.deepEqual(permissions, allFundPermissions)
+  })
+
+  await runFundBrowserStep('create CNY account with keyboard select', async () => {
+    await clickVisibleButton(page, '创建资金账户')
+    await waitForVisibleDialog(page, '创建资金账户')
+    await selectDialogOption(
+      page,
+      '创建资金账户',
+      '未开户用户',
+      '资金浏览器调账用户（fund_browser_flow_user）',
+    )
+    await fillDialogControl(
+      page,
+      '创建资金账户',
+      '初始用户分成比例',
+      '30',
+    )
+    await clickDialogButton(page, '创建资金账户', '创建账户')
+    await waitForNoVisibleDialog(page, '创建资金账户')
+    await waitForAccountSurface(page, flowUsername)
+    await waitForAccountRowText(page, flowUsername, '30%')
+  })
+
+  await runFundBrowserStep('update future share rate', async () => {
+    await clickVisibleRowButton(page, flowUsername, '修改比例')
+    await waitForVisibleDialog(page, '修改分成比例')
+    await fillDialogControl(
+      page,
+      '修改分成比例',
+      '新用户分成比例',
+      '45',
+    )
+    await fillDialogPlaceholder(
+      page,
+      '修改分成比例',
+      '说明本次比例调整原因',
+      'Browser 比例变更验收',
+    )
+    await clickDialogButton(page, '修改分成比例', '保存新比例')
+    await waitForNoVisibleDialog(page, '修改分成比例')
+    await waitForAccountRowText(page, flowUsername, '45%')
+  })
+
+  await runFundBrowserStep('positive user-only adjustment', async () => {
+    await submitManualAdjustment(page, {
+      amount: '100',
+      mode: '只调整选定用户账户',
+      reason: 'Browser 用户账户正向调账',
+    })
+    await waitForAccountRowText(page, flowUsername, '100.0000')
+  })
+
+  await runFundBrowserStep('negative shared adjustment', async () => {
+    await submitManualAdjustment(page, {
+      amount: '-40',
+      mode: '按当前比例一同调整用户与公司账户',
+      reason: 'Browser 用户公司按比例负向调账',
+    })
+    await waitForAccountRowText(page, flowUsername, '82.0000')
+    await waitForAccountRowText(page, '公司资金账户', '13.0000')
+  })
+
+  await runFundBrowserStep('transaction filter and immutable detail', async () => {
+    await page.navigate(appRouteUrl(configuration.baseUrl, transactionRoute))
+    await waitForTransactionSurface(page, profitBusinessNo)
+    await fillVisibleInput(
+      page,
+      'input[placeholder="输入完整编号或片段"]',
+      profitBusinessNo,
+    )
+    await clickVisibleButton(page, '应用筛选')
+    await waitForTransactionSurface(page, profitBusinessNo)
+    const filtered = await page.evaluate(`(() => {
+      const table = document.querySelector('[data-testid="fund-transaction-table"]')
+      return {
+        hasLoss: table?.textContent?.includes('E2E-ORDER-LOSS') ?? false,
+        profitRows: [...(table?.querySelectorAll('tbody tr') ?? [])]
+          .filter(row => row.getClientRects().length > 0
+            && row.textContent?.includes(${JSON.stringify(profitBusinessNo)}))
+          .length,
+      }
+    })()`)
+    assert.deepEqual(filtered, { hasLoss: false, profitRows: 2 })
+
+    await clickVisibleRowButton(page, profitBusinessNo, '查看详情')
+    await waitForVisibleDialog(page, profitBusinessNo)
+    const detail = await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(profitBusinessNo)}))
+      const text = dialog?.textContent ?? ''
+      return {
+        hasBusinessNo: text.includes(${JSON.stringify(profitBusinessNo)}),
+        hasCategory: text.includes('收益'),
+        hasCompanyRate: text.includes('70.0000%'),
+        hasSource: text.includes('BROWSER_ORDER_DOMAIN'),
+        hasUserRate: text.includes('30.0000%'),
+      }
+    })()`)
+    assert.deepEqual(detail, {
+      hasBusinessNo: true,
+      hasCategory: true,
+      hasCompanyRate: true,
+      hasSource: true,
+      hasUserRate: true,
+    })
+  })
+
+  await runFundBrowserStep('partial reversal preserves original batch', async () => {
+    await clickDialogButton(page, profitBusinessNo, '发起冲账')
+    await waitForVisibleDialog(page, '批次冲账')
+    await fillDialogControl(page, '批次冲账', '本次冲账额度', '40')
+    await fillDialogPlaceholder(
+      page,
+      '批次冲账',
+      '请输入明确、可审计的冲账原因',
+      'Browser 部分冲账验收',
+    )
+    await clickDialogButton(page, '批次冲账', '确认冲账')
+    await waitForNoVisibleDialog(page, '批次冲账')
+    await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes('Browser 部分冲账验收')
+        && dialog.textContent?.includes('部分冲账')))()`)
+  })
+
+  await runFundBrowserStep('390x844, themes, reduced motion and touch targets', async () => {
+    await clickDialogButton(page, profitBusinessNo, '关闭')
+    await page.setViewport(390, 844, true)
+    await page.navigate(appRouteUrl(configuration.baseUrl, accountListRoute))
+    await waitForAccountSurface(page, flowUsername)
+    await page.waitFor(`window.innerWidth === 390
+      && matchMedia('(max-width: 767px)').matches`)
+    const mobile = await page.evaluate(`(() => {
+      const card = [...document.querySelectorAll('[data-testid="fund-account-card"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
+      const actionLabels = [
+        '创建资金账户', '修改比例', '手动调账', '查看流水',
+      ]
+      const targets = [...document.querySelectorAll('button')]
+        .filter(button => button.getClientRects().length > 0
+          && actionLabels.includes(button.textContent?.trim()))
+      const animated = [...document.querySelectorAll(
+        '.animate-spin, .animate-pulse',
+      )].filter(element => element.getClientRects().length > 0)
+      const rect = card?.getBoundingClientRect()
+      return {
+        cardInside: Boolean(rect && rect.left >= 0
+          && rect.right <= document.documentElement.clientWidth),
+        documentFits: document.documentElement.scrollWidth
+          <= document.documentElement.clientWidth,
+        reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
+          && animated.every(element => getComputedStyle(element).animationName === 'none'),
+        targetCount: targets.length,
+        touchTargets: targets.every(button => (
+          button.getBoundingClientRect().height + 0.001 >= 44
+        )),
+      }
+    })()`)
+    assert.deepEqual({
+      cardInside: mobile.cardInside,
+      documentFits: mobile.documentFits,
+      reducedMotion: mobile.reducedMotion,
+      touchTargets: mobile.touchTargets,
+    }, {
+      cardInside: true,
+      documentFits: true,
+      reducedMotion: true,
+      touchTargets: true,
+    })
+    assert.ok(mobile.targetCount >= 4)
+
+    await page.evaluate(`(() => {
+      const app = document.querySelector('#app')?.__vue_app__
+      app?.config?.globalProperties?.$pinia?._s
+        ?.get('appSettings')?.setColorScheme('light')
+      return true
+    })()`)
+    await page.waitFor(`!document.documentElement.classList.contains('dark')`)
+    const light = await page.evaluate(`(() => {
+      const card = [...document.querySelectorAll('[data-testid="fund-account-card"]')]
+        .find(candidate => candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
+      const style = card?.parentElement ? getComputedStyle(card.parentElement) : null
+      return { background: style?.backgroundColor, color: style?.color }
+    })()`)
+    await page.evaluate(`(() => {
+      const app = document.querySelector('#app')?.__vue_app__
+      app?.config?.globalProperties?.$pinia?._s
+        ?.get('appSettings')?.setColorScheme('dark')
+      return true
+    })()`)
+    await page.waitFor(`document.documentElement.classList.contains('dark')`)
+    const dark = await page.evaluate(`(() => {
+      const card = [...document.querySelectorAll('[data-testid="fund-account-card"]')]
+        .find(candidate => candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
+      const style = card?.parentElement ? getComputedStyle(card.parentElement) : null
+      return { background: style?.backgroundColor, color: style?.color }
+    })()`)
+    assert.notEqual(dark.background, light.background)
+    assert.notEqual(dark.color, light.color)
+  })
+
+  runtime.stop()
+  assert.deepEqual(runtime.issues, [])
+
+  await runFundBrowserStep('non-admin API and both routes are forbidden', async () => {
+    const limitedBrowser = await launchChrome({
+      executable: configuration.chromeExecutable,
+      userDataDirectory: `${configuration.profileDirectory}-fund-accounts-limited`,
+    })
+    t.after(async () => limitedBrowser.close())
+    const limitedPage = await limitedBrowser.newPage()
+    await limitedPage.setViewport(390, 844, true)
+    await limitedPage.navigate(appRouteUrl(configuration.baseUrl, '/login'))
+    await loginThroughRealHttp(limitedPage, {
+      password: limitedPassword,
+      username: limitedUsername,
+    })
+    const response = await limitedPage.evaluate(apiExpression(
+      '/api/fund-accounts?page=1&pageSize=20',
+    ))
+    assert.equal(response.status, 403)
+    assert.equal(response.body?.code, 'FORBIDDEN')
+
+    for (const route of [accountListRoute, transactionRoute]) {
+      await limitedPage.navigate(appRouteUrl(configuration.baseUrl, route))
+      await waitForAfterAuthentication(limitedPage, `(() => (
+        document.body.innerText.includes('403')
+        && document.body.innerText.includes('无权访问该页面')
+        && document.querySelector('[data-testid="fund-account-list-table"]') === null
+        && document.querySelector('[data-testid="fund-transaction-table"]') === null
+      ))()`)
+    }
+  })
+})

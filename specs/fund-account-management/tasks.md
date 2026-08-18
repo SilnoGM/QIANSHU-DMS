@@ -300,17 +300,17 @@ flowchart TD
   - [x] 14.11 创建提交：`feat: 实现资金账户流水页面`。
   - _Requirements: R6-R10, R12-R15_
 
-- [ ] 15. 完成 PostgreSQL E2E 与真实浏览器验收
-  - [ ] 15.1 建立独立资金账户 Server E2E fixture，只使用一次性 PostgreSQL。
-  - [ ] 15.2 覆盖一用户一账户、单公司账户、CNY、比例边界、immutable trigger 和无用户账户 seed。
-  - [ ] 15.3 覆盖九种类型、正负订单结算、两种调账、负余额、来源授权和规则版本快照。
-  - [ ] 15.4 覆盖同 key 重放/冲突、同账户并发、多账户稳定锁顺序、Audit 失败回滚和账户序号连续。
-  - [ ] 15.5 覆盖部分冲账、最终闭合、并发不超额、冲账状态聚合和历史分类抵销。
-  - [ ] 15.6 验证空库全量 migration、第二次 deploy、status up to date 和不写持久开发数据库。
-  - [ ] 15.7 新增独立 `ci:browser-fund-accounts-e2e` 根编排和 Browser 测试，不复用持久数据。
-  - [ ] 15.8 Browser 覆盖开户、比例修改、两种正负调账、账户列表、流水筛选、详情和部分冲账。
-  - [ ] 15.9 覆盖 system_admin 排他权限、1440x900、390x844、light/dark、Reduced Motion、键盘、44px target 和无横向溢出。
-  - [ ] 15.10 若 E2E 暴露生产缺陷，使用独立 `fix:` 提交最小修复；纯验收提交：`test: 补齐资金账户端到端验收`。
+- [x] 15. 完成 PostgreSQL E2E 与真实浏览器验收
+  - [x] 15.1 建立独立资金账户 Server E2E fixture，只使用一次性 PostgreSQL。
+  - [x] 15.2 覆盖一用户一账户、单公司账户、CNY、比例边界、immutable trigger 和无用户账户 seed。
+  - [x] 15.3 覆盖九种类型、正负订单结算、两种调账、负余额、来源授权和规则版本快照。
+  - [x] 15.4 覆盖同 key 重放/冲突、同账户并发、多账户稳定锁顺序、Audit 失败回滚和账户序号连续。
+  - [x] 15.5 覆盖部分冲账、最终闭合、并发不超额、冲账状态聚合和历史分类抵销。
+  - [x] 15.6 验证空库全量 migration、第二次 deploy、status up to date 和不写持久开发数据库。
+  - [x] 15.7 新增独立 `ci:browser-fund-accounts-e2e` 根编排和 Browser 测试，不复用持久数据。
+  - [x] 15.8 Browser 覆盖开户、比例修改、两种正负调账、账户列表、流水筛选、详情和部分冲账。
+  - [x] 15.9 覆盖 system_admin 排他权限、1440x900、390x844、light/dark、Reduced Motion、键盘、44px target 和无横向溢出。
+  - [x] 15.10 若 E2E 暴露生产缺陷，使用独立 `fix:` 提交最小修复；纯验收提交：`test: 补齐资金账户端到端验收`。
   - _Requirements: R1-R15_
 
 - [ ] 16. 完成全量验证、规格状态和 Git 收口
