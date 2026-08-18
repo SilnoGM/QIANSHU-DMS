@@ -246,17 +246,17 @@ flowchart TD
   - [x] 10.6 创建提交：`chore: 同步资金账户接口契约`。
   - _Requirements: R5, R7, R10-R15_
 
-- [ ] 11. 以 TDD 实现 Web API adapter 与纯状态逻辑
-  - [ ] 11.1 为 generated DTO adapter、查询编码、AbortSignal、mutation config 和错误映射建立 RED。
-  - [ ] 11.2 实现账户、流水、批次、类型和来源查询 adapter；所有 GET 显式接收 AbortSignal。
-  - [ ] 11.3 实现开户、比例、调账、冲账和配置 mutation adapter，统一 `retry:false`、local error presentation。
-  - [ ] 11.4 实现 `requestVersion + authEpoch + permission + Abort` 竞态守卫。
-  - [ ] 11.5 实现开户、比例、两种调账、详情和冲账纯状态机。
-  - [ ] 11.6 幂等键仅在首次有效提交时生成；network/5xx 保留冻结 key/payload，4xx 清除并解锁编辑。
-  - [ ] 11.7 实现分账和预计余额预览，复用与 Server 相同的 decimal 语义但不将前端预览视为账务真相。
-  - [ ] 11.8 不创建全局资金 Store，不复制 generated DTO，不把金额转换为 number。
-  - [ ] 11.9 运行 Web API/logic 定向测试、typecheck、ESLint 和 diff-check。
-  - [ ] 11.10 创建提交：`feat: 建立资金账户前端状态`。
+- [x] 11. 以 TDD 实现 Web API adapter 与纯状态逻辑
+  - [x] 11.1 为 generated DTO adapter、查询编码、AbortSignal、mutation config 和错误映射建立 RED。
+  - [x] 11.2 实现账户、流水、批次、类型和来源查询 adapter；所有 GET 显式接收 AbortSignal。
+  - [x] 11.3 实现开户、比例、调账、冲账和配置 mutation adapter，统一 `retry:false`、local error presentation。
+  - [x] 11.4 实现 `requestVersion + authEpoch + permission + Abort` 竞态守卫。
+  - [x] 11.5 实现开户、比例、两种调账、详情和冲账纯状态机。
+  - [x] 11.6 幂等键仅在首次有效提交时生成；network/5xx 保留冻结 key/payload，4xx 清除并解锁编辑。
+  - [x] 11.7 实现分账和预计余额预览，复用与 Server 相同的 decimal 语义但不将前端预览视为账务真相。
+  - [x] 11.8 不创建全局资金 Store，不复制 generated DTO，不把金额转换为 number。
+  - [x] 11.9 运行 Web API/logic 定向测试、typecheck、ESLint 和 diff-check。
+  - [x] 11.10 创建提交：`feat: 建立资金账户前端状态`。
   - _Requirements: R1-R4, R7, R10-R15_
 
 - [ ] 12. 以 TDD 实现资金账户列表页面
