@@ -160,22 +160,22 @@ const userOptions = computed<FilterOption[]>(() => uniqueOptions([
 
 const postingTypeOptions = computed<FilterOption[]>(() => uniqueOptions([
   ...catalogPostingTypes.value.map(type => ({
-    label: `${type.name} · ${type.code}`,
+    label: type.name,
     value: type.id,
   })),
   ...transactions.value.map(transaction => ({
-    label: `${transaction.postingTypeName} · ${transaction.postingTypeCode}`,
+    label: transaction.postingTypeName,
     value: transaction.postingTypeId,
   })),
 ]))
 
 const businessSourceOptions = computed<FilterOption[]>(() => uniqueOptions([
   ...catalogBusinessSources.value.map(source => ({
-    label: `${source.name} · ${source.code}`,
+    label: source.name,
     value: source.id,
   })),
   ...transactions.value.map(transaction => ({
-    label: `${transaction.businessSourceName} · ${transaction.businessSourceCode}`,
+    label: transaction.businessSourceName,
     value: transaction.businessSourceId,
   })),
 ]))

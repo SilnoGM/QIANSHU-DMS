@@ -31,6 +31,19 @@ interface FundTransactionFilterOption {
 
 const draft = ref<FundTransactionFilterState>({ ...props.modelValue })
 
+/**
+ * 路由可以先于账户目录恢复 accountId。FaCombobox 在选项尚不存在时会按原始值
+ * 回显，因此这里只在目录已经能够解析主体名称后再把 ID 交给显示组件；draft
+ * 仍始终保留真实 ID，服务端筛选语义不会改变。
+ */
+const accountSelectionValue = computed(() => {
+  const accountId = draft.value.accountId
+  return accountId !== undefined
+    && props.accountOptions.some(option => option.value === draft.value.accountId)
+    ? accountId
+    : undefined
+})
+
 const categoryOptions = [
   { label: '收益', value: 'REVENUE' },
   { label: '成本', value: 'COST' },
@@ -38,8 +51,8 @@ const categoryOptions = [
   { label: '调账', value: 'ADJUSTMENT' },
 ]
 const directionOptions = [
-  { label: '入账（CREDIT）', value: 'CREDIT' },
-  { label: '出账（DEBIT）', value: 'DEBIT' },
+  { label: '入账', value: 'CREDIT' },
+  { label: '出账', value: 'DEBIT' },
 ]
 const reversalStatusOptions = [
   { label: '未冲账', value: 'NONE' },
@@ -132,7 +145,7 @@ watch(() => props.modelValue, (value) => {
       <label class="gap-1.5 grid min-w-0">
         <span class="qs-type-compact-label">账户</span>
         <FaCombobox
-          :model-value="draft.accountId"
+          :model-value="accountSelectionValue"
           :options="accountOptions"
           :disabled="disabled || catalogLoading"
           :input-attrs="{ 'aria-label': '按账户筛选', 'aria-busy': catalogLoading }"
@@ -172,7 +185,7 @@ watch(() => props.modelValue, (value) => {
           virtual-list
           class="w-full"
           empty-text="暂无可选业务类型"
-          placeholder="搜索类型名称或编码"
+          placeholder="搜索类型名称"
           @update:model-value="value => updateDraft('postingTypeId', value)"
         />
       </label>
@@ -201,7 +214,7 @@ watch(() => props.modelValue, (value) => {
           virtual-list
           class="w-full"
           empty-text="暂无可选业务来源"
-          placeholder="搜索来源名称或编码"
+          placeholder="搜索来源名称"
           @update:model-value="value => updateDraft('businessSourceId', value)"
         />
       </label>

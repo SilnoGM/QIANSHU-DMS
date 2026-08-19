@@ -71,6 +71,33 @@ test('页面筛选完整映射九种服务端条件且只在应用时查询', ()
   assert.match(pageSource, /buildFundTransactionQuery/u)
 })
 
+test('异步账户目录回填后只按主体名称回显既有账户筛选', () => {
+  assert.match(filterSource, /const accountSelectionValue = computed/u)
+  assert.match(
+    filterSource,
+    /props\.accountOptions\.some\(option => option\.value === draft\.value\.accountId\)/u,
+  )
+  assert.match(filterSource, /:model-value="accountSelectionValue"/u)
+  assert.doesNotMatch(filterSource, /:model-value="draft\.accountId"/u)
+})
+
+test('业务类型、业务来源与收支方向下拉只展示中文名称', () => {
+  for (const labelExpression of [
+    'label: type.name',
+    'label: transaction.postingTypeName',
+    'label: source.name',
+    'label: transaction.businessSourceName',
+  ]) {
+    assert.ok(pageSource.includes(labelExpression))
+  }
+
+  assert.match(filterSource, /\{ label: '入账', value: 'CREDIT' \}/u)
+  assert.match(filterSource, /\{ label: '出账', value: 'DEBIT' \}/u)
+  assert.match(filterSource, /placeholder="搜索类型名称"/u)
+  assert.match(filterSource, /placeholder="搜索来源名称"/u)
+  assert.doesNotMatch(filterSource, /入账（CREDIT）|出账（DEBIT）|名称或编码/u)
+})
+
 test('列表和详情 GET 具有 Abort、请求版本、身份与读取权限守卫', () => {
   assert.match(pageSource, /AbortController/u)
   assert.match(pageSource, /appAccountStore\.authEpoch/u)
