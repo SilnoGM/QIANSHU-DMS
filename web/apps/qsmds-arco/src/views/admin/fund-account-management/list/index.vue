@@ -189,6 +189,18 @@ const adjustmentUnknownResult = computed(() => (
   adjustmentSubmission.value.phase === 'unknown'
 ))
 
+/** 正负余额使用语义色，零值不覆盖 AmountDisplay 的默认文字颜色。 */
+function getFundBalanceTextClass(balance: string): string | undefined {
+  const tone = getFundBalanceState(balance).tone
+  if (tone === 'positive') {
+    return 'text-green-600 dark:text-green-400'
+  }
+  if (tone === 'negative') {
+    return 'text-destructive'
+  }
+  return undefined
+}
+
 function responseIsCurrent(
   requestVersion: number,
   latestRequestVersion: number,
@@ -875,10 +887,10 @@ onBeforeUnmount(() => {
               :value="row.original.balance"
               :currency="row.original.currency"
               :currencies="fundCurrencies"
-              :class="getFundBalanceState(row.original.balance).negative ? 'text-destructive' : ''"
+              :class="getFundBalanceTextClass(row.original.balance)"
             />
             <FaTag
-              v-if="getFundBalanceState(row.original.balance).negative"
+              v-if="getFundBalanceState(row.original.balance).tone === 'negative'"
               variant="outline"
               class="text-destructive qs-type-status-tag border-destructive/30 bg-destructive/8"
             >
@@ -967,10 +979,10 @@ onBeforeUnmount(() => {
                   :value="row.balance"
                   :currency="row.currency"
                   :currencies="fundCurrencies"
-                  :class="getFundBalanceState(row.balance).negative ? 'text-destructive' : ''"
+                  :class="getFundBalanceTextClass(row.balance)"
                 />
                 <FaTag
-                  v-if="getFundBalanceState(row.balance).negative"
+                  v-if="getFundBalanceState(row.balance).tone === 'negative'"
                   variant="outline"
                   class="text-destructive qs-type-status-tag border-destructive/30 bg-destructive/8"
                 >

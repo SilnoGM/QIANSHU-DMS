@@ -6,6 +6,8 @@ import type {
 import type { FundAccountListQuery } from '@/api/modules/fund-accounts'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
+import Decimal from 'decimal.js'
+
 interface FundAccountListSorting {
   readonly desc: boolean
   readonly id: string
@@ -21,7 +23,7 @@ export interface FundAccountListQueryInput {
 
 export interface FundBalanceState {
   readonly label: '余额正常' | '负余额'
-  readonly negative: boolean
+  readonly tone: 'negative' | 'neutral' | 'positive'
 }
 
 const ALLOWED_PAGE_SIZES = new Set([20, 50, 100])
@@ -109,10 +111,15 @@ export function withFundAccountPrecision(
 }
 
 export function getFundBalanceState(balance: string): FundBalanceState {
-  const negative = balance.startsWith('-')
+  const comparison = new Decimal(balance).comparedTo(0)
+  const tone = comparison < 0
+    ? 'negative'
+    : comparison > 0
+      ? 'positive'
+      : 'neutral'
   return {
-    label: negative ? '负余额' : '余额正常',
-    negative,
+    label: tone === 'negative' ? '负余额' : '余额正常',
+    tone,
   }
 }
 

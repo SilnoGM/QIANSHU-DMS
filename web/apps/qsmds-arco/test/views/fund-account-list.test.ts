@@ -43,6 +43,8 @@ test('表格展示主体、余额、比例、时间和公司标识但不暴露�
   }
   assert.match(pageSource, /公司账户/u)
   assert.match(pageSource, /负余额/u)
+  assert.match(pageSource, /text-green-600 dark:text-green-400/u)
+  assert.match(pageSource, /text-destructive/u)
   assert.doesNotMatch(pageSource, /title: '版本'/u)
 })
 

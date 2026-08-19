@@ -137,7 +137,7 @@ test('开户候选只排除已有用户账户并保留用户状态供管理员�
   assert.equal(findCompanyFundAccount(accounts)?.id, 'account-company')
 })
 
-test('资金展示固定四位精度并用文字补充负余额语义', () => {
+test('资金展示固定四位精度并区分正数、负数和零值状态', () => {
   const catalog: CurrencyDescriptor[] = [{
     code: 'CNY',
     enabled: true,
@@ -151,11 +151,19 @@ test('资金展示固定四位精度并用文字补充负余额语义', () => {
   assert.equal(catalog[0]?.minorUnit, 2)
   assert.deepEqual(getFundBalanceState('-0.0001'), {
     label: '负余额',
-    negative: true,
+    tone: 'negative',
+  })
+  assert.deepEqual(getFundBalanceState('12.3400'), {
+    label: '余额正常',
+    tone: 'positive',
   })
   assert.deepEqual(getFundBalanceState('0.0000'), {
     label: '余额正常',
-    negative: false,
+    tone: 'neutral',
+  })
+  assert.deepEqual(getFundBalanceState('-0.0000'), {
+    label: '余额正常',
+    tone: 'neutral',
   })
   assert.equal(formatFundShareRate('30.0000'), '30%')
   assert.equal(formatFundShareRate(null), '—')
