@@ -843,7 +843,7 @@ onBeforeUnmount(() => {
         v-model:sorting="sorting"
         data-testid="fund-account-list-table"
         row-key="id"
-        :action-column="{ fixed: 'right', minWidth: 380, width: 380 }"
+        :action-column="{ fixed: 'right', minWidth: 260, width: 260 }"
         :addable="false"
         :columns="columns"
         :data="accounts"
@@ -921,30 +921,30 @@ onBeforeUnmount(() => {
             v-if="canUpdateShareRate && row.ownerType === 'USER'"
             variant="ghost"
             size="sm"
-            class="min-h-11 sm:min-h-9"
+            class="shrink-0 min-h-11 whitespace-nowrap sm:min-h-9"
             :aria-label="`修改第 ${rowNumber} 行 ${row.user?.username ?? ''} 的分成比例`"
             @click="openShareModal(row)"
           >
-            <FaIcon name="i-lucide:percent" />修改比例
+            <FaIcon name="i-lucide:percent" />比例
           </FaButton>
           <FaButton
             v-if="canManualAdjust && row.ownerType === 'USER'"
             variant="ghost"
             size="sm"
-            class="min-h-11 sm:min-h-9"
+            class="shrink-0 min-h-11 whitespace-nowrap sm:min-h-9"
             :aria-label="`调整第 ${rowNumber} 行 ${row.user?.username ?? ''} 的资金余额`"
             @click="openAdjustmentModal(row)"
           >
-            <FaIcon name="i-lucide:circle-dollar-sign" />手动调账
+            <FaIcon name="i-lucide:circle-dollar-sign" />调账
           </FaButton>
           <FaButton
             variant="ghost"
             size="sm"
-            class="min-h-11 sm:min-h-9"
+            class="shrink-0 min-h-11 whitespace-nowrap sm:min-h-9"
             :aria-label="`查看第 ${rowNumber} 行账户流水`"
             @click="navigateToTransactions(row)"
           >
-            <FaIcon name="i-lucide:scroll-text" />查看流水
+            <FaIcon name="i-lucide:scroll-text" />流水
           </FaButton>
         </template>
 

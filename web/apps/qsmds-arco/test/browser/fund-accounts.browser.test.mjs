@@ -149,7 +149,7 @@ async function fillDialogPlaceholder(page, title, placeholder, value) {
 }
 
 async function openManualAdjustment(page) {
-  await clickVisibleRowButton(page, flowUsername, '手动调账')
+  await clickVisibleRowButton(page, flowUsername, '调账')
   await waitForVisibleDialog(page, '管理员手动调账')
 }
 
@@ -237,7 +237,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
   })
 
   await runFundBrowserStep('update future share rate', async () => {
-    await clickVisibleRowButton(page, flowUsername, '修改比例')
+    await clickVisibleRowButton(page, flowUsername, '比例')
     await waitForVisibleDialog(page, '修改分成比例')
     await fillDialogControl(
       page,
@@ -352,19 +352,55 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
         && dialog.textContent?.includes('部分冲账')))()`)
   })
 
-  await runFundBrowserStep('390x844, themes, reduced motion and touch targets', async () => {
+  await runFundBrowserStep('compact account actions stay on one row', async () => {
     await clickDialogButton(page, profitBusinessNo, '关闭')
-    await page.setViewport(390, 844, true)
     await page.navigate(appRouteUrl(configuration.baseUrl, accountListRoute))
+    await waitForAccountSurface(page, flowUsername)
+    const actions = await page.evaluate(`(() => {
+      const row = [...document.querySelectorAll(
+        '[data-testid="fund-account-list-table"] tbody tr',
+      )].find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
+      const expectedLabels = ['比例', '调账', '流水']
+      const buttons = [...(row?.querySelectorAll('button') ?? [])]
+        .filter(button => expectedLabels.includes(button.textContent?.trim()))
+      const buttonRects = buttons.map(button => button.getBoundingClientRect())
+      const actionCell = buttons[0]?.closest('td')
+      return {
+        actionCellWidth: actionCell?.getBoundingClientRect().width ?? 0,
+        labels: buttons.map(button => button.textContent?.trim()),
+        sameRow: buttonRects.length === expectedLabels.length
+          && buttonRects.every(rect => Math.abs(rect.top - buttonRects[0].top) <= 1),
+      }
+    })()`)
+    assert.deepEqual(actions.labels, ['比例', '调账', '流水'])
+    assert.equal(actions.sameRow, true)
+    assert.ok(actions.actionCellWidth >= 250 && actions.actionCellWidth <= 280)
+  })
+
+  await runFundBrowserStep('390x844, themes, reduced motion and touch targets', async () => {
+    await page.setViewport(390, 844, true)
+    // 桌面检查已经位于同一个 hash 路由；切换 mobile emulation 后必须重载
+    // 当前完整地址，让 Chrome 对新文档重新应用 viewport meta，避免页面缩放。
+    await page.navigate(await page.evaluate('location.href'))
     await waitForAccountSurface(page, flowUsername)
     await page.waitFor(`window.innerWidth === 390
       && matchMedia('(max-width: 767px)').matches`)
+    await page.waitFor(`(() => {
+      const actionLabels = ['创建资金账户', '比例', '调账', '流水']
+      const targets = [...document.querySelectorAll('button')]
+        .filter(button => button.getClientRects().length > 0
+          && actionLabels.includes(button.textContent?.trim()))
+      return targets.length >= 4 && targets.every(button => (
+        button.getBoundingClientRect().height + 0.001 >= 44
+      ))
+    })()`)
     const mobile = await page.evaluate(`(() => {
       const card = [...document.querySelectorAll('[data-testid="fund-account-card"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(flowUsername)}))
       const actionLabels = [
-        '创建资金账户', '修改比例', '手动调账', '查看流水',
+        '创建资金账户', '比例', '调账', '流水',
       ]
       const targets = [...document.querySelectorAll('button')]
         .filter(button => button.getClientRects().length > 0
@@ -381,6 +417,10 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
         reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches
           && animated.every(element => getComputedStyle(element).animationName === 'none'),
         targetCount: targets.length,
+        targetHeights: targets.map(button => ({
+          height: button.getBoundingClientRect().height,
+          label: button.textContent?.trim(),
+        })),
         touchTargets: targets.every(button => (
           button.getBoundingClientRect().height + 0.001 >= 44
         )),
@@ -390,13 +430,12 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
       cardInside: mobile.cardInside,
       documentFits: mobile.documentFits,
       reducedMotion: mobile.reducedMotion,
-      touchTargets: mobile.touchTargets,
     }, {
       cardInside: true,
       documentFits: true,
       reducedMotion: true,
-      touchTargets: true,
     })
+    assert.equal(mobile.touchTargets, true, JSON.stringify(mobile.targetHeights))
     assert.ok(mobile.targetCount >= 4)
 
     await page.evaluate(`(() => {
