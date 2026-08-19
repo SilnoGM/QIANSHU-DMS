@@ -471,7 +471,7 @@ test('web-check-build 只使用 Web cache 并验证正式应用产物', async ()
   assert.equal(job.includes('build:examples'), false)
 })
 
-test('browser-auth-e2e 安装双依赖域并只调用隔离根入口', async () => {
+test('browser-auth-e2e 通过隔离的 Ubuntu 官方源安装 FFmpeg 并调用隔离根入口', async () => {
   const job = extractJobs(await readCiWorkflow()).get('browser-auth-e2e')
   assertDependencySetup(job, [
     'server/pnpm-lock.yaml',
@@ -481,13 +481,39 @@ test('browser-auth-e2e 安装双依赖域并只调用隔离根入口', async () 
   assert.equal(ffmpegDependency, [
     '      - name: Install FFmpeg dependency',
     '        run: |',
-    '          sudo apt-get update',
-    '          sudo apt-get install --yes --no-install-recommends ffmpeg',
+    '          if test ! -x /usr/bin/ffprobe; then',
+    '            # GitHub Runner 的 mirror+file 会优先选择 Azure 镜像；该镜像异常时可能持续阻塞到 Job 超时。',
+    '            # 这里使用隔离索引和 Ubuntu 官方 HTTPS 源，避免旧索引、第三方源或云镜像参与解析。',
+    "            sudo tee /etc/apt/sources.list.d/qianshu-ubuntu.sources >/dev/null <<'EOF'",
+    '          Types: deb',
+    '          URIs: https://archive.ubuntu.com/ubuntu/',
+    '          Suites: noble noble-updates noble-backports',
+    '          Components: main restricted universe multiverse',
+    '          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg',
+    '',
+    '          Types: deb',
+    '          URIs: https://security.ubuntu.com/ubuntu/',
+    '          Suites: noble-security',
+    '          Components: main restricted universe multiverse',
+    '          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg',
+    '          EOF',
+    '            apt_lists="${RUNNER_TEMP}/qianshu-apt-lists"',
+    '            mkdir -p "${apt_lists}/partial"',
+    '            apt_options=(',
+    '              -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/qianshu-ubuntu.sources',
+    '              -o Dir::Etc::sourceparts=-',
+    '              -o "Dir::State::lists=${apt_lists}"',
+    '              -o Acquire::Retries=3',
+    '              -o Acquire::https::Timeout=30',
+    '            )',
+    '            sudo timeout 5m apt-get "${apt_options[@]}" update',
+    '            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg',
+    '          fi',
     '          test -x /usr/bin/ffprobe',
     '          /usr/bin/ffprobe -version',
   ].join('\n'))
   assertTextOrder(job, [
-    'sudo apt-get update',
+    'sudo timeout 5m apt-get "${apt_options[@]}" update',
     'run: pnpm -C server install --frozen-lockfile',
     'run: pnpm -C web install --frozen-lockfile',
     'run: node --run ci:browser-auth-e2e',
@@ -496,6 +522,8 @@ test('browser-auth-e2e 安装双依赖域并只调用隔离根入口', async () 
   assert.equal(job.includes('services:'), false)
   assert.equal(job.includes('DATABASE_URL'), false)
   assert.equal(job.includes('QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD'), false)
+  assert.equal(job.includes('mirror+file:'), false)
+  assert.equal(job.includes('azure.archive.ubuntu.com'), false)
 })
 
 test('browser-dictionaries-e2e 安装双依赖域并只调用字典隔离根入口', async () => {
