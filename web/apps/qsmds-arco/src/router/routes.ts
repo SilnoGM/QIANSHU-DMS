@@ -8,6 +8,9 @@ import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
+import FundAccountManagement, {
+  FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,
+} from './modules/fund-account.management'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement, {
   PRODUCT_MANAGEMENT_PERMISSIONS,
@@ -95,10 +98,14 @@ const asyncRoutes: RouteRecordMainRaw[] = [
     meta: {
       title: '管理员工作台',
       icon: 'i-lucide:layout-dashboard',
-      auth: [...PRODUCT_MANAGEMENT_PERMISSIONS],
+      auth: [
+        ...PRODUCT_MANAGEMENT_PERMISSIONS,
+        ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,
+      ],
     },
     children: [
       ProductManagement,
+      FundAccountManagement,
     ],
   },
   {

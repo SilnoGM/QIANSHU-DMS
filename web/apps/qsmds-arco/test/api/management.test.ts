@@ -41,13 +41,14 @@ function createClientRecorder(): { calls: Call[], client: AxiosInstance } {
 test('用户管理 API 使用 OpenAPI 路径并禁止密码写请求自动重试', async () => {
   const fixture = createClientRecorder()
   const api = createManagementApi(fixture.client)
+  const controller = new AbortController()
 
   await api.users.list({
     page: 2,
     pageSize: 20,
     username: 'operator',
     status: 'ACTIVE',
-  })
+  }, controller.signal)
   await api.users.create({
     username: 'operator',
     displayName: '操作员',
@@ -76,6 +77,7 @@ test('用户管理 API 使用 OpenAPI 路径并禁止密码写请求自动重试
           username: 'operator',
           status: 'ACTIVE',
         },
+        signal: controller.signal,
       },
     },
     {

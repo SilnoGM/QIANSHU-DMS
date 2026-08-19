@@ -66,11 +66,23 @@ test('管理员工作台是第一项独立顶部导航并挂载产品管理', ()
   const asyncRoutesSource = routesSource.slice(
     routesSource.indexOf('const asyncRoutes'),
   )
-
-  assert.match(
-    asyncRoutesSource,
-    /title: '管理员工作台'[\s\S]*?auth: \[\.\.\.PRODUCT_MANAGEMENT_PERMISSIONS\][\s\S]*?children: \[[\s\S]*?ProductManagement/u,
+  const administratorWorkbenchSource = asyncRoutesSource.slice(
+    asyncRoutesSource.indexOf('title: \'管理员工作台\''),
+    asyncRoutesSource.indexOf('title: \'系统管理\''),
   )
+  const productPermissionIndex = administratorWorkbenchSource.indexOf(
+    '...PRODUCT_MANAGEMENT_PERMISSIONS',
+  )
+  const fundAccountPermissionIndex = administratorWorkbenchSource.indexOf(
+    '...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS',
+  )
+  const productRouteIndex = administratorWorkbenchSource.indexOf(
+    'ProductManagement,',
+  )
+
+  assert.ok(productPermissionIndex >= 0)
+  assert.ok(fundAccountPermissionIndex > productPermissionIndex)
+  assert.ok(productRouteIndex > fundAccountPermissionIndex)
   assert.ok(
     asyncRoutesSource.indexOf('title: \'管理员工作台\'')
     < asyncRoutesSource.indexOf('title: \'系统管理\''),

@@ -3,6 +3,7 @@ import { AuthModule } from './modules/auth/auth.module'
 import { CurrencyModule } from './modules/currencies/currency.module'
 import { DictionaryModule } from './modules/dictionaries/dictionary.module'
 import { ExchangeRatesModule } from './modules/exchange-rates/exchange-rates.module'
+import { FundAccountsModule } from './modules/fund-accounts/fund-accounts.module'
 import { HealthModule } from './modules/health/health.module'
 import { NumberingModule } from './modules/numbering/numbering.module'
 import { PermissionsModule } from './modules/permissions/permissions.module'
@@ -23,6 +24,7 @@ export const HTTP_MODULES = [
   DictionaryModule,
   CurrencyModule,
   ExchangeRatesModule,
+  FundAccountsModule,
   RegionsModule,
   NumberingModule,
   ProductsModule,

@@ -252,9 +252,9 @@ describe('dictionary management database schema', () => {
         `ALTER TYPE "audit_event_type" ADD VALUE '${eventType}'`,
       )
     }
-    // Product 创建在后续 append-only migration 增加一个审计类型；字典测试继续
-    // 锁定全量基线，同时只要求字典 migration 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(42)
+    // 产品与资金领域在后续 append-only migration 扩展审计类型；字典测试继续
+    // 锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
+    expect(auditEventTypes).toHaveLength(56)
     expect(auditEventTypes).toContain('PRODUCT_CREATED')
     expect(auditEventTypes).toContain('PRODUCT_UPDATED')
     expect(

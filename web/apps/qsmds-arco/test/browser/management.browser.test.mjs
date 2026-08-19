@@ -58,6 +58,20 @@ function appRouteUrl(baseUrl, routePath) {
   return `${baseUrl}/#${routePath}`
 }
 
+async function verifyFundAccountRoutes(page, baseUrl) {
+  for (const [routePath, title] of [
+    ['/admin/fund-accounts/list', '资金账户列表'],
+    ['/admin/fund-accounts/transactions', '资金账户流水'],
+  ]) {
+    await page.navigate(appRouteUrl(baseUrl, routePath))
+    await page.waitFor(`(() => (
+      location.hash === ${JSON.stringify(`#${routePath}`)}
+      && document.body.innerText.includes(${JSON.stringify(title)})
+      && !document.body.innerText.includes('找不到页面')
+    ))()`)
+  }
+}
+
 function apiExpression(pathname, method, body) {
   const request = JSON.stringify({ body, method, pathname })
   return `(async () => {
@@ -1421,6 +1435,7 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   await page.waitFor(`document.body.innerText.includes('管理员工作台')`)
   await verifyProductCreate(page, configuration.baseUrl)
   await verifyProductList(page, configuration.baseUrl)
+  await verifyFundAccountRoutes(page, configuration.baseUrl)
 
   // 测试目标用户由受保护 API 准备；本场景关注的是管理员后续每项 UI 管理操作。
   const createdUser = await page.evaluate(apiExpression('/api/users', 'POST', {
@@ -1498,7 +1513,11 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
   const regionReadPermission = permissionsResponse.body?.find(
     permission => permission.code === 'regions:read',
   )
+  const fundAccountReadPermission = permissionsResponse.body?.find(
+    permission => permission.code === 'fund-accounts:read',
+  )
   assert.equal(typeof regionReadPermission?.id, 'string')
+  assert.equal(fundAccountReadPermission?.systemOnly, true)
 
   await clickVisibleTableRowButton(page, roleCode, '分配权限')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')].some(dialog => (
@@ -1537,11 +1556,16 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
       hasHorizontalOverflow: document.documentElement.scrollWidth > window.innerWidth,
       optionCount: options.length,
       rightGap: rect ? Math.abs(window.innerWidth - rect.right) : null,
+      showsDisabledFundAccountRead: options.some(option => (
+        option.textContent?.includes('fund-accounts:read')
+        && (option.getAttribute('aria-disabled') === 'true' || option.disabled)
+      )),
       showsUsersRead: options.some(option => option.textContent?.includes('users:read')),
       width: rect?.width ?? null,
     }
   })()`)
   assert.equal(permissionDrawerState.contentUsesGenericDrawer, true)
+  assert.equal(permissionDrawerState.showsDisabledFundAccountRead, true)
   assert.equal(permissionDrawerState.showsUsersRead, true)
   assert.ok(permissionDrawerState.optionCount > 0)
   assert.deepEqual(permissionDrawerState.enabledPermissionCodes, [

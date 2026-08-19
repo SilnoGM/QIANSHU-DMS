@@ -11,6 +11,7 @@ const RESOURCE_LABELS: Readonly<Record<string, string>> = {
   'currencies': '货币管理',
   'dictionaries': '字典管理',
   'exchange-rates': '当前汇率',
+  'fund-accounts': '资金账户管理',
   'numbering-rules': '编号规则',
   'product-media': '产品媒体',
   'products': '产品管理',

@@ -26,6 +26,22 @@ export const PRODUCT_MANAGEMENT_PERMISSION_CODES = [
 export const PRODUCT_MEDIA_PERMISSION_CODES = ['product-media:read'] as const
 
 /**
+ * 资金账户管理的完整人工权限边界。
+ *
+ * 数据库将全部权限标记为 systemOnly，确保普通角色不能通过角色权限维护接口获得；
+ * 同一 Server 内业务域动账不使用这些管理员权限，而由可信来源白名单约束。
+ */
+export const FUND_ACCOUNT_PERMISSION_CODES = [
+  'fund-accounts:read',
+  'fund-accounts:create',
+  'fund-accounts:update-share-rate',
+  'fund-accounts:manual-adjust',
+  'fund-transactions:reverse',
+  'fund-posting-types:manage',
+  'fund-business-sources:manage',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -71,6 +87,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   'dictionaries:disable',
   ...PRODUCT_MEDIA_PERMISSION_CODES,
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
+  ...FUND_ACCOUNT_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

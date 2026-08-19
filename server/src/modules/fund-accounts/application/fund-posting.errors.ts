@@ -1,0 +1,130 @@
+import { FUND_CALCULATION_ERROR_CODES } from '../domain'
+
+export const FUND_POSTING_ERROR_CODES = {
+  ...FUND_CALCULATION_ERROR_CODES,
+  VALIDATION_FAILED: 'FUND_VALIDATION_FAILED',
+  USER_NOT_FOUND: 'FUND_USER_NOT_FOUND',
+  ACCOUNT_NOT_FOUND: 'FUND_ACCOUNT_NOT_FOUND',
+  ACCOUNT_ALREADY_EXISTS: 'FUND_ACCOUNT_ALREADY_EXISTS',
+  ACCOUNT_UNAVAILABLE: 'FUND_ACCOUNT_UNAVAILABLE',
+  ACCOUNT_STATE_CHANGED: 'FUND_ACCOUNT_STATE_CHANGED',
+  COMPANY_ACCOUNT_UNAVAILABLE: 'FUND_COMPANY_ACCOUNT_UNAVAILABLE',
+  BUSINESS_SOURCE_NOT_FOUND: 'FUND_BUSINESS_SOURCE_NOT_FOUND',
+  BUSINESS_SOURCE_DISABLED: 'FUND_BUSINESS_SOURCE_DISABLED',
+  BUSINESS_SOURCE_CODE_ALREADY_EXISTS:
+    'FUND_BUSINESS_SOURCE_CODE_ALREADY_EXISTS',
+  POSTING_TYPE_NOT_FOUND: 'FUND_POSTING_TYPE_NOT_FOUND',
+  POSTING_TYPE_DISABLED: 'FUND_POSTING_TYPE_DISABLED',
+  POSTING_TYPE_CODE_ALREADY_EXISTS: 'FUND_POSTING_TYPE_CODE_ALREADY_EXISTS',
+  POSTING_TYPE_NOT_ALLOWED: 'FUND_POSTING_TYPE_NOT_ALLOWED',
+  POSTING_RULE_UNAVAILABLE: 'FUND_POSTING_RULE_UNAVAILABLE',
+  POSTING_BATCH_NOT_FOUND: 'FUND_POSTING_BATCH_NOT_FOUND',
+  CONFIG_STATE_CHANGED: 'FUND_CONFIG_STATE_CHANGED',
+  USER_REQUIRED: 'FUND_USER_REQUIRED',
+  METADATA_INVALID: 'FUND_METADATA_INVALID',
+  IDEMPOTENCY_CONFLICT: 'FUND_IDEMPOTENCY_CONFLICT',
+  REVERSAL_STATE_CHANGED: 'FUND_REVERSAL_STATE_CHANGED',
+  CONCURRENT_STATE_CHANGED: 'FUND_CONCURRENT_STATE_CHANGED',
+  INTERNAL_ERROR: 'FUND_INTERNAL_ERROR',
+} as const
+
+export type FundPostingErrorCode =
+  (typeof FUND_POSTING_ERROR_CODES)[keyof typeof FUND_POSTING_ERROR_CODES]
+
+export type FundPostingErrorField =
+  | 'body'
+  | 'context'
+  | 'actorUserId'
+  | 'consumerCode'
+  | 'sourceCode'
+  | 'requestId'
+  | 'correlationId'
+  | 'postingTypeCode'
+  | 'userId'
+  | 'amount'
+  | 'businessId'
+  | 'businessNo'
+  | 'summary'
+  | 'metadata'
+  | 'businessOccurredAt'
+  | 'occurredFrom'
+  | 'occurredTo'
+  | 'reversalStatus'
+  | 'idempotencyKey'
+  | 'accountId'
+  | 'userAccountId'
+  | 'adjustmentMode'
+  | 'reason'
+  | 'originalBatchId'
+  | 'page'
+  | 'pageSize'
+  | 'search'
+  | 'code'
+  | 'name'
+  | 'description'
+  | 'businessCategory'
+  | 'direction'
+  | 'requiresUser'
+  | 'amountSignPolicy'
+  | 'enabled'
+  | 'legs'
+  | 'postingTypeId'
+  | 'draftRuleVersionId'
+  | 'businessSourceId'
+  | 'allowedPostingTypeIds'
+  | 'ownerType'
+  | 'sortBy'
+  | 'sortOrder'
+  | 'shareRate'
+  | 'expectedVersion'
+
+const FUND_POSTING_ERROR_MESSAGES: Readonly<Record<FundPostingErrorCode, string>> = {
+  FUND_AMOUNT_INVALID: '资金金额格式无效',
+  FUND_SHARE_RATE_INVALID: '资金分成比例无效',
+  FUND_POSTING_AMOUNT_INVALID: '资金动账金额无效',
+  FUND_POSTING_RULE_INVALID: '资金动账规则无效',
+  FUND_ADJUSTMENT_MODE_INVALID: '资金调账模式无效',
+  FUND_REVERSAL_TARGET_INVALID: '资金冲账目标无效',
+  FUND_REVERSAL_SNAPSHOT_INVALID: '资金冲账快照无效',
+  FUND_REVERSAL_EXCEEDS_REMAINING: '资金冲账金额超过可冲额度',
+  FUND_VALIDATION_FAILED: '资金请求参数无效',
+  FUND_USER_NOT_FOUND: '用户不存在',
+  FUND_ACCOUNT_NOT_FOUND: '资金账户不存在',
+  FUND_ACCOUNT_ALREADY_EXISTS: '资金账户已存在',
+  FUND_ACCOUNT_UNAVAILABLE: '资金账户当前不可用',
+  FUND_ACCOUNT_STATE_CHANGED: '资金账户状态已变化',
+  FUND_COMPANY_ACCOUNT_UNAVAILABLE: '公司资金账户当前不可用',
+  FUND_BUSINESS_SOURCE_NOT_FOUND: '资金业务来源不存在',
+  FUND_BUSINESS_SOURCE_DISABLED: '资金业务来源已停用',
+  FUND_BUSINESS_SOURCE_CODE_ALREADY_EXISTS: '资金业务来源编码已存在',
+  FUND_POSTING_TYPE_NOT_FOUND: '资金业务类型不存在',
+  FUND_POSTING_TYPE_DISABLED: '资金业务类型已停用',
+  FUND_POSTING_TYPE_CODE_ALREADY_EXISTS: '资金业务类型编码已存在',
+  FUND_POSTING_TYPE_NOT_ALLOWED: '资金业务来源无权使用该类型',
+  FUND_POSTING_RULE_UNAVAILABLE: '资金动账规则当前不可用',
+  FUND_POSTING_BATCH_NOT_FOUND: '资金动账批次不存在',
+  FUND_CONFIG_STATE_CHANGED: '资金业务配置状态已变化',
+  FUND_USER_REQUIRED: '该资金业务必须指定用户',
+  FUND_METADATA_INVALID: '资金业务扩展信息无效',
+  FUND_IDEMPOTENCY_CONFLICT: '资金请求幂等键与已有业务不一致',
+  FUND_REVERSAL_STATE_CHANGED: '资金冲账状态已变化',
+  FUND_CONCURRENT_STATE_CHANGED: '资金状态发生并发变化，请重试',
+  FUND_INTERNAL_ERROR: '资金服务内部错误',
+}
+
+/**
+ * 应用边界异常只保留稳定 code、白名单 field 与 retryable，不接受底层 message、
+ * SQL 或原始输入，避免幂等键和业务 payload 经异常链泄漏。
+ */
+export class FundPostingError extends Error {
+  readonly retryable: boolean
+
+  constructor(
+    readonly code: FundPostingErrorCode,
+    readonly field?: FundPostingErrorField,
+  ) {
+    super(FUND_POSTING_ERROR_MESSAGES[code])
+    this.name = 'FundPostingError'
+    this.retryable = code === FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED
+  }
+}

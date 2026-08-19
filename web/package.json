@@ -36,6 +36,7 @@
     "test:browser:dictionaries": "node --test --test-concurrency=1 apps/qsmds-arco/test/browser/dictionaries.browser.test.mjs",
     "test:browser:numbering": "node --test --test-concurrency=1 apps/qsmds-arco/test/browser/numbering.browser.test.mjs",
     "test:browser:regions": "node --test --test-concurrency=1 apps/qsmds-arco/test/browser/regions.browser.test.mjs",
+    "test:browser:fund-accounts": "node --test --test-concurrency=1 apps/qsmds-arco/test/browser/fund-accounts.browser.test.mjs",
     "check": "run-s test:scripts typecheck lint",
     "check:examples": "pnpm --filter @fantastic-admin/core --filter @fantastic-admin/core-arco-design-vue --filter @fantastic-admin/example -r run lint",
     "build:examples": "pnpm --filter @fantastic-admin/core --filter @fantastic-admin/core-arco-design-vue --filter @fantastic-admin/example -r run build",
