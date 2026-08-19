@@ -150,19 +150,15 @@ test('资金展示固定两位精度并区分正数、负数和零值状态', ()
   assert.equal(fundCatalog[0]?.minorUnit, 2)
   assert.equal(catalog[0]?.minorUnit, 2)
   assert.deepEqual(getFundBalanceState('-0.01'), {
-    label: '负余额',
     tone: 'negative',
   })
   assert.deepEqual(getFundBalanceState('12.34'), {
-    label: '余额正常',
     tone: 'positive',
   })
   assert.deepEqual(getFundBalanceState('0.00'), {
-    label: '余额正常',
     tone: 'neutral',
   })
   assert.deepEqual(getFundBalanceState('-0.00'), {
-    label: '余额正常',
     tone: 'neutral',
   })
   assert.equal(formatFundShareRate('30.00'), '30.00%')

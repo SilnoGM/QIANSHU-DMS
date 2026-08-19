@@ -22,7 +22,6 @@ export interface FundAccountListQueryInput {
 }
 
 export interface FundBalanceState {
-  readonly label: '余额正常' | '负余额'
   readonly tone: 'negative' | 'neutral' | 'positive'
 }
 
@@ -118,7 +117,6 @@ export function getFundBalanceState(balance: string): FundBalanceState {
       ? 'positive'
       : 'neutral'
   return {
-    label: tone === 'negative' ? '负余额' : '余额正常',
     tone,
   }
 }

@@ -189,7 +189,7 @@ const adjustmentUnknownResult = computed(() => (
   adjustmentSubmission.value.phase === 'unknown'
 ))
 
-/** 正负余额使用语义色，零值不覆盖 AmountDisplay 的默认文字颜色。 */
+/** 余额的正值与负值使用语义色，零值不覆盖 AmountDisplay 的默认文字颜色。 */
 function getFundBalanceTextClass(balance: string): string | undefined {
   const tone = getFundBalanceState(balance).tone
   if (tone === 'positive') {
@@ -882,7 +882,7 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-balance="{ row }">
-          <div class="flex flex-wrap gap-2 items-center justify-end">
+          <div class="flex items-center justify-end">
             <AmountDisplay
               :value="row.original.balance"
               :currency="row.original.currency"
@@ -890,13 +890,6 @@ onBeforeUnmount(() => {
               class="!font-semibold"
               :class="getFundBalanceTextClass(row.original.balance)"
             />
-            <FaTag
-              v-if="getFundBalanceState(row.original.balance).tone === 'negative'"
-              variant="outline"
-              class="text-destructive qs-type-status-tag border-destructive/30 bg-destructive/8"
-            >
-              负余额
-            </FaTag>
           </div>
         </template>
 
@@ -975,7 +968,7 @@ onBeforeUnmount(() => {
               <div class="qs-type-compact-label mb-1">
                 实时余额
               </div>
-              <div class="flex flex-wrap gap-2 items-center">
+              <div class="flex items-center">
                 <AmountDisplay
                   :value="row.balance"
                   :currency="row.currency"
@@ -983,13 +976,6 @@ onBeforeUnmount(() => {
                   class="!font-semibold"
                   :class="getFundBalanceTextClass(row.balance)"
                 />
-                <FaTag
-                  v-if="getFundBalanceState(row.balance).tone === 'negative'"
-                  variant="outline"
-                  class="text-destructive qs-type-status-tag border-destructive/30 bg-destructive/8"
-                >
-                  负余额
-                </FaTag>
               </div>
             </div>
 
