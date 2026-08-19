@@ -92,9 +92,9 @@ describe('fund reversal persistence', () => {
       businessSourceCode: 'ORDER_SYSTEM',
       ruleVersionId: RULE_ID,
       userId: USER_ID,
-      businessAmount: '-100.0000',
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
+      businessAmount: '-100.00',
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
       adjustmentMode: null,
     })
     expect(sqlText(transaction)).toContain('FOR UPDATE OF batch')
@@ -139,8 +139,8 @@ describe('fund reversal persistence', () => {
           accountTarget: 'USER',
           direction: 'DEBIT',
           amountStrategy: 'USER_SHARE',
-          amount: '30.0000',
-          reversedAmount: '12.0000',
+          amount: '30.00',
+          reversedAmount: '12.00',
         },
         {
           originalLineNo: 2,
@@ -148,12 +148,12 @@ describe('fund reversal persistence', () => {
           accountTarget: 'COMPANY',
           direction: 'DEBIT',
           amountStrategy: 'COMPANY_REMAINDER',
-          amount: '70.0000',
-          reversedAmount: '28.0000',
+          amount: '70.00',
+          reversedAmount: '28.00',
         },
       ],
-      cumulativeReversedBusinessAmount: '40.0000',
-      cumulativeReversedEntryAmount: '40.0000',
+      cumulativeReversedBusinessAmount: '40.00',
+      cumulativeReversedEntryAmount: '40.00',
     })
     expect(sqlText(transaction)).toContain('reversal_of_batch_id')
     expect(sqlText(transaction)).toContain('SUM')
@@ -168,7 +168,7 @@ describe('fund reversal persistence', () => {
       id: REVERSAL_BATCH_ID,
       batchNo: 'FUND_2222222222224222A222222222222222',
       originalBatchId: ORIGINAL_BATCH_ID,
-      businessAmount: '40.0000',
+      businessAmount: '40.00',
       consumerCode: 'ADMIN_REVERSAL',
       idempotencyKeyHash: Buffer.alloc(32, 0x11),
       requestFingerprintHash: Buffer.alloc(32, 0x22),
@@ -202,7 +202,7 @@ describe('fund reversal persistence', () => {
       id: REVERSAL_BATCH_ID,
       batchNo: 'FUND_2222222222224222A222222222222222',
       originalBatchId: ORIGINAL_BATCH_ID,
-      businessAmount: '10.0000',
+      businessAmount: '10.00',
       consumerCode: 'ADMIN_REVERSAL',
       idempotencyKeyHash: Buffer.alloc(31),
       requestFingerprintHash: Buffer.alloc(32),

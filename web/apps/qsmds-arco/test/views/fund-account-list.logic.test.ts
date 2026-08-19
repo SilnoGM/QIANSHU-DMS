@@ -25,8 +25,8 @@ function accountFixture(
   userId?: string,
 ): FundAccountDto {
   return {
-    balance: ownerType === 'COMPANY' ? '100.0000' : '-20.1250',
-    companyShareRate: ownerType === 'COMPANY' ? null : '70.0000',
+    balance: ownerType === 'COMPANY' ? '100.00' : '-20.12',
+    companyShareRate: ownerType === 'COMPANY' ? null : '70.00',
     createdAt: '2026-08-18T01:00:00.000Z',
     currency: 'CNY',
     id,
@@ -43,7 +43,7 @@ function accountFixture(
           status: 'ACTIVE',
           username: `member-${userId}`,
         },
-    userShareRate: ownerType === 'COMPANY' ? null : '30.0000',
+    userShareRate: ownerType === 'COMPANY' ? null : '30.00',
     version: 3,
   }
 }
@@ -95,7 +95,7 @@ test('列表查询规范化搜索、主体筛选、分页和单列排序', () =>
   }), { page: 1, pageSize: 20 })
 })
 
-test('账户分页 adapter 保留四位金额与版本但切断容器引用', () => {
+test('账户分页 adapter 保留两位金额与版本但切断容器引用', () => {
   const page: FundAccountPageDto = {
     items: [accountFixture('account-user', 'USER', 'user-1')],
     page: 1,
@@ -109,7 +109,7 @@ test('账户分页 adapter 保留四位金额与版本但切断容器引用', ()
   assert.notEqual(adapted.items, page.items)
   assert.notEqual(adapted.items[0], page.items[0])
   assert.notEqual(adapted.items[0]?.user, page.items[0]?.user)
-  assert.equal(adapted.items[0]?.balance, '-20.1250')
+  assert.equal(adapted.items[0]?.balance, '-20.12')
   assert.equal(adapted.items[0]?.version, 3)
 })
 
@@ -137,7 +137,7 @@ test('开户候选只排除已有用户账户并保留用户状态供管理员�
   assert.equal(findCompanyFundAccount(accounts)?.id, 'account-company')
 })
 
-test('资金展示固定四位精度并区分正数、负数和零值状态', () => {
+test('资金展示固定两位精度并区分正数、负数和零值状态', () => {
   const catalog: CurrencyDescriptor[] = [{
     code: 'CNY',
     enabled: true,
@@ -147,24 +147,24 @@ test('资金展示固定四位精度并区分正数、负数和零值状态', ()
   }]
   const fundCatalog = withFundAccountPrecision(catalog)
 
-  assert.equal(fundCatalog[0]?.minorUnit, 4)
+  assert.equal(fundCatalog[0]?.minorUnit, 2)
   assert.equal(catalog[0]?.minorUnit, 2)
-  assert.deepEqual(getFundBalanceState('-0.0001'), {
+  assert.deepEqual(getFundBalanceState('-0.01'), {
     label: '负余额',
     tone: 'negative',
   })
-  assert.deepEqual(getFundBalanceState('12.3400'), {
+  assert.deepEqual(getFundBalanceState('12.34'), {
     label: '余额正常',
     tone: 'positive',
   })
-  assert.deepEqual(getFundBalanceState('0.0000'), {
+  assert.deepEqual(getFundBalanceState('0.00'), {
     label: '余额正常',
     tone: 'neutral',
   })
-  assert.deepEqual(getFundBalanceState('-0.0000'), {
+  assert.deepEqual(getFundBalanceState('-0.00'), {
     label: '余额正常',
     tone: 'neutral',
   })
-  assert.equal(formatFundShareRate('30.0000'), '30%')
+  assert.equal(formatFundShareRate('30.00'), '30.00%')
   assert.equal(formatFundShareRate(null), '—')
 })

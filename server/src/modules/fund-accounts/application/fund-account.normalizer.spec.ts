@@ -44,7 +44,7 @@ describe('fund account normalizer', () => {
       userShareRate: '30.5',
     })).toEqual({
       userId: TARGET_USER_ID,
-      userShareRate: '30.5000',
+      userShareRate: '30.50',
     })
 
     expect(normalizeFundAccountShareRateUpdate({
@@ -54,7 +54,7 @@ describe('fund account normalizer', () => {
       reason: '  调整   合作比例  ',
     })).toEqual({
       accountId: ACCOUNT_ID,
-      userShareRate: '45.0000',
+      userShareRate: '45.00',
       expectedVersion: 2,
       reason: '调整 合作比例',
     })

@@ -43,7 +43,7 @@ function batchDetailFixture(): FundPostingBatchDetailDto {
     actorUserId: 'admin-id',
     adjustmentMode: 'USER_ONLY',
     batchNo: 'FB202608180001',
-    businessAmount: '-100.0000',
+    businessAmount: '-100.00',
     businessCategory: 'REVENUE',
     businessId: 'order-id',
     businessNo: '0000011',
@@ -51,7 +51,7 @@ function batchDetailFixture(): FundPostingBatchDetailDto {
     businessSourceCode: 'ORDER_DOMAIN',
     businessSourceId: 'source-id',
     businessSourceName: '订单域',
-    companyShareRateSnapshot: '70.0000',
+    companyShareRateSnapshot: '70.00',
     correlationId: null,
     currency: 'CNY',
     entries: [],
@@ -64,12 +64,12 @@ function batchDetailFixture(): FundPostingBatchDetailDto {
     postingTypeName: '订单结算',
     requestId: 'request-id',
     reversalChain: {
-      originalAmount: '100.0000',
+      originalAmount: '100.00',
       originalBatchId: 'batch-id',
       originalBatchNo: 'FB202608180001',
-      remainingAmount: '100.0000',
+      remainingAmount: '100.00',
       reversals: [],
-      reversedAmount: '0.0000',
+      reversedAmount: '0.00',
       status: 'NONE',
     },
     reversalOfBatchId: null,
@@ -83,21 +83,21 @@ function batchDetailFixture(): FundPostingBatchDetailDto {
       status: 'ACTIVE',
       username: 'tester',
     },
-    userShareRateSnapshot: '30.0000',
+    userShareRateSnapshot: '30.00',
   }
 }
 
 test('开户、比例、两种调账和冲账请求只输出 generated DTO 可接受的规范字符串', () => {
   assert.deepEqual(
     buildFundAccountCreateRequest(' user-id ', '30'),
-    { userId: 'user-id', userShareRate: '30.0000' },
+    { userId: 'user-id', userShareRate: '30.00' },
   )
   assert.deepEqual(
     buildFundShareRateRequest('45.5', 7, '  调整未来分成  '),
     {
       expectedVersion: 7,
       reason: '调整未来分成',
-      userShareRate: '45.5000',
+      userShareRate: '45.50',
     },
   )
   assert.deepEqual(
@@ -109,7 +109,7 @@ test('开户、比例、两种调账和冲账请求只输出 generated DTO 可�
     ),
     {
       adjustmentMode: 'USER_ONLY',
-      amount: '-100.0000',
+      amount: '-100.00',
       metadata: { ticket: 'A-1' },
       reason: '用户余额调减',
     },
@@ -122,16 +122,16 @@ test('开户、比例、两种调账和冲账请求只输出 generated DTO 可�
     ),
     {
       adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
-      amount: '100.1000',
+      amount: '100.10',
       reason: '共同调增',
     },
   )
   assert.deepEqual(
-    buildFundReversalRequest('40', '100.0000', ' 部分冲账 '),
-    { amount: '40.0000', reason: '部分冲账' },
+    buildFundReversalRequest('40', '100.00', ' 部分冲账 '),
+    { amount: '40.00', reason: '部分冲账' },
   )
 
-  for (const invalid of ['0', '-0', '01', '+1', '1e2', '1.00000']) {
+  for (const invalid of ['0', '-0', '01', '+1', '1e2', '1.001']) {
     assert.throws(
       () => buildFundManualAdjustmentRequest(
         invalid,
@@ -141,14 +141,14 @@ test('开户、比例、两种调账和冲账请求只输出 generated DTO 可�
     )
   }
   assert.throws(() => buildFundAccountCreateRequest('', '30'))
-  assert.throws(() => buildFundAccountCreateRequest('user-id', '100.0001'))
+  assert.throws(() => buildFundAccountCreateRequest('user-id', '30.001'))
   assert.throws(() => buildFundShareRateRequest('30', 0, '原因'))
   assert.throws(() => buildFundShareRateRequest('30', -1, '原因'))
   assert.throws(() => buildFundReversalRequest('-1', '100', '原因'))
-  assert.throws(() => buildFundReversalRequest('100.0001', '100', '原因'))
+  assert.throws(() => buildFundReversalRequest('100.001', '100', '原因'))
 })
 
-test('调账预览复用 Server 四位 HALF_UP 和公司尾差语义且始终返回字符串', () => {
+test('调账预览复用 Server 两位 HALF_UP 和公司尾差语义且始终返回字符串', () => {
   assert.deepEqual(calculateFundAdjustmentPreview({
     adjustmentMode: 'USER_ONLY',
     amount: '-100',
@@ -156,13 +156,13 @@ test('调账预览复用 Server 四位 HALF_UP 和公司尾差语义且始终返
     userBalance: '20',
     userShareRate: '30',
   }), {
-    businessAmount: '-100.0000',
-    companyAmount: '0.0000',
-    companyBalanceAfter: '50.0000',
-    companyShareRate: '70.0000',
-    userAmount: '-100.0000',
-    userBalanceAfter: '-80.0000',
-    userShareRate: '30.0000',
+    businessAmount: '-100.00',
+    companyAmount: '0.00',
+    companyBalanceAfter: '50.00',
+    companyShareRate: '70.00',
+    userAmount: '-100.00',
+    userBalanceAfter: '-80.00',
+    userShareRate: '30.00',
   })
   assert.deepEqual(calculateFundAdjustmentPreview({
     adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
@@ -171,39 +171,39 @@ test('调账预览复用 Server 四位 HALF_UP 和公司尾差语义且始终返
     userBalance: '20',
     userShareRate: '30',
   }), {
-    businessAmount: '-100.0000',
-    companyAmount: '-70.0000',
-    companyBalanceAfter: '-20.0000',
-    companyShareRate: '70.0000',
-    userAmount: '-30.0000',
-    userBalanceAfter: '-10.0000',
-    userShareRate: '30.0000',
+    businessAmount: '-100.00',
+    companyAmount: '-70.00',
+    companyBalanceAfter: '-20.00',
+    companyShareRate: '70.00',
+    userAmount: '-30.00',
+    userBalanceAfter: '-10.00',
+    userShareRate: '30.00',
   })
   assert.deepEqual(calculateFundAdjustmentPreview({
     adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
-    amount: '0.0001',
+    amount: '0.01',
     companyBalance: '0',
     userBalance: '0',
     userShareRate: '50',
   }), {
-    businessAmount: '0.0001',
-    companyAmount: '0.0000',
-    companyBalanceAfter: '0.0000',
-    companyShareRate: '50.0000',
-    userAmount: '0.0001',
-    userBalanceAfter: '0.0001',
-    userShareRate: '50.0000',
+    businessAmount: '0.01',
+    companyAmount: '0.00',
+    companyBalanceAfter: '0.00',
+    companyShareRate: '50.00',
+    userAmount: '0.01',
+    userBalanceAfter: '0.01',
+    userShareRate: '50.00',
   })
 
   const large = calculateFundAdjustmentPreview({
     adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
-    amount: '99999999999999999999999999.9999',
+    amount: '99999999999999999999999999.99',
     companyBalance: '-1',
     userBalance: '1',
-    userShareRate: '33.3333',
+    userShareRate: '33.33',
   })
-  assert.equal(large.userAmount, '33333300000000000000000000.0000')
-  assert.equal(large.companyAmount, '66666699999999999999999999.9999')
+  assert.equal(large.userAmount, '33330000000000000000000000.00')
+  assert.equal(large.companyAmount, '66669999999999999999999999.99')
   assert.equal(
     Object.values(large).every(value => typeof value === 'string'),
     true,
@@ -391,7 +391,7 @@ test('幂等键仅在首次有效提交生成，network/5xx 冻结而 4xx 清除
   ))
   assert.equal(keySequence, 0)
 
-  const payload = { amount: '-100.0000', metadata: { ticket: 'A-1' } }
+  const payload = { amount: '-100.00', metadata: { ticket: 'A-1' } }
   context = beginFundIdempotentSubmission(
     context,
     () => payload,
@@ -435,7 +435,7 @@ test('幂等键仅在首次有效提交生成，network/5xx 冻结而 4xx 清除
 
   context = beginFundIdempotentSubmission(
     context,
-    () => ({ amount: '40.0000', metadata: { ticket: 'R-1' } }),
+    () => ({ amount: '40.00', metadata: { ticket: 'R-1' } }),
     createKey,
   )
   assert.equal(context.submission.idempotencyKey, 'fund-key-2')
@@ -445,7 +445,7 @@ test('幂等键仅在首次有效提交生成，network/5xx 冻结而 4xx 清除
 
   context = beginFundIdempotentSubmission(
     context,
-    () => ({ amount: '10.0000', metadata: { ticket: 'R-2' } }),
+    () => ({ amount: '10.00', metadata: { ticket: 'R-2' } }),
     createKey,
   )
   context = failFundIdempotentSubmission(
@@ -470,7 +470,7 @@ test('身份或权限变化可以从在途状态直接销毁幂等 key/payload',
   let context = createFundIdempotentSubmissionState<{ amount: string }>()
   context = beginFundIdempotentSubmission(
     context,
-    () => ({ amount: '-10.0000' }),
+    () => ({ amount: '-10.00' }),
     () => 'fund-key',
   )
   assert.equal(context.phase, 'submitting')

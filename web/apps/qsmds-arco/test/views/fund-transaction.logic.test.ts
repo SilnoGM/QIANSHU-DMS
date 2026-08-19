@@ -39,10 +39,10 @@ function entryFixture(
     },
     accountSequence: '1',
     accountTarget: 'USER',
-    amount: '30.0000',
+    amount: '30.00',
     amountStrategy: 'USER_SHARE',
-    balanceAfter: '30.0000',
-    balanceBefore: '0.0000',
+    balanceAfter: '30.00',
+    balanceBefore: '0.00',
     direction: 'CREDIT',
     entryId: 'entry-user',
     lineNo: 1,
@@ -59,7 +59,7 @@ function batchFixture(
     // OpenAPI 当前把 nullable 字段生成成必填联合；普通业务批次运行时返回 null。
     adjustmentMode: null as unknown as 'USER_ONLY',
     batchNo: 'FB202608180001',
-    businessAmount: '100.0000',
+    businessAmount: '100.00',
     businessCategory: 'REVENUE',
     businessId: 'order-id',
     businessNo: '0000011',
@@ -67,7 +67,7 @@ function batchFixture(
     businessSourceCode: 'ORDER_DOMAIN',
     businessSourceId: SOURCE_ID,
     businessSourceName: '订单域',
-    companyShareRateSnapshot: '70.0000',
+    companyShareRateSnapshot: '70.00',
     correlationId: null,
     currency: 'CNY',
     entries: [
@@ -80,10 +80,10 @@ function batchFixture(
         },
         accountSequence: '5',
         accountTarget: 'COMPANY',
-        amount: '70.0000',
+        amount: '70.00',
         amountStrategy: 'COMPANY_REMAINDER',
-        balanceAfter: '1070.0000',
-        balanceBefore: '1000.0000',
+        balanceAfter: '1070.00',
+        balanceBefore: '1000.00',
         entryId: 'entry-company',
         lineNo: 2,
       }),
@@ -97,19 +97,19 @@ function batchFixture(
     postingTypeName: '订单结算',
     requestId: 'request-id',
     reversalChain: {
-      originalAmount: '100.0000',
+      originalAmount: '100.00',
       originalBatchId: 'batch-id',
       originalBatchNo: 'FB202608180001',
-      remainingAmount: '80.0000',
+      remainingAmount: '80.00',
       reversals: [{
         actorUserId: 'admin-id',
-        amount: '20.0000',
+        amount: '20.00',
         batchId: 'reversal-1',
         batchNo: 'FR202608180001',
         postedAt: '2026-08-18T02:00:00.000Z',
         reason: '第一次部分冲账',
       }],
-      reversedAmount: '20.0000',
+      reversedAmount: '20.00',
       status: 'PARTIAL',
     },
     reversalOfBatchId: null,
@@ -123,7 +123,7 @@ function batchFixture(
       status: 'ACTIVE',
       username: 'tester',
     },
-    userShareRateSnapshot: '30.0000',
+    userShareRateSnapshot: '30.00',
     ...overrides,
   }
 }
@@ -191,72 +191,72 @@ test('流水查询只输出服务端支持的稳定分页、筛选和 ISO 时间
 
 test('部分冲账预览使用累计目标差额并保持用户比例与公司尾差守恒', () => {
   assert.deepEqual(calculateFundReversalPreview(batchFixture(), '40'), {
-    cumulativeReversedAmount: '60.0000',
+    cumulativeReversedAmount: '60.00',
     entries: [
       {
         accountTarget: 'USER',
-        amount: '12.0000',
+        amount: '12.00',
         direction: 'DEBIT',
         originalLineNo: 1,
       },
       {
         accountTarget: 'COMPANY',
-        amount: '28.0000',
+        amount: '28.00',
         direction: 'DEBIT',
         originalLineNo: 2,
       },
     ],
-    reversalAmount: '40.0000',
-    reversalBusinessAmount: '-40.0000',
+    reversalAmount: '40.00',
+    reversalBusinessAmount: '-40.00',
     reversalStatus: 'PARTIAL',
   })
 })
 
 test('负数订单亏损冲账生成入账方向，最后一次冲账与原分录精确闭合', () => {
   const loss = batchFixture({
-    businessAmount: '-100.0000',
+    businessAmount: '-100.00',
     entries: batchFixture().entries.map(entry => ({
       ...entry,
-      balanceAfter: entry.accountTarget === 'USER' ? '-30.0000' : '930.0000',
+      balanceAfter: entry.accountTarget === 'USER' ? '-30.00' : '930.00',
       direction: 'DEBIT' as const,
     })),
   })
   const lossPreview = calculateFundReversalPreview(loss, '40')
-  assert.equal(lossPreview.reversalBusinessAmount, '40.0000')
+  assert.equal(lossPreview.reversalBusinessAmount, '40.00')
   assert.deepEqual(
     lossPreview.entries.map(entry => entry.direction),
     ['CREDIT', 'CREDIT'],
   )
 
   const rounding = batchFixture({
-    businessAmount: '0.0003',
+    businessAmount: '0.03',
     entries: [
-      entryFixture({ amount: '0.0001' }),
+      entryFixture({ amount: '0.01' }),
       entryFixture({
         account: { id: COMPANY_ACCOUNT_ID, ownerType: 'COMPANY', user: null },
         accountTarget: 'COMPANY',
-        amount: '0.0002',
+        amount: '0.02',
         amountStrategy: 'COMPANY_REMAINDER',
         entryId: 'entry-company',
         lineNo: 2,
       }),
     ],
     reversalChain: {
-      originalAmount: '0.0003',
+      originalAmount: '0.03',
       originalBatchId: 'batch-id',
       originalBatchNo: 'FB202608180001',
-      remainingAmount: '0.0002',
+      remainingAmount: '0.02',
       reversals: [],
-      reversedAmount: '0.0001',
+      reversedAmount: '0.01',
       status: 'PARTIAL',
     },
-    userShareRateSnapshot: '50.0000',
-    companyShareRateSnapshot: '50.0000',
+    userShareRateSnapshot: '50.00',
+    companyShareRateSnapshot: '50.00',
   })
-  assert.deepEqual(calculateFundReversalPreview(rounding, '0.0002').entries, [
+  assert.deepEqual(calculateFundReversalPreview(rounding, '0.02').entries, [
     {
       accountTarget: 'COMPANY',
-      amount: '0.0002',
+      amount: '0.02',
       direction: 'DEBIT',
       originalLineNo: 2,
     },
@@ -274,7 +274,7 @@ test('冲账资格同时受批次类型、剩余额度和独立权限约束', ()
   }, true), false)
   assert.equal(canReverseFundBatch({
     ...detail,
-    reversalChain: { ...detail.reversalChain, remainingAmount: '0.0000', status: 'FULL' },
+    reversalChain: { ...detail.reversalChain, remainingAmount: '0.00', status: 'FULL' },
   }, true), false)
 })
 

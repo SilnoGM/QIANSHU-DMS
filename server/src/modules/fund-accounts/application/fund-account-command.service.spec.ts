@@ -94,10 +94,10 @@ describe('FundAccountCommandService createUserAccount', () => {
 
     expect(result).toMatchObject({
       id: ACCOUNT_ID,
-      balance: '0.0000',
+      balance: '0.00',
       currency: 'CNY',
-      userShareRate: '30.0000',
-      companyShareRate: '70.0000',
+      userShareRate: '30.00',
+      companyShareRate: '70.00',
       version: 1,
     })
     const createArguments = transaction.fundAccount.create.mock.calls[0]?.[0] as {
@@ -119,8 +119,8 @@ describe('FundAccountCommandService createUserAccount', () => {
       ownerType: 'USER',
       userId: TARGET_USER_ID,
       currency: 'CNY',
-      balance: new Prisma.Decimal('0.0000'),
-      userShareRate: new Prisma.Decimal('30.0000'),
+      balance: new Prisma.Decimal('0.00'),
+      userShareRate: new Prisma.Decimal('30.00'),
       nextSequence: 1n,
       version: 1,
     })
@@ -138,7 +138,7 @@ describe('FundAccountCommandService createUserAccount', () => {
         correlationId: 'correlation-1',
         metadata: {
           userId: TARGET_USER_ID,
-          userShareRate: '30.0000',
+          userShareRate: '30.00',
         },
       }),
     )
@@ -256,8 +256,8 @@ describe('FundAccountCommandService updateUserShareRate', () => {
       changed: true,
       account: {
         id: ACCOUNT_ID,
-        userShareRate: '45.0000',
-        companyShareRate: '55.0000',
+        userShareRate: '45.00',
+        companyShareRate: '55.00',
         version: 2,
         shareRateUpdatedAt: '2026-08-18T02:00:00.000Z',
       },
@@ -267,10 +267,10 @@ describe('FundAccountCommandService updateUserShareRate', () => {
       expect.objectContaining({
         eventType: 'FUND_ACCOUNT_SHARE_RATE_UPDATED',
         metadata: {
-          previousUserShareRate: '30.0000',
+          previousUserShareRate: '30.00',
           reason: '调整 合作比例',
           userId: TARGET_USER_ID,
-          userShareRate: '45.0000',
+          userShareRate: '45.00',
         },
       }),
     )
@@ -292,7 +292,7 @@ describe('FundAccountCommandService updateUserShareRate', () => {
 
     const result = await service.updateUserShareRate(CONTEXT, {
       accountId: ACCOUNT_ID,
-      userShareRate: '30.0000',
+      userShareRate: '30.00',
       expectedVersion: 1,
       reason: '无需变化',
     })

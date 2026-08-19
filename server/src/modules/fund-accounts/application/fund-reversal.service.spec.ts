@@ -48,19 +48,19 @@ const mockedLockOriginal = jest.mocked(lockFundOriginalBatchForReversal)
 const mockedReadEntries = jest.mocked(readFundOriginalEntriesForReversal)
 const mockedInsertReversal = jest.mocked(insertFundReversalBatch)
 
-function userAccount(balance = '10.0000') {
+function userAccount(balance = '10.00') {
   return {
     id: USER_ACCOUNT_ID,
     ownerType: 'USER' as const,
     userId: USER_ID,
     balance,
-    userShareRate: '30.0000',
+    userShareRate: '30.00',
     nextSequence: 7n,
     version: 2,
   }
 }
 
-function companyAccount(balance = '100.0000') {
+function companyAccount(balance = '100.00') {
   return {
     id: COMPANY_ACCOUNT_ID,
     ownerType: 'COMPANY' as const,
@@ -89,16 +89,16 @@ function originalBatch(options?: {
     businessSourceCode: 'ORDER_SYSTEM',
     ruleVersionId: RULE_ID,
     userId: USER_ID,
-    businessAmount: options?.businessAmount ?? '100.0000',
-    userShareRateSnapshot: '30.0000',
-    companyShareRateSnapshot: '70.0000',
+    businessAmount: options?.businessAmount ?? '100.00',
+    userShareRateSnapshot: '30.00',
+    companyShareRateSnapshot: '70.00',
     adjustmentMode: options?.adjustmentMode ?? null,
   }
 }
 
 function splitEntries(
   direction: 'CREDIT' | 'DEBIT',
-  reversed: readonly [string, string] = ['0.0000', '0.0000'],
+  reversed: readonly [string, string] = ['0.00', '0.00'],
 ) {
   return {
     entries: [
@@ -108,7 +108,7 @@ function splitEntries(
         accountTarget: 'USER' as const,
         direction,
         amountStrategy: 'USER_SHARE' as const,
-        amount: '30.0000',
+        amount: '30.00',
         reversedAmount: reversed[0],
       },
       {
@@ -117,18 +117,18 @@ function splitEntries(
         accountTarget: 'COMPANY' as const,
         direction,
         amountStrategy: 'COMPANY_REMAINDER' as const,
-        amount: '70.0000',
+        amount: '70.00',
         reversedAmount: reversed[1],
       },
     ],
-    cumulativeReversedBusinessAmount: '0.0000',
-    cumulativeReversedEntryAmount: '0.0000',
+    cumulativeReversedBusinessAmount: '0.00',
+    cumulativeReversedEntryAmount: '0.00',
   }
 }
 
 function fullUserEntry(
   direction: 'CREDIT' | 'DEBIT',
-  reversedAmount = '0.0000',
+  reversedAmount = '0.00',
 ) {
   return {
     entries: [{
@@ -137,7 +137,7 @@ function fullUserEntry(
       accountTarget: 'USER' as const,
       direction,
       amountStrategy: 'FULL_AMOUNT' as const,
-      amount: '100.0000',
+      amount: '100.00',
       reversedAmount,
     }],
     cumulativeReversedBusinessAmount: reversedAmount,
@@ -206,17 +206,17 @@ function replayRecord(requestFingerprintHash: Buffer) {
     batchId: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
     postingTypeCode: 'ORDER_SETTLEMENT',
     businessCategory: 'REVENUE' as const,
-    businessAmount: '-40.0000',
-    userShareRateSnapshot: '30.0000',
-    companyShareRateSnapshot: '70.0000',
+    businessAmount: '-40.00',
+    userShareRateSnapshot: '30.00',
+    companyShareRateSnapshot: '70.00',
     entries: [{
       entryId: 'bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb',
       accountId: USER_ACCOUNT_ID,
       accountTarget: 'USER' as const,
       direction: 'DEBIT' as const,
-      amount: '12.0000',
-      balanceBefore: '10.0000',
-      balanceAfter: '-2.0000',
+      amount: '12.00',
+      balanceBefore: '10.00',
+      balanceAfter: '-2.00',
       accountSequence: '7',
     }],
     postedAt: AS_OF,
@@ -240,7 +240,7 @@ describe('FundPostingApplicationService reversal scenarios', () => {
     ['positive revenue', originalBatch(), splitEntries('CREDIT'), 'DEBIT', 2],
     [
       'negative revenue',
-      originalBatch({ businessAmount: '-100.0000' }),
+      originalBatch({ businessAmount: '-100.00' }),
       splitEntries('DEBIT'),
       'CREDIT',
       2,
@@ -281,7 +281,7 @@ describe('FundPostingApplicationService reversal scenarios', () => {
       'shared negative adjustment',
       originalBatch({
         kind: 'MANUAL_ADJUSTMENT',
-        businessAmount: '-100.0000',
+        businessAmount: '-100.00',
         category: 'ADJUSTMENT',
         postingTypeCode: 'ADMIN_MANUAL_ADJUSTMENT',
         adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
@@ -312,10 +312,10 @@ describe('FundPostingApplicationService reversal scenarios', () => {
       postingTypeCode: batch.postingTypeCode,
       businessCategory: batch.businessCategory,
       businessAmount: batch.businessAmount.startsWith('-')
-        ? '40.0000'
-        : '-40.0000',
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
+        ? '40.00'
+        : '-40.00',
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
       postedAt: AS_OF.toISOString(),
       idempotentReplay: false,
     })
@@ -326,8 +326,8 @@ describe('FundPostingApplicationService reversal scenarios', () => {
     if (_name === 'positive revenue') {
       expect(result.entries.find(entry => entry.accountTarget === 'USER'))
         .toMatchObject({
-          balanceBefore: '10.0000',
-          balanceAfter: '-2.0000',
+          balanceBefore: '10.00',
+          balanceAfter: '-2.00',
         })
     }
     expect(mockedInsertReversal).toHaveBeenCalledWith(
@@ -351,34 +351,34 @@ describe('FundPostingApplicationService reversal scenarios', () => {
       targetType: 'FundPostingBatch',
       metadata: {
         originalBatchId: ORIGINAL_BATCH_ID,
-        reversalAmount: '40.0000',
+        reversalAmount: '40.00',
         reversalState: 'PARTIAL',
       },
     })
   })
 
   it('uses cumulative targets and closes the final reversal exactly', async () => {
-    const entries = splitEntries('CREDIT', ['19.9980', '46.6620'])
-    entries.cumulativeReversedBusinessAmount = '66.6600'
-    entries.cumulativeReversedEntryAmount = '66.6600'
+    const entries = splitEntries('CREDIT', ['20.00', '46.66'])
+    entries.cumulativeReversedBusinessAmount = '66.66'
+    entries.cumulativeReversedEntryAmount = '66.66'
     configureSuccessfulReversal({ entries })
     const { audit, service } = fixture()
 
     const result = await service.reversePostingBatch(CONTEXT, input('33.34'))
 
     expect(result.entries.map(entry => entry.amount)).toEqual([
-      '10.0020',
-      '23.3380',
+      '10.00',
+      '23.34',
     ])
     expect(mockedInsertReversal).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ businessAmount: '-33.3400' }),
+      expect.objectContaining({ businessAmount: '-33.34' }),
     )
     const auditInput = audit.record.mock.calls[0]?.[1] as
       | RecordAuditEventInput
       | undefined
     expect(auditInput?.metadata).toMatchObject({
-      reversalAmount: '33.3400',
+      reversalAmount: '33.34',
       reversalState: 'FULL',
     })
   })
@@ -488,9 +488,9 @@ describe('FundPostingApplicationService reversal idempotency and failures', () =
   })
 
   it('rejects excessive and inconsistent historical totals', async () => {
-    const excessive = splitEntries('CREDIT', ['18.0000', '42.0000'])
-    excessive.cumulativeReversedBusinessAmount = '60.0000'
-    excessive.cumulativeReversedEntryAmount = '60.0000'
+    const excessive = splitEntries('CREDIT', ['18.00', '42.00'])
+    excessive.cumulativeReversedBusinessAmount = '60.00'
+    excessive.cumulativeReversedEntryAmount = '60.00'
     configureSuccessfulReversal({ entries: excessive })
     const excessiveFixture = fixture()
     await expectFundReject(
@@ -499,9 +499,9 @@ describe('FundPostingApplicationService reversal idempotency and failures', () =
     )
 
     jest.clearAllMocks()
-    const inconsistent = splitEntries('CREDIT', ['12.0000', '28.0000'])
-    inconsistent.cumulativeReversedBusinessAmount = '39.0000'
-    inconsistent.cumulativeReversedEntryAmount = '40.0000'
+    const inconsistent = splitEntries('CREDIT', ['12.00', '28.00'])
+    inconsistent.cumulativeReversedBusinessAmount = '39.00'
+    inconsistent.cumulativeReversedEntryAmount = '40.00'
     configureSuccessfulReversal({ entries: inconsistent })
     const invalidFixture = fixture()
     await expectFundReject(

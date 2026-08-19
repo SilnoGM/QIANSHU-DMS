@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 已完成，本地实施验收通过
+- 状态：原 Phase 4 已完成；2026-08-19 两位小数增量技术设计待确认
 - 编写日期：2026-08-18
 - 确认日期：2026-08-18
 - 实施验收日期：2026-08-19
@@ -10,6 +10,7 @@
 - Tasks：`specs/fund-account-management/tasks.md`
 - 实施分支：`feat/admin-fund-account-management`
 - 设计边界：Schema、Migration、公共 API、公共数据结构和内部公共服务已按 Gate B 确认内容实施；Gate C 持久开发数据库变更仍未授权
+- 当前增量边界：只调整资金域金额/比例精度和资金流水桌面列宽；不修改共享组件 API，不扩展到其他业务域
 
 ## 2. 当前真相源与审计结论
 
@@ -544,3 +545,98 @@ Gate C 未授权且未执行。新 migration 已在一次性 PostgreSQL 完成�
 5. 数据库边界：`ci:server-e2e` 最终通过 33 个 suite、196 个 test，另有 4 个 suite、10 个 test 按既有条件跳过；资金 Browser 编排完成 21 个 migration 和最终数据库核验。
 6. 构建边界：Server/Web typecheck、lint、build、OpenAPI `contract:check`、字体 108 资产及零残留检查、根 `check` 与根 `build` 均通过。
 7. 可追溯性：完整命令、提交矩阵、一次未复现 E2E 波动、`ci:contract` 本地环境限制和非阻断构建警告记录在 `tasks.md` 第 9 节。
+
+## 19. 2026-08-19 两位小数增量设计
+
+### 19.1 审计结论
+
+1. 当前资金域全部账务金额和比例均以四位定点实现：`fund-decimal.ts` 使用 `10_000n`，DTO 允许四位输入且 OpenAPI 固定输出四位，Prisma 映射和查询 mapper 使用 `toFixed(4)`。
+2. 当前数据库共有八个需要调整的资金精度列：
+   - `fund_accounts.balance`
+   - `fund_accounts.user_share_rate`
+   - `fund_posting_batches.business_amount`
+   - `fund_posting_batches.user_share_rate_snapshot`
+   - `fund_posting_batches.company_share_rate_snapshot`
+   - `fund_ledger_entries.amount`
+   - `fund_ledger_entries.balance_before`
+   - `fund_ledger_entries.balance_after`
+3. Web 通过 `withFundAccountPrecision()` 把 CNY 临时覆盖为四位；调账、冲账预览和比例格式化也各自固定为四位。共享 `MoneyInput` 与 `AmountDisplay` 无需修改。
+4. 流水“方向 / 金额”列当前 `minWidth: 190` 且单元格使用 `flex-wrap`，是桌面换行的直接原因。
+5. 请求指纹 `v1` 包含规范化金额字符串。如果直接把 `100.0000` 改成 `100.00` 后参与 Hash，会让部署前已成功请求的同键重放被误判为冲突，因此必须保留原 `v1` Hash 字节语义。
+
+### 19.2 数据库设计
+
+新增单独 forward migration，不修改 `20260818090000_fund_account_domain_foundation`：
+
+```text
+fund_accounts.balance                              NUMERIC(30, 2)
+fund_accounts.user_share_rate                      NUMERIC(7, 2)
+fund_posting_batches.business_amount               NUMERIC(30, 2)
+fund_posting_batches.user_share_rate_snapshot      NUMERIC(7, 2)
+fund_posting_batches.company_share_rate_snapshot   NUMERIC(7, 2)
+fund_ledger_entries.amount                         NUMERIC(30, 2)
+fund_ledger_entries.balance_before                 NUMERIC(30, 2)
+fund_ledger_entries.balance_after                  NUMERIC(30, 2)
+```
+
+迁移顺序：
+
+1. 在任何 `ALTER COLUMN` 前，对八列分别检查 `value = round(value, 2)`；nullable 比例列只检查非空值。
+2. 任一检查失败时抛出明确异常，并依赖 PostgreSQL migration transaction 回滚全部 DDL。
+3. 全部通过后把列 typmod 改为两位小数，并把 `fund_accounts_balance_scale_check`、`fund_accounts_user_share_rate_range_check` 的 scale 上限同步为 `2`。
+4. 不执行 `UPDATE`，不调用 `round()` 写回，不关闭批次/流水 immutable trigger，不接触非资金表。
+5. Prisma 只同步上述八个 `@db.Decimal(..., 2)` 定义；金额总精度保持 `30`，比例总精度保持 `7`。
+
+### 19.3 Server 定点与契约设计
+
+1. `fund-decimal.ts` 改用 `100n` 最小单位；金额和比例输入最多两位小数，输出统一 `toFixed(2)` 语义。
+2. 金额整数部分仍限制最多 26 位，避免本次增量扩大既有公共输入范围；数据库增加的理论整数容量不对公共契约开放。
+3. 分账继续使用整数算法和 `ROUND_HALF_UP`：用户金额先舍入到分，公司金额使用总金额减用户金额承接尾差；正负订单只改变方向，不改变绝对值拆分。
+4. 冲账继续按累计目标计算。本次部分冲账按两位精度计算，最终全额冲账直接闭合到原不可变分录，避免累计舍入差。
+5. DTO 输入 pattern 从最多四位改为最多两位，错误文字和 OpenAPI example 同步；输出 pattern 改为固定两位。
+6. Prisma mapper、posting/reversal persistence、流水查询和零值常量全部改为两位，不允许 `Prisma.Decimal` 或浮点数泄漏到公共边界。
+7. 请求对象、返回对象的 TypeScript 类型仍为 `string`，字段名称和 endpoint 不变；这是固定 scale 行为变更，不新增远程业务动账接口。
+
+### 19.4 幂等兼容设计
+
+`FUND_REQUEST_FINGERPRINT_VERSIONS.*` 继续保持 `v1`。应用请求规范化输出两位字符串，但进入三类指纹计算前，把合法两位金额仅在 Hash 内部扩展为四位（例如 `100.00 -> 100.0000`）。这样：
+
+- 新请求和部署前相同语义请求得到相同 Hash；
+- API、数据库和业务计算仍全部是两位；
+- 不需要批量重算历史 `request_fingerprint_hash`，也不需要引入双版本回退分支。
+
+### 19.5 Web 设计规格
+
+- 用途：在高密度财务表格中稳定核对方向、金额和余额。
+- 审美方向：保留现有 `Brutally minimal` 金融运营工具风格，不重做页面。
+- 配色：只使用既有语义 Token；正向绿色、负向 `destructive`、零值普通前景色。
+- 字体：中文使用 `Noto Sans SC`；金额、比例、编号使用 `Noto Sans Mono` 与等宽数字。
+- 布局：桌面流水金额列加宽并使用 `flex-nowrap`；总表宽同步增加，由 `QsGenericTable` 既有横向滚动承接。移动卡片保持现有布局。
+
+具体实现：
+
+1. `withFundAccountPrecision()` 把资金 CNY 描述符固定为 `minorUnit: 2`，不修改货币目录或共享金额组件。
+2. 开户、比例修改、手动调账、冲账和预览逻辑只接受并输出两位；帮助文字与 placeholder 同步。
+3. 账户列表和比例快照统一显示固定两位百分比，不再裁掉尾零。
+4. 流水桌面“方向 / 金额”列提高到可容纳方向文本、符号、最大常规金额和 `CNY` 的最小宽度，并将单元格改为不换行布局；精确宽度通过真实 Chrome 1440px 验收后确定。
+5. 不改 `MoneyInput`、`AmountDisplay`、`QsGenericTable` 公共 API；产品金额、汇率和货币目录的精度行为保持不变。
+
+### 19.6 TDD 与验证设计
+
+RED 测试先覆盖：
+
+1. `0.001` 金额、`30.001` 比例在 Domain、DTO、Web request builder 均被拒绝。
+2. `0.01 × 50.00%` 采用 `ROUND_HALF_UP` 得到用户 `0.01`、公司 `0.00`；公司继续承接尾差且总额守恒。
+3. 正负订单、两种调账、部分冲账和最终闭合都返回固定两位字符串。
+4. 迁移在存在 `0.0010` 历史值时失败，在所有值可无损表示时成功并验证八列 scale 为 `2`。
+5. 同一业务输入在新两位规范化后产生与既有四位 `v1` 完全相同的请求指纹。
+6. Web 比例显示固定两位，金额描述符为两位；流水列定义宽度提升且单元格不存在 `flex-wrap`。
+
+GREEN 后执行资金 Domain/Application/DTO/Schema 单测、隔离 PostgreSQL E2E、OpenAPI 同步与校验、Web API/View 测试、类型检查、Lint、构建和资金真实 Chrome 专项。浏览器验收至少检查 `¥50,000.00 CNY`、`30.00%`、桌面方向金额同一行以及 390px 卡片无页面级横向溢出。
+
+### 19.7 风险与回退边界
+
+1. 精度迁移是不可逆业务口径变化；发现第三位非零历史值时只报告具体表/列和记录数量，不自动修正。
+2. migration 仅在一次性 PostgreSQL 验证；应用到持久开发或生产数据库仍属于 Gate C，必须另行确认目标与恢复方案。
+3. 新代码与旧四位 Schema 不应混用部署；发布顺序需由正式部署方案另行确定，本地任务只验证空库和可迁移数据库。
+4. 本增量不执行 push、PR、merge、deploy、持久数据库 migration、分支删除或共享组件改造。

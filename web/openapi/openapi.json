@@ -27992,16 +27992,16 @@
           },
           "balance": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "userShareRate": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "companyShareRate": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "version": {
@@ -28075,8 +28075,8 @@
           },
           "userShareRate": {
             "type": "string",
-            "pattern": "^(?:100(?:\\.0{1,4})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,4})?)$",
-            "example": "30.0000"
+            "pattern": "^(?:100(?:\\.0{1,2})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,2})?)$",
+            "example": "30.00"
           }
         },
         "required": [
@@ -28089,8 +28089,8 @@
         "properties": {
           "userShareRate": {
             "type": "string",
-            "pattern": "^(?:100(?:\\.0{1,4})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,4})?)$",
-            "example": "30.0000"
+            "pattern": "^(?:100(?:\\.0{1,2})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,2})?)$",
+            "example": "30.00"
           },
           "expectedVersion": {
             "type": "integer",
@@ -28129,8 +28129,8 @@
         "properties": {
           "amount": {
             "type": "string",
-            "pattern": "^-?(?:0\\.(?=\\d{1,4}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,4})?)$",
-            "example": "-100.0000"
+            "pattern": "^-?(?:0\\.(?=\\d{1,2}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,2})?)$",
+            "example": "-100.00"
           },
           "adjustmentMode": {
             "type": "string",
@@ -28197,15 +28197,15 @@
           },
           "amount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "balanceBefore": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "balanceAfter": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "accountSequence": {
             "type": "string",
@@ -28244,16 +28244,16 @@
           },
           "businessAmount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "userShareRateSnapshot": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "companyShareRateSnapshot": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "entries": {
@@ -28390,15 +28390,15 @@
           },
           "amount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "balanceBefore": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "balanceAfter": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "accountSequence": {
             "type": "string",
@@ -28406,16 +28406,16 @@
           },
           "businessAmount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "userShareRateSnapshot": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "companyShareRateSnapshot": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "businessId": {
@@ -28560,15 +28560,15 @@
           },
           "amount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "balanceBefore": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "balanceAfter": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "accountSequence": {
             "type": "string",
@@ -28605,7 +28605,7 @@
           },
           "amount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "reason": {
             "type": "string"
@@ -28648,15 +28648,15 @@
           },
           "originalAmount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "reversedAmount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "remainingAmount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "reversals": {
             "type": "array",
@@ -28741,7 +28741,7 @@
           },
           "businessAmount": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$"
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$"
           },
           "currency": {
             "type": "string",
@@ -28751,12 +28751,12 @@
           },
           "userShareRateSnapshot": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "companyShareRateSnapshot": {
             "type": "string",
-            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{4}$",
+            "pattern": "^-?(?:0|[1-9]\\d*)\\.\\d{2}$",
             "nullable": true
           },
           "businessId": {
@@ -28859,8 +28859,8 @@
         "properties": {
           "amount": {
             "type": "string",
-            "pattern": "^(?:0\\.(?=\\d{1,4}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,4})?)$",
-            "example": "50.0000"
+            "pattern": "^(?:0\\.(?=\\d{1,2}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,2})?)$",
+            "example": "50.00"
           },
           "reason": {
             "type": "string",

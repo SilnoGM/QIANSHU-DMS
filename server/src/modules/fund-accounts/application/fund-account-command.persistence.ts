@@ -49,7 +49,7 @@ export async function createFundAccountRecord(
       ownerType: 'USER',
       userId: input.userId,
       currency: 'CNY',
-      balance: new Prisma.Decimal('0.0000'),
+      balance: new Prisma.Decimal('0.00'),
       userShareRate: new Prisma.Decimal(input.userShareRate),
       nextSequence: 1n,
       version: 1,

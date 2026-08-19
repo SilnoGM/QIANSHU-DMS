@@ -17,6 +17,10 @@ const fundMigrationPath = resolve(
   serverRoot,
   'prisma/migrations/20260818090000_fund_account_domain_foundation/migration.sql',
 )
+const precisionMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20260819090000_fund_account_two_decimal_precision/migration.sql',
+)
 const SYSTEM_ADMIN_ROLE_ID = '00000000-0000-4000-8000-000000000001'
 const COMPANY_ACCOUNT_ID = '00000000-0000-4000-8000-000000002001'
 const ADMIN_SOURCE_ID = '00000000-0000-4000-8000-000000002101'
@@ -121,6 +125,7 @@ describe('fund account domain migration replay against PostgreSQL', () => {
       await client.query(readFileSync(authMigrationPath, 'utf8'))
       await client.query(readFileSync(readPermissionMigrationPath, 'utf8'))
       await client.query(readFileSync(fundMigrationPath, 'utf8'))
+      await client.query(readFileSync(precisionMigrationPath, 'utf8'))
 
       const tableCount = await client.query<{ count: number }>(`
         SELECT count(*)::integer AS "count"
@@ -182,7 +187,7 @@ describe('fund account domain migration replay against PostgreSQL', () => {
         id: COMPANY_ACCOUNT_ID,
         ownerType: 'COMPANY',
         currency: 'CNY',
-        balance: '0.0000',
+        balance: '0.00',
         userId: null,
         userShareRate: null,
       }])
@@ -283,7 +288,7 @@ describe('fund account domain migration replay against PostgreSQL', () => {
       await expectDatabaseRejection(
         client,
         () => client.query(`
-          UPDATE "fund_accounts" SET "user_share_rate" = 100.0001
+          UPDATE "fund_accounts" SET "user_share_rate" = 100.01
           WHERE "id" = $1
         `, [userAccountId]),
         'fund_accounts_user_share_rate_range_check',
@@ -422,6 +427,71 @@ describe('fund account domain migration replay against PostgreSQL', () => {
       await client.query('ROLLBACK')
     }
     finally {
+      if (schemaCreated) {
+        await client.query('RESET search_path').catch(() => undefined)
+        await client.query(`DROP SCHEMA ${quotedSchema} CASCADE`)
+          .catch(() => undefined)
+      }
+      await client.end()
+    }
+  })
+
+  it('rejects non-lossless historical decimals before narrowing the schema', async () => {
+    const client = new Client({ connectionString: requireDatabaseUrl() })
+    const schemaName = `fund_schema_${randomUUID().replaceAll('-', '')}`
+    const quotedSchema = quoteTestSchema(schemaName)
+    const userId = randomUUID()
+    let schemaCreated = false
+
+    await client.connect()
+    try {
+      await client.query(`CREATE SCHEMA ${quotedSchema}`)
+      schemaCreated = true
+      await client.query(`SET search_path TO ${quotedSchema}, public`)
+      await client.query(readFileSync(authMigrationPath, 'utf8'))
+      await client.query(readFileSync(readPermissionMigrationPath, 'utf8'))
+      await client.query(readFileSync(fundMigrationPath, 'utf8'))
+      await client.query(`
+        INSERT INTO "users" (
+          "id", "username", "username_normalized", "display_name",
+          "password_hash", "password_changed_at", "updated_at"
+        )
+        VALUES (
+          $1, 'fund-precision-e2e', 'fund-precision-e2e',
+          '资金精度迁移测试用户', 'hash', clock_timestamp(), clock_timestamp()
+        )
+      `, [userId])
+      await client.query(`
+        INSERT INTO "fund_accounts" (
+          "owner_type", "user_id", "balance", "user_share_rate",
+          "share_rate_updated_at"
+        )
+        VALUES ('USER', $1, 0.001, 30.00, clock_timestamp())
+      `, [userId])
+
+      try {
+        await client.query(readFileSync(precisionMigrationPath, 'utf8'))
+      }
+      catch (error) {
+        // 迁移只允许稳定错误码暴露给门禁；历史金额本身不得进入测试日志。
+        expect(readDatabaseError(error).code).toBe('23514')
+        await client.query('ROLLBACK')
+
+        const precision = await client.query<{ numericScale: number }>(`
+          SELECT numeric_scale::integer AS "numericScale"
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'fund_accounts'
+            AND column_name = 'balance'
+        `)
+        expect(precision.rows).toEqual([{ numericScale: 4 }])
+        return
+      }
+
+      throw new Error('Expected fund precision migration to reject historical data')
+    }
+    finally {
+      await client.query('ROLLBACK').catch(() => undefined)
       if (schemaCreated) {
         await client.query('RESET search_path').catch(() => undefined)
         await client.query(`DROP SCHEMA ${quotedSchema} CASCADE`)

@@ -51,11 +51,11 @@ export interface FundReversalPreview {
 
 const UUID_V4_PATTERN
   = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
-const FUND_AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
-const FUND_SHARE_RATE_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,4})?$/u
+const FUND_AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
+const FUND_SHARE_RATE_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/u
 
 /**
- * 页面预览使用独立 Decimal 配置镜像 Server 的 numeric(30,4) 与 HALF_UP；
+ * 页面预览使用独立 Decimal 配置镜像 Server 的 numeric(30,2) 与 HALF_UP；
  * 不修改 decimal.js 全局状态，也不使用 JavaScript number 参与资金计算。
  */
 const FundDecimal = Decimal.clone({
@@ -192,7 +192,7 @@ function targetAmount(
   const userAmount = cumulativeAmount
     .times(userShareRate)
     .dividedBy(100)
-    .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
   return entry.amountStrategy === 'USER_SHARE'
     ? userAmount
     : cumulativeAmount.minus(userAmount)
@@ -271,7 +271,7 @@ export function calculateFundReversalPreview(
     }
     return [{
       accountTarget: entry.accountTarget,
-      amount: current.toFixed(4),
+      amount: current.toFixed(2),
       direction: oppositeDirection(entry.direction),
       originalLineNo: entry.lineNo,
     }]
@@ -287,12 +287,12 @@ export function calculateFundReversalPreview(
 
   const originalBusinessAmount = new FundDecimal(detail.businessAmount)
   return Object.freeze({
-    cumulativeReversedAmount: nextCumulative.toFixed(4),
+    cumulativeReversedAmount: nextCumulative.toFixed(2),
     entries: Object.freeze(entries),
-    reversalAmount: reversalAmount.toFixed(4),
+    reversalAmount: reversalAmount.toFixed(2),
     reversalBusinessAmount: reversalAmount
       .times(originalBusinessAmount.isPositive() ? -1 : 1)
-      .toFixed(4),
+      .toFixed(2),
     reversalStatus: fullReversal ? 'FULL' : 'PARTIAL',
   })
 }
@@ -381,7 +381,7 @@ export function formatFundRateSnapshot(value: null | string): string {
     return '—'
   }
   try {
-    return `${parseShareRate(value).toFixed(4)}%`
+    return `${parseShareRate(value).toFixed(2)}%`
   }
   catch {
     return value

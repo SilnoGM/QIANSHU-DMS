@@ -44,6 +44,20 @@ function sha256Utf8(value: string): Buffer {
   return createHash('sha256').update(Buffer.from(value, 'utf8')).digest()
 }
 
+/**
+ * 指纹 v1 在两位精度发布前使用固定四位金额。数据库、API 与计算已统一为两位，
+ * 但 Hash 仍需扩展回四位，确保部署前成功请求可以用同一 key 安全重放。
+ */
+function toLegacyV1FingerprintAmount(value: string): string {
+  const separatorIndex = value.indexOf('.')
+  if (separatorIndex < 0) return `${value}.0000`
+
+  const fractionalLength = value.length - separatorIndex - 1
+  return fractionalLength >= 4
+    ? value
+    : value.padEnd(value.length + 4 - fractionalLength, '0')
+}
+
 /** 原始 key 的 UTF-8 bytes 既用于长度校验也用于 Hash，中间不做任何规范化。 */
 export function calculateFundIdempotencyKeyHash(value: unknown): Buffer {
   if (typeof value !== 'string') {
@@ -80,7 +94,7 @@ export function calculateFundBusinessFingerprintHash(
     sourceCode: input.sourceCode,
     postingTypeCode: input.postingTypeCode,
     userId: input.userId,
-    amount: input.amount,
+    amount: toLegacyV1FingerprintAmount(input.amount),
     businessId: input.businessId,
     businessNo: input.businessNo,
     summary: input.summary,
@@ -95,7 +109,7 @@ export function calculateFundManualAdjustmentFingerprintHash(
   return sha256Utf8(JSON.stringify({
     version: FUND_REQUEST_FINGERPRINT_VERSIONS.MANUAL_ADJUSTMENT,
     userAccountId: input.userAccountId,
-    amount: input.amount,
+    amount: toLegacyV1FingerprintAmount(input.amount),
     adjustmentMode: input.adjustmentMode,
     reason: input.reason,
     metadata: input.metadata,
@@ -108,7 +122,7 @@ export function calculateFundReversalFingerprintHash(
   return sha256Utf8(JSON.stringify({
     version: FUND_REQUEST_FINGERPRINT_VERSIONS.REVERSAL,
     originalBatchId: input.originalBatchId,
-    amount: input.amount,
+    amount: toLegacyV1FingerprintAmount(input.amount),
     reason: input.reason,
   }))
 }

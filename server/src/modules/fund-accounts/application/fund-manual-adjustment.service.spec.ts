@@ -94,8 +94,8 @@ function configureSuccess(): void {
       id: USER_ACCOUNT_ID,
       ownerType: 'USER',
       userId: USER_ID,
-      balance: '100.0000',
-      userShareRate: '30.0000',
+      balance: '100.00',
+      userShareRate: '30.00',
       nextSequence: 1n,
       version: 1,
     },
@@ -103,7 +103,7 @@ function configureSuccess(): void {
       id: COMPANY_ACCOUNT_ID,
       ownerType: 'COMPANY',
       userId: null,
-      balance: '1000.0000',
+      balance: '1000.00',
       userShareRate: null,
       nextSequence: 1n,
       version: 1,
@@ -138,12 +138,12 @@ describe('FundPostingApplicationService manual adjustment', () => {
     expect(result).toMatchObject({
       postingTypeCode: 'ADMIN_MANUAL_ADJUSTMENT',
       businessCategory: 'ADJUSTMENT',
-      businessAmount: '-100.0000',
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
+      businessAmount: '-100.00',
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
       entries: [
-        expect.objectContaining({ direction: 'DEBIT', amount: '30.0000' }),
-        expect.objectContaining({ direction: 'DEBIT', amount: '70.0000' }),
+        expect.objectContaining({ direction: 'DEBIT', amount: '30.00' }),
+        expect.objectContaining({ direction: 'DEBIT', amount: '70.00' }),
       ],
     })
     expect(mockedSource).toHaveBeenCalledWith(
@@ -184,8 +184,8 @@ describe('FundPostingApplicationService manual adjustment', () => {
         id: USER_ACCOUNT_ID,
         ownerType: 'USER',
         userId: USER_ID,
-        balance: '100.0000',
-        userShareRate: '30.0000',
+        balance: '100.00',
+        userShareRate: '30.00',
         nextSequence: 1n,
         version: 1,
       },
@@ -215,7 +215,7 @@ describe('FundPostingApplicationService manual adjustment', () => {
       expect.objectContaining({
         accountId: USER_ACCOUNT_ID,
         direction: 'CREDIT',
-        amount: '100.0000',
+        amount: '100.00',
       }),
     ])
   })

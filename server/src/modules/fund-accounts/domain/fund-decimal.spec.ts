@@ -7,13 +7,13 @@ import {
 
 describe('fund decimal calculation boundary', () => {
   it.each([
-    ['0', '0.0000'],
-    ['1', '1.0000'],
-    ['-1.2', '-1.2000'],
-    ['1.2345', '1.2345'],
+    ['0', '0.00'],
+    ['1', '1.00'],
+    ['-1.2', '-1.20'],
+    ['1.23', '1.23'],
     [
-      '99999999999999999999999999.9999',
-      '99999999999999999999999999.9999',
+      '99999999999999999999999999.99',
+      '99999999999999999999999999.99',
     ],
   ])('normalizes the exact decimal string %s', (input, expected) => {
     expect(normalizeFundAmount(input)).toBe(expected)
@@ -28,10 +28,10 @@ describe('fund decimal calculation boundary', () => {
     '+1',
     '.1',
     '1.',
-    '1.00000',
+    '1.001',
     '1e2',
     '-0',
-    '-0.0000',
+    '-0.00',
     '100000000000000000000000000',
     1,
     1n,
@@ -42,25 +42,26 @@ describe('fund decimal calculation boundary', () => {
   })
 
   it('accepts only non-zero positive values at the positive boundary', () => {
-    expect(normalizePositiveFundAmount('0.0001')).toBe('0.0001')
+    expect(normalizePositiveFundAmount('0.01')).toBe('0.01')
     expect(() => normalizePositiveFundAmount('0')).toThrow('资金金额必须大于零')
     expect(() => normalizePositiveFundAmount('-1')).toThrow('资金金额必须大于零')
   })
 
   it.each([
-    ['0', '0.0000'],
-    ['30', '30.0000'],
-    ['33.3333', '33.3333'],
-    ['100', '100.0000'],
+    ['0', '0.00'],
+    ['30', '30.00'],
+    ['33.33', '33.33'],
+    ['100', '100.00'],
   ])('normalizes the share rate %s', (input, expected) => {
     expect(normalizeFundShareRate(input)).toBe(expected)
   })
 
   it.each([
-    '-0.0001',
-    '100.0001',
+    '-0.01',
+    '30.001',
+    '100.01',
     '101',
-    '1.00000',
+    '1.001',
     '01',
     30,
   ])('rejects the invalid share rate %p', (input) => {
@@ -69,28 +70,28 @@ describe('fund decimal calculation boundary', () => {
 
   it('splits by ROUND_HALF_UP and gives the remainder to the company', () => {
     expect(splitFundAmountByShare('100', '30')).toEqual({
-      userAmount: '30.0000',
-      companyAmount: '70.0000',
+      userAmount: '30.00',
+      companyAmount: '70.00',
     })
-    expect(splitFundAmountByShare('0.0001', '50')).toEqual({
-      userAmount: '0.0001',
-      companyAmount: '0.0000',
+    expect(splitFundAmountByShare('0.01', '50')).toEqual({
+      userAmount: '0.01',
+      companyAmount: '0.00',
     })
-    expect(splitFundAmountByShare('0.0001', '49.9999')).toEqual({
-      userAmount: '0.0000',
-      companyAmount: '0.0001',
+    expect(splitFundAmountByShare('0.01', '49.99')).toEqual({
+      userAmount: '0.00',
+      companyAmount: '0.01',
     })
   })
 
   it('preserves exact values beyond the JavaScript safe integer range', () => {
     expect(
       splitFundAmountByShare(
-        '99999999999999999999999999.9999',
-        '33.3333',
+        '99999999999999999999999999.99',
+        '33.33',
       ),
     ).toEqual({
-      userAmount: '33333300000000000000000000.0000',
-      companyAmount: '66666699999999999999999999.9999',
+      userAmount: '33330000000000000000000000.00',
+      companyAmount: '66669999999999999999999999.99',
     })
   })
 })

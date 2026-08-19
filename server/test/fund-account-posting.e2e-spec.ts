@@ -188,7 +188,7 @@ describe('fund account posting against isolated PostgreSQL', () => {
       select: { balance: true, nextSequence: true, version: true },
     })
     return {
-      balance: account.balance.toFixed(4),
+      balance: account.balance.toFixed(2),
       nextSequence: account.nextSequence,
       version: account.version,
     }
@@ -220,14 +220,14 @@ describe('fund account posting against isolated PostgreSQL', () => {
       createAccount(fullUserId, '100'),
     ])
     expect(zeroAccount).toMatchObject({
-      balance: '0.0000',
+      balance: '0.00',
       currency: 'CNY',
-      userShareRate: '0.0000',
+      userShareRate: '0.00',
     })
     expect(fullAccount).toMatchObject({
-      balance: '0.0000',
+      balance: '0.00',
       currency: 'CNY',
-      userShareRate: '100.0000',
+      userShareRate: '100.00',
     })
 
     const duplicateAttempts = await Promise.allSettled([
@@ -252,10 +252,10 @@ describe('fund account posting against isolated PostgreSQL', () => {
       businessInput('ORDER_SETTLEMENT', '10', { userId: fullUserId }),
     )
     expect(zeroPosting.entries).toEqual([
-      expect.objectContaining({ accountTarget: 'COMPANY', amount: '10.0000' }),
+      expect.objectContaining({ accountTarget: 'COMPANY', amount: '10.00' }),
     ])
     expect(fullPosting.entries).toEqual([
-      expect.objectContaining({ accountTarget: 'USER', amount: '10.0000' }),
+      expect.objectContaining({ accountTarget: 'USER', amount: '10.00' }),
     ])
   })
 
@@ -301,7 +301,7 @@ describe('fund account posting against isolated PostgreSQL', () => {
     expect(adjustment).toMatchObject({
       postingTypeCode: 'ADMIN_MANUAL_ADJUSTMENT',
       businessCategory: 'ADJUSTMENT',
-      businessAmount: '-20.0000',
+      businessAmount: '-20.00',
     })
     expect(new Set([
       ...results.map(item => item.postingTypeCode),
@@ -358,7 +358,7 @@ describe('fund account posting against isolated PostgreSQL', () => {
     expect(userSequences.map(item => Number(item.accountSequence))).toEqual(
       Array.from({ length: 13 }, (_, index) => index + 1),
     )
-    expect((await accountSnapshot(account.id)).balance).toBe('6.6000')
+    expect((await accountSnapshot(account.id)).balance).toBe('6.60')
 
     const peerUserId = await createUser('lock_peer')
     const peerAccount = await createAccount(peerUserId, '70')
@@ -371,7 +371,7 @@ describe('fund account posting against isolated PostgreSQL', () => {
       )
     )))
     expect(multiAccount).toHaveLength(16)
-    expect((await accountSnapshot(peerAccount.id)).balance).toBe('-5.6000')
+    expect((await accountSnapshot(peerAccount.id)).balance).toBe('-5.60')
 
     const rollbackUserId = await createUser('audit_rollback')
     const rollbackAccount = await createAccount(rollbackUserId, '30')
@@ -389,7 +389,7 @@ describe('fund account posting against isolated PostgreSQL', () => {
     })
     auditSpy.mockRestore()
     await expect(accountSnapshot(rollbackAccount.id)).resolves.toEqual({
-      balance: '0.0000',
+      balance: '0.00',
       nextSequence: 1n,
       version: 1,
     })
@@ -411,11 +411,11 @@ describe('fund account posting against isolated PostgreSQL', () => {
     const originalDetail = await transactions.getBatchDetail(original.batchId)
     expect(originalDetail).toMatchObject({
       businessCategory: 'REVENUE',
-      businessAmount: '100.0000',
+      businessAmount: '100.00',
       ruleRevision: 1,
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
-      reversalChain: { status: 'NONE', remainingAmount: '100.0000' },
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
+      reversalChain: { status: 'NONE', remainingAmount: '100.00' },
     })
 
     const updated = await accountCommands.updateUserShareRate(
@@ -427,7 +427,7 @@ describe('fund account posting against isolated PostgreSQL', () => {
         reason: '验证历史批次不读取当前比例',
       },
     )
-    expect(updated.account.userShareRate).toBe('60.0000')
+    expect(updated.account.userShareRate).toBe('60.00')
 
     const first = await postings.reversePostingBatch(
       commandContext('reversal_first'),
@@ -439,14 +439,14 @@ describe('fund account posting against isolated PostgreSQL', () => {
       },
     )
     expect(first).toMatchObject({
-      businessAmount: '-20.0000',
+      businessAmount: '-20.00',
       businessCategory: 'REVENUE',
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
     })
     expect(first.entries).toEqual([
-      expect.objectContaining({ accountTarget: 'USER', amount: '6.0000', direction: 'DEBIT' }),
-      expect.objectContaining({ accountTarget: 'COMPANY', amount: '14.0000', direction: 'DEBIT' }),
+      expect.objectContaining({ accountTarget: 'USER', amount: '6.00', direction: 'DEBIT' }),
+      expect.objectContaining({ accountTarget: 'COMPANY', amount: '14.00', direction: 'DEBIT' }),
     ])
 
     const concurrent = await Promise.allSettled([
@@ -483,13 +483,13 @@ describe('fund account posting against isolated PostgreSQL', () => {
         idempotencyKey: `fund-e2e-reversal-final-${randomUUID()}`,
       },
     )
-    expect(final.userShareRateSnapshot).toBe('30.0000')
+    expect(final.userShareRateSnapshot).toBe('30.00')
 
     const closed = await transactions.getBatchDetail(original.batchId)
     expect(closed.reversalChain).toMatchObject({
-      originalAmount: '100.0000',
-      reversedAmount: '100.0000',
-      remainingAmount: '0.0000',
+      originalAmount: '100.00',
+      reversedAmount: '100.00',
+      remainingAmount: '0.00',
       status: 'FULL',
     })
     expect(closed.reversalChain.reversals).toHaveLength(3)
@@ -507,7 +507,7 @@ describe('fund account posting against isolated PostgreSQL', () => {
     expect(reversalEntries).toHaveLength(2)
     for (const entry of reversalEntries) {
       expect(entry.direction).toBe('DEBIT')
-      expect(entry._sum.amount?.toFixed(4)).toBe(originalAmounts.get(entry.accountId))
+      expect(entry._sum.amount?.toFixed(2)).toBe(originalAmounts.get(entry.accountId))
     }
 
     const categoryAmounts = await prisma.fundPostingBatch.findMany({

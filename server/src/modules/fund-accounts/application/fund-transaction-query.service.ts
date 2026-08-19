@@ -321,7 +321,7 @@ function decimalString(value: unknown): string {
   if (!Prisma.Decimal.isDecimal(value)) {
     throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
   }
-  return value.toFixed(4)
+  return value.toFixed(2)
 }
 
 function nullableDecimalString(value: unknown): string | null {
@@ -576,11 +576,11 @@ export class FundTransactionQueryService {
           throw new FundPostingError(FUND_POSTING_ERROR_CODES.INTERNAL_ERROR)
         }
 
-        const originalAmount = absoluteAmount(original.businessAmount.toFixed(4))
+        const originalAmount = absoluteAmount(original.businessAmount.toFixed(2))
         const originalMinor = parseFundAmountMinor(originalAmount)
         const reversedMinor = original.reversalBatches.reduce(
           (total, reversal) => total + parseFundAmountMinor(
-            absoluteAmount(reversal.businessAmount.toFixed(4)),
+            absoluteAmount(reversal.businessAmount.toFixed(2)),
           ),
           0n,
         )
@@ -612,11 +612,11 @@ export class FundTransactionQueryService {
             displayName: batch.user.displayName,
             status: batch.user.status,
           }),
-          businessAmount: batch.businessAmount.toFixed(4),
+          businessAmount: batch.businessAmount.toFixed(2),
           currency: 'CNY',
-          userShareRateSnapshot: batch.userShareRateSnapshot?.toFixed(4) ?? null,
+          userShareRateSnapshot: batch.userShareRateSnapshot?.toFixed(2) ?? null,
           companyShareRateSnapshot:
-            batch.companyShareRateSnapshot?.toFixed(4) ?? null,
+            batch.companyShareRateSnapshot?.toFixed(2) ?? null,
           businessId: batch.businessId,
           businessNo: batch.businessNo,
           summary: batch.summary,
@@ -645,9 +645,9 @@ export class FundTransactionQueryService {
             accountTarget: entry.accountTarget,
             direction: entry.direction,
             amountStrategy: entry.amountStrategy,
-            amount: entry.amount.toFixed(4),
-            balanceBefore: entry.balanceBefore.toFixed(4),
-            balanceAfter: entry.balanceAfter.toFixed(4),
+            amount: entry.amount.toFixed(2),
+            balanceBefore: entry.balanceBefore.toFixed(2),
+            balanceAfter: entry.balanceAfter.toFixed(2),
             accountSequence: entry.accountSequence.toString(),
             postedAt: entry.postedAt.toISOString(),
           }))),
@@ -667,7 +667,7 @@ export class FundTransactionQueryService {
               return Object.freeze({
                 batchId: reversal.id,
                 batchNo: reversal.batchNo,
-                amount: absoluteAmount(reversal.businessAmount.toFixed(4)),
+                amount: absoluteAmount(reversal.businessAmount.toFixed(2)),
                 reason: reversal.reversalReason,
                 actorUserId: reversal.actorUserId,
                 postedAt: reversal.postedAt.toISOString(),

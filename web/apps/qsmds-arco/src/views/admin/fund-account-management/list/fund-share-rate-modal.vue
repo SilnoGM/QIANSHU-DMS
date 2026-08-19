@@ -157,7 +157,7 @@ watch(() => props.submitting, (submitting) => {
         name="userShareRate"
         label="新用户分成比例"
         required
-        description="允许 0–100，最多四位小数；公司比例自动取剩余部分。"
+        description="允许 0–100，最多两位小数；公司比例自动取剩余部分。"
       >
         <FaInput
           v-model="userShareRate"

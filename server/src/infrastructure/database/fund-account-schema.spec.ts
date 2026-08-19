@@ -13,6 +13,12 @@ const migrationPath = resolve(
   serverRoot,
   `prisma/migrations/${migrationDirectory}/migration.sql`,
 )
+const precisionMigrationDirectory =
+  '20260819090000_fund_account_two_decimal_precision'
+const precisionMigrationPath = resolve(
+  serverRoot,
+  `prisma/migrations/${precisionMigrationDirectory}/migration.sql`,
+)
 
 const FUND_PERMISSION_SEEDS = [
   ['00000000-0000-4000-8000-000000000148', 'fund-accounts:create'],
@@ -64,6 +70,10 @@ function readSchema(): string {
 
 function readMigration(): string {
   return readFileSync(migrationPath, 'utf8')
+}
+
+function readPrecisionMigration(): string {
+  return readFileSync(precisionMigrationPath, 'utf8')
 }
 
 function extractModel(schema: string, modelName: string): string {
@@ -134,8 +144,8 @@ describe('fund account domain database schema', () => {
     const batch = extractModel(schema, 'FundPostingBatch')
     const entry = extractModel(schema, 'FundLedgerEntry')
 
-    expect(account).toMatch(/balance\s+Decimal\s+@default\(0\) @db\.Decimal\(30, 4\)/u)
-    expect(account).toContain('@map("user_share_rate") @db.Decimal(7, 4)')
+    expect(account).toMatch(/balance\s+Decimal\s+@default\(0\) @db\.Decimal\(30, 2\)/u)
+    expect(account).toContain('@map("user_share_rate") @db.Decimal(7, 2)')
     expect(account).toContain('@map("next_sequence") @db.BigInt')
     expect(account).toContain(
       '@relation("FundAccountUser", fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)',
@@ -185,14 +195,40 @@ describe('fund account domain database schema', () => {
     ]) {
       expect(batch).toMatch(new RegExp(`\\n\\s*${field}\\s`, 'u'))
     }
-    expect(batch).toContain('@map("business_amount") @db.Decimal(30, 4)')
+    expect(batch).toContain('@map("business_amount") @db.Decimal(30, 2)')
+    expect(batch).toContain('@map("user_share_rate_snapshot") @db.Decimal(7, 2)')
+    expect(batch).toContain('@map("company_share_rate_snapshot") @db.Decimal(7, 2)')
     expect(batch).not.toMatch(/updatedAt\s/u)
 
-    expect(entry).toMatch(/amount\s+Decimal\s+@db\.Decimal\(30, 4\)/u)
-    expect(entry).toContain('@map("balance_before") @db.Decimal(30, 4)')
-    expect(entry).toContain('@map("balance_after") @db.Decimal(30, 4)')
+    expect(entry).toMatch(/amount\s+Decimal\s+@db\.Decimal\(30, 2\)/u)
+    expect(entry).toContain('@map("balance_before") @db.Decimal(30, 2)')
+    expect(entry).toContain('@map("balance_after") @db.Decimal(30, 2)')
     expect(entry).toContain('@map("account_sequence") @db.BigInt')
     expect(entry).not.toMatch(/updatedAt\s/u)
+  })
+
+  it('fails closed before narrowing all eight persisted precision columns', () => {
+    const migration = readPrecisionMigration()
+
+    for (const [table, column] of [
+      ['fund_accounts', 'balance'],
+      ['fund_accounts', 'user_share_rate'],
+      ['fund_posting_batches', 'business_amount'],
+      ['fund_posting_batches', 'user_share_rate_snapshot'],
+      ['fund_posting_batches', 'company_share_rate_snapshot'],
+      ['fund_ledger_entries', 'amount'],
+      ['fund_ledger_entries', 'balance_before'],
+      ['fund_ledger_entries', 'balance_after'],
+    ] as const) {
+      expect(migration).toContain(`FROM "${table}"`)
+      expect(migration).toContain(`"${column}" <> round("${column}", 2)`)
+    }
+
+    expect(migration).not.toMatch(/UPDATE\s+"fund_/iu)
+    expect(migration).toContain('NUMERIC(30, 2)')
+    expect(migration).toContain('NUMERIC(7, 2)')
+    expect(migration.trimStart()).toMatch(/^BEGIN;/u)
+    expect(migration.trimEnd()).toMatch(/COMMIT;$/u)
   })
 
   it('creates named constraints, indexes and immutable triggers', () => {

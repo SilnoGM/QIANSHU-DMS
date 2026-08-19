@@ -599,7 +599,7 @@ export class FundPostingApplicationService extends FundPostingService {
       userId: identities.userId,
       businessAmount: plan.businessAmount,
       userShareRateSnapshot: plan.userShareRate ?? userShareRate,
-      companyShareRateSnapshot: plan.companyShareRate ?? '0.0000',
+      companyShareRateSnapshot: plan.companyShareRate ?? '0.00',
       businessId: identity.id,
       summary: request.input.reason,
       metadata: request.input.metadata,

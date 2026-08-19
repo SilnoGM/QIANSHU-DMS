@@ -80,8 +80,8 @@ function userAccount() {
     id: USER_ACCOUNT_ID,
     ownerType: 'USER' as const,
     userId: USER_ID,
-    balance: '10.0000',
-    userShareRate: '30.0000',
+    balance: '10.00',
+    userShareRate: '30.00',
     nextSequence: 7n,
     version: 2,
   }
@@ -92,7 +92,7 @@ function companyAccount() {
     id: COMPANY_ACCOUNT_ID,
     ownerType: 'COMPANY' as const,
     userId: null,
-    balance: '100.0000',
+    balance: '100.00',
     userShareRate: null,
     nextSequence: 11n,
     version: 4,
@@ -168,17 +168,17 @@ function replayRecord(
     batchId: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',
     postingTypeCode,
     businessCategory: 'REVENUE' as const,
-    businessAmount: '100.0000',
-    userShareRateSnapshot: '30.0000',
-    companyShareRateSnapshot: '70.0000',
+    businessAmount: '100.00',
+    userShareRateSnapshot: '30.00',
+    companyShareRateSnapshot: '70.00',
     entries: [{
       entryId: 'bbbbbbbb-bbbb-4bbb-abbb-bbbbbbbbbbbb',
       accountId: USER_ACCOUNT_ID,
       accountTarget: 'USER' as const,
       direction: 'CREDIT' as const,
-      amount: '30.0000',
-      balanceBefore: '10.0000',
-      balanceAfter: '40.0000',
+      amount: '30.00',
+      balanceBefore: '10.00',
+      balanceAfter: '40.00',
       accountSequence: '7',
     }],
     postedAt: AS_OF,
@@ -228,7 +228,7 @@ describe('FundPostingApplicationService business rules', () => {
       expect(result).toMatchObject({
         postingTypeCode: code,
         businessCategory: rule.businessCategory,
-        businessAmount: `${amount}.0000`,
+        businessAmount: `${amount}.00`,
         idempotentReplay: false,
       })
       expect(result.entries).toHaveLength(entryCount)
@@ -249,9 +249,9 @@ describe('FundPostingApplicationService business rules', () => {
     expect(result).toMatchObject({
       postingTypeCode: 'ORDER_SETTLEMENT',
       businessCategory: 'REVENUE',
-      businessAmount: '-100.0000',
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
+      businessAmount: '-100.00',
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
       postedAt: AS_OF.toISOString(),
       idempotentReplay: false,
       entries: [
@@ -259,18 +259,18 @@ describe('FundPostingApplicationService business rules', () => {
           accountId: USER_ACCOUNT_ID,
           accountTarget: 'USER',
           direction: 'DEBIT',
-          amount: '30.0000',
-          balanceBefore: '10.0000',
-          balanceAfter: '-20.0000',
+          amount: '30.00',
+          balanceBefore: '10.00',
+          balanceAfter: '-20.00',
           accountSequence: '7',
         },
         {
           accountId: COMPANY_ACCOUNT_ID,
           accountTarget: 'COMPANY',
           direction: 'DEBIT',
-          amount: '70.0000',
-          balanceBefore: '100.0000',
-          balanceAfter: '30.0000',
+          amount: '70.00',
+          balanceBefore: '100.00',
+          balanceAfter: '30.00',
           accountSequence: '11',
         },
       ],
@@ -291,9 +291,9 @@ describe('FundPostingApplicationService business rules', () => {
         ruleVersionId: RULE_ID,
         ruleRevisionSnapshot: 1,
         userId: USER_ID,
-        businessAmount: '-100.0000',
-        userShareRateSnapshot: '30.0000',
-        companyShareRateSnapshot: '70.0000',
+        businessAmount: '-100.00',
+        userShareRateSnapshot: '30.00',
+        companyShareRateSnapshot: '70.00',
         businessId: 'settlement-1',
         businessNo: '0000011',
         businessOccurredAt: AS_OF,
@@ -314,7 +314,7 @@ describe('FundPostingApplicationService business rules', () => {
         accountId: COMPANY_ACCOUNT_ID,
         expectedVersion: 4,
         expectedNextSequence: 11n,
-        balanceAfter: '30.0000',
+        balanceAfter: '30.00',
         nextSequence: 12n,
         asOf: AS_OF,
       },
@@ -322,7 +322,7 @@ describe('FundPostingApplicationService business rules', () => {
         accountId: USER_ACCOUNT_ID,
         expectedVersion: 2,
         expectedNextSequence: 7n,
-        balanceAfter: '-20.0000',
+        balanceAfter: '-20.00',
         nextSequence: 8n,
         asOf: AS_OF,
       },
@@ -381,7 +381,7 @@ describe('FundPostingApplicationService business rules', () => {
     configureSuccessfulPosting(rule)
     mockedLockAccounts.mockResolvedValue([
       companyAccount(),
-      { ...userAccount(), userShareRate: '0.0000' },
+      { ...userAccount(), userShareRate: '0.00' },
     ])
     const { service } = fixture()
 
@@ -390,7 +390,7 @@ describe('FundPostingApplicationService business rules', () => {
     expect(result.entries).toHaveLength(1)
     expect(result.entries[0]).toMatchObject({
       accountTarget: 'COMPANY',
-      amount: '100.0000',
+      amount: '100.00',
     })
     expect(mockedUpdateAccount).toHaveBeenCalledTimes(1)
   })

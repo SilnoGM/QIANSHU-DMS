@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 已完成，Task 1-16 本地实施验收通过
+- 状态：原 Phase 4 已完成；R16 增量任务计划待确认
 - 生成日期：2026-08-18
 - 实施验收日期：2026-08-19
 - Requirements：`specs/fund-account-management/requirements.md`
@@ -38,7 +38,7 @@
 14. 每次提交前检查 staged diff、敏感文件和生成资产，Commit Message 使用英文类型和中文描述。
 15. 未经明确要求，不 push、不 merge、不创建 PR、不部署、不删除分支或 worktree。
 
-需求编号 `R1` 至 `R15` 对应 `requirements.md` 第 7 节 Requirement 1 至 Requirement 15。
+需求编号 `R1` 至 `R16` 对应 `requirements.md` 第 7 节 Requirement 1 至 Requirement 16。
 
 ## 3. 硬确认门禁
 
@@ -475,3 +475,133 @@ Phase 4 Task 1-16 已在本地完成。当前停止在 `feat/admin-fund-account-
 4. 依赖 manifest 没有新增依赖；只有根与 Web `package.json` 增加资金 Browser 脚本，Server/Web lockfile 均未变化。
 5. 没有受跟踪的 `dist`、`dist-test`、`node_modules` 或真实 `.env`；最终提交只包含 Requirements、Design 和 Tasks 三份规格文档。
 6. Gate C 未授权且未执行：全部 migration 验证均使用一次性 PostgreSQL，未连接或改写持久开发数据库。
+
+## 10. R16 两位小数增量实施任务
+
+### 10.1 增量执行门禁
+
+- [x] 用户已确认 R16 目标、范围、真相源、禁止事项、验收标准、验证命令和 Git 要求。
+- [x] 用户已确认 `design.md` 第 19 节的数据库、Server、幂等和 Web 技术设计。
+- [x] 用户确认本节 Task 17-23 的实施与提交顺序后，才开始修改生产代码。
+- [x] 持久开发数据库 migration 仍属于 Gate C，本节确认不授权执行。
+
+### Task 17 - 复核绿色基线并建立 R16 RED
+
+**关联需求：** R16
+
+**动作：**
+
+- [x] 记录分支、HEAD、工作区、未跟踪文件和相对 `main` 提交序列，确认只保留本轮规格文档改动。
+- [x] 先运行资金 Domain/Application/DTO/Schema 与 Web 资金逻辑现有测试，证明修改前基线为绿色。
+- [x] 在 `fund-decimal.spec.ts` 增加两位输入、固定两位输出、第三位拒绝、`0.01 × 50.00%` 尾差和正负分账测试。
+- [x] 在输入 normalizer、DTO、账户/流水 mapper、posting/reversal 测试中把契约预期改为固定两位，并增加第三位拒绝断言。
+- [x] 增加 `v1` 指纹回归测试，证明两位规范化金额必须产生与原四位语义相同的 Hash。
+- [x] 在 Schema 与隔离 PostgreSQL 测试中增加八列 scale、可无损升级和第三位非零数据失败关闭断言。
+- [x] 在 Web 资金逻辑测试中增加两位 request/preview/ratio/currency descriptor 断言。
+- [x] 在流水页面源码契约或组件测试中先要求金额列更宽且桌面单元格不使用 `flex-wrap`。
+- [x] 运行定向测试并记录 RED；失败必须只来自现有四位实现或金额列换行实现。
+
+**退出标准：** 新测试稳定失败，失败原因与 R16 一一对应；不提交 RED-only 状态。
+
+### Task 18 - 实现数据库与 Server 两位定点精度
+
+**关联需求：** R5-R10、R14、R16
+
+**动作：**
+
+- [x] 新增 `20260819090000_fund_account_two_decimal_precision/migration.sql`，不得修改既有 migration。
+- [x] migration 在任何 DDL 前逐列检查第三位及以后非零值；失败时报告表/列并依赖事务完整回滚。
+- [x] 将八个资金列改为 `NUMERIC(..., 2)`，同步账户 scale/range constraints 和 Prisma `@db.Decimal`。
+- [x] 把 Domain 最小单位改为 `100n`，金额和比例解析最多两位、固定输出两位；保留 26 位整数输入上限。
+- [x] 保持 `ROUND_HALF_UP` 用户分录与公司尾差算法；更新正负动账、调账、累计部分冲账和最终闭合。
+- [x] 把账户、posting、reversal、流水查询 persistence/mapper 的 `toFixed(4)`、四位零值和注释统一为两位。
+- [x] 保留请求指纹版本 `v1`，仅在 Hash 内部把两位金额扩展为四位，验证历史同键重放不冲突。
+- [x] 运行资金 Server 定向单测、Prisma validate 与隔离 migration E2E，恢复 GREEN。
+
+**退出标准：** Domain、Application、Schema 与 migration 测试通过；历史非法精度场景明确失败且无数据/DDL残留。
+
+### Task 19 - 同步 DTO、OpenAPI 与 Web generated contract
+
+**关联需求：** R5、R14、R16
+
+**动作：**
+
+- [x] DTO input pattern、example 和中文错误文字改为最多两位；output pattern 固定为两位。
+- [x] 保持字段类型、字段名称、endpoint、operationId、权限和状态码不变。
+- [x] 通过根 `contract:sync` 生成 Server/Web OpenAPI snapshot 与 Web generated types，不手工编辑生成资产。
+- [x] 运行 DTO 测试、`contract:check` 和 generated diff 审计，确认只发生资金字段 scale 行为变化。
+
+**退出标准：** Server/Web 契约字节一致，公共金额仍是 string，没有新增或删除 endpoint。
+
+### Task 20 - 实现 Web 两位输入、计算与展示
+
+**关联需求：** R11-R12、R16
+
+**动作：**
+
+- [x] `fund-money.logic.ts` 和 `fund-transaction.logic.ts` 只接受最多两位，预览与请求固定输出两位。
+- [x] `withFundAccountPrecision()` 返回 `minorUnit: 2`；不修改货币目录、`MoneyInput` 或 `AmountDisplay` 公共 API。
+- [x] 账户列表、比例快照、详情与模态框比例统一显示 `30.00%`，不裁掉尾零。
+- [x] 开户、修改比例、手动调账和冲账的帮助文字、示例及 placeholder 改为两位口径。
+- [x] 验证第三位小数在 Web 边界被拒绝而不是舍入；调账和冲账预览与 Server 同构。
+- [x] 运行 Web 资金 API/View 定向测试、typecheck 和 lint，恢复精度部分 GREEN。
+
+**退出标准：** 所有资金页面输入/输出为两位，非资金页面精度行为与共享组件 API 不变。
+
+### Task 21 - 提交两位精度主改动
+
+**关联需求：** R16
+
+**动作：**
+
+- [x] 复核 staged diff 只包含规格、migration、资金 Server、OpenAPI generated 资产、资金 Web 和对应测试。
+- [x] 检查没有 `.env`、密钥、日志、构建产物、根依赖违规产物或非资金精度改动。
+- [ ] 提交 `feat: 统一资金账户两位小数精度`。
+
+**退出标准：** 提交后工作区只允许保留尚未提交的流水列宽任务改动。
+
+### Task 22 - 修复流水“方向 / 金额”桌面换行
+
+**关联需求：** R12、R16
+
+**动作：**
+
+- [ ] 在 Task 17 RED 基础上，把桌面金额列 `minWidth` 调整到真实内容可容纳范围，并同步表格总最小宽度。
+- [ ] 把桌面方向/金额单元格改为 `flex-nowrap`，为方向文字与金额内容增加必要的 `shrink-0/whitespace-nowrap`。
+- [ ] 保持移动卡片现有响应式结构，不为业务页面增加新的 overflow 容器。
+- [ ] 运行 Web 定向测试、typecheck 和 lint，恢复列宽部分 GREEN。
+
+**退出标准：** 源码契约通过；桌面金额列单行，移动卡片无页面级横向溢出。
+
+### Task 23 - 全量验证、真实浏览器验收与最终提交
+
+**关联需求：** R8-R16
+
+**动作：**
+
+- [ ] 运行 `pnpm -C server prisma:validate`、资金 Server 定向测试、typecheck、lint 和 build。
+- [ ] 运行 `node --run ci:server-e2e`，验证空库 deploy、二次 deploy、migration status、两位 Schema 和资金业务 E2E。
+- [ ] 运行 `node --run contract:check` 与本地可执行的 contract baseline。
+- [ ] 运行 `pnpm -C web test:api`、typecheck、lint 和 build。
+- [ ] 运行 `node --run ci:browser-fund-accounts-e2e`，在真实 Chrome 检查 `¥50,000.00 CNY`、`30.00%`、1440px 单行金额列、390px 卡片、主题和权限路径。
+- [ ] 运行根 `test:root`、`check`、`build`、`git diff --check`；任何失败如实记录并修复或报告。
+- [ ] 更新本节 checkbox 与最新验证证据，复核提交范围。
+- [ ] 提交 `fix: 调整资金流水金额列宽度`。
+- [ ] 提交后复跑 `git diff --check` 与 `git status --short --branch`，确认工作区干净。
+
+**退出标准：** 自动化和真实 UI 验收通过，两个计划提交存在，工作区干净；不执行 Gate C 或任何外部动作。
+
+### 10.2 增量依赖与提交顺序
+
+```text
+Task 17 RED
+  -> Task 18 DB + Server GREEN
+  -> Task 19 OpenAPI GREEN
+  -> Task 20 Web precision GREEN
+  -> Task 21 commit: feat: 统一资金账户两位小数精度
+  -> Task 22 transaction column GREEN
+  -> Task 23 full acceptance
+  -> Task 23 commit: fix: 调整资金流水金额列宽度
+```
+
+不创建单独 RED commit，不把 migration 与其 Domain/API 精度实现拆成可运行状态不一致的提交，不在本任务中 push、merge、部署或应用持久数据库 migration。

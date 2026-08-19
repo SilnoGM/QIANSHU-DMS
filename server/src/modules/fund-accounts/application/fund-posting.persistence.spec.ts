@@ -276,13 +276,13 @@ describe('fund posting persistence reads', () => {
     expect(result).toEqual([
       expect.objectContaining({
         id: COMPANY_ACCOUNT_ID,
-        balance: '100.0000',
+        balance: '100.00',
         userShareRate: null,
       }),
       expect.objectContaining({
         id: USER_ACCOUNT_ID,
-        balance: '-20.2500',
-        userShareRate: '30.0000',
+        balance: '-20.25',
+        userShareRate: '30.00',
       }),
     ])
     expect(sqlText(transaction)).toContain('ORDER BY account."id"')
@@ -341,10 +341,10 @@ describe('fund posting persistence reads', () => {
     expect(result).toMatchObject({
       requestFingerprintHash: FINGERPRINT_HASH,
       batchId: BATCH_ID,
-      businessAmount: '100.0000',
+      businessAmount: '100.00',
       entries: [
-        { amount: '30.0000', accountSequence: '7' },
-        { amount: '70.0000', accountSequence: '11' },
+        { amount: '30.00', accountSequence: '7' },
+        { amount: '70.00', accountSequence: '11' },
       ],
     })
     expect(result).not.toHaveProperty('idempotencyKeyHash')
@@ -371,9 +371,9 @@ describe('fund posting persistence writes', () => {
       ruleVersionId: RULE_ID,
       ruleRevisionSnapshot: 1,
       userId: USER_ID,
-      businessAmount: '-100.0000',
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
+      businessAmount: '-100.00',
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
       businessId: 'settlement-1',
       businessNo: '0000011',
       summary: '订单亏损结算',
@@ -395,7 +395,7 @@ describe('fund posting persistence writes', () => {
     expect(createInput.data).toMatchObject({
       id: BATCH_ID,
       kind: 'BUSINESS',
-      businessAmount: new Prisma.Decimal('-100.0000'),
+      businessAmount: new Prisma.Decimal('-100.00'),
       idempotencyKeyHash: Uint8Array.from(IDEMPOTENCY_HASH),
       requestFingerprintHash: Uint8Array.from(FINGERPRINT_HASH),
       adjustmentMode: null,
@@ -425,9 +425,9 @@ describe('fund posting persistence writes', () => {
       ruleVersionId: RULE_ID,
       ruleRevisionSnapshot: 1,
       userId: USER_ID,
-      businessAmount: '-100.0000',
-      userShareRateSnapshot: '30.0000',
-      companyShareRateSnapshot: '70.0000',
+      businessAmount: '-100.00',
+      userShareRateSnapshot: '30.00',
+      companyShareRateSnapshot: '70.00',
       businessId: BATCH_ID,
       summary: '修正录入金额',
       metadata: { ticketNo: 'FIN-1' },
@@ -462,7 +462,7 @@ describe('fund posting persistence writes', () => {
       accountId: USER_ACCOUNT_ID,
       expectedVersion: 2,
       expectedNextSequence: 7n,
-      balanceAfter: '-20.0000',
+      balanceAfter: '-20.00',
       nextSequence: 8n,
       asOf: AS_OF,
     })).resolves.toBe(true)
@@ -479,17 +479,17 @@ describe('fund posting persistence writes', () => {
       direction: 'DEBIT',
       accountTarget: 'USER',
       amountStrategy: 'USER_SHARE',
-      amount: '30.0000',
-      balanceBefore: '10.0000',
-      balanceAfter: '-20.0000',
+      amount: '30.00',
+      balanceBefore: '10.00',
+      balanceAfter: '-20.00',
       accountSequence: 7n,
       postedAt: AS_OF,
     }])
     expect(entryTransaction.createEntries).toHaveBeenCalledWith({
       data: [expect.objectContaining({
-        amount: new Prisma.Decimal('30.0000'),
-        balanceBefore: new Prisma.Decimal('10.0000'),
-        balanceAfter: new Prisma.Decimal('-20.0000'),
+        amount: new Prisma.Decimal('30.00'),
+        balanceBefore: new Prisma.Decimal('10.00'),
+        balanceAfter: new Prisma.Decimal('-20.00'),
       })],
     })
   })

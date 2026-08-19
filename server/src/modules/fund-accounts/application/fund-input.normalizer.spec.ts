@@ -7,6 +7,7 @@ import {
   normalizeFundUuid,
   normalizePostBusinessEventRequest,
 } from './fund-input.normalizer'
+import { calculateFundBusinessFingerprintHash } from './fund-idempotency'
 import { FundPostingError } from './fund-posting.errors'
 
 const USER_ID = '11111111-1111-4111-a111-111111111111'
@@ -57,7 +58,7 @@ describe('fund posting request normalization', () => {
     expect(result.input).toEqual({
       postingTypeCode: 'ORDER_SETTLEMENT',
       userId: USER_ID,
-      amount: '-100.5000',
+      amount: '-100.50',
       businessId: 'settlement-1',
       businessNo: '0000011',
       summary: '订单 亏损结算',
@@ -126,8 +127,22 @@ describe('fund posting request normalization', () => {
     ).requestFingerprintHash.toString('hex')
 
     const first = normalize('request-1', '1', { z: 2, a: 'first' })
-    expect(normalize('request-2', '1.0000', { a: 'first', z: 2 })).toBe(first)
-    expect(normalize('request-2', '1.0000', { a: 'first', z: 2 }, '其他结算')).not.toBe(first)
+    expect(normalize('request-2', '1.00', { a: 'first', z: 2 })).toBe(first)
+    expect(normalize('request-2', '1.00', { a: 'first', z: 2 }, '其他结算')).not.toBe(first)
+
+    const legacyV1Hash = calculateFundBusinessFingerprintHash({
+      amount: '1.0000',
+      businessId: 'settlement-1',
+      businessNo: null,
+      businessOccurredAt: null,
+      consumerCode: 'ORDER',
+      metadata: { a: 'first', z: 2 },
+      postingTypeCode: 'ORDER_SETTLEMENT',
+      sourceCode: 'ORDER_SYSTEM',
+      summary: '订单结算',
+      userId: USER_ID,
+    }).toString('hex')
+    expect(first).toBe(legacyV1Hash)
   })
 
   it('rejects request accessors without invoking them', () => {
@@ -202,7 +217,7 @@ describe('fund posting request normalization', () => {
     })
     expect(adjustment.input).toEqual({
       userAccountId: ACCOUNT_ID,
-      amount: '-50.0000',
+      amount: '-50.00',
       adjustmentMode: 'USER_AND_COMPANY_BY_SHARE',
       reason: '修正 初始化余额',
       metadata: { ticket: 'FIN-1' },
@@ -216,7 +231,7 @@ describe('fund posting request normalization', () => {
     })
     expect(reversal.input).toEqual({
       originalBatchId: BATCH_ID,
-      amount: '12.3000',
+      amount: '12.30',
       reason: '订单金额录入错误',
     })
     expectFundError(
@@ -244,7 +259,7 @@ describe('fund posting request normalization', () => {
 describe('fund common query normalization', () => {
   it('accepts canonical UUID, safe pagination and caller-owned sorting', () => {
     expect(normalizeFundUuid(USER_ID, 'userId')).toBe(USER_ID)
-    expect(normalizeFundShareRateInput('30.5')).toBe('30.5000')
+    expect(normalizeFundShareRateInput('30.5')).toBe('30.50')
     expect(normalizeFundPagination({ page: 2, pageSize: 100 })).toEqual({
       page: 2,
       pageSize: 100,
@@ -256,7 +271,7 @@ describe('fund common query normalization', () => {
     })).toEqual({ sortBy: 'balance', sortOrder: 'desc' })
   })
 
-  it.each(['-1', '100.0001', '1e2', 30])(
+  it.each(['-1', '30.001', '100.01', '1e2', 30])(
     'rejects an invalid share rate: %p',
     value => {
       expectFundError(

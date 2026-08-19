@@ -118,11 +118,11 @@ describe('FundTransactionQueryService', () => {
 
     await expect(service.listTransactions({})).resolves.toEqual({
       items: [expect.objectContaining({
-        amount: '30.0000',
-        balanceBefore: '-5.0000',
-        balanceAfter: '25.0000',
+        amount: '30.00',
+        balanceBefore: '-5.00',
+        balanceAfter: '25.00',
         accountSequence: '7',
-        businessAmount: '100.0000',
+        businessAmount: '100.00',
         reversalStatus: 'NONE',
       })],
       page: 1,
@@ -228,20 +228,20 @@ describe('FundTransactionQueryService', () => {
     )).resolves.toMatchObject({
       postingTypeCode: 'ORDER_SETTLEMENT',
       businessSourceCode: 'ORDER_SYSTEM',
-      businessAmount: '100.0000',
+      businessAmount: '100.00',
       metadata: { orderNo: '0000011' },
       entries: [{
-        amount: '30.0000',
-        balanceBefore: '-5.0000',
-        balanceAfter: '25.0000',
+        amount: '30.00',
+        balanceBefore: '-5.00',
+        balanceAfter: '25.00',
         accountSequence: '7',
       }],
       reversalChain: {
         status: 'PARTIAL',
-        originalAmount: '100.0000',
-        reversedAmount: '20.0000',
-        remainingAmount: '80.0000',
-        reversals: [{ amount: '20.0000', reason: '部分冲账' }],
+        originalAmount: '100.00',
+        reversedAmount: '20.00',
+        remainingAmount: '80.00',
+        reversals: [{ amount: '20.00', reason: '部分冲账' }],
       },
     })
   })

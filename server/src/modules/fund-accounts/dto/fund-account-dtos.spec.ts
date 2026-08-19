@@ -15,12 +15,13 @@ import { CreateFundReversalRequestDto } from './fund-transaction.dto'
 describe('Fund account DTOs', () => {
   it.each([
     ['0', true],
-    ['30.1234', true],
-    ['99.9999', true],
+    ['30.12', true],
+    ['99.99', true],
     ['100', true],
-    ['100.0000', true],
+    ['100.00', true],
+    ['30.001', false],
     ['-1', false],
-    ['100.0001', false],
+    ['100.01', false],
     ['101', false],
     ['999', false],
   ])('validates user share rate %s', async (userShareRate, valid) => {
@@ -59,10 +60,11 @@ describe('Fund account DTOs', () => {
 
   it.each([
     ['100', true],
-    ['0.0001', true],
+    ['0.01', true],
+    ['0.001', false],
     ['0', false],
-    ['0.0000', false],
-    ['-0.0001', false],
+    ['0.00', false],
+    ['-0.01', false],
     ['-100', false],
   ])('requires a positive reversal amount %s', async (amount, valid) => {
     const dto = plainToInstance(CreateFundReversalRequestDto, {
@@ -76,10 +78,11 @@ describe('Fund account DTOs', () => {
   it.each([
     ['100', true],
     ['-100', true],
-    ['0.0001', true],
-    ['-0.0001', true],
+    ['0.01', true],
+    ['-0.01', true],
+    ['0.001', false],
     ['0', false],
-    ['-0.0000', false],
+    ['-0.00', false],
   ])('requires a signed non-zero adjustment amount %s', async (amount, valid) => {
     const dto = plainToInstance(CreateFundManualAdjustmentRequestDto, {
       amount,

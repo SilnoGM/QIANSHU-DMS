@@ -217,7 +217,7 @@ function normalizePostingAmount(value: unknown, positiveOnly: boolean): string {
     const normalized = positiveOnly
       ? normalizePositiveFundAmount(value)
       : normalizeFundAmount(value)
-    if (normalized === '0.0000') {
+    if (normalized === '0.00') {
       throw new FundPostingError(
         FUND_POSTING_ERROR_CODES.POSTING_AMOUNT_INVALID,
         'amount',

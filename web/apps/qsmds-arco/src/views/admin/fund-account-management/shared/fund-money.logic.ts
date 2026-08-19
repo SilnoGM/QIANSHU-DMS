@@ -30,11 +30,11 @@ export interface FundAdjustmentPreview {
   readonly userShareRate: string
 }
 
-const FUND_AMOUNT_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
-const FUND_SHARE_RATE_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,4})?$/u
+const FUND_AMOUNT_PATTERN = /^-?(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
+const FUND_SHARE_RATE_PATTERN = /^(?:0|[1-9]\d{0,2})(?:\.\d{1,2})?$/u
 
 /**
- * 资金金额最多 26 位整数和 4 位小数；比例运算还会额外增加有效位。独立 clone
+ * 资金金额最多 26 位整数和 2 位小数；比例运算还会额外增加有效位。独立 clone
  * 防止修改 decimal.js 全局配置，同时为最大金额分账和余额相加保留充足精度。
  */
 const FundDecimal = Decimal.clone({
@@ -67,7 +67,7 @@ function normalizeNonZeroFundAmount(value: string): string {
   if (amount.isZero()) {
     throw new RangeError('资金金额必须为非零值')
   }
-  return amount.toFixed(4)
+  return amount.toFixed(2)
 }
 
 function parseFundShareRate(value: string): Decimal {
@@ -83,7 +83,7 @@ function parseFundShareRate(value: string): Decimal {
 }
 
 function normalizeFundShareRate(value: string): string {
-  return parseFundShareRate(value).toFixed(4)
+  return parseFundShareRate(value).toFixed(2)
 }
 
 function validVersion(value: number): boolean {
@@ -152,7 +152,7 @@ export function buildFundReversalRequest(
     throw new RangeError('冲账金额必须大于零且不超过剩余额度')
   }
   return {
-    amount: reversalAmount.toFixed(4),
+    amount: reversalAmount.toFixed(2),
     reason: normalizeText(reason, '冲账原因'),
   }
 }
@@ -165,7 +165,7 @@ function signedAmount(amount: Decimal, negative: boolean): Decimal {
 }
 
 /**
- * 调账预览严格镜像 Server 的四位定点、ROUND_HALF_UP 和“公司承接尾差”规则。
+ * 调账预览严格镜像 Server 的两位定点、ROUND_HALF_UP 和“公司承接尾差”规则。
  * 返回值仅用于管理员确认影响范围；真正余额、比例和分录仍以 Server 在账户锁内
  * 读取并提交的结果为唯一账务真相，页面不得拿预览结果直接修改本地余额。
  */
@@ -192,7 +192,7 @@ export function calculateFundAdjustmentPreview(
     const absoluteUserAmount = absoluteAmount
       .times(userShareRate)
       .dividedBy(100)
-      .toDecimalPlaces(4, Decimal.ROUND_HALF_UP)
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
     const absoluteCompanyAmount = absoluteAmount.minus(absoluteUserAmount)
     userAmount = signedAmount(absoluteUserAmount, businessAmount.isNegative())
     companyAmount = signedAmount(
@@ -205,12 +205,12 @@ export function calculateFundAdjustmentPreview(
   }
 
   return Object.freeze({
-    businessAmount: businessAmount.toFixed(4),
-    companyAmount: companyAmount.toFixed(4),
-    companyBalanceAfter: companyBalance.plus(companyAmount).toFixed(4),
-    companyShareRate: companyShareRate.toFixed(4),
-    userAmount: userAmount.toFixed(4),
-    userBalanceAfter: userBalance.plus(userAmount).toFixed(4),
-    userShareRate: userShareRate.toFixed(4),
+    businessAmount: businessAmount.toFixed(2),
+    companyAmount: companyAmount.toFixed(2),
+    companyBalanceAfter: companyBalance.plus(companyAmount).toFixed(2),
+    companyShareRate: companyShareRate.toFixed(2),
+    userAmount: userAmount.toFixed(2),
+    userBalanceAfter: userBalance.plus(userAmount).toFixed(2),
+    userShareRate: userShareRate.toFixed(2),
   })
 }

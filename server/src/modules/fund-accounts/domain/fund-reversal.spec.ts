@@ -45,8 +45,8 @@ describe('fund cumulative reversal calculation', () => {
   )
 
   it.each([
-    ['100', 'CREDIT', '-40.0000', 'DEBIT'],
-    ['-100', 'DEBIT', '40.0000', 'CREDIT'],
+    ['100', 'CREDIT', '-40.00', 'DEBIT'],
+    ['-100', 'DEBIT', '40.00', 'CREDIT'],
   ] as const)(
     'reverses the signed business amount %s using opposite entries',
     (originalBusinessAmount, direction, reversalBusinessAmount, reversedDirection) => {
@@ -58,7 +58,7 @@ describe('fund cumulative reversal calculation', () => {
         reversalAmount: '40',
       })).toEqual({
         reversalBusinessAmount,
-        cumulativeReversedAmount: '40.0000',
+        cumulativeReversedAmount: '40.00',
         reversalState: 'PARTIAL',
         entries: [
           {
@@ -66,14 +66,14 @@ describe('fund cumulative reversal calculation', () => {
             accountTarget: 'USER',
             direction: reversedDirection,
             amountStrategy: 'USER_SHARE',
-            amount: '12.0000',
+            amount: '12.00',
           },
           {
             originalLineNo: 2,
             accountTarget: 'COMPANY',
             direction: reversedDirection,
             amountStrategy: 'COMPANY_REMAINDER',
-            amount: '28.0000',
+            amount: '28.00',
           },
         ],
       })
@@ -89,44 +89,44 @@ describe('fund cumulative reversal calculation', () => {
       reversalAmount: '33.33',
     })
     expect(first.entries.map((entry) => entry.amount))
-      .toEqual(['9.9990', '23.3310'])
+      .toEqual(['10.00', '23.33'])
 
     const second = calculateFundReversal({
       originalBatchKind: 'BUSINESS',
       originalBusinessAmount: '100',
       userShareRateSnapshot: '30',
-      entries: splitEntries('CREDIT', ['9.9990', '23.3310']),
+      entries: splitEntries('CREDIT', ['10.00', '23.33']),
       reversalAmount: '33.33',
     })
     expect(second.entries.map((entry) => entry.amount))
-      .toEqual(['9.9990', '23.3310'])
-    expect(second.cumulativeReversedAmount).toBe('66.6600')
+      .toEqual(['10.00', '23.33'])
+    expect(second.cumulativeReversedAmount).toBe('66.66')
 
     const final = calculateFundReversal({
       originalBatchKind: 'BUSINESS',
       originalBusinessAmount: '100',
       userShareRateSnapshot: '30',
-      entries: splitEntries('CREDIT', ['19.9980', '46.6620']),
+      entries: splitEntries('CREDIT', ['20.00', '46.66']),
       reversalAmount: '33.34',
     })
     expect(final.entries.map((entry) => entry.amount))
-      .toEqual(['10.0020', '23.3380'])
-    expect(final.cumulativeReversedAmount).toBe('100.0000')
+      .toEqual(['10.00', '23.34'])
+    expect(final.cumulativeReversedAmount).toBe('100.00')
     expect(final.reversalState).toBe('FULL')
   })
 
   it('closes exactly against original entry snapshots on the final reversal', () => {
     const result = calculateFundReversal({
       originalBatchKind: 'MANUAL_ADJUSTMENT',
-      originalBusinessAmount: '0.0003',
-      userShareRateSnapshot: '33.3333',
+      originalBusinessAmount: '0.03',
+      userShareRateSnapshot: '33.33',
       entries: [
         {
           originalLineNo: 1,
           accountTarget: 'USER',
           direction: 'CREDIT',
           amountStrategy: 'USER_SHARE',
-          amount: '0.0001',
+          amount: '0.01',
           reversedAmount: '0',
         },
         {
@@ -134,16 +134,16 @@ describe('fund cumulative reversal calculation', () => {
           accountTarget: 'COMPANY',
           direction: 'CREDIT',
           amountStrategy: 'COMPANY_REMAINDER',
-          amount: '0.0002',
-          reversedAmount: '0.0001',
+          amount: '0.02',
+          reversedAmount: '0.01',
         },
       ],
-      reversalAmount: '0.0002',
+      reversalAmount: '0.02',
     })
 
     expect(result.reversalState).toBe('FULL')
     expect(result.entries.map((entry) => entry.amount))
-      .toEqual(['0.0001', '0.0001'])
+      .toEqual(['0.01', '0.01'])
   })
 
   it('rejects reversal batches, invalid snapshots and excessive amounts', () => {

@@ -275,7 +275,7 @@ function isUuidText(value: unknown): value is string {
 function decimalAmount(value: unknown): string {
   if (!(value instanceof Prisma.Decimal)) return persistenceInvariant()
   try {
-    return formatFundMinor(parseFundAmountMinor(value.toFixed(4)))
+    return formatFundMinor(parseFundAmountMinor(value.toFixed(2)))
   }
   catch {
     return persistenceInvariant()
@@ -287,7 +287,7 @@ function nullableShareRate(value: unknown): string | null {
   if (!(value instanceof Prisma.Decimal)) return persistenceInvariant()
   try {
     return formatFundShareRateUnits(
-      parseFundShareRateUnits(value.toFixed(4)),
+      parseFundShareRateUnits(value.toFixed(2)),
     )
   }
   catch {

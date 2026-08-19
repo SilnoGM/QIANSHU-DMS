@@ -169,11 +169,11 @@ export class CreateFundReversalRequestDto {
   @ApiProperty({
     type: 'string',
     pattern: FUND_POSITIVE_AMOUNT_INPUT_PATTERN,
-    example: '50.0000',
+    example: '50.00',
   })
   @IsString({ message: 'amount 必须是字符串' })
   @Matches(new RegExp(FUND_POSITIVE_AMOUNT_INPUT_PATTERN, 'u'), {
-    message: 'amount 必须是大于零且最多四位小数的十进制字符串',
+    message: 'amount 必须是大于零且最多两位小数的十进制字符串',
   })
   amount!: string
 

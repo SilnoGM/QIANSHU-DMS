@@ -746,8 +746,8 @@ model FundAccount {
   ownerType          FundAccountOwnerType @map("owner_type")
   userId             String?              @unique(map: "fund_accounts_user_id_key") @map("user_id") @db.Uuid
   currency           String               @default("CNY") @db.Char(3)
-  balance            Decimal              @default(0) @db.Decimal(30, 4)
-  userShareRate      Decimal?             @map("user_share_rate") @db.Decimal(7, 4)
+  balance            Decimal              @default(0) @db.Decimal(30, 2)
+  userShareRate      Decimal?             @map("user_share_rate") @db.Decimal(7, 2)
   nextSequence       BigInt               @default(1) @map("next_sequence") @db.BigInt
   version            Int                  @default(1)
   shareRateUpdatedAt DateTime?            @map("share_rate_updated_at") @db.Timestamptz(6)
@@ -877,10 +877,10 @@ model FundPostingBatch {
   ruleVersionId              String               @map("rule_version_id") @db.Uuid
   ruleRevisionSnapshot       Int                  @map("rule_revision_snapshot")
   userId                     String?              @map("user_id") @db.Uuid
-  businessAmount             Decimal              @map("business_amount") @db.Decimal(30, 4)
+  businessAmount             Decimal              @map("business_amount") @db.Decimal(30, 2)
   currency                   String               @default("CNY") @db.Char(3)
-  userShareRateSnapshot      Decimal?             @map("user_share_rate_snapshot") @db.Decimal(7, 4)
-  companyShareRateSnapshot   Decimal?             @map("company_share_rate_snapshot") @db.Decimal(7, 4)
+  userShareRateSnapshot      Decimal?             @map("user_share_rate_snapshot") @db.Decimal(7, 2)
+  companyShareRateSnapshot   Decimal?             @map("company_share_rate_snapshot") @db.Decimal(7, 2)
   businessId                 String               @map("business_id") @db.VarChar(128)
   businessNo                 String?              @map("business_no") @db.VarChar(128)
   summary                    String               @db.VarChar(500)
@@ -925,9 +925,9 @@ model FundLedgerEntry {
   direction       FundEntryDirection
   accountTarget   FundAccountTarget  @map("account_target")
   amountStrategy  FundAmountStrategy @map("amount_strategy")
-  amount          Decimal            @db.Decimal(30, 4)
-  balanceBefore   Decimal            @map("balance_before") @db.Decimal(30, 4)
-  balanceAfter    Decimal            @map("balance_after") @db.Decimal(30, 4)
+  amount          Decimal            @db.Decimal(30, 2)
+  balanceBefore   Decimal            @map("balance_before") @db.Decimal(30, 2)
+  balanceAfter    Decimal            @map("balance_after") @db.Decimal(30, 2)
   accountSequence BigInt             @map("account_sequence") @db.BigInt
   postedAt        DateTime           @default(now()) @map("posted_at") @db.Timestamptz(6)
 

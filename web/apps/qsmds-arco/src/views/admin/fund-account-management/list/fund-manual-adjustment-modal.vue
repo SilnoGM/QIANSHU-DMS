@@ -82,7 +82,7 @@ const preview = computed(() => {
     return calculateFundAdjustmentPreview({
       adjustmentMode: adjustmentMode.value,
       amount: amount.value,
-      companyBalance: props.companyAccount?.balance ?? '0.0000',
+      companyBalance: props.companyAccount?.balance ?? '0.00',
       userBalance: props.account.balance,
       userShareRate: props.account.userShareRate,
     })
@@ -248,7 +248,7 @@ watch(() => props.submitting, (submitting) => {
         name="amount"
         label="业务调账金额"
         required
-        description="正数为调增，负数为调减；最多四位小数且不能为零。"
+        description="正数为调增，负数为调减；最多两位小数且不能为零。"
       >
         <MoneyInput
           v-model="amount"
@@ -258,7 +258,7 @@ watch(() => props.submitting, (submitting) => {
           :disabled="locked || !currencyReady"
           autocomplete="off"
           aria-label="业务调账金额"
-          placeholder="例如 -100.0000"
+          placeholder="例如 -100.00"
           @update:model-value="localError = ''"
         />
       </FaFormItem>

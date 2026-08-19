@@ -40,7 +40,7 @@ function internalError(): never {
 
 function normalizeDecimal(value: Prisma.Decimal): string {
   try {
-    return value.toFixed(4)
+    return value.toFixed(2)
   }
   catch {
     return internalError()
@@ -48,7 +48,7 @@ function normalizeDecimal(value: Prisma.Decimal): string {
 }
 
 /**
- * Prisma Decimal 只在持久化边界内存在；所有应用返回值立即转成四位 decimal
+ * Prisma Decimal 只在持久化边界内存在；所有应用返回值立即转成两位 decimal
  * string。公司比例始终由用户比例推导，绝不从账户表读取第二份状态。
  */
 export function mapFundAccountView(row: FundAccountViewRow): FundAccountView {

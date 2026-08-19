@@ -24,13 +24,13 @@ import {
 import { FUND_ADJUSTMENT_MODES, type FundAdjustmentMode } from '../domain'
 
 export const FUND_NON_ZERO_AMOUNT_INPUT_PATTERN =
-  '^-?(?:0\\.(?=\\d{1,4}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,4})?)$'
+  '^-?(?:0\\.(?=\\d{1,2}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,2})?)$'
 export const FUND_POSITIVE_AMOUNT_INPUT_PATTERN =
-  '^(?:0\\.(?=\\d{1,4}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,4})?)$'
+  '^(?:0\\.(?=\\d{1,2}$)\\d*[1-9]\\d*|[1-9]\\d{0,25}(?:\\.\\d{1,2})?)$'
 export const FUND_SHARE_RATE_INPUT_PATTERN =
-  '^(?:100(?:\\.0{1,4})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,4})?)$'
+  '^(?:100(?:\\.0{1,2})?|(?:0|[1-9]\\d?)(?:\\.\\d{1,2})?)$'
 export const FUND_DECIMAL_OUTPUT_PATTERN =
-  '^-?(?:0|[1-9]\\d*)\\.\\d{4}$'
+  '^-?(?:0|[1-9]\\d*)\\.\\d{2}$'
 
 export class FundAccountIdParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
@@ -100,11 +100,11 @@ export class CreateFundAccountRequestDto {
   @ApiProperty({
     type: 'string',
     pattern: FUND_SHARE_RATE_INPUT_PATTERN,
-    example: '30.0000',
+    example: '30.00',
   })
   @IsString({ message: 'userShareRate 必须是字符串' })
   @Matches(new RegExp(FUND_SHARE_RATE_INPUT_PATTERN, 'u'), {
-    message: 'userShareRate 必须是 0 到 100 的四位以内小数',
+    message: 'userShareRate 必须是 0 到 100 的两位以内小数',
   })
   userShareRate!: string
 }
@@ -113,11 +113,11 @@ export class UpdateFundShareRateRequestDto {
   @ApiProperty({
     type: 'string',
     pattern: FUND_SHARE_RATE_INPUT_PATTERN,
-    example: '30.0000',
+    example: '30.00',
   })
   @IsString({ message: 'userShareRate 必须是字符串' })
   @Matches(new RegExp(FUND_SHARE_RATE_INPUT_PATTERN, 'u'), {
-    message: 'userShareRate 必须是 0 到 100 的四位以内小数',
+    message: 'userShareRate 必须是 0 到 100 的两位以内小数',
   })
   userShareRate!: string
 
@@ -140,11 +140,11 @@ export class CreateFundManualAdjustmentRequestDto {
   @ApiProperty({
     type: 'string',
     pattern: FUND_NON_ZERO_AMOUNT_INPUT_PATTERN,
-    example: '-100.0000',
+    example: '-100.00',
   })
   @IsString({ message: 'amount 必须是字符串' })
   @Matches(new RegExp(FUND_NON_ZERO_AMOUNT_INPUT_PATTERN, 'u'), {
-    message: 'amount 必须是非零且最多四位小数的十进制字符串',
+    message: 'amount 必须是非零且最多两位小数的十进制字符串',
   })
   amount!: string
 

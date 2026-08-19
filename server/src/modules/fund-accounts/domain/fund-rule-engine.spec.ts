@@ -32,21 +32,21 @@ describe('fund posting rule engine', () => {
         amount,
         userShareRate: '30',
       })).toEqual({
-        businessAmount: `${amount}.0000`,
-        userShareRate: '30.0000',
-        companyShareRate: '70.0000',
+        businessAmount: `${amount}.00`,
+        userShareRate: '30.00',
+        companyShareRate: '70.00',
         entries: [
           {
             accountTarget: 'USER',
             direction,
             amountStrategy: 'USER_SHARE',
-            amount: '30.0000',
+            amount: '30.00',
           },
           {
             accountTarget: 'COMPANY',
             direction,
             amountStrategy: 'COMPANY_REMAINDER',
-            amount: '70.0000',
+            amount: '70.00',
           },
         ],
       })
@@ -62,27 +62,27 @@ describe('fund posting rule engine', () => {
   })
 
   it.each([
-    ['USER_WITHDRAWAL', [['USER', '100.0000']]],
+    ['USER_WITHDRAWAL', [['USER', '100.00']]],
     [
       'PURCHASE_PAYMENT',
-      [['USER', '30.0000'], ['COMPANY', '70.0000']],
+      [['USER', '30.00'], ['COMPANY', '70.00']],
     ],
-    ['RENT_UTILITIES', [['COMPANY', '100.0000']]],
+    ['RENT_UTILITIES', [['COMPANY', '100.00']]],
     [
       'BUSINESS_ACCOUNT_FEE',
-      [['USER', '30.0000'], ['COMPANY', '70.0000']],
+      [['USER', '30.00'], ['COMPANY', '70.00']],
     ],
     [
       'ADVERTISING_FEE',
-      [['USER', '30.0000'], ['COMPANY', '70.0000']],
+      [['USER', '30.00'], ['COMPANY', '70.00']],
     ],
     [
       'NETWORK_IP_VPN_FEE',
-      [['USER', '30.0000'], ['COMPANY', '70.0000']],
+      [['USER', '30.00'], ['COMPANY', '70.00']],
     ],
     [
       'INVOICE_FEE',
-      [['USER', '30.0000'], ['COMPANY', '70.0000']],
+      [['USER', '30.00'], ['COMPANY', '70.00']],
     ],
   ] as const)(
     'calculates the fixed debit rule %s',
@@ -117,22 +117,22 @@ describe('fund posting rule engine', () => {
   })
 
   it.each([
-    ['USER_ONLY', '100', [['USER', 'CREDIT', '100.0000']]],
-    ['USER_ONLY', '-100', [['USER', 'DEBIT', '100.0000']]],
+    ['USER_ONLY', '100', [['USER', 'CREDIT', '100.00']]],
+    ['USER_ONLY', '-100', [['USER', 'DEBIT', '100.00']]],
     [
       'USER_AND_COMPANY_BY_SHARE',
       '100',
       [
-        ['USER', 'CREDIT', '30.0000'],
-        ['COMPANY', 'CREDIT', '70.0000'],
+        ['USER', 'CREDIT', '30.00'],
+        ['COMPANY', 'CREDIT', '70.00'],
       ],
     ],
     [
       'USER_AND_COMPANY_BY_SHARE',
       '-100',
       [
-        ['USER', 'DEBIT', '30.0000'],
-        ['COMPANY', 'DEBIT', '70.0000'],
+        ['USER', 'DEBIT', '30.00'],
+        ['COMPANY', 'DEBIT', '70.00'],
       ],
     ],
   ] as const)(
@@ -161,14 +161,14 @@ describe('fund posting rule engine', () => {
       amount: '100',
       userShareRate: '0',
     }).entries).toEqual([
-      expect.objectContaining({ accountTarget: 'COMPANY', amount: '100.0000' }),
+      expect.objectContaining({ accountTarget: 'COMPANY', amount: '100.00' }),
     ])
     expect(calculateFundPostingPlan({
       rule,
       amount: '100',
       userShareRate: '100',
     }).entries).toEqual([
-      expect.objectContaining({ accountTarget: 'USER', amount: '100.0000' }),
+      expect.objectContaining({ accountTarget: 'USER', amount: '100.00' }),
     ])
   })
 

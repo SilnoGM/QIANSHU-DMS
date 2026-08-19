@@ -101,13 +101,13 @@ export function findCompanyFundAccount(
   return accounts.find(account => account.ownerType === 'COMPANY') ?? null
 }
 
-/** 资金域固定四位小数；描述符仍源自应用货币目录，不复制名称或符号。 */
+/** 资金域固定两位小数；描述符仍源自应用货币目录，不复制名称或符号。 */
 export function withFundAccountPrecision(
   currencies: readonly CurrencyDescriptor[],
 ): CurrencyDescriptor[] {
   return currencies
     .filter(currency => currency.code === 'CNY')
-    .map(currency => ({ ...currency, minorUnit: 4 }))
+    .map(currency => ({ ...currency, minorUnit: 2 }))
 }
 
 export function getFundBalanceState(balance: string): FundBalanceState {
@@ -127,7 +127,5 @@ export function formatFundShareRate(rate: null | string): string {
   if (rate === null) {
     return '—'
   }
-  const [integer, rawFraction = ''] = rate.split('.')
-  const fraction = rawFraction.replace(/0+$/u, '')
-  return `${integer}${fraction === '' ? '' : `.${fraction}`}%`
+  return `${new Decimal(rate).toFixed(2)}%`
 }
