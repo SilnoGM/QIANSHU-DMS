@@ -22,18 +22,23 @@ function buildFundAccountOrderBy(
   sortBy: FundAccountSortField,
   sortOrder: FundAccountSortOrder,
 ): Prisma.FundAccountOrderByWithRelationInput[] {
+  // PostgreSQL enum 顺序是 USER、COMPANY；降序可让公司账户在业务排序和分页前固定置顶。
+  const companyFirstOrder: Prisma.FundAccountOrderByWithRelationInput = {
+    ownerType: 'desc',
+  }
   const stableIdOrder: Prisma.FundAccountOrderByWithRelationInput = {
     id: sortOrder,
   }
 
   if (sortBy === 'userShareRate') {
     return [
+      companyFirstOrder,
       { userShareRate: { sort: sortOrder, nulls: 'last' } },
       stableIdOrder,
     ]
   }
 
-  return [{ [sortBy]: sortOrder }, stableIdOrder]
+  return [companyFirstOrder, { [sortBy]: sortOrder }, stableIdOrder]
 }
 
 function buildFundAccountWhere(

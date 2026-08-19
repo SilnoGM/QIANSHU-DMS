@@ -162,18 +162,18 @@ const columns: QsGenericTableColumn<FundAccountDto>[] = [
     title: '比例更新时间',
   },
   {
-    accessorKey: 'createdAt',
-    id: 'createdAt',
-    minWidth: 190,
-    sortable: true,
-    title: '创建时间',
-  },
-  {
     accessorKey: 'updatedAt',
     id: 'updatedAt',
     minWidth: 190,
     sortable: true,
     title: '更新时间',
+  },
+  {
+    accessorKey: 'createdAt',
+    id: 'createdAt',
+    minWidth: 190,
+    sortable: true,
+    title: '创建时间',
   },
 ]
 
@@ -887,6 +887,7 @@ onBeforeUnmount(() => {
               :value="row.original.balance"
               :currency="row.original.currency"
               :currencies="fundCurrencies"
+              class="!font-semibold"
               :class="getFundBalanceTextClass(row.original.balance)"
             />
             <FaTag
@@ -908,11 +909,11 @@ onBeforeUnmount(() => {
         <template #cell-shareRateUpdatedAt="{ row }">
           <DateTimeDisplay :value="row.original.shareRateUpdatedAt" />
         </template>
-        <template #cell-createdAt="{ row }">
-          <DateTimeDisplay :value="row.original.createdAt" />
-        </template>
         <template #cell-updatedAt="{ row }">
           <DateTimeDisplay :value="row.original.updatedAt" />
+        </template>
+        <template #cell-createdAt="{ row }">
+          <DateTimeDisplay :value="row.original.createdAt" />
         </template>
 
         <template #actions="{ row, rowNumber }">
@@ -979,6 +980,7 @@ onBeforeUnmount(() => {
                   :value="row.balance"
                   :currency="row.currency"
                   :currencies="fundCurrencies"
+                  class="!font-semibold"
                   :class="getFundBalanceTextClass(row.balance)"
                 />
                 <FaTag

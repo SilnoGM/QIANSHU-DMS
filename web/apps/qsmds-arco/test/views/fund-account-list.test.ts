@@ -48,6 +48,14 @@ test('表格展示主体、余额、比例、时间和公司标识但不暴露�
   assert.doesNotMatch(pageSource, /title: '版本'/u)
 })
 
+test('余额使用半粗体且更新时间列位于创建时间列之前', () => {
+  assert.equal(pageSource.match(/class="!font-semibold"/gu)?.length, 2)
+  assert.ok(
+    pageSource.indexOf('accessorKey: \'updatedAt\'')
+    < pageSource.indexOf('accessorKey: \'createdAt\''),
+  )
+})
+
 test('页面组合开户、比例修改、手动调账 Modal 和账户流水跳转', () => {
   for (const component of [
     'FundAccountCreateModal',

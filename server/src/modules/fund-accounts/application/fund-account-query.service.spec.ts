@@ -74,7 +74,11 @@ describe('FundAccountQueryService', () => {
     expect(findArguments).toEqual(expect.objectContaining({
       skip: 10,
       take: 10,
-      orderBy: [{ balance: 'asc' }, { id: 'asc' }],
+      orderBy: [
+        { ownerType: 'desc' },
+        { balance: 'asc' },
+        { id: 'asc' },
+      ],
     }))
     expect(findArguments).toHaveProperty('where.ownerType', 'USER')
     expect(findArguments).toHaveProperty('where.user.is.OR')
@@ -114,6 +118,7 @@ describe('FundAccountQueryService', () => {
     })
     expect(fundAccount.findMany).toHaveBeenCalledWith(expect.objectContaining({
       orderBy: [
+        { ownerType: 'desc' },
         { userShareRate: { sort: 'desc', nulls: 'last' } },
         { id: 'desc' },
       ],
