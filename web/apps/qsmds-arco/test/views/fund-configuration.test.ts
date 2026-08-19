@@ -19,6 +19,9 @@ const typeFormSource = readSource(
 const ruleFormSource = readSource(
   '../../src/views/admin/fund-account-management/list/fund-posting-rule-modal.vue',
 )
+const ruleEditorSource = readSource(
+  '../../src/views/admin/fund-account-management/list/fund-posting-rule-editor.vue',
+)
 const sourceFormSource = readSource(
   '../../src/views/admin/fund-account-management/list/fund-business-source-form-modal.vue',
 )
@@ -70,6 +73,22 @@ test('类型交互覆盖只读身份、受控规则草稿、发布和危险状�
   assert.match(ruleFormSource, /最多两条标准分录/u)
   assert.match(drawerSource, /publish/u)
   assert.match(drawerSource, /FundConfigurationConfirmModal/u)
+})
+
+test('规则草稿 Modal 为可复用编辑器中的全部 FaFormItem 提供真实 FaForm 上下文', () => {
+  assert.match(ruleFormSource, /<FaForm\b/u)
+  assert.match(ruleEditorSource, /<FaFormItem\b/u)
+  assert.ok(
+    ruleFormSource.indexOf('<FaForm') < ruleFormSource.indexOf('<FundPostingRuleEditor'),
+    '规则草稿 Modal 的 FaForm 必须包裹可复用规则编辑器',
+  )
+})
+
+test('账户页头部操作使用独立间距容器', () => {
+  assert.match(
+    pageSource,
+    /data-testid="fund-account-header-actions"[^>]*class="[^"]*gap-2[^"]*"/u,
+  )
 })
 
 test('来源交互维护允许类型范围且稳定编码只在创建时录入', () => {

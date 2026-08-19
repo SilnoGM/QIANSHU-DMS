@@ -132,13 +132,20 @@ watch(
       </div>
     </dl>
 
-    <FundPostingRuleEditor
-      v-if="target"
-      v-model="legs"
-      :amount-sign-policy="target.amountSignPolicy"
-      :requires-user="target.requiresUser"
-      :disabled="submitting"
-    />
+    <!--
+      FundPostingRuleEditor 也会嵌入“创建业务类型”的现有 FaForm，因此不能在
+      编辑器内部再创建 form。独立草稿 Modal 由调用侧补齐上下文，确保其中的
+      FaFormItem 不会在 setup 阶段抛错并留下不可见模态遮罩。
+    -->
+    <FaForm :model="{ legs }" :disabled="submitting">
+      <FundPostingRuleEditor
+        v-if="target"
+        v-model="legs"
+        :amount-sign-policy="target.amountSignPolicy"
+        :requires-user="target.requiresUser"
+        :disabled="submitting"
+      />
+    </FaForm>
 
     <template #footer>
       <FaButton variant="outline" class="min-h-11 w-full sm:min-h-9 sm:w-auto" :disabled="submitting" @click="close">

@@ -784,17 +784,19 @@ onBeforeUnmount(() => {
       title="资金账户列表"
       description="核对用户与公司人民币账户的实时余额、分成比例和最近更新时间。"
     >
-      <FaButton
-        v-if="canConfigure"
-        variant="outline"
-        class="min-h-11 sm:min-h-9"
-        @click="openConfigurationDrawer"
-      >
-        <FaIcon name="i-lucide:sliders-horizontal" />业务配置
-      </FaButton>
-      <FaButton v-if="canCreate" class="min-h-11 sm:min-h-9" @click="openCreateModal">
-        <FaIcon name="i-lucide:plus" />创建资金账户
-      </FaButton>
+      <div data-testid="fund-account-header-actions" class="flex flex-wrap gap-2 items-center">
+        <FaButton
+          v-if="canConfigure"
+          variant="outline"
+          class="min-h-11 sm:min-h-9"
+          @click="openConfigurationDrawer"
+        >
+          <FaIcon name="i-lucide:sliders-horizontal" />业务配置
+        </FaButton>
+        <FaButton v-if="canCreate" class="min-h-11 sm:min-h-9" @click="openCreateModal">
+          <FaIcon name="i-lucide:plus" />创建资金账户
+        </FaButton>
+      </div>
     </FaPageHeader>
 
     <FaPageMain v-if="!canRead">
