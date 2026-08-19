@@ -51,6 +51,20 @@ test('流水列覆盖批次、主体、业务快照、方向金额、余额、�
   assert.match(tableSource, /getFundDirectionState/u)
 })
 
+test('桌面方向金额列加宽且方向、符号与金额保持同一行', () => {
+  const amountColumnStart = tableSource.indexOf('accessorKey: \'amount\'')
+  const amountColumnEnd = tableSource.indexOf('accessorKey: \'balanceAfter\'')
+  const amountCellStart = tableSource.indexOf('<template #cell-amount')
+  const amountCellEnd = tableSource.indexOf('<template #cell-balance')
+
+  assert.ok(amountColumnStart >= 0 && amountColumnEnd > amountColumnStart)
+  assert.ok(amountCellStart >= 0 && amountCellEnd > amountCellStart)
+  assert.match(tableSource.slice(amountColumnStart, amountColumnEnd), /minWidth: 300/u)
+  assert.match(tableSource, /table-class="min-w-\[2030px\]"/u)
+  assert.match(tableSource.slice(amountCellStart, amountCellEnd), /flex-nowrap/u)
+  assert.doesNotMatch(tableSource.slice(amountCellStart, amountCellEnd), /flex-wrap/u)
+})
+
 test('页面筛选完整映射九种服务端条件且只在应用时查询', () => {
   for (const field of [
     'accountId',

@@ -53,7 +53,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     accessorKey: 'amount',
     align: 'right',
     id: 'amount',
-    minWidth: 190,
+    minWidth: 300,
     sortable: true,
     title: '方向 / 金额',
   },
@@ -113,7 +113,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     :searchable="false"
     :show-column-settings="true"
     :total="total"
-    table-class="min-w-[1920px]"
+    table-class="min-w-[2030px]"
     @pagination-change="emit('paginationChange', $event)"
     @retry="emit('retry')"
     @sorting-change="emit('sortingChange', $event)"
@@ -169,9 +169,11 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     </template>
 
     <template #cell-amount="{ row }">
-      <div class="flex flex-wrap gap-2 items-center justify-end">
-        <span :class="getFundDirectionState(row.original.direction).tone === 'debit' ? 'text-destructive' : 'text-primary'" class="font-semibold whitespace-nowrap">{{ getFundDirectionState(row.original.direction).sign }} {{ getFundDirectionState(row.original.direction).label }}</span>
-        <AmountDisplay :value="row.original.amount" currency="CNY" :currencies="currencies" />
+      <div class="flex flex-nowrap gap-2 items-center justify-end">
+        <span :class="getFundDirectionState(row.original.direction).tone === 'debit' ? 'text-destructive' : 'text-primary'" class="font-semibold shrink-0 whitespace-nowrap">{{ getFundDirectionState(row.original.direction).sign }} {{ getFundDirectionState(row.original.direction).label }}</span>
+        <span class="shrink-0 whitespace-nowrap">
+          <AmountDisplay :value="row.original.amount" currency="CNY" :currencies="currencies" />
+        </span>
       </div>
     </template>
 

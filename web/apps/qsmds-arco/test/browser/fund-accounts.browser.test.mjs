@@ -233,7 +233,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     await clickDialogButton(page, '创建资金账户', '创建账户')
     await waitForNoVisibleDialog(page, '创建资金账户')
     await waitForAccountSurface(page, flowUsername)
-    await waitForAccountRowText(page, flowUsername, '30%')
+    await waitForAccountRowText(page, flowUsername, '30.00%')
   })
 
   await runFundBrowserStep('update future share rate', async () => {
@@ -253,7 +253,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     )
     await clickDialogButton(page, '修改分成比例', '保存新比例')
     await waitForNoVisibleDialog(page, '修改分成比例')
-    await waitForAccountRowText(page, flowUsername, '45%')
+    await waitForAccountRowText(page, flowUsername, '45.00%')
   })
 
   await runFundBrowserStep('positive user-only adjustment', async () => {
@@ -262,7 +262,7 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
       mode: '只调整选定用户账户',
       reason: 'Browser 用户账户正向调账',
     })
-    await waitForAccountRowText(page, flowUsername, '100.0000')
+    await waitForAccountRowText(page, flowUsername, '100.00')
   })
 
   await runFundBrowserStep('negative shared adjustment', async () => {
@@ -271,8 +271,8 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
       mode: '按当前比例一同调整用户与公司账户',
       reason: 'Browser 用户公司按比例负向调账',
     })
-    await waitForAccountRowText(page, flowUsername, '82.0000')
-    await waitForAccountRowText(page, '公司资金账户', '13.0000')
+    await waitForAccountRowText(page, flowUsername, '82.00')
+    await waitForAccountRowText(page, '公司资金账户', '13.00')
   })
 
   await runFundBrowserStep('transaction filter and immutable detail', async () => {
@@ -287,7 +287,16 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
     await waitForTransactionSurface(page, profitBusinessNo)
     const filtered = await page.evaluate(`(() => {
       const table = document.querySelector('[data-testid="fund-transaction-table"]')
+      const profitRow = [...(table?.querySelectorAll('tbody tr') ?? [])]
+        .find(row => row.getClientRects().length > 0
+          && row.textContent?.includes(${JSON.stringify(profitBusinessNo)})
+          && row.textContent?.includes('入账'))
+      const amountLayout = profitRow?.querySelector('div.flex-nowrap')
+      const amountParts = [...(amountLayout?.children ?? [])]
+        .map(element => element.getBoundingClientRect())
       return {
+        amountSingleLine: amountParts.length === 2
+          && Math.abs(amountParts[0].top - amountParts[1].top) <= 1,
         hasLoss: table?.textContent?.includes('E2E-ORDER-LOSS') ?? false,
         profitRows: [...(table?.querySelectorAll('tbody tr') ?? [])]
           .filter(row => row.getClientRects().length > 0
@@ -295,7 +304,11 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
           .length,
       }
     })()`)
-    assert.deepEqual(filtered, { hasLoss: false, profitRows: 2 })
+    assert.deepEqual(filtered, {
+      amountSingleLine: true,
+      hasLoss: false,
+      profitRows: 2,
+    })
 
     await clickVisibleRowButton(page, profitBusinessNo, '查看详情')
     await waitForVisibleDialog(page, profitBusinessNo)
@@ -307,9 +320,9 @@ test('真实 Chrome 覆盖资金账户开户、调账、流水冲账、RBAC 与�
       return {
         hasBusinessNo: text.includes(${JSON.stringify(profitBusinessNo)}),
         hasCategory: text.includes('收益'),
-        hasCompanyRate: text.includes('70.0000%'),
+        hasCompanyRate: text.includes('70.00%'),
         hasSource: text.includes('BROWSER_ORDER_DOMAIN'),
-        hasUserRate: text.includes('30.0000%'),
+        hasUserRate: text.includes('30.00%'),
       }
     })()`)
     assert.deepEqual(detail, {

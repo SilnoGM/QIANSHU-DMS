@@ -46,12 +46,12 @@ const { Client } = require('pg')
       accounts.rowCount !== 2
       || accounts.rows[0]?.username_normalized !== 'fund_browser_flow_user'
       || accounts.rows[0]?.currency !== 'CNY'
-      || accounts.rows[0]?.balance !== '82.0000'
-      || accounts.rows[0]?.user_share_rate !== '45.0000'
+      || accounts.rows[0]?.balance !== '82.00'
+      || accounts.rows[0]?.user_share_rate !== '45.00'
       || accounts.rows[1]?.username_normalized !== 'fund_browser_ledger_user'
       || accounts.rows[1]?.currency !== 'CNY'
-      || accounts.rows[1]?.balance !== '3.0000'
-      || accounts.rows[1]?.user_share_rate !== '30.0000'
+      || accounts.rows[1]?.balance !== '3.00'
+      || accounts.rows[1]?.user_share_rate !== '30.00'
     ) {
       throw new Error('user account state')
     }
@@ -63,7 +63,7 @@ const { Client } = require('pg')
     if (
       company.rowCount !== 1
       || company.rows[0]?.currency !== 'CNY'
-      || company.rows[0]?.balance !== '-15.0000'
+      || company.rows[0]?.balance !== '-15.00'
     ) {
       throw new Error('company account state')
     }
@@ -89,13 +89,13 @@ const { Client } = require('pg')
     if (
       batches.rowCount !== 2
       || loss?.kind !== 'BUSINESS'
-      || loss?.amount !== '-50.0000'
+      || loss?.amount !== '-50.00'
       || loss?.category !== 'REVENUE'
-      || loss?.user_share_rate !== '30.0000'
+      || loss?.user_share_rate !== '30.00'
       || profit?.kind !== 'BUSINESS'
-      || profit?.amount !== '100.0000'
+      || profit?.amount !== '100.00'
       || profit?.category !== 'REVENUE'
-      || profit?.user_share_rate !== '30.0000'
+      || profit?.user_share_rate !== '30.00'
     ) {
       throw new Error('business batch snapshots')
     }
@@ -111,7 +111,7 @@ const { Client } = require('pg')
     )
     if (
       reversals.rowCount !== 1
-      || reversals.rows[0]?.amount !== '-40.0000'
+      || reversals.rows[0]?.amount !== '-40.00'
       || reversals.rows[0]?.category !== 'REVENUE'
       || reversals.rows[0]?.reversal_reason !== 'Browser 部分冲账验收'
     ) {

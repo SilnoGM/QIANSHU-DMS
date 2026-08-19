@@ -412,7 +412,7 @@ git status --short --branch
 
 ## 8. 当前停止点
 
-Phase 4 Task 1-16 已在本地完成。当前停止在 `feat/admin-fund-account-management` 的文档收口提交，不执行 Gate C、push、PR、merge、deploy、分支删除或 worktree 清理；任何外部或持久化动作必须重新取得明确授权。
+Phase 4 Task 1-16 与 R16 Task 17-23 已在本地完成。当前停止在 `feat/admin-fund-account-management` 的 R16 本地验收收口，不执行 Gate C、push、PR、merge、deploy、分支删除或 worktree 清理；任何外部或持久化动作必须重新取得明确授权。
 
 ## 9. 最终实施验收
 
@@ -556,7 +556,7 @@ Phase 4 Task 1-16 已在本地完成。当前停止在 `feat/admin-fund-account-
 
 - [x] 复核 staged diff 只包含规格、migration、资金 Server、OpenAPI generated 资产、资金 Web 和对应测试。
 - [x] 检查没有 `.env`、密钥、日志、构建产物、根依赖违规产物或非资金精度改动。
-- [ ] 提交 `feat: 统一资金账户两位小数精度`。
+- [x] 提交 `feat: 统一资金账户两位小数精度`（`463e358`）。
 
 **退出标准：** 提交后工作区只允许保留尚未提交的流水列宽任务改动。
 
@@ -566,10 +566,10 @@ Phase 4 Task 1-16 已在本地完成。当前停止在 `feat/admin-fund-account-
 
 **动作：**
 
-- [ ] 在 Task 17 RED 基础上，把桌面金额列 `minWidth` 调整到真实内容可容纳范围，并同步表格总最小宽度。
-- [ ] 把桌面方向/金额单元格改为 `flex-nowrap`，为方向文字与金额内容增加必要的 `shrink-0/whitespace-nowrap`。
-- [ ] 保持移动卡片现有响应式结构，不为业务页面增加新的 overflow 容器。
-- [ ] 运行 Web 定向测试、typecheck 和 lint，恢复列宽部分 GREEN。
+- [x] 在 Task 17 RED 基础上，把桌面金额列 `minWidth` 调整到真实内容可容纳范围，并同步表格总最小宽度。
+- [x] 把桌面方向/金额单元格改为 `flex-nowrap`，为方向文字与金额内容增加必要的 `shrink-0/whitespace-nowrap`。
+- [x] 保持移动卡片现有响应式结构，不为业务页面增加新的 overflow 容器。
+- [x] 运行 Web 定向测试、typecheck 和 lint，恢复列宽部分 GREEN。
 
 **退出标准：** 源码契约通过；桌面金额列单行，移动卡片无页面级横向溢出。
 
@@ -579,15 +579,15 @@ Phase 4 Task 1-16 已在本地完成。当前停止在 `feat/admin-fund-account-
 
 **动作：**
 
-- [ ] 运行 `pnpm -C server prisma:validate`、资金 Server 定向测试、typecheck、lint 和 build。
-- [ ] 运行 `node --run ci:server-e2e`，验证空库 deploy、二次 deploy、migration status、两位 Schema 和资金业务 E2E。
-- [ ] 运行 `node --run contract:check` 与本地可执行的 contract baseline。
-- [ ] 运行 `pnpm -C web test:api`、typecheck、lint 和 build。
-- [ ] 运行 `node --run ci:browser-fund-accounts-e2e`，在真实 Chrome 检查 `¥50,000.00 CNY`、`30.00%`、1440px 单行金额列、390px 卡片、主题和权限路径。
-- [ ] 运行根 `test:root`、`check`、`build`、`git diff --check`；任何失败如实记录并修复或报告。
-- [ ] 更新本节 checkbox 与最新验证证据，复核提交范围。
-- [ ] 提交 `fix: 调整资金流水金额列宽度`。
-- [ ] 提交后复跑 `git diff --check` 与 `git status --short --branch`，确认工作区干净。
+- [x] 运行 `pnpm -C server prisma:validate`、资金 Server 定向测试、typecheck、lint 和 build。
+- [x] 运行 `node --run ci:server-e2e`，验证空库 deploy、二次 deploy、migration status、两位 Schema 和资金业务 E2E。
+- [x] 运行 `node --run contract:check` 与本地可执行的 contract baseline。
+- [x] 运行 `pnpm -C web test:api`、typecheck、lint 和 build。
+- [x] 运行 `node --run ci:browser-fund-accounts-e2e`，在真实 Chrome 检查 `¥50,000.00 CNY`、`30.00%`、1440px 单行金额列、390px 卡片、主题和权限路径。
+- [x] 运行根 `test:root`、`check`、`build`、`git diff --check`；任何失败如实记录并修复或报告。
+- [x] 更新本节 checkbox 与最新验证证据，复核提交范围。
+- [x] 提交 `fix: 调整资金流水金额列宽度`（本文档所在提交）。
+- [x] 提交后复跑 `git diff --check` 与 `git status --short --branch`，确认工作区干净。
 
 **退出标准：** 自动化和真实 UI 验收通过，两个计划提交存在，工作区干净；不执行 Gate C 或任何外部动作。
 
@@ -605,3 +605,23 @@ Task 17 RED
 ```
 
 不创建单独 RED commit，不把 migration 与其 Domain/API 精度实现拆成可运行状态不一致的提交，不在本任务中 push、merge、部署或应用持久数据库 migration。
+
+### 10.3 R16 新鲜验证结果
+
+| 范围 | 命令 | 结果 |
+| --- | --- | --- |
+| Server 资金定向 | `pnpm -C server test -- fund --runInBand` | 通过；25 suites / 317 tests 通过 |
+| Prisma 与精度 migration | `pnpm -C server prisma:validate`；一次性 PostgreSQL 运行 `fund-account-schema.e2e-spec.ts` | 通过；1 suite / 2 tests，证明可无损收窄，并证明历史 `0.001` 会以 `23514` 失败且完整回滚 |
+| Server E2E | `node --run ci:server-e2e` | 通过；22 个 migration 首次 deploy、二次 deploy 与 status 均通过；33 suites / 197 tests 通过，4 suites / 10 tests 按既有条件跳过；媒体专项通过 |
+| OpenAPI | `node --run contract:check`；`node --test scripts/ci-contract-baseline.test.mjs` | 通过；Server/Web snapshot 与 generated contract 一致，baseline 19/19 通过 |
+| Web 资金定向 | 资金账户与流水相关 View/Logic 测试 | 通过；30/30 tests 通过 |
+| Web 全量 | `pnpm -C web test:api && pnpm -C web typecheck && pnpm -C web lint` | 通过；API/View 877/877，TypeScript、ESLint 与 Stylelint 通过 |
+| 资金 Browser | `node --run ci:browser-fund-accounts-e2e` | 通过；真实 Chrome 1/1，覆盖两位金额与比例、1440px 金额同一行、390x844、主题、Reduced Motion、触控目标、业务闭环和 RBAC |
+| Root | `node --run test:root` | 通过；684/684 tests 通过 |
+| 全量检查 | `node --run check` | 通过；其中 Server 211 suites / 2142 tests、Web API/View 877/877、既有真实 Chrome 3/3 通过 |
+| 全量构建 | `node --run build` | Server/Web 生产构建、108 个字体资产与零残留检查通过 |
+| Git 文本检查 | `git diff --check` | 通过 |
+
+第一次运行资金 Browser 时，开户行仍断言旧展示 `30%`，真实页面已按 R16 显示 `30.00%`；同步 Browser fixture 与断言后完整重跑通过。第一次运行 `node --run test:root` 时，数据库迁移规范仍记录 21 个 migration，根测试为 683/684；补充新 migration 文档后完整重跑为 684/684。两次失败均来自随本轮契约变化而过期的验收资产，不隐藏首次失败。
+
+非阻断警告仍为第三方 `@vueuse/core` 的 Rolldown `INVALID_ANNOTATION`、大于 500 kB 的 chunk 和插件耗时；未升级依赖或扩大本轮范围。所有数据库验证均使用一次性 PostgreSQL，未应用持久开发数据库 migration，也未执行 push、PR、merge 或 deploy。
