@@ -2,31 +2,33 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 2 已确认，Phase 3 已确认，等待 Phase 4 精确 Schema/API 审批
+- 状态：Phase 4 已完成，本地实施验收通过
 - 编写日期：2026-08-18
 - 确认日期：2026-08-18
+- 实施验收日期：2026-08-19
 - Requirements：`specs/fund-account-management/requirements.md`
 - Tasks：`specs/fund-account-management/tasks.md`
 - 实施分支：`feat/admin-fund-account-management`
-- 设计边界：本设计是实施基线，但不替代数据库 Schema、Migration、公共 API 和公共数据结构的单独修改授权
+- 设计边界：Schema、Migration、公共 API、公共数据结构和内部公共服务已按 Gate B 确认内容实施；Gate C 持久开发数据库变更仍未授权
 
 ## 2. 当前真相源与审计结论
 
 ### 2.1 当前仓库事实
 
-1. `server/prisma/schema.prisma` 当前没有资金账户、业务类型、批次或流水 Model。
-2. `server/src/http.modules.ts` 当前没有资金账户模块。
-3. 当前唯一资金权限是 `fund-accounts:read`，由 `20260817090000_fund_account_read_permission` 标记为 `systemOnly` 并只授予 `system_admin`。
-4. `/admin/fund-accounts/list` 与 `/admin/fund-accounts/transactions` 已存在并受读取权限保护，但两个页面仍是单根空白节点。
-5. `AuditService` 支持由调用方传入 Prisma transaction，使审计失败能够回滚业务事务。
-6. `applyTransactionTimeouts()` 固定提供 PostgreSQL `2s` lock timeout 和 `5s` statement timeout，并要求作为事务第一条 SQL。
-7. `NumberingGeneratorService` 已提供内部服务、幂等哈希、请求指纹、唯一竞争恢复和结构化持久化错误映射的项目先例。
-8. Web 已有 `QsGenericTable`、`QsGenericModal`、`MoneyInput`、`AmountDisplay`、`DateTimeDisplay` 等可直接复用组件。
-9. OpenAPI Server/Web 双快照和 generated types 必须通过根 `contract:sync` 同步。
+1. `server/prisma/schema.prisma` 已包含资金账户、业务来源、业务类型、规则版本、批次和流水模型；资金账务事实由数据库约束与 trigger 保护。
+2. `FundAccountsModule` 已注册到 HTTP 模块边界，并向同一 Server 内的业务域导出 `FundPostingService`，未暴露远程业务动账 Controller。
+3. 七项资金管理权限全部为 `systemOnly`，migration 只授予稳定 `system_admin`；Web 路由与 Server `PermissionGuard` 双重强制授权。
+4. `/admin/fund-accounts/list` 与 `/admin/fund-accounts/transactions` 已实现完整管理页面，覆盖开户、比例、正负调账、配置、查询、详情和部分冲账。
+5. `AuditService` 由资金 mutation 复用同一 Prisma transaction，使审计失败回滚账户、批次和流水变化。
+6. 资金 mutation 的第一条业务 SQL 调用 `applyTransactionTimeouts()`，继续使用 PostgreSQL `2s` lock timeout 和 `5s` statement timeout。
+7. 内部统一动账已实现幂等哈希、请求指纹、固定账户锁序、唯一竞争恢复和结构化持久化错误映射。
+8. Web 复用了 `QsGenericTable`、`QsGenericModal`、`MoneyInput`、`AmountDisplay`、`DateTimeDisplay`，没有修改共享组件公共 API。
+9. OpenAPI Server/Web 双快照和 generated types 已通过根 `contract:sync` 生成，并由 `contract:check` 验证一致。
+10. 资金 PostgreSQL E2E 和真实 Chrome 专项均使用一次性隔离数据库，不读写持久开发数据库。
 
 ### 2.2 历史边界
 
-已有 `20260817090000_fund_account_read_permission` 是不可变历史，不得把业务模型追加到该 migration。所有新类型、表、约束、权限、Audit enum 和初始化数据必须进入新的 forward migration。
+已有 `20260817090000_fund_account_read_permission` 保持不可变。业务模型、约束、其余权限、Audit enum 和初始化数据均进入新的 forward migration `20260818090000_fund_account_domain_foundation`；最终审计确认没有改写已有 migration。
 
 ### 2.3 设计结论
 
@@ -99,27 +101,21 @@ flowchart LR
 
 ### 4.1 Server 模块边界
 
-计划新增 `server/src/modules/fund-accounts/`：
+`server/src/modules/fund-accounts/` 已按以下职责实施：
 
 - `fund-accounts.module.ts`：向其他 Server 模块导出 `FundPostingService`。
-- `fund-posting.service.ts`：统一动账和冲账应用服务。
-- `fund-posting.persistence.ts`：锁、查询、插入和余额更新的窄持久化函数。
-- `fund-rule-engine.ts`：规则校验和分录计划纯函数。
-- `fund-money.ts`：金额、比例、舍入和守恒纯函数。
-- `fund-reversal.ts`：累计部分冲账纯计算。
-- `fund-account-command.service.ts`：开户和比例修改。
-- `fund-configuration-command.service.ts`：类型、规则版本和来源配置。
-- `fund-query.service.ts`：账户、流水、批次和配置查询。
+- `application/`：统一动账、冲账、开户、比例、配置和查询服务，以及窄持久化、错误映射和输入规范化。
+- `domain/`：Decimal、分账规则和累计部分冲账纯计算。
 - `fund-accounts.controller.ts`：管理员账户与调账 API。
 - `fund-transactions.controller.ts`：流水、批次详情和冲账 API。
-- `fund-configuration.controller.ts`：类型、规则和来源管理 API。
-- `dto/`、`*.errors.ts`、`*.normalizer.ts`：公共契约和安全输入边界。
+- `fund-posting-types.controller.ts`、`fund-business-sources.controller.ts`：类型、规则和来源管理 API。
+- `dto/`、`fund-http-contract.ts`、`fund-http-error.mapper.ts`：HTTP 公共契约和安全错误边界。
 
 业务域只能依赖模块导出的 `FundPostingService` 及输入/结果类型，不得导入 repository、Prisma generated client 或内部计算函数。
 
 ## 5. 数据模型
 
-以下是已确认概念模型。Phase 4 Task 1 必须根据最新 Prisma 和 PostgreSQL 约定形成逐字段精确审批包后才能修改 Schema。
+以下模型已根据 Gate B 的逐字段 Prisma、PostgreSQL 约束和关系审批包完成实施。
 
 ### 5.1 `FundAccount`
 
@@ -210,7 +206,7 @@ flowchart LR
 
 ### 5.8 初始化数据
 
-新的 forward migration 计划初始化：
+新的 forward migration 已初始化：
 
 1. 一个稳定 UUID 的全局公司账户，余额 `0`。
 2. Requirements 第 6 节的九个业务类型。
@@ -295,7 +291,7 @@ interface FundPostingResult {
 }
 ```
 
-最终字段、最大长度和错误类型在 Phase 4 Gate B 精确冻结。`sourceCode` 由业务适配器常量绑定，不由普通业务 payload 选择。
+字段、最大长度和错误类型已在 Phase 4 Gate B 冻结并按最终契约实施。`sourceCode` 由业务适配器常量绑定，不由普通业务 payload 选择。
 
 ### 7.2 调用示例
 
@@ -354,11 +350,11 @@ PostgreSQL `READ COMMITTED + row-level FOR UPDATE + unique constraints` 足以�
 
 原批次的 `NONE/PARTIAL/FULL` 状态由关联冲账批次聚合，不写回原批次。
 
-## 10. 管理 API 设计方向
+## 10. 管理 API
 
-以下是管理员页面所需方向，最终 path、operationId、DTO、状态码和错误矩阵必须在 Phase 4 Gate B 再确认：
+以下管理员 API 的 path、operationId、DTO、状态码和错误矩阵已经 Gate B 确认并实施：
 
-| 能力 | 建议 API |
+| 能力 | API |
 | --- | --- |
 | 账户列表 | `GET /api/fund-accounts` |
 | 创建用户账户 | `POST /api/fund-accounts` |
@@ -374,7 +370,7 @@ PostgreSQL `READ COMMITTED + row-level FOR UPDATE + unique constraints` 足以�
 
 ## 11. 错误边界
 
-计划稳定错误族：
+已实施的稳定错误族：
 
 - 账户：不存在、重复开户、公司账户不可用、状态发生变化。
 - 配置：来源不存在/停用、类型不存在/停用、规则不可用、来源未授权类型。
@@ -389,7 +385,7 @@ PostgreSQL `READ COMMITTED + row-level FOR UPDATE + unique constraints` 足以�
 
 ### 12.1 管理权限
 
-保留现有 `fund-accounts:read`，计划新增：
+保留现有 `fund-accounts:read`，并已新增：
 
 - `fund-accounts:create`
 - `fund-accounts:update-share-rate`
@@ -509,15 +505,15 @@ FaPageMain
 - 收益率公式、经营统计看板和自动财务报表。
 - 远程 HTTP 业务动账接口及服务间认证。
 
-## 17. 实施门禁
+## 17. 实施门禁结果
 
 ### Gate A - Phase 4 与 Git 范围
 
-开始代码前重新确认目标、范围、真相源、禁止事项、验收标准、验证命令和 Git 要求，并复核当前分支/HEAD/工作区。
+已在开始代码前确认目标、范围、真相源、禁止事项、验收标准、验证命令和 Git 要求，并复核分支、HEAD 与工作区。
 
 ### Gate B - 数据库与公共契约
 
-必须先提交并单独确认：
+以下内容已通过精确审批包单独确认后实施：
 
 1. 精确 Prisma model、enum 和关系。
 2. 完整 forward SQL、约束、索引、trigger、种子和权限 ID。
@@ -525,16 +521,26 @@ FaPageMain
 4. 每个管理 endpoint 的 path、operationId、DTO、状态码和错误矩阵。
 5. `FundPostingService` 最终 TypeScript 输入、结果和错误契约。
 
-设计确认、任务确认和普通“继续”均不替代该修改授权。
+Gate B 已满足；最终实现仍保持确认后的 Schema/API 和内部服务边界。
 
 ### Gate C - 持久开发数据库
 
-新 migration 默认只在一次性 PostgreSQL 验证。部署到本地持久数据库前必须展示目标、待执行 migration、SQL 影响和恢复策略并另行确认。
+Gate C 未授权且未执行。新 migration 已在一次性 PostgreSQL 完成空库部署、二次部署和状态验证；部署到持久开发数据库前仍须展示目标、待执行 migration、SQL 影响和恢复策略并另行确认。
 
 ### Gate D - 共享组件
 
-当前设计默认不修改任何公共组件。若实际实现发现公共契约不足，停止对应任务并提交最小增量设计与测试方案。
+实施复用了现有公共组件，没有修改公共组件 API，Gate D 未触发增量审批。
 
 ### Gate E - 外部发布
 
-Push、PR、merge、远程部署、生产 migration、分支删除和 worktree 清理均不在本地实施授权内。
+未执行 push、PR、merge、远程部署、生产或持久开发数据库 migration、分支删除和 worktree 清理；这些动作仍不在本地实施授权内。
+
+## 18. 最终技术验收
+
+1. 实现基线：`1a174ebde18c7821d8deb6e6bb6665caa8680fa4`；最终规格收口由包含本节的文档提交完成。
+2. 数据边界：仅新增两个资金 migration，无旧 migration 改写、文件删除、额外币种、直接余额编辑或全部用户调账。
+3. 契约边界：OpenAPI 包含 19 个资金管理员 operation，无资金 `DELETE`，无远程 `postBusinessEvent` operation；业务域入口仍为同一 Server 内部服务。
+4. 验证边界：Server 定向测试 25 个 suite、311 个 test；Server 全量测试 211 个 suite、2136 个 test；Web API/View 870 个 test；Root 684 个 test；资金真实 Chrome 1 个场景和既有真实 Chrome 3 个场景均通过。
+5. 数据库边界：`ci:server-e2e` 最终通过 33 个 suite、196 个 test，另有 4 个 suite、10 个 test 按既有条件跳过；资金 Browser 编排完成 21 个 migration 和最终数据库核验。
+6. 构建边界：Server/Web typecheck、lint、build、OpenAPI `contract:check`、字体 108 资产及零残留检查、根 `check` 与根 `build` 均通过。
+7. 可追溯性：完整命令、提交矩阵、一次未复现 E2E 波动、`ci:contract` 本地环境限制和非阻断构建警告记录在 `tasks.md` 第 9 节。

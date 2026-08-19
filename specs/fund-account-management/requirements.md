@@ -2,14 +2,15 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 1 已确认，Phase 2 已确认，Phase 3 已确认，等待 Phase 4 精确实施授权
+- 状态：Phase 4 已完成，本地实施验收通过
 - 需求确认日期：2026-08-18
 - 技术方案确认日期：2026-08-18
 - 任务计划确认日期：2026-08-18
+- 实施验收日期：2026-08-19
 - 适用范围：`server/`、`web/apps/qsmds-arco`
 - 实施分支：`feat/admin-fund-account-management`
-- 当前基线：两个资金账户路由、空白页面及 `fund-accounts:read` 系统权限已经存在
-- 当前门禁：数据库 Schema、Migration、公共 API、公共数据结构与持久开发数据库变更尚未授权
+- 当前基线：R1-R15 已实现；两个管理页面、内部统一动账服务、管理 API、不可变资金模型、部分冲账、RBAC 与独立 E2E 均已完成
+- 当前门禁：Gate C 未授权且未执行；新 migration 只在一次性 PostgreSQL 验证，未应用到持久开发数据库
 
 ## 2. 背景与目标
 
@@ -329,3 +330,12 @@
 ## 10. 需求追踪编号
 
 后续 `design.md` 和 `tasks.md` 使用 `R1` 至 `R15` 分别引用本章 Requirement 1 至 Requirement 15。
+
+## 11. 最终实施验收
+
+1. R1-R15 已按确认后的需求、技术设计和任务顺序完成，本地实现基线为 `1a174ebde18c7821d8deb6e6bb6665caa8680fa4`。
+2. 资金账户只支持 `CNY`；调账范围只有 `USER_ONLY` 与 `USER_AND_COMPANY_BY_SHARE`，没有全部用户批量调账。
+3. 同一 Server 业务域通过 `FundPostingService.postBusinessEvent()` 调用；OpenAPI 只包含管理员查询和管理接口，没有远程业务动账接口或资金资源 `DELETE` operation。
+4. 数据库只追加 `20260817090000_fund_account_read_permission` 与 `20260818090000_fund_account_domain_foundation` 两个资金 migration，没有改写已有 migration 或删除文件。
+5. Server、隔离 PostgreSQL、OpenAPI、Web、资金真实 Chrome 专项及根级全量门禁已于 2026-08-19 重新验证；详细命令、结果、非阻断警告与一次未复现波动记录在 `tasks.md` 第 9 节。
+6. 未执行持久开发数据库 migration、push、PR、merge、deploy、分支删除或 worktree 清理；这些动作仍需新的明确授权。

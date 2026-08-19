@@ -2,8 +2,9 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 执行中，Task 1-5 已完成
+- 状态：Phase 4 已完成，Task 1-16 本地实施验收通过
 - 生成日期：2026-08-18
+- 实施验收日期：2026-08-19
 - Requirements：`specs/fund-account-management/requirements.md`
 - Design：`specs/fund-account-management/design.md`
 - 正式 Web 应用：`web/apps/qsmds-arco`
@@ -313,15 +314,15 @@ flowchart TD
   - [x] 15.10 若 E2E 暴露生产缺陷，使用独立 `fix:` 提交最小修复；纯验收提交：`test: 补齐资金账户端到端验收`。
   - _Requirements: R1-R15_
 
-- [ ] 16. 完成全量验证、规格状态和 Git 收口
-  - [ ] 16.1 冻结生产/测试源码，汇总 Task 2-15 的真实 RED/GREEN、失败、警告和提交 SHA。
-  - [ ] 16.2 串行执行第 7 节完整验证矩阵，不使用旧输出声称通过。
-  - [ ] 16.3 复核最终文件矩阵：无旧 migration 改写、DELETE、远程业务动账 API、全部用户调账、额外币种、依赖/lockfile、生成目录或敏感文件。
-  - [ ] 16.4 明确记录 Gate C 状态；未授权时 migration 只在一次性 PostgreSQL 验证，不部署到持久开发数据库。
-  - [ ] 16.5 更新 Requirements、Design 和 Tasks 状态、真实提交证据和最终验证结果。
-  - [ ] 16.6 暂存精确文档文件，检查 secrets/staged diff，创建提交：`docs: 完成资金账户管理实施验收`。
-  - [ ] 16.7 核对 `git status --short --branch`、相对基线提交序列和每个提交范围，向用户交付本地结果后暂停。
-  - [ ] 16.8 不执行 push、PR、merge、deploy、持久数据库 migration 或分支清理。
+- [x] 16. 完成全量验证、规格状态和 Git 收口
+  - [x] 16.1 冻结生产/测试源码，汇总 Task 2-15 的真实 RED/GREEN、失败、警告和提交 SHA。
+  - [x] 16.2 串行执行第 7 节完整验证矩阵，不使用旧输出声称通过。
+  - [x] 16.3 复核最终文件矩阵：无旧 migration 改写、DELETE、远程业务动账 API、全部用户调账、额外币种、依赖/lockfile、生成目录或敏感文件。
+  - [x] 16.4 明确记录 Gate C 状态；migration 只在一次性 PostgreSQL 验证，未部署到持久开发数据库。
+  - [x] 16.5 更新 Requirements、Design 和 Tasks 状态、真实提交证据和最终验证结果。
+  - [x] 16.6 暂存精确文档文件，检查 secrets/staged diff，创建提交：`docs: 完成资金账户管理实施验收`。
+  - [x] 16.7 核对 `git status --short --branch`、相对基线提交序列和每个提交范围，向用户交付本地结果后暂停。
+  - [x] 16.8 未执行 push、PR、merge、deploy、持久数据库 migration 或分支清理。
   - _Requirements: R1-R15_
 
 ## 6. 建议提交顺序
@@ -329,7 +330,7 @@ flowchart TD
 在已有 `8ea2575`、`8f6f4fa` 之后按以下顺序小步提交：
 
 1. `docs: 固化资金账户管理规格`
-2. `feat: 建立资金账户计算内核`
+2. `feat: 添加资金分账与冲账计算`
 3. `feat: 建立资金账户数据模型`
 4. `feat: 建立资金账户服务边界`
 5. `feat: 实现资金账户与比例管理`
@@ -411,4 +412,66 @@ git status --short --branch
 
 ## 8. 当前停止点
 
-Phase 3 文档固化完成后停止。下一步是 Task 1：重新取得 Phase 4 Gate A，并提交 Gate B 精确审批包；在用户单独确认前不得修改 Schema、Migration、公共 API 或业务代码。
+Phase 4 Task 1-16 已在本地完成。当前停止在 `feat/admin-fund-account-management` 的文档收口提交，不执行 Gate C、push、PR、merge、deploy、分支删除或 worktree 清理；任何外部或持久化动作必须重新取得明确授权。
+
+## 9. 最终实施验收
+
+### 9.1 Git 与提交证据
+
+- 分支：`feat/admin-fund-account-management`
+- 本地 `main` 基线：`62c28137e648b8815d77d291a8d235c1688577c1`
+- 生产与测试实现基线：`1a174ebde18c7821d8deb6e6bb6665caa8680fa4`
+- 文档收口提交前相对本地 `main`：`0 behind / 18 ahead`；本提交完成后为 `0 behind / 19 ahead`
+- worktree：只有当前一个 worktree；未执行 fetch、push、PR、merge、deploy、分支删除或 worktree 清理
+
+| 顺序 | SHA | 提交 |
+| --- | --- | --- |
+| 1 | `8ea2575df16443c28e676124b820e3a240ae16f6` | `feat: 添加资金账户管理空白页面` |
+| 2 | `8f6f4fa34d1b05a28d3a98e4fa4ff97e1486bafa` | `feat: 限制资金账户路由仅超级管理员访问` |
+| 3 | `b59761cedd6785754284ac3ae66996e6bd9657d6` | `docs: 固化资金账户管理规格` |
+| 4 | `f174f46c2059195fb63c9ae0c09ebc18bb5a6258` | `test: 补齐资金账户权限 E2E 预期` |
+| 5 | `2324f36f4eae78f50fb02e31e4354f360df45833` | `feat: 添加资金分账与冲账计算` |
+| 6 | `4551e660ed0fe21505a7fedfaf7f3faeb66a5e75` | `feat: 建立资金账户数据模型` |
+| 7 | `ca14e7dd9649c3ad83be4713f22b8d001007bda7` | `feat: 建立资金账户服务边界` |
+| 8 | `a44ceeaa9a3da9a4ebdeca53791b493ec6a8c4d9` | `feat: 实现资金账户与比例管理` |
+| 9 | `c330b3055439e208454cd216b97876aecca6895b` | `feat: 实现资金业务配置管理` |
+| 10 | `e8b041bb296d14d7d24d11ee2418967304a67046` | `feat: 实现统一资金动账引擎` |
+| 11 | `74fe81d739b17ff7179365da850171f77d57070b` | `feat: 实现资金流水部分冲账` |
+| 12 | `35e06f008312d899205be7b36aba552e2e29ff33` | `feat: 提供资金账户管理接口` |
+| 13 | `8f7ce09ad6da91df53459e4dcdfec12225a79f41` | `chore: 同步资金账户接口契约` |
+| 14 | `3bd188cae5718e965430c15903b5a2d1dd502ae9` | `feat: 建立资金账户前端状态` |
+| 15 | `b89197eb8cacc0400fee20fc3a6ad986e2fb6836` | `feat: 实现资金账户列表页面` |
+| 16 | `803ef8a97d96803737281a055f6d31a113b59591` | `feat: 实现资金业务配置交互` |
+| 17 | `63bb9e718e5e090ababe8b0d0cf6445cc1df82b9` | `feat: 实现资金账户流水页面` |
+| 18 | `1a174ebde18c7821d8deb6e6bb6665caa8680fa4` | `test: 补齐资金账户端到端验收` |
+| 19 | 本文档所在提交 | `docs: 完成资金账户管理实施验收` |
+
+### 9.2 2026-08-19 新鲜验证结果
+
+| 范围 | 命令 | 结果 |
+| --- | --- | --- |
+| Server 定向 | `pnpm -C server prisma:validate && pnpm -C server test -- fund --runInBand && pnpm -C server typecheck && pnpm -C server lint && pnpm -C server build` | 通过；Prisma 有效，25 suites / 311 tests 通过 |
+| 隔离数据库与 Server E2E | `node --run ci:server-e2e` | 最终通过；33 suites / 196 tests 通过，4 suites / 10 tests 按既有条件跳过；migration 首次 deploy、二次 deploy 与 status 均通过，媒体专项通过 |
+| OpenAPI | `node --run contract:check` | 通过；Server/Web snapshot 与 generated contract 一致 |
+| Contract baseline | `node --test scripts/ci-contract-baseline.test.mjs` | 19/19 通过 |
+| Web | `pnpm -C web test:api && pnpm -C web typecheck && pnpm -C web lint && pnpm -C web build` | 通过；API/View 870/870，TypeScript、ESLint、Stylelint、build、108 个字体资产与零残留均通过 |
+| 资金 Browser | `node --run ci:browser-fund-accounts-e2e` | 通过；真实 Chrome 1/1，覆盖开户、比例、正负调账、流水、部分冲账、RBAC、390x844、主题、Reduced Motion 与触控目标 |
+| Root | `node --run test:root` | 684/684 通过 |
+| 全量检查 | `node --run check` | 通过；其中 Server 211 suites / 2136 tests、Web API/View 870/870、既有真实 Chrome 3/3 通过 |
+| 全量构建 | `node --run build` | Server/Web 生产构建、108 个字体资产与零残留检查通过 |
+| Git 文本检查 | `git diff --check` | 通过 |
+
+`node --run ci:contract` 在本地没有 GitHub event/baseline 上下文时按设计返回 `OpenAPI contract check failed`，因此不伪造 CI 参数；本地可执行的 baseline 测试 19/19 与 `contract:check` 已通过。
+
+第一次新鲜执行 `node --run ci:server-e2e` 时，既有 `dictionary-management-api.e2e-spec.ts` 的 CSRF 场景出现一次 `expected 403 / received 404`；资金 suites 未失败，隔离数据库按生命周期清理。随后未修改任何生产或测试源码，完整重跑同一命令通过 33 suites / 196 tests，因此将其记录为未复现的既有请求时序波动，不隐藏首次失败。
+
+非阻断警告：Prisma 提示 `7.8.0 -> 7.9.1` 可升级；Web 构建报告第三方 `@vueuse/core` 的 Rolldown `INVALID_ANNOTATION`、大于 500 kB 的 chunk 和插件耗时。以上均未升级依赖或改变本期范围。
+
+### 9.3 最终文件与范围审计
+
+1. migration diff 只有新增 `20260817090000_fund_account_read_permission` 与 `20260818090000_fund_account_domain_foundation`，没有修改旧 migration。
+2. `main...HEAD` 没有删除文件；资金 OpenAPI 共 19 个管理员 operation，没有资金 `DELETE` 或远程业务动账 operation。
+3. 资金账户和流水公共契约仅接受 `CNY`；管理员调账只有 `USER_ONLY` 与 `USER_AND_COMPANY_BY_SHARE`，没有全部用户调账。
+4. 依赖 manifest 没有新增依赖；只有根与 Web `package.json` 增加资金 Browser 脚本，Server/Web lockfile 均未变化。
+5. 没有受跟踪的 `dist`、`dist-test`、`node_modules` 或真实 `.env`；最终提交只包含 Requirements、Design 和 Tasks 三份规格文档。
+6. Gate C 未授权且未执行：全部 migration 验证均使用一次性 PostgreSQL，未连接或改写持久开发数据库。
