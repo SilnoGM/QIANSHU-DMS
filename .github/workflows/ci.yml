@@ -255,8 +255,35 @@ jobs:
       # Browser auth E2E 会启动真实 Server；即使认证场景不上传视频，媒体配置仍必须指向真实 ffprobe。
       - name: Install FFmpeg dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg
+          if test ! -x /usr/bin/ffprobe; then
+            # GitHub Runner 的 mirror+file 会优先选择 Azure 镜像；该镜像异常时可能持续阻塞到 Job 超时。
+            # 这里使用隔离索引和 Ubuntu 官方 HTTPS 源，避免旧索引、第三方源或云镜像参与解析。
+            sudo tee /etc/apt/sources.list.d/qianshu-ubuntu.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: https://archive.ubuntu.com/ubuntu/
+          Suites: noble noble-updates noble-backports
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+
+          Types: deb
+          URIs: https://security.ubuntu.com/ubuntu/
+          Suites: noble-security
+          Components: main restricted universe multiverse
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+            apt_lists=/var/lib/apt/lists/qianshu-browser-auth
+            sudo install -d -m 0755 -o root -g root "${apt_lists}"
+            sudo install -d -m 0700 -o _apt -g root "${apt_lists}/partial"
+            apt_options=(
+              -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/qianshu-ubuntu.sources
+              -o Dir::Etc::sourceparts=-
+              -o "Dir::State::lists=${apt_lists}"
+              -o Acquire::Retries=3
+              -o Acquire::https::Timeout=30
+            )
+            sudo timeout 5m apt-get "${apt_options[@]}" update
+            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg
+          fi
           test -x /usr/bin/ffprobe
           /usr/bin/ffprobe -version
 
