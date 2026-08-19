@@ -60,6 +60,13 @@ test('页面组合开户、比例修改、手动调账 Modal 和账户流水跳�
   assert.doesNotMatch(pageSource, /全部用户/u)
 })
 
+test('桌面操作列为三个用户账户操作保留单行展示宽度', () => {
+  assert.match(
+    pageSource,
+    /:action-column="\{ fixed: 'right', minWidth: 380, width: 380 \}"/u,
+  )
+})
+
 test('三个领域 Modal 固定业务输入、预计余额和移动端可触达操作', () => {
   const createSource = readSource(
     '../../src/views/admin/fund-account-management/list/fund-account-create-modal.vue',
