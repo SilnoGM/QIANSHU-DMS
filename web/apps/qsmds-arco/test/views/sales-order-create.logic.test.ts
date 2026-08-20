@@ -14,6 +14,7 @@ import {
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
   replayUnknownSalesOrderSubmission,
+  resolveSalesOrderIssuerLabel,
   resolveSalesOrderSubmissionFailure,
 } from '../../src/views/operations/sales-orders/sales-order-create.logic'
 
@@ -56,6 +57,12 @@ test('币种路由只接受单值 TWD/MYR，缺失、数组与其他币种均拒
   assert.equal(parseSalesOrderCurrency(undefined), null)
   assert.equal(parseSalesOrderCurrency(['TWD']), null)
   assert.equal(parseSalesOrderCurrency('CNY'), null)
+})
+
+test('出单人优先显示当前用户显示名，缺失时回退用户名', () => {
+  assert.equal(resolveSalesOrderIssuerLabel(' 超级管理员 ', 'system_admin'), '超级管理员')
+  assert.equal(resolveSalesOrderIssuerLabel('   ', ' system_admin '), 'system_admin')
+  assert.equal(resolveSalesOrderIssuerLabel('', ''), '当前用户资料不可用')
 })
 
 test('现有地区域的 UUID v5 可用于客户地址快照', () => {

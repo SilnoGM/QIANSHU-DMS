@@ -108,6 +108,19 @@ export function parseSalesOrderCurrency(value: unknown): SalesOrderCurrency | nu
   return value === 'TWD' || value === 'MYR' ? value : null
 }
 
+/**
+ * 新增页只展示当前认证用户，不允许业务人员改选出单人。认证上下文在刷新期间
+ * 可能只有 username，因此这里与全局账户按钮保持一致，显示名缺失时回退账号。
+ */
+export function resolveSalesOrderIssuerLabel(
+  displayName: string,
+  username: string,
+): string {
+  return normalizeText(displayName)
+    || normalizeText(username)
+    || '当前用户资料不可用'
+}
+
 export function normalizeSalesOrderAddressDetail(value: string): string {
   return value.normalize('NFKC').replace(ALL_UNICODE_WHITESPACE_PATTERN, '')
 }

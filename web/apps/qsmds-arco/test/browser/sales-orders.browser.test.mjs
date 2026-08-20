@@ -111,23 +111,22 @@ async function fillLabelledControl(page, labelText, value) {
   ))`)
 }
 
-async function openLabelledSelect(page, labelText) {
+async function openLabelledProductControl(page, labelText) {
   const controlSource = labelledControlSource(labelText)
   await page.waitFor(`(() => {
     const control = ${controlSource}
-    return control?.getAttribute('data-slot') === 'select-trigger'
+    return control?.getAttribute('role') === 'combobox'
       && control.getClientRects().length > 0
       && !control.disabled
   })()`)
   await page.evaluate(`(() => {
     const control = ${controlSource}
-    if (control?.getAttribute('data-slot') !== 'select-trigger') {
-      throw new Error('sales order combobox unavailable')
+    if (control?.getAttribute('role') !== 'combobox') {
+      throw new Error('sales order product combobox unavailable')
     }
     control.focus({ preventScroll: true })
     return true
   })()`)
-  await pressKey(page, 'Enter')
   await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
     .some(option => option.getClientRects().length > 0))()`)
 }
@@ -226,9 +225,15 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         ?.getClientRects().length > 0
       && document.body.innerText.includes('订单币种已固定为 TWD')
     ))()`)
+    const issuerControlSource = labelledControlSource('出单人')
+    await page.waitFor(`${issuerControlSource}?.value === 'Browser Auth Admin'`)
   })
 
   await runSalesOrderBrowserStep('TWD product filter and customer snapshot', async () => {
+    await fillLabelledControl(page, '搜索数据库产品', 'PRODUCT-BROWSER-001')
+    await page.waitFor(`document.body.innerText.includes(
+      '找到 1 项与“PRODUCT-BROWSER-001”匹配的 TWD 产品。'
+    )`)
     await fillLabelledControl(page, '客户姓名', customerName)
     await fillLabelledControl(page, '客户电话', customerPhone)
     await selectRegionOption(
@@ -250,7 +255,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       '高雄市',
     )
 
-    await openLabelledSelect(page, '数据库产品')
+    await openLabelledProductControl(page, '数据库产品')
     const productControlSource = labelledControlSource('数据库产品')
     const optionLabels = await page.evaluate(`(() => {
       const control = ${productControlSource}
@@ -272,14 +277,16 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       true,
     )
     await page.evaluate(`(() => {
-      const option = [...document.querySelectorAll('[role="option"]')]
-        .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.trim() === ${JSON.stringify(productOption)})
-      if (!option) throw new Error('sales order TWD product unavailable')
-      option.focus({ preventScroll: true })
+      const control = ${productControlSource}
+      if (control?.getAttribute('role') !== 'combobox') {
+        throw new Error('sales order product combobox unavailable')
+      }
+      control.focus({ preventScroll: true })
       return true
     })()`)
+    await pressKey(page, 'ArrowDown', 'ArrowDown')
     await pressKey(page, 'Enter')
+    await page.waitFor(`${productControlSource}?.value === ${JSON.stringify(productOption)}`)
     await fillLabelledControl(page, '真实售价', '100')
     await fillLabelledControl(page, '产品数量', '2')
     await fillLabelledControl(page, '手填销售总价', '200')

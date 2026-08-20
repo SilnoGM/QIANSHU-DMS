@@ -68,12 +68,7 @@ function changeLineType(index: number, value: unknown): void {
   replaceLine(index, next)
 }
 
-function productSelectOptions(line: SalesOrderLineFormModel) {
-  const options = [{
-    disabled: true,
-    label: '请选择数据库产品',
-    value: `__empty_product_${line.key}`,
-  }]
+function productComboboxOptions(line: SalesOrderLineFormModel) {
   const source = [...props.productOptions]
   if (
     line.productId !== null
@@ -88,13 +83,10 @@ function productSelectOptions(line: SalesOrderLineFormModel) {
       currencyCode: props.currency,
     })
   }
-  return [
-    ...options,
-    ...source.map(product => ({
-      label: `${product.productNo} · ${product.name} · 标准价 ${product.standardUnitPriceAmount} ${props.currency}`,
-      value: product.id,
-    })),
-  ]
+  return source.map(product => ({
+    label: `${product.productNo} · ${product.name} · 标准价 ${product.standardUnitPriceAmount} ${props.currency}`,
+    value: product.id,
+  }))
 }
 
 function selectProduct(index: number, value: unknown): void {
@@ -225,10 +217,12 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
             required
             :auto-bind="false"
           >
-            <FaSelect
-              :model-value="line.productId ?? `__empty_product_${line.key}`"
-              :options="productSelectOptions(line)"
+            <FaCombobox
+              :model-value="line.productId ?? undefined"
+              :options="productComboboxOptions(line)"
               :disabled="disabled"
+              placeholder="请选择或输入编号、名称搜索"
+              :empty-text="`没有可选的 ${currency} 产品`"
               class="w-full"
               @update:model-value="selectProduct(index, $event)"
             />
