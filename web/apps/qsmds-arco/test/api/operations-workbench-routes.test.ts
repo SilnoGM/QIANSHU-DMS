@@ -74,53 +74,35 @@ test('千树运营工作台是最左侧顶部导航', () => {
   )
 })
 
-test('销售与采购订单页面各只提供一个新增按钮并跳转到对应隐藏页面', () => {
-  for (const [relativePath, buttonLabel, targetRouteName] of [
-    [
-      '../../src/views/operations/sales-orders/index.vue',
-      '新增销售订单',
-      'operationsSalesOrderCreate',
-    ],
-    [
-      '../../src/views/operations/purchase-orders/index.vue',
-      '新增采购订单',
-      'operationsPurchaseOrderCreate',
-    ],
-  ] as const) {
-    const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+test('采购订单列表继续保持单一新增按钮的空白产品边界', () => {
+  const source = readFileSync(
+    new URL('../../src/views/operations/purchase-orders/index.vue', import.meta.url),
+    'utf8',
+  )
 
-    assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
-    assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
-    assert.match(source, new RegExp(`>\\s*${buttonLabel}\\s*<\\/FaButton>`, 'u'))
-    assert.match(
-      source,
-      new RegExp(`router\\.push\\(\\{ name: '${targetRouteName}' \\}\\)`, 'u'),
-    )
-    assert.doesNotMatch(source, /<Fa(?:Alert|Card|Empty|Icon|PageHeader)/u)
-  }
+  assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
+  assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
+  assert.match(source, />\s*新增采购订单\s*<\/FaButton>/u)
+  assert.match(
+    source,
+    /router\.push\(\{ name: 'operationsPurchaseOrderCreate' \}\)/u,
+  )
+  assert.doesNotMatch(source, /<Fa(?:Alert|Card|Empty|Icon|PageHeader)/u)
 })
 
-test('两个新增订单页面各只提供一个返回按钮并跳转到对应订单页面', () => {
-  for (const [relativePath, targetRouteName] of [
-    [
-      '../../src/views/operations/sales-orders/create.vue',
-      'operationsSalesOrders',
-    ],
-    [
-      '../../src/views/operations/purchase-orders/create.vue',
-      'operationsPurchaseOrders',
-    ],
-  ] as const) {
-    const source = readFileSync(new URL(relativePath, import.meta.url), 'utf8')
+test('采购订单新增页继续保持单一返回按钮的空白产品边界', () => {
+  const source = readFileSync(
+    new URL('../../src/views/operations/purchase-orders/create.vue', import.meta.url),
+    'utf8',
+  )
 
-    assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
-    assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
-    assert.match(source, /<FaButton\s+variant="outline"\s+@click="navigateBack">/u)
-    assert.match(source, />\s*返回\s*<\/FaButton>/u)
-    assert.match(
-      source,
-      new RegExp(`router\\.push\\(\\{ name: '${targetRouteName}' \\}\\)`, 'u'),
-    )
-    assert.doesNotMatch(source, /<Fa(?:Alert|Card|Empty|Icon|PageHeader)/u)
-  }
+  assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
+  assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
+  assert.match(source, /<FaButton\s+variant="outline"\s+@click="navigateBack">/u)
+  assert.match(source, />\s*返回\s*<\/FaButton>/u)
+  assert.match(
+    source,
+    /router\.push\(\{ name: 'operationsPurchaseOrders' \}\)/u,
+  )
+  assert.doesNotMatch(source, /<Fa(?:Alert|Card|Empty|Icon|PageHeader)/u)
 })

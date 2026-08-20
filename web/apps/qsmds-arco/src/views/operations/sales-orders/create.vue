@@ -1,17 +1,847 @@
 <script setup lang="ts">
+import type { DateValue } from '@internationalized/date'
+import type {
+  SalesOrderApiFailure,
+  SalesOrderDocumentFormModel,
+  SalesOrderFieldErrors,
+  SalesOrderSubmissionState,
+  SalesOrderSubmittingState,
+  SalesOrderUnknownState,
+} from './sales-order-create.logic'
+import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
+
+import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
+import salesOrdersApi from '@/api/modules/sales-orders'
+import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import MoneyInput from '@/components/base/MoneyInput/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
+import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+
+import {
+  abandonUnknownSalesOrderSubmission,
+  beginSalesOrderSubmission,
+  buildCreateSalesOrderRequest,
+  calculateSalesOrderLineSubtotal,
+  canApplySalesOrderResponse,
+  createSalesOrderFormModel,
+  createSalesOrderSubmissionState,
+  getSalesOrderApiFailure,
+  hasSalesOrderChanges,
+  isSalesOrderAbortError,
+  normalizeSalesOrderAddressDetail,
+  parseSalesOrderCurrency,
+  replayUnknownSalesOrderSubmission,
+  resolveSalesOrderSubmissionFailure,
+  resolveSalesOrderSubmissionSuccess,
+} from './sales-order-create.logic'
+import SalesOrderLines from './sales-order-lines.vue'
+
+type DiscardIntent = 'navigation' | 'unknown-abandon'
+
 defineOptions({ name: 'OperationsSalesOrderCreate' })
 
+const route = useRoute()
 const router = useRouter()
+const { auth } = useAppAuth()
+const appAccountStore = useAppAccountStore()
+const toast = useQsToast()
+const currencyCatalog = useCurrencyCatalog()
+const selectedCurrency = parseSalesOrderCurrency(route.query.currency)
+const initialCurrency = selectedCurrency ?? 'TWD'
+const todayDate = today(getLocalTimeZone())
+const todayIso = todayDate.toString()
 
-function navigateBack(): void {
+const canCreate = computed(() => auth('sales-orders:create'))
+const canRead = computed(() => auth('sales-orders:read'))
+const canManageDocuments = computed(() => auth('sales-orders:document'))
+const formModel = ref(createSalesOrderFormModel(initialCurrency, todayIso))
+const fieldErrors = ref<SalesOrderFieldErrors>({})
+const formError = ref('')
+const formFailure = shallowRef<SalesOrderApiFailure | null>(null)
+const submission = shallowRef<SalesOrderSubmissionState>(createSalesOrderSubmissionState())
+const productOptions = ref<Awaited<ReturnType<typeof salesOrdersApi.productOptions>>['data']['items']>([])
+const productSearchKeyword = ref('')
+const productLoading = ref(false)
+const productError = ref('')
+const documentUploading = ref(false)
+const documentUploadError = ref('')
+const discardVisible = ref(false)
+const discardIntent = ref<DiscardIntent | null>(null)
+const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
+let productRequestVersion = 0
+let productAbortController: AbortController | null = null
+let submitRequestVersion = 0
+let submitAbortController: AbortController | null = null
+let documentAbortController: AbortController | null = null
+let pendingNavigationResolver: ((allow: boolean) => void) | null = null
+
+const fixedCurrencies = computed(() => currencyCatalog.currencies.value.filter(currency =>
+  currency.code === formModel.value.currencyCode))
+const fixedCurrencyDescriptor = computed(() => fixedCurrencies.value[0] ?? null)
+const amountPrecision = computed(() => fixedCurrencyDescriptor.value?.minorUnit ?? 4)
+const currencyUnavailable = computed(() => (
+  currencyCatalog.loading.value
+  || currencyCatalog.errorMessage.value !== null
+  || fixedCurrencyDescriptor.value?.enabled !== true
+))
+const orderDateValue = computed(() => parseDate(formModel.value.orderDate))
+const lineSubtotalAmount = computed(() => calculateSalesOrderLineSubtotal(
+  formModel.value.lines,
+  amountPrecision.value,
+))
+const fullAddressPreview = computed(() => [
+  ...formModel.value.regionNames,
+  normalizeSalesOrderAddressDetail(formModel.value.addressDetail),
+].join(''))
+const submitLocked = computed(() => submission.value.phase !== 'editing')
+const shouldConfirmDiscard = computed(() => (
+  submission.value.phase === 'unknown'
+  || (
+    submission.value.phase !== 'success'
+    && hasSalesOrderChanges(formModel.value, todayIso)
+  )
+))
+const discardTitle = computed(() => discardIntent.value === 'unknown-abandon'
+  ? '放弃本次未知结果？'
+  : '放弃未保存的销售订单？')
+const discardDescription = computed(() => discardIntent.value === 'unknown-abandon'
+  ? '放弃后将清除当前幂等请求，不能再使用同一请求确认订单是否已经保存。'
+  : '当前订单尚未正式保存，放弃后已填写内容无法恢复。')
+
+function clearFeedback(path?: string): void {
+  if (path === undefined) {
+    fieldErrors.value = {}
+  }
+  else if (fieldErrors.value[path] !== undefined) {
+    const next = { ...fieldErrors.value }
+    delete next[path]
+    fieldErrors.value = next
+  }
+  formError.value = ''
+  formFailure.value = null
+}
+
+function fieldError(path: string): string | undefined {
+  return fieldErrors.value[path]
+}
+
+function updateOrderDate(value: DateValue | DateValue[] | undefined): void {
+  if (Array.isArray(value) || value === undefined || submitLocked.value) {
+    return
+  }
+  formModel.value.orderDate = value.toString()
+  clearFeedback('orderDate')
+}
+
+function handleRegionChange(change: RegionSelectorChange): void {
+  formModel.value.region = { ...change.value }
+  formModel.value.regionNames = change.path.map(node => node.name)
+  clearFeedback('customer.cityId')
+  clearFeedback('customer.addressDetail')
+}
+
+function handleLinesUpdate(lines: typeof formModel.value.lines): void {
+  formModel.value.lines = lines
+  clearFeedback('lines')
+  clearFeedback('agreedTotalAmount')
+}
+
+async function loadProductOptions(): Promise<void> {
+  if (!canCreate.value || selectedCurrency === null) {
+    return
+  }
+  productAbortController?.abort()
+  const controller = new AbortController()
+  productAbortController = controller
+  const version = ++productRequestVersion
+  productLoading.value = true
+  productError.value = ''
+  const keyword = productSearchKeyword.value.trim().normalize('NFKC')
+  try {
+    const response = await salesOrdersApi.productOptions(
+      selectedCurrency,
+      keyword === '' ? undefined : keyword,
+      controller.signal,
+    )
+    if (version === productRequestVersion && !controller.signal.aborted) {
+      productOptions.value = response.data.items
+    }
+  }
+  catch (error) {
+    if (!isSalesOrderAbortError(error) && version === productRequestVersion) {
+      productError.value = getSalesOrderApiFailure(error).message
+    }
+  }
+  finally {
+    if (version === productRequestVersion) {
+      productLoading.value = false
+    }
+  }
+}
+
+function openFilePicker(): void {
+  if (!submitLocked.value && canManageDocuments.value && !documentUploading.value) {
+    fileInputRef.value?.click()
+  }
+}
+
+function updateDocument(index: number, patch: Partial<SalesOrderDocumentFormModel>): void {
+  const current = formModel.value.documents[index]
+  if (current === undefined || submitLocked.value) {
+    return
+  }
+  formModel.value.documents = formModel.value.documents.map((document, currentIndex) =>
+    currentIndex === index ? { ...document, ...patch } : { ...document })
+  clearFeedback('documents')
+}
+
+function removeDocument(index: number): void {
+  if (submitLocked.value) {
+    return
+  }
+  formModel.value.documents = formModel.value.documents.filter(
+    (_document, currentIndex) => currentIndex !== index,
+  )
+  clearFeedback('documents')
+}
+
+async function uploadFiles(files: readonly File[]): Promise<void> {
+  if (
+    files.length === 0
+    || !canManageDocuments.value
+    || submitLocked.value
+    || documentUploading.value
+  ) {
+    return
+  }
+  const remaining = 20 - formModel.value.documents.length
+  const selected = files.slice(0, Math.max(0, remaining))
+  if (selected.length === 0) {
+    documentUploadError.value = '订单凭证最多 20 个'
+    return
+  }
+  documentAbortController?.abort()
+  const controller = new AbortController()
+  documentAbortController = controller
+  documentUploading.value = true
+  documentUploadError.value = ''
+  try {
+    for (const file of selected) {
+      const mediaType = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
+      const response = await salesOrdersApi.uploadTemporaryDocument(file, mediaType, controller.signal)
+      if (controller.signal.aborted) {
+        return
+      }
+      formModel.value.documents.push({
+        ...response.data,
+        key: crypto.randomUUID(),
+        documentType: 'OTHER',
+        title: '',
+        remark: '',
+      })
+    }
+  }
+  catch (error) {
+    if (!isSalesOrderAbortError(error)) {
+      documentUploadError.value = getSalesOrderApiFailure(error).message
+    }
+  }
+  finally {
+    if (documentAbortController === controller) {
+      documentAbortController = null
+      documentUploading.value = false
+    }
+  }
+}
+
+function handleFileInput(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  void uploadFiles(files)
+}
+
+function responseIsCurrent(state: SalesOrderSubmittingState, controller: AbortController): boolean {
+  return canApplySalesOrderResponse({
+    aborted: controller.signal.aborted,
+    authorized: canCreate.value,
+    authEpoch: state.authEpoch,
+    currentAuthEpoch: appAccountStore.authEpoch,
+    requestVersion: state.requestVersion,
+    latestRequestVersion: submitRequestVersion,
+  })
+}
+
+async function executeSubmission(state: SalesOrderSubmittingState): Promise<void> {
+  submitAbortController?.abort()
+  const controller = new AbortController()
+  submitAbortController = controller
+  try {
+    const response = await salesOrdersApi.create(
+      state.snapshot,
+      state.idempotencyKey,
+      controller.signal,
+    )
+    if (!responseIsCurrent(state, controller)) {
+      return
+    }
+    submission.value = resolveSalesOrderSubmissionSuccess(state, response.data)
+    formModel.value = createSalesOrderFormModel(initialCurrency, todayIso)
+    clearFeedback()
+    toast.success(`销售订单 ${response.data.orderNo} 创建成功`)
+    if (canRead.value) {
+      await router.push({ name: 'operationsSalesOrders' })
+    }
+  }
+  catch (error) {
+    if (isSalesOrderAbortError(error) || !responseIsCurrent(state, controller)) {
+      return
+    }
+    const failure = getSalesOrderApiFailure(error)
+    formFailure.value = failure
+    formError.value = failure.message
+    fieldErrors.value = failure.fieldErrors
+    submission.value = resolveSalesOrderSubmissionFailure(state, failure)
+  }
+  finally {
+    if (submitAbortController === controller) {
+      submitAbortController = null
+    }
+  }
+}
+
+async function submitOrder(): Promise<void> {
+  if (!canCreate.value || submission.value.phase !== 'editing') {
+    return
+  }
+  if (currencyUnavailable.value) {
+    formError.value = '当前订单币种不可用，请返回列表重新选择或先启用该币种'
+    return
+  }
+  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, todayIso)
+  if (!result.valid) {
+    fieldErrors.value = result.fieldErrors
+    formError.value = '部分资料未通过校验，请修正后再正式保存'
+    formFailure.value = null
+    return
+  }
+  clearFeedback()
+  const state = beginSalesOrderSubmission(
+    submission.value,
+    result.request,
+    { authEpoch: appAccountStore.authEpoch, requestVersion: ++submitRequestVersion },
+  )
+  submission.value = state
+  await executeSubmission(state)
+}
+
+function replayUnknownResult(): void {
+  if (submission.value.phase !== 'unknown' || !canCreate.value) {
+    return
+  }
+  const state = replayUnknownSalesOrderSubmission(submission.value, {
+    authEpoch: appAccountStore.authEpoch,
+    requestVersion: ++submitRequestVersion,
+  })
+  formError.value = ''
+  formFailure.value = null
+  submission.value = state
+  void executeSubmission(state)
+}
+
+function requestUnknownAbandon(): void {
+  if (submission.value.phase !== 'unknown') {
+    return
+  }
+  discardIntent.value = 'unknown-abandon'
+  discardVisible.value = true
+}
+
+function requestBack(): void {
   void router.push({ name: 'operationsSalesOrders' })
 }
+
+function closeDiscard(): void {
+  discardVisible.value = false
+  discardIntent.value = null
+  const resolve = pendingNavigationResolver
+  pendingNavigationResolver = null
+  resolve?.(false)
+}
+
+function confirmDiscard(): void {
+  const intent = discardIntent.value
+  const resolve = pendingNavigationResolver
+  pendingNavigationResolver = null
+  discardVisible.value = false
+  discardIntent.value = null
+  if (intent === 'unknown-abandon' && submission.value.phase === 'unknown') {
+    submission.value = abandonUnknownSalesOrderSubmission(submission.value as SalesOrderUnknownState)
+    formModel.value = createSalesOrderFormModel(initialCurrency, todayIso)
+    clearFeedback()
+    toast.info('已放弃本次未知结果')
+    return
+  }
+  formModel.value = createSalesOrderFormModel(initialCurrency, todayIso)
+  resolve?.(true)
+}
+
+function handleBeforeUnload(event: BeforeUnloadEvent): void {
+  if (!shouldConfirmDiscard.value) {
+    return
+  }
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onBeforeRouteLeave(() => {
+  if (!shouldConfirmDiscard.value) {
+    return true
+  }
+  if (pendingNavigationResolver !== null) {
+    return false
+  }
+  discardIntent.value = 'navigation'
+  discardVisible.value = true
+  return new Promise<boolean>((resolve) => {
+    pendingNavigationResolver = resolve
+  })
+})
+
+onMounted(() => {
+  if (selectedCurrency === null) {
+    toast.error('请先从销售订单列表选择币种')
+    void router.replace({ name: 'operationsSalesOrders' })
+    return
+  }
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  void loadProductOptions()
+})
+
+onBeforeUnmount(() => {
+  productRequestVersion += 1
+  submitRequestVersion += 1
+  productAbortController?.abort()
+  submitAbortController?.abort()
+  documentAbortController?.abort()
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  pendingNavigationResolver?.(false)
+  pendingNavigationResolver = null
+})
 </script>
 
 <template>
-  <FaPageMain>
-    <FaButton variant="outline" @click="navigateBack">
-      返回
-    </FaButton>
-  </FaPageMain>
+  <div class="sales-order-create-page min-w-0" data-testid="sales-order-create-page">
+    <FaPageHeader
+      title="新增销售订单"
+      :description="`订单币种已固定为 ${formModel.currencyCode}；正式保存时才派发订单编号。`"
+    >
+      <FaButton
+        type="button"
+        variant="outline"
+        class="min-h-11 sm:min-h-9"
+        :disabled="submission.phase === 'submitting'"
+        @click="requestBack"
+      >
+        <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />返回销售订单
+      </FaButton>
+    </FaPageHeader>
+
+    <FaPageMain v-if="!canCreate">
+      <FaEmpty
+        icon="i-lucide:shield-alert"
+        title="无权新增销售订单"
+        description="当前身份缺少 sales-orders:create 权限。"
+        class="py-12"
+      />
+    </FaPageMain>
+
+    <FaPageMain v-else class="min-w-0 overflow-x-hidden">
+      <FaAlert
+        v-if="formError"
+        class="mb-5"
+        title="销售订单保存失败"
+        variant="destructive"
+        role="alert"
+      >
+        <template #description>
+          <div class="gap-2 grid">
+            <span>{{ formError }}</span>
+            <code v-if="formFailure?.requestId" class="text-xs font-mono break-all">
+              requestId: {{ formFailure.requestId }}
+            </code>
+          </div>
+        </template>
+      </FaAlert>
+
+      <FaAlert
+        v-if="submission.phase === 'unknown'"
+        class="mb-5"
+        title="订单保存结果暂时无法确认"
+        variant="destructive"
+        role="alert"
+      >
+        <template #description>
+          <div class="gap-3 grid">
+            <p class="m-0">
+              表单与幂等请求已经冻结。请使用相同请求重新确认，避免产生重复订单。
+            </p>
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <FaButton type="button" class="min-h-11 sm:min-h-9" @click="replayUnknownResult">
+                使用相同请求重新确认
+              </FaButton>
+              <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="requestUnknownAbandon">
+                放弃本次确认
+              </FaButton>
+            </div>
+          </div>
+        </template>
+      </FaAlert>
+
+      <FaForm
+        :model="formModel"
+        :disabled="submitLocked"
+        :aria-busy="submission.phase === 'submitting' ? 'true' : 'false'"
+        class="gap-6 grid grid-cols-1 lg:grid-cols-12"
+        @submit="submitOrder"
+      >
+        <div class="min-w-0 space-y-6 lg:col-span-8">
+          <FaCard
+            title="订单基础信息"
+            description="订单编号由 SALES_ORDER 规则在正式保存时派发。"
+            content-class="gap-4 grid grid-cols-1 md:grid-cols-2"
+          >
+            <div class="p-4 border border-border rounded-lg bg-muted/25 md:col-span-2">
+              <p class="text-sm font-medium m-0">
+                订单编号
+              </p>
+              <code class="text-sm text-muted-foreground font-mono mt-2 block">SALES_ORDER · AUTO</code>
+            </div>
+            <FaFormItem name="orderDate" label="出单日期" required :error="fieldError('orderDate')">
+              <FaDate
+                :model-value="orderDateValue"
+                :max-value="todayDate"
+                :disabled="submitLocked"
+                picker
+                prevent-deselect
+                trigger-class="w-full min-h-11 sm:min-h-9"
+                @update:model-value="updateOrderDate"
+              />
+            </FaFormItem>
+            <FaFormItem name="issuer" label="出单人">
+              <FaInput :model-value="appAccountStore.displayName" readonly class="w-full" />
+            </FaFormItem>
+            <FaFormItem name="currencyCode" label="订单币种">
+              <FaInput :model-value="formModel.currencyCode" readonly class="font-mono w-full" />
+            </FaFormItem>
+            <FaAlert
+              v-if="currencyUnavailable"
+              title="当前币种不可用于新订单"
+              description="请确认货币资料已启用，再返回列表重新进入。"
+              variant="destructive"
+              class="md:col-span-2"
+            />
+          </FaCard>
+
+          <FaCard
+            title="客户与地址快照"
+            description="首版只保存在本订单内，不新增客户主数据。"
+            content-class="gap-4 grid grid-cols-1 md:grid-cols-2"
+          >
+            <FaFormItem name="customerName" label="客户姓名" required :error="fieldError('customer.name')">
+              <FaInput
+                v-model="formModel.customerName"
+                maxlength="128"
+                autocomplete="name"
+                class="w-full"
+                @update:model-value="clearFeedback('customer.name')"
+              />
+            </FaFormItem>
+            <FaFormItem name="customerPhone" label="客户电话" required :error="fieldError('customer.phone')">
+              <FaInput
+                v-model="formModel.customerPhone"
+                maxlength="64"
+                autocomplete="tel"
+                class="w-full"
+                @update:model-value="clearFeedback('customer.phone')"
+              />
+            </FaFormItem>
+            <FaFormItem
+              name="region"
+              label="三级地区"
+              required
+              class="md:col-span-2"
+              :error="fieldError('customer.cityId') || fieldError('customer.countryRegionId')"
+            >
+              <QsRegionSelector
+                v-model="formModel.region"
+                name="customerCityId"
+                required
+                :disabled="submitLocked"
+                :error="Boolean(fieldError('customer.cityId'))"
+                @change="handleRegionChange"
+              />
+            </FaFormItem>
+            <FaFormItem
+              name="addressDetail"
+              label="详细地址"
+              required
+              class="md:col-span-2"
+              :error="fieldError('customer.addressDetail')"
+              description="保存时会移除全部空白；请勿重复填写已选国家/地区、省/州或城市。"
+            >
+              <FaTextarea
+                v-model="formModel.addressDetail"
+                maxlength="1000"
+                class="w-full"
+                placeholder="例如：苓雅区中正一路100号3楼"
+                @update:model-value="clearFeedback('customer.addressDetail')"
+              />
+            </FaFormItem>
+            <div class="p-3 border border-border rounded-lg bg-muted/25 md:col-span-2">
+              <p class="text-xs text-muted-foreground m-0">
+                完整地址预览（无空格拼接）
+              </p>
+              <p class="text-sm m-0 mt-1 break-all">
+                {{ fullAddressPreview || '完成三级地区与详细地址后显示' }}
+              </p>
+            </div>
+          </FaCard>
+
+          <FaCard content-class="min-w-0">
+            <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <FaFormItem name="productSearchKeyword" label="搜索数据库产品" class="m-0 flex-1">
+                <FaInput
+                  v-model="productSearchKeyword"
+                  class="w-full"
+                  placeholder="输入产品编号或名称，最多返回 50 项"
+                  :disabled="submitLocked || productLoading"
+                  @keydown.enter.prevent="loadProductOptions"
+                />
+              </FaFormItem>
+              <FaButton
+                type="button"
+                variant="outline"
+                class="min-h-11 sm:min-h-9"
+                :loading="productLoading"
+                :disabled="submitLocked"
+                @click="loadProductOptions"
+              >
+                搜索产品
+              </FaButton>
+            </div>
+            <FaAlert
+              v-if="productError"
+              title="产品选项加载失败"
+              :description="productError"
+              variant="destructive"
+              class="mb-4"
+            />
+            <SalesOrderLines
+              :model-value="formModel.lines"
+              :currency="formModel.currencyCode"
+              :currencies="fixedCurrencies"
+              :disabled="submitLocked"
+              :field-errors="fieldErrors"
+              :product-options="productOptions"
+              @update:model-value="handleLinesUpdate"
+            />
+          </FaCard>
+
+          <FaCard
+            title="订单凭证"
+            description="可先上传图片或文档；上传不会派发订单编号，正式保存时才关联。"
+            content-class="gap-4 grid"
+          >
+            <template v-if="canManageDocuments">
+              <input
+                ref="fileInputRef"
+                type="file"
+                accept="image/*,.pdf,.doc,.docx"
+                multiple
+                class="sr-only"
+                :disabled="submitLocked || documentUploading"
+                @change="handleFileInput"
+              >
+              <FaButton
+                type="button"
+                variant="outline"
+                class="min-h-11 w-full"
+                :loading="documentUploading"
+                :disabled="submitLocked || formModel.documents.length >= 20"
+                @click="openFilePicker"
+              >
+                <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传定金凭证、签收单等
+              </FaButton>
+              <p class="text-xs text-muted-foreground m-0">
+                移除只取消本订单关联，未使用的临时文件由系统后续清理。
+              </p>
+            </template>
+            <p v-else class="text-sm text-muted-foreground m-0">
+              当前身份没有 sales-orders:document 权限，可不附凭证直接创建订单。
+            </p>
+            <p v-if="documentUploadError" class="text-sm text-destructive m-0" role="alert">
+              {{ documentUploadError }}
+            </p>
+            <div
+              v-for="(document, index) in formModel.documents"
+              :key="document.key"
+              class="p-4 border border-border rounded-lg gap-3 grid grid-cols-1 md:grid-cols-2"
+            >
+              <div class="flex gap-3 min-w-0 items-start justify-between md:col-span-2">
+                <div class="min-w-0">
+                  <strong class="text-sm break-all">{{ document.originalFilename }}</strong>
+                  <p class="text-xs text-muted-foreground font-mono m-0 mt-1">
+                    {{ document.mimeType }} · {{ document.sizeBytes }} bytes
+                  </p>
+                </div>
+                <FaButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  :disabled="submitLocked"
+                  :aria-label="`移除凭证 ${document.originalFilename}`"
+                  @click="removeDocument(index)"
+                >
+                  移除
+                </FaButton>
+              </div>
+              <FaFormItem :name="`documents.${index}.documentType`" label="凭证类型" required>
+                <FaSelect
+                  :model-value="document.documentType"
+                  :options="[
+                    { label: '定金凭证', value: 'DEPOSIT_VOUCHER' },
+                    { label: '签收单', value: 'DELIVERY_RECEIPT' },
+                    { label: '其他', value: 'OTHER' },
+                  ]"
+                  class="w-full"
+                  @update:model-value="updateDocument(index, { documentType: $event as SalesOrderDocumentFormModel['documentType'] })"
+                />
+              </FaFormItem>
+              <FaFormItem :name="`documents.${index}.title`" label="标题">
+                <FaInput
+                  :model-value="document.title"
+                  maxlength="128"
+                  class="w-full"
+                  @update:model-value="updateDocument(index, { title: String($event ?? '') })"
+                />
+              </FaFormItem>
+              <FaFormItem :name="`documents.${index}.remark`" label="备注" class="md:col-span-2">
+                <FaTextarea
+                  :model-value="document.remark"
+                  maxlength="500"
+                  class="w-full"
+                  @update:model-value="updateDocument(index, { remark: String($event ?? '') })"
+                />
+              </FaFormItem>
+            </div>
+          </FaCard>
+
+          <FaCard title="订单备注" description="可记录本订单其他约定，不写入客户主数据。">
+            <FaTextarea v-model="formModel.remark" maxlength="2000" class="w-full" />
+          </FaCard>
+        </div>
+
+        <aside class="min-w-0 lg:col-span-4 lg:self-start">
+          <div class="space-y-6 lg:top-4 lg:sticky">
+            <FaCard
+              title="销售与付款约定"
+              description="两条金额等式均采用硬拦截，服务端会再次复核。"
+              content-class="gap-4 grid"
+            >
+              <div class="p-4 border border-border rounded-lg bg-muted/25">
+                <p class="text-xs text-muted-foreground m-0">
+                  产品明细汇总
+                </p>
+                <div class="qs-type-data-emphasis mt-1">
+                  <AmountDisplay
+                    :value="lineSubtotalAmount"
+                    :currency="formModel.currencyCode"
+                    :currencies="fixedCurrencies"
+                  />
+                </div>
+              </div>
+              <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :error="fieldError('agreedTotalAmount')">
+                <MoneyInput
+                  v-model="formModel.agreedTotalAmount"
+                  :currency="formModel.currencyCode"
+                  :currencies="fixedCurrencies"
+                  min="0"
+                  :disabled="submitLocked"
+                  name="agreedTotalAmount"
+                  @update:model-value="clearFeedback('agreedTotalAmount')"
+                />
+              </FaFormItem>
+              <FaFormItem name="depositDueAmount" label="约定定金" required :error="fieldError('depositDueAmount')">
+                <MoneyInput
+                  v-model="formModel.depositDueAmount"
+                  :currency="formModel.currencyCode"
+                  :currencies="fixedCurrencies"
+                  min="0"
+                  :disabled="submitLocked"
+                  name="depositDueAmount"
+                  @update:model-value="clearFeedback('depositDueAmount')"
+                />
+              </FaFormItem>
+              <FaFormItem name="balanceDueAmount" label="约定尾款" required :error="fieldError('balanceDueAmount')">
+                <MoneyInput
+                  v-model="formModel.balanceDueAmount"
+                  :currency="formModel.currencyCode"
+                  :currencies="fixedCurrencies"
+                  min="0"
+                  :disabled="submitLocked"
+                  name="balanceDueAmount"
+                  @update:model-value="clearFeedback('balanceDueAmount')"
+                />
+              </FaFormItem>
+              <div class="text-xs text-muted-foreground leading-5 p-3 border border-border rounded-lg">
+                销售总价 = 明细汇总；约定定金 + 约定尾款 = 销售总价。实际收款将在订单创建后单独记录。
+              </div>
+            </FaCard>
+            <div class="gap-2 grid grid-cols-1 lg:grid-cols-1 sm:grid-cols-2 xl:grid-cols-2">
+              <FaButton
+                type="button"
+                variant="outline"
+                class="min-h-11"
+                :disabled="submission.phase === 'submitting'"
+                @click="requestBack"
+              >
+                取消
+              </FaButton>
+              <FaButton
+                type="submit"
+                class="min-h-11"
+                :loading="submission.phase === 'submitting'"
+                :disabled="submission.phase !== 'editing' || currencyUnavailable"
+              >
+                正式保存并派号
+              </FaButton>
+            </div>
+          </div>
+        </aside>
+      </FaForm>
+    </FaPageMain>
+
+    <QsGenericModal
+      :model-value="discardVisible"
+      :title="discardTitle"
+      :description="discardDescription"
+      size="sm"
+      @update:model-value="$event ? (discardVisible = true) : closeDiscard()"
+    >
+      <p class="text-sm text-muted-foreground m-0">
+        {{ discardDescription }}
+      </p>
+      <template #footer>
+        <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="closeDiscard">
+          继续编辑
+        </FaButton>
+        <FaButton type="button" variant="destructive" class="min-h-11 sm:min-h-9" @click="confirmDiscard">
+          确认放弃
+        </FaButton>
+      </template>
+    </QsGenericModal>
+  </div>
 </template>
