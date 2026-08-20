@@ -42,6 +42,20 @@ export const FUND_ACCOUNT_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 销售订单域按读取、创建、通用更新、收款和凭证拆分权限。
+ *
+ * 付款状态由收款事实派生，不单独暴露手工写权限；凭证内容读取随订单读取权限，
+ * 上传和关联则由 document 权限控制。
+ */
+export const SALES_ORDER_PERMISSION_CODES = [
+  'sales-orders:read',
+  'sales-orders:create',
+  'sales-orders:update',
+  'sales-orders:payment',
+  'sales-orders:document',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -88,6 +102,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...PRODUCT_MEDIA_PERMISSION_CODES,
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
   ...FUND_ACCOUNT_PERMISSION_CODES,
+  ...SALES_ORDER_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

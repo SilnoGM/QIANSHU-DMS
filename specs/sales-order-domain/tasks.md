@@ -6,13 +6,14 @@
   - [x] 1.3 获得 Prisma Schema、迁移、公共 API 和正式实施授权。
   - _Requirements: R1-R10_
 
-- [ ] 2. 以 TDD 建立销售订单数据库 Schema
-  - [ ] 2.1 先建立 Schema RED，覆盖表、枚举、命名约束、索引、权限和媒体引用。
-  - [ ] 2.2 扩展 Prisma relations 和审计事件枚举。
-  - [ ] 2.3 新增 append-only migration，包含金额、状态、产品行、历史和媒体触发器约束。
-  - [ ] 2.4 使用隔离 PostgreSQL 应用迁移并验证失败/成功边界。
-  - [ ] 2.5 运行 Prisma validate、drift gate 和聚焦 Schema E2E。
-  - [ ] 2.6 更新任务证据并创建 Schema 小步提交。
+- [x] 2. 以 TDD 建立销售订单数据库 Schema
+  - [x] 2.1 先建立 Schema RED，覆盖表、枚举、命名约束、索引、权限和媒体引用。
+  - [x] 2.2 扩展 Prisma relations 和审计事件枚举。
+  - [x] 2.3 新增 append-only migration，包含金额、状态、产品行、历史和媒体触发器约束。
+  - [x] 2.4 使用隔离 PostgreSQL 应用迁移并验证失败/成功边界。
+  - [x] 2.5 运行 Prisma validate、drift gate 和聚焦 Schema E2E。
+  - [x] 2.6 更新任务证据并创建 Schema 小步提交。
+  - _Evidence: `pnpm -C server check`（211 suites / 2142 tests）；`node --run ci:server-e2e`（34 suites / 199 tests，另含 4 组产品媒体专项 E2E）_
   - _Requirements: R2-R10_
 
 - [ ] 3. 以 TDD 实现订单规范化和纯领域规则
