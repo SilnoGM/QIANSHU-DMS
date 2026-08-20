@@ -1,0 +1,29 @@
+import { Module } from '@nestjs/common'
+
+import { PrismaModule } from '../../infrastructure/database/prisma.module'
+import { AuthModule } from '../auth/auth.module'
+import { MediaModule } from '../media/media.module'
+import { NumberingModule } from '../numbering/numbering.module'
+import { SalesOrderCommandService } from './sales-order-command.service'
+import { SalesOrderDocumentMultipartParser } from './documents/sales-order-document-multipart.parser'
+import { SalesOrderDocumentService } from './documents/sales-order-document.service'
+import { SalesOrderMutationService } from './sales-order-mutation.service'
+import { SalesOrderQueryService } from './sales-order-query.service'
+import { SalesOrdersController } from './sales-orders.controller'
+
+@Module({
+  imports: [PrismaModule, AuthModule, MediaModule, NumberingModule],
+  controllers: [SalesOrdersController],
+  providers: [
+    SalesOrderQueryService,
+    SalesOrderCommandService,
+    SalesOrderMutationService,
+    SalesOrderDocumentService,
+    {
+      provide: SalesOrderDocumentMultipartParser,
+      useFactory: (): SalesOrderDocumentMultipartParser =>
+        new SalesOrderDocumentMultipartParser(),
+    },
+  ],
+})
+export class SalesOrdersModule {}

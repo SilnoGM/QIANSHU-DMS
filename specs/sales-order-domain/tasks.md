@@ -24,28 +24,31 @@
   - _Evidence: `pnpm -C server exec jest src/modules/sales-orders --runInBand`（5 suites / 54 tests）；`pnpm -C server typecheck`；销售订单目录 ESLint_
   - _Requirements: R2-R6, R8_
 
-- [ ] 4. 以 TDD 实现销售订单创建与查询服务
-  - [ ] 4.1 先建立 Service RED，覆盖编号时机、幂等重放、产品/地区快照和媒体激活。
-  - [ ] 4.2 实现产品币种选择查询和服务端状态复核。
-  - [ ] 4.3 实现订单事务、列表、详情和派生金额映射。
-  - [ ] 4.4 记录无敏感数据的审计事件。
-  - [ ] 4.5 运行聚焦单元与隔离 PostgreSQL E2E。
+- [x] 4. 以 TDD 实现销售订单创建与查询服务
+  - [x] 4.1 先建立 Service RED，覆盖编号时机、幂等重放、产品/地区快照和媒体激活。
+  - [x] 4.2 实现产品币种选择查询和服务端状态复核。
+  - [x] 4.3 实现订单事务、列表、详情和派生金额映射。
+  - [x] 4.4 记录无敏感数据的审计事件。
+  - [x] 4.5 运行聚焦单元与隔离 PostgreSQL E2E。
+  - _Evidence: 销售订单聚焦单元测试（7 suites / 61 tests）；`node --run ci:server-e2e`（35 suites / 200 tests，另含 4 组产品媒体专项 E2E）_
   - _Requirements: R1-R5, R7, R9-R10_
 
-- [ ] 5. 以 TDD 实现状态、收款、金额修订和凭证服务
-  - [ ] 5.1 建立状态流转、取消门禁和签收凭证门禁 RED。
-  - [ ] 5.2 建立收款累计、付款状态派生和作废 RED。
-  - [ ] 5.3 建立金额约定修订及前后快照 RED。
-  - [ ] 5.4 建立临时媒体上传、关联、解除和私有内容读取 RED。
-  - [ ] 5.5 实现最小服务并运行聚焦测试。
+- [x] 5. 以 TDD 实现状态、收款、金额修订和凭证服务
+  - [x] 5.1 建立状态流转、取消门禁和签收凭证门禁 RED。
+  - [x] 5.2 建立收款累计、付款状态派生和作废 RED。
+  - [x] 5.3 建立金额约定修订及前后快照 RED。
+  - [x] 5.4 建立临时媒体上传、关联、解除和私有内容读取 RED。
+  - [x] 5.5 实现最小服务并运行聚焦测试。
+  - _Evidence: `sales-order-mutation.service.spec.ts` 覆盖三维状态、签收门禁、取消门禁、金额修订、收款与作废；Server 全量单元检查通过_
   - _Requirements: R5-R8, R10_
 
-- [ ] 6. 建立公共 API、权限与 OpenAPI 契约
-  - [ ] 6.1 为 DTO、Controller、权限、CSRF 和错误矩阵建立 RED。
-  - [ ] 6.2 实现稳定 operationId 和 `ApiContractResponse`。
-  - [ ] 6.3 生成 Server snapshot，通过根 `contract:sync` 同步 Web snapshot。
-  - [ ] 6.4 运行 contract baseline、Server build/typecheck/lint。
-  - [ ] 6.5 更新任务证据并创建 Server API 小步提交。
+- [x] 6. 建立公共 API、权限与 OpenAPI 契约
+  - [x] 6.1 为 DTO、Controller、权限、CSRF 和错误矩阵建立 RED。
+  - [x] 6.2 实现稳定 operationId 和 `ApiContractResponse`。
+  - [x] 6.3 生成 Server snapshot，通过根 `contract:sync` 同步 Web snapshot。
+  - [x] 6.4 运行 contract baseline、Server build/typecheck/lint。
+  - [x] 6.5 更新任务证据并创建 Server API 小步提交。
+  - _Evidence: `pnpm -C server check`（218 suites / 2203 tests）；`node --run contract:check`；Server/Web OpenAPI snapshot 一致_
   - _Requirements: R1-R10_
 
 - [ ] 7. 以 TDD 实现 Web API 适配和纯表单状态
