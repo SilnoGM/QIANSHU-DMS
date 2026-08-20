@@ -16,11 +16,12 @@
   - _Evidence: `pnpm -C server check`（211 suites / 2142 tests）；`node --run ci:server-e2e`（34 suites / 199 tests，另含 4 组产品媒体专项 E2E）_
   - _Requirements: R2-R10_
 
-- [ ] 3. 以 TDD 实现订单规范化和纯领域规则
-  - [ ] 3.1 为地址去空白、地区前缀硬拦截建立失败测试。
-  - [ ] 3.2 为十进制金额、正整数数量和两项金额等式建立失败测试。
-  - [ ] 3.3 为请求指纹、幂等 Key 和状态机建立失败测试。
-  - [ ] 3.4 实现最小纯函数并运行聚焦测试。
+- [x] 3. 以 TDD 实现订单规范化和纯领域规则
+  - [x] 3.1 为地址去空白、地区前缀硬拦截建立失败测试。
+  - [x] 3.2 为十进制金额、正整数数量和两项金额等式建立失败测试。
+  - [x] 3.3 为请求指纹、幂等 Key 和状态机建立失败测试。
+  - [x] 3.4 实现最小纯函数并运行聚焦测试。
+  - _Evidence: `pnpm -C server exec jest src/modules/sales-orders --runInBand`（5 suites / 54 tests）；`pnpm -C server typecheck`；销售订单目录 ESLint_
   - _Requirements: R2-R6, R8_
 
 - [ ] 4. 以 TDD 实现销售订单创建与查询服务
