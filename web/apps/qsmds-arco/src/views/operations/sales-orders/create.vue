@@ -1,9 +1,11 @@
 <script setup lang="ts">
+import type { FormExpose } from '@fantastic-admin/components'
 import type { DateValue } from '@internationalized/date'
 import type {
   SalesOrderApiFailure,
   SalesOrderDocumentFormModel,
   SalesOrderFieldErrors,
+  SalesOrderFormModel,
   SalesOrderSubmissionState,
   SalesOrderSubmittingState,
   SalesOrderUnknownState,
@@ -69,6 +71,7 @@ const documentUploading = ref(false)
 const documentUploadError = ref('')
 const discardVisible = ref(false)
 const discardIntent = ref<DiscardIntent | null>(null)
+const formRef = useTemplateRef<FormExpose<SalesOrderFormModel>>('formRef')
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 let productRequestVersion = 0
 let productAbortController: AbortController | null = null
@@ -110,21 +113,57 @@ const discardDescription = computed(() => discardIntent.value === 'unknown-aband
   ? '放弃后将清除当前幂等请求，不能再使用同一请求确认订单是否已经保存。'
   : '当前订单尚未正式保存，放弃后已填写内容无法恢复。')
 
-function clearFeedback(path?: string): void {
-  if (path === undefined) {
-    fieldErrors.value = {}
+function formFieldForError(path: string): string {
+  if (path === 'customer.name') {
+    return 'customerName'
   }
-  else if (fieldErrors.value[path] !== undefined) {
-    const next = { ...fieldErrors.value }
-    delete next[path]
-    fieldErrors.value = next
+  if (path === 'customer.phone') {
+    return 'customerPhone'
   }
-  formError.value = ''
-  formFailure.value = null
+  if (
+    path === 'customer.countryRegionId'
+    || path === 'customer.provinceStateId'
+    || path === 'customer.cityId'
+  ) {
+    return 'region'
+  }
+  if (path === 'customer.addressDetail') {
+    return 'addressDetail'
+  }
+  return path
 }
 
-function fieldError(path: string): string | undefined {
-  return fieldErrors.value[path]
+/**
+ * 领域校验不依赖 vee-validate schema，因此必须把领域字段路径同步回
+ * FaForm 内部错误状态，才能同时得到就地文案、aria-invalid 与正确的标签关联。
+ */
+function applySalesOrderFieldErrors(errors: SalesOrderFieldErrors): void {
+  formRef.value?.clearValidate()
+  const appliedFields = new Set<string>()
+  for (const [path, message] of Object.entries(errors)) {
+    const field = formFieldForError(path)
+    if (field === 'lines' || field === 'documents' || appliedFields.has(field)) {
+      continue
+    }
+    formRef.value?.setFieldError(field, message)
+    appliedFields.add(field)
+  }
+}
+
+function replaceFieldErrors(errors: SalesOrderFieldErrors): void {
+  fieldErrors.value = { ...errors }
+  applySalesOrderFieldErrors(fieldErrors.value)
+}
+
+function clearFeedback(path?: string): void {
+  const next = path === undefined
+    ? {}
+    : Object.fromEntries(Object.entries(fieldErrors.value).filter(([field]) => (
+        field !== path && !field.startsWith(`${path}.`)
+      )))
+  replaceFieldErrors(next)
+  formError.value = ''
+  formFailure.value = null
 }
 
 function updateOrderDate(value: DateValue | DateValue[] | undefined): void {
@@ -138,6 +177,8 @@ function updateOrderDate(value: DateValue | DateValue[] | undefined): void {
 function handleRegionChange(change: RegionSelectorChange): void {
   formModel.value.region = { ...change.value }
   formModel.value.regionNames = change.path.map(node => node.name)
+  clearFeedback('customer.countryRegionId')
+  clearFeedback('customer.provinceStateId')
   clearFeedback('customer.cityId')
   clearFeedback('customer.addressDetail')
 }
@@ -302,7 +343,7 @@ async function executeSubmission(state: SalesOrderSubmittingState): Promise<void
     const failure = getSalesOrderApiFailure(error)
     formFailure.value = failure
     formError.value = failure.message
-    fieldErrors.value = failure.fieldErrors
+    replaceFieldErrors(failure.fieldErrors)
     submission.value = resolveSalesOrderSubmissionFailure(state, failure)
   }
   finally {
@@ -322,7 +363,7 @@ async function submitOrder(): Promise<void> {
   }
   const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, todayIso)
   if (!result.valid) {
-    fieldErrors.value = result.fieldErrors
+    replaceFieldErrors(result.fieldErrors)
     formError.value = '部分资料未通过校验，请修正后再正式保存'
     formFailure.value = null
     return
@@ -501,6 +542,7 @@ onBeforeUnmount(() => {
       </FaAlert>
 
       <FaForm
+        ref="formRef"
         :model="formModel"
         :disabled="submitLocked"
         :aria-busy="submission.phase === 'submitting' ? 'true' : 'false'"
@@ -519,7 +561,7 @@ onBeforeUnmount(() => {
               </p>
               <code class="text-sm text-muted-foreground font-mono mt-2 block">SALES_ORDER · AUTO</code>
             </div>
-            <FaFormItem name="orderDate" label="出单日期" required :error="fieldError('orderDate')">
+            <FaFormItem name="orderDate" label="出单日期" required :auto-bind="false">
               <FaDate
                 :model-value="orderDateValue"
                 :max-value="todayDate"
@@ -550,7 +592,7 @@ onBeforeUnmount(() => {
             description="首版只保存在本订单内，不新增客户主数据。"
             content-class="gap-4 grid grid-cols-1 md:grid-cols-2"
           >
-            <FaFormItem name="customerName" label="客户姓名" required :error="fieldError('customer.name')">
+            <FaFormItem name="customerName" label="客户姓名" required>
               <FaInput
                 v-model="formModel.customerName"
                 maxlength="128"
@@ -559,7 +601,7 @@ onBeforeUnmount(() => {
                 @update:model-value="clearFeedback('customer.name')"
               />
             </FaFormItem>
-            <FaFormItem name="customerPhone" label="客户电话" required :error="fieldError('customer.phone')">
+            <FaFormItem name="customerPhone" label="客户电话" required>
               <FaInput
                 v-model="formModel.customerPhone"
                 maxlength="64"
@@ -572,15 +614,15 @@ onBeforeUnmount(() => {
               name="region"
               label="三级地区"
               required
+              :auto-bind="false"
               class="md:col-span-2"
-              :error="fieldError('customer.cityId') || fieldError('customer.countryRegionId')"
             >
               <QsRegionSelector
                 v-model="formModel.region"
+                data-testid="sales-order-region-selector"
                 name="customerCityId"
                 required
                 :disabled="submitLocked"
-                :error="Boolean(fieldError('customer.cityId'))"
                 @change="handleRegionChange"
               />
             </FaFormItem>
@@ -589,7 +631,6 @@ onBeforeUnmount(() => {
               label="详细地址"
               required
               class="md:col-span-2"
-              :error="fieldError('customer.addressDetail')"
               description="保存时会移除全部空白；请勿重复填写已选国家/地区、省/州或城市。"
             >
               <FaTextarea
@@ -763,7 +804,7 @@ onBeforeUnmount(() => {
                   />
                 </div>
               </div>
-              <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :error="fieldError('agreedTotalAmount')">
+              <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :auto-bind="false">
                 <MoneyInput
                   v-model="formModel.agreedTotalAmount"
                   :currency="formModel.currencyCode"
@@ -774,7 +815,7 @@ onBeforeUnmount(() => {
                   @update:model-value="clearFeedback('agreedTotalAmount')"
                 />
               </FaFormItem>
-              <FaFormItem name="depositDueAmount" label="约定定金" required :error="fieldError('depositDueAmount')">
+              <FaFormItem name="depositDueAmount" label="约定定金" required :auto-bind="false">
                 <MoneyInput
                   v-model="formModel.depositDueAmount"
                   :currency="formModel.currencyCode"
@@ -785,7 +826,7 @@ onBeforeUnmount(() => {
                   @update:model-value="clearFeedback('depositDueAmount')"
                 />
               </FaFormItem>
-              <FaFormItem name="balanceDueAmount" label="约定尾款" required :error="fieldError('balanceDueAmount')">
+              <FaFormItem name="balanceDueAmount" label="约定尾款" required :auto-bind="false">
                 <MoneyInput
                   v-model="formModel.balanceDueAmount"
                   :currency="formModel.currencyCode"

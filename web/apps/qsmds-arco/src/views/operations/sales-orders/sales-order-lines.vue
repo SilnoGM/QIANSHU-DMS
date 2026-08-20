@@ -38,10 +38,6 @@ const LINE_TYPE_OPTIONS = [
   { label: '仅本订单的临时产品', value: 'CUSTOM' },
 ]
 
-function fieldError(index: number, field: string): string | undefined {
-  return props.fieldErrors[`lines.${index}.${field}`]
-}
-
 function replaceLine(index: number, line: SalesOrderLineFormModel): void {
   if (props.disabled) {
     return
@@ -211,7 +207,8 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
         </div>
 
         <div class="gap-4 grid grid-cols-1 md:grid-cols-2">
-          <FaFormItem :name="`lines.${index}.lineType`" label="产品来源" required>
+          <!-- 产品行由本组件显式回写整行快照，关闭 FaFormItem 自动绑定以避免旧快照反向覆盖。 -->
+          <FaFormItem :name="`lines.${index}.lineType`" label="产品来源" required :auto-bind="false">
             <FaSelect
               :model-value="line.lineType"
               :options="LINE_TYPE_OPTIONS"
@@ -226,7 +223,7 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
             :name="`lines.${index}.productId`"
             label="数据库产品"
             required
-            :error="fieldError(index, 'productId')"
+            :auto-bind="false"
           >
             <FaSelect
               :model-value="line.productId ?? `__empty_product_${line.key}`"
@@ -242,7 +239,7 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
             :name="`lines.${index}.name`"
             label="临时产品名称"
             required
-            :error="fieldError(index, 'name')"
+            :auto-bind="false"
           >
             <FaInput
               :model-value="line.name"
@@ -254,7 +251,7 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
             />
           </FaFormItem>
 
-          <FaFormItem v-if="line.lineType === 'CATALOG'" :name="`lines.${index}.standardUnitPriceAmount`" label="标准价">
+          <FaFormItem v-if="line.lineType === 'CATALOG'" :name="`lines.${index}.standardUnitPriceAmount`" label="标准价" :auto-bind="false">
             <div class="px-3 border border-border rounded-md bg-muted/30 flex min-h-10 items-center">
               <AmountDisplay
                 :value="line.standardUnitPriceAmount"
@@ -268,7 +265,7 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
             :name="`lines.${index}.actualUnitPriceAmount`"
             label="真实售价"
             required
-            :error="fieldError(index, 'actualUnitPriceAmount')"
+            :auto-bind="false"
           >
             <MoneyInput
               :model-value="line.actualUnitPriceAmount"
@@ -285,7 +282,7 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
             :name="`lines.${index}.quantity`"
             label="产品数量"
             required
-            :error="fieldError(index, 'quantity')"
+            :auto-bind="false"
           >
             <FaInput
               type="number"
@@ -299,7 +296,7 @@ function lineTotal(line: SalesOrderLineFormModel): string | null {
             />
           </FaFormItem>
 
-          <FaFormItem v-if="line.lineType === 'CUSTOM'" :name="`lines.${index}.description`" label="临时产品说明">
+          <FaFormItem v-if="line.lineType === 'CUSTOM'" :name="`lines.${index}.description`" label="临时产品说明" :auto-bind="false">
             <FaTextarea
               :model-value="line.description"
               maxlength="1000"

@@ -58,6 +58,18 @@ test('币种路由只接受单值 TWD/MYR，缺失、数组与其他币种均拒
   assert.equal(parseSalesOrderCurrency('CNY'), null)
 })
 
+test('现有地区域的 UUID v5 可用于客户地址快照', () => {
+  const model = validModel()
+  model.region = {
+    countryRegionId: '2e30acdf-7559-5fc2-8e00-c5b069d3df8b',
+    provinceStateId: 'ee82c572-f653-51d2-98d4-f11ac5928aa1',
+    cityId: '78f9134e-3d72-5f6e-9897-ca7e50004229',
+  }
+
+  const result = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(result.valid, true)
+})
+
 test('详细地址执行 NFKC 和全部 Unicode 空白删除，并硬拦截三级、两级或城市前缀', () => {
   assert.equal(
     normalizeSalesOrderAddressDetail(' 苓雅区\t中正一路\u3000100\u00A0号 3 楼 '),

@@ -49,6 +49,10 @@ const currencyOptions = computed(() => [
     value: currency.code,
   })),
 ])
+// FaFormItem 依赖 FaForm 提供的表单上下文；弹窗虽然只有一个字段，也不能省略该容器。
+const currencyFormModel = computed(() => ({
+  salesOrderCurrency: selectedCurrency.value ?? '__sales_order_currency_empty__',
+}))
 const currencySelectionUnavailable = computed(() => (
   currencyCatalog.loading.value
   || currencyCatalog.errorMessage.value !== null
@@ -425,32 +429,34 @@ onBeforeUnmount(() => {
       description="一张订单只允许一个币种，进入新增页后不可切换。产品选项和真实售价都按该币种处理。"
       size="sm"
     >
-      <div class="gap-4 grid">
-        <FaFormItem name="salesOrderCurrency" label="订单币种" required>
-          <FaSelect
-            :model-value="selectedCurrency ?? '__sales_order_currency_empty__'"
-            :options="currencyOptions"
-            class="w-full"
-            :disabled="currencySelectionUnavailable"
-            @update:model-value="updateSelectedCurrency"
+      <FaForm :model="currencyFormModel">
+        <div class="gap-4 grid">
+          <FaFormItem name="salesOrderCurrency" label="订单币种" required>
+            <FaSelect
+              :model-value="selectedCurrency ?? '__sales_order_currency_empty__'"
+              :options="currencyOptions"
+              class="w-full"
+              :disabled="currencySelectionUnavailable"
+              @update:model-value="updateSelectedCurrency"
+            />
+          </FaFormItem>
+          <p v-if="currencyCatalog.loading.value" class="text-sm text-muted-foreground m-0" role="status">
+            正在加载可用币种…
+          </p>
+          <FaAlert
+            v-else-if="currencyCatalog.errorMessage.value"
+            title="币种资料加载失败"
+            :description="currencyCatalog.errorMessage.value"
+            variant="destructive"
           />
-        </FaFormItem>
-        <p v-if="currencyCatalog.loading.value" class="text-sm text-muted-foreground m-0" role="status">
-          正在加载可用币种…
-        </p>
-        <FaAlert
-          v-else-if="currencyCatalog.errorMessage.value"
-          title="币种资料加载失败"
-          :description="currencyCatalog.errorMessage.value"
-          variant="destructive"
-        />
-        <FaAlert
-          v-else-if="availableOrderCurrencies.length === 0"
-          title="暂无可用销售币种"
-          description="请先在基础资料中启用 TWD 或 MYR。"
-          variant="destructive"
-        />
-      </div>
+          <FaAlert
+            v-else-if="availableOrderCurrencies.length === 0"
+            title="暂无可用销售币种"
+            description="请先在基础资料中启用 TWD 或 MYR。"
+            variant="destructive"
+          />
+        </div>
+      </FaForm>
       <template #footer>
         <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="currencyModalVisible = false">
           取消

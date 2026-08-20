@@ -39,15 +39,15 @@ export class SalesOrderCustomerInputDto {
   phone!: string
 
   @ApiProperty({ type: 'string', format: 'uuid' })
-  @IsUUID('4')
+  @IsUUID('all')
   countryRegionId!: string
 
   @ApiProperty({ type: 'string', format: 'uuid' })
-  @IsUUID('4')
+  @IsUUID('all')
   provinceStateId!: string
 
   @ApiProperty({ type: 'string', format: 'uuid' })
-  @IsUUID('4')
+  @IsUUID('all')
   cityId!: string
 
   @ApiProperty({ type: 'string', minLength: 1, maxLength: 1000 })

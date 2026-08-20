@@ -24,6 +24,8 @@ const SALES_ORDER_DOCUMENT_TYPES = new Set<SalesOrderDocumentType>([
 ])
 const CANONICAL_UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+const CANONICAL_REGION_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u
 
 export interface NormalizedSalesOrderCustomerInput {
@@ -96,7 +98,14 @@ function rejectUnknownKeys(
   parent = '',
 ): void {
   const allowed = new Set(allowedKeys)
-  if (Object.keys(record).some(key => !allowed.has(key))) {
+  if (Object.keys(record).some(key => (
+    !allowed.has(key) && record[key] !== undefined
+  ))) {
+    /*
+     * ValidationPipe 的 transform 会把同一联合 DTO 另一分支的 class field
+     * 实例化成 undefined own property。JSON 无法表达 undefined，因此它只代表
+     * “客户端未提交”；null 或任何实际值仍按跨分支未知字段硬拦截。
+     */
     // 未知字段名可能由外部输入控制，错误只暴露已知父路径。
     return salesOrderValidationFailure(parent || 'body')
   }
@@ -128,6 +137,14 @@ function normalizeNullableText(
 function normalizeUuid(value: unknown, field: string): string {
   if (typeof value !== 'string' || !CANONICAL_UUID_V4_PATTERN.test(value)) {
     return salesOrderValidationFailure(field, '必须是规范的小写 UUID v4')
+  }
+  return value
+}
+
+/** 地区域的可重现种子 ID 是 UUID v5，不得用业务聚合的 v4 约束误拦截。 */
+function normalizeRegionUuid(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !CANONICAL_REGION_UUID_PATTERN.test(value)) {
+    return salesOrderValidationFailure(field, '必须是规范的小写 UUID')
   }
   return value
 }
@@ -193,15 +210,15 @@ function normalizeCustomer(value: unknown): NormalizedSalesOrderCustomerInput {
   return Object.freeze({
     name: normalizeText(customer.name, 'customer.name', 128),
     phone: normalizeText(customer.phone, 'customer.phone', 64),
-    countryRegionId: normalizeUuid(
+    countryRegionId: normalizeRegionUuid(
       customer.countryRegionId,
       'customer.countryRegionId',
     ),
-    provinceStateId: normalizeUuid(
+    provinceStateId: normalizeRegionUuid(
       customer.provinceStateId,
       'customer.provinceStateId',
     ),
-    cityId: normalizeUuid(customer.cityId, 'customer.cityId'),
+    cityId: normalizeRegionUuid(customer.cityId, 'customer.cityId'),
     addressDetail,
   })
 }

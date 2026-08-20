@@ -1,4 +1,7 @@
+import { plainToInstance } from 'class-transformer'
+
 import { ApiException } from '../../infrastructure/http/api.exception'
+import { CreateSalesOrderRequestDto } from './dto/sales-order-create.dto'
 import {
   normalizeSalesOrderCreateCommand,
   parseSalesOrderIdempotencyKey,
@@ -61,6 +64,16 @@ function captureApiException(action: () => unknown): ApiException {
 }
 
 describe('normalizeSalesOrderCreateCommand', () => {
+  it('accepts the DTO class instance produced by the global ValidationPipe', () => {
+    const transformed = plainToInstance(
+      CreateSalesOrderRequestDto,
+      validInput(),
+    )
+
+    expect(normalizeSalesOrderCreateCommand(transformed, TODAY).lines)
+      .toHaveLength(2)
+  })
+
   it('normalizes a fixed-currency order and computes trusted line totals', () => {
     const normalized = normalizeSalesOrderCreateCommand(validInput(), TODAY)
 
@@ -99,6 +112,22 @@ describe('normalizeSalesOrderCreateCommand', () => {
     })
     expect(Object.isFrozen(normalized)).toBe(true)
     expect(Object.isFrozen(normalized.lines)).toBe(true)
+  })
+
+  it('accepts canonical UUID v5 region identities from the existing region domain', () => {
+    const input = validInput()
+    input.customer = {
+      ...(input.customer as Record<string, unknown>),
+      countryRegionId: '2e30acdf-7559-5fc2-8e00-c5b069d3df8b',
+      provinceStateId: 'ee82c572-f653-51d2-98d4-f11ac5928aa1',
+      cityId: '78f9134e-3d72-5f6e-9897-ca7e50004229',
+    }
+
+    expect(normalizeSalesOrderCreateCommand(input, TODAY).customer).toMatchObject({
+      countryRegionId: '2e30acdf-7559-5fc2-8e00-c5b069d3df8b',
+      provinceStateId: 'ee82c572-f653-51d2-98d4-f11ac5928aa1',
+      cityId: '78f9134e-3d72-5f6e-9897-ca7e50004229',
+    })
   })
 
   it.each([

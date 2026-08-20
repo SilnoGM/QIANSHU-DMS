@@ -90,6 +90,8 @@ export type SalesOrderSubmissionState
 
 const UUID_V4_PATTERN
   = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+const REGION_UUID_PATTERN
+  = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/u
 const ALL_UNICODE_WHITESPACE_PATTERN = /\p{White_Space}+/gu
@@ -390,7 +392,8 @@ export function buildCreateSalesOrderRequest(
     ['provinceStateId', provinceStateId],
     ['cityId', cityId],
   ] as const) {
-    if (value === null || !UUID_V4_PATTERN.test(value)) {
+    // 地区种子使用可重现的 UUID v5；产品、媒体和幂等聚合 ID 仍限 v4。
+    if (value === null || !REGION_UUID_PATTERN.test(value)) {
       errors[`customer.${field}`] = '请选择完整的三级地区'
     }
   }
