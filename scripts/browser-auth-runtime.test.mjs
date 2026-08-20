@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
 
@@ -139,6 +140,7 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.match(command.args.at(-1), /UPDATE currencies SET enabled = true/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rules/u)
   assert.match(command.args.at(-1), /VALUES \(\\'PRODUCT\\'/u)
+  assert.match(command.args.at(-1), /VALUES \(\\'SALES_ORDER\\'/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_versions/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_segments/u)
   assert.match(command.args.at(-1), /SET status = \\'ACTIVE\\'/u)
@@ -161,6 +163,18 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
       { message: 'Browser auth admin fixture input is invalid' },
     )
   }
+})
+
+test('认证 Browser 清单包含真实销售订单创建场景', () => {
+  const manifest = JSON.parse(readFileSync(
+    path.resolve(import.meta.dirname, '../web/package.json'),
+    'utf8',
+  ))
+
+  assert.match(
+    manifest.scripts['test:browser:auth'],
+    /sales-orders\.browser\.test\.mjs/u,
+  )
 })
 
 test('Server 启动诊断只输出固定分类且不透传底层敏感消息', () => {

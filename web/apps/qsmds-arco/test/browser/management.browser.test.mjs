@@ -1598,6 +1598,11 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'regions:enable',
     'regions:read',
     'regions:update',
+    'sales-orders:create',
+    'sales-orders:document',
+    'sales-orders:payment',
+    'sales-orders:read',
+    'sales-orders:update',
   ])
   assert.equal(Math.round(permissionDrawerState.width), 768)
   assert.ok(permissionDrawerState.rightGap <= 1)
