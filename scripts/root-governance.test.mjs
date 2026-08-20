@@ -63,6 +63,9 @@ const supplierResidueAllowlist = Object.freeze([
   'server/test/product-list-api.e2e-spec.ts',
   'server/test/product-schema.e2e-spec.ts',
   'server/test/product-view-update-api.e2e-spec.ts',
+  // 销售订单 E2E 只用 supplierValue 构造可被快照的 ACTIVE Product，
+  // 不恢复供应商主数据、API 或权限边界。
+  'server/test/sales-order-service.e2e-spec.ts',
   'scripts/browser-auth-runtime.test.mjs',
   'scripts/browser-auth/provision-admin.mjs',
   'specs/product-create/design.md',
