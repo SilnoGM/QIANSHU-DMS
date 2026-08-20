@@ -51,27 +51,30 @@
   - _Evidence: `pnpm -C server check`（218 suites / 2203 tests）；`node --run contract:check`；Server/Web OpenAPI snapshot 一致_
   - _Requirements: R1-R10_
 
-- [ ] 7. 以 TDD 实现 Web API 适配和纯表单状态
-  - [ ] 7.1 建立 generated DTO、API URL、Header、AbortSignal 和 retry 边界 RED。
-  - [ ] 7.2 建立币种路由校验、表单默认值、地址规范化、金额汇总和 DTO 映射 RED。
-  - [ ] 7.3 实现 Key 延迟创建、未知结果人工重放和字段错误映射。
-  - [ ] 7.4 运行 Web API/logic 聚焦测试。
+- [x] 7. 以 TDD 实现 Web API 适配和纯表单状态
+  - [x] 7.1 建立 generated DTO、API URL、Header、AbortSignal 和 retry 边界 RED。
+  - [x] 7.2 建立币种路由校验、表单默认值、地址规范化、金额汇总和 DTO 映射 RED。
+  - [x] 7.3 实现 Key 延迟创建、未知结果人工重放和字段错误映射。
+  - [x] 7.4 运行 Web API/logic 聚焦测试。
+  - _Evidence: 销售订单 Web logic/View 聚焦测试（10 tests）；`pnpm -C web check`（Node scripts 172 tests、TypeScript scripts 49 tests、API/View 890 tests）_
   - _Requirements: R1-R7, R10_
 
-- [ ] 8. 实现币种弹窗、订单列表和新增订单页面
-  - [ ] 8.1 为列表币种弹窗和创建页路由门禁建立 View RED。
-  - [ ] 8.2 实现工业化业务工作台 8/4 布局及窄屏单列。
-  - [ ] 8.3 复用 `QsRegionSelector`、`MoneyInput`、`QsGenericModal` 和现有媒体能力。
-  - [ ] 8.4 实现数据库/临时产品明细、地址错误、金额等式和提交状态。
-  - [ ] 8.5 覆盖键盘、焦点、busy/alert、light/dark 和未保存离开门禁。
-  - [ ] 8.6 运行 Web test/typecheck/lint/build 并创建 Web 小步提交。
+- [x] 8. 实现币种弹窗、订单列表和新增订单页面
+  - [x] 8.1 为列表币种弹窗和创建页路由门禁建立 View RED。
+  - [x] 8.2 实现工业化业务工作台 8/4 布局及窄屏单列。
+  - [x] 8.3 复用 `QsRegionSelector`、`MoneyInput`、`QsGenericModal` 和现有媒体能力。
+  - [x] 8.4 实现数据库/临时产品明细、地址错误、金额等式和提交状态。
+  - [x] 8.5 覆盖键盘、焦点、busy/alert、light/dark 和未保存离开门禁。
+  - [x] 8.6 运行 Web test/typecheck/lint/build 并创建 Web 小步提交。
+  - _Evidence: `node --run build` 通过；`pnpm -C web check` 通过；真实 Chrome 验证币种门禁、产品选择、字段错误与成功创建_
   - _Requirements: R1-R7, R9-R10_
 
-- [ ] 9. 完成跨端与真实浏览器验收
-  - [ ] 9.1 扩展隔离 PostgreSQL Server E2E inventory。
-  - [ ] 9.2 新增销售订单 Browser E2E runner、fixture 和 root script。
-  - [ ] 9.3 验证币种弹窗、产品过滤、地址硬拦截、金额硬拦截和成功创建。
-  - [ ] 9.4 运行 `node --run check`、contract check、build 和销售订单 E2E。
-  - [ ] 9.5 检查 Git diff、敏感文件、生成物和提交范围。
-  - [ ] 9.6 更新全部任务真实证据并完成收口提交。
+- [x] 9. 完成跨端与真实浏览器验收
+  - [x] 9.1 扩展隔离 PostgreSQL Server E2E inventory。
+  - [x] 9.2 新增销售订单 Browser E2E runner、fixture 和 root script。
+  - [x] 9.3 验证币种弹窗、产品过滤、地址硬拦截、金额硬拦截和成功创建。
+  - [x] 9.4 运行 `node --run check`、contract check、build 和销售订单 E2E。
+  - [x] 9.5 检查 Git diff、敏感文件、生成物和提交范围。
+  - [x] 9.6 更新全部任务真实证据并完成收口提交。
+  - _Evidence: `node --run check`（Root 685 tests；Server 219 suites / 2207 tests；Web Node scripts 172、TypeScript scripts 49、API/View 890 tests；Browser 4 tests）；`node --run contract:check`（由根 check 串行通过）；`node --run build`；`node --run ci:server-e2e`（35 suites / 200 tests，另含 4 组产品媒体专项 E2E）_
   - _Requirements: R1-R10_
