@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { FormExpose } from '@fantastic-admin/components'
+import type { FormExpose, StepsItem } from '@fantastic-admin/components'
 import type { DateValue } from '@internationalized/date'
 import type {
   SalesOrderApiFailure,
+  SalesOrderCreateStep,
   SalesOrderDocumentFormModel,
   SalesOrderFieldErrors,
   SalesOrderFormModel,
@@ -21,6 +22,7 @@ import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsRegionSelector from '@/components/business/QsRegionSelector/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
+import SalesOrderCreateReview from './sales-order-create-review.vue'
 import {
   abandonUnknownSalesOrderSubmission,
   beginSalesOrderSubmission,
@@ -35,15 +37,25 @@ import {
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
   replayUnknownSalesOrderSubmission,
+  resolveSalesOrderCreateStepForErrors,
   resolveSalesOrderIssuerLabel,
   resolveSalesOrderSubmissionFailure,
   resolveSalesOrderSubmissionSuccess,
+  SALES_ORDER_CREATE_REVIEW_STEP,
 } from './sales-order-create.logic'
 import SalesOrderLines from './sales-order-lines.vue'
 
 type DiscardIntent = 'navigation' | 'unknown-abandon'
 
 defineOptions({ name: 'OperationsSalesOrderCreate' })
+
+const salesOrderSteps: StepsItem[] = [
+  { id: 'base', title: '基础信息' },
+  { id: 'customer', title: '客户地址' },
+  { id: 'products-sales', title: '产品与销售' },
+  { id: 'documents', title: '订单凭证' },
+  { id: 'review', title: '核对提交' },
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -60,6 +72,7 @@ const canCreate = computed(() => auth('sales-orders:create'))
 const canRead = computed(() => auth('sales-orders:read'))
 const canManageDocuments = computed(() => auth('sales-orders:document'))
 const formModel = ref(createSalesOrderFormModel(initialCurrency, todayIso))
+const activeStep = ref<SalesOrderCreateStep>(0)
 const fieldErrors = ref<SalesOrderFieldErrors>({})
 const formError = ref('')
 const formFailure = shallowRef<SalesOrderApiFailure | null>(null)
@@ -74,6 +87,7 @@ const documentUploadError = ref('')
 const discardVisible = ref(false)
 const discardIntent = ref<DiscardIntent | null>(null)
 const formRef = useTemplateRef<FormExpose<SalesOrderFormModel>>('formRef')
+const stepNavigationRef = useTemplateRef<HTMLElement>('stepNavigationRef')
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 let productRequestVersion = 0
 let productAbortController: AbortController | null = null
@@ -140,6 +154,26 @@ const discardTitle = computed(() => discardIntent.value === 'unknown-abandon'
 const discardDescription = computed(() => discardIntent.value === 'unknown-abandon'
   ? '放弃后将清除当前幂等请求，不能再使用同一请求确认订单是否已经保存。'
   : '当前订单尚未正式保存，放弃后已填写内容无法恢复。')
+const activeStepTitle = computed(() => salesOrderSteps[activeStep.value]?.title ?? '')
+
+function goToStep(step: number): void {
+  activeStep.value = Math.min(
+    Math.max(step, 0),
+    SALES_ORDER_CREATE_REVIEW_STEP,
+  ) as SalesOrderCreateStep
+  // 各步骤高度不同，切换后回到进度区，避免沿用上一页底部滚动位置而漏看字段。
+  void nextTick(() => {
+    stepNavigationRef.value?.scrollIntoView({ block: 'start' })
+  })
+}
+
+function previousStep(): void {
+  goToStep(activeStep.value - 1)
+}
+
+function nextStep(): void {
+  goToStep(activeStep.value + 1)
+}
 
 function formFieldForError(path: string): string {
   if (path === 'customer.name') {
@@ -408,6 +442,7 @@ async function executeSubmission(state: SalesOrderSubmittingState): Promise<void
     formFailure.value = failure
     formError.value = failure.message
     replaceFieldErrors(failure.fieldErrors)
+    goToStep(resolveSalesOrderCreateStepForErrors(failure.fieldErrors))
     submission.value = resolveSalesOrderSubmissionFailure(state, failure)
   }
   finally {
@@ -418,7 +453,11 @@ async function executeSubmission(state: SalesOrderSubmittingState): Promise<void
 }
 
 async function submitOrder(): Promise<void> {
-  if (!canCreate.value || submission.value.phase !== 'editing') {
+  if (
+    activeStep.value !== SALES_ORDER_CREATE_REVIEW_STEP
+    || !canCreate.value
+    || submission.value.phase !== 'editing'
+  ) {
     return
   }
   if (currencyUnavailable.value) {
@@ -428,6 +467,7 @@ async function submitOrder(): Promise<void> {
   const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, todayIso)
   if (!result.valid) {
     replaceFieldErrors(result.fieldErrors)
+    goToStep(resolveSalesOrderCreateStepForErrors(result.fieldErrors))
     formError.value = '部分资料未通过校验，请修正后再正式保存'
     formFailure.value = null
     return
@@ -485,11 +525,13 @@ function confirmDiscard(): void {
   if (intent === 'unknown-abandon' && submission.value.phase === 'unknown') {
     submission.value = abandonUnknownSalesOrderSubmission(submission.value as SalesOrderUnknownState)
     formModel.value = createSalesOrderFormModel(initialCurrency, todayIso)
+    activeStep.value = 0
     clearFeedback()
     toast.info('已放弃本次未知结果')
     return
   }
   formModel.value = createSalesOrderFormModel(initialCurrency, todayIso)
+  activeStep.value = 0
   resolve?.(true)
 }
 
@@ -614,10 +656,25 @@ onBeforeUnmount(() => {
         :model="formModel"
         :disabled="submitLocked"
         :aria-busy="submission.phase === 'submitting' ? 'true' : 'false'"
-        class="gap-6 grid grid-cols-1 lg:grid-cols-12"
+        class="min-w-0"
         @submit="submitOrder"
       >
-        <div class="min-w-0 space-y-6 lg:col-span-8">
+        <nav
+          ref="stepNavigationRef"
+          class="mb-6 pb-5 border-b border-border scroll-mt-20"
+          aria-label="新增销售订单填写步骤"
+        >
+          <p class="text-sm text-muted-foreground m-0 mb-4" aria-live="polite">
+            第 {{ activeStep + 1 }} 步，共 {{ salesOrderSteps.length }} 步：{{ activeStepTitle }}
+          </p>
+          <FaSteps v-model="activeStep" :steps="salesOrderSteps" status="process" class="w-full" />
+        </nav>
+
+        <section
+          v-show="activeStep === 0"
+          aria-label="订单基础信息"
+          data-testid="sales-order-step-base"
+        >
           <FaCard
             title="订单基础信息"
             description="订单编号由 SALES_ORDER 规则在正式保存时派发。"
@@ -654,7 +711,13 @@ onBeforeUnmount(() => {
               class="md:col-span-2"
             />
           </FaCard>
+        </section>
 
+        <section
+          v-show="activeStep === 1"
+          aria-label="客户与地址"
+          data-testid="sales-order-step-customer"
+        >
           <FaCard
             title="客户与地址快照"
             description="首版只保存在本订单内，不新增客户主数据。"
@@ -718,59 +781,136 @@ onBeforeUnmount(() => {
               </p>
             </div>
           </FaCard>
+        </section>
 
-          <FaCard content-class="min-w-0">
-            <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-              <FaFormItem name="productSearchKeyword" label="搜索数据库产品" :auto-bind="false" class="m-0 flex-1">
-                <FaInput
-                  :model-value="productSearchKeyword"
-                  type="text"
-                  inputmode="search"
-                  enterkeyhint="search"
-                  class="w-full"
-                  placeholder="输入产品编号或名称，最多返回 50 项"
+        <section
+          v-show="activeStep === 2"
+          class="gap-6 grid grid-cols-1 lg:grid-cols-12"
+          aria-label="产品明细与销售信息"
+          data-testid="sales-order-step-products-sales"
+        >
+          <div class="min-w-0 lg:col-span-8">
+            <FaCard
+              title="产品明细"
+              description="选择当前币种的数据库产品，或新增仅用于本订单的临时产品。"
+              content-class="min-w-0"
+            >
+              <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <FaFormItem name="productSearchKeyword" label="搜索数据库产品" :auto-bind="false" class="m-0 flex-1">
+                  <FaInput
+                    :model-value="productSearchKeyword"
+                    type="text"
+                    inputmode="search"
+                    enterkeyhint="search"
+                    class="w-full"
+                    placeholder="输入产品编号或名称，最多返回 50 项"
+                    :disabled="submitLocked"
+                    @update:model-value="handleProductSearchKeyword"
+                    @keydown.enter.prevent="runProductSearch"
+                  />
+                </FaFormItem>
+                <FaButton
+                  type="button"
+                  variant="outline"
+                  class="min-h-11 sm:min-h-9"
+                  :loading="productLoading"
                   :disabled="submitLocked"
-                  @update:model-value="handleProductSearchKeyword"
-                  @keydown.enter.prevent="runProductSearch"
+                  @click="runProductSearch"
+                >
+                  搜索产品
+                </FaButton>
+              </div>
+              <p
+                v-if="productResultDescription"
+                class="text-xs text-muted-foreground m-0 mb-4"
+                role="status"
+                aria-live="polite"
+              >
+                {{ productResultDescription }}
+              </p>
+              <FaAlert
+                v-if="productError"
+                title="产品选项加载失败"
+                :description="productError"
+                variant="destructive"
+                class="mb-4"
+              />
+              <SalesOrderLines
+                :model-value="formModel.lines"
+                :currency="formModel.currencyCode"
+                :currencies="fixedCurrencies"
+                :disabled="submitLocked"
+                :field-errors="fieldErrors"
+                :product-options="productOptions"
+                @update:model-value="handleLinesUpdate"
+              />
+            </FaCard>
+          </div>
+
+          <aside class="min-w-0 lg:col-span-4 lg:self-start">
+            <FaCard
+              title="销售与付款约定"
+              description="两条金额等式均采用硬拦截，服务端会再次复核。"
+              content-class="gap-4 grid"
+            >
+              <div class="p-4 border border-border rounded-lg bg-muted/25">
+                <p class="text-xs text-muted-foreground m-0">
+                  产品明细汇总
+                </p>
+                <div class="qs-type-data-emphasis mt-1">
+                  <AmountDisplay
+                    :value="lineSubtotalAmount"
+                    :currency="formModel.currencyCode"
+                    :currencies="fixedCurrencies"
+                  />
+                </div>
+              </div>
+              <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :auto-bind="false">
+                <MoneyInput
+                  v-model="formModel.agreedTotalAmount"
+                  :currency="formModel.currencyCode"
+                  :currencies="fixedCurrencies"
+                  min="0"
+                  :disabled="submitLocked"
+                  name="agreedTotalAmount"
+                  @update:model-value="clearFeedback('agreedTotalAmount')"
                 />
               </FaFormItem>
-              <FaButton
-                type="button"
-                variant="outline"
-                class="min-h-11 sm:min-h-9"
-                :loading="productLoading"
-                :disabled="submitLocked"
-                @click="runProductSearch"
-              >
-                搜索产品
-              </FaButton>
-            </div>
-            <p
-              v-if="productResultDescription"
-              class="text-xs text-muted-foreground m-0 mb-4"
-              role="status"
-              aria-live="polite"
-            >
-              {{ productResultDescription }}
-            </p>
-            <FaAlert
-              v-if="productError"
-              title="产品选项加载失败"
-              :description="productError"
-              variant="destructive"
-              class="mb-4"
-            />
-            <SalesOrderLines
-              :model-value="formModel.lines"
-              :currency="formModel.currencyCode"
-              :currencies="fixedCurrencies"
-              :disabled="submitLocked"
-              :field-errors="fieldErrors"
-              :product-options="productOptions"
-              @update:model-value="handleLinesUpdate"
-            />
-          </FaCard>
+              <FaFormItem name="depositDueAmount" label="约定定金" required :auto-bind="false">
+                <MoneyInput
+                  v-model="formModel.depositDueAmount"
+                  :currency="formModel.currencyCode"
+                  :currencies="fixedCurrencies"
+                  min="0"
+                  :disabled="submitLocked"
+                  name="depositDueAmount"
+                  @update:model-value="clearFeedback('depositDueAmount')"
+                />
+              </FaFormItem>
+              <FaFormItem name="balanceDueAmount" label="约定尾款" required :auto-bind="false">
+                <MoneyInput
+                  v-model="formModel.balanceDueAmount"
+                  :currency="formModel.currencyCode"
+                  :currencies="fixedCurrencies"
+                  min="0"
+                  :disabled="submitLocked"
+                  name="balanceDueAmount"
+                  @update:model-value="clearFeedback('balanceDueAmount')"
+                />
+              </FaFormItem>
+              <div class="text-xs text-muted-foreground leading-5 p-3 border border-border rounded-lg">
+                销售总价 = 明细汇总；约定定金 + 约定尾款 = 销售总价。实际收款将在订单创建后单独记录。
+              </div>
+            </FaCard>
+          </aside>
+        </section>
 
+        <section
+          v-show="activeStep === 3"
+          class="space-y-6"
+          aria-label="订单凭证"
+          data-testid="sales-order-step-documents"
+        >
           <FaCard
             title="订单凭证"
             description="可先上传图片或文档；上传不会派发订单编号，正式保存时才关联。"
@@ -863,85 +1003,66 @@ onBeforeUnmount(() => {
           <FaCard title="订单备注" description="可记录本订单其他约定，不写入客户主数据。">
             <FaTextarea v-model="formModel.remark" maxlength="2000" class="w-full" />
           </FaCard>
-        </div>
+        </section>
 
-        <aside class="min-w-0 lg:col-span-4 lg:self-start">
-          <div class="space-y-6 lg:top-4 lg:sticky">
-            <FaCard
-              title="销售与付款约定"
-              description="两条金额等式均采用硬拦截，服务端会再次复核。"
-              content-class="gap-4 grid"
+        <section
+          v-show="activeStep === SALES_ORDER_CREATE_REVIEW_STEP"
+          aria-label="核对并提交"
+          data-testid="sales-order-step-review"
+        >
+          <SalesOrderCreateReview
+            :model="formModel"
+            :issuer-label="issuerLabel"
+            :full-address="fullAddressPreview"
+            :line-subtotal-amount="lineSubtotalAmount"
+            :amount-precision="amountPrecision"
+          />
+        </section>
+
+        <nav
+          class="mt-6 pt-4 border-t border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+          aria-label="订单填写步骤操作"
+        >
+          <FaButton
+            type="button"
+            variant="outline"
+            class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+            :disabled="submission.phase === 'submitting'"
+            @click="requestBack"
+          >
+            取消
+          </FaButton>
+          <div class="flex flex-col gap-2 sm:flex-row">
+            <FaButton
+              v-if="activeStep > 0"
+              type="button"
+              variant="outline"
+              class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+              :disabled="submitLocked"
+              @click="previousStep"
             >
-              <div class="p-4 border border-border rounded-lg bg-muted/25">
-                <p class="text-xs text-muted-foreground m-0">
-                  产品明细汇总
-                </p>
-                <div class="qs-type-data-emphasis mt-1">
-                  <AmountDisplay
-                    :value="lineSubtotalAmount"
-                    :currency="formModel.currencyCode"
-                    :currencies="fixedCurrencies"
-                  />
-                </div>
-              </div>
-              <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :auto-bind="false">
-                <MoneyInput
-                  v-model="formModel.agreedTotalAmount"
-                  :currency="formModel.currencyCode"
-                  :currencies="fixedCurrencies"
-                  min="0"
-                  :disabled="submitLocked"
-                  name="agreedTotalAmount"
-                  @update:model-value="clearFeedback('agreedTotalAmount')"
-                />
-              </FaFormItem>
-              <FaFormItem name="depositDueAmount" label="约定定金" required :auto-bind="false">
-                <MoneyInput
-                  v-model="formModel.depositDueAmount"
-                  :currency="formModel.currencyCode"
-                  :currencies="fixedCurrencies"
-                  min="0"
-                  :disabled="submitLocked"
-                  name="depositDueAmount"
-                  @update:model-value="clearFeedback('depositDueAmount')"
-                />
-              </FaFormItem>
-              <FaFormItem name="balanceDueAmount" label="约定尾款" required :auto-bind="false">
-                <MoneyInput
-                  v-model="formModel.balanceDueAmount"
-                  :currency="formModel.currencyCode"
-                  :currencies="fixedCurrencies"
-                  min="0"
-                  :disabled="submitLocked"
-                  name="balanceDueAmount"
-                  @update:model-value="clearFeedback('balanceDueAmount')"
-                />
-              </FaFormItem>
-              <div class="text-xs text-muted-foreground leading-5 p-3 border border-border rounded-lg">
-                销售总价 = 明细汇总；约定定金 + 约定尾款 = 销售总价。实际收款将在订单创建后单独记录。
-              </div>
-            </FaCard>
-            <div class="gap-2 grid grid-cols-1 lg:grid-cols-1 sm:grid-cols-2 xl:grid-cols-2">
-              <FaButton
-                type="button"
-                variant="outline"
-                class="min-h-11"
-                :disabled="submission.phase === 'submitting'"
-                @click="requestBack"
-              >
-                取消
-              </FaButton>
-              <FaButton
-                type="submit"
-                class="min-h-11"
-                :loading="submission.phase === 'submitting'"
-                :disabled="submission.phase !== 'editing' || currencyUnavailable"
-              >
-                正式保存并派号
-              </FaButton>
-            </div>
+              上一步
+            </FaButton>
+            <FaButton
+              v-if="activeStep < SALES_ORDER_CREATE_REVIEW_STEP"
+              type="button"
+              class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+              :disabled="submitLocked"
+              @click="nextStep"
+            >
+              下一步
+            </FaButton>
+            <FaButton
+              v-if="activeStep === SALES_ORDER_CREATE_REVIEW_STEP"
+              type="submit"
+              class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+              :loading="submission.phase === 'submitting'"
+              :disabled="submission.phase !== 'editing' || currencyUnavailable"
+            >
+              正式保存并派号
+            </FaButton>
           </div>
-        </aside>
+        </nav>
       </FaForm>
     </FaPageMain>
 

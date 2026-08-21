@@ -14,6 +14,7 @@ import {
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
   replayUnknownSalesOrderSubmission,
+  resolveSalesOrderCreateStepForErrors,
   resolveSalesOrderIssuerLabel,
   resolveSalesOrderSubmissionFailure,
 } from '../../src/views/operations/sales-orders/sales-order-create.logic'
@@ -63,6 +64,18 @@ test('出单人优先显示当前用户显示名，缺失时回退用户名', ()
   assert.equal(resolveSalesOrderIssuerLabel(' 超级管理员 ', 'system_admin'), '超级管理员')
   assert.equal(resolveSalesOrderIssuerLabel('   ', ' system_admin '), 'system_admin')
   assert.equal(resolveSalesOrderIssuerLabel('', ''), '当前用户资料不可用')
+})
+
+test('正式保存校验失败时回到最早包含错误的填写步骤', () => {
+  assert.equal(resolveSalesOrderCreateStepForErrors({ orderDate: '请选择日期' }), 0)
+  assert.equal(resolveSalesOrderCreateStepForErrors({ 'customer.phone': '请输入电话' }), 1)
+  assert.equal(resolveSalesOrderCreateStepForErrors({
+    'lines.0.productId': '请选择产品',
+    'documents.0.title': '标题无效',
+  }), 2)
+  assert.equal(resolveSalesOrderCreateStepForErrors({ remark: '备注过长' }), 3)
+  assert.equal(resolveSalesOrderCreateStepForErrors({ unknownField: '未知字段错误' }), 4)
+  assert.equal(resolveSalesOrderCreateStepForErrors({}), 4)
 })
 
 test('现有地区域的 UUID v5 可用于客户地址快照', () => {

@@ -21,6 +21,7 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
 
 test('新增页固定币种并组合日期、当前用户、三级地区、产品明细、金额与凭证', async () => {
   const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+  const reviewSource = await readFile(new URL('sales-order-create-review.vue', ROOT), 'utf8')
 
   assert.match(source, /parseSalesOrderCurrency\(route\.query\.currency\)/)
   assert.match(source, /<FaDate/)
@@ -42,11 +43,25 @@ test('新增页固定币种并组合日期、当前用户、三级地区、产�
   assert.match(source, /ref="formRef"/u)
   assert.match(source, /name="region"[\s\S]*?:auto-bind="false"[\s\S]*?<QsRegionSelector/u)
   assert.match(source, /使用相同请求重新确认/)
-  assert.match(source, /lg:grid-cols-12/)
-  assert.match(source, /lg:col-span-8/)
-  assert.match(source, /lg:col-span-4/)
-  assert.match(source, /lg:sticky/)
+  assert.match(source, /const activeStep = ref/)
+  assert.match(source, /<FaSteps[^>]*v-model="activeStep"/u)
+  assert.match(source, /订单基础信息/)
+  assert.match(source, /客户与地址/)
+  assert.match(source, /产品明细与销售信息/)
+  assert.match(source, /订单凭证/)
+  assert.match(source, /核对并提交/)
+  assert.match(source, /data-testid="sales-order-step-products-sales"[\s\S]*?<SalesOrderLines[\s\S]*?title="销售与付款约定"/u)
+  assert.match(source, /<SalesOrderCreateReview/)
+  assert.match(source, /v-if="activeStep === SALES_ORDER_CREATE_REVIEW_STEP"[\s\S]*?type="submit"/u)
+  assert.match(source, /resolveSalesOrderCreateStepForErrors\(/)
+  assert.match(source, /stepNavigationRef\.value\?\.scrollIntoView\(\{ block: 'start' \}\)/u)
+  assert.match(reviewSource, /<FaDescriptions/g)
+  assert.match(reviewSource, /产品明细/)
+  assert.match(reviewSource, /销售与付款约定/)
+  assert.match(reviewSource, /订单凭证/)
+  assert.match(reviewSource, /订单备注/)
   assert.doesNotMatch(source, /gradient|#[\dA-F]{3,8}/i)
+  assert.doesNotMatch(reviewSource, /gradient|#[\dA-F]{3,8}/i)
 })
 
 test('产品明细同时支持目录产品与仅本单临时产品，数量和真实售价均明确可编辑', async () => {

@@ -11,6 +11,9 @@ import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 export type SalesOrderLineType = 'CATALOG' | 'CUSTOM'
 export type SalesOrderDocumentType = 'DEPOSIT_VOUCHER' | 'DELIVERY_RECEIPT' | 'OTHER'
 export type SalesOrderFieldErrors = Readonly<Record<string, string>>
+export type SalesOrderCreateStep = 0 | 1 | 2 | 3 | 4
+
+export const SALES_ORDER_CREATE_REVIEW_STEP: SalesOrderCreateStep = 4
 
 export interface SalesOrderLineFormModel {
   key: string
@@ -106,6 +109,48 @@ function newKey(): string {
 
 export function parseSalesOrderCurrency(value: unknown): SalesOrderCurrency | null {
   return value === 'TWD' || value === 'MYR' ? value : null
+}
+
+/**
+ * 表单仍在最终保存时执行完整领域校验；这里仅负责把字段错误定位到最早的可编辑步骤，
+ * 避免用户停留在核对页却看不到需要修正的字段。未知字段保留在核对页展示全局错误。
+ */
+export function resolveSalesOrderCreateStepForErrors(
+  errors: SalesOrderFieldErrors,
+): SalesOrderCreateStep {
+  let earliestStep = SALES_ORDER_CREATE_REVIEW_STEP
+
+  for (const path of Object.keys(errors)) {
+    let step: SalesOrderCreateStep = SALES_ORDER_CREATE_REVIEW_STEP
+    if (path === 'orderDate' || path === 'currencyCode' || path === 'issuer') {
+      step = 0
+    }
+    else if (
+      path.startsWith('customer.')
+      || path === 'customerName'
+      || path === 'customerPhone'
+      || path === 'region'
+      || path === 'addressDetail'
+    ) {
+      step = 1
+    }
+    else if (
+      path === 'lines'
+      || path.startsWith('lines.')
+      || path === 'agreedTotalAmount'
+      || path === 'depositDueAmount'
+      || path === 'balanceDueAmount'
+    ) {
+      step = 2
+    }
+    else if (path === 'documents' || path.startsWith('documents.') || path === 'remark') {
+      step = 3
+    }
+
+    earliestStep = Math.min(earliestStep, step) as SalesOrderCreateStep
+  }
+
+  return earliestStep
 }
 
 /**
