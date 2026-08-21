@@ -191,6 +191,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:list-filter',
         },
       },
+      {
+        path: 'sales-order-desc',
+        name: 'componentLibraryQsSalesOrderDesc',
+        component: () => import('@/views/component_library/business/sales-order-desc.vue'),
+        meta: {
+          title: '销售订单详情',
+          icon: 'i-lucide:receipt-text',
+        },
+      },
     ],
   },
   {
