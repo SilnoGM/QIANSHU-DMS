@@ -11,9 +11,9 @@ import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 export type SalesOrderLineType = 'CATALOG' | 'CUSTOM'
 export type SalesOrderDocumentType = 'DEPOSIT_VOUCHER' | 'DELIVERY_RECEIPT' | 'OTHER'
 export type SalesOrderFieldErrors = Readonly<Record<string, string>>
-export type SalesOrderCreateStep = 0 | 1 | 2 | 3 | 4
+export type SalesOrderCreateStep = 0 | 1 | 2 | 3
 
-export const SALES_ORDER_CREATE_REVIEW_STEP: SalesOrderCreateStep = 4
+export const SALES_ORDER_CREATE_LAST_STEP: SalesOrderCreateStep = 3
 
 export interface SalesOrderLineFormModel {
   key: string
@@ -165,10 +165,12 @@ export function parseSalesOrderCurrency(value: unknown): SalesOrderCurrency | nu
 }
 
 /**
- * 表单仍在最终保存时执行完整领域校验；这里仅负责把字段错误定位到最早的可编辑步骤，
- * 避免用户停留在核对页却看不到需要修正的字段。未知字段保留在核对页展示全局错误。
+ * 表单仍在最终保存时执行完整领域校验；这里仅负责把字段错误定位到最早的可编辑步骤。
+ * 未知字段不猜测归属，交由页面顶部的全局错误展示，避免错误跳到订单凭证步骤。
  */
-function resolveSalesOrderCreateStepForField(path: string): SalesOrderCreateStep {
+export function resolveSalesOrderCreateStepForField(
+  path: string,
+): SalesOrderCreateStep | null {
   if (path === 'orderDate' || path === 'currencyCode' || path === 'issuer') {
     return 0
   }
@@ -193,17 +195,21 @@ function resolveSalesOrderCreateStepForField(path: string): SalesOrderCreateStep
   if (path === 'documents' || path.startsWith('documents.') || path === 'remark') {
     return 3
   }
-  return SALES_ORDER_CREATE_REVIEW_STEP
+  return null
 }
 
 export function resolveSalesOrderCreateStepForErrors(
   errors: SalesOrderFieldErrors,
-): SalesOrderCreateStep {
-  let earliestStep = SALES_ORDER_CREATE_REVIEW_STEP
+): SalesOrderCreateStep | null {
+  let earliestStep: SalesOrderCreateStep | null = null
 
   for (const path of Object.keys(errors)) {
     const step = resolveSalesOrderCreateStepForField(path)
-    earliestStep = Math.min(earliestStep, step) as SalesOrderCreateStep
+    if (step !== null) {
+      earliestStep = earliestStep === null
+        ? step
+        : Math.min(earliestStep, step) as SalesOrderCreateStep
+    }
   }
 
   return earliestStep

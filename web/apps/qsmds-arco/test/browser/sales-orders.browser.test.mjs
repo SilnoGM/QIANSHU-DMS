@@ -227,13 +227,25 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     ))()`)
     const issuerControlSource = labelledControlSource('出单人')
     await page.waitFor(`${issuerControlSource}?.value === 'Browser Auth Admin'`)
+    await page.waitFor(`(() => {
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
+      const submit = [...(summary?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.trim() === '提交订单')
+      return summary?.getClientRects().length > 0
+        && desc?.getClientRects().length > 0
+        && submit?.disabled === true
+        && document.body.innerText.includes('下一项：客户地址')
+    })()`)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-customer"]',
+    )?.getClientRects().length > 0`)
   })
 
-  await runSalesOrderBrowserStep('TWD product filter and customer snapshot', async () => {
-    await fillLabelledControl(page, '搜索数据库产品', 'PRODUCT-BROWSER-001')
-    await page.waitFor(`document.body.innerText.includes(
-      '找到 1 项与“PRODUCT-BROWSER-001”匹配的 TWD 产品。'
-    )`)
+  await runSalesOrderBrowserStep('customer snapshot and duplicate address block', async () => {
     await fillLabelledControl(page, '客户姓名', customerName)
     await fillLabelledControl(page, '客户电话', customerPhone)
     await selectRegionOption(
@@ -254,6 +266,32 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       'CITY',
       '高雄市',
     )
+    await fillLabelledControl(
+      page,
+      '详细地址',
+      '中国台湾 台湾 高雄市 苓雅区 中正一路 100 号 3 楼',
+    )
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.body.innerText.includes('详细地址请勿重复填写已选地区')`)
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-customer"]',
+    )?.getClientRects().length > 0`)
+    const blockedResponse = await readOrders(page)
+    assert.equal(blockedResponse.status, 200)
+    assert.equal(blockedResponse.body?.total, 0)
+
+    await fillLabelledControl(page, '详细地址', '苓雅区 中正一路 100 号 3 楼')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-products-sales"]',
+    )?.getClientRects().length > 0`)
+  })
+
+  await runSalesOrderBrowserStep('TWD product filter and sales values', async () => {
+    await fillLabelledControl(page, '搜索数据库产品', 'PRODUCT-BROWSER-001')
+    await page.waitFor(`document.body.innerText.includes(
+      '找到 1 项与“PRODUCT-BROWSER-001”匹配的 TWD 产品。'
+    )`)
 
     await openLabelledProductControl(page, '数据库产品')
     const productControlSource = labelledControlSource('数据库产品')
@@ -294,27 +332,16 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await fillLabelledControl(page, '约定尾款', '150')
   })
 
-  await runSalesOrderBrowserStep('duplicate address is a hard block', async () => {
-    await fillLabelledControl(
-      page,
-      '详细地址',
-      '中国台湾 台湾 高雄市 苓雅区 中正一路 100 号 3 楼',
-    )
-    await clickVisibleButton(page, '正式保存并派号')
-    await page.waitFor(`document.body.innerText.includes('详细地址请勿重复填写已选地区')`)
-    const response = await readOrders(page)
-    assert.equal(response.status, 200)
-    assert.equal(response.body?.total, 0)
-  })
-
   await runSalesOrderBrowserStep('manual total mismatch is a hard block', async () => {
-    await fillLabelledControl(page, '详细地址', '苓雅区 中正一路 100 号 3 楼')
     await fillLabelledControl(page, '手填销售总价', '199')
     await fillLabelledControl(page, '约定尾款', '149')
-    await clickVisibleButton(page, '正式保存并派号')
+    await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.body.innerText.includes(
       '手填销售总价必须与产品明细汇总一致'
     )`)
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-products-sales"]',
+    )?.getClientRects().length > 0`)
     const response = await readOrders(page)
     assert.equal(response.status, 200)
     assert.equal(response.body?.total, 0)
@@ -323,7 +350,28 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
   await runSalesOrderBrowserStep('formal save assigns number and persists snapshots', async () => {
     await fillLabelledControl(page, '手填销售总价', '200')
     await fillLabelledControl(page, '约定尾款', '150')
-    await clickVisibleButton(page, '正式保存并派号')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`(() => {
+      const documents = document.querySelector(
+        '[data-testid="sales-order-step-documents"]',
+      )
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      const submit = [...(summary?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.trim() === '提交订单')
+      return documents?.getClientRects().length > 0
+        && summary?.textContent?.includes(${JSON.stringify(customerName)})
+        && summary?.textContent?.includes('200')
+        && submit?.disabled === false
+    })()`)
+    await clickVisibleButton(page, '提交订单')
+    await waitForVisibleDialog(page, '确认提交销售订单？')
+
+    const beforeConfirmation = await readOrders(page)
+    assert.equal(beforeConfirmation.status, 200)
+    assert.equal(beforeConfirmation.body?.total, 0)
+    await clickDialogButton(page, '确认提交销售订单？', '确认保存并派号')
     await waitForAfterAuthentication(page, `(() => (
       location.hash === ${JSON.stringify(`#${listRoute}`)}
       && document.querySelector('[data-testid="sales-order-list-table"]')

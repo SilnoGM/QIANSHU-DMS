@@ -79,8 +79,8 @@ test('正式保存校验失败时回到最早包含错误的填写步骤', () =>
     'documents.0.title': '标题无效',
   }), 2)
   assert.equal(resolveSalesOrderCreateStepForErrors({ remark: '备注过长' }), 3)
-  assert.equal(resolveSalesOrderCreateStepForErrors({ unknownField: '未知字段错误' }), 4)
-  assert.equal(resolveSalesOrderCreateStepForErrors({}), 4)
+  assert.equal(resolveSalesOrderCreateStepForErrors({ unknownField: '未知字段错误' }), null)
+  assert.equal(resolveSalesOrderCreateStepForErrors({}), null)
 })
 
 test('客户步骤只返回当前步骤错误，防重复失败时不能继续', () => {
@@ -406,4 +406,11 @@ test('正式提交时才延迟生成 Key，网络未知结果保留同 Key 与�
   assert.equal(replay.idempotencyKey, key)
   assert.equal(replay.snapshot, unknown.snapshot)
   assert.equal(keyCalls, 1)
+  assert.throws(
+    () => replayUnknownSalesOrderSubmission(unknown, {
+      authEpoch: 3,
+      requestVersion: 3,
+    }),
+    /身份域变化后不能重放旧的销售订单请求/u,
+  )
 })
