@@ -14,7 +14,7 @@ import type {
 import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
 
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
-import { useElementSize, useMediaQuery } from '@vueuse/core'
+import { useMediaQuery } from '@vueuse/core'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
@@ -115,7 +115,6 @@ const isDesktopSummary = useMediaQuery('(min-width: 1280px)')
 const formRef = useTemplateRef<FormExpose<SalesOrderFormModel>>('formRef')
 const stepNavigationRef = useTemplateRef<HTMLElement>('stepNavigationRef')
 const reviewHeadingRef = useTemplateRef<HTMLElement>('reviewHeadingRef')
-const reviewActionsRef = useTemplateRef<HTMLElement>('reviewActionsRef')
 const summaryRegionRef = useTemplateRef<HTMLElement>('summaryRegionRef')
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 const appliedFormErrorFields = new Set<string>()
@@ -128,8 +127,6 @@ let submitRequestVersion = 0
 let submitAbortController: AbortController | null = null
 let documentAbortController: AbortController | null = null
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
-
-const { height: reviewActionsHeight } = useElementSize(reviewActionsRef)
 
 const fixedCurrencies = computed(() => currencyCatalog.currencies.value.filter(currency =>
   currency.code === formModel.value.currencyCode))
@@ -190,13 +187,6 @@ const submitReady = computed(() => (
   createSurface.value === 'review'
   && reviewReady.value
 ))
-const reviewSummaryStyle = computed(() => createSurface.value === 'review'
-  ? {
-      paddingBottom: reviewActionsHeight.value > 0
-        ? `calc(${Math.ceil(reviewActionsHeight.value)}px + max(2rem, env(safe-area-inset-bottom)))`
-        : '12rem',
-    }
-  : undefined)
 const submitStatusMessage = computed(() => {
   if (submission.value.phase === 'submitting') {
     return '正在保存销售订单，请勿重复操作。'
@@ -1653,7 +1643,6 @@ onBeforeUnmount(() => {
               class="sales-order-summary-region outline-none overscroll-contain rounded-2xl min-h-0 focus-visible:ring-2 focus-visible:ring-primary/40"
               role="region"
               :aria-label="createSurface === 'review' ? '待提交销售订单详情' : '已填销售订单详情'"
-              :style="reviewSummaryStyle"
               tabindex="0"
             >
               <QsSalesOrderDesc
@@ -1662,48 +1651,43 @@ onBeforeUnmount(() => {
               />
             </div>
 
-            <div class="sales-order-review-actions-layer">
-              <div class="sales-order-review-actions-viewport">
-                <Transition name="sales-order-submit-bar">
-                  <div
-                    v-if="createSurface === 'review'"
-                    ref="reviewActionsRef"
-                    data-testid="sales-order-review-actions"
-                    class="sales-order-review-actions p-4 border border-border rounded-2xl bg-background/95 shadow-lg"
+            <Transition name="sales-order-submit-bar">
+              <div
+                v-if="createSurface === 'review'"
+                data-testid="sales-order-review-actions"
+                class="sales-order-review-actions p-4 border border-border rounded-2xl bg-background/95 shadow-lg"
+              >
+                <p
+                  id="sales-order-review-submit-status"
+                  class="text-sm text-muted-foreground leading-5 m-0"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {{ submitStatusMessage }}
+                </p>
+                <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                  <FaButton
+                    type="button"
+                    variant="outline"
+                    class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                    :disabled="submitLocked"
+                    @click="returnToSalesOrderForm"
                   >
-                    <p
-                      id="sales-order-review-submit-status"
-                      class="text-sm text-muted-foreground leading-5 m-0"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      {{ submitStatusMessage }}
-                    </p>
-                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
-                      <FaButton
-                        type="button"
-                        variant="outline"
-                        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                        :disabled="submitLocked"
-                        @click="returnToSalesOrderForm"
-                      >
-                        返回修改
-                      </FaButton>
-                      <FaButton
-                        type="button"
-                        class="min-h-11 w-full sm:min-h-9 sm:min-w-36 sm:w-auto"
-                        :loading="submission.phase === 'submitting'"
-                        :disabled="!submitReady"
-                        aria-describedby="sales-order-review-submit-status"
-                        @click="requestSubmitConfirmation"
-                      >
-                        提交订单
-                      </FaButton>
-                    </div>
-                  </div>
-                </Transition>
+                    返回修改
+                  </FaButton>
+                  <FaButton
+                    type="button"
+                    class="min-h-11 w-full sm:min-h-9 sm:min-w-36 sm:w-auto"
+                    :loading="submission.phase === 'submitting'"
+                    :disabled="!submitReady"
+                    aria-describedby="sales-order-review-submit-status"
+                    @click="requestSubmitConfirmation"
+                  >
+                    提交订单
+                  </FaButton>
+                </div>
               </div>
-            </div>
+            </Transition>
           </div>
         </aside>
       </Transition>
@@ -1862,8 +1846,8 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
   transition:
-    grid-template-columns 420ms cubic-bezier(0.22, 1, 0.36, 1),
-    column-gap 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    grid-template-columns 1100ms cubic-bezier(0.22, 1, 0.36, 1),
+    column-gap 1100ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sales-order-alert-stack {
@@ -1878,8 +1862,8 @@ onBeforeUnmount(() => {
 
 .sales-order-form-track {
   transition:
-    opacity 260ms ease,
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 720ms ease,
+    transform 960ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /*
@@ -1918,39 +1902,19 @@ onBeforeUnmount(() => {
 .sales-order-review-actions {
   display: grid;
   gap: 0.75rem;
+  margin-bottom: max(0.75rem, env(safe-area-inset-bottom));
   backdrop-filter: blur(12px);
 }
 
-.sales-order-review-actions-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
 /*
- * 操作层覆盖完整核对区域，内部 viewport 才负责 sticky。这样即使详情很长，
- * 提交操作也会从进入核对态起停靠在可视底部，而不是等用户滚到文档末尾。
+ * 核对操作必须跟随订单详情进入普通文档流。长订单需要自然滚动到详情末尾后
+ * 才显示提交入口，避免操作卡覆盖产品、金额或附件信息。
  */
-.sales-order-review-actions-viewport {
-  position: sticky;
-  top: var(--sales-order-sticky-top);
-  display: flex;
-  align-items: flex-end;
-  height: var(--sales-order-review-viewport-height);
-  padding-bottom: max(1rem, env(safe-area-inset-bottom));
-}
-
-.sales-order-review-actions-viewport > .sales-order-review-actions {
-  width: 100%;
-  pointer-events: auto;
-}
-
 .sales-order-summary-panel-enter-active,
 .sales-order-summary-panel-leave-active {
   transition:
-    opacity 260ms ease,
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 720ms ease,
+    transform 960ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sales-order-summary-panel-enter-from,
@@ -1962,8 +1926,8 @@ onBeforeUnmount(() => {
 .sales-order-submit-bar-enter-active,
 .sales-order-submit-bar-leave-active {
   transition:
-    opacity 220ms ease,
-    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 660ms ease,
+    transform 960ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sales-order-submit-bar-enter-from,

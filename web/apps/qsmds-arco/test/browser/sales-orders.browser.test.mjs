@@ -402,6 +402,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         '[data-testid="sales-order-create-summary-column"]',
       )
       const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
+      const summaryRegion = summary?.querySelector('.sales-order-summary-region')
       const actions = document.querySelector(
         '[data-testid="sales-order-review-actions"]',
       )
@@ -409,7 +410,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         .find(button => button.textContent?.trim() === '提交订单')
       const layoutRect = layout?.getBoundingClientRect()
       const summaryRect = summary?.getBoundingClientRect()
+      const summaryRegionRect = summaryRegion?.getBoundingClientRect()
       const actionsRect = actions?.getBoundingClientRect()
+      const actionsPosition = actions ? getComputedStyle(actions).position : ''
       return formTrack?.getAttribute('aria-hidden') === 'true'
         && formTrack.hasAttribute('inert')
         && getComputedStyle(formTrack).opacity === '0'
@@ -420,8 +423,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         && summary.textContent?.includes(${JSON.stringify(customerName)})
         && summary.textContent?.includes('200')
         && actions?.getClientRects().length > 0
-        && actionsRect.top < innerHeight
-        && actionsRect.bottom <= innerHeight
+        && actions.parentElement === summaryRegion?.parentElement
+        && !['absolute', 'fixed', 'sticky'].includes(actionsPosition)
+        && actionsRect.top >= summaryRegionRect.bottom - 1
         && submit?.disabled === false
     })()`)
 
@@ -433,10 +437,12 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       const lastContent = document.querySelector(
         '[data-slot="sales-order-desc-documents"]',
       )
+      const summaryRegion = document.querySelector('.sales-order-summary-region')
       const actionsRect = actions?.getBoundingClientRect()
       const lastContentRect = lastContent?.getBoundingClientRect()
       return actionsRect
         && lastContentRect
+        && actions?.parentElement === summaryRegion?.parentElement
         && actionsRect.top >= 0
         && actionsRect.bottom <= innerHeight + 1
         && lastContentRect.bottom <= actionsRect.top
