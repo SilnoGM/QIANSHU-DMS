@@ -78,3 +78,67 @@
 - [x] 最终页面无控制台错误。
 
 final result: passed
+
+---
+
+# QsSalesOrderDesc Design QA
+
+## 验收基线
+
+- source visual truth：Figma 文件 `b3PkjOqgVsvNtmmuvaQ5g4`，桌面 Ready 节点 `10:23`、移动 Ready 节点 `10:24`。
+- source screenshots：`/tmp/qianshu-sales-order-desc-acceptance/figma-desktop-ready.png`（`496 × 1295`）、`/tmp/qianshu-sales-order-desc-acceptance/figma-mobile-ready.png`（`426 × 1325`）。去除各方向 `18px` 设计画布后，真实卡片分别是 `460 × 1267` 与 `390 × 1297`。
+- implementation screenshots：`/tmp/qianshu-sales-order-desc-acceptance/implementation-desktop-final.png`（`460 × 1372`）、`/tmp/qianshu-sales-order-desc-acceptance/implementation-mobile-final.png`（`390 × 1408`）、`/tmp/qianshu-sales-order-desc-acceptance/implementation-desktop-dark-final.png`（`460 × 1372`）。
+- combined comparisons：`/tmp/qianshu-sales-order-desc-acceptance/comparison-desktop-final.png` 与 `/tmp/qianshu-sales-order-desc-acceptance/comparison-mobile-final.png`；两图均为左侧 Figma、右侧真实组件。
+- viewport：桌面 `900 × 1900`，移动 `390 × 1800`，深色桌面 `900 × 1600`；浏览器报告 `devicePixelRatio = 1`。
+- density normalization：浏览器截图后端输出为 CSS 尺寸的 `0.5` 倍；桌面从 `230 × 686`、移动从 `195 × 704` 的有效组件区域使用 Lanczos 恢复为各自 CSS 尺寸后再与 Figma 等宽比较。只对截图证据做密度归一化，不修改组件渲染。
+- state：TWD、两个产品、两个图片附件、资料已完成；`actions` 插槽提供完成提示与提交按钮。
+
+## 全视图对比证据
+
+- 五段信息顺序与 Figma 一致：订单基础信息 → 客户信息 → 产品列表与小计 → 销售信息 → 附件缩略图。
+- 桌面组件宽度为 `460px`，移动组件宽度为 `390px`；两种视口均无页面级或组件级横向溢出。
+- 最终实现比 Figma 卡片高 `105px`（桌面）和 `111px`（移动）。差异来自真实自动标题、完整 `TWD` 代码和原始文件名等可审计内容；没有改变区域比例或隐藏固定操作区，归类为可接受的数据密度差异。
+- Figma 的顶部“核验通过”状态和移动抽屉把手/关闭按钮属于页面校验状态及 `QsGenericDrawer` 外壳；本轮已确认组件保持纯展示，因此未把这些状态耦合进 `QsSalesOrderDesc`。完成度与提交动作通过 `actions` 插槽注入。
+
+## 局部对比证据
+
+- 销售信息：销售总价保持整行主强调；约定定金、约定尾款保持两列次级强调。移动端两项金额容器 `clientWidth = scrollWidth = 146px`，`NT$30,000.00 TWD` 与 `NT$150,000.00 TWD` 默认均完整可见。
+- 产品：目录产品显示产品编号，临时产品显示“本单临时产品”；真实售价、数量、行小计和产品明细汇总均使用同一 TWD 金额格式，没有在组件内重算浮点数。
+- 附件：桌面为两列、移动为单列。两张 SVG 缩略图均加载成功，`naturalWidth = naturalHeight = 150`，`alt` 为完整自动标题；点击首张图片可打开预览对话框，关闭后触发器仍可见。
+- 语义：标题顺序为 `订单详情`、五个业务区块标题；所有区块均使用 `section + aria-labelledby`，文本数据使用 `dl/dt/dd`。
+- 深色主题：根卡片前景与背景分别为近白和深色 token，销售总价继续使用主题主色透明背景与边框；无横向溢出、无控制台 warning/error。
+
+## 必查视觉面
+
+- 字体与层级：实际标题使用 `Noto Sans SC`，`24px / 32px / 600`；金额继续使用项目 `qs-type-data-emphasis` 的 Noto Mono 与等宽数字。长标题和地址允许受控换行。
+- 间距与布局：桌面保留 `24px` 卡片内边距，移动使用 `16px`；区块采用 `16px` 节奏、圆角卡片和单一纵向阅读顺序。产品行经首轮修正后从 `161px` 收敛到约 `90px`，附件桌面切换为两列。
+- 色彩与 Token：仅使用 `background`、`foreground`、`muted`、`border`、`primary` 等主题 token；没有硬编码十六进制色、渐变或新建调色板。
+- 图片质量与素材一致性：验收使用项目现有真实 SVG fixture，通过正式 `ImageGroup` 渲染与预览；没有手绘 SVG、CSS 图形、Emoji 或占位框代替附件。
+- 文案与内容：订单编号明确“正式保存后派发”；产品区只突出真实售价、数量与小计；销售区明确“销售总价 / 约定定金 / 约定尾款”；附件展示凭证类型、自动标题和原始文件名。
+
+## Findings
+
+- 最终比较未发现可执行的 P0、P1 或 P2 问题。
+- P3：真实数据比 Figma 示例更长，使整体高度增加约 8%；后续页面接入时应由右侧栏或抽屉外壳统一管理滚动，不应在组件内部再建立嵌套滚动区。
+
+## Comparison History
+
+1. 首轮桌面对比发现 P2：组件高 `1667px`，产品区同时展示标准价四格、备注占用基础信息一行、附件始终单列，明显偏离 Figma 的摘要密度。
+2. 修复：按已确认的组件范围移除未要求的备注和标准价摘要；产品行改为“身份 + 真实售价 × 数量 + 小计”；附件在桌面改为两列，移动仍保持单列；区块节奏从 `20px` 收敛到 `16px`。
+3. 修复后桌面证据：组件高度降为 `1372px`，五段层级、产品卡、金额强调和附件密度均与 Figma 保持同一视觉方向。
+4. 首轮移动对比发现 P2：`AmountDisplay` 带完整 `TWD` 后缀，定金和尾款在 `146px` 内容宽度内需要横向滚动。
+5. 修复：定金和尾款在窄屏使用 `12px` 等宽金额，`sm` 以上恢复 `16px`；修复后两项 `scrollWidth` 均等于 `clientWidth`，文字完整可见。
+6. 最终重新捕获桌面、移动与深色主题，合并源图和实现图进行对比；没有新的 P0/P1/P2 发现。
+
+## Implementation Checklist
+
+- [x] 五段业务结构顺序固定且语义完整。
+- [x] 销售总价、约定定金、约定尾款层级清晰。
+- [x] 桌面 `460px`、移动 `390px` 均无横向溢出。
+- [x] 附件桌面两列、移动单列，图片可预览并具有非空 `alt`。
+- [x] 空产品、空附件和空文本状态保留稳定区块。
+- [x] 浅色、深色主题均使用项目 token。
+- [x] 浏览器控制台无 warning/error。
+- [x] 页面提交、校验、API、Store 和 Object URL 生命周期未进入组件职责。
+
+final result: passed
