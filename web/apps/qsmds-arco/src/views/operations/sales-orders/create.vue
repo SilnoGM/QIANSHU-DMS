@@ -29,19 +29,24 @@ import {
   buildCreateSalesOrderRequest,
   calculateSalesOrderLineSubtotal,
   canApplySalesOrderResponse,
+  createSalesOrderDocumentAutoTitle,
   createSalesOrderFormModel,
   createSalesOrderSubmissionState,
+  customizeSalesOrderDocumentTitle,
+  formatSalesOrderDocumentTitleTimestamp,
   getSalesOrderApiFailure,
   hasSalesOrderChanges,
   isSalesOrderAbortError,
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
+  refreshSalesOrderDocumentAutoTitle,
   replayUnknownSalesOrderSubmission,
   resolveSalesOrderCreateStepForErrors,
   resolveSalesOrderIssuerLabel,
   resolveSalesOrderSubmissionFailure,
   resolveSalesOrderSubmissionSuccess,
   SALES_ORDER_CREATE_REVIEW_STEP,
+  validateSalesOrderCreateStep,
 } from './sales-order-create.logic'
 import SalesOrderLines from './sales-order-lines.vue'
 
@@ -89,6 +94,7 @@ const discardIntent = ref<DiscardIntent | null>(null)
 const formRef = useTemplateRef<FormExpose<SalesOrderFormModel>>('formRef')
 const stepNavigationRef = useTemplateRef<HTMLElement>('stepNavigationRef')
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
+const appliedFormErrorFields = new Set<string>()
 let productRequestVersion = 0
 let productAbortController: AbortController | null = null
 let productSearchTimer: ReturnType<typeof setTimeout> | null = null
@@ -172,6 +178,21 @@ function previousStep(): void {
 }
 
 function nextStep(): void {
+  if (activeStep.value === 1 || activeStep.value === 2) {
+    const result = validateSalesOrderCreateStep(
+      formModel.value,
+      activeStep.value,
+      amountPrecision.value,
+      todayIso,
+    )
+    if (!result.valid) {
+      replaceFieldErrors(result.fieldErrors)
+      formError.value = ''
+      formFailure.value = null
+      return
+    }
+    clearFeedback()
+  }
   goToStep(activeStep.value + 1)
 }
 
@@ -201,14 +222,19 @@ function formFieldForError(path: string): string {
  */
 function applySalesOrderFieldErrors(errors: SalesOrderFieldErrors): void {
   formRef.value?.clearValidate()
-  const appliedFields = new Set<string>()
+  // FaForm 的全量 clearValidate 在同一个事件周期连续 setErrors 时可能保留旧字段，
+  // 因此逐个清除上一次由领域校验写入的字段，再同步本次结果。
+  for (const field of appliedFormErrorFields) {
+    formRef.value?.setFieldError(field, undefined)
+  }
+  appliedFormErrorFields.clear()
   for (const [path, message] of Object.entries(errors)) {
     const field = formFieldForError(path)
-    if (field === 'lines' || field === 'documents' || appliedFields.has(field)) {
+    if (field === 'lines' || field === 'documents' || appliedFormErrorFields.has(field)) {
       continue
     }
     formRef.value?.setFieldError(field, message)
-    appliedFields.add(field)
+    appliedFormErrorFields.add(field)
   }
 }
 
@@ -336,6 +362,44 @@ function updateDocument(index: number, patch: Partial<SalesOrderDocumentFormMode
   clearFeedback('documents')
 }
 
+function handleCustomerNameUpdate(value: unknown): void {
+  if (submitLocked.value) {
+    return
+  }
+  const customerName = String(value ?? '')
+  formModel.value.customerName = customerName
+  formModel.value.documents = formModel.value.documents.map(document => (
+    refreshSalesOrderDocumentAutoTitle(document, customerName)
+  ))
+  clearFeedback('customer.name')
+}
+
+function handleDocumentTypeUpdate(
+  index: number,
+  documentType: SalesOrderDocumentFormModel['documentType'],
+): void {
+  const current = formModel.value.documents[index]
+  if (current === undefined || submitLocked.value) {
+    return
+  }
+  updateDocument(index, refreshSalesOrderDocumentAutoTitle(
+    current,
+    formModel.value.customerName,
+    documentType,
+  ))
+}
+
+function handleDocumentTitleUpdate(index: number, value: unknown): void {
+  const current = formModel.value.documents[index]
+  if (current === undefined || submitLocked.value) {
+    return
+  }
+  updateDocument(index, customizeSalesOrderDocumentTitle(
+    current,
+    String(value ?? ''),
+  ))
+}
+
 function removeDocument(index: number): void {
   if (submitLocked.value) {
     return
@@ -373,11 +437,18 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
       if (controller.signal.aborted) {
         return
       }
+      const autoTitleTimestamp = formatSalesOrderDocumentTitleTimestamp(new Date())
       formModel.value.documents.push({
         ...response.data,
         key: crypto.randomUUID(),
         documentType: 'OTHER',
-        title: '',
+        title: createSalesOrderDocumentAutoTitle(
+          formModel.value.customerName,
+          'OTHER',
+          autoTitleTimestamp,
+        ),
+        autoTitleTimestamp,
+        titleManuallyEdited: false,
         remark: '',
       })
     }
@@ -725,11 +796,11 @@ onBeforeUnmount(() => {
           >
             <FaFormItem name="customerName" label="客户姓名" required>
               <FaInput
-                v-model="formModel.customerName"
+                :model-value="formModel.customerName"
                 maxlength="128"
                 autocomplete="name"
                 class="w-full"
-                @update:model-value="clearFeedback('customer.name')"
+                @update:model-value="handleCustomerNameUpdate"
               />
             </FaFormItem>
             <FaFormItem name="customerPhone" label="客户电话" required>
@@ -978,7 +1049,7 @@ onBeforeUnmount(() => {
                     { label: '其他', value: 'OTHER' },
                   ]"
                   class="w-full"
-                  @update:model-value="updateDocument(index, { documentType: $event as SalesOrderDocumentFormModel['documentType'] })"
+                  @update:model-value="handleDocumentTypeUpdate(index, $event as SalesOrderDocumentFormModel['documentType'])"
                 />
               </FaFormItem>
               <FaFormItem :name="`documents.${index}.title`" label="标题">
@@ -986,7 +1057,7 @@ onBeforeUnmount(() => {
                   :model-value="document.title"
                   maxlength="128"
                   class="w-full"
-                  @update:model-value="updateDocument(index, { title: String($event ?? '') })"
+                  @update:model-value="handleDocumentTitleUpdate(index, $event)"
                 />
               </FaFormItem>
               <FaFormItem :name="`documents.${index}.remark`" label="备注" class="md:col-span-2">

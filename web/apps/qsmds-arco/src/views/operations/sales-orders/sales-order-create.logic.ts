@@ -31,6 +31,10 @@ export interface SalesOrderDocumentFormModel extends SalesOrderTemporaryDocument
   key: string
   documentType: SalesOrderDocumentType
   title: string
+  /** 上传时生成并固定，后续自动刷新客户名或凭证类型时不重新计时。 */
+  autoTitleTimestamp: string
+  /** 用户一旦编辑过标题（包括清空），自动联动便不再覆盖用户输入。 */
+  titleManuallyEdited: boolean
   remark: string
 }
 
@@ -53,6 +57,10 @@ export interface SalesOrderFormModel {
 
 export type BuildSalesOrderRequestResult
   = | { readonly valid: true, readonly request: CreateSalesOrderRequestDto }
+    | { readonly valid: false, readonly fieldErrors: SalesOrderFieldErrors }
+
+export type ValidateSalesOrderCreateStepResult
+  = | { readonly valid: true }
     | { readonly valid: false, readonly fieldErrors: SalesOrderFieldErrors }
 
 export interface SalesOrderApiFailure {
@@ -100,8 +108,14 @@ const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/u
 const ALL_UNICODE_WHITESPACE_PATTERN = /\p{White_Space}+/gu
 const MAXIMUM_AMOUNT_UNITS = 10n ** 30n - 1n
 const MAXIMUM_QUANTITY = 2_147_483_647
+const MAXIMUM_DOCUMENT_TITLE_LENGTH = 128
 const AMOUNT_SCALE = 10_000n
 const DEFAULT_FAILURE_MESSAGE = '销售订单保存失败，请检查后重试'
+const DOCUMENT_TYPE_LABELS: Readonly<Record<SalesOrderDocumentType, string>> = {
+  DEPOSIT_VOUCHER: '定金凭证',
+  DELIVERY_RECEIPT: '签收单',
+  OTHER: '其他',
+}
 
 function newKey(): string {
   return crypto.randomUUID().toLowerCase()
@@ -115,38 +129,41 @@ export function parseSalesOrderCurrency(value: unknown): SalesOrderCurrency | nu
  * 表单仍在最终保存时执行完整领域校验；这里仅负责把字段错误定位到最早的可编辑步骤，
  * 避免用户停留在核对页却看不到需要修正的字段。未知字段保留在核对页展示全局错误。
  */
+function resolveSalesOrderCreateStepForField(path: string): SalesOrderCreateStep {
+  if (path === 'orderDate' || path === 'currencyCode' || path === 'issuer') {
+    return 0
+  }
+  if (
+    path.startsWith('customer.')
+    || path === 'customerName'
+    || path === 'customerPhone'
+    || path === 'region'
+    || path === 'addressDetail'
+  ) {
+    return 1
+  }
+  if (
+    path === 'lines'
+    || path.startsWith('lines.')
+    || path === 'agreedTotalAmount'
+    || path === 'depositDueAmount'
+    || path === 'balanceDueAmount'
+  ) {
+    return 2
+  }
+  if (path === 'documents' || path.startsWith('documents.') || path === 'remark') {
+    return 3
+  }
+  return SALES_ORDER_CREATE_REVIEW_STEP
+}
+
 export function resolveSalesOrderCreateStepForErrors(
   errors: SalesOrderFieldErrors,
 ): SalesOrderCreateStep {
   let earliestStep = SALES_ORDER_CREATE_REVIEW_STEP
 
   for (const path of Object.keys(errors)) {
-    let step: SalesOrderCreateStep = SALES_ORDER_CREATE_REVIEW_STEP
-    if (path === 'orderDate' || path === 'currencyCode' || path === 'issuer') {
-      step = 0
-    }
-    else if (
-      path.startsWith('customer.')
-      || path === 'customerName'
-      || path === 'customerPhone'
-      || path === 'region'
-      || path === 'addressDetail'
-    ) {
-      step = 1
-    }
-    else if (
-      path === 'lines'
-      || path.startsWith('lines.')
-      || path === 'agreedTotalAmount'
-      || path === 'depositDueAmount'
-      || path === 'balanceDueAmount'
-    ) {
-      step = 2
-    }
-    else if (path === 'documents' || path.startsWith('documents.') || path === 'remark') {
-      step = 3
-    }
-
+    const step = resolveSalesOrderCreateStepForField(path)
     earliestStep = Math.min(earliestStep, step) as SalesOrderCreateStep
   }
 
@@ -181,6 +198,69 @@ function optionalText(value: string): string | null {
 
 function codePointLength(value: string): number {
   return [...value].length
+}
+
+function padDatePart(value: number, length: number): string {
+  return value.toString().padStart(length, '0')
+}
+
+/**
+ * 凭证标题使用浏览器本地时间；时间戳无分隔符，既便于人工辨识，也能保持标题稳定。
+ */
+export function formatSalesOrderDocumentTitleTimestamp(value: Date): string {
+  return [
+    padDatePart(value.getFullYear(), 4),
+    padDatePart(value.getMonth() + 1, 2),
+    padDatePart(value.getDate(), 2),
+    padDatePart(value.getHours(), 2),
+    padDatePart(value.getMinutes(), 2),
+    padDatePart(value.getSeconds(), 2),
+    padDatePart(value.getMilliseconds(), 3),
+  ].join('')
+}
+
+export function createSalesOrderDocumentAutoTitle(
+  customerName: string,
+  documentType: SalesOrderDocumentType,
+  timestamp: string,
+): string {
+  const normalizedCustomerName = normalizeText(customerName) || '未填写客户'
+  const suffix = `-${DOCUMENT_TYPE_LABELS[documentType]}-${timestamp}`
+  // 服务端按 Unicode code point 限制 128 字符，因此不能用 UTF-16 length 截断中文或 emoji。
+  const maximumCustomerNameLength = Math.max(
+    0,
+    MAXIMUM_DOCUMENT_TITLE_LENGTH - codePointLength(suffix),
+  )
+  return `${[...normalizedCustomerName].slice(0, maximumCustomerNameLength).join('')}${suffix}`
+}
+
+export function refreshSalesOrderDocumentAutoTitle(
+  document: SalesOrderDocumentFormModel,
+  customerName: string,
+  documentType: SalesOrderDocumentType = document.documentType,
+): SalesOrderDocumentFormModel {
+  return {
+    ...document,
+    documentType,
+    title: document.titleManuallyEdited
+      ? document.title
+      : createSalesOrderDocumentAutoTitle(
+          customerName,
+          documentType,
+          document.autoTitleTimestamp,
+        ),
+  }
+}
+
+export function customizeSalesOrderDocumentTitle(
+  document: SalesOrderDocumentFormModel,
+  title: string,
+): SalesOrderDocumentFormModel {
+  return {
+    ...document,
+    title,
+    titleManuallyEdited: true,
+  }
 }
 
 function isValidDate(value: string): boolean {
@@ -552,6 +632,31 @@ export function buildCreateSalesOrderRequest(
       remark: optionalText(model.remark),
     },
   }
+}
+
+/**
+ * “下一步”复用最终保存的同一套领域校验，只筛选当前步骤的字段错误。
+ * 这样既能提前硬拦截，又不会把尚未填写的后续步骤错误带到当前页面。
+ */
+export function validateSalesOrderCreateStep(
+  model: SalesOrderFormModel,
+  step: SalesOrderCreateStep,
+  precision: number,
+  today: string = model.orderDate,
+): ValidateSalesOrderCreateStepResult {
+  const result = buildCreateSalesOrderRequest(model, precision, today)
+  if (result.valid) {
+    return { valid: true }
+  }
+
+  const fieldErrors = Object.fromEntries(
+    Object.entries(result.fieldErrors).filter(([path]) => (
+      resolveSalesOrderCreateStepForField(path) === step
+    )),
+  )
+  return Object.keys(fieldErrors).length === 0
+    ? { valid: true }
+    : { valid: false, fieldErrors: Object.freeze(fieldErrors) }
 }
 
 export function hasSalesOrderChanges(model: SalesOrderFormModel, today: string): boolean {

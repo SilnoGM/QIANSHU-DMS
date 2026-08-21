@@ -8,15 +8,20 @@ import {
   calculateSalesOrderLineSubtotal,
   createCatalogSalesOrderLine,
   createCustomSalesOrderLine,
+  createSalesOrderDocumentAutoTitle,
   createSalesOrderFormModel,
   createSalesOrderSubmissionState,
+  customizeSalesOrderDocumentTitle,
+  formatSalesOrderDocumentTitleTimestamp,
   getSalesOrderApiFailure,
   normalizeSalesOrderAddressDetail,
   parseSalesOrderCurrency,
+  refreshSalesOrderDocumentAutoTitle,
   replayUnknownSalesOrderSubmission,
   resolveSalesOrderCreateStepForErrors,
   resolveSalesOrderIssuerLabel,
   resolveSalesOrderSubmissionFailure,
+  validateSalesOrderCreateStep,
 } from '../../src/views/operations/sales-orders/sales-order-create.logic'
 
 const IDS = {
@@ -76,6 +81,124 @@ test('正式保存校验失败时回到最早包含错误的填写步骤', () =>
   assert.equal(resolveSalesOrderCreateStepForErrors({ remark: '备注过长' }), 3)
   assert.equal(resolveSalesOrderCreateStepForErrors({ unknownField: '未知字段错误' }), 4)
   assert.equal(resolveSalesOrderCreateStepForErrors({}), 4)
+})
+
+test('客户步骤只返回当前步骤错误，防重复失败时不能继续', () => {
+  const model = validModel()
+  model.addressDetail = '中国台湾 台湾 高雄市 苓雅区中正一路100号'
+  model.agreedTotalAmount = '99'
+  model.balanceDueAmount = '69'
+
+  const invalid = validateSalesOrderCreateStep(model, 1, 2)
+  assert.equal(invalid.valid, false)
+  if (!invalid.valid) {
+    assert.deepEqual(invalid.fieldErrors, {
+      'customer.addressDetail': '详细地址请勿重复填写已选地区',
+    })
+  }
+
+  model.addressDetail = '苓雅区中正一路100号'
+  model.customerName = '王小明'
+  model.lines[0]!.productId = null
+  const valid = validateSalesOrderCreateStep(model, 1, 2)
+  assert.deepEqual(valid, { valid: true })
+})
+
+test('产品与销售步骤分别硬拦截明细总价和定金尾款不一致', () => {
+  const model = validModel()
+  model.addressDetail = '中国台湾 台湾 高雄市 苓雅区中正一路100号'
+  model.agreedTotalAmount = '99'
+  model.balanceDueAmount = '69'
+
+  let result = validateSalesOrderCreateStep(model, 2, 2)
+  assert.equal(result.valid, false)
+  if (!result.valid) {
+    assert.deepEqual(result.fieldErrors, {
+      agreedTotalAmount: '手填销售总价必须与产品明细汇总一致',
+    })
+  }
+
+  model.agreedTotalAmount = '100'
+  result = validateSalesOrderCreateStep(model, 2, 2)
+  assert.equal(result.valid, false)
+  if (!result.valid) {
+    assert.deepEqual(result.fieldErrors, {
+      balanceDueAmount: '约定定金与尾款之和必须等于销售总价',
+    })
+  }
+
+  model.balanceDueAmount = '70'
+  assert.deepEqual(validateSalesOrderCreateStep(model, 2, 2), { valid: true })
+})
+
+test('凭证自动标题保留上传时间，联动客户与类型，手工编辑后停止覆盖', () => {
+  const timestamp = formatSalesOrderDocumentTitleTimestamp(
+    new Date(2026, 7, 21, 15, 30, 45, 123),
+  )
+  assert.equal(timestamp, '20260821153045123')
+  assert.equal(
+    createSalesOrderDocumentAutoTitle(' 王小明 ', 'DEPOSIT_VOUCHER', timestamp),
+    '王小明-定金凭证-20260821153045123',
+  )
+  assert.equal(
+    createSalesOrderDocumentAutoTitle('　Ａ王　', 'OTHER', timestamp),
+    'A王-其他-20260821153045123',
+  )
+  assert.equal(
+    createSalesOrderDocumentAutoTitle('', 'OTHER', timestamp),
+    '未填写客户-其他-20260821153045123',
+  )
+
+  const document = {
+    mediaAssetId: '55555555-5555-4555-8555-555555555555',
+    mediaType: 'IMAGE' as const,
+    mimeType: 'image/png',
+    sizeBytes: '128',
+    originalFilename: 'voucher.png',
+    key: 'document-1',
+    documentType: 'OTHER' as const,
+    title: createSalesOrderDocumentAutoTitle('王小明', 'OTHER', timestamp),
+    remark: '',
+    autoTitleTimestamp: timestamp,
+    titleManuallyEdited: false,
+  }
+  const model = validModel()
+  model.documents = [document]
+  const requestResult = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(requestResult.valid, true)
+  if (requestResult.valid) {
+    assert.deepEqual(requestResult.request.documents, [{
+      mediaAssetId: document.mediaAssetId,
+      documentType: 'OTHER',
+      title: document.title,
+      remark: null,
+    }])
+  }
+
+  const refreshed = refreshSalesOrderDocumentAutoTitle(
+    document,
+    '李小明',
+    'DELIVERY_RECEIPT',
+  )
+  assert.equal(refreshed.title, '李小明-签收单-20260821153045123')
+  assert.equal(refreshed.autoTitleTimestamp, timestamp)
+
+  const customized = customizeSalesOrderDocumentTitle(refreshed, '客户指定标题')
+  const preserved = refreshSalesOrderDocumentAutoTitle(customized, '陈小明', 'OTHER')
+  assert.equal(preserved.documentType, 'OTHER')
+  assert.equal(preserved.title, '客户指定标题')
+  assert.equal(preserved.titleManuallyEdited, true)
+
+  const cleared = customizeSalesOrderDocumentTitle(refreshed, '')
+  assert.equal(refreshSalesOrderDocumentAutoTitle(cleared, '陈小明').title, '')
+})
+
+test('凭证自动标题截断超长客户名并完整保留类型和时间戳后缀', () => {
+  const timestamp = '20260821153045123'
+  const title = createSalesOrderDocumentAutoTitle('王'.repeat(200), 'OTHER', timestamp)
+
+  assert.equal([...title].length, 128)
+  assert.equal(title.endsWith(`-其他-${timestamp}`), true)
 })
 
 test('现有地区域的 UUID v5 可用于客户地址快照', () => {
