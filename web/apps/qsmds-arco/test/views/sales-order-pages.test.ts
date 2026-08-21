@@ -54,7 +54,7 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /import QsSalesOrderDesc from '@\/components\/business\/QsSalesOrderDesc\/index\.vue'/u)
   assert.match(source, /import QsGenericDrawer from '@\/components\/business\/QsGenericDrawer\/index\.vue'/u)
   assert.match(source, /data-testid="sales-order-create-layout"/u)
-  assert.match(source, /xl:grid-cols-\[minmax\(0,1fr\)_30rem\]/u)
+  assert.match(source, /grid-template-columns: minmax\(0, calc\(100% - 31\.5rem\)\) minmax\(0, 30rem\)/u)
   assert.match(source, /data-testid="sales-order-create-form-column"/u)
   assert.match(source, /data-testid="sales-order-create-summary-column"/u)
   const formEnd = source.indexOf('</FaForm>')
@@ -70,7 +70,7 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /确认保存并派号/u)
   assert.match(source, /const submitReady = computed/u)
   assert.match(source, /:disabled="!submitReady"/u)
-  assert.match(source, /@submit="requestSubmitConfirmation"/u)
+  assert.doesNotMatch(source, /<FaForm[\s\S]*?@submit(?:\.|=)/u)
   assert.match(source, /function requestSubmitConfirmation\(\): void/u)
   assert.match(source, /async function confirmSubmitOrder\(\): Promise<void>/u)
   assert.match(source, /function requestSubmitConfirmation\(\): void \{[\s\S]*?!submitReady\.value[\s\S]*?return/u)
@@ -81,7 +81,7 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /if \(canRead\.value\) \{[\s\S]*?router\.push[\s\S]*?else \{[\s\S]*?createSalesOrderSubmissionState\(\)/u)
   assert.match(source, /useMediaQuery\('\(min-width: 1280px\)'\)/u)
   assert.match(source, /async function waitForOverlayFocusRestore\(\): Promise<void> \{[\s\S]*?await nextTick\(\)[\s\S]*?await nextTick\(\)[\s\S]*?setTimeout[\s\S]*?requestAnimationFrame/u)
-  assert.match(source, /async function runDeferredOverlayAction\(\): Promise<boolean> \{[\s\S]*?waitForOverlayFocusRestore\(\)[\s\S]*?openSubmitConfirmation\(\)/u)
+  assert.match(source, /async function runDeferredOverlayAction\(\): Promise<boolean> \{[\s\S]*?waitForOverlayFocusRestore\(\)[\s\S]*?openDiscardConfirmation\(\)/u)
   assert.match(source, /async function handleDetailsDrawerClosed\(\): Promise<void> \{[\s\S]*?runDeferredOverlayAction\(\)/u)
   assert.match(source, /ref="summaryRegionRef"/u)
   assert.match(source, /handleDetailsDrawerClosed[\s\S]*?isDesktopSummary\.value[\s\S]*?summaryRegionRef\.value\?\.focus/u)
@@ -92,7 +92,7 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /discardIntent\.value = submission\.value\.phase === 'unknown'[\s\S]*?'unknown-abandon'[\s\S]*?: 'navigation'/u)
   assert.match(source, /intent === 'unknown-abandon'[\s\S]*?resetSalesOrderForm\(\)[\s\S]*?resolve\?\.\(true\)/u)
   assert.match(source, /function requestUnknownAbandon\(\): void \{[\s\S]*?deferDiscardUntilOverlayClosed\(\)[\s\S]*?openDiscardConfirmation\(\)/u)
-  assert.match(source, /function requestSubmitConfirmation\(\): void \{[\s\S]*?detailsDrawerVisible\.value \|\| detailsDrawerActive\.value/u)
+  assert.match(source, /function requestSubmitConfirmation\(\): void \{[\s\S]*?createSurface\.value !== 'review'[\s\S]*?return/u)
   assert.match(source, /function openDetailsDrawer\(\): void \{[\s\S]*?detailsDrawerActive\.value = true[\s\S]*?detailsDrawerVisible\.value = true/u)
   assert.match(source, /function openSubmitConfirmation\(\): void \{[\s\S]*?submitConfirmationActive\.value = true[\s\S]*?submitConfirmVisible\.value = true/u)
   assert.match(source, /const discardActive = ref\(false\)/u)
@@ -117,6 +117,58 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /documentPreviewRegistry\.release/u)
   assert.match(source, /documentPreviewRegistry\.clear/u)
   assert.doesNotMatch(source, /gradient|#[\dA-F]{3,8}/i)
+})
+
+test('第四步通过完整校验后进入独立全页核对态', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(source, /type SalesOrderCreateSurface = 'form' \| 'review'/u)
+  assert.match(source, /const createSurface = ref<SalesOrderCreateSurface>\('form'\)/u)
+  assert.match(source, /const reviewReady = computed/u)
+  assert.match(source, /const submitReady = computed\(\(\) => \([\s\S]*?createSurface\.value === 'review'[\s\S]*?reviewReady\.value/u)
+  assert.match(source, /function enterSalesOrderReview\(\): void \{[\s\S]*?buildCreateSalesOrderRequest\([\s\S]*?resolveSalesOrderCreateStepForErrors\([\s\S]*?createSurface\.value = 'review'/u)
+  assert.match(source, /function nextStep\(\): void \{[\s\S]*?activeStep\.value === SALES_ORDER_CREATE_LAST_STEP[\s\S]*?enterSalesOrderReview\(\)[\s\S]*?return/u)
+  assert.match(source, /function returnToSalesOrderForm\(\): void \{[\s\S]*?createSurface\.value = 'form'[\s\S]*?goToStep\(SALES_ORDER_CREATE_LAST_STEP\)/u)
+  assert.match(source, /function requestSubmitConfirmation\(\): void \{[\s\S]*?createSurface\.value !== 'review'[\s\S]*?return/u)
+  assert.match(source, /function resetSalesOrderForm\(\): void \{[\s\S]*?createSurface\.value = 'form'/u)
+  assert.match(source, /function restorePendingSubmissionFeedback\(\): void \{[\s\S]*?feedback\.step === null[\s\S]*?return[\s\S]*?createSurface\.value = 'form'[\s\S]*?goToStep\(feedback\.step\)/u)
+
+  assert.match(source, /data-testid="sales-order-create-layout"[\s\S]*?sales-order-create-layout--review/u)
+  assert.match(source, /data-testid="sales-order-create-review"/u)
+  assert.match(source, /data-testid="sales-order-review-actions"/u)
+  assert.match(source, /useElementSize\(reviewActionsRef\)/u)
+  assert.match(source, /:style="reviewSummaryStyle"/u)
+  assert.match(source, /<Transition name="sales-order-submit-bar">\s*<div\s+v-if="createSurface === 'review'"\s+ref="reviewActionsRef"\s+data-testid="sales-order-review-actions"/u)
+  assert.match(source, /返回修改/u)
+  assert.match(source, /提交订单/u)
+  assert.match(source, /\.sales-order-create-layout[\s\S]*?transition:[^;]*grid-template-columns/u)
+  assert.match(source, /\.sales-order-review-actions-layer \{[\s\S]*?position: absolute[\s\S]*?pointer-events: none/u)
+  assert.match(source, /\.sales-order-review-actions-viewport \{[\s\S]*?position: sticky[\s\S]*?align-items: flex-end/u)
+  assert.match(source, /\.sales-order-submit-bar-enter-from[\s\S]*?translateY/u)
+  assert.match(source, /@media \(prefers-reduced-motion: reduce\)/u)
+
+  const fillSummaryStart = source.indexOf('data-testid="sales-order-create-summary-column"')
+  const reviewActionsStart = source.indexOf('data-testid="sales-order-review-actions"')
+  const unknownAlertStart = source.indexOf('title="订单保存结果暂时无法确认"')
+  const formTrackStart = source.indexOf('class="sales-order-form-track')
+  const drawerStart = source.indexOf('<QsGenericDrawer')
+  const drawerEnd = source.indexOf('</QsGenericDrawer>', drawerStart)
+  assert.ok(
+    unknownAlertStart >= 0 && unknownAlertStart < formTrackStart,
+    '未知结果恢复入口必须位于被隐藏的表单面板之外',
+  )
+  assert.ok(fillSummaryStart >= 0 && reviewActionsStart > fillSummaryStart)
+  assert.doesNotMatch(
+    source.slice(fillSummaryStart, reviewActionsStart),
+    /提交订单/u,
+    '填写态右栏不得保留提交按钮或提交卡',
+  )
+  assert.ok(drawerStart >= 0 && drawerEnd > drawerStart)
+  assert.doesNotMatch(
+    source.slice(drawerStart, drawerEnd),
+    /提交订单/u,
+    '移动端填写详情抽屉不得提供提交旁路',
+  )
 })
 
 test('产品明细同时支持目录产品与仅本单临时产品，数量和真实售价均明确可编辑', async () => {

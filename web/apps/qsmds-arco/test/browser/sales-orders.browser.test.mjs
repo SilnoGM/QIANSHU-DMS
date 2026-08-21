@@ -8,6 +8,7 @@ import {
   clickDialogButton,
   runNumberingBrowserStep,
   waitForAfterAuthentication,
+  waitForNoVisibleDialog,
   waitForVisibleDialog,
 } from './numbering.browser.helpers.mjs'
 import {
@@ -232,13 +233,30 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         '[data-testid="sales-order-create-summary-column"]',
       )
       const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
-      const submit = [...(summary?.querySelectorAll('button') ?? [])]
-        .find(button => button.textContent?.trim() === '提交订单')
       return summary?.getClientRects().length > 0
         && desc?.getClientRects().length > 0
-        && submit?.disabled === true
-        && document.body.innerText.includes('下一项：客户地址')
+        && ![...summary.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '提交订单')
+        && !document.body.innerText.includes('当前币种不可用于新订单')
     })()`)
+
+    await page.setViewport(390, 844, true)
+    await clickVisibleButton(page, '查看已填详情')
+    await waitForVisibleDialog(page, '已填销售订单详情')
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('已填销售订单详情'))
+      return drawer
+        && ![...drawer.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '提交订单')
+        && [...drawer.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '继续填写' && !button.disabled)
+    })()`)
+    await clickDialogButton(page, '已填销售订单详情', '继续填写')
+    await waitForNoVisibleDialog(page, '已填销售订单详情')
+    await page.setViewport(1440, 900, false)
+
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector(
       '[data-testid="sales-order-step-customer"]',
@@ -358,13 +376,102 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       const summary = document.querySelector(
         '[data-testid="sales-order-create-summary-column"]',
       )
-      const submit = [...(summary?.querySelectorAll('button') ?? [])]
-        .find(button => button.textContent?.trim() === '提交订单')
       return documents?.getClientRects().length > 0
         && summary?.textContent?.includes(${JSON.stringify(customerName)})
         && summary?.textContent?.includes('200')
+        && ![...summary.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '提交订单')
+    })()`)
+
+    const beforeReview = await readOrders(page)
+    assert.equal(beforeReview.status, 200)
+    assert.equal(beforeReview.body?.total, 0)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`(() => {
+      const formPanel = document.querySelector(
+        '[data-testid="sales-order-create-form-column"]',
+      )
+      const formTrack = formPanel?.closest('.sales-order-form-track')
+      const review = document.querySelector(
+        '[data-testid="sales-order-create-review"]',
+      )
+      const layout = document.querySelector(
+        '[data-testid="sales-order-create-layout"]',
+      )
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
+      const actions = document.querySelector(
+        '[data-testid="sales-order-review-actions"]',
+      )
+      const submit = [...(actions?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.trim() === '提交订单')
+      const layoutRect = layout?.getBoundingClientRect()
+      const summaryRect = summary?.getBoundingClientRect()
+      const actionsRect = actions?.getBoundingClientRect()
+      return formTrack?.getAttribute('aria-hidden') === 'true'
+        && formTrack.hasAttribute('inert')
+        && getComputedStyle(formTrack).opacity === '0'
+        && review?.getClientRects().length > 0
+        && summary?.getClientRects().length > 0
+        && summaryRect.width >= layoutRect.width - 2
+        && desc?.getClientRects().length > 0
+        && summary.textContent?.includes(${JSON.stringify(customerName)})
+        && summary.textContent?.includes('200')
+        && actions?.getClientRects().length > 0
+        && actionsRect.top < innerHeight
+        && actionsRect.bottom <= innerHeight
         && submit?.disabled === false
     })()`)
+
+    await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')
+    await page.waitFor(`(() => {
+      const actions = document.querySelector(
+        '[data-testid="sales-order-review-actions"]',
+      )
+      const lastContent = document.querySelector(
+        '[data-slot="sales-order-desc-documents"]',
+      )
+      const actionsRect = actions?.getBoundingClientRect()
+      const lastContentRect = lastContent?.getBoundingClientRect()
+      return actionsRect
+        && lastContentRect
+        && actionsRect.top >= 0
+        && actionsRect.bottom <= innerHeight + 1
+        && lastContentRect.bottom <= actionsRect.top
+    })()`)
+
+    await clickVisibleButton(page, '返回修改')
+    await page.waitFor(`(() => {
+      const formPanel = document.querySelector(
+        '[data-testid="sales-order-create-form-column"]',
+      )
+      const formTrack = formPanel?.closest('.sales-order-form-track')
+      const documents = document.querySelector(
+        '[data-testid="sales-order-step-documents"]',
+      )
+      const review = document.querySelector(
+        '[data-testid="sales-order-create-review"]',
+      )
+      return formPanel?.getClientRects().length > 0
+        && formTrack?.getAttribute('aria-hidden') !== 'true'
+        && !formTrack?.hasAttribute('inert')
+        && getComputedStyle(formTrack).opacity === '1'
+        && documents?.getClientRects().length > 0
+        && (!review || review.getClientRects().length === 0)
+        && ![...document.querySelectorAll('button')]
+          .some(button => button.getClientRects().length > 0
+            && button.textContent?.trim() === '提交订单')
+    })()`)
+
+    const afterReturn = await readOrders(page)
+    assert.equal(afterReturn.status, 200)
+    assert.equal(afterReturn.body?.total, 0)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-create-review"]',
+    )?.getClientRects().length > 0`)
     await clickVisibleButton(page, '提交订单')
     await waitForVisibleDialog(page, '确认提交销售订单？')
 

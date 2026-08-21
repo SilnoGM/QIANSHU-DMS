@@ -14,7 +14,7 @@ import type {
 import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
 
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
-import { useMediaQuery } from '@vueuse/core'
+import { useElementSize, useMediaQuery } from '@vueuse/core'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
@@ -56,7 +56,8 @@ import { createSalesOrderDocumentPreviewRegistry } from './sales-order-document-
 import SalesOrderLines from './sales-order-lines.vue'
 
 type DiscardIntent = 'navigation' | 'unknown-abandon'
-type DeferredOverlayAction = 'navigation-discard' | 'submit-confirmation'
+type DeferredOverlayAction = 'navigation-discard'
+type SalesOrderCreateSurface = 'form' | 'review'
 
 interface PendingSubmissionFeedback {
   errors: SalesOrderFieldErrors
@@ -87,6 +88,7 @@ const canCreate = computed(() => auth('sales-orders:create'))
 const canRead = computed(() => auth('sales-orders:read'))
 const canManageDocuments = computed(() => auth('sales-orders:document'))
 const formModel = ref(createSalesOrderFormModel(initialCurrency, todayIso))
+const createSurface = ref<SalesOrderCreateSurface>('form')
 const activeStep = ref<SalesOrderCreateStep>(0)
 const furthestReachedStep = ref<SalesOrderCreateStep>(0)
 const fieldErrors = ref<SalesOrderFieldErrors>({})
@@ -112,6 +114,8 @@ const pendingSubmissionFeedback = shallowRef<PendingSubmissionFeedback | null>(n
 const isDesktopSummary = useMediaQuery('(min-width: 1280px)')
 const formRef = useTemplateRef<FormExpose<SalesOrderFormModel>>('formRef')
 const stepNavigationRef = useTemplateRef<HTMLElement>('stepNavigationRef')
+const reviewHeadingRef = useTemplateRef<HTMLElement>('reviewHeadingRef')
+const reviewActionsRef = useTemplateRef<HTMLElement>('reviewActionsRef')
 const summaryRegionRef = useTemplateRef<HTMLElement>('summaryRegionRef')
 const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 const appliedFormErrorFields = new Set<string>()
@@ -124,6 +128,8 @@ let submitRequestVersion = 0
 let submitAbortController: AbortController | null = null
 let documentAbortController: AbortController | null = null
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
+
+const { height: reviewActionsHeight } = useElementSize(reviewActionsRef)
 
 const fixedCurrencies = computed(() => currencyCatalog.currencies.value.filter(currency =>
   currency.code === formModel.value.currencyCode))
@@ -170,7 +176,7 @@ const completedStepStates = computed(() => salesOrderSteps.map((_step, index) =>
     && (step !== SALES_ORDER_CREATE_LAST_STEP || !documentUploading.value)
 }))
 const allStepsPassed = computed(() => completedStepStates.value.every(Boolean))
-const submitReady = computed(() => (
+const reviewReady = computed(() => (
   canCreate.value
   && submission.value.phase === 'editing'
   && !currencyUnavailable.value
@@ -180,6 +186,17 @@ const submitReady = computed(() => (
   && fullValidation.value.valid
   && Object.keys(fieldErrors.value).length === 0
 ))
+const submitReady = computed(() => (
+  createSurface.value === 'review'
+  && reviewReady.value
+))
+const reviewSummaryStyle = computed(() => createSurface.value === 'review'
+  ? {
+      paddingBottom: reviewActionsHeight.value > 0
+        ? `calc(${Math.ceil(reviewActionsHeight.value)}px + max(2rem, env(safe-area-inset-bottom)))`
+        : '12rem',
+    }
+  : undefined)
 const submitStatusMessage = computed(() => {
   if (submission.value.phase === 'submitting') {
     return '正在保存销售订单，请勿重复操作。'
@@ -269,10 +286,60 @@ function previousStep(): void {
   goToStep(activeStep.value - 1)
 }
 
-function nextStep(): void {
-  if (activeStep.value >= SALES_ORDER_CREATE_LAST_STEP) {
+async function focusSalesOrderReview(): Promise<void> {
+  await nextTick()
+  await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
+  reviewHeadingRef.value?.scrollIntoView({ behavior: 'auto', block: 'start' })
+  reviewHeadingRef.value?.focus({ preventScroll: true })
+}
+
+/**
+ * 第四步的“下一步”是正式提交前的唯一页面门禁。这里执行完整订单校验，
+ * 但不创建幂等键、不冻结快照，也不会向服务端发送创建请求。
+ */
+function enterSalesOrderReview(): void {
+  if (currencyUnavailable.value) {
+    formError.value = '当前订单币种不可用，请返回列表重新选择或先启用该币种'
     return
   }
+  if (documentUploading.value) {
+    formError.value = '订单凭证正在上传，请等待上传完成后再进入核对'
+    return
+  }
+
+  const result = buildCreateSalesOrderRequest(formModel.value, amountPrecision.value, todayIso)
+  if (!result.valid) {
+    // 完整客户端校验仍采用增量覆盖，避免抹掉其他步骤尚未编辑清除的服务端错误。
+    const mergedErrors = { ...fieldErrors.value, ...result.fieldErrors }
+    replaceFieldErrors(mergedErrors)
+    if (formFailure.value === null) {
+      formError.value = '部分资料未通过校验，请修正后再进入订单核对'
+    }
+    const errorStep = resolveSalesOrderCreateStepForErrors(mergedErrors)
+    if (errorStep !== null) {
+      goToStep(errorStep)
+      focusFirstSalesOrderError(mergedErrors)
+    }
+    return
+  }
+
+  if (!reviewReady.value) {
+    formError.value = '请先修正未通过的步骤或服务端字段错误'
+    const errorStep = resolveSalesOrderCreateStepForErrors(fieldErrors.value)
+    if (errorStep !== null) {
+      goToStep(errorStep)
+      focusFirstSalesOrderError(fieldErrors.value)
+    }
+    return
+  }
+
+  clearGlobalFailure()
+  detailsDrawerVisible.value = false
+  createSurface.value = 'review'
+  void focusSalesOrderReview()
+}
+
+function nextStep(): void {
   if (activeStep.value === 0 && currencyUnavailable.value) {
     formError.value = '当前订单币种不可用，请等待货币资料加载完成或返回列表重新选择'
     formFailure.value = null
@@ -310,11 +377,23 @@ function nextStep(): void {
   if (Object.keys(fieldErrors.value).length === 0) {
     clearGlobalFailure()
   }
+  if (activeStep.value === SALES_ORDER_CREATE_LAST_STEP) {
+    enterSalesOrderReview()
+    return
+  }
   furthestReachedStep.value = Math.max(
     furthestReachedStep.value,
     activeStep.value + 1,
   ) as SalesOrderCreateStep
   goToStep(activeStep.value + 1)
+}
+
+function returnToSalesOrderForm(): void {
+  if (submitLocked.value || createSurface.value !== 'review') {
+    return
+  }
+  createSurface.value = 'form'
+  goToStep(SALES_ORDER_CREATE_LAST_STEP)
 }
 
 function formFieldForError(path: string): string {
@@ -676,6 +755,7 @@ function clearDocumentPreviews(): void {
 function resetSalesOrderForm(): void {
   clearDocumentPreviews()
   formModel.value = createSalesOrderFormModel(initialCurrency, todayIso)
+  createSurface.value = 'form'
   activeStep.value = 0
   furthestReachedStep.value = 0
   detailsDrawerVisible.value = false
@@ -696,9 +776,14 @@ async function waitForOverlayFocusRestore(): Promise<void> {
 function restorePendingSubmissionFeedback(): void {
   const feedback = pendingSubmissionFeedback.value
   pendingSubmissionFeedback.value = null
-  if (feedback === null || feedback.step === null) {
+  if (feedback === null) {
     return
   }
+  if (feedback.step === null) {
+    // 无字段的确定性失败或 unknown 保留在核对态，顶部全局提示提供重试或幂等恢复入口。
+    return
+  }
+  createSurface.value = 'form'
   goToStep(feedback.step)
   focusFirstSalesOrderError(feedback.errors)
 }
@@ -718,6 +803,9 @@ async function queueSubmissionFeedback(errors: SalesOrderFieldErrors): Promise<v
 }
 
 function openDetailsDrawer(): void {
+  if (createSurface.value !== 'form') {
+    return
+  }
   // active 必须先于 visible 写入，覆盖入场动画尚未发出 opened 时立即关闭的竞态。
   detailsDrawerActive.value = true
   detailsDrawerVisible.value = true
@@ -738,18 +826,12 @@ async function runDeferredOverlayAction(): Promise<boolean> {
     return false
   }
   await waitForOverlayFocusRestore()
-  // 等待期间路由离开可能把“提交确认”提升为更高优先级的“放弃确认”，因此此处重新读取。
-  const action = deferredOverlayAction.value
-  if (action === null) {
+  // 等待期间路由状态可能变化，因此真正打开前再次确认动作仍然有效。
+  if (deferredOverlayAction.value === null) {
     return false
   }
   deferredOverlayAction.value = null
-  if (action === 'submit-confirmation') {
-    openSubmitConfirmation()
-  }
-  else {
-    openDiscardConfirmation()
-  }
+  openDiscardConfirmation()
   return true
 }
 
@@ -799,6 +881,7 @@ function requestSubmitConfirmation(): void {
   if (
     !canCreate.value
     || submission.value.phase !== 'editing'
+    || createSurface.value !== 'review'
   ) {
     return
   }
@@ -819,6 +902,7 @@ function requestSubmitConfirmation(): void {
     replaceFieldErrors(result.fieldErrors)
     formError.value = '部分资料未通过校验，请修正后再正式保存'
     formFailure.value = null
+    createSurface.value = 'form'
     const errorStep = resolveSalesOrderCreateStepForErrors(result.fieldErrors)
     if (errorStep !== null) {
       goToStep(errorStep)
@@ -830,18 +914,13 @@ function requestSubmitConfirmation(): void {
     formError.value = '请先修正未通过的步骤或服务端字段错误'
     const firstInvalidStep = completedStepStates.value.findIndex(passed => !passed)
     if (firstInvalidStep >= 0) {
+      createSurface.value = 'form'
       goToStep(firstInvalidStep)
       focusFirstSalesOrderError(fieldErrors.value)
     }
     return
   }
 
-  // 详情 Drawer 与最终 Modal 不叠加；Drawer 完成关闭后再进入真正模态确认。
-  if (detailsDrawerVisible.value || detailsDrawerActive.value) {
-    deferredOverlayAction.value = 'submit-confirmation'
-    detailsDrawerVisible.value = false
-    return
-  }
   openSubmitConfirmation()
 }
 
@@ -851,7 +930,10 @@ async function handleDetailsDrawerClosed(): Promise<void> {
     return
   }
   await waitForOverlayFocusRestore()
-  if (isDesktopSummary.value) {
+  if (createSurface.value === 'review') {
+    reviewHeadingRef.value?.focus({ preventScroll: true })
+  }
+  else if (isDesktopSummary.value) {
     // 跨越 xl 断点后原移动端触发按钮会隐藏，把焦点落回真实可见的桌面详情区域。
     summaryRegionRef.value?.focus({ preventScroll: true })
   }
@@ -982,7 +1064,7 @@ function deferDiscardUntilOverlayClosed(): boolean {
     return true
   }
   if (deferredOverlayAction.value !== null) {
-    // 若 Drawer 正在切换到提交确认，则用离开确认覆盖后续动作，并继续等待当前浮层 closed。
+    // 当前浮层仍在退场时继续沿用离开确认，等待 closed 后再打开，避免两个确认层叠加。
     deferredOverlayAction.value = 'navigation-discard'
     return true
   }
@@ -1074,12 +1156,18 @@ onBeforeUnmount(() => {
     <div
       v-else
       data-testid="sales-order-create-layout"
-      class="m-4 gap-6 grid min-w-0 xl:grid-cols-[minmax(0,1fr)_30rem]"
+      class="sales-order-create-layout m-4 min-w-0"
+      :class="{
+        'sales-order-create-layout--form': createSurface === 'form',
+        'sales-order-create-layout--review': createSurface === 'review',
+      }"
     >
-      <FaPageMain class="m-0 min-w-0 overflow-visible" main-class="overflow-visible">
+      <div
+        v-if="formError || submission.phase === 'unknown'"
+        class="sales-order-alert-stack gap-4 grid"
+      >
         <FaAlert
           v-if="formError"
-          class="mb-5"
           :title="formErrorTitle"
           variant="destructive"
           role="alert"
@@ -1096,7 +1184,6 @@ onBeforeUnmount(() => {
 
         <FaAlert
           v-if="submission.phase === 'unknown'"
-          class="mb-5"
           title="订单保存结果暂时无法确认"
           variant="destructive"
           role="alert"
@@ -1117,14 +1204,20 @@ onBeforeUnmount(() => {
             </div>
           </template>
         </FaAlert>
+      </div>
 
+      <FaPageMain
+        class="sales-order-form-track m-0 min-w-0 overflow-visible"
+        main-class="overflow-visible"
+        :inert="createSurface === 'review'"
+        :aria-hidden="createSurface === 'review' ? 'true' : undefined"
+      >
         <FaForm
           ref="formRef"
           :model="formModel"
           :disabled="submitLocked"
           :aria-busy="submission.phase === 'submitting' ? 'true' : 'false'"
           class="min-w-0"
-          @submit="requestSubmitConfirmation"
         >
           <div data-testid="sales-order-create-form-column" class="min-w-0">
             <nav
@@ -1504,7 +1597,6 @@ onBeforeUnmount(() => {
                   上一步
                 </FaButton>
                 <FaButton
-                  v-if="activeStep < SALES_ORDER_CREATE_LAST_STEP"
                   type="button"
                   class="min-h-11 w-full sm:min-h-9 sm:w-auto"
                   :disabled="submitLocked"
@@ -1519,7 +1611,7 @@ onBeforeUnmount(() => {
                   :disabled="submission.phase === 'submitting'"
                   @click="openDetailsDrawer"
                 >
-                  {{ activeStep === SALES_ORDER_CREATE_LAST_STEP ? '核对并提交' : '查看已填详情' }}
+                  查看已填详情
                 </FaButton>
               </div>
             </nav>
@@ -1527,53 +1619,101 @@ onBeforeUnmount(() => {
         </FaForm>
       </FaPageMain>
 
-      <aside
-        data-testid="sales-order-create-summary-column"
-        class="sales-order-summary-sticky min-w-0 hidden self-start xl:block"
-        aria-label="已填销售订单详情与提交"
-      >
-        <div class="flex flex-col gap-3 max-h-[inherit]">
-          <div
-            ref="summaryRegionRef"
-            class="outline-none overscroll-contain rounded-2xl min-h-0 overflow-y-auto focus-visible:ring-2 focus-visible:ring-primary/40"
-            role="region"
-            aria-label="已填销售订单详情"
-            tabindex="0"
-          >
-            <QsSalesOrderDesc
-              :model="salesOrderDescModel"
-              :currencies="fixedCurrencies"
-            />
-          </div>
-          <div class="p-4 border border-border rounded-2xl bg-background shrink-0 shadow-sm">
-            <p
-              id="sales-order-desktop-submit-status"
-              class="text-sm text-muted-foreground leading-5 m-0 mb-3"
-              role="status"
-              aria-live="polite"
+      <Transition name="sales-order-summary-panel">
+        <aside
+          v-show="isDesktopSummary || createSurface === 'review'"
+          data-testid="sales-order-create-summary-column"
+          class="sales-order-summary-column min-w-0 self-start"
+          :data-surface="createSurface"
+          :aria-label="createSurface === 'review' ? '销售订单最终核对' : '已填销售订单详情'"
+        >
+          <div class="sales-order-summary-shell">
+            <header
+              v-if="createSurface === 'review'"
+              data-testid="sales-order-create-review"
+              class="sales-order-review-heading"
             >
-              {{ submitStatusMessage }}
-            </p>
-            <FaButton
-              type="button"
-              class="min-h-11 w-full"
-              :loading="submission.phase === 'submitting'"
-              :disabled="!submitReady"
-              aria-describedby="sales-order-desktop-submit-status"
-              @click="requestSubmitConfirmation"
+              <p class="text-xs text-primary tracking-wide font-semibold m-0">
+                最终核对
+              </p>
+              <h2
+                ref="reviewHeadingRef"
+                class="text-xl tracking-tight font-semibold m-0 mt-1 outline-none rounded-md focus-visible:ring-2 focus-visible:ring-primary/40"
+                tabindex="-1"
+              >
+                核对销售订单
+              </h2>
+              <p class="text-sm text-muted-foreground leading-6 m-0 mt-2">
+                请确认下列资料无误；只有二次确认后才会正式保存并派发订单编号。
+              </p>
+            </header>
+
+            <div
+              ref="summaryRegionRef"
+              class="sales-order-summary-region outline-none overscroll-contain rounded-2xl min-h-0 focus-visible:ring-2 focus-visible:ring-primary/40"
+              role="region"
+              :aria-label="createSurface === 'review' ? '待提交销售订单详情' : '已填销售订单详情'"
+              :style="reviewSummaryStyle"
+              tabindex="0"
             >
-              提交订单
-            </FaButton>
+              <QsSalesOrderDesc
+                :model="salesOrderDescModel"
+                :currencies="fixedCurrencies"
+              />
+            </div>
+
+            <div class="sales-order-review-actions-layer">
+              <div class="sales-order-review-actions-viewport">
+                <Transition name="sales-order-submit-bar">
+                  <div
+                    v-if="createSurface === 'review'"
+                    ref="reviewActionsRef"
+                    data-testid="sales-order-review-actions"
+                    class="sales-order-review-actions p-4 border border-border rounded-2xl bg-background/95 shadow-lg"
+                  >
+                    <p
+                      id="sales-order-review-submit-status"
+                      class="text-sm text-muted-foreground leading-5 m-0"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      {{ submitStatusMessage }}
+                    </p>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <FaButton
+                        type="button"
+                        variant="outline"
+                        class="min-h-11 w-full sm:min-h-9 sm:w-auto"
+                        :disabled="submitLocked"
+                        @click="returnToSalesOrderForm"
+                      >
+                        返回修改
+                      </FaButton>
+                      <FaButton
+                        type="button"
+                        class="min-h-11 w-full sm:min-h-9 sm:min-w-36 sm:w-auto"
+                        :loading="submission.phase === 'submitting'"
+                        :disabled="!submitReady"
+                        aria-describedby="sales-order-review-submit-status"
+                        @click="requestSubmitConfirmation"
+                      >
+                        提交订单
+                      </FaButton>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+            </div>
           </div>
-        </div>
-      </aside>
+        </aside>
+      </Transition>
     </div>
 
     <QsGenericDrawer
       :model-value="detailsDrawerVisible"
       data-testid="sales-order-details-drawer"
       title="已填销售订单详情"
-      description="实时核对左侧已填资料；确认后仍会进入二次确认。"
+      description="实时核对当前已填资料；完成第四步后通过“下一步”进入最终核对。"
       placement="right"
       size="xl"
       :submitting="submission.phase === 'submitting'"
@@ -1586,15 +1726,7 @@ onBeforeUnmount(() => {
         class="border-0 rounded-none shadow-none md:rounded-2xl"
       />
       <template #footer>
-        <div class="gap-3 grid w-full md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
-          <p
-            id="sales-order-drawer-submit-status"
-            class="text-sm text-muted-foreground leading-5 m-0"
-            role="status"
-            aria-live="polite"
-          >
-            {{ submitStatusMessage }}
-          </p>
+        <div class="flex w-full justify-end">
           <FaButton
             type="button"
             variant="outline"
@@ -1602,15 +1734,6 @@ onBeforeUnmount(() => {
             @click="detailsDrawerVisible = false"
           >
             继续填写
-          </FaButton>
-          <FaButton
-            type="button"
-            class="min-h-11 w-full md:w-auto"
-            :disabled="!submitReady"
-            aria-describedby="sales-order-drawer-submit-status"
-            @click="requestSubmitConfirmation"
-          >
-            提交订单
           </FaButton>
         </div>
       </template>
@@ -1726,16 +1849,196 @@ onBeforeUnmount(() => {
 <style scoped>
 .sales-order-create-page {
   --sales-order-sticky-top: calc(var(--g-slots-layout-top-height, 0px) + var(--g-header-actual-height, 0px) + var(--g-topbar-actual-height, 0px) + var(--g-main-container-padding-top, 0px) + 1rem);
+  --sales-order-review-viewport-height: calc(100dvh - var(--sales-order-sticky-top));
 }
 
 .sales-order-step-navigation {
   scroll-margin-top: var(--sales-order-sticky-top);
 }
 
-.sales-order-summary-sticky {
+.sales-order-create-layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+  transition:
+    grid-template-columns 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    column-gap 420ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sales-order-alert-stack {
+  grid-column: 1 / -1;
+}
+
+.sales-order-form-track,
+.sales-order-summary-column {
+  grid-column: 1;
+  min-width: 0;
+}
+
+.sales-order-form-track {
+  transition:
+    opacity 260ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * 表单退出流布局后仍保留淡出与位移动画；inert/aria-hidden 由模板同步控制，
+ * 因而视觉过渡期间不会留下可聚焦、可误操作的隐藏字段。
+ */
+.sales-order-create-layout--review .sales-order-form-track {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  max-height: calc(100dvh - var(--sales-order-sticky-top));
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-1.25rem);
+}
+
+.sales-order-summary-shell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.sales-order-summary-region {
+  overflow: visible;
+}
+
+.sales-order-review-heading {
+  padding: 0.25rem 0.25rem 0;
+  scroll-margin-top: var(--sales-order-sticky-top);
+}
+
+.sales-order-review-actions {
+  display: grid;
+  gap: 0.75rem;
+  backdrop-filter: blur(12px);
+}
+
+.sales-order-review-actions-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/*
+ * 操作层覆盖完整核对区域，内部 viewport 才负责 sticky。这样即使详情很长，
+ * 提交操作也会从进入核对态起停靠在可视底部，而不是等用户滚到文档末尾。
+ */
+.sales-order-review-actions-viewport {
   position: sticky;
   top: var(--sales-order-sticky-top);
-  max-height: calc(100dvh - var(--sales-order-sticky-top) - 1rem);
+  display: flex;
+  align-items: flex-end;
+  height: var(--sales-order-review-viewport-height);
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+.sales-order-review-actions-viewport > .sales-order-review-actions {
+  width: 100%;
+  pointer-events: auto;
+}
+
+.sales-order-summary-panel-enter-active,
+.sales-order-summary-panel-leave-active {
+  transition:
+    opacity 260ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sales-order-summary-panel-enter-from,
+.sales-order-summary-panel-leave-to {
+  opacity: 0;
+  transform: translateY(0.75rem);
+}
+
+.sales-order-submit-bar-enter-active,
+.sales-order-submit-bar-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.sales-order-submit-bar-enter-from,
+.sales-order-submit-bar-leave-to {
+  opacity: 0;
+  transform: translateY(calc(100% + 1rem));
+}
+
+@media (width >= 1280px) {
+  .sales-order-create-layout--form {
+    grid-template-columns: minmax(0, calc(100% - 31.5rem)) minmax(0, 30rem);
+  }
+
+  .sales-order-create-layout--review {
+    grid-template-columns: minmax(0, 0) minmax(0, 100%);
+    column-gap: 0;
+  }
+
+  .sales-order-summary-column {
+    position: sticky;
+    top: var(--sales-order-sticky-top);
+    grid-column: 2;
+    max-height: calc(100dvh - var(--sales-order-sticky-top) - 1rem);
+  }
+
+  .sales-order-create-layout--form .sales-order-summary-shell {
+    max-height: inherit;
+  }
+
+  .sales-order-create-layout--form .sales-order-summary-region {
+    overflow-y: auto;
+  }
+
+  .sales-order-create-layout--review .sales-order-form-track {
+    width: calc(100% - 31.5rem);
+  }
+}
+
+.sales-order-create-layout--review .sales-order-summary-column {
+  position: relative;
+  min-height: var(--sales-order-review-viewport-height);
+  max-height: none;
+}
+
+.sales-order-create-layout--review .sales-order-summary-shell {
+  position: relative;
+  display: flex;
+  min-height: inherit;
+}
+
+.sales-order-create-layout--review .sales-order-summary-region {
+  overflow: visible;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sales-order-create-layout,
+  .sales-order-form-track,
+  .sales-order-summary-panel-enter-active,
+  .sales-order-summary-panel-leave-active,
+  .sales-order-submit-bar-enter-active,
+  .sales-order-submit-bar-leave-active {
+    transition: none;
+  }
+
+  .sales-order-create-layout--review .sales-order-form-track {
+    transform: none;
+  }
+
+  .sales-order-summary-panel-enter-from,
+  .sales-order-summary-panel-leave-to,
+  .sales-order-submit-bar-enter-from,
+  .sales-order-submit-bar-leave-to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /*
