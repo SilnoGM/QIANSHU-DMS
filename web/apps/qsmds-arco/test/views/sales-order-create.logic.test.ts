@@ -213,19 +213,30 @@ test('现有地区域的 UUID v5 可用于客户地址快照', () => {
   assert.equal(result.valid, true)
 })
 
-test('详细地址执行 NFKC 和全部 Unicode 空白删除，并硬拦截三级、两级或城市前缀', () => {
+test('详细地址保留原文字形，并硬拦截地区全名、简称与台湾繁体前缀', () => {
   assert.equal(
     normalizeSalesOrderAddressDetail(' 苓雅区\t中正一路\u3000100\u00A0号 3 楼 '),
     '苓雅区中正一路100号3楼',
   )
+  assert.equal(
+    normalizeSalesOrderAddressDetail(' 台灣\t新竹縣\u3000測試區 22 號 '),
+    '台灣新竹縣測試區22號',
+  )
   const model = validModel()
+  model.regionNames = ['中国台湾', '台湾', '新竹县']
   for (const duplicated of [
-    '中国台湾 台湾 高雄市 苓雅区中正一路100号',
-    '台湾 高雄市 苓雅区中正一路100号',
-    '高雄市 苓雅区中正一路100号',
+    '中国台湾 台湾 新竹县 测试区测试22号',
+    '台湾 新竹县 测试区测试22号',
+    '台湾 新竹 测试区测试22号',
+    '新竹县 测试区测试22号',
+    '新竹 测试区测试22号',
+    '中國臺灣 臺灣 新竹縣 測試區測試22號',
+    '台灣 新竹縣 測試區測試22號',
+    '臺灣 新竹 測試區測試22號',
+    '新竹縣 測試區測試22號',
   ]) {
     model.addressDetail = duplicated
-    const result = buildCreateSalesOrderRequest(model, 2)
+    const result = validateSalesOrderCreateStep(model, 1, 2)
     assert.equal(result.valid, false)
     if (!result.valid) {
       assert.equal(
@@ -233,6 +244,43 @@ test('详细地址执行 NFKC 和全部 Unicode 空白删除，并硬拦截三�
         '详细地址请勿重复填写已选地区',
       )
     }
+  }
+
+  for (const [simplifiedCity, traditionalCity] of [
+    ['连江县', '連江縣'],
+    ['金门县', '金門縣'],
+    ['宜兰县', '宜蘭縣'],
+    ['云林县', '雲林縣'],
+    ['嘉义县', '嘉義縣'],
+    ['屏东县', '屏東縣'],
+    ['花莲县', '花蓮縣'],
+    ['桃园市', '桃園市'],
+  ] as const) {
+    model.regionNames = ['中国台湾', '台湾', simplifiedCity]
+    model.addressDetail = `${traditionalCity}測試區測試22號`
+    const result = validateSalesOrderCreateStep(model, 1, 2)
+    assert.equal(result.valid, false)
+  }
+
+  model.regionNames = ['中国台湾', '台湾', '新竹县']
+  for (const allowed of [
+    '测试区测试22号',
+    '測試區測試22號',
+    '测试区台湾新竹县22号',
+    '台湾新竹市测试区测试22号',
+  ]) {
+    model.addressDetail = allowed
+    assert.deepEqual(validateSalesOrderCreateStep(model, 1, 2), { valid: true })
+  }
+
+  model.addressDetail = '桃園路 22 號'
+  const preserved = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(preserved.valid, true)
+  if (preserved.valid) {
+    assert.equal(
+      preserved.request.customer.addressDetail,
+      '桃園路22號',
+    )
   }
 })
 

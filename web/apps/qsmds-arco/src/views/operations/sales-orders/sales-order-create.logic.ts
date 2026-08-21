@@ -106,11 +106,50 @@ const REGION_UUID_PATTERN
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u
 const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/u
 const ALL_UNICODE_WHITESPACE_PATTERN = /\p{White_Space}+/gu
+const TAIWAN_TRADITIONAL_REGION_CHARACTER_PATTERN = /[國臺灣縣連門蘭雲義東蓮園]/gu
 const MAXIMUM_AMOUNT_UNITS = 10n ** 30n - 1n
 const MAXIMUM_QUANTITY = 2_147_483_647
 const MAXIMUM_DOCUMENT_TITLE_LENGTH = 128
 const AMOUNT_SCALE = 10_000n
 const DEFAULT_FAILURE_MESSAGE = '销售订单保存失败，请检查后重试'
+const TAIWAN_COUNTRY_REGION_NAME = '中国台湾'
+const TAIWAN_TRADITIONAL_REGION_CHARACTER_FOLD: Readonly<Record<string, string>> = {
+  國: '国',
+  臺: '台',
+  灣: '湾',
+  縣: '县',
+  連: '连',
+  門: '门',
+  蘭: '兰',
+  雲: '云',
+  義: '义',
+  東: '东',
+  蓮: '莲',
+  園: '园',
+}
+const ADMINISTRATIVE_REGION_SUFFIXES = [
+  '联邦直辖区',
+  '聯邦直轄區',
+  '特别行政区',
+  '特別行政區',
+  '自治区',
+  '自治區',
+  '自治州',
+  '自治县',
+  '自治縣',
+  '行政区',
+  '行政區',
+  '地区',
+  '地區',
+  '省',
+  '市',
+  '县',
+  '縣',
+  '区',
+  '區',
+  '盟',
+  '旗',
+] as const
 const DOCUMENT_TYPE_LABELS: Readonly<Record<SalesOrderDocumentType, string>> = {
   DEPOSIT_VOUCHER: '定金凭证',
   DELIVERY_RECEIPT: '签收单',
@@ -375,6 +414,97 @@ export function createSalesOrderFormModel(
   }
 }
 
+interface RegionNameComparisonVariant {
+  readonly value: string
+  readonly omittedSuffix: string | null
+}
+
+interface RegionPrefixComparisonCandidate {
+  readonly value: string
+  readonly omittedTerminalSuffix: string | null
+}
+
+/**
+ * 当前地区真相源为台湾 22 个县市保留了官方繁体 sourceName。选择器没有公开该字段，
+ * 因而这里只折叠由该真相源验证过的 12 个地区字形；绝不改写用户实际保存的地址。
+ */
+function foldTaiwanTraditionalRegionCharacters(value: string): string {
+  return value.replace(
+    TAIWAN_TRADITIONAL_REGION_CHARACTER_PATTERN,
+    character => TAIWAN_TRADITIONAL_REGION_CHARACTER_FOLD[character] ?? character,
+  )
+}
+
+function findAdministrativeRegionSuffix(value: string, position: 'end' | 'start'): string | null {
+  return ADMINISTRATIVE_REGION_SUFFIXES.find(suffix => (
+    position === 'end' ? value.endsWith(suffix) : value.startsWith(suffix)
+  )) ?? null
+}
+
+function createRegionNameComparisonVariants(value: string): readonly RegionNameComparisonVariant[] {
+  const suffix = findAdministrativeRegionSuffix(value, 'end')
+  if (suffix === null || value.length === suffix.length) {
+    return [{ value, omittedSuffix: null }]
+  }
+  return [
+    { value, omittedSuffix: null },
+    { value: value.slice(0, -suffix.length), omittedSuffix: suffix },
+  ]
+}
+
+function createRegionPrefixComparisonCandidates(
+  country: string,
+  province: string,
+  city: string,
+): readonly RegionPrefixComparisonCandidate[] {
+  const countryVariants = createRegionNameComparisonVariants(country)
+  const provinceVariants = createRegionNameComparisonVariants(province)
+  const cityVariants = createRegionNameComparisonVariants(city)
+  const candidates = new Map<string, RegionPrefixComparisonCandidate>()
+
+  for (const cityVariant of cityVariants) {
+    const paths = [
+      ...countryVariants.flatMap(countryVariant => (
+        provinceVariants.map(provinceVariant => (
+          countryVariant.value + provinceVariant.value + cityVariant.value
+        ))
+      )),
+      ...provinceVariants.map(provinceVariant => (
+        provinceVariant.value + cityVariant.value
+      )),
+      cityVariant.value,
+    ]
+    for (const value of paths) {
+      if (value !== '') {
+        const key = `${value}\u0000${cityVariant.omittedSuffix ?? ''}`
+        candidates.set(key, {
+          value,
+          omittedTerminalSuffix: cityVariant.omittedSuffix,
+        })
+      }
+    }
+  }
+  return [...candidates.values()]
+}
+
+function matchesRegionPrefixCandidate(
+  detail: string,
+  candidate: RegionPrefixComparisonCandidate,
+): boolean {
+  if (!detail.startsWith(candidate.value)) {
+    return false
+  }
+  if (candidate.omittedTerminalSuffix === null) {
+    return true
+  }
+
+  // 简称后若明确填写了另一个行政后缀，说明它是不同地区。例如选“新竹县”时，
+  // “台湾新竹市…”不能因为共同前缀“新竹”被误拦截。
+  const remainder = detail.slice(candidate.value.length)
+  const explicitSuffix = findAdministrativeRegionSuffix(remainder, 'start')
+  return explicitSuffix === null || explicitSuffix === candidate.omittedTerminalSuffix
+}
+
 function addressContainsSelectedRegion(
   detail: string,
   regionNames: readonly string[],
@@ -382,11 +512,20 @@ function addressContainsSelectedRegion(
   if (regionNames.length !== 3) {
     return false
   }
-  const [country = '', province = '', city = ''] = regionNames.map(name =>
+  const [rawCountry = '', rawProvince = '', rawCity = ''] = regionNames.map(name =>
     normalizeSalesOrderAddressDetail(name))
-  return [country + province + city, province + city, city]
-    .filter(candidate => candidate !== '')
-    .some(candidate => detail.startsWith(candidate))
+  const isTaiwan = foldTaiwanTraditionalRegionCharacters(rawCountry)
+    === TAIWAN_COUNTRY_REGION_NAME
+  const comparison = (value: string) => isTaiwan
+    ? foldTaiwanTraditionalRegionCharacters(value)
+    : value
+  const country = comparison(rawCountry)
+  const province = comparison(rawProvince)
+  const city = comparison(rawCity)
+  const comparisonDetail = comparison(detail)
+
+  return createRegionPrefixComparisonCandidates(country, province, city)
+    .some(candidate => matchesRegionPrefixCandidate(comparisonDetail, candidate))
 }
 
 function normalizeQuantity(value: string): number | null {

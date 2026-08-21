@@ -240,6 +240,25 @@ describe('SalesOrderCommandService', () => {
     expect(unavailable.numbering.generateScoped).not.toHaveBeenCalled()
   })
 
+  it('rejects a traditional abbreviated region before issuing a number', async () => {
+    const fixture = setup()
+    const request = input()
+    request.customer = {
+      ...(request.customer as Record<string, unknown>),
+      addressDetail: '台灣高雄測試區測試22號',
+    }
+
+    await expect(fixture.service.create({
+      actorUserId: ACTOR_ID,
+      requestId: 'request-1',
+      idempotencyKey: IDEMPOTENCY_KEY,
+    }, request)).rejects.toMatchObject({
+      code: 'ADDRESS_DETAIL_CONTAINS_SELECTED_REGION',
+    })
+    expect(fixture.numbering.generateScoped).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrder.create).not.toHaveBeenCalled()
+  })
+
   it('returns the existing order without dependency reads or another number', async () => {
     const fixture = setup()
     const firstFingerprint = calculateSalesOrderCreateFingerprint(
