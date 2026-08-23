@@ -49,9 +49,10 @@ import { ProductCommandService } from './product-command.service'
 import { parseProductIdempotencyKey } from './product-command.normalizer'
 import { ApiProductMediaContentContract } from './media/product-media-content.contract'
 import {
-  ProductMediaContentService,
-  type ProductMediaContentResponse,
-} from './media/product-media-content.service'
+  applyProductMediaContentResponse,
+  type ProductMediaContentHttpResponse,
+} from './media/product-media-content.http'
+import { ProductMediaContentService } from './media/product-media-content.service'
 import {
   ProductMediaHttpService,
   type ProductMediaUploadResponse,
@@ -63,21 +64,6 @@ import {
   type ProductPage,
 } from './product-query.service'
 import { ProductUpdateService } from './product-update.service'
-
-interface ProductMediaContentHttpResponse {
-  setHeader(name: string, value: string): unknown
-  status(statusCode: number): unknown
-}
-
-function applyProductMediaContentResponse(
-  response: ProductMediaContentHttpResponse,
-  result: ProductMediaContentResponse,
-): void {
-  response.status(result.status)
-  for (const [name, value] of Object.entries(result.headers)) {
-    if (value !== undefined) response.setHeader(name, value)
-  }
-}
 
 @ApiTags('products')
 @Controller('products')

@@ -1,0 +1,90 @@
+import { HttpStatus } from '@nestjs/common'
+
+import type { PrismaService } from '../../../infrastructure/database/prisma.service'
+import type {
+  ProductMediaContentService,
+  ProductMediaContentResponse,
+} from '../../products/media/product-media-content.service'
+import { SalesOrderProductImageService } from './sales-order-product-image.service'
+
+const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
+const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
+const RESPONSE: ProductMediaContentResponse = {
+  status: HttpStatus.OK,
+  headers: {
+    'Accept-Ranges': 'bytes',
+    ETag: '"safe"',
+    'X-Content-Type-Options': 'nosniff',
+  },
+}
+
+function createFixture(found: object | null = { id: PRODUCT_MEDIA_ID }) {
+  const productMedia = { findFirst: jest.fn().mockResolvedValue(found) }
+  const resolve = jest.fn().mockResolvedValue(RESPONSE)
+  return {
+    productMedia,
+    resolve,
+    service: new SalesOrderProductImageService(
+      { productMedia } as unknown as PrismaService,
+      { resolve } as unknown as ProductMediaContentService,
+    ),
+  }
+}
+
+describe('SalesOrderProductImageService', () => {
+  it('revalidates sale eligibility and primary READY image before delegating content delivery', async () => {
+    const fixture = createFixture()
+
+    await expect(fixture.service.resolve(
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      'TWD',
+      '"known"',
+      'bytes=0-0',
+      'HEAD',
+    )).resolves.toBe(RESPONSE)
+
+    expect(fixture.productMedia.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: PRODUCT_MEDIA_ID,
+        productId: PRODUCT_ID,
+        kind: 'IMAGE',
+        isPrimary: true,
+        detachedAt: null,
+        mediaAsset: { is: { status: 'READY' } },
+        product: {
+          is: {
+            status: 'ACTIVE',
+            twdSalePriceAmount: { not: null },
+          },
+        },
+      },
+      select: { id: true },
+    })
+    expect(fixture.resolve).toHaveBeenCalledWith(
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      '"known"',
+      'bytes=0-0',
+      'HEAD',
+    )
+  })
+
+  it('uses one non-enumerating sales-order error for every ineligible image', async () => {
+    const fixture = createFixture(null)
+
+    await expect(fixture.service.resolve(
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      'MYR',
+      undefined,
+      undefined,
+      'GET',
+    )).rejects.toMatchObject({
+      code: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+      publicMessage: '产品主图不存在或当前不可用',
+      status: HttpStatus.NOT_FOUND,
+    })
+    expect(fixture.resolve).not.toHaveBeenCalled()
+  })
+})

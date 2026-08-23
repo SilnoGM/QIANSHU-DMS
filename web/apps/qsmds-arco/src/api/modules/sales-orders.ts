@@ -5,12 +5,16 @@ import type {
   SalesOrderPageDto,
   SalesOrderProductOptionsDto,
   SalesOrdersListData,
+  SalesOrdersProductOptionsData,
   SalesOrderTemporaryDocumentDto,
 } from '../generated/types.gen'
 
 import api from '../index'
 
 export type SalesOrderListQuery = NonNullable<SalesOrdersListData['query']>
+export type SalesOrderProductOptionsQuery = NonNullable<
+  SalesOrdersProductOptionsData['query']
+>
 export type SalesOrderCurrency = 'TWD' | 'MYR'
 
 /**
@@ -26,15 +30,11 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         signal,
       }),
     productOptions: (
-      currencyCode: SalesOrderCurrency,
-      keyword: string | undefined,
+      query: SalesOrderProductOptionsQuery,
       signal: AbortSignal,
     ) => client.get<SalesOrderProductOptionsDto>('sales-orders/product-options', {
       errorPresentation: 'local',
-      params: {
-        currencyCode,
-        ...(keyword === undefined ? {} : { keyword }),
-      },
+      params: query,
       signal,
     }),
     uploadTemporaryDocument: (

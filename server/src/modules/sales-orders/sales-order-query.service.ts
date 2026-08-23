@@ -140,9 +140,29 @@ export interface SalesOrderProductOption {
   readonly id: string
   readonly productNo: string
   readonly name: string
+  readonly supplierValue: string | null
   readonly attributes: readonly Record<string, unknown>[]
   readonly standardUnitPriceAmount: string
   readonly currencyCode: 'TWD' | 'MYR'
+  readonly mainImage: {
+    readonly id: string
+    readonly contentUrl: string
+  } | null
+}
+
+export interface SalesOrderProductOptionsQueryInput {
+  readonly currencyCode: 'TWD' | 'MYR'
+  readonly keyword?: string
+  readonly supplierValue?: string
+  readonly page?: number
+  readonly pageSize?: number
+}
+
+export interface SalesOrderProductOptionsPage {
+  readonly items: readonly SalesOrderProductOption[]
+  readonly page: number
+  readonly pageSize: number
+  readonly total: number
 }
 
 function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): string {
@@ -393,56 +413,87 @@ export class SalesOrderQueryService {
   }
 
   async productOptions(
-    currencyCode: 'TWD' | 'MYR',
-    keyword?: string,
-  ): Promise<readonly SalesOrderProductOption[]> {
-    const normalizedKeyword = keyword?.trim().normalize('NFKC')
-    const rows = await this.prisma.product.findMany({
-      where: {
-        status: 'ACTIVE',
-        ...(currencyCode === 'TWD'
-          ? { twdSalePriceAmount: { not: null } }
-          : { myrSalePriceAmount: { not: null } }),
-        ...(normalizedKeyword === undefined || normalizedKeyword.length === 0
-          ? {}
-          : {
-              OR: [
-                { productNo: { contains: normalizedKeyword, mode: 'insensitive' } },
-                { name: { contains: normalizedKeyword, mode: 'insensitive' } },
-              ],
-            }),
-      },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      take: 50,
-      select: {
-        id: true,
-        productNo: true,
-        name: true,
-        attributes: true,
-        twdSalePriceAmount: true,
-        myrSalePriceAmount: true,
-      },
-    })
-    return rows.map((row) => {
-      const standardPrice = currencyCode === 'TWD'
+    input: SalesOrderProductOptionsQueryInput,
+  ): Promise<SalesOrderProductOptionsPage> {
+    const page = input.page ?? 1
+    const pageSize = input.pageSize ?? 20
+    const normalizedKeyword = input.keyword?.trim().normalize('NFKC')
+    const where: Prisma.ProductWhereInput = {
+      status: 'ACTIVE',
+      ...(input.currencyCode === 'TWD'
+        ? { twdSalePriceAmount: { not: null } }
+        : { myrSalePriceAmount: { not: null } }),
+      ...(input.supplierValue === undefined
+        ? {}
+        : { supplierValue: input.supplierValue }),
+      ...(normalizedKeyword === undefined || normalizedKeyword.length === 0
+        ? {}
+        : {
+            OR: [
+              { productNo: { contains: normalizedKeyword, mode: 'insensitive' } },
+              { name: { contains: normalizedKeyword, mode: 'insensitive' } },
+            ],
+          }),
+    }
+    const [total, rows] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        select: {
+          id: true,
+          productNo: true,
+          name: true,
+          supplierValue: true,
+          attributes: true,
+          twdSalePriceAmount: true,
+          myrSalePriceAmount: true,
+          // 最多读取两张即可判断主图唯一性；不加载附图、视频或私有存储字段。
+          media: {
+            where: {
+              kind: 'IMAGE',
+              isPrimary: true,
+              detachedAt: null,
+              mediaAsset: { is: { status: 'READY' } },
+            },
+            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+            take: 2,
+            select: { id: true },
+          },
+        },
+      }),
+    ])
+    const items = rows.map((row) => {
+      const standardPrice = input.currencyCode === 'TWD'
         ? row.twdSalePriceAmount
         : row.myrSalePriceAmount
-      if (standardPrice === null) {
+      if (standardPrice === null || row.media.length > 1) {
         throw new ApiException(
           HttpStatus.CONFLICT,
           'SALES_ORDER_STATE_CHANGED',
-          '产品价格状态已变化，请重试',
+          '产品状态已变化，请重试',
         )
       }
+      const mainImage = row.media[0]
       return {
         id: row.id,
         productNo: row.productNo,
         name: row.name,
+        supplierValue: row.supplierValue,
         attributes: productOptionAttributes(row.attributes),
         standardUnitPriceAmount: decimalToFixed4(standardPrice),
-        currencyCode,
+        currencyCode: input.currencyCode,
+        mainImage: mainImage === undefined
+          ? null
+          : {
+              id: mainImage.id,
+              contentUrl: `/api/sales-orders/product-options/${row.id}/main-image/${mainImage.id}/content?currencyCode=${input.currencyCode}`,
+            },
       }
     })
+    return { items, page, pageSize, total }
   }
 
   async getById(salesOrderId: string): Promise<SalesOrderDetail> {

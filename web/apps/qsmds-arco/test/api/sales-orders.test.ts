@@ -40,7 +40,14 @@ test('销售订单列表和产品选项固定使用 query、AbortSignal 与局�
   }
 
   await api.list(query, controller.signal)
-  await api.productOptions('MYR', '包', controller.signal)
+  const productQuery = {
+    currencyCode: 'MYR' as const,
+    keyword: '包',
+    supplierValue: 'SUPPLIER_MY_01',
+    page: 3,
+    pageSize: 20,
+  }
+  await api.productOptions(productQuery, controller.signal)
 
   assert.deepEqual(calls, [
     {
@@ -55,7 +62,7 @@ test('销售订单列表和产品选项固定使用 query、AbortSignal 与局�
     {
       config: {
         errorPresentation: 'local',
-        params: { currencyCode: 'MYR', keyword: '包' },
+        params: productQuery,
         signal: controller.signal,
       },
       method: 'get',

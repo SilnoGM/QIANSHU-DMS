@@ -40,6 +40,8 @@ import {
   SalesOrderIdParamDto,
   SalesOrderListQueryDto,
   SalesOrderPaymentIdParamDto,
+  SalesOrderProductImageParamDto,
+  SalesOrderProductImageQueryDto,
   SalesOrderProductOptionsQueryDto,
 } from './dto/sales-order-query.dto'
 import {
@@ -50,6 +52,12 @@ import {
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { parseSalesOrderIdempotencyKey } from './sales-order-command.normalizer'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
+import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
+import {
+  applyProductMediaContentResponse,
+  type ProductMediaContentHttpResponse,
+} from '../products/media/product-media-content.http'
+import { SalesOrderProductImageService } from './products/sales-order-product-image.service'
 import {
   SalesOrderDocumentService,
   type SalesOrderDocumentContentResponse,
@@ -103,6 +111,7 @@ export class SalesOrdersController {
     private readonly commands: SalesOrderCommandService,
     private readonly mutations: SalesOrderMutationService,
     private readonly documents: SalesOrderDocumentService,
+    private readonly productImages: SalesOrderProductImageService,
   ) {}
 
   @Get()
@@ -143,15 +152,63 @@ export class SalesOrdersController {
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })
-  async productOptions(
+  productOptions(
     @Query() query: SalesOrderProductOptionsQueryDto,
   ): Promise<SalesOrderProductOptionsDto> {
-    return {
-      items: await this.queries.productOptions(
-        query.currencyCode,
-        query.keyword,
-      ),
-    }
+    return this.queries.productOptions(query)
+  }
+
+  @Head('product-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:create')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'sales_orders_head_product_option_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order product option main image.',
+  })
+  async headProductOptionMainImage(
+    @Param() params: SalesOrderProductImageParamDto,
+    @Query() query: SalesOrderProductImageQueryDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productImages.resolve(
+      params.productId,
+      params.productMediaId,
+      query.currencyCode,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get('product-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:create')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'sales_orders_get_product_option_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order product option main image.',
+  })
+  async getProductOptionMainImage(
+    @Param() params: SalesOrderProductImageParamDto,
+    @Query() query: SalesOrderProductImageQueryDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productImages.resolve(
+      params.productId,
+      params.productMediaId,
+      query.currencyCode,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
   }
 
   @Post('document-uploads')

@@ -293,12 +293,29 @@ export class SalesOrderProductOptionDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly productNo!: string
   @ApiProperty({ type: 'string' }) readonly name!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly supplierValue!: string | null
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } }) readonly attributes!: readonly Record<string, unknown>[]
   @ApiProperty({ type: 'string' }) readonly standardUnitPriceAmount!: string
   @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: string
+  @ApiProperty({
+    nullable: true,
+    type: 'object',
+    properties: {
+      id: { type: 'string', format: 'uuid' },
+      contentUrl: { type: 'string' },
+    },
+    required: ['id', 'contentUrl'],
+  })
+  readonly mainImage!: {
+    readonly id: string
+    readonly contentUrl: string
+  } | null
 }
 
 export class SalesOrderProductOptionsDto {
   @ApiProperty({ type: () => [SalesOrderProductOptionDto] })
   readonly items!: readonly SalesOrderProductOptionDto[]
+  @ApiProperty({ type: 'integer' }) readonly page!: number
+  @ApiProperty({ type: 'integer' }) readonly pageSize!: number
+  @ApiProperty({ type: 'integer' }) readonly total!: number
 }
