@@ -370,7 +370,7 @@ function formatAmountUnitsForPrecision(value: bigint, precision: number): string
 function isBlankCatalogLine(line: SalesOrderLineFormModel): boolean {
   return line.lineType === 'CATALOG'
     && line.productId === null
-    && line.actualUnitPriceAmount === null
+    && line.actualUnitPriceAmount === '0.00'
     && line.quantity === '1'
 }
 
@@ -385,7 +385,7 @@ export function createCatalogSalesOrderLine(
     name: '',
     description: '',
     standardUnitPriceAmount: null,
-    actualUnitPriceAmount: null,
+    actualUnitPriceAmount: '0.00',
     quantity: '1',
     mainImage: null,
   }
@@ -576,7 +576,10 @@ function validateLine(
       dto = {
         lineType: 'CATALOG',
         productId: line.productId,
-        actualUnitPriceAmount: formatAmountUnits(amountUnits(price)),
+        actualUnitPriceAmount: formatAmountUnitsForPrecision(
+          amountUnits(price),
+          precision,
+        ),
         quantity,
       }
     }
@@ -601,7 +604,10 @@ function validateLine(
         lineType: 'CUSTOM',
         name,
         description,
-        actualUnitPriceAmount: formatAmountUnits(amountUnits(price)),
+        actualUnitPriceAmount: formatAmountUnitsForPrecision(
+          amountUnits(price),
+          precision,
+        ),
         quantity,
       }
     }

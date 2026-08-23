@@ -69,6 +69,8 @@ test('新增销售订单默认使用空产品明细，用户添加后才创建�
   const model = createSalesOrderFormModel('TWD', '2026-08-20')
 
   assert.deepEqual(model.lines, [])
+  assert.equal(createCatalogSalesOrderLine('catalog').actualUnitPriceAmount, '0.00')
+  assert.equal(createCustomSalesOrderLine('custom').actualUnitPriceAmount, '0.00')
 })
 
 test('出单人优先显示当前用户显示名，缺失时回退用户名', () => {
@@ -309,14 +311,14 @@ test('产品数量只接受正整数，目录产品和订单临时产品映射�
       {
         lineType: 'CATALOG',
         productId: IDS.product,
-        actualUnitPriceAmount: '50.0000',
+        actualUnitPriceAmount: '50.00',
         quantity: 2,
       },
       {
         lineType: 'CUSTOM',
         name: '仅本单礼盒',
         description: '附丝带',
-        actualUnitPriceAmount: '20.0000',
+        actualUnitPriceAmount: '20.00',
         quantity: 1,
       },
     ])
@@ -329,6 +331,34 @@ test('产品数量只接受正整数，目录产品和订单临时产品映射�
     if (!invalid.valid) {
       assert.equal(invalid.fieldErrors['lines.0.quantity'], '产品数量必须是正整数')
     }
+  }
+})
+
+test('本单售价接受零和最多两位小数，第三位小数在构造请求前硬拦截', () => {
+  const model = validModel()
+  for (const [price, total] of [
+    ['0', '0'],
+    ['1', '2'],
+    ['1.2', '2.4'],
+    ['1.23', '2.46'],
+  ] as const) {
+    model.lines[0]!.actualUnitPriceAmount = price
+    model.agreedTotalAmount = total
+    model.depositDueAmount = '0'
+    model.balanceDueAmount = total
+    assert.equal(buildCreateSalesOrderRequest(model, 2).valid, true)
+  }
+
+  model.lines[0]!.actualUnitPriceAmount = '1.234'
+  model.agreedTotalAmount = '2.46'
+  model.balanceDueAmount = '2.46'
+  const invalid = buildCreateSalesOrderRequest(model, 2)
+  assert.equal(invalid.valid, false)
+  if (!invalid.valid) {
+    assert.equal(
+      invalid.fieldErrors['lines.0.actualUnitPriceAmount'],
+      '请输入有效的真实售价',
+    )
   }
 })
 

@@ -209,6 +209,8 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
             :key="line.key"
             class="align-middle border-b border-border last:border-b-0"
           >
+            <!-- FaFormItem 固定预留错误提示高度；可编辑字段下移半个提示行，使输入框
+                 与只读文字保持视觉居中，同时仍把校验信息留在输入框下方。 -->
             <td class="p-3 whitespace-nowrap">
               {{ line.lineType === 'CATALOG' ? labels.catalogProduct : labels.temporaryProduct }}
             </td>
@@ -222,6 +224,7 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
                 :label="`第 ${index + 1} 行产品名称`"
                 required
                 :auto-bind="false"
+                class="top-2 relative"
                 label-class="sr-only"
               >
                 <FaTooltip :text="line.name" :disabled="line.name === ''">
@@ -275,6 +278,7 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
                 :label="`第 ${index + 1} 行${labels.actualUnitPrice}`"
                 required
                 :auto-bind="false"
+                class="top-2 relative"
                 label-class="sr-only"
               >
                 <MoneyInput
@@ -295,6 +299,7 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
                 :label="`第 ${index + 1} 行产品数量`"
                 required
                 :auto-bind="false"
+                class="top-2 relative"
                 label-class="sr-only"
               >
                 <FaInput
@@ -322,6 +327,7 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
                 :name="`lines.${index}.description`"
                 :label="`第 ${index + 1} 行备注`"
                 :auto-bind="false"
+                class="top-2 relative"
                 label-class="sr-only"
               >
                 <FaTooltip :text="line.description" :disabled="line.description === ''">

@@ -56,7 +56,24 @@ test('ADD 与可累计 INCREMENT 一次性应用，增量保持售价和备注',
   ])
   assert.equal(result.lines[0]!.actualUnitPriceAmount, '10.2500')
   assert.equal(result.lines[0]!.description, '保留本单备注')
-  assert.equal(result.lines[1]!.actualUnitPriceAmount, '12.5000')
+  assert.equal(result.lines[1]!.actualUnitPriceAmount, '0.00')
+})
+
+test('数据库产品与临时产品新行的本单售价统一从零开始，不复制标准价', () => {
+  const temporary = createTemporaryOrderProductLine('temp-default-price')
+  const applied = applyProductSelectionChanges([], [{
+    kind: 'ADD',
+    product: catalogProduct,
+    quantity: 1,
+  }])
+
+  assert.equal(temporary.actualUnitPriceAmount, '0.00')
+  assert.equal(applied.ok, true)
+  if (!applied.ok) {
+    return
+  }
+  assert.equal(applied.lines[0]!.standardUnitPriceAmount, '12.5000')
+  assert.equal(applied.lines[0]!.actualUnitPriceAmount, '0.00')
 })
 
 test('任一变更不可信时整批失败，不部分写入原数组', () => {
@@ -118,7 +135,7 @@ test('临时产品不伪造标准价，汇总使用四位十进制定点计算',
   })
 })
 
-test('无当前币种标准价的产品可加入明细，本单售价留空且不计入标准价汇总', () => {
+test('无当前币种标准价的产品可加入明细，本单售价仍从零开始且不计入标准价汇总', () => {
   const unpricedProduct: ProductSelectorItem = {
     ...catalogProduct,
     id: 'product-unpriced',
@@ -136,13 +153,13 @@ test('无当前币种标准价的产品可加入明细，本单售价留空且�
     return
   }
   assert.equal(applied.lines[0]!.standardUnitPriceAmount, null)
-  assert.equal(applied.lines[0]!.actualUnitPriceAmount, null)
+  assert.equal(applied.lines[0]!.actualUnitPriceAmount, '0.00')
   assert.deepEqual(calculateOrderProductLineTotals([
     catalogLine,
     applied.lines[0]!,
   ], 4), {
     standardTotal: '25.0000',
-    actualTotal: null,
+    actualTotal: '20.5000',
     missingStandardPriceCount: 1,
   })
 })

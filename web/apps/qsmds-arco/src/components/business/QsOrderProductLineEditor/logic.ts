@@ -61,7 +61,7 @@ export function createTemporaryOrderProductLine(
     name: '',
     description: '',
     standardUnitPriceAmount: null,
-    actualUnitPriceAmount: null,
+    actualUnitPriceAmount: '0.00',
     quantity: '1',
     mainImage: null,
   }
@@ -170,7 +170,8 @@ export function applyProductSelectionChanges(
       name: change.product.name,
       description: '',
       standardUnitPriceAmount: change.product.standardUnitPriceAmount,
-      actualUnitPriceAmount: change.product.standardUnitPriceAmount,
+      // 本单售价属于订单录入值，不继承产品标准价；由用户基于当前订单重新确认。
+      actualUnitPriceAmount: '0.00',
       quantity: String(change.quantity),
       mainImage: change.product.mainImage,
     })
@@ -194,8 +195,8 @@ export function calculateOrderProductLineTotals(
   let actualTotalValid = true
   let missingStandardPriceCount = 0
   for (const line of lines) {
-    // 标准价缺失是允许的业务状态，本单售价为空则仍是待填写状态；两种汇总必须
-    // 独立计算，避免一个无标准价产品把其他产品可信的标准价汇总一起清空。
+    // 标准价缺失是允许的业务状态；两种汇总必须独立计算，避免一个无标准价产品
+    // 把其他产品可信的标准价汇总一起清空。
     const quantity = validQuantity(line.quantity)
     const actualPrice = amountUnits(line.actualUnitPriceAmount)
     if (quantity === null) {

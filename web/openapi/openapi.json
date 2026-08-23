@@ -36997,7 +36997,8 @@
           },
           "actualUnitPriceAmount": {
             "type": "string",
-            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
+            "description": "本单实际单价，非负且最多两位小数"
           },
           "quantity": {
             "type": "integer",

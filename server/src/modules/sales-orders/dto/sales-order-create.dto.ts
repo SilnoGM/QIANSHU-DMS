@@ -25,6 +25,7 @@ import {
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
+const ACTUAL_UNIT_PRICE_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
 export class SalesOrderCustomerInputDto {
@@ -79,9 +80,13 @@ export class SalesOrderLineInputDto {
   @IsUnicodeCodePointLength(1, 1000)
   description?: string | null
 
-  @ApiProperty({ type: 'string', pattern: AMOUNT_PATTERN.source })
+  @ApiProperty({
+    type: 'string',
+    pattern: ACTUAL_UNIT_PRICE_PATTERN.source,
+    description: '本单实际单价，非负且最多两位小数',
+  })
   @IsString()
-  @Matches(AMOUNT_PATTERN)
+  @Matches(ACTUAL_UNIT_PRICE_PATTERN)
   actualUnitPriceAmount!: string
 
   @ApiProperty({ type: 'integer', minimum: 1, maximum: 2_147_483_647 })

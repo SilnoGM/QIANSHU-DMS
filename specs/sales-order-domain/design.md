@@ -81,7 +81,7 @@ SalesOrderStatusDimension: ORDER | FULFILLMENT | PAYMENT
 - `CATALOG` 行必须有 `productId`，并保存产品编号、名称、属性、标准单价快照。
 - `CUSTOM` 行必须没有 `productId`，标准单价为空，只保存临时名称、说明和成交价。
 - `quantity` 为正整数。
-- `actualUnitPriceAmount >= 0`。
+- `actualUnitPriceAmount >= 0`，用户输入最多两位小数，领域内部仍规范化为四位定点金额。
 - `lineTotalAmount = actualUnitPriceAmount * quantity`。
 - `(salesOrderId, lineNumber)` 唯一，顺序从 1 开始且由服务端重排。
 

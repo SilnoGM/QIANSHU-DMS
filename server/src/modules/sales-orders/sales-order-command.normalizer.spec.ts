@@ -114,6 +114,47 @@ describe('normalizeSalesOrderCreateCommand', () => {
     expect(Object.isFrozen(normalized.lines)).toBe(true)
   })
 
+  it.each([
+    ['0', '0.0000'],
+    ['1', '1.0000'],
+    ['1.2', '1.2000'],
+    ['1.23', '1.2300'],
+  ])(
+    'accepts actual unit price with at most two decimal places: %s',
+    (actualUnitPriceAmount, normalizedAmount) => {
+      const input = validInput()
+      input.lines = [{
+        lineType: 'CATALOG',
+        productId: '44444444-4444-4444-8444-444444444444',
+        actualUnitPriceAmount,
+        quantity: 1,
+      }]
+      input.agreedTotalAmount = actualUnitPriceAmount
+      input.depositDueAmount = '0'
+      input.balanceDueAmount = actualUnitPriceAmount
+
+      expect(normalizeSalesOrderCreateCommand(input, TODAY).lines[0])
+        .toMatchObject({ actualUnitPriceAmount: normalizedAmount })
+    },
+  )
+
+  it('rejects a third decimal place in actual unit price', () => {
+    const input = validInput()
+    input.lines = [{
+      lineType: 'CATALOG',
+      productId: '44444444-4444-4444-8444-444444444444',
+      actualUnitPriceAmount: '1.234',
+      quantity: 1,
+    }]
+
+    const error = captureApiException(() => (
+      normalizeSalesOrderCreateCommand(input, TODAY)
+    ))
+    expect(error).toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(Object.keys(error.fieldErrors ?? {}))
+      .toEqual(['lines.0.actualUnitPriceAmount'])
+  })
+
   it('accepts canonical UUID v5 region identities from the existing region domain', () => {
     const input = validInput()
     input.customer = {

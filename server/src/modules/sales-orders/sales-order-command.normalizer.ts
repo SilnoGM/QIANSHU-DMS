@@ -27,6 +27,7 @@ const CANONICAL_UUID_V4_PATTERN =
 const CANONICAL_REGION_UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/u
+const ACTUAL_UNIT_PRICE_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 
 export interface NormalizedSalesOrderCustomerInput {
   readonly name: string
@@ -158,6 +159,17 @@ function normalizeAmountField(value: unknown, field: string): string {
   }
 }
 
+/**
+ * 本单售价是用户录入边界，只接受最多两位小数；订单领域内部仍规范化为四位定点
+ * 字符串参与乘法和持久化，避免修改既有金额计算及数据库精度。
+ */
+function normalizeActualUnitPriceField(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !ACTUAL_UNIT_PRICE_PATTERN.test(value)) {
+    return salesOrderValidationFailure(field, '必须是非负且最多两位小数的金额')
+  }
+  return normalizeAmountField(value, field)
+}
+
 function normalizeQuantityField(value: unknown, field: string): number {
   try {
     return normalizeSalesOrderQuantity(value)
@@ -237,7 +249,7 @@ function normalizeLine(
       'actualUnitPriceAmount',
       'quantity',
     ], field)
-    const actualUnitPriceAmount = normalizeAmountField(
+    const actualUnitPriceAmount = normalizeActualUnitPriceField(
       line.actualUnitPriceAmount,
       `${field}.actualUnitPriceAmount`,
     )
@@ -262,7 +274,7 @@ function normalizeLine(
       'actualUnitPriceAmount',
       'quantity',
     ], field)
-    const actualUnitPriceAmount = normalizeAmountField(
+    const actualUnitPriceAmount = normalizeActualUnitPriceField(
       line.actualUnitPriceAmount,
       `${field}.actualUnitPriceAmount`,
     )

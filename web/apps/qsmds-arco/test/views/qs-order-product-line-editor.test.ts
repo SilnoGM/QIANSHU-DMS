@@ -84,3 +84,11 @@ test('售价与产品名称列保留完整输入空间，汇总在右侧纵向�
   assert.match(source, /\{\{ labels\.actualTotal \}\}：/u)
   assert.doesNotMatch(source, /aria-label="产品金额汇总"[^>]*sm:grid-cols-2/u)
 })
+
+test('产品行垂直居中，并补偿表单错误提示预留空间造成的输入框上偏', async () => {
+  const source = await readFile(SOURCE, 'utf8')
+  const formItemOffsets = source.match(/class="top-2 relative"/gu) ?? []
+
+  assert.match(source, /class="align-middle border-b border-border last:border-b-0"/u)
+  assert.equal(formItemOffsets.length, 4)
+})

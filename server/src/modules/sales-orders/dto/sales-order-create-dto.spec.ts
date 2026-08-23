@@ -6,6 +6,7 @@ import { createValidationException } from '../../../infrastructure/http/validati
 import {
   CreateSalesOrderRequestDto,
   SalesOrderCustomerInputDto,
+  SalesOrderLineInputDto,
 } from './sales-order-create.dto'
 
 const dtoPipe = new ValidationPipe({
@@ -47,7 +48,7 @@ describe('CreateSalesOrderRequestDto', () => {
       lines: [{
         lineType: 'CATALOG',
         productId: '62f874aa-1b13-4dd0-8d6e-e67e71a3096f',
-        actualUnitPriceAmount: '100.0000',
+        actualUnitPriceAmount: '100.00',
         quantity: 2,
       }],
       agreedTotalAmount: '200.0000',
@@ -61,5 +62,33 @@ describe('CreateSalesOrderRequestDto', () => {
       metatype: CreateSalesOrderRequestDto,
       type: 'body',
     })).resolves.toBeInstanceOf(CreateSalesOrderRequestDto)
+  })
+})
+
+describe('SalesOrderLineInputDto', () => {
+  it.each(['0', '1', '1.2', '1.23'])(
+    'accepts an actual unit price with at most two decimals: %s',
+    async (actualUnitPriceAmount) => {
+      const dto = plainToInstance(SalesOrderLineInputDto, {
+        lineType: 'CATALOG',
+        productId: '62f874aa-1b13-4dd0-8d6e-e67e71a3096f',
+        actualUnitPriceAmount,
+        quantity: 1,
+      })
+
+      await expect(validate(dto)).resolves.toEqual([])
+    },
+  )
+
+  it('rejects a third decimal place in actual unit price', async () => {
+    const dto = plainToInstance(SalesOrderLineInputDto, {
+      lineType: 'CATALOG',
+      productId: '62f874aa-1b13-4dd0-8d6e-e67e71a3096f',
+      actualUnitPriceAmount: '1.234',
+      quantity: 1,
+    })
+
+    const errors = await validate(dto)
+    expect(errors.map(error => error.property)).toContain('actualUnitPriceAmount')
   })
 })
