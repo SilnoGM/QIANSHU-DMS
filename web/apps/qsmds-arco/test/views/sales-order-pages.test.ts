@@ -19,6 +19,49 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /salesOrdersApi\.list/)
 })
 
+test('销售订单列表使用八个双行复合列并展示服务端全量筛选汇总', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const columnsStart = source.indexOf('const columns:')
+  const columnsEnd = source.indexOf('function enumFilter', columnsStart)
+  const columnsSource = source.slice(columnsStart, columnsEnd)
+
+  assert.ok(columnsStart >= 0 && columnsEnd > columnsStart, '应存在稳定的销售订单列定义')
+  assert.equal(columnsSource.match(/\bid:/gu)?.length, 8)
+  for (const columnId of [
+    'orderSummary',
+    'customerSummary',
+    'productSummary',
+    'termsSummary',
+    'collectionSummary',
+    'statusSummary',
+    'documentSummary',
+    'auditSummary',
+  ]) {
+    assert.match(columnsSource, new RegExp(`id: '${columnId}'`, 'u'))
+    assert.match(source, new RegExp(`#cell-${columnId}`, 'u'))
+  }
+
+  assert.match(source, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
+  assert.match(source, /import DateTimeDisplay from '@\/components\/base\/DateTimeDisplay\/index\.vue'/u)
+  assert.match(source, /import QsTableStackedCell from '@\/components\/business\/QsGenericTable\/QsTableStackedCell\.vue'/u)
+  assert.match(source, /import QsTableStackedLine from '@\/components\/business\/QsGenericTable\/QsTableStackedLine\.vue'/u)
+  assert.match(source, /response\.data\.summariesByCurrency/u)
+  assert.match(source, /:summary-values="summaryValues"/u)
+  assert.match(source, /#summary-orderSummary/u)
+  assert.match(source, /#summary-termsSummary/u)
+  assert.match(source, /#summary-collectionSummary/u)
+  assert.match(source, /productImageItems\(/u)
+  assert.match(source, /documentImageItems\(/u)
+  assert.match(source, /data-testid="sales-order-mobile-summary"/u)
+  assert.match(source, /row\.lineSummary\.totalQuantity/u)
+  assert.match(source, /row\.lineSubtotalAmount/u)
+  assert.match(source, /row\.documentSummary\.count/u)
+  assert.match(source, /row\.depositDueAmount/u)
+  assert.match(source, /row\.balanceDueAmount/u)
+  assert.match(source, /row\.createdAt/u)
+  assert.match(source, /row\.updatedAt/u)
+})
+
 test('新增页使用四步表单与独立双栏实时订单详情', async () => {
   const source = await readFile(new URL('create.vue', ROOT), 'utf8')
 
