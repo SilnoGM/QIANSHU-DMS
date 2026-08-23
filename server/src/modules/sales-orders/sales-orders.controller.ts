@@ -38,6 +38,7 @@ import {
 } from './dto/sales-order-mutation.dto'
 import {
   SalesOrderIdParamDto,
+  SalesOrderLineProductImageParamDto,
   SalesOrderListQueryDto,
   SalesOrderPaymentIdParamDto,
   SalesOrderProductImageParamDto,
@@ -201,6 +202,57 @@ export class SalesOrdersController {
       params.productId,
       params.productMediaId,
       query.currencyCode,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
+  }
+
+  @Head(':salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:read')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'sales_orders_head_product_preview_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order list product preview image.',
+  })
+  async headProductPreviewMainImage(
+    @Param() params: SalesOrderLineProductImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productImages.resolveListPreview(
+      params.salesOrderId,
+      params.lineId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get(':salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:read')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'sales_orders_get_product_preview_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order list product preview image.',
+  })
+  async getProductPreviewMainImage(
+    @Param() params: SalesOrderLineProductImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productImages.resolveListPreview(
+      params.salesOrderId,
+      params.lineId,
+      params.productMediaId,
       ifNoneMatch,
       range,
       'GET',

@@ -9,6 +9,8 @@ import { SalesOrderProductImageService } from './sales-order-product-image.servi
 
 const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
 const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
+const SALES_ORDER_ID = '33333333-3333-4333-8333-333333333333'
+const SALES_ORDER_LINE_ID = '44444444-4444-4444-8444-444444444444'
 const RESPONSE: ProductMediaContentResponse = {
   status: HttpStatus.OK,
   headers: {
@@ -20,12 +22,16 @@ const RESPONSE: ProductMediaContentResponse = {
 
 function createFixture(found: object | null = { id: PRODUCT_MEDIA_ID }) {
   const productMedia = { findFirst: jest.fn().mockResolvedValue(found) }
+  const salesOrderLine = {
+    findFirst: jest.fn().mockResolvedValue({ productId: PRODUCT_ID }),
+  }
   const resolve = jest.fn().mockResolvedValue(RESPONSE)
   return {
     productMedia,
+    salesOrderLine,
     resolve,
     service: new SalesOrderProductImageService(
-      { productMedia } as unknown as PrismaService,
+      { productMedia, salesOrderLine } as unknown as PrismaService,
       { resolve } as unknown as ProductMediaContentService,
     ),
   }
@@ -66,6 +72,49 @@ describe('SalesOrderProductImageService', () => {
       '"known"',
       'bytes=0-0',
       'HEAD',
+    )
+  })
+
+  it('scopes a saved-order preview image to its exact catalog line', async () => {
+    const fixture = createFixture()
+
+    await expect(fixture.service.resolveListPreview(
+      SALES_ORDER_ID,
+      SALES_ORDER_LINE_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+      undefined,
+      'GET',
+    )).resolves.toBe(RESPONSE)
+
+    expect(fixture.salesOrderLine.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: SALES_ORDER_LINE_ID,
+        salesOrderId: SALES_ORDER_ID,
+        lineType: 'CATALOG',
+        productId: { not: null },
+        product: {
+          is: {
+            media: {
+              some: {
+                id: PRODUCT_MEDIA_ID,
+                kind: 'IMAGE',
+                isPrimary: true,
+                detachedAt: null,
+                mediaAsset: { is: { status: 'READY' } },
+              },
+            },
+          },
+        },
+      },
+      select: { productId: true },
+    })
+    expect(fixture.resolve).toHaveBeenCalledWith(
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+      undefined,
+      'GET',
     )
   })
 

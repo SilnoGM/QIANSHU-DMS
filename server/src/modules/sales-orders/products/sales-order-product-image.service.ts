@@ -36,6 +36,77 @@ export class SalesOrderProductImageService {
     method: 'GET' | 'HEAD',
   ): Promise<ProductMediaContentResponse> {
     void currencyCode
+    return this.resolveProductOptionImage(
+      productId,
+      productMediaId,
+      ifNoneMatch,
+      range,
+      method,
+    )
+  }
+
+  /**
+   * 已保存订单的列表摘要读取当前目录主图，但不能要求产品仍处于可销售状态；历史订单
+   * 里的产品即使后来停用，具备 sales-orders:read 的用户仍应看到其当前有效主图。
+   */
+  async resolveListPreview(
+    salesOrderId: string,
+    lineId: string,
+    productMediaId: string,
+    ifNoneMatch: unknown,
+    range: unknown,
+    method: 'GET' | 'HEAD',
+  ): Promise<ProductMediaContentResponse> {
+    let line: { readonly productId: string | null } | null
+    try {
+      line = await this.prisma.salesOrderLine.findFirst({
+        where: {
+          id: lineId,
+          salesOrderId,
+          lineType: 'CATALOG',
+          productId: { not: null },
+          product: {
+            is: {
+              media: {
+                some: {
+                  id: productMediaId,
+                  kind: 'IMAGE',
+                  isPrimary: true,
+                  detachedAt: null,
+                  mediaAsset: { is: { status: 'READY' } },
+                },
+              },
+            },
+          },
+        },
+        select: { productId: true },
+      })
+    }
+    catch {
+      throw new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'INTERNAL_ERROR',
+        '服务器内部错误',
+      )
+    }
+    if (line === null || line.productId === null) throw productImageNotFound()
+
+    return this.content.resolve(
+      line.productId,
+      productMediaId,
+      ifNoneMatch,
+      range,
+      method,
+    )
+  }
+
+  private async resolveProductOptionImage(
+    productId: string,
+    productMediaId: string,
+    ifNoneMatch: unknown,
+    range: unknown,
+    method: 'GET' | 'HEAD',
+  ): Promise<ProductMediaContentResponse> {
     let row: { readonly id: string } | null
     try {
       row = await this.prisma.productMedia.findFirst({
@@ -46,11 +117,7 @@ export class SalesOrderProductImageService {
           isPrimary: true,
           detachedAt: null,
           mediaAsset: { is: { status: 'READY' } },
-          product: {
-            is: {
-              status: 'ACTIVE',
-            },
-          },
+          product: { is: { status: 'ACTIVE' } },
         },
         select: { id: true },
       })

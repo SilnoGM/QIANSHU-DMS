@@ -264,6 +264,51 @@ export class SalesOrderDetailDto {
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly updatedAt!: string
 }
 
+export class SalesOrderListImageDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly contentUrl!: string
+}
+
+export class SalesOrderLinePreviewDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly lineId!: string
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: () => SalesOrderListImageDto, nullable: true })
+  readonly mainImage!: SalesOrderListImageDto | null
+}
+
+export class SalesOrderLineSummaryDto {
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly lineCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly totalQuantity!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly catalogCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly customCount!: number
+  @ApiProperty({ type: () => [SalesOrderLinePreviewDto] })
+  readonly previews!: readonly SalesOrderLinePreviewDto[]
+}
+
+export class SalesOrderDocumentPreviewDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ enum: SalesOrderDocumentType })
+  readonly documentType!: SalesOrderDocumentType
+  @ApiProperty({ type: 'string', nullable: true }) readonly title!: string | null
+  @ApiProperty({ enum: MediaType }) readonly mediaType!: MediaType
+  @ApiProperty({ type: 'string' }) readonly contentUrl!: string
+}
+
+export class SalesOrderDocumentSummaryDto {
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly imageCount!: number
+  @ApiProperty({ type: () => [SalesOrderDocumentPreviewDto] })
+  readonly previews!: readonly SalesOrderDocumentPreviewDto[]
+}
+
+export class SalesOrderCurrencySummaryDto {
+  @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly orderCount!: number
+  @ApiProperty({ type: 'string' }) readonly agreedTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly receivedAmount!: string
+  @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+}
+
 export class SalesOrderListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
@@ -272,18 +317,32 @@ export class SalesOrderListItemDto {
   @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: string
   @ApiProperty({ type: 'string' }) readonly customerName!: string
   @ApiProperty({ type: 'string' }) readonly customerPhone!: string
+  @ApiProperty({ type: 'string' }) readonly customerProvinceStateName!: string
   @ApiProperty({ type: 'string' }) readonly customerCityName!: string
+  @ApiProperty({ type: 'string' }) readonly customerFullAddress!: string
+  @ApiProperty({ type: 'string' }) readonly lineSubtotalAmount!: string
   @ApiProperty({ type: 'string' }) readonly agreedTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
   @ApiProperty({ type: 'string' }) readonly receivedAmount!: string
   @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ enum: SalesOrderStatus }) readonly orderStatus!: SalesOrderStatus
   @ApiProperty({ enum: SalesOrderFulfillmentStatus }) readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
   @ApiProperty({ enum: SalesOrderPaymentStatus }) readonly paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
+  @ApiProperty({ type: () => SalesOrderLineSummaryDto })
+  readonly lineSummary!: SalesOrderLineSummaryDto
+  @ApiProperty({ type: () => SalesOrderDocumentSummaryDto })
+  readonly documentSummary!: SalesOrderDocumentSummaryDto
+  @ApiProperty({ type: 'string', format: 'date-time' }) readonly createdAt!: string
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly updatedAt!: string
 }
 
 export class SalesOrderPageDto {
   @ApiProperty({ type: () => [SalesOrderListItemDto] }) readonly items!: readonly SalesOrderListItemDto[]
+  @ApiProperty({ type: () => [SalesOrderCurrencySummaryDto] })
+  readonly summariesByCurrency!: readonly SalesOrderCurrencySummaryDto[]
   @ApiProperty({ type: 'integer' }) readonly page!: number
   @ApiProperty({ type: 'integer' }) readonly pageSize!: number
   @ApiProperty({ type: 'integer' }) readonly total!: number

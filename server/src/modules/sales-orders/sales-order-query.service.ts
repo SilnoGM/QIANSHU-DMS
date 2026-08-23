@@ -2,6 +2,8 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 
 import type { Prisma } from '../../generated/prisma/client'
 import type {
+  MediaType,
+  SalesOrderDocumentType,
   SalesOrderFulfillmentStatus,
   SalesOrderPaymentStatus,
   SalesOrderStatus,
@@ -55,6 +57,75 @@ const SALES_ORDER_DETAIL_INCLUDE = {
 
 type SalesOrderDetailRow = Prisma.SalesOrderGetPayload<{
   include: typeof SALES_ORDER_DETAIL_INCLUDE
+}>
+
+const SALES_ORDER_LIST_PREVIEW_LIMIT = 3
+const SALES_ORDER_LIST_SELECT = {
+  id: true,
+  orderNo: true,
+  orderDate: true,
+  issuer: { select: { id: true, displayName: true } },
+  currencyCode: true,
+  customerName: true,
+  customerPhone: true,
+  customerProvinceStateNameSnapshot: true,
+  customerCityNameSnapshot: true,
+  customerFullAddressSnapshot: true,
+  lineSubtotalAmount: true,
+  agreedTotalAmount: true,
+  depositDueAmount: true,
+  balanceDueAmount: true,
+  remark: true,
+  orderStatus: true,
+  fulfillmentStatus: true,
+  paymentStatus: true,
+  version: true,
+  createdAt: true,
+  updatedAt: true,
+  payments: {
+    where: { voidedAt: null },
+    select: { amount: true },
+  },
+  lines: {
+    orderBy: { lineNumber: 'asc' },
+    select: {
+      id: true,
+      lineType: true,
+      productId: true,
+      productNameSnapshot: true,
+      quantity: true,
+      product: {
+        select: {
+          media: {
+            where: {
+              kind: 'IMAGE',
+              isPrimary: true,
+              detachedAt: null,
+              mediaAsset: { is: { status: 'READY' } },
+            },
+            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+            take: 1,
+            select: { id: true },
+          },
+        },
+      },
+    },
+  },
+  documents: {
+    where: { detachedAt: null },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    select: {
+      id: true,
+      mediaAssetId: true,
+      documentType: true,
+      title: true,
+      mediaAsset: { select: { mediaType: true } },
+    },
+  },
+} satisfies Prisma.SalesOrderSelect
+
+type SalesOrderListRow = Prisma.SalesOrderGetPayload<{
+  select: typeof SALES_ORDER_LIST_SELECT
 }>
 
 interface SalesOrderActor {
@@ -119,18 +190,60 @@ export interface SalesOrderListItem {
   readonly currencyCode: string
   readonly customerName: string
   readonly customerPhone: string
+  readonly customerProvinceStateName: string
   readonly customerCityName: string
+  readonly customerFullAddress: string
+  readonly lineSubtotalAmount: string
   readonly agreedTotalAmount: string
+  readonly depositDueAmount: string
+  readonly balanceDueAmount: string
   readonly receivedAmount: string
   readonly outstandingAmount: string
+  readonly remark: string | null
   readonly orderStatus: SalesOrderStatus
   readonly fulfillmentStatus: SalesOrderFulfillmentStatus
   readonly paymentStatus: SalesOrderPaymentStatus
+  readonly version: number
+  readonly lineSummary: {
+    readonly lineCount: number
+    readonly totalQuantity: number
+    readonly catalogCount: number
+    readonly customCount: number
+    readonly previews: readonly {
+      readonly lineId: string
+      readonly productName: string
+      readonly mainImage: {
+        readonly id: string
+        readonly contentUrl: string
+      } | null
+    }[]
+  }
+  readonly documentSummary: {
+    readonly count: number
+    readonly imageCount: number
+    readonly previews: readonly {
+      readonly id: string
+      readonly documentType: SalesOrderDocumentType
+      readonly title: string | null
+      readonly mediaType: MediaType
+      readonly contentUrl: string
+    }[]
+  }
+  readonly createdAt: string
   readonly updatedAt: string
+}
+
+export interface SalesOrderCurrencySummary {
+  readonly currencyCode: 'TWD' | 'MYR'
+  readonly orderCount: number
+  readonly agreedTotalAmount: string
+  readonly receivedAmount: string
+  readonly outstandingAmount: string
 }
 
 export interface SalesOrderPage {
   readonly items: readonly SalesOrderListItem[]
+  readonly summariesByCurrency: readonly SalesOrderCurrencySummary[]
   readonly page: number
   readonly pageSize: number
   readonly total: number
@@ -167,6 +280,92 @@ export interface SalesOrderProductOptionsPage {
 
 function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): string {
   return value.toFixed(4)
+}
+
+function nullableAmountUnits(
+  value: { toFixed(decimalPlaces: number): string } | null | undefined,
+): bigint {
+  return value === null || value === undefined
+    ? 0n
+    : parseSalesOrderAmountUnits(decimalToFixed4(value))
+}
+
+function listCurrencyWhere(
+  where: Prisma.SalesOrderWhereInput,
+  currencyCode: 'TWD' | 'MYR',
+): Prisma.SalesOrderWhereInput {
+  // 使用 AND 保留用户的币种筛选；当筛选币种不一致时，另一币种自然得到零条结果。
+  return { AND: [where, { currencyCode }] }
+}
+
+function mapLineSummary(row: SalesOrderListRow): SalesOrderListItem['lineSummary'] {
+  return {
+    lineCount: row.lines.length,
+    totalQuantity: row.lines.reduce((sum, line) => sum + line.quantity, 0),
+    catalogCount: row.lines.filter(line => line.lineType === 'CATALOG').length,
+    customCount: row.lines.filter(line => line.lineType === 'CUSTOM').length,
+    previews: row.lines.slice(0, SALES_ORDER_LIST_PREVIEW_LIMIT).map((line) => {
+      const mainImage = line.product?.media[0]
+      return {
+        lineId: line.id,
+        productName: line.productNameSnapshot,
+        mainImage: line.productId === null || mainImage === undefined
+          ? null
+          : {
+              id: mainImage.id,
+              contentUrl: `/api/sales-orders/${row.id}/lines/${line.id}/main-image/${mainImage.id}/content`,
+            },
+      }
+    }),
+  }
+}
+
+function mapDocumentSummary(
+  row: SalesOrderListRow,
+): SalesOrderListItem['documentSummary'] {
+  return {
+    count: row.documents.length,
+    imageCount: row.documents.filter(
+      document => document.mediaAsset.mediaType === 'IMAGE',
+    ).length,
+    previews: row.documents
+      .slice(0, SALES_ORDER_LIST_PREVIEW_LIMIT)
+      .map(document => ({
+        id: document.id,
+        documentType: document.documentType,
+        title: document.title,
+        mediaType: document.mediaAsset.mediaType,
+        contentUrl: `/api/sales-orders/${row.id}/documents/${document.id}/content`,
+      })),
+  }
+}
+
+function mapCurrencySummary(
+  currencyCode: 'TWD' | 'MYR',
+  orderAggregate: {
+    readonly _count: { readonly _all: number }
+    readonly _sum: {
+      readonly agreedTotalAmount: {
+        toFixed(decimalPlaces: number): string
+      } | null
+    }
+  },
+  paymentAggregate: {
+    readonly _sum: {
+      readonly amount: { toFixed(decimalPlaces: number): string } | null
+    }
+  },
+): SalesOrderCurrencySummary | null {
+  if (orderAggregate._count._all === 0) return null
+  const agreedUnits = nullableAmountUnits(orderAggregate._sum.agreedTotalAmount)
+  const receivedUnits = nullableAmountUnits(paymentAggregate._sum.amount)
+  return {
+    currencyCode,
+    orderCount: orderAggregate._count._all,
+    agreedTotalAmount: formatSalesOrderAmountUnits(agreedUnits),
+    receivedAmount: formatSalesOrderAmountUnits(receivedUnits),
+    outstandingAmount: formatSalesOrderAmountUnits(agreedUnits - receivedUnits),
+  }
 }
 
 function productOptionAttributes(
@@ -347,34 +546,54 @@ export class SalesOrderQueryService {
             ],
           }),
     }
-    const [total, rows] = await this.prisma.$transaction([
+    const twdWhere = listCurrencyWhere(where, 'TWD')
+    const myrWhere = listCurrencyWhere(where, 'MYR')
+    // 支持币种固定为 TWD/MYR，因此使用固定数量聚合查询，避免随列表行数增长的 N+1 查询。
+    const [
+      total,
+      rows,
+      twdOrders,
+      twdPayments,
+      myrOrders,
+      myrPayments,
+    ] = await this.prisma.$transaction([
       this.prisma.salesOrder.count({ where }),
       this.prisma.salesOrder.findMany({
         where,
         orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
-        select: {
-          id: true,
-          orderNo: true,
-          orderDate: true,
-          issuer: { select: { id: true, displayName: true } },
-          currencyCode: true,
-          customerName: true,
-          customerPhone: true,
-          customerCityNameSnapshot: true,
-          agreedTotalAmount: true,
-          orderStatus: true,
-          fulfillmentStatus: true,
-          paymentStatus: true,
-          updatedAt: true,
-          payments: {
-            where: { voidedAt: null },
-            select: { amount: true },
-          },
+        select: SALES_ORDER_LIST_SELECT,
+      }),
+      this.prisma.salesOrder.aggregate({
+        where: twdWhere,
+        _count: { _all: true },
+        _sum: { agreedTotalAmount: true },
+      }),
+      this.prisma.salesOrderPayment.aggregate({
+        where: {
+          voidedAt: null,
+          salesOrder: { is: twdWhere },
         },
+        _sum: { amount: true },
+      }),
+      this.prisma.salesOrder.aggregate({
+        where: myrWhere,
+        _count: { _all: true },
+        _sum: { agreedTotalAmount: true },
+      }),
+      this.prisma.salesOrderPayment.aggregate({
+        where: {
+          voidedAt: null,
+          salesOrder: { is: myrWhere },
+        },
+        _sum: { amount: true },
       }),
     ])
+    const summariesByCurrency = [
+      mapCurrencySummary('TWD', twdOrders, twdPayments),
+      mapCurrencySummary('MYR', myrOrders, myrPayments),
+    ].filter(summary => summary !== null)
     return {
       items: rows.map((row) => {
         const agreedUnits = parseSalesOrderAmountUnits(
@@ -394,18 +613,29 @@ export class SalesOrderQueryService {
           currencyCode: row.currencyCode,
           customerName: row.customerName,
           customerPhone: row.customerPhone,
+          customerProvinceStateName: row.customerProvinceStateNameSnapshot,
           customerCityName: row.customerCityNameSnapshot,
+          customerFullAddress: row.customerFullAddressSnapshot,
+          lineSubtotalAmount: decimalToFixed4(row.lineSubtotalAmount),
           agreedTotalAmount: formatSalesOrderAmountUnits(agreedUnits),
+          depositDueAmount: decimalToFixed4(row.depositDueAmount),
+          balanceDueAmount: decimalToFixed4(row.balanceDueAmount),
           receivedAmount: formatSalesOrderAmountUnits(receivedUnits),
           outstandingAmount: formatSalesOrderAmountUnits(
             agreedUnits - receivedUnits,
           ),
+          remark: row.remark,
           orderStatus: row.orderStatus,
           fulfillmentStatus: row.fulfillmentStatus,
           paymentStatus: row.paymentStatus,
+          version: row.version,
+          lineSummary: mapLineSummary(row),
+          documentSummary: mapDocumentSummary(row),
+          createdAt: row.createdAt.toISOString(),
           updatedAt: row.updatedAt.toISOString(),
         }
       }),
+      summariesByCurrency,
       page,
       pageSize,
       total,

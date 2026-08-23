@@ -28126,6 +28126,1168 @@
         }
       }
     },
+    "/api/sales-orders/{salesOrderId}/lines/{lineId}/main-image/{productMediaId}/content": {
+      "head": {
+        "operationId": "sales_orders_head_product_preview_main_image",
+        "parameters": [
+          {
+            "name": "salesOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productMediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^bytes="
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized sales-order list product preview image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Authorized sales-order list product preview image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The current opaque ETag matches If-None-Match.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested application-delivery byte range is invalid or unsatisfied.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "sales-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      },
+      "get": {
+        "operationId": "sales_orders_get_product_preview_main_image",
+        "parameters": [
+          {
+            "name": "salesOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productMediaId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Range",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^bytes="
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized sales-order list product preview image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/x-m4v": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "206": {
+            "description": "Authorized sales-order list product preview image.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Disposition": {
+                "description": "Inline disposition with a sanitized ASCII filename.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Content-Length": {
+                "description": "Selected representation length for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d+$"
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "Content-Type": {
+                "description": "Trusted media type derived from validated persisted metadata.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4",
+                    "video/quicktime",
+                    "video/webm",
+                    "video/x-m4v"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Accel-Redirect": {
+                "description": "Optional protected internal proxy location selected after authorization.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/quicktime": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/webm": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "video/x-m4v": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "The current opaque ETag matches If-None-Match.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "416": {
+            "description": "The requested application-delivery byte range is invalid or unsatisfied.",
+            "headers": {
+              "Accept-Ranges": {
+                "description": "Byte-range capability is implemented by the selected private delivery mode.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "bytes"
+                  ]
+                }
+              },
+              "Content-Range": {
+                "description": "Selected or unsatisfied byte range for application delivery.",
+                "schema": {
+                  "type": "string",
+                  "pattern": "^bytes "
+                }
+              },
+              "ETag": {
+                "description": "Opaque strong entity tag for conditional requests.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Content-Type-Options": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "nosniff"
+                  ]
+                }
+              },
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "sales-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            },
+            {
+              "status": 503,
+              "codes": [
+                "MEDIA_STORAGE_UNAVAILABLE"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/sales-orders/document-uploads": {
       "post": {
         "operationId": "sales_orders_upload_temporary_document",
@@ -36673,6 +37835,145 @@
           "displayName"
         ]
       },
+      "SalesOrderListImageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contentUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "contentUrl"
+        ]
+      },
+      "SalesOrderLinePreviewDto": {
+        "type": "object",
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "mainImage": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrderListImageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lineId",
+          "productName",
+          "mainImage"
+        ]
+      },
+      "SalesOrderLineSummaryDto": {
+        "type": "object",
+        "properties": {
+          "lineCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalQuantity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "catalogCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "customCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesOrderLinePreviewDto"
+            }
+          }
+        },
+        "required": [
+          "lineCount",
+          "totalQuantity",
+          "catalogCount",
+          "customCount",
+          "previews"
+        ]
+      },
+      "SalesOrderDocumentPreviewDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "DEPOSIT_VOUCHER",
+              "DELIVERY_RECEIPT",
+              "OTHER"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "IMAGE",
+              "VIDEO",
+              "DOCUMENT"
+            ]
+          },
+          "contentUrl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "documentType",
+          "title",
+          "mediaType",
+          "contentUrl"
+        ]
+      },
+      "SalesOrderDocumentSummaryDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "imageCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesOrderDocumentPreviewDto"
+            }
+          }
+        },
+        "required": [
+          "count",
+          "imageCount",
+          "previews"
+        ]
+      },
       "SalesOrderListItemDto": {
         "type": "object",
         "properties": {
@@ -36703,10 +38004,25 @@
           "customerPhone": {
             "type": "string"
           },
+          "customerProvinceStateName": {
+            "type": "string"
+          },
           "customerCityName": {
             "type": "string"
           },
+          "customerFullAddress": {
+            "type": "string"
+          },
+          "lineSubtotalAmount": {
+            "type": "string"
+          },
           "agreedTotalAmount": {
+            "type": "string"
+          },
+          "depositDueAmount": {
+            "type": "string"
+          },
+          "balanceDueAmount": {
             "type": "string"
           },
           "receivedAmount": {
@@ -36714,6 +38030,10 @@
           },
           "outstandingAmount": {
             "type": "string"
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
           },
           "orderStatus": {
             "type": "string",
@@ -36740,6 +38060,20 @@
               "PAID"
             ]
           },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lineSummary": {
+            "$ref": "#/components/schemas/SalesOrderLineSummaryDto"
+          },
+          "documentSummary": {
+            "$ref": "#/components/schemas/SalesOrderDocumentSummaryDto"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "updatedAt": {
             "type": "string",
             "format": "date-time"
@@ -36753,14 +38087,56 @@
           "currencyCode",
           "customerName",
           "customerPhone",
+          "customerProvinceStateName",
           "customerCityName",
+          "customerFullAddress",
+          "lineSubtotalAmount",
           "agreedTotalAmount",
+          "depositDueAmount",
+          "balanceDueAmount",
           "receivedAmount",
           "outstandingAmount",
+          "remark",
           "orderStatus",
           "fulfillmentStatus",
           "paymentStatus",
+          "version",
+          "lineSummary",
+          "documentSummary",
+          "createdAt",
           "updatedAt"
+        ]
+      },
+      "SalesOrderCurrencySummaryDto": {
+        "type": "object",
+        "properties": {
+          "currencyCode": {
+            "type": "string",
+            "enum": [
+              "TWD",
+              "MYR"
+            ]
+          },
+          "orderCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "agreedTotalAmount": {
+            "type": "string"
+          },
+          "receivedAmount": {
+            "type": "string"
+          },
+          "outstandingAmount": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currencyCode",
+          "orderCount",
+          "agreedTotalAmount",
+          "receivedAmount",
+          "outstandingAmount"
         ]
       },
       "SalesOrderPageDto": {
@@ -36770,6 +38146,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/SalesOrderListItemDto"
+            }
+          },
+          "summariesByCurrency": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesOrderCurrencySummaryDto"
             }
           },
           "page": {
@@ -36784,6 +38166,7 @@
         },
         "required": [
           "items",
+          "summariesByCurrency",
           "page",
           "pageSize",
           "total"

@@ -138,6 +138,16 @@ export class SalesOrderIdParamDto {
   salesOrderId!: string
 }
 
+export class SalesOrderLineProductImageParamDto extends SalesOrderIdParamDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
+  lineId!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
+  productMediaId!: string
+}
+
 export class SalesOrderPaymentIdParamDto extends SalesOrderIdParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)

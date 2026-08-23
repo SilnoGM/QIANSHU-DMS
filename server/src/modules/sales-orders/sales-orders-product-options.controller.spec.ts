@@ -26,15 +26,16 @@ function createController(result: ProductMediaContentResponse) {
     items: [], page: 1, pageSize: 20, total: 0,
   })
   const resolve = jest.fn().mockResolvedValue(result)
+  const resolveListPreview = jest.fn().mockResolvedValue(result)
   const controller = new SalesOrdersController(
     { productOptions } as unknown as SalesOrderQueryService,
     {} as SalesOrderCommandService,
     {} as SalesOrderMutationService,
     {} as SalesOrderDocumentService,
-    { resolve } as unknown as SalesOrderProductImageService,
+    { resolve, resolveListPreview } as unknown as SalesOrderProductImageService,
   )
   const response = { status: jest.fn(), setHeader: jest.fn() }
-  return { controller, productOptions, resolve, response }
+  return { controller, productOptions, resolve, resolveListPreview, response }
 }
 
 @Module({
@@ -53,7 +54,7 @@ function createController(result: ProductMediaContentResponse) {
     useValue: {},
   }, {
     provide: SalesOrderProductImageService,
-    useValue: { resolve: jest.fn() },
+    useValue: { resolve: jest.fn(), resolveListPreview: jest.fn() },
   }],
 })
 class SalesOrderProductOptionsContractModule {}
@@ -120,6 +121,52 @@ describe('SalesOrdersController product options', () => {
       )).toEqual(['sales-orders:create'])
     }
   })
+
+  it('serves list preview images through an independent read-authorized route', async () => {
+    const stream = Readable.from(Buffer.from('image'))
+    const fixture = createController({
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Type': 'image/webp',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      stream,
+    })
+    const params = {
+      salesOrderId: '33333333-3333-4333-8333-333333333333',
+      lineId: '44444444-4444-4444-8444-444444444444',
+      productMediaId: PRODUCT_MEDIA_ID,
+    }
+
+    await fixture.controller.headProductPreviewMainImage(
+      params, '"known"', 'bytes=0-0', fixture.response,
+    )
+    const body = await fixture.controller.getProductPreviewMainImage(
+      params, undefined, undefined, fixture.response,
+    )
+
+    expect(fixture.resolveListPreview).toHaveBeenNthCalledWith(
+      1, params.salesOrderId, params.lineId, PRODUCT_MEDIA_ID,
+      '"known"', 'bytes=0-0', 'HEAD',
+    )
+    expect(fixture.resolveListPreview).toHaveBeenNthCalledWith(
+      2, params.salesOrderId, params.lineId, PRODUCT_MEDIA_ID,
+      undefined, undefined, 'GET',
+    )
+    expect(body).toBeInstanceOf(StreamableFile)
+
+    const reflector = new Reflector()
+    for (const method of [
+      'headProductPreviewMainImage', 'getProductPreviewMainImage',
+    ] as const) {
+      expect(reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        SalesOrdersController.prototype[method],
+      )).toEqual(['sales-orders:read'])
+    }
+  })
 })
 
 describe('SalesOrdersController product options OpenAPI', () => {
@@ -163,6 +210,25 @@ describe('SalesOrdersController product options OpenAPI', () => {
       expect(errors).toContainEqual({
         status: 404,
         codes: ['SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND'],
+      })
+    }
+  })
+
+  it('publishes independent read-authorized list preview image operations', () => {
+    const imagePath = document.paths[
+      '/api/sales-orders/{salesOrderId}/lines/{lineId}/main-image/{productMediaId}/content'
+    ]
+    const get: ContractOperation | undefined = imagePath?.get
+    const head: ContractOperation | undefined = imagePath?.head
+
+    expect(get?.operationId).toBe('sales_orders_get_product_preview_main_image')
+    expect(head?.operationId).toBe('sales_orders_head_product_preview_main_image')
+    for (const operation of [get, head]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      expect(operation?.['x-qianshu-contract']).toMatchObject({
+        authorization: true,
+        resourceLocator: true,
+        privateNoStore: true,
       })
     }
   })
