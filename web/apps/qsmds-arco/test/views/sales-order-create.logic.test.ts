@@ -32,7 +32,7 @@ const IDS = {
 }
 
 function validModel() {
-  const model = createSalesOrderFormModel('TWD', '2026-08-20', () => 'line-1')
+  const model = createSalesOrderFormModel('TWD', '2026-08-20')
   model.customerName = ' 王小明 '
   model.customerPhone = ' 0912345678 '
   model.region = {
@@ -63,6 +63,12 @@ test('币种路由只接受单值 TWD/MYR，缺失、数组与其他币种均拒
   assert.equal(parseSalesOrderCurrency(undefined), null)
   assert.equal(parseSalesOrderCurrency(['TWD']), null)
   assert.equal(parseSalesOrderCurrency('CNY'), null)
+})
+
+test('新增销售订单默认使用空产品明细，用户添加后才创建产品行', () => {
+  const model = createSalesOrderFormModel('TWD', '2026-08-20')
+
+  assert.deepEqual(model.lines, [])
 })
 
 test('出单人优先显示当前用户显示名，缺失时回退用户名', () => {

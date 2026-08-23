@@ -96,9 +96,7 @@ const formError = ref('')
 const formFailure = shallowRef<SalesOrderApiFailure | null>(null)
 const submission = shallowRef<SalesOrderSubmissionState>(createSalesOrderSubmissionState())
 const productOptions = ref<Awaited<ReturnType<typeof salesOrdersApi.productOptions>>['data']['items']>([])
-const productSearchKeyword = ref('')
 const productLoading = ref(false)
-const productSearchPending = ref(false)
 const productError = ref('')
 const documentUploading = ref(false)
 const documentUploadError = ref('')
@@ -122,7 +120,6 @@ const documentPreviewRegistry = createSalesOrderDocumentPreviewRegistry()
 const documentPreviewSnapshot = shallowRef<Readonly<Record<string, string>>>({})
 let productRequestVersion = 0
 let productAbortController: AbortController | null = null
-let productSearchTimer: ReturnType<typeof setTimeout> | null = null
 let submitRequestVersion = 0
 let submitAbortController: AbortController | null = null
 let documentAbortController: AbortController | null = null
@@ -220,27 +217,6 @@ const salesOrderDescModel = computed(() => mapSalesOrderCreateFormToDesc(
     lineSubtotalAmount: lineSubtotalAmount.value,
   },
 ))
-const productResultDescription = computed(() => {
-  if (productError.value !== '') {
-    return ''
-  }
-  if (productSearchPending.value) {
-    return '正在准备搜索当前币种的产品…'
-  }
-  if (productLoading.value) {
-    return `正在加载 ${formModel.value.currencyCode} 产品…`
-  }
-  const keyword = productSearchKeyword.value.trim().normalize('NFKC')
-  const count = productOptions.value.length
-  if (count > 0) {
-    return keyword === ''
-      ? `当前有 ${count} 项可选的 ${formModel.value.currencyCode} 产品。`
-      : `找到 ${count} 项与“${keyword}”匹配的 ${formModel.value.currencyCode} 产品。`
-  }
-  return keyword === ''
-    ? `当前没有已启用且有 ${formModel.value.currencyCode} 标准价的数据库产品，可新增仅本订单产品。`
-    : `未找到与“${keyword}”匹配的产品；仅可选择已启用且有 ${formModel.value.currencyCode} 标准价的产品。`
-})
 const submitLocked = computed(() => submission.value.phase !== 'editing')
 const shouldConfirmDiscard = computed(() => (
   submission.value.phase === 'unknown'
@@ -506,22 +482,16 @@ async function loadProductOptions(): Promise<void> {
   if (!canCreate.value || selectedCurrency === null) {
     return
   }
-  if (productSearchTimer !== null) {
-    clearTimeout(productSearchTimer)
-    productSearchTimer = null
-  }
-  productSearchPending.value = false
   productAbortController?.abort()
   const controller = new AbortController()
   productAbortController = controller
   const version = ++productRequestVersion
   productLoading.value = true
   productError.value = ''
-  const keyword = productSearchKeyword.value.trim().normalize('NFKC')
   try {
     const response = await salesOrdersApi.productOptions(
       selectedCurrency,
-      keyword === '' ? undefined : keyword,
+      undefined,
       controller.signal,
     )
     if (version === productRequestVersion && !controller.signal.aborted) {
@@ -538,37 +508,6 @@ async function loadProductOptions(): Promise<void> {
       productLoading.value = false
     }
   }
-}
-
-function runProductSearch(): void {
-  if (productSearchTimer !== null) {
-    clearTimeout(productSearchTimer)
-    productSearchTimer = null
-  }
-  productSearchPending.value = false
-  void loadProductOptions()
-}
-
-function handleProductSearchKeyword(value: unknown): void {
-  productSearchKeyword.value = String(value ?? '')
-  if (!canCreate.value || selectedCurrency === null || submitLocked.value) {
-    return
-  }
-
-  // 输入变化后立即废弃旧请求，避免旧关键字响应覆盖即将开始的新搜索。
-  productAbortController?.abort()
-  productRequestVersion += 1
-  productLoading.value = false
-  productError.value = ''
-  productSearchPending.value = true
-  if (productSearchTimer !== null) {
-    clearTimeout(productSearchTimer)
-  }
-  productSearchTimer = setTimeout(() => {
-    productSearchTimer = null
-    productSearchPending.value = false
-    void loadProductOptions()
-  }, 300)
 }
 
 function openFilePicker(): void {
@@ -1105,10 +1044,6 @@ onBeforeUnmount(() => {
   productRequestVersion += 1
   submitRequestVersion += 1
   productAbortController?.abort()
-  if (productSearchTimer !== null) {
-    clearTimeout(productSearchTimer)
-    productSearchTimer = null
-  }
   submitAbortController?.abort()
   documentAbortController?.abort()
   clearDocumentPreviews()
@@ -1348,38 +1283,13 @@ onBeforeUnmount(() => {
                   description="选择当前币种的数据库产品，或新增仅用于本订单的临时产品。"
                   content-class="min-w-0"
                 >
-                  <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <FaFormItem name="productSearchKeyword" label="搜索数据库产品" :auto-bind="false" class="m-0 flex-1">
-                      <FaInput
-                        :model-value="productSearchKeyword"
-                        type="text"
-                        inputmode="search"
-                        enterkeyhint="search"
-                        class="w-full"
-                        placeholder="输入产品编号或名称，最多返回 50 项"
-                        :disabled="submitLocked"
-                        @update:model-value="handleProductSearchKeyword"
-                        @keydown.enter.prevent="runProductSearch"
-                      />
-                    </FaFormItem>
-                    <FaButton
-                      type="button"
-                      variant="outline"
-                      class="min-h-11 sm:min-h-9"
-                      :loading="productLoading"
-                      :disabled="submitLocked"
-                      @click="runProductSearch"
-                    >
-                      搜索产品
-                    </FaButton>
-                  </div>
                   <p
-                    v-if="productResultDescription"
+                    v-if="productLoading"
                     class="text-xs text-muted-foreground m-0 mb-4"
                     role="status"
                     aria-live="polite"
                   >
-                    {{ productResultDescription }}
+                    正在加载 {{ formModel.currencyCode }} 产品…
                   </p>
                   <FaAlert
                     v-if="productError"
@@ -1402,11 +1312,11 @@ onBeforeUnmount(() => {
 
               <aside class="min-w-0">
                 <FaCard
-                  title="销售与付款约定"
+                  title="销售与付款信息"
                   description="两条金额等式均采用硬拦截，服务端会再次复核。"
-                  content-class="gap-4 grid grid-cols-1 md:grid-cols-2"
+                  content-class="gap-4 grid grid-cols-1 md:grid-cols-3"
                 >
-                  <div class="p-4 border border-border rounded-lg bg-muted/25 md:col-span-2">
+                  <div class="p-4 border border-border rounded-lg bg-muted/25 md:col-span-3">
                     <p class="text-xs text-muted-foreground m-0">
                       产品明细汇总
                     </p>
@@ -1418,7 +1328,7 @@ onBeforeUnmount(() => {
                       />
                     </div>
                   </div>
-                  <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :auto-bind="false" class="md:col-span-2">
+                  <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :auto-bind="false">
                     <MoneyInput
                       v-model="formModel.agreedTotalAmount"
                       :currency="formModel.currencyCode"
@@ -1451,7 +1361,7 @@ onBeforeUnmount(() => {
                       @update:model-value="clearFeedback('balanceDueAmount')"
                     />
                   </FaFormItem>
-                  <div class="text-xs text-muted-foreground leading-5 p-3 border border-border rounded-lg md:col-span-2">
+                  <div class="text-xs text-muted-foreground leading-5 p-3 border border-border rounded-lg md:col-span-3">
                     销售总价 = 明细汇总；定金 + 尾款 = 销售总价。实际收款将在订单创建后单独记录。
                   </div>
                 </FaCard>

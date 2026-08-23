@@ -306,11 +306,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
   })
 
   await runSalesOrderBrowserStep('TWD product filter and sales values', async () => {
-    await fillLabelledControl(page, '搜索数据库产品', 'PRODUCT-BROWSER-001')
-    await page.waitFor(`document.body.innerText.includes(
-      '找到 1 项与“PRODUCT-BROWSER-001”匹配的 TWD 产品。'
-    )`)
-
+    await page.waitFor(`document.body.innerText.includes('暂无产品明细')`)
+    await clickVisibleButton(page, '添加数据库产品')
+    await fillLabelledControl(page, '数据库产品', 'PRODUCT-BROWSER-001')
     await openLabelledProductControl(page, '数据库产品')
     const productControlSource = labelledControlSource('数据库产品')
     const optionLabels = await page.evaluate(`(() => {

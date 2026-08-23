@@ -397,7 +397,6 @@ export function createCustomSalesOrderLine(
 export function createSalesOrderFormModel(
   currencyCode: SalesOrderCurrency,
   today: string,
-  keyFactory: () => string = newKey,
 ): SalesOrderFormModel {
   return {
     orderDate: today,
@@ -411,7 +410,8 @@ export function createSalesOrderFormModel(
     },
     regionNames: [],
     addressDetail: '',
-    lines: [createCatalogSalesOrderLine(keyFactory())],
+    // 新增页先展示空表格，避免把尚未由用户选择的目录产品误认为真实订单明细。
+    lines: [],
     agreedTotalAmount: null,
     depositDueAmount: null,
     balanceDueAmount: null,
