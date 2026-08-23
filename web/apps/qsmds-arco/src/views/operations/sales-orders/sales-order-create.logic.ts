@@ -25,6 +25,11 @@ export interface SalesOrderLineFormModel {
   standardUnitPriceAmount: string | null
   actualUnitPriceAmount: string | null
   quantity: string
+  /** 只用于创建会话展示，构建订单 DTO 时必须显式忽略。 */
+  mainImage: null | {
+    readonly id: string
+    readonly contentUrl: string
+  }
 }
 
 export interface SalesOrderDocumentFormModel extends SalesOrderTemporaryDocumentDto {
@@ -382,6 +387,7 @@ export function createCatalogSalesOrderLine(
     standardUnitPriceAmount: null,
     actualUnitPriceAmount: null,
     quantity: '1',
+    mainImage: null,
   }
 }
 

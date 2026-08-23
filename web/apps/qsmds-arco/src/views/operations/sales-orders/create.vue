@@ -11,6 +11,7 @@ import type {
   SalesOrderSubmittingState,
   SalesOrderUnknownState,
 } from './sales-order-create.logic'
+import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 import type { RegionSelectorChange } from '@/components/business/QsRegionSelector/types'
 
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
@@ -95,9 +96,6 @@ const fieldErrors = ref<SalesOrderFieldErrors>({})
 const formError = ref('')
 const formFailure = shallowRef<SalesOrderApiFailure | null>(null)
 const submission = shallowRef<SalesOrderSubmissionState>(createSalesOrderSubmissionState())
-const productOptions = ref<Awaited<ReturnType<typeof salesOrdersApi.productOptions>>['data']['items']>([])
-const productLoading = ref(false)
-const productError = ref('')
 const documentUploading = ref(false)
 const documentUploadError = ref('')
 const discardVisible = ref(false)
@@ -118,8 +116,6 @@ const fileInputRef = useTemplateRef<HTMLInputElement>('fileInputRef')
 const appliedFormErrorFields = new Set<string>()
 const documentPreviewRegistry = createSalesOrderDocumentPreviewRegistry()
 const documentPreviewSnapshot = shallowRef<Readonly<Record<string, string>>>({})
-let productRequestVersion = 0
-let productAbortController: AbortController | null = null
 let submitRequestVersion = 0
 let submitAbortController: AbortController | null = null
 let documentAbortController: AbortController | null = null
@@ -478,35 +474,17 @@ function handleLinesUpdate(lines: typeof formModel.value.lines): void {
   clearFeedback('agreedTotalAmount')
 }
 
-async function loadProductOptions(): Promise<void> {
-  if (!canCreate.value || selectedCurrency === null) {
-    return
-  }
-  productAbortController?.abort()
-  const controller = new AbortController()
-  productAbortController = controller
-  const version = ++productRequestVersion
-  productLoading.value = true
-  productError.value = ''
-  try {
-    const response = await salesOrdersApi.productOptions(
-      selectedCurrency,
-      undefined,
-      controller.signal,
-    )
-    if (version === productRequestVersion && !controller.signal.aborted) {
-      productOptions.value = response.data.items
-    }
-  }
-  catch (error) {
-    if (!isSalesOrderAbortError(error) && version === productRequestVersion) {
-      productError.value = getSalesOrderApiFailure(error).message
-    }
-  }
-  finally {
-    if (version === productRequestVersion) {
-      productLoading.value = false
-    }
+const loadSalesOrderProducts: ProductPageLoader = async (query, signal) => {
+  const response = await salesOrdersApi.productOptions(query, signal)
+  return {
+    page: response.data.page,
+    pageSize: response.data.pageSize,
+    total: response.data.total,
+    items: response.data.items.map(item => ({
+      ...item,
+      // OpenAPI 对 nullable object 生成 optional；组件边界统一收敛为显式 null。
+      mainImage: item.mainImage ?? null,
+    })),
   }
 }
 
@@ -1037,13 +1015,10 @@ onMounted(() => {
     return
   }
   window.addEventListener('beforeunload', handleBeforeUnload)
-  void loadProductOptions()
 })
 
 onBeforeUnmount(() => {
-  productRequestVersion += 1
   submitRequestVersion += 1
-  productAbortController?.abort()
   submitAbortController?.abort()
   documentAbortController?.abort()
   clearDocumentPreviews()
@@ -1283,28 +1258,13 @@ onBeforeUnmount(() => {
                   description="选择当前币种的数据库产品，或新增仅用于本订单的临时产品。"
                   content-class="min-w-0"
                 >
-                  <p
-                    v-if="productLoading"
-                    class="text-xs text-muted-foreground m-0 mb-4"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    正在加载 {{ formModel.currencyCode }} 产品…
-                  </p>
-                  <FaAlert
-                    v-if="productError"
-                    title="产品选项加载失败"
-                    :description="productError"
-                    variant="destructive"
-                    class="mb-4"
-                  />
                   <SalesOrderLines
                     :model-value="formModel.lines"
                     :currency="formModel.currencyCode"
                     :currencies="fixedCurrencies"
                     :disabled="submitLocked"
                     :field-errors="fieldErrors"
-                    :product-options="productOptions"
+                    :load-products="loadSalesOrderProducts"
                     @update:model-value="handleLinesUpdate"
                   />
                 </FaCard>
@@ -1316,18 +1276,6 @@ onBeforeUnmount(() => {
                   description="两条金额等式均采用硬拦截，服务端会再次复核。"
                   content-class="gap-4 grid grid-cols-1 md:grid-cols-3"
                 >
-                  <div class="p-4 border border-border rounded-lg bg-muted/25 md:col-span-3">
-                    <p class="text-xs text-muted-foreground m-0">
-                      产品明细汇总
-                    </p>
-                    <div class="qs-type-data-emphasis mt-1">
-                      <AmountDisplay
-                        :value="lineSubtotalAmount"
-                        :currency="formModel.currencyCode"
-                        :currencies="fixedCurrencies"
-                      />
-                    </div>
-                  </div>
                   <FaFormItem name="agreedTotalAmount" label="手填销售总价" required :auto-bind="false">
                     <MoneyInput
                       v-model="formModel.agreedTotalAmount"
