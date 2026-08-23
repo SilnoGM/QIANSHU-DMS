@@ -67,7 +67,7 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /data-testid="sales-order-submit-confirmation"/u)
   assert.match(source, /确认提交销售订单？/u)
   assert.match(source, /返回检查/u)
-  assert.match(source, /确认保存并派号/u)
+  assert.match(source, /确认提交订单/u)
   assert.match(source, /const submitReady = computed/u)
   assert.match(source, /:disabled="!submitReady"/u)
   assert.doesNotMatch(source, /<FaForm[\s\S]*?@submit(?:\.|=)/u)

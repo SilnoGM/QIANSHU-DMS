@@ -123,7 +123,7 @@ test('产品与销售步骤分别硬拦截明细总价和定金尾款不一致',
   assert.equal(result.valid, false)
   if (!result.valid) {
     assert.deepEqual(result.fieldErrors, {
-      balanceDueAmount: '约定定金与尾款之和必须等于销售总价',
+      balanceDueAmount: '定金与尾款之和必须等于销售总价',
     })
   }
 
@@ -342,7 +342,7 @@ test('真实售价乘数量精确汇总，手填总价或定金尾款不相等�
   result = buildCreateSalesOrderRequest(model, 2)
   assert.equal(result.valid, false)
   if (!result.valid) {
-    assert.equal(result.fieldErrors.balanceDueAmount, '约定定金与尾款之和必须等于销售总价')
+    assert.equal(result.fieldErrors.balanceDueAmount, '定金与尾款之和必须等于销售总价')
   }
 })
 

@@ -346,13 +346,13 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await fillLabelledControl(page, '真实售价', '100')
     await fillLabelledControl(page, '产品数量', '2')
     await fillLabelledControl(page, '手填销售总价', '200')
-    await fillLabelledControl(page, '约定定金', '50')
-    await fillLabelledControl(page, '约定尾款', '150')
+    await fillLabelledControl(page, '定金', '50')
+    await fillLabelledControl(page, '尾款', '150')
   })
 
   await runSalesOrderBrowserStep('manual total mismatch is a hard block', async () => {
     await fillLabelledControl(page, '手填销售总价', '199')
-    await fillLabelledControl(page, '约定尾款', '149')
+    await fillLabelledControl(page, '尾款', '149')
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.body.innerText.includes(
       '手填销售总价必须与产品明细汇总一致'
@@ -367,7 +367,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
 
   await runSalesOrderBrowserStep('formal save assigns number and persists snapshots', async () => {
     await fillLabelledControl(page, '手填销售总价', '200')
-    await fillLabelledControl(page, '约定尾款', '150')
+    await fillLabelledControl(page, '尾款', '150')
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`(() => {
       const documents = document.querySelector(
@@ -488,7 +488,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     const beforeConfirmation = await readOrders(page)
     assert.equal(beforeConfirmation.status, 200)
     assert.equal(beforeConfirmation.body?.total, 0)
-    await clickDialogButton(page, '确认提交销售订单？', '确认保存并派号')
+    await clickDialogButton(page, '确认提交销售订单？', '确认提交订单')
     await waitForAfterAuthentication(page, `(() => (
       location.hash === ${JSON.stringify(`#${listRoute}`)}
       && document.querySelector('[data-testid="sales-order-list-table"]')

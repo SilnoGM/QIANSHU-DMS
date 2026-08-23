@@ -1429,7 +1429,7 @@ onBeforeUnmount(() => {
                       @update:model-value="handleAgreedTotalAmountUpdate"
                     />
                   </FaFormItem>
-                  <FaFormItem name="depositDueAmount" label="约定定金" required :auto-bind="false">
+                  <FaFormItem name="depositDueAmount" label="定金" required :auto-bind="false">
                     <MoneyInput
                       v-model="formModel.depositDueAmount"
                       :currency="formModel.currencyCode"
@@ -1440,7 +1440,7 @@ onBeforeUnmount(() => {
                       @update:model-value="handleDepositDueAmountUpdate"
                     />
                   </FaFormItem>
-                  <FaFormItem name="balanceDueAmount" label="约定尾款" required :auto-bind="false">
+                  <FaFormItem name="balanceDueAmount" label="尾款" required :auto-bind="false">
                     <MoneyInput
                       v-model="formModel.balanceDueAmount"
                       :currency="formModel.currencyCode"
@@ -1452,7 +1452,7 @@ onBeforeUnmount(() => {
                     />
                   </FaFormItem>
                   <div class="text-xs text-muted-foreground leading-5 p-3 border border-border rounded-lg md:col-span-2">
-                    销售总价 = 明细汇总；约定定金 + 约定尾款 = 销售总价。实际收款将在订单创建后单独记录。
+                    销售总价 = 明细汇总；定金 + 尾款 = 销售总价。实际收款将在订单创建后单独记录。
                   </div>
                 </FaCard>
               </aside>
@@ -1766,7 +1766,7 @@ onBeforeUnmount(() => {
           />
         </dd>
         <dt class="text-sm text-muted-foreground">
-          约定定金
+          定金
         </dt>
         <dd class="m-0 overflow-x-auto">
           <AmountDisplay
@@ -1776,7 +1776,7 @@ onBeforeUnmount(() => {
           />
         </dd>
         <dt class="text-sm text-muted-foreground">
-          约定尾款
+          尾款
         </dt>
         <dd class="m-0 overflow-x-auto">
           <AmountDisplay
@@ -1803,7 +1803,7 @@ onBeforeUnmount(() => {
           :disabled="!submitReady"
           @click="confirmSubmitOrder"
         >
-          确认保存并派号
+          确认提交订单
         </FaButton>
       </template>
     </QsGenericModal>

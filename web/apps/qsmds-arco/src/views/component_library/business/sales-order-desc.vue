@@ -12,7 +12,7 @@ const principles = [
   },
   {
     title: '金额层级明确',
-    description: '产品小计、销售总价、约定定金与约定尾款保持稳定顺序，并通过标签与排版共同强调。',
+    description: '产品小计、销售总价、定金与尾款保持稳定顺序，并通过标签与排版共同强调。',
     icon: 'i-lucide:badge-dollar-sign',
   },
   {

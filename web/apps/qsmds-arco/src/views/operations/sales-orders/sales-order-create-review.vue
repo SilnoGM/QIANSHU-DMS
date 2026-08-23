@@ -66,8 +66,8 @@ const lineItems = computed<DescriptionItem[]>(() => props.model.lines.map((line,
 const salesItems = computed<DescriptionItem[]>(() => [
   { label: '产品明细汇总', value: displayMoney(props.lineSubtotalAmount) },
   { label: '手填销售总价', value: displayMoney(props.model.agreedTotalAmount) },
-  { label: '约定定金', value: displayMoney(props.model.depositDueAmount) },
-  { label: '约定尾款', value: displayMoney(props.model.balanceDueAmount) },
+  { label: '定金', value: displayMoney(props.model.depositDueAmount) },
+  { label: '尾款', value: displayMoney(props.model.balanceDueAmount) },
 ])
 
 const documentItems = computed<DescriptionItem[]>(() => {

@@ -713,10 +713,10 @@ export function buildCreateSalesOrderRequest(
     errors.agreedTotalAmount = '请输入有效的销售总价'
   }
   if (normalizedDeposit === null) {
-    errors.depositDueAmount = '请输入有效的约定定金'
+    errors.depositDueAmount = '请输入有效的定金'
   }
   if (normalizedBalance === null) {
-    errors.balanceDueAmount = '请输入有效的约定尾款'
+    errors.balanceDueAmount = '请输入有效的尾款'
   }
   if (
     normalizedAgreed !== null
@@ -732,7 +732,7 @@ export function buildCreateSalesOrderRequest(
     && amountUnits(normalizedDeposit) + amountUnits(normalizedBalance)
     !== amountUnits(normalizedAgreed)
   ) {
-    errors.balanceDueAmount = '约定定金与尾款之和必须等于销售总价'
+    errors.balanceDueAmount = '定金与尾款之和必须等于销售总价'
   }
 
   const documents: CreateSalesOrderRequestDto['documents'] = []

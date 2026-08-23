@@ -23,8 +23,8 @@
       "lineSubtotal": "本行小计",
       "lineSubtotalAmount": "产品明细汇总",
       "salesTotal": "销售总价",
-      "deposit": "约定定金",
-      "balance": "约定尾款",
+      "deposit": "定金",
+      "balance": "尾款",
       "lineIndex": "第 {index} 项产品"
     },
     "lineTypes": {

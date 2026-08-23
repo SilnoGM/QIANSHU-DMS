@@ -265,7 +265,7 @@ onBeforeUnmount(() => {
   <div class="sales-order-list-page min-w-0" data-testid="sales-order-list-page">
     <FaPageHeader
       title="销售订单"
-      description="订单、履约与付款状态独立展示；实际收款与约定定金/尾款分开统计。"
+      description="订单、履约与付款状态独立展示；实际收款与定金/尾款分开统计。"
     >
       <FaButton
         v-if="canCreate"
