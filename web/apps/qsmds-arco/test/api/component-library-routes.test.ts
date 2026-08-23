@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供十二个独立组件路由', () => {
+test('组件库按分类提供十四个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -144,6 +144,16 @@ test('组件库按分类提供十二个独立组件路由', () => {
         title: '字典选择器',
       },
       {
+        name: 'componentLibraryQsProductSelector',
+        path: 'product-selector',
+        title: '产品选择器',
+      },
+      {
+        name: 'componentLibraryQsOrderProductLineEditor',
+        path: 'order-product-line-editor',
+        title: '订单产品明细编辑器',
+      },
+      {
         name: 'componentLibraryQsSalesOrderDesc',
         path: 'sales-order-desc',
         title: '销售订单详情',
@@ -160,7 +170,7 @@ test('组件库按分类提供十二个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 12)
+  assert.equal(new Set(componentRouteNames).size, 14)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -191,7 +201,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('十二个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('十四个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -247,6 +257,16 @@ test('十二个组件页面与页面模板复用展示壳且不依赖业务 API 
       componentName: 'ComponentLibraryQsDictionarySelect',
       file: '../../src/views/component_library/business/dictionary-select.vue',
       title: '字典选择器',
+    },
+    {
+      componentName: 'ComponentLibraryQsProductSelector',
+      file: '../../src/views/component_library/business/product-selector.vue',
+      title: '产品选择器',
+    },
+    {
+      componentName: 'ComponentLibraryQsOrderProductLineEditor',
+      file: '../../src/views/component_library/business/order-product-line-editor.vue',
+      title: '订单产品明细编辑器',
     },
     {
       componentName: 'ComponentLibraryQsSalesOrderDesc',

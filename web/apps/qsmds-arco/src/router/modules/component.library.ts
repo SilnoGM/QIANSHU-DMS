@@ -192,6 +192,24 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'product-selector',
+        name: 'componentLibraryQsProductSelector',
+        component: () => import('@/views/component_library/business/product-selector.vue'),
+        meta: {
+          title: '产品选择器',
+          icon: 'i-lucide:package-search',
+        },
+      },
+      {
+        path: 'order-product-line-editor',
+        name: 'componentLibraryQsOrderProductLineEditor',
+        component: () => import('@/views/component_library/business/order-product-line-editor.vue'),
+        meta: {
+          title: '订单产品明细编辑器',
+          icon: 'i-lucide:table-properties',
+        },
+      },
+      {
         path: 'sales-order-desc',
         name: 'componentLibraryQsSalesOrderDesc',
         component: () => import('@/views/component_library/business/sales-order-desc.vue'),
