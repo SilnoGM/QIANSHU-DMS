@@ -412,12 +412,15 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       const summaryRect = summary?.getBoundingClientRect()
       const summaryRegionRect = summaryRegion?.getBoundingClientRect()
       const actionsRect = actions?.getBoundingClientRect()
+      const summaryTop = summary ? getComputedStyle(summary).top : ''
       const actionsPosition = actions ? getComputedStyle(actions).position : ''
       return formTrack?.getAttribute('aria-hidden') === 'true'
         && formTrack.hasAttribute('inert')
         && getComputedStyle(formTrack).opacity === '0'
         && review?.getClientRects().length > 0
         && summary?.getClientRects().length > 0
+        && summaryTop === 'auto'
+        && Math.abs(summaryRect.top - layoutRect.top) <= 1
         && summaryRect.width >= layoutRect.width - 2
         && desc?.getClientRects().length > 0
         && summary.textContent?.includes(${JSON.stringify(customerName)})

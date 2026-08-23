@@ -1968,6 +1968,9 @@ onBeforeUnmount(() => {
 
 .sales-order-create-layout--review .sales-order-summary-column {
   position: relative;
+
+  /* relative 仍会应用桌面填写态遗留的 sticky top，必须显式复位以免整块核对内容下移。 */
+  top: auto;
   min-height: var(--sales-order-review-viewport-height);
   max-height: none;
 }

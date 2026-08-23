@@ -143,6 +143,7 @@ test('第四步通过完整校验后进入独立全页核对态', async () => {
   assert.match(source, /\.sales-order-create-layout[\s\S]*?grid-template-columns 1100ms/u)
   assert.match(source, /\.sales-order-form-track \{[\s\S]*?opacity 720ms[\s\S]*?transform 960ms/u)
   assert.match(source, /\.sales-order-submit-bar-enter-active[\s\S]*?opacity 660ms[\s\S]*?transform 960ms/u)
+  assert.match(source, /\.sales-order-create-layout--review \.sales-order-summary-column \{[\s\S]*?position: relative;[\s\S]*?top: auto;/u)
   assert.doesNotMatch(source, /sales-order-review-actions-(?:layer|viewport)/u)
   assert.match(source, /\.sales-order-submit-bar-enter-from[\s\S]*?translateY/u)
   assert.match(source, /@media \(prefers-reduced-motion: reduce\)/u)
