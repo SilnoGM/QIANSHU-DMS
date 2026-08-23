@@ -387,6 +387,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     assert.equal(beforeReview.status, 200)
     assert.equal(beforeReview.body?.total, 0)
     await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.body.textContent?.includes('请检查订单信息是否正确')`)
     await page.waitFor(`(() => {
       const formPanel = document.querySelector(
         '[data-testid="sales-order-create-form-column"]',

@@ -127,6 +127,8 @@ test('第四步通过完整校验后进入独立全页核对态', async () => {
   assert.match(source, /const reviewReady = computed/u)
   assert.match(source, /const submitReady = computed\(\(\) => \([\s\S]*?createSurface\.value === 'review'[\s\S]*?reviewReady\.value/u)
   assert.match(source, /function enterSalesOrderReview\(\): void \{[\s\S]*?buildCreateSalesOrderRequest\([\s\S]*?resolveSalesOrderCreateStepForErrors\([\s\S]*?createSurface\.value = 'review'/u)
+  assert.match(source, /function enterSalesOrderReview\(\): void \{[\s\S]*?if \(!reviewReady\.value\)[\s\S]*?return[\s\S]*?createSurface\.value = 'review'\s+toast\.info\('请检查订单信息是否正确'\)/u)
+  assert.equal(source.match(/toast\.info\('请检查订单信息是否正确'\)/gu)?.length, 1)
   assert.match(source, /function nextStep\(\): void \{[\s\S]*?activeStep\.value === SALES_ORDER_CREATE_LAST_STEP[\s\S]*?enterSalesOrderReview\(\)[\s\S]*?return/u)
   assert.match(source, /function returnToSalesOrderForm\(\): void \{[\s\S]*?createSurface\.value = 'form'[\s\S]*?goToStep\(SALES_ORDER_CREATE_LAST_STEP\)/u)
   assert.match(source, /function requestSubmitConfirmation\(\): void \{[\s\S]*?createSurface\.value !== 'review'[\s\S]*?return/u)

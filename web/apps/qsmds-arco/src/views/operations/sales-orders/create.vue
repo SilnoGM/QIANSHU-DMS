@@ -326,6 +326,7 @@ function enterSalesOrderReview(): void {
   clearGlobalFailure()
   detailsDrawerVisible.value = false
   createSurface.value = 'review'
+  toast.info('请检查订单信息是否正确')
   void focusSalesOrderReview()
 }
 
