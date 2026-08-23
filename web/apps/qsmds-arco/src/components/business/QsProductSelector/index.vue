@@ -335,7 +335,7 @@ onBeforeUnmount(() => {
   <QsGenericModal
     :model-value="modelValue"
     title="选择数据库产品"
-    :description="`当前订单币种为 ${currency}，只显示具有该币种标准价的产品。`"
+    :description="`产品选择不限制币种；当前订单币种为 ${currency}，无该币种标准价时需手填本单售价。`"
     size="xl"
     class="sm:!max-w-[68rem]"
     :submitting="disabled"

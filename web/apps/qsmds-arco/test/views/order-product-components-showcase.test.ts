@@ -20,6 +20,8 @@ test('两个订单产品组件 Showcase 只使用内存 fixture，不访问真�
   assert.match(editor, /lines\.value = \[\]/u)
   assert.match(fixture, /createOrderProductFixtureProvider/u)
   assert.match(fixture, /createOrderProductFixtureLoader/u)
+  assert.match(fixture, /standardUnitPriceAmount: index % 7 === 0/u)
+  assert.match(fixture, /fixture-unpriced-catalog-line/u)
   assert.match(fixture, /code: 'MYR'/u)
   assert.doesNotMatch(`${selector}${editor}${fixture}`, /@\/api\//u)
   assert.doesNotMatch(`${selector}${editor}${fixture}`, /useAppAuth|defineStore|useRoute/u)

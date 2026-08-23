@@ -108,7 +108,7 @@ pnpm -C web exec tsx --test \
 - [x] 2.2 扩展响应 DTO：`items`、`page`、`pageSize`、`total`，单项只保留稳定产品 ID、编号、名称、供应商值、当前币种标准价和主图最小字段。
 - [x] 2.3 在 `SalesOrderQueryService` 中实现所有筛选条件的 AND 组合、稳定排序、独立 `count`、分页查询和当前币种价格唯一映射。
 - [x] 2.4 使用批量查询解析当前页 READY 主图，避免每张卡片单独查询数据库；没有主图时返回 `null`。
-- [x] 2.5 保持 `sales-orders:create` 权限、`ACTIVE` 产品和当前币种标准价资格不变，不返回其他币种或采购成本。
+- [x] 2.5 保持 `sales-orders:create` 权限和 `ACTIVE` 产品资格；订单币种只映射可空标准价，不返回其他币种或采购成本。
 - [x] 2.6 运行 DTO、Query Service 和 Controller 聚焦测试并确认转绿。
 
 **完成条件**
@@ -128,7 +128,7 @@ pnpm -C web exec tsx --test \
 
 - [x] 3.1 从产品媒体域提取无状态 HTTP 内容响应 helper，并保持 Products Controller 现有 GET/HEAD 行为不变。
 - [x] 3.2 让 `ProductsModule` 以最小边界导出既有 `ProductMediaContentService`，由 `SalesOrdersModule` 显式导入复用。
-- [x] 3.3 新增 `SalesOrderProductImageService`，按 `productId + productMediaId + currencyCode` 重新校验 ACTIVE、当前币种标准价、PRIMARY、READY 和归属关系。
+- [x] 3.3 新增 `SalesOrderProductImageService`，按 `productId + productMediaId` 重新校验 ACTIVE、PRIMARY、READY 和归属关系；币种标准价不参与主图资格。
 - [x] 3.4 新增 GET/HEAD 路由：`/api/sales-orders/product-options/:productId/main-image/:productMediaId/content`，只使用 `sales-orders:create`。
 - [x] 3.5 对不存在、无资格、非主图、非 READY 或归属不符统一返回不可枚举的 404；不暴露存储路径和底层对象地址。
 - [x] 3.6 运行产品媒体回归聚焦测试及销售域主图 Service/Controller 测试并确认转绿。
@@ -174,7 +174,7 @@ pnpm -C web exec tsx --test \
 - [x] 5.2 实现选择器纯逻辑：查询版本、Abort 失效、第一页替换、后续页追加、跨筛选保留会话状态、已有明细稳定 ID 判重和已选投影。
 - [x] 5.3 实现重复产品规则：每次确认累计 `+1`；拒绝后不改变会话，移除/恢复与左侧状态同步。
 - [x] 5.4 实现编辑器原子 reducer：先重新校验当前明细，再一次性应用 ADD/INCREMENT/REMOVE；任何冲突或上限错误时整批不写入。
-- [x] 5.5 复用销售订单既有十进制定点口径实现行小计、标准价汇总、本单售价汇总，禁止使用浮点直接累加。
+- [x] 5.5 复用销售订单既有十进制定点口径实现行小计、标准价汇总、本单售价汇总；缺标准价产品不计入标准价汇总并记录数量，禁止使用浮点直接累加。
 - [x] 5.6 为 `FaPopover` 增加默认 `false` 的 `autoFocus?: boolean`；只在重复确认浮层传 `true`，验证关闭后焦点回到触发项。
 - [x] 5.7 运行上述纯逻辑与 FaPopover 聚焦测试并确认转绿。
 

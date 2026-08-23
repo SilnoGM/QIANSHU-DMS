@@ -426,7 +426,7 @@ onBeforeUnmount(() => {
     <QsGenericModal
       v-model="currencyModalVisible"
       title="选择订单币种"
-      description="一张订单只允许一个币种，进入新增页后不可切换。产品选项和真实售价都按该币种处理。"
+      description="一张订单只允许一个币种，进入新增页后不可切换。产品选择不限制币种，本单售价按订单币种填写。"
       size="sm"
     >
       <FaForm :model="currencyFormModel">

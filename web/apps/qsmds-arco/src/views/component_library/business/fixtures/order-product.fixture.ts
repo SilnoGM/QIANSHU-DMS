@@ -51,9 +51,12 @@ function product(index: number, currencyCode: ProductSelectorCurrency): ProductS
     name: index % 3 === 0 ? `城市旅行收纳包 长款限定版 ${ordinal}` : `城市旅行收纳包 ${ordinal}`,
     supplierValue: supplier.value,
     attributes: Object.freeze([]),
-    standardUnitPriceAmount: currencyCode === 'TWD'
-      ? `${1200 + index}.0000`
-      : `${180 + index}.0000`,
+    // 每七个产品保留一个当前币种无标准价样本，用于验收“全部可选、售价手填”。
+    standardUnitPriceAmount: index % 7 === 0
+      ? null
+      : currencyCode === 'TWD'
+        ? `${1200 + index}.0000`
+        : `${180 + index}.0000`,
     currencyCode,
     mainImage: index % 4 === 0
       ? null
@@ -93,7 +96,10 @@ export function createOrderProductFixtureEditorLines(
   currencyCode: ProductSelectorCurrency,
 ): readonly OrderProductLineModel[] {
   const catalogProduct = ORDER_PRODUCT_FIXTURE_PRODUCTS.find(item => (
-    item.currencyCode === currencyCode
+    item.currencyCode === currencyCode && item.standardUnitPriceAmount !== null
+  ))!
+  const unpricedCatalogProduct = ORDER_PRODUCT_FIXTURE_PRODUCTS.find(item => (
+    item.currencyCode === currencyCode && item.standardUnitPriceAmount === null
   ))!
   const catalogActualPrice = currencyCode === 'TWD' ? '1168.5000' : '176.5000'
   const temporaryActualPrice = currencyCode === 'TWD' ? '85.2500' : '12.2500'
@@ -109,6 +115,17 @@ export function createOrderProductFixtureEditorLines(
     actualUnitPriceAmount: catalogActualPrice,
     quantity: '2',
     mainImage: catalogProduct.mainImage,
+  }, {
+    key: `fixture-unpriced-catalog-line-${currencyCode}`,
+    lineType: 'CATALOG' as const,
+    productId: unpricedCatalogProduct.id,
+    productNo: unpricedCatalogProduct.productNo,
+    name: '当前订单币种暂无标准价的数据库产品',
+    description: '用于验收标准价显示暂无、本单售价手填和汇总未计入提示。',
+    standardUnitPriceAmount: null,
+    actualUnitPriceAmount: catalogActualPrice,
+    quantity: '1',
+    mainImage: unpricedCatalogProduct.mainImage,
   }, {
     key: `fixture-temporary-line-${currencyCode}`,
     lineType: 'CUSTOM' as const,

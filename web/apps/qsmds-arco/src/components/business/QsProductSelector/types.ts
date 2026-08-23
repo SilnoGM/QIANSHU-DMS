@@ -14,7 +14,7 @@ export interface ProductSelectorItem {
   readonly name: string
   readonly supplierValue: string | null
   readonly attributes: readonly Record<string, unknown>[]
-  readonly standardUnitPriceAmount: string
+  readonly standardUnitPriceAmount: string | null
   readonly currencyCode: ProductSelectorCurrency
   readonly mainImage: null | {
     readonly id: string

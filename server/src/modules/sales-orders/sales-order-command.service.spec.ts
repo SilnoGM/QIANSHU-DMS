@@ -219,6 +219,41 @@ describe('SalesOrderCommandService', () => {
     expect(auditJson).not.toContain('idempotencyKey')
   })
 
+  it('allows an active catalog product without the current currency standard price', async () => {
+    const fixture = setup()
+    fixture.transaction.product.findMany.mockResolvedValue([{
+      id: '44444444-4444-4444-8444-444444444444',
+      productNo: 'P-001',
+      name: '无台币标准价产品',
+      status: 'ACTIVE',
+      attributes: [],
+      twdSalePriceAmount: null,
+      myrSalePriceAmount: { toFixed: () => '20.0000' },
+    }])
+
+    await expect(fixture.service.create({
+      actorUserId: ACTOR_ID,
+      requestId: 'request-no-standard-price',
+      idempotencyKey: IDEMPOTENCY_KEY,
+    }, input())).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: { in: ['44444444-4444-4444-8444-444444444444'] },
+          status: 'ACTIVE',
+        },
+      }),
+    )
+    expect(fixture.transaction.salesOrderLine.createMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({
+        productNameSnapshot: '无台币标准价产品',
+        standardUnitPriceAmount: null,
+        actualUnitPriceAmount: '50.0000',
+      })],
+    })
+  })
+
   it('does not issue a number for invalid input or changed dependencies', async () => {
     const future = setup()
     await expect(future.service.create({

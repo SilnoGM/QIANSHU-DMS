@@ -16,7 +16,7 @@
 ### 2.1 已有能力
 
 - 新增销售订单已经通过路由参数固定 `TWD | MYR`，产品与销售位于同一步骤。
-- `GET /sales-orders/product-options` 已使用 `sales-orders:create` 权限，并按固定币种过滤 `ACTIVE` 且具有对应标准售价的产品。
+- `GET /sales-orders/product-options` 使用 `sales-orders:create` 权限并返回全部 `ACTIVE` 产品；订单币种只决定返回哪一列可空标准价，不参与候选资格筛选。
 - `sales-order-lines.vue` 已有空表、数据库/临时产品、价格、正整数数量、行小计和删除能力。
 - `sales-order-create.logic.ts` 已使用十进制定点安全逻辑，并在“下一步”和正式提交前执行金额硬拦截。
 - `service_provider.supplier` 已由 Dictionary Catalog 提供，产品列表已有包含停用历史值的只读筛选口径。
@@ -91,7 +91,7 @@ flowchart LR
 
 | 参数 | 类型 | 规则 |
 | --- | --- | --- |
-| `currencyCode` | `TWD | MYR` | 必填，决定资格和唯一标准价 |
+| `currencyCode` | `TWD | MYR` | 必填，只决定返回哪一币种的可空标准价，不决定产品资格 |
 | `keyword` | `string?` | 1–128 Unicode code points；trim + NFKC；名称/编号 contains insensitive |
 | `supplierValue` | `string?` | 1–64 Unicode code points；精确 raw value，不 trim 或改变大小写 |
 | `page` | `integer` | 默认 `1`，最小 `1` |
@@ -112,7 +112,7 @@ interface SalesOrderProductOptionDto {
   productNo: string
   name: string
   attributes: Record<string, unknown>[]
-  standardUnitPriceAmount: string
+  standardUnitPriceAmount: string | null
   currencyCode: 'TWD' | 'MYR'
   mainImage: null | {
     id: string
@@ -129,7 +129,6 @@ interface SalesOrderProductOptionDto {
 
 ```text
 status = ACTIVE
-AND selectedCurrencyPrice IS NOT NULL
 AND supplierValue = exactRawValue       // 仅参数存在时
 AND (productNo ILIKE keyword OR name ILIKE keyword) // 仅关键词存在时
 ```
@@ -153,12 +152,12 @@ query: currencyCode=TWD|MYR
 permission: sales-orders:create
 ```
 
-采用独立销售订单路径，而不是给 `/products/:productId/media/:productMediaId/content` 增加 OR 权限。这样可避免持有录单权限的用户通过已知 ID 读取停用产品、无对应币种价格产品或非主图媒体。
+采用独立销售订单路径，而不是给 `/products/:productId/media/:productMediaId/content` 增加 OR 权限。这样可避免持有录单权限的用户通过已知 ID 读取停用产品或非主图媒体；缺少当前币种标准价不再影响主图资格。
 
 新增 `SalesOrderProductImageService`：
 
-1. 使用 `productId + productMediaId + currencyCode` 查询产品。
-2. 要求产品 `ACTIVE`、存在所选币种标准价、媒体属于该产品、类型为图片、当前为主图、未脱离且资产 `READY`。
+1. 使用 `productId + productMediaId` 查询产品；保留 `currencyCode` 作为既有内容 URL 请求上下文。
+2. 要求产品 `ACTIVE`、媒体属于该产品、类型为图片、当前为主图、未脱离且资产 `READY`；不检查币种标准价。
 3. 任一条件不满足时统一返回防枚举 404。
 4. 资格通过后委托既有 `ProductMediaContentService.resolve()` 处理 ETag、Range、Content-Type、私有存储和 internal redirect。
 5. GET 与 HEAD 保持相同授权和资格校验；GET 才返回内容体。
@@ -291,7 +290,7 @@ Events：
 
 桌面端：
 
-- 弹窗 Header：“选择数据库产品”，描述当前固定币种。
+- 弹窗 Header：“选择数据库产品”，明确产品选择不限制币种，当前币种只用于标准价显示和本单售价录入。
 - Body：`minmax(0, 3fr) minmax(18rem, 2fr)` 左宽右窄分栏。
 - 左侧：顶部搜索/供应商筛选，中部独立滚动卡片列表，底部固定显示“共 N 个产品”。
 - 右侧：应用本次变更后的数据库产品已选清单；Footer 提供“取消”和“确认添加”。
@@ -393,7 +392,7 @@ Event 仅使用：
 
 - 保留语义化 `<table>`、`<thead>`、`<tbody>`，外层 `overflow-x-auto`。
 - 最小总宽度按十列内容设置；金额和数量右对齐，操作列固定视觉宽度。
-- 数据库行来源、编号、名称、主图和标准价只读；本单售价、数量、备注可编辑。
+- 数据库行来源、编号、名称、主图和标准价只读；标准价缺失时显示“暂无”，本单售价留空并要求手填，数量和备注可编辑。
 - 临时行由按钮直接追加：名称为空、数量 `1`、价格空、编号“仅本订单”、主图/标准价 `—`。
 - 行来源使用文本/Tag，不再使用可切换 Select。
 - 删除图标调用纯 reducer 删除目标 key；不产生 API 请求。
@@ -406,7 +405,7 @@ Event 仅使用：
 1. 基于当前 `modelValue` 重新建立 `productId -> line` 与 `lineKey -> line` 索引。
 2. 先完整校验所有变更：ID 唯一、`ADD` 当前不存在、`INCREMENT` 仍命中相同产品和行、数量可安全增加、应用后不超过行数上限。
 3. 任一项失败则返回错误且不生成部分结果。
-4. 全部通过后在内存构造新数组：`ADD` 追加新行，数量默认 `1`，本单售价默认标准价；`INCREMENT` 只更新目标行数量。
+4. 全部通过后在内存构造新数组：`ADD` 追加新行，数量默认 `1`；有标准价时初始化本单售价，无标准价时本单售价为 `null`；`INCREMENT` 只更新目标行数量。
 5. 只触发一次 `update:modelValue`。
 
 该二次校验防止弹窗打开后调用方状态发生变化，也保证“确认添加”具备原子 UI 语义。
@@ -423,7 +422,7 @@ lineActualSubtotal = actualUnitPriceAmount × quantity
 
 - 使用十进制字符串转 `bigint` 定点单位，禁止 `Number` 浮点累计。
 - 临时产品不参与 `standardTotal`。
-- 无数据库产品时标准价汇总显示当前币种零值。
+- 无数据库产品时标准价汇总显示当前币种零值；缺少当前币种标准价的数据库产品不计入标准价汇总，并提示未计入数量。
 - 无效价格或数量的行显示可恢复占位，表单错误由既有销售步骤校验输出。
 - `calculateSalesOrderLineSubtotal()` 委托同一实际金额 reducer，避免表格汇总与“下一步”硬拦截出现两套算法。
 
@@ -524,7 +523,7 @@ Showcase 只使用内存分页 loader 和本地图片 Fixture，不请求 Server
 ### 13.1 Server 聚焦测试
 
 - DTO：分页、关键词、精确供应商、固定币种和非法输入。
-- Query Service：AND 条件、稳定顺序、`total`、分页、币种唯一价格和批量主图。
+- Query Service：ACTIVE/关键词/供应商 AND 条件、稳定顺序、`total`、分页、当前币种可空价格和批量主图。
 - 主图 Service/Controller：权限元数据、可售资格、仅主图、防枚举 404、GET/HEAD 委托和存储错误。
 - OpenAPI：新增分页字段、查询参数、主图响应和唯一 operationId。
 

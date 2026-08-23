@@ -8,7 +8,11 @@ function decimal(value: string) {
   return { toFixed: jest.fn().mockReturnValue(value) }
 }
 
-function createFixture(media = [{ id: PRODUCT_MEDIA_ID }]) {
+function createFixture(
+  media = [{ id: PRODUCT_MEDIA_ID }],
+  twdSalePriceAmount: ReturnType<typeof decimal> | null = decimal('1234.5000'),
+  myrSalePriceAmount: ReturnType<typeof decimal> | null = decimal('168.0000'),
+) {
   const product = {
     count: jest.fn().mockResolvedValue(5),
     findMany: jest.fn().mockResolvedValue([{
@@ -17,8 +21,8 @@ function createFixture(media = [{ id: PRODUCT_MEDIA_ID }]) {
       name: '城市旅行收纳包',
       supplierValue: 'SUPPLIER_TW_01',
       attributes: [{ key: 'color', value: 'green' }],
-      twdSalePriceAmount: decimal('1234.5000'),
-      myrSalePriceAmount: decimal('168.0000'),
+      twdSalePriceAmount,
+      myrSalePriceAmount,
       media,
     }]),
   }
@@ -27,7 +31,7 @@ function createFixture(media = [{ id: PRODUCT_MEDIA_ID }]) {
 }
 
 describe('SalesOrderQueryService product options', () => {
-  it('uses the same qualified filters for count/page and returns one currency plus main image', async () => {
+  it('filters active products without using order currency as product eligibility', async () => {
     const fixture = createFixture()
 
     await expect(fixture.service.productOptions({
@@ -58,7 +62,6 @@ describe('SalesOrderQueryService product options', () => {
     const expectedWhere = {
       status: 'ACTIVE',
       supplierValue: 'SUPPLIER_TW_01',
-      twdSalePriceAmount: { not: null },
       OR: [
         { productNo: { contains: '旅行', mode: 'insensitive' } },
         { name: { contains: '旅行', mode: 'insensitive' } },
@@ -90,6 +93,32 @@ describe('SalesOrderQueryService product options', () => {
           select: { id: true },
         },
       },
+    })
+  })
+
+  it('returns an active product when the current order currency has no standard price', async () => {
+    const fixture = createFixture([], null)
+
+    await expect(fixture.service.productOptions({
+      currencyCode: 'TWD',
+    })).resolves.toEqual({
+      items: [{
+        id: PRODUCT_ID,
+        productNo: 'SKU-TW-001',
+        name: '城市旅行收纳包',
+        supplierValue: 'SUPPLIER_TW_01',
+        attributes: [{ key: 'color', value: 'green' }],
+        standardUnitPriceAmount: null,
+        currencyCode: 'TWD',
+        mainImage: null,
+      }],
+      page: 1,
+      pageSize: 20,
+      total: 5,
+    })
+
+    expect(fixture.product.count).toHaveBeenCalledWith({
+      where: { status: 'ACTIVE' },
     })
   })
 

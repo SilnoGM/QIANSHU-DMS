@@ -142,7 +142,7 @@ export interface SalesOrderProductOption {
   readonly name: string
   readonly supplierValue: string | null
   readonly attributes: readonly Record<string, unknown>[]
-  readonly standardUnitPriceAmount: string
+  readonly standardUnitPriceAmount: string | null
   readonly currencyCode: 'TWD' | 'MYR'
   readonly mainImage: {
     readonly id: string
@@ -420,9 +420,6 @@ export class SalesOrderQueryService {
     const normalizedKeyword = input.keyword?.trim().normalize('NFKC')
     const where: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
-      ...(input.currencyCode === 'TWD'
-        ? { twdSalePriceAmount: { not: null } }
-        : { myrSalePriceAmount: { not: null } }),
       ...(input.supplierValue === undefined
         ? {}
         : { supplierValue: input.supplierValue }),
@@ -469,7 +466,7 @@ export class SalesOrderQueryService {
       const standardPrice = input.currencyCode === 'TWD'
         ? row.twdSalePriceAmount
         : row.myrSalePriceAmount
-      if (standardPrice === null || row.media.length > 1) {
+      if (row.media.length > 1) {
         throw new ApiException(
           HttpStatus.CONFLICT,
           'SALES_ORDER_STATE_CHANGED',
@@ -483,7 +480,9 @@ export class SalesOrderQueryService {
         name: row.name,
         supplierValue: row.supplierValue,
         attributes: productOptionAttributes(row.attributes),
-        standardUnitPriceAmount: decimalToFixed4(standardPrice),
+        standardUnitPriceAmount: standardPrice === null
+          ? null
+          : decimalToFixed4(standardPrice),
         currencyCode: input.currencyCode,
         mainImage: mainImage === undefined
           ? null

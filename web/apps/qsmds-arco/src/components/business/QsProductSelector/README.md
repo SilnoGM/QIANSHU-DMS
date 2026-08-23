@@ -1,7 +1,8 @@
 # QsProductSelector
 
 `QsProductSelector` 是业务中立的数据库产品选择器。组件只通过 `loadProducts`
-读取固定币种候选页，通过 `existingLines` 回显调用方当前数据库产品明细，并在
+读取全部有效产品候选页；订单币种只决定可空标准价，不限制产品展示。组件通过
+`existingLines` 回显调用方当前数据库产品明细，并在
 用户最终确认后一次性发出 `ADD | INCREMENT | REMOVE` 变更集。
 
 组件内部查询、供应商筛选、滚动分页、已选投影和变更集都属于一次弹窗会话。关闭、

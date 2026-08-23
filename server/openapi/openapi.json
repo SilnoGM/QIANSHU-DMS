@@ -36814,7 +36814,8 @@
             }
           },
           "standardUnitPriceAmount": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "currencyCode": {
             "type": "string",

@@ -114,5 +114,35 @@ test('临时产品不伪造标准价，汇总使用四位十进制定点计算',
   ], 4), {
     standardTotal: '25.0000',
     actualTotal: '30.4999',
+    missingStandardPriceCount: 0,
+  })
+})
+
+test('无当前币种标准价的产品可加入明细，本单售价留空且不计入标准价汇总', () => {
+  const unpricedProduct: ProductSelectorItem = {
+    ...catalogProduct,
+    id: 'product-unpriced',
+    productNo: 'SKU-UNPRICED',
+    standardUnitPriceAmount: null,
+  }
+  const applied = applyProductSelectionChanges([], [{
+    kind: 'ADD',
+    product: unpricedProduct,
+    quantity: 2,
+  }])
+
+  assert.equal(applied.ok, true)
+  if (!applied.ok) {
+    return
+  }
+  assert.equal(applied.lines[0]!.standardUnitPriceAmount, null)
+  assert.equal(applied.lines[0]!.actualUnitPriceAmount, null)
+  assert.deepEqual(calculateOrderProductLineTotals([
+    catalogLine,
+    applied.lines[0]!,
+  ], 4), {
+    standardTotal: '25.0000',
+    actualTotal: null,
+    missingStandardPriceCount: 1,
   })
 })

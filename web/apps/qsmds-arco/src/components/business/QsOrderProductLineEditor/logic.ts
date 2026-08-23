@@ -181,6 +181,7 @@ export function applyProductSelectionChanges(
 export interface OrderProductLineTotals {
   readonly standardTotal: string | null
   readonly actualTotal: string | null
+  readonly missingStandardPriceCount: number
 }
 
 export function calculateOrderProductLineTotals(
@@ -189,23 +190,46 @@ export function calculateOrderProductLineTotals(
 ): OrderProductLineTotals {
   let standardTotal = 0n
   let actualTotal = 0n
+  let standardTotalValid = true
+  let actualTotalValid = true
+  let missingStandardPriceCount = 0
   for (const line of lines) {
+    // 标准价缺失是允许的业务状态，本单售价为空则仍是待填写状态；两种汇总必须
+    // 独立计算，避免一个无标准价产品把其他产品可信的标准价汇总一起清空。
     const quantity = validQuantity(line.quantity)
     const actualPrice = amountUnits(line.actualUnitPriceAmount)
-    if (quantity === null || actualPrice === null) {
-      return { standardTotal: null, actualTotal: null }
+    if (quantity === null) {
+      standardTotalValid = false
+      actualTotalValid = false
+      continue
     }
-    actualTotal += actualPrice * BigInt(quantity)
+    if (actualPrice === null) {
+      actualTotalValid = false
+    }
+    else if (actualTotalValid) {
+      actualTotal += actualPrice * BigInt(quantity)
+    }
     if (line.lineType === 'CATALOG') {
+      if (line.standardUnitPriceAmount === null) {
+        missingStandardPriceCount += 1
+        continue
+      }
       const standardPrice = amountUnits(line.standardUnitPriceAmount)
       if (standardPrice === null) {
-        return { standardTotal: null, actualTotal: null }
+        standardTotalValid = false
       }
-      standardTotal += standardPrice * BigInt(quantity)
+      else if (standardTotalValid) {
+        standardTotal += standardPrice * BigInt(quantity)
+      }
     }
   }
   return {
-    standardTotal: formatAmountUnits(standardTotal, precision),
-    actualTotal: formatAmountUnits(actualTotal, precision),
+    standardTotal: standardTotalValid
+      ? formatAmountUnits(standardTotal, precision)
+      : null,
+    actualTotal: actualTotalValid
+      ? formatAmountUnits(actualTotal, precision)
+      : null,
+    missingStandardPriceCount,
   }
 }

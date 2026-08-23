@@ -122,7 +122,7 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
           产品明细
         </h2>
         <p class="text-sm text-muted-foreground m-0 mt-1">
-          {{ labels.catalogProduct }}按 {{ currency }} {{ labels.referenceUnitPrice }}筛选；数量只允许正整数。
+          {{ labels.catalogProduct }}选择不限制币种；{{ labels.referenceUnitPrice }}按 {{ currency }} 显示，无则需手填{{ labels.actualUnitPrice }}。
         </p>
       </div>
       <div class="flex flex-col gap-2 sm:flex-row">
@@ -260,12 +260,13 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
             </td>
             <td class="p-3 whitespace-nowrap">
               <AmountDisplay
-                v-if="line.lineType === 'CATALOG'"
+                v-if="line.lineType === 'CATALOG' && line.standardUnitPriceAmount !== null"
                 :value="line.standardUnitPriceAmount"
                 :currency="currency"
                 :currencies="currencies"
                 class="text-primary font-bold"
               />
+              <span v-else-if="line.lineType === 'CATALOG'" class="text-muted-foreground">暂无</span>
               <span v-else class="text-muted-foreground">—</span>
             </td>
             <td class="p-3">
@@ -363,6 +364,12 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
           class="text-lg text-primary font-bold"
         />
       </div>
+      <p
+        v-if="totals.missingStandardPriceCount > 0"
+        class="text-xs text-muted-foreground m-0"
+      >
+        其中 {{ totals.missingStandardPriceCount }} 项暂无 {{ currency }} 标准价，未计入汇总。
+      </p>
       <div class="flex gap-2 whitespace-nowrap items-baseline justify-end">
         <span class="text-xs text-destructive font-semibold">{{ labels.actualTotal }}：</span>
         <AmountDisplay

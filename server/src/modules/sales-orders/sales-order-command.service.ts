@@ -78,7 +78,7 @@ interface CatalogProductSnapshot {
   readonly productNo: string
   readonly name: string
   readonly attributes: Prisma.InputJsonValue
-  readonly standardUnitPriceAmount: string
+  readonly standardUnitPriceAmount: string | null
 }
 
 interface EffectiveCreateDependencies {
@@ -454,9 +454,6 @@ export class SalesOrderCommandService {
           where: {
             id: { in: productIds },
             status: 'ACTIVE',
-            ...(command.currencyCode === 'TWD'
-              ? { twdSalePriceAmount: { not: null } }
-              : { myrSalePriceAmount: { not: null } }),
           },
           select: {
             id: true,
@@ -473,7 +470,6 @@ export class SalesOrderCommandService {
         product,
         command.currencyCode,
       )
-      if (standardUnitPriceAmount === null) continue
       catalogProductsById.set(product.id, {
         id: product.id,
         productNo: product.productNo,
@@ -485,7 +481,7 @@ export class SalesOrderCommandService {
     if (catalogProductsById.size !== productIds.length) {
       throw dependencyError(
         'SALES_ORDER_PRODUCT_UNAVAILABLE',
-        '所选产品已停用或缺少当前币种标准售价',
+        '所选产品已停用或不存在',
       )
     }
 

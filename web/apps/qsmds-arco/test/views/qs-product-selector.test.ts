@@ -13,6 +13,8 @@ test('QsProductSelector 使用左宽右窄弹窗、滚动列表、供应商目�
 
   assert.match(source, /<QsGenericModal/u)
   assert.match(source, /选择数据库产品/u)
+  assert.match(source, /产品选择不限制币种/u)
+  assert.doesNotMatch(source, /只显示具有该币种标准价的产品/u)
   assert.match(source, /lg:grid-cols-\[minmax\(0,3fr\)_minmax\(18rem,2fr\)\]/u)
   assert.match(source, /service_provider\.supplier/u)
   assert.match(source, /共 \{\{ total \}\} 个产品/u)

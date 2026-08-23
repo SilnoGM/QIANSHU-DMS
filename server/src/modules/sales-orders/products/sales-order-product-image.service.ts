@@ -17,7 +17,8 @@ function productImageNotFound(): ApiException {
 
 /**
  * 录单主图是销售候选资格的一部分，不等于产品媒体管理读取权限。每次内容请求都
- * 重新校验产品、币种价格和主图关系，再把可信内容交给既有媒体交付服务处理。
+ * 重新校验有效产品和主图关系，再把可信内容交给既有媒体交付服务处理。订单币种
+ * 仅为既有内容 URL 的请求上下文，不再构成产品或主图的可选资格。
  */
 @Injectable()
 export class SalesOrderProductImageService {
@@ -34,6 +35,7 @@ export class SalesOrderProductImageService {
     range: unknown,
     method: 'GET' | 'HEAD',
   ): Promise<ProductMediaContentResponse> {
+    void currencyCode
     let row: { readonly id: string } | null
     try {
       row = await this.prisma.productMedia.findFirst({
@@ -47,9 +49,6 @@ export class SalesOrderProductImageService {
           product: {
             is: {
               status: 'ACTIVE',
-              ...(currencyCode === 'TWD'
-                ? { twdSalePriceAmount: { not: null } }
-                : { myrSalePriceAmount: { not: null } }),
             },
           },
         },

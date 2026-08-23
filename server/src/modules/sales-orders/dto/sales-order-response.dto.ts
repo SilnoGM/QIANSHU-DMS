@@ -295,7 +295,7 @@ export class SalesOrderProductOptionDto {
   @ApiProperty({ type: 'string' }) readonly name!: string
   @ApiProperty({ type: 'string', nullable: true }) readonly supplierValue!: string | null
   @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } }) readonly attributes!: readonly Record<string, unknown>[]
-  @ApiProperty({ type: 'string' }) readonly standardUnitPriceAmount!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly standardUnitPriceAmount!: string | null
   @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: string
   @ApiProperty({
     nullable: true,

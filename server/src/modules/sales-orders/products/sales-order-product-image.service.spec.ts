@@ -32,7 +32,7 @@ function createFixture(found: object | null = { id: PRODUCT_MEDIA_ID }) {
 }
 
 describe('SalesOrderProductImageService', () => {
-  it('revalidates sale eligibility and primary READY image before delegating content delivery', async () => {
+  it('revalidates active product and primary READY image without requiring a currency price', async () => {
     const fixture = createFixture()
 
     await expect(fixture.service.resolve(
@@ -55,7 +55,6 @@ describe('SalesOrderProductImageService', () => {
         product: {
           is: {
             status: 'ACTIVE',
-            twdSalePriceAmount: { not: null },
           },
         },
       },
