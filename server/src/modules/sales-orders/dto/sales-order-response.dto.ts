@@ -304,7 +304,10 @@ export class SalesOrderDocumentSummaryDto {
 export class SalesOrderCurrencySummaryDto {
   @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: string
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly orderCount!: number
+  @ApiProperty({ type: 'string' }) readonly standardSubtotalAmount!: string
   @ApiProperty({ type: 'string' }) readonly agreedTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
   @ApiProperty({ type: 'string' }) readonly receivedAmount!: string
   @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
 }
@@ -320,6 +323,7 @@ export class SalesOrderListItemDto {
   @ApiProperty({ type: 'string' }) readonly customerProvinceStateName!: string
   @ApiProperty({ type: 'string' }) readonly customerCityName!: string
   @ApiProperty({ type: 'string' }) readonly customerFullAddress!: string
+  @ApiProperty({ type: 'string' }) readonly standardSubtotalAmount!: string
   @ApiProperty({ type: 'string' }) readonly lineSubtotalAmount!: string
   @ApiProperty({ type: 'string' }) readonly agreedTotalAmount!: string
   @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string

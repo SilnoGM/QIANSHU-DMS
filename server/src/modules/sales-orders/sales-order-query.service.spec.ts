@@ -64,6 +64,7 @@ function createListFixture() {
       lineType: 'CATALOG',
       productId: PRODUCT_ID,
       productNameSnapshot: '城市旅行收纳包',
+      standardUnitPriceAmount: decimal('600.0000'),
       quantity: 2,
       product: {
         media: [{ id: PRODUCT_MEDIA_ID }],
@@ -73,6 +74,7 @@ function createListFixture() {
       lineType: 'CUSTOM',
       productId: null,
       productNameSnapshot: '本单临时包装服务',
+      standardUnitPriceAmount: null,
       quantity: 1,
       product: null,
     }],
@@ -90,12 +92,31 @@ function createListFixture() {
     aggregate: jest.fn()
       .mockResolvedValueOnce({
         _count: { _all: 1 },
-        _sum: { agreedTotalAmount: decimal('1200.0000') },
+        _sum: {
+          agreedTotalAmount: decimal('1200.0000'),
+          depositDueAmount: decimal('200.0000'),
+          balanceDueAmount: decimal('1000.0000'),
+        },
       })
       .mockResolvedValueOnce({
         _count: { _all: 1 },
-        _sum: { agreedTotalAmount: decimal('800.0000') },
+        _sum: {
+          agreedTotalAmount: decimal('800.0000'),
+          depositDueAmount: decimal('300.0000'),
+          balanceDueAmount: decimal('500.0000'),
+        },
       }),
+  }
+  const salesOrderLine = {
+    findMany: jest.fn()
+      .mockResolvedValueOnce([{
+        standardUnitPriceAmount: decimal('600.0000'),
+        quantity: 2,
+      }])
+      .mockResolvedValueOnce([{
+        standardUnitPriceAmount: decimal('400.0000'),
+        quantity: 2,
+      }]),
   }
   const salesOrderPayment = {
     aggregate: jest.fn()
@@ -107,10 +128,18 @@ function createListFixture() {
   ))
   const service = new SalesOrderQueryService({
     salesOrder,
+    salesOrderLine,
     salesOrderPayment,
     $transaction: transaction,
   } as unknown as PrismaService)
-  return { listRow, salesOrder, salesOrderPayment, service, transaction }
+  return {
+    listRow,
+    salesOrder,
+    salesOrderLine,
+    salesOrderPayment,
+    service,
+    transaction,
+  }
 }
 
 describe('SalesOrderQueryService list summaries', () => {
@@ -129,6 +158,7 @@ describe('SalesOrderQueryService list summaries', () => {
         customerProvinceStateName: '台湾',
         customerCityName: '新北市',
         customerFullAddress: '中国台湾台湾新北市板桥区测试路1号',
+        standardSubtotalAmount: '1200.0000',
         lineSubtotalAmount: '1200.0000',
         agreedTotalAmount: '1200.0000',
         depositDueAmount: '200.0000',
@@ -175,13 +205,19 @@ describe('SalesOrderQueryService list summaries', () => {
       summariesByCurrency: [{
         currencyCode: 'TWD',
         orderCount: 1,
+        standardSubtotalAmount: '1200.0000',
         agreedTotalAmount: '1200.0000',
+        depositDueAmount: '200.0000',
+        balanceDueAmount: '1000.0000',
         receivedAmount: '200.0000',
         outstandingAmount: '1000.0000',
       }, {
         currencyCode: 'MYR',
         orderCount: 1,
+        standardSubtotalAmount: '800.0000',
         agreedTotalAmount: '800.0000',
+        depositDueAmount: '300.0000',
+        balanceDueAmount: '500.0000',
         receivedAmount: '300.0000',
         outstandingAmount: '500.0000',
       }],
@@ -193,6 +229,7 @@ describe('SalesOrderQueryService list summaries', () => {
     expect(fixture.transaction).toHaveBeenCalledTimes(1)
     expect(fixture.salesOrder.findMany).toHaveBeenCalledTimes(1)
     expect(fixture.salesOrder.aggregate).toHaveBeenCalledTimes(2)
+    expect(fixture.salesOrderLine.findMany).toHaveBeenCalledTimes(2)
     expect(fixture.salesOrderPayment.aggregate).toHaveBeenCalledTimes(2)
   })
 
@@ -202,11 +239,19 @@ describe('SalesOrderQueryService list summaries', () => {
       .mockReset()
       .mockResolvedValueOnce({
         _count: { _all: 1 },
-        _sum: { agreedTotalAmount: decimal('1200.0000') },
+        _sum: {
+          agreedTotalAmount: decimal('1200.0000'),
+          depositDueAmount: decimal('200.0000'),
+          balanceDueAmount: decimal('1000.0000'),
+        },
       })
       .mockResolvedValueOnce({
         _count: { _all: 0 },
-        _sum: { agreedTotalAmount: null },
+        _sum: {
+          agreedTotalAmount: null,
+          depositDueAmount: null,
+          balanceDueAmount: null,
+        },
       })
     fixture.salesOrderPayment.aggregate
       .mockReset()
@@ -218,7 +263,10 @@ describe('SalesOrderQueryService list summaries', () => {
     expect(result.summariesByCurrency).toEqual([{
       currencyCode: 'TWD',
       orderCount: 1,
+      standardSubtotalAmount: '1200.0000',
       agreedTotalAmount: '1200.0000',
+      depositDueAmount: '200.0000',
+      balanceDueAmount: '1000.0000',
       receivedAmount: '200.0000',
       outstandingAmount: '1000.0000',
     }])
@@ -231,6 +279,7 @@ describe('SalesOrderQueryService list summaries', () => {
       lineType: 'CATALOG',
       productId: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${index}`,
       productNameSnapshot: `追加产品 ${index}`,
+      standardUnitPriceAmount: decimal(`${index}.0000`),
       quantity: index,
       product: {
         media: [{ id: `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${index}` }],

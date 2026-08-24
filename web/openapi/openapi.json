@@ -38013,6 +38013,9 @@
           "customerFullAddress": {
             "type": "string"
           },
+          "standardSubtotalAmount": {
+            "type": "string"
+          },
           "lineSubtotalAmount": {
             "type": "string"
           },
@@ -38090,6 +38093,7 @@
           "customerProvinceStateName",
           "customerCityName",
           "customerFullAddress",
+          "standardSubtotalAmount",
           "lineSubtotalAmount",
           "agreedTotalAmount",
           "depositDueAmount",
@@ -38121,7 +38125,16 @@
             "type": "integer",
             "minimum": 1
           },
+          "standardSubtotalAmount": {
+            "type": "string"
+          },
           "agreedTotalAmount": {
+            "type": "string"
+          },
+          "depositDueAmount": {
+            "type": "string"
+          },
+          "balanceDueAmount": {
             "type": "string"
           },
           "receivedAmount": {
@@ -38134,7 +38147,10 @@
         "required": [
           "currencyCode",
           "orderCount",
+          "standardSubtotalAmount",
           "agreedTotalAmount",
+          "depositDueAmount",
+          "balanceDueAmount",
           "receivedAmount",
           "outstandingAmount"
         ]

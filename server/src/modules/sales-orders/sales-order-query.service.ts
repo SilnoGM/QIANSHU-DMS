@@ -93,6 +93,7 @@ const SALES_ORDER_LIST_SELECT = {
       lineType: true,
       productId: true,
       productNameSnapshot: true,
+      standardUnitPriceAmount: true,
       quantity: true,
       product: {
         select: {
@@ -193,6 +194,7 @@ export interface SalesOrderListItem {
   readonly customerProvinceStateName: string
   readonly customerCityName: string
   readonly customerFullAddress: string
+  readonly standardSubtotalAmount: string
   readonly lineSubtotalAmount: string
   readonly agreedTotalAmount: string
   readonly depositDueAmount: string
@@ -236,7 +238,10 @@ export interface SalesOrderListItem {
 export interface SalesOrderCurrencySummary {
   readonly currencyCode: 'TWD' | 'MYR'
   readonly orderCount: number
+  readonly standardSubtotalAmount: string
   readonly agreedTotalAmount: string
+  readonly depositDueAmount: string
+  readonly balanceDueAmount: string
   readonly receivedAmount: string
   readonly outstandingAmount: string
 }
@@ -288,6 +293,24 @@ function nullableAmountUnits(
   return value === null || value === undefined
     ? 0n
     : parseSalesOrderAmountUnits(decimalToFixed4(value))
+}
+
+function standardSubtotalUnits(
+  lines: readonly {
+    readonly standardUnitPriceAmount: {
+      toFixed(decimalPlaces: number): string
+    } | null
+    readonly quantity: number
+  }[],
+): bigint {
+  // 标准价缺失是允许状态；与产品明细编辑器一致，仅累计具备标准价快照的明细。
+  return lines.reduce((sum, line) => (
+    line.standardUnitPriceAmount === null
+      ? sum
+      : sum
+        + parseSalesOrderAmountUnits(decimalToFixed4(line.standardUnitPriceAmount))
+        * BigInt(line.quantity)
+  ), 0n)
 }
 
 function listCurrencyWhere(
@@ -349,8 +372,20 @@ function mapCurrencySummary(
       readonly agreedTotalAmount: {
         toFixed(decimalPlaces: number): string
       } | null
+      readonly depositDueAmount: {
+        toFixed(decimalPlaces: number): string
+      } | null
+      readonly balanceDueAmount: {
+        toFixed(decimalPlaces: number): string
+      } | null
     }
   },
+  standardPriceLines: readonly {
+    readonly standardUnitPriceAmount: {
+      toFixed(decimalPlaces: number): string
+    } | null
+    readonly quantity: number
+  }[],
   paymentAggregate: {
     readonly _sum: {
       readonly amount: { toFixed(decimalPlaces: number): string } | null
@@ -363,7 +398,16 @@ function mapCurrencySummary(
   return {
     currencyCode,
     orderCount: orderAggregate._count._all,
+    standardSubtotalAmount: formatSalesOrderAmountUnits(
+      standardSubtotalUnits(standardPriceLines),
+    ),
     agreedTotalAmount: formatSalesOrderAmountUnits(agreedUnits),
+    depositDueAmount: formatSalesOrderAmountUnits(
+      nullableAmountUnits(orderAggregate._sum.depositDueAmount),
+    ),
+    balanceDueAmount: formatSalesOrderAmountUnits(
+      nullableAmountUnits(orderAggregate._sum.balanceDueAmount),
+    ),
     receivedAmount: formatSalesOrderAmountUnits(receivedUnits),
     outstandingAmount: formatSalesOrderAmountUnits(agreedUnits - receivedUnits),
   }
@@ -554,8 +598,10 @@ export class SalesOrderQueryService {
       total,
       rows,
       twdOrders,
+      twdStandardPriceLines,
       twdPayments,
       myrOrders,
+      myrStandardPriceLines,
       myrPayments,
     ] = await this.prisma.$transaction([
       this.prisma.salesOrder.count({ where }),
@@ -569,7 +615,18 @@ export class SalesOrderQueryService {
       this.prisma.salesOrder.aggregate({
         where: twdWhere,
         _count: { _all: true },
-        _sum: { agreedTotalAmount: true },
+        _sum: {
+          agreedTotalAmount: true,
+          depositDueAmount: true,
+          balanceDueAmount: true,
+        },
+      }),
+      this.prisma.salesOrderLine.findMany({
+        where: {
+          standardUnitPriceAmount: { not: null },
+          salesOrder: { is: twdWhere },
+        },
+        select: { standardUnitPriceAmount: true, quantity: true },
       }),
       this.prisma.salesOrderPayment.aggregate({
         where: {
@@ -581,7 +638,18 @@ export class SalesOrderQueryService {
       this.prisma.salesOrder.aggregate({
         where: myrWhere,
         _count: { _all: true },
-        _sum: { agreedTotalAmount: true },
+        _sum: {
+          agreedTotalAmount: true,
+          depositDueAmount: true,
+          balanceDueAmount: true,
+        },
+      }),
+      this.prisma.salesOrderLine.findMany({
+        where: {
+          standardUnitPriceAmount: { not: null },
+          salesOrder: { is: myrWhere },
+        },
+        select: { standardUnitPriceAmount: true, quantity: true },
       }),
       this.prisma.salesOrderPayment.aggregate({
         where: {
@@ -592,8 +660,8 @@ export class SalesOrderQueryService {
       }),
     ])
     const summariesByCurrency = [
-      mapCurrencySummary('TWD', twdOrders, twdPayments),
-      mapCurrencySummary('MYR', myrOrders, myrPayments),
+      mapCurrencySummary('TWD', twdOrders, twdStandardPriceLines, twdPayments),
+      mapCurrencySummary('MYR', myrOrders, myrStandardPriceLines, myrPayments),
     ].filter(summary => summary !== null)
     return {
       items: rows.map((row) => {
@@ -617,6 +685,9 @@ export class SalesOrderQueryService {
           customerProvinceStateName: row.customerProvinceStateNameSnapshot,
           customerCityName: row.customerCityNameSnapshot,
           customerFullAddress: row.customerFullAddressSnapshot,
+          standardSubtotalAmount: formatSalesOrderAmountUnits(
+            standardSubtotalUnits(row.lines),
+          ),
           lineSubtotalAmount: decimalToFixed4(row.lineSubtotalAmount),
           agreedTotalAmount: formatSalesOrderAmountUnits(agreedUnits),
           depositDueAmount: decimalToFixed4(row.depositDueAmount),
