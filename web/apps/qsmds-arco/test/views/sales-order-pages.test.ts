@@ -84,6 +84,11 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.match(source, /#summary-priceSummary[\s\S]*?summary\.agreedTotalAmount[\s\S]*?summary\.standardSubtotalAmount/u)
   assert.match(source, /#summary-termsSummary[\s\S]*?summary\.depositDueAmount[\s\S]*?summary\.balanceDueAmount/u)
   assert.match(source, /#summary-collectionSummary[\s\S]*?summary\.receivedAmount[\s\S]*?summary\.outstandingAmount/u)
+  // AmountDisplay 已经输出币种符号和代码，汇总标签不得重复拼接币种，否则窄列内会与金额重叠。
+  assert.match(source, /#summary-priceSummary[\s\S]*?label="实际售价"/u)
+  assert.match(source, /#summary-termsSummary[\s\S]*?label="定金"/u)
+  assert.match(source, /#summary-collectionSummary[\s\S]*?label="已收"/u)
+  assert.doesNotMatch(source, /:label="`(?:实际售价|定金|已收) \$\{summary\.currencyCode\}`"/u)
   assert.match(source, /row\.documentSummary\.count/u)
   assert.match(source, /row\.depositDueAmount/u)
   assert.match(source, /row\.balanceDueAmount/u)

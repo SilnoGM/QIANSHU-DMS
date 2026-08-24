@@ -584,7 +584,7 @@ onBeforeUnmount(() => {
         <template #summary-priceSummary>
           <div class="gap-2 grid justify-items-end">
             <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
-              <QsTableStackedLine :label="`实际售价 ${summary.currencyCode}`" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+              <QsTableStackedLine label="实际售价" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
                 <AmountDisplay :value="summary.agreedTotalAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
               </QsTableStackedLine>
               <QsTableStackedLine label="标准售价" content-class="ml-auto flex justify-end text-right" nowrap>
@@ -597,7 +597,7 @@ onBeforeUnmount(() => {
         <template #summary-termsSummary>
           <div class="gap-2 grid justify-items-end">
             <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
-              <QsTableStackedLine :label="`定金 ${summary.currencyCode}`" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+              <QsTableStackedLine label="定金" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
                 <AmountDisplay :value="summary.depositDueAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
               </QsTableStackedLine>
               <QsTableStackedLine label="尾款" tone="danger" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
@@ -610,7 +610,7 @@ onBeforeUnmount(() => {
         <template #summary-collectionSummary>
           <div class="gap-2 grid justify-items-end">
             <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
-              <QsTableStackedLine :label="`已收 ${summary.currencyCode}`" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+              <QsTableStackedLine label="已收" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
                 <AmountDisplay :value="summary.receivedAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
               </QsTableStackedLine>
               <QsTableStackedLine label="待收" :tone="hasPositiveAmount(summary.outstandingAmount) ? 'danger' : 'muted'" content-class="ml-auto flex justify-end text-right" nowrap>
