@@ -132,6 +132,15 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
   assert.doesNotMatch(source, /hasPositiveAmount/u)
   assert.match(source, /#cell-paymentStatusSummary[\s\S]*?paymentStatusLabel\(row\.original\.paymentStatus\)/u)
   assert.match(source, /#cell-orderStatusSummary[\s\S]*?orderStatusLabel\(row\.original\.orderStatus\)[\s\S]*?fulfillmentStatusLabel\(row\.original\.fulfillmentStatus\)/u)
+  assert.equal(source.match(/:class="paymentStatusTagClass\(/gu)?.length, 2)
+  assert.equal(source.match(/:class="orderStatusTagClass\(/gu)?.length, 2)
+  assert.equal(source.match(/:class="fulfillmentStatusTagClass\(/gu)?.length, 2)
+  assert.match(source, /UNPAID: '.*text-destructive'/u)
+  assert.match(source, /PARTIALLY_PAID: '.*text-amber-700/u)
+  assert.match(source, /PAID: '.*text-primary'/u)
+  assert.match(source, /CONFIRMED: '.*text-primary'/u)
+  assert.match(source, /CANCELLED: '.*text-destructive'/u)
+  assert.match(source, /SHIPPED: '.*text-blue-700/u)
   for (const amountField of [
     'agreedTotalAmount',
     'standardSubtotalAmount',

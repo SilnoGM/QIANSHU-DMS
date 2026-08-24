@@ -353,6 +353,34 @@ function paymentStatusLabel(value: SalesOrderListItemDto['paymentStatus']): stri
   return { UNPAID: '未付款', PARTIALLY_PAID: '部分付款', PAID: '已付清' }[value]
 }
 
+// 桌面表格与移动卡片共用同一套语义色，颜色仅用于辅助识别，状态含义仍由文字承载。
+function orderStatusTagClass(value: SalesOrderListItemDto['orderStatus']): string {
+  return {
+    DRAFT: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
+    CONFIRMED: 'border-primary/30 bg-primary/10 text-primary',
+    CANCELLED: 'border-destructive/30 bg-destructive/10 text-destructive',
+  }[value]
+}
+
+function fulfillmentStatusTagClass(
+  value: SalesOrderListItemDto['fulfillmentStatus'],
+): string {
+  return {
+    PENDING: 'border-border bg-muted text-muted-foreground',
+    PREPARING: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
+    SHIPPED: 'border-blue-500/30 bg-blue-500/8 text-blue-700 dark:text-blue-300',
+    SIGNED: 'border-primary/30 bg-primary/10 text-primary',
+  }[value]
+}
+
+function paymentStatusTagClass(value: SalesOrderListItemDto['paymentStatus']): string {
+  return {
+    UNPAID: 'border-destructive/30 bg-destructive/10 text-destructive',
+    PARTIALLY_PAID: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
+    PAID: 'border-primary/30 bg-primary/10 text-primary',
+  }[value]
+}
+
 onMounted(() => void loadOrders())
 onBeforeUnmount(() => {
   requestVersion += 1
@@ -513,7 +541,11 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-paymentStatusSummary="{ row }">
-          <FaTag variant="outline" class="qs-type-status-tag">
+          <FaTag
+            variant="outline"
+            class="qs-type-status-tag"
+            :class="paymentStatusTagClass(row.original.paymentStatus)"
+          >
             {{ paymentStatusLabel(row.original.paymentStatus) }}
           </FaTag>
         </template>
@@ -521,12 +553,20 @@ onBeforeUnmount(() => {
         <template #cell-orderStatusSummary="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine label="订单" nowrap>
-              <FaTag variant="outline" class="qs-type-status-tag">
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag"
+                :class="orderStatusTagClass(row.original.orderStatus)"
+              >
                 {{ orderStatusLabel(row.original.orderStatus) }}
               </FaTag>
             </QsTableStackedLine>
             <QsTableStackedLine label="履约" tone="muted" nowrap>
-              <FaTag variant="outline" class="qs-type-status-tag">
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag"
+                :class="fulfillmentStatusTagClass(row.original.fulfillmentStatus)"
+              >
                 {{ fulfillmentStatusLabel(row.original.fulfillmentStatus) }}
               </FaTag>
             </QsTableStackedLine>
@@ -863,7 +903,11 @@ onBeforeUnmount(() => {
                   付款状态
                 </dt>
                 <dd class="m-0">
-                  <FaTag variant="outline" class="qs-type-status-tag">
+                  <FaTag
+                    variant="outline"
+                    class="qs-type-status-tag"
+                    :class="paymentStatusTagClass(row.paymentStatus)"
+                  >
                     {{ paymentStatusLabel(row.paymentStatus) }}
                   </FaTag>
                 </dd>
@@ -875,12 +919,20 @@ onBeforeUnmount(() => {
                 <dd class="m-0">
                   <QsTableStackedCell>
                     <QsTableStackedLine label="订单" nowrap>
-                      <FaTag variant="outline" class="qs-type-status-tag">
+                      <FaTag
+                        variant="outline"
+                        class="qs-type-status-tag"
+                        :class="orderStatusTagClass(row.orderStatus)"
+                      >
                         {{ orderStatusLabel(row.orderStatus) }}
                       </FaTag>
                     </QsTableStackedLine>
                     <QsTableStackedLine label="履约" tone="muted" nowrap>
-                      <FaTag variant="outline" class="qs-type-status-tag">
+                      <FaTag
+                        variant="outline"
+                        class="qs-type-status-tag"
+                        :class="fulfillmentStatusTagClass(row.fulfillmentStatus)"
+                      >
                         {{ fulfillmentStatusLabel(row.fulfillmentStatus) }}
                       </FaTag>
                     </QsTableStackedLine>
