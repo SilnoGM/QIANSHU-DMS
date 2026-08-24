@@ -331,6 +331,9 @@ export class SalesOrderCommandService {
             agreedTotalAmount: command.agreedTotalAmount,
             depositDueAmount: command.depositDueAmount,
             balanceDueAmount: command.balanceDueAmount,
+            // 新增页只有“确认提交订单”语义，因此订单在创建事务内直接成为已确认状态，
+            // 不产生一个已经派号但仍需再次确认的中间草稿。
+            orderStatus: 'CONFIRMED',
             paymentStatus: 'UNPAID',
             remark: command.remark,
           },

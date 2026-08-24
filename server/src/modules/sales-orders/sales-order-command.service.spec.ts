@@ -187,6 +187,7 @@ describe('SalesOrderCommandService', () => {
         agreedTotalAmount: '100.0000',
         depositDueAmount: '30.0000',
         balanceDueAmount: '70.0000',
+        orderStatus: 'CONFIRMED',
         paymentStatus: 'UNPAID',
       },
       select: { id: true },
