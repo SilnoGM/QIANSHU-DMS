@@ -103,7 +103,9 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.match(source, /#cell-termsSummary[\s\S]*?label="尾款"[\s\S]*?row\.original\.balanceDueAmount/u)
   for (const amountSource of [desktopAmountSource, mobileAmountSource]) {
     assert.equal(amountSource.match(/<AmountDisplay/gu)?.length, 6)
+    assert.doesNotMatch(amountSource, /!font-normal/u)
     assert.doesNotMatch(amountSource, /tone="(?:success|danger)"|:tone=/u)
+    assert.doesNotMatch(amountSource, /weight="semibold"/u)
   }
   assert.doesNotMatch(source, /hasPositiveAmount/u)
   assert.match(source, /#cell-paymentStatusSummary[\s\S]*?paymentStatusLabel\(row\.original\.paymentStatus\)/u)

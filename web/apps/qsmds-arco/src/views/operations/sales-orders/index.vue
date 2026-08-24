@@ -471,7 +471,7 @@ onBeforeUnmount(() => {
 
         <template #cell-priceSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="实际售价" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="实际售价" content-class="ml-auto flex justify-end text-right" nowrap>
               <AmountDisplay :value="row.original.agreedTotalAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
             <QsTableStackedLine label="标准售价" content-class="ml-auto flex justify-end text-right" nowrap>
@@ -482,10 +482,10 @@ onBeforeUnmount(() => {
 
         <template #cell-termsSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="定金" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="定金" content-class="ml-auto flex justify-end text-right" nowrap>
               <AmountDisplay :value="row.original.depositDueAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
-            <QsTableStackedLine label="尾款" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="尾款" content-class="ml-auto flex justify-end text-right" nowrap>
               <AmountDisplay :value="row.original.balanceDueAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -493,7 +493,7 @@ onBeforeUnmount(() => {
 
         <template #cell-collectionSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="已收" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="已收" content-class="ml-auto flex justify-end text-right" nowrap>
               <AmountDisplay :value="row.original.receivedAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
             <QsTableStackedLine label="待收" content-class="ml-auto flex justify-end text-right" nowrap>
@@ -797,7 +797,7 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <QsTableStackedCell>
-                    <QsTableStackedLine label="实际售价" nowrap weight="semibold">
+                    <QsTableStackedLine label="实际售价" nowrap>
                       <AmountDisplay :value="row.agreedTotalAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
                     <QsTableStackedLine label="标准售价" nowrap>
@@ -812,10 +812,10 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <QsTableStackedCell>
-                    <QsTableStackedLine label="定金" nowrap weight="semibold">
+                    <QsTableStackedLine label="定金" nowrap>
                       <AmountDisplay :value="row.depositDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
-                    <QsTableStackedLine label="尾款" nowrap weight="semibold">
+                    <QsTableStackedLine label="尾款" nowrap>
                       <AmountDisplay :value="row.balanceDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
                   </QsTableStackedCell>
@@ -827,7 +827,7 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <QsTableStackedCell>
-                    <QsTableStackedLine label="已收" nowrap weight="semibold">
+                    <QsTableStackedLine label="已收" nowrap>
                       <AmountDisplay :value="row.receivedAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
                     <QsTableStackedLine label="待收" nowrap>
