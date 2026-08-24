@@ -59,7 +59,7 @@ type SalesOrderDetailRow = Prisma.SalesOrderGetPayload<{
   include: typeof SALES_ORDER_DETAIL_INCLUDE
 }>
 
-const SALES_ORDER_LIST_PREVIEW_LIMIT = 3
+const SALES_ORDER_DOCUMENT_PREVIEW_LIMIT = 3
 const SALES_ORDER_LIST_SELECT = {
   id: true,
   orderNo: true,
@@ -304,7 +304,8 @@ function mapLineSummary(row: SalesOrderListRow): SalesOrderListItem['lineSummary
     totalQuantity: row.lines.reduce((sum, line) => sum + line.quantity, 0),
     catalogCount: row.lines.filter(line => line.lineType === 'CATALOG').length,
     customCount: row.lines.filter(line => line.lineType === 'CUSTOM').length,
-    previews: row.lines.slice(0, SALES_ORDER_LIST_PREVIEW_LIMIT).map((line) => {
+    // 列表查询已经一次性取得当前订单的全部明细；完整返回预览，前端才能按实际有图产品计算 ImageGroup 的折叠数量。
+    previews: row.lines.map((line) => {
       const mainImage = line.product?.media[0]
       return {
         lineId: line.id,
@@ -329,7 +330,7 @@ function mapDocumentSummary(
       document => document.mediaAsset.mediaType === 'IMAGE',
     ).length,
     previews: row.documents
-      .slice(0, SALES_ORDER_LIST_PREVIEW_LIMIT)
+      .slice(0, SALES_ORDER_DOCUMENT_PREVIEW_LIMIT)
       .map(document => ({
         id: document.id,
         documentType: document.documentType,

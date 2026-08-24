@@ -36,56 +36,57 @@ function createFixture(
 }
 
 function createListFixture() {
+  const listRow = {
+    id: SALES_ORDER_ID,
+    orderNo: 'SO-20260823-0001',
+    orderDate: new Date('2026-08-22T00:00:00.000Z'),
+    issuer: { id: '88888888-8888-4888-8888-888888888888', displayName: 'SilnoGM' },
+    currencyCode: 'TWD',
+    customerName: '林测试',
+    customerPhone: '0912345678',
+    customerProvinceStateNameSnapshot: '台湾',
+    customerCityNameSnapshot: '新北市',
+    customerFullAddressSnapshot: '中国台湾台湾新北市板桥区测试路1号',
+    lineSubtotalAmount: decimal('1200.0000'),
+    agreedTotalAmount: decimal('1200.0000'),
+    depositDueAmount: decimal('200.0000'),
+    balanceDueAmount: decimal('1000.0000'),
+    remark: '客户要求周末送达',
+    orderStatus: 'CONFIRMED',
+    fulfillmentStatus: 'PREPARING',
+    paymentStatus: 'PARTIALLY_PAID',
+    version: 3,
+    createdAt: new Date('2026-08-22T09:00:00.000Z'),
+    updatedAt: new Date('2026-08-23T10:30:00.000Z'),
+    payments: [{ amount: decimal('200.0000') }],
+    lines: [{
+      id: SALES_ORDER_LINE_ID,
+      lineType: 'CATALOG',
+      productId: PRODUCT_ID,
+      productNameSnapshot: '城市旅行收纳包',
+      quantity: 2,
+      product: {
+        media: [{ id: PRODUCT_MEDIA_ID }],
+      },
+    }, {
+      id: CUSTOM_LINE_ID,
+      lineType: 'CUSTOM',
+      productId: null,
+      productNameSnapshot: '本单临时包装服务',
+      quantity: 1,
+      product: null,
+    }],
+    documents: [{
+      id: DOCUMENT_ID,
+      mediaAssetId: MEDIA_ASSET_ID,
+      documentType: 'DEPOSIT_VOUCHER',
+      title: '林测试-定金凭证-20260822090000',
+      mediaAsset: { mediaType: 'IMAGE' },
+    }],
+  }
   const salesOrder = {
     count: jest.fn().mockResolvedValue(1),
-    findMany: jest.fn().mockResolvedValue([{
-      id: SALES_ORDER_ID,
-      orderNo: 'SO-20260823-0001',
-      orderDate: new Date('2026-08-22T00:00:00.000Z'),
-      issuer: { id: '88888888-8888-4888-8888-888888888888', displayName: 'SilnoGM' },
-      currencyCode: 'TWD',
-      customerName: '林测试',
-      customerPhone: '0912345678',
-      customerProvinceStateNameSnapshot: '台湾',
-      customerCityNameSnapshot: '新北市',
-      customerFullAddressSnapshot: '中国台湾台湾新北市板桥区测试路1号',
-      lineSubtotalAmount: decimal('1200.0000'),
-      agreedTotalAmount: decimal('1200.0000'),
-      depositDueAmount: decimal('200.0000'),
-      balanceDueAmount: decimal('1000.0000'),
-      remark: '客户要求周末送达',
-      orderStatus: 'CONFIRMED',
-      fulfillmentStatus: 'PREPARING',
-      paymentStatus: 'PARTIALLY_PAID',
-      version: 3,
-      createdAt: new Date('2026-08-22T09:00:00.000Z'),
-      updatedAt: new Date('2026-08-23T10:30:00.000Z'),
-      payments: [{ amount: decimal('200.0000') }],
-      lines: [{
-        id: SALES_ORDER_LINE_ID,
-        lineType: 'CATALOG',
-        productId: PRODUCT_ID,
-        productNameSnapshot: '城市旅行收纳包',
-        quantity: 2,
-        product: {
-          media: [{ id: PRODUCT_MEDIA_ID }],
-        },
-      }, {
-        id: CUSTOM_LINE_ID,
-        lineType: 'CUSTOM',
-        productId: null,
-        productNameSnapshot: '本单临时包装服务',
-        quantity: 1,
-        product: null,
-      }],
-      documents: [{
-        id: DOCUMENT_ID,
-        mediaAssetId: MEDIA_ASSET_ID,
-        documentType: 'DEPOSIT_VOUCHER',
-        title: '林测试-定金凭证-20260822090000',
-        mediaAsset: { mediaType: 'IMAGE' },
-      }],
-    }]),
+    findMany: jest.fn().mockResolvedValue([listRow]),
     aggregate: jest.fn()
       .mockResolvedValueOnce({
         _count: { _all: 1 },
@@ -109,7 +110,7 @@ function createListFixture() {
     salesOrderPayment,
     $transaction: transaction,
   } as unknown as PrismaService)
-  return { salesOrder, salesOrderPayment, service, transaction }
+  return { listRow, salesOrder, salesOrderPayment, service, transaction }
 }
 
 describe('SalesOrderQueryService list summaries', () => {
@@ -221,6 +222,35 @@ describe('SalesOrderQueryService list summaries', () => {
       receivedAmount: '200.0000',
       outstandingAmount: '1000.0000',
     }])
+  })
+
+  it('returns every product line preview so the client can fold additional images', async () => {
+    const fixture = createListFixture()
+    const additionalLines = [1, 2, 3].map(index => ({
+      id: `99999999-9999-4999-8999-99999999999${index}`,
+      lineType: 'CATALOG',
+      productId: `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${index}`,
+      productNameSnapshot: `追加产品 ${index}`,
+      quantity: index,
+      product: {
+        media: [{ id: `bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb${index}` }],
+      },
+    }))
+    fixture.salesOrder.findMany.mockResolvedValueOnce([{
+      ...fixture.listRow,
+      lines: [...fixture.listRow.lines, ...additionalLines],
+    }])
+
+    const result = await fixture.service.list({ page: 1, pageSize: 20 })
+
+    expect(result.items[0]?.lineSummary.previews).toHaveLength(5)
+    expect(result.items[0]?.lineSummary.previews.filter(
+      preview => preview.mainImage !== null,
+    )).toHaveLength(4)
+    expect(result.items[0]?.lineSummary.previews.at(-1)).toMatchObject({
+      lineId: additionalLines[2]?.id,
+      productName: '追加产品 3',
+    })
   })
 })
 
