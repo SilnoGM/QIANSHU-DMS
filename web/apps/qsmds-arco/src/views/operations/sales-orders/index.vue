@@ -552,7 +552,7 @@ onBeforeUnmount(() => {
 
         <template #cell-orderStatusSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="订单" nowrap>
+            <QsTableStackedLine label="订单状态" nowrap>
               <FaTag
                 variant="outline"
                 class="qs-type-status-tag"
@@ -561,7 +561,7 @@ onBeforeUnmount(() => {
                 {{ orderStatusLabel(row.original.orderStatus) }}
               </FaTag>
             </QsTableStackedLine>
-            <QsTableStackedLine label="履约" tone="muted" nowrap>
+            <QsTableStackedLine label="订单进度" tone="muted" nowrap>
               <FaTag
                 variant="outline"
                 class="qs-type-status-tag"
@@ -918,7 +918,7 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <QsTableStackedCell>
-                    <QsTableStackedLine label="订单" nowrap>
+                    <QsTableStackedLine label="订单状态" nowrap>
                       <FaTag
                         variant="outline"
                         class="qs-type-status-tag"
@@ -927,7 +927,7 @@ onBeforeUnmount(() => {
                         {{ orderStatusLabel(row.orderStatus) }}
                       </FaTag>
                     </QsTableStackedLine>
-                    <QsTableStackedLine label="履约" tone="muted" nowrap>
+                    <QsTableStackedLine label="订单进度" tone="muted" nowrap>
                       <FaTag
                         variant="outline"
                         class="qs-type-status-tag"
