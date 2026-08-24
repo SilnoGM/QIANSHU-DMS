@@ -19,29 +19,31 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /salesOrdersApi\.list/)
 })
 
-test('销售订单列表使用八个双行复合列并展示服务端全量筛选汇总', async () => {
+test('销售订单列表使用十个复合列并展示服务端全量筛选汇总', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
   const columnsStart = source.indexOf('const columns:')
   const columnsEnd = source.indexOf('function enumFilter', columnsStart)
   const columnsSource = source.slice(columnsStart, columnsEnd)
   const productCellStart = source.indexOf('<template #cell-productSummary')
-  const productCellEnd = source.indexOf('<template #cell-termsSummary', productCellStart)
+  const productCellEnd = source.indexOf('<template #cell-priceSummary', productCellStart)
   const productCellSource = source.slice(productCellStart, productCellEnd)
   const mobileProductStart = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  产品')
-  const mobileProductEnd = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  销售总价', mobileProductStart)
+  const mobileProductEnd = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  售价', mobileProductStart)
   const mobileProductSource = source.slice(mobileProductStart, mobileProductEnd)
 
   assert.ok(columnsStart >= 0 && columnsEnd > columnsStart, '应存在稳定的销售订单列定义')
   assert.ok(productCellStart >= 0 && productCellEnd > productCellStart, '应存在桌面端产品列插槽')
   assert.ok(mobileProductStart >= 0 && mobileProductEnd > mobileProductStart, '应存在窄屏端产品区域')
-  assert.equal(columnsSource.match(/\bid:/gu)?.length, 8)
+  assert.equal(columnsSource.match(/\bid:/gu)?.length, 10)
   for (const columnId of [
     'orderSummary',
     'customerSummary',
     'productSummary',
+    'priceSummary',
     'termsSummary',
     'collectionSummary',
-    'statusSummary',
+    'paymentStatusSummary',
+    'orderStatusSummary',
     'documentSummary',
     'auditSummary',
   ]) {
@@ -57,8 +59,11 @@ test('销售订单列表使用八个双行复合列并展示服务端全量筛�
   assert.match(source, /response\.data\.summariesByCurrency/u)
   assert.match(source, /:summary-values="summaryValues"/u)
   assert.match(source, /#summary-orderSummary/u)
+  assert.match(source, /#summary-priceSummary/u)
   assert.match(source, /#summary-termsSummary/u)
   assert.match(source, /#summary-collectionSummary/u)
+  assert.match(source, /buildSalesOrderCustomerCopyText\(/u)
+  assert.match(source, /<CopyCellButton[^>]*label="客户信息"[^>]*:text="buildSalesOrderCustomerCopyText\(row\.original\)"/u)
   assert.match(source, /productImageItems\(/u)
   assert.match(source, /resolveProductPreview\(/u)
   assert.match(source, /documentImageItems\(/u)
@@ -70,6 +75,15 @@ test('销售订单列表使用八个双行复合列并展示服务端全量筛�
     assert.match(productSource, /<QsGoodTooltipContent/u)
     assert.doesNotMatch(productSource, /lineCount|totalQuantity|catalogCount|customCount|lineSubtotalAmount/u)
   }
+  assert.match(source, /#cell-priceSummary[\s\S]*?label="实际售价"[\s\S]*?tone="success"[\s\S]*?row\.original\.agreedTotalAmount/u)
+  assert.match(source, /#cell-priceSummary[\s\S]*?label="标准售价"[\s\S]*?row\.original\.standardSubtotalAmount/u)
+  assert.match(source, /#cell-termsSummary[\s\S]*?label="定金"[\s\S]*?tone="success"[\s\S]*?row\.original\.depositDueAmount/u)
+  assert.match(source, /#cell-termsSummary[\s\S]*?label="尾款"[\s\S]*?tone="danger"[\s\S]*?row\.original\.balanceDueAmount/u)
+  assert.match(source, /#cell-paymentStatusSummary[\s\S]*?paymentStatusLabel\(row\.original\.paymentStatus\)/u)
+  assert.match(source, /#cell-orderStatusSummary[\s\S]*?orderStatusLabel\(row\.original\.orderStatus\)[\s\S]*?fulfillmentStatusLabel\(row\.original\.fulfillmentStatus\)/u)
+  assert.match(source, /#summary-priceSummary[\s\S]*?summary\.agreedTotalAmount[\s\S]*?summary\.standardSubtotalAmount/u)
+  assert.match(source, /#summary-termsSummary[\s\S]*?summary\.depositDueAmount[\s\S]*?summary\.balanceDueAmount/u)
+  assert.match(source, /#summary-collectionSummary[\s\S]*?summary\.receivedAmount[\s\S]*?summary\.outstandingAmount/u)
   assert.match(source, /row\.documentSummary\.count/u)
   assert.match(source, /row\.depositDueAmount/u)
   assert.match(source, /row\.balanceDueAmount/u)

@@ -25,6 +25,7 @@ import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTool
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
+import { buildSalesOrderCustomerCopyText } from './sales-order-list.logic'
 
 defineOptions({ name: 'OperationsSalesOrders' })
 
@@ -127,14 +128,22 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     title: '订单',
   },
   { accessorKey: 'customerName', id: 'customerSummary', minWidth: 260, title: '客户' },
-  { accessorFn: item => item.lineSummary.lineCount, id: 'productSummary', minWidth: 230, title: '产品' },
+  { accessorFn: item => item.lineSummary.lineCount, id: 'productSummary', minWidth: 160, title: '产品' },
   {
     accessorKey: 'agreedTotalAmount',
     align: 'right',
-    id: 'termsSummary',
-    minWidth: 250,
+    id: 'priceSummary',
+    minWidth: 240,
     summary: { type: 'sum' },
-    title: '销售与付款约定',
+    title: '售价',
+  },
+  {
+    accessorKey: 'depositDueAmount',
+    align: 'right',
+    id: 'termsSummary',
+    minWidth: 230,
+    summary: { type: 'sum' },
+    title: '约定金额',
   },
   {
     accessorKey: 'receivedAmount',
@@ -144,7 +153,8 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     summary: { type: 'sum' },
     title: '实际收款',
   },
-  { accessorKey: 'orderStatus', id: 'statusSummary', minWidth: 230, title: '状态' },
+  { accessorKey: 'paymentStatus', id: 'paymentStatusSummary', minWidth: 170, title: '付款状态' },
+  { accessorKey: 'orderStatus', id: 'orderStatusSummary', minWidth: 210, title: '订单状态' },
   { accessorFn: item => item.documentSummary.count, id: 'documentSummary', minWidth: 250, title: '凭证与备注' },
   { accessorKey: 'updatedAt', id: 'auditSummary', minWidth: 240, title: '审计信息' },
 ]
@@ -152,6 +162,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
 const summaryValues = computed(() => ({
   collectionSummary: null,
   orderSummary: total.value,
+  priceSummary: null,
   termsSummary: null,
 }))
 
@@ -406,7 +417,7 @@ onBeforeUnmount(() => {
         :show-column-settings="true"
         :summary-values="summaryValues"
         :total="total"
-        table-class="min-w-[1940px]"
+        table-class="min-w-[2260px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="loadOrders"
@@ -427,9 +438,12 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-customerSummary="{ row }">
-          <QsTableStackedCell>
+          <QsTableStackedCell class="group">
             <QsTableStackedLine content-class="font-medium truncate" nowrap>
               {{ row.original.customerName }} · {{ row.original.customerPhone }}
+              <template #suffix>
+                <CopyCellButton label="客户信息" :text="buildSalesOrderCustomerCopyText(row.original)" />
+              </template>
             </QsTableStackedLine>
             <QsTableStackedLine tone="muted" content-class="qs-type-meta truncate" nowrap>
               <FaTooltip :text="row.original.customerFullAddress">
@@ -468,14 +482,23 @@ onBeforeUnmount(() => {
           </ImageGroup>
         </template>
 
-        <template #cell-termsSummary="{ row }">
+        <template #cell-priceSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="总价" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="实际售价" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
               <AmountDisplay :value="row.original.agreedTotalAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
-            <QsTableStackedLine label="定金 / 尾款" tone="muted" content-class="ml-auto flex gap-1 justify-end text-right" nowrap>
+            <QsTableStackedLine label="标准售价" content-class="ml-auto flex justify-end text-right" nowrap>
+              <AmountDisplay :value="row.original.standardSubtotalAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+
+        <template #cell-termsSummary="{ row }">
+          <QsTableStackedCell>
+            <QsTableStackedLine label="定金" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
               <AmountDisplay :value="row.original.depositDueAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              <span>/</span>
+            </QsTableStackedLine>
+            <QsTableStackedLine label="尾款" tone="danger" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
               <AmountDisplay :value="row.original.balanceDueAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -492,20 +515,22 @@ onBeforeUnmount(() => {
           </QsTableStackedCell>
         </template>
 
-        <template #cell-statusSummary="{ row }">
+        <template #cell-paymentStatusSummary="{ row }">
+          <FaTag variant="outline" class="qs-type-status-tag">
+            {{ paymentStatusLabel(row.original.paymentStatus) }}
+          </FaTag>
+        </template>
+
+        <template #cell-orderStatusSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine content-class="flex gap-1.5" nowrap>
+            <QsTableStackedLine label="订单" nowrap>
               <FaTag variant="outline" class="qs-type-status-tag">
                 {{ orderStatusLabel(row.original.orderStatus) }}
               </FaTag>
+            </QsTableStackedLine>
+            <QsTableStackedLine label="履约" tone="muted" nowrap>
               <FaTag variant="outline" class="qs-type-status-tag">
                 {{ fulfillmentStatusLabel(row.original.fulfillmentStatus) }}
-              </FaTag>
-            </QsTableStackedLine>
-            <QsTableStackedLine tone="muted" content-class="flex gap-1.5" nowrap>
-              <span class="qs-type-meta">付款</span>
-              <FaTag variant="outline" class="qs-type-status-tag">
-                {{ paymentStatusLabel(row.original.paymentStatus) }}
               </FaTag>
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -556,25 +581,42 @@ onBeforeUnmount(() => {
           </div>
         </template>
 
+        <template #summary-priceSummary>
+          <div class="gap-2 grid justify-items-end">
+            <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
+              <QsTableStackedLine :label="`实际售价 ${summary.currencyCode}`" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+                <AmountDisplay :value="summary.agreedTotalAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
+              </QsTableStackedLine>
+              <QsTableStackedLine label="标准售价" content-class="ml-auto flex justify-end text-right" nowrap>
+                <AmountDisplay :value="summary.standardSubtotalAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </div>
+        </template>
+
         <template #summary-termsSummary>
-          <div class="text-right gap-1.5 grid justify-items-end">
-            <span class="qs-type-meta">筛选结果 · 销售总价</span>
-            <div v-for="summary in summariesByCurrency" :key="summary.currencyCode" class="flex gap-2 items-baseline">
-              <span class="qs-type-meta font-mono">{{ summary.currencyCode }} · {{ summary.orderCount }} 单</span>
-              <AmountDisplay :value="summary.agreedTotalAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-            </div>
+          <div class="gap-2 grid justify-items-end">
+            <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
+              <QsTableStackedLine :label="`定金 ${summary.currencyCode}`" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+                <AmountDisplay :value="summary.depositDueAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
+              </QsTableStackedLine>
+              <QsTableStackedLine label="尾款" tone="danger" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+                <AmountDisplay :value="summary.balanceDueAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
+              </QsTableStackedLine>
+            </QsTableStackedCell>
           </div>
         </template>
 
         <template #summary-collectionSummary>
-          <div class="text-right gap-1.5 grid justify-items-end">
-            <span class="qs-type-meta">筛选结果 · 实收 / 待收</span>
-            <div v-for="summary in summariesByCurrency" :key="summary.currencyCode" class="flex gap-1 whitespace-nowrap items-baseline">
-              <span class="qs-type-meta font-mono">{{ summary.currencyCode }}</span>
-              <AmountDisplay :value="summary.receivedAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              <span class="qs-type-meta">/</span>
-              <AmountDisplay :value="summary.outstandingAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-            </div>
+          <div class="gap-2 grid justify-items-end">
+            <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
+              <QsTableStackedLine :label="`已收 ${summary.currencyCode}`" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+                <AmountDisplay :value="summary.receivedAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
+              </QsTableStackedLine>
+              <QsTableStackedLine label="待收" :tone="hasPositiveAmount(summary.outstandingAmount) ? 'danger' : 'muted'" content-class="ml-auto flex justify-end text-right" nowrap>
+                <AmountDisplay :value="summary.outstandingAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
+              </QsTableStackedLine>
+            </QsTableStackedCell>
           </div>
         </template>
 
@@ -600,9 +642,10 @@ onBeforeUnmount(() => {
                 <dt class="qs-type-compact-label mb-1">
                   客户
                 </dt>
-                <dd class="m-0">
-                  <div class="font-medium">
+                <dd class="group m-0">
+                  <div class="font-medium flex gap-2 items-center">
                     {{ row.customerName }} · {{ row.customerPhone }}
+                    <CopyCellButton always-visible label="客户信息" :text="buildSalesOrderCustomerCopyText(row)" />
                   </div>
                   <div class="qs-type-meta mt-1 break-all">
                     {{ salesRegionLabel(row) }} · {{ row.customerFullAddress }}
@@ -639,42 +682,76 @@ onBeforeUnmount(() => {
               </div>
               <div class="col-span-2">
                 <dt class="qs-type-compact-label mb-1">
-                  销售总价
+                  售价
                 </dt>
-                <dd class="qs-type-data-emphasis m-0">
-                  <AmountDisplay :value="row.agreedTotalAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
-                </dd>
-              </div>
-              <div>
-                <dt class="qs-type-compact-label mb-1">
-                  定金 / 已收
-                </dt>
-                <dd class="m-0 gap-1 grid">
-                  <AmountDisplay :value="row.depositDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" /><AmountDisplay :value="row.receivedAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
-                </dd>
-              </div>
-              <div>
-                <dt class="qs-type-compact-label mb-1">
-                  尾款 / 待收
-                </dt>
-                <dd class="m-0 gap-1 grid">
-                  <AmountDisplay :value="row.balanceDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" /><AmountDisplay :value="row.outstandingAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
+                <dd class="m-0">
+                  <QsTableStackedCell>
+                    <QsTableStackedLine label="实际售价" tone="success" nowrap weight="semibold">
+                      <AmountDisplay :value="row.agreedTotalAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
+                    </QsTableStackedLine>
+                    <QsTableStackedLine label="标准售价" nowrap>
+                      <AmountDisplay :value="row.standardSubtotalAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
+                    </QsTableStackedLine>
+                  </QsTableStackedCell>
                 </dd>
               </div>
               <div class="col-span-2">
                 <dt class="qs-type-compact-label mb-1">
-                  状态
+                  约定金额
                 </dt>
-                <dd class="m-0 flex flex-wrap gap-1.5">
-                  <FaTag variant="outline" class="qs-type-status-tag">
-                    {{ orderStatusLabel(row.orderStatus) }}
-                  </FaTag>
-                  <FaTag variant="outline" class="qs-type-status-tag">
-                    {{ fulfillmentStatusLabel(row.fulfillmentStatus) }}
-                  </FaTag>
+                <dd class="m-0">
+                  <QsTableStackedCell>
+                    <QsTableStackedLine label="定金" tone="success" nowrap weight="semibold">
+                      <AmountDisplay :value="row.depositDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
+                    </QsTableStackedLine>
+                    <QsTableStackedLine label="尾款" tone="danger" nowrap weight="semibold">
+                      <AmountDisplay :value="row.balanceDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
+                    </QsTableStackedLine>
+                  </QsTableStackedCell>
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  实际收款
+                </dt>
+                <dd class="m-0">
+                  <QsTableStackedCell>
+                    <QsTableStackedLine label="已收" tone="success" nowrap weight="semibold">
+                      <AmountDisplay :value="row.receivedAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
+                    </QsTableStackedLine>
+                    <QsTableStackedLine label="待收" :tone="hasPositiveAmount(row.outstandingAmount) ? 'danger' : 'muted'" nowrap>
+                      <AmountDisplay :value="row.outstandingAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
+                    </QsTableStackedLine>
+                  </QsTableStackedCell>
+                </dd>
+              </div>
+              <div>
+                <dt class="qs-type-compact-label mb-1">
+                  付款状态
+                </dt>
+                <dd class="m-0">
                   <FaTag variant="outline" class="qs-type-status-tag">
                     {{ paymentStatusLabel(row.paymentStatus) }}
                   </FaTag>
+                </dd>
+              </div>
+              <div>
+                <dt class="qs-type-compact-label mb-1">
+                  订单状态
+                </dt>
+                <dd class="m-0">
+                  <QsTableStackedCell>
+                    <QsTableStackedLine label="订单" nowrap>
+                      <FaTag variant="outline" class="qs-type-status-tag">
+                        {{ orderStatusLabel(row.orderStatus) }}
+                      </FaTag>
+                    </QsTableStackedLine>
+                    <QsTableStackedLine label="履约" tone="muted" nowrap>
+                      <FaTag variant="outline" class="qs-type-status-tag">
+                        {{ fulfillmentStatusLabel(row.fulfillmentStatus) }}
+                      </FaTag>
+                    </QsTableStackedLine>
+                  </QsTableStackedCell>
                 </dd>
               </div>
               <div class="col-span-2">
