@@ -93,10 +93,12 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   for (const productSource of [productCellSource, mobileProductSource]) {
     assert.match(productSource, /<ImageGroup/u)
     assert.match(productSource, /:max-count="3"/u)
+    assert.match(productSource, /:size="40"/u)
     assert.match(productSource, /<template #tooltip="\{ item, index, total: imageTotal \}">/u)
     assert.match(productSource, /<QsGoodTooltipContent/u)
     assert.doesNotMatch(productSource, /lineCount|totalQuantity|catalogCount|customCount|lineSubtotalAmount/u)
   }
+  assert.match(source, /#cell-documentSummary[\s\S]*?<ImageGroup[\s\S]*?:size="32"/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="实际售价"[\s\S]*?row\.original\.agreedTotalAmount/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="标准售价"[\s\S]*?row\.original\.standardSubtotalAmount/u)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="定金"[\s\S]*?row\.original\.depositDueAmount/u)

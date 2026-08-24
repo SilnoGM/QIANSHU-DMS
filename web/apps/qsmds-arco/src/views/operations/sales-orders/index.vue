@@ -444,7 +444,7 @@ onBeforeUnmount(() => {
           <ImageGroup
             :items="productImageItems(row.original)"
             :max-count="3"
-            :size="32"
+            :size="40"
             radius="md"
           >
             <template #tooltip="{ item, index, total: imageTotal }">
