@@ -25,7 +25,10 @@ import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTool
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
-import { buildSalesOrderCustomerCopyText } from './sales-order-list.logic'
+import {
+  buildSalesOrderCustomerCopyText,
+  formatSalesOrderSummaryAmount,
+} from './sales-order-list.logic'
 
 defineOptions({ name: 'OperationsSalesOrders' })
 
@@ -124,7 +127,6 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     id: 'orderSummary',
     fixed: 'left',
     minWidth: 230,
-    summary: { type: 'count' },
     title: '订单',
   },
   { accessorKey: 'customerName', id: 'customerSummary', minWidth: 260, title: '客户' },
@@ -134,7 +136,6 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     align: 'right',
     id: 'priceSummary',
     minWidth: 240,
-    summary: { type: 'sum' },
     title: '售价',
   },
   {
@@ -142,7 +143,6 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     align: 'right',
     id: 'termsSummary',
     minWidth: 230,
-    summary: { type: 'sum' },
     title: '约定金额',
   },
   {
@@ -150,7 +150,6 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     align: 'right',
     id: 'collectionSummary',
     minWidth: 230,
-    summary: { type: 'sum' },
     title: '实际收款',
   },
   { accessorKey: 'paymentStatus', id: 'paymentStatusSummary', minWidth: 170, title: '付款状态' },
@@ -158,13 +157,6 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
   { accessorFn: item => item.documentSummary.count, id: 'documentSummary', minWidth: 250, title: '凭证与备注' },
   { accessorKey: 'updatedAt', id: 'auditSummary', minWidth: 240, title: '审计信息' },
 ]
-
-const summaryValues = computed(() => ({
-  collectionSummary: null,
-  orderSummary: total.value,
-  priceSummary: null,
-  termsSummary: null,
-}))
 
 function productImageItems(row: SalesOrderListItemDto): readonly ImageGroupItem[] {
   return row.lineSummary.previews.flatMap(preview => preview.mainImage === null
@@ -415,7 +407,6 @@ onBeforeUnmount(() => {
         search-placeholder="搜索订单编号、客户姓名或电话"
         :searchable="true"
         :show-column-settings="true"
-        :summary-values="summaryValues"
         :total="total"
         table-class="min-w-[2260px]"
         @filter-change="handleFilterChange"
@@ -574,50 +565,174 @@ onBeforeUnmount(() => {
           </QsTableStackedCell>
         </template>
 
-        <template #summary-orderSummary>
-          <div class="gap-0.5 grid">
-            <span class="qs-type-meta">筛选结果</span>
-            <strong class="qs-type-data-emphasis">共 {{ total }} 张订单</strong>
-          </div>
-        </template>
+        <template #summary>
+          <!-- 币种作为稳定行维度，六项金额作为列维度，避免在窄表尾中重复币种和挤压标签。 -->
+          <section
+            data-testid="sales-order-summary-matrix"
+            aria-label="销售订单金额汇总"
+            class="border-t-2 border-border bg-background overflow-hidden"
+          >
+            <div class="md:grid md:grid-cols-[12rem_minmax(0,1fr)]">
+              <div class="px-4 py-3 border-border flex gap-1 md:border-r md:flex-col md:justify-center">
+                <span class="qs-type-meta">筛选结果</span>
+                <strong class="qs-type-data-emphasis">共 {{ total }} 张订单</strong>
+              </div>
 
-        <template #summary-priceSummary>
-          <div class="gap-2 grid justify-items-end">
-            <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
-              <QsTableStackedLine label="实际售价" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
-                <AmountDisplay :value="summary.agreedTotalAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              </QsTableStackedLine>
-              <QsTableStackedLine label="标准售价" content-class="ml-auto flex justify-end text-right" nowrap>
-                <AmountDisplay :value="summary.standardSubtotalAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              </QsTableStackedLine>
-            </QsTableStackedCell>
-          </div>
-        </template>
+              <div
+                data-testid="sales-order-summary-desktop"
+                class="min-w-0 hidden overflow-x-auto md:block"
+              >
+                <table class="text-sm min-w-[840px] w-full border-collapse">
+                  <caption class="sr-only">
+                    按币种汇总销售订单售价、付款约定与收款金额
+                  </caption>
+                  <thead class="text-muted-foreground bg-muted/20">
+                    <tr class="border-b border-border/70">
+                      <th scope="col" rowspan="2" class="font-medium px-4 py-2 text-left">
+                        币种
+                      </th>
+                      <th scope="colgroup" colspan="2" class="font-medium px-4 py-2 text-center">
+                        售价
+                      </th>
+                      <th scope="colgroup" colspan="2" class="font-medium px-4 py-2 text-center">
+                        付款约定
+                      </th>
+                      <th scope="colgroup" colspan="2" class="font-medium px-4 py-2 text-center">
+                        收款
+                      </th>
+                    </tr>
+                    <tr class="border-b border-border/70">
+                      <th scope="col" class="font-medium px-4 py-2 text-right">
+                        实际售价
+                      </th>
+                      <th scope="col" class="font-medium px-4 py-2 text-right">
+                        标准售价
+                      </th>
+                      <th scope="col" class="font-medium px-4 py-2 text-right">
+                        定金
+                      </th>
+                      <th scope="col" class="font-medium px-4 py-2 text-right">
+                        尾款
+                      </th>
+                      <th scope="col" class="font-medium px-4 py-2 text-right">
+                        已收
+                      </th>
+                      <th scope="col" class="font-medium px-4 py-2 text-right">
+                        待收
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody v-if="summariesByCurrency.length > 0">
+                    <tr
+                      v-for="summary in summariesByCurrency"
+                      :key="summary.currencyCode"
+                      class="border-b border-border/60 last:border-b-0"
+                    >
+                      <th scope="row" class="qs-type-data font-semibold px-4 py-3 text-left">
+                        {{ summary.currencyCode }}
+                      </th>
+                      <td class="qs-type-data-emphasis text-primary px-4 py-3 text-right whitespace-nowrap">
+                        {{ formatSalesOrderSummaryAmount(summary.agreedTotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                      </td>
+                      <td class="qs-type-data-emphasis text-foreground px-4 py-3 text-right whitespace-nowrap">
+                        {{ formatSalesOrderSummaryAmount(summary.standardSubtotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                      </td>
+                      <td class="qs-type-data-emphasis text-primary px-4 py-3 text-right whitespace-nowrap">
+                        {{ formatSalesOrderSummaryAmount(summary.depositDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                      </td>
+                      <td class="qs-type-data-emphasis text-destructive px-4 py-3 text-right whitespace-nowrap">
+                        {{ formatSalesOrderSummaryAmount(summary.balanceDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                      </td>
+                      <td class="qs-type-data-emphasis text-primary px-4 py-3 text-right whitespace-nowrap">
+                        {{ formatSalesOrderSummaryAmount(summary.receivedAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                      </td>
+                      <td class="qs-type-data-emphasis text-destructive px-4 py-3 text-right whitespace-nowrap">
+                        {{ formatSalesOrderSummaryAmount(summary.outstandingAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tbody v-else>
+                    <tr>
+                      <td colspan="7" class="text-muted-foreground px-4 py-5 text-center">
+                        暂无金额汇总
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
 
-        <template #summary-termsSummary>
-          <div class="gap-2 grid justify-items-end">
-            <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
-              <QsTableStackedLine label="定金" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
-                <AmountDisplay :value="summary.depositDueAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              </QsTableStackedLine>
-              <QsTableStackedLine label="尾款" tone="danger" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
-                <AmountDisplay :value="summary.balanceDueAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              </QsTableStackedLine>
-            </QsTableStackedCell>
-          </div>
-        </template>
-
-        <template #summary-collectionSummary>
-          <div class="gap-2 grid justify-items-end">
-            <QsTableStackedCell v-for="summary in summariesByCurrency" :key="summary.currencyCode">
-              <QsTableStackedLine label="已收" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
-                <AmountDisplay :value="summary.receivedAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              </QsTableStackedLine>
-              <QsTableStackedLine label="待收" :tone="hasPositiveAmount(summary.outstandingAmount) ? 'danger' : 'muted'" content-class="ml-auto flex justify-end text-right" nowrap>
-                <AmountDisplay :value="summary.outstandingAmount" :currency="summary.currencyCode" :currencies="currencyCatalog.currencies.value" />
-              </QsTableStackedLine>
-            </QsTableStackedCell>
-          </div>
+              <div
+                data-testid="sales-order-summary-mobile"
+                class="border-t border-border md:hidden"
+              >
+                <div v-if="summariesByCurrency.length > 0">
+                  <section
+                    v-for="summary in summariesByCurrency"
+                    :key="summary.currencyCode"
+                    class="p-4 border-b border-border last:border-b-0"
+                    :aria-label="`${summary.currencyCode} 金额汇总`"
+                  >
+                    <h3 class="qs-type-data-emphasis m-0 mb-3">
+                      {{ summary.currencyCode }}
+                    </h3>
+                    <dl class="m-0 gap-x-5 gap-y-4 grid grid-cols-2">
+                      <div>
+                        <dt class="qs-type-meta">
+                          实际售价
+                        </dt>
+                        <dd class="qs-type-data-emphasis text-primary m-0 mt-1 whitespace-nowrap">
+                          {{ formatSalesOrderSummaryAmount(summary.agreedTotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="qs-type-meta">
+                          标准售价
+                        </dt>
+                        <dd class="qs-type-data-emphasis m-0 mt-1 whitespace-nowrap">
+                          {{ formatSalesOrderSummaryAmount(summary.standardSubtotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="qs-type-meta">
+                          定金
+                        </dt>
+                        <dd class="qs-type-data-emphasis text-primary m-0 mt-1 whitespace-nowrap">
+                          {{ formatSalesOrderSummaryAmount(summary.depositDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="qs-type-meta">
+                          尾款
+                        </dt>
+                        <dd class="qs-type-data-emphasis text-destructive m-0 mt-1 whitespace-nowrap">
+                          {{ formatSalesOrderSummaryAmount(summary.balanceDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="qs-type-meta">
+                          已收
+                        </dt>
+                        <dd class="qs-type-data-emphasis text-primary m-0 mt-1 whitespace-nowrap">
+                          {{ formatSalesOrderSummaryAmount(summary.receivedAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt class="qs-type-meta">
+                          待收
+                        </dt>
+                        <dd class="qs-type-data-emphasis text-destructive m-0 mt-1 whitespace-nowrap">
+                          {{ formatSalesOrderSummaryAmount(summary.outstandingAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+                </div>
+                <p v-else class="text-sm text-muted-foreground m-0 px-4 py-5 text-center">
+                  暂无金额汇总
+                </p>
+              </div>
+            </div>
+          </section>
         </template>
 
         <template #mobile-row="{ row, rowNumber }">

@@ -57,11 +57,19 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.match(source, /import QsTableStackedCell from '@\/components\/business\/QsGenericTable\/QsTableStackedCell\.vue'/u)
   assert.match(source, /import QsTableStackedLine from '@\/components\/business\/QsGenericTable\/QsTableStackedLine\.vue'/u)
   assert.match(source, /response\.data\.summariesByCurrency/u)
-  assert.match(source, /:summary-values="summaryValues"/u)
-  assert.match(source, /#summary-orderSummary/u)
-  assert.match(source, /#summary-priceSummary/u)
-  assert.match(source, /#summary-termsSummary/u)
-  assert.match(source, /#summary-collectionSummary/u)
+  assert.match(source, /<template #summary>/u)
+  assert.match(source, /data-testid="sales-order-summary-matrix"/u)
+  assert.match(source, /data-testid="sales-order-summary-desktop"/u)
+  assert.match(source, /data-testid="sales-order-summary-mobile"/u)
+  assert.match(source, /scope="colgroup"[^>]*colspan="2"[^>]*>\s*售价/u)
+  assert.match(source, /scope="colgroup"[^>]*colspan="2"[^>]*>\s*付款约定/u)
+  assert.match(source, /scope="colgroup"[^>]*colspan="2"[^>]*>\s*收款/u)
+  assert.match(source, /v-for="summary in summariesByCurrency"/u)
+  assert.match(source, /colspan="7"/u)
+  assert.match(source, /formatSalesOrderSummaryAmount\(/u)
+  assert.doesNotMatch(source, /:summary-values="summaryValues"/u)
+  assert.doesNotMatch(source, /#summary-(?:orderSummary|priceSummary|termsSummary|collectionSummary)/u)
+  assert.doesNotMatch(columnsSource, /summary:/u)
   assert.match(source, /buildSalesOrderCustomerCopyText\(/u)
   assert.match(source, /<CopyCellButton[^>]*label="客户信息"[^>]*:text="buildSalesOrderCustomerCopyText\(row\.original\)"/u)
   assert.match(source, /productImageItems\(/u)
@@ -81,14 +89,16 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.match(source, /#cell-termsSummary[\s\S]*?label="尾款"[\s\S]*?tone="danger"[\s\S]*?row\.original\.balanceDueAmount/u)
   assert.match(source, /#cell-paymentStatusSummary[\s\S]*?paymentStatusLabel\(row\.original\.paymentStatus\)/u)
   assert.match(source, /#cell-orderStatusSummary[\s\S]*?orderStatusLabel\(row\.original\.orderStatus\)[\s\S]*?fulfillmentStatusLabel\(row\.original\.fulfillmentStatus\)/u)
-  assert.match(source, /#summary-priceSummary[\s\S]*?summary\.agreedTotalAmount[\s\S]*?summary\.standardSubtotalAmount/u)
-  assert.match(source, /#summary-termsSummary[\s\S]*?summary\.depositDueAmount[\s\S]*?summary\.balanceDueAmount/u)
-  assert.match(source, /#summary-collectionSummary[\s\S]*?summary\.receivedAmount[\s\S]*?summary\.outstandingAmount/u)
-  // AmountDisplay 已经输出币种符号和代码，汇总标签不得重复拼接币种，否则窄列内会与金额重叠。
-  assert.match(source, /#summary-priceSummary[\s\S]*?label="实际售价"/u)
-  assert.match(source, /#summary-termsSummary[\s\S]*?label="定金"/u)
-  assert.match(source, /#summary-collectionSummary[\s\S]*?label="已收"/u)
-  assert.doesNotMatch(source, /:label="`(?:实际售价|定金|已收) \$\{summary\.currencyCode\}`"/u)
+  for (const amountField of [
+    'agreedTotalAmount',
+    'standardSubtotalAmount',
+    'depositDueAmount',
+    'balanceDueAmount',
+    'receivedAmount',
+    'outstandingAmount',
+  ]) {
+    assert.match(source, new RegExp(`summary\\.${amountField}`, 'u'))
+  }
   assert.match(source, /row\.documentSummary\.count/u)
   assert.match(source, /row\.depositDueAmount/u)
   assert.match(source, /row\.balanceDueAmount/u)
