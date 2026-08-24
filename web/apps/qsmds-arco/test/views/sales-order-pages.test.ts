@@ -117,7 +117,8 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
     assert.match(productSource, /<QsGoodTooltipContent/u)
     assert.doesNotMatch(productSource, /lineCount|totalQuantity|catalogCount|customCount|lineSubtotalAmount/u)
   }
-  assert.match(source, /#cell-documentSummary[\s\S]*?<ImageGroup[\s\S]*?:size="32"/u)
+  assert.match(source, /#cell-documentSummary[\s\S]*?<ImageGroup[\s\S]*?:items="documentImageItems\(row\.original\)"[\s\S]*?:max-count="2"[\s\S]*?:size="32"/u)
+  assert.match(source, /v-if="row\.documentSummary\.imageCount > 0" :items="documentImageItems\(row\)" :max-count="2" :size="40"/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="实际售价"[\s\S]*?row\.original\.agreedTotalAmount/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="标准售价"[\s\S]*?row\.original\.standardSubtotalAmount/u)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="定金"[\s\S]*?row\.original\.depositDueAmount/u)

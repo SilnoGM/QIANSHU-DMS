@@ -539,7 +539,7 @@ onBeforeUnmount(() => {
               <ImageGroup
                 v-if="row.original.documentSummary.imageCount > 0"
                 :items="documentImageItems(row.original)"
-                :max-count="3"
+                :max-count="2"
                 :size="32"
                 radius="md"
               />
@@ -892,7 +892,7 @@ onBeforeUnmount(() => {
                   凭证与备注
                 </dt>
                 <dd class="m-0 flex gap-3 items-center">
-                  <ImageGroup v-if="row.documentSummary.imageCount > 0" :items="documentImageItems(row)" :max-count="3" :size="40" radius="md" />
+                  <ImageGroup v-if="row.documentSummary.imageCount > 0" :items="documentImageItems(row)" :max-count="2" :size="40" radius="md" />
                   <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground size-5" aria-hidden="true" />
                   <span class="min-w-0">
                     <span>{{ row.documentSummary.count }} 份凭证</span>
