@@ -30,10 +30,14 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   const mobileProductStart = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  产品')
   const mobileProductEnd = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  售价', mobileProductStart)
   const mobileProductSource = source.slice(mobileProductStart, mobileProductEnd)
+  const summaryMatrixStart = source.indexOf('data-testid="sales-order-summary-matrix"')
+  const summaryMatrixEnd = source.indexOf('<template #mobile-row', summaryMatrixStart)
+  const summaryMatrixSource = source.slice(summaryMatrixStart, summaryMatrixEnd)
 
   assert.ok(columnsStart >= 0 && columnsEnd > columnsStart, '应存在稳定的销售订单列定义')
   assert.ok(productCellStart >= 0 && productCellEnd > productCellStart, '应存在桌面端产品列插槽')
   assert.ok(mobileProductStart >= 0 && mobileProductEnd > mobileProductStart, '应存在窄屏端产品区域')
+  assert.ok(summaryMatrixStart >= 0 && summaryMatrixEnd > summaryMatrixStart, '应存在独立的金额汇总矩阵')
   assert.equal(columnsSource.match(/\bid:/gu)?.length, 10)
   for (const columnId of [
     'orderSummary',
@@ -67,6 +71,8 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.match(source, /v-for="summary in summariesByCurrency"/u)
   assert.match(source, /colspan="7"/u)
   assert.match(source, /formatSalesOrderSummaryAmount\(/u)
+  assert.equal(summaryMatrixSource.match(/qs-type-data-emphasis text-foreground/gu)?.length, 12)
+  assert.doesNotMatch(summaryMatrixSource, /text-(?:primary|destructive)/u)
   assert.doesNotMatch(source, /:summary-values="summaryValues"/u)
   assert.doesNotMatch(source, /#summary-(?:orderSummary|priceSummary|termsSummary|collectionSummary)/u)
   assert.doesNotMatch(columnsSource, /summary:/u)

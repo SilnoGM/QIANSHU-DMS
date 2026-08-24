@@ -631,22 +631,22 @@ onBeforeUnmount(() => {
                       <th scope="row" class="qs-type-data font-semibold px-4 py-3 text-left">
                         {{ summary.currencyCode }}
                       </th>
-                      <td class="qs-type-data-emphasis text-primary px-4 py-3 text-right whitespace-nowrap">
+                      <td class="qs-type-data-emphasis text-foreground px-4 py-3 text-right whitespace-nowrap">
                         {{ formatSalesOrderSummaryAmount(summary.agreedTotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                       </td>
                       <td class="qs-type-data-emphasis text-foreground px-4 py-3 text-right whitespace-nowrap">
                         {{ formatSalesOrderSummaryAmount(summary.standardSubtotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                       </td>
-                      <td class="qs-type-data-emphasis text-primary px-4 py-3 text-right whitespace-nowrap">
+                      <td class="qs-type-data-emphasis text-foreground px-4 py-3 text-right whitespace-nowrap">
                         {{ formatSalesOrderSummaryAmount(summary.depositDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                       </td>
-                      <td class="qs-type-data-emphasis text-destructive px-4 py-3 text-right whitespace-nowrap">
+                      <td class="qs-type-data-emphasis text-foreground px-4 py-3 text-right whitespace-nowrap">
                         {{ formatSalesOrderSummaryAmount(summary.balanceDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                       </td>
-                      <td class="qs-type-data-emphasis text-primary px-4 py-3 text-right whitespace-nowrap">
+                      <td class="qs-type-data-emphasis text-foreground px-4 py-3 text-right whitespace-nowrap">
                         {{ formatSalesOrderSummaryAmount(summary.receivedAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                       </td>
-                      <td class="qs-type-data-emphasis text-destructive px-4 py-3 text-right whitespace-nowrap">
+                      <td class="qs-type-data-emphasis text-foreground px-4 py-3 text-right whitespace-nowrap">
                         {{ formatSalesOrderSummaryAmount(summary.outstandingAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                       </td>
                     </tr>
@@ -680,7 +680,7 @@ onBeforeUnmount(() => {
                         <dt class="qs-type-meta">
                           实际售价
                         </dt>
-                        <dd class="qs-type-data-emphasis text-primary m-0 mt-1 whitespace-nowrap">
+                        <dd class="qs-type-data-emphasis text-foreground m-0 mt-1 whitespace-nowrap">
                           {{ formatSalesOrderSummaryAmount(summary.agreedTotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                         </dd>
                       </div>
@@ -688,7 +688,7 @@ onBeforeUnmount(() => {
                         <dt class="qs-type-meta">
                           标准售价
                         </dt>
-                        <dd class="qs-type-data-emphasis m-0 mt-1 whitespace-nowrap">
+                        <dd class="qs-type-data-emphasis text-foreground m-0 mt-1 whitespace-nowrap">
                           {{ formatSalesOrderSummaryAmount(summary.standardSubtotalAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                         </dd>
                       </div>
@@ -696,7 +696,7 @@ onBeforeUnmount(() => {
                         <dt class="qs-type-meta">
                           定金
                         </dt>
-                        <dd class="qs-type-data-emphasis text-primary m-0 mt-1 whitespace-nowrap">
+                        <dd class="qs-type-data-emphasis text-foreground m-0 mt-1 whitespace-nowrap">
                           {{ formatSalesOrderSummaryAmount(summary.depositDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                         </dd>
                       </div>
@@ -704,7 +704,7 @@ onBeforeUnmount(() => {
                         <dt class="qs-type-meta">
                           尾款
                         </dt>
-                        <dd class="qs-type-data-emphasis text-destructive m-0 mt-1 whitespace-nowrap">
+                        <dd class="qs-type-data-emphasis text-foreground m-0 mt-1 whitespace-nowrap">
                           {{ formatSalesOrderSummaryAmount(summary.balanceDueAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                         </dd>
                       </div>
@@ -712,7 +712,7 @@ onBeforeUnmount(() => {
                         <dt class="qs-type-meta">
                           已收
                         </dt>
-                        <dd class="qs-type-data-emphasis text-primary m-0 mt-1 whitespace-nowrap">
+                        <dd class="qs-type-data-emphasis text-foreground m-0 mt-1 whitespace-nowrap">
                           {{ formatSalesOrderSummaryAmount(summary.receivedAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                         </dd>
                       </div>
@@ -720,7 +720,7 @@ onBeforeUnmount(() => {
                         <dt class="qs-type-meta">
                           待收
                         </dt>
-                        <dd class="qs-type-data-emphasis text-destructive m-0 mt-1 whitespace-nowrap">
+                        <dd class="qs-type-data-emphasis text-foreground m-0 mt-1 whitespace-nowrap">
                           {{ formatSalesOrderSummaryAmount(summary.outstandingAmount, summary.currencyCode, currencyCatalog.currencies.value) }}
                         </dd>
                       </div>
