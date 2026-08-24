@@ -1472,7 +1472,7 @@ onBeforeUnmount(() => {
         <aside
           v-show="isDesktopSummary || createSurface === 'review'"
           data-testid="sales-order-create-summary-column"
-          class="sales-order-summary-column min-w-0 self-start"
+          class="sales-order-summary-column min-w-0 self-stretch"
           :data-surface="createSurface"
           :aria-label="createSurface === 'review' ? '销售订单最终核对' : '已填销售订单详情'"
         >
@@ -1809,14 +1809,27 @@ onBeforeUnmount(() => {
     position: sticky;
     top: var(--sales-order-sticky-top);
     grid-column: 2;
-    max-height: calc(100dvh - var(--sales-order-sticky-top) - 1rem);
+  }
+
+  /*
+   * 填写态先由 Grid 把订单详情拉伸到左侧表单高度，同时保留一个视口级默认
+   * 最低高度。详情内容超过等高后的可用空间时，再由 summary-region 内部滚动。
+   */
+  .sales-order-create-layout--form .sales-order-summary-column {
+    height: 100%;
+    min-height: calc(100dvh - var(--sales-order-sticky-top) - 1rem);
+    max-height: none;
+    contain: size;
   }
 
   .sales-order-create-layout--form .sales-order-summary-shell {
-    max-height: inherit;
+    height: 100%;
+    min-height: 0;
   }
 
   .sales-order-create-layout--form .sales-order-summary-region {
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
   }
 
