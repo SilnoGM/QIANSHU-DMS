@@ -24,8 +24,16 @@ test('销售订单列表使用八个双行复合列并展示服务端全量筛�
   const columnsStart = source.indexOf('const columns:')
   const columnsEnd = source.indexOf('function enumFilter', columnsStart)
   const columnsSource = source.slice(columnsStart, columnsEnd)
+  const productCellStart = source.indexOf('<template #cell-productSummary')
+  const productCellEnd = source.indexOf('<template #cell-termsSummary', productCellStart)
+  const productCellSource = source.slice(productCellStart, productCellEnd)
+  const mobileProductStart = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  产品')
+  const mobileProductEnd = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  销售总价', mobileProductStart)
+  const mobileProductSource = source.slice(mobileProductStart, mobileProductEnd)
 
   assert.ok(columnsStart >= 0 && columnsEnd > columnsStart, '应存在稳定的销售订单列定义')
+  assert.ok(productCellStart >= 0 && productCellEnd > productCellStart, '应存在桌面端产品列插槽')
+  assert.ok(mobileProductStart >= 0 && mobileProductEnd > mobileProductStart, '应存在窄屏端产品区域')
   assert.equal(columnsSource.match(/\bid:/gu)?.length, 8)
   for (const columnId of [
     'orderSummary',
@@ -42,6 +50,7 @@ test('销售订单列表使用八个双行复合列并展示服务端全量筛�
   }
 
   assert.match(source, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
+  assert.match(source, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
   assert.match(source, /import DateTimeDisplay from '@\/components\/base\/DateTimeDisplay\/index\.vue'/u)
   assert.match(source, /import QsTableStackedCell from '@\/components\/business\/QsGenericTable\/QsTableStackedCell\.vue'/u)
   assert.match(source, /import QsTableStackedLine from '@\/components\/business\/QsGenericTable\/QsTableStackedLine\.vue'/u)
@@ -51,10 +60,16 @@ test('销售订单列表使用八个双行复合列并展示服务端全量筛�
   assert.match(source, /#summary-termsSummary/u)
   assert.match(source, /#summary-collectionSummary/u)
   assert.match(source, /productImageItems\(/u)
+  assert.match(source, /resolveProductPreview\(/u)
   assert.match(source, /documentImageItems\(/u)
   assert.match(source, /data-testid="sales-order-mobile-summary"/u)
-  assert.match(source, /row\.lineSummary\.totalQuantity/u)
-  assert.match(source, /row\.lineSubtotalAmount/u)
+  for (const productSource of [productCellSource, mobileProductSource]) {
+    assert.match(productSource, /<ImageGroup/u)
+    assert.match(productSource, /:max-count="3"/u)
+    assert.match(productSource, /<template #tooltip="\{ item, index, total: imageTotal \}">/u)
+    assert.match(productSource, /<QsGoodTooltipContent/u)
+    assert.doesNotMatch(productSource, /lineCount|totalQuantity|catalogCount|customCount|lineSubtotalAmount/u)
+  }
   assert.match(source, /row\.documentSummary\.count/u)
   assert.match(source, /row\.depositDueAmount/u)
   assert.match(source, /row\.balanceDueAmount/u)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   SalesOrderCurrencySummaryDto,
+  SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
@@ -20,6 +21,7 @@ import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
@@ -164,6 +166,16 @@ function productImageItems(row: SalesOrderListItemDto): readonly ImageGroupItem[
       }])
 }
 
+function resolveProductPreview(
+  row: SalesOrderListItemDto,
+  item: ImageGroupItem,
+): SalesOrderLinePreviewDto | undefined {
+  // ImageGroup 可能折叠或重新排列可见项，按稳定的订单明细 ID 反查，避免 tooltip 与产品串项。
+  return typeof item.key === 'string'
+    ? row.lineSummary.previews.find(preview => preview.lineId === item.key)
+    : undefined
+}
+
 function documentImageItems(row: SalesOrderListItemDto): readonly ImageGroupItem[] {
   return row.documentSummary.previews.flatMap(preview => preview.mediaType !== 'IMAGE'
     ? []
@@ -173,10 +185,6 @@ function documentImageItems(row: SalesOrderListItemDto): readonly ImageGroupItem
         src: preview.contentUrl,
         tooltip: preview.title ?? '订单凭证',
       }])
-}
-
-function productPreviewNames(row: SalesOrderListItemDto): string {
-  return row.lineSummary.previews.map(preview => preview.productName).join('、')
 }
 
 function documentPreviewTitles(row: SalesOrderListItemDto): string {
@@ -432,23 +440,32 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-productSummary="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine content-class="flex gap-2 items-center" nowrap>
-              <ImageGroup
-                :items="productImageItems(row.original)"
-                :max-count="3"
-                :size="32"
-                radius="md"
-              />
-              <FaTooltip :text="productPreviewNames(row.original)">
-                <strong>{{ row.original.lineSummary.lineCount }} 项 · {{ row.original.lineSummary.totalQuantity }} 件</strong>
-              </FaTooltip>
-            </QsTableStackedLine>
-            <QsTableStackedLine tone="muted" content-class="qs-type-meta flex gap-1 items-baseline" nowrap>
-              <span>目录 {{ row.original.lineSummary.catalogCount }} · 临时 {{ row.original.lineSummary.customCount }} · 小计</span>
-              <AmountDisplay :value="row.original.lineSubtotalAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <ImageGroup
+            :items="productImageItems(row.original)"
+            :max-count="3"
+            :size="32"
+            radius="md"
+          >
+            <template #tooltip="{ item, index, total: imageTotal }">
+              <QsGoodTooltipContent
+                :image-src="item.src"
+                :image-alt="item.alt"
+              >
+                <template v-if="resolveProductPreview(row.original, item)">
+                  <div class="min-w-0">
+                    <div class="flex gap-3 items-center justify-between">
+                      <span class="tracking-[0.08em] font-semibold">订单产品</span>
+                      <span class="opacity-60 tabular-nums">{{ index + 1 }} / {{ imageTotal }}</span>
+                    </div>
+                    <p class="text-sm leading-5 font-semibold m-0 mt-2 break-words">
+                      {{ resolveProductPreview(row.original, item)?.productName }}
+                    </p>
+                  </div>
+                </template>
+                <span v-else class="opacity-70">产品信息不可用</span>
+              </QsGoodTooltipContent>
+            </template>
+          </ImageGroup>
         </template>
 
         <template #cell-termsSummary="{ row }">
@@ -596,15 +613,28 @@ onBeforeUnmount(() => {
                 <dt class="qs-type-compact-label mb-1">
                   产品
                 </dt>
-                <dd class="m-0 flex gap-3 items-center">
-                  <ImageGroup :items="productImageItems(row)" :max-count="3" :size="40" radius="md" />
-                  <span>
-                    {{ row.lineSummary.lineCount }} 项 · {{ row.lineSummary.totalQuantity }} 件
-                    <br>
-                    <span class="qs-type-meta">目录 {{ row.lineSummary.catalogCount }} · 临时 {{ row.lineSummary.customCount }}</span>
-                    <br>
-                    <span class="qs-type-meta inline-flex gap-1 items-baseline">小计 <AmountDisplay :value="row.lineSubtotalAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" /></span>
-                  </span>
+                <dd class="m-0">
+                  <ImageGroup :items="productImageItems(row)" :max-count="3" :size="40" radius="md">
+                    <template #tooltip="{ item, index, total: imageTotal }">
+                      <QsGoodTooltipContent
+                        :image-src="item.src"
+                        :image-alt="item.alt"
+                      >
+                        <template v-if="resolveProductPreview(row, item)">
+                          <div class="min-w-0">
+                            <div class="flex gap-3 items-center justify-between">
+                              <span class="tracking-[0.08em] font-semibold">订单产品</span>
+                              <span class="opacity-60 tabular-nums">{{ index + 1 }} / {{ imageTotal }}</span>
+                            </div>
+                            <p class="text-sm leading-5 font-semibold m-0 mt-2 break-words">
+                              {{ resolveProductPreview(row, item)?.productName }}
+                            </p>
+                          </div>
+                        </template>
+                        <span v-else class="opacity-70">产品信息不可用</span>
+                      </QsGoodTooltipContent>
+                    </template>
+                  </ImageGroup>
                 </dd>
               </div>
               <div class="col-span-2">
