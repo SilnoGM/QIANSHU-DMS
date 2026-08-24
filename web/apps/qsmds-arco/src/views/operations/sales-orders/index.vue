@@ -129,7 +129,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     minWidth: 230,
     title: '订单',
   },
-  { accessorKey: 'customerName', id: 'customerSummary', minWidth: 260, title: '客户' },
+  { accessorKey: 'customerName', id: 'customerSummary', minWidth: 300, title: '客户' },
   { accessorFn: item => item.lineSummary.lineCount, id: 'productSummary', minWidth: 160, title: '产品' },
   {
     accessorKey: 'agreedTotalAmount',

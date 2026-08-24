@@ -47,6 +47,7 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.ok(mobileAmountStart >= 0 && mobileAmountEnd > mobileAmountStart, '应存在窄屏端金额区域')
   assert.ok(summaryMatrixStart >= 0 && summaryMatrixEnd > summaryMatrixStart, '应存在独立的金额汇总矩阵')
   assert.equal(columnsSource.match(/\bid:/gu)?.length, 10)
+  assert.match(columnsSource, /id: 'customerSummary', minWidth: 300/u)
   for (const columnId of [
     'orderSummary',
     'customerSummary',
