@@ -22,6 +22,7 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
@@ -129,6 +130,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     minWidth: 230,
     title: '订单',
   },
+  { accessorFn: item => item.issuer.displayName, id: 'issuerSummary', minWidth: 180, title: '出单人' },
   { accessorKey: 'customerName', id: 'customerSummary', minWidth: 300, title: '客户' },
   { accessorFn: item => item.lineSummary.lineCount, id: 'productSummary', minWidth: 160, title: '产品' },
   {
@@ -404,7 +406,7 @@ onBeforeUnmount(() => {
         :searchable="true"
         :show-column-settings="true"
         :total="total"
-        table-class="min-w-[2260px]"
+        table-class="min-w-[2440px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="loadOrders"
@@ -419,9 +421,17 @@ onBeforeUnmount(() => {
               </template>
             </QsTableStackedLine>
             <QsTableStackedLine tone="muted" content-class="qs-type-meta" nowrap>
-              {{ row.original.orderDate }} · {{ row.original.issuer.displayName }} · {{ row.original.currencyCode }}
+              {{ row.original.orderDate }} · {{ row.original.currencyCode }}
             </QsTableStackedLine>
           </QsTableStackedCell>
+        </template>
+
+        <template #cell-issuerSummary="{ row }">
+          <QsPersonDisplay
+            :display-name="row.original.issuer.displayName"
+            size="sm"
+            class="max-w-[9rem]"
+          />
         </template>
 
         <template #cell-customerSummary="{ row }">
@@ -742,13 +752,25 @@ onBeforeUnmount(() => {
                   </template>
                 </QsTableStackedLine>
                 <QsTableStackedLine tone="muted" content-class="qs-type-meta">
-                  {{ row.orderDate }} · {{ row.issuer.displayName }} · {{ row.currencyCode }}
+                  {{ row.orderDate }} · {{ row.currencyCode }}
                 </QsTableStackedLine>
               </QsTableStackedCell>
               <span class="qs-type-meta shrink-0">#{{ rowNumber }}</span>
             </div>
 
             <dl class="m-0 gap-x-4 gap-y-4 grid grid-cols-2">
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  出单人
+                </dt>
+                <dd class="m-0">
+                  <QsPersonDisplay
+                    :display-name="row.issuer.displayName"
+                    size="sm"
+                    class="max-w-full"
+                  />
+                </dd>
+              </div>
               <div class="col-span-2">
                 <dt class="qs-type-compact-label mb-1">
                   客户

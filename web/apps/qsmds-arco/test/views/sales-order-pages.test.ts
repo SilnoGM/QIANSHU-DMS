@@ -19,7 +19,7 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /salesOrdersApi\.list/)
 })
 
-test('销售订单列表使用十个复合列并展示服务端全量筛选汇总', async () => {
+test('销售订单列表使用十一个复合列并展示服务端全量筛选汇总', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
   const columnsStart = source.indexOf('const columns:')
   const columnsEnd = source.indexOf('function enumFilter', columnsStart)
@@ -39,6 +39,14 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   const summaryMatrixStart = source.indexOf('data-testid="sales-order-summary-matrix"')
   const summaryMatrixEnd = source.indexOf('<template #mobile-row', summaryMatrixStart)
   const summaryMatrixSource = source.slice(summaryMatrixStart, summaryMatrixEnd)
+  const orderCellStart = source.indexOf('<template #cell-orderSummary')
+  const orderCellEnd = source.indexOf('<template #cell-issuerSummary', orderCellStart)
+  const orderCellSource = source.slice(orderCellStart, orderCellEnd)
+  const mobileRowStart = source.indexOf('<template #mobile-row')
+  const mobileDetailsStart = source.indexOf('<dl class="m-0 gap-x-4 gap-y-4 grid grid-cols-2">', mobileRowStart)
+  const mobileCustomerStart = source.indexOf('                  客户', mobileRowStart)
+  const mobileHeaderSource = source.slice(mobileRowStart, mobileDetailsStart)
+  const mobileIssuerSource = source.slice(mobileDetailsStart, mobileCustomerStart)
 
   assert.ok(columnsStart >= 0 && columnsEnd > columnsStart, '应存在稳定的销售订单列定义')
   assert.ok(productCellStart >= 0 && productCellEnd > productCellStart, '应存在桌面端产品列插槽')
@@ -46,10 +54,15 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.ok(mobileProductStart >= 0 && mobileProductEnd > mobileProductStart, '应存在窄屏端产品区域')
   assert.ok(mobileAmountStart >= 0 && mobileAmountEnd > mobileAmountStart, '应存在窄屏端金额区域')
   assert.ok(summaryMatrixStart >= 0 && summaryMatrixEnd > summaryMatrixStart, '应存在独立的金额汇总矩阵')
-  assert.equal(columnsSource.match(/\bid:/gu)?.length, 10)
+  assert.ok(orderCellStart >= 0 && orderCellEnd > orderCellStart, '订单列与出单人列应保持独立')
+  assert.ok(mobileRowStart >= 0 && mobileDetailsStart > mobileRowStart, '应存在窄屏订单摘要头部')
+  assert.ok(mobileCustomerStart > mobileDetailsStart, '应存在窄屏出单人与客户区域')
+  assert.equal(columnsSource.match(/\bid:/gu)?.length, 11)
   assert.match(columnsSource, /id: 'customerSummary', minWidth: 300/u)
+  assert.match(columnsSource, /id: 'issuerSummary', minWidth: 180, title: '出单人'/u)
   for (const columnId of [
     'orderSummary',
+    'issuerSummary',
     'customerSummary',
     'productSummary',
     'priceSummary',
@@ -65,6 +78,7 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   }
 
   assert.match(source, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
+  assert.match(source, /import QsPersonDisplay from '@\/components\/business\/QsPersonDisplay\/index\.vue'/u)
   assert.match(source, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
   assert.match(source, /import DateTimeDisplay from '@\/components\/base\/DateTimeDisplay\/index\.vue'/u)
   assert.match(source, /import QsTableStackedCell from '@\/components\/business\/QsGenericTable\/QsTableStackedCell\.vue'/u)
@@ -91,6 +105,10 @@ test('销售订单列表使用十个复合列并展示服务端全量筛选汇�
   assert.match(source, /resolveProductPreview\(/u)
   assert.match(source, /documentImageItems\(/u)
   assert.match(source, /data-testid="sales-order-mobile-summary"/u)
+  assert.match(source, /#cell-issuerSummary[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.original\.issuer\.displayName"[\s\S]*?size="sm"/u)
+  assert.doesNotMatch(orderCellSource, /issuer\.displayName/u)
+  assert.doesNotMatch(mobileHeaderSource, /issuer\.displayName/u)
+  assert.match(mobileIssuerSource, /出单人[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.issuer\.displayName"[\s\S]*?size="sm"/u)
   for (const productSource of [productCellSource, mobileProductSource]) {
     assert.match(productSource, /<ImageGroup/u)
     assert.match(productSource, /:max-count="3"/u)
