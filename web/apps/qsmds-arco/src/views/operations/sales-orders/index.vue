@@ -429,7 +429,7 @@ onBeforeUnmount(() => {
         <template #cell-issuerSummary="{ row }">
           <QsPersonDisplay
             :display-name="row.original.issuer.displayName"
-            size="sm"
+            size="md"
             class="max-w-[9rem]"
           />
         </template>
@@ -766,7 +766,7 @@ onBeforeUnmount(() => {
                 <dd class="m-0">
                   <QsPersonDisplay
                     :display-name="row.issuer.displayName"
-                    size="sm"
+                    size="md"
                     class="max-w-full"
                   />
                 </dd>

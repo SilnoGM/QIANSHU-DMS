@@ -105,10 +105,10 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
   assert.match(source, /resolveProductPreview\(/u)
   assert.match(source, /documentImageItems\(/u)
   assert.match(source, /data-testid="sales-order-mobile-summary"/u)
-  assert.match(source, /#cell-issuerSummary[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.original\.issuer\.displayName"[\s\S]*?size="sm"/u)
+  assert.match(source, /#cell-issuerSummary[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.original\.issuer\.displayName"[\s\S]*?size="md"/u)
   assert.doesNotMatch(orderCellSource, /issuer\.displayName/u)
   assert.doesNotMatch(mobileHeaderSource, /issuer\.displayName/u)
-  assert.match(mobileIssuerSource, /出单人[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.issuer\.displayName"[\s\S]*?size="sm"/u)
+  assert.match(mobileIssuerSource, /出单人[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.issuer\.displayName"[\s\S]*?size="md"/u)
   for (const productSource of [productCellSource, mobileProductSource]) {
     assert.match(productSource, /<ImageGroup/u)
     assert.match(productSource, /:max-count="3"/u)
