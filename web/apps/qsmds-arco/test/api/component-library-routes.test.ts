@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供十四个独立组件路由', () => {
+test('组件库按分类提供十五个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -144,6 +144,11 @@ test('组件库按分类提供十四个独立组件路由', () => {
         title: '字典选择器',
       },
       {
+        name: 'componentLibraryQsPersonDisplay',
+        path: 'person-display',
+        title: '人员显示',
+      },
+      {
         name: 'componentLibraryQsProductSelector',
         path: 'product-selector',
         title: '产品选择器',
@@ -170,7 +175,7 @@ test('组件库按分类提供十四个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 14)
+  assert.equal(new Set(componentRouteNames).size, 15)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -201,7 +206,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('十四个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('十五个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -259,6 +264,11 @@ test('十四个组件页面与页面模板复用展示壳且不依赖业务 API 
       title: '字典选择器',
     },
     {
+      componentName: 'ComponentLibraryQsPersonDisplay',
+      file: '../../src/views/component_library/business/person-display.vue',
+      title: '人员显示',
+    },
+    {
       componentName: 'ComponentLibraryQsProductSelector',
       file: '../../src/views/component_library/business/product-selector.vue',
       title: '产品选择器',
@@ -311,6 +321,18 @@ test('销售订单详情叶子路由固定图标与独立动态页面', () => {
   assert.match(
     source,
     /path: 'sales-order-desc',[\s\S]*?name: 'componentLibraryQsSalesOrderDesc',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/sales-order-desc\.vue'\),[\s\S]*?title: '销售订单详情',[\s\S]*?icon: 'i-lucide:receipt-text'/u,
+  )
+})
+
+test('人员显示叶子路由固定图标与独立动态页面', () => {
+  const source = readFileSync(
+    new URL('../../src/router/modules/component.library.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /path: 'person-display',[\s\S]*?name: 'componentLibraryQsPersonDisplay',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/person-display\.vue'\),[\s\S]*?title: '人员显示',[\s\S]*?icon: 'i-lucide:user-round'/u,
   )
 })
 

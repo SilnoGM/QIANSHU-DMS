@@ -192,6 +192,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'person-display',
+        name: 'componentLibraryQsPersonDisplay',
+        component: () => import('@/views/component_library/business/person-display.vue'),
+        meta: {
+          title: '人员显示',
+          icon: 'i-lucide:user-round',
+        },
+      },
+      {
         path: 'product-selector',
         name: 'componentLibraryQsProductSelector',
         component: () => import('@/views/component_library/business/product-selector.vue'),
