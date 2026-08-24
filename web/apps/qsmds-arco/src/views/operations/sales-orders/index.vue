@@ -202,10 +202,6 @@ function salesRegionLabel(row: SalesOrderListItemDto): string {
     : `${row.customerProvinceStateName} / ${row.customerCityName}`
 }
 
-function hasPositiveAmount(value: string): boolean {
-  return Number(value) > 0
-}
-
 function enumFilter<T extends string>(
   key: string,
   allowed: readonly T[],
@@ -475,7 +471,7 @@ onBeforeUnmount(() => {
 
         <template #cell-priceSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="实际售价" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="实际售价" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
               <AmountDisplay :value="row.original.agreedTotalAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
             <QsTableStackedLine label="标准售价" content-class="ml-auto flex justify-end text-right" nowrap>
@@ -486,10 +482,10 @@ onBeforeUnmount(() => {
 
         <template #cell-termsSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="定金" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="定金" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
               <AmountDisplay :value="row.original.depositDueAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
-            <QsTableStackedLine label="尾款" tone="danger" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="尾款" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
               <AmountDisplay :value="row.original.balanceDueAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -497,10 +493,10 @@ onBeforeUnmount(() => {
 
         <template #cell-collectionSummary="{ row }">
           <QsTableStackedCell>
-            <QsTableStackedLine label="已收" tone="success" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
+            <QsTableStackedLine label="已收" content-class="ml-auto flex justify-end text-right" nowrap weight="semibold">
               <AmountDisplay :value="row.original.receivedAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
-            <QsTableStackedLine label="待收" :tone="hasPositiveAmount(row.original.outstandingAmount) ? 'danger' : 'muted'" content-class="ml-auto flex justify-end text-right" nowrap>
+            <QsTableStackedLine label="待收" content-class="ml-auto flex justify-end text-right" nowrap>
               <AmountDisplay :value="row.original.outstandingAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -801,7 +797,7 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <QsTableStackedCell>
-                    <QsTableStackedLine label="实际售价" tone="success" nowrap weight="semibold">
+                    <QsTableStackedLine label="实际售价" nowrap weight="semibold">
                       <AmountDisplay :value="row.agreedTotalAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
                     <QsTableStackedLine label="标准售价" nowrap>
@@ -816,10 +812,10 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <QsTableStackedCell>
-                    <QsTableStackedLine label="定金" tone="success" nowrap weight="semibold">
+                    <QsTableStackedLine label="定金" nowrap weight="semibold">
                       <AmountDisplay :value="row.depositDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
-                    <QsTableStackedLine label="尾款" tone="danger" nowrap weight="semibold">
+                    <QsTableStackedLine label="尾款" nowrap weight="semibold">
                       <AmountDisplay :value="row.balanceDueAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
                   </QsTableStackedCell>
@@ -831,10 +827,10 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   <QsTableStackedCell>
-                    <QsTableStackedLine label="已收" tone="success" nowrap weight="semibold">
+                    <QsTableStackedLine label="已收" nowrap weight="semibold">
                       <AmountDisplay :value="row.receivedAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
-                    <QsTableStackedLine label="待收" :tone="hasPositiveAmount(row.outstandingAmount) ? 'danger' : 'muted'" nowrap>
+                    <QsTableStackedLine label="待收" nowrap>
                       <AmountDisplay :value="row.outstandingAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
                   </QsTableStackedCell>
