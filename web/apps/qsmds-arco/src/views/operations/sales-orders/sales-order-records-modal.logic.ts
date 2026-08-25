@@ -6,6 +6,7 @@ import type {
 import { validateMoneyString } from '@/components/base/MoneyInput/logic'
 
 export type SalesOrderRecordsKind = 'payments' | 'documents' | 'changes'
+export type SalesOrderRecordsInitialAction = 'payment' | 'receipt' | null
 
 export interface SalesOrderPaymentDraft {
   readonly amount: null | string
@@ -113,8 +114,24 @@ export function buildSalesOrderPaymentRequest(
 
 export function buildSalesOrderDeliveryReceiptRequest(
   mediaAssetId: null | string,
+  remark: string,
 ): BuildSalesOrderDeliveryReceiptRequestResult {
-  return mediaAssetId !== null && UUID_V4_PATTERN.test(mediaAssetId)
-    ? { valid: true, request: { mediaAssetId } }
-    : { valid: false, fieldErrors: { receipt: '货物签收必须上传且只能上传一份签收单' } }
+  const fieldErrors: Record<string, string> = {}
+  if (mediaAssetId === null || !UUID_V4_PATTERN.test(mediaAssetId)) {
+    fieldErrors.receipt = '货物签收必须上传且只能上传一份签收单'
+  }
+  const normalizedRemark = normalizedOptionalText(remark, 500)
+  if (remark.trim() !== '' && normalizedRemark === null) {
+    fieldErrors.remark = '备注最多 500 个字符'
+  }
+  if (Object.keys(fieldErrors).length > 0) {
+    return { valid: false, fieldErrors }
+  }
+  return {
+    valid: true,
+    request: {
+      mediaAssetId: mediaAssetId as string,
+      remark: normalizedRemark,
+    },
+  }
 }

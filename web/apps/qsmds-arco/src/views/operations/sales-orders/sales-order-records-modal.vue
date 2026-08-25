@@ -2,6 +2,7 @@
 import type {
   SalesOrderPaymentDraft,
   SalesOrderPaymentDraftErrors,
+  SalesOrderRecordsInitialAction,
   SalesOrderRecordsKind,
 } from './sales-order-records-modal.logic'
 import type {
@@ -32,6 +33,7 @@ import {
 
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
+  initialAction: SalesOrderRecordsInitialAction
   kind: SalesOrderRecordsKind
   modelValue: boolean
   order: SalesOrderListItemDto | null
@@ -58,6 +60,7 @@ const actionSubmitting = ref(false)
 const actionUploading = ref(false)
 const actionError = ref('')
 const paymentErrors = shallowRef<SalesOrderPaymentDraftErrors>({})
+const receiptErrors = shallowRef<SalesOrderPaymentDraftErrors>({})
 const paymentType = ref<SalesOrderPaymentDraft['paymentType']>('DEPOSIT')
 const paymentAmount = ref<null | string>(null)
 const paymentReceivedAt = ref('')
@@ -65,11 +68,13 @@ const paymentMethod = ref('')
 const paymentRemark = ref('')
 const paymentVoucher = shallowRef<UploadedVoucher | null>(null)
 const deliveryReceipt = shallowRef<UploadedVoucher | null>(null)
+const deliveryReceiptRemark = ref('')
 const paymentFileInputRef = useTemplateRef<HTMLInputElement>('paymentFileInputRef')
 const receiptFileInputRef = useTemplateRef<HTMLInputElement>('receiptFileInputRef')
 let requestVersion = 0
 let detailAbortController: AbortController | null = null
 let actionAbortController: AbortController | null = null
+let initialActionConsumed = false
 
 const modalVisible = computed({
   get: () => props.modelValue,
@@ -135,6 +140,15 @@ function documentTypeLabel(value: SalesOrderDocumentDto['documentType']): string
     DELIVERY_RECEIPT: '签收单',
     ORDER_ISSUANCE_VOUCHER: '出单凭证',
     PAYMENT_VOUCHER: '收款凭证',
+  }[value]
+}
+
+/** 凭证类型以稳定语义色辅助识别，文字仍是凭证类型的唯一含义来源。 */
+function documentTypeTagClass(value: SalesOrderDocumentDto['documentType']): string {
+  return {
+    DELIVERY_RECEIPT: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
+    ORDER_ISSUANCE_VOUCHER: 'border-blue-500/30 bg-blue-500/8 text-blue-700 dark:text-blue-300',
+    PAYMENT_VOUCHER: 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300',
   }[value]
 }
 
@@ -220,6 +234,8 @@ function resetPaymentForm(): void {
 function resetReceiptForm(): void {
   releaseUploadedVoucher(deliveryReceipt.value)
   deliveryReceipt.value = null
+  deliveryReceiptRemark.value = ''
+  receiptErrors.value = {}
   actionError.value = ''
 }
 
@@ -256,6 +272,13 @@ function closeReceiptModal(): void {
 function clearPaymentError(field: string): void {
   paymentErrors.value = Object.fromEntries(
     Object.entries(paymentErrors.value).filter(([path]) => path !== field),
+  )
+  actionError.value = ''
+}
+
+function clearReceiptError(field: string): void {
+  receiptErrors.value = Object.fromEntries(
+    Object.entries(receiptErrors.value).filter(([path]) => path !== field),
   )
   actionError.value = ''
 }
@@ -302,6 +325,7 @@ async function uploadActionVoucher(
     else {
       releaseUploadedVoucher(deliveryReceipt.value)
       deliveryReceipt.value = uploaded
+      clearReceiptError('receipt')
     }
   }
   catch (error) {
@@ -350,7 +374,7 @@ function removeDeliveryReceipt(): void {
   }
   releaseUploadedVoucher(deliveryReceipt.value)
   deliveryReceipt.value = null
-  actionError.value = ''
+  clearReceiptError('receipt')
 }
 
 async function submitPayment(): Promise<void> {
@@ -407,9 +431,11 @@ async function submitDeliveryReceipt(): Promise<void> {
   }
   const result = buildSalesOrderDeliveryReceiptRequest(
     deliveryReceipt.value?.mediaAssetId ?? null,
+    deliveryReceiptRemark.value,
   )
   if (!result.valid) {
-    actionError.value = result.fieldErrors.receipt ?? '请上传签收单'
+    receiptErrors.value = result.fieldErrors
+    actionError.value = '请修正未通过校验的签收信息'
     return
   }
 
@@ -484,6 +510,15 @@ async function loadDetail(): Promise<void> {
       return
     }
     detail.value = response.data
+    if (!initialActionConsumed) {
+      initialActionConsumed = true
+      if (props.initialAction === 'payment') {
+        openPaymentModal()
+      }
+      else if (props.initialAction === 'receipt') {
+        openReceiptModal()
+      }
+    }
   }
   catch (error) {
     if (isSalesOrderAbortError(error) || currentVersion !== requestVersion) {
@@ -503,6 +538,7 @@ watch(
   () => [props.modelValue, props.order?.id, props.kind] as const,
   ([visible, orderId]) => {
     if (!visible || orderId === undefined) {
+      initialActionConsumed = false
       cancelDetailRequest()
       cancelActionRequest()
       paymentModalVisible.value = false
@@ -514,6 +550,7 @@ watch(
       loading.value = false
       return
     }
+    initialActionConsumed = false
     activeChangeTab.value = 'status'
     void loadDetail()
   },
@@ -665,7 +702,7 @@ onBeforeUnmount(() => {
               :value="payment.amount"
               :currency="detail.currencyCode"
               :currencies="currencies"
-              class="qs-type-data-emphasis whitespace-nowrap sm:text-right"
+              class="qs-type-data-emphasis text-emerald-700 font-semibold whitespace-nowrap dark:text-emerald-300 sm:text-right"
             />
           </li>
         </ul>
@@ -714,7 +751,11 @@ onBeforeUnmount(() => {
                 <h3 class="qs-type-section-title m-0 break-words">
                   {{ document.title || document.originalFilename }}
                 </h3>
-                <FaTag variant="outline" class="qs-type-status-tag">
+                <FaTag
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="documentTypeTagClass(document.documentType)"
+                >
                   {{ documentTypeLabel(document.documentType) }}
                 </FaTag>
               </div>
@@ -1030,6 +1071,21 @@ onBeforeUnmount(() => {
     <p class="text-sm text-muted-foreground m-0">
       只需上传一份签收单。提交后作为订单级凭证保存，暂不自动更新订单进度。
     </p>
+    <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
+      <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">
+        <FaTextarea
+          v-model="deliveryReceiptRemark"
+          :maxlength="500"
+          class="w-full"
+          input-class="min-h-20 max-h-36"
+          placeholder="填写本次货物签收说明"
+          @update:model-value="clearReceiptError('remark')"
+        />
+        <p v-if="receiptErrors.remark" class="text-xs text-destructive m-0 mt-1">
+          {{ receiptErrors.remark }}
+        </p>
+      </FaFormItem>
+    </FaForm>
     <input
       ref="receiptFileInputRef"
       type="file"
@@ -1042,7 +1098,7 @@ onBeforeUnmount(() => {
       v-if="deliveryReceipt === null"
       type="button"
       variant="outline"
-      class="mt-4 min-h-11 w-full"
+      class="min-h-11 w-full"
       :loading="actionUploading"
       :disabled="actionLocked"
       @click="openReceiptFilePicker"
@@ -1071,6 +1127,9 @@ onBeforeUnmount(() => {
         移除
       </FaButton>
     </div>
+    <p v-if="receiptErrors.receipt" class="text-xs text-destructive m-0 mt-1">
+      {{ receiptErrors.receipt }}
+    </p>
     <p class="qs-type-meta m-0 mt-3">
       系统提交时自动按“客户名-签收单-时间戳”命名。
     </p>

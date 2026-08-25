@@ -57,13 +57,21 @@ test('实际收款硬拦截零金额、未来时间和缺失凭证', () => {
   assert.equal(toSalesOrderPaymentReceivedAt('', now), null)
 })
 
-test('货物签收请求只接收一个有效签收单媒体 ID', () => {
-  assert.deepEqual(buildSalesOrderDeliveryReceiptRequest(VOUCHER_ID), {
+test('货物签收请求接收一个有效签收单媒体 ID 与选填备注', () => {
+  assert.deepEqual(buildSalesOrderDeliveryReceiptRequest(VOUCHER_ID, '  外箱完好  '), {
     valid: true,
-    request: { mediaAssetId: VOUCHER_ID },
+    request: { mediaAssetId: VOUCHER_ID, remark: '外箱完好' },
   })
-  assert.deepEqual(buildSalesOrderDeliveryReceiptRequest(null), {
+  assert.deepEqual(buildSalesOrderDeliveryReceiptRequest(VOUCHER_ID, ''), {
+    valid: true,
+    request: { mediaAssetId: VOUCHER_ID, remark: null },
+  })
+  assert.deepEqual(buildSalesOrderDeliveryReceiptRequest(null, ''), {
     valid: false,
     fieldErrors: { receipt: '货物签收必须上传且只能上传一份签收单' },
+  })
+  assert.deepEqual(buildSalesOrderDeliveryReceiptRequest(VOUCHER_ID, '签'.repeat(501)), {
+    valid: false,
+    fieldErrors: { remark: '备注最多 500 个字符' },
   })
 })

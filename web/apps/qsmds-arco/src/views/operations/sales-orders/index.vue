@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import type { SalesOrderRecordsKind } from './sales-order-records-modal.logic'
+import type {
+  SalesOrderRecordsInitialAction,
+  SalesOrderRecordsKind,
+} from './sales-order-records-modal.logic'
 import type {
   SalesOrderCurrencySummaryDto,
   SalesOrderLinePreviewDto,
@@ -71,6 +74,10 @@ const currencyCatalog = useCurrencyCatalog()
 
 const canRead = computed(() => auth('sales-orders:read'))
 const canCreate = computed(() => auth('sales-orders:create'))
+const canRecordPayment = computed(() => (
+  auth('sales-orders:payment') && auth('sales-orders:document')
+))
+const canSubmitDeliveryReceipt = computed(() => auth('sales-orders:document'))
 const rows = ref<SalesOrderListItemDto[]>([])
 const summariesByCurrency = ref<SalesOrderCurrencySummaryDto[]>([])
 const page = ref(1)
@@ -86,6 +93,7 @@ const selectedCurrency = ref<SalesOrderCurrencyCode | null>(null)
 const recordsModalVisible = ref(false)
 const recordsModalKind = ref<SalesOrderRecordsKind>('payments')
 const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
+const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
 let requestVersion = 0
 let listAbortController: AbortController | null = null
 let queryRefreshPending = false
@@ -246,7 +254,19 @@ function openRecordsModal(
   kind: SalesOrderRecordsKind,
   order: SalesOrderListItemDto,
 ): void {
+  recordsModalInitialAction.value = null
   recordsModalKind.value = kind
+  recordsModalOrder.value = order
+  recordsModalVisible.value = true
+}
+
+/** 表格操作列直接进入对应业务表单；记录弹窗原有标题区入口继续保留。 */
+function openRecordsAction(
+  action: Exclude<SalesOrderRecordsInitialAction, null>,
+  order: SalesOrderListItemDto,
+): void {
+  recordsModalInitialAction.value = action
+  recordsModalKind.value = action === 'payment' ? 'payments' : 'documents'
   recordsModalOrder.value = order
   recordsModalVisible.value = true
 }
@@ -473,6 +493,7 @@ onBeforeUnmount(() => {
         data-testid="sales-order-list-table"
         :row-key="item => item.id"
         :addable="false"
+        :action-column="{ fixed: 'right', minWidth: 230, title: '操作', width: 230 }"
         :columns="columns"
         :data="rows"
         empty-title="暂无销售订单"
@@ -485,12 +506,37 @@ onBeforeUnmount(() => {
         :searchable="true"
         :show-column-settings="true"
         :total="total"
-        table-class="min-w-[3010px]"
+        table-class="min-w-[3240px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="loadOrders"
         @search="handleSearch"
       >
+        <template #actions="{ row }">
+          <div class="flex flex-wrap gap-1 items-center">
+            <FaButton
+              v-if="canRecordPayment"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              @click="openRecordsAction('payment', row)"
+            >
+              <FaIcon name="i-lucide:hand-coins" aria-hidden="true" />新增实际收款
+            </FaButton>
+            <FaButton
+              v-if="canSubmitDeliveryReceipt"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              @click="openRecordsAction('receipt', row)"
+            >
+              <FaIcon name="i-lucide:package-check" aria-hidden="true" />货物签收
+            </FaButton>
+          </div>
+        </template>
+
         <template #cell-orderSummary="{ row }">
           <QsTableStackedCell class="group">
             <QsTableStackedLine nowrap content-class="qs-type-data-emphasis font-mono">
@@ -1090,6 +1136,7 @@ onBeforeUnmount(() => {
     <SalesOrderRecordsModal
       v-model="recordsModalVisible"
       :kind="recordsModalKind"
+      :initial-action="recordsModalInitialAction"
       :order="recordsModalOrder"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="loadOrders"

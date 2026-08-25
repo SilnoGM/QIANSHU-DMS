@@ -138,6 +138,7 @@ test('收款、作废和货物签收 mutation 均局部呈错且禁止自动重�
   await api.voidPayment('order/id', 'payment/id', { reason: '录入错误' }, controller.signal)
   await api.submitDeliveryReceipt('order/id', {
     mediaAssetId: '66666666-6666-4666-8666-666666666666',
+    remark: '外箱完好',
   }, controller.signal)
 
   const config = {
@@ -157,7 +158,10 @@ test('收款、作废和货物签收 mutation 均局部呈错且禁止自动重�
     url: 'sales-orders/order%2Fid/payments/payment%2Fid/void',
   }, {
     config,
-    data: { mediaAssetId: '66666666-6666-4666-8666-666666666666' },
+    data: {
+      mediaAssetId: '66666666-6666-4666-8666-666666666666',
+      remark: '外箱完好',
+    },
     method: 'post',
     url: 'sales-orders/order%2Fid/delivery-receipts',
   }])
