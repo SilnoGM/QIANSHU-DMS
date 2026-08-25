@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：待确认
+- 状态：已确认
 - 设计日期：2026-08-25
 - 需求规格：[销售订单收款与凭证需求规格](./requirements.md)
 - 依赖设计：[销售订单域技术设计](../sales-order-domain/design.md)
@@ -16,6 +16,9 @@
 - 临时凭证上传已使用媒体域的 `UPLOADING -> READY` 生命周期，上传本身不发放订单编号。
 - 数据库触发器已禁止物理删除收款、修改收款事实、物理删除凭证和修改凭证事实。
 - Web 已具备订单创建凭证上传、实际收款记录查看和订单凭证查看能力。
+- 实际收款金额在服务端不保存独立币种，业务含义天然继承 `SalesOrder.currencyCode`。
+- `SalesOrderPayment.paymentMethod` 当前是可空自由文本，Web 使用 `FaInput`，服务端只做长度校验。
+- 表格快捷操作当前先打开记录弹窗，详情加载完成后再叠加收款或签收弹窗，因此出现两个弹窗依次渲染的闪屏。
 
 ### 2.2 与新需求的差异
 
@@ -29,6 +32,9 @@
 | 通用凭证接口可选传入 `paymentId` | 业务写入改为出单、收款、签收三个受控入口 |
 | 上传签收单与通用凭证混用 | “货物签收”弹窗只上传一份签收单 |
 | 凭证详情只显示是否关联收款 | 按凭证业务类型显示订单级或具体收款信息 |
+| 收款金额组件暴露全部货币选项 | 金额只能使用订单币种，币种后缀不可交互 |
+| 收款方式是可选自由文本 | 新收款必须选择 `payment.method` 当前有效稳定值 |
+| 快捷操作通过父弹窗再打开子弹窗 | 单一弹窗容器先确定视图再显示，不叠加弹窗 |
 
 ### 2.3 当前开发库数据快照
 
@@ -99,13 +105,38 @@ referenceNo / reference_no
 - `paymentType`：五种收款类型。
 - `amount`：正数定点金额。
 - `receivedAt`：不晚于当前时间的 UTC 时间。
-- `paymentMethod`：可选收款方式。
+- `paymentMethod`：新收款必填，保存 `payment.method` 字典条目的稳定 `value`；数据库列继续允许 `null`，只用于兼容既有历史记录。
 - `remark`：可选备注。
 - 创建和作废审计字段。
 
 收款事实继续不可变；录错后只能作废，不能修改或物理删除。
 
-### 4.4 `SalesOrderDocument`
+### 4.4 收款方式字典
+
+沿用现有系统字典边界，不新增收款方式枚举、主数据表或外键。字典类型固定为：
+
+```text
+code: payment.method
+name: 收款方式
+enabled: true
+```
+
+初始条目：
+
+| value | label | sortOrder |
+| --- | --- | ---: |
+| `BANK_TRANSFER` | 银行转账 | 10 |
+| `CASH` | 现金付款 | 20 |
+| `CHECK` | 支票支付 | 30 |
+| `LETTER_OF_CREDIT` | 信用证 L/C | 40 |
+
+- 业务表只保存 `value`，不保存 Item UUID 或 `label`。
+- 新收款写入必须在调用方事务内执行 `DictionaryLookupService.requireEffectiveValue()`。
+- 历史读取通过 Web Dictionary Catalog 解析 `label`；已停用条目仍可显示历史标签，未知值回显原始稳定值。
+- 普通业务字典属于可变业务数据，通过现有字典管理命令创建并保留审计记录，不写入 Prisma schema migration。
+- 实施前只读审计确认当前开发库尚不存在 `payment.method`；实施阶段已通过既有字典管理界面创建并复核上述 Type 与四个 Item。
+
+### 4.5 `SalesOrderDocument`
 
 沿用现有字段，`title` 改为服务端生成的不可编辑系统标题。新增数据库约束：
 
@@ -139,7 +170,7 @@ WHERE detached_at IS NULL
 
 签收单允许同一订单保存多份；每次“货物签收”操作只写入一份。
 
-### 4.5 标题生成
+### 4.6 标题生成
 
 新增服务端纯函数 `createSalesOrderDocumentTitle()`，输入为：
 
@@ -200,6 +231,14 @@ OTHER -> 其他收款凭证
 
 历史上没有出单凭证的订单继续可查询，但不补造媒体文件。仅新建订单受“恰好一份出单凭证”约束。
 
+### 5.1 本次增量不修改数据库结构
+
+币种固定、收款方式字典化和单弹窗交互不需要新增列、外键、索引或 migration：
+
+- 收款金额继续隐式继承 `SalesOrder.currencyCode`。
+- `sales_order_payments.payment_method varchar(64)` 继续保存稳定字符串，并保留历史 `null`。
+- `payment.method` 通过现有字典管理能力写入业务数据，不追加业务 seed migration。
+
 ## 6. API 设计
 
 ### 6.1 临时媒体上传
@@ -249,7 +288,7 @@ interface SalesOrderPaymentRequestDto {
   paymentType: 'DEPOSIT' | 'PROGRESS' | 'INVOICE_TAX' | 'BALANCE' | 'OTHER'
   amount: string
   receivedAt: string
-  paymentMethod: string | null
+  paymentMethod: string
   remark: string | null
   voucher: {
     mediaAssetId: string
@@ -258,6 +297,8 @@ interface SalesOrderPaymentRequestDto {
 ```
 
 - 删除 `referenceNo`。
+- `paymentMethod` 改为非空稳定字典值；服务端在收款事务内校验 `payment.method` 当前有效。
+- 请求仍不携带币种；服务端继续以目标订单的 `currencyCode` 解释 `amount`。
 - 同时要求 `sales-orders:payment` 和 `sales-orders:document`。
 - 成功返回更新后的 `SalesOrderDetailDto`，其中新收款包含唯一 `voucher`。
 
@@ -274,12 +315,14 @@ POST /api/sales-orders/:salesOrderId/delivery-receipts
 ```ts
 interface SalesOrderDeliveryReceiptRequestDto {
   mediaAssetId: string
+  remark: string | null
 }
 ```
 
 - 要求 `sales-orders:document`。
 - 固定写入 `DELIVERY_RECEIPT` 和 `paymentId = null`。
-- 不接收签收人、签收时间、备注或目标履约状态。
+- 接收最多 500 个 Unicode code point 的选填备注，并保存到签收单凭证备注。
+- 不接收签收人、签收时间或目标履约状态。
 - 不修改 `fulfillmentStatus`，只递增订单 `version` 并写入凭证审计。
 
 ### 6.5 通用凭证写接口
@@ -298,6 +341,7 @@ interface SalesOrderDeliveryReceiptRequestDto {
 
 - 删除 `referenceNo`。
 - 增加非空 `voucher: SalesOrderDocumentDto`，便于收款弹窗一次展示完整记录。
+- `paymentMethod` 响应继续允许 `null` 以读取历史数据；响应保存稳定 `value`，Web 通过字典 Catalog 展示 `label`。
 
 `SalesOrderDocumentDto`：
 
@@ -332,6 +376,7 @@ sequenceDiagram
   Web->>Payment: POST payment + voucher.mediaAssetId
   Payment->>DB: BEGIN + 锁定订单
   Payment->>DB: 校验订单、金额、累计有效收款
+  Payment->>DB: 校验 payment.method 当前有效
   Payment->>DB: 校验临时媒体归属与状态
   Payment->>DB: 创建 SalesOrderPayment
   Payment->>Media: 在同一事务激活媒体
@@ -341,7 +386,9 @@ sequenceDiagram
   Payment-->>Web: SalesOrderDetailDto
 ```
 
-关键顺序：先获得新收款 ID，再创建带 `paymentId` 的凭证；所有数据库写入共用现有事务客户端。媒体对象已经预上传，事务只改变 `MediaAsset` 状态和业务关联。
+关键顺序：锁定订单后，在同一事务中按固定锁序读取 `payment.method` Type 与 Item，再获得新收款 ID 并创建带 `paymentId` 的凭证；所有数据库写入共用现有事务客户端。媒体对象已经预上传，事务只改变 `MediaAsset` 状态和业务关联。
+
+`DictionaryLookupService.requireEffectiveValue()` 失败时，收款事务整体回滚并返回稳定的收款方式不可用错误；不得退化为保存自由文本。字典校验不改变订单币种，收款币种仍由锁定后的订单记录决定。
 
 ### 7.3 作废收款
 
@@ -354,7 +401,7 @@ sequenceDiagram
 1. 锁定订单并确认存在。
 2. 验证临时媒体属于当前用户且可激活。
 3. 激活媒体，生成签收单标题。
-4. 创建 `DELIVERY_RECEIPT`，`paymentId = null`。
+4. 创建 `DELIVERY_RECEIPT`，`paymentId = null`，保存规范化后的选填备注。
 5. 递增订单 `version`，写入 `SALES_ORDER_DOCUMENT_ATTACHED` 审计。
 6. 保持 `fulfillmentStatus` 原值，不写状态历史。
 
@@ -384,6 +431,8 @@ sequenceDiagram
 
 - 在“实际收款记录”弹窗标题区域提供“添加收款”主按钮。
 - 表单字段：收款类型、金额、收款时间、收款方式、备注、单文件凭证上传。
+- 金额组件继续复用 `MoneyInput` 的金额输入与精度校验，但新增不可切换币种模式；尾部只显示当前订单币种代码，不渲染 `FaSelect`。
+- 收款方式使用 `QsDictionarySelect dictionary-code="payment.method"`，不可清空；字典缺失、加载失败或无有效条目时失败关闭并阻止提交。
 - 不显示交易流水号。
 - 上传后显示 `FaImagePreview` 或文档图标、原始文件名和自动标题预览。
 - 未上传、正在上传、金额非法、未来时间或权限不足时禁止提交。
@@ -393,8 +442,8 @@ sequenceDiagram
 ### 8.4 货物签收弹窗
 
 - 在“订单凭证”弹窗标题区域提供“货物签收”主按钮。
-- 内容只包含单文件签收单上传、预览、自动标题和错误提示。
-- 不显示签收人、签收时间、备注或履约状态选择器。
+- 内容包含单文件签收单上传、选填备注、预览、自动标题和错误提示。
+- 不显示签收人、签收时间或履约状态选择器。
 - 成功后刷新订单凭证，不显示“订单进度已更新”类提示。
 
 ### 8.5 凭证详情
@@ -403,6 +452,31 @@ sequenceDiagram
 - `DELIVERY_RECEIPT`：类型“签收单”，归属“订单级凭证”。
 - `PAYMENT_VOUCHER`：展示关联收款类型、金额、收款时间和有效/已作废状态。
 - 图片继续由 `FaImagePreview` 展示，文档继续通过受权内容 URL 打开。
+
+### 8.6 单弹窗状态机
+
+`SalesOrderRecordsModal` 保留一个 `QsGenericModal` 宿主，不再同时挂载记录、收款和签收三个可见弹窗。内部视图状态定义为：
+
+```ts
+type SalesOrderModalView = 'records' | 'create-payment' | 'create-receipt'
+type SalesOrderModalOrigin = 'table-action' | 'records'
+```
+
+打开顺序：
+
+```text
+表格快捷收款 -> 先写 view=create-payment、origin=table-action -> 打开 Modal
+表格快捷签收 -> 先写 view=create-receipt、origin=table-action -> 打开 Modal
+点击记录列 -> 先写 view=records -> 打开 Modal
+记录页内部操作 -> 同一 Modal 原位切换 view，origin=records
+```
+
+- Modal 的 `title`、`description`、主体和 footer 都由 `view` 派生，切换时不创建第二层 overlay。
+- 表格直接进入表单时使用行快照中的订单号、客户名和币种，详情数据可在同一视图内加载，不先闪现记录列表。
+- `origin=records` 的取消动作返回原记录视图；`origin=table-action` 的取消动作关闭 Modal。
+- 上传或提交锁生效时禁止返回、关闭和切换视图。
+- 提交成功后刷新详情及表格；从记录页进入时返回刷新后的记录，从表格直接进入时关闭弹窗。
+- 可访问性验收要求任一时刻最多一个可见 `role="dialog"`，焦点由同一 Modal 宿主管理。
 
 ## 9. 权限与安全
 
@@ -448,6 +522,7 @@ sequenceDiagram
 - 创建 DTO/Normalizer：缺失、数组、多份、未知字段和合法单份出单凭证。
 - 创建服务：订单与唯一出单凭证同事务；媒体失败时订单不落库。
 - 收款服务：五种类型、含税累计、未来时间、超收、取消订单、唯一凭证及完整回滚。
+- 收款方式：缺失、未知、已停用 Type/Item 均被事务硬拦截；有效稳定值可保存，历史空值仍可查询。
 - 作废收款：凭证保留、累计金额和付款状态重新派生。
 - 货物签收：只创建签收单，不改变订单进度或状态历史。
 - 查询服务：收款返回唯一凭证，订单级凭证文案所需关系完整。
@@ -466,6 +541,8 @@ sequenceDiagram
 - 创建页只允许一份出单凭证并硬拦截缺失状态。
 - 自动标题预览与凭证类型映射。
 - 添加收款弹窗字段、权限、上传和提交映射；不存在流水号控件。
+- TWD/MYR 收款只显示订单币种且无币种选择器；收款方式只允许选择 `payment.method` 有效条目。
+- 表格快捷入口直接进入目标视图，记录入口原位切换；任一流程只存在一个可见 Dialog。
 - 货物签收弹窗只有单文件上传，不提交履约状态。
 - 凭证详情显示订单级或关联收款语义。
 - 桌面与窄屏入口一致。
@@ -499,4 +576,15 @@ git diff --check
 8. 更新记录弹窗语义和聚焦测试。
 9. 在隔离数据库验证迁移，再对目标开发库执行迁移。
 
-本阶段只确认设计。任务拆分、代码实施、数据库迁移执行和历史数据写入必须在后续确认门之后进行。
+本次增量实施顺序：
+
+1. 更新需求、技术设计和任务门禁。
+2. 建立收款方式服务校验、固定币种和单弹窗行为的聚焦失败测试。
+3. 将 `paymentMethod` 请求契约改为必填，在收款事务中接入 `DictionaryLookupService`。
+4. 通过现有字典管理命令创建并启用 `payment.method` 及四个条目，不创建 migration。
+5. 为 `MoneyInput` 增加默认向后兼容的不可切换币种模式，并在收款表单启用。
+6. 收款方式改用 `QsDictionarySelect`，历史展示通过 Catalog 映射标签并保留未知原值。
+7. 将记录、收款、签收重构为单一 Modal 视图状态机。
+8. 同步 OpenAPI，运行聚焦测试、类型检查、定向 lint、契约检查和单 Dialog 页面验收。
+
+本设计、公共 API 变更、公共组件 API 变更和字典数据写入均已确认并完成实施；本次增量未执行数据库 schema migration。

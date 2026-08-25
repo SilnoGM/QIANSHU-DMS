@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：Phase 4 实施完成，等待用户手动验收
+- 状态：原 Phase 4 已完成；本次收款币种、收款方式和单弹窗增量已完成并通过聚焦验证
 - 拆分日期：2026-08-25
 - 需求基线：[requirements.md](./requirements.md)
 - 技术基线：[design.md](./design.md)
@@ -32,6 +32,10 @@
 - [x] Gate D：Phase 4 实施与目标开发库迁移完成。
 - [x] Gate E：聚焦自动化与真实浏览器流程通过。
 - [ ] Gate F：用户手动验收完成。
+- [x] Gate G：本次增量需求已确认。
+- [x] Gate H：本次增量技术方案已确认。
+- [x] Gate I：本次增量任务、公共 API、公共组件 API、字典数据写入和验证范围已确认。
+- [x] Gate J：本次增量实施完成并通过聚焦验证。
 
 以下任一情况必须暂停并重新确认：
 
@@ -382,3 +386,206 @@ git diff --check
 - `e685fa6 feat: 同步销售订单收款与签收契约`
 - `5ce7483 feat: 新增订单改为单份出单凭证`
 - `3af7c71 feat: 增加订单收款与货物签收弹窗`
+
+## 7. 本次增量任务：固定币种、收款方式字典化与单弹窗
+
+### 7.1 实施边界
+
+- 本次只处理 R9-R11，不改变收款类型、含税累计、凭证原子事务、订单状态或签收单语义。
+- `SalesOrderPaymentRequestDto.paymentMethod` 从可空改为必填稳定字典值，属于已确认的公共 API 变更。
+- `MoneyInput` 增加默认保持现状的不可切换币种能力，属于已确认的公共组件 API 变更。
+- 不修改 Prisma schema，不新增 migration，不新增收款币种字段。
+- `payment.method` 通过既有字典管理命令写入当前开发库并保留审计，不直接执行 SQL，不写业务 seed migration。
+- 新功能和闪屏修复采用 TDD；只运行本次直接相关的聚焦测试、类型检查、契约检查和必要页面验收，不执行全量测试。
+- 字典或运行态验证失败时必须停止，不以自由文本、硬编码前端选项或临时回退值绕过。
+
+### 7.2 任务依赖
+
+```mermaid
+flowchart LR
+  T10[T10 基线与 RED]
+  T11[T11 Server 契约与字典校验]
+  T12[T12 字典数据初始化]
+  T13[T13 固定币种与字典选择]
+  T14[T14 单弹窗状态机]
+  T15[T15 聚焦验收与提交]
+
+  T10 --> T11 --> T12 --> T13 --> T14 --> T15
+```
+
+| 需求 | 主要任务 |
+| --- | --- |
+| R9 | Task 10、13、15 |
+| R10 | Task 10、11、12、13、15 |
+| R11 | Task 10、14、15 |
+
+### Task 10：冻结增量基线并建立聚焦失败测试
+
+**目标**
+
+先用聚焦测试固定币种、必填字典值和单 Dialog 行为，再实施最小改动。
+
+**步骤**
+
+- [x] 10.1 复核分支、HEAD、工作区、当前 OpenAPI、`payment.method` 数据和前后端运行状态，保留用户已有改动。
+- [x] 10.2 运行销售订单收款 Server/Web 现有聚焦测试，确认基线通过；不运行全量套件。
+- [x] 10.3 增加 Server RED：空值、自由文本、未知值、停用 Type/Item 被拒绝；有效 `BANK_TRANSFER` 在调用方事务内通过。
+- [x] 10.4 增加契约 RED：请求 `paymentMethod` 必填非空，响应继续允许历史 `null`，请求中仍不存在收款币种字段。
+- [x] 10.5 增加 Web RED：TWD/MYR 只显示静态订单币种；收款方式使用 `QsDictionarySelect`；缺失字典失败关闭。
+- [x] 10.6 增加交互 RED：表格快捷入口和记录页内部入口任一时刻最多一个可见 Dialog，并覆盖两种取消返回路径。
+
+**完成条件**
+
+- 现有基线通过；新增测试只因目标能力未实现而失败。
+- 失败输出不包含 Cookie、客户完整信息、媒体内容或数据库连接字符串。
+
+**提交策略**：RED 与对应实现一起提交，不保留长期失败提交。
+
+### Task 11：收紧收款契约并接入服务端字典校验
+
+**目标**
+
+把新收款的 `paymentMethod` 收紧为必填稳定值，并在既有收款事务内以字典为真相源校验。
+
+**步骤**
+
+- [x] 11.1 修改 `SalesOrderPaymentRequestDto.paymentMethod` 为必填 `string`，长度保持 1–64；响应 DTO 继续允许历史 `null`。
+- [x] 11.2 在 `SalesOrderMutationService` 注入 `DictionaryLookupService`，删除收款方式的可空自由文本路径。
+- [x] 11.3 锁定订单后，在同一事务中调用 `requireEffectiveValue({ dictionaryCode: 'payment.method', value })`，只保存返回的规范稳定值。
+- [x] 11.4 将字典缺失、停用或未知值映射为稳定业务错误，不泄露字典内部 ID 或数据库细节。
+- [x] 11.5 保持请求无币种字段，金额仍由锁定后的订单 `currencyCode` 解释。
+- [x] 11.6 更新 Controller/OpenAPI 错误契约，运行 Server 聚焦测试、typecheck 和目标文件 lint。
+- [x] 11.7 运行 `node --run contract:sync` 与 `node --run contract:check`，不得手工修改生成类型。
+
+**完成条件**
+
+- 新收款无法保存空值、任意文本、未知值或无效字典值。
+- 有效字典值与收款、凭证、付款状态和审计保持同一事务成功或回滚。
+- Prisma schema 和收款币种契约保持不变。
+
+**提交建议**：`feat: 收款方式改为字典必填`
+
+### Task 12：通过字典管理能力初始化 `payment.method`
+
+**目标**
+
+在当前开发库建立可审计、可维护的收款方式字典，不把业务数据写入 migration。
+
+**步骤**
+
+- [x] 12.1 写入前只读确认 `payment.method` 仍不存在；若已出现或部分存在，停止并报告差异，不覆盖现有数据。
+- [x] 12.2 使用现有字典管理 API/Command 创建停用 Type：`payment.method` / `收款方式`。
+- [x] 12.3 依次创建并启用 `BANK_TRANSFER`、`CASH`、`CHECK`、`LETTER_OF_CREDIT`，排序为 10/20/30/40。
+- [x] 12.4 在存在有效 Item 后启用 Type，遵守字典父子状态约束。
+- [x] 12.5 只读复核 Type、四个 Item、有效状态、排序和审计记录，不输出敏感身份信息。
+
+**完成条件**
+
+- Catalog 返回一个有效 `payment.method` 和四个有效条目，值与标签完全匹配设计。
+- Git 中不存在字典 seed migration、直连 SQL 脚本或环境专属数据文件。
+
+**Git 要求**：字典数据本身不形成 Git 提交；其消费代码与验证证据进入相邻功能提交。
+
+### Task 13：固定实际收款币种并接入字典选择
+
+**目标**
+
+消除收款币种误导入口，并以现有业务字典组件替换自由文本输入。
+
+**步骤**
+
+- [x] 13.1 为 `MoneyInput` 增加默认值为可切换的 `currencySelectable`（或等价命名）公共属性；关闭时渲染静态币种代码，不渲染 `FaSelect`。
+- [x] 13.2 保持金额输入、清空、精度、最小值、禁用、只读和校验公开行为不变，补齐基础组件聚焦测试。
+- [x] 13.3 收款表单以订单 `currencyCode` 启用不可切换模式；币种描述缺失或无效时阻止提交。
+- [x] 13.4 用 `QsDictionarySelect dictionary-code="payment.method"` 替换 `FaInput`，设置必填、不可清空，并复用现有加载/错误/重试语义。
+- [x] 13.5 更新请求 builder：收款方式为空时硬拦截，成功时提交稳定 `value`。
+- [x] 13.6 收款历史通过 Dictionary Catalog 将稳定值映射为 `label`；历史空值显示占位，停用值显示标签，未知值显示原始值。
+- [x] 13.7 运行 MoneyInput、QsDictionarySelect、收款逻辑和页面聚焦测试、Web typecheck 与目标文件 lint。
+
+**完成条件**
+
+- TWD 订单只显示 TWD，MYR 订单只显示 MYR，页面不存在可操作的收款币种 combobox。
+- 收款方式只能来自 `payment.method` 当前有效 Item，页面和请求均不接受自由文本。
+- 其他 MoneyInput 调用方保持原有币种选择行为。
+
+**提交建议**：`feat: 固定实际收款币种与方式`
+
+### Task 14：把记录、收款和签收重构为单弹窗状态机
+
+**目标**
+
+移除父子 Modal 叠加，通过一个 `QsGenericModal` 宿主承载记录、收款和签收视图。
+
+**步骤**
+
+- [x] 14.1 在纯逻辑层定义 `SalesOrderModalView`、`SalesOrderModalOrigin`、打开和取消转移规则，并建立聚焦单元测试。
+- [x] 14.2 表格操作列先设置目标 `view` 与 `origin=table-action`，再打开 Modal，不再打开记录视图等待详情后跳转。
+- [x] 14.3 记录列使用 `view=records`；记录页内部按钮在同一 Modal 内切换到操作表单并标记 `origin=records`。
+- [x] 14.4 合并 Modal 标题、主体和 footer，删除 `paymentModalVisible`、`receiptModalVisible` 及嵌套 `QsGenericModal`。
+- [x] 14.5 处理取消路径：记录来源返回并保留刷新后的记录；表格来源直接关闭；上传/提交期间禁止切换和关闭。
+- [x] 14.6 提交成功后刷新订单详情与列表汇总，避免重复请求、旧请求覆盖和焦点遗失。
+- [x] 14.7 增加 DOM/页面测试，断言任一入口最多一个可见 `role="dialog"`，同时覆盖桌面和窄屏结构。
+
+**完成条件**
+
+- 操作列点击后直接显示目标表单，不出现记录弹窗闪现或第二层遮罩。
+- 记录弹窗内部操作保持原按钮，切换过程只有一个弹窗和一套表单状态。
+- 所有上传、提交、权限和错误处理能力保持不变。
+
+**提交建议**：`refactor: 销售订单操作改为单弹窗`
+
+### Task 15：执行聚焦验收并完成增量提交
+
+**目标**
+
+验证 Server、契约、Web、字典数据和真实运行态闭环，更新任务证据并交给用户手动验收。
+
+**步骤**
+
+- [x] 15.1 运行销售订单 Mutation 聚焦测试、Controller/OpenAPI 契约检查、Server typecheck 和目标 lint。
+- [x] 15.2 运行 MoneyInput、QsDictionarySelect、销售订单收款/页面聚焦测试、Web typecheck 和目标 lint。
+- [x] 15.3 运行 `contract:sync/check`、`git diff --check`，确认没有 schema migration、敏感文件、生成目录或无关改动。
+- [x] 15.4 只读验证 `payment.method` Catalog 和服务端健康；按需直接重启前后端并确认 Web 200、Server/database `up`。
+- [x] 15.5 若开发库存在可用订单，真实浏览器核对固定币种、四项字典、单 Dialog 和取消路径，但不上传或提交；若没有订单，不伪造业务数据，明确记录由聚焦 DOM 测试覆盖。
+- [x] 15.6 精确暂存目标文件，按 Task 11、13、14 分批提交，最后更新本任务证据和状态。
+
+**必要验证命令**
+
+```bash
+pnpm -C server exec jest src/modules/sales-orders/sales-order-mutation.service.spec.ts --runInBand
+pnpm -C server typecheck
+node --run contract:sync
+node --run contract:check
+(cd web/apps/qsmds-arco && pnpm exec tsx --test \
+  test/views/money-input.test.ts \
+  test/views/dictionary-select.test.ts \
+  test/views/sales-order-records-modal.logic.test.ts \
+  test/views/sales-order-pages.test.ts)
+pnpm -C web typecheck
+git diff --check
+```
+
+最终 lint 使用实际修改文件清单运行，不扩大到全仓。
+
+**完成条件**
+
+- 聚焦自动化、契约、字典 Catalog、运行健康和可执行的真实页面检查全部通过。
+- Git 仅包含确认范围；没有全量测试、push、merge 或部署动作。
+- 用户可以手动验收固定币种、收款方式和单弹窗交互。
+
+### 7.3 增量验证证据（2026-08-25）
+
+- Server 收款 Mutation 聚焦 Jest：`1` 个 suite、`11` 个 test 全部通过。
+- Web MoneyInput、QsDictionarySelect、销售订单收款逻辑与页面聚焦测试：`36/36` 通过。
+- Server/Web typecheck、目标修改文件 ESLint、`contract:sync`、`contract:check` 与 `git diff --check`：通过。
+- 初次从 `web/` 根目录执行 Web 聚焦测试时，`sales-order-records-modal.logic.test.ts` 因无法解析应用级 `@/components` 别名而启动失败；改为从 `web/apps/qsmds-arco/` 执行同一测试集合后 `36/36` 通过，没有跳过失败断言。
+- 当前开发库字典 `payment.method` 已启用，四个有效条目按 `10/20/30/40` 排序：`BANK_TRANSFER`、`CASH`、`CHECK`、`LETTER_OF_CREDIT`；数据通过既有字典管理界面创建，没有直连 SQL 或业务 migration。
+- 清理重复且未监听端口的旧开发进程后，使用根 `node --run dev` 重新启动；Web `9000` 与 Server `3000` 均返回 HTTP `200`，健康响应 `status=ok`、database `up`。
+- 真实登录态页面核对：表格快捷入口直接打开唯一实际收款 Dialog；TWD 以静态币种显示；收款方式只有银行转账、现金付款、支票支付、信用证 L/C 四项；直接入口取消后关闭，记录弹窗内部取消后返回记录视图，整个过程 Dialog 数始终为 `0/1`。
+- 浏览器验收未上传文件、未添加收款、未提交签收单；重启后的本次验收期间没有新增 console error。
+
+### 7.4 增量实施提交
+
+- `fdc9605 feat: 收款方式改为字典必填`
+- `9ad9006 feat: 支持固定金额输入币种`
+- `0af7174 refactor: 销售订单操作改为单弹窗`
