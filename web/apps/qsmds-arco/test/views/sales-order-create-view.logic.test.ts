@@ -35,38 +35,19 @@ test('创建表单映射为独立订单详情模型并按行计算小计', () =>
   model.agreedTotalAmount = '39.68'
   model.depositDueAmount = '10'
   model.balanceDueAmount = '29.68'
-  model.documents = [
-    {
-      autoTitleTimestamp: '20260821153045123',
-      documentType: 'DEPOSIT_VOUCHER',
-      key: 'document-image',
-      mediaAssetId: '22222222-2222-4222-8222-222222222222',
-      mediaType: 'IMAGE',
-      mimeType: 'image/png',
-      originalFilename: 'deposit.png',
-      remark: '',
-      sizeBytes: '128',
-      title: ' 林晓芳-定金凭证-20260821153045123 ',
-      titleManuallyEdited: false,
-    },
-    {
-      autoTitleTimestamp: '20260821153045124',
-      documentType: 'OTHER',
-      key: 'document-file',
-      mediaAssetId: '33333333-3333-4333-8333-333333333333',
-      mediaType: 'DOCUMENT',
-      mimeType: 'application/pdf',
-      originalFilename: 'agreement.pdf',
-      remark: '',
-      sizeBytes: '256',
-      title: ' 合同 ',
-      titleManuallyEdited: true,
-    },
-  ]
+  model.issuanceVoucher = {
+    autoTitleTimestamp: '20260821153045123',
+    key: 'document-image',
+    mediaAssetId: '22222222-2222-4222-8222-222222222222',
+    mediaType: 'IMAGE',
+    mimeType: 'image/png',
+    originalFilename: 'issuance.png',
+    sizeBytes: '128',
+    title: ' 林晓芳-出单凭证-20260821153045123 ',
+  }
   const originalModel = structuredClone(model)
   const documentPreviewByKey = new Map([
     ['document-image', 'blob:https://example.test/image-preview'],
-    ['document-file', 'blob:https://example.test/document-must-not-preview'],
   ])
 
   const result = mapSalesOrderCreateFormToDesc(model, {
@@ -93,22 +74,13 @@ test('创建表单映射为独立订单详情模型并按行计算小计', () =>
     },
     documents: [
       {
-        documentType: 'DEPOSIT_VOUCHER',
+        documentType: 'ORDER_ISSUANCE_VOUCHER',
         key: 'document-image',
         mediaType: 'IMAGE',
-        originalFilename: 'deposit.png',
+        originalFilename: 'issuance.png',
         previewSrc: 'blob:https://example.test/image-preview',
         thumbnailSrc: 'blob:https://example.test/image-preview',
-        title: '林晓芳-定金凭证-20260821153045123',
-      },
-      {
-        documentType: 'OTHER',
-        key: 'document-file',
-        mediaType: 'DOCUMENT',
-        originalFilename: 'agreement.pdf',
-        previewSrc: null,
-        thumbnailSrc: null,
-        title: '合同',
+        title: '林晓芳-出单凭证-20260821153045123',
       },
     ],
     issuerName: 'SilnoGM',
@@ -138,7 +110,6 @@ test('创建表单映射为独立订单详情模型并按行计算小计', () =>
   assert.deepEqual(model, originalModel)
   assert.deepEqual([...documentPreviewByKey], [
     ['document-image', 'blob:https://example.test/image-preview'],
-    ['document-file', 'blob:https://example.test/document-must-not-preview'],
   ])
   assert.notEqual(result.customer.regionNames, model.regionNames)
 })

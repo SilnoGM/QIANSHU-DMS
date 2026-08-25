@@ -11,7 +11,6 @@ import {
   createSalesOrderDocumentAutoTitle,
   createSalesOrderFormModel,
   createSalesOrderSubmissionState,
-  customizeSalesOrderDocumentTitle,
   formatSalesOrderDocumentTitleTimestamp,
   getSalesOrderApiFailure,
   normalizeSalesOrderAddressDetail,
@@ -54,8 +53,28 @@ function validModel() {
   model.agreedTotalAmount = '100'
   model.depositDueAmount = '30'
   model.balanceDueAmount = '70'
+  model.issuanceVoucher = {
+    autoTitleTimestamp: '20260820120000000',
+    key: 'issuance-voucher',
+    mediaAssetId: '55555555-5555-4555-8555-555555555555',
+    mediaType: 'IMAGE',
+    mimeType: 'image/png',
+    originalFilename: 'issuance.png',
+    sizeBytes: '128',
+    title: '王小明-出单凭证-20260820120000000',
+  }
   return model
 }
+
+test('第四步硬拦截缺失的出单凭证', () => {
+  const model = validModel()
+  model.issuanceVoucher = null
+
+  assert.deepEqual(validateSalesOrderCreateStep(model, 3, 2), {
+    valid: false,
+    fieldErrors: { issuanceVoucher: '出单凭证必须上传且只能上传一份' },
+  })
+})
 
 test('币种路由只接受单值 TWD/MYR，缺失、数组与其他币种均拒绝', () => {
   assert.equal(parseSalesOrderCurrency('TWD'), 'TWD')
@@ -84,7 +103,7 @@ test('正式保存校验失败时回到最早包含错误的填写步骤', () =>
   assert.equal(resolveSalesOrderCreateStepForErrors({ 'customer.phone': '请输入电话' }), 1)
   assert.equal(resolveSalesOrderCreateStepForErrors({
     'lines.0.productId': '请选择产品',
-    'documents.0.title': '标题无效',
+    'issuanceVoucher.mediaAssetId': '上传状态无效',
   }), 2)
   assert.equal(resolveSalesOrderCreateStepForErrors({ remark: '备注过长' }), 3)
   assert.equal(resolveSalesOrderCreateStepForErrors({ unknownField: '未知字段错误' }), null)
@@ -139,22 +158,22 @@ test('产品与销售步骤分别硬拦截明细总价和定金尾款不一致',
   assert.deepEqual(validateSalesOrderCreateStep(model, 2, 2), { valid: true })
 })
 
-test('凭证自动标题保留上传时间，联动客户与类型，手工编辑后停止覆盖', () => {
+test('出单凭证自动标题保留上传时间并随客户名刷新，构造请求只提交媒体 ID', () => {
   const timestamp = formatSalesOrderDocumentTitleTimestamp(
     new Date(2026, 7, 21, 15, 30, 45, 123),
   )
   assert.equal(timestamp, '20260821153045123')
   assert.equal(
-    createSalesOrderDocumentAutoTitle(' 王小明 ', 'DEPOSIT_VOUCHER', timestamp),
-    '王小明-定金凭证-20260821153045123',
+    createSalesOrderDocumentAutoTitle(' 王小明 ', timestamp),
+    '王小明-出单凭证-20260821153045123',
   )
   assert.equal(
-    createSalesOrderDocumentAutoTitle('　Ａ王　', 'OTHER', timestamp),
-    'A王-其他-20260821153045123',
+    createSalesOrderDocumentAutoTitle('　Ａ王　', timestamp),
+    'A王-出单凭证-20260821153045123',
   )
   assert.equal(
-    createSalesOrderDocumentAutoTitle('', 'OTHER', timestamp),
-    '未填写客户-其他-20260821153045123',
+    createSalesOrderDocumentAutoTitle('', timestamp),
+    '未填写客户-出单凭证-20260821153045123',
   )
 
   const document = {
@@ -164,49 +183,33 @@ test('凭证自动标题保留上传时间，联动客户与类型，手工编�
     sizeBytes: '128',
     originalFilename: 'voucher.png',
     key: 'document-1',
-    documentType: 'OTHER' as const,
-    title: createSalesOrderDocumentAutoTitle('王小明', 'OTHER', timestamp),
-    remark: '',
+    title: createSalesOrderDocumentAutoTitle('王小明', timestamp),
     autoTitleTimestamp: timestamp,
-    titleManuallyEdited: false,
   }
   const model = validModel()
-  model.documents = [document]
+  model.issuanceVoucher = document
   const requestResult = buildCreateSalesOrderRequest(model, 2)
   assert.equal(requestResult.valid, true)
   if (requestResult.valid) {
-    assert.deepEqual(requestResult.request.documents, [{
+    assert.deepEqual(requestResult.request.issuanceVoucher, {
       mediaAssetId: document.mediaAssetId,
-      documentType: 'OTHER',
-      title: document.title,
-      remark: null,
-    }])
+    })
   }
 
   const refreshed = refreshSalesOrderDocumentAutoTitle(
     document,
     '李小明',
-    'DELIVERY_RECEIPT',
   )
-  assert.equal(refreshed.title, '李小明-签收单-20260821153045123')
+  assert.equal(refreshed.title, '李小明-出单凭证-20260821153045123')
   assert.equal(refreshed.autoTitleTimestamp, timestamp)
-
-  const customized = customizeSalesOrderDocumentTitle(refreshed, '客户指定标题')
-  const preserved = refreshSalesOrderDocumentAutoTitle(customized, '陈小明', 'OTHER')
-  assert.equal(preserved.documentType, 'OTHER')
-  assert.equal(preserved.title, '客户指定标题')
-  assert.equal(preserved.titleManuallyEdited, true)
-
-  const cleared = customizeSalesOrderDocumentTitle(refreshed, '')
-  assert.equal(refreshSalesOrderDocumentAutoTitle(cleared, '陈小明').title, '')
 })
 
 test('凭证自动标题截断超长客户名并完整保留类型和时间戳后缀', () => {
   const timestamp = '20260821153045123'
-  const title = createSalesOrderDocumentAutoTitle('王'.repeat(200), 'OTHER', timestamp)
+  const title = createSalesOrderDocumentAutoTitle('王'.repeat(200), timestamp)
 
   assert.equal([...title].length, 128)
-  assert.equal(title.endsWith(`-其他-${timestamp}`), true)
+  assert.equal(title.endsWith(`-出单凭证-${timestamp}`), true)
 })
 
 test('现有地区域的 UUID v5 可用于客户地址快照', () => {

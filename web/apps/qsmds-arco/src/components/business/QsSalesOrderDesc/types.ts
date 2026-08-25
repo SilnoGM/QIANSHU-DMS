@@ -2,7 +2,7 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 
 export type QsSalesOrderDescLineType = 'CATALOG' | 'CUSTOM'
 export type QsSalesOrderDescDocumentType
-  = 'DELIVERY_RECEIPT' | 'DEPOSIT_VOUCHER' | 'OTHER'
+  = 'ORDER_ISSUANCE_VOUCHER' | 'PAYMENT_VOUCHER' | 'DELIVERY_RECEIPT'
 export type QsSalesOrderDescMediaType = 'DOCUMENT' | 'IMAGE' | 'VIDEO'
 
 export interface QsSalesOrderDescCustomerViewModel {

@@ -32,9 +32,9 @@
       "CUSTOM": "Order-only product"
     },
     "documentTypes": {
-      "DEPOSIT_VOUCHER": "Deposit voucher",
-      "DELIVERY_RECEIPT": "Delivery receipt",
-      "OTHER": "Other document"
+      "ORDER_ISSUANCE_VOUCHER": "Issuance voucher",
+      "PAYMENT_VOUCHER": "Payment voucher",
+      "DELIVERY_RECEIPT": "Delivery receipt"
     },
     "empty": {
       "text": "Not provided",

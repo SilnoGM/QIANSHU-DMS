@@ -4,7 +4,6 @@ import type { DateValue } from '@internationalized/date'
 import type {
   SalesOrderApiFailure,
   SalesOrderCreateStep,
-  SalesOrderDocumentFormModel,
   SalesOrderFieldErrors,
   SalesOrderFormModel,
   SalesOrderSubmissionState,
@@ -36,7 +35,6 @@ import {
   createSalesOrderDocumentAutoTitle,
   createSalesOrderFormModel,
   createSalesOrderSubmissionState,
-  customizeSalesOrderDocumentTitle,
   formatSalesOrderDocumentTitleTimestamp,
   getSalesOrderApiFailure,
   hasSalesOrderChanges,
@@ -71,7 +69,7 @@ const salesOrderSteps: StepsItem[] = [
   { id: 'base', title: '基础信息' },
   { id: 'customer', title: '客户地址' },
   { id: 'products-sales', title: '产品与销售' },
-  { id: 'documents', title: '订单凭证' },
+  { id: 'documents', title: '出单凭证' },
 ]
 
 const route = useRoute()
@@ -191,7 +189,7 @@ const submitStatusMessage = computed(() => {
     return '当前订单币种不可用，暂时无法提交。'
   }
   if (documentUploading.value) {
-    return '订单凭证正在上传，上传完成后才能提交。'
+    return '出单凭证正在上传，上传完成后才能提交。'
   }
   if (furthestReachedStep.value < SALES_ORDER_CREATE_LAST_STEP) {
     const nextStepTitle = salesOrderSteps[furthestReachedStep.value + 1]?.title ?? '剩余步骤'
@@ -265,7 +263,7 @@ function enterSalesOrderReview(): void {
     return
   }
   if (documentUploading.value) {
-    formError.value = '订单凭证正在上传，请等待上传完成后再进入核对'
+    formError.value = '出单凭证正在上传，请等待上传完成后再进入核对'
     return
   }
 
@@ -406,7 +404,7 @@ function applySalesOrderFieldErrors(errors: SalesOrderFieldErrors): void {
   appliedFormErrorFields.clear()
   for (const [path, message] of Object.entries(errors)) {
     const field = formFieldForError(path)
-    if (field === 'lines' || field === 'documents' || appliedFormErrorFields.has(field)) {
+    if (field === 'lines' || field === 'issuanceVoucher' || appliedFormErrorFields.has(field)) {
       continue
     }
     formRef.value?.setFieldError(field, message)
@@ -489,19 +487,14 @@ const loadSalesOrderProducts: ProductPageLoader = async (query, signal) => {
 }
 
 function openFilePicker(): void {
-  if (!submitLocked.value && canManageDocuments.value && !documentUploading.value) {
+  if (
+    !submitLocked.value
+    && canManageDocuments.value
+    && !documentUploading.value
+    && formModel.value.issuanceVoucher === null
+  ) {
     fileInputRef.value?.click()
   }
-}
-
-function updateDocument(index: number, patch: Partial<SalesOrderDocumentFormModel>): void {
-  const current = formModel.value.documents[index]
-  if (current === undefined || submitLocked.value) {
-    return
-  }
-  formModel.value.documents = formModel.value.documents.map((document, currentIndex) =>
-    currentIndex === index ? { ...document, ...patch } : { ...document })
-  clearFeedback('documents')
 }
 
 function handleCustomerNameUpdate(value: unknown): void {
@@ -510,52 +503,27 @@ function handleCustomerNameUpdate(value: unknown): void {
   }
   const customerName = String(value ?? '')
   formModel.value.customerName = customerName
-  formModel.value.documents = formModel.value.documents.map(document => (
-    refreshSalesOrderDocumentAutoTitle(document, customerName)
-  ))
+  if (formModel.value.issuanceVoucher !== null) {
+    formModel.value.issuanceVoucher = refreshSalesOrderDocumentAutoTitle(
+      formModel.value.issuanceVoucher,
+      customerName,
+    )
+  }
   clearFeedback('customer.name')
-  clearFeedback('documents')
+  clearFeedback('issuanceVoucher')
 }
 
-function handleDocumentTypeUpdate(
-  index: number,
-  documentType: SalesOrderDocumentFormModel['documentType'],
-): void {
-  const current = formModel.value.documents[index]
-  if (current === undefined || submitLocked.value) {
-    return
-  }
-  updateDocument(index, refreshSalesOrderDocumentAutoTitle(
-    current,
-    formModel.value.customerName,
-    documentType,
-  ))
-}
-
-function handleDocumentTitleUpdate(index: number, value: unknown): void {
-  const current = formModel.value.documents[index]
-  if (current === undefined || submitLocked.value) {
-    return
-  }
-  updateDocument(index, customizeSalesOrderDocumentTitle(
-    current,
-    String(value ?? ''),
-  ))
-}
-
-function removeDocument(index: number): void {
+function removeDocument(): void {
   if (submitLocked.value) {
     return
   }
-  const document = formModel.value.documents[index]
-  if (document !== undefined) {
+  const document = formModel.value.issuanceVoucher
+  if (document !== null) {
     documentPreviewRegistry.release(document.key)
     documentPreviewSnapshot.value = documentPreviewRegistry.snapshot()
   }
-  formModel.value.documents = formModel.value.documents.filter(
-    (_document, currentIndex) => currentIndex !== index,
-  )
-  clearFeedback('documents')
+  formModel.value.issuanceVoucher = null
+  clearFeedback('issuanceVoucher')
 }
 
 async function uploadFiles(files: readonly File[]): Promise<void> {
@@ -564,51 +532,42 @@ async function uploadFiles(files: readonly File[]): Promise<void> {
     || !canManageDocuments.value
     || submitLocked.value
     || documentUploading.value
+    || formModel.value.issuanceVoucher !== null
   ) {
     return
   }
-  const remaining = 20 - formModel.value.documents.length
-  const selected = files.slice(0, Math.max(0, remaining))
-  if (selected.length === 0) {
-    documentUploadError.value = '订单凭证最多 20 个'
-    return
-  }
+  const file = files[0]!
   documentAbortController?.abort()
   const controller = new AbortController()
   documentAbortController = controller
   documentUploading.value = true
   documentUploadError.value = ''
   try {
-    for (const file of selected) {
-      const mediaType = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
-      const response = await salesOrdersApi.uploadTemporaryDocument(file, mediaType, controller.signal)
-      if (controller.signal.aborted) {
-        return
-      }
-      const autoTitleTimestamp = formatSalesOrderDocumentTitleTimestamp(new Date())
-      const key = crypto.randomUUID()
-      formModel.value.documents.push({
-        ...response.data,
-        key,
-        documentType: 'OTHER',
-        title: createSalesOrderDocumentAutoTitle(
-          formModel.value.customerName,
-          'OTHER',
-          autoTitleTimestamp,
-        ),
+    const mediaType = file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT'
+    const response = await salesOrdersApi.uploadTemporaryDocument(file, mediaType, controller.signal)
+    if (controller.signal.aborted) {
+      return
+    }
+    const autoTitleTimestamp = formatSalesOrderDocumentTitleTimestamp(new Date())
+    const key = crypto.randomUUID()
+    formModel.value.issuanceVoucher = {
+      ...response.data,
+      key,
+      title: createSalesOrderDocumentAutoTitle(
+        formModel.value.customerName,
         autoTitleTimestamp,
-        titleManuallyEdited: false,
-        remark: '',
-      })
-      if (response.data.mediaType === 'IMAGE') {
-        try {
-          documentPreviewRegistry.register(key, file)
-          documentPreviewSnapshot.value = documentPreviewRegistry.snapshot()
-        }
-        catch {
-          // 服务端已成功接收临时文件，本地缩略图失败不应丢弃该凭证。
-          documentUploadError.value = '文件已上传，但本地缩略图暂时无法显示'
-        }
+      ),
+      autoTitleTimestamp,
+    }
+    clearFeedback('issuanceVoucher')
+    if (response.data.mediaType === 'IMAGE') {
+      try {
+        documentPreviewRegistry.register(key, file)
+        documentPreviewSnapshot.value = documentPreviewRegistry.snapshot()
+      }
+      catch {
+        // 服务端已成功接收临时文件，本地缩略图失败不应丢弃该凭证。
+        documentUploadError.value = '文件已上传，但本地缩略图暂时无法显示'
       }
     }
   }
@@ -798,7 +757,7 @@ function requestSubmitConfirmation(): void {
     return
   }
   if (documentUploading.value) {
-    formError.value = '订单凭证正在上传，请等待上传完成后再提交'
+    formError.value = '出单凭证正在上传，请等待上传完成后再提交'
     return
   }
   if (furthestReachedStep.value !== SALES_ORDER_CREATE_LAST_STEP) {
@@ -1319,12 +1278,12 @@ onBeforeUnmount(() => {
             <section
               v-show="activeStep === 3"
               class="space-y-6"
-              aria-label="订单凭证"
+              aria-label="出单凭证"
               data-testid="sales-order-step-documents"
             >
               <FaCard
-                title="订单凭证"
-                description="可先上传图片或文档；上传不会派发订单编号，正式保存时才关联。"
+                title="出单凭证"
+                description="出单凭证必传且只能上传一份；上传不会派发订单编号，正式保存时才关联。"
                 content-class="gap-4 grid"
               >
                 <template v-if="canManageDocuments">
@@ -1332,7 +1291,6 @@ onBeforeUnmount(() => {
                     ref="fileInputRef"
                     type="file"
                     accept="image/*,.pdf,.doc,.docx"
-                    multiple
                     class="sr-only"
                     :disabled="submitLocked || documentUploading"
                     @change="handleFileInput"
@@ -1342,31 +1300,42 @@ onBeforeUnmount(() => {
                     variant="outline"
                     class="min-h-11 w-full"
                     :loading="documentUploading"
-                    :disabled="submitLocked || formModel.documents.length >= 20"
+                    :disabled="submitLocked || formModel.issuanceVoucher !== null"
                     @click="openFilePicker"
                   >
-                    <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传定金凭证、签收单等
+                    <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传出单凭证
                   </FaButton>
                   <p class="text-xs text-muted-foreground m-0">
                     移除只取消本订单关联，未使用的临时文件由系统后续清理。
                   </p>
                 </template>
                 <p v-else class="text-sm text-muted-foreground m-0">
-                  当前身份没有 sales-orders:document 权限，可不附凭证直接创建订单。
+                  当前身份没有 sales-orders:document 权限，无法创建销售订单。
                 </p>
                 <p v-if="documentUploadError" class="text-sm text-destructive m-0" role="alert">
                   {{ documentUploadError }}
                 </p>
                 <div
-                  v-for="(document, index) in formModel.documents"
-                  :key="document.key"
-                  class="p-4 border border-border rounded-lg gap-3 grid grid-cols-1 md:grid-cols-2"
+                  v-if="formModel.issuanceVoucher"
+                  class="p-4 border border-border rounded-lg gap-4 grid md:grid-cols-[5rem_minmax(0,1fr)]"
                 >
-                  <div class="flex gap-3 min-w-0 items-start justify-between md:col-span-2">
+                  <FaImagePreview
+                    v-if="formModel.issuanceVoucher.mediaType === 'IMAGE'"
+                    :src="documentPreviewSnapshot[formModel.issuanceVoucher.key] ?? ''"
+                    class="rounded-lg size-20 object-cover"
+                    :aria-label="`出单凭证 ${formModel.issuanceVoucher.originalFilename}`"
+                  />
+                  <div v-else class="border border-border rounded-lg bg-muted/30 flex size-20 items-center justify-center">
+                    <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-8" aria-hidden="true" />
+                  </div>
+                  <div class="flex gap-3 min-w-0 items-start justify-between">
                     <div class="min-w-0">
-                      <strong class="text-sm break-all">{{ document.originalFilename }}</strong>
+                      <strong class="text-sm break-all">{{ formModel.issuanceVoucher.originalFilename }}</strong>
                       <p class="text-xs text-muted-foreground font-mono m-0 mt-1">
-                        {{ document.mimeType }} · {{ document.sizeBytes }} bytes
+                        {{ formModel.issuanceVoucher.mimeType }} · {{ formModel.issuanceVoucher.sizeBytes }} bytes
+                      </p>
+                      <p class="text-sm m-0 mt-2 break-words">
+                        系统标题：{{ formModel.issuanceVoucher.title }}
                       </p>
                     </div>
                     <FaButton
@@ -1374,40 +1343,12 @@ onBeforeUnmount(() => {
                       variant="ghost"
                       size="sm"
                       :disabled="submitLocked"
-                      :aria-label="`移除凭证 ${document.originalFilename}`"
-                      @click="removeDocument(index)"
+                      :aria-label="`移除出单凭证 ${formModel.issuanceVoucher.originalFilename}`"
+                      @click="removeDocument"
                     >
                       移除
                     </FaButton>
                   </div>
-                  <FaFormItem :name="`documents.${index}.documentType`" label="凭证类型" required>
-                    <FaSelect
-                      :model-value="document.documentType"
-                      :options="[
-                        { label: '定金凭证', value: 'DEPOSIT_VOUCHER' },
-                        { label: '签收单', value: 'DELIVERY_RECEIPT' },
-                        { label: '其他', value: 'OTHER' },
-                      ]"
-                      class="w-full"
-                      @update:model-value="handleDocumentTypeUpdate(index, $event as SalesOrderDocumentFormModel['documentType'])"
-                    />
-                  </FaFormItem>
-                  <FaFormItem :name="`documents.${index}.title`" label="标题">
-                    <FaInput
-                      :model-value="document.title"
-                      maxlength="128"
-                      class="w-full"
-                      @update:model-value="handleDocumentTitleUpdate(index, $event)"
-                    />
-                  </FaFormItem>
-                  <FaFormItem :name="`documents.${index}.remark`" label="备注" class="md:col-span-2">
-                    <FaTextarea
-                      :model-value="document.remark"
-                      maxlength="500"
-                      class="w-full"
-                      @update:model-value="updateDocument(index, { remark: String($event ?? '') })"
-                    />
-                  </FaFormItem>
                 </div>
               </FaCard>
 

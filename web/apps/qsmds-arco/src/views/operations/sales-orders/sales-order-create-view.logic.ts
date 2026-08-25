@@ -46,20 +46,22 @@ export function mapSalesOrderCreateFormToDesc(
         return normalized === null ? [] : [normalized]
       }),
     },
-    documents: model.documents.map((document) => {
-      const imagePreview = document.mediaType === 'IMAGE'
-        ? optionalDisplayText(context.documentPreviewByKey.get(document.key))
-        : null
-      return {
-        documentType: document.documentType,
-        key: document.key,
-        mediaType: document.mediaType,
-        originalFilename: document.originalFilename,
-        previewSrc: imagePreview,
-        thumbnailSrc: imagePreview,
-        title: optionalDisplayText(document.title),
-      }
-    }),
+    documents: model.issuanceVoucher === null
+      ? []
+      : [model.issuanceVoucher].map((document) => {
+          const imagePreview = document.mediaType === 'IMAGE'
+            ? optionalDisplayText(context.documentPreviewByKey.get(document.key))
+            : null
+          return {
+            documentType: 'ORDER_ISSUANCE_VOUCHER' as const,
+            key: document.key,
+            mediaType: document.mediaType,
+            originalFilename: document.originalFilename,
+            previewSrc: imagePreview,
+            thumbnailSrc: imagePreview,
+            title: optionalDisplayText(document.title),
+          }
+        }),
     issuerName: optionalDisplayText(context.issuerName),
     lines: model.lines.map(line => ({
       actualUnitPriceAmount: optionalDisplayText(line.actualUnitPriceAmount),

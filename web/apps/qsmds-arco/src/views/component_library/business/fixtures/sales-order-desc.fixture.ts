@@ -25,13 +25,13 @@ export const SALES_ORDER_DESC_SHOWCASE_MODEL = {
   },
   documents: [
     {
-      documentType: 'DEPOSIT_VOUCHER',
-      key: 'document-deposit-voucher',
+      documentType: 'ORDER_ISSUANCE_VOUCHER',
+      key: 'document-issuance-voucher',
       mediaType: 'IMAGE',
-      originalFilename: 'deposit-voucher.jpg',
+      originalFilename: 'issuance-voucher.jpg',
       previewSrc: depositVoucherSrc,
       thumbnailSrc: depositVoucherSrc,
-      title: '林晓芳-定金凭证-20260821142415001',
+      title: '林晓芳-出单凭证-20260821142415001',
     },
     {
       documentType: 'DELIVERY_RECEIPT',

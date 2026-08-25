@@ -12,12 +12,6 @@ const props = defineProps<{
   amountPrecision: number
 }>()
 
-const documentTypeLabels = {
-  DEPOSIT_VOUCHER: '定金凭证',
-  DELIVERY_RECEIPT: '签收单',
-  OTHER: '其他',
-} as const
-
 function displayText(value: string): string {
   return value.trim() || '未填写'
 }
@@ -71,20 +65,14 @@ const salesItems = computed<DescriptionItem[]>(() => [
 ])
 
 const documentItems = computed<DescriptionItem[]>(() => {
-  const items: DescriptionItem[] = [
-    { label: '凭证数量', value: props.model.documents.length },
-  ]
-  for (const [index, document] of props.model.documents.entries()) {
-    const title = document.title.trim()
-    items.push({
-      key: `document-${index}`,
-      label: `凭证 ${index + 1}（${documentTypeLabels[document.documentType]}）`,
-      value: title === '' || title === document.originalFilename
-        ? document.originalFilename
-        : `${title}；原始文件 ${document.originalFilename}`,
-    })
+  const document = props.model.issuanceVoucher
+  if (document === null) {
+    return [{ label: '出单凭证', value: '未上传' }]
   }
-  return items
+  return [{
+    label: '出单凭证',
+    value: `${document.title}；原始文件 ${document.originalFilename}`,
+  }]
 })
 
 const remarkItems = computed<DescriptionItem[]>(() => [
@@ -129,7 +117,7 @@ const remarkItems = computed<DescriptionItem[]>(() => [
 
     <section aria-labelledby="sales-order-review-documents">
       <h3 id="sales-order-review-documents" class="text-sm font-semibold m-0 mb-3">
-        订单凭证
+        出单凭证
       </h3>
       <FaDescriptions :items="documentItems" :column="1" border size="sm" label-width="8.5rem" />
     </section>

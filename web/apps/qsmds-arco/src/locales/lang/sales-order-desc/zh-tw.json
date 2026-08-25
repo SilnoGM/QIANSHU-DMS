@@ -32,9 +32,9 @@
       "CUSTOM": "本單臨時產品"
     },
     "documentTypes": {
-      "DEPOSIT_VOUCHER": "訂金憑證",
-      "DELIVERY_RECEIPT": "簽收單",
-      "OTHER": "其他憑證"
+      "ORDER_ISSUANCE_VOUCHER": "出單憑證",
+      "PAYMENT_VOUCHER": "收款憑證",
+      "DELIVERY_RECEIPT": "簽收單"
     },
     "empty": {
       "text": "未填寫",

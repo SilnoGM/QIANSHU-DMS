@@ -9,7 +9,6 @@ import type { RegionSelectorValue } from '@/components/business/QsRegionSelector
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 export type SalesOrderLineType = 'CATALOG' | 'CUSTOM'
-export type SalesOrderDocumentType = 'DEPOSIT_VOUCHER' | 'DELIVERY_RECEIPT' | 'OTHER'
 export type SalesOrderFieldErrors = Readonly<Record<string, string>>
 export type SalesOrderCreateStep = 0 | 1 | 2 | 3
 
@@ -32,15 +31,11 @@ export interface SalesOrderLineFormModel {
   }
 }
 
-export interface SalesOrderDocumentFormModel extends SalesOrderTemporaryDocumentDto {
+export interface SalesOrderIssuanceVoucherFormModel extends SalesOrderTemporaryDocumentDto {
   key: string
-  documentType: SalesOrderDocumentType
   title: string
-  /** 上传时生成并固定，后续自动刷新客户名或凭证类型时不重新计时。 */
+  /** 上传时生成并固定，后续自动刷新客户名时不重新计时。 */
   autoTitleTimestamp: string
-  /** 用户一旦编辑过标题（包括清空），自动联动便不再覆盖用户输入。 */
-  titleManuallyEdited: boolean
-  remark: string
 }
 
 export interface SalesOrderFormModel {
@@ -56,7 +51,7 @@ export interface SalesOrderFormModel {
   agreedTotalAmount: string | null
   depositDueAmount: string | null
   balanceDueAmount: string | null
-  documents: SalesOrderDocumentFormModel[]
+  issuanceVoucher: SalesOrderIssuanceVoucherFormModel | null
   remark: string
 }
 
@@ -155,11 +150,6 @@ const ADMINISTRATIVE_REGION_SUFFIXES = [
   '盟',
   '旗',
 ] as const
-const DOCUMENT_TYPE_LABELS: Readonly<Record<SalesOrderDocumentType, string>> = {
-  DEPOSIT_VOUCHER: '定金凭证',
-  DELIVERY_RECEIPT: '签收单',
-  OTHER: '其他',
-}
 
 function newKey(): string {
   return crypto.randomUUID().toLowerCase()
@@ -197,7 +187,11 @@ export function resolveSalesOrderCreateStepForField(
   ) {
     return 2
   }
-  if (path === 'documents' || path.startsWith('documents.') || path === 'remark') {
+  if (
+    path === 'issuanceVoucher'
+    || path.startsWith('issuanceVoucher.')
+    || path === 'remark'
+  ) {
     return 3
   }
   return null
@@ -271,11 +265,10 @@ export function formatSalesOrderDocumentTitleTimestamp(value: Date): string {
 
 export function createSalesOrderDocumentAutoTitle(
   customerName: string,
-  documentType: SalesOrderDocumentType,
   timestamp: string,
 ): string {
   const normalizedCustomerName = normalizeText(customerName) || '未填写客户'
-  const suffix = `-${DOCUMENT_TYPE_LABELS[documentType]}-${timestamp}`
+  const suffix = `-出单凭证-${timestamp}`
   // 服务端按 Unicode code point 限制 128 字符，因此不能用 UTF-16 length 截断中文或 emoji。
   const maximumCustomerNameLength = Math.max(
     0,
@@ -285,31 +278,15 @@ export function createSalesOrderDocumentAutoTitle(
 }
 
 export function refreshSalesOrderDocumentAutoTitle(
-  document: SalesOrderDocumentFormModel,
+  document: SalesOrderIssuanceVoucherFormModel,
   customerName: string,
-  documentType: SalesOrderDocumentType = document.documentType,
-): SalesOrderDocumentFormModel {
+): SalesOrderIssuanceVoucherFormModel {
   return {
     ...document,
-    documentType,
-    title: document.titleManuallyEdited
-      ? document.title
-      : createSalesOrderDocumentAutoTitle(
-          customerName,
-          documentType,
-          document.autoTitleTimestamp,
-        ),
-  }
-}
-
-export function customizeSalesOrderDocumentTitle(
-  document: SalesOrderDocumentFormModel,
-  title: string,
-): SalesOrderDocumentFormModel {
-  return {
-    ...document,
-    title,
-    titleManuallyEdited: true,
+    title: createSalesOrderDocumentAutoTitle(
+      customerName,
+      document.autoTitleTimestamp,
+    ),
   }
 }
 
@@ -421,7 +398,7 @@ export function createSalesOrderFormModel(
     agreedTotalAmount: null,
     depositDueAmount: null,
     balanceDueAmount: null,
-    documents: [],
+    issuanceVoucher: null,
     remark: '',
   }
 }
@@ -747,21 +724,11 @@ export function buildCreateSalesOrderRequest(
     errors.balanceDueAmount = '定金与尾款之和必须等于销售总价'
   }
 
-  const documents: CreateSalesOrderRequestDto['documents'] = []
-  if (model.documents.length > 20) {
-    errors.documents = '订单凭证最多 20 个'
+  if (model.issuanceVoucher === null) {
+    errors.issuanceVoucher = '出单凭证必须上传且只能上传一份'
   }
-  for (const [index, document] of model.documents.entries()) {
-    if (!UUID_V4_PATTERN.test(document.mediaAssetId)) {
-      errors[`documents.${index}.mediaAssetId`] = '订单凭证上传状态无效'
-      continue
-    }
-    documents.push({
-      mediaAssetId: document.mediaAssetId,
-      documentType: document.documentType,
-      title: optionalText(document.title),
-      remark: optionalText(document.remark),
-    })
+  else if (!UUID_V4_PATTERN.test(model.issuanceVoucher.mediaAssetId)) {
+    errors['issuanceVoucher.mediaAssetId'] = '出单凭证上传状态无效'
   }
 
   if (Object.keys(errors).length > 0) {
@@ -785,7 +752,10 @@ export function buildCreateSalesOrderRequest(
       agreedTotalAmount: formatAmountUnits(amountUnits(normalizedAgreed as string)),
       depositDueAmount: formatAmountUnits(amountUnits(normalizedDeposit as string)),
       balanceDueAmount: formatAmountUnits(amountUnits(normalizedBalance as string)),
-      documents,
+      issuanceVoucher: {
+        mediaAssetId: (model.issuanceVoucher as SalesOrderIssuanceVoucherFormModel)
+          .mediaAssetId,
+      },
       remark: optionalText(model.remark),
     },
   }
@@ -825,7 +795,7 @@ export function hasSalesOrderChanges(model: SalesOrderFormModel, today: string):
     || model.agreedTotalAmount !== null
     || model.depositDueAmount !== null
     || model.balanceDueAmount !== null
-    || model.documents.length > 0
+    || model.issuanceVoucher !== null
     || model.remark !== ''
     || model.lines.length !== 1
     || !isBlankCatalogLine(model.lines[0]!)
@@ -842,16 +812,16 @@ function readFirstMessage(value: unknown): string | undefined {
 }
 
 function allowedFieldPath(path: string): boolean {
-  return /^(?:orderDate|currencyCode|agreedTotalAmount|depositDueAmount|balanceDueAmount|remark|lines|documents)$/u.test(path)
+  return /^(?:orderDate|currencyCode|agreedTotalAmount|depositDueAmount|balanceDueAmount|remark|lines|issuanceVoucher)$/u.test(path)
     || /^customer\.(?:name|phone|countryRegionId|provinceStateId|cityId|addressDetail)$/u.test(path)
     || /^lines\.(?:\d|[1-9]\d)\.(?:lineType|productId|name|description|actualUnitPriceAmount|quantity)$/u.test(path)
-    || /^documents\.(?:\d|1\d)\.(?:mediaAssetId|documentType|title|remark)$/u.test(path)
+    || /^issuanceVoucher\.mediaAssetId$/u.test(path)
 }
 
 const RULE_CODE_FIELDS: Readonly<Record<string, string>> = {
   ADDRESS_DETAIL_CONTAINS_SELECTED_REGION: 'customer.addressDetail',
   SALES_ORDER_CURRENCY_UNAVAILABLE: 'currencyCode',
-  SALES_ORDER_DOCUMENT_UNAVAILABLE: 'documents',
+  SALES_ORDER_DOCUMENT_UNAVAILABLE: 'issuanceVoucher',
   SALES_ORDER_PAYMENT_TERMS_MISMATCH: 'balanceDueAmount',
   SALES_ORDER_PRODUCT_UNAVAILABLE: 'lines',
   SALES_ORDER_REGION_UNAVAILABLE: 'customer.cityId',

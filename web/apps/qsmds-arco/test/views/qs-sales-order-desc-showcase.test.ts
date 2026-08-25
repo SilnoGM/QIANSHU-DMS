@@ -54,7 +54,7 @@ test('销售订单详情 fixture 覆盖两类产品、三段金额和图片附�
   assert.match(fixtureSource, /agreedTotalAmount:/u)
   assert.match(fixtureSource, /depositDueAmount:/u)
   assert.match(fixtureSource, /balanceDueAmount:/u)
-  assert.match(fixtureSource, /documentType: 'DEPOSIT_VOUCHER'/u)
+  assert.match(fixtureSource, /documentType: 'ORDER_ISSUANCE_VOUCHER'/u)
   assert.match(fixtureSource, /documentType: 'DELIVERY_RECEIPT'/u)
   assert.match(fixtureSource, /thumbnailSrc:/u)
   assert.match(fixtureSource, /previewSrc:/u)
