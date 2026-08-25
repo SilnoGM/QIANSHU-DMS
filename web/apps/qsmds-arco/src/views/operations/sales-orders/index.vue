@@ -44,13 +44,13 @@ type SalesOrderCurrencyCode = 'TWD' | 'MYR'
 const ORDER_CURRENCY_CARD_DEFINITIONS = [
   {
     code: 'TWD',
-    emblemClass: 'bg-sky-950 text-rose-100 ring-rose-400/30 dark:bg-sky-900',
+    emblemClass: 'bg-emerald-950 text-white ring-emerald-400/30 dark:bg-emerald-900',
     fallbackName: '新台币',
     fallbackSymbol: 'NT$',
     icon: 'i-lucide:flower-2',
-    motifClass: 'text-rose-500/10 dark:text-rose-300/10',
+    motifClass: 'text-emerald-500/10 dark:text-emerald-300/10',
     regionLabel: '中国台湾',
-    regionTextClass: 'text-rose-700 dark:text-rose-300',
+    regionTextClass: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-700/50 dark:bg-emerald-950/60 dark:text-emerald-300',
   },
   {
     code: 'MYR',
@@ -1098,10 +1098,15 @@ onBeforeUnmount(() => {
       v-model="currencyModalVisible"
       title="选择订单币种"
       description="一张订单只允许一个币种，进入新增页后不可切换。产品选择不限制币种，本单售价按订单币种填写。"
-      size="md"
+      size="xl"
+      class="sm:max-w-[72rem]"
     >
+      <template #header-leading>
+        <FaIcon name="i-lucide:coins" class="size-5" aria-hidden="true" />
+      </template>
+
       <FaForm :model="currencyFormModel">
-        <div class="gap-4 grid">
+        <div class="gap-5 grid">
           <FaFormItem name="salesOrderCurrency" label="订单币种" required>
             <fieldset
               class="m-0 p-0 border-0 min-w-0 w-full"
@@ -1110,7 +1115,7 @@ onBeforeUnmount(() => {
               <legend class="sr-only">
                 订单币种
               </legend>
-              <div class="gap-3 grid grid-cols-2">
+              <div class="gap-5 grid grid-cols-2">
                 <label
                   v-for="option in orderCurrencyCardOptions"
                   :key="option.value"
@@ -1129,73 +1134,83 @@ onBeforeUnmount(() => {
                   <span
                     data-testid="sales-order-currency-card"
                     :data-currency-code="option.code"
-                    class="p-4 text-left border rounded-xl bg-background flex flex-col min-h-36 transition-[border-color,background-color,box-shadow] duration-200 ease-out relative overflow-hidden peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
+                    class="p-5 text-left border rounded-xl bg-background flex flex-col min-h-72 transition-[border-color,background-color,box-shadow,transform] duration-200 ease-out relative overflow-hidden sm:p-6 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
                     :class="currencySelectionUnavailable || option.disabled
                       ? 'border-border bg-muted/30 opacity-60'
                       : selectedCurrency === option.value
-                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
-                        : 'border-border hover:border-primary/40 hover:bg-muted/30'"
+                        ? 'border-primary bg-primary/[0.035] shadow-md ring-1 ring-primary/20'
+                        : 'border-border shadow-sm hover:border-primary/40 hover:bg-muted/20 hover:shadow-md'"
                   >
-                    <span
-                      class="size-24 absolute -right-3 -top-3"
-                      :class="option.motifClass"
-                      aria-hidden="true"
-                    >
-                      <FaIcon :name="option.icon" class="size-full" />
-                    </span>
-
-                    <span class="flex items-start justify-between relative">
+                    <span class="flex gap-4 min-w-0 items-start relative">
                       <span
-                        class="rounded-lg flex h-12 w-14 ring-1 items-center justify-center"
+                        data-testid="sales-order-currency-emblem"
+                        class="rounded-xl flex shrink-0 size-16 ring-2 shadow-sm items-center justify-center"
                         :class="option.emblemClass"
                         aria-hidden="true"
                       >
-                        <span class="text-base tracking-tight font-semibold tabular-nums">
+                        <span class="text-2xl tracking-tight font-semibold tabular-nums">
                           {{ option.symbol }}
                         </span>
                       </span>
+
+                      <span class="pt-0.5 flex-1 min-w-0">
+                        <strong class="text-lg leading-7 font-semibold block truncate">
+                          {{ option.name }}
+                        </strong>
+                        <span
+                          data-testid="sales-order-currency-region"
+                          class="text-xs font-medium mt-1.5 px-2 py-0.5 border rounded-md inline-flex max-w-full items-center"
+                          :class="option.regionTextClass"
+                        >
+                          {{ option.regionLabel }}
+                        </span>
+                      </span>
+
                       <FaIcon
                         v-if="selectedCurrency === option.value && !option.disabled"
                         name="i-lucide:circle-check-big"
-                        class="text-primary size-5"
+                        class="text-primary shrink-0 size-7"
                         aria-hidden="true"
                       />
                       <FaIcon
                         v-else-if="currencySelectionUnavailable || option.disabled"
                         name="i-lucide:circle-slash-2"
-                        class="text-muted-foreground size-5"
+                        class="text-muted-foreground shrink-0 size-7"
                         aria-hidden="true"
                       />
                     </span>
 
-                    <span class="mt-4 min-w-0 relative">
-                      <span
-                        class="text-xs tracking-wide font-medium block"
-                        :class="option.regionTextClass"
-                      >
-                        {{ option.regionLabel }}
-                      </span>
-                      <span class="mt-1 flex flex-wrap gap-x-2 gap-y-1 items-baseline">
-                        <strong class="qs-type-section-title">{{ option.code }}</strong>
+                    <span class="mt-6 pt-5 border-t border-dashed flex flex-1 flex-col min-w-0 relative">
+                      <span class="flex flex-wrap gap-x-3 gap-y-1 min-w-0 items-baseline relative z-10">
+                        <strong class="text-3xl leading-none tracking-wide font-semibold">{{ option.code }}</strong>
                         <span class="text-sm text-muted-foreground truncate">{{ option.name }}</span>
                       </span>
-                    </span>
 
-                    <span
-                      class="text-xs font-medium mt-auto pt-4 relative"
-                      :class="selectedCurrency === option.value && !option.disabled
-                        ? 'text-primary'
-                        : 'text-muted-foreground'"
-                    >
-                      {{ selectedCurrency === option.value && !option.disabled
-                        ? '已选中'
-                        : currencyCatalog.loading.value
-                          ? '正在加载'
-                          : currencyCatalog.errorMessage.value !== null
-                            ? '暂时不可用'
-                            : option.disabled
-                              ? '当前不可用'
-                              : '点击选择' }}
+                      <span
+                        class="text-sm font-medium mt-auto pt-7 flex gap-2 items-center relative z-10"
+                        :class="selectedCurrency === option.value && !option.disabled
+                          ? 'text-primary'
+                          : 'text-muted-foreground'"
+                      >
+                        <FaIcon name="i-lucide:mouse-pointer-click" class="size-4" aria-hidden="true" />
+                        {{ selectedCurrency === option.value && !option.disabled
+                          ? '已选中'
+                          : currencyCatalog.loading.value
+                            ? '正在加载'
+                            : currencyCatalog.errorMessage.value !== null
+                              ? '暂时不可用'
+                              : option.disabled
+                                ? '当前不可用'
+                                : '点击选择' }}
+                      </span>
+
+                      <span
+                        class="size-28 absolute -bottom-8 -right-5"
+                        :class="option.motifClass"
+                        aria-hidden="true"
+                      >
+                        <FaIcon :name="option.icon" class="size-full" />
+                      </span>
                     </span>
                   </span>
                 </label>
@@ -1217,15 +1232,21 @@ onBeforeUnmount(() => {
             description="请先在基础资料中启用 TWD 或 MYR。"
             variant="destructive"
           />
+          <FaAlert
+            v-else
+            icon="i-lucide:info"
+            title="币种确定后不可在订单编辑页修改，请谨慎选择。"
+            class="text-blue-900 border-blue-200 bg-blue-50/70 dark:text-blue-100 dark:border-blue-800/70 dark:bg-blue-950/30"
+          />
         </div>
       </FaForm>
       <template #footer>
-        <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="currencyModalVisible = false">
+        <FaButton type="button" variant="outline" class="px-7 min-h-11" @click="currencyModalVisible = false">
           取消
         </FaButton>
         <FaButton
           type="button"
-          class="min-h-11 sm:min-h-9"
+          class="px-7 min-h-11"
           :disabled="!selectedCurrencyAvailable || currencySelectionUnavailable"
           @click="enterCreatePage"
         >

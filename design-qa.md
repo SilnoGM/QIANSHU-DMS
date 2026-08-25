@@ -81,6 +81,42 @@ final result: passed
 
 ---
 
+# 销售订单币种选择弹窗 Design QA
+
+## 验收基线
+
+- source visual truth：用户提供的参考图 `/var/folders/mq/jghl7cqn6fl2mccy65d_8k8w0000gn/T/codex-clipboard-8b010522-582d-449e-88d3-51738302a2da.png`。
+- implementation screenshot：`/tmp/qianshu-sales-order-currency-selector-1407x1118.png`。
+- viewport：参考图与实现图均为 `1407 × 1118`，实现图通过临时浏览器视口覆盖捕获，验收结束后已恢复默认视口。
+- state：浅色主题、销售订单列表、币种弹窗打开、`TWD` 已选中。
+- primary interactions tested：打开弹窗时没有默认币种；点击可见的 `TWD` 卡片后选中态与主按钮同步启用；点击“进入新增订单”进入 `#/operations/sales-orders/create?currency=TWD`。
+
+## 同尺寸对照结论
+
+- 弹窗采用宽幅双卡片结构，TWD 与 MYR 横向并排，卡片内部均包含货币徽标、货币名称、地区标签、币种编码、分隔线、选择提示和地区特色水印。
+- `TWD` 选中态具有绿色边框、浅绿背景、选中图标和绿色状态文字；`MYR` 保持中性边框、蓝金徽标和暖黄色月星水印。
+- 蓝色信息提示、取消按钮和绿色主按钮的位置与信息层级均与参考图一致。
+- 实现沿用项目 `QsGenericModal` 的标题、正文、页脚密度，因此标题区和页脚区比视觉概念图更紧凑；该差异不影响信息结构、选择路径或可读性，归类为可接受的产品设计系统差异。
+
+## Findings
+
+- 最终比较未发现可执行的 P0、P1 或 P2 问题。
+- P3：参考图采用更宽松的概念稿垂直留白；实现保留后台系统既有模态框密度，避免在常见笔记本视口产生不必要的内部滚动。
+
+## Implementation Checklist
+
+- [x] TWD、MYR 使用横向并排的矩形卡片。
+- [x] 每次打开弹窗均无默认选择。
+- [x] 货币名称、符号与启用状态继续读取货币目录。
+- [x] 卡片选中、键盘选择、禁用状态与主按钮状态同步。
+- [x] 提示文案明确币种进入新增页后不可修改。
+- [x] 同尺寸、同状态参考图与实现图已放入同一对照输入检查。
+- [x] 交互最终进入带固定币种参数的新增订单路由。
+
+final result: passed
+
+---
+
 # QsSalesOrderDesc Design QA
 
 ## 验收基线
