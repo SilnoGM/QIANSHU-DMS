@@ -194,6 +194,9 @@ test('销售订单列表使用十四个复合列并展示服务端全量筛选�
 
 test('销售订单记录弹窗按需读取详情并分开展示收款、凭证与变更记录', async () => {
   const source = await readFile(new URL('sales-order-records-modal.vue', ROOT), 'utf8')
+  const documentsStart = source.indexOf('<section v-else-if="kind === \'documents\'"')
+  const documentsEnd = source.indexOf('<section v-else-if="kind === \'changes\'"', documentsStart)
+  const documentsSource = source.slice(documentsStart, documentsEnd)
 
   assert.match(source, /<QsGenericModal/u)
   assert.match(source, /salesOrdersApi\.getById/u)
@@ -202,6 +205,10 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /kind === 'changes'/u)
   assert.match(source, /payment\.voidedAt/u)
   assert.match(source, /document\.detachedAt === null/u)
+  assert.match(documentsSource, /<FaImagePreview[\s\S]*?v-if="document\.mediaType === 'IMAGE'"[\s\S]*?:src="document\.contentUrl"/u)
+  assert.match(documentsSource, /<template #error>/u)
+  assert.match(documentsSource, /<a[\s\S]*?v-else/u)
+  assert.doesNotMatch(documentsSource, /<img/u)
   assert.match(source, /<FaTabs/u)
   assert.match(source, /状态变更（\$\{detail\.value\?\.statusHistory\.length \?\? 0\}）/u)
   assert.match(source, /金额变更（\$\{detail\.value\?\.amountRevisions\.length \?\? 0\}）/u)

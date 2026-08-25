@@ -310,20 +310,29 @@ onBeforeUnmount(cancelDetailRequest)
             :key="document.id"
             class="py-4 flex gap-4 min-w-0 items-start"
           >
+            <FaImagePreview
+              v-if="document.mediaType === 'IMAGE'"
+              :src="document.contentUrl"
+              class="shrink-0 size-20 object-cover"
+              role="img"
+              :aria-label="`凭证图片 ${document.title || document.originalFilename}`"
+            >
+              <template #error>
+                <div class="text-muted-foreground flex size-20 items-center justify-center">
+                  <FaIcon name="i-lucide:image-off" class="size-8" aria-hidden="true" />
+                  <span class="sr-only">凭证图片加载失败</span>
+                </div>
+              </template>
+            </FaImagePreview>
             <a
+              v-else
               :href="document.contentUrl"
               target="_blank"
               rel="noopener noreferrer"
               class="border border-border rounded-lg bg-muted/30 flex shrink-0 size-20 items-center justify-center overflow-hidden"
               :aria-label="`打开凭证 ${document.title || document.originalFilename}`"
             >
-              <img
-                v-if="document.mediaType === 'IMAGE'"
-                :src="document.contentUrl"
-                :alt="document.title || document.originalFilename"
-                class="size-full object-cover"
-              >
-              <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground size-8" aria-hidden="true" />
+              <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-8" aria-hidden="true" />
             </a>
             <div class="flex-1 min-w-0">
               <div class="flex flex-wrap gap-2 items-center">
