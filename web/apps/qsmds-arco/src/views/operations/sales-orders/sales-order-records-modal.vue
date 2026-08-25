@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import type { SalesOrderRecordsKind } from './sales-order-records-modal.logic'
+import type {
+  SalesOrderPaymentDraft,
+  SalesOrderPaymentDraftErrors,
+  SalesOrderRecordsKind,
+} from './sales-order-records-modal.logic'
 import type {
   SalesOrderAmountRevisionDto,
   SalesOrderDetailDto,
@@ -7,16 +11,24 @@ import type {
   SalesOrderListItemDto,
   SalesOrderPaymentDto,
   SalesOrderStatusHistoryDto,
+  SalesOrderTemporaryDocumentDto,
 } from '@/api/generated/types.gen'
 
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import MoneyInput from '@/components/base/MoneyInput/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
+import {
+  buildSalesOrderDeliveryReceiptRequest,
+  buildSalesOrderPaymentRequest,
+  formatSalesOrderLocalDateTime,
+} from './sales-order-records-modal.logic'
 
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
@@ -26,15 +38,38 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  'detailUpdated': [detail: SalesOrderDetailDto]
   'update:modelValue': [value: boolean]
 }>()
 
+interface UploadedVoucher extends SalesOrderTemporaryDocumentDto {
+  readonly previewUrl: null | string
+}
+
+const { auth } = useAppAuth()
+const toast = useQsToast()
 const detail = ref<SalesOrderDetailDto | null>(null)
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
 const activeChangeTab = ref<'status' | 'amount'>('status')
+const paymentModalVisible = ref(false)
+const receiptModalVisible = ref(false)
+const actionSubmitting = ref(false)
+const actionUploading = ref(false)
+const actionError = ref('')
+const paymentErrors = shallowRef<SalesOrderPaymentDraftErrors>({})
+const paymentType = ref<SalesOrderPaymentDraft['paymentType']>('DEPOSIT')
+const paymentAmount = ref<null | string>(null)
+const paymentReceivedAt = ref('')
+const paymentMethod = ref('')
+const paymentRemark = ref('')
+const paymentVoucher = shallowRef<UploadedVoucher | null>(null)
+const deliveryReceipt = shallowRef<UploadedVoucher | null>(null)
+const paymentFileInputRef = useTemplateRef<HTMLInputElement>('paymentFileInputRef')
+const receiptFileInputRef = useTemplateRef<HTMLInputElement>('receiptFileInputRef')
 let requestVersion = 0
 let detailAbortController: AbortController | null = null
+let actionAbortController: AbortController | null = null
 
 const modalVisible = computed({
   get: () => props.modelValue,
@@ -66,13 +101,53 @@ const changeTabs = computed(() => [
     value: 'amount',
   },
 ])
+const canRecordPayment = computed(() => (
+  auth('sales-orders:payment') && auth('sales-orders:document')
+))
+const canSubmitDeliveryReceipt = computed(() => auth('sales-orders:document'))
+const actionLocked = computed(() => actionSubmitting.value || actionUploading.value)
+const currencyPrecision = computed(() => props.currencies.find(
+  currency => currency.code === detail.value?.currencyCode,
+)?.minorUnit ?? 2)
+const paymentTypeOptions: Array<{
+  label: string
+  value: SalesOrderPaymentDraft['paymentType']
+}> = [
+  { label: '定金', value: 'DEPOSIT' },
+  { label: '过程款', value: 'PROGRESS' },
+  { label: '开票税金', value: 'INVOICE_TAX' },
+  { label: '尾款', value: 'BALANCE' },
+  { label: '其他', value: 'OTHER' },
+]
 
 function paymentTypeLabel(value: SalesOrderPaymentDto['paymentType']): string {
-  return { DEPOSIT: '定金', BALANCE: '尾款', OTHER: '其他收款' }[value]
+  return {
+    BALANCE: '尾款',
+    DEPOSIT: '定金',
+    INVOICE_TAX: '开票税金',
+    OTHER: '其他',
+    PROGRESS: '过程款',
+  }[value]
 }
 
 function documentTypeLabel(value: SalesOrderDocumentDto['documentType']): string {
-  return { DEPOSIT_VOUCHER: '定金凭证', DELIVERY_RECEIPT: '签收单', OTHER: '其他凭证' }[value]
+  return {
+    DELIVERY_RECEIPT: '签收单',
+    ORDER_ISSUANCE_VOUCHER: '出单凭证',
+    PAYMENT_VOUCHER: '收款凭证',
+  }[value]
+}
+
+function documentAssociationLabel(document: SalesOrderDocumentDto): string {
+  return document.documentType === 'PAYMENT_VOUCHER'
+    ? '已关联实际收款记录'
+    : '订单级凭证'
+}
+
+function linkedPayment(document: SalesOrderDocumentDto): SalesOrderPaymentDto | null {
+  return document.paymentId === null
+    ? null
+    : detail.value?.payments.find(payment => payment.id === document.paymentId) ?? null
 }
 
 function statusDimensionLabel(value: SalesOrderStatusHistoryDto['dimension']): string {
@@ -124,10 +199,263 @@ function handleChangeTab(value: string | number): void {
   }
 }
 
+function releaseUploadedVoucher(voucher: UploadedVoucher | null): void {
+  if (voucher?.previewUrl !== null && voucher?.previewUrl !== undefined) {
+    URL.revokeObjectURL(voucher.previewUrl)
+  }
+}
+
+function resetPaymentForm(): void {
+  releaseUploadedVoucher(paymentVoucher.value)
+  paymentType.value = 'DEPOSIT'
+  paymentAmount.value = null
+  paymentReceivedAt.value = formatSalesOrderLocalDateTime(new Date())
+  paymentMethod.value = ''
+  paymentRemark.value = ''
+  paymentVoucher.value = null
+  paymentErrors.value = {}
+  actionError.value = ''
+}
+
+function resetReceiptForm(): void {
+  releaseUploadedVoucher(deliveryReceipt.value)
+  deliveryReceipt.value = null
+  actionError.value = ''
+}
+
+function openPaymentModal(): void {
+  if (!canRecordPayment.value || detail.value === null) {
+    return
+  }
+  resetPaymentForm()
+  paymentModalVisible.value = true
+}
+
+function openReceiptModal(): void {
+  if (!canSubmitDeliveryReceipt.value || detail.value === null) {
+    return
+  }
+  resetReceiptForm()
+  receiptModalVisible.value = true
+}
+
+function closePaymentModal(): void {
+  if (!actionLocked.value) {
+    paymentModalVisible.value = false
+    resetPaymentForm()
+  }
+}
+
+function closeReceiptModal(): void {
+  if (!actionLocked.value) {
+    receiptModalVisible.value = false
+    resetReceiptForm()
+  }
+}
+
+function clearPaymentError(field: string): void {
+  paymentErrors.value = Object.fromEntries(
+    Object.entries(paymentErrors.value).filter(([path]) => path !== field),
+  )
+  actionError.value = ''
+}
+
+function openPaymentFilePicker(): void {
+  if (!actionLocked.value && paymentVoucher.value === null) {
+    paymentFileInputRef.value?.click()
+  }
+}
+
+function openReceiptFilePicker(): void {
+  if (!actionLocked.value && deliveryReceipt.value === null) {
+    receiptFileInputRef.value?.click()
+  }
+}
+
+async function uploadActionVoucher(
+  file: File,
+  target: 'payment' | 'receipt',
+): Promise<void> {
+  actionAbortController?.abort()
+  const controller = new AbortController()
+  actionAbortController = controller
+  actionUploading.value = true
+  actionError.value = ''
+  try {
+    const response = await salesOrdersApi.uploadTemporaryDocument(
+      file,
+      file.type.startsWith('image/') ? 'IMAGE' : 'DOCUMENT',
+      controller.signal,
+    )
+    if (controller.signal.aborted) {
+      return
+    }
+    const uploaded: UploadedVoucher = {
+      ...response.data,
+      previewUrl: response.data.mediaType === 'IMAGE' ? URL.createObjectURL(file) : null,
+    }
+    if (target === 'payment') {
+      releaseUploadedVoucher(paymentVoucher.value)
+      paymentVoucher.value = uploaded
+      clearPaymentError('voucher')
+    }
+    else {
+      releaseUploadedVoucher(deliveryReceipt.value)
+      deliveryReceipt.value = uploaded
+    }
+  }
+  catch (error) {
+    if (!isSalesOrderAbortError(error)) {
+      actionError.value = getSalesOrderApiFailure(error).message
+    }
+  }
+  finally {
+    if (actionAbortController === controller) {
+      actionAbortController = null
+      actionUploading.value = false
+    }
+  }
+}
+
+function handlePaymentFileInput(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file !== undefined) {
+    void uploadActionVoucher(file, 'payment')
+  }
+}
+
+function handleReceiptFileInput(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file !== undefined) {
+    void uploadActionVoucher(file, 'receipt')
+  }
+}
+
+function removePaymentVoucher(): void {
+  if (actionLocked.value) {
+    return
+  }
+  releaseUploadedVoucher(paymentVoucher.value)
+  paymentVoucher.value = null
+  clearPaymentError('voucher')
+}
+
+function removeDeliveryReceipt(): void {
+  if (actionLocked.value) {
+    return
+  }
+  releaseUploadedVoucher(deliveryReceipt.value)
+  deliveryReceipt.value = null
+  actionError.value = ''
+}
+
+async function submitPayment(): Promise<void> {
+  const orderId = detail.value?.id
+  if (orderId === undefined || actionLocked.value) {
+    return
+  }
+  const result = buildSalesOrderPaymentRequest({
+    amount: paymentAmount.value,
+    paymentMethod: paymentMethod.value,
+    paymentType: paymentType.value,
+    receivedAt: paymentReceivedAt.value,
+    remark: paymentRemark.value,
+    voucherMediaAssetId: paymentVoucher.value?.mediaAssetId ?? null,
+  }, currencyPrecision.value)
+  if (!result.valid) {
+    paymentErrors.value = result.fieldErrors
+    actionError.value = '请修正未通过校验的收款信息'
+    return
+  }
+
+  const controller = new AbortController()
+  actionAbortController = controller
+  actionSubmitting.value = true
+  actionError.value = ''
+  try {
+    const response = await salesOrdersApi.recordPayment(orderId, result.request, controller.signal)
+    if (controller.signal.aborted) {
+      return
+    }
+    detail.value = response.data
+    emit('detailUpdated', response.data)
+    paymentModalVisible.value = false
+    resetPaymentForm()
+    toast.success('实际收款记录添加成功')
+  }
+  catch (error) {
+    if (!isSalesOrderAbortError(error)) {
+      actionError.value = getSalesOrderApiFailure(error).message
+    }
+  }
+  finally {
+    if (actionAbortController === controller) {
+      actionAbortController = null
+      actionSubmitting.value = false
+    }
+  }
+}
+
+async function submitDeliveryReceipt(): Promise<void> {
+  const orderId = detail.value?.id
+  if (orderId === undefined || actionLocked.value) {
+    return
+  }
+  const result = buildSalesOrderDeliveryReceiptRequest(
+    deliveryReceipt.value?.mediaAssetId ?? null,
+  )
+  if (!result.valid) {
+    actionError.value = result.fieldErrors.receipt ?? '请上传签收单'
+    return
+  }
+
+  const controller = new AbortController()
+  actionAbortController = controller
+  actionSubmitting.value = true
+  actionError.value = ''
+  try {
+    const response = await salesOrdersApi.submitDeliveryReceipt(
+      orderId,
+      result.request,
+      controller.signal,
+    )
+    if (controller.signal.aborted) {
+      return
+    }
+    detail.value = response.data
+    emit('detailUpdated', response.data)
+    receiptModalVisible.value = false
+    resetReceiptForm()
+    toast.success('签收单上传成功，订单进度保持不变')
+  }
+  catch (error) {
+    if (!isSalesOrderAbortError(error)) {
+      actionError.value = getSalesOrderApiFailure(error).message
+    }
+  }
+  finally {
+    if (actionAbortController === controller) {
+      actionAbortController = null
+      actionSubmitting.value = false
+    }
+  }
+}
+
 function cancelDetailRequest(): void {
   requestVersion += 1
   detailAbortController?.abort()
   detailAbortController = null
+}
+
+function cancelActionRequest(): void {
+  actionAbortController?.abort()
+  actionAbortController = null
+  actionSubmitting.value = false
+  actionUploading.value = false
 }
 
 /** 每次打开都读取最新详情，避免列表计数和弹窗记录在状态变更后出现时间差。 */
@@ -176,6 +504,11 @@ watch(
   ([visible, orderId]) => {
     if (!visible || orderId === undefined) {
       cancelDetailRequest()
+      cancelActionRequest()
+      paymentModalVisible.value = false
+      receiptModalVisible.value = false
+      resetPaymentForm()
+      resetReceiptForm()
       detail.value = null
       errorMessage.value = null
       loading.value = false
@@ -187,7 +520,12 @@ watch(
   { immediate: true },
 )
 
-onBeforeUnmount(cancelDetailRequest)
+onBeforeUnmount(() => {
+  cancelDetailRequest()
+  cancelActionRequest()
+  releaseUploadedVoucher(paymentVoucher.value)
+  releaseUploadedVoucher(deliveryReceipt.value)
+})
 </script>
 
 <template>
@@ -201,6 +539,25 @@ onBeforeUnmount(cancelDetailRequest)
   >
     <template #header-leading>
       <FaIcon :name="modalIcon" class="size-5" aria-hidden="true" />
+    </template>
+
+    <template #header-extra>
+      <FaButton
+        v-if="kind === 'payments' && canRecordPayment"
+        type="button"
+        size="sm"
+        @click="openPaymentModal"
+      >
+        <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />新增实际收款
+      </FaButton>
+      <FaButton
+        v-else-if="kind === 'documents' && canSubmitDeliveryReceipt"
+        type="button"
+        size="sm"
+        @click="openReceiptModal"
+      >
+        <FaIcon name="i-lucide:package-check" aria-hidden="true" />货物签收
+      </FaButton>
     </template>
 
     <template #error-actions>
@@ -250,13 +607,6 @@ onBeforeUnmount(cancelDetailRequest)
                     {{ optionalText(payment.paymentMethod) }}
                   </dd>
                 </div>
-                <div>
-                  <dt class="text-muted-foreground inline">
-                    参考编号：
-                  </dt><dd class="m-0 inline break-all">
-                    {{ optionalText(payment.referenceNo) }}
-                  </dd>
-                </div>
                 <div class="sm:col-span-2">
                   <dt class="text-muted-foreground inline">
                     备注：
@@ -274,6 +624,31 @@ onBeforeUnmount(cancelDetailRequest)
                   </dd>
                 </div>
               </dl>
+              <div class="mt-3 p-3 border border-border rounded-lg bg-muted/15 flex gap-3 min-w-0 items-center">
+                <FaImagePreview
+                  v-if="payment.voucher.mediaType === 'IMAGE'"
+                  :src="payment.voucher.contentUrl"
+                  class="rounded-md shrink-0 size-14 object-cover"
+                  :aria-label="`收款凭证 ${payment.voucher.title || payment.voucher.originalFilename}`"
+                />
+                <a
+                  v-else
+                  :href="payment.voucher.contentUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="border border-border rounded-md bg-background flex shrink-0 size-14 items-center justify-center"
+                >
+                  <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-6" aria-hidden="true" />
+                </a>
+                <div class="min-w-0">
+                  <p class="text-sm font-medium m-0 truncate">
+                    {{ payment.voucher.title || payment.voucher.originalFilename }}
+                  </p>
+                  <p class="qs-type-meta m-0 mt-1 truncate">
+                    {{ payment.voucher.originalFilename }}
+                  </p>
+                </div>
+              </div>
               <div
                 v-if="payment.voidedAt"
                 class="text-sm mt-3 p-3 border border-destructive/20 rounded-lg bg-destructive/5"
@@ -353,12 +728,36 @@ onBeforeUnmount(cancelDetailRequest)
               <p class="text-sm m-0 mt-2 break-words">
                 备注：{{ optionalText(document.remark) }}
               </p>
+              <div
+                v-if="linkedPayment(document)"
+                class="text-sm mt-3 p-3 border border-border rounded-lg bg-muted/15 flex flex-wrap gap-x-4 gap-y-2 items-center"
+              >
+                <span>收款类型：{{ paymentTypeLabel(linkedPayment(document)!.paymentType) }}</span>
+                <span class="inline-flex gap-1 items-center">
+                  收款金额：
+                  <AmountDisplay
+                    :value="linkedPayment(document)!.amount"
+                    :currency="detail.currencyCode"
+                    :currencies="currencies"
+                  />
+                </span>
+                <span>收款时间：<DateTimeDisplay :value="linkedPayment(document)!.receivedAt" /></span>
+                <FaTag
+                  variant="outline"
+                  class="qs-type-status-tag"
+                  :class="linkedPayment(document)!.voidedAt === null
+                    ? 'border-primary/30 bg-primary/10 text-primary'
+                    : 'border-destructive/30 bg-destructive/10 text-destructive'"
+                >
+                  {{ linkedPayment(document)!.voidedAt === null ? '有效' : '已作废' }}
+                </FaTag>
+              </div>
               <div class="qs-type-meta mt-3 flex flex-wrap gap-x-4 gap-y-2 items-center">
                 <span class="inline-flex gap-2 items-center">
                   上传人：<QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" />
                 </span>
                 <span>上传时间：<DateTimeDisplay :value="document.createdAt" /></span>
-                <span>{{ document.paymentId === null ? '未关联收款记录' : '已关联收款记录' }}</span>
+                <span>{{ documentAssociationLabel(document) }}</span>
               </div>
             </div>
           </li>
@@ -451,6 +850,238 @@ onBeforeUnmount(cancelDetailRequest)
           </template>
         </FaTabs>
       </section>
+    </template>
+  </QsGenericModal>
+
+  <QsGenericModal
+    v-model="paymentModalVisible"
+    title="新增实际收款"
+    :description="detail === null ? undefined : `${detail.orderNo} · ${detail.customer.name}`"
+    size="lg"
+    :submitting="actionLocked"
+    :dismiss-on-escape="!actionLocked"
+    :dismiss-on-overlay="!actionLocked"
+  >
+    <template #header-leading>
+      <FaIcon name="i-lucide:hand-coins" class="size-5" aria-hidden="true" />
+    </template>
+
+    <FaAlert
+      v-if="actionError"
+      variant="destructive"
+      icon="i-lucide:circle-alert"
+      title="收款信息未保存"
+      :description="actionError"
+      class="mb-4"
+      role="alert"
+    />
+
+    <FaForm
+      :model="{ paymentType, paymentAmount, paymentReceivedAt, paymentMethod, paymentRemark }"
+      :disabled="actionLocked"
+    >
+      <div class="gap-x-4 gap-y-1 grid sm:grid-cols-2">
+        <FaFormItem name="paymentType" label="收款类型" required>
+          <FaSelect
+            v-model="paymentType"
+            :options="paymentTypeOptions"
+            class="min-h-11 w-full sm:min-h-9"
+            @update:model-value="clearPaymentError('paymentType')"
+          />
+          <p v-if="paymentErrors.paymentType" class="text-xs text-destructive m-0 mt-1">
+            {{ paymentErrors.paymentType }}
+          </p>
+        </FaFormItem>
+        <FaFormItem name="paymentAmount" label="收款金额" required>
+          <MoneyInput
+            v-model="paymentAmount"
+            :currency="detail?.currencyCode ?? null"
+            :currencies="currencies"
+            min="0.01"
+            @update:model-value="clearPaymentError('amount')"
+          />
+          <p v-if="paymentErrors.amount" class="text-xs text-destructive m-0 mt-1">
+            {{ paymentErrors.amount }}
+          </p>
+        </FaFormItem>
+        <FaFormItem name="paymentReceivedAt" label="收款时间" required>
+          <FaInput
+            v-model="paymentReceivedAt"
+            type="datetime-local"
+            class="min-h-11 w-full sm:min-h-9"
+            @update:model-value="clearPaymentError('receivedAt')"
+          />
+          <p v-if="paymentErrors.receivedAt" class="text-xs text-destructive m-0 mt-1">
+            {{ paymentErrors.receivedAt }}
+          </p>
+        </FaFormItem>
+        <FaFormItem name="paymentMethod" label="收款方式">
+          <FaInput
+            v-model="paymentMethod"
+            maxlength="64"
+            placeholder="例如：银行转账"
+            class="min-h-11 w-full sm:min-h-9"
+            @update:model-value="clearPaymentError('paymentMethod')"
+          />
+          <p v-if="paymentErrors.paymentMethod" class="text-xs text-destructive m-0 mt-1">
+            {{ paymentErrors.paymentMethod }}
+          </p>
+        </FaFormItem>
+        <FaFormItem name="paymentRemark" label="备注" class="sm:col-span-2">
+          <FaTextarea
+            v-model="paymentRemark"
+            maxlength="500"
+            class="w-full"
+            input-class="min-h-20 max-h-36"
+            @update:model-value="clearPaymentError('remark')"
+          />
+          <p v-if="paymentErrors.remark" class="text-xs text-destructive m-0 mt-1">
+            {{ paymentErrors.remark }}
+          </p>
+        </FaFormItem>
+      </div>
+    </FaForm>
+
+    <section class="mt-2" aria-labelledby="payment-voucher-title">
+      <h3 id="payment-voucher-title" class="qs-type-section-title m-0">
+        收款凭证 <span class="text-destructive" aria-hidden="true">*</span>
+      </h3>
+      <p class="qs-type-meta m-0 mt-1">
+        每笔收款必须上传且只能上传一份凭证；系统提交时自动按“客户名-凭证类型-时间戳”命名。
+      </p>
+      <input
+        ref="paymentFileInputRef"
+        type="file"
+        accept="image/*,.pdf,.doc,.docx"
+        class="sr-only"
+        :disabled="actionLocked"
+        @change="handlePaymentFileInput"
+      >
+      <FaButton
+        v-if="paymentVoucher === null"
+        type="button"
+        variant="outline"
+        class="mt-3 min-h-11 w-full"
+        :loading="actionUploading"
+        :disabled="actionLocked"
+        @click="openPaymentFilePicker"
+      >
+        <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传收款凭证
+      </FaButton>
+      <div v-else class="mt-3 p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
+        <FaImagePreview
+          v-if="paymentVoucher.previewUrl"
+          :src="paymentVoucher.previewUrl"
+          class="rounded-md shrink-0 size-16 object-cover"
+          :aria-label="`待提交收款凭证 ${paymentVoucher.originalFilename}`"
+        />
+        <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
+          <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium m-0 truncate">
+            {{ paymentVoucher.originalFilename }}
+          </p>
+          <p class="qs-type-meta m-0 mt-1">
+            {{ paymentVoucher.mimeType }} · {{ paymentVoucher.sizeBytes }} bytes
+          </p>
+        </div>
+        <FaButton type="button" variant="ghost" size="sm" :disabled="actionLocked" @click="removePaymentVoucher">
+          移除
+        </FaButton>
+      </div>
+      <p v-if="paymentErrors.voucher" class="text-xs text-destructive m-0 mt-1">
+        {{ paymentErrors.voucher }}
+      </p>
+    </section>
+
+    <template #footer>
+      <FaButton type="button" variant="outline" :disabled="actionLocked" @click="closePaymentModal">
+        取消
+      </FaButton>
+      <FaButton type="button" :loading="actionSubmitting" :disabled="actionLocked" @click="submitPayment">
+        确认添加收款
+      </FaButton>
+    </template>
+  </QsGenericModal>
+
+  <QsGenericModal
+    v-model="receiptModalVisible"
+    title="货物签收"
+    :description="detail === null ? undefined : `${detail.orderNo} · ${detail.customer.name}`"
+    size="md"
+    :submitting="actionLocked"
+    :dismiss-on-escape="!actionLocked"
+    :dismiss-on-overlay="!actionLocked"
+  >
+    <template #header-leading>
+      <FaIcon name="i-lucide:package-check" class="size-5" aria-hidden="true" />
+    </template>
+
+    <FaAlert
+      v-if="actionError"
+      variant="destructive"
+      icon="i-lucide:circle-alert"
+      title="签收单未保存"
+      :description="actionError"
+      class="mb-4"
+      role="alert"
+    />
+    <p class="text-sm text-muted-foreground m-0">
+      只需上传一份签收单。提交后作为订单级凭证保存，暂不自动更新订单进度。
+    </p>
+    <input
+      ref="receiptFileInputRef"
+      type="file"
+      accept="image/*,.pdf,.doc,.docx"
+      class="sr-only"
+      :disabled="actionLocked"
+      @change="handleReceiptFileInput"
+    >
+    <FaButton
+      v-if="deliveryReceipt === null"
+      type="button"
+      variant="outline"
+      class="mt-4 min-h-11 w-full"
+      :loading="actionUploading"
+      :disabled="actionLocked"
+      @click="openReceiptFilePicker"
+    >
+      <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传签收单
+    </FaButton>
+    <div v-else class="mt-4 p-3 border border-border rounded-lg flex gap-3 min-w-0 items-center">
+      <FaImagePreview
+        v-if="deliveryReceipt.previewUrl"
+        :src="deliveryReceipt.previewUrl"
+        class="rounded-md shrink-0 size-16 object-cover"
+        :aria-label="`待提交签收单 ${deliveryReceipt.originalFilename}`"
+      />
+      <div v-else class="border border-border rounded-md bg-muted/30 flex shrink-0 size-16 items-center justify-center">
+        <FaIcon name="i-lucide:file-text" class="text-muted-foreground size-7" aria-hidden="true" />
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium m-0 truncate">
+          {{ deliveryReceipt.originalFilename }}
+        </p>
+        <p class="qs-type-meta m-0 mt-1">
+          {{ deliveryReceipt.mimeType }} · {{ deliveryReceipt.sizeBytes }} bytes
+        </p>
+      </div>
+      <FaButton type="button" variant="ghost" size="sm" :disabled="actionLocked" @click="removeDeliveryReceipt">
+        移除
+      </FaButton>
+    </div>
+    <p class="qs-type-meta m-0 mt-3">
+      系统提交时自动按“客户名-签收单-时间戳”命名。
+    </p>
+
+    <template #footer>
+      <FaButton type="button" variant="outline" :disabled="actionLocked" @click="closeReceiptModal">
+        取消
+      </FaButton>
+      <FaButton type="button" :loading="actionSubmitting" :disabled="actionLocked" @click="submitDeliveryReceipt">
+        确认货物签收
+      </FaButton>
     </template>
   </QsGenericModal>
 </template>

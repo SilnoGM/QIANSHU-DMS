@@ -1092,6 +1092,7 @@ onBeforeUnmount(() => {
       :kind="recordsModalKind"
       :order="recordsModalOrder"
       :currencies="currencyCatalog.currencies.value"
+      @detail-updated="loadOrders"
     />
 
     <QsGenericModal
