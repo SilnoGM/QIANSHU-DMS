@@ -31253,9 +31253,9 @@
         }
       }
     },
-    "/api/sales-orders/{salesOrderId}/documents": {
+    "/api/sales-orders/{salesOrderId}/delivery-receipts": {
       "post": {
-        "operationId": "sales_orders_attach_document",
+        "operationId": "sales_orders_submit_delivery_receipt",
         "parameters": [
           {
             "name": "salesOrderId",
@@ -31283,7 +31283,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SalesOrderDocumentAttachRequestDto"
+                "$ref": "#/components/schemas/SalesOrderDeliveryReceiptRequestDto"
               }
             }
           }
@@ -31562,7 +31562,6 @@
               "status": 422,
               "codes": [
                 "SALES_ORDER_DOCUMENT_UNAVAILABLE",
-                "SALES_ORDER_PAYMENT_NOT_FOUND",
                 "VALIDATION_FAILED"
               ]
             },
@@ -31859,6 +31858,7 @@
               "status": 422,
               "codes": [
                 "SALES_ORDER_DELIVERY_RECEIPT_REQUIRED",
+                "SALES_ORDER_DOCUMENT_REQUIRED",
                 "VALIDATION_FAILED"
               ]
             }
@@ -37921,9 +37921,9 @@
           "documentType": {
             "type": "string",
             "enum": [
-              "DEPOSIT_VOUCHER",
-              "DELIVERY_RECEIPT",
-              "OTHER"
+              "ORDER_ISSUANCE_VOUCHER",
+              "PAYMENT_VOUCHER",
+              "DELIVERY_RECEIPT"
             ]
           },
           "title": {
@@ -38426,37 +38426,16 @@
           "quantity"
         ]
       },
-      "SalesOrderCreateDocumentInputDto": {
+      "SalesOrderIssuanceVoucherInputDto": {
         "type": "object",
         "properties": {
           "mediaAssetId": {
             "type": "string",
             "format": "uuid"
-          },
-          "documentType": {
-            "type": "string",
-            "enum": [
-              "DEPOSIT_VOUCHER",
-              "DELIVERY_RECEIPT",
-              "OTHER"
-            ]
-          },
-          "title": {
-            "type": "string",
-            "maxLength": 128,
-            "nullable": true
-          },
-          "remark": {
-            "type": "string",
-            "maxLength": 500,
-            "nullable": true
           }
         },
         "required": [
-          "mediaAssetId",
-          "documentType",
-          "title",
-          "remark"
+          "mediaAssetId"
         ]
       },
       "CreateSalesOrderRequestDto": {
@@ -38496,12 +38475,8 @@
             "type": "string",
             "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,4})?$"
           },
-          "documents": {
-            "maxItems": 20,
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SalesOrderCreateDocumentInputDto"
-            }
+          "issuanceVoucher": {
+            "$ref": "#/components/schemas/SalesOrderIssuanceVoucherInputDto"
           },
           "remark": {
             "type": "string",
@@ -38517,7 +38492,7 @@
           "agreedTotalAmount",
           "depositDueAmount",
           "balanceDueAmount",
-          "documents",
+          "issuanceVoucher",
           "remark"
         ]
       },
@@ -38676,81 +38651,6 @@
           "lineTotalAmount"
         ]
       },
-      "SalesOrderPaymentDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "paymentType": {
-            "type": "string",
-            "enum": [
-              "DEPOSIT",
-              "BALANCE",
-              "OTHER"
-            ]
-          },
-          "amount": {
-            "type": "string"
-          },
-          "receivedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "paymentMethod": {
-            "type": "string",
-            "nullable": true
-          },
-          "referenceNo": {
-            "type": "string",
-            "nullable": true
-          },
-          "remark": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdBy": {
-            "$ref": "#/components/schemas/SalesOrderActorDto"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "voidedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "voidedBy": {
-            "nullable": true,
-            "type": "object",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/SalesOrderActorDto"
-              }
-            ]
-          },
-          "voidReason": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "paymentType",
-          "amount",
-          "receivedAt",
-          "paymentMethod",
-          "referenceNo",
-          "remark",
-          "createdBy",
-          "createdAt",
-          "voidedAt",
-          "voidedBy",
-          "voidReason"
-        ]
-      },
       "SalesOrderDocumentDto": {
         "type": "object",
         "properties": {
@@ -38770,9 +38670,9 @@
           "documentType": {
             "type": "string",
             "enum": [
-              "DEPOSIT_VOUCHER",
-              "DELIVERY_RECEIPT",
-              "OTHER"
+              "ORDER_ISSUANCE_VOUCHER",
+              "PAYMENT_VOUCHER",
+              "DELIVERY_RECEIPT"
             ]
           },
           "title": {
@@ -38843,6 +38743,82 @@
           "createdAt",
           "detachedAt",
           "detachedBy"
+        ]
+      },
+      "SalesOrderPaymentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "paymentType": {
+            "type": "string",
+            "enum": [
+              "DEPOSIT",
+              "PROGRESS",
+              "INVOICE_TAX",
+              "BALANCE",
+              "OTHER"
+            ]
+          },
+          "amount": {
+            "type": "string"
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "nullable": true
+          },
+          "remark": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/SalesOrderActorDto"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "voidedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "voidedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrderActorDto"
+              }
+            ]
+          },
+          "voidReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "voucher": {
+            "$ref": "#/components/schemas/SalesOrderDocumentDto"
+          }
+        },
+        "required": [
+          "id",
+          "paymentType",
+          "amount",
+          "receivedAt",
+          "paymentMethod",
+          "remark",
+          "createdBy",
+          "createdAt",
+          "voidedAt",
+          "voidedBy",
+          "voidReason",
+          "voucher"
         ]
       },
       "SalesOrderStatusHistoryDto": {
@@ -39142,6 +39118,18 @@
           "reason"
         ]
       },
+      "SalesOrderPaymentVoucherInputDto": {
+        "type": "object",
+        "properties": {
+          "mediaAssetId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "mediaAssetId"
+        ]
+      },
       "SalesOrderPaymentRequestDto": {
         "type": "object",
         "properties": {
@@ -39149,6 +39137,8 @@
             "type": "string",
             "enum": [
               "DEPOSIT",
+              "PROGRESS",
+              "INVOICE_TAX",
               "BALANCE",
               "OTHER"
             ]
@@ -39166,15 +39156,13 @@
             "maxLength": 64,
             "nullable": true
           },
-          "referenceNo": {
-            "type": "string",
-            "maxLength": 128,
-            "nullable": true
-          },
           "remark": {
             "type": "string",
             "maxLength": 500,
             "nullable": true
+          },
+          "voucher": {
+            "$ref": "#/components/schemas/SalesOrderPaymentVoucherInputDto"
           }
         },
         "required": [
@@ -39182,8 +39170,8 @@
           "amount",
           "receivedAt",
           "paymentMethod",
-          "referenceNo",
-          "remark"
+          "remark",
+          "voucher"
         ]
       },
       "SalesOrderPaymentVoidRequestDto": {
@@ -39199,43 +39187,16 @@
           "reason"
         ]
       },
-      "SalesOrderDocumentAttachRequestDto": {
+      "SalesOrderDeliveryReceiptRequestDto": {
         "type": "object",
         "properties": {
           "mediaAssetId": {
             "type": "string",
             "format": "uuid"
-          },
-          "paymentId": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "documentType": {
-            "type": "string",
-            "enum": [
-              "DEPOSIT_VOUCHER",
-              "DELIVERY_RECEIPT",
-              "OTHER"
-            ]
-          },
-          "title": {
-            "type": "string",
-            "maxLength": 128,
-            "nullable": true
-          },
-          "remark": {
-            "type": "string",
-            "maxLength": 500,
-            "nullable": true
           }
         },
         "required": [
-          "mediaAssetId",
-          "paymentId",
-          "documentType",
-          "title",
-          "remark"
+          "mediaAssetId"
         ]
       },
       "AuditEventDto": {

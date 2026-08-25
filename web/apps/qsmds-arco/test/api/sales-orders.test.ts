@@ -96,7 +96,9 @@ test('正式保存才携带幂等 Key，禁止自动重试且保留 frozen DTO',
     agreedTotalAmount: '100.0000',
     depositDueAmount: '30.0000',
     balanceDueAmount: '70.0000',
-    documents: [],
+    issuanceVoucher: {
+      mediaAssetId: '55555555-5555-4555-8555-555555555555',
+    },
     remark: null,
   } satisfies CreateSalesOrderRequestDto
 
@@ -116,6 +118,48 @@ test('正式保存才携带幂等 Key，禁止自动重试且保留 frozen DTO',
     data: request,
     method: 'post',
     url: 'sales-orders',
+  }])
+})
+
+test('收款、作废和货物签收 mutation 均局部呈错且禁止自动重试', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+  const payment = {
+    paymentType: 'INVOICE_TAX' as const,
+    amount: '10.0000',
+    receivedAt: '2026-08-20T07:00:00.000Z',
+    paymentMethod: 'BANK_TRANSFER',
+    remark: null,
+    voucher: { mediaAssetId: '55555555-5555-4555-8555-555555555555' },
+  }
+
+  await api.recordPayment('order/id', payment, controller.signal)
+  await api.voidPayment('order/id', 'payment/id', { reason: '录入错误' }, controller.signal)
+  await api.submitDeliveryReceipt('order/id', {
+    mediaAssetId: '66666666-6666-4666-8666-666666666666',
+  }, controller.signal)
+
+  const config = {
+    errorPresentation: 'local',
+    retry: false,
+    signal: controller.signal,
+  }
+  assert.deepEqual(calls, [{
+    config,
+    data: payment,
+    method: 'post',
+    url: 'sales-orders/order%2Fid/payments',
+  }, {
+    config,
+    data: { reason: '录入错误' },
+    method: 'post',
+    url: 'sales-orders/order%2Fid/payments/payment%2Fid/void',
+  }, {
+    config,
+    data: { mediaAssetId: '66666666-6666-4666-8666-666666666666' },
+    method: 'post',
+    url: 'sales-orders/order%2Fid/delivery-receipts',
   }])
 })
 

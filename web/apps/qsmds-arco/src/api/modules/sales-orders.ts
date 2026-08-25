@@ -2,7 +2,10 @@ import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
   SalesOrderDetailDto,
+  SalesOrderDeliveryReceiptRequestDto,
   SalesOrderPageDto,
+  SalesOrderPaymentRequestDto,
+  SalesOrderPaymentVoidRequestDto,
   SalesOrderProductOptionsDto,
   SalesOrdersListData,
   SalesOrdersProductOptionsData,
@@ -71,6 +74,34 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         `sales-orders/${encodeURIComponent(salesOrderId)}`,
         { errorPresentation: 'local', signal },
       ),
+    recordPayment: (
+      salesOrderId: string,
+      data: SalesOrderPaymentRequestDto,
+      signal: AbortSignal,
+    ) => client.post<SalesOrderDetailDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/payments`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    voidPayment: (
+      salesOrderId: string,
+      paymentId: string,
+      data: SalesOrderPaymentVoidRequestDto,
+      signal: AbortSignal,
+    ) => client.post<SalesOrderDetailDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/payments/${encodeURIComponent(paymentId)}/void`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    submitDeliveryReceipt: (
+      salesOrderId: string,
+      data: SalesOrderDeliveryReceiptRequestDto,
+      signal: AbortSignal,
+    ) => client.post<SalesOrderDetailDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/delivery-receipts`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
   }
 }
 
