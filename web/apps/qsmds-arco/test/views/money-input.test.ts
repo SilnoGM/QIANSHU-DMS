@@ -260,9 +260,13 @@ test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍
     /defineModel<string \| null>\('currency', \{[\s\S]*?default: null/u,
   )
   assert.match(source, /currencies: readonly CurrencyDescriptor\[\]/u)
+  assert.match(source, /currencySelectable\?: boolean/u)
+  assert.match(source, /currencySelectable: true/u)
   assert.match(source, /currentCurrency[\s\S]*?minorUnit/u)
   assert.match(source, /<FaInput/u)
   assert.match(source, /<FaSelect/u)
+  assert.match(source, /<FaSelect[\s\S]*?v-if="currencySelectable"/u)
+  assert.match(source, /<span[\s\S]*?v-else[\s\S]*?currentCurrency\?\.code/u)
   assert.match(source, /:options="currencyOptions"/u)
   assert.match(source, /:disabled="disabled \|\| readonly \|\| !hasEnabledCurrencies"/u)
   assert.match(source, /@update:model-value="handleCurrencyUpdate"/u)

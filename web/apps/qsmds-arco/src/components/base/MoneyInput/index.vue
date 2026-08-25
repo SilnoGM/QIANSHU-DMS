@@ -25,6 +25,7 @@ const props = withDefaults(defineProps<{
   allowNegative?: boolean
   clearable?: boolean
   currencies: readonly CurrencyDescriptor[]
+  currencySelectable?: boolean
   disabled?: boolean
   inputClass?: HTMLAttributes['class']
   max?: string
@@ -34,6 +35,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   allowNegative: false,
   clearable: true,
+  currencySelectable: true,
   disabled: false,
   readonly: false,
 })
@@ -216,6 +218,7 @@ defineExpose({
         class="flex shrink-0 items-center"
       >
         <FaSelect
+          v-if="currencySelectable"
           :model-value="currency ?? EMPTY_MONEY_CURRENCY_VALUE"
           :options="currencyOptions"
           :disabled="disabled || readonly || !hasEnabledCurrencies"
@@ -223,6 +226,10 @@ defineExpose({
           position="popper"
           @update:model-value="handleCurrencyUpdate"
         />
+        <span
+          v-else
+          class="text-xs text-muted-foreground font-mono px-3 whitespace-nowrap"
+        >{{ currentCurrency?.code ?? '—' }}</span>
       </span>
     </template>
   </FaInput>
