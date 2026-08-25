@@ -35,6 +35,35 @@ import SalesOrderRecordsModal from './sales-order-records-modal.vue'
 
 defineOptions({ name: 'OperationsSalesOrders' })
 
+type SalesOrderCurrencyCode = 'TWD' | 'MYR'
+
+/**
+ * 销售订单首版只允许 TWD 与 MYR。这里固定的是两种货币的视觉身份，名称、符号与
+ * 启用状态仍由货币目录提供，避免卡片展示与基础资料形成第二份业务真相源。
+ */
+const ORDER_CURRENCY_CARD_DEFINITIONS = [
+  {
+    code: 'TWD',
+    emblemClass: 'bg-sky-950 text-rose-100 ring-rose-400/30 dark:bg-sky-900',
+    fallbackName: '新台币',
+    fallbackSymbol: 'NT$',
+    icon: 'i-lucide:flower-2',
+    motifClass: 'text-rose-500/10 dark:text-rose-300/10',
+    regionLabel: '中国台湾',
+    regionTextClass: 'text-rose-700 dark:text-rose-300',
+  },
+  {
+    code: 'MYR',
+    emblemClass: 'bg-blue-950 text-amber-300 ring-amber-400/30 dark:bg-blue-900',
+    fallbackName: '马来西亚林吉特',
+    fallbackSymbol: 'RM',
+    icon: 'i-lucide:moon-star',
+    motifClass: 'text-amber-500/10 dark:text-amber-300/10',
+    regionLabel: '马来西亚',
+    regionTextClass: 'text-blue-700 dark:text-blue-300',
+  },
+] as const
+
 const router = useRouter()
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
@@ -53,7 +82,7 @@ const loading = ref(false)
 const listError = ref('')
 const requestId = ref<string>()
 const currencyModalVisible = ref(false)
-const selectedCurrency = ref<'TWD' | 'MYR' | null>(null)
+const selectedCurrency = ref<SalesOrderCurrencyCode | null>(null)
 const recordsModalVisible = ref(false)
 const recordsModalKind = ref<SalesOrderRecordsKind>('payments')
 const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
@@ -64,13 +93,16 @@ let queryRefreshPending = false
 const availableOrderCurrencies = computed(() => currencyCatalog.selectableCurrencies.value.filter(
   currency => currency.code === 'TWD' || currency.code === 'MYR',
 ))
-const currencyOptions = computed(() => [
-  { disabled: true, label: '请选择币种', value: '__sales_order_currency_empty__' },
-  ...availableOrderCurrencies.value.map(currency => ({
-    label: `${currency.code} · ${currency.name}`,
-    value: currency.code,
-  })),
-])
+const orderCurrencyCardOptions = computed(() => ORDER_CURRENCY_CARD_DEFINITIONS.map((definition) => {
+  const currency = currencyCatalog.currencies.value.find(item => item.code === definition.code)
+  return {
+    ...definition,
+    disabled: currency?.enabled !== true,
+    name: currency?.name ?? definition.fallbackName,
+    symbol: currency?.symbol?.trim() || definition.fallbackSymbol,
+    value: definition.code,
+  }
+}))
 // FaFormItem 依赖 FaForm 提供的表单上下文；弹窗虽然只有一个字段，也不能省略该容器。
 const currencyFormModel = computed(() => ({
   salesOrderCurrency: selectedCurrency.value ?? '__sales_order_currency_empty__',
@@ -80,9 +112,20 @@ const currencySelectionUnavailable = computed(() => (
   || currencyCatalog.errorMessage.value !== null
   || availableOrderCurrencies.value.length === 0
 ))
+const selectedCurrencyAvailable = computed(() => selectedCurrency.value !== null
+  && availableOrderCurrencies.value.some(currency => currency.code === selectedCurrency.value))
 const listErrorDisplay = computed(() => requestId.value === undefined
   ? listError.value || undefined
   : `${listError.value}（requestId: ${requestId.value}）`)
+
+watch(availableOrderCurrencies, (currencies) => {
+  if (
+    selectedCurrency.value !== null
+    && !currencies.some(currency => currency.code === selectedCurrency.value)
+  ) {
+    selectedCurrency.value = null
+  }
+})
 
 const filterDefinitions: QsGenericTableFilterDefinition[] = [
   {
@@ -316,11 +359,15 @@ function openCurrencyModal(): void {
 }
 
 function updateSelectedCurrency(value: unknown): void {
-  selectedCurrency.value = value === 'TWD' || value === 'MYR' ? value : null
+  const currencyCode = value === 'TWD' || value === 'MYR' ? value : null
+  selectedCurrency.value = currencyCode !== null
+    && availableOrderCurrencies.value.some(currency => currency.code === currencyCode)
+    ? currencyCode
+    : null
 }
 
 function enterCreatePage(): void {
-  if (selectedCurrency.value === null) {
+  if (!selectedCurrencyAvailable.value || selectedCurrency.value === null) {
     return
   }
   currencyModalVisible.value = false
@@ -1051,18 +1098,109 @@ onBeforeUnmount(() => {
       v-model="currencyModalVisible"
       title="选择订单币种"
       description="一张订单只允许一个币种，进入新增页后不可切换。产品选择不限制币种，本单售价按订单币种填写。"
-      size="sm"
+      size="md"
     >
       <FaForm :model="currencyFormModel">
         <div class="gap-4 grid">
           <FaFormItem name="salesOrderCurrency" label="订单币种" required>
-            <FaSelect
-              :model-value="selectedCurrency ?? '__sales_order_currency_empty__'"
-              :options="currencyOptions"
-              class="w-full"
+            <fieldset
+              class="m-0 p-0 border-0 min-w-0 w-full"
               :disabled="currencySelectionUnavailable"
-              @update:model-value="updateSelectedCurrency"
-            />
+            >
+              <legend class="sr-only">
+                订单币种
+              </legend>
+              <div class="gap-3 grid grid-cols-2">
+                <label
+                  v-for="option in orderCurrencyCardOptions"
+                  :key="option.value"
+                  class="min-w-0 cursor-pointer relative"
+                  :class="(currencySelectionUnavailable || option.disabled) && 'cursor-not-allowed'"
+                >
+                  <input
+                    type="radio"
+                    name="sales-order-currency"
+                    :value="option.value"
+                    :checked="selectedCurrency === option.value"
+                    :disabled="currencySelectionUnavailable || option.disabled"
+                    class="peer sr-only"
+                    @change="updateSelectedCurrency(option.value)"
+                  >
+                  <span
+                    data-testid="sales-order-currency-card"
+                    :data-currency-code="option.code"
+                    class="p-4 text-left border rounded-xl bg-background flex flex-col min-h-36 transition-[border-color,background-color,box-shadow] duration-200 ease-out relative overflow-hidden peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
+                    :class="currencySelectionUnavailable || option.disabled
+                      ? 'border-border bg-muted/30 opacity-60'
+                      : selectedCurrency === option.value
+                        ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/20'
+                        : 'border-border hover:border-primary/40 hover:bg-muted/30'"
+                  >
+                    <span
+                      class="size-24 absolute -right-3 -top-3"
+                      :class="option.motifClass"
+                      aria-hidden="true"
+                    >
+                      <FaIcon :name="option.icon" class="size-full" />
+                    </span>
+
+                    <span class="flex items-start justify-between relative">
+                      <span
+                        class="rounded-lg flex h-12 w-14 ring-1 items-center justify-center"
+                        :class="option.emblemClass"
+                        aria-hidden="true"
+                      >
+                        <span class="text-base tracking-tight font-semibold tabular-nums">
+                          {{ option.symbol }}
+                        </span>
+                      </span>
+                      <FaIcon
+                        v-if="selectedCurrency === option.value && !option.disabled"
+                        name="i-lucide:circle-check-big"
+                        class="text-primary size-5"
+                        aria-hidden="true"
+                      />
+                      <FaIcon
+                        v-else-if="currencySelectionUnavailable || option.disabled"
+                        name="i-lucide:circle-slash-2"
+                        class="text-muted-foreground size-5"
+                        aria-hidden="true"
+                      />
+                    </span>
+
+                    <span class="mt-4 min-w-0 relative">
+                      <span
+                        class="text-xs tracking-wide font-medium block"
+                        :class="option.regionTextClass"
+                      >
+                        {{ option.regionLabel }}
+                      </span>
+                      <span class="mt-1 flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+                        <strong class="qs-type-section-title">{{ option.code }}</strong>
+                        <span class="text-sm text-muted-foreground truncate">{{ option.name }}</span>
+                      </span>
+                    </span>
+
+                    <span
+                      class="text-xs font-medium mt-auto pt-4 relative"
+                      :class="selectedCurrency === option.value && !option.disabled
+                        ? 'text-primary'
+                        : 'text-muted-foreground'"
+                    >
+                      {{ selectedCurrency === option.value && !option.disabled
+                        ? '已选中'
+                        : currencyCatalog.loading.value
+                          ? '正在加载'
+                          : currencyCatalog.errorMessage.value !== null
+                            ? '暂时不可用'
+                            : option.disabled
+                              ? '当前不可用'
+                              : '点击选择' }}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
           </FaFormItem>
           <p v-if="currencyCatalog.loading.value" class="text-sm text-muted-foreground m-0" role="status">
             正在加载可用币种…
@@ -1088,7 +1226,7 @@ onBeforeUnmount(() => {
         <FaButton
           type="button"
           class="min-h-11 sm:min-h-9"
-          :disabled="selectedCurrency === null || currencySelectionUnavailable"
+          :disabled="!selectedCurrencyAvailable || currencySelectionUnavailable"
           @click="enterCreatePage"
         >
           进入新增订单
