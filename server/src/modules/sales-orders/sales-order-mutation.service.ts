@@ -15,6 +15,10 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import {
+  MediaAssetLifecycleError,
+  MediaAssetService,
+} from '../media/media-asset.service'
+import {
   deriveSalesOrderPaymentStatus,
   formatSalesOrderAmountUnits,
   normalizePositiveSalesOrderAmount,
@@ -25,6 +29,7 @@ import {
   salesOrderRuleFailure,
   salesOrderValidationFailure,
 } from './domain/sales-order-errors'
+import { createSalesOrderDocumentTitle } from './domain/sales-order-document-title'
 import {
   assertSalesOrderFulfillmentTransition,
   assertSalesOrderStatusTransition,
@@ -37,6 +42,8 @@ import {
 
 const PAYMENT_TYPES = new Set<SalesOrderPaymentType>([
   'DEPOSIT',
+  'PROGRESS',
+  'INVOICE_TAX',
   'BALANCE',
   'OTHER',
 ])
@@ -81,6 +88,7 @@ type MutableOrderRow = Prisma.SalesOrderGetPayload<{
     agreedTotalAmount: true
     depositDueAmount: true
     balanceDueAmount: true
+    customerName: true
     version: true
   }
 }>
@@ -118,6 +126,17 @@ function requireRecord(
     return salesOrderValidationFailure(field)
   }
   return value as Readonly<Record<string, unknown>>
+}
+
+function rejectUnknownKeys(
+  body: Readonly<Record<string, unknown>>,
+  allowedKeys: readonly string[],
+  field = 'body',
+): void {
+  const allowed = new Set(allowedKeys)
+  if (Object.keys(body).some(key => !allowed.has(key))) {
+    return salesOrderValidationFailure(field)
+  }
 }
 
 function requireText(
@@ -160,6 +179,7 @@ export class SalesOrderMutationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly mediaAsset: MediaAssetService,
     private readonly query: SalesOrderQueryService,
     @Optional()
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
@@ -342,6 +362,14 @@ export class SalesOrderMutationService {
     const trusted = validateContext(context)
     const salesOrderId = requireUuid(rawSalesOrderId, 'salesOrderId')
     const body = requireRecord(input)
+    rejectUnknownKeys(body, [
+      'paymentType',
+      'amount',
+      'receivedAt',
+      'paymentMethod',
+      'remark',
+      'voucher',
+    ])
     if (
       typeof body.paymentType !== 'string'
       || !PAYMENT_TYPES.has(body.paymentType as SalesOrderPaymentType)
@@ -349,59 +377,115 @@ export class SalesOrderMutationService {
       return salesOrderValidationFailure('paymentType')
     }
     const amount = normalizePositiveSalesOrderAmount(body.amount)
-    const receivedAt = this.normalizeReceivedAt(body.receivedAt)
+    const recordedAt = this.dependencies.now()
+    const receivedAt = this.normalizeReceivedAt(body.receivedAt, recordedAt)
     const paymentMethod = optionalText(body.paymentMethod, 'paymentMethod', 64)
-    const referenceNo = optionalText(body.referenceNo, 'referenceNo', 128)
     const remark = optionalText(body.remark, 'remark', 500)
-    await this.prisma.$transaction(async transaction => {
-      await applyTransactionTimeouts(transaction)
-      const order = await this.lockOrder(transaction, salesOrderId)
-      if (order.orderStatus === 'CANCELLED') {
+    const voucher = requireRecord(body.voucher, 'voucher')
+    rejectUnknownKeys(voucher, ['mediaAssetId'], 'voucher')
+    const mediaAssetId = requireUuid(
+      voucher.mediaAssetId,
+      'voucher.mediaAssetId',
+    )
+    try {
+      await this.prisma.$transaction(async transaction => {
+        await applyTransactionTimeouts(transaction)
+        const order = await this.lockOrder(transaction, salesOrderId)
+        if (order.orderStatus === 'CANCELLED') {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_CANCELLED',
+            '已取消订单不能记录收款',
+          )
+        }
+        const asset = await transaction.mediaAsset.findFirst({
+          where: {
+            id: mediaAssetId,
+            createdByUserId: trusted.actorUserId,
+            status: 'UPLOADING',
+            mediaType: { in: ['IMAGE', 'DOCUMENT'] },
+            deletedAt: null,
+            objectKey: { not: null },
+          },
+          select: { id: true },
+        })
+        if (asset === null) {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_DOCUMENT_UNAVAILABLE',
+            '所选收款凭证当前不可用',
+          )
+        }
+        const oldReceivedAmount = await this.readReceivedAmount(
+          transaction,
+          salesOrderId,
+        )
+        const newReceivedAmount = formatSalesOrderAmountUnits(
+          parseSalesOrderAmountUnits(oldReceivedAmount)
+          + parseSalesOrderAmountUnits(amount),
+        )
+        const newStatus = deriveSalesOrderPaymentStatus(
+          fixed4(order.agreedTotalAmount),
+          newReceivedAmount,
+        )
+        const payment = await transaction.salesOrderPayment.create({
+          data: {
+            salesOrderId,
+            paymentType: body.paymentType as SalesOrderPaymentType,
+            amount,
+            receivedAt,
+            paymentMethod,
+            remark,
+            createdByUserId: trusted.actorUserId,
+          },
+          select: { id: true },
+        })
+        await this.mediaAsset.activate(transaction, mediaAssetId)
+        const document = await transaction.salesOrderDocument.create({
+          data: {
+            salesOrderId,
+            mediaAssetId,
+            paymentId: payment.id,
+            documentType: 'PAYMENT_VOUCHER',
+            title: createSalesOrderDocumentTitle(
+              order.customerName,
+              body.paymentType as SalesOrderPaymentType,
+              recordedAt,
+            ),
+            remark: null,
+            createdByUserId: trusted.actorUserId,
+          },
+          select: { id: true },
+        })
+        await this.writePaymentStatus(
+          transaction,
+          trusted,
+          order,
+          newStatus,
+        )
+        await this.recordAudit(transaction, trusted, {
+          eventType: AuditEventType.SALES_ORDER_PAYMENT_RECORDED,
+          targetId: payment.id,
+          metadata: {
+            salesOrderId,
+            paymentType: body.paymentType as SalesOrderPaymentType,
+          },
+        })
+        await this.recordAudit(transaction, trusted, {
+          eventType: AuditEventType.SALES_ORDER_DOCUMENT_ATTACHED,
+          targetId: document.id,
+          metadata: { salesOrderId, documentType: 'PAYMENT_VOUCHER' },
+        })
+      })
+    }
+    catch (error) {
+      if (error instanceof ApiException) throw error
+      if (error instanceof MediaAssetLifecycleError) {
         return salesOrderRuleFailure(
-          'SALES_ORDER_CANCELLED',
-          '已取消订单不能记录收款',
+          'SALES_ORDER_DOCUMENT_UNAVAILABLE',
+          '所选收款凭证当前不可用',
         )
       }
-      const oldReceivedAmount = await this.readReceivedAmount(
-        transaction,
-        salesOrderId,
-      )
-      const newReceivedAmount = formatSalesOrderAmountUnits(
-        parseSalesOrderAmountUnits(oldReceivedAmount)
-        + parseSalesOrderAmountUnits(amount),
-      )
-      const newStatus = deriveSalesOrderPaymentStatus(
-        fixed4(order.agreedTotalAmount),
-        newReceivedAmount,
-      )
-      const payment = await transaction.salesOrderPayment.create({
-        data: {
-          salesOrderId,
-          paymentType: body.paymentType as SalesOrderPaymentType,
-          amount,
-          receivedAt,
-          paymentMethod,
-          referenceNo,
-          remark,
-          createdByUserId: trusted.actorUserId,
-        },
-        select: { id: true },
-      })
-      await this.writePaymentStatus(
-        transaction,
-        trusted,
-        order,
-        newStatus,
-      )
-      await this.recordAudit(transaction, trusted, {
-        eventType: AuditEventType.SALES_ORDER_PAYMENT_RECORDED,
-        targetId: payment.id,
-        metadata: {
-          salesOrderId,
-          paymentType: body.paymentType as SalesOrderPaymentType,
-        },
-      })
-    })
+      throw error
+    }
     return this.query.getById(salesOrderId)
   }
 
@@ -472,10 +556,9 @@ export class SalesOrderMutationService {
     return this.query.getById(salesOrderId)
   }
 
-  private normalizeReceivedAt(value: unknown): Date {
+  private normalizeReceivedAt(value: unknown, now: Date): Date {
     if (typeof value !== 'string') return salesOrderValidationFailure('receivedAt')
     const receivedAt = new Date(value)
-    const now = this.dependencies.now()
     if (
       !Number.isFinite(receivedAt.getTime())
       || receivedAt.toISOString() !== value
@@ -517,6 +600,7 @@ export class SalesOrderMutationService {
         agreedTotalAmount: true,
         depositDueAmount: true,
         balanceDueAmount: true,
+        customerName: true,
         version: true,
       },
     })

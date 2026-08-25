@@ -22,6 +22,7 @@ import {
   NumberingGenerationError,
 } from '../numbering/numbering.errors'
 import { normalizeSalesOrderAddress } from './domain/sales-order-address'
+import { createSalesOrderDocumentTitle } from './domain/sales-order-document-title'
 import {
   isCanonicalSalesOrderActorId,
   normalizeSalesOrderCreateCommand,
@@ -50,6 +51,7 @@ export interface SalesOrderCommandContext {
 
 interface SalesOrderCommandServiceDependencies {
   readonly businessToday: () => string
+  readonly now: () => Date
 }
 
 const DEFAULT_DEPENDENCIES: SalesOrderCommandServiceDependencies = {
@@ -59,6 +61,7 @@ const DEFAULT_DEPENDENCIES: SalesOrderCommandServiceDependencies = {
     month: '2-digit',
     day: '2-digit',
   }).format(new Date()),
+  now: () => new Date(),
 }
 
 const SALES_ORDER_COMMAND_DEPENDENCIES = Symbol(
@@ -346,33 +349,38 @@ export class SalesOrderCommandService {
             effective.catalogProductsById,
           )),
         })
-        for (const document of command.documents) {
-          await this.mediaAsset.activate(transaction, document.mediaAssetId)
-          const association = await transaction.salesOrderDocument.create({
-            data: {
-              salesOrderId: created.id,
-              mediaAssetId: document.mediaAssetId,
-              documentType: document.documentType,
-              title: document.title,
-              remark: document.remark,
-              createdByUserId: trusted.actorUserId,
-            },
-            select: { id: true },
-          })
-          await this.audit.record(transaction, {
-            eventType: AuditEventType.SALES_ORDER_DOCUMENT_ATTACHED,
-            outcome: AuditOutcome.SUCCESS,
-            actorType: AuditActorType.USER,
-            actorUserId: trusted.actorUserId,
-            targetType: 'SALES_ORDER_DOCUMENT',
-            targetId: association.id,
-            requestId: trusted.requestId,
-            metadata: {
-              salesOrderId: created.id,
-              documentType: document.documentType,
-            },
-          })
-        }
+        await this.mediaAsset.activate(
+          transaction,
+          command.issuanceVoucher.mediaAssetId,
+        )
+        const association = await transaction.salesOrderDocument.create({
+          data: {
+            salesOrderId: created.id,
+            mediaAssetId: command.issuanceVoucher.mediaAssetId,
+            documentType: 'ORDER_ISSUANCE_VOUCHER',
+            title: createSalesOrderDocumentTitle(
+              command.customer.name,
+              'ORDER_ISSUANCE_VOUCHER',
+              this.dependencies.now(),
+            ),
+            remark: null,
+            createdByUserId: trusted.actorUserId,
+          },
+          select: { id: true },
+        })
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.SALES_ORDER_DOCUMENT_ATTACHED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: trusted.actorUserId,
+          targetType: 'SALES_ORDER_DOCUMENT',
+          targetId: association.id,
+          requestId: trusted.requestId,
+          metadata: {
+            salesOrderId: created.id,
+            documentType: 'ORDER_ISSUANCE_VOUCHER',
+          },
+        })
         await this.audit.record(transaction, {
           eventType: AuditEventType.SALES_ORDER_CREATED,
           outcome: AuditOutcome.SUCCESS,
@@ -385,7 +393,7 @@ export class SalesOrderCommandService {
             orderNo: issuance.number,
             currencyCode: command.currencyCode,
             lineCount: command.lines.length,
-            documentCount: command.documents.length,
+            documentCount: 1,
           },
         })
         return created.id
@@ -488,25 +496,22 @@ export class SalesOrderCommandService {
       )
     }
 
-    const mediaAssetIds = command.documents.map(document => document.mediaAssetId)
-    if (mediaAssetIds.length > 0) {
-      const assets = await transaction.mediaAsset.findMany({
-        where: {
-          id: { in: mediaAssetIds },
-          createdByUserId: actorUserId,
-          status: 'UPLOADING',
-          mediaType: { in: ['IMAGE', 'DOCUMENT'] satisfies MediaType[] },
-          deletedAt: null,
-          objectKey: { not: null },
-        },
-        select: { id: true },
-      })
-      if (assets.length !== mediaAssetIds.length) {
-        throw dependencyError(
-          'SALES_ORDER_DOCUMENT_UNAVAILABLE',
-          '所选订单凭证当前不可用',
-        )
-      }
+    const assets = await transaction.mediaAsset.findMany({
+      where: {
+        id: { in: [command.issuanceVoucher.mediaAssetId] },
+        createdByUserId: actorUserId,
+        status: 'UPLOADING',
+        mediaType: { in: ['IMAGE', 'DOCUMENT'] satisfies MediaType[] },
+        deletedAt: null,
+        objectKey: { not: null },
+      },
+      select: { id: true },
+    })
+    if (assets.length !== 1) {
+      throw dependencyError(
+        'SALES_ORDER_DOCUMENT_UNAVAILABLE',
+        '所选出单凭证当前不可用',
+      )
     }
     return Object.freeze({ ...regionPath, catalogProductsById })
   }

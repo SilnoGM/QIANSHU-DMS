@@ -1,10 +1,12 @@
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import type { AuditService } from '../audit/audit.service'
+import type { MediaAssetService } from '../media/media-asset.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import type { SalesOrderQueryService } from './sales-order-query.service'
 
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+const VOUCHER_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
 function decimal(value: string) {
   return { toFixed: () => value }
@@ -20,6 +22,7 @@ function setup() {
     agreedTotalAmount: decimal('100.0000'),
     depositDueAmount: decimal('30.0000'),
     balanceDueAmount: decimal('70.0000'),
+    customerName: '王小明',
     version: 1,
   }
   const transaction = {
@@ -39,6 +42,12 @@ function setup() {
     },
     salesOrderDocument: {
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
+      create: jest.fn<Promise<unknown>, [unknown]>()
+        .mockResolvedValue({ id: 'document-id' }),
+    },
+    mediaAsset: {
+      findFirst: jest.fn<Promise<unknown>, [unknown]>()
+        .mockResolvedValue({ id: VOUCHER_ID }),
     },
     salesOrderStatusHistory: {
       create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
@@ -56,6 +65,10 @@ function setup() {
   const audit = {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
   }
+  const media = {
+    activate: jest.fn<Promise<void>, [unknown, string]>()
+      .mockResolvedValue(undefined),
+  }
   const detail = { id: ORDER_ID }
   const query = {
     getById: jest.fn<Promise<typeof detail>, [string]>().mockResolvedValue(detail),
@@ -63,10 +76,11 @@ function setup() {
   const service = new SalesOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
+    media as unknown as MediaAssetService,
     query as unknown as SalesOrderQueryService,
     { now: () => new Date('2026-08-20T08:00:00.000Z') },
   )
-  return { audit, detail, order, query, service, transaction }
+  return { audit, detail, media, order, query, service, transaction }
 }
 
 const context = {
@@ -115,8 +129,8 @@ describe('SalesOrderMutationService', () => {
       amount: '30',
       receivedAt: '2026-08-20T07:00:00.000Z',
       paymentMethod: 'BANK_TRANSFER',
-      referenceNo: 'REF-1',
       remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
     })).resolves.toEqual(fixture.detail)
     const paymentCall = fixture.transaction.salesOrderPayment.create
       .mock.calls[0]?.[0]
@@ -131,6 +145,22 @@ describe('SalesOrderMutationService', () => {
       where: { id: ORDER_ID },
       data: { paymentStatus: 'PARTIALLY_PAID', version: { increment: 1 } },
     })
+    expect(fixture.media.activate).toHaveBeenCalledWith(
+      fixture.transaction,
+      VOUCHER_ID,
+    )
+    expect(fixture.transaction.salesOrderDocument.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: ORDER_ID,
+        mediaAssetId: VOUCHER_ID,
+        paymentId: 'payment-id',
+        documentType: 'PAYMENT_VOUCHER',
+        title: '王小明-定金凭证-20260820160000000',
+        remark: null,
+        createdByUserId: ACTOR_ID,
+      },
+      select: { id: true },
+    })
 
     const overpaid = setup()
     overpaid.transaction.salesOrderPayment.aggregate.mockResolvedValue({
@@ -141,11 +171,52 @@ describe('SalesOrderMutationService', () => {
       amount: '20',
       receivedAt: '2026-08-20T07:00:00.000Z',
       paymentMethod: null,
-      referenceNo: null,
       remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
     })).rejects.toMatchObject({
       code: 'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
     })
+  })
+
+  it.each(['DEPOSIT', 'PROGRESS', 'INVOICE_TAX', 'BALANCE', 'OTHER'] as const)(
+    'records %s as an effective payment with one required voucher',
+    async (paymentType) => {
+      const fixture = setup()
+      await expect(fixture.service.recordPayment(context, ORDER_ID, {
+        paymentType,
+        amount: '1',
+        receivedAt: '2026-08-20T07:00:00.000Z',
+        paymentMethod: null,
+        remark: null,
+        voucher: { mediaAssetId: VOUCHER_ID },
+      })).resolves.toEqual(fixture.detail)
+      expect(JSON.stringify(
+        fixture.transaction.salesOrderPayment.create.mock.calls[0]?.[0],
+      )).toContain(`"paymentType":"${paymentType}"`)
+    },
+  )
+
+  it('rejects missing vouchers and the removed referenceNo field', async () => {
+    const missing = setup()
+    await expect(missing.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT',
+      amount: '1',
+      receivedAt: '2026-08-20T07:00:00.000Z',
+      paymentMethod: null,
+      remark: null,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(missing.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
+
+    const legacy = setup()
+    await expect(legacy.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT',
+      amount: '1',
+      receivedAt: '2026-08-20T07:00:00.000Z',
+      paymentMethod: null,
+      referenceNo: 'REMOVED',
+      remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
   })
 
   it('preserves before/after snapshots for a confirmed payment-term revision', async () => {

@@ -54,7 +54,9 @@ describe('CreateSalesOrderRequestDto', () => {
       agreedTotalAmount: '200.0000',
       depositDueAmount: '50.0000',
       balanceDueAmount: '150.0000',
-      documents: [],
+      issuanceVoucher: {
+        mediaAssetId: '55555555-5555-4555-8555-555555555555',
+      },
       remark: null,
     }
 
@@ -62,6 +64,47 @@ describe('CreateSalesOrderRequestDto', () => {
       metatype: CreateSalesOrderRequestDto,
       type: 'body',
     })).resolves.toBeInstanceOf(CreateSalesOrderRequestDto)
+  })
+
+  it('rejects a missing issuance voucher and the legacy documents array', async () => {
+    const base = {
+      orderDate: '2026-08-20',
+      currencyCode: 'TWD',
+      customer: {
+        name: '王小明',
+        phone: '0912345678',
+        countryRegionId: '2e30acdf-7559-5fc2-8e00-c5b069d3df8b',
+        provinceStateId: 'ee82c572-f653-51d2-98d4-f11ac5928aa1',
+        cityId: '78f9134e-3d72-5f6e-9897-ca7e50004229',
+        addressDetail: '苓雅区中正一路100号',
+      },
+      lines: [{
+        lineType: 'CUSTOM',
+        name: '临时产品',
+        description: null,
+        actualUnitPriceAmount: '1',
+        quantity: 1,
+      }],
+      agreedTotalAmount: '1',
+      depositDueAmount: '0',
+      balanceDueAmount: '1',
+      remark: null,
+    }
+
+    await expect(dtoPipe.transform(base, {
+      metatype: CreateSalesOrderRequestDto,
+      type: 'body',
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    await expect(dtoPipe.transform({
+      ...base,
+      documents: [],
+      issuanceVoucher: {
+        mediaAssetId: '55555555-5555-4555-8555-555555555555',
+      },
+    }, {
+      metatype: CreateSalesOrderRequestDto,
+      type: 'body',
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
   })
 })
 

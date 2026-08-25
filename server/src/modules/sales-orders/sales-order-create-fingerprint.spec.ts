@@ -30,7 +30,9 @@ function payload(overrides: Record<string, unknown> = {}) {
     agreedTotalAmount: '20',
     depositDueAmount: '5',
     balanceDueAmount: '15',
-    documents: [],
+    issuanceVoucher: {
+      mediaAssetId: '55555555-5555-4555-8555-555555555555',
+    },
     remark: null,
     ...overrides,
   }, TODAY)
@@ -48,7 +50,7 @@ describe('sales order create fingerprint', () => {
       })))
   })
 
-  it('changes for actor, line order, document order, or business content', () => {
+  it('changes for actor, issuance voucher, or business content', () => {
     const baseline = calculateSalesOrderCreateFingerprint(ACTOR_ID, payload())
     const variants = [
       calculateSalesOrderCreateFingerprint(
@@ -66,6 +68,11 @@ describe('sales order create fingerprint', () => {
         },
       })),
       calculateSalesOrderCreateFingerprint(ACTOR_ID, payload({ remark: 'x' })),
+      calculateSalesOrderCreateFingerprint(ACTOR_ID, payload({
+        issuanceVoucher: {
+          mediaAssetId: '66666666-6666-4666-8666-666666666666',
+        },
+      })),
     ]
     expect(new Set([baseline, ...variants]).size).toBe(variants.length + 1)
   })

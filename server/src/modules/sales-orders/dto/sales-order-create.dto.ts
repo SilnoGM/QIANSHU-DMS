@@ -18,10 +18,7 @@ import {
   ValidateNested,
 } from 'class-validator'
 
-import {
-  SalesOrderDocumentType,
-  SalesOrderLineType,
-} from '../../../generated/prisma/enums'
+import { SalesOrderLineType } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 const AMOUNT_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,4})?$/u
@@ -96,26 +93,10 @@ export class SalesOrderLineInputDto {
   quantity!: number
 }
 
-export class SalesOrderCreateDocumentInputDto {
+export class SalesOrderIssuanceVoucherInputDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
   mediaAssetId!: string
-
-  @ApiProperty({ enum: SalesOrderDocumentType })
-  @IsEnum(SalesOrderDocumentType)
-  documentType!: SalesOrderDocumentType
-
-  @ApiProperty({ type: 'string', maxLength: 128, nullable: true })
-  @IsOptional()
-  @IsString()
-  @IsUnicodeCodePointLength(1, 128)
-  title!: string | null
-
-  @ApiProperty({ type: 'string', maxLength: 500, nullable: true })
-  @IsOptional()
-  @IsString()
-  @IsUnicodeCodePointLength(1, 500)
-  remark!: string | null
 }
 
 export class CreateSalesOrderRequestDto {
@@ -157,12 +138,11 @@ export class CreateSalesOrderRequestDto {
   @Matches(AMOUNT_PATTERN)
   balanceDueAmount!: string
 
-  @ApiProperty({ type: () => [SalesOrderCreateDocumentInputDto], maxItems: 20 })
-  @IsArray()
-  @ArrayMaxSize(20)
-  @ValidateNested({ each: true })
-  @Type(() => SalesOrderCreateDocumentInputDto)
-  documents!: SalesOrderCreateDocumentInputDto[]
+  @ApiProperty({ type: () => SalesOrderIssuanceVoucherInputDto })
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => SalesOrderIssuanceVoucherInputDto)
+  issuanceVoucher!: SalesOrderIssuanceVoucherInputDto
 
   @ApiProperty({ type: 'string', maxLength: 1000, nullable: true })
   @IsOptional()

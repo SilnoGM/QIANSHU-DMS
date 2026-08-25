@@ -39,14 +39,9 @@ function validInput(): Record<string, unknown> {
     agreedTotalAmount: '50',
     depositDueAmount: '20',
     balanceDueAmount: '30',
-    documents: [
-      {
-        mediaAssetId: '55555555-5555-4555-8555-555555555555',
-        documentType: 'DEPOSIT_VOUCHER',
-        title: ' 定金凭证 ',
-        remark: null,
-      },
-    ],
+    issuanceVoucher: {
+      mediaAssetId: '55555555-5555-4555-8555-555555555555',
+    },
     remark: ' 订单备注 ',
   }
 }
@@ -108,6 +103,9 @@ describe('normalizeSalesOrderCreateCommand', () => {
       agreedTotalAmount: '50.0000',
       depositDueAmount: '20.0000',
       balanceDueAmount: '30.0000',
+      issuanceVoucher: {
+        mediaAssetId: '55555555-5555-4555-8555-555555555555',
+      },
       remark: '订单备注',
     })
     expect(Object.isFrozen(normalized)).toBe(true)
@@ -219,6 +217,21 @@ describe('normalizeSalesOrderCreateCommand', () => {
       depositDueAmount: '19.99',
     }, TODAY))
     expect(error.code).toBe('SALES_ORDER_TOTAL_MISMATCH')
+  })
+
+  it('requires exactly one issuance voucher and rejects the legacy documents field', () => {
+    const missing = validInput()
+    delete missing.issuanceVoucher
+    expect(() => normalizeSalesOrderCreateCommand(missing, TODAY)).toThrow(
+      expect.objectContaining({ code: 'VALIDATION_FAILED' }),
+    )
+
+    const legacyError = captureApiException(() => normalizeSalesOrderCreateCommand({
+      ...validInput(),
+      documents: [],
+    }, TODAY))
+    expect(legacyError.code).toBe('VALIDATION_FAILED')
+    expect(Object.keys(legacyError.fieldErrors ?? {})).toEqual(['body'])
   })
 })
 

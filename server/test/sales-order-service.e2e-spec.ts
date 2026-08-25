@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { ConfigService } from '@nestjs/config'
 
+import type { Prisma } from '../src/generated/prisma/client'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { AuditService } from '../src/modules/audit/audit.service'
 import type { MediaAssetService } from '../src/modules/media/media-asset.service'
@@ -26,6 +27,8 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
   let countryRegionId: string
   let createdTwdExchangeRate = false
   let productId: string
+  let issuanceVoucherMediaAssetId: string
+  let paymentVoucherMediaAssetId: string
   let provinceStateId: string
   let twdCurrencyId: string
   let twdWasEnabled = false
@@ -65,6 +68,19 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       select: { id: true },
     })
     actorUserId = actor.id
+    const createTemporaryVoucher = (name: string) => prisma.mediaAsset.create({
+      data: {
+        mediaType: 'DOCUMENT',
+        status: 'UPLOADING',
+        objectKey: `assets/sales-order-e2e-${suffix.toLowerCase()}-${name}.pdf`,
+        originalFilename: `${name}.pdf`,
+        uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+        createdByUserId: actor.id,
+      },
+      select: { id: true },
+    })
+    issuanceVoucherMediaAssetId = (await createTemporaryVoucher('issuance')).id
+    paymentVoucherMediaAssetId = (await createTemporaryVoucher('payment')).id
     const country = await prisma.region.create({
       data: {
         administrativeType: 'COUNTRY_REGION',
@@ -128,7 +144,18 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       }),
     } as unknown as NumberingGeneratorService
     const media = {
-      activate: jest.fn(() => Promise.reject(new Error('unexpected media activation'))),
+      activate: jest.fn((transaction: Prisma.TransactionClient, id: string) => (
+        transaction.mediaAsset.update({
+          where: { id },
+          data: {
+            status: 'READY',
+            mimeType: 'application/pdf',
+            sizeBytes: 1n,
+            checksumSha256: '0'.repeat(64),
+            uploadExpiresAt: null,
+          },
+        }).then(() => undefined)
+      )),
     } as unknown as MediaAssetService
     commands = new SalesOrderCommandService(
       prisma,
@@ -141,6 +168,7 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
     mutations = new SalesOrderMutationService(
       prisma,
       new AuditService(),
+      media,
       query,
       { now: () => new Date('2026-08-20T12:00:00.000Z') },
     )
@@ -184,6 +212,14 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
           await transaction.salesOrder.deleteMany({
             where: { id: { in: salesOrderIds } },
           })
+          // 凭证关联删除也会登记 deferred 媒体引用校验。必须在统一结算约束
+          // 之前一并删除本夹具拥有的媒体，否则 READY 媒体会短暂成为孤儿。
+          await transaction.mediaAsset.deleteMany({
+            where: { id: { in: [
+              issuanceVoucherMediaAssetId,
+              paymentVoucherMediaAssetId,
+            ] } },
+          })
           // DELETE 会登记 deferred 汇总校验；订单已删除后先结算事件，才能
           // 在同一事务内安全恢复 payment 表的普通触发器。
           await transaction.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE')
@@ -202,6 +238,12 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
         }
         await transaction.product.deleteMany({
           where: { productNo: `SO-P-${suffix}` },
+        })
+        await transaction.mediaAsset.deleteMany({
+          where: { id: { in: [
+            issuanceVoucherMediaAssetId,
+            paymentVoucherMediaAssetId,
+          ] } },
         })
         await transaction.region.deleteMany({
           where: { code: `ZZ-${suffix}-C` },
@@ -257,7 +299,7 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       agreedTotalAmount: '100',
       depositDueAmount: '30',
       balanceDueAmount: '70',
-      documents: [],
+      issuanceVoucher: { mediaAssetId: issuanceVoucherMediaAssetId },
       remark: null,
     }
   }
@@ -289,10 +331,6 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       where: { orderNo: `SO-E2E-${suffix}` },
     })).toBe(1)
 
-    await mutations.updateOrderStatus({
-      actorUserId,
-      requestId: `sales-order-confirm-${suffix}`,
-    }, created.id, { toStatus: 'CONFIRMED', reason: '确认销售' })
     const paid = await mutations.recordPayment({
       actorUserId,
       requestId: `sales-order-payment-${suffix}`,
@@ -301,8 +339,8 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       amount: '30',
       receivedAt: '2026-08-20T10:00:00.000Z',
       paymentMethod: 'BANK_TRANSFER',
-      referenceNo: `REF-${suffix}`,
       remark: null,
+      voucher: { mediaAssetId: paymentVoucherMediaAssetId },
     })
     expect(paid).toMatchObject({
       orderStatus: 'CONFIRMED',
@@ -324,7 +362,6 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       select: { dimension: true, fromStatus: true, toStatus: true },
     })
     expect(statusHistory).toEqual([
-      { dimension: 'ORDER', fromStatus: 'DRAFT', toStatus: 'CONFIRMED' },
       { dimension: 'PAYMENT', fromStatus: 'UNPAID', toStatus: 'PARTIALLY_PAID' },
     ])
   })

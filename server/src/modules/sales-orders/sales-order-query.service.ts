@@ -444,6 +444,29 @@ function mapActor(actor: SalesOrderActor | null): SalesOrderActor | null {
   return actor === null ? null : { id: actor.id, displayName: actor.displayName }
 }
 
+function mapDetailDocument(
+  salesOrderId: string,
+  document: SalesOrderDetailRow['documents'][number],
+): Record<string, unknown> {
+  return {
+    id: document.id,
+    mediaAssetId: document.mediaAssetId,
+    paymentId: document.paymentId,
+    documentType: document.documentType,
+    title: document.title,
+    remark: document.remark,
+    originalFilename: document.mediaAsset.originalFilename,
+    mimeType: document.mediaAsset.mimeType,
+    mediaType: document.mediaAsset.mediaType,
+    sizeBytes: document.mediaAsset.sizeBytes?.toString() ?? null,
+    contentUrl: `/api/sales-orders/${salesOrderId}/documents/${document.id}/content`,
+    createdBy: mapActor(document.createdBy),
+    createdAt: document.createdAt.toISOString(),
+    detachedAt: document.detachedAt?.toISOString() ?? null,
+    detachedBy: mapActor(document.detachedBy),
+  }
+}
+
 function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
   const receivedUnits = row.payments.reduce(
     (sum, payment) => payment.voidedAt === null
@@ -510,37 +533,34 @@ function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
       quantity: line.quantity,
       lineTotalAmount: decimalToFixed4(line.lineTotalAmount),
     })),
-    payments: row.payments.map(payment => ({
-      id: payment.id,
-      paymentType: payment.paymentType,
-      amount: decimalToFixed4(payment.amount),
-      receivedAt: payment.receivedAt.toISOString(),
-      paymentMethod: payment.paymentMethod,
-      referenceNo: payment.referenceNo,
-      remark: payment.remark,
-      createdBy: mapActor(payment.createdBy),
-      createdAt: payment.createdAt.toISOString(),
-      voidedAt: payment.voidedAt?.toISOString() ?? null,
-      voidedBy: mapActor(payment.voidedBy),
-      voidReason: payment.voidReason,
-    })),
-    documents: row.documents.map(document => ({
-      id: document.id,
-      mediaAssetId: document.mediaAssetId,
-      paymentId: document.paymentId,
-      documentType: document.documentType,
-      title: document.title,
-      remark: document.remark,
-      originalFilename: document.mediaAsset.originalFilename,
-      mimeType: document.mediaAsset.mimeType,
-      mediaType: document.mediaAsset.mediaType,
-      sizeBytes: document.mediaAsset.sizeBytes?.toString() ?? null,
-      contentUrl: `/api/sales-orders/${row.id}/documents/${document.id}/content`,
-      createdBy: mapActor(document.createdBy),
-      createdAt: document.createdAt.toISOString(),
-      detachedAt: document.detachedAt?.toISOString() ?? null,
-      detachedBy: mapActor(document.detachedBy),
-    })),
+    payments: row.payments.map((payment) => {
+      const voucher = row.documents.find(document => (
+        document.paymentId === payment.id
+        && document.documentType === 'PAYMENT_VOUCHER'
+      ))
+      if (voucher === undefined) {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'SALES_ORDER_STATE_CHANGED',
+          '收款凭证状态已变化，请刷新后重试',
+        )
+      }
+      return {
+        id: payment.id,
+        paymentType: payment.paymentType,
+        amount: decimalToFixed4(payment.amount),
+        receivedAt: payment.receivedAt.toISOString(),
+        paymentMethod: payment.paymentMethod,
+        remark: payment.remark,
+        createdBy: mapActor(payment.createdBy),
+        createdAt: payment.createdAt.toISOString(),
+        voidedAt: payment.voidedAt?.toISOString() ?? null,
+        voidedBy: mapActor(payment.voidedBy),
+        voidReason: payment.voidReason,
+        voucher: mapDetailDocument(row.id, voucher),
+      }
+    }),
+    documents: row.documents.map(document => mapDetailDocument(row.id, document)),
     statusHistory: row.statusHistory.map(history => ({
       id: history.id,
       dimension: history.dimension,

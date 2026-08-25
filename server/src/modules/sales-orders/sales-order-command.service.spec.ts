@@ -32,12 +32,9 @@ function input(overrides: Record<string, unknown> = {}): Record<string, unknown>
     agreedTotalAmount: '100',
     depositDueAmount: '30',
     balanceDueAmount: '70',
-    documents: [{
+    issuanceVoucher: {
       mediaAssetId: '55555555-5555-4555-8555-555555555555',
-      documentType: 'DEPOSIT_VOUCHER',
-      title: '定金凭证',
-      remark: null,
-    }],
+    },
     remark: null,
     ...overrides,
   }
@@ -145,7 +142,10 @@ function setup() {
     audit as unknown as AuditService,
     media as unknown as MediaAssetService,
     query as unknown as SalesOrderQueryService,
-    { businessToday: () => '2026-08-20' },
+    {
+      businessToday: () => '2026-08-20',
+      now: () => new Date('2026-08-20T01:02:03.004Z'),
+    },
   )
   return { audit, detail, media, numbering, prisma, query, service, transaction }
 }
@@ -207,6 +207,17 @@ describe('SalesOrderCommandService', () => {
       fixture.transaction,
       '55555555-5555-4555-8555-555555555555',
     )
+    expect(fixture.transaction.salesOrderDocument.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: ORDER_ID,
+        mediaAssetId: '55555555-5555-4555-8555-555555555555',
+        documentType: 'ORDER_ISSUANCE_VOUCHER',
+        title: '王小明-出单凭证-20260820090203004',
+        remark: null,
+        createdByUserId: ACTOR_ID,
+      },
+      select: { id: true },
+    })
     const createAuditCall = fixture.audit.record.mock.calls.find(
       call => JSON.stringify(call[1]).includes('SALES_ORDER_CREATED'),
     )

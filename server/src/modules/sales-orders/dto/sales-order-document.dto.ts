@@ -1,11 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsUUID } from 'class-validator'
 
-import {
-  MediaType,
-  SalesOrderDocumentType,
-} from '../../../generated/prisma/enums'
-import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
+import { MediaType } from '../../../generated/prisma/enums'
 
 export class SalesOrderDocumentUploadRequestDto {
   @ApiProperty({ type: 'string', enum: ['IMAGE', 'DOCUMENT'] })
@@ -32,31 +28,10 @@ export class SalesOrderTemporaryDocumentDto {
   readonly originalFilename!: string
 }
 
-export class SalesOrderDocumentAttachRequestDto {
+export class SalesOrderDeliveryReceiptRequestDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
   mediaAssetId!: string
-
-  @ApiProperty({ type: 'string', format: 'uuid', nullable: true })
-  @IsOptional()
-  @IsUUID('4')
-  paymentId!: string | null
-
-  @ApiProperty({ enum: SalesOrderDocumentType })
-  @IsEnum(SalesOrderDocumentType)
-  documentType!: SalesOrderDocumentType
-
-  @ApiProperty({ type: 'string', maxLength: 128, nullable: true })
-  @IsOptional()
-  @IsString()
-  @IsUnicodeCodePointLength(1, 128)
-  title!: string | null
-
-  @ApiProperty({ type: 'string', maxLength: 500, nullable: true })
-  @IsOptional()
-  @IsString()
-  @IsUnicodeCodePointLength(1, 500)
-  remark!: string | null
 }
 
 export class SalesOrderDocumentIdParamDto {

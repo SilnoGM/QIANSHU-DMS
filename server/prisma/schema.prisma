@@ -234,6 +234,8 @@ enum SalesOrderLineType {
 
 enum SalesOrderPaymentType {
   DEPOSIT
+  PROGRESS
+  INVOICE_TAX
   BALANCE
   OTHER
 
@@ -241,9 +243,9 @@ enum SalesOrderPaymentType {
 }
 
 enum SalesOrderDocumentType {
-  DEPOSIT_VOUCHER
+  ORDER_ISSUANCE_VOUCHER
+  PAYMENT_VOUCHER
   DELIVERY_RECEIPT
-  OTHER
 
   @@map("sales_order_document_type")
 }
@@ -799,7 +801,6 @@ model SalesOrderPayment {
   amount          Decimal               @db.Decimal(30, 4)
   receivedAt      DateTime              @map("received_at") @db.Timestamptz(6)
   paymentMethod   String?               @map("payment_method") @db.VarChar(64)
-  referenceNo     String?               @map("reference_no") @db.VarChar(128)
   remark          String?               @db.VarChar(500)
   createdByUserId String                @map("created_by_user_id") @db.Uuid
   createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)

@@ -8,7 +8,6 @@ import {
   AuditActorType,
   AuditEventType,
   AuditOutcome,
-  type SalesOrderDocumentType,
 } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../../infrastructure/database/transaction-timeouts'
@@ -24,6 +23,7 @@ import {
   salesOrderRuleFailure,
   salesOrderValidationFailure,
 } from '../domain/sales-order-errors'
+import { createSalesOrderDocumentTitle } from '../domain/sales-order-document-title'
 import { isCanonicalSalesOrderActorId } from '../sales-order-command.normalizer'
 import type { SalesOrderMutationContext } from '../sales-order-mutation.service'
 import {
@@ -37,12 +37,6 @@ import {
 
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
-const DOCUMENT_TYPES = new Set<SalesOrderDocumentType>([
-  'DEPOSIT_VOUCHER',
-  'DELIVERY_RECEIPT',
-  'OTHER',
-])
-
 export interface SalesOrderTemporaryDocument {
   readonly mediaAssetId: string
   readonly mediaType: 'IMAGE' | 'DOCUMENT'
@@ -79,14 +73,25 @@ function requireContext(context: SalesOrderMutationContext): void {
   }
 }
 
-function optionalText(value: unknown, field: string, maximum: number): string | null {
-  if (value === null || value === undefined) return null
-  if (typeof value !== 'string') return salesOrderValidationFailure(field)
-  const normalized = value.trim().normalize('NFKC')
-  if ([...normalized].length < 1 || [...normalized].length > maximum) {
+function requireRecord(
+  value: unknown,
+  field = 'body',
+): Readonly<Record<string, unknown>> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return salesOrderValidationFailure(field)
   }
-  return normalized
+  return value as Readonly<Record<string, unknown>>
+}
+
+function rejectUnknownKeys(
+  body: Readonly<Record<string, unknown>>,
+  allowedKeys: readonly string[],
+  field = 'body',
+): void {
+  const allowed = new Set(allowedKeys)
+  if (Object.keys(body).some(key => !allowed.has(key))) {
+    return salesOrderValidationFailure(field)
+  }
 }
 
 function mapUploadError(error: unknown): never {
@@ -163,39 +168,38 @@ export class SalesOrderDocumentService {
     })
   }
 
-  async attach(
+  async submitDeliveryReceipt(
     context: SalesOrderMutationContext,
     rawSalesOrderId: unknown,
     input: unknown,
   ): Promise<SalesOrderDetail> {
     requireContext(context)
     const salesOrderId = requireUuid(rawSalesOrderId, 'salesOrderId')
-    if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-      return salesOrderValidationFailure('body')
-    }
-    const body = input as Readonly<Record<string, unknown>>
+    const body = requireRecord(input)
+    rejectUnknownKeys(body, ['mediaAssetId'])
     const mediaAssetId = requireUuid(body.mediaAssetId, 'mediaAssetId')
-    const paymentId = body.paymentId === null || body.paymentId === undefined
-      ? null
-      : requireUuid(body.paymentId, 'paymentId')
-    if (
-      typeof body.documentType !== 'string'
-      || !DOCUMENT_TYPES.has(body.documentType as SalesOrderDocumentType)
-    ) {
-      return salesOrderValidationFailure('documentType')
-    }
-    const documentType = body.documentType as SalesOrderDocumentType
-    const title = optionalText(body.title, 'title', 128)
-    const remark = optionalText(body.remark, 'remark', 500)
+
     try {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
         const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-          SELECT "id" FROM "sales_orders"
+          SELECT "id"
+          FROM "sales_orders"
           WHERE "id" = CAST(${salesOrderId} AS uuid)
           FOR UPDATE
         `)
         if (locks.length !== 1) {
+          throw new ApiException(
+            HttpStatus.NOT_FOUND,
+            'SALES_ORDER_NOT_FOUND',
+            '销售订单不存在',
+          )
+        }
+        const order = await transaction.salesOrder.findUnique({
+          where: { id: salesOrderId },
+          select: { id: true, customerName: true },
+        })
+        if (order === null) {
           throw new ApiException(
             HttpStatus.NOT_FOUND,
             'SALES_ORDER_NOT_FOUND',
@@ -211,39 +215,32 @@ export class SalesOrderDocumentService {
             deletedAt: null,
             objectKey: { not: null },
           },
-          select: { id: true },
+          select: { id: true, createdAt: true },
         })
         if (asset === null) {
           return salesOrderRuleFailure(
             'SALES_ORDER_DOCUMENT_UNAVAILABLE',
-            '所选订单凭证当前不可用',
+            '所选签收单当前不可用',
           )
-        }
-        if (paymentId !== null) {
-          const payment = await transaction.salesOrderPayment.findFirst({
-            where: { id: paymentId, salesOrderId },
-            select: { id: true },
-          })
-          if (payment === null) {
-            return salesOrderRuleFailure(
-              'SALES_ORDER_PAYMENT_NOT_FOUND',
-              '关联的实际收款记录不存在',
-            )
-          }
         }
         await this.mediaAsset.activate(transaction, mediaAssetId)
         const document = await transaction.salesOrderDocument.create({
           data: {
             salesOrderId,
             mediaAssetId,
-            paymentId,
-            documentType,
-            title,
-            remark,
+            paymentId: null,
+            documentType: 'DELIVERY_RECEIPT',
+            title: createSalesOrderDocumentTitle(
+              order.customerName,
+              'DELIVERY_RECEIPT',
+              asset.createdAt,
+            ),
+            remark: null,
             createdByUserId: context.actorUserId,
           },
           select: { id: true },
         })
+        // 货物签收仅新增订单级凭证；订单进度仍等待后续管理员审批。
         await transaction.salesOrder.update({
           where: { id: salesOrderId },
           data: { version: { increment: 1 } },
@@ -256,13 +253,14 @@ export class SalesOrderDocumentService {
           targetType: 'SALES_ORDER_DOCUMENT',
           targetId: document.id,
           requestId: context.requestId,
-          metadata: { salesOrderId, documentType },
+          metadata: { salesOrderId, documentType: 'DELIVERY_RECEIPT' },
         })
       })
     }
     catch (error) {
       if (error instanceof ApiException) throw error
-      return mapUploadError(error)
+      if (error instanceof MediaAssetLifecycleError) return mapUploadError(error)
+      throw error
     }
     return this.query.getById(salesOrderId)
   }
@@ -302,6 +300,12 @@ export class SalesOrderDocumentService {
           HttpStatus.NOT_FOUND,
           'SALES_ORDER_DOCUMENT_NOT_FOUND',
           '订单凭证不存在',
+        )
+      }
+      if (document.documentType !== 'DELIVERY_RECEIPT') {
+        return salesOrderRuleFailure(
+          'SALES_ORDER_DOCUMENT_REQUIRED',
+          '出单凭证和收款凭证不能单独解除',
         )
       }
       if (

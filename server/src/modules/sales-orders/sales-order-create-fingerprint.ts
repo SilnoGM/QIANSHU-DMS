@@ -56,12 +56,9 @@ function serializeSalesOrderCreateFingerprint(
       agreedTotalAmount: payload.agreedTotalAmount,
       depositDueAmount: payload.depositDueAmount,
       balanceDueAmount: payload.balanceDueAmount,
-      documents: payload.documents.map(document => ({
-        mediaAssetId: document.mediaAssetId,
-        documentType: document.documentType,
-        title: document.title,
-        remark: document.remark,
-      })),
+      issuanceVoucher: {
+        mediaAssetId: payload.issuanceVoucher.mediaAssetId,
+      },
       remark: payload.remark,
     },
   })

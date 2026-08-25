@@ -86,8 +86,8 @@ function createListFixture() {
     documents: [{
       id: DOCUMENT_ID,
       mediaAssetId: MEDIA_ASSET_ID,
-      documentType: 'DEPOSIT_VOUCHER',
-      title: '林测试-定金凭证-20260822090000',
+      documentType: 'ORDER_ISSUANCE_VOUCHER',
+      title: '林测试-出单凭证-20260822090000',
       mediaAsset: { mediaType: 'IMAGE' },
     }],
   }
@@ -201,8 +201,8 @@ describe('SalesOrderQueryService list summaries', () => {
           imageCount: 1,
           previews: [{
             id: DOCUMENT_ID,
-            documentType: 'DEPOSIT_VOUCHER',
-            title: '林测试-定金凭证-20260822090000',
+            documentType: 'ORDER_ISSUANCE_VOUCHER',
+            title: '林测试-出单凭证-20260822090000',
             mediaType: 'IMAGE',
             contentUrl: `/api/sales-orders/${SALES_ORDER_ID}/documents/${DOCUMENT_ID}/content`,
           }],

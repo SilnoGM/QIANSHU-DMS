@@ -1,7 +1,4 @@
-import type {
-  SalesOrderDocumentType,
-  SalesOrderLineType,
-} from '../../generated/prisma/enums'
+import type { SalesOrderLineType } from '../../generated/prisma/enums'
 import {
   calculateSalesOrderLineTotal,
   normalizeSalesOrderAmount,
@@ -17,11 +14,6 @@ import {
 } from './domain/sales-order-errors'
 
 const SALES_ORDER_CURRENCIES = new Set(['TWD', 'MYR'])
-const SALES_ORDER_DOCUMENT_TYPES = new Set<SalesOrderDocumentType>([
-  'DEPOSIT_VOUCHER',
-  'DELIVERY_RECEIPT',
-  'OTHER',
-])
 const CANONICAL_UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const CANONICAL_REGION_UUID_PATTERN =
@@ -63,11 +55,8 @@ export type NormalizedSalesOrderCreateLine =
   | NormalizedSalesOrderCatalogLine
   | NormalizedSalesOrderCustomLine
 
-export interface NormalizedSalesOrderCreateDocument {
+export interface NormalizedSalesOrderIssuanceVoucher {
   readonly mediaAssetId: string
-  readonly documentType: SalesOrderDocumentType
-  readonly title: string | null
-  readonly remark: string | null
 }
 
 export interface NormalizedSalesOrderCreateCommand {
@@ -79,7 +68,7 @@ export interface NormalizedSalesOrderCreateCommand {
   readonly agreedTotalAmount: string
   readonly depositDueAmount: string
   readonly balanceDueAmount: string
-  readonly documents: readonly NormalizedSalesOrderCreateDocument[]
+  readonly issuanceVoucher: NormalizedSalesOrderIssuanceVoucher
   readonly remark: string | null
 }
 
@@ -306,48 +295,17 @@ function normalizeLines(value: unknown): readonly NormalizedSalesOrderCreateLine
   return Object.freeze(value.map(normalizeLine))
 }
 
-function normalizeDocuments(
+function normalizeIssuanceVoucher(
   value: unknown,
-): readonly NormalizedSalesOrderCreateDocument[] {
-  if (!Array.isArray(value) || value.length > 20) {
-    return salesOrderValidationFailure('documents')
-  }
-  const mediaAssetIds = new Set<string>()
-  return Object.freeze(value.map((rawDocument, index) => {
-    const field = `documents.${index}`
-    const document = requireRecord(rawDocument, field)
-    rejectUnknownKeys(document, [
-      'mediaAssetId',
-      'documentType',
-      'title',
-      'remark',
-    ], field)
-    const mediaAssetId = normalizeUuid(
-      document.mediaAssetId,
-      `${field}.mediaAssetId`,
-    )
-    if (mediaAssetIds.has(mediaAssetId)) {
-      return salesOrderValidationFailure(
-        `${field}.mediaAssetId`,
-        '同一媒体资产不能重复关联',
-      )
-    }
-    mediaAssetIds.add(mediaAssetId)
-    if (
-      typeof document.documentType !== 'string'
-      || !SALES_ORDER_DOCUMENT_TYPES.has(
-        document.documentType as SalesOrderDocumentType,
-      )
-    ) {
-      return salesOrderValidationFailure(`${field}.documentType`)
-    }
-    return Object.freeze({
-      mediaAssetId,
-      documentType: document.documentType as SalesOrderDocumentType,
-      title: normalizeNullableText(document.title, `${field}.title`, 128),
-      remark: normalizeNullableText(document.remark, `${field}.remark`, 500),
-    })
-  }))
+): NormalizedSalesOrderIssuanceVoucher {
+  const voucher = requireRecord(value, 'issuanceVoucher')
+  rejectUnknownKeys(voucher, ['mediaAssetId'], 'issuanceVoucher')
+  return Object.freeze({
+    mediaAssetId: normalizeUuid(
+      voucher.mediaAssetId,
+      'issuanceVoucher.mediaAssetId',
+    ),
+  })
 }
 
 /** 创建订单 Body 的唯一纯规范化入口，不读取数据库、不发号。 */
@@ -364,7 +322,7 @@ export function normalizeSalesOrderCreateCommand(
     'agreedTotalAmount',
     'depositDueAmount',
     'balanceDueAmount',
-    'documents',
+    'issuanceVoucher',
     'remark',
   ])
   if (
@@ -398,7 +356,7 @@ export function normalizeSalesOrderCreateCommand(
     customer: normalizeCustomer(body.customer),
     lines,
     ...amounts,
-    documents: normalizeDocuments(body.documents),
+    issuanceVoucher: normalizeIssuanceVoucher(body.issuanceVoucher),
     remark: normalizeNullableText(body.remark, 'remark', 1000),
   })
 }

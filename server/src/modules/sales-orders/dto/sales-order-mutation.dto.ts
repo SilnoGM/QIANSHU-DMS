@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsEnum, IsOptional, IsString, Matches } from 'class-validator'
+import { Type } from 'class-transformer'
+import {
+  IsDefined,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  ValidateNested,
+} from 'class-validator'
 
 import {
   SalesOrderFulfillmentStatus,
@@ -53,6 +62,12 @@ export class SalesOrderPaymentTermsRequestDto {
   reason!: string
 }
 
+export class SalesOrderPaymentVoucherInputDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @IsUUID('4')
+  mediaAssetId!: string
+}
+
 export class SalesOrderPaymentRequestDto {
   @ApiProperty({ enum: SalesOrderPaymentType })
   @IsEnum(SalesOrderPaymentType)
@@ -72,17 +87,17 @@ export class SalesOrderPaymentRequestDto {
   @IsUnicodeCodePointLength(1, 64)
   paymentMethod!: string | null
 
-  @ApiProperty({ type: 'string', maxLength: 128, nullable: true })
-  @IsOptional()
-  @IsString()
-  @IsUnicodeCodePointLength(1, 128)
-  referenceNo!: string | null
-
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true })
   @IsOptional()
   @IsString()
   @IsUnicodeCodePointLength(1, 500)
   remark!: string | null
+
+  @ApiProperty({ type: () => SalesOrderPaymentVoucherInputDto })
+  @IsDefined()
+  @ValidateNested()
+  @Type(() => SalesOrderPaymentVoucherInputDto)
+  voucher!: SalesOrderPaymentVoucherInputDto
 }
 
 export class SalesOrderPaymentVoidRequestDto {

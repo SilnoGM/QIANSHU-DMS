@@ -128,9 +128,6 @@ export class SalesOrderPaymentDto {
   readonly paymentMethod!: string | null
 
   @ApiProperty({ type: 'string', nullable: true })
-  readonly referenceNo!: string | null
-
-  @ApiProperty({ type: 'string', nullable: true })
   readonly remark!: string | null
 
   @ApiProperty({ type: () => SalesOrderActorDto })
@@ -147,6 +144,9 @@ export class SalesOrderPaymentDto {
 
   @ApiProperty({ type: 'string', nullable: true })
   readonly voidReason!: string | null
+
+  @ApiProperty({ type: () => SalesOrderDocumentDto })
+  readonly voucher!: Readonly<Record<string, unknown>>
 }
 
 export class SalesOrderDocumentDto {

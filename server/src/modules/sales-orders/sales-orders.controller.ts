@@ -23,7 +23,7 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import {
-  SalesOrderDocumentAttachRequestDto,
+  SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDocumentIdParamDto,
   SalesOrderDocumentUploadRequestDto,
   SalesOrderTemporaryDocumentDto,
@@ -294,7 +294,7 @@ export class SalesOrdersController {
   }
 
   @Post()
-  @RequirePermissions('sales-orders:create')
+  @RequirePermissions('sales-orders:create', 'sales-orders:document')
   @HttpCode(HttpStatus.CREATED)
   @ApiHeader({
     name: 'Idempotency-Key',
@@ -463,7 +463,7 @@ export class SalesOrdersController {
   }
 
   @Post(':salesOrderId/payments')
-  @RequirePermissions('sales-orders:payment')
+  @RequirePermissions('sales-orders:payment', 'sales-orders:document')
   @HttpCode(HttpStatus.CREATED)
   @ApiContractResponse({ status: HttpStatus.CREATED, type: SalesOrderDetailDto })
   @ApiApplicationContract({
@@ -525,12 +525,12 @@ export class SalesOrdersController {
     )
   }
 
-  @Post(':salesOrderId/documents')
+  @Post(':salesOrderId/delivery-receipts')
   @RequirePermissions('sales-orders:document')
   @HttpCode(HttpStatus.CREATED)
   @ApiContractResponse({ status: HttpStatus.CREATED, type: SalesOrderDetailDto })
   @ApiApplicationContract({
-    operationId: 'sales_orders_attach_document',
+    operationId: 'sales_orders_submit_delivery_receipt',
     session: 'required', authorization: true, csrf: true, badRequest: true,
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
@@ -538,18 +538,17 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_DOCUMENT_UNAVAILABLE',
-        'SALES_ORDER_PAYMENT_NOT_FOUND',
         'VALIDATION_FAILED',
       ] },
       { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
     ],
   })
-  attachDocument(
+  submitDeliveryReceipt(
     @Param() params: SalesOrderIdParamDto,
-    @Body() dto: SalesOrderDocumentAttachRequestDto,
+    @Body() dto: SalesOrderDeliveryReceiptRequestDto,
     @Req() request: object,
   ): Promise<SalesOrderDetail> {
-    return this.documents.attach(
+    return this.documents.submitDeliveryReceipt(
       mutationContext(request),
       params.salesOrderId,
       dto,
@@ -571,6 +570,7 @@ export class SalesOrdersController {
       ] },
       { status: 422, codes: [
         'SALES_ORDER_DELIVERY_RECEIPT_REQUIRED',
+        'SALES_ORDER_DOCUMENT_REQUIRED',
         'VALIDATION_FAILED',
       ] },
     ],

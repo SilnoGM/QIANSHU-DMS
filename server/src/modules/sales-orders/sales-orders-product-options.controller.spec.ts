@@ -60,6 +60,23 @@ function createController(result: ProductMediaContentResponse) {
 class SalesOrderProductOptionsContractModule {}
 
 describe('SalesOrdersController product options', () => {
+  it('requires all permissions for atomic create/payment writes and exposes receipt-only document write', () => {
+    const reflector = new Reflector()
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      SalesOrdersController.prototype.create,
+    )).toEqual(['sales-orders:create', 'sales-orders:document'])
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      SalesOrdersController.prototype.recordPayment,
+    )).toEqual(['sales-orders:payment', 'sales-orders:document'])
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      SalesOrdersController.prototype.submitDeliveryReceipt,
+    )).toEqual(['sales-orders:document'])
+    expect('attachDocument' in SalesOrdersController.prototype).toBe(false)
+  })
+
   it('passes the normalized page query as one object', async () => {
     const fixture = createController({
       status: HttpStatus.OK,
@@ -212,6 +229,13 @@ describe('SalesOrdersController product options OpenAPI', () => {
         codes: ['SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND'],
       })
     }
+  })
+
+  it('publishes the dedicated receipt operation and removes general document writes', () => {
+    expect(document.paths['/api/sales-orders/{salesOrderId}/delivery-receipts']?.post)
+      .toMatchObject({ operationId: 'sales_orders_submit_delivery_receipt' })
+    expect(document.paths['/api/sales-orders/{salesOrderId}/documents']?.post)
+      .toBeUndefined()
   })
 
   it('publishes independent read-authorized list preview image operations', () => {
