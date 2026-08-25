@@ -334,6 +334,9 @@ export class SalesOrderListItemDto {
   @ApiProperty({ enum: SalesOrderStatus }) readonly orderStatus!: SalesOrderStatus
   @ApiProperty({ enum: SalesOrderFulfillmentStatus }) readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
   @ApiProperty({ enum: SalesOrderPaymentStatus }) readonly paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly paymentRecordCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly statusChangeRecordCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly amountChangeRecordCount!: number
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: () => SalesOrderLineSummaryDto })
   readonly lineSummary!: SalesOrderLineSummaryDto

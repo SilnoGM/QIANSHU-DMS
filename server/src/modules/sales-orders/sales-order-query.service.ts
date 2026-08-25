@@ -79,6 +79,14 @@ const SALES_ORDER_LIST_SELECT = {
   orderStatus: true,
   fulfillmentStatus: true,
   paymentStatus: true,
+  // 金额汇总仍只读取有效收款；关系计数保留全部收款，确保已作废记录也进入记录总数。
+  _count: {
+    select: {
+      payments: true,
+      statusHistory: true,
+      amountRevisions: true,
+    },
+  },
   version: true,
   createdAt: true,
   updatedAt: true,
@@ -205,6 +213,9 @@ export interface SalesOrderListItem {
   readonly orderStatus: SalesOrderStatus
   readonly fulfillmentStatus: SalesOrderFulfillmentStatus
   readonly paymentStatus: SalesOrderPaymentStatus
+  readonly paymentRecordCount: number
+  readonly statusChangeRecordCount: number
+  readonly amountChangeRecordCount: number
   readonly version: number
   readonly lineSummary: {
     readonly lineCount: number
@@ -700,6 +711,9 @@ export class SalesOrderQueryService {
           orderStatus: row.orderStatus,
           fulfillmentStatus: row.fulfillmentStatus,
           paymentStatus: row.paymentStatus,
+          paymentRecordCount: row._count.payments,
+          statusChangeRecordCount: row._count.statusHistory,
+          amountChangeRecordCount: row._count.amountRevisions,
           version: row.version,
           lineSummary: mapLineSummary(row),
           documentSummary: mapDocumentSummary(row),

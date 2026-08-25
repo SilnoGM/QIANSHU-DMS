@@ -55,6 +55,11 @@ function createListFixture() {
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'PREPARING',
     paymentStatus: 'PARTIALLY_PAID',
+    _count: {
+      payments: 2,
+      statusHistory: 3,
+      amountRevisions: 1,
+    },
     version: 3,
     createdAt: new Date('2026-08-22T09:00:00.000Z'),
     updatedAt: new Date('2026-08-23T10:30:00.000Z'),
@@ -169,6 +174,9 @@ describe('SalesOrderQueryService list summaries', () => {
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: 'PREPARING',
         paymentStatus: 'PARTIALLY_PAID',
+        paymentRecordCount: 2,
+        statusChangeRecordCount: 3,
+        amountChangeRecordCount: 1,
         version: 3,
         lineSummary: {
           lineCount: 2,

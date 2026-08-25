@@ -38063,6 +38063,18 @@
               "PAID"
             ]
           },
+          "paymentRecordCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "statusChangeRecordCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amountChangeRecordCount": {
+            "type": "integer",
+            "minimum": 0
+          },
           "version": {
             "type": "integer",
             "minimum": 1
@@ -38104,6 +38116,9 @@
           "orderStatus",
           "fulfillmentStatus",
           "paymentStatus",
+          "paymentRecordCount",
+          "statusChangeRecordCount",
+          "amountChangeRecordCount",
           "version",
           "lineSummary",
           "documentSummary",
