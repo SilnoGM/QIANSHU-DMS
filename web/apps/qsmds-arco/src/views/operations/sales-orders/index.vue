@@ -1099,7 +1099,6 @@ onBeforeUnmount(() => {
       title="选择订单币种"
       description="一张订单只允许一个币种，进入新增页后不可切换。产品选择不限制币种，本单售价按订单币种填写。"
       size="xl"
-      class="sm:max-w-[72rem]"
     >
       <template #header-leading>
         <FaIcon name="i-lucide:coins" class="size-5" aria-hidden="true" />
@@ -1134,7 +1133,7 @@ onBeforeUnmount(() => {
                   <span
                     data-testid="sales-order-currency-card"
                     :data-currency-code="option.code"
-                    class="p-5 text-left border rounded-xl bg-background flex flex-col min-h-72 transition-[border-color,background-color,box-shadow,transform] duration-200 ease-out relative overflow-hidden sm:p-6 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
+                    class="p-5 text-left border rounded-xl bg-background flex flex-col min-h-64 transition-[border-color,background-color,box-shadow,transform] duration-200 ease-out relative overflow-hidden sm:p-6 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
                     :class="currencySelectionUnavailable || option.disabled
                       ? 'border-border bg-muted/30 opacity-60'
                       : selectedCurrency === option.value
