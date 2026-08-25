@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SalesOrderRecordsKind } from './sales-order-records-modal.logic'
 import type {
   SalesOrderCurrencySummaryDto,
   SalesOrderLinePreviewDto,
@@ -6,12 +7,12 @@ import type {
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
+
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
 } from '@/components/business/QsGenericTable/logic'
-
 import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -23,13 +24,14 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
-import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 
+import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
   buildSalesOrderCustomerCopyText,
   formatSalesOrderSummaryAmount,
 } from './sales-order-list.logic'
+import SalesOrderRecordsModal from './sales-order-records-modal.vue'
 
 defineOptions({ name: 'OperationsSalesOrders' })
 
@@ -52,6 +54,9 @@ const listError = ref('')
 const requestId = ref<string>()
 const currencyModalVisible = ref(false)
 const selectedCurrency = ref<'TWD' | 'MYR' | null>(null)
+const recordsModalVisible = ref(false)
+const recordsModalKind = ref<SalesOrderRecordsKind>('payments')
+const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
 let requestVersion = 0
 let listAbortController: AbortController | null = null
 let queryRefreshPending = false
@@ -154,9 +159,12 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     minWidth: 230,
     title: '实际收款',
   },
+  { accessorKey: 'paymentRecordCount', id: 'paymentRecordsSummary', minWidth: 180, title: '实际收款记录' },
   { accessorKey: 'paymentStatus', id: 'paymentStatusSummary', minWidth: 170, title: '付款状态' },
   { accessorKey: 'orderStatus', id: 'orderStatusSummary', minWidth: 210, title: '订单状态' },
-  { accessorFn: item => item.documentSummary.count, id: 'documentSummary', minWidth: 250, title: '凭证与备注' },
+  { accessorFn: item => item.documentSummary.count, id: 'documentSummary', minWidth: 170, title: '订单凭证' },
+  { accessorKey: 'remark', id: 'remarkSummary', minWidth: 240, title: '备注' },
+  { accessorFn: item => item.statusChangeRecordCount + item.amountChangeRecordCount, id: 'changeRecordsSummary', minWidth: 170, title: '变更记录' },
   { accessorKey: 'updatedAt', id: 'auditSummary', minWidth: 240, title: '审计信息' },
 ]
 
@@ -181,27 +189,23 @@ function resolveProductPreview(
     : undefined
 }
 
-function documentImageItems(row: SalesOrderListItemDto): readonly ImageGroupItem[] {
-  return row.documentSummary.previews.flatMap(preview => preview.mediaType !== 'IMAGE'
-    ? []
-    : [{
-        alt: preview.title ?? '订单凭证',
-        key: preview.id,
-        src: preview.contentUrl,
-        tooltip: preview.title ?? '订单凭证',
-      }])
-}
-
-function documentPreviewTitles(row: SalesOrderListItemDto): string {
-  return row.documentSummary.previews
-    .map(preview => preview.title ?? '未命名凭证')
-    .join('、')
-}
-
 function salesRegionLabel(row: SalesOrderListItemDto): string {
   return row.customerProvinceStateName === row.customerCityName
     ? row.customerCityName
     : `${row.customerProvinceStateName} / ${row.customerCityName}`
+}
+
+function changeRecordCount(row: SalesOrderListItemDto): number {
+  return row.statusChangeRecordCount + row.amountChangeRecordCount
+}
+
+function openRecordsModal(
+  kind: SalesOrderRecordsKind,
+  order: SalesOrderListItemDto,
+): void {
+  recordsModalKind.value = kind
+  recordsModalOrder.value = order
+  recordsModalVisible.value = true
 }
 
 function enumFilter<T extends string>(
@@ -434,7 +438,7 @@ onBeforeUnmount(() => {
         :searchable="true"
         :show-column-settings="true"
         :total="total"
-        table-class="min-w-[2440px]"
+        table-class="min-w-[3010px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="loadOrders"
@@ -540,6 +544,19 @@ onBeforeUnmount(() => {
           </QsTableStackedCell>
         </template>
 
+        <template #cell-paymentRecordsSummary="{ row }">
+          <FaButton
+            type="button"
+            variant="ghost"
+            class="font-medium px-2 py-1.5 gap-2 h-auto"
+            :aria-label="`查看 ${row.original.paymentRecordCount} 项实际收款记录`"
+            @click="openRecordsModal('payments', row.original)"
+          >
+            <FaIcon name="i-lucide:hand-coins" class="text-primary size-4" aria-hidden="true" />
+            {{ row.original.paymentRecordCount }} 项记录
+          </FaButton>
+        </template>
+
         <template #cell-paymentStatusSummary="{ row }">
           <FaTag
             variant="outline"
@@ -574,29 +591,40 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-documentSummary="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine content-class="flex gap-2 items-center" nowrap>
-              <ImageGroup
-                v-if="row.original.documentSummary.imageCount > 0"
-                :items="documentImageItems(row.original)"
-                :max-count="2"
-                :size="32"
-                radius="md"
-              />
-              <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground size-5" aria-hidden="true" />
-              <FaTooltip :text="documentPreviewTitles(row.original)" :disabled="row.original.documentSummary.count === 0">
-                <span>{{ row.original.documentSummary.count }} 份凭证</span>
-              </FaTooltip>
-              <span v-if="row.original.documentSummary.count > row.original.documentSummary.imageCount" class="qs-type-meta">
-                含 {{ row.original.documentSummary.count - row.original.documentSummary.imageCount }} 份文件
-              </span>
-            </QsTableStackedLine>
-            <QsTableStackedLine tone="muted" content-class="qs-type-meta truncate" nowrap>
-              <FaTooltip :text="row.original.remark ?? '未填写备注'" :disabled="row.original.remark === null">
-                <span class="truncate">{{ row.original.remark ?? '未填写备注' }}</span>
-              </FaTooltip>
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <FaButton
+            type="button"
+            variant="ghost"
+            class="font-medium px-2 py-1.5 gap-2 h-auto"
+            :aria-label="`查看 ${row.original.documentSummary.count} 项订单凭证`"
+            @click="openRecordsModal('documents', row.original)"
+          >
+            <FaIcon name="i-lucide:files" class="text-primary size-4" aria-hidden="true" />
+            {{ row.original.documentSummary.count }} 项凭证
+          </FaButton>
+        </template>
+
+        <template #cell-remarkSummary="{ row }">
+          <FaTooltip
+            :text="row.original.remark ?? '未填写备注'"
+            :disabled="row.original.remark === null"
+          >
+            <span class="max-w-[13rem] block truncate">
+              {{ row.original.remark ?? '未填写备注' }}
+            </span>
+          </FaTooltip>
+        </template>
+
+        <template #cell-changeRecordsSummary="{ row }">
+          <FaButton
+            type="button"
+            variant="ghost"
+            class="font-medium px-2 py-1.5 gap-2 h-auto"
+            :aria-label="`查看 ${changeRecordCount(row.original)} 项变更记录`"
+            @click="openRecordsModal('changes', row.original)"
+          >
+            <FaIcon name="i-lucide:history" class="text-primary size-4" aria-hidden="true" />
+            {{ changeRecordCount(row.original) }} 项记录
+          </FaButton>
         </template>
 
         <template #cell-auditSummary="{ row }">
@@ -898,6 +926,22 @@ onBeforeUnmount(() => {
                   </QsTableStackedCell>
                 </dd>
               </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  实际收款记录
+                </dt>
+                <dd class="m-0">
+                  <FaButton
+                    type="button"
+                    variant="ghost"
+                    class="font-medium px-2 py-1.5 gap-2 h-auto"
+                    @click="openRecordsModal('payments', row)"
+                  >
+                    <FaIcon name="i-lucide:hand-coins" class="text-primary size-4" aria-hidden="true" />
+                    {{ row.paymentRecordCount }} 项记录
+                  </FaButton>
+                </dd>
+              </div>
               <div>
                 <dt class="qs-type-compact-label mb-1">
                   付款状态
@@ -941,16 +985,44 @@ onBeforeUnmount(() => {
               </div>
               <div class="col-span-2">
                 <dt class="qs-type-compact-label mb-1">
-                  凭证与备注
+                  订单凭证
                 </dt>
-                <dd class="m-0 flex gap-3 items-center">
-                  <ImageGroup v-if="row.documentSummary.imageCount > 0" :items="documentImageItems(row)" :max-count="2" :size="40" radius="md" />
-                  <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground size-5" aria-hidden="true" />
-                  <span class="min-w-0">
-                    <span>{{ row.documentSummary.count }} 份凭证</span>
-                    <span v-if="row.documentSummary.previews[0]?.title" class="qs-type-meta mt-1 block truncate">{{ row.documentSummary.previews[0].title }}</span>
-                    <span class="qs-type-meta mt-1 block break-all">{{ row.remark ?? '未填写备注' }}</span>
-                  </span>
+                <dd class="m-0">
+                  <FaButton
+                    type="button"
+                    variant="ghost"
+                    class="font-medium px-2 py-1.5 gap-2 h-auto"
+                    @click="openRecordsModal('documents', row)"
+                  >
+                    <FaIcon name="i-lucide:files" class="text-primary size-4" aria-hidden="true" />
+                    {{ row.documentSummary.count }} 项凭证
+                  </FaButton>
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  备注
+                </dt>
+                <dd class="m-0 min-w-0">
+                  <FaTooltip :text="row.remark ?? '未填写备注'" :disabled="row.remark === null">
+                    <span class="block truncate">{{ row.remark ?? '未填写备注' }}</span>
+                  </FaTooltip>
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  变更记录
+                </dt>
+                <dd class="m-0">
+                  <FaButton
+                    type="button"
+                    variant="ghost"
+                    class="font-medium px-2 py-1.5 gap-2 h-auto"
+                    @click="openRecordsModal('changes', row)"
+                  >
+                    <FaIcon name="i-lucide:history" class="text-primary size-4" aria-hidden="true" />
+                    {{ changeRecordCount(row) }} 项记录
+                  </FaButton>
                 </dd>
               </div>
               <div class="col-span-2">
@@ -967,6 +1039,13 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
+
+    <SalesOrderRecordsModal
+      v-model="recordsModalVisible"
+      :kind="recordsModalKind"
+      :order="recordsModalOrder"
+      :currencies="currencyCatalog.currencies.value"
+    />
 
     <QsGenericModal
       v-model="currencyModalVisible"

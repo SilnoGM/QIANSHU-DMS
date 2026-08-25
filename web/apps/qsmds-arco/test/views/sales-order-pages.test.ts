@@ -19,7 +19,7 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /salesOrdersApi\.list/)
 })
 
-test('销售订单列表使用十一个复合列并展示服务端全量筛选汇总', async () => {
+test('销售订单列表使用十四个复合列并展示服务端全量筛选汇总', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
   const columnsStart = source.indexOf('const columns:')
   const columnsEnd = source.indexOf('function enumFilter', columnsStart)
@@ -57,7 +57,7 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
   assert.ok(orderCellStart >= 0 && orderCellEnd > orderCellStart, '订单列与出单人列应保持独立')
   assert.ok(mobileRowStart >= 0 && mobileDetailsStart > mobileRowStart, '应存在窄屏订单摘要头部')
   assert.ok(mobileCustomerStart > mobileDetailsStart, '应存在窄屏出单人与客户区域')
-  assert.equal(columnsSource.match(/\bid:/gu)?.length, 11)
+  assert.equal(columnsSource.match(/\bid:/gu)?.length, 14)
   assert.match(columnsSource, /id: 'customerSummary', minWidth: 300/u)
   assert.match(columnsSource, /id: 'issuerSummary', minWidth: 180, title: '出单人'/u)
   for (const columnId of [
@@ -68,9 +68,12 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
     'priceSummary',
     'termsSummary',
     'collectionSummary',
+    'paymentRecordsSummary',
     'paymentStatusSummary',
     'orderStatusSummary',
     'documentSummary',
+    'remarkSummary',
+    'changeRecordsSummary',
     'auditSummary',
   ]) {
     assert.match(columnsSource, new RegExp(`id: '${columnId}'`, 'u'))
@@ -103,7 +106,6 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
   assert.match(source, /<CopyCellButton[^>]*label="客户信息"[^>]*:text="buildSalesOrderCustomerCopyText\(row\.original\)"/u)
   assert.match(source, /productImageItems\(/u)
   assert.match(source, /resolveProductPreview\(/u)
-  assert.match(source, /documentImageItems\(/u)
   assert.match(source, /data-testid="sales-order-mobile-summary"/u)
   assert.match(source, /#cell-issuerSummary[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.original\.issuer\.displayName"[\s\S]*?size="md"/u)
   assert.doesNotMatch(orderCellSource, /issuer\.displayName/u)
@@ -117,8 +119,11 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
     assert.match(productSource, /<QsGoodTooltipContent/u)
     assert.doesNotMatch(productSource, /lineCount|totalQuantity|catalogCount|customCount|lineSubtotalAmount/u)
   }
-  assert.match(source, /#cell-documentSummary[\s\S]*?<ImageGroup[\s\S]*?:items="documentImageItems\(row\.original\)"[\s\S]*?:max-count="2"[\s\S]*?:size="32"/u)
-  assert.match(source, /v-if="row\.documentSummary\.imageCount > 0" :items="documentImageItems\(row\)" :max-count="2" :size="40"/u)
+  assert.match(source, /#cell-paymentRecordsSummary[\s\S]*?paymentRecordCount[\s\S]*?openRecordsModal\('payments'/u)
+  assert.match(source, /#cell-documentSummary[\s\S]*?documentSummary\.count[\s\S]*?openRecordsModal\('documents'/u)
+  assert.match(source, /#cell-remarkSummary[\s\S]*?<FaTooltip[\s\S]*?row\.original\.remark/u)
+  assert.match(source, /#cell-changeRecordsSummary[\s\S]*?changeRecordCount[\s\S]*?openRecordsModal\('changes'/u)
+  assert.match(source, /<SalesOrderRecordsModal/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="实际售价"[\s\S]*?row\.original\.agreedTotalAmount/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="标准售价"[\s\S]*?row\.original\.standardSubtotalAmount/u)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="定金"[\s\S]*?row\.original\.depositDueAmount/u)
@@ -156,6 +161,24 @@ test('销售订单列表使用十一个复合列并展示服务端全量筛选�
   assert.match(source, /row\.balanceDueAmount/u)
   assert.match(source, /row\.createdAt/u)
   assert.match(source, /row\.updatedAt/u)
+})
+
+test('销售订单记录弹窗按需读取详情并分开展示收款、凭证与变更记录', async () => {
+  const source = await readFile(new URL('sales-order-records-modal.vue', ROOT), 'utf8')
+
+  assert.match(source, /<QsGenericModal/u)
+  assert.match(source, /salesOrdersApi\.getById/u)
+  assert.match(source, /kind === 'payments'/u)
+  assert.match(source, /kind === 'documents'/u)
+  assert.match(source, /kind === 'changes'/u)
+  assert.match(source, /payment\.voidedAt/u)
+  assert.match(source, /document\.detachedAt === null/u)
+  assert.match(source, /<FaTabs/u)
+  assert.match(source, /状态变更（\$\{detail\.value\?\.statusHistory\.length \?\? 0\}）/u)
+  assert.match(source, /金额变更（\$\{detail\.value\?\.amountRevisions\.length \?\? 0\}）/u)
+  assert.match(source, /#status/u)
+  assert.match(source, /#amount/u)
+  assert.match(source, /@click="loadDetail"/u)
 })
 
 test('新增页使用四步表单与独立双栏实时订单详情', async () => {
