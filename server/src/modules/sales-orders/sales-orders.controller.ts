@@ -477,6 +477,7 @@ export class SalesOrdersController {
         'SALES_ORDER_CANCELLED',
         'SALES_ORDER_PAYMENT_AMOUNT_INVALID',
         'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
+        'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
         'VALIDATION_FAILED',
       ] },
     ],

@@ -15,6 +15,10 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import {
+  DictionaryLookupService,
+  DictionaryValueUnavailableError,
+} from '../dictionaries/dictionary-lookup.service'
+import {
   MediaAssetLifecycleError,
   MediaAssetService,
 } from '../media/media-asset.service'
@@ -47,6 +51,7 @@ const PAYMENT_TYPES = new Set<SalesOrderPaymentType>([
   'BALANCE',
   'OTHER',
 ])
+const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const ORDER_STATUSES = new Set<SalesOrderStatus>([
   'DRAFT',
   'CONFIRMED',
@@ -180,6 +185,7 @@ export class SalesOrderMutationService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly mediaAsset: MediaAssetService,
+    private readonly dictionaryLookup: DictionaryLookupService,
     private readonly query: SalesOrderQueryService,
     @Optional()
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
@@ -379,7 +385,7 @@ export class SalesOrderMutationService {
     const amount = normalizePositiveSalesOrderAmount(body.amount)
     const recordedAt = this.dependencies.now()
     const receivedAt = this.normalizeReceivedAt(body.receivedAt, recordedAt)
-    const paymentMethod = optionalText(body.paymentMethod, 'paymentMethod', 64)
+    const paymentMethod = requireText(body.paymentMethod, 'paymentMethod', 64)
     const remark = optionalText(body.remark, 'remark', 500)
     const voucher = requireRecord(body.voucher, 'voucher')
     rejectUnknownKeys(voucher, ['mediaAssetId'], 'voucher')
@@ -397,6 +403,11 @@ export class SalesOrderMutationService {
             '已取消订单不能记录收款',
           )
         }
+        const effectivePaymentMethod = await this.dictionaryLookup
+          .requireEffectiveValue(transaction, {
+            dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE,
+            value: paymentMethod,
+          })
         const asset = await transaction.mediaAsset.findFirst({
           where: {
             id: mediaAssetId,
@@ -432,7 +443,7 @@ export class SalesOrderMutationService {
             paymentType: body.paymentType as SalesOrderPaymentType,
             amount,
             receivedAt,
-            paymentMethod,
+            paymentMethod: effectivePaymentMethod.value,
             remark,
             createdByUserId: trusted.actorUserId,
           },
@@ -478,6 +489,13 @@ export class SalesOrderMutationService {
     }
     catch (error) {
       if (error instanceof ApiException) throw error
+      if (error instanceof DictionaryValueUnavailableError) {
+        return salesOrderRuleFailure(
+          'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
+          '收款方式当前不可用',
+          'paymentMethod',
+        )
+      }
       if (error instanceof MediaAssetLifecycleError) {
         return salesOrderRuleFailure(
           'SALES_ORDER_DOCUMENT_UNAVAILABLE',

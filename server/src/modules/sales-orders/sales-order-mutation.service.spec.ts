@@ -1,6 +1,8 @@
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import type { AuditService } from '../audit/audit.service'
+import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../media/media-asset.service'
+import { DictionaryValueUnavailableError } from '../dictionaries/dictionary-lookup.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import type { SalesOrderQueryService } from './sales-order-query.service'
 
@@ -73,14 +75,35 @@ function setup() {
   const query = {
     getById: jest.fn<Promise<typeof detail>, [string]>().mockResolvedValue(detail),
   }
+  const dictionaryLookup = {
+    requireEffectiveValue: jest.fn<
+      Promise<unknown>,
+      [unknown, { value: string }]
+    >().mockImplementation((_transaction, input) => Promise.resolve({
+        dictionaryCode: 'payment.method',
+        label: '银行转账',
+        tone: 'DEFAULT',
+        value: input.value,
+      })),
+  }
   const service = new SalesOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
     media as unknown as MediaAssetService,
+    dictionaryLookup as unknown as DictionaryLookupService,
     query as unknown as SalesOrderQueryService,
     { now: () => new Date('2026-08-20T08:00:00.000Z') },
   )
-  return { audit, detail, media, order, query, service, transaction }
+  return {
+    audit,
+    detail,
+    dictionaryLookup,
+    media,
+    order,
+    query,
+    service,
+    transaction,
+  }
 }
 
 const context = {
@@ -145,6 +168,10 @@ describe('SalesOrderMutationService', () => {
       where: { id: ORDER_ID },
       data: { paymentStatus: 'PARTIALLY_PAID', version: { increment: 1 } },
     })
+    expect(fixture.dictionaryLookup.requireEffectiveValue).toHaveBeenCalledWith(
+      fixture.transaction,
+      { dictionaryCode: 'payment.method', value: 'BANK_TRANSFER' },
+    )
     expect(fixture.media.activate).toHaveBeenCalledWith(
       fixture.transaction,
       VOUCHER_ID,
@@ -170,7 +197,7 @@ describe('SalesOrderMutationService', () => {
       paymentType: 'BALANCE',
       amount: '20',
       receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: null,
+      paymentMethod: 'BANK_TRANSFER',
       remark: null,
       voucher: { mediaAssetId: VOUCHER_ID },
     })).rejects.toMatchObject({
@@ -186,7 +213,7 @@ describe('SalesOrderMutationService', () => {
         paymentType,
         amount: '1',
         receivedAt: '2026-08-20T07:00:00.000Z',
-        paymentMethod: null,
+        paymentMethod: 'BANK_TRANSFER',
         remark: null,
         voucher: { mediaAssetId: VOUCHER_ID },
       })).resolves.toEqual(fixture.detail)
@@ -202,7 +229,7 @@ describe('SalesOrderMutationService', () => {
       paymentType: 'DEPOSIT',
       amount: '1',
       receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: null,
+      paymentMethod: 'BANK_TRANSFER',
       remark: null,
     })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
     expect(missing.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
@@ -212,11 +239,42 @@ describe('SalesOrderMutationService', () => {
       paymentType: 'DEPOSIT',
       amount: '1',
       receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: null,
+      paymentMethod: 'BANK_TRANSFER',
       referenceNo: 'REMOVED',
       remark: null,
       voucher: { mediaAssetId: VOUCHER_ID },
     })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+  })
+
+  it('requires one effective payment.method value in the payment transaction', async () => {
+    const missing = setup()
+    await expect(missing.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT',
+      amount: '1',
+      receivedAt: '2026-08-20T07:00:00.000Z',
+      paymentMethod: null,
+      remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
+    })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+    })
+    expect(missing.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
+
+    const unavailable = setup()
+    unavailable.dictionaryLookup.requireEffectiveValue.mockRejectedValue(
+      new DictionaryValueUnavailableError('DICTIONARY_ITEM_NOT_FOUND'),
+    )
+    await expect(unavailable.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT',
+      amount: '1',
+      receivedAt: '2026-08-20T07:00:00.000Z',
+      paymentMethod: 'UNKNOWN_METHOD',
+      remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
+    })).rejects.toMatchObject({
+      code: 'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
+    })
+    expect(unavailable.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
   })
 
   it('preserves before/after snapshots for a confirmed payment-term revision', async () => {

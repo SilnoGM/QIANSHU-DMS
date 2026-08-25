@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config'
 import type { Prisma } from '../src/generated/prisma/client'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { AuditService } from '../src/modules/audit/audit.service'
+import type { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../src/modules/media/media-asset.service'
 import type { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
@@ -157,6 +158,14 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
         }).then(() => undefined)
       )),
     } as unknown as MediaAssetService
+    const dictionaryLookup = {
+      requireEffectiveValue: jest.fn().mockResolvedValue({
+        dictionaryCode: 'payment.method',
+        label: '银行转账',
+        tone: 'DEFAULT',
+        value: 'BANK_TRANSFER',
+      }),
+    } as unknown as DictionaryLookupService
     commands = new SalesOrderCommandService(
       prisma,
       numbering,
@@ -169,6 +178,7 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       prisma,
       new AuditService(),
       media,
+      dictionaryLookup,
       query,
       { now: () => new Date('2026-08-20T12:00:00.000Z') },
     )

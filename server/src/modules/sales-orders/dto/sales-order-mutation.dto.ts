@@ -81,11 +81,10 @@ export class SalesOrderPaymentRequestDto {
   @IsString()
   receivedAt!: string
 
-  @ApiProperty({ type: 'string', maxLength: 64, nullable: true })
-  @IsOptional()
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
   @IsString()
   @IsUnicodeCodePointLength(1, 64)
-  paymentMethod!: string | null
+  paymentMethod!: string
 
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true })
   @IsOptional()

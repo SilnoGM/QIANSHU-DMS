@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
+import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { ProductsModule } from '../products/products.module'
@@ -14,7 +15,14 @@ import { SalesOrderQueryService } from './sales-order-query.service'
 import { SalesOrdersController } from './sales-orders.controller'
 
 @Module({
-  imports: [PrismaModule, AuthModule, MediaModule, NumberingModule, ProductsModule],
+  imports: [
+    PrismaModule,
+    AuthModule,
+    DictionaryModule,
+    MediaModule,
+    NumberingModule,
+    ProductsModule,
+  ],
   controllers: [SalesOrdersController],
   providers: [
     SalesOrderQueryService,

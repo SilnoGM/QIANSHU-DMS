@@ -30946,6 +30946,7 @@
                 "SALES_ORDER_CANCELLED",
                 "SALES_ORDER_PAYMENT_AMOUNT_INVALID",
                 "SALES_ORDER_PAYMENT_EXCEEDS_TOTAL",
+                "SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -39153,8 +39154,8 @@
           },
           "paymentMethod": {
             "type": "string",
-            "maxLength": 64,
-            "nullable": true
+            "minLength": 1,
+            "maxLength": 64
           },
           "remark": {
             "type": "string",
