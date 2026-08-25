@@ -1,7 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
-import { IsUUID } from 'class-validator'
+import { IsOptional, IsString, IsUUID } from 'class-validator'
 
 import { MediaType } from '../../../generated/prisma/enums'
+import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 export class SalesOrderDocumentUploadRequestDto {
   @ApiProperty({ type: 'string', enum: ['IMAGE', 'DOCUMENT'] })
@@ -32,6 +33,12 @@ export class SalesOrderDeliveryReceiptRequestDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
   mediaAssetId!: string
+
+  @ApiProperty({ type: 'string', maxLength: 500, nullable: true })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 500)
+  remark!: string | null
 }
 
 export class SalesOrderDocumentIdParamDto {

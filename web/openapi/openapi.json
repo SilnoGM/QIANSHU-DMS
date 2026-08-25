@@ -39193,10 +39193,16 @@
           "mediaAssetId": {
             "type": "string",
             "format": "uuid"
+          },
+          "remark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
           }
         },
         "required": [
-          "mediaAssetId"
+          "mediaAssetId",
+          "remark"
         ]
       },
       "AuditEventDto": {

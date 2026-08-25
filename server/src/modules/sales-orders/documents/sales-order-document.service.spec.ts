@@ -76,7 +76,7 @@ describe('SalesOrderDocumentService', () => {
     await expect(fixture.service.submitDeliveryReceipt(
       context,
       ORDER_ID,
-      { mediaAssetId: MEDIA_ASSET_ID },
+      { mediaAssetId: MEDIA_ASSET_ID, remark: '  外箱完好，数量已核对  ' },
     )).resolves.toEqual(fixture.detail)
 
     expect(fixture.media.activate).toHaveBeenCalledWith(
@@ -90,7 +90,7 @@ describe('SalesOrderDocumentService', () => {
         paymentId: null,
         documentType: 'DELIVERY_RECEIPT',
         title: '王小明-签收单-20260820090203004',
-        remark: null,
+        remark: '外箱完好,数量已核对',
         createdByUserId: ACTOR_ID,
       },
       select: { id: true },
@@ -107,6 +107,11 @@ describe('SalesOrderDocumentService', () => {
     await expect(invalid.service.submitDeliveryReceipt(context, ORDER_ID, {
       mediaAssetId: MEDIA_ASSET_ID,
       signedAt: '2026-08-20T00:00:00.000Z',
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+
+    await expect(invalid.service.submitDeliveryReceipt(context, ORDER_ID, {
+      mediaAssetId: MEDIA_ASSET_ID,
+      remark: '签'.repeat(501),
     })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
 
     for (const documentType of ['ORDER_ISSUANCE_VOUCHER', 'PAYMENT_VOUCHER']) {

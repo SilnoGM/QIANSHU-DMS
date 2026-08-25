@@ -94,6 +94,28 @@ function rejectUnknownKeys(
   }
 }
 
+/**
+ * 签收备注与订单其他备注采用相同的 NFKC、去首尾空白和 Unicode code point 上限。
+ * 空值由 null 表达；空字符串不作为有效备注写入数据库。
+ */
+function optionalText(
+  value: unknown,
+  field: string,
+  maximum: number,
+): string | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+  if (typeof value !== 'string') {
+    return salesOrderValidationFailure(field)
+  }
+  const normalized = value.trim().normalize('NFKC')
+  if ([...normalized].length < 1 || [...normalized].length > maximum) {
+    return salesOrderValidationFailure(field)
+  }
+  return normalized
+}
+
 function mapUploadError(error: unknown): never {
   if (error instanceof ApiException) throw error
   if (error instanceof MediaAssetLifecycleError) {
@@ -176,8 +198,9 @@ export class SalesOrderDocumentService {
     requireContext(context)
     const salesOrderId = requireUuid(rawSalesOrderId, 'salesOrderId')
     const body = requireRecord(input)
-    rejectUnknownKeys(body, ['mediaAssetId'])
+    rejectUnknownKeys(body, ['mediaAssetId', 'remark'])
     const mediaAssetId = requireUuid(body.mediaAssetId, 'mediaAssetId')
+    const remark = optionalText(body.remark, 'remark', 500)
 
     try {
       await this.prisma.$transaction(async transaction => {
@@ -235,7 +258,7 @@ export class SalesOrderDocumentService {
               'DELIVERY_RECEIPT',
               asset.createdAt,
             ),
-            remark: null,
+            remark,
             createdByUserId: context.actorUserId,
           },
           select: { id: true },
