@@ -7,6 +7,35 @@ import { validateMoneyString } from '@/components/base/MoneyInput/logic'
 
 export type SalesOrderRecordsKind = 'payments' | 'documents' | 'changes'
 export type SalesOrderRecordsInitialAction = 'payment' | 'receipt' | null
+export type SalesOrderModalView = 'records' | 'create-payment' | 'create-receipt'
+export type SalesOrderModalOrigin = 'records' | 'table-action'
+
+export interface SalesOrderModalState {
+  readonly origin: SalesOrderModalOrigin
+  readonly view: SalesOrderModalView
+}
+
+/** 表格快捷操作直接进入表单视图，避免先渲染记录弹窗再切换造成闪屏。 */
+export function resolveSalesOrderModalInitialState(
+  initialAction: SalesOrderRecordsInitialAction,
+): SalesOrderModalState {
+  if (initialAction === 'payment') {
+    return { origin: 'table-action', view: 'create-payment' }
+  }
+  if (initialAction === 'receipt') {
+    return { origin: 'table-action', view: 'create-receipt' }
+  }
+  return { origin: 'records', view: 'records' }
+}
+
+/** 记录弹窗内发起的操作取消后返回记录；表格快捷操作取消后关闭宿主弹窗。 */
+export function resolveSalesOrderModalCancelAction(
+  state: SalesOrderModalState,
+): 'close' | 'records' {
+  return state.origin === 'records' && state.view !== 'records'
+    ? 'records'
+    : 'close'
+}
 
 export interface SalesOrderPaymentDraft {
   readonly amount: null | string
@@ -82,8 +111,10 @@ export function buildSalesOrderPaymentRequest(
     fieldErrors.receivedAt = '请选择不晚于当前时间的有效收款时间'
   }
   const paymentMethod = normalizedOptionalText(draft.paymentMethod, 64)
-  if (draft.paymentMethod.trim() !== '' && paymentMethod === null) {
-    fieldErrors.paymentMethod = '收款方式最多 64 个字符'
+  if (paymentMethod === null) {
+    fieldErrors.paymentMethod = draft.paymentMethod.trim() === ''
+      ? '请选择收款方式'
+      : '收款方式最多 64 个字符'
   }
   const remark = normalizedOptionalText(draft.remark, 500)
   if (draft.remark.trim() !== '' && remark === null) {
@@ -96,7 +127,7 @@ export function buildSalesOrderPaymentRequest(
     fieldErrors.voucher = '每笔收款必须上传且只能上传一份凭证'
   }
 
-  if (Object.keys(fieldErrors).length > 0) {
+  if (Object.keys(fieldErrors).length > 0 || paymentMethod === null) {
     return { valid: false, fieldErrors }
   }
   return {

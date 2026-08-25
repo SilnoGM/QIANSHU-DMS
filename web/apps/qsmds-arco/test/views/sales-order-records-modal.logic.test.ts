@@ -6,6 +6,8 @@ import {
   buildSalesOrderDeliveryReceiptRequest,
   buildSalesOrderPaymentRequest,
   formatSalesOrderLocalDateTime,
+  resolveSalesOrderModalCancelAction,
+  resolveSalesOrderModalInitialState,
   toSalesOrderPaymentReceivedAt,
 } from '../../src/views/operations/sales-orders/sales-order-records-modal.logic'
 
@@ -16,7 +18,7 @@ test('实际收款请求包含五类收款、精确金额与唯一凭证且不�
   const receivedAt = formatSalesOrderLocalDateTime(new Date(2026, 7, 25, 13, 20, 0))
   const result = buildSalesOrderPaymentRequest({
     amount: '100.5',
-    paymentMethod: ' 银行转账 ',
+    paymentMethod: ' BANK_TRANSFER ',
     paymentType: 'INVOICE_TAX',
     receivedAt,
     remark: ' 含税总价内开票税金 ',
@@ -27,7 +29,7 @@ test('实际收款请求包含五类收款、精确金额与唯一凭证且不�
   if (result.valid) {
     assert.deepEqual(result.request, {
       amount: '100.50',
-      paymentMethod: '银行转账',
+      paymentMethod: 'BANK_TRANSFER',
       paymentType: 'INVOICE_TAX',
       receivedAt: new Date(2026, 7, 25, 13, 20, 0).toISOString(),
       remark: '含税总价内开票税金',
@@ -51,10 +53,34 @@ test('实际收款硬拦截零金额、未来时间和缺失凭证', () => {
   assert.equal(result.valid, false)
   if (!result.valid) {
     assert.equal(result.fieldErrors.amount, '金额不能小于 0.01')
+    assert.equal(result.fieldErrors.paymentMethod, '请选择收款方式')
     assert.equal(result.fieldErrors.receivedAt, '请选择不晚于当前时间的有效收款时间')
     assert.equal(result.fieldErrors.voucher, '每笔收款必须上传且只能上传一份凭证')
   }
   assert.equal(toSalesOrderPaymentReceivedAt('', now), null)
+})
+
+test('销售订单操作先确定唯一弹窗视图，并按来源决定取消行为', () => {
+  assert.deepEqual(resolveSalesOrderModalInitialState(null), {
+    origin: 'records',
+    view: 'records',
+  })
+  assert.deepEqual(resolveSalesOrderModalInitialState('payment'), {
+    origin: 'table-action',
+    view: 'create-payment',
+  })
+  assert.deepEqual(resolveSalesOrderModalInitialState('receipt'), {
+    origin: 'table-action',
+    view: 'create-receipt',
+  })
+  assert.equal(resolveSalesOrderModalCancelAction({
+    origin: 'records',
+    view: 'create-payment',
+  }), 'records')
+  assert.equal(resolveSalesOrderModalCancelAction({
+    origin: 'table-action',
+    view: 'create-receipt',
+  }), 'close')
 })
 
 test('货物签收请求接收一个有效签收单媒体 ID 与选填备注', () => {
