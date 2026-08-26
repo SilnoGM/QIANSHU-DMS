@@ -48,7 +48,7 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /salesOrdersApi\.list/)
 })
 
-test('销售订单列表使用十四个复合列并展示服务端全量筛选汇总', async () => {
+test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
   const columnsStart = source.indexOf('const columns:')
   const columnsEnd = source.indexOf('function enumFilter', columnsStart)
@@ -86,7 +86,7 @@ test('销售订单列表使用十四个复合列并展示服务端全量筛选�
   assert.ok(orderCellStart >= 0 && orderCellEnd > orderCellStart, '订单列与出单人列应保持独立')
   assert.ok(mobileRowStart >= 0 && mobileDetailsStart > mobileRowStart, '应存在窄屏订单摘要头部')
   assert.ok(mobileCustomerStart > mobileDetailsStart, '应存在窄屏出单人与客户区域')
-  assert.equal(columnsSource.match(/\bid:/gu)?.length, 14)
+  assert.equal(columnsSource.match(/\bid:/gu)?.length, 15)
   assert.match(columnsSource, /id: 'customerSummary', minWidth: 300/u)
   assert.match(columnsSource, /id: 'issuerSummary', minWidth: 180, title: '出单人'/u)
   for (const columnId of [
@@ -95,6 +95,7 @@ test('销售订单列表使用十四个复合列并展示服务端全量筛选�
     'customerSummary',
     'productSummary',
     'priceSummary',
+    'discountRateSummary',
     'termsSummary',
     'collectionSummary',
     'paymentRecordsSummary',
@@ -113,6 +114,7 @@ test('销售订单列表使用十四个复合列并展示服务端全量筛选�
   assert.match(source, /import QsPersonDisplay from '@\/components\/business\/QsPersonDisplay\/index\.vue'/u)
   assert.match(source, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
   assert.match(source, /import DateTimeDisplay from '@\/components\/base\/DateTimeDisplay\/index\.vue'/u)
+  assert.match(source, /import \{ formatMoneyDiscountRate \} from '@\/components\/base\/MoneyInput\/logic'/u)
   assert.match(source, /import QsTableStackedCell from '@\/components\/business\/QsGenericTable\/QsTableStackedCell\.vue'/u)
   assert.match(source, /import QsTableStackedLine from '@\/components\/business\/QsGenericTable\/QsTableStackedLine\.vue'/u)
   assert.match(source, /response\.data\.summariesByCurrency/u)
@@ -174,6 +176,10 @@ test('销售订单列表使用十四个复合列并展示服务端全量筛选�
   assert.match(source, /:initial-action="recordsModalInitialAction"/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="实际售价"[\s\S]*?row\.original\.agreedTotalAmount/u)
   assert.match(source, /#cell-priceSummary[\s\S]*?label="标准售价"[\s\S]*?row\.original\.standardSubtotalAmount/u)
+  assert.match(columnsSource, /align: 'right',[\s\S]*?id: 'discountRateSummary',[\s\S]*?minWidth: 120,[\s\S]*?title: '折扣率'/u)
+  assert.match(source, /function salesOrderDiscountRate\([\s\S]*?row\.agreedTotalAmount[\s\S]*?row\.standardSubtotalAmount/u)
+  assert.match(source, /#cell-discountRateSummary[\s\S]*?salesOrderDiscountRate\(row\.original\) \?\? '—'/u)
+  assert.match(mobileAmountSource, /折扣率[\s\S]*?salesOrderDiscountRate\(row\) \?\? '—'/u)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="定金"[\s\S]*?row\.original\.depositDueAmount/u)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="尾款"[\s\S]*?row\.original\.balanceDueAmount/u)
   for (const amountSource of [desktopAmountSource, mobileAmountSource]) {

@@ -20,6 +20,7 @@ import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import { formatMoneyDiscountRate } from '@/components/base/MoneyInput/logic'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -197,6 +198,13 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     title: '售价',
   },
   {
+    accessorFn: item => salesOrderDiscountRate(item) ?? '',
+    align: 'right',
+    id: 'discountRateSummary',
+    minWidth: 120,
+    title: '折扣率',
+  },
+  {
     accessorKey: 'depositDueAmount',
     align: 'right',
     id: 'termsSummary',
@@ -248,6 +256,14 @@ function salesRegionLabel(row: SalesOrderListItemDto): string {
 
 function changeRecordCount(row: SalesOrderListItemDto): number {
   return row.statusChangeRecordCount + row.amountChangeRecordCount
+}
+
+/** 订单折扣率以双方约定总价对比标准价小计，缺少有效标准价时保持空态。 */
+function salesOrderDiscountRate(row: SalesOrderListItemDto): string | null {
+  return formatMoneyDiscountRate(
+    row.agreedTotalAmount,
+    row.standardSubtotalAmount,
+  )
 }
 
 function openRecordsModal(
@@ -513,7 +529,7 @@ onBeforeUnmount(() => {
         :searchable="true"
         :show-column-settings="true"
         :total="total"
-        table-class="min-w-[3240px]"
+        table-class="min-w-[3360px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="loadOrders"
@@ -627,6 +643,10 @@ onBeforeUnmount(() => {
               <AmountDisplay :value="row.original.standardSubtotalAmount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
           </QsTableStackedCell>
+        </template>
+
+        <template #cell-discountRateSummary="{ row }">
+          <span class="whitespace-nowrap tabular-nums">{{ salesOrderDiscountRate(row.original) ?? '—' }}</span>
         </template>
 
         <template #cell-termsSummary="{ row }">
@@ -1008,6 +1028,14 @@ onBeforeUnmount(() => {
                       <AmountDisplay :value="row.standardSubtotalAmount" :currency="row.currencyCode" :currencies="currencyCatalog.currencies.value" />
                     </QsTableStackedLine>
                   </QsTableStackedCell>
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  折扣率
+                </dt>
+                <dd class="m-0 whitespace-nowrap tabular-nums">
+                  {{ salesOrderDiscountRate(row) ?? '—' }}
                 </dd>
               </div>
               <div class="col-span-2">
