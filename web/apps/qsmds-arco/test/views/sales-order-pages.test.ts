@@ -179,7 +179,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(columnsSource, /align: 'right',[\s\S]*?id: 'discountRateSummary',[\s\S]*?minWidth: 120,[\s\S]*?title: '折扣率'/u)
   assert.match(source, /function salesOrderDiscountRate\([\s\S]*?row\.agreedTotalAmount[\s\S]*?row\.standardSubtotalAmount/u)
   assert.match(source, /function discountRateTextClass\([\s\S]*?below[\s\S]*?text-destructive[\s\S]*?above[\s\S]*?text-primary[\s\S]*?text-foreground/u)
-  assert.match(source, /function discountRateTrendIcon\([\s\S]*?below[\s\S]*?i-lucide:arrow-down[\s\S]*?above[\s\S]*?i-lucide:arrow-up[\s\S]*?i-lucide:arrow-right/u)
+  assert.match(source, /function discountRateTrendIcon\([\s\S]*?below[\s\S]*?i-lucide:trending-down[\s\S]*?above[\s\S]*?i-lucide:trending-up[\s\S]*?i-lucide:move-right/u)
   assert.match(source, /#cell-discountRateSummary[\s\S]*?<FaIcon[\s\S]*?discountRateTrendIcon\(salesOrderDiscountRate\(row\.original\)\?\.trend\)[\s\S]*?formattedValue \?\? '—'/u)
   assert.match(mobileAmountSource, /折扣率[\s\S]*?<FaIcon[\s\S]*?discountRateTrendIcon\(salesOrderDiscountRate\(row\)\?\.trend\)[\s\S]*?formattedValue \?\? '—'/u)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="定金"[\s\S]*?row\.original\.depositDueAmount/u)

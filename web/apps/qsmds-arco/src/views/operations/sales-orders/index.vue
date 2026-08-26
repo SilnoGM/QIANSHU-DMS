@@ -282,12 +282,12 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
 
 function discountRateTrendIcon(trend: MoneyDiscountRateTrend | undefined): string | null {
   if (trend === 'below') {
-    return 'i-lucide:arrow-down'
+    return 'i-lucide:trending-down'
   }
   if (trend === 'above') {
-    return 'i-lucide:arrow-up'
+    return 'i-lucide:trending-up'
   }
-  return trend === 'equal' ? 'i-lucide:arrow-right' : null
+  return trend === 'equal' ? 'i-lucide:move-right' : null
 }
 
 function openRecordsModal(
@@ -676,7 +676,7 @@ onBeforeUnmount(() => {
           >
             <FaIcon
               v-if="discountRateTrendIcon(salesOrderDiscountRate(row.original)?.trend)"
-              :name="discountRateTrendIcon(salesOrderDiscountRate(row.original)?.trend) ?? 'i-lucide:arrow-right'"
+              :name="discountRateTrendIcon(salesOrderDiscountRate(row.original)?.trend) ?? 'i-lucide:move-right'"
               class="shrink-0 size-3.5"
               aria-hidden="true"
             />
@@ -1075,7 +1075,7 @@ onBeforeUnmount(() => {
                 >
                   <FaIcon
                     v-if="discountRateTrendIcon(salesOrderDiscountRate(row)?.trend)"
-                    :name="discountRateTrendIcon(salesOrderDiscountRate(row)?.trend) ?? 'i-lucide:arrow-right'"
+                    :name="discountRateTrendIcon(salesOrderDiscountRate(row)?.trend) ?? 'i-lucide:move-right'"
                     class="shrink-0 size-3.5"
                     aria-hidden="true"
                   />
