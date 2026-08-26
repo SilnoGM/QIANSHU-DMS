@@ -40,6 +40,7 @@ test('销售订单列表和产品选项固定使用 query、AbortSignal 与局�
   }
 
   await api.list(query, controller.signal)
+  await api.issuerOptions(controller.signal)
   const productQuery = {
     currencyCode: 'MYR' as const,
     keyword: '包',
@@ -58,6 +59,14 @@ test('销售订单列表和产品选项固定使用 query、AbortSignal 与局�
       },
       method: 'get',
       url: 'sales-orders',
+    },
+    {
+      config: {
+        errorPresentation: 'local',
+        signal: controller.signal,
+      },
+      method: 'get',
+      url: 'sales-orders/issuer-options',
     },
     {
       config: {

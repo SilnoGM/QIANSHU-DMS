@@ -22,27 +22,40 @@ const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
 const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
 
 function createController(result: ProductMediaContentResponse) {
+  const issuerOptions = jest.fn().mockResolvedValue({ items: [] })
   const productOptions = jest.fn().mockResolvedValue({
     items: [], page: 1, pageSize: 20, total: 0,
   })
   const resolve = jest.fn().mockResolvedValue(result)
   const resolveListPreview = jest.fn().mockResolvedValue(result)
   const controller = new SalesOrdersController(
-    { productOptions } as unknown as SalesOrderQueryService,
+    { issuerOptions, productOptions } as unknown as SalesOrderQueryService,
     {} as SalesOrderCommandService,
     {} as SalesOrderMutationService,
     {} as SalesOrderDocumentService,
     { resolve, resolveListPreview } as unknown as SalesOrderProductImageService,
   )
   const response = { status: jest.fn(), setHeader: jest.fn() }
-  return { controller, productOptions, resolve, resolveListPreview, response }
+  return {
+    controller,
+    issuerOptions,
+    productOptions,
+    resolve,
+    resolveListPreview,
+    response,
+  }
 }
 
 @Module({
   controllers: [SalesOrdersController],
   providers: [{
     provide: SalesOrderQueryService,
-    useValue: { list: jest.fn(), productOptions: jest.fn(), getById: jest.fn() },
+    useValue: {
+      getById: jest.fn(),
+      issuerOptions: jest.fn(),
+      list: jest.fn(),
+      productOptions: jest.fn(),
+    },
   }, {
     provide: SalesOrderCommandService,
     useValue: { create: jest.fn() },
@@ -95,6 +108,25 @@ describe('SalesOrdersController product options', () => {
     await fixture.controller.productOptions(query)
 
     expect(fixture.productOptions).toHaveBeenCalledWith(query)
+  })
+
+  it('reads issuer options with sales-order read permission', async () => {
+    const fixture = createController({
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+
+    await expect(fixture.controller.issuerOptions()).resolves.toEqual({ items: [] })
+    expect(fixture.issuerOptions).toHaveBeenCalledTimes(1)
+    const reflector = new Reflector()
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      SalesOrdersController.prototype.issuerOptions,
+    )).toEqual(['sales-orders:read'])
   })
 
   it('protects and delegates GET/HEAD main image content without duplicating delivery', async () => {
@@ -194,6 +226,13 @@ describe('SalesOrdersController product options OpenAPI', () => {
   })
 
   it('publishes paged selector query and independent protected main image operations', () => {
+    const list = document.paths['/api/sales-orders']?.get
+    expect(list?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'issuerUserId' }),
+    ]))
+    expect(document.paths['/api/sales-orders/issuer-options']?.get)
+      .toMatchObject({ operationId: 'sales_orders_issuer_options' })
+
     const options = document.paths['/api/sales-orders/product-options']?.get
     expect(options?.operationId).toBe('sales_orders_product_options')
     expect(options?.parameters).toEqual(expect.arrayContaining([

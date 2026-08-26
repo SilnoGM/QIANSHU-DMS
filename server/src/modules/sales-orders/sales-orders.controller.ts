@@ -47,6 +47,7 @@ import {
 } from './dto/sales-order-query.dto'
 import {
   SalesOrderDetailDto,
+  SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderProductOptionsDto,
 } from './dto/sales-order-response.dto'
@@ -70,6 +71,7 @@ import type {
 import {
   SalesOrderQueryService,
   type SalesOrderDetail,
+  type SalesOrderIssuerOptions,
   type SalesOrderPage,
 } from './sales-order-query.service'
 
@@ -132,6 +134,21 @@ export class SalesOrdersController {
   })
   list(@Query() query: SalesOrderListQueryDto): Promise<SalesOrderPage> {
     return this.queries.list(query)
+  }
+
+  @Get('issuer-options')
+  @RequirePermissions('sales-orders:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderIssuerOptionsDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_issuer_options',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    privateNoStore: true,
+    errors: [{ status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] }],
+  })
+  issuerOptions(): Promise<SalesOrderIssuerOptions> {
+    return this.queries.issuerOptions()
   }
 
   @Get('product-options')

@@ -1,7 +1,31 @@
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
-import { SalesOrderProductOptionsQueryDto } from './sales-order-query.dto'
+import {
+  SalesOrderListQueryDto,
+  SalesOrderProductOptionsQueryDto,
+} from './sales-order-query.dto'
+
+const ISSUER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
+describe('SalesOrderListQueryDto', () => {
+  it('accepts a canonical issuer user id', async () => {
+    const dto = plainToInstance(SalesOrderListQueryDto, {
+      issuerUserId: ISSUER_ID,
+    })
+
+    await expect(validate(dto)).resolves.toEqual([])
+    expect(dto.issuerUserId).toBe(ISSUER_ID)
+  })
+
+  it('rejects a malformed issuer user id', async () => {
+    const dto = plainToInstance(SalesOrderListQueryDto, {
+      issuerUserId: 'not-a-user-id',
+    })
+
+    await expect(validate(dto)).resolves.not.toHaveLength(0)
+  })
+})
 
 describe('SalesOrderProductOptionsQueryDto', () => {
   it('accepts fixed currency, exact supplier value and transformed pagination', async () => {

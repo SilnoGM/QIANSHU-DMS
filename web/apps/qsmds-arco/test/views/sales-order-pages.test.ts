@@ -46,6 +46,9 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /query: \{ currency: selectedCurrency/u)
   assert.match(source, /<QsGenericTable/)
   assert.match(source, /salesOrdersApi\.list/)
+  assert.match(source, /salesOrdersApi\.issuerOptions/u)
+  assert.match(source, /key: 'issuerUserId'[\s\S]*?label: '出单人'/u)
+  assert.match(source, /issuerUserId[\s\S]*?buildListQuery/u)
 })
 
 test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {

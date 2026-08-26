@@ -7,6 +7,7 @@ import type {
   SalesOrderFulfillmentStatus,
   SalesOrderPaymentStatus,
   SalesOrderStatus,
+  UserStatus,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
@@ -184,11 +185,20 @@ export interface SalesOrderListQueryInput {
   readonly pageSize?: number
   readonly keyword?: string
   readonly currencyCode?: 'TWD' | 'MYR'
+  readonly issuerUserId?: string
   readonly orderStatus?: SalesOrderStatus
   readonly fulfillmentStatus?: SalesOrderFulfillmentStatus
   readonly paymentStatus?: SalesOrderPaymentStatus
   readonly orderDateFrom?: string
   readonly orderDateTo?: string
+}
+
+export interface SalesOrderIssuerOptions {
+  readonly items: readonly {
+    readonly id: string
+    readonly displayName: string
+    readonly status: UserStatus
+  }[]
 }
 
 export interface SalesOrderListItem {
@@ -593,12 +603,25 @@ function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
 export class SalesOrderQueryService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * 出单人选项直接读取用户主表，并保留停用账号以支持历史订单筛选。该接口只暴露
+   * 展示所需的最小身份信息，不要求销售人员额外拥有用户管理权限。
+   */
+  async issuerOptions(): Promise<SalesOrderIssuerOptions> {
+    const users = await this.prisma.user.findMany({
+      orderBy: [{ status: 'asc' }, { displayName: 'asc' }, { id: 'asc' }],
+      select: { id: true, displayName: true, status: true },
+    })
+    return { items: users }
+  }
+
   async list(input: SalesOrderListQueryInput): Promise<SalesOrderPage> {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
     const where: Prisma.SalesOrderWhereInput = {
       currencyCode: input.currencyCode,
+      issuerUserId: input.issuerUserId,
       orderStatus: input.orderStatus,
       fulfillmentStatus: input.fulfillmentStatus,
       paymentStatus: input.paymentStatus,

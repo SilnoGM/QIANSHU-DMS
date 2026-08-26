@@ -6,6 +6,7 @@ import type {
 } from './sales-order-records-modal.logic'
 import type {
   SalesOrderCurrencySummaryDto,
+  SalesOrderIssuerOptionDto,
   SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
 } from '@/api/generated/types.gen'
@@ -87,6 +88,8 @@ const canRecordPayment = computed(() => (
 const canSubmitDeliveryReceipt = computed(() => auth('sales-orders:document'))
 const rows = ref<SalesOrderListItemDto[]>([])
 const summariesByCurrency = ref<SalesOrderCurrencySummaryDto[]>([])
+const issuerFilterOptions = ref<SalesOrderIssuerOptionDto[]>([])
+const issuerFilterOptionsLoaded = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -142,7 +145,7 @@ watch(availableOrderCurrencies, (currencies) => {
   }
 })
 
-const filterDefinitions: QsGenericTableFilterDefinition[] = [
+const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   {
     key: 'currencyCode',
     label: '订单币种',
@@ -151,6 +154,17 @@ const filterDefinitions: QsGenericTableFilterDefinition[] = [
       { label: 'MYR', value: 'MYR' },
     ],
     placeholder: '选择订单币种',
+  },
+  {
+    key: 'issuerUserId',
+    label: '出单人',
+    options: issuerFilterOptions.value.map(user => ({
+      label: user.status === 'DISABLED'
+        ? `${user.displayName} · 已停用`
+        : user.displayName,
+      value: user.id,
+    })),
+    placeholder: '选择出单人',
   },
   {
     key: 'orderStatus',
@@ -183,7 +197,7 @@ const filterDefinitions: QsGenericTableFilterDefinition[] = [
     ],
     placeholder: '选择付款状态',
   },
-]
+])
 
 const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
   {
@@ -326,6 +340,10 @@ function enumFilter<T extends string>(
 function buildListQuery(): SalesOrderListQuery {
   const keyword = searchKeyword.value.trim().normalize('NFKC')
   const currencyCode = enumFilter('currencyCode', ['TWD', 'MYR'] as const)
+  const issuerUserId = typeof filters.value.issuerUserId === 'string'
+    && issuerFilterOptions.value.some(option => option.id === filters.value.issuerUserId)
+    ? filters.value.issuerUserId
+    : undefined
   const orderStatus = enumFilter('orderStatus', ['DRAFT', 'CONFIRMED', 'CANCELLED'] as const)
   const fulfillmentStatus = enumFilter(
     'fulfillmentStatus',
@@ -340,6 +358,7 @@ function buildListQuery(): SalesOrderListQuery {
     pageSize: pageSize.value,
     ...(keyword === '' ? {} : { keyword }),
     ...(currencyCode === undefined ? {} : { currencyCode }),
+    ...(issuerUserId === undefined ? {} : { issuerUserId }),
     ...(orderStatus === undefined ? {} : { orderStatus }),
     ...(fulfillmentStatus === undefined ? {} : { fulfillmentStatus }),
     ...(paymentStatus === undefined ? {} : { paymentStatus }),
@@ -359,7 +378,14 @@ async function loadOrders(): Promise<void> {
   listError.value = ''
   requestId.value = undefined
   try {
-    const response = await salesOrdersApi.list(buildListQuery(), controller.signal)
+    // 出单人选项只在当前页面生命周期内加载一次，并与首屏列表共用取消与鉴权世代边界。
+    // 这样既不会要求用户额外拥有 users:read，也能保留已停用历史出单人的筛选能力。
+    const [response, issuerOptionsResponse] = await Promise.all([
+      salesOrdersApi.list(buildListQuery(), controller.signal),
+      issuerFilterOptionsLoaded.value
+        ? Promise.resolve(null)
+        : salesOrdersApi.issuerOptions(controller.signal),
+    ])
     if (
       controller.signal.aborted
       || version !== requestVersion
@@ -367,6 +393,10 @@ async function loadOrders(): Promise<void> {
       || !canRead.value
     ) {
       return
+    }
+    if (issuerOptionsResponse !== null) {
+      issuerFilterOptions.value = issuerOptionsResponse.data.items.map(item => ({ ...item }))
+      issuerFilterOptionsLoaded.value = true
     }
     rows.value = response.data.items.map(item => ({
       ...item,

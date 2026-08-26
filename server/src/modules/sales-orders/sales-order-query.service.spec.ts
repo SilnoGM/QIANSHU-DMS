@@ -8,6 +8,7 @@ const SALES_ORDER_LINE_ID = '44444444-4444-4444-8444-444444444444'
 const CUSTOM_LINE_ID = '55555555-5555-4555-8555-555555555555'
 const DOCUMENT_ID = '66666666-6666-4666-8666-666666666666'
 const MEDIA_ASSET_ID = '77777777-7777-4777-8777-777777777777'
+const ISSUER_ID = '88888888-8888-4888-8888-888888888888'
 
 function decimal(value: string) {
   return { toFixed: jest.fn().mockReturnValue(value) }
@@ -40,7 +41,7 @@ function createListFixture() {
     id: SALES_ORDER_ID,
     orderNo: 'SO-20260823-0001',
     orderDate: new Date('2026-08-22T00:00:00.000Z'),
-    issuer: { id: '88888888-8888-4888-8888-888888888888', displayName: 'SilnoGM' },
+    issuer: { id: ISSUER_ID, displayName: 'SilnoGM' },
     currencyCode: 'TWD',
     customerName: '林测试',
     customerPhone: '0912345678',
@@ -151,7 +152,11 @@ describe('SalesOrderQueryService list summaries', () => {
   it('returns bounded row summaries and fixed currency aggregates without per-row queries', async () => {
     const fixture = createListFixture()
 
-    await expect(fixture.service.list({ page: 1, pageSize: 20 })).resolves.toEqual({
+    await expect(fixture.service.list({
+      issuerUserId: ISSUER_ID,
+      page: 1,
+      pageSize: 20,
+    })).resolves.toEqual({
       items: [{
         id: SALES_ORDER_ID,
         orderNo: 'SO-20260823-0001',
@@ -239,6 +244,16 @@ describe('SalesOrderQueryService list summaries', () => {
     expect(fixture.salesOrder.aggregate).toHaveBeenCalledTimes(2)
     expect(fixture.salesOrderLine.findMany).toHaveBeenCalledTimes(2)
     expect(fixture.salesOrderPayment.aggregate).toHaveBeenCalledTimes(2)
+    expect(fixture.salesOrder.count).toHaveBeenCalledWith({
+      where: {
+        currencyCode: undefined,
+        fulfillmentStatus: undefined,
+        issuerUserId: ISSUER_ID,
+        orderDate: undefined,
+        orderStatus: undefined,
+        paymentStatus: undefined,
+      },
+    })
   })
 
   it('omits currencies that have no orders in the filtered result', async () => {
@@ -307,6 +322,28 @@ describe('SalesOrderQueryService list summaries', () => {
     expect(result.items[0]?.lineSummary.previews.at(-1)).toMatchObject({
       lineId: additionalLines[2]?.id,
       productName: '追加产品 3',
+    })
+  })
+})
+
+describe('SalesOrderQueryService issuer options', () => {
+  it('reads active and disabled users directly from the user database', async () => {
+    const users = [{
+      id: ISSUER_ID,
+      displayName: 'SilnoGM',
+      status: 'ACTIVE',
+    }, {
+      id: '99999999-9999-4999-8999-999999999999',
+      displayName: '历史出单人',
+      status: 'DISABLED',
+    }]
+    const user = { findMany: jest.fn().mockResolvedValue(users) }
+    const service = new SalesOrderQueryService({ user } as unknown as PrismaService)
+
+    await expect(service.issuerOptions()).resolves.toEqual({ items: users })
+    expect(user.findMany).toHaveBeenCalledWith({
+      orderBy: [{ status: 'asc' }, { displayName: 'asc' }, { id: 'asc' }],
+      select: { id: true, displayName: true, status: true },
     })
   })
 })

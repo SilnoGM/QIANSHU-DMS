@@ -51,6 +51,11 @@ export class SalesOrderListQueryDto {
   @IsIn(['TWD', 'MYR'])
   currencyCode?: 'TWD' | 'MYR'
 
+  @ApiProperty({ type: 'string', format: 'uuid', required: false })
+  @IsOptional()
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
+  issuerUserId?: string
+
   @ApiProperty({ enum: SalesOrderStatus, required: false })
   @IsOptional()
   @IsEnum(SalesOrderStatus)

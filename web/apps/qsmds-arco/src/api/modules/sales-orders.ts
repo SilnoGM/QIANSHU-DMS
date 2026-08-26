@@ -1,8 +1,9 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
-  SalesOrderDetailDto,
   SalesOrderDeliveryReceiptRequestDto,
+  SalesOrderDetailDto,
+  SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderPaymentRequestDto,
   SalesOrderPaymentVoidRequestDto,
@@ -30,6 +31,11 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       client.get<SalesOrderPageDto>('sales-orders', {
         errorPresentation: 'local',
         params: query,
+        signal,
+      }),
+    issuerOptions: (signal: AbortSignal) =>
+      client.get<SalesOrderIssuerOptionsDto>('sales-orders/issuer-options', {
+        errorPresentation: 'local',
         signal,
       }),
     productOptions: (

@@ -9,6 +9,7 @@ import {
   SalesOrderPaymentType,
   SalesOrderStatus,
   SalesOrderStatusDimension,
+  UserStatus,
 } from '../../../generated/prisma/enums'
 
 export class SalesOrderActorDto {
@@ -310,6 +311,17 @@ export class SalesOrderCurrencySummaryDto {
   @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
   @ApiProperty({ type: 'string' }) readonly receivedAmount!: string
   @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+}
+
+export class SalesOrderIssuerOptionDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly displayName!: string
+  @ApiProperty({ enum: UserStatus }) readonly status!: UserStatus
+}
+
+export class SalesOrderIssuerOptionsDto {
+  @ApiProperty({ type: () => [SalesOrderIssuerOptionDto] })
+  readonly items!: readonly SalesOrderIssuerOptionDto[]
 }
 
 export class SalesOrderListItemDto {
