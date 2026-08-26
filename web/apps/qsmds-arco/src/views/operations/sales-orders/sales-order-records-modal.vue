@@ -808,7 +808,7 @@ onBeforeUnmount(() => {
               </p>
               <div
                 v-if="linkedPayment(document)"
-                class="text-sm mt-3 p-3 border border-border rounded-lg bg-muted/15 flex flex-wrap gap-x-4 gap-y-2 items-center"
+                class="text-sm mt-3 p-3 border border-primary/40 rounded-lg bg-primary/5 flex flex-wrap gap-x-4 gap-y-2 items-center"
               >
                 <span>收款类型：{{ paymentTypeLabel(linkedPayment(document)!.paymentType) }}</span>
                 <span class="inline-flex gap-1 items-center">
@@ -817,6 +817,7 @@ onBeforeUnmount(() => {
                     :value="linkedPayment(document)!.amount"
                     :currency="detail.currencyCode"
                     :currencies="currencies"
+                    class="text-primary"
                   />
                 </span>
                 <span>收款时间：<DateTimeDisplay :value="linkedPayment(document)!.receivedAt" /></span>
