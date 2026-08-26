@@ -43,6 +43,7 @@ import {
   parseSalesOrderCurrency,
   refreshSalesOrderDocumentAutoTitle,
   replayUnknownSalesOrderSubmission,
+  requiresSalesOrderCashOnDeliveryConfirmation,
   resolveSalesOrderCreateStepForErrors,
   resolveSalesOrderCreateStepForField,
   resolveSalesOrderIssuerLabel,
@@ -64,6 +65,8 @@ interface PendingSubmissionFeedback {
 }
 
 defineOptions({ name: 'OperationsSalesOrderCreate' })
+
+const SALES_ORDER_PRODUCTS_SALES_STEP: SalesOrderCreateStep = 2
 
 const salesOrderSteps: StepsItem[] = [
   { id: 'base', title: '基础信息' },
@@ -99,6 +102,8 @@ const documentUploadError = ref('')
 const discardVisible = ref(false)
 const discardActive = ref(false)
 const discardIntent = ref<DiscardIntent | null>(null)
+const cashOnDeliveryConfirmVisible = ref(false)
+const cashOnDeliveryConfirmationActive = ref(false)
 const detailsDrawerVisible = ref(false)
 const submitConfirmVisible = ref(false)
 const detailsDrawerActive = ref(false)
@@ -300,6 +305,35 @@ function enterSalesOrderReview(): void {
   void focusSalesOrderReview()
 }
 
+function advanceToNextStep(): void {
+  furthestReachedStep.value = Math.max(
+    furthestReachedStep.value,
+    activeStep.value + 1,
+  ) as SalesOrderCreateStep
+  goToStep(activeStep.value + 1)
+}
+
+function openCashOnDeliveryConfirmation(): void {
+  if (cashOnDeliveryConfirmVisible.value || cashOnDeliveryConfirmationActive.value) {
+    return
+  }
+  cashOnDeliveryConfirmationActive.value = true
+  cashOnDeliveryConfirmVisible.value = true
+}
+
+function rejectCashOnDelivery(): void {
+  cashOnDeliveryConfirmVisible.value = false
+  toast.warning('不是货到付款定金不可以为0')
+}
+
+function confirmCashOnDelivery(): void {
+  cashOnDeliveryConfirmVisible.value = false
+  if (activeStep.value !== SALES_ORDER_PRODUCTS_SALES_STEP || submitLocked.value) {
+    return
+  }
+  advanceToNextStep()
+}
+
 function nextStep(): void {
   if (activeStep.value === 0 && currencyUnavailable.value) {
     formError.value = '当前订单币种不可用，请等待货币资料加载完成或返回列表重新选择'
@@ -342,11 +376,17 @@ function nextStep(): void {
     enterSalesOrderReview()
     return
   }
-  furthestReachedStep.value = Math.max(
-    furthestReachedStep.value,
-    activeStep.value + 1,
-  ) as SalesOrderCreateStep
-  goToStep(activeStep.value + 1)
+  if (
+    activeStep.value === SALES_ORDER_PRODUCTS_SALES_STEP
+    && requiresSalesOrderCashOnDeliveryConfirmation(
+      formModel.value.depositDueAmount,
+      amountPrecision.value,
+    )
+  ) {
+    openCashOnDeliveryConfirmation()
+    return
+  }
+  advanceToNextStep()
 }
 
 function returnToSalesOrderForm(): void {
@@ -626,6 +666,7 @@ function resetSalesOrderForm(): void {
   activeStep.value = 0
   furthestReachedStep.value = 0
   detailsDrawerVisible.value = false
+  cashOnDeliveryConfirmVisible.value = false
   submitConfirmVisible.value = false
   deferredOverlayAction.value = null
   pendingSubmissionFeedback.value = null
@@ -815,6 +856,14 @@ async function handleSubmitConfirmationClosed(): Promise<void> {
   restorePendingSubmissionFeedback()
 }
 
+async function handleCashOnDeliveryConfirmationClosed(): Promise<void> {
+  cashOnDeliveryConfirmationActive.value = false
+  if (await runDeferredOverlayAction()) {
+    return
+  }
+  await waitForOverlayFocusRestore()
+}
+
 async function handleDiscardClosed(): Promise<void> {
   discardActive.value = false
   await waitForOverlayFocusRestore()
@@ -928,6 +977,11 @@ function deferDiscardUntilOverlayClosed(): boolean {
   if (submitConfirmVisible.value || submitConfirmationActive.value) {
     deferredOverlayAction.value = 'navigation-discard'
     submitConfirmVisible.value = false
+    return true
+  }
+  if (cashOnDeliveryConfirmVisible.value || cashOnDeliveryConfirmationActive.value) {
+    deferredOverlayAction.value = 'navigation-discard'
+    cashOnDeliveryConfirmVisible.value = false
     return true
   }
   if (deferredOverlayAction.value !== null) {
@@ -1522,6 +1576,40 @@ onBeforeUnmount(() => {
         </div>
       </template>
     </QsGenericDrawer>
+
+    <QsGenericModal
+      :model-value="cashOnDeliveryConfirmVisible"
+      data-testid="sales-order-cash-on-delivery-confirmation"
+      title="确认货到付款"
+      description="定金为0，该笔订单是货到付款？"
+      size="sm"
+      :closable="false"
+      :dismiss-on-escape="false"
+      :dismiss-on-overlay="false"
+      @closed="handleCashOnDeliveryConfirmationClosed"
+      @update:model-value="cashOnDeliveryConfirmVisible = $event"
+    >
+      <p class="text-sm text-muted-foreground m-0">
+        零定金订单需要确认付款约定后才能继续填写。
+      </p>
+      <template #footer>
+        <FaButton
+          type="button"
+          variant="outline"
+          class="min-h-11 sm:min-h-9"
+          @click="rejectCashOnDelivery"
+        >
+          不是货到付款
+        </FaButton>
+        <FaButton
+          type="button"
+          class="min-h-11 sm:min-h-9"
+          @click="confirmCashOnDelivery"
+        >
+          确认货到付款
+        </FaButton>
+      </template>
+    </QsGenericModal>
 
     <QsGenericModal
       :model-value="submitConfirmVisible"

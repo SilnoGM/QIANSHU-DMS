@@ -17,6 +17,7 @@ import {
   parseSalesOrderCurrency,
   refreshSalesOrderDocumentAutoTitle,
   replayUnknownSalesOrderSubmission,
+  requiresSalesOrderCashOnDeliveryConfirmation,
   resolveSalesOrderCreateStepForErrors,
   resolveSalesOrderIssuerLabel,
   resolveSalesOrderSubmissionFailure,
@@ -363,6 +364,15 @@ test('本单售价接受零和最多两位小数，第三位小数在构造请�
       '请输入有效的真实售价',
     )
   }
+})
+
+test('只有精确零定金需要货到付款确认，非法值继续交由步骤校验拦截', () => {
+  assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0', 2), true)
+  assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0.00', 2), true)
+  assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0.0000', 4), true)
+  assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('0.01', 2), false)
+  assert.equal(requiresSalesOrderCashOnDeliveryConfirmation(null, 2), false)
+  assert.equal(requiresSalesOrderCashOnDeliveryConfirmation('invalid', 2), false)
 })
 
 test('真实售价乘数量精确汇总，手填总价或定金尾款不相等时硬拦截', () => {

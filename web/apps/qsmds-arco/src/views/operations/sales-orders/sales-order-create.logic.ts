@@ -325,6 +325,18 @@ function normalizedAmount(
   return result.valid ? result.normalizedValue : null
 }
 
+/**
+ * 货到付款确认只处理已经通过金额校验的精确零定金。非法或空金额返回 false，
+ * 继续由步骤校验显示字段错误，避免确认弹窗遮挡真正需要修正的输入问题。
+ */
+export function requiresSalesOrderCashOnDeliveryConfirmation(
+  depositDueAmount: string | null,
+  precision: number,
+): boolean {
+  const normalized = normalizedAmount(depositDueAmount, precision)
+  return normalized !== null && /^0(?:\.0+)?$/u.test(normalized)
+}
+
 function amountUnits(value: string): bigint {
   const [integerPart = '0', fractionPart = ''] = value.split('.')
   return BigInt(integerPart) * AMOUNT_SCALE
