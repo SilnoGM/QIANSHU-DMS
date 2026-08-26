@@ -140,6 +140,7 @@ test('销售订单列表使用十四个复合列并展示服务端全量筛选�
   assert.doesNotMatch(orderCellSource, /issuer\.displayName/u)
   assert.doesNotMatch(mobileHeaderSource, /issuer\.displayName/u)
   assert.equal(source.match(/:class="currencyTagClass\(/gu)?.length, 2)
+  assert.equal(source.match(/class="qs-type-status-tag px-1\.5 py-0 shrink-0 !text-\[10px\] !leading-4"/gu)?.length, 2)
   assert.match(source, /TWD'[\s\S]*?border-emerald-500/u)
   assert.match(source, /border-blue-500/u)
   assert.ok(

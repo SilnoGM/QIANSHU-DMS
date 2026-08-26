@@ -555,7 +555,7 @@ onBeforeUnmount(() => {
             <QsTableStackedLine content-class="qs-type-meta inline-flex gap-2 items-center" nowrap>
               <FaTag
                 variant="outline"
-                class="qs-type-status-tag shrink-0"
+                class="qs-type-status-tag px-1.5 py-0 shrink-0 !text-[10px] !leading-4"
                 :class="currencyTagClass(row.original.currencyCode)"
               >
                 {{ row.original.currencyCode }}
@@ -929,7 +929,7 @@ onBeforeUnmount(() => {
                 <QsTableStackedLine content-class="qs-type-meta inline-flex gap-2 items-center">
                   <FaTag
                     variant="outline"
-                    class="qs-type-status-tag shrink-0"
+                    class="qs-type-status-tag px-1.5 py-0 shrink-0 !text-[10px] !leading-4"
                     :class="currencyTagClass(row.currencyCode)"
                   >
                     {{ row.currencyCode }}
