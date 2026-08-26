@@ -36,8 +36,10 @@ describe('sales order state machine', () => {
 
   it.each([
     ['PENDING', 'PREPARING'],
-    ['PREPARING', 'SHIPPED'],
-    ['SHIPPED', 'SIGNED'],
+    ['PREPARING', 'LAND_TRANSIT'],
+    ['LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],
+    ['WAREHOUSE_ARRIVED', 'SEA_TRANSIT'],
+    ['SEA_TRANSIT', 'SIGNED'],
   ] as const)('allows fulfillment transition %s -> %s', (from, to) => {
     expect(() => assertSalesOrderFulfillmentTransition(from, to, {
       hasActiveDeliveryReceipt: to === 'SIGNED',
@@ -45,7 +47,7 @@ describe('sales order state machine', () => {
   })
 
   it('requires a delivery receipt before SIGNED', () => {
-    expect(() => assertSalesOrderFulfillmentTransition('SHIPPED', 'SIGNED', {
+    expect(() => assertSalesOrderFulfillmentTransition('SEA_TRANSIT', 'SIGNED', {
       hasActiveDeliveryReceipt: false,
     })).toThrow(expect.objectContaining({
       code: 'SALES_ORDER_DELIVERY_RECEIPT_REQUIRED',
@@ -53,10 +55,17 @@ describe('sales order state machine', () => {
   })
 
   it('blocks skipped or backward fulfillment transitions', () => {
-    expect(() => assertSalesOrderFulfillmentTransition('PENDING', 'SHIPPED', {
-      hasActiveDeliveryReceipt: false,
-    })).toThrow(expect.objectContaining({
-      code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
-    }))
+    for (const [from, to] of [
+      ['PENDING', 'LAND_TRANSIT'],
+      ['SEA_TRANSIT', 'WAREHOUSE_ARRIVED'],
+      ['LAND_TRANSIT', 'LAND_TRANSIT'],
+      ['SIGNED', 'SEA_TRANSIT'],
+    ] as const) {
+      expect(() => assertSalesOrderFulfillmentTransition(from, to, {
+        hasActiveDeliveryReceipt: false,
+      })).toThrow(expect.objectContaining({
+        code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
+      }))
+    }
   })
 })

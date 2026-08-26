@@ -180,9 +180,11 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
     key: 'fulfillmentStatus',
     label: '履约状态',
     options: [
-      { label: '待处理', value: 'PENDING' },
+      { label: '待采购', value: 'PENDING' },
       { label: '备货中', value: 'PREPARING' },
-      { label: '已发货', value: 'SHIPPED' },
+      { label: '陆运中', value: 'LAND_TRANSIT' },
+      { label: '已到仓', value: 'WAREHOUSE_ARRIVED' },
+      { label: '海运中', value: 'SEA_TRANSIT' },
       { label: '已签收', value: 'SIGNED' },
     ],
     placeholder: '选择履约状态',
@@ -347,7 +349,7 @@ function buildListQuery(): SalesOrderListQuery {
   const orderStatus = enumFilter('orderStatus', ['DRAFT', 'CONFIRMED', 'CANCELLED'] as const)
   const fulfillmentStatus = enumFilter(
     'fulfillmentStatus',
-    ['PENDING', 'PREPARING', 'SHIPPED', 'SIGNED'] as const,
+    ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED', 'SEA_TRANSIT', 'SIGNED'] as const,
   )
   const paymentStatus = enumFilter(
     'paymentStatus',
@@ -489,7 +491,14 @@ function orderStatusLabel(value: SalesOrderListItemDto['orderStatus']): string {
 }
 
 function fulfillmentStatusLabel(value: SalesOrderListItemDto['fulfillmentStatus']): string {
-  return { PENDING: '待处理', PREPARING: '备货中', SHIPPED: '已发货', SIGNED: '已签收' }[value]
+  return {
+    LAND_TRANSIT: '陆运中',
+    PENDING: '待采购',
+    PREPARING: '备货中',
+    SEA_TRANSIT: '海运中',
+    SIGNED: '已签收',
+    WAREHOUSE_ARRIVED: '已到仓',
+  }[value]
 }
 
 function paymentStatusLabel(value: SalesOrderListItemDto['paymentStatus']): string {
@@ -516,10 +525,12 @@ function fulfillmentStatusTagClass(
   value: SalesOrderListItemDto['fulfillmentStatus'],
 ): string {
   return {
+    LAND_TRANSIT: 'border-sky-500/30 bg-sky-500/8 text-sky-700 dark:text-sky-300',
     PENDING: 'border-border bg-muted text-muted-foreground',
     PREPARING: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
-    SHIPPED: 'border-blue-500/30 bg-blue-500/8 text-blue-700 dark:text-blue-300',
+    SEA_TRANSIT: 'border-blue-500/30 bg-blue-500/8 text-blue-700 dark:text-blue-300',
     SIGNED: 'border-primary/30 bg-primary/10 text-primary',
+    WAREHOUSE_ARRIVED: 'border-teal-500/30 bg-teal-500/8 text-teal-700 dark:text-teal-300',
   }[value]
 }
 

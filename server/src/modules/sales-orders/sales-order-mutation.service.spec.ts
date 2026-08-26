@@ -18,7 +18,7 @@ function setup() {
   const order = {
     id: ORDER_ID,
     orderStatus: 'CONFIRMED',
-    fulfillmentStatus: 'SHIPPED',
+    fulfillmentStatus: 'SEA_TRANSIT',
     paymentStatus: 'UNPAID',
     currencyCode: 'TWD',
     currency: { symbol: 'NT$', minorUnit: 2 },
@@ -129,7 +129,7 @@ describe('SalesOrderMutationService', () => {
       .mock.calls[0]?.[0]
     expect(historyCall).toMatchObject({ data: {
         dimension: 'FULFILLMENT',
-        fromStatus: 'SHIPPED',
+        fromStatus: 'SEA_TRANSIT',
         toStatus: 'SIGNED',
         reason: '客户已签收',
         changedByUserId: ACTOR_ID,

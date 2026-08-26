@@ -33,7 +33,7 @@ SalesOrderStatus: DRAFT -> CONFIRMED
                   CONFIRMED -> CANCELLED（仅无有效收款）
 
 SalesOrderFulfillmentStatus:
-PENDING -> PREPARING -> SHIPPED -> SIGNED
+PENDING -> PREPARING -> LAND_TRANSIT -> WAREHOUSE_ARRIVED -> SEA_TRANSIT -> SIGNED
 
 SalesOrderPaymentStatus:
 UNPAID -> PARTIALLY_PAID -> PAID
@@ -47,7 +47,7 @@ UNPAID -> PARTIALLY_PAID -> PAID
 
 ```text
 SalesOrderStatus: DRAFT | CONFIRMED | CANCELLED
-SalesOrderFulfillmentStatus: PENDING | PREPARING | SHIPPED | SIGNED
+SalesOrderFulfillmentStatus: PENDING | PREPARING | LAND_TRANSIT | WAREHOUSE_ARRIVED | SEA_TRANSIT | SIGNED
 SalesOrderPaymentStatus: UNPAID | PARTIALLY_PAID | PAID
 SalesOrderLineType: CATALOG | CUSTOM
 SalesOrderPaymentType: DEPOSIT | BALANCE | OTHER

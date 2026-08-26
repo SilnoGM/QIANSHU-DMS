@@ -15,8 +15,10 @@ const FULFILLMENT_TRANSITIONS: Readonly<
   Record<SalesOrderFulfillmentStatus, readonly SalesOrderFulfillmentStatus[]>
 > = {
   PENDING: ['PREPARING'],
-  PREPARING: ['SHIPPED'],
-  SHIPPED: ['SIGNED'],
+  PREPARING: ['LAND_TRANSIT'],
+  LAND_TRANSIT: ['WAREHOUSE_ARRIVED'],
+  WAREHOUSE_ARRIVED: ['SEA_TRANSIT'],
+  SEA_TRANSIT: ['SIGNED'],
   SIGNED: [],
 }
 

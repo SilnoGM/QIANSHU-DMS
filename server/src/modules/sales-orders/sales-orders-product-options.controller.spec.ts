@@ -277,6 +277,21 @@ describe('SalesOrdersController product options OpenAPI', () => {
       .toBeUndefined()
   })
 
+  it('publishes only the confirmed six fulfillment states', () => {
+    const contract = JSON.stringify(document)
+    for (const status of [
+      'PENDING',
+      'PREPARING',
+      'LAND_TRANSIT',
+      'WAREHOUSE_ARRIVED',
+      'SEA_TRANSIT',
+      'SIGNED',
+    ]) {
+      expect(contract).toContain(`"${status}"`)
+    }
+    expect(contract).not.toContain('"SHIPPED"')
+  })
+
   it('publishes independent read-authorized list preview image operations', () => {
     const imagePath = document.paths[
       '/api/sales-orders/{salesOrderId}/lines/{lineId}/main-image/{productMediaId}/content'

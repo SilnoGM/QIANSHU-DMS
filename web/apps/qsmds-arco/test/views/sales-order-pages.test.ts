@@ -49,6 +49,8 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /salesOrdersApi\.issuerOptions/u)
   assert.match(source, /key: 'issuerUserId'[\s\S]*?label: '出单人'/u)
   assert.match(source, /issuerUserId[\s\S]*?buildListQuery/u)
+  assert.match(source, /key: 'fulfillmentStatus'[\s\S]*?待采购[\s\S]*?备货中[\s\S]*?陆运中[\s\S]*?已到仓[\s\S]*?海运中[\s\S]*?已签收/u)
+  assert.match(source, /\['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED', 'SEA_TRANSIT', 'SIGNED'\] as const/u)
 })
 
 test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {
@@ -216,7 +218,13 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /PAID: '.*text-primary'/u)
   assert.match(source, /CONFIRMED: '.*text-primary'/u)
   assert.match(source, /CANCELLED: '.*text-destructive'/u)
-  assert.match(source, /SHIPPED: '.*text-blue-700/u)
+  assert.match(source, /PENDING: '.*text-muted-foreground/u)
+  assert.match(source, /PREPARING: '.*text-amber-700/u)
+  assert.match(source, /LAND_TRANSIT: '.*text-sky-700/u)
+  assert.match(source, /WAREHOUSE_ARRIVED: '.*text-teal-700/u)
+  assert.match(source, /SEA_TRANSIT: '.*text-blue-700/u)
+  assert.match(source, /SIGNED: '.*text-primary/u)
+  assert.doesNotMatch(source, /SHIPPED/u)
   for (const amountField of [
     'agreedTotalAmount',
     'standardSubtotalAmount',
@@ -283,6 +291,10 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /name="deliveryReceiptRemark"/u)
   assert.match(source, /:maxlength="500"/u)
   assert.match(source, /buildSalesOrderDeliveryReceiptRequest\([\s\S]*?deliveryReceiptRemark\.value/u)
+  assert.match(source, /LAND_TRANSIT: '陆运中'/u)
+  assert.match(source, /WAREHOUSE_ARRIVED: '已到仓'/u)
+  assert.match(source, /SEA_TRANSIT: '海运中'/u)
+  assert.doesNotMatch(source, /SHIPPED/u)
 })
 
 test('新增页使用四步表单与独立双栏实时订单详情', async () => {

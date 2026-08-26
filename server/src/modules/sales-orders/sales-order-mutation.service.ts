@@ -60,7 +60,9 @@ const ORDER_STATUSES = new Set<SalesOrderStatus>([
 const FULFILLMENT_STATUSES = new Set<SalesOrderFulfillmentStatus>([
   'PENDING',
   'PREPARING',
-  'SHIPPED',
+  'LAND_TRANSIT',
+  'WAREHOUSE_ARRIVED',
+  'SEA_TRANSIT',
   'SIGNED',
 ])
 const UUID_V4_PATTERN =

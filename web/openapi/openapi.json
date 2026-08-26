@@ -26183,7 +26183,9 @@
               "enum": [
                 "PENDING",
                 "PREPARING",
-                "SHIPPED",
+                "LAND_TRANSIT",
+                "WAREHOUSE_ARRIVED",
+                "SEA_TRANSIT",
                 "SIGNED"
               ]
             }
@@ -38227,7 +38229,9 @@
             "enum": [
               "PENDING",
               "PREPARING",
-              "SHIPPED",
+              "LAND_TRANSIT",
+              "WAREHOUSE_ARRIVED",
+              "SEA_TRANSIT",
               "SIGNED"
             ]
           },
@@ -39178,7 +39182,9 @@
             "enum": [
               "PENDING",
               "PREPARING",
-              "SHIPPED",
+              "LAND_TRANSIT",
+              "WAREHOUSE_ARRIVED",
+              "SEA_TRANSIT",
               "SIGNED"
             ]
           },
@@ -39289,7 +39295,9 @@
             "enum": [
               "PENDING",
               "PREPARING",
-              "SHIPPED",
+              "LAND_TRANSIT",
+              "WAREHOUSE_ARRIVED",
+              "SEA_TRANSIT",
               "SIGNED"
             ]
           },

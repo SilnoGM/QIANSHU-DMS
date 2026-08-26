@@ -123,7 +123,7 @@
 
 1. 销售订单系统应分别保存 `orderStatus`、`fulfillmentStatus` 和 `paymentStatus`。
 2. 当订单从 `DRAFT` 变更为 `CONFIRMED` 或 `CANCELLED` 时，销售订单系统应校验允许的订单状态流转并记录历史。
-3. 当履约从 `PENDING` 依次进入 `PREPARING`、`SHIPPED`、`SIGNED` 时，销售订单系统应校验顺序并记录历史。
+3. 当履约从 `PENDING` 依次进入 `PREPARING`、`LAND_TRANSIT`、`WAREHOUSE_ARRIVED`、`SEA_TRANSIT`、`SIGNED` 时，销售订单系统应校验顺序并记录历史。
 4. 当付款记录变化时，销售订单系统应派生并持久化最新付款状态，不允许客户端直接指定付款状态。
 5. 当订单已有有效实际收款时，销售订单系统应拒绝取消订单。
 6. 当订单已 `CONFIRMED` 时，客户快照和地址应冻结；金额约定只能通过受控修改接口变更。

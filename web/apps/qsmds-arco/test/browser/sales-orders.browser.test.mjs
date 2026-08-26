@@ -492,7 +492,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       && document.querySelector('[data-testid="sales-order-list-table"]')
         ?.textContent?.includes(${JSON.stringify(customerName)})
       && document.body.innerText.includes('草稿')
-      && document.body.innerText.includes('待处理')
+      && document.body.innerText.includes('待采购')
       && document.body.innerText.includes('未付款')
     ))()`)
 

@@ -14,7 +14,7 @@ const MEDIA_ASSET_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 function setup(documentType = 'DELIVERY_RECEIPT') {
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>()
-      .mockResolvedValue([{ id: ORDER_ID, fulfillmentStatus: 'SHIPPED' }]),
+      .mockResolvedValue([{ id: ORDER_ID, fulfillmentStatus: 'SEA_TRANSIT' }]),
     salesOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: ORDER_ID, customerName: '王小明' }),
