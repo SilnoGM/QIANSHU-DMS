@@ -89,6 +89,8 @@ type MutableOrderRow = Prisma.SalesOrderGetPayload<{
     orderStatus: true
     fulfillmentStatus: true
     paymentStatus: true
+    currencyCode: true
+    currency: { select: { symbol: true, minorUnit: true } }
     lineSubtotalAmount: true
     agreedTotalAmount: true
     depositDueAmount: true
@@ -175,6 +177,42 @@ function effectiveReceivedAmount(
   aggregate: { readonly _sum: { readonly amount: { toFixed(decimalPlaces: number): string } | null } },
 ): string {
   return aggregate._sum.amount === null ? '0.0000' : fixed4(aggregate._sum.amount)
+}
+
+/**
+ * 变更原因属于需要长期留存的业务快照，因此直接使用订单当时关联的货币符号与
+ * 小数位规则生成文本。这里全程处理十进制字符串，不转成 number，避免大金额
+ * 在添加千分位时发生精度损失。
+ */
+function formatPaymentReasonAmount(
+  value: string,
+  order: Pick<MutableOrderRow, 'currencyCode' | 'currency'>,
+): string {
+  const [integerPart = '0', fractionPart = ''] = formatSalesOrderAmountUnits(
+    parseSalesOrderAmountUnits(value),
+  ).split('.')
+  const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
+  const minimumDigits = Math.max(0, Math.min(order.currency.minorUnit, 4))
+  const lastNonZeroDigit = fractionPart.search(/0*$/u)
+  const visibleDigits = Math.max(minimumDigits, lastNonZeroDigit)
+  const visibleFraction = fractionPart.slice(0, visibleDigits)
+  const amount = visibleFraction.length > 0
+    ? `${groupedInteger}.${visibleFraction}`
+    : groupedInteger
+  return `${order.currency.symbol ?? ''}${amount} ${order.currencyCode}`
+}
+
+function recordedPaymentStatusReason(
+  order: MutableOrderRow,
+  paymentAmount: string,
+  outstandingAmount: string,
+  newStatus: SalesOrderPaymentStatus,
+): string {
+  const payment = formatPaymentReasonAmount(paymentAmount, order)
+  const outstanding = formatPaymentReasonAmount(outstandingAmount, order)
+  return newStatus === 'PAID'
+    ? `用户添加实际收款 ${payment}，剩余 ${outstanding}，订单已付清`
+    : `用户添加实际收款 ${payment}，剩余 ${outstanding} 未收`
 }
 
 @Injectable()
@@ -437,6 +475,10 @@ export class SalesOrderMutationService {
           fixed4(order.agreedTotalAmount),
           newReceivedAmount,
         )
+        const outstandingAmount = formatSalesOrderAmountUnits(
+          parseSalesOrderAmountUnits(fixed4(order.agreedTotalAmount))
+          - parseSalesOrderAmountUnits(newReceivedAmount),
+        )
         const payment = await transaction.salesOrderPayment.create({
           data: {
             salesOrderId,
@@ -471,6 +513,12 @@ export class SalesOrderMutationService {
           trusted,
           order,
           newStatus,
+          recordedPaymentStatusReason(
+            order,
+            amount,
+            outstandingAmount,
+            newStatus,
+          ),
         )
         await this.recordAudit(transaction, trusted, {
           eventType: AuditEventType.SALES_ORDER_PAYMENT_RECORDED,
@@ -614,6 +662,8 @@ export class SalesOrderMutationService {
         orderStatus: true,
         fulfillmentStatus: true,
         paymentStatus: true,
+        currencyCode: true,
+        currency: { select: { symbol: true, minorUnit: true } },
         lineSubtotalAmount: true,
         agreedTotalAmount: true,
         depositDueAmount: true,
@@ -648,6 +698,7 @@ export class SalesOrderMutationService {
     context: SalesOrderMutationContext,
     order: MutableOrderRow,
     newStatus: SalesOrderPaymentStatus,
+    reason: string | null = null,
   ): Promise<void> {
     await transaction.salesOrder.update({
       where: { id: order.id },
@@ -659,6 +710,7 @@ export class SalesOrderMutationService {
       dimension: 'PAYMENT',
       fromStatus: order.paymentStatus,
       toStatus: newStatus,
+      reason,
       changedByUserId: context.actorUserId,
     } })
   }

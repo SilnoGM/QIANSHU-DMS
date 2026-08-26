@@ -20,6 +20,8 @@ function setup() {
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'SHIPPED',
     paymentStatus: 'UNPAID',
+    currencyCode: 'TWD',
+    currency: { symbol: 'NT$', minorUnit: 2 },
     lineSubtotalAmount: decimal('100.0000'),
     agreedTotalAmount: decimal('100.0000'),
     depositDueAmount: decimal('30.0000'),
@@ -168,6 +170,17 @@ describe('SalesOrderMutationService', () => {
       where: { id: ORDER_ID },
       data: { paymentStatus: 'PARTIALLY_PAID', version: { increment: 1 } },
     })
+    expect(fixture.transaction.salesOrderStatusHistory.create)
+      .toHaveBeenCalledWith({
+        data: {
+          salesOrderId: ORDER_ID,
+          dimension: 'PAYMENT',
+          fromStatus: 'UNPAID',
+          toStatus: 'PARTIALLY_PAID',
+          reason: '用户添加实际收款 NT$30.00 TWD，剩余 NT$70.00 TWD 未收',
+          changedByUserId: ACTOR_ID,
+        },
+      })
     expect(fixture.dictionaryLookup.requireEffectiveValue).toHaveBeenCalledWith(
       fixture.transaction,
       { dictionaryCode: 'payment.method', value: 'BANK_TRANSFER' },
@@ -203,6 +216,30 @@ describe('SalesOrderMutationService', () => {
     })).rejects.toMatchObject({
       code: 'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
     })
+  })
+
+  it('records a completed-payment reason when one payment settles the order', async () => {
+    const fixture = setup()
+    await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'BALANCE',
+      amount: '100',
+      receivedAt: '2026-08-20T07:00:00.000Z',
+      paymentMethod: 'BANK_TRANSFER',
+      remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
+    })).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.salesOrderStatusHistory.create)
+      .toHaveBeenCalledWith({
+        data: {
+          salesOrderId: ORDER_ID,
+          dimension: 'PAYMENT',
+          fromStatus: 'UNPAID',
+          toStatus: 'PAID',
+          reason: '用户添加实际收款 NT$100.00 TWD，剩余 NT$0.00 TWD，订单已付清',
+          changedByUserId: ACTOR_ID,
+        },
+      })
   })
 
   it.each(['DEPOSIT', 'PROGRESS', 'INVOICE_TAX', 'BALANCE', 'OTHER'] as const)(
