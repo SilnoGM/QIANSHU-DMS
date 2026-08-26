@@ -424,6 +424,13 @@ function paymentStatusLabel(value: SalesOrderListItemDto['paymentStatus']): stri
   return { UNPAID: '未付款', PARTIALLY_PAID: '部分付款', PAID: '已付清' }[value]
 }
 
+// 与币种选择卡片保持相同的视觉身份，文字仍作为主要识别信息，颜色仅用于快速区分。
+function currencyTagClass(value: SalesOrderListItemDto['currencyCode']): string {
+  return value === 'TWD'
+    ? 'border-emerald-500/30 bg-emerald-500/8 text-emerald-700 dark:text-emerald-300'
+    : 'border-blue-500/30 bg-blue-500/8 text-blue-700 dark:text-blue-300'
+}
+
 // 桌面表格与移动卡片共用同一套语义色，颜色仅用于辅助识别，状态含义仍由文字承载。
 function orderStatusTagClass(value: SalesOrderListItemDto['orderStatus']): string {
   return {
@@ -545,8 +552,15 @@ onBeforeUnmount(() => {
                 <CopyCellButton label="订单编号" :text="row.original.orderNo" />
               </template>
             </QsTableStackedLine>
-            <QsTableStackedLine tone="muted" content-class="qs-type-meta" nowrap>
-              {{ row.original.orderDate }} · {{ row.original.currencyCode }}
+            <QsTableStackedLine content-class="qs-type-meta inline-flex gap-2 items-center" nowrap>
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag shrink-0"
+                :class="currencyTagClass(row.original.currencyCode)"
+              >
+                {{ row.original.currencyCode }}
+              </FaTag>
+              <span class="text-muted-foreground">{{ row.original.orderDate }}</span>
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -912,8 +926,15 @@ onBeforeUnmount(() => {
                     <CopyCellButton always-visible label="订单编号" :text="row.orderNo" />
                   </template>
                 </QsTableStackedLine>
-                <QsTableStackedLine tone="muted" content-class="qs-type-meta">
-                  {{ row.orderDate }} · {{ row.currencyCode }}
+                <QsTableStackedLine content-class="qs-type-meta inline-flex gap-2 items-center">
+                  <FaTag
+                    variant="outline"
+                    class="qs-type-status-tag shrink-0"
+                    :class="currencyTagClass(row.currencyCode)"
+                  >
+                    {{ row.currencyCode }}
+                  </FaTag>
+                  <span class="text-muted-foreground">{{ row.orderDate }}</span>
                 </QsTableStackedLine>
               </QsTableStackedCell>
               <span class="qs-type-meta shrink-0">#{{ rowNumber }}</span>

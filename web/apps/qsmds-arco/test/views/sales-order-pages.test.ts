@@ -139,6 +139,19 @@ test('销售订单列表使用十四个复合列并展示服务端全量筛选�
   assert.match(source, /#cell-issuerSummary[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.original\.issuer\.displayName"[\s\S]*?size="md"/u)
   assert.doesNotMatch(orderCellSource, /issuer\.displayName/u)
   assert.doesNotMatch(mobileHeaderSource, /issuer\.displayName/u)
+  assert.equal(source.match(/:class="currencyTagClass\(/gu)?.length, 2)
+  assert.match(source, /TWD'[\s\S]*?border-emerald-500/u)
+  assert.match(source, /border-blue-500/u)
+  assert.ok(
+    orderCellSource.indexOf('currencyTagClass(row.original.currencyCode)')
+    < orderCellSource.indexOf('{{ row.original.orderDate }}'),
+    '桌面订单列的币种标签应位于出单日期前',
+  )
+  assert.ok(
+    mobileHeaderSource.indexOf('currencyTagClass(row.currencyCode)')
+    < mobileHeaderSource.indexOf('{{ row.orderDate }}'),
+    '窄屏订单摘要的币种标签应位于出单日期前',
+  )
   assert.match(mobileIssuerSource, /出单人[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.issuer\.displayName"[\s\S]*?size="md"/u)
   for (const productSource of [productCellSource, mobileProductSource]) {
     assert.match(productSource, /<ImageGroup/u)
