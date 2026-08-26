@@ -65,6 +65,9 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   const mobileAmountStart = mobileProductEnd
   const mobileAmountEnd = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  付款状态', mobileAmountStart)
   const mobileAmountSource = source.slice(mobileAmountStart, mobileAmountEnd)
+  const mobilePaymentStart = mobileAmountEnd
+  const mobilePaymentEnd = source.indexOf('<dt class="qs-type-compact-label mb-1">\n                  订单状态', mobilePaymentStart)
+  const mobilePaymentSource = source.slice(mobilePaymentStart, mobilePaymentEnd)
   const summaryMatrixStart = source.indexOf('data-testid="sales-order-summary-matrix"')
   const summaryMatrixEnd = source.indexOf('<template #mobile-row', summaryMatrixStart)
   const summaryMatrixSource = source.slice(summaryMatrixStart, summaryMatrixEnd)
@@ -82,6 +85,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.ok(desktopAmountStart >= 0 && desktopAmountEnd > desktopAmountStart, '应存在桌面端金额列插槽')
   assert.ok(mobileProductStart >= 0 && mobileProductEnd > mobileProductStart, '应存在窄屏端产品区域')
   assert.ok(mobileAmountStart >= 0 && mobileAmountEnd > mobileAmountStart, '应存在窄屏端金额区域')
+  assert.ok(mobilePaymentStart >= 0 && mobilePaymentEnd > mobilePaymentStart, '应存在窄屏端付款状态区域')
   assert.ok(summaryMatrixStart >= 0 && summaryMatrixEnd > summaryMatrixStart, '应存在独立的金额汇总矩阵')
   assert.ok(orderCellStart >= 0 && orderCellEnd > orderCellStart, '订单列与出单人列应保持独立')
   assert.ok(mobileRowStart >= 0 && mobileDetailsStart > mobileRowStart, '应存在窄屏订单摘要头部')
@@ -192,6 +196,12 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   }
   assert.doesNotMatch(source, /hasPositiveAmount/u)
   assert.match(source, /#cell-paymentStatusSummary[\s\S]*?paymentStatusLabel\(row\.original\.paymentStatus\)/u)
+  assert.match(source, /import \{[\s\S]*?calculateSalesOrderPaymentProgress[\s\S]*?\} from '.\/sales-order-list\.logic'/u)
+  assert.equal(source.match(/<FaProgress/gu)?.length, 2)
+  assert.match(source, /function paymentProgress\([\s\S]*?row\.receivedAmount[\s\S]*?row\.agreedTotalAmount/u)
+  assert.match(source, /function paymentProgressClass\([\s\S]*?UNPAID[\s\S]*?bg-muted-foreground[\s\S]*?PARTIALLY_PAID[\s\S]*?bg-amber-500[\s\S]*?PAID[\s\S]*?bg-primary/u)
+  assert.match(source, /#cell-paymentStatusSummary[\s\S]*?<FaTag[\s\S]*?<FaProgress[\s\S]*?paymentProgress\(row\.original\)\?\.progressValue[\s\S]*?formattedPercentage/u)
+  assert.match(mobilePaymentSource, /付款状态[\s\S]*?<FaTag[\s\S]*?<FaProgress[\s\S]*?paymentProgress\(row\)\?\.progressValue[\s\S]*?formattedPercentage/u)
   assert.match(source, /#cell-orderStatusSummary[\s\S]*?orderStatusLabel\(row\.original\.orderStatus\)[\s\S]*?fulfillmentStatusLabel\(row\.original\.fulfillmentStatus\)/u)
   assert.equal(source.match(/:class="paymentStatusTagClass\(/gu)?.length, 2)
   assert.equal(source.match(/:class="orderStatusTagClass\(/gu)?.length, 2)

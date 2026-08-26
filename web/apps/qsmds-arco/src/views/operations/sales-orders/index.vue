@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { SalesOrderPaymentProgress } from './sales-order-list.logic'
 import type {
   SalesOrderRecordsInitialAction,
   SalesOrderRecordsKind,
@@ -37,6 +38,7 @@ import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
   buildSalesOrderCustomerCopyText,
+  calculateSalesOrderPaymentProgress,
   formatSalesOrderSummaryAmount,
 } from './sales-order-list.logic'
 import SalesOrderRecordsModal from './sales-order-records-modal.vue'
@@ -499,6 +501,30 @@ function paymentStatusTagClass(value: SalesOrderListItemDto['paymentStatus']): s
   }[value]
 }
 
+function paymentProgress(row: SalesOrderListItemDto): SalesOrderPaymentProgress | null {
+  return calculateSalesOrderPaymentProgress(
+    row.receivedAmount,
+    row.agreedTotalAmount,
+  )
+}
+
+// 进度条沿用付款状态语义色；标签和百分比文字继续承担主要信息，颜色只辅助扫读。
+function paymentProgressClass(value: SalesOrderListItemDto['paymentStatus']): string {
+  return {
+    UNPAID: 'bg-muted [&_[data-slot=progress-indicator]]:bg-muted-foreground',
+    PARTIALLY_PAID: 'bg-amber-500/15 [&_[data-slot=progress-indicator]]:bg-amber-500',
+    PAID: 'bg-primary/20 [&_[data-slot=progress-indicator]]:bg-primary',
+  }[value]
+}
+
+function paymentProgressTextClass(value: SalesOrderListItemDto['paymentStatus']): string {
+  return {
+    UNPAID: 'text-muted-foreground',
+    PARTIALLY_PAID: 'text-amber-700 dark:text-amber-300',
+    PAID: 'text-primary',
+  }[value]
+}
+
 onMounted(() => void loadOrders())
 onBeforeUnmount(() => {
   requestVersion += 1
@@ -720,13 +746,30 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-paymentStatusSummary="{ row }">
-          <FaTag
-            variant="outline"
-            class="qs-type-status-tag"
-            :class="paymentStatusTagClass(row.original.paymentStatus)"
-          >
-            {{ paymentStatusLabel(row.original.paymentStatus) }}
-          </FaTag>
+          <div class="flex flex-col gap-2 min-w-0">
+            <FaTag
+              variant="outline"
+              class="qs-type-status-tag self-start"
+              :class="paymentStatusTagClass(row.original.paymentStatus)"
+            >
+              {{ paymentStatusLabel(row.original.paymentStatus) }}
+            </FaTag>
+            <div v-if="paymentProgress(row.original)" class="flex gap-2 min-w-0 items-center">
+              <FaProgress
+                :model-value="paymentProgress(row.original)?.progressValue ?? 0"
+                :aria-label="`收款进度 ${paymentProgress(row.original)?.formattedPercentage ?? '—'}`"
+                class="flex-1 h-1.5 min-w-16"
+                :class="paymentProgressClass(row.original.paymentStatus)"
+              />
+              <span
+                class="qs-type-meta shrink-0 tabular-nums"
+                :class="paymentProgressTextClass(row.original.paymentStatus)"
+              >
+                {{ paymentProgress(row.original)?.formattedPercentage }}
+              </span>
+            </div>
+            <span v-else class="qs-type-meta text-muted-foreground">—</span>
+          </div>
         </template>
 
         <template #cell-orderStatusSummary="{ row }">
@@ -1133,13 +1176,30 @@ onBeforeUnmount(() => {
                   付款状态
                 </dt>
                 <dd class="m-0">
-                  <FaTag
-                    variant="outline"
-                    class="qs-type-status-tag"
-                    :class="paymentStatusTagClass(row.paymentStatus)"
-                  >
-                    {{ paymentStatusLabel(row.paymentStatus) }}
-                  </FaTag>
+                  <div class="flex flex-col gap-2 min-w-0">
+                    <FaTag
+                      variant="outline"
+                      class="qs-type-status-tag self-start"
+                      :class="paymentStatusTagClass(row.paymentStatus)"
+                    >
+                      {{ paymentStatusLabel(row.paymentStatus) }}
+                    </FaTag>
+                    <div v-if="paymentProgress(row)" class="flex gap-2 min-w-0 items-center">
+                      <FaProgress
+                        :model-value="paymentProgress(row)?.progressValue ?? 0"
+                        :aria-label="`收款进度 ${paymentProgress(row)?.formattedPercentage ?? '—'}`"
+                        class="flex-1 h-1.5 min-w-16"
+                        :class="paymentProgressClass(row.paymentStatus)"
+                      />
+                      <span
+                        class="qs-type-meta shrink-0 tabular-nums"
+                        :class="paymentProgressTextClass(row.paymentStatus)"
+                      >
+                        {{ paymentProgress(row)?.formattedPercentage }}
+                      </span>
+                    </div>
+                    <span v-else class="qs-type-meta text-muted-foreground">—</span>
+                  </div>
                 </dd>
               </div>
               <div>

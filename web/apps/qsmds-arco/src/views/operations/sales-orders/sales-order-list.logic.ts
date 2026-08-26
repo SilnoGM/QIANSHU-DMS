@@ -1,7 +1,14 @@
 import type { CurrencyAmountValue } from '../../../components/base/AmountDisplay/format'
 import type { CurrencyDescriptor } from '../../../components/base/currency'
 
+import Decimal from 'decimal.js'
 import { formatCurrencyAmount } from '../../../components/base/AmountDisplay/format'
+import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
+
+export interface SalesOrderPaymentProgress {
+  readonly formattedPercentage: string
+  readonly progressValue: number
+}
 
 export interface SalesOrderCustomerCopySource {
   readonly customerName: string
@@ -37,4 +44,40 @@ export function formatSalesOrderSummaryAmount(
   return normalizedCurrency.length > 0 && formatted.endsWith(currencySuffix)
     ? formatted.slice(0, -currencySuffix.length)
     : formatted
+}
+
+/**
+ * 根据累计已收和销售总价计算收款进度。真实比例允许超过 100%，但传给进度条的
+ * number 只用于视觉展示并限制在 0 到 100，业务金额始终保留 Decimal 字符串边界。
+ */
+export function calculateSalesOrderPaymentProgress(
+  receivedAmount: string | null,
+  agreedTotalAmount: string | null,
+): SalesOrderPaymentProgress | null {
+  const receivedResult = validateMoneyString(receivedAmount, { precision: 4 })
+  const totalResult = validateMoneyString(agreedTotalAmount, { precision: 4 })
+
+  if (
+    !receivedResult.valid
+    || !totalResult.valid
+    || receivedResult.normalizedValue === null
+    || totalResult.normalizedValue === null
+  ) {
+    return null
+  }
+
+  const total = new Decimal(totalResult.normalizedValue)
+  if (total.isZero()) {
+    return null
+  }
+
+  const percentage = new Decimal(receivedResult.normalizedValue)
+    .dividedBy(total)
+    .times(100)
+  return {
+    formattedPercentage: `${percentage.toFixed(2, Decimal.ROUND_HALF_UP)}%`,
+    progressValue: Decimal.min(percentage, 100)
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+      .toNumber(),
+  }
 }
