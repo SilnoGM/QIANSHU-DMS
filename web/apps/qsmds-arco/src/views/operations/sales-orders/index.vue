@@ -697,13 +697,13 @@ onBeforeUnmount(() => {
 
         <template #cell-discountRateSummary="{ row }">
           <span
-            class="inline-flex gap-1 whitespace-nowrap items-center tabular-nums"
+            class="inline-flex gap-1 whitespace-nowrap [font-weight:var(--qs-type-weight-medium,500)] items-center tabular-nums"
             :class="discountRateTextClass(salesOrderDiscountRate(row.original)?.trend)"
           >
             <FaIcon
               v-if="discountRateTrendIcon(salesOrderDiscountRate(row.original)?.trend)"
               :name="discountRateTrendIcon(salesOrderDiscountRate(row.original)?.trend) ?? 'i-lucide:move-right'"
-              class="shrink-0 size-3.5"
+              class="shrink-0 size-3.5 stroke-2"
               aria-hidden="true"
             />
             {{ salesOrderDiscountRate(row.original)?.formattedValue ?? '—' }}
@@ -1113,13 +1113,13 @@ onBeforeUnmount(() => {
                   折扣率
                 </dt>
                 <dd
-                  class="m-0 inline-flex gap-1 whitespace-nowrap items-center tabular-nums"
+                  class="m-0 inline-flex gap-1 whitespace-nowrap [font-weight:var(--qs-type-weight-medium,500)] items-center tabular-nums"
                   :class="discountRateTextClass(salesOrderDiscountRate(row)?.trend)"
                 >
                   <FaIcon
                     v-if="discountRateTrendIcon(salesOrderDiscountRate(row)?.trend)"
                     :name="discountRateTrendIcon(salesOrderDiscountRate(row)?.trend) ?? 'i-lucide:move-right'"
-                    class="shrink-0 size-3.5"
+                    class="shrink-0 size-3.5 stroke-2"
                     aria-hidden="true"
                   />
                   {{ salesOrderDiscountRate(row)?.formattedValue ?? '—' }}

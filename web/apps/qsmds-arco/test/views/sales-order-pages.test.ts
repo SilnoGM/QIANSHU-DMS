@@ -186,6 +186,8 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /function discountRateTrendIcon\([\s\S]*?below[\s\S]*?i-lucide:trending-down[\s\S]*?above[\s\S]*?i-lucide:trending-up[\s\S]*?i-lucide:move-right/u)
   assert.match(source, /#cell-discountRateSummary[\s\S]*?<FaIcon[\s\S]*?discountRateTrendIcon\(salesOrderDiscountRate\(row\.original\)\?\.trend\)[\s\S]*?formattedValue \?\? '—'/u)
   assert.match(mobileAmountSource, /折扣率[\s\S]*?<FaIcon[\s\S]*?discountRateTrendIcon\(salesOrderDiscountRate\(row\)\?\.trend\)[\s\S]*?formattedValue \?\? '—'/u)
+  assert.equal(source.match(/\[font-weight:var\(--qs-type-weight-medium,500\)\]/gu)?.length, 2)
+  assert.equal(source.match(/class="shrink-0 size-3\.5 stroke-2"/gu)?.length, 2)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="定金"[\s\S]*?row\.original\.depositDueAmount/u)
   assert.match(source, /#cell-termsSummary[\s\S]*?label="尾款"[\s\S]*?row\.original\.balanceDueAmount/u)
   for (const amountSource of [desktopAmountSource, mobileAmountSource]) {
