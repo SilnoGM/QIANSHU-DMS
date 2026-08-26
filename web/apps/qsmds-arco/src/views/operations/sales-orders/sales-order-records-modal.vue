@@ -2,6 +2,7 @@
 import type {
   SalesOrderPaymentDraft,
   SalesOrderPaymentDraftErrors,
+  SalesOrderPaymentStatusReasonTone,
   SalesOrderRecordsInitialAction,
   SalesOrderRecordsKind,
 } from './sales-order-records-modal.logic'
@@ -33,6 +34,7 @@ import {
   formatSalesOrderLocalDateTime,
   resolveSalesOrderModalCancelAction,
   resolveSalesOrderModalInitialState,
+  splitSalesOrderPaymentStatusReason,
 } from './sales-order-records-modal.logic'
 
 const props = defineProps<{
@@ -206,6 +208,17 @@ function statusValueLabel(value: string): string {
 
 function optionalText(value: string | null): string {
   return value?.trim() || '—'
+}
+
+/** 收款金额与剩余应收分别使用稳定的业务语义色，原因原文仍由文本片段完整组成。 */
+function paymentStatusReasonSegmentClass(
+  tone: SalesOrderPaymentStatusReasonTone,
+): string {
+  return {
+    default: '',
+    outstanding: 'text-destructive font-semibold',
+    received: 'text-emerald-700 dark:text-emerald-300 font-semibold',
+  }[tone]
 }
 
 function amountRevisionItems(revision: SalesOrderAmountRevisionDto) {
@@ -877,7 +890,11 @@ onBeforeUnmount(() => {
                   </FaTag>
                 </p>
                 <p class="text-sm m-0 mt-3 break-words">
-                  原因：{{ optionalText(history.reason) }}
+                  <span>原因：</span><span
+                    v-for="(segment, index) in splitSalesOrderPaymentStatusReason(optionalText(history.reason))"
+                    :key="`${history.id}-${index}`"
+                    :class="paymentStatusReasonSegmentClass(segment.tone)"
+                  >{{ segment.text }}</span>
                 </p>
                 <div class="qs-type-meta mt-2 inline-flex gap-2 items-center">
                   操作人：<QsPersonDisplay :display-name="history.changedBy.displayName" size="sm" />

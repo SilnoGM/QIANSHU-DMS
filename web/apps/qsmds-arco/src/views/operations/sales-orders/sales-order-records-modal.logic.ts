@@ -9,6 +9,43 @@ export type SalesOrderRecordsKind = 'payments' | 'documents' | 'changes'
 export type SalesOrderRecordsInitialAction = 'payment' | 'receipt' | null
 export type SalesOrderModalView = 'records' | 'create-payment' | 'create-receipt'
 export type SalesOrderModalOrigin = 'records' | 'table-action'
+export type SalesOrderPaymentStatusReasonTone
+  = 'default' | 'outstanding' | 'received'
+
+export interface SalesOrderPaymentStatusReasonSegment {
+  readonly text: string
+  readonly tone: SalesOrderPaymentStatusReasonTone
+}
+
+/**
+ * 只拆分服务端生成的实际收款原因模板。手工原因或历史原因必须完整回退为普通文本，
+ * 避免仅凭金额外观误把用户输入染色。
+ */
+export function splitSalesOrderPaymentStatusReason(
+  reason: string,
+): readonly SalesOrderPaymentStatusReasonSegment[] {
+  const matched = reason.match(
+    /^用户添加实际收款 (.+?)，剩余 (.+?)( 未收|，订单已付清)$/u,
+  )
+  if (matched === null) {
+    return [{ text: reason, tone: 'default' }]
+  }
+  const [, receivedAmount, outstandingAmount, suffix] = matched
+  if (
+    receivedAmount === undefined
+    || outstandingAmount === undefined
+    || suffix === undefined
+  ) {
+    return [{ text: reason, tone: 'default' }]
+  }
+  return [
+    { text: '用户添加实际收款 ', tone: 'default' },
+    { text: receivedAmount, tone: 'received' },
+    { text: '，剩余 ', tone: 'default' },
+    { text: outstandingAmount, tone: 'outstanding' },
+    { text: suffix, tone: 'default' },
+  ]
+}
 
 export interface SalesOrderModalState {
   readonly origin: SalesOrderModalOrigin

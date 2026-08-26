@@ -8,6 +8,7 @@ import {
   formatSalesOrderLocalDateTime,
   resolveSalesOrderModalCancelAction,
   resolveSalesOrderModalInitialState,
+  splitSalesOrderPaymentStatusReason,
   toSalesOrderPaymentReceivedAt,
 } from '../../src/views/operations/sales-orders/sales-order-records-modal.logic'
 
@@ -100,4 +101,37 @@ test('货物签收请求接收一个有效签收单媒体 ID 与选填备注', (
     valid: false,
     fieldErrors: { remark: '备注最多 500 个字符' },
   })
+})
+
+test('付款状态原因将本次收款和剩余未收金额拆分为独立语义片段', () => {
+  assert.deepEqual(
+    splitSalesOrderPaymentStatusReason(
+      '用户添加实际收款 RM1,000.00 MYR，剩余 RM74,000.00 MYR 未收',
+    ),
+    [
+      { text: '用户添加实际收款 ', tone: 'default' },
+      { text: 'RM1,000.00 MYR', tone: 'received' },
+      { text: '，剩余 ', tone: 'default' },
+      { text: 'RM74,000.00 MYR', tone: 'outstanding' },
+      { text: ' 未收', tone: 'default' },
+    ],
+  )
+  assert.deepEqual(
+    splitSalesOrderPaymentStatusReason(
+      '用户添加实际收款 NT$100.00 TWD，剩余 NT$0.00 TWD，订单已付清',
+    ),
+    [
+      { text: '用户添加实际收款 ', tone: 'default' },
+      { text: 'NT$100.00 TWD', tone: 'received' },
+      { text: '，剩余 ', tone: 'default' },
+      { text: 'NT$0.00 TWD', tone: 'outstanding' },
+      { text: '，订单已付清', tone: 'default' },
+    ],
+  )
+})
+
+test('非系统付款原因保持完整普通文本', () => {
+  assert.deepEqual(splitSalesOrderPaymentStatusReason('客户要求调整状态'), [
+    { text: '客户要求调整状态', tone: 'default' },
+  ])
 })
