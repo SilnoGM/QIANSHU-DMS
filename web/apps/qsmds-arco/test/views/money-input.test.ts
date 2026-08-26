@@ -17,6 +17,7 @@ import {
   formatMoneyDiscountRate,
   MoneyValidationError,
   normalizeMoneyString,
+  resolveMoneyDiscountRate,
   sumMoneyValues,
   validateMoneyString,
 } from '../../src/components/base/MoneyInput/logic'
@@ -89,6 +90,22 @@ test('折扣率在金额非法、标准金额为空或为零时不伪造结果',
   assert.equal(formatMoneyDiscountRate('85.0000', '0.0000'), null)
   assert.equal(formatMoneyDiscountRate('invalid', '100.0000'), null)
   assert.equal(formatMoneyDiscountRate('85.0000', 'invalid'), null)
+})
+
+test('折扣率趋势比较原始 Decimal 金额，不受两位百分比舍入影响', () => {
+  assert.deepEqual(resolveMoneyDiscountRate('99.9999', '100.0000'), {
+    formattedValue: '100.00%',
+    trend: 'below',
+  })
+  assert.deepEqual(resolveMoneyDiscountRate('100.0000', '100.0000'), {
+    formattedValue: '100.00%',
+    trend: 'equal',
+  })
+  assert.deepEqual(resolveMoneyDiscountRate('100.0001', '100.0000'), {
+    formattedValue: '100.00%',
+    trend: 'above',
+  })
+  assert.equal(resolveMoneyDiscountRate('85.0000', '0.0000'), null)
 })
 
 test('币种描述符支持 0 到 4 位小数，并按调用方选项动态解析', () => {

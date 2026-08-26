@@ -10,6 +10,10 @@ import type {
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
+import type {
+  MoneyDiscountRate,
+  MoneyDiscountRateTrend,
+} from '@/components/base/MoneyInput/logic'
 
 import type {
   QsGenericTableColumn,
@@ -20,7 +24,7 @@ import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
-import { formatMoneyDiscountRate } from '@/components/base/MoneyInput/logic'
+import { resolveMoneyDiscountRate } from '@/components/base/MoneyInput/logic'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -198,7 +202,7 @@ const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
     title: '售价',
   },
   {
-    accessorFn: item => salesOrderDiscountRate(item) ?? '',
+    accessorFn: item => salesOrderDiscountRate(item)?.formattedValue ?? '',
     align: 'right',
     id: 'discountRateSummary',
     minWidth: 120,
@@ -259,11 +263,31 @@ function changeRecordCount(row: SalesOrderListItemDto): number {
 }
 
 /** 订单折扣率以双方约定总价对比标准价小计，缺少有效标准价时保持空态。 */
-function salesOrderDiscountRate(row: SalesOrderListItemDto): string | null {
-  return formatMoneyDiscountRate(
+function salesOrderDiscountRate(row: SalesOrderListItemDto): MoneyDiscountRate | null {
+  return resolveMoneyDiscountRate(
     row.agreedTotalAmount,
     row.standardSubtotalAmount,
   )
+}
+
+function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): string {
+  if (trend === 'below') {
+    return 'text-destructive'
+  }
+  if (trend === 'above') {
+    return 'text-primary'
+  }
+  return 'text-foreground'
+}
+
+function discountRateTrendIcon(trend: MoneyDiscountRateTrend | undefined): string | null {
+  if (trend === 'below') {
+    return 'i-lucide:arrow-down'
+  }
+  if (trend === 'above') {
+    return 'i-lucide:arrow-up'
+  }
+  return trend === 'equal' ? 'i-lucide:arrow-right' : null
 }
 
 function openRecordsModal(
@@ -646,7 +670,18 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-discountRateSummary="{ row }">
-          <span class="whitespace-nowrap tabular-nums">{{ salesOrderDiscountRate(row.original) ?? '—' }}</span>
+          <span
+            class="inline-flex gap-1 whitespace-nowrap items-center tabular-nums"
+            :class="discountRateTextClass(salesOrderDiscountRate(row.original)?.trend)"
+          >
+            <FaIcon
+              v-if="discountRateTrendIcon(salesOrderDiscountRate(row.original)?.trend)"
+              :name="discountRateTrendIcon(salesOrderDiscountRate(row.original)?.trend) ?? 'i-lucide:arrow-right'"
+              class="shrink-0 size-3.5"
+              aria-hidden="true"
+            />
+            {{ salesOrderDiscountRate(row.original)?.formattedValue ?? '—' }}
+          </span>
         </template>
 
         <template #cell-termsSummary="{ row }">
@@ -1034,8 +1069,17 @@ onBeforeUnmount(() => {
                 <dt class="qs-type-compact-label mb-1">
                   折扣率
                 </dt>
-                <dd class="m-0 whitespace-nowrap tabular-nums">
-                  {{ salesOrderDiscountRate(row) ?? '—' }}
+                <dd
+                  class="m-0 inline-flex gap-1 whitespace-nowrap items-center tabular-nums"
+                  :class="discountRateTextClass(salesOrderDiscountRate(row)?.trend)"
+                >
+                  <FaIcon
+                    v-if="discountRateTrendIcon(salesOrderDiscountRate(row)?.trend)"
+                    :name="discountRateTrendIcon(salesOrderDiscountRate(row)?.trend) ?? 'i-lucide:arrow-right'"
+                    class="shrink-0 size-3.5"
+                    aria-hidden="true"
+                  />
+                  {{ salesOrderDiscountRate(row)?.formattedValue ?? '—' }}
                 </dd>
               </div>
               <div class="col-span-2">

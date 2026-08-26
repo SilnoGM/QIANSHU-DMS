@@ -59,11 +59,13 @@ test('通用产品明细可按领域适配层开启只读折扣率计算列', as
 
   assert.match(types, /readonly showDiscountRate\?: boolean/u)
   assert.match(source, /showDiscountRate: false/u)
-  assert.match(source, /formatMoneyDiscountRate/u)
+  assert.match(source, /resolveMoneyDiscountRate/u)
   assert.match(source, /function lineDiscountRate\(/u)
   assert.match(source, /v-if="showDiscountRate"[\s\S]*?>\s*折扣率/u)
-  assert.match(source, /v-if="showDiscountRate"[\s\S]*?lineDiscountRate\(line\) \?\? '—'/u)
+  assert.match(source, /v-if="showDiscountRate"[\s\S]*?lineDiscountRate\(line\)\?\.formattedValue \?\? '—'/u)
   assert.match(source, /:colspan="showDiscountRate \? 11 : 10"/u)
+  assert.match(source, /function discountRateTextClass\([\s\S]*?below[\s\S]*?text-destructive[\s\S]*?above[\s\S]*?text-primary[\s\S]*?text-foreground/u)
+  assert.match(source, /:class="discountRateTextClass\(lineDiscountRate\(line\)\?\.trend\)"/u)
 })
 
 test('产品行独立横向滚动，固定汇总以语义色强化两类价格', async () => {

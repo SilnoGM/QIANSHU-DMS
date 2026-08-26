@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import type {
+  MoneyDiscountRate,
+  MoneyDiscountRateTrend,
+} from '../../base/MoneyInput/logic'
 import type { ProductSelectionChange } from '../QsProductSelector/types'
 import type {
   OrderProductLineEditorProps,
@@ -7,7 +11,7 @@ import type {
 
 import AmountDisplay from '../../base/AmountDisplay/index.vue'
 import MoneyInput from '../../base/MoneyInput/index.vue'
-import { formatMoneyDiscountRate } from '../../base/MoneyInput/logic'
+import { resolveMoneyDiscountRate } from '../../base/MoneyInput/logic'
 import QsProductSelector from '../QsProductSelector/index.vue'
 import {
   applyProductSelectionChanges,
@@ -115,15 +119,25 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
   return calculateOrderProductLineTotals([line], precision.value).actualTotal
 }
 
-function lineDiscountRate(line: OrderProductLineModel): string | null {
+function lineDiscountRate(line: OrderProductLineModel): MoneyDiscountRate | null {
   if (line.lineType !== 'CATALOG') {
     return null
   }
 
-  return formatMoneyDiscountRate(
+  return resolveMoneyDiscountRate(
     line.actualUnitPriceAmount,
     line.standardUnitPriceAmount,
   )
+}
+
+function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): string {
+  if (trend === 'below') {
+    return 'text-destructive'
+  }
+  if (trend === 'above') {
+    return 'text-primary'
+  }
+  return 'text-foreground'
 }
 </script>
 
@@ -310,7 +324,9 @@ function lineDiscountRate(line: OrderProductLineModel): string | null {
               </FaFormItem>
             </td>
             <td v-if="showDiscountRate" class="p-3 whitespace-nowrap">
-              {{ lineDiscountRate(line) ?? '—' }}
+              <span :class="discountRateTextClass(lineDiscountRate(line)?.trend)">
+                {{ lineDiscountRate(line)?.formattedValue ?? '—' }}
+              </span>
             </td>
             <td class="p-3">
               <FaFormItem
