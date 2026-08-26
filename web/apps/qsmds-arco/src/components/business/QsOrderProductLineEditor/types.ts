@@ -40,4 +40,5 @@ export interface OrderProductLineEditorProps {
   readonly disabled?: boolean
   readonly fieldErrors?: Readonly<Record<string, string | undefined>>
   readonly maximumLines?: number
+  readonly showDiscountRate?: boolean
 }

@@ -56,6 +56,7 @@ function handleUpdate(value: readonly OrderProductLineModel[]): void {
     :field-errors="fieldErrors"
     :labels="labels"
     :load-products="loadProducts"
+    show-discount-rate
     @update:model-value="handleUpdate"
   />
 </template>

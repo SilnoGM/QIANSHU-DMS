@@ -50,6 +50,22 @@ test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承�
   assert.doesNotMatch(source, /<FaTextarea/u)
 })
 
+test('通用产品明细可按领域适配层开启只读折扣率计算列', async () => {
+  const source = await readFile(SOURCE, 'utf8')
+  const types = await readFile(new URL(
+    '../../src/components/business/QsOrderProductLineEditor/types.ts',
+    import.meta.url,
+  ), 'utf8')
+
+  assert.match(types, /readonly showDiscountRate\?: boolean/u)
+  assert.match(source, /showDiscountRate: false/u)
+  assert.match(source, /formatMoneyDiscountRate/u)
+  assert.match(source, /function lineDiscountRate\(/u)
+  assert.match(source, /v-if="showDiscountRate"[\s\S]*?>\s*折扣率/u)
+  assert.match(source, /v-if="showDiscountRate"[\s\S]*?lineDiscountRate\(line\) \?\? '—'/u)
+  assert.match(source, /:colspan="showDiscountRate \? 11 : 10"/u)
+})
+
 test('产品行独立横向滚动，固定汇总以语义色强化两类价格', async () => {
   const source = await readFile(SOURCE, 'utf8')
   const scrollStart = source.indexOf('overflow-x-auto')

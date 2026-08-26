@@ -228,6 +228,37 @@ export function normalizeMoneyString(
 }
 
 /**
+ * 使用持久化金额字符串计算折扣率。金额域最多保存四位小数，百分比统一按
+ * ROUND_HALF_UP 保留两位；任一金额非法、缺失或参考金额为零时不伪造结果。
+ */
+export function formatMoneyDiscountRate(
+  actualAmount: MoneyAmount,
+  referenceAmount: MoneyAmount,
+): string | null {
+  const actualResult = validateMoneyString(actualAmount, { precision: 4 })
+  const referenceResult = validateMoneyString(referenceAmount, { precision: 4 })
+
+  if (
+    !actualResult.valid
+    || !referenceResult.valid
+    || actualResult.normalizedValue === null
+    || referenceResult.normalizedValue === null
+  ) {
+    return null
+  }
+
+  const reference = new Decimal(referenceResult.normalizedValue)
+  if (reference.isZero()) {
+    return null
+  }
+
+  return `${new Decimal(actualResult.normalizedValue)
+    .dividedBy(reference)
+    .times(100)
+    .toFixed(2, Decimal.ROUND_HALF_UP)}%`
+}
+
+/**
  * 精确汇总 decimal 字符串。空值不参与计算；没有有效值时返回对应精度的零。
  * 每一项都先执行与 MoneyInput 相同的严格校验，任何非法值都会中止汇总。
  */

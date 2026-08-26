@@ -14,6 +14,7 @@ import {
   resolveCommonMoneyCurrency,
 } from '../../src/components/base/MoneyInput/currency'
 import {
+  formatMoneyDiscountRate,
   MoneyValidationError,
   normalizeMoneyString,
   sumMoneyValues,
@@ -73,6 +74,21 @@ test('严格金额字符串可规范化为空值或固定精度十进制文本',
     valid: true,
   })
   assert.equal(normalizeMoneyString('-0.00', { allowNegative: true }), '0.00')
+})
+
+test('折扣率使用 Decimal 精确计算并固定显示两位小数', () => {
+  assert.equal(formatMoneyDiscountRate('85.2500', '100.0000'), '85.25%')
+  assert.equal(formatMoneyDiscountRate('1.0000', '3.0000'), '33.33%')
+  assert.equal(formatMoneyDiscountRate('120.0000', '100.0000'), '120.00%')
+  assert.equal(formatMoneyDiscountRate('0.0000', '100.0000'), '0.00%')
+})
+
+test('折扣率在金额非法、标准金额为空或为零时不伪造结果', () => {
+  assert.equal(formatMoneyDiscountRate(null, '100.0000'), null)
+  assert.equal(formatMoneyDiscountRate('85.0000', null), null)
+  assert.equal(formatMoneyDiscountRate('85.0000', '0.0000'), null)
+  assert.equal(formatMoneyDiscountRate('invalid', '100.0000'), null)
+  assert.equal(formatMoneyDiscountRate('85.0000', 'invalid'), null)
 })
 
 test('币种描述符支持 0 到 4 位小数，并按调用方选项动态解析', () => {

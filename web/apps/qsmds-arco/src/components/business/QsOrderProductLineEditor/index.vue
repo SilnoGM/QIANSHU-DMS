@@ -7,6 +7,7 @@ import type {
 
 import AmountDisplay from '../../base/AmountDisplay/index.vue'
 import MoneyInput from '../../base/MoneyInput/index.vue'
+import { formatMoneyDiscountRate } from '../../base/MoneyInput/logic'
 import QsProductSelector from '../QsProductSelector/index.vue'
 import {
   applyProductSelectionChanges,
@@ -20,6 +21,7 @@ const props = withDefaults(defineProps<OrderProductLineEditorProps>(), {
   disabled: false,
   fieldErrors: () => ({}),
   maximumLines: 100,
+  showDiscountRate: false,
 })
 
 const emit = defineEmits<{
@@ -112,6 +114,17 @@ function markImageFailed(key: string): void {
 function lineActualSubtotal(line: OrderProductLineModel): string | null {
   return calculateOrderProductLineTotals([line], precision.value).actualTotal
 }
+
+function lineDiscountRate(line: OrderProductLineModel): string | null {
+  if (line.lineType !== 'CATALOG') {
+    return null
+  }
+
+  return formatMoneyDiscountRate(
+    line.actualUnitPriceAmount,
+    line.standardUnitPriceAmount,
+  )
+}
 </script>
 
 <template>
@@ -155,7 +168,7 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
     </p>
 
     <div class="border border-border rounded-xl bg-background overflow-x-auto">
-      <table class="text-sm min-w-[120rem] w-full border-collapse">
+      <table class="text-sm min-w-[128rem] w-full border-collapse">
         <caption class="sr-only">
           订单产品明细
         </caption>
@@ -179,6 +192,9 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
             <th scope="col" class="font-medium p-3 w-72">
               {{ labels.actualUnitPrice }}
             </th>
+            <th v-if="showDiscountRate" scope="col" class="font-medium p-3 w-28">
+              折扣率
+            </th>
             <th scope="col" class="font-medium p-3 w-32">
               产品数量
             </th>
@@ -195,7 +211,7 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
         </thead>
         <tbody>
           <tr v-if="modelValue.length === 0">
-            <td colspan="10" class="p-0">
+            <td :colspan="showDiscountRate ? 11 : 10" class="p-0">
               <FaEmpty
                 icon="i-lucide:shopping-basket"
                 title="暂无产品明细"
@@ -292,6 +308,9 @@ function lineActualSubtotal(line: OrderProductLineModel): string | null {
                   @update:model-value="patchLine(index, { actualUnitPriceAmount: $event })"
                 />
               </FaFormItem>
+            </td>
+            <td v-if="showDiscountRate" class="p-3 whitespace-nowrap">
+              {{ lineDiscountRate(line) ?? '—' }}
             </td>
             <td class="p-3">
               <FaFormItem
