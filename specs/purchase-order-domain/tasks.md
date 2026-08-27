@@ -50,12 +50,13 @@
   - _Requirements: R2, R5, R7, R9-R11_
 
 - [ ] 6. 以 TDD 实现创建规范化、请求指纹与幂等发号
-  - [ ] 6.1 为创建 DTO、规范化命令和不同采购类型 payload 形状建立 RED。
-  - [ ] 6.2 为 UUID v4 `Idempotency-Key`、SHA-256 存储和规范请求指纹建立 RED。
+  - [x] 6.1 为创建 DTO、规范化命令和不同采购类型 payload 形状建立 RED。
+  - [x] 6.2 为 UUID v4 `Idempotency-Key`、SHA-256 存储和规范请求指纹建立 RED。
   - [ ] 6.3 为“预校验后发号、最终事务重校验”顺序建立 Service RED。
   - [ ] 6.4 接入 `PURCHASE_ORDER` / `PURCHASE_ORDER.CREATE`，覆盖同请求重放、Key 冲突和编号域错误映射。
-  - [ ] 6.5 验证客户端不能提交订单号或其他币种。
+  - [x] 6.5 验证客户端不能提交订单号或其他币种。
   - [ ] 6.6 运行创建服务聚焦测试并提交创建核心小步提交。
+  - _Partial evidence: 规范化与指纹 2 suites 首轮因 DTO、Normalizer、Fingerprint 模块不存在而 RED；最小实现后 2 suites / 17 tests 通过。已固定销售关联/备货四类行 payload、固定 CNY、两位用户金额、服务端行汇总、字典值规范化、UUID v4 Key、Key SHA-256 与 `PURCHASE_ORDER` / `PURCHASE_ORDER.CREATE` 指纹范围。_
   - _Requirements: R2-R8, R11-R12_
 
 - [ ] 7. 以 TDD 实现供应商、产品与销售来源校验
