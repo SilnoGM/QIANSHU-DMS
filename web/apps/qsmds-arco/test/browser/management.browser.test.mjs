@@ -1021,7 +1021,9 @@ async function verifyProductList(page, baseUrl) {
       if (!(video instanceof HTMLVideoElement)) throw new Error('preview video unavailable')
       Object.defineProperty(video, 'error', {
         configurable: true,
-        value: { code: MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED },
+        // 4 是规范定义的 MEDIA_ERR_SRC_NOT_SUPPORTED。使用协议常量可避免部分
+        // Headless Chrome 环境没有暴露 MediaError 构造器而导致测试脚本自身失败。
+        value: { code: 4 },
       })
       video.dispatchEvent(new Event('error'))
       return true
@@ -1598,6 +1600,11 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'regions:enable',
     'regions:read',
     'regions:update',
+    'sales-orders:create',
+    'sales-orders:document',
+    'sales-orders:payment',
+    'sales-orders:read',
+    'sales-orders:update',
   ])
   assert.equal(Math.round(permissionDrawerState.width), 768)
   assert.ok(permissionDrawerState.rightGap <= 1)

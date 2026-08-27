@@ -1,0 +1,47 @@
+{
+  "salesOrderDesc": {
+    "title": "Order details",
+    "description": "Details update as you type. Review each section before submitting.",
+    "sections": {
+      "basic": "Order information",
+      "customer": "Customer information",
+      "lines": "Products and subtotals ({count})",
+      "sales": "Sales information",
+      "documents": "Attachment previews ({count})"
+    },
+    "fields": {
+      "orderNo": "Order number",
+      "orderDate": "Order date",
+      "issuer": "Issued by",
+      "currency": "Currency",
+      "customerName": "Customer",
+      "customerPhone": "Phone",
+      "region": "Region",
+      "fullAddress": "Full address",
+      "actualUnitPrice": "Actual price",
+      "quantity": "Quantity",
+      "lineSubtotal": "Line subtotal",
+      "lineSubtotalAmount": "Product subtotal",
+      "salesTotal": "Sales total",
+      "deposit": "Agreed deposit",
+      "balance": "Agreed balance",
+      "lineIndex": "Product item {index}"
+    },
+    "lineTypes": {
+      "CATALOG": "Catalog product",
+      "CUSTOM": "Order-only product"
+    },
+    "documentTypes": {
+      "ORDER_ISSUANCE_VOUCHER": "Issuance voucher",
+      "PAYMENT_VOUCHER": "Payment voucher",
+      "DELIVERY_RECEIPT": "Delivery receipt"
+    },
+    "empty": {
+      "text": "Not provided",
+      "region": "Not selected",
+      "orderNo": "Assigned after the order is saved",
+      "lines": "No products yet",
+      "documents": "No attachments yet"
+    }
+  }
+}

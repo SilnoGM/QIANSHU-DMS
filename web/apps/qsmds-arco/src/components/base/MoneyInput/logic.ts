@@ -19,6 +19,13 @@ export interface MoneyValidationOptions {
   precision?: number
 }
 
+export type MoneyDiscountRateTrend = 'above' | 'below' | 'equal'
+
+export interface MoneyDiscountRate {
+  formattedValue: string
+  trend: MoneyDiscountRateTrend
+}
+
 export type MoneyValidationResult
   = | {
     normalizedValue: MoneyAmount
@@ -225,6 +232,51 @@ export function normalizeMoneyString(
   }
 
   return result.normalizedValue
+}
+
+/**
+ * 使用持久化金额字符串计算折扣率。金额域最多保存四位小数，百分比统一按
+ * ROUND_HALF_UP 保留两位；任一金额非法、缺失或参考金额为零时不伪造结果。
+ */
+export function resolveMoneyDiscountRate(
+  actualAmount: MoneyAmount,
+  referenceAmount: MoneyAmount,
+): MoneyDiscountRate | null {
+  const actualResult = validateMoneyString(actualAmount, { precision: 4 })
+  const referenceResult = validateMoneyString(referenceAmount, { precision: 4 })
+
+  if (
+    !actualResult.valid
+    || !referenceResult.valid
+    || actualResult.normalizedValue === null
+    || referenceResult.normalizedValue === null
+  ) {
+    return null
+  }
+
+  const actual = new Decimal(actualResult.normalizedValue)
+  const reference = new Decimal(referenceResult.normalizedValue)
+  if (reference.isZero()) {
+    return null
+  }
+
+  return {
+    formattedValue: `${actual
+      .dividedBy(reference)
+      .times(100)
+      .toFixed(2, Decimal.ROUND_HALF_UP)}%`,
+    trend: actual.lessThan(reference)
+      ? 'below'
+      : actual.greaterThan(reference) ? 'above' : 'equal',
+  }
+}
+
+/** 兼容仅需要展示文本的调用方，趋势判断统一复用原始 Decimal 比较结果。 */
+export function formatMoneyDiscountRate(
+  actualAmount: MoneyAmount,
+  referenceAmount: MoneyAmount,
+): string | null {
+  return resolveMoneyDiscountRate(actualAmount, referenceAmount)?.formattedValue ?? null
 }
 
 /**

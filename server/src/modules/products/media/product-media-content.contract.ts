@@ -65,8 +65,15 @@ const PRODUCT_MEDIA_CONTENT = {
  * GET 与 HEAD 共享同一授权、条件请求及私有交付契约；仅 GET 声明 binary body。
  * application 模式由 Nest 返回完整或单区间内容，internal_redirect 模式继续交给 Nginx。
  */
+export interface ProductMediaContentContractOptions {
+  readonly operationId?: string
+  readonly notFoundCode?: string
+  readonly description?: string
+}
+
 export function ApiProductMediaContentContract(
   method: 'GET' | 'HEAD',
+  options: ProductMediaContentContractOptions = {},
 ): MethodDecorator {
   return applyDecorators(
     ApiHeader({
@@ -81,13 +88,13 @@ export function ApiProductMediaContentContract(
     }),
     ApiContractResponse({
       status: HttpStatus.OK,
-      description: 'Authorized private product media content.',
+      description: options.description ?? 'Authorized private product media content.',
       headers: PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS,
       ...(method === 'GET' ? { content: PRODUCT_MEDIA_CONTENT } : {}),
     }),
     ApiContractResponse({
       status: HttpStatus.PARTIAL_CONTENT,
-      description: 'Authorized private product media byte range.',
+      description: options.description ?? 'Authorized private product media byte range.',
       headers: PRODUCT_MEDIA_CONTENT_RESPONSE_HEADERS,
       ...(method === 'GET' ? { content: PRODUCT_MEDIA_CONTENT } : {}),
     }),
@@ -113,9 +120,9 @@ export function ApiProductMediaContentContract(
       },
     }),
     ApiApplicationContract({
-      operationId: method === 'GET'
+      operationId: options.operationId ?? (method === 'GET'
         ? 'products_get_media_content'
-        : 'products_head_media_content',
+        : 'products_head_media_content'),
       session: 'required',
       authorization: true,
       badRequest: true,
@@ -127,7 +134,7 @@ export function ApiProductMediaContentContract(
           status: 403,
           codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'],
         },
-        { status: 404, codes: ['PRODUCT_MEDIA_NOT_FOUND'] },
+        { status: 404, codes: [options.notFoundCode ?? 'PRODUCT_MEDIA_NOT_FOUND'] },
         { status: 422, codes: ['VALIDATION_FAILED'] },
         { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },
       ],

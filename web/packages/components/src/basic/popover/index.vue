@@ -12,17 +12,23 @@ defineOptions({
   name: 'BuiltInPopover',
 })
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   align?: PopoverContentProps['align']
   alignOffset?: PopoverContentProps['alignOffset']
+  autoFocus?: boolean
   side?: PopoverContentProps['side']
   sideOffset?: PopoverContentProps['sideOffset']
   collisionPadding?: PopoverContentProps['collisionPadding']
   class?: HTMLAttributes['class']
-}>()
+}>(), {
+  autoFocus: false,
+})
 
 function handleOpenAutoFocus(e: Event) {
-  e.preventDefault()
+  // 默认保持既有轻量提示行为；确认型 Popover 可显式允许焦点进入操作区。
+  if (!props.autoFocus) {
+    e.preventDefault()
+  }
 }
 
 const open = defineModel<boolean>('open', {

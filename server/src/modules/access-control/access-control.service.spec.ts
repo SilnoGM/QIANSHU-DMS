@@ -79,8 +79,13 @@ describe('permission constants', () => {
       'fund-transactions:reverse',
       'fund-posting-types:manage',
       'fund-business-sources:manage',
+      'sales-orders:read',
+      'sales-orders:create',
+      'sales-orders:update',
+      'sales-orders:payment',
+      'sales-orders:document',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 48)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 53)
   })
 })
 

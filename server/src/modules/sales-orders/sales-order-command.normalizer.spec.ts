@@ -1,0 +1,255 @@
+import { plainToInstance } from 'class-transformer'
+
+import { ApiException } from '../../infrastructure/http/api.exception'
+import { CreateSalesOrderRequestDto } from './dto/sales-order-create.dto'
+import {
+  normalizeSalesOrderCreateCommand,
+  parseSalesOrderIdempotencyKey,
+} from './sales-order-command.normalizer'
+
+const TODAY = '2026-08-20'
+
+function validInput(): Record<string, unknown> {
+  return {
+    orderDate: '2026-08-20',
+    currencyCode: 'TWD',
+    customer: {
+      name: ' 王 小明 ',
+      phone: ' 0912-345-678 ',
+      countryRegionId: '11111111-1111-4111-8111-111111111111',
+      provinceStateId: '22222222-2222-4222-8222-222222222222',
+      cityId: '33333333-3333-4333-8333-333333333333',
+      addressDetail: ' 苓雅区 中正一路 100 号 ',
+    },
+    lines: [
+      {
+        lineType: 'CATALOG',
+        productId: '44444444-4444-4444-8444-444444444444',
+        actualUnitPriceAmount: '20',
+        quantity: 2,
+      },
+      {
+        lineType: 'CUSTOM',
+        name: ' 临时配件 ',
+        description: ' 本单专用 ',
+        actualUnitPriceAmount: '10',
+        quantity: 1,
+      },
+    ],
+    agreedTotalAmount: '50',
+    depositDueAmount: '20',
+    balanceDueAmount: '30',
+    issuanceVoucher: {
+      mediaAssetId: '55555555-5555-4555-8555-555555555555',
+    },
+    remark: ' 订单备注 ',
+  }
+}
+
+function captureApiException(action: () => unknown): ApiException {
+  let thrown: unknown
+  try {
+    action()
+  }
+  catch (error) {
+    thrown = error
+  }
+  expect(thrown).toBeInstanceOf(ApiException)
+  return thrown as ApiException
+}
+
+describe('normalizeSalesOrderCreateCommand', () => {
+  it('accepts the DTO class instance produced by the global ValidationPipe', () => {
+    const transformed = plainToInstance(
+      CreateSalesOrderRequestDto,
+      validInput(),
+    )
+
+    expect(normalizeSalesOrderCreateCommand(transformed, TODAY).lines)
+      .toHaveLength(2)
+  })
+
+  it('normalizes a fixed-currency order and computes trusted line totals', () => {
+    const normalized = normalizeSalesOrderCreateCommand(validInput(), TODAY)
+
+    expect(normalized).toMatchObject({
+      orderDate: TODAY,
+      currencyCode: 'TWD',
+      customer: {
+        name: '王 小明',
+        phone: '0912-345-678',
+        addressDetail: '苓雅区中正一路100号',
+      },
+      lines: [
+        {
+          lineNumber: 1,
+          lineType: 'CATALOG',
+          productId: '44444444-4444-4444-8444-444444444444',
+          actualUnitPriceAmount: '20.0000',
+          quantity: 2,
+          lineTotalAmount: '40.0000',
+        },
+        {
+          lineNumber: 2,
+          lineType: 'CUSTOM',
+          name: '临时配件',
+          description: '本单专用',
+          actualUnitPriceAmount: '10.0000',
+          quantity: 1,
+          lineTotalAmount: '10.0000',
+        },
+      ],
+      lineSubtotalAmount: '50.0000',
+      agreedTotalAmount: '50.0000',
+      depositDueAmount: '20.0000',
+      balanceDueAmount: '30.0000',
+      issuanceVoucher: {
+        mediaAssetId: '55555555-5555-4555-8555-555555555555',
+      },
+      remark: '订单备注',
+    })
+    expect(Object.isFrozen(normalized)).toBe(true)
+    expect(Object.isFrozen(normalized.lines)).toBe(true)
+  })
+
+  it.each([
+    ['0', '0.0000'],
+    ['1', '1.0000'],
+    ['1.2', '1.2000'],
+    ['1.23', '1.2300'],
+  ])(
+    'accepts actual unit price with at most two decimal places: %s',
+    (actualUnitPriceAmount, normalizedAmount) => {
+      const input = validInput()
+      input.lines = [{
+        lineType: 'CATALOG',
+        productId: '44444444-4444-4444-8444-444444444444',
+        actualUnitPriceAmount,
+        quantity: 1,
+      }]
+      input.agreedTotalAmount = actualUnitPriceAmount
+      input.depositDueAmount = '0'
+      input.balanceDueAmount = actualUnitPriceAmount
+
+      expect(normalizeSalesOrderCreateCommand(input, TODAY).lines[0])
+        .toMatchObject({ actualUnitPriceAmount: normalizedAmount })
+    },
+  )
+
+  it('rejects a third decimal place in actual unit price', () => {
+    const input = validInput()
+    input.lines = [{
+      lineType: 'CATALOG',
+      productId: '44444444-4444-4444-8444-444444444444',
+      actualUnitPriceAmount: '1.234',
+      quantity: 1,
+    }]
+
+    const error = captureApiException(() => (
+      normalizeSalesOrderCreateCommand(input, TODAY)
+    ))
+    expect(error).toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(Object.keys(error.fieldErrors ?? {}))
+      .toEqual(['lines.0.actualUnitPriceAmount'])
+  })
+
+  it('accepts canonical UUID v5 region identities from the existing region domain', () => {
+    const input = validInput()
+    input.customer = {
+      ...(input.customer as Record<string, unknown>),
+      countryRegionId: '2e30acdf-7559-5fc2-8e00-c5b069d3df8b',
+      provinceStateId: 'ee82c572-f653-51d2-98d4-f11ac5928aa1',
+      cityId: '78f9134e-3d72-5f6e-9897-ca7e50004229',
+    }
+
+    expect(normalizeSalesOrderCreateCommand(input, TODAY).customer).toMatchObject({
+      countryRegionId: '2e30acdf-7559-5fc2-8e00-c5b069d3df8b',
+      provinceStateId: 'ee82c572-f653-51d2-98d4-f11ac5928aa1',
+      cityId: '78f9134e-3d72-5f6e-9897-ca7e50004229',
+    })
+  })
+
+  it.each([
+    ['orderDate', { orderDate: '2026-08-21' }],
+    ['orderDate', { orderDate: '2026-02-30' }],
+    ['currencyCode', { currencyCode: 'USD' }],
+    ['lines', { lines: [] }],
+    ['lines.0.quantity', {
+      lines: [{
+        lineType: 'CATALOG',
+        productId: '44444444-4444-4444-8444-444444444444',
+        actualUnitPriceAmount: '20',
+        quantity: 0,
+      }],
+    }],
+    ['lines.0.productId', {
+      lines: [{
+        lineType: 'CATALOG',
+        actualUnitPriceAmount: '20',
+        quantity: 1,
+      }],
+    }],
+    ['lines.0', {
+      lines: [{
+        lineType: 'CUSTOM',
+        name: '临时产品',
+        productId: '44444444-4444-4444-8444-444444444444',
+        description: null,
+        actualUnitPriceAmount: '20',
+        quantity: 1,
+      }],
+    }],
+    ['body', { issuerUserId: 'must-not-leak' }],
+  ])('rejects invalid input at safe field %s', (field, override) => {
+    const error = captureApiException(() => normalizeSalesOrderCreateCommand({
+      ...validInput(),
+      ...override,
+    }, TODAY))
+    expect(error).toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(Object.keys(error.fieldErrors ?? {})).toEqual([field])
+    expect(JSON.stringify(error)).not.toContain('must-not-leak')
+  })
+
+  it('hard-blocks a manually entered total that differs from line subtotal', () => {
+    const error = captureApiException(() => normalizeSalesOrderCreateCommand({
+      ...validInput(),
+      agreedTotalAmount: '49.99',
+      depositDueAmount: '19.99',
+    }, TODAY))
+    expect(error.code).toBe('SALES_ORDER_TOTAL_MISMATCH')
+  })
+
+  it('requires exactly one issuance voucher and rejects the legacy documents field', () => {
+    const missing = validInput()
+    delete missing.issuanceVoucher
+    expect(() => normalizeSalesOrderCreateCommand(missing, TODAY)).toThrow(
+      expect.objectContaining({ code: 'VALIDATION_FAILED' }),
+    )
+
+    const legacyError = captureApiException(() => normalizeSalesOrderCreateCommand({
+      ...validInput(),
+      documents: [],
+    }, TODAY))
+    expect(legacyError.code).toBe('VALIDATION_FAILED')
+    expect(Object.keys(legacyError.fieldErrors ?? {})).toEqual(['body'])
+  })
+})
+
+describe('parseSalesOrderIdempotencyKey', () => {
+  it('accepts only a canonical lowercase UUID v4', () => {
+    expect(parseSalesOrderIdempotencyKey(
+      '123e4567-e89b-42d3-a456-426614174000',
+    )).toBe('123e4567-e89b-42d3-a456-426614174000')
+
+    for (const value of [
+      undefined,
+      '123E4567-E89B-42D3-A456-426614174000',
+      '123e4567-e89b-12d3-a456-426614174000',
+      '123e4567-e89b-42d3-a456-426614174000,other',
+    ]) {
+      expect(() => parseSalesOrderIdempotencyKey(value)).toThrow(
+        expect.objectContaining({ code: 'VALIDATION_FAILED' }),
+      )
+    }
+  })
+})

@@ -14,8 +14,10 @@ import {
   resolveCommonMoneyCurrency,
 } from '../../src/components/base/MoneyInput/currency'
 import {
+  formatMoneyDiscountRate,
   MoneyValidationError,
   normalizeMoneyString,
+  resolveMoneyDiscountRate,
   sumMoneyValues,
   validateMoneyString,
 } from '../../src/components/base/MoneyInput/logic'
@@ -73,6 +75,37 @@ test('严格金额字符串可规范化为空值或固定精度十进制文本',
     valid: true,
   })
   assert.equal(normalizeMoneyString('-0.00', { allowNegative: true }), '0.00')
+})
+
+test('折扣率使用 Decimal 精确计算并固定显示两位小数', () => {
+  assert.equal(formatMoneyDiscountRate('85.2500', '100.0000'), '85.25%')
+  assert.equal(formatMoneyDiscountRate('1.0000', '3.0000'), '33.33%')
+  assert.equal(formatMoneyDiscountRate('120.0000', '100.0000'), '120.00%')
+  assert.equal(formatMoneyDiscountRate('0.0000', '100.0000'), '0.00%')
+})
+
+test('折扣率在金额非法、标准金额为空或为零时不伪造结果', () => {
+  assert.equal(formatMoneyDiscountRate(null, '100.0000'), null)
+  assert.equal(formatMoneyDiscountRate('85.0000', null), null)
+  assert.equal(formatMoneyDiscountRate('85.0000', '0.0000'), null)
+  assert.equal(formatMoneyDiscountRate('invalid', '100.0000'), null)
+  assert.equal(formatMoneyDiscountRate('85.0000', 'invalid'), null)
+})
+
+test('折扣率趋势比较原始 Decimal 金额，不受两位百分比舍入影响', () => {
+  assert.deepEqual(resolveMoneyDiscountRate('99.9999', '100.0000'), {
+    formattedValue: '100.00%',
+    trend: 'below',
+  })
+  assert.deepEqual(resolveMoneyDiscountRate('100.0000', '100.0000'), {
+    formattedValue: '100.00%',
+    trend: 'equal',
+  })
+  assert.deepEqual(resolveMoneyDiscountRate('100.0001', '100.0000'), {
+    formattedValue: '100.00%',
+    trend: 'above',
+  })
+  assert.equal(resolveMoneyDiscountRate('85.0000', '0.0000'), null)
 })
 
 test('币种描述符支持 0 到 4 位小数，并按调用方选项动态解析', () => {
@@ -260,9 +293,13 @@ test('MoneyInput 基于 FaInput 提供字符串模型、币种语义和无障碍
     /defineModel<string \| null>\('currency', \{[\s\S]*?default: null/u,
   )
   assert.match(source, /currencies: readonly CurrencyDescriptor\[\]/u)
+  assert.match(source, /currencySelectable\?: boolean/u)
+  assert.match(source, /currencySelectable: true/u)
   assert.match(source, /currentCurrency[\s\S]*?minorUnit/u)
   assert.match(source, /<FaInput/u)
   assert.match(source, /<FaSelect/u)
+  assert.match(source, /<FaSelect[\s\S]*?v-if="currencySelectable"/u)
+  assert.match(source, /<span[\s\S]*?v-else[\s\S]*?currentCurrency\?\.code/u)
   assert.match(source, /:options="currencyOptions"/u)
   assert.match(source, /:disabled="disabled \|\| readonly \|\| !hasEnabledCurrencies"/u)
   assert.match(source, /@update:model-value="handleCurrencyUpdate"/u)

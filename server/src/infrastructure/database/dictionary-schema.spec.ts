@@ -31,6 +31,17 @@ const DICTIONARY_AUDIT_EVENT_TYPES = [
   'DICTIONARY_ITEM_DISABLED',
 ] as const
 
+const SALES_ORDER_AUDIT_EVENT_TYPES = [
+  'SALES_ORDER_CREATED',
+  'SALES_ORDER_ORDER_STATUS_CHANGED',
+  'SALES_ORDER_FULFILLMENT_STATUS_CHANGED',
+  'SALES_ORDER_PAYMENT_TERMS_UPDATED',
+  'SALES_ORDER_PAYMENT_RECORDED',
+  'SALES_ORDER_PAYMENT_VOIDED',
+  'SALES_ORDER_DOCUMENT_ATTACHED',
+  'SALES_ORDER_DOCUMENT_DETACHED',
+] as const
+
 const DICTIONARY_CONSTRAINTS = [
   'dictionary_types_pkey',
   'dictionary_types_code_format_check',
@@ -252,14 +263,17 @@ describe('dictionary management database schema', () => {
         `ALTER TYPE "audit_event_type" ADD VALUE '${eventType}'`,
       )
     }
-    // 产品与资金领域在后续 append-only migration 扩展审计类型；字典测试继续
-    // 锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(56)
+    // 产品、资金与销售订单领域会在后续 append-only migration 扩展审计类型；
+    // 字典测试锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
+    expect(auditEventTypes).toHaveLength(64)
     expect(auditEventTypes).toContain('PRODUCT_CREATED')
     expect(auditEventTypes).toContain('PRODUCT_UPDATED')
     expect(
       auditEventTypes.filter(eventType => eventType.startsWith('DICTIONARY_')),
     ).toEqual(DICTIONARY_AUDIT_EVENT_TYPES)
+    expect(
+      auditEventTypes.filter(eventType => eventType.startsWith('SALES_ORDER_')),
+    ).toEqual(SALES_ORDER_AUDIT_EVENT_TYPES)
     for (const [id, code, name] of DICTIONARY_PERMISSION_SEEDS) {
       expect(migration).toMatch(
         new RegExp(

@@ -1,0 +1,47 @@
+{
+  "salesOrderDesc": {
+    "title": "訂單詳情",
+    "description": "內容會隨填寫即時更新，請在提交前逐項核對。",
+    "sections": {
+      "basic": "訂單基礎資訊",
+      "customer": "客戶資訊",
+      "lines": "產品列表與小計（{count}）",
+      "sales": "銷售資訊",
+      "documents": "附件縮圖（{count}）"
+    },
+    "fields": {
+      "orderNo": "訂單編號",
+      "orderDate": "出單日期",
+      "issuer": "出單人",
+      "currency": "訂單幣別",
+      "customerName": "客戶姓名",
+      "customerPhone": "客戶電話",
+      "region": "三級地區",
+      "fullAddress": "完整地址",
+      "actualUnitPrice": "真實售價",
+      "quantity": "數量",
+      "lineSubtotal": "本行小計",
+      "lineSubtotalAmount": "產品明細彙總",
+      "salesTotal": "銷售總價",
+      "deposit": "約定訂金",
+      "balance": "約定尾款",
+      "lineIndex": "第 {index} 項產品"
+    },
+    "lineTypes": {
+      "CATALOG": "資料庫產品",
+      "CUSTOM": "本單臨時產品"
+    },
+    "documentTypes": {
+      "ORDER_ISSUANCE_VOUCHER": "出單憑證",
+      "PAYMENT_VOUCHER": "收款憑證",
+      "DELIVERY_RECEIPT": "簽收單"
+    },
+    "empty": {
+      "text": "未填寫",
+      "region": "未選擇",
+      "orderNo": "正式儲存後派發",
+      "lines": "暫無產品",
+      "documents": "暫無附件"
+    }
+  }
+}

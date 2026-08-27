@@ -348,6 +348,25 @@ test('桌面汇总行使用统一背景且自定义汇总组件跟随列对齐',
   assert.match(source, /background-color: oklch\(var\(--background\)\)/u)
 })
 
+test('通用表格支持位于数据区域之后且分页之前的可选全宽汇总区域', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const readme = readRelativeSource(
+    '../../src/components/business/QsGenericTable/README.md',
+  )
+
+  assert.match(source, /const hasFullWidthSummary = computed\(\(\) => Boolean\(slots\.summary\)\)/u)
+  assert.match(source, /v-if="hasFullWidthSummary"[\s\S]*?data-slot="qs-generic-table-summary"[\s\S]*?<slot name="summary"\s*\/>/u)
+
+  const summaryStart = source.indexOf('data-slot="qs-generic-table-summary"')
+  const paginationStart = source.indexOf('<FaPagination')
+  assert.ok(summaryStart >= 0 && paginationStart > summaryStart, '全宽汇总区域必须位于分页之前')
+
+  assert.match(readme, /`summary`：可选全宽汇总/u)
+  assert.match(readme, /数据区域之后、分页之前/u)
+})
+
 test('通用表格消费全局角色且只由显式业务语义启用结构化数据排版', () => {
   const tableSource = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',

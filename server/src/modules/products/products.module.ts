@@ -41,5 +41,6 @@ import { ProductsController } from './products.controller'
         new ProductMediaMultipartParser(),
     },
   ],
+  exports: [ProductMediaContentService],
 })
 export class ProductsModule {}

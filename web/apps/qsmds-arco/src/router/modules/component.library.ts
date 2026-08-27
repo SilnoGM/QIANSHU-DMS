@@ -191,6 +191,51 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:list-filter',
         },
       },
+      {
+        path: 'person-display',
+        name: 'componentLibraryQsPersonDisplay',
+        component: () => import('@/views/component_library/business/person-display.vue'),
+        meta: {
+          title: '人员显示',
+          icon: 'i-lucide:user-round',
+        },
+      },
+      {
+        path: 'product-selector',
+        name: 'componentLibraryQsProductSelector',
+        component: () => import('@/views/component_library/business/product-selector.vue'),
+        meta: {
+          title: '产品选择器',
+          icon: 'i-lucide:package-search',
+        },
+      },
+      {
+        path: 'order-product-line-editor',
+        name: 'componentLibraryQsOrderProductLineEditor',
+        component: () => import('@/views/component_library/business/order-product-line-editor.vue'),
+        meta: {
+          title: '订单产品明细编辑器',
+          icon: 'i-lucide:table-properties',
+        },
+      },
+      {
+        path: 'sales-order-desc',
+        name: 'componentLibraryQsSalesOrderDesc',
+        component: () => import('@/views/component_library/business/sales-order-desc.vue'),
+        meta: {
+          title: '销售订单详情',
+          icon: 'i-lucide:receipt-text',
+        },
+      },
+      {
+        path: 'status-switch-toolbar',
+        name: 'componentLibraryQsStatusSwitchToolbar',
+        component: () => import('@/views/component_library/business/status-switch-toolbar.vue'),
+        meta: {
+          title: '状态切换工具栏',
+          icon: 'i-lucide:list-filter',
+        },
+      },
     ],
   },
   {

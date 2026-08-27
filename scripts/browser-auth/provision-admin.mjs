@@ -214,6 +214,68 @@ const { Client } = require('pg')
       [productRule.rows[0].id],
     )
 
+    // 销售订单 Browser 场景必须通过正式编号域在最终保存时派号。该规则与
+    // PRODUCT 使用独立序列，确保打开表单和前端硬拦截阶段不会提前消耗编号。
+    const salesOrderRule = await client.query(
+      [
+        'INSERT INTO numbering_rules (rule_code, name, status, version)',
+        'VALUES (\'SALES_ORDER\', \'Browser Sales Order Rule\', \'DRAFT\', 1)',
+        'RETURNING id',
+      ].join(' '),
+    )
+    const salesOrderRuleVersion = await client.query(
+      [
+        'INSERT INTO numbering_rule_versions (',
+        'rule_id, revision, status, reset_policy, timezone, config_fingerprint',
+        ') VALUES ($1, 1, \'DRAFT\', \'NEVER\', \'Asia/Shanghai\', repeat(\'b\', 64))',
+        'RETURNING id',
+      ].join(' '),
+      [salesOrderRule.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, fixed_value',
+        ') VALUES',
+        '($1, 0, \'FIXED\', \'SO\'),',
+        '($1, 2, \'FIXED\', \'BRW\')',
+      ].join(' '),
+      [salesOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, separator_value',
+        ') VALUES',
+        '($1, 1, \'SEPARATOR\', \'-\'),',
+        '($1, 3, \'SEPARATOR\', \'-\')',
+      ].join(' '),
+      [salesOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, sequence_width, sequence_start_value, sequence_step',
+        ') VALUES ($1, 4, \'SEQUENCE\', 8, 1, 1)',
+      ].join(' '),
+      [salesOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rule_versions',
+        'SET status = \'ACTIVE\', published_at = clock_timestamp()',
+        'WHERE id = $1',
+      ].join(' '),
+      [salesOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rules SET status = \'ENABLED\', version = 3,',
+        'updated_at = clock_timestamp() WHERE id = $1',
+      ].join(' '),
+      [salesOrderRule.rows[0].id],
+    )
+
     // 管理域 Browser 场景保留独立的 4 图 2 视频只读样本；产品媒体专属场景使用
     // 另一条空媒体 Product，通过真实 API 写入，避免测试文件顺序影响验收结果。
     const managementProduct = await client.query(

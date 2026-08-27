@@ -13,10 +13,15 @@ function modelBlocks(schema: string): readonly string[] {
 describe('media reference extension contract', () => {
   it('keeps every implemented active-reference model explicit in repository and Trigger', () => {
     const schema = readFileSync(resolve(serverRoot, 'prisma/schema.prisma'), 'utf8')
-    const migration = readFileSync(resolve(
+    const productMediaMigration = readFileSync(resolve(
       serverRoot,
       'prisma/migrations/20260813120000_media_asset_product_media_schema/migration.sql',
     ), 'utf8')
+    const salesOrderMigration = readFileSync(resolve(
+      serverRoot,
+      'prisma/migrations/20260820120000_sales_order_domain/migration.sql',
+    ), 'utf8')
+    const migration = `${productMediaMigration}\n${salesOrderMigration}`
     const referenceTables = modelBlocks(schema)
       .filter(block => /\bmediaAssetId\b/u.test(block) && /\bdetachedAt\b/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])

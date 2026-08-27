@@ -107,6 +107,14 @@ enum AuditEventType {
   FUND_MANUAL_ADJUSTMENT_POSTED
   FUND_BUSINESS_POSTED
   FUND_POSTING_REVERSED
+  SALES_ORDER_CREATED
+  SALES_ORDER_ORDER_STATUS_CHANGED
+  SALES_ORDER_FULFILLMENT_STATUS_CHANGED
+  SALES_ORDER_PAYMENT_TERMS_UPDATED
+  SALES_ORDER_PAYMENT_RECORDED
+  SALES_ORDER_PAYMENT_VOIDED
+  SALES_ORDER_DOCUMENT_ATTACHED
+  SALES_ORDER_DOCUMENT_DETACHED
 
   @@map("audit_event_type")
 }
@@ -190,6 +198,66 @@ enum ProductStatus {
   INACTIVE
 
   @@map("product_status")
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+
+  @@map("sales_order_status")
+}
+
+enum SalesOrderFulfillmentStatus {
+  PENDING
+  PREPARING
+  LAND_TRANSIT
+  WAREHOUSE_ARRIVED
+  SEA_TRANSIT
+  SIGNED
+
+  @@map("sales_order_fulfillment_status")
+}
+
+enum SalesOrderPaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+
+  @@map("sales_order_payment_status")
+}
+
+enum SalesOrderLineType {
+  CATALOG
+  CUSTOM
+
+  @@map("sales_order_line_type")
+}
+
+enum SalesOrderPaymentType {
+  DEPOSIT
+  PROGRESS
+  INVOICE_TAX
+  BALANCE
+  OTHER
+
+  @@map("sales_order_payment_type")
+}
+
+enum SalesOrderDocumentType {
+  ORDER_ISSUANCE_VOUCHER
+  PAYMENT_VOUCHER
+  DELIVERY_RECEIPT
+
+  @@map("sales_order_document_type")
+}
+
+enum SalesOrderStatusDimension {
+  ORDER
+  FULFILLMENT
+  PAYMENT
+
+  @@map("sales_order_status_dimension")
 }
 
 enum MediaType {
@@ -317,24 +385,31 @@ model User {
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdBy                 User?                    @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  createdUsers              User[]                   @relation("UserCreatedBy")
-  disabledBy                User?                    @relation("UserDisabledBy", fields: [disabledByUserId], references: [id], onDelete: Restrict)
-  disabledUsers             User[]                   @relation("UserDisabledBy")
-  roles                     UserRole[]
-  sessions                  AuthSession[]
-  auditEvents               AuditEvent[]             @relation("AuditActor")
-  profile                   UserProfile?
-  productsCreated           Product[]                @relation("ProductCreatedBy")
-  productsUpdated           Product[]                @relation("ProductUpdatedBy")
-  mediaAssetsCreated        MediaAsset[]             @relation("MediaAssetCreatedBy")
-  productMediaCreated       ProductMedia[]           @relation("ProductMediaCreatedBy")
-  productMediaDetached      ProductMedia[]           @relation("ProductMediaDetachedBy")
-  fundAccount               FundAccount?             @relation("FundAccountUser")
-  fundRuleVersionsCreated   FundPostingRuleVersion[] @relation("FundRuleVersionCreatedBy")
-  fundRuleVersionsPublished FundPostingRuleVersion[] @relation("FundRuleVersionPublishedBy")
-  fundPostingBatches        FundPostingBatch[]       @relation("FundPostingBatchUser")
-  fundPostingBatchesActed   FundPostingBatch[]       @relation("FundPostingBatchActor")
+  createdBy                   User?                      @relation("UserCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  createdUsers                User[]                     @relation("UserCreatedBy")
+  disabledBy                  User?                      @relation("UserDisabledBy", fields: [disabledByUserId], references: [id], onDelete: Restrict)
+  disabledUsers               User[]                     @relation("UserDisabledBy")
+  roles                       UserRole[]
+  sessions                    AuthSession[]
+  auditEvents                 AuditEvent[]               @relation("AuditActor")
+  profile                     UserProfile?
+  productsCreated             Product[]                  @relation("ProductCreatedBy")
+  productsUpdated             Product[]                  @relation("ProductUpdatedBy")
+  mediaAssetsCreated          MediaAsset[]               @relation("MediaAssetCreatedBy")
+  productMediaCreated         ProductMedia[]             @relation("ProductMediaCreatedBy")
+  productMediaDetached        ProductMedia[]             @relation("ProductMediaDetachedBy")
+  fundAccount                 FundAccount?               @relation("FundAccountUser")
+  fundRuleVersionsCreated     FundPostingRuleVersion[]   @relation("FundRuleVersionCreatedBy")
+  fundRuleVersionsPublished   FundPostingRuleVersion[]   @relation("FundRuleVersionPublishedBy")
+  fundPostingBatches          FundPostingBatch[]         @relation("FundPostingBatchUser")
+  fundPostingBatchesActed     FundPostingBatch[]         @relation("FundPostingBatchActor")
+  salesOrdersIssued           SalesOrder[]               @relation("SalesOrderIssuer")
+  salesOrderPaymentsCreated   SalesOrderPayment[]        @relation("SalesOrderPaymentCreatedBy")
+  salesOrderPaymentsVoided    SalesOrderPayment[]        @relation("SalesOrderPaymentVoidedBy")
+  salesOrderDocumentsCreated  SalesOrderDocument[]       @relation("SalesOrderDocumentCreatedBy")
+  salesOrderDocumentsDetached SalesOrderDocument[]       @relation("SalesOrderDocumentDetachedBy")
+  salesOrderStatusesChanged   SalesOrderStatusHistory[]  @relation("SalesOrderStatusChangedBy")
+  salesOrderAmountsChanged    SalesOrderAmountRevision[] @relation("SalesOrderAmountChangedBy")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -476,8 +551,11 @@ model Region {
   createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  parent   Region?  @relation("RegionHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  children Region[] @relation("RegionHierarchy")
+  parent                     Region?      @relation("RegionHierarchy", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  children                   Region[]     @relation("RegionHierarchy")
+  salesOrdersAsCountryRegion SalesOrder[] @relation("SalesOrderCountryRegion")
+  salesOrdersAsProvinceState SalesOrder[] @relation("SalesOrderProvinceState")
+  salesOrdersAsCity          SalesOrder[] @relation("SalesOrderCity")
 
   @@unique([parentId, normalizedName], map: "regions_parent_id_normalized_name_key")
   @@index([parentId, sortOrder, normalizedName, id], map: "regions_parent_id_sort_order_name_id_idx")
@@ -499,6 +577,7 @@ model Currency {
   updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   exchangeRate ExchangeRate?
+  salesOrders  SalesOrder[]
 
   @@index([enabled, sortOrder, code, id], map: "currencies_enabled_sort_order_code_id_idx")
   @@map("currencies")
@@ -576,9 +655,10 @@ model Product {
   createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  createdBy User?          @relation("ProductCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  updatedBy User?          @relation("ProductUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  media     ProductMedia[]
+  createdBy       User?            @relation("ProductCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy       User?            @relation("ProductUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  media           ProductMedia[]
+  salesOrderLines SalesOrderLine[]
 
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "products_status_updated_at_id_idx")
   @@index([supplierValue, updatedAt(sort: Desc), id(sort: Desc)], map: "products_supplier_value_updated_at_id_idx")
@@ -609,8 +689,9 @@ model MediaAsset {
   updatedAt        DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
-  createdBy    User           @relation("MediaAssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  productMedia ProductMedia[]
+  createdBy           User                 @relation("MediaAssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  productMedia        ProductMedia[]
+  salesOrderDocuments SalesOrderDocument[]
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -636,6 +717,170 @@ model ProductMedia {
   detachedBy User?      @relation("ProductMediaDetachedBy", fields: [detachedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@map("product_media")
+}
+
+model SalesOrder {
+  id                                String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderNo                           String                      @unique(map: "sales_orders_order_no_key") @map("order_no") @db.VarChar(64)
+  createIdempotencyKeyHash          Bytes                       @unique(map: "sales_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
+  createRequestFingerprintHash      Bytes                       @map("create_request_fingerprint_hash") @db.ByteA
+  orderDate                         DateTime                    @map("order_date") @db.Date
+  issuerUserId                      String                      @map("issuer_user_id") @db.Uuid
+  currencyCode                      String                      @map("currency_code") @db.VarChar(3)
+  customerName                      String                      @map("customer_name") @db.VarChar(128)
+  customerPhone                     String                      @map("customer_phone") @db.VarChar(64)
+  customerCountryRegionId           String                      @map("customer_country_region_id") @db.Uuid
+  customerProvinceStateId           String                      @map("customer_province_state_id") @db.Uuid
+  customerCityId                    String                      @map("customer_city_id") @db.Uuid
+  customerCountryRegionCodeSnapshot String                      @map("customer_country_region_code_snapshot") @db.VarChar(64)
+  customerProvinceStateCodeSnapshot String                      @map("customer_province_state_code_snapshot") @db.VarChar(64)
+  customerCityCodeSnapshot          String                      @map("customer_city_code_snapshot") @db.VarChar(64)
+  customerCountryRegionNameSnapshot String                      @map("customer_country_region_name_snapshot") @db.VarChar(128)
+  customerProvinceStateNameSnapshot String                      @map("customer_province_state_name_snapshot") @db.VarChar(128)
+  customerCityNameSnapshot          String                      @map("customer_city_name_snapshot") @db.VarChar(128)
+  customerAddressDetail             String                      @map("customer_address_detail") @db.VarChar(1000)
+  customerFullAddressSnapshot       String                      @map("customer_full_address_snapshot") @db.VarChar(1500)
+  lineSubtotalAmount                Decimal                     @map("line_subtotal_amount") @db.Decimal(30, 4)
+  agreedTotalAmount                 Decimal                     @map("agreed_total_amount") @db.Decimal(30, 4)
+  depositDueAmount                  Decimal                     @map("deposit_due_amount") @db.Decimal(30, 4)
+  balanceDueAmount                  Decimal                     @map("balance_due_amount") @db.Decimal(30, 4)
+  orderStatus                       SalesOrderStatus            @default(DRAFT) @map("order_status")
+  fulfillmentStatus                 SalesOrderFulfillmentStatus @default(PENDING) @map("fulfillment_status")
+  paymentStatus                     SalesOrderPaymentStatus     @default(UNPAID) @map("payment_status")
+  remark                            String?                     @db.VarChar(1000)
+  version                           Int                         @default(1)
+  createdAt                         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                         DateTime                    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  issuer          User                       @relation("SalesOrderIssuer", fields: [issuerUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  currency        Currency                   @relation(fields: [currencyCode], references: [code], onDelete: Restrict, onUpdate: Restrict)
+  countryRegion   Region                     @relation("SalesOrderCountryRegion", fields: [customerCountryRegionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  provinceState   Region                     @relation("SalesOrderProvinceState", fields: [customerProvinceStateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  city            Region                     @relation("SalesOrderCity", fields: [customerCityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines           SalesOrderLine[]
+  payments        SalesOrderPayment[]
+  documents       SalesOrderDocument[]
+  statusHistory   SalesOrderStatusHistory[]
+  amountRevisions SalesOrderAmountRevision[]
+
+  @@index([orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_order_date_id_idx")
+  @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_statuses_order_date_id_idx")
+  @@index([currencyCode, orderStatus, customerCountryRegionId, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_currency_country_date_idx")
+  @@index([currencyCode, orderStatus, customerProvinceStateId, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_currency_province_date_idx")
+  @@index([currencyCode, orderStatus, customerCityId, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_currency_city_date_idx")
+  @@index([issuerUserId, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_issuer_order_date_id_idx")
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id                        String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  salesOrderId              String             @map("sales_order_id") @db.Uuid
+  lineNumber                Int                @map("line_number") @db.SmallInt
+  lineType                  SalesOrderLineType @map("line_type")
+  productId                 String?            @map("product_id") @db.Uuid
+  productNoSnapshot         String?            @map("product_no_snapshot") @db.VarChar(64)
+  productNameSnapshot       String             @map("product_name_snapshot") @db.VarChar(128)
+  productAttributesSnapshot Json               @default("[]") @map("product_attributes_snapshot") @db.JsonB
+  descriptionSnapshot       String?            @map("description_snapshot") @db.VarChar(1000)
+  standardUnitPriceAmount   Decimal?           @map("standard_unit_price_amount") @db.Decimal(30, 4)
+  actualUnitPriceAmount     Decimal            @map("actual_unit_price_amount") @db.Decimal(30, 4)
+  quantity                  Int
+  lineTotalAmount           Decimal            @map("line_total_amount") @db.Decimal(30, 4)
+  createdAt                 DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  product    Product?   @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([salesOrderId, lineNumber], map: "sales_order_lines_order_id_line_number_key")
+  @@index([productId, salesOrderId], map: "sales_order_lines_product_id_order_id_idx")
+  @@map("sales_order_lines")
+}
+
+model SalesOrderPayment {
+  id              String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  salesOrderId    String                @map("sales_order_id") @db.Uuid
+  paymentType     SalesOrderPaymentType @map("payment_type")
+  amount          Decimal               @db.Decimal(30, 4)
+  receivedAt      DateTime              @map("received_at") @db.Timestamptz(6)
+  paymentMethod   String?               @map("payment_method") @db.VarChar(64)
+  remark          String?               @db.VarChar(500)
+  createdByUserId String                @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  voidedAt        DateTime?             @map("voided_at") @db.Timestamptz(6)
+  voidedByUserId  String?               @map("voided_by_user_id") @db.Uuid
+  voidReason      String?               @map("void_reason") @db.VarChar(500)
+
+  salesOrder SalesOrder           @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User                 @relation("SalesOrderPaymentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy   User?                @relation("SalesOrderPaymentVoidedBy", fields: [voidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  documents  SalesOrderDocument[]
+
+  @@index([salesOrderId, voidedAt, receivedAt(sort: Desc), id(sort: Desc)], map: "sales_order_payments_order_voided_received_idx")
+  @@map("sales_order_payments")
+}
+
+model SalesOrderDocument {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  salesOrderId     String                 @map("sales_order_id") @db.Uuid
+  mediaAssetId     String                 @map("media_asset_id") @db.Uuid
+  paymentId        String?                @map("payment_id") @db.Uuid
+  documentType     SalesOrderDocumentType @map("document_type")
+  title            String?                @db.VarChar(128)
+  remark           String?                @db.VarChar(500)
+  createdByUserId  String                 @map("created_by_user_id") @db.Uuid
+  detachedByUserId String?                @map("detached_by_user_id") @db.Uuid
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  detachedAt       DateTime?              @map("detached_at") @db.Timestamptz(6)
+
+  salesOrder SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  mediaAsset MediaAsset         @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  payment    SalesOrderPayment? @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy  User               @relation("SalesOrderDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  detachedBy User?              @relation("SalesOrderDocumentDetachedBy", fields: [detachedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([salesOrderId, detachedAt, documentType, createdAt(sort: Desc), id(sort: Desc)], map: "sales_order_documents_order_type_created_idx")
+  @@index([mediaAssetId, detachedAt], map: "sales_order_documents_asset_detached_idx")
+  @@index([paymentId, detachedAt], map: "sales_order_documents_payment_detached_idx")
+  @@map("sales_order_documents")
+}
+
+model SalesOrderStatusHistory {
+  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  salesOrderId    String                    @map("sales_order_id") @db.Uuid
+  dimension       SalesOrderStatusDimension
+  fromStatus      String                    @map("from_status") @db.VarChar(32)
+  toStatus        String                    @map("to_status") @db.VarChar(32)
+  reason          String?                   @db.VarChar(500)
+  changedByUserId String                    @map("changed_by_user_id") @db.Uuid
+  changedAt       DateTime                  @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  changedBy  User       @relation("SalesOrderStatusChangedBy", fields: [changedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([salesOrderId, changedAt(sort: Desc), id(sort: Desc)], map: "sales_order_status_history_order_changed_idx")
+  @@map("sales_order_status_history")
+}
+
+model SalesOrderAmountRevision {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  salesOrderId          String   @map("sales_order_id") @db.Uuid
+  oldLineSubtotalAmount Decimal  @map("old_line_subtotal_amount") @db.Decimal(30, 4)
+  oldAgreedTotalAmount  Decimal  @map("old_agreed_total_amount") @db.Decimal(30, 4)
+  oldDepositDueAmount   Decimal  @map("old_deposit_due_amount") @db.Decimal(30, 4)
+  oldBalanceDueAmount   Decimal  @map("old_balance_due_amount") @db.Decimal(30, 4)
+  newLineSubtotalAmount Decimal  @map("new_line_subtotal_amount") @db.Decimal(30, 4)
+  newAgreedTotalAmount  Decimal  @map("new_agreed_total_amount") @db.Decimal(30, 4)
+  newDepositDueAmount   Decimal  @map("new_deposit_due_amount") @db.Decimal(30, 4)
+  newBalanceDueAmount   Decimal  @map("new_balance_due_amount") @db.Decimal(30, 4)
+  reason                String   @db.VarChar(500)
+  changedByUserId       String   @map("changed_by_user_id") @db.Uuid
+  changedAt             DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  changedBy  User       @relation("SalesOrderAmountChangedBy", fields: [changedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([salesOrderId, changedAt(sort: Desc), id(sort: Desc)], map: "sales_order_amount_revisions_order_changed_idx")
+  @@map("sales_order_amount_revisions")
 }
 
 model NumberingRule {

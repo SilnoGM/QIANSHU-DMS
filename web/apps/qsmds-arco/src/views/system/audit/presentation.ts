@@ -72,6 +72,14 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   FUND_MANUAL_ADJUSTMENT_POSTED: '管理员手动调账已记账',
   FUND_BUSINESS_POSTED: '资金业务已记账',
   FUND_POSTING_REVERSED: '资金动账已冲账',
+  SALES_ORDER_CREATED: '销售订单已创建',
+  SALES_ORDER_ORDER_STATUS_CHANGED: '销售订单状态已变更',
+  SALES_ORDER_FULFILLMENT_STATUS_CHANGED: '销售订单履约状态已变更',
+  SALES_ORDER_PAYMENT_TERMS_UPDATED: '销售订单付款约定已修改',
+  SALES_ORDER_PAYMENT_RECORDED: '销售订单收款已记录',
+  SALES_ORDER_PAYMENT_VOIDED: '销售订单收款已作废',
+  SALES_ORDER_DOCUMENT_ATTACHED: '销售订单凭证已关联',
+  SALES_ORDER_DOCUMENT_DETACHED: '销售订单凭证已解除',
 }
 
 export function auditMetadataEntries(

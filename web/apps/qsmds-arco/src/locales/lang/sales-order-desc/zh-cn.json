@@ -1,0 +1,47 @@
+{
+  "salesOrderDesc": {
+    "title": "订单详情",
+    "description": "内容随填写实时更新，请在提交前逐项核对。",
+    "sections": {
+      "basic": "订单基础信息",
+      "customer": "客户信息",
+      "lines": "产品列表与小计（{count}）",
+      "sales": "销售信息",
+      "documents": "附件缩略图（{count}）"
+    },
+    "fields": {
+      "orderNo": "订单编号",
+      "orderDate": "出单日期",
+      "issuer": "出单人",
+      "currency": "订单币种",
+      "customerName": "客户姓名",
+      "customerPhone": "客户电话",
+      "region": "三级地区",
+      "fullAddress": "完整地址",
+      "actualUnitPrice": "真实售价",
+      "quantity": "数量",
+      "lineSubtotal": "本行小计",
+      "lineSubtotalAmount": "产品明细汇总",
+      "salesTotal": "销售总价",
+      "deposit": "定金",
+      "balance": "尾款",
+      "lineIndex": "第 {index} 项产品"
+    },
+    "lineTypes": {
+      "CATALOG": "数据库产品",
+      "CUSTOM": "本单临时产品"
+    },
+    "documentTypes": {
+      "ORDER_ISSUANCE_VOUCHER": "出单凭证",
+      "PAYMENT_VOUCHER": "收款凭证",
+      "DELIVERY_RECEIPT": "签收单"
+    },
+    "empty": {
+      "text": "未填写",
+      "region": "未选择",
+      "orderNo": "正式保存后派发",
+      "lines": "暂无产品",
+      "documents": "暂无附件"
+    }
+  }
+}

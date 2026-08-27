@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供十一个独立组件路由', () => {
+test('组件库按分类提供十六个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -143,6 +143,31 @@ test('组件库按分类提供十一个独立组件路由', () => {
         path: 'dictionary-select',
         title: '字典选择器',
       },
+      {
+        name: 'componentLibraryQsPersonDisplay',
+        path: 'person-display',
+        title: '人员显示',
+      },
+      {
+        name: 'componentLibraryQsProductSelector',
+        path: 'product-selector',
+        title: '产品选择器',
+      },
+      {
+        name: 'componentLibraryQsOrderProductLineEditor',
+        path: 'order-product-line-editor',
+        title: '订单产品明细编辑器',
+      },
+      {
+        name: 'componentLibraryQsSalesOrderDesc',
+        path: 'sales-order-desc',
+        title: '销售订单详情',
+      },
+      {
+        name: 'componentLibraryQsStatusSwitchToolbar',
+        path: 'status-switch-toolbar',
+        title: '状态切换工具栏',
+      },
     ],
   )
 
@@ -155,7 +180,7 @@ test('组件库按分类提供十一个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 11)
+  assert.equal(new Set(componentRouteNames).size, 16)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -186,7 +211,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('十一个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('十六个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -244,6 +269,31 @@ test('十一个组件页面与页面模板复用展示壳且不依赖业务 API 
       title: '字典选择器',
     },
     {
+      componentName: 'ComponentLibraryQsPersonDisplay',
+      file: '../../src/views/component_library/business/person-display.vue',
+      title: '人员显示',
+    },
+    {
+      componentName: 'ComponentLibraryQsProductSelector',
+      file: '../../src/views/component_library/business/product-selector.vue',
+      title: '产品选择器',
+    },
+    {
+      componentName: 'ComponentLibraryQsOrderProductLineEditor',
+      file: '../../src/views/component_library/business/order-product-line-editor.vue',
+      title: '订单产品明细编辑器',
+    },
+    {
+      componentName: 'ComponentLibraryQsSalesOrderDesc',
+      file: '../../src/views/component_library/business/sales-order-desc.vue',
+      title: '销售订单详情',
+    },
+    {
+      componentName: 'ComponentLibraryQsStatusSwitchToolbar',
+      file: '../../src/views/component_library/business/status-switch-toolbar.vue',
+      title: '状态切换工具栏',
+    },
+    {
       componentName: 'ComponentLibraryPageTemplates',
       file: '../../src/views/component_library/page_templates/index.vue',
       title: '页面模板',
@@ -269,6 +319,42 @@ test('字典选择器叶子路由固定图标与独立动态页面', () => {
   assert.match(
     source,
     /path: 'dictionary-select',[\s\S]*?name: 'componentLibraryQsDictionarySelect',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/dictionary-select\.vue'\),[\s\S]*?title: '字典选择器',[\s\S]*?icon: 'i-lucide:list-filter'/u,
+  )
+})
+
+test('销售订单详情叶子路由固定图标与独立动态页面', () => {
+  const source = readFileSync(
+    new URL('../../src/router/modules/component.library.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /path: 'sales-order-desc',[\s\S]*?name: 'componentLibraryQsSalesOrderDesc',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/sales-order-desc\.vue'\),[\s\S]*?title: '销售订单详情',[\s\S]*?icon: 'i-lucide:receipt-text'/u,
+  )
+})
+
+test('状态切换工具栏叶子路由固定图标与独立动态页面', () => {
+  const source = readFileSync(
+    new URL('../../src/router/modules/component.library.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /path: 'status-switch-toolbar',[\s\S]*?name: 'componentLibraryQsStatusSwitchToolbar',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/status-switch-toolbar\.vue'\),[\s\S]*?title: '状态切换工具栏',[\s\S]*?icon: 'i-lucide:list-filter'/u,
+  )
+})
+
+test('人员显示叶子路由固定图标与独立动态页面', () => {
+  const source = readFileSync(
+    new URL('../../src/router/modules/component.library.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /path: 'person-display',[\s\S]*?name: 'componentLibraryQsPersonDisplay',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/person-display\.vue'\),[\s\S]*?title: '人员显示',[\s\S]*?icon: 'i-lucide:user-round'/u,
   )
 })
 

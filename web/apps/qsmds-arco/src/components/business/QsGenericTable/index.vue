@@ -145,6 +145,8 @@ const visibleColumnDefinitions = computed(() => props.columns.flatMap((column) =
 
 const summaryColumns = computed(() => visibleColumnDefinitions.value.filter(column => column.summary))
 const hasSummary = computed(() => summaryColumns.value.length > 0)
+// 全宽汇总只提供稳定的“数据后、分页前”位置，内容与业务语义仍由调用页面负责。
+const hasFullWidthSummary = computed(() => Boolean(slots.summary))
 const hasActionColumn = computed(() => Boolean(slots.actions))
 const slottedCellColumns = computed(() => visibleColumnDefinitions.value.filter(column =>
   column.copyable || Boolean(slots[`cell-${column.id}`])))
@@ -774,6 +776,14 @@ watch([tableColumns, isNarrow], () => {
           </div>
         </div>
       </template>
+    </div>
+
+    <div
+      v-if="hasFullWidthSummary"
+      data-slot="qs-generic-table-summary"
+      class="mt-4 min-w-0"
+    >
+      <slot name="summary" />
     </div>
 
     <div v-if="showPagination && totalRows > 0" class="mt-4 max-w-full overflow-x-auto">

@@ -1,0 +1,540 @@
+/* eslint-disable test/no-import-node-test */
+import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
+import process from 'node:process'
+import test from 'node:test'
+
+import { launchChrome } from './chrome-driver.mjs'
+import {
+  clickDialogButton,
+  runNumberingBrowserStep,
+  waitForAfterAuthentication,
+  waitForNoVisibleDialog,
+  waitForVisibleDialog,
+} from './numbering.browser.helpers.mjs'
+import {
+  apiExpression,
+  appRouteUrl,
+  clickVisibleButton,
+  collectRuntimeIssues,
+  loginThroughRealHttp,
+  readConfiguration,
+  selectRegionOption,
+} from './regions.browser.helpers.mjs'
+
+const listRoute = '/qs-operations/sales/sales-orders'
+const customerName = 'Browser 销售订单客户'
+const customerPhone = '0912000000'
+const regionSelectorTestId = 'sales-order-region-selector'
+const voucherFixtureBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+/**
+ * 复用编号场景的脱敏步骤日志，但将错误边界收敛到销售订单，日志不输出客户
+ * 地址、请求 DTO、Cookie 或幂等键。
+ */
+async function runSalesOrderBrowserStep(label, action) {
+  try {
+    return await runNumberingBrowserStep(`sales orders · ${label}`, action)
+  }
+  catch (error) {
+    throw new Error(`Sales order browser step failed: ${label}`, {
+      cause: error,
+    })
+  }
+}
+
+function labelledControlSource(labelText) {
+  return `(() => {
+    const label = [...document.querySelectorAll('label')].find(candidate => (
+      candidate.getClientRects().length > 0
+      && candidate.textContent?.trim().startsWith(${JSON.stringify(labelText)})
+    ))
+    if (!label) return null
+    const direct = label.querySelector(
+      'input, textarea, [role="combobox"], [data-slot="select-trigger"]',
+    )
+    if (direct) return direct
+    const htmlFor = label.getAttribute('for')
+    if (htmlFor) {
+      const linked = document.getElementById(htmlFor)
+      if (linked?.matches(
+        'input, textarea, [role="combobox"], [data-slot="select-trigger"]',
+      )) return linked
+      const linkedControl = linked?.querySelector(
+        'input, textarea, [role="combobox"], [data-slot="select-trigger"]',
+      )
+      if (linkedControl) return linkedControl
+    }
+    let parent = label.parentElement
+    for (let depth = 0; depth < 5 && parent; depth += 1) {
+      const nested = parent.querySelector(
+        'input, textarea, [role="combobox"], [data-slot="select-trigger"]',
+      )
+      if (nested) return nested
+      parent = parent.parentElement
+    }
+    return null
+  })()`
+}
+
+/** 原生 setter + input/change 与正式 FaInput/MoneyInput 的 v-model 契约一致。 */
+async function fillLabelledControl(page, labelText, value) {
+  const controlSource = labelledControlSource(labelText)
+  await page.waitFor(`(() => {
+    const control = ${controlSource}
+    return (control instanceof HTMLInputElement
+      || control instanceof HTMLTextAreaElement)
+      && control.getClientRects().length > 0
+      && !control.disabled
+  })()`)
+  await page.evaluate(`(() => {
+    const control = ${controlSource}
+    if (!(control instanceof HTMLInputElement)
+      && !(control instanceof HTMLTextAreaElement)) {
+      throw new Error('sales order labelled control unavailable')
+    }
+    const prototype = control instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype
+    Object.getOwnPropertyDescriptor(prototype, 'value')
+      .set.call(control, ${JSON.stringify(value)})
+    control.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      inputType: 'insertText',
+    }))
+    control.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  })()`)
+  await page.waitFor(`${controlSource}?.value === ${JSON.stringify(value)}`)
+  // MoneyInput 经内部 draft 与父 formModel 两层 passive v-model 回写，等待两帧。
+  await page.evaluate(`new Promise(resolve => requestAnimationFrame(
+    () => requestAnimationFrame(resolve),
+  ))`)
+}
+
+/**
+ * 币种弹窗使用两个货币卡片。通过卡片上的稳定币种代码选择对应 radio，既覆盖
+ * 用户实际点击卡片的交互，也避免重新依赖已经移除的下拉选择器 DOM。
+ */
+async function selectCurrencyOption(page, currencyCode) {
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
+    .some(dialog => dialog.getClientRects().length > 0
+      && dialog.textContent?.includes('选择订单币种')
+      && (() => {
+        const card = dialog.querySelector(
+          '[data-testid="sales-order-currency-card"]'
+            + '[data-currency-code=${JSON.stringify(currencyCode)}]',
+        )
+        const control = card?.closest('label')?.querySelector('input[type="radio"]')
+        return card?.getClientRects().length > 0 && !control?.disabled
+      })()))()`)
+  await page.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('选择订单币种'))
+    const card = dialog?.querySelector(
+      '[data-testid="sales-order-currency-card"]'
+        + '[data-currency-code=${JSON.stringify(currencyCode)}]',
+    )
+    const control = card?.closest('label')?.querySelector('input[type="radio"]')
+    if (!(control instanceof HTMLInputElement) || control.disabled) {
+      throw new Error('sales order currency card unavailable')
+    }
+    control.click()
+    return true
+  })()`)
+  await page.waitFor(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('选择订单币种'))
+    const card = dialog?.querySelector(
+      '[data-testid="sales-order-currency-card"]'
+        + '[data-currency-code=${JSON.stringify(currencyCode)}]',
+    )
+    return card?.closest('label')?.querySelector('input[type="radio"]')?.checked === true
+  })()`)
+}
+
+async function readOrders(page) {
+  const pathname = `/api/sales-orders?page=1&pageSize=20&keyword=${encodeURIComponent(customerName)}`
+  return page.evaluate(apiExpression(pathname))
+}
+
+test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截及正式派号', {
+  timeout: 600_000,
+}, async (t) => {
+  const configuration = readConfiguration(process.env)
+  const fixtureDirectory = process.env.QIANSHU_BROWSER_AUTH_FIXTURE_DIRECTORY
+  assert.equal(typeof fixtureDirectory, 'string')
+  assert.equal(path.isAbsolute(fixtureDirectory), true)
+  await mkdir(fixtureDirectory, { mode: 0o700, recursive: true })
+  const voucherFixture = path.join(fixtureDirectory, 'browser-sales-order-voucher.png')
+  await writeFile(voucherFixture, Buffer.from(voucherFixtureBase64, 'base64'), { mode: 0o600 })
+  const browser = await launchChrome({
+    executable: configuration.chromeExecutable,
+    userDataDirectory: `${configuration.profileDirectory}-sales-orders`,
+  })
+  t.after(async () => browser.close())
+
+  const page = await browser.newPage()
+  await page.setViewport(1440, 900, false)
+  await page.connection.send('Emulation.setEmulatedMedia', {
+    features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+
+  await runSalesOrderBrowserStep('real login and empty list', async () => {
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/login'))
+    await loginThroughRealHttp(page, configuration)
+    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
+    await waitForAfterAuthentication(page, `(() => {
+      const table = document.querySelector('[data-testid="sales-order-list-table"]')
+      return table?.getClientRects().length > 0
+        && !table.querySelector('[aria-busy="true"]')
+    })()`)
+    const response = await readOrders(page)
+    assert.equal(response.status, 200)
+    assert.equal(response.body?.total, 0)
+  })
+
+  const runtime = collectRuntimeIssues(page, {
+    sensitiveValues: [configuration.password],
+  })
+  runtime.start()
+
+  await runSalesOrderBrowserStep('currency gate fixes TWD route', async () => {
+    const catalog = await page.evaluate(apiExpression('/api/currency-catalog'))
+    assert.equal(catalog.status, 200)
+    assert.equal(
+      catalog.body?.some(currency => currency.code === 'TWD' && currency.enabled === true),
+      true,
+    )
+    await clickVisibleButton(page, '新增销售订单')
+    await waitForVisibleDialog(page, '选择订单币种')
+    await selectCurrencyOption(page, 'TWD')
+    await clickDialogButton(page, '选择订单币种', '进入新增订单')
+    await waitForAfterAuthentication(page, `(() => (
+      location.hash.includes('/qs-operations/sales/sales-orders/create?currency=TWD')
+      && document.querySelector('[data-testid="sales-order-create-page"]')
+        ?.getClientRects().length > 0
+      && document.body.innerText.includes('订单币种已固定为 TWD')
+    ))()`)
+    const issuerControlSource = labelledControlSource('出单人')
+    await page.waitFor(`${issuerControlSource}?.value === 'Browser Auth Admin'`)
+    await page.waitFor(`(() => {
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
+      return summary?.getClientRects().length > 0
+        && desc?.getClientRects().length > 0
+        && ![...summary.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '提交订单')
+        && !document.body.innerText.includes('当前币种不可用于新订单')
+    })()`)
+
+    await page.setViewport(390, 844, true)
+    await clickVisibleButton(page, '查看已填详情')
+    await waitForVisibleDialog(page, '已填销售订单详情')
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('已填销售订单详情'))
+      return drawer
+        && ![...drawer.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '提交订单')
+        && [...drawer.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '继续填写' && !button.disabled)
+    })()`)
+    await clickDialogButton(page, '已填销售订单详情', '继续填写')
+    await waitForNoVisibleDialog(page, '已填销售订单详情')
+    await page.setViewport(1440, 900, false)
+
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-customer"]',
+    )?.getClientRects().length > 0`)
+  })
+
+  await runSalesOrderBrowserStep('customer snapshot and duplicate address block', async () => {
+    await fillLabelledControl(page, '客户姓名', customerName)
+    await fillLabelledControl(page, '客户电话', customerPhone)
+    await selectRegionOption(
+      page,
+      regionSelectorTestId,
+      'COUNTRY_REGION',
+      '中国台湾',
+    )
+    await selectRegionOption(
+      page,
+      regionSelectorTestId,
+      'PROVINCE_STATE',
+      '台湾',
+    )
+    await selectRegionOption(
+      page,
+      regionSelectorTestId,
+      'CITY',
+      '高雄市',
+    )
+    await fillLabelledControl(
+      page,
+      '详细地址',
+      '中国台湾 台湾 高雄市 苓雅区 中正一路 100 号 3 楼',
+    )
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.body.innerText.includes('详细地址请勿重复填写已选地区')`)
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-customer"]',
+    )?.getClientRects().length > 0`)
+    const blockedResponse = await readOrders(page)
+    assert.equal(blockedResponse.status, 200)
+    assert.equal(blockedResponse.body?.total, 0)
+
+    await fillLabelledControl(page, '详细地址', '苓雅区 中正一路 100 号 3 楼')
+    // 上一次硬拦截会同时写入领域错误与 FaForm 展示状态。必须先等待错误反馈
+    // 完整清除，再触发下一步，避免测试在 Vue 连续事件刷新期间提前点击。
+    await page.waitFor(`!document.body.innerText.includes('详细地址请勿重复填写已选地区')`)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-products-sales"]',
+    )?.getClientRects().length > 0`)
+  })
+
+  await runSalesOrderBrowserStep('TWD product selection and sales values', async () => {
+    await page.waitFor(`document.body.innerText.includes('暂无产品明细')`)
+    await clickVisibleButton(page, '添加数据库产品')
+    await waitForVisibleDialog(page, '选择数据库产品')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择数据库产品'))
+      return dialog?.textContent?.includes('PRODUCT-BROWSER-001')
+    })()`)
+    const selectorText = await page.evaluate(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('选择数据库产品'))?.textContent ?? '')()`)
+    assert.equal(selectorText.includes('产品选择不限制币种'), true)
+    assert.match(selectorText, /共 \d+ 个产品/u)
+    await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择数据库产品'))
+      const product = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.includes('PRODUCT-BROWSER-001')
+          && button.textContent?.includes('选择产品'))
+      if (!product) {
+        throw new Error('sales order product card unavailable')
+      }
+      product.click()
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择数据库产品'))
+      const selected = dialog?.querySelector('aside[aria-label="已选择产品"]')
+      return selected?.textContent?.includes('PRODUCT-BROWSER-001')
+        && selected.textContent.includes('新增产品 · 数量 1')
+    })()`)
+    await clickDialogButton(page, '选择数据库产品', '确认添加')
+    await waitForNoVisibleDialog(page, '选择数据库产品')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-products-sales"]',
+    )?.textContent?.includes('PRODUCT-BROWSER-001')`)
+    await fillLabelledControl(page, '第 1 行本单售价', '100')
+    await fillLabelledControl(page, '第 1 行产品数量', '2')
+    await fillLabelledControl(page, '手填销售总价', '200')
+    await fillLabelledControl(page, '定金', '50')
+    await fillLabelledControl(page, '尾款', '150')
+  })
+
+  await runSalesOrderBrowserStep('manual total mismatch is a hard block', async () => {
+    await fillLabelledControl(page, '手填销售总价', '199')
+    await fillLabelledControl(page, '尾款', '149')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.body.innerText.includes(
+      '手填销售总价必须与产品明细汇总一致'
+    )`)
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-products-sales"]',
+    )?.getClientRects().length > 0`)
+    const response = await readOrders(page)
+    assert.equal(response.status, 200)
+    assert.equal(response.body?.total, 0)
+  })
+
+  await runSalesOrderBrowserStep('formal save assigns number and persists snapshots', async () => {
+    await fillLabelledControl(page, '手填销售总价', '200')
+    await fillLabelledControl(page, '尾款', '150')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`(() => {
+      const documents = document.querySelector(
+        '[data-testid="sales-order-step-documents"]',
+      )
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      return documents?.getClientRects().length > 0
+        && summary?.textContent?.includes(${JSON.stringify(customerName)})
+        && summary?.textContent?.includes('200')
+        && ![...summary.querySelectorAll('button')]
+          .some(button => button.textContent?.trim() === '提交订单')
+    })()`)
+
+    const beforeReview = await readOrders(page)
+    assert.equal(beforeReview.status, 200)
+    assert.equal(beforeReview.body?.total, 0)
+    await page.setFiles('[data-testid="sales-order-issuance-voucher-input"]', [voucherFixture])
+    await page.waitFor(`(() => {
+      const documents = document.querySelector('[data-testid="sales-order-step-documents"]')
+      return documents?.textContent?.includes('browser-sales-order-voucher.png')
+        && documents.textContent.includes(${JSON.stringify(`${customerName}-出单凭证-`)})
+        && [...documents.querySelectorAll('button')].some(button => (
+          button.getAttribute('aria-label')
+            === '移除出单凭证 browser-sales-order-voucher.png'
+          && !button.disabled
+        ))
+    })()`)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.body.textContent?.includes('请检查订单信息是否正确')`)
+    await page.waitFor(`(() => {
+      const formPanel = document.querySelector(
+        '[data-testid="sales-order-create-form-column"]',
+      )
+      const formTrack = formPanel?.closest('.sales-order-form-track')
+      const review = document.querySelector(
+        '[data-testid="sales-order-create-review"]',
+      )
+      const layout = document.querySelector(
+        '[data-testid="sales-order-create-layout"]',
+      )
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
+      const summaryRegion = summary?.querySelector('.sales-order-summary-region')
+      const actions = document.querySelector(
+        '[data-testid="sales-order-review-actions"]',
+      )
+      const submit = [...(actions?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.trim() === '提交订单')
+      const actionsPosition = actions ? getComputedStyle(actions).position : ''
+      return formTrack?.getAttribute('aria-hidden') === 'true'
+        && formTrack.hasAttribute('inert')
+        && getComputedStyle(formTrack).opacity === '0'
+        && layout?.classList.contains('sales-order-create-layout--review')
+        && review?.getClientRects().length > 0
+        && summary?.getClientRects().length > 0
+        && summary.getAttribute('data-surface') === 'review'
+        && desc?.getClientRects().length > 0
+        && summary.textContent?.includes(${JSON.stringify(customerName)})
+        && summary.textContent?.includes('200')
+        && actions?.getClientRects().length > 0
+        && !['absolute', 'fixed', 'sticky'].includes(actionsPosition)
+        && Boolean(summaryRegion.compareDocumentPosition(actions)
+          & Node.DOCUMENT_POSITION_FOLLOWING)
+        && submit?.disabled === false
+    })()`)
+
+    await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')
+    await page.waitFor(`(() => {
+      const actions = document.querySelector(
+        '[data-testid="sales-order-review-actions"]',
+      )
+      const lastContent = document.querySelector(
+        '[data-slot="sales-order-desc-documents"]',
+      )
+      const summaryRegion = document.querySelector('.sales-order-summary-region')
+      const actionsRect = actions?.getBoundingClientRect()
+      const lastContentRect = lastContent?.getBoundingClientRect()
+      return actionsRect
+        && lastContentRect
+        && actions?.parentElement === summaryRegion?.parentElement
+        && actionsRect.top >= 0
+        && actionsRect.bottom <= innerHeight + 1
+        && lastContentRect.bottom <= actionsRect.top
+    })()`)
+
+    await clickVisibleButton(page, '返回修改')
+    await page.waitFor(`(() => {
+      const formPanel = document.querySelector(
+        '[data-testid="sales-order-create-form-column"]',
+      )
+      const formTrack = formPanel?.closest('.sales-order-form-track')
+      const documents = document.querySelector(
+        '[data-testid="sales-order-step-documents"]',
+      )
+      const review = document.querySelector(
+        '[data-testid="sales-order-create-review"]',
+      )
+      return formPanel?.getClientRects().length > 0
+        && formTrack?.getAttribute('aria-hidden') !== 'true'
+        && !formTrack?.hasAttribute('inert')
+        && getComputedStyle(formTrack).opacity === '1'
+        && documents?.getClientRects().length > 0
+        && (!review || review.getClientRects().length === 0)
+        && ![...document.querySelectorAll('button')]
+          .some(button => button.getClientRects().length > 0
+            && button.textContent?.trim() === '提交订单')
+    })()`)
+
+    const afterReturn = await readOrders(page)
+    assert.equal(afterReturn.status, 200)
+    assert.equal(afterReturn.body?.total, 0)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-create-review"]',
+    )?.getClientRects().length > 0`)
+    await clickVisibleButton(page, '提交订单')
+    await waitForVisibleDialog(page, '确认提交销售订单？')
+
+    const beforeConfirmation = await readOrders(page)
+    assert.equal(beforeConfirmation.status, 200)
+    assert.equal(beforeConfirmation.body?.total, 0)
+    await clickDialogButton(page, '确认提交销售订单？', '确认提交订单')
+    await waitForAfterAuthentication(page, `(() => (
+      location.hash === ${JSON.stringify(`#${listRoute}`)}
+      && document.querySelector('[data-testid="sales-order-list-table"]')
+        ?.textContent?.includes(${JSON.stringify(customerName)})
+      && document.body.innerText.includes('已确认')
+      && document.body.innerText.includes('待采购')
+      && document.body.innerText.includes('未付款')
+    ))()`)
+
+    const response = await readOrders(page)
+    assert.equal(response.status, 200)
+    assert.equal(response.body?.total, 1)
+    const order = response.body?.items?.[0]
+    assert.match(order?.orderNo ?? '', /^SO-BRW-\d{8}$/u)
+    assert.equal(order?.currencyCode, 'TWD')
+    assert.equal(order?.agreedTotalAmount, '200.0000')
+    assert.equal(order?.receivedAmount, '0.0000')
+    assert.equal(order?.outstandingAmount, '200.0000')
+
+    const detail = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}`,
+    ))
+    assert.equal(detail.status, 200)
+    assert.equal(detail.body?.customer?.addressDetail, '苓雅区中正一路100号3楼')
+    assert.equal(
+      detail.body?.customer?.fullAddress,
+      '中国台湾台湾高雄市苓雅区中正一路100号3楼',
+    )
+    assert.deepEqual(detail.body?.amounts, {
+      agreedTotalAmount: '200.0000',
+      balanceDueAmount: '150.0000',
+      depositDueAmount: '50.0000',
+      lineSubtotalAmount: '200.0000',
+      outstandingAmount: '200.0000',
+      receivedAmount: '0.0000',
+    })
+    assert.equal(detail.body?.lines?.[0]?.productNo, 'PRODUCT-BROWSER-001')
+    assert.equal(detail.body?.lines?.[0]?.actualUnitPriceAmount, '100.0000')
+    assert.equal(detail.body?.lines?.[0]?.quantity, 2)
+  })
+
+  runtime.stop()
+  assert.deepEqual(runtime.issues, [])
+})
