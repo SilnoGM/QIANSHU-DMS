@@ -5,8 +5,8 @@ function Layout() {
 }
 
 /**
- * 销售订单进入独立业务分组，后续待办与全部订单共用该层级；新增页仍是隐藏叶子，
- * 并通过 `activeMenu` 保持“全部订单”导航选中。采购订单暂时维持既有一级入口。
+ * 销售订单与采购订单各自进入独立业务分组，让待办页和全部页拥有稳定的菜单层级。
+ * 销售订单新增页继续作为隐藏叶子；采购订单当前只开放两个页头入口，不提前引入业务功能。
  */
 const routes: RouteRecordRaw[] = [
   {
@@ -52,25 +52,34 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
-    path: '/operations/purchase-orders',
-    name: 'operationsPurchaseOrders',
-    component: () => import('@/views/operations/purchase-orders/index.vue'),
+    path: '/qs-operations/purchase',
+    name: 'qsOperationsPurchase',
+    component: Layout,
+    redirect: { name: 'qsOperationsPendingPurchaseOrders' },
     meta: {
       title: '采购订单',
       icon: 'i-lucide:shopping-cart',
-      singleMenu: true,
     },
-  },
-  {
-    path: '/operations/purchase-orders/create',
-    name: 'operationsPurchaseOrderCreate',
-    component: () => import('@/views/operations/purchase-orders/create.vue'),
-    meta: {
-      title: '新增采购订单',
-      activeMenu: '/operations/purchase-orders',
-      menu: false,
-      singleMenu: true,
-    },
+    children: [
+      {
+        path: 'pending-purchase-orders',
+        name: 'qsOperationsPendingPurchaseOrders',
+        component: () => import('@/views/operations/purchase-orders/pending.vue'),
+        meta: {
+          title: '待办采购',
+          icon: 'i-lucide:list-checks',
+        },
+      },
+      {
+        path: 'purchase-orders',
+        name: 'qsOperationsPurchaseOrders',
+        component: () => import('@/views/operations/purchase-orders/index.vue'),
+        meta: {
+          title: '全部采购',
+          icon: 'i-lucide:table-properties',
+        },
+      },
+    ],
   },
 ]
 

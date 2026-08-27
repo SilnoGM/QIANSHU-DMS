@@ -1,17 +1,7 @@
 <script setup lang="ts">
-defineOptions({ name: 'OperationsPurchaseOrders' })
-
-const router = useRouter()
-
-function navigateToCreate(): void {
-  void router.push({ name: 'operationsPurchaseOrderCreate' })
-}
+defineOptions({ name: 'QsOperationsPurchaseOrders' })
 </script>
 
 <template>
-  <FaPageMain>
-    <FaButton @click="navigateToCreate">
-      新增采购订单
-    </FaButton>
-  </FaPageMain>
+  <FaPageHeader title="全部采购" />
 </template>

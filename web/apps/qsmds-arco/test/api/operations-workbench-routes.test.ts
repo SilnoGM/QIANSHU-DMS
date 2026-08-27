@@ -59,37 +59,44 @@ test('销售订单迁移到销售业务分组，旧路由不再保留', () => {
   assert.doesNotMatch(allPaths.join('\n'), /\/operations\/sales-orders/u)
 })
 
-test('采购订单继续保留原有列表与隐藏新增入口', () => {
-  const purchaseRoutes = operationsWorkbenchRoutes.filter(
-    route => route.name === 'operationsPurchaseOrders'
-      || route.name === 'operationsPurchaseOrderCreate',
+test('采购订单迁移到采购业务分组，并按待办、全部顺序展示', () => {
+  const purchaseRoute = operationsWorkbenchRoutes.find(
+    route => route.name === 'qsOperationsPurchase',
+  )
+  const purchaseChildren = purchaseRoute?.children ?? []
+
+  assert.equal(purchaseRoute?.path, '/qs-operations/purchase')
+  assert.equal(purchaseRoute?.meta?.title, '采购订单')
+  assert.equal(typeof purchaseRoute?.component, 'function')
+  assert.deepEqual(purchaseRoute?.redirect, {
+    name: 'qsOperationsPendingPurchaseOrders',
+  })
+  assert.deepEqual(
+    purchaseChildren.map(route => ({
+      menu: route.meta?.menu,
+      name: route.name,
+      path: route.path,
+      title: route.meta?.title,
+    })),
+    [
+      {
+        menu: undefined,
+        name: 'qsOperationsPendingPurchaseOrders',
+        path: 'pending-purchase-orders',
+        title: '待办采购',
+      },
+      {
+        menu: undefined,
+        name: 'qsOperationsPurchaseOrders',
+        path: 'purchase-orders',
+        title: '全部采购',
+      },
+    ],
   )
 
-  assert.deepEqual(purchaseRoutes.map(route => ({
-    activeMenu: route.meta?.activeMenu,
-    menu: route.meta?.menu,
-    name: route.name,
-    path: route.path,
-    singleMenu: route.meta?.singleMenu,
-    title: route.meta?.title,
-  })), [
-    {
-      activeMenu: undefined,
-      menu: undefined,
-      name: 'operationsPurchaseOrders',
-      path: '/operations/purchase-orders',
-      singleMenu: true,
-      title: '采购订单',
-    },
-    {
-      activeMenu: '/operations/purchase-orders',
-      menu: false,
-      name: 'operationsPurchaseOrderCreate',
-      path: '/operations/purchase-orders/create',
-      singleMenu: true,
-      title: '新增采购订单',
-    },
-  ])
+  const routeContract = JSON.stringify(operationsWorkbenchRoutes)
+  assert.doesNotMatch(routeContract, /\/operations\/purchase-orders/u)
+  assert.doesNotMatch(routeContract, /operationsPurchaseOrderCreate/u)
 })
 
 test('千树运营工作台是最左侧顶部导航', () => {
@@ -111,35 +118,26 @@ test('千树运营工作台是最左侧顶部导航', () => {
   )
 })
 
-test('采购订单列表继续保持单一新增按钮的空白产品边界', () => {
+test('全部采购页面只提供页头', () => {
   const source = readFileSync(
     new URL('../../src/views/operations/purchase-orders/index.vue', import.meta.url),
     'utf8',
   )
 
-  assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
-  assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
-  assert.match(source, />\s*新增采购订单\s*<\/FaButton>/u)
-  assert.match(
-    source,
-    /router\.push\(\{ name: 'operationsPurchaseOrderCreate' \}\)/u,
-  )
-  assert.doesNotMatch(source, /<Fa(?:Alert|Card|Empty|Icon|PageHeader)/u)
+  assert.equal(source.match(/<FaPageHeader(?:\s|>)/gu)?.length, 1)
+  assert.match(source, /<FaPageHeader\s+title="全部采购"\s*\/>/u)
+  assert.doesNotMatch(source, /<Fa(?:Alert|Button|Card|Empty|Icon|PageMain)/u)
+  assert.doesNotMatch(source, /useRouter|useRoute|fetch\(|axios/u)
 })
 
-test('采购订单新增页继续保持单一返回按钮的空白产品边界', () => {
+test('待办采购页面只提供页头', () => {
   const source = readFileSync(
-    new URL('../../src/views/operations/purchase-orders/create.vue', import.meta.url),
+    new URL('../../src/views/operations/purchase-orders/pending.vue', import.meta.url),
     'utf8',
   )
 
-  assert.equal(source.match(/<FaButton(?:\s|>)/gu)?.length, 1)
-  assert.equal(source.match(/<\/FaButton>/gu)?.length, 1)
-  assert.match(source, /<FaButton\s+variant="outline"\s+@click="navigateBack">/u)
-  assert.match(source, />\s*返回\s*<\/FaButton>/u)
-  assert.match(
-    source,
-    /router\.push\(\{ name: 'operationsPurchaseOrders' \}\)/u,
-  )
-  assert.doesNotMatch(source, /<Fa(?:Alert|Card|Empty|Icon|PageHeader)/u)
+  assert.equal(source.match(/<FaPageHeader(?:\s|>)/gu)?.length, 1)
+  assert.match(source, /<FaPageHeader\s+title="待办采购"\s*\/>/u)
+  assert.doesNotMatch(source, /<Fa(?:Alert|Button|Card|Empty|Icon|PageMain)/u)
+  assert.doesNotMatch(source, /useRouter|useRoute|fetch\(|axios/u)
 })
