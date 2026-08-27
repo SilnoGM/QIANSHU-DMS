@@ -227,6 +227,15 @@ const routes: RouteRecordRaw[] = [
           icon: 'i-lucide:receipt-text',
         },
       },
+      {
+        path: 'status-switch-toolbar',
+        name: 'componentLibraryQsStatusSwitchToolbar',
+        component: () => import('@/views/component_library/business/status-switch-toolbar.vue'),
+        meta: {
+          title: '状态切换工具栏',
+          icon: 'i-lucide:list-filter',
+        },
+      },
     ],
   },
   {
