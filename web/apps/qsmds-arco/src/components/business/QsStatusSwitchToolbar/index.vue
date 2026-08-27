@@ -152,7 +152,7 @@ onMounted(async () => {
           <span
             v-if="modelValue === item.value"
             aria-hidden="true"
-            class="rounded-[2px] bg-primary h-1 w-5 bottom-0 left-1/2 absolute -translate-x-1/2"
+            class="qs-status-switch-toolbar__indicator rounded-[2px] bg-primary h-1 w-5 bottom-0 left-1/2 absolute -translate-x-1/2"
           />
         </button>
       </div>
@@ -185,6 +185,11 @@ onMounted(async () => {
 
 .qs-status-switch-toolbar__viewport::-webkit-scrollbar {
   display: none;
+}
+
+/* 与顶部主导航一致，使用组件背景色描边，在选中背景和指示条之间形成清晰分隔。 */
+.qs-status-switch-toolbar__indicator {
+  box-shadow: 0 0 0 1px oklch(var(--background));
 }
 
 @media (prefers-reduced-motion: reduce) {
