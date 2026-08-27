@@ -1,19 +1,44 @@
 import type { RouteRecordRaw } from 'vue-router'
 
+function Layout() {
+  return import('@/layouts/index.vue')
+}
+
 /**
- * 四个页面都是顶部工作台下的一级路由。`singleMenu` 让页面复用正式布局，
- * 两个新增页再通过 `menu: false` 保持可直接访问但不进入任何导航菜单。
+ * 销售订单进入独立业务分组，后续待办与全部订单共用该层级；新增页仍是隐藏叶子，
+ * 并通过 `activeMenu` 保持“全部订单”导航选中。采购订单暂时维持既有一级入口。
  */
 const routes: RouteRecordRaw[] = [
   {
-    path: '/operations/sales-orders',
-    name: 'operationsSalesOrders',
-    component: () => import('@/views/operations/sales-orders/index.vue'),
+    path: '/qs-operations/sales',
+    name: 'qsOperationsSales',
+    component: Layout,
+    redirect: { name: 'qsOperationsSalesOrders' },
     meta: {
       title: '销售订单',
       icon: 'i-lucide:receipt-text',
-      singleMenu: true,
     },
+    children: [
+      {
+        path: 'sales-orders',
+        name: 'qsOperationsSalesOrders',
+        component: () => import('@/views/operations/sales-orders/index.vue'),
+        meta: {
+          title: '全部订单',
+          icon: 'i-lucide:table-properties',
+        },
+      },
+      {
+        path: 'sales-orders/create',
+        name: 'operationsSalesOrderCreate',
+        component: () => import('@/views/operations/sales-orders/create.vue'),
+        meta: {
+          title: '新增销售订单',
+          activeMenu: '/qs-operations/sales/sales-orders',
+          menu: false,
+        },
+      },
+    ],
   },
   {
     path: '/operations/purchase-orders',
@@ -22,17 +47,6 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: '采购订单',
       icon: 'i-lucide:shopping-cart',
-      singleMenu: true,
-    },
-  },
-  {
-    path: '/operations/sales-orders/create',
-    name: 'operationsSalesOrderCreate',
-    component: () => import('@/views/operations/sales-orders/create.vue'),
-    meta: {
-      title: '新增销售订单',
-      activeMenu: '/operations/sales-orders',
-      menu: false,
       singleMenu: true,
     },
   },

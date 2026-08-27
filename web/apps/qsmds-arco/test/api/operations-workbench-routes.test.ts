@@ -5,54 +5,79 @@ import test from 'node:test'
 
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
 
-test('千树运营工作台注册两个可见订单入口和两个隐藏新增入口', () => {
+test('销售订单迁移到销售业务分组，旧路由不再保留', () => {
+  const salesRoute = operationsWorkbenchRoutes.find(
+    route => route.name === 'qsOperationsSales',
+  )
+  const salesChildren = salesRoute?.children ?? []
+
+  assert.equal(salesRoute?.path, '/qs-operations/sales')
+  assert.equal(salesRoute?.meta?.title, '销售订单')
+  assert.equal(typeof salesRoute?.component, 'function')
   assert.deepEqual(
-    operationsWorkbenchRoutes.map(route => ({
+    salesChildren.map(route => ({
       activeMenu: route.meta?.activeMenu,
       menu: route.meta?.menu,
       name: route.name,
       path: route.path,
-      singleMenu: route.meta?.singleMenu,
       title: route.meta?.title,
     })),
     [
       {
         activeMenu: undefined,
         menu: undefined,
-        name: 'operationsSalesOrders',
-        path: '/operations/sales-orders',
-        singleMenu: true,
-        title: '销售订单',
+        name: 'qsOperationsSalesOrders',
+        path: 'sales-orders',
+        title: '全部订单',
       },
       {
-        activeMenu: undefined,
-        menu: undefined,
-        name: 'operationsPurchaseOrders',
-        path: '/operations/purchase-orders',
-        singleMenu: true,
-        title: '采购订单',
-      },
-      {
-        activeMenu: '/operations/sales-orders',
+        activeMenu: '/qs-operations/sales/sales-orders',
         menu: false,
         name: 'operationsSalesOrderCreate',
-        path: '/operations/sales-orders/create',
-        singleMenu: true,
+        path: 'sales-orders/create',
         title: '新增销售订单',
-      },
-      {
-        activeMenu: '/operations/purchase-orders',
-        menu: false,
-        name: 'operationsPurchaseOrderCreate',
-        path: '/operations/purchase-orders/create',
-        singleMenu: true,
-        title: '新增采购订单',
       },
     ],
   )
-  assert.ok(operationsWorkbenchRoutes.every(
-    route => typeof route.component === 'function',
-  ))
+
+  const allPaths = operationsWorkbenchRoutes.flatMap(route => [
+    route.path,
+    ...(route.children ?? []).map(child => child.path),
+  ])
+  assert.doesNotMatch(allPaths.join('\n'), /\/operations\/sales-orders/u)
+})
+
+test('采购订单继续保留原有列表与隐藏新增入口', () => {
+  const purchaseRoutes = operationsWorkbenchRoutes.filter(
+    route => route.name === 'operationsPurchaseOrders'
+      || route.name === 'operationsPurchaseOrderCreate',
+  )
+
+  assert.deepEqual(purchaseRoutes.map(route => ({
+    activeMenu: route.meta?.activeMenu,
+    menu: route.meta?.menu,
+    name: route.name,
+    path: route.path,
+    singleMenu: route.meta?.singleMenu,
+    title: route.meta?.title,
+  })), [
+    {
+      activeMenu: undefined,
+      menu: undefined,
+      name: 'operationsPurchaseOrders',
+      path: '/operations/purchase-orders',
+      singleMenu: true,
+      title: '采购订单',
+    },
+    {
+      activeMenu: '/operations/purchase-orders',
+      menu: false,
+      name: 'operationsPurchaseOrderCreate',
+      path: '/operations/purchase-orders/create',
+      singleMenu: true,
+      title: '新增采购订单',
+    },
+  ])
 })
 
 test('千树运营工作台是最左侧顶部导航', () => {

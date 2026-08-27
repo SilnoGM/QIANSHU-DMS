@@ -22,7 +22,7 @@ import {
   selectRegionOption,
 } from './regions.browser.helpers.mjs'
 
-const listRoute = '/operations/sales-orders'
+const listRoute = '/qs-operations/sales/sales-orders'
 const customerName = 'Browser 销售订单客户'
 const customerPhone = '0912000000'
 const productOption = 'PRODUCT-BROWSER-001 · Browser 多媒体产品 · 标准价 1234.5678 TWD'
@@ -221,7 +221,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await selectCurrencyOption(page, 'TWD · 新台币')
     await clickDialogButton(page, '选择订单币种', '进入新增订单')
     await waitForAfterAuthentication(page, `(() => (
-      location.hash.includes('/operations/sales-orders/create?currency=TWD')
+      location.hash.includes('/qs-operations/sales/sales-orders/create?currency=TWD')
       && document.querySelector('[data-testid="sales-order-create-page"]')
         ?.getClientRects().length > 0
       && document.body.innerText.includes('订单币种已固定为 TWD')

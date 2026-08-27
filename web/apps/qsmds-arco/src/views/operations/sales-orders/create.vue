@@ -760,7 +760,7 @@ async function executeSubmission(state: SalesOrderSubmittingState): Promise<void
     resetSalesOrderForm()
     toast.success(`销售订单 ${response.data.orderNo} 创建成功`)
     if (canRead.value) {
-      await router.push({ name: 'operationsSalesOrders' })
+      await router.push({ name: 'qsOperationsSalesOrders' })
     }
     else {
       // 仅有创建权限时留在当前页，并重新进入可编辑态创建下一单。
@@ -932,7 +932,7 @@ function requestUnknownAbandon(): void {
 }
 
 function requestBack(): void {
-  void router.push({ name: 'operationsSalesOrders' })
+  void router.push({ name: 'qsOperationsSalesOrders' })
 }
 
 function closeDiscard(): void {
@@ -1024,7 +1024,7 @@ watch(isDesktopSummary, (desktop) => {
 onMounted(() => {
   if (selectedCurrency === null) {
     toast.error('请先从销售订单列表选择币种')
-    void router.replace({ name: 'operationsSalesOrders' })
+    void router.replace({ name: 'qsOperationsSalesOrders' })
     return
   }
   window.addEventListener('beforeunload', handleBeforeUnload)
