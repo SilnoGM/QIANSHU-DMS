@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import type {
+  SalesOrderListViewMode,
+  SalesOrderQueryTarget,
+} from './sales-order-list-view.logic'
 import type { SalesOrderPaymentProgress } from './sales-order-list.logic'
 import type {
   SalesOrderRecordsInitialAction,
@@ -9,6 +13,7 @@ import type {
   SalesOrderIssuerOptionDto,
   SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
+  SalesOrderPageDto,
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
@@ -34,9 +39,16 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
+import {
+  getSalesOrderStatusItems,
+  mergeSalesOrderCurrencySummaries,
+  normalizeSalesOrderStatusSelection,
+  resolveSalesOrderQueryTargets,
+} from './sales-order-list-view.logic'
 import {
   buildSalesOrderCustomerCopyText,
   calculateSalesOrderPaymentProgress,
@@ -45,6 +57,12 @@ import {
 import SalesOrderRecordsModal from './sales-order-records-modal.vue'
 
 defineOptions({ name: 'OperationsSalesOrders' })
+
+const props = withDefaults(defineProps<{
+  viewMode?: SalesOrderListViewMode
+}>(), {
+  viewMode: 'all',
+})
 
 type SalesOrderCurrencyCode = 'TWD' | 'MYR'
 
@@ -75,6 +93,7 @@ const ORDER_CURRENCY_CARD_DEFINITIONS = [
   },
 ] as const
 
+const route = useRoute()
 const router = useRouter()
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
@@ -135,6 +154,50 @@ const selectedCurrencyAvailable = computed(() => selectedCurrency.value !== null
 const listErrorDisplay = computed(() => requestId.value === undefined
   ? listError.value || undefined
   : `${listError.value}（requestId: ${requestId.value}）`)
+const statusItems = computed(() => getSalesOrderStatusItems(props.viewMode))
+const pageTitle = computed(() => props.viewMode === 'pending' ? '待办订单' : '全部订单')
+const pageDescription = computed(() => props.viewMode === 'pending'
+  ? '聚合当前需要推进的销售订单，并按履约阶段快速筛选。'
+  : '订单、履约与付款状态独立展示；实际收款与定金/尾款分开统计。')
+const tableEmptyTitle = computed(() => props.viewMode === 'pending'
+  ? '暂无待办订单'
+  : '暂无销售订单')
+const tableEmptyDescription = computed(() => {
+  const selected = normalizeSalesOrderStatusSelection(
+    props.viewMode,
+    route.query.status,
+  )
+  if (
+    props.viewMode === 'all'
+    && (selected === 'PENDING_RECONCILIATION' || selected === 'COMPLETED')
+  ) {
+    return '该订单状态尚未进入当前数据契约。'
+  }
+  return props.viewMode === 'pending'
+    ? '当前筛选条件下没有需要处理的销售订单。'
+    : '当前筛选条件下没有可展示的销售订单。'
+})
+
+/**
+ * 状态切换写入 URL，保证刷新与浏览器前进/后退可恢复；“全部”使用无查询参数的规范地址。
+ */
+const selectedStatus = computed<string>({
+  get: () => normalizeSalesOrderStatusSelection(props.viewMode, route.query.status),
+  set: (value) => {
+    const normalized = normalizeSalesOrderStatusSelection(props.viewMode, value)
+    if (normalized === selectedStatus.value) {
+      return
+    }
+    const nextQuery = { ...route.query }
+    if (normalized === 'ALL') {
+      delete nextQuery.status
+    }
+    else {
+      nextQuery.status = normalized
+    }
+    void router.push({ query: nextQuery })
+  },
+})
 
 watch(availableOrderCurrencies, (currencies) => {
   if (
@@ -165,29 +228,6 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
       value: user.id,
     })),
     placeholder: '选择出单人',
-  },
-  {
-    key: 'orderStatus',
-    label: '订单状态',
-    options: [
-      { label: '草稿', value: 'DRAFT' },
-      { label: '已确认', value: 'CONFIRMED' },
-      { label: '已取消', value: 'CANCELLED' },
-    ],
-    placeholder: '选择订单状态',
-  },
-  {
-    key: 'fulfillmentStatus',
-    label: '履约状态',
-    options: [
-      { label: '待采购', value: 'PENDING' },
-      { label: '备货中', value: 'PREPARING' },
-      { label: '陆运中', value: 'LAND_TRANSIT' },
-      { label: '已到仓', value: 'WAREHOUSE_ARRIVED' },
-      { label: '海运中', value: 'SEA_TRANSIT' },
-      { label: '已签收', value: 'SIGNED' },
-    ],
-    placeholder: '选择履约状态',
   },
   {
     key: 'paymentStatus',
@@ -346,11 +386,6 @@ function buildListQuery(): SalesOrderListQuery {
     && issuerFilterOptions.value.some(option => option.id === filters.value.issuerUserId)
     ? filters.value.issuerUserId
     : undefined
-  const orderStatus = enumFilter('orderStatus', ['DRAFT', 'CONFIRMED', 'CANCELLED'] as const)
-  const fulfillmentStatus = enumFilter(
-    'fulfillmentStatus',
-    ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED', 'SEA_TRANSIT', 'SIGNED'] as const,
-  )
   const paymentStatus = enumFilter(
     'paymentStatus',
     ['UNPAID', 'PARTIALLY_PAID', 'PAID'] as const,
@@ -361,9 +396,94 @@ function buildListQuery(): SalesOrderListQuery {
     ...(keyword === '' ? {} : { keyword }),
     ...(currencyCode === undefined ? {} : { currencyCode }),
     ...(issuerUserId === undefined ? {} : { issuerUserId }),
-    ...(orderStatus === undefined ? {} : { orderStatus }),
-    ...(fulfillmentStatus === undefined ? {} : { fulfillmentStatus }),
     ...(paymentStatus === undefined ? {} : { paymentStatus }),
+  }
+}
+
+async function loadCompleteQueryTarget(
+  baseQuery: SalesOrderListQuery,
+  target: SalesOrderQueryTarget,
+  signal: AbortSignal,
+): Promise<SalesOrderPageDto> {
+  const firstResponse = await salesOrdersApi.list({
+    ...baseQuery,
+    ...target,
+    page: 1,
+    pageSize: 100,
+  }, signal)
+  const firstPage = firstResponse.data
+  const pageCount = Math.ceil(firstPage.total / firstPage.pageSize)
+  if (pageCount <= 1) {
+    return firstPage
+  }
+
+  // 同一状态的汇总在每页响应中一致，只读取第一页汇总；其余请求仅补齐明细行。
+  const remainingPages = await Promise.all(
+    Array.from({ length: pageCount - 1 }, (_, index) => salesOrdersApi.list({
+      ...baseQuery,
+      ...target,
+      page: index + 2,
+      pageSize: 100,
+    }, signal)),
+  )
+  return {
+    ...firstPage,
+    items: [
+      ...firstPage.items,
+      ...remainingPages.flatMap(response => response.data.items),
+    ],
+  }
+}
+
+/**
+ * 单状态沿用服务端分页；“全部待办/全部订单”需要合并多个互斥状态，先完整读取各目标，
+ * 再按服务端相同顺序排序、精确汇总并在前端切页，保证总数与汇总不被当前页截断。
+ */
+async function loadSalesOrderPage(
+  signal: AbortSignal,
+): Promise<{ data: SalesOrderPageDto }> {
+  const selection = normalizeSalesOrderStatusSelection(
+    props.viewMode,
+    route.query.status,
+  )
+  const targets = resolveSalesOrderQueryTargets(props.viewMode, selection)
+  const baseQuery = buildListQuery()
+
+  if (targets.length === 0) {
+    return {
+      data: {
+        items: [],
+        page: page.value,
+        pageSize: pageSize.value,
+        summariesByCurrency: [],
+        total: 0,
+      },
+    }
+  }
+  if (targets.length === 1) {
+    return salesOrdersApi.list({ ...baseQuery, ...targets[0] }, signal)
+  }
+
+  const targetPages = await Promise.all(
+    targets.map(target => loadCompleteQueryTarget(baseQuery, target, signal)),
+  )
+  const allItems = targetPages
+    .flatMap(result => result.items)
+    .sort((left, right) => (
+      right.orderDate.localeCompare(left.orderDate)
+      || right.id.localeCompare(left.id)
+    ))
+  const start = (page.value - 1) * pageSize.value
+  return {
+    data: {
+      items: allItems.slice(start, start + pageSize.value),
+      page: page.value,
+      pageSize: pageSize.value,
+      summariesByCurrency: mergeSalesOrderCurrencySummaries(
+        targetPages.map(result => result.summariesByCurrency),
+      ),
+      total: allItems.length,
+    },
   }
 }
 
@@ -383,7 +503,7 @@ async function loadOrders(): Promise<void> {
     // 出单人选项只在当前页面生命周期内加载一次，并与首屏列表共用取消与鉴权世代边界。
     // 这样既不会要求用户额外拥有 users:read，也能保留已停用历史出单人的筛选能力。
     const [response, issuerOptionsResponse] = await Promise.all([
-      salesOrdersApi.list(buildListQuery(), controller.signal),
+      loadSalesOrderPage(controller.signal),
       issuerFilterOptionsLoaded.value
         ? Promise.resolve(null)
         : salesOrdersApi.issuerOptions(controller.signal),
@@ -566,6 +686,23 @@ function paymentProgressTextClass(value: SalesOrderListItemDto['paymentStatus'])
   }[value]
 }
 
+watch([
+  () => props.viewMode,
+  () => route.query.status,
+], () => {
+  page.value = 1
+  const normalized = normalizeSalesOrderStatusSelection(
+    props.viewMode,
+    route.query.status,
+  )
+  if (route.query.status !== undefined && normalized === 'ALL') {
+    const nextQuery = { ...route.query }
+    delete nextQuery.status
+    void router.replace({ query: nextQuery })
+  }
+  scheduleQueryRefresh()
+})
+
 onMounted(() => void loadOrders())
 onBeforeUnmount(() => {
   requestVersion += 1
@@ -576,8 +713,8 @@ onBeforeUnmount(() => {
 <template>
   <div class="sales-order-list-page min-w-0" data-testid="sales-order-list-page">
     <FaPageHeader
-      title="销售订单"
-      description="订单、履约与付款状态独立展示；实际收款与定金/尾款分开统计。"
+      :title="pageTitle"
+      :description="pageDescription"
     >
       <FaButton
         v-if="canCreate"
@@ -599,6 +736,13 @@ onBeforeUnmount(() => {
     </FaPageMain>
 
     <FaPageMain v-else class="min-w-0">
+      <QsStatusSwitchToolbar
+        v-model="selectedStatus"
+        :items="statusItems"
+        :aria-label="`${pageTitle}状态筛选`"
+        class="mb-4"
+      />
+
       <QsGenericTable
         v-model:page="page"
         v-model:page-size="pageSize"
@@ -610,8 +754,8 @@ onBeforeUnmount(() => {
         :action-column="{ fixed: 'right', minWidth: 230, title: '操作', width: 230 }"
         :columns="columns"
         :data="rows"
-        empty-title="暂无销售订单"
-        empty-description="当前没有可展示的销售订单。"
+        :empty-title="tableEmptyTitle"
+        :empty-description="tableEmptyDescription"
         :error="listErrorDisplay"
         :filter-definitions="filterDefinitions"
         :loading="loading"

@@ -49,8 +49,30 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /salesOrdersApi\.issuerOptions/u)
   assert.match(source, /key: 'issuerUserId'[\s\S]*?label: '出单人'/u)
   assert.match(source, /issuerUserId[\s\S]*?buildListQuery/u)
-  assert.match(source, /key: 'fulfillmentStatus'[\s\S]*?待采购[\s\S]*?备货中[\s\S]*?陆运中[\s\S]*?已到仓[\s\S]*?海运中[\s\S]*?已签收/u)
-  assert.match(source, /\['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED', 'SEA_TRANSIT', 'SIGNED'\] as const/u)
+  assert.doesNotMatch(source, /key: '(?:orderStatus|fulfillmentStatus)'/u)
+})
+
+test('销售订单列表通过路由视图模式和状态工具栏切换待办与全部订单', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const headerStart = source.indexOf('<FaPageHeader')
+  const toolbarStart = source.indexOf('<QsStatusSwitchToolbar')
+  const tableStart = source.indexOf('<QsGenericTable\n', toolbarStart)
+
+  assert.match(source, /defineProps<[\s\S]*?viewMode\?: SalesOrderListViewMode/u)
+  assert.match(source, /import QsStatusSwitchToolbar from '@\/components\/business\/QsStatusSwitchToolbar\/index\.vue'/u)
+  assert.match(source, /getSalesOrderStatusItems/u)
+  assert.match(source, /normalizeSalesOrderStatusSelection/u)
+  assert.match(source, /resolveSalesOrderQueryTargets/u)
+  assert.match(source, /route\.query\.status/u)
+  assert.match(source, /router\.push\(\{ query: nextQuery \}\)/u)
+  assert.match(source, /viewMode === 'pending'[\s\S]*?'待办订单'[\s\S]*?'全部订单'/u)
+  assert.ok(headerStart >= 0, '应存在页面头')
+  assert.ok(toolbarStart > headerStart, '状态切换工具栏应位于页面头之后')
+  assert.ok(tableStart > toolbarStart, '订单表格应位于状态切换工具栏之后')
+  assert.match(source, /v-model="selectedStatus"/u)
+  assert.match(source, /:items="statusItems"/u)
+  assert.match(source, /loadSalesOrderPage/u)
+  assert.match(source, /mergeSalesOrderCurrencySummaries/u)
 })
 
 test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {

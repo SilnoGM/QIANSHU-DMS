@@ -14,20 +14,31 @@ test('销售订单迁移到销售业务分组，旧路由不再保留', () => {
   assert.equal(salesRoute?.path, '/qs-operations/sales')
   assert.equal(salesRoute?.meta?.title, '销售订单')
   assert.equal(typeof salesRoute?.component, 'function')
+  assert.deepEqual(salesRoute?.redirect, { name: 'qsOperationsPendingSalesOrders' })
   assert.deepEqual(
     salesChildren.map(route => ({
       activeMenu: route.meta?.activeMenu,
       menu: route.meta?.menu,
       name: route.name,
       path: route.path,
+      props: route.props,
       title: route.meta?.title,
     })),
     [
       {
         activeMenu: undefined,
         menu: undefined,
+        name: 'qsOperationsPendingSalesOrders',
+        path: 'pending-sales-orders',
+        props: { viewMode: 'pending' },
+        title: '待办订单',
+      },
+      {
+        activeMenu: undefined,
+        menu: undefined,
         name: 'qsOperationsSalesOrders',
         path: 'sales-orders',
+        props: { viewMode: 'all' },
         title: '全部订单',
       },
       {
@@ -35,6 +46,7 @@ test('销售订单迁移到销售业务分组，旧路由不再保留', () => {
         menu: false,
         name: 'operationsSalesOrderCreate',
         path: 'sales-orders/create',
+        props: undefined,
         title: '新增销售订单',
       },
     ],

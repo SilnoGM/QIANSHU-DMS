@@ -13,16 +13,27 @@ const routes: RouteRecordRaw[] = [
     path: '/qs-operations/sales',
     name: 'qsOperationsSales',
     component: Layout,
-    redirect: { name: 'qsOperationsSalesOrders' },
+    redirect: { name: 'qsOperationsPendingSalesOrders' },
     meta: {
       title: '销售订单',
       icon: 'i-lucide:receipt-text',
     },
     children: [
       {
+        path: 'pending-sales-orders',
+        name: 'qsOperationsPendingSalesOrders',
+        component: () => import('@/views/operations/sales-orders/index.vue'),
+        props: { viewMode: 'pending' },
+        meta: {
+          title: '待办订单',
+          icon: 'i-lucide:list-checks',
+        },
+      },
+      {
         path: 'sales-orders',
         name: 'qsOperationsSalesOrders',
         component: () => import('@/views/operations/sales-orders/index.vue'),
+        props: { viewMode: 'all' },
         meta: {
           title: '全部订单',
           icon: 'i-lucide:table-properties',
