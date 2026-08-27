@@ -200,7 +200,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /#cell-documentSummary[\s\S]*?documentSummary\.count[\s\S]*?openRecordsModal\('documents'/u)
   assert.match(source, /#cell-remarkSummary[\s\S]*?<FaTooltip[\s\S]*?row\.original\.remark/u)
   assert.match(source, /#cell-changeRecordsSummary[\s\S]*?changeRecordCount[\s\S]*?openRecordsModal\('changes'/u)
-  assert.match(source, /:action-column="\{ fixed: 'right',[\s\S]*?title: '操作'/u)
+  assert.match(source, /:action-column="\{ fixed: 'right', minWidth: 180, title: '操作', width: 180 \}"/u)
   assert.match(source, /<template #actions="\{ row \}">[\s\S]*?v-for="action in salesOrderRowActions\(row\)"/u)
   assert.match(source, /resolvePendingSalesOrderActions/u)
   assert.match(source, /handleSalesOrderRowAction\(action, row\)/u)

@@ -812,7 +812,7 @@ onBeforeUnmount(() => {
         data-testid="sales-order-list-table"
         :row-key="item => item.id"
         :addable="false"
-        :action-column="{ fixed: 'right', minWidth: 230, title: '操作', width: 230 }"
+        :action-column="{ fixed: 'right', minWidth: 180, title: '操作', width: 180 }"
         :columns="columns"
         :data="rows"
         :empty-title="tableEmptyTitle"
