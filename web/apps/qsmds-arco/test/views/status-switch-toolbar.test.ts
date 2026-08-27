@@ -56,6 +56,7 @@ test('状态切换工具栏组件保持受控模型、可访问按钮与自动�
   assert.match(source, /aria-pressed/u)
   assert.match(source, /:disabled="item\.disabled"/u)
   assert.match(source, /i-lucide:chevron-right/u)
+  assert.match(source, /rounded-\[2px\] bg-primary h-1 w-5 bottom-0 left-1\/2 absolute -translate-x-1\/2/u)
   assert.match(source, /prefers-reduced-motion/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store|useRoute/u)
 })

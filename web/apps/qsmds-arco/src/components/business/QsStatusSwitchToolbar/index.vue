@@ -152,7 +152,7 @@ onMounted(async () => {
           <span
             v-if="modelValue === item.value"
             aria-hidden="true"
-            class="rounded-full bg-primary h-0.5 inset-x-3 bottom-0 absolute"
+            class="rounded-[2px] bg-primary h-1 w-5 bottom-0 left-1/2 absolute -translate-x-1/2"
           />
         </button>
       </div>
