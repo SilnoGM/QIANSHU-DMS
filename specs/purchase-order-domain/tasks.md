@@ -2,9 +2,10 @@
 
 ## 执行状态
 
-- 当前阶段：Phase 3 任务拆分，等待用户确认。
-- 已完成：需求确认、技术设计确认、采购菜单与两个页头入口。
-- 未授权：公共 API、Prisma schema、数据库 migration 和正式业务实现。
+- 当前阶段：Phase 4 Server 优先实施。
+- 已完成：需求确认、技术设计确认、任务确认、采购菜单与两个页头入口。
+- 已授权：采购 Server、公共 API、Prisma schema、append-only migration 和相关数据结构变更。
+- 暂不实施：采购业务页面；两个采购页面继续只保留页头。
 - TDD 原则：每个新能力先建立可观察的失败测试，再实现最小能力，最后重构并运行风险匹配的验证。
 
 - [x] 1. 固化已确认需求与技术设计
@@ -20,15 +21,15 @@
   - _Evidence: commit `c1bbeee` (`feat: 迁移采购订单菜单与页头`)_
   - _Requirements: R1_
 
-- [ ] 3. 完成实施前审批门禁
-  - [ ] 3.1 用户确认本任务拆分与实施顺序。
-  - [ ] 3.2 单独获得 Prisma schema、append-only migration 和数据库约束修改授权。
-  - [ ] 3.3 单独获得采购订单公共 API、权限目录和 OpenAPI 契约修改授权。
-  - [ ] 3.4 明确 Phase 4 是否一次实施完整域，或先实施 Server 后再实施 Web。
+- [x] 3. 完成实施前审批门禁
+  - [x] 3.1 用户确认本任务拆分与实施顺序。
+  - [x] 3.2 单独获得 Prisma schema、append-only migration 和数据库约束修改授权。
+  - [x] 3.3 单独获得采购订单公共 API、权限目录和 OpenAPI 契约修改授权。
+  - [x] 3.4 确认 Phase 4 先实施完整 Server 域，Web 业务页面继续只保留页头。
   - _Requirements: R1-R12_
 
 - [ ] 4. 以 TDD 建立采购订单数据库 Schema
-  - [ ] 4.1 先建立 Schema RED，覆盖采购枚举、六张领域表、外键、索引和命名约束。
+  - [ ] 4.1 先建立 Schema RED，覆盖采购枚举、五张领域表、外键、索引和命名约束。
   - [ ] 4.2 为采购类型/销售来源形状、固定 CNY、金额等式、行类型形状和 `CUSTOM` 双价格相等建立失败测试。
   - [ ] 4.3 为有效付款汇总、状态一致性和销售来源累计数量建立隔离 PostgreSQL RED。
   - [ ] 4.4 扩展 Prisma relations、`MediaAsset` 引用、`User` 引用和审计事件枚举。
