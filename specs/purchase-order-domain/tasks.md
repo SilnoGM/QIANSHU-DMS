@@ -49,30 +49,31 @@
   - _Evidence: 3 个领域 suite 首轮均因目标模块不存在而 RED；最小实现后 3 suites / 47 tests 全绿。用户金额入口只接受两位小数，受信任产品成本快照可保留四位；全部运算使用 `bigint` 四位最小单位，并覆盖零元订单直接 `PAID`、`CUSTOM` 双价格、采购类型行形状、取消/履约、待办谓词、Unicode code point 和业务日期门禁。_
   - _Requirements: R2, R5, R7, R9-R11_
 
-- [ ] 6. 以 TDD 实现创建规范化、请求指纹与幂等发号
+- [x] 6. 以 TDD 实现创建规范化、请求指纹与幂等发号
   - [x] 6.1 为创建 DTO、规范化命令和不同采购类型 payload 形状建立 RED。
   - [x] 6.2 为 UUID v4 `Idempotency-Key`、SHA-256 存储和规范请求指纹建立 RED。
-  - [ ] 6.3 为“预校验后发号、最终事务重校验”顺序建立 Service RED。
-  - [ ] 6.4 接入 `PURCHASE_ORDER` / `PURCHASE_ORDER.CREATE`，覆盖同请求重放、Key 冲突和编号域错误映射。
+  - [x] 6.3 为“预校验后发号、最终事务重校验”顺序建立 Service RED。
+  - [x] 6.4 接入 `PURCHASE_ORDER` / `PURCHASE_ORDER.CREATE`，覆盖同请求重放、Key 冲突和编号域错误映射。
   - [x] 6.5 验证客户端不能提交订单号或其他币种。
-  - [ ] 6.6 运行创建服务聚焦测试并提交创建核心小步提交。
-  - _Partial evidence: 规范化与指纹 2 suites 首轮因 DTO、Normalizer、Fingerprint 模块不存在而 RED；最小实现后 2 suites / 17 tests 通过。已固定销售关联/备货四类行 payload、固定 CNY、两位用户金额、服务端行汇总、字典值规范化、UUID v4 Key、Key SHA-256 与 `PURCHASE_ORDER` / `PURCHASE_ORDER.CREATE` 指纹范围。_
+  - [x] 6.6 运行创建服务聚焦测试并提交创建核心小步提交。
+  - _Evidence: 规范化与指纹 2 suites 首轮因 DTO、Normalizer、Fingerprint 模块不存在而 RED；最小实现后 2 suites / 17 tests 通过。创建服务 RED 因 Service 不存在失败；实现后与依赖解析合计 2 suites / 15 tests 通过。已固定销售关联/备货四类行 payload、固定 CNY、两位用户金额、服务端行汇总、字典值规范化、UUID v4 Key、Key SHA-256、发号前预检、最终 `Serializable` 重校验、同请求重放/冲突恢复与 `PURCHASE_ORDER` / `PURCHASE_ORDER.CREATE` 编号范围。_
   - _Requirements: R2-R8, R11-R12_
 
-- [ ] 7. 以 TDD 实现供应商、产品与销售来源校验
-  - [ ] 7.1 为 `service_provider.supplier` 最终事务校验建立 RED。
-  - [ ] 7.2 为 `CATALOG` 产品 ACTIVE、CNY 采购成本、供应商匹配和快照来源建立 RED。
-  - [ ] 7.3 为关联/备货 `CUSTOM` 快照与双价格规则建立 RED。
-  - [ ] 7.4 为销售订单有效状态、销售行归属、行类型和产品一致性建立 RED。
-  - [ ] 7.5 实现最小依赖加载与快照映射，不信任客户端名称、属性、供应商或采购定价。
-  - [ ] 7.6 运行聚焦测试并提交依赖校验小步提交。
+- [x] 7. 以 TDD 实现供应商、产品与销售来源校验
+  - [x] 7.1 为 `service_provider.supplier` 最终事务校验建立 RED。
+  - [x] 7.2 为 `CATALOG` 产品 ACTIVE、CNY 采购成本、供应商匹配和快照来源建立 RED。
+  - [x] 7.3 为关联/备货 `CUSTOM` 快照与双价格规则建立 RED。
+  - [x] 7.4 为销售订单有效状态、销售行归属、行类型和产品一致性建立 RED。
+  - [x] 7.5 实现最小依赖加载与快照映射，不信任客户端名称、属性、供应商或采购定价。
+  - [x] 7.6 运行聚焦测试并提交依赖校验小步提交。
+  - _Evidence: 依赖解析 suite 首轮因 Service 不存在而 RED；实现后 9/9 通过，覆盖系统字典供应商、CNY、管理员备货权限、销售订单/销售行归属与类型、销售快照、当前产品采购成本、正式产品供应商匹配、关联/备货 `CUSTOM` 和累计采购数量。_
   - _Requirements: R2-R6_
 
 - [ ] 8. 以 TDD 实现累计采购量并发控制
   - [ ] 8.1 建立同一销售行多采购订单拆分数量的正常测试。
   - [ ] 8.2 建立累计超量、并发超量和取消释放数量 RED。
-  - [ ] 8.3 在 `Serializable` 事务中按来源销售行 UUID 稳定排序加锁并重新聚合。
-  - [ ] 8.4 实现数据库延迟约束触发器，防止绕过服务层写入超量数据。
+  - [x] 8.3 在 `Serializable` 事务中按来源销售行 UUID 稳定排序加锁并重新聚合。
+  - [x] 8.4 实现数据库延迟约束触发器，防止绕过服务层写入超量数据。
   - [ ] 8.5 使用隔离 PostgreSQL 并发测试证明最多一个冲突事务成功。
   - [ ] 8.6 提交累计采购量小步提交。
   - _Requirements: R2, R6, R8-R9_
