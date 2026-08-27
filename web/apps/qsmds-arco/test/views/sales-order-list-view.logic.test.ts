@@ -3,13 +3,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  deduplicateSalesOrderItems,
   getSalesOrderStatusItems,
-  mergeSalesOrderCurrencySummaries,
   normalizeSalesOrderStatusSelection,
   resolveSalesOrderQueryTargets,
+  summarizeSalesOrderItemsByCurrency,
 } from '../../src/views/operations/sales-orders/sales-order-list-view.logic'
 
-test('待办视图仅包含四个可操作履约阶段，不混入海运中与已签收', () => {
+test('待办视图包含履约末端与付款待办，并允许同一订单跨分类出现', () => {
   assert.deepEqual(
     getSalesOrderStatusItems('pending').map(item => [item.value, item.label]),
     [
@@ -18,6 +19,8 @@ test('待办视图仅包含四个可操作履约阶段，不混入海运中与�
       ['PREPARING', '待发货'],
       ['LAND_TRANSIT', '待入仓'],
       ['WAREHOUSE_ARRIVED', '待装柜'],
+      ['SEA_TRANSIT', '待签收'],
+      ['WAITING_PAYMENT', '待收款'],
     ],
   )
   assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'ALL'), [
@@ -25,9 +28,16 @@ test('待办视图仅包含四个可操作履约阶段，不混入海运中与�
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' },
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' },
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' },
+    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' },
+    { orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' },
+    { orderStatus: 'CONFIRMED', paymentStatus: 'PARTIALLY_PAID' },
   ])
-  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'PREPARING'), [
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' },
+  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'SEA_TRANSIT'), [
+    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' },
+  ])
+  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'WAITING_PAYMENT'), [
+    { orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' },
+    { orderStatus: 'CONFIRMED', paymentStatus: 'PARTIALLY_PAID' },
   ])
 })
 
@@ -57,36 +67,40 @@ test('URL 中非法或跨视图状态回退到当前视图的全部状态', () =
   assert.equal(normalizeSalesOrderStatusSelection('all', undefined), 'ALL')
 })
 
-test('多状态查询的币种汇总使用精确四位小数相加', () => {
-  const merged = mergeSalesOrderCurrencySummaries([
-    [{
-      agreedTotalAmount: '100.1000',
-      balanceDueAmount: '60.0600',
-      currencyCode: 'TWD',
-      depositDueAmount: '40.0400',
-      orderCount: 1,
-      outstandingAmount: '70.0700',
-      receivedAmount: '30.0300',
-      standardSubtotalAmount: '120.1200',
-    }],
-    [{
-      agreedTotalAmount: '0.2000',
-      balanceDueAmount: '0.1200',
-      currencyCode: 'TWD',
-      depositDueAmount: '0.0800',
-      orderCount: 2,
-      outstandingAmount: '0.1400',
-      receivedAmount: '0.0600',
-      standardSubtotalAmount: '0.2400',
-    }],
+test('全部待办按订单 ID 去重，并使用去重后的订单精确重算币种汇总', () => {
+  const firstOrder = {
+    agreedTotalAmount: '100.1000',
+    balanceDueAmount: '60.0600',
+    currencyCode: 'TWD' as const,
+    depositDueAmount: '40.0400',
+    id: 'order-1',
+    outstandingAmount: '70.0700',
+    receivedAmount: '30.0300',
+    standardSubtotalAmount: '120.1200',
+  }
+  const secondOrder = {
+    agreedTotalAmount: '0.2000',
+    balanceDueAmount: '0.1200',
+    currencyCode: 'TWD' as const,
+    depositDueAmount: '0.0800',
+    id: 'order-2',
+    outstandingAmount: '0.1400',
+    receivedAmount: '0.0600',
+    standardSubtotalAmount: '0.2400',
+  }
+  const uniqueOrders = deduplicateSalesOrderItems([
+    firstOrder,
+    { ...firstOrder },
+    secondOrder,
   ])
 
-  assert.deepEqual(merged, [{
+  assert.deepEqual(uniqueOrders.map(order => order.id), ['order-1', 'order-2'])
+  assert.deepEqual(summarizeSalesOrderItemsByCurrency(uniqueOrders), [{
     agreedTotalAmount: '100.3000',
     balanceDueAmount: '60.1800',
     currencyCode: 'TWD',
     depositDueAmount: '40.1200',
-    orderCount: 3,
+    orderCount: 2,
     outstandingAmount: '70.2100',
     receivedAmount: '30.0900',
     standardSubtotalAmount: '120.3600',

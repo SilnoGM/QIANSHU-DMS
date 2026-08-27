@@ -72,7 +72,8 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.match(source, /v-model="selectedStatus"/u)
   assert.match(source, /:items="statusItems"/u)
   assert.match(source, /loadSalesOrderPage/u)
-  assert.match(source, /mergeSalesOrderCurrencySummaries/u)
+  assert.match(source, /deduplicateSalesOrderItems/u)
+  assert.match(source, /summarizeSalesOrderItemsByCurrency/u)
 })
 
 test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {

@@ -1,5 +1,6 @@
 import type {
   SalesOrderCurrencySummaryDto,
+  SalesOrderListItemDto,
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
 import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
@@ -14,11 +15,25 @@ export type SalesOrderListStatusSelection
     | 'PENDING'
     | 'PENDING_RECONCILIATION'
     | 'PREPARING'
+    | 'SEA_TRANSIT'
+    | 'WAITING_PAYMENT'
     | 'WAREHOUSE_ARRIVED'
 
 export type SalesOrderQueryTarget = Pick<
   SalesOrderListQuery,
-  'fulfillmentStatus' | 'orderStatus'
+  'fulfillmentStatus' | 'orderStatus' | 'paymentStatus'
+>
+
+type SalesOrderSummarySource = Pick<
+  SalesOrderListItemDto,
+  | 'agreedTotalAmount'
+  | 'balanceDueAmount'
+  | 'currencyCode'
+  | 'depositDueAmount'
+  | 'id'
+  | 'outstandingAmount'
+  | 'receivedAmount'
+  | 'standardSubtotalAmount'
 >
 
 const PENDING_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
@@ -27,6 +42,8 @@ const PENDING_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
   { label: '待发货', value: 'PREPARING' },
   { label: '待入仓', value: 'LAND_TRANSIT' },
   { label: '待装柜', value: 'WAREHOUSE_ARRIVED' },
+  { label: '待签收', value: 'SEA_TRANSIT' },
+  { label: '待收款', value: 'WAITING_PAYMENT' },
 ]
 
 const ALL_ORDER_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
@@ -42,6 +59,7 @@ const PENDING_FULFILLMENT_STATUSES = [
   'PREPARING',
   'LAND_TRANSIT',
   'WAREHOUSE_ARRIVED',
+  'SEA_TRANSIT',
 ] as const
 
 const SUMMARY_AMOUNT_FIELDS = [
@@ -87,13 +105,23 @@ export function resolveSalesOrderQueryTargets(
   selection: SalesOrderListStatusSelection,
 ): readonly SalesOrderQueryTarget[] {
   if (viewMode === 'pending') {
+    const paymentTargets: readonly SalesOrderQueryTarget[] = [
+      { orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' },
+      { orderStatus: 'CONFIRMED', paymentStatus: 'PARTIALLY_PAID' },
+    ]
+    if (selection === 'WAITING_PAYMENT') {
+      return paymentTargets
+    }
     const statuses = selection === 'ALL'
       ? PENDING_FULFILLMENT_STATUSES
       : PENDING_FULFILLMENT_STATUSES.filter(status => status === selection)
-    return statuses.map(fulfillmentStatus => ({
+    const fulfillmentTargets: SalesOrderQueryTarget[] = statuses.map(fulfillmentStatus => ({
       fulfillmentStatus,
       orderStatus: 'CONFIRMED',
     }))
+    return selection === 'ALL'
+      ? [...fulfillmentTargets, ...paymentTargets]
+      : fulfillmentTargets
   }
 
   if (selection === 'ALL') {
@@ -125,34 +153,53 @@ function formatAmountUnits(units: bigint): string {
   return `${sign}${integerPart}.${fractionPart}`
 }
 
-/** 多个互斥状态的服务端全量汇总按币种合并，金额坚持使用定点整数避免浮点误差。 */
-export function mergeSalesOrderCurrencySummaries(
-  groups: readonly (readonly SalesOrderCurrencySummaryDto[])[],
+/** 多个待办条件允许重叠，按稳定订单 ID 保留首次出现的数据，避免列表与总数重复。 */
+export function deduplicateSalesOrderItems<T extends { id: string }>(
+  items: readonly T[],
+): T[] {
+  const uniqueItems = new Map<string, T>()
+  for (const item of items) {
+    if (!uniqueItems.has(item.id)) {
+      uniqueItems.set(item.id, item)
+    }
+  }
+  return [...uniqueItems.values()]
+}
+
+/**
+ * 全部待办不能直接相加各查询响应的汇总，因为同一订单可能同时待签收和待收款。
+ * 这里从去重后的订单重新按币种汇总，并保持四位定点小数。
+ */
+export function summarizeSalesOrderItemsByCurrency(
+  items: readonly SalesOrderSummarySource[],
 ): SalesOrderCurrencySummaryDto[] {
-  const merged = new Map<
+  const grouped = new Map<
     SalesOrderCurrencySummaryDto['currencyCode'],
     SalesOrderCurrencySummaryDto
   >()
 
-  for (const summaries of groups) {
-    for (const summary of summaries) {
-      const current = merged.get(summary.currencyCode)
-      if (!current) {
-        merged.set(summary.currencyCode, { ...summary })
-        continue
-      }
-      const next = { ...current, orderCount: current.orderCount + summary.orderCount }
-      for (const field of SUMMARY_AMOUNT_FIELDS) {
-        next[field] = formatAmountUnits(
-          parseAmountUnits(current[field]) + parseAmountUnits(summary[field]),
-        )
-      }
-      merged.set(summary.currencyCode, next)
+  for (const item of items) {
+    const current = grouped.get(item.currencyCode) ?? {
+      agreedTotalAmount: '0.0000',
+      balanceDueAmount: '0.0000',
+      currencyCode: item.currencyCode,
+      depositDueAmount: '0.0000',
+      orderCount: 0,
+      outstandingAmount: '0.0000',
+      receivedAmount: '0.0000',
+      standardSubtotalAmount: '0.0000',
     }
+    const next = { ...current, orderCount: current.orderCount + 1 }
+    for (const field of SUMMARY_AMOUNT_FIELDS) {
+      next[field] = formatAmountUnits(
+        parseAmountUnits(current[field]) + parseAmountUnits(item[field]),
+      )
+    }
+    grouped.set(item.currencyCode, next)
   }
 
   return ['TWD', 'MYR'].flatMap((currencyCode) => {
-    const summary = merged.get(currencyCode as SalesOrderCurrencySummaryDto['currencyCode'])
+    const summary = grouped.get(currencyCode as SalesOrderCurrencySummaryDto['currencyCode'])
     return summary ? [summary] : []
   })
 }

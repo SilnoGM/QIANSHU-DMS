@@ -44,10 +44,11 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
+  deduplicateSalesOrderItems,
   getSalesOrderStatusItems,
-  mergeSalesOrderCurrencySummaries,
   normalizeSalesOrderStatusSelection,
   resolveSalesOrderQueryTargets,
+  summarizeSalesOrderItemsByCurrency,
 } from './sales-order-list-view.logic'
 import {
   buildSalesOrderCustomerCopyText,
@@ -208,38 +209,43 @@ watch(availableOrderCurrencies, (currencies) => {
   }
 })
 
-const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
-  {
-    key: 'currencyCode',
-    label: '订单币种',
-    options: [
-      { label: 'TWD', value: 'TWD' },
-      { label: 'MYR', value: 'MYR' },
-    ],
-    placeholder: '选择订单币种',
-  },
-  {
-    key: 'issuerUserId',
-    label: '出单人',
-    options: issuerFilterOptions.value.map(user => ({
-      label: user.status === 'DISABLED'
-        ? `${user.displayName} · 已停用`
-        : user.displayName,
-      value: user.id,
-    })),
-    placeholder: '选择出单人',
-  },
-  {
-    key: 'paymentStatus',
-    label: '付款状态',
-    options: [
-      { label: '未付款', value: 'UNPAID' },
-      { label: '部分付款', value: 'PARTIALLY_PAID' },
-      { label: '已付清', value: 'PAID' },
-    ],
-    placeholder: '选择付款状态',
-  },
-])
+const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => {
+  const definitions: QsGenericTableFilterDefinition[] = [
+    {
+      key: 'currencyCode',
+      label: '订单币种',
+      options: [
+        { label: 'TWD', value: 'TWD' },
+        { label: 'MYR', value: 'MYR' },
+      ],
+      placeholder: '选择订单币种',
+    },
+    {
+      key: 'issuerUserId',
+      label: '出单人',
+      options: issuerFilterOptions.value.map(user => ({
+        label: user.status === 'DISABLED'
+          ? `${user.displayName} · 已停用`
+          : user.displayName,
+        value: user.id,
+      })),
+      placeholder: '选择出单人',
+    },
+  ]
+  if (props.viewMode === 'all') {
+    definitions.push({
+      key: 'paymentStatus',
+      label: '付款状态',
+      options: [
+        { label: '未付款', value: 'UNPAID' },
+        { label: '部分付款', value: 'PARTIALLY_PAID' },
+        { label: '已付清', value: 'PAID' },
+      ],
+      placeholder: '选择付款状态',
+    })
+  }
+  return definitions
+})
 
 const columns: QsGenericTableColumn<SalesOrderListItemDto>[] = [
   {
@@ -386,10 +392,10 @@ function buildListQuery(): SalesOrderListQuery {
     && issuerFilterOptions.value.some(option => option.id === filters.value.issuerUserId)
     ? filters.value.issuerUserId
     : undefined
-  const paymentStatus = enumFilter(
-    'paymentStatus',
-    ['UNPAID', 'PARTIALLY_PAID', 'PAID'] as const,
-  )
+  // 待办页由工具栏统一定义付款待办，避免与通用付款筛选形成互相覆盖的查询条件。
+  const paymentStatus = props.viewMode === 'all'
+    ? enumFilter('paymentStatus', ['UNPAID', 'PARTIALLY_PAID', 'PAID'] as const)
+    : undefined
   return {
     page: page.value,
     pageSize: pageSize.value,
@@ -467,8 +473,9 @@ async function loadSalesOrderPage(
   const targetPages = await Promise.all(
     targets.map(target => loadCompleteQueryTarget(baseQuery, target, signal)),
   )
-  const allItems = targetPages
-    .flatMap(result => result.items)
+  const allItems = deduplicateSalesOrderItems(
+    targetPages.flatMap(result => result.items),
+  )
     .sort((left, right) => (
       right.orderDate.localeCompare(left.orderDate)
       || right.id.localeCompare(left.id)
@@ -479,9 +486,7 @@ async function loadSalesOrderPage(
       items: allItems.slice(start, start + pageSize.value),
       page: page.value,
       pageSize: pageSize.value,
-      summariesByCurrency: mergeSalesOrderCurrencySummaries(
-        targetPages.map(result => result.summariesByCurrency),
-      ),
+      summariesByCurrency: summarizeSalesOrderItemsByCurrency(allItems),
       total: allItems.length,
     },
   }
