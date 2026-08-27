@@ -6,6 +6,7 @@ import {
   deduplicateSalesOrderItems,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
+  resolvePendingSalesOrderActions,
   resolveSalesOrderQueryTargets,
   summarizeSalesOrderItemsByCurrency,
 } from '../../src/views/operations/sales-orders/sales-order-list-view.logic'
@@ -65,6 +66,74 @@ test('URL 中非法或跨视图状态回退到当前视图的全部状态', () =
   assert.equal(normalizeSalesOrderStatusSelection('pending', 'CANCELLED'), 'ALL')
   assert.equal(normalizeSalesOrderStatusSelection('all', ['CONFIRMED']), 'ALL')
   assert.equal(normalizeSalesOrderStatusSelection('all', undefined), 'ALL')
+})
+
+test('待办操作按当前筛选收敛，全部待办允许履约与收款操作并存', () => {
+  const pendingAndUnpaid = {
+    fulfillmentStatus: 'PENDING' as const,
+    paymentStatus: 'UNPAID' as const,
+  }
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('PENDING', pendingAndUnpaid).map(action => action.key),
+    ['SUBMIT_PURCHASE'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('PREPARING', {
+      fulfillmentStatus: 'PREPARING',
+      paymentStatus: 'PARTIALLY_PAID',
+    }).map(action => action.key),
+    ['FACTORY_SHIPMENT'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('LAND_TRANSIT', {
+      fulfillmentStatus: 'LAND_TRANSIT',
+      paymentStatus: 'PAID',
+    }).map(action => action.key),
+    ['WAREHOUSE_RECEIPT'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('WAREHOUSE_ARRIVED', {
+      fulfillmentStatus: 'WAREHOUSE_ARRIVED',
+      paymentStatus: 'UNPAID',
+    }).map(action => action.key),
+    ['CONTAINER_SHIPMENT'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('SEA_TRANSIT', {
+      fulfillmentStatus: 'SEA_TRANSIT',
+      paymentStatus: 'UNPAID',
+    }).map(action => action.key),
+    ['DELIVERY_RECEIPT'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('WAITING_PAYMENT', {
+      fulfillmentStatus: 'SIGNED',
+      paymentStatus: 'PARTIALLY_PAID',
+    }).map(action => action.key),
+    ['RECORD_PAYMENT'],
+  )
+
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('ALL', {
+      fulfillmentStatus: 'SEA_TRANSIT',
+      paymentStatus: 'UNPAID',
+    }).map(action => action.key),
+    ['DELIVERY_RECEIPT', 'RECORD_PAYMENT'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('ALL', {
+      fulfillmentStatus: 'SIGNED',
+      paymentStatus: 'UNPAID',
+    }).map(action => action.key),
+    ['RECORD_PAYMENT'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('ALL', {
+      fulfillmentStatus: 'PENDING',
+      paymentStatus: 'PAID',
+    }).map(action => action.key),
+    ['SUBMIT_PURCHASE'],
+  )
 })
 
 test('全部待办按订单 ID 去重，并使用去重后的订单精确重算币种汇总', () => {

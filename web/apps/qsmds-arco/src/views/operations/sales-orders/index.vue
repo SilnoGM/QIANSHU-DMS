@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type {
   SalesOrderListViewMode,
+  SalesOrderPendingActionItem,
   SalesOrderQueryTarget,
 } from './sales-order-list-view.logic'
 import type { SalesOrderPaymentProgress } from './sales-order-list.logic'
@@ -32,6 +33,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { resolveMoneyDiscountRate } from '@/components/base/MoneyInput/logic'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -47,6 +49,7 @@ import {
   deduplicateSalesOrderItems,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
+  resolvePendingSalesOrderActions,
   resolveSalesOrderQueryTargets,
   summarizeSalesOrderItemsByCurrency,
 } from './sales-order-list-view.logic'
@@ -94,11 +97,26 @@ const ORDER_CURRENCY_CARD_DEFINITIONS = [
   },
 ] as const
 
+/** 全部订单页保持既有两个记录入口；待办页由订单状态动态收敛操作。 */
+const ALL_ORDER_ROW_ACTIONS = [
+  {
+    icon: 'i-lucide:hand-coins',
+    key: 'RECORD_PAYMENT',
+    label: '新增实际收款',
+  },
+  {
+    icon: 'i-lucide:package-check',
+    key: 'DELIVERY_RECEIPT',
+    label: '货物签收',
+  },
+] as const satisfies readonly SalesOrderPendingActionItem[]
+
 const route = useRoute()
 const router = useRouter()
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
+const toast = useQsToast()
 
 const canRead = computed(() => auth('sales-orders:read'))
 const canCreate = computed(() => auth('sales-orders:create'))
@@ -373,6 +391,44 @@ function openRecordsAction(
   recordsModalKind.value = action === 'payment' ? 'payments' : 'documents'
   recordsModalOrder.value = order
   recordsModalVisible.value = true
+}
+
+function salesOrderRowActions(
+  order: SalesOrderListItemDto,
+): readonly SalesOrderPendingActionItem[] {
+  if (props.viewMode === 'all') {
+    return ALL_ORDER_ROW_ACTIONS
+  }
+  return resolvePendingSalesOrderActions(
+    normalizeSalesOrderStatusSelection(props.viewMode, route.query.status),
+    order,
+  )
+}
+
+/** 已落地动作继续遵守原权限；占位动作不改变数据，仅向有读取权限的用户说明建设状态。 */
+function canShowSalesOrderRowAction(action: SalesOrderPendingActionItem): boolean {
+  if (action.key === 'RECORD_PAYMENT') {
+    return canRecordPayment.value
+  }
+  if (action.key === 'DELIVERY_RECEIPT') {
+    return canSubmitDeliveryReceipt.value
+  }
+  return true
+}
+
+function handleSalesOrderRowAction(
+  action: SalesOrderPendingActionItem,
+  order: SalesOrderListItemDto,
+): void {
+  if (action.key === 'RECORD_PAYMENT') {
+    openRecordsAction('payment', order)
+    return
+  }
+  if (action.key === 'DELIVERY_RECEIPT') {
+    openRecordsAction('receipt', order)
+    return
+  }
+  toast.info(`${action.label}功能正在建设中`)
 }
 
 function enumFilter<T extends string>(
@@ -777,26 +833,22 @@ onBeforeUnmount(() => {
       >
         <template #actions="{ row }">
           <div class="flex flex-wrap gap-1 items-center">
-            <FaButton
-              v-if="canRecordPayment"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              @click="openRecordsAction('payment', row)"
+            <template
+              v-for="action in salesOrderRowActions(row)"
+              :key="action.key"
             >
-              <FaIcon name="i-lucide:hand-coins" aria-hidden="true" />新增实际收款
-            </FaButton>
-            <FaButton
-              v-if="canSubmitDeliveryReceipt"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              @click="openRecordsAction('receipt', row)"
-            >
-              <FaIcon name="i-lucide:package-check" aria-hidden="true" />货物签收
-            </FaButton>
+              <FaButton
+                v-if="canShowSalesOrderRowAction(action)"
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="min-h-11 sm:min-h-8"
+                :aria-label="`${row.orderNo}：${action.label}`"
+                @click="handleSalesOrderRowAction(action, row)"
+              >
+                <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
+              </FaButton>
+            </template>
           </div>
         </template>
 

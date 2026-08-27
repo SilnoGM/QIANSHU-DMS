@@ -24,6 +24,25 @@ export type SalesOrderQueryTarget = Pick<
   'fulfillmentStatus' | 'orderStatus' | 'paymentStatus'
 >
 
+export type SalesOrderPendingActionKey
+  = | 'CONTAINER_SHIPMENT'
+    | 'DELIVERY_RECEIPT'
+    | 'FACTORY_SHIPMENT'
+    | 'RECORD_PAYMENT'
+    | 'SUBMIT_PURCHASE'
+    | 'WAREHOUSE_RECEIPT'
+
+export interface SalesOrderPendingActionItem {
+  icon: string
+  key: SalesOrderPendingActionKey
+  label: string
+}
+
+type SalesOrderPendingActionSource = Pick<
+  SalesOrderListItemDto,
+  'fulfillmentStatus' | 'paymentStatus'
+>
+
 type SalesOrderSummarySource = Pick<
   SalesOrderListItemDto,
   | 'agreedTotalAmount'
@@ -62,6 +81,43 @@ const PENDING_FULFILLMENT_STATUSES = [
   'SEA_TRANSIT',
 ] as const
 
+const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
+  SalesOrderListItemDto['fulfillmentStatus'],
+  SalesOrderPendingActionItem
+>> = {
+  PENDING: {
+    icon: 'i-lucide:clipboard-plus',
+    key: 'SUBMIT_PURCHASE',
+    label: '提交采购',
+  },
+  PREPARING: {
+    icon: 'i-lucide:factory',
+    key: 'FACTORY_SHIPMENT',
+    label: '工厂发货',
+  },
+  LAND_TRANSIT: {
+    icon: 'i-lucide:warehouse',
+    key: 'WAREHOUSE_RECEIPT',
+    label: '货物入仓',
+  },
+  WAREHOUSE_ARRIVED: {
+    icon: 'i-lucide:ship',
+    key: 'CONTAINER_SHIPMENT',
+    label: '装柜出货',
+  },
+  SEA_TRANSIT: {
+    icon: 'i-lucide:package-check',
+    key: 'DELIVERY_RECEIPT',
+    label: '货物签收',
+  },
+}
+
+const RECORD_PAYMENT_ACTION: SalesOrderPendingActionItem = {
+  icon: 'i-lucide:hand-coins',
+  key: 'RECORD_PAYMENT',
+  label: '新增实际收款',
+}
+
 const SUMMARY_AMOUNT_FIELDS = [
   'standardSubtotalAmount',
   'agreedTotalAmount',
@@ -94,6 +150,36 @@ export function normalizeSalesOrderStatusSelection(
   return getSalesOrderStatusItems(viewMode).some(item => item.value === value)
     ? value as SalesOrderListStatusSelection
     : 'ALL'
+}
+
+/**
+ * 具体待办筛选只暴露与筛选语义一致的单一操作；“全部待办”则根据订单当前状态
+ * 同时组合履约推进与收款入口。已付清订单不再出现收款操作。
+ */
+export function resolvePendingSalesOrderActions(
+  selection: SalesOrderListStatusSelection,
+  order: SalesOrderPendingActionSource,
+): readonly SalesOrderPendingActionItem[] {
+  if (selection === 'WAITING_PAYMENT') {
+    return order.paymentStatus === 'PAID' ? [] : [RECORD_PAYMENT_ACTION]
+  }
+
+  if (selection !== 'ALL') {
+    const fulfillmentAction = PENDING_ACTION_BY_FULFILLMENT_STATUS[
+      selection as SalesOrderListItemDto['fulfillmentStatus']
+    ]
+    return fulfillmentAction === undefined ? [] : [fulfillmentAction]
+  }
+
+  const actions: SalesOrderPendingActionItem[] = []
+  const fulfillmentAction = PENDING_ACTION_BY_FULFILLMENT_STATUS[order.fulfillmentStatus]
+  if (fulfillmentAction !== undefined) {
+    actions.push(fulfillmentAction)
+  }
+  if (order.paymentStatus !== 'PAID') {
+    actions.push(RECORD_PAYMENT_ACTION)
+  }
+  return actions
 }
 
 /**
