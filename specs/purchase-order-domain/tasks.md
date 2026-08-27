@@ -28,14 +28,15 @@
   - [x] 3.4 确认 Phase 4 先实施完整 Server 域，Web 业务页面继续只保留页头。
   - _Requirements: R1-R12_
 
-- [ ] 4. 以 TDD 建立采购订单数据库 Schema
-  - [ ] 4.1 先建立 Schema RED，覆盖采购枚举、五张领域表、外键、索引和命名约束。
-  - [ ] 4.2 为采购类型/销售来源形状、固定 CNY、金额等式、行类型形状和 `CUSTOM` 双价格相等建立失败测试。
-  - [ ] 4.3 为有效付款汇总、状态一致性和销售来源累计数量建立隔离 PostgreSQL RED。
-  - [ ] 4.4 扩展 Prisma relations、`MediaAsset` 引用、`User` 引用和审计事件枚举。
-  - [ ] 4.5 新增单一 append-only migration，并原子 seed 采购权限；`purchase-orders:create-stock` 只授予 `system_admin`。
-  - [ ] 4.6 运行 Prisma validate、migration apply、schema drift gate 和数据库专项测试。
-  - [ ] 4.7 检查暂存范围并提交数据库小步提交。
+- [x] 4. 以 TDD 建立采购订单数据库 Schema
+  - [x] 4.1 先建立 Schema RED，覆盖采购枚举、五张领域表、外键、索引和命名约束。
+  - [x] 4.2 为采购类型/销售来源形状、固定 CNY、金额等式、行类型形状和 `CUSTOM` 双价格相等建立失败测试。
+  - [x] 4.3 为有效付款汇总、状态一致性和销售来源累计数量建立隔离 PostgreSQL RED。
+  - [x] 4.4 扩展 Prisma relations、`MediaAsset` 引用、`User` 引用和审计事件枚举。
+  - [x] 4.5 新增单一 append-only migration，并原子 seed 采购权限；`purchase-orders:create-stock` 只授予 `system_admin`。
+  - [x] 4.6 运行 Prisma validate、migration apply、schema drift gate 和数据库专项测试。
+  - [x] 4.7 检查暂存范围并提交数据库小步提交。
+  - _Evidence: Schema 首轮 RED 因采购权限常量缺失失败；实现后结构专项 `3/3`、权限与结构单元 `11/11`、Prisma validate/generate/typecheck/lint 均通过。隔离 PostgreSQL 已从空库应用 27 条 migration、二次 deploy 无待执行项且 schema up to date；数据库专项验证权限目录、`CUSTOM` 双价格和销售来源累计数量约束。完整 E2E 首轮暴露新测试夹具污染，改为事务内夹具后污染相关用例全部恢复；之后两次完整重跑中，采购 schema 均通过，分别只剩既有地区读取和管理登录各一次 `expected 200 / received 404` 的非确定 HTTP 时序失败，最新结果为 36 suites / 203 tests 通过、1 suite / 1 test 失败、4 suites / 10 tests 按条件跳过；未修改无关生产代码。_
   - _Requirements: R2-R12_
 
 - [ ] 5. 以 TDD 实现采购领域纯规则

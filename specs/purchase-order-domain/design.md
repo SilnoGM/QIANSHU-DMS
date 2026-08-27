@@ -178,7 +178,7 @@ purchaseTotalAmount = depositDueAmount + balanceDueAmount
 
 ### 5.6 `PurchaseOrderDocument`
 
-- 首期只使用 `PAYMENT_VOUCHER`，并可选关联 `paymentId`。
+- 首期只使用 `PAYMENT_VOUCHER`；付款凭证本身可选，但一旦创建凭证记录，必须关联且只能关联同一采购订单下的 `paymentId`。
 - 显式关联 `purchaseOrderId + mediaAssetId`，不复用 `ProductMedia.id`。
 - 保存标题、备注、创建/解除操作人和时间；解除为软解除。
 - 付款凭证可选，缺少凭证不影响付款记录创建。
