@@ -2,7 +2,7 @@
 
 ## 执行状态
 
-- 当前阶段：Phase 4 Server 优先实施。
+- 当前阶段：Phase 4 Server 域与公共 API 已完成；Web 业务页面等待后续单独授权。
 - 已完成：需求确认、技术设计确认、任务确认、采购菜单与两个页头入口。
 - 已授权：采购 Server、公共 API、Prisma schema、append-only migration 和相关数据结构变更。
 - 暂不实施：采购业务页面；两个采购页面继续只保留页头。
@@ -33,10 +33,10 @@
   - [x] 4.2 为采购类型/销售来源形状、固定 CNY、金额等式、行类型形状和 `CUSTOM` 双价格相等建立失败测试。
   - [x] 4.3 为有效付款汇总、状态一致性和销售来源累计数量建立隔离 PostgreSQL RED。
   - [x] 4.4 扩展 Prisma relations、`MediaAsset` 引用、`User` 引用和审计事件枚举。
-  - [x] 4.5 新增单一 append-only migration，并原子 seed 采购权限；`purchase-orders:create-stock` 只授予 `system_admin`。
+  - [x] 4.5 新增采购主 migration 与一条媒体引用向前修复 migration，并原子 seed 采购权限；`purchase-orders:create-stock` 只授予 `system_admin`。
   - [x] 4.6 运行 Prisma validate、migration apply、schema drift gate 和数据库专项测试。
   - [x] 4.7 检查暂存范围并提交数据库小步提交。
-  - _Evidence: Schema 首轮 RED 因采购权限常量缺失失败；实现后结构专项 `3/3`、权限与结构单元 `11/11`、Prisma validate/generate/typecheck/lint 均通过。隔离 PostgreSQL 已从空库应用 27 条 migration、二次 deploy 无待执行项且 schema up to date；数据库专项验证权限目录、`CUSTOM` 双价格和销售来源累计数量约束。完整 E2E 首轮暴露新测试夹具污染，改为事务内夹具后污染相关用例全部恢复；之后两次完整重跑中，采购 schema 均通过，分别只剩既有地区读取和管理登录各一次 `expected 200 / received 404` 的非确定 HTTP 时序失败，最新结果为 36 suites / 203 tests 通过、1 suite / 1 test 失败、4 suites / 10 tests 按条件跳过；未修改无关生产代码。_
+  - _Evidence: Schema 首轮 RED 因采购权限常量缺失失败；实现后结构专项 `3/3`、权限与结构单元 `11/11`、Prisma validate/generate/typecheck/lint 均通过。隔离 PostgreSQL 已从空库应用 28 条 migration、二次 deploy 无待执行项且 schema up to date；数据库专项验证权限目录、`CUSTOM` 双价格、销售来源累计数量约束和采购凭证媒体引用闭包。采购主 migration 保持不可变，媒体引用缺口通过 `20260827130000_purchase_order_media_reference_extension` 向前修复。完整 E2E 最新结果中采购 schema 与服务专项通过，全局 38 suites / 210 tests 通过、1 个既有字典接口用例出现 `expected 422 / received 404` 的非确定 HTTP 时序失败、4 suites / 10 tests 按条件跳过；未修改无关生产代码。_
   - _Requirements: R2-R12_
 
 - [x] 5. 以 TDD 实现采购领域纯规则
@@ -69,13 +69,14 @@
   - _Evidence: 依赖解析 suite 首轮因 Service 不存在而 RED；实现后 9/9 通过，覆盖系统字典供应商、CNY、管理员备货权限、销售订单/销售行归属与类型、销售快照、当前产品采购成本、正式产品供应商匹配、关联/备货 `CUSTOM` 和累计采购数量。_
   - _Requirements: R2-R6_
 
-- [ ] 8. 以 TDD 实现累计采购量并发控制
-  - [ ] 8.1 建立同一销售行多采购订单拆分数量的正常测试。
-  - [ ] 8.2 建立累计超量、并发超量和取消释放数量 RED。
+- [x] 8. 以 TDD 实现累计采购量并发控制
+  - [x] 8.1 建立同一销售行多采购订单拆分数量的正常测试。
+  - [x] 8.2 建立累计超量、并发超量和取消释放数量 RED。
   - [x] 8.3 在 `Serializable` 事务中按来源销售行 UUID 稳定排序加锁并重新聚合。
   - [x] 8.4 实现数据库延迟约束触发器，防止绕过服务层写入超量数据。
-  - [ ] 8.5 使用隔离 PostgreSQL 并发测试证明最多一个冲突事务成功。
-  - [ ] 8.6 提交累计采购量小步提交。
+  - [x] 8.5 使用隔离 PostgreSQL 并发测试证明最多一个冲突事务成功。
+  - [x] 8.6 提交累计采购量小步提交。
+  - _Evidence: 创建服务先以单元测试固定最终事务来源行锁与聚合顺序；隔离 PostgreSQL 专项 3/3 通过，覆盖同一销售行拆分两张采购单、第三张超量拒绝、取消释放后再次创建，以及两个请求并发争抢数量为 1 的来源行时恰好一个成功且有效采购汇总为 1。完整 E2E 中采购专项继续通过且未污染后续 suite。_
   - _Requirements: R2, R6, R8-R9_
 
 - [x] 9. 以 TDD 实现查询、产品选项和销售来源服务
@@ -88,21 +89,23 @@
   - _Evidence: 两个 Query suite 首轮因 Service 不存在而 RED；实现后 2 suites / 7 tests 通过，覆盖固定待办谓词、稳定排序、有效付款聚合、客户名关联、历史供应商解析、有效供应商 CNY 产品选项、最小 CONFIRMED 销售来源与剩余可采购数量。采购模块累计 9 suites / 86 tests，typecheck/lint 全绿。_
   - _Requirements: R2-R6, R12_
 
-- [ ] 10. 以 TDD 实现状态、付款、凭证与审计
-  - [ ] 10.1 为履约顺序、取消付款门禁、取消后写入门禁和状态历史建立 RED。
-  - [ ] 10.2 为付款金额、`payment.method` 字典、累计上限、状态派生和作废建立 RED。
-  - [ ] 10.3 为可选付款凭证上传、关联、软解除和私有内容读取建立 RED。
-  - [ ] 10.4 实现采购状态、付款和凭证服务，并只记录非敏感审计摘要。
-  - [ ] 10.5 运行聚焦单元与隔离 PostgreSQL E2E，并提交状态付款小步提交。
+- [x] 10. 以 TDD 实现状态、付款、凭证与审计
+  - [x] 10.1 为履约顺序、取消付款门禁、取消后写入门禁和状态历史建立 RED。
+  - [x] 10.2 为付款金额、`payment.method` 字典、累计上限、状态派生和作废建立 RED。
+  - [x] 10.3 为可选付款凭证上传、关联、软解除和私有内容读取建立 RED。
+  - [x] 10.4 实现采购状态、付款和凭证服务，并只记录非敏感审计摘要。
+  - [x] 10.5 运行聚焦单元与隔离 PostgreSQL E2E，并提交状态付款小步提交。
+  - _Evidence: 状态/付款/凭证测试先因目标 Service 不存在而 RED；实现后聚焦 2 suites / 9 tests 通过，采购模块累计 11 suites / 95 tests 全绿，typecheck/lint 通过并提交 `dca1ce3`。隔离 PostgreSQL 进一步证明备货权限、付款 `UNPAID → PARTIALLY_PAID → PAID`、尾款作废回退、取消付款门禁、五步履约和待办退出/重入。_
   - _Requirements: R9-R12_
 
-- [ ] 11. 建立采购公共 API、权限与 OpenAPI 契约
-  - [ ] 11.1 为 Controller 路由、DTO、权限、CSRF、状态码和错误矩阵建立 RED。
-  - [ ] 11.2 实现列表、详情、产品选项、销售来源、创建、状态和付款接口。
-  - [ ] 11.3 实现稳定 operationId 与 `ApiContractResponse`，禁止额外字段漂移。
-  - [ ] 11.4 生成 Server OpenAPI snapshot，并通过根契约入口同步 Web snapshot。
-  - [ ] 11.5 运行 contract check、Server typecheck/lint/build 和 API E2E。
-  - [ ] 11.6 检查暂存范围并提交 API 小步提交。
+- [x] 11. 建立采购公共 API、权限与 OpenAPI 契约
+  - [x] 11.1 为 Controller 路由、DTO、权限、CSRF、状态码和错误矩阵建立 RED。
+  - [x] 11.2 实现列表、详情、产品选项、销售来源、创建、状态和付款接口。
+  - [x] 11.3 实现稳定 operationId 与 `ApiContractResponse`，禁止额外字段漂移。
+  - [x] 11.4 生成 Server OpenAPI snapshot，并通过根契约入口同步 Web snapshot。
+  - [x] 11.5 运行 contract check、Server typecheck/lint/build 和 API E2E。
+  - [x] 11.6 检查暂存范围并提交 API 小步提交。
+  - _Evidence: Controller suite 首轮因目标 Controller 不存在而 RED；实现后采购模块 12 suites / 99 tests 全绿，固定 14 个 HTTP operationId、权限和创建后详情读取。采购 HTTP API E2E 4/4、全局 HTTP contract E2E 23/23 均通过；`contract:sync` 已同步 Server/Web OpenAPI，`contract:check`、Server typecheck/lint/build 均通过。`node --run check` 全绿，覆盖 Root 685/685、Server 2396/2396、Web 975 项、28 条 migration 空库部署、正式构建与真实 Chrome 4/4。完整 Server E2E 中采购专项通过；全局仅有既有字典接口一次 `expected 422 / received 404` 的非确定 HTTP 失败。_
   - _Requirements: R2-R12_
 
 - [ ] 12. 以 TDD 扩展业务中立产品组件与 Web 适配层
@@ -125,12 +128,13 @@
   - _Requirements: R1-R12_
 
 - [ ] 14. 完成跨端、并发与真实浏览器验收
-  - [ ] 14.1 扩展隔离 PostgreSQL E2E inventory，覆盖 schema、权限、创建、并发数量和付款全流程。
+  - [x] 14.1 扩展隔离 PostgreSQL E2E inventory，覆盖 schema、权限、创建、并发数量和付款全流程。
   - [ ] 14.2 建立采购订单 Browser E2E runner 和稳定 fixture。
   - [ ] 14.3 验证销售关联创建、管理员备货创建、普通用户拒绝和两个采购列表。
   - [ ] 14.4 验证 `CUSTOM` 双价格、供应商漂移、采购成本漂移、超量并发和幂等重放。
-  - [ ] 14.5 验证履约到签收、付款到付清后订单从待办列表退出。
+  - [x] 14.5 验证履约到签收、付款到付清后订单从待办列表退出。
   - [ ] 14.6 运行 `node --run check`、contract check、Server E2E、Web build 和 Browser E2E。
   - [ ] 14.7 检查 Git diff、敏感文件、生成物、迁移顺序和小步提交范围。
   - [ ] 14.8 更新本文件真实执行证据并完成收口提交。
+  - _Partial evidence: Server 侧采购 schema、创建、并发数量、付款和履约 E2E 已通过；根检查、契约、Web build 与既有真实 Browser E2E 已通过。采购页面仍按确认范围仅保留页头，因此 14.2-14.4 与采购 Browser 验收留待完整 Web UI 获得单独授权后实施。_
   - _Requirements: R1-R12_

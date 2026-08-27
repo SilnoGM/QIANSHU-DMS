@@ -9,6 +9,7 @@ import { NumberingModule } from './modules/numbering/numbering.module'
 import { PermissionsModule } from './modules/permissions/permissions.module'
 import { ProfileModule } from './modules/profile/profile.module'
 import { ProductsModule } from './modules/products/products.module'
+import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module'
 import { RegionsModule } from './modules/regions/regions.module'
 import { RolesModule } from './modules/roles/roles.module'
 import { SalesOrdersModule } from './modules/sales-orders/sales-orders.module'
@@ -30,5 +31,6 @@ export const HTTP_MODULES = [
   NumberingModule,
   ProductsModule,
   SalesOrdersModule,
+  PurchaseOrdersModule,
   AuditModule,
 ] as const

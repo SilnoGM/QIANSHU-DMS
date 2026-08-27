@@ -80,6 +80,13 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SALES_ORDER_PAYMENT_VOIDED: '销售订单收款已作废',
   SALES_ORDER_DOCUMENT_ATTACHED: '销售订单凭证已关联',
   SALES_ORDER_DOCUMENT_DETACHED: '销售订单凭证已解除',
+  PURCHASE_ORDER_CREATED: '采购订单已创建',
+  PURCHASE_ORDER_ORDER_STATUS_CHANGED: '采购订单状态已变更',
+  PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED: '采购订单履约状态已变更',
+  PURCHASE_ORDER_PAYMENT_RECORDED: '采购订单付款已记录',
+  PURCHASE_ORDER_PAYMENT_VOIDED: '采购订单付款已作废',
+  PURCHASE_ORDER_DOCUMENT_ATTACHED: '采购订单凭证已关联',
+  PURCHASE_ORDER_DOCUMENT_DETACHED: '采购订单凭证已解除',
 }
 
 export function auditMetadataEntries(

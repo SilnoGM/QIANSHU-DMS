@@ -21,7 +21,20 @@ describe('media reference extension contract', () => {
       serverRoot,
       'prisma/migrations/20260820120000_sales_order_domain/migration.sql',
     ), 'utf8')
-    const migration = `${productMediaMigration}\n${salesOrderMigration}`
+    const purchaseOrderMigration = readFileSync(resolve(
+      serverRoot,
+      'prisma/migrations/20260827120000_purchase_order_domain/migration.sql',
+    ), 'utf8')
+    const purchaseOrderMediaReferenceMigration = readFileSync(resolve(
+      serverRoot,
+      'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
+    ), 'utf8')
+    const migration = [
+      productMediaMigration,
+      salesOrderMigration,
+      purchaseOrderMigration,
+      purchaseOrderMediaReferenceMigration,
+    ].join('\n')
     const referenceTables = modelBlocks(schema)
       .filter(block => /\bmediaAssetId\b/u.test(block) && /\bdetachedAt\b/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
