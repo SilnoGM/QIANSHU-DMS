@@ -1,5 +1,8 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
+import { mkdir, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import process from 'node:process'
 import test from 'node:test'
 
@@ -17,7 +20,6 @@ import {
   clickVisibleButton,
   collectRuntimeIssues,
   loginThroughRealHttp,
-  pressKey,
   readConfiguration,
   selectRegionOption,
 } from './regions.browser.helpers.mjs'
@@ -25,8 +27,8 @@ import {
 const listRoute = '/qs-operations/sales/sales-orders'
 const customerName = 'Browser 销售订单客户'
 const customerPhone = '0912000000'
-const productOption = 'PRODUCT-BROWSER-001 · Browser 多媒体产品 · 标准价 1234.5678 TWD'
 const regionSelectorTestId = 'sales-order-region-selector'
+const voucherFixtureBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
 /**
  * 复用编号场景的脱敏步骤日志，但将错误边界收敛到销售订单，日志不输出客户
@@ -112,61 +114,47 @@ async function fillLabelledControl(page, labelText, value) {
   ))`)
 }
 
-async function openLabelledProductControl(page, labelText) {
-  const controlSource = labelledControlSource(labelText)
-  await page.waitFor(`(() => {
-    const control = ${controlSource}
-    return control?.getAttribute('role') === 'combobox'
-      && control.getClientRects().length > 0
-      && !control.disabled
-  })()`)
-  await page.evaluate(`(() => {
-    const control = ${controlSource}
-    if (control?.getAttribute('role') !== 'combobox') {
-      throw new Error('sales order product combobox unavailable')
-    }
-    control.focus({ preventScroll: true })
-    return true
-  })()`)
-  await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
-    .some(option => option.getClientRects().length > 0))()`)
-}
-
-/** 币种弹窗只有一个选择器，直接在可见 dialog 内解析，避免依赖表单内部层级。 */
-async function selectCurrencyOption(page, optionText) {
+/**
+ * 币种弹窗使用两个货币卡片。通过卡片上的稳定币种代码选择对应 radio，既覆盖
+ * 用户实际点击卡片的交互，也避免重新依赖已经移除的下拉选择器 DOM。
+ */
+async function selectCurrencyOption(page, currencyCode) {
   await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
     .some(dialog => dialog.getClientRects().length > 0
       && dialog.textContent?.includes('选择订单币种')
       && (() => {
-        const control = dialog.querySelector('[data-slot="select-trigger"]')
-        return control?.getClientRects().length > 0 && !control.disabled
+        const card = dialog.querySelector(
+          '[data-testid="sales-order-currency-card"]'
+            + '[data-currency-code=${JSON.stringify(currencyCode)}]',
+        )
+        const control = card?.closest('label')?.querySelector('input[type="radio"]')
+        return card?.getClientRects().length > 0 && !control?.disabled
       })()))()`)
   await page.evaluate(`(() => {
     const dialog = [...document.querySelectorAll('[role="dialog"]')]
       .find(candidate => candidate.getClientRects().length > 0
         && candidate.textContent?.includes('选择订单币种'))
-    const control = dialog?.querySelector('[data-slot="select-trigger"]')
-    if (!control || control.disabled) {
-      throw new Error('sales order currency combobox unavailable')
+    const card = dialog?.querySelector(
+      '[data-testid="sales-order-currency-card"]'
+        + '[data-currency-code=${JSON.stringify(currencyCode)}]',
+    )
+    const control = card?.closest('label')?.querySelector('input[type="radio"]')
+    if (!(control instanceof HTMLInputElement) || control.disabled) {
+      throw new Error('sales order currency card unavailable')
     }
-    control.focus({ preventScroll: true })
+    control.click()
     return true
   })()`)
-  await pressKey(page, 'Enter')
-  await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
-    .some(option => option.getClientRects().length > 0
-      && option.getAttribute('aria-disabled') !== 'true'
-      && option.textContent?.trim() === ${JSON.stringify(optionText)}))()`)
-  await page.evaluate(`(() => {
-    const option = [...document.querySelectorAll('[role="option"]')]
+  await page.waitFor(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
       .find(candidate => candidate.getClientRects().length > 0
-        && candidate.getAttribute('aria-disabled') !== 'true'
-        && candidate.textContent?.trim() === ${JSON.stringify(optionText)})
-    if (!option) throw new Error('sales order currency option unavailable')
-    option.focus({ preventScroll: true })
-    return true
+        && candidate.textContent?.includes('选择订单币种'))
+    const card = dialog?.querySelector(
+      '[data-testid="sales-order-currency-card"]'
+        + '[data-currency-code=${JSON.stringify(currencyCode)}]',
+    )
+    return card?.closest('label')?.querySelector('input[type="radio"]')?.checked === true
   })()`)
-  await pressKey(page, 'Enter')
 }
 
 async function readOrders(page) {
@@ -178,6 +166,12 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
   timeout: 600_000,
 }, async (t) => {
   const configuration = readConfiguration(process.env)
+  const fixtureDirectory = process.env.QIANSHU_BROWSER_AUTH_FIXTURE_DIRECTORY
+  assert.equal(typeof fixtureDirectory, 'string')
+  assert.equal(path.isAbsolute(fixtureDirectory), true)
+  await mkdir(fixtureDirectory, { mode: 0o700, recursive: true })
+  const voucherFixture = path.join(fixtureDirectory, 'browser-sales-order-voucher.png')
+  await writeFile(voucherFixture, Buffer.from(voucherFixtureBase64, 'base64'), { mode: 0o600 })
   const browser = await launchChrome({
     executable: configuration.chromeExecutable,
     userDataDirectory: `${configuration.profileDirectory}-sales-orders`,
@@ -218,7 +212,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     )
     await clickVisibleButton(page, '新增销售订单')
     await waitForVisibleDialog(page, '选择订单币种')
-    await selectCurrencyOption(page, 'TWD · 新台币')
+    await selectCurrencyOption(page, 'TWD')
     await clickDialogButton(page, '选择订单币种', '进入新增订单')
     await waitForAfterAuthentication(page, `(() => (
       location.hash.includes('/qs-operations/sales/sales-orders/create?currency=TWD')
@@ -299,50 +293,58 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     assert.equal(blockedResponse.body?.total, 0)
 
     await fillLabelledControl(page, '详细地址', '苓雅区 中正一路 100 号 3 楼')
+    // 上一次硬拦截会同时写入领域错误与 FaForm 展示状态。必须先等待错误反馈
+    // 完整清除，再触发下一步，避免测试在 Vue 连续事件刷新期间提前点击。
+    await page.waitFor(`!document.body.innerText.includes('详细地址请勿重复填写已选地区')`)
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector(
       '[data-testid="sales-order-step-products-sales"]',
     )?.getClientRects().length > 0`)
   })
 
-  await runSalesOrderBrowserStep('TWD product filter and sales values', async () => {
+  await runSalesOrderBrowserStep('TWD product selection and sales values', async () => {
     await page.waitFor(`document.body.innerText.includes('暂无产品明细')`)
     await clickVisibleButton(page, '添加数据库产品')
-    await fillLabelledControl(page, '数据库产品', 'PRODUCT-BROWSER-001')
-    await openLabelledProductControl(page, '数据库产品')
-    const productControlSource = labelledControlSource('数据库产品')
-    const optionLabels = await page.evaluate(`(() => {
-      const control = ${productControlSource}
-      const listboxId = control?.getAttribute('aria-controls')
-      const listbox = listboxId ? document.getElementById(listboxId) : null
-      if (!listbox || listbox.getAttribute('role') !== 'listbox') {
-        throw new Error('sales order product listbox unavailable')
-      }
-      return [...listbox.querySelectorAll('[role="option"]')]
-        .filter(option => option.getClientRects().length > 0)
-        .map(option => option.textContent?.trim() ?? '')
+    await waitForVisibleDialog(page, '选择数据库产品')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择数据库产品'))
+      return dialog?.textContent?.includes('PRODUCT-BROWSER-001')
     })()`)
-    assert.equal(optionLabels.includes(productOption), true)
-    assert.equal(optionLabels.some(label => label.includes(' MYR')), false)
-    assert.equal(
-      optionLabels
-        .filter(label => label !== '请选择数据库产品')
-        .every(label => label.includes(' TWD')),
-      true,
-    )
+    const selectorText = await page.evaluate(`(() => [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('选择数据库产品'))?.textContent ?? '')()`)
+    assert.equal(selectorText.includes('产品选择不限制币种'), true)
+    assert.match(selectorText, /共 \d+ 个产品/u)
     await page.evaluate(`(() => {
-      const control = ${productControlSource}
-      if (control?.getAttribute('role') !== 'combobox') {
-        throw new Error('sales order product combobox unavailable')
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择数据库产品'))
+      const product = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.includes('PRODUCT-BROWSER-001')
+          && button.textContent?.includes('选择产品'))
+      if (!product) {
+        throw new Error('sales order product card unavailable')
       }
-      control.focus({ preventScroll: true })
+      product.click()
       return true
     })()`)
-    await pressKey(page, 'ArrowDown', 'ArrowDown')
-    await pressKey(page, 'Enter')
-    await page.waitFor(`${productControlSource}?.value === ${JSON.stringify(productOption)}`)
-    await fillLabelledControl(page, '真实售价', '100')
-    await fillLabelledControl(page, '产品数量', '2')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择数据库产品'))
+      const selected = dialog?.querySelector('aside[aria-label="已选择产品"]')
+      return selected?.textContent?.includes('PRODUCT-BROWSER-001')
+        && selected.textContent.includes('新增产品 · 数量 1')
+    })()`)
+    await clickDialogButton(page, '选择数据库产品', '确认添加')
+    await waitForNoVisibleDialog(page, '选择数据库产品')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-step-products-sales"]',
+    )?.textContent?.includes('PRODUCT-BROWSER-001')`)
+    await fillLabelledControl(page, '第 1 行本单售价', '100')
+    await fillLabelledControl(page, '第 1 行产品数量', '2')
     await fillLabelledControl(page, '手填销售总价', '200')
     await fillLabelledControl(page, '定金', '50')
     await fillLabelledControl(page, '尾款', '150')
@@ -384,6 +386,17 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     const beforeReview = await readOrders(page)
     assert.equal(beforeReview.status, 200)
     assert.equal(beforeReview.body?.total, 0)
+    await page.setFiles('[data-testid="sales-order-issuance-voucher-input"]', [voucherFixture])
+    await page.waitFor(`(() => {
+      const documents = document.querySelector('[data-testid="sales-order-step-documents"]')
+      return documents?.textContent?.includes('browser-sales-order-voucher.png')
+        && documents.textContent.includes(${JSON.stringify(`${customerName}-出单凭证-`)})
+        && [...documents.querySelectorAll('button')].some(button => (
+          button.getAttribute('aria-label')
+            === '移除出单凭证 browser-sales-order-voucher.png'
+          && !button.disabled
+        ))
+    })()`)
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.body.textContent?.includes('请检查订单信息是否正确')`)
     await page.waitFor(`(() => {
@@ -407,27 +420,21 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       )
       const submit = [...(actions?.querySelectorAll('button') ?? [])]
         .find(button => button.textContent?.trim() === '提交订单')
-      const layoutRect = layout?.getBoundingClientRect()
-      const summaryRect = summary?.getBoundingClientRect()
-      const summaryRegionRect = summaryRegion?.getBoundingClientRect()
-      const actionsRect = actions?.getBoundingClientRect()
-      const summaryTop = summary ? getComputedStyle(summary).top : ''
       const actionsPosition = actions ? getComputedStyle(actions).position : ''
       return formTrack?.getAttribute('aria-hidden') === 'true'
         && formTrack.hasAttribute('inert')
         && getComputedStyle(formTrack).opacity === '0'
+        && layout?.classList.contains('sales-order-create-layout--review')
         && review?.getClientRects().length > 0
         && summary?.getClientRects().length > 0
-        && summaryTop === 'auto'
-        && Math.abs(summaryRect.top - layoutRect.top) <= 1
-        && summaryRect.width >= layoutRect.width - 2
+        && summary.getAttribute('data-surface') === 'review'
         && desc?.getClientRects().length > 0
         && summary.textContent?.includes(${JSON.stringify(customerName)})
         && summary.textContent?.includes('200')
         && actions?.getClientRects().length > 0
-        && actions.parentElement === summaryRegion?.parentElement
         && !['absolute', 'fixed', 'sticky'].includes(actionsPosition)
-        && actionsRect.top >= summaryRegionRect.bottom - 1
+        && Boolean(summaryRegion.compareDocumentPosition(actions)
+          & Node.DOCUMENT_POSITION_FOLLOWING)
         && submit?.disabled === false
     })()`)
 
@@ -491,7 +498,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       location.hash === ${JSON.stringify(`#${listRoute}`)}
       && document.querySelector('[data-testid="sales-order-list-table"]')
         ?.textContent?.includes(${JSON.stringify(customerName)})
-      && document.body.innerText.includes('草稿')
+      && document.body.innerText.includes('已确认')
       && document.body.innerText.includes('待采购')
       && document.body.innerText.includes('未付款')
     ))()`)

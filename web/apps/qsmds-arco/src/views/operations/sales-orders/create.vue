@@ -357,6 +357,20 @@ function nextStep(): void {
     return
   }
 
+  if (formFailure.value === null) {
+    // 当前步骤已通过最新一次领域校验时，之前由客户端硬拦截写入的同步骤错误
+    // 已经失效，必须从持久错误集合移除。服务端错误会携带 formFailure，仍由
+    // 下方保护分支继续拦截，不能因为一次本地校验通过而被误清除。
+    const errorsOutsideCurrentStep = Object.fromEntries(
+      Object.entries(fieldErrors.value).filter(([path]) => (
+        resolveSalesOrderCreateStepForField(path) !== activeStep.value
+      )),
+    )
+    if (Object.keys(errorsOutsideCurrentStep).length !== Object.keys(fieldErrors.value).length) {
+      replaceFieldErrors(errorsOutsideCurrentStep)
+    }
+  }
+
   const persistedStepErrors = Object.fromEntries(
     Object.entries(fieldErrors.value).filter(([path]) => (
       resolveSalesOrderCreateStepForField(path) === activeStep.value
@@ -1343,6 +1357,7 @@ onBeforeUnmount(() => {
                 <template v-if="canManageDocuments">
                   <input
                     ref="fileInputRef"
+                    data-testid="sales-order-issuance-voucher-input"
                     type="file"
                     accept="image/*,.pdf,.doc,.docx"
                     class="sr-only"
