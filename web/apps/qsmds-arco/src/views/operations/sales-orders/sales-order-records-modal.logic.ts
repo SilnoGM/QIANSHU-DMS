@@ -3,7 +3,7 @@ import type {
   SalesOrderPaymentRequestDto,
 } from '@/api/generated/types.gen'
 
-import { validateMoneyString } from '@/components/base/MoneyInput/logic'
+import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 export type SalesOrderRecordsKind = 'payments' | 'documents' | 'changes'
 export type SalesOrderRecordsInitialAction = 'payment' | 'receipt' | null
