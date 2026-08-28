@@ -20,6 +20,7 @@
       "supplier": "供应商",
       "salesOrderNo": "销售订单",
       "customerName": "客户名称",
+      "lineRemark": "备注：",
       "referencePurchaseUnitPrice": "采购定价",
       "actualPurchaseUnitPrice": "真实采购价",
       "lineSubtotal": "本行小计",

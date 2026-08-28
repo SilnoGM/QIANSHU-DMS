@@ -20,6 +20,7 @@
       "supplier": "Supplier",
       "salesOrderNo": "Sales order",
       "customerName": "Customer",
+      "lineRemark": "Note:",
       "referencePurchaseUnitPrice": "Purchase list price",
       "actualPurchaseUnitPrice": "Actual purchase price",
       "lineSubtotal": "Line subtotal",

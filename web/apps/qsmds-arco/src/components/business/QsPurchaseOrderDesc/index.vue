@@ -240,8 +240,11 @@ function lineImageItems(
                 </span>
                 {{ displayText(line.productName) }}
               </p>
-              <p v-if="line.description" class="qs-type-meta text-muted-foreground m-0 mt-1 [overflow-wrap:anywhere]">
-                {{ line.description }}
+              <p v-if="line.description" class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-1 [overflow-wrap:anywhere]">
+                <span class="text-foreground/80 font-medium">
+                  {{ t('purchaseOrderDesc.fields.lineRemark') }}
+                </span>
+                <span>{{ line.description }}</span>
               </p>
             </div>
           </div>

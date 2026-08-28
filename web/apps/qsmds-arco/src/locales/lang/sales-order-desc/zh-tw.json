@@ -18,6 +18,7 @@
       "customerPhone": "客戶電話",
       "region": "三級地區",
       "fullAddress": "完整地址",
+      "lineRemark": "備註：",
       "actualUnitPrice": "真實售價",
       "quantity": "數量",
       "lineSubtotal": "本行小計",

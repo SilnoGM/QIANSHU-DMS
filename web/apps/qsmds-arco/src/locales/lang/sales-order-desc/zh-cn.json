@@ -18,6 +18,7 @@
       "customerPhone": "客户电话",
       "region": "三级地区",
       "fullAddress": "完整地址",
+      "lineRemark": "备注：",
       "actualUnitPrice": "真实售价",
       "quantity": "数量",
       "lineSubtotal": "本行小计",

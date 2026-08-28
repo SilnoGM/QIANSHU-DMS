@@ -18,6 +18,7 @@
       "customerPhone": "Phone",
       "region": "Region",
       "fullAddress": "Full address",
+      "lineRemark": "Note:",
       "actualUnitPrice": "Actual price",
       "quantity": "Quantity",
       "lineSubtotal": "Line subtotal",
