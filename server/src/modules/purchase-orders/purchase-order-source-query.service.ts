@@ -103,6 +103,17 @@ export class PurchaseOrderSourceQueryService {
           supplierValue: true,
           purchaseCostAmount: true,
           purchaseCostCurrency: true,
+          media: {
+            where: {
+              kind: 'IMAGE',
+              isPrimary: true,
+              detachedAt: null,
+              mediaAsset: { is: { status: 'READY' } },
+            },
+            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+            take: 2,
+            select: { id: true },
+          },
         },
       }),
     ])
@@ -115,6 +126,14 @@ export class PurchaseOrderSourceQueryService {
             '产品采购成本已变化，请重试',
           )
         }
+        if (row.media.length > 1) {
+          throw new ApiException(
+            HttpStatus.CONFLICT,
+            'PURCHASE_ORDER_STATE_CHANGED',
+            '产品主图状态已变化，请重试',
+          )
+        }
+        const mainImage = row.media[0]
         return {
           id: row.id,
           productNo: row.productNo,
@@ -123,6 +142,13 @@ export class PurchaseOrderSourceQueryService {
           supplierValue: row.supplierValue as string,
           referencePurchaseUnitPriceAmount: fixed4(row.purchaseCostAmount),
           currencyCode: 'CNY' as const,
+          mainImage: mainImage === undefined
+            ? null
+            : {
+                id: mainImage.id,
+                contentUrl:
+                  `/api/purchase-orders/product-options/${row.id}/main-image/${mainImage.id}/content`,
+              },
         }
       }),
       page,

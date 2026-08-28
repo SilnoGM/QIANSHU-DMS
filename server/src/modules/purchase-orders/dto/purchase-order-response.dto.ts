@@ -156,6 +156,11 @@ export class PurchaseOrderPageDto {
   @ApiProperty({ type: 'integer' }) readonly total!: number
 }
 
+export class PurchaseOrderProductImageDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly contentUrl!: string
+}
+
 export class PurchaseOrderProductOptionDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly productNo!: string
@@ -165,6 +170,8 @@ export class PurchaseOrderProductOptionDto {
   @ApiProperty({ type: 'string' }) readonly supplierValue!: string
   @ApiProperty({ type: 'string' }) readonly referencePurchaseUnitPriceAmount!: string
   @ApiProperty({ enum: ['CNY'] }) readonly currencyCode!: 'CNY'
+  @ApiProperty({ type: () => PurchaseOrderProductImageDto, nullable: true })
+  readonly mainImage!: PurchaseOrderProductImageDto | null
 }
 
 export class PurchaseOrderProductOptionsDto {

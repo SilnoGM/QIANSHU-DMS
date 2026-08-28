@@ -5,11 +5,13 @@ import { AuthModule } from '../auth/auth.module'
 import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
+import { ProductsModule } from '../products/products.module'
 import { PurchaseOrderDocumentMultipartParser } from './documents/purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from './purchase-order-create-dependency.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
+import { PurchaseOrderProductImageService } from './products/purchase-order-product-image.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
 import { PurchaseOrdersController } from './purchase-orders.controller'
@@ -21,6 +23,7 @@ import { PurchaseOrdersController } from './purchase-orders.controller'
     DictionaryModule,
     MediaModule,
     NumberingModule,
+    ProductsModule,
   ],
   controllers: [PurchaseOrdersController],
   providers: [
@@ -30,6 +33,7 @@ import { PurchaseOrdersController } from './purchase-orders.controller'
     PurchaseOrderCommandService,
     PurchaseOrderMutationService,
     PurchaseOrderDocumentService,
+    PurchaseOrderProductImageService,
     {
       provide: PurchaseOrderDocumentMultipartParser,
       useFactory: (): PurchaseOrderDocumentMultipartParser =>

@@ -24,7 +24,7 @@ import {
   validatePurchaseOrderCreateStep,
 } from '../../src/views/operations/purchase-orders/purchase-order-create.logic'
 
-const catalogOption: PurchaseOrderProductOptionDto = {
+const catalogOption = {
   id: '11111111-1111-4111-8111-111111111111',
   productNo: 'SKU-A',
   name: '采购产品 A',
@@ -32,6 +32,12 @@ const catalogOption: PurchaseOrderProductOptionDto = {
   supplierValue: 'SUPPLIER_CN_01',
   referencePurchaseUnitPriceAmount: '12.5000',
   currencyCode: 'CNY',
+  mainImage: {
+    id: '77777777-7777-4777-8777-777777777777',
+    contentUrl: '/api/purchase-orders/product-options/main-image/content',
+  },
+} as PurchaseOrderProductOptionDto & {
+  readonly mainImage: { readonly id: string, readonly contentUrl: string }
 }
 
 const sourceCatalogLine: PurchaseOrderSourceSalesOrderLineDto = {
@@ -125,7 +131,7 @@ test('采购产品 loader 映射 CNY 采购定价且保持分页身份', () => {
       attributes: [],
       standardUnitPriceAmount: '12.5000',
       currencyCode: 'CNY',
-      mainImage: null,
+      mainImage: catalogOption.mainImage,
     }],
     page: 2,
     pageSize: 20,
@@ -192,6 +198,7 @@ test('销售来源同步只加入当前供应商可采购的正式产品和所�
   })
   assert.equal(result.incompatibleCatalogCount, 1)
   assert.equal(result.exhaustedCount, 1)
+  assert.deepEqual(result.lines[0]?.mainImage, catalogOption.mainImage)
 })
 
 test('关联采购构造 DTO 时校验来源数量、明细总价和 CUSTOM 双价格', () => {

@@ -445,26 +445,30 @@ export function createBrowserRegionsPlan(input) {
     ...input,
     sourceEnv: databaseIsolatedSourceEnv,
   })
-  const prepare = Object.freeze(authPlan.prepare.map((step) => {
-    if (step.name !== 'web-build') {
-      return step
-    }
-    return Object.freeze({
-      ...step,
-      args: Object.freeze([
-        '-C', 'web',
-        '--filter', 'qsmds-arco',
-        'run', 'build:test',
-      ]),
-      env: Object.freeze({
-        ...step.env,
-        // test mode 只提供独立 outDir/sourcemap；Browser E2E 仍必须访问真实同源 API。
-        VITE_APP_API_BASEURL: '/api',
-        VITE_BUILD_FAKE: 'false',
-        VITE_ENABLE_COMPONENT_LIBRARY: 'true',
-      }),
-    })
-  }))
+  // 固定主图文件只服务认证综合套件中的采购场景；地区及其派生套件不读取产品
+  // 媒体，因此保持原有最小准备面，不向这些隔离任务写入无消费方的媒体夹具。
+  const prepare = Object.freeze(authPlan.prepare
+    .filter(step => step.name !== 'media-fixture')
+    .map((step) => {
+      if (step.name !== 'web-build') {
+        return step
+      }
+      return Object.freeze({
+        ...step,
+        args: Object.freeze([
+          '-C', 'web',
+          '--filter', 'qsmds-arco',
+          'run', 'build:test',
+        ]),
+        env: Object.freeze({
+          ...step.env,
+          // test mode 只提供独立 outDir/sourcemap；Browser E2E 仍必须访问真实同源 API。
+          VITE_APP_API_BASEURL: '/api',
+          VITE_BUILD_FAKE: 'false',
+          VITE_ENABLE_COMPONENT_LIBRARY: 'true',
+        }),
+      })
+    }))
   const services = Object.freeze(authPlan.services.map((definition) => {
     if (definition.name !== 'web') {
       return definition

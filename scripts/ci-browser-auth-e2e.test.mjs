@@ -62,6 +62,7 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
       ['pnpm', ['-C', 'server', 'build']],
       ['pnpm', ['-C', 'web', 'build']],
       [process.execPath, ['./scripts/browser-auth/provision-admin.mjs']],
+      [process.execPath, ['./scripts/browser-auth/provision-media-fixtures.mjs']],
       ['openssl', [
         'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
         '-keyout', '/tmp/qianshu-browser-auth-session/tls-key.pem',
@@ -78,6 +79,11 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
     'proxy-development',
     'proxy-production',
   ])
+  assert.equal(
+    plan.prepare.find(step => step.name === 'media-fixture')
+      ?.env.QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT,
+    '/var/tmp/qianshu-browser-media',
+  )
   assert.deepEqual(
     plan.services
       .filter(service => service.name.startsWith('server-'))

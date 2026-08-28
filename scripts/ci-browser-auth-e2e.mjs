@@ -160,6 +160,14 @@ export function createBrowserAuthPlan(input) {
       }),
     }),
     Object.freeze({
+      name: 'media-fixture',
+      command: process.execPath,
+      args: Object.freeze(['./scripts/browser-auth/provision-media-fixtures.mjs']),
+      env: safeEnvironment(sourceEnv, {
+        QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT: mediaStorageRoot,
+      }),
+    }),
+    Object.freeze({
       name: 'tls-certificate',
       command: 'openssl',
       args: Object.freeze([

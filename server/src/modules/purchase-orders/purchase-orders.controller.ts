@@ -22,6 +22,11 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
+import {
+  applyProductMediaContentResponse,
+  type ProductMediaContentHttpResponse,
+} from '../products/media/product-media-content.http'
 import type {
   PurchaseOrderDocumentMultipartRequest,
 } from './documents/purchase-order-document-multipart.parser'
@@ -46,6 +51,7 @@ import {
   PurchaseOrderIdParamDto,
   PurchaseOrderListQueryDto,
   PurchaseOrderPaymentIdParamDto,
+  PurchaseOrderProductImageParamDto,
   PurchaseOrderProductOptionsQueryDto,
   PurchaseOrderSourceSalesOrderIdParamDto,
   PurchaseOrderSourceSalesOrdersQueryDto,
@@ -60,6 +66,7 @@ import {
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { parsePurchaseOrderIdempotencyKey } from './purchase-order-command.normalizer'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
+import { PurchaseOrderProductImageService } from './products/purchase-order-product-image.service'
 import {
   PurchaseOrderQueryService,
   type PurchaseOrderDetail,
@@ -107,6 +114,7 @@ export class PurchaseOrdersController {
     private readonly commands: PurchaseOrderCommandService,
     private readonly mutations: PurchaseOrderMutationService,
     private readonly documents: PurchaseOrderDocumentService,
+    private readonly productImages: PurchaseOrderProductImageService,
   ) {}
 
   @Get()
@@ -142,6 +150,55 @@ export class PurchaseOrdersController {
     @Query() query: PurchaseOrderProductOptionsQueryDto,
   ): ReturnType<PurchaseOrderSourceQueryService['productOptions']> {
     return this.sourceQueries.productOptions(query)
+  }
+
+  @Head('product-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:create')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'purchase_orders_head_product_option_main_image',
+    notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized purchase-order product option main image.',
+  })
+  async headProductOptionMainImage(
+    @Param() params: PurchaseOrderProductImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productImages.resolve(
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get('product-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:create')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'purchase_orders_get_product_option_main_image',
+    notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized purchase-order product option main image.',
+  })
+  async getProductOptionMainImage(
+    @Param() params: PurchaseOrderProductImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productImages.resolve(
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
   }
 
   @Get('source-sales-orders')

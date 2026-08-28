@@ -345,6 +345,14 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
     await clickVisibleButton(page, '同步销售产品明细')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
       ?.textContent?.includes(${JSON.stringify(productNo)})`)
+    await page.waitFor(`(() => {
+      const step = document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      const image = step?.querySelector('tbody img')
+      return image instanceof HTMLImageElement
+        && image.src.includes('/api/purchase-orders/product-options/')
+        && image.complete
+        && image.naturalWidth > 0
+    })()`)
     await fillLabelledControl(page, '第 1 行本单采购价', '80')
     await fillAriaControl(page, '定金', '20')
     await fillAriaControl(page, '尾款', '140')

@@ -18,6 +18,7 @@ function setup() {
         supplierValue: 'SUPPLIER_A',
         purchaseCostAmount: decimal('12.34'),
         purchaseCostCurrency: 'CNY',
+        media: [{ id: 'product-media-id' }],
       }]),
     },
     salesOrder: {
@@ -89,13 +90,18 @@ describe('PurchaseOrderSourceQueryService', () => {
         supplierValue: 'SUPPLIER_A',
         referencePurchaseUnitPriceAmount: '12.3400',
         currencyCode: 'CNY',
+        mainImage: {
+          id: 'product-media-id',
+          contentUrl:
+            '/api/purchase-orders/product-options/product-id/main-image/product-media-id/content',
+        },
       }],
       page: 1,
       pageSize: 20,
       total: 1,
     })
     const productQuery = fixture.prisma.product.findMany.mock.calls[0]?.[0] as
-      | { where?: Record<string, unknown> }
+      | { select?: Record<string, unknown>, where?: Record<string, unknown> }
       | undefined
     expect(productQuery?.where).toMatchObject({
       status: 'ACTIVE',
@@ -103,6 +109,36 @@ describe('PurchaseOrderSourceQueryService', () => {
       purchaseCostAmount: { not: null },
       purchaseCostCurrency: 'CNY',
     })
+    expect(productQuery?.select).toMatchObject({
+      media: {
+        where: {
+          kind: 'IMAGE',
+          isPrimary: true,
+          detachedAt: null,
+          mediaAsset: { is: { status: 'READY' } },
+        },
+        take: 2,
+        select: { id: true },
+      },
+    })
+  })
+
+  it('rejects inconsistent products that expose more than one current primary image', async () => {
+    const fixture = setup()
+    fixture.prisma.product.findMany.mockResolvedValue([{
+      id: 'product-id',
+      productNo: 'P-001',
+      name: '采购产品',
+      attributes: [],
+      supplierValue: 'SUPPLIER_A',
+      purchaseCostAmount: decimal('12.34'),
+      purchaseCostCurrency: 'CNY',
+      media: [{ id: 'media-a' }, { id: 'media-b' }],
+    }])
+
+    await expect(fixture.service.productOptions({
+      supplierValue: 'SUPPLIER_A',
+    })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
   })
 
   it('rejects an unknown or disabled supplier before reading products', async () => {

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
@@ -16,6 +17,7 @@ import {
   createProvisionCommand,
   readProvisionInput,
 } from './browser-auth/provision-admin.mjs'
+import { resolveManagementMainImageFixturePath } from './browser-auth/provision-media-fixtures.mjs'
 import { classifyServerStartupError } from './browser-auth/server-entry.mjs'
 import {
   CdpConnection,
@@ -164,6 +166,28 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
         QIANSHU_BROWSER_AUTH_ADMIN_PASSWORD: invalidPassword,
       }),
       { message: 'Browser auth admin fixture input is invalid' },
+    )
+  }
+})
+
+test('媒体 fixture 只写入当前用户的一次性 Browser 媒体根', () => {
+  const root = path.join(os.homedir(), '.qianshu-browser-media-e2e-fixture')
+  assert.equal(
+    resolveManagementMainImageFixturePath(root),
+    path.join(
+      root,
+      'assets/2026/08/11111111-1111-4111-8111-111111111111.png',
+    ),
+  )
+  for (const invalid of [
+    '/',
+    os.homedir(),
+    path.resolve('relative-media-root'),
+    path.join(os.homedir(), 'persistent-media'),
+  ]) {
+    assert.throws(
+      () => resolveManagementMainImageFixturePath(invalid),
+      { message: 'Browser auth media fixture root is invalid' },
     )
   }
 })

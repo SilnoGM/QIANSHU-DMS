@@ -1,4 +1,6 @@
-import { HttpStatus, Module } from '@nestjs/common'
+import { Readable } from 'node:stream'
+
+import { HttpStatus, Module, StreamableFile } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import type { OpenAPIObject } from '@nestjs/swagger'
 
@@ -6,15 +8,20 @@ import { requestIdMiddleware } from '../../infrastructure/http/request-id.middle
 import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
+import type { ProductMediaContentResponse } from '../products/media/product-media-content.service'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
+import { PurchaseOrderProductImageService } from './products/purchase-order-product-image.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
 import { PurchaseOrdersController } from './purchase-orders.controller'
 
 const ORDER_ID = '11111111-1111-4111-8111-111111111111'
 const ACTOR_ID = '22222222-2222-4222-8222-222222222222'
+type ContractOperation = NonNullable<OpenAPIObject['paths'][string]['get']> & {
+  'x-qianshu-contract'?: unknown
+}
 
 function createRequest(): object {
   const request = {}
@@ -57,6 +64,9 @@ const providers = [{
   useValue: {
     uploadTemporary: jest.fn(), detach: jest.fn(), resolveContent: jest.fn(),
   },
+}, {
+  provide: PurchaseOrderProductImageService,
+  useValue: { resolve: jest.fn() },
 }]
 
 @Module({ controllers: [PurchaseOrdersController], providers })
@@ -91,6 +101,7 @@ describe('PurchaseOrdersController', () => {
       commands as unknown as PurchaseOrderCommandService,
       {} as PurchaseOrderMutationService,
       {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
     )
     const request = createRequest()
     const input = { purchaseType: 'STOCK' }
@@ -108,6 +119,59 @@ describe('PurchaseOrdersController', () => {
       input,
     )
     expect(queries.getById).toHaveBeenCalledWith(ORDER_ID)
+  })
+
+  it('protects and delegates GET/HEAD product main image content', async () => {
+    const stream = Readable.from(Buffer.from('image'))
+    const result: ProductMediaContentResponse = {
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Type': 'image/png',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      stream,
+    }
+    const resolve = jest.fn().mockResolvedValue(result)
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      {} as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      { resolve } as unknown as PurchaseOrderProductImageService,
+    )
+    const params = {
+      productId: '33333333-3333-4333-8333-333333333333',
+      productMediaId: '44444444-4444-4444-8444-444444444444',
+    }
+    const response = { status: jest.fn(), setHeader: jest.fn() }
+
+    await controller.headProductOptionMainImage(
+      params, '"known"', 'bytes=0-0', response,
+    )
+    const body = await controller.getProductOptionMainImage(
+      params, undefined, undefined, response,
+    )
+
+    expect(resolve).toHaveBeenNthCalledWith(
+      1, params.productId, params.productMediaId, '"known"', 'bytes=0-0', 'HEAD',
+    )
+    expect(resolve).toHaveBeenNthCalledWith(
+      2, params.productId, params.productMediaId, undefined, undefined, 'GET',
+    )
+    expect(body).toBeInstanceOf(StreamableFile)
+    expect((body as StreamableFile).getStream()).toBe(stream)
+    const reflector = new Reflector()
+    for (const method of [
+      'headProductOptionMainImage', 'getProductOptionMainImage',
+    ] as const) {
+      expect(reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        PurchaseOrdersController.prototype[method],
+      )).toEqual(['purchase-orders:create'])
+    }
   })
 })
 
@@ -136,6 +200,34 @@ describe('PurchaseOrdersController OpenAPI', () => {
     expect(document.paths[
       '/api/purchase-orders/{purchaseOrderId}/documents/{documentId}/content'
     ]?.head).toMatchObject({ operationId: 'purchase_orders_head_document_content' })
+
+    const imagePath = document.paths[
+      '/api/purchase-orders/product-options/{productId}/main-image/{productMediaId}/content'
+    ]
+    const get: ContractOperation | undefined = imagePath?.get
+    const head: ContractOperation | undefined = imagePath?.head
+    expect(get?.operationId).toBe('purchase_orders_get_product_option_main_image')
+    expect(head?.operationId).toBe('purchase_orders_head_product_option_main_image')
+    for (const operation of [get, head]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      const contract = operation?.['x-qianshu-contract']
+      expect(contract).toMatchObject({
+        authorization: true,
+        resourceLocator: true,
+        privateNoStore: true,
+      })
+      if (typeof contract !== 'object' || contract === null || !('errors' in contract)) {
+        throw new Error('OpenAPI contract must expose an errors array')
+      }
+      const errors: unknown = contract.errors
+      if (!Array.isArray(errors)) {
+        throw new Error('OpenAPI contract errors must be an array')
+      }
+      expect(errors).toContainEqual({
+        status: 404,
+        codes: ['PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND'],
+      })
+    }
   })
 
   it('requires explicit list view and documents CNY as the only currency', () => {
