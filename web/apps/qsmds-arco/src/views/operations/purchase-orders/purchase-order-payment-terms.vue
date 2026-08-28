@@ -26,8 +26,9 @@ const emit = defineEmits<{
     title="付款约定"
     description="采购总价由明细计算，并且必须等于定金与尾款之和。"
   >
-    <dl class="m-0 gap-4 grid">
-      <div class="p-4 border border-border rounded-xl bg-primary/5 flex items-center justify-between">
+    <!-- 采购总价独占整行；中等及以上视口将定金与尾款并排，窄屏自动回退为单列。 -->
+    <dl class="m-0 gap-4 grid grid-cols-1 md:grid-cols-2">
+      <div class="p-4 border border-border rounded-xl bg-primary/5 flex items-center justify-between md:col-span-2">
         <dt class="text-sm text-muted-foreground">
           采购总价
         </dt>
@@ -35,7 +36,7 @@ const emit = defineEmits<{
           <AmountDisplay :value="purchaseTotalAmount" currency="CNY" :currencies="currencies" />
         </dd>
       </div>
-      <div>
+      <div class="min-w-0">
         <dt class="text-sm font-medium mb-2">
           定金
         </dt>
@@ -55,7 +56,7 @@ const emit = defineEmits<{
           </p>
         </dd>
       </div>
-      <div>
+      <div class="min-w-0">
         <dt class="text-sm font-medium mb-2">
           尾款
         </dt>

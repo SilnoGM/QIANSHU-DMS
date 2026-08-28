@@ -140,5 +140,15 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /<FaForm[\s\S]*?:model="formModel"/u)
   assert.match(paymentSource, /aria-label="定金"/u)
   assert.match(paymentSource, /aria-label="尾款"/u)
+  assert.match(
+    paymentSource,
+    /<dl class="[^"]*grid-cols-1[^"]*md:grid-cols-2[^"]*"/u,
+    '付款约定在桌面端必须将定金与尾款并排展示，并在窄屏回退为单列',
+  )
+  assert.match(
+    paymentSource,
+    /采购总价独占整行[\s\S]*?md:col-span-2/u,
+    '采购总价必须独占付款约定首行',
+  )
   assert.match(source, /focusFirstInvalidField/u)
 })
