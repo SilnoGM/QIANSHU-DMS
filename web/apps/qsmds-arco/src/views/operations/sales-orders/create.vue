@@ -527,7 +527,16 @@ function handleLinesUpdate(lines: typeof formModel.value.lines): void {
 }
 
 const loadSalesOrderProducts: ProductPageLoader = async (query, signal) => {
-  const response = await salesOrdersApi.productOptions(query, signal)
+  // 通用选择器同时服务固定 CNY 的采购订单；销售创建页的路由已把币种收窄为
+  // TWD/MYR，这里继续保留运行时守卫，避免未来调用方绕过路由后把 CNY 发给销售 API。
+  const { currencyCode } = query
+  if (currencyCode === 'CNY') {
+    throw new Error('销售订单产品查询不支持 CNY')
+  }
+  const response = await salesOrdersApi.productOptions({
+    ...query,
+    currencyCode,
+  }, signal)
   return {
     page: response.data.page,
     pageSize: response.data.pageSize,

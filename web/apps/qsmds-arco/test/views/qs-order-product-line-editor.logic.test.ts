@@ -8,6 +8,7 @@ import {
   applyProductSelectionChanges,
   calculateOrderProductLineTotals,
   createTemporaryOrderProductLine,
+  validateMatchingCustomUnitPrices,
 } from '../../src/components/business/QsOrderProductLineEditor/logic'
 
 const catalogProduct: ProductSelectorItem = {
@@ -74,6 +75,30 @@ test('数据库产品与临时产品新行的本单售价统一从零开始，�
   }
   assert.equal(applied.lines[0]!.standardUnitPriceAmount, '12.5000')
   assert.equal(applied.lines[0]!.actualUnitPriceAmount, '0.00')
+})
+
+test('采购临时产品可从双价格空值开始，并要求规范金额完全相等', () => {
+  const temporary = createTemporaryOrderProductLine('purchase-custom', null)
+
+  assert.equal(temporary.standardUnitPriceAmount, null)
+  assert.equal(temporary.actualUnitPriceAmount, null)
+  assert.deepEqual(validateMatchingCustomUnitPrices(temporary), {
+    ok: false,
+    code: 'REQUIRED',
+  })
+  assert.deepEqual(validateMatchingCustomUnitPrices({
+    ...temporary,
+    standardUnitPriceAmount: '12.50',
+    actualUnitPriceAmount: '12.5000',
+  }), { ok: true })
+  assert.deepEqual(validateMatchingCustomUnitPrices({
+    ...temporary,
+    standardUnitPriceAmount: '12.50',
+    actualUnitPriceAmount: '12.51',
+  }), {
+    ok: false,
+    code: 'MISMATCH',
+  })
 })
 
 test('任一变更不可信时整批失败，不部分写入原数组', () => {

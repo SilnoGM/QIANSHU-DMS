@@ -22,10 +22,14 @@ import {
 defineOptions({ name: 'QsOrderProductLineEditor' })
 
 const props = withDefaults(defineProps<OrderProductLineEditorProps>(), {
+  customReferenceUnitPriceEditable: false,
   disabled: false,
   fieldErrors: () => ({}),
+  fixedProductSupplierValue: undefined,
   maximumLines: 100,
+  productSelectionDescription: undefined,
   showDiscountRate: false,
+  temporaryLineInitialActualUnitPriceAmount: '0.00',
 })
 
 const emit = defineEmits<{
@@ -76,7 +80,13 @@ function addTemporaryLine(): void {
     return
   }
   selectionError.value = ''
-  emit('update:modelValue', [...cloneLines(), createTemporaryOrderProductLine()])
+  emit('update:modelValue', [
+    ...cloneLines(),
+    createTemporaryOrderProductLine(
+      undefined,
+      props.temporaryLineInitialActualUnitPriceAmount,
+    ),
+  ])
 }
 
 function applySelection(changes: readonly ProductSelectionChange[]): void {
@@ -292,8 +302,28 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               </div>
             </td>
             <td class="p-3 whitespace-nowrap">
+              <FaFormItem
+                v-if="line.lineType === 'CUSTOM' && customReferenceUnitPriceEditable"
+                :name="`lines.${index}.standardUnitPriceAmount`"
+                :label="`第 ${index + 1} 行${labels.referenceUnitPrice}`"
+                required
+                :auto-bind="false"
+                class="top-2 relative"
+                label-class="sr-only"
+              >
+                <MoneyInput
+                  :model-value="line.standardUnitPriceAmount"
+                  :currency="currency"
+                  :currencies="currencies"
+                  min="0"
+                  :disabled="disabled"
+                  input-class="text-primary !font-bold"
+                  name="standardUnitPriceAmount"
+                  @update:model-value="patchLine(index, { standardUnitPriceAmount: $event })"
+                />
+              </FaFormItem>
               <AmountDisplay
-                v-if="line.lineType === 'CATALOG' && line.standardUnitPriceAmount !== null"
+                v-else-if="line.lineType === 'CATALOG' && line.standardUnitPriceAmount !== null"
                 :value="line.standardUnitPriceAmount"
                 :currency="currency"
                 :currencies="currencies"
@@ -428,6 +458,8 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
       :existing-lines="existingCatalogLines"
       :load-products="loadProducts"
       :disabled="disabled"
+      :description="productSelectionDescription"
+      :fixed-supplier-value="fixedProductSupplierValue"
       @confirm="applySelection"
     />
   </section>

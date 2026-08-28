@@ -30,9 +30,13 @@ const props = withDefaults(defineProps<{
   existingLines: readonly ExistingCatalogLine[]
   loadProducts: ProductPageLoader
   disabled?: boolean
+  description?: string
+  fixedSupplierValue?: string
   pageSize?: number
 }>(), {
   disabled: false,
+  description: undefined,
+  fixedSupplierValue: undefined,
   pageSize: 20,
 })
 
@@ -135,7 +139,9 @@ async function loadPage(targetPage: number, replace: boolean): Promise<void> {
   const query = {
     currencyCode: props.currency,
     ...(appliedKeyword.value === '' ? {} : { keyword: appliedKeyword.value }),
-    ...(supplierValue.value === undefined ? {} : { supplierValue: supplierValue.value }),
+    ...((props.fixedSupplierValue ?? supplierValue.value) === undefined
+      ? {}
+      : { supplierValue: props.fixedSupplierValue ?? supplierValue.value }),
     page: targetPage,
     pageSize: props.pageSize,
   } as const
@@ -319,6 +325,9 @@ watch(() => props.modelValue, (open) => {
 
 watch(() => props.currency, closeUntrustedSession)
 
+// 固定供应商来自订单上下文；变化时旧候选产品不再可信，必须结束当前选择会话。
+watch(() => props.fixedSupplierValue, closeUntrustedSession)
+
 watch(() => props.disabled, (disabled) => {
   if (disabled) {
     closeUntrustedSession()
@@ -335,7 +344,7 @@ onBeforeUnmount(() => {
   <QsGenericModal
     :model-value="modelValue"
     title="选择数据库产品"
-    :description="`产品选择不限制币种；当前订单币种为 ${currency}，无该币种标准价时需手填本单售价。`"
+    :description="description ?? `产品选择不限制币种；当前订单币种为 ${currency}，无该币种标准价时需手填本单售价。`"
     size="xl"
     class="sm:!max-w-[68rem]"
     :submitting="disabled"
@@ -343,7 +352,10 @@ onBeforeUnmount(() => {
   >
     <div class="gap-5 grid lg:grid-cols-[minmax(0,3fr)_minmax(18rem,2fr)]">
       <section class="border border-border rounded-xl bg-background min-w-0 overflow-hidden" aria-label="产品检索结果">
-        <div class="p-4 border-b border-border bg-muted/20 gap-3 grid sm:grid-cols-[minmax(0,1fr)_14rem]">
+        <div
+          class="p-4 border-b border-border bg-muted/20 gap-3 grid"
+          :class="fixedSupplierValue === undefined ? 'sm:grid-cols-[minmax(0,1fr)_14rem]' : 'sm:grid-cols-1'"
+        >
           <FaInput
             v-model="keywordDraft"
             placeholder="搜索产品名称或编号"
@@ -353,6 +365,7 @@ onBeforeUnmount(() => {
             @keydown.enter.prevent="applyKeyword"
           />
           <FaSelect
+            v-if="fixedSupplierValue === undefined"
             :model-value="supplierValue ?? ALL_SUPPLIERS_OPTION_VALUE"
             :options="supplierOptions"
             placeholder="全部供应商"
@@ -361,7 +374,7 @@ onBeforeUnmount(() => {
             @update:model-value="handleSupplierChange"
           />
           <div
-            v-if="supplierCatalog.error.value"
+            v-if="fixedSupplierValue === undefined && supplierCatalog.error.value"
             class="text-xs text-destructive flex gap-2 items-center sm:col-span-2"
             role="alert"
           >

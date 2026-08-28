@@ -1,4 +1,4 @@
-export type ProductSelectorCurrency = 'MYR' | 'TWD'
+export type ProductSelectorCurrency = 'CNY' | 'MYR' | 'TWD'
 
 export interface ProductSelectorQuery {
   readonly currencyCode: ProductSelectorCurrency

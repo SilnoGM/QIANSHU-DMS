@@ -108,17 +108,18 @@
   - _Evidence: Controller suite 首轮因目标 Controller 不存在而 RED；实现后采购模块 12 suites / 99 tests 全绿，固定 14 个 HTTP operationId、权限和创建后详情读取。采购 HTTP API E2E 4/4、全局 HTTP contract E2E 23/23 均通过；`contract:sync` 已同步 Server/Web OpenAPI，`contract:check`、Server typecheck/lint/build 均通过。`node --run check` 全绿，覆盖 Root 685/685、Server 2396/2396、Web 975 项、28 条 migration 空库部署、正式构建与真实 Chrome 4/4。完整 Server E2E 中采购专项通过；全局仅有既有字典接口一次 `expected 422 / received 404` 的非确定 HTTP 失败。_
   - _Requirements: R2-R12_
 
-- [ ] 12. 以 TDD 扩展业务中立产品组件与 Web 适配层
-  - [ ] 12.1 为 `ProductSelectorCurrency` 增加 `CNY` 建立类型/逻辑 RED，保证销售币种行为不变。
-  - [ ] 12.2 为采购产品 loader、销售来源 loader、AbortSignal 和错误映射建立 RED。
-  - [ ] 12.3 为行级采购定价编辑策略建立 RED：`CATALOG` 只读，`CUSTOM` 可编辑且必填。
-  - [ ] 12.4 为 `CUSTOM` 双价格分别输入、相等校验和 DTO 映射建立 RED。
-  - [ ] 12.5 实现最小通用组件扩展，不导入采购 API、路由、Store 或权限常量。
-  - [ ] 12.6 运行销售订单回归和采购 Web 聚焦测试，提交组件/适配小步提交。
+- [x] 12. 以 TDD 扩展业务中立产品组件与 Web 适配层
+  - [x] 12.1 为 `ProductSelectorCurrency` 增加 `CNY` 建立类型/逻辑 RED，保证销售币种行为不变。
+  - [x] 12.2 为采购产品 loader、销售来源 loader、AbortSignal 和错误映射建立 RED。
+  - [x] 12.3 为行级采购定价编辑策略建立 RED：`CATALOG` 只读，`CUSTOM` 可编辑且必填。
+  - [x] 12.4 为 `CUSTOM` 双价格分别输入、相等校验和 DTO 映射建立 RED。
+  - [x] 12.5 实现最小通用组件扩展，不导入采购 API、路由、Store 或权限常量。
+  - [x] 12.6 运行销售订单回归和采购 Web 聚焦测试，提交组件/适配小步提交。
+  - _Evidence: 采购 API 与组件测试先因模块/导出/可选属性缺失形成 4 个 RED；最小实现后采购适配、产品选择、产品明细和销售创建回归 55/55 通过。Web typecheck 通过；`QsProductSelector` 以固定供应商可选参数隔离订单级供应商，`QsOrderProductLineEditor` 以默认关闭的双价格输入能力保持销售行为不变。_
   - _Requirements: R3-R7, R12_
 
 - [ ] 13. 实现采购列表与创建交互
-  - [ ] 13.1 在用户授权完整 UI 实施后，先按 `ui-design` 与 `web-development` 技能固定最终页面规格。
+  - [x] 13.1 在用户授权完整 UI 实施后，先按 `ui-design` 与 `web-development` 技能固定最终页面规格。
   - [ ] 13.2 为待办/全部列表模式、筛选和派生金额展示建立 View RED。
   - [ ] 13.3 为“新增销售关联采购”和仅管理员可见的“新增备货采购”入口建立 RED。
   - [ ] 13.4 实现销售来源选择、供应商选择、同步产品、临时产品、金额和唛头表单。

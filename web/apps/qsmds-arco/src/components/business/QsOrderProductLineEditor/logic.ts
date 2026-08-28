@@ -52,6 +52,7 @@ function formatAmountUnits(value: bigint, precision: number): string {
 
 export function createTemporaryOrderProductLine(
   key: string = newLineKey(),
+  initialActualUnitPriceAmount: string | null = '0.00',
 ): OrderProductLineModel {
   return {
     key,
@@ -61,10 +62,43 @@ export function createTemporaryOrderProductLine(
     name: '',
     description: '',
     standardUnitPriceAmount: null,
-    actualUnitPriceAmount: '0.00',
+    actualUnitPriceAmount: initialActualUnitPriceAmount,
     quantity: '1',
     mainImage: null,
   }
+}
+
+export type MatchingCustomUnitPriceValidation
+  = | { readonly ok: true }
+    | {
+      readonly ok: false
+      readonly code: 'INVALID' | 'MISMATCH' | 'REQUIRED'
+    }
+
+/**
+ * 采购等领域可以要求临时产品的参考价与实际价分别录入且数值相等。
+ * 比较统一换算为四位定点单位，因此 `12.50` 与 `12.5000` 视为同一金额。
+ */
+export function validateMatchingCustomUnitPrices(
+  line: OrderProductLineModel,
+): MatchingCustomUnitPriceValidation {
+  if (
+    line.lineType !== 'CUSTOM'
+    || line.standardUnitPriceAmount === null
+    || line.actualUnitPriceAmount === null
+    || line.standardUnitPriceAmount === ''
+    || line.actualUnitPriceAmount === ''
+  ) {
+    return { ok: false, code: 'REQUIRED' }
+  }
+  const referenceUnits = amountUnits(line.standardUnitPriceAmount)
+  const actualUnits = amountUnits(line.actualUnitPriceAmount)
+  if (referenceUnits === null || actualUnits === null) {
+    return { ok: false, code: 'INVALID' }
+  }
+  return referenceUnits === actualUnits
+    ? { ok: true }
+    : { ok: false, code: 'MISMATCH' }
 }
 
 /**

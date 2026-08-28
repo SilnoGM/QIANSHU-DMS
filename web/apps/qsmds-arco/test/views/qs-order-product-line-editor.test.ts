@@ -7,6 +7,10 @@ const SOURCE = new URL(
   '../../src/components/business/QsOrderProductLineEditor/index.vue',
   import.meta.url,
 )
+const TYPES = new URL(
+  '../../src/components/business/QsOrderProductLineEditor/types.ts',
+  import.meta.url,
+)
 
 test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承载通用明细', async () => {
   const source = await readFile(SOURCE, 'utf8')
@@ -108,5 +112,20 @@ test('产品行垂直居中，并补偿表单错误提示预留空间造成的�
   const formItemOffsets = source.match(/class="top-2 relative"/gu) ?? []
 
   assert.match(source, /class="align-middle border-b border-border last:border-b-0"/u)
-  assert.equal(formItemOffsets.length, 4)
+  // 第五处属于按领域显式开启的 CUSTOM 参考价输入；默认销售场景仍不会渲染它。
+  assert.equal(formItemOffsets.length, 5)
+})
+
+test('产品行编辑器仅在调用方开启时允许临时产品填写参考价', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /customReferenceUnitPriceEditable\?: boolean/u)
+  assert.match(types, /temporaryLineInitialActualUnitPriceAmount\?: string \| null/u)
+  assert.match(types, /fixedProductSupplierValue\?: string/u)
+  assert.match(source, /line\.lineType === 'CUSTOM' && customReferenceUnitPriceEditable/u)
+  assert.match(source, /standardUnitPriceAmount: \$event/u)
+  assert.match(source, /:fixed-supplier-value="fixedProductSupplierValue"/u)
 })
