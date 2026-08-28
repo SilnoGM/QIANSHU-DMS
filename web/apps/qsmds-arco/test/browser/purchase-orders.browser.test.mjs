@@ -282,7 +282,11 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
     ))()`)
 
     await clickVisibleButton(page, '下一步')
-    await page.waitFor(`document.body.innerText.includes('请先完成并修正当前步骤的必填资料')`)
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('请先完成并修正当前步骤的必填资料'))`)
+    assert.equal(await page.evaluate(`document.querySelector('.purchase-order-alert-stack')
+      ?.getClientRects().length ?? 0`), 0)
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-base"]')
       ?.getClientRects().length > 0`)
 

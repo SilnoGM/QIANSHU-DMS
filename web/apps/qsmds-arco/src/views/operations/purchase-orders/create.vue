@@ -63,6 +63,10 @@ defineOptions({ name: 'OperationsPurchaseOrderCreate' })
 
 type PurchaseOrderCreateSurface = 'form' | 'review'
 
+// “下一步”失败属于用户可立即修正的本地反馈，统一使用短时 Toast，
+// 不写入页面级 formError，避免轻量步骤校验挤压整个双栏表单布局。
+const STEP_VALIDATION_MESSAGE = '请先完成并修正当前步骤的必填资料'
+
 const purchaseOrderSteps: StepsItem[] = [
   { id: 'base', title: '采购基础信息' },
   { id: 'products-payment', title: '采购产品与付款' },
@@ -452,7 +456,7 @@ function enterPurchaseOrderReview(): void {
   const result = buildCurrentRequest()
   if (result === null || !result.valid) {
     fieldErrors.value = result?.fieldErrors ?? {}
-    formError.value = '部分采购资料未通过校验，请修正后再进入订单详情核对'
+    toast.warning('部分采购资料未通过校验，请修正后再进入订单详情核对')
     const errorStep = resolvePurchaseOrderCreateStepForErrors(fieldErrors.value)
     if (errorStep !== null) {
       goToFormStep(errorStep)
@@ -478,7 +482,7 @@ function nextStep(): void {
     return
   }
   if (activeStep.value === 0 && currencyUnavailable.value) {
-    formError.value = 'CNY 当前不可用，请等待货币资料加载完成后再继续'
+    toast.warning('CNY 当前不可用，请等待货币资料加载完成后再继续')
     return
   }
   const source = buildCurrentSource()
@@ -489,7 +493,7 @@ function nextStep(): void {
   const result = validatePurchaseOrderCreateStep(source, step)
   if (!result.valid) {
     fieldErrors.value = { ...fieldErrors.value, ...result.fieldErrors }
-    formError.value = '请先完成并修正当前步骤的必填资料'
+    toast.warning(STEP_VALIDATION_MESSAGE)
     focusFirstInvalidField(result.fieldErrors)
     return
   }

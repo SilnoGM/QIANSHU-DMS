@@ -391,6 +391,16 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /function requestSubmitConfirmation\(\): void \{[\s\S]*?!submitReady\.value[\s\S]*?return/u)
   assert.match(source, /function nextStep\(\): void \{[\s\S]*?clearGlobalFailure\(\)/u)
   assert.match(source, /function nextStep\(\): void \{[\s\S]*?replaceFieldErrors\(\{ \.\.\.fieldErrors\.value, \.\.\.result\.fieldErrors \}\)/u)
+  assert.match(source, /const STEP_VALIDATION_MESSAGE = '请先完成并修正当前步骤的必填资料'/u)
+  assert.match(
+    source,
+    /function nextStep\(\): void \{[\s\S]*?if \(!result\.valid\) \{[\s\S]*?toast\.warning\(STEP_VALIDATION_MESSAGE\)[\s\S]*?focusFirstSalesOrderError\(result\.fieldErrors\)[\s\S]*?return/u,
+  )
+  assert.match(
+    source,
+    /function enterSalesOrderReview\(\): void \{[\s\S]*?toast\.warning\('部分资料未通过校验，请修正后再进入订单核对'\)/u,
+  )
+  assert.doesNotMatch(source, /formError\.value = '部分资料未通过校验，请修正后再进入订单核对'/u)
   assert.match(source, /function nextStep\(\): void \{[\s\S]*?persistedStepErrors[\s\S]*?Object\.keys\(persistedStepErrors\)\.length > 0[\s\S]*?return/u)
   assert.match(source, /function replayUnknownResult\(\): void \{[\s\S]*?authEpoch !== appAccountStore\.authEpoch[\s\S]*?return/u)
   assert.match(source, /if \(canRead\.value\) \{[\s\S]*?router\.push[\s\S]*?else \{[\s\S]*?createSalesOrderSubmissionState\(\)/u)

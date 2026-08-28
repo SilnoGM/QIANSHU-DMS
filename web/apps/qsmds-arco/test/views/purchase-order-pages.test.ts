@@ -75,6 +75,16 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /validatePurchaseOrderCreateStep/u)
   assert.match(source, /@click="previousStep"/u)
   assert.match(source, /@click="nextStep"/u)
+  assert.match(source, /const STEP_VALIDATION_MESSAGE = '请先完成并修正当前步骤的必填资料'/u)
+  assert.match(
+    source,
+    /function nextStep\(\): void \{[\s\S]*?if \(!result\.valid\) \{[\s\S]*?toast\.warning\(STEP_VALIDATION_MESSAGE\)[\s\S]*?focusFirstInvalidField\(result\.fieldErrors\)[\s\S]*?return/u,
+  )
+  assert.doesNotMatch(source, /formError\.value = '请先完成并修正当前步骤的必填资料'/u)
+  assert.match(
+    source,
+    /function enterPurchaseOrderReview\(\): void \{[\s\S]*?toast\.warning\('部分采购资料未通过校验，请修正后再进入订单详情核对'\)/u,
+  )
   assert.match(source, /import QsPurchaseOrderDesc from '@\/components\/business\/QsPurchaseOrderDesc\/index\.vue'/u)
   assert.match(source, /mapPurchaseOrderCreateToDesc/u)
   assert.match(source, /<QsPurchaseOrderDesc/u)

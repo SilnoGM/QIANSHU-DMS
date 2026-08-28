@@ -67,6 +67,9 @@ interface PendingSubmissionFeedback {
 defineOptions({ name: 'OperationsSalesOrderCreate' })
 
 const SALES_ORDER_PRODUCTS_SALES_STEP: SalesOrderCreateStep = 2
+// “下一步”失败属于用户可立即修正的本地反馈，统一使用短时 Toast，
+// 不写入页面级 formError，避免轻量步骤校验挤压整个双栏表单布局。
+const STEP_VALIDATION_MESSAGE = '请先完成并修正当前步骤的必填资料'
 
 const salesOrderSteps: StepsItem[] = [
   { id: 'base', title: '基础信息' },
@@ -264,11 +267,11 @@ async function focusSalesOrderReview(): Promise<void> {
  */
 function enterSalesOrderReview(): void {
   if (currencyUnavailable.value) {
-    formError.value = '当前订单币种不可用，请返回列表重新选择或先启用该币种'
+    toast.warning('当前订单币种不可用，请返回列表重新选择或先启用该币种')
     return
   }
   if (documentUploading.value) {
-    formError.value = '出单凭证正在上传，请等待上传完成后再进入核对'
+    toast.warning('出单凭证正在上传，请等待上传完成后再进入核对')
     return
   }
 
@@ -277,9 +280,7 @@ function enterSalesOrderReview(): void {
     // 完整客户端校验仍采用增量覆盖，避免抹掉其他步骤尚未编辑清除的服务端错误。
     const mergedErrors = { ...fieldErrors.value, ...result.fieldErrors }
     replaceFieldErrors(mergedErrors)
-    if (formFailure.value === null) {
-      formError.value = '部分资料未通过校验，请修正后再进入订单核对'
-    }
+    toast.warning('部分资料未通过校验，请修正后再进入订单核对')
     const errorStep = resolveSalesOrderCreateStepForErrors(mergedErrors)
     if (errorStep !== null) {
       goToStep(errorStep)
@@ -289,7 +290,7 @@ function enterSalesOrderReview(): void {
   }
 
   if (!reviewReady.value) {
-    formError.value = '请先修正未通过的步骤或服务端字段错误'
+    toast.warning('请先修正未通过的步骤或服务端字段错误')
     const errorStep = resolveSalesOrderCreateStepForErrors(fieldErrors.value)
     if (errorStep !== null) {
       goToStep(errorStep)
@@ -336,7 +337,7 @@ function confirmCashOnDelivery(): void {
 
 function nextStep(): void {
   if (activeStep.value === 0 && currencyUnavailable.value) {
-    formError.value = '当前订单币种不可用，请等待货币资料加载完成或返回列表重新选择'
+    toast.warning('当前订单币种不可用，请等待货币资料加载完成或返回列表重新选择')
     formFailure.value = null
     return
   }
@@ -353,6 +354,7 @@ function nextStep(): void {
     if (formFailure.value === null) {
       formError.value = ''
     }
+    toast.warning(STEP_VALIDATION_MESSAGE)
     focusFirstSalesOrderError(result.fieldErrors)
     return
   }
@@ -377,7 +379,7 @@ function nextStep(): void {
     )),
   )
   if (Object.keys(persistedStepErrors).length > 0) {
-    formError.value = '当前步骤仍有服务端校验错误，请修改对应字段后再继续'
+    toast.warning('当前步骤仍有服务端校验错误，请修改对应字段后再继续')
     focusFirstSalesOrderError(persistedStepErrors)
     return
   }

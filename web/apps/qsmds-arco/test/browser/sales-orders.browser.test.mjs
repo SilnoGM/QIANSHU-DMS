@@ -285,6 +285,11 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       '中国台湾 台湾 高雄市 苓雅区 中正一路 100 号 3 楼',
     )
     await clickVisibleButton(page, '下一步')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('请先完成并修正当前步骤的必填资料'))`)
+    assert.equal(await page.evaluate(`document.querySelector('.sales-order-alert-stack')
+      ?.getClientRects().length ?? 0`), 0)
     await page.waitFor(`document.body.innerText.includes('详细地址请勿重复填写已选地区')`)
     await page.waitFor(`document.querySelector(
       '[data-testid="sales-order-step-customer"]',
