@@ -75,6 +75,8 @@ test('产品主图保留，价格信息按销售详情样式只展示真实采�
   assert.match(source, /line\.mainImage/u)
   assert.match(source, /line\.description/u)
   assert.match(source, /purchaseOrderDesc\.fields\.lineRemark/u)
+  assert.doesNotMatch(source, /v-if="line\.description"/u)
+  assert.match(source, /displayText\(line\.description\)/u)
   assert.doesNotMatch(source, /line\.referencePurchaseUnitPriceAmount/u)
   assert.match(source, /line\.actualPurchaseUnitPriceAmount/u)
   assert.match(source, /line\.lineSubtotalAmount/u)

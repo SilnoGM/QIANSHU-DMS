@@ -85,6 +85,8 @@ test('销售产品复用采购详情结构展示主图、说明、真实售价�
   assert.match(source, /line\.mainImage/u)
   assert.match(source, /line\.description/u)
   assert.match(source, /salesOrderDesc\.fields\.lineRemark/u)
+  assert.doesNotMatch(source, /v-if="line\.description"/u)
+  assert.match(source, /displayText\(line\.description\)/u)
   assert.match(source, /i-lucide:image-off/u)
   assert.match(source, /<div class="flex gap-3 min-w-0 items-start">/u)
   assert.match(source, /line\.lineType/u)

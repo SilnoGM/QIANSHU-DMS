@@ -254,11 +254,11 @@ function documentImageItems(
                 </span>
                 {{ displayText(line.productName) }}
               </p>
-              <p v-if="line.description" class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-1 [overflow-wrap:anywhere]">
+              <p class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-1 [overflow-wrap:anywhere]">
                 <span class="text-foreground/80 font-medium">
                   {{ t('salesOrderDesc.fields.lineRemark') }}
                 </span>
-                <span>{{ line.description }}</span>
+                <span>{{ displayText(line.description) }}</span>
               </p>
             </div>
           </div>
