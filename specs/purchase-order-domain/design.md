@@ -303,17 +303,20 @@ AND (fulfillmentStatus != SIGNED OR paymentStatus != PAID)
 
 ### 11.1 当前页面
 
-- `/qs-operations/purchase/pending-purchase-orders` 只展示“待办采购”页头。
-- `/qs-operations/purchase/purchase-orders` 只展示“全部采购”页头。
-- 本阶段不向两个页面增加表格、按钮、筛选器或业务请求。
+- `/qs-operations/purchase/pending-purchase-orders` 使用 Server `view=pending` 查询尚未签收或尚未付清的采购订单。
+- `/qs-operations/purchase/purchase-orders` 使用 Server `view=all` 查询全部采购订单，并提供销售关联采购与管理员备货采购入口。
+- `/qs-operations/purchase/purchase-orders/create` 是隐藏创建页，按路由 `type=SALES_LINKED|STOCK` 收窄创建能力。
+- 两个列表共用查询、筛选、移动卡片和详情抽屉；详情抽屉承载履约、付款、凭证和状态历史。
 
-### 11.2 后续实现
+### 11.2 Web 实现边界
 
 - 复用 `QsProductSelector` 和 `QsOrderProductLineEditor`，组件继续保持业务中立。
 - 将 `ProductSelectorCurrency` 扩展为包含 `CNY`，采购域提供独立 loader。
 - 增加行级采购定价编辑策略：`CATALOG` 只读，`CUSTOM` 必填且可编辑。
 - 销售订单 `CUSTOM` 行标准价为空的现有行为必须保持不变。
 - 创建入口分为“新增销售关联采购”和“新增备货采购”，后者受 system-only 权限控制。
+- 详情与写操作分别使用 `purchase-orders:read`、`purchase-orders:update`、`purchase-orders:payment` 和 `purchase-orders:document` 权限；客户端隐藏不作为授权边界。
+- 付款凭证保持可选；付款、作废、取消和履约均使用显式确认，写成功后重新查询当前列表。
 - 视觉继续沿用现有 Industrial/utilitarian 工作台、主题 Token、Noto 字体和 Lucide 图标。
 
 ## 12. 测试策略

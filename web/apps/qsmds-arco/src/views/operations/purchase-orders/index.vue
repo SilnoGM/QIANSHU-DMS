@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
+import type { PurchaseOrderDetailInitialAction } from './purchase-order-detail-drawer.vue'
 import type { PurchaseOrderListViewMode } from './purchase-order-list.logic'
-import type { PurchaseOrderListItemDto } from '@/api/generated/types.gen'
+import type {
+  PurchaseOrderDetailDto,
+  PurchaseOrderListItemDto,
+} from '@/api/generated/types.gen'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -20,6 +24,7 @@ import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStac
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
+import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
 import {
   buildPurchaseOrderListQuery,
   calculatePurchaseOrderPaymentProgress,
@@ -27,6 +32,7 @@ import {
   fulfillmentStatusTagClass,
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
+  nextPurchaseOrderFulfillmentStatus,
   orderStatusLabel,
   orderStatusTagClass,
   paymentStatusLabel,
@@ -52,6 +58,8 @@ const supplierCatalog = useDictionaryCatalog(SUPPLIER_DICTIONARY_CODE)
 const canRead = computed(() => auth('purchase-orders:read'))
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
+const canUpdate = computed(() => auth('purchase-orders:update'))
+const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' : '全部采购')
 const pageDescription = computed(() => props.viewMode === 'pending'
   ? '集中处理尚未签收或尚未付清的采购订单。'
@@ -70,6 +78,9 @@ const dateRange = shallowRef<CalendarDateRangeValue>({
 const loading = ref(false)
 const listError = ref('')
 const requestId = ref<string>()
+const detailVisible = ref(false)
+const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
+const detailInitialAction = ref<PurchaseOrderDetailInitialAction>('detail')
 const todayDate = today(getLocalTimeZone())
 let requestVersion = 0
 let listAbortController: AbortController | null = null
@@ -297,8 +308,24 @@ function navigateCreate(type: PurchaseOrderListItemDto['purchaseType']): void {
   })
 }
 
+function openPurchaseOrderDetail(
+  order: PurchaseOrderListItemDto,
+  initialAction: PurchaseOrderDetailInitialAction = 'detail',
+): void {
+  selectedOrder.value = { ...order }
+  detailInitialAction.value = initialAction
+  detailVisible.value = true
+}
+
+function handleDetailUpdated(_detail: PurchaseOrderDetailDto): void {
+  // 待办谓词和筛选均由 Server 负责；mutation 后重取当前页，避免本地复制查询规则。
+  void loadOrders()
+}
+
 watch(() => appAccountStore.authEpoch, () => {
   listAbortController?.abort()
+  detailVisible.value = false
+  selectedOrder.value = null
   rows.value = []
   total.value = 0
   if (canRead.value) {
@@ -394,6 +421,7 @@ onBeforeUnmount(() => {
         data-testid="purchase-order-list-table"
         :row-key="item => item.id"
         :addable="false"
+        :action-column="{ fixed: 'right', minWidth: 260, title: '操作', width: 260 }"
         :columns="columns"
         :data="rows"
         :empty-title="viewMode === 'pending' ? '暂无待办采购' : '暂无采购订单'"
@@ -404,12 +432,49 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]"
         search-placeholder="搜索采购单号、销售单号或客户名"
         :total="total"
-        table-class="min-w-[2300px]"
+        table-class="min-w-[2560px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="loadOrders"
         @search="handleSearch"
       >
+        <template #actions="{ row }">
+          <div class="flex flex-wrap gap-1 items-center">
+            <FaButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.orderNo}：查看详情`"
+              @click="openPurchaseOrderDetail(row)"
+            >
+              <FaIcon name="i-lucide:eye" aria-hidden="true" />查看
+            </FaButton>
+            <FaButton
+              v-if="canUpdate && nextPurchaseOrderFulfillmentStatus(row)"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.orderNo}：推进履约`"
+              @click="openPurchaseOrderDetail(row, 'fulfillment')"
+            >
+              <FaIcon name="i-lucide:truck" aria-hidden="true" />履约
+            </FaButton>
+            <FaButton
+              v-if="canManagePayment && row.orderStatus === 'CONFIRMED' && row.paymentStatus !== 'PAID'"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.orderNo}：记录付款`"
+              @click="openPurchaseOrderDetail(row, 'payment')"
+            >
+              <FaIcon name="i-lucide:hand-coins" aria-hidden="true" />付款
+            </FaButton>
+          </div>
+        </template>
+
         <template #cell-orderSummary="{ row }">
           <QsTableStackedCell class="group">
             <QsTableStackedLine nowrap content-class="qs-type-data-emphasis font-mono">
@@ -609,5 +674,13 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
+
+    <PurchaseOrderDetailDrawer
+      v-model="detailVisible"
+      :order="selectedOrder"
+      :initial-action="detailInitialAction"
+      :currencies="currencyCatalog.currencies.value"
+      @detail-updated="handleDetailUpdated"
+    />
   </div>
 </template>
