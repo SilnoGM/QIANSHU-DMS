@@ -68,6 +68,7 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '待办采购',
           icon: 'i-lucide:list-checks',
+          auth: 'purchase-orders:read',
         },
       },
       {
@@ -77,6 +78,18 @@ const routes: RouteRecordRaw[] = [
         meta: {
           title: '全部采购',
           icon: 'i-lucide:table-properties',
+          auth: 'purchase-orders:read',
+        },
+      },
+      {
+        path: 'purchase-orders/create',
+        name: 'operationsPurchaseOrderCreate',
+        component: () => import('@/views/operations/purchase-orders/create.vue'),
+        meta: {
+          title: '新增采购订单',
+          auth: 'purchase-orders:create',
+          activeMenu: '/qs-operations/purchase/purchase-orders',
+          menu: false,
         },
       },
     ],
