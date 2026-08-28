@@ -229,6 +229,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
       return summary?.getClientRects().length > 0
         && desc?.getClientRects().length > 0
+        && getComputedStyle(desc).borderTopLeftRadius === '12px'
         && ![...summary.querySelectorAll('button')]
           .some(button => button.textContent?.trim() === '提交订单')
         && !document.body.innerText.includes('当前币种不可用于新订单')

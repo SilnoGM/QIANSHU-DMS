@@ -51,6 +51,15 @@ test('详情按五个业务区块固定排序并使用可关联的语义标题',
   }
 
   assert.match(source, /data-slot="qs-sales-order-desc"/u)
+  assert.match(
+    source,
+    /data-slot="qs-sales-order-desc"[\s\S]*?class="[^"]*rounded-xl[^"]*"/u,
+    '共享订单详情组件外层必须使用与页面详情区域一致的 rounded-xl',
+  )
+  assert.doesNotMatch(
+    source,
+    /data-slot="qs-sales-order-desc"[\s\S]*?class="[^"]*rounded-2xl[^"]*"/u,
+  )
   assert.match(source, /<section[\s\S]*:aria-labelledby=/u)
   assert.match(source, /<h3[\s\S]*:id=/u)
   assert.match(source, /<dl/u)

@@ -98,7 +98,7 @@ function documentImageItems(
   <article
     data-slot="qs-sales-order-desc"
     :aria-labelledby="titleId"
-    class="text-foreground p-4 border border-border rounded-2xl bg-background min-w-0 w-full shadow-sm sm:p-6"
+    class="text-foreground p-4 border border-border rounded-xl bg-background min-w-0 w-full shadow-sm sm:p-6"
   >
     <header class="pb-4 border-b border-border/70">
       <h2 :id="titleId" class="qs-type-page-title m-0">

@@ -361,9 +361,12 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
       const layout = document.querySelector('[data-testid="purchase-order-create-layout"]')
       const review = document.querySelector('[data-testid="purchase-order-create-review"]')
       const summary = document.querySelector('[data-testid="purchase-order-create-summary-column"]')
+      const detail = summary?.querySelector('.purchase-order-review-card')
       return form?.getAttribute('aria-hidden') === 'true'
         && layout?.classList.contains('purchase-order-create-layout--review')
         && review?.getClientRects().length > 0
+        && detail?.getClientRects().length > 0
+        && getComputedStyle(detail).borderTopLeftRadius === '12px'
         && summary?.getAttribute('data-surface') === 'review'
         && summary.getBoundingClientRect().width > window.innerWidth * 0.8
         && summary.textContent?.includes(${JSON.stringify(salesCustomerName)})

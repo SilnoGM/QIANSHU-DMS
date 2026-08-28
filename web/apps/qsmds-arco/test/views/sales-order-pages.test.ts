@@ -373,6 +373,11 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.ok(formEnd >= 0 && formEnd < summaryStart, '订单详情必须位于表单之外')
   assert.ok(pageMainEnd >= 0 && pageMainEnd < summaryStart, '订单详情必须位于表单面板之外')
   assert.match(source, /<QsSalesOrderDesc[\s\S]*?:model="salesOrderDescModel"[\s\S]*?:currencies="fixedCurrencies"/u)
+  assert.match(
+    source,
+    /<QsSalesOrderDesc[\s\S]*?class="border-0 rounded-none shadow-none md:rounded-xl"/u,
+    '销售订单详情抽屉在桌面端必须沿用共享组件的 rounded-xl',
+  )
   assert.match(source, /<QsGenericDrawer[\s\S]*?data-testid="sales-order-details-drawer"/u)
   assert.match(source, /data-testid="sales-order-submit-confirmation"/u)
   assert.match(source, /确认提交销售订单？/u)

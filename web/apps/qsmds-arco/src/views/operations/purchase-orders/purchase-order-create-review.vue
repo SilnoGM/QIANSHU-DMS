@@ -37,7 +37,7 @@ function lineTotal(line: OrderProductLineModel): string | null {
 </script>
 
 <template>
-  <article class="purchase-order-review-card p-4 border border-border rounded-2xl bg-background min-w-0 sm:p-6">
+  <article class="purchase-order-review-card p-4 border border-border rounded-xl bg-background min-w-0 sm:p-6">
     <section aria-labelledby="purchase-create-review-summary" class="p-4 border border-border rounded-xl bg-muted/15">
       <h3 id="purchase-create-review-summary" class="qs-type-section-title m-0">
         订单概览

@@ -1196,7 +1196,7 @@ onBeforeUnmount(() => {
         :sales-order="selectedSalesOrder"
         :shipping-mark-text="formModel.shippingMarkText"
         :supplier-label="selectedSupplierDisplayLabel"
-        class="border-0 rounded-none shadow-none md:rounded-2xl"
+        class="border-0 rounded-none shadow-none md:rounded-xl"
       />
       <template #footer>
         <div class="flex w-full justify-end">
