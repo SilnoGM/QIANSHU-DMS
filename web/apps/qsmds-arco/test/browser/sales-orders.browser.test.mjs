@@ -439,6 +439,37 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         && submit?.disabled === false
     })()`)
 
+    const salesProductState = await page.evaluate(`(() => {
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      const salesLine = summary?.querySelector('[data-slot="sales-order-desc-line"]')
+      const salesLineImage = salesLine?.querySelector('[data-slot="image-group"] img')
+      return {
+        imageAlt: salesLineImage?.alt ?? null,
+        imagePath: salesLineImage ? new URL(salesLineImage.src).pathname : null,
+        lineHasProductNo: salesLine?.textContent?.includes('PRODUCT-BROWSER-001') ?? false,
+        lineHasSubtotal: salesLine?.textContent?.includes('本行小计') ?? false,
+        lineHasUnitPrice: salesLine?.textContent?.includes('真实售价') ?? false,
+        titleVisible: summary?.textContent?.includes('销售产品与小计（1）') ?? false,
+      }
+    })()`)
+    assert.deepEqual({
+      ...salesProductState,
+      imagePath: undefined,
+    }, {
+      imageAlt: 'Browser 多媒体产品',
+      imagePath: undefined,
+      lineHasProductNo: true,
+      lineHasSubtotal: true,
+      lineHasUnitPrice: true,
+      titleVisible: true,
+    })
+    assert.match(
+      salesProductState.imagePath ?? '',
+      /^\/api\/sales-orders\/product-options\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/main-image\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/content$/u,
+    )
+
     await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')
     await page.waitFor(`(() => {
       const actions = document.querySelector(

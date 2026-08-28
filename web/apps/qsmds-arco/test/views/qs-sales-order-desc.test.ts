@@ -22,6 +22,8 @@ test('QsSalesOrderDesc 使用独立只读 ViewModel，且不依赖创建表单�
   assert.match(typesSource, /readonly currencyCode: string/u)
   assert.match(typesSource, /readonly customer: Readonly<QsSalesOrderDescCustomerViewModel>/u)
   assert.match(typesSource, /readonly lines: readonly QsSalesOrderDescLineViewModel\[\]/u)
+  assert.match(typesSource, /readonly description: null \| string/u)
+  assert.match(typesSource, /readonly mainImage: null \| Readonly<QsSalesOrderDescImageViewModel>/u)
   assert.match(typesSource, /readonly documents: readonly QsSalesOrderDescDocumentViewModel\[\]/u)
   assert.match(typesSource, /readonly currencies: readonly CurrencyDescriptor\[\]/u)
   assert.doesNotMatch(typesSource, /standardUnitPriceAmount|readonly remark:/u)
@@ -68,20 +70,40 @@ test('详情按五个业务区块固定排序并使用可关联的语义标题',
   assert.doesNotMatch(source, /<FaDescriptions/u)
 })
 
-test('产品和销售信息统一复用 AmountDisplay，并突出总价、定金和尾款', () => {
+test('销售产品复用采购详情结构展示主图、说明、真实售价、数量和本行小计', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsSalesOrderDesc/index.vue',
   )
+  const zhCn = readRelativeSource(
+    '../../src/locales/lang/sales-order-desc/zh-cn.json',
+  )
 
   assert.match(source, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
+  assert.match(source, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
   assert.match(source, /data-slot="sales-order-desc-line"/u)
+  assert.match(source, /lineImageItems\(line\)/u)
+  assert.match(source, /line\.mainImage/u)
+  assert.match(source, /line\.description/u)
+  assert.match(source, /i-lucide:image-off/u)
+  assert.match(source, /<div class="flex gap-3 min-w-0 items-start">/u)
   assert.match(source, /line\.lineType/u)
   assert.match(source, /line\.productName/u)
   assert.match(source, /line\.productNo/u)
   assert.match(source, /line\.actualUnitPriceAmount/u)
   assert.match(source, /line\.quantity/u)
   assert.match(source, /line\.lineSubtotalAmount/u)
+  assert.match(source, /grid-cols-\[minmax\(0,1fr\)_auto\] items-end/u)
+  assert.match(source, /qs-type-meta text-muted-foreground m-0 flex flex-wrap gap-x-1 items-baseline/u)
+  assert.match(source, /<div class="text-right min-w-0">/u)
+  assert.match(zhCn, /"lines": "销售产品与小计（\{count\}）"/u)
   assert.match(source, /model\.amounts\.lineSubtotalAmount/u)
+})
+
+test('销售信息统一复用 AmountDisplay，并突出总价、定金和尾款', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsSalesOrderDesc/index.vue',
+  )
+
   assert.match(source, /data-slot="sales-order-desc-total"/u)
   assert.match(source, /model\.amounts\.agreedTotalAmount/u)
   assert.match(source, /data-slot="sales-order-desc-deposit"/u)

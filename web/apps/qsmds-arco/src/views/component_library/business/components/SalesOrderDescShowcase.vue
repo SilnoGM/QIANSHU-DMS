@@ -34,7 +34,7 @@ function setPreviewWidth(value: PreviewWidth): void {
             同一详情适配创建侧栏与正式详情页
           </h3>
           <p class="text-sm text-muted-foreground leading-6 m-0 mt-2 max-w-3xl">
-            示例使用确定性本地 ViewModel，覆盖正式产品、临时产品、金额强调与附件预览，不读取真实订单数据。
+            示例使用确定性本地 ViewModel，覆盖产品主图与说明、正式产品、临时产品、金额强调与附件预览，不读取真实订单数据。
           </p>
         </div>
         <FaTag variant="secondary">

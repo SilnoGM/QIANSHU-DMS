@@ -2,6 +2,7 @@
 import type {
   QsSalesOrderDescDocumentViewModel,
   QsSalesOrderDescLineType,
+  QsSalesOrderDescLineViewModel,
   QsSalesOrderDescProps,
 } from './types'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
@@ -44,6 +45,23 @@ function displayRegion(regionNames: readonly string[]): string {
 
 function lineTypeLabel(lineType: QsSalesOrderDescLineType): string {
   return t(`salesOrderDesc.lineTypes.${lineType}`)
+}
+
+function lineImageItems(
+  line: QsSalesOrderDescLineViewModel,
+): readonly ImageGroupItem[] {
+  const source = line.mainImage?.src.trim()
+  if (!source) {
+    return []
+  }
+  const label = line.mainImage?.alt.trim() || displayText(line.productName)
+  return [{
+    alt: label,
+    key: `${line.key}-main-image`,
+    previewSrc: source,
+    src: source,
+    tooltip: label,
+  }]
 }
 
 function documentTypeLabel(
@@ -190,7 +208,7 @@ function documentImageItems(
     <section
       data-slot="sales-order-desc-lines"
       :aria-labelledby="sectionIds.lines"
-      class="mt-4 pt-4 border-t border-border/70"
+      class="mt-4 pt-4 border-t border-border/70 min-w-0"
     >
       <div class="mb-3 flex gap-2.5 items-center">
         <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
@@ -212,14 +230,37 @@ function documentImageItems(
           data-slot="sales-order-desc-line"
           class="p-3 border border-border rounded-xl bg-muted/15 min-w-0"
         >
-          <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
-            <span class="text-muted-foreground">
-              {{ line.productNo?.trim() || lineTypeLabel(line.lineType) }} ·
+          <div class="flex gap-3 min-w-0 items-start">
+            <ImageGroup
+              v-if="lineImageItems(line).length > 0"
+              :items="lineImageItems(line)"
+              :max-count="1"
+              :size="56"
+              :tooltip="true"
+              radius="lg"
+              class="shrink-0"
+            />
+            <span
+              v-else
+              class="text-muted-foreground border border-border rounded-lg bg-muted/50 flex-center shrink-0 size-14"
+            >
+              <FaIcon name="i-lucide:image-off" class="size-5" aria-hidden="true" />
             </span>
-            {{ displayText(line.productName) }}
-          </p>
 
-          <dl class="m-0 mt-2 gap-x-4 gap-y-1 grid grid-cols-[minmax(0,1fr)_auto] items-end">
+            <div class="flex-1 min-w-0">
+              <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
+                <span class="text-muted-foreground">
+                  {{ line.productNo?.trim() || lineTypeLabel(line.lineType) }} ·
+                </span>
+                {{ displayText(line.productName) }}
+              </p>
+              <p v-if="line.description" class="qs-type-meta text-muted-foreground m-0 mt-1 [overflow-wrap:anywhere]">
+                {{ line.description }}
+              </p>
+            </div>
+          </div>
+
+          <dl class="m-0 mt-3 gap-x-4 gap-y-1 grid grid-cols-[minmax(0,1fr)_auto] items-end">
             <div class="min-w-0">
               <dt class="sr-only">
                 {{ t('salesOrderDesc.fields.actualUnitPrice') }}

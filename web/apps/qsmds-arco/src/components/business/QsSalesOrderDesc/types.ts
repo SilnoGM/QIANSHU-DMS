@@ -12,11 +12,18 @@ export interface QsSalesOrderDescCustomerViewModel {
   readonly regionNames: readonly string[]
 }
 
+export interface QsSalesOrderDescImageViewModel {
+  readonly alt: string
+  readonly src: string
+}
+
 export interface QsSalesOrderDescLineViewModel {
   readonly actualUnitPriceAmount: null | string
+  readonly description: null | string
   readonly key: string
   readonly lineSubtotalAmount: null | string
   readonly lineType: QsSalesOrderDescLineType
+  readonly mainImage: null | Readonly<QsSalesOrderDescImageViewModel>
   readonly productName: null | string
   readonly productNo: null | string
   readonly quantity: null | string

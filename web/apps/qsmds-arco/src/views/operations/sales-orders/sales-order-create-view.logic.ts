@@ -63,18 +63,29 @@ export function mapSalesOrderCreateFormToDesc(
           }
         }),
     issuerName: optionalDisplayText(context.issuerName),
-    lines: model.lines.map(line => ({
-      actualUnitPriceAmount: optionalDisplayText(line.actualUnitPriceAmount),
-      key: line.key,
-      lineSubtotalAmount: calculateSalesOrderLineSubtotal(
-        [line],
-        context.amountPrecision,
-      ),
-      lineType: line.lineType,
-      productName: optionalDisplayText(line.name),
-      productNo: optionalDisplayText(line.productNo),
-      quantity: optionalDisplayText(line.quantity),
-    })),
+    lines: model.lines.map((line) => {
+      const productName = optionalDisplayText(line.name)
+      const mainImageSrc = optionalDisplayText(line.mainImage?.contentUrl)
+      return {
+        actualUnitPriceAmount: optionalDisplayText(line.actualUnitPriceAmount),
+        description: optionalDisplayText(line.description),
+        key: line.key,
+        lineSubtotalAmount: calculateSalesOrderLineSubtotal(
+          [line],
+          context.amountPrecision,
+        ),
+        lineType: line.lineType,
+        mainImage: mainImageSrc === null
+          ? null
+          : {
+              alt: productName ?? '销售产品主图',
+              src: mainImageSrc,
+            },
+        productName,
+        productNo: optionalDisplayText(line.productNo),
+        quantity: optionalDisplayText(line.quantity),
+      }
+    }),
     orderDate: optionalDisplayText(model.orderDate),
     orderNo: null,
   }

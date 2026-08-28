@@ -5,7 +5,7 @@
     "sections": {
       "basic": "訂單基礎資訊",
       "customer": "客戶資訊",
-      "lines": "產品列表與小計（{count}）",
+      "lines": "銷售產品與小計（{count}）",
       "sales": "銷售資訊",
       "documents": "附件縮圖（{count}）"
     },
