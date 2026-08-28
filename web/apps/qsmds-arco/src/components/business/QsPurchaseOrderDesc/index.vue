@@ -246,37 +246,23 @@ function lineImageItems(
             </div>
           </div>
 
-          <dl class="m-0 mt-3 gap-2 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+          <dl class="m-0 mt-3 gap-x-4 gap-y-1 grid grid-cols-[minmax(0,1fr)_auto] items-end">
             <div class="min-w-0">
-              <dt class="qs-type-compact-label text-muted-foreground">
-                {{ t('purchaseOrderDesc.fields.referencePurchaseUnitPrice') }}
-              </dt>
-              <dd class="m-0 mt-0.5 overflow-x-auto">
-                <AmountDisplay
-                  :value="line.referencePurchaseUnitPriceAmount"
-                  :currency="model.currencyCode"
-                  :currencies="currencies"
-                  class="!text-xs sm:!text-base"
-                />
-              </dd>
-            </div>
-            <div class="min-w-0">
-              <dt class="qs-type-compact-label text-muted-foreground">
+              <dt class="sr-only">
                 {{ t('purchaseOrderDesc.fields.actualPurchaseUnitPrice') }}
               </dt>
-              <dd class="m-0 mt-0.5 flex flex-wrap gap-x-1 items-baseline">
+              <dd class="qs-type-meta text-muted-foreground m-0 flex flex-wrap gap-x-1 items-baseline">
+                <span>{{ t('purchaseOrderDesc.fields.actualPurchaseUnitPrice') }}</span>
                 <AmountDisplay
                   :value="line.actualPurchaseUnitPriceAmount"
                   :currency="model.currencyCode"
                   :currencies="currencies"
-                  class="!text-xs sm:!text-base"
+                  class="!text-xs !leading-4"
                 />
-                <span class="qs-type-meta text-muted-foreground">
-                  × {{ line.quantity?.trim() || t('purchaseOrderDesc.empty.text') }}
-                </span>
+                <span>× {{ line.quantity?.trim() || t('purchaseOrderDesc.empty.text') }}</span>
               </dd>
             </div>
-            <div class="text-left min-w-0 sm:text-right">
+            <div class="text-right min-w-0">
               <dt class="qs-type-compact-label text-muted-foreground">
                 {{ t('purchaseOrderDesc.fields.lineSubtotal') }}
               </dt>

@@ -11,8 +11,8 @@ const principles = [
     icon: 'i-lucide:braces',
   },
   {
-    title: '采购双价明确',
-    description: '采购定价、本单采购价、数量与小计保持稳定层级，组件不重新执行金额计算。',
+    title: '采购价格清晰',
+    description: '产品行只展示真实采购价、数量与小计，视觉层级与销售订单详情保持一致。',
     icon: 'i-lucide:badge-dollar-sign',
   },
   {
@@ -26,7 +26,7 @@ const principles = [
 <template>
   <ComponentCatalogPage
     title="采购订单详情"
-    description="独立验收 QsPurchaseOrderDesc 的采购来源、双价产品、金额、状态和响应式宽度。"
+    description="独立验收 QsPurchaseOrderDesc 的采购来源、真实采购价、金额、状态和响应式宽度。"
     section-label="QsPurchaseOrderDesc"
     headline="统一采购创建核对与正式详情"
     summary="采购订单详情按基础信息、供应商与销售来源、产品与小计、采购金额和唛头备注的稳定顺序展示；调用方提供中立 ViewModel。"

@@ -18,7 +18,7 @@ import type { QsPurchaseOrderDescViewModel } from '@/components/business/QsPurch
 | `model` | `Readonly<QsPurchaseOrderDescViewModel>` | 调用方准备好的只读采购订单快照 |
 | `currencies` | `readonly CurrencyDescriptor[]` | `AmountDisplay` 用于解析 CNY 符号与小数位的描述符 |
 
-产品行的采购定价、本单采购价、数量和行小计均由调用方提供。组件不会使用浮点数重新计算金额，也不会判断采购总价与付款约定是否相等。
+产品行的采购定价、真实采购价、数量和行小计均由调用方提供。详情界面参照销售订单详情，只展示“真实采购价 × 数量”和本行小计；采购定价仍保留在只读模型中，但不在产品行重复展示。组件不会使用浮点数重新计算金额，也不会判断采购总价与付款约定是否相等。
 
 ## 产品主图
 

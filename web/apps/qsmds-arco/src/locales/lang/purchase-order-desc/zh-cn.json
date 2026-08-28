@@ -21,7 +21,7 @@
       "salesOrderNo": "销售订单",
       "customerName": "客户名称",
       "referencePurchaseUnitPrice": "采购定价",
-      "actualPurchaseUnitPrice": "本单采购价",
+      "actualPurchaseUnitPrice": "真实采购价",
       "lineSubtotal": "本行小计",
       "lineSubtotalAmount": "产品明细汇总",
       "purchaseTotal": "采购总价",

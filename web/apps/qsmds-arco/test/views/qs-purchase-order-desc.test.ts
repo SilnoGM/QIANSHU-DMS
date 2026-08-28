@@ -62,17 +62,29 @@ test('详情按采购业务顺序展示基础、来源、产品、金额和唛�
   assert.match(source, /<dd/u)
 })
 
-test('产品主图与采购金额使用现有基础组件，且组件不重新计算金额', () => {
+test('产品主图保留，价格信息按销售详情样式只展示真实采购价、数量和本行小计', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsPurchaseOrderDesc/index.vue',
+  )
+  const zhCn = readRelativeSource(
+    '../../src/locales/lang/purchase-order-desc/zh-cn.json',
   )
 
   assert.match(source, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
   assert.match(source, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
   assert.match(source, /line\.mainImage/u)
-  assert.match(source, /line\.referencePurchaseUnitPriceAmount/u)
+  assert.doesNotMatch(source, /line\.referencePurchaseUnitPriceAmount/u)
   assert.match(source, /line\.actualPurchaseUnitPriceAmount/u)
   assert.match(source, /line\.lineSubtotalAmount/u)
+  assert.match(
+    source,
+    /grid-cols-\[minmax\(0,1fr\)_auto\] items-end/u,
+    '采购价格带必须复用销售详情的左右两列布局',
+  )
+  assert.match(source, /qs-type-meta text-muted-foreground m-0 flex flex-wrap gap-x-1 items-baseline/u)
+  assert.match(source, /class="!text-xs !leading-4"/u)
+  assert.match(source, /<div class="text-right min-w-0">/u)
+  assert.match(zhCn, /"actualPurchaseUnitPrice": "真实采购价"/u)
   assert.match(source, /model\.amounts\.purchaseTotalAmount/u)
   assert.match(source, /model\.amounts\.depositDueAmount/u)
   assert.match(source, /model\.amounts\.balanceDueAmount/u)

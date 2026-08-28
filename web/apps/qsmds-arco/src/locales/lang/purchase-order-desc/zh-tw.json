@@ -21,7 +21,7 @@
       "salesOrderNo": "銷售訂單",
       "customerName": "客戶名稱",
       "referencePurchaseUnitPrice": "採購定價",
-      "actualPurchaseUnitPrice": "本單採購價",
+      "actualPurchaseUnitPrice": "實際採購價",
       "lineSubtotal": "本行小計",
       "lineSubtotalAmount": "產品明細彙總",
       "purchaseTotal": "採購總價",

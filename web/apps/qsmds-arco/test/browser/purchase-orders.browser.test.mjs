@@ -384,6 +384,8 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
         && summary.textContent?.includes(${JSON.stringify(salesCustomerName)})
         && summary.textContent.includes(${JSON.stringify(supplierLabel)})
         && summary.textContent.includes(${JSON.stringify(productNo)})
+        && summary.textContent.includes('真实采购价')
+        && !summary.textContent.includes('采购定价')
         && [...summary.querySelectorAll('[data-currency="CNY"]')]
           .some(amount => amount.getAttribute('aria-label')?.includes('160'))
         && summary.textContent.includes('BROWSER LINKED MARK')

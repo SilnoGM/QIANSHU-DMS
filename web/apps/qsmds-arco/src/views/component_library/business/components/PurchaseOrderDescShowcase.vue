@@ -35,7 +35,7 @@ function setPreviewWidth(value: PreviewWidth): void {
             同一详情适配采购创建核对与正式订单
           </h3>
           <p class="text-sm text-muted-foreground leading-6 m-0 mt-2 max-w-3xl">
-            示例使用确定性本地 ViewModel，覆盖供应商、销售来源、采购双价、产品主图、付款进度和状态，不读取真实订单数据。
+            示例使用确定性本地 ViewModel，覆盖供应商、销售来源、真实采购价、产品主图、付款进度和状态，不读取真实订单数据。
           </p>
         </div>
         <FaTag variant="secondary">
