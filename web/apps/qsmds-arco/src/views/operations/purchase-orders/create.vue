@@ -778,9 +778,11 @@ onBeforeUnmount(() => {
         />
       </div>
 
+      <!-- 产品表固定保留 128rem 最小列宽；从 FaPageMain 到产品卡片的每层 Grid item
+           都必须允许收缩，才能让超宽内容进入表格自己的横向滚动，而不是扩大左侧轨道。 -->
       <FaPageMain
         class="purchase-order-form-track m-0 min-w-0 overflow-visible"
-        main-class="overflow-visible"
+        main-class="min-w-0 overflow-visible"
         :inert="createSurface === 'review'"
         :aria-hidden="createSurface === 'review' ? 'true' : undefined"
       >
@@ -788,7 +790,7 @@ onBeforeUnmount(() => {
           :model="formModel"
           :disabled="submitLocked"
           :aria-busy="submission.phase === 'submitting' ? 'true' : 'false'"
-          class="min-w-0"
+          class="grid-cols-[minmax(0,1fr)] min-w-0"
         >
           <nav
             v-if="guidedCreate"
@@ -803,8 +805,11 @@ onBeforeUnmount(() => {
             <FaSteps v-model="activeStep" :steps="purchaseOrderSteps" status="process" class="w-full" />
           </nav>
 
-          <div :class="purchaseType === 'STOCK' ? 'gap-6 grid xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]' : ''">
-            <main class="gap-6 grid min-w-0">
+          <div
+            class="min-w-0"
+            :class="purchaseType === 'STOCK' ? 'gap-6 grid xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]' : ''"
+          >
+            <main class="gap-6 grid grid-cols-[minmax(0,1fr)] min-w-0">
               <section
                 v-show="purchaseType === 'STOCK' || activeStep === 0"
                 class="gap-6 grid"
@@ -892,11 +897,12 @@ onBeforeUnmount(() => {
 
               <section
                 v-show="purchaseType === 'STOCK' || activeStep === 1"
-                class="gap-6 grid"
+                class="gap-6 grid grid-cols-[minmax(0,1fr)] min-w-0"
                 aria-label="采购产品明细与付款约定"
                 data-testid="purchase-order-step-products-payment"
               >
                 <FaCard
+                  class="min-w-0"
                   title="采购产品明细"
                   :description="purchaseType === 'STOCK' ? '可手工添加数据库产品或临时产品。' : '从销售订单同步产品；可删除本次暂不采购的行。'"
                   content-class="min-w-0"

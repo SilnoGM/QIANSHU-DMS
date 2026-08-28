@@ -107,6 +107,21 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /使用相同请求重新确认/u)
   assert.match(source, /onBeforeRouteLeave/u)
   assert.match(source, /data-testid="purchase-order-create-page"/u)
+  assert.match(
+    source,
+    /<FaPageMain[\s\S]*?main-class="min-w-0 overflow-visible"/u,
+    '双栏表单必须允许 FaPageMain 内层 flex item 收缩，超宽产品表只能在自身容器内滚动',
+  )
+  assert.match(
+    source,
+    /<FaForm[\s\S]*?class="grid-cols-\[minmax\(0,1fr\)\] min-w-0"/u,
+    '表单的隐式 Grid 列必须使用 minmax(0, 1fr)，不能按产品表的最小内容宽度扩张',
+  )
+  assert.match(
+    source,
+    /data-testid="purchase-order-step-products-payment"[\s\S]*?<FaCard\s+class="min-w-0"/u,
+    '采购产品步骤与产品卡片必须保持可收缩，表格横向滚动不能泄漏到页面布局',
+  )
   assert.match(source, /<FaForm[\s\S]*?:model="formModel"/u)
   assert.match(paymentSource, /aria-label="定金"/u)
   assert.match(paymentSource, /aria-label="尾款"/u)

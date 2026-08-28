@@ -312,6 +312,36 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
       ?.getClientRects().length > 0`)
+    const stepTwoLayout = await page.evaluate(`(() => {
+      const layout = document.querySelector('[data-testid="purchase-order-create-layout"]')
+      const form = document.querySelector('.purchase-order-form-track')
+      const step = document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      const summary = document.querySelector('[data-testid="purchase-order-create-summary-column"]')
+      const table = step?.querySelector('table')
+      const scroller = table?.parentElement
+      if (!layout || !form || !step || !summary || !table || !scroller) return null
+      const layoutRect = layout.getBoundingClientRect()
+      const formRect = form.getBoundingClientRect()
+      const stepRect = step.getBoundingClientRect()
+      const summaryRect = summary.getBoundingClientRect()
+      const scrollerRect = scroller.getBoundingClientRect()
+      return {
+        viewportRight: document.documentElement.clientWidth,
+        layoutRight: layoutRect.right,
+        formRight: formRect.right,
+        stepRight: stepRect.right,
+        summaryLeft: summaryRect.left,
+        scrollerRight: scrollerRect.right,
+        scrollerClientWidth: scroller.clientWidth,
+        scrollerScrollWidth: scroller.scrollWidth,
+      }
+    })()`)
+    assert.ok(stepTwoLayout, '采购产品与付款步骤必须渲染完整布局')
+    assert.ok(stepTwoLayout.layoutRight <= stepTwoLayout.viewportRight + 1, JSON.stringify(stepTwoLayout))
+    assert.ok(stepTwoLayout.stepRight <= stepTwoLayout.formRight + 1, JSON.stringify(stepTwoLayout))
+    assert.ok(stepTwoLayout.scrollerRight <= stepTwoLayout.formRight + 1, JSON.stringify(stepTwoLayout))
+    assert.ok(stepTwoLayout.summaryLeft >= stepTwoLayout.formRight + 20, JSON.stringify(stepTwoLayout))
+    assert.ok(stepTwoLayout.scrollerScrollWidth > stepTwoLayout.scrollerClientWidth, JSON.stringify(stepTwoLayout))
     await clickVisibleButton(page, '同步销售产品明细')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
       ?.textContent?.includes(${JSON.stringify(productNo)})`)
