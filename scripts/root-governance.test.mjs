@@ -99,6 +99,22 @@ const supplierResidueAllowlist = Object.freeze([
   'specs/purchase-order-domain/tasks.md',
   'scripts/browser-auth-runtime.test.mjs',
   'scripts/browser-auth/provision-admin.mjs',
+  // 采购 Web 只消费 service_provider.supplier 字典值、产品 supplierValue 快照
+  // 与展示标签；页面、适配层和测试不允许恢复独立 Supplier 主数据调用。
+  'web/apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue',
+  'web/apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/types.ts',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/create.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/index.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-create.logic.ts',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-detail-drawer.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts',
+  'web/apps/qsmds-arco/test/api/purchase-orders.test.ts',
+  'web/apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
+  'web/apps/qsmds-arco/test/views/purchase-order-create.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-detail.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-list.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-pages.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-order-product-line-editor.test.ts',
   // 订单产品选择器通过稳定 supplierValue 查询和展示现有产品；规格、组件、
   // fixture 与回归测试属于该字典消费边界，不得引入 Supplier 主数据依赖。
   'specs/order-product-line-editor/design.md',

@@ -2,8 +2,8 @@
 
 ## 执行状态
 
-- 当前阶段：Phase 5 Web 采购列表与创建交互实施中。
-- 已完成：需求、技术设计、任务、采购菜单、Server/公共 API、采购列表和创建主流程。
+- 当前阶段：Phase 5 Web 采购列表、创建、详情与业务交互已完成；Phase 6 专项验收实施中。
+- 已完成：需求、技术设计、任务、采购菜单、Server/公共 API，以及采购列表、创建、详情、付款和履约主流程。
 - 已授权：采购 Server、公共 API、Prisma schema、append-only migration 和相关数据结构变更。
 - 当前边界：只在既有公共 API 内完成 Web；不新增 schema、公共 API 或数据结构。
 - TDD 原则：每个新能力先建立可观察的失败测试，再实现最小能力，最后重构并运行风险匹配的验证。
@@ -118,27 +118,27 @@
   - _Evidence: 采购 API 与组件测试先因模块/导出/可选属性缺失形成 4 个 RED；最小实现后采购适配、产品选择、产品明细和销售创建回归 55/55 通过。Web typecheck 通过；`QsProductSelector` 以固定供应商可选参数隔离订单级供应商，`QsOrderProductLineEditor` 以默认关闭的双价格输入能力保持销售行为不变。_
   - _Requirements: R3-R7, R12_
 
-- [ ] 13. 实现采购列表与创建交互
+- [x] 13. 实现采购列表与创建交互
   - [x] 13.1 在用户授权完整 UI 实施后，先按 `ui-design` 与 `web-development` 技能固定最终页面规格。
   - [x] 13.2 为待办/全部列表模式、筛选和派生金额展示建立 View RED。
   - [x] 13.3 为“新增销售关联采购”和仅管理员可见的“新增备货采购”入口建立 RED。
   - [x] 13.4 实现销售来源选择、供应商选择、同步产品、临时产品、金额和唛头表单。
   - [x] 13.5 实现 Idempotency-Key 生命周期、未知结果安全重试、字段错误和未保存离开门禁。
-  - [ ] 13.6 覆盖键盘、焦点、busy/alert、亮暗主题和窄屏布局。
+  - [x] 13.6 覆盖键盘、焦点、busy/alert、亮暗主题和窄屏布局。
   - [x] 13.7 运行 Web test/typecheck/lint/build 并提交页面小步提交。
   - [x] 13.8 实现采购详情、产品、唛头、付款、凭证和状态历史读取。
   - [x] 13.9 实现取消、五步履约、实际付款/作废、可选凭证上传/下载/解除及权限门禁。
-  - _Partial evidence: 列表逻辑与 View 先因目标模块不存在、占位页未实现形成 4 个 RED；实现后采购列表逻辑/页面 7/7、连同销售页面回归 14/14 通过。创建逻辑、来源选择器与页面结构先形成 4 个 RED；实现后采购创建与通用明细聚焦测试 25/25。详情与业务动作先形成 4 个 RED；实现后详情、列表和动作聚焦测试 16/16，Web API/View 全量 1006/1006 通过，Web typecheck、变更文件 eslint/stylelint 与正式 build 通过。两个列表使用服务端 `view=all|pending` 和全量筛选；创建页固定 CNY、供应商字典、销售剩余明细同步、管理员备货、`CUSTOM` 双价格、金额等式、唛头、二次确认、未知结果同 Key 重放和未保存离开门禁；详情抽屉按独立权限覆盖履约、付款、作废及付款凭证完整生命周期。_
+  - _Evidence: 列表逻辑与 View 先因目标模块不存在、占位页未实现形成 4 个 RED；实现后采购列表逻辑/页面 7/7、连同销售页面回归 14/14 通过。创建逻辑、来源选择器与页面结构先形成 4 个 RED；实现后采购创建与通用明细聚焦测试 25/25。详情与业务动作先形成 4 个 RED；实现后详情、列表和动作聚焦测试 16/16，Web API/View 全量 1006/1006 通过，Web typecheck、变更文件 eslint/stylelint 与正式 build 通过。两个列表使用服务端 `view=all|pending` 和全量筛选；创建页固定 CNY、供应商字典、销售剩余明细同步、管理员备货、`CUSTOM` 双价格、金额等式、唛头、二次确认、未知结果同 Key 重放和未保存离开门禁；详情抽屉按独立权限覆盖履约、付款、作废及付款凭证完整生命周期。真实 Chrome 进一步证明键盘选择、首个错误字段聚焦、提交 busy/alert、390x844 窄屏不溢出、44px 触控目标、reduced motion 和亮暗主题均可用。_
   - _Requirements: R1-R12_
 
 - [ ] 14. 完成跨端、并发与真实浏览器验收
   - [x] 14.1 扩展隔离 PostgreSQL E2E inventory，覆盖 schema、权限、创建、并发数量和付款全流程。
-  - [ ] 14.2 建立采购订单 Browser E2E runner 和稳定 fixture。
+  - [x] 14.2 建立采购订单 Browser E2E runner 和稳定 fixture。
   - [ ] 14.3 验证销售关联创建、管理员备货创建、普通用户拒绝和两个采购列表。
   - [ ] 14.4 验证 `CUSTOM` 双价格、供应商漂移、采购成本漂移、超量并发和幂等重放。
   - [x] 14.5 验证履约到签收、付款到付清后订单从待办列表退出。
-  - [ ] 14.6 运行 `node --run check`、contract check、Server E2E、Web build 和 Browser E2E。
-  - [ ] 14.7 检查 Git diff、敏感文件、生成物、迁移顺序和小步提交范围。
+  - [x] 14.6 运行 `node --run check`、contract check、Server E2E、Web build 和 Browser E2E。
+  - [x] 14.7 检查 Git diff、敏感文件、生成物、迁移顺序和小步提交范围。
   - [ ] 14.8 更新本文件真实执行证据并完成收口提交。
-  - _Partial evidence: Server 侧采购 schema、创建、并发数量、付款和履约 E2E 已通过；根检查、契约、Web build 与既有真实 Browser E2E 已通过。采购列表与创建主流程已实现，采购专项 Browser E2E、漂移/并发边界和完整 Web 收口验证仍待本阶段后续执行。_
+  - _Partial evidence: Server 侧采购 schema、创建、并发数量、付款和履约 E2E 已通过；采购 Browser runner 使用一次性 PostgreSQL fixture 建立有效供应商、付款方式、CNY 产品和启用的 `PURCHASE_ORDER` 编号规则。根 `node --run check` 最终单次 exit 0，覆盖 Root 686/686、Server 2396/2396、Web API/View 1006/1006、契约、28 条 migration 空库部署、Web 类型/Lint/正式 build 与真实 Chrome 5/5；其中采购专项覆盖全部/待办空态、管理员备货创建、正式派号、详情、全额付款、五步履约、待办退出和响应式主题。提交前 `git diff --check`、敏感路径/生成物扫描和迁移顺序均通过。销售关联创建、普通用户拒绝、漂移/并发边界与幂等重放的专项 Browser 覆盖仍待后续执行。_
   - _Requirements: R1-R12_

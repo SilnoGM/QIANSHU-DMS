@@ -351,7 +351,7 @@ onBeforeUnmount(() => {
         <FaButton
           v-if="canCreate"
           type="button"
-          class="min-h-11 sm:min-h-9"
+          class="min-h-[44px] sm:min-h-9"
           @click="navigateCreate('SALES_LINKED')"
         >
           <FaIcon name="i-lucide:link-2" aria-hidden="true" />新增销售关联采购
@@ -360,7 +360,7 @@ onBeforeUnmount(() => {
           v-if="canCreate && canCreateStock"
           type="button"
           variant="outline"
-          class="min-h-11 sm:min-h-9"
+          class="min-h-[44px] sm:min-h-9"
           @click="navigateCreate('STOCK')"
         >
           <FaIcon name="i-lucide:warehouse" aria-hidden="true" />新增备货采购

@@ -127,6 +127,8 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.match(command.args.at(-1), /product-media:read/u)
   assert.match(command.args.at(-1), /service_provider\.supplier/u)
   assert.match(command.args.at(-1), /BROWSER_SUPPLIER_EFFECTIVE/u)
+  assert.match(command.args.at(-1), /payment\.method/u)
+  assert.match(command.args.at(-1), /BROWSER_BANK_TRANSFER/u)
   assert.match(command.args.at(-1), /INSERT INTO products/u)
   assert.match(command.args.at(-1), /PRODUCT-BROWSER-001/u)
   assert.match(command.args.at(-1), /PRODUCT-MEDIA-BROWSER-001/u)
@@ -141,6 +143,7 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.match(command.args.at(-1), /INSERT INTO numbering_rules/u)
   assert.match(command.args.at(-1), /VALUES \(\\'PRODUCT\\'/u)
   assert.match(command.args.at(-1), /VALUES \(\\'SALES_ORDER\\'/u)
+  assert.match(command.args.at(-1), /VALUES \(\\'PURCHASE_ORDER\\'/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_versions/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_segments/u)
   assert.match(command.args.at(-1), /SET status = \\'ACTIVE\\'/u)
@@ -174,6 +177,18 @@ test('认证 Browser 清单包含真实销售订单创建场景', () => {
   assert.match(
     manifest.scripts['test:browser:auth'],
     /sales-orders\.browser\.test\.mjs/u,
+  )
+})
+
+test('认证 Browser 清单包含真实采购订单创建与详情场景', () => {
+  const manifest = JSON.parse(readFileSync(
+    path.resolve(import.meta.dirname, '../web/package.json'),
+    'utf8',
+  ))
+
+  assert.match(
+    manifest.scripts['test:browser:auth'],
+    /purchase-orders\.browser\.test\.mjs/u,
   )
 })
 

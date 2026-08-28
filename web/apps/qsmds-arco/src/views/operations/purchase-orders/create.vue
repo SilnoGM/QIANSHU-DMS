@@ -24,6 +24,7 @@ import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.v
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsOrderProductLineEditor from '@/components/business/QsOrderProductLineEditor/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
+import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
 import {
   adaptPurchaseOrderProductPage,
@@ -52,6 +53,7 @@ const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
+const supplierCatalog = useDictionaryCatalog('service_provider.supplier')
 const todayDate = today(getLocalTimeZone())
 const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('purchase-orders:create'))
@@ -91,6 +93,8 @@ const formError = ref('')
 const requestId = ref<string>()
 const submitConfirmVisible = ref(false)
 const discardVisible = ref(false)
+const createPageRef = useTemplateRef<HTMLElement>('createPageRef')
+const supplierSelectRef = useTemplateRef<InstanceType<typeof QsDictionarySelect>>('supplierSelectRef')
 const submission = shallowRef<PurchaseOrderSubmissionState>(createPurchaseOrderEditingState())
 let sourceAbortController: AbortController | null = null
 let synchronizeAbortController: AbortController | null = null
@@ -108,6 +112,11 @@ const currencyUnavailable = computed(() => (
 ))
 const orderDateValue = computed(() => parseDate(formModel.orderDate))
 const purchaseTotalAmount = computed(() => calculatePurchaseOrderDraftTotal(formModel.lines))
+const selectedSupplierDisplayLabel = computed(() => (
+  supplierCatalog.resolve(formModel.supplierValue)?.displayLabel
+  ?? formModel.supplierValue
+  ?? '—'
+))
 const submitLocked = computed(() => submission.value.phase === 'submitting')
 const sourceReady = computed(() => (
   purchaseType === 'SALES_LINKED'
@@ -341,6 +350,51 @@ function buildCurrentRequest() {
   })
 }
 
+/** 校验失败后聚焦第一个公开错误字段，避免键盘用户只能从页头重新寻找。 */
+function focusFirstInvalidField(errors: Readonly<Record<string, string>>): void {
+  const firstField = Object.keys(errors)[0]
+  if (firstField === undefined) {
+    return
+  }
+  void nextTick(() => {
+    if (firstField === 'supplierValue') {
+      supplierSelectRef.value?.focus()
+      return
+    }
+    const root = createPageRef.value
+    if (root === null) {
+      return
+    }
+    const directLabels: Readonly<Record<string, string>> = {
+      balanceDueAmount: '尾款',
+      depositDueAmount: '定金',
+      lines: '添加数据库产品',
+      orderDate: '采购日期',
+      salesOrderId: '选择销售订单',
+    }
+    let label = directLabels[firstField]
+    const lineField = /^lines\.(\d+)\.(.+)$/u.exec(firstField)
+    if (lineField !== null) {
+      const lineNumber = Number(lineField[1]) + 1
+      const lineLabelByField: Readonly<Record<string, string>> = {
+        actualUnitPriceAmount: '本单采购价',
+        name: '产品名称',
+        quantity: '产品数量',
+        standardUnitPriceAmount: '采购定价',
+      }
+      const suffix = lineLabelByField[lineField[2] ?? ''] ?? '本单采购价'
+      label = `第 ${lineNumber} 行${suffix}`
+    }
+    const control = label === undefined
+      ? null
+      : root.querySelector<HTMLElement>(`[aria-label="${label}"]`)
+        ?? [...root.querySelectorAll<HTMLElement>('button')].find(button => (
+          button.textContent?.trim() === label
+        ))
+    control?.focus({ preventScroll: false })
+  })
+}
+
 function requestSubmit(): void {
   if (!canCreate.value || submitLocked.value || currencyUnavailable.value) {
     return
@@ -349,6 +403,7 @@ function requestSubmit(): void {
   if (result === null || !result.valid) {
     fieldErrors.value = result?.fieldErrors ?? {}
     formError.value = '请修正采购订单中的必填项和金额后再提交'
+    focusFirstInvalidField(fieldErrors.value)
     return
   }
   clearFeedback()
@@ -388,6 +443,7 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
     requestId.value = failure.requestId
     if (!failure.unknownResult) {
       submitConfirmVisible.value = false
+      focusFirstInvalidField(failure.fieldErrors)
     }
   }
   finally {
@@ -406,6 +462,7 @@ function confirmSubmit(): void {
     fieldErrors.value = result?.fieldErrors ?? {}
     formError.value = '订单资料已变化，请返回检查后重新提交'
     submitConfirmVisible.value = false
+    focusFirstInvalidField(fieldErrors.value)
     return
   }
   const state = beginPurchaseOrderSubmission(
@@ -506,7 +563,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="purchase-order-create-page min-w-0">
+  <div ref="createPageRef" class="purchase-order-create-page min-w-0" data-testid="purchase-order-create-page">
     <FaPageHeader :title="title" :description="typeDescription">
       <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" @click="requestBack">
         <FaIcon name="i-lucide:arrow-left" aria-hidden="true" />返回全部采购
@@ -522,7 +579,13 @@ onBeforeUnmount(() => {
       />
     </FaPageMain>
 
-    <div v-else class="purchase-order-create-layout px-[var(--g-main-container-padding)] pb-[var(--g-main-container-padding)] gap-6 grid xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]">
+    <FaForm
+      v-else
+      :model="formModel"
+      :disabled="submitLocked"
+      :aria-busy="submission.phase === 'submitting' ? 'true' : 'false'"
+      class="purchase-order-create-layout px-[var(--g-main-container-padding)] pb-[var(--g-main-container-padding)] gap-6 grid xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]"
+    >
       <main class="gap-6 grid min-w-0">
         <FaAlert
           v-if="formError"
@@ -544,6 +607,7 @@ onBeforeUnmount(() => {
           </div>
           <FaFormItem name="orderDate" label="采购日期" required :auto-bind="false">
             <FaDate
+              aria-label="采购日期"
               :model-value="orderDateValue"
               :max-value="todayDate"
               :disabled="submitLocked"
@@ -558,6 +622,7 @@ onBeforeUnmount(() => {
           </FaFormItem>
           <FaFormItem name="supplierValue" label="供应商" required :auto-bind="false">
             <QsDictionarySelect
+              ref="supplierSelectRef"
               :model-value="formModel.supplierValue"
               dictionary-code="service_provider.supplier"
               placeholder="选择采购供应商"
@@ -690,6 +755,7 @@ onBeforeUnmount(() => {
               <dd class="m-0">
                 <MoneyInput
                   :model-value="formModel.depositDueAmount"
+                  aria-label="定金"
                   currency="CNY"
                   :currencies="fixedCurrencies"
                   :currency-selectable="false"
@@ -709,6 +775,7 @@ onBeforeUnmount(() => {
               <dd class="m-0">
                 <MoneyInput
                   :model-value="formModel.balanceDueAmount"
+                  aria-label="尾款"
                   currency="CNY"
                   :currencies="fixedCurrencies"
                   :currency-selectable="false"
@@ -745,7 +812,7 @@ onBeforeUnmount(() => {
           </FaButton>
         </FaCard>
       </aside>
-    </div>
+    </FaForm>
 
     <PurchaseSourceSalesOrderSelector
       v-if="purchaseType === 'SALES_LINKED'"
@@ -776,7 +843,7 @@ onBeforeUnmount(() => {
           供应商
         </dt>
         <dd class="text-sm font-mono m-0 break-all">
-          {{ formModel.supplierValue }}
+          {{ selectedSupplierDisplayLabel }}
         </dd>
         <dt class="text-sm text-muted-foreground">
           产品数

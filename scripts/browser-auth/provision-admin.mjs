@@ -133,6 +133,28 @@ const { Client } = require('pg')
       [supplierType.rows[0].id],
     )
 
+    // 采购付款弹窗消费真实字典 Catalog；该类型与条目只写入一次性 Browser 库。
+    const paymentMethodType = await client.query(
+      [
+        'INSERT INTO dictionary_types (code, name, enabled, sort_order)',
+        'VALUES (\'payment.method\', \'付款方式\', false, 30)',
+        'RETURNING id',
+      ].join(' '),
+    )
+    await client.query(
+      [
+        'INSERT INTO dictionary_items (',
+        'dictionary_type_id, value, label, tone, enabled, sort_order',
+        ') VALUES ($1, \'BROWSER_BANK_TRANSFER\', \'Browser 银行转账\',',
+        '\'PRIMARY\', true, 10)',
+      ].join(' '),
+      [paymentMethodType.rows[0].id],
+    )
+    await client.query(
+      'UPDATE dictionary_types SET enabled = true, updated_at = clock_timestamp() WHERE id = $1',
+      [paymentMethodType.rows[0].id],
+    )
+
     // 创建页必须从真实 Currency Catalog 取得 TWD/MYR/CNY。外币先建立当前汇率
     // 再启用，严格遵守数据库 trigger 的顺序约束；数据只存在于一次性 Browser 库。
     const productCurrencies = await client.query(
@@ -274,6 +296,68 @@ const { Client } = require('pg')
         'updated_at = clock_timestamp() WHERE id = $1',
       ].join(' '),
       [salesOrderRule.rows[0].id],
+    )
+
+    // 采购 Browser 场景独立消费 PURCHASE_ORDER 规则，确保页面确认前不派号，
+    // 正式创建后获得可稳定断言的 PO-BRW 序列。
+    const purchaseOrderRule = await client.query(
+      [
+        'INSERT INTO numbering_rules (rule_code, name, status, version)',
+        'VALUES (\'PURCHASE_ORDER\', \'Browser Purchase Order Rule\', \'DRAFT\', 1)',
+        'RETURNING id',
+      ].join(' '),
+    )
+    const purchaseOrderRuleVersion = await client.query(
+      [
+        'INSERT INTO numbering_rule_versions (',
+        'rule_id, revision, status, reset_policy, timezone, config_fingerprint',
+        ') VALUES ($1, 1, \'DRAFT\', \'NEVER\', \'Asia/Shanghai\', repeat(\'c\', 64))',
+        'RETURNING id',
+      ].join(' '),
+      [purchaseOrderRule.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, fixed_value',
+        ') VALUES',
+        '($1, 0, \'FIXED\', \'PO\'),',
+        '($1, 2, \'FIXED\', \'BRW\')',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, separator_value',
+        ') VALUES',
+        '($1, 1, \'SEPARATOR\', \'-\'),',
+        '($1, 3, \'SEPARATOR\', \'-\')',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, sequence_width, sequence_start_value, sequence_step',
+        ') VALUES ($1, 4, \'SEQUENCE\', 8, 1, 1)',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rule_versions',
+        'SET status = \'ACTIVE\', published_at = clock_timestamp()',
+        'WHERE id = $1',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rules SET status = \'ENABLED\', version = 3,',
+        'updated_at = clock_timestamp() WHERE id = $1',
+      ].join(' '),
+      [purchaseOrderRule.rows[0].id],
     )
 
     // 管理域 Browser 场景保留独立的 4 图 2 视频只读样本；产品媒体专属场景使用
