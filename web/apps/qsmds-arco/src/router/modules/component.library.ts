@@ -228,6 +228,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'purchase-order-desc',
+        name: 'componentLibraryQsPurchaseOrderDesc',
+        component: () => import('@/views/component_library/business/purchase-order-desc.vue'),
+        meta: {
+          title: '采购订单详情',
+          icon: 'i-lucide:shopping-basket',
+        },
+      },
+      {
         path: 'status-switch-toolbar',
         name: 'componentLibraryQsStatusSwitchToolbar',
         component: () => import('@/views/component_library/business/status-switch-toolbar.vue'),

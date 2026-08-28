@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供十六个独立组件路由', () => {
+test('组件库按分类提供十七个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -164,6 +164,11 @@ test('组件库按分类提供十六个独立组件路由', () => {
         title: '销售订单详情',
       },
       {
+        name: 'componentLibraryQsPurchaseOrderDesc',
+        path: 'purchase-order-desc',
+        title: '采购订单详情',
+      },
+      {
         name: 'componentLibraryQsStatusSwitchToolbar',
         path: 'status-switch-toolbar',
         title: '状态切换工具栏',
@@ -180,7 +185,7 @@ test('组件库按分类提供十六个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 16)
+  assert.equal(new Set(componentRouteNames).size, 17)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -211,7 +216,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('十六个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('十七个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -289,6 +294,11 @@ test('十六个组件页面与页面模板复用展示壳且不依赖业务 API 
       title: '销售订单详情',
     },
     {
+      componentName: 'ComponentLibraryQsPurchaseOrderDesc',
+      file: '../../src/views/component_library/business/purchase-order-desc.vue',
+      title: '采购订单详情',
+    },
+    {
       componentName: 'ComponentLibraryQsStatusSwitchToolbar',
       file: '../../src/views/component_library/business/status-switch-toolbar.vue',
       title: '状态切换工具栏',
@@ -331,6 +341,18 @@ test('销售订单详情叶子路由固定图标与独立动态页面', () => {
   assert.match(
     source,
     /path: 'sales-order-desc',[\s\S]*?name: 'componentLibraryQsSalesOrderDesc',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/sales-order-desc\.vue'\),[\s\S]*?title: '销售订单详情',[\s\S]*?icon: 'i-lucide:receipt-text'/u,
+  )
+})
+
+test('采购订单详情叶子路由固定图标与独立动态页面', () => {
+  const source = readFileSync(
+    new URL('../../src/router/modules/component.library.ts', import.meta.url),
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /path: 'purchase-order-desc',[\s\S]*?name: 'componentLibraryQsPurchaseOrderDesc',[\s\S]*?component: \(\) => import\('@\/views\/component_library\/business\/purchase-order-desc\.vue'\),[\s\S]*?title: '采购订单详情',[\s\S]*?icon: 'i-lucide:shopping-basket'/u,
   )
 })
 

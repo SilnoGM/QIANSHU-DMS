@@ -27,10 +27,10 @@ import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.v
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsOrderProductLineEditor from '@/components/business/QsOrderProductLineEditor/index.vue'
+import QsPurchaseOrderDesc from '@/components/business/QsPurchaseOrderDesc/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
-import PurchaseOrderCreateReview from './purchase-order-create-review.vue'
 import {
   adaptPurchaseOrderProductPage,
   beginPurchaseOrderSubmission,
@@ -48,6 +48,10 @@ import {
   synchronizePurchaseOrderSourceLines,
   validatePurchaseOrderCreateStep,
 } from './purchase-order-create.logic'
+import {
+  mapPurchaseOrderCreateToDesc,
+  resolvePurchaseOrderIssuerLabel,
+} from './purchase-order-desc.logic'
 import {
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
@@ -143,6 +147,22 @@ const selectedSupplierDisplayLabel = computed(() => (
   ?? formModel.supplierValue
   ?? '—'
 ))
+const purchaseOrderDescModel = computed(() => mapPurchaseOrderCreateToDesc({
+  balanceDueAmount: formModel.balanceDueAmount,
+  depositDueAmount: formModel.depositDueAmount,
+  issuerName: resolvePurchaseOrderIssuerLabel(
+    appAccountStore.displayName,
+    appAccountStore.account,
+  ),
+  lines: formModel.lines,
+  orderDate: formModel.orderDate,
+  purchaseTotalAmount: purchaseTotalAmount.value,
+  purchaseType: purchaseType ?? 'SALES_LINKED',
+  remark: formModel.remark,
+  salesOrder: selectedSalesOrder.value,
+  shippingMarkText: formModel.shippingMarkText,
+  supplierLabel: selectedSupplierDisplayLabel.value,
+}))
 const submitLocked = computed(() => submission.value.phase === 'submitting')
 const guidedCreate = computed(() => purchaseType === 'SALES_LINKED')
 const sourceReady = computed(() => (
@@ -1105,17 +1125,9 @@ onBeforeUnmount(() => {
             </header>
 
             <div class="purchase-order-summary-region rounded-2xl min-h-0">
-              <PurchaseOrderCreateReview
-                :balance-due-amount="formModel.balanceDueAmount"
+              <QsPurchaseOrderDesc
                 :currencies="fixedCurrencies"
-                :deposit-due-amount="formModel.depositDueAmount"
-                :lines="formModel.lines"
-                :order-date="formModel.orderDate"
-                :purchase-total-amount="purchaseTotalAmount"
-                :remark="formModel.remark"
-                :sales-order="selectedSalesOrder"
-                :shipping-mark-text="formModel.shippingMarkText"
-                :supplier-label="selectedSupplierDisplayLabel"
+                :model="purchaseOrderDescModel"
               />
             </div>
 
@@ -1185,17 +1197,9 @@ onBeforeUnmount(() => {
       size="xl"
       :submitting="submitLocked"
     >
-      <PurchaseOrderCreateReview
-        :balance-due-amount="formModel.balanceDueAmount"
+      <QsPurchaseOrderDesc
         :currencies="fixedCurrencies"
-        :deposit-due-amount="formModel.depositDueAmount"
-        :lines="formModel.lines"
-        :order-date="formModel.orderDate"
-        :purchase-total-amount="purchaseTotalAmount"
-        :remark="formModel.remark"
-        :sales-order="selectedSalesOrder"
-        :shipping-mark-text="formModel.shippingMarkText"
-        :supplier-label="selectedSupplierDisplayLabel"
+        :model="purchaseOrderDescModel"
         class="border-0 rounded-none shadow-none md:rounded-xl"
       />
       <template #footer>

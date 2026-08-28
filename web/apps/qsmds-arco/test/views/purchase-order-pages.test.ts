@@ -58,7 +58,7 @@ test('采购创建页作为受保护隐藏路由并保持全部采购菜单激�
 test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 与幂等确认', async () => {
   const source = await readFile(new URL('create.vue', ROOT), 'utf8')
   const paymentSource = await readFile(new URL('purchase-order-payment-terms.vue', ROOT), 'utf8')
-  const reviewSource = await readFile(new URL('purchase-order-create-review.vue', ROOT), 'utf8')
+  const detailDrawerSource = await readFile(new URL('purchase-order-detail-drawer.vue', ROOT), 'utf8')
 
   assert.match(source, /const purchaseOrderSteps: StepsItem\[\]/u)
   assert.match(source, /title: '采购基础信息'/u)
@@ -75,21 +75,18 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /validatePurchaseOrderCreateStep/u)
   assert.match(source, /@click="previousStep"/u)
   assert.match(source, /@click="nextStep"/u)
-  assert.match(source, /<PurchaseOrderCreateReview/u)
-  assert.match(
-    reviewSource,
-    /<article class="purchase-order-review-card[^"]*rounded-xl[^"]*"/u,
-    '采购订单详情组件外层必须与共享销售订单详情组件统一使用 rounded-xl',
-  )
-  assert.doesNotMatch(
-    reviewSource,
-    /<article class="purchase-order-review-card[^"]*rounded-2xl[^"]*"/u,
-  )
+  assert.match(source, /import QsPurchaseOrderDesc from '@\/components\/business\/QsPurchaseOrderDesc\/index\.vue'/u)
+  assert.match(source, /mapPurchaseOrderCreateToDesc/u)
+  assert.match(source, /<QsPurchaseOrderDesc/u)
   assert.match(
     source,
-    /<PurchaseOrderCreateReview[\s\S]*?class="border-0 rounded-none shadow-none md:rounded-xl"/u,
-    '采购订单详情抽屉在桌面端必须沿用详情组件的 rounded-xl',
+    /<QsPurchaseOrderDesc[\s\S]*?class="border-0 rounded-none shadow-none md:rounded-xl"/u,
+    '采购订单详情抽屉在桌面端必须沿用新详情组件的 rounded-xl',
   )
+  assert.doesNotMatch(source, /<PurchaseOrderCreateReview/u)
+  assert.match(detailDrawerSource, /import QsPurchaseOrderDesc from '@\/components\/business\/QsPurchaseOrderDesc\/index\.vue'/u)
+  assert.match(detailDrawerSource, /mapPurchaseOrderDetailToDesc/u)
+  assert.match(detailDrawerSource, /<QsPurchaseOrderDesc/u)
   assert.match(source, /data-testid="purchase-order-create-review"/u)
   assert.match(source, /purchase-order-create-layout--review/u)
   assert.match(source, /@click="returnToPurchaseOrderForm"/u)

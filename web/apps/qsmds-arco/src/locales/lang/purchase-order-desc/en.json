@@ -1,0 +1,48 @@
+{
+  "purchaseOrderDesc": {
+    "title": "Purchase order details",
+    "description": "Review each item as the draft or order status is updated.",
+    "sections": {
+      "basic": "Order information",
+      "source": "Supplier and sales source",
+      "lines": "Purchase products and subtotal ({count})",
+      "purchase": "Purchase amounts",
+      "notes": "Shipping mark and remark"
+    },
+    "fields": {
+      "orderNo": "Purchase order no.",
+      "orderDate": "Purchase date",
+      "purchaseType": "Purchase type",
+      "issuer": "Purchaser",
+      "currency": "Currency",
+      "createdAt": "Created at",
+      "updatedAt": "Updated at",
+      "supplier": "Supplier",
+      "salesOrderNo": "Sales order",
+      "customerName": "Customer",
+      "referencePurchaseUnitPrice": "Purchase list price",
+      "actualPurchaseUnitPrice": "Order purchase price",
+      "lineSubtotal": "Line subtotal",
+      "lineSubtotalAmount": "Product subtotal",
+      "purchaseTotal": "Purchase total",
+      "deposit": "Deposit",
+      "balance": "Balance",
+      "paid": "Paid",
+      "outstanding": "Outstanding",
+      "shippingMark": "Shipping mark",
+      "remark": "Purchase remark",
+      "lineIndex": "Purchase product {index}"
+    },
+    "lineTypes": {
+      "CATALOG": "Catalog product",
+      "CUSTOM": "Custom product"
+    },
+    "empty": {
+      "text": "Not provided",
+      "orderNo": "Issued after the order is saved",
+      "independentStock": "Independent stock purchase",
+      "unlinkedCustomer": "No linked customer",
+      "lines": "No purchase products"
+    }
+  }
+}

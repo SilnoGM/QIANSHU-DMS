@@ -11,9 +11,10 @@ import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
-import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsPurchaseOrderDesc from '@/components/business/QsPurchaseOrderDesc/index.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
+import { mapPurchaseOrderDetailToDesc } from './purchase-order-desc.logic'
 import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
 import {
   purchaseOrderPaymentTypeLabel,
@@ -22,14 +23,9 @@ import {
 } from './purchase-order-detail.logic'
 import {
   fulfillmentStatusLabel,
-  fulfillmentStatusTagClass,
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
   nextPurchaseOrderFulfillmentStatus,
-  orderStatusLabel,
-  orderStatusTagClass,
-  paymentStatusLabel,
-  paymentStatusTagClass,
   purchaseTypeLabel,
 } from './purchase-order-list.logic'
 
@@ -75,6 +71,9 @@ const drawerTitle = computed(() => props.order?.orderNo ?? '采购订单详情')
 const drawerDescription = computed(() => props.order === null
   ? '查看采购订单、履约、付款和凭证。'
   : `${props.order.supplier.label} · ${purchaseTypeLabel(props.order.purchaseType)}`)
+const purchaseOrderDescModel = computed(() => detail.value === null
+  ? null
+  : mapPurchaseOrderDetailToDesc(detail.value))
 const canRecordPayment = computed(() => (
   canManagePayment.value
   && detail.value?.orderStatus === 'CONFIRMED'
@@ -256,179 +255,11 @@ onBeforeUnmount(() => {
       class="mb-4"
     />
 
-    <div v-if="detail" class="gap-6 grid">
-      <section aria-labelledby="purchase-detail-summary-title" class="p-4 border border-border rounded-xl bg-muted/15">
-        <div class="flex flex-wrap gap-2 items-center justify-between">
-          <h3 id="purchase-detail-summary-title" class="qs-type-section-title m-0">
-            订单概览
-          </h3>
-          <div class="flex flex-wrap gap-2">
-            <FaTag variant="outline" :class="orderStatusTagClass(detail.orderStatus)">
-              {{ orderStatusLabel(detail.orderStatus) }}
-            </FaTag>
-            <FaTag variant="outline" :class="fulfillmentStatusTagClass(detail.fulfillmentStatus)">
-              {{ fulfillmentStatusLabel(detail.fulfillmentStatus) }}
-            </FaTag>
-            <FaTag variant="outline" :class="paymentStatusTagClass(detail.paymentStatus)">
-              {{ paymentStatusLabel(detail.paymentStatus) }}
-            </FaTag>
-          </div>
-        </div>
-        <dl class="text-sm m-0 mt-4 gap-x-5 gap-y-3 grid grid-cols-1 sm:grid-cols-2">
-          <div>
-            <dt class="text-muted-foreground">
-              采购类型
-            </dt>
-            <dd class="font-medium m-0 mt-1">
-              {{ purchaseTypeLabel(detail.purchaseType) }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">
-              采购日期
-            </dt>
-            <dd class="font-mono m-0 mt-1">
-              {{ detail.orderDate }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">
-              供应商
-            </dt>
-            <dd class="font-medium m-0 mt-1">
-              {{ detail.supplier.label }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">
-              销售来源 / 客户
-            </dt>
-            <dd class="m-0 mt-1">
-              {{ detail.salesOrderNo ?? '独立备货' }} · {{ detail.customerName ?? '不关联客户' }}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">
-              创建人
-            </dt>
-            <dd class="m-0 mt-1">
-              <QsPersonDisplay :display-name="detail.createdBy.displayName" size="sm" />
-            </dd>
-          </div>
-          <div>
-            <dt class="text-muted-foreground">
-              创建 / 更新
-            </dt>
-            <dd class="m-0 mt-1">
-              <DateTimeDisplay :value="detail.createdAt" /> · <DateTimeDisplay :value="detail.updatedAt" />
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <section aria-labelledby="purchase-detail-amount-title">
-        <h3 id="purchase-detail-amount-title" class="qs-type-section-title m-0 mb-3">
-          采购金额
-        </h3>
-        <dl class="m-0 gap-3 grid grid-cols-2 sm:grid-cols-3">
-          <div
-            v-for="item in [
-              { label: '采购总价', value: detail.purchaseTotalAmount },
-              { label: '定金', value: detail.depositDueAmount },
-              { label: '尾款', value: detail.balanceDueAmount },
-              { label: '已付', value: detail.paidAmount },
-              { label: '未付', value: detail.outstandingAmount },
-            ]" :key="item.label" class="p-3 border border-border rounded-lg min-w-0"
-          >
-            <dt class="qs-type-compact-label">
-              {{ item.label }}
-            </dt>
-            <dd class="font-semibold m-0 mt-2 overflow-x-auto">
-              <AmountDisplay :value="item.value" currency="CNY" :currencies="currencies" />
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <section aria-labelledby="purchase-detail-lines-title" class="min-w-0">
-        <h3 id="purchase-detail-lines-title" class="qs-type-section-title m-0 mb-3">
-          采购产品明细
-        </h3>
-        <div class="border border-border rounded-xl overflow-x-auto">
-          <table class="text-sm min-w-[72rem] w-full border-collapse">
-            <thead class="bg-muted/45">
-              <tr class="text-left border-b border-border">
-                <th class="p-3">
-                  #
-                </th><th class="p-3">
-                  产品编号
-                </th><th class="p-3">
-                  产品名称
-                </th>
-                <th class="p-3 text-right">
-                  采购定价
-                </th><th class="p-3 text-right">
-                  本单采购价
-                </th>
-                <th class="p-3 text-right">
-                  数量
-                </th><th class="p-3 text-right">
-                  小计
-                </th><th class="p-3">
-                  备注
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="line in detail.lines" :key="line.id" class="border-b border-border last:border-0">
-                <td class="p-3 tabular-nums">
-                  {{ line.lineNumber }}
-                </td>
-                <td class="font-mono p-3">
-                  {{ line.productNo ?? 'CUSTOM' }}
-                </td>
-                <td class="p-3">
-                  {{ line.productName }}
-                </td>
-                <td class="p-3 text-right">
-                  <AmountDisplay :value="line.referencePurchaseUnitPriceAmount" currency="CNY" :currencies="currencies" />
-                </td>
-                <td class="p-3 text-right">
-                  <AmountDisplay :value="line.actualPurchaseUnitPriceAmount" currency="CNY" :currencies="currencies" />
-                </td>
-                <td class="p-3 text-right tabular-nums">
-                  {{ line.quantity }}
-                </td>
-                <td class="p-3 text-right">
-                  <AmountDisplay :value="line.lineTotalAmount" currency="CNY" :currencies="currencies" />
-                </td>
-                <td class="p-3 max-w-64 truncate">
-                  {{ optionalText(line.description) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="purchase-detail-mark-title" class="gap-3 grid sm:grid-cols-2">
-        <div class="p-4 border border-border rounded-xl">
-          <h3 id="purchase-detail-mark-title" class="qs-type-section-title m-0">
-            采购唛头
-          </h3>
-          <p class="text-sm leading-6 m-0 mt-3 whitespace-pre-wrap break-words">
-            {{ optionalText(detail.shippingMarkText) }}
-          </p>
-        </div>
-        <div class="p-4 border border-border rounded-xl">
-          <h3 class="qs-type-section-title m-0">
-            采购备注
-          </h3>
-          <p class="text-sm leading-6 m-0 mt-3 whitespace-pre-wrap break-words">
-            {{ optionalText(detail.remark) }}
-          </p>
-        </div>
-      </section>
+    <div v-if="detail && purchaseOrderDescModel" class="gap-6 grid">
+      <QsPurchaseOrderDesc
+        :model="purchaseOrderDescModel"
+        :currencies="currencies"
+      />
 
       <section aria-labelledby="purchase-detail-payments-title">
         <div class="mb-3 flex flex-wrap gap-2 items-center justify-between">

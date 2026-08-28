@@ -12,16 +12,16 @@ const ACTIONS_SOURCE = new URL(
   import.meta.url,
 )
 
-test('采购详情抽屉展示产品、付款、凭证和状态历史', async () => {
+test('采购详情抽屉由采购订单详情组件展示订单，并保留付款、凭证和状态历史', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
   assert.match(source, /<QsGenericDrawer/u)
   assert.match(source, /purchaseOrdersApi\.getById/u)
-  assert.match(source, /采购产品明细/u)
+  assert.match(source, /<QsPurchaseOrderDesc/u)
+  assert.match(source, /mapPurchaseOrderDetailToDesc/u)
   assert.match(source, /实际付款/u)
   assert.match(source, /付款凭证/u)
   assert.match(source, /状态历史/u)
-  assert.match(source, /采购唛头/u)
   assert.match(source, /<AmountDisplay/u)
   assert.match(source, /<DateTimeDisplay/u)
 })

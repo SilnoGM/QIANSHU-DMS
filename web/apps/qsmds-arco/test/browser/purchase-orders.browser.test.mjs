@@ -369,12 +369,16 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
       const layout = document.querySelector('[data-testid="purchase-order-create-layout"]')
       const review = document.querySelector('[data-testid="purchase-order-create-review"]')
       const summary = document.querySelector('[data-testid="purchase-order-create-summary-column"]')
-      const detail = summary?.querySelector('.purchase-order-review-card')
+      const detail = summary?.querySelector('[data-slot="qs-purchase-order-desc"]')
+      const productImage = detail?.querySelector('img')
       return form?.getAttribute('aria-hidden') === 'true'
         && layout?.classList.contains('purchase-order-create-layout--review')
         && review?.getClientRects().length > 0
         && detail?.getClientRects().length > 0
         && getComputedStyle(detail).borderTopLeftRadius === '12px'
+        && productImage instanceof HTMLImageElement
+        && productImage.complete
+        && productImage.naturalWidth > 0
         && summary?.getAttribute('data-surface') === 'review'
         && summary.getBoundingClientRect().width > window.innerWidth * 0.8
         && summary.textContent?.includes(${JSON.stringify(salesCustomerName)})
@@ -385,6 +389,68 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
         && summary.textContent.includes('BROWSER LINKED MARK')
         && summary.textContent.includes('BROWSER LINKED REMARK')
     })()`)
+
+    await page.setViewport(390, 844, true)
+    await page.waitFor(`(() => (
+      innerWidth === 390
+      && document.querySelector('[data-slot="qs-purchase-order-desc"]')
+        ?.getClientRects().length > 0
+    ))()`)
+    await page.evaluate(`(() => {
+      const app = document.querySelector('#app')?.__vue_app__
+      app?.config?.globalProperties?.$pinia?._s
+        ?.get('appSettings')?.setColorScheme('light')
+      return true
+    })()`)
+    await page.waitFor(`!document.documentElement.classList.contains('dark')`)
+    const lightPurchaseDesc = await page.evaluate(`(() => {
+      const component = document.querySelector('[data-slot="qs-purchase-order-desc"]')
+      const image = component?.querySelector('img')
+      const rect = component?.getBoundingClientRect()
+      const style = component ? getComputedStyle(component) : null
+      return {
+        background: style?.backgroundColor,
+        color: style?.color,
+        componentInside: Boolean(rect && rect.left >= 0
+          && rect.right <= document.documentElement.clientWidth),
+        documentFits: document.documentElement.scrollWidth
+          <= document.documentElement.clientWidth,
+        imageDecoded: image instanceof HTMLImageElement
+          && image.complete
+          && image.naturalWidth > 0,
+      }
+    })()`)
+    assert.deepEqual({
+      componentInside: lightPurchaseDesc.componentInside,
+      documentFits: lightPurchaseDesc.documentFits,
+      imageDecoded: lightPurchaseDesc.imageDecoded,
+    }, {
+      componentInside: true,
+      documentFits: true,
+      imageDecoded: true,
+    })
+    await page.evaluate(`(() => {
+      const app = document.querySelector('#app')?.__vue_app__
+      app?.config?.globalProperties?.$pinia?._s
+        ?.get('appSettings')?.setColorScheme('dark')
+      return true
+    })()`)
+    await page.waitFor(`document.documentElement.classList.contains('dark')`)
+    const darkPurchaseDesc = await page.evaluate(`(() => {
+      const component = document.querySelector('[data-slot="qs-purchase-order-desc"]')
+      const style = component ? getComputedStyle(component) : null
+      return { background: style?.backgroundColor, color: style?.color }
+    })()`)
+    assert.notEqual(darkPurchaseDesc.background, lightPurchaseDesc.background)
+    assert.notEqual(darkPurchaseDesc.color, lightPurchaseDesc.color)
+    await page.evaluate(`(() => {
+      const app = document.querySelector('#app')?.__vue_app__
+      app?.config?.globalProperties?.$pinia?._s
+        ?.get('appSettings')?.setColorScheme('light')
+      return true
+    })()`)
+    await page.waitFor(`!document.documentElement.classList.contains('dark')`)
+    await page.setViewport(1440, 900, true)
 
     await clickVisibleButton(page, '返回修改')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
@@ -468,8 +534,8 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
       const drawer = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
-      return drawer?.textContent?.includes('订单概览')
-        && drawer.textContent.includes('采购产品明细')
+      return drawer?.textContent?.includes('订单基础信息')
+        && drawer.textContent.includes('采购产品与小计')
         && drawer.textContent.includes(${JSON.stringify(productNo)})
         && drawer.textContent.includes('BROWSER STOCK MARK')
         && drawer.textContent.includes('状态历史')
