@@ -9,6 +9,10 @@ import type { OrderProductLineModel } from '../../../components/business/QsOrder
 import type { ProductSelectorPage } from '../../../components/business/QsProductSelector/types'
 
 export type PurchaseOrderCreateType = 'SALES_LINKED' | 'STOCK'
+export type PurchaseOrderCreateStep = 0 | 1 | 2 | 3
+export type PurchaseOrderFormStep = Exclude<PurchaseOrderCreateStep, 3>
+
+export const PURCHASE_ORDER_CREATE_REVIEW_STEP: PurchaseOrderCreateStep = 3
 
 export interface PurchaseOrderCreateSource {
   readonly balanceDueAmount: string | null
@@ -37,6 +41,13 @@ export type PurchaseOrderCreateBuildResult
     readonly fieldErrors: Readonly<Record<string, string>>
     readonly purchaseTotalAmount: string | null
   }
+
+export type ValidatePurchaseOrderCreateStepResult
+  = | { readonly valid: true }
+    | {
+      readonly valid: false
+      readonly fieldErrors: Readonly<Record<string, string>>
+    }
 
 export interface PurchaseOrderSourceSynchronizationResult {
   readonly exhaustedCount: number
@@ -145,6 +156,46 @@ export function parsePurchaseOrderCreateType(
     return value
   }
   return value === 'STOCK' && canCreateStock ? value : null
+}
+
+/**
+ * 将服务端和客户端共享的字段路径定位到采购创建页的可编辑步骤。
+ * 第四步是只读核对面，不承载字段；未知路径保留在全局错误区，避免错误地
+ * 把用户带到一个无法修正该问题的步骤。
+ */
+export function resolvePurchaseOrderCreateStepForField(
+  path: string,
+): PurchaseOrderFormStep | null {
+  if (path === 'orderDate' || path === 'supplierValue' || path === 'salesOrderId') {
+    return 0
+  }
+  if (
+    path === 'lines'
+    || path.startsWith('lines.')
+    || path === 'depositDueAmount'
+    || path === 'balanceDueAmount'
+  ) {
+    return 1
+  }
+  if (path === 'shippingMarkText' || path === 'remark') {
+    return 2
+  }
+  return null
+}
+
+export function resolvePurchaseOrderCreateStepForErrors(
+  errors: Readonly<Record<string, string>>,
+): PurchaseOrderFormStep | null {
+  let earliestStep: PurchaseOrderFormStep | null = null
+  for (const path of Object.keys(errors)) {
+    const step = resolvePurchaseOrderCreateStepForField(path)
+    if (step !== null) {
+      earliestStep = earliestStep === null
+        ? step
+        : Math.min(earliestStep, step) as PurchaseOrderFormStep
+    }
+  }
+  return earliestStep
 }
 
 export function adaptPurchaseOrderProductPage(
@@ -414,6 +465,28 @@ export function buildPurchaseOrderCreateRequest(
     },
     valid: true,
   }
+}
+
+/**
+ * “下一步”复用最终创建请求的领域校验，但只返回当前步骤能够修正的错误。
+ * 后续步骤尚未填写时不会污染当前页面，最终进入核对前仍会执行一次完整校验。
+ */
+export function validatePurchaseOrderCreateStep(
+  source: PurchaseOrderCreateSource,
+  step: PurchaseOrderFormStep,
+): ValidatePurchaseOrderCreateStepResult {
+  const result = buildPurchaseOrderCreateRequest(source)
+  if (result.valid) {
+    return { valid: true }
+  }
+  const fieldErrors = Object.fromEntries(
+    Object.entries(result.fieldErrors).filter(([path]) => (
+      resolvePurchaseOrderCreateStepForField(path) === step
+    )),
+  )
+  return Object.keys(fieldErrors).length === 0
+    ? { valid: true }
+    : { fieldErrors: Object.freeze(fieldErrors), valid: false }
 }
 
 function deepFreeze<T>(value: T): Readonly<T> {

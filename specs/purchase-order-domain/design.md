@@ -306,6 +306,9 @@ AND (fulfillmentStatus != SIGNED OR paymentStatus != PAID)
 - `/qs-operations/purchase/pending-purchase-orders` 使用 Server `view=pending` 查询尚未签收或尚未付清的采购订单。
 - `/qs-operations/purchase/purchase-orders` 使用 Server `view=all` 查询全部采购订单，并提供销售关联采购与管理员备货采购入口。
 - `/qs-operations/purchase/purchase-orders/create` 是隐藏创建页，按路由 `type=SALES_LINKED|STOCK` 收窄创建能力。
+- 销售关联创建页标题固定为“新增采购订单”，按“采购基础信息 + 销售订单关联”“采购产品明细 + 付款约定”“唛头与备注”“订单详情核对”四步引导；每个可编辑步骤校验通过后才能进入下一步。
+- 销售关联创建页在桌面端使用左侧表单、右侧实时订单详情；移动端通过详情抽屉查看已填内容。第四步切换为扩展全宽的只读订单核对面，返回修改时保留全部草稿。
+- 备货采购继续使用管理员专属的单页表单，不套用销售关联采购的分步流程。
 - 两个列表共用查询、筛选、移动卡片和详情抽屉；详情抽屉承载履约、付款、凭证和状态历史。
 
 ### 11.2 Web 实现边界
@@ -315,6 +318,7 @@ AND (fulfillmentStatus != SIGNED OR paymentStatus != PAID)
 - 增加行级采购定价编辑策略：`CATALOG` 只读，`CUSTOM` 必填且可编辑。
 - 销售订单 `CUSTOM` 行标准价为空的现有行为必须保持不变。
 - 创建入口分为“新增采购”和“新增备货采购”；前者进入销售关联采购流程，后者受 system-only 权限控制。
+- 第四步只执行完整客户端校验和只读展示，不创建 `Idempotency-Key`、不调用创建 API、也不预占采购订单号；用户在既有最终确认框确认后才冻结请求快照并提交，由 Server 正式派发 `PURCHASE_ORDER`。
 - 详情与写操作分别使用 `purchase-orders:read`、`purchase-orders:update`、`purchase-orders:payment` 和 `purchase-orders:document` 权限；客户端隐藏不作为授权边界。
 - 付款凭证保持可选；付款、作废、取消和履约均使用显式确认，写成功后重新查询当前列表。
 - 视觉继续沿用现有 Industrial/utilitarian 工作台、主题 Token、Noto 字体和 Lucide 图标。

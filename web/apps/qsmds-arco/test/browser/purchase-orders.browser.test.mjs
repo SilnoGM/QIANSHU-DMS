@@ -17,7 +17,6 @@ import {
   clickVisibleButton,
   collectRuntimeIssues,
   loginThroughRealHttp,
-  pressKey,
   readConfiguration,
 } from './regions.browser.helpers.mjs'
 
@@ -25,6 +24,7 @@ const listRoute = '/qs-operations/purchase/purchase-orders'
 const pendingRoute = '/qs-operations/purchase/pending-purchase-orders'
 const supplierLabel = 'Browser 有效供应商'
 const productNo = 'PRODUCT-BROWSER-001'
+const salesCustomerName = 'Browser 采购来源客户'
 
 /** 日志只保留固定步骤名，不输出 Cookie、密码、付款草稿或幂等键。 */
 async function runPurchaseOrderBrowserStep(label, action) {
@@ -141,21 +141,41 @@ async function fillAriaControl(page, label, value) {
   ))`)
 }
 
-/** 供应商和付款方式均通过公开 placeholder + combobox 键盘契约选择。 */
+/** 供应商和付款方式均通过公开 placeholder、trigger 与 option 契约选择。 */
 async function selectVisibleComboboxOption(page, placeholder, optionText) {
   const serializedPlaceholder = JSON.stringify(placeholder)
   const serializedOption = JSON.stringify(optionText)
   const controlSource = `([...document.querySelectorAll(
     'input[data-slot="combobox-input"]',
   )].find(input => input.placeholder === ${serializedPlaceholder}) ?? null)`
-  await page.waitFor(`${controlSource}?.getClientRects().length > 0`)
+  await page.waitFor(`(() => {
+    const control = ${controlSource}
+    return control?.getClientRects().length > 0
+      && !control.disabled
+      && control.getAttribute('aria-busy') !== 'true'
+  })()`)
   await page.evaluate(`(() => {
     const control = ${controlSource}
     if (!control) throw new Error('purchase order combobox unavailable')
-    control.focus({ preventScroll: true })
+    // 校验失败可能已经通过领域组件的公开 focus() 展开 Popover。先释放焦点，
+    // 再使用相邻公开 trigger 建立确定的“关闭 -> 展开”测试前置状态。
+    control.blur()
     return true
   })()`)
-  await pressKey(page, 'Enter')
+  await page.evaluate(`new Promise(resolve => requestAnimationFrame(
+    () => requestAnimationFrame(resolve),
+  ))`)
+  await page.evaluate(`(() => {
+    const control = ${controlSource}
+    const trigger = control?.parentElement?.querySelector(
+      '[data-slot="combobox-trigger"]',
+    )
+    if (!(trigger instanceof HTMLButtonElement)) {
+      throw new Error('purchase order combobox trigger unavailable')
+    }
+    trigger.click()
+    return true
+  })()`)
   await page.waitFor(`(() => [...document.querySelectorAll('[role="option"]')]
     .some(option => option.getClientRects().length > 0
       && option.textContent?.trim() === ${serializedOption}
@@ -166,10 +186,9 @@ async function selectVisibleComboboxOption(page, placeholder, optionText) {
         && candidate.textContent?.trim() === ${serializedOption}
         && candidate.getAttribute('aria-disabled') !== 'true')
     if (!option) throw new Error('purchase order option unavailable')
-    option.focus({ preventScroll: true })
+    option.click()
     return true
   })()`)
-  await pressKey(page, 'Enter')
   await page.waitFor(`(() => {
     const control = ${controlSource}
     const display = control instanceof HTMLInputElement
@@ -251,6 +270,89 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
     sensitiveValues: [configuration.password],
   })
   runtime.start()
+
+  await runPurchaseOrderBrowserStep('sales-linked four-step review and discard', async () => {
+    await clickVisibleButton(page, '新增采购')
+    await waitForAfterAuthentication(page, `(() => (
+      location.hash.includes('/qs-operations/purchase/purchase-orders/create?type=SALES_LINKED')
+      && document.querySelector('[data-testid="purchase-order-step-base"]')
+        ?.getClientRects().length > 0
+      && document.body.innerText.includes('新增采购订单')
+      && document.body.innerText.includes('第 1 步，共 4 步')
+    ))()`)
+
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.body.innerText.includes('请先完成并修正当前步骤的必填资料')`)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-base"]')
+      ?.getClientRects().length > 0`)
+
+    await selectVisibleComboboxOption(page, '选择采购供应商', supplierLabel)
+    await clickVisibleButton(page, '选择销售订单')
+    await waitForVisibleDialog(page, '选择销售订单')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择销售订单'))
+      return dialog?.textContent?.includes(${JSON.stringify(salesCustomerName)})
+    })()`)
+    await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择销售订单'))
+      const order = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.includes(${JSON.stringify(salesCustomerName)}))
+      if (!order) throw new Error('purchase source sales order unavailable')
+      order.click()
+      return true
+    })()`)
+    await waitForNoVisibleDialog(page, '选择销售订单')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-base"]')
+      ?.textContent?.includes(${JSON.stringify(salesCustomerName)})`)
+
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      ?.getClientRects().length > 0`)
+    await clickVisibleButton(page, '同步销售产品明细')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      ?.textContent?.includes(${JSON.stringify(productNo)})`)
+    await fillLabelledControl(page, '第 1 行本单采购价', '80')
+    await fillAriaControl(page, '定金', '20')
+    await fillAriaControl(page, '尾款', '140')
+
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
+      ?.getClientRects().length > 0`)
+    await fillLabelledControl(page, '采购唛头', 'BROWSER LINKED MARK')
+    await fillLabelledControl(page, '采购备注', 'BROWSER LINKED REMARK')
+    await clickVisibleButton(page, '下一步')
+
+    await page.waitFor(`(() => {
+      const form = document.querySelector('.purchase-order-form-track')
+      const layout = document.querySelector('[data-testid="purchase-order-create-layout"]')
+      const review = document.querySelector('[data-testid="purchase-order-create-review"]')
+      const summary = document.querySelector('[data-testid="purchase-order-create-summary-column"]')
+      return form?.getAttribute('aria-hidden') === 'true'
+        && layout?.classList.contains('purchase-order-create-layout--review')
+        && review?.getClientRects().length > 0
+        && summary?.getAttribute('data-surface') === 'review'
+        && summary.getBoundingClientRect().width > window.innerWidth * 0.8
+        && summary.textContent?.includes(${JSON.stringify(salesCustomerName)})
+        && summary.textContent.includes(${JSON.stringify(supplierLabel)})
+        && summary.textContent.includes(${JSON.stringify(productNo)})
+        && [...summary.querySelectorAll('[data-currency="CNY"]')]
+          .some(amount => amount.getAttribute('aria-label')?.includes('160'))
+        && summary.textContent.includes('BROWSER LINKED MARK')
+        && summary.textContent.includes('BROWSER LINKED REMARK')
+    })()`)
+
+    await clickVisibleButton(page, '返回修改')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
+      ?.getClientRects().length > 0`)
+    await clickVisibleButton(page, '返回全部采购')
+    await waitForVisibleDialog(page, '放弃当前采购订单？')
+    await clickDialogButton(page, '放弃当前采购订单？', '确认放弃')
+    await waitForPurchaseList(page, '暂无采购订单')
+  })
 
   let order
   await runPurchaseOrderBrowserStep('stock creation and validation focus', async () => {

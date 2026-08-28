@@ -16,9 +16,12 @@ import {
   createPurchaseOrderEditingState,
   parsePurchaseOrderCreateType,
   replayUnknownPurchaseOrderSubmission,
+  resolvePurchaseOrderCreateStepForErrors,
+  resolvePurchaseOrderCreateStepForField,
   resolvePurchaseOrderSubmissionFailure,
   resolvePurchaseOrderSubmissionSuccess,
   synchronizePurchaseOrderSourceLines,
+  validatePurchaseOrderCreateStep,
 } from '../../src/views/operations/purchase-orders/purchase-order-create.logic'
 
 const catalogOption: PurchaseOrderProductOptionDto = {
@@ -51,6 +54,60 @@ test('创建类型只接受路由单值，备货类型还要求 system-only 权�
   assert.equal(parsePurchaseOrderCreateType('STOCK', false), null)
   assert.equal(parsePurchaseOrderCreateType(['STOCK'], true), null)
   assert.equal(parsePurchaseOrderCreateType('OTHER', true), null)
+})
+
+test('销售关联采购字段按基础信息、产品付款、唛头备注归属到前三个填写步骤', () => {
+  assert.equal(resolvePurchaseOrderCreateStepForField('orderDate'), 0)
+  assert.equal(resolvePurchaseOrderCreateStepForField('supplierValue'), 0)
+  assert.equal(resolvePurchaseOrderCreateStepForField('salesOrderId'), 0)
+  assert.equal(resolvePurchaseOrderCreateStepForField('lines.0.actualUnitPriceAmount'), 1)
+  assert.equal(resolvePurchaseOrderCreateStepForField('depositDueAmount'), 1)
+  assert.equal(resolvePurchaseOrderCreateStepForField('balanceDueAmount'), 1)
+  assert.equal(resolvePurchaseOrderCreateStepForField('shippingMarkText'), 2)
+  assert.equal(resolvePurchaseOrderCreateStepForField('remark'), 2)
+  assert.equal(resolvePurchaseOrderCreateStepForField('unknown'), null)
+  assert.equal(resolvePurchaseOrderCreateStepForErrors({
+    balanceDueAmount: '金额错误',
+    shippingMarkText: '唛头错误',
+  }), 1)
+})
+
+test('下一步只拦截当前采购填写步骤的领域错误', () => {
+  const source = {
+    balanceDueAmount: null,
+    depositDueAmount: null,
+    lines: [],
+    maximumQuantityByKey: {},
+    orderDate: '2026-08-28',
+    purchaseType: 'SALES_LINKED',
+    remark: '',
+    salesOrderId: null,
+    shippingMarkText: '',
+    sourceSalesOrderLineIdByKey: {},
+    supplierValue: '',
+    today: '2026-08-28',
+  } as const
+
+  const base = validatePurchaseOrderCreateStep(source, 0)
+  assert.equal(base.valid, false)
+  if (!base.valid) {
+    assert.deepEqual(base.fieldErrors, {
+      salesOrderId: '请选择关联销售订单',
+      supplierValue: '请选择供应商',
+    })
+  }
+
+  const products = validatePurchaseOrderCreateStep(source, 1)
+  assert.equal(products.valid, false)
+  if (!products.valid) {
+    assert.deepEqual(products.fieldErrors, {
+      balanceDueAmount: '尾款必须是非负且最多两位小数的金额',
+      depositDueAmount: '定金必须是非负且最多两位小数的金额',
+      lines: '请至少添加一条采购产品明细',
+    })
+  }
+
+  assert.deepEqual(validatePurchaseOrderCreateStep(source, 2), { valid: true })
 })
 
 test('采购产品 loader 映射 CNY 采购定价且保持分页身份', () => {

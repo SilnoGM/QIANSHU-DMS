@@ -7,6 +7,7 @@ const bootstrapProgram = String.raw`
 const argon2 = require('argon2')
 const { randomUUID } = require('node:crypto')
 const { Client } = require('pg')
+let fixtureFailureCode = 'UNKNOWN'
 
 ;(async () => {
   const passwordHash = await argon2.hash(
@@ -385,6 +386,81 @@ const { Client } = require('pg')
         user.rows[0].id,
       ],
     )
+
+    // 采购分步创建必须在采购 Browser 文件独立运行时也有可关联来源。该夹具使用
+    // 独立客户名，不会命中销售 Browser 场景按客户名执行的“初始为空”查询。
+    fixtureFailureCode = 'PURCHASE_SOURCE_REGION'
+    const regionPath = await client.query(
+      [
+        'SELECT country.id AS country_id, country.code AS country_code, country.name AS country_name,',
+        'province.id AS province_id, province.code AS province_code, province.name AS province_name,',
+        'city.id AS city_id, city.code AS city_code, city.name AS city_name',
+        'FROM regions city',
+        'JOIN regions province ON province.id = city.parent_id',
+        'JOIN regions country ON country.id = province.parent_id',
+        'WHERE city.level = \'CITY\' AND city.enabled AND province.enabled AND country.enabled',
+        'ORDER BY city.code LIMIT 1',
+      ].join(' '),
+    )
+    if (regionPath.rowCount !== 1) throw new Error('purchase_source_region')
+    fixtureFailureCode = 'PURCHASE_SOURCE_ORDER'
+    const purchaseSourceSalesOrder = await client.query(
+      [
+        'INSERT INTO sales_orders (',
+        'order_no, create_idempotency_key_hash, create_request_fingerprint_hash,',
+        'order_date, issuer_user_id, currency_code, customer_name, customer_phone,',
+        'customer_country_region_id, customer_province_state_id, customer_city_id,',
+        'customer_country_region_code_snapshot, customer_province_state_code_snapshot,',
+        'customer_city_code_snapshot, customer_country_region_name_snapshot,',
+        'customer_province_state_name_snapshot, customer_city_name_snapshot,',
+        'customer_address_detail, customer_full_address_snapshot, line_subtotal_amount,',
+        'agreed_total_amount, deposit_due_amount, balance_due_amount, order_status, remark',
+        ') VALUES (',
+        '\'SO-BRW-PURCHASE-SOURCE\', decode(repeat(\'7\', 64), \'hex\'),',
+        'decode(repeat(\'8\', 64), \'hex\'), CURRENT_DATE, $1, \'TWD\',',
+        '\'Browser 采购来源客户\', \'0912888000\', $2, $3, $4, $5, $6, $7,',
+        '$8, $9, $10, \'采购来源路100号\', $11,',
+        '200, 200, 50, 150, \'CONFIRMED\', \'Browser purchase source fixture\'',
+        ') RETURNING id',
+      ].join(' '),
+      [
+        user.rows[0].id,
+        regionPath.rows[0].country_id,
+        regionPath.rows[0].province_id,
+        regionPath.rows[0].city_id,
+        regionPath.rows[0].country_code,
+        regionPath.rows[0].province_code,
+        regionPath.rows[0].city_code,
+        regionPath.rows[0].country_name,
+        regionPath.rows[0].province_name,
+        regionPath.rows[0].city_name,
+        regionPath.rows[0].country_name
+          + regionPath.rows[0].province_name
+          + regionPath.rows[0].city_name
+          + '采购来源路100号',
+      ],
+    )
+    fixtureFailureCode = 'PURCHASE_SOURCE_LINE'
+    await client.query(
+      [
+        'INSERT INTO sales_order_lines (',
+        'sales_order_id, line_number, line_type, product_id, product_no_snapshot,',
+        'product_name_snapshot, product_attributes_snapshot, description_snapshot,',
+        'standard_unit_price_amount, actual_unit_price_amount, quantity, line_total_amount',
+        ') VALUES ($1, 1, \'CATALOG\', $2, \'PRODUCT-BROWSER-001\',',
+        '\'Browser 多媒体产品\', $3::jsonb, \'Browser 采购来源明细\',',
+        '1234.5678, 100, 2, 200)',
+      ].join(' '),
+      [
+        purchaseSourceSalesOrder.rows[0].id,
+        managementProduct.rows[0].id,
+        JSON.stringify([
+          { title: '颜色', value: '墨黑' },
+          { title: '尺寸', value: 'XL' },
+        ]),
+      ],
+    )
+    fixtureFailureCode = 'UNKNOWN'
     const managementMedia = [
       {
         checksum: '1'.repeat(64),
@@ -550,6 +626,7 @@ const { Client } = require('pg')
       ].join(' '),
       [user.rows[0].id, 'e2e:' + randomUUID()],
     )
+    fixtureFailureCode = 'FIXTURE_COMMIT'
     await client.query('COMMIT')
   }
   catch (error) {
@@ -560,7 +637,31 @@ const { Client } = require('pg')
     await client.end()
   }
 })().catch((error) => {
-  process.stderr.write('UNKNOWN')
+  const databaseErrorCode = ({
+    '22P02': 'INVALID_INPUT',
+    23502: 'NOT_NULL',
+    23503: 'FOREIGN_KEY',
+    23505: 'UNIQUE',
+    23514: 'CHECK',
+    42804: 'TYPE',
+  })[error?.code] ?? 'NO_CODE'
+  const databaseConstraintCode = ({
+    sales_orders_address_no_whitespace_check: 'ORDER_ADDRESS',
+    sales_orders_agreed_total_matches_lines_check: 'ORDER_LINES',
+    sales_orders_amount_scales_check: 'ORDER_SCALE',
+    sales_orders_amounts_nonnegative_check: 'ORDER_AMOUNT',
+    sales_orders_create_hash_lengths_check: 'ORDER_HASH',
+    sales_orders_currency_check: 'ORDER_CURRENCY',
+    sales_orders_customer_nonblank_check: 'ORDER_CUSTOMER',
+    sales_orders_payment_terms_sum_check: 'ORDER_PAYMENT',
+    sales_orders_region_snapshot_nonblank_check: 'ORDER_REGION',
+    sales_orders_remark_nonblank_check: 'ORDER_REMARK',
+  })[error?.constraint] ?? ({
+    Error: 'ERROR',
+    RangeError: 'RANGE_ERROR',
+    TypeError: 'TYPE_ERROR',
+  })[error?.constructor?.name] ?? databaseErrorCode
+  process.stderr.write(fixtureFailureCode + '_' + databaseConstraintCode)
   process.exit(1)
 })
 `
