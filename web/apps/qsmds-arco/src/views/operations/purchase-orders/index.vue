@@ -354,7 +354,7 @@ onBeforeUnmount(() => {
           class="min-h-[44px] sm:min-h-9"
           @click="navigateCreate('SALES_LINKED')"
         >
-          <FaIcon name="i-lucide:link-2" aria-hidden="true" />新增销售关联采购
+          <FaIcon name="i-lucide:link-2" aria-hidden="true" />新增采购
         </FaButton>
         <FaButton
           v-if="canCreate && canCreateStock"

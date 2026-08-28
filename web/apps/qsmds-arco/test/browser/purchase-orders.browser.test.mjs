@@ -410,7 +410,7 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
     await page.waitFor(`(() => {
       const headerButtons = [...document.querySelectorAll('button')]
         .filter(button => button.getClientRects().length > 0
-          && ['新增销售关联采购', '新增备货采购']
+          && ['新增采购', '新增备货采购']
             .includes(button.textContent?.trim()))
       return headerButtons.length === 2 && headerButtons.every(button => (
         button.getBoundingClientRect().height + 0.001 >= 44
@@ -423,7 +423,7 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
         && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
       const headerButtons = [...document.querySelectorAll('button')]
         .filter(button => button.getClientRects().length > 0
-          && ['新增销售关联采购', '新增备货采购']
+          && ['新增采购', '新增备货采购']
             .includes(button.textContent?.trim()))
       const mobileActions = card?.parentElement?.querySelector(
         '[data-slot="qs-generic-table-mobile-actions"]',

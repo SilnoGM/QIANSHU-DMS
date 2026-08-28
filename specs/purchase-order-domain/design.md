@@ -314,7 +314,7 @@ AND (fulfillmentStatus != SIGNED OR paymentStatus != PAID)
 - 将 `ProductSelectorCurrency` 扩展为包含 `CNY`，采购域提供独立 loader。
 - 增加行级采购定价编辑策略：`CATALOG` 只读，`CUSTOM` 必填且可编辑。
 - 销售订单 `CUSTOM` 行标准价为空的现有行为必须保持不变。
-- 创建入口分为“新增销售关联采购”和“新增备货采购”，后者受 system-only 权限控制。
+- 创建入口分为“新增采购”和“新增备货采购”；前者进入销售关联采购流程，后者受 system-only 权限控制。
 - 详情与写操作分别使用 `purchase-orders:read`、`purchase-orders:update`、`purchase-orders:payment` 和 `purchase-orders:document` 权限；客户端隐藏不作为授权边界。
 - 付款凭证保持可选；付款、作废、取消和履约均使用显式确认，写成功后重新查询当前列表。
 - 视觉继续沿用现有 Industrial/utilitarian 工作台、主题 Token、Noto 字体和 Lucide 图标。

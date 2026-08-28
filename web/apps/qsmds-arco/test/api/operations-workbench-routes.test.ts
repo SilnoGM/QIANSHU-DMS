@@ -145,8 +145,10 @@ test('全部采购页面接入共享列表、查询和创建入口', () => {
   assert.match(source, /props\.viewMode === 'pending' \? '待办采购' : '全部采购'/u)
   assert.match(source, /purchaseOrdersApi\.list/u)
   assert.match(source, /<QsGenericTable/u)
-  assert.match(source, /新增销售关联采购/u)
+  assert.match(source, />新增采购/u)
+  assert.doesNotMatch(source, />新增销售关联采购/u)
   assert.match(source, /新增备货采购/u)
+  assert.match(source, /v-if="canCreate && canCreateStock"/u)
 })
 
 test('待办采购页面复用共享列表并固定 pending 模式', () => {
