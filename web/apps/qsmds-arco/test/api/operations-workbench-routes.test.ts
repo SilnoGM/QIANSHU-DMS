@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-// eslint-disable-next-line test/no-import-node-test -- 路由与占位页面契约使用 Node.js 内置 runner。
+// eslint-disable-next-line test/no-import-node-test -- 路由与采购页面入口契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
@@ -73,30 +73,47 @@ test('采购订单迁移到采购业务分组，并按待办、全部顺序展�
   })
   assert.deepEqual(
     purchaseChildren.map(route => ({
+      activeMenu: route.meta?.activeMenu,
+      auth: route.meta?.auth,
       menu: route.meta?.menu,
       name: route.name,
       path: route.path,
+      props: route.props,
       title: route.meta?.title,
     })),
     [
       {
+        activeMenu: undefined,
+        auth: 'purchase-orders:read',
         menu: undefined,
         name: 'qsOperationsPendingPurchaseOrders',
         path: 'pending-purchase-orders',
+        props: undefined,
         title: '待办采购',
       },
       {
+        activeMenu: undefined,
+        auth: 'purchase-orders:read',
         menu: undefined,
         name: 'qsOperationsPurchaseOrders',
         path: 'purchase-orders',
+        props: undefined,
         title: '全部采购',
+      },
+      {
+        activeMenu: '/qs-operations/purchase/purchase-orders',
+        auth: 'purchase-orders:create',
+        menu: false,
+        name: 'operationsPurchaseOrderCreate',
+        path: 'purchase-orders/create',
+        props: undefined,
+        title: '新增采购订单',
       },
     ],
   )
 
   const routeContract = JSON.stringify(operationsWorkbenchRoutes)
   assert.doesNotMatch(routeContract, /\/operations\/purchase-orders/u)
-  assert.doesNotMatch(routeContract, /operationsPurchaseOrderCreate/u)
 })
 
 test('千树运营工作台是最左侧顶部导航', () => {
@@ -118,26 +135,26 @@ test('千树运营工作台是最左侧顶部导航', () => {
   )
 })
 
-test('全部采购页面只提供页头', () => {
+test('全部采购页面接入共享列表、查询和创建入口', () => {
   const source = readFileSync(
     new URL('../../src/views/operations/purchase-orders/index.vue', import.meta.url),
     'utf8',
   )
 
   assert.equal(source.match(/<FaPageHeader(?:\s|>)/gu)?.length, 1)
-  assert.match(source, /<FaPageHeader\s+title="全部采购"\s*\/>/u)
-  assert.doesNotMatch(source, /<Fa(?:Alert|Button|Card|Empty|Icon|PageMain)/u)
-  assert.doesNotMatch(source, /useRouter|useRoute|fetch\(|axios/u)
+  assert.match(source, /props\.viewMode === 'pending' \? '待办采购' : '全部采购'/u)
+  assert.match(source, /purchaseOrdersApi\.list/u)
+  assert.match(source, /<QsGenericTable/u)
+  assert.match(source, /新增销售关联采购/u)
+  assert.match(source, /新增备货采购/u)
 })
 
-test('待办采购页面只提供页头', () => {
+test('待办采购页面复用共享列表并固定 pending 模式', () => {
   const source = readFileSync(
     new URL('../../src/views/operations/purchase-orders/pending.vue', import.meta.url),
     'utf8',
   )
 
-  assert.equal(source.match(/<FaPageHeader(?:\s|>)/gu)?.length, 1)
-  assert.match(source, /<FaPageHeader\s+title="待办采购"\s*\/>/u)
-  assert.doesNotMatch(source, /<Fa(?:Alert|Button|Card|Empty|Icon|PageMain)/u)
-  assert.doesNotMatch(source, /useRouter|useRoute|fetch\(|axios/u)
+  assert.match(source, /import PurchaseOrderListPage from '.\/index\.vue'/u)
+  assert.match(source, /<PurchaseOrderListPage view-mode="pending"/u)
 })

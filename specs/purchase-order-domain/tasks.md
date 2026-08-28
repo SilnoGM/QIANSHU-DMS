@@ -2,10 +2,10 @@
 
 ## 执行状态
 
-- 当前阶段：Phase 4 Server 域与公共 API 已完成；Web 业务页面等待后续单独授权。
-- 已完成：需求确认、技术设计确认、任务确认、采购菜单与两个页头入口。
+- 当前阶段：Phase 5 Web 采购列表与创建交互实施中。
+- 已完成：需求、技术设计、任务、采购菜单、Server/公共 API、采购列表和创建主流程。
 - 已授权：采购 Server、公共 API、Prisma schema、append-only migration 和相关数据结构变更。
-- 暂不实施：采购业务页面；两个采购页面继续只保留页头。
+- 当前边界：只在既有公共 API 内完成 Web；不新增 schema、公共 API 或数据结构。
 - TDD 原则：每个新能力先建立可观察的失败测试，再实现最小能力，最后重构并运行风险匹配的验证。
 
 - [x] 1. 固化已确认需求与技术设计
@@ -122,11 +122,11 @@
   - [x] 13.1 在用户授权完整 UI 实施后，先按 `ui-design` 与 `web-development` 技能固定最终页面规格。
   - [x] 13.2 为待办/全部列表模式、筛选和派生金额展示建立 View RED。
   - [x] 13.3 为“新增销售关联采购”和仅管理员可见的“新增备货采购”入口建立 RED。
-  - [ ] 13.4 实现销售来源选择、供应商选择、同步产品、临时产品、金额和唛头表单。
-  - [ ] 13.5 实现 Idempotency-Key 生命周期、未知结果安全重试、字段错误和未保存离开门禁。
+  - [x] 13.4 实现销售来源选择、供应商选择、同步产品、临时产品、金额和唛头表单。
+  - [x] 13.5 实现 Idempotency-Key 生命周期、未知结果安全重试、字段错误和未保存离开门禁。
   - [ ] 13.6 覆盖键盘、焦点、busy/alert、亮暗主题和窄屏布局。
-  - [ ] 13.7 运行 Web test/typecheck/lint/build 并提交页面小步提交。
-  - _Partial evidence: 列表逻辑与 View 先因目标模块不存在、占位页未实现形成 4 个 RED；实现后采购列表逻辑/页面 7/7、连同销售页面回归 14/14 通过。Web typecheck、变更文件 eslint/stylelint 通过；两个列表均使用服务端 `view=all|pending`、供应商字典、采购类型/三维状态/日期筛选、CNY 金额与付款进度，备货入口只在 `purchase-orders:create-stock` 权限下显示。_
+  - [x] 13.7 运行 Web test/typecheck/lint/build 并提交页面小步提交。
+  - _Partial evidence: 列表逻辑与 View 先因目标模块不存在、占位页未实现形成 4 个 RED；实现后采购列表逻辑/页面 7/7、连同销售页面回归 14/14 通过。创建逻辑、来源选择器与页面结构先形成 4 个 RED；实现后采购创建与通用明细聚焦测试 25/25、Web API/View 全量 998/998 通过，Web typecheck、变更文件 eslint/stylelint 与正式 build 通过。两个列表使用服务端 `view=all|pending` 和全量筛选；创建页固定 CNY、供应商字典、销售剩余明细同步、管理员备货、`CUSTOM` 双价格、金额等式、唛头、二次确认、未知结果同 Key 重放和未保存离开门禁。_
   - _Requirements: R1-R12_
 
 - [ ] 14. 完成跨端、并发与真实浏览器验收
@@ -138,5 +138,5 @@
   - [ ] 14.6 运行 `node --run check`、contract check、Server E2E、Web build 和 Browser E2E。
   - [ ] 14.7 检查 Git diff、敏感文件、生成物、迁移顺序和小步提交范围。
   - [ ] 14.8 更新本文件真实执行证据并完成收口提交。
-  - _Partial evidence: Server 侧采购 schema、创建、并发数量、付款和履约 E2E 已通过；根检查、契约、Web build 与既有真实 Browser E2E 已通过。采购页面仍按确认范围仅保留页头，因此 14.2-14.4 与采购 Browser 验收留待完整 Web UI 获得单独授权后实施。_
+  - _Partial evidence: Server 侧采购 schema、创建、并发数量、付款和履约 E2E 已通过；根检查、契约、Web build 与既有真实 Browser E2E 已通过。采购列表与创建主流程已实现，采购专项 Browser E2E、漂移/并发边界和完整 Web 收口验证仍待本阶段后续执行。_
   - _Requirements: R1-R12_

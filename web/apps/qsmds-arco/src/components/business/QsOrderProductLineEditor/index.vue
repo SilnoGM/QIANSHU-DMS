@@ -22,6 +22,9 @@ import {
 defineOptions({ name: 'QsOrderProductLineEditor' })
 
 const props = withDefaults(defineProps<OrderProductLineEditorProps>(), {
+  catalogLineInitialActualUnitPriceAmount: '0.00',
+  catalogProductAddable: true,
+  customProductAddable: true,
   customReferenceUnitPriceEditable: false,
   disabled: false,
   fieldErrors: () => ({}),
@@ -94,6 +97,7 @@ function applySelection(changes: readonly ProductSelectionChange[]): void {
     props.modelValue,
     changes,
     props.maximumLines,
+    props.catalogLineInitialActualUnitPriceAmount,
   )
   if (!result.ok) {
     selectionError.value = result.message
@@ -162,8 +166,9 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
           {{ labels.catalogProduct }}选择不限制币种；{{ labels.referenceUnitPrice }}按 {{ currency }} 显示，无则需手填{{ labels.actualUnitPrice }}。
         </p>
       </div>
-      <div class="flex flex-col gap-2 sm:flex-row">
+      <div v-if="catalogProductAddable || customProductAddable" class="flex flex-col gap-2 sm:flex-row">
         <FaButton
+          v-if="catalogProductAddable"
           type="button"
           variant="outline"
           class="min-h-11 sm:min-h-9"
@@ -173,6 +178,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
           <FaIcon name="i-lucide:database" aria-hidden="true" />添加数据库产品
         </FaButton>
         <FaButton
+          v-if="customProductAddable"
           type="button"
           variant="outline"
           class="min-h-11 sm:min-h-9"
@@ -453,6 +459,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
     </div>
 
     <QsProductSelector
+      v-if="catalogProductAddable"
       v-model="selectorOpen"
       :currency="currency"
       :existing-lines="existingCatalogLines"

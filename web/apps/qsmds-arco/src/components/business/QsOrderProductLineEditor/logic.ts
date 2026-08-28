@@ -109,6 +109,7 @@ export function applyProductSelectionChanges(
   source: readonly OrderProductLineModel[],
   changes: readonly ProductSelectionChange[],
   maximumLines = 100,
+  initialActualUnitPriceAmount: string | null = '0.00',
 ): ApplyProductSelectionResult {
   const lines = source.map(line => ({ ...line }))
   const productIds = new Set(lines.flatMap(line => (
@@ -204,8 +205,8 @@ export function applyProductSelectionChanges(
       name: change.product.name,
       description: '',
       standardUnitPriceAmount: change.product.standardUnitPriceAmount,
-      // 本单售价属于订单录入值，不继承产品标准价；由用户基于当前订单重新确认。
-      actualUnitPriceAmount: '0.00',
+      // 本单价格属于订单录入值，不继承产品档案参考价；由用户基于当前订单重新确认。
+      actualUnitPriceAmount: initialActualUnitPriceAmount,
       quantity: String(change.quantity),
       mainImage: change.product.mainImage,
     })

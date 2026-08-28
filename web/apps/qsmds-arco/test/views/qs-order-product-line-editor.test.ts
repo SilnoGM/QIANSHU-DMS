@@ -129,3 +129,17 @@ test('产品行编辑器仅在调用方开启时允许临时产品填写参考�
   assert.match(source, /standardUnitPriceAmount: \$event/u)
   assert.match(source, /:fixed-supplier-value="fixedProductSupplierValue"/u)
 })
+
+test('产品行编辑器允许领域调用方分别关闭数据库和临时产品新增入口', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /catalogProductAddable\?: boolean/u)
+  assert.match(types, /catalogLineInitialActualUnitPriceAmount\?: string \| null/u)
+  assert.match(types, /customProductAddable\?: boolean/u)
+  assert.match(source, /v-if="catalogProductAddable"[\s\S]*?添加数据库产品/u)
+  assert.match(source, /v-if="customProductAddable"[\s\S]*?添加临时产品/u)
+  assert.match(source, /v-if="catalogProductAddable"[\s\S]*?<QsProductSelector/u)
+})

@@ -32,8 +32,11 @@ export interface OrderProductLineLabels {
 }
 
 export interface OrderProductLineEditorProps {
+  readonly catalogLineInitialActualUnitPriceAmount?: string | null
+  readonly catalogProductAddable?: boolean
   readonly currency: ProductSelectorCurrency
   readonly currencies: readonly CurrencyDescriptor[]
+  readonly customProductAddable?: boolean
   readonly loadProducts: ProductPageLoader
   readonly labels: OrderProductLineLabels
   readonly modelValue: readonly OrderProductLineModel[]
