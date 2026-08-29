@@ -168,9 +168,12 @@ const purchaseOrderDescModel = computed(() => mapPurchaseOrderCreateToDesc({
   supplierLabel: selectedSupplierDisplayLabel.value,
 }))
 const submitLocked = computed(() => submission.value.phase === 'submitting')
-const guidedCreate = computed(() => purchaseType === 'SALES_LINKED')
+// 两类采购都复用分步填写与核对流程；销售来源能力仍单独受类型约束，
+// 避免为了统一页面体验而把销售订单选择或同步入口泄漏给备货采购。
+const steppedCreate = computed(() => purchaseType !== null)
+const salesLinkedCreate = computed(() => purchaseType === 'SALES_LINKED')
 const sourceReady = computed(() => (
-  purchaseType === 'SALES_LINKED'
+  salesLinkedCreate.value
   && selectedSalesOrder.value !== null
   && sourceSalesOrderLines.value.length > 0
   && formModel.supplierValue !== null
@@ -189,7 +192,7 @@ const shouldConfirmDiscard = computed(() => (
 ))
 const title = purchaseType === 'STOCK' ? '新增备货采购' : '新增采购订单'
 const typeDescription = purchaseType === 'STOCK'
-  ? '管理员独立创建备货采购，不关联销售订单。'
+  ? '管理员分步骤创建独立备货采购，不关联销售订单，并在订单详情全屏核对后正式提交。'
   : '分步骤完成采购资料，并在订单详情全屏核对后正式提交。'
 const formErrorDisplay = computed(() => requestId.value === undefined
   ? formError.value
@@ -435,7 +438,7 @@ function goToFormStep(step: number): void {
 }
 
 function previousStep(): void {
-  if (!guidedCreate.value || createSurface.value !== 'form') {
+  if (!steppedCreate.value || createSurface.value !== 'form') {
     return
   }
   goToFormStep(activeStep.value - 1)
@@ -475,7 +478,7 @@ function enterPurchaseOrderReview(): void {
 
 function nextStep(): void {
   if (
-    !guidedCreate.value
+    !steppedCreate.value
     || createSurface.value !== 'form'
     || activeStep.value === PURCHASE_ORDER_CREATE_REVIEW_STEP
   ) {
@@ -515,7 +518,7 @@ function nextStep(): void {
 }
 
 function returnToPurchaseOrderForm(): void {
-  if (!guidedCreate.value || submitLocked.value || createSurface.value !== 'review') {
+  if (!steppedCreate.value || submitLocked.value || createSurface.value !== 'review') {
     return
   }
   createSurface.value = 'form'
@@ -523,7 +526,7 @@ function returnToPurchaseOrderForm(): void {
 }
 
 function openDetailsDrawer(): void {
-  if (guidedCreate.value && !isDesktopSummary.value && createSurface.value === 'form') {
+  if (steppedCreate.value && !isDesktopSummary.value && createSurface.value === 'form') {
     detailsDrawerVisible.value = true
   }
 }
@@ -578,7 +581,7 @@ function requestSubmit(): void {
     !canCreate.value
     || submitLocked.value
     || currencyUnavailable.value
-    || (guidedCreate.value && createSurface.value !== 'review')
+    || (steppedCreate.value && createSurface.value !== 'review')
   ) {
     return
   }
@@ -586,7 +589,7 @@ function requestSubmit(): void {
   if (result === null || !result.valid) {
     fieldErrors.value = result?.fieldErrors ?? {}
     formError.value = '请修正采购订单中的必填项和金额后再提交'
-    if (guidedCreate.value) {
+    if (steppedCreate.value) {
       createSurface.value = 'form'
       const errorStep = resolvePurchaseOrderCreateStepForErrors(fieldErrors.value)
       goToFormStep(errorStep ?? 2)
@@ -631,7 +634,7 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
     requestId.value = failure.requestId
     if (!failure.unknownResult) {
       submitConfirmVisible.value = false
-      if (guidedCreate.value) {
+      if (steppedCreate.value) {
         createSurface.value = 'form'
         const errorStep = resolvePurchaseOrderCreateStepForErrors(failure.fieldErrors)
         goToFormStep(errorStep ?? 2)
@@ -655,7 +658,7 @@ function confirmSubmit(): void {
     fieldErrors.value = result?.fieldErrors ?? {}
     formError.value = '订单资料已变化，请返回检查后重新提交'
     submitConfirmVisible.value = false
-    if (guidedCreate.value) {
+    if (steppedCreate.value) {
       createSurface.value = 'form'
       const errorStep = resolvePurchaseOrderCreateStepForErrors(fieldErrors.value)
       goToFormStep(errorStep ?? 2)
@@ -788,9 +791,8 @@ onBeforeUnmount(() => {
       data-testid="purchase-order-create-layout"
       class="purchase-order-create-layout m-4 min-w-0"
       :class="{
-        'purchase-order-create-layout--stock': purchaseType === 'STOCK',
-        'purchase-order-create-layout--form': guidedCreate && createSurface === 'form',
-        'purchase-order-create-layout--review': guidedCreate && createSurface === 'review',
+        'purchase-order-create-layout--form': steppedCreate && createSurface === 'form',
+        'purchase-order-create-layout--review': steppedCreate && createSurface === 'review',
       }"
     >
       <div v-if="formError" class="purchase-order-alert-stack">
@@ -817,10 +819,10 @@ onBeforeUnmount(() => {
           class="grid-cols-[minmax(0,1fr)] min-w-0"
         >
           <nav
-            v-if="guidedCreate"
+            v-if="steppedCreate"
             ref="stepNavigationRef"
             class="purchase-order-step-navigation mb-6 pb-5 border-b border-border"
-            aria-label="新增采购订单填写步骤"
+            :aria-label="`${title}填写步骤`"
             tabindex="-1"
           >
             <p class="text-sm text-muted-foreground m-0 mb-4" aria-live="polite">
@@ -829,15 +831,12 @@ onBeforeUnmount(() => {
             <FaSteps v-model="activeStep" :steps="purchaseOrderSteps" status="process" class="w-full" />
           </nav>
 
-          <div
-            class="min-w-0"
-            :class="purchaseType === 'STOCK' ? 'gap-6 grid xl:grid-cols-[minmax(0,2fr)_minmax(20rem,1fr)]' : ''"
-          >
+          <div class="min-w-0">
             <main class="gap-6 grid grid-cols-[minmax(0,1fr)] min-w-0">
               <section
-                v-show="purchaseType === 'STOCK' || activeStep === 0"
+                v-show="activeStep === 0"
                 class="gap-6 grid"
-                aria-label="采购基础信息与销售订单关联"
+                :aria-label="salesLinkedCreate ? '采购基础信息与销售订单关联' : '采购基础信息'"
                 data-testid="purchase-order-step-base"
               >
                 <FaCard
@@ -883,7 +882,7 @@ onBeforeUnmount(() => {
                 </FaCard>
 
                 <FaCard
-                  v-if="guidedCreate"
+                  v-if="salesLinkedCreate"
                   title="销售订单关联"
                   description="一个采购订单只关联一个销售订单；同一销售订单可拆分为多个采购订单。"
                 >
@@ -920,7 +919,7 @@ onBeforeUnmount(() => {
               </section>
 
               <section
-                v-show="purchaseType === 'STOCK' || activeStep === 1"
+                v-show="activeStep === 1"
                 class="gap-6 grid grid-cols-[minmax(0,1fr)] min-w-0"
                 aria-label="采购产品明细与付款约定"
                 data-testid="purchase-order-step-products-payment"
@@ -931,7 +930,7 @@ onBeforeUnmount(() => {
                   :description="purchaseType === 'STOCK' ? '可手工添加数据库产品或临时产品。' : '从销售订单同步产品；可删除本次暂不采购的行。'"
                   content-class="min-w-0"
                 >
-                  <div v-if="guidedCreate" class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div v-if="salesLinkedCreate" class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p class="text-sm text-muted-foreground m-0">
                       {{ selectedSalesOrder ? `来源：${selectedSalesOrder.orderNo} · ${selectedSalesOrder.customerName}` : '请先在第一步关联销售订单' }}
                     </p>
@@ -965,7 +964,6 @@ onBeforeUnmount(() => {
                 </FaCard>
 
                 <PurchaseOrderPaymentTerms
-                  v-if="guidedCreate"
                   :balance-due-amount="formModel.balanceDueAmount"
                   :currencies="fixedCurrencies"
                   :deposit-due-amount="formModel.depositDueAmount"
@@ -978,7 +976,7 @@ onBeforeUnmount(() => {
               </section>
 
               <section
-                v-show="purchaseType === 'STOCK' || activeStep === 2"
+                v-show="activeStep === 2"
                 aria-label="唛头与备注"
                 data-testid="purchase-order-step-mark-remark"
               >
@@ -1014,7 +1012,7 @@ onBeforeUnmount(() => {
               </section>
 
               <nav
-                v-if="guidedCreate"
+                v-if="steppedCreate"
                 class="mt-1 pt-4 border-t border-border flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
                 aria-label="采购订单填写步骤操作"
               >
@@ -1058,49 +1056,13 @@ onBeforeUnmount(() => {
                 </div>
               </nav>
             </main>
-
-            <aside v-if="purchaseType === 'STOCK'" class="min-w-0">
-              <div class="xl:top-[calc(var(--g-header-actual-height,0px)+var(--g-topbar-actual-height,0px)+1rem)] xl:sticky">
-                <PurchaseOrderPaymentTerms
-                  :balance-due-amount="formModel.balanceDueAmount"
-                  :currencies="fixedCurrencies"
-                  :deposit-due-amount="formModel.depositDueAmount"
-                  :disabled="submitLocked"
-                  :field-errors="fieldErrors"
-                  :purchase-total-amount="purchaseTotalAmount"
-                  @update:balance-due-amount="handleBalanceUpdate"
-                  @update:deposit-due-amount="handleDepositUpdate"
-                />
-                <FaAlert
-                  v-if="submission.phase === 'unknown'"
-                  title="提交结果未知"
-                  description="网络中断时订单可能已经创建。只能使用相同请求重新确认，避免重复编号。"
-                  class="mt-5"
-                >
-                  <template #actions>
-                    <FaButton type="button" variant="outline" size="sm" @click="retryUnknownSubmission">
-                      使用相同请求重新确认
-                    </FaButton>
-                  </template>
-                </FaAlert>
-                <FaButton
-                  type="button"
-                  class="mt-6 min-h-11 w-full"
-                  :loading="submitLocked"
-                  :disabled="submitLocked || currencyUnavailable"
-                  @click="requestSubmit"
-                >
-                  核对并确认采购订单
-                </FaButton>
-              </div>
-            </aside>
           </div>
         </FaForm>
       </FaPageMain>
 
       <Transition name="purchase-order-summary-panel">
         <aside
-          v-if="guidedCreate"
+          v-if="steppedCreate"
           v-show="isDesktopSummary || createSurface === 'review'"
           data-testid="purchase-order-create-summary-column"
           class="purchase-order-summary-column min-w-0 self-stretch"
@@ -1192,7 +1154,7 @@ onBeforeUnmount(() => {
     </div>
 
     <QsGenericDrawer
-      v-if="guidedCreate"
+      v-if="steppedCreate"
       v-model="detailsDrawerVisible"
       data-testid="purchase-order-details-drawer"
       title="已填采购订单详情"

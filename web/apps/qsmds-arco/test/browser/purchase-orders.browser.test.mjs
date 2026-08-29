@@ -475,9 +475,17 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
       && document.querySelector('[data-testid="purchase-order-create-page"]')
         ?.getClientRects().length > 0
       && document.body.innerText.includes('PURCHASE_ORDER · AUTO')
+      && document.body.innerText.includes('第 1 步，共 4 步')
+      && document.querySelector('[data-testid="purchase-order-create-summary-column"]')
+        ?.getClientRects().length > 0
+      && !document.body.innerText.includes('选择销售订单')
+      && !document.body.innerText.includes('同步销售产品明细')
     ))()`)
 
     await selectVisibleComboboxOption(page, '选择采购供应商', supplierLabel)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      ?.getClientRects().length > 0`)
     await clickVisibleButton(page, '添加数据库产品')
     await waitForVisibleDialog(page, '选择数据库产品')
     await page.waitFor(`(() => {
@@ -501,16 +509,24 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
     await waitForNoVisibleDialog(page, '选择数据库产品')
     await fillLabelledControl(page, '第 1 行本单采购价', '80')
 
-    await clickVisibleButton(page, '核对并确认采购订单')
-    await page.waitFor(`document.body.innerText.includes(
-      '请修正采购订单中的必填项和金额后再提交'
-    )`)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('请先完成并修正当前步骤的必填资料'))`)
     await page.waitFor(`document.activeElement?.getAttribute('aria-label') === '定金'`)
 
     await fillAriaControl(page, '定金', '20')
     await fillAriaControl(page, '尾款', '60')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
+      ?.getClientRects().length > 0`)
     await fillLabelledControl(page, '采购唛头', 'BROWSER STOCK MARK')
-    await clickVisibleButton(page, '核对并确认采购订单')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-review"]')
+      ?.getClientRects().length > 0`)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-summary-column"]')
+      ?.textContent?.includes('BROWSER STOCK MARK')`)
+    await clickVisibleButton(page, '提交订单')
     await waitForVisibleDialog(page, '确认提交采购订单？')
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
