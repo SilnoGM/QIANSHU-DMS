@@ -171,9 +171,12 @@ watch(() => props.modelValue, (open) => {
 
     <div
       data-slot="sales-order-selector-body"
-      class="max-h-[min(36rem,calc(100dvh-13.5rem))] min-w-0 overflow-x-hidden overflow-y-auto"
+      class="flex flex-col h-[min(36rem,calc(100dvh-13.5rem))] min-h-0 min-w-0 overflow-hidden"
     >
-      <div class="pb-4 border-b border-border/70 gap-3 grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+      <div
+        data-slot="sales-order-selector-toolbar"
+        class="pb-4 border-b border-border/70 shrink-0 gap-3 grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+      >
         <form class="flex gap-2 min-w-0" role="search" @submit.prevent="search">
           <FaInput
             v-model="keywordDraft"
@@ -204,7 +207,10 @@ watch(() => props.modelValue, (open) => {
         </div>
       </div>
 
-      <div class="pt-4 min-h-80">
+      <div
+        data-slot="sales-order-selector-list"
+        class="pt-4 overscroll-contain flex-1 min-h-0 overflow-x-hidden overflow-y-auto"
+      >
         <div
           v-if="loading"
           class="gap-3 grid"
@@ -369,43 +375,47 @@ watch(() => props.modelValue, (open) => {
               </span>
             </div>
           </div>
-
-          <div class="mt-4 pt-4 border-t border-border/70 gap-3 grid sm:grid-cols-[1fr_auto] sm:items-center">
-            <span class="qs-type-meta text-muted-foreground">
-              显示 {{ pagination.rangeStart }}–{{ pagination.rangeEnd }}，共 {{ pagination.total }} 张
-            </span>
-            <FaPagination
-              :page="pagination.page"
-              :size="pagination.pageSize"
-              :sizes="[20, 50, 100]"
-              :total="pagination.total"
-              layout="pager, sizes"
-              class="min-w-max hidden sm:flex"
-              @update:page="changePage"
-              @update:size="changePageSize"
-            />
-            <div class="flex gap-2 sm:hidden">
-              <FaButton
-                type="button"
-                variant="outline"
-                class="flex-1 size-11"
-                :disabled="pagination.page <= 1"
-                @click="changePage(pagination.page - 1)"
-              >
-                上一页
-              </FaButton>
-              <FaButton
-                type="button"
-                variant="outline"
-                class="flex-1 size-11"
-                :disabled="pagination.page >= pagination.pageCount"
-                @click="changePage(pagination.page + 1)"
-              >
-                下一页
-              </FaButton>
-            </div>
-          </div>
         </template>
+      </div>
+
+      <div
+        v-if="pagination.total > 0"
+        data-slot="sales-order-selector-pagination"
+        class="mt-4 pt-4 border-t border-border/70 shrink-0 gap-3 grid sm:grid-cols-[1fr_auto] sm:items-center"
+      >
+        <span class="qs-type-meta text-muted-foreground">
+          显示 {{ pagination.rangeStart }}–{{ pagination.rangeEnd }}，共 {{ pagination.total }} 张
+        </span>
+        <FaPagination
+          :page="pagination.page"
+          :size="pagination.pageSize"
+          :sizes="[20, 50, 100]"
+          :total="pagination.total"
+          layout="pager, sizes"
+          class="min-w-max hidden sm:flex"
+          @update:page="changePage"
+          @update:size="changePageSize"
+        />
+        <div class="flex gap-2 sm:hidden">
+          <FaButton
+            type="button"
+            variant="outline"
+            class="flex-1 size-11"
+            :disabled="pagination.page <= 1"
+            @click="changePage(pagination.page - 1)"
+          >
+            上一页
+          </FaButton>
+          <FaButton
+            type="button"
+            variant="outline"
+            class="flex-1 size-11"
+            :disabled="pagination.page >= pagination.pageCount"
+            @click="changePage(pagination.page + 1)"
+          >
+            下一页
+          </FaButton>
+        </div>
       </div>
     </div>
 

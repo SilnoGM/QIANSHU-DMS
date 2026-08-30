@@ -17,6 +17,15 @@ const PRODUCT_PREVIEW = new URL(
   import.meta.url,
 )
 
+function readSlotUtilities(source: string, slot: string): ReadonlySet<string> {
+  const match = source.match(new RegExp(
+    `data-slot="${slot}"[\\s\\S]*?class="([^"]+)"`,
+    'u',
+  ))
+  assert.ok(match, `缺少 ${slot} 的 class 契约`)
+  return new Set(match[1].split(/\s+/u))
+}
+
 test('销售订单选择弹窗复用 QsGenericModal 且不读取 API、Store 或采购域', async () => {
   const [source, types, productPreview] = await Promise.all([
     readFile(SOURCE, 'utf8'),
@@ -65,11 +74,32 @@ test('销售订单选择弹窗覆盖搜索、单选确认、分页和五种稳�
   assert.match(source, /:disabled="!selectedOrder \|\| disabled \|\| loading \|\| Boolean\(error\)"/u)
 })
 
-test('销售订单选择弹窗桌面使用数据行、移动端使用卡片且正文独立滚动', async () => {
+test('销售订单选择弹窗桌面使用数据行、移动端使用卡片且仅列表独立滚动', async () => {
   const source = await readFile(SOURCE, 'utf8')
+  const bodyUtilities = readSlotUtilities(source, 'sales-order-selector-body')
+  const toolbarUtilities = readSlotUtilities(source, 'sales-order-selector-toolbar')
+  const listUtilities = readSlotUtilities(source, 'sales-order-selector-list')
+  const paginationUtilities = readSlotUtilities(source, 'sales-order-selector-pagination')
 
-  assert.match(source, /data-slot="sales-order-selector-body"/u)
-  assert.match(source, /overflow-y-auto/u)
+  assert.ok(bodyUtilities.has('flex'))
+  assert.ok(bodyUtilities.has('flex-col'))
+  assert.ok(bodyUtilities.has('min-h-0'))
+  assert.ok(bodyUtilities.has('overflow-hidden'))
+  assert.ok(toolbarUtilities.has('shrink-0'))
+  assert.ok(listUtilities.has('min-h-0'))
+  assert.ok(listUtilities.has('flex-1'))
+  assert.ok(listUtilities.has('overflow-y-auto'))
+  assert.ok(listUtilities.has('overscroll-contain'))
+  assert.ok(paginationUtilities.has('shrink-0'))
+  assert.equal(source.match(/overflow-y-auto/gu)?.length, 1)
+  assert.ok(
+    source.indexOf('data-slot="sales-order-selector-toolbar"')
+    < source.indexOf('data-slot="sales-order-selector-list"'),
+  )
+  assert.ok(
+    source.indexOf('data-slot="sales-order-selector-list"')
+    < source.indexOf('data-slot="sales-order-selector-pagination"'),
+  )
   assert.match(source, /hidden sm:block/u)
   assert.match(source, /sm:hidden/u)
   const productPreview = await readFile(PRODUCT_PREVIEW, 'utf8')
