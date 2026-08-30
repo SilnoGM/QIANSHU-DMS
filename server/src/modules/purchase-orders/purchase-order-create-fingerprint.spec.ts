@@ -64,6 +64,8 @@ describe('purchase order create fingerprint', () => {
         lines: [{
           lineType: 'CUSTOM',
           sourceSalesOrderLineId: '22222222-2222-4222-8222-222222222222',
+          name: '采购侧临时产品',
+          description: '采购侧临时说明',
           referencePurchaseUnitPriceAmount: '10',
           actualPurchaseUnitPriceAmount: '10',
           quantity: 2,

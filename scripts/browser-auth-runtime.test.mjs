@@ -133,6 +133,7 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.match(command.args.at(-1), /BROWSER_BANK_TRANSFER/u)
   assert.match(command.args.at(-1), /INSERT INTO products/u)
   assert.match(command.args.at(-1), /PRODUCT-BROWSER-001/u)
+  assert.match(command.args.at(-1), /Browser 销售临时产品/u)
   assert.match(command.args.at(-1), /PRODUCT-MEDIA-BROWSER-001/u)
   assert.match(command.args.at(-1), /INSERT INTO media_assets/u)
   assert.match(command.args.at(-1), /INSERT INTO product_media/u)

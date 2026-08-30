@@ -420,7 +420,7 @@ let fixtureFailureCode = 'UNKNOWN'
         'decode(repeat(\'8\', 64), \'hex\'), CURRENT_DATE, $1, \'TWD\',',
         '\'Browser 采购来源客户\', \'0912888000\', $2, $3, $4, $5, $6, $7,',
         '$8, $9, $10, \'采购来源路100号\', $11,',
-        '200, 200, 50, 150, \'CONFIRMED\', \'Browser purchase source fixture\'',
+        '250, 250, 50, 200, \'CONFIRMED\', \'Browser purchase source fixture\'',
         ') RETURNING id',
       ].join(' '),
       [
@@ -449,7 +449,9 @@ let fixtureFailureCode = 'UNKNOWN'
         'standard_unit_price_amount, actual_unit_price_amount, quantity, line_total_amount',
         ') VALUES ($1, 1, \'CATALOG\', $2, \'PRODUCT-BROWSER-001\',',
         '\'Browser 多媒体产品\', $3::jsonb, \'Browser 采购来源明细\',',
-        '1234.5678, 100, 2, 200)',
+        '1234.5678, 100, 2, 200),',
+        '($1, 2, \'CUSTOM\', NULL, NULL, \'Browser 销售临时产品\',',
+        '\'[]\'::jsonb, \'Browser 临时来源说明\', NULL, 50, 1, 50)',
       ].join(' '),
       [
         purchaseSourceSalesOrder.rows[0].id,

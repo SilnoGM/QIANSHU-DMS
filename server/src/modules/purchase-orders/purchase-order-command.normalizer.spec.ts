@@ -27,6 +27,8 @@ function linkedInput(): Record<string, unknown> {
       {
         lineType: 'CUSTOM',
         sourceSalesOrderLineId: '44444444-4444-4444-8444-444444444444',
+        name: ' 采购侧临时产品 ',
+        description: ' 采购侧临时说明 ',
         referencePurchaseUnitPriceAmount: '10',
         actualPurchaseUnitPriceAmount: '10.00',
         quantity: 1,
@@ -104,6 +106,8 @@ describe('normalizePurchaseOrderCreateCommand', () => {
           lineNumber: 2,
           lineType: 'CUSTOM',
           sourceSalesOrderLineId: '44444444-4444-4444-8444-444444444444',
+          name: '采购侧临时产品',
+          description: '采购侧临时说明',
           referencePurchaseUnitPriceAmount: '10.0000',
           actualPurchaseUnitPriceAmount: '10.0000',
           quantity: 1,

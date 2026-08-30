@@ -143,7 +143,7 @@ describe('PurchaseOrderCreateDependencyService', () => {
     )
   })
 
-  it('copies a linked CUSTOM sales snapshot while keeping both manual prices', async () => {
+  it('persists the linked CUSTOM purchase snapshot while keeping the sales source', async () => {
     const fixture = setup()
     fixture.transaction.salesOrderLine.findMany.mockResolvedValue([{
       id: SOURCE_LINE_ID,
@@ -160,6 +160,8 @@ describe('PurchaseOrderCreateDependencyService', () => {
     const command = linkedCommand({
       lineType: 'CUSTOM',
       productId: undefined,
+      name: '采购侧临时产品',
+      description: '采购侧临时说明',
       referencePurchaseUnitPriceAmount: '10',
     })
 
@@ -172,8 +174,8 @@ describe('PurchaseOrderCreateDependencyService', () => {
       lineType: 'CUSTOM',
       productId: null,
       productNoSnapshot: null,
-      productNameSnapshot: '销售临时产品',
-      descriptionSnapshot: '销售临时说明',
+      productNameSnapshot: '采购侧临时产品',
+      descriptionSnapshot: '采购侧临时说明',
       referencePurchaseUnitPriceAmount: '10.0000',
       actualPurchaseUnitPriceAmount: '10.0000',
     }] })

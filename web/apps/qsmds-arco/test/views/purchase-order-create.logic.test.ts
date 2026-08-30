@@ -262,7 +262,6 @@ test('关联采购构造 DTO 时校验来源数量、明细总价和 CUSTOM 双�
       lineType: 'CATALOG',
       productId: catalogOption.id,
       sourceSalesOrderLineId: sourceCatalogLine.id,
-      description: '采购备注',
       actualPurchaseUnitPriceAmount: '10.00',
       quantity: 2,
     }, {

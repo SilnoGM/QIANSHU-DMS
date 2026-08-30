@@ -25,6 +25,8 @@ const pendingRoute = '/qs-operations/purchase/pending-purchase-orders'
 const supplierLabel = 'Browser 有效供应商'
 const productNo = 'PRODUCT-BROWSER-001'
 const salesCustomerName = 'Browser 采购来源客户'
+const purchaseCustomName = 'Browser 采购侧临时产品'
+const purchaseCustomDescription = 'Browser 采购侧临时说明'
 
 /** 日志只保留固定步骤名，不输出 Cookie、密码、付款草稿或幂等键。 */
 async function runPurchaseOrderBrowserStep(label, action) {
@@ -233,7 +235,7 @@ async function waitForPurchaseList(page, expectedText) {
   })()`)
 }
 
-test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应式主题', {
+test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、履约和响应式主题', {
   timeout: 600_000,
 }, async (t) => {
   const configuration = readConfiguration(process.env)
@@ -271,7 +273,8 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
   })
   runtime.start()
 
-  await runPurchaseOrderBrowserStep('sales-linked four-step review and discard', async () => {
+  let linkedOrder
+  await runPurchaseOrderBrowserStep('sales-linked CUSTOM snapshot and final submission', async () => {
     await clickVisibleButton(page, '新增采购')
     await waitForAfterAuthentication(page, `(() => (
       location.hash.includes('/qs-operations/purchase/purchase-orders/create?type=SALES_LINKED')
@@ -303,12 +306,14 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('选择销售订单'))
-      const order = [...(dialog?.querySelectorAll('button') ?? [])]
-        .find(button => button.textContent?.includes(${JSON.stringify(salesCustomerName)}))
+      const order = [...(dialog?.querySelectorAll('[role="radio"]') ?? [])]
+        .find(candidate => candidate.getAttribute('aria-label')
+          ?.includes(${JSON.stringify(salesCustomerName)}))
       if (!order) throw new Error('purchase source sales order unavailable')
       order.click()
       return true
     })()`)
+    await clickVisibleButton(page, '确认选择')
     await waitForNoVisibleDialog(page, '选择销售订单')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-base"]')
       ?.textContent?.includes(${JSON.stringify(salesCustomerName)})`)
@@ -358,8 +363,12 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
         && image.naturalWidth > 0
     })()`)
     await fillLabelledControl(page, '第 1 行本单采购价', '80')
+    await fillLabelledControl(page, '第 2 行产品名称', purchaseCustomName)
+    await fillLabelledControl(page, '第 2 行采购定价', '30')
+    await fillLabelledControl(page, '第 2 行本单采购价', '30')
+    await fillLabelledControl(page, '第 2 行备注', purchaseCustomDescription)
     await fillAriaControl(page, '定金', '20')
-    await fillAriaControl(page, '尾款', '140')
+    await fillAriaControl(page, '尾款', '170')
 
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
@@ -388,6 +397,8 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
         && summary.textContent?.includes(${JSON.stringify(salesCustomerName)})
         && summary.textContent.includes(${JSON.stringify(supplierLabel)})
         && summary.textContent.includes(${JSON.stringify(productNo)})
+        && summary.textContent.includes(${JSON.stringify(purchaseCustomName)})
+        && summary.textContent.includes(${JSON.stringify(purchaseCustomDescription)})
         && summary.textContent.includes('真实采购价')
         && !summary.textContent.includes('采购定价')
         && [...summary.querySelectorAll('[data-currency="CNY"]')]
@@ -458,13 +469,35 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
     await page.waitFor(`!document.documentElement.classList.contains('dark')`)
     await page.setViewport(1440, 900, true)
 
-    await clickVisibleButton(page, '返回修改')
-    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
-      ?.getClientRects().length > 0`)
-    await clickVisibleButton(page, '返回全部采购')
-    await waitForVisibleDialog(page, '放弃当前采购订单？')
-    await clickDialogButton(page, '放弃当前采购订单？', '确认放弃')
-    await waitForPurchaseList(page, '暂无采购订单')
+    await clickVisibleButton(page, '提交订单')
+    await waitForVisibleDialog(page, '确认提交采购订单？')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认提交采购订单？'))
+      return dialog?.textContent?.includes('销售关联采购')
+        && dialog.textContent.includes(${JSON.stringify(supplierLabel)})
+        && dialog.textContent.includes('190')
+    })()`)
+    await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
+    await waitForPurchaseList(page, salesCustomerName)
+
+    const response = await readPurchaseOrders(page)
+    assert.equal(response.status, 200)
+    assert.equal(response.body?.total, 1)
+    linkedOrder = response.body?.items?.find(item => item.purchaseType === 'SALES_LINKED')
+    assert.match(linkedOrder?.orderNo ?? '', /^PO-BRW-\d{8}$/u)
+    assert.equal(linkedOrder?.purchaseTotalAmount, '190.0000')
+    assert.equal(linkedOrder?.depositDueAmount, '20.0000')
+    assert.equal(linkedOrder?.balanceDueAmount, '170.0000')
+
+    const detail = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(linkedOrder.id)}`,
+    ))
+    assert.equal(detail.status, 200)
+    const customLine = detail.body?.lines?.find(line => line.lineType === 'CUSTOM')
+    assert.equal(customLine?.productName, purchaseCustomName)
+    assert.equal(customLine?.description, purchaseCustomDescription)
   })
 
   let order
@@ -541,8 +574,8 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
-    assert.equal(response.body?.total, 1)
-    order = response.body?.items?.[0]
+    assert.equal(response.body?.total, 2)
+    order = response.body?.items?.find(item => item.purchaseType === 'STOCK')
     assert.match(order?.orderNo ?? '', /^PO-BRW-\d{8}$/u)
     assert.equal(order?.purchaseType, 'STOCK')
     assert.equal(order?.purchaseTotalAmount, '80.0000')
@@ -618,10 +651,11 @@ test('真实 Chrome 覆盖备货采购创建、详情、付款、履约和响应
       await waitForPurchaseList(page, order.orderNo)
     }
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
-    await waitForPurchaseList(page, '暂无待办采购')
+    await waitForPurchaseList(page, linkedOrder.orderNo)
     const pending = await readPurchaseOrders(page, 'pending')
     assert.equal(pending.status, 200)
-    assert.equal(pending.body?.total, 0)
+    assert.equal(pending.body?.total, 1)
+    assert.equal(pending.body?.items?.[0]?.id, linkedOrder.id)
   })
 
   await runPurchaseOrderBrowserStep('390x844 light dark and touch targets', async () => {

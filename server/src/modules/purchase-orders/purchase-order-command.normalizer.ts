@@ -39,8 +39,8 @@ export interface NormalizedPurchaseOrderCustomLine
   extends NormalizedPurchaseOrderLineBase {
   readonly lineType: 'CUSTOM'
   readonly referencePurchaseUnitPriceAmount: string
-  readonly name?: string
-  readonly description?: string | null
+  readonly name: string
+  readonly description: string | null
 }
 
 export type NormalizedPurchaseOrderCreateLine =
@@ -190,22 +190,15 @@ function normalizeCustomLine(
   index: number,
   purchaseType: PurchaseOrderType,
 ): NormalizedPurchaseOrderCustomLine {
-  const allowedKeys = purchaseType === 'SALES_LINKED'
-    ? [
-        'lineType',
-        'sourceSalesOrderLineId',
-        'referencePurchaseUnitPriceAmount',
-        'actualPurchaseUnitPriceAmount',
-        'quantity',
-      ]
-    : [
-        'lineType',
-        'name',
-        'description',
-        'referencePurchaseUnitPriceAmount',
-        'actualPurchaseUnitPriceAmount',
-        'quantity',
-      ]
+  const allowedKeys = [
+    'lineType',
+    'name',
+    'description',
+    'referencePurchaseUnitPriceAmount',
+    'actualPurchaseUnitPriceAmount',
+    'quantity',
+    ...(purchaseType === 'SALES_LINKED' ? ['sourceSalesOrderLineId'] : []),
+  ]
   rejectUnknownKeys(line, allowedKeys, field)
   const prices = assertCustomPurchasePrices(
     line.referencePurchaseUnitPriceAmount,
@@ -221,6 +214,14 @@ function normalizeCustomLine(
           `${field}.sourceSalesOrderLineId`,
         )
       : null,
+    // 销售来源只约束关联身份、类型和数量；采购人员确认后的名称与描述属于采购快照，
+    // 必须在服务端重新规范化后保存，不能静默覆盖回销售订单的旧文本。
+    name: normalizeText(line.name, `${field}.name`, 128),
+    description: normalizeNullableText(
+      line.description,
+      `${field}.description`,
+      1000,
+    ),
     ...prices,
     quantity,
     lineTotalAmount: calculatePurchaseOrderLineTotal(
@@ -228,17 +229,7 @@ function normalizeCustomLine(
       quantity,
     ),
   }
-  return purchaseType === 'SALES_LINKED'
-    ? Object.freeze(common)
-    : Object.freeze({
-        ...common,
-        name: normalizeText(line.name, `${field}.name`, 128),
-        description: normalizeNullableText(
-          line.description,
-          `${field}.description`,
-          1000,
-        ),
-      })
+  return Object.freeze(common)
 }
 
 function normalizeLine(

@@ -379,11 +379,12 @@ export class PurchaseOrderCreateDependencyService {
         productId: null,
         sourceSalesOrderLineId: line.sourceSalesOrderLineId,
         productNoSnapshot: null,
-        productNameSnapshot: source?.productNameSnapshot ?? line.name ?? '',
+        // CUSTOM 允许采购侧修订名称和描述；销售明细仅作为来源、类型和数量的可信约束。
+        productNameSnapshot: line.name,
         productAttributesSnapshot: source === null
           ? []
           : normalizeAttributes(source.productAttributesSnapshot),
-        descriptionSnapshot: source?.descriptionSnapshot ?? line.description ?? null,
+        descriptionSnapshot: line.description,
         referencePurchaseUnitPriceAmount:
           line.referencePurchaseUnitPriceAmount,
         actualPurchaseUnitPriceAmount: line.actualPurchaseUnitPriceAmount,
