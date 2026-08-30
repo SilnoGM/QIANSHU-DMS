@@ -249,7 +249,7 @@ watch(() => props.modelValue, (open) => {
           <div class="hidden sm:block" role="radiogroup" aria-label="销售订单候选列表">
             <div class="text-xs text-muted-foreground px-4 pb-2 gap-4 grid grid-cols-[1.35fr_1fr_0.75fr_1fr_0.9fr]">
               <span>销售订单</span>
-              <span>客户 / 开单人</span>
+              <span>客户 / 出单人</span>
               <span>产品明细</span>
               <span class="text-end">约定总价</span>
               <span class="text-end">订单状态</span>
@@ -334,7 +334,7 @@ watch(() => props.modelValue, (open) => {
               </span>
               <span class="mt-4 gap-3 grid grid-cols-2">
                 <span class="min-w-0">
-                  <span class="qs-type-meta text-muted-foreground block">客户 / 开单人</span>
+                  <span class="qs-type-meta text-muted-foreground block">客户 / 出单人</span>
                   <strong class="qs-type-body-medium mt-1 block truncate">{{ item.customerName }}</strong>
                   <span class="qs-type-meta text-muted-foreground block truncate">{{ item.issuer.displayName }}</span>
                 </span>
