@@ -945,6 +945,7 @@ onBeforeUnmount(() => {
                     </FaButton>
                   </div>
                   <QsOrderProductLineEditor
+                    class="purchase-order-line-editor"
                     :model-value="formModel.lines"
                     currency="CNY"
                     :currencies="fixedCurrencies"
@@ -1263,6 +1264,19 @@ onBeforeUnmount(() => {
 .purchase-order-step-navigation,
 .purchase-order-review-heading {
   scroll-margin-top: var(--purchase-order-sticky-top);
+}
+
+/*
+ * 采购定价在临时产品场景同时展示金额输入、固定币种和下拉图标。
+ * 仅在采购创建页扩大该语义列并同步增加表格宽度，避免影响销售订单共用组件的列布局。
+ */
+.purchase-order-line-editor :deep([data-slot="order-product-line-table"]) {
+  min-width: 137rem;
+}
+
+.purchase-order-line-editor :deep([data-column="reference-unit-price"]) {
+  width: 20rem;
+  min-width: 20rem;
 }
 
 .purchase-order-create-layout {

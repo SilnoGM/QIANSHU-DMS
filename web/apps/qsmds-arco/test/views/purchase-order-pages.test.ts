@@ -114,6 +114,17 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /supplierCatalog\.resolve\(formModel\.supplierValue\)/u)
   assert.match(source, /\{\{ selectedSupplierDisplayLabel \}\}/u)
   assert.match(source, /<QsOrderProductLineEditor/u)
+  assert.match(source, /<QsOrderProductLineEditor[\s\S]*?class="purchase-order-line-editor"/u)
+  assert.match(
+    source,
+    /\.purchase-order-line-editor :deep\(\[data-column="reference-unit-price"\]\) \{[\s\S]*?width: 20rem;[\s\S]*?min-width: 20rem;/u,
+    '采购创建页必须为采购定价输入保留金额、币种与下拉图标的完整宽度',
+  )
+  assert.match(
+    source,
+    /\.purchase-order-line-editor :deep\(\[data-slot="order-product-line-table"\]\) \{[\s\S]*?min-width: 137rem;/u,
+    '加宽采购定价列时必须同步增加产品表最小宽度，不能挤压相邻列',
+  )
   assert.match(source, /currency="CNY"/u)
   assert.match(source, /:catalog-product-addable="purchaseType === 'STOCK'"/u)
   assert.match(source, /:custom-product-addable="purchaseType === 'STOCK'"/u)

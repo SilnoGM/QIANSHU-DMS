@@ -198,7 +198,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
     </p>
 
     <div class="border border-border rounded-xl bg-background overflow-x-auto">
-      <table class="text-sm min-w-[128rem] w-full border-collapse">
+      <table data-slot="order-product-line-table" class="text-sm min-w-[128rem] w-full border-collapse">
         <caption class="sr-only">
           订单产品明细
         </caption>
@@ -216,7 +216,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
             <th scope="col" class="font-medium p-3 w-28">
               产品主图
             </th>
-            <th scope="col" class="font-medium p-3 w-44">
+            <th scope="col" data-column="reference-unit-price" class="font-medium p-3 w-44">
               {{ labels.referenceUnitPrice }}
             </th>
             <th scope="col" class="font-medium p-3 w-72">
@@ -307,7 +307,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
                 <span v-else class="text-muted-foreground" aria-label="临时产品无主图">—</span>
               </div>
             </td>
-            <td class="p-3 whitespace-nowrap">
+            <td data-column="reference-unit-price" class="p-3 whitespace-nowrap">
               <FaFormItem
                 v-if="line.lineType === 'CUSTOM' && customReferenceUnitPriceEditable"
                 :name="`lines.${index}.standardUnitPriceAmount`"

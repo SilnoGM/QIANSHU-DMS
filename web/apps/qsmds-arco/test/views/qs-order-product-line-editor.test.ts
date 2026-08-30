@@ -44,6 +44,17 @@ test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承�
     position = next
   }
   assert.match(source, /overflow-x-auto/u)
+  assert.match(source, /data-slot="order-product-line-table"/u)
+  assert.match(
+    source,
+    /data-column="reference-unit-price" class="font-medium p-3 w-44"/u,
+    '通用组件默认参考单价列宽必须保持不变，采购领域只能在调用页局部覆盖',
+  )
+  assert.equal(
+    source.match(/data-column="reference-unit-price"/gu)?.length,
+    2,
+    '参考单价表头与数据单元格必须共享语义列标记，供领域页面定向调整宽度',
+  )
   assert.match(source, /<FaTooltip/u)
   assert.match(source, /\{\{ labels\.referenceTotal \}\}/u)
   assert.match(source, /\{\{ labels\.actualTotal \}\}/u)
