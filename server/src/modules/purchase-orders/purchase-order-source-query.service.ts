@@ -181,19 +181,74 @@ export class PurchaseOrderSourceQueryService {
           id: true,
           orderNo: true,
           orderDate: true,
+          issuer: { select: { id: true, displayName: true } },
           customerName: true,
           lineSubtotalAmount: true,
+          orderStatus: true,
+          fulfillmentStatus: true,
+          paymentStatus: true,
+          lines: {
+            orderBy: { lineNumber: 'asc' },
+            select: {
+              id: true,
+              productId: true,
+              productNameSnapshot: true,
+              quantity: true,
+              product: {
+                select: {
+                  media: {
+                    where: {
+                      kind: 'IMAGE',
+                      isPrimary: true,
+                      detachedAt: null,
+                      mediaAsset: { is: { status: 'READY' } },
+                    },
+                    orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+                    take: 1,
+                    select: { id: true },
+                  },
+                },
+              },
+            },
+          },
         },
       }),
     ])
     return {
-      items: rows.map(row => ({
-        id: row.id,
-        orderNo: row.orderNo,
-        orderDate: row.orderDate.toISOString().slice(0, 10),
-        customerName: row.customerName,
-        salesTotalAmount: fixed4(row.lineSubtotalAmount),
-      })),
+      items: rows.map((row) => {
+        // 图片 URL 必须留在采购权限域，不能复用要求 sales-orders:read 的销售列表内容端点。
+        // CUSTOM 行没有目录产品，或目录产品当前没有有效主图时，明确返回 null 供公共组件降级展示。
+        const previews = row.lines.map((line) => {
+          const mainImage = line.product?.media[0]
+          return {
+            lineId: line.id,
+            productName: line.productNameSnapshot,
+            mainImage: line.productId === null || mainImage === undefined
+              ? null
+              : {
+                  id: mainImage.id,
+                  contentUrl:
+                    `/api/purchase-orders/source-sales-orders/${row.id}/lines/${line.id}/main-image/${mainImage.id}/content`,
+                },
+          }
+        })
+        return {
+          id: row.id,
+          orderNo: row.orderNo,
+          orderDate: row.orderDate.toISOString().slice(0, 10),
+          issuer: row.issuer,
+          customerName: row.customerName,
+          salesTotalAmount: fixed4(row.lineSubtotalAmount),
+          orderStatus: row.orderStatus,
+          fulfillmentStatus: row.fulfillmentStatus,
+          paymentStatus: row.paymentStatus,
+          lineSummary: {
+            lineCount: row.lines.length,
+            totalQuantity: row.lines.reduce((sum, line) => sum + line.quantity, 0),
+            previews,
+          },
+        }
+      }),
       page,
       pageSize,
       total,

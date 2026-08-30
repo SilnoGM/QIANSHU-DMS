@@ -1180,6 +1180,7 @@ onBeforeUnmount(() => {
     <PurchaseSourceSalesOrderSelector
       v-if="purchaseType === 'SALES_LINKED'"
       v-model="sourceSelectorVisible"
+      :selected-order-id="selectedSalesOrder?.id ?? null"
       :disabled="submitLocked"
       :load-sales-orders="loadSourceSalesOrders"
       @confirm="selectSourceSalesOrder"

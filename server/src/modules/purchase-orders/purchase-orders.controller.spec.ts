@@ -66,7 +66,7 @@ const providers = [{
   },
 }, {
   provide: PurchaseOrderProductImageService,
-  useValue: { resolve: jest.fn() },
+  useValue: { resolve: jest.fn(), resolveSourceLinePreview: jest.fn() },
 }]
 
 @Module({ controllers: [PurchaseOrdersController], providers })
@@ -173,6 +173,73 @@ describe('PurchaseOrdersController', () => {
       )).toEqual(['purchase-orders:create'])
     }
   })
+
+  it('protects and delegates GET/HEAD sales source line main image content', async () => {
+    const stream = Readable.from(Buffer.from('image'))
+    const result: ProductMediaContentResponse = {
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Type': 'image/png',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      stream,
+    }
+    const resolveSourceLinePreview = jest.fn().mockResolvedValue(result)
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      {} as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      { resolveSourceLinePreview } as unknown as PurchaseOrderProductImageService,
+    )
+    const params = {
+      salesOrderId: '33333333-3333-4333-8333-333333333333',
+      lineId: '44444444-4444-4444-8444-444444444444',
+      productMediaId: '55555555-5555-4555-8555-555555555555',
+    }
+    const response = { status: jest.fn(), setHeader: jest.fn() }
+
+    await controller.headSourceSalesOrderLineMainImage(
+      params, '"known"', 'bytes=0-0', response,
+    )
+    const body = await controller.getSourceSalesOrderLineMainImage(
+      params, undefined, undefined, response,
+    )
+
+    expect(resolveSourceLinePreview).toHaveBeenNthCalledWith(
+      1,
+      params.salesOrderId,
+      params.lineId,
+      params.productMediaId,
+      '"known"',
+      'bytes=0-0',
+      'HEAD',
+    )
+    expect(resolveSourceLinePreview).toHaveBeenNthCalledWith(
+      2,
+      params.salesOrderId,
+      params.lineId,
+      params.productMediaId,
+      undefined,
+      undefined,
+      'GET',
+    )
+    expect(body).toBeInstanceOf(StreamableFile)
+    expect((body as StreamableFile).getStream()).toBe(stream)
+    const reflector = new Reflector()
+    for (const method of [
+      'headSourceSalesOrderLineMainImage',
+      'getSourceSalesOrderLineMainImage',
+    ] as const) {
+      expect(reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        PurchaseOrdersController.prototype[method],
+      )).toEqual(['purchase-orders:create'])
+    }
+  })
 })
 
 describe('PurchaseOrdersController OpenAPI', () => {
@@ -228,6 +295,14 @@ describe('PurchaseOrdersController OpenAPI', () => {
         codes: ['PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND'],
       })
     }
+
+    const sourceImagePath = document.paths[
+      '/api/purchase-orders/source-sales-orders/{salesOrderId}/lines/{lineId}/main-image/{productMediaId}/content'
+    ]
+    expect(sourceImagePath?.get?.operationId)
+      .toBe('purchase_orders_get_source_sales_order_line_main_image')
+    expect(sourceImagePath?.head?.operationId)
+      .toBe('purchase_orders_head_source_sales_order_line_main_image')
   })
 
   it('requires explicit list view and documents CNY as the only currency', () => {

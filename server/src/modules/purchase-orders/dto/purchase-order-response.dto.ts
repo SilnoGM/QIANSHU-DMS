@@ -10,7 +10,10 @@ import {
   PurchaseOrderStatus,
   PurchaseOrderStatusDimension,
   PurchaseOrderType,
+  SalesOrderFulfillmentStatus,
   SalesOrderLineType,
+  SalesOrderPaymentStatus,
+  SalesOrderStatus,
 } from '../../../generated/prisma/enums'
 
 export class PurchaseOrderActorDto {
@@ -182,12 +185,39 @@ export class PurchaseOrderProductOptionsDto {
   @ApiProperty({ type: 'integer' }) readonly total!: number
 }
 
+export class PurchaseOrderSourceSalesOrderListImageDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly contentUrl!: string
+}
+
+export class PurchaseOrderSourceSalesOrderLinePreviewDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly lineId!: string
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderListImageDto, nullable: true })
+  readonly mainImage!: PurchaseOrderSourceSalesOrderListImageDto | null
+}
+
+export class PurchaseOrderSourceSalesOrderLineSummaryDto {
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly lineCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly totalQuantity!: number
+  @ApiProperty({ type: () => [PurchaseOrderSourceSalesOrderLinePreviewDto] })
+  readonly previews!: readonly PurchaseOrderSourceSalesOrderLinePreviewDto[]
+}
+
 export class PurchaseOrderSourceSalesOrderListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
   @ApiProperty({ type: 'string', format: 'date' }) readonly orderDate!: string
+  @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly issuer!: PurchaseOrderActorDto
   @ApiProperty({ type: 'string' }) readonly customerName!: string
   @ApiProperty({ type: 'string' }) readonly salesTotalAmount!: string
+  @ApiProperty({ enum: SalesOrderStatus }) readonly orderStatus!: SalesOrderStatus
+  @ApiProperty({ enum: SalesOrderFulfillmentStatus })
+  readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
+  @ApiProperty({ enum: SalesOrderPaymentStatus })
+  readonly paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderLineSummaryDto })
+  readonly lineSummary!: PurchaseOrderSourceSalesOrderLineSummaryDto
 }
 
 export class PurchaseOrderSourceSalesOrdersDto {

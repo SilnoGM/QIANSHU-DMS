@@ -105,6 +105,7 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /parsePurchaseOrderCreateType\(route\.query\.type/u)
   assert.match(source, /auth\('purchase-orders:create-stock'\)/u)
   assert.match(source, /<PurchaseSourceSalesOrderSelector/u)
+  assert.match(source, /:selected-order-id="selectedSalesOrder\?\.id \?\? null"/u)
   assert.match(source, /purchaseOrdersApi\.sourceSalesOrderLines/u)
   assert.match(source, /synchronizePurchaseOrderSourceLines/u)
   assert.match(source, /同步销售产品明细/u)

@@ -27,8 +27,25 @@ function setup() {
         id: 'sales-order-id',
         orderNo: 'SO-001',
         orderDate: new Date('2026-08-26T00:00:00.000Z'),
+        issuer: { id: 'issuer-id', displayName: '出单人甲' },
         customerName: '客户甲',
         lineSubtotalAmount: decimal('100'),
+        orderStatus: 'CONFIRMED',
+        fulfillmentStatus: 'PREPARING',
+        paymentStatus: 'PARTIALLY_PAID',
+        lines: [{
+          id: 'sales-line-id',
+          productId: 'product-id',
+          productNameSnapshot: '销售快照产品',
+          quantity: 5,
+          product: { media: [{ id: 'product-media-id' }] },
+        }, {
+          id: 'custom-line-id',
+          productId: null,
+          productNameSnapshot: '本单临时服务',
+          quantity: 1,
+          product: null,
+        }],
       }]),
       findFirst: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: 'sales-order-id', orderNo: 'SO-001', customerName: '客户甲' }),
@@ -154,24 +171,72 @@ describe('PurchaseOrderSourceQueryService', () => {
     expect(fixture.prisma.product.findMany).not.toHaveBeenCalled()
   })
 
-  it('returns minimal CONFIRMED sales-order sources', async () => {
+  it('returns selector-ready CONFIRMED sales-order sources', async () => {
     const fixture = setup()
     await expect(fixture.service.salesOrders({ keyword: 'SO' })).resolves.toEqual({
       items: [{
         id: 'sales-order-id',
         orderNo: 'SO-001',
         orderDate: '2026-08-26',
+        issuer: { id: 'issuer-id', displayName: '出单人甲' },
         customerName: '客户甲',
         salesTotalAmount: '100.0000',
+        orderStatus: 'CONFIRMED',
+        fulfillmentStatus: 'PREPARING',
+        paymentStatus: 'PARTIALLY_PAID',
+        lineSummary: {
+          lineCount: 2,
+          totalQuantity: 6,
+          previews: [{
+            lineId: 'sales-line-id',
+            productName: '销售快照产品',
+            mainImage: {
+              id: 'product-media-id',
+              contentUrl: '/api/purchase-orders/source-sales-orders/sales-order-id/lines/sales-line-id/main-image/product-media-id/content',
+            },
+          }, {
+            lineId: 'custom-line-id',
+            productName: '本单临时服务',
+            mainImage: null,
+          }],
+        },
       }],
       page: 1,
       pageSize: 20,
       total: 1,
     })
     const sourceQuery = fixture.prisma.salesOrder.findMany.mock.calls[0]?.[0] as
-      | { where?: Record<string, unknown> }
+      | { select?: Record<string, unknown>, where?: Record<string, unknown> }
       | undefined
     expect(sourceQuery?.where).toMatchObject({ orderStatus: 'CONFIRMED' })
+    expect(sourceQuery?.select).toMatchObject({
+      issuer: { select: { id: true, displayName: true } },
+      orderStatus: true,
+      fulfillmentStatus: true,
+      paymentStatus: true,
+      lines: {
+        select: {
+          id: true,
+          productId: true,
+          productNameSnapshot: true,
+          quantity: true,
+          product: {
+            select: {
+              media: {
+                where: {
+                  kind: 'IMAGE',
+                  isPrimary: true,
+                  detachedAt: null,
+                  mediaAsset: { is: { status: 'READY' } },
+                },
+                take: 1,
+                select: { id: true },
+              },
+            },
+          },
+        },
+      },
+    })
   })
 
   it('returns source lines with remaining quantity after active purchases', async () => {

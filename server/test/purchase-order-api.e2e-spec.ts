@@ -17,6 +17,8 @@ const ACTOR_ID = '11111111-1111-4111-8111-111111111111'
 const ORDER_ID = '22222222-2222-4222-8222-222222222222'
 const IDEMPOTENCY_KEY = '33333333-3333-4333-8333-333333333333'
 const SALES_ORDER_ID = '44444444-4444-4444-8444-444444444444'
+const SALES_ORDER_LINE_ID = '66666666-6666-4666-8666-666666666666'
+const PRODUCT_MEDIA_ID = '77777777-7777-4777-8777-777777777777'
 
 const list = jest.fn().mockResolvedValue({ items: [], page: 2, pageSize: 10, total: 0 })
 const getById = jest.fn().mockResolvedValue({ id: ORDER_ID })
@@ -25,6 +27,13 @@ const create = jest.fn<Promise<string>, [unknown, unknown]>()
 const salesOrderLines = jest.fn().mockResolvedValue({
   salesOrder: { id: SALES_ORDER_ID, orderNo: 'SO-E2E', customerName: '测试客户' },
   items: [],
+})
+const resolveSourceLinePreview = jest.fn().mockResolvedValue({
+  status: 200,
+  headers: {
+    'Content-Type': 'image/png',
+    'X-Content-Type-Options': 'nosniff',
+  },
 })
 
 @Module({
@@ -59,7 +68,7 @@ const salesOrderLines = jest.fn().mockResolvedValue({
     },
   }, {
     provide: PurchaseOrderProductImageService,
-    useValue: { resolve: jest.fn() },
+    useValue: { resolve: jest.fn(), resolveSourceLinePreview },
   }],
 })
 class PurchaseOrderApiE2eModule {}
@@ -145,6 +154,24 @@ describe('PurchaseOrder HTTP API contract', () => {
       salesOrder: { id: SALES_ORDER_ID }, items: [],
     })
     expect(salesOrderLines).toHaveBeenCalledWith(SALES_ORDER_ID)
+    expect(getById).not.toHaveBeenCalled()
+  })
+
+  it('serves sales-source preview images without entering the order locator', async () => {
+    await request(requireApplication().getHttpServer())
+      .get(
+        `/api/purchase-orders/source-sales-orders/${SALES_ORDER_ID}/lines/${SALES_ORDER_LINE_ID}/main-image/${PRODUCT_MEDIA_ID}/content`,
+      )
+      .expect(200)
+
+    expect(resolveSourceLinePreview).toHaveBeenCalledWith(
+      SALES_ORDER_ID,
+      SALES_ORDER_LINE_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+      undefined,
+      'GET',
+    )
     expect(getById).not.toHaveBeenCalled()
   })
 

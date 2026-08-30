@@ -54,6 +54,7 @@ import {
   PurchaseOrderProductImageParamDto,
   PurchaseOrderProductOptionsQueryDto,
   PurchaseOrderSourceSalesOrderIdParamDto,
+  PurchaseOrderSourceSalesOrderLineImageParamDto,
   PurchaseOrderSourceSalesOrdersQueryDto,
 } from './dto/purchase-order-query.dto'
 import {
@@ -237,6 +238,57 @@ export class PurchaseOrdersController {
     @Param() params: PurchaseOrderSourceSalesOrderIdParamDto,
   ): ReturnType<PurchaseOrderSourceQueryService['salesOrderLines']> {
     return this.sourceQueries.salesOrderLines(params.salesOrderId)
+  }
+
+  @Head('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:create')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'purchase_orders_head_source_sales_order_line_main_image',
+    notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized purchase source sales-order line main image.',
+  })
+  async headSourceSalesOrderLineMainImage(
+    @Param() params: PurchaseOrderSourceSalesOrderLineImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productImages.resolveSourceLinePreview(
+      params.salesOrderId,
+      params.lineId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:create')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'purchase_orders_get_source_sales_order_line_main_image',
+    notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized purchase source sales-order line main image.',
+  })
+  async getSourceSalesOrderLineMainImage(
+    @Param() params: PurchaseOrderSourceSalesOrderLineImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productImages.resolveSourceLinePreview(
+      params.salesOrderId,
+      params.lineId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
   }
 
   @Post('document-uploads')

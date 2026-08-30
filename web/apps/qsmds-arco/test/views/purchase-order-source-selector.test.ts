@@ -8,16 +8,18 @@ const SOURCE = new URL(
   import.meta.url,
 )
 
-test('销售来源选择器使用局部搜索、AbortSignal、分页和订单摘要', async () => {
+test('销售来源选择器以采购域适配器接入公共选择弹窗', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
-  assert.match(source, /<QsGenericModal/u)
-  assert.match(source, /选择销售订单/u)
+  assert.match(source, /QsSalesOrderSelectorModal/u)
+  assert.match(source, /<QsSalesOrderSelectorModal/u)
+  assert.doesNotMatch(source, /<QsGenericModal/u)
   assert.match(source, /loadSalesOrders/u)
   assert.match(source, /new AbortController/u)
-  assert.match(source, /搜索销售订单号或客户名/u)
-  assert.match(source, /销售币种不写入采购订单/u)
-  assert.doesNotMatch(source, /currency="CNY"/u)
-  assert.match(source, /<FaPagination/u)
-  assert.match(source, /emit\('confirm', \{ \.\.\.item \}\)/u)
+  assert.match(source, /:selected-order-id="selectedOrderId"/u)
+  assert.match(source, /@search="handleSearch"/u)
+  assert.match(source, /@page-change="handlePageChange"/u)
+  assert.match(source, /@retry="loadPage"/u)
+  assert.match(source, /@confirm="confirmSelection"/u)
+  assert.match(source, /emit\('confirm', sourceItem\)/u)
 })
