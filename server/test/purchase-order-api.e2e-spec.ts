@@ -8,6 +8,7 @@ import { attachRequestAuthContext } from '../src/modules/auth/auth-context'
 import { PurchaseOrderDocumentService } from '../src/modules/purchase-orders/documents/purchase-order-document.service'
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
+import { PurchaseOrderProductImageService } from '../src/modules/purchase-orders/products/purchase-order-product-image.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { PurchaseOrdersController } from '../src/modules/purchase-orders/purchase-orders.controller'
@@ -56,6 +57,9 @@ const salesOrderLines = jest.fn().mockResolvedValue({
       detach: jest.fn(),
       resolveContent: jest.fn(),
     },
+  }, {
+    provide: PurchaseOrderProductImageService,
+    useValue: { resolve: jest.fn() },
   }],
 })
 class PurchaseOrderApiE2eModule {}
