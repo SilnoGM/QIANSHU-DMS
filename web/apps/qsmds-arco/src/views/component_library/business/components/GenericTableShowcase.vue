@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { TableSortingState } from '@fantastic-admin/components'
+import type { CalendarDateRangeValue, TableSortingState } from '@fantastic-admin/components'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 import type { QsGenericTableColumn, QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 
+import { getLocalTimeZone, today } from '@internationalized/date'
 import Decimal from 'decimal.js'
 import productDetail from '@/assets/images/component-library/image-group/product-detail.svg'
 import productFront from '@/assets/images/component-library/image-group/product-front.svg'
@@ -13,6 +14,7 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { sumMoneyValues } from '@/components/base/MoneyInput/logic'
+import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
@@ -195,7 +197,9 @@ const pageSize = ref(20)
 const search = ref('')
 const filters = ref<QsGenericTableFilterValues>({})
 const sorting = ref<TableSortingState>([])
+const dateRange = shallowRef<CalendarDateRangeValue>({ end: undefined, start: undefined })
 const lastEvent = ref('等待交互')
+const todayDate = today(getLocalTimeZone())
 
 const filteredRows = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase('zh-CN')
@@ -205,8 +209,13 @@ const filteredRows = computed(() => {
       .some(value => value.toLocaleLowerCase('zh-CN').includes(keyword))
     const matchesRegion = !filters.value.region || row.region === filters.value.region
     const matchesStatus = !filters.value.status || row.status === filters.value.status
+    const rowDate = row.updatedAt.slice(0, 10)
+    const matchesStart = dateRange.value.start === undefined
+      || rowDate >= dateRange.value.start.toString()
+    const matchesEnd = dateRange.value.end === undefined
+      || rowDate <= dateRange.value.end.toString()
 
-    return matchesSearch && matchesRegion && matchesStatus
+    return matchesSearch && matchesRegion && matchesStatus && matchesStart && matchesEnd
   })
 })
 
@@ -267,6 +276,16 @@ function statusClass(status: SettlementRow['status']) {
 
 function recordEvent(message: string) {
   lastEvent.value = message
+}
+
+function handleDateRangeComplete() {
+  page.value = 1
+  recordEvent('date-range · 日期范围已应用')
+}
+
+function handleDateRangeClear() {
+  page.value = 1
+  recordEvent('date-range · 日期范围已清除')
 }
 </script>
 
@@ -329,6 +348,17 @@ function recordEvent(message: string) {
         @search="recordEvent('search · 搜索词已应用')"
         @sorting-change="recordEvent('sorting-change · 排序状态已更新')"
       >
+        <template #query-leading>
+          <QsDateRangeFilter
+            v-model="dateRange"
+            :max-value="todayDate"
+            calendar-label="业务日期范围"
+            placeholder="业务日期范围"
+            @complete="handleDateRangeComplete"
+            @clear="handleDateRangeClear"
+          />
+        </template>
+
         <template #cell-settlementNo="{ row }">
           <QsTableStackedCell class="group">
             <QsTableStackedLine

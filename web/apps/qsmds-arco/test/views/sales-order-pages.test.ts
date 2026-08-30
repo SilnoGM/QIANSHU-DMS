@@ -76,6 +76,28 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.match(source, /summarizeSalesOrderItemsByCurrency/u)
 })
 
+test('销售订单列表在搜索框前复用日期范围筛选并传递订单日期查询', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const tableStart = source.indexOf('<QsGenericTable')
+  const queryLeadingStart = source.indexOf('<template #query-leading>', tableStart)
+  const dateFilterStart = source.indexOf('<QsDateRangeFilter', queryLeadingStart)
+
+  assert.match(source, /import type \{ CalendarDateRangeValue \} from '@fantastic-admin\/components'/u)
+  assert.match(source, /import QsDateRangeFilter from '@\/components\/business\/QsDateRangeFilter\/index\.vue'/u)
+  assert.match(source, /const dateRange = shallowRef<CalendarDateRangeValue>/u)
+  assert.ok(tableStart >= 0, '应存在销售通用表格')
+  assert.ok(queryLeadingStart > tableStart, '销售日期筛选应进入通用表格查询前置插槽')
+  assert.ok(dateFilterStart > queryLeadingStart, '查询前置插槽应渲染日期筛选组件')
+  assert.match(source, /calendar-label="出单日期范围"/u)
+  assert.match(source, /placeholder="出单日期范围"/u)
+  assert.match(source, /@complete="handleDateRangeComplete"/u)
+  assert.match(source, /@clear="clearDateRange"/u)
+  assert.match(source, /orderDateFrom: dateRange\.value\.start\.toString\(\)/u)
+  assert.match(source, /orderDateTo: dateRange\.value\.end\.toString\(\)/u)
+  assert.match(source, /function handleDateRangeComplete\(\): void \{[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(\)/u)
+  assert.match(source, /function clearDateRange\(\): void \{[\s\S]*?dateRange\.value = \{ end: undefined, start: undefined \}[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(\)/u)
+})
+
 test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
   const columnsStart = source.indexOf('const columns:')

@@ -398,7 +398,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
 
     const clearState = await page.evaluate(`(() => {
       const clear = document.querySelector('button[aria-label="清除采购日期范围"]')
-      const group = clear?.closest('.purchase-order-date-filter')
+      const group = clear?.closest('[data-slot="qs-date-range-filter"]')
       if (!clear || !group) return null
       const rect = group.getBoundingClientRect()
       return {

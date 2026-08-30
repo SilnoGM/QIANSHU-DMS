@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type {
   SalesOrderListViewMode,
   SalesOrderPendingActionItem,
@@ -28,12 +29,14 @@ import type {
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
 } from '@/components/business/QsGenericTable/logic'
+import { getLocalTimeZone, today } from '@internationalized/date'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { resolveMoneyDiscountRate } from '@/components/base/MoneyInput/logic'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -133,6 +136,10 @@ const pageSize = ref(20)
 const total = ref(0)
 const searchKeyword = ref('')
 const filters = ref<QsGenericTableFilterValues>({})
+const dateRange = shallowRef<CalendarDateRangeValue>({
+  end: undefined,
+  start: undefined,
+})
 const loading = ref(false)
 const listError = ref('')
 const requestId = ref<string>()
@@ -145,6 +152,7 @@ const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
 let requestVersion = 0
 let listAbortController: AbortController | null = null
 let queryRefreshPending = false
+const todayDate = today(getLocalTimeZone())
 
 const availableOrderCurrencies = computed(() => currencyCatalog.selectableCurrencies.value.filter(
   currency => currency.code === 'TWD' || currency.code === 'MYR',
@@ -449,6 +457,12 @@ function buildListQuery(): SalesOrderListQuery {
     ...(currencyCode === undefined ? {} : { currencyCode }),
     ...(issuerUserId === undefined ? {} : { issuerUserId }),
     ...(paymentStatus === undefined ? {} : { paymentStatus }),
+    ...(dateRange.value.start === undefined
+      ? {}
+      : { orderDateFrom: dateRange.value.start.toString() }),
+    ...(dateRange.value.end === undefined
+      ? {}
+      : { orderDateTo: dateRange.value.end.toString() }),
   }
 }
 
@@ -657,6 +671,17 @@ function handlePaginationChange(): void {
   scheduleQueryRefresh()
 }
 
+function handleDateRangeComplete(): void {
+  page.value = 1
+  scheduleQueryRefresh()
+}
+
+function clearDateRange(): void {
+  dateRange.value = { end: undefined, start: undefined }
+  page.value = 1
+  scheduleQueryRefresh()
+}
+
 function orderStatusLabel(value: SalesOrderListItemDto['orderStatus']): string {
   return {
     DRAFT: '草稿',
@@ -829,6 +854,17 @@ onBeforeUnmount(() => {
         @retry="loadOrders"
         @search="handleSearch"
       >
+        <template #query-leading>
+          <QsDateRangeFilter
+            v-model="dateRange"
+            :max-value="todayDate"
+            calendar-label="出单日期范围"
+            placeholder="出单日期范围"
+            @complete="handleDateRangeComplete"
+            @clear="clearDateRange"
+          />
+        </template>
+
         <template #actions="{ row }">
           <div class="flex flex-wrap gap-1 items-center">
             <template

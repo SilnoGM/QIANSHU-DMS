@@ -19,7 +19,7 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /purchaseOrdersApi\.list/u)
   assert.match(source, /buildPurchaseOrderListQuery/u)
   assert.match(source, /<FaPageHeader/u)
-  assert.match(source, /<FaCalendarDateRange/u)
+  assert.match(source, /<QsDateRangeFilter/u)
   assert.match(source, /<QsGenericTable/u)
   assert.match(source, /service_provider\.supplier/u)
   assert.match(source, /auth\('purchase-orders:read'\)/u)
@@ -44,23 +44,21 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
 
 test('采购日期范围位于搜索框前并以内嵌叉号清除', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
-  const dateFilterStart = source.indexOf('<div class="purchase-order-date-filter')
-  const genericTableStart = source.indexOf('<QsGenericTable', dateFilterStart)
+  const tableStart = source.indexOf('<QsGenericTable')
+  const queryLeadingStart = source.indexOf('<template #query-leading>', tableStart)
+  const dateFilterStart = source.indexOf('<QsDateRangeFilter', queryLeadingStart)
 
-  assert.notEqual(dateFilterStart, -1)
-  assert.ok(genericTableStart > dateFilterStart)
-  assert.match(source, /const dateRangePickerOpen = ref\(false\)/u)
-  assert.match(source, /const dateRangeLabel = computed/u)
-  assert.match(source, /<FaPopover\s+v-model:open="dateRangePickerOpen"/u)
-  assert.match(source, /aria-label="清除采购日期范围"/u)
-  assert.match(source, /@click\.stop="clearDateRange"/u)
-  assert.match(source, /md:group-hover:opacity-100/u)
-  assert.match(source, /md:group-focus-within:opacity-100/u)
-  assert.doesNotMatch(source, />清除日期</u)
-  assert.match(
-    source,
-    /md:mb-\[-2\.25rem\][\s\S]*?@media \(width >= 768px\)[\s\S]*?:deep\(\.qs-generic-table > div:first-child\) \{[\s\S]*?padding-inline-start: 18\.25rem;/u,
-  )
+  assert.match(source, /import QsDateRangeFilter from '@\/components\/business\/QsDateRangeFilter\/index\.vue'/u)
+  assert.ok(tableStart >= 0, '应存在采购通用表格')
+  assert.ok(queryLeadingStart > tableStart, '采购日期筛选应进入通用表格查询前置插槽')
+  assert.ok(dateFilterStart > queryLeadingStart, '查询前置插槽应渲染日期筛选组件')
+  assert.match(source, /v-model="dateRange"/u)
+  assert.match(source, /calendar-label="采购日期范围"/u)
+  assert.match(source, /placeholder="采购日期范围"/u)
+  assert.match(source, /@complete="handleDateRangeComplete"/u)
+  assert.match(source, /@clear="clearDateRange"/u)
+  assert.doesNotMatch(source, /dateRangePickerOpen|dateRangeLabel|purchase-order-date-filter/u)
+  assert.doesNotMatch(source, /:deep\(\.qs-generic-table > div:first-child\)/u)
 })
 
 test('采购创建页作为受保护隐藏路由并保持全部采购菜单激活', async () => {
