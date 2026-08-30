@@ -243,6 +243,8 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /PARTIALLY_PAID: '.*text-amber-700/u)
   assert.match(source, /PAID: '.*text-primary'/u)
   assert.match(source, /CONFIRMED: '.*text-primary'/u)
+  assert.match(source, /PENDING_RECONCILIATION: '.*text-amber-700/u)
+  assert.match(source, /COMPLETED: '.*text-primary'/u)
   assert.match(source, /CANCELLED: '.*text-destructive'/u)
   assert.match(source, /PENDING: '.*text-muted-foreground/u)
   assert.match(source, /PREPARING: '.*text-amber-700/u)
@@ -251,6 +253,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /SEA_TRANSIT: '.*text-blue-700/u)
   assert.match(source, /SIGNED: '.*text-primary/u)
   assert.doesNotMatch(source, /SHIPPED/u)
+  assert.doesNotMatch(source, /该订单状态尚未进入当前数据契约/u)
   for (const amountField of [
     'agreedTotalAmount',
     'standardSubtotalAmount',

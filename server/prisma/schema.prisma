@@ -210,6 +210,8 @@ enum ProductStatus {
 enum SalesOrderStatus {
   DRAFT
   CONFIRMED
+  PENDING_RECONCILIATION
+  COMPLETED
   CANCELLED
 
   @@map("sales_order_status")

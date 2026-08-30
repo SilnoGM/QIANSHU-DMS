@@ -26170,6 +26170,8 @@
               "enum": [
                 "DRAFT",
                 "CONFIRMED",
+                "PENDING_RECONCILIATION",
+                "COMPLETED",
                 "CANCELLED"
               ]
             }
@@ -30245,6 +30247,8 @@
               "status": 422,
               "codes": [
                 "SALES_ORDER_CANCEL_HAS_PAYMENTS",
+                "SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET",
+                "SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET",
                 "SALES_ORDER_STATUS_TRANSITION_INVALID",
                 "VALIDATION_FAILED"
               ]
@@ -30536,6 +30540,7 @@
               "status": 422,
               "codes": [
                 "SALES_ORDER_CANCELLED",
+                "SALES_ORDER_COMPLETED",
                 "SALES_ORDER_DELIVERY_RECEIPT_REQUIRED",
                 "SALES_ORDER_FULFILLMENT_TRANSITION_INVALID",
                 "VALIDATION_FAILED"
@@ -31121,6 +31126,7 @@
               "status": 422,
               "codes": [
                 "SALES_ORDER_CANCELLED",
+                "SALES_ORDER_COMPLETED",
                 "SALES_ORDER_PAYMENT_AMOUNT_INVALID",
                 "SALES_ORDER_PAYMENT_EXCEEDS_TOTAL",
                 "SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE",
@@ -31423,6 +31429,7 @@
             {
               "status": 422,
               "codes": [
+                "SALES_ORDER_COMPLETED",
                 "SALES_ORDER_PAYMENT_ALREADY_VOIDED",
                 "VALIDATION_FAILED"
               ]
@@ -43326,6 +43333,8 @@
             "enum": [
               "DRAFT",
               "CONFIRMED",
+              "PENDING_RECONCILIATION",
+              "COMPLETED",
               "CANCELLED"
             ]
           },
@@ -44279,6 +44288,8 @@
             "enum": [
               "DRAFT",
               "CONFIRMED",
+              "PENDING_RECONCILIATION",
+              "COMPLETED",
               "CANCELLED"
             ]
           },
@@ -44378,6 +44389,8 @@
             "enum": [
               "DRAFT",
               "CONFIRMED",
+              "PENDING_RECONCILIATION",
+              "COMPLETED",
               "CANCELLED"
             ]
           },

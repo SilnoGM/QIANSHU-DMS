@@ -25,6 +25,16 @@ describe('SalesOrderListQueryDto', () => {
 
     await expect(validate(dto)).resolves.not.toHaveLength(0)
   })
+
+  it.each(['PENDING_RECONCILIATION', 'COMPLETED'])(
+    'accepts the persisted %s order status filter',
+    async (orderStatus) => {
+      const dto = plainToInstance(SalesOrderListQueryDto, { orderStatus })
+
+      await expect(validate(dto)).resolves.toEqual([])
+      expect(dto.orderStatus).toBe(orderStatus)
+    },
+  )
 })
 
 describe('SalesOrderProductOptionsQueryDto', () => {

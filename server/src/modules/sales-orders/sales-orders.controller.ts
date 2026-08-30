@@ -401,6 +401,8 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCEL_HAS_PAYMENTS',
+        'SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET',
+        'SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET',
         'SALES_ORDER_STATUS_TRANSITION_INVALID',
         'VALIDATION_FAILED',
       ] },
@@ -430,6 +432,7 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCELLED',
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_DELIVERY_RECEIPT_REQUIRED',
         'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
         'VALIDATION_FAILED',
@@ -492,6 +495,7 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCELLED',
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_PAYMENT_AMOUNT_INVALID',
         'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
         'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
@@ -525,6 +529,7 @@ export class SalesOrdersController {
         'SALES_ORDER_PAYMENT_NOT_FOUND',
       ] },
       { status: 422, codes: [
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_PAYMENT_ALREADY_VOIDED',
         'VALIDATION_FAILED',
       ] },

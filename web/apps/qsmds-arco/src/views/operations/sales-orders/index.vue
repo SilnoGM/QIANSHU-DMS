@@ -182,16 +182,6 @@ const tableEmptyTitle = computed(() => props.viewMode === 'pending'
   ? '暂无待办订单'
   : '暂无销售订单')
 const tableEmptyDescription = computed(() => {
-  const selected = normalizeSalesOrderStatusSelection(
-    props.viewMode,
-    route.query.status,
-  )
-  if (
-    props.viewMode === 'all'
-    && (selected === 'PENDING_RECONCILIATION' || selected === 'COMPLETED')
-  ) {
-    return '该订单状态尚未进入当前数据契约。'
-  }
   return props.viewMode === 'pending'
     ? '当前筛选条件下没有需要处理的销售订单。'
     : '当前筛选条件下没有可展示的销售订单。'
@@ -668,7 +658,13 @@ function handlePaginationChange(): void {
 }
 
 function orderStatusLabel(value: SalesOrderListItemDto['orderStatus']): string {
-  return { DRAFT: '草稿', CONFIRMED: '已确认', CANCELLED: '已取消' }[value]
+  return {
+    DRAFT: '草稿',
+    CONFIRMED: '已确认',
+    PENDING_RECONCILIATION: '待对账',
+    COMPLETED: '已完成',
+    CANCELLED: '已取消',
+  }[value]
 }
 
 function fulfillmentStatusLabel(value: SalesOrderListItemDto['fulfillmentStatus']): string {
@@ -698,6 +694,8 @@ function orderStatusTagClass(value: SalesOrderListItemDto['orderStatus']): strin
   return {
     DRAFT: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
     CONFIRMED: 'border-primary/30 bg-primary/10 text-primary',
+    PENDING_RECONCILIATION: 'border-amber-500/30 bg-amber-500/8 text-amber-700 dark:text-amber-300',
+    COMPLETED: 'border-primary/30 bg-primary/10 text-primary',
     CANCELLED: 'border-destructive/30 bg-destructive/10 text-destructive',
   }[value]
 }

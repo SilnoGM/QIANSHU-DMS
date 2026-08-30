@@ -42,7 +42,7 @@ test('待办视图包含履约末端与付款待办，并允许同一订单跨�
   ])
 })
 
-test('全部订单视图排除草稿，并为尚未进入接口契约的状态保留入口', () => {
+test('全部订单视图排除草稿，并把四类正式状态映射到可信服务端查询', () => {
   assert.deepEqual(
     getSalesOrderStatusItems('all').map(item => [item.value, item.label]),
     [
@@ -55,10 +55,16 @@ test('全部订单视图排除草稿，并为尚未进入接口契约的状态�
   )
   assert.deepEqual(resolveSalesOrderQueryTargets('all', 'ALL'), [
     { orderStatus: 'CONFIRMED' },
+    { orderStatus: 'PENDING_RECONCILIATION' },
     { orderStatus: 'CANCELLED' },
+    { orderStatus: 'COMPLETED' },
   ])
-  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'PENDING_RECONCILIATION'), [])
-  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'COMPLETED'), [])
+  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'PENDING_RECONCILIATION'), [
+    { orderStatus: 'PENDING_RECONCILIATION' },
+  ])
+  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'COMPLETED'), [
+    { orderStatus: 'COMPLETED' },
+  ])
 })
 
 test('URL 中非法或跨视图状态回退到当前视图的全部状态', () => {

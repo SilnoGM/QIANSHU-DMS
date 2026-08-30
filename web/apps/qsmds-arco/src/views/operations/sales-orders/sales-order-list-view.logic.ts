@@ -81,6 +81,13 @@ const PENDING_FULFILLMENT_STATUSES = [
   'SEA_TRANSIT',
 ] as const
 
+const FORMAL_ORDER_STATUSES = [
+  'CONFIRMED',
+  'PENDING_RECONCILIATION',
+  'CANCELLED',
+  'COMPLETED',
+] as const
+
 const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
   SalesOrderListItemDto['fulfillmentStatus'],
   SalesOrderPendingActionItem
@@ -184,7 +191,7 @@ export function resolvePendingSalesOrderActions(
 
 /**
  * 当前公开列表接口只接受单个订单状态与单个履约状态，因此“全部”视图拆成互斥查询目标，
- * 页面再做精确聚合。待对账与已完成尚未进入当前 API/数据库契约，保留入口但不发送非法值。
+ * 页面再做精确聚合。正式订单明确排除历史草稿，四类目标均来自服务端真实枚举。
  */
 export function resolveSalesOrderQueryTargets(
   viewMode: SalesOrderListViewMode,
@@ -211,11 +218,12 @@ export function resolveSalesOrderQueryTargets(
   }
 
   if (selection === 'ALL') {
-    // 首版正式订单无草稿机制；显式查询两个已落地状态，防止历史草稿混入全部订单。
-    return [{ orderStatus: 'CONFIRMED' }, { orderStatus: 'CANCELLED' }]
+    // 首版正式订单无草稿机制；显式查询四个已落地状态，防止历史草稿混入全部订单。
+    return FORMAL_ORDER_STATUSES.map(orderStatus => ({ orderStatus }))
   }
-  if (selection === 'CONFIRMED' || selection === 'CANCELLED') {
-    return [{ orderStatus: selection }]
+  const orderStatus = FORMAL_ORDER_STATUSES.find(status => status === selection)
+  if (orderStatus !== undefined) {
+    return [{ orderStatus }]
   }
   return []
 }

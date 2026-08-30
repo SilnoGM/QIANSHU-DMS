@@ -18,6 +18,13 @@ type ContractOperation = NonNullable<OpenAPIObject['paths'][string]['get']> & {
   'x-qianshu-contract'?: unknown
 }
 
+function readOperationContract(operation: unknown): unknown {
+  if (typeof operation !== 'object' || operation === null) return undefined
+  return Object.prototype.hasOwnProperty.call(operation, 'x-qianshu-contract')
+    ? (operation as Record<string, unknown>)['x-qianshu-contract']
+    : undefined
+}
+
 const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
 const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
 
@@ -290,6 +297,40 @@ describe('SalesOrdersController product options OpenAPI', () => {
       expect(contract).toContain(`"${status}"`)
     }
     expect(contract).not.toContain('"SHIPPED"')
+  })
+
+  it('publishes five persisted order states and reconciliation transition errors', () => {
+    const contract = JSON.stringify(document)
+    for (const status of [
+      'DRAFT',
+      'CONFIRMED',
+      'PENDING_RECONCILIATION',
+      'COMPLETED',
+      'CANCELLED',
+    ]) {
+      expect(contract).toContain(`"${status}"`)
+    }
+
+    const operation = document.paths[
+      '/api/sales-orders/{salesOrderId}/order-status'
+    ]?.patch
+    const operationContract = JSON.stringify(readOperationContract(operation))
+    expect(operationContract).toContain('SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET')
+    expect(operationContract).toContain('SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET')
+
+    for (const mutationContract of [
+      readOperationContract(document.paths[
+        '/api/sales-orders/{salesOrderId}/fulfillment-status'
+      ]?.patch),
+      readOperationContract(document.paths[
+        '/api/sales-orders/{salesOrderId}/payments'
+      ]?.post),
+      readOperationContract(document.paths[
+        '/api/sales-orders/{salesOrderId}/payments/{paymentId}/void'
+      ]?.post),
+    ]) {
+      expect(JSON.stringify(mutationContract)).toContain('SALES_ORDER_COMPLETED')
+    }
   })
 
   it('publishes independent read-authorized list preview image operations', () => {

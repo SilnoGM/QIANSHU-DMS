@@ -195,6 +195,8 @@ function statusValueLabel(value: string): string {
   return {
     DRAFT: '草稿',
     CONFIRMED: '已确认',
+    PENDING_RECONCILIATION: '待对账',
+    COMPLETED: '已完成',
     CANCELLED: '已取消',
     PENDING: '待采购',
     PREPARING: '备货中',
