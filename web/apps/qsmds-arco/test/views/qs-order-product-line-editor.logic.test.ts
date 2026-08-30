@@ -160,6 +160,25 @@ test('临时产品不伪造标准价，汇总使用四位十进制定点计算',
   })
 })
 
+test('临时产品手工填写采购定价后按数量计入采购定价汇总', () => {
+  const temporary = {
+    ...createTemporaryOrderProductLine('purchase-custom-total', null),
+    name: '手工采购包装服务',
+    standardUnitPriceAmount: '15.00',
+    actualUnitPriceAmount: '15.00',
+    quantity: '2',
+  }
+
+  assert.deepEqual(calculateOrderProductLineTotals([
+    catalogLine,
+    temporary,
+  ], 2), {
+    standardTotal: '55.00',
+    actualTotal: '50.50',
+    missingStandardPriceCount: 0,
+  })
+})
+
 test('无当前币种标准价的产品可加入明细，本单售价仍从零开始且不计入标准价汇总', () => {
   const unpricedProduct: ProductSelectorItem = {
     ...catalogProduct,

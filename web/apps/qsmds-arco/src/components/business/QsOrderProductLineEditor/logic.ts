@@ -245,18 +245,21 @@ export function calculateOrderProductLineTotals(
     else if (actualTotalValid) {
       actualTotal += actualPrice * BigInt(quantity)
     }
-    if (line.lineType === 'CATALOG') {
-      if (line.standardUnitPriceAmount === null) {
+    // 采购场景允许 CUSTOM 行手工录入采购定价；只要存在明确价格就应与数据库
+    // 产品一样参与汇总。CUSTOM 空价仍保持“未提供参考价”语义，不伪造价格，也
+    // 不计入仅面向数据库产品档案的缺价数量。
+    if (line.standardUnitPriceAmount === null) {
+      if (line.lineType === 'CATALOG') {
         missingStandardPriceCount += 1
-        continue
       }
-      const standardPrice = amountUnits(line.standardUnitPriceAmount)
-      if (standardPrice === null) {
-        standardTotalValid = false
-      }
-      else if (standardTotalValid) {
-        standardTotal += standardPrice * BigInt(quantity)
-      }
+      continue
+    }
+    const standardPrice = amountUnits(line.standardUnitPriceAmount)
+    if (standardPrice === null) {
+      standardTotalValid = false
+    }
+    else if (standardTotalValid) {
+      standardTotal += standardPrice * BigInt(quantity)
     }
   }
   return {
