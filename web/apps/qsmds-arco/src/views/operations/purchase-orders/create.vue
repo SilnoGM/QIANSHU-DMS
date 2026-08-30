@@ -968,6 +968,7 @@ onBeforeUnmount(() => {
                     :disabled="submitLocked || currencyUnavailable || formModel.supplierValue === null"
                     :field-errors="fieldErrors"
                     :fixed-product-supplier-value="formModel.supplierValue ?? undefined"
+                    :maximum-quantity-by-key="maximumQuantityByKey"
                     :catalog-product-addable="purchaseType === 'STOCK'"
                     :custom-product-addable="purchaseType === 'STOCK'"
                     :catalog-line-initial-actual-unit-price-amount="null"

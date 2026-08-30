@@ -45,6 +45,7 @@ export interface OrderProductLineEditorProps {
   readonly fieldErrors?: Readonly<Record<string, string | undefined>>
   readonly fixedProductSupplierValue?: string
   readonly maximumLines?: number
+  readonly maximumQuantityByKey?: Readonly<Record<string, number | undefined>>
   readonly productSelectionDescription?: string
   readonly showDiscountRate?: boolean
   readonly temporaryLineInitialActualUnitPriceAmount?: string | null

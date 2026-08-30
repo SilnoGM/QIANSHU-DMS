@@ -154,3 +154,21 @@ test('产品行编辑器允许领域调用方分别关闭数据库和临时产�
   assert.match(source, /v-if="customProductAddable"[\s\S]*?添加临时产品/u)
   assert.match(source, /v-if="catalogProductAddable"[\s\S]*?<QsProductSelector/u)
 })
+
+test('产品行编辑器支持领域数量上限、逐字段错误展示与稳定聚焦标签', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(
+    types,
+    /readonly maximumQuantityByKey\?: Readonly<Record<string, number \| undefined>>/u,
+  )
+  assert.match(source, /maximumQuantityByKey: \(\) => \(\{\}\)/u)
+  assert.match(source, /function lineMaximumQuantity\(line: OrderProductLineModel\): number \| undefined/u)
+  assert.match(source, /:max="lineMaximumQuantity\(line\)"/u)
+  assert.match(source, /:aria-label="`第 \$\{index \+ 1\} 行产品数量`"/u)
+  assert.match(source, /lineFieldError\(index, 'quantity'\)/u)
+  assert.match(source, /role="alert"/u)
+})

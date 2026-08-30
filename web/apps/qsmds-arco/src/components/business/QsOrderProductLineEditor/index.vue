@@ -30,6 +30,7 @@ const props = withDefaults(defineProps<OrderProductLineEditorProps>(), {
   fieldErrors: () => ({}),
   fixedProductSupplierValue: undefined,
   maximumLines: 100,
+  maximumQuantityByKey: () => ({}),
   productSelectionDescription: undefined,
   showDiscountRate: false,
   temporaryLineInitialActualUnitPriceAmount: '0.00',
@@ -131,6 +132,27 @@ function markImageFailed(key: string): void {
 
 function lineActualSubtotal(line: OrderProductLineModel): string | null {
   return calculateOrderProductLineTotals([line], precision.value).actualTotal
+}
+
+/**
+ * 行级领域错误由销售、采购页面计算，编辑器只负责把精确字段错误放回对应输入框。
+ * 使用稳定字段路径可以同时服务可见提示、无障碍关联和页面的首错聚焦。
+ */
+function lineFieldError(index: number, field: string): string | undefined {
+  return props.fieldErrors[`lines.${index}.${field}`]
+}
+
+function lineFieldErrorId(index: number, field: string): string {
+  return `order-product-line-${index}-${field}-error`
+}
+
+function lineMaximumQuantity(line: OrderProductLineModel): number | undefined {
+  const maximumQuantity = props.maximumQuantityByKey[line.key]
+  return typeof maximumQuantity === 'number'
+    && Number.isSafeInteger(maximumQuantity)
+    && maximumQuantity > 0
+    ? maximumQuantity
+    : undefined
 }
 
 function lineDiscountRate(line: OrderProductLineModel): MoneyDiscountRate | null {
@@ -276,6 +298,9 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
                 <FaTooltip :text="line.name" :disabled="line.name === ''">
                   <FaInput
                     :model-value="line.name"
+                    :aria-describedby="lineFieldError(index, 'name') ? lineFieldErrorId(index, 'name') : undefined"
+                    :aria-invalid="Boolean(lineFieldError(index, 'name'))"
+                    :aria-label="`第 ${index + 1} 行产品名称`"
                     maxlength="128"
                     class="w-full"
                     :disabled="disabled"
@@ -284,7 +309,15 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
                   />
                 </FaTooltip>
               </FaFormItem>
-              <FaTooltip v-else :text="line.name" :disabled="line.name === ''">
+              <p
+                v-if="lineFieldError(index, 'name')"
+                :id="lineFieldErrorId(index, 'name')"
+                class="text-xs text-destructive m-0 mt-1"
+                role="alert"
+              >
+                {{ lineFieldError(index, 'name') }}
+              </p>
+              <FaTooltip v-if="line.lineType !== 'CUSTOM'" :text="line.name" :disabled="line.name === ''">
                 <span tabindex="0" class="max-w-80 block truncate">{{ line.name }}</span>
               </FaTooltip>
             </td>
@@ -319,6 +352,9 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               >
                 <MoneyInput
                   :model-value="line.standardUnitPriceAmount"
+                  :aria-describedby="lineFieldError(index, 'standardUnitPriceAmount') ? lineFieldErrorId(index, 'standardUnitPriceAmount') : undefined"
+                  :aria-invalid="Boolean(lineFieldError(index, 'standardUnitPriceAmount'))"
+                  :aria-label="`第 ${index + 1} 行${labels.referenceUnitPrice}`"
                   :currency="currency"
                   :currencies="currencies"
                   min="0"
@@ -337,6 +373,14 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               />
               <span v-else-if="line.lineType === 'CATALOG'" class="text-muted-foreground">暂无</span>
               <span v-else class="text-muted-foreground">—</span>
+              <p
+                v-if="lineFieldError(index, 'standardUnitPriceAmount')"
+                :id="lineFieldErrorId(index, 'standardUnitPriceAmount')"
+                class="text-xs text-destructive m-0 mt-1 whitespace-normal"
+                role="alert"
+              >
+                {{ lineFieldError(index, 'standardUnitPriceAmount') }}
+              </p>
             </td>
             <td class="p-3">
               <FaFormItem
@@ -349,6 +393,9 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               >
                 <MoneyInput
                   :model-value="line.actualUnitPriceAmount"
+                  :aria-describedby="lineFieldError(index, 'actualUnitPriceAmount') ? lineFieldErrorId(index, 'actualUnitPriceAmount') : undefined"
+                  :aria-invalid="Boolean(lineFieldError(index, 'actualUnitPriceAmount'))"
+                  :aria-label="`第 ${index + 1} 行${labels.actualUnitPrice}`"
                   :currency="currency"
                   :currencies="currencies"
                   min="0"
@@ -358,6 +405,14 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
                   @update:model-value="patchLine(index, { actualUnitPriceAmount: $event })"
                 />
               </FaFormItem>
+              <p
+                v-if="lineFieldError(index, 'actualUnitPriceAmount')"
+                :id="lineFieldErrorId(index, 'actualUnitPriceAmount')"
+                class="text-xs text-destructive m-0 mt-1"
+                role="alert"
+              >
+                {{ lineFieldError(index, 'actualUnitPriceAmount') }}
+              </p>
             </td>
             <td v-if="showDiscountRate" class="p-3 whitespace-nowrap">
               <span :class="discountRateTextClass(lineDiscountRate(line)?.trend)">
@@ -376,14 +431,26 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
                 <FaInput
                   type="number"
                   min="1"
+                  :max="lineMaximumQuantity(line)"
                   step="1"
                   inputmode="numeric"
                   :model-value="line.quantity"
+                  :aria-describedby="lineFieldError(index, 'quantity') ? lineFieldErrorId(index, 'quantity') : undefined"
+                  :aria-invalid="Boolean(lineFieldError(index, 'quantity'))"
+                  :aria-label="`第 ${index + 1} 行产品数量`"
                   :disabled="disabled"
                   class="w-full"
                   @update:model-value="patchLine(index, { quantity: String($event ?? '') })"
                 />
               </FaFormItem>
+              <p
+                v-if="lineFieldError(index, 'quantity')"
+                :id="lineFieldErrorId(index, 'quantity')"
+                class="text-xs text-destructive m-0 mt-1"
+                role="alert"
+              >
+                {{ lineFieldError(index, 'quantity') }}
+              </p>
             </td>
             <td class="qs-type-data-emphasis p-3 whitespace-nowrap">
               <AmountDisplay

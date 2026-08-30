@@ -132,6 +132,11 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /采购定价/u)
   assert.match(source, /本单采购价/u)
   assert.match(source, /<PurchaseOrderPaymentTerms/u)
+  assert.match(
+    source,
+    /:maximum-quantity-by-key="maximumQuantityByKey"/u,
+    '采购产品编辑器必须接收销售明细剩余可采购数量，备货采购传入空映射时保持无来源上限',
+  )
   assert.match(source, /采购总价/u)
   assert.match(source, /定金/u)
   assert.match(source, /尾款/u)
