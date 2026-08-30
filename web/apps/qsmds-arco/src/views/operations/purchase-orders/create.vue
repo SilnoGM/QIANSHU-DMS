@@ -296,15 +296,25 @@ function handleRemarkUpdate(value: unknown): void {
 async function selectSourceSalesOrder(
   item: PurchaseOrderSourceSalesOrderListItemDto,
 ): Promise<void> {
+  const previousSalesOrderId = selectedSalesOrder.value?.id ?? null
+  const sourceChanged = previousSalesOrderId !== null
+    && previousSalesOrderId !== item.id
   sourceAbortController?.abort()
   const controller = new AbortController()
   sourceAbortController = controller
   const authEpoch = appAccountStore.authEpoch
   selectedSalesOrder.value = item
   sourceSalesOrderLines.value = []
-  formModel.lines = []
-  sourceSalesOrderLineIdByKey.value = {}
-  maximumQuantityByKey.value = {}
+  if (sourceChanged) {
+    // 产品、付款约定和销售明细映射都依赖原销售订单，换单后必须一起失效；
+    // 重选同一订单则保留用户已填写内容，只刷新该订单的剩余可采购明细。
+    formModel.lines = []
+    formModel.depositDueAmount = null
+    formModel.balanceDueAmount = null
+    sourceSalesOrderLineIdByKey.value = {}
+    maximumQuantityByKey.value = {}
+    toast.info('销售订单已更换，请重新同步产品明细并填写付款约定')
+  }
   sourceLoading.value = true
   sourceError.value = ''
   clearFeedback()
@@ -812,8 +822,9 @@ onBeforeUnmount(() => {
         :inert="createSurface === 'review'"
         :aria-hidden="createSurface === 'review' ? 'true' : undefined"
       >
+        <!-- 页面字段均显式绑定 formModel，并由采购领域逻辑分步骤校验；FaForm 仅提供
+             表单语义和布局，不能回写外部模型，否则会删除未注册为 FaFormItem 的产品和付款字段。 -->
         <FaForm
-          :model="formModel"
           :disabled="submitLocked"
           :aria-busy="submission.phase === 'submitting' ? 'true' : 'false'"
           class="grid-cols-[minmax(0,1fr)] min-w-0"

@@ -156,7 +156,6 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
     /data-testid="purchase-order-step-products-payment"[\s\S]*?<FaCard\s+class="min-w-0"/u,
     '采购产品步骤与产品卡片必须保持可收缩，表格横向滚动不能泄漏到页面布局',
   )
-  assert.match(source, /<FaForm[\s\S]*?:model="formModel"/u)
   assert.match(paymentSource, /aria-label="定金"/u)
   assert.match(paymentSource, /aria-label="尾款"/u)
   assert.match(
@@ -170,6 +169,42 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
     '采购总价必须独占付款约定首行',
   )
   assert.match(source, /focusFirstInvalidField/u)
+})
+
+test('销售关联采购仅在切换不同订单时重置产品和付款依赖', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+  const handlerStart = source.indexOf('async function selectSourceSalesOrder(')
+  const handlerEnd = source.indexOf('async function loadAllSupplierProducts(', handlerStart)
+  const handlerSource = source.slice(handlerStart, handlerEnd)
+
+  assert.match(handlerSource, /const previousSalesOrderId = selectedSalesOrder\.value\?\.id \?\? null/u)
+  assert.match(
+    handlerSource,
+    /const sourceChanged = previousSalesOrderId !== null\s+&& previousSalesOrderId !== item\.id/u,
+    '首次选择和重选同一订单不得清空已经填写的下游资料',
+  )
+  assert.match(
+    handlerSource,
+    /if \(sourceChanged\) \{[\s\S]*?formModel\.lines = \[\][\s\S]*?formModel\.depositDueAmount = null[\s\S]*?formModel\.balanceDueAmount = null[\s\S]*?sourceSalesOrderLineIdByKey\.value = \{\}[\s\S]*?maximumQuantityByKey\.value = \{\}/u,
+    '切换不同销售订单必须原子清空产品、定金、尾款和销售明细映射',
+  )
+  assert.match(
+    handlerSource,
+    /toast\.info\('销售订单已更换，请重新同步产品明细并填写付款约定'\)/u,
+  )
+})
+
+test('采购分步表单不允许 FaForm 回写并删除显式绑定的产品和付款字段', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+  const formStart = source.indexOf('<FaForm')
+  const formEnd = source.indexOf('>', formStart)
+  const formTagSource = source.slice(formStart, formEnd + 1)
+
+  assert.doesNotMatch(
+    formTagSource,
+    /:model="formModel"/u,
+    '产品、定金和尾款未注册为 FaFormItem，FaForm 回写外部 model 会把它们删除为 undefined',
+  )
 })
 
 test('备货采购复用四步表单、实时详情与全屏核对，同时隔离销售来源能力', async () => {
