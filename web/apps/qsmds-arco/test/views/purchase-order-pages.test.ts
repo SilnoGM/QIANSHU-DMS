@@ -187,6 +187,11 @@ test('备货采购复用四步表单、实时详情与全屏核对，同时隔�
   assert.match(source, /v-show="activeStep === 2"/u)
   assert.doesNotMatch(source, /v-show="purchaseType === 'STOCK' \|\| activeStep/u)
   assert.match(source, /<FaCard\s+v-if="salesLinkedCreate"\s+title="销售订单关联"/u)
+  assert.match(
+    source,
+    /<FaCard\s+v-if="salesLinkedCreate"[\s\S]*?:class="selectedSalesOrder !== null \? 'border-primary' : undefined"/u,
+    '选择销售订单后，整个销售订单关联卡片必须使用主色边框反馈已关联状态',
+  )
   assert.match(source, /<div v-if="salesLinkedCreate" class="mb-4/u)
   assert.doesNotMatch(source, /<aside v-if="purchaseType === 'STOCK'"/u)
   assert.match(source, /<aside\s+v-if="steppedCreate"[\s\S]*?data-testid="purchase-order-create-summary-column"/u)

@@ -885,6 +885,7 @@ onBeforeUnmount(() => {
                   v-if="salesLinkedCreate"
                   title="销售订单关联"
                   description="一个采购订单只关联一个销售订单；同一销售订单可拆分为多个采购订单。"
+                  :class="selectedSalesOrder !== null ? 'border-primary' : undefined"
                 >
                   <div class="p-4 border border-border rounded-xl bg-muted/20 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div class="min-w-0">
