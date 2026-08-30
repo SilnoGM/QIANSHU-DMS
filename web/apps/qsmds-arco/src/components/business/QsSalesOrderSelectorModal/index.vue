@@ -252,7 +252,7 @@ watch(() => props.modelValue, (open) => {
               <span>客户 / 开单人</span>
               <span>产品明细</span>
               <span class="text-end">约定总价</span>
-              <span>订单状态</span>
+              <span class="text-end">订单状态</span>
             </div>
             <button
               v-for="item in eligibleItems"
@@ -291,7 +291,7 @@ watch(() => props.modelValue, (open) => {
               <strong class="qs-type-data-emphasis font-mono text-end break-words">
                 {{ formatSalesOrderAmount(item.agreedTotalAmount, item.currencyCode) }}
               </strong>
-              <span class="flex flex-col gap-1.5 min-w-0 items-start">
+              <span class="flex flex-col gap-1.5 min-w-0 items-end">
                 <FaTag variant="outline" class="qs-type-status-tag" :class="getSalesOrderFulfillmentStatusMeta(item.fulfillmentStatus).className">
                   {{ getSalesOrderFulfillmentStatusMeta(item.fulfillmentStatus).label }}
                 </FaTag>
@@ -344,7 +344,7 @@ watch(() => props.modelValue, (open) => {
                   <span class="qs-type-meta text-muted-foreground block">{{ formatSalesOrderQuantity(item.lineSummary.totalQuantity) }}</span>
                 </span>
               </span>
-              <span class="mt-4 pt-3 border-t border-border/70 flex flex-col gap-1.5 items-start">
+              <span class="mt-4 pt-3 border-t border-border/70 flex flex-col gap-1.5 items-end">
                 <FaTag variant="outline" class="qs-type-status-tag" :class="getSalesOrderFulfillmentStatusMeta(item.fulfillmentStatus).className">
                   {{ getSalesOrderFulfillmentStatusMeta(item.fulfillmentStatus).label }}
                 </FaTag>

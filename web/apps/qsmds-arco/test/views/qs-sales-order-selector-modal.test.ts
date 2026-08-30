@@ -24,9 +24,10 @@ test('销售订单选择弹窗覆盖搜索、单选确认、分页和五种稳�
 
   assert.match(source, /搜索销售订单号或客户名/u)
   assert.match(source, /订单状态：已确认/u)
-  assert.match(source, /<span>订单状态<\/span>/u)
+  assert.match(source, /<span class="text-end">订单状态<\/span>/u)
   assert.doesNotMatch(source, /履约 \/ 付款/u)
   assert.equal(source.match(/flex flex-col gap-1\.5/gu)?.length, 2)
+  assert.equal(source.match(/flex flex-col gap-1\.5[^"]*items-end/gu)?.length, 2)
   assert.match(source, /role="radiogroup"/u)
   assert.match(source, /role="radio"/u)
   assert.match(source, /emit\('select'/u)
