@@ -75,6 +75,7 @@ const dateRange = shallowRef<CalendarDateRangeValue>({
   end: undefined,
   start: undefined,
 })
+const dateRangePickerOpen = ref(false)
 const loading = ref(false)
 const listError = ref('')
 const requestId = ref<string>()
@@ -199,6 +200,19 @@ const listErrorDisplay = computed(() => listError.value === ''
     : `${listError.value}（requestId: ${requestId.value}）`)
 const hasDateRange = computed(() => dateRange.value.start !== undefined
   || dateRange.value.end !== undefined)
+const dateRangeLabel = computed(() => {
+  const { end, start } = dateRange.value
+  if (start !== undefined && end !== undefined) {
+    return `${start.toString()} 至 ${end.toString()}`
+  }
+  if (start !== undefined) {
+    return `${start.toString()} 至 ...`
+  }
+  if (end !== undefined) {
+    return `... 至 ${end.toString()}`
+  }
+  return '采购日期范围'
+})
 
 function paymentProgress(order: PurchaseOrderListItemDto) {
   return calculatePurchaseOrderPaymentProgress(
@@ -291,11 +305,13 @@ function handlePaginationChange(): void {
 }
 
 function handleDateRangeComplete(): void {
+  dateRangePickerOpen.value = false
   page.value = 1
   void loadOrders()
 }
 
 function clearDateRange(): void {
+  dateRangePickerOpen.value = false
   dateRange.value = { end: undefined, start: undefined }
   page.value = 1
   void loadOrders()
@@ -392,24 +408,43 @@ onBeforeUnmount(() => {
         </template>
       </FaAlert>
 
-      <div class="mb-4 flex flex-wrap gap-2 items-center">
-        <FaCalendarDateRange
-          v-model="dateRange"
-          picker
-          :max-value="todayDate"
-          picker-placeholder="采购日期范围"
-          calendar-label="采购日期范围"
-          trigger-class="min-h-11 sm:min-h-9"
-          @complete="handleDateRangeComplete"
-        />
+      <div class="purchase-order-date-filter group mb-3 max-w-full w-[280px] relative md:mb-[-2.25rem] md:z-10">
+        <FaPopover
+          v-model:open="dateRangePickerOpen"
+          align="start"
+          class="p-0 min-w-0 w-auto"
+        >
+          <FaButton
+            type="button"
+            variant="outline"
+            class="font-normal pe-10 text-left min-h-11 w-full justify-start overflow-hidden sm:min-h-9"
+            :class="hasDateRange ? undefined : 'text-muted-foreground'"
+            :aria-label="`打开采购日期范围选择：${dateRangeLabel}`"
+          >
+            <FaIcon name="i-lucide:calendar" class="flex-none size-4" aria-hidden="true" />
+            <span class="flex-1 min-w-0 truncate">{{ dateRangeLabel }}</span>
+          </FaButton>
+          <template #panel>
+            <FaCalendarDateRange
+              v-model="dateRange"
+              :max-value="todayDate"
+              calendar-label="采购日期范围"
+              @complete="handleDateRangeComplete"
+            />
+          </template>
+        </FaPopover>
+
+        <!-- 桌面端只在 hover 或键盘聚焦时显示；触屏端保持可见，避免失去清除入口。 -->
         <FaButton
           v-if="hasDateRange"
           type="button"
           variant="ghost"
-          class="min-h-11 sm:min-h-9"
-          @click="clearDateRange"
+          size="icon-sm"
+          aria-label="清除采购日期范围"
+          class="text-muted-foreground opacity-100 size-8 transition-opacity end-1 top-1/2 absolute md:opacity-0 md:pointer-events-none -translate-y-1/2 md:group-focus-within:opacity-100 md:group-hover:opacity-100 md:group-focus-within:pointer-events-auto md:group-hover:pointer-events-auto"
+          @click.stop="clearDateRange"
         >
-          <FaIcon name="i-lucide:x" aria-hidden="true" />清除日期
+          <FaIcon name="i-lucide:x" class="size-4" aria-hidden="true" />
         </FaButton>
       </div>
 
@@ -684,3 +719,12 @@ onBeforeUnmount(() => {
     />
   </div>
 </template>
+
+<style scoped>
+@media (width >= 768px) {
+  /* 日期控件属于采购域筛选，视觉上占用通用查询栏最左侧，但不扩张 QsGenericTable 公共 API。 */
+  :deep(.qs-generic-table > div:first-child) {
+    padding-inline-start: 18.25rem;
+  }
+}
+</style>

@@ -42,6 +42,27 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /付款状态/u)
 })
 
+test('采购日期范围位于搜索框前并以内嵌叉号清除', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const dateFilterStart = source.indexOf('<div class="purchase-order-date-filter')
+  const genericTableStart = source.indexOf('<QsGenericTable', dateFilterStart)
+
+  assert.notEqual(dateFilterStart, -1)
+  assert.ok(genericTableStart > dateFilterStart)
+  assert.match(source, /const dateRangePickerOpen = ref\(false\)/u)
+  assert.match(source, /const dateRangeLabel = computed/u)
+  assert.match(source, /<FaPopover\s+v-model:open="dateRangePickerOpen"/u)
+  assert.match(source, /aria-label="清除采购日期范围"/u)
+  assert.match(source, /@click\.stop="clearDateRange"/u)
+  assert.match(source, /md:group-hover:opacity-100/u)
+  assert.match(source, /md:group-focus-within:opacity-100/u)
+  assert.doesNotMatch(source, />清除日期</u)
+  assert.match(
+    source,
+    /md:mb-\[-2\.25rem\][\s\S]*?@media \(width >= 768px\)[\s\S]*?:deep\(\.qs-generic-table > div:first-child\) \{[\s\S]*?padding-inline-start: 18\.25rem;/u,
+  )
+})
+
 test('采购创建页作为受保护隐藏路由并保持全部采购菜单激活', async () => {
   const router = await readFile(new URL(
     '../../src/router/modules/operations.workbench.ts',

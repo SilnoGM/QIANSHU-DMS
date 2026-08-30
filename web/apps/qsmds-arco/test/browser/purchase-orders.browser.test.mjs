@@ -273,6 +273,162 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
   })
   runtime.start()
 
+  await runPurchaseOrderBrowserStep('date range precedes search and clears in place', async () => {
+    await page.waitFor(`(() => {
+      const loading = document.querySelector('.qianshu-loading')
+      return loading === null
+        || loading.getClientRects().length === 0
+        || getComputedStyle(loading).pointerEvents === 'none'
+    })()`)
+    const layout = await page.evaluate(`(() => {
+      const date = [...document.querySelectorAll('button')]
+        .find(button => button.getAttribute('aria-label')?.startsWith('打开采购日期范围选择：'))
+      const search = document.querySelector('input[placeholder="搜索采购单号、销售单号或客户名"]')
+      if (!date || !search) return null
+      const dateRect = date.getBoundingClientRect()
+      const searchRect = search.getBoundingClientRect()
+      return {
+        centerDelta: Math.abs(
+          dateRect.top + dateRect.height / 2 - (searchRect.top + searchRect.height / 2),
+        ),
+        dateRight: dateRect.right,
+        searchLeft: searchRect.left,
+      }
+    })()`)
+    assert.ok(layout)
+    assert.ok(layout.dateRight + 8 <= layout.searchLeft)
+    assert.ok(layout.centerDelta <= 1)
+    assert.equal(await page.evaluate(`document.querySelectorAll(
+      'button[aria-label="清除采购日期范围"]',
+    ).length`), 0)
+
+    await page.evaluate(`(() => {
+      const button = [...document.querySelectorAll('button')]
+        .find(candidate => candidate.getAttribute('aria-label')?.startsWith('打开采购日期范围选择：'))
+      if (!button) throw new Error('purchase date range trigger unavailable')
+      button.click()
+      return true
+    })()`)
+    await page.waitFor(`document.querySelector('[data-slot="range-calendar"]')
+      ?.getClientRects().length > 0`)
+    await page.evaluate(`(() => {
+      const day = [...document.querySelectorAll('[data-slot="range-calendar-trigger"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && !candidate.disabled
+          && !candidate.hasAttribute('data-outside-view'))
+      if (!day) throw new Error('purchase date range start unavailable')
+      day.click()
+      return true
+    })()`)
+    await page.waitFor(`document.querySelector(
+      '[data-slot="range-calendar-trigger"][data-selection-start]',
+    )`)
+    const rangeEndPoint = await page.evaluate(`(() => {
+      const days = [...document.querySelectorAll('[data-slot="range-calendar-trigger"]')]
+        .filter(candidate => candidate.getClientRects().length > 0
+          && !candidate.disabled
+          && !candidate.hasAttribute('data-outside-view'))
+      const startIndex = days.findIndex(candidate => candidate.hasAttribute('data-selection-start'))
+      const day = days[startIndex + 1]
+      if (!day) return null
+      const rect = day.getBoundingClientRect()
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      }
+    })()`)
+    assert.ok(rangeEndPoint)
+    await page.connection.send('Input.dispatchMouseEvent', {
+      button: 'none',
+      buttons: 0,
+      pointerType: 'mouse',
+      type: 'mouseMoved',
+      x: rangeEndPoint.x,
+      y: rangeEndPoint.y,
+    })
+    await page.connection.send('Input.dispatchMouseEvent', {
+      button: 'left',
+      buttons: 1,
+      clickCount: 1,
+      pointerType: 'mouse',
+      type: 'mousePressed',
+      x: rangeEndPoint.x,
+      y: rangeEndPoint.y,
+    })
+    await page.connection.send('Input.dispatchMouseEvent', {
+      button: 'left',
+      buttons: 0,
+      clickCount: 1,
+      pointerType: 'mouse',
+      type: 'mouseReleased',
+      x: rangeEndPoint.x,
+      y: rangeEndPoint.y,
+    })
+    await page.waitFor(`(() => {
+      const calendar = document.querySelector('[data-slot="range-calendar"]')
+      const clear = document.querySelector('button[aria-label="清除采购日期范围"]')
+      const trigger = [...document.querySelectorAll('button')]
+        .find(candidate => candidate.getAttribute('aria-label')?.startsWith('打开采购日期范围选择：'))
+      const label = trigger?.getAttribute('aria-label') ?? ''
+      return (calendar?.getClientRects().length ?? 0) === 0
+        && clear !== null
+        && label.includes(' 至 ')
+        && !label.includes('...')
+    })()`)
+    await page.evaluate(`(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur()
+      }
+      return true
+    })()`)
+    await page.connection.send('Input.dispatchMouseEvent', {
+      button: 'none',
+      buttons: 0,
+      pointerType: 'mouse',
+      type: 'mouseMoved',
+      x: 0,
+      y: 0,
+    })
+    await page.waitFor(`(() => {
+      const clear = document.querySelector('button[aria-label="清除采购日期范围"]')
+      return clear !== null
+        && getComputedStyle(clear).opacity === '0'
+        && getComputedStyle(clear).pointerEvents === 'none'
+    })()`)
+
+    const clearState = await page.evaluate(`(() => {
+      const clear = document.querySelector('button[aria-label="清除采购日期范围"]')
+      const group = clear?.closest('.purchase-order-date-filter')
+      if (!clear || !group) return null
+      const rect = group.getBoundingClientRect()
+      return {
+        opacity: getComputedStyle(clear).opacity,
+        pointerEvents: getComputedStyle(clear).pointerEvents,
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+      }
+    })()`)
+    assert.ok(clearState)
+    assert.equal(clearState.opacity, '0')
+    assert.equal(clearState.pointerEvents, 'none')
+    await page.connection.send('Input.dispatchMouseEvent', {
+      type: 'mouseMoved',
+      x: clearState.x,
+      y: clearState.y,
+    })
+    await page.waitFor(`(() => {
+      const clear = document.querySelector('button[aria-label="清除采购日期范围"]')
+      return clear && getComputedStyle(clear).opacity === '1'
+        && getComputedStyle(clear).pointerEvents !== 'none'
+    })()`)
+    await clickVisibleAriaButton(page, '清除采购日期范围')
+    await page.waitFor(`!document.querySelector('button[aria-label="清除采购日期范围"]')
+      && [...document.querySelectorAll('button')].some(button => (
+        button.getAttribute('aria-label') === '打开采购日期范围选择：采购日期范围'
+      ))`)
+    await waitForPurchaseList(page, '暂无采购订单')
+  })
+
   let linkedOrder
   await runPurchaseOrderBrowserStep('sales-linked CUSTOM snapshot and final submission', async () => {
     await clickVisibleButton(page, '新增采购')
