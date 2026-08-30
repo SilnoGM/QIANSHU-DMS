@@ -4,13 +4,15 @@ import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 组件纯逻辑使用 Node.js 内置 runner。
 import test from 'node:test'
 import {
+  buildSalesOrderProductImageItems,
   filterEligibleSalesOrders,
-  formatSalesOrderAmount,
+  filterSalesOrderProductsWithoutImage,
   formatSalesOrderLineCount,
   formatSalesOrderQuantity,
   getSalesOrderFulfillmentStatusMeta,
   getSalesOrderPaymentStatusMeta,
   normalizeSalesOrderSelectorKeyword,
+  resolveSalesOrderProductPreview,
   resolveSalesOrderSelection,
   resolveSelectorPagination,
 } from '../../src/components/business/QsSalesOrderSelectorModal/logic'
@@ -27,14 +29,19 @@ function order(
       id: `issuer-${id}`,
       displayName: '余树',
     },
-    currencyCode: 'TWD',
     customerName: `客户 ${id}`,
-    agreedTotalAmount: '120000.0000',
     orderStatus,
     fulfillmentStatus: 'PREPARING',
     paymentStatus: 'PARTIALLY_PAID',
     lineSummary: {
       lineCount: 2,
+      previews: [
+        {
+          lineId: `line-${id}`,
+          productName: `产品 ${id}`,
+          mainImage: null,
+        },
+      ],
       totalQuantity: 3,
     },
   }
@@ -90,9 +97,49 @@ test('分页对异常输入进行约束并生成稳定区间', () => {
   })
 })
 
+test('产品预览按稳定行号映射图片，并识别无主图产品', () => {
+  const previews: SalesOrderSelectorItem['lineSummary']['previews'] = [
+    {
+      lineId: 'line-catalog',
+      productName: '千树标准组合柜',
+      mainImage: {
+        id: 'image-catalog',
+        contentUrl: ' /api/products/catalog-main/content ',
+      },
+    },
+    {
+      lineId: 'line-custom',
+      productName: '本单临时包装服务',
+      mainImage: null,
+    },
+    {
+      lineId: 'line-empty-url',
+      productName: '无有效主图产品',
+      mainImage: {
+        id: 'image-empty-url',
+        contentUrl: '   ',
+      },
+    },
+  ]
+
+  const images = buildSalesOrderProductImageItems(previews)
+  assert.deepEqual(images, [
+    {
+      alt: '千树标准组合柜',
+      key: 'line-catalog',
+      src: '/api/products/catalog-main/content',
+      tooltip: '千树标准组合柜',
+    },
+  ])
+  assert.deepEqual(
+    filterSalesOrderProductsWithoutImage(previews).map(item => item.lineId),
+    ['line-custom', 'line-empty-url'],
+  )
+  assert.equal(resolveSalesOrderProductPreview(previews, images[0])?.lineId, 'line-catalog')
+  assert.equal(resolveSalesOrderProductPreview(previews, { src: '/missing' }), null)
+})
+
 test('产品汇总和销售状态使用稳定中文语义', () => {
-  assert.equal(formatSalesOrderAmount('180000.0000', 'TWD'), 'NT$180,000.00')
-  assert.equal(formatSalesOrderAmount('86500.5000', 'MYR'), 'RM86,500.50')
   assert.equal(formatSalesOrderLineCount(2), '2 项产品')
   assert.equal(formatSalesOrderQuantity(3), '共 3 件')
   assert.equal(getSalesOrderFulfillmentStatusMeta('PENDING').label, '待采购')

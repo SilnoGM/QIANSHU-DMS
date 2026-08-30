@@ -8,15 +8,35 @@ const SOURCE = new URL(
   '../../src/components/business/QsSalesOrderSelectorModal/index.vue',
   import.meta.url,
 )
+const TYPES = new URL(
+  '../../src/components/business/QsSalesOrderSelectorModal/types.ts',
+  import.meta.url,
+)
+const PRODUCT_PREVIEW = new URL(
+  '../../src/components/business/QsSalesOrderSelectorModal/SalesOrderProductPreview.vue',
+  import.meta.url,
+)
 
 test('销售订单选择弹窗复用 QsGenericModal 且不读取 API、Store 或采购域', async () => {
-  const source = await readFile(SOURCE, 'utf8')
+  const [source, types, productPreview] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+    readFile(PRODUCT_PREVIEW, 'utf8'),
+  ])
 
   assert.match(source, /defineOptions\(\{ name: 'QsSalesOrderSelectorModal' \}\)/u)
+  assert.match(source, /import SalesOrderProductPreview from '\.\/SalesOrderProductPreview\.vue'/u)
   assert.match(source, /import QsGenericModal from '@\/components\/business\/QsGenericModal\/index\.vue'/u)
   assert.match(source, /size="xl"/u)
   assert.match(source, /orderStatus === 'CONFIRMED'/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store|purchase-order|PurchaseOrder/u)
+  assert.match(types, /readonly previews: readonly SalesOrderSelectorLinePreview\[\]/u)
+  assert.match(types, /readonly contentUrl: string/u)
+  assert.doesNotMatch(types, /agreedTotalAmount|currencyCode/u)
+  assert.match(productPreview, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
+  assert.match(productPreview, /import QsGoodTooltip from '@\/components\/business\/QsGoodTooltip\/index\.vue'/u)
+  assert.match(productPreview, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
+  assert.doesNotMatch(productPreview, /@\/api|useApp\w*Store|purchase-order|PurchaseOrder/u)
 })
 
 test('销售订单选择弹窗覆盖搜索、单选确认、分页和五种稳定状态', async () => {
@@ -27,6 +47,7 @@ test('销售订单选择弹窗覆盖搜索、单选确认、分页和五种稳�
   assert.equal(source.match(/客户 \/ 出单人/gu)?.length, 2)
   assert.doesNotMatch(source, /客户 \/ 开单人/u)
   assert.match(source, /<span class="text-end">订单状态<\/span>/u)
+  assert.doesNotMatch(source, /约定总价|agreedTotalAmount|formatSalesOrderAmount/u)
   assert.doesNotMatch(source, /履约 \/ 付款/u)
   assert.equal(source.match(/flex flex-col gap-1\.5/gu)?.length, 2)
   assert.equal(source.match(/flex flex-col gap-1\.5[^"]*items-end/gu)?.length, 2)
@@ -51,6 +72,14 @@ test('销售订单选择弹窗桌面使用数据行、移动端使用卡片且�
   assert.match(source, /overflow-y-auto/u)
   assert.match(source, /hidden sm:block/u)
   assert.match(source, /sm:hidden/u)
+  const productPreview = await readFile(PRODUCT_PREVIEW, 'utf8')
+  assert.equal(source.match(/<SalesOrderProductPreview/gu)?.length, 2)
+  assert.equal(productPreview.match(/<ImageGroup/gu)?.length, 1)
+  assert.equal(productPreview.match(/#tooltip="\{ item: image, index, total: productTotal \}"/gu)?.length, 1)
+  assert.equal(productPreview.match(/<QsGoodTooltipContent/gu)?.length, 1)
+  assert.equal(productPreview.match(/<QsGoodTooltip/gu)?.length, 2)
+  assert.match(source, /grid-cols-\[1\.35fr_1fr_1\.1fr_0\.9fr\]/u)
+  assert.match(source, /@keydown\.enter\.self\.prevent="selectOrder\(item\)"/u)
   assert.match(source, /min-w-0/u)
   assert.match(source, /overflow-x-hidden/u)
   assert.match(source, /size-11/u)

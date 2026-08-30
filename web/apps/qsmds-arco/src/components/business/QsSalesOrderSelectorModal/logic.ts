@@ -1,8 +1,10 @@
 import type {
   SalesOrderSelectorFulfillmentStatus,
   SalesOrderSelectorItem,
+  SalesOrderSelectorLinePreview,
   SalesOrderSelectorPaymentStatus,
 } from './types'
+import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 
 interface SelectorPaginationInput {
   page: number
@@ -87,6 +89,41 @@ export function normalizeSalesOrderSelectorKeyword(keyword: string): string {
   return keyword.normalize('NFKC').trim()
 }
 
+export function buildSalesOrderProductImageItems(
+  previews: readonly SalesOrderSelectorLinePreview[],
+): ImageGroupItem[] {
+  return previews.flatMap((preview) => {
+    const source = preview.mainImage?.contentUrl.trim()
+    if (!source) {
+      return []
+    }
+    const productName = preview.productName.trim() || '未命名产品'
+    return [{
+      alt: productName,
+      key: preview.lineId,
+      src: source,
+      tooltip: productName,
+    }]
+  })
+}
+
+export function filterSalesOrderProductsWithoutImage(
+  previews: readonly SalesOrderSelectorLinePreview[],
+): SalesOrderSelectorLinePreview[] {
+  return previews.filter(preview => !preview.mainImage?.contentUrl.trim())
+}
+
+export function resolveSalesOrderProductPreview(
+  previews: readonly SalesOrderSelectorLinePreview[],
+  image: ImageGroupItem | null | undefined,
+): SalesOrderSelectorLinePreview | null {
+  if (image?.key === undefined) {
+    return null
+  }
+  const lineId = String(image.key)
+  return previews.find(preview => preview.lineId === lineId) ?? null
+}
+
 export function resolveSelectorPagination(input: SelectorPaginationInput): SelectorPagination {
   const total = Number.isFinite(input.total) ? Math.max(0, Math.trunc(input.total)) : 0
   const pageSize = Number.isFinite(input.pageSize) && input.pageSize > 0
@@ -112,25 +149,6 @@ export function formatSalesOrderLineCount(value: number): string {
 
 export function formatSalesOrderQuantity(value: number): string {
   return `共 ${Math.max(0, Math.trunc(value))} 件`
-}
-
-/**
- * 金额来自 Decimal 字符串，显示时直接对字符串分组，避免先转 Number 导致大额精度丢失。
- */
-export function formatSalesOrderAmount(
-  amount: string,
-  currencyCode: SalesOrderSelectorItem['currencyCode'],
-): string {
-  const normalized = amount.trim()
-  const matched = normalized.match(/^(-?)(\d+)(?:\.(\d+))?$/u)
-  if (!matched) {
-    return `${currencyCode} ${normalized || '-'}`
-  }
-
-  const [, sign, integer = '0', fraction = ''] = matched
-  const groupedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
-  const symbol = currencyCode === 'TWD' ? 'NT$' : 'RM'
-  return `${sign}${symbol}${groupedInteger}.${fraction.padEnd(2, '0').slice(0, 2)}`
 }
 
 export function getSalesOrderFulfillmentStatusMeta(

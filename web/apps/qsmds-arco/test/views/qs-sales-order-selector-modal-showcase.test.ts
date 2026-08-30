@@ -20,6 +20,9 @@ test('组件库展示页独立展示销售订单选择弹窗且不读取业务 A
   ])
 
   assert.match(showcase, /import QsSalesOrderSelectorModal/u)
+  assert.match(showcase, /productFront/u)
+  assert.match(showcase, /productSide/u)
+  assert.match(showcase, /lineSummary: \{[\s\S]*?previews:/u)
   assert.match(showcase, /'default', 'selected', 'loading', 'empty', 'error'/u)
   assert.match(showcase, /selected: \{/u)
   assert.match(showcase, /state === 'selected'/u)

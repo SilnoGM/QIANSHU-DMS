@@ -5,7 +5,6 @@ import type {
 } from './types'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import {
-  formatSalesOrderAmount,
   formatSalesOrderLineCount,
   formatSalesOrderQuantity,
   getSalesOrderFulfillmentStatusMeta,
@@ -14,6 +13,7 @@ import {
   resolveSalesOrderSelection,
   resolveSelectorPagination,
 } from './logic'
+import SalesOrderProductPreview from './SalesOrderProductPreview.vue'
 
 defineOptions({ name: 'QsSalesOrderSelectorModal' })
 
@@ -72,6 +72,15 @@ const pagination = computed(() => resolveSelectorPagination({
   pageSize: props.pageSize,
   total: props.total,
 }))
+
+function selectionAriaLabel(item: SalesOrderSelectorItem): string {
+  return [
+    `选择销售订单 ${item.orderNo}`,
+    item.customerName,
+    formatSalesOrderLineCount(item.lineSummary.lineCount),
+    formatSalesOrderQuantity(item.lineSummary.totalQuantity),
+  ].join('，')
+}
 
 function selectOrder(item: SalesOrderSelectorItem): void {
   if (props.disabled || props.loading || props.error) {
@@ -206,10 +215,9 @@ watch(() => props.modelValue, (open) => {
           <div
             v-for="index in 4"
             :key="index"
-            class="p-4 border border-border rounded-lg bg-background gap-3 grid sm:grid-cols-[1.3fr_1fr_0.75fr_1fr_0.9fr]"
+            class="p-4 border border-border rounded-lg bg-background gap-3 grid sm:grid-cols-[1.35fr_1fr_1.1fr_0.9fr]"
             aria-hidden="true"
           >
-            <div class="rounded bg-muted h-5 animate-pulse" />
             <div class="rounded bg-muted h-5 animate-pulse" />
             <div class="rounded bg-muted h-5 animate-pulse" />
             <div class="rounded bg-muted h-5 animate-pulse" />
@@ -247,25 +255,30 @@ watch(() => props.modelValue, (open) => {
 
         <template v-else>
           <div class="hidden sm:block" role="radiogroup" aria-label="销售订单候选列表">
-            <div class="text-xs text-muted-foreground px-4 pb-2 gap-4 grid grid-cols-[1.35fr_1fr_0.75fr_1fr_0.9fr]">
+            <div class="text-xs text-muted-foreground px-4 pb-2 gap-4 grid grid-cols-[1.35fr_1fr_1.1fr_0.9fr]">
               <span>销售订单</span>
               <span>客户 / 出单人</span>
               <span>产品明细</span>
-              <span class="text-end">约定总价</span>
               <span class="text-end">订单状态</span>
             </div>
-            <button
+            <div
               v-for="item in eligibleItems"
               :key="item.id"
-              type="button"
               role="radio"
               :aria-checked="selectedOrderIdDraft === item.id"
-              class="p-4 text-start border rounded-lg bg-background gap-4 grid grid-cols-[1.35fr_1fr_0.75fr_1fr_0.9fr] min-w-0 w-full transition-colors items-center [&+&]:mt-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              :class="selectedOrderIdDraft === item.id
-                ? 'border-primary bg-primary/[0.035] ring-1 ring-primary/20'
-                : 'border-border hover:border-primary/50'"
-              :disabled="disabled"
+              :aria-disabled="disabled"
+              :aria-label="selectionAriaLabel(item)"
+              :tabindex="disabled ? -1 : 0"
+              class="p-4 text-start border rounded-lg bg-background gap-4 grid grid-cols-[1.35fr_1fr_1.1fr_0.9fr] min-w-0 w-full transition-colors items-center [&+&]:mt-2 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              :class="[
+                selectedOrderIdDraft === item.id
+                  ? 'border-primary bg-primary/[0.035] ring-1 ring-primary/20'
+                  : 'border-border hover:border-primary/50',
+                disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+              ]"
               @click="selectOrder(item)"
+              @keydown.enter.self.prevent="selectOrder(item)"
+              @keydown.space.self.prevent="selectOrder(item)"
             >
               <span class="flex gap-3 min-w-0 items-center">
                 <span
@@ -284,13 +297,7 @@ watch(() => props.modelValue, (open) => {
                 <strong class="qs-type-body-medium block truncate">{{ item.customerName }}</strong>
                 <span class="qs-type-meta text-muted-foreground mt-1 block truncate">{{ item.issuer.displayName }}</span>
               </span>
-              <span class="min-w-0">
-                <strong class="qs-type-body-medium block">{{ formatSalesOrderLineCount(item.lineSummary.lineCount) }}</strong>
-                <span class="qs-type-meta text-muted-foreground mt-1 block">{{ formatSalesOrderQuantity(item.lineSummary.totalQuantity) }}</span>
-              </span>
-              <strong class="qs-type-data-emphasis font-mono text-end break-words">
-                {{ formatSalesOrderAmount(item.agreedTotalAmount, item.currencyCode) }}
-              </strong>
+              <SalesOrderProductPreview :previews="item.lineSummary.previews" />
               <span class="flex flex-col gap-1.5 min-w-0 items-end">
                 <FaTag variant="outline" class="qs-type-status-tag" :class="getSalesOrderFulfillmentStatusMeta(item.fulfillmentStatus).className">
                   {{ getSalesOrderFulfillmentStatusMeta(item.fulfillmentStatus).label }}
@@ -299,22 +306,28 @@ watch(() => props.modelValue, (open) => {
                   {{ getSalesOrderPaymentStatusMeta(item.paymentStatus).label }}
                 </FaTag>
               </span>
-            </button>
+            </div>
           </div>
 
           <div class="gap-3 grid sm:hidden" role="radiogroup" aria-label="销售订单候选列表">
-            <button
+            <div
               v-for="item in eligibleItems"
               :key="item.id"
-              type="button"
               role="radio"
               :aria-checked="selectedOrderIdDraft === item.id"
+              :aria-disabled="disabled"
+              :aria-label="selectionAriaLabel(item)"
+              :tabindex="disabled ? -1 : 0"
               class="p-4 text-start border rounded-lg bg-background min-w-0 w-full transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              :class="selectedOrderIdDraft === item.id
-                ? 'border-primary bg-primary/[0.035] ring-1 ring-primary/20'
-                : 'border-border'"
-              :disabled="disabled"
+              :class="[
+                selectedOrderIdDraft === item.id
+                  ? 'border-primary bg-primary/[0.035] ring-1 ring-primary/20'
+                  : 'border-border',
+                disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer',
+              ]"
               @click="selectOrder(item)"
+              @keydown.enter.self.prevent="selectOrder(item)"
+              @keydown.space.self.prevent="selectOrder(item)"
             >
               <span class="flex gap-3 min-w-0 items-start">
                 <span
@@ -328,9 +341,6 @@ watch(() => props.modelValue, (open) => {
                   <strong class="qs-type-data-emphasis font-mono block break-all">{{ item.orderNo }}</strong>
                   <span class="qs-type-meta text-muted-foreground mt-1 block">{{ item.orderDate }}</span>
                 </span>
-                <strong class="qs-type-data-emphasis font-mono text-end max-w-[9rem] break-words">
-                  {{ formatSalesOrderAmount(item.agreedTotalAmount, item.currencyCode) }}
-                </strong>
               </span>
               <span class="mt-4 gap-3 grid grid-cols-2">
                 <span class="min-w-0">
@@ -338,10 +348,15 @@ watch(() => props.modelValue, (open) => {
                   <strong class="qs-type-body-medium mt-1 block truncate">{{ item.customerName }}</strong>
                   <span class="qs-type-meta text-muted-foreground block truncate">{{ item.issuer.displayName }}</span>
                 </span>
-                <span>
+                <span class="min-w-0">
                   <span class="qs-type-meta text-muted-foreground block">产品明细</span>
-                  <strong class="qs-type-body-medium mt-1 block">{{ formatSalesOrderLineCount(item.lineSummary.lineCount) }}</strong>
-                  <span class="qs-type-meta text-muted-foreground block">{{ formatSalesOrderQuantity(item.lineSummary.totalQuantity) }}</span>
+                  <SalesOrderProductPreview
+                    :previews="item.lineSummary.previews"
+                    :image-size="40"
+                    :max-count="2"
+                    no-image-align="end"
+                    class="mt-1.5"
+                  />
                 </span>
               </span>
               <span class="mt-4 pt-3 border-t border-border/70 flex flex-col gap-1.5 items-end">
@@ -352,7 +367,7 @@ watch(() => props.modelValue, (open) => {
                   {{ getSalesOrderPaymentStatusMeta(item.paymentStatus).label }}
                 </FaTag>
               </span>
-            </button>
+            </div>
           </div>
 
           <div class="mt-4 pt-4 border-t border-border/70 gap-3 grid sm:grid-cols-[1fr_auto] sm:items-center">

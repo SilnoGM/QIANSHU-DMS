@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import type { SalesOrderSelectorItem } from '@/components/business/QsSalesOrderSelectorModal/types'
+import productDetail from '@/assets/images/component-library/image-group/product-detail.svg'
+import productFront from '@/assets/images/component-library/image-group/product-front.svg'
+import productLabel from '@/assets/images/component-library/image-group/product-label.svg'
+import productSide from '@/assets/images/component-library/image-group/product-side.svg'
 import QsSalesOrderSelectorModal from '@/components/business/QsSalesOrderSelectorModal/index.vue'
 
 defineOptions({ name: 'SalesOrderSelectorModalShowcase' })
@@ -44,6 +48,23 @@ const showcaseStates = stateValues.map(value => ({
   value,
 }))
 
+function linePreview(
+  lineId: string,
+  productName: string,
+  contentUrl: null | string = null,
+): SalesOrderSelectorItem['lineSummary']['previews'][number] {
+  return {
+    lineId,
+    productName,
+    mainImage: contentUrl
+      ? {
+          id: `image-${lineId}`,
+          contentUrl,
+        }
+      : null,
+  }
+}
+
 /**
  * Fixture 故意混入所有不合格状态，便于组件库直接证明公共组件的防御性过滤有效。
  * 数据固定在本文件内，不接业务接口、不读取 Store，也不会产生写入副作用。
@@ -54,104 +75,137 @@ const fixtureItems: readonly SalesOrderSelectorItem[] = [
     orderNo: 'SO/20260830-00108',
     orderDate: '2026-08-30',
     issuer: { id: 'issuer-1', displayName: '余树' },
-    currencyCode: 'TWD',
     customerName: '千航贸易（台北）有限公司',
-    agreedTotalAmount: '180000.0000',
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'PREPARING',
     paymentStatus: 'PARTIALLY_PAID',
-    lineSummary: { lineCount: 2, totalQuantity: 3 },
+    lineSummary: {
+      lineCount: 2,
+      previews: [
+        linePreview('confirmed-1-line-1', '千树标准组合柜', productFront),
+        linePreview('confirmed-1-line-2', '本单临时包装服务'),
+      ],
+      totalQuantity: 3,
+    },
   },
   {
     id: 'confirmed-2',
     orderNo: 'SO/20260829-00107',
     orderDate: '2026-08-29',
     issuer: { id: 'issuer-2', displayName: '李昕' },
-    currencyCode: 'MYR',
     customerName: 'GREEN TREE SDN. BHD.',
-    agreedTotalAmount: '86500.5000',
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'PENDING',
     paymentStatus: 'UNPAID',
-    lineSummary: { lineCount: 4, totalQuantity: 12 },
+    lineSummary: {
+      lineCount: 4,
+      previews: [
+        linePreview('confirmed-2-line-1', '城市旅行收纳包', productFront),
+        linePreview('confirmed-2-line-2', '墨蓝中号旅行收纳包', productSide),
+        linePreview('confirmed-2-line-3', '沙棕大号旅行收纳包', productLabel),
+        linePreview('confirmed-2-line-4', '本单临时安装服务'),
+      ],
+      totalQuantity: 12,
+    },
   },
   {
     id: 'confirmed-3',
     orderNo: 'SO/20260828-00106',
     orderDate: '2026-08-28',
     issuer: { id: 'issuer-3', displayName: '孙伟' },
-    currencyCode: 'TWD',
     customerName: '远山国际采购中心',
-    agreedTotalAmount: '62000.0000',
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'SEA_TRANSIT',
     paymentStatus: 'PAID',
-    lineSummary: { lineCount: 1, totalQuantity: 2 },
+    lineSummary: {
+      lineCount: 1,
+      previews: [
+        linePreview('confirmed-3-line-1', '通勤分区收纳包', productDetail),
+      ],
+      totalQuantity: 2,
+    },
   },
   {
     id: 'confirmed-4',
     orderNo: 'SO/20260827-00105',
     orderDate: '2026-08-27',
     issuer: { id: 'issuer-4', displayName: '陈卓' },
-    currencyCode: 'TWD',
     customerName: '山海空间设计有限公司',
-    agreedTotalAmount: '328000.0000',
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'WAREHOUSE_ARRIVED',
     paymentStatus: 'PARTIALLY_PAID',
-    lineSummary: { lineCount: 6, totalQuantity: 18 },
+    lineSummary: {
+      lineCount: 6,
+      previews: [
+        linePreview('confirmed-4-line-1', '千树标准组合柜', productFront),
+        linePreview('confirmed-4-line-2', '墨蓝中号旅行收纳包', productSide),
+        linePreview('confirmed-4-line-3', '沙棕大号旅行收纳包', productLabel),
+        linePreview('confirmed-4-line-4', '通勤分区收纳包', productDetail),
+        linePreview('confirmed-4-line-5', '订单专用包装服务'),
+        linePreview('confirmed-4-line-6', '现场安装服务'),
+      ],
+      totalQuantity: 18,
+    },
   },
   {
     id: 'draft',
     orderNo: 'SO/DRAFT',
     orderDate: '2026-08-30',
     issuer: { id: 'issuer-hidden', displayName: '隐藏数据' },
-    currencyCode: 'TWD',
     customerName: '草稿订单不应显示',
-    agreedTotalAmount: '1.0000',
     orderStatus: 'DRAFT',
     fulfillmentStatus: 'PENDING',
     paymentStatus: 'UNPAID',
-    lineSummary: { lineCount: 1, totalQuantity: 1 },
+    lineSummary: {
+      lineCount: 1,
+      previews: [linePreview('draft-line-1', '草稿产品')],
+      totalQuantity: 1,
+    },
   },
   {
     id: 'reconciliation',
     orderNo: 'SO/RECONCILIATION',
     orderDate: '2026-08-30',
     issuer: { id: 'issuer-hidden', displayName: '隐藏数据' },
-    currencyCode: 'TWD',
     customerName: '待对账订单不应显示',
-    agreedTotalAmount: '1.0000',
     orderStatus: 'PENDING_RECONCILIATION',
     fulfillmentStatus: 'SIGNED',
     paymentStatus: 'PAID',
-    lineSummary: { lineCount: 1, totalQuantity: 1 },
+    lineSummary: {
+      lineCount: 1,
+      previews: [linePreview('reconciliation-line-1', '待对账产品')],
+      totalQuantity: 1,
+    },
   },
   {
     id: 'completed',
     orderNo: 'SO/COMPLETED',
     orderDate: '2026-08-30',
     issuer: { id: 'issuer-hidden', displayName: '隐藏数据' },
-    currencyCode: 'TWD',
     customerName: '已完成订单不应显示',
-    agreedTotalAmount: '1.0000',
     orderStatus: 'COMPLETED',
     fulfillmentStatus: 'SIGNED',
     paymentStatus: 'PAID',
-    lineSummary: { lineCount: 1, totalQuantity: 1 },
+    lineSummary: {
+      lineCount: 1,
+      previews: [linePreview('completed-line-1', '已完成产品')],
+      totalQuantity: 1,
+    },
   },
   {
     id: 'cancelled',
     orderNo: 'SO/CANCELLED',
     orderDate: '2026-08-30',
     issuer: { id: 'issuer-hidden', displayName: '隐藏数据' },
-    currencyCode: 'TWD',
     customerName: '已取消订单不应显示',
-    agreedTotalAmount: '1.0000',
     orderStatus: 'CANCELLED',
     fulfillmentStatus: 'PENDING',
     paymentStatus: 'UNPAID',
-    lineSummary: { lineCount: 1, totalQuantity: 1 },
+    lineSummary: {
+      lineCount: 1,
+      previews: [linePreview('cancelled-line-1', '已取消产品')],
+      totalQuantity: 1,
+    },
   },
 ]
 

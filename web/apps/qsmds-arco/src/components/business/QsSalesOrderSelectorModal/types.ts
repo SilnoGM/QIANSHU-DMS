@@ -22,6 +22,15 @@ export type SalesOrderSelectorPaymentStatus
     | 'PARTIALLY_PAID'
     | 'PAID'
 
+export interface SalesOrderSelectorLinePreview {
+  readonly lineId: string
+  readonly productName: string
+  readonly mainImage: {
+    readonly id: string
+    readonly contentUrl: string
+  } | null
+}
+
 export interface SalesOrderSelectorItem {
   readonly id: string
   readonly orderNo: string
@@ -30,14 +39,13 @@ export interface SalesOrderSelectorItem {
     readonly id: string
     readonly displayName: string
   }
-  readonly currencyCode: 'TWD' | 'MYR'
   readonly customerName: string
-  readonly agreedTotalAmount: string
   readonly orderStatus: SalesOrderSelectorOrderStatus
   readonly fulfillmentStatus: SalesOrderSelectorFulfillmentStatus
   readonly paymentStatus: SalesOrderSelectorPaymentStatus
   readonly lineSummary: {
     readonly lineCount: number
+    readonly previews: readonly SalesOrderSelectorLinePreview[]
     readonly totalQuantity: number
   }
 }
