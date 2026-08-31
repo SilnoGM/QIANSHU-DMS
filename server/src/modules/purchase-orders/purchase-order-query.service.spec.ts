@@ -169,6 +169,7 @@ describe('PurchaseOrderQueryService', () => {
       salesOrderNo: 'SO-001',
       customerName: '客户甲',
       supplier: { value: 'SUPPLIER_A', label: '供应商 A' },
+      createdBy: { id: 'actor-id', displayName: '采购员' },
       purchaseTotalAmount: '100.0000',
       paidAmount: '30.0000',
       outstandingAmount: '70.0000',
@@ -201,6 +202,7 @@ describe('PurchaseOrderQueryService', () => {
     const where = (fixture.prisma.purchaseOrder.findMany.mock.calls[0]?.[0] as {
       where?: unknown
       orderBy?: unknown
+      select?: unknown
     } | undefined)
     expect(where?.where).toMatchObject({
       orderStatus: 'CONFIRMED',
@@ -210,6 +212,9 @@ describe('PurchaseOrderQueryService', () => {
       ] }],
     })
     expect(where?.orderBy).toEqual([{ orderDate: 'desc' }, { id: 'desc' }])
+    expect(where?.select).toMatchObject({
+      createdBy: { select: { id: true, displayName: true } },
+    })
   })
 
   it.each([

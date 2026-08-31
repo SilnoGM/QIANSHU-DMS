@@ -36,6 +36,7 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /query: \{ type \}/u)
   assert.match(source, /<AmountDisplay/u)
   assert.match(source, /<DateTimeDisplay/u)
+  assert.match(source, /import QsPersonDisplay from '@\/components\/business\/QsPersonDisplay\/index\.vue'/u)
   assert.match(source, /#mobile-row/u)
   assert.match(
     source,
@@ -46,6 +47,21 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
     source,
     /id: 'supplierSummary',\s+minWidth: 60,\s+title: '供应商'/u,
     '采购列表供应商列最小宽度固定为 60px',
+  )
+  assert.match(
+    source,
+    /id: 'supplierSummary',[\s\S]*?id: 'buyerSummary',\s+minWidth: 180,\s+title: '采购人'[\s\S]*?id: 'productSummary'/u,
+    '采购人列必须位于供应商与产品之间，并与销售人员列保持 180px',
+  )
+  assert.match(
+    source,
+    /<template #cell-buyerSummary="\{ row \}">[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.original\.createdBy\.displayName"[\s\S]*?size="md"[\s\S]*?class="max-w-\[9rem\]"/u,
+    '桌面采购人列必须使用 QsPersonDisplay 展示 createdBy',
+  )
+  assert.match(
+    source,
+    /采购人[\s\S]*?<QsPersonDisplay[\s\S]*?:display-name="row\.createdBy\.displayName"[\s\S]*?size="md"[\s\S]*?class="max-w-full"/u,
+    '移动采购卡片必须使用 QsPersonDisplay 展示采购人',
   )
   assert.match(
     source,
@@ -107,8 +123,8 @@ test('采购列表使用销售列表同构的三槽产品主图与产品提示',
   assert.match(source, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
   assert.match(
     source,
-    /id: 'supplierSummary',[\s\S]*?id: 'productSummary',\s+minWidth: 160,\s+title: '产品'[\s\S]*?id: 'amountSummary'/u,
-    '产品列必须位于供应商与采购金额之间，并固定为 160px',
+    /id: 'buyerSummary',[\s\S]*?id: 'productSummary',\s+minWidth: 160,\s+title: '产品'[\s\S]*?id: 'amountSummary'/u,
+    '产品列必须位于采购人与采购金额之间，并固定为 160px',
   )
   assert.match(source, /function productImageItems\(row: PurchaseOrderListItemDto\): readonly ImageGroupItem\[\]/u)
   assert.match(source, /row\.lineSummary\.previews\.flatMap/u)

@@ -137,6 +137,7 @@ export class PurchaseOrderListItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly salesOrderNo!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly customerName!: string | null
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto
+  @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly createdBy!: PurchaseOrderActorDto
   @ApiProperty({ type: () => PurchaseOrderLineSummaryDto })
   readonly lineSummary!: PurchaseOrderLineSummaryDto
   @ApiProperty({ type: 'string', format: 'date' }) readonly orderDate!: string
@@ -162,7 +163,6 @@ export class PurchaseOrderDetailDto extends PurchaseOrderListItemDto {
   readonly sourceSalesOrder!: PurchaseOrderSourceSalesOrderDto | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
   @ApiProperty({ type: () => PurchaseOrderAmountsDto }) readonly amounts!: PurchaseOrderAmountsDto
-  @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly createdBy!: PurchaseOrderActorDto
   @ApiProperty({ type: () => [PurchaseOrderLineDto] }) readonly lines!: readonly PurchaseOrderLineDto[]
   @ApiProperty({ type: () => [PurchaseOrderPaymentDto] })
   readonly payments!: readonly PurchaseOrderPaymentDto[]

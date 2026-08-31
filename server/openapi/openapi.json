@@ -47518,6 +47518,22 @@
           "effectiveEnabled"
         ]
       },
+      "PurchaseOrderActorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ]
+      },
       "PurchaseOrderListImageDto": {
         "type": "object",
         "properties": {
@@ -47612,6 +47628,9 @@
           "supplier": {
             "$ref": "#/components/schemas/PurchaseOrderSupplierDto"
           },
+          "createdBy": {
+            "$ref": "#/components/schemas/PurchaseOrderActorDto"
+          },
           "lineSummary": {
             "$ref": "#/components/schemas/PurchaseOrderLineSummaryDto"
           },
@@ -47689,6 +47708,7 @@
           "salesOrderNo",
           "customerName",
           "supplier",
+          "createdBy",
           "lineSummary",
           "orderDate",
           "currencyCode",
@@ -47872,22 +47892,6 @@
           "page",
           "pageSize",
           "total"
-        ]
-      },
-      "PurchaseOrderActorDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "displayName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "displayName"
         ]
       },
       "PurchaseOrderSourceSalesOrderListImageDto": {
@@ -48660,6 +48664,9 @@
           "supplier": {
             "$ref": "#/components/schemas/PurchaseOrderSupplierDto"
           },
+          "createdBy": {
+            "$ref": "#/components/schemas/PurchaseOrderActorDto"
+          },
           "lineSummary": {
             "$ref": "#/components/schemas/PurchaseOrderLineSummaryDto"
           },
@@ -48745,9 +48752,6 @@
           "amounts": {
             "$ref": "#/components/schemas/PurchaseOrderAmountsDto"
           },
-          "createdBy": {
-            "$ref": "#/components/schemas/PurchaseOrderActorDto"
-          },
           "lines": {
             "type": "array",
             "items": {
@@ -48780,6 +48784,7 @@
           "salesOrderNo",
           "customerName",
           "supplier",
+          "createdBy",
           "lineSummary",
           "orderDate",
           "currencyCode",
@@ -48798,7 +48803,6 @@
           "sourceSalesOrder",
           "shippingMarkText",
           "amounts",
-          "createdBy",
           "lines",
           "payments",
           "documents",

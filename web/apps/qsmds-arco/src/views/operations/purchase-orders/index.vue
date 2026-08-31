@@ -33,6 +33,7 @@ import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
@@ -201,6 +202,11 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   id: 'supplierSummary',
   minWidth: 60,
   title: '供应商',
+}, {
+  accessorFn: item => item.createdBy.displayName,
+  id: 'buyerSummary',
+  minWidth: 180,
+  title: '采购人',
 }, {
   accessorFn: item => item.lineSummary.lineCount,
   id: 'productSummary',
@@ -612,7 +618,7 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]"
         search-placeholder="搜索采购单号、销售单号或客户名"
         :total="total"
-        table-class="min-w-[2560px]"
+        table-class="min-w-[2740px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="retryOrders"
@@ -710,6 +716,14 @@ onBeforeUnmount(() => {
           <FaTag variant="outline" :class="row.original.supplier.tone">
             {{ row.original.supplier.label }}
           </FaTag>
+        </template>
+
+        <template #cell-buyerSummary="{ row }">
+          <QsPersonDisplay
+            :display-name="row.original.createdBy.displayName"
+            size="md"
+            class="max-w-[9rem]"
+          />
         </template>
 
         <template #cell-productSummary="{ row }">
@@ -856,6 +870,18 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   {{ row.supplier.label }}
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  采购人
+                </dt>
+                <dd class="m-0">
+                  <QsPersonDisplay
+                    :display-name="row.createdBy.displayName"
+                    size="md"
+                    class="max-w-full"
+                  />
                 </dd>
               </div>
               <div class="col-span-2">

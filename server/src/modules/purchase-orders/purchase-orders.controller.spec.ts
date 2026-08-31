@@ -450,6 +450,14 @@ describe('PurchaseOrdersController OpenAPI', () => {
       in: 'query', name: 'view', required: true,
       schema: { enum: ['all', 'pending'] },
     })
+    const listItemSchema = document.components?.schemas?.PurchaseOrderListItemDto
+    if (listItemSchema === undefined || '$ref' in listItemSchema) {
+      throw new Error('PurchaseOrderListItemDto must be an inline OpenAPI schema')
+    }
+    expect(listItemSchema.required).toContain('createdBy')
+    expect(listItemSchema.properties?.createdBy).toEqual({
+      $ref: '#/components/schemas/PurchaseOrderActorDto',
+    })
     const response = document.paths['/api/purchase-orders/product-options']
       ?.get?.responses?.[HttpStatus.OK]
     expect(JSON.stringify(response)).toContain('PurchaseOrderProductOptionsDto')

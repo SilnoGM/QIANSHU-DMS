@@ -672,12 +672,18 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     })()`)
     await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
     await waitForPurchaseList(page, salesCustomerName)
+    await page.waitFor(`(() => {
+      const table = document.querySelector('[data-testid="purchase-order-list-table"]')
+      return [...(table?.querySelectorAll('[data-slot="qs-person-display-name"]') ?? [])]
+        .some(name => name.textContent?.trim() === 'Browser Auth Admin')
+    })()`)
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
     assert.equal(response.body?.total, 1)
     linkedOrder = response.body?.items?.find(item => item.purchaseType === 'SALES_LINKED')
     assert.match(linkedOrder?.orderNo ?? '', /^PO-BRW-\d{8}$/u)
+    assert.equal(linkedOrder?.createdBy?.displayName, 'Browser Auth Admin')
     assert.equal(linkedOrder?.purchaseTotalAmount, '190.0000')
     assert.equal(linkedOrder?.depositDueAmount, '20.0000')
     assert.equal(linkedOrder?.balanceDueAmount, '170.0000')
@@ -866,7 +872,9 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
       const card = [...document.querySelectorAll(
         '[data-testid="purchase-order-mobile-summary"]',
       )].find(candidate => candidate.getClientRects().length > 0
-        && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+        && candidate.textContent?.includes(${JSON.stringify(order.orderNo)})
+        && candidate.textContent?.includes('采购人')
+        && candidate.textContent?.includes('Browser Auth Admin'))
       return innerWidth === 390 && card
     })()`)
     // 页头带入场缩放；必须等视觉尺寸稳定后再验收物理触控目标，避免采到

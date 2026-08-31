@@ -61,6 +61,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
   version: true,
   createdAt: true,
   updatedAt: true,
+  createdBy: { select: { id: true, displayName: true } },
   salesOrder: {
     select: { id: true, orderNo: true, customerName: true },
   },
@@ -74,7 +75,6 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
   ...PURCHASE_ORDER_LIST_SELECT,
   shippingMarkText: true,
   lineSubtotalAmount: true,
-  createdBy: { select: { id: true, displayName: true } },
   lines: {
     orderBy: [{ lineNumber: 'asc' as const }, { id: 'asc' as const }],
     select: {
@@ -175,6 +175,7 @@ export interface PurchaseOrderListItem {
   readonly salesOrderNo: string | null
   readonly customerName: string | null
   readonly supplier: PurchaseOrderSupplier
+  readonly createdBy: { readonly id: string, readonly displayName: string }
   readonly lineSummary: {
     readonly lineCount: number
     readonly totalQuantity: number
@@ -243,7 +244,6 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
     readonly paidAmount: string
     readonly outstandingAmount: string
   }
-  readonly createdBy: { readonly id: string, readonly displayName: string }
   readonly lines: readonly Record<string, unknown>[]
   readonly payments: readonly Record<string, unknown>[]
   readonly documents: readonly Record<string, unknown>[]
@@ -371,6 +371,7 @@ function mapListItem(
     salesOrderNo: row.salesOrder?.orderNo ?? null,
     customerName: row.salesOrder?.customerName ?? null,
     supplier,
+    createdBy: row.createdBy,
     lineSummary: mapLineSummary(row),
     orderDate: row.orderDate.toISOString().slice(0, 10),
     currencyCode: row.currencyCode,
@@ -598,7 +599,6 @@ export class PurchaseOrderQueryService {
           totalUnits - activePaidUnits,
         ),
       },
-      createdBy: row.createdBy,
       lines: row.lines.map(line => ({
         id: line.id,
         lineNumber: line.lineNumber,
