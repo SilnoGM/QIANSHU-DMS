@@ -33,23 +33,23 @@ docs: 设计订单状态计数能力
 
 目标：证明当前销售订单域缺少状态计数 DTO、Controller 路由和服务端聚合。
 
-- [ ] 扩展 `sales-order-query-dto.spec.ts`，覆盖：
+- [x] 扩展 `sales-order-query-dto.spec.ts`，覆盖：
   - `view=all|pending`；
   - 关键字、币种、出单人、付款状态和日期范围；
   - 非法视图、UUID、日期和枚举被拒绝。
-- [ ] 扩展 `sales-order-query.service.spec.ts`，覆盖：
+- [x] 扩展 `sales-order-query.service.spec.ts`，覆盖：
   - 全部销售排除 `DRAFT`；
   - 四个正式状态与 `ALL`；
   - 待办五个履约分类、待收款和去重 `ALL`；
   - 缺失分组补 `0`；
   - 基础筛选进入所有聚合谓词；
   - 待办多次读取使用 `RepeatableRead`。
-- [ ] 扩展销售 Controller/OpenAPI 测试，断言：
+- [x] 扩展销售 Controller/OpenAPI 测试，断言：
   - `GET /api/sales-orders/status-counts`；
   - `operationId = sales_orders_status_counts`；
   - `sales-orders:read`；
   - 私有 no-store、校验和响应 DTO。
-- [ ] 运行定向测试并记录预期失败原因。
+- [x] 运行定向测试并记录预期失败原因。
 
 ```bash
 pnpm -C server test -- sales-order-query-dto.spec.ts sales-order-query.service.spec.ts sales-orders-product-options.controller.spec.ts --runInBand
@@ -59,15 +59,15 @@ pnpm -C server test -- sales-order-query-dto.spec.ts sales-order-query.service.s
 
 目标：以最小实现让 T2 通过，并复用销售列表基础谓词。
 
-- [ ] 新增 `SalesOrderStatusCountsQueryDto`、计数项 DTO 和响应 DTO。
-- [ ] 提取销售列表基础 `where` 构造，保持关键字、日期和通用筛选语义不变。
-- [ ] 实现全部销售 `groupBy(orderStatus)`，显式排除 `DRAFT`。
-- [ ] 实现待办销售履约分组、付款分组和去重联合 `ALL`。
-- [ ] 待办聚合使用 `RepeatableRead` 事务。
-- [ ] 在 Controller 接入只读路由、权限和 OpenAPI 契约。
-- [ ] 重新运行 T2，确认通过。
-- [ ] 运行服务端类型检查和 lint。
-- [ ] 创建本地提交：
+- [x] 新增 `SalesOrderStatusCountsQueryDto`、计数项 DTO 和响应 DTO。
+- [x] 提取销售列表基础 `where` 构造，保持关键字、日期和通用筛选语义不变。
+- [x] 实现全部销售 `groupBy(orderStatus)`，显式排除 `DRAFT`。
+- [x] 实现待办销售履约分组、付款分组和去重联合 `ALL`。
+- [x] 待办聚合使用 `RepeatableRead` 事务。
+- [x] 在 Controller 接入只读路由、权限和 OpenAPI 契约。
+- [x] 重新运行 T2，确认通过。
+- [x] 运行服务端类型检查和 lint。
+- [x] 创建本地提交：
 
 ```text
 feat: 添加销售订单状态计数接口

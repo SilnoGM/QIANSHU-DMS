@@ -30,13 +30,14 @@ const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
 
 function createController(result: ProductMediaContentResponse) {
   const issuerOptions = jest.fn().mockResolvedValue({ items: [] })
+  const statusCounts = jest.fn().mockResolvedValue({ view: 'all', items: [] })
   const productOptions = jest.fn().mockResolvedValue({
     items: [], page: 1, pageSize: 20, total: 0,
   })
   const resolve = jest.fn().mockResolvedValue(result)
   const resolveListPreview = jest.fn().mockResolvedValue(result)
   const controller = new SalesOrdersController(
-    { issuerOptions, productOptions } as unknown as SalesOrderQueryService,
+    { issuerOptions, productOptions, statusCounts } as unknown as SalesOrderQueryService,
     {} as SalesOrderCommandService,
     {} as SalesOrderMutationService,
     {} as SalesOrderDocumentService,
@@ -47,6 +48,7 @@ function createController(result: ProductMediaContentResponse) {
     controller,
     issuerOptions,
     productOptions,
+    statusCounts,
     resolve,
     resolveListPreview,
     response,
@@ -62,6 +64,7 @@ function createController(result: ProductMediaContentResponse) {
       issuerOptions: jest.fn(),
       list: jest.fn(),
       productOptions: jest.fn(),
+      statusCounts: jest.fn(),
     },
   }, {
     provide: SalesOrderCommandService,
@@ -133,6 +136,29 @@ describe('SalesOrdersController product options', () => {
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
       SalesOrdersController.prototype.issuerOptions,
+    )).toEqual(['sales-orders:read'])
+  })
+
+  it('reads status counts with sales-order read permission', async () => {
+    const fixture = createController({
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+    const query = { view: 'pending' as const, currencyCode: 'TWD' as const }
+
+    await expect(fixture.controller.statusCounts(query)).resolves.toEqual({
+      view: 'all',
+      items: [],
+    })
+    expect(fixture.statusCounts).toHaveBeenCalledWith(query)
+    const reflector = new Reflector()
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      SalesOrdersController.prototype.statusCounts,
     )).toEqual(['sales-orders:read'])
   })
 
@@ -239,6 +265,20 @@ describe('SalesOrdersController product options OpenAPI', () => {
     ]))
     expect(document.paths['/api/sales-orders/issuer-options']?.get)
       .toMatchObject({ operationId: 'sales_orders_issuer_options' })
+    const statusCounts: ContractOperation | undefined = document.paths[
+      '/api/sales-orders/status-counts'
+    ]?.get
+    expect(statusCounts).toMatchObject({ operationId: 'sales_orders_status_counts' })
+    expect(statusCounts?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'view', required: true }),
+      expect.objectContaining({ in: 'query', name: 'currencyCode' }),
+      expect.objectContaining({ in: 'query', name: 'issuerUserId' }),
+    ]))
+    expect(statusCounts?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      privateNoStore: true,
+      validation: true,
+    })
 
     const options = document.paths['/api/sales-orders/product-options']?.get
     expect(options?.operationId).toBe('sales_orders_product_options')

@@ -348,6 +348,156 @@ describe('SalesOrderQueryService issuer options', () => {
   })
 })
 
+describe('SalesOrderQueryService status counts', () => {
+  function createStatusCountsFixture() {
+    const salesOrder = {
+      count: jest.fn(),
+      groupBy: jest.fn(),
+    }
+    const transaction = jest.fn(async (
+      operation: (client: { salesOrder: typeof salesOrder }) => Promise<unknown>,
+      options?: { isolationLevel?: string },
+    ) => {
+      void options
+      return operation({ salesOrder })
+    })
+    const service = new SalesOrderQueryService({
+      salesOrder,
+      $transaction: transaction,
+    } as unknown as PrismaService)
+    return { salesOrder, service, transaction }
+  }
+
+  it('counts only formal order statuses for the all view and fills missing groups with zero', async () => {
+    const fixture = createStatusCountsFixture()
+    fixture.salesOrder.groupBy.mockResolvedValueOnce([{
+      orderStatus: 'CONFIRMED',
+      _count: { _all: 7 },
+    }, {
+      orderStatus: 'COMPLETED',
+      _count: { _all: 2 },
+    }])
+
+    await expect(fixture.service.statusCounts({
+      view: 'all',
+      keyword: '  客户甲  ',
+      currencyCode: 'TWD',
+      issuerUserId: ISSUER_ID,
+      paymentStatus: 'PAID',
+      orderDateFrom: '2026-08-01',
+      orderDateTo: '2026-08-31',
+    })).resolves.toEqual({
+      view: 'all',
+      items: [
+        { value: 'ALL', count: 9 },
+        { value: 'CONFIRMED', count: 7 },
+        { value: 'PENDING_RECONCILIATION', count: 0 },
+        { value: 'CANCELLED', count: 0 },
+        { value: 'COMPLETED', count: 2 },
+      ],
+    })
+
+    expect(fixture.salesOrder.groupBy).toHaveBeenCalledWith({
+      by: ['orderStatus'],
+      where: {
+        AND: [
+          expect.objectContaining({
+            currencyCode: 'TWD',
+            issuerUserId: ISSUER_ID,
+            paymentStatus: 'PAID',
+            orderDate: {
+              gte: new Date('2026-08-01T00:00:00.000Z'),
+              lte: new Date('2026-08-31T00:00:00.000Z'),
+            },
+            OR: [
+              { orderNo: { contains: '客户甲', mode: 'insensitive' } },
+              { customerName: { contains: '客户甲', mode: 'insensitive' } },
+              { customerPhone: { contains: '客户甲' } },
+            ],
+          }),
+          {
+            orderStatus: {
+              in: ['CONFIRMED', 'PENDING_RECONCILIATION', 'CANCELLED', 'COMPLETED'],
+            },
+          },
+        ],
+      },
+      _count: { _all: true },
+    })
+  })
+
+  it('counts overlapping pending categories and uses a repeatable-read snapshot for unique ALL', async () => {
+    const fixture = createStatusCountsFixture()
+    fixture.salesOrder.groupBy
+      .mockResolvedValueOnce([
+        { fulfillmentStatus: 'PENDING', _count: { _all: 4 } },
+        { fulfillmentStatus: 'PREPARING', _count: { _all: 3 } },
+        { fulfillmentStatus: 'SEA_TRANSIT', _count: { _all: 2 } },
+      ])
+      .mockResolvedValueOnce([
+        { paymentStatus: 'UNPAID', _count: { _all: 5 } },
+        { paymentStatus: 'PARTIALLY_PAID', _count: { _all: 1 } },
+      ])
+    fixture.salesOrder.count.mockResolvedValueOnce(11)
+
+    await expect(fixture.service.statusCounts({ view: 'pending' })).resolves.toEqual({
+      view: 'pending',
+      items: [
+        { value: 'ALL', count: 11 },
+        { value: 'PENDING', count: 4 },
+        { value: 'PREPARING', count: 3 },
+        { value: 'LAND_TRANSIT', count: 0 },
+        { value: 'WAREHOUSE_ARRIVED', count: 0 },
+        { value: 'SEA_TRANSIT', count: 2 },
+        { value: 'WAITING_PAYMENT', count: 6 },
+      ],
+    })
+
+    const pendingBaseWhere = {
+      AND: [
+        expect.objectContaining({
+          currencyCode: undefined,
+          issuerUserId: undefined,
+          orderDate: undefined,
+          paymentStatus: undefined,
+        }),
+        { orderStatus: 'CONFIRMED' },
+      ],
+    }
+    expect(fixture.salesOrder.groupBy).toHaveBeenNthCalledWith(1, {
+      by: ['fulfillmentStatus'],
+      where: pendingBaseWhere,
+      _count: { _all: true },
+    })
+    expect(fixture.salesOrder.groupBy).toHaveBeenNthCalledWith(2, {
+      by: ['paymentStatus'],
+      where: pendingBaseWhere,
+      _count: { _all: true },
+    })
+    expect(fixture.salesOrder.count).toHaveBeenCalledWith({
+      where: {
+        AND: [
+          pendingBaseWhere,
+          { OR: [
+            { fulfillmentStatus: { in: [
+              'PENDING',
+              'PREPARING',
+              'LAND_TRANSIT',
+              'WAREHOUSE_ARRIVED',
+              'SEA_TRANSIT',
+            ] } },
+            { paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } },
+          ] },
+        ],
+      },
+    })
+    expect(fixture.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: 'RepeatableRead' },
+    )
+  })
+})
+
 describe('SalesOrderQueryService product options', () => {
   it('filters active products without using order currency as product eligibility', async () => {
     const fixture = createFixture()

@@ -44,12 +44,14 @@ import {
   SalesOrderProductImageParamDto,
   SalesOrderProductImageQueryDto,
   SalesOrderProductOptionsQueryDto,
+  SalesOrderStatusCountsQueryDto,
 } from './dto/sales-order-query.dto'
 import {
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderProductOptionsDto,
+  SalesOrderStatusCountsDto,
 } from './dto/sales-order-response.dto'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { parseSalesOrderIdempotencyKey } from './sales-order-command.normalizer'
@@ -73,6 +75,7 @@ import {
   type SalesOrderDetail,
   type SalesOrderIssuerOptions,
   type SalesOrderPage,
+  type SalesOrderStatusCounts,
 } from './sales-order-query.service'
 
 const COMMON_FORBIDDEN_ERRORS = [
@@ -134,6 +137,27 @@ export class SalesOrdersController {
   })
   list(@Query() query: SalesOrderListQueryDto): Promise<SalesOrderPage> {
     return this.queries.list(query)
+  }
+
+  @Get('status-counts')
+  @RequirePermissions('sales-orders:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderStatusCountsDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_status_counts',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  statusCounts(
+    @Query() query: SalesOrderStatusCountsQueryDto,
+  ): Promise<SalesOrderStatusCounts> {
+    return this.queries.statusCounts(query)
   }
 
   @Get('issuer-options')

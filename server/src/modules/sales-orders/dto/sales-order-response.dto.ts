@@ -367,6 +367,36 @@ export class SalesOrderPageDto {
   @ApiProperty({ type: 'integer' }) readonly total!: number
 }
 
+export const SALES_ORDER_STATUS_COUNT_VALUES = [
+  'ALL',
+  'CONFIRMED',
+  'PENDING_RECONCILIATION',
+  'CANCELLED',
+  'COMPLETED',
+  'PENDING',
+  'PREPARING',
+  'LAND_TRANSIT',
+  'WAREHOUSE_ARRIVED',
+  'SEA_TRANSIT',
+  'WAITING_PAYMENT',
+] as const
+
+export class SalesOrderStatusCountItemDto {
+  @ApiProperty({ enum: SALES_ORDER_STATUS_COUNT_VALUES })
+  readonly value!: typeof SALES_ORDER_STATUS_COUNT_VALUES[number]
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly count!: number
+}
+
+export class SalesOrderStatusCountsDto {
+  @ApiProperty({ enum: ['all', 'pending'] })
+  readonly view!: 'all' | 'pending'
+
+  @ApiProperty({ type: () => [SalesOrderStatusCountItemDto] })
+  readonly items!: readonly SalesOrderStatusCountItemDto[]
+}
+
 export class SalesOrderProductOptionDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly productNo!: string

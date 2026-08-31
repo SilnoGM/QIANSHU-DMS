@@ -4,6 +4,7 @@ import { validate } from 'class-validator'
 import {
   SalesOrderListQueryDto,
   SalesOrderProductOptionsQueryDto,
+  SalesOrderStatusCountsQueryDto,
 } from './sales-order-query.dto'
 
 const ISSUER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -35,6 +36,43 @@ describe('SalesOrderListQueryDto', () => {
       expect(dto.orderStatus).toBe(orderStatus)
     },
   )
+})
+
+describe('SalesOrderStatusCountsQueryDto', () => {
+  it('accepts a view and the shared non-toolbar filters', async () => {
+    const dto = plainToInstance(SalesOrderStatusCountsQueryDto, {
+      view: 'all',
+      keyword: '  SO-001  ',
+      currencyCode: 'TWD',
+      issuerUserId: ISSUER_ID,
+      paymentStatus: 'PARTIALLY_PAID',
+      orderDateFrom: '2026-08-01',
+      orderDateTo: '2026-08-31',
+    })
+
+    await expect(validate(dto)).resolves.toEqual([])
+    expect(dto).toMatchObject({
+      view: 'all',
+      currencyCode: 'TWD',
+      issuerUserId: ISSUER_ID,
+      paymentStatus: 'PARTIALLY_PAID',
+    })
+    expect('page' in dto).toBe(false)
+    expect('orderStatus' in dto).toBe(false)
+    expect('fulfillmentStatus' in dto).toBe(false)
+  })
+
+  it.each([
+    { view: 'unknown' },
+    { view: 'all', issuerUserId: 'not-a-user-id' },
+    { view: 'pending', currencyCode: 'USD' },
+    { view: 'pending', paymentStatus: 'UNKNOWN' },
+    { view: 'all', orderDateFrom: '2026/08/01' },
+  ])('rejects invalid status-count filters %j', async input => {
+    const dto = plainToInstance(SalesOrderStatusCountsQueryDto, input)
+
+    await expect(validate(dto)).resolves.not.toHaveLength(0)
+  })
 })
 
 describe('SalesOrderProductOptionsQueryDto', () => {

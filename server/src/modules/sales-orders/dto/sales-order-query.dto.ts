@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, OmitType } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
   IsEnum,
@@ -80,6 +80,15 @@ export class SalesOrderListQueryDto {
   @IsOptional()
   @Matches(DATE_PATTERN)
   orderDateTo?: string
+}
+
+export class SalesOrderStatusCountsQueryDto extends OmitType(
+  SalesOrderListQueryDto,
+  ['page', 'pageSize', 'orderStatus', 'fulfillmentStatus'] as const,
+) {
+  @ApiProperty({ enum: ['all', 'pending'] })
+  @IsIn(['all', 'pending'])
+  view!: 'all' | 'pending'
 }
 
 export class SalesOrderProductOptionsQueryDto {
