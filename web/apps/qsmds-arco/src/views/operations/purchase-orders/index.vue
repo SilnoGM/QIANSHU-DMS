@@ -722,7 +722,7 @@ onBeforeUnmount(() => {
                 />
               </template>
             </QsTableStackedLine>
-            <QsTableStackedLine content-class="truncate" nowrap>
+            <QsTableStackedLine tone="muted" content-class="qs-type-meta truncate" nowrap>
               {{ row.original.customerName ?? '不关联销售客户' }}
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -913,7 +913,7 @@ onBeforeUnmount(() => {
                       :text="row.salesOrderNo ?? ''"
                     />
                   </div>
-                  <div class="mt-1">
+                  <div class="qs-type-meta mt-1">
                     {{ row.customerName ?? '不关联销售客户' }}
                   </div>
                 </dd>

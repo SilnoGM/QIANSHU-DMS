@@ -50,6 +50,16 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   )
   assert.match(
     source,
+    /<QsTableStackedLine tone="muted" content-class="qs-type-meta truncate" nowrap>\s+\{\{ row\.original\.customerName \?\? '不关联销售客户' \}\}/u,
+    '桌面销售来源的客户名应复用采购订单第二行的弱化元信息样式',
+  )
+  assert.match(
+    source,
+    /<div class="qs-type-meta mt-1">\s+\{\{ row\.customerName \?\? '不关联销售客户' \}\}/u,
+    '移动采购卡片的客户名应保持相同的弱化元信息样式',
+  )
+  assert.match(
+    source,
     /id: 'supplierSummary',\s+minWidth: 120,\s+title: '供应商'/u,
     '采购列表供应商列最小宽度固定为 120px',
   )
@@ -118,10 +128,10 @@ test('采购列表展示可复制唛头、备注和可复制销售来源', async
     /<CopyCellButton[\s\S]*?label="销售订单号"[\s\S]*?:text="row\.original\.salesOrderNo \?\? ''"/u,
     '销售订单号应复用列表复制按钮',
   )
-  assert.doesNotMatch(
+  assert.match(
     sourceCell[1] ?? '',
-    /<QsTableStackedLine tone="muted"[\s\S]*?row\.original\.customerName/u,
-    '客户名不应继续使用弱化元信息样式',
+    /<QsTableStackedLine tone="muted" content-class="qs-type-meta truncate" nowrap>[\s\S]*?row\.original\.customerName/u,
+    '客户名应使用与采购订单第二行一致的弱化元信息样式',
   )
 
   const markCell = source.match(
