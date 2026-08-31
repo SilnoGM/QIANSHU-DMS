@@ -32748,6 +32748,7 @@
               "type": "string",
               "enum": [
                 "CONFIRMED",
+                "COMPLETED",
                 "CANCELLED"
               ]
             }
@@ -47034,6 +47035,7 @@
             "type": "string",
             "enum": [
               "CONFIRMED",
+              "COMPLETED",
               "CANCELLED"
             ]
           },
@@ -48034,6 +48036,7 @@
             "type": "string",
             "enum": [
               "CONFIRMED",
+              "COMPLETED",
               "CANCELLED"
             ]
           },

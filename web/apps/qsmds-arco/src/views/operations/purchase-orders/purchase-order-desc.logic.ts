@@ -161,7 +161,7 @@ export function mapPurchaseOrderDetailToDesc(
       {
         key: 'ORDER',
         label: '订单状态',
-        tone: detail.orderStatus === 'CONFIRMED' ? 'success' : 'danger',
+        tone: detail.orderStatus === 'CANCELLED' ? 'danger' : 'success',
         value: orderStatusLabel(detail.orderStatus),
       },
       {

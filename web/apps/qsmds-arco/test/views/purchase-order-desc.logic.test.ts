@@ -27,7 +27,9 @@ const draftLine: OrderProductLineModel = {
   standardUnitPriceAmount: '12.50',
 }
 
-function createDetail(): PurchaseOrderDetailDto {
+function createDetail(
+  patch: Partial<PurchaseOrderDetailDto> = {},
+): PurchaseOrderDetailDto {
   return {
     amounts: {
       balanceDueAmount: '80.0000',
@@ -88,6 +90,7 @@ function createDetail(): PurchaseOrderDetailDto {
     },
     updatedAt: '2026-08-28T02:00:00.000Z',
     version: 1,
+    ...patch,
   }
 }
 
@@ -161,6 +164,21 @@ test('正式采购详情映射状态、付款进度和采购语义产品字段',
   ])
   assert.equal(result.createdAt, '2026-08-28T01:00:00.000Z')
   assert.equal(result.updatedAt, '2026-08-28T02:00:00.000Z')
+})
+
+test('已完成采购详情使用成功语义展示订单状态', () => {
+  const result = mapPurchaseOrderDetailToDesc(createDetail({
+    fulfillmentStatus: 'SIGNED',
+    orderStatus: 'COMPLETED',
+    paymentStatus: 'PAID',
+  }))
+
+  assert.deepEqual(result.statuses[0], {
+    key: 'ORDER',
+    label: '订单状态',
+    tone: 'success',
+    value: '已完成',
+  })
 })
 
 test('采购经办人名称优先显示名并回退账号', () => {

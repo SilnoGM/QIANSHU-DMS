@@ -53,6 +53,7 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
     '采购金额、付款约定与实际付款列分别固定为 100px、130px 和 130px',
   )
   assert.match(source, /订单状态/u)
+  assert.match(source, /\{ label: '已完成', value: 'COMPLETED' \}/u)
   assert.match(source, /履约状态/u)
   assert.match(source, /付款状态/u)
 })

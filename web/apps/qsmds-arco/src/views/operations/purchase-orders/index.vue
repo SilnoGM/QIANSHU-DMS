@@ -136,6 +136,7 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   label: '订单状态',
   options: [
     { label: '已确认', value: 'CONFIRMED' },
+    { label: '已完成', value: 'COMPLETED' },
     { label: '已取消', value: 'CANCELLED' },
   ],
   placeholder: '选择订单状态',

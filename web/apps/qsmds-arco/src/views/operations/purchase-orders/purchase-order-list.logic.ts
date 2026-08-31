@@ -47,7 +47,7 @@ export interface PurchaseOrderApiFailure {
 }
 
 const PURCHASE_TYPES = ['SALES_LINKED', 'STOCK'] as const
-const ORDER_STATUSES = ['CONFIRMED', 'CANCELLED'] as const
+const ORDER_STATUSES = ['CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
 const FULFILLMENT_STATUSES = [
   'ORDERED',
   'PREPARING',
@@ -181,7 +181,11 @@ export function purchaseTypeLabel(
 export function orderStatusLabel(
   value: PurchaseOrderListItemDto['orderStatus'],
 ): string {
-  return value === 'CONFIRMED' ? '已确认' : '已取消'
+  return {
+    CANCELLED: '已取消',
+    COMPLETED: '已完成',
+    CONFIRMED: '已确认',
+  }[value]
 }
 
 export function fulfillmentStatusLabel(
@@ -208,9 +212,11 @@ export function paymentStatusLabel(
 export function orderStatusTagClass(
   value: PurchaseOrderListItemDto['orderStatus'],
 ): string {
-  return value === 'CONFIRMED'
-    ? 'border-primary/35 bg-primary/10 text-primary'
-    : 'border-destructive/35 bg-destructive/10 text-destructive'
+  return {
+    CANCELLED: 'border-destructive/35 bg-destructive/10 text-destructive',
+    COMPLETED: 'border-primary/35 bg-primary/10 text-primary',
+    CONFIRMED: 'border-primary/35 bg-primary/10 text-primary',
+  }[value]
 }
 
 export function fulfillmentStatusTagClass(
@@ -266,7 +272,7 @@ export function calculatePurchaseOrderPaymentProgress(
 export function nextPurchaseOrderFulfillmentStatus(
   order: Pick<PurchaseOrderListItemDto, 'fulfillmentStatus' | 'orderStatus'>,
 ): PurchaseOrderListItemDto['fulfillmentStatus'] | null {
-  if (order.orderStatus === 'CANCELLED') {
+  if (order.orderStatus !== 'CONFIRMED') {
     return null
   }
   const nextByStatus: Record<

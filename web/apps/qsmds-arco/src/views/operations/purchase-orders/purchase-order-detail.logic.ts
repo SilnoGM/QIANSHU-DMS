@@ -227,6 +227,7 @@ export function purchaseOrderStatusDimensionLabel(value: string): string {
 export function purchaseOrderStatusHistoryValueLabel(value: string): string {
   return {
     CANCELLED: '已取消',
+    COMPLETED: '已完成',
     CONFIRMED: '已确认',
     ORDERED: '已下单',
     PAID: '已付清',

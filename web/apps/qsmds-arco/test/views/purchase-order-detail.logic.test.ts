@@ -144,6 +144,7 @@ test('付款作废强制填写原因并固定采购状态中文语义', () => {
   assert.equal(buildPurchaseOrderPaymentVoidRequest('  ').valid, false)
   assert.equal(purchaseOrderPaymentTypeLabel('BALANCE'), '尾款')
   assert.equal(purchaseOrderStatusHistoryValueLabel('ORDERED'), '已下单')
+  assert.equal(purchaseOrderStatusHistoryValueLabel('COMPLETED'), '已完成')
   assert.equal(purchaseOrderStatusHistoryValueLabel('UNKNOWN'), 'UNKNOWN')
 })
 

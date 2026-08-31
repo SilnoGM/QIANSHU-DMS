@@ -12,6 +12,7 @@ import {
   nextPurchaseOrderFulfillmentStatus,
   normalizePurchaseOrderPendingTask,
   orderStatusLabel,
+  orderStatusTagClass,
   paymentStatusLabel,
   purchaseTypeLabel,
   resolvePurchaseOrderPendingActions,
@@ -59,13 +60,29 @@ test('待办与全部列表严格映射服务端 view 并规范化筛选和日�
     searchKeyword: '　',
     viewMode: 'all',
   }), { view: 'all', page: 1, pageSize: 20 })
+
+  assert.deepEqual(buildPurchaseOrderListQuery({
+    dateRange: {},
+    filters: { orderStatus: 'COMPLETED' },
+    page: 1,
+    pageSize: 20,
+    searchKeyword: '',
+    viewMode: 'all',
+  }), {
+    view: 'all',
+    page: 1,
+    pageSize: 20,
+    orderStatus: 'COMPLETED',
+  })
 })
 
 test('采购列表标签完整覆盖类型、订单、履约与付款状态', () => {
   assert.equal(purchaseTypeLabel('SALES_LINKED'), '销售关联采购')
   assert.equal(purchaseTypeLabel('STOCK'), '备货采购')
   assert.equal(orderStatusLabel('CONFIRMED'), '已确认')
+  assert.equal(orderStatusLabel('COMPLETED'), '已完成')
   assert.equal(orderStatusLabel('CANCELLED'), '已取消')
+  assert.match(orderStatusTagClass('COMPLETED'), /text-primary/u)
   assert.equal(fulfillmentStatusLabel('ORDERED'), '已下单')
   assert.equal(fulfillmentStatusLabel('PREPARING'), '备货中')
   assert.equal(fulfillmentStatusLabel('SHIPPED'), '已发货')
@@ -98,6 +115,11 @@ test('履约状态只按既定顺序推进，取消和签收订单没有下一�
   assert.equal(nextPurchaseOrderFulfillmentStatus({ ...base, fulfillmentStatus: 'SHIPPED' }), 'SIGNED')
   assert.equal(nextPurchaseOrderFulfillmentStatus({ ...base, fulfillmentStatus: 'SIGNED' }), null)
   assert.equal(nextPurchaseOrderFulfillmentStatus({ ...base, orderStatus: 'CANCELLED' }), null)
+  assert.equal(nextPurchaseOrderFulfillmentStatus({
+    ...base,
+    fulfillmentStatus: 'SHIPPED',
+    orderStatus: 'COMPLETED',
+  }), null)
 })
 
 test('待办采购任务固定三类并把无效 URL 值归一化为待发货', () => {
