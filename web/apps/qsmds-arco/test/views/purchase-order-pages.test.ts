@@ -84,6 +84,71 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /付款状态/u)
 })
 
+test('采购列表展示可复制唛头、备注和可复制销售来源', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(
+    source,
+    /id: 'statusSummary',[\s\S]*?id: 'shippingMarkSummary',\s+minWidth: 200,\s+title: '采购唛头'[\s\S]*?id: 'remarkSummary',\s+minWidth: 240,\s+title: '备注'[\s\S]*?id: 'auditSummary'/u,
+    '采购唛头与备注应连续位于订单状态和审计信息之间',
+  )
+  const markRemarkColumns = source.match(
+    /id: 'shippingMarkSummary',([\s\S]*?)id: 'auditSummary'/u,
+  )
+  assert.ok(markRemarkColumns, '应存在采购唛头与备注列定义')
+  assert.doesNotMatch(
+    markRemarkColumns[1] ?? '',
+    /defaultVisible: false/u,
+    '采购唛头与备注均应默认显示',
+  )
+
+  const sourceCell = source.match(
+    /<template #cell-sourceSummary="\{ row \}">([\s\S]*?)<template #cell-supplierSummary/u,
+  )
+  assert.ok(sourceCell, '应存在销售来源单元格')
+  assert.match(sourceCell[1] ?? '', /<QsTableStackedCell class="group">/u)
+  assert.match(sourceCell[1] ?? '', /qs-type-data-emphasis font-mono/u)
+  assert.match(
+    sourceCell[1] ?? '',
+    /<CopyCellButton[\s\S]*?label="销售订单号"[\s\S]*?:text="row\.original\.salesOrderNo \?\? ''"/u,
+    '销售订单号应复用列表复制按钮',
+  )
+  assert.doesNotMatch(
+    sourceCell[1] ?? '',
+    /<QsTableStackedLine tone="muted"[\s\S]*?row\.original\.customerName/u,
+    '客户名不应继续使用弱化元信息样式',
+  )
+
+  const markCell = source.match(
+    /<template #cell-shippingMarkSummary="\{ row \}">([\s\S]*?)<template #cell-remarkSummary/u,
+  )
+  assert.ok(markCell, '应存在采购唛头单元格')
+  assert.match(markCell[1] ?? '', /<FaTooltip[\s\S]*?row\.original\.shippingMarkText/u)
+  assert.match(markCell[1] ?? '', /\{\{ row\.original\.shippingMarkText \?\? '-' \}\}/u)
+  assert.match(
+    markCell[1] ?? '',
+    /<CopyCellButton[\s\S]*?label="采购唛头"[\s\S]*?:text="row\.original\.shippingMarkText \?\? ''"/u,
+  )
+
+  const remarkCell = source.match(
+    /<template #cell-remarkSummary="\{ row \}">([\s\S]*?)<template #cell-auditSummary/u,
+  )
+  assert.ok(remarkCell, '应存在备注单元格')
+  assert.match(remarkCell[1] ?? '', /\{\{ row\.original\.remark \?\? '-' \}\}/u)
+
+  assert.match(
+    source,
+    /销售来源[\s\S]*?<CopyCellButton[\s\S]*?always-visible[\s\S]*?label="销售订单号"[\s\S]*?:text="row\.salesOrderNo \?\? ''"[\s\S]*?\{\{ row\.customerName \?\? '不关联销售客户' \}\}/u,
+    '移动端销售来源应上下展示订单号、复制按钮和正常客户名',
+  )
+  assert.match(
+    source,
+    /采购唛头[\s\S]*?<CopyCellButton[\s\S]*?always-visible[\s\S]*?label="采购唛头"[\s\S]*?:text="row\.shippingMarkText \?\? ''"/u,
+    '移动端采购唛头应支持常显复制操作',
+  )
+  assert.match(source, /备注[\s\S]*?\{\{ row\.remark \?\? '-' \}\}/u)
+})
+
 test('全部与待办采购均使用带计数的状态工具栏', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
 

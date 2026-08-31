@@ -57,6 +57,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
   orderStatus: true,
   fulfillmentStatus: true,
   paymentStatus: true,
+  shippingMarkText: true,
   remark: true,
   version: true,
   createdAt: true,
@@ -73,7 +74,6 @@ const PURCHASE_ORDER_LIST_SELECT = {
 
 const PURCHASE_ORDER_DETAIL_SELECT = {
   ...PURCHASE_ORDER_LIST_SELECT,
-  shippingMarkText: true,
   lineSubtotalAmount: true,
   lines: {
     orderBy: [{ lineNumber: 'asc' as const }, { id: 'asc' as const }],
@@ -198,6 +198,7 @@ export interface PurchaseOrderListItem {
   readonly orderStatus: PurchaseOrderStatus
   readonly fulfillmentStatus: PurchaseOrderFulfillmentStatus
   readonly paymentStatus: PurchaseOrderPaymentStatus
+  readonly shippingMarkText: string | null
   readonly remark: string | null
   readonly version: number
   readonly createdAt: string
@@ -383,6 +384,7 @@ function mapListItem(
     orderStatus: row.orderStatus,
     fulfillmentStatus: row.fulfillmentStatus,
     paymentStatus: row.paymentStatus,
+    shippingMarkText: row.shippingMarkText,
     remark: row.remark,
     version: row.version,
     createdAt: row.createdAt.toISOString(),

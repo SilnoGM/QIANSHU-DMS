@@ -241,8 +241,12 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 210,
   title: '订单状态',
 }, {
+  accessorKey: 'shippingMarkText',
+  id: 'shippingMarkSummary',
+  minWidth: 200,
+  title: '采购唛头',
+}, {
   accessorKey: 'remark',
-  defaultVisible: false,
   id: 'remarkSummary',
   minWidth: 240,
   title: '备注',
@@ -702,11 +706,23 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-sourceSummary="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine content-class="font-medium" nowrap>
+          <QsTableStackedCell class="group">
+            <QsTableStackedLine
+              :content-class="row.original.salesOrderNo === null
+                ? 'font-medium'
+                : 'qs-type-data-emphasis font-mono'"
+              nowrap
+            >
               {{ row.original.salesOrderNo ?? '独立备货' }}
+              <template #suffix>
+                <CopyCellButton
+                  v-if="row.original.salesOrderNo !== null"
+                  label="销售订单号"
+                  :text="row.original.salesOrderNo ?? ''"
+                />
+              </template>
             </QsTableStackedLine>
-            <QsTableStackedLine tone="muted" content-class="qs-type-meta" nowrap>
+            <QsTableStackedLine content-class="truncate" nowrap>
               {{ row.original.customerName ?? '不关联销售客户' }}
             </QsTableStackedLine>
           </QsTableStackedCell>
@@ -824,9 +840,29 @@ onBeforeUnmount(() => {
           </QsTableStackedCell>
         </template>
 
+        <template #cell-shippingMarkSummary="{ row }">
+          <QsTableStackedCell class="group">
+            <QsTableStackedLine content-class="truncate" nowrap>
+              <FaTooltip
+                :text="row.original.shippingMarkText ?? '-'"
+                :disabled="row.original.shippingMarkText === null"
+              >
+                <span class="block truncate">{{ row.original.shippingMarkText ?? '-' }}</span>
+              </FaTooltip>
+              <template #suffix>
+                <CopyCellButton
+                  v-if="row.original.shippingMarkText !== null"
+                  label="采购唛头"
+                  :text="row.original.shippingMarkText ?? ''"
+                />
+              </template>
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+        </template>
+
         <template #cell-remarkSummary="{ row }">
-          <FaTooltip :text="row.original.remark ?? '未填写备注'" :disabled="row.original.remark === null">
-            <span class="max-w-[13rem] block truncate">{{ row.original.remark ?? '未填写备注' }}</span>
+          <FaTooltip :text="row.original.remark ?? '-'" :disabled="row.original.remark === null">
+            <span class="max-w-[13rem] block truncate">{{ row.original.remark ?? '-' }}</span>
           </FaTooltip>
         </template>
 
@@ -860,8 +896,26 @@ onBeforeUnmount(() => {
                 <dt class="qs-type-compact-label mb-1">
                   销售来源
                 </dt>
-                <dd class="font-medium m-0">
-                  {{ row.salesOrderNo ?? '独立备货' }} · {{ row.customerName ?? '不关联客户' }}
+                <dd class="m-0">
+                  <div class="group flex gap-1 min-w-0 items-center">
+                    <span
+                      class="min-w-0 break-all"
+                      :class="row.salesOrderNo === null
+                        ? 'font-medium'
+                        : 'qs-type-data-emphasis font-mono'"
+                    >
+                      {{ row.salesOrderNo ?? '独立备货' }}
+                    </span>
+                    <CopyCellButton
+                      v-if="row.salesOrderNo !== null"
+                      always-visible
+                      label="销售订单号"
+                      :text="row.salesOrderNo ?? ''"
+                    />
+                  </div>
+                  <div class="mt-1">
+                    {{ row.customerName ?? '不关联销售客户' }}
+                  </div>
                 </dd>
               </div>
               <div class="col-span-2">
@@ -956,6 +1010,30 @@ onBeforeUnmount(() => {
                   <FaTag variant="outline" :class="paymentStatusTagClass(row.paymentStatus)">
                     {{ paymentStatusLabel(row.paymentStatus) }}
                   </FaTag>
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  采购唛头
+                </dt>
+                <dd class="m-0 flex gap-1 items-start">
+                  <span class="min-w-0 whitespace-pre-wrap break-words">
+                    {{ row.shippingMarkText ?? '-' }}
+                  </span>
+                  <CopyCellButton
+                    v-if="row.shippingMarkText !== null"
+                    always-visible
+                    label="采购唛头"
+                    :text="row.shippingMarkText ?? ''"
+                  />
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  备注
+                </dt>
+                <dd class="m-0 whitespace-pre-wrap break-words">
+                  {{ row.remark ?? '-' }}
                 </dd>
               </div>
             </dl>

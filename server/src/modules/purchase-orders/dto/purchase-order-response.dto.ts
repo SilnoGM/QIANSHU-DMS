@@ -152,6 +152,7 @@ export class PurchaseOrderListItemDto {
   readonly fulfillmentStatus!: PurchaseOrderFulfillmentStatus
   @ApiProperty({ enum: PurchaseOrderPaymentStatus })
   readonly paymentStatus!: PurchaseOrderPaymentStatus
+  @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly createdAt!: string
@@ -161,7 +162,6 @@ export class PurchaseOrderListItemDto {
 export class PurchaseOrderDetailDto extends PurchaseOrderListItemDto {
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true })
   readonly sourceSalesOrder!: PurchaseOrderSourceSalesOrderDto | null
-  @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
   @ApiProperty({ type: () => PurchaseOrderAmountsDto }) readonly amounts!: PurchaseOrderAmountsDto
   @ApiProperty({ type: () => [PurchaseOrderLineDto] }) readonly lines!: readonly PurchaseOrderLineDto[]
   @ApiProperty({ type: () => [PurchaseOrderPaymentDto] })

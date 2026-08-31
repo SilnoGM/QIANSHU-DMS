@@ -168,6 +168,7 @@ describe('PurchaseOrderQueryService', () => {
       orderNo: 'PO-001',
       salesOrderNo: 'SO-001',
       customerName: '客户甲',
+      shippingMarkText: 'MARK',
       supplier: { value: 'SUPPLIER_A', label: '供应商 A' },
       createdBy: { id: 'actor-id', displayName: '采购员' },
       purchaseTotalAmount: '100.0000',
@@ -214,6 +215,7 @@ describe('PurchaseOrderQueryService', () => {
     expect(where?.orderBy).toEqual([{ orderDate: 'desc' }, { id: 'desc' }])
     expect(where?.select).toMatchObject({
       createdBy: { select: { id: true, displayName: true } },
+      shippingMarkText: true,
     })
   })
 

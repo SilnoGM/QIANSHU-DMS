@@ -47684,6 +47684,10 @@
               "PAID"
             ]
           },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -47720,6 +47724,7 @@
           "orderStatus",
           "fulfillmentStatus",
           "paymentStatus",
+          "shippingMarkText",
           "remark",
           "version",
           "createdAt",
@@ -48720,6 +48725,10 @@
               "PAID"
             ]
           },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -48744,10 +48753,6 @@
                 "$ref": "#/components/schemas/PurchaseOrderSourceSalesOrderDto"
               }
             ]
-          },
-          "shippingMarkText": {
-            "type": "string",
-            "nullable": true
           },
           "amounts": {
             "$ref": "#/components/schemas/PurchaseOrderAmountsDto"
@@ -48796,12 +48801,12 @@
           "orderStatus",
           "fulfillmentStatus",
           "paymentStatus",
+          "shippingMarkText",
           "remark",
           "version",
           "createdAt",
           "updatedAt",
           "sourceSalesOrder",
-          "shippingMarkText",
           "amounts",
           "lines",
           "payments",
