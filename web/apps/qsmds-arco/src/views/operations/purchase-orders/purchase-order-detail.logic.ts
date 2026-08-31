@@ -231,7 +231,6 @@ export function purchaseOrderStatusHistoryValueLabel(value: string): string {
     ORDERED: '已下单',
     PAID: '已付清',
     PARTIALLY_PAID: '部分付款',
-    PENDING_ORDER: '待下单',
     PREPARING: '备货中',
     SHIPPED: '已发货',
     SIGNED: '已签收',

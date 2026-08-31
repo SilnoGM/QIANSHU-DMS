@@ -32759,7 +32759,6 @@
             "schema": {
               "type": "string",
               "enum": [
-                "PENDING_ORDER",
                 "ORDERED",
                 "PREPARING",
                 "SHIPPED",
@@ -32777,6 +32776,19 @@
                 "UNPAID",
                 "PARTIALLY_PAID",
                 "PAID"
+              ]
+            }
+          },
+          {
+            "name": "pendingTask",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AWAITING_SHIPMENT",
+                "AWAITING_WAREHOUSE",
+                "AWAITING_PAYMENT"
               ]
             }
           },
@@ -45797,7 +45809,6 @@
           "fulfillmentStatus": {
             "type": "string",
             "enum": [
-              "PENDING_ORDER",
               "ORDERED",
               "PREPARING",
               "SHIPPED",
@@ -46794,7 +46805,6 @@
           "fulfillmentStatus": {
             "type": "string",
             "enum": [
-              "PENDING_ORDER",
               "ORDERED",
               "PREPARING",
               "SHIPPED",
@@ -46925,7 +46935,6 @@
           "toStatus": {
             "type": "string",
             "enum": [
-              "PENDING_ORDER",
               "ORDERED",
               "PREPARING",
               "SHIPPED",

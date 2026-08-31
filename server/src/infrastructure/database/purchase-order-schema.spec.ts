@@ -12,6 +12,10 @@ const migrationPath = resolve(
   serverRoot,
   'prisma/migrations/20260827120000_purchase_order_domain/migration.sql',
 )
+const fulfillmentStatusMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20260831120000_remove_purchase_order_pending_order/migration.sql',
+)
 
 function extractPrismaBlock(
   source: string,
@@ -45,7 +49,6 @@ describe('purchase order domain schema', () => {
       'CANCELLED',
     ])
     expect(enumValues(schema, 'PurchaseOrderFulfillmentStatus')).toEqual([
-      'PENDING_ORDER',
       'ORDERED',
       'PREPARING',
       'SHIPPED',
@@ -88,12 +91,40 @@ describe('purchase order domain schema', () => {
     expect(order).toMatch(/salesOrderId\s+String\?/u)
     expect(order).not.toMatch(/@@unique\(\[salesOrderId\]/u)
     expect(order).toMatch(/currencyCode\s+String\s+@default\("CNY"\)/u)
+    expect(order).toMatch(
+      /fulfillmentStatus\s+PurchaseOrderFulfillmentStatus\s+@default\(ORDERED\)/u,
+    )
 
     const line = extractPrismaBlock(schema, 'model', 'PurchaseOrderLine')
     expect(line).toMatch(/sourceSalesOrderLineId\s+String\?/u)
     expect(line).not.toMatch(/@@unique\(\[sourceSalesOrderLineId\]/u)
     expect(line).toMatch(/referencePurchaseUnitPriceAmount\s+Decimal/u)
     expect(line).toMatch(/actualPurchaseUnitPriceAmount\s+Decimal/u)
+  })
+
+  it('maps historical pending-order facts before removing the obsolete enum value', () => {
+    const migration = readFileSync(fulfillmentStatusMigrationPath, 'utf8')
+
+    expect(migration.trimStart()).toMatch(/^BEGIN;/u)
+    expect(migration.trimEnd()).toMatch(/COMMIT;$/u)
+    expect(migration).toContain('LOCK TABLE "purchase_orders" IN ACCESS EXCLUSIVE MODE')
+    expect(migration).toMatch(
+      /ALTER TABLE "purchase_orders"[\s\S]*?ALTER COLUMN "fulfillment_status"[\s\S]*?CASE "fulfillment_status"::text[\s\S]*?WHEN 'PENDING_ORDER' THEN 'ORDERED'/u,
+    )
+    expect(migration).toMatch(
+      /CREATE TYPE "purchase_order_fulfillment_status_next" AS ENUM \([\s\S]*?'ORDERED'[\s\S]*?'PREPARING'[\s\S]*?'SHIPPED'[\s\S]*?'SIGNED'[\s\S]*?\)/u,
+    )
+    expect(migration).toMatch(
+      /UPDATE "purchase_order_status_history"[\s\S]*?"from_status" = 'ORDERED'[\s\S]*?"from_status" = 'PENDING_ORDER'/u,
+    )
+    expect(migration).toMatch(
+      /UPDATE "purchase_order_status_history"[\s\S]*?"to_status" = 'ORDERED'[\s\S]*?"to_status" = 'PENDING_ORDER'/u,
+    )
+    expect(migration).toContain("SET DEFAULT 'ORDERED'")
+    expect(migration).not.toMatch(
+      /(?:CREATE|DROP|ALTER)\s+[\s\S]{0,80}\sIF\s+(?:NOT\s+)?EXISTS\b/iu,
+    )
+    expect(migration).not.toMatch(/\bCASCADE\b/iu)
   })
 
   it('adds strict SQL constraints, deferred invariants and permission seeds', () => {

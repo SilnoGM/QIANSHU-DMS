@@ -17,6 +17,7 @@ import {
   formatPurchaseOrderAmountUnits,
   parsePurchaseOrderAmountUnits,
 } from './domain/purchase-order-decimal'
+import type { PurchaseOrderPendingTask } from './dto/purchase-order-query.dto'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
@@ -131,6 +132,7 @@ export interface PurchaseOrderListQueryInput {
   readonly orderStatus?: PurchaseOrderStatus
   readonly fulfillmentStatus?: PurchaseOrderFulfillmentStatus
   readonly paymentStatus?: PurchaseOrderPaymentStatus
+  readonly pendingTask?: PurchaseOrderPendingTask
   readonly orderDateFrom?: string
   readonly orderDateTo?: string
 }
@@ -272,13 +274,28 @@ export class PurchaseOrderQueryService {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
+    // 待办任务允许交叉归类，因此直接由当前任务生成服务端谓词，而不在页面合并结果。
+    const taskClauseByType: Readonly<Record<
+      PurchaseOrderPendingTask,
+      Prisma.PurchaseOrderWhereInput
+    >> = {
+      AWAITING_PAYMENT: {
+        paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
+      },
+      AWAITING_SHIPMENT: {
+        fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] },
+      },
+      AWAITING_WAREHOUSE: { fulfillmentStatus: 'SHIPPED' },
+    }
     const pendingClause: Prisma.PurchaseOrderWhereInput | undefined =
-      input.view === 'pending'
-        ? { OR: [
-            { fulfillmentStatus: { not: 'SIGNED' } },
-            { paymentStatus: { not: 'PAID' } },
-          ] }
-        : undefined
+      input.view !== 'pending'
+        ? undefined
+        : input.pendingTask === undefined
+          ? { OR: [
+              { fulfillmentStatus: { not: 'SIGNED' } },
+              { paymentStatus: { not: 'PAID' } },
+            ] }
+          : taskClauseByType[input.pendingTask]
     const explicitOrderStatus = input.view === 'pending' && input.orderStatus !== undefined
       ? { orderStatus: input.orderStatus }
       : undefined

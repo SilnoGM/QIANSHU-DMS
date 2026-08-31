@@ -42,6 +42,20 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /付款状态/u)
 })
 
+test('待办采购使用任务工具栏和轻提示占位操作，全部采购保留真实操作', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /import QsStatusSwitchToolbar from '@\/components\/business\/QsStatusSwitchToolbar\/index\.vue'/u)
+  assert.match(source, /import \{ useQsToast \} from '@\/components\/base\/QsToast\/useQsToast'/u)
+  assert.match(source, /<QsStatusSwitchToolbar[\s\S]*?v-model="selectedPendingTask"[\s\S]*?:items="pendingTaskItems"/u)
+  assert.match(source, /props\.viewMode === 'pending'/u)
+  assert.match(source, /resolvePurchaseOrderPendingActions/u)
+  assert.match(source, /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
+  assert.match(source, />发货|action\.label/u)
+  assert.match(source, /openPurchaseOrderDetail\(row, 'fulfillment'\)/u)
+  assert.match(source, /openPurchaseOrderDetail\(row, 'payment'\)/u)
+})
+
 test('采购日期范围位于搜索框前并以内嵌叉号清除', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
   const tableStart = source.indexOf('<QsGenericTable')

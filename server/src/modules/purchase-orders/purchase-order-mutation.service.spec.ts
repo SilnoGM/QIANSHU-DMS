@@ -19,7 +19,7 @@ function setup() {
   const order = {
     id: ORDER_ID,
     orderStatus: 'CONFIRMED',
-    fulfillmentStatus: 'PENDING_ORDER',
+    fulfillmentStatus: 'ORDERED',
     paymentStatus: 'UNPAID',
     purchaseTotalAmount: decimal('100'),
     version: 1,
@@ -149,11 +149,11 @@ describe('PurchaseOrderMutationService', () => {
     await fixture.service.updateFulfillmentStatus(
       context,
       ORDER_ID,
-      { toStatus: 'ORDERED', reason: null },
+      { toStatus: 'PREPARING', reason: null },
     )
     expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
-      data: { fulfillmentStatus: 'ORDERED', version: { increment: 1 } },
+      data: { fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
     })
 
     const cancelled = setup()
@@ -164,7 +164,7 @@ describe('PurchaseOrderMutationService', () => {
     await expect(cancelled.service.updateFulfillmentStatus(
       context,
       ORDER_ID,
-      { toStatus: 'ORDERED' },
+      { toStatus: 'PREPARING' },
     )).rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCELLED' })
   })
 

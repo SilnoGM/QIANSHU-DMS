@@ -52,7 +52,7 @@ PurchaseOrderStatus:
 CONFIRMED -> CANCELLED
 
 PurchaseOrderFulfillmentStatus:
-PENDING_ORDER -> ORDERED -> PREPARING -> SHIPPED -> SIGNED
+ORDERED -> PREPARING -> SHIPPED -> SIGNED
 
 PurchaseOrderPaymentStatus:
 UNPAID | PARTIALLY_PAID | PAID（由有效付款事实派生）
@@ -67,7 +67,7 @@ UNPAID | PARTIALLY_PAID | PAID（由有效付款事实派生）
 ```text
 PurchaseOrderType: SALES_LINKED | STOCK
 PurchaseOrderStatus: CONFIRMED | CANCELLED
-PurchaseOrderFulfillmentStatus: PENDING_ORDER | ORDERED | PREPARING | SHIPPED | SIGNED
+PurchaseOrderFulfillmentStatus: ORDERED | PREPARING | SHIPPED | SIGNED
 PurchaseOrderPaymentStatus: UNPAID | PARTIALLY_PAID | PAID
 PurchaseOrderLineType: CATALOG | CUSTOM
 PurchaseOrderPaymentType: DEPOSIT | BALANCE | OTHER
@@ -94,7 +94,7 @@ PurchaseOrderStatusDimension: ORDER | FULFILLMENT | PAYMENT
 | `depositDueAmount` | `decimal(30,4)` | 非负 |
 | `balanceDueAmount` | `decimal(30,4)` | 非负 |
 | `orderStatus` | enum | 创建时固定 `CONFIRMED` |
-| `fulfillmentStatus` | enum | 默认 `PENDING_ORDER` |
+| `fulfillmentStatus` | enum | 默认 `ORDERED` |
 | `paymentStatus` | enum | 服务端派生；零元订单为 `PAID` |
 | `createdByUserId` | `uuid` | 来自可信 Session |
 | `remark` | `varchar(1000)?` | 非空白 |

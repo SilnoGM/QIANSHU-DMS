@@ -1,12 +1,25 @@
 import type { PurchaseOrderListItemDto } from '../../../api/generated/types.gen'
 import type { PurchaseOrderListQuery } from '../../../api/modules/purchase-orders'
 import type { QsGenericTableFilterValues } from '../../../components/business/QsGenericTable/logic'
+import type { QsStatusSwitchItem } from '../../../components/business/QsStatusSwitchToolbar/types'
 
 import Decimal from 'decimal.js'
 
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 export type PurchaseOrderListViewMode = 'all' | 'pending'
+export type PurchaseOrderPendingTask
+  = | 'AWAITING_PAYMENT'
+    | 'AWAITING_SHIPMENT'
+    | 'AWAITING_WAREHOUSE'
+
+export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
+
+export interface PurchaseOrderPendingActionItem {
+  readonly icon: string
+  readonly key: PurchaseOrderPendingActionKey
+  readonly label: string
+}
 
 export interface PurchaseOrderListDateRange {
   readonly orderDateFrom?: string
@@ -18,6 +31,7 @@ export interface PurchaseOrderListQuerySource {
   readonly filters: QsGenericTableFilterValues
   readonly page: number
   readonly pageSize: number
+  readonly pendingTask?: PurchaseOrderPendingTask
   readonly searchKeyword: string
   readonly viewMode: PurchaseOrderListViewMode
 }
@@ -35,13 +49,64 @@ export interface PurchaseOrderApiFailure {
 const PURCHASE_TYPES = ['SALES_LINKED', 'STOCK'] as const
 const ORDER_STATUSES = ['CONFIRMED', 'CANCELLED'] as const
 const FULFILLMENT_STATUSES = [
-  'PENDING_ORDER',
   'ORDERED',
   'PREPARING',
   'SHIPPED',
   'SIGNED',
 ] as const
 const PAYMENT_STATUSES = ['UNPAID', 'PARTIALLY_PAID', 'PAID'] as const
+
+const PENDING_TASK_ITEMS: readonly QsStatusSwitchItem[] = [
+  { label: '待发货', value: 'AWAITING_SHIPMENT' },
+  { label: '待入仓', value: 'AWAITING_WAREHOUSE' },
+  { label: '待付款', value: 'AWAITING_PAYMENT' },
+]
+
+const PAYMENT_ACTION: PurchaseOrderPendingActionItem = {
+  icon: 'i-lucide:hand-coins',
+  key: 'PAYMENT',
+  label: '付款',
+}
+
+const TASK_ACTION: Readonly<Record<
+  Exclude<PurchaseOrderPendingTask, 'AWAITING_PAYMENT'>,
+  PurchaseOrderPendingActionItem
+>> = {
+  AWAITING_SHIPMENT: {
+    icon: 'i-lucide:truck',
+    key: 'SHIPMENT',
+    label: '发货',
+  },
+  AWAITING_WAREHOUSE: {
+    icon: 'i-lucide:warehouse',
+    key: 'WAREHOUSE_RECEIPT',
+    label: '到仓',
+  },
+}
+
+export function getPurchaseOrderPendingTaskItems(): readonly QsStatusSwitchItem[] {
+  return PENDING_TASK_ITEMS
+}
+
+/** URL 查询值只接受待办工具栏声明的稳定编码，缺省或非法值回落到首个处理队列。 */
+export function normalizePurchaseOrderPendingTask(value: unknown): PurchaseOrderPendingTask {
+  return typeof value === 'string' && PENDING_TASK_ITEMS.some(item => item.value === value)
+    ? value as PurchaseOrderPendingTask
+    : 'AWAITING_SHIPMENT'
+}
+
+/** 待办动作首期仅提供入口提示；已付清订单不再展示没有业务意义的付款入口。 */
+export function resolvePurchaseOrderPendingActions(
+  task: PurchaseOrderPendingTask,
+  order: Pick<PurchaseOrderListItemDto, 'paymentStatus'>,
+): readonly PurchaseOrderPendingActionItem[] {
+  if (task === 'AWAITING_PAYMENT') {
+    return order.paymentStatus === 'PAID' ? [] : [PAYMENT_ACTION]
+  }
+  return order.paymentStatus === 'PAID'
+    ? [TASK_ACTION[task]]
+    : [TASK_ACTION[task], PAYMENT_ACTION]
+}
 
 function enumFilter<T extends string>(
   filters: QsGenericTableFilterValues,
@@ -93,6 +158,9 @@ export function buildPurchaseOrderListQuery(
     view: source.viewMode,
     page: source.page,
     pageSize: source.pageSize,
+    ...(source.viewMode === 'pending' && source.pendingTask !== undefined
+      ? { pendingTask: source.pendingTask }
+      : {}),
     ...(keyword === '' ? {} : { keyword }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
     ...(purchaseType === undefined ? {} : { purchaseType }),
@@ -121,7 +189,6 @@ export function fulfillmentStatusLabel(
 ): string {
   return {
     ORDERED: '已下单',
-    PENDING_ORDER: '待下单',
     PREPARING: '备货中',
     SHIPPED: '已发货',
     SIGNED: '已签收',
@@ -151,7 +218,6 @@ export function fulfillmentStatusTagClass(
 ): string {
   return {
     ORDERED: 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-    PENDING_ORDER: 'border-border bg-muted/60 text-muted-foreground',
     PREPARING: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
     SHIPPED: 'border-teal-500/35 bg-teal-500/10 text-teal-700 dark:text-teal-300',
     SIGNED: 'border-primary/35 bg-primary/10 text-primary',
@@ -208,7 +274,6 @@ export function nextPurchaseOrderFulfillmentStatus(
     PurchaseOrderListItemDto['fulfillmentStatus'] | null
   > = {
     ORDERED: 'PREPARING',
-    PENDING_ORDER: 'ORDERED',
     PREPARING: 'SHIPPED',
     SHIPPED: 'SIGNED',
     SIGNED: null,

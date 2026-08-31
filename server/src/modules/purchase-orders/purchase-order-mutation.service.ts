@@ -53,7 +53,6 @@ const PAYMENT_TYPES = new Set<PurchaseOrderPaymentType>([
   'OTHER',
 ])
 const FULFILLMENT_STATUSES = new Set<PurchaseOrderFulfillmentStatus>([
-  'PENDING_ORDER',
   'ORDERED',
   'PREPARING',
   'SHIPPED',

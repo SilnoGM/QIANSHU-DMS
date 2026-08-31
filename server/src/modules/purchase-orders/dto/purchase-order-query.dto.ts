@@ -23,6 +23,14 @@ const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u
 
+export const PURCHASE_ORDER_PENDING_TASKS = [
+  'AWAITING_SHIPMENT',
+  'AWAITING_WAREHOUSE',
+  'AWAITING_PAYMENT',
+] as const
+
+export type PurchaseOrderPendingTask = typeof PURCHASE_ORDER_PENDING_TASKS[number]
+
 function optionalInteger(value: unknown): unknown {
   return typeof value === 'string' && /^\d+$/u.test(value) ? Number(value) : value
 }
@@ -80,6 +88,11 @@ export class PurchaseOrderListQueryDto extends PurchaseOrderPageQueryDto {
   @IsOptional()
   @IsEnum(PurchaseOrderPaymentStatus)
   paymentStatus?: PurchaseOrderPaymentStatus
+
+  @ApiProperty({ enum: PURCHASE_ORDER_PENDING_TASKS, required: false })
+  @IsOptional()
+  @IsIn(PURCHASE_ORDER_PENDING_TASKS)
+  pendingTask?: PurchaseOrderPendingTask
 
   @ApiProperty({ type: 'string', format: 'date', required: false })
   @IsOptional()

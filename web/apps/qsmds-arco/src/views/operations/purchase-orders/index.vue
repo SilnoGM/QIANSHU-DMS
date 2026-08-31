@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type { PurchaseOrderDetailInitialAction } from './purchase-order-detail-drawer.vue'
-import type { PurchaseOrderListViewMode } from './purchase-order-list.logic'
+import type {
+  PurchaseOrderListViewMode,
+  PurchaseOrderPendingActionItem,
+} from './purchase-order-list.logic'
 import type {
   PurchaseOrderDetailDto,
   PurchaseOrderListItemDto,
@@ -17,11 +20,13 @@ import { getLocalTimeZone, today } from '@internationalized/date'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
@@ -32,13 +37,16 @@ import {
   fulfillmentStatusLabel,
   fulfillmentStatusTagClass,
   getPurchaseOrderApiFailure,
+  getPurchaseOrderPendingTaskItems,
   isPurchaseOrderAbortError,
   nextPurchaseOrderFulfillmentStatus,
+  normalizePurchaseOrderPendingTask,
   orderStatusLabel,
   orderStatusTagClass,
   paymentStatusLabel,
   paymentStatusTagClass,
   purchaseTypeLabel,
+  resolvePurchaseOrderPendingActions,
 } from './purchase-order-list.logic'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
@@ -52,7 +60,9 @@ const props = withDefaults(defineProps<{
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
+const route = useRoute()
 const router = useRouter()
+const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const supplierCatalog = useDictionaryCatalog(SUPPLIER_DICTIONARY_CODE)
 
@@ -63,8 +73,19 @@ const canUpdate = computed(() => auth('purchase-orders:update'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' : '全部采购')
 const pageDescription = computed(() => props.viewMode === 'pending'
-  ? '集中处理尚未签收或尚未付清的采购订单。'
+  ? '按待发货、待入仓和待付款分类处理采购订单。'
   : '查询所有采购订单及其销售来源、履约和付款状态。')
+const pendingTaskItems = getPurchaseOrderPendingTaskItems()
+const selectedPendingTask = computed<string>({
+  get: () => normalizePurchaseOrderPendingTask(route.query.task),
+  set: (value) => {
+    const normalized = normalizePurchaseOrderPendingTask(value)
+    if (normalized === selectedPendingTask.value) {
+      return
+    }
+    void router.push({ query: { ...route.query, task: normalized } })
+  },
+})
 
 const rows = ref<PurchaseOrderListItemDto[]>([])
 const page = ref(1)
@@ -118,7 +139,6 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   key: 'fulfillmentStatus',
   label: '履约状态',
   options: [
-    { label: '待下单', value: 'PENDING_ORDER' },
     { label: '已下单', value: 'ORDERED' },
     { label: '备货中', value: 'PREPARING' },
     { label: '已发货', value: 'SHIPPED' },
@@ -242,6 +262,9 @@ async function loadOrders(): Promise<void> {
       filters: filters.value,
       page: page.value,
       pageSize: pageSize.value,
+      pendingTask: props.viewMode === 'pending'
+        ? normalizePurchaseOrderPendingTask(route.query.task)
+        : undefined,
       searchKeyword: searchKeyword.value,
       viewMode: props.viewMode,
     }), controller.signal)
@@ -314,6 +337,22 @@ function openPurchaseOrderDetail(
   detailVisible.value = true
 }
 
+function pendingActions(order: PurchaseOrderListItemDto) {
+  return resolvePurchaseOrderPendingActions(
+    normalizePurchaseOrderPendingTask(route.query.task),
+    order,
+  )
+}
+
+function canShowPendingAction(action: PurchaseOrderPendingActionItem): boolean {
+  return action.key === 'PAYMENT' ? canManagePayment.value : canUpdate.value
+}
+
+/** 首期只说明能力建设状态，不调用履约或付款 mutation，避免按钮产生半成品业务事实。 */
+function handlePendingAction(action: PurchaseOrderPendingActionItem): void {
+  toast.info(`${action.label}功能正在建设中`)
+}
+
 function handleDetailUpdated(_detail: PurchaseOrderDetailDto): void {
   // 待办谓词和筛选均由 Server 负责；mutation 后重取当前页，避免本地复制查询规则。
   void loadOrders()
@@ -329,6 +368,17 @@ watch(() => appAccountStore.authEpoch, () => {
     void loadOrders()
   }
 })
+
+watch(
+  () => [props.viewMode, route.query.task] as const,
+  ([nextMode, nextTask], [previousMode, previousTask]) => {
+    if (nextMode === previousMode && nextTask === previousTask) {
+      return
+    }
+    page.value = 1
+    void loadOrders()
+  },
+)
 
 onMounted(() => {
   if (canRead.value) {
@@ -375,6 +425,14 @@ onBeforeUnmount(() => {
     </FaPageMain>
 
     <FaPageMain v-else class="min-w-0">
+      <QsStatusSwitchToolbar
+        v-if="props.viewMode === 'pending'"
+        v-model="selectedPendingTask"
+        :items="pendingTaskItems"
+        aria-label="待办采购任务筛选"
+        class="mb-4"
+      />
+
       <FaAlert
         v-if="supplierCatalog.error.value"
         title="供应商筛选暂不可用"
@@ -401,7 +459,7 @@ onBeforeUnmount(() => {
         :columns="columns"
         :data="rows"
         :empty-title="viewMode === 'pending' ? '暂无待办采购' : '暂无采购订单'"
-        :empty-description="viewMode === 'pending' ? '所有采购订单均已签收并付清。' : '请先创建采购订单。'"
+        :empty-description="viewMode === 'pending' ? '当前分类下暂无需要处理的采购订单。' : '请先创建采购订单。'"
         :error="listErrorDisplay"
         :filter-definitions="filterDefinitions"
         :loading="loading"
@@ -437,8 +495,23 @@ onBeforeUnmount(() => {
             >
               <FaIcon name="i-lucide:eye" aria-hidden="true" />查看
             </FaButton>
+            <template v-if="props.viewMode === 'pending'">
+              <template v-for="action in pendingActions(row)" :key="action.key">
+                <FaButton
+                  v-if="canShowPendingAction(action)"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="min-h-11 sm:min-h-8"
+                  :aria-label="`${row.orderNo}：${action.label}`"
+                  @click="handlePendingAction(action)"
+                >
+                  <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
+                </FaButton>
+              </template>
+            </template>
             <FaButton
-              v-if="canUpdate && nextPurchaseOrderFulfillmentStatus(row)"
+              v-else-if="canUpdate && nextPurchaseOrderFulfillmentStatus(row)"
               type="button"
               variant="ghost"
               size="sm"
@@ -449,7 +522,7 @@ onBeforeUnmount(() => {
               <FaIcon name="i-lucide:truck" aria-hidden="true" />履约
             </FaButton>
             <FaButton
-              v-if="canManagePayment && row.orderStatus === 'CONFIRMED' && row.paymentStatus !== 'PAID'"
+              v-if="props.viewMode === 'all' && canManagePayment && row.orderStatus === 'CONFIRMED' && row.paymentStatus !== 'PAID'"
               type="button"
               variant="ghost"
               size="sm"

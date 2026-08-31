@@ -15,7 +15,6 @@ import {
 
 const FULFILLMENT_STATUS_TONES = {
   ORDERED: 'info',
-  PENDING_ORDER: 'neutral',
   PREPARING: 'warning',
   SHIPPED: 'info',
   SIGNED: 'success',

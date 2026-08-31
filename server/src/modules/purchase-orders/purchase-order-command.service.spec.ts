@@ -136,7 +136,7 @@ describe('PurchaseOrderCommandService', () => {
         depositDueAmount: '5.0000',
         balanceDueAmount: '15.0000',
         orderStatus: 'CONFIRMED',
-        fulfillmentStatus: 'PENDING_ORDER',
+        fulfillmentStatus: 'ORDERED',
         paymentStatus: 'UNPAID',
         createdByUserId: ACTOR_ID,
     })

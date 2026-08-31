@@ -27,7 +27,6 @@ describe('purchase order state machine', () => {
   })
 
   it.each([
-    ['PENDING_ORDER', 'ORDERED'],
     ['ORDERED', 'PREPARING'],
     ['PREPARING', 'SHIPPED'],
     ['SHIPPED', 'SIGNED'],
@@ -39,11 +38,11 @@ describe('purchase order state machine', () => {
 
   it('blocks skipped, backward, repeated, or cancelled fulfillment transitions', () => {
     for (const [from, to, orderStatus] of [
-      ['PENDING_ORDER', 'PREPARING', 'CONFIRMED'],
+      ['ORDERED', 'SHIPPED', 'CONFIRMED'],
       ['SHIPPED', 'PREPARING', 'CONFIRMED'],
       ['ORDERED', 'ORDERED', 'CONFIRMED'],
       ['SIGNED', 'SHIPPED', 'CONFIRMED'],
-      ['PENDING_ORDER', 'ORDERED', 'CANCELLED'],
+      ['ORDERED', 'PREPARING', 'CANCELLED'],
     ] as const) {
       expect(() => assertPurchaseOrderFulfillmentTransition(from, to, {
         orderStatus,
@@ -56,11 +55,11 @@ describe('purchase order state machine', () => {
   })
 
   it.each([
-    ['CONFIRMED', 'PENDING_ORDER', 'UNPAID', true],
+    ['CONFIRMED', 'ORDERED', 'UNPAID', true],
     ['CONFIRMED', 'SIGNED', 'UNPAID', true],
-    ['CONFIRMED', 'PENDING_ORDER', 'PAID', true],
+    ['CONFIRMED', 'ORDERED', 'PAID', true],
     ['CONFIRMED', 'SIGNED', 'PAID', false],
-    ['CANCELLED', 'PENDING_ORDER', 'UNPAID', false],
+    ['CANCELLED', 'ORDERED', 'UNPAID', false],
   ] as const)(
     'derives pending for %s/%s/%s as %s',
     (orderStatus, fulfillmentStatus, paymentStatus, expected) => {

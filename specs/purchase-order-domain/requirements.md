@@ -132,7 +132,7 @@
 
 1. 采购订单系统应独立保存 `orderStatus`、`fulfillmentStatus` 和 `paymentStatus`。
 2. 当采购订单创建成功时，订单状态应为 `CONFIRMED`，不得持久化业务草稿。
-3. 当履约状态变化时，采购订单系统应只允许 `PENDING_ORDER -> ORDERED -> PREPARING -> SHIPPED -> SIGNED` 顺序流转。
+3. 当履约状态变化时，采购订单系统应只允许 `ORDERED -> PREPARING -> SHIPPED -> SIGNED` 顺序流转；采购订单创建成功后直接进入 `ORDERED`。
 4. 当付款事实变化时，采购订单系统应自动派生付款状态，不允许客户端直接指定付款状态。
 5. 当订单存在有效付款时，采购订单系统应要求先作废付款再取消订单。
 6. 当订单取消后，采购订单系统应禁止继续推进履约或新增付款。

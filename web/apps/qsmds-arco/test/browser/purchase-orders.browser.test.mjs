@@ -774,17 +774,21 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
   })
 
   await runPurchaseOrderBrowserStep('sequential fulfillment leaves pending list', async () => {
-    await clickVisibleAriaButton(page, `${order.orderNo}：推进履约`)
-    await waitForVisibleDialog(page, '推进采购履约状态？')
-    await clickDialogButton(page, '推进采购履约状态？', '确认推进')
-    await waitForNoVisibleDialog(page, '推进采购履约状态？')
+    await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
+    await waitForPurchaseList(page, order.orderNo)
     await page.waitFor(`(() => {
-      const drawer = [...document.querySelectorAll('[role="dialog"]')]
-        .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
-      return drawer?.textContent?.includes('已下单')
+      const toolbar = document.querySelector('[aria-label="待办采购任务筛选"]')
+      return toolbar?.textContent?.includes('待发货')
+        && toolbar.textContent.includes('待入仓')
+        && toolbar.textContent.includes('待付款')
     })()`)
-    await clickVisibleAriaButton(page, '关闭抽屉')
+    await clickVisibleAriaButton(page, `${order.orderNo}：发货`)
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="info"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('发货功能正在建设中'))`)
+
+    // 待办操作首期只能提示，真实履约仍从全部采购详情入口回归。
+    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
     await waitForPurchaseList(page, order.orderNo)
 
     for (const statusLabel of ['备货中', '已发货', '已签收']) {

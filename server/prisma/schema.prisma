@@ -284,7 +284,6 @@ enum PurchaseOrderStatus {
 }
 
 enum PurchaseOrderFulfillmentStatus {
-  PENDING_ORDER
   ORDERED
   PREPARING
   SHIPPED
@@ -980,7 +979,7 @@ model PurchaseOrder {
   depositDueAmount             Decimal                        @map("deposit_due_amount") @db.Decimal(30, 4)
   balanceDueAmount             Decimal                        @map("balance_due_amount") @db.Decimal(30, 4)
   orderStatus                  PurchaseOrderStatus            @default(CONFIRMED) @map("order_status")
-  fulfillmentStatus            PurchaseOrderFulfillmentStatus @default(PENDING_ORDER) @map("fulfillment_status")
+  fulfillmentStatus            PurchaseOrderFulfillmentStatus @default(ORDERED) @map("fulfillment_status")
   paymentStatus                PurchaseOrderPaymentStatus     @default(UNPAID) @map("payment_status")
   createdByUserId              String                         @map("created_by_user_id") @db.Uuid
   remark                       String?                        @db.VarChar(1000)

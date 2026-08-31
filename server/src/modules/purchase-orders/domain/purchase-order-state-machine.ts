@@ -16,7 +16,6 @@ const ORDER_TRANSITIONS: Readonly<
 const FULFILLMENT_TRANSITIONS: Readonly<
   Record<PurchaseOrderFulfillmentStatus, readonly PurchaseOrderFulfillmentStatus[]>
 > = {
-  PENDING_ORDER: ['ORDERED'],
   ORDERED: ['PREPARING'],
   PREPARING: ['SHIPPED'],
   SHIPPED: ['SIGNED'],

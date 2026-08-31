@@ -32,7 +32,7 @@ function createDetail(
     paidAmount: '20.0000',
     outstandingAmount: '80.0000',
     orderStatus: 'CONFIRMED',
-    fulfillmentStatus: 'PENDING_ORDER',
+    fulfillmentStatus: 'ORDERED',
     paymentStatus: 'PARTIALLY_PAID',
     remark: null,
     version: 1,
@@ -111,11 +111,11 @@ test('付款硬拦截零金额、超额、未来时间和缺失付款方式', ()
 test('履约只能顺序推进，取消必须先作废有效付款', () => {
   assert.deepEqual(buildPurchaseOrderFulfillmentRequest(
     createDetail(),
-    'ORDERED',
+    'PREPARING',
     '供应商已确认',
   ), {
     valid: true,
-    request: { reason: '供应商已确认', toStatus: 'ORDERED' },
+    request: { reason: '供应商已确认', toStatus: 'PREPARING' },
   })
   assert.equal(buildPurchaseOrderFulfillmentRequest(
     createDetail(),
@@ -143,7 +143,7 @@ test('付款作废强制填写原因并固定采购状态中文语义', () => {
   })
   assert.equal(buildPurchaseOrderPaymentVoidRequest('  ').valid, false)
   assert.equal(purchaseOrderPaymentTypeLabel('BALANCE'), '尾款')
-  assert.equal(purchaseOrderStatusHistoryValueLabel('PENDING_ORDER'), '待下单')
+  assert.equal(purchaseOrderStatusHistoryValueLabel('ORDERED'), '已下单')
   assert.equal(purchaseOrderStatusHistoryValueLabel('UNKNOWN'), 'UNKNOWN')
 })
 

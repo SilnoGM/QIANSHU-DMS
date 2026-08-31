@@ -286,7 +286,7 @@ export class PurchaseOrderCommandService {
             depositDueAmount: command.depositDueAmount,
             balanceDueAmount: command.balanceDueAmount,
             orderStatus: 'CONFIRMED',
-            fulfillmentStatus: 'PENDING_ORDER',
+            fulfillmentStatus: 'ORDERED',
             paymentStatus: derivePurchaseOrderPaymentStatus(
               command.purchaseTotalAmount,
               '0',

@@ -157,6 +157,24 @@ describe('PurchaseOrderQueryService', () => {
     expect(where?.orderBy).toEqual([{ orderDate: 'desc' }, { id: 'desc' }])
   })
 
+  it.each([
+    ['AWAITING_SHIPMENT', { fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] } }],
+    ['AWAITING_WAREHOUSE', { fulfillmentStatus: 'SHIPPED' }],
+    ['AWAITING_PAYMENT', { paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } }],
+  ] as const)('builds the %s pending task predicate', async (pendingTask, taskClause) => {
+    const fixture = setup()
+
+    await fixture.service.list({ view: 'pending', pendingTask })
+
+    const query = fixture.prisma.purchaseOrder.findMany.mock.calls[0]?.[0] as {
+      where?: { orderStatus?: unknown, AND?: unknown[] }
+    }
+    expect(query.where).toMatchObject({
+      orderStatus: { not: 'CANCELLED' },
+      AND: [taskClause],
+    })
+  })
+
   it('returns detail customer through SalesOrder and derives active payment totals', async () => {
     const fixture = setup()
     await expect(fixture.service.getById('order-id')).resolves.toMatchObject({
