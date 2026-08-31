@@ -176,19 +176,19 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   accessorKey: 'purchaseTotalAmount',
   align: 'right',
   id: 'amountSummary',
-  minWidth: 130,
+  minWidth: 100,
   title: '采购金额',
 }, {
   accessorKey: 'depositDueAmount',
   align: 'right',
   id: 'termsSummary',
-  minWidth: 160,
+  minWidth: 130,
   title: '付款约定',
 }, {
   accessorKey: 'paidAmount',
   align: 'right',
   id: 'paymentAmountSummary',
-  minWidth: 160,
+  minWidth: 130,
   title: '实际付款',
 }, {
   accessorKey: 'paymentStatus',

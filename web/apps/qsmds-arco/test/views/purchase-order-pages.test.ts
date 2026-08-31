@@ -49,8 +49,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   )
   assert.match(
     source,
-    /id: 'amountSummary',\s+minWidth: 130,\s+title: '采购金额'[\s\S]*?id: 'termsSummary',\s+minWidth: 160,\s+title: '付款约定'[\s\S]*?id: 'paymentAmountSummary',\s+minWidth: 160,\s+title: '实际付款'/u,
-    '采购金额、付款约定与实际付款列分别固定为 130px、160px 和 160px',
+    /id: 'amountSummary',\s+minWidth: 100,\s+title: '采购金额'[\s\S]*?id: 'termsSummary',\s+minWidth: 130,\s+title: '付款约定'[\s\S]*?id: 'paymentAmountSummary',\s+minWidth: 130,\s+title: '实际付款'/u,
+    '采购金额、付款约定与实际付款列分别固定为 100px、130px 和 130px',
   )
   assert.match(source, /订单状态/u)
   assert.match(source, /履约状态/u)
