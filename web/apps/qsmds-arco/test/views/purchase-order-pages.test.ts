@@ -90,6 +90,37 @@ test('采购日期范围位于搜索框前并以内嵌叉号清除', async () =>
   assert.doesNotMatch(source, /:deep\(\.qs-generic-table > div:first-child\)/u)
 })
 
+test('采购列表使用销售列表同构的三槽产品主图与产品提示', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /PurchaseOrderLinePreviewDto/u)
+  assert.match(source, /import type \{ ImageGroupItem \} from '@\/components\/base\/ImageGroup\/types'/u)
+  assert.match(source, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
+  assert.match(source, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
+  assert.match(
+    source,
+    /id: 'supplierSummary',[\s\S]*?id: 'productSummary',\s+minWidth: 160,\s+title: '产品'[\s\S]*?id: 'amountSummary'/u,
+    '产品列必须位于供应商与采购金额之间，并固定为 160px',
+  )
+  assert.match(source, /function productImageItems\(row: PurchaseOrderListItemDto\): readonly ImageGroupItem\[\]/u)
+  assert.match(source, /row\.lineSummary\.previews\.flatMap/u)
+  assert.match(source, /key: preview\.lineId/u)
+  assert.match(source, /function resolveProductPreview\([\s\S]*?row\.lineSummary\.previews\.find\(preview => preview\.lineId === item\.key\)/u)
+  assert.match(source, /<template #cell-productSummary="\{ row \}">/u)
+  assert.equal(
+    [...source.matchAll(/<ImageGroup[\s\S]*?:max-count="3"[\s\S]*?:size="40"[\s\S]*?radius="md"/gu)].length,
+    2,
+    '桌面表格与移动卡片必须各复用一次三槽图片组',
+  )
+  assert.equal(
+    [...source.matchAll(/<QsGoodTooltipContent/gu)].length,
+    2,
+    '桌面和移动图片均应展示同构产品提示',
+  )
+  assert.match(source, />采购产品</u)
+  assert.match(source, /<dt class="qs-type-compact-label mb-1">\s+产品\s+<\/dt>[\s\S]*?<ImageGroup :items="productImageItems\(row\)"/u)
+})
+
 test('采购创建页作为受保护隐藏路由并保持全部采购菜单激活', async () => {
   const router = await readFile(new URL(
     '../../src/router/modules/operations.workbench.ts',

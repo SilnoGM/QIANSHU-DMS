@@ -7,8 +7,10 @@ import type {
 } from './purchase-order-list.logic'
 import type {
   PurchaseOrderDetailDto,
+  PurchaseOrderLinePreviewDto,
   PurchaseOrderListItemDto,
 } from '@/api/generated/types.gen'
+import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -20,12 +22,14 @@ import { getLocalTimeZone, today } from '@internationalized/date'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
+import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
@@ -173,6 +177,11 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 60,
   title: '供应商',
 }, {
+  accessorFn: item => item.lineSummary.lineCount,
+  id: 'productSummary',
+  minWidth: 160,
+  title: '产品',
+}, {
   accessorKey: 'purchaseTotalAmount',
   align: 'right',
   id: 'amountSummary',
@@ -218,6 +227,28 @@ const listErrorDisplay = computed(() => listError.value === ''
   : requestId.value === undefined
     ? listError.value
     : `${listError.value}（requestId: ${requestId.value}）`)
+
+function productImageItems(row: PurchaseOrderListItemDto): readonly ImageGroupItem[] {
+  return row.lineSummary.previews.flatMap(preview => preview.mainImage === null
+    ? []
+    : [{
+        alt: preview.productName,
+        key: preview.lineId,
+        src: preview.mainImage.contentUrl,
+        tooltip: preview.productName,
+      }])
+}
+
+function resolveProductPreview(
+  row: PurchaseOrderListItemDto,
+  item: ImageGroupItem,
+): PurchaseOrderLinePreviewDto | undefined {
+  // 图片组折叠后可见位置会变化，必须按稳定采购明细 ID 反查，避免 Tooltip 与产品串项。
+  return typeof item.key === 'string'
+    ? row.lineSummary.previews.find(preview => preview.lineId === item.key)
+    : undefined
+}
+
 function paymentProgress(order: PurchaseOrderListItemDto) {
   return calculatePurchaseOrderPaymentProgress(
     order.paidAmount,
@@ -566,6 +597,35 @@ onBeforeUnmount(() => {
           </FaTag>
         </template>
 
+        <template #cell-productSummary="{ row }">
+          <ImageGroup
+            :items="productImageItems(row.original)"
+            :max-count="3"
+            :size="40"
+            radius="md"
+          >
+            <template #tooltip="{ item, index, total: imageTotal }">
+              <QsGoodTooltipContent
+                :image-src="item.src"
+                :image-alt="item.alt"
+              >
+                <template v-if="resolveProductPreview(row.original, item)">
+                  <div class="min-w-0">
+                    <div class="flex gap-3 items-center justify-between">
+                      <span class="tracking-[0.08em] font-semibold">采购产品</span>
+                      <span class="opacity-60 tabular-nums">{{ index + 1 }} / {{ imageTotal }}</span>
+                    </div>
+                    <p class="text-sm leading-5 font-semibold m-0 mt-2 break-words">
+                      {{ resolveProductPreview(row.original, item)?.productName }}
+                    </p>
+                  </div>
+                </template>
+                <span v-else class="opacity-70">产品信息不可用</span>
+              </QsGoodTooltipContent>
+            </template>
+          </ImageGroup>
+        </template>
+
         <template #cell-amountSummary="{ row }">
           <AmountDisplay
             :value="row.original.purchaseTotalAmount"
@@ -681,6 +741,34 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0">
                   {{ row.supplier.label }}
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  产品
+                </dt>
+                <dd class="m-0">
+                  <ImageGroup :items="productImageItems(row)" :max-count="3" :size="40" radius="md">
+                    <template #tooltip="{ item, index, total: imageTotal }">
+                      <QsGoodTooltipContent
+                        :image-src="item.src"
+                        :image-alt="item.alt"
+                      >
+                        <template v-if="resolveProductPreview(row, item)">
+                          <div class="min-w-0">
+                            <div class="flex gap-3 items-center justify-between">
+                              <span class="tracking-[0.08em] font-semibold">采购产品</span>
+                              <span class="opacity-60 tabular-nums">{{ index + 1 }} / {{ imageTotal }}</span>
+                            </div>
+                            <p class="text-sm leading-5 font-semibold m-0 mt-2 break-words">
+                              {{ resolveProductPreview(row, item)?.productName }}
+                            </p>
+                          </div>
+                        </template>
+                        <span v-else class="opacity-70">产品信息不可用</span>
+                      </QsGoodTooltipContent>
+                    </template>
+                  </ImageGroup>
                 </dd>
               </div>
               <div>
