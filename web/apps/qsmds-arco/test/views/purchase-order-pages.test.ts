@@ -39,18 +39,18 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /#mobile-row/u)
   assert.match(
     source,
-    /id: 'sourceSummary',\s+minWidth: 160,\s+title: '销售来源'/u,
-    '采购列表销售来源列最小宽度固定为 160px',
+    /id: 'sourceSummary',\s+minWidth: 140,\s+title: '销售来源'/u,
+    '采购列表销售来源列最小宽度固定为 140px',
   )
   assert.match(
     source,
-    /id: 'supplierSummary',\s+minWidth: 120,\s+title: '供应商'/u,
-    '采购列表供应商列最小宽度固定为 120px',
+    /id: 'supplierSummary',\s+minWidth: 60,\s+title: '供应商'/u,
+    '采购列表供应商列最小宽度固定为 60px',
   )
   assert.match(
     source,
-    /id: 'amountSummary',\s+minWidth: 160,\s+title: '采购金额'[\s\S]*?id: 'termsSummary',\s+minWidth: 190,\s+title: '付款约定'[\s\S]*?id: 'paymentAmountSummary',\s+minWidth: 190,\s+title: '实际付款'/u,
-    '采购金额必须比付款约定少 30px，付款约定与实际付款保持相同列宽',
+    /id: 'amountSummary',\s+minWidth: 130,\s+title: '采购金额'[\s\S]*?id: 'termsSummary',\s+minWidth: 160,\s+title: '付款约定'[\s\S]*?id: 'paymentAmountSummary',\s+minWidth: 160,\s+title: '实际付款'/u,
+    '采购金额、付款约定与实际付款列分别固定为 130px、160px 和 160px',
   )
   assert.match(source, /订单状态/u)
   assert.match(source, /履约状态/u)
