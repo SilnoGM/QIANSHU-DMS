@@ -165,7 +165,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
 }, {
   accessorKey: 'salesOrderNo',
   id: 'sourceSummary',
-  minWidth: 220,
+  minWidth: 190,
   title: '销售来源',
 }, {
   accessorFn: item => item.supplier.value,
