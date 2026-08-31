@@ -50,6 +50,16 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   )
   assert.match(
     source,
+    /<template #cell-supplierSummary="\{ row \}">\s+<span class="font-medium">\s+\{\{ row\.original\.supplier\.label \}\}\s+<\/span>\s+<\/template>/u,
+    '供应商应直接使用普通文字展示',
+  )
+  const supplierCell = source.match(
+    /<template #cell-supplierSummary="\{ row \}">([\s\S]*?)<\/template>/u,
+  )
+  assert.ok(supplierCell, '应存在供应商单元格插槽')
+  assert.doesNotMatch(supplierCell[1] ?? '', /<FaTag/u, '供应商不应继续使用标签样式')
+  assert.match(
+    source,
     /id: 'supplierSummary',[\s\S]*?id: 'buyerSummary',\s+minWidth: 180,\s+title: '采购人'[\s\S]*?id: 'productSummary'/u,
     '采购人列必须位于供应商与产品之间，并与销售人员列保持 180px',
   )

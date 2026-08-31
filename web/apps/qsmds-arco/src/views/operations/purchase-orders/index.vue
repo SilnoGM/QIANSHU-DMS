@@ -713,9 +713,9 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-supplierSummary="{ row }">
-          <FaTag variant="outline" :class="row.original.supplier.tone">
+          <span class="font-medium">
             {{ row.original.supplier.label }}
-          </FaTag>
+          </span>
         </template>
 
         <template #cell-buyerSummary="{ row }">
