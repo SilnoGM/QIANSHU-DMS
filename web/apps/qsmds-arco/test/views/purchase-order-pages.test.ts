@@ -39,8 +39,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /#mobile-row/u)
   assert.match(
     source,
-    /id: 'sourceSummary',\s+minWidth: 190,\s+title: '销售来源'/u,
-    '采购列表销售来源列最小宽度固定为 190px',
+    /id: 'sourceSummary',\s+minWidth: 160,\s+title: '销售来源'/u,
+    '采购列表销售来源列最小宽度固定为 160px',
   )
   assert.match(
     source,
