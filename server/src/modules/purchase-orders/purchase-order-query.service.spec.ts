@@ -262,3 +262,133 @@ describe('PurchaseOrderQueryService', () => {
     })
   })
 })
+
+describe('PurchaseOrderQueryService status counts', () => {
+  function createStatusCountsFixture() {
+    const purchaseOrder = {
+      groupBy: jest.fn<Promise<unknown[]>, [unknown]>(),
+    }
+    const transaction = jest.fn(async (
+      operation: (client: { purchaseOrder: typeof purchaseOrder }) => Promise<unknown>,
+      options?: { isolationLevel?: string },
+    ) => {
+      void options
+      return operation({ purchaseOrder })
+    })
+    const service = new PurchaseOrderQueryService({
+      purchaseOrder,
+      $transaction: transaction,
+    } as unknown as PrismaService, {
+      resolveStoredValues: jest.fn(),
+      resolveStoredValue: jest.fn(),
+    } as unknown as DictionaryLookupService)
+    return { purchaseOrder, service, transaction }
+  }
+
+  it('counts all order statuses under the shared base filters and fills missing groups with zero', async () => {
+    const fixture = createStatusCountsFixture()
+    fixture.purchaseOrder.groupBy.mockResolvedValueOnce([{
+      orderStatus: 'CONFIRMED',
+      _count: { _all: 5 },
+    }, {
+      orderStatus: 'COMPLETED',
+      _count: { _all: 2 },
+    }])
+
+    await expect(fixture.service.statusCounts({
+      view: 'all',
+      keyword: '  客户甲  ',
+      supplierValue: 'SUPPLIER_A',
+      purchaseType: 'SALES_LINKED',
+      fulfillmentStatus: 'SIGNED',
+      paymentStatus: 'PAID',
+      orderDateFrom: '2026-08-01',
+      orderDateTo: '2026-08-31',
+    })).resolves.toEqual({
+      view: 'all',
+      items: [
+        { value: 'ALL', count: 7 },
+        { value: 'CONFIRMED', count: 5 },
+        { value: 'COMPLETED', count: 2 },
+        { value: 'CANCELLED', count: 0 },
+      ],
+    })
+
+    const query = fixture.purchaseOrder.groupBy.mock.calls[0]?.[0] as {
+      by?: unknown
+      where?: unknown
+      _count?: unknown
+    }
+    expect(query.by).toEqual(['orderStatus'])
+    expect(query.where).toMatchObject({
+        supplierValue: 'SUPPLIER_A',
+        purchaseType: 'SALES_LINKED',
+        fulfillmentStatus: 'SIGNED',
+        paymentStatus: 'PAID',
+        orderDate: {
+          gte: new Date('2026-08-01T00:00:00.000Z'),
+          lte: new Date('2026-08-31T00:00:00.000Z'),
+        },
+        OR: [
+          { orderNo: { contains: '客户甲', mode: 'insensitive' } },
+          { salesOrder: { is: {
+            orderNo: { contains: '客户甲', mode: 'insensitive' },
+          } } },
+          { salesOrder: { is: {
+            customerName: { contains: '客户甲', mode: 'insensitive' },
+          } } },
+        ],
+    })
+    expect(query._count).toEqual({ _all: true })
+  })
+
+  it('counts overlapping pending categories in one repeatable-read snapshot', async () => {
+    const fixture = createStatusCountsFixture()
+    fixture.purchaseOrder.groupBy
+      .mockResolvedValueOnce([
+        { fulfillmentStatus: 'ORDERED', _count: { _all: 4 } },
+        { fulfillmentStatus: 'PREPARING', _count: { _all: 3 } },
+        { fulfillmentStatus: 'SHIPPED', _count: { _all: 2 } },
+      ])
+      .mockResolvedValueOnce([
+        { paymentStatus: 'UNPAID', _count: { _all: 5 } },
+        { paymentStatus: 'PARTIALLY_PAID', _count: { _all: 1 } },
+      ])
+
+    await expect(fixture.service.statusCounts({ view: 'pending' })).resolves.toEqual({
+      view: 'pending',
+      items: [
+        { value: 'AWAITING_SHIPMENT', count: 7 },
+        { value: 'AWAITING_WAREHOUSE', count: 2 },
+        { value: 'AWAITING_PAYMENT', count: 6 },
+      ],
+    })
+
+    const pendingBaseWhere = {
+      AND: [
+        expect.objectContaining({
+          fulfillmentStatus: undefined,
+          paymentStatus: undefined,
+          purchaseType: undefined,
+          supplierValue: undefined,
+          orderDate: undefined,
+        }),
+        { orderStatus: 'CONFIRMED' },
+      ],
+    }
+    expect(fixture.purchaseOrder.groupBy).toHaveBeenNthCalledWith(1, {
+      by: ['fulfillmentStatus'],
+      where: pendingBaseWhere,
+      _count: { _all: true },
+    })
+    expect(fixture.purchaseOrder.groupBy).toHaveBeenNthCalledWith(2, {
+      by: ['paymentStatus'],
+      where: pendingBaseWhere,
+      _count: { _all: true },
+    })
+    expect(fixture.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: 'RepeatableRead' },
+    )
+  })
+})

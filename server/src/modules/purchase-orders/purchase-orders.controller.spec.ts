@@ -42,7 +42,7 @@ function createRequest(): object {
 
 const providers = [{
   provide: PurchaseOrderQueryService,
-  useValue: { getById: jest.fn(), list: jest.fn() },
+  useValue: { getById: jest.fn(), list: jest.fn(), statusCounts: jest.fn() },
 }, {
   provide: PurchaseOrderSourceQueryService,
   useValue: {
@@ -121,6 +121,30 @@ describe('PurchaseOrdersController', () => {
       input,
     )
     expect(queries.getById).toHaveBeenCalledWith(ORDER_ID)
+  })
+
+  it('reads status counts with purchase-order read permission', async () => {
+    const statusCounts = jest.fn().mockResolvedValue({ view: 'pending', items: [] })
+    const controller = new PurchaseOrdersController(
+      { statusCounts } as unknown as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      {} as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
+    )
+    const query = { view: 'pending' as const, supplierValue: 'SUPPLIER_A' }
+
+    await expect(controller.statusCounts(query)).resolves.toEqual({
+      view: 'pending',
+      items: [],
+    })
+    expect(statusCounts).toHaveBeenCalledWith(query)
+    const reflector = new Reflector()
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      PurchaseOrdersController.prototype.statusCounts,
+    )).toEqual(['purchase-orders:read'])
   })
 
   it('protects and delegates GET/HEAD product main image content', async () => {
@@ -322,6 +346,20 @@ describe('PurchaseOrdersController OpenAPI', () => {
       .toMatchObject({ operationId: 'purchase_orders_list' })
     expect(document.paths['/api/purchase-orders']?.post)
       .toMatchObject({ operationId: 'purchase_orders_create' })
+    const statusCounts: ContractOperation | undefined = document.paths[
+      '/api/purchase-orders/status-counts'
+    ]?.get
+    expect(statusCounts).toMatchObject({ operationId: 'purchase_orders_status_counts' })
+    expect(statusCounts?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'view', required: true }),
+      expect.objectContaining({ in: 'query', name: 'supplierValue' }),
+      expect.objectContaining({ in: 'query', name: 'purchaseType' }),
+    ]))
+    expect(statusCounts?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      privateNoStore: true,
+      validation: true,
+    })
     expect(document.paths['/api/purchase-orders/product-options']?.get)
       .toMatchObject({ operationId: 'purchase_orders_product_options' })
     expect(document.paths['/api/purchase-orders/source-sales-orders']?.get)

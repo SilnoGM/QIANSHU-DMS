@@ -85,20 +85,20 @@ pnpm -C server lint
 
 目标：证明当前采购订单域缺少全部/待办状态计数能力。
 
-- [ ] 新建 `purchase-order-query-dto.spec.ts`，覆盖：
+- [x] 新建 `purchase-order-query-dto.spec.ts`，覆盖：
   - `view=all|pending`；
   - 关键字、供应商、采购类型、履约、付款和日期范围；
   - 查询契约不接受 `orderStatus`、`pendingTask`、分页参数；
   - 非法视图、日期和枚举被拒绝。
-- [ ] 扩展 `purchase-order-query.service.spec.ts`，覆盖：
+- [x] 扩展 `purchase-order-query.service.spec.ts`，覆盖：
   - `CONFIRMED`、`COMPLETED`、`CANCELLED` 与 `ALL`；
   - 待发货、待入仓、待付款；
   - 同一订单可同时贡献履约与付款分类；
   - 缺失分组补 `0`；
   - 基础筛选进入所有聚合谓词；
   - 待办两次读取使用 `RepeatableRead`。
-- [ ] 扩展 `purchase-orders.controller.spec.ts`，固定路由、operationId、读取权限和响应契约。
-- [ ] 运行定向测试并记录预期失败原因。
+- [x] 扩展 `purchase-orders.controller.spec.ts`，固定路由、operationId、读取权限和响应契约。
+- [x] 运行定向测试并记录预期失败原因。
 
 ```bash
 pnpm -C server test -- purchase-order-query-dto.spec.ts purchase-order-query.service.spec.ts purchase-orders.controller.spec.ts --runInBand
@@ -108,15 +108,15 @@ pnpm -C server test -- purchase-order-query-dto.spec.ts purchase-order-query.ser
 
 目标：以最小实现让 T4 通过，并复用采购列表基础谓词。
 
-- [ ] 新增 `PurchaseOrderStatusCountsQueryDto`、计数项 DTO 和响应 DTO。
-- [ ] 提取采购列表基础 `where` 构造，保持关键字、日期、供应商和通用筛选语义不变。
-- [ ] 实现全部采购订单状态分组与 `ALL`。
-- [ ] 实现待办履约、付款分组和允许重叠的映射。
-- [ ] 待办聚合使用 `RepeatableRead` 事务。
-- [ ] 在 Controller 接入只读路由、权限和 OpenAPI 契约。
-- [ ] 重新运行 T4，确认通过。
-- [ ] 运行服务端类型检查和 lint。
-- [ ] 创建本地提交：
+- [x] 新增 `PurchaseOrderStatusCountsQueryDto`、计数项 DTO 和响应 DTO。
+- [x] 提取采购列表基础 `where` 构造，保持关键字、日期、供应商和通用筛选语义不变。
+- [x] 实现全部采购订单状态分组与 `ALL`。
+- [x] 实现待办履约、付款分组和允许重叠的映射。
+- [x] 待办聚合使用 `RepeatableRead` 事务。
+- [x] 在 Controller 接入只读路由、权限和 OpenAPI 契约。
+- [x] 重新运行 T4，确认通过。
+- [x] 运行服务端类型检查和 lint。
+- [x] 创建本地提交：
 
 ```text
 feat: 添加采购订单状态计数接口

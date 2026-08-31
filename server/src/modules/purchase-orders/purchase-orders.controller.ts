@@ -57,6 +57,7 @@ import {
   PurchaseOrderSourceSalesOrderIdParamDto,
   PurchaseOrderSourceSalesOrderLineImageParamDto,
   PurchaseOrderSourceSalesOrdersQueryDto,
+  PurchaseOrderStatusCountsQueryDto,
 } from './dto/purchase-order-query.dto'
 import {
   PurchaseOrderDetailDto,
@@ -64,6 +65,7 @@ import {
   PurchaseOrderProductOptionsDto,
   PurchaseOrderSourceSalesOrderLinesDto,
   PurchaseOrderSourceSalesOrdersDto,
+  PurchaseOrderStatusCountsDto,
 } from './dto/purchase-order-response.dto'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { parsePurchaseOrderIdempotencyKey } from './purchase-order-command.normalizer'
@@ -73,6 +75,7 @@ import {
   PurchaseOrderQueryService,
   type PurchaseOrderDetail,
   type PurchaseOrderPage,
+  type PurchaseOrderStatusCounts,
 } from './purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
 
@@ -133,6 +136,27 @@ export class PurchaseOrdersController {
   })
   list(@Query() query: PurchaseOrderListQueryDto): Promise<PurchaseOrderPage> {
     return this.queries.list(query)
+  }
+
+  @Get('status-counts')
+  @RequirePermissions('purchase-orders:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderStatusCountsDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_status_counts',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  statusCounts(
+    @Query() query: PurchaseOrderStatusCountsQueryDto,
+  ): Promise<PurchaseOrderStatusCounts> {
+    return this.queries.statusCounts(query)
   }
 
   @Get('product-options')

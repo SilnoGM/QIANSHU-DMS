@@ -210,6 +210,24 @@ export interface PurchaseOrderPage {
   readonly total: number
 }
 
+export type PurchaseOrderStatusCountValue =
+  | 'ALL'
+  | PurchaseOrderStatus
+  | PurchaseOrderPendingTask
+
+export type PurchaseOrderStatusCountsQueryInput = Omit<
+  PurchaseOrderListQueryInput,
+  'orderStatus' | 'page' | 'pageSize' | 'pendingTask'
+>
+
+export interface PurchaseOrderStatusCounts {
+  readonly view: 'all' | 'pending'
+  readonly items: readonly {
+    readonly value: PurchaseOrderStatusCountValue
+    readonly count: number
+  }[]
+}
+
 export interface PurchaseOrderDetail extends PurchaseOrderListItem {
   readonly sourceSalesOrder: {
     readonly id: string
@@ -264,6 +282,54 @@ function actor(value: { readonly id: string, readonly displayName: string } | nu
 
 function paidUnits(value: { toFixed(decimalPlaces: number): string } | null): bigint {
   return value === null ? 0n : parsePurchaseOrderAmountUnits(decimalToFixed4(value))
+}
+
+/**
+ * 列表与状态计数共享非工具栏筛选语义。订单状态与待办任务由调用方单独叠加，
+ * 防止当前选中的工具栏分类反向污染其他分类的计数。
+ */
+function buildPurchaseOrderBaseWhere(
+  input: Omit<
+    PurchaseOrderListQueryInput,
+    'orderStatus' | 'page' | 'pageSize' | 'pendingTask' | 'view'
+  >,
+): Prisma.PurchaseOrderWhereInput {
+  const keyword = input.keyword?.trim().normalize('NFKC')
+  return {
+    fulfillmentStatus: input.fulfillmentStatus,
+    paymentStatus: input.paymentStatus,
+    purchaseType: input.purchaseType,
+    supplierValue: input.supplierValue,
+    orderDate: input.orderDateFrom === undefined && input.orderDateTo === undefined
+      ? undefined
+      : {
+          gte: input.orderDateFrom === undefined
+            ? undefined
+            : new Date(`${input.orderDateFrom}T00:00:00.000Z`),
+          lte: input.orderDateTo === undefined
+            ? undefined
+            : new Date(`${input.orderDateTo}T00:00:00.000Z`),
+        },
+    ...(keyword === undefined || keyword.length === 0
+      ? {}
+      : { OR: [
+          { orderNo: { contains: keyword, mode: 'insensitive' } },
+          { salesOrder: { is: {
+            orderNo: { contains: keyword, mode: 'insensitive' },
+          } } },
+          { salesOrder: { is: {
+            customerName: { contains: keyword, mode: 'insensitive' },
+          } } },
+        ] }),
+  }
+}
+
+function groupedCount<T extends string>(
+  rows: readonly { readonly value: string, readonly count: number }[],
+  values: readonly T[],
+): ReadonlyMap<T, number> {
+  const countByValue = new Map(rows.map(row => [row.value, row.count] as const))
+  return new Map(values.map(value => [value, countByValue.get(value) ?? 0] as const))
 }
 
 function mapLineSummary(
@@ -333,7 +399,6 @@ export class PurchaseOrderQueryService {
   async list(input: PurchaseOrderListQueryInput): Promise<PurchaseOrderPage> {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
-    const keyword = input.keyword?.trim().normalize('NFKC')
     // 待办任务允许交叉归类，因此直接由当前任务生成服务端谓词，而不在页面合并结果。
     const taskClauseByType: Readonly<Record<
       PurchaseOrderPendingTask,
@@ -360,37 +425,13 @@ export class PurchaseOrderQueryService {
       ? { orderStatus: input.orderStatus }
       : undefined
     const where: Prisma.PurchaseOrderWhereInput = {
+      ...buildPurchaseOrderBaseWhere(input),
       orderStatus: input.view === 'pending'
         ? 'CONFIRMED'
         : input.orderStatus,
-      fulfillmentStatus: input.fulfillmentStatus,
-      paymentStatus: input.paymentStatus,
-      purchaseType: input.purchaseType,
-      supplierValue: input.supplierValue,
       AND: [pendingClause, explicitOrderStatus].filter(
         (value): value is Prisma.PurchaseOrderWhereInput => value !== undefined,
       ),
-      orderDate: input.orderDateFrom === undefined && input.orderDateTo === undefined
-        ? undefined
-        : {
-            gte: input.orderDateFrom === undefined
-              ? undefined
-              : new Date(`${input.orderDateFrom}T00:00:00.000Z`),
-            lte: input.orderDateTo === undefined
-              ? undefined
-              : new Date(`${input.orderDateTo}T00:00:00.000Z`),
-          },
-      ...(keyword === undefined || keyword.length === 0
-        ? {}
-        : { OR: [
-            { orderNo: { contains: keyword, mode: 'insensitive' } },
-            { salesOrder: { is: {
-              orderNo: { contains: keyword, mode: 'insensitive' },
-            } } },
-            { salesOrder: { is: {
-              customerName: { contains: keyword, mode: 'insensitive' },
-            } } },
-          ] }),
     }
     const [total, rows] = await Promise.all([
       this.prisma.purchaseOrder.count({ where }),
@@ -429,6 +470,87 @@ export class PurchaseOrderQueryService {
       page,
       pageSize,
       total,
+    }
+  }
+
+  async statusCounts(
+    input: PurchaseOrderStatusCountsQueryInput,
+  ): Promise<PurchaseOrderStatusCounts> {
+    const baseWhere = buildPurchaseOrderBaseWhere(input)
+
+    if (input.view === 'all') {
+      const statuses = ['CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
+      const rows = await this.prisma.purchaseOrder.groupBy({
+        by: ['orderStatus'] as const,
+        where: baseWhere,
+        _count: { _all: true } as const,
+      })
+      const counts = groupedCount(rows.map(row => ({
+        value: row.orderStatus,
+        count: row._count._all,
+      })), statuses)
+      const items = statuses.map(value => ({ value, count: counts.get(value) ?? 0 }))
+      return {
+        view: 'all',
+        items: [
+          { value: 'ALL', count: items.reduce((sum, item) => sum + item.count, 0) },
+          ...items,
+        ],
+      }
+    }
+
+    const pendingBaseWhere: Prisma.PurchaseOrderWhereInput = {
+      AND: [baseWhere, { orderStatus: 'CONFIRMED' }],
+    }
+    const { fulfillmentRows, paymentRows } = await this.prisma.$transaction(
+      async (transaction) => {
+        const fulfillmentRows = await transaction.purchaseOrder.groupBy({
+          by: ['fulfillmentStatus'],
+          where: pendingBaseWhere,
+          _count: { _all: true },
+        })
+        const paymentRows = await transaction.purchaseOrder.groupBy({
+          by: ['paymentStatus'],
+          where: pendingBaseWhere,
+          _count: { _all: true },
+        })
+        return { fulfillmentRows, paymentRows }
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    )
+    const fulfillmentStatuses = ['ORDERED', 'PREPARING', 'SHIPPED'] as const
+    const fulfillmentCounts = groupedCount(
+      fulfillmentRows.map(row => ({
+        value: row.fulfillmentStatus,
+        count: row._count._all,
+      })),
+      fulfillmentStatuses,
+    )
+    const paymentStatuses = ['UNPAID', 'PARTIALLY_PAID'] as const
+    const paymentCounts = groupedCount(
+      paymentRows.map(row => ({
+        value: row.paymentStatus,
+        count: row._count._all,
+      })),
+      paymentStatuses,
+    )
+
+    return {
+      view: 'pending',
+      items: [{
+        value: 'AWAITING_SHIPMENT',
+        count: (fulfillmentCounts.get('ORDERED') ?? 0)
+          + (fulfillmentCounts.get('PREPARING') ?? 0),
+      }, {
+        value: 'AWAITING_WAREHOUSE',
+        count: fulfillmentCounts.get('SHIPPED') ?? 0,
+      }, {
+        value: 'AWAITING_PAYMENT',
+        count: paymentStatuses.reduce(
+          (sum, value) => sum + (paymentCounts.get(value) ?? 0),
+          0,
+        ),
+      }],
     }
   }
 

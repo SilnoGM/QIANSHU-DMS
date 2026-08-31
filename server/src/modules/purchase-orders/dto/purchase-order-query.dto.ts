@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, OmitType } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
   IsEnum,
@@ -104,6 +104,11 @@ export class PurchaseOrderListQueryDto extends PurchaseOrderPageQueryDto {
   @Matches(DATE_PATTERN)
   orderDateTo?: string
 }
+
+export class PurchaseOrderStatusCountsQueryDto extends OmitType(
+  PurchaseOrderListQueryDto,
+  ['page', 'pageSize', 'orderStatus', 'pendingTask'] as const,
+) {}
 
 export class PurchaseOrderProductOptionsQueryDto extends PurchaseOrderPageQueryDto {
   @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
