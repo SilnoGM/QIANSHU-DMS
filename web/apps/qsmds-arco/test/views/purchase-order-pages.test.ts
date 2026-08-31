@@ -21,6 +21,11 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /<FaPageHeader/u)
   assert.match(source, /<QsDateRangeFilter/u)
   assert.match(source, /<QsGenericTable/u)
+  assert.match(
+    source,
+    /search-placeholder="搜索采购单号、销售单号、客户名或采购唛头"/u,
+    '采购列表搜索提示应明确支持采购唛头',
+  )
   assert.match(source, /service_provider\.supplier/u)
   assert.match(source, /auth\('purchase-orders:read'\)/u)
   assert.match(source, /auth\('purchase-orders:create'\)/u)

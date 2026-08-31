@@ -32986,6 +32986,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
+            "description": "按采购单号、销售单号、客户名或采购唛头模糊搜索",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -33575,6 +33576,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
+            "description": "按采购单号、销售单号、客户名或采购唛头模糊搜索",
             "schema": {
               "maxLength": 128,
               "type": "string"

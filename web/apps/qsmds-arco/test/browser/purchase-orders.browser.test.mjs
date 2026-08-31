@@ -318,7 +318,9 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     const layout = await page.evaluate(`(() => {
       const date = [...document.querySelectorAll('button')]
         .find(button => button.getAttribute('aria-label')?.startsWith('打开采购日期范围选择：'))
-      const search = document.querySelector('input[placeholder="搜索采购单号、销售单号或客户名"]')
+      const search = document.querySelector(
+        'input[placeholder="搜索采购单号、销售单号、客户名或采购唛头"]',
+      )
       if (!date || !search) return null
       const dateRect = date.getBoundingClientRect()
       const searchRect = search.getBoundingClientRect()

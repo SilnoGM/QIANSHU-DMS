@@ -446,9 +446,17 @@ describe('PurchaseOrdersController OpenAPI', () => {
     const view = list?.parameters?.find(parameter => (
       'name' in parameter && parameter.name === 'view'
     ))
+    const keyword = list?.parameters?.find(parameter => (
+      'name' in parameter && parameter.name === 'keyword'
+    ))
     expect(view).toMatchObject({
       in: 'query', name: 'view', required: true,
       schema: { enum: ['all', 'pending'] },
+    })
+    expect(keyword).toMatchObject({
+      description: '按采购单号、销售单号、客户名或采购唛头模糊搜索',
+      in: 'query',
+      name: 'keyword',
     })
     const listItemSchema = document.components?.schemas?.PurchaseOrderListItemDto
     if (listItemSchema === undefined || '$ref' in listItemSchema) {

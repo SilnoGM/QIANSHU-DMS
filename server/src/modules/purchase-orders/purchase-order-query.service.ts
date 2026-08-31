@@ -321,6 +321,7 @@ function buildPurchaseOrderBaseWhere(
           { salesOrder: { is: {
             customerName: { contains: keyword, mode: 'insensitive' },
           } } },
+          { shippingMarkText: { contains: keyword, mode: 'insensitive' } },
         ] }),
   }
 }

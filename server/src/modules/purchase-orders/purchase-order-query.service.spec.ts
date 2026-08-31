@@ -211,6 +211,16 @@ describe('PurchaseOrderQueryService', () => {
         { fulfillmentStatus: { not: 'SIGNED' } },
         { paymentStatus: { not: 'PAID' } },
       ] }],
+      OR: [
+        { orderNo: { contains: 'PO', mode: 'insensitive' } },
+        { salesOrder: { is: {
+          orderNo: { contains: 'PO', mode: 'insensitive' },
+        } } },
+        { salesOrder: { is: {
+          customerName: { contains: 'PO', mode: 'insensitive' },
+        } } },
+        { shippingMarkText: { contains: 'PO', mode: 'insensitive' } },
+      ],
     })
     expect(where?.orderBy).toEqual([{ orderDate: 'desc' }, { id: 'desc' }])
     expect(where?.select).toMatchObject({
@@ -344,6 +354,7 @@ describe('PurchaseOrderQueryService status counts', () => {
           { salesOrder: { is: {
             customerName: { contains: '客户甲', mode: 'insensitive' },
           } } },
+          { shippingMarkText: { contains: '客户甲', mode: 'insensitive' } },
         ],
     })
     expect(query._count).toEqual({ _all: true })

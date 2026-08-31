@@ -57,7 +57,12 @@ export class PurchaseOrderListQueryDto extends PurchaseOrderPageQueryDto {
   @IsIn(['all', 'pending'])
   view!: 'all' | 'pending'
 
-  @ApiProperty({ type: 'string', maxLength: 128, required: false })
+  @ApiProperty({
+    type: 'string',
+    description: '按采购单号、销售单号、客户名或采购唛头模糊搜索',
+    maxLength: 128,
+    required: false,
+  })
   @IsOptional()
   @IsString()
   @IsUnicodeCodePointLength(1, 128)
