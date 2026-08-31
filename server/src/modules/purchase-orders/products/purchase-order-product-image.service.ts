@@ -74,6 +74,61 @@ export class PurchaseOrderProductImageService {
   }
 
   /**
+   * 已保存采购订单的列表摘要读取目录产品当前主图，但不重新要求产品满足创建采购
+   * 的候选资格；产品后续停用或成本变化不应破坏历史采购订单的只读展示。
+   */
+  async resolveListPreview(
+    purchaseOrderId: string,
+    lineId: string,
+    productMediaId: string,
+    ifNoneMatch: unknown,
+    range: unknown,
+    method: 'GET' | 'HEAD',
+  ): Promise<ProductMediaContentResponse> {
+    let line: { readonly productId: string | null } | null
+    try {
+      line = await this.prisma.purchaseOrderLine.findFirst({
+        where: {
+          id: lineId,
+          purchaseOrderId,
+          lineType: 'CATALOG',
+          productId: { not: null },
+          product: {
+            is: {
+              media: {
+                some: {
+                  id: productMediaId,
+                  kind: 'IMAGE',
+                  isPrimary: true,
+                  detachedAt: null,
+                  mediaAsset: { is: { status: 'READY' } },
+                },
+              },
+            },
+          },
+        },
+        select: { productId: true },
+      })
+    }
+    catch {
+      throw new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'INTERNAL_ERROR',
+        '服务器内部错误',
+      )
+    }
+    if (line === null || line.productId === null) throw productImageNotFound()
+
+    return this.content.resolve(
+      line.productId,
+      productMediaId,
+      ifNoneMatch,
+      range,
+      method,
+    )
+  }
+
+  /**
    * 采购来源弹窗读取的是销售订单快照所引用目录产品的当前主图。授权边界属于
    * purchase-orders:create，因此每次内容请求都重新校验来源订单仍为已确认、
    * 明细仍指向该目录产品，并且媒体仍是当前 READY 主图，避免复用销售读取权限。

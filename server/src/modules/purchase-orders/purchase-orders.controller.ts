@@ -49,6 +49,7 @@ import {
 import {
   PurchaseOrderDocumentIdParamDto,
   PurchaseOrderIdParamDto,
+  PurchaseOrderLineProductImageParamDto,
   PurchaseOrderListQueryDto,
   PurchaseOrderPaymentIdParamDto,
   PurchaseOrderProductImageParamDto,
@@ -279,6 +280,57 @@ export class PurchaseOrdersController {
   ): Promise<StreamableFile | undefined> {
     const result = await this.productImages.resolveSourceLinePreview(
       params.salesOrderId,
+      params.lineId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
+  }
+
+  @Head(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:read')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'purchase_orders_head_product_preview_main_image',
+    notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized purchase-order list product preview image.',
+  })
+  async headProductPreviewMainImage(
+    @Param() params: PurchaseOrderLineProductImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productImages.resolveListPreview(
+      params.purchaseOrderId,
+      params.lineId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get(':purchaseOrderId/lines/:lineId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:read')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'purchase_orders_get_product_preview_main_image',
+    notFoundCode: 'PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized purchase-order list product preview image.',
+  })
+  async getProductPreviewMainImage(
+    @Param() params: PurchaseOrderLineProductImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productImages.resolveListPreview(
+      params.purchaseOrderId,
       params.lineId,
       params.productMediaId,
       ifNoneMatch,

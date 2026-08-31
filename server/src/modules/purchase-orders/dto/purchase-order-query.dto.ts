@@ -149,6 +149,16 @@ export class PurchaseOrderSourceSalesOrderLineImageParamDto
   productMediaId!: string
 }
 
+export class PurchaseOrderLineProductImageParamDto extends PurchaseOrderIdParamDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Matches(UUID_V4_PATTERN)
+  lineId!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Matches(UUID_V4_PATTERN)
+  productMediaId!: string
+}
+
 export class PurchaseOrderProductImageParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @Matches(UUID_V4_PATTERN)

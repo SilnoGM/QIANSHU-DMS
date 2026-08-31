@@ -21,6 +21,29 @@ import type { PurchaseOrderPendingTask } from './dto/purchase-order-query.dto'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
+const PURCHASE_ORDER_LINE_SUMMARY_SELECT = {
+  id: true,
+  lineType: true,
+  productId: true,
+  productNameSnapshot: true,
+  quantity: true,
+  product: {
+    select: {
+      media: {
+        where: {
+          kind: 'IMAGE',
+          isPrimary: true,
+          detachedAt: null,
+          mediaAsset: { is: { status: 'READY' } },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        take: 1,
+        select: { id: true },
+      },
+    },
+  },
+} as const satisfies Prisma.PurchaseOrderLineSelect
+
 const PURCHASE_ORDER_LIST_SELECT = {
   id: true,
   orderNo: true,
@@ -41,6 +64,10 @@ const PURCHASE_ORDER_LIST_SELECT = {
   salesOrder: {
     select: { id: true, orderNo: true, customerName: true },
   },
+  lines: {
+    orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+    select: PURCHASE_ORDER_LINE_SUMMARY_SELECT,
+  },
 } as const satisfies Prisma.PurchaseOrderSelect
 
 const PURCHASE_ORDER_DETAIL_SELECT = {
@@ -51,18 +78,14 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
   lines: {
     orderBy: [{ lineNumber: 'asc' as const }, { id: 'asc' as const }],
     select: {
-      id: true,
+      ...PURCHASE_ORDER_LINE_SUMMARY_SELECT,
       lineNumber: true,
-      lineType: true,
-      productId: true,
       sourceSalesOrderLineId: true,
       productNoSnapshot: true,
-      productNameSnapshot: true,
       productAttributesSnapshot: true,
       descriptionSnapshot: true,
       referencePurchaseUnitPriceAmount: true,
       actualPurchaseUnitPriceAmount: true,
-      quantity: true,
       lineTotalAmount: true,
     },
   },
@@ -152,6 +175,18 @@ export interface PurchaseOrderListItem {
   readonly salesOrderNo: string | null
   readonly customerName: string | null
   readonly supplier: PurchaseOrderSupplier
+  readonly lineSummary: {
+    readonly lineCount: number
+    readonly totalQuantity: number
+    readonly previews: readonly {
+      readonly lineId: string
+      readonly productName: string
+      readonly mainImage: {
+        readonly id: string
+        readonly contentUrl: string
+      } | null
+    }[]
+  }
   readonly orderDate: string
   readonly currencyCode: string
   readonly purchaseTotalAmount: string
@@ -231,6 +266,30 @@ function paidUnits(value: { toFixed(decimalPlaces: number): string } | null): bi
   return value === null ? 0n : parsePurchaseOrderAmountUnits(decimalToFixed4(value))
 }
 
+function mapLineSummary(
+  row: PurchaseOrderListRow,
+): PurchaseOrderListItem['lineSummary'] {
+  return {
+    lineCount: row.lines.length,
+    totalQuantity: row.lines.reduce((sum, line) => sum + line.quantity, 0),
+    // 返回完整 preview，由 ImageGroup 依据真实有图项计算折叠数量；服务端不能预先截断。
+    previews: row.lines.map((line) => {
+      const mainImage = line.product?.media[0]
+      return {
+        lineId: line.id,
+        productName: line.productNameSnapshot,
+        mainImage: line.productId === null || mainImage === undefined
+          ? null
+          : {
+              id: mainImage.id,
+              contentUrl:
+                `/api/purchase-orders/${row.id}/lines/${line.id}/main-image/${mainImage.id}/content`,
+            },
+      }
+    }),
+  }
+}
+
 function mapListItem(
   row: PurchaseOrderListRow,
   supplier: PurchaseOrderSupplier,
@@ -246,6 +305,7 @@ function mapListItem(
     salesOrderNo: row.salesOrder?.orderNo ?? null,
     customerName: row.salesOrder?.customerName ?? null,
     supplier,
+    lineSummary: mapLineSummary(row),
     orderDate: row.orderDate.toISOString().slice(0, 10),
     currencyCode: row.currencyCode,
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),

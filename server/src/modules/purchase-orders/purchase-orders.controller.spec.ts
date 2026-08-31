@@ -66,7 +66,9 @@ const providers = [{
   },
 }, {
   provide: PurchaseOrderProductImageService,
-  useValue: { resolve: jest.fn(), resolveSourceLinePreview: jest.fn() },
+  useValue: {
+    resolve: jest.fn(), resolveListPreview: jest.fn(), resolveSourceLinePreview: jest.fn(),
+  },
 }]
 
 @Module({ controllers: [PurchaseOrdersController], providers })
@@ -240,6 +242,72 @@ describe('PurchaseOrdersController', () => {
       )).toEqual(['purchase-orders:create'])
     }
   })
+
+  it('serves purchase list preview images through an independent read-authorized route', async () => {
+    const stream = Readable.from(Buffer.from('image'))
+    const result: ProductMediaContentResponse = {
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Type': 'image/webp',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      stream,
+    }
+    const resolveListPreview = jest.fn().mockResolvedValue(result)
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      {} as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      { resolveListPreview } as unknown as PurchaseOrderProductImageService,
+    )
+    const params = {
+      purchaseOrderId: ORDER_ID,
+      lineId: '33333333-3333-4333-8333-333333333333',
+      productMediaId: '44444444-4444-4444-8444-444444444444',
+    }
+    const response = { status: jest.fn(), setHeader: jest.fn() }
+
+    await controller.headProductPreviewMainImage(
+      params, '"known"', 'bytes=0-0', response,
+    )
+    const body = await controller.getProductPreviewMainImage(
+      params, undefined, undefined, response,
+    )
+
+    expect(resolveListPreview).toHaveBeenNthCalledWith(
+      1,
+      params.purchaseOrderId,
+      params.lineId,
+      params.productMediaId,
+      '"known"',
+      'bytes=0-0',
+      'HEAD',
+    )
+    expect(resolveListPreview).toHaveBeenNthCalledWith(
+      2,
+      params.purchaseOrderId,
+      params.lineId,
+      params.productMediaId,
+      undefined,
+      undefined,
+      'GET',
+    )
+    expect(body).toBeInstanceOf(StreamableFile)
+
+    const reflector = new Reflector()
+    for (const method of [
+      'headProductPreviewMainImage', 'getProductPreviewMainImage',
+    ] as const) {
+      expect(reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        PurchaseOrdersController.prototype[method],
+      )).toEqual(['purchase-orders:read'])
+    }
+  })
 })
 
 describe('PurchaseOrdersController OpenAPI', () => {
@@ -303,6 +371,36 @@ describe('PurchaseOrdersController OpenAPI', () => {
       .toBe('purchase_orders_get_source_sales_order_line_main_image')
     expect(sourceImagePath?.head?.operationId)
       .toBe('purchase_orders_head_source_sales_order_line_main_image')
+
+    const previewImagePath = document.paths[
+      '/api/purchase-orders/{purchaseOrderId}/lines/{lineId}/main-image/{productMediaId}/content'
+    ]
+    const previewGet: ContractOperation | undefined = previewImagePath?.get
+    const previewHead: ContractOperation | undefined = previewImagePath?.head
+    expect(previewGet?.operationId)
+      .toBe('purchase_orders_get_product_preview_main_image')
+    expect(previewHead?.operationId)
+      .toBe('purchase_orders_head_product_preview_main_image')
+    for (const operation of [previewGet, previewHead]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      const contract = operation?.['x-qianshu-contract']
+      expect(contract).toMatchObject({
+        authorization: true,
+        resourceLocator: true,
+        privateNoStore: true,
+      })
+      if (typeof contract !== 'object' || contract === null || !('errors' in contract)) {
+        throw new Error('OpenAPI contract must expose an errors array')
+      }
+      const errors: unknown = contract.errors
+      if (!Array.isArray(errors)) {
+        throw new TypeError('OpenAPI contract errors must be an array')
+      }
+      expect(errors).toContainEqual({
+        status: 404,
+        codes: ['PURCHASE_ORDER_PRODUCT_IMAGE_NOT_FOUND'],
+      })
+    }
   })
 
   it('requires explicit list view and documents CNY as the only currency', () => {

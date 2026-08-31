@@ -111,6 +111,25 @@ export class PurchaseOrderStatusHistoryDto {
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly changedAt!: string
 }
 
+export class PurchaseOrderListImageDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly contentUrl!: string
+}
+
+export class PurchaseOrderLinePreviewDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly lineId!: string
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: () => PurchaseOrderListImageDto, nullable: true })
+  readonly mainImage!: PurchaseOrderListImageDto | null
+}
+
+export class PurchaseOrderLineSummaryDto {
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly lineCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly totalQuantity!: number
+  @ApiProperty({ type: () => [PurchaseOrderLinePreviewDto] })
+  readonly previews!: readonly PurchaseOrderLinePreviewDto[]
+}
+
 export class PurchaseOrderListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
@@ -118,6 +137,8 @@ export class PurchaseOrderListItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly salesOrderNo!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly customerName!: string | null
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto
+  @ApiProperty({ type: () => PurchaseOrderLineSummaryDto })
+  readonly lineSummary!: PurchaseOrderLineSummaryDto
   @ApiProperty({ type: 'string', format: 'date' }) readonly orderDate!: string
   @ApiProperty({ enum: ['CNY'] }) readonly currencyCode!: 'CNY'
   @ApiProperty({ type: 'string' }) readonly purchaseTotalAmount!: string

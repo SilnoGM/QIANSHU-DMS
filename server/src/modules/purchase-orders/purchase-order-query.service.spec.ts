@@ -6,6 +6,36 @@ function decimal(value: string) {
   return { toFixed: () => Number(value).toFixed(4) }
 }
 
+const listLines = [{
+  id: 'line-catalog-image-1',
+  lineType: 'CATALOG',
+  productId: 'product-1',
+  productNameSnapshot: '目录产品一',
+  quantity: 2,
+  product: { media: [{ id: 'media-1' }] },
+}, {
+  id: 'line-catalog-empty',
+  lineType: 'CATALOG',
+  productId: 'product-2',
+  productNameSnapshot: '目录产品无图',
+  quantity: 3,
+  product: { media: [] },
+}, {
+  id: 'line-custom',
+  lineType: 'CUSTOM',
+  productId: null,
+  productNameSnapshot: '临时采购服务',
+  quantity: 4,
+  product: null,
+}, ...[3, 4, 5].map(index => ({
+  id: `line-catalog-image-${index}`,
+  lineType: 'CATALOG',
+  productId: `product-${index}`,
+  productNameSnapshot: `目录产品${index}`,
+  quantity: index + 2,
+  product: { media: [{ id: `media-${index}` }] },
+}))]
+
 function orderRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'order-id',
@@ -45,7 +75,7 @@ function setup() {
     purchaseOrder: {
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
       findMany: jest.fn<Promise<unknown[]>, [unknown]>()
-        .mockResolvedValue([orderRow()]),
+        .mockResolvedValue([orderRow({ lines: listLines })]),
       findUnique: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue(orderRow({
           lines: [{
@@ -142,7 +172,32 @@ describe('PurchaseOrderQueryService', () => {
       purchaseTotalAmount: '100.0000',
       paidAmount: '30.0000',
       outstandingAmount: '70.0000',
+      lineSummary: {
+        lineCount: 6,
+        totalQuantity: 27,
+      },
     })
+    expect(page.items[0]?.lineSummary.previews).toHaveLength(6)
+    expect(page.items[0]?.lineSummary.previews.slice(0, 3)).toEqual([{
+      lineId: 'line-catalog-image-1',
+      productName: '目录产品一',
+      mainImage: {
+        id: 'media-1',
+        contentUrl:
+          '/api/purchase-orders/order-id/lines/line-catalog-image-1/main-image/media-1/content',
+      },
+    }, {
+      lineId: 'line-catalog-empty',
+      productName: '目录产品无图',
+      mainImage: null,
+    }, {
+      lineId: 'line-custom',
+      productName: '临时采购服务',
+      mainImage: null,
+    }])
+    expect(page.items[0]?.lineSummary.previews.filter(
+      preview => preview.mainImage !== null,
+    )).toHaveLength(4)
     const where = (fixture.prisma.purchaseOrder.findMany.mock.calls[0]?.[0] as {
       where?: unknown
       orderBy?: unknown
