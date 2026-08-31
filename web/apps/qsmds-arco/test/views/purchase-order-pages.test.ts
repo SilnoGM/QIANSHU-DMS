@@ -45,8 +45,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   )
   assert.match(
     source,
-    /id: 'supplierSummary',\s+minWidth: 90,\s+title: '供应商'/u,
-    '采购列表供应商列最小宽度固定为 90px',
+    /id: 'supplierSummary',\s+minWidth: 120,\s+title: '供应商'/u,
+    '采购列表供应商列最小宽度固定为 120px',
   )
   assert.match(
     source,
@@ -60,8 +60,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.doesNotMatch(supplierCell[1] ?? '', /<FaTag/u, '供应商不应继续使用标签样式')
   assert.match(
     source,
-    /id: 'supplierSummary',[\s\S]*?id: 'buyerSummary',\s+minWidth: 180,\s+title: '采购人'[\s\S]*?id: 'productSummary'/u,
-    '采购人列必须位于供应商与产品之间，并与销售人员列保持 180px',
+    /id: 'supplierSummary',[\s\S]*?id: 'buyerSummary',\s+minWidth: 120,\s+title: '采购人'[\s\S]*?id: 'productSummary'/u,
+    '采购人列必须位于供应商与产品之间，并固定为 120px',
   )
   assert.match(
     source,
