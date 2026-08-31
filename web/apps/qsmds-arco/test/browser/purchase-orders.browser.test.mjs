@@ -235,6 +235,30 @@ async function waitForPurchaseList(page, expectedText) {
   })()`)
 }
 
+/**
+ * 状态项的文本节点同时包含业务标签与计数，不能复用只匹配完整按钮文案的帮助函数。
+ * 这里按工具栏 aria-label 和首个 span 的稳定标签定位，覆盖真实渲染出来的全量计数。
+ */
+async function waitForStatusToolbarCounts(page, ariaLabel, expectedCounts) {
+  await page.waitFor(`(() => {
+    const toolbar = document.querySelector(
+      '[data-slot="qs-status-switch-toolbar"][aria-label='
+        + CSS.escape(${JSON.stringify(ariaLabel)}) + ']',
+    )
+    if (!toolbar) return false
+    const counts = Object.fromEntries(
+      [...toolbar.querySelectorAll('[data-slot="qs-status-switch-item"]')]
+        .map((button) => {
+          const parts = [...button.querySelectorAll('span')]
+            .map(span => span.textContent?.trim() ?? '')
+          return [parts[0], Number(parts[1])]
+        }),
+    )
+    return Object.entries(${JSON.stringify(expectedCounts)})
+      .every(([label, count]) => counts[label] === count)
+  })()`)
+}
+
 test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、履约和响应式主题', {
   timeout: 600_000,
 }, async (t) => {
@@ -256,11 +280,22 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     await loginThroughRealHttp(page, configuration)
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
     await waitForPurchaseList(page, '暂无采购订单')
+    await waitForStatusToolbarCounts(page, '全部采购状态筛选', {
+      全部采购: 0,
+      已确认: 0,
+      已完成: 0,
+      已取消: 0,
+    })
     const all = await readPurchaseOrders(page)
     assert.equal(all.status, 200)
     assert.equal(all.body?.total, 0)
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, '暂无待办采购')
+    await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
+      待发货: 0,
+      待付款: 0,
+      待入仓: 0,
+    })
     const pending = await readPurchaseOrders(page, 'pending')
     assert.equal(pending.status, 200)
     assert.equal(pending.body?.total, 0)
@@ -776,12 +811,11 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
   await runPurchaseOrderBrowserStep('sequential fulfillment leaves pending list', async () => {
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, order.orderNo)
-    await page.waitFor(`(() => {
-      const toolbar = document.querySelector('[aria-label="待办采购任务筛选"]')
-      return toolbar?.textContent?.includes('待发货')
-        && toolbar.textContent.includes('待入仓')
-        && toolbar.textContent.includes('待付款')
-    })()`)
+    await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
+      待发货: 2,
+      待付款: 1,
+      待入仓: 0,
+    })
     await clickVisibleAriaButton(page, `${order.orderNo}：发货`)
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="info"]')]
       .some(toast => toast.getClientRects().length > 0
@@ -812,6 +846,11 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     }
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, linkedOrder.orderNo)
+    await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
+      待发货: 1,
+      待付款: 1,
+      待入仓: 0,
+    })
     const pending = await readPurchaseOrders(page, 'pending')
     assert.equal(pending.status, 200)
     assert.equal(pending.body?.total, 1)

@@ -76,6 +76,7 @@ const supplierResidueAllowlist = Object.freeze([
   // 已授权的 schema、服务、API、E2E 与规格文件，禁止借此恢复 Supplier 主数据域。
   'server/prisma/migrations/20260827120000_purchase_order_domain/migration.sql',
   'server/src/modules/purchase-orders/dto/purchase-order-create.dto.ts',
+  'server/src/modules/purchase-orders/dto/purchase-order-query-dto.spec.ts',
   'server/src/modules/purchase-orders/dto/purchase-order-query.dto.ts',
   'server/src/modules/purchase-orders/dto/purchase-order-response.dto.ts',
   'server/src/modules/purchase-orders/products/purchase-order-product-image.service.spec.ts',
@@ -92,6 +93,7 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/purchase-orders/purchase-order-query.service.ts',
   'server/src/modules/purchase-orders/purchase-order-source-query.service.spec.ts',
   'server/src/modules/purchase-orders/purchase-order-source-query.service.ts',
+  'server/src/modules/purchase-orders/purchase-orders.controller.spec.ts',
   'server/src/modules/purchase-orders/purchase-orders.controller.ts',
   'server/test/purchase-order-api.e2e-spec.ts',
   'server/test/purchase-order-schema.e2e-spec.ts',
@@ -99,6 +101,7 @@ const supplierResidueAllowlist = Object.freeze([
   'specs/purchase-order-domain/design.md',
   'specs/purchase-order-domain/requirements.md',
   'specs/purchase-order-domain/tasks.md',
+  'specs/status-switch-toolbar-counts/design.md',
   'scripts/browser-auth-runtime.test.mjs',
   'scripts/browser-auth/provision-admin.mjs',
   // 采购 Web 只消费 service_provider.supplier 字典值、产品 supplierValue 快照
