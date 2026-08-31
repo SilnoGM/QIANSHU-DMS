@@ -50,6 +50,7 @@ import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchTool
 
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
+import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
   buildSalesOrderStatusCountsQuery,
   deduplicateSalesOrderItems,
@@ -147,6 +148,8 @@ const dateRange = shallowRef<CalendarDateRangeValue>({
 const loading = ref(false)
 const listError = ref('')
 const requestId = ref<string>()
+const detailVisible = ref(false)
+const detailOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const currencyModalVisible = ref(false)
 const selectedCurrency = ref<SalesOrderCurrencyCode | null>(null)
 const recordsModalVisible = ref(false)
@@ -392,6 +395,15 @@ function openRecordsModal(
   recordsModalKind.value = kind
   recordsModalOrder.value = order
   recordsModalVisible.value = true
+}
+
+function openSalesOrderDetail(order: SalesOrderListItemDto): void {
+  detailOrder.value = { ...order }
+  detailVisible.value = true
+}
+
+function handleSalesOrderDetailClosed(): void {
+  detailOrder.value = null
 }
 
 /** 表格操作列直接进入对应业务表单；记录弹窗原有标题区入口继续保留。 */
@@ -915,7 +927,7 @@ onBeforeUnmount(() => {
         data-testid="sales-order-list-table"
         :row-key="item => item.id"
         :addable="false"
-        :action-column="{ fixed: 'right', minWidth: 180, title: '操作', width: 180 }"
+        :action-column="{ fixed: 'right', minWidth: 260, title: '操作', width: 260 }"
         :columns="columns"
         :data="rows"
         :empty-title="tableEmptyTitle"
@@ -947,6 +959,16 @@ onBeforeUnmount(() => {
 
         <template #actions="{ row }">
           <div class="flex flex-wrap gap-1 items-center">
+            <FaButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.orderNo}：查看详情`"
+              @click="openSalesOrderDetail(row)"
+            >
+              <FaIcon name="i-lucide:eye" aria-hidden="true" />查看
+            </FaButton>
             <template
               v-for="action in salesOrderRowActions(row)"
               :key="action.key"
@@ -1641,6 +1663,13 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
+
+    <SalesOrderDetailDrawer
+      v-model="detailVisible"
+      :order="detailOrder"
+      :currencies="currencyCatalog.currencies.value"
+      @closed="handleSalesOrderDetailClosed"
+    />
 
     <SalesOrderRecordsModal
       v-model="recordsModalVisible"

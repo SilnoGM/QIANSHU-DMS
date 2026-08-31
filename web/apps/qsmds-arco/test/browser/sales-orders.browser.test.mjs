@@ -162,6 +162,28 @@ async function readOrders(page) {
   return page.evaluate(apiExpression(pathname))
 }
 
+/**
+ * 详情入口依赖订单号拼出的 aria-label；通过可见性与禁用态双重约束，确保
+ * 浏览器回归走的是用户可操作按钮，而不是命中抽屉内的隐藏副本。
+ */
+async function clickVisibleAriaButton(page, label) {
+  await page.waitFor(`(() => [...document.querySelectorAll(
+    '[aria-label=${JSON.stringify(label)}]'
+  )].some(element => element.getClientRects().length > 0
+    && !element.disabled))()`)
+  await page.evaluate(`(() => {
+    const element = [...document.querySelectorAll(
+      '[aria-label=${JSON.stringify(label)}]'
+    )].find(candidate => candidate.getClientRects().length > 0
+      && !candidate.disabled)
+    if (!(element instanceof HTMLElement)) {
+      throw new Error('sales order aria button unavailable')
+    }
+    element.click()
+    return true
+  })()`)
+}
+
 test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截及正式派号', {
   timeout: 600_000,
 }, async (t) => {
@@ -570,6 +592,36 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     assert.equal(detail.body?.lines?.[0]?.productNo, 'PRODUCT-BROWSER-001')
     assert.equal(detail.body?.lines?.[0]?.actualUnitPriceAmount, '100.0000')
     assert.equal(detail.body?.lines?.[0]?.quantity, 2)
+
+    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+      return drawer?.querySelector('[data-slot="qs-sales-order-desc"]')
+        && drawer.textContent.includes('订单基础信息')
+        && drawer.textContent.includes('销售产品与小计')
+        && drawer.textContent.includes('PRODUCT-BROWSER-001')
+        && drawer.textContent.includes(${JSON.stringify(customerName)})
+    })()`)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
+
+    // 再次打开同一订单，覆盖抽屉关闭后清理状态并重新请求详情的生命周期。
+    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+      return drawer?.textContent?.includes('销售产品与小计')
+        && drawer.textContent.includes('PRODUCT-BROWSER-001')
+    })()`)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
   })
 
   runtime.stop()
