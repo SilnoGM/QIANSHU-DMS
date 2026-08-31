@@ -153,7 +153,11 @@ describe('PurchaseOrderMutationService', () => {
     )
     expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
-      data: { fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
+      data: {
+        fulfillmentStatus: 'PREPARING',
+        orderStatus: 'CONFIRMED',
+        version: { increment: 1 },
+      },
     })
 
     const cancelled = setup()
@@ -166,6 +170,52 @@ describe('PurchaseOrderMutationService', () => {
       ORDER_ID,
       { toStatus: 'PREPARING' },
     )).rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCELLED' })
+  })
+
+  it('atomically completes a paid order when fulfillment reaches SIGNED', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order,
+      fulfillmentStatus: 'SHIPPED',
+      paymentStatus: 'PAID',
+    })
+
+    await fixture.service.updateFulfillmentStatus(
+      context,
+      ORDER_ID,
+      { toStatus: 'SIGNED', reason: null },
+    )
+
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: {
+        fulfillmentStatus: 'SIGNED',
+        orderStatus: 'COMPLETED',
+        version: { increment: 1 },
+      },
+    })
+    expect(fixture.transaction.purchaseOrderStatusHistory.create.mock.calls).toContainEqual([{
+      data: {
+        purchaseOrderId: ORDER_ID,
+        dimension: 'ORDER',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'COMPLETED',
+        reason: null,
+        changedByUserId: ACTOR_ID,
+      },
+    }])
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED',
+        metadata: {
+          automatic: true,
+          fromStatus: 'CONFIRMED',
+          toStatus: 'COMPLETED',
+          trigger: 'FULFILLMENT',
+        },
+      }),
+    )
   })
 
   it('records payment without requiring a voucher and derives PARTIALLY_PAID', async () => {
@@ -194,10 +244,74 @@ describe('PurchaseOrderMutationService', () => {
     })
     expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
-      data: { paymentStatus: 'PARTIALLY_PAID', version: { increment: 1 } },
+      data: {
+        orderStatus: 'CONFIRMED',
+        paymentStatus: 'PARTIALLY_PAID',
+        version: { increment: 1 },
+      },
     })
+    expect(fixture.transaction.purchaseOrderStatusHistory.create.mock.calls).toEqual([[{
+      data: {
+        purchaseOrderId: ORDER_ID,
+        dimension: 'PAYMENT',
+        fromStatus: 'UNPAID',
+        toStatus: 'PARTIALLY_PAID',
+        reason: null,
+        changedByUserId: ACTOR_ID,
+      },
+    }]])
     expect(fixture.transaction.purchaseOrderDocument.create).not.toHaveBeenCalled()
     expect(fixture.media.activate).not.toHaveBeenCalled()
+  })
+
+  it('atomically completes a signed order when payment reaches PAID', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order,
+      fulfillmentStatus: 'SIGNED',
+      paymentStatus: 'PARTIALLY_PAID',
+    })
+    fixture.transaction.purchaseOrderPayment.aggregate.mockResolvedValue({
+      _sum: { amount: decimal('70') },
+    })
+
+    await fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'BALANCE',
+      amount: '30',
+      paidAt: '2026-08-27T11:00:00.000Z',
+      paymentMethod: 'BANK',
+    })
+
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: {
+        orderStatus: 'COMPLETED',
+        paymentStatus: 'PAID',
+        version: { increment: 1 },
+      },
+    })
+    expect(fixture.transaction.purchaseOrderStatusHistory.create.mock.calls).toContainEqual([{
+      data: {
+        purchaseOrderId: ORDER_ID,
+        dimension: 'ORDER',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'COMPLETED',
+        reason: null,
+        changedByUserId: ACTOR_ID,
+      },
+    }])
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED',
+        metadata: {
+          automatic: true,
+          fromStatus: 'CONFIRMED',
+          toStatus: 'COMPLETED',
+          trigger: 'PAYMENT',
+        },
+      }),
+    )
   })
 
   it('optionally attaches one prepared payment voucher in the payment transaction', async () => {
@@ -276,7 +390,62 @@ describe('PurchaseOrderMutationService', () => {
     })
     expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
-      data: { paymentStatus: 'UNPAID', version: { increment: 1 } },
+      data: {
+        orderStatus: 'CONFIRMED',
+        paymentStatus: 'UNPAID',
+        version: { increment: 1 },
+      },
     })
+  })
+
+  it('atomically reopens a completed order when voiding payment makes it partially paid', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order,
+      orderStatus: 'COMPLETED',
+      fulfillmentStatus: 'SIGNED',
+      paymentStatus: 'PAID',
+    })
+    fixture.transaction.purchaseOrderPayment.aggregate.mockResolvedValue({
+      _sum: { amount: decimal('100') },
+    })
+
+    await fixture.service.voidPayment(
+      context,
+      ORDER_ID,
+      PAYMENT_ID,
+      { reason: '冲销已完成订单付款' },
+    )
+
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: {
+        orderStatus: 'CONFIRMED',
+        paymentStatus: 'PARTIALLY_PAID',
+        version: { increment: 1 },
+      },
+    })
+    expect(fixture.transaction.purchaseOrderStatusHistory.create.mock.calls).toContainEqual([{
+      data: {
+        purchaseOrderId: ORDER_ID,
+        dimension: 'ORDER',
+        fromStatus: 'COMPLETED',
+        toStatus: 'CONFIRMED',
+        reason: null,
+        changedByUserId: ACTOR_ID,
+      },
+    }])
+    expect(fixture.audit.record).toHaveBeenCalledWith(
+      fixture.transaction,
+      expect.objectContaining({
+        eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED',
+        metadata: {
+          automatic: true,
+          fromStatus: 'COMPLETED',
+          toStatus: 'CONFIRMED',
+          trigger: 'PAYMENT',
+        },
+      }),
+    )
   })
 })

@@ -203,7 +203,7 @@ describe('PurchaseOrderQueryService', () => {
       orderBy?: unknown
     } | undefined)
     expect(where?.where).toMatchObject({
-      orderStatus: { not: 'CANCELLED' },
+      orderStatus: 'CONFIRMED',
       AND: [{ OR: [
         { fulfillmentStatus: { not: 'SIGNED' } },
         { paymentStatus: { not: 'PAID' } },
@@ -225,7 +225,7 @@ describe('PurchaseOrderQueryService', () => {
       where?: { orderStatus?: unknown, AND?: unknown[] }
     }
     expect(query.where).toMatchObject({
-      orderStatus: { not: 'CANCELLED' },
+      orderStatus: 'CONFIRMED',
       AND: [taskClause],
     })
   })

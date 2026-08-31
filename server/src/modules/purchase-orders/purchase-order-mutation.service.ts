@@ -5,6 +5,7 @@ import type {
   PurchaseOrderFulfillmentStatus,
   PurchaseOrderPaymentStatus,
   PurchaseOrderPaymentType,
+  PurchaseOrderStatus,
 } from '../../generated/prisma/enums'
 import {
   AuditActorType,
@@ -37,6 +38,7 @@ import {
 import {
   assertPurchaseOrderFulfillmentTransition,
   assertPurchaseOrderStatusTransition,
+  derivePurchaseOrderStatus,
 } from './domain/purchase-order-state-machine'
 import { isCanonicalPurchaseOrderActorId } from './purchase-order-command.normalizer'
 import {
@@ -75,6 +77,8 @@ const DEFAULT_DEPENDENCIES: PurchaseOrderMutationDependencies = {
 const PURCHASE_ORDER_MUTATION_DEPENDENCIES = Symbol(
   'qianshu.purchase-order.mutation-dependencies',
 )
+
+type AutomaticOrderStatusTrigger = 'FULFILLMENT' | 'PAYMENT'
 
 type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
   select: {
@@ -256,9 +260,18 @@ export class PurchaseOrderMutationService {
         toStatus,
         { orderStatus: order.orderStatus },
       )
+      const newOrderStatus = derivePurchaseOrderStatus({
+        orderStatus: order.orderStatus,
+        fulfillmentStatus: toStatus,
+        paymentStatus: order.paymentStatus,
+      })
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
-        data: { fulfillmentStatus: toStatus, version: { increment: 1 } },
+        data: {
+          fulfillmentStatus: toStatus,
+          orderStatus: newOrderStatus,
+          version: { increment: 1 },
+        },
       })
       await transaction.purchaseOrderStatusHistory.create({ data: {
         purchaseOrderId,
@@ -273,6 +286,13 @@ export class PurchaseOrderMutationService {
         targetId: purchaseOrderId,
         metadata: { fromStatus: order.fulfillmentStatus, toStatus },
       })
+      await this.recordAutomaticOrderStatusChange(
+        transaction,
+        trusted,
+        order,
+        newOrderStatus,
+        'FULFILLMENT',
+      )
     })
     return this.query.getById(purchaseOrderId)
   }
@@ -391,7 +411,7 @@ export class PurchaseOrderMutationService {
             metadata: { purchaseOrderId, documentType: 'PAYMENT_VOUCHER' },
           })
         }
-        await this.writePaymentStatus(
+        await this.writePaymentAndOrderStatus(
           transaction,
           trusted,
           order,
@@ -477,7 +497,7 @@ export class PurchaseOrderMutationService {
           voidReason: reason,
         },
       })
-      await this.writePaymentStatus(
+      await this.writePaymentAndOrderStatus(
         transaction,
         trusted,
         order,
@@ -585,25 +605,72 @@ export class PurchaseOrderMutationService {
     return effectivePaidAmount(aggregate)
   }
 
-  private async writePaymentStatus(
+  private async writePaymentAndOrderStatus(
     transaction: Prisma.TransactionClient,
     context: PurchaseOrderMutationContext,
     order: MutablePurchaseOrder,
     newStatus: PurchaseOrderPaymentStatus,
   ): Promise<void> {
+    const newOrderStatus = derivePurchaseOrderStatus({
+      orderStatus: order.orderStatus,
+      fulfillmentStatus: order.fulfillmentStatus,
+      paymentStatus: newStatus,
+    })
+    // 付款作废可能让完成订单重新打开。付款与订单状态必须在同一次 UPDATE 中
+    // 写入，否则数据库的完成态 CHECK 会拒绝中间不一致状态。
     await transaction.purchaseOrder.update({
       where: { id: order.id },
-      data: { paymentStatus: newStatus, version: { increment: 1 } },
+      data: {
+        orderStatus: newOrderStatus,
+        paymentStatus: newStatus,
+        version: { increment: 1 },
+      },
     })
-    if (newStatus === order.paymentStatus) return
+    if (newStatus !== order.paymentStatus) {
+      await transaction.purchaseOrderStatusHistory.create({ data: {
+        purchaseOrderId: order.id,
+        dimension: 'PAYMENT',
+        fromStatus: order.paymentStatus,
+        toStatus: newStatus,
+        reason: null,
+        changedByUserId: context.actorUserId,
+      } })
+    }
+    await this.recordAutomaticOrderStatusChange(
+      transaction,
+      context,
+      order,
+      newOrderStatus,
+      'PAYMENT',
+    )
+  }
+
+  private async recordAutomaticOrderStatusChange(
+    transaction: Prisma.TransactionClient,
+    context: PurchaseOrderMutationContext,
+    order: MutablePurchaseOrder,
+    newStatus: PurchaseOrderStatus,
+    trigger: AutomaticOrderStatusTrigger,
+  ): Promise<void> {
+    if (newStatus === order.orderStatus) return
     await transaction.purchaseOrderStatusHistory.create({ data: {
       purchaseOrderId: order.id,
-      dimension: 'PAYMENT',
-      fromStatus: order.paymentStatus,
+      dimension: 'ORDER',
+      fromStatus: order.orderStatus,
       toStatus: newStatus,
       reason: null,
       changedByUserId: context.actorUserId,
     } })
+    await this.recordAudit(transaction, context, {
+      eventType: AuditEventType.PURCHASE_ORDER_ORDER_STATUS_CHANGED,
+      targetId: order.id,
+      metadata: {
+        automatic: true,
+        fromStatus: order.orderStatus,
+        toStatus: newStatus,
+        trigger,
+      },
+    })
   }
 
   private recordAudit(

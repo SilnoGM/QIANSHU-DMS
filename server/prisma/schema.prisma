@@ -278,6 +278,7 @@ enum PurchaseOrderType {
 
 enum PurchaseOrderStatus {
   CONFIRMED
+  COMPLETED
   CANCELLED
 
   @@map("purchase_order_status")

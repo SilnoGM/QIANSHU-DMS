@@ -16,6 +16,10 @@ const fulfillmentStatusMigrationPath = resolve(
   serverRoot,
   'prisma/migrations/20260831120000_remove_purchase_order_pending_order/migration.sql',
 )
+const completionStatusMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20260831130000_purchase_order_auto_completion/migration.sql',
+)
 
 function extractPrismaBlock(
   source: string,
@@ -46,6 +50,7 @@ describe('purchase order domain schema', () => {
     ])
     expect(enumValues(schema, 'PurchaseOrderStatus')).toEqual([
       'CONFIRMED',
+      'COMPLETED',
       'CANCELLED',
     ])
     expect(enumValues(schema, 'PurchaseOrderFulfillmentStatus')).toEqual([
@@ -124,6 +129,34 @@ describe('purchase order domain schema', () => {
     expect(migration).not.toMatch(
       /(?:CREATE|DROP|ALTER)\s+[\s\S]{0,80}\sIF\s+(?:NOT\s+)?EXISTS\b/iu,
     )
+    expect(migration).not.toMatch(/\bCASCADE\b/iu)
+  })
+
+  it('backfills completed orders and enforces the signed-and-paid invariant', () => {
+    const migration = readFileSync(completionStatusMigrationPath, 'utf8')
+
+    expect(migration.trimStart()).toMatch(/^BEGIN;/u)
+    expect(migration.trimEnd()).toMatch(/COMMIT;$/u)
+    expect(migration).toContain(
+      'LOCK TABLE "purchase_orders" IN ACCESS EXCLUSIVE MODE',
+    )
+    expect(migration).toContain('purchase_order_status_next')
+    expect(migration).toMatch(
+      /UPDATE "purchase_orders"[\s\S]*?SET "order_status" = 'COMPLETED'[\s\S]*?"order_status" = 'CONFIRMED'[\s\S]*?"fulfillment_status" = 'SIGNED'[\s\S]*?"payment_status" = 'PAID'/u,
+    )
+    expect(migration).toContain(
+      'purchase_orders_completed_requires_signed_paid_check',
+    )
+    expect(migration).toMatch(/"order_status"\s*<>\s*'COMPLETED'/u)
+    expect(migration).toMatch(/"fulfillment_status"\s*=\s*'SIGNED'/u)
+    expect(migration).toMatch(/"payment_status"\s*=\s*'PAID'/u)
+    expect(migration).toContain(
+      'purchase order completion migration invariant mismatch: backfill',
+    )
+    expect(migration).toContain(
+      'CREATE CONSTRAINT TRIGGER "purchase_orders_source_quantity_trigger"',
+    )
+    expect(migration).not.toMatch(/"version"|"updated_at"/u)
     expect(migration).not.toMatch(/\bCASCADE\b/iu)
   })
 

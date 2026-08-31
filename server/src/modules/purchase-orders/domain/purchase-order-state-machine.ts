@@ -10,6 +10,7 @@ const ORDER_TRANSITIONS: Readonly<
   Record<PurchaseOrderStatus, readonly PurchaseOrderStatus[]>
 > = {
   CONFIRMED: ['CANCELLED'],
+  COMPLETED: [],
   CANCELLED: [],
 }
 
@@ -69,7 +70,21 @@ export interface PurchaseOrderPendingState {
   readonly paymentStatus: PurchaseOrderPaymentStatus
 }
 
+/**
+ * 采购订单状态只由已锁定的履约和付款事实派生。
+ * `CANCELLED` 是人工终态，不允许被后续事实重新打开；其余状态则保持事实一致性，
+ * 因此付款作废后可从 `COMPLETED` 自动回到 `CONFIRMED`。
+ */
+export function derivePurchaseOrderStatus(
+  state: PurchaseOrderPendingState,
+): PurchaseOrderStatus {
+  if (state.orderStatus === 'CANCELLED') return 'CANCELLED'
+  return state.fulfillmentStatus === 'SIGNED' && state.paymentStatus === 'PAID'
+    ? 'COMPLETED'
+    : 'CONFIRMED'
+}
+
 export function isPendingPurchaseOrder(state: PurchaseOrderPendingState): boolean {
-  return state.orderStatus !== 'CANCELLED'
+  return state.orderStatus === 'CONFIRMED'
     && (state.fulfillmentStatus !== 'SIGNED' || state.paymentStatus !== 'PAID')
 }

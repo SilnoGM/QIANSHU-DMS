@@ -361,7 +361,7 @@ export class PurchaseOrderQueryService {
       : undefined
     const where: Prisma.PurchaseOrderWhereInput = {
       orderStatus: input.view === 'pending'
-        ? { not: 'CANCELLED' }
+        ? 'CONFIRMED'
         : input.orderStatus,
       fulfillmentStatus: input.fulfillmentStatus,
       paymentStatus: input.paymentStatus,
