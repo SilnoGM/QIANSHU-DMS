@@ -1,5 +1,8 @@
 import type { PurchaseOrderListItemDto } from '../../../api/generated/types.gen'
-import type { PurchaseOrderListQuery } from '../../../api/modules/purchase-orders'
+import type {
+  PurchaseOrderListQuery,
+  PurchaseOrderStatusCountsQuery,
+} from '../../../api/modules/purchase-orders'
 import type { QsGenericTableFilterValues } from '../../../components/business/QsGenericTable/logic'
 import type { QsStatusSwitchItem } from '../../../components/business/QsStatusSwitchToolbar/types'
 
@@ -12,6 +15,11 @@ export type PurchaseOrderPendingTask
   = | 'AWAITING_PAYMENT'
     | 'AWAITING_SHIPMENT'
     | 'AWAITING_WAREHOUSE'
+type PurchaseOrderOrderStatusSelection = 'CANCELLED' | 'COMPLETED' | 'CONFIRMED'
+export type PurchaseOrderListStatusSelection
+  = | 'ALL'
+    | PurchaseOrderOrderStatusSelection
+    | PurchaseOrderPendingTask
 
 export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
 
@@ -31,8 +39,8 @@ export interface PurchaseOrderListQuerySource {
   readonly filters: QsGenericTableFilterValues
   readonly page: number
   readonly pageSize: number
-  readonly pendingTask?: PurchaseOrderPendingTask
   readonly searchKeyword: string
+  readonly statusSelection: PurchaseOrderListStatusSelection
   readonly viewMode: PurchaseOrderListViewMode
 }
 
@@ -47,7 +55,6 @@ export interface PurchaseOrderApiFailure {
 }
 
 const PURCHASE_TYPES = ['SALES_LINKED', 'STOCK'] as const
-const ORDER_STATUSES = ['CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
 const FULFILLMENT_STATUSES = [
   'ORDERED',
   'PREPARING',
@@ -60,6 +67,13 @@ const PENDING_TASK_ITEMS: readonly QsStatusSwitchItem[] = [
   { label: '待发货', value: 'AWAITING_SHIPMENT' },
   { label: '待入仓', value: 'AWAITING_WAREHOUSE' },
   { label: '待付款', value: 'AWAITING_PAYMENT' },
+]
+
+const ALL_ORDER_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
+  { label: '全部采购', value: 'ALL' },
+  { label: '已确认', value: 'CONFIRMED' },
+  { label: '已完成', value: 'COMPLETED' },
+  { label: '已取消', value: 'CANCELLED' },
 ]
 
 const PAYMENT_ACTION: PurchaseOrderPendingActionItem = {
@@ -84,15 +98,21 @@ const TASK_ACTION: Readonly<Record<
   },
 }
 
-export function getPurchaseOrderPendingTaskItems(): readonly QsStatusSwitchItem[] {
-  return PENDING_TASK_ITEMS
+export function getPurchaseOrderStatusItems(
+  viewMode: PurchaseOrderListViewMode,
+): readonly QsStatusSwitchItem[] {
+  return viewMode === 'pending' ? PENDING_TASK_ITEMS : ALL_ORDER_STATUS_ITEMS
 }
 
-/** URL 查询值只接受待办工具栏声明的稳定编码，缺省或非法值回落到首个处理队列。 */
-export function normalizePurchaseOrderPendingTask(value: unknown): PurchaseOrderPendingTask {
-  return typeof value === 'string' && PENDING_TASK_ITEMS.some(item => item.value === value)
-    ? value as PurchaseOrderPendingTask
-    : 'AWAITING_SHIPMENT'
+/** URL 查询值只接受当前工具栏声明的稳定编码，非法值回落到该视图的默认状态。 */
+export function normalizePurchaseOrderStatusSelection(
+  viewMode: PurchaseOrderListViewMode,
+  value: unknown,
+): PurchaseOrderListStatusSelection {
+  const items = getPurchaseOrderStatusItems(viewMode)
+  return typeof value === 'string' && items.some(item => item.value === value)
+    ? value as PurchaseOrderListStatusSelection
+    : viewMode === 'pending' ? 'AWAITING_SHIPMENT' : 'ALL'
 }
 
 /** 待办动作首期仅提供入口提示；已付清订单不再展示没有业务意义的付款入口。 */
@@ -141,10 +161,13 @@ function dateFilter(value: string | undefined): string | undefined {
 export function buildPurchaseOrderListQuery(
   source: PurchaseOrderListQuerySource,
 ): PurchaseOrderListQuery {
+  const statusSelection = normalizePurchaseOrderStatusSelection(
+    source.viewMode,
+    source.statusSelection,
+  )
   const keyword = source.searchKeyword.trim().normalize('NFKC')
   const supplierValue = textFilter(source.filters, 'supplierValue')
   const purchaseType = enumFilter(source.filters, 'purchaseType', PURCHASE_TYPES)
-  const orderStatus = enumFilter(source.filters, 'orderStatus', ORDER_STATUSES)
   const fulfillmentStatus = enumFilter(
     source.filters,
     'fulfillmentStatus',
@@ -158,18 +181,33 @@ export function buildPurchaseOrderListQuery(
     view: source.viewMode,
     page: source.page,
     pageSize: source.pageSize,
-    ...(source.viewMode === 'pending' && source.pendingTask !== undefined
-      ? { pendingTask: source.pendingTask }
-      : {}),
+    ...(source.viewMode === 'pending'
+      ? { pendingTask: statusSelection as PurchaseOrderPendingTask }
+      : statusSelection === 'ALL'
+        ? {}
+        : { orderStatus: statusSelection as PurchaseOrderOrderStatusSelection }),
     ...(keyword === '' ? {} : { keyword }),
     ...(supplierValue === undefined ? {} : { supplierValue }),
     ...(purchaseType === undefined ? {} : { purchaseType }),
-    ...(orderStatus === undefined ? {} : { orderStatus }),
     ...(fulfillmentStatus === undefined ? {} : { fulfillmentStatus }),
     ...(paymentStatus === undefined ? {} : { paymentStatus }),
     ...(orderDateFrom === undefined ? {} : { orderDateFrom }),
     ...(orderDateTo === undefined ? {} : { orderDateTo }),
   }
+}
+
+/** 状态计数排除分页和当前工具栏选择，只继承搜索、日期及通用筛选。 */
+export function buildPurchaseOrderStatusCountsQuery(
+  listQuery: PurchaseOrderListQuery,
+): PurchaseOrderStatusCountsQuery {
+  const {
+    orderStatus: _orderStatus,
+    page: _page,
+    pageSize: _pageSize,
+    pendingTask: _pendingTask,
+    ...baseQuery
+  } = listQuery
+  return baseQuery
 }
 
 export function purchaseTypeLabel(

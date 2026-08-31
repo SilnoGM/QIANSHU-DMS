@@ -50,6 +50,8 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
   const listQuery = { view: 'pending' as const, page: 2, pageSize: 50 }
 
   await api.list(listQuery, controller.signal)
+  const countQuery = { view: 'pending' as const, supplierValue: 'SUPPLIER_CN_01' }
+  await api.statusCounts(countQuery, controller.signal)
   await api.productOptions({ supplierValue: 'SUPPLIER_CN_01', page: 1, pageSize: 20 }, controller.signal)
   await api.sourceSalesOrders({ keyword: 'SO-001', page: 1, pageSize: 20 }, controller.signal)
   await api.sourceSalesOrderLines('sales/order', controller.signal)
@@ -59,6 +61,14 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
     config: { errorPresentation: 'local', params: listQuery, signal: controller.signal },
     method: 'get',
     url: 'purchase-orders',
+  }, {
+    config: {
+      errorPresentation: 'local',
+      params: countQuery,
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'purchase-orders/status-counts',
   }, {
     config: {
       errorPresentation: 'local',

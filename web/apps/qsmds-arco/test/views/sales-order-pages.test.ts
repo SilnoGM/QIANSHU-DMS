@@ -76,6 +76,18 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.match(source, /summarizeSalesOrderItemsByCurrency/u)
 })
 
+test('销售全部与待办状态工具栏使用服务端全量计数', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /salesOrdersApi\.statusCounts/u)
+  assert.match(source, /withStatusSwitchCounts/u)
+  assert.match(source, /buildSalesOrderStatusCountsQuery/u)
+  assert.match(source, /let countRequestVersion = 0/u)
+  assert.match(source, /countAbortController/u)
+  assert.match(source, /selectedValue: selectedStatus\.value/u)
+  assert.match(source, /selectedCount: loading\.value \? undefined : total\.value/u)
+})
+
 test('销售订单列表在搜索框前复用日期范围筛选并传递订单日期查询', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
   const tableStart = source.indexOf('<QsGenericTable')
@@ -94,8 +106,8 @@ test('销售订单列表在搜索框前复用日期范围筛选并传递订单�
   assert.match(source, /@clear="clearDateRange"/u)
   assert.match(source, /orderDateFrom: dateRange\.value\.start\.toString\(\)/u)
   assert.match(source, /orderDateTo: dateRange\.value\.end\.toString\(\)/u)
-  assert.match(source, /function handleDateRangeComplete\(\): void \{[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(\)/u)
-  assert.match(source, /function clearDateRange\(\): void \{[\s\S]*?dateRange\.value = \{ end: undefined, start: undefined \}[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(\)/u)
+  assert.match(source, /function handleDateRangeComplete\(\): void \{[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(true\)/u)
+  assert.match(source, /function clearDateRange\(\): void \{[\s\S]*?dateRange\.value = \{ end: undefined, start: undefined \}[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(true\)/u)
 })
 
 test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {

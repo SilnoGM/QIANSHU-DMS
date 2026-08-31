@@ -134,23 +134,23 @@ pnpm -C server lint
 
 目标：生成可信 Web 类型，并先证明正式页面尚未提供完整计数与全部采购工具栏。
 
-- [ ] 执行契约同步，检查两个新路径、查询 DTO、响应 DTO 和 operationId。
-- [ ] 扩展 `status-switch-toolbar.test.ts`，覆盖：
+- [x] 执行契约同步，检查两个新路径、查询 DTO、响应 DTO 和 operationId。
+- [x] 扩展 `status-switch-toolbar.test.ts`，覆盖：
   - 按 `value` 合并计数；
   - 显式 `0` 保留；
   - 缺失键归零；
   - `label`、`disabled` 保持。
-- [ ] 扩展销售列表逻辑测试，要求全部/待办所有项目均具备计数。
-- [ ] 扩展采购列表逻辑测试，覆盖：
+- [x] 扩展销售列表逻辑测试，要求全部/待办所有项目均具备计数。
+- [x] 扩展采购列表逻辑测试，覆盖：
   - 全部采购四个状态顺序；
   - 非法 URL 状态归一；
   - `ALL` 不发送 `orderStatus`；
   - 其他状态映射到 `orderStatus`；
   - 待办继续映射 `pendingTask`；
   - 计数查询排除工具栏选择和分页。
-- [ ] 扩展销售、采购页面测试，断言 API 计数接入、全部采购工具栏、重复订单状态筛选移除和请求世代保护。
-- [ ] 扩展组件库测试，要求每个固定示例项都含 `count`。
-- [ ] 运行 Web 定向测试并记录预期失败原因。
+- [x] 扩展销售、采购页面测试，断言 API 计数接入、全部采购工具栏、重复订单状态筛选移除和请求世代保护。
+- [x] 扩展组件库测试，要求每个固定示例项都含 `count`。
+- [x] 运行 Web 定向测试并记录预期失败原因。
 
 ```bash
 node --run contract:sync
@@ -162,38 +162,38 @@ pnpm -C web exec tsx --test apps/qsmds-arco/test/views/status-switch-toolbar.tes
 
 目标：让销售全部和销售待办展示服务端计数，同时保持现有列表与 URL 语义。
 
-- [ ] 在 `QsStatusSwitchToolbar/logic.ts` 实现 `withStatusSwitchCounts()`。
-- [ ] 在销售 API 模块增加生成类型驱动的 `statusCounts()`。
-- [ ] 建立销售计数查询，只包含 `view` 与计数基准条件。
-- [ ] 为销售状态项目映射计数，初始与缺失值展示 `0`。
-- [ ] 基础筛选变化、mutation、重试时并发刷新计数；状态切换和分页只刷新列表。
-- [ ] 使用 `AbortSignal`、请求版本和鉴权世代阻止过期响应覆盖。
-- [ ] 使用列表 `total` 校准当前选中项目计数。
-- [ ] 重新运行销售与共享逻辑测试。
+- [x] 在 `QsStatusSwitchToolbar/logic.ts` 实现 `withStatusSwitchCounts()`。
+- [x] 在销售 API 模块增加生成类型驱动的 `statusCounts()`。
+- [x] 建立销售计数查询，只包含 `view` 与计数基准条件。
+- [x] 为销售状态项目映射计数，初始与缺失值展示 `0`。
+- [x] 基础筛选变化、mutation、重试时并发刷新计数；状态切换和分页只刷新列表。
+- [x] 使用 `AbortSignal`、请求版本和鉴权世代阻止过期响应覆盖。
+- [x] 使用列表 `total` 校准当前选中项目计数。
+- [x] 重新运行销售与共享逻辑测试。
 
 ### T8：实现全部采购工具栏与采购计数接入
 
 目标：让采购全部和采购待办使用同一工具栏结构并显示真实计数。
 
-- [ ] 在采购 API 模块增加生成类型驱动的 `statusCounts()`。
-- [ ] 新增全部采购状态类型、项目定义和 URL `status` 规范化。
-- [ ] `buildPurchaseOrderListQuery()` 根据模式映射 `orderStatus` 或 `pendingTask`。
-- [ ] 建立采购计数查询，排除分页、订单状态和待办任务。
-- [ ] 页面始终渲染工具栏，并根据 `viewMode` 切换项目、model 与 aria-label。
-- [ ] 删除筛选抽屉中重复的“订单状态”。
-- [ ] 接入与销售一致的计数刷新、过期响应防护和选中项 `total` 校准。
-- [ ] mutation 与重试重新刷新计数。
-- [ ] 重新运行采购与共享逻辑测试。
+- [x] 在采购 API 模块增加生成类型驱动的 `statusCounts()`。
+- [x] 新增全部采购状态类型、项目定义和 URL `status` 规范化。
+- [x] `buildPurchaseOrderListQuery()` 根据模式映射 `orderStatus` 或 `pendingTask`。
+- [x] 建立采购计数查询，排除分页、订单状态和待办任务。
+- [x] 页面始终渲染工具栏，并根据 `viewMode` 切换项目、model 与 aria-label。
+- [x] 删除筛选抽屉中重复的“订单状态”。
+- [x] 接入与销售一致的计数刷新、过期响应防护和选中项 `total` 校准。
+- [x] mutation 与重试重新刷新计数。
+- [x] 重新运行采购与共享逻辑测试。
 
 ### T9：更新组件库并完成 Web 回归
 
 目标：确保仓库内每一个 `QsStatusSwitchToolbar` 实例都展示计数。
 
-- [ ] 将组件库 `NO_COUNT` 示例改为带固定计数状态。
-- [ ] 保留禁用项计数、390px 横向浏览和所有既有视觉规格。
-- [ ] 使用 `rg` 复核所有组件引用及其 items 来源。
-- [ ] 运行 Web API、页面、组件逻辑测试、类型检查和 lint。
-- [ ] 创建本地提交：
+- [x] 将组件库 `NO_COUNT` 示例改为带固定计数状态。
+- [x] 保留禁用项计数、390px 横向浏览和所有既有视觉规格。
+- [x] 使用 `rg` 复核所有组件引用及其 items 来源。
+- [x] 运行 Web API、页面、组件逻辑测试、类型检查和 lint。
+- [x] 创建本地提交：
 
 ```text
 feat: 展示订单状态分类计数

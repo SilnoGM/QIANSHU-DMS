@@ -10,6 +10,8 @@ import type {
   SalesOrderProductOptionsDto,
   SalesOrdersListData,
   SalesOrdersProductOptionsData,
+  SalesOrdersStatusCountsData,
+  SalesOrderStatusCountsDto,
   SalesOrderTemporaryDocumentDto,
 } from '../generated/types.gen'
 
@@ -18,6 +20,9 @@ import api from '../index'
 export type SalesOrderListQuery = NonNullable<SalesOrdersListData['query']>
 export type SalesOrderProductOptionsQuery = NonNullable<
   SalesOrdersProductOptionsData['query']
+>
+export type SalesOrderStatusCountsQuery = NonNullable<
+  SalesOrdersStatusCountsData['query']
 >
 export type SalesOrderCurrency = 'TWD' | 'MYR'
 
@@ -29,6 +34,12 @@ export function createSalesOrdersApi(client: AxiosInstance) {
   return {
     list: (query: SalesOrderListQuery, signal: AbortSignal) =>
       client.get<SalesOrderPageDto>('sales-orders', {
+        errorPresentation: 'local',
+        params: query,
+        signal,
+      }),
+    statusCounts: (query: SalesOrderStatusCountsQuery, signal: AbortSignal) =>
+      client.get<SalesOrderStatusCountsDto>('sales-orders/status-counts', {
         errorPresentation: 'local',
         params: query,
         signal,

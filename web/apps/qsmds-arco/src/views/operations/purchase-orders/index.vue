@@ -2,13 +2,16 @@
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
 import type { PurchaseOrderDetailInitialAction } from './purchase-order-detail-drawer.vue'
 import type {
+  PurchaseOrderListStatusSelection,
   PurchaseOrderListViewMode,
   PurchaseOrderPendingActionItem,
+  PurchaseOrderPendingTask,
 } from './purchase-order-list.logic'
 import type {
   PurchaseOrderDetailDto,
   PurchaseOrderLinePreviewDto,
   PurchaseOrderListItemDto,
+  PurchaseOrderStatusCountItemDto,
 } from '@/api/generated/types.gen'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 import type {
@@ -31,20 +34,22 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
+import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
 import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
 import {
   buildPurchaseOrderListQuery,
+  buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
   fulfillmentStatusLabel,
   fulfillmentStatusTagClass,
   getPurchaseOrderApiFailure,
-  getPurchaseOrderPendingTaskItems,
+  getPurchaseOrderStatusItems,
   isPurchaseOrderAbortError,
   nextPurchaseOrderFulfillmentStatus,
-  normalizePurchaseOrderPendingTask,
+  normalizePurchaseOrderStatusSelection,
   orderStatusLabel,
   orderStatusTagClass,
   paymentStatusLabel,
@@ -79,15 +84,31 @@ const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' :
 const pageDescription = computed(() => props.viewMode === 'pending'
   ? '按待发货、待入仓和待付款分类处理采购订单。'
   : '查询所有采购订单及其销售来源、履约和付款状态。')
-const pendingTaskItems = getPurchaseOrderPendingTaskItems()
-const selectedPendingTask = computed<string>({
-  get: () => normalizePurchaseOrderPendingTask(route.query.task),
+const selectedStatus = computed<string>({
+  get: () => normalizePurchaseOrderStatusSelection(
+    props.viewMode,
+    props.viewMode === 'pending' ? route.query.task : route.query.status,
+  ),
   set: (value) => {
-    const normalized = normalizePurchaseOrderPendingTask(value)
-    if (normalized === selectedPendingTask.value) {
+    const normalized = normalizePurchaseOrderStatusSelection(props.viewMode, value)
+    if (normalized === selectedStatus.value) {
       return
     }
-    void router.push({ query: { ...route.query, task: normalized } })
+    const nextQuery = { ...route.query }
+    if (props.viewMode === 'pending') {
+      delete nextQuery.status
+      nextQuery.task = normalized
+    }
+    else {
+      delete nextQuery.task
+      if (normalized === 'ALL') {
+        delete nextQuery.status
+      }
+      else {
+        nextQuery.status = normalized
+      }
+    }
+    void router.push({ query: nextQuery })
   },
 })
 
@@ -95,6 +116,7 @@ const rows = ref<PurchaseOrderListItemDto[]>([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const statusCountItems = ref<PurchaseOrderStatusCountItemDto[]>([])
 const searchKeyword = ref('')
 const filters = ref<QsGenericTableFilterValues>({})
 const dateRange = shallowRef<CalendarDateRangeValue>({
@@ -109,7 +131,18 @@ const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const detailInitialAction = ref<PurchaseOrderDetailInitialAction>('detail')
 const todayDate = today(getLocalTimeZone())
 let requestVersion = 0
+let countRequestVersion = 0
 let listAbortController: AbortController | null = null
+let countAbortController: AbortController | null = null
+
+const statusItems = computed(() => withStatusSwitchCounts(
+  getPurchaseOrderStatusItems(props.viewMode),
+  statusCountItems.value,
+  {
+    selectedValue: selectedStatus.value,
+    selectedCount: loading.value ? undefined : total.value,
+  },
+))
 
 const supplierFilterOptions = computed(() => (
   supplierCatalog.catalog.value?.items ?? []
@@ -131,15 +164,6 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
     { label: '备货采购', value: 'STOCK' },
   ],
   placeholder: '选择采购类型',
-}, {
-  key: 'orderStatus',
-  label: '订单状态',
-  options: [
-    { label: '已确认', value: 'CONFIRMED' },
-    { label: '已完成', value: 'COMPLETED' },
-    { label: '已取消', value: 'CANCELLED' },
-  ],
-  placeholder: '选择订单状态',
 }, {
   key: 'fulfillmentStatus',
   label: '履约状态',
@@ -276,6 +300,18 @@ function currentDateRange() {
   }
 }
 
+function currentListQuery() {
+  return buildPurchaseOrderListQuery({
+    dateRange: currentDateRange(),
+    filters: filters.value,
+    page: page.value,
+    pageSize: pageSize.value,
+    searchKeyword: searchKeyword.value,
+    statusSelection: selectedStatus.value as PurchaseOrderListStatusSelection,
+    viewMode: props.viewMode,
+  })
+}
+
 async function loadOrders(): Promise<void> {
   if (!canRead.value) {
     return
@@ -289,17 +325,7 @@ async function loadOrders(): Promise<void> {
   listError.value = ''
   requestId.value = undefined
   try {
-    const response = await purchaseOrdersApi.list(buildPurchaseOrderListQuery({
-      dateRange: currentDateRange(),
-      filters: filters.value,
-      page: page.value,
-      pageSize: pageSize.value,
-      pendingTask: props.viewMode === 'pending'
-        ? normalizePurchaseOrderPendingTask(route.query.task)
-        : undefined,
-      searchKeyword: searchKeyword.value,
-      viewMode: props.viewMode,
-    }), controller.signal)
+    const response = await purchaseOrdersApi.list(currentListQuery(), controller.signal)
     if (
       controller.signal.aborted
       || version !== requestVersion
@@ -329,14 +355,60 @@ async function loadOrders(): Promise<void> {
   }
 }
 
+async function loadStatusCounts(): Promise<void> {
+  if (!canRead.value) {
+    return
+  }
+  countAbortController?.abort()
+  const controller = new AbortController()
+  countAbortController = controller
+  const version = ++countRequestVersion
+  const authEpoch = appAccountStore.authEpoch
+  try {
+    const response = await purchaseOrdersApi.statusCounts(
+      buildPurchaseOrderStatusCountsQuery(currentListQuery()),
+      controller.signal,
+    )
+    if (
+      controller.signal.aborted
+      || version !== countRequestVersion
+      || authEpoch !== appAccountStore.authEpoch
+      || !canRead.value
+    ) {
+      return
+    }
+    statusCountItems.value = response.data.items.map(item => ({ ...item }))
+  }
+  catch (error) {
+    // 状态数量不遮蔽主列表错误；请求失败时由共享映射显式展示 0。
+    if (!isPurchaseOrderAbortError(error) && version === countRequestVersion) {
+      statusCountItems.value = []
+    }
+  }
+  finally {
+    if (countAbortController === controller) {
+      countAbortController = null
+    }
+  }
+}
+
+function refreshOrdersAndCounts(): void {
+  void loadOrders()
+  void loadStatusCounts()
+}
+
+function retryOrders(): void {
+  refreshOrdersAndCounts()
+}
+
 function handleSearch(): void {
   page.value = 1
-  void loadOrders()
+  refreshOrdersAndCounts()
 }
 
 function handleFilterChange(): void {
   page.value = 1
-  void loadOrders()
+  refreshOrdersAndCounts()
 }
 
 function handlePaginationChange(): void {
@@ -345,12 +417,12 @@ function handlePaginationChange(): void {
 
 function handleDateRangeComplete(): void {
   page.value = 1
-  void loadOrders()
+  refreshOrdersAndCounts()
 }
 
 function clearDateRange(): void {
   page.value = 1
-  void loadOrders()
+  refreshOrdersAndCounts()
 }
 
 function navigateCreate(type: PurchaseOrderListItemDto['purchaseType']): void {
@@ -371,7 +443,10 @@ function openPurchaseOrderDetail(
 
 function pendingActions(order: PurchaseOrderListItemDto) {
   return resolvePurchaseOrderPendingActions(
-    normalizePurchaseOrderPendingTask(route.query.task),
+    normalizePurchaseOrderStatusSelection(
+      'pending',
+      route.query.task,
+    ) as PurchaseOrderPendingTask,
     order,
   )
 }
@@ -387,39 +462,79 @@ function handlePendingAction(action: PurchaseOrderPendingActionItem): void {
 
 function handleDetailUpdated(_detail: PurchaseOrderDetailDto): void {
   // 待办谓词和筛选均由 Server 负责；mutation 后重取当前页，避免本地复制查询规则。
-  void loadOrders()
+  refreshOrdersAndCounts()
 }
 
 watch(() => appAccountStore.authEpoch, () => {
+  requestVersion += 1
+  countRequestVersion += 1
   listAbortController?.abort()
+  countAbortController?.abort()
   detailVisible.value = false
   selectedOrder.value = null
   rows.value = []
+  statusCountItems.value = []
   total.value = 0
   if (canRead.value) {
-    void loadOrders()
+    refreshOrdersAndCounts()
   }
 })
 
 watch(
-  () => [props.viewMode, route.query.task] as const,
-  ([nextMode, nextTask], [previousMode, previousTask]) => {
-    if (nextMode === previousMode && nextTask === previousTask) {
+  () => [
+    props.viewMode,
+    props.viewMode === 'pending' ? route.query.task : route.query.status,
+  ] as const,
+  ([nextMode, nextStatus], [previousMode, previousStatus]) => {
+    if (nextMode === previousMode && nextStatus === previousStatus) {
       return
     }
     page.value = 1
+    const normalized = normalizePurchaseOrderStatusSelection(nextMode, nextStatus)
+    const nextQuery = { ...route.query }
+    let shouldReplaceQuery = false
+    if (nextMode === 'pending') {
+      if (nextQuery.status !== undefined) {
+        delete nextQuery.status
+        shouldReplaceQuery = true
+      }
+      if (nextStatus !== undefined && normalized === 'AWAITING_SHIPMENT'
+        && nextStatus !== normalized) {
+        delete nextQuery.task
+        shouldReplaceQuery = true
+      }
+    }
+    else {
+      if (nextQuery.task !== undefined) {
+        delete nextQuery.task
+        shouldReplaceQuery = true
+      }
+      if (nextStatus !== undefined && normalized === 'ALL') {
+        delete nextQuery.status
+        shouldReplaceQuery = true
+      }
+    }
+    if (shouldReplaceQuery) {
+      void router.replace({ query: nextQuery })
+    }
     void loadOrders()
+    if (nextMode !== previousMode) {
+      void loadStatusCounts()
+    }
   },
 )
 
 onMounted(() => {
   if (canRead.value) {
-    void loadOrders()
+    refreshOrdersAndCounts()
   }
 })
 
 onBeforeUnmount(() => {
+  requestVersion += 1
+  countRequestVersion += 1
   listAbortController?.abort()
+  countAbortController?.abort()
 })
 </script>
 
@@ -458,10 +573,9 @@ onBeforeUnmount(() => {
 
     <FaPageMain v-else class="min-w-0">
       <QsStatusSwitchToolbar
-        v-if="props.viewMode === 'pending'"
-        v-model="selectedPendingTask"
-        :items="pendingTaskItems"
-        aria-label="待办采购任务筛选"
+        v-model="selectedStatus"
+        :items="statusItems"
+        :aria-label="`${pageTitle}状态筛选`"
         class="mb-4"
       />
 
@@ -501,7 +615,7 @@ onBeforeUnmount(() => {
         table-class="min-w-[2560px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
-        @retry="loadOrders"
+        @retry="retryOrders"
         @search="handleSearch"
       >
         <template #query-leading>

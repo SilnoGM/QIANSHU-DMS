@@ -6,7 +6,23 @@ import test from 'node:test'
 import {
   getStatusSwitchScrollTarget,
   hasStatusSwitchRightOverflow,
+  withStatusSwitchCounts,
 } from '../../src/components/business/QsStatusSwitchToolbar/logic'
+
+test('状态计数按稳定 value 合并，缺失值归零并保留原项目属性', () => {
+  assert.deepEqual(withStatusSwitchCounts([
+    { label: '全部订单', value: 'ALL' },
+    { disabled: true, label: '已确认', value: 'CONFIRMED' },
+    { count: 99, label: '已完成', value: 'COMPLETED' },
+  ], [
+    { count: 8, value: 'ALL' },
+    { count: 0, value: 'CONFIRMED' },
+  ]), [
+    { count: 8, label: '全部订单', value: 'ALL' },
+    { count: 0, disabled: true, label: '已确认', value: 'CONFIRMED' },
+    { count: 0, label: '已完成', value: 'COMPLETED' },
+  ])
+})
 
 test('状态切换工具栏只在视口右侧仍有隐藏内容时显示浏览入口', () => {
   assert.equal(hasStatusSwitchRightOverflow({
@@ -76,6 +92,7 @@ test('状态切换工具栏 Showcase 使用本地状态覆盖计数、禁用和�
   assert.match(source, /待采购/u)
   assert.match(source, /已完成/u)
   assert.match(source, /disabled: true/u)
+  assert.doesNotMatch(source, /NO_COUNT|无计数状态/u)
   assert.match(source, /class="max-w-\[390px\]"/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store|useRoute/u)
 })

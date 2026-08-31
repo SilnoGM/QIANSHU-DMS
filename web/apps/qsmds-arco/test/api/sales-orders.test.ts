@@ -28,7 +28,7 @@ function createRecorder(calls: Call[]): AxiosInstance {
   } as unknown as AxiosInstance
 }
 
-test('销售订单列表和产品选项固定使用 query、AbortSignal 与局部呈错', async () => {
+test('销售订单列表、状态计数和产品选项固定使用 query、AbortSignal 与局部呈错', async () => {
   const calls: Call[] = []
   const api = createSalesOrdersApi(createRecorder(calls))
   const controller = new AbortController()
@@ -40,6 +40,8 @@ test('销售订单列表和产品选项固定使用 query、AbortSignal 与局�
   }
 
   await api.list(query, controller.signal)
+  const countQuery = { view: 'all' as const, currencyCode: 'TWD' as const }
+  await api.statusCounts(countQuery, controller.signal)
   await api.issuerOptions(controller.signal)
   const productQuery = {
     currencyCode: 'MYR' as const,
@@ -59,6 +61,15 @@ test('销售订单列表和产品选项固定使用 query、AbortSignal 与局�
       },
       method: 'get',
       url: 'sales-orders',
+    },
+    {
+      config: {
+        errorPresentation: 'local',
+        params: countQuery,
+        signal: controller.signal,
+      },
+      method: 'get',
+      url: 'sales-orders/status-counts',
     },
     {
       config: {

@@ -25,7 +25,7 @@ const orderItems: readonly QsStatusSwitchItem[] = [
 const stateItems: readonly QsStatusSwitchItem[] = [
   { value: 'ACTIVE', label: '选中状态', count: 24 },
   { value: 'DEFAULT', label: '默认状态', count: 16 },
-  { value: 'NO_COUNT', label: '无计数状态' },
+  { value: 'ZERO', label: '零计数状态', count: 0 },
   { value: 'DISABLED', label: '禁用状态', count: 5, disabled: true },
 ]
 </script>

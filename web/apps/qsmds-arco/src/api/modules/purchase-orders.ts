@@ -12,6 +12,8 @@ import type {
   PurchaseOrderSourceSalesOrdersDto,
   PurchaseOrdersProductOptionsData,
   PurchaseOrdersSourceSalesOrdersData,
+  PurchaseOrdersStatusCountsData,
+  PurchaseOrderStatusCountsDto,
   PurchaseOrderStatusRequestDto,
   PurchaseOrderTemporaryDocumentDto,
 } from '../generated/types.gen'
@@ -24,6 +26,9 @@ export type PurchaseOrderProductOptionsQuery = NonNullable<
 >
 export type PurchaseOrderSourceSalesOrdersQuery = NonNullable<
   PurchaseOrdersSourceSalesOrdersData['query']
+>
+export type PurchaseOrderStatusCountsQuery = NonNullable<
+  PurchaseOrdersStatusCountsData['query']
 >
 
 function orderPath(purchaseOrderId: string): string {
@@ -45,6 +50,12 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
   return {
     list: (query: PurchaseOrderListQuery, signal: AbortSignal) =>
       client.get<PurchaseOrderPageDto>('purchase-orders', {
+        errorPresentation: 'local',
+        params: query,
+        signal,
+      }),
+    statusCounts: (query: PurchaseOrderStatusCountsQuery, signal: AbortSignal) =>
+      client.get<PurchaseOrderStatusCountsDto>('purchase-orders/status-counts', {
         errorPresentation: 'local',
         params: query,
         signal,

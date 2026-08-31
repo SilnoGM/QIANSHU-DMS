@@ -6,11 +6,12 @@ import test from 'node:test'
 
 import {
   buildPurchaseOrderListQuery,
+  buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
   fulfillmentStatusLabel,
-  getPurchaseOrderPendingTaskItems,
+  getPurchaseOrderStatusItems,
   nextPurchaseOrderFulfillmentStatus,
-  normalizePurchaseOrderPendingTask,
+  normalizePurchaseOrderStatusSelection,
   orderStatusLabel,
   orderStatusTagClass,
   paymentStatusLabel,
@@ -31,7 +32,7 @@ test('待办与全部列表严格映射服务端 view 并规范化筛选和日�
     page: 2,
     pageSize: 50,
     searchKeyword: '  PO-001 ',
-    pendingTask: 'AWAITING_PAYMENT',
+    statusSelection: 'AWAITING_PAYMENT',
     viewMode: 'pending',
   }), {
     view: 'pending',
@@ -41,7 +42,6 @@ test('待办与全部列表严格映射服务端 view 并规范化筛选和日�
     pendingTask: 'AWAITING_PAYMENT',
     supplierValue: 'SUPPLIER_CN_01',
     purchaseType: 'SALES_LINKED',
-    orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'PREPARING',
     paymentStatus: 'PARTIALLY_PAID',
     orderDateFrom: '2026-08-01',
@@ -58,6 +58,7 @@ test('待办与全部列表严格映射服务端 view 并规范化筛选和日�
     page: 1,
     pageSize: 20,
     searchKeyword: '　',
+    statusSelection: 'ALL',
     viewMode: 'all',
   }), { view: 'all', page: 1, pageSize: 20 })
 
@@ -67,12 +68,34 @@ test('待办与全部列表严格映射服务端 view 并规范化筛选和日�
     page: 1,
     pageSize: 20,
     searchKeyword: '',
+    statusSelection: 'COMPLETED',
     viewMode: 'all',
   }), {
     view: 'all',
     page: 1,
     pageSize: 20,
     orderStatus: 'COMPLETED',
+  })
+})
+
+test('采购状态计数查询排除分页、订单状态和待办任务', () => {
+  assert.deepEqual(buildPurchaseOrderStatusCountsQuery({
+    view: 'pending',
+    page: 3,
+    pageSize: 50,
+    keyword: 'PO-001',
+    supplierValue: 'SUPPLIER_CN_01',
+    purchaseType: 'SALES_LINKED',
+    pendingTask: 'AWAITING_PAYMENT',
+    fulfillmentStatus: 'PREPARING',
+    paymentStatus: 'PARTIALLY_PAID',
+  }), {
+    view: 'pending',
+    keyword: 'PO-001',
+    supplierValue: 'SUPPLIER_CN_01',
+    purchaseType: 'SALES_LINKED',
+    fulfillmentStatus: 'PREPARING',
+    paymentStatus: 'PARTIALLY_PAID',
   })
 })
 
@@ -122,15 +145,28 @@ test('履约状态只按既定顺序推进，取消和签收订单没有下一�
   }), null)
 })
 
-test('待办采购任务固定三类并把无效 URL 值归一化为待发货', () => {
-  assert.deepEqual(getPurchaseOrderPendingTaskItems(), [
+test('全部与待办采购使用稳定状态顺序并规范化 URL', () => {
+  assert.deepEqual(getPurchaseOrderStatusItems('all'), [
+    { label: '全部采购', value: 'ALL' },
+    { label: '已确认', value: 'CONFIRMED' },
+    { label: '已完成', value: 'COMPLETED' },
+    { label: '已取消', value: 'CANCELLED' },
+  ])
+  assert.deepEqual(getPurchaseOrderStatusItems('pending'), [
     { label: '待发货', value: 'AWAITING_SHIPMENT' },
     { label: '待入仓', value: 'AWAITING_WAREHOUSE' },
     { label: '待付款', value: 'AWAITING_PAYMENT' },
   ])
-  assert.equal(normalizePurchaseOrderPendingTask('AWAITING_WAREHOUSE'), 'AWAITING_WAREHOUSE')
-  assert.equal(normalizePurchaseOrderPendingTask('UNKNOWN'), 'AWAITING_SHIPMENT')
-  assert.equal(normalizePurchaseOrderPendingTask(undefined), 'AWAITING_SHIPMENT')
+  assert.equal(normalizePurchaseOrderStatusSelection('all', 'COMPLETED'), 'COMPLETED')
+  assert.equal(normalizePurchaseOrderStatusSelection('all', 'UNKNOWN'), 'ALL')
+  assert.equal(
+    normalizePurchaseOrderStatusSelection('pending', 'AWAITING_WAREHOUSE'),
+    'AWAITING_WAREHOUSE',
+  )
+  assert.equal(
+    normalizePurchaseOrderStatusSelection('pending', undefined),
+    'AWAITING_SHIPMENT',
+  )
 })
 
 test('待办采购操作与当前任务一致且付款只对未付清订单展示', () => {

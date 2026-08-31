@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildSalesOrderStatusCountsQuery,
   deduplicateSalesOrderItems,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
@@ -10,6 +11,27 @@ import {
   resolveSalesOrderQueryTargets,
   summarizeSalesOrderItemsByCurrency,
 } from '../../src/views/operations/sales-orders/sales-order-list-view.logic'
+
+test('销售状态计数查询只保留视图和非工具栏基础筛选', () => {
+  assert.deepEqual(buildSalesOrderStatusCountsQuery({
+    currencyCode: 'TWD',
+    fulfillmentStatus: 'PREPARING',
+    issuerUserId: '11111111-1111-4111-8111-111111111111',
+    keyword: 'SO-001',
+    orderDateFrom: '2026-08-01',
+    orderStatus: 'CONFIRMED',
+    page: 2,
+    pageSize: 50,
+    paymentStatus: 'PARTIALLY_PAID',
+  }, 'all'), {
+    currencyCode: 'TWD',
+    issuerUserId: '11111111-1111-4111-8111-111111111111',
+    keyword: 'SO-001',
+    orderDateFrom: '2026-08-01',
+    paymentStatus: 'PARTIALLY_PAID',
+    view: 'all',
+  })
+})
 
 test('待办视图包含履约末端与付款待办，并允许同一订单跨分类出现', () => {
   assert.deepEqual(

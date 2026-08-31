@@ -2,7 +2,10 @@ import type {
   SalesOrderCurrencySummaryDto,
   SalesOrderListItemDto,
 } from '@/api/generated/types.gen'
-import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
+import type {
+  SalesOrderListQuery,
+  SalesOrderStatusCountsQuery,
+} from '@/api/modules/sales-orders'
 import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 
 export type SalesOrderListViewMode = 'all' | 'pending'
@@ -141,6 +144,21 @@ export function getSalesOrderStatusItems(
   viewMode: SalesOrderListViewMode,
 ): readonly QsStatusSwitchItem[] {
   return viewMode === 'pending' ? PENDING_STATUS_ITEMS : ALL_ORDER_STATUS_ITEMS
+}
+
+/** 计数使用与列表相同的基础筛选，但不能携带分页或当前工具栏状态。 */
+export function buildSalesOrderStatusCountsQuery(
+  listQuery: SalesOrderListQuery,
+  view: SalesOrderListViewMode,
+): SalesOrderStatusCountsQuery {
+  const {
+    fulfillmentStatus: _fulfillmentStatus,
+    orderStatus: _orderStatus,
+    page: _page,
+    pageSize: _pageSize,
+    ...baseQuery
+  } = listQuery
+  return { ...baseQuery, view }
 }
 
 /**

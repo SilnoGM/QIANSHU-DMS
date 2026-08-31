@@ -53,17 +53,24 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
     '采购金额、付款约定与实际付款列分别固定为 100px、130px 和 130px',
   )
   assert.match(source, /订单状态/u)
-  assert.match(source, /\{ label: '已完成', value: 'COMPLETED' \}/u)
+  assert.doesNotMatch(source, /key: 'orderStatus'/u)
   assert.match(source, /履约状态/u)
   assert.match(source, /付款状态/u)
 })
 
-test('待办采购使用任务工具栏和轻提示占位操作，全部采购保留真实操作', async () => {
+test('全部与待办采购均使用带计数的状态工具栏', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
 
   assert.match(source, /import QsStatusSwitchToolbar from '@\/components\/business\/QsStatusSwitchToolbar\/index\.vue'/u)
+  assert.match(source, /purchaseOrdersApi\.statusCounts/u)
+  assert.match(source, /withStatusSwitchCounts/u)
+  assert.match(source, /buildPurchaseOrderStatusCountsQuery/u)
+  assert.match(source, /let countRequestVersion = 0/u)
+  assert.match(source, /countAbortController/u)
   assert.match(source, /import \{ useQsToast \} from '@\/components\/base\/QsToast\/useQsToast'/u)
-  assert.match(source, /<QsStatusSwitchToolbar[\s\S]*?v-model="selectedPendingTask"[\s\S]*?:items="pendingTaskItems"/u)
+  assert.match(source, /<QsStatusSwitchToolbar[\s\S]*?v-model="selectedStatus"[\s\S]*?:items="statusItems"/u)
+  assert.doesNotMatch(source, /<QsStatusSwitchToolbar[^>]*v-if=/u)
+  assert.match(source, /:aria-label="`\$\{pageTitle\}状态筛选`"/u)
   assert.match(source, /props\.viewMode === 'pending'/u)
   assert.match(source, /resolvePurchaseOrderPendingActions/u)
   assert.match(source, /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)

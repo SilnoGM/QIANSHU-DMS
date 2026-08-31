@@ -16,6 +16,7 @@ import type {
   SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
   SalesOrderPageDto,
+  SalesOrderStatusCountItemDto,
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
@@ -45,10 +46,12 @@ import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStac
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
+import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
+  buildSalesOrderStatusCountsQuery,
   deduplicateSalesOrderItems,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
@@ -134,6 +137,7 @@ const issuerFilterOptionsLoaded = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const statusCountItems = ref<SalesOrderStatusCountItemDto[]>([])
 const searchKeyword = ref('')
 const filters = ref<QsGenericTableFilterValues>({})
 const dateRange = shallowRef<CalendarDateRangeValue>({
@@ -150,8 +154,11 @@ const recordsModalKind = ref<SalesOrderRecordsKind>('payments')
 const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
 const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
 let requestVersion = 0
+let countRequestVersion = 0
 let listAbortController: AbortController | null = null
+let countAbortController: AbortController | null = null
 let queryRefreshPending = false
+let queryRefreshIncludesCounts = false
 const todayDate = today(getLocalTimeZone())
 
 const availableOrderCurrencies = computed(() => currencyCatalog.selectableCurrencies.value.filter(
@@ -181,7 +188,6 @@ const selectedCurrencyAvailable = computed(() => selectedCurrency.value !== null
 const listErrorDisplay = computed(() => requestId.value === undefined
   ? listError.value || undefined
   : `${listError.value}（requestId: ${requestId.value}）`)
-const statusItems = computed(() => getSalesOrderStatusItems(props.viewMode))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办订单' : '全部订单')
 const pageDescription = computed(() => props.viewMode === 'pending'
   ? '聚合当前需要推进的销售订单，并按履约阶段快速筛选。'
@@ -215,6 +221,14 @@ const selectedStatus = computed<string>({
     void router.push({ query: nextQuery })
   },
 })
+const statusItems = computed(() => withStatusSwitchCounts(
+  getSalesOrderStatusItems(props.viewMode),
+  statusCountItems.value,
+  {
+    selectedValue: selectedStatus.value,
+    selectedCount: loading.value ? undefined : total.value,
+  },
+))
 
 watch(availableOrderCurrencies, (currencies) => {
   if (
@@ -621,15 +635,66 @@ async function loadOrders(): Promise<void> {
   }
 }
 
-function scheduleQueryRefresh(): void {
+async function loadStatusCounts(): Promise<void> {
+  if (!canRead.value) {
+    return
+  }
+  countAbortController?.abort()
+  const controller = new AbortController()
+  countAbortController = controller
+  const version = ++countRequestVersion
+  const authEpoch = appAccountStore.authEpoch
+  try {
+    const response = await salesOrdersApi.statusCounts(
+      buildSalesOrderStatusCountsQuery(buildListQuery(), props.viewMode),
+      controller.signal,
+    )
+    if (
+      controller.signal.aborted
+      || version !== countRequestVersion
+      || authEpoch !== appAccountStore.authEpoch
+      || !canRead.value
+    ) {
+      return
+    }
+    statusCountItems.value = response.data.items.map(item => ({ ...item }))
+  }
+  catch (error) {
+    // 计数是列表的辅助信息；失败时保留上次快照或初始 0，不覆盖列表主错误。
+    if (!isSalesOrderAbortError(error) && version === countRequestVersion) {
+      statusCountItems.value = []
+    }
+  }
+  finally {
+    if (countAbortController === controller) {
+      countAbortController = null
+    }
+  }
+}
+
+function scheduleQueryRefresh(refreshCounts = false): void {
+  queryRefreshIncludesCounts ||= refreshCounts
   if (queryRefreshPending) {
     return
   }
   queryRefreshPending = true
   queueMicrotask(() => {
+    const shouldRefreshCounts = queryRefreshIncludesCounts
     queryRefreshPending = false
+    queryRefreshIncludesCounts = false
     void loadOrders()
+    if (shouldRefreshCounts) {
+      void loadStatusCounts()
+    }
   })
+}
+
+function retryOrders(): void {
+  scheduleQueryRefresh(true)
+}
+
+function handleSalesOrderDetailUpdated(): void {
+  scheduleQueryRefresh(true)
 }
 
 function openCurrencyModal(): void {
@@ -658,13 +723,13 @@ function enterCreatePage(): void {
 
 function handleSearch(): void {
   page.value = 1
-  scheduleQueryRefresh()
+  scheduleQueryRefresh(true)
 }
 
 function handleFilterChange(value: QsGenericTableFilterValues): void {
   filters.value = { ...value }
   page.value = 1
-  scheduleQueryRefresh()
+  scheduleQueryRefresh(true)
 }
 
 function handlePaginationChange(): void {
@@ -673,13 +738,13 @@ function handlePaginationChange(): void {
 
 function handleDateRangeComplete(): void {
   page.value = 1
-  scheduleQueryRefresh()
+  scheduleQueryRefresh(true)
 }
 
 function clearDateRange(): void {
   dateRange.value = { end: undefined, start: undefined }
   page.value = 1
-  scheduleQueryRefresh()
+  scheduleQueryRefresh(true)
 }
 
 function orderStatusLabel(value: SalesOrderListItemDto['orderStatus']): string {
@@ -770,10 +835,23 @@ function paymentProgressTextClass(value: SalesOrderListItemDto['paymentStatus'])
   }[value]
 }
 
+watch(() => appAccountStore.authEpoch, () => {
+  requestVersion += 1
+  countRequestVersion += 1
+  listAbortController?.abort()
+  countAbortController?.abort()
+  rows.value = []
+  statusCountItems.value = []
+  total.value = 0
+  if (canRead.value) {
+    scheduleQueryRefresh(true)
+  }
+})
+
 watch([
   () => props.viewMode,
   () => route.query.status,
-], () => {
+], ([nextMode], [previousMode]) => {
   page.value = 1
   const normalized = normalizeSalesOrderStatusSelection(
     props.viewMode,
@@ -784,13 +862,15 @@ watch([
     delete nextQuery.status
     void router.replace({ query: nextQuery })
   }
-  scheduleQueryRefresh()
+  scheduleQueryRefresh(nextMode !== previousMode)
 })
 
-onMounted(() => void loadOrders())
+onMounted(() => scheduleQueryRefresh(true))
 onBeforeUnmount(() => {
   requestVersion += 1
+  countRequestVersion += 1
   listAbortController?.abort()
+  countAbortController?.abort()
 })
 </script>
 
@@ -851,7 +931,7 @@ onBeforeUnmount(() => {
         table-class="min-w-[3360px]"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
-        @retry="loadOrders"
+        @retry="retryOrders"
         @search="handleSearch"
       >
         <template #query-leading>
@@ -1568,7 +1648,7 @@ onBeforeUnmount(() => {
       :initial-action="recordsModalInitialAction"
       :order="recordsModalOrder"
       :currencies="currencyCatalog.currencies.value"
-      @detail-updated="loadOrders"
+      @detail-updated="handleSalesOrderDetailUpdated"
     />
 
     <QsGenericModal
