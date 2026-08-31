@@ -45,8 +45,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   )
   assert.match(
     source,
-    /id: 'supplierSummary',\s+minWidth: 60,\s+title: '供应商'/u,
-    '采购列表供应商列最小宽度固定为 60px',
+    /id: 'supplierSummary',\s+minWidth: 90,\s+title: '供应商'/u,
+    '采购列表供应商列最小宽度固定为 90px',
   )
   assert.match(
     source,
