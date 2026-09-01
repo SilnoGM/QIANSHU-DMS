@@ -70,6 +70,23 @@ function documentTypeLabel(
   return t(`salesOrderDesc.documentTypes.${document.documentType}`)
 }
 
+/**
+ * 附件类型同时依靠文字与语义色区分。颜色只用于快速扫描，未知类型仍回退到
+ * 中性主题色，避免服务端未来扩展类型时出现不可读标签。
+ */
+function documentTypeTagClass(documentType: string): string {
+  switch (documentType) {
+    case 'ORDER_ISSUANCE_VOUCHER':
+      return 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:border-sky-500/35! dark:bg-sky-500/10! dark:text-sky-300'
+    case 'PAYMENT_VOUCHER':
+      return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/35! dark:bg-emerald-500/10! dark:text-emerald-300'
+    case 'DELIVERY_RECEIPT':
+      return 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:border-amber-500/35! dark:bg-amber-500/10! dark:text-amber-300'
+    default:
+      return 'border-border bg-muted/50 text-muted-foreground'
+  }
+}
+
 function documentDisplayTitle(
   document: QsSalesOrderDescDocumentViewModel,
 ): string {
@@ -415,7 +432,11 @@ function documentImageItems(
           </span>
 
           <div class="min-w-0">
-            <FaTag variant="outline" class="qs-type-status-tag mb-1">
+            <FaTag
+              variant="outline"
+              class="qs-type-status-tag mb-1"
+              :class="documentTypeTagClass(document.documentType)"
+            >
               {{ documentTypeLabel(document) }}
             </FaTag>
             <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere] line-clamp-2" :title="documentDisplayTitle(document)">

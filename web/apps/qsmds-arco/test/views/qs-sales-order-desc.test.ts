@@ -122,7 +122,7 @@ test('销售信息统一复用 AmountDisplay，并突出总价、定金和尾款
   assert.doesNotMatch(source, /Number\(|parseFloat\(|parseInt\(/u)
 })
 
-test('附件缩略图复用 ImageGroup，文件元数据有稳定降级且操作区由插槽提供', () => {
+test('附件缩略图复用 ImageGroup，类型标签使用可辨识语义色且未知类型稳定降级', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsSalesOrderDesc/index.vue',
   )
@@ -134,6 +134,12 @@ test('附件缩略图复用 ImageGroup，文件元数据有稳定降级且操作
   assert.match(source, /document\.originalFilename/u)
   assert.match(source, /i-lucide:(?:file-text|file|video)/u)
   assert.match(source, /sm:grid-cols-2/u)
+  assert.match(source, /function documentTypeTagClass\(documentType: string\): string/u)
+  assert.match(source, /case 'ORDER_ISSUANCE_VOUCHER':[\s\S]*?dark:border-sky-500\/35![\s\S]*?dark:bg-sky-500\/10![\s\S]*?dark:text-sky-300/u)
+  assert.match(source, /case 'PAYMENT_VOUCHER':[\s\S]*?dark:border-emerald-500\/35![\s\S]*?dark:bg-emerald-500\/10![\s\S]*?dark:text-emerald-300/u)
+  assert.match(source, /case 'DELIVERY_RECEIPT':[\s\S]*?dark:border-amber-500\/35![\s\S]*?dark:bg-amber-500\/10![\s\S]*?dark:text-amber-300/u)
+  assert.match(source, /default:[\s\S]*?border-border bg-muted\/50 text-muted-foreground/u)
+  assert.match(source, /:class="documentTypeTagClass\(document\.documentType\)"/u)
   assert.match(source, /defineSlots<[\s\S]*actions/u)
   assert.match(source, /<slot name="actions"/u)
   assert.doesNotMatch(source, /defineEmits|type="submit"|<FaButton|<button/u)
