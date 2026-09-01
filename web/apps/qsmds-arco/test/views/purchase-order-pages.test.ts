@@ -492,3 +492,19 @@ test('销售快捷入口只在首次挂载时可信绑定且允许手工改选',
   assert.match(source, /watch\(\(\) => appAccountStore\.authEpoch[\s\S]*?shortcutAbortController\?\.abort\(\)/u)
   assert.match(source, /onBeforeUnmount\(\(\) => \{[\s\S]*?shortcutAbortController\?\.abort\(\)/u)
 })
+
+test('销售来源无剩余产品时阻止进入无效同步流程', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(
+    source,
+    /const sourceHasPurchasableLines = computed\(\(\) => hasPurchasablePurchaseOrderSourceLines\(sourceSalesOrderLines\.value\)\)/u,
+  )
+  assert.match(source, /sourceHasPurchasableLines\.value/u)
+  assert.match(source, /该销售订单已无剩余可采购产品/u)
+  assert.match(
+    source,
+    /function nextStep\(\): void \{[\s\S]*?activeStep\.value === 0[\s\S]*?salesLinkedCreate\.value[\s\S]*?!sourceHasPurchasableLines\.value[\s\S]*?return/u,
+    '第一步必须阻止零剩余来源进入产品同步步骤',
+  )
+})

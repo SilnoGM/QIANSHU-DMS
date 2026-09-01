@@ -14,6 +14,7 @@ import {
   beginPurchaseOrderSubmission,
   buildPurchaseOrderCreateRequest,
   createPurchaseOrderEditingState,
+  hasPurchasablePurchaseOrderSourceLines,
   parsePurchaseOrderCreateType,
   replayUnknownPurchaseOrderSubmission,
   resolvePurchaseOrderCreateStepForErrors,
@@ -97,6 +98,20 @@ test('销售来源快捷参数只接受销售关联采购的可信单值输入',
   ] as const) {
     assert.equal(parseShortcut(input), null)
   }
+})
+
+test('销售来源只有存在剩余数量时才允许同步', () => {
+  assert.equal(hasPurchasablePurchaseOrderSourceLines([]), false)
+  assert.equal(hasPurchasablePurchaseOrderSourceLines([{
+    ...sourceCatalogLine,
+    purchasedQuantity: 3,
+    remainingQuantity: 0,
+  }]), false)
+  assert.equal(hasPurchasablePurchaseOrderSourceLines([{
+    ...sourceCatalogLine,
+    purchasedQuantity: 2,
+    remainingQuantity: 1,
+  }]), true)
 })
 
 test('销售关联采购字段按基础信息、产品付款、唛头备注归属到前三个填写步骤', () => {

@@ -257,6 +257,16 @@ function sourceLineKey(sourceLineId: string): string {
 }
 
 /**
+ * 来源接口会保留已经采购完毕的销售明细用于数量审计，因此不能只用数组长度
+ * 判断是否可同步；至少一行剩余数量大于零时，采购表单才有可继续处理的来源。
+ */
+export function hasPurchasablePurchaseOrderSourceLines(
+  sourceLines: readonly PurchaseOrderSourceSalesOrderLineDto[],
+): boolean {
+  return sourceLines.some(line => line.remainingQuantity > 0)
+}
+
+/**
  * 销售来源接口刻意不泄露采购成本和供应商。页面先按订单供应商读取可采购产品，
  * 再以稳定 productId 交集同步正式产品；临时产品没有产品级供应商，始终允许同步。
  */

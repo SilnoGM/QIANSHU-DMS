@@ -38,6 +38,7 @@ import {
   calculatePurchaseOrderDraftTotal,
   createPurchaseOrderEditingState,
   getPurchaseOrderMutationFailure,
+  hasPurchasablePurchaseOrderSourceLines,
   parsePurchaseOrderCreateType,
   parsePurchaseOrderSourceShortcut,
   PURCHASE_ORDER_CREATE_REVIEW_STEP,
@@ -180,10 +181,11 @@ const submitLocked = computed(() => submission.value.phase === 'submitting')
 // 避免为了统一页面体验而把销售订单选择或同步入口泄漏给备货采购。
 const steppedCreate = computed(() => purchaseType !== null)
 const salesLinkedCreate = computed(() => purchaseType === 'SALES_LINKED')
+const sourceHasPurchasableLines = computed(() => hasPurchasablePurchaseOrderSourceLines(sourceSalesOrderLines.value))
 const sourceReady = computed(() => (
   salesLinkedCreate.value
   && selectedSalesOrder.value !== null
-  && sourceSalesOrderLines.value.length > 0
+  && sourceHasPurchasableLines.value
   && formModel.supplierValue !== null
 ))
 const shouldConfirmDiscard = computed(() => (
@@ -336,8 +338,8 @@ async function selectSourceSalesOrder(
       return
     }
     sourceSalesOrderLines.value = response.data.items
-    if (response.data.items.length === 0) {
-      sourceError.value = '该销售订单当前没有剩余可采购产品'
+    if (!hasPurchasablePurchaseOrderSourceLines(response.data.items)) {
+      sourceError.value = '该销售订单已无剩余可采购产品'
     }
   }
   catch (error) {
@@ -555,6 +557,19 @@ function nextStep(): void {
   }
   if (activeStep.value === 0 && currencyUnavailable.value) {
     toast.warning('CNY 当前不可用，请等待货币资料加载完成后再继续')
+    return
+  }
+  if (
+    activeStep.value === 0
+    && salesLinkedCreate.value
+    && selectedSalesOrder.value !== null
+    && !sourceHasPurchasableLines.value
+  ) {
+    // 快捷入口和手工选单共享同一防线：来源加载中、加载失败或已经采购完毕时，
+    // 都不能把用户带到一个注定无法同步产品的第二步。
+    toast.warning(sourceLoading.value
+      ? '销售订单产品明细仍在加载，请稍后重试'
+      : sourceError.value || '销售订单产品明细尚未加载完成，请重新选择销售订单')
     return
   }
   const source = buildCurrentSource()
