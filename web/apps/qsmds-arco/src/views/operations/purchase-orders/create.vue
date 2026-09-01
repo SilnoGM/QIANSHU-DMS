@@ -975,7 +975,7 @@ onBeforeUnmount(() => {
                       type="button"
                       variant="default"
                       class="shrink-0 min-h-11 sm:min-h-9"
-                      :class="selectedSalesOrder !== null ? 'border-amber-500 bg-amber-500 text-amber-950 hover:border-amber-600 hover:bg-amber-600 hover:text-amber-950' : ''"
+                      :class="selectedSalesOrder !== null ? 'border-amber-500 bg-amber-500 text-white hover:border-amber-600 hover:bg-amber-600 hover:text-white' : ''"
                       :disabled="submitLocked || sourceLoading"
                       @click="sourceSelectorVisible = true"
                     >
