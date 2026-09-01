@@ -26,6 +26,7 @@ import type {
 } from '@/components/base/MoneyInput/logic'
 
 import type {
+  QsGenericTableActionColumn,
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
@@ -103,20 +104,6 @@ const ORDER_CURRENCY_CARD_DEFINITIONS = [
     regionTextClass: 'text-blue-700 dark:text-blue-300',
   },
 ] as const
-
-/** 全部订单页保持既有两个记录入口；待办页由订单状态动态收敛操作。 */
-const ALL_ORDER_ROW_ACTIONS = [
-  {
-    icon: 'i-lucide:hand-coins',
-    key: 'RECORD_PAYMENT',
-    label: '新增实际收款',
-  },
-  {
-    icon: 'i-lucide:package-check',
-    key: 'DELIVERY_RECEIPT',
-    label: '货物签收',
-  },
-] as const satisfies readonly SalesOrderPendingActionItem[]
 
 const route = useRoute()
 const router = useRouter()
@@ -202,6 +189,10 @@ const tableEmptyDescription = computed(() => {
   return props.viewMode === 'pending'
     ? '当前筛选条件下没有需要处理的销售订单。'
     : '当前筛选条件下没有可展示的销售订单。'
+})
+const actionColumn = computed<QsGenericTableActionColumn>(() => {
+  const width = props.viewMode === 'all' ? 100 : 260
+  return { fixed: 'right', minWidth: width, title: '操作', width }
 })
 
 /**
@@ -443,8 +434,8 @@ function openRecordsAction(
 function salesOrderRowActions(
   order: SalesOrderListItemDto,
 ): readonly SalesOrderPendingActionItem[] {
-  if (props.viewMode === 'all') {
-    return ALL_ORDER_ROW_ACTIONS
+  if (props.viewMode !== 'pending') {
+    return []
   }
   return resolvePendingSalesOrderActions(
     normalizeSalesOrderStatusSelection(props.viewMode, route.query.status),
@@ -948,7 +939,7 @@ onBeforeUnmount(() => {
         data-testid="sales-order-list-table"
         :row-key="item => item.id"
         :addable="false"
-        :action-column="{ fixed: 'right', minWidth: 260, title: '操作', width: 260 }"
+        :action-column="actionColumn"
         :columns="columns"
         :data="rows"
         :empty-title="tableEmptyTitle"
@@ -990,21 +981,23 @@ onBeforeUnmount(() => {
             >
               <FaIcon name="i-lucide:eye" aria-hidden="true" />查看
             </FaButton>
-            <template
-              v-for="action in salesOrderRowActions(row)"
-              :key="action.key"
-            >
-              <FaButton
-                v-if="canShowSalesOrderRowAction(action)"
-                type="button"
-                variant="ghost"
-                size="sm"
-                class="min-h-11 sm:min-h-8"
-                :aria-label="`${row.orderNo}：${action.label}`"
-                @click="handleSalesOrderRowAction(action, row)"
+            <template v-if="props.viewMode === 'pending'">
+              <template
+                v-for="action in salesOrderRowActions(row)"
+                :key="action.key"
               >
-                <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
-              </FaButton>
+                <FaButton
+                  v-if="canShowSalesOrderRowAction(action)"
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="min-h-11 sm:min-h-8"
+                  :aria-label="`${row.orderNo}：${action.label}`"
+                  @click="handleSalesOrderRowAction(action, row)"
+                >
+                  <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
+                </FaButton>
+              </template>
             </template>
           </div>
         </template>
