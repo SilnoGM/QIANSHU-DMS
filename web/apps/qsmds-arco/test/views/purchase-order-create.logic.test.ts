@@ -23,6 +23,7 @@ import {
   synchronizePurchaseOrderSourceLines,
   validatePurchaseOrderCreateStep,
 } from '../../src/views/operations/purchase-orders/purchase-order-create.logic'
+import * as purchaseOrderCreateLogic from '../../src/views/operations/purchase-orders/purchase-order-create.logic'
 
 const catalogOption = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -60,6 +61,42 @@ test('创建类型只接受路由单值，备货类型还要求 system-only 权�
   assert.equal(parsePurchaseOrderCreateType('STOCK', false), null)
   assert.equal(parsePurchaseOrderCreateType(['STOCK'], true), null)
   assert.equal(parsePurchaseOrderCreateType('OTHER', true), null)
+})
+
+test('销售来源快捷参数只接受销售关联采购的可信单值输入', () => {
+  type ShortcutParser = (input: {
+    readonly purchaseType: 'SALES_LINKED' | 'STOCK' | null
+    readonly salesOrderId: unknown
+    readonly salesOrderNo: unknown
+  }) => null | { readonly salesOrderId: string, readonly salesOrderNo: string }
+
+  const parseShortcut = Reflect.get(
+    purchaseOrderCreateLogic,
+    'parsePurchaseOrderSourceShortcut',
+  ) as ShortcutParser | undefined
+
+  assert.equal(typeof parseShortcut, 'function', '采购创建逻辑应导出快捷来源参数解析器')
+  assert.ok(parseShortcut)
+  assert.deepEqual(parseShortcut({
+    purchaseType: 'SALES_LINKED',
+    salesOrderId: ' 11111111-1111-4111-8111-111111111111 ',
+    salesOrderNo: ' ＳＯ／２０２６－００１ ',
+  }), {
+    salesOrderId: '11111111-1111-4111-8111-111111111111',
+    salesOrderNo: 'SO/2026-001',
+  })
+
+  for (const input of [
+    { purchaseType: 'STOCK', salesOrderId: 'order-id', salesOrderNo: 'SO-001' },
+    { purchaseType: null, salesOrderId: 'order-id', salesOrderNo: 'SO-001' },
+    { purchaseType: 'SALES_LINKED', salesOrderId: '', salesOrderNo: 'SO-001' },
+    { purchaseType: 'SALES_LINKED', salesOrderId: ['order-id'], salesOrderNo: 'SO-001' },
+    { purchaseType: 'SALES_LINKED', salesOrderId: 'order-id', salesOrderNo: ['SO-001'] },
+    { purchaseType: 'SALES_LINKED', salesOrderId: 'x'.repeat(129), salesOrderNo: 'SO-001' },
+    { purchaseType: 'SALES_LINKED', salesOrderId: 'order-id', salesOrderNo: '订'.repeat(129) },
+  ] as const) {
+    assert.equal(parseShortcut(input), null)
+  }
 })
 
 test('销售关联采购字段按基础信息、产品付款、唛头备注归属到前三个填写步骤', () => {

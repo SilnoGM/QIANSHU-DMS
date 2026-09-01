@@ -101,6 +101,10 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
     ['SUBMIT_PURCHASE'],
   )
   assert.deepEqual(
+    resolvePendingSalesOrderActions('PENDING', pendingAndUnpaid).map(action => action.label),
+    ['新增采购'],
+  )
+  assert.deepEqual(
     resolvePendingSalesOrderActions('PREPARING', {
       fulfillmentStatus: 'PREPARING',
       paymentStatus: 'PARTIALLY_PAID',

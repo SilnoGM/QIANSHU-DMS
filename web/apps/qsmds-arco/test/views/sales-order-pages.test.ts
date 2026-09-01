@@ -585,3 +585,27 @@ test('产品明细由薄销售适配层接入通用编辑器，不保留行内�
   assert.doesNotMatch(editor, /<FaCombobox/u)
   assert.doesNotMatch(editor, /<FaTextarea/u)
 })
+
+test('销售待采购通过权限受控的命名路由快捷新增采购', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /const canCreatePurchase = computed\(\(\) => auth\('purchase-orders:create'\)\)/u)
+  assert.match(
+    source,
+    /action\.key === 'SUBMIT_PURCHASE'[\s\S]*?return canCreatePurchase\.value/u,
+    '新增采购操作必须服从采购创建权限',
+  )
+  assert.match(
+    source,
+    /action\.key === 'SUBMIT_PURCHASE'[\s\S]*?router\.push\(\{[\s\S]*?name: 'operationsPurchaseOrderCreate'[\s\S]*?type: 'SALES_LINKED'[\s\S]*?salesOrderId: order\.id[\s\S]*?salesOrderNo: order\.orderNo/u,
+    '待采购操作应通过命名路由携带可信定位参数',
+  )
+
+  const handler = source.match(
+    /function handleSalesOrderRowAction\([\s\S]*?\n\}/u,
+  )
+  assert.ok(handler, '应存在销售待办动作处理函数')
+  assert.match(handler[0], /SUBMIT_PURCHASE/u)
+  assert.match(handler[0], /operationsPurchaseOrderCreate/u)
+  assert.match(handler[0], /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
+})

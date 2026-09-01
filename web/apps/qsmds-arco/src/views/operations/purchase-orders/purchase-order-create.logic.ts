@@ -12,6 +12,11 @@ export type PurchaseOrderCreateType = 'SALES_LINKED' | 'STOCK'
 export type PurchaseOrderCreateStep = 0 | 1 | 2 | 3
 export type PurchaseOrderFormStep = Exclude<PurchaseOrderCreateStep, 3>
 
+export interface PurchaseOrderSourceShortcut {
+  readonly salesOrderId: string
+  readonly salesOrderNo: string
+}
+
 export const PURCHASE_ORDER_CREATE_REVIEW_STEP: PurchaseOrderCreateStep = 3
 
 export interface PurchaseOrderCreateSource {
@@ -156,6 +161,35 @@ export function parsePurchaseOrderCreateType(
     return value
   }
   return value === 'STOCK' && canCreateStock ? value : null
+}
+
+/**
+ * 快捷入口参数来自 URL，不能直接作为已选销售订单。这里只做单值、长度与文字
+ * 规范化；页面随后仍须通过采购域来源接口取得可信 DTO 并执行 ID 精确匹配。
+ */
+export function parsePurchaseOrderSourceShortcut(input: {
+  readonly purchaseType: PurchaseOrderCreateType | null
+  readonly salesOrderId: unknown
+  readonly salesOrderNo: unknown
+}): PurchaseOrderSourceShortcut | null {
+  if (
+    input.purchaseType !== 'SALES_LINKED'
+    || typeof input.salesOrderId !== 'string'
+    || typeof input.salesOrderNo !== 'string'
+  ) {
+    return null
+  }
+  const salesOrderId = input.salesOrderId.trim()
+  const salesOrderNo = input.salesOrderNo.normalize('NFKC').trim()
+  if (
+    salesOrderId === ''
+    || salesOrderNo === ''
+    || unicodeLength(salesOrderId) > 128
+    || unicodeLength(salesOrderNo) > 128
+  ) {
+    return null
+  }
+  return { salesOrderId, salesOrderNo }
 }
 
 /**

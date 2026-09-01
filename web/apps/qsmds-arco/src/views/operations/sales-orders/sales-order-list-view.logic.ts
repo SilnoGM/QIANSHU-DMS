@@ -97,7 +97,7 @@ const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
   PENDING: {
     icon: 'i-lucide:clipboard-plus',
     key: 'SUBMIT_PURCHASE',
-    label: '提交采购',
+    label: '新增采购',
   },
   PREPARING: {
     icon: 'i-lucide:factory',

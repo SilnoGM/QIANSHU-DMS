@@ -440,3 +440,35 @@ test('备货采购复用四步表单、实时详情与全屏核对，同时隔�
   assert.match(source, /:custom-product-addable="purchaseType === 'STOCK'"/u)
   assert.match(source, /v-if="salesLinkedCreate"[\s\S]*?同步销售产品明细/u)
 })
+
+test('销售快捷入口只在首次挂载时可信绑定且允许手工改选', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(source, /parsePurchaseOrderSourceShortcut/u)
+  assert.match(source, /route\.query\.salesOrderId/u)
+  assert.match(source, /route\.query\.salesOrderNo/u)
+  assert.match(source, /let shortcutAbortController: AbortController \| null = null/u)
+  assert.match(source, /let shortcutLookupStarted = false/u)
+  assert.match(
+    source,
+    /purchaseOrdersApi\.sourceSalesOrders\(\{[\s\S]*?keyword: sourceShortcut\.salesOrderNo[\s\S]*?page: 1[\s\S]*?pageSize: 100/u,
+  )
+  assert.match(
+    source,
+    /candidate\.id === sourceShortcut\.salesOrderId[\s\S]*?candidate\.orderNo === sourceShortcut\.salesOrderNo/u,
+    '自动来源必须同时精确匹配订单 ID 和订单号',
+  )
+  assert.match(
+    source,
+    /selectedSalesOrder\.value !== null[\s\S]*?return[\s\S]*?selectSourceSalesOrder\(candidate\)/u,
+    '自动查询不得覆盖用户已经选择的销售订单',
+  )
+  assert.match(source, /销售订单自动关联失败，请手工选择销售订单/u)
+  assert.match(
+    source,
+    /onMounted\(\(\) => \{[\s\S]*?bindSourceSalesOrderFromShortcut\(\)/u,
+    '自动绑定只应由首次挂载触发，不监听步骤或路由变化',
+  )
+  assert.match(source, /watch\(\(\) => appAccountStore\.authEpoch[\s\S]*?shortcutAbortController\?\.abort\(\)/u)
+  assert.match(source, /onBeforeUnmount\(\(\) => \{[\s\S]*?shortcutAbortController\?\.abort\(\)/u)
+})

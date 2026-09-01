@@ -39,6 +39,7 @@ import {
   createPurchaseOrderEditingState,
   getPurchaseOrderMutationFailure,
   parsePurchaseOrderCreateType,
+  parsePurchaseOrderSourceShortcut,
   PURCHASE_ORDER_CREATE_REVIEW_STEP,
   replayUnknownPurchaseOrderSubmission,
   resolvePurchaseOrderCreateStepForErrors,
@@ -86,6 +87,11 @@ const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
 const purchaseType = parsePurchaseOrderCreateType(route.query.type, canCreateStock.value)
+const sourceShortcut = parsePurchaseOrderSourceShortcut({
+  purchaseType,
+  salesOrderId: route.query.salesOrderId,
+  salesOrderNo: route.query.salesOrderNo,
+})
 
 const lineLabels: OrderProductLineLabels = {
   actualSubtotal: '本单采购小计',
@@ -131,8 +137,10 @@ const supplierSelectRef = useTemplateRef<InstanceType<typeof QsDictionarySelect>
 const isDesktopSummary = useMediaQuery('(min-width: 1280px)')
 const submission = shallowRef<PurchaseOrderSubmissionState>(createPurchaseOrderEditingState())
 let sourceAbortController: AbortController | null = null
+let shortcutAbortController: AbortController | null = null
 let synchronizeAbortController: AbortController | null = null
 let submitAbortController: AbortController | null = null
+let shortcutLookupStarted = false
 let submitRequestVersion = 0
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
 
@@ -342,6 +350,57 @@ async function selectSourceSalesOrder(
     if (sourceAbortController === controller) {
       sourceAbortController = null
       sourceLoading.value = false
+    }
+  }
+}
+
+/**
+ * URL 只提供定位线索。自动绑定仍从采购权限域重新读取候选订单，并同时核对
+ * ID 与订单号；请求返回前若用户已经手工选单，则以用户选择为准。
+ */
+async function bindSourceSalesOrderFromShortcut(): Promise<void> {
+  if (
+    shortcutLookupStarted
+    || sourceShortcut === null
+    || selectedSalesOrder.value !== null
+  ) {
+    return
+  }
+  shortcutLookupStarted = true
+  const controller = new AbortController()
+  shortcutAbortController = controller
+  const authEpoch = appAccountStore.authEpoch
+  try {
+    const response = await purchaseOrdersApi.sourceSalesOrders({
+      keyword: sourceShortcut.salesOrderNo,
+      page: 1,
+      pageSize: 100,
+    }, controller.signal)
+    if (controller.signal.aborted || authEpoch !== appAccountStore.authEpoch) {
+      return
+    }
+    const candidate = response.data.items.find(candidate => (
+      candidate.id === sourceShortcut.salesOrderId
+      && candidate.orderNo === sourceShortcut.salesOrderNo
+    ))
+    if (selectedSalesOrder.value !== null) {
+      return
+    }
+    if (candidate === undefined) {
+      toast.warning('销售订单自动关联失败，请手工选择销售订单')
+      return
+    }
+    await selectSourceSalesOrder(candidate)
+  }
+  catch (error) {
+    if (controller.signal.aborted || isPurchaseOrderAbortError(error)) {
+      return
+    }
+    toast.warning('销售订单自动关联失败，请手工选择销售订单')
+  }
+  finally {
+    if (shortcutAbortController === controller) {
+      shortcutAbortController = null
     }
   }
 }
@@ -748,6 +807,7 @@ onBeforeRouteLeave(() => {
 })
 
 watch(() => appAccountStore.authEpoch, () => {
+  shortcutAbortController?.abort()
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
   submitAbortController?.abort()
@@ -767,9 +827,11 @@ onMounted(() => {
     return
   }
   window.addEventListener('beforeunload', handleBeforeUnload)
+  void bindSourceSalesOrderFromShortcut()
 })
 
 onBeforeUnmount(() => {
+  shortcutAbortController?.abort()
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
   submitAbortController?.abort()

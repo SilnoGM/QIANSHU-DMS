@@ -25,6 +25,7 @@ const pendingRoute = '/qs-operations/purchase/pending-purchase-orders'
 const supplierLabel = 'Browser 有效供应商'
 const productNo = 'PRODUCT-BROWSER-001'
 const salesCustomerName = 'Browser 采购来源客户'
+const salesOrderNo = 'SO-BRW-PURCHASE-SOURCE'
 const purchaseCustomName = 'Browser 采购侧临时产品'
 const purchaseCustomDescription = 'Browser 采购侧临时说明'
 
@@ -487,13 +488,36 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
 
   let linkedOrder
   await runPurchaseOrderBrowserStep('sales-linked CUSTOM snapshot and final submission', async () => {
-    await clickVisibleButton(page, '新增采购')
+    await page.navigate(appRouteUrl(
+      configuration.baseUrl,
+      '/qs-operations/sales/pending-sales-orders',
+    ))
+    await waitForAfterAuthentication(page, `(() => {
+      const table = document.querySelector('[data-testid="sales-order-list-table"]')
+      const action = document.querySelector(
+        'button[aria-label=' + CSS.escape(${JSON.stringify(`${salesOrderNo}：新增采购`)}) + ']',
+      )
+      return table?.getClientRects().length > 0
+        && table.textContent?.includes(${JSON.stringify(salesCustomerName)})
+        && action?.getClientRects().length > 0
+    })()`)
+    await clickVisibleAriaButton(page, `${salesOrderNo}：新增采购`)
     await waitForAfterAuthentication(page, `(() => (
-      location.hash.includes('/qs-operations/purchase/purchase-orders/create?type=SALES_LINKED')
-      && document.querySelector('[data-testid="purchase-order-step-base"]')
-        ?.getClientRects().length > 0
-      && document.body.innerText.includes('新增采购订单')
-      && document.body.innerText.includes('第 1 步，共 4 步')
+      (() => {
+        const parameters = new URLSearchParams(location.hash.split('?')[1] ?? '')
+        const step = document.querySelector('[data-testid="purchase-order-step-base"]')
+        const source = [...(step?.querySelectorAll('.border-primary') ?? [])]
+          .find(candidate => candidate.textContent?.includes(${JSON.stringify(salesOrderNo)})
+            && candidate.textContent.includes(${JSON.stringify(salesCustomerName)}))
+        return location.hash.includes('/qs-operations/purchase/purchase-orders/create?')
+          && parameters.get('type') === 'SALES_LINKED'
+          && parameters.get('salesOrderNo') === ${JSON.stringify(salesOrderNo)}
+          && Boolean(parameters.get('salesOrderId'))
+          && step?.getClientRects().length > 0
+          && source?.getClientRects().length > 0
+          && document.body.innerText.includes('新增采购订单')
+          && document.body.innerText.includes('第 1 步，共 4 步')
+      })()
     ))()`)
 
     await clickVisibleButton(page, '下一步')
@@ -514,18 +538,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
           && candidate.textContent?.includes('选择销售订单'))
       return dialog?.textContent?.includes(${JSON.stringify(salesCustomerName)})
     })()`)
-    await page.evaluate(`(() => {
-      const dialog = [...document.querySelectorAll('[role="dialog"]')]
-        .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.includes('选择销售订单'))
-      const order = [...(dialog?.querySelectorAll('[role="radio"]') ?? [])]
-        .find(candidate => candidate.getAttribute('aria-label')
-          ?.includes(${JSON.stringify(salesCustomerName)}))
-      if (!order) throw new Error('purchase source sales order unavailable')
-      order.click()
-      return true
-    })()`)
-    await clickVisibleButton(page, '确认选择')
+    await clickDialogButton(page, '选择销售订单', '取消')
     await waitForNoVisibleDialog(page, '选择销售订单')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-base"]')
       ?.textContent?.includes(${JSON.stringify(salesCustomerName)})`)

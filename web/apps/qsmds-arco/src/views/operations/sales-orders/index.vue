@@ -114,6 +114,7 @@ const toast = useQsToast()
 
 const canRead = computed(() => auth('sales-orders:read'))
 const canCreate = computed(() => auth('sales-orders:create'))
+const canCreatePurchase = computed(() => auth('purchase-orders:create'))
 const canRecordPayment = computed(() => (
   auth('sales-orders:payment') && auth('sales-orders:document')
 ))
@@ -445,6 +446,9 @@ function salesOrderRowActions(
 
 /** 已落地动作继续遵守原权限；占位动作不改变数据，仅向有读取权限的用户说明建设状态。 */
 function canShowSalesOrderRowAction(action: SalesOrderPendingActionItem): boolean {
+  if (action.key === 'SUBMIT_PURCHASE') {
+    return canCreatePurchase.value
+  }
   if (action.key === 'RECORD_PAYMENT') {
     return canRecordPayment.value
   }
@@ -458,6 +462,17 @@ function handleSalesOrderRowAction(
   action: SalesOrderPendingActionItem,
   order: SalesOrderListItemDto,
 ): void {
+  if (action.key === 'SUBMIT_PURCHASE') {
+    void router.push({
+      name: 'operationsPurchaseOrderCreate',
+      query: {
+        type: 'SALES_LINKED',
+        salesOrderId: order.id,
+        salesOrderNo: order.orderNo,
+      },
+    })
+    return
+  }
   if (action.key === 'RECORD_PAYMENT') {
     openRecordsAction('payment', order)
     return
