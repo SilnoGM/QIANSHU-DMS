@@ -432,13 +432,18 @@ test('备货采购复用四步表单、实时详情与全屏核对，同时隔�
   )
   assert.match(
     source,
-    /:variant="selectedSalesOrder === null \? 'default' : 'outline'"/u,
-    '未关联时使用主色实心按钮，已关联后降级为描边重选按钮',
+    /variant="default"/u,
+    '选择与重选均必须使用实心按钮结构',
   )
   assert.match(
     source,
-    /selectedSalesOrder !== null \? 'border-amber-500 text-amber-700 hover:bg-amber-500\/10 dark:text-amber-300' : ''/u,
-    '已关联的重选按钮必须使用黄色警示语义，且不得升级为危险操作',
+    /selectedSalesOrder !== null \? 'border-amber-500 bg-amber-500 text-amber-950 hover:border-amber-600 hover:bg-amber-600 hover:text-amber-950' : ''/u,
+    '已关联的重选按钮必须使用可读的黄色实心状态',
+  )
+  assert.match(
+    source,
+    /:name="selectedSalesOrder === null \? 'i-lucide:search' : 'i-lucide:arrow-left-right'"/u,
+    '首次选择使用搜索图标，重选使用切换销售来源图标',
   )
   assert.match(
     source,
