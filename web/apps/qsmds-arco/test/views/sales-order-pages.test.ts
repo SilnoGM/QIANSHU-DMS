@@ -75,6 +75,8 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.match(source, /resolveSalesOrderQueryTargets/u)
   assert.match(source, /route\.query\.status/u)
   assert.match(source, /router\.push\(\{ query: nextQuery \}\)/u)
+  assert.match(source, /function ensureCanonicalSalesOrderStatusQuery\(\): boolean/u)
+  assert.match(source, /onMounted\(\(\) => \{[\s\S]*?ensureCanonicalSalesOrderStatusQuery\(\)[\s\S]*?scheduleQueryRefresh\(true\)/u)
   assert.match(source, /viewMode === 'pending'[\s\S]*?'待办订单'[\s\S]*?'全部订单'/u)
   assert.ok(headerStart >= 0, '应存在页面头')
   assert.ok(toolbarStart > headerStart, '状态切换工具栏应位于页面头之后')

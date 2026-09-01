@@ -233,6 +233,29 @@ const statusItems = computed(() => withStatusSwitchCounts(
   },
 ))
 
+/**
+ * 首次打开、刷新和浏览器回退都可能带入旧状态参数。先清理当前工具栏未声明的值，
+ * 再加载列表，避免界面已经回落到默认项而地址栏仍保留失效状态。
+ */
+function ensureCanonicalSalesOrderStatusQuery(): boolean {
+  if (route.query.status === undefined) {
+    return true
+  }
+  const normalized = normalizeSalesOrderStatusSelection(
+    props.viewMode,
+    route.query.status,
+  )
+  const declaredStatus = getSalesOrderStatusItems(props.viewMode)
+    .some(item => item.value === route.query.status)
+  if (normalized !== 'ALL' && declaredStatus) {
+    return true
+  }
+  const nextQuery = { ...route.query }
+  delete nextQuery.status
+  void router.replace({ query: nextQuery })
+  return false
+}
+
 watch(availableOrderCurrencies, (currencies) => {
   if (
     selectedCurrency.value !== null
@@ -865,19 +888,17 @@ watch([
   () => route.query.status,
 ], ([nextMode], [previousMode]) => {
   page.value = 1
-  const normalized = normalizeSalesOrderStatusSelection(
-    props.viewMode,
-    route.query.status,
-  )
-  if (route.query.status !== undefined && normalized === 'ALL') {
-    const nextQuery = { ...route.query }
-    delete nextQuery.status
-    void router.replace({ query: nextQuery })
+  if (!ensureCanonicalSalesOrderStatusQuery()) {
+    return
   }
   scheduleQueryRefresh(nextMode !== previousMode)
 })
 
-onMounted(() => scheduleQueryRefresh(true))
+onMounted(() => {
+  if (ensureCanonicalSalesOrderStatusQuery()) {
+    scheduleQueryRefresh(true)
+  }
+})
 onBeforeUnmount(() => {
   requestVersion += 1
   countRequestVersion += 1

@@ -33,11 +33,10 @@ test('销售状态计数查询只保留视图和非工具栏基础筛选', () =>
   })
 })
 
-test('待办视图包含履约末端与付款待办，并允许同一订单跨分类出现', () => {
+test('待办视图不展示全部待办，并以待采购作为首个有效分类', () => {
   assert.deepEqual(
     getSalesOrderStatusItems('pending').map(item => [item.value, item.label]),
     [
-      ['ALL', '全部待办'],
       ['PENDING', '待采购'],
       ['PREPARING', '待发货'],
       ['LAND_TRANSIT', '待入仓'],
@@ -46,14 +45,8 @@ test('待办视图包含履约末端与付款待办，并允许同一订单跨�
       ['WAITING_PAYMENT', '待收款'],
     ],
   )
-  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'ALL'), [
+  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'PENDING'), [
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PENDING' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' },
-    { orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' },
-    { orderStatus: 'CONFIRMED', paymentStatus: 'PARTIALLY_PAID' },
   ])
   assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'SEA_TRANSIT'), [
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' },
@@ -89,9 +82,11 @@ test('全部订单视图排除草稿，并把四类正式状态映射到可信�
   ])
 })
 
-test('URL 中非法或跨视图状态回退到当前视图的全部状态', () => {
+test('URL 中缺失、非法或跨视图状态回退到当前视图默认状态', () => {
   assert.equal(normalizeSalesOrderStatusSelection('pending', 'PREPARING'), 'PREPARING')
-  assert.equal(normalizeSalesOrderStatusSelection('pending', 'CANCELLED'), 'ALL')
+  assert.equal(normalizeSalesOrderStatusSelection('pending', undefined), 'PENDING')
+  assert.equal(normalizeSalesOrderStatusSelection('pending', 'ALL'), 'PENDING')
+  assert.equal(normalizeSalesOrderStatusSelection('pending', 'CANCELLED'), 'PENDING')
   assert.equal(normalizeSalesOrderStatusSelection('all', ['CONFIRMED']), 'ALL')
   assert.equal(normalizeSalesOrderStatusSelection('all', undefined), 'ALL')
 })

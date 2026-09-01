@@ -59,7 +59,6 @@ type SalesOrderSummarySource = Pick<
 >
 
 const PENDING_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
-  { label: '全部待办', value: 'ALL' },
   { label: '待采购', value: 'PENDING' },
   { label: '待发货', value: 'PREPARING' },
   { label: '待入仓', value: 'LAND_TRANSIT' },
@@ -163,18 +162,22 @@ export function buildSalesOrderStatusCountsQuery(
 
 /**
  * URL 查询参数属于不可信输入。这里只接受当前页面工具栏实际声明的值，避免两个页面
- * 互相复用到不属于自己的状态，刷新或浏览器回退时也能稳定落到“全部”。
+ * 互相复用到不属于自己的状态；待办页默认进入首个有效分类“待采购”，全部订单页
+ * 继续默认进入“全部订单”。
  */
 export function normalizeSalesOrderStatusSelection(
   viewMode: SalesOrderListViewMode,
   value: unknown,
 ): SalesOrderListStatusSelection {
+  const defaultSelection: SalesOrderListStatusSelection = viewMode === 'pending'
+    ? 'PENDING'
+    : 'ALL'
   if (typeof value !== 'string') {
-    return 'ALL'
+    return defaultSelection
   }
   return getSalesOrderStatusItems(viewMode).some(item => item.value === value)
     ? value as SalesOrderListStatusSelection
-    : 'ALL'
+    : defaultSelection
 }
 
 /**
