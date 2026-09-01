@@ -975,7 +975,7 @@ onBeforeUnmount(() => {
                       type="button"
                       :variant="selectedSalesOrder === null ? 'default' : 'outline'"
                       class="shrink-0 min-h-11 sm:min-h-9"
-                      :class="selectedSalesOrder !== null ? 'border-primary text-primary hover:bg-primary/10' : ''"
+                      :class="selectedSalesOrder !== null ? 'border-amber-500 text-amber-700 hover:bg-amber-500/10 dark:text-amber-300' : ''"
                       :disabled="submitLocked || sourceLoading"
                       @click="sourceSelectorVisible = true"
                     >

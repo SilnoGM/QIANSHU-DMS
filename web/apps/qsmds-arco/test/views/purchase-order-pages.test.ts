@@ -437,8 +437,8 @@ test('备货采购复用四步表单、实时详情与全屏核对，同时隔�
   )
   assert.match(
     source,
-    /selectedSalesOrder !== null \? 'border-primary text-primary hover:bg-primary\/10' : ''/u,
-    '已关联的重选按钮必须保留主色提示',
+    /selectedSalesOrder !== null \? 'border-amber-500 text-amber-700 hover:bg-amber-500\/10 dark:text-amber-300' : ''/u,
+    '已关联的重选按钮必须使用黄色警示语义，且不得升级为危险操作',
   )
   assert.match(
     source,
