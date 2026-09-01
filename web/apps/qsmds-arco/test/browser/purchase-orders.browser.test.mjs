@@ -348,10 +348,25 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     })()`)
     await page.waitFor(`document.querySelector('[data-slot="range-calendar"]')
       ?.getClientRects().length > 0`)
+    const initialHeading = await page.evaluate(`document.querySelector(
+      '[data-slot="range-calendar-heading"]',
+    )?.textContent ?? ''`)
+    assert.ok(initialHeading)
+    await page.evaluate(`(() => {
+      const previous = document.querySelector('[data-slot="range-calendar-prev-button"]')
+      if (!previous) throw new Error('purchase date range previous month unavailable')
+      previous.click()
+      return true
+    })()`)
+    await page.waitFor(`document.querySelector(
+      '[data-slot="range-calendar-heading"]',
+    )?.textContent !== ${JSON.stringify(initialHeading)}`)
     await page.evaluate(`(() => {
       const day = [...document.querySelectorAll('[data-slot="range-calendar-trigger"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && !candidate.disabled
+          && !candidate.hasAttribute('data-disabled')
+          && !candidate.hasAttribute('data-unavailable')
           && !candidate.hasAttribute('data-outside-view'))
       if (!day) throw new Error('purchase date range start unavailable')
       day.click()
@@ -364,6 +379,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
       const days = [...document.querySelectorAll('[data-slot="range-calendar-trigger"]')]
         .filter(candidate => candidate.getClientRects().length > 0
           && !candidate.disabled
+          && !candidate.hasAttribute('data-disabled')
+          && !candidate.hasAttribute('data-unavailable')
           && !candidate.hasAttribute('data-outside-view'))
       const startIndex = days.findIndex(candidate => candidate.hasAttribute('data-selection-start'))
       const day = days[startIndex + 1]
@@ -375,6 +392,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
       }
     })()`)
     assert.ok(rangeEndPoint)
+    // 范围终点需要真实 hover 形成高亮区间后再点击；使用上个月合法日期，
+    // 避免每月第一天把“今天之后”的禁用日期误当作可选终点。
     await page.connection.send('Input.dispatchMouseEvent', {
       button: 'none',
       buttons: 0,
