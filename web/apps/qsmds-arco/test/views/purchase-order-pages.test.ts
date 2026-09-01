@@ -430,6 +430,21 @@ test('备货采购复用四步表单、实时详情与全屏核对，同时隔�
     /class="p-4 border rounded-xl bg-muted\/20[^"]*"\s+:class="selectedSalesOrder !== null \? 'border-primary' : 'border-border'"/u,
     '选择销售订单后，必须仅把内部订单摘要框切换为主色边框',
   )
+  assert.match(
+    source,
+    /:variant="selectedSalesOrder === null \? 'default' : 'outline'"/u,
+    '未关联时使用主色实心按钮，已关联后降级为描边重选按钮',
+  )
+  assert.match(
+    source,
+    /selectedSalesOrder !== null \? 'border-primary text-primary hover:bg-primary\/10' : ''/u,
+    '已关联的重选按钮必须保留主色提示',
+  )
+  assert.match(
+    source,
+    /\{\{ selectedSalesOrder === null \? '选择销售订单' : '重选销售订单' \}\}/u,
+    '销售订单关联按钮必须按是否已关联切换文字',
+  )
   assert.match(source, /<div v-if="salesLinkedCreate" class="mb-4/u)
   assert.doesNotMatch(source, /<aside v-if="purchaseType === 'STOCK'"/u)
   assert.match(source, /<aside\s+v-if="steppedCreate"[\s\S]*?data-testid="purchase-order-create-summary-column"/u)

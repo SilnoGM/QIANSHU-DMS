@@ -973,12 +973,14 @@ onBeforeUnmount(() => {
                     </div>
                     <FaButton
                       type="button"
-                      variant="outline"
+                      :variant="selectedSalesOrder === null ? 'default' : 'outline'"
                       class="shrink-0 min-h-11 sm:min-h-9"
+                      :class="selectedSalesOrder !== null ? 'border-primary text-primary hover:bg-primary/10' : ''"
                       :disabled="submitLocked || sourceLoading"
                       @click="sourceSelectorVisible = true"
                     >
-                      <FaIcon name="i-lucide:search" aria-hidden="true" />选择销售订单
+                      <FaIcon name="i-lucide:search" aria-hidden="true" />
+                      {{ selectedSalesOrder === null ? '选择销售订单' : '重选销售订单' }}
                     </FaButton>
                   </div>
                   <FaAlert
