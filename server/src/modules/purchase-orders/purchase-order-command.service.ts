@@ -38,6 +38,7 @@ import {
   PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
+import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
 const PURCHASE_ORDER_STATE_CHANGE_CODES = [
@@ -202,6 +203,7 @@ export class PurchaseOrderCommandService {
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
     private readonly createDependencies: PurchaseOrderCreateDependencyService,
+    private readonly salesProgress: SalesOrderPurchaseCoverageService,
     @Optional()
     @Inject(PURCHASE_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderCommandServiceDependencies> = {},
@@ -299,6 +301,18 @@ export class PurchaseOrderCommandService {
         await transaction.purchaseOrderLine.createMany({
           data: effective.lines.map(line => lineData(created.id, line)),
         })
+        if (
+          command.purchaseType === 'SALES_LINKED'
+          && command.salesOrderId !== null
+        ) {
+          await this.salesProgress.advanceWhenFullyCovered(transaction, {
+            actorUserId: trusted.actorUserId,
+            purchaseOrderId: created.id,
+            purchaseOrderNo: issuance.number,
+            requestId: trusted.requestId,
+            salesOrderId: command.salesOrderId,
+          })
+        }
         await this.audit.record(transaction, {
           eventType: AuditEventType.PURCHASE_ORDER_CREATED,
           outcome: AuditOutcome.SUCCESS,

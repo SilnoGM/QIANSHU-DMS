@@ -13,6 +13,7 @@ import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purc
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
+import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 
@@ -30,6 +31,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   const supplierValue = `PUR-SUPPLIER-${suffix}`
   let actorUserId: string
   let cityId: string
+  let concurrentDistinctSourceAId: string
+  let concurrentDistinctSourceBId: string
   let countryRegionId: string
   let createdTwdExchangeRate = false
   let cnyWasEnabled = false
@@ -39,6 +42,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let salesOrderId: string
   let splitSourceLineId: string
   let concurrentSourceLineId: string
+  let customSourceLineId: string
   let twdCurrencyId: string
   let twdWasEnabled = false
   let prisma: PrismaService
@@ -206,21 +210,49 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         productId,
         actualUnitPriceAmount: '100',
         quantity: 1,
+      }, {
+        lineType: 'CUSTOM',
+        name: '采购来源临时产品',
+        description: '用于验证 CUSTOM 采购覆盖',
+        actualUnitPriceAmount: '50',
+        quantity: 2,
+      }, {
+        lineType: 'CATALOG',
+        productId,
+        actualUnitPriceAmount: '100',
+        quantity: 1,
+      }, {
+        lineType: 'CATALOG',
+        productId,
+        actualUnitPriceAmount: '100',
+        quantity: 1,
       }],
-      agreedTotalAmount: '300',
+      agreedTotalAmount: '600',
       depositDueAmount: '0',
-      balanceDueAmount: '300',
+      balanceDueAmount: '600',
       issuanceVoucher: { mediaAssetId: issuanceVoucherMediaAssetId },
       remark: null,
     })
     salesOrderId = salesOrder.id
     const firstSourceId = salesOrder.lines[0]?.id
     const secondSourceId = salesOrder.lines[1]?.id
-    if (typeof firstSourceId !== 'string' || typeof secondSourceId !== 'string') {
+    const customSourceId = salesOrder.lines[2]?.id
+    const distinctSourceAId = salesOrder.lines[3]?.id
+    const distinctSourceBId = salesOrder.lines[4]?.id
+    if (
+      typeof firstSourceId !== 'string'
+      || typeof secondSourceId !== 'string'
+      || typeof customSourceId !== 'string'
+      || typeof distinctSourceAId !== 'string'
+      || typeof distinctSourceBId !== 'string'
+    ) {
       throw new Error('Sales source lines were not persisted')
     }
     splitSourceLineId = firstSourceId
     concurrentSourceLineId = secondSourceId
+    customSourceLineId = customSourceId
+    concurrentDistinctSourceAId = distinctSourceAId
+    concurrentDistinctSourceBId = distinctSourceBId
 
     const dictionaryLookup = {
       requireEffectiveValue: jest.fn((
@@ -272,6 +304,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       numbering,
       new AuditService(),
       new PurchaseOrderCreateDependencyService(dictionaryLookup, accessControl),
+      new SalesOrderPurchaseCoverageService(new AuditService()),
       { businessToday: () => '2026-08-27' },
     )
     mutations = new PurchaseOrderMutationService(
@@ -307,7 +340,15 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
           await transaction.$executeRawUnsafe(
             'ALTER TABLE "sales_order_documents" DISABLE TRIGGER "sales_order_documents_invariants_trigger"',
           )
+          // 销售履约历史是 append-only；隔离 E2E 只在本清理事务内精确停用
+          // 删除门禁，恢复后再提交，不改变任何生产运行时规则。
+          await transaction.$executeRawUnsafe(
+            'ALTER TABLE "sales_order_status_history" DISABLE TRIGGER "sales_order_status_history_immutable_trigger"',
+          )
           await transaction.salesOrderDocument.deleteMany({
+            where: { salesOrderId },
+          })
+          await transaction.salesOrderStatusHistory.deleteMany({
             where: { salesOrderId },
           })
           await transaction.salesOrderLine.deleteMany({
@@ -320,6 +361,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
             where: { id: issuanceVoucherMediaAssetId },
           })
           await transaction.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE')
+          await transaction.$executeRawUnsafe(
+            'ALTER TABLE "sales_order_status_history" ENABLE TRIGGER "sales_order_status_history_immutable_trigger"',
+          )
           await transaction.$executeRawUnsafe(
             'ALTER TABLE "sales_order_documents" ENABLE TRIGGER "sales_order_documents_invariants_trigger"',
           )
@@ -384,6 +428,29 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     }
   }
 
+  function linkedCustomInput(sourceSalesOrderLineId: string, quantity: number) {
+    const total = String(15 * quantity)
+    return {
+      purchaseType: 'SALES_LINKED',
+      salesOrderId,
+      supplierValue,
+      orderDate: '2026-08-27',
+      lines: [{
+        lineType: 'CUSTOM',
+        name: '采购侧临时产品',
+        description: '采购覆盖 E2E',
+        sourceSalesOrderLineId,
+        referencePurchaseUnitPriceAmount: '15',
+        actualPurchaseUnitPriceAmount: '15',
+        quantity,
+      }],
+      purchaseTotalAmount: total,
+      depositDueAmount: '0',
+      balanceDueAmount: total,
+      remark: null,
+    }
+  }
+
   it('enforces admin stock creation and derives payment/pending state', async () => {
     const idempotencyKey = randomUUID()
     const stockInput = {
@@ -411,6 +478,10 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     const createdId = await commands.create(context(idempotencyKey), stockInput)
     await expect(commands.create(context(idempotencyKey), stockInput))
       .resolves.toBe(createdId)
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { fulfillmentStatus: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
     const created = await queries.getById(createdId)
     expect(created).toMatchObject({
       purchaseType: 'STOCK',
@@ -444,7 +515,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       paymentStatus: 'PAID',
       amounts: { paidAmount: '25.0000', outstandingAmount: '0.0000' },
     })
-    for (const toStatus of ['ORDERED', 'PREPARING', 'SHIPPED', 'SIGNED'] as const) {
+    for (const toStatus of ['PREPARING', 'SHIPPED', 'SIGNED'] as const) {
       await mutations.updateFulfillmentStatus({
         actorUserId, requestId: `purchase-${toStatus}-${suffix}`,
       }, createdId, { toStatus })
@@ -491,6 +562,10 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       _sum: { quantity: true },
     })
     expect(aggregate._sum.quantity).toBe(2)
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { fulfillmentStatus: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
   })
 
   it('serializes concurrent source claims so at most one transaction succeeds', async () => {
@@ -510,5 +585,100 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       _sum: { quantity: true },
     })
     expect(aggregate._sum.quantity).toBe(1)
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { fulfillmentStatus: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
+  })
+
+  it('counts CUSTOM purchases cumulatively without advancing incomplete orders', async () => {
+    const firstKey = randomUUID()
+    const secondKey = randomUUID()
+    await commands.create(
+      context(firstKey),
+      linkedCustomInput(customSourceLineId, 1),
+    )
+    const secondId = await commands.create(
+      context(secondKey),
+      linkedCustomInput(customSourceLineId, 1),
+    )
+    await expect(commands.create(
+      context(secondKey),
+      linkedCustomInput(customSourceLineId, 1),
+    )).resolves.toBe(secondId)
+
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { fulfillmentStatus: true, version: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PENDING', version: 1 })
+    await expect(prisma.salesOrderStatusHistory.count({
+      where: { salesOrderId, dimension: 'FULFILLMENT' },
+    })).resolves.toBe(0)
+  })
+
+  it('serializes disjoint final purchases and advances exactly once', async () => {
+    const firstKey = randomUUID()
+    const secondKey = randomUUID()
+    const firstInput = linkedInput(concurrentDistinctSourceAId, 1)
+    const secondInput = linkedInput(concurrentDistinctSourceBId, 1)
+    const attempts = [
+      { idempotencyKey: firstKey, input: firstInput },
+      { idempotencyKey: secondKey, input: secondInput },
+    ] as const
+    const initialResults = await Promise.allSettled(attempts.map(attempt => (
+      commands.create(context(attempt.idempotencyKey), attempt.input)
+    )))
+    expect(initialResults.filter(result => result.status === 'fulfilled').length)
+      .toBeGreaterThanOrEqual(1)
+    for (const [index, result] of initialResults.entries()) {
+      if (result.status === 'rejected') {
+        expect(result.reason).toMatchObject({
+          code: 'PURCHASE_ORDER_STATE_CHANGED',
+        })
+        const attempt = attempts[index]
+        if (attempt === undefined) throw new Error('Concurrent attempt missing')
+        await commands.create(
+          context(attempt.idempotencyKey),
+          attempt.input,
+        )
+      }
+    }
+    const [firstId, secondId] = await Promise.all([
+      commands.create(context(firstKey), firstInput),
+      commands.create(context(secondKey), secondInput),
+    ])
+    await expect(commands.create(context(firstKey), firstInput)).resolves.toBe(firstId)
+    await expect(commands.create(context(secondKey), secondInput)).resolves.toBe(secondId)
+
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { fulfillmentStatus: true, version: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PREPARING', version: 2 })
+    await expect(prisma.salesOrderStatusHistory.findMany({
+      where: { salesOrderId, dimension: 'FULFILLMENT' },
+      select: {
+        fromStatus: true,
+        toStatus: true,
+        changedByUserId: true,
+      },
+    })).resolves.toEqual([{
+      fromStatus: 'PENDING',
+      toStatus: 'PREPARING',
+      changedByUserId: actorUserId,
+    }])
+    const auditEvents = await prisma.auditEvent.findMany({
+      where: {
+        eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED',
+        targetId: salesOrderId,
+      },
+      select: { metadata: true },
+    })
+    expect(auditEvents).toHaveLength(1)
+    expect(auditEvents[0]?.metadata).toMatchObject({
+      automatic: true,
+      fromStatus: 'PENDING',
+      toStatus: 'PREPARING',
+      trigger: 'PURCHASE_COVERAGE',
+    })
   })
 })

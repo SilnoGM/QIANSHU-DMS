@@ -8,6 +8,9 @@ import type {
   PurchaseOrderCreateDependencyService,
 } from './purchase-order-create-dependency.service'
 import { calculatePurchaseOrderCreateFingerprint } from './purchase-order-create-fingerprint'
+import type {
+  SalesOrderPurchaseCoverageService,
+} from './sales-order-purchase-coverage.service'
 
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -86,14 +89,27 @@ function setup() {
         }],
       }),
   }
+  const salesProgress = {
+    advanceWhenFullyCovered: jest.fn<Promise<void>, [unknown, unknown]>()
+      .mockResolvedValue(undefined),
+  }
   const service = new PurchaseOrderCommandService(
     prisma as unknown as PrismaService,
     numbering as unknown as NumberingGeneratorService,
     audit as unknown as AuditService,
     dependencies as unknown as PurchaseOrderCreateDependencyService,
+    salesProgress as unknown as SalesOrderPurchaseCoverageService,
     { businessToday: () => '2026-08-27' },
   )
-  return { audit, dependencies, numbering, prisma, service, transaction }
+  return {
+    audit,
+    dependencies,
+    numbering,
+    prisma,
+    salesProgress,
+    service,
+    transaction,
+  }
 }
 
 describe('PurchaseOrderCommandService', () => {
@@ -150,6 +166,21 @@ describe('PurchaseOrderCommandService', () => {
         actualPurchaseUnitPriceAmount: '10.0000',
       })],
     })
+    expect(fixture.salesProgress.advanceWhenFullyCovered).toHaveBeenCalledWith(
+      fixture.transaction,
+      {
+        actorUserId: ACTOR_ID,
+        purchaseOrderId: ORDER_ID,
+        purchaseOrderNo: 'PO-20260827-0001',
+        requestId: 'request-1',
+        salesOrderId: '11111111-1111-4111-8111-111111111111',
+      },
+    )
+    expect(
+      fixture.transaction.purchaseOrderLine.createMany.mock.invocationCallOrder[0],
+    ).toBeLessThan(
+      fixture.salesProgress.advanceWhenFullyCovered.mock.invocationCallOrder[0] ?? 0,
+    )
     const auditInput = fixture.audit.record.mock.calls[0]?.[1]
     expect(auditInput).toMatchObject({
       eventType: 'PURCHASE_ORDER_CREATED',
@@ -204,6 +235,7 @@ describe('PurchaseOrderCommandService', () => {
       | { data?: Record<string, unknown> }
       | undefined
     expect(createInput?.data).toMatchObject({ paymentStatus: 'PAID' })
+    expect(fixture.salesProgress.advanceWhenFullyCovered).not.toHaveBeenCalled()
   })
 
   it('returns the existing matching order without dependencies or another number', async () => {
@@ -224,6 +256,7 @@ describe('PurchaseOrderCommandService', () => {
     }, input())).resolves.toBe(ORDER_ID)
     expect(fixture.dependencies.requireDependencies).not.toHaveBeenCalled()
     expect(fixture.numbering.generateScoped).not.toHaveBeenCalled()
+    expect(fixture.salesProgress.advanceWhenFullyCovered).not.toHaveBeenCalled()
   })
 
   it('rejects a reused key for another actor or normalized payload', async () => {
@@ -293,5 +326,20 @@ describe('PurchaseOrderCommandService', () => {
     })
     expect(fixture.numbering.generateScoped).toHaveBeenCalledTimes(1)
     expect(fixture.transaction.purchaseOrder.create).not.toHaveBeenCalled()
+  })
+
+  it('does not return a created order when sales progress synchronization fails', async () => {
+    const fixture = setup()
+    fixture.salesProgress.advanceWhenFullyCovered.mockRejectedValue(
+      new ApiException(409, 'PURCHASE_ORDER_STATE_CHANGED', '采购订单依赖状态已变化，请重试'),
+    )
+
+    await expect(fixture.service.create({
+      actorUserId: ACTOR_ID,
+      requestId: 'request-progress-failed',
+      idempotencyKey: IDEMPOTENCY_KEY,
+    }, input())).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_STATE_CHANGED',
+    })
   })
 })

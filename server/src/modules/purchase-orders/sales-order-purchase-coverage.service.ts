@@ -1,0 +1,150 @@
+import { HttpStatus, Injectable } from '@nestjs/common'
+
+import { Prisma, type Prisma as PrismaTypes } from '../../generated/prisma/client'
+import type {
+  SalesOrderFulfillmentStatus,
+  SalesOrderStatus,
+} from '../../generated/prisma/enums'
+import {
+  AuditActorType,
+  AuditEventType,
+  AuditOutcome,
+} from '../../generated/prisma/enums'
+import { ApiException } from '../../infrastructure/http/api.exception'
+import { AuditService } from '../audit/audit.service'
+import {
+  assertSalesOrderFulfillmentTransition,
+} from '../sales-orders/domain/sales-order-state-machine'
+
+interface SalesLineQuantity {
+  readonly id: string
+  readonly quantity: number
+}
+
+interface LockedSalesOrder {
+  readonly fulfillmentStatus: SalesOrderFulfillmentStatus
+  readonly id: string
+  readonly orderStatus: SalesOrderStatus
+}
+
+export interface AdvanceSalesOrderPurchaseProgressInput {
+  readonly actorUserId: string
+  readonly purchaseOrderId: string
+  readonly purchaseOrderNo: string
+  readonly requestId: string
+  readonly salesOrderId: string
+}
+
+/**
+ * 覆盖判断必须以销售明细 ID 为粒度。相同产品可以出现在多条销售明细中，
+ * CUSTOM 也没有 productId，因此不能按产品字段合并。
+ */
+export function isSalesOrderPurchaseFullyCovered(
+  salesLines: readonly SalesLineQuantity[],
+  purchasedBySource: ReadonlyMap<string, number>,
+): boolean {
+  return salesLines.length > 0 && salesLines.every(line => (
+    (purchasedBySource.get(line.id) ?? 0) >= line.quantity
+  ))
+}
+
+function stateChangedError(): ApiException {
+  return new ApiException(
+    HttpStatus.CONFLICT,
+    'PURCHASE_ORDER_STATE_CHANGED',
+    '采购订单依赖状态已变化，请重试',
+  )
+}
+
+@Injectable()
+export class SalesOrderPurchaseCoverageService {
+  constructor(private readonly audit: AuditService) {}
+
+  async advanceWhenFullyCovered(
+    transaction: PrismaTypes.TransactionClient,
+    input: AdvanceSalesOrderPurchaseProgressInput,
+  ): Promise<void> {
+    // 本次采购可能只锁定部分销售明细。额外锁定销售订单主行，才能让同一销售
+    // 订单下、采购不同明细的并发创建也按统一顺序完成最终覆盖判定。
+    const locked = await transaction.$queryRaw<LockedSalesOrder[]>(Prisma.sql`
+      SELECT
+        "id",
+        "order_status" AS "orderStatus",
+        "fulfillment_status" AS "fulfillmentStatus"
+      FROM "sales_orders"
+      WHERE "id" = CAST(${input.salesOrderId} AS uuid)
+      FOR UPDATE
+    `)
+    const order = locked[0]
+    if (locked.length !== 1 || order?.orderStatus !== 'CONFIRMED') {
+      throw stateChangedError()
+    }
+    // 已经进入备货或后续物流阶段时只保留现状，不允许覆盖、倒退或跳级。
+    if (order.fulfillmentStatus !== 'PENDING') return
+
+    const salesLines = await transaction.salesOrderLine.findMany({
+      where: { salesOrderId: input.salesOrderId },
+      select: { id: true, quantity: true },
+    })
+    if (salesLines.length === 0) return
+
+    const purchasedRows = await transaction.purchaseOrderLine.groupBy({
+      by: ['sourceSalesOrderLineId'],
+      where: {
+        sourceSalesOrderLineId: { in: salesLines.map(line => line.id) },
+        purchaseOrder: {
+          salesOrderId: input.salesOrderId,
+          purchaseType: 'SALES_LINKED',
+          orderStatus: { not: 'CANCELLED' },
+        },
+      },
+      _sum: { quantity: true },
+    })
+    const purchasedBySource = new Map<string, number>()
+    for (const row of purchasedRows) {
+      if (row.sourceSalesOrderLineId !== null) {
+        purchasedBySource.set(
+          row.sourceSalesOrderLineId,
+          row._sum.quantity ?? 0,
+        )
+      }
+    }
+    if (!isSalesOrderPurchaseFullyCovered(salesLines, purchasedBySource)) return
+
+    assertSalesOrderFulfillmentTransition('PENDING', 'PREPARING', {
+      hasActiveDeliveryReceipt: false,
+    })
+    await transaction.salesOrder.update({
+      where: { id: input.salesOrderId },
+      data: {
+        fulfillmentStatus: 'PREPARING',
+        version: { increment: 1 },
+      },
+    })
+    await transaction.salesOrderStatusHistory.create({ data: {
+      salesOrderId: input.salesOrderId,
+      dimension: 'FULFILLMENT',
+      fromStatus: 'PENDING',
+      toStatus: 'PREPARING',
+      reason: '采购订单提交后已覆盖全部销售产品',
+      changedByUserId: input.actorUserId,
+    } })
+    await this.audit.record(transaction, {
+      eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.USER,
+      actorUserId: input.actorUserId,
+      targetType: 'SALES_ORDER',
+      targetId: input.salesOrderId,
+      requestId: input.requestId,
+      metadata: {
+        automatic: true,
+        fromStatus: 'PENDING',
+        purchaseOrderId: input.purchaseOrderId,
+        purchaseOrderNo: input.purchaseOrderNo,
+        toStatus: 'PREPARING',
+        trigger: 'PURCHASE_COVERAGE',
+      },
+    })
+  }
+}

@@ -15,6 +15,7 @@ import { PurchaseOrderProductImageService } from './products/purchase-order-prod
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
 import { PurchaseOrdersController } from './purchase-orders.controller'
+import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { PurchaseOrdersController } from './purchase-orders.controller'
     PurchaseOrderQueryService,
     PurchaseOrderSourceQueryService,
     PurchaseOrderCreateDependencyService,
+    SalesOrderPurchaseCoverageService,
     PurchaseOrderCommandService,
     PurchaseOrderMutationService,
     PurchaseOrderDocumentService,

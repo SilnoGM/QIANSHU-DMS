@@ -2,7 +2,7 @@
 
 ## 1. 文档状态
 
-- 状态：已确认
+- 状态：已完成
 - 编写日期：2026-09-01
 - 需求规格：[requirements.md](./requirements.md)
 - 技术设计：[design.md](./design.md)
@@ -25,7 +25,7 @@
   - 创建本地提交：`docs: 定义销售采购覆盖联动规则`。
   - _Requirements: R1, R2, R3, R4_
 
-- [ ] 2. 为覆盖算法和联动服务建立失败测试
+- [x] 2. 为覆盖算法和联动服务建立失败测试
   - 新增 `sales-order-purchase-coverage.service.spec.ts`。
   - 覆盖空销售明细、部分覆盖、累计全部覆盖、缺失采购汇总、相同产品多销售行和 `CUSTOM` 行。
   - 覆盖 `PENDING -> PREPARING` 时的订单更新、版本递增、状态历史和审计写入。
@@ -34,7 +34,7 @@
   - 运行定向测试并确认因实现缺失或行为缺失而失败，不接受测试装配错误作为有效 RED。
   - _Requirements: R1.1-R1.5, R2.1-R2.5, R3.1-R3.5, R4.1-R4.3_
 
-- [ ] 3. 实现销售订单采购覆盖联动服务
+- [x] 3. 实现销售订单采购覆盖联动服务
   - 新增 `SalesOrderPurchaseCoverageService` 和纯函数 `isSalesOrderPurchaseFullyCovered()`。
   - 使用参数化 `SELECT ... FOR UPDATE` 锁定销售订单主行。
   - 查询销售订单全部销售明细，并按 `sourceSalesOrderLineId` 汇总非取消销售关联采购数量。
@@ -45,7 +45,7 @@
   - 运行任务 2 的定向测试并确认转绿。
   - _Requirements: R1, R2, R3, R4.1-R4.3_
 
-- [ ] 4. 将联动服务接入采购创建事务
+- [x] 4. 将联动服务接入采购创建事务
   - 在 `PurchaseOrdersModule` 注册 `SalesOrderPurchaseCoverageService`。
   - 在 `PurchaseOrderCommandService` 注入服务。
   - 更新 `purchase-order-command.service.spec.ts` 的测试夹具和失败断言。
@@ -54,7 +54,7 @@
   - 保持现有采购创建审计、发号、指纹和错误映射不变。
   - _Requirements: R1.1, R2.1-R2.5, R3.5, R4.1, R4.4-R4.5_
 
-- [ ] 5. 增加隔离 PostgreSQL 端到端测试
+- [x] 5. 增加隔离 PostgreSQL 端到端测试
   - 扩展 `purchase-order-service.e2e-spec.ts` 的销售订单和产品明细测试夹具。
   - 验证单张部分采购保持 `PENDING`。
   - 验证后续采购累计补齐后进入 `PREPARING`。
@@ -65,18 +65,18 @@
   - 验证备货采购不修改销售订单。
   - _Requirements: R1.2-R1.5, R2, R3, R4_
 
-- [ ] 6. 完成服务端与仓库级验证
+- [x] 6. 完成服务端与仓库级验证
   - 运行定向单元测试：
     `pnpm -C server test -- sales-order-purchase-coverage.service.spec.ts purchase-order-command.service.spec.ts --runInBand`。
   - 运行服务端类型检查：`pnpm -C server typecheck`。
   - 运行服务端代码规范检查：`pnpm -C server lint`。
   - 运行隔离数据库 E2E：
-    `pnpm -C server test:e2e -- purchase-order-service.e2e-spec.ts`。
+    `node scripts/ci-postgres.mjs -- zsh -lc 'pnpm -C server db:migrate:deploy && pnpm -C server test:e2e -- purchase-order-service.e2e-spec.ts'`。
   - 运行仓库总检查：`node --run check`。
   - 运行 `git diff --check`，并确认没有 API、Schema、migration、OpenAPI 或 Web 变更。
   - _Requirements: R1, R2, R3, R4_
 
-- [ ] 7. 更新任务状态并创建业务实现提交
+- [x] 7. 更新任务状态并创建业务实现提交
   - 将已完成任务逐项勾选，并把本文件状态更新为已完成。
   - 检查 Git 暂存范围，不包含 `.env`、日志、生成目录或无关用户改动。
   - 创建本地提交：`feat: 联动销售订单采购进度`。
