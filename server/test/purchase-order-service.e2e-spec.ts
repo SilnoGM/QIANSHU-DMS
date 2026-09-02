@@ -27,6 +27,15 @@ function requireDatabaseUrl(): string {
   return value
 }
 
+/** 查询上下文按数据库精度返回四位小数；修改命令仍遵守销售录入最多两位小数的契约。 */
+function amountInputFromSnapshot(value: string): string {
+  const separator = value.indexOf('.')
+  if (separator < 0) return value
+  const integer = value.slice(0, separator)
+  const fraction = value.slice(separator + 1).replace(/0+$/u, '')
+  return fraction === '' ? integer : `${integer}.${fraction}`
+}
+
 describe('PurchaseOrder services with isolated PostgreSQL', () => {
   jest.setTimeout(60_000)
 
@@ -808,7 +817,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         lineId: line.id,
         name: line.productName,
         description: line.description,
-        actualUnitPriceAmount: line.actualUnitPriceAmount,
+        actualUnitPriceAmount: amountInputFromSnapshot(line.actualUnitPriceAmount),
         desiredQuantity: line.quantity,
       })),
       newLines: [{
