@@ -290,19 +290,24 @@ export function synchronizePurchaseOrderSourceLines(input: {
     const option = sourceLine.productId === null
       ? undefined
       : optionByProductId.get(sourceLine.productId)
-    if (sourceLine.purchasedQuantity > 0) {
-      // 已采购数量使用销售明细快照描述历史事实；当前产品档案只补充可选主图，
-      // 不用当前名称覆盖销售订单快照，也不向本单可编辑模型泄漏历史数量。
+    for (const purchasedLine of sourceLine.purchasedLines) {
+      // 每条有效采购明细独立展示，价格、小计和备注使用采购单保存时的快照；
+      // 当前产品档案只补充可选主图，不会把历史行并入本次采购表单模型。
       readOnlyLines.push({
-        description: sourceLine.description ?? '',
-        key: `purchased-${sourceLine.id}`,
+        actualSubtotalAmount: purchasedLine.lineTotalAmount,
+        actualUnitPriceAmount: purchasedLine.actualPurchaseUnitPriceAmount,
+        description: purchasedLine.description ?? '',
+        key: `purchased-${purchasedLine.id}`,
         lineType: sourceLine.lineType,
         mainImage: sourceLine.lineType === 'CATALOG'
           ? option?.mainImage ?? null
           : null,
         name: sourceLine.productName,
         productNo: sourceLine.productNo,
-        quantity: String(sourceLine.purchasedQuantity),
+        quantity: String(purchasedLine.quantity),
+        standardUnitPriceAmount: purchasedLine.referencePurchaseUnitPriceAmount,
+        statusDescription:
+          `该销售订单中的本产品已经存在有效的采购单，已采购数量${purchasedLine.quantity}件`,
         statusLabel: '已采购',
       })
     }

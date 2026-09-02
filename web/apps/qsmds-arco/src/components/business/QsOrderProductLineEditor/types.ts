@@ -32,8 +32,12 @@ export interface OrderProductLineReadOnlyModel {
   readonly productNo: string | null
   readonly name: string
   readonly description: string
+  readonly standardUnitPriceAmount: string
+  readonly actualUnitPriceAmount: string
+  readonly actualSubtotalAmount: string
   readonly quantity: string
   readonly statusLabel: string
+  readonly statusDescription: string
   readonly mainImage: null | {
     readonly id: string
     readonly contentUrl: string

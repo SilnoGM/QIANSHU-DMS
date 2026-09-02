@@ -341,6 +341,29 @@ describe('PurchaseOrdersController OpenAPI', () => {
     document = await createOpenApiDocument(PurchaseOrdersContractModule)
   })
 
+  it('publishes effective purchased-line snapshots for sales-source reconciliation', () => {
+    expect(document.components?.schemas).toMatchObject({
+      PurchaseOrderSourcePurchasedLineDto: {
+        properties: {
+          id: { format: 'uuid', type: 'string' },
+          referencePurchaseUnitPriceAmount: { type: 'string' },
+          actualPurchaseUnitPriceAmount: { type: 'string' },
+          quantity: { minimum: 1, type: 'integer' },
+          lineTotalAmount: { type: 'string' },
+          description: { nullable: true, type: 'string' },
+        },
+      },
+      PurchaseOrderSourceSalesOrderLineDto: {
+        properties: {
+          purchasedLines: {
+            items: { $ref: '#/components/schemas/PurchaseOrderSourcePurchasedLineDto' },
+            type: 'array',
+          },
+        },
+      },
+    })
+  })
+
   it('publishes the fixed purchase API paths and stable operation ids', () => {
     expect(document.paths['/api/purchase-orders']?.get)
       .toMatchObject({ operationId: 'purchase_orders_list' })

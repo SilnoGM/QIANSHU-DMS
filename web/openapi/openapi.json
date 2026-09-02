@@ -48082,6 +48082,40 @@
           "customerName"
         ]
       },
+      "PurchaseOrderSourcePurchasedLineDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "referencePurchaseUnitPriceAmount": {
+            "type": "string"
+          },
+          "actualPurchaseUnitPriceAmount": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lineTotalAmount": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "referencePurchaseUnitPriceAmount",
+          "actualPurchaseUnitPriceAmount",
+          "quantity",
+          "lineTotalAmount",
+          "description"
+        ]
+      },
       "PurchaseOrderSourceSalesOrderLineDto": {
         "type": "object",
         "properties": {
@@ -48133,6 +48167,12 @@
           "remainingQuantity": {
             "type": "integer",
             "minimum": 0
+          },
+          "purchasedLines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderSourcePurchasedLineDto"
+            }
           }
         },
         "required": [
@@ -48146,7 +48186,8 @@
           "description",
           "quantity",
           "purchasedQuantity",
-          "remainingQuantity"
+          "remainingQuantity",
+          "purchasedLines"
         ]
       },
       "PurchaseOrderSourceSalesOrderLinesDto": {

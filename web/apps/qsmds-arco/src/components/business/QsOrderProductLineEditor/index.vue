@@ -534,10 +534,20 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               </div>
             </td>
             <td data-column="reference-unit-price" class="p-3 whitespace-nowrap">
-              —
+              <AmountDisplay
+                :value="line.standardUnitPriceAmount"
+                :currency="currency"
+                :currencies="currencies"
+                class="text-muted-foreground"
+              />
             </td>
             <td class="p-3 whitespace-nowrap">
-              —
+              <AmountDisplay
+                :value="line.actualUnitPriceAmount"
+                :currency="currency"
+                :currencies="currencies"
+                class="text-muted-foreground"
+              />
             </td>
             <td v-if="showDiscountRate" class="p-3 whitespace-nowrap">
               —
@@ -546,7 +556,12 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               {{ line.quantity }}
             </td>
             <td class="p-3 whitespace-nowrap">
-              —
+              <AmountDisplay
+                :value="line.actualSubtotalAmount"
+                :currency="currency"
+                :currencies="currencies"
+                class="text-muted-foreground"
+              />
             </td>
             <td class="p-3">
               <FaTooltip :text="line.description" :disabled="line.description === ''">
@@ -556,9 +571,18 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               </FaTooltip>
             </td>
             <td class="p-3 text-right whitespace-nowrap">
-              <span class="font-medium inline-flex gap-1 items-center">
-                <FaIcon name="i-lucide:circle-check" class="size-4" aria-hidden="true" />
-                {{ line.statusLabel }}
+              <span class="font-medium inline-flex gap-1.5 items-center">
+                <span>{{ line.statusLabel }}</span>
+                <FaTooltip :text="line.statusDescription">
+                  <span
+                    tabindex="0"
+                    role="img"
+                    :aria-label="line.statusDescription"
+                    class="outline-none rounded-full inline-flex size-5 cursor-help items-center justify-center focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <FaIcon name="i-lucide:info" class="size-4" aria-hidden="true" />
+                  </span>
+                </FaTooltip>
               </span>
             </td>
           </tr>

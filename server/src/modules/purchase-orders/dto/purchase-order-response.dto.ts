@@ -275,6 +275,21 @@ export class PurchaseOrderSourceSalesOrdersDto {
   @ApiProperty({ type: 'integer' }) readonly total!: number
 }
 
+/**
+ * 销售来源中已经形成有效采购单的明细快照。
+ *
+ * 金额与备注必须读取采购明细保存时的事实，不能用当前产品成本或销售明细说明
+ * 回填，否则历史采购核对会随主数据变化而漂移。
+ */
+export class PurchaseOrderSourcePurchasedLineDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly referencePurchaseUnitPriceAmount!: string
+  @ApiProperty({ type: 'string' }) readonly actualPurchaseUnitPriceAmount!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
+  @ApiProperty({ type: 'string' }) readonly lineTotalAmount!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly description!: string | null
+}
+
 export class PurchaseOrderSourceSalesOrderLineDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'integer' }) readonly lineNumber!: number
@@ -288,6 +303,8 @@ export class PurchaseOrderSourceSalesOrderLineDto {
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly purchasedQuantity!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly remainingQuantity!: number
+  @ApiProperty({ type: () => [PurchaseOrderSourcePurchasedLineDto] })
+  readonly purchasedLines!: readonly PurchaseOrderSourcePurchasedLineDto[]
 }
 
 export class PurchaseOrderSourceSalesOrderLinesDto {

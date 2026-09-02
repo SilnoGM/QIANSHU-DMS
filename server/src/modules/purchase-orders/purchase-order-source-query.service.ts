@@ -285,22 +285,44 @@ export class PurchaseOrderSourceQueryService {
     const sourceIds = lines.map(line => line.id)
     const purchasedRows = sourceIds.length === 0
       ? []
-      : await this.prisma.purchaseOrderLine.groupBy({
-          by: ['sourceSalesOrderLineId'],
+      : await this.prisma.purchaseOrderLine.findMany({
           where: {
             sourceSalesOrderLineId: { in: sourceIds },
             purchaseOrder: { orderStatus: { not: 'CANCELLED' } },
           },
-          _sum: { quantity: true },
+          orderBy: [
+            { purchaseOrder: { createdAt: 'asc' } },
+            { purchaseOrderId: 'asc' },
+            { lineNumber: 'asc' },
+            { id: 'asc' },
+          ],
+          select: {
+            id: true,
+            sourceSalesOrderLineId: true,
+            referencePurchaseUnitPriceAmount: true,
+            actualPurchaseUnitPriceAmount: true,
+            quantity: true,
+            lineTotalAmount: true,
+            descriptionSnapshot: true,
+          },
         })
-    const purchasedBySource = new Map(purchasedRows.map(row => [
-      row.sourceSalesOrderLineId,
-      row._sum.quantity ?? 0,
-    ]))
+    const purchasedBySource = new Map<string, typeof purchasedRows>()
+    for (const row of purchasedRows) {
+      if (row.sourceSalesOrderLineId === null) {
+        continue
+      }
+      const rows = purchasedBySource.get(row.sourceSalesOrderLineId) ?? []
+      rows.push(row)
+      purchasedBySource.set(row.sourceSalesOrderLineId, rows)
+    }
     return {
       salesOrder,
       items: lines.map((line) => {
-        const purchasedQuantity = purchasedBySource.get(line.id) ?? 0
+        const purchasedLines = purchasedBySource.get(line.id) ?? []
+        const purchasedQuantity = purchasedLines.reduce(
+          (sum, purchasedLine) => sum + purchasedLine.quantity,
+          0,
+        )
         return {
           id: line.id,
           lineNumber: line.lineNumber,
@@ -313,6 +335,16 @@ export class PurchaseOrderSourceQueryService {
           quantity: line.quantity,
           purchasedQuantity,
           remainingQuantity: Math.max(0, line.quantity - purchasedQuantity),
+          purchasedLines: purchasedLines.map(purchasedLine => ({
+            id: purchasedLine.id,
+            referencePurchaseUnitPriceAmount:
+              fixed4(purchasedLine.referencePurchaseUnitPriceAmount),
+            actualPurchaseUnitPriceAmount:
+              fixed4(purchasedLine.actualPurchaseUnitPriceAmount),
+            quantity: purchasedLine.quantity,
+            lineTotalAmount: fixed4(purchasedLine.lineTotalAmount),
+            description: purchasedLine.descriptionSnapshot,
+          })),
         }
       }),
     }

@@ -64,9 +64,14 @@ function setup() {
       }]),
     },
     purchaseOrderLine: {
-      groupBy: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+        id: 'purchase-line-id',
         sourceSalesOrderLineId: 'sales-line-id',
-        _sum: { quantity: 2 },
+        referencePurchaseUnitPriceAmount: decimal('12.34'),
+        actualPurchaseUnitPriceAmount: decimal('11.50'),
+        quantity: 2,
+        lineTotalAmount: decimal('23.00'),
+        descriptionSnapshot: '历史采购备注',
       }]),
     },
   }
@@ -248,7 +253,36 @@ describe('PurchaseOrderSourceQueryService', () => {
         quantity: 5,
         purchasedQuantity: 2,
         remainingQuantity: 3,
+        purchasedLines: [{
+          id: 'purchase-line-id',
+          referencePurchaseUnitPriceAmount: '12.3400',
+          actualPurchaseUnitPriceAmount: '11.5000',
+          quantity: 2,
+          lineTotalAmount: '23.0000',
+          description: '历史采购备注',
+        }],
       })],
+    })
+    expect(fixture.prisma.purchaseOrderLine.findMany).toHaveBeenCalledWith({
+      where: {
+        sourceSalesOrderLineId: { in: ['sales-line-id'] },
+        purchaseOrder: { orderStatus: { not: 'CANCELLED' } },
+      },
+      orderBy: [
+        { purchaseOrder: { createdAt: 'asc' } },
+        { purchaseOrderId: 'asc' },
+        { lineNumber: 'asc' },
+        { id: 'asc' },
+      ],
+      select: {
+        id: true,
+        sourceSalesOrderLineId: true,
+        referencePurchaseUnitPriceAmount: true,
+        actualPurchaseUnitPriceAmount: true,
+        quantity: true,
+        lineTotalAmount: true,
+        descriptionSnapshot: true,
+      },
     })
   })
 })
