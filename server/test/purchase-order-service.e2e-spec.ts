@@ -16,6 +16,7 @@ import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purcha
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
 import { SalesOrderAddOnService } from '../src/modules/sales-orders/sales-order-add-on.service'
+import { SalesOrderAddOnQueryService } from '../src/modules/sales-orders/sales-order-add-on-query.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
@@ -55,6 +56,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let queries: PurchaseOrderQueryService
   let sourceQueries: PurchaseOrderSourceQueryService
   let addOns: SalesOrderAddOnService
+  let addOnQueries: SalesOrderAddOnQueryService
   let salesMutations: SalesOrderMutationService
   let grantStockPermission = true
   let purchaseNumber = 0
@@ -323,6 +325,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new AuditService(),
       dictionaryLookup,
     )
+    addOnQueries = new SalesOrderAddOnQueryService(prisma, dictionaryLookup)
     salesMutations = new SalesOrderMutationService(
       prisma,
       new AuditService(),
@@ -969,5 +972,53 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       where: { id: salesOrderId },
       select: { fulfillmentStatus: true },
     })).resolves.toEqual({ fulfillmentStatus: 'PREPARING' })
+  })
+
+  it('uses persisted fulfillment and order status to enforce the pre-sea add-on boundary', async () => {
+    /*
+     * 这里直接切换隔离数据库中的状态，是为了只验证加购资格查询对持久化事实的
+     * 判断；履约状态机的逐步流转已由独立服务测试负责，避免本用例产生无关历史。
+     */
+    try {
+      for (const fulfillmentStatus of [
+        'PREPARING',
+        'LAND_TRANSIT',
+        'WAREHOUSE_ARRIVED',
+      ] as const) {
+        await prisma.salesOrder.update({
+          where: { id: salesOrderId },
+          data: { fulfillmentStatus },
+        })
+        await expect(addOnQueries.context(salesOrderId)).resolves.toMatchObject({
+          salesOrder: { fulfillmentStatus },
+        })
+      }
+
+      for (const fulfillmentStatus of ['SEA_TRANSIT', 'SIGNED'] as const) {
+        await prisma.salesOrder.update({
+          where: { id: salesOrderId },
+          data: { fulfillmentStatus },
+        })
+        await expect(addOnQueries.context(salesOrderId)).rejects.toMatchObject({
+          status: 422,
+          code: 'SALES_ORDER_ADD_ON_NOT_ALLOWED',
+        })
+      }
+
+      await prisma.salesOrder.update({
+        where: { id: salesOrderId },
+        data: { orderStatus: 'CANCELLED', fulfillmentStatus: 'PREPARING' },
+      })
+      await expect(addOnQueries.context(salesOrderId)).rejects.toMatchObject({
+        status: 422,
+        code: 'SALES_ORDER_ADD_ON_NOT_ALLOWED',
+      })
+    }
+    finally {
+      await prisma.salesOrder.update({
+        where: { id: salesOrderId },
+        data: { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' },
+      })
+    }
   })
 })

@@ -40,6 +40,7 @@ const SALES_ORDER_AUDIT_EVENT_TYPES = [
   'SALES_ORDER_PAYMENT_VOIDED',
   'SALES_ORDER_DOCUMENT_ATTACHED',
   'SALES_ORDER_DOCUMENT_DETACHED',
+  'SALES_ORDER_PRODUCT_APPENDED',
 ] as const
 
 const DICTIONARY_CONSTRAINTS = [
@@ -263,11 +264,12 @@ describe('dictionary management database schema', () => {
         `ALTER TYPE "audit_event_type" ADD VALUE '${eventType}'`,
       )
     }
-    // 产品、资金、销售订单与采购订单领域会在后续 append-only migration 扩展审计类型；
+    // 产品、资金、销售订单、销售加购与采购订单领域会在后续 append-only migration 扩展审计类型；
     // 字典测试锁定当前全量基线，同时只要求字典 migration 对自身八个类型负责。
-    expect(auditEventTypes).toHaveLength(71)
+    expect(auditEventTypes).toHaveLength(72)
     expect(auditEventTypes).toContain('PRODUCT_CREATED')
     expect(auditEventTypes).toContain('PRODUCT_UPDATED')
+    expect(auditEventTypes).toContain('SALES_ORDER_PRODUCT_APPENDED')
     expect(
       auditEventTypes.filter(eventType => eventType.startsWith('DICTIONARY_')),
     ).toEqual(DICTIONARY_AUDIT_EVENT_TYPES)

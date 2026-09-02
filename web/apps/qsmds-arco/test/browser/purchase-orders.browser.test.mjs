@@ -519,6 +519,13 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
           && document.body.innerText.includes('第 1 步，共 4 步')
       })()
     ))()`)
+    // 快捷入口会异步恢复来源明细；重选按钮恢复可用即表示来源加载已经结束，
+    // 此后点击下一步才能稳定验证“缺少供应商”的步骤校验，而不是加载中提示。
+    await page.waitFor(`[...document.querySelectorAll('button')].some(button => (
+      button.textContent?.trim() === '重选销售订单'
+      && button.getClientRects().length > 0
+      && !button.disabled
+    ))`)
 
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')]
@@ -530,7 +537,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
       ?.getClientRects().length > 0`)
 
     await selectVisibleComboboxOption(page, '选择采购供应商', supplierLabel)
-    await clickVisibleButton(page, '选择销售订单')
+    // 销售待办快捷入口已自动绑定来源，此处验证的是重选弹窗与取消后保留关联。
+    await clickVisibleButton(page, '重选销售订单')
     await waitForVisibleDialog(page, '选择销售订单')
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]

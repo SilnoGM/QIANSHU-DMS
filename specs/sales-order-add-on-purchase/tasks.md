@@ -198,9 +198,9 @@ pnpm -C server test:prisma-drift-gate
 - [x] 扩展采购服务 E2E，验证未采购、部分采购、全部采购三个视图及可信计数。
 - [x] 验证取消采购后按最新有效采购事实重新分类。
 - [x] 验证相同产品多行和 CUSTOM 的逐销售明细剩余数量。
-- [ ] 扩展销售服务 E2E，验证 PREPARING、LAND_TRANSIT、WAREHOUSE_ARRIVED 可加购。
-- [ ] 验证 SEA_TRANSIT、SIGNED 和非 `CONFIRMED` 硬拦截。
-- [ ] 验证缺少任一权限时 POST 和只读加购端点均为 403。
+- [x] 扩展销售服务 E2E，验证 PREPARING、LAND_TRANSIT、WAREHOUSE_ARRIVED 可加购。
+- [x] 验证 SEA_TRANSIT、SIGNED 和非 `CONFIRMED` 硬拦截。
+- [x] 验证缺少任一权限时 POST 和只读加购端点均为 403。
 - [x] 验证产品、金额、付款状态、金额修订、付款历史和逐行审计一次提交。
 - [x] 并发提交同一 `expectedVersion`，断言只有一个成功。
 - [x] 加购成功后订单进入部分采购视图；补齐新增行后退出部分视图且原履约状态不变。
@@ -307,15 +307,15 @@ pnpm -C server test:prisma-drift-gate
 
 目标：在不应用开发数据库 migration 的前提下完成代码、契约和隔离数据库验证。
 
-- [ ] 运行全部定向 Server 单元和 Controller 测试。
-- [ ] 运行 `prisma:validate`、drift gate、Server typecheck 和 lint。
-- [ ] 运行隔离 PostgreSQL E2E，包含 migration、三视图、加购、并发和后续采购。
-- [ ] 运行 `contract:check`。
-- [ ] 运行全部定向 Web API、logic、页面和组件测试。
-- [ ] 运行 Web typecheck、ESLint、Stylelint 和生产构建。
-- [ ] 运行 `node --run check`；任何既有或新增失败均如实报告，不掩盖。
-- [ ] 运行 `git diff --check` 并审计变更只在确认范围内。
-- [ ] 确认未对开发数据库应用 migration。
+- [x] 运行全部定向 Server 单元和 Controller 测试。
+- [x] 运行 `prisma:validate`、drift gate、Server typecheck 和 lint。
+- [x] 运行隔离 PostgreSQL E2E，包含 migration、三视图、加购、并发和后续采购。
+- [x] 运行 `contract:check`。
+- [x] 运行全部定向 Web API、logic、页面和组件测试。
+- [x] 运行 Web typecheck、ESLint、Stylelint 和生产构建。
+- [x] 运行 `node --run check`；任何既有或新增失败均如实报告，不掩盖。
+- [x] 运行 `git diff --check` 并审计变更只在确认范围内。
+- [x] 确认未对开发数据库应用 migration。
 - _Requirements: R1-R10_
 
 验证命令：
@@ -339,11 +339,12 @@ git diff --check
 
 目标：把已验证 migration 应用与代码实现解耦，避免未经授权改变开发数据库。
 
-- [ ] 展示待应用 migration 的精确目录、SQL 内容、Schema diff、隔离 E2E 和 drift 结果。
-- [ ] 确认 SQL 只有 `SALES_ORDER_PRODUCT_APPENDED` 的 `ALTER TYPE ... ADD VALUE`。
-- [ ] 检查当前开发数据库连接目标，只报告脱敏环境信息，不输出连接字符串或密码。
-- [ ] 停止并等待用户明确指令“应用 migration”。
-- [ ] 未取得该指令前不得执行开发数据库 `db:migrate:deploy`，不得用手工 SQL 绕过。
+- [x] 展示待应用 migration 的精确目录、SQL 内容、Schema diff、隔离 E2E 和 drift 结果。
+- [x] 确认 SQL 只有 `SALES_ORDER_PRODUCT_APPENDED` 的 `ALTER TYPE ... ADD VALUE`。
+- [x] 检查当前开发数据库连接目标，只报告脱敏环境信息，不输出连接字符串或密码。
+- [x] 停止并等待用户明确指令“应用 migration”。
+- [x] 未取得该指令前不得执行开发数据库 `db:migrate:deploy`，不得用手工 SQL 绕过。
+- 当前只读结果：开发库识别为 `127.0.0.1:15433/qianshu_dms_dev?schema=public`，33 条 migration 中仅 `20260902100000_sales_order_product_appended_audit_event` 待应用；`prisma:drift:check` 因未配置 `SHADOW_DATABASE_URL` 按安全边界失败关闭，待 T18 配置独立 shadow 后重跑。
 - _Requirements: R7.6-R7.7, R10.4_
 
 ### T18：应用 migration 并完成真实浏览器验收
@@ -372,7 +373,7 @@ git diff --check
 
 目标：用可回溯的小提交保存完整实现和验证证据。
 
-- [ ] 实施中按以下建议阶段提交，实际文件范围必须精确检查：
+- [x] 实施中按以下建议阶段提交，实际文件范围必须精确检查：
 
 ```text
 docs: 设计销售订单海运前加购流程
@@ -383,13 +384,13 @@ feat: 接入采购订单加购流程
 test: 完成销售加购流程验收
 ```
 
-- [ ] 每次提交前运行该阶段定向测试和 `git diff --check`。
-- [ ] 检查暂存区不包含 `.env`、密钥、日志、数据库转储、缓存、构建产物或用户无关变更。
+- [x] 每次提交前运行该阶段定向测试和 `git diff --check`。
+- [x] 检查暂存区不包含 `.env`、密钥、日志、数据库转储、缓存、构建产物或用户无关变更。
 - [ ] 将本文件任务逐项勾选，最终状态改为已完成。
-- [ ] 复核完整 diff、migration、OpenAPI、generated types 和测试证据。
+- [x] 复核完整 diff、migration、OpenAPI、generated types 和测试证据。
 - [ ] 记录所有本地提交 SHA、验证结果、migration 应用结果和运行时健康状态。
 - [ ] 确认工作树不存在本需求遗留改动；若存在用户改动则明确区分，不覆盖。
-- [ ] 不 push、不创建 PR、不发布、不部署。
+- [x] 不 push、不创建 PR、不发布、不部署。
 - _Requirements: R1-R10_
 
 ## 4. 需求追踪矩阵
