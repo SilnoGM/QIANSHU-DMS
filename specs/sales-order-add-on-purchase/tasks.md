@@ -195,17 +195,17 @@ pnpm -C server test:prisma-drift-gate
 
 目标：以真实约束、事务和并发验证三视图与加购闭环。
 
-- [ ] 扩展采购服务 E2E，验证未采购、部分采购、全部采购三个视图及可信计数。
-- [ ] 验证取消采购后按最新有效采购事实重新分类。
-- [ ] 验证相同产品多行和 CUSTOM 的逐销售明细剩余数量。
+- [x] 扩展采购服务 E2E，验证未采购、部分采购、全部采购三个视图及可信计数。
+- [x] 验证取消采购后按最新有效采购事实重新分类。
+- [x] 验证相同产品多行和 CUSTOM 的逐销售明细剩余数量。
 - [ ] 扩展销售服务 E2E，验证 PREPARING、LAND_TRANSIT、WAREHOUSE_ARRIVED 可加购。
 - [ ] 验证 SEA_TRANSIT、SIGNED 和非 `CONFIRMED` 硬拦截。
 - [ ] 验证缺少任一权限时 POST 和只读加购端点均为 403。
-- [ ] 验证产品、金额、付款状态、金额修订、付款历史和逐行审计一次提交。
-- [ ] 并发提交同一 `expectedVersion`，断言只有一个成功。
-- [ ] 加购成功后订单进入部分采购视图；补齐新增行后退出部分视图且原履约状态不变。
-- [ ] 验证来源数量 constraint trigger 继续阻止超量采购。
-- [ ] 在隔离 PostgreSQL 中执行完整 migration 后运行 E2E，不触碰开发数据库。
+- [x] 验证产品、金额、付款状态、金额修订、付款历史和逐行审计一次提交。
+- [x] 并发提交同一 `expectedVersion`，断言只有一个成功。
+- [x] 加购成功后订单进入部分采购视图；补齐新增行后退出部分视图且原履约状态不变。
+- [x] 验证来源数量 constraint trigger 继续阻止超量采购。
+- [x] 在隔离 PostgreSQL 中执行完整 migration 后运行 E2E，不触碰开发数据库。
 - _Requirements: R1-R10_
 
 ### T11：同步 OpenAPI 并建立 Web API 失败测试

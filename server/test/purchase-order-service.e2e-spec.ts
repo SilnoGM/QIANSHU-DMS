@@ -13,8 +13,11 @@ import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purc
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
+import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
+import { SalesOrderAddOnService } from '../src/modules/sales-orders/sales-order-add-on.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
+import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 
 function requireDatabaseUrl(): string {
@@ -37,6 +40,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let createdTwdExchangeRate = false
   let cnyWasEnabled = false
   let issuanceVoucherMediaAssetId: string
+  let paymentVoucherMediaAssetId: string
   let productId: string
   let provinceStateId: string
   let salesOrderId: string
@@ -49,6 +53,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let commands: PurchaseOrderCommandService
   let mutations: PurchaseOrderMutationService
   let queries: PurchaseOrderQueryService
+  let sourceQueries: PurchaseOrderSourceQueryService
+  let addOns: SalesOrderAddOnService
+  let salesMutations: SalesOrderMutationService
   let grantStockPermission = true
   let purchaseNumber = 0
 
@@ -97,6 +104,17 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         status: 'UPLOADING',
         objectKey: `assets/purchase-service-e2e-${suffix.toLowerCase()}.pdf`,
         originalFilename: 'issuance.pdf',
+        uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
+        createdByUserId: actor.id,
+      },
+      select: { id: true },
+    })).id
+    paymentVoucherMediaAssetId = (await prisma.mediaAsset.create({
+      data: {
+        mediaType: 'DOCUMENT',
+        status: 'UPLOADING',
+        objectKey: `assets/purchase-service-e2e-${suffix.toLowerCase()}-payment.pdf`,
+        originalFilename: 'payment.pdf',
         uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'),
         createdByUserId: actor.id,
       },
@@ -299,6 +317,20 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       })),
     } as unknown as NumberingGeneratorService
     queries = new PurchaseOrderQueryService(prisma, dictionaryLookup)
+    sourceQueries = new PurchaseOrderSourceQueryService(prisma, dictionaryLookup)
+    addOns = new SalesOrderAddOnService(
+      prisma,
+      new AuditService(),
+      dictionaryLookup,
+    )
+    salesMutations = new SalesOrderMutationService(
+      prisma,
+      new AuditService(),
+      media,
+      dictionaryLookup,
+      salesQuery,
+      { now: () => new Date('2026-08-27T11:30:00.000Z') },
+    )
     commands = new PurchaseOrderCommandService(
       prisma,
       numbering,
@@ -345,10 +377,22 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
           await transaction.$executeRawUnsafe(
             'ALTER TABLE "sales_order_status_history" DISABLE TRIGGER "sales_order_status_history_immutable_trigger"',
           )
+          await transaction.$executeRawUnsafe(
+            'ALTER TABLE "sales_order_payments" DISABLE TRIGGER "sales_order_payments_invariants_trigger"',
+          )
+          await transaction.$executeRawUnsafe(
+            'ALTER TABLE "sales_order_amount_revisions" DISABLE TRIGGER "sales_order_amount_revisions_immutable_trigger"',
+          )
           await transaction.salesOrderDocument.deleteMany({
             where: { salesOrderId },
           })
+          await transaction.salesOrderAmountRevision.deleteMany({
+            where: { salesOrderId },
+          })
           await transaction.salesOrderStatusHistory.deleteMany({
+            where: { salesOrderId },
+          })
+          await transaction.salesOrderPayment.deleteMany({
             where: { salesOrderId },
           })
           await transaction.salesOrderLine.deleteMany({
@@ -358,9 +402,18 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
           // READY 媒体的引用检查同样是 deferred；必须与凭证和订单一起在
           // `SET CONSTRAINTS` 前删除，否则夹具清理会留下媒体与地区业务数据。
           await transaction.mediaAsset.deleteMany({
-            where: { id: issuanceVoucherMediaAssetId },
+            where: { id: { in: [
+              issuanceVoucherMediaAssetId,
+              paymentVoucherMediaAssetId,
+            ] } },
           })
           await transaction.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE')
+          await transaction.$executeRawUnsafe(
+            'ALTER TABLE "sales_order_amount_revisions" ENABLE TRIGGER "sales_order_amount_revisions_immutable_trigger"',
+          )
+          await transaction.$executeRawUnsafe(
+            'ALTER TABLE "sales_order_payments" ENABLE TRIGGER "sales_order_payments_invariants_trigger"',
+          )
           await transaction.$executeRawUnsafe(
             'ALTER TABLE "sales_order_status_history" ENABLE TRIGGER "sales_order_status_history_immutable_trigger"',
           )
@@ -373,7 +426,10 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         }
         if (issuanceVoucherMediaAssetId !== undefined) {
           await transaction.mediaAsset.deleteMany({
-            where: { id: issuanceVoucherMediaAssetId },
+            where: { id: { in: [
+              issuanceVoucherMediaAssetId,
+              paymentVoucherMediaAssetId,
+            ] } },
           })
         }
         await transaction.region.deleteMany({ where: { code: `PX-${suffix}-C` } })
@@ -450,6 +506,37 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       remark: null,
     }
   }
+
+  async function expectSourceView(
+    expectedView: 'UNPURCHASED' | 'PARTIALLY_PURCHASED' | 'COMPLETED_PURCHASE_ADD_ON',
+  ) {
+    const result = await sourceQueries.salesOrders({
+      view: expectedView,
+      keyword: `SO-PUR-E2E-${suffix}`,
+      page: 1,
+      pageSize: 20,
+    })
+    expect(result).toMatchObject({
+      view: expectedView,
+      total: 1,
+      items: [{ id: salesOrderId }],
+      counts: [
+        { value: 'UNPURCHASED', count: expectedView === 'UNPURCHASED' ? 1 : 0 },
+        {
+          value: 'PARTIALLY_PURCHASED',
+          count: expectedView === 'PARTIALLY_PURCHASED' ? 1 : 0,
+        },
+        {
+          value: 'COMPLETED_PURCHASE_ADD_ON',
+          count: expectedView === 'COMPLETED_PURCHASE_ADD_ON' ? 1 : 0,
+        },
+      ],
+    })
+  }
+
+  it('classifies a confirmed pending sales order without purchase facts as unpurchased', async () => {
+    await expectSourceView('UNPURCHASED')
+  })
 
   it('enforces admin stock creation and derives payment/pending state', async () => {
     const idempotencyKey = randomUUID()
@@ -545,15 +632,18 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
 
   it('supports split quantities, rejects overage, and releases quantity on cancel', async () => {
     const first = await commands.create(context(), linkedInput(splitSourceLineId, 1))
-    await commands.create(context(), linkedInput(splitSourceLineId, 1))
-    await expect(commands.create(context(), linkedInput(splitSourceLineId, 1)))
-      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED' })
+    await expectSourceView('PARTIALLY_PURCHASED')
 
     await mutations.updateOrderStatus({
       actorUserId, requestId: `purchase-cancel-release-${suffix}`,
     }, first, { toStatus: 'CANCELLED', reason: '释放来源数量' })
+    await expectSourceView('UNPURCHASED')
+    await commands.create(context(), linkedInput(splitSourceLineId, 1))
     await expect(commands.create(context(), linkedInput(splitSourceLineId, 1)))
       .resolves.toEqual(expect.any(String))
+    await expect(commands.create(context(), linkedInput(splitSourceLineId, 1)))
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED' })
+    await expectSourceView('PARTIALLY_PURCHASED')
     const aggregate = await prisma.purchaseOrderLine.aggregate({
       where: {
         sourceSalesOrderLineId: splitSourceLineId,
@@ -680,5 +770,204 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       toStatus: 'PREPARING',
       trigger: 'PURCHASE_COVERAGE',
     })
+    await expectSourceView('COMPLETED_PURCHASE_ADD_ON')
+  })
+
+  it('atomically appends products once, becomes partial, and returns to completed after purchase', async () => {
+    await salesMutations.recordPayment({
+      actorUserId,
+      requestId: `sales-payment-before-add-on-${suffix}`,
+    }, salesOrderId, {
+      paymentType: 'BALANCE',
+      amount: '600',
+      receivedAt: '2026-08-27T11:00:00.000Z',
+      paymentMethod: 'BANK_TRANSFER',
+      remark: null,
+      voucher: { mediaAssetId: paymentVoucherMediaAssetId },
+    })
+    const before = await prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { version: true, paymentStatus: true, fulfillmentStatus: true },
+    })
+    expect(before).toMatchObject({
+      paymentStatus: 'PAID',
+      fulfillmentStatus: 'PREPARING',
+    })
+    const addOnInput = {
+      expectedVersion: before.version,
+      supplierValue,
+      reason: '客户加购产品',
+      lines: [{
+        lineType: 'CATALOG',
+        productId,
+        actualUnitPriceAmount: '120',
+        quantity: 1,
+      }, {
+        lineType: 'CUSTOM',
+        name: '加购安装服务',
+        description: '采购服务 E2E 加购',
+        actualUnitPriceAmount: '30',
+        quantity: 2,
+      }],
+    }
+    const attempts = await Promise.allSettled([
+      addOns.appendLines({
+        actorUserId,
+        requestId: `sales-add-on-a-${suffix}`,
+      }, salesOrderId, addOnInput),
+      addOns.appendLines({
+        actorUserId,
+        requestId: `sales-add-on-b-${suffix}`,
+      }, salesOrderId, addOnInput),
+    ])
+    const succeeded = attempts.filter(
+      (result): result is PromiseFulfilledResult<Awaited<
+        ReturnType<SalesOrderAddOnService['appendLines']>
+      >> => result.status === 'fulfilled',
+    )
+    const failed = attempts.filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    )
+    expect(succeeded).toHaveLength(1)
+    expect(failed).toHaveLength(1)
+    const failedReason: unknown = failed[0]?.reason
+    expect(failedReason).toMatchObject({
+      code: 'SALES_ORDER_ADD_ON_VERSION_CONFLICT',
+    })
+    const result = succeeded[0]?.value
+    if (result === undefined) throw new Error('Add-on result is unavailable')
+    expect(result).toMatchObject({
+      salesOrderId,
+      previousVersion: before.version,
+      version: before.version + 1,
+      amountDelta: '180.0000',
+      paymentStatus: 'PARTIALLY_PAID',
+      amounts: {
+        lineSubtotalAmount: '780.0000',
+        agreedTotalAmount: '780.0000',
+        depositDueAmount: '0.0000',
+        balanceDueAmount: '780.0000',
+        paidAmount: '600.0000',
+        outstandingAmount: '180.0000',
+      },
+    })
+    expect(result.addedLineIds).toHaveLength(2)
+
+    const persisted = await prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: {
+        version: true,
+        fulfillmentStatus: true,
+        paymentStatus: true,
+        lineSubtotalAmount: true,
+        agreedTotalAmount: true,
+        depositDueAmount: true,
+        balanceDueAmount: true,
+        lines: {
+          where: { id: { in: [...result.addedLineIds] } },
+          orderBy: { lineNumber: 'asc' },
+          select: {
+            id: true,
+            lineNumber: true,
+            lineType: true,
+            productId: true,
+            productNoSnapshot: true,
+            productNameSnapshot: true,
+            descriptionSnapshot: true,
+            standardUnitPriceAmount: true,
+            actualUnitPriceAmount: true,
+            quantity: true,
+            lineTotalAmount: true,
+          },
+        },
+      },
+    })
+    expect({
+      ...persisted,
+      lineSubtotalAmount: persisted.lineSubtotalAmount.toFixed(4),
+      agreedTotalAmount: persisted.agreedTotalAmount.toFixed(4),
+      depositDueAmount: persisted.depositDueAmount.toFixed(4),
+      balanceDueAmount: persisted.balanceDueAmount.toFixed(4),
+      lines: persisted.lines.map(line => ({
+        ...line,
+        standardUnitPriceAmount: line.standardUnitPriceAmount?.toFixed(4) ?? null,
+        actualUnitPriceAmount: line.actualUnitPriceAmount.toFixed(4),
+        lineTotalAmount: line.lineTotalAmount.toFixed(4),
+      })),
+    }).toMatchObject({
+      version: before.version + 1,
+      fulfillmentStatus: 'PREPARING',
+      paymentStatus: 'PARTIALLY_PAID',
+      lineSubtotalAmount: '780.0000',
+      agreedTotalAmount: '780.0000',
+      depositDueAmount: '0.0000',
+      balanceDueAmount: '780.0000',
+      lines: [{
+        lineNumber: 6,
+        lineType: 'CATALOG',
+        productId,
+        productNoSnapshot: `PUR-P-${suffix}`,
+        productNameSnapshot: `采购测试产品${suffix}`,
+        standardUnitPriceAmount: '100.0000',
+        actualUnitPriceAmount: '120.0000',
+        quantity: 1,
+        lineTotalAmount: '120.0000',
+      }, {
+        lineNumber: 7,
+        lineType: 'CUSTOM',
+        productId: null,
+        productNoSnapshot: null,
+        productNameSnapshot: '加购安装服务',
+        descriptionSnapshot: '采购服务 E2E 加购',
+        standardUnitPriceAmount: null,
+        actualUnitPriceAmount: '30.0000',
+        quantity: 2,
+        lineTotalAmount: '60.0000',
+      }],
+    })
+    await expect(prisma.salesOrderAmountRevision.count({
+      where: { salesOrderId },
+    })).resolves.toBe(1)
+    await expect(prisma.salesOrderStatusHistory.findMany({
+      where: { salesOrderId, dimension: 'PAYMENT' },
+      orderBy: { changedAt: 'asc' },
+      select: { fromStatus: true, toStatus: true },
+    })).resolves.toEqual([
+      { fromStatus: 'UNPAID', toStatus: 'PAID' },
+      { fromStatus: 'PAID', toStatus: 'PARTIALLY_PAID' },
+    ])
+    await expect(prisma.auditEvent.count({
+      where: {
+        eventType: 'SALES_ORDER_PRODUCT_APPENDED',
+        targetId: { in: [...result.addedLineIds] },
+      },
+    })).resolves.toBe(2)
+    await expectSourceView('PARTIALLY_PURCHASED')
+
+    const sourceLines = await sourceQueries.salesOrderLines(salesOrderId)
+    expect(sourceLines.items.slice(-2)).toMatchObject([{
+      id: result.addedLineIds[0],
+      lineType: 'CATALOG',
+      purchasedQuantity: 0,
+      remainingQuantity: 1,
+    }, {
+      id: result.addedLineIds[1],
+      lineType: 'CUSTOM',
+      purchasedQuantity: 0,
+      remainingQuantity: 2,
+    }])
+    await commands.create(context(), linkedInput(result.addedLineIds[0], 1))
+    await commands.create(context(), linkedCustomInput(result.addedLineIds[1], 2))
+    await expect(commands.create(
+      context(),
+      linkedInput(result.addedLineIds[0], 1),
+    )).rejects.toMatchObject({
+      code: 'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED',
+    })
+    await expectSourceView('COMPLETED_PURCHASE_ADD_ON')
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { fulfillmentStatus: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PREPARING' })
   })
 })
