@@ -6,8 +6,10 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -16,10 +18,32 @@ import {
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 import { SalesOrderLineInputDto } from './sales-order-create.dto'
 
+const ACTUAL_UNIT_PRICE_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
+
 export class SalesOrderExistingLineTargetDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
   lineId!: string
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 128 })
+  @IsString()
+  @IsUnicodeCodePointLength(1, 128)
+  name!: string
+
+  @ApiProperty({ type: 'string', maxLength: 1000, nullable: true })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 1000)
+  description!: string | null
+
+  @ApiProperty({
+    type: 'string',
+    pattern: ACTUAL_UNIT_PRICE_PATTERN.source,
+    description: '既有销售明细修改后的本单售价，非负且最多两位小数',
+  })
+  @IsString()
+  @Matches(ACTUAL_UNIT_PRICE_PATTERN)
+  actualUnitPriceAmount!: string
 
   @ApiProperty({ type: 'integer', minimum: 0, maximum: 2_147_483_647 })
   @IsInt()

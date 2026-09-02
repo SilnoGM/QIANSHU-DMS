@@ -3,7 +3,7 @@ import type { OrderProductLineModel } from '@/components/business/QsOrderProduct
 import type { SalesOrderProductEditModalContext } from '@/components/business/QsSalesOrderProductsEditorModal/types'
 
 import QsSalesOrderProductsEditorModal from '@/components/business/QsSalesOrderProductsEditorModal/index.vue'
-import { createExistingSalesOrderLineDrafts } from '@/components/business/QsSalesOrderProductsEditorModal/logic'
+import { createSalesOrderProductEditLines } from '@/components/business/QsSalesOrderProductsEditorModal/logic'
 import { dictionaryCatalogProviderKey } from '@/dictionary-catalog/injection'
 import {
   createOrderProductFixtureEditorLines,
@@ -59,6 +59,7 @@ const baseContext: SalesOrderProductEditModalContext = {
     lineTotalAmount: '120000.0000',
     activePurchasedQuantity: 1,
     canDecrease: false,
+    mainImage: null,
   }, {
     id: 'existing-2',
     lineNumber: 2,
@@ -73,6 +74,7 @@ const baseContext: SalesOrderProductEditModalContext = {
     lineTotalAmount: '60000.0000',
     activePurchasedQuantity: 0,
     canDecrease: true,
+    mainImage: null,
   }],
   availableLineCapacity: 98,
 }
@@ -80,8 +82,7 @@ const baseContext: SalesOrderProductEditModalContext = {
 const visible = ref(false)
 const selectedState = ref<ShowcaseState>('stable')
 const context = shallowRef(baseContext)
-const existingLineDrafts = ref(createExistingSalesOrderLineDrafts(baseContext))
-const newLines = ref<readonly OrderProductLineModel[]>([])
+const lines = ref<readonly OrderProductLineModel[]>(createSalesOrderProductEditLines(baseContext))
 const reason = ref('客户调整产品')
 const lastEvent = ref('等待打开')
 const loader = createOrderProductFixtureLoader()
@@ -93,14 +94,15 @@ const error = computed(() => selectedState.value === 'error'
 function selectState(state: ShowcaseState): void {
   selectedState.value = state
   context.value = baseContext
-  existingLineDrafts.value = createExistingSalesOrderLineDrafts(baseContext).map(
-    (draft, index) => state === 'deposit-risk' && index === 1
-      ? { ...draft, desiredQuantity: '0' }
-      : draft,
-  )
-  newLines.value = state === 'stable' || state === 'mobile'
-    ? createOrderProductFixtureEditorLines('TWD').slice(0, 1)
-    : []
+  const existingLines = createSalesOrderProductEditLines(baseContext)
+  lines.value = [
+    ...(state === 'deposit-risk' ? existingLines.slice(0, 1) : existingLines),
+    ...(
+      state === 'stable' || state === 'mobile'
+        ? createOrderProductFixtureEditorLines('TWD').slice(0, 1)
+        : []
+    ),
+  ]
   reason.value = '客户调整产品'
   lastEvent.value = `state · ${state}`
 }
@@ -152,15 +154,13 @@ function openModal(): void {
     <QsSalesOrderProductsEditorModal
       v-model="visible"
       v-model:reason="reason"
-      :existing-line-drafts="existingLineDrafts"
-      :new-lines="newLines"
+      :lines="lines"
       :context="context"
       :currencies="ORDER_PRODUCT_FIXTURE_CURRENCIES"
       :load-products="loader"
       :loading="loading"
       :error="error"
-      @update:existing-line-drafts="existingLineDrafts = $event"
-      @update:new-lines="newLines = $event"
+      @update:lines="lines = $event"
       @validation-error="lastEvent = `validation · ${$event}`"
       @review="lastEvent = `review · ${$event.newLines.length} 项新增`"
       @confirm="lastEvent = `confirm · v${$event.expectedVersion}`"

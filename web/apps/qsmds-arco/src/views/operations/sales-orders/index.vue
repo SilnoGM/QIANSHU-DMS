@@ -16,7 +16,6 @@ import type {
   SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
   SalesOrderPageDto,
-  SalesOrderProductEditContextDto,
   SalesOrderStatusCountItemDto,
 } from '@/api/generated/types.gen'
 import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
@@ -35,8 +34,8 @@ import type { OrderProductLineModel } from '@/components/business/QsOrderProduct
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 
 import type {
-  ExistingSalesOrderLineDraft,
   SalesOrderProductEditIntent,
+  SalesOrderProductEditModalContext,
 } from '@/components/business/QsSalesOrderProductsEditorModal/types'
 import { getLocalTimeZone, today } from '@internationalized/date'
 import salesOrdersApi from '@/api/modules/sales-orders'
@@ -54,7 +53,10 @@ import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStac
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsSalesOrderProductsEditorModal from '@/components/business/QsSalesOrderProductsEditorModal/index.vue'
-import { createExistingSalesOrderLineDrafts } from '@/components/business/QsSalesOrderProductsEditorModal/logic'
+import {
+  createSalesOrderProductEditLines,
+  reconcileSalesOrderProductEditLines,
+} from '@/components/business/QsSalesOrderProductsEditorModal/logic'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 
@@ -156,9 +158,8 @@ const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
 const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
 const productEditVisible = ref(false)
 const productEditOrder = shallowRef<SalesOrderListItemDto | null>(null)
-const productEditContext = shallowRef<SalesOrderProductEditContextDto | null>(null)
-const productEditExistingLineDrafts = ref<readonly ExistingSalesOrderLineDraft[]>([])
-const productEditNewLines = ref<readonly OrderProductLineModel[]>([])
+const productEditContext = shallowRef<SalesOrderProductEditModalContext | null>(null)
+const productEditLines = ref<readonly OrderProductLineModel[]>([])
 const productEditReason = ref('客户调整产品')
 const productEditLoading = ref(false)
 const productEditSubmitting = ref(false)
@@ -453,13 +454,16 @@ function canEditSalesOrderProducts(order: SalesOrderListItemDto): boolean {
 }
 
 function copyProductEditContext(
-  context: SalesOrderProductEditContextDto,
-): SalesOrderProductEditContextDto {
+  context: import('@/api/generated/types.gen').SalesOrderProductEditContextDto,
+): SalesOrderProductEditModalContext {
   return {
     ...context,
     salesOrder: { ...context.salesOrder },
     amounts: { ...context.amounts },
-    existingLines: context.existingLines.map(line => ({ ...line })),
+    existingLines: context.existingLines.map(line => ({
+      ...line,
+      mainImage: line.mainImage ?? null,
+    })),
   }
 }
 
@@ -473,25 +477,23 @@ async function loadProductEditContext(preserveDraft = false): Promise<void> {
   productEditAbortController = controller
   productEditLoading.value = true
   productEditError.value = null
-  const previousDrafts = new Map(
-    productEditExistingLineDrafts.value.map(draft => [draft.lineId, draft]),
-  )
+  const previousContext = productEditContext.value
+  const previousLines = productEditLines.value
   try {
     const response = await salesOrdersApi.productEditContext(order.id, controller.signal)
     if (controller.signal.aborted || productEditOrder.value?.id !== order.id) {
       return
     }
     const nextContext = copyProductEditContext(response.data)
-    const freshDrafts = createExistingSalesOrderLineDrafts(nextContext)
+    const freshLines = createSalesOrderProductEditLines(nextContext)
     productEditContext.value = nextContext
-    productEditExistingLineDrafts.value = preserveDraft
-      ? freshDrafts.map((draft) => {
-          const previous = previousDrafts.get(draft.lineId)
-          return previous === undefined
-            ? draft
-            : { ...draft, desiredQuantity: previous.desiredQuantity }
+    productEditLines.value = preserveDraft && previousContext !== null
+      ? reconcileSalesOrderProductEditLines({
+          previousContext,
+          nextContext,
+          previousLines,
         })
-      : freshDrafts
+      : freshLines
   }
   catch (error) {
     if (isSalesOrderAbortError(error)) {
@@ -516,8 +518,7 @@ function openProductEdit(order: SalesOrderListItemDto): void {
   }
   productEditOrder.value = { ...order }
   productEditContext.value = null
-  productEditExistingLineDrafts.value = []
-  productEditNewLines.value = []
+  productEditLines.value = []
   productEditReason.value = '客户调整产品'
   productEditError.value = null
   productEditVisible.value = true
@@ -567,6 +568,7 @@ async function submitProductEdit(intent: SalesOrderProductEditIntent): Promise<v
     productEditVisible.value = false
     productEditOrder.value = null
     productEditContext.value = null
+    productEditLines.value = []
     toast.success('销售订单产品已更新')
     scheduleQueryRefresh(true)
   }
@@ -596,8 +598,7 @@ function handleProductEditVisibility(value: boolean): void {
   productEditSubmitAbortController?.abort()
   productEditOrder.value = null
   productEditContext.value = null
-  productEditExistingLineDrafts.value = []
-  productEditNewLines.value = []
+  productEditLines.value = []
   productEditError.value = null
 }
 
@@ -1909,8 +1910,7 @@ onBeforeUnmount(() => {
     <QsSalesOrderProductsEditorModal
       :model-value="productEditVisible"
       :context="productEditContext"
-      :existing-line-drafts="productEditExistingLineDrafts"
-      :new-lines="productEditNewLines"
+      :lines="productEditLines"
       :reason="productEditReason"
       :currencies="currencyCatalog.currencies.value"
       :load-products="loadProductEditProducts"
@@ -1918,8 +1918,7 @@ onBeforeUnmount(() => {
       :error="productEditError"
       :submitting="productEditSubmitting"
       @update:model-value="handleProductEditVisibility"
-      @update:existing-line-drafts="productEditExistingLineDrafts = $event"
-      @update:new-lines="productEditNewLines = $event"
+      @update:lines="productEditLines = $event"
       @update:reason="productEditReason = $event"
       @validation-error="toast.warning($event)"
       @retry="loadProductEditContext(true)"

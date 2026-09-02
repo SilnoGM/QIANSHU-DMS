@@ -8,7 +8,7 @@ const ROOT = new URL(
   import.meta.url,
 )
 
-test('销售产品修改弹窗保持纯组件边界并采用 90rem 与 4:8 布局', async () => {
+test('销售产品修改弹窗保持纯组件边界并采用 90rem 纵向三段布局', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
 
   assert.match(source, /defineOptions\(\{ name: 'QsSalesOrderProductsEditorModal' \}\)/u)
@@ -17,10 +17,18 @@ test('销售产品修改弹窗保持纯组件边界并采用 90rem 与 4:8 布�
   assert.doesNotMatch(source, /@\/api|useApp\w*Store|fetch\(|axios/u)
   assert.match(source, /title="修改销售订单产品"/u)
   assert.match(source, /sm:!max-w-\[90rem\]/u)
-  assert.match(source, /lg:grid-cols-\[minmax\(0,4fr\)_minmax\(0,8fr\)\]/u)
+  const orderPanel = source.indexOf('aria-label="销售订单信息"')
+  const editor = source.indexOf('<QsOrderProductLineEditor')
+  const pricePanel = source.indexOf('aria-label="价格变化"')
+  assert.ok(orderPanel >= 0)
+  assert.ok(editor > orderPanel)
+  assert.ok(pricePanel > editor)
+  assert.doesNotMatch(source, /lg:grid-cols-\[minmax\(0,4fr\)_minmax\(0,8fr\)\]/u)
   assert.match(source, /activePurchasedQuantity/u)
-  assert.match(source, /存在有效采购单，只能增加数量/u)
-  assert.match(source, /:model-value="newLines"/u)
+  assert.match(source, /存在有效采购单/u)
+  assert.match(source, /:model-value="lines"/u)
+  assert.match(source, /:minimum-quantity-by-key/u)
+  assert.match(source, /:removal-disabled-by-key/u)
 })
 
 test('弹窗区分普通确认与唯一的定金下调加强确认', async () => {

@@ -31,6 +31,10 @@ const props = withDefaults(defineProps<OrderProductLineEditorProps>(), {
   fixedProductSupplierValue: undefined,
   maximumLines: 100,
   maximumQuantityByKey: () => ({}),
+  minimumQuantityByKey: () => ({}),
+  removalDisabledByKey: () => ({}),
+  nameEditableByKey: () => ({}),
+  lineConstraintDescriptionByKey: () => ({}),
   productSelectionDescription: undefined,
   readOnlyLines: () => ([]),
   showDiscountRate: false,
@@ -95,6 +99,13 @@ function addTemporaryLine(): void {
 }
 
 function applySelection(changes: readonly ProductSelectionChange[]): void {
+  const removesLockedLine = changes.some(change => (
+    change.kind === 'REMOVE' && props.removalDisabledByKey[change.lineKey] === true
+  ))
+  if (removesLockedLine) {
+    selectionError.value = '存在有效采购单的产品不能删除或更换产品身份'
+    return
+  }
   const result = applyProductSelectionChanges(
     props.modelValue,
     changes,
@@ -119,7 +130,8 @@ function patchLine(index: number, patch: Partial<OrderProductLineModel>): void {
 }
 
 function removeLine(index: number): void {
-  if (props.disabled) {
+  const line = props.modelValue[index]
+  if (props.disabled || line === undefined || props.removalDisabledByKey[line.key] === true) {
     return
   }
   emit('update:modelValue', props.modelValue
@@ -154,6 +166,15 @@ function lineMaximumQuantity(line: OrderProductLineModel): number | undefined {
     && maximumQuantity > 0
     ? maximumQuantity
     : undefined
+}
+
+function lineMinimumQuantity(line: OrderProductLineModel): number {
+  const minimumQuantity = props.minimumQuantityByKey[line.key]
+  return typeof minimumQuantity === 'number'
+    && Number.isSafeInteger(minimumQuantity)
+    && minimumQuantity > 0
+    ? minimumQuantity
+    : 1
 }
 
 function lineDiscountRate(line: OrderProductLineModel): MoneyDiscountRate | null {
@@ -277,6 +298,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
             v-for="(line, index) in modelValue"
             :key="line.key"
             class="align-middle border-b border-border last:border-b-0"
+            :class="lineConstraintDescriptionByKey[line.key] ? 'bg-amber-500/[0.025]' : ''"
           >
             <!-- FaFormItem 固定预留错误提示高度；可编辑字段下移半个提示行，使输入框
                  与只读文字保持视觉居中，同时仍把校验信息留在输入框下方。 -->
@@ -288,7 +310,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
             </td>
             <td class="p-3">
               <FaFormItem
-                v-if="line.lineType === 'CUSTOM'"
+                v-if="line.lineType === 'CUSTOM' || nameEditableByKey[line.key]"
                 :name="`lines.${index}.name`"
                 :label="`第 ${index + 1} 行产品名称`"
                 required
@@ -305,7 +327,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
                     maxlength="128"
                     class="w-full"
                     :disabled="disabled"
-                    placeholder="输入临时产品名称"
+                    placeholder="输入产品名称"
                     @update:model-value="patchLine(index, { name: String($event ?? '') })"
                   />
                 </FaTooltip>
@@ -318,7 +340,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               >
                 {{ lineFieldError(index, 'name') }}
               </p>
-              <FaTooltip v-if="line.lineType !== 'CUSTOM'" :text="line.name" :disabled="line.name === ''">
+              <FaTooltip v-if="line.lineType !== 'CUSTOM' && !nameEditableByKey[line.key]" :text="line.name" :disabled="line.name === ''">
                 <span tabindex="0" class="max-w-80 block truncate">{{ line.name }}</span>
               </FaTooltip>
             </td>
@@ -431,7 +453,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               >
                 <FaInput
                   type="number"
-                  min="1"
+                  :min="lineMinimumQuantity(line)"
                   :max="lineMaximumQuantity(line)"
                   step="1"
                   inputmode="numeric"
@@ -482,7 +504,20 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               </FaFormItem>
             </td>
             <td class="p-3 text-right">
+              <FaTooltip
+                v-if="removalDisabledByKey[line.key]"
+                :text="lineConstraintDescriptionByKey[line.key] || '该产品不能删除'"
+              >
+                <span
+                  tabindex="0"
+                  class="text-amber-700 outline-none rounded-full inline-flex size-9 items-center justify-center dark:text-amber-300 focus-visible:ring-2 focus-visible:ring-amber-500"
+                  :aria-label="lineConstraintDescriptionByKey[line.key] || '该产品不能删除'"
+                >
+                  <FaIcon name="i-lucide:lock-keyhole" aria-hidden="true" />
+                </span>
+              </FaTooltip>
               <FaButton
+                v-else
                 type="button"
                 variant="ghost"
                 size="icon"

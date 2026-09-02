@@ -2,6 +2,9 @@ import type {
   NormalizedSalesOrderCreateLine,
 } from './sales-order-command.normalizer'
 import { normalizeSalesOrderLines } from './sales-order-command.normalizer'
+import {
+  normalizeSalesOrderAmount,
+} from './domain/sales-order-decimal'
 import { salesOrderValidationFailure } from './domain/sales-order-errors'
 
 const UUID_V4_PATTERN =
@@ -9,8 +12,13 @@ const UUID_V4_PATTERN =
 
 export interface NormalizedSalesOrderExistingLineTarget {
   readonly lineId: string
+  readonly name: string
+  readonly description: string | null
+  readonly actualUnitPriceAmount: string
   readonly desiredQuantity: number
 }
+
+const ACTUAL_UNIT_PRICE_PATTERN = /^(?:0|[1-9]\d{0,25})(?:\.\d{1,2})?$/u
 
 export interface NormalizedSalesOrderProductEditCommand {
   readonly expectedVersion: number
@@ -62,7 +70,13 @@ function existingLines(value: unknown): readonly NormalizedSalesOrderExistingLin
   return Object.freeze(value.map((item, index) => {
     const field = `existingLines.${index}`
     const line = record(item, field)
-    exactKeys(line, ['lineId', 'desiredQuantity'], field)
+    exactKeys(line, [
+      'lineId',
+      'name',
+      'description',
+      'actualUnitPriceAmount',
+      'desiredQuantity',
+    ], field)
     if (typeof line.lineId !== 'string' || !UUID_V4_PATTERN.test(line.lineId)) {
       return salesOrderValidationFailure(`${field}.lineId`)
     }
@@ -76,9 +90,33 @@ function existingLines(value: unknown): readonly NormalizedSalesOrderExistingLin
     ) {
       return salesOrderValidationFailure(`${field}.desiredQuantity`)
     }
+    if (typeof line.name !== 'string') {
+      return salesOrderValidationFailure(`${field}.name`)
+    }
+    const name = line.name.trim().normalize('NFKC')
+    if ([...name].length < 1 || [...name].length > 128) {
+      return salesOrderValidationFailure(`${field}.name`)
+    }
+    const description = line.description === null
+      ? null
+      : typeof line.description === 'string'
+        ? line.description.trim().normalize('NFKC')
+        : salesOrderValidationFailure(`${field}.description`)
+    if (description !== null && ([...description].length < 1 || [...description].length > 1000)) {
+      return salesOrderValidationFailure(`${field}.description`)
+    }
+    if (
+      typeof line.actualUnitPriceAmount !== 'string'
+      || !ACTUAL_UNIT_PRICE_PATTERN.test(line.actualUnitPriceAmount)
+    ) {
+      return salesOrderValidationFailure(`${field}.actualUnitPriceAmount`)
+    }
     seen.add(line.lineId)
     return Object.freeze({
       lineId: line.lineId,
+      name,
+      description,
+      actualUnitPriceAmount: normalizeSalesOrderAmount(line.actualUnitPriceAmount),
       desiredQuantity: line.desiredQuantity as number,
     })
   }))

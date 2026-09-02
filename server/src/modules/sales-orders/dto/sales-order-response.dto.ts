@@ -467,6 +467,8 @@ export class SalesOrderProductEditExistingLineDto {
   @ApiProperty({ type: 'integer', minimum: 0 })
   readonly activePurchasedQuantity!: number
   @ApiProperty({ type: 'boolean' }) readonly canDecrease!: boolean
+  @ApiProperty({ type: () => SalesOrderListImageDto, nullable: true, required: true })
+  readonly mainImage!: SalesOrderListImageDto | null
 }
 
 export class SalesOrderProductEditContextDto {

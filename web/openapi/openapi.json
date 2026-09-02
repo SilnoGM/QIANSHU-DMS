@@ -48744,6 +48744,15 @@
           },
           "canDecrease": {
             "type": "boolean"
+          },
+          "mainImage": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SalesOrderListImageDto"
+              }
+            ]
           }
         },
         "required": [
@@ -48759,7 +48768,8 @@
           "quantity",
           "lineTotalAmount",
           "activePurchasedQuantity",
-          "canDecrease"
+          "canDecrease",
+          "mainImage"
         ]
       },
       "SalesOrderProductEditContextDto": {
@@ -48797,6 +48807,21 @@
             "type": "string",
             "format": "uuid"
           },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "nullable": true
+          },
+          "actualUnitPriceAmount": {
+            "type": "string",
+            "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$",
+            "description": "既有销售明细修改后的本单售价，非负且最多两位小数"
+          },
           "desiredQuantity": {
             "type": "integer",
             "minimum": 0,
@@ -48805,6 +48830,9 @@
         },
         "required": [
           "lineId",
+          "name",
+          "description",
+          "actualUnitPriceAmount",
           "desiredQuantity"
         ]
       },

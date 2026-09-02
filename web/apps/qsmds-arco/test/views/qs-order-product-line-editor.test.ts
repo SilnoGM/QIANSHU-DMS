@@ -207,3 +207,20 @@ test('产品行编辑器支持领域数量上限、逐字段错误展示与稳�
   assert.match(source, /lineFieldError\(index, 'quantity'\)/u)
   assert.match(source, /role="alert"/u)
 })
+
+test('产品行编辑器支持行级数量下限、删除锁和目录快照名称编辑', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /readonly minimumQuantityByKey\?: Readonly<Record<string, number \| undefined>>/u)
+  assert.match(types, /readonly removalDisabledByKey\?: Readonly<Record<string, boolean \| undefined>>/u)
+  assert.match(types, /readonly nameEditableByKey\?: Readonly<Record<string, boolean \| undefined>>/u)
+  assert.match(types, /readonly lineConstraintDescriptionByKey\?: Readonly<Record<string, string \| undefined>>/u)
+  assert.match(source, /function lineMinimumQuantity\(line: OrderProductLineModel\)/u)
+  assert.match(source, /:min="lineMinimumQuantity\(line\)"/u)
+  assert.match(source, /removalDisabledByKey\[line\.key\]/u)
+  assert.match(source, /nameEditableByKey\[line\.key\]/u)
+  assert.match(source, /lineConstraintDescriptionByKey\[line\.key\]/u)
+})

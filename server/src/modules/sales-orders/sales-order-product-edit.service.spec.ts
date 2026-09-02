@@ -36,6 +36,8 @@ function orderRow(overrides: Record<string, unknown> = {}) {
       lineNumber: 1,
       lineType: 'CATALOG',
       productId: PRODUCT_ID,
+      productNameSnapshot: '原目录产品',
+      descriptionSnapshot: null,
       actualUnitPriceAmount: decimal('50'),
       quantity: 2,
       lineTotalAmount: decimal('100'),
@@ -44,6 +46,8 @@ function orderRow(overrides: Record<string, unknown> = {}) {
       lineNumber: 2,
       lineType: 'CUSTOM',
       productId: null,
+      productNameSnapshot: '原临时产品',
+      descriptionSnapshot: '原备注',
       actualUnitPriceAmount: decimal('200'),
       quantity: 1,
       lineTotalAmount: decimal('200'),
@@ -57,8 +61,18 @@ function input(overrides: Record<string, unknown> = {}) {
     expectedVersion: 4,
     reason: '客户调整产品',
     confirmDepositReduction: false,
-    existingLines: [{ lineId: LINE_A_ID, desiredQuantity: 3 }, {
-      lineId: LINE_B_ID, desiredQuantity: 0,
+    existingLines: [{
+      lineId: LINE_A_ID,
+      name: '修改后的目录产品',
+      description: '目录备注',
+      actualUnitPriceAmount: '60',
+      desiredQuantity: 3,
+    }, {
+      lineId: LINE_B_ID,
+      name: '原临时产品',
+      description: '原备注',
+      actualUnitPriceAmount: '200',
+      desiredQuantity: 0,
     }],
     newLines: [{
       lineType: 'CUSTOM',
@@ -77,6 +91,9 @@ interface TestLineUpdateInput {
     readonly quantity?: number
     readonly lineTotalAmount?: string
     readonly removedAt?: Date
+    readonly productNameSnapshot?: string
+    readonly descriptionSnapshot?: string | null
+    readonly actualUnitPriceAmount?: string
   }
 }
 
@@ -163,17 +180,17 @@ describe('SalesOrderProductEditService', () => {
       updatedLineIds: [LINE_A_ID],
       removedLineIds: [LINE_B_ID],
       addedLineIds: [expect.any(String)],
-      amountDelta: '-120.0000',
+      amountDelta: '-90.0000',
       fulfillmentStatus: 'PENDING',
       paymentStatus: 'PARTIALLY_PAID',
       depositReduced: false,
       amounts: {
-        lineSubtotalAmount: '180.0000',
-        agreedTotalAmount: '180.0000',
+        lineSubtotalAmount: '210.0000',
+        agreedTotalAmount: '210.0000',
         depositDueAmount: '100.0000',
-        balanceDueAmount: '80.0000',
+        balanceDueAmount: '110.0000',
         paidAmount: '80.0000',
-        outstandingAmount: '100.0000',
+        outstandingAmount: '130.0000',
       },
     })
 
@@ -187,7 +204,13 @@ describe('SalesOrderProductEditService', () => {
     expect(sqlCalls[1]).toContain('sales_orders')
     expect(fixture.transaction.salesOrderLine.update).toHaveBeenCalledWith({
       where: { id: LINE_A_ID },
-      data: { quantity: 3, lineTotalAmount: '150.0000' },
+      data: {
+        productNameSnapshot: '修改后的目录产品',
+        descriptionSnapshot: '目录备注',
+        actualUnitPriceAmount: '60.0000',
+        quantity: 3,
+        lineTotalAmount: '180.0000',
+      },
     })
     const removalWrite = fixture.transaction.salesOrderLine.update.mock.calls
       .find(([write]) => write.where.id === LINE_B_ID)?.[0]
@@ -195,10 +218,10 @@ describe('SalesOrderProductEditService', () => {
     expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
       data: {
-        lineSubtotalAmount: '180.0000',
-        agreedTotalAmount: '180.0000',
+        lineSubtotalAmount: '210.0000',
+        agreedTotalAmount: '210.0000',
         depositDueAmount: '100.0000',
-        balanceDueAmount: '80.0000',
+        balanceDueAmount: '110.0000',
         fulfillmentStatus: 'PENDING',
         paymentStatus: 'PARTIALLY_PAID',
         version: { increment: 1 },
@@ -220,7 +243,7 @@ describe('SalesOrderProductEditService', () => {
       requestId: 'product-edit-1',
       metadata: {
         removedLineIds: [LINE_B_ID],
-        amountDelta: '-120.0000',
+        amountDelta: '-90.0000',
         previousVersion: 4,
         version: 5,
       },
@@ -231,15 +254,25 @@ describe('SalesOrderProductEditService', () => {
     ]))
   })
 
-  it('rejects every decrease on a line with active purchase facts', async () => {
+  it('rejects a decrease below the active purchased quantity', async () => {
     const fixture = setup()
 
     await expect(fixture.service.updateProducts({
       actorUserId: ACTOR_ID,
       requestId: 'product-edit-locked',
     }, ORDER_ID, input({
-      existingLines: [{ lineId: LINE_A_ID, desiredQuantity: 1 }, {
-        lineId: LINE_B_ID, desiredQuantity: 1,
+      existingLines: [{
+        lineId: LINE_A_ID,
+        name: '原目录产品',
+        description: null,
+        actualUnitPriceAmount: '50',
+        desiredQuantity: 1,
+      }, {
+        lineId: LINE_B_ID,
+        name: '原临时产品',
+        description: '原备注',
+        actualUnitPriceAmount: '200',
+        desiredQuantity: 1,
       }],
       newLines: [],
     }))).rejects.toMatchObject({
@@ -248,6 +281,73 @@ describe('SalesOrderProductEditService', () => {
     })
     expect(fixture.transaction.salesOrderLine.update).not.toHaveBeenCalled()
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('allows a purchased line to decrease to its purchased quantity and updates only sales snapshots', async () => {
+    const fixture = setup({
+      order: {
+        lineSubtotalAmount: decimal('350'),
+        agreedTotalAmount: decimal('350'),
+        balanceDueAmount: decimal('250'),
+        lines: [{
+          id: LINE_A_ID,
+          lineNumber: 1,
+          lineType: 'CATALOG',
+          productId: PRODUCT_ID,
+          productNameSnapshot: '原目录产品',
+          descriptionSnapshot: null,
+          actualUnitPriceAmount: decimal('50'),
+          quantity: 3,
+          lineTotalAmount: decimal('150'),
+        }, {
+          id: LINE_B_ID,
+          lineNumber: 2,
+          lineType: 'CUSTOM',
+          productId: null,
+          productNameSnapshot: '原临时产品',
+          descriptionSnapshot: '原备注',
+          actualUnitPriceAmount: decimal('200'),
+          quantity: 1,
+          lineTotalAmount: decimal('200'),
+        }],
+      },
+    })
+
+    await expect(fixture.service.updateProducts({
+      actorUserId: ACTOR_ID,
+      requestId: 'product-edit-snapshot',
+    }, ORDER_ID, input({
+      existingLines: [{
+        lineId: LINE_A_ID,
+        name: '销售快照新名称',
+        description: '销售快照新备注',
+        actualUnitPriceAmount: '55',
+        desiredQuantity: 2,
+      }, {
+        lineId: LINE_B_ID,
+        name: '原临时产品',
+        description: '原备注',
+        actualUnitPriceAmount: '200',
+        desiredQuantity: 1,
+      }],
+      newLines: [],
+    }))).resolves.toMatchObject({
+      amountDelta: '-40.0000',
+      updatedLineIds: [LINE_A_ID],
+      removedLineIds: [],
+      amounts: { lineSubtotalAmount: '310.0000' },
+    })
+    expect(fixture.transaction.salesOrderLine.update).toHaveBeenCalledWith({
+      where: { id: LINE_A_ID },
+      data: {
+        productNameSnapshot: '销售快照新名称',
+        descriptionSnapshot: '销售快照新备注',
+        actualUnitPriceAmount: '55.0000',
+        quantity: 2,
+        lineTotalAmount: '110.0000',
+      },
+    })
+    expect(fixture.transaction.product.findMany).not.toHaveBeenCalled()
   })
 
   it('requires explicit deposit reduction confirmation and then lowers deposit', async () => {
@@ -259,8 +359,18 @@ describe('SalesOrderProductEditService', () => {
       },
     })
     const reductionInput = input({
-      existingLines: [{ lineId: LINE_A_ID, desiredQuantity: 2 }, {
-        lineId: LINE_B_ID, desiredQuantity: 0,
+      existingLines: [{
+        lineId: LINE_A_ID,
+        name: '原目录产品',
+        description: null,
+        actualUnitPriceAmount: '50',
+        desiredQuantity: 2,
+      }, {
+        lineId: LINE_B_ID,
+        name: '原临时产品',
+        description: '原备注',
+        actualUnitPriceAmount: '200',
+        desiredQuantity: 0,
       }],
       newLines: [],
     })
@@ -305,8 +415,18 @@ describe('SalesOrderProductEditService', () => {
       requestId: 'product-edit-below-paid',
     }, ORDER_ID, input({
       confirmDepositReduction: true,
-      existingLines: [{ lineId: LINE_A_ID, desiredQuantity: 2 }, {
-        lineId: LINE_B_ID, desiredQuantity: 0,
+      existingLines: [{
+        lineId: LINE_A_ID,
+        name: '原目录产品',
+        description: null,
+        actualUnitPriceAmount: '50',
+        desiredQuantity: 2,
+      }, {
+        lineId: LINE_B_ID,
+        name: '原临时产品',
+        description: '原备注',
+        actualUnitPriceAmount: '200',
+        desiredQuantity: 0,
       }],
       newLines: [],
     }))).rejects.toMatchObject({ code: 'SALES_ORDER_TOTAL_BELOW_RECEIVED' })
@@ -315,7 +435,13 @@ describe('SalesOrderProductEditService', () => {
 
   it.each([
     ['version', { expectedVersion: 3 }, 'SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT'],
-    ['line set', { existingLines: [{ lineId: LINE_A_ID, desiredQuantity: 2 }] }, 'SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED'],
+    ['line set', { existingLines: [{
+      lineId: LINE_A_ID,
+      name: '原目录产品',
+      description: null,
+      actualUnitPriceAmount: '50',
+      desiredQuantity: 2,
+    }] }, 'SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED'],
   ])('rejects a stale %s before writes', async (_name, override, code) => {
     const fixture = setup()
 

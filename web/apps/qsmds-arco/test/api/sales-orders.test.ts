@@ -226,6 +226,9 @@ test('销售产品修改读取不依赖供应商，PATCH 写入局部呈错且�
     confirmDepositReduction: false,
     existingLines: [{
       lineId: '22222222-2222-4222-8222-222222222222',
+      name: '销售产品快照',
+      description: null,
+      actualUnitPriceAmount: '120.00',
       desiredQuantity: 2,
     }],
     newLines: [{

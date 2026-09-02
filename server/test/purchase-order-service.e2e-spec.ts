@@ -806,6 +806,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       confirmDepositReduction: false,
       existingLines: editContext.existingLines.map(line => ({
         lineId: line.id,
+        name: line.productName,
+        description: line.description,
+        actualUnitPriceAmount: line.actualUnitPriceAmount,
         desiredQuantity: line.quantity,
       })),
       newLines: [{

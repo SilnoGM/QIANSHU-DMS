@@ -600,7 +600,7 @@ test('产品明细由薄销售适配层接入通用编辑器，不保留行内�
   assert.match(adapter, /仅本订单/u)
   assert.doesNotMatch(adapter, /<FaCombobox/u)
   assert.match(editor, /step="1"/)
-  assert.match(editor, /min="1"/)
+  assert.match(editor, /:min="lineMinimumQuantity\(line\)"/u)
   assert.match(editor, /<MoneyInput/u)
   assert.match(editor, /class="[^"]*overflow-x-auto[^"]*"/u)
   assert.match(

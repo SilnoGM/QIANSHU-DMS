@@ -19,6 +19,18 @@
 
 ## 3. 任务清单
 
+### T15：统一销售产品编辑器与价格变化面板
+
+- [x] 先扩展 Web 与 Server 失败测试，固定统一行模型、已采购数量下限、快照修改和纵向结构。
+- [x] 扩展 `QsOrderProductLineEditor` 的行级删除锁、数量下限和目录产品名称编辑能力。
+- [x] 将既有行与新增行统一装载到 `QsOrderProductLineEditor`，移除旧的独立既有行列表。
+- [x] 扩展修改命令，使既有行名称、描述、备注和本单售价快照可原子更新。
+- [x] 新价格面板展示标准总价、约定总价、定金、尾款、已收款和待收款的旧值、新值与差额。
+- [x] 保留总价低于原定金时的加强确认、版本冲突、采购锁定和收款保护。
+- [x] 同步 OpenAPI/Web generated types，并完成组件库、页面、Server/Web 与根级回归。
+- [ ] 创建本地标准提交，不推送远端。
+- _Requirements: R3-R6, R8-R9_
+
 ### T1：固化需求与技术设计
 
 - [x] 使用 EARS 编写产品修改、两视图采购和金额联动需求。
@@ -116,9 +128,9 @@
 
 - [x] 先写 logic 测试：既有行最小数量、增加/减少/移除、新增行和金额预览。
 - [x] 固定普通确认与定金下调加强确认，确认标记只能由对应复核状态产生。
-- [x] 先写结构测试：纯组件边界、`90rem`、`4:8`、锁定提示、草稿保留和移动布局。
+- [x] 先写结构测试：纯组件边界、`90rem`、锁定提示、草稿保留和移动布局。
 - [x] 新建组件 `types.ts`、`logic.ts`、`index.vue` 和 README。
-- [x] 既有行只编辑数量；新增行复用 `QsOrderProductLineEditor`。
+- [x] 初版既有行只编辑数量；新增行复用 `QsOrderProductLineEditor`，后续由 T15 统一编辑模型。
 - [x] 本地错误使用 Warning Toast 并保留字段错误；服务端错误使用弹窗持久错误。
 - [x] 替换组件库路由、Showcase 和验收测试。
 - [x] 删除旧组件目录与旧组件测试。
@@ -196,6 +208,13 @@
 - 不推送远端、不部署生产环境。
 
 ## 6. 最终验收记录
+
+- T15 已完成统一产品编辑器、纵向价格变化面板、销售快照原子更新与采购数量下限保护；
+  本次不新增 schema 或 migration，也不回写产品档案及既有采购快照。
+- T15 定向回归通过：Server 4 个套件、42 项测试；Web 36 项测试；Server/Web
+  typecheck、ESLint、Stylelint、OpenAPI `contract:check` 与 `git diff --check` 通过。
+- T15 根级 `node --run check` 通过：Root 687 项、Server 251 个套件/2540 项、Web
+  1074 项、生产构建与 5 组真实 Chrome E2E 全部通过。
 
 - 开发库已应用 `20260902160000_sales_order_product_editing`，`prisma migrate status` 确认全部 34 条 migration 为最新状态。
 - 开发库已核对 `removed_at`、`SALES_ORDER_PRODUCTS_CHANGED`、三个约束函数与销售来源数量 trigger。

@@ -356,7 +356,13 @@ describe('SalesOrdersController product options', () => {
       expectedVersion: 4,
       reason: '客户调整产品',
       confirmDepositReduction: false,
-      existingLines: [{ lineId: PRODUCT_ID, desiredQuantity: 2 }],
+      existingLines: [{
+        lineId: PRODUCT_ID,
+        name: '销售产品快照',
+        description: null,
+        actualUnitPriceAmount: '120.00',
+        desiredQuantity: 2,
+      }],
       newLines: [],
     }
     const result = {

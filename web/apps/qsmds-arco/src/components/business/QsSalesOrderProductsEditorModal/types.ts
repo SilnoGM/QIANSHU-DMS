@@ -36,6 +36,7 @@ export interface SalesOrderProductEditModalExistingLine {
   readonly lineTotalAmount: string
   readonly activePurchasedQuantity: number
   readonly canDecrease: boolean
+  readonly mainImage: OrderProductLineModel['mainImage']
 }
 
 export interface SalesOrderProductEditModalContext {
@@ -43,13 +44,6 @@ export interface SalesOrderProductEditModalContext {
   readonly amounts: SalesOrderProductEditModalAmounts
   readonly existingLines: readonly SalesOrderProductEditModalExistingLine[]
   readonly availableLineCapacity: number
-}
-
-export interface ExistingSalesOrderLineDraft {
-  readonly lineId: string
-  readonly originalQuantity: number
-  readonly desiredQuantity: string
-  readonly minimumQuantity: number
 }
 
 export type SalesOrderProductEditIntentLine
@@ -73,6 +67,9 @@ export interface SalesOrderProductEditIntent {
   readonly confirmDepositReduction: boolean
   readonly existingLines: readonly {
     readonly lineId: string
+    readonly name: string
+    readonly description: string | null
+    readonly actualUnitPriceAmount: string
     readonly desiredQuantity: number
   }[]
   readonly newLines: readonly SalesOrderProductEditIntentLine[]
@@ -80,10 +77,14 @@ export interface SalesOrderProductEditIntent {
 
 export interface SalesOrderProductEditPreview {
   readonly amountDelta: string
+  readonly standardAmountDelta: string | null
+  readonly standardSubtotalAmount: string | null
   readonly lineSubtotalAmount: string
   readonly agreedTotalAmount: string
   readonly depositDueAmount: string
   readonly balanceDueAmount: string
+  readonly paidAmount: string
+  readonly outstandingAmount: string
   readonly depositReductionAmount: string
   readonly requiresDepositReduction: boolean
   readonly addedLineCount: number
@@ -96,8 +97,7 @@ export interface SalesOrderProductEditPreview {
 export interface SalesOrderProductsEditorModalProps {
   readonly modelValue: boolean
   readonly context: SalesOrderProductEditModalContext | null
-  readonly existingLineDrafts?: readonly ExistingSalesOrderLineDraft[]
-  readonly newLines?: readonly OrderProductLineModel[]
+  readonly lines?: readonly OrderProductLineModel[]
   readonly reason?: string
   readonly currencies: readonly CurrencyDescriptor[]
   readonly loadProducts: ProductPageLoader

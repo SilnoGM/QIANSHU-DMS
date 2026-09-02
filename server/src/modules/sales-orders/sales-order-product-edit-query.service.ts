@@ -61,6 +61,21 @@ export class SalesOrderProductEditQueryService {
             actualUnitPriceAmount: true,
             quantity: true,
             lineTotalAmount: true,
+            product: {
+              select: {
+                media: {
+                  where: {
+                    kind: 'IMAGE',
+                    isPrimary: true,
+                    detachedAt: null,
+                    mediaAsset: { is: { status: 'READY' } },
+                  },
+                  orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
           },
         },
         payments: {
@@ -131,23 +146,33 @@ export class SalesOrderProductEditQueryService {
         paidAmount: formatSalesOrderAmountUnits(paidUnits),
         outstandingAmount: formatSalesOrderAmountUnits(agreedUnits - paidUnits),
       },
-      existingLines: order.lines.map(line => ({
-        id: line.id,
-        lineNumber: line.lineNumber,
-        lineType: line.lineType,
-        productId: line.productId,
-        productNo: line.productNoSnapshot,
-        productName: line.productNameSnapshot,
-        description: line.descriptionSnapshot,
-        standardUnitPriceAmount: line.standardUnitPriceAmount === null
-          ? null
-          : fixed4(line.standardUnitPriceAmount),
-        actualUnitPriceAmount: fixed4(line.actualUnitPriceAmount),
-        quantity: line.quantity,
-        lineTotalAmount: fixed4(line.lineTotalAmount),
-        activePurchasedQuantity: purchasedByLine.get(line.id) ?? 0,
-        canDecrease: (purchasedByLine.get(line.id) ?? 0) === 0,
-      })),
+      existingLines: order.lines.map((line) => {
+        const mainImage = line.product?.media[0]
+        const activePurchasedQuantity = purchasedByLine.get(line.id) ?? 0
+        return {
+          id: line.id,
+          lineNumber: line.lineNumber,
+          lineType: line.lineType,
+          productId: line.productId,
+          productNo: line.productNoSnapshot,
+          productName: line.productNameSnapshot,
+          description: line.descriptionSnapshot,
+          standardUnitPriceAmount: line.standardUnitPriceAmount === null
+            ? null
+            : fixed4(line.standardUnitPriceAmount),
+          actualUnitPriceAmount: fixed4(line.actualUnitPriceAmount),
+          quantity: line.quantity,
+          lineTotalAmount: fixed4(line.lineTotalAmount),
+          activePurchasedQuantity,
+          canDecrease: activePurchasedQuantity < line.quantity,
+          mainImage: line.productId === null || mainImage === undefined
+            ? null
+            : {
+                id: mainImage.id,
+                contentUrl: `/api/sales-orders/${order.id}/lines/${line.id}/main-image/${mainImage.id}/content`,
+              },
+        }
+      }),
       availableLineCapacity: Math.max(0, MAX_SALES_ORDER_LINES - order.lines.length),
     }
   }

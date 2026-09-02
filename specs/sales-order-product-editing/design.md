@@ -12,7 +12,7 @@
 1. 删除采购域“已完成采购-加购产品”视图和采购创建页加购状态机，采购来源选择器只保留两个可信视图。
 2. 以销售域专用的产品修改上下文、产品选项和修改命令替换现有 add-on API；全部接口只要求 `sales-orders:update`。
 3. 将 `QsSalesOrderAddOnProductsModal` 替换为 `QsSalesOrderProductsEditorModal`，并把唯一业务入口放到“全部销售订单”操作列。
-4. 既有行使用稳定 `lineId + desiredQuantity` 表达目标数量；新增行继续使用 CATALOG/CUSTOM 联合类型。服务端要求请求包含全部当前有效既有行，避免“遗漏代表删除”的歧义。
+4. 弹窗以统一的 `OrderProductLineModel[]` 编辑既有行和新增行；提交时既有行携带稳定 `lineId`、目标数量和可修改销售快照，新行继续使用 CATALOG/CUSTOM 联合类型。服务端要求请求包含全部当前有效既有行，避免“遗漏代表删除”的歧义。
 5. 给 `SalesOrderLine` 增加 `removedAt` 软移除字段。数量降为 `0` 时保留原销售明细和已取消采购历史，但不再参与有效产品、金额和采购覆盖计算。
 6. 新增 `SALES_ORDER_PRODUCTS_CHANGED` 审计枚举；保留既有 `SALES_ORDER_PRODUCT_APPENDED` 历史值，不重写历史审计。
 7. 产品、金额、定金/尾款、付款状态、履约状态、金额修订、状态历史和审计在一个 Serializable 事务中提交。
@@ -150,6 +150,10 @@ interface SalesOrderProductEditContextDto {
     lineTotalAmount: string
     activePurchasedQuantity: number
     canDecrease: boolean
+    mainImage: {
+      id: string
+      contentUrl: string
+    } | null
   }>
   availableLineCapacity: number
 }
@@ -186,6 +190,9 @@ interface SalesOrderProductsUpdateRequestDto {
   confirmDepositReduction: boolean
   existingLines: Array<{
     lineId: string
+    name: string
+    description: string | null
+    actualUnitPriceAmount: string
     desiredQuantity: number // 0 表示业务移除
   }>
   newLines: SalesOrderLineInputDto[]
@@ -195,10 +202,10 @@ interface SalesOrderProductsUpdateRequestDto {
 约束：
 
 1. `existingLines` 必须与事务内全部有效既有行一一对应，不能重复、遗漏或加入其他订单行。
-2. `desiredQuantity > currentQuantity` 始终允许；`desiredQuantity < currentQuantity` 仅在该行有效采购数量为 `0` 时允许。
+2. `desiredQuantity` 不得低于有效已采购数量；有效已采购数量大于 `0` 时禁止移除，未采购行可以通过 `0` 业务移除。
 3. `desiredQuantity = 0` 转换为 `removedAt = now()`，不把数据库数量写成 `0`。
 4. `newLines` 可以为空；最终有效产品至少一行、最多 100 行。
-5. 客户端不提交汇总金额、目标状态、产品快照或采购数量。
+5. 客户端不提交汇总金额、目标状态或采购数量；既有行只提交允许修改的销售快照字段，产品档案和采购快照均不更新。
 
 响应：
 
@@ -226,7 +233,7 @@ interface SalesOrderProductsUpdateResultDto {
 | `409` | `SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT` | 订单版本已变化 |
 | `409` | `SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED` | 产品、状态或行集合已变化 |
 | `422` | `SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED` | 非已确认或已经海运 |
-| `422` | `SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED` | 有效采购行禁止减少 |
+| `422` | `SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED` | 目标数量低于有效已采购数量或试图移除已采购行 |
 | `422` | `SALES_ORDER_DEPOSIT_REDUCTION_CONFIRMATION_REQUIRED` | 需要下调定金但缺少明确确认 |
 | `422` | `SALES_ORDER_TOTAL_BELOW_RECEIVED` | 新总价低于有效收款 |
 | `422` | `SALES_ORDER_LINE_LIMIT_EXCEEDED` | 有效产品行超限或为空 |
@@ -250,7 +257,7 @@ interface SalesOrderProductsUpdateResultDto {
 ### 6.2 单事务写入顺序
 
 1. 规范化新增行并读取有效产品快照。
-2. 计算既有行目标数量、软移除集合和新增行。
+2. 计算既有行目标数量、可修改销售快照、软移除集合和新增行。
 3. 服务端重算新产品小计、`amountDelta` 和订单金额。
 4. 若新总价小于有效收款，拒绝。
 5. 若新总价小于原定金且 `confirmDepositReduction !== true`，拒绝。
@@ -318,17 +325,19 @@ components/business/QsSalesOrderProductsEditorModal/
 前端草稿拆分为：
 
 ```ts
-interface ExistingSalesOrderLineDraft {
-  lineId: string
-  originalQuantity: number
-  desiredQuantity: string
-  minimumQuantity: number // canDecrease ? 0 : originalQuantity
+interface SalesOrderProductEditLine extends OrderProductLineModel {
+  sourceLineId: string | null
+  originalQuantity: number | null
+  activePurchasedQuantity: number
 }
-
-type NewSalesOrderLineDraft = OrderProductLineModel
 ```
 
-既有行只允许修改数量；本单售价和产品快照只读。新增行继续复用 `QsOrderProductLineEditor`。
+既有行与新增行统一使用 `QsOrderProductLineEditor`。既有行通过 `sourceLineId` 保持身份稳定：
+
+- 无有效采购的既有行可编辑销售快照、售价和数量，也可删除。
+- 存在有效采购的既有行锁定删除、产品身份、来源和类型，数量下限为
+  `activePurchasedQuantity`；名称、描述、备注和本单售价仍可编辑。
+- 所有快照修改只落到销售明细，不回写产品档案或任何既有采购明细。
 
 ### 8.3 二次确认
 
@@ -395,7 +404,7 @@ type NewSalesOrderLineDraft = OrderProductLineModel
 ### 10.2 Web RED → GREEN
 
 1. Logic 测试固定差额预览、行锁最小数量、业务移除和定金下调确认。
-2. 组件测试固定纯组件边界、`90rem`、`4:8`、普通/加强确认与错误保留。
+2. 组件测试固定纯组件边界、`90rem`、纵向三段结构、普通/加强确认与错误保留。
 3. 销售列表测试固定入口资格、权限、提交刷新和不自动跳采购。
 4. 采购页面与选择器测试固定第三视图和 add-on 流程完全移除。
 5. API 测试固定 generated DTO、新端点和 mutation 禁止自动重试。

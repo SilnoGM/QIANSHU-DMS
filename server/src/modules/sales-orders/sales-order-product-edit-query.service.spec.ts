@@ -31,6 +31,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
       actualUnitPriceAmount: decimal('50'),
       quantity: 2,
       lineTotalAmount: decimal('100'),
+      product: { media: [{ id: 'existing-product-media-id' }] },
     }, {
       id: 'sales-line-b',
       lineNumber: 2,
@@ -43,6 +44,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
       actualUnitPriceAmount: decimal('200'),
       quantity: 1,
       lineTotalAmount: decimal('200'),
+      product: null,
     }],
     payments: [{ amount: decimal('80') }],
     ...overrides,
@@ -120,10 +122,15 @@ describe('SalesOrderProductEditQueryService', () => {
         lineTotalAmount: '100.0000',
         activePurchasedQuantity: 2,
         canDecrease: false,
+        mainImage: {
+          id: 'existing-product-media-id',
+          contentUrl: '/api/sales-orders/sales-order-id/lines/sales-line-a/main-image/existing-product-media-id/content',
+        },
       }, expect.objectContaining({
         id: 'sales-line-b',
         activePurchasedQuantity: 0,
         canDecrease: true,
+        mainImage: null,
       })],
       availableLineCapacity: 98,
     })
@@ -141,6 +148,21 @@ describe('SalesOrderProductEditQueryService', () => {
         } },
       },
       select: { sourceSalesOrderLineId: true, quantity: true },
+    })
+  })
+
+  it('marks a partially purchased line as decreaseable down to the purchased quantity', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrderLine.findMany.mockResolvedValue([{
+      sourceSalesOrderLineId: 'sales-line-a', quantity: 1,
+    }])
+
+    const result = await fixture.service.context('sales-order-id')
+
+    expect(result.existingLines[0]).toMatchObject({
+      quantity: 2,
+      activePurchasedQuantity: 1,
+      canDecrease: true,
     })
   })
 

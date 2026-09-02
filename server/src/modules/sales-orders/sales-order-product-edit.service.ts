@@ -204,6 +204,8 @@ export class SalesOrderProductEditService {
                 lineNumber: true,
                 lineType: true,
                 productId: true,
+                productNameSnapshot: true,
+                descriptionSnapshot: true,
                 actualUnitPriceAmount: true,
                 quantity: true,
                 lineTotalAmount: true,
@@ -291,13 +293,16 @@ export class SalesOrderProductEditService {
           const target = targetById.get(line.id)
           if (target === undefined) throw productEditStateChanged()
           const activePurchasedQuantity = purchasedByLine.get(line.id) ?? 0
-          if (target.desiredQuantity < line.quantity && activePurchasedQuantity > 0) {
+          if (target.desiredQuantity < activePurchasedQuantity) {
             throw failure(
               HttpStatus.UNPROCESSABLE_ENTITY,
               'SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED',
-              '存在有效采购单的产品只能增加数量',
+              `存在有效采购单，产品数量不能低于已采购数量 ${activePurchasedQuantity}`,
             )
           }
+          const snapshotChanged = target.name !== line.productNameSnapshot
+            || target.description !== line.descriptionSnapshot
+            || target.actualUnitPriceAmount !== fixed4(line.actualUnitPriceAmount)
           if (target.desiredQuantity !== line.quantity) {
             quantityChanges.push({
               lineId: line.id,
@@ -305,11 +310,15 @@ export class SalesOrderProductEditService {
               to: target.desiredQuantity,
             })
             if (target.desiredQuantity === 0) removedLineIds.push(line.id)
-            else updatedLineIds.push(line.id)
+          }
+          if (target.desiredQuantity > 0 && (
+            target.desiredQuantity !== line.quantity || snapshotChanged
+          )) {
+            updatedLineIds.push(line.id)
           }
           if (target.desiredQuantity > 0) {
             newLineSubtotalUnits += parseSalesOrderAmountUnits(
-              fixed4(line.actualUnitPriceAmount),
+              target.actualUnitPriceAmount,
             ) * BigInt(target.desiredQuantity)
             remainingQuantity += Math.max(
               target.desiredQuantity - activePurchasedQuantity,
@@ -413,21 +422,33 @@ export class SalesOrderProductEditService {
         const removedAt = new Date()
         for (const line of order.lines) {
           const target = targetById.get(line.id)
-          if (target === undefined || target.desiredQuantity === line.quantity) continue
+          if (target === undefined) continue
           if (target.desiredQuantity === 0) {
+            if (target.desiredQuantity === line.quantity) continue
             await transaction.salesOrderLine.update({
               where: { id: line.id },
               data: { removedAt },
             })
           }
           else {
+            const snapshotChanged = target.name !== line.productNameSnapshot
+              || target.description !== line.descriptionSnapshot
+              || target.actualUnitPriceAmount !== fixed4(line.actualUnitPriceAmount)
+            if (target.desiredQuantity === line.quantity && !snapshotChanged) continue
             const lineTotalAmount = formatSalesOrderAmountUnits(
-              parseSalesOrderAmountUnits(fixed4(line.actualUnitPriceAmount))
+              parseSalesOrderAmountUnits(target.actualUnitPriceAmount)
               * BigInt(target.desiredQuantity),
             )
             await transaction.salesOrderLine.update({
               where: { id: line.id },
-              data: { quantity: target.desiredQuantity, lineTotalAmount },
+              data: {
+                // 这里只更新销售订单快照；产品档案与已经形成的采购快照均不回写。
+                productNameSnapshot: target.name,
+                descriptionSnapshot: target.description,
+                actualUnitPriceAmount: target.actualUnitPriceAmount,
+                quantity: target.desiredQuantity,
+                lineTotalAmount,
+              },
             })
           }
         }
@@ -511,6 +532,7 @@ export class SalesOrderProductEditService {
           requestId: trusted.requestId,
           metadata: {
             addedLineIds: addedLines.map(item => item.id),
+            updatedLineIds,
             quantityChanges,
             removedLineIds,
             amountDelta: signedAmount(amountDeltaUnits),
