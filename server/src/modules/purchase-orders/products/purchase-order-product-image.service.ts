@@ -147,6 +147,7 @@ export class PurchaseOrderProductImageService {
         where: {
           id: lineId,
           salesOrderId,
+          removedAt: null,
           lineType: 'CATALOG',
           productId: { not: null },
           salesOrder: { is: { orderStatus: 'CONFIRMED' } },

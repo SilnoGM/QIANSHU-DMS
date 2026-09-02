@@ -15,7 +15,6 @@ interface SalesOrderPurchaseFacts {
 type TrustedSourceView =
   | 'UNPURCHASED'
   | 'PARTIALLY_PURCHASED'
-  | 'COMPLETED_PURCHASE_ADD_ON'
 
 function classify(facts: SalesOrderPurchaseFacts): TrustedSourceView | null {
   const classifier = (
@@ -68,23 +67,6 @@ describe('classifyPurchaseSourceView', () => {
   )
 
   it.each([
-    'PENDING',
-    'PREPARING',
-    'LAND_TRANSIT',
-    'WAREHOUSE_ARRIVED',
-  ] as const)(
-    'classifies fully purchased orders before sea transit as completed-purchase add-on in %s',
-    (fulfillmentStatus) => {
-      expect(classify(facts({
-        fulfillmentStatus,
-        activePurchaseOrderCount: 1,
-        purchasedQuantity: 3,
-        remainingQuantity: 0,
-      }))).toBe('COMPLETED_PURCHASE_ADD_ON')
-    },
-  )
-
-  it.each([
     facts({ orderStatus: 'DRAFT' }),
     facts({ orderStatus: 'CANCELLED' }),
     facts({ fulfillmentStatus: 'SEA_TRANSIT' }),
@@ -92,6 +74,7 @@ describe('classifyPurchaseSourceView', () => {
     facts({ activePurchaseOrderCount: 0, purchasedQuantity: 1, remainingQuantity: 2 }),
     facts({ activePurchaseOrderCount: 1, purchasedQuantity: 0, remainingQuantity: 2 }),
     facts({ activePurchaseOrderCount: 0, purchasedQuantity: 0, remainingQuantity: 0 }),
+    facts({ activePurchaseOrderCount: 1, purchasedQuantity: 3, remainingQuantity: 0 }),
   ])('rejects an unavailable or internally inconsistent fact set %#', (input) => {
     expect(classify(input)).toBeNull()
   })
@@ -100,7 +83,6 @@ describe('classifyPurchaseSourceView', () => {
     expect(sourceView.PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS).toEqual([
       'UNPURCHASED',
       'PARTIALLY_PURCHASED',
-      'COMPLETED_PURCHASE_ADD_ON',
     ])
   })
 })

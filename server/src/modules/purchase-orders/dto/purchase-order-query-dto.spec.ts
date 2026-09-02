@@ -10,7 +10,6 @@ describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
   it.each([
     'UNPURCHASED',
     'PARTIALLY_PURCHASED',
-    'COMPLETED_PURCHASE_ADD_ON',
   ])(
     'accepts the trusted source-sales-order view %s',
     async (view) => {
@@ -31,6 +30,7 @@ describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
     { view: 'UNKNOWN' },
     { view: 'INITIAL_PURCHASE' },
     { view: 'SUPPLEMENTAL_PURCHASE' },
+    { view: 'COMPLETED_PURCHASE_ADD_ON' },
   ])('rejects a missing or unknown source-sales-order view %j', async input => {
     const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, input)
 

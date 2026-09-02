@@ -511,7 +511,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   }
 
   async function expectSourceView(
-    expectedView: 'UNPURCHASED' | 'PARTIALLY_PURCHASED' | 'COMPLETED_PURCHASE_ADD_ON',
+    expectedView: 'UNPURCHASED' | 'PARTIALLY_PURCHASED',
   ) {
     const result = await sourceQueries.salesOrders({
       view: expectedView,
@@ -529,12 +529,19 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
           value: 'PARTIALLY_PURCHASED',
           count: expectedView === 'PARTIALLY_PURCHASED' ? 1 : 0,
         },
-        {
-          value: 'COMPLETED_PURCHASE_ADD_ON',
-          count: expectedView === 'COMPLETED_PURCHASE_ADD_ON' ? 1 : 0,
-        },
       ],
     })
+  }
+
+  async function expectNoSourceView() {
+    for (const view of ['UNPURCHASED', 'PARTIALLY_PURCHASED'] as const) {
+      await expect(sourceQueries.salesOrders({
+        view,
+        keyword: `SO-PUR-E2E-${suffix}`,
+        page: 1,
+        pageSize: 20,
+      })).resolves.toMatchObject({ view, total: 0, items: [] })
+    }
   }
 
   it('classifies a confirmed pending sales order without purchase facts as unpurchased', async () => {
@@ -773,7 +780,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       toStatus: 'PREPARING',
       trigger: 'PURCHASE_COVERAGE',
     })
-    await expectSourceView('COMPLETED_PURCHASE_ADD_ON')
+    await expectNoSourceView()
   })
 
   it('atomically appends products once, becomes partial, and returns to completed after purchase', async () => {
@@ -967,7 +974,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     )).rejects.toMatchObject({
       code: 'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED',
     })
-    await expectSourceView('COMPLETED_PURCHASE_ADD_ON')
+    await expectNoSourceView()
     await expect(prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
       select: { fulfillmentStatus: true },

@@ -121,6 +121,10 @@ describe('SalesOrderPurchaseCoverageService', () => {
     )
 
     expect(fixture.calls).toEqual(['lock', 'sales-lines', 'purchases'])
+    expect(fixture.transaction.salesOrderLine.findMany).toHaveBeenCalledWith({
+      where: { salesOrderId: SALES_ORDER_ID, removedAt: null },
+      select: { id: true, quantity: true },
+    })
     expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
       where: { id: SALES_ORDER_ID },
       data: {

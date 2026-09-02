@@ -4,7 +4,7 @@ import type {
 } from '../../../generated/prisma/enums'
 
 /**
- * 采购域选择销售来源时允许的三个可信视图。
+ * 采购域选择销售来源时允许的两个可信视图。
  *
  * 前端只提交视图意图，分类必须由服务端基于订单状态、履约阶段和有效采购事实得出，
  * 避免调用方通过任意状态组合或产品 ID 聚合绕过逐销售明细的剩余数量边界。
@@ -12,7 +12,6 @@ import type {
 export const PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS = [
   'UNPURCHASED',
   'PARTIALLY_PURCHASED',
-  'COMPLETED_PURCHASE_ADD_ON',
 ] as const
 
 export type PurchaseOrderSourceSalesOrderView =
@@ -73,12 +72,6 @@ export function classifyPurchaseSourceView(
     && facts.remainingQuantity > 0
   ) {
     return 'PARTIALLY_PURCHASED'
-  }
-  if (
-    facts.activePurchaseOrderCount > 0
-    && facts.remainingQuantity === 0
-  ) {
-    return 'COMPLETED_PURCHASE_ADD_ON'
   }
   return null
 }

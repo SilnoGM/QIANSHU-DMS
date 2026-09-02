@@ -21,7 +21,9 @@ import {
   DictionaryLookupService,
   DictionaryValueUnavailableError,
 } from '../dictionaries/dictionary-lookup.service'
-import { classifyPurchaseSourceView } from '../purchase-orders/domain/purchase-order-source-sales-order-view'
+import {
+  SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES,
+} from '../purchase-orders/domain/purchase-order-source-sales-order-view'
 import {
   deriveSalesOrderPaymentStatus,
   formatSalesOrderAmountUnits,
@@ -247,13 +249,15 @@ export class SalesOrderAddOnService {
         const remainingQuantity = order.lines.reduce((sum, line) => (
           sum + Math.max(0, line.quantity - (purchasedByLine.get(line.id) ?? 0))
         ), 0)
-        if (classifyPurchaseSourceView({
-          orderStatus: order.orderStatus,
-          fulfillmentStatus: order.fulfillmentStatus,
-          activePurchaseOrderCount,
-          purchasedQuantity,
-          remainingQuantity,
-        }) !== 'COMPLETED_PURCHASE_ADD_ON') {
+        if (
+          order.orderStatus !== 'CONFIRMED'
+          || !SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES.includes(
+            order.fulfillmentStatus as typeof SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES[number],
+          )
+          || activePurchaseOrderCount < 1
+          || purchasedQuantity < 1
+          || remainingQuantity !== 0
+        ) {
           throw error(
             HttpStatus.UNPROCESSABLE_ENTITY,
             'SALES_ORDER_ADD_ON_NOT_ALLOWED',

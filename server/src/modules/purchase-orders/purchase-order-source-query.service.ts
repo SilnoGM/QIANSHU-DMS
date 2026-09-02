@@ -98,6 +98,7 @@ function sourceSalesOrderFactsSql(keyword: string | undefined): Prisma.Sql {
         source_line."sales_order_id",
         source_line."quantity"
       FROM "sales_order_lines" AS source_line
+      WHERE source_line."removed_at" IS NULL
     ),
     purchased_by_line AS (
       SELECT
@@ -169,9 +170,6 @@ function sourceSalesOrderFactsSql(keyword: string | undefined): Prisma.Sql {
             AND facts."purchased_quantity" > 0
             AND facts."remaining_quantity" > 0
             THEN 'PARTIALLY_PURCHASED'
-          WHEN facts."active_purchase_order_count" > 0
-            AND facts."remaining_quantity" = 0
-            THEN 'COMPLETED_PURCHASE_ADD_ON'
           ELSE NULL
         END AS "source_view"
       FROM order_purchase_facts AS facts
@@ -324,7 +322,10 @@ export class PurchaseOrderSourceQueryService {
     const unorderedRows = pageIds.length === 0
       ? []
       : await this.prisma.salesOrder.findMany({
-        where: { id: { in: pageIds } },
+        where: {
+          id: { in: pageIds },
+          lines: { some: { removedAt: null } },
+        },
         select: {
           id: true,
           orderNo: true,
@@ -336,6 +337,7 @@ export class PurchaseOrderSourceQueryService {
           fulfillmentStatus: true,
           paymentStatus: true,
           lines: {
+            where: { removedAt: null },
             orderBy: { lineNumber: 'asc' },
             select: {
               id: true,
@@ -422,7 +424,7 @@ export class PurchaseOrderSourceQueryService {
       )
     }
     const lines = await this.prisma.salesOrderLine.findMany({
-      where: { salesOrderId },
+      where: { salesOrderId, removedAt: null },
       orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
       select: {
         id: true,

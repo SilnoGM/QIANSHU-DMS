@@ -137,6 +137,18 @@ describe('PurchaseOrderCreateDependencyService', () => {
       lineTotalAmount: '20.0000',
     }])
     expect(fixture.transaction.$queryRaw).toHaveBeenCalledTimes(1)
+    expect(String(
+      (fixture.transaction.$queryRaw.mock.calls[0]?.[0] as { strings?: string[] })
+        ?.strings?.join(' '),
+    )).toContain('"removed_at" IS NULL')
+    expect(fixture.transaction.salesOrderLine.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: { in: [SOURCE_LINE_ID] },
+          removedAt: null,
+        },
+      }),
+    )
     expect(fixture.dictionaryLookup.requireEffectiveValue).toHaveBeenCalledWith(
       fixture.transaction,
       { dictionaryCode: 'service_provider.supplier', value: 'SUPPLIER_A' },

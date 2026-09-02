@@ -375,7 +375,6 @@ describe('PurchaseOrdersController OpenAPI', () => {
             enum: [
               'UNPURCHASED',
               'PARTIALLY_PURCHASED',
-              'COMPLETED_PURCHASE_ADD_ON',
             ],
             type: 'string',
           },
@@ -440,7 +439,6 @@ describe('PurchaseOrdersController OpenAPI', () => {
         enum: [
           'UNPURCHASED',
           'PARTIALLY_PURCHASED',
-          'COMPLETED_PURCHASE_ADD_ON',
         ],
       },
     })

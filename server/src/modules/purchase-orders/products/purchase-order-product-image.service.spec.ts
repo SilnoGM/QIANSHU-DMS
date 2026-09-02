@@ -119,6 +119,7 @@ describe('PurchaseOrderProductImageService', () => {
       where: {
         id: SALES_ORDER_LINE_ID,
         salesOrderId: SALES_ORDER_ID,
+        removedAt: null,
         lineType: 'CATALOG',
         productId: { not: null },
         salesOrder: { is: { orderStatus: 'CONFIRMED' } },

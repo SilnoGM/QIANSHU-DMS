@@ -214,6 +214,7 @@ export class PurchaseOrderCreateDependencyService {
       SELECT "id"
       FROM "sales_order_lines"
       WHERE "id" IN (${Prisma.join(ids)})
+        AND "removed_at" IS NULL
       ORDER BY "id"
       FOR UPDATE
     `)
@@ -245,7 +246,7 @@ export class PurchaseOrderCreateDependencyService {
       )
     }
     const rows = await transaction.salesOrderLine.findMany({
-      where: { id: { in: [...sourceIds] } },
+      where: { id: { in: [...sourceIds] }, removedAt: null },
       select: {
         id: true,
         salesOrderId: true,

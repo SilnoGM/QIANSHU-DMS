@@ -83,7 +83,7 @@ export class SalesOrderPurchaseCoverageService {
     if (order.fulfillmentStatus !== 'PENDING') return
 
     const salesLines = await transaction.salesOrderLine.findMany({
-      where: { salesOrderId: input.salesOrderId },
+      where: { salesOrderId: input.salesOrderId, removedAt: null },
       select: { id: true, quantity: true },
     })
     if (salesLines.length === 0) return

@@ -139,7 +139,6 @@ function prepareSourceFacts(
     .mockResolvedValueOnce(input.counts ?? [
       { view: 'UNPURCHASED', count: 1n },
       { view: 'PARTIALLY_PURCHASED', count: 1n },
-      { view: 'COMPLETED_PURCHASE_ADD_ON', count: 1n },
     ])
     .mockResolvedValueOnce(input.page ?? [{ id: 'sales-order-id', totalCount: 1n }])
 }
@@ -246,7 +245,6 @@ describe('PurchaseOrderSourceQueryService', () => {
       counts: [
         { value: 'UNPURCHASED', count: 1 },
         { value: 'PARTIALLY_PURCHASED', count: 1 },
-        { value: 'COMPLETED_PURCHASE_ADD_ON', count: 1 },
       ],
       items: [{
         id: 'sales-order-id',
@@ -282,13 +280,17 @@ describe('PurchaseOrderSourceQueryService', () => {
     const sourceQuery = fixture.prisma.salesOrder.findMany.mock.calls[0]?.[0] as
       | { select?: Record<string, unknown>, where?: Record<string, unknown> }
       | undefined
-    expect(sourceQuery?.where).toEqual({ id: { in: ['sales-order-id'] } })
+    expect(sourceQuery?.where).toEqual({
+      id: { in: ['sales-order-id'] },
+      lines: { some: { removedAt: null } },
+    })
     expect(sourceQuery?.select).toMatchObject({
       issuer: { select: { id: true, displayName: true } },
       orderStatus: true,
       fulfillmentStatus: true,
       paymentStatus: true,
       lines: {
+        where: { removedAt: null },
         select: {
           id: true,
           productId: true,
@@ -319,6 +321,7 @@ describe('PurchaseOrderSourceQueryService', () => {
     for (const sql of [countsSql, pageSql]) {
       const text = sqlText(sql)
       expect(text).toContain('source_sales_order_lines')
+      expect(text).toContain('source_line."removed_at" IS NULL')
       expect(text).toContain('purchased_by_line')
       expect(text).toContain('active_purchase_by_order')
       expect(text).toContain('source_sales_order_line_id')
@@ -332,7 +335,7 @@ describe('PurchaseOrderSourceQueryService', () => {
     expect(sqlText(pageSql)).toContain('"sales_order_id" DESC')
   })
 
-  it('returns all three counts with explicit zeroes and uses the requested fact view total', async () => {
+  it('returns both counts with explicit zeroes and uses the requested fact view total', async () => {
     const fixture = setup()
     prepareSourceFacts(fixture, {
       counts: [{ view: 'PARTIALLY_PURCHASED', count: 7n }],
@@ -347,7 +350,6 @@ describe('PurchaseOrderSourceQueryService', () => {
       counts: [
         { value: 'UNPURCHASED', count: 0 },
         { value: 'PARTIALLY_PURCHASED', count: 7 },
-        { value: 'COMPLETED_PURCHASE_ADD_ON', count: 0 },
       ],
       items: [],
       total: 7,
@@ -359,8 +361,7 @@ describe('PurchaseOrderSourceQueryService', () => {
     prepareSourceFacts(fixture, {
       counts: [
         { view: 'UNPURCHASED', count: 1n },
-        { view: 'PARTIALLY_PURCHASED', count: 1n },
-        { view: 'COMPLETED_PURCHASE_ADD_ON', count: 2n },
+        { view: 'PARTIALLY_PURCHASED', count: 2n },
       ],
       page: [
         { id: 'sales-order-id', totalCount: 2n },
@@ -376,7 +377,7 @@ describe('PurchaseOrderSourceQueryService', () => {
     ])
 
     const result = await fixture.service.salesOrders({
-      view: 'COMPLETED_PURCHASE_ADD_ON',
+      view: 'PARTIALLY_PURCHASED',
       page: 2,
       pageSize: 2,
     })
@@ -387,10 +388,13 @@ describe('PurchaseOrderSourceQueryService', () => {
     ])
     expect(result.total).toBe(2)
     expect(fixture.prisma.salesOrder.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: [
-        'sales-order-id',
-        'second-sales-order-id',
-      ] } } }),
+      expect.objectContaining({ where: {
+        id: { in: [
+          'sales-order-id',
+          'second-sales-order-id',
+        ] },
+        lines: { some: { removedAt: null } },
+      } }),
     )
   })
 
@@ -434,5 +438,10 @@ describe('PurchaseOrderSourceQueryService', () => {
         descriptionSnapshot: true,
       },
     })
+    expect(fixture.prisma.salesOrderLine.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { salesOrderId: 'sales-order-id', removedAt: null },
+      }),
+    )
   })
 })
