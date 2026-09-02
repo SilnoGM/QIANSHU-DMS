@@ -1,17 +1,17 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
-  SalesOrderAddOnContextDto,
-  SalesOrderAddOnLinesRequestDto,
-  SalesOrderAddOnResultDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderPaymentRequestDto,
   SalesOrderPaymentVoidRequestDto,
+  SalesOrderProductEditContextDto,
   SalesOrderProductOptionsDto,
-  SalesOrdersGetAddOnProductOptionsData,
+  SalesOrderProductsUpdateRequestDto,
+  SalesOrderProductsUpdateResultDto,
+  SalesOrdersGetProductEditOptionsData,
   SalesOrdersListData,
   SalesOrdersProductOptionsData,
   SalesOrdersStatusCountsData,
@@ -28,8 +28,8 @@ export type SalesOrderProductOptionsQuery = NonNullable<
 export type SalesOrderStatusCountsQuery = NonNullable<
   SalesOrdersStatusCountsData['query']
 >
-export type SalesOrderAddOnProductOptionsQuery = NonNullable<
-  SalesOrdersGetAddOnProductOptionsData['query']
+export type SalesOrderProductEditOptionsQuery = NonNullable<
+  SalesOrdersGetProductEditOptionsData['query']
 >
 export type SalesOrderCurrency = 'TWD' | 'MYR'
 
@@ -64,28 +64,28 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       params: query,
       signal,
     }),
-    addOnContext: (salesOrderId: string, signal: AbortSignal) =>
-      client.get<SalesOrderAddOnContextDto>(
-        `sales-orders/${encodeURIComponent(salesOrderId)}/add-on-context`,
+    productEditContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderProductEditContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-context`,
         { errorPresentation: 'local', signal },
       ),
-    addOnProductOptions: (
+    productEditOptions: (
       salesOrderId: string,
-      query: SalesOrderAddOnProductOptionsQuery,
+      query: SalesOrderProductEditOptionsQuery,
       signal: AbortSignal,
     ) => client.get<SalesOrderProductOptionsDto>(
-      `sales-orders/${encodeURIComponent(salesOrderId)}/add-on-product-options`,
+      `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-options`,
       { errorPresentation: 'local', params: query, signal },
     ),
-    appendAddOnLines: (
+    updateProducts: (
       salesOrderId: string,
-      data: SalesOrderAddOnLinesRequestDto,
+      data: SalesOrderProductsUpdateRequestDto,
       signal: AbortSignal,
-    ) => client.post<SalesOrderAddOnResultDto>(
-      `sales-orders/${encodeURIComponent(salesOrderId)}/add-on-lines`,
+    ) => client.patch<SalesOrderProductsUpdateResultDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/products`,
       data,
       {
-        // 追加没有幂等操作键；网络结果未知时必须刷新核对，禁止自动重放。
+        // 产品修改携带版本号但没有幂等操作键；网络结果未知时禁止自动重放。
         errorPresentation: 'local',
         retry: false,
         signal,

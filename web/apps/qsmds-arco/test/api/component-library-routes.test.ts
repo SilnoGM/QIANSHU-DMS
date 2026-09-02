@@ -134,9 +134,9 @@ test('组件库按分类提供十九个独立组件路由', () => {
         title: '销售订单选择弹窗',
       },
       {
-        name: 'componentLibraryQsSalesOrderAddOnProductsModal',
-        path: 'sales-order-add-on-products-modal',
-        title: '销售订单加购产品弹窗',
+        name: 'componentLibraryQsSalesOrderProductsEditorModal',
+        path: 'sales-order-products-editor-modal',
+        title: '销售订单产品修改弹窗',
       },
       {
         name: 'componentLibraryQsGoodTooltip',
@@ -274,9 +274,9 @@ test('十九个组件页面与页面模板复用展示壳且不依赖业务 API 
       title: '销售订单选择弹窗',
     },
     {
-      componentName: 'ComponentLibraryQsSalesOrderAddOnProductsModal',
-      file: '../../src/views/component_library/business/sales-order-add-on-products-modal.vue',
-      title: '销售订单加购产品弹窗',
+      componentName: 'ComponentLibraryQsSalesOrderProductsEditorModal',
+      file: '../../src/views/component_library/business/sales-order-products-editor-modal.vue',
+      title: '销售订单产品修改弹窗',
     },
     {
       componentName: 'ComponentLibraryQsGoodTooltip',

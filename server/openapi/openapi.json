@@ -27409,9 +27409,9 @@
         }
       }
     },
-    "/api/sales-orders/{salesOrderId}/add-on-context": {
+    "/api/sales-orders/{salesOrderId}/product-edit-context": {
       "get": {
-        "operationId": "sales_orders_get_add_on_context",
+        "operationId": "sales_orders_get_product_edit_context",
         "parameters": [
           {
             "name": "salesOrderId",
@@ -27445,7 +27445,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SalesOrderAddOnContextDto"
+                  "$ref": "#/components/schemas/SalesOrderProductEditContextDto"
                 }
               }
             }
@@ -27642,7 +27642,7 @@
             {
               "status": 422,
               "codes": [
-                "SALES_ORDER_ADD_ON_NOT_ALLOWED",
+                "SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED",
                 "VALIDATION_FAILED"
               ]
             }
@@ -27650,9 +27650,9 @@
         }
       }
     },
-    "/api/sales-orders/{salesOrderId}/add-on-lines": {
-      "post": {
-        "operationId": "sales_orders_append_add_on_lines",
+    "/api/sales-orders/{salesOrderId}/products": {
+      "patch": {
+        "operationId": "sales_orders_update_products",
         "parameters": [
           {
             "name": "salesOrderId",
@@ -27680,13 +27680,13 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SalesOrderAddOnLinesRequestDto"
+                "$ref": "#/components/schemas/SalesOrderProductsUpdateRequestDto"
               }
             }
           }
         },
         "responses": {
-          "201": {
+          "200": {
             "headers": {
               "X-Request-Id": {
                 "schema": {
@@ -27707,7 +27707,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SalesOrderAddOnResultDto"
+                  "$ref": "#/components/schemas/SalesOrderProductsUpdateResultDto"
                 }
               }
             }
@@ -27914,6 +27914,7 @@
           "session": "required",
           "csrf": true,
           "privateNoStore": true,
+          "retry": false,
           "errors": [
             {
               "status": 403,
@@ -27932,17 +27933,18 @@
             {
               "status": 409,
               "codes": [
-                "SALES_ORDER_ADD_ON_VERSION_CONFLICT",
-                "SALES_ORDER_STATE_CHANGED"
+                "SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED",
+                "SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT"
               ]
             },
             {
               "status": 422,
               "codes": [
-                "SALES_ORDER_ADD_ON_NOT_ALLOWED",
-                "SALES_ORDER_ADD_ON_PRODUCT_SUPPLIER_MISMATCH",
-                "SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE",
+                "SALES_ORDER_DEPOSIT_REDUCTION_CONFIRMATION_REQUIRED",
                 "SALES_ORDER_LINE_LIMIT_EXCEEDED",
+                "SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED",
+                "SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED",
+                "SALES_ORDER_TOTAL_BELOW_RECEIVED",
                 "VALIDATION_FAILED"
               ]
             }
@@ -27950,9 +27952,9 @@
         }
       }
     },
-    "/api/sales-orders/{salesOrderId}/add-on-product-options": {
+    "/api/sales-orders/{salesOrderId}/product-edit-options": {
       "get": {
-        "operationId": "sales_orders_get_add_on_product_options",
+        "operationId": "sales_orders_get_product_edit_options",
         "parameters": [
           {
             "name": "salesOrderId",
@@ -27960,16 +27962,6 @@
             "in": "path",
             "schema": {
               "format": "uuid",
-              "type": "string"
-            }
-          },
-          {
-            "name": "supplierValue",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "minLength": 1,
-              "maxLength": 64,
               "type": "string"
             }
           },
@@ -28255,8 +28247,7 @@
             {
               "status": 422,
               "codes": [
-                "SALES_ORDER_ADD_ON_NOT_ALLOWED",
-                "SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE",
+                "SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED",
                 "VALIDATION_FAILED"
               ]
             }
@@ -28264,9 +28255,9 @@
         }
       }
     },
-    "/api/sales-orders/{salesOrderId}/add-on-product-options/{productId}/main-image/{productMediaId}/content": {
+    "/api/sales-orders/{salesOrderId}/product-edit-options/{productId}/main-image/{productMediaId}/content": {
       "head": {
-        "operationId": "sales_orders_head_add_on_product_option_main_image",
+        "operationId": "sales_orders_head_product_edit_option_main_image",
         "parameters": [
           {
             "name": "salesOrderId",
@@ -28296,16 +28287,6 @@
             }
           },
           {
-            "name": "supplierValue",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "minLength": 1,
-              "maxLength": 64,
-              "type": "string"
-            }
-          },
-          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -28325,7 +28306,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Authorized sales-order add-on product option main image.",
+            "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
                 "description": "Byte-range capability is implemented by the selected private delivery mode.",
@@ -28408,7 +28389,7 @@
             }
           },
           "206": {
-            "description": "Authorized sales-order add-on product option main image.",
+            "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
                 "description": "Byte-range capability is implemented by the selected private delivery mode.",
@@ -28812,7 +28793,7 @@
         }
       },
       "get": {
-        "operationId": "sales_orders_get_add_on_product_option_main_image",
+        "operationId": "sales_orders_get_product_edit_option_main_image",
         "parameters": [
           {
             "name": "salesOrderId",
@@ -28842,16 +28823,6 @@
             }
           },
           {
-            "name": "supplierValue",
-            "required": true,
-            "in": "query",
-            "schema": {
-              "minLength": 1,
-              "maxLength": 64,
-              "type": "string"
-            }
-          },
-          {
             "name": "If-None-Match",
             "in": "header",
             "required": false,
@@ -28871,7 +28842,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Authorized sales-order add-on product option main image.",
+            "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
                 "description": "Byte-range capability is implemented by the selected private delivery mode.",
@@ -28998,7 +28969,7 @@
             }
           },
           "206": {
-            "description": "Authorized sales-order add-on product option main image.",
+            "description": "Authorized sales-order product-edit option main image.",
             "headers": {
               "Accept-Ranges": {
                 "description": "Byte-range capability is implemented by the selected private delivery mode.",
@@ -37329,8 +37300,7 @@
               "type": "string",
               "enum": [
                 "UNPURCHASED",
-                "PARTIALLY_PURCHASED",
-                "COMPLETED_PURCHASE_ADD_ON"
+                "PARTIALLY_PURCHASED"
               ]
             }
           },
@@ -42825,6 +42795,7 @@
                 "SALES_ORDER_DOCUMENT_ATTACHED",
                 "SALES_ORDER_DOCUMENT_DETACHED",
                 "SALES_ORDER_PRODUCT_APPENDED",
+                "SALES_ORDER_PRODUCTS_CHANGED",
                 "PURCHASE_ORDER_CREATED",
                 "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
                 "PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED",
@@ -48623,7 +48594,7 @@
           "total"
         ]
       },
-      "SalesOrderAddOnContextOrderDto": {
+      "SalesOrderProductEditContextOrderDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -48641,6 +48612,16 @@
             "enum": [
               "TWD",
               "MYR"
+            ]
+          },
+          "orderStatus": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "CONFIRMED",
+              "PENDING_RECONCILIATION",
+              "COMPLETED",
+              "CANCELLED"
             ]
           },
           "fulfillmentStatus": {
@@ -48672,12 +48653,13 @@
           "orderNo",
           "customerName",
           "currencyCode",
+          "orderStatus",
           "fulfillmentStatus",
           "paymentStatus",
           "version"
         ]
       },
-      "SalesOrderAddOnContextAmountsDto": {
+      "SalesOrderProductEditAmountsDto": {
         "type": "object",
         "properties": {
           "lineSubtotalAmount": {
@@ -48708,7 +48690,7 @@
           "outstandingAmount"
         ]
       },
-      "SalesOrderAddOnExistingLineDto": {
+      "SalesOrderProductEditExistingLineDto": {
         "type": "object",
         "properties": {
           "id": {
@@ -48726,12 +48708,25 @@
               "CUSTOM"
             ]
           },
+          "productId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
           "productNo": {
             "type": "string",
             "nullable": true
           },
           "productName": {
             "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "standardUnitPriceAmount": {
+            "type": "string",
+            "nullable": true
           },
           "actualUnitPriceAmount": {
             "type": "string"
@@ -48742,32 +48737,44 @@
           },
           "lineTotalAmount": {
             "type": "string"
+          },
+          "activePurchasedQuantity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "canDecrease": {
+            "type": "boolean"
           }
         },
         "required": [
           "id",
           "lineNumber",
           "lineType",
+          "productId",
           "productNo",
           "productName",
+          "description",
+          "standardUnitPriceAmount",
           "actualUnitPriceAmount",
           "quantity",
-          "lineTotalAmount"
+          "lineTotalAmount",
+          "activePurchasedQuantity",
+          "canDecrease"
         ]
       },
-      "SalesOrderAddOnContextDto": {
+      "SalesOrderProductEditContextDto": {
         "type": "object",
         "properties": {
           "salesOrder": {
-            "$ref": "#/components/schemas/SalesOrderAddOnContextOrderDto"
+            "$ref": "#/components/schemas/SalesOrderProductEditContextOrderDto"
           },
           "amounts": {
-            "$ref": "#/components/schemas/SalesOrderAddOnContextAmountsDto"
+            "$ref": "#/components/schemas/SalesOrderProductEditAmountsDto"
           },
           "existingLines": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SalesOrderAddOnExistingLineDto"
+              "$ref": "#/components/schemas/SalesOrderProductEditExistingLineDto"
             }
           },
           "availableLineCapacity": {
@@ -48781,6 +48788,24 @@
           "amounts",
           "existingLines",
           "availableLineCapacity"
+        ]
+      },
+      "SalesOrderExistingLineTargetDto": {
+        "type": "object",
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "desiredQuantity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "lineId",
+          "desiredQuantity"
         ]
       },
       "SalesOrderLineInputDto": {
@@ -48824,7 +48849,7 @@
           "quantity"
         ]
       },
-      "SalesOrderAddOnLinesRequestDto": {
+      "SalesOrderProductsUpdateRequestDto": {
         "type": "object",
         "properties": {
           "expectedVersion": {
@@ -48832,18 +48857,23 @@
             "minimum": 1,
             "maximum": 2147483647
           },
-          "supplierValue": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 64
-          },
           "reason": {
             "type": "string",
             "minLength": 1,
             "maxLength": 500
           },
-          "lines": {
+          "confirmDepositReduction": {
+            "type": "boolean"
+          },
+          "existingLines": {
             "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesOrderExistingLineTargetDto"
+            }
+          },
+          "newLines": {
             "maxItems": 100,
             "type": "array",
             "items": {
@@ -48853,12 +48883,13 @@
         },
         "required": [
           "expectedVersion",
-          "supplierValue",
           "reason",
-          "lines"
+          "confirmDepositReduction",
+          "existingLines",
+          "newLines"
         ]
       },
-      "SalesOrderAddOnResultDto": {
+      "SalesOrderProductsUpdateResultDto": {
         "type": "object",
         "properties": {
           "salesOrderId": {
@@ -48880,8 +48911,33 @@
               "format": "uuid"
             }
           },
+          "updatedLineIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "removedLineIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           "amountDelta": {
             "type": "string"
+          },
+          "fulfillmentStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PREPARING",
+              "LAND_TRANSIT",
+              "WAREHOUSE_ARRIVED",
+              "SEA_TRANSIT",
+              "SIGNED"
+            ]
           },
           "paymentStatus": {
             "type": "string",
@@ -48891,8 +48947,11 @@
               "PAID"
             ]
           },
+          "depositReduced": {
+            "type": "boolean"
+          },
           "amounts": {
-            "$ref": "#/components/schemas/SalesOrderAddOnContextAmountsDto"
+            "$ref": "#/components/schemas/SalesOrderProductEditAmountsDto"
           }
         },
         "required": [
@@ -48900,8 +48959,12 @@
           "previousVersion",
           "version",
           "addedLineIds",
+          "updatedLineIds",
+          "removedLineIds",
           "amountDelta",
+          "fulfillmentStatus",
           "paymentStatus",
+          "depositReduced",
           "amounts"
         ]
       },
@@ -50200,8 +50263,7 @@
             "type": "string",
             "enum": [
               "UNPURCHASED",
-              "PARTIALLY_PURCHASED",
-              "COMPLETED_PURCHASE_ADD_ON"
+              "PARTIALLY_PURCHASED"
             ]
           },
           "count": {
@@ -50356,8 +50418,7 @@
             "type": "string",
             "enum": [
               "UNPURCHASED",
-              "PARTIALLY_PURCHASED",
-              "COMPLETED_PURCHASE_ADD_ON"
+              "PARTIALLY_PURCHASED"
             ]
           },
           "counts": {
@@ -51373,6 +51434,7 @@
               "SALES_ORDER_DOCUMENT_ATTACHED",
               "SALES_ORDER_DOCUMENT_DETACHED",
               "SALES_ORDER_PRODUCT_APPENDED",
+              "SALES_ORDER_PRODUCTS_CHANGED",
               "PURCHASE_ORDER_CREATED",
               "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
               "PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED",

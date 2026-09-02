@@ -16,6 +16,8 @@ export const MAX_AUDIT_METADATA_KEY_LENGTH = 128
 export const MAX_AUDIT_METADATA_STRING_LENGTH = 512
 export const MAX_AUDIT_METADATA_ENTRY_COUNT = 32
 export const MAX_AUDIT_METADATA_SERIALIZED_BYTES = 8_192
+const MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES = 32_768
+const MAX_PRODUCT_CHANGE_AUDIT_ARRAY_LENGTH = 100
 
 const MAX_REQUEST_ID_LENGTH = 64
 const MAX_AUDIT_REFERENCE_LENGTH = 128
@@ -49,7 +51,12 @@ const SAFE_PASSWORD_STATE_METADATA_KEYS = new Set(['mustchangepassword'])
 const RESERVED_METADATA_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 export type AuditMetadataScalar = string | number | boolean | null
-export type AuditMetadata = Record<string, AuditMetadataScalar>
+export type AuditMetadataObject = Record<string, AuditMetadataScalar>
+export type AuditMetadataValue =
+  | AuditMetadataScalar
+  | AuditMetadataScalar[]
+  | AuditMetadataObject[]
+export type AuditMetadata = Record<string, AuditMetadataValue>
 
 export interface RecordAuditEventInput {
   eventType: AuditEventTypeValue
@@ -164,7 +171,7 @@ function validateAuditEventInput(
       MAX_AUDIT_REFERENCE_LENGTH,
     ),
     sourceIpHash: validateSourceIpHash(input.sourceIpHash),
-    metadata: validateMetadata(input.metadata),
+    metadata: validateMetadata(input.metadata, input.eventType),
   }
 }
 
@@ -228,7 +235,10 @@ function validateSourceIpHash(
   return Buffer.from(value)
 }
 
-function validateMetadata(value: AuditMetadata | undefined): AuditMetadata {
+function validateMetadata(
+  value: AuditMetadata | undefined,
+  eventType: AuditEventTypeValue,
+): AuditMetadata {
   if (value === undefined) {
     return {}
   }
@@ -246,22 +256,23 @@ function validateMetadata(value: AuditMetadata | undefined): AuditMetadata {
 
   const metadata: AuditMetadata = {}
 
+  const allowStructured = eventType === AuditEventType.SALES_ORDER_PRODUCTS_CHANGED
   for (const [key, descriptor] of entries) {
     if (
       !descriptor.enumerable
       || !('value' in descriptor)
-      || !isMetadataScalar(descriptor.value)
       || !isSafeMetadataEntry(key, descriptor.value)
     ) {
       throw new AuditEventValidationError()
     }
-
-    metadata[key] = descriptor.value
+    metadata[key] = validateMetadataValue(descriptor.value, allowStructured)
   }
 
   if (
     Buffer.byteLength(JSON.stringify(metadata), 'utf8')
-    > MAX_AUDIT_METADATA_SERIALIZED_BYTES
+    > (allowStructured
+        ? MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES
+        : MAX_AUDIT_METADATA_SERIALIZED_BYTES)
   ) {
     throw new AuditEventValidationError()
   }
@@ -281,7 +292,7 @@ function isPlainObject(value: unknown): value is AuditMetadata {
 
 function isSafeMetadataEntry(
   key: string,
-  value: AuditMetadataScalar,
+  value: unknown,
 ): boolean {
   if (
     key.length === 0
@@ -301,6 +312,39 @@ function isSafeMetadataEntry(
   return !SENSITIVE_METADATA_KEY_FRAGMENTS.some(fragment =>
     normalizedKey.includes(fragment),
   )
+}
+
+function validateMetadataValue(
+  value: unknown,
+  allowStructured: boolean,
+): AuditMetadataValue {
+  if (isMetadataScalar(value)) return value
+  if (
+    !allowStructured
+    || !Array.isArray(value)
+    || value.length > MAX_PRODUCT_CHANGE_AUDIT_ARRAY_LENGTH
+  ) {
+    throw new AuditEventValidationError()
+  }
+  if (value.every(isMetadataScalar)) return [...value]
+  if (value.every(item => isPlainObject(item))) {
+    return value.map((item) => {
+      const entries = Object.entries(item)
+      if (entries.length > 8) throw new AuditEventValidationError()
+      const normalized: AuditMetadataObject = {}
+      for (const [key, nestedValue] of entries) {
+        if (
+          !isMetadataScalar(nestedValue)
+          || !isSafeMetadataEntry(key, nestedValue)
+        ) {
+          throw new AuditEventValidationError()
+        }
+        normalized[key] = nestedValue
+      }
+      return normalized
+    })
+  }
+  throw new AuditEventValidationError()
 }
 
 function isMetadataScalar(value: unknown): value is AuditMetadataScalar {

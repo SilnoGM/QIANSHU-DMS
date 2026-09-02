@@ -19,7 +19,7 @@ import { mapSalesOrderProductOption } from './products/sales-order-product-optio
 
 const SALES_ORDER_DETAIL_INCLUDE = {
   issuer: { select: { id: true, displayName: true } },
-  lines: { orderBy: { lineNumber: 'asc' } },
+  lines: { where: { removedAt: null }, orderBy: { lineNumber: 'asc' } },
   payments: {
     orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
     include: {
@@ -97,6 +97,7 @@ const SALES_ORDER_LIST_SELECT = {
     select: { amount: true },
   },
   lines: {
+    where: { removedAt: null },
     orderBy: { lineNumber: 'asc' },
     select: {
       id: true,
@@ -710,6 +711,7 @@ export class SalesOrderQueryService {
       }),
       this.prisma.salesOrderLine.findMany({
         where: {
+          removedAt: null,
           standardUnitPriceAmount: { not: null },
           salesOrder: { is: twdWhere },
         },
@@ -733,6 +735,7 @@ export class SalesOrderQueryService {
       }),
       this.prisma.salesOrderLine.findMany({
         where: {
+          removedAt: null,
           standardUnitPriceAmount: { not: null },
           salesOrder: { is: myrWhere },
         },

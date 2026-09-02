@@ -1,7 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
-  SalesOrderAddOnLinesRequestDto,
+  SalesOrderProductsUpdateRequestDto,
 } from '../../src/api/generated/types.gen'
 
 import assert from 'node:assert/strict'
@@ -13,7 +13,7 @@ import { createSalesOrdersApi } from '../../src/api/modules/sales-orders'
 interface Call {
   readonly config?: unknown
   readonly data?: unknown
-  readonly method: 'get' | 'post'
+  readonly method: 'get' | 'patch' | 'post'
   readonly url: string
 }
 
@@ -26,6 +26,10 @@ function createRecorder(calls: Call[]): AxiosInstance {
     },
     post(url: string, data?: unknown, config?: unknown) {
       calls.push({ config, data, method: 'post', url })
+      return response
+    },
+    patch(url: string, data?: unknown, config?: unknown) {
+      calls.push({ config, data, method: 'patch', url })
       return response
     },
   } as unknown as AxiosInstance
@@ -212,15 +216,19 @@ test('临时凭证上传只发送 multipart，不携带订单编号或幂等 Key
   assert.equal((call.data.get('file') as File).name, 'deposit.png')
 })
 
-test('销售加购读取使用订单币种，追加写入局部呈错且绝不自动重试', async () => {
+test('销售产品修改读取不依赖供应商，PATCH 写入局部呈错且绝不自动重试', async () => {
   const calls: Call[] = []
   const api = createSalesOrdersApi(createRecorder(calls))
   const controller = new AbortController()
   const request = {
     expectedVersion: 4,
-    supplierValue: 'SUPPLIER_TW_01',
-    reason: '客户加购产品',
-    lines: [{
+    reason: '客户调整产品',
+    confirmDepositReduction: false,
+    existingLines: [{
+      lineId: '22222222-2222-4222-8222-222222222222',
+      desiredQuantity: 2,
+    }],
+    newLines: [{
       lineType: 'CATALOG',
       productId: '11111111-1111-4111-8111-111111111111',
       actualUnitPriceAmount: '120.00',
@@ -232,16 +240,15 @@ test('销售加购读取使用订单币种，追加写入局部呈错且绝不�
       actualUnitPriceAmount: '30.00',
       quantity: 2,
     }],
-  } satisfies SalesOrderAddOnLinesRequestDto
+  } satisfies SalesOrderProductsUpdateRequestDto
 
-  await api.addOnContext('sales/order', controller.signal)
-  await api.addOnProductOptions('sales/order', {
-    supplierValue: 'SUPPLIER_TW_01',
+  await api.productEditContext('sales/order', controller.signal)
+  await api.productEditOptions('sales/order', {
     keyword: '组合柜',
     page: 2,
     pageSize: 20,
   }, controller.signal)
-  await api.appendAddOnLines('sales/order', request, controller.signal)
+  await api.updateProducts('sales/order', request, controller.signal)
 
   assert.deepEqual(calls, [{
     config: {
@@ -249,12 +256,11 @@ test('销售加购读取使用订单币种，追加写入局部呈错且绝不�
       signal: controller.signal,
     },
     method: 'get',
-    url: 'sales-orders/sales%2Forder/add-on-context',
+    url: 'sales-orders/sales%2Forder/product-edit-context',
   }, {
     config: {
       errorPresentation: 'local',
       params: {
-        supplierValue: 'SUPPLIER_TW_01',
         keyword: '组合柜',
         page: 2,
         pageSize: 20,
@@ -262,7 +268,7 @@ test('销售加购读取使用订单币种，追加写入局部呈错且绝不�
       signal: controller.signal,
     },
     method: 'get',
-    url: 'sales-orders/sales%2Forder/add-on-product-options',
+    url: 'sales-orders/sales%2Forder/product-edit-options',
   }, {
     config: {
       errorPresentation: 'local',
@@ -270,7 +276,7 @@ test('销售加购读取使用订单币种，追加写入局部呈错且绝不�
       signal: controller.signal,
     },
     data: request,
-    method: 'post',
-    url: 'sales-orders/sales%2Forder/add-on-lines',
+    method: 'patch',
+    url: 'sales-orders/sales%2Forder/products',
   }])
 })

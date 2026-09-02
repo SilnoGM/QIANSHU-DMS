@@ -81,6 +81,7 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SALES_ORDER_DOCUMENT_ATTACHED: '销售订单凭证已关联',
   SALES_ORDER_DOCUMENT_DETACHED: '销售订单凭证已解除',
   SALES_ORDER_PRODUCT_APPENDED: '销售订单产品已追加',
+  SALES_ORDER_PRODUCTS_CHANGED: '销售订单产品已修改',
   PURCHASE_ORDER_CREATED: '采购订单已创建',
   PURCHASE_ORDER_ORDER_STATUS_CHANGED: '采购订单状态已变更',
   PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED: '采购订单履约状态已变更',

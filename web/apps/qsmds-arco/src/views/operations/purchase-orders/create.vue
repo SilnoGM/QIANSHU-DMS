@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Step, StepContext, StepsItem } from '@fantastic-admin/components'
+import type { StepsItem } from '@fantastic-admin/components'
 import type { DateValue } from '@internationalized/date'
 import type {
   PurchaseOrderCreateStep,
@@ -11,8 +11,6 @@ import type { PurchaseSourceSalesOrderSelection } from './purchase-source-sales-
 import type {
   PurchaseOrderSourceSalesOrderLineDto,
   PurchaseOrderSourceSalesOrderListItemDto,
-  SalesOrderAddOnContextDto,
-  SalesOrderAddOnResultDto,
 } from '@/api/generated/types.gen'
 import type { PurchaseOrderSourceSalesOrdersQuery } from '@/api/modules/purchase-orders'
 import type {
@@ -21,27 +19,21 @@ import type {
   OrderProductLineReadOnlyModel,
 } from '@/components/business/QsOrderProductLineEditor/types'
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
-import type { SalesOrderAddOnIntent } from '@/components/business/QsSalesOrderAddOnProductsModal/types'
 
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import { useMediaQuery } from '@vueuse/core'
 
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
-import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
-import { findCurrencyDescriptor } from '@/components/base/currency'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsOrderProductLineEditor from '@/components/business/QsOrderProductLineEditor/index.vue'
 import QsPurchaseOrderDesc from '@/components/business/QsPurchaseOrderDesc/index.vue'
-import QsSalesOrderAddOnProductsModal from '@/components/business/QsSalesOrderAddOnProductsModal/index.vue'
-import { calculateSalesOrderAddOnPreview } from '@/components/business/QsSalesOrderAddOnProductsModal/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
-import { getSalesOrderApiFailure, isSalesOrderAbortError } from '../sales-orders/sales-order-create.logic'
 import {
   adaptPurchaseOrderProductPage,
   beginPurchaseOrderSubmission,
@@ -70,15 +62,6 @@ import {
   isPurchaseOrderAbortError,
 } from './purchase-order-list.logic'
 import PurchaseOrderPaymentTerms from './purchase-order-payment-terms.vue'
-import {
-  beginSalesOrderAddOn,
-  completeSalesOrderAddOn,
-  createSalesOrderAddOnState,
-  markSalesOrderAddOnSaved,
-  resolveSalesOrderAddOnFailure,
-  stageSalesOrderAddOnCandidate,
-  verifySalesOrderAddOnResult,
-} from './purchase-order-sales-add-on.logic'
 import PurchaseSourceSalesOrderSelector from './purchase-source-sales-order-selector.vue'
 
 defineOptions({ name: 'OperationsPurchaseOrderCreate' })
@@ -107,7 +90,6 @@ const todayDate = today(getLocalTimeZone())
 const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
-const canUpdateSalesOrders = computed(() => auth('sales-orders:update'))
 const purchaseType = parsePurchaseOrderCreateType(route.query.type, canCreateStock.value)
 const sourceShortcut = parsePurchaseOrderSourceShortcut({
   purchaseType,
@@ -141,16 +123,6 @@ const purchasedSourceLines = shallowRef<readonly OrderProductLineReadOnlyModel[]
 const sourceSalesOrderLineIdByKey = shallowRef<Readonly<Record<string, string | undefined>>>({})
 const maximumQuantityByKey = shallowRef<Readonly<Record<string, number | undefined>>>({})
 const sourceSelectorVisible = ref(false)
-const addOnCandidate = shallowRef<PurchaseOrderSourceSalesOrderListItemDto | null>(null)
-const addOnContext = shallowRef<SalesOrderAddOnContextDto | null>(null)
-const addOnLines = ref<readonly OrderProductLineModel[]>([])
-const addOnReason = ref('客户加购产品')
-const addOnVisible = ref(false)
-const addOnLoading = ref(false)
-const addOnError = ref<string | null>(null)
-const addOnRunning = ref(false)
-const pendingAddOnIntent = shallowRef<SalesOrderAddOnIntent | null>(null)
-const addOnWorkflow = shallowRef(createSalesOrderAddOnState(null))
 const sourceLoading = ref(false)
 const synchronizing = ref(false)
 const sourceError = ref('')
@@ -173,8 +145,6 @@ let sourceAbortController: AbortController | null = null
 let shortcutAbortController: AbortController | null = null
 let synchronizeAbortController: AbortController | null = null
 let submitAbortController: AbortController | null = null
-let addOnContextAbortController: AbortController | null = null
-let addOnWorkflowAbortController: AbortController | null = null
 let shortcutLookupStarted = false
 let submitRequestVersion = 0
 let pendingNavigationResolver: ((allow: boolean) => void) | null = null
@@ -210,10 +180,7 @@ const purchaseOrderDescModel = computed(() => mapPurchaseOrderCreateToDesc({
   shippingMarkText: formModel.shippingMarkText,
   supplierLabel: selectedSupplierDisplayLabel.value,
 }))
-const submitLocked = computed(() => submission.value.phase === 'submitting' || addOnRunning.value)
-const addOnCurrencies = computed(() => currencyCatalog.currencies.value.filter(item => (
-  item.code === 'TWD' || item.code === 'MYR'
-)))
+const submitLocked = computed(() => submission.value.phase === 'submitting')
 // 两类采购都复用分步填写与核对流程；销售来源能力仍单独受类型约束，
 // 避免为了统一页面体验而把销售订单选择或同步入口泄漏给备货采购。
 const steppedCreate = computed(() => purchaseType !== null)
@@ -401,54 +368,7 @@ async function selectSourceSalesOrder(
 async function handleSourceSalesOrderConfirm(
   selection: PurchaseSourceSalesOrderSelection,
 ): Promise<void> {
-  if (selection.view === 'COMPLETED_PURCHASE_ADD_ON') {
-    if (formModel.supplierValue === null) {
-      toast.warning('请先选择供应商')
-      return
-    }
-    addOnCandidate.value = selection.item
-    addOnWorkflow.value = stageSalesOrderAddOnCandidate(
-      createSalesOrderAddOnState(selectedSalesOrder.value?.id ?? null),
-      selection.item.id,
-    )
-    sourceSelectorVisible.value = false
-    addOnVisible.value = true
-    await loadSalesOrderAddOnContext()
-    return
-  }
   await selectSourceSalesOrder(selection.item)
-}
-
-async function loadSalesOrderAddOnContext(): Promise<void> {
-  const candidate = addOnCandidate.value
-  if (candidate === null) {
-    return
-  }
-  addOnContextAbortController?.abort()
-  const controller = new AbortController()
-  addOnContextAbortController = controller
-  addOnLoading.value = true
-  addOnError.value = null
-  try {
-    const response = await salesOrdersApi.addOnContext(candidate.id, controller.signal)
-    if (controller.signal.aborted || addOnCandidate.value?.id !== candidate.id) {
-      return
-    }
-    addOnContext.value = response.data
-    addOnLines.value = []
-    addOnReason.value = '客户加购产品'
-  }
-  catch (error) {
-    if (!controller.signal.aborted && !isSalesOrderAbortError(error)) {
-      addOnError.value = getSalesOrderApiFailure(error).message
-    }
-  }
-  finally {
-    if (addOnContextAbortController === controller) {
-      addOnContextAbortController = null
-      addOnLoading.value = false
-    }
-  }
 }
 
 /**
@@ -529,179 +449,6 @@ async function loadAllSupplierProducts(signal: AbortSignal) {
     page += 1
   } while (products.length < total)
   return products
-}
-
-const loadAddOnProducts: ProductPageLoader = async (query, signal) => {
-  const candidate = addOnCandidate.value
-  const supplierValue = formModel.supplierValue
-  if (candidate === null || supplierValue === null) {
-    return { items: [], page: query.page, pageSize: query.pageSize, total: 0 }
-  }
-  const response = await salesOrdersApi.addOnProductOptions(candidate.id, {
-    ...(query.keyword === undefined ? {} : { keyword: query.keyword }),
-    page: query.page,
-    pageSize: query.pageSize,
-    supplierValue,
-  }, signal)
-  return {
-    ...response.data,
-    items: response.data.items.map(item => ({
-      ...item,
-      mainImage: item.mainImage ?? null,
-    })),
-  }
-}
-
-async function appendSalesOrderAddOnLines(): Promise<SalesOrderAddOnResultDto> {
-  const candidate = addOnCandidate.value
-  const intent = pendingAddOnIntent.value
-  const supplierValue = formModel.supplierValue
-  const controller = addOnWorkflowAbortController
-  if (candidate === null || intent === null || supplierValue === null || controller === null) {
-    throw new Error('销售加购上下文已失效，请重新选择销售订单')
-  }
-  const response = await salesOrdersApi.appendAddOnLines(candidate.id, {
-    expectedVersion: intent.expectedVersion,
-    reason: intent.reason,
-    supplierValue,
-    lines: intent.lines.map(line => ({ ...line })),
-  }, controller.signal)
-
-  if (selectedSalesOrder.value?.id !== candidate.id) {
-    formModel.lines = []
-    purchasedSourceLines.value = []
-    formModel.depositDueAmount = null
-    formModel.balanceDueAmount = null
-    sourceSalesOrderLineIdByKey.value = {}
-    maximumQuantityByKey.value = {}
-  }
-  sourceSalesOrderLines.value = []
-  selectedSalesOrder.value = candidate
-  // 销售 POST 明确成功后才能提升候选；之后即使采购同步失败，也不能回滚已经
-  // 提交的销售事实，只能保留关联并通过安全 GET 恢复。
-  addOnWorkflow.value = markSalesOrderAddOnSaved(addOnWorkflow.value)
-  return response.data
-}
-
-async function verifyReturnedSalesOrderAmounts(context: StepContext): Promise<void> {
-  const result = context.addOnResult as SalesOrderAddOnResultDto | undefined
-  const intent = pendingAddOnIntent.value
-  const currentContext = addOnContext.value
-  if (result === undefined || intent === null || currentContext === null) {
-    throw new Error('销售加购返回结果不完整，请刷新订单核对')
-  }
-  const precision = findCurrencyDescriptor(
-    addOnCurrencies.value,
-    currentContext.salesOrder.currencyCode,
-  )?.minorUnit ?? 2
-  const preview = calculateSalesOrderAddOnPreview(currentContext, addOnLines.value, precision)
-  if (preview === null || !verifySalesOrderAddOnResult({
-    expectedVersion: intent.expectedVersion,
-    expectedAmountDelta: preview.amountDelta,
-    expectedAgreedTotalAmount: preview.agreedTotalAmount,
-    result: {
-      previousVersion: result.previousVersion,
-      version: result.version,
-      amountDelta: result.amountDelta,
-      agreedTotalAmount: result.amounts.agreedTotalAmount,
-    },
-  })) {
-    throw new Error('销售订单金额返回值与加购预览不一致，请刷新核对')
-  }
-}
-
-async function reloadAndSynchronizeAddOnSourceLines(): Promise<void> {
-  const candidate = addOnCandidate.value
-  const controller = addOnWorkflowAbortController
-  if (candidate === null || controller === null) {
-    throw new Error('销售加购同步上下文已失效')
-  }
-  const response = await purchaseOrdersApi.sourceSalesOrderLines(candidate.id, controller.signal)
-  const productOptions = await loadAllSupplierProducts(controller.signal)
-  const result = synchronizePurchaseOrderSourceLines({
-    productOptions,
-    sourceLines: response.data.items,
-  })
-  if (result.lines.length === 0) {
-    throw new Error('新增销售产品未能同步到采购单，请从部分采购视图恢复')
-  }
-  sourceSalesOrderLines.value = response.data.items
-  formModel.lines = result.lines.map(line => ({ ...line }))
-  purchasedSourceLines.value = result.readOnlyLines.map(line => ({ ...line }))
-  sourceSalesOrderLineIdByKey.value = result.sourceSalesOrderLineIdByKey
-  maximumQuantityByKey.value = result.maximumQuantityByKey
-}
-
-const salesOrderAddOnSteps: Step[] = [{
-  name: 'addOnResult',
-  text: '正在新增销售产品',
-  afterText: '销售产品新增完成',
-  action: appendSalesOrderAddOnLines,
-}, {
-  text: '完成销售订单金额变更',
-  afterText: '销售订单金额已更新',
-  action: verifyReturnedSalesOrderAmounts,
-}, {
-  name: 'sourceLines',
-  text: '同步产品到采购单',
-  afterText: '新增产品已同步到采购单',
-  action: reloadAndSynchronizeAddOnSourceLines,
-}]
-
-function startSalesOrderAddOn(intent: SalesOrderAddOnIntent): void {
-  if (addOnRunning.value || addOnContext.value === null) {
-    return
-  }
-  pendingAddOnIntent.value = intent
-  // 加购接口没有幂等键，本流程只允许加载器第 1 步执行一次 POST；第 2 步仅核验
-  // 返回值，第 3 步只有安全读取。采购创建幂等键仍留到最终提交采购订单时生成。
-  addOnWorkflow.value = beginSalesOrderAddOn(addOnWorkflow.value)
-  addOnWorkflowAbortController?.abort()
-  addOnWorkflowAbortController = new AbortController()
-  addOnRunning.value = true
-}
-
-function handleSalesOrderAddOnComplete(): void {
-  addOnWorkflow.value = completeSalesOrderAddOn(addOnWorkflow.value)
-  addOnRunning.value = false
-  addOnWorkflowAbortController = null
-  addOnVisible.value = false
-  sourceError.value = ''
-  clearFeedback()
-  furthestReachedStep.value = Math.max(furthestReachedStep.value, 1) as PurchaseOrderCreateStep
-  goToFormStep(1)
-  toast.success('销售产品已加购并同步到采购单')
-}
-
-function handleSalesOrderAddOnError(error: Error, stepIndex: number): void {
-  const failure = getSalesOrderApiFailure(error)
-  addOnWorkflow.value = resolveSalesOrderAddOnFailure(addOnWorkflow.value, {
-    stepIndex,
-    unknownResult: stepIndex === 0 && failure.unknownResult,
-  })
-  addOnRunning.value = false
-  addOnWorkflowAbortController = null
-  requestId.value = failure.requestId
-  if (stepIndex === 0 && failure.unknownResult) {
-    addOnVisible.value = false
-    formError.value = '加购请求结果未知，请刷新销售订单核对，切勿重复提交'
-    return
-  }
-  if (addOnWorkflow.value.phase === 'sales-saved') {
-    addOnVisible.value = false
-    formError.value = stepIndex === 2
-      ? '销售订单已完成加购，但产品同步失败；请从部分采购视图恢复同步'
-      : '销售订单已完成加购，但返回金额核对失败；请刷新销售订单核对'
-    if (stepIndex === 2 && addOnCandidate.value !== null) {
-      // 重新读取来源行不包含写操作；成功后第二步的“同步销售产品明细”就是当前页
-      // 恢复入口，若读取仍失败，用户还可从部分采购视图重新进入。
-      void selectSourceSalesOrder(addOnCandidate.value)
-      goToFormStep(1)
-    }
-    return
-  }
-  addOnError.value = failure.message
-  addOnVisible.value = true
 }
 
 async function synchronizeSourceProducts(): Promise<void> {
@@ -1086,7 +833,7 @@ function handleBeforeUnload(event: BeforeUnloadEvent): void {
 
 onBeforeRouteLeave(() => {
   if (submitLocked.value) {
-    toast.info(addOnRunning.value ? '销售加购正在处理中，请等待完成后再离开' : '采购订单正在保存，请等待结果确认后再离开')
+    toast.info('采购订单正在保存，请等待结果确认后再离开')
     return false
   }
   if (!shouldConfirmDiscard.value) {
@@ -1106,8 +853,6 @@ watch(() => appAccountStore.authEpoch, () => {
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
   submitAbortController?.abort()
-  addOnContextAbortController?.abort()
-  addOnWorkflowAbortController?.abort()
   void router.replace({ name: 'qsOperationsPurchaseOrders' })
 })
 
@@ -1132,8 +877,6 @@ onBeforeUnmount(() => {
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
   submitAbortController?.abort()
-  addOnContextAbortController?.abort()
-  addOnWorkflowAbortController?.abort()
   window.removeEventListener('beforeunload', handleBeforeUnload)
   pendingNavigationResolver?.(false)
   pendingNavigationResolver = null
@@ -1565,33 +1308,8 @@ onBeforeUnmount(() => {
       v-model="sourceSelectorVisible"
       :selected-order-id="selectedSalesOrder?.id ?? null"
       :disabled="submitLocked"
-      :can-add-sales-order-products="canUpdateSalesOrders"
       :load-sales-orders="loadSourceSalesOrders"
       @confirm="handleSourceSalesOrderConfirm"
-    />
-
-    <QsSalesOrderAddOnProductsModal
-      v-model="addOnVisible"
-      v-model:reason="addOnReason"
-      :context="addOnContext"
-      :lines="addOnLines"
-      :supplier-value="formModel.supplierValue ?? ''"
-      :currencies="addOnCurrencies"
-      :load-products="loadAddOnProducts"
-      :loading="addOnLoading"
-      :error="addOnError"
-      :submitting="addOnRunning"
-      @update:lines="addOnLines = $event"
-      @retry="loadSalesOrderAddOnContext"
-      @confirm="startSalesOrderAddOn"
-    />
-
-    <FaMultiStepLoader
-      :loading="addOnRunning"
-      :steps="salesOrderAddOnSteps"
-      prevent-close
-      @complete="handleSalesOrderAddOnComplete"
-      @error="handleSalesOrderAddOnError"
     />
 
     <QsGenericModal

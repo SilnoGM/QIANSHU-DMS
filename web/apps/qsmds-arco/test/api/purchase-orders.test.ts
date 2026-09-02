@@ -56,7 +56,6 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
   for (const view of [
     'UNPURCHASED',
     'PARTIALLY_PURCHASED',
-    'COMPLETED_PURCHASE_ADD_ON',
   ] as const) {
     await api.sourceSalesOrders({
       view,
@@ -106,19 +105,6 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
       errorPresentation: 'local',
       params: {
         view: 'PARTIALLY_PURCHASED',
-        keyword: 'SO-001',
-        page: 1,
-        pageSize: 20,
-      },
-      signal: controller.signal,
-    },
-    method: 'get',
-    url: 'purchase-orders/source-sales-orders',
-  }, {
-    config: {
-      errorPresentation: 'local',
-      params: {
-        view: 'COMPLETED_PURCHASE_ADD_ON',
         keyword: 'SO-001',
         page: 1,
         pageSize: 20,

@@ -15,10 +15,10 @@ import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/pur
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
-import { SalesOrderAddOnService } from '../src/modules/sales-orders/sales-order-add-on.service'
-import { SalesOrderAddOnQueryService } from '../src/modules/sales-orders/sales-order-add-on-query.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
+import { SalesOrderProductEditQueryService } from '../src/modules/sales-orders/sales-order-product-edit-query.service'
+import { SalesOrderProductEditService } from '../src/modules/sales-orders/sales-order-product-edit.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 
 function requireDatabaseUrl(): string {
@@ -55,8 +55,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let mutations: PurchaseOrderMutationService
   let queries: PurchaseOrderQueryService
   let sourceQueries: PurchaseOrderSourceQueryService
-  let addOns: SalesOrderAddOnService
-  let addOnQueries: SalesOrderAddOnQueryService
+  let productEdits: SalesOrderProductEditService
+  let productEditQueries: SalesOrderProductEditQueryService
   let salesMutations: SalesOrderMutationService
   let grantStockPermission = true
   let purchaseNumber = 0
@@ -320,12 +320,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     } as unknown as NumberingGeneratorService
     queries = new PurchaseOrderQueryService(prisma, dictionaryLookup)
     sourceQueries = new PurchaseOrderSourceQueryService(prisma, dictionaryLookup)
-    addOns = new SalesOrderAddOnService(
-      prisma,
-      new AuditService(),
-      dictionaryLookup,
-    )
-    addOnQueries = new SalesOrderAddOnQueryService(prisma, dictionaryLookup)
+    productEdits = new SalesOrderProductEditService(prisma, new AuditService())
+    productEditQueries = new SalesOrderProductEditQueryService(prisma)
     salesMutations = new SalesOrderMutationService(
       prisma,
       new AuditService(),
@@ -783,10 +779,10 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     await expectNoSourceView()
   })
 
-  it('atomically appends products once, becomes partial, and returns to completed after purchase', async () => {
+  it('atomically edits products once, becomes partial, and returns to completed after purchase', async () => {
     await salesMutations.recordPayment({
       actorUserId,
-      requestId: `sales-payment-before-add-on-${suffix}`,
+      requestId: `sales-payment-before-product-edit-${suffix}`,
     }, salesOrderId, {
       paymentType: 'BALANCE',
       amount: '600',
@@ -803,11 +799,16 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       paymentStatus: 'PAID',
       fulfillmentStatus: 'PREPARING',
     })
-    const addOnInput = {
+    const editContext = await productEditQueries.context(salesOrderId)
+    const productEditInput = {
       expectedVersion: before.version,
-      supplierValue,
       reason: '客户加购产品',
-      lines: [{
+      confirmDepositReduction: false,
+      existingLines: editContext.existingLines.map(line => ({
+        lineId: line.id,
+        desiredQuantity: line.quantity,
+      })),
+      newLines: [{
         lineType: 'CATALOG',
         productId,
         actualUnitPriceAmount: '120',
@@ -821,18 +822,18 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       }],
     }
     const attempts = await Promise.allSettled([
-      addOns.appendLines({
+      productEdits.updateProducts({
         actorUserId,
-        requestId: `sales-add-on-a-${suffix}`,
-      }, salesOrderId, addOnInput),
-      addOns.appendLines({
+        requestId: `sales-product-edit-a-${suffix}`,
+      }, salesOrderId, productEditInput),
+      productEdits.updateProducts({
         actorUserId,
-        requestId: `sales-add-on-b-${suffix}`,
-      }, salesOrderId, addOnInput),
+        requestId: `sales-product-edit-b-${suffix}`,
+      }, salesOrderId, productEditInput),
     ])
     const succeeded = attempts.filter(
       (result): result is PromiseFulfilledResult<Awaited<
-        ReturnType<SalesOrderAddOnService['appendLines']>
+        ReturnType<SalesOrderProductEditService['updateProducts']>
       >> => result.status === 'fulfilled',
     )
     const failed = attempts.filter(
@@ -842,15 +843,16 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(failed).toHaveLength(1)
     const failedReason: unknown = failed[0]?.reason
     expect(failedReason).toMatchObject({
-      code: 'SALES_ORDER_ADD_ON_VERSION_CONFLICT',
+      code: 'SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT',
     })
     const result = succeeded[0]?.value
-    if (result === undefined) throw new Error('Add-on result is unavailable')
+    if (result === undefined) throw new Error('Product-edit result is unavailable')
     expect(result).toMatchObject({
       salesOrderId,
       previousVersion: before.version,
       version: before.version + 1,
       amountDelta: '180.0000',
+      fulfillmentStatus: 'PENDING',
       paymentStatus: 'PARTIALLY_PAID',
       amounts: {
         lineSubtotalAmount: '780.0000',
@@ -906,7 +908,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       })),
     }).toMatchObject({
       version: before.version + 1,
-      fulfillmentStatus: 'PREPARING',
+      fulfillmentStatus: 'PENDING',
       paymentStatus: 'PARTIALLY_PAID',
       lineSubtotalAmount: '780.0000',
       agreedTotalAmount: '780.0000',
@@ -946,12 +948,20 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       { fromStatus: 'UNPAID', toStatus: 'PAID' },
       { fromStatus: 'PAID', toStatus: 'PARTIALLY_PAID' },
     ])
+    await expect(prisma.salesOrderStatusHistory.findMany({
+      where: { salesOrderId, dimension: 'FULFILLMENT' },
+      orderBy: { changedAt: 'asc' },
+      select: { fromStatus: true, toStatus: true },
+    })).resolves.toEqual([
+      { fromStatus: 'PENDING', toStatus: 'PREPARING' },
+      { fromStatus: 'PREPARING', toStatus: 'PENDING' },
+    ])
     await expect(prisma.auditEvent.count({
       where: {
-        eventType: 'SALES_ORDER_PRODUCT_APPENDED',
-        targetId: { in: [...result.addedLineIds] },
+        eventType: 'SALES_ORDER_PRODUCTS_CHANGED',
+        targetId: salesOrderId,
       },
-    })).resolves.toBe(2)
+    })).resolves.toBe(1)
     await expectSourceView('PARTIALLY_PURCHASED')
 
     const sourceLines = await sourceQueries.salesOrderLines(salesOrderId)
@@ -981,9 +991,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).resolves.toEqual({ fulfillmentStatus: 'PREPARING' })
   })
 
-  it('uses persisted fulfillment and order status to enforce the pre-sea add-on boundary', async () => {
+  it('uses persisted fulfillment and order status to enforce the pre-sea product-edit boundary', async () => {
     /*
-     * 这里直接切换隔离数据库中的状态，是为了只验证加购资格查询对持久化事实的
+     * 这里直接切换隔离数据库中的状态，是为了只验证产品修改资格查询对持久化事实的
      * 判断；履约状态机的逐步流转已由独立服务测试负责，避免本用例产生无关历史。
      */
     try {
@@ -996,7 +1006,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
           where: { id: salesOrderId },
           data: { fulfillmentStatus },
         })
-        await expect(addOnQueries.context(salesOrderId)).resolves.toMatchObject({
+        await expect(productEditQueries.context(salesOrderId)).resolves.toMatchObject({
           salesOrder: { fulfillmentStatus },
         })
       }
@@ -1006,9 +1016,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
           where: { id: salesOrderId },
           data: { fulfillmentStatus },
         })
-        await expect(addOnQueries.context(salesOrderId)).rejects.toMatchObject({
+        await expect(productEditQueries.context(salesOrderId)).rejects.toMatchObject({
           status: 422,
-          code: 'SALES_ORDER_ADD_ON_NOT_ALLOWED',
+          code: 'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
         })
       }
 
@@ -1016,9 +1026,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         where: { id: salesOrderId },
         data: { orderStatus: 'CANCELLED', fulfillmentStatus: 'PREPARING' },
       })
-      await expect(addOnQueries.context(salesOrderId)).rejects.toMatchObject({
+      await expect(productEditQueries.context(salesOrderId)).rejects.toMatchObject({
         status: 422,
-        code: 'SALES_ORDER_ADD_ON_NOT_ALLOWED',
+        code: 'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
       })
     }
     finally {

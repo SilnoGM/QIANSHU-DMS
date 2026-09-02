@@ -247,7 +247,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /#cell-remarkSummary[\s\S]*?<FaTooltip[\s\S]*?row\.original\.remark/u)
   assert.match(source, /#cell-changeRecordsSummary[\s\S]*?changeRecordCount[\s\S]*?openRecordsModal\('changes'/u)
   assert.match(source, /const actionColumn = computed<QsGenericTableActionColumn>/u)
-  assert.match(source, /props\.viewMode === 'all' \? 100 : 260/u)
+  assert.match(source, /props\.viewMode === 'all' \? 210 : 260/u)
   assert.match(source, /:action-column="actionColumn"/u)
   assert.match(source, /<template #actions="\{ row \}">[\s\S]*?查看[\s\S]*?<template[\s\S]*?v-if="props\.viewMode === 'pending'"[\s\S]*?v-for="action in salesOrderRowActions\(row\)"/u)
   assert.match(source, /function salesOrderRowActions\([\s\S]*?props\.viewMode !== 'pending'[\s\S]*?return \[\]/u)
@@ -318,6 +318,31 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /row\.balanceDueAmount/u)
   assert.match(source, /row\.createdAt/u)
   assert.match(source, /row\.updatedAt/u)
+})
+
+test('全部销售订单以销售权限和海运前状态提供唯一的修改产品入口', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const submitStart = source.indexOf('async function submitProductEdit')
+  const submitEnd = source.indexOf('\nfunction ', submitStart)
+  const submitSource = source.slice(submitStart, submitEnd)
+
+  assert.match(source, /import QsSalesOrderProductsEditorModal/u)
+  assert.match(source, /const canUpdateProducts = computed\(\(\) => auth\('sales-orders:update'\)\)/u)
+  assert.match(source, /function canEditSalesOrderProducts\(order: SalesOrderListItemDto\)/u)
+  assert.match(source, /props\.viewMode === 'all'/u)
+  assert.match(source, /PRODUCT_EDIT_FULFILLMENT_STATUSES/u)
+  for (const status of ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED']) {
+    assert.match(source, new RegExp(`'${status}'`, 'u'))
+  }
+  assert.match(source, /v-if="canEditSalesOrderProducts\(row\)"[\s\S]*?修改产品/u)
+  assert.match(source, /salesOrdersApi\.productEditContext/u)
+  assert.match(source, /salesOrdersApi\.productEditOptions/u)
+  assert.match(source, /salesOrdersApi\.updateProducts/u)
+  assert.match(source, /retry: false|updateProducts/u)
+  assert.match(source, /toast\.success\('销售订单产品已更新'\)/u)
+  assert.match(source, /scheduleQueryRefresh\(true\)/u)
+  assert.ok(submitStart >= 0 && submitEnd > submitStart)
+  assert.doesNotMatch(submitSource, /operationsPurchaseOrderCreate|router\.push/u)
 })
 
 test('销售订单记录弹窗按需读取详情并分开展示收款、凭证与变更记录', async () => {

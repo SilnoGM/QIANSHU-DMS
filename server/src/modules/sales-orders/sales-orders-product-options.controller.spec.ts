@@ -1,7 +1,6 @@
 import { Readable } from 'node:stream'
 
 import { HttpStatus, Module, StreamableFile } from '@nestjs/common'
-import { HTTP_CODE_METADATA } from '@nestjs/common/constants'
 import { Reflector } from '@nestjs/core'
 import type { OpenAPIObject } from '@nestjs/swagger'
 
@@ -13,12 +12,12 @@ import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import type { ProductMediaContentResponse } from '../products/media/product-media-content.service'
-import { SalesOrderAddOnService } from './sales-order-add-on.service'
 import { SalesOrderCommandService } from './sales-order-command.service'
-import { SalesOrderAddOnQueryService } from './sales-order-add-on-query.service'
 import { SalesOrderDocumentService } from './documents/sales-order-document.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import { SalesOrderProductImageService } from './products/sales-order-product-image.service'
+import { SalesOrderProductEditQueryService } from './sales-order-product-edit-query.service'
+import { SalesOrderProductEditService } from './sales-order-product-edit.service'
 import { SalesOrderQueryService } from './sales-order-query.service'
 import { SalesOrdersController } from './sales-orders.controller'
 
@@ -108,14 +107,14 @@ function createController(result: ProductMediaContentResponse) {
     useValue: {
       resolve: jest.fn(),
       resolveListPreview: jest.fn(),
-      resolveAddOnProductOption: jest.fn(),
+      resolveProductEditOption: jest.fn(),
     },
   }, {
-    provide: SalesOrderAddOnQueryService,
+    provide: SalesOrderProductEditQueryService,
     useValue: { context: jest.fn(), productOptions: jest.fn() },
   }, {
-    provide: SalesOrderAddOnService,
-    useValue: { appendLines: jest.fn() },
+    provide: SalesOrderProductEditService,
+    useValue: { updateProducts: jest.fn() },
   }],
 })
 class SalesOrderProductOptionsContractModule {}
@@ -288,13 +287,13 @@ describe('SalesOrdersController product options', () => {
     }
   })
 
-  it('requires both purchase-create and sales-update for every add-on read', async () => {
+  it('requires sales-update for every product-edit read', async () => {
     const stream = Readable.from(Buffer.from('image'))
     const context = jest.fn().mockResolvedValue({ salesOrder: { id: 'order-id' } })
     const productOptions = jest.fn().mockResolvedValue({
       items: [], page: 1, pageSize: 20, total: 0,
     })
-    const resolveAddOnProductOption = jest.fn().mockResolvedValue({
+    const resolveProductEditOption = jest.fn().mockResolvedValue({
       status: HttpStatus.OK,
       headers: {
         'Accept-Ranges': 'bytes',
@@ -308,70 +307,69 @@ describe('SalesOrdersController product options', () => {
       {} as SalesOrderCommandService,
       {} as SalesOrderMutationService,
       {} as SalesOrderDocumentService,
-      { resolveAddOnProductOption } as unknown as SalesOrderProductImageService,
-      { context, productOptions } as unknown as SalesOrderAddOnQueryService,
+      { resolveProductEditOption } as unknown as SalesOrderProductImageService,
+      { context, productOptions } as unknown as SalesOrderProductEditQueryService,
     )
     const params = {
       salesOrderId: '33333333-3333-4333-8333-333333333333',
       productId: PRODUCT_ID,
       productMediaId: PRODUCT_MEDIA_ID,
     }
-    const query = { supplierValue: 'SUPPLIER_TW_01' }
+    const query = { keyword: '目录' }
     const response = { status: jest.fn(), setHeader: jest.fn() }
 
-    await expect(controller.addOnContext(params)).resolves.toMatchObject({
+    await expect(controller.productEditContext(params)).resolves.toMatchObject({
       salesOrder: { id: 'order-id' },
     })
-    await expect(controller.addOnProductOptions(params, query)).resolves.toMatchObject({
+    await expect(controller.productEditOptions(params, query)).resolves.toMatchObject({
       items: [],
     })
-    await controller.headAddOnProductOptionMainImage(
-      params, query, '"known"', 'bytes=0-0', response,
+    await controller.headProductEditOptionMainImage(
+      params, '"known"', 'bytes=0-0', response,
     )
-    const body = await controller.getAddOnProductOptionMainImage(
-      params, query, undefined, undefined, response,
+    const body = await controller.getProductEditOptionMainImage(
+      params, undefined, undefined, response,
     )
     expect(context).toHaveBeenCalledWith(params.salesOrderId)
     expect(productOptions).toHaveBeenCalledWith(params.salesOrderId, query)
-    expect(resolveAddOnProductOption).toHaveBeenCalledTimes(2)
+    expect(resolveProductEditOption).toHaveBeenCalledTimes(2)
     expect(body).toBeInstanceOf(StreamableFile)
 
     const reflector = new Reflector()
     for (const method of [
-      'addOnContext',
-      'addOnProductOptions',
-      'headAddOnProductOptionMainImage',
-      'getAddOnProductOptionMainImage',
+      'productEditContext',
+      'productEditOptions',
+      'headProductEditOptionMainImage',
+      'getProductEditOptionMainImage',
     ] as const) {
       expect(reflector.get(
         REQUIRED_PERMISSIONS_METADATA,
         SalesOrdersController.prototype[method],
-      )).toEqual(['purchase-orders:create', 'sales-orders:update'])
+      )).toEqual(['sales-orders:update'])
     }
   })
 
-  it('requires both permissions and forwards only trusted context for add-on writes', async () => {
+  it('requires sales-update and forwards only trusted context for product writes', async () => {
     const request = createRequest()
     const requestId = getRequestId(request)
     const dto = {
       expectedVersion: 4,
-      supplierValue: 'SUPPLIER_TW_01',
-      reason: '客户加购产品',
-      lines: [{
-        lineType: 'CUSTOM' as const,
-        name: '安装服务',
-        description: null,
-        actualUnitPriceAmount: '30',
-        quantity: 1,
-      }],
+      reason: '客户调整产品',
+      confirmDepositReduction: false,
+      existingLines: [{ lineId: PRODUCT_ID, desiredQuantity: 2 }],
+      newLines: [],
     }
     const result = {
       salesOrderId: SALES_ORDER_ID,
       previousVersion: 4,
       version: 5,
       addedLineIds: ['66666666-6666-4666-8666-666666666666'],
+      updatedLineIds: [],
+      removedLineIds: [],
       amountDelta: '30.0000',
       paymentStatus: 'PARTIALLY_PAID' as const,
+      fulfillmentStatus: 'PENDING' as const,
+      depositReduced: false,
       amounts: {
         lineSubtotalAmount: '330.0000',
         agreedTotalAmount: '330.0000',
@@ -381,21 +379,21 @@ describe('SalesOrdersController product options', () => {
         outstandingAmount: '30.0000',
       },
     }
-    const appendLines = jest.fn().mockResolvedValue(result)
+    const updateProducts = jest.fn().mockResolvedValue(result)
     const controller = new SalesOrdersController(
       {} as SalesOrderQueryService,
       {} as SalesOrderCommandService,
       {} as SalesOrderMutationService,
       {} as SalesOrderDocumentService,
       {} as SalesOrderProductImageService,
-      {} as SalesOrderAddOnQueryService,
-      { appendLines } as unknown as SalesOrderAddOnService,
+      {} as SalesOrderProductEditQueryService,
+      { updateProducts } as unknown as SalesOrderProductEditService,
     )
 
-    await expect(controller.appendAddOnLines(
+    await expect(controller.updateProducts(
       { salesOrderId: SALES_ORDER_ID }, dto, request,
     )).resolves.toEqual(result)
-    expect(appendLines).toHaveBeenCalledWith(
+    expect(updateProducts).toHaveBeenCalledWith(
       { actorUserId: ACTOR_ID, requestId },
       SALES_ORDER_ID,
       dto,
@@ -404,12 +402,8 @@ describe('SalesOrdersController product options', () => {
     const reflector = new Reflector()
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
-      SalesOrdersController.prototype.appendAddOnLines,
-    )).toEqual(['purchase-orders:create', 'sales-orders:update'])
-    expect(Reflect.getMetadata(
-      HTTP_CODE_METADATA,
-      SalesOrdersController.prototype.appendAddOnLines,
-    )).toBe(HttpStatus.CREATED)
+      SalesOrdersController.prototype.updateProducts,
+    )).toEqual(['sales-orders:update'])
   })
 })
 
@@ -479,31 +473,29 @@ describe('SalesOrdersController product options OpenAPI', () => {
     }
   })
 
-  it('publishes add-on context, supplier-scoped options and protected image routes', () => {
+  it('publishes product-edit context, options and protected image routes', () => {
     const context = document.paths[
-      '/api/sales-orders/{salesOrderId}/add-on-context'
+      '/api/sales-orders/{salesOrderId}/product-edit-context'
     ]?.get
-    expect(context).toMatchObject({ operationId: 'sales_orders_get_add_on_context' })
+    expect(context).toMatchObject({ operationId: 'sales_orders_get_product_edit_context' })
 
     const options = document.paths[
-      '/api/sales-orders/{salesOrderId}/add-on-product-options'
+      '/api/sales-orders/{salesOrderId}/product-edit-options'
     ]?.get
     expect(options).toMatchObject({
-      operationId: 'sales_orders_get_add_on_product_options',
+      operationId: 'sales_orders_get_product_edit_options',
     })
-    expect(options?.parameters).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        in: 'query', name: 'supplierValue', required: true,
-      }),
+    expect(options?.parameters).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'supplierValue' }),
     ]))
 
     const imagePath = document.paths[
-      '/api/sales-orders/{salesOrderId}/add-on-product-options/{productId}/main-image/{productMediaId}/content'
+      '/api/sales-orders/{salesOrderId}/product-edit-options/{productId}/main-image/{productMediaId}/content'
     ]
     expect(imagePath?.head?.operationId)
-      .toBe('sales_orders_head_add_on_product_option_main_image')
+      .toBe('sales_orders_head_product_edit_option_main_image')
     expect(imagePath?.get?.operationId)
-      .toBe('sales_orders_get_add_on_product_option_main_image')
+      .toBe('sales_orders_get_product_edit_option_main_image')
     for (const operation of [
       context,
       options,
@@ -518,14 +510,14 @@ describe('SalesOrdersController product options OpenAPI', () => {
     }
   })
 
-  it('publishes the non-retrying add-on mutation security and stable errors', () => {
+  it('publishes the non-retrying product-edit mutation security and stable errors', () => {
     const operation: ContractOperation | undefined = document.paths[
-      '/api/sales-orders/{salesOrderId}/add-on-lines'
-    ]?.post
+      '/api/sales-orders/{salesOrderId}/products'
+    ]?.patch
 
-    expect(operation).toMatchObject({ operationId: 'sales_orders_append_add_on_lines' })
+    expect(operation).toMatchObject({ operationId: 'sales_orders_update_products' })
     expect(operation?.security).toEqual([{ sessionCookie: [] }])
-    expect(operation?.responses).toHaveProperty('201')
+    expect(operation?.responses).toHaveProperty('200')
     expect(operation?.requestBody).toBeDefined()
     expect(operation?.['x-qianshu-contract']).toMatchObject({
       authorization: true,
@@ -534,16 +526,18 @@ describe('SalesOrdersController product options OpenAPI', () => {
       privateNoStore: true,
       resourceLocator: true,
       validation: true,
+      retry: false,
     })
     const contract = JSON.stringify(operation?.['x-qianshu-contract'])
     for (const code of [
       'CSRF_REJECTED',
       'SALES_ORDER_NOT_FOUND',
-      'SALES_ORDER_ADD_ON_VERSION_CONFLICT',
-      'SALES_ORDER_STATE_CHANGED',
-      'SALES_ORDER_ADD_ON_NOT_ALLOWED',
-      'SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE',
-      'SALES_ORDER_ADD_ON_PRODUCT_SUPPLIER_MISMATCH',
+      'SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT',
+      'SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED',
+      'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
+      'SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED',
+      'SALES_ORDER_DEPOSIT_REDUCTION_CONFIRMATION_REQUIRED',
+      'SALES_ORDER_TOTAL_BELOW_RECEIVED',
       'SALES_ORDER_LINE_LIMIT_EXCEEDED',
       'VALIDATION_FAILED',
     ]) {

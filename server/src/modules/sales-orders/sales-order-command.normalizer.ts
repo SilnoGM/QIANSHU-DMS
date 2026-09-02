@@ -12,7 +12,6 @@ import {
 import {
   salesOrderValidationFailure,
 } from './domain/sales-order-errors'
-import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
 
 const SALES_ORDER_CURRENCIES = new Set(['TWD', 'MYR'])
 const CANONICAL_UUID_V4_PATTERN =
@@ -372,49 +371,6 @@ export function normalizeSalesOrderCreateCommand(
     ...amounts,
     issuanceVoucher: normalizeIssuanceVoucher(body.issuanceVoucher),
     remark: normalizeNullableText(body.remark, 'remark', 1000),
-  })
-}
-
-export interface NormalizedSalesOrderAddOnCommand {
-  readonly expectedVersion: number
-  readonly supplierValue: string
-  readonly reason: string
-  readonly lines: readonly NormalizedSalesOrderCreateLine[]
-  readonly amountDelta: string
-}
-
-/** 销售加购 Body 的纯规范化入口，不读取订单、不接受客户端金额汇总。 */
-export function normalizeSalesOrderAddOnCommand(
-  input: unknown,
-): NormalizedSalesOrderAddOnCommand {
-  const body = requireRecord(input, 'body')
-  rejectUnknownKeys(body, [
-    'expectedVersion',
-    'supplierValue',
-    'reason',
-    'lines',
-  ])
-  if (
-    !Number.isInteger(body.expectedVersion)
-    || (body.expectedVersion as number) < 1
-    || (body.expectedVersion as number) > 2_147_483_647
-  ) {
-    return salesOrderValidationFailure('expectedVersion')
-  }
-  let supplierValue: string
-  try {
-    supplierValue = normalizeDictionaryItemValue(body.supplierValue)
-  }
-  catch {
-    return salesOrderValidationFailure('supplierValue')
-  }
-  const lines = normalizeSalesOrderLines(body.lines)
-  return Object.freeze({
-    expectedVersion: body.expectedVersion as number,
-    supplierValue,
-    reason: normalizeText(body.reason, 'reason', 500),
-    lines,
-    amountDelta: sumSalesOrderAmounts(lines.map(line => line.lineTotalAmount)),
   })
 }
 

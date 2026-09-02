@@ -9,10 +9,10 @@ import { attachRequestAuthContext } from '../src/modules/auth/auth-context'
 import { PermissionGuard } from '../src/modules/auth/guards/permission.guard'
 import { SalesOrderDocumentService } from '../src/modules/sales-orders/documents/sales-order-document.service'
 import { SalesOrderProductImageService } from '../src/modules/sales-orders/products/sales-order-product-image.service'
-import { SalesOrderAddOnQueryService } from '../src/modules/sales-orders/sales-order-add-on-query.service'
-import { SalesOrderAddOnService } from '../src/modules/sales-orders/sales-order-add-on.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
+import { SalesOrderProductEditQueryService } from '../src/modules/sales-orders/sales-order-product-edit-query.service'
+import { SalesOrderProductEditService } from '../src/modules/sales-orders/sales-order-product-edit.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 import { SalesOrdersController } from '../src/modules/sales-orders/sales-orders.controller'
 
@@ -27,8 +27,8 @@ function attachTestAuth(
   attachRequestAuthContext(requestObject, {
     id: '33333333-3333-4333-8333-333333333333',
     userId: ACTOR_ID,
-    username: 'sales_add_on_api_e2e',
-    displayName: '销售加购 API E2E',
+    username: 'sales_product_edit_api_e2e',
+    displayName: '销售产品修改 API E2E',
     mustChangePassword: false,
     createdAt: new Date('2026-09-02T00:00:00.000Z'),
     lastActivityAt: new Date('2026-09-02T00:00:00.000Z'),
@@ -38,12 +38,12 @@ function attachTestAuth(
   next()
 }
 
-describe('Sales order add-on HTTP permission boundary', () => {
+describe('Sales order product-edit HTTP permission boundary', () => {
   let application: INestApplication | undefined
   let grantedPermissions: string[]
 
   beforeAll(async () => {
-    grantedPermissions = ['purchase-orders:create', 'sales-orders:update']
+    grantedPermissions = ['sales-orders:update']
 
     @Module({
       controllers: [SalesOrdersController],
@@ -71,7 +71,7 @@ describe('Sales order add-on HTTP permission boundary', () => {
         provide: SalesOrderProductImageService,
         useValue: {},
       }, {
-        provide: SalesOrderAddOnQueryService,
+        provide: SalesOrderProductEditQueryService,
         useValue: {
           context: jest.fn().mockResolvedValue({ salesOrder: { id: SALES_ORDER_ID } }),
           productOptions: jest.fn().mockResolvedValue({
@@ -79,17 +79,17 @@ describe('Sales order add-on HTTP permission boundary', () => {
           }),
         },
       }, {
-        provide: SalesOrderAddOnService,
-        useValue: { appendLines: jest.fn() },
+        provide: SalesOrderProductEditService,
+        useValue: { updateProducts: jest.fn() },
       }, {
         provide: APP_GUARD,
         useClass: PermissionGuard,
       }],
     })
-    class SalesOrderAddOnApiTestModule {}
+    class SalesOrderProductEditApiTestModule {}
 
     const moduleRef = await Test.createTestingModule({
-      imports: [SalesOrderAddOnApiTestModule],
+      imports: [SalesOrderProductEditApiTestModule],
     }).compile()
     application = moduleRef.createNestApplication()
     application.use(attachTestAuth)
@@ -103,45 +103,38 @@ describe('Sales order add-on HTTP permission boundary', () => {
   })
 
   beforeEach(() => {
-    grantedPermissions = ['purchase-orders:create', 'sales-orders:update']
+    grantedPermissions = ['sales-orders:update']
   })
 
   function requireApplication(): INestApplication {
-    if (!application) throw new Error('Sales order add-on test app is unavailable')
+    if (!application) throw new Error('Sales order product-edit test app is unavailable')
     return application
   }
 
-  const readRequests = [
-    () => request(requireApplication().getHttpServer())
-      .get(`/api/sales-orders/${SALES_ORDER_ID}/add-on-context`),
-    () => request(requireApplication().getHttpServer())
-      .get(`/api/sales-orders/${SALES_ORDER_ID}/add-on-product-options`)
-      .query({ supplierValue: 'SUPPLIER_E2E' }),
-  ]
+  it('allows product-edit reads with only sales update permission', async () => {
+    await request(requireApplication().getHttpServer())
+      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-context`)
+      .expect(200)
+    await request(requireApplication().getHttpServer())
+      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-options`)
+      .expect(200)
+  })
 
-  it.each([
-    ['purchase permission missing', ['sales-orders:update']],
-    ['sales update permission missing', ['purchase-orders:create']],
-  ] as const)('returns 403 from every add-on endpoint when %s', async (
-    _scenario,
-    permissions,
-  ) => {
-    grantedPermissions = [...permissions]
-
-    for (const createReadRequest of readRequests) {
-      await createReadRequest()
-        .expect(403)
-        .expect(({ body }) => {
-          expect(body).toMatchObject({ code: 'FORBIDDEN' })
-        })
-    }
+  it('returns 403 from every product-edit endpoint without sales update permission', async () => {
+    grantedPermissions = []
 
     await request(requireApplication().getHttpServer())
-      .post(`/api/sales-orders/${SALES_ORDER_ID}/add-on-lines`)
+      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-context`)
+      .expect(403)
+      .expect(({ body }) => expect(body).toMatchObject({ code: 'FORBIDDEN' }))
+    await request(requireApplication().getHttpServer())
+      .get(`/api/sales-orders/${SALES_ORDER_ID}/product-edit-options`)
+      .expect(403)
+      .expect(({ body }) => expect(body).toMatchObject({ code: 'FORBIDDEN' }))
+    await request(requireApplication().getHttpServer())
+      .patch(`/api/sales-orders/${SALES_ORDER_ID}/products`)
       .send({})
       .expect(403)
-      .expect(({ body }) => {
-        expect(body).toMatchObject({ code: 'FORBIDDEN' })
-      })
+      .expect(({ body }) => expect(body).toMatchObject({ code: 'FORBIDDEN' }))
   })
 })

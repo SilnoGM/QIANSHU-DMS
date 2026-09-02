@@ -136,16 +136,7 @@ export class SalesOrderProductImageQueryDto {
   currencyCode!: 'TWD' | 'MYR'
 }
 
-export class SalesOrderAddOnProductOptionsQueryDto {
-  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
-  @Transform(({ value }: { value: unknown }) => (
-    typeof value === 'string' ? value.trim().normalize('NFC').toUpperCase() : value
-  ))
-  @IsString()
-  @IsUnicodeCodePointLength(1, 64)
-  @Matches(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
-  supplierValue!: string
-
+export class SalesOrderProductEditOptionsQueryDto {
   @ApiProperty({ type: 'string', maxLength: 128, required: false })
   @IsOptional()
   @IsString()
@@ -170,17 +161,6 @@ export class SalesOrderAddOnProductOptionsQueryDto {
   pageSize?: number
 }
 
-export class SalesOrderAddOnProductImageQueryDto {
-  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
-  @Transform(({ value }: { value: unknown }) => (
-    typeof value === 'string' ? value.trim().normalize('NFC').toUpperCase() : value
-  ))
-  @IsString()
-  @IsUnicodeCodePointLength(1, 64)
-  @Matches(/^[A-Za-z0-9][A-Za-z0-9._-]*$/u)
-  supplierValue!: string
-}
-
 export class SalesOrderProductImageParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
@@ -197,7 +177,7 @@ export class SalesOrderIdParamDto {
   salesOrderId!: string
 }
 
-export class SalesOrderAddOnProductImageParamDto extends SalesOrderIdParamDto {
+export class SalesOrderProductEditImageParamDto extends SalesOrderIdParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
   productId!: string

@@ -22,9 +22,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
-import {
-  SalesOrderAddOnLinesRequestDto,
-} from './dto/sales-order-add-on.dto'
+import { SalesOrderProductsUpdateRequestDto } from './dto/sales-order-product-edit.dto'
 import {
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDocumentIdParamDto,
@@ -40,32 +38,31 @@ import {
   SalesOrderStatusRequestDto,
 } from './dto/sales-order-mutation.dto'
 import {
-  SalesOrderAddOnProductImageParamDto,
-  SalesOrderAddOnProductImageQueryDto,
-  SalesOrderAddOnProductOptionsQueryDto,
   SalesOrderIdParamDto,
   SalesOrderLineProductImageParamDto,
   SalesOrderListQueryDto,
   SalesOrderPaymentIdParamDto,
   SalesOrderProductImageParamDto,
   SalesOrderProductImageQueryDto,
+  SalesOrderProductEditImageParamDto,
+  SalesOrderProductEditOptionsQueryDto,
   SalesOrderProductOptionsQueryDto,
   SalesOrderStatusCountsQueryDto,
 } from './dto/sales-order-query.dto'
 import {
-  SalesOrderAddOnContextDto,
-  SalesOrderAddOnResultDto,
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderProductOptionsDto,
+  SalesOrderProductEditContextDto,
+  SalesOrderProductsUpdateResultDto,
   SalesOrderStatusCountsDto,
 } from './dto/sales-order-response.dto'
-import { SalesOrderAddOnQueryService } from './sales-order-add-on-query.service'
+import { SalesOrderProductEditQueryService } from './sales-order-product-edit-query.service'
 import {
-  SalesOrderAddOnService,
-  type SalesOrderAddOnResult,
-} from './sales-order-add-on.service'
+  SalesOrderProductEditService,
+  type SalesOrderProductsUpdateResult,
+} from './sales-order-product-edit.service'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { parseSalesOrderIdempotencyKey } from './sales-order-command.normalizer'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
@@ -131,8 +128,8 @@ export class SalesOrdersController {
     private readonly mutations: SalesOrderMutationService,
     private readonly documents: SalesOrderDocumentService,
     private readonly productImages: SalesOrderProductImageService,
-    private readonly addOnQueries?: SalesOrderAddOnQueryService,
-    private readonly addOnService?: SalesOrderAddOnService,
+    private readonly productEditQueries?: SalesOrderProductEditQueryService,
+    private readonly productEditService?: SalesOrderProductEditService,
   ) {}
 
   @Get()
@@ -215,80 +212,80 @@ export class SalesOrdersController {
     return this.queries.productOptions(query)
   }
 
-  /**
-   * 加购由采购流程发起但会修改销售金额，因此只读准备接口也同时要求采购创建和
-   * 销售更新权限；不能复用普通录单的 sales-orders:create 权限绕过职责分离。
-   */
-  @Get(':salesOrderId/add-on-context')
-  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
-  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderAddOnContextDto })
+  @Get(':salesOrderId/product-edit-context')
+  @RequirePermissions('sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderProductEditContextDto })
   @ApiApplicationContract({
-    operationId: 'sales_orders_get_add_on_context',
+    operationId: 'sales_orders_get_product_edit_context',
     session: 'required', authorization: true, badRequest: true,
     resourceLocator: true, validation: true, privateNoStore: true,
     errors: [
       { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
-      { status: 422, codes: ['SALES_ORDER_ADD_ON_NOT_ALLOWED', 'VALIDATION_FAILED'] },
-    ],
-  })
-  addOnContext(
-    @Param() params: SalesOrderIdParamDto,
-  ): Promise<SalesOrderAddOnContextDto> {
-    if (this.addOnQueries === undefined) {
-      throw new Error('SalesOrderAddOnQueryService is not configured')
-    }
-    return this.addOnQueries.context(params.salesOrderId)
-  }
-
-  /**
-   * 加购写入会同时改变销售明细、金额与付款状态，必须把可信操作者和请求 ID
-   * 交给单一事务服务；Controller 不接收客户端汇总金额，也不做任何自动重放。
-   */
-  @Post(':salesOrderId/add-on-lines')
-  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
-  @HttpCode(HttpStatus.CREATED)
-  @ApiContractResponse({ status: HttpStatus.CREATED, type: SalesOrderAddOnResultDto })
-  @ApiApplicationContract({
-    operationId: 'sales_orders_append_add_on_lines',
-    session: 'required', authorization: true, csrf: true, badRequest: true,
-    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
-    errors: [
-      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
-      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
-      { status: 409, codes: [
-        'SALES_ORDER_ADD_ON_VERSION_CONFLICT',
-        'SALES_ORDER_STATE_CHANGED',
-      ] },
       { status: 422, codes: [
-        'SALES_ORDER_ADD_ON_NOT_ALLOWED',
-        'SALES_ORDER_ADD_ON_PRODUCT_SUPPLIER_MISMATCH',
-        'SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE',
-        'SALES_ORDER_LINE_LIMIT_EXCEEDED',
+        'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
         'VALIDATION_FAILED',
       ] },
     ],
   })
-  appendAddOnLines(
+  productEditContext(
     @Param() params: SalesOrderIdParamDto,
-    @Body() dto: SalesOrderAddOnLinesRequestDto,
-    @Req() request: object,
-  ): Promise<SalesOrderAddOnResult> {
-    if (this.addOnService === undefined) {
-      throw new Error('SalesOrderAddOnService is not configured')
+  ): Promise<SalesOrderProductEditContextDto> {
+    if (this.productEditQueries === undefined) {
+      throw new Error('SalesOrderProductEditQueryService is not configured')
     }
-    return this.addOnService.appendLines(
+    return this.productEditQueries.context(params.salesOrderId)
+  }
+
+  /**
+   * 产品修改会同时改变销售明细、金额、付款与采购覆盖状态；Controller 只传递
+   * 可信操作者和请求 ID，且显式禁止客户端或中间层自动重放。
+   */
+  @Patch(':salesOrderId/products')
+  @RequirePermissions('sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderProductsUpdateResultDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_update_products',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    retry: false,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: [
+        'SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED',
+        'SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT',
+      ] },
+      { status: 422, codes: [
+        'SALES_ORDER_DEPOSIT_REDUCTION_CONFIRMATION_REQUIRED',
+        'SALES_ORDER_LINE_LIMIT_EXCEEDED',
+        'SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED',
+        'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
+        'SALES_ORDER_TOTAL_BELOW_RECEIVED',
+        'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  updateProducts(
+    @Param() params: SalesOrderIdParamDto,
+    @Body() dto: SalesOrderProductsUpdateRequestDto,
+    @Req() request: object,
+  ): Promise<SalesOrderProductsUpdateResult> {
+    if (this.productEditService === undefined) {
+      throw new Error('SalesOrderProductEditService is not configured')
+    }
+    return this.productEditService.updateProducts(
       mutationContext(request),
       params.salesOrderId,
       dto,
     )
   }
 
-  @Get(':salesOrderId/add-on-product-options')
-  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @Get(':salesOrderId/product-edit-options')
+  @RequirePermissions('sales-orders:update')
   @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderProductOptionsDto })
   @ApiApplicationContract({
-    operationId: 'sales_orders_get_add_on_product_options',
+    operationId: 'sales_orders_get_product_edit_options',
     session: 'required', authorization: true, badRequest: true,
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
@@ -298,42 +295,39 @@ export class SalesOrdersController {
       {
         status: 422,
         codes: [
-          'SALES_ORDER_ADD_ON_NOT_ALLOWED',
-          'SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE',
+          'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
           'VALIDATION_FAILED',
         ],
       },
     ],
   })
-  addOnProductOptions(
+  productEditOptions(
     @Param() params: SalesOrderIdParamDto,
-    @Query() query: SalesOrderAddOnProductOptionsQueryDto,
+    @Query() query: SalesOrderProductEditOptionsQueryDto,
   ): Promise<SalesOrderProductOptionsDto> {
-    if (this.addOnQueries === undefined) {
-      throw new Error('SalesOrderAddOnQueryService is not configured')
+    if (this.productEditQueries === undefined) {
+      throw new Error('SalesOrderProductEditQueryService is not configured')
     }
-    return this.addOnQueries.productOptions(params.salesOrderId, query)
+    return this.productEditQueries.productOptions(params.salesOrderId, query)
   }
 
-  @Head(':salesOrderId/add-on-product-options/:productId/main-image/:productMediaId/content')
-  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @Head(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:update')
   @ApiProductMediaContentContract('HEAD', {
-    operationId: 'sales_orders_head_add_on_product_option_main_image',
+    operationId: 'sales_orders_head_product_edit_option_main_image',
     notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
-    description: 'Authorized sales-order add-on product option main image.',
+    description: 'Authorized sales-order product-edit option main image.',
   })
-  async headAddOnProductOptionMainImage(
-    @Param() params: SalesOrderAddOnProductImageParamDto,
-    @Query() query: SalesOrderAddOnProductImageQueryDto,
+  async headProductEditOptionMainImage(
+    @Param() params: SalesOrderProductEditImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<void> {
-    const result = await this.productImages.resolveAddOnProductOption(
+    const result = await this.productImages.resolveProductEditOption(
       params.salesOrderId,
       params.productId,
       params.productMediaId,
-      query.supplierValue,
       ifNoneMatch,
       range,
       'HEAD',
@@ -341,25 +335,23 @@ export class SalesOrdersController {
     applyProductMediaContentResponse(response, result)
   }
 
-  @Get(':salesOrderId/add-on-product-options/:productId/main-image/:productMediaId/content')
-  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @Get(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:update')
   @ApiProductMediaContentContract('GET', {
-    operationId: 'sales_orders_get_add_on_product_option_main_image',
+    operationId: 'sales_orders_get_product_edit_option_main_image',
     notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
-    description: 'Authorized sales-order add-on product option main image.',
+    description: 'Authorized sales-order product-edit option main image.',
   })
-  async getAddOnProductOptionMainImage(
-    @Param() params: SalesOrderAddOnProductImageParamDto,
-    @Query() query: SalesOrderAddOnProductImageQueryDto,
+  async getProductEditOptionMainImage(
+    @Param() params: SalesOrderProductEditImageParamDto,
     @Headers('if-none-match') ifNoneMatch: unknown,
     @Headers('range') range: unknown,
     @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
   ): Promise<StreamableFile | undefined> {
-    const result = await this.productImages.resolveAddOnProductOption(
+    const result = await this.productImages.resolveProductEditOption(
       params.salesOrderId,
       params.productId,
       params.productMediaId,
-      query.supplierValue,
       ifNoneMatch,
       range,
       'GET',

@@ -526,26 +526,21 @@ test('销售来源无剩余产品时阻止进入无效同步流程', async () =>
   )
 })
 
-test('已完成采购加购通过独立弹窗和三步加载器写回销售并同步采购', async () => {
+test('采购新增页不再提供销售产品修改或第三个来源视图', async () => {
   const source = await readFile(new URL('create.vue', ROOT), 'utf8')
 
-  assert.match(source, /import QsSalesOrderAddOnProductsModal/u)
-  assert.match(source, /import salesOrdersApi/u)
-  assert.match(source, /<QsSalesOrderAddOnProductsModal/u)
-  assert.match(source, /selection\.view === 'COMPLETED_PURCHASE_ADD_ON'/u)
-  assert.match(source, /toast\.warning\('请先选择供应商'\)/u)
-  assert.match(source, /salesOrdersApi\.addOnContext/u)
-  assert.match(source, /salesOrdersApi\.appendAddOnLines/u)
+  assert.doesNotMatch(source, /QsSalesOrderAddOnProductsModal/u)
+  assert.doesNotMatch(source, /import salesOrdersApi/u)
+  assert.doesNotMatch(source, /COMPLETED_PURCHASE_ADD_ON/u)
+  assert.doesNotMatch(source, /salesOrdersApi\.addOnContext/u)
+  assert.doesNotMatch(source, /salesOrdersApi\.appendAddOnLines/u)
+  assert.doesNotMatch(source, /<FaMultiStepLoader/u)
+  assert.doesNotMatch(source, /正在新增销售产品/u)
+  assert.doesNotMatch(source, /完成销售订单金额变更/u)
+  assert.doesNotMatch(source, /purchase-order-sales-add-on\.logic/u)
+  assert.doesNotMatch(source, /can-add-sales-order-products/u)
   assert.match(source, /purchaseOrdersApi\.sourceSalesOrderLines/u)
-  assert.match(source, /<FaMultiStepLoader/u)
-  assert.match(source, /正在新增销售产品/u)
-  assert.match(source, /完成销售订单金额变更/u)
-  assert.match(source, /同步产品到采购单/u)
-  assert.match(source, /prevent-close/u)
-  assert.match(source, /function handleSalesOrderAddOnComplete/u)
-  assert.match(source, /function handleSalesOrderAddOnError/u)
-  assert.match(source, /加购请求结果未知，请刷新销售订单核对/u)
-  assert.doesNotMatch(source, /appendAddOnLines[\s\S]*?appendAddOnLines/u)
+  assert.match(source, /synchronizeSourceProducts/u)
 })
 
 test('销售快捷入口首次视图未命中时只回退部分采购视图', async () => {

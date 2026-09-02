@@ -174,12 +174,12 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
-        path: 'sales-order-add-on-products-modal',
-        name: 'componentLibraryQsSalesOrderAddOnProductsModal',
-        component: () => import('@/views/component_library/business/sales-order-add-on-products-modal.vue'),
+        path: 'sales-order-products-editor-modal',
+        name: 'componentLibraryQsSalesOrderProductsEditorModal',
+        component: () => import('@/views/component_library/business/sales-order-products-editor-modal.vue'),
         meta: {
-          title: '销售订单加购产品弹窗',
-          icon: 'i-lucide:package-plus',
+          title: '销售订单产品修改弹窗',
+          icon: 'i-lucide:list-restart',
         },
       },
       {

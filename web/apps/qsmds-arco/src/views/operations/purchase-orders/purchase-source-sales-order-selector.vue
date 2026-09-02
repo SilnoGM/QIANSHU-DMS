@@ -21,7 +21,6 @@ defineOptions({ name: 'PurchaseSourceSalesOrderSelector' })
 const props = withDefaults(defineProps<{
   modelValue: boolean
   disabled?: boolean
-  canAddSalesOrderProducts?: boolean
   selectedOrderId?: string | null
   loadSalesOrders: (
     query: PurchaseOrderSourceSalesOrdersQuery,
@@ -29,7 +28,6 @@ const props = withDefaults(defineProps<{
   ) => Promise<PurchaseOrderSourceSalesOrdersDto>
 }>(), {
   disabled: false,
-  canAddSalesOrderProducts: false,
   selectedOrderId: null,
 })
 
@@ -41,7 +39,6 @@ const emit = defineEmits<{
 const SOURCE_VIEW_ITEMS = [
   { value: 'UNPURCHASED', label: '未采购订单-采购' },
   { value: 'PARTIALLY_PURCHASED', label: '部分采购订单-采购' },
-  { value: 'COMPLETED_PURCHASE_ADD_ON', label: '已完成采购-加购产品' },
 ] as const satisfies readonly QsStatusSwitchItem[]
 
 function isPurchaseSourceSalesOrderView(
@@ -49,7 +46,6 @@ function isPurchaseSourceSalesOrderView(
 ): value is PurchaseSourceSalesOrderView {
   return value === 'UNPURCHASED'
     || value === 'PARTIALLY_PURCHASED'
-    || value === 'COMPLETED_PURCHASE_ADD_ON'
 }
 
 const keyword = ref('')
@@ -61,16 +57,6 @@ const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
-const confirmText = computed(() => selectedView.value === 'COMPLETED_PURCHASE_ADD_ON'
-  ? '加购产品'
-  : '确认选择')
-const confirmDisabled = computed(() => (
-  selectedView.value === 'COMPLETED_PURCHASE_ADD_ON'
-  && !props.canAddSalesOrderProducts
-))
-const confirmDisabledReason = computed(() => confirmDisabled.value
-  ? '缺少销售订单修改权限，无法加购产品'
-  : null)
 let requestVersion = 0
 let controller: AbortController | null = null
 const viewItems = computed(() => withStatusSwitchCounts(
@@ -210,10 +196,7 @@ onBeforeUnmount(() => controller?.abort())
     :loading="loading"
     :error="errorMessage"
     :disabled="disabled"
-    :confirm-text="confirmText"
-    :confirm-disabled="confirmDisabled"
-    :confirm-disabled-reason="confirmDisabledReason"
-    :close-on-confirm="selectedView !== 'COMPLETED_PURCHASE_ADD_ON'"
+    confirm-text="确认选择"
     @update:model-value="emit('update:modelValue', $event)"
     @update:keyword="handleKeywordUpdate"
     @search="handleSearch"

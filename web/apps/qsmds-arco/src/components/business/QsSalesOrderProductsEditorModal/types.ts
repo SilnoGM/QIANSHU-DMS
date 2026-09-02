@@ -2,17 +2,18 @@ import type { CurrencyDescriptor } from '../../base/currency'
 import type { OrderProductLineModel } from '../QsOrderProductLineEditor/types'
 import type { ProductPageLoader, ProductSelectorCurrency } from '../QsProductSelector/types'
 
-export interface SalesOrderAddOnModalOrder {
+export interface SalesOrderProductEditModalOrder {
   readonly id: string
   readonly orderNo: string
   readonly customerName: string
   readonly currencyCode: Extract<ProductSelectorCurrency, 'MYR' | 'TWD'>
+  readonly orderStatus: 'DRAFT' | 'CONFIRMED' | 'PENDING_RECONCILIATION' | 'COMPLETED' | 'CANCELLED'
   readonly fulfillmentStatus: 'PENDING' | 'PREPARING' | 'LAND_TRANSIT' | 'WAREHOUSE_ARRIVED' | 'SEA_TRANSIT' | 'SIGNED'
   readonly paymentStatus: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID'
   readonly version: number
 }
 
-export interface SalesOrderAddOnModalAmounts {
+export interface SalesOrderProductEditModalAmounts {
   readonly lineSubtotalAmount: string
   readonly agreedTotalAmount: string
   readonly depositDueAmount: string
@@ -21,25 +22,37 @@ export interface SalesOrderAddOnModalAmounts {
   readonly outstandingAmount: string
 }
 
-export interface SalesOrderAddOnModalExistingLine {
+export interface SalesOrderProductEditModalExistingLine {
   readonly id: string
   readonly lineNumber: number
   readonly lineType: 'CATALOG' | 'CUSTOM'
+  readonly productId: string | null
   readonly productNo: string | null
   readonly productName: string
+  readonly description: string | null
+  readonly standardUnitPriceAmount: string | null
   readonly actualUnitPriceAmount: string
   readonly quantity: number
   readonly lineTotalAmount: string
+  readonly activePurchasedQuantity: number
+  readonly canDecrease: boolean
 }
 
-export interface SalesOrderAddOnModalContext {
-  readonly salesOrder: SalesOrderAddOnModalOrder
-  readonly amounts: SalesOrderAddOnModalAmounts
-  readonly existingLines: readonly SalesOrderAddOnModalExistingLine[]
+export interface SalesOrderProductEditModalContext {
+  readonly salesOrder: SalesOrderProductEditModalOrder
+  readonly amounts: SalesOrderProductEditModalAmounts
+  readonly existingLines: readonly SalesOrderProductEditModalExistingLine[]
   readonly availableLineCapacity: number
 }
 
-export type SalesOrderAddOnIntentLine
+export interface ExistingSalesOrderLineDraft {
+  readonly lineId: string
+  readonly originalQuantity: number
+  readonly desiredQuantity: string
+  readonly minimumQuantity: number
+}
+
+export type SalesOrderProductEditIntentLine
   = | {
     readonly lineType: 'CATALOG'
     readonly productId: string
@@ -54,26 +67,38 @@ export type SalesOrderAddOnIntentLine
     readonly quantity: number
   }
 
-export interface SalesOrderAddOnIntent {
+export interface SalesOrderProductEditIntent {
   readonly expectedVersion: number
   readonly reason: string
-  readonly lines: readonly SalesOrderAddOnIntentLine[]
+  readonly confirmDepositReduction: boolean
+  readonly existingLines: readonly {
+    readonly lineId: string
+    readonly desiredQuantity: number
+  }[]
+  readonly newLines: readonly SalesOrderProductEditIntentLine[]
 }
 
-export interface SalesOrderAddOnPreview {
+export interface SalesOrderProductEditPreview {
   readonly amountDelta: string
   readonly lineSubtotalAmount: string
   readonly agreedTotalAmount: string
   readonly depositDueAmount: string
   readonly balanceDueAmount: string
+  readonly depositReductionAmount: string
+  readonly requiresDepositReduction: boolean
+  readonly addedLineCount: number
+  readonly increasedLineCount: number
+  readonly decreasedLineCount: number
+  readonly removedLineCount: number
+  readonly expectedFulfillmentStatus: SalesOrderProductEditModalOrder['fulfillmentStatus']
 }
 
-export interface SalesOrderAddOnProductsModalProps {
+export interface SalesOrderProductsEditorModalProps {
   readonly modelValue: boolean
-  readonly context: SalesOrderAddOnModalContext | null
-  readonly lines?: readonly OrderProductLineModel[]
+  readonly context: SalesOrderProductEditModalContext | null
+  readonly existingLineDrafts?: readonly ExistingSalesOrderLineDraft[]
+  readonly newLines?: readonly OrderProductLineModel[]
   readonly reason?: string
-  readonly supplierValue: string
   readonly currencies: readonly CurrencyDescriptor[]
   readonly loadProducts: ProductPageLoader
   readonly loading?: boolean
@@ -81,4 +106,4 @@ export interface SalesOrderAddOnProductsModalProps {
   readonly submitting?: boolean
 }
 
-export type SalesOrderAddOnFieldErrors = Readonly<Record<string, string>>
+export type SalesOrderProductEditFieldErrors = Readonly<Record<string, string>>

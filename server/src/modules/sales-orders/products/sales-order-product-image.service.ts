@@ -6,7 +6,7 @@ import {
   ProductMediaContentService,
   type ProductMediaContentResponse,
 } from '../../products/media/product-media-content.service'
-import { SalesOrderAddOnQueryService } from '../sales-order-add-on-query.service'
+import { SalesOrderProductEditQueryService } from '../sales-order-product-edit-query.service'
 
 function productImageNotFound(): ApiException {
   return new ApiException(
@@ -26,7 +26,7 @@ export class SalesOrderProductImageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly content: ProductMediaContentService,
-    private readonly addOnQueries?: SalesOrderAddOnQueryService,
+    private readonly productEditQueries?: SalesOrderProductEditQueryService,
   ) {}
 
   async resolve(
@@ -65,6 +65,7 @@ export class SalesOrderProductImageService {
         where: {
           id: lineId,
           salesOrderId,
+          removedAt: null,
           lineType: 'CATALOG',
           productId: { not: null },
           product: {
@@ -102,23 +103,19 @@ export class SalesOrderProductImageService {
     )
   }
 
-  async resolveAddOnProductOption(
+  async resolveProductEditOption(
     salesOrderId: string,
     productId: string,
     productMediaId: string,
-    supplierInput: string,
     ifNoneMatch: unknown,
     range: unknown,
     method: 'GET' | 'HEAD',
   ): Promise<ProductMediaContentResponse> {
-    if (this.addOnQueries === undefined) {
-      throw new Error('SalesOrderAddOnQueryService is not configured')
+    if (this.productEditQueries === undefined) {
+      throw new Error('SalesOrderProductEditQueryService is not configured')
     }
-    // 图片 URL 可能被长期缓存或复制，内容读取时必须重验订单资格与供应商状态。
-    await this.addOnQueries.context(salesOrderId)
-    const supplierValue = await this.addOnQueries.assertEffectiveSupplier(
-      supplierInput,
-    )
+    // 图片 URL 可能被长期缓存或复制，内容读取时必须重验订单修改资格与当前产品状态。
+    await this.productEditQueries.context(salesOrderId)
     let row: { readonly id: string } | null
     try {
       row = await this.prisma.productMedia.findFirst({
@@ -129,7 +126,7 @@ export class SalesOrderProductImageService {
           isPrimary: true,
           detachedAt: null,
           mediaAsset: { is: { status: 'READY' } },
-          product: { is: { status: 'ACTIVE', supplierValue } },
+          product: { is: { status: 'ACTIVE' } },
         },
         select: { id: true },
       })

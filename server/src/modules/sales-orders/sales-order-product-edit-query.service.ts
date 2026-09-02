@@ -3,8 +3,6 @@ import { HttpStatus, Injectable } from '@nestjs/common'
 import { Prisma } from '../../generated/prisma/client'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
-import { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
-import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
 import {
   SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES,
 } from '../purchase-orders/domain/purchase-order-source-sales-order-view'
@@ -14,42 +12,23 @@ import {
 } from './domain/sales-order-decimal'
 import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
 
-const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const MAX_SALES_ORDER_LINES = 100
 
 function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
   return value.toFixed(4)
 }
 
-function addOnNotAllowed(): never {
+function productEditNotAllowed(): never {
   throw new ApiException(
     HttpStatus.UNPROCESSABLE_ENTITY,
-    'SALES_ORDER_ADD_ON_NOT_ALLOWED',
-    '销售订单当前不允许加购产品',
+    'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
+    '销售订单当前不允许修改产品',
   )
-}
-
-function supplierUnavailable(): never {
-  throw new ApiException(
-    HttpStatus.UNPROCESSABLE_ENTITY,
-    'SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE',
-    '加购供应商当前不可用',
-  )
-}
-
-export interface SalesOrderAddOnProductOptionsInput {
-  readonly supplierValue: string
-  readonly keyword?: string
-  readonly page?: number
-  readonly pageSize?: number
 }
 
 @Injectable()
-export class SalesOrderAddOnQueryService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly dictionaryLookup: DictionaryLookupService,
-  ) {}
+export class SalesOrderProductEditQueryService {
+  constructor(private readonly prisma: PrismaService) {}
 
   async context(salesOrderId: string) {
     const order = await this.prisma.salesOrder.findUnique({
@@ -68,13 +47,17 @@ export class SalesOrderAddOnQueryService {
         depositDueAmount: true,
         balanceDueAmount: true,
         lines: {
+          where: { removedAt: null },
           orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
           select: {
             id: true,
             lineNumber: true,
             lineType: true,
+            productId: true,
             productNoSnapshot: true,
             productNameSnapshot: true,
+            descriptionSnapshot: true,
+            standardUnitPriceAmount: true,
             actualUnitPriceAmount: true,
             quantity: true,
             lineTotalAmount: true,
@@ -93,32 +76,29 @@ export class SalesOrderAddOnQueryService {
         '销售订单不存在',
       )
     }
+    if (
+      order.orderStatus !== 'CONFIRMED'
+      || !SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES.includes(
+        order.fulfillmentStatus as typeof SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES[number],
+      )
+    ) {
+      return productEditNotAllowed()
+    }
 
     const sourceLineIds = order.lines.map(line => line.id)
-    const [activePurchaseOrderCount, purchasedRows] = await Promise.all([
-      this.prisma.purchaseOrder.count({
-        where: {
-          purchaseType: 'SALES_LINKED',
-          salesOrderId,
-          orderStatus: { not: 'CANCELLED' },
-        },
-      }),
-      sourceLineIds.length === 0
-        ? Promise.resolve([])
-        : this.prisma.purchaseOrderLine.findMany({
-            where: {
-              sourceSalesOrderLineId: { in: sourceLineIds },
-              purchaseOrder: {
-                is: {
-                  purchaseType: 'SALES_LINKED',
-                  salesOrderId,
-                  orderStatus: { not: 'CANCELLED' },
-                },
-              },
-            },
-            select: { sourceSalesOrderLineId: true, quantity: true },
-          }),
-    ])
+    const purchasedRows = sourceLineIds.length === 0
+      ? []
+      : await this.prisma.purchaseOrderLine.findMany({
+          where: {
+            sourceSalesOrderLineId: { in: sourceLineIds },
+            purchaseOrder: { is: {
+              purchaseType: 'SALES_LINKED',
+              salesOrderId,
+              orderStatus: { not: 'CANCELLED' },
+            } },
+          },
+          select: { sourceSalesOrderLineId: true, quantity: true },
+        })
     const purchasedByLine = new Map<string, number>()
     for (const row of purchasedRows) {
       if (row.sourceSalesOrderLineId === null) continue
@@ -127,33 +107,18 @@ export class SalesOrderAddOnQueryService {
         (purchasedByLine.get(row.sourceSalesOrderLineId) ?? 0) + row.quantity,
       )
     }
-    const purchasedQuantity = [...purchasedByLine.values()]
-      .reduce((sum, quantity) => sum + quantity, 0)
-    const remainingQuantity = order.lines.reduce((sum, line) => (
-      sum + Math.max(0, line.quantity - (purchasedByLine.get(line.id) ?? 0))
-    ), 0)
-    if (
-      order.orderStatus !== 'CONFIRMED'
-      || !SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES.includes(
-        order.fulfillmentStatus as typeof SALES_ORDER_PRE_SEA_FULFILLMENT_STATUSES[number],
-      )
-      || activePurchaseOrderCount < 1
-      || purchasedQuantity < 1
-      || remainingQuantity !== 0
-    ) {
-      return addOnNotAllowed()
-    }
-
     const paidUnits = order.payments.reduce((sum, payment) => (
       sum + parseSalesOrderAmountUnits(fixed4(payment.amount))
     ), 0n)
     const agreedUnits = parseSalesOrderAmountUnits(fixed4(order.agreedTotalAmount))
+
     return {
       salesOrder: {
         id: order.id,
         orderNo: order.orderNo,
         customerName: order.customerName,
         currencyCode: order.currencyCode as 'TWD' | 'MYR',
+        orderStatus: order.orderStatus,
         fulfillmentStatus: order.fulfillmentStatus,
         paymentStatus: order.paymentStatus,
         version: order.version,
@@ -170,11 +135,18 @@ export class SalesOrderAddOnQueryService {
         id: line.id,
         lineNumber: line.lineNumber,
         lineType: line.lineType,
+        productId: line.productId,
         productNo: line.productNoSnapshot,
         productName: line.productNameSnapshot,
+        description: line.descriptionSnapshot,
+        standardUnitPriceAmount: line.standardUnitPriceAmount === null
+          ? null
+          : fixed4(line.standardUnitPriceAmount),
         actualUnitPriceAmount: fixed4(line.actualUnitPriceAmount),
         quantity: line.quantity,
         lineTotalAmount: fixed4(line.lineTotalAmount),
+        activePurchasedQuantity: purchasedByLine.get(line.id) ?? 0,
+        canDecrease: (purchasedByLine.get(line.id) ?? 0) === 0,
       })),
       availableLineCapacity: Math.max(0, MAX_SALES_ORDER_LINES - order.lines.length),
     }
@@ -182,17 +154,14 @@ export class SalesOrderAddOnQueryService {
 
   async productOptions(
     salesOrderId: string,
-    input: SalesOrderAddOnProductOptionsInput,
+    input: { readonly keyword?: string, readonly page?: number, readonly pageSize?: number },
   ) {
     const context = await this.context(salesOrderId)
-    const supplierValue = await this.assertEffectiveSupplier(input.supplierValue)
-
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
     const where: Prisma.ProductWhereInput = {
       status: 'ACTIVE',
-      supplierValue,
       ...(keyword === undefined || keyword.length === 0
         ? {}
         : { OR: [
@@ -229,32 +198,13 @@ export class SalesOrderAddOnQueryService {
         },
       }),
     ])
-    const currencyCode = context.salesOrder.currencyCode
     const items = rows.map(row => mapSalesOrderProductOption(
       row,
-      currencyCode,
+      context.salesOrder.currencyCode,
       (productId, productMediaId) => (
-        `/api/sales-orders/${salesOrderId}/add-on-product-options/${productId}/main-image/${productMediaId}/content?supplierValue=${encodeURIComponent(supplierValue)}`
+        `/api/sales-orders/${salesOrderId}/product-edit-options/${productId}/main-image/${productMediaId}/content`
       ),
     ))
     return { items, page, pageSize, total }
-  }
-
-  async assertEffectiveSupplier(input: string): Promise<string> {
-    let supplierValue: string
-    try {
-      supplierValue = normalizeDictionaryItemValue(input)
-    }
-    catch {
-      return supplierUnavailable()
-    }
-    const supplier = await this.dictionaryLookup.resolveStoredValue({
-      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-      value: supplierValue,
-    })
-    if (supplier.known !== true || !supplier.effectiveEnabled) {
-      return supplierUnavailable()
-    }
-    return supplierValue
   }
 }
