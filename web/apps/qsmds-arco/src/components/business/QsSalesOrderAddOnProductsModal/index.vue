@@ -193,7 +193,7 @@ watch(() => props.modelValue, (open) => {
 
     <div
       v-if="context"
-      class="gap-5 grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start"
+      class="gap-5 grid lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:items-start"
     >
       <aside class="min-w-0 space-y-4">
         <section class="p-4 border border-border rounded-xl bg-muted/15">
