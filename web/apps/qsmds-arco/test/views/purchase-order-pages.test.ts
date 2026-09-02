@@ -310,6 +310,18 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /<QsOrderProductLineEditor[\s\S]*?class="purchase-order-line-editor"/u)
   assert.match(
     source,
+    /const purchasedSourceLines = shallowRef<readonly OrderProductLineReadOnlyModel\[\]>\(\[\]\)/u,
+    '采购创建页必须独立保存已采购的只读来源行',
+  )
+  assert.match(source, /purchasedSourceLines\.value = result\.readOnlyLines\.map/u)
+  assert.match(source, /:read-only-lines="purchasedSourceLines"/u)
+  assert.match(
+    source,
+    /function buildCurrentSource\(\) \{[\s\S]*?lines: formModel\.lines,/u,
+    '已采购历史行不能进入本单校验、金额计算或提交 DTO',
+  )
+  assert.match(
+    source,
     /\.purchase-order-line-editor :deep\(\[data-column="reference-unit-price"\]\) \{[\s\S]*?width: 20rem;[\s\S]*?min-width: 20rem;/u,
     '采购创建页必须为采购定价输入保留金额、币种与下拉图标的完整宽度',
   )

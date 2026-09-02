@@ -578,7 +578,11 @@ test('产品明细由薄销售适配层接入通用编辑器，不保留行内�
   assert.match(editor, /min="1"/)
   assert.match(editor, /<MoneyInput/u)
   assert.match(editor, /class="[^"]*overflow-x-auto[^"]*"/u)
-  assert.match(editor, /v-if="modelValue\.length === 0"/u)
+  assert.match(
+    editor,
+    /v-if="modelValue\.length === 0 && readOnlyLines\.length === 0"/u,
+    '通用编辑器只有在可编辑行与只读历史行都为空时才展示空状态',
+  )
   assert.match(editor, /暂无产品明细/u)
   assert.match(editor, /labels\.actualSubtotal/u)
   assert.match(editor, /labels\.actualTotal/u)

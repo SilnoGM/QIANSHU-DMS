@@ -5,7 +5,10 @@ import type {
   PurchaseOrderProductOptionsDto,
   PurchaseOrderSourceSalesOrderLineDto,
 } from '../../../api/generated/types.gen'
-import type { OrderProductLineModel } from '../../../components/business/QsOrderProductLineEditor/types'
+import type {
+  OrderProductLineModel,
+  OrderProductLineReadOnlyModel,
+} from '../../../components/business/QsOrderProductLineEditor/types'
 import type { ProductSelectorPage } from '../../../components/business/QsProductSelector/types'
 
 export type PurchaseOrderCreateType = 'SALES_LINKED' | 'STOCK'
@@ -59,6 +62,7 @@ export interface PurchaseOrderSourceSynchronizationResult {
   readonly incompatibleCatalogCount: number
   readonly lines: readonly OrderProductLineModel[]
   readonly maximumQuantityByKey: Readonly<Record<string, number>>
+  readonly readOnlyLines: readonly OrderProductLineReadOnlyModel[]
   readonly sourceSalesOrderLineIdByKey: Readonly<Record<string, string>>
 }
 
@@ -276,21 +280,38 @@ export function synchronizePurchaseOrderSourceLines(input: {
 }): PurchaseOrderSourceSynchronizationResult {
   const optionByProductId = new Map(input.productOptions.map(item => [item.id, item]))
   const lines: OrderProductLineModel[] = []
+  const readOnlyLines: OrderProductLineReadOnlyModel[] = []
   const sourceSalesOrderLineIdByKey: Record<string, string> = {}
   const maximumQuantityByKey: Record<string, number> = {}
   let incompatibleCatalogCount = 0
   let exhaustedCount = 0
 
   for (const sourceLine of input.sourceLines) {
+    const option = sourceLine.productId === null
+      ? undefined
+      : optionByProductId.get(sourceLine.productId)
+    if (sourceLine.purchasedQuantity > 0) {
+      // 已采购数量使用销售明细快照描述历史事实；当前产品档案只补充可选主图，
+      // 不用当前名称覆盖销售订单快照，也不向本单可编辑模型泄漏历史数量。
+      readOnlyLines.push({
+        description: sourceLine.description ?? '',
+        key: `purchased-${sourceLine.id}`,
+        lineType: sourceLine.lineType,
+        mainImage: sourceLine.lineType === 'CATALOG'
+          ? option?.mainImage ?? null
+          : null,
+        name: sourceLine.productName,
+        productNo: sourceLine.productNo,
+        quantity: String(sourceLine.purchasedQuantity),
+        statusLabel: '已采购',
+      })
+    }
     if (sourceLine.remainingQuantity <= 0) {
       exhaustedCount += 1
       continue
     }
     const key = sourceLineKey(sourceLine.id)
     if (sourceLine.lineType === 'CATALOG') {
-      const option = sourceLine.productId === null
-        ? undefined
-        : optionByProductId.get(sourceLine.productId)
       if (option === undefined) {
         incompatibleCatalogCount += 1
         continue
@@ -331,6 +352,7 @@ export function synchronizePurchaseOrderSourceLines(input: {
     incompatibleCatalogCount,
     lines,
     maximumQuantityByKey: Object.freeze(maximumQuantityByKey),
+    readOnlyLines: Object.freeze(readOnlyLines),
     sourceSalesOrderLineIdByKey: Object.freeze(sourceSalesOrderLineIdByKey),
   }
 }

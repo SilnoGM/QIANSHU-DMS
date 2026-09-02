@@ -14,6 +14,7 @@ import type {
 import type {
   OrderProductLineLabels,
   OrderProductLineModel,
+  OrderProductLineReadOnlyModel,
 } from '@/components/business/QsOrderProductLineEditor/types'
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 
@@ -116,6 +117,7 @@ const formModel = reactive({
 })
 const selectedSalesOrder = shallowRef<PurchaseOrderSourceSalesOrderListItemDto | null>(null)
 const sourceSalesOrderLines = shallowRef<readonly PurchaseOrderSourceSalesOrderLineDto[]>([])
+const purchasedSourceLines = shallowRef<readonly OrderProductLineReadOnlyModel[]>([])
 const sourceSalesOrderLineIdByKey = shallowRef<Readonly<Record<string, string | undefined>>>({})
 const maximumQuantityByKey = shallowRef<Readonly<Record<string, number | undefined>>>({})
 const sourceSelectorVisible = ref(false)
@@ -269,9 +271,13 @@ function handleSupplierUpdate(value: string | null): void {
   }
   formModel.supplierValue = value
   clearFeedback()
-  if (purchaseType === 'SALES_LINKED' && formModel.lines.length > 0) {
+  if (
+    purchaseType === 'SALES_LINKED'
+    && (formModel.lines.length > 0 || purchasedSourceLines.value.length > 0)
+  ) {
     // 正式产品的采购成本和供应商绑定；切换供应商后必须重新求交集，不能沿用旧快照。
     formModel.lines = []
+    purchasedSourceLines.value = []
     sourceSalesOrderLineIdByKey.value = {}
     maximumQuantityByKey.value = {}
     toast.info('供应商已变更，请重新同步销售产品明细')
@@ -319,6 +325,7 @@ async function selectSourceSalesOrder(
     // 产品、付款约定和销售明细映射都依赖原销售订单，换单后必须一起失效；
     // 重选同一订单则保留用户已填写内容，只刷新该订单的剩余可采购明细。
     formModel.lines = []
+    purchasedSourceLines.value = []
     formModel.depositDueAmount = null
     formModel.balanceDueAmount = null
     sourceSalesOrderLineIdByKey.value = {}
@@ -448,6 +455,7 @@ async function synchronizeSourceProducts(): Promise<void> {
       sourceLines: sourceSalesOrderLines.value,
     })
     formModel.lines = result.lines.map(line => ({ ...line }))
+    purchasedSourceLines.value = result.readOnlyLines.map(line => ({ ...line }))
     sourceSalesOrderLineIdByKey.value = result.sourceSalesOrderLineIdByKey
     maximumQuantityByKey.value = result.maximumQuantityByKey
     clearFeedback()
@@ -455,10 +463,13 @@ async function synchronizeSourceProducts(): Promise<void> {
       sourceError.value = '当前供应商没有可同步的销售产品明细'
       return
     }
-    const skipped = result.incompatibleCatalogCount + result.exhaustedCount
-    toast.success(skipped === 0
-      ? `已同步 ${result.lines.length} 条销售产品明细`
-      : `已同步 ${result.lines.length} 条，跳过 ${skipped} 条不可采购明细`)
+    const historyMessage = result.readOnlyLines.length === 0
+      ? ''
+      : `，并展示 ${result.readOnlyLines.length} 条已采购明细`
+    const incompatibleMessage = result.incompatibleCatalogCount === 0
+      ? ''
+      : `，另有 ${result.incompatibleCatalogCount} 条正式产品不属于当前供应商`
+    toast.success(`已同步 ${result.lines.length} 条待采购明细${historyMessage}${incompatibleMessage}`)
   }
   catch (error) {
     if (controller.signal.aborted || isPurchaseOrderAbortError(error)) {
@@ -1043,6 +1054,7 @@ onBeforeUnmount(() => {
                   <QsOrderProductLineEditor
                     class="purchase-order-line-editor"
                     :model-value="formModel.lines"
+                    :read-only-lines="purchasedSourceLines"
                     currency="CNY"
                     :currencies="fixedCurrencies"
                     :load-products="loadPurchaseProducts"

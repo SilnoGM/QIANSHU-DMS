@@ -32,6 +32,7 @@ const props = withDefaults(defineProps<OrderProductLineEditorProps>(), {
   maximumLines: 100,
   maximumQuantityByKey: () => ({}),
   productSelectionDescription: undefined,
+  readOnlyLines: () => ([]),
   showDiscountRate: false,
   temporaryLineInitialActualUnitPriceAmount: '0.00',
 })
@@ -262,7 +263,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
           </tr>
         </thead>
         <tbody>
-          <tr v-if="modelValue.length === 0">
+          <tr v-if="modelValue.length === 0 && readOnlyLines.length === 0">
             <td :colspan="showDiscountRate ? 11 : 10" class="p-0">
               <FaEmpty
                 icon="i-lucide:shopping-basket"
@@ -491,6 +492,74 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
               >
                 <FaIcon name="i-lucide:trash-2" aria-hidden="true" />
               </FaButton>
+            </td>
+          </tr>
+          <!-- 历史已采购行与 modelValue 物理隔离并统一后置：它们只说明销售来源的
+               已处理数量，不参与当前采购单编辑、金额汇总或提交事件。 -->
+          <tr
+            v-for="line in readOnlyLines"
+            :key="line.key"
+            data-readonly-line
+            class="text-muted-foreground align-middle border-b border-border bg-muted/55 last:border-b-0"
+            :aria-label="`${line.statusLabel}：${line.name}`"
+          >
+            <td class="p-3 whitespace-nowrap">
+              {{ line.lineType === 'CATALOG' ? labels.catalogProduct : labels.temporaryProduct }}
+            </td>
+            <td class="font-mono p-3 whitespace-nowrap">
+              {{ line.lineType === 'CATALOG' ? line.productNo : labels.temporaryProductNo }}
+            </td>
+            <td class="p-3">
+              <FaTooltip :text="line.name" :disabled="line.name === ''">
+                <span tabindex="0" class="max-w-80 block truncate">{{ line.name }}</span>
+              </FaTooltip>
+            </td>
+            <td class="p-3">
+              <div class="border border-border rounded-lg bg-background/70 flex size-14 items-center justify-center overflow-hidden">
+                <img
+                  v-if="line.lineType === 'CATALOG' && line.mainImage && !failedImages.has(line.key)"
+                  :src="line.mainImage.contentUrl"
+                  :alt="line.name"
+                  class="opacity-70 size-full object-cover grayscale"
+                  loading="lazy"
+                  @error="markImageFailed(line.key)"
+                >
+                <FaIcon
+                  v-else-if="line.lineType === 'CATALOG'"
+                  name="i-lucide:image"
+                  class="text-muted-foreground size-5"
+                  aria-label="暂无产品主图"
+                />
+                <span v-else aria-label="临时产品无主图">—</span>
+              </div>
+            </td>
+            <td data-column="reference-unit-price" class="p-3 whitespace-nowrap">
+              —
+            </td>
+            <td class="p-3 whitespace-nowrap">
+              —
+            </td>
+            <td v-if="showDiscountRate" class="p-3 whitespace-nowrap">
+              —
+            </td>
+            <td class="font-mono p-3 whitespace-nowrap">
+              {{ line.quantity }}
+            </td>
+            <td class="p-3 whitespace-nowrap">
+              —
+            </td>
+            <td class="p-3">
+              <FaTooltip :text="line.description" :disabled="line.description === ''">
+                <span tabindex="0" class="max-w-64 block truncate">
+                  {{ line.description || '—' }}
+                </span>
+              </FaTooltip>
+            </td>
+            <td class="p-3 text-right whitespace-nowrap">
+              <span class="font-medium inline-flex gap-1 items-center">
+                <FaIcon name="i-lucide:circle-check" class="size-4" aria-hidden="true" />
+                {{ line.statusLabel }}
+              </span>
             </td>
           </tr>
         </tbody>

@@ -52,8 +52,8 @@ test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承�
   )
   assert.equal(
     source.match(/data-column="reference-unit-price"/gu)?.length,
-    2,
-    '参考单价表头与数据单元格必须共享语义列标记，供领域页面定向调整宽度',
+    3,
+    '参考单价表头、可编辑行与只读行必须共享语义列标记，供领域页面定向调整宽度',
   )
   assert.match(source, /<FaTooltip/u)
   assert.match(source, /\{\{ labels\.referenceTotal \}\}/u)
@@ -63,6 +63,30 @@ test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承�
   assert.match(source, /未计入汇总/u)
   assert.doesNotMatch(source, /<FaCombobox/u)
   assert.doesNotMatch(source, /<FaTextarea/u)
+})
+
+test('只读产品行始终排在可编辑行之后且不渲染编辑控件', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /export interface OrderProductLineReadOnlyModel/u)
+  assert.match(types, /readonly readOnlyLines\?: readonly OrderProductLineReadOnlyModel\[\]/u)
+  assert.match(source, /readOnlyLines: \(\) => \(\[\]\)/u)
+  assert.match(source, /modelValue\.length === 0 && readOnlyLines\.length === 0/u)
+
+  const editableLineStart = source.indexOf('v-for="(line, index) in modelValue"')
+  const readOnlyLineStart = source.indexOf('v-for="line in readOnlyLines"')
+  assert.ok(editableLineStart >= 0, '必须保留可编辑产品行')
+  assert.ok(readOnlyLineStart > editableLineStart, '已采购只读行必须始终排在所有待采购行之后')
+
+  const readOnlyLineEnd = source.indexOf('</tr>', readOnlyLineStart)
+  const readOnlyLineSource = source.slice(readOnlyLineStart, readOnlyLineEnd)
+  assert.match(readOnlyLineSource, /data-readonly-line/u)
+  assert.match(readOnlyLineSource, /bg-muted\/55/u)
+  assert.match(readOnlyLineSource, /\{\{ line\.statusLabel \}\}/u)
+  assert.doesNotMatch(readOnlyLineSource, /<(?:FaInput|MoneyInput|FaButton)/u)
 })
 
 test('通用产品明细可按领域适配层开启只读折扣率计算列', async () => {

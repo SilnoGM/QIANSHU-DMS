@@ -214,6 +214,7 @@ test('销售来源同步只加入当前供应商可采购的正式产品和所�
       ...sourceCatalogLine,
       id: '66666666-6666-4666-8666-666666666666',
       lineNumber: 4,
+      purchasedQuantity: 3,
       remainingQuantity: 0,
     }],
   })
@@ -251,6 +252,37 @@ test('销售来源同步只加入当前供应商可采购的正式产品和所�
   assert.equal(result.incompatibleCatalogCount, 1)
   assert.equal(result.exhaustedCount, 1)
   assert.deepEqual(result.lines[0]?.mainImage, catalogOption.mainImage)
+  assert.deepEqual(result.readOnlyLines.map(line => ({
+    key: line.key,
+    name: line.name,
+    quantity: line.quantity,
+    status: line.statusLabel,
+    type: line.lineType,
+  })), [{
+    key: `purchased-${sourceCatalogLine.id}`,
+    name: '采购产品 A',
+    quantity: '1',
+    status: '已采购',
+    type: 'CATALOG',
+  }, {
+    key: 'purchased-33333333-3333-4333-8333-333333333333',
+    name: '其他供应商产品',
+    quantity: '1',
+    status: '已采购',
+    type: 'CATALOG',
+  }, {
+    key: 'purchased-55555555-5555-4555-8555-555555555555',
+    name: '销售临时包装',
+    quantity: '1',
+    status: '已采购',
+    type: 'CUSTOM',
+  }, {
+    key: 'purchased-66666666-6666-4666-8666-666666666666',
+    name: '采购产品 A',
+    quantity: '3',
+    status: '已采购',
+    type: 'CATALOG',
+  }])
 })
 
 test('关联采购构造 DTO 时校验来源数量、明细总价和 CUSTOM 双价格', () => {

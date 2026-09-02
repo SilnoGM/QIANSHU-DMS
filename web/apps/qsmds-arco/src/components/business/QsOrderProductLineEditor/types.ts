@@ -20,6 +20,26 @@ export interface OrderProductLineModel {
   }
 }
 
+/**
+ * 仅用于展示来源订单中已经处理过的产品快照。
+ *
+ * 只读行与 `modelValue` 分离，组件不会将其计入金额、产品选择器状态或
+ * `update:modelValue` 事件，避免历史业务数据被本次订单再次提交。
+ */
+export interface OrderProductLineReadOnlyModel {
+  readonly key: string
+  readonly lineType: 'CATALOG' | 'CUSTOM'
+  readonly productNo: string | null
+  readonly name: string
+  readonly description: string
+  readonly quantity: string
+  readonly statusLabel: string
+  readonly mainImage: null | {
+    readonly id: string
+    readonly contentUrl: string
+  }
+}
+
 export interface OrderProductLineLabels {
   readonly referenceUnitPrice: string
   readonly actualUnitPrice: string
@@ -40,6 +60,7 @@ export interface OrderProductLineEditorProps {
   readonly loadProducts: ProductPageLoader
   readonly labels: OrderProductLineLabels
   readonly modelValue: readonly OrderProductLineModel[]
+  readonly readOnlyLines?: readonly OrderProductLineReadOnlyModel[]
   readonly customReferenceUnitPriceEditable?: boolean
   readonly disabled?: boolean
   readonly fieldErrors?: Readonly<Record<string, string | undefined>>
