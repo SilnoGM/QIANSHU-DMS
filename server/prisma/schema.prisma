@@ -116,6 +116,7 @@ enum AuditEventType {
   SALES_ORDER_DOCUMENT_ATTACHED
   SALES_ORDER_DOCUMENT_DETACHED
   SALES_ORDER_PRODUCT_APPENDED
+  SALES_ORDER_PRODUCTS_CHANGED
   PURCHASE_ORDER_CREATED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
   PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED
@@ -867,6 +868,7 @@ model SalesOrderLine {
   actualUnitPriceAmount     Decimal            @map("actual_unit_price_amount") @db.Decimal(30, 4)
   quantity                  Int
   lineTotalAmount           Decimal            @map("line_total_amount") @db.Decimal(30, 4)
+  removedAt                 DateTime?          @map("removed_at") @db.Timestamptz(6)
   createdAt                 DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
 
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)

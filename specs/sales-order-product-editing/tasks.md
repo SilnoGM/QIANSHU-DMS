@@ -29,22 +29,22 @@
 
 ### T2：建立数据库软移除与约束失败测试
 
-- [ ] 新增 schema 测试，要求 `SalesOrderLine.removedAt` 和 `SALES_ORDER_PRODUCTS_CHANGED` 唯一存在。
-- [ ] 固定 migration 只能新增可空字段和枚举，不回填、不删除历史数据。
-- [ ] 固定销售小计触发器只统计有效销售明细且至少保留一行。
-- [ ] 固定有效采购不得引用软移除行、取消采购可以保留历史引用。
-- [ ] 固定软移除行不得存在有效采购数量。
-- [ ] 运行定向 schema 测试并记录有效 RED。
+- [x] 新增 schema 测试，要求 `SalesOrderLine.removedAt` 和 `SALES_ORDER_PRODUCTS_CHANGED` 唯一存在。
+- [x] 固定 migration 只能新增可空字段和枚举，不回填、不删除历史数据。
+- [x] 固定销售小计触发器只统计有效销售明细且至少保留一行。
+- [x] 固定有效采购不得引用软移除行、取消采购可以保留历史引用。
+- [x] 固定软移除行不得存在有效采购数量。
+- [x] 运行定向 schema 测试并记录有效 RED。
 - _Requirements: R5, R6, R8_
 
 ### T3：实现 Prisma schema 与增量 migration
 
-- [ ] 修改 Prisma schema，增加 `removedAt` 和审计枚举。
-- [ ] 新增单条增量 migration，替换相关数据库约束函数。
-- [ ] 更新 schema governance 固定枚举和 migration 顺序。
-- [ ] 运行 `prisma:validate`、schema 定向测试和 drift gate。
-- [ ] 确认未应用当前开发数据库。
-- [ ] 提交数据库契约改造。
+- [x] 修改 Prisma schema，增加 `removedAt` 和审计枚举。
+- [x] 新增单条增量 migration，替换相关数据库约束函数。
+- [x] 更新 schema governance 固定枚举和 migration 顺序。
+- [x] 运行 `prisma:validate`、schema 定向测试和 drift gate。
+- [x] 确认未应用当前开发数据库。
+- [x] 提交数据库契约改造。
 - _Requirements: R5, R6, R8_
 
 ### T4：把采购来源收敛为两个可信视图
