@@ -242,21 +242,21 @@ pnpm -C server test:prisma-drift-gate
 
 目标：提供只追加产品、金额预览和二次确认的纯业务组件。
 
-- [ ] 先新增组件 logic 测试，覆盖：
+- [x] 先新增组件 logic 测试，覆盖：
   - 新增小计和新金额预览；
   - 定金不变、尾款增加；
   - 原销售行不进入可编辑 `modelValue`；
   - 累计行容量、必填原因和 CATALOG/CUSTOM 校验；
   - 相同历史产品仍可作为新的独立行选择。
-- [ ] 先新增组件结构测试，固定 `QsGenericModal`、订单摘要、原产品只读区、编辑区和二次确认。
-- [ ] 新建组件 `types.ts`、`logic.ts`、`index.vue` 和 `README.md`。
-- [ ] 复用 `QsOrderProductLineEditor`，传入订单币种、采购供应商和剩余行容量。
-- [ ] 默认原因设为“客户加购产品”，允许用户修改。
-- [ ] 桌面实现约 `5:7` 双栏，移动端纵向排列；不产生页面级横向滚动。
-- [ ] 使用现有主题 token、Noto 字体、mono 金额样式和不少于 44px 的移动触控目标。
-- [ ] 禁止直接发 API；只发取消、编辑、检查和确认意图。
-- [ ] 新增组件库路由与 Showcase，覆盖稳定、空、加载、错误、行数满和移动状态。
-- [ ] 运行组件、logic、组件库、typecheck 和 lint。
+- [x] 先新增组件结构测试，固定 `QsGenericModal`、订单摘要、原产品只读区、编辑区和二次确认。
+- [x] 新建组件 `types.ts`、`logic.ts`、`index.vue` 和 `README.md`。
+- [x] 复用 `QsOrderProductLineEditor`，传入订单币种、采购供应商和剩余行容量。
+- [x] 默认原因设为“客户加购产品”，允许用户修改。
+- [x] 桌面实现约 `5:7` 双栏，移动端纵向排列；不产生页面级横向滚动。
+- [x] 使用现有主题 token、Noto 字体、mono 金额样式和不少于 44px 的移动触控目标。
+- [x] 禁止直接发 API；只发取消、编辑、检查和确认意图。
+- [x] 新增组件库路由与 Showcase，覆盖稳定、空、加载、错误、行数满和移动状态。
+- [x] 运行组件、logic、组件库、typecheck 和 lint。
 - _Requirements: R4.4-R4.5, R5, R7.1-R7.5, R8.1, R10.3_
 
 ### T14：建立采购页加购流程失败测试

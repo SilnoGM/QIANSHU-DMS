@@ -174,6 +174,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'sales-order-add-on-products-modal',
+        name: 'componentLibraryQsSalesOrderAddOnProductsModal',
+        component: () => import('@/views/component_library/business/sales-order-add-on-products-modal.vue'),
+        meta: {
+          title: '销售订单加购产品弹窗',
+          icon: 'i-lucide:package-plus',
+        },
+      },
+      {
         path: 'good-tooltip',
         name: 'componentLibraryQsGoodTooltip',
         component: () => import('@/views/component_library/business/good-tooltip.vue'),
