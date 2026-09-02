@@ -324,7 +324,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
             <th v-if="showDiscountRate" scope="col" class="font-medium p-3 w-28">
               折扣率
             </th>
-            <th scope="col" class="font-medium p-3 w-32">
+            <th scope="col" class="font-medium p-3 w-36">
               产品数量
             </th>
             <th scope="col" class="font-medium p-3 w-48">
@@ -754,6 +754,7 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
 
 <style scoped>
 .order-product-quantity-input :deep(input[type="number"]) {
+  min-width: 3.25rem;
   appearance: textfield;
 }
 

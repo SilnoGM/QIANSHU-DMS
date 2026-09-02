@@ -144,6 +144,8 @@ test('售价与产品名称列保留完整输入空间，汇总在右侧纵向�
   assert.match(source, /class="font-medium p-3 w-80"[\s\S]*?产品名称/u)
   assert.match(source, /class="max-w-80 block truncate"/u)
   assert.match(source, /class="font-medium p-3 w-72"[\s\S]*?labels\.actualUnitPrice/u)
+  assert.match(source, /class="font-medium p-3 w-36"[\s\S]*?产品数量/u)
+  assert.match(source, /min-width: 3\.25rem/u)
   assert.ok(summaryTag, '必须保留产品金额汇总语义区域')
   assert.ok(summaryTag[1].split(' ').includes('flex'), '汇总区域必须使用弹性布局')
   assert.ok(summaryTag[1].split(' ').includes('flex-col'), '两组汇总必须上下排列')
