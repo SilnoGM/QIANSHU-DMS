@@ -7,6 +7,10 @@ import {
   DictionaryLookupService,
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
+import {
+  PURCHASE_ORDER_SOURCE_FULFILLMENT_STATUSES,
+  type PurchaseOrderSourceSalesOrderView,
+} from './domain/purchase-order-source-sales-order-view'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
@@ -18,9 +22,22 @@ export interface PurchaseOrderProductOptionsInput {
 }
 
 export interface PurchaseOrderSourceSalesOrdersInput {
+  readonly view: PurchaseOrderSourceSalesOrderView
   readonly keyword?: string
   readonly page?: number
   readonly pageSize?: number
+}
+
+function sourceSalesOrderWhere(
+  view: PurchaseOrderSourceSalesOrderView,
+  baseWhere: Prisma.SalesOrderWhereInput,
+): Prisma.SalesOrderWhereInput {
+  return {
+    ...baseWhere,
+    fulfillmentStatus: {
+      in: [...PURCHASE_ORDER_SOURCE_FULFILLMENT_STATUSES[view]],
+    },
+  }
 }
 
 function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
@@ -161,7 +178,7 @@ export class PurchaseOrderSourceQueryService {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
-    const where: Prisma.SalesOrderWhereInput = {
+    const baseWhere: Prisma.SalesOrderWhereInput = {
       orderStatus: 'CONFIRMED',
       ...(keyword === undefined || keyword.length === 0
         ? {}
@@ -170,8 +187,15 @@ export class PurchaseOrderSourceQueryService {
             { customerName: { contains: keyword, mode: 'insensitive' } },
           ] }),
     }
-    const [total, rows] = await Promise.all([
-      this.prisma.salesOrder.count({ where }),
+    const where = sourceSalesOrderWhere(input.view, baseWhere)
+    const initialPurchaseWhere = sourceSalesOrderWhere('INITIAL_PURCHASE', baseWhere)
+    const supplementalPurchaseWhere = sourceSalesOrderWhere(
+      'SUPPLEMENTAL_PURCHASE',
+      baseWhere,
+    )
+    const [initialPurchaseCount, supplementalPurchaseCount, rows] = await Promise.all([
+      this.prisma.salesOrder.count({ where: initialPurchaseWhere }),
+      this.prisma.salesOrder.count({ where: supplementalPurchaseWhere }),
       this.prisma.salesOrder.findMany({
         where,
         orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
@@ -214,7 +238,13 @@ export class PurchaseOrderSourceQueryService {
         },
       }),
     ])
+    const counts = [
+      { value: 'INITIAL_PURCHASE' as const, count: initialPurchaseCount },
+      { value: 'SUPPLEMENTAL_PURCHASE' as const, count: supplementalPurchaseCount },
+    ]
     return {
+      view: input.view,
+      counts,
       items: rows.map((row) => {
         // 图片 URL 必须留在采购权限域，不能复用要求 sales-orders:read 的销售列表内容端点。
         // CUSTOM 行没有目录产品，或目录产品当前没有有效主图时，明确返回 null 供公共组件降级展示。
@@ -251,7 +281,9 @@ export class PurchaseOrderSourceQueryService {
       }),
       page,
       pageSize,
-      total,
+      total: input.view === 'INITIAL_PURCHASE'
+        ? initialPurchaseCount
+        : supplementalPurchaseCount,
     }
   }
 

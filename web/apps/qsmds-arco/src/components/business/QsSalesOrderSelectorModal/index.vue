@@ -3,7 +3,9 @@ import type {
   SalesOrderSelectorItem,
   SalesOrderSelectorPageChange,
 } from './types'
+import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import {
   formatSalesOrderLineCount,
   formatSalesOrderQuantity,
@@ -20,6 +22,8 @@ defineOptions({ name: 'QsSalesOrderSelectorModal' })
 const props = withDefaults(defineProps<{
   modelValue: boolean
   items: readonly SalesOrderSelectorItem[]
+  view: string
+  viewItems: readonly QsStatusSwitchItem[]
   selectedOrderId?: string | null
   keyword?: string
   page?: number
@@ -51,10 +55,33 @@ const emit = defineEmits<{
   'update:keyword': [keyword: string]
   'update:modelValue': [value: boolean]
   'update:selectedOrderId': [value: string | null]
+  'update:view': [value: string]
+  'viewChange': [value: string]
 }>()
 
 const keywordDraft = ref(props.keyword)
 const selectedOrderIdDraft = ref<string | null>(props.selectedOrderId)
+
+function clearDraftSelection(): void {
+  if (selectedOrderIdDraft.value === null) {
+    return
+  }
+  selectedOrderIdDraft.value = null
+  emit('update:selectedOrderId', null)
+}
+
+const activeView = computed({
+  get: () => props.view,
+  set: (value: string) => {
+    if (value === props.view) {
+      return
+    }
+    // 视图切换后旧页候选已经失效，必须先清空弹窗内草稿选择，再通知调用方查询。
+    clearDraftSelection()
+    emit('update:view', value)
+    emit('viewChange', value)
+  },
+})
 
 /**
  * 调用方仍应在服务端查询“已确认”数据；组件再次过滤是公共复用边界的最后防线，
@@ -144,6 +171,12 @@ watch(() => props.selectedOrderId, (value) => {
   selectedOrderIdDraft.value = value
 })
 
+watch(() => props.view, (value, previousValue) => {
+  if (value !== previousValue && props.modelValue) {
+    clearDraftSelection()
+  }
+})
+
 watch(() => props.modelValue, (open) => {
   if (!open) {
     return
@@ -158,7 +191,7 @@ watch(() => props.modelValue, (open) => {
   <QsGenericModal
     :model-value="modelValue"
     title="选择销售订单"
-    description="选择一张已确认且仍在履约中的销售订单。"
+    description="按当前采购场景选择一张符合条件的销售订单。"
     size="xl"
     :submitting="submitting"
     :dismiss-on-overlay="!submitting"
@@ -173,6 +206,14 @@ watch(() => props.modelValue, (open) => {
       data-slot="sales-order-selector-body"
       class="flex flex-col h-[min(36rem,calc(100dvh-13.5rem))] min-h-0 min-w-0 overflow-hidden"
     >
+      <QsStatusSwitchToolbar
+        v-model="activeView"
+        data-slot="sales-order-selector-view-switch"
+        class="mb-3 shrink-0"
+        :items="viewItems"
+        aria-label="销售订单采购场景"
+      />
+
       <div
         data-slot="sales-order-selector-toolbar"
         class="pb-4 border-b border-border/70 shrink-0 gap-3 grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"

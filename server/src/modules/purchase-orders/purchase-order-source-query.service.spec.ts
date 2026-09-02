@@ -176,9 +176,17 @@ describe('PurchaseOrderSourceQueryService', () => {
     expect(fixture.prisma.product.findMany).not.toHaveBeenCalled()
   })
 
-  it('returns selector-ready CONFIRMED sales-order sources', async () => {
+  it('returns selector-ready CONFIRMED sales-order sources for initial purchase', async () => {
     const fixture = setup()
-    await expect(fixture.service.salesOrders({ keyword: 'SO' })).resolves.toEqual({
+    await expect(fixture.service.salesOrders({
+      view: 'INITIAL_PURCHASE',
+      keyword: 'SO',
+    })).resolves.toEqual({
+      view: 'INITIAL_PURCHASE',
+      counts: [
+        { value: 'INITIAL_PURCHASE', count: 1 },
+        { value: 'SUPPLEMENTAL_PURCHASE', count: 1 },
+      ],
       items: [{
         id: 'sales-order-id',
         orderNo: 'SO-001',
@@ -213,7 +221,10 @@ describe('PurchaseOrderSourceQueryService', () => {
     const sourceQuery = fixture.prisma.salesOrder.findMany.mock.calls[0]?.[0] as
       | { select?: Record<string, unknown>, where?: Record<string, unknown> }
       | undefined
-    expect(sourceQuery?.where).toMatchObject({ orderStatus: 'CONFIRMED' })
+    expect(sourceQuery?.where).toMatchObject({
+      orderStatus: 'CONFIRMED',
+      fulfillmentStatus: { in: ['PENDING'] },
+    })
     expect(sourceQuery?.select).toMatchObject({
       issuer: { select: { id: true, displayName: true } },
       orderStatus: true,
@@ -242,6 +253,51 @@ describe('PurchaseOrderSourceQueryService', () => {
         },
       },
     })
+    const initialCountQuery = fixture.prisma.salesOrder.count.mock.calls[0]?.[0] as
+      | { where?: Record<string, unknown> }
+      | undefined
+    const supplementalCountQuery = fixture.prisma.salesOrder.count.mock.calls[1]?.[0] as
+      | { where?: Record<string, unknown> }
+      | undefined
+    expect(initialCountQuery?.where).toMatchObject({
+      orderStatus: 'CONFIRMED',
+      fulfillmentStatus: { in: ['PENDING'] },
+    })
+    expect(supplementalCountQuery?.where).toMatchObject({
+      orderStatus: 'CONFIRMED',
+      fulfillmentStatus: {
+        in: ['PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],
+      },
+    })
+  })
+
+  it('uses only the confirmed preparing, land-transit and warehouse-arrived states for supplemental purchase', async () => {
+    const fixture = setup()
+    fixture.prisma.salesOrder.count
+      .mockResolvedValueOnce(4)
+      .mockResolvedValueOnce(7)
+
+    await expect(fixture.service.salesOrders({
+      view: 'SUPPLEMENTAL_PURCHASE',
+    })).resolves.toMatchObject({
+      view: 'SUPPLEMENTAL_PURCHASE',
+      counts: [
+        { value: 'INITIAL_PURCHASE', count: 4 },
+        { value: 'SUPPLEMENTAL_PURCHASE', count: 7 },
+      ],
+      total: 7,
+    })
+
+    expect(fixture.prisma.salesOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          orderStatus: 'CONFIRMED',
+          fulfillmentStatus: {
+            in: ['PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],
+          },
+        },
+      }),
+    )
   })
 
   it('returns source lines with remaining quantity after active purchases', async () => {

@@ -1,10 +1,11 @@
 # QsSalesOrderSelectorModal
 
-`QsSalesOrderSelectorModal` 是基于 `QsGenericModal` 的公共销售订单单选弹窗。它负责搜索入口、候选项展示、单选草稿、分页意图、稳定状态和显式确认，不负责接口请求、权限判断或具体业务写入。
+`QsSalesOrderSelectorModal` 是基于 `QsGenericModal` 的公共销售订单单选弹窗。它负责使用 `QsStatusSwitchToolbar` 切换调用方提供的关联视图，并承载搜索入口、候选项展示、单选草稿、分页意图、稳定状态和显式确认；不负责接口请求、权限判断或具体业务写入。
 
 ## 数据边界
 
-- 调用方负责从服务端查询 `orderStatus=CONFIRMED` 的销售订单，并传入 `items`、`total`、`page`、`pageSize`、`loading` 和 `error`。
+- 调用方负责从服务端查询可信视图下 `orderStatus=CONFIRMED` 的销售订单，并传入 `view`、带计数的 `viewItems`、`items`、`total`、`page`、`pageSize`、`loading` 和 `error`。
+- 用户切换视图时组件会清空单选草稿并发出 `update:view` 与 `viewChange`；调用方负责回到第一页并重新查询。
 - 组件会再次过滤非 `CONFIRMED` 数据，防止草稿、待对账、已完成或已取消订单误入选择结果。
 - 组件使用最小结构类型 `SalesOrderSelectorItem`，与销售订单列表 DTO 保持结构兼容，但不反向依赖生成 API。
 - `lineSummary.previews` 直接接收销售订单列表已有的产品预览；有主图产品通过 `ImageGroup` 展示，并在逐图 Tooltip 中复用 `QsGoodTooltipContent`。

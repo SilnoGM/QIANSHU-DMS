@@ -3,12 +3,17 @@ import type {
   PurchaseOrderSourceSalesOrderListItemDto,
   PurchaseOrderSourceSalesOrdersDto,
 } from '@/api/generated/types.gen'
+import type { PurchaseOrderSourceSalesOrdersQuery } from '@/api/modules/purchase-orders'
 import type {
   SalesOrderSelectorItem,
   SalesOrderSelectorPageChange,
 } from '@/components/business/QsSalesOrderSelectorModal/types'
+import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 
 import QsSalesOrderSelectorModal from '@/components/business/QsSalesOrderSelectorModal/index.vue'
+import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
+
+type PurchaseSourceSalesOrderView = PurchaseOrderSourceSalesOrdersDto['view']
 
 defineOptions({ name: 'PurchaseSourceSalesOrderSelector' })
 
@@ -17,7 +22,7 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   selectedOrderId?: string | null
   loadSalesOrders: (
-    query: { keyword?: string, page: number, pageSize: number },
+    query: PurchaseOrderSourceSalesOrdersQuery,
     signal: AbortSignal,
   ) => Promise<PurchaseOrderSourceSalesOrdersDto>
 }>(), {
@@ -30,7 +35,20 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
 
+const SOURCE_VIEW_ITEMS = [
+  { value: 'INITIAL_PURCHASE', label: '未采购订单采购' },
+  { value: 'SUPPLEMENTAL_PURCHASE', label: '已采购订单补采' },
+] as const satisfies readonly QsStatusSwitchItem[]
+
+function isPurchaseSourceSalesOrderView(
+  value: string,
+): value is PurchaseSourceSalesOrderView {
+  return value === 'INITIAL_PURCHASE' || value === 'SUPPLEMENTAL_PURCHASE'
+}
+
 const keyword = ref('')
+const selectedView = ref<PurchaseSourceSalesOrderView>('INITIAL_PURCHASE')
+const counts = ref<PurchaseOrderSourceSalesOrdersDto['counts']>([])
 const items = ref<PurchaseOrderSourceSalesOrderListItemDto[]>([])
 const page = ref(1)
 const pageSize = ref(20)
@@ -39,12 +57,22 @@ const loading = ref(false)
 const errorMessage = ref<string | null>(null)
 let requestVersion = 0
 let controller: AbortController | null = null
+const viewItems = computed(() => withStatusSwitchCounts(
+  SOURCE_VIEW_ITEMS,
+  counts.value,
+  {
+    selectedValue: selectedView.value,
+    selectedCount: total.value,
+  },
+))
 
 function reset(): void {
   controller?.abort()
   controller = null
   requestVersion += 1
   keyword.value = ''
+  selectedView.value = 'INITIAL_PURCHASE'
+  counts.value = []
   items.value = []
   page.value = 1
   total.value = 0
@@ -67,11 +95,13 @@ async function loadPage(): Promise<void> {
       ...(keyword.value === '' ? {} : { keyword: keyword.value }),
       page: page.value,
       pageSize: pageSize.value,
+      view: selectedView.value,
     }, nextController.signal)
     if (nextController.signal.aborted || version !== requestVersion) {
       return
     }
     items.value = result.items
+    counts.value = result.counts
     page.value = result.page
     pageSize.value = result.pageSize
     total.value = result.total
@@ -105,6 +135,18 @@ function handleKeywordUpdate(value: string): void {
 function handlePageChange(payload: SalesOrderSelectorPageChange): void {
   page.value = payload.page
   pageSize.value = payload.pageSize
+  void loadPage()
+}
+
+function handleViewChange(value: string): void {
+  if (!isPurchaseSourceSalesOrderView(value) || value === selectedView.value) {
+    return
+  }
+  selectedView.value = value
+  page.value = 1
+  // 上一个响应已经包含同一搜索条件下两个视图的可信计数；切换瞬间先使用目标
+  // 计数校准工具栏和分页，避免把旧视图 total 短暂显示到新视图。
+  total.value = counts.value.find(item => item.value === value)?.count ?? 0
   void loadPage()
 }
 
@@ -142,6 +184,8 @@ onBeforeUnmount(() => controller?.abort())
   <QsSalesOrderSelectorModal
     :model-value="modelValue"
     :items="items"
+    :view="selectedView"
+    :view-items="viewItems"
     :selected-order-id="selectedOrderId"
     :keyword="keyword"
     :page="page"
@@ -154,6 +198,7 @@ onBeforeUnmount(() => controller?.abort())
     @update:keyword="handleKeywordUpdate"
     @search="handleSearch"
     @page-change="handlePageChange"
+    @view-change="handleViewChange"
     @retry="loadPage"
     @confirm="confirmSelection"
   />

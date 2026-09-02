@@ -15,6 +15,10 @@ import {
   SalesOrderPaymentStatus,
   SalesOrderStatus,
 } from '../../../generated/prisma/enums'
+import {
+  PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
+  type PurchaseOrderSourceSalesOrderView,
+} from '../domain/purchase-order-source-sales-order-view'
 
 export class PurchaseOrderActorDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
@@ -267,7 +271,19 @@ export class PurchaseOrderSourceSalesOrderListItemDto {
   readonly lineSummary!: PurchaseOrderSourceSalesOrderLineSummaryDto
 }
 
+export class PurchaseOrderSourceSalesOrderViewCountItemDto {
+  @ApiProperty({ enum: PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS })
+  readonly value!: PurchaseOrderSourceSalesOrderView
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly count!: number
+}
+
 export class PurchaseOrderSourceSalesOrdersDto {
+  @ApiProperty({ enum: PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS })
+  readonly view!: PurchaseOrderSourceSalesOrderView
+  @ApiProperty({ type: () => [PurchaseOrderSourceSalesOrderViewCountItemDto] })
+  readonly counts!: readonly PurchaseOrderSourceSalesOrderViewCountItemDto[]
   @ApiProperty({ type: () => [PurchaseOrderSourceSalesOrderListItemDto] })
   readonly items!: readonly PurchaseOrderSourceSalesOrderListItemDto[]
   @ApiProperty({ type: 'integer' }) readonly page!: number

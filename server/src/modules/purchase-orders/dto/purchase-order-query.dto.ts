@@ -18,6 +18,10 @@ import {
   PurchaseOrderType,
 } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
+import {
+  PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
+  type PurchaseOrderSourceSalesOrderView,
+} from '../domain/purchase-order-source-sales-order-view'
 
 const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
@@ -129,6 +133,10 @@ export class PurchaseOrderProductOptionsQueryDto extends PurchaseOrderPageQueryD
 }
 
 export class PurchaseOrderSourceSalesOrdersQueryDto extends PurchaseOrderPageQueryDto {
+  @ApiProperty({ enum: PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS })
+  @IsIn(PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS)
+  view!: PurchaseOrderSourceSalesOrderView
+
   @ApiProperty({ type: 'string', maxLength: 128, required: false })
   @IsOptional()
   @IsString()

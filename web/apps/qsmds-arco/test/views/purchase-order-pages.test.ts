@@ -487,6 +487,11 @@ test('销售快捷入口只在首次挂载时可信绑定且允许手工改选',
   )
   assert.match(
     source,
+    /purchaseOrdersApi\.sourceSalesOrders\(\{[\s\S]*?view: 'INITIAL_PURCHASE'/u,
+    '待采购销售订单快捷入口必须使用首次采购视图的可信服务端筛选',
+  )
+  assert.match(
+    source,
     /candidate\.id === sourceShortcut\.salesOrderId[\s\S]*?candidate\.orderNo === sourceShortcut\.salesOrderNo/u,
     '自动来源必须同时精确匹配订单 ID 和订单号',
   )

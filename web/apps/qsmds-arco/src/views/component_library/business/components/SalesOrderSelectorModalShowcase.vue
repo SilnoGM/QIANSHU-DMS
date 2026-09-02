@@ -1,15 +1,40 @@
 <script setup lang="ts">
 import type { SalesOrderSelectorItem } from '@/components/business/QsSalesOrderSelectorModal/types'
+import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 import productDetail from '@/assets/images/component-library/image-group/product-detail.svg'
 import productFront from '@/assets/images/component-library/image-group/product-front.svg'
 import productLabel from '@/assets/images/component-library/image-group/product-label.svg'
 import productSide from '@/assets/images/component-library/image-group/product-side.svg'
 import QsSalesOrderSelectorModal from '@/components/business/QsSalesOrderSelectorModal/index.vue'
+import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 
 defineOptions({ name: 'SalesOrderSelectorModalShowcase' })
 
 const stateValues = ['default', 'selected', 'loading', 'empty', 'error'] as const
 type ShowcaseState = typeof stateValues[number]
+type ShowcaseView = 'INITIAL_PURCHASE' | 'SUPPLEMENTAL_PURCHASE'
+
+const VIEW_ITEMS = [
+  { value: 'INITIAL_PURCHASE', label: '未采购订单采购' },
+  { value: 'SUPPLEMENTAL_PURCHASE', label: '已采购订单补采' },
+] as const satisfies readonly QsStatusSwitchItem[]
+
+function viewIncludesFulfillmentStatus(
+  view: ShowcaseView,
+  status: SalesOrderSelectorItem['fulfillmentStatus'],
+): boolean {
+  // 两个只读元组的联合会把 Array.includes 参数收窄为 never；按视图显式分支，
+  // 同时让组件库 fixture 与服务端可信映射保持可读的一一对应。
+  return view === 'INITIAL_PURCHASE'
+    ? status === 'PENDING'
+    : status === 'PREPARING'
+      || status === 'LAND_TRANSIT'
+      || status === 'WAREHOUSE_ARRIVED'
+}
+
+function isShowcaseView(value: string): value is ShowcaseView {
+  return value === 'INITIAL_PURCHASE' || value === 'SUPPLEMENTAL_PURCHASE'
+}
 
 const stateDefinitions: Record<ShowcaseState, {
   description: string
@@ -211,23 +236,52 @@ const fixtureItems: readonly SalesOrderSelectorItem[] = [
 
 const visible = ref(false)
 const selectedState = ref<ShowcaseState>('default')
+const selectedView = ref<ShowcaseView>('INITIAL_PURCHASE')
 const selectedOrderId = ref<string | null>(null)
 const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const lastEvent = ref('等待打开')
 
-const modalItems = computed(() => selectedState.value === 'empty' ? [] : fixtureItems)
+const eligibleFixtureItems = computed(() => fixtureItems.filter(item => (
+  item.orderStatus === 'CONFIRMED'
+  && viewIncludesFulfillmentStatus(selectedView.value, item.fulfillmentStatus)
+)))
+const modalItems = computed(() => selectedState.value === 'empty' ? [] : eligibleFixtureItems.value)
 const modalLoading = computed(() => selectedState.value === 'loading')
 const modalError = computed(() => selectedState.value === 'error'
   ? '暂时无法读取销售订单，请检查网络后重新加载。'
   : null)
 const modalTotal = computed(() => selectedState.value === 'empty' ? 0 : 108)
+const viewItems = computed(() => withStatusSwitchCounts(
+  VIEW_ITEMS,
+  VIEW_ITEMS.map(item => ({
+    value: item.value,
+    count: fixtureItems.filter(candidate => (
+      candidate.orderStatus === 'CONFIRMED'
+      && viewIncludesFulfillmentStatus(item.value, candidate.fulfillmentStatus)
+    )).length,
+  })),
+  { selectedValue: selectedView.value, selectedCount: modalTotal.value },
+))
 
 function selectState(state: ShowcaseState): void {
   selectedState.value = state
+  selectedView.value = state === 'selected'
+    ? 'SUPPLEMENTAL_PURCHASE'
+    : 'INITIAL_PURCHASE'
   selectedOrderId.value = state === 'selected' ? 'confirmed-1' : null
   lastEvent.value = `state · ${state}`
+}
+
+function handleViewChange(value: string): void {
+  if (!isShowcaseView(value)) {
+    return
+  }
+  selectedView.value = value
+  selectedOrderId.value = null
+  page.value = 1
+  lastEvent.value = `view · ${value}`
 }
 
 function openModal(): void {
@@ -328,6 +382,8 @@ function handleRetry(): void {
       v-model="visible"
       v-model:keyword="keyword"
       v-model:selected-order-id="selectedOrderId"
+      :view="selectedView"
+      :view-items="viewItems"
       :items="modalItems"
       :page="page"
       :page-size="pageSize"
@@ -336,6 +392,7 @@ function handleRetry(): void {
       :error="modalError"
       @search="handleSearch"
       @page-change="handlePageChange"
+      @view-change="handleViewChange"
       @select="lastEvent = `select · ${$event.orderNo}`"
       @confirm="handleConfirm"
       @cancel="lastEvent = 'cancel'"

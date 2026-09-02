@@ -11,6 +11,7 @@ import type {
   PurchaseOrderSourceSalesOrderLineDto,
   PurchaseOrderSourceSalesOrderListItemDto,
 } from '@/api/generated/types.gen'
+import type { PurchaseOrderSourceSalesOrdersQuery } from '@/api/modules/purchase-orders'
 import type {
   OrderProductLineLabels,
   OrderProductLineModel,
@@ -244,7 +245,7 @@ const loadPurchaseProducts: ProductPageLoader = async (query, signal) => {
 }
 
 async function loadSourceSalesOrders(
-  query: { keyword?: string, page: number, pageSize: number },
+  query: PurchaseOrderSourceSalesOrdersQuery,
   signal: AbortSignal,
 ) {
   const response = await purchaseOrdersApi.sourceSalesOrders(query, signal)
@@ -384,6 +385,7 @@ async function bindSourceSalesOrderFromShortcut(): Promise<void> {
       keyword: sourceShortcut.salesOrderNo,
       page: 1,
       pageSize: 100,
+      view: 'INITIAL_PURCHASE',
     }, controller.signal)
     if (controller.signal.aborted || authEpoch !== appAccountStore.authEpoch) {
       return

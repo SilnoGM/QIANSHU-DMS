@@ -343,6 +343,15 @@ describe('PurchaseOrdersController OpenAPI', () => {
 
   it('publishes effective purchased-line snapshots for sales-source reconciliation', () => {
     expect(document.components?.schemas).toMatchObject({
+      PurchaseOrderSourceSalesOrderViewCountItemDto: {
+        properties: {
+          value: {
+            enum: ['INITIAL_PURCHASE', 'SUPPLEMENTAL_PURCHASE'],
+            type: 'string',
+          },
+          count: { minimum: 0, type: 'integer' },
+        },
+      },
       PurchaseOrderSourcePurchasedLineDto: {
         properties: {
           id: { format: 'uuid', type: 'string' },
@@ -385,8 +394,22 @@ describe('PurchaseOrdersController OpenAPI', () => {
     })
     expect(document.paths['/api/purchase-orders/product-options']?.get)
       .toMatchObject({ operationId: 'purchase_orders_product_options' })
-    expect(document.paths['/api/purchase-orders/source-sales-orders']?.get)
+    const sourceSalesOrders: ContractOperation | undefined = document.paths[
+      '/api/purchase-orders/source-sales-orders'
+    ]?.get
+    expect(sourceSalesOrders)
       .toMatchObject({ operationId: 'purchase_orders_source_sales_orders' })
+    const viewParameter = sourceSalesOrders?.parameters?.find(parameter => (
+      'name' in parameter && parameter.name === 'view'
+    ))
+    expect(viewParameter).toMatchObject({
+      in: 'query',
+      name: 'view',
+      required: true,
+      schema: {
+        enum: ['INITIAL_PURCHASE', 'SUPPLEMENTAL_PURCHASE'],
+      },
+    })
     expect(document.paths[
       '/api/purchase-orders/source-sales-orders/{salesOrderId}/lines'
     ]?.get).toMatchObject({ operationId: 'purchase_orders_source_sales_order_lines' })

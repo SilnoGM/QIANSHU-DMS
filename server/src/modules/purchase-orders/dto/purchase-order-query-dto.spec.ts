@@ -1,7 +1,36 @@
 import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
-import { PurchaseOrderStatusCountsQueryDto } from './purchase-order-query.dto'
+import {
+  PurchaseOrderSourceSalesOrdersQueryDto,
+  PurchaseOrderStatusCountsQueryDto,
+} from './purchase-order-query.dto'
+
+describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
+  it.each(['INITIAL_PURCHASE', 'SUPPLEMENTAL_PURCHASE'])(
+    'accepts the trusted source-sales-order view %s',
+    async (view) => {
+      const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, {
+        view,
+        keyword: 'SO-001',
+        page: '2',
+        pageSize: '50',
+      })
+
+      await expect(validate(dto)).resolves.toEqual([])
+      expect(dto).toMatchObject({ view, keyword: 'SO-001', page: 2, pageSize: 50 })
+    },
+  )
+
+  it.each([
+    {},
+    { view: 'UNKNOWN' },
+  ])('rejects a missing or unknown source-sales-order view %j', async input => {
+    const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, input)
+
+    await expect(validate(dto)).resolves.not.toHaveLength(0)
+  })
+})
 
 describe('PurchaseOrderStatusCountsQueryDto', () => {
   it('accepts a view and the shared non-toolbar filters', async () => {

@@ -35285,6 +35285,18 @@
             }
           },
           {
+            "name": "view",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "INITIAL_PURCHASE",
+                "SUPPLEMENTAL_PURCHASE"
+              ]
+            }
+          },
+          {
             "name": "keyword",
             "required": false,
             "in": "query",
@@ -47901,6 +47913,26 @@
           "total"
         ]
       },
+      "PurchaseOrderSourceSalesOrderViewCountItemDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "INITIAL_PURCHASE",
+              "SUPPLEMENTAL_PURCHASE"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ]
+      },
       "PurchaseOrderSourceSalesOrderListImageDto": {
         "type": "object",
         "properties": {
@@ -48039,6 +48071,19 @@
       "PurchaseOrderSourceSalesOrdersDto": {
         "type": "object",
         "properties": {
+          "view": {
+            "type": "string",
+            "enum": [
+              "INITIAL_PURCHASE",
+              "SUPPLEMENTAL_PURCHASE"
+            ]
+          },
+          "counts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderSourceSalesOrderViewCountItemDto"
+            }
+          },
           "items": {
             "type": "array",
             "items": {
@@ -48056,6 +48101,8 @@
           }
         },
         "required": [
+          "view",
+          "counts",
           "items",
           "page",
           "pageSize",
