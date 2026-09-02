@@ -1,3 +1,5 @@
+import { HttpStatus } from '@nestjs/common'
+
 import type {
   AuditService,
   RecordAuditEventInput,
@@ -261,6 +263,22 @@ describe('SalesOrderAddOnService', () => {
     })
     expect(fixture.transaction.salesOrderLine.createMany).not.toHaveBeenCalled()
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('maps a nested PostgreSQL serialization failure to the stable version conflict', async () => {
+    const fixture = setup()
+    fixture.prisma.$transaction.mockRejectedValue({
+      code: 'P2010',
+      meta: { database_error: { code: '40001' } },
+    })
+
+    await expect(fixture.service.appendLines({
+      actorUserId: ACTOR_ID,
+      requestId: 'request-add-on-serialization',
+    }, ORDER_ID, input())).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+      code: 'SALES_ORDER_ADD_ON_VERSION_CONFLICT',
+    })
   })
 
   it.each([

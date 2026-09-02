@@ -9,6 +9,10 @@ import {
   AuditOutcome,
   type SalesOrderPaymentStatus,
 } from '../../generated/prisma/enums'
+import {
+  hasPersistenceCode,
+  readPersistenceErrorFacts,
+} from '../../infrastructure/database/persistence-error-facts'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
 import { ApiException } from '../../infrastructure/http/api.exception'
@@ -34,6 +38,12 @@ const UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 const MAX_SALES_ORDER_LINES = 100
+const SALES_ORDER_ADD_ON_CONCURRENT_CODES = [
+  'P2034',
+  '40001',
+  '40P01',
+  '55P03',
+] as const
 
 export interface SalesOrderAddOnContext {
   readonly actorUserId: string
@@ -71,6 +81,13 @@ function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
 
 function error(status: HttpStatus, code: string, message: string): ApiException {
   return new ApiException(status, code, message)
+}
+
+function isConcurrentVersionConflict(caught: unknown): boolean {
+  const facts = readPersistenceErrorFacts(caught)
+  return SALES_ORDER_ADD_ON_CONCURRENT_CODES.some(code => (
+    hasPersistenceCode(facts, code)
+  ))
 }
 
 function validateContext(context: SalesOrderAddOnContext): SalesOrderAddOnContext {
@@ -431,6 +448,18 @@ export class SalesOrderAddOnService {
           HttpStatus.UNPROCESSABLE_ENTITY,
           'SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE',
           '加购供应商当前不可用',
+        )
+      }
+      /*
+       * PostgreSQL 在 Serializable 下可能先以 40001 终止等待行锁的旧快照，
+       * 请求来不及重新读取 version。它与显式版本不一致属于同一个外部事实：
+       * 同一 expectedVersion 已被其他事务消费，边界不得泄漏 Prisma P2010。
+       */
+      if (isConcurrentVersionConflict(caught)) {
+        throw error(
+          HttpStatus.CONFLICT,
+          'SALES_ORDER_ADD_ON_VERSION_CONFLICT',
+          '销售订单已被其他操作更新，请刷新后重试',
         )
       }
       throw caught
