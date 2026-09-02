@@ -8,6 +8,7 @@ import { NumberingModule } from '../numbering/numbering.module'
 import { ProductsModule } from '../products/products.module'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { SalesOrderAddOnQueryService } from './sales-order-add-on-query.service'
+import { SalesOrderAddOnService } from './sales-order-add-on.service'
 import { SalesOrderDocumentMultipartParser } from './documents/sales-order-document-multipart.parser'
 import { SalesOrderDocumentService } from './documents/sales-order-document.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
@@ -28,6 +29,7 @@ import { SalesOrdersController } from './sales-orders.controller'
   providers: [
     SalesOrderQueryService,
     SalesOrderAddOnQueryService,
+    SalesOrderAddOnService,
     SalesOrderCommandService,
     SalesOrderMutationService,
     SalesOrderDocumentService,

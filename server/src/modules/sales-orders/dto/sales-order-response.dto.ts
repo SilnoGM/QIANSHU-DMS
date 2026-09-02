@@ -470,3 +470,26 @@ export class SalesOrderAddOnContextDto {
   @ApiProperty({ type: 'integer', minimum: 0, maximum: 100 })
   readonly availableLineCapacity!: number
 }
+
+export class SalesOrderAddOnResultDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  readonly salesOrderId!: string
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  readonly previousVersion!: number
+
+  @ApiProperty({ type: 'integer', minimum: 2 })
+  readonly version!: number
+
+  @ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' } })
+  readonly addedLineIds!: readonly string[]
+
+  @ApiProperty({ type: 'string' })
+  readonly amountDelta!: string
+
+  @ApiProperty({ enum: SalesOrderPaymentStatus })
+  readonly paymentStatus!: SalesOrderPaymentStatus
+
+  @ApiProperty({ type: () => SalesOrderAddOnContextAmountsDto })
+  readonly amounts!: SalesOrderAddOnContextAmountsDto
+}

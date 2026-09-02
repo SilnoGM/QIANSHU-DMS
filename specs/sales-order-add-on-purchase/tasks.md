@@ -157,37 +157,38 @@ pnpm -C server test:prisma-drift-gate
 
 目标：先固定行锁、版本、金额、付款状态、修订和审计的原子行为。
 
-- [ ] 新增 `sales-order-add-on.service.spec.ts`，要求第一条数据库操作锁定销售订单主行。
-- [ ] 覆盖 `expectedVersion` 相同成功、不同返回 `SALES_ORDER_ADD_ON_VERSION_CONFLICT`。
-- [ ] 覆盖锁后进入海运、非 `CONFIRMED`、无有效采购、剩余大于 0 时零写入。
-- [ ] 覆盖目录产品停用、供应商不匹配、供应商字典失效和行数超限。
-- [ ] 覆盖相同目录产品形成新销售行，原销售行数量和快照完全不变。
-- [ ] 覆盖 CATALOG/CUSTOM 快照、最大行号递增和新增行 ID 返回。
-- [ ] 覆盖金额公式：产品小计、约定总价、定金不变、尾款增加。
-- [ ] 覆盖有效收款不变，付款状态从 `PAID` 变为 `PARTIALLY_PAID` 或保持原值。
-- [ ] 要求付款状态变化才写 PAYMENT 历史，销售履约状态始终不写。
-- [ ] 要求一条 `SalesOrderAmountRevision` 保存完整前后快照和原因。
-- [ ] 要求每个新增销售明细写一条 `SALES_ORDER_PRODUCT_APPENDED`，共享 `requestId` 与 `amountRevisionId`，且无敏感字段。
-- [ ] 模拟销售行、金额修订、订单更新、历史或审计任一步失败，断言事务不返回成功。
-- [ ] 运行定向测试并记录有效 RED。
+- [x] 新增 `sales-order-add-on.service.spec.ts`，要求第一条数据库操作锁定销售订单主行。
+- [x] 覆盖 `expectedVersion` 相同成功、不同返回 `SALES_ORDER_ADD_ON_VERSION_CONFLICT`。
+- [x] 覆盖锁后进入海运、非 `CONFIRMED`、无有效采购、剩余大于 0 时零写入。
+- [x] 覆盖目录产品停用、供应商不匹配、供应商字典失效和行数超限。
+- [x] 覆盖相同目录产品形成新销售行，原销售行数量和快照完全不变。
+- [x] 覆盖 CATALOG/CUSTOM 快照、最大行号递增和新增行 ID 返回。
+- [x] 覆盖金额公式：产品小计、约定总价、定金不变、尾款增加。
+- [x] 覆盖有效收款不变，付款状态从 `PAID` 变为 `PARTIALLY_PAID` 或保持原值。
+- [x] 要求付款状态变化才写 PAYMENT 历史，销售履约状态始终不写。
+- [x] 要求一条 `SalesOrderAmountRevision` 保存完整前后快照和原因。
+- [x] 要求每个新增销售明细写一条 `SALES_ORDER_PRODUCT_APPENDED`，共享 `requestId` 与 `amountRevisionId`，且无敏感字段。
+- [x] 模拟销售行、金额修订、订单更新、历史或审计任一步失败，断言事务不返回成功。
+- [x] 运行定向测试并记录有效 RED。
 - _Requirements: R5, R6, R7, R9, R10.4-R10.5_
 
 ### T9：实现销售产品追加命令与 POST 契约
 
 目标：以单事务完成销售产品、金额、付款事实和审计写入。
 
-- [ ] 新增 `SalesOrderAddOnService`，复用可信 mutation context 和事务 timeout。
-- [ ] 使用 `SELECT ... FOR UPDATE` 锁定销售订单，再校验版本和最新资格。
-- [ ] 服务端预生成新销售明细 UUID，按最大 `lineNumber` 递增并批量写入。
-- [ ] 重新读取正式产品构造编号、名称、属性和标准售价快照。
-- [ ] 使用销售金额定点函数计算 `amountDelta` 和四个新金额字段。
-- [ ] 汇总非作废收款，推导新付款状态和待收金额。
-- [ ] 原子写入销售订单、金额修订、必要付款历史和逐行审计，版本只增加 1。
-- [ ] 新增 `POST /api/sales-orders/:salesOrderId/add-on-lines`，要求 Session、CSRF、两项权限、private no-store 和 `retry: false` 客户端边界。
-- [ ] 返回新增行 ID、金额增量、前后版本、付款状态和可信金额结果。
-- [ ] 完成错误码和 OpenAPI Controller 测试。
-- [ ] 对行锁顺序、未知结果不可重放和履约状态不回退添加必要中文注释。
-- [ ] 重新运行 T8 并转绿。
+- [x] 新增 `SalesOrderAddOnService`，复用可信 mutation context 和事务 timeout。
+- [x] 使用 `SELECT ... FOR UPDATE` 锁定销售订单，再校验版本和最新资格。
+- [x] 服务端预生成新销售明细 UUID，按最大 `lineNumber` 递增并批量写入。
+- [x] 重新读取正式产品构造编号、名称、属性和标准售价快照。
+- [x] 使用销售金额定点函数计算 `amountDelta` 和四个新金额字段。
+- [x] 汇总非作废收款，推导新付款状态和待收金额。
+- [x] 原子写入销售订单、金额修订、必要付款历史和逐行审计，版本只增加 1。
+- [x] 新增 `POST /api/sales-orders/:salesOrderId/add-on-lines`，要求 Session、CSRF、两项权限和 private no-store。
+- [ ] Web API 客户端显式配置 `retry: false`，且未知结果不自动重放。
+- [x] 返回新增行 ID、金额增量、前后版本、付款状态和可信金额结果。
+- [x] 完成错误码和 OpenAPI Controller 测试。
+- [x] 对行锁顺序、未知结果不可重放和履约状态不回退添加必要中文注释。
+- [x] 重新运行 T8 并转绿。
 - _Requirements: R5-R10_
 
 ### T10：增加隔离 PostgreSQL 服务端 E2E

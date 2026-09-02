@@ -23,6 +23,9 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import {
+  SalesOrderAddOnLinesRequestDto,
+} from './dto/sales-order-add-on.dto'
+import {
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDocumentIdParamDto,
   SalesOrderDocumentUploadRequestDto,
@@ -51,6 +54,7 @@ import {
 } from './dto/sales-order-query.dto'
 import {
   SalesOrderAddOnContextDto,
+  SalesOrderAddOnResultDto,
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
@@ -58,6 +62,10 @@ import {
   SalesOrderStatusCountsDto,
 } from './dto/sales-order-response.dto'
 import { SalesOrderAddOnQueryService } from './sales-order-add-on-query.service'
+import {
+  SalesOrderAddOnService,
+  type SalesOrderAddOnResult,
+} from './sales-order-add-on.service'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { parseSalesOrderIdempotencyKey } from './sales-order-command.normalizer'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
@@ -124,6 +132,7 @@ export class SalesOrdersController {
     private readonly documents: SalesOrderDocumentService,
     private readonly productImages: SalesOrderProductImageService,
     private readonly addOnQueries?: SalesOrderAddOnQueryService,
+    private readonly addOnService?: SalesOrderAddOnService,
   ) {}
 
   @Get()
@@ -230,6 +239,49 @@ export class SalesOrdersController {
       throw new Error('SalesOrderAddOnQueryService is not configured')
     }
     return this.addOnQueries.context(params.salesOrderId)
+  }
+
+  /**
+   * 加购写入会同时改变销售明细、金额与付款状态，必须把可信操作者和请求 ID
+   * 交给单一事务服务；Controller 不接收客户端汇总金额，也不做任何自动重放。
+   */
+  @Post(':salesOrderId/add-on-lines')
+  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiContractResponse({ status: HttpStatus.CREATED, type: SalesOrderAddOnResultDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_append_add_on_lines',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: [
+        'SALES_ORDER_ADD_ON_VERSION_CONFLICT',
+        'SALES_ORDER_STATE_CHANGED',
+      ] },
+      { status: 422, codes: [
+        'SALES_ORDER_ADD_ON_NOT_ALLOWED',
+        'SALES_ORDER_ADD_ON_PRODUCT_SUPPLIER_MISMATCH',
+        'SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE',
+        'SALES_ORDER_LINE_LIMIT_EXCEEDED',
+        'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  appendAddOnLines(
+    @Param() params: SalesOrderIdParamDto,
+    @Body() dto: SalesOrderAddOnLinesRequestDto,
+    @Req() request: object,
+  ): Promise<SalesOrderAddOnResult> {
+    if (this.addOnService === undefined) {
+      throw new Error('SalesOrderAddOnService is not configured')
+    }
+    return this.addOnService.appendLines(
+      mutationContext(request),
+      params.salesOrderId,
+      dto,
+    )
   }
 
   @Get(':salesOrderId/add-on-product-options')
