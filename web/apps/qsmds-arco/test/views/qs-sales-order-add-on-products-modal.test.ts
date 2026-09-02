@@ -16,7 +16,7 @@ test('销售加购产品弹窗保持纯组件边界并复用通用模态框与�
   assert.match(source, /import QsOrderProductLineEditor/u)
   assert.doesNotMatch(source, /@\/api|useApp\w*Store|fetch\(|axios/u)
   assert.match(source, /title="销售订单加购产品"/u)
-  assert.match(source, /class="sm:!max-w-\[112rem\] sm:!w-\[calc\(100%-3rem\)\]"/u)
+  assert.match(source, /class="sm:!max-w-\[90rem\] sm:!w-\[calc\(100%-3rem\)\]"/u)
   assert.match(source, /lg:grid-cols-\[minmax\(0,5fr\)_minmax\(0,7fr\)\]/u)
   assert.match(source, /context\.existingLines/u)
   assert.match(source, /:model-value="lines"/u)

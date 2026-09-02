@@ -172,7 +172,7 @@ watch(() => props.modelValue, (open) => {
     title="销售订单加购产品"
     description="只追加新的销售产品；原销售产品和既有收款不会被修改。"
     size="xl"
-    class="sm:!max-w-[112rem] sm:!w-[calc(100%-3rem)]"
+    class="sm:!max-w-[90rem] sm:!w-[calc(100%-3rem)]"
     :loading="loading"
     :error="error"
     :submitting="submitting"
