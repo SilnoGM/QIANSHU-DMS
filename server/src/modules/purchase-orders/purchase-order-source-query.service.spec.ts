@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
@@ -6,8 +9,60 @@ function decimal(value: string) {
   return { toFixed: () => Number(value).toFixed(4) }
 }
 
+interface SqlShape {
+  readonly strings: readonly string[]
+  readonly values: readonly unknown[]
+}
+
+function sqlShape(value: unknown): SqlShape {
+  if (
+    typeof value !== 'object'
+    || value === null
+    || !('strings' in value)
+    || !Array.isArray(value.strings)
+    || !('values' in value)
+    || !Array.isArray(value.values)
+  ) {
+    throw new Error('Expected a parameterized Prisma SQL object')
+  }
+  return value as unknown as SqlShape
+}
+
+function sqlText(value: unknown): string {
+  return sqlShape(value).strings.join(' ')
+}
+
+function sourceSalesOrderRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'sales-order-id',
+    orderNo: 'SO-001',
+    orderDate: new Date('2026-08-26T00:00:00.000Z'),
+    issuer: { id: 'issuer-id', displayName: '出单人甲' },
+    customerName: '客户甲',
+    lineSubtotalAmount: decimal('100'),
+    orderStatus: 'CONFIRMED',
+    fulfillmentStatus: 'PREPARING',
+    paymentStatus: 'PARTIALLY_PAID',
+    lines: [{
+      id: 'sales-line-id',
+      productId: 'product-id',
+      productNameSnapshot: '销售快照产品',
+      quantity: 5,
+      product: { media: [{ id: 'product-media-id' }] },
+    }, {
+      id: 'custom-line-id',
+      productId: null,
+      productNameSnapshot: '本单临时服务',
+      quantity: 1,
+      product: null,
+    }],
+    ...overrides,
+  }
+}
+
 function setup() {
   const prisma = {
+    $queryRaw: jest.fn<Promise<unknown>, [unknown]>(),
     product: {
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
@@ -23,30 +78,8 @@ function setup() {
     },
     salesOrder: {
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
-      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
-        id: 'sales-order-id',
-        orderNo: 'SO-001',
-        orderDate: new Date('2026-08-26T00:00:00.000Z'),
-        issuer: { id: 'issuer-id', displayName: '出单人甲' },
-        customerName: '客户甲',
-        lineSubtotalAmount: decimal('100'),
-        orderStatus: 'CONFIRMED',
-        fulfillmentStatus: 'PREPARING',
-        paymentStatus: 'PARTIALLY_PAID',
-        lines: [{
-          id: 'sales-line-id',
-          productId: 'product-id',
-          productNameSnapshot: '销售快照产品',
-          quantity: 5,
-          product: { media: [{ id: 'product-media-id' }] },
-        }, {
-          id: 'custom-line-id',
-          productId: null,
-          productNameSnapshot: '本单临时服务',
-          quantity: 1,
-          product: null,
-        }],
-      }]),
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>()
+        .mockResolvedValue([sourceSalesOrderRow()]),
       findFirst: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ id: 'sales-order-id', orderNo: 'SO-001', customerName: '客户甲' }),
     },
@@ -95,7 +128,33 @@ function setup() {
   return { dictionaryLookup, prisma, service }
 }
 
+function prepareSourceFacts(
+  fixture: ReturnType<typeof setup>,
+  input: {
+    readonly counts?: readonly { readonly view: string, readonly count: bigint }[]
+    readonly page?: readonly { readonly id: string, readonly totalCount: bigint }[]
+  } = {},
+) {
+  fixture.prisma.$queryRaw
+    .mockResolvedValueOnce(input.counts ?? [
+      { view: 'UNPURCHASED', count: 1n },
+      { view: 'PARTIALLY_PURCHASED', count: 1n },
+      { view: 'COMPLETED_PURCHASE_ADD_ON', count: 1n },
+    ])
+    .mockResolvedValueOnce(input.page ?? [{ id: 'sales-order-id', totalCount: 1n }])
+}
+
 describe('PurchaseOrderSourceQueryService', () => {
+  it('uses only parameterized Prisma SQL for purchase-fact classification', () => {
+    const source = readFileSync(
+      join(__dirname, 'purchase-order-source-query.service.ts'),
+      'utf8',
+    )
+
+    expect(source).toContain('Prisma.sql`')
+    expect(source).not.toContain('$queryRawUnsafe')
+  })
+
   it('returns only current ACTIVE CNY products for an effective supplier', async () => {
     const fixture = setup()
     await expect(fixture.service.productOptions({
@@ -176,16 +235,18 @@ describe('PurchaseOrderSourceQueryService', () => {
     expect(fixture.prisma.product.findMany).not.toHaveBeenCalled()
   })
 
-  it('returns selector-ready CONFIRMED sales-order sources for initial purchase', async () => {
+  it('returns selector-ready confirmed sources from the unpurchased facts view', async () => {
     const fixture = setup()
+    prepareSourceFacts(fixture)
     await expect(fixture.service.salesOrders({
-      view: 'INITIAL_PURCHASE',
+      view: 'UNPURCHASED',
       keyword: 'SO',
     })).resolves.toEqual({
-      view: 'INITIAL_PURCHASE',
+      view: 'UNPURCHASED',
       counts: [
-        { value: 'INITIAL_PURCHASE', count: 1 },
-        { value: 'SUPPLEMENTAL_PURCHASE', count: 1 },
+        { value: 'UNPURCHASED', count: 1 },
+        { value: 'PARTIALLY_PURCHASED', count: 1 },
+        { value: 'COMPLETED_PURCHASE_ADD_ON', count: 1 },
       ],
       items: [{
         id: 'sales-order-id',
@@ -221,10 +282,7 @@ describe('PurchaseOrderSourceQueryService', () => {
     const sourceQuery = fixture.prisma.salesOrder.findMany.mock.calls[0]?.[0] as
       | { select?: Record<string, unknown>, where?: Record<string, unknown> }
       | undefined
-    expect(sourceQuery?.where).toMatchObject({
-      orderStatus: 'CONFIRMED',
-      fulfillmentStatus: { in: ['PENDING'] },
-    })
+    expect(sourceQuery?.where).toEqual({ id: { in: ['sales-order-id'] } })
     expect(sourceQuery?.select).toMatchObject({
       issuer: { select: { id: true, displayName: true } },
       orderStatus: true,
@@ -253,50 +311,86 @@ describe('PurchaseOrderSourceQueryService', () => {
         },
       },
     })
-    const initialCountQuery = fixture.prisma.salesOrder.count.mock.calls[0]?.[0] as
-      | { where?: Record<string, unknown> }
-      | undefined
-    const supplementalCountQuery = fixture.prisma.salesOrder.count.mock.calls[1]?.[0] as
-      | { where?: Record<string, unknown> }
-      | undefined
-    expect(initialCountQuery?.where).toMatchObject({
-      orderStatus: 'CONFIRMED',
-      fulfillmentStatus: { in: ['PENDING'] },
+    expect(fixture.prisma.salesOrder.count).not.toHaveBeenCalled()
+    expect(fixture.prisma.$queryRaw).toHaveBeenCalledTimes(2)
+
+    const [countsSql, pageSql] = fixture.prisma.$queryRaw.mock.calls
+      .map(call => call[0])
+    for (const sql of [countsSql, pageSql]) {
+      const text = sqlText(sql)
+      expect(text).toContain('source_sales_order_lines')
+      expect(text).toContain('purchased_by_line')
+      expect(text).toContain('active_purchase_by_order')
+      expect(text).toContain('source_sales_order_line_id')
+      expect(text).toContain('purchase_type')
+      expect(text).toContain('SALES_LINKED')
+      expect(text).toContain('CANCELLED')
+      expect(text).not.toContain('product_id')
+      expect(sqlShape(sql).values).toContain('SO')
+    }
+    expect(sqlText(pageSql)).toContain('"order_date" DESC')
+    expect(sqlText(pageSql)).toContain('"sales_order_id" DESC')
+  })
+
+  it('returns all three counts with explicit zeroes and uses the requested fact view total', async () => {
+    const fixture = setup()
+    prepareSourceFacts(fixture, {
+      counts: [{ view: 'PARTIALLY_PURCHASED', count: 7n }],
+      page: [],
     })
-    expect(supplementalCountQuery?.where).toMatchObject({
-      orderStatus: 'CONFIRMED',
-      fulfillmentStatus: {
-        in: ['PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],
-      },
+    fixture.prisma.salesOrder.findMany.mockResolvedValue([])
+
+    await expect(fixture.service.salesOrders({
+      view: 'PARTIALLY_PURCHASED',
+    })).resolves.toMatchObject({
+      view: 'PARTIALLY_PURCHASED',
+      counts: [
+        { value: 'UNPURCHASED', count: 0 },
+        { value: 'PARTIALLY_PURCHASED', count: 7 },
+        { value: 'COMPLETED_PURCHASE_ADD_ON', count: 0 },
+      ],
+      items: [],
+      total: 7,
     })
   })
 
-  it('uses only the confirmed preparing, land-transit and warehouse-arrived states for supplemental purchase', async () => {
+  it('loads only the current page summaries and restores raw order after Prisma loading', async () => {
     const fixture = setup()
-    fixture.prisma.salesOrder.count
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(7)
-
-    await expect(fixture.service.salesOrders({
-      view: 'SUPPLEMENTAL_PURCHASE',
-    })).resolves.toMatchObject({
-      view: 'SUPPLEMENTAL_PURCHASE',
+    prepareSourceFacts(fixture, {
       counts: [
-        { value: 'INITIAL_PURCHASE', count: 4 },
-        { value: 'SUPPLEMENTAL_PURCHASE', count: 7 },
+        { view: 'UNPURCHASED', count: 1n },
+        { view: 'PARTIALLY_PURCHASED', count: 1n },
+        { view: 'COMPLETED_PURCHASE_ADD_ON', count: 2n },
       ],
-      total: 7,
+      page: [
+        { id: 'sales-order-id', totalCount: 2n },
+        { id: 'second-sales-order-id', totalCount: 2n },
+      ],
+    })
+    fixture.prisma.salesOrder.findMany.mockResolvedValue([
+      sourceSalesOrderRow({
+        id: 'second-sales-order-id',
+        orderNo: 'SO-002',
+      }),
+      sourceSalesOrderRow(),
+    ])
+
+    const result = await fixture.service.salesOrders({
+      view: 'COMPLETED_PURCHASE_ADD_ON',
+      page: 2,
+      pageSize: 2,
     })
 
+    expect(result.items.map(item => item.id)).toEqual([
+      'sales-order-id',
+      'second-sales-order-id',
+    ])
+    expect(result.total).toBe(2)
     expect(fixture.prisma.salesOrder.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          orderStatus: 'CONFIRMED',
-          fulfillmentStatus: {
-            in: ['PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],
-          },
-        },
-      }),
+      expect.objectContaining({ where: { id: { in: [
+        'sales-order-id',
+        'second-sales-order-id',
+      ] } } }),
     )
   })
 

@@ -8,7 +8,7 @@ import {
 } from '../dictionaries/dictionary-lookup.service'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
 import {
-  PURCHASE_ORDER_SOURCE_FULFILLMENT_STATUSES,
+  PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
   type PurchaseOrderSourceSalesOrderView,
 } from './domain/purchase-order-source-sales-order-view'
 
@@ -26,18 +26,6 @@ export interface PurchaseOrderSourceSalesOrdersInput {
   readonly keyword?: string
   readonly page?: number
   readonly pageSize?: number
-}
-
-function sourceSalesOrderWhere(
-  view: PurchaseOrderSourceSalesOrderView,
-  baseWhere: Prisma.SalesOrderWhereInput,
-): Prisma.SalesOrderWhereInput {
-  return {
-    ...baseWhere,
-    fulfillmentStatus: {
-      in: [...PURCHASE_ORDER_SOURCE_FULFILLMENT_STATUSES[view]],
-    },
-  }
 }
 
 function fixed4(value: { toFixed(decimalPlaces: number): string }): string {
@@ -66,6 +54,129 @@ function unavailableSupplier(): never {
     'PURCHASE_ORDER_SUPPLIER_UNAVAILABLE',
     '供应商当前不可用',
   )
+}
+
+interface SourceSalesOrderCountRow {
+  readonly view: PurchaseOrderSourceSalesOrderView
+  readonly count: bigint | number
+}
+
+interface SourceSalesOrderPageRow {
+  readonly id: string
+}
+
+function safeCount(value: bigint | number): number {
+  const count = Number(value)
+  if (!Number.isSafeInteger(count) || count < 0) {
+    throw new ApiException(
+      HttpStatus.CONFLICT,
+      'PURCHASE_ORDER_STATE_CHANGED',
+      '销售订单采购事实已变化，请重试',
+    )
+  }
+  return count
+}
+
+function sourceSalesOrderFactsSql(keyword: string | undefined): Prisma.Sql {
+  const keywordFilter = keyword === undefined || keyword.length === 0
+    ? Prisma.empty
+    : Prisma.sql`
+        AND (
+          strpos(lower(source_order."order_no"), lower(${keyword})) > 0
+          OR strpos(lower(source_order."customer_name"), lower(${keyword})) > 0
+        )
+      `
+
+  /*
+   * 同一个目录产品允许在销售订单中出现多行，因此必须先按
+   * source_sales_order_line_id 聚合，再逐销售明细计算剩余数量；禁止按 product_id 合并。
+   */
+  return Prisma.sql`
+    WITH source_sales_order_lines AS (
+      SELECT
+        source_line."id",
+        source_line."sales_order_id",
+        source_line."quantity"
+      FROM "sales_order_lines" AS source_line
+    ),
+    purchased_by_line AS (
+      SELECT
+        purchase_line."source_sales_order_line_id",
+        COALESCE(SUM(purchase_line."quantity"), 0)::bigint AS "purchased_quantity"
+      FROM "purchase_order_lines" AS purchase_line
+      INNER JOIN "purchase_orders" AS purchase_order
+        ON purchase_order."id" = purchase_line."purchase_order_id"
+      WHERE purchase_line."source_sales_order_line_id" IS NOT NULL
+        AND purchase_order."purchase_type" = 'SALES_LINKED'::purchase_order_type
+        AND purchase_order."order_status" <> 'CANCELLED'::purchase_order_status
+      GROUP BY purchase_line."source_sales_order_line_id"
+    ),
+    active_purchase_by_order AS (
+      SELECT
+        purchase_order."sales_order_id",
+        COUNT(DISTINCT purchase_order."id")::bigint AS "active_purchase_order_count"
+      FROM "purchase_orders" AS purchase_order
+      WHERE purchase_order."sales_order_id" IS NOT NULL
+        AND purchase_order."purchase_type" = 'SALES_LINKED'::purchase_order_type
+        AND purchase_order."order_status" <> 'CANCELLED'::purchase_order_status
+      GROUP BY purchase_order."sales_order_id"
+    ),
+    order_purchase_facts AS (
+      SELECT
+        source_order."id" AS "sales_order_id",
+        source_order."order_date",
+        source_order."fulfillment_status",
+        COALESCE(active_purchase."active_purchase_order_count", 0)::bigint
+          AS "active_purchase_order_count",
+        COALESCE(SUM(COALESCE(purchased."purchased_quantity", 0)), 0)::bigint
+          AS "purchased_quantity",
+        COALESCE(SUM(GREATEST(
+          source_line."quantity" - COALESCE(purchased."purchased_quantity", 0),
+          0
+        )), 0)::bigint AS "remaining_quantity"
+      FROM "sales_orders" AS source_order
+      INNER JOIN source_sales_order_lines AS source_line
+        ON source_line."sales_order_id" = source_order."id"
+      LEFT JOIN purchased_by_line AS purchased
+        ON purchased."source_sales_order_line_id" = source_line."id"
+      LEFT JOIN active_purchase_by_order AS active_purchase
+        ON active_purchase."sales_order_id" = source_order."id"
+      WHERE source_order."order_status" = 'CONFIRMED'::sales_order_status
+        AND source_order."fulfillment_status" IN (
+          'PENDING'::sales_order_fulfillment_status,
+          'PREPARING'::sales_order_fulfillment_status,
+          'LAND_TRANSIT'::sales_order_fulfillment_status,
+          'WAREHOUSE_ARRIVED'::sales_order_fulfillment_status
+        )
+        ${keywordFilter}
+      GROUP BY
+        source_order."id",
+        source_order."order_date",
+        source_order."fulfillment_status",
+        active_purchase."active_purchase_order_count"
+    ),
+    classified_source_orders AS (
+      SELECT
+        facts."sales_order_id",
+        facts."order_date",
+        CASE
+          WHEN facts."fulfillment_status" = 'PENDING'::sales_order_fulfillment_status
+            AND facts."active_purchase_order_count" = 0
+            AND facts."purchased_quantity" = 0
+            AND facts."remaining_quantity" > 0
+            THEN 'UNPURCHASED'
+          WHEN facts."active_purchase_order_count" > 0
+            AND facts."purchased_quantity" > 0
+            AND facts."remaining_quantity" > 0
+            THEN 'PARTIALLY_PURCHASED'
+          WHEN facts."active_purchase_order_count" > 0
+            AND facts."remaining_quantity" = 0
+            THEN 'COMPLETED_PURCHASE_ADD_ON'
+          ELSE NULL
+        END AS "source_view"
+      FROM order_purchase_facts AS facts
+    )
+  `
 }
 
 @Injectable()
@@ -178,29 +289,42 @@ export class PurchaseOrderSourceQueryService {
     const page = input.page ?? 1
     const pageSize = input.pageSize ?? 20
     const keyword = input.keyword?.trim().normalize('NFKC')
-    const baseWhere: Prisma.SalesOrderWhereInput = {
-      orderStatus: 'CONFIRMED',
-      ...(keyword === undefined || keyword.length === 0
-        ? {}
-        : { OR: [
-            { orderNo: { contains: keyword, mode: 'insensitive' } },
-            { customerName: { contains: keyword, mode: 'insensitive' } },
-          ] }),
+    const factsSql = sourceSalesOrderFactsSql(keyword)
+    const [countRows, pageRows] = await Promise.all([
+      this.prisma.$queryRaw<SourceSalesOrderCountRow[]>(Prisma.sql`
+        ${factsSql}
+        SELECT
+          classified."source_view" AS "view",
+          COUNT(*)::bigint AS "count"
+        FROM classified_source_orders AS classified
+        WHERE classified."source_view" IS NOT NULL
+        GROUP BY classified."source_view"
+      `),
+      this.prisma.$queryRaw<SourceSalesOrderPageRow[]>(Prisma.sql`
+        ${factsSql}
+        SELECT classified."sales_order_id" AS "id"
+        FROM classified_source_orders AS classified
+        WHERE classified."source_view" = ${input.view}
+        ORDER BY classified."order_date" DESC, classified."sales_order_id" DESC
+        LIMIT ${pageSize}
+        OFFSET ${(page - 1) * pageSize}
+      `),
+    ])
+    const countByView = new Map<PurchaseOrderSourceSalesOrderView, number>()
+    for (const row of countRows) {
+      if (PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS.includes(row.view)) {
+        countByView.set(row.view, safeCount(row.count))
+      }
     }
-    const where = sourceSalesOrderWhere(input.view, baseWhere)
-    const initialPurchaseWhere = sourceSalesOrderWhere('INITIAL_PURCHASE', baseWhere)
-    const supplementalPurchaseWhere = sourceSalesOrderWhere(
-      'SUPPLEMENTAL_PURCHASE',
-      baseWhere,
-    )
-    const [initialPurchaseCount, supplementalPurchaseCount, rows] = await Promise.all([
-      this.prisma.salesOrder.count({ where: initialPurchaseWhere }),
-      this.prisma.salesOrder.count({ where: supplementalPurchaseWhere }),
-      this.prisma.salesOrder.findMany({
-        where,
-        orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+    const counts = PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS.map(value => ({
+      value,
+      count: countByView.get(value) ?? 0,
+    }))
+    const pageIds = pageRows.map(row => row.id)
+    const unorderedRows = pageIds.length === 0
+      ? []
+      : await this.prisma.salesOrder.findMany({
+        where: { id: { in: pageIds } },
         select: {
           id: true,
           orderNo: true,
@@ -236,12 +360,12 @@ export class PurchaseOrderSourceQueryService {
             },
           },
         },
-      }),
-    ])
-    const counts = [
-      { value: 'INITIAL_PURCHASE' as const, count: initialPurchaseCount },
-      { value: 'SUPPLEMENTAL_PURCHASE' as const, count: supplementalPurchaseCount },
-    ]
+      })
+    const rowById = new Map(unorderedRows.map(row => [row.id, row]))
+    const rows = pageIds.flatMap((id) => {
+      const row = rowById.get(id)
+      return row === undefined ? [] : [row]
+    })
     return {
       view: input.view,
       counts,
@@ -281,9 +405,7 @@ export class PurchaseOrderSourceQueryService {
       }),
       page,
       pageSize,
-      total: input.view === 'INITIAL_PURCHASE'
-        ? initialPurchaseCount
-        : supplementalPurchaseCount,
+      total: countByView.get(input.view) ?? 0,
     }
   }
 

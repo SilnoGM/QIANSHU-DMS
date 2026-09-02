@@ -45,18 +45,18 @@ docs: 设计销售订单海运前加购流程
 
 目标：先证明当前按履约状态分类的实现无法满足三个事实互斥视图。
 
-- [ ] 扩展 `purchase-order-source-sales-order-view` 纯领域测试，覆盖：
+- [x] 扩展 `purchase-order-source-sales-order-view` 纯领域测试，覆盖：
   - `PENDING + 无有效采购 + 剩余 > 0`；
   - 海运前 `有效采购 > 0 + 剩余 > 0`；
   - 海运前 `有效采购存在 + 剩余 = 0`；
   - `SEA_TRANSIT`、`SIGNED`、非 `CONFIRMED` 和异常事实返回不可选；
   - 三个视图互斥且优先级稳定。
-- [ ] 扩展 `purchase-order-source-query.service.spec.ts`，要求聚合按 `sourceSalesOrderLineId` 计算，不按 `productId` 合并。
-- [ ] 覆盖相同目录产品多销售行、`CUSTOM`、取消采购、部分采购和完全覆盖。
-- [ ] 要求三个视图计数使用与列表相同关键词，并对缺失分类显式返回 `0`。
-- [ ] 要求分页排序保持 `orderDate DESC, id DESC`，只加载当前页展示摘要。
-- [ ] 断言 SQL 使用 Prisma 参数化模板，不允许 `$queryRawUnsafe`。
-- [ ] 运行定向测试并记录预期失败原因；测试装配错误不算有效 RED。
+- [x] 扩展 `purchase-order-source-query.service.spec.ts`，要求聚合按 `sourceSalesOrderLineId` 计算，不按 `productId` 合并。
+- [x] 覆盖相同目录产品多销售行、`CUSTOM`、取消采购、部分采购和完全覆盖。
+- [x] 要求三个视图计数使用与列表相同关键词，并对缺失分类显式返回 `0`。
+- [x] 要求分页排序保持 `orderDate DESC, id DESC`，只加载当前页展示摘要。
+- [x] 断言 SQL 使用 Prisma 参数化模板，不允许 `$queryRawUnsafe`。
+- [x] 运行定向测试并记录预期失败原因；测试装配错误不算有效 RED。
 - _Requirements: R1, R2.1, R3.1, R6_
 
 验证命令：
@@ -69,31 +69,31 @@ pnpm -C server test -- purchase-order-source-sales-order-view.spec.ts purchase-o
 
 目标：以最小实现让 T2 转绿，并删除旧视图的错误语义。
 
-- [ ] 将服务端固定视图编码改为：
+- [x] 将服务端固定视图编码改为：
   - `UNPURCHASED`；
   - `PARTIALLY_PURCHASED`；
   - `COMPLETED_PURCHASE_ADD_ON`。
-- [ ] 新增 `SalesOrderPurchaseFacts` 和无副作用分类函数。
-- [ ] 使用参数化 CTE 分别构造 `purchased_by_line`、`active_purchase_by_order` 和 `order_purchase_facts`。
-- [ ] 有效采购同时限定 `SALES_LINKED`、相同 `salesOrderId` 和非 `CANCELLED`。
-- [ ] 使用事实查询取得当前视图分页 ID，再通过 Prisma 加载客户、出单人、状态、产品摘要和主图。
-- [ ] 三个计数和当前列表共享关键词、订单状态与海运前基础谓词。
-- [ ] 对聚合口径、参数化 SQL和为何不能按产品合并添加必要中文注释。
-- [ ] 重新运行 T2，确认全部转绿。
-- [ ] 运行服务端 typecheck 和 lint。
+- [x] 新增 `SalesOrderPurchaseFacts` 和无副作用分类函数。
+- [x] 使用参数化 CTE 分别构造 `purchased_by_line`、`active_purchase_by_order` 和 `order_purchase_facts`。
+- [x] 有效采购同时限定 `SALES_LINKED`、相同 `salesOrderId` 和非 `CANCELLED`。
+- [x] 使用事实查询取得当前视图分页 ID，再通过 Prisma 加载客户、出单人、状态、产品摘要和主图。
+- [x] 三个计数和当前列表共享关键词、订单状态与海运前基础谓词。
+- [x] 对聚合口径、参数化 SQL和为何不能按产品合并添加必要中文注释。
+- [x] 重新运行 T2，确认全部转绿。
+- [x] 运行服务端 typecheck 和 lint。
 - _Requirements: R1, R2, R3, R6_
 
 ### T4：固化三视图 HTTP 与 OpenAPI 契约
 
 目标：先用契约测试固定公共枚举、权限、响应计数和错误边界。
 
-- [ ] 更新查询 DTO 测试，接受三个新视图并拒绝旧值和任意状态组合。
-- [ ] 更新响应 DTO 测试，要求 `view` 与 `counts[].value` 只使用三个固定编码。
-- [ ] 更新 `purchase-orders.controller.spec.ts` 和 OpenAPI 快照断言。
-- [ ] 保持 `GET /api/purchase-orders/source-sales-orders`、`purchase-orders:create`、private no-store 和现有分页协议。
-- [ ] 保持来源图片 GET/HEAD 仍只要求采购创建权限。
-- [ ] 先确认旧契约测试因新枚举缺失而失败，再完成 DTO/Controller 最小更新。
-- [ ] 运行定向契约测试、typecheck 和 lint。
+- [x] 更新查询 DTO 测试，接受三个新视图并拒绝旧值和任意状态组合。
+- [x] 更新响应 DTO 测试，要求 `view` 与 `counts[].value` 只使用三个固定编码。
+- [x] 更新 `purchase-orders.controller.spec.ts` 和 OpenAPI 快照断言。
+- [x] 保持 `GET /api/purchase-orders/source-sales-orders`、`purchase-orders:create`、private no-store 和现有分页协议。
+- [x] 保持来源图片 GET/HEAD 仍只要求采购创建权限。
+- [x] 先确认旧契约测试因新枚举缺失而失败，再完成 DTO/Controller 最小更新。
+- [x] 运行定向契约测试、typecheck 和 lint。
 - _Requirements: R1.1-R1.6, R10.1, R10.6_
 
 ### T5：建立加购 Schema 与 migration 失败测试

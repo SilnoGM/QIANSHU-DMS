@@ -147,6 +147,32 @@ describe('PurchaseOrdersController', () => {
     )).toEqual(['purchase-orders:read'])
   })
 
+  it('keeps the trusted sales-source selector inside purchase creation permission', async () => {
+    const salesOrders = jest.fn().mockResolvedValue({
+      view: 'UNPURCHASED',
+      counts: [],
+      items: [],
+    })
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      { salesOrders } as unknown as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      {} as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
+    )
+    const query = { view: 'UNPURCHASED' as const }
+
+    await expect(controller.sourceSalesOrders(query)).resolves.toMatchObject({
+      view: 'UNPURCHASED',
+    })
+    expect(salesOrders).toHaveBeenCalledWith(query)
+    expect(new Reflector().get(
+      REQUIRED_PERMISSIONS_METADATA,
+      PurchaseOrdersController.prototype.sourceSalesOrders,
+    )).toEqual(['purchase-orders:create'])
+  })
+
   it('protects and delegates GET/HEAD product main image content', async () => {
     const stream = Readable.from(Buffer.from('image'))
     const result: ProductMediaContentResponse = {
@@ -346,7 +372,11 @@ describe('PurchaseOrdersController OpenAPI', () => {
       PurchaseOrderSourceSalesOrderViewCountItemDto: {
         properties: {
           value: {
-            enum: ['INITIAL_PURCHASE', 'SUPPLEMENTAL_PURCHASE'],
+            enum: [
+              'UNPURCHASED',
+              'PARTIALLY_PURCHASED',
+              'COMPLETED_PURCHASE_ADD_ON',
+            ],
             type: 'string',
           },
           count: { minimum: 0, type: 'integer' },
@@ -407,8 +437,18 @@ describe('PurchaseOrdersController OpenAPI', () => {
       name: 'view',
       required: true,
       schema: {
-        enum: ['INITIAL_PURCHASE', 'SUPPLEMENTAL_PURCHASE'],
+        enum: [
+          'UNPURCHASED',
+          'PARTIALLY_PURCHASED',
+          'COMPLETED_PURCHASE_ADD_ON',
+        ],
       },
+    })
+    expect(sourceSalesOrders?.security).toEqual([{ sessionCookie: [] }])
+    expect(sourceSalesOrders?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      privateNoStore: true,
+      validation: true,
     })
     expect(document.paths[
       '/api/purchase-orders/source-sales-orders/{salesOrderId}/lines'

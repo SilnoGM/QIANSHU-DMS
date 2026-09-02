@@ -7,7 +7,11 @@ import {
 } from './purchase-order-query.dto'
 
 describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
-  it.each(['INITIAL_PURCHASE', 'SUPPLEMENTAL_PURCHASE'])(
+  it.each([
+    'UNPURCHASED',
+    'PARTIALLY_PURCHASED',
+    'COMPLETED_PURCHASE_ADD_ON',
+  ])(
     'accepts the trusted source-sales-order view %s',
     async (view) => {
       const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, {
@@ -25,10 +29,25 @@ describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
   it.each([
     {},
     { view: 'UNKNOWN' },
+    { view: 'INITIAL_PURCHASE' },
+    { view: 'SUPPLEMENTAL_PURCHASE' },
   ])('rejects a missing or unknown source-sales-order view %j', async input => {
     const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, input)
 
     await expect(validate(dto)).resolves.not.toHaveLength(0)
+  })
+
+  it('rejects caller-composed sales status filters', async () => {
+    const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, {
+      view: 'UNPURCHASED',
+      orderStatus: 'CONFIRMED',
+      fulfillmentStatus: 'PENDING',
+    })
+
+    await expect(validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    })).resolves.not.toHaveLength(0)
   })
 })
 
