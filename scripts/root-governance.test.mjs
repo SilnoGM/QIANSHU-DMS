@@ -68,24 +68,16 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/sales-orders/dto/sales-order-query-dto.spec.ts',
   'server/src/modules/sales-orders/dto/sales-order-query.dto.ts',
   'server/src/modules/sales-orders/dto/sales-order-response.dto.ts',
-  // 海运前加购仍只消费 supplierValue 稳定字典值；DTO、查询、写服务、图片
-  // 与 HTTP 权限测试均不得借此恢复 Supplier 主数据、关系或管理接口。
-  'server/src/modules/sales-orders/dto/sales-order-add-on-dto.spec.ts',
-  'server/src/modules/sales-orders/dto/sales-order-add-on.dto.ts',
-  'server/src/modules/sales-orders/products/sales-order-product-image.service.spec.ts',
-  'server/src/modules/sales-orders/products/sales-order-product-image.service.ts',
+  // 销售产品修改查询仍只消费 supplierValue 稳定字典值；查询服务与规格
+  // 均不得借此恢复 Supplier 主数据、关系或管理接口。
   'server/src/modules/sales-orders/products/sales-order-product-option.mapper.ts',
-  'server/src/modules/sales-orders/sales-order-add-on-query.service.spec.ts',
-  'server/src/modules/sales-orders/sales-order-add-on-query.service.ts',
-  'server/src/modules/sales-orders/sales-order-add-on.service.spec.ts',
-  'server/src/modules/sales-orders/sales-order-add-on.service.ts',
-  'server/src/modules/sales-orders/sales-order-command.normalizer.ts',
+  'server/src/modules/sales-orders/sales-order-product-edit-query.service.spec.ts',
+  'server/src/modules/sales-orders/sales-order-product-edit-query.service.ts',
   'server/src/modules/sales-orders/sales-order-query.service.spec.ts',
   'server/src/modules/sales-orders/sales-order-query.service.ts',
   'server/src/modules/sales-orders/sales-orders-product-options.controller.spec.ts',
-  'server/src/modules/sales-orders/sales-orders.controller.ts',
-  'server/test/sales-order-add-on-api.e2e-spec.ts',
   'server/test/sales-order-service.e2e-spec.ts',
+  'specs/sales-order-product-editing/design.md',
   // 采购订单域继续消费 service_provider.supplier 的稳定字典值；这里精确冻结
   // 已授权的 schema、服务、API、E2E 与规格文件，禁止借此恢复 Supplier 主数据域。
   'server/prisma/migrations/20260827120000_purchase_order_domain/migration.sql',
@@ -126,13 +118,10 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/types.ts',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/index.vue',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/types.ts',
-  'web/apps/qsmds-arco/src/components/business/QsSalesOrderAddOnProductsModal/index.vue',
-  'web/apps/qsmds-arco/src/components/business/QsSalesOrderAddOnProductsModal/types.ts',
   'web/apps/qsmds-arco/src/locales/lang/purchase-order-desc/en.json',
   'web/apps/qsmds-arco/src/locales/lang/purchase-order-desc/zh-cn.json',
   'web/apps/qsmds-arco/src/locales/lang/purchase-order-desc/zh-tw.json',
   'web/apps/qsmds-arco/src/views/component_library/business/fixtures/purchase-order-desc.fixture.ts',
-  'web/apps/qsmds-arco/src/views/component_library/business/components/SalesOrderAddOnProductsModalShowcase.vue',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/create.vue',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/index.vue',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-create-review.vue',
@@ -148,7 +137,6 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/views/purchase-order-list.logic.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-pages.test.ts',
   'web/apps/qsmds-arco/test/views/qs-order-product-line-editor.test.ts',
-  'web/apps/qsmds-arco/test/views/qs-sales-order-add-on-products-modal.test.ts',
   // 订单产品选择器通过稳定 supplierValue 查询和展示现有产品；规格、组件、
   // fixture 与回归测试属于该字典消费边界，不得引入 Supplier 主数据依赖。
   'specs/order-product-line-editor/design.md',

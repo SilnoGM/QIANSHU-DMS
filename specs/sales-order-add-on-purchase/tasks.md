@@ -3,10 +3,11 @@
 ## 1. 文档状态
 
 - 阶段：Phase 4 - Implementation
-- 状态：已确认并进入实施
+- 状态：已被「销售订单产品修改与采购入口收敛」实施计划替代，仅保留历史执行记录
 - 编写日期：2026-09-02
 - 需求规格：[requirements.md](./requirements.md)
 - 技术设计：[design.md](./design.md)
+- 替代计划：[销售订单产品修改与采购入口收敛实施计划](../sales-order-product-editing/tasks.md)
 - migration 边界：已确认，仅允许新增 `AuditEventType.SALES_ORDER_PRODUCT_APPENDED`
 - migration 应用：未授权，开发数据库应用前必须再次取得明确指令
 

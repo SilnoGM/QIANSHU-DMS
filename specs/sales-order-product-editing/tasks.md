@@ -3,7 +3,7 @@
 ## 1. 文档状态
 
 - 阶段：Phase 3 - Task Breakdown
-- 状态：已确认，实施中
+- 状态：已完成
 - 编写日期：2026-09-02
 - 需求规格：[requirements.md](./requirements.md)
 - 技术设计：[design.md](./design.md)
@@ -59,118 +59,118 @@
 
 ### T5：建立销售产品修改 DTO、normalizer 与查询失败测试
 
-- [ ] 新增 DTO 测试，覆盖 `expectedVersion`、原因、确认标记、完整既有行和新增行。
-- [ ] 新增 normalizer 测试，覆盖重复行 ID、非法数量、`0` 业务移除、空有效行和最多 100 行。
-- [ ] 新增查询测试，覆盖海运前资格、每行有效采购数量、取消采购不锁定、有效产品选项和无供应商条件。
-- [ ] 新增图片授权测试，要求 `sales-orders:update`、有效订单和有效产品关系。
-- [ ] 运行定向测试并记录有效 RED。
+- [x] 新增 DTO 测试，覆盖 `expectedVersion`、原因、确认标记、完整既有行和新增行。
+- [x] 新增 normalizer 测试，覆盖重复行 ID、非法数量、`0` 业务移除、空有效行和最多 100 行。
+- [x] 新增查询测试，覆盖海运前资格、每行有效采购数量、取消采购不锁定、有效产品选项和无供应商条件。
+- [x] 新增图片授权测试，要求 `sales-orders:update`、有效订单和有效产品关系。
+- [x] 运行定向测试并记录有效 RED。
 - _Requirements: R2-R5, R8_
 
 ### T6：实现销售产品修改只读契约
 
-- [ ] 新增 `SalesOrderProductEditQueryService`。
-- [ ] 返回订单、金额、既有行、有效采购数量、`canDecrease` 和剩余行容量。
-- [ ] 新增不受供应商限制的目录产品选项和授权主图路径。
-- [ ] 统一过滤 `removedAt: null`。
-- [ ] 实现 DTO/normalizer 并转绿 T5。
-- [ ] 提交销售产品修改查询能力。
+- [x] 新增 `SalesOrderProductEditQueryService`。
+- [x] 返回订单、金额、既有行、有效采购数量、`canDecrease` 和剩余行容量。
+- [x] 新增不受供应商限制的目录产品选项和授权主图路径。
+- [x] 统一过滤 `removedAt: null`。
+- [x] 实现 DTO/normalizer 并转绿 T5。
+- [x] 提交销售产品修改查询能力。
 - _Requirements: R2-R5, R8_
 
 ### T7：建立销售产品修改事务失败测试
 
-- [ ] 固定“销售行 → 销售订单”锁顺序、Serializable 和版本校验。
-- [ ] 覆盖既有行增加、无有效采购减少、软移除、新增 CATALOG/CUSTOM。
-- [ ] 覆盖有效采购锁定、仅取消采购允许减少、行集合伪造和最终空订单。
-- [ ] 覆盖金额增减、定金下调确认、总价低于有效收款和付款状态重算。
-- [ ] 覆盖剩余数量导致 `PENDING` 回退、覆盖完成导致 `PREPARING` 推进和其他海运前状态保持。
-- [ ] 覆盖金额修订、状态历史、单条审计、版本只增加一次和事务任一步失败回滚。
-- [ ] 覆盖并发修改、并发采购与序列化冲突映射。
-- [ ] 运行定向测试并记录有效 RED。
+- [x] 固定“销售行 → 销售订单”锁顺序、Serializable 和版本校验。
+- [x] 覆盖既有行增加、无有效采购减少、软移除、新增 CATALOG/CUSTOM。
+- [x] 覆盖有效采购锁定、仅取消采购允许减少、行集合伪造和最终空订单。
+- [x] 覆盖金额增减、定金下调确认、总价低于有效收款和付款状态重算。
+- [x] 覆盖剩余数量导致 `PENDING` 回退、覆盖完成导致 `PREPARING` 推进和其他海运前状态保持。
+- [x] 覆盖金额修订、状态历史、单条审计、版本只增加一次和事务任一步失败回滚。
+- [x] 覆盖并发修改、并发采购与序列化冲突映射。
+- [x] 运行定向测试并记录有效 RED。
 - _Requirements: R3-R8_
 
 ### T8：实现销售产品修改事务服务
 
-- [ ] 新增 `SalesOrderProductEditService`，事务内重读全部业务事实。
-- [ ] 实现数量更新、`removedAt` 软移除和新增行快照。
-- [ ] 服务端重算金额、确认定金下调、保护有效收款并派生付款状态。
-- [ ] 重算采购覆盖和履约状态，写入必要状态历史。
-- [ ] 写金额修订与 `SALES_ORDER_PRODUCTS_CHANGED` 审计。
-- [ ] 映射稳定业务错误码与并发冲突。
-- [ ] 转绿 T7，并运行相关销售/采购回归测试。
-- [ ] 提交销售产品原子修改能力。
+- [x] 新增 `SalesOrderProductEditService`，事务内重读全部业务事实。
+- [x] 实现数量更新、`removedAt` 软移除和新增行快照。
+- [x] 服务端重算金额、确认定金下调、保护有效收款并派生付款状态。
+- [x] 重算采购覆盖和履约状态，写入必要状态历史。
+- [x] 写金额修订与 `SALES_ORDER_PRODUCTS_CHANGED` 审计。
+- [x] 映射稳定业务错误码与并发冲突。
+- [x] 转绿 T7，并运行相关销售/采购回归测试。
+- [x] 提交销售产品原子修改能力。
 - _Requirements: R3-R8_
 
 ### T9：替换 Controller、OpenAPI 和 Web API 契约
 
-- [ ] 先修改 Controller 测试，固定 `product-edit-context`、产品选项、图片和 `PATCH products`。
-- [ ] 固定所有新端点只要求 `sales-orders:update`，mutation 要求 CSRF、private no-store 和 `retry: false`。
-- [ ] 删除旧 add-on Controller 路径、DTO 注入与模块 provider。
-- [ ] 实现新 Controller 路径、DTO 响应和错误码。
-- [ ] 执行 `contract:sync` 并只使用 generated types。
-- [ ] 修改 Web API 定向测试和适配器，删除旧 add-on 方法。
-- [ ] 运行 Controller、OpenAPI、Web API 和 `contract:check`。
-- [ ] 提交公共契约替换。
+- [x] 先修改 Controller 测试，固定 `product-edit-context`、产品选项、图片和 `PATCH products`。
+- [x] 固定所有新端点只要求 `sales-orders:update`，mutation 要求 CSRF、private no-store 和 `retry: false`。
+- [x] 删除旧 add-on Controller 路径、DTO 注入与模块 provider。
+- [x] 实现新 Controller 路径、DTO 响应和错误码。
+- [x] 执行 `contract:sync` 并只使用 generated types。
+- [x] 修改 Web API 定向测试和适配器，删除旧 add-on 方法。
+- [x] 运行 Controller、OpenAPI、Web API 和 `contract:check`。
+- [x] 提交公共契约替换。
 - _Requirements: R2-R9_
 
 ### T10：建立并实现 `QsSalesOrderProductsEditorModal`
 
-- [ ] 先写 logic 测试：既有行最小数量、增加/减少/移除、新增行和金额预览。
-- [ ] 固定普通确认与定金下调加强确认，确认标记只能由对应复核状态产生。
-- [ ] 先写结构测试：纯组件边界、`90rem`、`4:8`、锁定提示、草稿保留和移动布局。
-- [ ] 新建组件 `types.ts`、`logic.ts`、`index.vue` 和 README。
-- [ ] 既有行只编辑数量；新增行复用 `QsOrderProductLineEditor`。
-- [ ] 本地错误使用 Warning Toast 并保留字段错误；服务端错误使用弹窗持久错误。
-- [ ] 替换组件库路由、Showcase 和验收测试。
-- [ ] 删除旧组件目录与旧组件测试。
-- [ ] 运行组件、logic、组件库、typecheck、ESLint 和 Stylelint。
-- [ ] 提交新产品修改组件。
+- [x] 先写 logic 测试：既有行最小数量、增加/减少/移除、新增行和金额预览。
+- [x] 固定普通确认与定金下调加强确认，确认标记只能由对应复核状态产生。
+- [x] 先写结构测试：纯组件边界、`90rem`、`4:8`、锁定提示、草稿保留和移动布局。
+- [x] 新建组件 `types.ts`、`logic.ts`、`index.vue` 和 README。
+- [x] 既有行只编辑数量；新增行复用 `QsOrderProductLineEditor`。
+- [x] 本地错误使用 Warning Toast 并保留字段错误；服务端错误使用弹窗持久错误。
+- [x] 替换组件库路由、Showcase 和验收测试。
+- [x] 删除旧组件目录与旧组件测试。
+- [x] 运行组件、logic、组件库、typecheck、ESLint 和 Stylelint。
+- [x] 提交新产品修改组件。
 - _Requirements: R3-R6, R9_
 
 ### T11：接入全部销售订单操作列
 
-- [ ] 先写页面测试，固定“全部订单”显示“查看 + 修改产品”，待办页不新增该入口。
-- [ ] 固定 `CONFIRMED + 海运前 + sales-orders:update` 资格。
-- [ ] 固定上下文加载、产品选项、二次确认、禁止重复提交、错误恢复和成功刷新。
-- [ ] 接入新组件和 Web API，调整操作列宽度。
-- [ ] 成功后 Toast 并刷新列表/状态计数，不自动跳转采购页。
-- [ ] 运行销售列表页面与逻辑定向测试。
-- [ ] 提交全部销售订单入口。
+- [x] 先写页面测试，固定“全部订单”显示“查看 + 修改产品”，待办页不新增该入口。
+- [x] 固定 `CONFIRMED + 海运前 + sales-orders:update` 资格。
+- [x] 固定上下文加载、产品选项、二次确认、禁止重复提交、错误恢复和成功刷新。
+- [x] 接入新组件和 Web API，调整操作列宽度。
+- [x] 成功后 Toast 并刷新列表/状态计数，不自动跳转采购页。
+- [x] 运行销售列表页面与逻辑定向测试。
+- [x] 提交全部销售订单入口。
 - _Requirements: R2-R9_
 
 ### T12：删除采购页第三视图与加购流程
 
-- [ ] 先修改选择器、适配器和采购页面测试，要求只剩两个视图。
-- [ ] 删除 `canAddSalesOrderProducts`、第三视图动作和权限说明。
-- [ ] 删除采购创建页 add-on state、API、弹窗、`FaMultiStepLoader` 和相关恢复逻辑。
-- [ ] 删除 `purchase-order-sales-add-on.logic.ts` 及旧测试。
-- [ ] 保持普通来源选择、快捷入口、同步剩余行和已采购灰色行行为不变。
-- [ ] 全仓审计 `COMPLETED_PURCHASE_ADD_ON`、旧组件名和旧 add-on API 不再存在于运行时代码。
-- [ ] 运行采购页面、选择器、快捷入口和同步逻辑回归测试。
-- [ ] 提交采购入口收敛。
+- [x] 先修改选择器、适配器和采购页面测试，要求只剩两个视图。
+- [x] 删除 `canAddSalesOrderProducts`、第三视图动作和权限说明。
+- [x] 删除采购创建页 add-on state、API、弹窗、`FaMultiStepLoader` 和相关恢复逻辑。
+- [x] 删除 `purchase-order-sales-add-on.logic.ts` 及旧测试。
+- [x] 保持普通来源选择、快捷入口、同步剩余行和已采购灰色行行为不变。
+- [x] 全仓审计 `COMPLETED_PURCHASE_ADD_ON`、旧组件名和旧 add-on API 不再存在于运行时代码。
+- [x] 运行采购页面、选择器、快捷入口和同步逻辑回归测试。
+- [x] 提交采购入口收敛。
 - _Requirements: R1, R7, R9.8-R9.9_
 
 ### T13：隔离 PostgreSQL E2E 与完整回归
 
-- [ ] 在隔离数据库执行全部 migration。
-- [ ] 验证软移除、取消采购历史、有效采购锁定和数据库约束。
-- [ ] 验证产品增加/减少、定金确认、收款保护和状态联动。
-- [ ] 验证并发修改以及采购创建竞态最多一个合法结果。
-- [ ] 验证修改后订单进入正确采购视图并只能同步剩余产品。
-- [ ] 运行 Server/Web 定向测试、typecheck、lint、Stylelint、生产构建和契约检查。
-- [ ] 运行 `node --run check` 与 `git diff --check`。
-- [ ] 修复新增失败；既有失败单独记录，不掩盖。
+- [x] 在隔离数据库执行全部 migration。
+- [x] 验证软移除、取消采购历史、有效采购锁定和数据库约束。
+- [x] 验证产品增加/减少、定金确认、收款保护和状态联动。
+- [x] 验证并发修改以及采购创建竞态最多一个合法结果。
+- [x] 验证修改后订单进入正确采购视图并只能同步剩余产品。
+- [x] 运行 Server/Web 定向测试、typecheck、lint、Stylelint、生产构建和契约检查。
+- [x] 运行 `node --run check` 与 `git diff --check`。
+- [x] 修复新增失败；既有失败单独记录，不掩盖。
 - _Requirements: R1-R9_
 
 ### T14：应用 migration 并完成运行时验收
 
-- [ ] 应用前脱敏核对当前开发数据库身份与 migration 状态。
-- [ ] 执行 `pnpm -C server db:migrate:deploy`。
-- [ ] 验证 migration 为 Applied、`removed_at`、审计枚举和约束函数。
-- [ ] 重启或确认 Server/Web 使用最新代码。
-- [ ] 验证 Web `9000` HTTP 200、Server `3000/api/health` database `up`。
-- [ ] 对“全部销售订单 → 修改产品 → 采购两视图同步”执行浏览器验收。
-- [ ] 更新 `tasks.md`、旧规格替代状态和最终验证记录。
-- [ ] 创建最终收口提交，确认 Git 工作区干净。
+- [x] 应用前脱敏核对当前开发数据库身份与 migration 状态。
+- [x] 执行 `pnpm -C server db:migrate:deploy`。
+- [x] 验证 migration 为 Applied、`removed_at`、审计枚举和约束函数。
+- [x] 重启或确认 Server/Web 使用最新代码。
+- [x] 验证 Web `9000` HTTP 200、Server `3000/api/health` database `up`。
+- [x] 对“全部销售订单 → 修改产品 → 采购两视图同步”执行浏览器验收。
+- [x] 更新 `tasks.md`、旧规格替代状态和最终验证记录。
+- [x] 创建最终收口提交，确认 Git 工作区干净。
 - _Requirements: R1-R9_
 
 ## 4. 计划提交边界
@@ -194,3 +194,12 @@
 - 公共 API、schema、migration 和旧文件删除严格限制在已确认设计内。
 - migration 通过规定验证后直接应用当前开发数据库。
 - 不推送远端、不部署生产环境。
+
+## 6. 最终验收记录
+
+- 开发库已应用 `20260902160000_sales_order_product_editing`，`prisma migrate status` 确认全部 34 条 migration 为最新状态。
+- 开发库已核对 `removed_at`、`SALES_ORDER_PRODUCTS_CHANGED`、三个约束函数与销售来源数量 trigger。
+- 隔离 PostgreSQL E2E 通过：42 个套件、221 项测试；4 个套件、10 项按既有配置跳过。
+- `node --run check` 通过，覆盖 Root、Server、OpenAPI Contract、Web typecheck/lint/Stylelint、生产构建与 5 组真实 Chrome E2E。
+- Server `3000/api/health` 返回 `status: ok` 且数据库 `up`，Web `9000` 返回 HTTP 200。
+- 浏览器已验收“全部销售订单 → 修改产品”与采购来源两视图；验收期间未提交业务修改。

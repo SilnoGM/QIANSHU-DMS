@@ -3,8 +3,9 @@
 ## 1. 文档状态
 
 - 阶段：Phase 1 - Requirements
-- 状态：已确认
+- 状态：已被「销售订单产品修改与采购入口收敛」规格替代，仅保留历史设计依据
 - 编写日期：2026-09-02
+- 替代规格：[销售订单产品修改需求](../sales-order-product-editing/requirements.md)
 - 关联规格：[采购接入销售订单选择器](../purchase-sales-order-selector-integration/requirements.md)
 - 关联规格：[销售订单采购覆盖进度联动](../sales-order-purchase-coverage-progress/requirements.md)
 
