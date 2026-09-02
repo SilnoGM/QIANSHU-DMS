@@ -12,6 +12,7 @@ import {
 import {
   salesOrderValidationFailure,
 } from './domain/sales-order-errors'
+import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
 
 const SALES_ORDER_CURRENCIES = new Set(['TWD', 'MYR'])
 const CANONICAL_UUID_V4_PATTERN =
@@ -227,6 +228,7 @@ function normalizeCustomer(value: unknown): NormalizedSalesOrderCustomerInput {
 function normalizeLine(
   value: unknown,
   index: number,
+  startingLineNumber: number,
 ): NormalizedSalesOrderCreateLine {
   const field = `lines.${index}`
   const line = requireRecord(value, field)
@@ -244,7 +246,7 @@ function normalizeLine(
     )
     const quantity = normalizeQuantityField(line.quantity, `${field}.quantity`)
     return Object.freeze({
-      lineNumber: index + 1,
+      lineNumber: startingLineNumber + index,
       lineType,
       productId: normalizeUuid(line.productId, `${field}.productId`),
       actualUnitPriceAmount,
@@ -269,7 +271,7 @@ function normalizeLine(
     )
     const quantity = normalizeQuantityField(line.quantity, `${field}.quantity`)
     return Object.freeze({
-      lineNumber: index + 1,
+      lineNumber: startingLineNumber + index,
       lineType,
       name: normalizeText(line.name, `${field}.name`, 128),
       description: normalizeNullableText(
@@ -288,11 +290,23 @@ function normalizeLine(
   return salesOrderValidationFailure(`${field}.lineType`)
 }
 
-function normalizeLines(value: unknown): readonly NormalizedSalesOrderCreateLine[] {
+/**
+ * 创建订单与海运前加购共用同一销售明细规范化入口，确保价格精度、数量和行小计
+ * 不会因为两个写接口而出现不同口径。数据库锁内只负责补充真实起始行号。
+ */
+export function normalizeSalesOrderLines(
+  value: unknown,
+  startingLineNumber = 1,
+): readonly NormalizedSalesOrderCreateLine[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 100) {
     return salesOrderValidationFailure('lines')
   }
-  return Object.freeze(value.map(normalizeLine))
+  if (!Number.isInteger(startingLineNumber) || startingLineNumber < 1) {
+    return salesOrderValidationFailure('lines')
+  }
+  return Object.freeze(value.map((line, index) => (
+    normalizeLine(line, index, startingLineNumber)
+  )))
 }
 
 function normalizeIssuanceVoucher(
@@ -331,7 +345,7 @@ export function normalizeSalesOrderCreateCommand(
   ) {
     return salesOrderValidationFailure('currencyCode', '首版仅支持 TWD 或 MYR')
   }
-  const lines = normalizeLines(body.lines)
+  const lines = normalizeSalesOrderLines(body.lines)
   const lineSubtotalAmount = sumSalesOrderAmounts(
     lines.map(line => line.lineTotalAmount),
   )
@@ -358,6 +372,49 @@ export function normalizeSalesOrderCreateCommand(
     ...amounts,
     issuanceVoucher: normalizeIssuanceVoucher(body.issuanceVoucher),
     remark: normalizeNullableText(body.remark, 'remark', 1000),
+  })
+}
+
+export interface NormalizedSalesOrderAddOnCommand {
+  readonly expectedVersion: number
+  readonly supplierValue: string
+  readonly reason: string
+  readonly lines: readonly NormalizedSalesOrderCreateLine[]
+  readonly amountDelta: string
+}
+
+/** 销售加购 Body 的纯规范化入口，不读取订单、不接受客户端金额汇总。 */
+export function normalizeSalesOrderAddOnCommand(
+  input: unknown,
+): NormalizedSalesOrderAddOnCommand {
+  const body = requireRecord(input, 'body')
+  rejectUnknownKeys(body, [
+    'expectedVersion',
+    'supplierValue',
+    'reason',
+    'lines',
+  ])
+  if (
+    !Number.isInteger(body.expectedVersion)
+    || (body.expectedVersion as number) < 1
+    || (body.expectedVersion as number) > 2_147_483_647
+  ) {
+    return salesOrderValidationFailure('expectedVersion')
+  }
+  let supplierValue: string
+  try {
+    supplierValue = normalizeDictionaryItemValue(body.supplierValue)
+  }
+  catch {
+    return salesOrderValidationFailure('supplierValue')
+  }
+  const lines = normalizeSalesOrderLines(body.lines)
+  return Object.freeze({
+    expectedVersion: body.expectedVersion as number,
+    supplierValue,
+    reason: normalizeText(body.reason, 'reason', 500),
+    lines,
+    amountDelta: sumSalesOrderAmounts(lines.map(line => line.lineTotalAmount)),
   })
 }
 

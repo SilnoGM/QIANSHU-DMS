@@ -100,14 +100,14 @@ pnpm -C server test -- purchase-order-source-sales-order-view.spec.ts purchase-o
 
 目标：只为专用审计事件创建已确认的最小数据库变更。
 
-- [ ] 新增 `sales-order-add-on-schema.spec.ts`，先要求 Prisma 枚举和 migration 同时包含 `SALES_ORDER_PRODUCT_APPENDED`。
-- [ ] 断言 migration 只执行一条 `ALTER TYPE ... ADD VALUE`，不包含表、列、索引、约束、权限或数据回填。
-- [ ] 运行 schema 测试并确认因枚举和 migration 尚不存在而 RED。
-- [ ] 修改 `server/prisma/schema.prisma` 的 `AuditEventType`。
-- [ ] 新增单一职责 migration 文件。
-- [ ] 运行 `prisma:validate`、schema 定向测试和 `prisma:generate`。
-- [ ] 在隔离临时 PostgreSQL 执行 migration 并运行 drift gate；不得对开发数据库执行 `db:migrate:deploy`。
-- [ ] 检查生成 Prisma enum 中存在新事件且没有其他 Schema 漂移。
+- [x] 新增 `sales-order-add-on-schema.spec.ts`，先要求 Prisma 枚举和 migration 同时包含 `SALES_ORDER_PRODUCT_APPENDED`。
+- [x] 断言 migration 只执行一条 `ALTER TYPE ... ADD VALUE`，不包含表、列、索引、约束、权限或数据回填。
+- [x] 运行 schema 测试并确认因枚举和 migration 尚不存在而 RED。
+- [x] 修改 `server/prisma/schema.prisma` 的 `AuditEventType`。
+- [x] 新增单一职责 migration 文件。
+- [x] 运行 `prisma:validate`、schema 定向测试和 `prisma:generate`。
+- [x] 在隔离临时 PostgreSQL 执行 migration 并运行 drift gate；不得对开发数据库执行 `db:migrate:deploy`。
+- [x] 检查生成 Prisma enum 中存在新事件且没有其他 Schema 漂移。
 - _Requirements: R7.6-R7.7, R10.4-R10.5_
 
 验证命令：
@@ -122,35 +122,35 @@ pnpm -C server test:prisma-drift-gate
 
 目标：先固定只追加销售明细的输入规则、资格读取和供应商产品边界。
 
-- [ ] 新增加购 DTO 与纯规范化测试，覆盖 CATALOG、CUSTOM、未知字段、UUID、价格、数量、名称、描述、原因和 `expectedVersion`。
-- [ ] 要求单次至少 1 行，累计销售明细不超过 100 行。
-- [ ] 证明现有销售创建行规则与加购行规则一致，避免双重金额口径。
-- [ ] 新增 `SalesOrderAddOnQueryService` 失败测试，覆盖：
+- [x] 新增加购 DTO 与纯规范化测试，覆盖 CATALOG、CUSTOM、未知字段、UUID、价格、数量、名称、描述、原因和 `expectedVersion`。
+- [x] 要求单次至少 1 行，累计销售明细不超过 100 行。
+- [x] 证明现有销售创建行规则与加购行规则一致，避免双重金额口径。
+- [x] 新增 `SalesOrderAddOnQueryService` 失败测试，覆盖：
   - `CONFIRMED + 海运前 + 有效采购 + 剩余 = 0` 才返回上下文；
   - 上下文包含版本、金额、有效收款、待收金额、原销售行和剩余行容量；
   - 非法阶段、仍有剩余、无有效采购和非正式订单拒绝；
   - 产品选项使用订单币种、指定供应商、启用产品和唯一主图；
   - `CUSTOM` 不来自产品选项；
   - 图片关系失效时返回既有安全错误。
-- [ ] 运行定向测试并记录有效 RED。
+- [x] 运行定向测试并记录有效 RED。
 - _Requirements: R4, R5, R6, R7.1, R10.2-R10.3_
 
 ### T7：实现加购上下文、产品选项和图片端点
 
 目标：提供加购弹窗所需的最小只读数据，并执行双权限硬边界。
 
-- [ ] 提取销售创建和加购共用的行输入规范化函数，保持创建接口行为不变。
-- [ ] 新增 `SalesOrderAddOnQueryService`，实现上下文资格重读和金额映射。
-- [ ] 复用销售产品选项映射，币种只从销售订单读取，不接受客户端币种。
-- [ ] 使用 `supplierValue` 限定启用目录产品并通过供应商字典有效性校验。
-- [ ] 扩展销售产品图片服务，重新校验订单资格、供应商、产品和当前主图关系。
-- [ ] 新增以下只读路由：
+- [x] 提取销售创建和加购共用的行输入规范化函数，保持创建接口行为不变。
+- [x] 新增 `SalesOrderAddOnQueryService`，实现上下文资格重读和金额映射。
+- [x] 复用销售产品选项映射，币种只从销售订单读取，不接受客户端币种。
+- [x] 使用 `supplierValue` 限定启用目录产品并通过供应商字典有效性校验。
+- [x] 扩展销售产品图片服务，重新校验订单资格、供应商、产品和当前主图关系。
+- [x] 新增以下只读路由：
   - `GET /api/sales-orders/:salesOrderId/add-on-context`；
   - `GET /api/sales-orders/:salesOrderId/add-on-product-options`；
   - 加购产品主图 `HEAD/GET`。
-- [ ] 所有路由声明 `purchase-orders:create` 与 `sales-orders:update`，验证权限 Guard 使用全部满足语义。
-- [ ] 添加必要中文注释解释为什么采购加购读取不复用 `sales-orders:create` 权限。
-- [ ] 重新运行 T6 并转绿。
+- [x] 所有路由声明 `purchase-orders:create` 与 `sales-orders:update`，验证权限 Guard 使用全部满足语义。
+- [x] 添加必要中文注释解释为什么采购加购读取不复用 `sales-orders:create` 权限。
+- [x] 重新运行 T6 并转绿。
 - _Requirements: R4, R5.3-R5.7, R6, R10.2-R10.5_
 
 ### T8：建立销售加购原子事务失败测试

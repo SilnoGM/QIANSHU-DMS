@@ -15,6 +15,7 @@ import {
   formatSalesOrderAmountUnits,
   parseSalesOrderAmountUnits,
 } from './domain/sales-order-decimal'
+import { mapSalesOrderProductOption } from './products/sales-order-product-option.mapper'
 
 const SALES_ORDER_DETAIL_INCLUDE = {
   issuer: { select: { id: true, displayName: true } },
@@ -504,22 +505,6 @@ function mapCurrencySummary(
   }
 }
 
-function productOptionAttributes(
-  value: unknown,
-): readonly Record<string, unknown>[] {
-  if (
-    !Array.isArray(value)
-    || value.some(item => typeof item !== 'object' || item === null || Array.isArray(item))
-  ) {
-    throw new ApiException(
-      HttpStatus.CONFLICT,
-      'SALES_ORDER_STATE_CHANGED',
-      '产品属性状态已变化，请重试',
-    )
-  }
-  return value as readonly Record<string, unknown>[]
-}
-
 function mapActor(actor: SalesOrderActor | null): SalesOrderActor | null {
   return actor === null ? null : { id: actor.id, displayName: actor.displayName }
 }
@@ -972,36 +957,13 @@ export class SalesOrderQueryService {
         },
       }),
     ])
-    const items = rows.map((row) => {
-      const standardPrice = input.currencyCode === 'TWD'
-        ? row.twdSalePriceAmount
-        : row.myrSalePriceAmount
-      if (row.media.length > 1) {
-        throw new ApiException(
-          HttpStatus.CONFLICT,
-          'SALES_ORDER_STATE_CHANGED',
-          '产品状态已变化，请重试',
-        )
-      }
-      const mainImage = row.media[0]
-      return {
-        id: row.id,
-        productNo: row.productNo,
-        name: row.name,
-        supplierValue: row.supplierValue,
-        attributes: productOptionAttributes(row.attributes),
-        standardUnitPriceAmount: standardPrice === null
-          ? null
-          : decimalToFixed4(standardPrice),
-        currencyCode: input.currencyCode,
-        mainImage: mainImage === undefined
-          ? null
-          : {
-              id: mainImage.id,
-              contentUrl: `/api/sales-orders/product-options/${row.id}/main-image/${mainImage.id}/content?currencyCode=${input.currencyCode}`,
-            },
-      }
-    })
+    const items = rows.map(row => mapSalesOrderProductOption(
+      row,
+      input.currencyCode,
+      (productId, productMediaId) => (
+        `/api/sales-orders/product-options/${productId}/main-image/${productMediaId}/content?currencyCode=${input.currencyCode}`
+      ),
+    ))
     return { items, page, pageSize, total }
   }
 

@@ -6,6 +6,7 @@ import {
   ProductMediaContentService,
   type ProductMediaContentResponse,
 } from '../../products/media/product-media-content.service'
+import { SalesOrderAddOnQueryService } from '../sales-order-add-on-query.service'
 
 function productImageNotFound(): ApiException {
   return new ApiException(
@@ -25,6 +26,7 @@ export class SalesOrderProductImageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly content: ProductMediaContentService,
+    private readonly addOnQueries?: SalesOrderAddOnQueryService,
   ) {}
 
   async resolve(
@@ -93,6 +95,55 @@ export class SalesOrderProductImageService {
 
     return this.content.resolve(
       line.productId,
+      productMediaId,
+      ifNoneMatch,
+      range,
+      method,
+    )
+  }
+
+  async resolveAddOnProductOption(
+    salesOrderId: string,
+    productId: string,
+    productMediaId: string,
+    supplierInput: string,
+    ifNoneMatch: unknown,
+    range: unknown,
+    method: 'GET' | 'HEAD',
+  ): Promise<ProductMediaContentResponse> {
+    if (this.addOnQueries === undefined) {
+      throw new Error('SalesOrderAddOnQueryService is not configured')
+    }
+    // 图片 URL 可能被长期缓存或复制，内容读取时必须重验订单资格与供应商状态。
+    await this.addOnQueries.context(salesOrderId)
+    const supplierValue = await this.addOnQueries.assertEffectiveSupplier(
+      supplierInput,
+    )
+    let row: { readonly id: string } | null
+    try {
+      row = await this.prisma.productMedia.findFirst({
+        where: {
+          id: productMediaId,
+          productId,
+          kind: 'IMAGE',
+          isPrimary: true,
+          detachedAt: null,
+          mediaAsset: { is: { status: 'READY' } },
+          product: { is: { status: 'ACTIVE', supplierValue } },
+        },
+        select: { id: true },
+      })
+    }
+    catch {
+      throw new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'INTERNAL_ERROR',
+        '服务器内部错误',
+      )
+    }
+    if (row === null) throw productImageNotFound()
+    return this.content.resolve(
+      productId,
       productMediaId,
       ifNoneMatch,
       range,

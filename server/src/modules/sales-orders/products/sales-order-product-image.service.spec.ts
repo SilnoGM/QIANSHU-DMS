@@ -6,6 +6,7 @@ import type {
   ProductMediaContentResponse,
 } from '../../products/media/product-media-content.service'
 import { SalesOrderProductImageService } from './sales-order-product-image.service'
+import type { SalesOrderAddOnQueryService } from '../sales-order-add-on-query.service'
 
 const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
 const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
@@ -26,13 +27,19 @@ function createFixture(found: object | null = { id: PRODUCT_MEDIA_ID }) {
     findFirst: jest.fn().mockResolvedValue({ productId: PRODUCT_ID }),
   }
   const resolve = jest.fn().mockResolvedValue(RESPONSE)
+  const addOnQueries = {
+    context: jest.fn().mockResolvedValue({ salesOrder: { id: SALES_ORDER_ID } }),
+    assertEffectiveSupplier: jest.fn().mockResolvedValue('SUPPLIER_TW_01'),
+  }
   return {
+    addOnQueries,
     productMedia,
     salesOrderLine,
     resolve,
     service: new SalesOrderProductImageService(
       { productMedia, salesOrderLine } as unknown as PrismaService,
       { resolve } as unknown as ProductMediaContentService,
+      addOnQueries as unknown as SalesOrderAddOnQueryService,
     ),
   }
 }
@@ -131,6 +138,72 @@ describe('SalesOrderProductImageService', () => {
     )).rejects.toMatchObject({
       code: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       publicMessage: '产品主图不存在或当前不可用',
+      status: HttpStatus.NOT_FOUND,
+    })
+    expect(fixture.resolve).not.toHaveBeenCalled()
+  })
+
+  it('revalidates add-on order, supplier and exact current main image relation', async () => {
+    const fixture = createFixture()
+
+    await expect(fixture.service.resolveAddOnProductOption(
+      SALES_ORDER_ID,
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      'supplier_tw_01',
+      '"known"',
+      'bytes=0-0',
+      'HEAD',
+    )).resolves.toBe(RESPONSE)
+
+    expect(fixture.addOnQueries.context).toHaveBeenCalledWith(SALES_ORDER_ID)
+    expect(fixture.addOnQueries.assertEffectiveSupplier)
+      .toHaveBeenCalledWith('supplier_tw_01')
+    expect(fixture.productMedia.findFirst).toHaveBeenLastCalledWith({
+      where: {
+        id: PRODUCT_MEDIA_ID,
+        productId: PRODUCT_ID,
+        kind: 'IMAGE',
+        isPrimary: true,
+        detachedAt: null,
+        mediaAsset: { is: { status: 'READY' } },
+        product: { is: { status: 'ACTIVE', supplierValue: 'SUPPLIER_TW_01' } },
+      },
+      select: { id: true },
+    })
+  })
+
+  it('does not enumerate product media when the add-on order is no longer eligible', async () => {
+    const fixture = createFixture()
+    fixture.addOnQueries.context.mockRejectedValue(
+      new Error('add-on context is no longer eligible'),
+    )
+
+    await expect(fixture.service.resolveAddOnProductOption(
+      SALES_ORDER_ID,
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      'SUPPLIER_TW_01',
+      undefined,
+      undefined,
+      'GET',
+    )).rejects.toThrow('add-on context is no longer eligible')
+    expect(fixture.productMedia.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('uses the existing non-enumerating image error when an add-on relation is stale', async () => {
+    const fixture = createFixture(null)
+
+    await expect(fixture.service.resolveAddOnProductOption(
+      SALES_ORDER_ID,
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      'SUPPLIER_TW_01',
+      undefined,
+      undefined,
+      'GET',
+    )).rejects.toMatchObject({
+      code: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       status: HttpStatus.NOT_FOUND,
     })
     expect(fixture.resolve).not.toHaveBeenCalled()

@@ -427,3 +427,46 @@ export class SalesOrderProductOptionsDto {
   @ApiProperty({ type: 'integer' }) readonly pageSize!: number
   @ApiProperty({ type: 'integer' }) readonly total!: number
 }
+
+export class SalesOrderAddOnContextOrderDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly orderNo!: string
+  @ApiProperty({ type: 'string' }) readonly customerName!: string
+  @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: 'TWD' | 'MYR'
+  @ApiProperty({ enum: SalesOrderFulfillmentStatus })
+  readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
+  @ApiProperty({ enum: SalesOrderPaymentStatus })
+  readonly paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
+}
+
+export class SalesOrderAddOnContextAmountsDto {
+  @ApiProperty({ type: 'string' }) readonly lineSubtotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly agreedTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly paidAmount!: string
+  @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+}
+
+export class SalesOrderAddOnExistingLineDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly lineNumber!: number
+  @ApiProperty({ enum: SalesOrderLineType }) readonly lineType!: SalesOrderLineType
+  @ApiProperty({ type: 'string', nullable: true }) readonly productNo!: string | null
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'string' }) readonly actualUnitPriceAmount!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
+  @ApiProperty({ type: 'string' }) readonly lineTotalAmount!: string
+}
+
+export class SalesOrderAddOnContextDto {
+  @ApiProperty({ type: () => SalesOrderAddOnContextOrderDto })
+  readonly salesOrder!: SalesOrderAddOnContextOrderDto
+  @ApiProperty({ type: () => SalesOrderAddOnContextAmountsDto })
+  readonly amounts!: SalesOrderAddOnContextAmountsDto
+  @ApiProperty({ type: () => [SalesOrderAddOnExistingLineDto] })
+  readonly existingLines!: readonly SalesOrderAddOnExistingLineDto[]
+  @ApiProperty({ type: 'integer', minimum: 0, maximum: 100 })
+  readonly availableLineCapacity!: number
+}

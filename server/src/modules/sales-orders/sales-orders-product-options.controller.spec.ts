@@ -8,6 +8,7 @@ import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import type { ProductMediaContentResponse } from '../products/media/product-media-content.service'
 import { SalesOrderCommandService } from './sales-order-command.service'
+import { SalesOrderAddOnQueryService } from './sales-order-add-on-query.service'
 import { SalesOrderDocumentService } from './documents/sales-order-document.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import { SalesOrderProductImageService } from './products/sales-order-product-image.service'
@@ -76,8 +77,15 @@ function createController(result: ProductMediaContentResponse) {
     provide: SalesOrderDocumentService,
     useValue: {},
   }, {
-    provide: SalesOrderProductImageService,
-    useValue: { resolve: jest.fn(), resolveListPreview: jest.fn() },
+  provide: SalesOrderProductImageService,
+    useValue: {
+      resolve: jest.fn(),
+      resolveListPreview: jest.fn(),
+      resolveAddOnProductOption: jest.fn(),
+    },
+  }, {
+    provide: SalesOrderAddOnQueryService,
+    useValue: { context: jest.fn(), productOptions: jest.fn() },
   }],
 })
 class SalesOrderProductOptionsContractModule {}
@@ -249,6 +257,68 @@ describe('SalesOrdersController product options', () => {
       )).toEqual(['sales-orders:read'])
     }
   })
+
+  it('requires both purchase-create and sales-update for every add-on read', async () => {
+    const stream = Readable.from(Buffer.from('image'))
+    const context = jest.fn().mockResolvedValue({ salesOrder: { id: 'order-id' } })
+    const productOptions = jest.fn().mockResolvedValue({
+      items: [], page: 1, pageSize: 20, total: 0,
+    })
+    const resolveAddOnProductOption = jest.fn().mockResolvedValue({
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      stream,
+    })
+    const controller = new SalesOrdersController(
+      {} as SalesOrderQueryService,
+      {} as SalesOrderCommandService,
+      {} as SalesOrderMutationService,
+      {} as SalesOrderDocumentService,
+      { resolveAddOnProductOption } as unknown as SalesOrderProductImageService,
+      { context, productOptions } as unknown as SalesOrderAddOnQueryService,
+    )
+    const params = {
+      salesOrderId: '33333333-3333-4333-8333-333333333333',
+      productId: PRODUCT_ID,
+      productMediaId: PRODUCT_MEDIA_ID,
+    }
+    const query = { supplierValue: 'SUPPLIER_TW_01' }
+    const response = { status: jest.fn(), setHeader: jest.fn() }
+
+    await expect(controller.addOnContext(params)).resolves.toMatchObject({
+      salesOrder: { id: 'order-id' },
+    })
+    await expect(controller.addOnProductOptions(params, query)).resolves.toMatchObject({
+      items: [],
+    })
+    await controller.headAddOnProductOptionMainImage(
+      params, query, '"known"', 'bytes=0-0', response,
+    )
+    const body = await controller.getAddOnProductOptionMainImage(
+      params, query, undefined, undefined, response,
+    )
+    expect(context).toHaveBeenCalledWith(params.salesOrderId)
+    expect(productOptions).toHaveBeenCalledWith(params.salesOrderId, query)
+    expect(resolveAddOnProductOption).toHaveBeenCalledTimes(2)
+    expect(body).toBeInstanceOf(StreamableFile)
+
+    const reflector = new Reflector()
+    for (const method of [
+      'addOnContext',
+      'addOnProductOptions',
+      'headAddOnProductOptionMainImage',
+      'getAddOnProductOptionMainImage',
+    ] as const) {
+      expect(reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        SalesOrdersController.prototype[method],
+      )).toEqual(['purchase-orders:create', 'sales-orders:update'])
+    }
+  })
 })
 
 describe('SalesOrdersController product options OpenAPI', () => {
@@ -313,6 +383,45 @@ describe('SalesOrdersController product options OpenAPI', () => {
       expect(errors).toContainEqual({
         status: 404,
         codes: ['SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND'],
+      })
+    }
+  })
+
+  it('publishes add-on context, supplier-scoped options and protected image routes', () => {
+    const context = document.paths[
+      '/api/sales-orders/{salesOrderId}/add-on-context'
+    ]?.get
+    expect(context).toMatchObject({ operationId: 'sales_orders_get_add_on_context' })
+
+    const options = document.paths[
+      '/api/sales-orders/{salesOrderId}/add-on-product-options'
+    ]?.get
+    expect(options).toMatchObject({
+      operationId: 'sales_orders_get_add_on_product_options',
+    })
+    expect(options?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        in: 'query', name: 'supplierValue', required: true,
+      }),
+    ]))
+
+    const imagePath = document.paths[
+      '/api/sales-orders/{salesOrderId}/add-on-product-options/{productId}/main-image/{productMediaId}/content'
+    ]
+    expect(imagePath?.head?.operationId)
+      .toBe('sales_orders_head_add_on_product_option_main_image')
+    expect(imagePath?.get?.operationId)
+      .toBe('sales_orders_get_add_on_product_option_main_image')
+    for (const operation of [
+      context,
+      options,
+      imagePath?.head,
+      imagePath?.get,
+    ] as readonly (ContractOperation | undefined)[]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      expect(operation?.['x-qianshu-contract']).toMatchObject({
+        authorization: true,
+        privateNoStore: true,
       })
     }
   })

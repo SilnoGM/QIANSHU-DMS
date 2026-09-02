@@ -37,6 +37,9 @@ import {
   SalesOrderStatusRequestDto,
 } from './dto/sales-order-mutation.dto'
 import {
+  SalesOrderAddOnProductImageParamDto,
+  SalesOrderAddOnProductImageQueryDto,
+  SalesOrderAddOnProductOptionsQueryDto,
   SalesOrderIdParamDto,
   SalesOrderLineProductImageParamDto,
   SalesOrderListQueryDto,
@@ -47,12 +50,14 @@ import {
   SalesOrderStatusCountsQueryDto,
 } from './dto/sales-order-query.dto'
 import {
+  SalesOrderAddOnContextDto,
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderProductOptionsDto,
   SalesOrderStatusCountsDto,
 } from './dto/sales-order-response.dto'
+import { SalesOrderAddOnQueryService } from './sales-order-add-on-query.service'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { parseSalesOrderIdempotencyKey } from './sales-order-command.normalizer'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
@@ -118,6 +123,7 @@ export class SalesOrdersController {
     private readonly mutations: SalesOrderMutationService,
     private readonly documents: SalesOrderDocumentService,
     private readonly productImages: SalesOrderProductImageService,
+    private readonly addOnQueries?: SalesOrderAddOnQueryService,
   ) {}
 
   @Get()
@@ -198,6 +204,118 @@ export class SalesOrdersController {
     @Query() query: SalesOrderProductOptionsQueryDto,
   ): Promise<SalesOrderProductOptionsDto> {
     return this.queries.productOptions(query)
+  }
+
+  /**
+   * 加购由采购流程发起但会修改销售金额，因此只读准备接口也同时要求采购创建和
+   * 销售更新权限；不能复用普通录单的 sales-orders:create 权限绕过职责分离。
+   */
+  @Get(':salesOrderId/add-on-context')
+  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderAddOnContextDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_get_add_on_context',
+    session: 'required', authorization: true, badRequest: true,
+    resourceLocator: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 422, codes: ['SALES_ORDER_ADD_ON_NOT_ALLOWED', 'VALIDATION_FAILED'] },
+    ],
+  })
+  addOnContext(
+    @Param() params: SalesOrderIdParamDto,
+  ): Promise<SalesOrderAddOnContextDto> {
+    if (this.addOnQueries === undefined) {
+      throw new Error('SalesOrderAddOnQueryService is not configured')
+    }
+    return this.addOnQueries.context(params.salesOrderId)
+  }
+
+  @Get(':salesOrderId/add-on-product-options')
+  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderProductOptionsDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_get_add_on_product_options',
+    session: 'required', authorization: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SALES_ORDER_STATE_CHANGED'] },
+      {
+        status: 422,
+        codes: [
+          'SALES_ORDER_ADD_ON_NOT_ALLOWED',
+          'SALES_ORDER_ADD_ON_SUPPLIER_UNAVAILABLE',
+          'VALIDATION_FAILED',
+        ],
+      },
+    ],
+  })
+  addOnProductOptions(
+    @Param() params: SalesOrderIdParamDto,
+    @Query() query: SalesOrderAddOnProductOptionsQueryDto,
+  ): Promise<SalesOrderProductOptionsDto> {
+    if (this.addOnQueries === undefined) {
+      throw new Error('SalesOrderAddOnQueryService is not configured')
+    }
+    return this.addOnQueries.productOptions(params.salesOrderId, query)
+  }
+
+  @Head(':salesOrderId/add-on-product-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'sales_orders_head_add_on_product_option_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order add-on product option main image.',
+  })
+  async headAddOnProductOptionMainImage(
+    @Param() params: SalesOrderAddOnProductImageParamDto,
+    @Query() query: SalesOrderAddOnProductImageQueryDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productImages.resolveAddOnProductOption(
+      params.salesOrderId,
+      params.productId,
+      params.productMediaId,
+      query.supplierValue,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get(':salesOrderId/add-on-product-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('purchase-orders:create', 'sales-orders:update')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'sales_orders_get_add_on_product_option_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order add-on product option main image.',
+  })
+  async getAddOnProductOptionMainImage(
+    @Param() params: SalesOrderAddOnProductImageParamDto,
+    @Query() query: SalesOrderAddOnProductImageQueryDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productImages.resolveAddOnProductOption(
+      params.salesOrderId,
+      params.productId,
+      params.productMediaId,
+      query.supplierValue,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
   }
 
   @Head('product-options/:productId/main-image/:productMediaId/content')
