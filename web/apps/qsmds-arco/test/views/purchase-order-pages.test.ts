@@ -487,12 +487,12 @@ test('销售快捷入口只在首次挂载时可信绑定且允许手工改选',
   )
   assert.match(
     source,
-    /purchaseOrdersApi\.sourceSalesOrders\(\{[\s\S]*?view: 'UNPURCHASED'/u,
-    '待采购销售订单快捷入口必须使用首次采购视图的可信服务端筛选',
+    /const shortcutViews = \['UNPURCHASED', 'PARTIALLY_PURCHASED'\] as const[\s\S]*?purchaseOrdersApi\.sourceSalesOrders\(\{[\s\S]*?view,/u,
+    '待采购销售订单快捷入口必须依次使用未采购和部分采购的可信服务端筛选',
   )
   assert.match(
     source,
-    /candidate\.id === sourceShortcut\.salesOrderId[\s\S]*?candidate\.orderNo === sourceShortcut\.salesOrderNo/u,
+    /item\.id === sourceShortcut\.salesOrderId[\s\S]*?item\.orderNo === sourceShortcut\.salesOrderNo/u,
     '自动来源必须同时精确匹配订单 ID 和订单号',
   )
   assert.match(
@@ -524,4 +524,34 @@ test('销售来源无剩余产品时阻止进入无效同步流程', async () =>
     /function nextStep\(\): void \{[\s\S]*?activeStep\.value === 0[\s\S]*?salesLinkedCreate\.value[\s\S]*?!sourceHasPurchasableLines\.value[\s\S]*?return/u,
     '第一步必须阻止零剩余来源进入产品同步步骤',
   )
+})
+
+test('已完成采购加购通过独立弹窗和三步加载器写回销售并同步采购', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(source, /import QsSalesOrderAddOnProductsModal/u)
+  assert.match(source, /import salesOrdersApi/u)
+  assert.match(source, /<QsSalesOrderAddOnProductsModal/u)
+  assert.match(source, /selection\.view === 'COMPLETED_PURCHASE_ADD_ON'/u)
+  assert.match(source, /toast\.warning\('请先选择供应商'\)/u)
+  assert.match(source, /salesOrdersApi\.addOnContext/u)
+  assert.match(source, /salesOrdersApi\.appendAddOnLines/u)
+  assert.match(source, /purchaseOrdersApi\.sourceSalesOrderLines/u)
+  assert.match(source, /<FaMultiStepLoader/u)
+  assert.match(source, /正在新增销售产品/u)
+  assert.match(source, /完成销售订单金额变更/u)
+  assert.match(source, /同步产品到采购单/u)
+  assert.match(source, /prevent-close/u)
+  assert.match(source, /function handleSalesOrderAddOnComplete/u)
+  assert.match(source, /function handleSalesOrderAddOnError/u)
+  assert.match(source, /加购请求结果未知，请刷新销售订单核对/u)
+  assert.doesNotMatch(source, /appendAddOnLines[\s\S]*?appendAddOnLines/u)
+})
+
+test('销售快捷入口首次视图未命中时只回退部分采购视图', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(source, /const shortcutViews = \['UNPURCHASED', 'PARTIALLY_PURCHASED'\] as const/u)
+  assert.match(source, /for \(const view of shortcutViews\)/u)
+  assert.doesNotMatch(source, /shortcutViews = \[[^\]]*COMPLETED_PURCHASE_ADD_ON/u)
 })

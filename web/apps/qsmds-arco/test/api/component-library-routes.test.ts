@@ -54,7 +54,7 @@ test('真实 Provider Browser harness 只在显式 test build 注册且不进入
   assert.equal(route?.children?.[0]?.meta?.menu, false)
 })
 
-test('组件库按分类提供十八个独立组件路由', () => {
+test('组件库按分类提供十九个独立组件路由', () => {
   const [basicRoute, businessRoute, pageTemplatesRoute] = componentLibraryRoutes
 
   assert.equal(basicRoute?.name, 'componentLibraryBasic')
@@ -134,6 +134,11 @@ test('组件库按分类提供十八个独立组件路由', () => {
         title: '销售订单选择弹窗',
       },
       {
+        name: 'componentLibraryQsSalesOrderAddOnProductsModal',
+        path: 'sales-order-add-on-products-modal',
+        title: '销售订单加购产品弹窗',
+      },
+      {
         name: 'componentLibraryQsGoodTooltip',
         path: 'good-tooltip',
         title: '产品提示',
@@ -190,7 +195,7 @@ test('组件库按分类提供十八个独立组件路由', () => {
     ...(basicRoute?.children ?? []),
     ...(businessRoute?.children ?? []),
   ].map(route => route.name)
-  assert.equal(new Set(componentRouteNames).size, 18)
+  assert.equal(new Set(componentRouteNames).size, 19)
   assert.ok(
     [...(basicRoute?.children ?? []), ...(businessRoute?.children ?? [])]
       .every(route => !route.path.startsWith('/')),
@@ -221,7 +226,7 @@ test('组件库主导航只在环境策略允许时进入 asyncRoutes', () => {
   )
 })
 
-test('十八个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
+test('十九个组件页面与页面模板复用展示壳且不依赖业务 API 或 Store', () => {
   const pages = [
     {
       componentName: 'ComponentLibraryAmountDisplay',
@@ -267,6 +272,11 @@ test('十八个组件页面与页面模板复用展示壳且不依赖业务 API 
       componentName: 'ComponentLibraryQsSalesOrderSelectorModal',
       file: '../../src/views/component_library/business/sales-order-selector-modal.vue',
       title: '销售订单选择弹窗',
+    },
+    {
+      componentName: 'ComponentLibraryQsSalesOrderAddOnProductsModal',
+      file: '../../src/views/component_library/business/sales-order-add-on-products-modal.vue',
+      title: '销售订单加购产品弹窗',
     },
     {
       componentName: 'ComponentLibraryQsGoodTooltip',
