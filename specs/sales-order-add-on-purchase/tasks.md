@@ -184,7 +184,7 @@ pnpm -C server test:prisma-drift-gate
 - [x] 汇总非作废收款，推导新付款状态和待收金额。
 - [x] 原子写入销售订单、金额修订、必要付款历史和逐行审计，版本只增加 1。
 - [x] 新增 `POST /api/sales-orders/:salesOrderId/add-on-lines`，要求 Session、CSRF、两项权限和 private no-store。
-- [ ] Web API 客户端显式配置 `retry: false`，且未知结果不自动重放。
+- [x] Web API 客户端显式配置 `retry: false`，且未知结果不自动重放。
 - [x] 返回新增行 ID、金额增量、前后版本、付款状态和可信金额结果。
 - [x] 完成错误码和 OpenAPI Controller 测试。
 - [x] 对行锁顺序、未知结果不可重放和履约状态不回退添加必要中文注释。
@@ -212,30 +212,30 @@ pnpm -C server test:prisma-drift-gate
 
 目标：以生成类型驱动 Web 接入，不手写漂移 DTO。
 
-- [ ] 执行 `node --run contract:sync`，检查 Server/Web OpenAPI 和 generated types。
-- [ ] 断言三个视图编码、加购上下文、产品选项、图片和 POST 请求/响应完整生成。
-- [ ] 扩展 `purchase-orders.test.ts`，固定三视图查询和来源明细恢复调用。
-- [ ] 扩展 `sales-orders.test.ts`，固定加购上下文、产品选项和 POST 均使用 generated DTO。
-- [ ] 断言加购 POST 配置 `errorPresentation: local`、`retry: false` 和 AbortSignal。
-- [ ] 运行 API 定向测试并先确认缺少 Web API 方法的 RED。
-- [ ] 实现最小 API 适配方法并转绿。
-- [ ] 运行 `contract:check`，不接受手改 generated 文件。
+- [x] 执行 `node --run contract:sync`，检查 Server/Web OpenAPI 和 generated types。
+- [x] 断言三个视图编码、加购上下文、产品选项、图片和 POST 请求/响应完整生成。
+- [x] 扩展 `purchase-orders.test.ts`，固定三视图查询和来源明细恢复调用。
+- [x] 扩展 `sales-orders.test.ts`，固定加购上下文、产品选项和 POST 均使用 generated DTO。
+- [x] 断言加购 POST 配置 `errorPresentation: local`、`retry: false` 和 AbortSignal。
+- [x] 运行 API 定向测试并先确认缺少 Web API 方法的 RED。
+- [x] 实现最小 API 适配方法并转绿。
+- [x] 运行 `contract:check`，不接受手改 generated 文件。
 - _Requirements: R1, R4, R5, R8, R9, R10_
 
 ### T12：扩展销售订单选择器和采购适配器
 
 目标：让公共选择器支持三种动作语义，同时保持纯组件和受控业务关闭。
 
-- [ ] 先扩展组件测试，要求 `confirmText`、`confirmDisabled`、禁用原因和 `closeOnConfirm`。
-- [ ] 要求切换视图保留关键词、重置页码并清空失效草稿选择。
-- [ ] 要求顶部工具栏、搜索和底部分页固定，只有候选列表滚动。
-- [ ] 实现公共 props，默认行为继续兼容组件库其他调用方。
-- [ ] 将采购适配器改为三个 `QsStatusSwitchToolbar` 项并接入可信计数。
-- [ ] 适配器确认事件携带 `{ view, item }`，不根据中文文案推断动作。
-- [ ] 第三视图显示“加购产品”；缺少 `sales-orders:update` 时禁用并解释原因。
-- [ ] 未选择供应商时允许触发父级轻提示并保持选择器打开。
-- [ ] 更新组件库示例，覆盖三视图、计数、权限禁用、桌面和移动布局。
-- [ ] 运行选择器、适配器和组件库定向测试。
+- [x] 先扩展组件测试，要求 `confirmText`、`confirmDisabled`、禁用原因和 `closeOnConfirm`。
+- [x] 要求切换视图保留关键词、重置页码并清空失效草稿选择。
+- [x] 要求顶部工具栏、搜索和底部分页固定，只有候选列表滚动。
+- [x] 实现公共 props，默认行为继续兼容组件库其他调用方。
+- [x] 将采购适配器改为三个 `QsStatusSwitchToolbar` 项并接入可信计数。
+- [x] 适配器确认事件携带 `{ view, item }`，不根据中文文案推断动作。
+- [x] 第三视图显示“加购产品”；缺少 `sales-orders:update` 时禁用并解释原因。
+- [x] 未选择供应商时允许触发父级轻提示并保持选择器打开。
+- [x] 更新组件库示例，覆盖三视图、计数、权限禁用、桌面和移动布局。
+- [x] 运行选择器、适配器和组件库定向测试。
 - _Requirements: R1, R4.1-R4.3, R10.2-R10.3_
 
 ### T13：建立并实现 `QsSalesOrderAddOnProductsModal`

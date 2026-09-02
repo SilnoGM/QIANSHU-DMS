@@ -33,6 +33,10 @@ const props = withDefaults(defineProps<{
   error?: string | null
   disabled?: boolean
   submitting?: boolean
+  confirmText?: string
+  confirmDisabled?: boolean
+  confirmDisabledReason?: string | null
+  closeOnConfirm?: boolean
 }>(), {
   selectedOrderId: null,
   keyword: '',
@@ -43,6 +47,10 @@ const props = withDefaults(defineProps<{
   error: null,
   disabled: false,
   submitting: false,
+  confirmText: '确认选择',
+  confirmDisabled: false,
+  confirmDisabledReason: null,
+  closeOnConfirm: true,
 })
 
 const emit = defineEmits<{
@@ -155,12 +163,20 @@ function handleModalVisibility(value: boolean): void {
 }
 
 function confirmSelection(): void {
-  if (!selectedOrder.value || props.disabled || props.loading || props.error) {
+  if (
+    !selectedOrder.value
+    || props.confirmDisabled
+    || props.disabled
+    || props.loading
+    || props.error
+  ) {
     return
   }
 
   emit('confirm', selectedOrder.value)
-  emit('update:modelValue', false)
+  if (props.closeOnConfirm) {
+    emit('update:modelValue', false)
+  }
 }
 
 watch(() => props.keyword, (value) => {
@@ -462,8 +478,15 @@ watch(() => props.modelValue, (open) => {
 
     <template #footer>
       <div class="pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-col gap-2 w-full sm:pb-0 sm:flex-row sm:items-center">
-        <p class="qs-type-meta text-muted-foreground m-0 flex-1 min-w-0 truncate">
-          {{ selectedOrder ? `已选择：${selectedOrder.orderNo} · ${selectedOrder.customerName}` : '请选择一张销售订单' }}
+        <p
+          class="qs-type-meta m-0 flex-1 min-w-0 truncate"
+          :class="confirmDisabled && confirmDisabledReason ? 'text-warning' : 'text-muted-foreground'"
+        >
+          {{ confirmDisabled && confirmDisabledReason
+            ? confirmDisabledReason
+            : selectedOrder
+              ? `已选择：${selectedOrder.orderNo} · ${selectedOrder.customerName}`
+              : '请选择一张销售订单' }}
         </p>
         <FaButton type="button" variant="outline" class="h-11 sm:h-9 sm:order-1" :disabled="submitting" @click="closeAsCancel">
           取消
@@ -472,10 +495,10 @@ watch(() => props.modelValue, (open) => {
           type="button"
           class="h-11 sm:h-9 sm:order-2"
           :loading="submitting"
-          :disabled="!selectedOrder || disabled || loading || Boolean(error)"
+          :disabled="!selectedOrder || confirmDisabled || disabled || loading || Boolean(error)"
           @click="confirmSelection"
         >
-          确认选择
+          {{ confirmText }}
         </FaButton>
       </div>
     </template>

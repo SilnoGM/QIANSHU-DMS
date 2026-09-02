@@ -1,5 +1,8 @@
 import type { AxiosInstance } from 'axios'
-import type { CreateSalesOrderRequestDto } from '../../src/api/generated/types.gen'
+import type {
+  CreateSalesOrderRequestDto,
+  SalesOrderAddOnLinesRequestDto,
+} from '../../src/api/generated/types.gen'
 
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- Web API 契约测试使用 Node.js 内置 runner。
@@ -207,4 +210,67 @@ test('临时凭证上传只发送 multipart，不携带订单编号或幂等 Key
   assert.ok(call.data instanceof FormData)
   assert.equal(call.data.get('mediaType'), 'IMAGE')
   assert.equal((call.data.get('file') as File).name, 'deposit.png')
+})
+
+test('销售加购读取使用订单币种，追加写入局部呈错且绝不自动重试', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+  const request = {
+    expectedVersion: 4,
+    supplierValue: 'SUPPLIER_TW_01',
+    reason: '客户加购产品',
+    lines: [{
+      lineType: 'CATALOG',
+      productId: '11111111-1111-4111-8111-111111111111',
+      actualUnitPriceAmount: '120.00',
+      quantity: 1,
+    }, {
+      lineType: 'CUSTOM',
+      name: '安装服务',
+      description: null,
+      actualUnitPriceAmount: '30.00',
+      quantity: 2,
+    }],
+  } satisfies SalesOrderAddOnLinesRequestDto
+
+  await api.addOnContext('sales/order', controller.signal)
+  await api.addOnProductOptions('sales/order', {
+    supplierValue: 'SUPPLIER_TW_01',
+    keyword: '组合柜',
+    page: 2,
+    pageSize: 20,
+  }, controller.signal)
+  await api.appendAddOnLines('sales/order', request, controller.signal)
+
+  assert.deepEqual(calls, [{
+    config: {
+      errorPresentation: 'local',
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'sales-orders/sales%2Forder/add-on-context',
+  }, {
+    config: {
+      errorPresentation: 'local',
+      params: {
+        supplierValue: 'SUPPLIER_TW_01',
+        keyword: '组合柜',
+        page: 2,
+        pageSize: 20,
+      },
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'sales-orders/sales%2Forder/add-on-product-options',
+  }, {
+    config: {
+      errorPresentation: 'local',
+      retry: false,
+      signal: controller.signal,
+    },
+    data: request,
+    method: 'post',
+    url: 'sales-orders/sales%2Forder/add-on-lines',
+  }])
 })

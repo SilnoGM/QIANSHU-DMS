@@ -53,12 +53,18 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
   const countQuery = { view: 'pending' as const, supplierValue: 'SUPPLIER_CN_01' }
   await api.statusCounts(countQuery, controller.signal)
   await api.productOptions({ supplierValue: 'SUPPLIER_CN_01', page: 1, pageSize: 20 }, controller.signal)
-  await api.sourceSalesOrders({
-    view: 'INITIAL_PURCHASE',
-    keyword: 'SO-001',
-    page: 1,
-    pageSize: 20,
-  }, controller.signal)
+  for (const view of [
+    'UNPURCHASED',
+    'PARTIALLY_PURCHASED',
+    'COMPLETED_PURCHASE_ADD_ON',
+  ] as const) {
+    await api.sourceSalesOrders({
+      view,
+      keyword: 'SO-001',
+      page: 1,
+      pageSize: 20,
+    }, controller.signal)
+  }
   await api.sourceSalesOrderLines('sales/order', controller.signal)
   await api.getById('purchase/order', controller.signal)
 
@@ -86,7 +92,33 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
     config: {
       errorPresentation: 'local',
       params: {
-        view: 'INITIAL_PURCHASE',
+        view: 'UNPURCHASED',
+        keyword: 'SO-001',
+        page: 1,
+        pageSize: 20,
+      },
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'purchase-orders/source-sales-orders',
+  }, {
+    config: {
+      errorPresentation: 'local',
+      params: {
+        view: 'PARTIALLY_PURCHASED',
+        keyword: 'SO-001',
+        page: 1,
+        pageSize: 20,
+      },
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'purchase-orders/source-sales-orders',
+  }, {
+    config: {
+      errorPresentation: 'local',
+      params: {
+        view: 'COMPLETED_PURCHASE_ADD_ON',
         keyword: 'SO-001',
         page: 1,
         pageSize: 20,

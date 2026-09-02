@@ -78,7 +78,14 @@ test('销售订单选择弹窗覆盖搜索、单选确认、分页和五种稳�
   assert.match(source, /aria-label="销售订单采购场景"/u)
   assert.match(source, /emit\('viewChange', value\)/u)
   assert.match(source, /selectedOrderIdDraft\.value = null/u)
-  assert.match(source, /:disabled="!selectedOrder \|\| disabled \|\| loading \|\| Boolean\(error\)"/u)
+  assert.match(source, /confirmText\?: string/u)
+  assert.match(source, /confirmDisabled\?: boolean/u)
+  assert.match(source, /confirmDisabledReason\?: string \| null/u)
+  assert.match(source, /closeOnConfirm\?: boolean/u)
+  assert.match(source, /if \(props\.closeOnConfirm\)/u)
+  assert.match(source, /\{\{ confirmText \}\}/u)
+  assert.match(source, /:disabled="!selectedOrder \|\| confirmDisabled \|\| disabled \|\| loading \|\| Boolean\(error\)"/u)
+  assert.match(source, /confirmDisabledReason/u)
 })
 
 test('销售订单选择弹窗桌面使用数据行、移动端使用卡片且仅列表独立滚动', async () => {

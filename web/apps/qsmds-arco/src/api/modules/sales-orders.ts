@@ -1,6 +1,9 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
+  SalesOrderAddOnContextDto,
+  SalesOrderAddOnLinesRequestDto,
+  SalesOrderAddOnResultDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
@@ -8,6 +11,7 @@ import type {
   SalesOrderPaymentRequestDto,
   SalesOrderPaymentVoidRequestDto,
   SalesOrderProductOptionsDto,
+  SalesOrdersGetAddOnProductOptionsData,
   SalesOrdersListData,
   SalesOrdersProductOptionsData,
   SalesOrdersStatusCountsData,
@@ -23,6 +27,9 @@ export type SalesOrderProductOptionsQuery = NonNullable<
 >
 export type SalesOrderStatusCountsQuery = NonNullable<
   SalesOrdersStatusCountsData['query']
+>
+export type SalesOrderAddOnProductOptionsQuery = NonNullable<
+  SalesOrdersGetAddOnProductOptionsData['query']
 >
 export type SalesOrderCurrency = 'TWD' | 'MYR'
 
@@ -57,6 +64,33 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       params: query,
       signal,
     }),
+    addOnContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderAddOnContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/add-on-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    addOnProductOptions: (
+      salesOrderId: string,
+      query: SalesOrderAddOnProductOptionsQuery,
+      signal: AbortSignal,
+    ) => client.get<SalesOrderProductOptionsDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/add-on-product-options`,
+      { errorPresentation: 'local', params: query, signal },
+    ),
+    appendAddOnLines: (
+      salesOrderId: string,
+      data: SalesOrderAddOnLinesRequestDto,
+      signal: AbortSignal,
+    ) => client.post<SalesOrderAddOnResultDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/add-on-lines`,
+      data,
+      {
+        // 追加没有幂等操作键；网络结果未知时必须刷新核对，禁止自动重放。
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      },
+    ),
     uploadTemporaryDocument: (
       file: File,
       mediaType: 'IMAGE' | 'DOCUMENT',

@@ -12,28 +12,33 @@ defineOptions({ name: 'SalesOrderSelectorModalShowcase' })
 
 const stateValues = ['default', 'selected', 'loading', 'empty', 'error'] as const
 type ShowcaseState = typeof stateValues[number]
-type ShowcaseView = 'INITIAL_PURCHASE' | 'SUPPLEMENTAL_PURCHASE'
+type ShowcaseView = 'UNPURCHASED' | 'PARTIALLY_PURCHASED' | 'COMPLETED_PURCHASE_ADD_ON'
 
 const VIEW_ITEMS = [
-  { value: 'INITIAL_PURCHASE', label: '未采购订单采购' },
-  { value: 'SUPPLEMENTAL_PURCHASE', label: '已采购订单补采' },
+  { value: 'UNPURCHASED', label: '未采购订单-采购' },
+  { value: 'PARTIALLY_PURCHASED', label: '部分采购订单-采购' },
+  { value: 'COMPLETED_PURCHASE_ADD_ON', label: '已完成采购-加购产品' },
 ] as const satisfies readonly QsStatusSwitchItem[]
 
 function viewIncludesFulfillmentStatus(
   view: ShowcaseView,
   status: SalesOrderSelectorItem['fulfillmentStatus'],
 ): boolean {
-  // 两个只读元组的联合会把 Array.includes 参数收窄为 never；按视图显式分支，
-  // 同时让组件库 fixture 与服务端可信映射保持可读的一一对应。
-  return view === 'INITIAL_PURCHASE'
-    ? status === 'PENDING'
-    : status === 'PREPARING'
-      || status === 'LAND_TRANSIT'
-      || status === 'WAREHOUSE_ARRIVED'
+  // 组件库使用履约状态把确定性 fixture 分到三个场景，只验证视图切换、计数与确认态；
+  // 真实“采购记录/剩余数量”资格仍由采购域服务端查询负责。
+  if (view === 'UNPURCHASED') {
+    return status === 'PENDING'
+  }
+  if (view === 'PARTIALLY_PURCHASED') {
+    return status === 'PREPARING'
+  }
+  return status === 'LAND_TRANSIT' || status === 'WAREHOUSE_ARRIVED'
 }
 
 function isShowcaseView(value: string): value is ShowcaseView {
-  return value === 'INITIAL_PURCHASE' || value === 'SUPPLEMENTAL_PURCHASE'
+  return value === 'UNPURCHASED'
+    || value === 'PARTIALLY_PURCHASED'
+    || value === 'COMPLETED_PURCHASE_ADD_ON'
 }
 
 const stateDefinitions: Record<ShowcaseState, {
@@ -236,8 +241,9 @@ const fixtureItems: readonly SalesOrderSelectorItem[] = [
 
 const visible = ref(false)
 const selectedState = ref<ShowcaseState>('default')
-const selectedView = ref<ShowcaseView>('INITIAL_PURCHASE')
+const selectedView = ref<ShowcaseView>('UNPURCHASED')
 const selectedOrderId = ref<string | null>(null)
+const canAddSalesOrderProducts = ref(false)
 const keyword = ref('')
 const page = ref(1)
 const pageSize = ref(20)
@@ -253,6 +259,16 @@ const modalError = computed(() => selectedState.value === 'error'
   ? '暂时无法读取销售订单，请检查网络后重新加载。'
   : null)
 const modalTotal = computed(() => selectedState.value === 'empty' ? 0 : 108)
+const confirmText = computed(() => selectedView.value === 'COMPLETED_PURCHASE_ADD_ON'
+  ? '加购产品'
+  : '确认选择')
+const confirmDisabled = computed(() => (
+  selectedView.value === 'COMPLETED_PURCHASE_ADD_ON'
+  && !canAddSalesOrderProducts.value
+))
+const confirmDisabledReason = computed(() => confirmDisabled.value
+  ? '缺少销售订单修改权限，无法加购产品'
+  : null)
 const viewItems = computed(() => withStatusSwitchCounts(
   VIEW_ITEMS,
   VIEW_ITEMS.map(item => ({
@@ -268,8 +284,8 @@ const viewItems = computed(() => withStatusSwitchCounts(
 function selectState(state: ShowcaseState): void {
   selectedState.value = state
   selectedView.value = state === 'selected'
-    ? 'SUPPLEMENTAL_PURCHASE'
-    : 'INITIAL_PURCHASE'
+    ? 'PARTIALLY_PURCHASED'
+    : 'UNPURCHASED'
   selectedOrderId.value = state === 'selected' ? 'confirmed-1' : null
   lastEvent.value = `state · ${state}`
 }
@@ -366,6 +382,10 @@ function handleRetry(): void {
           <p class="qs-type-meta text-muted-foreground m-0 mt-2 break-all">
             {{ lastEvent }}
           </p>
+          <label class="qs-type-meta mt-4 flex gap-2 items-center">
+            <input v-model="canAddSalesOrderProducts" type="checkbox">
+            具备销售订单修改权限
+          </label>
           <FaButton
             data-testid="sales-order-selector-trigger"
             class="mt-5 w-full"
@@ -390,6 +410,10 @@ function handleRetry(): void {
       :total="modalTotal"
       :loading="modalLoading"
       :error="modalError"
+      :confirm-text="confirmText"
+      :confirm-disabled="confirmDisabled"
+      :confirm-disabled-reason="confirmDisabledReason"
+      :close-on-confirm="selectedView !== 'COMPLETED_PURCHASE_ADD_ON'"
       @search="handleSearch"
       @page-change="handlePageChange"
       @view-change="handleViewChange"

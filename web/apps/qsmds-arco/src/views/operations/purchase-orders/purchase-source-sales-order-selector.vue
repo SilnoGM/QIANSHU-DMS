@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { PurchaseSourceSalesOrderSelection } from './purchase-source-sales-order-selector.types'
 import type {
   PurchaseOrderSourceSalesOrderListItemDto,
   PurchaseOrderSourceSalesOrdersDto,
@@ -20,6 +21,7 @@ defineOptions({ name: 'PurchaseSourceSalesOrderSelector' })
 const props = withDefaults(defineProps<{
   modelValue: boolean
   disabled?: boolean
+  canAddSalesOrderProducts?: boolean
   selectedOrderId?: string | null
   loadSalesOrders: (
     query: PurchaseOrderSourceSalesOrdersQuery,
@@ -27,27 +29,31 @@ const props = withDefaults(defineProps<{
   ) => Promise<PurchaseOrderSourceSalesOrdersDto>
 }>(), {
   disabled: false,
+  canAddSalesOrderProducts: false,
   selectedOrderId: null,
 })
 
 const emit = defineEmits<{
-  'confirm': [item: PurchaseOrderSourceSalesOrderListItemDto]
+  'confirm': [selection: PurchaseSourceSalesOrderSelection]
   'update:modelValue': [value: boolean]
 }>()
 
 const SOURCE_VIEW_ITEMS = [
-  { value: 'INITIAL_PURCHASE', label: '未采购订单采购' },
-  { value: 'SUPPLEMENTAL_PURCHASE', label: '已采购订单补采' },
+  { value: 'UNPURCHASED', label: '未采购订单-采购' },
+  { value: 'PARTIALLY_PURCHASED', label: '部分采购订单-采购' },
+  { value: 'COMPLETED_PURCHASE_ADD_ON', label: '已完成采购-加购产品' },
 ] as const satisfies readonly QsStatusSwitchItem[]
 
 function isPurchaseSourceSalesOrderView(
   value: string,
 ): value is PurchaseSourceSalesOrderView {
-  return value === 'INITIAL_PURCHASE' || value === 'SUPPLEMENTAL_PURCHASE'
+  return value === 'UNPURCHASED'
+    || value === 'PARTIALLY_PURCHASED'
+    || value === 'COMPLETED_PURCHASE_ADD_ON'
 }
 
 const keyword = ref('')
-const selectedView = ref<PurchaseSourceSalesOrderView>('INITIAL_PURCHASE')
+const selectedView = ref<PurchaseSourceSalesOrderView>('UNPURCHASED')
 const counts = ref<PurchaseOrderSourceSalesOrdersDto['counts']>([])
 const items = ref<PurchaseOrderSourceSalesOrderListItemDto[]>([])
 const page = ref(1)
@@ -55,6 +61,16 @@ const pageSize = ref(20)
 const total = ref(0)
 const loading = ref(false)
 const errorMessage = ref<string | null>(null)
+const confirmText = computed(() => selectedView.value === 'COMPLETED_PURCHASE_ADD_ON'
+  ? '加购产品'
+  : '确认选择')
+const confirmDisabled = computed(() => (
+  selectedView.value === 'COMPLETED_PURCHASE_ADD_ON'
+  && !props.canAddSalesOrderProducts
+))
+const confirmDisabledReason = computed(() => confirmDisabled.value
+  ? '缺少销售订单修改权限，无法加购产品'
+  : null)
 let requestVersion = 0
 let controller: AbortController | null = null
 const viewItems = computed(() => withStatusSwitchCounts(
@@ -71,7 +87,7 @@ function reset(): void {
   controller = null
   requestVersion += 1
   keyword.value = ''
-  selectedView.value = 'INITIAL_PURCHASE'
+  selectedView.value = 'UNPURCHASED'
   counts.value = []
   items.value = []
   page.value = 1
@@ -158,7 +174,7 @@ function confirmSelection(item: SalesOrderSelectorItem): void {
   // 原始 DTO，避免通过类型断言伪造采购域字段或接受已经被新请求替换的旧对象。
   const sourceItem = items.value.find(candidate => candidate.id === item.id)
   if (sourceItem !== undefined) {
-    emit('confirm', sourceItem)
+    emit('confirm', { item: sourceItem, view: selectedView.value })
   }
 }
 
@@ -194,6 +210,10 @@ onBeforeUnmount(() => controller?.abort())
     :loading="loading"
     :error="errorMessage"
     :disabled="disabled"
+    :confirm-text="confirmText"
+    :confirm-disabled="confirmDisabled"
+    :confirm-disabled-reason="confirmDisabledReason"
+    :close-on-confirm="selectedView !== 'COMPLETED_PURCHASE_ADD_ON'"
     @update:model-value="emit('update:modelValue', $event)"
     @update:keyword="handleKeywordUpdate"
     @search="handleSearch"

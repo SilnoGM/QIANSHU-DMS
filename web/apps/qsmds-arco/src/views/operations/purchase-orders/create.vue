@@ -7,6 +7,7 @@ import type {
   PurchaseOrderSubmissionState,
   PurchaseOrderSubmittingState,
 } from './purchase-order-create.logic'
+import type { PurchaseSourceSalesOrderSelection } from './purchase-source-sales-order-selector.types'
 import type {
   PurchaseOrderSourceSalesOrderLineDto,
   PurchaseOrderSourceSalesOrderListItemDto,
@@ -89,6 +90,7 @@ const todayDate = today(getLocalTimeZone())
 const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
+const canUpdateSalesOrders = computed(() => auth('sales-orders:update'))
 const purchaseType = parsePurchaseOrderCreateType(route.query.type, canCreateStock.value)
 const sourceShortcut = parsePurchaseOrderSourceShortcut({
   purchaseType,
@@ -364,6 +366,20 @@ async function selectSourceSalesOrder(
   }
 }
 
+async function handleSourceSalesOrderConfirm(
+  selection: PurchaseSourceSalesOrderSelection,
+): Promise<void> {
+  if (selection.view === 'COMPLETED_PURCHASE_ADD_ON') {
+    // 第三视图需要先以当前供应商追加销售产品；弹窗编排在加购产品组件接入时完成。
+    // 此处先守住供应商前置条件，且公共选择器会保持打开，避免用户丢失当前选择。
+    if (formModel.supplierValue === null) {
+      toast.warning('请先选择供应商')
+    }
+    return
+  }
+  await selectSourceSalesOrder(selection.item)
+}
+
 /**
  * URL 只提供定位线索。自动绑定仍从采购权限域重新读取候选订单，并同时核对
  * ID 与订单号；请求返回前若用户已经手工选单，则以用户选择为准。
@@ -385,7 +401,7 @@ async function bindSourceSalesOrderFromShortcut(): Promise<void> {
       keyword: sourceShortcut.salesOrderNo,
       page: 1,
       pageSize: 100,
-      view: 'INITIAL_PURCHASE',
+      view: 'UNPURCHASED',
     }, controller.signal)
     if (controller.signal.aborted || authEpoch !== appAccountStore.authEpoch) {
       return
@@ -1294,8 +1310,9 @@ onBeforeUnmount(() => {
       v-model="sourceSelectorVisible"
       :selected-order-id="selectedSalesOrder?.id ?? null"
       :disabled="submitLocked"
+      :can-add-sales-order-products="canUpdateSalesOrders"
       :load-sales-orders="loadSourceSalesOrders"
-      @confirm="selectSourceSalesOrder"
+      @confirm="handleSourceSalesOrderConfirm"
     />
 
     <QsGenericModal
