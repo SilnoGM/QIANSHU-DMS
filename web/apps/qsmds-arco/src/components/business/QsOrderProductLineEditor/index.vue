@@ -17,6 +17,7 @@ import {
   applyProductSelectionChanges,
   calculateOrderProductLineTotals,
   createTemporaryOrderProductLine,
+  MAXIMUM_QUANTITY,
 } from './logic'
 
 defineOptions({ name: 'QsOrderProductLineEditor' })
@@ -42,6 +43,7 @@ const props = withDefaults(defineProps<OrderProductLineEditorProps>(), {
 })
 
 const emit = defineEmits<{
+  'quantityMinimumReached': [lineKey: string, minimumQuantity: number]
   'update:modelValue': [value: readonly OrderProductLineModel[]]
 }>()
 
@@ -175,6 +177,59 @@ function lineMinimumQuantity(line: OrderProductLineModel): number {
     && minimumQuantity > 0
     ? minimumQuantity
     : 1
+}
+
+function hasExplicitMinimumQuantity(line: OrderProductLineModel): boolean {
+  const minimumQuantity = props.minimumQuantityByKey[line.key]
+  return typeof minimumQuantity === 'number'
+    && Number.isSafeInteger(minimumQuantity)
+    && minimumQuantity > 0
+}
+
+function parsedLineQuantity(line: OrderProductLineModel): number | null {
+  if (!/^[1-9]\d*$/u.test(line.quantity)) {
+    return null
+  }
+  const quantity = Number(line.quantity)
+  return Number.isSafeInteger(quantity) && quantity <= MAXIMUM_QUANTITY
+    ? quantity
+    : null
+}
+
+/**
+ * 已采购数量是领域硬下限，但减少按钮仍保持可点击，才能在用户再次尝试越界时
+ * 给出明确反馈。普通新增行没有显式下限，降至 1 后继续减少仍沿用原来的静默行为。
+ */
+function decreaseLineQuantity(index: number): void {
+  const line = props.modelValue[index]
+  if (props.disabled || line === undefined) {
+    return
+  }
+  const quantity = parsedLineQuantity(line)
+  if (quantity === null) {
+    return
+  }
+  const minimumQuantity = lineMinimumQuantity(line)
+  if (quantity <= minimumQuantity) {
+    if (hasExplicitMinimumQuantity(line)) {
+      emit('quantityMinimumReached', line.key, minimumQuantity)
+    }
+    return
+  }
+  patchLine(index, { quantity: String(quantity - 1) })
+}
+
+function increaseLineQuantity(index: number): void {
+  const line = props.modelValue[index]
+  if (props.disabled || line === undefined) {
+    return
+  }
+  const quantity = parsedLineQuantity(line)
+  const maximumQuantity = lineMaximumQuantity(line) ?? MAXIMUM_QUANTITY
+  if (quantity === null || quantity >= maximumQuantity) {
+    return
+  }
+  patchLine(index, { quantity: String(quantity + 1) })
 }
 
 function lineDiscountRate(line: OrderProductLineModel): MoneyDiscountRate | null {
@@ -462,9 +517,39 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
                   :aria-invalid="Boolean(lineFieldError(index, 'quantity'))"
                   :aria-label="`第 ${index + 1} 行产品数量`"
                   :disabled="disabled"
-                  class="w-full"
+                  class="order-product-quantity-input w-full"
+                  input-class="text-center"
                   @update:model-value="patchLine(index, { quantity: String($event ?? '') })"
-                />
+                  @keydown.down.prevent="decreaseLineQuantity(index)"
+                  @keydown.up.prevent="increaseLineQuantity(index)"
+                >
+                  <template #start>
+                    <FaButton
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="rounded-none size-8"
+                      :disabled="disabled"
+                      :aria-label="`减少第 ${index + 1} 行产品数量`"
+                      @click="decreaseLineQuantity(index)"
+                    >
+                      <FaIcon name="i-lucide:minus" aria-hidden="true" />
+                    </FaButton>
+                  </template>
+                  <template #end>
+                    <FaButton
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      class="rounded-none size-8"
+                      :disabled="disabled"
+                      :aria-label="`增加第 ${index + 1} 行产品数量`"
+                      @click="increaseLineQuantity(index)"
+                    >
+                      <FaIcon name="i-lucide:plus" aria-hidden="true" />
+                    </FaButton>
+                  </template>
+                </FaInput>
               </FaFormItem>
               <p
                 v-if="lineFieldError(index, 'quantity')"
@@ -666,3 +751,15 @@ function discountRateTextClass(trend: MoneyDiscountRateTrend | undefined): strin
     />
   </section>
 </template>
+
+<style scoped>
+.order-product-quantity-input :deep(input[type="number"]) {
+  appearance: textfield;
+}
+
+.order-product-quantity-input :deep(input[type="number"]::-webkit-inner-spin-button),
+.order-product-quantity-input :deep(input[type="number"]::-webkit-outer-spin-button) {
+  margin: 0;
+  appearance: none;
+}
+</style>

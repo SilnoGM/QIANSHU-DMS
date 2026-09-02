@@ -44,3 +44,11 @@ test('弹窗区分普通确认与唯一的定金下调加强确认', async () =>
   assert.match(source, /:submitting="submitting"/u)
   assert.doesNotMatch(source, /第三层|再次确认定金/u)
 })
+
+test('销售产品达到已采购数量后继续减少时转为页面轻提示', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /function handleQuantityMinimumReached\(_lineKey: string, minimumQuantity: number\): void/u)
+  assert.match(source, /`该产品数量不能低于已采购数量 \$\{minimumQuantity\} 件`/u)
+  assert.match(source, /@quantity-minimum-reached="handleQuantityMinimumReached"/u)
+})

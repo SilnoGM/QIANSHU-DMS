@@ -224,3 +224,15 @@ test('产品行编辑器支持行级数量下限、删除锁和目录快照名�
   assert.match(source, /nameEditableByKey\[line\.key\]/u)
   assert.match(source, /lineConstraintDescriptionByKey\[line\.key\]/u)
 })
+
+test('产品行达到领域数量下限后再次减少会抛出明确交互事件', async () => {
+  const source = await readFile(SOURCE, 'utf8')
+
+  assert.match(source, /'quantityMinimumReached': \[lineKey: string, minimumQuantity: number\]/u)
+  assert.match(source, /function decreaseLineQuantity\(index: number\): void/u)
+  assert.match(source, /hasExplicitMinimumQuantity\(line\)/u)
+  assert.match(source, /emit\('quantityMinimumReached', line\.key, minimumQuantity\)/u)
+  assert.match(source, /@click="decreaseLineQuantity\(index\)"/u)
+  assert.match(source, /@keydown\.down\.prevent="decreaseLineQuantity\(index\)"/u)
+  assert.match(source, /:aria-label="`减少第 \$\{index \+ 1\} 行产品数量`"/u)
+})

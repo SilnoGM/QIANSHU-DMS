@@ -2,7 +2,7 @@ import type { ProductSelectionChange } from '../QsProductSelector/types'
 import type { OrderProductLineModel } from './types'
 
 const AMOUNT_SCALE = 10_000n
-const MAXIMUM_QUANTITY = 2_147_483_647
+export const MAXIMUM_QUANTITY = 2_147_483_647
 
 export type ApplyProductSelectionResult
   = | { readonly ok: true, readonly lines: readonly OrderProductLineModel[] }

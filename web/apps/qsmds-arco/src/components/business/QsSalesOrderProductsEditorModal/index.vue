@@ -135,6 +135,10 @@ function updateReason(value: string | undefined): void {
   emit('update:reason', value ?? '')
 }
 
+function handleQuantityMinimumReached(_lineKey: string, minimumQuantity: number): void {
+  emit('validationError', `该产品数量不能低于已采购数量 ${minimumQuantity} 件`)
+}
+
 function buildIntent(): SalesOrderProductEditIntent | null {
   if (props.context === null) {
     return null
@@ -310,6 +314,7 @@ watch(() => props.context?.salesOrder.version, () => {
             temporary-line-initial-actual-unit-price-amount="0.00"
             product-selection-description="可维护当前订单产品；已采购产品的身份和删除操作受锁定。"
             @update:model-value="updateLines"
+            @quantity-minimum-reached="handleQuantityMinimumReached"
           />
         </section>
 
