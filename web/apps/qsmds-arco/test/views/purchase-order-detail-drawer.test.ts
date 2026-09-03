@@ -43,7 +43,7 @@ test('采购详情动作精确受 update、payment 和 document 权限控制', a
   assert.match(source, /不存在凭证也可记录付款/u)
 })
 
-test('采购列表操作列打开详情、履约和付款上下文', async () => {
+test('采购列表操作列可打开详情和已确认订单取消上下文', async () => {
   const source = await readFile(new URL(
     '../../src/views/operations/purchase-orders/index.vue',
     import.meta.url,
@@ -55,4 +55,17 @@ test('采购列表操作列打开详情、履约和付款上下文', async () =>
   assert.match(source, /openPurchaseOrderDetail/u)
   assert.match(source, /:initial-action="detailInitialAction"/u)
   assert.match(source, /@detail-updated=/u)
+
+  const drawerSource = await readFile(SOURCE, 'utf8')
+  assert.match(
+    drawerSource,
+    /PurchaseOrderDetailInitialAction = 'detail' \| 'fulfillment' \| 'payment' \| 'cancel'/u,
+  )
+  assert.match(drawerSource, /props\.initialAction === 'cancel'/u)
+  assert.match(drawerSource, /detailActionsRef\.value\?\.openCancelDialog\(\)/u)
+  assert.match(
+    drawerSource,
+    /<template #footer>[\s\S]*?<template v-if="detail">[\s\S]*?<FaButton v-if="canCancelOrder"/u,
+  )
+  assert.doesNotMatch(drawerSource, /<template v-if="detail" #footer>/u)
 })

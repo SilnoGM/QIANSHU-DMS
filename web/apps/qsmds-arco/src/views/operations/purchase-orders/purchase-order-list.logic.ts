@@ -136,7 +136,10 @@ export function normalizePurchaseOrderStatusSelection(
     : viewMode === 'pending' ? 'AWAITING_SHIPMENT' : 'ALL'
 }
 
-/** 待办动作首期仅提供入口提示；已付清订单不再展示没有业务意义的付款入口。 */
+/**
+ * 待办动作严格由当前任务决定，避免“待发货 / 待入仓”行混入付款操作。
+ * 待付款额外防御已付清的陈旧列表行，避免展示已经没有业务意义的入口。
+ */
 export function resolvePurchaseOrderPendingActions(
   task: PurchaseOrderPendingTask,
   order: Pick<PurchaseOrderListItemDto, 'paymentStatus'>,
@@ -144,9 +147,14 @@ export function resolvePurchaseOrderPendingActions(
   if (task === 'AWAITING_PAYMENT') {
     return order.paymentStatus === 'PAID' ? [] : [PAYMENT_ACTION]
   }
-  return order.paymentStatus === 'PAID'
-    ? [TASK_ACTION[task]]
-    : [TASK_ACTION[task], PAYMENT_ACTION]
+  return [TASK_ACTION[task]]
+}
+
+/** 列表取消入口只对已确认订单开放，最终提交前仍由详情接口重新校验最新状态。 */
+export function canCancelPurchaseOrderFromList(
+  order: Pick<PurchaseOrderListItemDto, 'orderStatus'>,
+): boolean {
+  return order.orderStatus === 'CONFIRMED'
 }
 
 function enumFilter<T extends string>(

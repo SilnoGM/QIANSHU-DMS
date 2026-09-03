@@ -9,6 +9,7 @@ import {
   buildPurchaseOrderListQuery,
   buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
+  canCancelPurchaseOrderFromList,
   formatPurchaseOrderSummaryAmount,
   fulfillmentStatusLabel,
   getPurchaseOrderStatusItems,
@@ -181,17 +182,26 @@ test('全部与待办采购使用稳定状态顺序并规范化 URL', () => {
   )
 })
 
-test('待办采购操作与当前任务一致且付款只对未付清订单展示', () => {
+test('待办采购操作严格只返回当前任务对应的唯一处理动作', () => {
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_SHIPMENT', {
     paymentStatus: 'UNPAID',
-  }).map(item => item.label), ['发货', '付款'])
+  }).map(item => item.label), ['发货'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_SHIPMENT', {
     paymentStatus: 'PAID',
   }).map(item => item.label), ['发货'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_WAREHOUSE', {
     paymentStatus: 'PARTIALLY_PAID',
-  }).map(item => item.label), ['到仓', '付款'])
+  }).map(item => item.label), ['到仓'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
     paymentStatus: 'PARTIALLY_PAID',
   }).map(item => item.label), ['付款'])
+  assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
+    paymentStatus: 'PAID',
+  }), [])
+})
+
+test('全部采购仅允许已确认订单从操作列进入取消流程', () => {
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED' }), true)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'COMPLETED' }), false)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CANCELLED' }), false)
 })

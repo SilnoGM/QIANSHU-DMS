@@ -196,8 +196,14 @@ test('全部与待办采购均使用带计数的状态工具栏', async () => {
   assert.match(source, /resolvePurchaseOrderPendingActions/u)
   assert.match(source, /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
   assert.match(source, />发货|action\.label/u)
-  assert.match(source, /openPurchaseOrderDetail\(row, 'fulfillment'\)/u)
-  assert.match(source, /openPurchaseOrderDetail\(row, 'payment'\)/u)
+  assert.match(source, /canCancelPurchaseOrderFromList\(row\)/u)
+  assert.match(source, /openPurchaseOrderDetail\(row, 'cancel'\)/u)
+  assert.match(source, /i-lucide:circle-x/u)
+  assert.doesNotMatch(
+    source,
+    /v-else-if="canUpdate && nextPurchaseOrderFulfillmentStatus\(row\)"/u,
+  )
+  assert.doesNotMatch(source, /props\.viewMode === 'all' && canManagePayment/u)
 })
 
 test('采购日期范围位于搜索框前并以内嵌叉号清除', async () => {

@@ -29,7 +29,7 @@ import {
   purchaseTypeLabel,
 } from './purchase-order-list.logic'
 
-export type PurchaseOrderDetailInitialAction = 'detail' | 'fulfillment' | 'payment'
+export type PurchaseOrderDetailInitialAction = 'detail' | 'fulfillment' | 'payment' | 'cancel'
 
 defineOptions({ name: 'PurchaseOrderDetailDrawer' })
 
@@ -121,6 +121,9 @@ function openInitialAction(): void {
   }
   else if (props.initialAction === 'payment' && canRecordPayment.value) {
     detailActionsRef.value?.openPaymentDialog()
+  }
+  else if (props.initialAction === 'cancel' && canCancelOrder.value) {
+    detailActionsRef.value?.openCancelDialog()
   }
 }
 
@@ -353,16 +356,18 @@ onBeforeUnmount(() => {
       </section>
     </div>
 
-    <template v-if="detail" #footer>
-      <FaButton v-if="canCancelOrder" type="button" variant="destructive" :disabled="actionLocked" @click="openCancelDialog">
-        取消订单
-      </FaButton>
-      <FaButton v-if="canUpdate && nextFulfillmentStatus" type="button" variant="outline" :disabled="actionLocked" @click="openFulfillmentDialog">
-        推进至{{ fulfillmentStatusLabel(nextFulfillmentStatus) }}
-      </FaButton>
-      <FaButton v-if="canRecordPayment" type="button" :disabled="actionLocked" @click="openPaymentDialog">
-        记录付款
-      </FaButton>
+    <template #footer>
+      <template v-if="detail">
+        <FaButton v-if="canCancelOrder" type="button" variant="destructive" :disabled="actionLocked" @click="openCancelDialog">
+          取消订单
+        </FaButton>
+        <FaButton v-if="canUpdate && nextFulfillmentStatus" type="button" variant="outline" :disabled="actionLocked" @click="openFulfillmentDialog">
+          推进至{{ fulfillmentStatusLabel(nextFulfillmentStatus) }}
+        </FaButton>
+        <FaButton v-if="canRecordPayment" type="button" :disabled="actionLocked" @click="openPaymentDialog">
+          记录付款
+        </FaButton>
+      </template>
     </template>
   </QsGenericDrawer>
 

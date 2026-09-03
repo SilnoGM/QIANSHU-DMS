@@ -834,12 +834,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
         && drawer.textContent.includes('BROWSER STOCK MARK')
         && drawer.textContent.includes('状态历史')
     })()`)
-    await clickVisibleAriaButton(page, '关闭抽屉')
-    await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
-      .some(dialog => dialog.getClientRects().length > 0
-        && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
-
-    await clickVisibleAriaButton(page, `${order.orderNo}：记录付款`)
+    // 全部采购列表只保留查看与取消；付款从已打开的详情抽屉继续办理。
+    await clickVisibleButton(page, '记录付款')
     await waitForVisibleDialog(page, '记录实际付款')
     await fillLabelledControl(page, '付款金额', '80')
     await selectVisibleComboboxOption(page, '选择付款方式', 'Browser 银行转账')
@@ -853,6 +849,14 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
         && drawer.textContent.includes('Browser 银行转账')
     })()`)
     await clickVisibleAriaButton(page, '关闭抽屉')
+    await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
+    // 等待 Vue 把 v-model=false 刷入抽屉子组件，避免同一帧再次打开时
+    // false -> true 被批处理成未变化，令子组件 localOpen 停留在 false。
+    await page.evaluate(`new Promise(resolve => requestAnimationFrame(
+      () => requestAnimationFrame(resolve),
+    ))`)
     await waitForPurchaseList(page, order.orderNo)
   })
 
@@ -872,10 +876,54 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     // 待办操作首期只能提示，真实履约仍从全部采购详情入口回归。
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
     await waitForPurchaseList(page, order.orderNo)
+    // 该订单同时存在于待办与全部列表；必须确认新路由的工具栏已经接管 DOM，
+    // 避免误点路由切换期间尚未卸载的待办列表按钮。
+    await waitForStatusToolbarCounts(page, '全部采购状态筛选', {
+      全部采购: 2,
+      已确认: 2,
+      已完成: 0,
+      已取消: 0,
+    })
 
     for (const statusLabel of ['备货中', '已发货', '已签收']) {
       process.stdout.write(`[numbering-browser] purchase orders · fulfillment ${statusLabel}\n`)
-      await clickVisibleAriaButton(page, `${order.orderNo}：推进履约`)
+      // 履约不再暴露为列表快捷操作，每次都从最新详情上下文推进。
+      await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+      // 抽屉壳体会先于详情请求完成出现；必须等当前订单详情落入抽屉后再找 Footer，
+      // 否则较慢的正式构建环境会把“仍在加载”误判成缺少履约动作。
+      try {
+        await page.waitFor(`(() => {
+          const drawer = [...document.querySelectorAll('[role="dialog"]')]
+            .find(candidate => candidate.getClientRects().length > 0
+              && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+          return drawer?.querySelector('[data-slot="qs-generic-drawer"]')
+            ?.getAttribute('aria-busy') === 'false'
+            && drawer.textContent.includes('订单基础信息')
+        })()`)
+      }
+      catch (error) {
+        const state = await page.evaluate(`(() => ({
+          hash: location.hash,
+          dialogs: [...document.querySelectorAll('[role="dialog"]')]
+            .filter(dialog => dialog.getClientRects().length > 0)
+            .map(dialog => ({
+              busy: dialog.querySelector('[data-slot="qs-generic-drawer"]')
+                ?.getAttribute('aria-busy') ?? null,
+              text: dialog.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 500) ?? '',
+            })),
+          viewButtons: [...document.querySelectorAll('button')]
+            .filter(button => button.getAttribute('aria-label')
+              === ${JSON.stringify(`${order.orderNo}：查看详情`)})
+            .map(button => ({
+              disabled: button.disabled,
+              visible: button.getClientRects().length > 0,
+            })),
+        }))()`)
+        throw new Error(`purchase detail drawer unavailable: ${JSON.stringify(state)}`, {
+          cause: error,
+        })
+      }
+      await clickVisibleButton(page, `推进至${statusLabel}`)
       await waitForVisibleDialog(page, '推进采购履约状态？')
       await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
         .some(dialog => dialog.getClientRects().length > 0
@@ -890,6 +938,12 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
         return drawer?.textContent?.includes(${JSON.stringify(statusLabel)})
       })()`)
       await clickVisibleAriaButton(page, '关闭抽屉')
+      await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
+        .some(dialog => dialog.getClientRects().length > 0
+          && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
+      await page.evaluate(`new Promise(resolve => requestAnimationFrame(
+        () => requestAnimationFrame(resolve),
+      ))`)
       await waitForPurchaseList(page, order.orderNo)
     }
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))

@@ -45,13 +45,13 @@ import {
   buildPurchaseOrderListQuery,
   buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
+  canCancelPurchaseOrderFromList,
   formatPurchaseOrderSummaryAmount,
   fulfillmentStatusLabel,
   fulfillmentStatusTagClass,
   getPurchaseOrderApiFailure,
   getPurchaseOrderStatusItems,
   isPurchaseOrderAbortError,
-  nextPurchaseOrderFulfillmentStatus,
   normalizePurchaseOrderStatusSelection,
   orderStatusLabel,
   orderStatusTagClass,
@@ -675,26 +675,15 @@ onBeforeUnmount(() => {
               </template>
             </template>
             <FaButton
-              v-else-if="canUpdate && nextPurchaseOrderFulfillmentStatus(row)"
+              v-else-if="canUpdate && canCancelPurchaseOrderFromList(row)"
               type="button"
               variant="ghost"
               size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：推进履约`"
-              @click="openPurchaseOrderDetail(row, 'fulfillment')"
+              class="text-destructive min-h-11 sm:min-h-8"
+              :aria-label="`${row.orderNo}：取消订单`"
+              @click="openPurchaseOrderDetail(row, 'cancel')"
             >
-              <FaIcon name="i-lucide:truck" aria-hidden="true" />履约
-            </FaButton>
-            <FaButton
-              v-if="props.viewMode === 'all' && canManagePayment && row.orderStatus === 'CONFIRMED' && row.paymentStatus !== 'PAID'"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：记录付款`"
-              @click="openPurchaseOrderDetail(row, 'payment')"
-            >
-              <FaIcon name="i-lucide:hand-coins" aria-hidden="true" />付款
+              <FaIcon name="i-lucide:circle-x" aria-hidden="true" />取消
             </FaButton>
           </div>
         </template>
