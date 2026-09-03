@@ -10,6 +10,7 @@ import type { MediaAssetService } from '../src/modules/media/media-asset.service
 import type { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
+import { SalesOrderAutomaticStateService } from '../src/modules/sales-orders/sales-order-automatic-state.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 
 function requireDatabaseUrl(): string {
@@ -180,6 +181,7 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       media,
       dictionaryLookup,
       query,
+      new SalesOrderAutomaticStateService(new AuditService()),
       { now: () => new Date('2026-08-20T12:00:00.000Z') },
     )
   })

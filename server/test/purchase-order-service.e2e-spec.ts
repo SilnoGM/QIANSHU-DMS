@@ -17,6 +17,7 @@ import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
+import { SalesOrderAutomaticStateService } from '../src/modules/sales-orders/sales-order-automatic-state.service'
 import { SalesOrderProductEditQueryService } from '../src/modules/sales-orders/sales-order-product-edit-query.service'
 import { SalesOrderProductEditService } from '../src/modules/sales-orders/sales-order-product-edit.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
@@ -337,6 +338,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       media,
       dictionaryLookup,
       salesQuery,
+      new SalesOrderAutomaticStateService(new AuditService()),
       { now: () => new Date('2026-08-27T11:30:00.000Z') },
     )
     commands = new PurchaseOrderCommandService(
@@ -353,6 +355,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       dictionaryLookup,
       media,
       queries,
+      new SalesOrderPurchaseCoverageService(new AuditService()),
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })

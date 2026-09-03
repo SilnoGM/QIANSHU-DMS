@@ -22,8 +22,18 @@ function input() {
 }
 
 function setup(overrides: {
-  readonly fulfillmentStatus?: 'PENDING' | 'PREPARING'
-  readonly orderStatus?: 'CONFIRMED' | 'CANCELLED'
+  readonly fulfillmentStatus?:
+    | 'PENDING'
+    | 'PREPARING'
+    | 'LAND_TRANSIT'
+    | 'WAREHOUSE_ARRIVED'
+    | 'SEA_TRANSIT'
+    | 'SIGNED'
+  readonly orderStatus?:
+    | 'CONFIRMED'
+    | 'PENDING_RECONCILIATION'
+    | 'COMPLETED'
+    | 'CANCELLED'
   readonly purchasedRows?: readonly {
     readonly sourceSalesOrderLineId: string | null
     readonly _sum: { readonly quantity: number | null }
@@ -207,4 +217,84 @@ describe('SalesOrderPurchaseCoverageService', () => {
     expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
   })
+
+  it('returns a pre-sea order to pending when cancellation removes full coverage', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'WAREHOUSE_ARRIVED',
+      purchasedRows: [{
+        sourceSalesOrderLineId: SALES_LINE_A_ID,
+        _sum: { quantity: 2 },
+      }],
+    })
+
+    await fixture.service.recalculateAfterPurchaseCancellation(
+      fixture.transactionClient,
+      input(),
+    )
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'PENDING', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: SALES_ORDER_ID,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'WAREHOUSE_ARRIVED',
+        toStatus: 'PENDING',
+        reason: '取消采购订单后重新计算销售产品采购覆盖',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+    expect(JSON.stringify(fixture.audit.record.mock.calls[0]?.[1]))
+      .toContain('"trigger":"PURCHASE_CANCELLATION"')
+    expect(JSON.stringify(fixture.audit.record.mock.calls[0]?.[1]))
+      .toContain('"fromStatus":"WAREHOUSE_ARRIVED"')
+    expect(JSON.stringify(fixture.audit.record.mock.calls[0]?.[1]))
+      .toContain('"toStatus":"PENDING"')
+  })
+
+  it('keeps full coverage and only advances pending to preparing', async () => {
+    const alreadyPreparing = setup({ fulfillmentStatus: 'PREPARING' })
+    await alreadyPreparing.service.recalculateAfterPurchaseCancellation(
+      alreadyPreparing.transactionClient,
+      input(),
+    )
+    expect(alreadyPreparing.transaction.salesOrder.update).not.toHaveBeenCalled()
+
+    const pending = setup({ fulfillmentStatus: 'PENDING' })
+    await pending.service.recalculateAfterPurchaseCancellation(
+      pending.transactionClient,
+      input(),
+    )
+    expect(pending.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
+    })
+  })
+
+  it.each([
+    ['SEA_TRANSIT', 'CONFIRMED'],
+    ['SIGNED', 'CONFIRMED'],
+    ['PREPARING', 'PENDING_RECONCILIATION'],
+    ['PREPARING', 'COMPLETED'],
+    ['PREPARING', 'CANCELLED'],
+  ] as const)(
+    'does not regress fulfillment=%s or order=%s after cancellation',
+    async (fulfillmentStatus, orderStatus) => {
+      const fixture = setup({
+        fulfillmentStatus,
+        orderStatus,
+        purchasedRows: [],
+      })
+
+      await fixture.service.recalculateAfterPurchaseCancellation(
+        fixture.transactionClient,
+        input(),
+      )
+
+      expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+      expect(fixture.audit.record).not.toHaveBeenCalled()
+    },
+  )
 })

@@ -39,6 +39,7 @@ import {
   assertSalesOrderStatusTransition,
 } from './domain/sales-order-state-machine'
 import { isCanonicalSalesOrderActorId } from './sales-order-command.normalizer'
+import { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
 import {
   SalesOrderQueryService,
   type SalesOrderDetail,
@@ -229,6 +230,7 @@ export class SalesOrderMutationService {
     private readonly mediaAsset: MediaAssetService,
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly query: SalesOrderQueryService,
+    private readonly automaticState: SalesOrderAutomaticStateService,
     @Optional()
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderMutationDependencies> = {},
@@ -349,6 +351,13 @@ export class SalesOrderMutationService {
         targetId: salesOrderId,
         metadata: { fromStatus: order.fulfillmentStatus, toStatus },
       })
+      // 在同一事务内重新读取更新后的三个状态维度，避免调用方凭旧快照判断。
+      await this.automaticState.advanceToPendingReconciliationWhenEligible(
+        transaction,
+        trusted,
+        salesOrderId,
+        'FULFILLMENT',
+      )
     })
     return this.query.getById(salesOrderId)
   }
@@ -378,7 +387,10 @@ export class SalesOrderMutationService {
         balanceDueAmount: body.balanceDueAmount,
       })
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
-      deriveSalesOrderPaymentStatus(amounts.agreedTotalAmount, receivedAmount)
+      const newPaymentStatus = deriveSalesOrderPaymentStatus(
+        amounts.agreedTotalAmount,
+        receivedAmount,
+      )
       await transaction.salesOrderAmountRevision.create({ data: {
         salesOrderId,
         oldLineSubtotalAmount: fixed4(order.lineSubtotalAmount),
@@ -398,14 +410,31 @@ export class SalesOrderMutationService {
           agreedTotalAmount: amounts.agreedTotalAmount,
           depositDueAmount: amounts.depositDueAmount,
           balanceDueAmount: amounts.balanceDueAmount,
+          paymentStatus: newPaymentStatus,
           version: { increment: 1 },
         },
       })
+      if (newPaymentStatus !== order.paymentStatus) {
+        await transaction.salesOrderStatusHistory.create({ data: {
+          salesOrderId,
+          dimension: 'PAYMENT',
+          fromStatus: order.paymentStatus,
+          toStatus: newPaymentStatus,
+          reason: '修改付款约定后系统重新计算付款状态',
+          changedByUserId: trusted.actorUserId,
+        } })
+      }
       await this.recordAudit(transaction, trusted, {
         eventType: AuditEventType.SALES_ORDER_PAYMENT_TERMS_UPDATED,
         targetId: salesOrderId,
         metadata: { reasonProvided: true },
       })
+      await this.automaticState.advanceToPendingReconciliationWhenEligible(
+        transaction,
+        trusted,
+        salesOrderId,
+        'PAYMENT_TERMS',
+      )
     })
     return this.query.getById(salesOrderId)
   }
@@ -551,6 +580,12 @@ export class SalesOrderMutationService {
           targetId: document.id,
           metadata: { salesOrderId, documentType: 'PAYMENT_VOUCHER' },
         })
+        await this.automaticState.advanceToPendingReconciliationWhenEligible(
+          transaction,
+          trusted,
+          salesOrderId,
+          'PAYMENT',
+        )
       })
     }
     catch (error) {

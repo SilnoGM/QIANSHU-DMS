@@ -4,6 +4,7 @@ import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.
 import type { MediaAssetService } from '../media/media-asset.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import type { PurchaseOrderQueryService } from './purchase-order-query.service'
+import type { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -18,10 +19,13 @@ function decimal(value: string) {
 function setup() {
   const order = {
     id: ORDER_ID,
+    orderNo: 'PO/20260901-00001',
     orderStatus: 'CONFIRMED',
     fulfillmentStatus: 'ORDERED',
     paymentStatus: 'UNPAID',
     purchaseTotalAmount: decimal('100'),
+    purchaseType: 'SALES_LINKED',
+    salesOrderId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     version: 1,
   }
   const transaction = {
@@ -85,16 +89,22 @@ function setup() {
   const query = {
     getById: jest.fn<Promise<typeof detail>, [string]>().mockResolvedValue(detail),
   }
+  const coverage = {
+    recalculateAfterPurchaseCancellation:
+      jest.fn<Promise<void>, [unknown, unknown]>().mockResolvedValue(undefined),
+  }
   const service = new PurchaseOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
     dictionaryLookup as unknown as DictionaryLookupService,
     media as unknown as MediaAssetService,
     query as unknown as PurchaseOrderQueryService,
+    coverage as unknown as SalesOrderPurchaseCoverageService,
     { now: () => new Date('2026-08-27T12:00:00.000Z') },
   )
   return {
     audit,
+    coverage,
     detail,
     dictionaryLookup,
     media,
@@ -131,6 +141,14 @@ describe('PurchaseOrderMutationService', () => {
       fixture.transaction,
       expect.objectContaining({ eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED' }),
     )
+    expect(fixture.coverage.recalculateAfterPurchaseCancellation)
+      .toHaveBeenCalledWith(fixture.transaction, {
+        actorUserId: ACTOR_ID,
+        purchaseOrderId: ORDER_ID,
+        purchaseOrderNo: 'PO/20260901-00001',
+        requestId: 'request-1',
+        salesOrderId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+      })
 
     const paid = setup()
     paid.transaction.purchaseOrderPayment.aggregate.mockResolvedValue({
@@ -142,6 +160,24 @@ describe('PurchaseOrderMutationService', () => {
       { toStatus: 'CANCELLED' },
     )).rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
     expect(paid.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('does not recalculate sales coverage when cancelling a stock purchase', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order,
+      purchaseType: 'STOCK',
+      salesOrderId: null,
+    })
+
+    await fixture.service.updateOrderStatus(
+      context,
+      ORDER_ID,
+      { toStatus: 'CANCELLED', reason: null },
+    )
+
+    expect(fixture.coverage.recalculateAfterPurchaseCancellation)
+      .not.toHaveBeenCalled()
   })
 
   it('advances fulfillment in order and blocks cancelled orders', async () => {

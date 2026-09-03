@@ -35,6 +35,14 @@ export interface AdvanceSalesOrderPurchaseProgressInput {
   readonly salesOrderId: string
 }
 
+const CANCELLATION_RECALCULABLE_STATUSES
+  = new Set<SalesOrderFulfillmentStatus>([
+    'PENDING',
+    'PREPARING',
+    'LAND_TRANSIT',
+    'WAREHOUSE_ARRIVED',
+  ])
+
 /**
  * 覆盖判断必须以销售明细 ID 为粒度。相同产品可以出现在多条销售明细中，
  * CUSTOM 也没有 productId，因此不能按产品字段合并。
@@ -144,6 +152,94 @@ export class SalesOrderPurchaseCoverageService {
         purchaseOrderNo: input.purchaseOrderNo,
         toStatus: 'PREPARING',
         trigger: 'PURCHASE_COVERAGE',
+      },
+    })
+  }
+
+  async recalculateAfterPurchaseCancellation(
+    transaction: PrismaTypes.TransactionClient,
+    input: AdvanceSalesOrderPurchaseProgressInput,
+  ): Promise<void> {
+    const locked = await transaction.$queryRaw<LockedSalesOrder[]>(Prisma.sql`
+      SELECT
+        "id",
+        "order_status" AS "orderStatus",
+        "fulfillment_status" AS "fulfillmentStatus"
+      FROM "sales_orders"
+      WHERE "id" = CAST(${input.salesOrderId} AS uuid)
+      FOR UPDATE
+    `)
+    const order = locked[0]
+    // 销售订单终态、待对账态，以及海运或签收阶段都不能被采购取消倒退。
+    if (
+      locked.length !== 1
+      || order?.orderStatus !== 'CONFIRMED'
+      || !CANCELLATION_RECALCULABLE_STATUSES.has(order.fulfillmentStatus)
+    ) {
+      return
+    }
+
+    const salesLines = await transaction.salesOrderLine.findMany({
+      where: { salesOrderId: input.salesOrderId, removedAt: null },
+      select: { id: true, quantity: true },
+    })
+    const purchasedRows = await transaction.purchaseOrderLine.groupBy({
+      by: ['sourceSalesOrderLineId'],
+      where: {
+        sourceSalesOrderLineId: { in: salesLines.map(line => line.id) },
+        purchaseOrder: {
+          salesOrderId: input.salesOrderId,
+          purchaseType: 'SALES_LINKED',
+          orderStatus: { not: 'CANCELLED' },
+        },
+      },
+      _sum: { quantity: true },
+    })
+    const purchasedBySource = new Map<string, number>()
+    for (const row of purchasedRows) {
+      if (row.sourceSalesOrderLineId !== null) {
+        purchasedBySource.set(
+          row.sourceSalesOrderLineId,
+          row._sum.quantity ?? 0,
+        )
+      }
+    }
+    const fullyCovered = isSalesOrderPurchaseFullyCovered(
+      salesLines,
+      purchasedBySource,
+    )
+    const toStatus: SalesOrderFulfillmentStatus = fullyCovered
+      ? (order.fulfillmentStatus === 'PENDING' ? 'PREPARING' : order.fulfillmentStatus)
+      : 'PENDING'
+    if (toStatus === order.fulfillmentStatus) return
+
+    await transaction.salesOrder.update({
+      where: { id: input.salesOrderId },
+      data: { fulfillmentStatus: toStatus, version: { increment: 1 } },
+    })
+    await transaction.salesOrderStatusHistory.create({ data: {
+      salesOrderId: input.salesOrderId,
+      dimension: 'FULFILLMENT',
+      fromStatus: order.fulfillmentStatus,
+      toStatus,
+      reason: '取消采购订单后重新计算销售产品采购覆盖',
+      changedByUserId: input.actorUserId,
+    } })
+    await this.audit.record(transaction, {
+      eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.USER,
+      actorUserId: input.actorUserId,
+      targetType: 'SALES_ORDER',
+      targetId: input.salesOrderId,
+      requestId: input.requestId,
+      metadata: {
+        automatic: true,
+        fromStatus: order.fulfillmentStatus,
+        purchaseOrderId: input.purchaseOrderId,
+        purchaseOrderNo: input.purchaseOrderNo,
+        toStatus,
+        trigger: 'PURCHASE_CANCELLATION',
       },
     })
   }

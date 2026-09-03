@@ -26,6 +26,7 @@ import {
 import { createSalesOrderDocumentTitle } from '../domain/sales-order-document-title'
 import { assertSalesOrderFulfillmentTransition } from '../domain/sales-order-state-machine'
 import { isCanonicalSalesOrderActorId } from '../sales-order-command.normalizer'
+import { SalesOrderAutomaticStateService } from '../sales-order-automatic-state.service'
 import type { SalesOrderMutationContext } from '../sales-order-mutation.service'
 import {
   SalesOrderQueryService,
@@ -160,6 +161,7 @@ export class SalesOrderDocumentService {
     private readonly audit: AuditService,
     private readonly query: SalesOrderQueryService,
     private readonly multipart: SalesOrderDocumentMultipartParser,
+    private readonly automaticState: SalesOrderAutomaticStateService,
   ) {}
 
   uploadTemporary(
@@ -328,6 +330,13 @@ export class SalesOrderDocumentService {
             toStatus: 'SIGNED',
           },
         })
+        // 签收状态与可能已存在的付清状态必须在同一事务中共同派生待对账。
+        await this.automaticState.advanceToPendingReconciliationWhenEligible(
+          transaction,
+          context,
+          salesOrderId,
+          'DELIVERY_RECEIPT',
+        )
       })
     }
     catch (error) {

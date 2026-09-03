@@ -271,7 +271,9 @@ function submitCancellation(): void {
       signal,
     )
     return response.data
-  }, '采购订单已取消')
+  }, props.detail.purchaseType === 'SALES_LINKED'
+    ? '采购订单已取消，关联销售订单采购覆盖状态已重新计算'
+    : '采购订单已取消')
 }
 
 function submitPaymentVoid(): void {

@@ -3,6 +3,7 @@ import type { AuditService } from '../../audit/audit.service'
 import type { MediaAssetService } from '../../media/media-asset.service'
 import type { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
 import type { SalesOrderQueryService } from '../sales-order-query.service'
+import type { SalesOrderAutomaticStateService } from '../sales-order-automatic-state.service'
 import type { SalesOrderDocumentMultipartParser } from './sales-order-document-multipart.parser'
 import { SalesOrderDocumentService } from './sales-order-document.service'
 
@@ -65,6 +66,11 @@ function setup(
   const query = {
     getById: jest.fn<Promise<typeof detail>, [string]>().mockResolvedValue(detail),
   }
+  const automaticState = {
+    advanceToPendingReconciliationWhenEligible:
+      jest.fn<Promise<boolean>, [unknown, unknown, string, string]>()
+        .mockResolvedValue(false),
+  }
   const service = new SalesOrderDocumentService(
     prisma as unknown as PrismaService,
     media as unknown as MediaAssetService,
@@ -72,8 +78,9 @@ function setup(
     audit as unknown as AuditService,
     query as unknown as SalesOrderQueryService,
     {} as SalesOrderDocumentMultipartParser,
+    automaticState as unknown as SalesOrderAutomaticStateService,
   )
-  return { audit, detail, media, service, transaction }
+  return { audit, automaticState, detail, media, query, service, transaction }
 }
 
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
@@ -131,6 +138,26 @@ describe('SalesOrderDocumentService', () => {
       requestId: 'request-1',
       metadata: { fromStatus: 'SEA_TRANSIT', toStatus: 'SIGNED' },
     })
+    expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
+      .toHaveBeenCalledWith(
+        fixture.transaction,
+        context,
+        ORDER_ID,
+        'DELIVERY_RECEIPT',
+      )
+  })
+
+  it('does not return a successful detail when receipt-derived state fails', async () => {
+    const fixture = setup()
+    fixture.automaticState.advanceToPendingReconciliationWhenEligible
+      .mockRejectedValue(new Error('automatic-state-failed'))
+
+    await expect(fixture.service.submitDeliveryReceipt(
+      context,
+      ORDER_ID,
+      { mediaAssetId: MEDIA_ASSET_ID, remark: null },
+    )).rejects.toThrow('automatic-state-failed')
+    expect(fixture.query.getById).not.toHaveBeenCalled()
   })
 
   it.each([

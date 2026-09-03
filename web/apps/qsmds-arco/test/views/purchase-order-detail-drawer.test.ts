@@ -42,6 +42,9 @@ test('采购详情动作精确受 update、payment 和 document 权限控制', a
   assert.match(source, /purchaseOrdersApi\.getDocumentContent/u)
   assert.match(source, /dictionary-code="payment\.method"/u)
   assert.match(source, /不存在凭证也可记录付款/u)
+  assert.match(source, /props\.detail\.purchaseType === 'SALES_LINKED'/u)
+  assert.match(source, /采购订单已取消，关联销售订单采购覆盖状态已重新计算/u)
+  assert.match(source, /采购订单已取消/u)
 })
 
 test('采购列表查看使用详情抽屉，取消则独立读取最新详情并直接打开确认弹窗', async () => {

@@ -410,6 +410,7 @@ function removeDeliveryReceipt(): void {
 
 async function submitPayment(): Promise<void> {
   const orderId = detail.value?.id
+  const previousOrderStatus = detail.value?.orderStatus
   if (orderId === undefined || actionLocked.value) {
     return
   }
@@ -451,7 +452,12 @@ async function submitPayment(): Promise<void> {
     else {
       modalVisible.value = false
     }
-    toast.success('实际收款记录添加成功')
+    toast.success(
+      previousOrderStatus === 'CONFIRMED'
+      && response.data.orderStatus === 'PENDING_RECONCILIATION'
+        ? '订单已签收且已付清，已自动进入待对账'
+        : '实际收款记录添加成功',
+    )
   }
   catch (error) {
     if (!isSalesOrderAbortError(error)) {
@@ -468,6 +474,7 @@ async function submitPayment(): Promise<void> {
 
 async function submitDeliveryReceipt(): Promise<void> {
   const orderId = detail.value?.id
+  const previousOrderStatus = detail.value?.orderStatus
   if (orderId === undefined || actionLocked.value) {
     return
   }
@@ -504,7 +511,12 @@ async function submitDeliveryReceipt(): Promise<void> {
     else {
       modalVisible.value = false
     }
-    toast.success('签收单上传成功，订单已进入已签收')
+    toast.success(
+      previousOrderStatus === 'CONFIRMED'
+      && response.data.orderStatus === 'PENDING_RECONCILIATION'
+        ? '订单已签收且已付清，已自动进入待对账'
+        : '签收单上传成功，订单已进入已签收',
+    )
   }
   catch (error) {
     if (!isSalesOrderAbortError(error)) {

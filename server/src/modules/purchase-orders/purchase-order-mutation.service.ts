@@ -45,6 +45,7 @@ import {
   PurchaseOrderQueryService,
   type PurchaseOrderDetail,
 } from './purchase-order-query.service'
+import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 
 const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const UUID_V4_PATTERN =
@@ -83,10 +84,13 @@ type AutomaticOrderStatusTrigger = 'FULFILLMENT' | 'PAYMENT'
 type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
   select: {
     id: true
+    orderNo: true
     orderStatus: true
     fulfillmentStatus: true
     paymentStatus: true
     purchaseTotalAmount: true
+    purchaseType: true
+    salesOrderId: true
     version: true
   }
 }>
@@ -180,6 +184,7 @@ export class PurchaseOrderMutationService {
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly mediaAsset: MediaAssetService,
     private readonly query: PurchaseOrderQueryService,
+    private readonly salesOrderCoverage: SalesOrderPurchaseCoverageService,
     @Optional()
     @Inject(PURCHASE_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
@@ -229,6 +234,18 @@ export class PurchaseOrderMutationService {
         targetId: purchaseOrderId,
         metadata: { fromStatus: order.orderStatus, toStatus: 'CANCELLED' },
       })
+      if (order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
+        await this.salesOrderCoverage.recalculateAfterPurchaseCancellation(
+          transaction,
+          {
+            actorUserId: trusted.actorUserId,
+            purchaseOrderId,
+            purchaseOrderNo: order.orderNo,
+            requestId: trusted.requestId,
+            salesOrderId: order.salesOrderId,
+          },
+        )
+      }
     })
     return this.query.getById(purchaseOrderId)
   }
@@ -577,10 +594,13 @@ export class PurchaseOrderMutationService {
       where: { id: purchaseOrderId },
       select: {
         id: true,
+        orderNo: true,
         orderStatus: true,
         fulfillmentStatus: true,
         paymentStatus: true,
         purchaseTotalAmount: true,
+        purchaseType: true,
+        salesOrderId: true,
         version: true,
       },
     })
