@@ -148,7 +148,14 @@ test('采购创建草稿映射为独立详情模型并保留产品主图', () =>
 })
 
 test('正式采购详情映射状态、付款进度和采购语义产品字段', () => {
-  const result = mapPurchaseOrderDetailToDesc(createDetail())
+  const result = mapPurchaseOrderDetailToDesc(createDetail(), [{
+    lineId: 'line-1',
+    mainImage: {
+      contentUrl: '/api/purchase-orders/purchase-order-1/lines/line-1/main-image/media-1/content',
+      id: 'media-1',
+    },
+    productName: '标准采购产品',
+  }])
 
   assert.equal(result.orderNo, 'PO/20260828-00001')
   assert.equal(result.supplierLabel, '供应商甲')
@@ -156,7 +163,10 @@ test('正式采购详情映射状态、付款进度和采购语义产品字段',
   assert.equal(result.amounts.outstandingAmount, '70.0000')
   assert.equal(result.lines[0]?.referencePurchaseUnitPriceAmount, '12.5000')
   assert.equal(result.lines[0]?.actualPurchaseUnitPriceAmount, '10.0000')
-  assert.equal(result.lines[0]?.mainImage, null)
+  assert.deepEqual(result.lines[0]?.mainImage, {
+    alt: '标准采购产品',
+    src: '/api/purchase-orders/purchase-order-1/lines/line-1/main-image/media-1/content',
+  })
   assert.deepEqual(result.statuses, [
     { key: 'ORDER', label: '订单状态', tone: 'success', value: '已确认' },
     { key: 'FULFILLMENT', label: '履约状态', tone: 'warning', value: '备货中' },

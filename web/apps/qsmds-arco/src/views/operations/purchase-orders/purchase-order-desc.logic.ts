@@ -1,5 +1,6 @@
 import type {
   PurchaseOrderDetailDto,
+  PurchaseOrderLinePreviewDto,
   PurchaseOrderSourceSalesOrderListItemDto,
 } from '@/api/generated/types.gen'
 import type { OrderProductLineModel } from '@/components/business/QsOrderProductLineEditor/types'
@@ -118,7 +119,13 @@ export function mapPurchaseOrderCreateToDesc(
 /** 正式详情 DTO 在页面边界映射，避免共享组件依赖 API 生成类型。 */
 export function mapPurchaseOrderDetailToDesc(
   detail: Readonly<PurchaseOrderDetailDto>,
+  linePreviews: readonly Readonly<PurchaseOrderLinePreviewDto>[] = [],
 ): QsPurchaseOrderDescViewModel {
+  const mainImageByLineId = new Map(linePreviews.map(preview => [
+    preview.lineId,
+    preview.mainImage,
+  ] as const))
+
   return {
     amounts: {
       balanceDueAmount: optionalDisplayText(detail.amounts.balanceDueAmount),
@@ -131,19 +138,27 @@ export function mapPurchaseOrderDetailToDesc(
     createdAt: optionalDisplayText(detail.createdAt),
     currencyCode: detail.currencyCode,
     issuerName: optionalDisplayText(detail.createdBy.displayName),
-    lines: detail.lines.map(line => ({
-      actualPurchaseUnitPriceAmount: optionalDisplayText(line.actualPurchaseUnitPriceAmount),
-      description: optionalDisplayText(line.description),
-      key: line.id,
-      lineSubtotalAmount: optionalDisplayText(line.lineTotalAmount),
-      lineType: line.lineType,
-      // 当前正式采购详情契约未返回产品媒体，保持显式空态而不是拼装越权 URL。
-      mainImage: null,
-      productName: optionalDisplayText(line.productName),
-      productNo: optionalDisplayText(line.productNo),
-      quantity: String(line.quantity),
-      referencePurchaseUnitPriceAmount: optionalDisplayText(line.referencePurchaseUnitPriceAmount),
-    })),
+    lines: detail.lines.map((line) => {
+      const mainImageSrc = optionalDisplayText(mainImageByLineId.get(line.id)?.contentUrl)
+      return {
+        actualPurchaseUnitPriceAmount: optionalDisplayText(line.actualPurchaseUnitPriceAmount),
+        description: optionalDisplayText(line.description),
+        key: line.id,
+        lineSubtotalAmount: optionalDisplayText(line.lineTotalAmount),
+        lineType: line.lineType,
+        // 正式详情契约不含产品媒体，按行 ID 使用列表已经返回的同订单授权地址。
+        mainImage: mainImageSrc === null
+          ? null
+          : {
+              alt: optionalDisplayText(line.productName) ?? '采购产品主图',
+              src: mainImageSrc,
+            },
+        productName: optionalDisplayText(line.productName),
+        productNo: optionalDisplayText(line.productNo),
+        quantity: String(line.quantity),
+        referencePurchaseUnitPriceAmount: optionalDisplayText(line.referencePurchaseUnitPriceAmount),
+      }
+    }),
     orderDate: optionalDisplayText(detail.orderDate),
     orderNo: optionalDisplayText(detail.orderNo),
     purchaseTypeLabel: purchaseTypeLabel(detail.purchaseType),

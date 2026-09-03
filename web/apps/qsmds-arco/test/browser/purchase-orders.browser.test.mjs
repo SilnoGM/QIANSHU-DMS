@@ -839,11 +839,18 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
       const drawer = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+      const productImage = drawer?.querySelector(
+        '[data-slot="purchase-order-desc-line"] [data-slot="image-group"] img',
+      )
       return drawer?.textContent?.includes('订单基础信息')
         && drawer.textContent.includes('采购产品与小计')
         && drawer.textContent.includes(${JSON.stringify(productNo)})
         && drawer.textContent.includes('BROWSER STOCK MARK')
         && drawer.textContent.includes('状态历史')
+        && productImage instanceof HTMLImageElement
+        && productImage.src.includes('/api/purchase-orders/${order.id}/lines/')
+        && productImage.complete
+        && productImage.naturalWidth > 0
     })()`)
     // 全部采购列表只保留查看与取消；付款从已打开的详情抽屉继续办理。
     await clickVisibleButton(page, '记录付款')

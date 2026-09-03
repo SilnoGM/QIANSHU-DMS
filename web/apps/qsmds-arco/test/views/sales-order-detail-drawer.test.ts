@@ -19,6 +19,7 @@ test('销售详情抽屉按需读取详情并使用 QsSalesOrderDesc 展示', as
   assert.match(source, /salesOrdersApi\.getById/u)
   assert.match(source, /<QsSalesOrderDesc/u)
   assert.match(source, /mapSalesOrderDetailToDesc/u)
+  assert.match(source, /props\.order\?\.lineSummary\.previews \?\? \[\]/u)
   assert.match(source, /:loading="loading"/u)
   assert.match(source, /:error="loadError"/u)
   assert.match(source, /@click="loadDetail"/u)
@@ -110,7 +111,14 @@ test('销售详情 DTO 映射为独立只读详情模型并忽略已解除附件
     version: 1,
   } satisfies SalesOrderDetailDto
 
-  const model = mapSalesOrderDetailToDesc(detail)
+  const model = mapSalesOrderDetailToDesc(detail, [{
+    lineId: 'line-id',
+    mainImage: {
+      contentUrl: '/api/sales-orders/sales-order-id/lines/line-id/main-image/media-id/content',
+      id: 'media-id',
+    },
+    productName: '测试产品',
+  }])
 
   assert.deepEqual(model.amounts, {
     agreedTotalAmount: '180000.0000',
@@ -126,7 +134,10 @@ test('销售详情 DTO 映射为独立只读详情模型并忽略已解除附件
     key: 'line-id',
     lineSubtotalAmount: '180000.0000',
     lineType: 'CATALOG',
-    mainImage: null,
+    mainImage: {
+      alt: '测试产品',
+      src: '/api/sales-orders/sales-order-id/lines/line-id/main-image/media-id/content',
+    },
     productName: '测试产品',
     productNo: 'PROD/00001',
     quantity: '2',

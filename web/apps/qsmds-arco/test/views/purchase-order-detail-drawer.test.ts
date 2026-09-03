@@ -19,6 +19,7 @@ test('采购详情抽屉由采购订单详情组件展示订单，并保留付�
   assert.match(source, /purchaseOrdersApi\.getById/u)
   assert.match(source, /<QsPurchaseOrderDesc/u)
   assert.match(source, /mapPurchaseOrderDetailToDesc/u)
+  assert.match(source, /props\.order\?\.lineSummary\.previews \?\? \[\]/u)
   assert.match(source, /实际付款/u)
   assert.match(source, /付款凭证/u)
   assert.match(source, /状态历史/u)

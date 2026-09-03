@@ -598,11 +598,18 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       const drawer = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+      const productImage = drawer?.querySelector(
+        '[data-slot="sales-order-desc-line"] [data-slot="image-group"] img',
+      )
       return drawer?.querySelector('[data-slot="qs-sales-order-desc"]')
         && drawer.textContent.includes('订单基础信息')
         && drawer.textContent.includes('销售产品与小计')
         && drawer.textContent.includes('PRODUCT-BROWSER-001')
         && drawer.textContent.includes(${JSON.stringify(customerName)})
+        && productImage instanceof HTMLImageElement
+        && productImage.src.includes('/api/sales-orders/${order.id}/lines/')
+        && productImage.complete
+        && productImage.naturalWidth > 0
     })()`)
     await clickVisibleAriaButton(page, '关闭抽屉')
     await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]

@@ -64,7 +64,10 @@ const drawerDescription = computed(() => props.order === null
   : `${props.order.supplier.label} · ${purchaseTypeLabel(props.order.purchaseType)}`)
 const purchaseOrderDescModel = computed(() => detail.value === null
   ? null
-  : mapPurchaseOrderDetailToDesc(detail.value))
+  : mapPurchaseOrderDetailToDesc(
+      detail.value,
+      props.order?.lineSummary.previews ?? [],
+    ))
 const canRecordPayment = computed(() => (
   canManagePayment.value
   && detail.value?.orderStatus === 'CONFIRMED'

@@ -42,7 +42,10 @@ const drawerDescription = computed(() => props.order === null
   : `${props.order.customerName} · ${props.order.currencyCode}`)
 const salesOrderDescModel = computed(() => detail.value === null
   ? null
-  : mapSalesOrderDetailToDesc(detail.value))
+  : mapSalesOrderDetailToDesc(
+      detail.value,
+      props.order?.lineSummary.previews ?? [],
+    ))
 
 function cancelDetailRequest(): void {
   requestVersion += 1
@@ -50,7 +53,10 @@ function cancelDetailRequest(): void {
   detailAbortController = null
 }
 
-/** 每次打开均读取服务端详情，避免列表摘要或上一次打开的订单成为展示依据。 */
+/**
+ * 每次打开均读取服务端详情；仅产品主图复用列表返回的同订单授权预览地址，因为详情
+ * 契约不包含产品媒体。其余订单字段不依赖列表摘要，避免展示过期业务数据。
+ */
 async function loadDetail(): Promise<void> {
   const orderId = props.order?.id
   if (!props.modelValue || orderId === undefined) {
