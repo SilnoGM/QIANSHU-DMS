@@ -347,6 +347,9 @@ test('全部销售订单以销售权限和海运前状态提供唯一的修改�
 
 test('销售订单记录弹窗按需读取详情并分开展示收款、凭证与变更记录', async () => {
   const source = await readFile(new URL('sales-order-records-modal.vue', ROOT), 'utf8')
+  const headerExtraStart = source.indexOf('<template #header-extra>')
+  const headerExtraEnd = source.indexOf('</template>', headerExtraStart)
+  const headerExtraSource = source.slice(headerExtraStart, headerExtraEnd)
   const documentsStart = source.indexOf('<section v-else-if="kind === \'documents\'"')
   const documentsEnd = source.indexOf('<section v-else-if="kind === \'changes\'"', documentsStart)
   const documentsSource = source.slice(documentsStart, documentsEnd)
@@ -358,7 +361,7 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /kind === 'changes'/u)
   assert.match(source, /payment\.voidedAt/u)
   assert.match(source, /新增实际收款/u)
-  assert.match(source, /货物签收/u)
+  assert.doesNotMatch(headerExtraSource, /货物签收|openReceiptModal|canSubmitDeliveryReceipt/u)
   assert.match(source, /<QsDictionarySelect/u)
   assert.match(source, /dictionary-code="payment\.method"/u)
   assert.match(source, /v-model="paymentMethod"/u)

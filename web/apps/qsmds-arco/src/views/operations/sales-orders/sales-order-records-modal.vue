@@ -125,7 +125,6 @@ const changeTabs = computed(() => [
 const canRecordPayment = computed(() => (
   auth('sales-orders:payment') && auth('sales-orders:document')
 ))
-const canSubmitDeliveryReceipt = computed(() => auth('sales-orders:document'))
 const actionLocked = computed(() => actionSubmitting.value || actionUploading.value)
 const paymentCurrency = computed(() => props.currencies.find(
   currency => currency.code === detail.value?.currencyCode,
@@ -283,14 +282,6 @@ function openPaymentModal(): void {
   }
   resetPaymentForm()
   modalState.value = { origin: 'records', view: 'create-payment' }
-}
-
-function openReceiptModal(): void {
-  if (!canSubmitDeliveryReceipt.value || detail.value === null) {
-    return
-  }
-  resetReceiptForm()
-  modalState.value = { origin: 'records', view: 'create-receipt' }
 }
 
 /** 单一弹窗宿主内切换视图，彻底避免表格快捷操作产生双弹窗闪屏。 */
@@ -640,14 +631,6 @@ onBeforeUnmount(() => {
         @click="openPaymentModal"
       >
         <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />新增实际收款
-      </FaButton>
-      <FaButton
-        v-else-if="modalState.view === 'records' && kind === 'documents' && canSubmitDeliveryReceipt"
-        type="button"
-        size="sm"
-        @click="openReceiptModal"
-      >
-        <FaIcon name="i-lucide:package-check" aria-hidden="true" />货物签收
       </FaButton>
     </template>
 
