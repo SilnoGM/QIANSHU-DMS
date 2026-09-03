@@ -207,9 +207,21 @@ export interface PurchaseOrderListItem {
 
 export interface PurchaseOrderPage {
   readonly items: readonly PurchaseOrderListItem[]
+  readonly summariesByCurrency: readonly PurchaseOrderCurrencySummary[]
   readonly page: number
   readonly pageSize: number
   readonly total: number
+}
+
+export interface PurchaseOrderCurrencySummary {
+  readonly currencyCode: 'CNY'
+  readonly orderCount: number
+  readonly referenceSubtotalAmount: string
+  readonly purchaseTotalAmount: string
+  readonly depositDueAmount: string
+  readonly balanceDueAmount: string
+  readonly paidAmount: string
+  readonly outstandingAmount: string
 }
 
 export type PurchaseOrderStatusCountValue =
@@ -283,6 +295,70 @@ function actor(value: { readonly id: string, readonly displayName: string } | nu
 
 function paidUnits(value: { toFixed(decimalPlaces: number): string } | null): bigint {
   return value === null ? 0n : parsePurchaseOrderAmountUnits(decimalToFixed4(value))
+}
+
+function referenceSubtotalUnits(lines: readonly {
+  readonly quantity: number
+  readonly referencePurchaseUnitPriceAmount: {
+    toFixed(decimalPlaces: number): string
+  }
+}[]): bigint {
+  return lines.reduce(
+    (sum, line) => sum + parsePurchaseOrderAmountUnits(
+      decimalToFixed4(line.referencePurchaseUnitPriceAmount),
+    ) * BigInt(line.quantity),
+    0n,
+  )
+}
+
+function mapCurrencySummary(
+  orderAggregate: {
+    readonly _count: { readonly _all: number }
+    readonly _sum: {
+      readonly purchaseTotalAmount: {
+        toFixed(decimalPlaces: number): string
+      } | null
+      readonly depositDueAmount: {
+        toFixed(decimalPlaces: number): string
+      } | null
+      readonly balanceDueAmount: {
+        toFixed(decimalPlaces: number): string
+      } | null
+    }
+  },
+  referencePriceLines: readonly {
+    readonly quantity: number
+    readonly referencePurchaseUnitPriceAmount: {
+      toFixed(decimalPlaces: number): string
+    }
+  }[],
+  paymentAggregate: {
+    readonly _sum: {
+      readonly amount: { toFixed(decimalPlaces: number): string } | null
+    }
+  },
+): PurchaseOrderCurrencySummary | null {
+  if (orderAggregate._count._all === 0) return null
+  const purchaseTotalUnits = paidUnits(orderAggregate._sum.purchaseTotalAmount)
+  const activePaidUnits = paidUnits(paymentAggregate._sum.amount)
+  return {
+    currencyCode: 'CNY',
+    orderCount: orderAggregate._count._all,
+    referenceSubtotalAmount: formatPurchaseOrderAmountUnits(
+      referenceSubtotalUnits(referencePriceLines),
+    ),
+    purchaseTotalAmount: formatPurchaseOrderAmountUnits(purchaseTotalUnits),
+    depositDueAmount: formatPurchaseOrderAmountUnits(
+      paidUnits(orderAggregate._sum.depositDueAmount),
+    ),
+    balanceDueAmount: formatPurchaseOrderAmountUnits(
+      paidUnits(orderAggregate._sum.balanceDueAmount),
+    ),
+    paidAmount: formatPurchaseOrderAmountUnits(activePaidUnits),
+    outstandingAmount: formatPurchaseOrderAmountUnits(
+      purchaseTotalUnits - activePaidUnits,
+    ),
+  }
 }
 
 /**
@@ -437,7 +513,15 @@ export class PurchaseOrderQueryService {
         (value): value is Prisma.PurchaseOrderWhereInput => value !== undefined,
       ),
     }
-    const [total, rows] = await Promise.all([
+    // 列表数量、当前页与金额汇总必须共享同一份筛选谓词，并在一个事务快照内读取，
+    // 避免并发付款或订单变更令“共 N 张”与金额矩阵出现瞬时错位。
+    const [
+      total,
+      rows,
+      orderAggregate,
+      referencePriceLines,
+      paymentAggregate,
+    ] = await this.prisma.$transaction([
       this.prisma.purchaseOrder.count({ where }),
       this.prisma.purchaseOrder.findMany({
         where,
@@ -445,6 +529,29 @@ export class PurchaseOrderQueryService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: PURCHASE_ORDER_LIST_SELECT,
+      }),
+      this.prisma.purchaseOrder.aggregate({
+        where,
+        _count: { _all: true },
+        _sum: {
+          purchaseTotalAmount: true,
+          depositDueAmount: true,
+          balanceDueAmount: true,
+        },
+      }),
+      this.prisma.purchaseOrderLine.findMany({
+        where: { purchaseOrder: { is: where } },
+        select: {
+          referencePurchaseUnitPriceAmount: true,
+          quantity: true,
+        },
+      }),
+      this.prisma.purchaseOrderPayment.aggregate({
+        where: {
+          voidedAt: null,
+          purchaseOrder: { is: where },
+        },
+        _sum: { amount: true },
       }),
     ])
     const ids = rows.map(row => row.id)
@@ -465,12 +572,18 @@ export class PurchaseOrderQueryService {
       row.purchaseOrderId,
       paidUnits(row._sum.amount),
     ]))
+    const currencySummary = mapCurrencySummary(
+      orderAggregate,
+      referencePriceLines,
+      paymentAggregate,
+    )
     return {
       items: rows.map((row, index) => mapListItem(
         row,
         supplierFromResolution(row.supplierValue, supplierResolutions[index]),
         paidByOrder.get(row.id) ?? 0n,
       )),
+      summariesByCurrency: currencySummary === null ? [] : [currencySummary],
       page,
       pageSize,
       total,

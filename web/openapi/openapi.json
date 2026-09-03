@@ -50116,6 +50116,49 @@
           "updatedAt"
         ]
       },
+      "PurchaseOrderCurrencySummaryDto": {
+        "type": "object",
+        "properties": {
+          "currencyCode": {
+            "type": "string",
+            "enum": [
+              "CNY"
+            ]
+          },
+          "orderCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "referenceSubtotalAmount": {
+            "type": "string"
+          },
+          "purchaseTotalAmount": {
+            "type": "string"
+          },
+          "depositDueAmount": {
+            "type": "string"
+          },
+          "balanceDueAmount": {
+            "type": "string"
+          },
+          "paidAmount": {
+            "type": "string"
+          },
+          "outstandingAmount": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "currencyCode",
+          "orderCount",
+          "referenceSubtotalAmount",
+          "purchaseTotalAmount",
+          "depositDueAmount",
+          "balanceDueAmount",
+          "paidAmount",
+          "outstandingAmount"
+        ]
+      },
       "PurchaseOrderPageDto": {
         "type": "object",
         "properties": {
@@ -50123,6 +50166,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/PurchaseOrderListItemDto"
+            }
+          },
+          "summariesByCurrency": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderCurrencySummaryDto"
             }
           },
           "page": {
@@ -50137,6 +50186,7 @@
         },
         "required": [
           "items",
+          "summariesByCurrency",
           "page",
           "pageSize",
           "total"

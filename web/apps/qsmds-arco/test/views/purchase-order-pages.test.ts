@@ -17,6 +17,9 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
 
   assert.match(source, /viewMode\?: PurchaseOrderListViewMode/u)
   assert.match(source, /purchaseOrdersApi\.list/u)
+  assert.match(source, /PurchaseOrderCurrencySummaryDto/u)
+  assert.match(source, /const summariesByCurrency = ref<PurchaseOrderCurrencySummaryDto\[\]>\(\[\]\)/u)
+  assert.match(source, /summariesByCurrency\.value = response\.data\.summariesByCurrency/u)
   assert.match(source, /buildPurchaseOrderListQuery/u)
   assert.match(source, /<FaPageHeader/u)
   assert.match(source, /<QsDateRangeFilter/u)
@@ -97,6 +100,18 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.doesNotMatch(source, /key: 'orderStatus'/u)
   assert.match(source, /履约状态/u)
   assert.match(source, /付款状态/u)
+  assert.match(source, /<template #summary>/u)
+  assert.match(source, /data-testid="purchase-order-summary-matrix"/u)
+  assert.match(source, /data-testid="purchase-order-summary-desktop"/u)
+  assert.match(source, /data-testid="purchase-order-summary-mobile"/u)
+  assert.match(source, /共 \{\{ total \}\} 张订单/u)
+  assert.match(source, />\s*采购价\s*</u)
+  assert.match(source, />\s*本单采购\s*</u)
+  assert.match(source, />\s*采购定价\s*</u)
+  assert.match(source, />\s*付款约定\s*</u)
+  assert.match(source, />\s*已付\s*</u)
+  assert.match(source, />\s*待付\s*</u)
+  assert.match(source, /formatPurchaseOrderSummaryAmount/u)
 })
 
 test('采购列表展示可复制唛头、备注和可复制销售来源', async () => {

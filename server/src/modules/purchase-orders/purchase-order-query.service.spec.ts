@@ -73,6 +73,14 @@ function orderRow(overrides: Record<string, unknown> = {}) {
 function setup() {
   const prisma = {
     purchaseOrder: {
+      aggregate: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
+        _count: { _all: 1 },
+        _sum: {
+          balanceDueAmount: decimal('70'),
+          depositDueAmount: decimal('30'),
+          purchaseTotalAmount: decimal('100'),
+        },
+      }),
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
       findMany: jest.fn<Promise<unknown[]>, [unknown]>()
         .mockResolvedValue([orderRow({ lines: listLines })]),
@@ -108,13 +116,28 @@ function setup() {
           }],
         })),
     },
+    purchaseOrderLine: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+        quantity: 2,
+        referencePurchaseUnitPriceAmount: decimal('15'),
+      }, {
+        quantity: 1,
+        referencePurchaseUnitPriceAmount: decimal('10'),
+      }]),
+    },
     purchaseOrderPayment: {
+      aggregate: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
+        _sum: { amount: decimal('30') },
+      }),
       groupBy: jest.fn<Promise<unknown[]>, [unknown]>()
         .mockResolvedValue([{
           purchaseOrderId: 'order-id',
           _sum: { amount: decimal('30') },
         }]),
     },
+    $transaction: jest.fn().mockImplementation(
+      (operations: readonly Promise<unknown>[]) => Promise.all(operations),
+    ),
   }
   const dictionaryLookup = {
     resolveStoredValues: jest.fn<Promise<unknown[]>, [unknown]>()
@@ -160,6 +183,16 @@ describe('PurchaseOrderQueryService', () => {
     expect(page).toMatchObject({
       page: 1,
       pageSize: 20,
+      summariesByCurrency: [{
+        balanceDueAmount: '70.0000',
+        currencyCode: 'CNY',
+        depositDueAmount: '30.0000',
+        orderCount: 1,
+        outstandingAmount: '70.0000',
+        paidAmount: '30.0000',
+        purchaseTotalAmount: '100.0000',
+        referenceSubtotalAmount: '40.0000',
+      }],
       total: 1,
     })
     expect(page.items).toHaveLength(1)
@@ -226,6 +259,38 @@ describe('PurchaseOrderQueryService', () => {
     expect(where?.select).toMatchObject({
       createdBy: { select: { id: true, displayName: true } },
       shippingMarkText: true,
+    })
+    expect(fixture.prisma.purchaseOrderLine.findMany).toHaveBeenCalledWith({
+      where: { purchaseOrder: { is: where?.where } },
+      select: { quantity: true, referencePurchaseUnitPriceAmount: true },
+    })
+    expect(fixture.prisma.purchaseOrderPayment.aggregate).toHaveBeenCalledWith({
+      where: { purchaseOrder: { is: where?.where }, voidedAt: null },
+      _sum: { amount: true },
+    })
+  })
+
+  it('returns an empty summary collection when the filtered result has no orders', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.count.mockResolvedValue(0)
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([])
+    fixture.prisma.purchaseOrder.aggregate.mockResolvedValue({
+      _count: { _all: 0 },
+      _sum: {
+        balanceDueAmount: null,
+        depositDueAmount: null,
+        purchaseTotalAmount: null,
+      },
+    })
+    fixture.prisma.purchaseOrderLine.findMany.mockResolvedValue([])
+    fixture.prisma.purchaseOrderPayment.aggregate.mockResolvedValue({
+      _sum: { amount: null },
+    })
+
+    await expect(fixture.service.list({ view: 'all' })).resolves.toMatchObject({
+      items: [],
+      summariesByCurrency: [],
+      total: 0,
     })
   })
 

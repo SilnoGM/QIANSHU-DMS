@@ -1,4 +1,5 @@
 import type { PurchaseOrderListItemDto } from '../../src/api/generated/types.gen'
+import type { CurrencyDescriptor } from '../../src/components/base/currency'
 
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 采购列表纯逻辑使用 Node.js 内置 runner。
@@ -8,6 +9,7 @@ import {
   buildPurchaseOrderListQuery,
   buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
+  formatPurchaseOrderSummaryAmount,
   fulfillmentStatusLabel,
   getPurchaseOrderStatusItems,
   nextPurchaseOrderFulfillmentStatus,
@@ -18,6 +20,16 @@ import {
   purchaseTypeLabel,
   resolvePurchaseOrderPendingActions,
 } from '../../src/views/operations/purchase-orders/purchase-order-list.logic'
+
+const currencies: readonly CurrencyDescriptor[] = [
+  { code: 'CNY', enabled: true, minorUnit: 2, name: '人民币', symbol: '¥' },
+]
+
+test('采购汇总矩阵保留精确金额与人民币符号但不重复币种代码', () => {
+  assert.equal(formatPurchaseOrderSummaryAmount('31000', 'CNY', currencies), '¥31,000.00')
+  assert.equal(formatPurchaseOrderSummaryAmount('15000.005', 'CNY', currencies), '¥15,000.01')
+  assert.equal(formatPurchaseOrderSummaryAmount(null, 'CNY', currencies), '—')
+})
 
 test('待办与全部列表严格映射服务端 view 并规范化筛选和日期范围', () => {
   assert.deepEqual(buildPurchaseOrderListQuery({

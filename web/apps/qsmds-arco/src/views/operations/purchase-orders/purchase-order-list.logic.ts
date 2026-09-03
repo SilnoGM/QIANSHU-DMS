@@ -3,11 +3,14 @@ import type {
   PurchaseOrderListQuery,
   PurchaseOrderStatusCountsQuery,
 } from '../../../api/modules/purchase-orders'
+import type { CurrencyAmountValue } from '../../../components/base/AmountDisplay/format'
+import type { CurrencyDescriptor } from '../../../components/base/currency'
 import type { QsGenericTableFilterValues } from '../../../components/business/QsGenericTable/logic'
 import type { QsStatusSwitchItem } from '../../../components/business/QsStatusSwitchToolbar/types'
 
 import Decimal from 'decimal.js'
 
+import { formatCurrencyAmount } from '../../../components/base/AmountDisplay/format'
 import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 export type PurchaseOrderListViewMode = 'all' | 'pending'
@@ -52,6 +55,24 @@ export interface PurchaseOrderPaymentProgress {
 export interface PurchaseOrderApiFailure {
   readonly message: string
   readonly requestId?: string
+}
+
+/**
+ * 汇总矩阵已经以币种作为行标题，因此金额单元格移除末尾重复的币种代码。
+ * 底层仍复用 AmountDisplay 的精确十进制格式化，避免列表另建舍入规则。
+ */
+export function formatPurchaseOrderSummaryAmount(
+  value: CurrencyAmountValue,
+  currency: string,
+  currencies: readonly CurrencyDescriptor[],
+): string {
+  const formatted = formatCurrencyAmount(value, currency, currencies)
+  const normalizedCurrency = currency.trim()
+  const currencySuffix = ` ${normalizedCurrency}`
+
+  return normalizedCurrency.length > 0 && formatted.endsWith(currencySuffix)
+    ? formatted.slice(0, -currencySuffix.length)
+    : formatted
 }
 
 const PURCHASE_TYPES = ['SALES_LINKED', 'STOCK'] as const

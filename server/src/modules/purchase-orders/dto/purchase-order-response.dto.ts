@@ -176,9 +176,22 @@ export class PurchaseOrderDetailDto extends PurchaseOrderListItemDto {
   readonly statusHistory!: readonly PurchaseOrderStatusHistoryDto[]
 }
 
+export class PurchaseOrderCurrencySummaryDto {
+  @ApiProperty({ enum: ['CNY'] }) readonly currencyCode!: 'CNY'
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly orderCount!: number
+  @ApiProperty({ type: 'string' }) readonly referenceSubtotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly purchaseTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly paidAmount!: string
+  @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+}
+
 export class PurchaseOrderPageDto {
   @ApiProperty({ type: () => [PurchaseOrderListItemDto] })
   readonly items!: readonly PurchaseOrderListItemDto[]
+  @ApiProperty({ type: () => [PurchaseOrderCurrencySummaryDto] })
+  readonly summariesByCurrency!: readonly PurchaseOrderCurrencySummaryDto[]
   @ApiProperty({ type: 'integer' }) readonly page!: number
   @ApiProperty({ type: 'integer' }) readonly pageSize!: number
   @ApiProperty({ type: 'integer' }) readonly total!: number
