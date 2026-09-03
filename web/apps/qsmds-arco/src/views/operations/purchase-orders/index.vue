@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { CalendarDateRangeValue } from '@fantastic-admin/components'
-import type { PurchaseOrderDetailInitialAction } from './purchase-order-detail-drawer.vue'
 import type {
   PurchaseOrderListStatusSelection,
   PurchaseOrderListViewMode,
@@ -40,6 +39,7 @@ import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchTool
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 
+import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
 import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
 import {
   buildPurchaseOrderListQuery,
@@ -132,12 +132,16 @@ const listError = ref('')
 const requestId = ref<string>()
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
-const detailInitialAction = ref<PurchaseOrderDetailInitialAction>('detail')
+const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
+const cancelLoadingOrderId = ref<string | null>(null)
+const cancelActionsRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailActions>>('cancelActionsRef')
 const todayDate = today(getLocalTimeZone())
 let requestVersion = 0
 let countRequestVersion = 0
+let cancellationRequestVersion = 0
 let listAbortController: AbortController | null = null
 let countAbortController: AbortController | null = null
+let cancellationAbortController: AbortController | null = null
 
 const statusItems = computed(() => withStatusSwitchCounts(
   getPurchaseOrderStatusItems(props.viewMode),
@@ -449,13 +453,74 @@ function navigateCreate(type: PurchaseOrderListItemDto['purchaseType']): void {
   })
 }
 
-function openPurchaseOrderDetail(
-  order: PurchaseOrderListItemDto,
-  initialAction: PurchaseOrderDetailInitialAction = 'detail',
-): void {
+function openPurchaseOrderDetail(order: PurchaseOrderListItemDto): void {
   selectedOrder.value = { ...order }
-  detailInitialAction.value = initialAction
   detailVisible.value = true
+}
+
+function cancelCancellationDetailRequest(): void {
+  cancellationRequestVersion += 1
+  cancellationAbortController?.abort()
+  cancellationAbortController = null
+  cancelLoadingOrderId.value = null
+}
+
+/**
+ * 取消入口只借用详情接口取得最新版本和付款状态，不打开详情抽屉。
+ * 服务端仍会在真正提交取消时再次校验状态与 version，避免列表缓存成为写入依据。
+ */
+async function loadPurchaseOrderForCancellation(order: PurchaseOrderListItemDto): Promise<void> {
+  if (
+    !canUpdate.value
+    || !canCancelPurchaseOrderFromList(order)
+    || cancelLoadingOrderId.value !== null
+  ) {
+    return
+  }
+  cancelCancellationDetailRequest()
+  const version = cancellationRequestVersion
+  const controller = new AbortController()
+  cancellationAbortController = controller
+  const authEpoch = appAccountStore.authEpoch
+  cancelLoadingOrderId.value = order.id
+  try {
+    const response = await purchaseOrdersApi.getById(order.id, controller.signal)
+    if (
+      controller.signal.aborted
+      || version !== cancellationRequestVersion
+      || authEpoch !== appAccountStore.authEpoch
+    ) {
+      return
+    }
+    if (response.data.orderStatus !== 'CONFIRMED') {
+      toast.warning('采购订单状态已变化，当前无法取消')
+      refreshOrdersAndCounts()
+      return
+    }
+    cancellationDetail.value = response.data
+    await nextTick()
+    cancelActionsRef.value?.openCancelDialog()
+  }
+  catch (error) {
+    if (!controller.signal.aborted && !isPurchaseOrderAbortError(error)) {
+      const failure = getPurchaseOrderApiFailure(error)
+      toast.error(failure.requestId === undefined
+        ? failure.message
+        : `${failure.message}（requestId: ${failure.requestId}）`)
+    }
+  }
+  finally {
+    if (version === cancellationRequestVersion) {
+      cancelLoadingOrderId.value = null
+      if (cancellationAbortController === controller) {
+        cancellationAbortController = null
+      }
+    }
+  }
+}
+
+function openPurchaseOrderCancellation(order: PurchaseOrderListItemDto): void {
+  void loadPurchaseOrderForCancellation(order)
 }
 
 function pendingActions(order: PurchaseOrderListItemDto) {
@@ -482,13 +547,20 @@ function handleDetailUpdated(_detail: PurchaseOrderDetailDto): void {
   refreshOrdersAndCounts()
 }
 
+function handleCancellationUpdated(detail: PurchaseOrderDetailDto): void {
+  cancellationDetail.value = detail
+  refreshOrdersAndCounts()
+}
+
 watch(() => appAccountStore.authEpoch, () => {
   requestVersion += 1
   countRequestVersion += 1
   listAbortController?.abort()
   countAbortController?.abort()
+  cancelCancellationDetailRequest()
   detailVisible.value = false
   selectedOrder.value = null
+  cancellationDetail.value = null
   rows.value = []
   summariesByCurrency.value = []
   statusCountItems.value = []
@@ -553,6 +625,8 @@ onBeforeUnmount(() => {
   countRequestVersion += 1
   listAbortController?.abort()
   countAbortController?.abort()
+  cancelCancellationDetailRequest()
+  cancelActionsRef.value?.cancelPendingRequests()
 })
 </script>
 
@@ -681,7 +755,9 @@ onBeforeUnmount(() => {
               size="sm"
               class="text-destructive min-h-11 sm:min-h-8"
               :aria-label="`${row.orderNo}：取消订单`"
-              @click="openPurchaseOrderDetail(row, 'cancel')"
+              :loading="cancelLoadingOrderId === row.id"
+              :disabled="cancelLoadingOrderId !== null"
+              @click="openPurchaseOrderCancellation(row)"
             >
               <FaIcon name="i-lucide:circle-x" aria-hidden="true" />取消
             </FaButton>
@@ -1212,9 +1288,17 @@ onBeforeUnmount(() => {
     <PurchaseOrderDetailDrawer
       v-model="detailVisible"
       :order="selectedOrder"
-      :initial-action="detailInitialAction"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleDetailUpdated"
+    />
+
+    <PurchaseOrderDetailActions
+      v-if="cancellationDetail"
+      ref="cancelActionsRef"
+      :detail="cancellationDetail"
+      :currencies="currencyCatalog.currencies.value"
+      @detail-updated="handleCancellationUpdated"
+      @failure="toast.error($event)"
     />
   </div>
 </template>

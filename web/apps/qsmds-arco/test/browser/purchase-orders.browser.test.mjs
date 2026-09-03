@@ -260,7 +260,7 @@ async function waitForStatusToolbarCounts(page, ariaLabel, expectedCounts) {
   })()`)
 }
 
-test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、履约和响应式主题', {
+test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详情付款和响应式主题', {
   timeout: 600_000,
 }, async (t) => {
   const configuration = readConfiguration(process.env)
@@ -822,6 +822,17 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     assert.equal(order?.balanceDueAmount, '60.0000')
   })
 
+  await runPurchaseOrderBrowserStep('cancel opens confirmation without detail drawer', async () => {
+    await clickVisibleAriaButton(page, `${order.orderNo}：取消订单`)
+    await waitForVisibleDialog(page, '取消采购订单？')
+    assert.equal(await page.evaluate(`(() => [...document.querySelectorAll(
+      '[data-slot="qs-generic-drawer"]',
+    )].filter(drawer => drawer.getClientRects().length > 0).length)()`), 0)
+    await clickDialogButton(page, '取消采购订单？', '返回')
+    await waitForNoVisibleDialog(page, '取消采购订单？')
+    await waitForPurchaseList(page, order.orderNo)
+  })
+
   await runPurchaseOrderBrowserStep('detail and full payment', async () => {
     await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
     await page.waitFor(`(() => {
@@ -860,7 +871,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     await waitForPurchaseList(page, order.orderNo)
   })
 
-  await runPurchaseOrderBrowserStep('sequential fulfillment leaves pending list', async () => {
+  await runPurchaseOrderBrowserStep('pending action stays lightweight without detail drawer', async () => {
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, order.orderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
@@ -872,91 +883,16 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、详情、付款、
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="info"]')]
       .some(toast => toast.getClientRects().length > 0
         && toast.textContent?.includes('发货功能正在建设中'))`)
-
-    // 待办操作首期只能提示，真实履约仍从全部采购详情入口回归。
-    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
-    await waitForPurchaseList(page, order.orderNo)
-    // 该订单同时存在于待办与全部列表；必须确认新路由的工具栏已经接管 DOM，
-    // 避免误点路由切换期间尚未卸载的待办列表按钮。
-    await waitForStatusToolbarCounts(page, '全部采购状态筛选', {
-      全部采购: 2,
-      已确认: 2,
-      已完成: 0,
-      已取消: 0,
-    })
-
-    for (const statusLabel of ['备货中', '已发货', '已签收']) {
-      process.stdout.write(`[numbering-browser] purchase orders · fulfillment ${statusLabel}\n`)
-      // 履约不再暴露为列表快捷操作，每次都从最新详情上下文推进。
-      await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
-      // 抽屉壳体会先于详情请求完成出现；必须等当前订单详情落入抽屉后再找 Footer，
-      // 否则较慢的正式构建环境会把“仍在加载”误判成缺少履约动作。
-      try {
-        await page.waitFor(`(() => {
-          const drawer = [...document.querySelectorAll('[role="dialog"]')]
-            .find(candidate => candidate.getClientRects().length > 0
-              && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
-          return drawer?.querySelector('[data-slot="qs-generic-drawer"]')
-            ?.getAttribute('aria-busy') === 'false'
-            && drawer.textContent.includes('订单基础信息')
-        })()`)
-      }
-      catch (error) {
-        const state = await page.evaluate(`(() => ({
-          hash: location.hash,
-          dialogs: [...document.querySelectorAll('[role="dialog"]')]
-            .filter(dialog => dialog.getClientRects().length > 0)
-            .map(dialog => ({
-              busy: dialog.querySelector('[data-slot="qs-generic-drawer"]')
-                ?.getAttribute('aria-busy') ?? null,
-              text: dialog.textContent?.replace(/\\s+/g, ' ').trim().slice(0, 500) ?? '',
-            })),
-          viewButtons: [...document.querySelectorAll('button')]
-            .filter(button => button.getAttribute('aria-label')
-              === ${JSON.stringify(`${order.orderNo}：查看详情`)})
-            .map(button => ({
-              disabled: button.disabled,
-              visible: button.getClientRects().length > 0,
-            })),
-        }))()`)
-        throw new Error(`purchase detail drawer unavailable: ${JSON.stringify(state)}`, {
-          cause: error,
-        })
-      }
-      await clickVisibleButton(page, `推进至${statusLabel}`)
-      await waitForVisibleDialog(page, '推进采购履约状态？')
-      await page.waitFor(`(() => [...document.querySelectorAll('[role="dialog"]')]
-        .some(dialog => dialog.getClientRects().length > 0
-          && dialog.textContent?.includes('推进采购履约状态？')
-          && dialog.textContent.includes(${JSON.stringify(`下一状态：${statusLabel}`)})))()`)
-      await clickDialogButton(page, '推进采购履约状态？', '确认推进')
-      await waitForNoVisibleDialog(page, '推进采购履约状态？')
-      await page.waitFor(`(() => {
-        const drawer = [...document.querySelectorAll('[role="dialog"]')]
-          .find(candidate => candidate.getClientRects().length > 0
-            && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
-        return drawer?.textContent?.includes(${JSON.stringify(statusLabel)})
-      })()`)
-      await clickVisibleAriaButton(page, '关闭抽屉')
-      await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
-        .some(dialog => dialog.getClientRects().length > 0
-          && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
-      await page.evaluate(`new Promise(resolve => requestAnimationFrame(
-        () => requestAnimationFrame(resolve),
-      ))`)
-      await waitForPurchaseList(page, order.orderNo)
-    }
-    await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
-    await waitForPurchaseList(page, linkedOrder.orderNo)
-    await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
-      待发货: 1,
-      待付款: 1,
-      待入仓: 0,
-    })
+    assert.equal(await page.evaluate(`(() => [...document.querySelectorAll(
+      '[data-slot="qs-generic-drawer"]',
+    )].filter(drawer => drawer.getClientRects().length > 0).length)()`), 0)
     const pending = await readPurchaseOrders(page, 'pending')
     assert.equal(pending.status, 200)
-    assert.equal(pending.body?.total, 1)
-    assert.equal(pending.body?.items?.[0]?.id, linkedOrder.id)
+    assert.equal(pending.body?.total, 2)
+    assert.deepEqual(
+      new Set(pending.body?.items?.map(item => item.id)),
+      new Set([linkedOrder.id, order.id]),
+    )
   })
 
   await runPurchaseOrderBrowserStep('390x844 light dark and touch targets', async () => {

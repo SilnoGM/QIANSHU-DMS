@@ -22,20 +22,15 @@ import {
   purchaseOrderStatusHistoryValueLabel,
 } from './purchase-order-detail.logic'
 import {
-  fulfillmentStatusLabel,
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
-  nextPurchaseOrderFulfillmentStatus,
   purchaseTypeLabel,
 } from './purchase-order-list.logic'
-
-export type PurchaseOrderDetailInitialAction = 'detail' | 'fulfillment' | 'payment' | 'cancel'
 
 defineOptions({ name: 'PurchaseOrderDetailDrawer' })
 
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
-  initialAction: PurchaseOrderDetailInitialAction
   modelValue: boolean
   order: PurchaseOrderListItemDto | null
 }>()
@@ -61,12 +56,8 @@ const drawerVisible = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
 })
-const canUpdate = computed(() => auth('purchase-orders:update'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const canManageDocument = computed(() => auth('purchase-orders:document'))
-const nextFulfillmentStatus = computed(() => detail.value === null
-  ? null
-  : nextPurchaseOrderFulfillmentStatus(detail.value))
 const drawerTitle = computed(() => props.order?.orderNo ?? '采购订单详情')
 const drawerDescription = computed(() => props.order === null
   ? '查看采购订单、履约、付款和凭证。'
@@ -79,10 +70,6 @@ const canRecordPayment = computed(() => (
   && detail.value?.orderStatus === 'CONFIRMED'
   && detail.value.paymentStatus !== 'PAID'
 ))
-const canCancelOrder = computed(() => (
-  canUpdate.value && detail.value?.orderStatus === 'CONFIRMED'
-))
-
 function optionalText(value: string | null): string {
   return value?.trim() || '—'
 }
@@ -115,18 +102,6 @@ function applyUpdatedDetail(updated: PurchaseOrderDetailDto): void {
   emit('detailUpdated', updated)
 }
 
-function openInitialAction(): void {
-  if (props.initialAction === 'fulfillment' && canUpdate.value && nextFulfillmentStatus.value) {
-    detailActionsRef.value?.openFulfillmentDialog()
-  }
-  else if (props.initialAction === 'payment' && canRecordPayment.value) {
-    detailActionsRef.value?.openPaymentDialog()
-  }
-  else if (props.initialAction === 'cancel' && canCancelOrder.value) {
-    detailActionsRef.value?.openCancelDialog()
-  }
-}
-
 /** 每次打开都读取详情，避免列表摘要在其他用户操作后成为写入依据。 */
 async function loadDetail(): Promise<void> {
   const orderId = props.order?.id
@@ -153,7 +128,6 @@ async function loadDetail(): Promise<void> {
       return
     }
     detail.value = response.data
-    nextTick(openInitialAction)
   }
   catch (error) {
     if (controller.signal.aborted || isPurchaseOrderAbortError(error)) {
@@ -176,16 +150,6 @@ function openPaymentDialog(): void {
   detailActionsRef.value?.openPaymentDialog()
 }
 
-function openFulfillmentDialog(): void {
-  actionError.value = ''
-  detailActionsRef.value?.openFulfillmentDialog()
-}
-
-function openCancelDialog(): void {
-  actionError.value = ''
-  detailActionsRef.value?.openCancelDialog()
-}
-
 function openVoidDialog(payment: PurchaseOrderPaymentDto): void {
   actionError.value = ''
   detailActionsRef.value?.openVoidDialog(payment)
@@ -202,7 +166,7 @@ function downloadDocument(document: PurchaseOrderDocumentDto): void {
 }
 
 watch(
-  () => [props.modelValue, props.order?.id, props.initialAction] as const,
+  () => [props.modelValue, props.order?.id] as const,
   ([visible, orderId]) => {
     if (!visible || orderId === undefined) {
       cancelDetailRequest()
@@ -355,20 +319,6 @@ onBeforeUnmount(() => {
         </ol>
       </section>
     </div>
-
-    <template #footer>
-      <template v-if="detail">
-        <FaButton v-if="canCancelOrder" type="button" variant="destructive" :disabled="actionLocked" @click="openCancelDialog">
-          取消订单
-        </FaButton>
-        <FaButton v-if="canUpdate && nextFulfillmentStatus" type="button" variant="outline" :disabled="actionLocked" @click="openFulfillmentDialog">
-          推进至{{ fulfillmentStatusLabel(nextFulfillmentStatus) }}
-        </FaButton>
-        <FaButton v-if="canRecordPayment" type="button" :disabled="actionLocked" @click="openPaymentDialog">
-          记录付款
-        </FaButton>
-      </template>
-    </template>
   </QsGenericDrawer>
 
   <PurchaseOrderDetailActions
