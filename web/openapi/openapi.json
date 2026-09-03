@@ -34026,7 +34026,10 @@
             {
               "status": 422,
               "codes": [
+                "SALES_ORDER_CANCELLED",
+                "SALES_ORDER_COMPLETED",
                 "SALES_ORDER_DOCUMENT_UNAVAILABLE",
+                "SALES_ORDER_FULFILLMENT_TRANSITION_INVALID",
                 "VALIDATION_FAILED"
               ]
             },

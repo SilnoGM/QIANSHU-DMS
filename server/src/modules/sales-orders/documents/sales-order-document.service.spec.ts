@@ -11,13 +11,22 @@ const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const DOCUMENT_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const MEDIA_ASSET_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
-function setup(documentType = 'DELIVERY_RECEIPT') {
+function setup(
+  documentType = 'DELIVERY_RECEIPT',
+  fulfillmentStatus = 'SEA_TRANSIT',
+  orderStatus = 'CONFIRMED',
+) {
   const transaction = {
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>()
-      .mockResolvedValue([{ id: ORDER_ID, fulfillmentStatus: 'SEA_TRANSIT' }]),
+      .mockResolvedValue([{ id: ORDER_ID, fulfillmentStatus }]),
     salesOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>()
-        .mockResolvedValue({ id: ORDER_ID, customerName: '王小明' }),
+        .mockResolvedValue({
+          id: ORDER_ID,
+          customerName: '王小明',
+          fulfillmentStatus,
+          orderStatus,
+        }),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
     mediaAsset: {
@@ -70,7 +79,7 @@ function setup(documentType = 'DELIVERY_RECEIPT') {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('SalesOrderDocumentService', () => {
-  it('creates one order-level delivery receipt without changing fulfillment state', async () => {
+  it('atomically creates one delivery receipt and advances sea transit to signed', async () => {
     const fixture = setup()
 
     await expect(fixture.service.submitDeliveryReceipt(
@@ -97,10 +106,55 @@ describe('SalesOrderDocumentService', () => {
     })
     expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
       where: { id: ORDER_ID },
-      data: { version: { increment: 1 } },
+      data: {
+        fulfillmentStatus: 'SIGNED',
+        version: { increment: 1 },
+      },
     })
-    expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: ORDER_ID,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'SEA_TRANSIT',
+        toStatus: 'SIGNED',
+        reason: '业务人员上传签收单后自动确认签收',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+    expect(fixture.audit.record).toHaveBeenNthCalledWith(2, fixture.transaction, {
+      eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED',
+      outcome: 'SUCCESS',
+      actorType: 'USER',
+      actorUserId: ACTOR_ID,
+      targetType: 'SALES_ORDER',
+      targetId: ORDER_ID,
+      requestId: 'request-1',
+      metadata: { fromStatus: 'SEA_TRANSIT', toStatus: 'SIGNED' },
+    })
   })
+
+  it.each([
+    ['WAREHOUSE_ARRIVED', 'CONFIRMED', 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID'],
+    ['SEA_TRANSIT', 'CANCELLED', 'SALES_ORDER_CANCELLED'],
+    ['SEA_TRANSIT', 'COMPLETED', 'SALES_ORDER_COMPLETED'],
+  ])(
+    'rejects receipt submission before media activation when fulfillment=%s order=%s',
+    async (fulfillmentStatus, orderStatus, code) => {
+      const fixture = setup('DELIVERY_RECEIPT', fulfillmentStatus, orderStatus)
+
+      await expect(fixture.service.submitDeliveryReceipt(
+        context,
+        ORDER_ID,
+        { mediaAssetId: MEDIA_ASSET_ID, remark: null },
+      )).rejects.toMatchObject({ code })
+
+      expect(fixture.media.activate).not.toHaveBeenCalled()
+      expect(fixture.transaction.salesOrderDocument.create).not.toHaveBeenCalled()
+      expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+      expect(fixture.transaction.salesOrderStatusHistory.create).not.toHaveBeenCalled()
+      expect(fixture.audit.record).not.toHaveBeenCalled()
+    },
+  )
 
   it('rejects extra receipt fields and protects issuance/payment vouchers from detachment', async () => {
     const invalid = setup()

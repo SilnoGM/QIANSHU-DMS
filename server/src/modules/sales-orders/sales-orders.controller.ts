@@ -746,7 +746,10 @@ export class SalesOrdersController {
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
+        'SALES_ORDER_CANCELLED',
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_DOCUMENT_UNAVAILABLE',
+        'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
         'VALIDATION_FAILED',
       ] },
       { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },

@@ -18,6 +18,7 @@ import {
   apiExpression,
   appRouteUrl,
   clickVisibleButton,
+  clickVisibleRowButton,
   collectRuntimeIssues,
   loginThroughRealHttp,
   readConfiguration,
@@ -629,6 +630,80 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
       .some(dialog => dialog.getClientRects().length > 0
         && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
+
+    // 使用正式状态接口按既有状态机推进到海运中，再从真实待办操作上传签收单。
+    // 浏览器场景运行在一次性隔离数据库中，不会修改开发环境的业务订单。
+    for (const toStatus of [
+      'PREPARING',
+      'LAND_TRANSIT',
+      'WAREHOUSE_ARRIVED',
+      'SEA_TRANSIT',
+    ]) {
+      const transition = await page.evaluate(apiExpression(
+        `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
+        'PATCH',
+        { toStatus, reason: 'Browser 签收自动推进验收' },
+      ))
+      assert.equal(transition.status, 200)
+      assert.equal(transition.body?.fulfillmentStatus, toStatus)
+    }
+
+    await page.navigate(appRouteUrl(
+      configuration.baseUrl,
+      '/qs-operations/sales/pending-sales-orders?status=SEA_TRANSIT',
+    ))
+    await waitForAfterAuthentication(page, `(() => {
+      const table = document.querySelector('[data-testid="sales-order-list-table"]')
+      return table?.getClientRects().length > 0
+        && !table.querySelector('[aria-busy="true"]')
+        && table.textContent?.includes(${JSON.stringify(order.orderNo)})
+    })()`)
+    await clickVisibleRowButton(page, order.orderNo, '货物签收')
+    await waitForVisibleDialog(page, '货物签收')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('货物签收'))
+      return dialog?.textContent?.includes('自动将订单进度更新为已签收')
+    })()`)
+    await page.setFiles(
+      '[data-testid="sales-order-delivery-receipt-input"]',
+      [voucherFixture],
+    )
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('货物签收'))
+      return dialog?.textContent?.includes('browser-sales-order-voucher.png')
+    })()`)
+    await clickDialogButton(page, '货物签收', '确认货物签收')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('签收单上传成功，订单已进入已签收'))`)
+    await waitForNoVisibleDialog(page, '货物签收')
+
+    const signedDetail = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}`,
+    ))
+    assert.equal(signedDetail.status, 200)
+    assert.equal(signedDetail.body?.fulfillmentStatus, 'SIGNED')
+    assert.equal(signedDetail.body?.orderStatus, 'CONFIRMED')
+    assert.equal(
+      signedDetail.body?.documents?.some(document => (
+        document.documentType === 'DELIVERY_RECEIPT'
+        && document.detachedAt === null
+      )),
+      true,
+    )
+    assert.equal(
+      signedDetail.body?.statusHistory?.some(history => (
+        history.dimension === 'FULFILLMENT'
+        && history.fromStatus === 'SEA_TRANSIT'
+        && history.toStatus === 'SIGNED'
+        && history.reason === '业务人员上传签收单后自动确认签收'
+      )),
+      true,
+    )
   })
 
   runtime.stop()

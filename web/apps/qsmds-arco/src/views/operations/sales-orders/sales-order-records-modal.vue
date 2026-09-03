@@ -504,7 +504,7 @@ async function submitDeliveryReceipt(): Promise<void> {
     else {
       modalVisible.value = false
     }
-    toast.success('签收单上传成功，订单进度保持不变')
+    toast.success('签收单上传成功，订单已进入已签收')
   }
   catch (error) {
     if (!isSalesOrderAbortError(error)) {
@@ -1079,7 +1079,7 @@ onBeforeUnmount(() => {
         role="alert"
       />
       <p class="text-sm text-muted-foreground m-0">
-        只需上传一份签收单。提交后作为订单级凭证保存，暂不自动更新订单进度。
+        只需上传一份签收单。提交后作为订单级凭证保存，并自动将订单进度更新为已签收。
       </p>
       <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
         <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">
@@ -1098,6 +1098,7 @@ onBeforeUnmount(() => {
       </FaForm>
       <input
         ref="receiptFileInputRef"
+        data-testid="sales-order-delivery-receipt-input"
         type="file"
         accept="image/*,.pdf,.doc,.docx"
         class="sr-only"
