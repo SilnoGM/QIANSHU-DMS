@@ -55,6 +55,7 @@ import {
   PurchaseOrderProductImageParamDto,
   PurchaseOrderProductOptionsQueryDto,
   PurchaseOrderSourceSalesOrderIdParamDto,
+  PurchaseOrderSourceSalesOrderLinesQueryDto,
   PurchaseOrderSourceSalesOrderLineImageParamDto,
   PurchaseOrderSourceSalesOrdersQueryDto,
   PurchaseOrderStatusCountsQueryDto,
@@ -261,8 +262,9 @@ export class PurchaseOrdersController {
   })
   sourceSalesOrderLines(
     @Param() params: PurchaseOrderSourceSalesOrderIdParamDto,
+    @Query() query: PurchaseOrderSourceSalesOrderLinesQueryDto,
   ): ReturnType<PurchaseOrderSourceQueryService['salesOrderLines']> {
-    return this.sourceQueries.salesOrderLines(params.salesOrderId)
+    return this.sourceQueries.salesOrderLines(params.salesOrderId, query)
   }
 
   @Head('source-sales-orders/:salesOrderId/lines/:lineId/main-image/:productMediaId/content')

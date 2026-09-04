@@ -9,11 +9,13 @@ import {
   Matches,
   Max,
   Min,
+  ValidateIf,
 } from 'class-validator'
 
 import {
   PurchaseOrderFulfillmentStatus,
   PurchaseOrderPaymentStatus,
+  type PurchaseOrderProductMode,
   PurchaseOrderStatus,
   PurchaseOrderType,
 } from '../../../generated/prisma/enums'
@@ -132,7 +134,32 @@ export class PurchaseOrderProductOptionsQueryDto extends PurchaseOrderPageQueryD
   keyword?: string
 }
 
-export class PurchaseOrderSourceSalesOrdersQueryDto extends PurchaseOrderPageQueryDto {
+export const PURCHASE_ORDER_SOURCE_PRODUCT_MODES = [
+  'CATALOG',
+  'CUSTOM',
+] as const
+
+export type PurchaseOrderSourceProductMode = Exclude<
+  PurchaseOrderProductMode,
+  'MIXED'
+>
+
+class PurchaseOrderSourceProductFilterQueryDto {
+  @ApiProperty({ enum: PURCHASE_ORDER_SOURCE_PRODUCT_MODES })
+  @IsIn(PURCHASE_ORDER_SOURCE_PRODUCT_MODES)
+  productMode!: PurchaseOrderSourceProductMode
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64, required: false })
+  @ValidateIf((query: PurchaseOrderSourceProductFilterQueryDto) => (
+    query.productMode === 'CATALOG'
+  ))
+  @IsString()
+  @IsUnicodeCodePointLength(1, 64)
+  supplierValue?: string
+}
+
+export class PurchaseOrderSourceSalesOrdersQueryDto
+  extends PurchaseOrderSourceProductFilterQueryDto {
   @ApiProperty({ enum: PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS })
   @IsIn(PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS)
   view!: PurchaseOrderSourceSalesOrderView
@@ -142,7 +169,30 @@ export class PurchaseOrderSourceSalesOrdersQueryDto extends PurchaseOrderPageQue
   @IsString()
   @IsUnicodeCodePointLength(1, 128)
   keyword?: string
+
+  @ApiProperty({ type: 'string', format: 'uuid', required: false })
+  @IsOptional()
+  @Matches(UUID_V4_PATTERN)
+  salesOrderId?: string
+
+  @ApiProperty({ type: 'integer', minimum: 1, default: 1, required: false })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => optionalInteger(value))
+  @IsInt()
+  @Min(1)
+  page?: number
+
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: 100, default: 20, required: false })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => optionalInteger(value))
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number
 }
+
+export class PurchaseOrderSourceSalesOrderLinesQueryDto
+  extends PurchaseOrderSourceProductFilterQueryDto {}
 
 export class PurchaseOrderIdParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })

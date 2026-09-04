@@ -161,7 +161,11 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderDocumentService,
       {} as PurchaseOrderProductImageService,
     )
-    const query = { view: 'UNPURCHASED' as const }
+    const query = {
+      view: 'UNPURCHASED' as const,
+      productMode: 'CATALOG' as const,
+      supplierValue: 'SUPPLIER_A',
+    }
 
     await expect(controller.sourceSalesOrders(query)).resolves.toMatchObject({
       view: 'UNPURCHASED',

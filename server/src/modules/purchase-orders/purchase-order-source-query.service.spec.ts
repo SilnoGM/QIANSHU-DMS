@@ -132,7 +132,11 @@ function prepareSourceFacts(
   fixture: ReturnType<typeof setup>,
   input: {
     readonly counts?: readonly { readonly view: string, readonly count: bigint }[]
-    readonly page?: readonly { readonly id: string, readonly totalCount: bigint }[]
+    readonly page?: readonly {
+      readonly id: string
+      readonly lineIds: readonly string[]
+      readonly remainingQuantity: bigint
+    }[]
   } = {},
 ) {
   fixture.prisma.$queryRaw
@@ -140,7 +144,11 @@ function prepareSourceFacts(
       { view: 'UNPURCHASED', count: 1n },
       { view: 'PARTIALLY_PURCHASED', count: 1n },
     ])
-    .mockResolvedValueOnce(input.page ?? [{ id: 'sales-order-id', totalCount: 1n }])
+    .mockResolvedValueOnce(input.page ?? [{
+      id: 'sales-order-id',
+      lineIds: ['sales-line-id'],
+      remainingQuantity: 3n,
+    }])
 }
 
 describe('PurchaseOrderSourceQueryService', () => {
@@ -239,6 +247,8 @@ describe('PurchaseOrderSourceQueryService', () => {
     prepareSourceFacts(fixture)
     await expect(fixture.service.salesOrders({
       view: 'UNPURCHASED',
+      productMode: 'CATALOG',
+      supplierValue: 'SUPPLIER_A',
       keyword: 'SO',
     })).resolves.toEqual({
       view: 'UNPURCHASED',
@@ -257,8 +267,8 @@ describe('PurchaseOrderSourceQueryService', () => {
         fulfillmentStatus: 'PREPARING',
         paymentStatus: 'PARTIALLY_PAID',
         lineSummary: {
-          lineCount: 2,
-          totalQuantity: 6,
+          lineCount: 1,
+          totalQuantity: 3,
           previews: [{
             lineId: 'sales-line-id',
             productName: '销售快照产品',
@@ -266,10 +276,6 @@ describe('PurchaseOrderSourceQueryService', () => {
               id: 'product-media-id',
               contentUrl: '/api/purchase-orders/source-sales-orders/sales-order-id/lines/sales-line-id/main-image/product-media-id/content',
             },
-          }, {
-            lineId: 'custom-line-id',
-            productName: '本单临时服务',
-            mainImage: null,
           }],
         },
       }],
@@ -282,7 +288,7 @@ describe('PurchaseOrderSourceQueryService', () => {
       | undefined
     expect(sourceQuery?.where).toEqual({
       id: { in: ['sales-order-id'] },
-      lines: { some: { removedAt: null } },
+      lines: { some: { id: { in: ['sales-line-id'] }, removedAt: null } },
     })
     expect(sourceQuery?.select).toMatchObject({
       issuer: { select: { id: true, displayName: true } },
@@ -290,7 +296,7 @@ describe('PurchaseOrderSourceQueryService', () => {
       fulfillmentStatus: true,
       paymentStatus: true,
       lines: {
-        where: { removedAt: null },
+        where: { id: { in: ['sales-line-id'] }, removedAt: null },
         select: {
           id: true,
           productId: true,
@@ -321,6 +327,8 @@ describe('PurchaseOrderSourceQueryService', () => {
     for (const sql of [countsSql, pageSql]) {
       const text = sqlText(sql)
       expect(text).toContain('source_sales_order_lines')
+      expect(text).toContain('target_source_sales_order_lines')
+      expect(text).toContain('target_remaining_lines')
       expect(text).toContain('source_line."removed_at" IS NULL')
       expect(text).toContain('purchased_by_line')
       expect(text).toContain('active_purchase_by_order')
@@ -328,7 +336,9 @@ describe('PurchaseOrderSourceQueryService', () => {
       expect(text).toContain('purchase_type')
       expect(text).toContain('SALES_LINKED')
       expect(text).toContain('CANCELLED')
-      expect(text).not.toContain('product_id')
+      expect(text).toContain('product_id')
+      expect(sqlShape(sql).values).toContain('CATALOG')
+      expect(sqlShape(sql).values).toContain('SUPPLIER_A')
       expect(sqlShape(sql).values).toContain('SO')
     }
     expect(sqlText(pageSql)).toContain('"order_date" DESC')
@@ -345,6 +355,7 @@ describe('PurchaseOrderSourceQueryService', () => {
 
     await expect(fixture.service.salesOrders({
       view: 'PARTIALLY_PURCHASED',
+      productMode: 'CUSTOM',
     })).resolves.toMatchObject({
       view: 'PARTIALLY_PURCHASED',
       counts: [
@@ -354,6 +365,26 @@ describe('PurchaseOrderSourceQueryService', () => {
       items: [],
       total: 7,
     })
+    expect(fixture.dictionaryLookup.resolveStoredValue).not.toHaveBeenCalled()
+  })
+
+  it('parameterizes the exact sales order eligibility filter for shortcuts', async () => {
+    const fixture = setup()
+    prepareSourceFacts(fixture, { page: [] })
+
+    await fixture.service.salesOrders({
+      view: 'UNPURCHASED',
+      productMode: 'CATALOG',
+      supplierValue: 'SUPPLIER_A',
+      salesOrderId: '11111111-1111-4111-8111-111111111111',
+    })
+
+    for (const [sql] of fixture.prisma.$queryRaw.mock.calls) {
+      expect(sqlText(sql)).toContain('source_order."id" = CAST(')
+      expect(sqlShape(sql).values).toContain(
+        '11111111-1111-4111-8111-111111111111',
+      )
+    }
   })
 
   it('loads only the current page summaries and restores raw order after Prisma loading', async () => {
@@ -364,8 +395,16 @@ describe('PurchaseOrderSourceQueryService', () => {
         { view: 'PARTIALLY_PURCHASED', count: 2n },
       ],
       page: [
-        { id: 'sales-order-id', totalCount: 2n },
-        { id: 'second-sales-order-id', totalCount: 2n },
+        {
+          id: 'sales-order-id',
+          lineIds: ['sales-line-id'],
+          remainingQuantity: 3n,
+        },
+        {
+          id: 'second-sales-order-id',
+          lineIds: ['sales-line-id'],
+          remainingQuantity: 3n,
+        },
       ],
     })
     fixture.prisma.salesOrder.findMany.mockResolvedValue([
@@ -378,6 +417,8 @@ describe('PurchaseOrderSourceQueryService', () => {
 
     const result = await fixture.service.salesOrders({
       view: 'PARTIALLY_PURCHASED',
+      productMode: 'CATALOG',
+      supplierValue: 'SUPPLIER_A',
       page: 2,
       pageSize: 2,
     })
@@ -393,14 +434,17 @@ describe('PurchaseOrderSourceQueryService', () => {
           'sales-order-id',
           'second-sales-order-id',
         ] },
-        lines: { some: { removedAt: null } },
+        lines: { some: { id: { in: ['sales-line-id'] }, removedAt: null } },
       } }),
     )
   })
 
   it('returns source lines with remaining quantity after active purchases', async () => {
     const fixture = setup()
-    await expect(fixture.service.salesOrderLines('sales-order-id')).resolves.toEqual({
+    await expect(fixture.service.salesOrderLines('sales-order-id', {
+      productMode: 'CATALOG',
+      supplierValue: 'SUPPLIER_A',
+    })).resolves.toEqual({
       salesOrder: { id: 'sales-order-id', orderNo: 'SO-001', customerName: '客户甲' },
       items: [expect.objectContaining({
         id: 'sales-line-id',
@@ -440,8 +484,83 @@ describe('PurchaseOrderSourceQueryService', () => {
     })
     expect(fixture.prisma.salesOrderLine.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { salesOrderId: 'sales-order-id', removedAt: null },
+        where: {
+          salesOrderId: 'sales-order-id',
+          removedAt: null,
+          lineType: 'CATALOG',
+          product: { is: { supplierValue: 'SUPPLIER_A' } },
+        },
       }),
     )
+  })
+
+  it('filters CUSTOM orders and lines without resolving a dictionary supplier', async () => {
+    const fixture = setup()
+    prepareSourceFacts(fixture, { page: [] })
+
+    await fixture.service.salesOrders({
+      view: 'UNPURCHASED',
+      productMode: 'CUSTOM',
+    })
+    expect(fixture.dictionaryLookup.resolveStoredValue).not.toHaveBeenCalled()
+    for (const [sql] of fixture.prisma.$queryRaw.mock.calls) {
+      expect(sqlShape(sql).values).toContain('CUSTOM')
+      expect(sqlShape(sql).values).not.toContain('SUPPLIER_A')
+    }
+
+    fixture.prisma.salesOrderLine.findMany.mockResolvedValue([{
+      id: 'custom-line-id',
+      lineNumber: 2,
+      lineType: 'CUSTOM',
+      productId: null,
+      productNoSnapshot: null,
+      productNameSnapshot: '本单临时服务',
+      productAttributesSnapshot: [],
+      descriptionSnapshot: null,
+      quantity: 1,
+    }])
+    fixture.prisma.purchaseOrderLine.findMany.mockResolvedValue([])
+    await expect(fixture.service.salesOrderLines('sales-order-id', {
+      productMode: 'CUSTOM',
+    })).resolves.toMatchObject({
+      items: [{ lineType: 'CUSTOM', remainingQuantity: 1 }],
+    })
+    expect(fixture.prisma.salesOrderLine.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          salesOrderId: 'sales-order-id',
+          removedAt: null,
+          lineType: 'CUSTOM',
+        },
+      }),
+    )
+  })
+
+  it('rejects source lines when all target quantities are already purchased', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrderLine.findMany.mockResolvedValue([{
+      id: 'purchase-line-id',
+      sourceSalesOrderLineId: 'sales-line-id',
+      referencePurchaseUnitPriceAmount: decimal('12.34'),
+      actualPurchaseUnitPriceAmount: decimal('11.50'),
+      quantity: 5,
+      lineTotalAmount: decimal('57.50'),
+      descriptionSnapshot: null,
+    }])
+
+    await expect(fixture.service.salesOrderLines('sales-order-id', {
+      productMode: 'CATALOG',
+      supplierValue: 'SUPPLIER_A',
+    })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
+  })
+
+  it.each([
+    [{ view: 'UNPURCHASED', productMode: 'CATALOG' }, 'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID'],
+    [{ view: 'UNPURCHASED', productMode: 'CUSTOM', supplierValue: 'SUPPLIER_A' }, 'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID'],
+    [{ view: 'UNPURCHASED', productMode: 'MIXED' }, 'PURCHASE_ORDER_PRODUCT_MODE_INVALID'],
+  ])('rejects an invalid source filter %#', async (input, code) => {
+    const fixture = setup()
+    await expect(fixture.service.salesOrders(input as never)).rejects.toMatchObject({ code })
+    expect(fixture.prisma.$queryRaw).not.toHaveBeenCalled()
   })
 })

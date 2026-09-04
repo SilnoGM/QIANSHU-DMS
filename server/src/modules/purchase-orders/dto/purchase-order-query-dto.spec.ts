@@ -2,6 +2,7 @@ import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
 import {
+  PurchaseOrderSourceSalesOrderLinesQueryDto,
   PurchaseOrderSourceSalesOrdersQueryDto,
   PurchaseOrderStatusCountsQueryDto,
 } from './purchase-order-query.dto'
@@ -15,22 +16,33 @@ describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
     async (view) => {
       const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, {
         view,
+        productMode: 'CATALOG',
+        supplierValue: 'SUPPLIER_A',
         keyword: 'SO-001',
         page: '2',
         pageSize: '50',
       })
 
       await expect(validate(dto)).resolves.toEqual([])
-      expect(dto).toMatchObject({ view, keyword: 'SO-001', page: 2, pageSize: 50 })
+      expect(dto).toMatchObject({
+        view,
+        productMode: 'CATALOG',
+        supplierValue: 'SUPPLIER_A',
+        keyword: 'SO-001',
+        page: 2,
+        pageSize: 50,
+      })
     },
   )
 
   it.each([
     {},
-    { view: 'UNKNOWN' },
-    { view: 'INITIAL_PURCHASE' },
-    { view: 'SUPPLEMENTAL_PURCHASE' },
-    { view: 'COMPLETED_PURCHASE_ADD_ON' },
+    { view: 'UNKNOWN', productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' },
+    { view: 'INITIAL_PURCHASE', productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' },
+    { view: 'SUPPLEMENTAL_PURCHASE', productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' },
+    { view: 'COMPLETED_PURCHASE_ADD_ON', productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' },
+    { view: 'UNPURCHASED', productMode: 'MIXED', supplierValue: 'SUPPLIER_A' },
+    { view: 'UNPURCHASED', productMode: 'CATALOG' },
   ])('rejects a missing or unknown source-sales-order view %j', async input => {
     const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, input)
 
@@ -40,6 +52,7 @@ describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
   it('rejects caller-composed sales status filters', async () => {
     const dto = plainToInstance(PurchaseOrderSourceSalesOrdersQueryDto, {
       view: 'UNPURCHASED',
+      productMode: 'CUSTOM',
       orderStatus: 'CONFIRMED',
       fulfillmentStatus: 'PENDING',
     })
@@ -48,6 +61,26 @@ describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
       whitelist: true,
       forbidNonWhitelisted: true,
     })).resolves.not.toHaveLength(0)
+  })
+})
+
+describe('PurchaseOrderSourceSalesOrderLinesQueryDto', () => {
+  it.each([
+    { productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' },
+    { productMode: 'CUSTOM' },
+  ])('accepts the supported source line filter %j', async input => {
+    const dto = plainToInstance(PurchaseOrderSourceSalesOrderLinesQueryDto, input)
+    await expect(validate(dto)).resolves.toEqual([])
+  })
+
+  it.each([
+    {},
+    { productMode: 'MIXED' },
+    { productMode: 'UNKNOWN' },
+    { productMode: 'CATALOG' },
+  ])('rejects an incomplete source line filter %j', async input => {
+    const dto = plainToInstance(PurchaseOrderSourceSalesOrderLinesQueryDto, input)
+    await expect(validate(dto)).resolves.not.toHaveLength(0)
   })
 })
 

@@ -244,6 +244,9 @@ export class PurchaseOrderCreateDependencyService {
       where: {
         id: command.salesOrderId ?? undefined,
         orderStatus: 'CONFIRMED',
+        fulfillmentStatus: {
+          in: ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED'],
+        },
       },
       select: { id: true },
     })
