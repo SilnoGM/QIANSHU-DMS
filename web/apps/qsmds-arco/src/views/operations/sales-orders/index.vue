@@ -31,11 +31,6 @@ import type {
   FactoryShipmentModalContext,
 } from '@/components/business/QsFactoryShipmentModal/types'
 import type {
-  PurchaseStartPresetSalesOrder,
-  PurchaseStartPresetValidationResult,
-  PurchaseStartSelection,
-} from '@/components/business/QsPurchaseStartModal/types'
-import type {
   QsGenericTableActionColumn,
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -43,6 +38,11 @@ import type {
 } from '@/components/business/QsGenericTable/logic'
 import type { OrderProductLineModel } from '@/components/business/QsOrderProductLineEditor/types'
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
+import type {
+  PurchaseStartPresetSalesOrder,
+  PurchaseStartPresetValidationResult,
+  PurchaseStartSelection,
+} from '@/components/business/QsPurchaseStartModal/types'
 
 import type {
   SalesOrderProductEditIntent,
@@ -76,8 +76,8 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
-import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import { getPurchaseOrderApiFailure } from '../purchase-orders/purchase-order-list.logic'
+import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
   buildSalesOrderStatusCountsQuery,

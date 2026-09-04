@@ -20,14 +20,14 @@ import type {
   FactoryShipmentModalContext,
 } from '@/components/business/QsFactoryShipmentModal/types'
 import type {
-  PurchaseStartPurchaseType,
-  PurchaseStartSelection,
-} from '@/components/business/QsPurchaseStartModal/types'
-import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
 } from '@/components/business/QsGenericTable/logic'
+import type {
+  PurchaseStartPurchaseType,
+  PurchaseStartSelection,
+} from '@/components/business/QsPurchaseStartModal/types'
 
 import { getLocalTimeZone, today } from '@internationalized/date'
 

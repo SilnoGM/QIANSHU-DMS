@@ -215,11 +215,11 @@ onBeforeUnmount(abortValidation)
       </section>
 
       <fieldset class="m-0 p-0 border-0 min-w-0" :disabled="disabled || submissionPending">
-        <legend class="qs-type-body-medium mb-3 font-semibold">
+        <legend class="qs-type-body-medium font-semibold mb-3">
           第一步：选择采购产品类型
         </legend>
         <div class="gap-4 grid grid-cols-1 sm:grid-cols-2" role="radiogroup" aria-label="采购产品类型">
-          <label class="cursor-pointer min-w-0 relative">
+          <label class="min-w-0 cursor-pointer relative">
             <input
               type="radio"
               name="purchase-start-product-mode"
@@ -255,7 +255,7 @@ onBeforeUnmount(abortValidation)
             </span>
           </label>
 
-          <label class="cursor-pointer min-w-0 relative">
+          <label class="min-w-0 cursor-pointer relative">
             <input
               type="radio"
               name="purchase-start-product-mode"
@@ -299,7 +299,7 @@ onBeforeUnmount(abortValidation)
         aria-labelledby="purchase-start-supplier-title"
       >
         <div class="mb-3">
-          <h3 id="purchase-start-supplier-title" class="qs-type-body-medium m-0 font-semibold">
+          <h3 id="purchase-start-supplier-title" class="qs-type-body-medium font-semibold m-0">
             第二步：{{ productModeDraft === 'CATALOG' ? '下拉选择供应商' : '填写供应商名称' }}
           </h3>
           <p class="qs-type-meta text-muted-foreground m-0 mt-1">

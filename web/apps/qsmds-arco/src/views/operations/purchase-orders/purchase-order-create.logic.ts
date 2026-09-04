@@ -29,13 +29,13 @@ export type PurchaseOrderCreateContext
     readonly sourceShortcut: PurchaseOrderSourceShortcut | null
     readonly supplierValue: string
   }
-    | {
-      readonly customSupplierName: string
-      readonly productMode: 'CUSTOM'
-      readonly purchaseType: PurchaseOrderCreateType
-      readonly sourceShortcut: PurchaseOrderSourceShortcut | null
-      readonly supplierValue: null
-    }
+  | {
+    readonly customSupplierName: string
+    readonly productMode: 'CUSTOM'
+    readonly purchaseType: PurchaseOrderCreateType
+    readonly sourceShortcut: PurchaseOrderSourceShortcut | null
+    readonly supplierValue: null
+  }
 
 export const PURCHASE_ORDER_CREATE_REVIEW_STEP: PurchaseOrderCreateStep = 3
 

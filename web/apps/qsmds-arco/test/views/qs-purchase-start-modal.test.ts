@@ -42,7 +42,7 @@ test('采购开始弹窗提供双面板、条件供应商步骤与可访问选�
   assert.match(source, /:disabled="!canConfirm"/u)
   assert.match(source, /i-lucide:boxes/u)
   assert.match(source, /i-lucide:package-plus/u)
-  assert.doesNotMatch(source, /[🚀⭐❤️👍🔥💡🎉✨]/u)
+  assert.doesNotMatch(source, /(?:[🚀⭐👍🔥💡🎉✨]|\u{2764}\u{FE0F})/u)
 })
 
 test('采购开始弹窗关闭、切换、身份变化与卸载均清理草稿或中止旧校验', async () => {
