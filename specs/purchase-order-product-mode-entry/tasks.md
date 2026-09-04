@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 4 实施中（任务 8）
+- 当前阶段：Phase 4 实施中（任务 9）
 
 ## 2. 执行原则
 
@@ -114,14 +114,14 @@
   - _Requirement: R5、R8、R10_
   - _Suggested commit: 与对应 Server 公共契约切片一同提交_
 
-- [ ] 8. 实现 `QsPurchaseStartModal`
-  - [ ] 先建立纯逻辑和组件契约 RED 测试。
-  - [ ] 基于 `QsGenericModal` 实现 `CATALOG/CUSTOM` 互斥面板和条件化供应商控件。
-  - [ ] `CATALOG` 复用 `QsDictionarySelect(service_provider.supplier)`；`CUSTOM` 使用受控文本输入。
-  - [ ] 面板切换清空旧供应商和错误，关闭清空局部草稿。
-  - [ ] 只有初始化资料合法时允许“开始采购”，提交中防重复并锁定关闭。
-  - [ ] 支持销售快捷订单资格校验、Abort、身份变化和失败恢复。
-  - [ ] 完成桌面双面板、移动单列、radio 语义、focus ring 和 44px 点击目标。
+- [x] 8. 实现 `QsPurchaseStartModal`
+  - [x] 先建立纯逻辑和组件契约 RED 测试。
+  - [x] 基于 `QsGenericModal` 实现 `CATALOG/CUSTOM` 互斥面板和条件化供应商控件。
+  - [x] `CATALOG` 复用 `QsDictionarySelect(service_provider.supplier)`；`CUSTOM` 使用受控文本输入。
+  - [x] 面板切换清空旧供应商和错误，关闭清空局部草稿。
+  - [x] 只有初始化资料合法时允许“开始采购”，提交中防重复并锁定关闭。
+  - [x] 支持销售快捷订单资格校验、Abort、身份变化和失败恢复。
+  - [x] 完成桌面双面板、移动单列、radio 语义、focus ring 和 44px 点击目标。
   - _Requirement: R1、R2、R3_
   - _Suggested commit: `feat: 新增采购开始选择弹窗`_
 
