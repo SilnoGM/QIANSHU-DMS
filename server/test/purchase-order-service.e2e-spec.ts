@@ -49,6 +49,17 @@ function expectAuditMetadata(
   expect(value).toMatchObject(expected)
 }
 
+/** JSONB 查询未声明排序时不保证返回顺序，审计断言必须按领域内容定位目标事件。 */
+function auditMetadataMatches(
+  value: Prisma.JsonValue,
+  expected: Readonly<Record<string, string | number | boolean>>,
+): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false
+  }
+  return Object.entries(expected).every(([key, expectedValue]) => value[key] === expectedValue)
+}
+
 describe('PurchaseOrder services with isolated PostgreSQL', () => {
   jest.setTimeout(60_000)
 
@@ -1155,18 +1166,18 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       select: { metadata: true },
     })
     expect(purchaseAuditEvents).toHaveLength(2)
-    expectAuditMetadata(purchaseAuditEvents[0]?.metadata ?? null, {
+    expect(purchaseAuditEvents.some(event => auditMetadataMatches(event.metadata, {
       automatic: true,
       fromStatus: 'ORDERED',
       source: 'PURCHASE_ORDER',
       toStatus: 'PREPARING',
-    })
-    expectAuditMetadata(purchaseAuditEvents[1]?.metadata ?? null, {
+    }))).toBe(true)
+    expect(purchaseAuditEvents.some(event => auditMetadataMatches(event.metadata, {
       automatic: false,
       fromStatus: 'PREPARING',
       source: 'PURCHASE_ORDER',
       toStatus: 'SHIPPED',
-    })
+    }))).toBe(true)
 
     const pendingOrders = await prisma.purchaseOrder.findMany({
       where: {
