@@ -42,6 +42,12 @@ function setup(overrides: {
     readonly id: string
     readonly quantity: number
   }[]
+  readonly shipmentStatuses?: readonly (
+    | 'ORDERED'
+    | 'PREPARING'
+    | 'SHIPPED'
+    | 'SIGNED'
+  )[]
 } = {}) {
   const calls: string[] = []
   const transaction = {
@@ -64,6 +70,13 @@ function setup(overrides: {
           _sum: { quantity: 1 },
         }])])
       }),
+    },
+    purchaseOrder: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue(
+        (overrides.shipmentStatuses ?? ['SHIPPED']).map(fulfillmentStatus => ({
+          fulfillmentStatus,
+        })),
+      ),
     },
     salesOrder: {
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
@@ -297,4 +310,57 @@ describe('SalesOrderPurchaseCoverageService', () => {
       expect(fixture.audit.record).not.toHaveBeenCalled()
     },
   )
+
+  it('advances PREPARING to LAND_TRANSIT only after coverage and all purchases ship', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+
+    await expect(fixture.service.advanceWhenAllPurchasesShipped(
+      fixture.transactionClient,
+      {
+        actorUserId: ACTOR_ID,
+        changedPurchaseOrderCount: 1,
+        requestId: 'factory-shipment-test',
+        salesOrderId: SALES_ORDER_ID,
+      },
+    )).resolves.toEqual({
+      advancedToLandTransit: true,
+      fulfillmentStatus: 'LAND_TRANSIT',
+    })
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'LAND_TRANSIT', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: SALES_ORDER_ID,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'PREPARING',
+        toStatus: 'LAND_TRANSIT',
+        reason: '全部有效关联采购订单已发货',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+  })
+
+  it('keeps PREPARING when one active purchase is not shipped', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'PREPARING',
+      shipmentStatuses: ['SHIPPED', 'PREPARING'],
+    })
+
+    await expect(fixture.service.advanceWhenAllPurchasesShipped(
+      fixture.transactionClient,
+      {
+        actorUserId: ACTOR_ID,
+        changedPurchaseOrderCount: 1,
+        requestId: 'factory-shipment-test',
+        salesOrderId: SALES_ORDER_ID,
+      },
+    )).resolves.toEqual({
+      advancedToLandTransit: false,
+      fulfillmentStatus: 'PREPARING',
+    })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
 })
