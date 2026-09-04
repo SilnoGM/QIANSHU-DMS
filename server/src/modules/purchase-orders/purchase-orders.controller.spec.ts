@@ -446,21 +446,65 @@ describe('PurchaseOrdersController OpenAPI', () => {
         ],
       },
     })
+    expect(sourceSalesOrders?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'productMode', required: true }),
+      expect.objectContaining({ in: 'query', name: 'supplierValue', required: false }),
+      expect.objectContaining({ in: 'query', name: 'salesOrderId', required: false }),
+    ]))
     expect(sourceSalesOrders?.security).toEqual([{ sessionCookie: [] }])
     expect(sourceSalesOrders?.['x-qianshu-contract']).toMatchObject({
       authorization: true,
       privateNoStore: true,
       validation: true,
     })
-    expect(document.paths[
+    const sourceContract = sourceSalesOrders?.['x-qianshu-contract']
+    if (
+      typeof sourceContract !== 'object'
+      || sourceContract === null
+      || !('errors' in sourceContract)
+      || !Array.isArray(sourceContract.errors)
+    ) {
+      throw new Error('Sales-source OpenAPI contract must expose an errors array')
+    }
+    expect(sourceContract.errors).toContainEqual({
+      status: 422,
+      codes: [
+        'PURCHASE_ORDER_PRODUCT_MODE_INVALID',
+        'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID',
+        'PURCHASE_ORDER_SUPPLIER_UNAVAILABLE',
+        'VALIDATION_FAILED',
+      ],
+    })
+    const sourceSalesOrderLines: ContractOperation | undefined = document.paths[
       '/api/purchase-orders/source-sales-orders/{salesOrderId}/lines'
-    ]?.get).toMatchObject({ operationId: 'purchase_orders_source_sales_order_lines' })
+    ]?.get
+    expect(sourceSalesOrderLines)
+      .toMatchObject({ operationId: 'purchase_orders_source_sales_order_lines' })
+    expect(sourceSalesOrderLines?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'productMode', required: true }),
+      expect.objectContaining({ in: 'query', name: 'supplierValue', required: false }),
+    ]))
     expect(document.paths[
       '/api/purchase-orders/{purchaseOrderId}/payments'
     ]?.post).toMatchObject({ operationId: 'purchase_orders_record_payment' })
     expect(document.paths[
       '/api/purchase-orders/{purchaseOrderId}/documents/{documentId}/content'
     ]?.head).toMatchObject({ operationId: 'purchase_orders_head_document_content' })
+    expect(document.components?.schemas?.PurchaseOrderSupplierDto).toMatchObject({
+      properties: {
+        source: { enum: ['DICTIONARY', 'CUSTOM_TEXT'] },
+        value: { nullable: true, type: 'string' },
+        label: { type: 'string' },
+        tone: { nullable: true, type: 'string' },
+        known: { nullable: true, type: 'boolean' },
+        effectiveEnabled: { nullable: true, type: 'boolean' },
+      },
+    })
+    expect(document.components?.schemas?.PurchaseOrderListItemDto).toMatchObject({
+      properties: {
+        productMode: { enum: ['CATALOG', 'CUSTOM', 'MIXED'] },
+      },
+    })
 
     const imagePath = document.paths[
       '/api/purchase-orders/product-options/{productId}/main-image/{productMediaId}/content'

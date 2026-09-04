@@ -237,7 +237,13 @@ export class PurchaseOrdersController {
     validation: true, privateNoStore: true,
     errors: [
       { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
-      { status: 422, codes: ['VALIDATION_FAILED'] },
+      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+      { status: 422, codes: [
+        'PURCHASE_ORDER_PRODUCT_MODE_INVALID',
+        'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID',
+        'PURCHASE_ORDER_SUPPLIER_UNAVAILABLE',
+        'VALIDATION_FAILED',
+      ] },
     ],
   })
   sourceSalesOrders(
@@ -257,7 +263,12 @@ export class PurchaseOrdersController {
       { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['PURCHASE_ORDER_SOURCE_ORDER_NOT_FOUND'] },
       { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
-      { status: 422, codes: ['VALIDATION_FAILED'] },
+      { status: 422, codes: [
+        'PURCHASE_ORDER_PRODUCT_MODE_INVALID',
+        'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID',
+        'PURCHASE_ORDER_SUPPLIER_UNAVAILABLE',
+        'VALIDATION_FAILED',
+      ] },
     ],
   })
   sourceSalesOrderLines(

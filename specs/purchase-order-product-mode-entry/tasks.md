@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 4 实施中（任务 7）
+- 当前阶段：Phase 4 实施中（任务 8）
 
 ## 2. 执行原则
 
@@ -105,12 +105,12 @@
   - _Requirement: R9、R10_
   - _Suggested commit: `feat: 支持自定义采购供应商展示`_
 
-- [ ] 7. 同步并验证 OpenAPI 契约
-  - [ ] 更新 Controller DTO/decorators、请求 query/body、响应和稳定错误码。
-  - [ ] 先让 OpenAPI snapshot/operation 契约测试按新设计失败，再完成最小实现。
-  - [ ] 通过根 `contract:sync` 同步 Server snapshot、Web snapshot 和 generated client。
-  - [ ] 检查 generated diff 仅包含预期采购契约，不手工修改生成文件。
-  - [ ] 运行 `contract:check`、Server typecheck、lint 和相关测试。
+- [x] 7. 同步并验证 OpenAPI 契约
+  - [x] 更新 Controller DTO/decorators、请求 query/body、响应和稳定错误码。
+  - [x] 先让 OpenAPI snapshot/operation 契约测试按新设计失败，再完成最小实现。
+  - [x] 通过根 `contract:sync` 同步 Server snapshot、Web snapshot 和 generated client。
+  - [x] 检查 generated diff 仅包含预期采购契约，不手工修改生成文件。
+  - [x] 运行 `contract:check`、Server typecheck、lint 和相关测试。
   - _Requirement: R5、R8、R10_
   - _Suggested commit: 与对应 Server 公共契约切片一同提交_
 

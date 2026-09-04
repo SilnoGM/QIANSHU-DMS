@@ -35550,14 +35550,18 @@
               "codes": [
                 "PURCHASE_ORDER_CURRENCY_UNAVAILABLE",
                 "PURCHASE_ORDER_CUSTOM_PRICES_INVALID",
+                "PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID",
+                "PURCHASE_ORDER_LINE_MODE_MISMATCH",
                 "PURCHASE_ORDER_PAYMENT_TERMS_MISMATCH",
                 "PURCHASE_ORDER_PRODUCT_COST_UNAVAILABLE",
+                "PURCHASE_ORDER_PRODUCT_MODE_INVALID",
                 "PURCHASE_ORDER_PRODUCT_SNAPSHOT_INVALID",
                 "PURCHASE_ORDER_PRODUCT_SUPPLIER_MISMATCH",
                 "PURCHASE_ORDER_PRODUCT_UNAVAILABLE",
                 "PURCHASE_ORDER_SOURCE_LINE_INVALID",
                 "PURCHASE_ORDER_SOURCE_ORDER_INVALID",
                 "PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED",
+                "PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID",
                 "PURCHASE_ORDER_SUPPLIER_UNAVAILABLE",
                 "PURCHASE_ORDER_TOTAL_MISMATCH",
                 "VALIDATION_FAILED"
@@ -37275,24 +37279,25 @@
         "operationId": "purchase_orders_source_sales_orders",
         "parameters": [
           {
-            "name": "page",
-            "required": false,
+            "name": "productMode",
+            "required": true,
             "in": "query",
             "schema": {
-              "minimum": 1,
-              "default": 1,
-              "type": "integer"
+              "type": "string",
+              "enum": [
+                "CATALOG",
+                "CUSTOM"
+              ]
             }
           },
           {
-            "name": "pageSize",
+            "name": "supplierValue",
             "required": false,
             "in": "query",
             "schema": {
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20,
-              "type": "integer"
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
             }
           },
           {
@@ -37314,6 +37319,36 @@
             "schema": {
               "maxLength": 128,
               "type": "string"
+            }
+          },
+          {
+            "name": "salesOrderId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "type": "integer"
             }
           }
         ],
@@ -37422,6 +37457,32 @@
               }
             }
           },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "422": {
             "headers": {
               "X-Request-Id": {
@@ -37502,8 +37563,17 @@
               ]
             },
             {
+              "status": 409,
+              "codes": [
+                "PURCHASE_ORDER_STATE_CHANGED"
+              ]
+            },
+            {
               "status": 422,
               "codes": [
+                "PURCHASE_ORDER_PRODUCT_MODE_INVALID",
+                "PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID",
+                "PURCHASE_ORDER_SUPPLIER_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -37521,6 +37591,28 @@
             "in": "path",
             "schema": {
               "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productMode",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CATALOG",
+                "CUSTOM"
+              ]
+            }
+          },
+          {
+            "name": "supplierValue",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
               "type": "string"
             }
           }
@@ -37776,6 +37868,9 @@
             {
               "status": 422,
               "codes": [
+                "PURCHASE_ORDER_PRODUCT_MODE_INVALID",
+                "PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID",
+                "PURCHASE_ORDER_SUPPLIER_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             }
@@ -50718,23 +50813,35 @@
       "PurchaseOrderSupplierDto": {
         "type": "object",
         "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "DICTIONARY",
+              "CUSTOM_TEXT"
+            ]
+          },
           "value": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "label": {
             "type": "string"
           },
           "tone": {
-            "type": "string"
+            "type": "string",
+            "nullable": true
           },
           "known": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           },
           "effectiveEnabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "nullable": true
           }
         },
         "required": [
+          "source",
           "value",
           "label",
           "tone",
@@ -50841,6 +50948,14 @@
               "STOCK"
             ]
           },
+          "productMode": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM",
+              "MIXED"
+            ]
+          },
           "salesOrderNo": {
             "type": "string",
             "nullable": true
@@ -50933,6 +51048,7 @@
           "id",
           "orderNo",
           "purchaseType",
+          "productMode",
           "salesOrderNo",
           "customerName",
           "supplier",
@@ -51628,6 +51744,13 @@
               "STOCK"
             ]
           },
+          "productMode": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM"
+            ]
+          },
           "salesOrderId": {
             "type": "string",
             "format": "uuid"
@@ -51636,6 +51759,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 64
+          },
+          "customSupplierName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
           },
           "orderDate": {
             "type": "string",
@@ -51674,7 +51802,7 @@
         },
         "required": [
           "purchaseType",
-          "supplierValue",
+          "productMode",
           "orderDate",
           "lines",
           "purchaseTotalAmount",
@@ -52008,6 +52136,14 @@
               "STOCK"
             ]
           },
+          "productMode": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM",
+              "MIXED"
+            ]
+          },
           "salesOrderNo": {
             "type": "string",
             "nullable": true
@@ -52136,6 +52272,7 @@
           "id",
           "orderNo",
           "purchaseType",
+          "productMode",
           "salesOrderNo",
           "customerName",
           "supplier",
@@ -52493,6 +52630,14 @@
             "type": "string",
             "format": "date"
           },
+          "productMode": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM",
+              "MIXED"
+            ]
+          },
           "supplier": {
             "$ref": "#/components/schemas/PurchaseOrderSupplierDto"
           },
@@ -52517,6 +52662,7 @@
           "id",
           "orderNo",
           "orderDate",
+          "productMode",
           "supplier",
           "fulfillmentStatus",
           "version",
