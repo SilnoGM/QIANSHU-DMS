@@ -500,8 +500,8 @@ export class PurchaseOrderFactoryShipmentService {
       SELECT "id"
       FROM "purchase_orders"
       WHERE "sales_order_id" = CAST(${salesOrderId} AS uuid)
-        AND "purchase_type" = CAST('SALES_LINKED' AS "PurchaseOrderType")
-        AND "order_status" <> CAST('CANCELLED' AS "PurchaseOrderStatus")
+        AND "purchase_type" = CAST('SALES_LINKED' AS "purchase_order_type")
+        AND "order_status" <> CAST('CANCELLED' AS "purchase_order_status")
       ORDER BY "id"
       FOR UPDATE
     `)

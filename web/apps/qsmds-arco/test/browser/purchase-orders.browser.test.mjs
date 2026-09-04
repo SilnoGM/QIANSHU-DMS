@@ -878,7 +878,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await waitForPurchaseList(page, order.orderNo)
   })
 
-  await runPurchaseOrderBrowserStep('pending action stays lightweight without detail drawer', async () => {
+  await runPurchaseOrderBrowserStep('pending purchase ships through confirmation modal', async () => {
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, order.orderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
@@ -887,9 +887,62 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
       待入仓: 0,
     })
     await clickVisibleAriaButton(page, `${order.orderNo}：发货`)
-    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="info"]')]
+    await waitForVisibleDialog(page, '确认本采购单已发货？')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认本采购单已发货？'))
+      return dialog?.textContent?.includes(${JSON.stringify(order.orderNo)})
+        && dialog.textContent.includes(${JSON.stringify(supplierLabel)})
+        && dialog.textContent.includes('系统将顺序推进采购履约状态')
+        && dialog.textContent.includes('确认后系统将完成备货状态并将本采购单标记为已发货')
+    })()`)
+    await fillLabelledControl(page, '发货说明（可选）', 'Browser 独立备货采购发货')
+    // 用同一真实订单模拟第二窗口先推进到备货中，首轮提交必须因版本过期失败关闭；
+    // 用户在弹窗内重新加载后，才允许基于最新版本完成发货。
+    const beforeConflict = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(order.id)}`,
+    ))
+    assert.equal(beforeConflict.status, 200)
+    const competingTransition = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
+      'PATCH',
+      { toStatus: 'PREPARING', reason: 'Browser 第二窗口并发推进' },
+    ))
+    assert.equal(competingTransition.status, 200)
+    assert.equal(competingTransition.body?.fulfillmentStatus, 'PREPARING')
+    await clickDialogButton(page, '确认本采购单已发货？', '确认发货')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认本采购单已发货？'))
+      return dialog?.textContent?.includes('订单状态已变化，请刷新后重新确认发货范围')
+        && [...dialog.querySelectorAll('button')].some(button => (
+          button.getClientRects().length > 0
+          && button.textContent?.trim() === '重新加载'
+        ))
+    })()`)
+    await clickDialogButton(page, '确认本采购单已发货？', '重新加载')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认本采购单已发货？'))
+      return dialog?.textContent?.includes('备货中')
+        && !dialog.textContent.includes('订单状态已变化，请刷新后重新确认发货范围')
+        && !dialog.textContent.includes('系统将顺序推进采购履约状态')
+    })()`)
+    await fillLabelledControl(page, '发货说明（可选）', 'Browser 冲突刷新后发货')
+    await clickDialogButton(page, '确认本采购单已发货？', '确认发货')
+    await waitForNoVisibleDialog(page, '确认本采购单已发货？')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
       .some(toast => toast.getClientRects().length > 0
-        && toast.textContent?.includes('发货功能正在建设中'))`)
+        && toast.textContent?.includes('采购订单已发货'))`)
+    await waitForPurchaseList(page, linkedOrder.orderNo)
+    await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
+      待发货: 1,
+      待付款: 1,
+      待入仓: 1,
+    })
     assert.equal(await page.evaluate(`(() => [...document.querySelectorAll(
       '[data-slot="qs-generic-drawer"]',
     )].filter(drawer => drawer.getClientRects().length > 0).length)()`), 0)
@@ -900,6 +953,137 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
       new Set(pending.body?.items?.map(item => item.id)),
       new Set([linkedOrder.id, order.id]),
     )
+    const shippedOrder = pending.body?.items?.find(item => item.id === order.id)
+    assert.equal(shippedOrder?.fulfillmentStatus, 'SHIPPED')
+  })
+
+  await runPurchaseOrderBrowserStep('sales order ships all linked purchases and advances', async () => {
+    await page.navigate(appRouteUrl(
+      configuration.baseUrl,
+      '/qs-operations/sales/pending-sales-orders?status=PREPARING',
+    ))
+    await waitForAfterAuthentication(page, `(() => {
+      const table = document.querySelector('[data-testid="sales-order-list-table"]')
+      const action = document.querySelector(
+        'button[aria-label=' + CSS.escape(${JSON.stringify(`${salesOrderNo}：工厂发货`)}) + ']',
+      )
+      return table?.getClientRects().length > 0
+        && !table.querySelector('[aria-busy="true"]')
+        && table.textContent?.includes(${JSON.stringify(salesOrderNo)})
+        && action?.getClientRects().length > 0
+    })()`)
+    const salesBefore = await page.evaluate(apiExpression(
+      `/api/sales-orders?orderStatus=CONFIRMED&fulfillmentStatus=PREPARING&page=1&pageSize=20&keyword=${encodeURIComponent(salesOrderNo)}`,
+    ))
+    assert.equal(salesBefore.status, 200)
+    const salesOrder = salesBefore.body?.items?.find(item => item.orderNo === salesOrderNo)
+    assert.ok(salesOrder?.id)
+
+    await clickVisibleAriaButton(page, `${salesOrderNo}：工厂发货`)
+    await waitForVisibleDialog(page, '确认工厂发货范围')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认工厂发货范围'))
+      const list = dialog?.querySelector('[data-slot="factory-shipment-order-list"]')
+      return dialog?.textContent?.includes(${JSON.stringify(salesOrderNo)})
+        && dialog.textContent.includes(${JSON.stringify(salesCustomerName)})
+        && dialog.textContent.includes(${JSON.stringify(linkedOrder.orderNo)})
+        && dialog.textContent.includes('全部待发货采购单')
+        && list !== null
+        && getComputedStyle(list).overflowY === 'auto'
+    })()`)
+    await page.evaluate(`(() => {
+      const list = document.querySelector('[data-slot="factory-shipment-order-list"]')
+      const button = [...(list?.querySelectorAll('button') ?? [])]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(linkedOrder.orderNo)}))
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('selected factory-shipment target is unavailable')
+      }
+      button.click()
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const list = document.querySelector('[data-slot="factory-shipment-order-list"]')
+      const selected = [...(list?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.includes(${JSON.stringify(linkedOrder.orderNo)}))
+      const dialog = selected?.closest('[role="dialog"]')
+      const submit = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.includes('确认发货')
+          && !button.textContent.includes('全部待发货采购单'))
+      return selected?.getAttribute('aria-pressed') === 'true'
+        && submit instanceof HTMLButtonElement
+        && !submit.disabled
+    })()`)
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认工厂发货范围'))
+      return [...(dialog?.querySelectorAll('button') ?? [])].some(button => (
+        button.getClientRects().length > 0
+        && !button.disabled
+        && button.textContent?.includes('全部待发货采购单')
+      ))
+    })()`)
+    await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认工厂发货范围'))
+      const button = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(candidate => candidate.getClientRects().length > 0
+          && !candidate.disabled
+          && candidate.textContent?.includes('全部待发货采购单'))
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('all pending factory-shipment range is unavailable')
+      }
+      button.click()
+      return true
+    })()`)
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认工厂发货范围'))
+      const all = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.includes('全部待发货采购单'))
+      const submit = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.includes('确认发货')
+          && !button.textContent.includes('全部待发货采购单'))
+      return all?.getAttribute('aria-pressed') === 'true'
+        && submit instanceof HTMLButtonElement
+        && !submit.disabled
+    })()`)
+    await fillLabelledControl(page, '发货说明（可选）', 'Browser 销售订单全部工厂发货')
+    await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认工厂发货范围'))
+      const button = [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(candidate => candidate.getClientRects().length > 0
+          && !candidate.disabled
+          && candidate.textContent?.includes('确认发货')
+          && !candidate.textContent.includes('全部待发货采购单'))
+      if (!(button instanceof HTMLButtonElement)) {
+        throw new Error('sales factory-shipment submit is unavailable')
+      }
+      button.click()
+      return true
+    })()`)
+    await waitForNoVisibleDialog(page, '确认工厂发货范围')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('已确认 1 张采购单发货，销售订单已进入陆运中'))`)
+
+    const salesAfter = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(salesOrder.id)}`,
+    ))
+    assert.equal(salesAfter.status, 200)
+    assert.equal(salesAfter.body?.fulfillmentStatus, 'LAND_TRANSIT')
+    const linkedAfter = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(linkedOrder.id)}`,
+    ))
+    assert.equal(linkedAfter.status, 200)
+    assert.equal(linkedAfter.body?.fulfillmentStatus, 'SHIPPED')
   })
 
   await runPurchaseOrderBrowserStep('390x844 light dark and touch targets', async () => {

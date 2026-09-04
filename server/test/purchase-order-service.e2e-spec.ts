@@ -11,6 +11,7 @@ import type { MediaAssetService } from '../src/modules/media/media-asset.service
 import type { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
+import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
@@ -35,6 +36,17 @@ function amountInputFromSnapshot(value: string): string {
   const integer = value.slice(0, separator)
   const fraction = value.slice(separator + 1).replace(/0+$/u, '')
   return fraction === '' ? integer : `${integer}.${fraction}`
+}
+
+/** 审计 metadata 来自 JSONB；先收窄成对象，再比较领域字段，避免测试 matcher 污染类型。 */
+function expectAuditMetadata(
+  value: Prisma.JsonValue,
+  expected: Readonly<Record<string, string | number | boolean>>,
+): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('Audit metadata must be a JSON object')
+  }
+  expect(value).toMatchObject(expected)
 }
 
 describe('PurchaseOrder services with isolated PostgreSQL', () => {
@@ -62,6 +74,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let twdWasEnabled = false
   let prisma: PrismaService
   let commands: PurchaseOrderCommandService
+  let factoryShipments: PurchaseOrderFactoryShipmentService
   let mutations: PurchaseOrderMutationService
   let queries: PurchaseOrderQueryService
   let sourceQueries: PurchaseOrderSourceQueryService
@@ -348,6 +361,11 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new PurchaseOrderCreateDependencyService(dictionaryLookup, accessControl),
       new SalesOrderPurchaseCoverageService(new AuditService()),
       { businessToday: () => '2026-08-27' },
+    )
+    factoryShipments = new PurchaseOrderFactoryShipmentService(
+      prisma,
+      new AuditService(),
+      new SalesOrderPurchaseCoverageService(new AuditService()),
     )
     mutations = new PurchaseOrderMutationService(
       prisma,
@@ -1052,5 +1070,230 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         data: { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' },
       })
     }
+  })
+
+  it('ships linked purchases atomically and advances sales only after the final shipment', async () => {
+    const initialOrders = await prisma.purchaseOrder.findMany({
+      where: {
+        salesOrderId,
+        purchaseType: 'SALES_LINKED',
+        orderStatus: { not: 'CANCELLED' },
+      },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        orderNo: true,
+        fulfillmentStatus: true,
+        version: true,
+      },
+    })
+    expect(initialOrders.length).toBeGreaterThanOrEqual(3)
+    expect(initialOrders.every(order => order.fulfillmentStatus === 'ORDERED'))
+      .toBe(true)
+
+    const concurrentTarget = initialOrders[0]
+    if (concurrentTarget === undefined) {
+      throw new Error('Concurrent factory-shipment target is unavailable')
+    }
+    const concurrentResults = await Promise.all([
+      factoryShipments.shipPurchaseOrder({
+        actorUserId,
+        requestId: `purchase-factory-concurrent-a-${suffix}`,
+      }, concurrentTarget.id, {
+        expectedVersion: concurrentTarget.version,
+        reason: 'E2E 并发发货',
+      }),
+      factoryShipments.shipPurchaseOrder({
+        actorUserId,
+        requestId: `purchase-factory-concurrent-b-${suffix}`,
+      }, concurrentTarget.id, {
+        expectedVersion: concurrentTarget.version,
+        reason: 'E2E 并发发货',
+      }),
+    ])
+    expect(concurrentResults.map(result => result.changedPurchaseOrderCount).sort())
+      .toEqual([0, 1])
+
+    const concurrentHistory = await prisma.purchaseOrderStatusHistory.findMany({
+      where: {
+        purchaseOrderId: concurrentTarget.id,
+        dimension: 'FULFILLMENT',
+      },
+      select: {
+        fromStatus: true,
+        toStatus: true,
+        reason: true,
+        changedByUserId: true,
+        changedAt: true,
+      },
+    })
+    expect(concurrentHistory).toHaveLength(2)
+    expect(concurrentHistory.every(history => history.changedAt instanceof Date))
+      .toBe(true)
+    expect(concurrentHistory.map(history => ({
+      fromStatus: history.fromStatus,
+      toStatus: history.toStatus,
+      reason: history.reason,
+      changedByUserId: history.changedByUserId,
+    })))
+      .toEqual(expect.arrayContaining([{
+      fromStatus: 'ORDERED',
+      toStatus: 'PREPARING',
+      reason: '确认发货时系统自动完成备货状态',
+      changedByUserId: actorUserId,
+    }, {
+      fromStatus: 'PREPARING',
+      toStatus: 'SHIPPED',
+      reason: 'E2E 并发发货',
+      changedByUserId: actorUserId,
+    }]))
+    const purchaseAuditEvents = await prisma.auditEvent.findMany({
+      where: {
+        eventType: 'PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED',
+        targetId: concurrentTarget.id,
+      },
+      select: { metadata: true },
+    })
+    expect(purchaseAuditEvents).toHaveLength(2)
+    expectAuditMetadata(purchaseAuditEvents[0]?.metadata ?? null, {
+      automatic: true,
+      fromStatus: 'ORDERED',
+      source: 'PURCHASE_ORDER',
+      toStatus: 'PREPARING',
+    })
+    expectAuditMetadata(purchaseAuditEvents[1]?.metadata ?? null, {
+      automatic: false,
+      fromStatus: 'PREPARING',
+      source: 'PURCHASE_ORDER',
+      toStatus: 'SHIPPED',
+    })
+
+    const pendingOrders = await prisma.purchaseOrder.findMany({
+      where: {
+        salesOrderId,
+        purchaseType: 'SALES_LINKED',
+        orderStatus: { not: 'CANCELLED' },
+        fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] },
+      },
+      orderBy: { id: 'asc' },
+      select: { id: true, version: true },
+    })
+    const finalTarget = pendingOrders.at(-1)
+    const selectedTargets = pendingOrders.slice(0, -1)
+    if (finalTarget === undefined || selectedTargets.length === 0) {
+      throw new Error('Split factory-shipment targets are unavailable')
+    }
+
+    const staleTarget = selectedTargets[0]
+    if (staleTarget === undefined) throw new Error('Stale target is unavailable')
+    await expect(factoryShipments.shipPurchaseOrder({
+      actorUserId,
+      requestId: `purchase-factory-stale-${suffix}`,
+    }, staleTarget.id, {
+      expectedVersion: staleTarget.version + 1,
+      reason: null,
+    })).rejects.toMatchObject({
+      status: 409,
+      code: 'FACTORY_SHIPMENT_STATE_CHANGED',
+    })
+
+    const partial = await factoryShipments.shipSalesOrder({
+      actorUserId,
+      requestId: `sales-factory-partial-${suffix}`,
+    }, salesOrderId, {
+      mode: 'SELECTED',
+      targets: selectedTargets.map(target => ({
+        purchaseOrderId: target.id,
+        expectedVersion: target.version,
+      })),
+      reason: 'E2E 销售分批发货',
+    })
+    expect(partial).toMatchObject({
+      changedPurchaseOrderCount: selectedTargets.length,
+      remainingPendingShipmentCount: 1,
+      salesOrder: {
+        fulfillmentStatus: 'PREPARING',
+        advancedToLandTransit: false,
+      },
+    })
+
+    const completed = await factoryShipments.shipPurchaseOrder({
+      actorUserId,
+      requestId: `purchase-factory-final-${suffix}`,
+    }, finalTarget.id, {
+      expectedVersion: finalTarget.version,
+      reason: 'E2E 最后一张采购发货',
+    })
+    expect(completed).toMatchObject({
+      changedPurchaseOrderCount: 1,
+      remainingPendingShipmentCount: 0,
+      salesOrder: {
+        fulfillmentStatus: 'LAND_TRANSIT',
+        advancedToLandTransit: true,
+      },
+    })
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId },
+      select: { fulfillmentStatus: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'LAND_TRANSIT' })
+    const salesShipmentHistory = await prisma.salesOrderStatusHistory.findMany({
+      where: {
+        salesOrderId,
+        dimension: 'FULFILLMENT',
+        fromStatus: 'PREPARING',
+        toStatus: 'LAND_TRANSIT',
+      },
+      select: {
+        reason: true,
+        changedByUserId: true,
+        changedAt: true,
+      },
+    })
+    expect(salesShipmentHistory).toHaveLength(1)
+    expect(salesShipmentHistory[0]).toMatchObject({
+      reason: '全部有效关联采购订单已发货',
+      changedByUserId: actorUserId,
+    })
+    expect(salesShipmentHistory[0]?.changedAt).toBeInstanceOf(Date)
+    const salesAuditEvents = await prisma.auditEvent.findMany({
+      where: {
+        eventType: 'SALES_ORDER_FULFILLMENT_STATUS_CHANGED',
+        targetId: salesOrderId,
+      },
+      orderBy: { occurredAt: 'desc' },
+      take: 1,
+      select: { metadata: true },
+    })
+    expect(salesAuditEvents).toHaveLength(1)
+    expectAuditMetadata(salesAuditEvents[0]?.metadata ?? null, {
+      automatic: true,
+      changedPurchaseOrderCount: 1,
+      fromStatus: 'PREPARING',
+      source: 'PURCHASE_FACTORY_SHIPMENT',
+      toStatus: 'LAND_TRANSIT',
+      trigger: 'PURCHASE_FACTORY_SHIPMENT',
+    })
+
+    const historyCountBeforeRetry = await prisma.purchaseOrderStatusHistory.count({
+      where: { purchaseOrderId: finalTarget.id, dimension: 'FULFILLMENT' },
+    })
+    await expect(factoryShipments.shipPurchaseOrder({
+      actorUserId,
+      requestId: `purchase-factory-retry-${suffix}`,
+    }, finalTarget.id, {
+      expectedVersion: finalTarget.version,
+      reason: 'E2E 安全重试不得重复写历史',
+    })).resolves.toMatchObject({
+      changedPurchaseOrderCount: 0,
+      alreadySatisfiedCount: 1,
+      remainingPendingShipmentCount: 0,
+      salesOrder: {
+        fulfillmentStatus: 'LAND_TRANSIT',
+        advancedToLandTransit: false,
+      },
+    })
+    await expect(prisma.purchaseOrderStatusHistory.count({
+      where: { purchaseOrderId: finalTarget.id, dimension: 'FULFILLMENT' },
+    })).resolves.toBe(historyCountBeforeRetry)
   })
 })
