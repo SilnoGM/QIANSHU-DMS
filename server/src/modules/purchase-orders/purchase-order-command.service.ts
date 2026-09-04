@@ -278,8 +278,10 @@ export class PurchaseOrderCommandService {
             createIdempotencyKeyHash: Uint8Array.from(idempotencyKeyHash),
             createRequestFingerprintHash: Uint8Array.from(fingerprintHash),
             purchaseType: command.purchaseType,
+            productMode: command.productMode,
             salesOrderId: command.salesOrderId,
             supplierValue: command.supplierValue,
+            customSupplierName: command.customSupplierName,
             orderDate: new Date(`${command.orderDate}T00:00:00.000Z`),
             currencyCode: command.currencyCode,
             shippingMarkText: command.shippingMarkText,
@@ -324,6 +326,10 @@ export class PurchaseOrderCommandService {
           metadata: {
             orderNo: issuance.number,
             purchaseType: command.purchaseType,
+            productMode: command.productMode,
+            supplierSource: command.supplierValue === null
+              ? 'CUSTOM_TEXT'
+              : 'DICTIONARY',
             currencyCode: command.currencyCode,
             lineCount: effective.lines.length,
             salesLinked: command.salesOrderId !== null,
@@ -360,6 +366,32 @@ export class PurchaseOrderCommandService {
           HttpStatus.CONFLICT,
           'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED',
           '采购数量超过销售明细剩余可采购数量',
+        )
+      }
+      if (hasPersistenceConstraint(
+        facts,
+        'purchase_orders_custom_supplier_name_nonblank_check',
+      )) {
+        throw purchaseOrderException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID',
+          '自定义供应商名称无效',
+        )
+      }
+      if (
+        hasPersistenceConstraint(
+          facts,
+          'purchase_orders_supplier_source_exactly_one_check',
+        )
+        || hasPersistenceConstraint(
+          facts,
+          'purchase_orders_supplier_value_nonblank_check',
+        )
+      ) {
+        throw purchaseOrderException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID',
+          '供应商来源与采购产品类型不匹配',
         )
       }
       if (PURCHASE_ORDER_STATE_CHANGE_CODES.some(code => (

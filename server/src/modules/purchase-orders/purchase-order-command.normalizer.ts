@@ -1,5 +1,6 @@
 import type {
   PurchaseOrderLineType,
+  PurchaseOrderProductMode,
   PurchaseOrderType,
 } from '../../generated/prisma/enums'
 import { normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
@@ -11,7 +12,10 @@ import {
   sumPurchaseOrderAmounts,
   validatePurchaseOrderAgreedAmounts,
 } from './domain/purchase-order-decimal'
-import { purchaseOrderValidationFailure } from './domain/purchase-order-errors'
+import {
+  purchaseOrderRuleFailure,
+  purchaseOrderValidationFailure,
+} from './domain/purchase-order-errors'
 import {
   normalizePurchaseOrderDate,
   normalizePurchaseOrderShippingMark,
@@ -49,8 +53,10 @@ export type NormalizedPurchaseOrderCreateLine =
 
 export interface NormalizedPurchaseOrderCreateCommand {
   readonly purchaseType: PurchaseOrderType
+  readonly productMode: Exclude<PurchaseOrderProductMode, 'MIXED'>
   readonly salesOrderId: string | null
-  readonly supplierValue: string
+  readonly supplierValue: string | null
+  readonly customSupplierName: string | null
   readonly orderDate: string
   readonly currencyCode: 'CNY'
   readonly shippingMarkText: string | null
@@ -123,6 +129,71 @@ function normalizeSupplierValue(value: unknown): string {
   catch {
     return purchaseOrderValidationFailure('supplierValue')
   }
+}
+
+function invalidProductMode(): never {
+  return purchaseOrderRuleFailure(
+    'PURCHASE_ORDER_PRODUCT_MODE_INVALID',
+    '采购产品类型无效',
+    'productMode',
+  )
+}
+
+function invalidSupplierSource(): never {
+  return purchaseOrderRuleFailure(
+    'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID',
+    '供应商来源与采购产品类型不匹配',
+    'supplier',
+  )
+}
+
+function normalizeProductMode(
+  value: unknown,
+): Exclude<PurchaseOrderProductMode, 'MIXED'> {
+  if (value !== 'CATALOG' && value !== 'CUSTOM') return invalidProductMode()
+  return value
+}
+
+function normalizeCustomSupplierName(value: unknown): string {
+  if (typeof value !== 'string') {
+    return purchaseOrderRuleFailure(
+      'PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID',
+      '自定义供应商名称必须是 1 至 128 个字符',
+      'customSupplierName',
+    )
+  }
+  // 先执行 NFKC 再 trim，使全角空格等兼容字符不能绕过空值检查。
+  const normalized = value.normalize('NFKC').trim()
+  const length = [...normalized].length
+  if (length < 1 || length > 128) {
+    return purchaseOrderRuleFailure(
+      'PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID',
+      '自定义供应商名称必须是 1 至 128 个字符',
+      'customSupplierName',
+    )
+  }
+  return normalized
+}
+
+function normalizeSupplierSource(
+  body: Readonly<Record<string, unknown>>,
+  productMode: Exclude<PurchaseOrderProductMode, 'MIXED'>,
+): Readonly<{
+  customSupplierName: string | null
+  supplierValue: string | null
+}> {
+  if (productMode === 'CATALOG') {
+    if (body.customSupplierName !== undefined) return invalidSupplierSource()
+    return Object.freeze({
+      supplierValue: normalizeSupplierValue(body.supplierValue),
+      customSupplierName: null,
+    })
+  }
+  if (body.supplierValue !== undefined) return invalidSupplierSource()
+  return Object.freeze({
+    supplierValue: null,
+    customSupplierName: normalizeCustomSupplierName(body.customSupplierName),
+  })
 }
 
 function normalizeAmountField(value: unknown, field: string): string {
@@ -260,6 +331,19 @@ function normalizeLines(
   )))
 }
 
+function assertLineModes(
+  lines: readonly NormalizedPurchaseOrderCreateLine[],
+  productMode: Exclude<PurchaseOrderProductMode, 'MIXED'>,
+): void {
+  if (lines.some(line => line.lineType !== productMode)) {
+    return purchaseOrderRuleFailure(
+      'PURCHASE_ORDER_LINE_MODE_MISMATCH',
+      '采购产品明细与采购产品类型不匹配',
+      'lines',
+    )
+  }
+}
+
 function normalizePurchaseType(value: unknown): PurchaseOrderType {
   if (value !== 'SALES_LINKED' && value !== 'STOCK') {
     return purchaseOrderValidationFailure('purchaseType')
@@ -275,8 +359,10 @@ export function normalizePurchaseOrderCreateCommand(
   const body = requireRecord(input, 'body')
   rejectUnknownKeys(body, [
     'purchaseType',
+    'productMode',
     'salesOrderId',
     'supplierValue',
+    'customSupplierName',
     'orderDate',
     'shippingMarkText',
     'lines',
@@ -286,6 +372,8 @@ export function normalizePurchaseOrderCreateCommand(
     'remark',
   ])
   const purchaseType = normalizePurchaseType(body.purchaseType)
+  const productMode = normalizeProductMode(body.productMode)
+  const supplier = normalizeSupplierSource(body, productMode)
   const salesOrderId = purchaseType === 'SALES_LINKED'
     ? normalizeUuid(body.salesOrderId, 'salesOrderId')
     : null
@@ -293,6 +381,7 @@ export function normalizePurchaseOrderCreateCommand(
     return purchaseOrderValidationFailure('salesOrderId')
   }
   const lines = normalizeLines(body.lines, purchaseType)
+  assertLineModes(lines, productMode)
   const lineSubtotalAmount = sumPurchaseOrderAmounts(
     lines.map(line => line.lineTotalAmount),
   )
@@ -321,8 +410,9 @@ export function normalizePurchaseOrderCreateCommand(
 
   return Object.freeze({
     purchaseType,
+    productMode,
     salesOrderId,
-    supplierValue: normalizeSupplierValue(body.supplierValue),
+    ...supplier,
     orderDate,
     currencyCode: 'CNY',
     shippingMarkText: normalizePurchaseOrderShippingMark(body.shippingMarkText),

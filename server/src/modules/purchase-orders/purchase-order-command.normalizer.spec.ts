@@ -1,4 +1,5 @@
 import { plainToInstance } from 'class-transformer'
+import { validate } from 'class-validator'
 
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { CreatePurchaseOrderRequestDto } from './dto/purchase-order-create.dto'
@@ -12,6 +13,7 @@ const TODAY = '2026-08-27'
 function linkedInput(): Record<string, unknown> {
   return {
     purchaseType: 'SALES_LINKED',
+    productMode: 'CATALOG',
     salesOrderId: '11111111-1111-4111-8111-111111111111',
     supplierValue: ' supplier_a ',
     orderDate: TODAY,
@@ -24,18 +26,9 @@ function linkedInput(): Record<string, unknown> {
         actualPurchaseUnitPriceAmount: '20',
         quantity: 2,
       },
-      {
-        lineType: 'CUSTOM',
-        sourceSalesOrderLineId: '44444444-4444-4444-8444-444444444444',
-        name: ' 采购侧临时产品 ',
-        description: ' 采购侧临时说明 ',
-        referencePurchaseUnitPriceAmount: '10',
-        actualPurchaseUnitPriceAmount: '10.00',
-        quantity: 1,
-      },
     ],
-    purchaseTotalAmount: '50',
-    depositDueAmount: '20',
+    purchaseTotalAmount: '40',
+    depositDueAmount: '10',
     balanceDueAmount: '30',
     remark: ' 采购备注 ',
   }
@@ -44,7 +37,8 @@ function linkedInput(): Record<string, unknown> {
 function stockInput(): Record<string, unknown> {
   return {
     purchaseType: 'STOCK',
-    supplierValue: 'SUPPLIER_A',
+    productMode: 'CUSTOM',
+    customSupplierName: ' ＡＢＣ 供应商 ',
     orderDate: TODAY,
     shippingMarkText: null,
     lines: [{
@@ -81,14 +75,16 @@ describe('normalizePurchaseOrderCreateCommand', () => {
       linkedInput(),
     )
     expect(normalizePurchaseOrderCreateCommand(transformed, TODAY).lines)
-      .toHaveLength(2)
+      .toHaveLength(1)
   })
 
   it('normalizes a sales-linked command and computes trusted totals', () => {
     expect(normalizePurchaseOrderCreateCommand(linkedInput(), TODAY)).toEqual({
       purchaseType: 'SALES_LINKED',
+      productMode: 'CATALOG',
       salesOrderId: '11111111-1111-4111-8111-111111111111',
       supplierValue: 'SUPPLIER_A',
+      customSupplierName: null,
       orderDate: TODAY,
       currencyCode: 'CNY',
       shippingMarkText: 'BOX A\nBOX B',
@@ -102,21 +98,10 @@ describe('normalizePurchaseOrderCreateCommand', () => {
           quantity: 2,
           lineTotalAmount: '40.0000',
         },
-        {
-          lineNumber: 2,
-          lineType: 'CUSTOM',
-          sourceSalesOrderLineId: '44444444-4444-4444-8444-444444444444',
-          name: '采购侧临时产品',
-          description: '采购侧临时说明',
-          referencePurchaseUnitPriceAmount: '10.0000',
-          actualPurchaseUnitPriceAmount: '10.0000',
-          quantity: 1,
-          lineTotalAmount: '10.0000',
-        },
       ],
-      lineSubtotalAmount: '50.0000',
-      purchaseTotalAmount: '50.0000',
-      depositDueAmount: '20.0000',
+      lineSubtotalAmount: '40.0000',
+      purchaseTotalAmount: '40.0000',
+      depositDueAmount: '10.0000',
       balanceDueAmount: '30.0000',
       remark: '采购备注',
     })
@@ -126,7 +111,10 @@ describe('normalizePurchaseOrderCreateCommand', () => {
     const normalized = normalizePurchaseOrderCreateCommand(stockInput(), TODAY)
     expect(normalized).toMatchObject({
       purchaseType: 'STOCK',
+      productMode: 'CUSTOM',
       salesOrderId: null,
+      supplierValue: null,
+      customSupplierName: 'ABC 供应商',
       currencyCode: 'CNY',
       lines: [{
         lineType: 'CUSTOM',
@@ -140,6 +128,49 @@ describe('normalizePurchaseOrderCreateCommand', () => {
     })
     expect(Object.isFrozen(normalized)).toBe(true)
     expect(Object.isFrozen(normalized.lines)).toBe(true)
+  })
+
+  it('normalizes a CUSTOM supplier by NFKC and Unicode code points', () => {
+    const normalized = normalizePurchaseOrderCreateCommand(stockInput(), TODAY)
+    expect(normalized.customSupplierName).toBe('ABC 供应商')
+
+    expect(() => normalizePurchaseOrderCreateCommand({
+      ...stockInput(),
+      customSupplierName: '😀'.repeat(129),
+    }, TODAY)).toThrow(expect.objectContaining({
+      code: 'PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID',
+    }))
+  })
+
+  it.each([
+    [{ ...linkedInput(), productMode: 'MIXED' }, 'PURCHASE_ORDER_PRODUCT_MODE_INVALID'],
+    [{ ...linkedInput(), productMode: 'UNKNOWN' }, 'PURCHASE_ORDER_PRODUCT_MODE_INVALID'],
+    [{ ...linkedInput(), customSupplierName: '不应提交' }, 'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID'],
+    [{ ...stockInput(), supplierValue: 'SUPPLIER_A' }, 'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID'],
+    [{ ...stockInput(), customSupplierName: '   ' }, 'PURCHASE_ORDER_CUSTOM_SUPPLIER_INVALID'],
+    [{ ...stockInput(), productMode: 'CATALOG' }, 'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID'],
+    [{ ...linkedInput(), productMode: 'CUSTOM' }, 'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID'],
+  ])('rejects invalid product mode or supplier source %#', (value, code) => {
+    expect(() => normalizePurchaseOrderCreateCommand(value, TODAY)).toThrow(
+      expect.objectContaining({ code }),
+    )
+  })
+
+  it('rejects lines outside the selected product mode', () => {
+    expect(() => normalizePurchaseOrderCreateCommand({
+      ...stockInput(),
+      lines: [{
+        lineType: 'CATALOG',
+        productId: '22222222-2222-4222-8222-222222222222',
+        actualPurchaseUnitPriceAmount: '10',
+        quantity: 1,
+      }],
+      purchaseTotalAmount: '10',
+      depositDueAmount: '0',
+      balanceDueAmount: '10',
+    }, TODAY)).toThrow(expect.objectContaining({
+      code: 'PURCHASE_ORDER_LINE_MODE_MISMATCH',
+    }))
   })
 
   it.each([
@@ -208,6 +239,37 @@ describe('normalizePurchaseOrderCreateCommand', () => {
     }, TODAY)).toThrow(expect.objectContaining({
       code: 'PURCHASE_ORDER_TOTAL_MISMATCH',
     }))
+  })
+})
+
+describe('CreatePurchaseOrderRequestDto', () => {
+  it('exposes only CATALOG and CUSTOM as valid create product modes', async () => {
+    await expect(validate(plainToInstance(
+      CreatePurchaseOrderRequestDto,
+      linkedInput(),
+    ))).resolves.toHaveLength(0)
+
+    const mixedErrors = await validate(plainToInstance(
+      CreatePurchaseOrderRequestDto,
+      { ...linkedInput(), productMode: 'MIXED' },
+    ))
+    expect(mixedErrors.map(error => error.property)).toContain('productMode')
+  })
+
+  it('requires the supplier field selected by the product mode', async () => {
+    const catalogErrors = await validate(plainToInstance(
+      CreatePurchaseOrderRequestDto,
+      { ...linkedInput(), supplierValue: undefined },
+    ))
+    expect(catalogErrors.map(error => error.property)).toContain('supplierValue')
+
+    const customErrors = await validate(plainToInstance(
+      CreatePurchaseOrderRequestDto,
+      { ...stockInput(), customSupplierName: undefined },
+    ))
+    expect(customErrors.map(error => error.property)).toContain(
+      'customSupplierName',
+    )
   })
 })
 

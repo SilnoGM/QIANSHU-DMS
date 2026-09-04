@@ -21,6 +21,7 @@ const IDEMPOTENCY_KEY = '123e4567-e89b-42d3-a456-426614174000'
 function input(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     purchaseType: 'SALES_LINKED',
+    productMode: 'CATALOG',
     salesOrderId: '11111111-1111-4111-8111-111111111111',
     supplierValue: 'SUPPLIER_A',
     orderDate: '2026-08-27',
@@ -143,8 +144,10 @@ describe('PurchaseOrderCommandService', () => {
     expect(createInput?.data).toMatchObject({
         orderNo: 'PO-20260827-0001',
         purchaseType: 'SALES_LINKED',
+        productMode: 'CATALOG',
         salesOrderId: '11111111-1111-4111-8111-111111111111',
         supplierValue: 'SUPPLIER_A',
+        customSupplierName: null,
         currencyCode: 'CNY',
         shippingMarkText: 'MARK',
         lineSubtotalAmount: '20.0000',
@@ -189,6 +192,7 @@ describe('PurchaseOrderCommandService', () => {
       metadata: {
         orderNo: 'PO-20260827-0001',
         purchaseType: 'SALES_LINKED',
+        productMode: 'CATALOG',
         lineCount: 1,
       },
     })
@@ -218,7 +222,8 @@ describe('PurchaseOrderCommandService', () => {
       idempotencyKey: IDEMPOTENCY_KEY,
     }, {
       purchaseType: 'STOCK',
-      supplierValue: 'SUPPLIER_A',
+      productMode: 'CUSTOM',
+      customSupplierName: '礼品供应商',
       orderDate: '2026-08-27',
       lines: [{
         lineType: 'CUSTOM',

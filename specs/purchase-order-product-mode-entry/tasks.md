@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 4 实施中（任务 3）
+- 当前阶段：Phase 4 实施中（任务 4–5）
 
 ## 2. 执行原则
 
@@ -61,19 +61,19 @@
   - _Suggested commit: `feat: 增加采购产品类型与供应商来源模型`_
   - _Approval gate: 开始前需要 Schema 与 migration 生成实施授权；应用 migration 另行确认_
 
-- [ ] 3. 改造采购创建契约与可信校验（进行中）
-  - [ ] 先为 DTO、Normalizer、领域规则、依赖服务和请求指纹建立 RED 测试。
-  - [ ] Create DTO 增加 `productMode` 和 `customSupplierName`，并将 `supplierValue` 改为条件必填。
-  - [ ] 对 `CUSTOM` 供应商名称执行 NFKC、trim、1–128 code points 校验。
-  - [ ] 强制供应商字段互斥、全部明细 `lineType === productMode`，并禁止新建 `MIXED`。
-  - [ ] 将产品模式和供应商来源加入幂等请求指纹。
-  - [ ] 保留 `CATALOG` 当前产品供应商/采购成本校验、`CUSTOM` 双价格相等和数量约束。
-  - [ ] 增加稳定错误码并更新控制器错误契约测试。
+- [x] 3. 改造采购创建契约与可信校验
+  - [x] 先为 DTO、Normalizer、领域规则、依赖服务和请求指纹建立 RED 测试。
+  - [x] Create DTO 增加 `productMode` 和 `customSupplierName`，并将 `supplierValue` 改为条件必填。
+  - [x] 对 `CUSTOM` 供应商名称执行 NFKC、trim、1–128 code points 校验。
+  - [x] 强制供应商字段互斥、全部明细 `lineType === productMode`，并禁止新建 `MIXED`。
+  - [x] 将产品模式和供应商来源加入幂等请求指纹。
+  - [x] 保留 `CATALOG` 当前产品供应商/采购成本校验、`CUSTOM` 双价格相等和数量约束。
+  - [x] 增加稳定错误码并更新控制器错误契约测试。
   - _Requirement: R3、R7、R8_
   - _Suggested commit: `feat: 增加采购产品类型创建约束`_
   - _Approval gate: 开始前需要公共 API 修改实施授权_
 
-- [ ] 4. 按产品类型与供应商过滤销售来源订单
+- [ ] 4. 按产品类型与供应商过滤销售来源订单（进行中）
   - [ ] 先覆盖 `CATALOG/CUSTOM`、多供应商、部分采购、已取消采购、无剩余明细和状态边界 RED 测试。
   - [ ] 来源列表 query 增加 `productMode`；`CATALOG` 条件要求 `supplierValue`，`CUSTOM` 禁止该参数。
   - [ ] 重构来源事实 SQL，先按 `sourceSalesOrderLineId` 计算有效已采购数量，再建立目标剩余明细集合。

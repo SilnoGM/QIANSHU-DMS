@@ -9,9 +9,13 @@ const SALES_ORDER_ID = '11111111-1111-4111-8111-111111111111'
 const PRODUCT_ID = '22222222-2222-4222-8222-222222222222'
 const SOURCE_LINE_ID = '33333333-3333-4333-8333-333333333333'
 
-function linkedCommand(line: Record<string, unknown> = {}) {
+function linkedCommand(
+  line: Record<string, unknown> = {},
+  order: Record<string, unknown> = {},
+) {
   return normalizePurchaseOrderCreateCommand({
     purchaseType: 'SALES_LINKED',
+    productMode: 'CATALOG',
     salesOrderId: SALES_ORDER_ID,
     supplierValue: 'SUPPLIER_A',
     orderDate: '2026-08-27',
@@ -26,13 +30,15 @@ function linkedCommand(line: Record<string, unknown> = {}) {
     purchaseTotalAmount: '20',
     depositDueAmount: '5',
     balanceDueAmount: '15',
+    ...order,
   }, '2026-08-27')
 }
 
 function stockCommand() {
   return normalizePurchaseOrderCreateCommand({
     purchaseType: 'STOCK',
-    supplierValue: 'SUPPLIER_A',
+    productMode: 'CUSTOM',
+    customSupplierName: '备货供应商',
     orderDate: '2026-08-27',
     lines: [{
       lineType: 'CUSTOM',
@@ -175,6 +181,10 @@ describe('PurchaseOrderCreateDependencyService', () => {
       name: '采购侧临时产品',
       description: '采购侧临时说明',
       referencePurchaseUnitPriceAmount: '10',
+    }, {
+      productMode: 'CUSTOM',
+      supplierValue: undefined,
+      customSupplierName: '临时供应商',
     })
 
     await expect(fixture.service.requireDependencies(
@@ -209,6 +219,7 @@ describe('PurchaseOrderCreateDependencyService', () => {
       productNameSnapshot: '临时包装',
       descriptionSnapshot: '备货说明',
     }])
+    expect(fixture.dictionaryLookup.requireEffectiveValue).not.toHaveBeenCalled()
 
     fixture.accessControl.getPermissionCodesInTransaction.mockResolvedValue([])
     await expect(fixture.service.requireDependencies(

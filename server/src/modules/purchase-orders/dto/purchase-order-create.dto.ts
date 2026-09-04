@@ -6,6 +6,7 @@ import {
   IsArray,
   IsEnum,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -18,6 +19,7 @@ import {
 
 import {
   PurchaseOrderLineType,
+  type PurchaseOrderProductMode,
   PurchaseOrderType,
 } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
@@ -86,6 +88,10 @@ export class CreatePurchaseOrderRequestDto {
   @IsEnum(PurchaseOrderType)
   purchaseType!: PurchaseOrderType
 
+  @ApiProperty({ enum: ['CATALOG', 'CUSTOM'] })
+  @IsIn(['CATALOG', 'CUSTOM'])
+  productMode!: Exclude<PurchaseOrderProductMode, 'MIXED'>
+
   @ApiProperty({ type: 'string', format: 'uuid', required: false })
   @ValidateIf((order: CreatePurchaseOrderRequestDto) => (
     order.purchaseType === 'SALES_LINKED'
@@ -93,10 +99,21 @@ export class CreatePurchaseOrderRequestDto {
   @IsUUID('4')
   salesOrderId?: string
 
-  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 64, required: false })
+  @ValidateIf((order: CreatePurchaseOrderRequestDto) => (
+    order.productMode === 'CATALOG'
+  ))
   @IsString()
   @IsUnicodeCodePointLength(1, 64)
-  supplierValue!: string
+  supplierValue?: string
+
+  @ApiProperty({ type: 'string', minLength: 1, maxLength: 128, required: false })
+  @ValidateIf((order: CreatePurchaseOrderRequestDto) => (
+    order.productMode === 'CUSTOM'
+  ))
+  @IsString()
+  @IsUnicodeCodePointLength(1, 128)
+  customSupplierName?: string
 
   @ApiProperty({ type: 'string', format: 'date' })
   @IsString()

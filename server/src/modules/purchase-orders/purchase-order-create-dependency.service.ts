@@ -115,7 +115,15 @@ export class PurchaseOrderCreateDependencyService {
     actorUserId: string,
     options: { readonly lockSalesLines: boolean },
   ): Promise<EffectivePurchaseOrderCreateDependencies> {
-    await this.requireSupplier(transaction, command.supplierValue)
+    if (command.productMode === 'CATALOG') {
+      if (command.supplierValue === null) {
+        return purchaseDependencyFailure(
+          'PURCHASE_ORDER_SUPPLIER_SOURCE_INVALID',
+          '供应商来源与采购产品类型不匹配',
+        )
+      }
+      await this.requireSupplier(transaction, command.supplierValue)
+    }
     await this.requireCurrency(transaction)
     if (command.purchaseType === 'STOCK') {
       await this.requireStockPermission(transaction, actorUserId)
@@ -352,6 +360,12 @@ export class PurchaseOrderCreateDependencyService {
     salesLinesById: ReadonlyMap<string, SalesLineSnapshot>,
     productsById: ReadonlyMap<string, ProductSnapshot>,
   ): EffectivePurchaseOrderLine {
+    if (line.lineType !== command.productMode) {
+      return purchaseDependencyFailure(
+        'PURCHASE_ORDER_LINE_MODE_MISMATCH',
+        '采购产品明细与采购产品类型不匹配',
+      )
+    }
     const source = line.sourceSalesOrderLineId === null
       ? null
       : salesLinesById.get(line.sourceSalesOrderLineId) ?? null
@@ -401,7 +415,10 @@ export class PurchaseOrderCreateDependencyService {
         '所选产品已停用或不存在',
       )
     }
-    if (product.supplierValue !== command.supplierValue) {
+    if (
+      command.supplierValue === null
+      || product.supplierValue !== command.supplierValue
+    ) {
       return purchaseDependencyFailure(
         'PURCHASE_ORDER_PRODUCT_SUPPLIER_MISMATCH',
         '所选产品不属于当前采购供应商',
