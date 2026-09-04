@@ -108,7 +108,7 @@ Phase 4 开始前需要用户明确授权以下公共契约变更：
   - 建议提交：`feat: 提供订单工厂发货接口`。
   - _Requirements: R1, R2, R3, R6, R7, R8_
 
-- [ ] 4. 实现 `QsFactoryShipmentModal` 公共组件
+- [x] 4. 实现 `QsFactoryShipmentModal` 公共组件
   - 先为 `logic.ts` 添加失败测试，覆盖稳定排序、指定/全部模式、预计剩余数量、单张固定目标和提交可用性。
   - 基于 `QsGenericModal` 实现 `PURCHASE_ORDER` 与 `SALES_ORDER` 两种受控模式，组件内部不直接请求 API。
   - 销售模式实现约 `8:4` 的列表与影响摘要；只滚动采购单列表，标题、范围、摘要和底部按钮固定。

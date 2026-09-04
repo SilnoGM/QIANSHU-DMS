@@ -1,0 +1,14 @@
+# QsFactoryShipmentModal
+
+`QsFactoryShipmentModal` 是销售订单与采购订单共用的工厂发货确认组件。组件基于 `QsGenericModal`，只管理发货范围草稿、采购单选择、影响预告和可选说明，不读取 API、Store、权限或服务端状态机。
+
+## 模式
+
+- `PURCHASE_ORDER`：固定当前唯一采购单，适用于待办采购“发货”。
+- `SALES_ORDER`：支持指定一张、多张或全部待发货采购单，适用于销售待办“工厂发货”。
+
+组件通过 `submit` 返回 `FactoryShipmentIntent`。调用方负责权限、接口请求、错误映射、列表刷新和轻提示；服务端响应才是销售订单是否进入陆运中的真相源。
+
+## 滚动与响应式
+
+销售模式桌面采用左侧列表与右侧影响摘要的非对称布局，只有 `factory-shipment-order-list` 可以纵向滚动。窄屏变为上下结构，Header、发货范围、说明和 Footer 始终可见。

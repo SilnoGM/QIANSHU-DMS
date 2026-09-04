@@ -165,6 +165,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'factory-shipment-modal',
+        name: 'componentLibraryQsFactoryShipmentModal',
+        component: () => import('@/views/component_library/business/factory-shipment-modal.vue'),
+        meta: {
+          title: '订单工厂发货弹窗',
+          icon: 'i-lucide:truck',
+        },
+      },
+      {
         path: 'sales-order-selector-modal',
         name: 'componentLibraryQsSalesOrderSelectorModal',
         component: () => import('@/views/component_library/business/sales-order-selector-modal.vue'),
