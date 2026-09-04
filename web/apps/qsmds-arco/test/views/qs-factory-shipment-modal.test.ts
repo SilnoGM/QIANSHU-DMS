@@ -57,18 +57,30 @@ test('采购模式固定当前订单并提示 ORDERED 自动补齐备货状态',
   assert.doesNotMatch(source, /[🚚📦🏭]/u)
 })
 
-test('采购单卡片直接展示最多三项产品名称、数量和主图提示', async () => {
+test('销售采购单默认折叠且选择与产品展开是独立可访问操作', async () => {
   const [source, productSummary, types] = await Promise.all([
     readFile(SOURCE, 'utf8'),
     readFile(PRODUCT_SUMMARY, 'utf8'),
     readFile(TYPES, 'utf8'),
   ])
   assert.match(source, /import FactoryShipmentProductSummary from '.\/FactoryShipmentProductSummary\.vue'/u)
+  assert.match(source, /const expandedOrderIds = ref<string\[\]>\(\[\]\)/u)
+  assert.match(source, /expandedOrderIds\.value = \[\]/u)
+  assert.match(source, /data-slot="factory-shipment-order-card"/u)
+  assert.match(source, /data-slot="factory-shipment-order-select"/u)
+  assert.match(source, /data-slot="factory-shipment-order-expand"/u)
+  assert.match(source, /:aria-expanded="expandedOrderIds\.includes\(order\.id\)"/u)
+  assert.match(source, /@click="toggleOrderExpanded\(order\.id\)"/u)
+  assert.match(source, /v-if="expandedOrderIds\.includes\(order\.id\)"/u)
   assert.equal(source.match(/<FactoryShipmentProductSummary/gu)?.length, 2)
   assert.match(source, /:previews="order\.lineSummary\.previews"/u)
+  assert.match(source, /display-mode="FULL"/u)
   assert.match(source, /:previews="primaryOrder\.lineSummary\.previews"/u)
   assert.match(productSummary, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
   assert.match(productSummary, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
+  assert.match(productSummary, /displayMode: 'SUMMARY'/u)
+  assert.match(productSummary, /props\.displayMode === 'FULL'/u)
+  assert.match(productSummary, /data-slot="factory-shipment-product-list"/u)
   assert.match(productSummary, /slice\(0, 3\)/u)
   assert.match(productSummary, /:max-count="3"/u)
   assert.match(productSummary, /productDisplayName\(preview\)/u)

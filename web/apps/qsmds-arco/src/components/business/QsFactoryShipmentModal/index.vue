@@ -40,6 +40,7 @@ const emit = defineEmits<{
 
 const selectionMode = ref<FactoryShipmentSelectionMode>('SELECTED')
 const selectedIds = ref<string[]>([])
+const expandedOrderIds = ref<string[]>([])
 const reason = ref('')
 
 const sortedOrders = computed(() => sortFactoryShipmentOrders(
@@ -70,6 +71,8 @@ const description = computed(() => props.mode === 'SALES_ORDER'
 function resetDraft(mode: FactoryShipmentModalMode): void {
   reason.value = ''
   selectionMode.value = 'SELECTED'
+  // 每次打开或切换上下文时恢复折叠态，避免沿用上一张销售订单的展开记录。
+  expandedOrderIds.value = []
   selectedIds.value = mode === 'PURCHASE_ORDER' && primaryOrder.value
     ? [primaryOrder.value.id]
     : []
@@ -93,6 +96,12 @@ function toggleOrder(order: FactoryShipmentModalPurchaseOrder): void {
   selectedIds.value = selectedIds.value.includes(order.id)
     ? selectedIds.value.filter(id => id !== order.id)
     : [...selectedIds.value, order.id]
+}
+
+function toggleOrderExpanded(orderId: string): void {
+  expandedOrderIds.value = expandedOrderIds.value.includes(orderId)
+    ? expandedOrderIds.value.filter(id => id !== orderId)
+    : [...expandedOrderIds.value, orderId]
 }
 
 function closeAsCancel(): void {
@@ -233,61 +242,98 @@ watch(
             class="pr-1 overscroll-contain flex-1 min-h-0 overflow-x-hidden overflow-y-auto"
             aria-label="关联采购单列表"
           >
-            <button
+            <article
               v-for="order in sortedOrders"
               :key="order.id"
-              type="button"
-              class="p-4 text-start border rounded-lg gap-3 grid min-w-0 w-full transition-colors [&+&]:mt-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+              data-slot="factory-shipment-order-card"
+              class="p-4 border rounded-lg min-w-0 w-full transition-colors [&+&]:mt-2"
               :class="[
                 isPendingFactoryShipment(order)
-                  ? 'bg-background hover:border-primary/50'
-                  : 'border-border bg-muted/40 text-muted-foreground cursor-default',
+                  ? 'bg-background'
+                  : 'border-border bg-muted/40 text-muted-foreground',
                 selectedIds.includes(order.id) && isPendingFactoryShipment(order)
                   ? 'border-primary bg-primary/[0.035] ring-1 ring-primary/20'
                   : 'border-border',
               ]"
-              :disabled="submitting || !isPendingFactoryShipment(order)"
-              :aria-pressed="selectedIds.includes(order.id)"
-              @click="toggleOrder(order)"
             >
-              <span
-                class="border rounded flex shrink-0 size-5 items-center justify-center"
-                :class="selectedIds.includes(order.id)
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-muted-foreground/40 bg-background'"
-                aria-hidden="true"
+              <div class="gap-3 grid min-w-0 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                <button
+                  type="button"
+                  data-slot="factory-shipment-order-select"
+                  class="rounded-md flex size-10 items-center justify-center disabled:cursor-not-allowed"
+                  :disabled="submitting || !isPendingFactoryShipment(order)"
+                  :aria-label="isPendingFactoryShipment(order)
+                    ? `${order.orderNo}：${selectedIds.includes(order.id) ? '取消选择' : '选择发货'}`
+                    : `${order.orderNo}：已发货`"
+                  :aria-pressed="selectedIds.includes(order.id)"
+                  @click="toggleOrder(order)"
+                >
+                  <span
+                    class="border rounded flex shrink-0 size-5 items-center justify-center"
+                    :class="selectedIds.includes(order.id)
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-muted-foreground/40 bg-background'"
+                    aria-hidden="true"
+                  >
+                    <FaIcon
+                      v-if="isPendingFactoryShipment(order) && selectedIds.includes(order.id)"
+                      name="i-lucide:check"
+                      class="size-3.5"
+                    />
+                    <FaIcon
+                      v-else-if="!isPendingFactoryShipment(order)"
+                      name="i-lucide:package-check"
+                      class="size-3.5"
+                    />
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  data-slot="factory-shipment-order-expand"
+                  class="text-start rounded-md min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  :aria-label="`${order.orderNo}：${expandedOrderIds.includes(order.id) ? '收起采购产品' : '展开采购产品'}`"
+                  :aria-expanded="expandedOrderIds.includes(order.id)"
+                  :aria-controls="`factory-shipment-products-${order.id}`"
+                  @click="toggleOrderExpanded(order.id)"
+                >
+                  <strong class="qs-type-data-emphasis font-mono block break-all">
+                    {{ order.orderNo }}
+                  </strong>
+                  <span class="qs-type-meta text-muted-foreground mt-1 block truncate">
+                    {{ order.orderDate }} · {{ order.supplier.label }}
+                  </span>
+                  <span class="qs-type-meta text-muted-foreground mt-1 block">
+                    {{ order.lineSummary.lineCount }} 项产品 · 共 {{ order.lineSummary.totalQuantity }} 件
+                  </span>
+                  <span class="qs-type-meta text-primary mt-2 flex gap-1 items-center">
+                    {{ expandedOrderIds.includes(order.id) ? '收起产品' : '查看产品' }}
+                    <FaIcon
+                      :name="expandedOrderIds.includes(order.id)
+                        ? 'i-lucide:chevron-up'
+                        : 'i-lucide:chevron-down'"
+                      class="size-4"
+                      aria-hidden="true"
+                    />
+                  </span>
+                </button>
+                <FaTag
+                  variant="outline"
+                  class="qs-type-status-tag w-fit sm:justify-self-end"
+                  :class="getPurchaseShipmentStatusMeta(order.fulfillmentStatus).className"
+                >
+                  {{ getPurchaseShipmentStatusMeta(order.fulfillmentStatus).label }}
+                </FaTag>
+              </div>
+              <div
+                v-if="expandedOrderIds.includes(order.id)"
+                :id="`factory-shipment-products-${order.id}`"
               >
-                <FaIcon
-                  v-if="isPendingFactoryShipment(order) && selectedIds.includes(order.id)"
-                  name="i-lucide:check"
-                  class="size-3.5"
+                <FactoryShipmentProductSummary
+                  :previews="order.lineSummary.previews"
+                  display-mode="FULL"
                 />
-                <FaIcon
-                  v-else-if="!isPendingFactoryShipment(order)"
-                  name="i-lucide:package-check"
-                  class="size-3.5"
-                />
-              </span>
-              <span class="min-w-0">
-                <strong class="qs-type-data-emphasis font-mono block break-all">
-                  {{ order.orderNo }}
-                </strong>
-                <span class="qs-type-meta text-muted-foreground mt-1 block truncate">
-                  {{ order.orderDate }} · {{ order.supplier.label }}
-                </span>
-                <span class="qs-type-meta text-muted-foreground mt-1 block">
-                  {{ order.lineSummary.lineCount }} 项产品 · 共 {{ order.lineSummary.totalQuantity }} 件
-                </span>
-                <FactoryShipmentProductSummary :previews="order.lineSummary.previews" />
-              </span>
-              <FaTag
-                variant="outline"
-                class="qs-type-status-tag w-fit sm:justify-self-end"
-                :class="getPurchaseShipmentStatusMeta(order.fulfillmentStatus).className"
-              >
-                {{ getPurchaseShipmentStatusMeta(order.fulfillmentStatus).label }}
-              </FaTag>
-            </button>
+              </div>
+            </article>
           </div>
         </section>
 

@@ -989,18 +989,40 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
       return dialog?.textContent?.includes(${JSON.stringify(salesOrderNo)})
         && dialog.textContent.includes(${JSON.stringify(salesCustomerName)})
         && dialog.textContent.includes(${JSON.stringify(linkedOrder.orderNo)})
-        && dialog.textContent.includes(${JSON.stringify(purchaseCustomName)})
-        && dialog.querySelector('[data-slot="factory-shipment-product-summary"]')
-          ?.textContent?.includes('× 1')
+        && !dialog.textContent.includes(${JSON.stringify(purchaseCustomName)})
+        && dialog.querySelector('[data-slot="factory-shipment-product-summary"]') === null
+        && dialog.querySelector(
+          'button[data-slot="factory-shipment-order-expand"]'
+            + '[aria-expanded="false"]'
+            + '[aria-label=' + CSS.escape(${JSON.stringify(`${linkedOrder.orderNo}：展开采购产品`)}) + ']',
+        )?.getClientRects().length > 0
         && dialog.textContent.includes('全部待发货采购单')
         && list !== null
         && getComputedStyle(list).overflowY === 'auto'
     })()`)
+    await clickVisibleAriaButton(page, `${linkedOrder.orderNo}：展开采购产品`)
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('确认工厂发货范围'))
+      const select = dialog?.querySelector(
+        'button[data-slot="factory-shipment-order-select"]'
+          + '[aria-label=' + CSS.escape(${JSON.stringify(`${linkedOrder.orderNo}：选择发货`)}) + ']',
+      )
+      return dialog?.textContent?.includes(${JSON.stringify(purchaseCustomName)})
+        && dialog.querySelector('[data-slot="factory-shipment-product-list"]')
+          ?.textContent?.includes('× 1')
+        && dialog.querySelector(
+          'button[data-slot="factory-shipment-order-expand"][aria-expanded="true"]',
+        )?.getClientRects().length > 0
+        && select?.getAttribute('aria-pressed') === 'false'
+    })()`)
     await page.evaluate(`(() => {
       const list = document.querySelector('[data-slot="factory-shipment-order-list"]')
-      const button = [...(list?.querySelectorAll('button') ?? [])]
-        .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.includes(${JSON.stringify(linkedOrder.orderNo)}))
+      const button = list?.querySelector(
+        'button[data-slot="factory-shipment-order-select"]'
+          + '[aria-label=' + CSS.escape(${JSON.stringify(`${linkedOrder.orderNo}：选择发货`)}) + ']',
+      )
       if (!(button instanceof HTMLButtonElement)) {
         throw new Error('selected factory-shipment target is unavailable')
       }
@@ -1009,8 +1031,10 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     })()`)
     await page.waitFor(`(() => {
       const list = document.querySelector('[data-slot="factory-shipment-order-list"]')
-      const selected = [...(list?.querySelectorAll('button') ?? [])]
-        .find(button => button.textContent?.includes(${JSON.stringify(linkedOrder.orderNo)}))
+      const selected = list?.querySelector(
+        'button[data-slot="factory-shipment-order-select"]'
+          + '[aria-label=' + CSS.escape(${JSON.stringify(`${linkedOrder.orderNo}：取消选择`)}) + ']',
+      )
       const dialog = selected?.closest('[role="dialog"]')
       const submit = [...(dialog?.querySelectorAll('button') ?? [])]
         .find(button => button.textContent?.includes('确认发货')
