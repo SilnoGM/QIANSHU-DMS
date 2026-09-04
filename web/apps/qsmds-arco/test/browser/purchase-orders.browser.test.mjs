@@ -26,6 +26,7 @@ const supplierLabel = 'Browser 有效供应商'
 const productNo = 'PRODUCT-BROWSER-001'
 const salesCustomerName = 'Browser 采购来源客户'
 const salesOrderNo = 'SO-BRW-PURCHASE-SOURCE'
+const customSupplierName = 'Browser 自定义供应商'
 const purchaseCustomName = 'Browser 采购侧临时产品'
 const purchaseCustomDescription = 'Browser 采购侧临时说明'
 
@@ -144,6 +145,65 @@ async function fillAriaControl(page, label, value) {
   ))`)
 }
 
+/** 采购前置弹窗使用原生 radio，Browser 用例通过可访问控件选择真实产品类型。 */
+async function selectPurchaseStartMode(page, mode) {
+  const serializedMode = JSON.stringify(mode)
+  await page.waitFor(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('选择采购产品类型'))
+    const input = dialog?.querySelector(
+      'input[name="purchase-start-product-mode"][value=' + CSS.escape(${serializedMode}) + ']',
+    )
+    return input instanceof HTMLInputElement && !input.disabled
+  })()`)
+  await page.evaluate(`(() => {
+    const dialog = [...document.querySelectorAll('[role="dialog"]')]
+      .find(candidate => candidate.getClientRects().length > 0
+        && candidate.textContent?.includes('选择采购产品类型'))
+    const input = dialog?.querySelector(
+      'input[name="purchase-start-product-mode"][value=' + CSS.escape(${serializedMode}) + ']',
+    )
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error('purchase start product mode unavailable')
+    }
+    input.focus({ preventScroll: true })
+    input.click()
+    return true
+  })()`)
+  await page.waitFor(`document.querySelector(
+    'input[name="purchase-start-product-mode"][value=' + CSS.escape(${serializedMode}) + ']',
+  )?.checked === true`)
+}
+
+/** 自定义供应商没有字典选项，只驱动弹窗公开的 placeholder input。 */
+async function fillPurchaseStartCustomSupplier(page, value) {
+  const placeholder = '填写本次采购的供应商名称'
+  const selector = `input[placeholder=${JSON.stringify(placeholder)}]`
+  await page.waitFor(`(() => {
+    const input = document.querySelector(${JSON.stringify(selector)})
+    return input instanceof HTMLInputElement
+      && input.getClientRects().length > 0
+      && !input.disabled
+  })()`)
+  await page.evaluate(`(() => {
+    const input = document.querySelector(${JSON.stringify(selector)})
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error('purchase start custom supplier unavailable')
+    }
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')
+      .set.call(input, ${JSON.stringify(value)})
+    input.dispatchEvent(new InputEvent('input', {
+      bubbles: true,
+      inputType: 'insertText',
+    }))
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    return true
+  })()`)
+  await page.waitFor(`document.querySelector(${JSON.stringify(selector)})?.value
+    === ${JSON.stringify(value)}`)
+}
+
 /** 供应商和付款方式均通过公开 placeholder、trigger 与 option 契约选择。 */
 async function selectVisibleComboboxOption(page, placeholder, optionText) {
   const serializedPlaceholder = JSON.stringify(placeholder)
@@ -217,6 +277,27 @@ async function clickVisibleAriaButton(page, label) {
     if (!button) throw new Error('purchase order aria button unavailable')
     button.focus({ preventScroll: true })
     button.click()
+    return true
+  })()`)
+}
+
+/** 销售订单候选项是可访问的 radio 容器，名称还会附带客户和产品汇总。 */
+async function clickVisibleSalesOrderCandidate(page, orderNo) {
+  const labelPrefix = JSON.stringify(`选择销售订单 ${orderNo}`)
+  await page.waitFor(`(() => [...document.querySelectorAll('[role="radio"]')]
+    .some(candidate => candidate.getAttribute('aria-label')?.startsWith(${labelPrefix})
+      && candidate.getClientRects().length > 0
+      && candidate.getAttribute('aria-disabled') !== 'true'))()`)
+  await page.evaluate(`(() => {
+    const candidate = [...document.querySelectorAll('[role="radio"]')]
+      .find(item => item.getAttribute('aria-label')?.startsWith(${labelPrefix})
+        && item.getClientRects().length > 0
+        && item.getAttribute('aria-disabled') !== 'true')
+    if (!(candidate instanceof HTMLElement)) {
+      throw new Error('sales order candidate unavailable')
+    }
+    candidate.focus({ preventScroll: true })
+    candidate.click()
     return true
   })()`)
 }
@@ -486,47 +567,29 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await waitForPurchaseList(page, '暂无采购订单')
   })
 
-  let linkedOrder
-  await runPurchaseOrderBrowserStep('sales-linked CUSTOM snapshot and final submission', async () => {
-    await page.navigate(appRouteUrl(
-      configuration.baseUrl,
-      '/qs-operations/sales/pending-sales-orders',
-    ))
-    await waitForAfterAuthentication(page, `(() => {
-      const table = document.querySelector('[data-testid="sales-order-list-table"]')
-      const action = document.querySelector(
-        'button[aria-label=' + CSS.escape(${JSON.stringify(`${salesOrderNo}：新增采购`)}) + ']',
-      )
-      return table?.getClientRects().length > 0
-        && table.textContent?.includes(${JSON.stringify(salesCustomerName)})
-        && action?.getClientRects().length > 0
-    })()`)
-    await clickVisibleAriaButton(page, `${salesOrderNo}：新增采购`)
+  let catalogLinkedOrder
+  await runPurchaseOrderBrowserStep('sales-linked CATALOG filter and final submission', async () => {
+    await clickVisibleButton(page, '新增采购')
+    await waitForVisibleDialog(page, '选择采购产品类型')
+    await selectPurchaseStartMode(page, 'CATALOG')
+    await selectVisibleComboboxOption(page, '选择供应商', supplierLabel)
+    await clickDialogButton(page, '选择采购产品类型', '开始采购')
     await waitForAfterAuthentication(page, `(() => (
       (() => {
         const parameters = new URLSearchParams(location.hash.split('?')[1] ?? '')
         const step = document.querySelector('[data-testid="purchase-order-step-base"]')
-        const source = [...(step?.querySelectorAll('.border-primary') ?? [])]
-          .find(candidate => candidate.textContent?.includes(${JSON.stringify(salesOrderNo)})
-            && candidate.textContent.includes(${JSON.stringify(salesCustomerName)}))
         return location.hash.includes('/qs-operations/purchase/purchase-orders/create?')
           && parameters.get('type') === 'SALES_LINKED'
-          && parameters.get('salesOrderNo') === ${JSON.stringify(salesOrderNo)}
-          && Boolean(parameters.get('salesOrderId'))
+          && parameters.get('productMode') === 'CATALOG'
+          && parameters.get('supplierValue') === 'BROWSER_SUPPLIER_EFFECTIVE'
+          && parameters.get('customSupplierName') === null
           && step?.getClientRects().length > 0
-          && source?.getClientRects().length > 0
           && document.body.innerText.includes('新增采购订单')
           && document.body.innerText.includes('第 1 步，共 4 步')
+          && step.textContent.includes('产品库产品采购')
       })()
     ))()`)
-    // 快捷入口会异步恢复来源明细；重选按钮恢复可用即表示来源加载已经结束，
-    // 此后点击下一步才能稳定验证“缺少供应商”的步骤校验，而不是加载中提示。
-    await page.waitFor(`[...document.querySelectorAll('button')].some(button => (
-      button.textContent?.trim() === '重选销售订单'
-      && button.getClientRects().length > 0
-      && !button.disabled
-    ))`)
-
+    // 通用采购入口不预选销售订单，必须先通过筛选后的选择器完成关联。
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')]
       .some(toast => toast.getClientRects().length > 0
@@ -536,17 +599,31 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-base"]')
       ?.getClientRects().length > 0`)
 
-    await selectVisibleComboboxOption(page, '选择采购供应商', supplierLabel)
-    // 销售待办快捷入口已自动绑定来源，此处验证的是重选弹窗与取消后保留关联。
-    await clickVisibleButton(page, '重选销售订单')
+    await clickVisibleButton(page, '选择销售订单')
     await waitForVisibleDialog(page, '选择销售订单')
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes('选择销售订单'))
+      const candidate = [...(dialog?.querySelectorAll('[role="radio"]') ?? [])]
+        .find(item => item.getAttribute('aria-label')
+          ?.startsWith(${JSON.stringify(`选择销售订单 ${salesOrderNo}`)}))
+      const productImage = candidate?.querySelector(
+        '[data-slot="image-group"] img[alt="Browser 多媒体产品"]',
+      )
       return dialog?.textContent?.includes(${JSON.stringify(salesCustomerName)})
+        && candidate?.getClientRects().length > 0
+        && productImage instanceof HTMLImageElement
+        && productImage.complete
+        && productImage.naturalWidth > 0
+        && candidate.querySelector('[data-slot="image-group"]')
+          ?.getAttribute('aria-label') === '图片组，共 1 张'
+        && candidate.querySelector(
+          '[data-slot="sales-order-selector-products-without-image"]',
+        ) === null
     })()`)
-    await clickDialogButton(page, '选择销售订单', '取消')
+    await clickVisibleSalesOrderCandidate(page, salesOrderNo)
+    await clickDialogButton(page, '选择销售订单', '确认选择')
     await waitForNoVisibleDialog(page, '选择销售订单')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-base"]')
       ?.textContent?.includes(${JSON.stringify(salesCustomerName)})`)
@@ -590,18 +667,15 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await page.waitFor(`(() => {
       const step = document.querySelector('[data-testid="purchase-order-step-products-payment"]')
       const image = step?.querySelector('tbody img')
-      return image instanceof HTMLImageElement
+      return !step?.textContent?.includes('Browser 销售临时产品')
+        && image instanceof HTMLImageElement
         && image.src.includes('/api/purchase-orders/product-options/')
         && image.complete
         && image.naturalWidth > 0
     })()`)
     await fillLabelledControl(page, '第 1 行本单采购价', '80')
-    await fillLabelledControl(page, '第 2 行产品名称', purchaseCustomName)
-    await fillLabelledControl(page, '第 2 行采购定价', '30')
-    await fillLabelledControl(page, '第 2 行本单采购价', '30')
-    await fillLabelledControl(page, '第 2 行备注', purchaseCustomDescription)
     await fillAriaControl(page, '定金', '20')
-    await fillAriaControl(page, '尾款', '170')
+    await fillAriaControl(page, '尾款', '140')
 
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
@@ -630,8 +704,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         && summary.textContent?.includes(${JSON.stringify(salesCustomerName)})
         && summary.textContent.includes(${JSON.stringify(supplierLabel)})
         && summary.textContent.includes(${JSON.stringify(productNo)})
-        && summary.textContent.includes(${JSON.stringify(purchaseCustomName)})
-        && summary.textContent.includes(${JSON.stringify(purchaseCustomDescription)})
+        && !summary.textContent.includes('Browser 销售临时产品')
         && summary.textContent.includes('真实采购价')
         && !summary.textContent.includes('采购定价')
         && [...summary.querySelectorAll('[data-currency="CNY"]')]
@@ -710,7 +783,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
           && candidate.textContent?.includes('确认提交采购订单？'))
       return dialog?.textContent?.includes('销售关联采购')
         && dialog.textContent.includes(${JSON.stringify(supplierLabel)})
-        && dialog.textContent.includes('190')
+        && dialog.textContent.includes('160')
     })()`)
     await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
     await waitForPurchaseList(page, salesCustomerName)
@@ -723,12 +796,149 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
     assert.equal(response.body?.total, 1)
-    linkedOrder = response.body?.items?.find(item => item.purchaseType === 'SALES_LINKED')
+    catalogLinkedOrder = response.body?.items?.find(item => (
+      item.purchaseType === 'SALES_LINKED' && item.productMode === 'CATALOG'
+    ))
+    assert.match(catalogLinkedOrder?.orderNo ?? '', /^PO-BRW-\d{8}$/u)
+    assert.equal(catalogLinkedOrder?.createdBy?.displayName, 'Browser Auth Admin')
+    assert.equal(catalogLinkedOrder?.purchaseTotalAmount, '160.0000')
+    assert.equal(catalogLinkedOrder?.depositDueAmount, '20.0000')
+    assert.equal(catalogLinkedOrder?.balanceDueAmount, '140.0000')
+  })
+
+  let linkedOrder
+  await runPurchaseOrderBrowserStep('sales shortcut CUSTOM eligibility and final submission', async () => {
+    await page.navigate(appRouteUrl(
+      configuration.baseUrl,
+      '/qs-operations/sales/pending-sales-orders',
+    ))
+    await waitForAfterAuthentication(page, `(() => {
+      const table = document.querySelector('[data-testid="sales-order-list-table"]')
+      const action = document.querySelector(
+        'button[aria-label=' + CSS.escape(${JSON.stringify(`${salesOrderNo}：新增采购`)}) + ']',
+      )
+      return table?.getClientRects().length > 0
+        && table.textContent?.includes(${JSON.stringify(salesCustomerName)})
+        && action?.getClientRects().length > 0
+    })()`)
+    await clickVisibleAriaButton(page, `${salesOrderNo}：新增采购`)
+    await waitForVisibleDialog(page, '选择采购产品类型')
+    await page.waitFor(`document.querySelector('[aria-label="预选销售订单"]')
+      ?.textContent?.includes(${JSON.stringify(salesOrderNo)})`)
+
+    // 目录产品已被上一张采购单全量覆盖；快捷入口必须在弹窗内拒绝
+    // 该组合，而不是导航到一张无可同步明细的采购表单。
+    await selectPurchaseStartMode(page, 'CATALOG')
+    await selectVisibleComboboxOption(page, '选择供应商', supplierLabel)
+    await clickDialogButton(page, '选择采购产品类型', '开始采购')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes(
+          '该销售订单没有符合当前产品类型和供应商条件的待采购产品',
+        ))`)
+    await waitForVisibleDialog(page, '选择采购产品类型')
+
+    await selectPurchaseStartMode(page, 'CUSTOM')
+    await page.waitFor(`!document.querySelector(
+      'input[data-slot="combobox-input"][placeholder="选择供应商"]',
+    )`)
+    await fillPurchaseStartCustomSupplier(page, customSupplierName)
+
+    // 与创建页共用同一窄屏验收基线：弹窗不溢出，双面板收敛为单列，
+    // Footer 操作仍保持至少 44px 的可触达高度。
+    await page.setViewport(390, 844, true)
+    const mobileStartModal = await page.evaluate(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('选择采购产品类型'))
+      const group = dialog?.querySelector('[role="radiogroup"]')
+      const buttons = [...(dialog?.querySelectorAll('button') ?? [])]
+        .filter(button => ['取消', '开始采购'].includes(button.textContent?.trim()))
+      const rect = dialog?.getBoundingClientRect()
+      return {
+        dialogFits: Boolean(rect && rect.left >= 0
+          && rect.right <= document.documentElement.clientWidth),
+        singleColumn: group ? getComputedStyle(group).gridTemplateColumns.split(' ').length === 1 : false,
+        touchTargets: buttons.length === 2 && buttons.every(button => (
+          button.getBoundingClientRect().height + 0.001 >= 44
+        )),
+      }
+    })()`)
+    assert.deepEqual(mobileStartModal, {
+      dialogFits: true,
+      singleColumn: true,
+      touchTargets: true,
+    })
+    await page.setViewport(1440, 900, true)
+
+    await clickDialogButton(page, '选择采购产品类型', '开始采购')
+    await waitForAfterAuthentication(page, `(() => {
+      const parameters = new URLSearchParams(location.hash.split('?')[1] ?? '')
+      const step = document.querySelector('[data-testid="purchase-order-step-base"]')
+      const supplier = step?.querySelector('input[aria-label="供应商名称"]')
+      const source = [...(step?.querySelectorAll('.border-primary') ?? [])]
+        .find(candidate => candidate.textContent?.includes(${JSON.stringify(salesOrderNo)})
+          && candidate.textContent.includes(${JSON.stringify(salesCustomerName)}))
+      return parameters.get('type') === 'SALES_LINKED'
+        && parameters.get('productMode') === 'CUSTOM'
+        && parameters.get('customSupplierName') === ${JSON.stringify(customSupplierName)}
+        && parameters.get('supplierValue') === null
+        && step?.textContent?.includes('自定义产品采购')
+        && supplier instanceof HTMLInputElement
+        && supplier.value === ${JSON.stringify(customSupplierName)}
+        && source?.getClientRects().length > 0
+    })()`)
+    await page.waitFor(`[...document.querySelectorAll('button')].some(button => (
+      button.textContent?.trim() === '重选销售订单'
+      && button.getClientRects().length > 0
+      && !button.disabled
+    ))`)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      ?.getClientRects().length > 0`)
+    await clickVisibleButton(page, '同步销售产品明细')
+    await page.waitFor(`(() => {
+      const step = document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      const productName = step?.querySelector('input[aria-label="第 1 行产品名称"]')
+      return productName instanceof HTMLInputElement
+        && productName.value === 'Browser 销售临时产品'
+        && !step.textContent.includes(${JSON.stringify(productNo)})
+    })()`)
+    await fillLabelledControl(page, '第 1 行产品名称', purchaseCustomName)
+    await fillLabelledControl(page, '第 1 行采购定价', '30')
+    await fillLabelledControl(page, '第 1 行本单采购价', '30')
+    await fillLabelledControl(page, '第 1 行备注', purchaseCustomDescription)
+    await fillAriaControl(page, '定金', '10')
+    await fillAriaControl(page, '尾款', '20')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
+      ?.getClientRects().length > 0`)
+    await fillLabelledControl(page, '采购唛头', 'BROWSER CUSTOM LINKED MARK')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`(() => {
+      const summary = document.querySelector('[data-testid="purchase-order-create-summary-column"]')
+      return summary?.getAttribute('data-surface') === 'review'
+        && summary.textContent?.includes(${JSON.stringify(customSupplierName)})
+        && summary.textContent.includes(${JSON.stringify(purchaseCustomName)})
+        && summary.textContent.includes(${JSON.stringify(purchaseCustomDescription)})
+        && !summary.textContent.includes(${JSON.stringify(productNo)})
+    })()`)
+    await clickVisibleButton(page, '提交订单')
+    await waitForVisibleDialog(page, '确认提交采购订单？')
+    await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
+    await waitForPurchaseList(page, customSupplierName)
+
+    const response = await readPurchaseOrders(page)
+    assert.equal(response.status, 200)
+    assert.equal(response.body?.total, 2)
+    linkedOrder = response.body?.items?.find(item => (
+      item.purchaseType === 'SALES_LINKED' && item.productMode === 'CUSTOM'
+    ))
     assert.match(linkedOrder?.orderNo ?? '', /^PO-BRW-\d{8}$/u)
-    assert.equal(linkedOrder?.createdBy?.displayName, 'Browser Auth Admin')
-    assert.equal(linkedOrder?.purchaseTotalAmount, '190.0000')
-    assert.equal(linkedOrder?.depositDueAmount, '20.0000')
-    assert.equal(linkedOrder?.balanceDueAmount, '170.0000')
+    assert.equal(linkedOrder?.supplier?.source, 'CUSTOM_TEXT')
+    assert.equal(linkedOrder?.supplier?.value, null)
+    assert.equal(linkedOrder?.supplier?.label, customSupplierName)
+    assert.equal(linkedOrder?.purchaseTotalAmount, '30.0000')
 
     const detail = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(linkedOrder.id)}`,
@@ -742,8 +952,18 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
   let order
   await runPurchaseOrderBrowserStep('stock creation and validation focus', async () => {
     await clickVisibleButton(page, '新增备货采购')
+    await waitForVisibleDialog(page, '选择采购产品类型')
+    await selectPurchaseStartMode(page, 'CATALOG')
+    await selectVisibleComboboxOption(page, '选择供应商', supplierLabel)
+    await clickDialogButton(page, '选择采购产品类型', '开始采购')
     await waitForAfterAuthentication(page, `(() => (
-      location.hash.includes('/qs-operations/purchase/purchase-orders/create?type=STOCK')
+      (() => {
+        const parameters = new URLSearchParams(location.hash.split('?')[1] ?? '')
+        return location.hash.includes('/qs-operations/purchase/purchase-orders/create?')
+          && parameters.get('type') === 'STOCK'
+          && parameters.get('productMode') === 'CATALOG'
+          && parameters.get('supplierValue') === 'BROWSER_SUPPLIER_EFFECTIVE'
+      })()
       && document.querySelector('[data-testid="purchase-order-create-page"]')
         ?.getClientRects().length > 0
       && document.body.innerText.includes('PURCHASE_ORDER · AUTO')
@@ -754,7 +974,6 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
       && !document.body.innerText.includes('同步销售产品明细')
     ))()`)
 
-    await selectVisibleComboboxOption(page, '选择采购供应商', supplierLabel)
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-products-payment"]')
       ?.getClientRects().length > 0`)
@@ -813,13 +1032,55 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
-    assert.equal(response.body?.total, 2)
-    order = response.body?.items?.find(item => item.purchaseType === 'STOCK')
+    assert.equal(response.body?.total, 3)
+    order = response.body?.items?.find(item => (
+      item.purchaseType === 'STOCK' && item.productMode === 'CATALOG'
+    ))
     assert.match(order?.orderNo ?? '', /^PO-BRW-\d{8}$/u)
     assert.equal(order?.purchaseType, 'STOCK')
     assert.equal(order?.purchaseTotalAmount, '80.0000')
     assert.equal(order?.depositDueAmount, '20.0000')
     assert.equal(order?.balanceDueAmount, '60.0000')
+  })
+
+  await runPurchaseOrderBrowserStep('stock CUSTOM exposes only temporary products', async () => {
+    await clickVisibleButton(page, '新增备货采购')
+    await waitForVisibleDialog(page, '选择采购产品类型')
+    await selectPurchaseStartMode(page, 'CUSTOM')
+    await fillPurchaseStartCustomSupplier(page, customSupplierName)
+    await clickDialogButton(page, '选择采购产品类型', '开始采购')
+    await waitForAfterAuthentication(page, `(() => {
+      const parameters = new URLSearchParams(location.hash.split('?')[1] ?? '')
+      const step = document.querySelector('[data-testid="purchase-order-step-base"]')
+      const supplier = step?.querySelector('input[aria-label="供应商名称"]')
+      return parameters.get('type') === 'STOCK'
+        && parameters.get('productMode') === 'CUSTOM'
+        && parameters.get('customSupplierName') === ${JSON.stringify(customSupplierName)}
+        && parameters.get('supplierValue') === null
+        && step?.textContent?.includes('自定义产品采购')
+        && supplier instanceof HTMLInputElement
+        && supplier.value === ${JSON.stringify(customSupplierName)}
+    })()`)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`(() => {
+      const step = document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      const buttons = [...(step?.querySelectorAll('button') ?? [])]
+        .filter(button => button.getClientRects().length > 0)
+        .map(button => button.textContent?.trim())
+      return buttons.includes('添加临时产品')
+        && !buttons.includes('添加数据库产品')
+    })()`)
+    await clickVisibleButton(page, '添加临时产品')
+    await page.waitFor(`(() => {
+      const step = document.querySelector('[data-testid="purchase-order-step-products-payment"]')
+      return step?.querySelector('input[aria-label="第 1 行产品名称"]')
+        ?.getClientRects().length > 0
+    })()`)
+    await clickVisibleButton(page, '取消')
+    await waitForVisibleDialog(page, '放弃当前采购订单？')
+    await clickDialogButton(page, '放弃当前采购订单？', '确认放弃')
+    await waitForNoVisibleDialog(page, '放弃当前采购订单？')
+    await waitForPurchaseList(page, order.orderNo)
   })
 
   await runPurchaseOrderBrowserStep('cancel opens confirmation without detail drawer', async () => {
@@ -882,8 +1143,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, order.orderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
-      待发货: 2,
-      待付款: 1,
+      待发货: 3,
+      待付款: 2,
       待入仓: 0,
     })
     await clickVisibleAriaButton(page, `${order.orderNo}：发货`)
@@ -939,8 +1200,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         && toast.textContent?.includes('采购订单已发货'))`)
     await waitForPurchaseList(page, linkedOrder.orderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
-      待发货: 1,
-      待付款: 1,
+      待发货: 2,
+      待付款: 2,
       待入仓: 1,
     })
     assert.equal(await page.evaluate(`(() => [...document.querySelectorAll(
@@ -948,10 +1209,10 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     )].filter(drawer => drawer.getClientRects().length > 0).length)()`), 0)
     const pending = await readPurchaseOrders(page, 'pending')
     assert.equal(pending.status, 200)
-    assert.equal(pending.body?.total, 2)
+    assert.equal(pending.body?.total, 3)
     assert.deepEqual(
       new Set(pending.body?.items?.map(item => item.id)),
-      new Set([linkedOrder.id, order.id]),
+      new Set([catalogLinkedOrder.id, linkedOrder.id, order.id]),
     )
     const shippedOrder = pending.body?.items?.find(item => item.id === order.id)
     assert.equal(shippedOrder?.fulfillmentStatus, 'SHIPPED')
@@ -1099,7 +1360,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await waitForNoVisibleDialog(page, '确认工厂发货范围')
     await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
       .some(toast => toast.getClientRects().length > 0
-        && toast.textContent?.includes('已确认 1 张采购单发货，销售订单已进入陆运中'))`)
+        && toast.textContent?.includes('已确认 2 张采购单发货，销售订单已进入陆运中'))`)
 
     const salesAfter = await page.evaluate(apiExpression(
       `/api/sales-orders/${encodeURIComponent(salesOrder.id)}`,
@@ -1111,6 +1372,11 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     ))
     assert.equal(linkedAfter.status, 200)
     assert.equal(linkedAfter.body?.fulfillmentStatus, 'SHIPPED')
+    const catalogLinkedAfter = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(catalogLinkedOrder.id)}`,
+    ))
+    assert.equal(catalogLinkedAfter.status, 200)
+    assert.equal(catalogLinkedAfter.body?.fulfillmentStatus, 'SHIPPED')
   })
 
   await runPurchaseOrderBrowserStep('390x844 light dark and touch targets', async () => {
