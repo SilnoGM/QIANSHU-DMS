@@ -85,6 +85,11 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/purchase-orders/dto/purchase-order-query-dto.spec.ts',
   'server/src/modules/purchase-orders/dto/purchase-order-query.dto.ts',
   'server/src/modules/purchase-orders/dto/purchase-order-response.dto.ts',
+  // 工厂发货上下文仅返回采购单已冻结的 supplierValue 展示值；DTO、查询服务
+  // 与测试仍不得引入 Supplier 主数据、关系或管理接口。
+  'server/src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment-query.service.spec.ts',
+  'server/src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment-query.service.ts',
+  'server/src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.dto.ts',
   'server/src/modules/purchase-orders/products/purchase-order-product-image.service.spec.ts',
   'server/src/modules/purchase-orders/products/purchase-order-product-image.service.ts',
   'server/src/modules/purchase-orders/purchase-order-command.normalizer.spec.ts',
@@ -104,6 +109,7 @@ const supplierResidueAllowlist = Object.freeze([
   'server/test/purchase-order-api.e2e-spec.ts',
   'server/test/purchase-order-schema.e2e-spec.ts',
   'server/test/purchase-order-service.e2e-spec.ts',
+  'specs/order-factory-shipment/design.md',
   'specs/purchase-order-domain/design.md',
   'specs/purchase-order-domain/requirements.md',
   'specs/purchase-order-domain/tasks.md',
@@ -114,6 +120,8 @@ const supplierResidueAllowlist = Object.freeze([
   'scripts/browser-auth/provision-admin.mjs',
   // 采购 Web 只消费 service_provider.supplier 字典值、产品 supplierValue 快照
   // 与展示标签；页面、适配层和测试不允许恢复独立 Supplier 主数据调用。
+  'web/apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue',
+  'web/apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/types.ts',
   'web/apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue',
   'web/apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/types.ts',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/index.vue',
@@ -129,6 +137,8 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-desc.logic.ts',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-detail-drawer.vue',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts',
+  'web/apps/qsmds-arco/src/views/operations/sales-orders/index.vue',
+  'web/apps/qsmds-arco/src/views/component_library/business/components/FactoryShipmentModalShowcase.vue',
   'web/apps/qsmds-arco/test/api/purchase-orders.test.ts',
   'web/apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
   'web/apps/qsmds-arco/test/views/purchase-order-create.logic.test.ts',
@@ -136,6 +146,7 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/views/purchase-order-detail.logic.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-list.logic.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-pages.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-factory-shipment-modal.logic.test.ts',
   'web/apps/qsmds-arco/test/views/qs-order-product-line-editor.test.ts',
   // 订单产品选择器通过稳定 supplierValue 查询和展示现有产品；规格、组件、
   // fixture 与回归测试属于该字典消费边界，不得引入 Supplier 主数据依赖。
