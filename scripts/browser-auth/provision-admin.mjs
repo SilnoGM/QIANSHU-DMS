@@ -462,6 +462,86 @@ let fixtureFailureCode = 'UNKNOWN'
         ]),
       ],
     )
+
+    // 历史 MIXED 采购单只能由迁移回填产生，新建 API 会严格拒绝该类型。
+    // Browser 夹具因此直接写入两张历史单：一张用于付款与发货，另一张保持
+    // 零付款用于取消，避免用同一订单绕过“有有效付款不可取消”的领域约束。
+    fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_ACTIVE'
+    const historicalMixedActiveOrder = await client.query(
+      [
+        'INSERT INTO purchase_orders (',
+        'order_no, create_idempotency_key_hash, create_request_fingerprint_hash,',
+        'purchase_type, product_mode, sales_order_id, supplier_value, custom_supplier_name,',
+        'order_date, currency_code, shipping_mark_text, line_subtotal_amount,',
+        'purchase_total_amount, deposit_due_amount, balance_due_amount, order_status,',
+        'fulfillment_status, payment_status, created_by_user_id, remark, version,',
+        'created_at, updated_at',
+        ') VALUES (',
+        '\'PO-BRW-MIXED-ACTIVE\', decode(repeat(\'a\', 64), \'hex\'),',
+        'decode(repeat(\'b\', 64), \'hex\'), \'STOCK\', \'MIXED\', NULL,',
+        '\'BROWSER_SUPPLIER_EFFECTIVE\', NULL, CURRENT_DATE, \'CNY\',',
+        '\'BROWSER HISTORICAL MIXED ACTIVE MARK\', 30, 30, 10, 20,',
+        '\'CONFIRMED\', \'ORDERED\', \'UNPAID\', $1,',
+        '\'Browser 历史混合采购付款发货回归\', 1,',
+        'clock_timestamp() - interval \'2 minutes\',',
+        'clock_timestamp() - interval \'2 minutes\'',
+        ') RETURNING id',
+      ].join(' '),
+      [user.rows[0].id],
+    )
+    fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_CANCEL'
+    const historicalMixedCancelableOrder = await client.query(
+      [
+        'INSERT INTO purchase_orders (',
+        'order_no, create_idempotency_key_hash, create_request_fingerprint_hash,',
+        'purchase_type, product_mode, sales_order_id, supplier_value, custom_supplier_name,',
+        'order_date, currency_code, shipping_mark_text, line_subtotal_amount,',
+        'purchase_total_amount, deposit_due_amount, balance_due_amount, order_status,',
+        'fulfillment_status, payment_status, created_by_user_id, remark, version,',
+        'created_at, updated_at',
+        ') VALUES (',
+        '\'PO-BRW-MIXED-CANCEL\', decode(repeat(\'c\', 64), \'hex\'),',
+        'decode(repeat(\'d\', 64), \'hex\'), \'STOCK\', \'MIXED\', NULL,',
+        '\'BROWSER_SUPPLIER_EFFECTIVE\', NULL, CURRENT_DATE, \'CNY\',',
+        '\'BROWSER HISTORICAL MIXED CANCEL MARK\', 30, 30, 10, 20,',
+        '\'CONFIRMED\', \'ORDERED\', \'UNPAID\', $1,',
+        '\'Browser 历史混合采购取消回归\', 1,',
+        'clock_timestamp() - interval \'1 minute\',',
+        'clock_timestamp() - interval \'1 minute\'',
+        ') RETURNING id',
+      ].join(' '),
+      [user.rows[0].id],
+    )
+    fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_LINES'
+    for (const historicalOrder of [
+      historicalMixedActiveOrder.rows[0],
+      historicalMixedCancelableOrder.rows[0],
+    ]) {
+      await client.query(
+        [
+          'INSERT INTO purchase_order_lines (',
+          'purchase_order_id, line_number, line_type, product_id,',
+          'source_sales_order_line_id, product_no_snapshot, product_name_snapshot,',
+          'product_attributes_snapshot, description_snapshot,',
+          'reference_purchase_unit_price_amount, actual_purchase_unit_price_amount,',
+          'quantity, line_total_amount',
+          ') VALUES ($1, 1, \'CATALOG\', $2, NULL, \'PRODUCT-BROWSER-001\',',
+          '\'Browser 历史混合目录产品\', $3::jsonb,',
+          '\'Browser 历史混合目录明细\', 88.9, 10, 1, 10),',
+          '($1, 2, \'CUSTOM\', NULL, NULL, NULL,',
+          '\'Browser 历史混合临时产品\', \'[]\'::jsonb,',
+          '\'Browser 历史混合临时明细\', 20, 20, 1, 20)',
+        ].join(' '),
+        [
+          historicalOrder.id,
+          managementProduct.rows[0].id,
+          JSON.stringify([
+            { title: '颜色', value: '墨黑' },
+            { title: '尺寸', value: 'XL' },
+          ]),
+        ],
+      )
+    }
     fixtureFailureCode = 'UNKNOWN'
     const managementMedia = [
       {

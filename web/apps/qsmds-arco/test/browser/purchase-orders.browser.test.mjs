@@ -29,6 +29,10 @@ const salesOrderNo = 'SO-BRW-PURCHASE-SOURCE'
 const customSupplierName = 'Browser 自定义供应商'
 const purchaseCustomName = 'Browser 采购侧临时产品'
 const purchaseCustomDescription = 'Browser 采购侧临时说明'
+const historicalMixedActiveOrderNo = 'PO-BRW-MIXED-ACTIVE'
+const historicalMixedCancelableOrderNo = 'PO-BRW-MIXED-CANCEL'
+const historicalMixedCatalogProductName = 'Browser 历史混合目录产品'
+const historicalMixedCustomProductName = 'Browser 历史混合临时产品'
 
 /** 日志只保留固定步骤名，不输出 Cookie、密码、付款草稿或幂等键。 */
 async function runPurchaseOrderBrowserStep(label, action) {
@@ -357,32 +361,44 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
   })
 
-  await runPurchaseOrderBrowserStep('real login and empty lists', async () => {
+  let historicalMixedActiveOrder
+  let historicalMixedCancelableOrder
+  await runPurchaseOrderBrowserStep('real login and historical mixed lists', async () => {
     await page.navigate(appRouteUrl(configuration.baseUrl, '/login'))
     await loginThroughRealHttp(page, configuration)
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
-    await waitForPurchaseList(page, '暂无采购订单')
+    await waitForPurchaseList(page, historicalMixedActiveOrderNo)
     await waitForStatusToolbarCounts(page, '全部采购状态筛选', {
-      全部采购: 0,
-      已确认: 0,
+      全部采购: 2,
+      已确认: 2,
       已完成: 0,
       已取消: 0,
     })
     const all = await readPurchaseOrders(page)
     assert.equal(all.status, 200)
-    assert.equal(all.body?.total, 0)
+    assert.equal(all.body?.total, 2)
+    historicalMixedActiveOrder = all.body?.items?.find(
+      item => item.orderNo === historicalMixedActiveOrderNo,
+    )
+    historicalMixedCancelableOrder = all.body?.items?.find(
+      item => item.orderNo === historicalMixedCancelableOrderNo,
+    )
+    assert.equal(historicalMixedActiveOrder?.productMode, 'MIXED')
+    assert.equal(historicalMixedCancelableOrder?.productMode, 'MIXED')
+    assert.equal(historicalMixedActiveOrder?.supplier?.source, 'DICTIONARY')
+    assert.equal(historicalMixedActiveOrder?.supplier?.label, supplierLabel)
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
-    await waitForPurchaseList(page, '暂无待办采购')
+    await waitForPurchaseList(page, historicalMixedCancelableOrderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
-      待发货: 0,
-      待付款: 0,
+      待发货: 2,
+      待付款: 2,
       待入仓: 0,
     })
     const pending = await readPurchaseOrders(page, 'pending')
     assert.equal(pending.status, 200)
-    assert.equal(pending.body?.total, 0)
+    assert.equal(pending.body?.total, 2)
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
-    await waitForPurchaseList(page, '暂无采购订单')
+    await waitForPurchaseList(page, historicalMixedActiveOrderNo)
   })
 
   const runtime = collectRuntimeIssues(page, {
@@ -564,7 +580,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
       && [...document.querySelectorAll('button')].some(button => (
         button.getAttribute('aria-label') === '打开采购日期范围选择：采购日期范围'
       ))`)
-    await waitForPurchaseList(page, '暂无采购订单')
+    await waitForPurchaseList(page, historicalMixedActiveOrderNo)
   })
 
   let catalogLinkedOrder
@@ -795,7 +811,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
-    assert.equal(response.body?.total, 1)
+    assert.equal(response.body?.total, 3)
     catalogLinkedOrder = response.body?.items?.find(item => (
       item.purchaseType === 'SALES_LINKED' && item.productMode === 'CATALOG'
     ))
@@ -930,7 +946,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
-    assert.equal(response.body?.total, 2)
+    assert.equal(response.body?.total, 4)
     linkedOrder = response.body?.items?.find(item => (
       item.purchaseType === 'SALES_LINKED' && item.productMode === 'CUSTOM'
     ))
@@ -1032,7 +1048,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
-    assert.equal(response.body?.total, 3)
+    assert.equal(response.body?.total, 5)
     order = response.body?.items?.find(item => (
       item.purchaseType === 'STOCK' && item.productMode === 'CATALOG'
     ))
@@ -1143,8 +1159,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, order.orderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
-      待发货: 3,
-      待付款: 2,
+      待发货: 5,
+      待付款: 4,
       待入仓: 0,
     })
     await clickVisibleAriaButton(page, `${order.orderNo}：发货`)
@@ -1200,8 +1216,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         && toast.textContent?.includes('采购订单已发货'))`)
     await waitForPurchaseList(page, linkedOrder.orderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
-      待发货: 2,
-      待付款: 2,
+      待发货: 4,
+      待付款: 4,
       待入仓: 1,
     })
     assert.equal(await page.evaluate(`(() => [...document.querySelectorAll(
@@ -1209,10 +1225,16 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     )].filter(drawer => drawer.getClientRects().length > 0).length)()`), 0)
     const pending = await readPurchaseOrders(page, 'pending')
     assert.equal(pending.status, 200)
-    assert.equal(pending.body?.total, 3)
+    assert.equal(pending.body?.total, 5)
     assert.deepEqual(
       new Set(pending.body?.items?.map(item => item.id)),
-      new Set([catalogLinkedOrder.id, linkedOrder.id, order.id]),
+      new Set([
+        catalogLinkedOrder.id,
+        linkedOrder.id,
+        order.id,
+        historicalMixedActiveOrder.id,
+        historicalMixedCancelableOrder.id,
+      ]),
     )
     const shippedOrder = pending.body?.items?.find(item => item.id === order.id)
     assert.equal(shippedOrder?.fulfillmentStatus, 'SHIPPED')
@@ -1377,6 +1399,86 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     ))
     assert.equal(catalogLinkedAfter.status, 200)
     assert.equal(catalogLinkedAfter.body?.fulfillmentStatus, 'SHIPPED')
+  })
+
+  await runPurchaseOrderBrowserStep('historical MIXED detail payment shipment and cancellation', async () => {
+    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
+    await waitForPurchaseList(page, historicalMixedActiveOrderNo)
+    await clickVisibleAriaButton(page, `${historicalMixedActiveOrderNo}：查看详情`)
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(historicalMixedActiveOrderNo)}))
+      const catalogImage = drawer?.querySelector(
+        '[data-slot="purchase-order-desc-line"] [data-slot="image-group"] img',
+      )
+      return drawer?.textContent?.includes(${JSON.stringify(historicalMixedCatalogProductName)})
+        && drawer.textContent.includes(${JSON.stringify(historicalMixedCustomProductName)})
+        && drawer.textContent.includes('真实采购价')
+        && drawer.textContent.includes('30.00 CNY')
+        && catalogImage instanceof HTMLImageElement
+        && catalogImage.complete
+        && catalogImage.naturalWidth > 0
+    })()`)
+    await clickVisibleButton(page, '记录付款')
+    await waitForVisibleDialog(page, '记录实际付款')
+    await fillLabelledControl(page, '付款金额', '5')
+    await selectVisibleComboboxOption(page, '选择付款方式', 'Browser 银行转账')
+    await clickDialogButton(page, '记录实际付款', '确认付款')
+    await waitForNoVisibleDialog(page, '记录实际付款')
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(historicalMixedActiveOrderNo)}))
+      return drawer?.textContent?.includes('部分付款')
+        && drawer.textContent.includes('Browser 银行转账')
+    })()`)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await waitForNoVisibleDialog(page, historicalMixedActiveOrderNo)
+
+    await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
+    await waitForPurchaseList(page, historicalMixedActiveOrderNo)
+    await clickVisibleAriaButton(page, `${historicalMixedActiveOrderNo}：发货`)
+    await waitForVisibleDialog(page, '确认本采购单已发货？')
+    await fillLabelledControl(page, '发货说明（可选）', 'Browser 历史混合采购发货')
+    await clickDialogButton(page, '确认本采购单已发货？', '确认发货')
+    await waitForNoVisibleDialog(page, '确认本采购单已发货？')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('采购订单已发货'))`)
+    await waitForPurchaseList(page, historicalMixedCancelableOrderNo)
+
+    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
+    await waitForPurchaseList(page, historicalMixedCancelableOrderNo)
+    await clickVisibleAriaButton(page, `${historicalMixedCancelableOrderNo}：取消订单`)
+    await waitForVisibleDialog(page, '取消采购订单？')
+    await clickDialogButton(page, '取消采购订单？', '确认取消')
+    await waitForNoVisibleDialog(page, '取消采购订单？')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('采购订单已取消'))`)
+
+    const activeAfter = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(historicalMixedActiveOrder.id)}`,
+    ))
+    assert.equal(activeAfter.status, 200)
+    assert.equal(activeAfter.body?.productMode, 'MIXED')
+    assert.equal(activeAfter.body?.fulfillmentStatus, 'SHIPPED')
+    assert.equal(activeAfter.body?.paymentStatus, 'PARTIALLY_PAID')
+    assert.equal(activeAfter.body?.paidAmount, '5.0000')
+    assert.deepEqual(
+      activeAfter.body?.lines?.map(line => line.lineType),
+      ['CATALOG', 'CUSTOM'],
+    )
+
+    const cancelledAfter = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(historicalMixedCancelableOrder.id)}`,
+    ))
+    assert.equal(cancelledAfter.status, 200)
+    assert.equal(cancelledAfter.body?.productMode, 'MIXED')
+    assert.equal(cancelledAfter.body?.orderStatus, 'CANCELLED')
+    assert.equal(cancelledAfter.body?.fulfillmentStatus, 'ORDERED')
+    assert.equal(cancelledAfter.body?.paymentStatus, 'UNPAID')
   })
 
   await runPurchaseOrderBrowserStep('390x844 light dark and touch targets', async () => {

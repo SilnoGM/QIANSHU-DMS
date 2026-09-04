@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 4 实施中（任务 11）
+- 当前阶段：Phase 4 实施与隔离验收完成（待 Gate C 目标库 migration 应用）
 
 ## 2. 执行原则
 
@@ -148,16 +148,19 @@
   - _Requirement: R4、R6、R7_
   - _Suggested commit: `feat: 接入采购产品类型创建流程`_
 
-- [ ] 11. 完成回归、浏览器和全量验收
-  - [ ] 构造并验证 `SALES_LINKED + CATALOG`：按供应商过滤、同步和提交。
-  - [ ] 构造并验证 `SALES_LINKED + CUSTOM`：文本供应商、CUSTOM 过滤和双价格。
-  - [ ] 以管理员验证 `STOCK + CATALOG` 和 `STOCK + CUSTOM` 的单类型编辑器。
-  - [ ] 验证销售订单快捷入口成功与无资格分支。
-  - [ ] 验证供应商切换清空下游、并发超量、订单状态变化和取消采购释放数量。
-  - [ ] 验证 390px、1440px、键盘导航、焦点、关闭和重复提交行为。
-  - [ ] 验证历史 `MIXED` 采购单的列表、详情、付款、履约、取消和发货不回归。
-  - [ ] 运行 Server/Web typecheck、lint、test、build、OpenAPI 契约检查、真实 Browser E2E 和根 `node --run check`。
-  - [ ] 如实记录所有失败；任何必要检查失败时不得声称完成或推送。
+- [x] 11. 完成回归、浏览器和全量验收
+  - [x] 构造并验证 `SALES_LINKED + CATALOG`：按供应商过滤、同步和提交。
+  - [x] 构造并验证 `SALES_LINKED + CUSTOM`：文本供应商、CUSTOM 过滤和双价格。
+  - [x] 以管理员验证 `STOCK + CATALOG` 和 `STOCK + CUSTOM` 的单类型编辑器。
+  - [x] 验证销售订单快捷入口成功与无资格分支。
+  - [x] 验证供应商切换清空下游、并发超量、订单状态变化和取消采购释放数量。
+  - [x] 验证 390px、1440px、键盘导航、焦点、关闭和重复提交行为。
+  - [x] 验证历史 `MIXED` 采购单的列表、详情、付款、履约、取消和发货不回归。
+    - 隔离 Browser 数据库新增两张历史夹具：付款/发货单与零付款取消单，未绕过领域状态约束。
+  - [x] 运行 Server/Web typecheck、lint、test、build、OpenAPI 契约检查、真实 Browser E2E 和根 `node --run check`。
+    - 2026-09-04：Browser RED 按预期在缺少历史夹具时失败；补齐后 5/5 通过。
+    - 2026-09-04：根 `node --run check` 通过；仅保留既有 Rolldown annotation、chunk-size 与 pg deprecation warning。
+  - [x] 如实记录所有失败；任何必要检查失败时不得声称完成或推送。
   - _Requirement: R1–R10_
   - _Suggested commit: `test: 补充采购产品类型流程验收`_
 
