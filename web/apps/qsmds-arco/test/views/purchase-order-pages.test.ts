@@ -194,7 +194,19 @@ test('全部与待办采购均使用带计数的状态工具栏', async () => {
   assert.match(source, /:aria-label="`\$\{pageTitle\}状态筛选`"/u)
   assert.match(source, /props\.viewMode === 'pending'/u)
   assert.match(source, /resolvePurchaseOrderPendingActions/u)
-  assert.match(source, /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
+  assert.match(source, /import QsFactoryShipmentModal from '@\/components\/business\/QsFactoryShipmentModal\/index\.vue'/u)
+  assert.match(source, /purchaseOrdersApi\.factoryShipment/u)
+  assert.match(source, /if \(action\.key === 'SHIPMENT'\)/u)
+  assert.match(source, /openPurchaseFactoryShipment\(order\)/u)
+  assert.match(source, /@click="handlePendingAction\(action, row\)"/u)
+  assert.match(source, /<QsFactoryShipmentModal[\s\S]*?mode="PURCHASE_ORDER"/u)
+  assert.match(source, /@submit="submitPurchaseFactoryShipment"/u)
+  assert.match(source, /formatPurchaseFactoryShipmentSuccess/u)
+  assert.match(
+    source,
+    /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u,
+    '到仓和付款仍应保持建设中提示',
+  )
   assert.match(source, />发货|action\.label/u)
   assert.match(source, /canCancelPurchaseOrderFromList\(row\)/u)
   assert.match(source, /openPurchaseOrderCancellation\(row\)/u)

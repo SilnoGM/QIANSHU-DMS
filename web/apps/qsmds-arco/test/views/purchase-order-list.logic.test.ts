@@ -1,4 +1,7 @@
-import type { PurchaseOrderListItemDto } from '../../src/api/generated/types.gen'
+import type {
+  FactoryShipmentResultDto,
+  PurchaseOrderListItemDto,
+} from '../../src/api/generated/types.gen'
 import type { CurrencyDescriptor } from '../../src/components/base/currency'
 
 import assert from 'node:assert/strict'
@@ -10,6 +13,7 @@ import {
   buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
   canCancelPurchaseOrderFromList,
+  formatPurchaseFactoryShipmentSuccess,
   formatPurchaseOrderSummaryAmount,
   fulfillmentStatusLabel,
   getPurchaseOrderStatusItems,
@@ -204,4 +208,46 @@ test('全部采购仅允许已确认订单从操作列进入取消流程', () =>
   assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED' }), true)
   assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'COMPLETED' }), false)
   assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CANCELLED' }), false)
+})
+
+test('采购发货成功提示完全依据服务端结果区分安全重试和销售联动', () => {
+  const base: FactoryShipmentResultDto = {
+    purchaseOrders: [{
+      id: 'purchase-1',
+      orderNo: 'PO/20260904-00001',
+      fulfillmentStatus: 'SHIPPED',
+      changed: true,
+    }],
+    changedPurchaseOrderCount: 1,
+    alreadySatisfiedCount: 0,
+    remainingPendingShipmentCount: 0,
+    salesOrder: null,
+  }
+
+  assert.equal(formatPurchaseFactoryShipmentSuccess(base), '采购订单已发货')
+  assert.equal(formatPurchaseFactoryShipmentSuccess({
+    ...base,
+    changedPurchaseOrderCount: 0,
+    alreadySatisfiedCount: 1,
+    purchaseOrders: [{ ...base.purchaseOrders[0]!, changed: false }],
+  }), '采购订单已处于已发货状态，未重复处理')
+  assert.equal(formatPurchaseFactoryShipmentSuccess({
+    ...base,
+    remainingPendingShipmentCount: 2,
+    salesOrder: {
+      id: 'sales-1',
+      orderNo: 'SO/20260904-00001',
+      fulfillmentStatus: 'PREPARING',
+      advancedToLandTransit: false,
+    },
+  }), '采购订单已发货，关联销售订单仍有 2 张采购单待发货')
+  assert.equal(formatPurchaseFactoryShipmentSuccess({
+    ...base,
+    salesOrder: {
+      id: 'sales-1',
+      orderNo: 'SO/20260904-00001',
+      fulfillmentStatus: 'LAND_TRANSIT',
+      advancedToLandTransit: true,
+    },
+  }), '采购订单已发货，关联销售订单已进入陆运中')
 })

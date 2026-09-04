@@ -1,4 +1,7 @@
-import type { PurchaseOrderListItemDto } from '../../../api/generated/types.gen'
+import type {
+  FactoryShipmentResultDto,
+  PurchaseOrderListItemDto,
+} from '../../../api/generated/types.gen'
 import type {
   PurchaseOrderListQuery,
   PurchaseOrderStatusCountsQuery,
@@ -155,6 +158,25 @@ export function canCancelPurchaseOrderFromList(
   order: Pick<PurchaseOrderListItemDto, 'orderStatus'>,
 ): boolean {
   return order.orderStatus === 'CONFIRMED'
+}
+
+/**
+ * 发货结果的销售联动只能以 Server 返回值为准。Web 不根据当前列表自行推断
+ * 销售订单是否进入陆运中，避免并发采购变化时展示错误业务事实。
+ */
+export function formatPurchaseFactoryShipmentSuccess(
+  result: FactoryShipmentResultDto,
+): string {
+  if (result.changedPurchaseOrderCount === 0) {
+    return '采购订单已处于已发货状态，未重复处理'
+  }
+  if (result.salesOrder === null) {
+    return '采购订单已发货'
+  }
+  if (result.salesOrder.advancedToLandTransit) {
+    return '采购订单已发货，关联销售订单已进入陆运中'
+  }
+  return `采购订单已发货，关联销售订单仍有 ${result.remainingPendingShipmentCount} 张采购单待发货`
 }
 
 function enumFilter<T extends string>(

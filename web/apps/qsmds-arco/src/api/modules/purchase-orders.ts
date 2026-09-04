@@ -1,7 +1,9 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreatePurchaseOrderRequestDto,
+  FactoryShipmentResultDto,
   PurchaseOrderDetailDto,
+  PurchaseOrderFactoryShipmentRequestDto,
   PurchaseOrderFulfillmentStatusRequestDto,
   PurchaseOrderPageDto,
   PurchaseOrderPaymentRequestDto,
@@ -124,6 +126,15 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
       signal: AbortSignal,
     ) => client.patch<PurchaseOrderDetailDto>(
       `${orderPath(purchaseOrderId)}/fulfillment-status`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    factoryShipment: (
+      purchaseOrderId: string,
+      data: PurchaseOrderFactoryShipmentRequestDto,
+      signal: AbortSignal,
+    ) => client.post<FactoryShipmentResultDto>(
+      `${orderPath(purchaseOrderId)}/factory-shipments`,
       data,
       { errorPresentation: 'local', retry: false, signal },
     ),

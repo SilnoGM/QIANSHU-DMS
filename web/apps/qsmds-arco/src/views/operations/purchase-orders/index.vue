@@ -7,6 +7,7 @@ import type {
   PurchaseOrderPendingTask,
 } from './purchase-order-list.logic'
 import type {
+  FactoryShipmentResultDto,
   PurchaseOrderCurrencySummaryDto,
   PurchaseOrderDetailDto,
   PurchaseOrderLinePreviewDto,
@@ -14,6 +15,10 @@ import type {
   PurchaseOrderStatusCountItemDto,
 } from '@/api/generated/types.gen'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
+import type {
+  FactoryShipmentIntent,
+  FactoryShipmentModalContext,
+} from '@/components/business/QsFactoryShipmentModal/types'
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -28,6 +33,7 @@ import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
+import QsFactoryShipmentModal from '@/components/business/QsFactoryShipmentModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
@@ -46,6 +52,7 @@ import {
   buildPurchaseOrderStatusCountsQuery,
   calculatePurchaseOrderPaymentProgress,
   canCancelPurchaseOrderFromList,
+  formatPurchaseFactoryShipmentSuccess,
   formatPurchaseOrderSummaryAmount,
   fulfillmentStatusLabel,
   fulfillmentStatusTagClass,
@@ -134,6 +141,12 @@ const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
 const cancelLoadingOrderId = ref<string | null>(null)
+const shipmentVisible = ref(false)
+const shipmentContext = shallowRef<FactoryShipmentModalContext | null>(null)
+const shipmentTarget = shallowRef<PurchaseOrderListItemDto | null>(null)
+const shipmentContextLoading = ref(false)
+const shipmentSubmitting = ref(false)
+const shipmentError = ref<string | null>(null)
 const cancelActionsRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailActions>>('cancelActionsRef')
 const todayDate = today(getLocalTimeZone())
 let requestVersion = 0
@@ -142,6 +155,7 @@ let cancellationRequestVersion = 0
 let listAbortController: AbortController | null = null
 let countAbortController: AbortController | null = null
 let cancellationAbortController: AbortController | null = null
+let shipmentAbortController: AbortController | null = null
 
 const statusItems = computed(() => withStatusSwitchCounts(
   getPurchaseOrderStatusItems(props.viewMode),
@@ -537,8 +551,133 @@ function canShowPendingAction(action: PurchaseOrderPendingActionItem): boolean {
   return action.key === 'PAYMENT' ? canManagePayment.value : canUpdate.value
 }
 
-/** 首期只说明能力建设状态，不调用履约或付款 mutation，避免按钮产生半成品业务事实。 */
-function handlePendingAction(action: PurchaseOrderPendingActionItem): void {
+function createPurchaseShipmentContext(
+  order: PurchaseOrderListItemDto,
+): FactoryShipmentModalContext {
+  return {
+    // 单采购模式只核对当前采购订单；销售联动结果由 Server 提交结果统一返回。
+    salesOrder: null,
+    purchaseOrders: [{
+      id: order.id,
+      orderNo: order.orderNo,
+      orderDate: order.orderDate,
+      supplier: { label: order.supplier.label },
+      fulfillmentStatus: order.fulfillmentStatus,
+      version: order.version,
+      lineSummary: order.lineSummary,
+    }],
+  }
+}
+
+function cancelShipmentRequest(): void {
+  shipmentAbortController?.abort()
+  shipmentAbortController = null
+  shipmentContextLoading.value = false
+  shipmentSubmitting.value = false
+}
+
+function openPurchaseFactoryShipment(order: PurchaseOrderListItemDto): void {
+  cancelShipmentRequest()
+  shipmentTarget.value = order
+  shipmentContext.value = createPurchaseShipmentContext(order)
+  shipmentError.value = null
+  shipmentVisible.value = true
+}
+
+function closePurchaseFactoryShipment(): void {
+  if (shipmentSubmitting.value) {
+    return
+  }
+  cancelShipmentRequest()
+  shipmentVisible.value = false
+  shipmentError.value = null
+  shipmentTarget.value = null
+  shipmentContext.value = null
+}
+
+function shipmentFailureMessage(error: unknown): string {
+  const failure = getPurchaseOrderApiFailure(error)
+  const message = failure.requestId === undefined
+    ? failure.message
+    : `${failure.message}（requestId: ${failure.requestId}）`
+  return `${message}。请重新加载最新订单后再次确认。`
+}
+
+async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Promise<void> {
+  const target = intent.targets[0]
+  if (target === undefined || shipmentSubmitting.value) {
+    return
+  }
+  cancelShipmentRequest()
+  const controller = new AbortController()
+  shipmentAbortController = controller
+  shipmentSubmitting.value = true
+  shipmentError.value = null
+  try {
+    const response = await purchaseOrdersApi.factoryShipment(target.purchaseOrderId, {
+      expectedVersion: target.expectedVersion,
+      reason: intent.reason,
+    }, controller.signal)
+    if (controller.signal.aborted) {
+      return
+    }
+    const result: FactoryShipmentResultDto = response.data
+    toast.success(formatPurchaseFactoryShipmentSuccess(result))
+    shipmentVisible.value = false
+    shipmentTarget.value = null
+    shipmentContext.value = null
+    refreshOrdersAndCounts()
+  }
+  catch (error) {
+    if (!controller.signal.aborted && !isPurchaseOrderAbortError(error)) {
+      shipmentError.value = shipmentFailureMessage(error)
+    }
+  }
+  finally {
+    if (shipmentAbortController === controller) {
+      shipmentAbortController = null
+      shipmentSubmitting.value = false
+    }
+  }
+}
+
+async function retryPurchaseFactoryShipment(): Promise<void> {
+  const targetId = shipmentTarget.value?.id
+  if (targetId === undefined || shipmentSubmitting.value) {
+    return
+  }
+  shipmentContextLoading.value = true
+  shipmentError.value = null
+  await loadOrders()
+  if (listError.value !== '') {
+    shipmentContextLoading.value = false
+    shipmentError.value = '最新采购订单加载失败，请稍后重试。'
+    return
+  }
+  const refreshedOrder = rows.value.find(order => order.id === targetId)
+  shipmentContextLoading.value = false
+  if (
+    refreshedOrder === undefined
+    || refreshedOrder.orderStatus !== 'CONFIRMED'
+    || !['ORDERED', 'PREPARING'].includes(refreshedOrder.fulfillmentStatus)
+  ) {
+    closePurchaseFactoryShipment()
+    toast.info('采购订单状态已变化，列表已刷新')
+    return
+  }
+  shipmentTarget.value = refreshedOrder
+  shipmentContext.value = createPurchaseShipmentContext(refreshedOrder)
+}
+
+/** 发货进入正式业务弹窗；到仓和付款本期继续只说明能力建设状态。 */
+function handlePendingAction(
+  action: PurchaseOrderPendingActionItem,
+  order: PurchaseOrderListItemDto,
+): void {
+  if (action.key === 'SHIPMENT') {
+    openPurchaseFactoryShipment(order)
+    return
+  }
   toast.info(`${action.label}功能正在建设中`)
 }
 
@@ -558,6 +697,11 @@ watch(() => appAccountStore.authEpoch, () => {
   listAbortController?.abort()
   countAbortController?.abort()
   cancelCancellationDetailRequest()
+  cancelShipmentRequest()
+  shipmentVisible.value = false
+  shipmentTarget.value = null
+  shipmentContext.value = null
+  shipmentError.value = null
   detailVisible.value = false
   selectedOrder.value = null
   cancellationDetail.value = null
@@ -626,6 +770,7 @@ onBeforeUnmount(() => {
   listAbortController?.abort()
   countAbortController?.abort()
   cancelCancellationDetailRequest()
+  cancelShipmentRequest()
   cancelActionsRef.value?.cancelPendingRequests()
 })
 </script>
@@ -742,7 +887,7 @@ onBeforeUnmount(() => {
                   size="sm"
                   class="min-h-11 sm:min-h-8"
                   :aria-label="`${row.orderNo}：${action.label}`"
-                  @click="handlePendingAction(action)"
+                  @click="handlePendingAction(action, row)"
                 >
                   <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
                 </FaButton>
@@ -1299,6 +1444,18 @@ onBeforeUnmount(() => {
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleCancellationUpdated"
       @failure="toast.error($event)"
+    />
+
+    <QsFactoryShipmentModal
+      v-model="shipmentVisible"
+      mode="PURCHASE_ORDER"
+      :context="shipmentContext"
+      :loading="shipmentContextLoading"
+      :submitting="shipmentSubmitting"
+      :error="shipmentError"
+      @submit="submitPurchaseFactoryShipment"
+      @cancel="closePurchaseFactoryShipment"
+      @retry="retryPurchaseFactoryShipment"
     />
   </div>
 </template>
