@@ -88,6 +88,8 @@ describe('PurchaseOrderFactoryShipmentQueryService', () => {
             totalQuantity: 2,
             previews: [{
               lineId: 'line-a',
+              productName: '产品甲',
+              quantity: 2,
               mainImage: { id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' },
             }],
           },

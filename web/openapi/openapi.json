@@ -52424,6 +52424,61 @@
           "version"
         ]
       },
+      "FactoryShipmentProductPreviewDto": {
+        "type": "object",
+        "properties": {
+          "lineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "mainImage": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderListImageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "lineId",
+          "productName",
+          "quantity",
+          "mainImage"
+        ]
+      },
+      "FactoryShipmentLineSummaryDto": {
+        "type": "object",
+        "properties": {
+          "lineCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalQuantity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "previews": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FactoryShipmentProductPreviewDto"
+            }
+          }
+        },
+        "required": [
+          "lineCount",
+          "totalQuantity",
+          "previews"
+        ]
+      },
       "SalesOrderFactoryShipmentContextPurchaseOrderDto": {
         "type": "object",
         "properties": {
@@ -52455,7 +52510,7 @@
             "minimum": 1
           },
           "lineSummary": {
-            "$ref": "#/components/schemas/PurchaseOrderLineSummaryDto"
+            "$ref": "#/components/schemas/FactoryShipmentLineSummaryDto"
           }
         },
         "required": [

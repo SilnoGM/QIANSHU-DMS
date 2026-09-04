@@ -73,6 +73,7 @@ export interface SalesOrderFactoryShipmentContext {
       readonly previews: readonly {
         readonly lineId: string
         readonly productName: string
+        readonly quantity: number
         readonly mainImage: {
           readonly id: string
           readonly contentUrl: string
@@ -218,6 +219,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
           return {
             lineId: line.id,
             productName: line.productNameSnapshot,
+            quantity: line.quantity,
             mainImage: line.productId === null || image === undefined
               ? null
               : {

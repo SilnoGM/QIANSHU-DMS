@@ -7,6 +7,7 @@ import type {
   FactoryShipmentSelectionMode,
 } from './types'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import FactoryShipmentProductSummary from './FactoryShipmentProductSummary.vue'
 import {
   buildFactoryShipmentIntent,
   calculateFactoryShipmentImpact,
@@ -277,6 +278,7 @@ watch(
                 <span class="qs-type-meta text-muted-foreground mt-1 block">
                   {{ order.lineSummary.lineCount }} 项产品 · 共 {{ order.lineSummary.totalQuantity }} 件
                 </span>
+                <FactoryShipmentProductSummary :previews="order.lineSummary.previews" />
               </span>
               <FaTag
                 variant="outline"
@@ -353,6 +355,7 @@ watch(
               {{ getPurchaseShipmentStatusMeta(primaryOrder.fulfillmentStatus).label }}
             </FaTag>
           </div>
+          <FactoryShipmentProductSummary :previews="primaryOrder.lineSummary.previews" />
         </div>
         <FaAlert
           v-if="primaryOrder.fulfillmentStatus === 'ORDERED'"

@@ -10,6 +10,16 @@ export type FactoryShipmentPurchaseStatus
     | 'SHIPPED'
     | 'SIGNED'
 
+export interface FactoryShipmentProductPreview {
+  readonly lineId: string
+  readonly productName: string
+  readonly quantity?: number
+  readonly mainImage: {
+    readonly id: string
+    readonly contentUrl: string
+  } | null
+}
+
 export interface FactoryShipmentModalPurchaseOrder {
   readonly id: string
   readonly orderNo: string
@@ -20,14 +30,7 @@ export interface FactoryShipmentModalPurchaseOrder {
   readonly lineSummary: {
     readonly lineCount: number
     readonly totalQuantity: number
-    readonly previews: readonly {
-      readonly lineId: string
-      readonly productName: string
-      readonly mainImage: {
-        readonly id: string
-        readonly contentUrl: string
-      } | null
-    }[]
+    readonly previews: readonly FactoryShipmentProductPreview[]
   }
 }
 

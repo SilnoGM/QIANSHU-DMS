@@ -127,5 +127,10 @@ describe('factory shipment controllers', () => {
       .toMatchObject({ operationId: 'sales_orders_factory_shipment_context' })
     expect(paths['/api/sales-orders/{salesOrderId}/factory-shipments']?.post)
       .toMatchObject({ operationId: 'sales_orders_factory_shipment' })
+    const productPreviewSchema = JSON.stringify(
+      document.components?.schemas?.FactoryShipmentProductPreviewDto,
+    )
+    expect(productPreviewSchema).toContain('"quantity":{"type":"integer","minimum":1}')
+    expect(productPreviewSchema).toContain('"required":["lineId","productName","quantity","mainImage"]')
   })
 })

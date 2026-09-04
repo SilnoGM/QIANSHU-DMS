@@ -989,6 +989,9 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
       return dialog?.textContent?.includes(${JSON.stringify(salesOrderNo)})
         && dialog.textContent.includes(${JSON.stringify(salesCustomerName)})
         && dialog.textContent.includes(${JSON.stringify(linkedOrder.orderNo)})
+        && dialog.textContent.includes(${JSON.stringify(purchaseCustomName)})
+        && dialog.querySelector('[data-slot="factory-shipment-product-summary"]')
+          ?.textContent?.includes('× 1')
         && dialog.textContent.includes('全部待发货采购单')
         && list !== null
         && getComputedStyle(list).overflowY === 'auto'

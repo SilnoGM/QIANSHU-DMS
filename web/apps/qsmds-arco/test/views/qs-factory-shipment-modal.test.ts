@@ -12,6 +12,10 @@ const TYPES = new URL(
   '../../src/components/business/QsFactoryShipmentModal/types.ts',
   import.meta.url,
 )
+const PRODUCT_SUMMARY = new URL(
+  '../../src/components/business/QsFactoryShipmentModal/FactoryShipmentProductSummary.vue',
+  import.meta.url,
+)
 
 test('工厂发货弹窗复用 QsGenericModal 且不读取 API 或 Store', async () => {
   const [source, types] = await Promise.all([
@@ -51,4 +55,24 @@ test('采购模式固定当前订单并提示 ORDERED 自动补齐备货状态',
   assert.match(source, /i-lucide:factory/u)
   assert.match(source, /i-lucide:package-check/u)
   assert.doesNotMatch(source, /[🚚📦🏭]/u)
+})
+
+test('采购单卡片直接展示最多三项产品名称、数量和主图提示', async () => {
+  const [source, productSummary, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(PRODUCT_SUMMARY, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+  assert.match(source, /import FactoryShipmentProductSummary from '.\/FactoryShipmentProductSummary\.vue'/u)
+  assert.equal(source.match(/<FactoryShipmentProductSummary/gu)?.length, 2)
+  assert.match(source, /:previews="order\.lineSummary\.previews"/u)
+  assert.match(source, /:previews="primaryOrder\.lineSummary\.previews"/u)
+  assert.match(productSummary, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
+  assert.match(productSummary, /import QsGoodTooltipContent from '@\/components\/business\/QsGoodTooltip\/QsGoodTooltipContent\.vue'/u)
+  assert.match(productSummary, /slice\(0, 3\)/u)
+  assert.match(productSummary, /:max-count="3"/u)
+  assert.match(productSummary, /productDisplayName\(preview\)/u)
+  assert.match(productSummary, /preview\.quantity/u)
+  assert.match(productSummary, /另有 \{\{ hiddenCount \}\} 项/u)
+  assert.match(types, /readonly quantity\?: number/u)
 })

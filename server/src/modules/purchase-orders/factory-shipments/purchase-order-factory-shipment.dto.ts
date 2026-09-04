@@ -19,7 +19,7 @@ import {
 } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 import {
-  PurchaseOrderLineSummaryDto,
+  PurchaseOrderListImageDto,
   PurchaseOrderSupplierDto,
 } from '../dto/purchase-order-response.dto'
 
@@ -104,6 +104,21 @@ export class SalesOrderFactoryShipmentContextSalesOrderDto {
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
 }
 
+export class FactoryShipmentProductPreviewDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly lineId!: string
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
+  @ApiProperty({ type: () => PurchaseOrderListImageDto, nullable: true })
+  readonly mainImage!: PurchaseOrderListImageDto | null
+}
+
+export class FactoryShipmentLineSummaryDto {
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly lineCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly totalQuantity!: number
+  @ApiProperty({ type: () => [FactoryShipmentProductPreviewDto] })
+  readonly previews!: readonly FactoryShipmentProductPreviewDto[]
+}
+
 export class SalesOrderFactoryShipmentContextPurchaseOrderDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
@@ -113,8 +128,8 @@ export class SalesOrderFactoryShipmentContextPurchaseOrderDto {
   @ApiProperty({ enum: PurchaseOrderFulfillmentStatus })
   readonly fulfillmentStatus!: PurchaseOrderFulfillmentStatus
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
-  @ApiProperty({ type: () => PurchaseOrderLineSummaryDto })
-  readonly lineSummary!: PurchaseOrderLineSummaryDto
+  @ApiProperty({ type: () => FactoryShipmentLineSummaryDto })
+  readonly lineSummary!: FactoryShipmentLineSummaryDto
 }
 
 export class SalesOrderFactoryShipmentContextDto {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FactoryShipmentModalContext } from '@/components/business/QsFactoryShipmentModal/types'
 
+import productImageSrc from '@/assets/images/component-library/image-group/product-front.svg?url'
 import QsFactoryShipmentModal from '@/components/business/QsFactoryShipmentModal/index.vue'
 
 defineOptions({ name: 'FactoryShipmentModalShowcase' })
@@ -33,7 +34,20 @@ const salesContext: FactoryShipmentModalContext = {
       lineSummary: {
         lineCount: 2,
         totalQuantity: 6,
-        previews: [],
+        previews: [{
+          lineId: '21111111-2111-4111-8111-111111111111',
+          productName: '标准组合柜',
+          quantity: 4,
+          mainImage: {
+            id: '21111111-3111-4111-8111-111111111111',
+            contentUrl: productImageSrc,
+          },
+        }, {
+          lineId: '21111111-4111-4111-8111-111111111111',
+          productName: '安装辅料包',
+          quantity: 2,
+          mainImage: null,
+        }],
       },
     },
     {
@@ -46,7 +60,25 @@ const salesContext: FactoryShipmentModalContext = {
       lineSummary: {
         lineCount: 3,
         totalQuantity: 12,
-        previews: [],
+        previews: [{
+          lineId: '31111111-2111-4111-8111-111111111111',
+          productName: '胡桃木餐边柜',
+          quantity: 6,
+          mainImage: {
+            id: '31111111-3111-4111-8111-111111111111',
+            contentUrl: productImageSrc,
+          },
+        }, {
+          lineId: '31111111-4111-4111-8111-111111111111',
+          productName: '金属支撑脚',
+          quantity: 4,
+          mainImage: null,
+        }, {
+          lineId: '31111111-5111-4111-8111-111111111111',
+          productName: '定制包装服务',
+          quantity: 2,
+          mainImage: null,
+        }],
       },
     },
     {
@@ -59,7 +91,12 @@ const salesContext: FactoryShipmentModalContext = {
       lineSummary: {
         lineCount: 1,
         totalQuantity: 2,
-        previews: [],
+        previews: [{
+          lineId: '41111111-2111-4111-8111-111111111111',
+          productName: '防撞包装套件',
+          quantity: 2,
+          mainImage: null,
+        }],
       },
     },
   ],
