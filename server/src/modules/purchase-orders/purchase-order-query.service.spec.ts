@@ -41,7 +41,9 @@ function orderRow(overrides: Record<string, unknown> = {}) {
     id: 'order-id',
     orderNo: 'PO-001',
     purchaseType: 'SALES_LINKED',
+    productMode: 'CATALOG',
     supplierValue: 'SUPPLIER_A',
+    customSupplierName: null,
     orderDate: new Date('2026-08-27T00:00:00.000Z'),
     currencyCode: 'CNY',
     shippingMarkText: 'MARK',
@@ -199,10 +201,16 @@ describe('PurchaseOrderQueryService', () => {
     expect(page.items[0]).toMatchObject({
       id: 'order-id',
       orderNo: 'PO-001',
+      productMode: 'CATALOG',
       salesOrderNo: 'SO-001',
       customerName: '客户甲',
       shippingMarkText: 'MARK',
-      supplier: { value: 'SUPPLIER_A', label: '供应商 A' },
+      supplier: {
+        source: 'DICTIONARY',
+        value: 'SUPPLIER_A',
+        label: '供应商 A',
+        known: true,
+      },
       createdBy: { id: 'actor-id', displayName: '采购员' },
       purchaseTotalAmount: '100.0000',
       paidAmount: '30.0000',
@@ -253,6 +261,7 @@ describe('PurchaseOrderQueryService', () => {
           customerName: { contains: 'PO', mode: 'insensitive' },
         } } },
         { shippingMarkText: { contains: 'PO', mode: 'insensitive' } },
+        { customSupplierName: { contains: 'PO', mode: 'insensitive' } },
       ],
     })
     expect(where?.orderBy).toEqual([{ orderDate: 'desc' }, { id: 'desc' }])
@@ -332,6 +341,64 @@ describe('PurchaseOrderQueryService', () => {
         actualPurchaseUnitPriceAmount: '10.0000',
       })],
       payments: [expect.objectContaining({ amount: '30.0000' })],
+    })
+  })
+
+  it('maps a custom-text supplier without asking the dictionary to resolve it', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      productMode: 'CUSTOM',
+      supplierValue: null,
+      customSupplierName: '临时加工厂',
+      lines: listLines.filter(line => line.lineType === 'CUSTOM'),
+    })])
+    fixture.dictionaryLookup.resolveStoredValues.mockResolvedValue([])
+
+    const page = await fixture.service.list({ view: 'all', keyword: '加工厂' })
+
+    expect(page.items[0]).toMatchObject({
+      productMode: 'CUSTOM',
+      supplier: {
+        source: 'CUSTOM_TEXT',
+        value: null,
+        label: '临时加工厂',
+        tone: null,
+        known: null,
+        effectiveEnabled: null,
+      },
+    })
+    expect(fixture.dictionaryLookup.resolveStoredValues).toHaveBeenCalledWith({
+      dictionaryCode: 'service_provider.supplier',
+      values: [],
+    })
+    const query = fixture.prisma.purchaseOrder.findMany.mock.calls[0]?.[0] as {
+      where?: { OR?: unknown[] }
+      select?: Record<string, unknown>
+    }
+    expect(query.select).toMatchObject({
+      productMode: true,
+      supplierValue: true,
+      customSupplierName: true,
+    })
+    expect(query.where?.OR).toContainEqual({
+      customSupplierName: { contains: '加工厂', mode: 'insensitive' },
+    })
+  })
+
+  it('keeps historical MIXED orders readable with their dictionary supplier', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      productMode: 'MIXED',
+      customSupplierName: null,
+    }))
+
+    await expect(fixture.service.getById('order-id')).resolves.toMatchObject({
+      productMode: 'MIXED',
+      supplier: {
+        source: 'DICTIONARY',
+        value: 'SUPPLIER_A',
+        label: '供应商 A',
+      },
     })
   })
 
@@ -420,6 +487,7 @@ describe('PurchaseOrderQueryService status counts', () => {
             customerName: { contains: '客户甲', mode: 'insensitive' },
           } } },
           { shippingMarkText: { contains: '客户甲', mode: 'insensitive' } },
+          { customSupplierName: { contains: '客户甲', mode: 'insensitive' } },
         ],
     })
     expect(query._count).toEqual({ _all: true })

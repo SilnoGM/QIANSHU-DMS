@@ -21,7 +21,9 @@ function setup() {
         id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
         orderNo: 'PO/20260904-00002',
         orderDate: new Date('2026-09-04T00:00:00.000Z'),
-        supplierValue: 'SUPPLIER_B',
+        productMode: 'CUSTOM',
+        supplierValue: null,
+        customSupplierName: '临时加工厂',
         fulfillmentStatus: 'SHIPPED',
         version: 3,
         lines: [{
@@ -35,7 +37,9 @@ function setup() {
         id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
         orderNo: 'PO/20260903-00001',
         orderDate: new Date('2026-09-03T00:00:00.000Z'),
+        productMode: 'MIXED',
         supplierValue: 'SUPPLIER_A',
+        customSupplierName: null,
         fulfillmentStatus: 'PREPARING',
         version: 2,
         lines: [{
@@ -50,11 +54,6 @@ function setup() {
   }
   const dictionary = {
     resolveStoredValues: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
-      known: true,
-      label: '供应商 B',
-      tone: 'DEFAULT',
-      effectiveEnabled: true,
-    }, {
       known: true,
       label: '供应商 A',
       tone: 'DEFAULT',
@@ -81,7 +80,12 @@ describe('PurchaseOrderFactoryShipmentQueryService', () => {
         shipmentSatisfiedCount: 1,
         purchaseOrders: [{
           orderNo: 'PO/20260903-00001',
-          supplier: { value: 'SUPPLIER_A', label: '供应商 A' },
+          productMode: 'MIXED',
+          supplier: {
+            source: 'DICTIONARY',
+            value: 'SUPPLIER_A',
+            label: '供应商 A',
+          },
           fulfillmentStatus: 'PREPARING',
           lineSummary: {
             lineCount: 1,
@@ -95,9 +99,22 @@ describe('PurchaseOrderFactoryShipmentQueryService', () => {
           },
         }, {
           orderNo: 'PO/20260904-00002',
+          productMode: 'CUSTOM',
+          supplier: {
+            source: 'CUSTOM_TEXT',
+            value: null,
+            label: '临时加工厂',
+            tone: null,
+            known: null,
+            effectiveEnabled: null,
+          },
           fulfillmentStatus: 'SHIPPED',
         }],
       })
+    expect(fixture.dictionary.resolveStoredValues).toHaveBeenCalledWith({
+      dictionaryCode: 'service_provider.supplier',
+      values: ['SUPPLIER_A'],
+    })
     expect(context.purchaseOrders[0]?.lineSummary.previews[0]?.mainImage?.contentUrl)
       .toContain('/lines/line-a/main-image/')
   })

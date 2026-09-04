@@ -7,6 +7,7 @@ import {
   PurchaseOrderLineType,
   PurchaseOrderPaymentStatus,
   PurchaseOrderPaymentType,
+  PurchaseOrderProductMode,
   PurchaseOrderStatus,
   PurchaseOrderStatusDimension,
   PurchaseOrderType,
@@ -26,11 +27,14 @@ export class PurchaseOrderActorDto {
 }
 
 export class PurchaseOrderSupplierDto {
-  @ApiProperty({ type: 'string' }) readonly value!: string
+  @ApiProperty({ enum: ['DICTIONARY', 'CUSTOM_TEXT'] })
+  readonly source!: 'DICTIONARY' | 'CUSTOM_TEXT'
+  @ApiProperty({ type: 'string', nullable: true }) readonly value!: string | null
   @ApiProperty({ type: 'string' }) readonly label!: string
-  @ApiProperty({ type: 'string' }) readonly tone!: string
-  @ApiProperty({ type: 'boolean' }) readonly known!: boolean
-  @ApiProperty({ type: 'boolean' }) readonly effectiveEnabled!: boolean
+  @ApiProperty({ type: 'string', nullable: true }) readonly tone!: string | null
+  @ApiProperty({ type: 'boolean', nullable: true }) readonly known!: boolean | null
+  @ApiProperty({ type: 'boolean', nullable: true })
+  readonly effectiveEnabled!: boolean | null
 }
 
 export class PurchaseOrderAmountsDto {
@@ -138,6 +142,8 @@ export class PurchaseOrderListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
   @ApiProperty({ enum: PurchaseOrderType }) readonly purchaseType!: PurchaseOrderType
+  @ApiProperty({ enum: PurchaseOrderProductMode })
+  readonly productMode!: PurchaseOrderProductMode
   @ApiProperty({ type: 'string', nullable: true }) readonly salesOrderNo!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly customerName!: string | null
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto

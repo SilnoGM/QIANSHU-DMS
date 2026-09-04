@@ -4,6 +4,7 @@ import { Prisma } from '../../generated/prisma/client'
 import type {
   PurchaseOrderFulfillmentStatus,
   PurchaseOrderPaymentStatus,
+  PurchaseOrderProductMode,
   PurchaseOrderStatus,
   PurchaseOrderType,
 } from '../../generated/prisma/enums'
@@ -48,7 +49,9 @@ const PURCHASE_ORDER_LIST_SELECT = {
   id: true,
   orderNo: true,
   purchaseType: true,
+  productMode: true,
   supplierValue: true,
+  customSupplierName: true,
   orderDate: true,
   currencyCode: true,
   purchaseTotalAmount: true,
@@ -161,17 +164,19 @@ export interface PurchaseOrderListQueryInput {
 }
 
 export interface PurchaseOrderSupplier {
-  readonly value: string
+  readonly source: 'DICTIONARY' | 'CUSTOM_TEXT'
+  readonly value: string | null
   readonly label: string
-  readonly tone: string
-  readonly known: boolean
-  readonly effectiveEnabled: boolean
+  readonly tone: string | null
+  readonly known: boolean | null
+  readonly effectiveEnabled: boolean | null
 }
 
 export interface PurchaseOrderListItem {
   readonly id: string
   readonly orderNo: string
   readonly purchaseType: PurchaseOrderType
+  readonly productMode: PurchaseOrderProductMode
   readonly salesOrderNo: string | null
   readonly customerName: string | null
   readonly supplier: PurchaseOrderSupplier
@@ -267,12 +272,28 @@ function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): str
   return value.toFixed(4)
 }
 
-function supplierFromResolution(
-  value: string,
+export function purchaseOrderSupplierFromSources(
+  sources: {
+    readonly supplierValue: string | null
+    readonly customSupplierName: string | null
+  },
   resolution: StoredDictionaryValueResolution | undefined,
 ): PurchaseOrderSupplier {
+  const value = sources.supplierValue
+  if (value === null) {
+    return {
+      source: 'CUSTOM_TEXT',
+      value: null,
+      // 数据库互斥约束保证名称存在；兜底仅防止损坏的历史数据令读取接口崩溃。
+      label: sources.customSupplierName ?? '—',
+      tone: null,
+      known: null,
+      effectiveEnabled: null,
+    }
+  }
   if (resolution?.known === true) {
     return {
+      source: 'DICTIONARY',
       value,
       label: resolution.label,
       tone: resolution.tone,
@@ -281,6 +302,7 @@ function supplierFromResolution(
     }
   }
   return {
+    source: 'DICTIONARY',
     value,
     label: value,
     tone: 'DEFAULT',
@@ -398,6 +420,7 @@ function buildPurchaseOrderBaseWhere(
             customerName: { contains: keyword, mode: 'insensitive' },
           } } },
           { shippingMarkText: { contains: keyword, mode: 'insensitive' } },
+          { customSupplierName: { contains: keyword, mode: 'insensitive' } },
         ] }),
   }
 }
@@ -446,6 +469,7 @@ function mapListItem(
     id: row.id,
     orderNo: row.orderNo,
     purchaseType: row.purchaseType,
+    productMode: row.productMode,
     salesOrderNo: row.salesOrder?.orderNo ?? null,
     customerName: row.salesOrder?.customerName ?? null,
     supplier,
@@ -555,6 +579,10 @@ export class PurchaseOrderQueryService {
       }),
     ])
     const ids = rows.map(row => row.id)
+    const dictionarySupplierRows = rows.filter(
+      (row): row is typeof row & { readonly supplierValue: string } =>
+        row.supplierValue !== null,
+    )
     const [paymentRows, supplierResolutions] = await Promise.all([
       ids.length === 0
         ? []
@@ -565,9 +593,13 @@ export class PurchaseOrderQueryService {
           }),
       this.dictionaryLookup.resolveStoredValues({
         dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-        values: rows.map(row => row.supplierValue),
+        values: dictionarySupplierRows.map(row => row.supplierValue),
       }),
     ])
+    const supplierByOrderId = new Map(dictionarySupplierRows.map((row, index) => [
+      row.id,
+      purchaseOrderSupplierFromSources(row, supplierResolutions[index]),
+    ]))
     const paidByOrder = new Map(paymentRows.map(row => [
       row.purchaseOrderId,
       paidUnits(row._sum.amount),
@@ -578,9 +610,9 @@ export class PurchaseOrderQueryService {
       paymentAggregate,
     )
     return {
-      items: rows.map((row, index) => mapListItem(
+      items: rows.map(row => mapListItem(
         row,
-        supplierFromResolution(row.supplierValue, supplierResolutions[index]),
+        supplierByOrderId.get(row.id) ?? purchaseOrderSupplierFromSources(row, undefined),
         paidByOrder.get(row.id) ?? 0n,
       )),
       summariesByCurrency: currencySummary === null ? [] : [currencySummary],
@@ -683,10 +715,12 @@ export class PurchaseOrderQueryService {
         '采购订单不存在',
       )
     }
-    const resolution = await this.dictionaryLookup.resolveStoredValue({
-      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-      value: row.supplierValue,
-    })
+    const resolution = row.supplierValue === null
+      ? undefined
+      : await this.dictionaryLookup.resolveStoredValue({
+          dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+          value: row.supplierValue,
+        })
     const activePaidUnits = row.payments.reduce(
       (sum, payment) => payment.voidedAt === null
         ? sum + parsePurchaseOrderAmountUnits(decimalToFixed4(payment.amount))
@@ -695,7 +729,7 @@ export class PurchaseOrderQueryService {
     )
     const summary = mapListItem(
       row,
-      supplierFromResolution(row.supplierValue, resolution),
+      purchaseOrderSupplierFromSources(row, resolution),
       activePaidUnits,
     )
     const totalUnits = parsePurchaseOrderAmountUnits(

@@ -4,11 +4,11 @@ import { Prisma } from '../../../generated/prisma/client'
 import type { PurchaseOrderFulfillmentStatus } from '../../../generated/prisma/enums'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
 import {
-  DictionaryLookupService,
-  type StoredDictionaryValueResolution,
-} from '../../dictionaries/dictionary-lookup.service'
-import type { PurchaseOrderSupplier } from '../purchase-order-query.service'
+  purchaseOrderSupplierFromSources,
+  type PurchaseOrderSupplier,
+} from '../purchase-order-query.service'
 import { requireFactoryShipmentUuid } from './purchase-order-factory-shipment.normalizer'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
@@ -39,7 +39,9 @@ const CONTEXT_PURCHASE_ORDER_SELECT = {
   id: true,
   orderNo: true,
   orderDate: true,
+  productMode: true,
   supplierValue: true,
+  customSupplierName: true,
   fulfillmentStatus: true,
   version: true,
   lines: {
@@ -64,6 +66,7 @@ export interface SalesOrderFactoryShipmentContext {
     readonly id: string
     readonly orderNo: string
     readonly orderDate: string
+    readonly productMode: 'CATALOG' | 'CUSTOM' | 'MIXED'
     readonly supplier: PurchaseOrderSupplier
     readonly fulfillmentStatus: PurchaseOrderFulfillmentStatus
     readonly version: number
@@ -83,27 +86,6 @@ export interface SalesOrderFactoryShipmentContext {
   }[]
   readonly pendingShipmentCount: number
   readonly shipmentSatisfiedCount: number
-}
-
-function supplier(
-  value: string,
-  resolution: StoredDictionaryValueResolution | undefined,
-): PurchaseOrderSupplier {
-  return resolution?.known === true
-    ? {
-        value,
-        label: resolution.label,
-        tone: resolution.tone,
-        known: true,
-        effectiveEnabled: resolution.effectiveEnabled,
-      }
-    : {
-        value,
-        label: value,
-        tone: 'DEFAULT',
-        known: false,
-        effectiveEnabled: false,
-      }
 }
 
 function priority(status: PurchaseOrderFulfillmentStatus): number {
@@ -169,13 +151,24 @@ export class PurchaseOrderFactoryShipmentQueryService {
       orderBy: [{ orderDate: 'asc' }, { orderNo: 'asc' }, { id: 'asc' }],
       select: CONTEXT_PURCHASE_ORDER_SELECT,
     })
+    const dictionarySupplierRows = rows.filter(
+      (row): row is typeof row & { readonly supplierValue: string } =>
+        row.supplierValue !== null,
+    )
     const resolutions = await this.dictionaryLookup.resolveStoredValues({
       dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-      values: rows.map(row => row.supplierValue),
+      values: dictionarySupplierRows.map(row => row.supplierValue),
     })
-    const mappedById = new Map(rows.map((row, index) => [
+    const supplierByOrderId = new Map(dictionarySupplierRows.map((row, index) => [
       row.id,
-      this.mapPurchaseOrder(row, supplier(row.supplierValue, resolutions[index])),
+      purchaseOrderSupplierFromSources(row, resolutions[index]),
+    ]))
+    const mappedById = new Map(rows.map(row => [
+      row.id,
+      this.mapPurchaseOrder(
+        row,
+        supplierByOrderId.get(row.id) ?? purchaseOrderSupplierFromSources(row, undefined),
+      ),
     ]))
     const purchaseOrders = [...rows]
       .sort(compareContextOrder)
@@ -208,6 +201,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
       id: row.id,
       orderNo: row.orderNo,
       orderDate: row.orderDate.toISOString().slice(0, 10),
+      productMode: row.productMode,
       supplier: resolvedSupplier,
       fulfillmentStatus: row.fulfillmentStatus,
       version: row.version,

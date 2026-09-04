@@ -15,6 +15,7 @@ import {
 
 import {
   PurchaseOrderFulfillmentStatus,
+  PurchaseOrderProductMode,
   SalesOrderFulfillmentStatus,
 } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
@@ -123,6 +124,8 @@ export class SalesOrderFactoryShipmentContextPurchaseOrderDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
   @ApiProperty({ type: 'string', format: 'date' }) readonly orderDate!: string
+  @ApiProperty({ enum: PurchaseOrderProductMode })
+  readonly productMode!: PurchaseOrderProductMode
   @ApiProperty({ type: () => PurchaseOrderSupplierDto })
   readonly supplier!: PurchaseOrderSupplierDto
   @ApiProperty({ enum: PurchaseOrderFulfillmentStatus })

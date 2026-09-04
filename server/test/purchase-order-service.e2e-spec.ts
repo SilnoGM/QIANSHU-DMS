@@ -507,6 +507,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     const total = String(20 * quantity)
     return {
       purchaseType: 'SALES_LINKED',
+      productMode: 'CATALOG',
       salesOrderId,
       supplierValue,
       orderDate: '2026-08-27',
@@ -528,8 +529,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     const total = String(15 * quantity)
     return {
       purchaseType: 'SALES_LINKED',
+      productMode: 'CUSTOM',
       salesOrderId,
-      supplierValue,
+      customSupplierName: 'E2E 临时供应商',
       orderDate: '2026-08-27',
       lines: [{
         lineType: 'CUSTOM',
@@ -552,6 +554,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   ) {
     const result = await sourceQueries.salesOrders({
       view: expectedView,
+      productMode: 'CATALOG',
+      supplierValue,
       keyword: `SO-PUR-E2E-${suffix}`,
       page: 1,
       pageSize: 20,
@@ -574,6 +578,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     for (const view of ['UNPURCHASED', 'PARTIALLY_PURCHASED'] as const) {
       await expect(sourceQueries.salesOrders({
         view,
+        productMode: 'CATALOG',
+        supplierValue,
         keyword: `SO-PUR-E2E-${suffix}`,
         page: 1,
         pageSize: 20,
@@ -589,7 +595,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     const idempotencyKey = randomUUID()
     const stockInput = {
       purchaseType: 'STOCK',
-      supplierValue,
+      productMode: 'CUSTOM',
+      customSupplierName: 'E2E 备货供应商',
       orderDate: '2026-08-27',
       shippingMarkText: ' E2E 唛头 ',
       lines: [{
@@ -1008,18 +1015,27 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).resolves.toBe(1)
     await expectSourceView('PARTIALLY_PURCHASED')
 
-    const sourceLines = await sourceQueries.salesOrderLines(salesOrderId)
-    expect(sourceLines.items.slice(-2)).toMatchObject([{
+    const catalogSourceLines = await sourceQueries.salesOrderLines(salesOrderId, {
+      productMode: 'CATALOG',
+      supplierValue,
+    })
+    const customSourceLines = await sourceQueries.salesOrderLines(salesOrderId, {
+      productMode: 'CUSTOM',
+    })
+    expect(catalogSourceLines.items.find(line => line.id === result.addedLineIds[0]))
+      .toMatchObject({
       id: result.addedLineIds[0],
       lineType: 'CATALOG',
       purchasedQuantity: 0,
       remainingQuantity: 1,
-    }, {
+    })
+    expect(customSourceLines.items.find(line => line.id === result.addedLineIds[1]))
+      .toMatchObject({
       id: result.addedLineIds[1],
       lineType: 'CUSTOM',
       purchasedQuantity: 0,
       remainingQuantity: 2,
-    }])
+    })
     await commands.create(context(), linkedInput(result.addedLineIds[0], 1))
     await commands.create(context(), linkedCustomInput(result.addedLineIds[1], 2))
     await expect(commands.create(

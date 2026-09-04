@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 4 实施中（任务 6）
+- 当前阶段：Phase 4 实施中（任务 7）
 
 ## 2. 执行原则
 
@@ -94,14 +94,14 @@
   - _Requirement: R6、R8_
   - _Suggested commit for tasks 4–5: `feat: 支持按产品类型过滤销售来源`_
 
-- [ ] 6. 适配采购列表、详情与下游供应商读取（进行中）
-  - [ ] 先审计所有假定 `supplierValue` 非空的列表、详情、发货、付款、取消和展示路径。
-  - [ ] 列表与详情响应增加 `productMode` 和供应商来源判别字段。
-  - [ ] 字典供应商继续通过 `resolveStoredValue()` 返回有效、停用或未知状态。
-  - [ ] 自由文本供应商直接返回保存名称，不伪装为字典值或未知字典项。
-  - [ ] 采购关键字搜索增加 `customSupplierName`。
-  - [ ] 历史 `MIXED` 采购单继续支持列表、详情、付款、履约、取消和发货。
-  - [ ] 补充所有受影响 DTO、Mapper 和服务测试。
+- [x] 6. 适配采购列表、详情与下游供应商读取
+  - [x] 先审计所有假定 `supplierValue` 非空的列表、详情、发货、付款、取消和展示路径。
+  - [x] 列表与详情响应增加 `productMode` 和供应商来源判别字段。
+  - [x] 字典供应商继续通过 `resolveStoredValue()` 返回有效、停用或未知状态。
+  - [x] 自由文本供应商直接返回保存名称，不伪装为字典值或未知字典项。
+  - [x] 采购关键字搜索增加 `customSupplierName`。
+  - [x] 历史 `MIXED` 采购单继续支持列表、详情、付款、履约、取消和发货。
+  - [x] 补充所有受影响 DTO、Mapper 和服务测试。
   - _Requirement: R9、R10_
   - _Suggested commit: `feat: 支持自定义采购供应商展示`_
 
