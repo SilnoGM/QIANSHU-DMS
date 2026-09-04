@@ -96,7 +96,7 @@ Phase 4 开始前需要用户明确授权以下公共契约变更：
   - 建议提交：`feat: 联动销售订单工厂发货状态`。
   - _Requirements: R2, R4, R5, R6, R7_
 
-- [ ] 3. 提供发货上下文和提交公共 API
+- [x] 3. 提供发货上下文和提交公共 API
   - 先添加 Controller、DTO、权限和 OpenAPI 失败测试。
   - 实现销售发货上下文查询，仅返回当前销售订单有效的销售关联采购单。
   - 将 `ORDERED/PREPARING` 稳定排序在前，将 `SHIPPED/SIGNED` 灰态数据稳定排序在后。

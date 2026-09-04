@@ -8,6 +8,12 @@ import { NumberingModule } from '../numbering/numbering.module'
 import { ProductsModule } from '../products/products.module'
 import { PurchaseOrderDocumentMultipartParser } from './documents/purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
+import {
+  PurchaseOrderFactoryShipmentController,
+  SalesOrderFactoryShipmentController,
+} from './factory-shipments/purchase-order-factory-shipment.controller'
+import { PurchaseOrderFactoryShipmentQueryService } from './factory-shipments/purchase-order-factory-shipment-query.service'
+import { PurchaseOrderFactoryShipmentService } from './factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from './purchase-order-create-dependency.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
@@ -26,12 +32,18 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
     NumberingModule,
     ProductsModule,
   ],
-  controllers: [PurchaseOrdersController],
+  controllers: [
+    PurchaseOrdersController,
+    PurchaseOrderFactoryShipmentController,
+    SalesOrderFactoryShipmentController,
+  ],
   providers: [
     PurchaseOrderQueryService,
     PurchaseOrderSourceQueryService,
     PurchaseOrderCreateDependencyService,
     SalesOrderPurchaseCoverageService,
+    PurchaseOrderFactoryShipmentQueryService,
+    PurchaseOrderFactoryShipmentService,
     PurchaseOrderCommandService,
     PurchaseOrderMutationService,
     PurchaseOrderDocumentService,
