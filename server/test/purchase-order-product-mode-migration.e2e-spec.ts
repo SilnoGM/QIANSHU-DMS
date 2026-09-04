@@ -44,6 +44,19 @@ async function createLegacyTables(
       "purchase_order_id" UUID NOT NULL,
       "line_type" ${lineTypeSql.includes('CREATE TYPE') ? '"purchase_order_line_type"' : 'TEXT'} NOT NULL
     );
+    CREATE FUNCTION "test_deferred_purchase_order_update"()
+    RETURNS TRIGGER
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+      RETURN NEW;
+    END
+    $$;
+    CREATE CONSTRAINT TRIGGER "purchase_orders_line_source_trigger"
+    AFTER UPDATE ON "purchase_orders"
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW
+    EXECUTE FUNCTION "test_deferred_purchase_order_update"();
   `)
 }
 
@@ -61,6 +74,8 @@ async function withIsolatedSchema(
     await action(client)
   }
   finally {
+    // migration 自带事务；失败时必须先解除 aborted transaction，才能清理隔离 schema。
+    await client.query('ROLLBACK')
     await client.query('RESET search_path')
     await client.query(`DROP SCHEMA IF EXISTS ${quotedSchema} CASCADE`)
     await client.end()

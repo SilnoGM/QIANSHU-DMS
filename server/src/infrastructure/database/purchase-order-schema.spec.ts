@@ -142,6 +142,9 @@ describe('purchase order domain schema', () => {
     expect(migration).toMatch(
       /WHEN[\s\S]*?has_custom[\s\S]*?THEN 'CUSTOM'/u,
     )
+    expect(migration).toMatch(
+      /UPDATE "purchase_orders"[\s\S]*?SET CONSTRAINTS "purchase_orders_line_source_trigger" IMMEDIATE;[\s\S]*?ALTER TABLE "purchase_orders"/u,
+    )
     expect(migration).toContain(
       'purchase_orders_supplier_source_exactly_one_check',
     )

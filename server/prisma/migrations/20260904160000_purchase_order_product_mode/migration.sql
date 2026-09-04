@@ -71,6 +71,10 @@ END
 FROM "line_facts" AS line_facts
 WHERE line_facts."purchase_order_id" = purchase_order."id";
 
+-- 历史回填会触发现有的延迟采购来源约束。下一次 ALTER TABLE 前仅结算该命名约束，
+-- 避免非空数据库因 pending trigger events 拒绝修改 purchase_orders 的表结构。
+SET CONSTRAINTS "purchase_orders_line_source_trigger" IMMEDIATE;
+
 DO $$
 BEGIN
   IF EXISTS (

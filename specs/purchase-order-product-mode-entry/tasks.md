@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 4 实施与隔离验收完成（待 Gate C 目标库 migration 应用）
+- 当前阶段：Phase 4 实施、目标库 migration 应用与全量验收完成
 
 ## 2. 执行原则
 
@@ -181,6 +181,9 @@
 ### Gate C - Migration 应用
 
 完成 migration 代码和隔离验证后，先提交审计结果。只有用户明确要求“应用 migration”后，才允许对指定数据库执行。
+
+- 2026-09-04：经用户明确授权，已将 `20260904160000_purchase_order_product_mode` 应用到本地开发库 `qianshu_dms_dev`。首次执行因历史延迟约束触发器产生 pending events 而完整回滚；补充非空历史库回归并在回填后结算命名约束，再将失败记录标记为 rolled back 后重新执行成功。
+- 迁移前后业务事实均为 5 张采购订单、7 条采购明细；迁移后空 `productMode`、供应商来源结构冲突、订单与明细产品类型不一致均为 0，Prisma migration 未解决记录为 0。
 
 ### Gate D - 外部 Git 与发布
 
