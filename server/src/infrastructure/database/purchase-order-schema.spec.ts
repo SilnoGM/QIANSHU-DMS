@@ -20,6 +20,10 @@ const completionStatusMigrationPath = resolve(
   serverRoot,
   'prisma/migrations/20260831130000_purchase_order_auto_completion/migration.sql',
 )
+const productModeMigrationPath = resolve(
+  serverRoot,
+  'prisma/migrations/20260904160000_purchase_order_product_mode/migration.sql',
+)
 
 function extractPrismaBlock(
   source: string,
@@ -68,6 +72,11 @@ describe('purchase order domain schema', () => {
       'CATALOG',
       'CUSTOM',
     ])
+    expect(enumValues(schema, 'PurchaseOrderProductMode')).toEqual([
+      'CATALOG',
+      'CUSTOM',
+      'MIXED',
+    ])
     expect(enumValues(schema, 'PurchaseOrderPaymentType')).toEqual([
       'DEPOSIT',
       'BALANCE',
@@ -95,6 +104,15 @@ describe('purchase order domain schema', () => {
     const order = extractPrismaBlock(schema, 'model', 'PurchaseOrder')
     expect(order).toMatch(/salesOrderId\s+String\?/u)
     expect(order).not.toMatch(/@@unique\(\[salesOrderId\]/u)
+    expect(order).toMatch(
+      /productMode\s+PurchaseOrderProductMode\s+@map\("product_mode"\)/u,
+    )
+    expect(order).toMatch(
+      /supplierValue\s+String\?\s+@map\("supplier_value"\)\s+@db\.VarChar\(64\)/u,
+    )
+    expect(order).toMatch(
+      /customSupplierName\s+String\?\s+@map\("custom_supplier_name"\)\s+@db\.VarChar\(128\)/u,
+    )
     expect(order).toMatch(/currencyCode\s+String\s+@default\("CNY"\)/u)
     expect(order).toMatch(
       /fulfillmentStatus\s+PurchaseOrderFulfillmentStatus\s+@default\(ORDERED\)/u,
@@ -105,6 +123,38 @@ describe('purchase order domain schema', () => {
     expect(line).not.toMatch(/@@unique\(\[sourceSalesOrderLineId\]/u)
     expect(line).toMatch(/referencePurchaseUnitPriceAmount\s+Decimal/u)
     expect(line).toMatch(/actualPurchaseUnitPriceAmount\s+Decimal/u)
+  })
+
+  it('backfills a lossless product mode and enforces one supplier source', () => {
+    const migration = readFileSync(productModeMigrationPath, 'utf8')
+
+    expect(migration.trimStart()).toMatch(/^BEGIN;/u)
+    expect(migration.trimEnd()).toMatch(/COMMIT;$/u)
+    expect(migration).toContain(
+      'LOCK TABLE "purchase_orders", "purchase_order_lines" IN ACCESS EXCLUSIVE MODE',
+    )
+    expect(migration).toMatch(
+      /CREATE TYPE "purchase_order_product_mode" AS ENUM \('CATALOG', 'CUSTOM', 'MIXED'\)/u,
+    )
+    expect(migration).toMatch(
+      /WHEN[\s\S]*?has_catalog[\s\S]*?AND[\s\S]*?has_custom[\s\S]*?THEN 'MIXED'/u,
+    )
+    expect(migration).toMatch(
+      /WHEN[\s\S]*?has_custom[\s\S]*?THEN 'CUSTOM'/u,
+    )
+    expect(migration).toContain(
+      'purchase_orders_supplier_source_exactly_one_check',
+    )
+    expect(migration).toContain(
+      'purchase order product mode migration invariant mismatch',
+    )
+    expect(migration).toContain(
+      'purchase_orders_custom_supplier_date_id_idx',
+    )
+    expect(migration).not.toMatch(
+      /UPDATE "purchase_orders"[\s\S]*?SET[\s\S]*?(?:"order_no"|"line_subtotal_amount"|"purchase_total_amount"|"order_status"|"sales_order_id")/u,
+    )
+    expect(migration).not.toMatch(/\bCASCADE\b/iu)
   })
 
   it('maps historical pending-order facts before removing the obsolete enum value', () => {

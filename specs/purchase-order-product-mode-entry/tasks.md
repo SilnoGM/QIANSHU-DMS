@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 3 已完成，等待 Phase 4 正式实施授权
+- 当前阶段：Phase 4 实施中（任务 2）
 
 ## 2. 执行原则
 
@@ -38,16 +38,17 @@
 
 ## 4. 实施任务
 
-- [ ] 1. 建立数据库与历史数据 RED 测试
-  - [ ] 对目标数据库只读统计 `CATALOG`、`CUSTOM`、`MIXED` 采购单分布，并记录统计时间与范围。
-  - [ ] 为新枚举、字段、供应商来源互斥约束和历史回填建立 migration/Schema 失败断言。
-  - [ ] 覆盖纯 `CATALOG`、纯 `CUSTOM`、混合明细、无明细和未知明细类型场景。
-  - [ ] 证明迁移不得修改采购单数量、订单号、金额、状态、销售来源关系和明细数量。
-  - [ ] 运行 RED 测试并保留预期失败证据，不提前放宽断言。
+- [x] 1. 建立数据库与历史数据 RED 测试
+  - [x] 对目标数据库只读统计 `CATALOG`、`CUSTOM`、`MIXED` 采购单分布，并记录统计时间与范围。
+    - 2026-09-04 本地开发库：共 5 张，`CATALOG` 3 张、`CUSTOM` 0 张、`MIXED` 2 张、无明细 0 张、未知类型 0 张。
+  - [x] 为新枚举、字段、供应商来源互斥约束和历史回填建立 migration/Schema 失败断言。
+  - [x] 覆盖纯 `CATALOG`、纯 `CUSTOM`、混合明细、无明细和未知明细类型场景。
+  - [x] 证明迁移不得修改采购单数量、订单号、金额、状态、销售来源关系和明细数量。
+  - [x] 运行 RED 测试并保留预期失败证据，不提前放宽断言。
   - _Requirement: R8、R9_
   - _Verification: Prisma Schema/migration drift tests、隔离 PostgreSQL migration replay_
 
-- [ ] 2. 新增产品采购类型数据模型与 append-only migration
+- [ ] 2. 新增产品采购类型数据模型与 append-only migration（进行中）
   - [ ] 新增 `PurchaseOrderProductMode.CATALOG/CUSTOM/MIXED`。
   - [ ] 为 `PurchaseOrder` 增加 `productMode` 和 `customSupplierName`，将 `supplierValue` 改为可空。
   - [ ] 按历史采购明细构成回填 `productMode`；历史混合采购单回填只读 `MIXED`。
