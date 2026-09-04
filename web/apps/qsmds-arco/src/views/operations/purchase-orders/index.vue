@@ -20,6 +20,10 @@ import type {
   FactoryShipmentModalContext,
 } from '@/components/business/QsFactoryShipmentModal/types'
 import type {
+  PurchaseStartPurchaseType,
+  PurchaseStartSelection,
+} from '@/components/business/QsPurchaseStartModal/types'
+import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
   QsGenericTableFilterValues,
@@ -40,6 +44,8 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsPurchaseStartModal from '@/components/business/QsPurchaseStartModal/index.vue'
+import { buildPurchaseStartRouteQuery } from '@/components/business/QsPurchaseStartModal/logic'
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
@@ -140,6 +146,8 @@ const requestId = ref<string>()
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
+const purchaseStartVisible = ref(false)
+const purchaseStartType = ref<PurchaseStartPurchaseType>('SALES_LINKED')
 const cancelLoadingOrderId = ref<string | null>(null)
 const shipmentVisible = ref(false)
 const shipmentContext = shallowRef<FactoryShipmentModalContext | null>(null)
@@ -219,7 +227,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 140,
   title: '销售来源',
 }, {
-  accessorFn: item => item.supplier.value,
+  accessorFn: item => item.supplier.label,
   id: 'supplierSummary',
   minWidth: 120,
   title: '供应商',
@@ -460,11 +468,26 @@ function clearDateRange(): void {
   refreshOrdersAndCounts()
 }
 
-function navigateCreate(type: PurchaseOrderListItemDto['purchaseType']): void {
-  void router.push({
-    name: 'operationsPurchaseOrderCreate',
-    query: { type },
-  })
+function openPurchaseStart(type: PurchaseStartPurchaseType): void {
+  if (!canCreate.value || (type === 'STOCK' && !canCreateStock.value)) {
+    return
+  }
+  purchaseStartType.value = type
+  purchaseStartVisible.value = true
+}
+
+async function enterPurchaseCreate(selection: PurchaseStartSelection): Promise<void> {
+  purchaseStartVisible.value = false
+  try {
+    await router.push({
+      name: 'operationsPurchaseOrderCreate',
+      query: buildPurchaseStartRouteQuery(selection),
+    })
+  }
+  catch {
+    toast.error('无法进入新增采购页面，请重试')
+    purchaseStartVisible.value = true
+  }
 }
 
 function openPurchaseOrderDetail(order: PurchaseOrderListItemDto): void {
@@ -705,6 +728,7 @@ watch(() => appAccountStore.authEpoch, () => {
   detailVisible.value = false
   selectedOrder.value = null
   cancellationDetail.value = null
+  purchaseStartVisible.value = false
   rows.value = []
   summariesByCurrency.value = []
   statusCountItems.value = []
@@ -783,7 +807,7 @@ onBeforeUnmount(() => {
           v-if="canCreate"
           type="button"
           class="min-h-[44px] sm:min-h-9"
-          @click="navigateCreate('SALES_LINKED')"
+          @click="openPurchaseStart('SALES_LINKED')"
         >
           <FaIcon name="i-lucide:link-2" aria-hidden="true" />新增采购
         </FaButton>
@@ -792,7 +816,7 @@ onBeforeUnmount(() => {
           type="button"
           variant="outline"
           class="min-h-[44px] sm:min-h-9"
-          @click="navigateCreate('STOCK')"
+          @click="openPurchaseStart('STOCK')"
         >
           <FaIcon name="i-lucide:warehouse" aria-hidden="true" />新增备货采购
         </FaButton>
@@ -1456,6 +1480,13 @@ onBeforeUnmount(() => {
       @submit="submitPurchaseFactoryShipment"
       @cancel="closePurchaseFactoryShipment"
       @retry="retryPurchaseFactoryShipment"
+    />
+
+    <QsPurchaseStartModal
+      v-model="purchaseStartVisible"
+      :purchase-type="purchaseStartType"
+      @confirm="enterPurchaseCreate"
+      @validation-error="toast.warning($event)"
     />
   </div>
 </template>

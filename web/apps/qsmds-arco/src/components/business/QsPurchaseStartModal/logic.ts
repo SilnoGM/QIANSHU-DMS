@@ -1,8 +1,11 @@
 import type {
+  PurchaseStartPresetSalesOrder,
   PurchaseStartProductMode,
   PurchaseStartPurchaseType,
   PurchaseStartSelection,
 } from './types'
+
+export type PurchaseStartRouteQuery = Readonly<Record<string, string>>
 
 export interface PurchaseStartSupplierDraft {
   readonly supplierValue: string | null
@@ -80,4 +83,27 @@ export function createPurchaseStartSelection(
     supplierValue: null,
     customSupplierName,
   }
+}
+
+/**
+ * 三个入口统一通过此函数生成创建页查询参数，确保字典供应商与文本供应商不会
+ * 同时进入 URL。销售待办快捷入口只附加定位字段，创建页仍会向服务端复核资格。
+ */
+export function buildPurchaseStartRouteQuery(
+  selection: PurchaseStartSelection,
+  presetSalesOrder: PurchaseStartPresetSalesOrder | null = null,
+): PurchaseStartRouteQuery {
+  return Object.freeze({
+    type: selection.purchaseType,
+    productMode: selection.productMode,
+    ...(selection.productMode === 'CATALOG'
+      ? { supplierValue: selection.supplierValue! }
+      : { customSupplierName: selection.customSupplierName! }),
+    ...(presetSalesOrder === null
+      ? {}
+      : {
+          salesOrderId: presetSalesOrder.id,
+          salesOrderNo: presetSalesOrder.orderNo,
+        }),
+  })
 }

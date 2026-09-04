@@ -4,11 +4,40 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  buildPurchaseStartRouteQuery,
   createPurchaseStartSelection,
   normalizeCustomSupplierName,
   resetPurchaseStartSupplierDraft,
   validatePurchaseStartDraft,
 } from '../../src/components/business/QsPurchaseStartModal/logic'
+
+test('采购入口统一生成互斥供应商字段和可选销售快捷参数', () => {
+  assert.deepEqual(buildPurchaseStartRouteQuery({
+    customSupplierName: null,
+    productMode: 'CATALOG',
+    purchaseType: 'SALES_LINKED',
+    supplierValue: 'SUPPLIER_A',
+  }), {
+    productMode: 'CATALOG',
+    supplierValue: 'SUPPLIER_A',
+    type: 'SALES_LINKED',
+  })
+  assert.deepEqual(buildPurchaseStartRouteQuery({
+    customSupplierName: '临时供应商',
+    productMode: 'CUSTOM',
+    purchaseType: 'SALES_LINKED',
+    supplierValue: null,
+  }, {
+    id: '11111111-1111-4111-8111-111111111111',
+    orderNo: 'SO/2026-001',
+  }), {
+    customSupplierName: '临时供应商',
+    productMode: 'CUSTOM',
+    salesOrderId: '11111111-1111-4111-8111-111111111111',
+    salesOrderNo: 'SO/2026-001',
+    type: 'SALES_LINKED',
+  })
+})
 
 test('采购开始草稿按产品模式强制供应商来源互斥', () => {
   assert.deepEqual(createPurchaseStartSelection({

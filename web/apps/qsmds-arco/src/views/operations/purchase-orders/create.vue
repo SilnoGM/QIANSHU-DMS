@@ -42,8 +42,7 @@ import {
   createPurchaseOrderEditingState,
   getPurchaseOrderMutationFailure,
   hasPurchasablePurchaseOrderSourceLines,
-  parsePurchaseOrderCreateType,
-  parsePurchaseOrderSourceShortcut,
+  parsePurchaseOrderCreateContext,
   PURCHASE_ORDER_CREATE_REVIEW_STEP,
   replayUnknownPurchaseOrderSubmission,
   resolvePurchaseOrderCreateStepForErrors,
@@ -90,12 +89,18 @@ const todayDate = today(getLocalTimeZone())
 const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
-const purchaseType = parsePurchaseOrderCreateType(route.query.type, canCreateStock.value)
-const sourceShortcut = parsePurchaseOrderSourceShortcut({
-  purchaseType,
+const createContext = parsePurchaseOrderCreateContext({
+  canCreateStock: canCreateStock.value,
+  customSupplierName: route.query.customSupplierName,
+  productMode: route.query.productMode,
+  purchaseType: route.query.type,
   salesOrderId: route.query.salesOrderId,
   salesOrderNo: route.query.salesOrderNo,
+  supplierValue: route.query.supplierValue,
 })
+const purchaseType = createContext?.purchaseType ?? null
+const productMode = createContext?.productMode ?? null
+const sourceShortcut = createContext?.sourceShortcut ?? null
 
 const lineLabels: OrderProductLineLabels = {
   actualSubtotal: '本单采购小计',
@@ -115,8 +120,14 @@ const formModel = reactive({
   orderDate: todayIso,
   remark: '',
   shippingMarkText: '',
-  supplierValue: null as string | null,
+  supplierValue: createContext?.supplierValue ?? null,
+  customSupplierName: createContext?.customSupplierName ?? null,
 })
+const customSupplierDraft = ref(createContext?.customSupplierName ?? '')
+const pendingSupplierChange = shallowRef<{
+  readonly customSupplierName: string | null
+  readonly supplierValue: string | null
+} | null>(null)
 const selectedSalesOrder = shallowRef<PurchaseOrderSourceSalesOrderListItemDto | null>(null)
 const sourceSalesOrderLines = shallowRef<readonly PurchaseOrderSourceSalesOrderLineDto[]>([])
 const purchasedSourceLines = shallowRef<readonly OrderProductLineReadOnlyModel[]>([])
@@ -135,6 +146,7 @@ const furthestReachedStep = ref<PurchaseOrderCreateStep>(0)
 const detailsDrawerVisible = ref(false)
 const submitConfirmVisible = ref(false)
 const discardVisible = ref(false)
+const supplierChangeConfirmVisible = ref(false)
 const createPageRef = useTemplateRef<HTMLElement>('createPageRef')
 const stepNavigationRef = useTemplateRef<HTMLElement>('stepNavigationRef')
 const reviewHeadingRef = useTemplateRef<HTMLElement>('reviewHeadingRef')
@@ -160,9 +172,11 @@ const currencyUnavailable = computed(() => (
 const orderDateValue = computed(() => parseDate(formModel.orderDate))
 const purchaseTotalAmount = computed(() => calculatePurchaseOrderDraftTotal(formModel.lines))
 const selectedSupplierDisplayLabel = computed(() => (
-  supplierCatalog.resolve(formModel.supplierValue)?.displayLabel
-  ?? formModel.supplierValue
-  ?? '—'
+  productMode === 'CUSTOM'
+    ? formModel.customSupplierName ?? '—'
+    : (supplierCatalog.resolve(formModel.supplierValue)?.displayLabel
+      ?? formModel.supplierValue
+      ?? '—')
 ))
 const purchaseOrderDescModel = computed(() => mapPurchaseOrderCreateToDesc({
   balanceDueAmount: formModel.balanceDueAmount,
@@ -186,16 +200,21 @@ const submitLocked = computed(() => submission.value.phase === 'submitting')
 const steppedCreate = computed(() => purchaseType !== null)
 const salesLinkedCreate = computed(() => purchaseType === 'SALES_LINKED')
 const sourceHasPurchasableLines = computed(() => hasPurchasablePurchaseOrderSourceLines(sourceSalesOrderLines.value))
+const supplierReady = computed(() => productMode === 'CATALOG'
+  ? formModel.supplierValue !== null
+  : formModel.customSupplierName?.trim() !== '')
 const sourceReady = computed(() => (
   salesLinkedCreate.value
   && selectedSalesOrder.value !== null
   && sourceHasPurchasableLines.value
-  && formModel.supplierValue !== null
+  && supplierReady.value
 ))
 const shouldConfirmDiscard = computed(() => (
   submission.value.phase !== 'success'
   && (
-    formModel.supplierValue !== null
+    formModel.supplierValue !== (createContext?.supplierValue ?? null)
+    || formModel.customSupplierName !== (createContext?.customSupplierName ?? null)
+    || customSupplierDraft.value !== (createContext?.customSupplierName ?? '')
     || formModel.lines.length > 0
     || formModel.depositDueAmount !== null
     || formModel.balanceDueAmount !== null
@@ -232,6 +251,9 @@ const submitReady = computed(() => (
 ))
 
 const loadPurchaseProducts: ProductPageLoader = async (query, signal) => {
+  if (productMode !== 'CATALOG') {
+    return { items: [], page: query.page, pageSize: query.pageSize, total: 0 }
+  }
   const supplierValue = query.supplierValue ?? formModel.supplierValue
   if (supplierValue === null || supplierValue === undefined || supplierValue === '') {
     return { items: [], page: query.page, pageSize: query.pageSize, total: 0 }
@@ -271,19 +293,92 @@ function handleSupplierUpdate(value: string | null): void {
   if (submitLocked.value || value === formModel.supplierValue) {
     return
   }
-  formModel.supplierValue = value
-  clearFeedback()
-  if (
-    purchaseType === 'SALES_LINKED'
-    && (formModel.lines.length > 0 || purchasedSourceLines.value.length > 0)
-  ) {
-    // 正式产品的采购成本和供应商绑定；切换供应商后必须重新求交集，不能沿用旧快照。
-    formModel.lines = []
-    purchasedSourceLines.value = []
-    sourceSalesOrderLineIdByKey.value = {}
-    maximumQuantityByKey.value = {}
-    toast.info('供应商已变更，请重新同步销售产品明细')
+  requestSupplierChange({ customSupplierName: null, supplierValue: value })
+}
+
+function handleCustomSupplierUpdate(value: unknown): void {
+  const nextValue = String(value ?? '')
+  if (submitLocked.value) {
+    return
   }
+  customSupplierDraft.value = nextValue
+  clearFeedback()
+  if (!hasSupplierDependentData()) {
+    formModel.customSupplierName = nextValue
+  }
+}
+
+function hasSupplierDependentData(): boolean {
+  return selectedSalesOrder.value !== null
+    || sourceSalesOrderLines.value.length > 0
+    || formModel.lines.length > 0
+    || purchasedSourceLines.value.length > 0
+    || formModel.depositDueAmount !== null
+    || formModel.balanceDueAmount !== null
+}
+
+function requestCustomSupplierChange(): void {
+  const nextValue = customSupplierDraft.value
+  if (submitLocked.value || nextValue === formModel.customSupplierName) {
+    return
+  }
+  requestSupplierChange({ customSupplierName: nextValue, supplierValue: null })
+}
+
+function requestSupplierChange(nextSupplier: {
+  readonly customSupplierName: string | null
+  readonly supplierValue: string | null
+}): void {
+  if (!hasSupplierDependentData()) {
+    applySupplierChange(nextSupplier, false)
+    return
+  }
+  pendingSupplierChange.value = nextSupplier
+  supplierChangeConfirmVisible.value = true
+}
+
+function applySupplierChange(
+  nextSupplier: { readonly customSupplierName: string | null, readonly supplierValue: string | null },
+  notify: boolean,
+): void {
+  formModel.supplierValue = nextSupplier.supplierValue
+  formModel.customSupplierName = nextSupplier.customSupplierName
+  customSupplierDraft.value = nextSupplier.customSupplierName ?? ''
+  clearFeedback()
+  // 销售来源资格、产品价格与付款约定都依赖供应商；确认变更后必须一次性失效，
+  // 防止新供应商与旧订单、旧产品或旧金额组合成不可提交的半更新草稿。
+  sourceAbortController?.abort()
+  sourceSelectorVisible.value = false
+  selectedSalesOrder.value = null
+  sourceSalesOrderLines.value = []
+  formModel.lines = []
+  purchasedSourceLines.value = []
+  sourceSalesOrderLineIdByKey.value = {}
+  maximumQuantityByKey.value = {}
+  formModel.depositDueAmount = null
+  formModel.balanceDueAmount = null
+  sourceError.value = ''
+  if (notify) {
+    toast.info(purchaseType === 'SALES_LINKED'
+      ? '供应商已变更，请重新选择销售订单并同步产品明细'
+      : '供应商已变更，请重新添加采购产品并填写付款约定')
+  }
+}
+
+function cancelSupplierChange(): void {
+  pendingSupplierChange.value = null
+  supplierChangeConfirmVisible.value = false
+  customSupplierDraft.value = formModel.customSupplierName ?? ''
+}
+
+function confirmSupplierChange(): void {
+  const nextSupplier = pendingSupplierChange.value
+  if (nextSupplier === null) {
+    return
+  }
+  pendingSupplierChange.value = null
+  supplierChangeConfirmVisible.value = false
+  applySupplierChange(nextSupplier, true)
 }
 
 function handleLinesUpdate(lines: readonly OrderProductLineModel[]): void {
@@ -338,7 +433,12 @@ async function selectSourceSalesOrder(
   sourceError.value = ''
   clearFeedback()
   try {
-    const response = await purchaseOrdersApi.sourceSalesOrderLines(item.id, controller.signal)
+    const response = await purchaseOrdersApi.sourceSalesOrderLines(item.id, {
+      productMode: productMode!,
+      ...(productMode === 'CATALOG'
+        ? { supplierValue: formModel.supplierValue! }
+        : {}),
+    }, controller.signal)
     if (
       controller.signal.aborted
       || authEpoch !== appAccountStore.authEpoch
@@ -395,6 +495,10 @@ async function bindSourceSalesOrderFromShortcut(): Promise<void> {
         keyword: sourceShortcut.salesOrderNo,
         page: 1,
         pageSize: 100,
+        productMode: productMode!,
+        ...(productMode === 'CATALOG'
+          ? { supplierValue: formModel.supplierValue! }
+          : {}),
         view,
       }, controller.signal)
       if (controller.signal.aborted || authEpoch !== appAccountStore.authEpoch) {
@@ -431,6 +535,9 @@ async function bindSourceSalesOrderFromShortcut(): Promise<void> {
 }
 
 async function loadAllSupplierProducts(signal: AbortSignal) {
+  if (productMode !== 'CATALOG') {
+    return []
+  }
   const supplierValue = formModel.supplierValue
   if (supplierValue === null) {
     return []
@@ -511,12 +618,14 @@ function buildCurrentSource() {
     lines: formModel.lines,
     maximumQuantityByKey: maximumQuantityByKey.value,
     orderDate: formModel.orderDate,
+    productMode: productMode!,
     purchaseType,
     remark: formModel.remark,
     salesOrderId: selectedSalesOrder.value?.id ?? null,
     shippingMarkText: formModel.shippingMarkText,
     sourceSalesOrderLineIdByKey: sourceSalesOrderLineIdByKey.value,
-    supplierValue: formModel.supplierValue ?? '',
+    supplierValue: formModel.supplierValue,
+    customSupplierName: formModel.customSupplierName,
     today: todayIso,
   } as const
 }
@@ -580,6 +689,13 @@ function nextStep(): void {
     || createSurface.value !== 'form'
     || activeStep.value === PURCHASE_ORDER_CREATE_REVIEW_STEP
   ) {
+    return
+  }
+  if (
+    supplierChangeConfirmVisible.value
+    || customSupplierDraft.value !== (formModel.customSupplierName ?? '')
+  ) {
+    requestCustomSupplierChange()
     return
   }
   if (activeStep.value === 0 && currencyUnavailable.value) {
@@ -659,6 +775,7 @@ function focusFirstInvalidField(errors: Readonly<Record<string, string>>): void 
     }
     const directLabels: Readonly<Record<string, string>> = {
       balanceDueAmount: '尾款',
+      customSupplierName: '供应商名称',
       depositDueAmount: '定金',
       lines: '添加数据库产品',
       orderDate: '采购日期',
@@ -853,6 +970,8 @@ watch(() => appAccountStore.authEpoch, () => {
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
   submitAbortController?.abort()
+  supplierChangeConfirmVisible.value = false
+  pendingSupplierChange.value = null
   void router.replace({ name: 'qsOperationsPurchaseOrders' })
 })
 
@@ -863,8 +982,8 @@ watch(isDesktopSummary, (desktop) => {
 })
 
 onMounted(() => {
-  if (!canCreate.value || purchaseType === null) {
-    toast.error('当前入口无效或缺少创建该类型采购订单的权限')
+  if (!canCreate.value || createContext === null) {
+    toast.warning('当前入口无效或缺少创建该类型采购订单的权限')
     void router.replace({ name: 'qsOperationsPurchaseOrders' })
     return
   }
@@ -965,6 +1084,14 @@ onBeforeUnmount(() => {
                     </p>
                     <code class="text-sm text-muted-foreground font-mono mt-2 block">PURCHASE_ORDER · AUTO</code>
                   </div>
+                  <div class="p-4 border border-border rounded-lg bg-muted/25">
+                    <p class="text-sm font-medium m-0">
+                      采购产品类型
+                    </p>
+                    <p class="text-sm text-muted-foreground m-0 mt-2">
+                      {{ productMode === 'CATALOG' ? '产品库产品采购' : '自定义产品采购' }}
+                    </p>
+                  </div>
                   <FaFormItem name="orderDate" label="采购日期" required :auto-bind="false">
                     <FaDate
                       aria-label="采购日期"
@@ -980,7 +1107,13 @@ onBeforeUnmount(() => {
                       {{ fieldErrors.orderDate }}
                     </p>
                   </FaFormItem>
-                  <FaFormItem name="supplierValue" label="供应商" required :auto-bind="false">
+                  <FaFormItem
+                    v-if="productMode === 'CATALOG'"
+                    name="supplierValue"
+                    label="供应商"
+                    required
+                    :auto-bind="false"
+                  >
                     <QsDictionarySelect
                       ref="supplierSelectRef"
                       :model-value="formModel.supplierValue"
@@ -992,6 +1125,26 @@ onBeforeUnmount(() => {
                     />
                     <p v-if="fieldErrors.supplierValue" class="text-xs text-destructive m-0 mt-1" role="alert">
                       {{ fieldErrors.supplierValue }}
+                    </p>
+                  </FaFormItem>
+                  <FaFormItem
+                    v-else
+                    name="customSupplierName"
+                    label="供应商名称"
+                    required
+                    :auto-bind="false"
+                  >
+                    <FaInput
+                      aria-label="供应商名称"
+                      :model-value="customSupplierDraft"
+                      maxlength="128"
+                      placeholder="填写自定义供应商名称"
+                      :disabled="submitLocked"
+                      @update:model-value="handleCustomSupplierUpdate"
+                      @blur="requestCustomSupplierChange"
+                    />
+                    <p v-if="fieldErrors.customSupplierName" class="text-xs text-destructive m-0 mt-1" role="alert">
+                      {{ fieldErrors.customSupplierName }}
                     </p>
                   </FaFormItem>
                 </FaCard>
@@ -1018,7 +1171,7 @@ onBeforeUnmount(() => {
                       variant="default"
                       class="shrink-0 min-h-11 sm:min-h-9"
                       :class="selectedSalesOrder !== null ? 'border-amber-500 bg-amber-500 text-white hover:border-amber-600 hover:bg-amber-600 hover:text-white' : ''"
-                      :disabled="submitLocked || sourceLoading"
+                      :disabled="submitLocked || sourceLoading || !supplierReady"
                       @click="sourceSelectorVisible = true"
                     >
                       <FaIcon
@@ -1050,7 +1203,11 @@ onBeforeUnmount(() => {
                 <FaCard
                   class="min-w-0"
                   title="采购产品明细"
-                  :description="purchaseType === 'STOCK' ? '可手工添加数据库产品或临时产品。' : '从销售订单同步产品；可删除本次暂不采购的行。'"
+                  :description="purchaseType === 'STOCK'
+                    ? productMode === 'CATALOG'
+                      ? '仅可手工添加当前供应商的数据库产品。'
+                      : '仅可手工添加自定义产品。'
+                    : '从销售订单同步当前产品类型；可删除本次暂不采购的行。'"
                   content-class="min-w-0"
                 >
                   <div v-if="salesLinkedCreate" class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1075,12 +1232,12 @@ onBeforeUnmount(() => {
                     :currencies="fixedCurrencies"
                     :load-products="loadPurchaseProducts"
                     :labels="lineLabels"
-                    :disabled="submitLocked || currencyUnavailable || formModel.supplierValue === null"
+                    :disabled="submitLocked || currencyUnavailable || !supplierReady"
                     :field-errors="fieldErrors"
                     :fixed-product-supplier-value="formModel.supplierValue ?? undefined"
                     :maximum-quantity-by-key="maximumQuantityByKey"
-                    :catalog-product-addable="purchaseType === 'STOCK'"
-                    :custom-product-addable="purchaseType === 'STOCK'"
+                    :catalog-product-addable="purchaseType === 'STOCK' && productMode === 'CATALOG'"
+                    :custom-product-addable="purchaseType === 'STOCK' && productMode === 'CUSTOM'"
                     :catalog-line-initial-actual-unit-price-amount="null"
                     custom-reference-unit-price-editable
                     :temporary-line-initial-actual-unit-price-amount="null"
@@ -1306,11 +1463,35 @@ onBeforeUnmount(() => {
     <PurchaseSourceSalesOrderSelector
       v-if="purchaseType === 'SALES_LINKED'"
       v-model="sourceSelectorVisible"
+      :product-mode="productMode ?? 'CATALOG'"
+      :supplier-value="formModel.supplierValue"
       :selected-order-id="selectedSalesOrder?.id ?? null"
       :disabled="submitLocked"
       :load-sales-orders="loadSourceSalesOrders"
       @confirm="handleSourceSalesOrderConfirm"
     />
+
+    <QsGenericModal
+      :model-value="supplierChangeConfirmVisible"
+      title="确认更换供应商？"
+      description="更换后将清空已选销售订单、采购产品明细、已采购展示行、定金和尾款。"
+      size="sm"
+      :dismiss-on-overlay="false"
+      :submitting="submitLocked"
+      @update:model-value="$event ? (supplierChangeConfirmVisible = true) : cancelSupplierChange()"
+    >
+      <p class="text-sm text-muted-foreground m-0">
+        当前已填写的下游采购资料依赖原供应商，确认后需重新选择或添加。
+      </p>
+      <template #footer>
+        <FaButton type="button" variant="outline" :disabled="submitLocked" @click="cancelSupplierChange">
+          保留原供应商
+        </FaButton>
+        <FaButton type="button" :disabled="submitLocked" @click="confirmSupplierChange">
+          确认更换
+        </FaButton>
+      </template>
+    </QsGenericModal>
 
     <QsGenericModal
       :model-value="submitConfirmVisible"

@@ -15,6 +15,7 @@ import {
   buildPurchaseOrderCreateRequest,
   createPurchaseOrderEditingState,
   hasPurchasablePurchaseOrderSourceLines,
+  parsePurchaseOrderCreateContext,
   parsePurchaseOrderCreateType,
   replayUnknownPurchaseOrderSubmission,
   resolvePurchaseOrderCreateStepForErrors,
@@ -70,6 +71,70 @@ test('创建类型只接受路由单值，备货类型还要求 system-only 权�
   assert.equal(parsePurchaseOrderCreateType('STOCK', false), null)
   assert.equal(parsePurchaseOrderCreateType(['STOCK'], true), null)
   assert.equal(parsePurchaseOrderCreateType('OTHER', true), null)
+})
+
+test('创建上下文只接受产品类型与供应商来源互斥的完整路由参数', () => {
+  assert.deepEqual(parsePurchaseOrderCreateContext({
+    canCreateStock: false,
+    customSupplierName: undefined,
+    productMode: 'CATALOG',
+    purchaseType: 'SALES_LINKED',
+    salesOrderId: undefined,
+    salesOrderNo: undefined,
+    supplierValue: ' SUPPLIER_CN_01 ',
+  }), {
+    customSupplierName: null,
+    productMode: 'CATALOG',
+    purchaseType: 'SALES_LINKED',
+    sourceShortcut: null,
+    supplierValue: 'SUPPLIER_CN_01',
+  })
+  assert.deepEqual(parsePurchaseOrderCreateContext({
+    canCreateStock: true,
+    customSupplierName: ' 自定义供应商 ',
+    productMode: 'CUSTOM',
+    purchaseType: 'STOCK',
+    salesOrderId: undefined,
+    salesOrderNo: undefined,
+    supplierValue: undefined,
+  }), {
+    customSupplierName: '自定义供应商',
+    productMode: 'CUSTOM',
+    purchaseType: 'STOCK',
+    sourceShortcut: null,
+    supplierValue: null,
+  })
+  assert.deepEqual(parsePurchaseOrderCreateContext({
+    canCreateStock: false,
+    customSupplierName: '临时供应商',
+    productMode: 'CUSTOM',
+    purchaseType: 'SALES_LINKED',
+    salesOrderId: '11111111-1111-4111-8111-111111111111',
+    salesOrderNo: 'SO/2026-001',
+    supplierValue: undefined,
+  })?.sourceShortcut, {
+    salesOrderId: '11111111-1111-4111-8111-111111111111',
+    salesOrderNo: 'SO/2026-001',
+  })
+
+  for (const input of [
+    { productMode: undefined, supplierValue: 'SUPPLIER_CN_01' },
+    { productMode: 'CATALOG', supplierValue: undefined },
+    { productMode: 'CATALOG', supplierValue: ['SUPPLIER_CN_01'] },
+    { productMode: 'CATALOG', supplierValue: 'SUPPLIER_CN_01', customSupplierName: '不应同时存在' },
+    { productMode: 'CUSTOM', customSupplierName: undefined },
+    { productMode: 'CUSTOM', customSupplierName: '供应商', supplierValue: '不应同时存在' },
+  ] as const) {
+    assert.equal(parsePurchaseOrderCreateContext({
+      canCreateStock: false,
+      customSupplierName: undefined,
+      purchaseType: 'SALES_LINKED',
+      salesOrderId: undefined,
+      salesOrderNo: undefined,
+      supplierValue: undefined,
+      ...input,
+    }), null)
+  }
 })
 
 test('销售来源快捷参数只接受销售关联采购的可信单值输入', () => {
@@ -145,12 +210,14 @@ test('下一步只拦截当前采购填写步骤的领域错误', () => {
     lines: [],
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
+    productMode: 'CATALOG',
     purchaseType: 'SALES_LINKED',
     remark: '',
     salesOrderId: null,
     shippingMarkText: '',
     sourceSalesOrderLineIdByKey: {},
     supplierValue: '',
+    customSupplierName: null,
     today: '2026-08-28',
   } as const
 
@@ -353,7 +420,7 @@ test('销售来源同步只加入当前供应商可采购的正式产品和所�
   }])
 })
 
-test('关联采购构造 DTO 时校验来源数量、明细总价和 CUSTOM 双价格', () => {
+test('产品库关联采购构造 DTO 时提交互斥供应商来源并校验数量', () => {
   const catalogLine: OrderProductLineModel = {
     key: `source-${sourceCatalogLine.id}`,
     lineType: 'CATALOG',
@@ -366,34 +433,22 @@ test('关联采购构造 DTO 时校验来源数量、明细总价和 CUSTOM 双�
     quantity: '2',
     mainImage: null,
   }
-  const customLine: OrderProductLineModel = {
-    key: 'source-55555555-5555-4555-8555-555555555555',
-    lineType: 'CUSTOM',
-    productId: null,
-    productNo: null,
-    name: '销售临时包装',
-    description: '',
-    standardUnitPriceAmount: '5.00',
-    actualUnitPriceAmount: '5.00',
-    quantity: '1',
-    mainImage: null,
-  }
   const source = {
-    balanceDueAmount: '15.00',
+    balanceDueAmount: '10.00',
+    customSupplierName: null,
     depositDueAmount: '10.00',
-    lines: [catalogLine, customLine],
+    lines: [catalogLine],
     maximumQuantityByKey: {
       [catalogLine.key]: 2,
-      [customLine.key]: 1,
     },
     orderDate: '2026-08-28',
+    productMode: 'CATALOG',
     purchaseType: 'SALES_LINKED',
     remark: '  采购说明 ',
     salesOrderId: '77777777-7777-4777-8777-777777777777',
     shippingMarkText: '  唛头 A\n第二行 ',
     sourceSalesOrderLineIdByKey: {
       [catalogLine.key]: sourceCatalogLine.id,
-      [customLine.key]: '55555555-5555-4555-8555-555555555555',
     },
     supplierValue: 'SUPPLIER_CN_01',
     today: '2026-08-28',
@@ -406,6 +461,7 @@ test('关联采购构造 DTO 时校验来源数量、明细总价和 CUSTOM 双�
   }
   assert.deepEqual(result.request, {
     purchaseType: 'SALES_LINKED',
+    productMode: 'CATALOG',
     salesOrderId: '77777777-7777-4777-8777-777777777777',
     supplierValue: 'SUPPLIER_CN_01',
     orderDate: '2026-08-28',
@@ -416,41 +472,28 @@ test('关联采购构造 DTO 时校验来源数量、明细总价和 CUSTOM 双�
       sourceSalesOrderLineId: sourceCatalogLine.id,
       actualPurchaseUnitPriceAmount: '10.00',
       quantity: 2,
-    }, {
-      lineType: 'CUSTOM',
-      sourceSalesOrderLineId: '55555555-5555-4555-8555-555555555555',
-      name: '销售临时包装',
-      description: null,
-      referencePurchaseUnitPriceAmount: '5.00',
-      actualPurchaseUnitPriceAmount: '5.00',
-      quantity: 1,
     }],
-    purchaseTotalAmount: '25.00',
+    purchaseTotalAmount: '20.00',
     depositDueAmount: '10.00',
-    balanceDueAmount: '15.00',
+    balanceDueAmount: '10.00',
     remark: '采购说明',
   })
 
   const invalid = buildPurchaseOrderCreateRequest({
     ...source,
-    lines: [{
-      ...customLine,
-      standardUnitPriceAmount: '5.00',
-      actualUnitPriceAmount: '5.01',
-      quantity: '2',
-    }],
+    lines: [{ ...catalogLine, quantity: '3' }],
   })
   assert.equal(invalid.valid, false)
   if (invalid.valid) {
     return
   }
-  assert.equal(invalid.fieldErrors['lines.0.actualUnitPriceAmount'], '临时产品的采购定价必须与本单采购价相等')
-  assert.equal(invalid.fieldErrors['lines.0.quantity'], '采购数量不能超过销售明细剩余可采购数量 1')
+  assert.equal(invalid.fieldErrors['lines.0.quantity'], '采购数量不能超过销售明细剩余可采购数量 2')
 })
 
-test('备货采购允许无销售来源的手工临时产品', () => {
+test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', () => {
   const result = buildPurchaseOrderCreateRequest({
     balanceDueAmount: '8.00',
+    customSupplierName: ' 临时供应商 ',
     depositDueAmount: '0.00',
     lines: [{
       key: 'stock-custom',
@@ -466,25 +509,62 @@ test('备货采购允许无销售来源的手工临时产品', () => {
     }],
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
+    productMode: 'CUSTOM',
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
     shippingMarkText: '',
     sourceSalesOrderLineIdByKey: {},
-    supplierValue: 'SUPPLIER_CN_01',
+    supplierValue: null,
     today: '2026-08-28',
   })
 
   assert.equal(result.valid, true)
   if (result.valid) {
     assert.equal(result.request.salesOrderId, undefined)
+    assert.equal(result.request.productMode, 'CUSTOM')
+    assert.equal(result.request.customSupplierName, '临时供应商')
+    assert.equal(result.request.supplierValue, undefined)
     assert.equal(result.request.lines[0]?.sourceSalesOrderLineId, undefined)
+  }
+
+  const invalid = buildPurchaseOrderCreateRequest({
+    balanceDueAmount: '8.01',
+    customSupplierName: '临时供应商',
+    depositDueAmount: '0.00',
+    lines: [{
+      actualUnitPriceAmount: '8.01',
+      description: '',
+      key: 'stock-custom',
+      lineType: 'CUSTOM',
+      mainImage: null,
+      name: '备货临时包装',
+      productId: null,
+      productNo: null,
+      quantity: '1',
+      standardUnitPriceAmount: '8.00',
+    }],
+    maximumQuantityByKey: {},
+    orderDate: '2026-08-28',
+    productMode: 'CUSTOM',
+    purchaseType: 'STOCK',
+    remark: '',
+    salesOrderId: null,
+    shippingMarkText: '',
+    sourceSalesOrderLineIdByKey: {},
+    supplierValue: null,
+    today: '2026-08-28',
+  })
+  assert.equal(invalid.valid, false)
+  if (!invalid.valid) {
+    assert.equal(invalid.fieldErrors['lines.0.actualUnitPriceAmount'], '临时产品的采购定价必须与本单采购价相等')
   }
 })
 
 test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => {
   const built = buildPurchaseOrderCreateRequest({
     balanceDueAmount: '8.00',
+    customSupplierName: '临时供应商',
     depositDueAmount: '0.00',
     lines: [{
       key: 'stock-custom',
@@ -500,12 +580,13 @@ test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => 
     }],
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
+    productMode: 'CUSTOM',
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
     shippingMarkText: '',
     sourceSalesOrderLineIdByKey: {},
-    supplierValue: 'SUPPLIER_CN_01',
+    supplierValue: null,
     today: '2026-08-28',
   })
   assert.equal(built.valid, true)

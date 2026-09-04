@@ -23,6 +23,8 @@ test('销售来源选择器以采购域适配器接入公共选择弹窗', async
   assert.doesNotMatch(source, /已完成采购-加购产品/u)
   assert.doesNotMatch(source, /canAddSalesOrderProducts/u)
   assert.match(source, /withStatusSwitchCounts/u)
+  assert.match(source, /productMode: props\.productMode/u)
+  assert.match(source, /props\.productMode === 'CATALOG'[\s\S]*?supplierValue: props\.supplierValue/u)
   assert.match(source, /view: selectedView\.value/u)
   assert.match(source, /function handleViewChange/u)
   assert.match(source, /page\.value = 1/u)

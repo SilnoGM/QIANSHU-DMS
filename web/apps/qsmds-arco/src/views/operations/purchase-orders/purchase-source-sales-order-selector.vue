@@ -20,6 +20,8 @@ defineOptions({ name: 'PurchaseSourceSalesOrderSelector' })
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
+  productMode: PurchaseOrderSourceSalesOrdersQuery['productMode']
+  supplierValue?: string | null
   disabled?: boolean
   selectedOrderId?: string | null
   loadSalesOrders: (
@@ -29,6 +31,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   disabled: false,
   selectedOrderId: null,
+  supplierValue: null,
 })
 
 const emit = defineEmits<{
@@ -97,6 +100,10 @@ async function loadPage(): Promise<void> {
       ...(keyword.value === '' ? {} : { keyword: keyword.value }),
       page: page.value,
       pageSize: pageSize.value,
+      productMode: props.productMode,
+      ...(props.productMode === 'CATALOG' && typeof props.supplierValue === 'string'
+        ? { supplierValue: props.supplierValue }
+        : {}),
       view: selectedView.value,
     }, nextController.signal)
     if (nextController.signal.aborted || version !== requestVersion) {

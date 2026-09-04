@@ -62,9 +62,13 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
       keyword: 'SO-001',
       page: 1,
       pageSize: 20,
+      productMode: 'CATALOG',
+      supplierValue: 'SUPPLIER_CN_01',
     }, controller.signal)
   }
-  await api.sourceSalesOrderLines('sales/order', controller.signal)
+  await api.sourceSalesOrderLines('sales/order', {
+    productMode: 'CUSTOM',
+  }, controller.signal)
   await api.getById('purchase/order', controller.signal)
 
   assert.deepEqual(calls, [{
@@ -95,6 +99,8 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
         keyword: 'SO-001',
         page: 1,
         pageSize: 20,
+        productMode: 'CATALOG',
+        supplierValue: 'SUPPLIER_CN_01',
       },
       signal: controller.signal,
     },
@@ -108,13 +114,19 @@ test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后
         keyword: 'SO-001',
         page: 1,
         pageSize: 20,
+        productMode: 'CATALOG',
+        supplierValue: 'SUPPLIER_CN_01',
       },
       signal: controller.signal,
     },
     method: 'get',
     url: 'purchase-orders/source-sales-orders',
   }, {
-    config: { errorPresentation: 'local', signal: controller.signal },
+    config: {
+      errorPresentation: 'local',
+      params: { productMode: 'CUSTOM' },
+      signal: controller.signal,
+    },
     method: 'get',
     url: 'purchase-orders/source-sales-orders/sales%2Forder/lines',
   }, {
@@ -129,8 +141,9 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
   const api = createPurchaseOrdersApi(createRecorder(calls))
   const controller = new AbortController()
   const request = {
+    customSupplierName: '临时供应商',
+    productMode: 'CUSTOM',
     purchaseType: 'STOCK',
-    supplierValue: 'SUPPLIER_CN_01',
     orderDate: '2026-08-28',
     lines: [{
       lineType: 'CUSTOM',

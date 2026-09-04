@@ -12,6 +12,7 @@ import type {
 import type { ProductSelectorPage } from '../../../components/business/QsProductSelector/types'
 
 export type PurchaseOrderCreateType = 'SALES_LINKED' | 'STOCK'
+export type PurchaseOrderCreateProductMode = 'CATALOG' | 'CUSTOM'
 export type PurchaseOrderCreateStep = 0 | 1 | 2 | 3
 export type PurchaseOrderFormStep = Exclude<PurchaseOrderCreateStep, 3>
 
@@ -19,6 +20,22 @@ export interface PurchaseOrderSourceShortcut {
   readonly salesOrderId: string
   readonly salesOrderNo: string
 }
+
+export type PurchaseOrderCreateContext
+  = | {
+    readonly customSupplierName: null
+    readonly productMode: 'CATALOG'
+    readonly purchaseType: PurchaseOrderCreateType
+    readonly sourceShortcut: PurchaseOrderSourceShortcut | null
+    readonly supplierValue: string
+  }
+    | {
+      readonly customSupplierName: string
+      readonly productMode: 'CUSTOM'
+      readonly purchaseType: PurchaseOrderCreateType
+      readonly sourceShortcut: PurchaseOrderSourceShortcut | null
+      readonly supplierValue: null
+    }
 
 export const PURCHASE_ORDER_CREATE_REVIEW_STEP: PurchaseOrderCreateStep = 3
 
@@ -28,12 +45,14 @@ export interface PurchaseOrderCreateSource {
   readonly lines: readonly OrderProductLineModel[]
   readonly maximumQuantityByKey: Readonly<Record<string, number | undefined>>
   readonly orderDate: string
+  readonly productMode: PurchaseOrderCreateProductMode
   readonly purchaseType: PurchaseOrderCreateType
   readonly remark: string
   readonly salesOrderId: string | null
   readonly shippingMarkText: string
   readonly sourceSalesOrderLineIdByKey: Readonly<Record<string, string | undefined>>
-  readonly supplierValue: string
+  readonly supplierValue: string | null
+  readonly customSupplierName: string | null
   readonly today: string
 }
 
@@ -167,6 +186,16 @@ export function parsePurchaseOrderCreateType(
   return value === 'STOCK' && canCreateStock ? value : null
 }
 
+function parseRouteText(value: unknown, maximumLength = 128): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const normalized = value.normalize('NFKC').trim()
+  return normalized !== '' && unicodeLength(normalized) <= maximumLength
+    ? normalized
+    : null
+}
+
 /**
  * 快捷入口参数来自 URL，不能直接作为已选销售订单。这里只做单值、长度与文字
  * 规范化；页面随后仍须通过采购域来源接口取得可信 DTO 并执行 ID 精确匹配。
@@ -197,6 +226,70 @@ export function parsePurchaseOrderSourceShortcut(input: {
 }
 
 /**
+ * 采购创建页只能接受入口弹窗生成的完整上下文。产品类型与供应商来源组成互斥
+ * 联合，任何数组、缺失字段或双供应商字段都会整体拒绝，页面随后安全返回列表。
+ */
+export function parsePurchaseOrderCreateContext(input: {
+  readonly canCreateStock: boolean
+  readonly customSupplierName: unknown
+  readonly productMode: unknown
+  readonly purchaseType: unknown
+  readonly salesOrderId: unknown
+  readonly salesOrderNo: unknown
+  readonly supplierValue: unknown
+}): PurchaseOrderCreateContext | null {
+  const purchaseType = parsePurchaseOrderCreateType(
+    input.purchaseType,
+    input.canCreateStock,
+  )
+  if (
+    purchaseType === null
+    || (input.productMode !== 'CATALOG' && input.productMode !== 'CUSTOM')
+  ) {
+    return null
+  }
+
+  const hasShortcutField = input.salesOrderId !== undefined
+    || input.salesOrderNo !== undefined
+  const sourceShortcut = hasShortcutField
+    ? parsePurchaseOrderSourceShortcut({
+        purchaseType,
+        salesOrderId: input.salesOrderId,
+        salesOrderNo: input.salesOrderNo,
+      })
+    : null
+  if (hasShortcutField && sourceShortcut === null) {
+    return null
+  }
+
+  if (input.productMode === 'CATALOG') {
+    const supplierValue = parseRouteText(input.supplierValue)
+    if (supplierValue === null || input.customSupplierName !== undefined) {
+      return null
+    }
+    return {
+      customSupplierName: null,
+      productMode: 'CATALOG',
+      purchaseType,
+      sourceShortcut,
+      supplierValue,
+    }
+  }
+
+  const customSupplierName = parseRouteText(input.customSupplierName)
+  if (customSupplierName === null || input.supplierValue !== undefined) {
+    return null
+  }
+  return {
+    customSupplierName,
+    productMode: 'CUSTOM',
+    purchaseType,
+    sourceShortcut,
+    supplierValue: null,
+  }
+}
+
+/**
  * 将服务端和客户端共享的字段路径定位到采购创建页的可编辑步骤。
  * 第四步是只读核对面，不承载字段；未知路径保留在全局错误区，避免错误地
  * 把用户带到一个无法修正该问题的步骤。
@@ -204,7 +297,12 @@ export function parsePurchaseOrderSourceShortcut(input: {
 export function resolvePurchaseOrderCreateStepForField(
   path: string,
 ): PurchaseOrderFormStep | null {
-  if (path === 'orderDate' || path === 'supplierValue' || path === 'salesOrderId') {
+  if (
+    path === 'orderDate'
+    || path === 'supplierValue'
+    || path === 'customSupplierName'
+    || path === 'salesOrderId'
+  ) {
     return 0
   }
   if (
@@ -381,9 +479,16 @@ export function buildPurchaseOrderCreateRequest(
   source: PurchaseOrderCreateSource,
 ): PurchaseOrderCreateBuildResult {
   const fieldErrors: Record<string, string> = {}
-  const supplierValue = source.supplierValue.trim().normalize('NFKC')
-  if (supplierValue === '') {
+  const supplierValue = source.supplierValue?.trim().normalize('NFKC') ?? null
+  const customSupplierName = source.customSupplierName?.trim().normalize('NFKC') ?? null
+  if (source.productMode === 'CATALOG' && !supplierValue) {
     fieldErrors.supplierValue = '请选择供应商'
+  }
+  if (
+    source.productMode === 'CUSTOM'
+    && (!customSupplierName || unicodeLength(customSupplierName) > 128)
+  ) {
+    fieldErrors.customSupplierName = '请输入 1 至 128 个字符的供应商名称'
   }
   if (!/^\d{4}-\d{2}-\d{2}$/u.test(source.orderDate) || source.orderDate > source.today) {
     fieldErrors.orderDate = '采购日期不能为空且不能晚于今天'
@@ -409,6 +514,12 @@ export function buildPurchaseOrderCreateRequest(
     const actualPrice = normalizeUserAmount(line.actualUnitPriceAmount)
     const sourceSalesOrderLineId = source.sourceSalesOrderLineIdByKey[line.key]
     const maximumQuantity = source.maximumQuantityByKey[line.key]
+
+    if (line.lineType !== source.productMode) {
+      fieldErrors[`${prefix}.lineType`] = source.productMode === 'CATALOG'
+        ? '产品库产品采购只能提交数据库产品'
+        : '自定义产品采购只能提交临时产品'
+    }
 
     if (quantity === null) {
       fieldErrors[`${prefix}.quantity`] = '采购数量必须是正整数'
@@ -524,6 +635,7 @@ export function buildPurchaseOrderCreateRequest(
       depositDueAmount: deposit!.normalized,
       lines: requestLines,
       orderDate: source.orderDate,
+      productMode: source.productMode,
       purchaseTotalAmount,
       purchaseType: source.purchaseType,
       remark,
@@ -531,7 +643,9 @@ export function buildPurchaseOrderCreateRequest(
         ? { salesOrderId: source.salesOrderId! }
         : {}),
       shippingMarkText,
-      supplierValue,
+      ...(source.productMode === 'CATALOG'
+        ? { supplierValue: supplierValue! }
+        : { customSupplierName: customSupplierName! }),
     },
     valid: true,
   }

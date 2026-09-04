@@ -626,7 +626,7 @@ test('产品明细由薄销售适配层接入通用编辑器，不保留行内�
   assert.doesNotMatch(editor, /<FaTextarea/u)
 })
 
-test('销售待采购通过权限受控的命名路由快捷新增采购', async () => {
+test('销售待采购通过权限受控的采购前置弹窗复核并快捷新增采购', async () => {
   const source = await readFile(new URL('index.vue', ROOT), 'utf8')
 
   assert.match(source, /const canCreatePurchase = computed\(\(\) => auth\('purchase-orders:create'\)\)/u)
@@ -637,16 +637,21 @@ test('销售待采购通过权限受控的命名路由快捷新增采购', async
   )
   assert.match(
     source,
-    /action\.key === 'SUBMIT_PURCHASE'[\s\S]*?router\.push\(\{[\s\S]*?name: 'operationsPurchaseOrderCreate'[\s\S]*?type: 'SALES_LINKED'[\s\S]*?salesOrderId: order\.id[\s\S]*?salesOrderNo: order\.orderNo/u,
-    '待采购操作应通过命名路由携带可信定位参数',
+    /action\.key === 'SUBMIT_PURCHASE'[\s\S]*?purchaseStartPreset\.value = \{ id, orderNo \}[\s\S]*?purchaseStartVisible\.value = true/u,
+    '待采购操作应先打开带预选销售订单的采购前置弹窗',
   )
+  assert.match(source, /<QsPurchaseStartModal[\s\S]*?purchase-type="SALES_LINKED"[\s\S]*?:preset-sales-order="purchaseStartPreset"/u)
+  assert.match(source, /:validate-preset="validatePresetPurchaseSource"/u)
+  assert.match(source, /purchaseOrdersApi\.sourceSalesOrders\(\{[\s\S]*?productMode: selection\.productMode[\s\S]*?salesOrderId: presetSalesOrder\.id/u)
+  assert.match(source, /query: buildPurchaseStartRouteQuery\(selection, preset\)/u)
+  assert.match(source, /catch \{[\s\S]*?toast\.error\('无法进入新增采购页面，请重试'\)[\s\S]*?purchaseStartVisible\.value = true/u)
 
   const handler = source.match(
     /function handleSalesOrderRowAction\([\s\S]*?\n\}/u,
   )
   assert.ok(handler, '应存在销售待办动作处理函数')
   assert.match(handler[0], /SUBMIT_PURCHASE/u)
-  assert.match(handler[0], /operationsPurchaseOrderCreate/u)
+  assert.match(handler[0], /purchaseStartVisible\.value = true/u)
   assert.match(handler[0], /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
 })
 

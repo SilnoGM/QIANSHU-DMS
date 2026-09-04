@@ -31,6 +31,11 @@ import type {
   FactoryShipmentModalContext,
 } from '@/components/business/QsFactoryShipmentModal/types'
 import type {
+  PurchaseStartPresetSalesOrder,
+  PurchaseStartPresetValidationResult,
+  PurchaseStartSelection,
+} from '@/components/business/QsPurchaseStartModal/types'
+import type {
   QsGenericTableActionColumn,
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -44,6 +49,7 @@ import type {
   SalesOrderProductEditModalContext,
 } from '@/components/business/QsSalesOrderProductsEditorModal/types'
 import { getLocalTimeZone, today } from '@internationalized/date'
+import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import salesOrdersApi from '@/api/modules/sales-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -59,6 +65,8 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTooltipContent.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
+import QsPurchaseStartModal from '@/components/business/QsPurchaseStartModal/index.vue'
+import { buildPurchaseStartRouteQuery } from '@/components/business/QsPurchaseStartModal/logic'
 import QsSalesOrderProductsEditorModal from '@/components/business/QsSalesOrderProductsEditorModal/index.vue'
 import {
   createSalesOrderProductEditLines,
@@ -69,6 +77,7 @@ import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchTool
 
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
+import { getPurchaseOrderApiFailure } from '../purchase-orders/purchase-order-list.logic'
 import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
   buildSalesOrderStatusCountsQuery,
@@ -170,6 +179,8 @@ const recordsModalKind = ref<SalesOrderRecordsKind>('payments')
 const recordsModalOrder = ref<SalesOrderListItemDto | null>(null)
 const recordsModalInitialAction = ref<SalesOrderRecordsInitialAction>(null)
 const productEditVisible = ref(false)
+const purchaseStartVisible = ref(false)
+const purchaseStartPreset = shallowRef<PurchaseStartPresetSalesOrder | null>(null)
 const productEditOrder = shallowRef<SalesOrderListItemDto | null>(null)
 const productEditContext = shallowRef<SalesOrderProductEditModalContext | null>(null)
 const productEditLines = ref<readonly OrderProductLineModel[]>([])
@@ -805,14 +816,9 @@ function handleSalesOrderRowAction(
   order: SalesOrderListItemDto,
 ): void {
   if (action.key === 'SUBMIT_PURCHASE') {
-    void router.push({
-      name: 'operationsPurchaseOrderCreate',
-      query: {
-        type: 'SALES_LINKED',
-        salesOrderId: order.id,
-        salesOrderNo: order.orderNo,
-      },
-    })
+    const { id, orderNo } = order
+    purchaseStartPreset.value = { id, orderNo }
+    purchaseStartVisible.value = true
     return
   }
   if (action.key === 'RECORD_PAYMENT') {
@@ -828,6 +834,59 @@ function handleSalesOrderRowAction(
     return
   }
   toast.info(`${action.label}功能正在建设中`)
+}
+
+async function validatePresetPurchaseSource(
+  selection: PurchaseStartSelection,
+  presetSalesOrder: PurchaseStartPresetSalesOrder,
+  signal: AbortSignal,
+): Promise<PurchaseStartPresetValidationResult> {
+  try {
+    const views = ['UNPURCHASED', 'PARTIALLY_PURCHASED'] as const
+    for (const view of views) {
+      const response = await purchaseOrdersApi.sourceSalesOrders({
+        page: 1,
+        pageSize: 1,
+        productMode: selection.productMode,
+        salesOrderId: presetSalesOrder.id,
+        ...(selection.productMode === 'CATALOG'
+          ? { supplierValue: selection.supplierValue! }
+          : {}),
+        view,
+      }, signal)
+      if (response.data.items.some(item => item.id === presetSalesOrder.id)) {
+        return { eligible: true }
+      }
+    }
+    return {
+      eligible: false,
+      message: '该销售订单没有符合当前产品类型和供应商条件的待采购产品',
+    }
+  }
+  catch (error) {
+    if (signal.aborted) {
+      throw error
+    }
+    throw new Error(getPurchaseOrderApiFailure(error).message)
+  }
+}
+
+async function enterPresetPurchaseCreate(selection: PurchaseStartSelection): Promise<void> {
+  const preset = purchaseStartPreset.value
+  if (preset === null) {
+    return
+  }
+  purchaseStartVisible.value = false
+  try {
+    await router.push({
+      name: 'operationsPurchaseOrderCreate',
+      query: buildPurchaseStartRouteQuery(selection, preset),
+    })
+  }
+  catch {
+    toast.error('无法进入新增采购页面，请重试')
+    purchaseStartVisible.value = true
+  }
 }
 
 function enumFilter<T extends string>(
@@ -1229,6 +1288,8 @@ watch(() => appAccountStore.authEpoch, () => {
   listAbortController?.abort()
   countAbortController?.abort()
   rows.value = []
+  purchaseStartVisible.value = false
+  purchaseStartPreset.value = null
   statusCountItems.value = []
   total.value = 0
   if (canRead.value) {
@@ -2099,6 +2160,15 @@ onBeforeUnmount(() => {
       @submit="submitSalesFactoryShipment"
       @cancel="closeSalesFactoryShipment"
       @retry="loadSalesFactoryShipmentContext"
+    />
+
+    <QsPurchaseStartModal
+      v-model="purchaseStartVisible"
+      purchase-type="SALES_LINKED"
+      :preset-sales-order="purchaseStartPreset"
+      :validate-preset="validatePresetPurchaseSource"
+      @confirm="enterPresetPurchaseCreate"
+      @validation-error="toast.warning($event)"
     />
 
     <QsGenericModal

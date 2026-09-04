@@ -13,6 +13,7 @@ import type {
   PurchaseOrderSourceSalesOrderLinesDto,
   PurchaseOrderSourceSalesOrdersDto,
   PurchaseOrdersProductOptionsData,
+  PurchaseOrdersSourceSalesOrderLinesData,
   PurchaseOrdersSourceSalesOrdersData,
   PurchaseOrdersStatusCountsData,
   PurchaseOrderStatusCountsDto,
@@ -28,6 +29,9 @@ export type PurchaseOrderProductOptionsQuery = NonNullable<
 >
 export type PurchaseOrderSourceSalesOrdersQuery = NonNullable<
   PurchaseOrdersSourceSalesOrdersData['query']
+>
+export type PurchaseOrderSourceSalesOrderLinesQuery = NonNullable<
+  PurchaseOrdersSourceSalesOrderLinesData['query']
 >
 export type PurchaseOrderStatusCountsQuery = NonNullable<
   PurchaseOrdersStatusCountsData['query']
@@ -76,10 +80,14 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
       'purchase-orders/source-sales-orders',
       { errorPresentation: 'local', params: query, signal },
     ),
-    sourceSalesOrderLines: (salesOrderId: string, signal: AbortSignal) =>
+    sourceSalesOrderLines: (
+      salesOrderId: string,
+      query: PurchaseOrderSourceSalesOrderLinesQuery,
+      signal: AbortSignal,
+    ) =>
       client.get<PurchaseOrderSourceSalesOrderLinesDto>(
         `purchase-orders/source-sales-orders/${encodeURIComponent(salesOrderId)}/lines`,
-        { errorPresentation: 'local', signal },
+        { errorPresentation: 'local', params: query, signal },
       ),
     uploadTemporaryDocument: (
       file: File,
