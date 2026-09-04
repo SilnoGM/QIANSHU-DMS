@@ -6,7 +6,7 @@
 - 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 技术设计：[`design.md`](./design.md)
-- 当前阶段：Phase 4 实施中（任务 2）
+- 当前阶段：Phase 4 实施中（任务 3）
 
 ## 2. 执行原则
 
@@ -48,19 +48,20 @@
   - _Requirement: R8、R9_
   - _Verification: Prisma Schema/migration drift tests、隔离 PostgreSQL migration replay_
 
-- [ ] 2. 新增产品采购类型数据模型与 append-only migration（进行中）
-  - [ ] 新增 `PurchaseOrderProductMode.CATALOG/CUSTOM/MIXED`。
-  - [ ] 为 `PurchaseOrder` 增加 `productMode` 和 `customSupplierName`，将 `supplierValue` 改为可空。
-  - [ ] 按历史采购明细构成回填 `productMode`；历史混合采购单回填只读 `MIXED`。
-  - [ ] 保留所有历史 `supplierValue`，不拆单、不改号、不重算金额、不伪造自由文本供应商。
-  - [ ] 增加 `supplierValue/customSupplierName` 恰好一个存在及非空白约束。
-  - [ ] 增加必要索引并完成空库重放、升级重放、回滚失败和 Prisma drift 验证。
-  - [ ] 只生成和验证 migration，不应用到业务数据库。
+- [x] 2. 新增产品采购类型数据模型与 append-only migration
+  - [x] 新增 `PurchaseOrderProductMode.CATALOG/CUSTOM/MIXED`。
+  - [x] 为 `PurchaseOrder` 增加 `productMode` 和 `customSupplierName`，将 `supplierValue` 改为可空。
+  - [x] 按历史采购明细构成回填 `productMode`；历史混合采购单回填只读 `MIXED`。
+  - [x] 保留所有历史 `supplierValue`，不拆单、不改号、不重算金额、不伪造自由文本供应商。
+  - [x] 增加 `supplierValue/customSupplierName` 恰好一个存在及非空白约束。
+  - [x] 增加必要索引并完成空库重放、升级重放、回滚失败和 Prisma drift 验证。
+    - 空库完整重放成功；全库 drift 仅余既有的 numbering pattern index 与 sales order FK 命名差异，无本次采购模型差异。
+  - [x] 只生成和验证 migration，不应用到业务数据库。
   - _Requirement: R2、R3、R9_
   - _Suggested commit: `feat: 增加采购产品类型与供应商来源模型`_
   - _Approval gate: 开始前需要 Schema 与 migration 生成实施授权；应用 migration 另行确认_
 
-- [ ] 3. 改造采购创建契约与可信校验
+- [ ] 3. 改造采购创建契约与可信校验（进行中）
   - [ ] 先为 DTO、Normalizer、领域规则、依赖服务和请求指纹建立 RED 测试。
   - [ ] Create DTO 增加 `productMode` 和 `customSupplierName`，并将 `supplierValue` 改为条件必填。
   - [ ] 对 `CUSTOM` 供应商名称执行 NFKC、trim、1–128 code points 校验。

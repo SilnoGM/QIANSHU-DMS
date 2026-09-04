@@ -187,6 +187,7 @@ describe('purchase order product mode migration with isolated PostgreSQL', () =>
 
       await expect(client.query(readFileSync(migrationPath, 'utf8')))
         .rejects.toThrow('purchase order product mode migration invariant mismatch')
+      await client.query('ROLLBACK')
 
       const columns = await client.query<{ count: string }>(`
         SELECT COUNT(*) AS "count"
@@ -220,6 +221,7 @@ describe('purchase order product mode migration with isolated PostgreSQL', () =>
 
       await expect(client.query(readFileSync(migrationPath, 'utf8')))
         .rejects.toThrow('purchase order product mode migration invariant mismatch')
+      await client.query('ROLLBACK')
     })
   })
 })

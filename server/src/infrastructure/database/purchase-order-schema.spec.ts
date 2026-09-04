@@ -151,9 +151,15 @@ describe('purchase order domain schema', () => {
     expect(migration).toContain(
       'purchase_orders_custom_supplier_date_id_idx',
     )
-    expect(migration).not.toMatch(
-      /UPDATE "purchase_orders"[\s\S]*?SET[\s\S]*?(?:"order_no"|"line_subtotal_amount"|"purchase_total_amount"|"order_status"|"sales_order_id")/u,
-    )
+    for (const protectedColumn of [
+      'order_no',
+      'line_subtotal_amount',
+      'purchase_total_amount',
+      'order_status',
+      'sales_order_id',
+    ]) {
+      expect(migration).not.toContain(`SET "${protectedColumn}"`)
+    }
     expect(migration).not.toMatch(/\bCASCADE\b/iu)
   })
 

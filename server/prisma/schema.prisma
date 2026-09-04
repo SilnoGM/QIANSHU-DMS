@@ -310,6 +310,14 @@ enum PurchaseOrderLineType {
   @@map("purchase_order_line_type")
 }
 
+enum PurchaseOrderProductMode {
+  CATALOG
+  CUSTOM
+  MIXED
+
+  @@map("purchase_order_product_mode")
+}
+
 enum PurchaseOrderPaymentType {
   DEPOSIT
   BALANCE
@@ -973,8 +981,10 @@ model PurchaseOrder {
   createIdempotencyKeyHash     Bytes                          @unique(map: "purchase_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
   createRequestFingerprintHash Bytes                          @map("create_request_fingerprint_hash") @db.ByteA
   purchaseType                 PurchaseOrderType              @map("purchase_type")
+  productMode                  PurchaseOrderProductMode       @map("product_mode")
   salesOrderId                 String?                        @map("sales_order_id") @db.Uuid
-  supplierValue                String                         @map("supplier_value") @db.VarChar(64)
+  supplierValue                String?                        @map("supplier_value") @db.VarChar(64)
+  customSupplierName           String?                        @map("custom_supplier_name") @db.VarChar(128)
   orderDate                    DateTime                       @map("order_date") @db.Date
   currencyCode                 String                         @default("CNY") @map("currency_code") @db.Char(3)
   shippingMarkText             String?                        @map("shipping_mark_text") @db.VarChar(2000)
@@ -1003,6 +1013,7 @@ model PurchaseOrder {
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_statuses_order_date_id_idx")
   @@index([salesOrderId, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_sales_order_date_id_idx")
   @@index([supplierValue, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_supplier_date_id_idx")
+  @@index([customSupplierName, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_custom_supplier_date_id_idx")
   @@map("purchase_orders")
 }
 
