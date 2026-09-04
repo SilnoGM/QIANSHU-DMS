@@ -219,7 +219,10 @@ onBeforeUnmount(abortValidation)
           第一步：选择采购产品类型
         </legend>
         <div class="gap-4 grid grid-cols-1 sm:grid-cols-2" role="radiogroup" aria-label="采购产品类型">
-          <label class="min-w-0 cursor-pointer relative">
+          <label
+            class="min-w-0 cursor-pointer relative"
+            :class="(disabled || submissionPending) && 'cursor-not-allowed'"
+          >
             <input
               type="radio"
               name="purchase-start-product-mode"
@@ -229,33 +232,65 @@ onBeforeUnmount(abortValidation)
               @change="selectProductMode('CATALOG')"
             >
             <span
-              class="p-5 text-start border rounded-xl bg-background flex flex-col min-h-44 transition-[border-color,background-color,box-shadow] peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2"
-              :class="productModeDraft === 'CATALOG'
-                ? 'border-primary bg-primary/[0.035] ring-1 ring-primary/20'
-                : 'border-border hover:border-primary/40 hover:bg-muted/20'"
+              data-testid="purchase-start-product-mode-card"
+              data-product-mode="CATALOG"
+              class="p-5 text-start border rounded-xl bg-background flex flex-col min-h-64 transition-[border-color,background-color,box-shadow] duration-200 ease-out relative overflow-hidden sm:p-6 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
+              :class="disabled || submissionPending
+                ? 'border-border bg-muted/30 opacity-60'
+                : productModeDraft === 'CATALOG'
+                  ? 'border-primary bg-primary/[0.035] shadow-md ring-1 ring-primary/20'
+                  : 'border-border shadow-sm hover:border-primary/40 hover:bg-muted/20 hover:shadow-md'"
             >
-              <span class="flex gap-3 items-start">
-                <span class="text-primary rounded-lg bg-primary/10 flex shrink-0 size-11 items-center justify-center">
-                  <FaIcon name="i-lucide:boxes" class="size-5" aria-hidden="true" />
+              <span class="flex gap-4 min-w-0 items-start relative">
+                <span
+                  data-testid="purchase-start-product-mode-emblem"
+                  class="text-emerald-700 rounded-xl bg-emerald-50 flex shrink-0 size-16 ring-2 ring-emerald-200 shadow-sm items-center justify-center dark:text-emerald-300 dark:bg-emerald-950/60 dark:ring-emerald-700/50"
+                  aria-hidden="true"
+                >
+                  <FaIcon name="i-lucide:boxes" class="size-8" />
                 </span>
-                <span class="flex-1 min-w-0">
-                  <strong class="qs-type-body-medium font-semibold block">产品库产品采购</strong>
-                  <span class="qs-type-meta text-muted-foreground mt-1 block">采购已建档产品，并沿用产品档案采购成本。</span>
+                <span class="pt-0.5 flex-1 min-w-0">
+                  <strong class="text-lg leading-7 font-semibold block">产品库产品采购</strong>
+                  <span class="text-xs text-emerald-700 font-medium mt-1.5 px-2 py-0.5 border border-emerald-200 rounded-md bg-emerald-50 inline-flex items-center dark:text-emerald-300 dark:border-emerald-700/50 dark:bg-emerald-950/60">
+                    已建档产品
+                  </span>
                 </span>
                 <FaIcon
                   v-if="productModeDraft === 'CATALOG'"
                   name="i-lucide:circle-check-big"
-                  class="text-primary shrink-0 size-5"
+                  class="text-primary shrink-0 size-7"
                   aria-hidden="true"
                 />
               </span>
-              <span class="qs-type-meta text-muted-foreground mt-auto pt-5 border-t border-dashed">
-                第二步：下拉选择供应商
+
+              <span class="mt-6 pt-5 border-t border-dashed flex flex-1 flex-col min-w-0 relative">
+                <span class="flex flex-wrap gap-x-3 gap-y-1 min-w-0 items-baseline relative z-10">
+                  <strong class="text-3xl leading-none tracking-wide font-semibold">产品库</strong>
+                  <span class="text-sm text-muted-foreground font-mono">CATALOG</span>
+                </span>
+                <span class="qs-type-meta text-muted-foreground mt-3 max-w-[32rem] relative z-10">
+                  采购已建档产品，并沿用产品档案中的采购成本。
+                </span>
+                <span
+                  class="text-sm font-medium mt-auto pt-6 flex gap-2 items-center relative z-10"
+                  :class="productModeDraft === 'CATALOG' ? 'text-primary' : 'text-muted-foreground'"
+                >
+                  <FaIcon name="i-lucide:mouse-pointer-click" class="size-4" aria-hidden="true" />
+                  {{ productModeDraft === 'CATALOG' ? '已选中' : '点击选择' }}
+                </span>
+                <FaIcon
+                  name="i-lucide:boxes"
+                  class="text-emerald-500/10 size-28 absolute dark:text-emerald-400/10 -bottom-8 -right-5"
+                  aria-hidden="true"
+                />
               </span>
             </span>
           </label>
 
-          <label class="min-w-0 cursor-pointer relative">
+          <label
+            class="min-w-0 cursor-pointer relative"
+            :class="(disabled || submissionPending) && 'cursor-not-allowed'"
+          >
             <input
               type="radio"
               name="purchase-start-product-mode"
@@ -265,28 +300,57 @@ onBeforeUnmount(abortValidation)
               @change="selectProductMode('CUSTOM')"
             >
             <span
-              class="p-5 text-start border rounded-xl bg-background flex flex-col min-h-44 transition-[border-color,background-color,box-shadow] peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2"
-              :class="productModeDraft === 'CUSTOM'
-                ? 'border-primary bg-primary/[0.035] ring-1 ring-primary/20'
-                : 'border-border hover:border-primary/40 hover:bg-muted/20'"
+              data-testid="purchase-start-product-mode-card"
+              data-product-mode="CUSTOM"
+              class="p-5 text-start border rounded-xl bg-background flex flex-col min-h-64 transition-[border-color,background-color,box-shadow] duration-200 ease-out relative overflow-hidden sm:p-6 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background"
+              :class="disabled || submissionPending
+                ? 'border-border bg-muted/30 opacity-60'
+                : productModeDraft === 'CUSTOM'
+                  ? 'border-primary bg-primary/[0.035] shadow-md ring-1 ring-primary/20'
+                  : 'border-border shadow-sm hover:border-primary/40 hover:bg-muted/20 hover:shadow-md'"
             >
-              <span class="flex gap-3 items-start">
-                <span class="text-primary rounded-lg bg-primary/10 flex shrink-0 size-11 items-center justify-center">
-                  <FaIcon name="i-lucide:package-plus" class="size-5" aria-hidden="true" />
+              <span class="flex gap-4 min-w-0 items-start relative">
+                <span
+                  data-testid="purchase-start-product-mode-emblem"
+                  class="text-amber-700 rounded-xl bg-amber-50 flex shrink-0 size-16 ring-2 ring-amber-200 shadow-sm items-center justify-center dark:text-amber-300 dark:bg-amber-950/60 dark:ring-amber-700/50"
+                  aria-hidden="true"
+                >
+                  <FaIcon name="i-lucide:package-plus" class="size-8" />
                 </span>
-                <span class="flex-1 min-w-0">
-                  <strong class="qs-type-body-medium font-semibold block">自定义产品采购</strong>
-                  <span class="qs-type-meta text-muted-foreground mt-1 block">采购销售订单中的临时产品，采购价格由用户填写。</span>
+                <span class="pt-0.5 flex-1 min-w-0">
+                  <strong class="text-lg leading-7 font-semibold block">自定义产品采购</strong>
+                  <span class="text-xs text-amber-700 font-medium mt-1.5 px-2 py-0.5 border border-amber-200 rounded-md bg-amber-50 inline-flex items-center dark:text-amber-300 dark:border-amber-700/50 dark:bg-amber-950/60">
+                    临时产品
+                  </span>
                 </span>
                 <FaIcon
                   v-if="productModeDraft === 'CUSTOM'"
                   name="i-lucide:circle-check-big"
-                  class="text-primary shrink-0 size-5"
+                  class="text-primary shrink-0 size-7"
                   aria-hidden="true"
                 />
               </span>
-              <span class="qs-type-meta text-muted-foreground mt-auto pt-5 border-t border-dashed">
-                第二步：填写供应商名称
+
+              <span class="mt-6 pt-5 border-t border-dashed flex flex-1 flex-col min-w-0 relative">
+                <span class="flex flex-wrap gap-x-3 gap-y-1 min-w-0 items-baseline relative z-10">
+                  <strong class="text-3xl leading-none tracking-wide font-semibold">自定义</strong>
+                  <span class="text-sm text-muted-foreground font-mono">CUSTOM</span>
+                </span>
+                <span class="qs-type-meta text-muted-foreground mt-3 max-w-[32rem] relative z-10">
+                  采购销售订单中的临时产品，采购价格由用户填写。
+                </span>
+                <span
+                  class="text-sm font-medium mt-auto pt-6 flex gap-2 items-center relative z-10"
+                  :class="productModeDraft === 'CUSTOM' ? 'text-primary' : 'text-muted-foreground'"
+                >
+                  <FaIcon name="i-lucide:mouse-pointer-click" class="size-4" aria-hidden="true" />
+                  {{ productModeDraft === 'CUSTOM' ? '已选中' : '点击选择' }}
+                </span>
+                <FaIcon
+                  name="i-lucide:package-plus"
+                  class="text-amber-500/10 size-28 absolute dark:text-amber-400/10 -bottom-8 -right-5"
+                  aria-hidden="true"
+                />
               </span>
             </span>
           </label>
@@ -318,13 +382,13 @@ onBeforeUnmount(abortValidation)
           required
           class="w-full"
         />
-        <div v-else>
+        <div v-else class="w-full">
           <FaInput
             v-model="customSupplierNameDraft"
             placeholder="填写本次采购的供应商名称"
             :aria-invalid="Boolean(customSupplierError)"
             :disabled="disabled || submissionPending"
-            class="min-h-11"
+            class="min-h-11 w-full"
             @blur="customSupplierTouched = true"
           />
           <p
