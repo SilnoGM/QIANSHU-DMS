@@ -2,8 +2,9 @@
 
 ## 1. 文档状态
 
-- 状态：待确认
+- 状态：已确认
 - 编写日期：2026-09-04
+- 确认日期：2026-09-04
 - 需求规格：[`requirements.md`](./requirements.md)
 - 当前分支：`feat/purchase-order-domain`
 - 本文只定义技术方案，不授权实现、生成 migration、修改公共 API 或写数据库。
