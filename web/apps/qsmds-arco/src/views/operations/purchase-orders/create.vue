@@ -1078,7 +1078,7 @@ onBeforeUnmount(() => {
                   description="订单号由 PURCHASE_ORDER 规则在最终二次确认后幂等派发。"
                   content-class="gap-4 grid grid-cols-1 md:grid-cols-2"
                 >
-                  <div class="p-4 border border-border rounded-lg bg-muted/25 md:col-span-2">
+                  <div class="p-4 border border-border rounded-lg bg-muted/25">
                     <p class="text-sm font-medium m-0">
                       采购订单号
                     </p>

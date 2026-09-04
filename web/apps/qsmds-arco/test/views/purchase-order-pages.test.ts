@@ -469,6 +469,17 @@ test('采购分步表单不允许 FaForm 回写并删除显式绑定的产品和
   )
 })
 
+test('采购基础信息在桌面端按两行两列排列', async () => {
+  const source = await readFile(new URL('create.vue', ROOT), 'utf8')
+
+  assert.match(source, /content-class="gap-4 grid grid-cols-1 md:grid-cols-2"/u)
+  assert.doesNotMatch(
+    source,
+    /<div class="[^"]*md:col-span-2[^"]*">\s*<p[^>]*>\s*采购订单号/u,
+    '采购订单号不应独占整行，应与采购产品类型并排',
+  )
+})
+
 test('备货采购复用四步表单、实时详情与全屏核对，同时隔离销售来源能力', async () => {
   const source = await readFile(new URL('create.vue', ROOT), 'utf8')
 
