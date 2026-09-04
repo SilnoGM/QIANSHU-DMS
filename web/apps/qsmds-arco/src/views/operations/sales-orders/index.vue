@@ -11,7 +11,9 @@ import type {
   SalesOrderRecordsKind,
 } from './sales-order-records-modal.logic'
 import type {
+  FactoryShipmentResultDto,
   SalesOrderCurrencySummaryDto,
+  SalesOrderFactoryShipmentContextDto,
   SalesOrderIssuerOptionDto,
   SalesOrderLinePreviewDto,
   SalesOrderListItemDto,
@@ -24,6 +26,10 @@ import type {
   MoneyDiscountRate,
   MoneyDiscountRateTrend,
 } from '@/components/base/MoneyInput/logic'
+import type {
+  FactoryShipmentIntent,
+  FactoryShipmentModalContext,
+} from '@/components/business/QsFactoryShipmentModal/types'
 import type {
   QsGenericTableActionColumn,
   QsGenericTableColumn,
@@ -45,6 +51,7 @@ import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { resolveMoneyDiscountRate } from '@/components/base/MoneyInput/logic'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDateRangeFilter from '@/components/business/QsDateRangeFilter/index.vue'
+import QsFactoryShipmentModal from '@/components/business/QsFactoryShipmentModal/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
@@ -66,6 +73,7 @@ import SalesOrderDetailDrawer from './sales-order-detail-drawer.vue'
 import {
   buildSalesOrderStatusCountsQuery,
   deduplicateSalesOrderItems,
+  formatSalesFactoryShipmentSuccess,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
   resolvePendingSalesOrderActions,
@@ -127,6 +135,11 @@ const canRead = computed(() => auth('sales-orders:read'))
 const canCreate = computed(() => auth('sales-orders:create'))
 const canUpdateProducts = computed(() => auth('sales-orders:update'))
 const canCreatePurchase = computed(() => auth('purchase-orders:create'))
+const canFactoryShipment = computed(() => (
+  auth('sales-orders:update')
+  && auth('purchase-orders:update')
+  && auth('purchase-orders:read')
+))
 const canRecordPayment = computed(() => (
   auth('sales-orders:payment') && auth('sales-orders:document')
 ))
@@ -164,12 +177,20 @@ const productEditReason = ref('客户调整产品')
 const productEditLoading = ref(false)
 const productEditSubmitting = ref(false)
 const productEditError = ref<string | null>(null)
+const shipmentVisible = ref(false)
+const shipmentOrder = shallowRef<SalesOrderListItemDto | null>(null)
+const shipmentContext = shallowRef<FactoryShipmentModalContext | null>(null)
+const shipmentLoading = ref(false)
+const shipmentSubmitting = ref(false)
+const shipmentError = ref<string | null>(null)
 let requestVersion = 0
 let countRequestVersion = 0
 let listAbortController: AbortController | null = null
 let countAbortController: AbortController | null = null
 let productEditAbortController: AbortController | null = null
 let productEditSubmitAbortController: AbortController | null = null
+let shipmentContextAbortController: AbortController | null = null
+let shipmentSubmitAbortController: AbortController | null = null
 let queryRefreshPending = false
 let queryRefreshIncludesCounts = false
 const todayDate = today(getLocalTimeZone())
@@ -640,7 +661,143 @@ function canShowSalesOrderRowAction(action: SalesOrderPendingActionItem): boolea
   if (action.key === 'DELIVERY_RECEIPT') {
     return canSubmitDeliveryReceipt.value
   }
+  if (action.key === 'FACTORY_SHIPMENT') {
+    return canFactoryShipment.value
+  }
   return true
+}
+
+function copyFactoryShipmentContext(
+  context: SalesOrderFactoryShipmentContextDto,
+): FactoryShipmentModalContext {
+  return {
+    salesOrder: { ...context.salesOrder },
+    purchaseOrders: context.purchaseOrders.map(order => ({
+      ...order,
+      supplier: { label: order.supplier.label },
+      lineSummary: {
+        ...order.lineSummary,
+        previews: order.lineSummary.previews.map(preview => ({
+          ...preview,
+          mainImage: preview.mainImage === null ? null : { ...preview.mainImage },
+        })),
+      },
+    })),
+  }
+}
+
+function factoryShipmentFailureMessage(error: unknown): string {
+  const failure = getSalesOrderApiFailure(error)
+  const message = failure.requestId === undefined
+    ? failure.message
+    : `${failure.message}（requestId: ${failure.requestId}）`
+  return `${message}。请重新加载最新发货范围后再次确认。`
+}
+
+async function loadSalesFactoryShipmentContext(): Promise<void> {
+  const order = shipmentOrder.value
+  if (order === null || !canFactoryShipment.value) {
+    return
+  }
+  shipmentContextAbortController?.abort()
+  const controller = new AbortController()
+  shipmentContextAbortController = controller
+  shipmentLoading.value = true
+  shipmentError.value = null
+  const authEpoch = appAccountStore.authEpoch
+  try {
+    const response = await salesOrdersApi.factoryShipmentContext(order.id, controller.signal)
+    if (
+      controller.signal.aborted
+      || shipmentOrder.value?.id !== order.id
+      || authEpoch !== appAccountStore.authEpoch
+      || !shipmentVisible.value
+    ) {
+      return
+    }
+    shipmentContext.value = copyFactoryShipmentContext(response.data)
+  }
+  catch (error) {
+    if (!controller.signal.aborted && !isSalesOrderAbortError(error)) {
+      shipmentError.value = factoryShipmentFailureMessage(error)
+    }
+  }
+  finally {
+    if (shipmentContextAbortController === controller) {
+      shipmentContextAbortController = null
+      shipmentLoading.value = false
+    }
+  }
+}
+
+function openSalesFactoryShipment(order: SalesOrderListItemDto): void {
+  if (!canFactoryShipment.value) {
+    return
+  }
+  shipmentContextAbortController?.abort()
+  shipmentSubmitAbortController?.abort()
+  shipmentOrder.value = { ...order }
+  shipmentContext.value = null
+  shipmentError.value = null
+  shipmentVisible.value = true
+  void loadSalesFactoryShipmentContext()
+}
+
+function closeSalesFactoryShipment(force = false): void {
+  if (shipmentSubmitting.value && !force) {
+    return
+  }
+  shipmentContextAbortController?.abort()
+  shipmentSubmitAbortController?.abort()
+  shipmentContextAbortController = null
+  shipmentSubmitAbortController = null
+  shipmentVisible.value = false
+  shipmentOrder.value = null
+  shipmentContext.value = null
+  shipmentError.value = null
+  shipmentLoading.value = false
+}
+
+async function submitSalesFactoryShipment(intent: FactoryShipmentIntent): Promise<void> {
+  const order = shipmentOrder.value
+  if (order === null || shipmentSubmitting.value || !canFactoryShipment.value) {
+    return
+  }
+  shipmentSubmitAbortController?.abort()
+  const controller = new AbortController()
+  shipmentSubmitAbortController = controller
+  shipmentSubmitting.value = true
+  shipmentError.value = null
+  try {
+    const response = await salesOrdersApi.factoryShipment(order.id, {
+      mode: intent.mode,
+      targets: intent.targets.map(target => ({ ...target })),
+      reason: intent.reason,
+    }, controller.signal)
+    if (
+      controller.signal.aborted
+      || shipmentOrder.value?.id !== order.id
+      || !shipmentVisible.value
+    ) {
+      return
+    }
+    const result: FactoryShipmentResultDto = response.data
+    toast.success(formatSalesFactoryShipmentSuccess(result))
+    shipmentSubmitting.value = false
+    closeSalesFactoryShipment()
+    scheduleQueryRefresh(true)
+  }
+  catch (error) {
+    if (!controller.signal.aborted && !isSalesOrderAbortError(error)) {
+      shipmentError.value = factoryShipmentFailureMessage(error)
+    }
+  }
+  finally {
+    if (shipmentSubmitAbortController === controller) {
+      shipmentSubmitAbortController = null
+      shipmentSubmitting.value = false
+    }
+  }
 }
 
 function handleSalesOrderRowAction(
@@ -664,6 +821,10 @@ function handleSalesOrderRowAction(
   }
   if (action.key === 'DELIVERY_RECEIPT') {
     openRecordsAction('receipt', order)
+    return
+  }
+  if (action.key === 'FACTORY_SHIPMENT') {
+    openSalesFactoryShipment(order)
     return
   }
   toast.info(`${action.label}功能正在建设中`)
@@ -866,6 +1027,7 @@ async function loadStatusCounts(): Promise<void> {
     return
   }
   countAbortController?.abort()
+  closeSalesFactoryShipment(true)
   const controller = new AbortController()
   countAbortController = controller
   const version = ++countRequestVersion
@@ -1097,6 +1259,8 @@ onBeforeUnmount(() => {
   countAbortController?.abort()
   productEditAbortController?.abort()
   productEditSubmitAbortController?.abort()
+  shipmentContextAbortController?.abort()
+  shipmentSubmitAbortController?.abort()
 })
 </script>
 
@@ -1923,6 +2087,18 @@ onBeforeUnmount(() => {
       @validation-error="toast.warning($event)"
       @retry="loadProductEditContext(true)"
       @confirm="submitProductEdit"
+    />
+
+    <QsFactoryShipmentModal
+      v-model="shipmentVisible"
+      mode="SALES_ORDER"
+      :context="shipmentContext"
+      :loading="shipmentLoading"
+      :submitting="shipmentSubmitting"
+      :error="shipmentError"
+      @submit="submitSalesFactoryShipment"
+      @cancel="closeSalesFactoryShipment"
+      @retry="loadSalesFactoryShipmentContext"
     />
 
     <QsGenericModal

@@ -649,3 +649,33 @@ test('销售待采购通过权限受控的命名路由快捷新增采购', async
   assert.match(handler[0], /operationsPurchaseOrderCreate/u)
   assert.match(handler[0], /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
 })
+
+test('销售待发货使用双更新权限打开聚合发货弹窗并保持后续动作占位', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /import QsFactoryShipmentModal from '@\/components\/business\/QsFactoryShipmentModal\/index\.vue'/u)
+  assert.match(
+    source,
+    /const canFactoryShipment = computed\(\(\) => \([\s\S]*?auth\('sales-orders:update'\)[\s\S]*?auth\('purchase-orders:update'\)/u,
+    '工厂发货操作必须同时持有销售与采购更新权限',
+  )
+  assert.match(
+    source,
+    /action\.key === 'FACTORY_SHIPMENT'[\s\S]*?return canFactoryShipment\.value/u,
+  )
+  assert.match(source, /salesOrdersApi\.factoryShipmentContext/u)
+  assert.match(source, /salesOrdersApi\.factoryShipment/u)
+  assert.match(source, /formatSalesFactoryShipmentSuccess/u)
+  assert.match(source, /<QsFactoryShipmentModal[\s\S]*?mode="SALES_ORDER"/u)
+  assert.match(source, /@submit="submitSalesFactoryShipment"/u)
+  assert.match(source, /@retry="loadSalesFactoryShipmentContext"/u)
+  assert.match(
+    source,
+    /action\.key === 'FACTORY_SHIPMENT'[\s\S]*?openSalesFactoryShipment\(order\)/u,
+  )
+  assert.match(
+    source,
+    /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u,
+    '货物入仓与装柜出货仍应保持建设中提示',
+  )
+})

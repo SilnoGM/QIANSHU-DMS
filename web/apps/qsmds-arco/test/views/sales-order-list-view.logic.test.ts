@@ -1,3 +1,4 @@
+import type { FactoryShipmentResultDto } from '../../src/api/generated/types.gen'
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 销售订单视图状态契约使用 Node.js 内置 runner。
 import test from 'node:test'
@@ -5,12 +6,60 @@ import test from 'node:test'
 import {
   buildSalesOrderStatusCountsQuery,
   deduplicateSalesOrderItems,
+  formatSalesFactoryShipmentSuccess,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
   resolvePendingSalesOrderActions,
   resolveSalesOrderQueryTargets,
   summarizeSalesOrderItemsByCurrency,
 } from '../../src/views/operations/sales-orders/sales-order-list-view.logic'
+
+test('销售工厂发货提示只采用服务端返回的变更与剩余数量', () => {
+  const base: FactoryShipmentResultDto = {
+    purchaseOrders: [{
+      id: 'purchase-1',
+      orderNo: 'PO/20260904-00001',
+      fulfillmentStatus: 'SHIPPED',
+      changed: true,
+    }],
+    changedPurchaseOrderCount: 1,
+    alreadySatisfiedCount: 0,
+    remainingPendingShipmentCount: 2,
+    salesOrder: {
+      id: 'sales-1',
+      orderNo: 'SO/20260904-00001',
+      fulfillmentStatus: 'PREPARING',
+      advancedToLandTransit: false,
+    },
+  }
+
+  assert.equal(
+    formatSalesFactoryShipmentSuccess(base),
+    '已确认 1 张采购单发货，仍有 2 张采购单待发货',
+  )
+  assert.equal(
+    formatSalesFactoryShipmentSuccess({
+      ...base,
+      changedPurchaseOrderCount: 2,
+      remainingPendingShipmentCount: 0,
+      salesOrder: {
+        ...base.salesOrder!,
+        fulfillmentStatus: 'LAND_TRANSIT',
+        advancedToLandTransit: true,
+      },
+    }),
+    '已确认 2 张采购单发货，销售订单已进入陆运中',
+  )
+  assert.equal(
+    formatSalesFactoryShipmentSuccess({
+      ...base,
+      changedPurchaseOrderCount: 0,
+      alreadySatisfiedCount: 1,
+      remainingPendingShipmentCount: 0,
+    }),
+    '所选采购单均已发货，未重复处理',
+  )
+})
 
 test('销售状态计数查询只保留视图和非工具栏基础筛选', () => {
   assert.deepEqual(buildSalesOrderStatusCountsQuery({

@@ -194,6 +194,41 @@ test('收款、作废和货物签收 mutation 均局部呈错且禁止自动重�
   }])
 })
 
+test('销售工厂发货读取最新上下文并以单次无重试 mutation 提交完整目标', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const controller = new AbortController()
+  const request = {
+    mode: 'SELECTED' as const,
+    targets: [{
+      purchaseOrderId: '22222222-2222-4222-8222-222222222222',
+      expectedVersion: 4,
+    }],
+    reason: '华东工厂第一批',
+  }
+
+  await api.factoryShipmentContext('sales/order', controller.signal)
+  await api.factoryShipment('sales/order', request, controller.signal)
+
+  assert.deepEqual(calls, [{
+    config: {
+      errorPresentation: 'local',
+      signal: controller.signal,
+    },
+    method: 'get',
+    url: 'sales-orders/sales%2Forder/factory-shipment-context',
+  }, {
+    config: {
+      errorPresentation: 'local',
+      retry: false,
+      signal: controller.signal,
+    },
+    data: request,
+    method: 'post',
+    url: 'sales-orders/sales%2Forder/factory-shipments',
+  }])
+})
+
 test('临时凭证上传只发送 multipart，不携带订单编号或幂等 Key', async () => {
   const calls: Call[] = []
   const api = createSalesOrdersApi(createRecorder(calls))

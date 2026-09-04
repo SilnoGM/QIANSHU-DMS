@@ -1,8 +1,11 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
+  FactoryShipmentResultDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
+  SalesOrderFactoryShipmentContextDto,
+  SalesOrderFactoryShipmentRequestDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderPaymentRequestDto,
@@ -69,6 +72,20 @@ export function createSalesOrdersApi(client: AxiosInstance) {
         `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-context`,
         { errorPresentation: 'local', signal },
       ),
+    factoryShipmentContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderFactoryShipmentContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/factory-shipment-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    factoryShipment: (
+      salesOrderId: string,
+      data: SalesOrderFactoryShipmentRequestDto,
+      signal: AbortSignal,
+    ) => client.post<FactoryShipmentResultDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/factory-shipments`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
     productEditOptions: (
       salesOrderId: string,
       query: SalesOrderProductEditOptionsQuery,

@@ -1,4 +1,5 @@
 import type {
+  FactoryShipmentResultDto,
   SalesOrderCurrencySummaryDto,
   SalesOrderListItemDto,
 } from '@/api/generated/types.gen'
@@ -208,6 +209,22 @@ export function resolvePendingSalesOrderActions(
     actions.push(RECORD_PAYMENT_ACTION)
   }
   return actions
+}
+
+/**
+ * 销售履约状态由 Server 在发货事务中统一重算，Web 只把返回结果翻译为轻提示，
+ * 不根据本地采购单快照重复实现覆盖和全量发货判断。
+ */
+export function formatSalesFactoryShipmentSuccess(
+  result: FactoryShipmentResultDto,
+): string {
+  if (result.changedPurchaseOrderCount === 0) {
+    return '所选采购单均已发货，未重复处理'
+  }
+  if (result.salesOrder?.advancedToLandTransit === true) {
+    return `已确认 ${result.changedPurchaseOrderCount} 张采购单发货，销售订单已进入陆运中`
+  }
+  return `已确认 ${result.changedPurchaseOrderCount} 张采购单发货，仍有 ${result.remainingPendingShipmentCount} 张采购单待发货`
 }
 
 /**
