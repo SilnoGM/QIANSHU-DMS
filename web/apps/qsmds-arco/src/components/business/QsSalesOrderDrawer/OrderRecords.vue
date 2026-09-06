@@ -24,7 +24,7 @@ watch(() => props.detail.id, () => {
 <template>
   <section :aria-label="t('salesOrderDrawer.payments')" class="pt-5 border-t border-border/70">
     <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-      <FaIcon name="i-lucide:receipt" class="text-muted-foreground size-4" aria-hidden="true" />
+      <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
       {{ t('salesOrderDrawer.payments') }}
       <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ detail.payments.length }}</span>
     </h3>
@@ -94,7 +94,7 @@ watch(() => props.detail.id, () => {
 
   <section :aria-label="t('salesOrderDrawer.documents')" class="pt-5 border-t border-border/70">
     <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-      <FaIcon name="i-lucide:files" class="text-muted-foreground size-4" aria-hidden="true" />
+      <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
       {{ t('salesOrderDrawer.documents') }}
       <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ documents.length }}</span>
     </h3>

@@ -29,7 +29,7 @@ const amountItems = computed(() => [
   <div class="pb-2 space-y-6">
     <section data-slot="sales-order-drawer-basic" :aria-label="t('salesOrderDesc.sections.basic')">
       <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-        <FaIcon name="i-lucide:clipboard-list" class="text-muted-foreground size-4" aria-hidden="true" />
+        <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
         {{ t('salesOrderDesc.sections.basic') }}
       </h3>
       <dl class="text-sm m-0 px-4 py-3 border border-border/70 rounded-xl bg-muted/25 gap-x-6 gap-y-3 grid grid-cols-1 sm:grid-cols-2">
@@ -65,7 +65,7 @@ const amountItems = computed(() => [
     </section>
     <section data-slot="sales-order-drawer-customer" :aria-label="t('salesOrderDesc.sections.customer')">
       <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-        <FaIcon name="i-lucide:contact-round" class="text-muted-foreground size-4" aria-hidden="true" />
+        <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
         {{ t('salesOrderDesc.sections.customer') }}
       </h3>
       <dl class="text-sm m-0 px-4 gap-x-6 gap-y-3 grid grid-cols-1 sm:grid-cols-2">
@@ -101,7 +101,7 @@ const amountItems = computed(() => [
     </section>
     <section :aria-label="t('salesOrderDrawer.products')" class="pt-5 border-t border-border/70">
       <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-        <FaIcon name="i-lucide:package" class="text-muted-foreground size-4" aria-hidden="true" />
+        <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
         {{ t('salesOrderDrawer.products') }}
         <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ detail.lines.length }}</span>
       </h3>
@@ -145,7 +145,7 @@ const amountItems = computed(() => [
     </section>
     <section :aria-label="t('salesOrderDesc.sections.sales')">
       <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-        <FaIcon name="i-lucide:wallet" class="text-muted-foreground size-4" aria-hidden="true" />
+        <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
         {{ t('salesOrderDesc.sections.sales') }}
       </h3>
       <dl class="m-0 border border-border rounded-xl grid grid-cols-1 overflow-hidden sm:grid-cols-2">
