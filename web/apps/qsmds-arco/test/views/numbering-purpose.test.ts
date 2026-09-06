@@ -34,3 +34,15 @@ test('新增入口迁至独立页面，列表保持用途列及状态切换组�
   assert.match(page, /NumberingPurposeSelectModal/u)
   assert.match(routes, /systemBasicDataNumberingCreate/u)
 })
+
+test('用途切换位于列表面板内，排在容量说明与搜索表格之前', () => {
+  const page = readFileSync(new URL('../../src/views/system/basic-data/numbering/index.vue', import.meta.url), 'utf8')
+  const panel = page.match(/<FaPageMain>([\s\S]*?)<\/FaPageMain>/u)?.[1] ?? ''
+  // 切换栏与列表共用权限分支和面板，不能再游离在页头与表格之间。
+  assert.match(panel, /<section v-else[^>]*>\s*<QsStatusSwitchToolbar\b/u)
+  const toolbar = panel.indexOf('<QsStatusSwitchToolbar')
+  const description = panel.indexOf('容量、已使用与剩余量均为精确整数')
+  const table = panel.indexOf('<QsGenericTable')
+  assert.ok(toolbar >= 0 && toolbar < description && description < table)
+  assert.equal(page.match(/<QsStatusSwitchToolbar\b/gu)?.length, 1)
+})

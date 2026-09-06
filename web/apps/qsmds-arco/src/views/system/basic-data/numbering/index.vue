@@ -729,7 +729,6 @@ onBeforeUnmount(() => {
       </FaButton>
     </FaPageHeader>
 
-    <QsStatusSwitchToolbar v-if="canRead" :model-value="purposeView" :items="purposeItems" @update:model-value="switchPurpose" />
     <NumberingPurposeSelectModal v-if="canRead && canCreate" v-model="purposeModalVisible" :loading="createNavigationPending" @confirm="startCreate" />
 
     <FaPageMain>
@@ -742,6 +741,13 @@ onBeforeUnmount(() => {
       />
 
       <section v-else class="min-w-0" aria-label="编号规则列表与容量统计">
+        <QsStatusSwitchToolbar
+          :model-value="purposeView"
+          :items="purposeItems"
+          class="numbering-purpose-toolbar mb-4"
+          @update:model-value="switchPurpose"
+        />
+
         <div class="mb-4 flex flex-wrap gap-3 items-baseline justify-between">
           <p class="qs-type-description m-0 max-w-3xl">
             容量、已使用与剩余量均为精确整数；下一编号可能是确定值或随机预览。
@@ -1194,6 +1200,14 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 用途切换与列表共用面板；仅在当前页移除独立外框并对齐内容左沿。 */
+.numbering-purpose-toolbar {
+  padding-inline: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .numbering-management-page :deep(.qs-generic-table .animate-pulse) {
     animation: none !important;
