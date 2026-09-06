@@ -51,8 +51,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.match(source, /#mobile-row/u)
   assert.match(
     source,
-    /id: 'sourceSummary',\s+minWidth: 140,\s+title: '销售来源'/u,
-    '采购列表销售来源列最小宽度固定为 140px',
+    /id: 'sourceSummary',\s+minWidth: 260,\s+title: '销售来源'/u,
+    '销售来源列应为完整编号和复制按钮保留至少 260px',
   )
   assert.match(
     source,
@@ -81,8 +81,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   assert.doesNotMatch(supplierCell[1] ?? '', /<FaTag/u, '供应商不应继续使用标签样式')
   assert.match(
     source,
-    /id: 'supplierSummary',[\s\S]*?id: 'buyerSummary',\s+minWidth: 120,\s+title: '采购人'[\s\S]*?id: 'productSummary'/u,
-    '采购人列必须位于供应商与产品之间，并固定为 120px',
+    /id: 'supplierSummary',[\s\S]*?id: 'buyerSummary',\s+minWidth: 140,\s+title: '采购人'[\s\S]*?id: 'productSummary'/u,
+    '采购人列必须位于供应商与产品之间，并为头像和姓名保留至少 140px',
   )
   assert.match(
     source,
@@ -96,8 +96,8 @@ test('采购列表接入真实查询、全量筛选、日期范围和双创建�
   )
   assert.match(
     source,
-    /id: 'amountSummary',\s+minWidth: 100,\s+title: '采购金额'[\s\S]*?id: 'termsSummary',\s+minWidth: 130,\s+title: '付款约定'[\s\S]*?id: 'paymentAmountSummary',\s+minWidth: 130,\s+title: '实际付款'/u,
-    '采购金额、付款约定与实际付款列分别固定为 100px、130px 和 130px',
+    /id: 'amountSummary',\s+minWidth: 200,\s+title: '采购金额'[\s\S]*?id: 'termsSummary',\s+minWidth: 240,\s+title: '付款约定'[\s\S]*?id: 'paymentAmountSummary',\s+minWidth: 240,\s+title: '实际付款'/u,
+    '采购金额、付款约定与实际付款列分别保留至少 200px、240px 和 240px',
   )
   assert.match(source, /订单状态/u)
   assert.doesNotMatch(source, /key: 'orderStatus'/u)

@@ -222,16 +222,18 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   placeholder: '选择付款状态',
 }])
 
+// 编号包含复制按钮，付款列包含标签和完整币种金额；最小宽度需覆盖这些复合内容。
+// 记录列只承载图标数量入口，保持紧凑，不再沿用多行摘要的预留宽度。
 const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   accessorKey: 'orderNo',
   fixed: 'left',
   id: 'orderSummary',
-  minWidth: 220,
+  minWidth: 260,
   title: '采购订单',
 }, {
   accessorKey: 'salesOrderNo',
   id: 'sourceSummary',
-  minWidth: 140,
+  minWidth: 260,
   title: '销售来源',
 }, {
   accessorFn: item => item.supplier.label,
@@ -241,7 +243,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
 }, {
   accessorFn: item => item.createdBy.displayName,
   id: 'buyerSummary',
-  minWidth: 120,
+  minWidth: 140,
   title: '采购人',
 }, {
   accessorFn: item => item.lineSummary.lineCount,
@@ -252,24 +254,24 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   accessorKey: 'purchaseTotalAmount',
   align: 'right',
   id: 'amountSummary',
-  minWidth: 100,
+  minWidth: 200,
   title: '采购金额',
 }, {
   accessorKey: 'depositDueAmount',
   align: 'right',
   id: 'termsSummary',
-  minWidth: 130,
+  minWidth: 240,
   title: '付款约定',
 }, {
   accessorKey: 'paidAmount',
   align: 'right',
   id: 'paymentAmountSummary',
-  minWidth: 130,
+  minWidth: 240,
   title: '实际付款',
 }, {
   accessorFn: item => item.paymentRecordSummary.totalCount,
   id: 'paymentRecordsSummary',
-  minWidth: 180,
+  minWidth: 150,
   title: t('purchaseOrderList.records.payments'),
 }, {
   accessorKey: 'paymentStatus',
@@ -284,7 +286,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
 }, {
   accessorFn: item => item.documentSummary.count,
   id: 'documentRecordsSummary',
-  minWidth: 170,
+  minWidth: 140,
   title: t('purchaseOrderList.records.documents'),
 }, {
   accessorKey: 'shippingMarkText',
@@ -299,12 +301,12 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
 }, {
   accessorFn: item => item.changeSummary.statusCount + item.changeSummary.amountCount,
   id: 'changeRecordsSummary',
-  minWidth: 190,
+  minWidth: 140,
   title: t('purchaseOrderList.records.changes'),
 }, {
   accessorKey: 'updatedAt',
   id: 'auditSummary',
-  minWidth: 230,
+  minWidth: 260,
   title: '审计信息',
 }]
 
@@ -896,6 +898,7 @@ onBeforeUnmount(() => {
         </template>
       </FaAlert>
 
+      <!-- 复合单元格按完整内容参与列宽计算；溢出仅在表格容器内滚动，不改变页面宽度。 -->
       <QsGenericTable
         v-model:page="page"
         v-model:page-size="pageSize"
@@ -904,7 +907,7 @@ onBeforeUnmount(() => {
         data-testid="purchase-order-list-table"
         :row-key="item => item.id"
         :addable="false"
-        :action-column="{ fixed: 'right', minWidth: 260, title: '操作', width: 260 }"
+        :action-column="{ fixed: 'right', minWidth: 200, title: '操作', width: 200 }"
         :columns="columns"
         :data="rows"
         :empty-title="viewMode === 'pending' ? '暂无待办采购' : '暂无采购订单'"
@@ -915,7 +918,7 @@ onBeforeUnmount(() => {
         :page-size-options="[20, 50, 100]"
         search-placeholder="搜索采购单号、销售单号、客户名或采购唛头"
         :total="total"
-        table-class="min-w-[2740px]"
+        table-class="w-max min-w-full"
         @filter-change="handleFilterChange"
         @pagination-change="handlePaginationChange"
         @retry="retryOrders"
