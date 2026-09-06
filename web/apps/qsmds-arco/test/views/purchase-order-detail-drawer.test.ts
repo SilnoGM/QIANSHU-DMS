@@ -12,19 +12,41 @@ const ACTIONS_SOURCE = new URL(
   import.meta.url,
 )
 
-test('采购详情抽屉由采购订单详情组件展示订单，并保留付款、凭证和状态历史', async () => {
+test('采购查看入口使用独立抽屉，保留请求取消和既有操作事件', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
-  assert.match(source, /<QsGenericDrawer/u)
+  assert.match(source, /<QsPurchaseOrderDrawer/u)
   assert.match(source, /purchaseOrdersApi\.getById/u)
-  assert.match(source, /<QsPurchaseOrderDesc/u)
-  assert.match(source, /mapPurchaseOrderDetailToDesc/u)
-  assert.match(source, /props\.order\?\.lineSummary\.previews \?\? \[\]/u)
-  assert.match(source, /实际付款/u)
-  assert.match(source, /付款凭证/u)
-  assert.match(source, /状态历史/u)
-  assert.match(source, /<AmountDisplay/u)
-  assert.match(source, /<DateTimeDisplay/u)
+  assert.doesNotMatch(source, /QsPurchaseOrderDesc|QsGenericDrawer/u)
+  assert.match(source, /detailAbortController\?\.abort\(\)/u)
+  assert.match(source, /@record-payment="openPaymentDialog"/u)
+  assert.match(source, /@void-payment="openVoidDialog"/u)
+  assert.match(source, /@detach-document="openDetachDialog"/u)
+  assert.match(source, /@download-document="downloadDocument"/u)
+})
+
+test('专用采购抽屉继承销售布局及动画，不引入销售业务字段', async () => {
+  const read = (file: string) => readFile(new URL(`../../src/components/business/QsPurchaseOrderDrawer/${file}`, import.meta.url), 'utf8')
+  const [drawer, information, records, document, history] = await Promise.all(['index.vue', 'OrderInformation.vue', 'OrderRecords.vue', 'OrderDocument.vue', 'OrderHistory.vue'].map(read))
+  assert.match(drawer, /<FaDrawer/u)
+  assert.match(drawer, /rounded-l-2xl/u)
+  assert.match(drawer, /<FaTabs/u)
+  assert.match(drawer, /watch\(activeTab/u)
+  assert.match(drawer, /printNotice/u)
+  assert.doesNotMatch(drawer, /QsSalesOrderDesc|QsPurchaseOrderDesc/u)
+  assert.match(information, /actualPurchaseUnitPriceAmount/u)
+  assert.match(information, /lineTotalAmount/u)
+  assert.match(information, /shippingMarkText/u)
+  assert.match(information, /QsPersonDisplay/u)
+  assert.match(information, /bg-primary shrink-0 h-5 w-1/u)
+  assert.doesNotMatch(information, /referencePurchaseUnitPriceAmount|actualUnitPriceAmount/u)
+  assert.equal((records.match(/v-if="!open" key="thumbnail"/gu) ?? []).length, 2)
+  assert.match(records, /prefers-reduced-motion: reduce/u)
+  assert.match(records, /canManagePayment/u)
+  assert.match(document, /detachedAt === null/u)
+  assert.match(document, /<ImageGroup/u)
+  assert.match(history, /buildPurchaseOrderTimeline/u)
+  assert.doesNotMatch(history, /amountRevisions/u)
 })
 
 test('采购详情动作精确受 update、payment 和 document 权限控制', async () => {

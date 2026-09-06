@@ -326,9 +326,9 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
     '采购订单详情抽屉在桌面端必须沿用新详情组件的 rounded-xl',
   )
   assert.doesNotMatch(source, /<PurchaseOrderCreateReview/u)
-  assert.match(detailDrawerSource, /import QsPurchaseOrderDesc from '@\/components\/business\/QsPurchaseOrderDesc\/index\.vue'/u)
-  assert.match(detailDrawerSource, /mapPurchaseOrderDetailToDesc/u)
-  assert.match(detailDrawerSource, /<QsPurchaseOrderDesc/u)
+  assert.match(detailDrawerSource, /import QsPurchaseOrderDrawer from '@\/components\/business\/QsPurchaseOrderDrawer\/index\.vue'/u)
+  assert.match(detailDrawerSource, /<QsPurchaseOrderDrawer/u)
+  assert.doesNotMatch(detailDrawerSource, /mapPurchaseOrderDetailToDesc|<QsPurchaseOrderDesc/u)
   assert.match(source, /data-testid="purchase-order-create-review"/u)
   assert.match(source, /purchase-order-create-layout--review/u)
   assert.match(source, /@click="returnToPurchaseOrderForm"/u)
