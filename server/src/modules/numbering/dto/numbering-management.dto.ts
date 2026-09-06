@@ -16,6 +16,14 @@ import {
 
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
+export const NumberingRulePurpose = {
+  BUSINESS: 'BUSINESS',
+  SHIPPING_MARK: 'SHIPPING_MARK',
+} as const
+
+export type NumberingRulePurpose =
+  (typeof NumberingRulePurpose)[keyof typeof NumberingRulePurpose]
+
 export const NumberingRuleStatus = {
   DRAFT: 'DRAFT',
   ENABLED: 'ENABLED',
@@ -77,6 +85,11 @@ export class NumberingPaginationQueryDto {
 }
 
 export class NumberingRuleListQueryDto extends NumberingPaginationQueryDto {
+  @ApiPropertyOptional({ type: 'string', enum: NumberingRulePurpose })
+  @ValidateIf((_object: NumberingRuleListQueryDto, value: unknown) => value !== undefined)
+  @IsIn(Object.values(NumberingRulePurpose), { message: 'purpose 不在白名单内' })
+  purpose?: NumberingRulePurpose
+
   @ApiPropertyOptional({ type: 'string', minLength: 1, maxLength: 128 })
   @ValidateIf((_object: NumberingRuleListQueryDto, value: unknown) =>
     value !== undefined,

@@ -136,6 +136,13 @@ enum RegionLevel {
   @@map("region_level")
 }
 
+enum NumberingRulePurpose {
+  BUSINESS
+  SHIPPING_MARK
+
+  @@map("numbering_rule_purpose")
+}
+
 enum NumberingRuleStatus {
   DRAFT
   ENABLED
@@ -1139,6 +1146,7 @@ model PurchaseOrderAmountRevision {
 model NumberingRule {
   id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleCode    String              @unique(map: "numbering_rules_rule_code_key") @map("rule_code") @db.VarChar(64)
+  purpose     NumberingRulePurpose
   name        String              @db.VarChar(128)
   description String?             @db.VarChar(500)
   status      NumberingRuleStatus @default(DRAFT)
@@ -1151,6 +1159,7 @@ model NumberingRule {
   issuances    NumberingIssuance[]
 
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "numbering_rules_status_updated_at_id_idx")
+  @@index([purpose, status, updatedAt(sort: Desc), id(sort: Desc)], map: "numbering_rules_purpose_status_updated_id_idx")
   @@map("numbering_rules")
 }
 

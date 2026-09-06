@@ -10,6 +10,7 @@ import type {
   PublishNumberingRuleRequestDto,
   UpdateNumberingRuleRequestDto,
 } from '@/api/generated/types.gen'
+import { parseNumberingPurpose } from '../../../../api/modules/numbering-purpose'
 
 export type NumberingRuleSegment
   = PreviewNumberingRuleRequestDto['segments'][number]
@@ -30,6 +31,7 @@ export interface NumberingRuleFormModel {
 }
 
 export interface BuildNumberingRuleListQueryInput {
+  readonly purpose?: unknown
   readonly keyword: string
   readonly page: number
   readonly pageSize: number
@@ -149,6 +151,7 @@ export function buildNumberingRuleListQuery(
   return {
     page: normalizePage(input.page),
     pageSize: normalizePageSize(input.pageSize),
+    ...(parseNumberingPurpose(input.purpose) ? { purpose: parseNumberingPurpose(input.purpose)! } : {}),
     ...(keyword === '' || codePointLength(keyword) > 128
       ? {}
       : { keyword }),
@@ -520,9 +523,14 @@ function normalizedSegments(
 
 export function buildCreateNumberingRuleRequest(
   model: NumberingRuleFormModel,
+  purpose: CreateNumberingRuleRequestDto['purpose'],
 ): CreateNumberingRuleRequestDto {
+  if (parseNumberingPurpose(purpose) === null) {
+    throw new Error('请先选择编码用途')
+  }
   const description = normalizeField(model.description)
   return {
+    purpose,
     resetPolicy: model.resetPolicy,
     segments: normalizedSegments(model.segments),
     ruleCode: normalizeField(model.ruleCode).toUpperCase(),

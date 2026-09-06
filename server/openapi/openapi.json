@@ -19833,6 +19833,18 @@
             }
           },
           {
+            "name": "purpose",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BUSINESS",
+                "SHIPPING_MARK"
+              ]
+            }
+          },
+          {
             "name": "keyword",
             "required": false,
             "in": "query",
@@ -47738,6 +47750,28 @@
           }
         }
       },
+      "NumberingRulePurposeCountDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "BUSINESS",
+              "SHIPPING_MARK"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "value",
+          "count"
+        ]
+      },
       "NumberingFixedSegmentInputDto": {
         "type": "object",
         "properties": {
@@ -48059,6 +48093,13 @@
       "NumberingRuleListItemDto": {
         "type": "object",
         "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "BUSINESS",
+              "SHIPPING_MARK"
+            ]
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -48116,6 +48157,7 @@
           }
         },
         "required": [
+          "purpose",
           "id",
           "ruleCode",
           "name",
@@ -48133,6 +48175,15 @@
       "NumberingRulePageDto": {
         "type": "object",
         "properties": {
+          "purposeCounts": {
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "按 keyword/status 统计，固定顺序 ALL/BUSINESS/SHIPPING_MARK，不受用途和分页影响",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NumberingRulePurposeCountDto"
+            }
+          },
           "items": {
             "type": "array",
             "items": {
@@ -48154,6 +48205,7 @@
           }
         },
         "required": [
+          "purposeCounts",
           "items",
           "page",
           "pageSize",
@@ -48334,6 +48386,13 @@
               }
             }
           },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "BUSINESS",
+              "SHIPPING_MARK"
+            ]
+          },
           "ruleCode": {
             "type": "string",
             "minLength": 1,
@@ -48355,6 +48414,7 @@
         "required": [
           "resetPolicy",
           "segments",
+          "purpose",
           "ruleCode",
           "name"
         ]
@@ -48362,6 +48422,13 @@
       "NumberingRuleDetailDto": {
         "type": "object",
         "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "BUSINESS",
+              "SHIPPING_MARK"
+            ]
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -48424,6 +48491,7 @@
           }
         },
         "required": [
+          "purpose",
           "id",
           "ruleCode",
           "name",

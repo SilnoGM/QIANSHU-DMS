@@ -30,8 +30,12 @@ function extendReplace(router: Router) {
     if (appSettingsStore.settings.topbar.tabbar && router.currentRoute.value.meta.tabMerge !== 'activeMenu') {
       const tabId = getId(router)
       const appTabbarStore = useAppTabbarStore(pinia)
-      return originalReplace(to).then(() => {
-        appTabbarStore.remove(tabId)
+      return originalReplace(to).then((failure) => {
+        // 表单离开守卫返回 false 时不能移除页签，且必须透传 NavigationFailure。
+        if (!failure) {
+          appTabbarStore.remove(tabId)
+        }
+        return failure
       })
     }
     else {
@@ -104,7 +108,10 @@ function extendClose(router: Router) {
   router.close = function (to: RouteLocationRaw) {
     const currentRoute = router.currentRoute.value
     const tabId = getId(router)
-    return router.push(to).then(() => {
+    return router.push(to).then((failure) => {
+      if (failure) {
+        return failure
+      }
       const appSettingsStore = useAppSettingsStore(pinia)
       if (appSettingsStore.settings.topbar.tabbar && currentRoute.meta.tabMerge !== 'activeMenu') {
         const appTabbarStore = useAppTabbarStore(pinia)

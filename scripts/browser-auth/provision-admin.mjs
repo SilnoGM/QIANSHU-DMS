@@ -179,8 +179,8 @@ let fixtureFailureCode = 'UNKNOWN'
     // 片段，再按 DRAFT -> ACTIVE 与规则 ENABLED 的合法顺序完成 fixture。
     const productRule = await client.query(
       [
-        'INSERT INTO numbering_rules (rule_code, name, status, version)',
-        'VALUES (\'PRODUCT\', \'Browser Product Rule\', \'DRAFT\', 1)',
+        'INSERT INTO numbering_rules (rule_code, name, status, version, purpose)',
+        'VALUES (\'PRODUCT\', \'Browser Product Rule\', \'DRAFT\', 1, \'BUSINESS\')',
         'RETURNING id',
       ].join(' '),
     )
@@ -241,8 +241,8 @@ let fixtureFailureCode = 'UNKNOWN'
     // PRODUCT 使用独立序列，确保打开表单和前端硬拦截阶段不会提前消耗编号。
     const salesOrderRule = await client.query(
       [
-        'INSERT INTO numbering_rules (rule_code, name, status, version)',
-        'VALUES (\'SALES_ORDER\', \'Browser Sales Order Rule\', \'DRAFT\', 1)',
+        'INSERT INTO numbering_rules (rule_code, name, status, version, purpose)',
+        'VALUES (\'SALES_ORDER\', \'Browser Sales Order Rule\', \'DRAFT\', 1, \'BUSINESS\')',
         'RETURNING id',
       ].join(' '),
     )
@@ -303,8 +303,8 @@ let fixtureFailureCode = 'UNKNOWN'
     // 正式创建后获得可稳定断言的 PO-BRW 序列。
     const purchaseOrderRule = await client.query(
       [
-        'INSERT INTO numbering_rules (rule_code, name, status, version)',
-        'VALUES (\'PURCHASE_ORDER\', \'Browser Purchase Order Rule\', \'DRAFT\', 1)',
+        'INSERT INTO numbering_rules (rule_code, name, status, version, purpose)',
+        'VALUES (\'PURCHASE_ORDER\', \'Browser Purchase Order Rule\', \'DRAFT\', 1, \'BUSINESS\')',
         'RETURNING id',
       ].join(' '),
     )

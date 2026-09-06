@@ -133,6 +133,7 @@ export class NumberingCommandService {
     const changedFields = [
       ...(Object.hasOwn(input, 'description') ? ['description'] : []),
       'name',
+      'purpose',
       'resetPolicy',
       'ruleCode',
       'segments',
@@ -140,6 +141,7 @@ export class NumberingCommandService {
 
     return this.runMutation(async (transaction, asOf) => {
       const created = await createNumberingRuleRecord(transaction, {
+        purpose: input.purpose,
         ruleCode,
         name,
         description,
@@ -158,6 +160,7 @@ export class NumberingCommandService {
         targetId: created.id,
         requestId: context.requestId,
         metadata: {
+          purpose: input.purpose,
           ruleCode,
           changedFields,
           revision: 1,
@@ -657,6 +660,7 @@ export class NumberingCommandService {
       // 收口，而不是误报成调用方的 422 输入错误。
       const prepared = prepareNumberingRuleConfig(sourceVersion.config)
       const created = await createNumberingRuleRecord(transaction, {
+        purpose: source.purpose,
         ruleCode,
         name,
         description: overridesDescription
@@ -678,8 +682,9 @@ export class NumberingCommandService {
         requestId: context.requestId,
         metadata: {
           clonedFromRuleCode: source.ruleCode,
+          purpose: source.purpose,
           ruleCode,
-          changedFields: 'description,name,resetPolicy,ruleCode,segments',
+          changedFields: 'description,name,purpose,resetPolicy,ruleCode,segments',
           revision: 1,
           version: 1,
           ...configSummary(prepared.config),

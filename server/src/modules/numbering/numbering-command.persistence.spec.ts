@@ -138,6 +138,7 @@ describe('numbering command persistence', () => {
     const fixture = createTransactionFixture()
 
     await expect(createNumberingRuleRecord(fixture.transaction, {
+      purpose: 'BUSINESS',
       ruleCode: 'SALES_ORDER',
       name: '销售订单',
       description: null,
@@ -145,6 +146,7 @@ describe('numbering command persistence', () => {
 
     expect(fixture.mocks.numberingRuleCreate).toHaveBeenCalledWith({
       data: {
+        purpose: 'BUSINESS',
         ruleCode: 'SALES_ORDER',
         name: '销售订单',
         description: null,

@@ -236,6 +236,7 @@ describe('NumberingGeneratorService concurrency and capacity with PostgreSQL', (
       .set(CSRF_HEADERS)
       .send({
         ruleCode: input.ruleCode,
+        purpose: 'BUSINESS',
         name: `E2E ${input.ruleCode}`,
         resetPolicy: input.resetPolicy,
         segments: input.segments,

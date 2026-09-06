@@ -309,7 +309,8 @@ test('请求构造保持 decimal string、携带 expectedVersion 且没有可编
     step: '2',
   }]
 
-  assert.deepEqual(buildCreateNumberingRuleRequest(model), {
+  assert.deepEqual(buildCreateNumberingRuleRequest(model, 'BUSINESS'), {
+    purpose: 'BUSINESS',
     resetPolicy: 'NEVER',
     segments: model.segments,
     ruleCode: 'SALES_ORDER',

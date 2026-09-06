@@ -17,6 +17,7 @@ import {
   type NumberingRuleSegmentInput,
 } from './numbering-segment.dto'
 import {
+  NumberingRulePurpose,
   NumberingRuleStatus,
   type NumberingRuleStatus as NumberingRuleStatusValue,
 } from './numbering-management.dto'
@@ -138,6 +139,9 @@ export class NumberingRuleVersionDto {
 }
 
 export class NumberingRuleListItemDto {
+  @ApiProperty({ type: 'string', enum: NumberingRulePurpose })
+  purpose!: NumberingRulePurpose
+
   @ApiProperty({ type: 'string', format: 'uuid' })
   id!: string
 
@@ -176,6 +180,9 @@ export class NumberingRuleListItemDto {
 }
 
 export class NumberingRuleDetailDto {
+  @ApiProperty({ type: 'string', enum: NumberingRulePurpose })
+  purpose!: NumberingRulePurpose
+
   @ApiProperty({ type: 'string', format: 'uuid' })
   id!: string
 
@@ -280,7 +287,21 @@ export class NumberingIssuanceDto {
   issuedAt!: string
 }
 
+export class NumberingRulePurposeCountDto {
+  @ApiProperty({ type: 'string', enum: ['ALL', 'BUSINESS', 'SHIPPING_MARK'] })
+  value!: 'ALL' | NumberingRulePurpose
+
+  @ApiProperty({ type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER })
+  count!: number
+}
+
 export class NumberingRulePageDto {
+  @ApiProperty({
+    type: [NumberingRulePurposeCountDto], minItems: 3, maxItems: 3,
+    description: '按 keyword/status 统计，固定顺序 ALL/BUSINESS/SHIPPING_MARK，不受用途和分页影响',
+  })
+  purposeCounts!: NumberingRulePurposeCountDto[]
+
   @ApiProperty({ type: [NumberingRuleListItemDto] })
   items!: NumberingRuleListItemDto[]
 

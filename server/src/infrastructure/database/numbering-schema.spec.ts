@@ -367,7 +367,7 @@ describe('numbering management database schema', () => {
       .sort()
     const migration = readMigration()
 
-    expect(numberingMigrations).toEqual([migrationDirectory])
+    expect(numberingMigrations).toEqual([migrationDirectory, '20260906090000_numbering_rule_purpose'])
     expect(migration).not.toContain('INSERT INTO "numbering_rules"')
     expect(migration).not.toContain('ON CONFLICT DO NOTHING')
     expect(migration).not.toMatch(/\bIF NOT EXISTS\b/iu)

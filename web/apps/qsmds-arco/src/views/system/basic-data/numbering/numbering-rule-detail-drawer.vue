@@ -12,6 +12,7 @@ import type {
   NumberingRuleVersionDto,
   NumberingRuleVersionsListData,
 } from '@/api/generated/types.gen'
+import { numberingPurposeLabel } from '@/api/modules/numbering-purpose'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import {
@@ -319,6 +320,9 @@ watch(() => props.issuanceFilters, (filters) => {
                   <code class="qs-type-data-emphasis [overflow-wrap:anywhere]">
                     {{ detail.ruleCode }}
                   </code>
+                  <p class="qs-type-meta mb-0 mt-2">
+                    用途分类：{{ numberingPurposeLabel(detail.purpose) }}
+                  </p>
                 </div>
                 <FaTag class="qs-type-status-tag" variant="outline">
                   <FaIcon :name="statusIcon(detail.status)" class="me-1 size-3.5" />

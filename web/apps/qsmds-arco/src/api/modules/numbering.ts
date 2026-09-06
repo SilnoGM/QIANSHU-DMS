@@ -17,6 +17,12 @@ import type {
 } from '../generated/types.gen'
 
 import api from '../index'
+import { assertNumberingPurposePage, assertNumberingRulePurpose } from './numbering-purpose'
+
+function validateRuleResponse<T extends { data: NumberingRuleDetailDto }>(response: T): T {
+  assertNumberingRulePurpose(response.data)
+  return response
+}
 
 export type { NumberingRuleListItemDto } from '../generated/types.gen'
 
@@ -51,12 +57,15 @@ export function createNumberingApi(client: AxiosInstance) {
           errorPresentation: 'local',
           params: query,
           signal,
+        }).then((response) => {
+          assertNumberingPurposePage(response.data, query.purpose)
+          return response
         }),
       get: (ruleId: string, signal: AbortSignal) =>
         client.get<NumberingRuleDetailDto>(numberingRulePath(ruleId), {
           errorPresentation: 'local',
           signal,
-        }),
+        }).then(validateRuleResponse),
       versions: (
         ruleId: string,
         query: NumberingVersionListQuery,
@@ -95,25 +104,25 @@ export function createNumberingApi(client: AxiosInstance) {
           'numbering-rules',
           data,
           LOCAL_MUTATION_CONFIG,
-        ),
+        ).then(validateRuleResponse),
       update: (ruleId: string, data: UpdateNumberingRuleRequestDto) =>
         client.patch<NumberingRuleDetailDto>(
           numberingRulePath(ruleId),
           data,
           LOCAL_MUTATION_CONFIG,
-        ),
+        ).then(validateRuleResponse),
       clone: (ruleId: string, data: CloneNumberingRuleRequestDto) =>
         client.post<NumberingRuleDetailDto>(
           `${numberingRulePath(ruleId)}/clone`,
           data,
           LOCAL_MUTATION_CONFIG,
-        ),
+        ).then(validateRuleResponse),
       publish: (ruleId: string, data: PublishNumberingRuleRequestDto) =>
         client.post<NumberingRuleDetailDto>(
           `${numberingRulePath(ruleId)}/publish`,
           data,
           LOCAL_MUTATION_CONFIG,
-        ),
+        ).then(validateRuleResponse),
       enable: (
         ruleId: string,
         data: ChangeNumberingRuleStatusRequestDto,
@@ -121,7 +130,7 @@ export function createNumberingApi(client: AxiosInstance) {
         `${numberingRulePath(ruleId)}/enable`,
         data,
         LOCAL_MUTATION_CONFIG,
-      ),
+      ).then(validateRuleResponse),
       disable: (
         ruleId: string,
         data: ChangeNumberingRuleStatusRequestDto,
@@ -129,7 +138,7 @@ export function createNumberingApi(client: AxiosInstance) {
         `${numberingRulePath(ruleId)}/disable`,
         data,
         LOCAL_MUTATION_CONFIG,
-      ),
+      ).then(validateRuleResponse),
     },
   }
 }

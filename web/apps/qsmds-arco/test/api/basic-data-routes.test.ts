@@ -39,6 +39,14 @@ const basicDataPageContracts = [
     title: '编号管理',
   },
   {
+    auth: 'numbering-rules:read',
+    file: '../../src/views/system/basic-data/numbering/create.vue',
+    menu: false,
+    name: 'systemBasicDataNumberingCreate',
+    path: 'numbering/create',
+    title: '新增编号规则',
+  },
+  {
     auth: 'dictionaries:read',
     file: '../../src/views/system/basic-data/dictionaries/index.vue',
     name: 'systemBasicDataDictionaries',
@@ -267,7 +275,7 @@ test('编号管理已升级为真实业务页面', () => {
 })
 
 test('字典管理叶子已升级为受权限保护的三面板单页骨架', () => {
-  for (const page of basicDataPageContracts.slice(4)) {
+  for (const page of basicDataPageContracts.filter(page => page.name === 'systemBasicDataDictionaries')) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
 
     assert.match(source, /<script setup lang="ts">/u)
