@@ -226,7 +226,7 @@ export class PurchaseOrderMutationService {
         dimension: 'ORDER',
         fromStatus: order.orderStatus,
         toStatus: 'CANCELLED',
-        reason,
+        reason: reason ?? '用户取消采购订单',
         changedByUserId: trusted.actorUserId,
       } })
       await this.recordAudit(transaction, trusted, {
@@ -295,7 +295,9 @@ export class PurchaseOrderMutationService {
         dimension: 'FULFILLMENT',
         fromStatus: order.fulfillmentStatus,
         toStatus,
-        reason,
+        reason: reason ?? `用户确认采购订单进入${{
+          ORDERED: '已下单', PREPARING: '备货中', SHIPPED: '已发货', SIGNED: '已签收',
+        }[toStatus]}`,
         changedByUserId: trusted.actorUserId,
       } })
       await this.recordAudit(transaction, trusted, {
@@ -433,6 +435,7 @@ export class PurchaseOrderMutationService {
           trusted,
           order,
           newStatus,
+          `新增付款 ${amount} CNY，累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed4(order.purchaseTotalAmount)} CNY`,
         )
         await this.recordAudit(transaction, trusted, {
           eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_RECORDED,
@@ -519,6 +522,7 @@ export class PurchaseOrderMutationService {
         trusted,
         order,
         newStatus,
+        `作废付款 ${fixed4(payment.amount)} CNY，重算累计有效付款 ${newPaidAmount} CNY；采购总价 ${fixed4(order.purchaseTotalAmount)} CNY`,
       )
       await this.recordAudit(transaction, trusted, {
         eventType: AuditEventType.PURCHASE_ORDER_PAYMENT_VOIDED,
@@ -630,6 +634,7 @@ export class PurchaseOrderMutationService {
     context: PurchaseOrderMutationContext,
     order: MutablePurchaseOrder,
     newStatus: PurchaseOrderPaymentStatus,
+    reason: string,
   ): Promise<void> {
     const newOrderStatus = derivePurchaseOrderStatus({
       orderStatus: order.orderStatus,
@@ -652,7 +657,7 @@ export class PurchaseOrderMutationService {
         dimension: 'PAYMENT',
         fromStatus: order.paymentStatus,
         toStatus: newStatus,
-        reason: null,
+        reason,
         changedByUserId: context.actorUserId,
       } })
     }
@@ -678,7 +683,10 @@ export class PurchaseOrderMutationService {
       dimension: 'ORDER',
       fromStatus: order.orderStatus,
       toStatus: newStatus,
-      reason: null,
+      // 只为本次真实发生的自动转换生成原因；历史空值由展示层明确标记，不回填。
+      reason: newStatus === 'COMPLETED'
+        ? `${trigger === 'FULFILLMENT' ? '签收' : '付款'}后满足已签收且已付清，系统自动完成采购订单`
+        : '付款作废后不再满足已付清，系统将采购订单恢复为已确认',
       changedByUserId: context.actorUserId,
     } })
     await this.recordAudit(transaction, context, {

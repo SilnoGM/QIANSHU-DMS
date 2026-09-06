@@ -117,6 +117,23 @@ function setup() {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderMutationService', () => {
+  it('counts OTHER payments toward full payment without filtering payment types', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrderPayment.aggregate.mockResolvedValue({ _sum: { amount: decimal('70') } })
+    await fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'OTHER', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
+    })
+    expect(fixture.transaction.purchaseOrderPayment.aggregate).toHaveBeenCalledWith({
+      where: { purchaseOrderId: ORDER_ID, voidedAt: null }, _sum: { amount: true },
+    })
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { orderStatus: 'CONFIRMED', paymentStatus: 'PAID', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      reason: expect.stringContaining('累计有效付款 100.0000 CNY') as unknown,
+    }) as unknown })
+  })
   it('cancels only without active payments and records immutable history', async () => {
     const fixture = setup()
     await expect(fixture.service.updateOrderStatus(
@@ -178,6 +195,9 @@ describe('PurchaseOrderMutationService', () => {
 
     expect(fixture.coverage.recalculateAfterPurchaseCancellation)
       .not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      reason: '用户取消采购订单',
+    }) as unknown })
   })
 
   it('advances fulfillment in order and blocks cancelled orders', async () => {
@@ -196,6 +216,9 @@ describe('PurchaseOrderMutationService', () => {
       },
     })
 
+    expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+      reason: '用户确认采购订单进入备货中',
+    }) as unknown })
     const cancelled = setup()
     cancelled.transaction.purchaseOrder.findUnique.mockResolvedValue({
       ...cancelled.order,
@@ -236,7 +259,7 @@ describe('PurchaseOrderMutationService', () => {
         dimension: 'ORDER',
         fromStatus: 'CONFIRMED',
         toStatus: 'COMPLETED',
-        reason: null,
+        reason: expect.stringContaining('签收后满足已签收且已付清') as unknown,
         changedByUserId: ACTOR_ID,
       },
     }])
@@ -292,7 +315,7 @@ describe('PurchaseOrderMutationService', () => {
         dimension: 'PAYMENT',
         fromStatus: 'UNPAID',
         toStatus: 'PARTIALLY_PAID',
-        reason: null,
+        reason: expect.stringContaining('新增付款 30.0000 CNY') as unknown,
         changedByUserId: ACTOR_ID,
       },
     }]])
@@ -332,7 +355,7 @@ describe('PurchaseOrderMutationService', () => {
         dimension: 'ORDER',
         fromStatus: 'CONFIRMED',
         toStatus: 'COMPLETED',
-        reason: null,
+        reason: expect.stringContaining('付款后满足已签收且已付清') as unknown,
         changedByUserId: ACTOR_ID,
       },
     }])
@@ -467,7 +490,7 @@ describe('PurchaseOrderMutationService', () => {
         dimension: 'ORDER',
         fromStatus: 'COMPLETED',
         toStatus: 'CONFIRMED',
-        reason: null,
+        reason: expect.stringContaining('付款作废后不再满足已付清') as unknown,
         changedByUserId: ACTOR_ID,
       },
     }])

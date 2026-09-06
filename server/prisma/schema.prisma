@@ -328,6 +328,8 @@ enum PurchaseOrderPaymentType {
 
 enum PurchaseOrderDocumentType {
   PAYMENT_VOUCHER
+  ORDER_ISSUANCE_VOUCHER
+  DELIVERY_RECEIPT
 
   @@map("purchase_order_document_type")
 }
@@ -496,6 +498,7 @@ model User {
   purchaseOrderDocumentsCreated     PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentCreatedBy")
   purchaseOrderDocumentsDetached    PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentDetachedBy")
   purchaseOrderStatusesChanged      PurchaseOrderStatusHistory[] @relation("PurchaseOrderStatusChangedBy")
+  purchaseOrderAmountsChanged       PurchaseOrderAmountRevision[] @relation("PurchaseOrderAmountChangedBy")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -1008,6 +1011,7 @@ model PurchaseOrder {
   payments     PurchaseOrderPayment[]
   documents    PurchaseOrderDocument[]
   statusHistory PurchaseOrderStatusHistory[]
+  amountRevisions PurchaseOrderAmountRevision[]
 
   @@index([orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_order_date_id_idx")
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_statuses_order_date_id_idx")
@@ -1071,7 +1075,7 @@ model PurchaseOrderDocument {
   id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   purchaseOrderId  String                    @map("purchase_order_id") @db.Uuid
   mediaAssetId     String                    @map("media_asset_id") @db.Uuid
-  paymentId        String                    @map("payment_id") @db.Uuid
+  paymentId        String?                   @map("payment_id") @db.Uuid
   documentType     PurchaseOrderDocumentType @map("document_type")
   title            String?                   @db.VarChar(128)
   remark           String?                   @db.VarChar(500)
@@ -1082,7 +1086,7 @@ model PurchaseOrderDocument {
 
   purchaseOrder PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   mediaAsset    MediaAsset           @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  payment       PurchaseOrderPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  payment       PurchaseOrderPayment? @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   createdBy     User                 @relation("PurchaseOrderDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   detachedBy    User?                @relation("PurchaseOrderDocumentDetachedBy", fields: [detachedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
@@ -1107,6 +1111,29 @@ model PurchaseOrderStatusHistory {
 
   @@index([purchaseOrderId, changedAt(sort: Desc), id(sort: Desc)], map: "purchase_order_status_history_order_changed_idx")
   @@map("purchase_order_status_history")
+}
+
+// 约定金额的前后快照与实际付款事实独立；仅真实约定变更才能新增记录，不回填推测历史。
+model PurchaseOrderAmountRevision {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId        String   @map("purchase_order_id") @db.Uuid
+  oldLineSubtotalAmount  Decimal  @map("old_line_subtotal_amount") @db.Decimal(30, 4)
+  oldPurchaseTotalAmount Decimal  @map("old_purchase_total_amount") @db.Decimal(30, 4)
+  oldDepositDueAmount    Decimal  @map("old_deposit_due_amount") @db.Decimal(30, 4)
+  oldBalanceDueAmount    Decimal  @map("old_balance_due_amount") @db.Decimal(30, 4)
+  newLineSubtotalAmount  Decimal  @map("new_line_subtotal_amount") @db.Decimal(30, 4)
+  newPurchaseTotalAmount Decimal  @map("new_purchase_total_amount") @db.Decimal(30, 4)
+  newDepositDueAmount    Decimal  @map("new_deposit_due_amount") @db.Decimal(30, 4)
+  newBalanceDueAmount    Decimal  @map("new_balance_due_amount") @db.Decimal(30, 4)
+  reason                String   @db.VarChar(500)
+  changedByUserId        String   @map("changed_by_user_id") @db.Uuid
+  changedAt             DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  changedBy User @relation("PurchaseOrderAmountChangedBy", fields: [changedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([purchaseOrderId, changedAt(sort: Desc), id(sort: Desc)], map: "purchase_order_amount_revisions_order_changed_idx")
+  @@map("purchase_order_amount_revisions")
 }
 
 model NumberingRule {

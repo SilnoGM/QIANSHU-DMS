@@ -37,6 +37,7 @@ import {
 } from './documents/purchase-order-document.service'
 import { CreatePurchaseOrderRequestDto } from './dto/purchase-order-create.dto'
 import {
+  PurchaseOrderDocumentAttachRequestDto,
   PurchaseOrderDocumentUploadRequestDto,
   PurchaseOrderTemporaryDocumentDto,
 } from './dto/purchase-order-document.dto'
@@ -591,6 +592,30 @@ export class PurchaseOrdersController {
     return this.mutations.voidPayment(
       mutationContext(request), params.purchaseOrderId, params.paymentId, dto,
     )
+  }
+
+  @Post(':purchaseOrderId/documents')
+  @RequirePermissions('purchase-orders:document')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiContractResponse({ status: HttpStatus.CREATED, type: PurchaseOrderDetailDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_attach_document',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 422, codes: [
+        'PURCHASE_ORDER_DOCUMENT_ALREADY_EXISTS', 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', 'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  attachDocument(
+    @Param() params: PurchaseOrderIdParamDto,
+    @Body() dto: PurchaseOrderDocumentAttachRequestDto,
+    @Req() request: object,
+  ): Promise<PurchaseOrderDetail> {
+    return this.documents.attach(mutationContext(request), params.purchaseOrderId, dto)
   }
 
   @Delete(':purchaseOrderId/documents/:documentId')

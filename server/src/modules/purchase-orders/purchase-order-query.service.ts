@@ -143,6 +143,17 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
       changedBy: { select: { id: true, displayName: true } },
     },
   },
+  amountRevisions: {
+    orderBy: [{ changedAt: 'desc' as const }, { id: 'desc' as const }],
+    select: {
+      id: true, reason: true, changedAt: true,
+      oldLineSubtotalAmount: true, oldPurchaseTotalAmount: true,
+      oldDepositDueAmount: true, oldBalanceDueAmount: true,
+      newLineSubtotalAmount: true, newPurchaseTotalAmount: true,
+      newDepositDueAmount: true, newBalanceDueAmount: true,
+      changedBy: { select: { id: true, displayName: true } },
+    },
+  },
 } as const satisfies Prisma.PurchaseOrderSelect
 
 type PurchaseOrderListRow = Prisma.PurchaseOrderGetPayload<{
@@ -266,6 +277,7 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
   readonly payments: readonly Record<string, unknown>[]
   readonly documents: readonly Record<string, unknown>[]
   readonly statusHistory: readonly Record<string, unknown>[]
+  readonly amountRevisions: readonly Record<string, unknown>[]
 }
 
 function decimalToFixed4(value: { toFixed(decimalPlaces: number): string }): string {
@@ -807,6 +819,21 @@ export class PurchaseOrderQueryService {
         reason: history.reason,
         changedBy: actor(history.changedBy),
         changedAt: history.changedAt.toISOString(),
+      })),
+      // 金额快照只读取已存储事实；付款录入不生成约定金额修订，也不拼接推测历史。
+      amountRevisions: row.amountRevisions.map(revision => ({
+        id: revision.id,
+        oldLineSubtotalAmount: decimalToFixed4(revision.oldLineSubtotalAmount),
+        oldPurchaseTotalAmount: decimalToFixed4(revision.oldPurchaseTotalAmount),
+        oldDepositDueAmount: decimalToFixed4(revision.oldDepositDueAmount),
+        oldBalanceDueAmount: decimalToFixed4(revision.oldBalanceDueAmount),
+        newLineSubtotalAmount: decimalToFixed4(revision.newLineSubtotalAmount),
+        newPurchaseTotalAmount: decimalToFixed4(revision.newPurchaseTotalAmount),
+        newDepositDueAmount: decimalToFixed4(revision.newDepositDueAmount),
+        newBalanceDueAmount: decimalToFixed4(revision.newBalanceDueAmount),
+        reason: revision.reason,
+        changedBy: actor(revision.changedBy),
+        changedAt: revision.changedAt.toISOString(),
       })),
     }
   }

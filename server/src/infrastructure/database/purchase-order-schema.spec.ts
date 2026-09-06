@@ -45,7 +45,7 @@ function enumValues(source: string, name: string): readonly string[] {
 }
 
 describe('purchase order domain schema', () => {
-  it('publishes the exact purchase enums and five domain models', () => {
+  it('publishes the exact purchase enums and six domain models', () => {
     const schema = readFileSync(schemaPath, 'utf8')
 
     expect(enumValues(schema, 'PurchaseOrderType')).toEqual([
@@ -84,6 +84,8 @@ describe('purchase order domain schema', () => {
     ])
     expect(enumValues(schema, 'PurchaseOrderDocumentType')).toEqual([
       'PAYMENT_VOUCHER',
+      'ORDER_ISSUANCE_VOUCHER',
+      'DELIVERY_RECEIPT',
     ])
     expect(enumValues(schema, 'PurchaseOrderStatusDimension')).toEqual([
       'ORDER',
@@ -97,6 +99,7 @@ describe('purchase order domain schema', () => {
       'PurchaseOrderPayment',
       'PurchaseOrderDocument',
       'PurchaseOrderStatusHistory',
+      'PurchaseOrderAmountRevision',
     ]) {
       expect(extractPrismaBlock(schema, 'model', model)).toBeTruthy()
     }
@@ -123,6 +126,26 @@ describe('purchase order domain schema', () => {
     expect(line).not.toMatch(/@@unique\(\[sourceSalesOrderLineId\]/u)
     expect(line).toMatch(/referencePurchaseUnitPriceAmount\s+Decimal/u)
     expect(line).toMatch(/actualPurchaseUnitPriceAmount\s+Decimal/u)
+  })
+
+  it('keeps standalone documents independent of payments and stores exact amount revisions', () => {
+    const schema = readFileSync(schemaPath, 'utf8')
+    const document = extractPrismaBlock(schema, 'model', 'PurchaseOrderDocument')
+    expect(document).toMatch(/paymentId\s+String\?/u)
+    const revision = extractPrismaBlock(schema, 'model', 'PurchaseOrderAmountRevision')
+    for (const side of ['old', 'new']) {
+      for (const amount of ['LineSubtotalAmount', 'PurchaseTotalAmount', 'DepositDueAmount', 'BalanceDueAmount']) {
+        expect(revision).toMatch(new RegExp(`${side}${amount}\\s+Decimal[^\\n]*@db\\.Decimal\\(30, 4\\)`, 'u'))
+      }
+    }
+    expect(revision).toMatch(/reason\s+String\s+@db\.VarChar\(500\)/u)
+    const migration = readFileSync(resolve(serverRoot,
+      'prisma/migrations/20260906120000_purchase_order_records/migration.sql'), 'utf8')
+    expect(migration).toContain('purchase_order_documents_active_issuance_key')
+    expect(migration).toContain('purchase_order_amount_revisions_amounts_check')
+    expect(migration).toContain('purchase_order_amount_revisions_reason_check')
+    expect(migration).toContain('DROP NOT NULL')
+    expect(migration).not.toMatch(/UPDATE\s+"purchase_orders"|INSERT INTO\s+"purchase_order_amount_revisions"/u)
   })
 
   it('backfills a lossless product mode and enforces one supplier source', () => {

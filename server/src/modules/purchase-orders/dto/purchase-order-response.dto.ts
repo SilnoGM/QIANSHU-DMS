@@ -90,7 +90,7 @@ export class PurchaseOrderPaymentDto {
 export class PurchaseOrderDocumentDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly mediaAssetId!: string
-  @ApiProperty({ type: 'string', format: 'uuid' }) readonly paymentId!: string
+  @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly paymentId!: string | null
   @ApiProperty({ enum: PurchaseOrderDocumentType })
   readonly documentType!: PurchaseOrderDocumentType
   @ApiProperty({ type: 'string', nullable: true }) readonly title!: string | null
@@ -115,6 +115,21 @@ export class PurchaseOrderStatusHistoryDto {
   @ApiProperty({ type: 'string' }) readonly fromStatus!: string
   @ApiProperty({ type: 'string' }) readonly toStatus!: string
   @ApiProperty({ type: 'string', nullable: true }) readonly reason!: string | null
+  @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly changedBy!: PurchaseOrderActorDto
+  @ApiProperty({ type: 'string', format: 'date-time' }) readonly changedAt!: string
+}
+
+export class PurchaseOrderAmountRevisionDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly oldLineSubtotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly oldPurchaseTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly oldDepositDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly oldBalanceDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly newLineSubtotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly newPurchaseTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly newDepositDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly newBalanceDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly reason!: string
   @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly changedBy!: PurchaseOrderActorDto
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly changedAt!: string
 }
@@ -180,6 +195,8 @@ export class PurchaseOrderDetailDto extends PurchaseOrderListItemDto {
   readonly documents!: readonly PurchaseOrderDocumentDto[]
   @ApiProperty({ type: () => [PurchaseOrderStatusHistoryDto] })
   readonly statusHistory!: readonly PurchaseOrderStatusHistoryDto[]
+  @ApiProperty({ type: () => [PurchaseOrderAmountRevisionDto] })
+  readonly amountRevisions!: readonly PurchaseOrderAmountRevisionDto[]
 }
 
 export class PurchaseOrderCurrencySummaryDto {

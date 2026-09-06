@@ -67,6 +67,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
     payments: [],
     documents: [],
     statusHistory: [],
+    amountRevisions: [],
     createdBy: { id: 'actor-id', displayName: '采购员' },
     ...overrides,
   }
@@ -173,6 +174,38 @@ function setup() {
 }
 
 describe('PurchaseOrderQueryService', () => {
+  it('returns exact amount snapshots and standalone documents without fabricating history', async () => {
+    const fixture = setup()
+    const changedAt = new Date('2026-09-06T03:00:00.000Z')
+    const actor = { id: 'actor-id', displayName: '采购员' }
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      amountRevisions: [{
+        id: 'revision-id', reason: '调整付款约定', changedAt, changedBy: actor,
+        oldLineSubtotalAmount: decimal('100'), oldPurchaseTotalAmount: decimal('100'),
+        oldDepositDueAmount: decimal('30'), oldBalanceDueAmount: decimal('70'),
+        newLineSubtotalAmount: decimal('100'), newPurchaseTotalAmount: decimal('100'),
+        newDepositDueAmount: decimal('20'), newBalanceDueAmount: decimal('80'),
+      }],
+      lines: [],
+      documents: [{
+        id: 'doc-id', mediaAssetId: 'asset-id', paymentId: null, documentType: 'DELIVERY_RECEIPT',
+        title: '签收单', remark: null, createdAt: changedAt, detachedAt: null,
+        createdBy: actor, detachedBy: null,
+        mediaAsset: { originalFilename: 'receipt.png', mediaType: 'IMAGE', mimeType: 'image/png', sizeBytes: 100n },
+      }],
+    }))
+    await expect(fixture.service.getById('order-id')).resolves.toMatchObject({
+      statusHistory: [],
+      documents: [expect.objectContaining({ paymentId: null, documentType: 'DELIVERY_RECEIPT' })],
+      amountRevisions: [{
+        id: 'revision-id', reason: '调整付款约定', changedAt: changedAt.toISOString(), changedBy: actor,
+        oldLineSubtotalAmount: '100.0000', oldPurchaseTotalAmount: '100.0000',
+        oldDepositDueAmount: '30.0000', oldBalanceDueAmount: '70.0000',
+        newLineSubtotalAmount: '100.0000', newPurchaseTotalAmount: '100.0000',
+        newDepositDueAmount: '20.0000', newBalanceDueAmount: '80.0000',
+      }],
+    })
+  })
   it('builds the fixed pending predicate and maps paid/outstanding amounts', async () => {
     const fixture = setup()
     const page = await fixture.service.list({

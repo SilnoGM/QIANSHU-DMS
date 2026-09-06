@@ -5,6 +5,7 @@ import request from 'supertest'
 
 import { configureApplication } from '../src/app.setup'
 import { attachRequestAuthContext } from '../src/modules/auth/auth-context'
+import { REQUIRED_PERMISSIONS_METADATA } from '../src/modules/auth/decorators/auth.decorators'
 import { PurchaseOrderDocumentService } from '../src/modules/purchase-orders/documents/purchase-order-document.service'
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
@@ -24,6 +25,8 @@ const list = jest.fn().mockResolvedValue({ items: [], page: 2, pageSize: 10, tot
 const getById = jest.fn().mockResolvedValue({ id: ORDER_ID })
 const create = jest.fn<Promise<string>, [unknown, unknown]>()
   .mockResolvedValue(ORDER_ID)
+const attach = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
+  .mockResolvedValue({ id: ORDER_ID, amountRevisions: [] })
 const salesOrderLines = jest.fn().mockResolvedValue({
   salesOrder: { id: SALES_ORDER_ID, orderNo: 'SO-E2E', customerName: '测试客户' },
   items: [],
@@ -63,6 +66,7 @@ const resolveSourceLinePreview = jest.fn().mockResolvedValue({
     provide: PurchaseOrderDocumentService,
     useValue: {
       uploadTemporary: jest.fn(),
+      attach,
       detach: jest.fn(),
       resolveContent: jest.fn(),
     },
@@ -148,12 +152,12 @@ describe('PurchaseOrder HTTP API contract', () => {
 
   it('keeps static sales-source routing independent from the order locator', async () => {
     const response = await request(requireApplication().getHttpServer())
-      .get(`/api/purchase-orders/source-sales-orders/${SALES_ORDER_ID}/lines`)
+      .get(`/api/purchase-orders/source-sales-orders/${SALES_ORDER_ID}/lines?productMode=CUSTOM`)
       .expect(200)
     expect(responseBody(response)).toMatchObject({
       salesOrder: { id: SALES_ORDER_ID }, items: [],
     })
-    expect(salesOrderLines).toHaveBeenCalledWith(SALES_ORDER_ID)
+    expect(salesOrderLines).toHaveBeenCalledWith(SALES_ORDER_ID, { productMode: 'CUSTOM' })
     expect(getById).not.toHaveBeenCalled()
   })
 
@@ -178,7 +182,8 @@ describe('PurchaseOrder HTTP API contract', () => {
   it('accepts a canonical idempotency key and returns persisted detail with 201', async () => {
     const payload = {
       purchaseType: 'STOCK',
-      supplierValue: 'SUPPLIER_E2E',
+      productMode: 'CUSTOM',
+      customSupplierName: 'Records Supplier',
       orderDate: '2026-08-27',
       lines: [{
         lineType: 'CUSTOM',
@@ -205,5 +210,25 @@ describe('PurchaseOrder HTTP API contract', () => {
       expect.objectContaining({ purchaseType: 'STOCK' }),
     )
     expect(getById).toHaveBeenCalledWith(ORDER_ID)
+  })
+
+  it('archives standalone documents with 201 and rejects payment fields before services', async () => {
+    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS_METADATA, PurchaseOrdersController.prototype.attachDocument)).toEqual(['purchase-orders:document'])
+    const body = { documentType: 'DELIVERY_RECEIPT', mediaAssetId: PRODUCT_MEDIA_ID, remark: '归档' }
+    const response = await request(requireApplication().getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/documents`).send(body).expect(201)
+    expect(responseBody(response)).toEqual({ id: ORDER_ID, amountRevisions: [] })
+    expect(attach).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, body)
+    attach.mockClear()
+    for (const invalid of [
+      { ...body, documentType: 'PAYMENT_VOUCHER' },
+      { ...body, paymentId: PRODUCT_MEDIA_ID },
+      { ...body, fulfillmentStatus: 'SIGNED' },
+      { ...body, remark: 'x'.repeat(501) },
+    ]) {
+      await request(requireApplication().getHttpServer())
+        .post(`/api/purchase-orders/${ORDER_ID}/documents`).send(invalid).expect(422)
+    }
+    expect(attach).not.toHaveBeenCalled()
   })
 })

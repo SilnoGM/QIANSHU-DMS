@@ -201,12 +201,12 @@ describe('purchase order schema with isolated PostgreSQL', () => {
         `
           INSERT INTO "purchase_orders" (
             "id", "order_no", "create_idempotency_key_hash",
-            "create_request_fingerprint_hash", "purchase_type",
+            "create_request_fingerprint_hash", "purchase_type", "product_mode",
             "supplier_value", "order_date", "line_subtotal_amount",
             "purchase_total_amount", "deposit_due_amount",
             "balance_due_amount", "payment_status", "created_by_user_id"
           )
-          VALUES ($1, $2, $3, $4, 'STOCK', 'SUPPLIER_E2E', CURRENT_DATE, 9, 9, 0, 9, 'UNPAID', $5)
+          VALUES ($1, $2, $3, $4, 'STOCK', 'MIXED', 'SUPPLIER_E2E', CURRENT_DATE, 9, 9, 0, 9, 'UNPAID', $5)
         `,
         [
           orderId,
@@ -245,12 +245,12 @@ describe('purchase order schema with isolated PostgreSQL', () => {
         `
           INSERT INTO "purchase_orders" (
             "id", "order_no", "create_idempotency_key_hash",
-            "create_request_fingerprint_hash", "purchase_type", "sales_order_id",
+            "create_request_fingerprint_hash", "purchase_type", "product_mode", "sales_order_id",
             "supplier_value", "order_date", "line_subtotal_amount",
             "purchase_total_amount", "deposit_due_amount",
             "balance_due_amount", "payment_status", "created_by_user_id"
           )
-          VALUES ($1, $2, $3, $4, 'SALES_LINKED', $5, 'SUPPLIER_E2E', CURRENT_DATE, 20, 20, 0, 20, 'UNPAID', $6)
+          VALUES ($1, $2, $3, $4, 'SALES_LINKED', 'CATALOG', $5, 'SUPPLIER_E2E', CURRENT_DATE, 20, 20, 0, 20, 'UNPAID', $6)
         `,
         [
           orderId,

@@ -28,6 +28,10 @@ function setup() {
         documentType: 'PAYMENT_VOUCHER',
       }),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+      create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({ id: DOCUMENT_ID }),
+    },
+    mediaAsset: {
+      findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({ id: MEDIA_ID }),
     },
   }
   const prisma = {
@@ -47,6 +51,7 @@ function setup() {
     },
   }
   const media = {
+    activate: jest.fn<Promise<void>, [unknown, string]>().mockResolvedValue(undefined),
     prepare: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
       id: MEDIA_ID,
       mediaType: 'DOCUMENT',
@@ -93,6 +98,50 @@ function setup() {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderDocumentService', () => {
+  it.each(['ORDER_ISSUANCE_VOUCHER', 'DELIVERY_RECEIPT'])('archives %s without changing fulfillment or payments', async documentType => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrderDocument.findFirst.mockResolvedValue(null)
+    await expect(fixture.service.attach(context, ORDER_ID, {
+      documentType, mediaAssetId: MEDIA_ID, remark: '归档说明',
+    })).resolves.toEqual(fixture.detail)
+    expect(fixture.transaction.mediaAsset.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: MEDIA_ID, createdByUserId: ACTOR_ID, status: 'UPLOADING',
+        mediaType: { in: ['IMAGE', 'DOCUMENT'] }, deletedAt: null, objectKey: { not: null },
+      },
+      select: { id: true },
+    })
+    expect(fixture.transaction.purchaseOrderDocument.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ purchaseOrderId: ORDER_ID, paymentId: null, documentType, remark: '归档说明' }) as unknown,
+    }))
+    expect(fixture.media.activate).toHaveBeenCalledWith(fixture.transaction, MEDIA_ID)
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID }, data: { version: { increment: 1 } },
+    })
+    expect(fixture.audit.record).toHaveBeenCalledWith(fixture.transaction,
+      expect.objectContaining({ eventType: 'PURCHASE_ORDER_DOCUMENT_ATTACHED' }))
+  })
+
+  it('rejects a second active purchase document before activating the uploaded asset', async () => {
+    const fixture = setup()
+    await expect(fixture.service.attach(context, ORDER_ID, {
+      documentType: 'ORDER_ISSUANCE_VOUCHER', mediaAssetId: MEDIA_ID,
+    })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_ALREADY_EXISTS' })
+    expect(fixture.media.activate).not.toHaveBeenCalled()
+  })
+
+  it('rejects unavailable or foreign uploads and standalone payment vouchers', async () => {
+    const fixture = setup()
+    fixture.transaction.mediaAsset.findFirst.mockResolvedValue(null)
+    await expect(fixture.service.attach(context, ORDER_ID, {
+      documentType: 'DELIVERY_RECEIPT', mediaAssetId: MEDIA_ID,
+    })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+    await expect(fixture.service.attach(context, ORDER_ID, {
+      documentType: 'PAYMENT_VOUCHER', mediaAssetId: MEDIA_ID,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(fixture.transaction.purchaseOrderDocument.create).not.toHaveBeenCalled()
+  })
+
   it('prepares an unassociated optional payment voucher', async () => {
     const fixture = setup()
     await expect(fixture.service.uploadTemporary(context, {} as never)).resolves.toEqual({

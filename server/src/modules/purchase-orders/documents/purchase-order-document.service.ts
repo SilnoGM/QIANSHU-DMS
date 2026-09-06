@@ -19,7 +19,7 @@ import {
 } from '../../media/media-asset.service'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../../media/media-storage'
-import { purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
+import { purchaseOrderRuleFailure, purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
 import { isCanonicalPurchaseOrderActorId } from '../purchase-order-command.normalizer'
 import type { PurchaseOrderMutationContext } from '../purchase-order-mutation.service'
 import {
@@ -82,7 +82,7 @@ function mapUploadError(error: unknown): never {
     throw new ApiException(
       HttpStatus.UNPROCESSABLE_ENTITY,
       code,
-      '采购订单付款凭证文件无效',
+      '采购订单凭证文件无效',
     )
   }
   throw new ApiException(
@@ -144,6 +144,89 @@ export class PurchaseOrderDocumentService {
     })
   }
 
+  /** 独立凭证只归档；不复用销售签收的状态推进，避免附件写入改变采购履约事实。 */
+  async attach(
+    context: PurchaseOrderMutationContext,
+    rawPurchaseOrderId: unknown,
+    input: unknown,
+  ): Promise<PurchaseOrderDetail> {
+    requireContext(context)
+    const purchaseOrderId = requireUuid(rawPurchaseOrderId, 'purchaseOrderId')
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) {
+      return purchaseOrderValidationFailure('body')
+    }
+    const body = input as Record<string, unknown>
+    if (Object.keys(body).some(key => !['documentType', 'mediaAssetId', 'remark'].includes(key))) {
+      return purchaseOrderValidationFailure('body')
+    }
+    const documentType = body.documentType
+    if (documentType !== 'ORDER_ISSUANCE_VOUCHER' && documentType !== 'DELIVERY_RECEIPT') {
+      return purchaseOrderValidationFailure('documentType')
+    }
+    const mediaAssetId = requireUuid(body.mediaAssetId, 'mediaAssetId')
+    if (body.remark != null && (typeof body.remark !== 'string' || [...body.remark].length > 500)) {
+      return purchaseOrderValidationFailure('remark')
+    }
+    const remark = typeof body.remark === 'string' ? body.remark.trim() || null : null
+    try {
+      await this.prisma.$transaction(async transaction => {
+        await applyTransactionTimeouts(transaction)
+        const locks = await transaction.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+          SELECT "id" FROM "purchase_orders"
+          WHERE "id" = CAST(${purchaseOrderId} AS uuid) FOR UPDATE
+        `)
+        if (locks.length !== 1) {
+          throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_NOT_FOUND', '采购订单不存在')
+        }
+        // 订单行锁串行化同单归档请求，部分唯一索引再防守绕过服务的并发写入。
+        if (documentType === 'ORDER_ISSUANCE_VOUCHER') {
+          const existing = await transaction.purchaseOrderDocument.findFirst({
+            where: { purchaseOrderId, documentType, detachedAt: null }, select: { id: true },
+          })
+          if (existing !== null) {
+            return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_ALREADY_EXISTS', '该采购订单已有有效采购单凭证')
+          }
+        }
+        const asset = await transaction.mediaAsset.findFirst({
+          where: {
+            id: mediaAssetId, createdByUserId: context.actorUserId, status: 'UPLOADING',
+            mediaType: { in: ['IMAGE', 'DOCUMENT'] }, deletedAt: null, objectKey: { not: null },
+          },
+          select: { id: true },
+        })
+        if (asset === null) {
+          return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '所选订单凭证当前不可用')
+        }
+        await this.mediaAsset.activate(transaction, mediaAssetId)
+        const document = await transaction.purchaseOrderDocument.create({
+          data: {
+            purchaseOrderId, mediaAssetId, paymentId: null, documentType, remark,
+            title: documentType === 'ORDER_ISSUANCE_VOUCHER' ? '采购单' : '签收单',
+            createdByUserId: context.actorUserId,
+          },
+          select: { id: true },
+        })
+        await transaction.purchaseOrder.update({
+          where: { id: purchaseOrderId }, data: { version: { increment: 1 } },
+        })
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.PURCHASE_ORDER_DOCUMENT_ATTACHED,
+          outcome: AuditOutcome.SUCCESS, actorType: AuditActorType.USER,
+          actorUserId: context.actorUserId, targetType: 'PURCHASE_ORDER_DOCUMENT',
+          targetId: document.id, requestId: context.requestId,
+          metadata: { purchaseOrderId, documentType },
+        })
+      })
+    }
+    catch (error) {
+      if (error instanceof MediaAssetLifecycleError) {
+        return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '所选订单凭证当前不可用')
+      }
+      throw error
+    }
+    return this.query.getById(purchaseOrderId)
+  }
+
   async detach(
     context: PurchaseOrderMutationContext,
     rawPurchaseOrderId: unknown,
@@ -175,7 +258,7 @@ export class PurchaseOrderDocumentService {
         throw new ApiException(
           HttpStatus.NOT_FOUND,
           'PURCHASE_ORDER_DOCUMENT_NOT_FOUND',
-          '采购订单付款凭证不存在',
+          '采购订单凭证不存在',
         )
       }
       // 凭证与付款事实分离：解除只隐藏附件，不作废或改写实际付款记录。
@@ -235,7 +318,7 @@ export class PurchaseOrderDocumentService {
       throw new ApiException(
         HttpStatus.NOT_FOUND,
         'PURCHASE_ORDER_DOCUMENT_NOT_FOUND',
-        '采购订单付款凭证不存在',
+        '采购订单凭证不存在',
       )
     }
     const objectKey = requireMediaObjectKeyNamespace(

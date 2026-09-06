@@ -353,7 +353,7 @@ export class PurchaseOrderFactoryShipmentService {
       order,
       fromStatus,
       'SHIPPED',
-      reason,
+      reason ?? (source === 'SALES_ORDER' ? '从销售订单确认关联采购单工厂发货' : '用户确认本采购单发货'),
       source,
       false,
     )
