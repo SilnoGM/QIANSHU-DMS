@@ -45,6 +45,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   NUMBERING_RULE_VERSION_PUBLISHED: '编号规则版本已发布',
   NUMBERING_RULE_ENABLED: '编号规则已启用',
   NUMBERING_RULE_DISABLED: '编号规则已停用',
+  SHIPPING_MARK_BINDING_CREATED: '供应商唛头规则已绑定',
+  SHIPPING_MARK_BINDING_UPDATED: '供应商唛头规则已改绑',
   DICTIONARY_TYPE_CREATED: '字典类型已创建',
   DICTIONARY_TYPE_UPDATED: '字典类型已更新',
   DICTIONARY_TYPE_ENABLED: '字典类型已启用',

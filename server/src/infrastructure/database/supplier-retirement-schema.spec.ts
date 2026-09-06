@@ -8,6 +8,8 @@ const legacyMigrationDirectory =
   '20260805090000_supplier_management_schema_and_permissions'
 const retirementMigrationDirectory =
   '20260809090000_supplier_domain_retirement'
+const bindingMigrationDirectory =
+  '20260906090104_supplier_shipping_mark_rule_bindings'
 const legacyMigrationPath = resolve(
   serverRoot,
   `prisma/migrations/${legacyMigrationDirectory}/migration.sql`,
@@ -95,7 +97,7 @@ function extractCreatedEnumValues(
 }
 
 describe('supplier domain retirement database schema', () => {
-  it('keeps the legacy migration byte-identical and appends one retirement migration', () => {
+  it('keeps legacy retirement immutable and only permits the dictionary-backed binding addition', () => {
     const legacyMigration = readFileSync(legacyMigrationPath)
     expect(createHash('sha256').update(legacyMigration).digest('hex')).toBe(
       LEGACY_MIGRATION_SHA256,
@@ -111,8 +113,16 @@ describe('supplier domain retirement database schema', () => {
     expect(supplierMigrationDirectories).toEqual([
       legacyMigrationDirectory,
       retirementMigrationDirectory,
+      bindingMigrationDirectory,
     ])
     expect(readRetirementMigration()).not.toHaveLength(0)
+
+    // 新增的只是以字典稳定值为主键的配置；不得借 supplier_ 命名恢复主数据表或流水。
+    const binding = readFileSync(resolve(serverRoot, `prisma/migrations/${bindingMigrationDirectory}/migration.sql`), 'utf8')
+    expect([...binding.matchAll(/CREATE TABLE "([^"]+)"/gu)].map(match => match[1])).toEqual(['supplier_shipping_mark_rule_bindings'])
+    expect(binding).toContain("t.code = 'service_provider.supplier'")
+    expect(binding).not.toMatch(/(?:INSERT INTO|UPDATE|DELETE FROM)\s+"?(?:numbering_period_states|numbering_issuances|purchase_orders)\b/iu)
+    expect(binding).not.toContain("'suppliers:")
   })
 
   it('removes Supplier models, relations, enum and audit labels from Prisma', () => {

@@ -13,6 +13,22 @@ const repositoryRoot = path.resolve(scriptsDirectory, '..')
 
 const supplierResiduePattern = 'supplier|service[._ /-]?provider'
 const supplierResidueAllowlist = Object.freeze([
+  // 唛头绑定仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据或采购自动派发。
+  'server/prisma/migrations/20260906090104_supplier_shipping_mark_rule_bindings/migration.sql',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.controller.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.service.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.service.spec.ts',
+  'server/src/modules/purchase-shipping-marks/shipping-mark-binding.dto.ts',
+  'server/src/modules/purchase-shipping-marks/shipping-mark-binding.persistence.ts',
+  'server/test/shipping-mark-bindings.e2e-spec.ts',
+  'specs/purchase-shipping-mark-binding/design.md',
+  'specs/purchase-shipping-mark-binding/requirements.md',
+  'web/apps/qsmds-arco/src/api/modules/shipping-mark-bindings.ts',
+  'web/apps/qsmds-arco/src/locales/lang/shipping-mark-binding/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue',
+  'web/apps/qsmds-arco/src/views/system/basic-data/numbering/use-shipping-mark-bindings.ts',
+  'web/apps/qsmds-arco/test/api/shipping-mark-bindings.test.ts',
+  'web/apps/qsmds-arco/test/browser/shipping-mark-bindings.browser.scenario.mjs',
   'docs/后端文档/数据库迁移规范.md',
   'scripts/contract-check.test.mjs',
   'scripts/openapi-contract.mjs',

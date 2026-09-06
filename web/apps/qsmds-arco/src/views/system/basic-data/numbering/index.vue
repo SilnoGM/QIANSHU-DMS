@@ -62,6 +62,7 @@ interface PendingRowAction {
 }
 
 const { auth } = useAppAuth()
+const { t } = useI18n()
 const appAccountStore = useAppAccountStore()
 const route = useRoute()
 const router = useRouter()
@@ -718,6 +719,15 @@ onBeforeUnmount(() => {
         </h1>
       </template>
 
+      <FaButton
+        v-if="auth('purchase-shipping-marks:read')"
+        data-testid="shipping-mark-bindings-entry"
+        variant="outline"
+        @click="router.push({ name: 'systemBasicDataShippingMarkBindings' })"
+      >
+        <FaIcon name="i-lucide:link" />
+        {{ t('shippingMarkBinding.title') }}
+      </FaButton>
       <FaButton
         v-if="canRead && canCreate"
         data-testid="numbering-create-rule"

@@ -80,6 +80,8 @@ enum AuditEventType {
   NUMBERING_RULE_VERSION_PUBLISHED
   NUMBERING_RULE_ENABLED
   NUMBERING_RULE_DISABLED
+  SHIPPING_MARK_BINDING_CREATED
+  SHIPPING_MARK_BINDING_UPDATED
   DICTIONARY_TYPE_CREATED
   DICTIONARY_TYPE_UPDATED
   DICTIONARY_TYPE_ENABLED
@@ -506,6 +508,8 @@ model User {
   purchaseOrderDocumentsDetached    PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentDetachedBy")
   purchaseOrderStatusesChanged      PurchaseOrderStatusHistory[] @relation("PurchaseOrderStatusChangedBy")
   purchaseOrderAmountsChanged       PurchaseOrderAmountRevision[] @relation("PurchaseOrderAmountChangedBy")
+  shippingMarkBindingsCreated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingCreatedBy")
+  shippingMarkBindingsUpdated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingUpdatedBy")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -1143,6 +1147,24 @@ model PurchaseOrderAmountRevision {
   @@map("purchase_order_amount_revisions")
 }
 
+// 仅为供应商字典值增加业务配置，不恢复独立供应商主数据或供应商级流水。
+model SupplierShippingMarkRuleBinding {
+  supplierValue   String   @id @map("supplier_value") @db.VarChar(64)
+  ruleId          String   @map("rule_id") @db.Uuid
+  version         Int      @default(1)
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  updatedByUserId String   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rule      NumberingRule @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation("ShippingMarkBindingCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User @relation("ShippingMarkBindingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([ruleId], map: "supplier_shipping_mark_bindings_rule_idx")
+  @@map("supplier_shipping_mark_rule_bindings")
+}
+
 model NumberingRule {
   id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleCode    String              @unique(map: "numbering_rules_rule_code_key") @map("rule_code") @db.VarChar(64)
@@ -1157,6 +1179,7 @@ model NumberingRule {
   versions     NumberingRuleVersion[]
   periodStates NumberingPeriodState[]
   issuances    NumberingIssuance[]
+  shippingMarkBindings SupplierShippingMarkRuleBinding[]
 
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "numbering_rules_status_updated_at_id_idx")
   @@index([purpose, status, updatedAt(sort: Desc), id(sort: Desc)], map: "numbering_rules_purpose_status_updated_id_idx")

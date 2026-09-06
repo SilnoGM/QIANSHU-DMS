@@ -79,6 +79,18 @@ const routes: RouteRecordRaw = {
       },
     },
     {
+      path: 'numbering/shipping-mark-bindings',
+      name: 'systemBasicDataShippingMarkBindings',
+      component: () => import('@/views/system/basic-data/numbering/shipping-mark-bindings.vue'),
+      meta: {
+        title: '唛头规则绑定',
+        auth: 'purchase-shipping-marks:read',
+        activeMenu: '/system/basic-data/numbering',
+        menu: false,
+        tabMerge: 'routeName',
+      },
+    },
+    {
       path: 'dictionaries',
       name: 'systemBasicDataDictionaries',
       component: () => import('@/views/system/basic-data/dictionaries/index.vue'),

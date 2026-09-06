@@ -40,6 +40,7 @@ import {
   readConfiguration,
   requestPathname,
 } from './regions.browser.helpers.mjs'
+import { verifyShippingMarkBindings } from './shipping-mark-bindings.browser.scenario.mjs'
 
 const managementRoute = '/system/basic-data/numbering'
 const mainRuleCode = 'E2E_BROWSER_SEQUENCE'
@@ -1296,6 +1297,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   await waitForRuleRow(page, mainRuleCode)
   await waitForRuleRow(page, 'E2E_BROWSER_SHIPPING')
 
+  await runNumberingBrowserStep('shipping mark binding configuration', () => verifyShippingMarkBindings(page, configuration))
   issues.stop()
   assert.deepEqual(issues.issues, [])
   assert.equal(
