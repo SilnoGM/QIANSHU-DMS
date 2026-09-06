@@ -40,13 +40,26 @@ test('专用采购抽屉继承销售布局及动画，不引入销售业务字�
   assert.match(information, /QsPersonDisplay/u)
   assert.match(information, /bg-primary shrink-0 h-5 w-1/u)
   assert.doesNotMatch(information, /referencePurchaseUnitPriceAmount|actualUnitPriceAmount/u)
-  assert.equal((records.match(/v-if="!open" key="thumbnail"/gu) ?? []).length, 2)
+  assert.equal((records.match(/v-if="!open" key="thumbnail"/gu) ?? []).length, 1)
   assert.match(records, /prefers-reduced-motion: reduce/u)
   assert.match(records, /canManagePayment/u)
   assert.match(document, /detachedAt === null/u)
   assert.match(document, /<ImageGroup/u)
   assert.match(history, /buildPurchaseOrderTimeline/u)
   assert.doesNotMatch(history, /amountRevisions/u)
+})
+
+test('付款凭证仅在对应付款记录内展示，保留空态及凭证操作', async () => {
+  const records = await readFile(new URL('../../src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue', import.meta.url), 'utf8')
+
+  assert.doesNotMatch(records, /<section :aria-label="t\('purchaseOrderDrawer\.documents'\)"/u)
+  assert.doesNotMatch(records, /expandedDocument/u)
+  assert.match(records, /getPaymentDocuments\(props\.detail\.documents, payment\.id\)/u)
+  assert.match(records, /v-if="!vouchers\.length" :title="t\('purchaseOrderDrawer\.noVoucher'\)"/u)
+  assert.equal((records.match(/<OrderDocument\b/gu) ?? []).length, 1)
+  assert.match(records, /<OrderDocument v-for="voucher in vouchers" :key="voucher\.id" :document="voucher" :busy="busy" :can-manage-document="canManageDocument"/u)
+  assert.match(records, /@download-document="emit\('downloadDocument', \$event\)"/u)
+  assert.match(records, /@detach-document="emit\('detachDocument', \$event\)"/u)
 })
 
 test('采购详情动作精确受 update、payment 和 document 权限控制', async () => {

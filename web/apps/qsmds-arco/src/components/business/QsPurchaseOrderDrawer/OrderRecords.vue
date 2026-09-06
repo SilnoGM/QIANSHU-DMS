@@ -12,19 +12,17 @@ const props = defineProps<{ detail: PurchaseOrderDetailDto, currencies: readonly
 const emit = defineEmits<{ recordPayment: [], voidPayment: [payment: PurchaseOrderPaymentDto], detachDocument: [document: PurchaseOrderDocumentDto], downloadDocument: [document: PurchaseOrderDocumentDto] }>()
 const { t } = useI18n()
 const methodCatalog = useDictionaryCatalog('payment.method')
-const documents = computed(() => props.detail.documents)
-// 采购允许无凭证付款；凭证按 paymentId 精确关联，解除记录仍保留文字但不加载媒体。
+// 凭证仅在所属付款记录内展示，避免独立小节重复；采购允许无凭证付款。
+// 按 paymentId 精确关联，解除记录仍保留文字但不加载媒体。
 const paymentRecords = computed(() => props.detail.payments.map((payment) => {
   const vouchers = getPaymentDocuments(props.detail.documents, payment.id)
   return { payment, vouchers, thumbnail: vouchers.find(item => item.detachedAt === null && item.mediaType === 'IMAGE' && item.contentUrl)?.contentUrl }
 }))
 const canRecordPayment = computed(() => props.canManagePayment && props.detail.orderStatus === 'CONFIRMED' && props.detail.paymentStatus !== 'PAID')
 const expandedPayment = ref<string | null>(null)
-const expandedDocument = ref<string | null>(null)
 // 每次换单都清空展开状态，避免同一抽屉实例残留上一单的卡片状态。
 watch(() => props.detail.id, () => {
   expandedPayment.value = null
-  expandedDocument.value = null
 })
 </script>
 
@@ -120,47 +118,6 @@ watch(() => props.detail.id, () => {
               <OrderDocument v-for="voucher in vouchers" :key="voucher.id" :document="voucher" :busy="busy" :can-manage-document="canManageDocument" @download-document="emit('downloadDocument', $event)" @detach-document="emit('detachDocument', $event)" />
             </div>
           </div>
-        </div>
-      </FaCollapsible>
-    </div>
-  </section>
-
-  <section :aria-label="t('purchaseOrderDrawer.documents')" class="pt-5 border-t border-border/70">
-    <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
-      <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
-      {{ t('purchaseOrderDrawer.documents') }}
-      <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ documents.length }}</span>
-    </h3>
-    <FaEmpty v-if="!documents.length" :title="t('purchaseOrderDrawer.noDocuments')" class="py-6" />
-    <div v-else class="space-y-2.5">
-      <FaCollapsible
-        v-for="document in documents" :key="document.id"
-        :model-value="expandedDocument === document.id"
-        class="border border-border rounded-xl transition-colors duration-150 overflow-hidden [&_[data-slot=collapsible-trigger]]:w-full motion-reduce:transition-none"
-        :class="expandedDocument === document.id ? 'border-primary/35' : ''"
-        @update:model-value="expandedDocument = $event ? document.id : null"
-      >
-        <template #trigger="{ open }">
-          <TransitionGroup name="record-summary" tag="span" class="p-4 text-start flex gap-3 min-h-22 min-w-0 items-center relative hover:bg-muted/25 sm:gap-4">
-            <span v-if="!open" key="thumbnail" data-slot="record-summary-thumbnail" class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
-              <img v-if="document.mediaType === 'IMAGE' && document.detachedAt === null" :src="document.contentUrl" :alt="document.originalFilename" class="size-full object-cover">
-              <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground size-6" aria-hidden="true" />
-            </span>
-            <span key="details" class="flex-1 min-w-0">
-              <span class="flex flex-wrap gap-x-3 gap-y-1 items-center">
-                <FaTag variant="outline" class="text-amber-700 border-amber-500/25 bg-amber-500/8 dark:text-amber-300">{{ t('purchaseOrderDrawer.documents') }}</FaTag>
-                <FaTag v-if="document.detachedAt" variant="outline" class="text-muted-foreground">{{ t('purchaseOrderDrawer.detached') }}</FaTag>
-                <span class="qs-type-meta"><DateTimeDisplay :value="document.createdAt" /></span>
-              </span>
-              <span class="qs-type-body-medium mt-1.5 block truncate" :title="document.title || document.originalFilename">{{ document.title || document.originalFilename }}</span>
-            </span>
-            <span key="toggle" class="text-muted-foreground rounded-full bg-muted/50 flex shrink-0 size-7 items-center justify-center">
-              <FaIcon name="i-lucide:chevron-down" class="size-4 transition-transform duration-150 motion-reduce:transition-none" :class="open ? 'rotate-180' : ''" aria-hidden="true" />
-            </span>
-          </TransitionGroup>
-        </template>
-        <div class="p-4 border-t border-border/70 bg-muted/15 sm:p-5">
-          <OrderDocument :document="document" :busy="busy" :can-manage-document="canManageDocument" @download-document="emit('downloadDocument', $event)" @detach-document="emit('detachDocument', $event)" />
         </div>
       </FaCollapsible>
     </div>
