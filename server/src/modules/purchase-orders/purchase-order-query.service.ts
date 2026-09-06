@@ -56,7 +56,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
     where: { detachedAt: null },
     select: { documentType: true, detachedAt: true },
   },
-  _count: { select: { statusHistory: true, amountRevisions: true } },
+  _count: { select: { payments: true, statusHistory: true, amountRevisions: true } },
   statusHistory: {
     take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
     select: { id: true, changedAt: true, reason: true },

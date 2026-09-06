@@ -68,7 +68,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
     documents: [],
     statusHistory: [],
     amountRevisions: [],
-    _count: { statusHistory: 0, amountRevisions: 0 },
+    _count: { payments: 0, statusHistory: 0, amountRevisions: 0 },
     createdBy: { id: 'actor-id', displayName: '采购员' },
     ...overrides,
   }
@@ -178,12 +178,12 @@ describe('PurchaseOrderQueryService', () => {
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
-      _count: { statusHistory: 0, amountRevisions: 0 },
+      _count: { payments: 0, statusHistory: 0, amountRevisions: 0 },
     })])
     const page = await fixture.service.list({ view: 'all' })
     expect(page.items[0]).toMatchObject({
       paidAmount: '0.0000',
-      paymentRecordSummary: { count: 0, byType: [
+      paymentRecordSummary: { totalCount: 0, count: 0, byType: [
         { paymentType: 'DEPOSIT', count: 0, amount: '0.0000' },
         { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
         { paymentType: 'OTHER', count: 0, amount: '0.0000' },
@@ -218,12 +218,12 @@ describe('PurchaseOrderQueryService', () => {
       ],
       statusHistory: [{ id: 'status-1', changedAt: new Date('2026-09-05T03:00:00Z'), reason: null }],
       amountRevisions: [{ id: 'amount-1', changedAt, reason: '调整采购约定' }],
-      _count: { statusHistory: 3, amountRevisions: 2 },
+      _count: { payments: 5, statusHistory: 3, amountRevisions: 2 },
     })])
     const page = await fixture.service.list({ view: 'all', page: 2, pageSize: 5 })
     expect(page.items[0]).toMatchObject({
       paidAmount: '9007199254740993.0010', outstandingAmount: '0.9989',
-      paymentRecordSummary: { count: 4, byType: [
+      paymentRecordSummary: { totalCount: 5, count: 4, byType: [
         { paymentType: 'DEPOSIT', count: 1, amount: '9007199254740993.0001' },
         { paymentType: 'BALANCE', count: 1, amount: '0.0002' },
         { paymentType: 'OTHER', count: 2, amount: '0.0007' },
@@ -246,7 +246,7 @@ describe('PurchaseOrderQueryService', () => {
         documents: { where: { detachedAt: null }, select: { documentType: true, detachedAt: true } },
         statusHistory: expect.objectContaining({ take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }] }) as unknown,
         amountRevisions: expect.objectContaining({ take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }] }) as unknown,
-        _count: { select: { statusHistory: true, amountRevisions: true } },
+        _count: { select: { payments: true, statusHistory: true, amountRevisions: true } },
       }) as unknown,
     }))
     expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Array), { isolationLevel: 'RepeatableRead' })
@@ -256,7 +256,7 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     const changedAt = new Date('2026-09-06T03:00:00Z')
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
-      _count: { statusHistory: 1, amountRevisions: 1 },
+      _count: { payments: 0, statusHistory: 1, amountRevisions: 1 },
       statusHistory: [{ id: 'same-id', changedAt, reason: null }],
       amountRevisions: [{ id: 'same-id', changedAt, reason: '金额调整' }],
     })])
@@ -264,6 +264,19 @@ describe('PurchaseOrderQueryService', () => {
     expect(page.items[0]).toMatchObject({ changeSummary: {
       statusCount: 1, amountCount: 1, latest: { kind: 'STATUS', changedAt: changedAt.toISOString(), reason: null },
     } })
+  })
+
+  it('counts voided-only payment history while keeping active totals zero', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      // 列表仍只加载有效付款；历史总数独立来自数据库关系计数。
+      payments: [], _count: { payments: 2, statusHistory: 0, amountRevisions: 0 },
+    })])
+    const page = await fixture.service.list({ view: 'all' })
+    expect(page.items[0]).toMatchObject({
+      paidAmount: '0.0000', outstandingAmount: '100.0000',
+      paymentRecordSummary: { totalCount: 2, count: 0 },
+    })
   })
 
   it('returns exact amount snapshots and standalone documents without fabricating history', async () => {

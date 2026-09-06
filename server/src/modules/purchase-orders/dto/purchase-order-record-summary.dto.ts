@@ -8,6 +8,7 @@ export class PurchaseOrderPaymentTypeSummaryDto {
 }
 
 export class PurchaseOrderPaymentRecordSummaryDto {
+  @ApiProperty({ type: 'integer', minimum: 0, description: '全部付款记录数，包含已作废记录；仅用于历史记录入口' }) readonly totalCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly count!: number
   @ApiProperty({ type: () => [PurchaseOrderPaymentTypeSummaryDto] }) readonly byType!: readonly PurchaseOrderPaymentTypeSummaryDto[]
 }

@@ -13,18 +13,19 @@ test('采购记录三列使用服务端摘要，并保留原有金额、固定�
   for (const kind of ['payments', 'documents', 'changes']) {
     assert.match(source, new RegExp(`<PurchaseOrderRecordSummaryCell[^>]+kind="${kind}"[^>]+:order="row.original"`, 'u'))
     assert.match(source, new RegExp(`<PurchaseOrderRecordSummaryCell[^>]+kind="${kind}"[^>]+:order="row"`, 'u'))
+    assert.match(source, new RegExp(`@open="openRecordsModal\\('${kind}', row.original\\)"`, 'u'))
+    assert.match(source, new RegExp(`@open="openRecordsModal\\('${kind}', row\\)"`, 'u'))
   }
+  assert.match(source, /<PurchaseOrderRecordsModal/u)
   assert.match(source, /fixed: 'right'/u)
 })
 
-test('摘要单元格准确展示类型、金额、次数和最近原因，不自行请求或重算付款', async () => {
+test('三列与销售一致使用可点击的图标数量按钮，零记录不禁用', async () => {
   const source = await readFile(new URL('purchase-order-record-summary-cell.vue', root), 'utf8')
-  assert.match(source, /paymentRecordSummary\.byType\.filter\(item => item\.count > 0\)/u)
-  assert.match(source, /documentSummary\.byType\.filter\(item => item\.count > 0\)/u)
-  assert.match(source, /<AmountDisplay :value="item.amount"/u)
-  assert.match(source, /changeSummary\.statusCount \+ props\.order\.changeSummary\.amountCount/u)
-  assert.match(source, /latest\.reason\?\.trim\(\) \|\| t\('purchaseOrderDrawer.reasonNotRecorded'\)/u)
-  assert.match(source, /<DateTimeDisplay/u)
-  assert.match(source, /v-else[^>]*>—</u)
-  assert.doesNotMatch(source, /purchaseOrdersApi|parseFloat|Number\(item\.amount\)|fetch\(/u)
+  assert.match(source, /<FaButton[\s\S]*?variant="ghost"/u)
+  assert.match(source, /@click="emit\('open'\)"/u)
+  assert.match(source, /getPurchaseOrderRecordCount/u)
+  assert.match(source, /:aria-label=/u)
+  assert.match(source, /<FaIcon/u)
+  assert.doesNotMatch(source, /disabled|purchaseOrdersApi|fetch\(|<AmountDisplay|<DateTimeDisplay/u)
 })

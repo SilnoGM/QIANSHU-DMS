@@ -655,7 +655,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(paid).toMatchObject({
       paymentStatus: 'PAID',
       amounts: { paidAmount: '25.0000', outstandingAmount: '0.0000' },
-      paymentRecordSummary: { count: 2, byType: [
+      paymentRecordSummary: { totalCount: 2, count: 2, byType: [
         { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
         { paymentType: 'BALANCE', count: 1, amount: '15.0000' },
         { paymentType: 'OTHER', count: 0, amount: '0.0000' },
@@ -695,7 +695,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     await expect(queries.list({
       view: 'pending', keyword: created.orderNo,
     })).resolves.toMatchObject({ total: 1, items: [{
-      paidAmount: '10.0000', paymentRecordSummary: { count: 1, byType: [
+      paidAmount: '10.0000', paymentRecordSummary: { totalCount: 2, count: 1, byType: [
         { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
         { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
         { paymentType: 'OTHER', count: 0, amount: '0.0000' },

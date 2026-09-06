@@ -51130,6 +51130,11 @@
       "PurchaseOrderPaymentRecordSummaryDto": {
         "type": "object",
         "properties": {
+          "totalCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "全部付款记录数，包含已作废记录；仅用于历史记录入口"
+          },
           "count": {
             "type": "integer",
             "minimum": 0
@@ -51142,6 +51147,7 @@
           }
         },
         "required": [
+          "totalCount",
           "count",
           "byType"
         ]

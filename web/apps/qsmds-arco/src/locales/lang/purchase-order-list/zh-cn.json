@@ -4,11 +4,24 @@
       "payments": "实际付款记录",
       "documents": "订单凭证",
       "changes": "变更记录",
-      "paymentCount": "{count} 笔有效付款",
-      "documentCount": "{count} 份",
-      "changeCount": "{count} 次变更",
-      "changeBreakdown": "状态变更 {status} 次，金额变更 {amount} 次",
-      "changeKinds": { "STATUS": "最近：状态变更", "AMOUNT": "最近：金额变更" }
+      "open": "查看 {count} 项{name}",
+      "recordCount": "{count} 项记录",
+      "voucherCount": "{count} 项凭证",
+      "noPaymentsDescription": "该订单还没有有效或已作废的付款记录。",
+      "noDocumentsDescription": "该订单目前没有有效凭证。",
+      "noStatusChanges": "暂无状态变更",
+      "noAmountChanges": "暂无金额变更",
+      "statusTab": "状态变更（{count}）",
+      "amountTab": "金额变更（{count}）",
+      "paidAt": "付款时间",
+      "paymentType": "付款类型",
+      "paymentAmount": "付款金额",
+      "remark": "备注",
+      "preview": "预览凭证 {name}",
+      "openFile": "打开凭证 {name}",
+      "imageError": "凭证图片加载失败",
+      "orderDocument": "订单级凭证",
+      "paymentDocument": "已关联实际付款记录"
     }
   }
 }

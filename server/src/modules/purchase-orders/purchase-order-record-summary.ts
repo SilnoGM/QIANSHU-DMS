@@ -20,12 +20,13 @@ interface RecordSource {
   }[]
   readonly statusHistory: readonly ChangeRecord[]
   readonly amountRevisions: readonly ChangeRecord[]
-  readonly _count: { readonly statusHistory: number, readonly amountRevisions: number }
+  readonly _count: { readonly payments: number, readonly statusHistory: number, readonly amountRevisions: number }
 }
 
 export interface PurchaseOrderRecordSummaries {
   readonly paidAmount: string
   readonly paymentRecordSummary: {
+    readonly totalCount: number
     readonly count: number
     readonly byType: readonly { readonly paymentType: PurchaseOrderPaymentType, readonly count: number, readonly amount: string }[]
   }
@@ -66,7 +67,8 @@ export function summarizePurchaseOrderRecords(source: RecordSource): PurchaseOrd
   const latest = candidates[0]
   return {
     paidAmount: formatPurchaseOrderAmountUnits(byPaymentType.reduce((sum, item) => sum + parsePurchaseOrderAmountUnits(item.amount), 0n)),
-    paymentRecordSummary: { count: payments.length, byType: byPaymentType },
+    // 浏览记录总数包含作废历史；有效数量和金额继续只取未作废付款。
+    paymentRecordSummary: { totalCount: source._count.payments, count: payments.length, byType: byPaymentType },
     documentSummary: {
       count: documents.length,
       byType: DOCUMENT_TYPES.map(documentType => ({

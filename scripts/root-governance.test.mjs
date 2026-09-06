@@ -134,6 +134,8 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/index.vue',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/types.ts',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderInformation.vue',
+  // 记录弹窗仅展示已授权采购响应中的供应商标签，不新增供应商主数据访问。
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.vue',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseStartModal/README.md',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue',
   'web/apps/qsmds-arco/src/components/business/QsPurchaseStartModal/logic.ts',

@@ -6,6 +6,7 @@ import type {
   PurchaseOrderPendingActionItem,
   PurchaseOrderPendingTask,
 } from './purchase-order-list.logic'
+import type { PurchaseOrderRecordsKind } from './purchase-order-records-modal.logic'
 import type {
   FactoryShipmentResultDto,
   PurchaseOrderCurrencySummaryDto,
@@ -74,6 +75,7 @@ import {
   resolvePurchaseOrderPendingActions,
 } from './purchase-order-list.logic'
 import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
+import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
 
@@ -147,6 +149,9 @@ const listError = ref('')
 const requestId = ref<string>()
 const detailVisible = ref(false)
 const selectedOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
+const recordsModalVisible = ref(false)
+const recordsModalKind = ref<PurchaseOrderRecordsKind>('payments')
+const recordsModalOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
 const purchaseStartVisible = ref(false)
 const purchaseStartType = ref<PurchaseStartPurchaseType>('SALES_LINKED')
@@ -262,7 +267,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 130,
   title: '实际付款',
 }, {
-  accessorFn: item => item.paymentRecordSummary.count,
+  accessorFn: item => item.paymentRecordSummary.totalCount,
   id: 'paymentRecordsSummary',
   minWidth: 180,
   title: t('purchaseOrderList.records.payments'),
@@ -726,6 +731,24 @@ function handleDetailUpdated(_detail: PurchaseOrderDetailDto): void {
   refreshOrdersAndCounts()
 }
 
+function openRecordsModal(kind: PurchaseOrderRecordsKind, order: PurchaseOrderListItemDto): void {
+  recordsModalKind.value = kind
+  recordsModalOrder.value = order
+  recordsModalVisible.value = true
+}
+
+/** 弹窗拿到新快照后同步三个入口数量，不触发列表筛选或写入。 */
+function handleRecordsLoaded(detail: PurchaseOrderDetailDto): void {
+  rows.value = rows.value.map(row => row.id === detail.id
+    ? {
+        ...row,
+        paymentRecordSummary: detail.paymentRecordSummary,
+        documentSummary: detail.documentSummary,
+        changeSummary: detail.changeSummary,
+      }
+    : row)
+}
+
 function handleCancellationUpdated(detail: PurchaseOrderDetailDto): void {
   cancellationDetail.value = detail
   refreshOrdersAndCounts()
@@ -743,6 +766,8 @@ watch(() => appAccountStore.authEpoch, () => {
   shipmentContext.value = null
   shipmentError.value = null
   detailVisible.value = false
+  recordsModalVisible.value = false
+  recordsModalOrder.value = null
   selectedOrder.value = null
   cancellationDetail.value = null
   purchaseStartVisible.value = false
@@ -1085,13 +1110,13 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-paymentRecordsSummary="{ row }">
-          <PurchaseOrderRecordSummaryCell kind="payments" :order="row.original" :currencies="currencyCatalog.currencies.value" />
+          <PurchaseOrderRecordSummaryCell kind="payments" :order="row.original" @open="openRecordsModal('payments', row.original)" />
         </template>
         <template #cell-documentRecordsSummary="{ row }">
-          <PurchaseOrderRecordSummaryCell kind="documents" :order="row.original" :currencies="currencyCatalog.currencies.value" />
+          <PurchaseOrderRecordSummaryCell kind="documents" :order="row.original" @open="openRecordsModal('documents', row.original)" />
         </template>
         <template #cell-changeRecordsSummary="{ row }">
-          <PurchaseOrderRecordSummaryCell kind="changes" :order="row.original" :currencies="currencyCatalog.currencies.value" />
+          <PurchaseOrderRecordSummaryCell kind="changes" :order="row.original" @open="openRecordsModal('changes', row.original)" />
         </template>
 
         <template #cell-statusSummary="{ row }">
@@ -1480,7 +1505,7 @@ onBeforeUnmount(() => {
                   {{ t('purchaseOrderList.records.payments') }}
                 </dt>
                 <dd class="m-0">
-                  <PurchaseOrderRecordSummaryCell kind="payments" :order="row" :currencies="currencyCatalog.currencies.value" />
+                  <PurchaseOrderRecordSummaryCell kind="payments" :order="row" @open="openRecordsModal('payments', row)" />
                 </dd>
               </div>
               <div class="col-span-2">
@@ -1488,7 +1513,7 @@ onBeforeUnmount(() => {
                   {{ t('purchaseOrderList.records.documents') }}
                 </dt>
                 <dd class="m-0">
-                  <PurchaseOrderRecordSummaryCell kind="documents" :order="row" :currencies="currencyCatalog.currencies.value" />
+                  <PurchaseOrderRecordSummaryCell kind="documents" :order="row" @open="openRecordsModal('documents', row)" />
                 </dd>
               </div>
               <div class="col-span-2">
@@ -1496,7 +1521,7 @@ onBeforeUnmount(() => {
                   {{ t('purchaseOrderList.records.changes') }}
                 </dt>
                 <dd class="m-0">
-                  <PurchaseOrderRecordSummaryCell kind="changes" :order="row" :currencies="currencyCatalog.currencies.value" />
+                  <PurchaseOrderRecordSummaryCell kind="changes" :order="row" @open="openRecordsModal('changes', row)" />
                 </dd>
               </div>
             </dl>
@@ -1504,6 +1529,14 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
+
+    <PurchaseOrderRecordsModal
+      v-model="recordsModalVisible"
+      :kind="recordsModalKind"
+      :order="recordsModalOrder"
+      :currencies="currencyCatalog.currencies.value"
+      @detail-loaded="handleRecordsLoaded"
+    />
 
     <PurchaseOrderDetailDrawer
       v-model="detailVisible"

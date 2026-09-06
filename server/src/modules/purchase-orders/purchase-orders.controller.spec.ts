@@ -511,6 +511,10 @@ describe('PurchaseOrdersController OpenAPI', () => {
     expect(document.components?.schemas?.PurchaseOrderPaymentTypeSummaryDto).toMatchObject({
       properties: { paymentType: { enum: ['DEPOSIT', 'BALANCE', 'OTHER'] }, amount: { type: 'string' } },
     })
+    expect(document.components?.schemas?.PurchaseOrderPaymentRecordSummaryDto).toMatchObject({
+      required: expect.arrayContaining(['totalCount', 'count', 'byType']) as unknown,
+      properties: { totalCount: { type: 'integer', minimum: 0 } },
+    })
     expect(document.components?.schemas?.PurchaseOrderChangeSummaryDto).toMatchObject({
       properties: { latest: { nullable: true } },
     })
