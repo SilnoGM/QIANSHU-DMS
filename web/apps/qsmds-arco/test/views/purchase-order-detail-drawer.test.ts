@@ -44,7 +44,8 @@ test('专用采购抽屉继承销售布局及动画，不引入销售业务字�
   assert.match(document, /detachedAt === null/u)
   assert.match(document, /<ImageGroup/u)
   assert.match(history, /buildPurchaseOrderTimeline/u)
-  assert.doesNotMatch(history, /amountRevisions/u)
+  assert.match(history, /revisionAmounts\(entry\.record\)/u)
+  assert.match(history, /reasonNotRecorded/u)
 })
 
 test('付款凭证仅在对应付款记录内展示，保留空态', async () => {
@@ -56,6 +57,30 @@ test('付款凭证仅在对应付款记录内展示，保留空态', async () =>
   assert.match(records, /v-if="!vouchers\.length" :title="t\('purchaseOrderDrawer\.noVoucher'\)"/u)
   assert.equal((records.match(/<OrderDocument\b/gu) ?? []).length, 1)
   assert.match(records, /<OrderDocument v-for="voucher in vouchers" :key="voucher\.id" :document="voucher" \/>/u)
+})
+
+test('订单凭证独立过滤，保留展开小图退场动画与权限控制的归档入口', async () => {
+  const source = await readFile(new URL('../../src/components/business/QsPurchaseOrderDrawer/OrderDocuments.vue', import.meta.url), 'utf8')
+  assert.match(source, /getOrderDocuments\(props\.detail\.documents\)/u)
+  assert.match(source, /bg-primary shrink-0 h-5 w-1/u)
+  assert.match(source, /v-if="!open" key="thumbnail"/u)
+  assert.match(source, /prefers-reduced-motion: reduce/u)
+  assert.match(source, /v-if="canAttachDocument"/u)
+  assert.match(source, /DELIVERY_RECEIPT/u)
+  assert.doesNotMatch(source, /voidPayment|downloadDocument|detachDocument/u)
+})
+
+test('凭证弹窗限定归档类型，换单与退出登录取消请求、释放预览资源', async () => {
+  const source = await readFile(new URL('../../src/views/operations/purchase-orders/purchase-order-document-modal.vue', import.meta.url), 'utf8')
+  assert.match(source, /auth\('purchase-orders:document'\)/u)
+  assert.match(source, /hasIssuance/u)
+  assert.match(source, /purchaseOrdersApi\.attachDocument/u)
+  assert.match(source, /controller\?\.abort\(\)/u)
+  assert.match(source, /URL\.revokeObjectURL/u)
+  assert.match(source, /account\.authEpoch/u)
+  assert.match(source, /onBeforeUnmount\(reset\)/u)
+  assert.match(source, /:submitting="busy"/u)
+  assert.doesNotMatch(source, /updateFulfillmentStatus|recordPayment|paymentId/u)
 })
 
 test('采购抽屉移除作废、下载和解除入口，保留图片预览及历史状态', async () => {

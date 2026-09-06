@@ -43,6 +43,20 @@ function createRecorder(calls: Call[]): AxiosInstance {
   } as unknown as AxiosInstance
 }
 
+test('独立凭证归档使用专属接口，不自动重试且不提交付款 ID 或履约状态', async () => {
+  const calls: Call[] = []
+  const api = createPurchaseOrdersApi(createRecorder(calls))
+  const signal = new AbortController().signal
+  const data = { documentType: 'DELIVERY_RECEIPT' as const, mediaAssetId: 'media-id', remark: '归档' }
+  await api.attachDocument('purchase/order', data, signal)
+  assert.deepEqual(calls, [{
+    method: 'post',
+    url: 'purchase-orders/purchase%2Forder/documents',
+    data,
+    config: { errorPresentation: 'local', retry: false, signal },
+  }])
+})
+
 test('采购查询与来源 loader 使用局部呈错、AbortSignal 和编码后的资源路径', async () => {
   const calls: Call[] = []
   const api = createPurchaseOrdersApi(createRecorder(calls))

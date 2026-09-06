@@ -8,6 +8,7 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import QsPurchaseOrderDrawer from '@/components/business/QsPurchaseOrderDrawer/index.vue'
 import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
+import PurchaseOrderDocumentModal from './purchase-order-document-modal.vue'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 
 defineOptions({ name: 'PurchaseOrderDetailDrawer' })
@@ -30,6 +31,7 @@ const loading = ref(false)
 const loadError = ref<string | null>(null)
 const actionError = ref('')
 const actionLocked = ref(false)
+const documentModalVisible = ref(false)
 const detailActionsRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailActions>>('detailActionsRef')
 let requestVersion = 0
 let detailAbortController: AbortController | null = null
@@ -39,6 +41,7 @@ const drawerVisible = computed({
   set: value => emit('update:modelValue', value),
 })
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
+const canAttachDocument = computed(() => auth('purchase-orders:document'))
 function cancelDetailRequest(): void {
   requestVersion += 1
   detailAbortController?.abort()
@@ -101,6 +104,7 @@ function openPaymentDialog(): void {
 watch(
   () => [props.modelValue, props.order?.id] as const,
   ([visible, orderId]) => {
+    documentModalVisible.value = false
     if (!visible || orderId === undefined) {
       cancelDetailRequest()
       detailActionsRef.value?.cancelPendingRequests()
@@ -140,8 +144,10 @@ onBeforeUnmount(() => {
     :action-error="actionError"
     :busy="actionLocked"
     :can-manage-payment="canManagePayment"
+    :can-attach-document="canAttachDocument"
     @reload="loadDetail"
     @record-payment="openPaymentDialog"
+    @attach-document="documentModalVisible = canAttachDocument && !actionLocked"
   />
 
   <PurchaseOrderDetailActions
@@ -152,5 +158,9 @@ onBeforeUnmount(() => {
     @busy-change="actionLocked = $event"
     @detail-updated="applyUpdatedDetail"
     @failure="actionError = $event"
+  />
+  <PurchaseOrderDocumentModal
+    v-if="detail && documentModalVisible" :key="detail.id" v-model="documentModalVisible" :detail="detail"
+    @busy-change="actionLocked = $event" @detail-updated="applyUpdatedDetail"
   />
 </template>

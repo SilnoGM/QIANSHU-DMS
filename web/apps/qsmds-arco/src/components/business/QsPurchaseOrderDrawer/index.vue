@@ -2,6 +2,7 @@
 import type { PurchaseOrderDetailDto, PurchaseOrderListItemDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
+import OrderDocuments from './OrderDocuments.vue'
 import OrderHistory from './OrderHistory.vue'
 import OrderInformation from './OrderInformation.vue'
 import OrderRecords from './OrderRecords.vue'
@@ -17,12 +18,14 @@ const props = defineProps<{
   actionError: string
   busy: boolean
   canManagePayment: boolean
+  canAttachDocument?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
   'closed': []
   'recordPayment': []
+  'attachDocument': []
 }>()
 const { t } = useI18n()
 const toast = useQsToast()
@@ -111,10 +114,11 @@ function onClosed() {
               :detail="detail" :currencies="currencies" :busy="busy" :can-manage-payment="canManagePayment"
               @record-payment="emit('recordPayment')"
             />
+            <OrderDocuments :detail="detail" :busy="busy" :can-attach-document="Boolean(canAttachDocument)" @attach-document="emit('attachDocument')" />
           </div>
         </template>
         <template #changes>
-          <OrderHistory :detail="detail" />
+          <OrderHistory :detail="detail" :currencies="currencies" />
         </template>
       </FaTabs>
     </div>

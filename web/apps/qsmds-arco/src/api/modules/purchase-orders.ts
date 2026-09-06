@@ -3,6 +3,7 @@ import type {
   CreatePurchaseOrderRequestDto,
   FactoryShipmentResultDto,
   PurchaseOrderDetailDto,
+  PurchaseOrderDocumentAttachRequestDto,
   PurchaseOrderFactoryShipmentRequestDto,
   PurchaseOrderFulfillmentStatusRequestDto,
   PurchaseOrderPageDto,
@@ -162,6 +163,15 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
       signal: AbortSignal,
     ) => client.post<PurchaseOrderDetailDto>(
       `${orderPath(purchaseOrderId)}/payments/${encodeURIComponent(paymentId)}/void`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    attachDocument: (
+      purchaseOrderId: string,
+      data: PurchaseOrderDocumentAttachRequestDto,
+      signal: AbortSignal,
+    ) => client.post<PurchaseOrderDetailDto>(
+      `${orderPath(purchaseOrderId)}/documents`,
       data,
       { errorPresentation: 'local', retry: false, signal },
     ),
