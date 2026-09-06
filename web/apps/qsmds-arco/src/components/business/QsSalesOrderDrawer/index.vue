@@ -58,13 +58,13 @@ function onClosed() {
     :closable="false"
     :show-confirm-button="false"
     :destroy-on-close="true"
-    content-class="qs-sales-order-drawer border-border bg-background w-screen max-w-none sm:max-w-none md:w-[48rem] md:max-w-[calc(100vw-3rem)]"
+    content-class="qs-sales-order-drawer border-border rounded-l-2xl bg-background w-screen max-w-none overflow-hidden sm:max-w-none md:w-[48rem] md:max-w-[calc(100vw-3rem)]"
     header-class="p-0"
-    footer-class="px-5 py-3 bg-muted/15 sm:px-6"
+    footer-class="px-5 py-2 bg-muted/15 sm:px-6"
     @closed="onClosed"
   >
     <template #header>
-      <div class="px-5 py-5 bg-muted/15 flex gap-3 min-w-0 items-center sm:px-6 sm:py-6 sm:gap-4">
+      <div class="px-5 py-3 bg-muted/15 flex gap-3 min-w-0 items-center sm:px-6 sm:gap-4">
         <span class="text-primary border border-primary/15 rounded-xl bg-primary/8 flex shrink-0 size-12 items-center justify-center dark:text-foreground"><FaIcon name="i-lucide:receipt-text" class="size-6" aria-hidden="true" /></span>
         <div class="flex-1 min-w-0">
           <h2 class="qs-type-page-title m-0 [overflow-wrap:anywhere] font-mono!">
@@ -105,7 +105,7 @@ function onClosed() {
     </div>
     <template #footer>
       <div class="flex justify-end">
-        <FaButton type="button" variant="outline" class="px-6 min-h-11 min-w-28" :disabled="loading || !detail || Boolean(error)" @click="toast.info(t('salesOrderDrawer.printNotice'))">
+        <FaButton type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="loading || !detail || Boolean(error)" @click="toast.info(t('salesOrderDrawer.printNotice'))">
           <FaIcon name="i-lucide:printer" class="size-4" aria-hidden="true" />{{ t('salesOrderDrawer.print') }}
         </FaButton>
       </div>
