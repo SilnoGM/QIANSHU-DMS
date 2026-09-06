@@ -16,3 +16,17 @@
 - [x] 获得 `list-extension-design.md` 中公开 API 响应扩展确认。
 - [x] 按 TDD 扩展列表摘要并同步 OpenAPI。
 - [x] 接入共用采购表格三列，完成自动及页面验证后本地提交。
+
+## 后续：付款凭证按采购订单号与付款类型命名
+
+- [x] 确认 `DEPOSIT / BALANCE / OTHER` 分别使用“定金凭证 / 尾款凭证 / 其他付款凭证”，只影响新凭证，不改变原始文件名及历史标题。
+- [x] 先补命名失败测试（3 项），再在记录付款事务中根据真实 `orderNo` 生成标题；补客户端覆盖拒绝与历史读取回归。
+- [x] 隔离 PostgreSQL 验证三类标题落库、原始文件名保留、已激活附件不可重复使用、付款累计不变；不写入业务库。
+- [x] 验证命令及结果：
+  - `pnpm -C server exec jest --runInBand`：256 个套件、2625 项通过。
+  - `pnpm -C server exec tsc --noEmit`：通过。
+  - `pnpm -C server exec eslint src/modules/purchase-orders/purchase-order-mutation.service.ts src/modules/purchase-orders/purchase-order-mutation.service.spec.ts src/modules/purchase-orders/purchase-order-query.service.spec.ts test/purchase-order-service.e2e-spec.ts`：通过。
+  - `node ./scripts/ci-postgres.mjs -- /bin/sh -c 'pnpm -C server db:migrate:deploy && pnpm -C server exec jest --config test/jest-e2e.json --runInBand --runTestsByPath test/purchase-order-service.e2e-spec.ts'`：10 项通过；仅在临时数据库部署已有迁移。输出一条 `pg` 并发查询弃用警告，未导致失败。
+  - `pnpm -C web test:api`：1123 项通过；`pnpm -C web typecheck`：通过。
+  - `git diff --check`：通过。
+- 前端沿用服务端保存标题；本次无 UI 变动，未向业务库提交测试付款。首轮新增覆盖拒绝测试误用了错误码，已按现有 `VALIDATION_FAILED` 修正，再验证三条命名用例确实失败后实施修复。

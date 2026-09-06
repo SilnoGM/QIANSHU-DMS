@@ -75,6 +75,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let cnyWasEnabled = false
   let issuanceVoucherMediaAssetId: string
   let paymentVoucherMediaAssetId: string
+  const purchaseVoucherMediaAssetIds: string[] = []
   let productId: string
   let provinceStateId: string
   let salesOrderId: string
@@ -408,6 +409,13 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
             where: { id: { in: purchaseOrderIds } },
           })
         }
+        // 新增付款凭证夹具只按本测试捕获的 ID 清理，并与凭证删除同事务，
+        // 确保 READY 媒体的延迟引用约束不会在清理时看到无引用的残留资产。
+        if (purchaseVoucherMediaAssetIds.length > 0) {
+          await transaction.mediaAsset.deleteMany({
+            where: { id: { in: purchaseVoucherMediaAssetIds } },
+          })
+        }
         if (salesOrderId !== undefined) {
           await transaction.$executeRawUnsafe(
             'ALTER TABLE "sales_order_documents" DISABLE TRIGGER "sales_order_documents_invariants_trigger"',
@@ -706,6 +714,54 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       actorUserId, requestId: `purchase-cancel-paid-${suffix}`,
     }, createdId, { toStatus: 'CANCELLED' }))
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
+  })
+
+  it('persists typed voucher names without renaming source files or reusing uploads', async () => {
+    const orderId = await commands.create(context(), {
+      purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: '凭证命名测试供应商',
+      orderDate: '2026-08-27',
+      lines: [{
+        lineType: 'CUSTOM', name: '凭证命名测试产品', description: null,
+        referencePurchaseUnitPriceAmount: '100', actualPurchaseUnitPriceAmount: '100', quantity: 1,
+      }],
+      purchaseTotalAmount: '100', depositDueAmount: '30', balanceDueAmount: '70',
+    })
+    const { orderNo } = await queries.getById(orderId)
+    for (const [paymentType, label] of [
+      ['DEPOSIT', '定金凭证'], ['BALANCE', '尾款凭证'], ['OTHER', '其他付款凭证'],
+    ] as const) {
+      const originalFilename = `original-${paymentType}.pdf`
+      const asset = await prisma.mediaAsset.create({
+        data: {
+          mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename,
+          objectKey: `assets/purchase-voucher-${suffix}-${paymentType}.pdf`,
+          uploadExpiresAt: new Date('2099-01-01T00:00:00.000Z'), createdByUserId: actorUserId,
+        },
+        select: { id: true },
+      })
+      purchaseVoucherMediaAssetIds.push(asset.id)
+      const input = {
+        paymentType, amount: '10', paidAt: '2026-08-27T11:00:00.000Z',
+        paymentMethod: 'BANK_TRANSFER', voucher: { mediaAssetId: asset.id },
+      }
+      const detail = await mutations.recordPayment(context(), orderId, input)
+      expect(detail.documents.find(document => document.mediaAssetId === asset.id))
+        .toMatchObject({ title: `${orderNo}-${label}`, originalFilename })
+      await expect(prisma.purchaseOrderDocument.findFirstOrThrow({
+        where: { purchaseOrderId: orderId, mediaAssetId: asset.id },
+        select: { title: true, mediaAsset: { select: { originalFilename: true } } },
+      })).resolves.toEqual({ title: `${orderNo}-${label}`, mediaAsset: { originalFilename } })
+      // 延续现有上传归属/状态校验；重复使用已激活的附件不能新增付款或凭证。
+      await expect(mutations.recordPayment(context(), orderId, input))
+        .rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+    }
+    await expect(prisma.purchaseOrderPayment.count({ where: { purchaseOrderId: orderId } }))
+      .resolves.toBe(3)
+    await expect(prisma.purchaseOrderDocument.count({ where: { purchaseOrderId: orderId } }))
+      .resolves.toBe(3)
+    await expect(queries.getById(orderId)).resolves.toMatchObject({
+      paymentStatus: 'PARTIALLY_PAID', amounts: { paidAmount: '30.0000', outstandingAmount: '70.0000' },
+    })
   })
 
   it('supports split quantities, rejects overage, and releases quantity on cancel', async () => {

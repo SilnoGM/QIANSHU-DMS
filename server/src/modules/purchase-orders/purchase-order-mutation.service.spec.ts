@@ -373,10 +373,14 @@ describe('PurchaseOrderMutationService', () => {
     )
   })
 
-  it('optionally attaches one prepared payment voucher in the payment transaction', async () => {
+  it.each([
+    ['DEPOSIT', '定金凭证'],
+    ['BALANCE', '尾款凭证'],
+    ['OTHER', '其他付款凭证'],
+  ])('names the %s voucher from the persisted order number in the payment transaction', async (paymentType, label) => {
     const fixture = setup()
     await fixture.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'DEPOSIT',
+      paymentType,
       amount: '30',
       paidAt: '2026-08-27T11:00:00.000Z',
       paymentMethod: 'BANK',
@@ -394,9 +398,23 @@ describe('PurchaseOrderMutationService', () => {
         paymentId: PAYMENT_ID,
         mediaAssetId: MEDIA_ID,
         documentType: 'PAYMENT_VOUCHER',
+        title: `${fixture.order.orderNo}-${label}`,
       },
       select: { id: true },
     })
+  })
+
+  it.each([
+    { orderNo: 'FORGED-ORDER' },
+    { voucher: { mediaAssetId: MEDIA_ID, title: 'Forged title' } },
+  ])('rejects client overrides of the voucher naming source', async (overrides) => {
+    const fixture = setup()
+    await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z',
+      paymentMethod: 'BANK', voucher: { mediaAssetId: MEDIA_ID }, ...overrides,
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(fixture.transaction.purchaseOrderPayment.create).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderDocument.create).not.toHaveBeenCalled()
   })
 
   it('rejects overpayment and any payment on a cancelled order', async () => {

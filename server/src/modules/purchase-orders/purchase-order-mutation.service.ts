@@ -55,6 +55,11 @@ const PAYMENT_TYPES = new Set<PurchaseOrderPaymentType>([
   'BALANCE',
   'OTHER',
 ])
+const PAYMENT_VOUCHER_TITLE_LABELS: Readonly<Record<PurchaseOrderPaymentType, string>> = {
+  DEPOSIT: '定金凭证',
+  BALANCE: '尾款凭证',
+  OTHER: '其他付款凭证',
+}
 const FULFILLMENT_STATUSES = new Set<PurchaseOrderFulfillmentStatus>([
   'ORDERED',
   'PREPARING',
@@ -418,7 +423,9 @@ export class PurchaseOrderMutationService {
               mediaAssetId,
               paymentId: payment.id,
               documentType: 'PAYMENT_VOUCHER',
-              title: `付款凭证-${paymentType}`,
+              // 凭证展示名只在创建时由已锁定订单的真实编号和付款类型生成；
+              // 不改媒体原始文件名，也不在查询时重写历史凭证标题。
+              title: `${order.orderNo}-${PAYMENT_VOUCHER_TITLE_LABELS[paymentType]}`,
               remark: null,
               createdByUserId: trusted.actorUserId,
             },

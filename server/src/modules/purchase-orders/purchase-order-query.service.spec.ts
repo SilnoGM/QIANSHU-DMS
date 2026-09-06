@@ -311,6 +311,22 @@ describe('PurchaseOrderQueryService', () => {
       }],
     })
   })
+  it('preserves historical payment voucher titles and original filenames on read', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      documents: [{
+        id: 'doc-id', mediaAssetId: 'asset-id', paymentId: 'payment-id',
+        documentType: 'PAYMENT_VOUCHER', title: '付款凭证-DEPOSIT', remark: null,
+        createdAt: new Date('2026-09-06T03:00:00.000Z'), detachedAt: null,
+        createdBy: { id: 'actor-id', displayName: '采购员' }, detachedBy: null,
+        mediaAsset: { originalFilename: 'original.png', mediaType: 'IMAGE', mimeType: 'image/png', sizeBytes: 100n },
+      }],
+    }))
+    await expect(fixture.service.getById('order-id')).resolves.toMatchObject({
+      documents: [{ title: '付款凭证-DEPOSIT', originalFilename: 'original.png' }],
+    })
+  })
+
   it('builds the fixed pending predicate and maps paid/outstanding amounts', async () => {
     const fixture = setup()
     const page = await fixture.service.list({
