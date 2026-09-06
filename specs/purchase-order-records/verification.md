@@ -31,3 +31,17 @@
 - 未重启前后端，未推送远端，未进行业务库上的浏览器视觉及交互验收。前端已通过自动测试、类型、lint 和生产构建，但不声称完成真实页面验收。
 - 金额变更记录提供不可变数据结构、约束、查询和展示；本次没有新增修改采购金额、产品或付款约定的业务入口，也没有伪造历史记录。
 - 保持 `DEPOSIT / BALANCE / OTHER`，实际付款汇总排除作废项；归档采购签收单不推进履约状态；未恢复作废付款、下载或解除关联按钮。
+
+## 后续授权：应用业务数据库（2026-09-06）
+
+用户后续明确授权将既有 migration 应用到业务数据库。以下结果更新上文“未应用业务数据库”的实施阶段边界，不覆盖原始验收历史。
+
+- 目标：当前 Server 配置使用的本地业务库 `qianshu_dms_dev`，不是隔离 CI 库。
+- 应用前：35 条成功迁移与仓库文件的 SHA-256 校验值一致；唯一待应用项为 `20260906120000_purchase_order_records`。4 条早期失败历史已标记回滚，本次没有修改历史记录。
+- 使用既有 PostgreSQL 16 容器中的 `pg_dump` 创建迁移前完整备份，`pg_restore --list` 检查通过。本机备份为 `/tmp/qs-purchase-records-migration.wLD0DK/before.dump`，权限 `0600`，大小 350123 bytes；备份不进入 Git，且未声称完成恢复演练。
+- `pnpm -C server exec prisma migrate status` 应用前因唯一待应用项返回退出码 1；`pnpm -C server db:migrate:deploy` 成功，完成时间为 `2026-09-06T04:22:59.382Z`（UTC）。
+- 应用后 `pnpm -C server exec prisma migrate status` 返回 `Database schema is up to date!`；再次 deploy 返回 `No pending migrations to apply.`，两条命令退出码均为 0。
+- 对比前后采购订单 5 条、明细 7 条、付款 2 条、凭证 1 条、状态历史 11 条：每张表全行 JSON 的有序聚合指纹一致，原有业务数据未改变。
+- 验证三类凭证 enum、可空 `payment_id`、有效采购单凭证唯一索引、8 个 `Decimal(30,4)` 金额字段、约定等式及非空原因约束、金额记录不可变 trigger 均已存在。金额变更历史仍为 0 条，没有回填或伪造记录。
+- `/api/health` 返回 HTTP 200，数据库状态 `up`。本次未重启服务，也未操作订单、付款或凭证业务。
+- 表格新增三列需要扩展列表响应，尚未修改公开契约或前端代码；具体字段见待确认的 `list-extension-design.md`。
