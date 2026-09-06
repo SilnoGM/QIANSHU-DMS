@@ -68,6 +68,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
     documents: [],
     statusHistory: [],
     amountRevisions: [],
+    _count: { statusHistory: 0, amountRevisions: 0 },
     createdBy: { id: 'actor-id', displayName: '采购员' },
     ...overrides,
   }
@@ -86,7 +87,7 @@ function setup() {
       }),
       count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
       findMany: jest.fn<Promise<unknown[]>, [unknown]>()
-        .mockResolvedValue([orderRow({ lines: listLines })]),
+        .mockResolvedValue([orderRow({ lines: listLines, payments: [{ paymentType: 'DEPOSIT', amount: decimal('30'), voidedAt: null }] })]),
       findUnique: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue(orderRow({
           lines: [{
@@ -174,6 +175,97 @@ function setup() {
 }
 
 describe('PurchaseOrderQueryService', () => {
+  it('returns empty record summaries without inventing records or latest changes', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      _count: { statusHistory: 0, amountRevisions: 0 },
+    })])
+    const page = await fixture.service.list({ view: 'all' })
+    expect(page.items[0]).toMatchObject({
+      paidAmount: '0.0000',
+      paymentRecordSummary: { count: 0, byType: [
+        { paymentType: 'DEPOSIT', count: 0, amount: '0.0000' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
+        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+      ] },
+      documentSummary: { count: 0, byType: [
+        { documentType: 'ORDER_ISSUANCE_VOUCHER', count: 0 },
+        { documentType: 'PAYMENT_VOUCHER', count: 0 },
+        { documentType: 'DELIVERY_RECEIPT', count: 0 },
+      ] },
+      changeSummary: { statusCount: 0, amountCount: 0, latest: null },
+    })
+  })
+
+  it('summarizes all active payment types exactly and merges the latest stored change', async () => {
+    const fixture = setup()
+    const changedAt = new Date('2026-09-06T03:00:00.000Z')
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      purchaseTotalAmount: { toFixed: () => '9007199254740993.9999' },
+      payments: [
+        { paymentType: 'DEPOSIT', amount: { toFixed: () => '9007199254740993.0001' }, voidedAt: null },
+        { paymentType: 'BALANCE', amount: { toFixed: () => '0.0002' }, voidedAt: null },
+        { paymentType: 'OTHER', amount: { toFixed: () => '0.0003' }, voidedAt: null },
+        { paymentType: 'OTHER', amount: { toFixed: () => '0.0004' }, voidedAt: null },
+        { paymentType: 'DEPOSIT', amount: decimal('100'), voidedAt: changedAt },
+      ],
+      documents: [
+        { documentType: 'ORDER_ISSUANCE_VOUCHER', detachedAt: null },
+        { documentType: 'PAYMENT_VOUCHER', detachedAt: null },
+        { documentType: 'DELIVERY_RECEIPT', detachedAt: null },
+        { documentType: 'DELIVERY_RECEIPT', detachedAt: null },
+        { documentType: 'PAYMENT_VOUCHER', detachedAt: changedAt },
+      ],
+      statusHistory: [{ id: 'status-1', changedAt: new Date('2026-09-05T03:00:00Z'), reason: null }],
+      amountRevisions: [{ id: 'amount-1', changedAt, reason: '调整采购约定' }],
+      _count: { statusHistory: 3, amountRevisions: 2 },
+    })])
+    const page = await fixture.service.list({ view: 'all', page: 2, pageSize: 5 })
+    expect(page.items[0]).toMatchObject({
+      paidAmount: '9007199254740993.0010', outstandingAmount: '0.9989',
+      paymentRecordSummary: { count: 4, byType: [
+        { paymentType: 'DEPOSIT', count: 1, amount: '9007199254740993.0001' },
+        { paymentType: 'BALANCE', count: 1, amount: '0.0002' },
+        { paymentType: 'OTHER', count: 2, amount: '0.0007' },
+      ] },
+      documentSummary: { count: 4, byType: [
+        { documentType: 'ORDER_ISSUANCE_VOUCHER', count: 1 },
+        { documentType: 'PAYMENT_VOUCHER', count: 1 },
+        { documentType: 'DELIVERY_RECEIPT', count: 2 },
+      ] },
+      changeSummary: { statusCount: 3, amountCount: 2, latest: {
+        kind: 'AMOUNT', changedAt: changedAt.toISOString(), reason: '调整采购约定',
+      } },
+    })
+    expect(fixture.prisma.purchaseOrder.findMany).toHaveBeenCalledTimes(1)
+    expect(fixture.prisma.purchaseOrder.findUnique).not.toHaveBeenCalled()
+    expect(fixture.prisma.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      skip: 5, take: 5,
+      select: expect.objectContaining({
+        payments: { where: { voidedAt: null }, select: { paymentType: true, amount: true, voidedAt: true } },
+        documents: { where: { detachedAt: null }, select: { documentType: true, detachedAt: true } },
+        statusHistory: expect.objectContaining({ take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }] }) as unknown,
+        amountRevisions: expect.objectContaining({ take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }] }) as unknown,
+        _count: { select: { statusHistory: true, amountRevisions: true } },
+      }) as unknown,
+    }))
+    expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Array), { isolationLevel: 'RepeatableRead' })
+  })
+
+  it('uses a stable kind-qualified key for equal change times and preserves a missing historical reason', async () => {
+    const fixture = setup()
+    const changedAt = new Date('2026-09-06T03:00:00Z')
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      _count: { statusHistory: 1, amountRevisions: 1 },
+      statusHistory: [{ id: 'same-id', changedAt, reason: null }],
+      amountRevisions: [{ id: 'same-id', changedAt, reason: '金额调整' }],
+    })])
+    const page = await fixture.service.list({ view: 'all' })
+    expect(page.items[0]).toMatchObject({ changeSummary: {
+      statusCount: 1, amountCount: 1, latest: { kind: 'STATUS', changedAt: changedAt.toISOString(), reason: null },
+    } })
+  })
+
   it('returns exact amount snapshots and standalone documents without fabricating history', async () => {
     const fixture = setup()
     const changedAt = new Date('2026-09-06T03:00:00.000Z')
@@ -374,6 +466,11 @@ describe('PurchaseOrderQueryService', () => {
         actualPurchaseUnitPriceAmount: '10.0000',
       })],
       payments: [expect.objectContaining({ amount: '30.0000' })],
+      paymentRecordSummary: { count: 1, byType: [
+        { paymentType: 'DEPOSIT', count: 1, amount: '30.0000' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
+        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+      ] },
     })
   })
 

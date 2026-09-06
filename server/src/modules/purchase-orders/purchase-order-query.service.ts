@@ -19,6 +19,7 @@ import {
   parsePurchaseOrderAmountUnits,
 } from './domain/purchase-order-decimal'
 import type { PurchaseOrderPendingTask } from './dto/purchase-order-query.dto'
+import { summarizePurchaseOrderRecords, type PurchaseOrderRecordSummaries } from './purchase-order-record-summary'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
 
@@ -46,6 +47,24 @@ const PURCHASE_ORDER_LINE_SUMMARY_SELECT = {
 } as const satisfies Prisma.PurchaseOrderLineSelect
 
 const PURCHASE_ORDER_LIST_SELECT = {
+  // Prisma 对当前页关系进行批量查询；不为每张采购单额外调用详情接口。
+  payments: {
+    where: { voidedAt: null },
+    select: { paymentType: true, amount: true, voidedAt: true },
+  },
+  documents: {
+    where: { detachedAt: null },
+    select: { documentType: true, detachedAt: true },
+  },
+  _count: { select: { statusHistory: true, amountRevisions: true } },
+  statusHistory: {
+    take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, changedAt: true, reason: true },
+  },
+  amountRevisions: {
+    take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, changedAt: true, reason: true },
+  },
   id: true,
   orderNo: true,
   purchaseType: true,
@@ -183,7 +202,7 @@ export interface PurchaseOrderSupplier {
   readonly effectiveEnabled: boolean | null
 }
 
-export interface PurchaseOrderListItem {
+export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly id: string
   readonly orderNo: string
   readonly purchaseType: PurchaseOrderType
@@ -472,12 +491,14 @@ function mapLineSummary(
 function mapListItem(
   row: PurchaseOrderListRow,
   supplier: PurchaseOrderSupplier,
-  activePaidUnits: bigint,
 ): PurchaseOrderListItem {
+  const records = summarizePurchaseOrderRecords(row)
+  const activePaidUnits = parsePurchaseOrderAmountUnits(records.paidAmount)
   const totalUnits = parsePurchaseOrderAmountUnits(
     decimalToFixed4(row.purchaseTotalAmount),
   )
   return {
+    ...records,
     id: row.id,
     orderNo: row.orderNo,
     purchaseType: row.purchaseType,
@@ -550,7 +571,8 @@ export class PurchaseOrderQueryService {
       ),
     }
     // 列表数量、当前页与金额汇总必须共享同一份筛选谓词，并在一个事务快照内读取，
-    // 避免并发付款或订单变更令“共 N 张”与金额矩阵出现瞬时错位。
+    // 显式使用 RepeatableRead，避免默认 ReadCommitted 下并发付款或订单变更
+    // 令“共 N 张”、分类付款与金额矩阵读到不同快照而出现瞬时错位。
     const [
       total,
       rows,
@@ -589,32 +611,18 @@ export class PurchaseOrderQueryService {
         },
         _sum: { amount: true },
       }),
-    ])
-    const ids = rows.map(row => row.id)
+    ], { isolationLevel: 'RepeatableRead' })
     const dictionarySupplierRows = rows.filter(
       (row): row is typeof row & { readonly supplierValue: string } =>
         row.supplierValue !== null,
     )
-    const [paymentRows, supplierResolutions] = await Promise.all([
-      ids.length === 0
-        ? []
-        : this.prisma.purchaseOrderPayment.groupBy({
-            by: ['purchaseOrderId'],
-            where: { purchaseOrderId: { in: ids }, voidedAt: null },
-            _sum: { amount: true },
-          }),
-      this.dictionaryLookup.resolveStoredValues({
-        dictionaryCode: SUPPLIER_DICTIONARY_CODE,
-        values: dictionarySupplierRows.map(row => row.supplierValue),
-      }),
-    ])
+    const supplierResolutions = await this.dictionaryLookup.resolveStoredValues({
+      dictionaryCode: SUPPLIER_DICTIONARY_CODE,
+      values: dictionarySupplierRows.map(row => row.supplierValue),
+    })
     const supplierByOrderId = new Map(dictionarySupplierRows.map((row, index) => [
       row.id,
       purchaseOrderSupplierFromSources(row, supplierResolutions[index]),
-    ]))
-    const paidByOrder = new Map(paymentRows.map(row => [
-      row.purchaseOrderId,
-      paidUnits(row._sum.amount),
     ]))
     const currencySummary = mapCurrencySummary(
       orderAggregate,
@@ -625,7 +633,6 @@ export class PurchaseOrderQueryService {
       items: rows.map(row => mapListItem(
         row,
         supplierByOrderId.get(row.id) ?? purchaseOrderSupplierFromSources(row, undefined),
-        paidByOrder.get(row.id) ?? 0n,
       )),
       summariesByCurrency: currencySummary === null ? [] : [currencySummary],
       page,
@@ -733,17 +740,11 @@ export class PurchaseOrderQueryService {
           dictionaryCode: SUPPLIER_DICTIONARY_CODE,
           value: row.supplierValue,
         })
-    const activePaidUnits = row.payments.reduce(
-      (sum, payment) => payment.voidedAt === null
-        ? sum + parsePurchaseOrderAmountUnits(decimalToFixed4(payment.amount))
-        : sum,
-      0n,
-    )
     const summary = mapListItem(
       row,
       purchaseOrderSupplierFromSources(row, resolution),
-      activePaidUnits,
     )
+    const activePaidUnits = parsePurchaseOrderAmountUnits(summary.paidAmount)
     const totalUnits = parsePurchaseOrderAmountUnits(
       decimalToFixed4(row.purchaseTotalAmount),
     )

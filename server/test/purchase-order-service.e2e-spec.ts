@@ -655,7 +655,24 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(paid).toMatchObject({
       paymentStatus: 'PAID',
       amounts: { paidAmount: '25.0000', outstandingAmount: '0.0000' },
+      paymentRecordSummary: { count: 2, byType: [
+        { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
+        { paymentType: 'BALANCE', count: 1, amount: '15.0000' },
+        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+      ] },
     })
+    const paidPage = await queries.list({ view: 'all', keyword: created.orderNo, pageSize: 1 })
+    expect(paidPage.items).toHaveLength(1)
+    expect(paidPage.items[0]).toMatchObject({
+      id: createdId, paidAmount: '25.0000',
+      paymentRecordSummary: paid.paymentRecordSummary,
+      documentSummary: { count: 0 },
+      changeSummary: paid.changeSummary,
+    })
+    expect(paidPage.items[0]?.changeSummary.latest?.kind).toBe('STATUS')
+    expect(paidPage.items[0]?.changeSummary.latest?.reason).toContain('25.0000')
+    await expect(queries.list({ view: 'all', keyword: created.orderNo, page: 2, pageSize: 1 }))
+      .resolves.toMatchObject({ total: 1, items: [] })
     for (const toStatus of ['PREPARING', 'SHIPPED', 'SIGNED'] as const) {
       await mutations.updateFulfillmentStatus({
         actorUserId, requestId: `purchase-${toStatus}-${suffix}`,
@@ -677,7 +694,14 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })
     await expect(queries.list({
       view: 'pending', keyword: created.orderNo,
-    })).resolves.toMatchObject({ total: 1 })
+    })).resolves.toMatchObject({ total: 1, items: [{
+      paidAmount: '10.0000', paymentRecordSummary: { count: 1, byType: [
+        { paymentType: 'DEPOSIT', count: 1, amount: '10.0000' },
+        { paymentType: 'BALANCE', count: 0, amount: '0.0000' },
+        { paymentType: 'OTHER', count: 0, amount: '0.0000' },
+      ] },
+      changeSummary: voided.changeSummary,
+    }] })
     await expect(mutations.updateOrderStatus({
       actorUserId, requestId: `purchase-cancel-paid-${suffix}`,
     }, createdId, { toStatus: 'CANCELLED' }))

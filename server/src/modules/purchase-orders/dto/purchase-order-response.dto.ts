@@ -20,6 +20,7 @@ import {
   PURCHASE_ORDER_SOURCE_SALES_ORDER_VIEWS,
   type PurchaseOrderSourceSalesOrderView,
 } from '../domain/purchase-order-source-sales-order-view'
+import { PurchaseOrderChangeSummaryDto, PurchaseOrderDocumentSummaryDto, PurchaseOrderPaymentRecordSummaryDto } from './purchase-order-record-summary.dto'
 
 export class PurchaseOrderActorDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
@@ -154,6 +155,9 @@ export class PurchaseOrderLineSummaryDto {
 }
 
 export class PurchaseOrderListItemDto {
+  @ApiProperty({ type: () => PurchaseOrderPaymentRecordSummaryDto }) readonly paymentRecordSummary!: PurchaseOrderPaymentRecordSummaryDto
+  @ApiProperty({ type: () => PurchaseOrderDocumentSummaryDto }) readonly documentSummary!: PurchaseOrderDocumentSummaryDto
+  @ApiProperty({ type: () => PurchaseOrderChangeSummaryDto }) readonly changeSummary!: PurchaseOrderChangeSummaryDto
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
   @ApiProperty({ enum: PurchaseOrderType }) readonly purchaseType!: PurchaseOrderType

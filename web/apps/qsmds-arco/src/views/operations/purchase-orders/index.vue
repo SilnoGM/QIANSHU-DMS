@@ -73,6 +73,7 @@ import {
   purchaseTypeLabel,
   resolvePurchaseOrderPendingActions,
 } from './purchase-order-list.logic'
+import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
 
@@ -83,6 +84,7 @@ const props = withDefaults(defineProps<{
 })
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
+const { t } = useI18n()
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const route = useRoute()
@@ -260,6 +262,11 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 130,
   title: '实际付款',
 }, {
+  accessorFn: item => item.paymentRecordSummary.count,
+  id: 'paymentRecordsSummary',
+  minWidth: 180,
+  title: t('purchaseOrderList.records.payments'),
+}, {
   accessorKey: 'paymentStatus',
   id: 'paymentStatusSummary',
   minWidth: 180,
@@ -270,6 +277,11 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 210,
   title: '订单状态',
 }, {
+  accessorFn: item => item.documentSummary.count,
+  id: 'documentRecordsSummary',
+  minWidth: 170,
+  title: t('purchaseOrderList.records.documents'),
+}, {
   accessorKey: 'shippingMarkText',
   id: 'shippingMarkSummary',
   minWidth: 200,
@@ -279,6 +291,11 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   id: 'remarkSummary',
   minWidth: 240,
   title: '备注',
+}, {
+  accessorFn: item => item.changeSummary.statusCount + item.changeSummary.amountCount,
+  id: 'changeRecordsSummary',
+  minWidth: 190,
+  title: t('purchaseOrderList.records.changes'),
 }, {
   accessorKey: 'updatedAt',
   id: 'auditSummary',
@@ -1067,6 +1084,16 @@ onBeforeUnmount(() => {
           </div>
         </template>
 
+        <template #cell-paymentRecordsSummary="{ row }">
+          <PurchaseOrderRecordSummaryCell kind="payments" :order="row.original" :currencies="currencyCatalog.currencies.value" />
+        </template>
+        <template #cell-documentRecordsSummary="{ row }">
+          <PurchaseOrderRecordSummaryCell kind="documents" :order="row.original" :currencies="currencyCatalog.currencies.value" />
+        </template>
+        <template #cell-changeRecordsSummary="{ row }">
+          <PurchaseOrderRecordSummaryCell kind="changes" :order="row.original" :currencies="currencyCatalog.currencies.value" />
+        </template>
+
         <template #cell-statusSummary="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine label="订单状态" nowrap>
@@ -1446,6 +1473,30 @@ onBeforeUnmount(() => {
                 </dt>
                 <dd class="m-0 whitespace-pre-wrap break-words">
                   {{ row.remark ?? '-' }}
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  {{ t('purchaseOrderList.records.payments') }}
+                </dt>
+                <dd class="m-0">
+                  <PurchaseOrderRecordSummaryCell kind="payments" :order="row" :currencies="currencyCatalog.currencies.value" />
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  {{ t('purchaseOrderList.records.documents') }}
+                </dt>
+                <dd class="m-0">
+                  <PurchaseOrderRecordSummaryCell kind="documents" :order="row" :currencies="currencyCatalog.currencies.value" />
+                </dd>
+              </div>
+              <div class="col-span-2">
+                <dt class="qs-type-compact-label mb-1">
+                  {{ t('purchaseOrderList.records.changes') }}
+                </dt>
+                <dd class="m-0">
+                  <PurchaseOrderRecordSummaryCell kind="changes" :order="row" :currencies="currencyCatalog.currencies.value" />
                 </dd>
               </div>
             </dl>

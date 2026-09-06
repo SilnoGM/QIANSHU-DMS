@@ -1,0 +1,14 @@
+{
+  "purchaseOrderList": {
+    "records": {
+      "payments": "实际付款记录",
+      "documents": "订单凭证",
+      "changes": "变更记录",
+      "paymentCount": "{count} 笔有效付款",
+      "documentCount": "{count} 份",
+      "changeCount": "{count} 次变更",
+      "changeBreakdown": "状态变更 {status} 次，金额变更 {amount} 次",
+      "changeKinds": { "STATUS": "最近：状态变更", "AMOUNT": "最近：金额变更" }
+    }
+  }
+}

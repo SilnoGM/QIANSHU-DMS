@@ -51101,6 +51101,143 @@
           "remark"
         ]
       },
+      "PurchaseOrderPaymentTypeSummaryDto": {
+        "type": "object",
+        "properties": {
+          "paymentType": {
+            "type": "string",
+            "enum": [
+              "DEPOSIT",
+              "BALANCE",
+              "OTHER"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amount": {
+            "type": "string",
+            "description": "该类型有效付款合计，四位小数十进制字符串"
+          }
+        },
+        "required": [
+          "paymentType",
+          "count",
+          "amount"
+        ]
+      },
+      "PurchaseOrderPaymentRecordSummaryDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byType": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderPaymentTypeSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "count",
+          "byType"
+        ]
+      },
+      "PurchaseOrderDocumentTypeSummaryDto": {
+        "type": "object",
+        "properties": {
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "PAYMENT_VOUCHER",
+              "ORDER_ISSUANCE_VOUCHER",
+              "DELIVERY_RECEIPT"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "documentType",
+          "count"
+        ]
+      },
+      "PurchaseOrderDocumentSummaryDto": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byType": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderDocumentTypeSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "count",
+          "byType"
+        ]
+      },
+      "PurchaseOrderLatestChangeDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "STATUS",
+              "AMOUNT"
+            ]
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "kind",
+          "changedAt",
+          "reason"
+        ]
+      },
+      "PurchaseOrderChangeSummaryDto": {
+        "type": "object",
+        "properties": {
+          "statusCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amountCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "latest": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderLatestChangeDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "statusCount",
+          "amountCount",
+          "latest"
+        ]
+      },
       "PurchaseOrderSupplierDto": {
         "type": "object",
         "properties": {
@@ -51225,6 +51362,15 @@
       "PurchaseOrderListItemDto": {
         "type": "object",
         "properties": {
+          "paymentRecordSummary": {
+            "$ref": "#/components/schemas/PurchaseOrderPaymentRecordSummaryDto"
+          },
+          "documentSummary": {
+            "$ref": "#/components/schemas/PurchaseOrderDocumentSummaryDto"
+          },
+          "changeSummary": {
+            "$ref": "#/components/schemas/PurchaseOrderChangeSummaryDto"
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -51336,6 +51482,9 @@
           }
         },
         "required": [
+          "paymentRecordSummary",
+          "documentSummary",
+          "changeSummary",
           "id",
           "orderNo",
           "purchaseType",
@@ -52473,6 +52622,15 @@
       "PurchaseOrderDetailDto": {
         "type": "object",
         "properties": {
+          "paymentRecordSummary": {
+            "$ref": "#/components/schemas/PurchaseOrderPaymentRecordSummaryDto"
+          },
+          "documentSummary": {
+            "$ref": "#/components/schemas/PurchaseOrderDocumentSummaryDto"
+          },
+          "changeSummary": {
+            "$ref": "#/components/schemas/PurchaseOrderChangeSummaryDto"
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -52626,6 +52784,9 @@
           }
         },
         "required": [
+          "paymentRecordSummary",
+          "documentSummary",
+          "changeSummary",
           "id",
           "orderNo",
           "purchaseType",

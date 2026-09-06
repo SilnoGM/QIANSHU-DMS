@@ -503,7 +503,16 @@ describe('PurchaseOrdersController OpenAPI', () => {
     expect(document.components?.schemas?.PurchaseOrderListItemDto).toMatchObject({
       properties: {
         productMode: { enum: ['CATALOG', 'CUSTOM', 'MIXED'] },
+        paymentRecordSummary: { $ref: '#/components/schemas/PurchaseOrderPaymentRecordSummaryDto' },
+        documentSummary: { $ref: '#/components/schemas/PurchaseOrderDocumentSummaryDto' },
+        changeSummary: { $ref: '#/components/schemas/PurchaseOrderChangeSummaryDto' },
       },
+    })
+    expect(document.components?.schemas?.PurchaseOrderPaymentTypeSummaryDto).toMatchObject({
+      properties: { paymentType: { enum: ['DEPOSIT', 'BALANCE', 'OTHER'] }, amount: { type: 'string' } },
+    })
+    expect(document.components?.schemas?.PurchaseOrderChangeSummaryDto).toMatchObject({
+      properties: { latest: { nullable: true } },
     })
 
     const imagePath = document.paths[
