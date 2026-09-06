@@ -50,6 +50,20 @@ test('收款展开区的时间和备注独占一行，凭证备注与上传信�
   assert.match(document, /v-if="document\.detachedAt"/u)
 })
 
+test('两类摘要缩略图随展开状态移除，过渡仅使用透明度和变换且支持减少动态效果', async () => {
+  const records = await readFile(new URL('../../src/components/business/QsSalesOrderDrawer/OrderRecords.vue', import.meta.url), 'utf8')
+  assert.equal((records.match(/<TransitionGroup name="record-summary"/gu) ?? []).length, 2)
+  assert.equal((records.match(/v-if="!open" key="thumbnail"/gu) ?? []).length, 2)
+  assert.match(records, /\.record-summary-leave-active\s*\{[^}]*position: absolute/u)
+  assert.match(records, /180ms/u)
+  assert.match(records, /prefers-reduced-motion: reduce/u)
+  assert.match(records, /transition: none/u)
+  assert.doesNotMatch(records, /transition:[^;]*(?:width|height|margin|padding)/u)
+  // 大图和单展开逻辑仍使用原组件，图片隐藏不能改变收款或凭证的关联。
+  assert.match(records, /<OrderDocument :document="payment\.voucher"/u)
+  assert.match(records, /<OrderDocument :document="document"/u)
+})
+
 test('销售详情抽屉按需读取详情并使用 QsSalesOrderDrawer 展示', async () => {
   const source = await readFile(SOURCE, 'utf8')
 

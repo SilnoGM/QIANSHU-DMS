@@ -38,12 +38,12 @@ watch(() => props.detail.id, () => {
         @update:model-value="expandedPayment = $event ? payment.id : null"
       >
         <template #trigger="{ open }">
-          <span class="p-4 text-start flex gap-3 min-w-0 items-center hover:bg-muted/25 sm:gap-4">
-            <span class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
+          <TransitionGroup name="record-summary" tag="span" class="p-4 text-start flex gap-3 min-h-22 min-w-0 items-center relative hover:bg-muted/25 sm:gap-4">
+            <span v-if="!open" key="thumbnail" data-slot="record-summary-thumbnail" class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
               <img v-if="payment.voucher.mediaType === 'IMAGE' && payment.voucher.detachedAt === null" :src="payment.voucher.contentUrl" :alt="t('salesOrderDesc.documentTypes.PAYMENT_VOUCHER')" class="size-full object-cover">
               <FaIcon v-else name="i-lucide:receipt-text" class="text-muted-foreground size-6" aria-hidden="true" />
             </span>
-            <span class="flex flex-1 flex-wrap gap-x-4 gap-y-2 min-w-0 items-center justify-between">
+            <span key="details" class="flex flex-1 flex-wrap gap-x-4 gap-y-2 min-w-0 items-center justify-between">
               <span class="min-w-0">
                 <span class="flex flex-wrap gap-2 items-center">
                   <span class="qs-type-body-medium">{{ t(`salesOrderDrawer.paymentTypes.${payment.paymentType}`) }}</span>
@@ -53,10 +53,10 @@ watch(() => props.detail.id, () => {
               </span>
               <AmountDisplay :value="payment.amount" :currency="detail.currencyCode" :currencies="currencies" class="max-w-full overflow-x-auto !text-base !font-semibold" :class="payment.voidedAt ? 'text-muted-foreground! line-through' : ''" />
             </span>
-            <span class="text-muted-foreground rounded-full bg-muted/50 flex shrink-0 size-7 items-center justify-center">
+            <span key="toggle" class="text-muted-foreground rounded-full bg-muted/50 flex shrink-0 size-7 items-center justify-center">
               <FaIcon name="i-lucide:chevron-down" class="size-4 transition-transform duration-150 motion-reduce:transition-none" :class="open ? 'rotate-180' : ''" aria-hidden="true" />
             </span>
-          </span>
+          </TransitionGroup>
         </template>
         <div class="p-4 border-t border-border/70 bg-muted/15 flex flex-col gap-5 sm:p-5">
           <!-- 时间与收款备注跨整行，避免长日期和业务备注挤压相邻字段。 -->
@@ -121,22 +121,22 @@ watch(() => props.detail.id, () => {
         @update:model-value="expandedDocument = $event ? document.id : null"
       >
         <template #trigger="{ open }">
-          <span class="p-4 text-start flex gap-3 min-w-0 items-center hover:bg-muted/25 sm:gap-4">
-            <span class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
+          <TransitionGroup name="record-summary" tag="span" class="p-4 text-start flex gap-3 min-h-22 min-w-0 items-center relative hover:bg-muted/25 sm:gap-4">
+            <span v-if="!open" key="thumbnail" data-slot="record-summary-thumbnail" class="border border-border/70 rounded-lg bg-muted/20 flex shrink-0 size-14 items-center justify-center overflow-hidden">
               <img v-if="document.mediaType === 'IMAGE'" :src="document.contentUrl" :alt="document.originalFilename" class="size-full object-cover">
               <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground size-6" aria-hidden="true" />
             </span>
-            <span class="flex-1 min-w-0">
+            <span key="details" class="flex-1 min-w-0">
               <span class="flex flex-wrap gap-x-3 gap-y-1 items-center">
                 <FaTag variant="outline" :class="document.documentType === 'DELIVERY_RECEIPT' ? 'border-amber-500/25 bg-amber-500/8 text-amber-700 dark:text-amber-300' : 'border-sky-500/25 bg-sky-500/8 text-sky-700 dark:text-sky-300'">{{ t(`salesOrderDesc.documentTypes.${document.documentType}`) }}</FaTag>
                 <span class="qs-type-meta"><DateTimeDisplay :value="document.createdAt" /></span>
               </span>
               <span class="qs-type-body-medium mt-1.5 block truncate" :title="document.title || document.originalFilename">{{ document.title || document.originalFilename }}</span>
             </span>
-            <span class="text-muted-foreground rounded-full bg-muted/50 flex shrink-0 size-7 items-center justify-center">
+            <span key="toggle" class="text-muted-foreground rounded-full bg-muted/50 flex shrink-0 size-7 items-center justify-center">
               <FaIcon name="i-lucide:chevron-down" class="size-4 transition-transform duration-150 motion-reduce:transition-none" :class="open ? 'rotate-180' : ''" aria-hidden="true" />
             </span>
-          </span>
+          </TransitionGroup>
         </template>
         <div class="p-4 border-t border-border/70 bg-muted/15 sm:p-5">
           <OrderDocument :document="document" />
@@ -145,3 +145,36 @@ watch(() => props.detail.id, () => {
     </div>
   </section>
 </template>
+
+<style scoped>
+/* 小图退出时立即脱离占位，Vue 的 FLIP 位移动画让摘要平滑补位；不逐帧改变宽高。 */
+.record-summary-move {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.record-summary-enter-active,
+.record-summary-leave-active {
+  transition: opacity 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.record-summary-leave-active {
+  position: absolute;
+  inset-inline-start: 1rem;
+  pointer-events: none;
+}
+
+.record-summary-enter-from,
+.record-summary-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+/* 跟随系统减少动态效果设置，快速切换仍由 Vue 取消上一段过渡，不另建计时状态。 */
+@media (prefers-reduced-motion: reduce) {
+  .record-summary-move,
+  .record-summary-enter-active,
+  .record-summary-leave-active {
+    transition: none;
+  }
+}
+</style>
