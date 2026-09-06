@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PurchaseOrderDetailDto, PurchaseOrderDocumentDto, PurchaseOrderListItemDto, PurchaseOrderPaymentDto } from '@/api/generated/types.gen'
+import type { PurchaseOrderDetailDto, PurchaseOrderListItemDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import OrderHistory from './OrderHistory.vue'
@@ -17,16 +17,12 @@ const props = defineProps<{
   actionError: string
   busy: boolean
   canManagePayment: boolean
-  canManageDocument: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
   'closed': []
   'recordPayment': []
-  'voidPayment': [payment: PurchaseOrderPaymentDto]
-  'detachDocument': [document: PurchaseOrderDocumentDto]
-  'downloadDocument': [document: PurchaseOrderDocumentDto]
 }>()
 const { t } = useI18n()
 const toast = useQsToast()
@@ -112,8 +108,8 @@ function onClosed() {
             <FaAlert v-if="actionError" :title="t('purchaseOrderDrawer.actionFailed')" :description="actionError" variant="destructive" />
             <OrderInformation :detail="detail" :currencies="currencies" />
             <OrderRecords
-              :detail="detail" :currencies="currencies" :busy="busy" :can-manage-payment="canManagePayment" :can-manage-document="canManageDocument"
-              @record-payment="emit('recordPayment')" @void-payment="emit('voidPayment', $event)" @detach-document="emit('detachDocument', $event)" @download-document="emit('downloadDocument', $event)"
+              :detail="detail" :currencies="currencies" :busy="busy" :can-manage-payment="canManagePayment"
+              @record-payment="emit('recordPayment')"
             />
           </div>
         </template>

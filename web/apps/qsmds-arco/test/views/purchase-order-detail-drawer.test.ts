@@ -12,7 +12,7 @@ const ACTIONS_SOURCE = new URL(
   import.meta.url,
 )
 
-test('采购查看入口使用独立抽屉，保留请求取消和既有操作事件', async () => {
+test('采购查看入口使用独立抽屉，保留请求取消和记录付款入口', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
   assert.match(source, /<QsPurchaseOrderDrawer/u)
@@ -20,9 +20,7 @@ test('采购查看入口使用独立抽屉，保留请求取消和既有操作�
   assert.doesNotMatch(source, /QsPurchaseOrderDesc|QsGenericDrawer/u)
   assert.match(source, /detailAbortController\?\.abort\(\)/u)
   assert.match(source, /@record-payment="openPaymentDialog"/u)
-  assert.match(source, /@void-payment="openVoidDialog"/u)
-  assert.match(source, /@detach-document="openDetachDialog"/u)
-  assert.match(source, /@download-document="downloadDocument"/u)
+  assert.doesNotMatch(source, /openVoidDialog|openDetachDialog|downloadDocument/u)
 })
 
 test('专用采购抽屉继承销售布局及动画，不引入销售业务字段', async () => {
@@ -49,7 +47,7 @@ test('专用采购抽屉继承销售布局及动画，不引入销售业务字�
   assert.doesNotMatch(history, /amountRevisions/u)
 })
 
-test('付款凭证仅在对应付款记录内展示，保留空态及凭证操作', async () => {
+test('付款凭证仅在对应付款记录内展示，保留空态', async () => {
   const records = await readFile(new URL('../../src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue', import.meta.url), 'utf8')
 
   assert.doesNotMatch(records, /<section :aria-label="t\('purchaseOrderDrawer\.documents'\)"/u)
@@ -57,9 +55,23 @@ test('付款凭证仅在对应付款记录内展示，保留空态及凭证操�
   assert.match(records, /getPaymentDocuments\(props\.detail\.documents, payment\.id\)/u)
   assert.match(records, /v-if="!vouchers\.length" :title="t\('purchaseOrderDrawer\.noVoucher'\)"/u)
   assert.equal((records.match(/<OrderDocument\b/gu) ?? []).length, 1)
-  assert.match(records, /<OrderDocument v-for="voucher in vouchers" :key="voucher\.id" :document="voucher" :busy="busy" :can-manage-document="canManageDocument"/u)
-  assert.match(records, /@download-document="emit\('downloadDocument', \$event\)"/u)
-  assert.match(records, /@detach-document="emit\('detachDocument', \$event\)"/u)
+  assert.match(records, /<OrderDocument v-for="voucher in vouchers" :key="voucher\.id" :document="voucher" \/>/u)
+})
+
+test('采购抽屉移除作废、下载和解除入口，保留图片预览及历史状态', async () => {
+  const read = (file: string) => readFile(new URL(`../../src/components/business/QsPurchaseOrderDrawer/${file}`, import.meta.url), 'utf8')
+  const [drawer, records, document] = await Promise.all(['index.vue', 'OrderRecords.vue', 'OrderDocument.vue'].map(read))
+
+  for (const source of [drawer, records, document]) {
+    assert.doesNotMatch(source, /voidPayment|downloadDocument|detachDocument|canManageDocument/u)
+  }
+  assert.doesNotMatch(document, /<FaButton/u)
+  assert.match(document, /previewSrc: props\.document\.contentUrl/u)
+  assert.match(document, /<ImageGroup v-if="images\.length" :items="images"/u)
+  assert.match(document, /v-if="document\.detachedAt"/u)
+  assert.match(records, /v-if="payment\.voidedAt"/u)
+  assert.match(records, /payment\.voidReason/u)
+  assert.match(records, /@click="emit\('recordPayment'\)"/u)
 })
 
 test('采购详情动作精确受 update、payment 和 document 权限控制', async () => {

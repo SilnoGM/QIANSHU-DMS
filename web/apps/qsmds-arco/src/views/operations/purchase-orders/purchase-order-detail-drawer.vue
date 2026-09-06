@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import type {
   PurchaseOrderDetailDto,
-  PurchaseOrderDocumentDto,
   PurchaseOrderListItemDto,
-  PurchaseOrderPaymentDto,
 } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
@@ -41,7 +39,6 @@ const drawerVisible = computed({
   set: value => emit('update:modelValue', value),
 })
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
-const canManageDocument = computed(() => auth('purchase-orders:document'))
 function cancelDetailRequest(): void {
   requestVersion += 1
   detailAbortController?.abort()
@@ -101,21 +98,6 @@ function openPaymentDialog(): void {
   detailActionsRef.value?.openPaymentDialog()
 }
 
-function openVoidDialog(payment: PurchaseOrderPaymentDto): void {
-  actionError.value = ''
-  detailActionsRef.value?.openVoidDialog(payment)
-}
-
-function openDetachDialog(document: PurchaseOrderDocumentDto): void {
-  actionError.value = ''
-  detailActionsRef.value?.openDetachDialog(document)
-}
-
-function downloadDocument(document: PurchaseOrderDocumentDto): void {
-  actionError.value = ''
-  void detailActionsRef.value?.downloadDocument(document)
-}
-
 watch(
   () => [props.modelValue, props.order?.id] as const,
   ([visible, orderId]) => {
@@ -158,12 +140,8 @@ onBeforeUnmount(() => {
     :action-error="actionError"
     :busy="actionLocked"
     :can-manage-payment="canManagePayment"
-    :can-manage-document="canManageDocument"
     @reload="loadDetail"
     @record-payment="openPaymentDialog"
-    @void-payment="openVoidDialog"
-    @detach-document="openDetachDialog"
-    @download-document="downloadDocument"
   />
 
   <PurchaseOrderDetailActions

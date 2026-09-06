@@ -4,9 +4,9 @@ import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 
-const props = defineProps<{ document: PurchaseOrderDocumentDto, canManageDocument: boolean, busy: boolean }>()
-const emit = defineEmits<{ downloadDocument: [document: PurchaseOrderDocumentDto], detachDocument: [document: PurchaseOrderDocumentDto] }>()
+const props = defineProps<{ document: PurchaseOrderDocumentDto }>()
 const { t } = useI18n()
+// 凭证区域仅展示与预览，已解除的历史记录继续保留元数据，不加载失效媒体。
 const images = computed(() => props.document.mediaType === 'IMAGE' && props.document.detachedAt === null && props.document.contentUrl
   ? [{ src: props.document.contentUrl, previewSrc: props.document.contentUrl, alt: props.document.originalFilename }]
   : [])
@@ -58,14 +58,6 @@ const fileSize = computed(() => {
       <p v-if="document.detachedAt" class="text-muted-foreground m-0">
         {{ t('purchaseOrderDrawer.detached') }} · <DateTimeDisplay :value="document.detachedAt" />
       </p>
-      <div v-if="document.detachedAt === null" class="flex flex-wrap gap-2">
-        <FaButton type="button" variant="outline" size="sm" :disabled="busy" @click="emit('downloadDocument', document)">
-          {{ t('purchaseOrderDrawer.download') }}
-        </FaButton>
-        <FaButton v-if="canManageDocument" type="button" variant="ghost" size="sm" :disabled="busy" @click="emit('detachDocument', document)">
-          {{ t('purchaseOrderDrawer.detach') }}
-        </FaButton>
-      </div>
     </div>
   </div>
 </template>

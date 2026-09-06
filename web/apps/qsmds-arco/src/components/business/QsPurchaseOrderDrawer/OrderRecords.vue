@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PurchaseOrderDetailDto, PurchaseOrderDocumentDto, PurchaseOrderPaymentDto } from '@/api/generated/types.gen'
+import type { PurchaseOrderDetailDto } from '@/api/generated/types.gen'
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
@@ -8,8 +8,8 @@ import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalo
 import { getPaymentDocuments } from './logic'
 import OrderDocument from './OrderDocument.vue'
 
-const props = defineProps<{ detail: PurchaseOrderDetailDto, currencies: readonly CurrencyDescriptor[], canManagePayment: boolean, canManageDocument: boolean, busy: boolean }>()
-const emit = defineEmits<{ recordPayment: [], voidPayment: [payment: PurchaseOrderPaymentDto], detachDocument: [document: PurchaseOrderDocumentDto], downloadDocument: [document: PurchaseOrderDocumentDto] }>()
+const props = defineProps<{ detail: PurchaseOrderDetailDto, currencies: readonly CurrencyDescriptor[], canManagePayment: boolean, busy: boolean }>()
+const emit = defineEmits<{ recordPayment: [] }>()
 const { t } = useI18n()
 const methodCatalog = useDictionaryCatalog('payment.method')
 // 凭证仅在所属付款记录内展示，避免独立小节重复；采购允许无凭证付款。
@@ -107,15 +107,10 @@ watch(() => props.detail.id, () => {
           <p v-if="payment.voidedAt" class="text-sm text-destructive m-0">
             {{ t('purchaseOrderDrawer.voidReason') }}：{{ payment.voidReason || '-' }} · <DateTimeDisplay :value="payment.voidedAt" />
           </p>
-          <div v-if="canManagePayment && payment.voidedAt === null" class="flex justify-end">
-            <FaButton type="button" variant="ghost" size="sm" :disabled="busy" @click="emit('voidPayment', payment)">
-              {{ t('purchaseOrderDrawer.void') }}
-            </FaButton>
-          </div>
           <div class="pt-5 border-t border-border/70">
             <FaEmpty v-if="!vouchers.length" :title="t('purchaseOrderDrawer.noVoucher')" class="py-2" />
             <div v-else class="space-y-5">
-              <OrderDocument v-for="voucher in vouchers" :key="voucher.id" :document="voucher" :busy="busy" :can-manage-document="canManageDocument" @download-document="emit('downloadDocument', $event)" @detach-document="emit('detachDocument', $event)" />
+              <OrderDocument v-for="voucher in vouchers" :key="voucher.id" :document="voucher" />
             </div>
           </div>
         </div>
