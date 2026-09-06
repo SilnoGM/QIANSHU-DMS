@@ -600,11 +600,15 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
       const productImage = drawer?.querySelector(
-        '[data-slot="sales-order-desc-line"] [data-slot="image-group"] img',
+        'section[aria-label="销售产品列表"] [data-slot="image-group"] img',
       )
-      return drawer?.querySelector('[data-slot="qs-sales-order-desc"]')
+      return drawer?.querySelector('[data-testid="sales-order-detail-drawer"]')
+        && !drawer.querySelector('[data-slot="qs-sales-order-desc"]')
         && drawer.textContent.includes('订单基础信息')
-        && drawer.textContent.includes('销售产品与小计')
+        && drawer.textContent.includes('销售产品列表')
+        && drawer.textContent.includes('实际收款记录')
+        && drawer.querySelector('[role="tab"][aria-selected="true"]')
+          ?.textContent.includes('订单详情信息')
         && drawer.textContent.includes('PRODUCT-BROWSER-001')
         && drawer.textContent.includes(${JSON.stringify(customerName)})
         && productImage instanceof HTMLImageElement
@@ -612,6 +616,15 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         && productImage.complete
         && productImage.naturalWidth > 0
     })()`)
+    // 专用抽屉的第二页只显示真实变更；打印当前仅是轻提示，不触发系统打印。
+    await clickVisibleButton(page, '订单变更记录')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-detail-drawer"] [role="tab"][aria-selected="true"]',
+    )?.textContent.includes('订单变更记录')`)
+    await clickVisibleButton(page, '打印')
+    await page.waitFor(`document.body.innerText.includes(
+      '该功能将在后续版本推出，敬请期待',
+    )`)
     await clickVisibleAriaButton(page, '关闭抽屉')
     await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
       .some(dialog => dialog.getClientRects().length > 0
@@ -623,8 +636,10 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       const drawer = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
-      return drawer?.textContent?.includes('销售产品与小计')
+      return drawer?.textContent?.includes('销售产品列表')
         && drawer.textContent.includes('PRODUCT-BROWSER-001')
+        && drawer.querySelector('[role="tab"][aria-selected="true"]')
+          ?.textContent.includes('订单详情信息')
     })()`)
     await clickVisibleAriaButton(page, '关闭抽屉')
     await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]

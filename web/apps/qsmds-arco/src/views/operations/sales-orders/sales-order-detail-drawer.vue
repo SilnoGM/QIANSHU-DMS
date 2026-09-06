@@ -6,11 +6,9 @@ import type {
 import type { CurrencyDescriptor } from '@/components/base/currency'
 
 import salesOrdersApi from '@/api/modules/sales-orders'
-import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
-import QsSalesOrderDesc from '@/components/business/QsSalesOrderDesc/index.vue'
+import QsSalesOrderDrawer from '@/components/business/QsSalesOrderDrawer/index.vue'
 
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
-import { mapSalesOrderDetailToDesc } from './sales-order-desc.logic'
 
 defineOptions({ name: 'SalesOrderDetailDrawer' })
 
@@ -36,16 +34,6 @@ const drawerVisible = computed({
   get: () => props.modelValue,
   set: value => emit('update:modelValue', value),
 })
-const drawerTitle = computed(() => props.order?.orderNo ?? '销售订单详情')
-const drawerDescription = computed(() => props.order === null
-  ? '查看销售订单基础信息、客户、产品、金额和附件。'
-  : `${props.order.customerName} · ${props.order.currencyCode}`)
-const salesOrderDescModel = computed(() => detail.value === null
-  ? null
-  : mapSalesOrderDetailToDesc(
-      detail.value,
-      props.order?.lineSummary.previews ?? [],
-    ))
 
 function cancelDetailRequest(): void {
   requestVersion += 1
@@ -125,30 +113,14 @@ onBeforeUnmount(cancelDetailRequest)
 </script>
 
 <template>
-  <QsGenericDrawer
+  <QsSalesOrderDrawer
     v-model="drawerVisible"
-    data-testid="sales-order-detail-drawer"
-    :title="drawerTitle"
-    :description="drawerDescription"
+    :order="order"
+    :detail="detail"
+    :currencies="currencies"
     :loading="loading"
     :error="loadError"
-    size="xl"
+    @reload="loadDetail"
     @closed="emit('closed')"
-  >
-    <template #header-leading>
-      <FaIcon name="i-lucide:receipt-text" class="size-5" aria-hidden="true" />
-    </template>
-
-    <template #error-actions>
-      <FaButton type="button" variant="outline" @click="loadDetail">
-        <FaIcon name="i-lucide:refresh-cw" aria-hidden="true" />重新加载
-      </FaButton>
-    </template>
-
-    <QsSalesOrderDesc
-      v-if="salesOrderDescModel"
-      :model="salesOrderDescModel"
-      :currencies="currencies"
-    />
-  </QsGenericDrawer>
+  />
 </template>

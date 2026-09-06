@@ -12,17 +12,17 @@ const SOURCE = new URL(
   import.meta.url,
 )
 
-test('销售详情抽屉按需读取详情并使用 QsSalesOrderDesc 展示', async () => {
+test('销售详情抽屉按需读取详情并使用 QsSalesOrderDrawer 展示', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
-  assert.match(source, /<QsGenericDrawer/u)
+  assert.match(source, /<QsSalesOrderDrawer/u)
   assert.match(source, /salesOrdersApi\.getById/u)
-  assert.match(source, /<QsSalesOrderDesc/u)
-  assert.match(source, /mapSalesOrderDetailToDesc/u)
-  assert.match(source, /props\.order\?\.lineSummary\.previews \?\? \[\]/u)
+  assert.doesNotMatch(source, /QsSalesOrderDesc/u)
+  assert.match(source, /:detail="detail"/u)
+  assert.match(source, /:order="order"/u)
   assert.match(source, /:loading="loading"/u)
   assert.match(source, /:error="loadError"/u)
-  assert.match(source, /@click="loadDetail"/u)
+  assert.match(source, /@reload="loadDetail"/u)
   assert.match(source, /detailAbortController\?\.abort\(\)/u)
   assert.match(source, /detail\.value = null/u)
   assert.match(source, /drawerVisible\.value = false/u)
