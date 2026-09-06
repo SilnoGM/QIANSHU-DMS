@@ -58,33 +58,46 @@ watch(() => props.detail.id, () => {
             </span>
           </span>
         </template>
-        <div class="p-4 border-t border-border/70 bg-muted/15 space-y-4">
-          <dl class="text-sm m-0 gap-x-3 gap-y-2.5 grid grid-cols-[4.5rem_minmax(0,1fr)] sm:grid-cols-[4.5rem_minmax(0,1fr)_4.5rem_minmax(0,1fr)]">
-            <dt class="text-muted-foreground">
-              {{ t('salesOrderDrawer.paymentMethod') }}
-            </dt><dd class="m-0">
-              {{ methodCatalog.resolve(payment.paymentMethod)?.label ?? payment.paymentMethod ?? '-' }}
-            </dd>
-            <dt class="text-muted-foreground">
-              {{ t('salesOrderDrawer.recordedBy') }}
-            </dt><dd class="m-0">
-              <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" />
-            </dd>
-            <dt class="text-muted-foreground">
-              {{ t('salesOrderDrawer.recordedAt') }}
-            </dt><dd class="m-0">
-              <DateTimeDisplay :value="payment.createdAt" />
-            </dd>
-            <dt class="text-muted-foreground">
-              {{ t('salesOrderDrawer.remark') }}
-            </dt><dd class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-              {{ payment.remark || '-' }}
-            </dd>
+        <div class="p-4 border-t border-border/70 bg-muted/15 flex flex-col gap-5 sm:p-5">
+          <!-- 时间与收款备注跨整行，避免长日期和业务备注挤压相邻字段。 -->
+          <dl class="text-sm m-0 gap-x-6 gap-y-3 grid grid-cols-1 sm:grid-cols-2">
+            <div class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start">
+              <dt class="text-muted-foreground">
+                {{ t('salesOrderDrawer.paymentMethod') }}
+              </dt>
+              <dd class="m-0 [overflow-wrap:anywhere]">
+                {{ methodCatalog.resolve(payment.paymentMethod)?.label ?? payment.paymentMethod ?? '-' }}
+              </dd>
+            </div>
+            <div class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start">
+              <dt class="text-muted-foreground">
+                {{ t('salesOrderDrawer.recordedBy') }}
+              </dt>
+              <dd class="m-0 min-w-0">
+                <QsPersonDisplay :display-name="payment.createdBy.displayName" size="sm" />
+              </dd>
+            </div>
+            <div data-slot="payment-recorded-at" class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start sm:col-span-2">
+              <dt class="text-muted-foreground">
+                {{ t('salesOrderDrawer.recordedAt') }}
+              </dt>
+              <dd class="m-0 min-w-0">
+                <DateTimeDisplay :value="payment.createdAt" class="whitespace-normal!" />
+              </dd>
+            </div>
+            <div data-slot="payment-remark" class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start sm:col-span-2">
+              <dt class="text-muted-foreground">
+                {{ t('salesOrderDrawer.paymentRemark') }}
+              </dt>
+              <dd class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
+                {{ payment.remark || '-' }}
+              </dd>
+            </div>
           </dl>
           <p v-if="payment.voidedAt" class="text-sm text-destructive m-0">
             {{ t('salesOrderDrawer.voidReason') }}：{{ payment.voidReason || '-' }} · <DateTimeDisplay :value="payment.voidedAt" />
           </p>
-          <div class="pt-4 border-t border-border/70">
+          <div class="pt-5 border-t border-border/70">
             <OrderDocument :document="payment.voucher" />
           </div>
         </div>
@@ -125,7 +138,7 @@ watch(() => props.detail.id, () => {
             </span>
           </span>
         </template>
-        <div class="p-4 border-t border-border/70 bg-muted/15">
+        <div class="p-4 border-t border-border/70 bg-muted/15 sm:p-5">
           <OrderDocument :document="document" />
         </div>
       </FaCollapsible>

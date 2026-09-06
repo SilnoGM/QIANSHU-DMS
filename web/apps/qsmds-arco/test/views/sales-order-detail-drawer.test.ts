@@ -34,6 +34,22 @@ test('切换页签只重置抽屉正文滚动，避免进入变更记录时停�
   assert.doesNotMatch(drawer, /window\.scrollTo/u)
 })
 
+test('收款展开区的时间和备注独占一行，凭证备注与上传信息有独立标签', async () => {
+  const [records, document] = await Promise.all([
+    readFile(new URL('../../src/components/business/QsSalesOrderDrawer/OrderRecords.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/components/business/QsSalesOrderDrawer/OrderDocument.vue', import.meta.url), 'utf8'),
+  ])
+  // 长时间和多行备注不能继续与其他字段争用半行，也不能混淆收款与凭证各自的备注。
+  assert.match(records, /data-slot="payment-recorded-at"[^>]*sm:col-span-2/u)
+  assert.match(records, /data-slot="payment-remark"[^>]*sm:col-span-2/u)
+  assert.match(records, /salesOrderDrawer\.paymentRemark/u)
+  assert.match(document, /salesOrderDrawer\.documentRemark/u)
+  assert.match(document, /salesOrderDrawer\.uploadedAt/u)
+  assert.match(document, /data-slot="order-document-metadata"/u)
+  assert.match(document, /<ImageGroup[^>]*:items="images"/u)
+  assert.match(document, /v-if="document\.detachedAt"/u)
+})
+
 test('销售详情抽屉按需读取详情并使用 QsSalesOrderDrawer 展示', async () => {
   const source = await readFile(SOURCE, 'utf8')
 

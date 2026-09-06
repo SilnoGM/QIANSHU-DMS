@@ -18,23 +18,42 @@ const fileSize = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 min-w-0 sm:flex-row">
-    <ImageGroup v-if="images.length" :items="images" :size="96" :max-count="1" class="shrink-0" />
-    <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground shrink-0 size-8" aria-hidden="true" />
-    <div class="text-sm flex-1 min-w-0 space-y-2.5">
-      <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
-        {{ document.title || document.originalFilename }}
-      </p>
-      <p class="qs-type-meta m-0 [overflow-wrap:anywhere]">
-        {{ document.originalFilename }} · {{ fileSize }}
-      </p>
-      <p class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-        {{ t('salesOrderDrawer.remark') }}：{{ document.remark || '-' }}
-      </p>
-      <div class="qs-type-meta flex flex-wrap gap-x-4 gap-y-2 items-center">
-        <span class="inline-flex gap-1 items-center">{{ t('salesOrderDrawer.uploadedBy') }}：<QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" /></span>
-        <DateTimeDisplay :value="document.createdAt" />
+  <div class="gap-5 grid grid-cols-1 min-w-0 items-start sm:grid-cols-[6rem_minmax(0,1fr)]">
+    <ImageGroup v-if="images.length" :items="images" :size="96" :max-count="1" />
+    <span v-else class="text-muted-foreground border border-border/70 rounded-lg bg-muted/20 flex size-24 items-center justify-center">
+      <FaIcon name="i-lucide:file-text" class="size-8" aria-hidden="true" />
+    </span>
+    <div class="text-sm flex flex-col gap-4 min-w-0">
+      <div class="flex flex-col gap-1.5">
+        <p class="qs-type-body-medium leading-relaxed m-0 [overflow-wrap:anywhere]">
+          {{ document.title || document.originalFilename }}
+        </p>
+        <p class="qs-type-meta m-0 flex flex-wrap gap-x-2 gap-y-1 items-baseline">
+          <span class="min-w-0 [overflow-wrap:anywhere]">{{ document.originalFilename }}</span>
+          <span class="shrink-0">· {{ fileSize }}</span>
+        </p>
       </div>
+      <!-- 凭证上传信息独立标注，不与收款记录时间或收款备注混用。 -->
+      <dl data-slot="order-document-metadata" class="m-0 gap-x-3 gap-y-3 grid grid-cols-[4.5rem_minmax(0,1fr)] items-start">
+        <dt class="text-muted-foreground">
+          {{ t('salesOrderDrawer.documentRemark') }}
+        </dt>
+        <dd class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {{ document.remark || '-' }}
+        </dd>
+        <dt class="text-muted-foreground">
+          {{ t('salesOrderDrawer.uploadedBy') }}
+        </dt>
+        <dd class="m-0 min-w-0">
+          <QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" />
+        </dd>
+        <dt class="text-muted-foreground">
+          {{ t('salesOrderDrawer.uploadedAt') }}
+        </dt>
+        <dd class="m-0 min-w-0">
+          <DateTimeDisplay :value="document.createdAt" class="whitespace-normal!" />
+        </dd>
+      </dl>
       <p v-if="document.detachedAt" class="text-muted-foreground m-0">
         {{ t('salesOrderDrawer.detached') }} · <DateTimeDisplay :value="document.detachedAt" />
       </p>
