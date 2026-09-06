@@ -18,20 +18,20 @@ const fileSize = computed(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 min-w-0 sm:flex-row">
-    <ImageGroup v-if="images.length" :items="images" :size="80" :max-count="1" class="shrink-0" />
+  <div class="flex flex-col gap-4 min-w-0 sm:flex-row">
+    <ImageGroup v-if="images.length" :items="images" :size="96" :max-count="1" class="shrink-0" />
     <FaIcon v-else name="i-lucide:file-text" class="text-muted-foreground shrink-0 size-8" aria-hidden="true" />
-    <div class="text-sm flex-1 min-w-0 space-y-2">
-      <p class="font-medium m-0 [overflow-wrap:anywhere]">
+    <div class="text-sm flex-1 min-w-0 space-y-2.5">
+      <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
         {{ document.title || document.originalFilename }}
       </p>
-      <p class="text-muted-foreground m-0 [overflow-wrap:anywhere]">
+      <p class="qs-type-meta m-0 [overflow-wrap:anywhere]">
         {{ document.originalFilename }} · {{ fileSize }}
       </p>
       <p class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
         {{ t('salesOrderDrawer.remark') }}：{{ document.remark || '-' }}
       </p>
-      <div class="text-muted-foreground flex flex-wrap gap-x-4 gap-y-2 items-center">
+      <div class="qs-type-meta flex flex-wrap gap-x-4 gap-y-2 items-center">
         <span class="inline-flex gap-1 items-center">{{ t('salesOrderDrawer.uploadedBy') }}：<QsPersonDisplay :display-name="document.createdBy.displayName" size="sm" /></span>
         <DateTimeDisplay :value="document.createdAt" />
       </div>

@@ -12,6 +12,28 @@ const SOURCE = new URL(
   import.meta.url,
 )
 
+test('专用抽屉摘要使用标题字号，详情信息保持紧凑分组且不依赖未定义字体类', async () => {
+  const [drawer, information] = await Promise.all([
+    readFile(new URL('../../src/components/business/QsSalesOrderDrawer/index.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/components/business/QsSalesOrderDrawer/OrderInformation.vue', import.meta.url), 'utf8'),
+  ])
+  // 标题和表格数据的字体角色不能混用，否则表格的 14px 规则会压过标题字号。
+  assert.match(drawer, /<h2[^>]*class="[^"]*qs-type-page-title/u)
+  assert.doesNotMatch(information, /font-qs-data-mono/u)
+  assert.match(information, /data-slot="sales-order-drawer-basic"/u)
+  assert.match(information, /data-slot="sales-order-drawer-customer"/u)
+  assert.match(information, /line\.actualUnitPriceAmount/u)
+  assert.match(information, /line\.lineTotalAmount/u)
+  assert.doesNotMatch(information, /standardUnitPriceAmount/u)
+})
+
+test('切换页签只重置抽屉正文滚动，避免进入变更记录时停留在半页', async () => {
+  const drawer = await readFile(new URL('../../src/components/business/QsSalesOrderDrawer/index.vue', import.meta.url), 'utf8')
+  assert.match(drawer, /watch\(activeTab/u)
+  assert.match(drawer, /drawerBody\.value\?\.parentElement\?\.scrollTo\(\{ top: 0 \}\)/u)
+  assert.doesNotMatch(drawer, /window\.scrollTo/u)
+})
+
 test('销售详情抽屉按需读取详情并使用 QsSalesOrderDrawer 展示', async () => {
   const source = await readFile(SOURCE, 'utf8')
 
