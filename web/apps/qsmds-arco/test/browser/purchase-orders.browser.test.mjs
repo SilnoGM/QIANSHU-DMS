@@ -11,6 +11,7 @@ import {
   waitForNoVisibleDialog,
   waitForVisibleDialog,
 } from './numbering.browser.helpers.mjs'
+import { clickOrderDrawerTab } from './order-drawer.browser.helpers.mjs'
 import {
   apiExpression,
   appRouteUrl,
@@ -44,6 +45,26 @@ async function runPurchaseOrderBrowserStep(label, action) {
       cause: error,
     })
   }
+}
+
+/** 付款方式在手风琴正文内，先验证默认折叠，再展开并等待真实可见内容。 */
+async function expandFirstPaymentRecord(page) {
+  const sectionSelector = '[data-testid="purchase-order-detail-drawer"] section[aria-label="实际付款记录"]'
+  const triggerSelector = `${sectionSelector} [data-slot="collapsible-trigger"]`
+  await page.waitFor(`(() => {
+    const trigger = document.querySelector(${JSON.stringify(triggerSelector)})
+    return trigger?.getClientRects().length > 0
+      && trigger.getAttribute('aria-expanded') === 'false'
+  })()`)
+  await page.evaluate(`document.querySelector(${JSON.stringify(triggerSelector)}).click()`)
+  await page.waitFor(`(() => {
+    const trigger = document.querySelector(${JSON.stringify(triggerSelector)})
+    const content = document.getElementById(trigger?.getAttribute('aria-controls') ?? '')
+    return trigger?.getAttribute('aria-expanded') === 'true'
+      && content?.getClientRects().length > 0
+      && content.innerText.includes('Browser 银行转账')
+      && content.innerText.includes('本次付款未关联凭证')
+  })()`)
 }
 
 function labelledControlSource(labelText) {
@@ -1117,18 +1138,28 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
       const productImage = drawer?.querySelector(
-        '[data-slot="purchase-order-desc-line"] [data-slot="image-group"] img',
+        'section[aria-label="采购产品列表"] [data-slot="image-group"] img',
       )
-      return drawer?.textContent?.includes('订单基础信息')
-        && drawer.textContent.includes('采购产品与小计')
+      return drawer?.querySelector('[data-testid="purchase-order-detail-drawer"]')
+        && !drawer.querySelector('[data-slot="qs-purchase-order-desc"]')
+        && drawer.textContent.includes('订单基础信息')
+        && drawer.textContent.includes('采购产品列表')
+        && drawer.textContent.includes('实际付款记录')
+        && drawer.textContent.includes('订单凭证')
+        && drawer.querySelector('[role="tab"][aria-selected="true"]')
+          ?.textContent.includes('订单详情信息')
         && drawer.textContent.includes(${JSON.stringify(productNo)})
         && drawer.textContent.includes('BROWSER STOCK MARK')
-        && drawer.textContent.includes('状态历史')
         && productImage instanceof HTMLImageElement
         && productImage.src.includes('/api/purchase-orders/${order.id}/lines/')
         && productImage.complete
         && productImage.naturalWidth > 0
     })()`)
+    await clickOrderDrawerTab(page, 'purchase-order-detail-drawer', '订单变更记录')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="purchase-order-detail-drawer"] section[aria-label="订单变更记录"]',
+    )?.getClientRects().length > 0`)
+    await clickOrderDrawerTab(page, 'purchase-order-detail-drawer', '订单详情信息')
     // 全部采购列表只保留查看与取消；付款从已打开的详情抽屉继续办理。
     await clickVisibleButton(page, '记录付款')
     await waitForVisibleDialog(page, '记录实际付款')
@@ -1141,7 +1172,23 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
       return drawer?.textContent?.includes('已付清')
-        && drawer.textContent.includes('Browser 银行转账')
+    })()`)
+    await expandFirstPaymentRecord(page)
+    const paidDetail = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(order.id)}`,
+    ))
+    assert.equal(paidDetail.status, 200)
+    assert.equal(paidDetail.body?.paymentStatus, 'PAID')
+    assert.equal(paidDetail.body?.payments?.length, 1)
+    assert.equal(paidDetail.body?.payments?.[0]?.amount, '80.0000')
+    await clickOrderDrawerTab(page, 'purchase-order-detail-drawer', '订单变更记录')
+    await page.waitFor(`(() => {
+      const history = document.querySelector(
+        '[data-testid="purchase-order-detail-drawer"] section[aria-label="订单变更记录"]',
+      )
+      return history?.innerText.includes('付款状态变更')
+        && history.innerText.includes('未付款')
+        && history.innerText.includes('已付清')
     })()`)
     await clickVisibleAriaButton(page, '关闭抽屉')
     await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
@@ -1410,7 +1457,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(historicalMixedActiveOrderNo)}))
       const catalogImage = drawer?.querySelector(
-        '[data-slot="purchase-order-desc-line"] [data-slot="image-group"] img',
+        'section[aria-label="采购产品列表"] [data-slot="image-group"] img',
       )
       return drawer?.textContent?.includes(${JSON.stringify(historicalMixedCatalogProductName)})
         && drawer.textContent.includes(${JSON.stringify(historicalMixedCustomProductName)})
@@ -1431,8 +1478,8 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.includes(${JSON.stringify(historicalMixedActiveOrderNo)}))
       return drawer?.textContent?.includes('部分付款')
-        && drawer.textContent.includes('Browser 银行转账')
     })()`)
+    await expandFirstPaymentRecord(page)
     await clickVisibleAriaButton(page, '关闭抽屉')
     await waitForNoVisibleDialog(page, historicalMixedActiveOrderNo)
 

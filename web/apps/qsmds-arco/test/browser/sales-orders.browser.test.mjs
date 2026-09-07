@@ -14,6 +14,7 @@ import {
   waitForNoVisibleDialog,
   waitForVisibleDialog,
 } from './numbering.browser.helpers.mjs'
+import { clickOrderDrawerTab } from './order-drawer.browser.helpers.mjs'
 import {
   apiExpression,
   appRouteUrl,
@@ -617,10 +618,16 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         && productImage.naturalWidth > 0
     })()`)
     // 专用抽屉的第二页只显示真实变更；打印当前仅是轻提示，不触发系统打印。
-    await clickVisibleButton(page, '订单变更记录')
+    await clickOrderDrawerTab(page, 'sales-order-detail-drawer', '订单变更记录')
     await page.waitFor(`document.querySelector(
-      '[data-testid="sales-order-detail-drawer"] [role="tab"][aria-selected="true"]',
-    )?.textContent.includes('订单变更记录')`)
+      '[data-testid="sales-order-detail-drawer"] section[aria-label="订单变更记录"]',
+    )?.getClientRects().length > 0`)
+    await clickOrderDrawerTab(page, 'sales-order-detail-drawer', '订单详情信息')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-detail-drawer"] section[aria-label="销售产品列表"]',
+    )?.textContent.includes('PRODUCT-BROWSER-001')`)
+    // 留在变更页关闭，下一次打开必须重置为详情页，而非继承上次的页签。
+    await clickOrderDrawerTab(page, 'sales-order-detail-drawer', '订单变更记录')
     await clickVisibleButton(page, '打印')
     await page.waitFor(`document.body.innerText.includes(
       '该功能将在后续版本推出，敬请期待',
