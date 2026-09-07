@@ -1,6 +1,9 @@
 import type { PurchaseOrderShippingMarkResolutionDto } from '../../../api/generated/types.gen'
 import type { PurchaseOrderShippingMarkResolutionQuery } from '../../../api/modules/purchase-orders'
+import { formatNumberingRuleStructure } from '../../system/basic-data/numbering/numbering-list.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
+
+export const PURCHASE_SHIPPING_MARK_DISPATCH_HINT = '正式提交后自动派发，规则容量与生成结果将在提交时最终校验。'
 
 export interface PurchaseOrderShippingMarkState {
   readonly error: string
@@ -27,7 +30,12 @@ export function formatPurchaseOrderShippingMarkSummary(
   const revision = resolution.activeRevision === null ? '无生效版本' : `第 ${resolution.activeRevision} 版`
   const source = resolution.matchSource === 'CUSTOM_RULE' ? '自定义采购固定规则' : '供应商绑定规则'
   const status = isPurchaseOrderShippingMarkAvailable(resolution) ? '可用' : '不可用'
-  return `${source}：${rule} · ${revision} · ${status}\n${resolution.message}\n正式提交后自动派发`
+  return [
+    `${source}：${rule} · ${revision} · ${status}`,
+    resolution.activeConfig ? formatNumberingRuleStructure(resolution.activeConfig) : null,
+    isPurchaseOrderShippingMarkAvailable(resolution) ? null : resolution.message,
+    PURCHASE_SHIPPING_MARK_DISPATCH_HINT,
+  ].filter(Boolean).join('\n')
 }
 
 /**

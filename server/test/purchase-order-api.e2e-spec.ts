@@ -17,6 +17,7 @@ import { CsrfProtectionGuard } from '../src/modules/auth/guards/csrf-protection.
 import { PasswordChangeRequiredGuard } from '../src/modules/auth/guards/password-change-required.guard'
 import { PermissionGuard } from '../src/modules/auth/guards/permission.guard'
 import { SessionCookieProvider } from '../src/modules/auth/providers/session-cookie.provider'
+import type { NumberingRuleConfigResponseDto } from '../src/modules/numbering/dto/numbering-response.dto'
 import { PurchaseOrderDocumentService } from '../src/modules/purchase-orders/documents/purchase-order-document.service'
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
@@ -25,6 +26,7 @@ import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purcha
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { PurchaseOrdersController } from '../src/modules/purchase-orders/purchase-orders.controller'
 import { PurchaseShippingMarkResolverService } from '../src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service'
+import type { PurchaseOrderShippingMarkResolutionDto } from '../src/modules/purchase-shipping-marks/purchase-shipping-mark-resolution.dto'
 import { PurchaseShippingMarksController } from '../src/modules/purchase-shipping-marks/purchase-shipping-marks.controller'
 import { PurchaseShippingMarksService } from '../src/modules/purchase-shipping-marks/purchase-shipping-marks.service'
 
@@ -35,6 +37,10 @@ const SALES_ORDER_ID = '44444444-4444-4444-8444-444444444444'
 const SALES_ORDER_LINE_ID = '66666666-6666-4666-8666-666666666666'
 const PRODUCT_MEDIA_ID = '77777777-7777-4777-8777-777777777777'
 const RESOLUTION_TOKEN = 'a'.repeat(64)
+const ACTIVE_CONFIG: NumberingRuleConfigResponseDto = {
+  resetPolicy: 'NEVER', timezone: 'Asia/Shanghai', maxOutputLength: 22,
+  segments: [{ type: 'FIXED', value: 'CUSTOM' }, { type: 'SEQUENCE', width: 16, startValue: '9007199254740993', step: '7' }],
+}
 
 const list = jest.fn().mockResolvedValue({ items: [], page: 2, pageSize: 10, total: 0 })
 const getById = jest.fn().mockResolvedValue({ id: ORDER_ID })
@@ -53,12 +59,13 @@ const resolveSourceLinePreview = jest.fn().mockResolvedValue({
     'X-Content-Type-Options': 'nosniff',
   },
 })
-const readShippingMarkResolution = jest.fn().mockResolvedValue({
+const resolutionResponse: PurchaseOrderShippingMarkResolutionDto = {
   productMode: 'CUSTOM', matchSource: 'CUSTOM_RULE',
   ruleId: PRODUCT_MEDIA_ID, ruleCode: 'CUSTOM_MARK', name: '自定义采购唛头',
-  activeRevision: 1, availability: 'AVAILABLE',
+  activeRevision: 1, activeConfig: ACTIVE_CONFIG, availability: 'AVAILABLE',
   message: '正式提交后自动派发', resolutionToken: RESOLUTION_TOKEN,
-})
+}
+const readShippingMarkResolution = jest.fn().mockResolvedValue(resolutionResponse)
 
 @Module({
   controllers: [PurchaseOrdersController],
@@ -199,7 +206,7 @@ describe('PurchaseOrder HTTP API contract', () => {
     const detailCallsBefore = getById.mock.calls.length
     const response = await request(requireApplication().getHttpServer())
       .get('/api/purchase-orders/shipping-mark-resolution?productMode=CUSTOM').expect(200)
-    expect(responseBody(response)).toMatchObject({ availability: 'AVAILABLE', ruleCode: 'CUSTOM_MARK', resolutionToken: RESOLUTION_TOKEN })
+    expect(responseBody(response)).toMatchObject({ availability: 'AVAILABLE', ruleCode: 'CUSTOM_MARK', activeConfig: ACTIVE_CONFIG, resolutionToken: RESOLUTION_TOKEN })
     expect(response.headers['cache-control']).toContain('no-store')
     expect(response.headers['x-request-id']).toBeTruthy()
     expect(readShippingMarkResolution).toHaveBeenLastCalledWith({ productMode: 'CUSTOM' })
@@ -208,6 +215,13 @@ describe('PurchaseOrder HTTP API contract', () => {
     expect(readShippingMarkResolution).toHaveBeenLastCalledWith({ productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' })
     expect(create).toHaveBeenCalledTimes(callsBefore)
     expect(getById).toHaveBeenCalledTimes(detailCallsBefore)
+  })
+
+  it('preserves an explicit null active config in unavailable HTTP responses', async () => {
+    readShippingMarkResolution.mockResolvedValueOnce({ ...resolutionResponse, activeRevision: null, activeConfig: null, availability: 'NO_ACTIVE_VERSION', resolutionToken: null })
+    const response = await request(requireApplication().getHttpServer())
+      .get('/api/purchase-orders/shipping-mark-resolution?productMode=CUSTOM').expect(200)
+    expect(responseBody(response)).toMatchObject({ availability: 'NO_ACTIVE_VERSION', activeRevision: null, activeConfig: null, resolutionToken: null })
   })
 
   it('rejects missing scene suppliers and arbitrary rule selectors before resolution', async () => {
@@ -364,8 +378,9 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
   afterAll(async () => { await application?.close() })
 
   it('allows an ordinary creation operator to resolve and reach sales-linked creation without management grants', async () => {
-    await request(application.getHttpServer()).get('/api/purchase-orders/shipping-mark-resolution')
+    const response = await request(application.getHttpServer()).get('/api/purchase-orders/shipping-mark-resolution')
       .set('Cookie', cookie).query({ productMode: 'CUSTOM' }).expect(200)
+    expect(responseBody(response)).toMatchObject({ activeConfig: ACTIVE_CONFIG })
     await request(application.getHttpServer()).post('/api/purchase-orders')
       .set(mutationHeaders).set('Cookie', cookie).set('Idempotency-Key', IDEMPOTENCY_KEY)
       .send(payload).expect(201)

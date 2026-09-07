@@ -9,6 +9,8 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { DictionaryLookupService, DictionaryValueUnavailableError } from '../dictionaries/dictionary-lookup.service'
 import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
+import { reconstructStoredNumberingConfig, toNumberingConfigResponse } from '../numbering/numbering-query.mapper'
+import { NUMBERING_VERSION_READ_SELECT } from '../numbering/numbering-query.persistence'
 import type { PurchaseOrderShippingMarkResolutionDto, PurchaseOrderShippingMarkResolutionQueryDto } from './purchase-shipping-mark-resolution.dto'
 import type { ShippingMarkAvailability } from './shipping-mark-binding.dto'
 import { ruleAvailability, SHIPPING_MARK_RULE_SELECT, summarizeRule } from './shipping-mark-binding.persistence'
@@ -25,6 +27,10 @@ interface BindingIdentity {
 
 const CUSTOM_RULE_CODE = 'CUSTOM_MARK'
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
+const RESOLUTION_RULE_SELECT = {
+  ...SHIPPING_MARK_RULE_SELECT,
+  versions: { where: { status: 'ACTIVE' }, select: NUMBERING_VERSION_READ_SELECT, take: 1 },
+} as const satisfies Prisma.NumberingRuleSelect
 const AVAILABILITY_MESSAGES: Record<ShippingMarkAvailability, string> = {
   AVAILABLE: '正式提交后自动派发，规则容量与生成结果将在提交时最终校验',
   SUPPLIER_UNAVAILABLE: '供应商当前不可用，请检查供应商字典启用状态',
@@ -85,6 +91,7 @@ export class PurchaseShippingMarkResolverService {
       ruleCode: input.productMode === 'CUSTOM' ? CUSTOM_RULE_CODE : null,
       name: null,
       activeRevision: null,
+      activeConfig: null,
       availability: 'RULE_MISSING',
       message: AVAILABILITY_MESSAGES.RULE_MISSING,
       resolutionToken: null,
@@ -115,13 +122,19 @@ export class PurchaseShippingMarkResolverService {
         : Prisma.sql`SELECT id FROM numbering_rules WHERE id = ${binding.ruleId}::uuid FOR SHARE`)
     }
     // 发布与启停均更新 Rule；持锁后读取 ACTIVE revision，与后续派发共用同一事务。
-    const rule = summarizeRule(await transaction.numberingRule.findUnique({ where, select: SHIPPING_MARK_RULE_SELECT }))
+    const storedRule = await transaction.numberingRule.findUnique({ where, select: RESOLUTION_RULE_SELECT })
+    const rule = summarizeRule(storedRule)
+    const activeVersion = storedRule?.versions[0]
     const availability = ruleAvailability(rule)
     Object.assign(result, {
       ruleId: rule?.id ?? result.ruleId,
       ruleCode: rule?.ruleCode ?? result.ruleCode,
       name: rule?.name ?? null,
       activeRevision: rule?.activeRevision ?? null,
+      // 停用不抹去已发布配置；错误用途不跨场景展示，且绝不回退到 DRAFT。
+      activeConfig: storedRule?.purpose === 'SHIPPING_MARK' && activeVersion !== undefined
+        ? toNumberingConfigResponse(reconstructStoredNumberingConfig(activeVersion))
+        : null,
       availability,
       message: AVAILABILITY_MESSAGES[availability],
     })

@@ -8,6 +8,18 @@ import {
 } from '../../src/views/operations/purchase-orders/purchase-order-shipping-mark.logic'
 
 const available: PurchaseOrderShippingMarkResolutionDto = {
+  activeConfig: {
+    maxOutputLength: 64,
+    resetPolicy: 'YEARLY',
+    timezone: 'Asia/Shanghai',
+    segments: [
+      { type: 'FIXED', value: 'WGJ' },
+      { type: 'SEPARATOR', value: '-' },
+      { type: 'DATE', format: 'YYYY' },
+      { type: 'SEPARATOR', value: '-' },
+      { type: 'SEQUENCE', width: 4, startValue: '1', step: '1' },
+    ],
+  },
   activeRevision: 2,
   availability: 'AVAILABLE',
   matchSource: 'SUPPLIER_BINDING',
@@ -38,6 +50,30 @@ test('变更场景立即清空旧摘要且取消请求，迟到响应不能覆�
   await first
   assert.equal(states.at(-1)?.resolution?.ruleCode, 'NEW_MARK')
   assert.equal(states.at(-1)?.loading, false)
+})
+
+test('摘要复用真实生效规则结构，派发说明只出现一次且不展示候选号', () => {
+  const summary = formatPurchaseOrderShippingMarkSummary({
+    ...available,
+    message: '正式提交后自动派发，规则容量与生成结果将在提交时最终校验',
+  })
+  assert.match(summary, /WGJ-\{YYYY\}-\{SEQ:4,start=1,step=1\}/u)
+  assert.equal(summary.split('正式提交后自动派发').length - 1, 1)
+  assert.doesNotMatch(summary, /WGJ-2026-0001/u)
+})
+
+test('无生效版本不伪造配置，摘要保留不可用原因', () => {
+  const summary = formatPurchaseOrderShippingMarkSummary({
+    ...available,
+    activeConfig: null,
+    activeRevision: null,
+    availability: 'NO_ACTIVE_VERSION',
+    resolutionToken: null,
+    message: '唛头规则尚无生效版本',
+  })
+  assert.match(summary, /无生效版本.*不可用/u)
+  assert.match(summary, /唛头规则尚无生效版本/u)
+  assert.doesNotMatch(summary, /WGJ|SEQ|undefined|null/u)
 })
 
 test('身份变化、卸载和未知提交不会接受新解析或覆盖已确认摘要', async () => {

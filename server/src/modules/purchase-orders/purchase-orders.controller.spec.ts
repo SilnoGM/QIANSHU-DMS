@@ -417,10 +417,11 @@ describe('PurchaseOrdersController OpenAPI', () => {
       expect.objectContaining({ in: 'query', name: 'supplierValue', required: false }),
     ]))
     expect(document.components?.schemas?.PurchaseOrderShippingMarkResolutionDto).toMatchObject({
-      required: ['productMode', 'matchSource', 'ruleId', 'ruleCode', 'name', 'activeRevision', 'availability', 'message', 'resolutionToken'],
+      required: ['productMode', 'matchSource', 'ruleId', 'ruleCode', 'name', 'activeRevision', 'activeConfig', 'availability', 'message', 'resolutionToken'],
       properties: {
         matchSource: { enum: ['SUPPLIER_BINDING', 'CUSTOM_RULE'] },
         ruleId: { nullable: true, type: 'string', format: 'uuid' },
+        activeConfig: { nullable: true, allOf: [{ $ref: '#/components/schemas/NumberingRuleConfigResponseDto' }] },
         resolutionToken: { nullable: true, type: 'string', pattern: '^[0-9a-f]{64}$' },
       },
     })

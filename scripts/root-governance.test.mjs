@@ -22,6 +22,7 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service.ts',
   'server/test/purchase-shipping-mark-atomicity.e2e-spec.ts',
   'server/test/purchase-shipping-mark-atomicity.fixture.ts',
+  'server/test/purchase-shipping-mark-resolution.e2e-spec.ts',
   'specs/purchase-shipping-mark-binding/issuance-tasks.md',
   'web/apps/qsmds-arco/test/views/purchase-order-shipping-mark.logic.test.ts',
   'server/prisma/migrations/20260906090104_supplier_shipping_mark_rule_bindings/migration.sql',

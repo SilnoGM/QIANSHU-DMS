@@ -8,6 +8,7 @@ import { launchChrome } from './chrome-driver.mjs'
 import {
   clickDialogButton,
   runNumberingBrowserStep,
+  saveNumberingScreenshot,
   waitForAfterAuthentication,
   waitForNoVisibleDialog,
   waitForVisibleDialog,
@@ -57,8 +58,56 @@ async function readAvailableShippingMarkSummary(page, productMode) {
       && region.textContent.includes('正式提交后自动派发')
       && region.textContent.includes(${JSON.stringify(productMode === 'CUSTOM' ? 'CUSTOM_MARK' : '供应商绑定规则')})
       && region.querySelector('input, textarea') === null
+      && region.querySelector('button') === null
+      && region.querySelector('[data-testid="purchase-order-shipping-mark-status"]')?.textContent.trim() === '可用'
+      && region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]')?.textContent.includes('{SEQ:')
+      && region.textContent.split('正式提交后自动派发').length === 2
   })()`)
-  return page.evaluate(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"] p')?.textContent?.trim()`)
+  return page.evaluate(`(() => {
+    const region = document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
+    const fields = Object.fromEntries([...region.querySelectorAll('dl > div')].map(field => (
+      [field.querySelector('dt').textContent.trim(), field.querySelector('dd').textContent.trim()]
+    )))
+    return [
+      fields['匹配来源'] + '：' + fields['规则编码'] + ' · ' + region.querySelector('p').textContent.trim() + ' · ' + fields['生效版本'] + ' · 可用',
+      region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]').textContent.trim(),
+      region.querySelector('[data-testid="purchase-order-shipping-mark-hint"]').textContent.trim(),
+    ].join('\\n')
+  })()`)
+}
+
+async function assertShippingMarkPanelAppearance(page) {
+  await page.waitFor(`[...document.querySelectorAll('[data-qs-toast]')].every(toast => toast.getClientRects().length === 0)`)
+  const styles = []
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(`document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('appSettings').setColorScheme(${JSON.stringify(theme)})`)
+    await page.waitFor(`document.documentElement.classList.contains('dark') === ${theme === 'dark'}`)
+    await page.evaluate(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]').scrollIntoView({ block: 'center' })`)
+    await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+    styles.push(await page.evaluate(`(() => {
+      const panel = document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
+      const style = getComputedStyle(panel)
+      return { background: style.backgroundColor, color: style.color }
+    })()`))
+    await saveNumberingScreenshot(page, `purchase-shipping-mark-${theme}`)
+  }
+  assert.notEqual(styles[0].background, styles[1].background)
+  assert.notEqual(styles[0].color, styles[1].color)
+  await page.setViewport(390, 844, true)
+  await page.waitFor(`innerWidth === 390 && document.querySelector('[data-testid="purchase-order-create-summary-column"]')?.getClientRects().length === 0`)
+  await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+  await page.evaluate(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]').scrollIntoView({ block: 'center' })`)
+  assert.equal(await page.evaluate(`(() => {
+    const panel = document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
+    const rect = panel.getBoundingClientRect()
+    return rect.left >= 0 && rect.right <= document.documentElement.clientWidth
+      && panel.scrollWidth <= panel.clientWidth
+      && getComputedStyle(panel.querySelector('dl')).gridTemplateColumns.split(' ').length === 1
+  })()`), true)
+  await saveNumberingScreenshot(page, 'purchase-shipping-mark-mobile')
+  await page.setViewport(1440, 900, false)
+  await page.evaluate(`document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('appSettings').setColorScheme('light')`)
+  await page.waitFor(`!document.documentElement.classList.contains('dark')`)
 }
 
 async function assertConfirmShippingMarkSummary(page, expected) {
@@ -755,6 +804,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
       ?.getClientRects().length > 0`)
     const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CATALOG')
+    await assertShippingMarkPanelAppearance(page)
     await fillLabelledControl(page, '采购备注', 'BROWSER LINKED REMARK')
     await clickVisibleButton(page, '下一步')
 
@@ -1037,7 +1087,16 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await waitForVisibleDialog(page, '选择采购产品类型')
     await selectPurchaseStartMode(page, 'CATALOG')
     await selectVisibleComboboxOption(page, '选择供应商', supplierLabel)
+    await page.enableRequestInterception([{ urlPattern: '*/api/purchase-orders/shipping-mark-resolution*', requestStage: 'Request' }])
+    const failedResolution = page.waitForEvent('Fetch.requestPaused', event => event.request.method === 'GET')
     await clickDialogButton(page, '选择采购产品类型', '开始采购')
+    await page.connection.send('Fetch.failRequest', {
+      requestId: (await failedResolution).requestId,
+      errorReason: 'ConnectionClosed',
+    })
+    await page.disableRequestInterception()
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')?.textContent.includes('可返回上一步后重试')`)
+    const resolutionsBeforeRecovery = resolutionRequests
     await waitForAfterAuthentication(page, `(() => (
       (() => {
         const parameters = new URLSearchParams(location.hash.split('?')[1] ?? '')
@@ -1094,6 +1153,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
       ?.getClientRects().length > 0`)
     const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CATALOG')
+    assert.ok(resolutionRequests > resolutionsBeforeRecovery, '进入唛头步骤自动恢复失败的只读匹配')
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-review"]')
       ?.getClientRects().length > 0`)

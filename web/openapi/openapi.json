@@ -52741,6 +52741,16 @@
             "minimum": 1,
             "nullable": true
           },
+          "activeConfig": {
+            "nullable": true,
+            "description": "唛头规则当前生效配置；停用时仍可核对，不回退草稿。缺少生效版本或用途不符时为 null。",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NumberingRuleConfigResponseDto"
+              }
+            ]
+          },
           "availability": {
             "type": "string",
             "enum": [
@@ -52773,6 +52783,7 @@
           "ruleCode",
           "name",
           "activeRevision",
+          "activeConfig",
           "availability",
           "message",
           "resolutionToken"

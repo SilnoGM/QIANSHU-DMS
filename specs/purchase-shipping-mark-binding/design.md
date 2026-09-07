@@ -121,7 +121,7 @@ PUT 提交失败或响应未知时保留输入，通过重新读取确认最终�
 
 - CATALOG 输入 `productMode=CATALOG&supplierValue=...`；CUSTOM 仅输入 `productMode=CUSTOM`，不需要供应商姓名，不接收 ruleId/ruleCode。
 - 使用现有合法采购创建权限（销售关联/备货权限按原有规则），不要求绑定管理权限；返回仅该场景的规则摘要，不泄漏完整配置列表。
-- 响应包含 `productMode`、匹配来源、ruleId/ruleCode/name/activeRevision、`availability`、安全提示文本及 `resolutionToken`。
+- 响应包含 `productMode`、匹配来源、ruleId/ruleCode/name/activeRevision、`availability`、安全提示文本及 `resolutionToken`。`activeConfig` 为可空的当前生效配置，复用编号域配置契约；只返回该采购场景命中的唛头规则，不返回草稿或其他用途的配置。
 - availability 区分 AVAILABLE、SUPPLIER_UNAVAILABLE、UNBOUND、RULE_MISSING、WRONG_PURPOSE、RULE_DISABLED、NO_ACTIVE_VERSION；这些是只读配置状态，不伪装成 HTTP 系统故障。
 - 返回 AVAILABLE 只证明当前用途、启用和生效版本符合要求，不预留容量，不发号；耗尽与规则生成错误由提交时的 Generator 最终拒绝。
 - resolutionToken 为服务端规范化的“产品类型、供应商稳定值、绑定版本、ruleId、activeRevision”摘要，CUSTOM 使用固定解析身份；不是客户端指定规则的权限凭据。
@@ -158,9 +158,10 @@ PUT 提交失败或响应未知时保留输入，通过重新读取确认最终�
 ### 6.3 采购页
 
 - 保留四步结构，将第三步手填唛头替换为只读规则摘要和“正式提交后自动派发”，采购备注继续编辑。
+- 唛头区域按“规则名称与可用状态 → 真实编号结构 → 规则编码、匹配来源、生效版本与重置周期 → 派发说明”分层展示，补充时区和最大长度；复用编号列表结构格式，不生成候选编号。无配置时不伪造结构。
 - 第四步、右侧 QsPurchaseOrderDesc 和二次确认弹窗展示同一规则摘要，不能把预览编号当已派发编号。
 - 选择/更换供应商或产品类型时取消旧匹配请求、清除旧摘要；保留 authEpoch/requestVersion 防止旧响应覆盖新选择，不重置无关产品金额。
-- 未绑定/不可用时显示具体原因并阻止最终提交；有配置权限才提供跳转配置入口，普通业务员提示联系管理员，不授予配置权限。
+- 未绑定/不可用时显示具体原因并阻止最终提交，提示联系管理员；不展示“刷新规则”或“查看唛头配置”按钮。网络失败后返回此步骤自动重新匹配，保留已填写内容；提交中或结果未知时仍禁止刷新。
 - 绑定/版本变化返回冲突时回到第三步刷新核对；可纠正问题用轻提示，服务端异常/未知结果保留原恢复机制。
 - 仅最终确认创建幂等键；返回修改、取消确认、只读解析不发号。新订单不提供手改/重生成唛头，历史详情沿用原文本显示。
 

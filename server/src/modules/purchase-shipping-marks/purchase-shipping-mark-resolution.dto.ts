@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { IsIn, Validate, ValidatorConstraint, type ValidationArguments, type ValidatorConstraintInterface } from 'class-validator'
 
 import { isNormalizableDictionaryItemValue } from '../dictionaries/dictionary.normalizer'
+import { NumberingRuleConfigResponseDto } from '../numbering/dto/numbering-response.dto'
 import { SHIPPING_MARK_AVAILABILITIES, type ShippingMarkAvailability } from './shipping-mark-binding.dto'
 
 @ValidatorConstraint({ name: 'shippingMarkSupplierForProductMode', async: false })
@@ -46,6 +47,9 @@ export class PurchaseOrderShippingMarkResolutionDto {
 
   @ApiProperty({ type: 'integer', minimum: 1, nullable: true })
   activeRevision!: number | null
+
+  @ApiProperty({ type: NumberingRuleConfigResponseDto, nullable: true, description: '唛头规则当前生效配置；停用时仍可核对，不回退草稿。缺少生效版本或用途不符时为 null。' })
+  activeConfig!: NumberingRuleConfigResponseDto | null
 
   @ApiProperty({ type: 'string', enum: SHIPPING_MARK_AVAILABILITIES })
   availability!: ShippingMarkAvailability
