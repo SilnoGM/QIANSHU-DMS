@@ -1,6 +1,7 @@
 {
   "shippingMarkBinding": {
     "title": "唛头规则绑定",
+    "entryLabel": "唛头绑定",
     "description": "按供应商维护唛头规则；多个供应商使用同一规则时共用流水。",
     "configOnly": "本页仅保存绑定配置，不生成编号；采购自动唛头尚未接入。",
     "customTitle": "自定义产品统一规则",

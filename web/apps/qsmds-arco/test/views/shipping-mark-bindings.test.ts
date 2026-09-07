@@ -39,3 +39,14 @@ test('入口、隐藏路由与配置页不向采购创建或编号引擎增加�
   assert.match(page, /CUSTOM_MARK/u)
   assert.doesNotMatch(page, /purchaseOrdersApi|NumberingGenerator|generateScoped/u)
 })
+test('编号管理页头入口使用短名称与可换行间距，不改变配置页标题', () => {
+  const root = new URL('../../src/', import.meta.url)
+  const page = readFileSync(new URL('views/system/basic-data/numbering/index.vue', root), 'utf8')
+  const locale = JSON.parse(readFileSync(new URL('locales/lang/shipping-mark-binding/zh-cn.json', root), 'utf8'))
+  // 间距仅作用于本页操作区，窄屏允许换行，不影响共用页头组件。
+  assert.match(page, /default-class="max-w-full flex flex-wrap gap-3 items-center justify-end"/u)
+  assert.match(page, /t\('shippingMarkBinding\.entryLabel'\)/u)
+  assert.equal(locale.shippingMarkBinding.entryLabel, '唛头绑定')
+  assert.equal(locale.shippingMarkBinding.title, '唛头规则绑定')
+  assert.match(page, /data-testid="numbering-create-rule"[^>]*>[\s\S]*?新建规则\s*<\/FaButton>/u)
+})

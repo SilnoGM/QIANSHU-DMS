@@ -181,7 +181,7 @@ export async function waitForNumberingCreatePage(page) {
 
 export async function openNumberingCreatePage(page, purpose) {
   process.stdout.write(`[numbering-browser] select purpose and open create page: ${purpose}\n`)
-  await clickVisibleButton(page, '新建编号规则')
+  await clickVisibleButton(page, '新建规则')
   await waitForVisibleDialog(page, '选择编码用途')
   await page.evaluate(`(() => {
     const input = document.querySelector('input[type="radio"][value="${purpose}"]')

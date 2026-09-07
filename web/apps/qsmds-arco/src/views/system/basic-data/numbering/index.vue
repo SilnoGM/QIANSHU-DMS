@@ -712,6 +712,7 @@ onBeforeUnmount(() => {
   <div class="numbering-management-page min-w-0">
     <FaPageHeader
       description="集中查看后续业务域的编号结构、规则状态、版本与当前周期容量；所有时间均按 Asia/Shanghai 展示。"
+      default-class="max-w-full flex flex-wrap gap-3 items-center justify-end"
     >
       <template #title>
         <h1 class="m-0">
@@ -726,7 +727,7 @@ onBeforeUnmount(() => {
         @click="router.push({ name: 'systemBasicDataShippingMarkBindings' })"
       >
         <FaIcon name="i-lucide:link" />
-        {{ t('shippingMarkBinding.title') }}
+        {{ t('shippingMarkBinding.entryLabel') }}
       </FaButton>
       <FaButton
         v-if="canRead && canCreate"
@@ -735,7 +736,7 @@ onBeforeUnmount(() => {
         @click="purposeModalVisible = true"
       >
         <FaIcon name="i-lucide:plus" />
-        新建编号规则
+        新建规则
       </FaButton>
     </FaPageHeader>
 

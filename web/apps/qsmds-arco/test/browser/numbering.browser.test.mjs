@@ -327,9 +327,14 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     const visibleButton = label => [...document.querySelectorAll('button')]
       .find(button => button.getClientRects().length > 0
         && button.textContent?.trim() === label)
-    const createButton = visibleButton('新建编号规则')
+    const createButton = visibleButton('新建规则')
+    const bindingButton = visibleButton('唛头绑定')
     const queryButton = visibleButton('查询')
     return {
+      headerButtonGap: createButton && bindingButton
+        ? createButton.getBoundingClientRect().left
+          - bindingButton.getBoundingClientRect().right
+        : null,
       createHeight: createButton?.getBoundingClientRect().height ?? 0,
       documentFits: document.documentElement.scrollWidth
         <= document.documentElement.clientWidth,
@@ -361,9 +366,11 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     Math.abs(desktop.createHeight - desktop.queryHeight) <= 1,
     `页头主按钮与查询按钮高度不一致: ${JSON.stringify(desktop)}`,
   )
+  assert.equal(desktop.headerButtonGap, 12, '页头按钮之间应保留 12px 间距')
+  await saveNumberingScreenshot(page, 'header-buttons-desktop')
 
   // 用途选择不预选，Escape 可退出；新增页自己的 dirty 守卫不依赖 Drawer。
-  await clickVisibleButton(page, '新建编号规则')
+  await clickVisibleButton(page, '新建规则')
   await waitForVisibleDialog(page, '选择编码用途')
   await saveNumberingScreenshot(page, 'purpose-modal-desktop')
   assert.equal(await page.evaluate(`document.querySelectorAll('input[type="radio"]:checked').length`), 0)
@@ -1111,7 +1118,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     const buttons = [...document.querySelectorAll('button')]
       .filter(button => button.getClientRects().length > 0)
     const createButton = buttons.find(
-      button => button.textContent?.trim() === '新建编号规则',
+      button => button.textContent?.trim() === '新建规则',
     )
     return window.innerWidth === 390
       && matchMedia('(max-width: 767px)').matches
@@ -1122,6 +1129,10 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
         ?.startsWith('编号规则操作 · '))
   })()`)
   const mobile = await page.evaluate(`(() => {
+    const headerButtons = [
+      document.querySelector('[data-testid="shipping-mark-bindings-entry"]'),
+      document.querySelector('[data-testid="numbering-create-rule"]'),
+    ]
     const row = [...document.querySelectorAll(
       '[data-testid="numbering-mobile-row"]',
     )].find(candidate => candidate.getClientRects().length > 0
@@ -1131,16 +1142,22 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
       ...document.querySelectorAll('button'),
     ].filter(button => button.getClientRects().length > 0
       && (
-        button.textContent?.trim() === '新建编号规则'
+        button.textContent?.trim() === '新建规则'
         || button.getAttribute('aria-label')
           ?.startsWith('编号规则操作 · ')
       ))
     return {
+      headerButtonsInside: headerButtons.every(button => button
+        && button.getBoundingClientRect().left >= 0
+        && button.getBoundingClientRect().right <= window.innerWidth),
+      headerButtonsWrap: headerButtons[1]
+        ? getComputedStyle(headerButtons[1].parentElement).flexWrap
+        : null,
       buttonHeights: buttons.map(button => Number(
         button.getBoundingClientRect().height.toFixed(3),
       )),
       buttonKinds: buttons.map(button => (
-        button.textContent?.trim() === '新建编号规则'
+        button.textContent?.trim() === '新建规则'
           ? 'create'
           : 'row-action'
       )),
@@ -1159,10 +1176,14 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   assert.deepEqual({
     cardInside: mobile.cardInside,
     documentFits: mobile.documentFits,
+    headerButtonsInside: mobile.headerButtonsInside,
+    headerButtonsWrap: mobile.headerButtonsWrap,
     hasStatusText: mobile.hasStatusText,
   }, {
     cardInside: true,
     documentFits: true,
+    headerButtonsInside: true,
+    headerButtonsWrap: 'wrap',
     hasStatusText: true,
   })
   assert.equal(
@@ -1629,7 +1650,7 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
   assert.equal(
     await limitedPage.evaluate(`(() => ![...document.querySelectorAll('button')]
       .some(button => button.getClientRects().length > 0
-        && button.textContent?.trim() === '新建编号规则'))()`),
+        && button.textContent?.trim() === '新建规则'))()`),
     true,
   )
 
@@ -1641,7 +1662,7 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
   await openManagement()
   await limitedPage.waitFor(`(() => [...document.querySelectorAll('button')]
     .some(button => button.getClientRects().length > 0
-      && button.textContent?.trim() === '新建编号规则'))()`)
+      && button.textContent?.trim() === '新建规则'))()`)
   const createItems = await readRuleMenuItems(
     limitedPage,
     permissionTargetRuleCode,
