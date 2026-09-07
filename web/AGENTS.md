@@ -28,7 +28,7 @@
 
 Web 仍可独立安装、检查、构建和移植。正式产品 Release 从同一个 Tag Commit 同时重新构建 Web 与 Server；这只是仓库根的发布编排，不改变两端独立依赖域，也不授权 Web 通过 `file:`、`link:`、跨目录 `workspace:*` 或源码引用依赖 Server。
 
-阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。Task 14 完成前，不得声称 GitHub CI、Tag 触发或正式 Release 已在平台通过。
+GitHub CI、Tag 和 Release 的验证结论必须对应具体 SHA、Run 与产物；历史验收记录见仓库根 `docs/全局文档/发布与版本管理.md`，历史成功不等于当前版本已通过。
 
 ## 目录职责
 
@@ -119,7 +119,7 @@ pnpm serve:select
 - 跨端 snapshot 只通过根 `contract:sync` 更新；`contract:check` 是只读检查，不得用复制命令或 Web 脚本直接覆盖 Server snapshot。
 - `apps/qsmds-arco/src/api/index.ts` 只装配唯一生产 Axios Client；成功路径保留完整 `AxiosResponse<T>`，Store 和调用方显式读取 `res.data`，不得恢复全局 envelope 解包。
 - 错误必须先收敛为 `ApiClientError`；Blob、`401/403`、取消、受限重试与 fake 裸 DTO 的规则以 `docs/前端文档/接口接入规范.md` 为准。
-- 新增或修改公共 API、数据结构或数据库 schema 前，必须先获得用户确认。
+- 新增或修改公共 API、公共或持久化数据结构、数据库 schema 前须有明确实施授权；具体对象、范围与授权有效期遵循根 `AGENTS.md`。
 
 在仓库根执行跨端同步和检查；在 Web 自身验证独立生成：
 
@@ -132,3 +132,17 @@ pnpm -C web api:generate
 ## 反复修改检测
 
 使用项目 `fa-*` Skill 时，如果用户针对同一功能点连续三次以上反馈仍未达到预期，应暂停猜测，重新核对需求、现有实现和验收标准；不要自动把问题归因于框架。
+
+授权范围与确认有效期遵循根 `AGENTS.md`：具体对象和范围已经明确批准时不重复确认；需求或设计确认不自动授权实施。
+
+## 项目技能入口
+
+`web/skills/` 是版本控制内的技能真相源，不假设该非标准目录会被 Codex 自动注册。按当前任务读取对应的 `skills/<name>/SKILL.md`（路径相对本文件）：
+
+- 框架设置：`fa-framework-settings`；布局插槽：`fa-slot-creator`。
+- 表单：`fa-form-builder`；完整 CRUD：`fa-crud-page-generator`。
+- 路由：`fa-route-generator`；Pinia：`fa-store-generator`；国际化：`fa-i18n-manager`。
+- 页面优化：`fa-page-optimizer`；主题：`fa-theme-customizer`。
+- 用户明确要求框架反馈时读取 `fa-feedback`；反复失败先定位需求与实现原因，不自动归因于框架或对外发送信息。
+
+仅加载相关技能；现有 Qs/Fa/Arco 组件契约和主题优先于通用生成模板。局部调整不自动扩展为全套 CRUD、mock、主题重建或额外文件生成；审查请求保持只读。
