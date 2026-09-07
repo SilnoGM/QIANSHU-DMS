@@ -27,6 +27,7 @@ import type { QsPurchaseOrderDescViewModel } from '@/components/business/QsPurch
 ## Slots
 
 - `actions`：订单快照后的操作区。页面可放置提交提示或只读操作，但组件本身不负责提交。
+- `shipping-mark`：可选唛头展示区，创建页用于展示待派发规则的紧凑摘要。不传时继续显示 `model.shippingMarkText`，已保存唛头与历史快照不受影响；规则查询与提交状态仍由调用方管理。
 
 ## 响应式边界
 

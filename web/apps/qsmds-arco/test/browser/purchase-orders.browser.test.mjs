@@ -71,11 +71,14 @@ async function readAvailableShippingMarkSummary(page, productMode) {
     const fields = Object.fromEntries([...details.querySelectorAll('dt')].map(field => (
       [field.textContent.trim(), field.nextElementSibling.textContent.trim()]
     )))
-    return [
-      fields['匹配来源'] + '：' + fields['规则编码'] + ' · ' + region.querySelector('[data-testid="purchase-order-shipping-mark-name"]').textContent.trim() + ' · ' + fields['生效版本'] + ' · 可用',
-      region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]').textContent.trim(),
-      details.querySelector('[data-testid="purchase-order-shipping-mark-dispatch-detail"]').textContent.trim(),
-    ].join('\\n')
+    return {
+      name: region.querySelector('[data-testid="purchase-order-shipping-mark-name"]').textContent.trim(),
+      status: '可用',
+      structure: region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]').textContent.trim(),
+      hint: '正式提交后自动派发',
+      fields,
+      detailHint: details.querySelector('[data-testid="purchase-order-shipping-mark-dispatch-detail"]').textContent.trim(),
+    }
   })()`)
   await closeShippingMarkDetails(page)
   return summary
@@ -189,8 +192,151 @@ async function assertShippingMarkDetailsInteraction(page) {
 }
 
 async function assertConfirmShippingMarkSummary(page, expected) {
-  await page.waitFor(`document.querySelector('[data-testid="purchase-order-confirm-shipping-mark"]')
-    ?.textContent?.trim() === ${JSON.stringify(expected)}`)
+  await assertCompactShippingMarkSummary(page, '[data-testid="purchase-order-confirm-shipping-mark"]', expected)
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-confirm-shipping-mark"]')?.closest('dl') === null`), true, '确认弹窗的唛头摘要须独占全宽区域，不再挤进标签值两列表格')
+}
+
+async function assertCompactShippingMarkSummary(page, scope, expected) {
+  await page.waitFor(`(() => {
+    const scope = [...document.querySelectorAll(${JSON.stringify(scope)})].find(element => element.getClientRects().length > 0)
+    const summary = scope?.querySelector('[data-testid="purchase-order-shipping-mark-summary"]')
+    if (!summary?.getClientRects().length) return false
+    return ${JSON.stringify(['name', 'status', 'structure', 'hint'])}.every(field => (
+      summary.querySelector('[data-testid="shipping-mark-summary-' + field + '"]')?.textContent.trim() === ${JSON.stringify(expected)}[field]
+    ))
+  })()`)
+  assert.equal(await page.evaluate(`(() => {
+    const scope = [...document.querySelectorAll(${JSON.stringify(scope)})].find(element => element.getClientRects().length > 0)
+    const summary = scope.querySelector('[data-testid="purchase-order-shipping-mark-summary"]')
+    return summary.querySelector('dl') === null
+      && !summary.textContent.includes(${JSON.stringify(expected.detailHint)})
+      && !summary.textContent.includes(${JSON.stringify(expected.fields['匹配来源'])})
+      && !summary.textContent.includes(${JSON.stringify(expected.fields['规则编码'])})
+      && !summary.textContent.includes(${JSON.stringify(expected.fields['生效版本'])})
+      && summary.textContent.split('正式提交后自动派发').length === 2
+      && summary.querySelector('button[aria-label="查看唛头规则详情"]')?.getAttribute('aria-haspopup') === 'dialog'
+  })()`), true, '核对与提交摘要仅保留名称、状态、规则结构及单行短提示')
+}
+
+/** 在真实核对区/确认弹窗分别检验紧凑布局，避免后台隐藏的第三步组件成为断言目标。 */
+async function assertCompactShippingMarkAppearance(page, scope, expected, surface) {
+  const styles = []
+  const summaryExpression = `(() => {
+    const scope = [...document.querySelectorAll(${JSON.stringify(scope)})].find(element => element.getClientRects().length > 0)
+    return scope?.querySelector('[data-testid="purchase-order-shipping-mark-summary"]')
+  })()`
+  const visibleDetails = `[...document.querySelectorAll('[data-testid="shipping-mark-summary-details"]')].find(element => element.getClientRects().length > 0)`
+  for (const appearance of [
+    { label: 'light', theme: 'light', width: 1440, height: 900, mobile: false },
+    { label: 'dark', theme: 'dark', width: 1440, height: 900, mobile: false },
+    { label: 'mobile', theme: 'light', width: 390, height: 844, mobile: true },
+  ]) {
+    await page.connection.send('Emulation.setTouchEmulationEnabled', { enabled: appearance.mobile })
+    await page.setViewport(appearance.width, appearance.height, appearance.mobile)
+    await page.evaluate(`document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('appSettings').setColorScheme(${JSON.stringify(appearance.theme)})`)
+    await page.waitFor(`innerWidth === ${appearance.width} && document.documentElement.classList.contains('dark') === ${appearance.theme === 'dark'}`)
+    await page.waitFor(`matchMedia('(hover: hover) and (pointer: fine)').matches === ${!appearance.mobile}`)
+    await assertCompactShippingMarkSummary(page, scope, expected)
+    // 核对页会在 nextTick + RAF 后聚焦标题，并持续过渡列宽；先等页面布局稳定，再滚动目标摘要。
+    await page.evaluate('document.fonts.ready.then(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))')
+    await page.waitFor(`(() => {
+      const summary = ${summaryExpression}
+      const layout = summary.closest('[role="dialog"]') ?? summary.closest('[data-testid="purchase-order-create-layout"]')
+      return (layout ?? summary).getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
+    })()`)
+    await page.evaluate(`${summaryExpression}.scrollIntoView({ behavior: 'instant', block: 'center' })`)
+    await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+    const trigger = `${summaryExpression}.querySelector('button[aria-label="查看唛头规则详情"]')`
+    assert.equal(await page.evaluate(`!(${visibleDetails}) && ${trigger}.getAttribute('aria-expanded') === 'false'`), true, `${surface}-${appearance.label}: 默认不展开次要配置，即使模态初始焦点落在详情按钮`)
+    const geometryExpression = `(() => {
+      const summary = ${summaryExpression}
+      const rect = summary.getBoundingClientRect()
+      const button = summary.querySelector('button')
+      const buttonRect = button.getBoundingClientRect()
+      const hit = document.elementFromPoint(buttonRect.x + buttonRect.width / 2, buttonRect.y + buttonRect.height / 2)
+      const style = getComputedStyle(summary)
+      let surface = summary
+      let background = style.backgroundColor
+      while (surface.parentElement && ['transparent', 'rgba(0, 0, 0, 0)'].includes(background)) {
+        surface = surface.parentElement
+        background = getComputedStyle(surface).backgroundColor
+      }
+      return {
+        background, color: style.color,
+        fits: rect.left >= 0 && rect.right <= innerWidth + 1 && summary.scrollWidth <= summary.clientWidth + 1,
+        compact: rect.height <= ${appearance.mobile ? 180 : 140},
+        reachable: buttonRect.width >= ${appearance.mobile ? 44 : 28} && buttonRect.height >= ${appearance.mobile ? 44 : 28}
+          && buttonRect.top >= 0 && buttonRect.bottom <= innerHeight && button.contains(hit),
+        diagnostic: {
+          summary: rect.toJSON(), button: buttonRect.toJSON(), width: innerWidth, height: innerHeight,
+          hit: hit ? { tag: hit.tagName, role: hit.getAttribute('role'), testId: hit.getAttribute('data-testid') } : null,
+        },
+      }
+    })()`
+    try {
+      await page.waitFor(`${geometryExpression}.reachable`)
+    }
+    catch (error) {
+      throw new Error(`Shipping mark summary is not reachable: ${surface}-${appearance.label} ${JSON.stringify(await page.evaluate(geometryExpression))}`, { cause: error })
+    }
+    const geometry = await page.evaluate(geometryExpression)
+    await saveNumberingScreenshot(page, `purchase-shipping-mark-${surface}-${appearance.label}`)
+    const { background, color, diagnostic, ...layout } = geometry
+    styles.push({ background, color })
+    assert.deepEqual(layout, { fits: true, compact: true, reachable: true }, `${surface}-${appearance.label} ${JSON.stringify(diagnostic)}`)
+    if (appearance.mobile) {
+      const point = await page.evaluate(`(() => { const rect = ${trigger}.getBoundingClientRect(); return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } })()`)
+      await page.connection.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...point, radiusX: 1, radiusY: 1 }] })
+      await page.connection.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    }
+    else if (appearance.label === 'light') {
+      const point = await page.evaluate(`(() => { const rect = ${trigger}.getBoundingClientRect(); return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } })()`)
+      await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, button: 'none', buttons: 0 })
+    }
+    else {
+      await page.evaluate(`${trigger}.focus()`)
+      await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+      assert.equal(await page.evaluate(`!(${visibleDetails}) && ${trigger}.getAttribute('aria-expanded') === 'false'`), true, '仅键盘聚焦不自动打开详情')
+      await page.connection.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', nativeVirtualKeyCode: 13, windowsVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' })
+      await page.connection.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', nativeVirtualKeyCode: 13, windowsVirtualKeyCode: 13 })
+    }
+    await page.waitFor(`${trigger}.getAttribute('aria-expanded') === 'true' && Boolean(${visibleDetails})`)
+    await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+    await page.waitFor(`${visibleDetails}?.closest('.arco-trigger-popup')?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
+    const details = await page.evaluate(`(() => {
+      const details = ${visibleDetails}
+      const rect = details.getBoundingClientRect()
+      return {
+        fields: Object.fromEntries([...details.querySelectorAll('dt')].map(field => [field.textContent.trim(), field.nextElementSibling.textContent.trim()])),
+        hasHint: details.textContent.includes(${JSON.stringify(expected.detailHint)}),
+        dialog: details.getAttribute('role') === 'dialog' && details.getAttribute('aria-label') === '唛头规则详情',
+        fits: rect.left >= 0 && rect.right <= innerWidth + 1 && details.scrollWidth <= details.clientWidth + 1,
+        reachable: details.contains(document.elementFromPoint(rect.x + 12, rect.y + 12)),
+      }
+    })()`)
+    await saveNumberingScreenshot(page, `purchase-shipping-mark-${surface}-details-${appearance.label}`)
+    assert.deepEqual(details, { fields: expected.fields, hasHint: true, dialog: true, fits: true, reachable: true })
+    if (appearance.label === 'light') {
+      const point = await page.evaluate(`(() => { const rect = ${visibleDetails}.getBoundingClientRect(); return { x: rect.x + 12, y: rect.y + 12 } })()`)
+      await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point })
+      // 超过组件离开延时仍保持展开，确保鼠标能移入浮层阅读，而不是刚移动就消失。
+      await page.evaluate('new Promise(resolve => setTimeout(resolve, 220))')
+      await page.waitFor(`${trigger}.getAttribute('aria-expanded') === 'true' && Boolean(${visibleDetails})`)
+    }
+    await page.connection.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await page.connection.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await page.waitFor(`!(${visibleDetails}) && ${trigger}.getAttribute('aria-expanded') === 'false'`)
+    if (surface === 'confirm') {
+      await waitForVisibleDialog(page, '确认提交采购订单？')
+    }
+    await page.evaluate(`document.activeElement?.blur()`)
+    await page.connection.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+    await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 })
+  }
+  assert.notEqual(styles[0].background, styles[1].background)
+  assert.notEqual(styles[0].color, styles[1].color)
+  await page.setViewport(1440, 900, false)
+  await page.waitFor(`innerWidth === 1440 && !document.documentElement.classList.contains('dark')`)
 }
 
 /** 付款方式在手风琴正文内，先验证默认折叠，再展开并等待真实可见内容。 */
@@ -928,9 +1074,10 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
         && !summary.textContent.includes('采购定价')
         && [...summary.querySelectorAll('[data-currency="CNY"]')]
           .some(amount => amount.getAttribute('aria-label')?.includes('160'))
-        && summary.textContent.includes(${JSON.stringify(shippingMarkSummary)})
         && summary.textContent.includes('BROWSER LINKED REMARK')
     })()`)
+    await assertCompactShippingMarkSummary(page, '[data-testid="purchase-order-create-summary-column"]', shippingMarkSummary)
+    await assertCompactShippingMarkAppearance(page, '[data-testid="purchase-order-create-summary-column"]', shippingMarkSummary, 'review')
 
     await page.setViewport(390, 844, true)
     await page.waitFor(`(() => (
@@ -997,6 +1144,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     await clickVisibleButton(page, '提交订单')
     await waitForVisibleDialog(page, '确认提交采购订单？')
     await assertConfirmShippingMarkSummary(page, shippingMarkSummary)
+    await assertCompactShippingMarkAppearance(page, '[data-testid="purchase-order-confirm-shipping-mark"]', shippingMarkSummary, 'confirm')
     assert.equal(createRequests.length, 0, '读取规则与进入确认不应创建采购订单')
     assert.ok(resolutionRequests > 0)
     await page.waitFor(`(() => {
@@ -1256,8 +1404,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-review"]')
       ?.getClientRects().length > 0`)
-    await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-summary-column"]')
-      ?.textContent?.includes(${JSON.stringify(shippingMarkSummary)})`)
+    await assertCompactShippingMarkSummary(page, '[data-testid="purchase-order-create-summary-column"]', shippingMarkSummary)
     await clickVisibleButton(page, '提交订单')
     await waitForVisibleDialog(page, '确认提交采购订单？')
     await assertConfirmShippingMarkSummary(page, shippingMarkSummary)

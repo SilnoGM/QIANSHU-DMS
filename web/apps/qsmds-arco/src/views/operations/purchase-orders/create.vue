@@ -66,6 +66,7 @@ import {
   isPurchaseOrderAbortError,
 } from './purchase-order-list.logic'
 import PurchaseOrderPaymentTerms from './purchase-order-payment-terms.vue'
+import PurchaseOrderShippingMarkSummary from './purchase-order-shipping-mark-summary.vue'
 import {
   createPurchaseOrderShippingMarkResolver,
   formatPurchaseOrderShippingMarkSummary,
@@ -1559,7 +1560,15 @@ onBeforeUnmount(() => {
               <QsPurchaseOrderDesc
                 :currencies="fixedCurrencies"
                 :model="purchaseOrderDescModel"
-              />
+              >
+                <template #shipping-mark>
+                  <PurchaseOrderShippingMarkSummary
+                    :resolution="shippingMarkResolution"
+                    :loading="shippingMarkState.loading"
+                    :error="shippingMarkState.error"
+                  />
+                </template>
+              </QsPurchaseOrderDesc>
             </div>
 
             <Transition name="purchase-order-submit-bar">
@@ -1632,7 +1641,15 @@ onBeforeUnmount(() => {
         :currencies="fixedCurrencies"
         :model="purchaseOrderDescModel"
         class="border-0 rounded-none shadow-none md:rounded-xl"
-      />
+      >
+        <template #shipping-mark>
+          <PurchaseOrderShippingMarkSummary
+            :resolution="shippingMarkResolution"
+            :loading="shippingMarkState.loading"
+            :error="shippingMarkState.error"
+          />
+        </template>
+      </QsPurchaseOrderDesc>
       <template #footer>
         <div class="flex w-full justify-end">
           <FaButton type="button" variant="outline" class="min-h-11 w-full md:w-auto" @click="detailsDrawerVisible = false">
@@ -1717,13 +1734,17 @@ onBeforeUnmount(() => {
         <dd class="m-0 overflow-x-auto">
           <AmountDisplay :value="purchaseTotalAmount" currency="CNY" :currencies="fixedCurrencies" />
         </dd>
-        <dt class="text-sm text-muted-foreground">
-          唛头规则
-        </dt>
-        <dd class="text-sm m-0 whitespace-pre-line break-words" data-testid="purchase-order-confirm-shipping-mark">
-          {{ shippingMarkSummary }}
-        </dd>
       </dl>
+      <section class="mt-4 pt-4 border-t border-border/70 min-w-0" aria-label="唛头规则" data-testid="purchase-order-confirm-shipping-mark">
+        <h3 class="text-xs text-muted-foreground font-normal m-0 mb-2">
+          唛头规则
+        </h3>
+        <PurchaseOrderShippingMarkSummary
+          :resolution="shippingMarkResolution"
+          :loading="shippingMarkState.loading"
+          :error="shippingMarkState.error"
+        />
+      </section>
       <template #footer>
         <FaButton type="button" variant="outline" :disabled="editingLocked" @click="submitConfirmVisible = false">
           返回检查

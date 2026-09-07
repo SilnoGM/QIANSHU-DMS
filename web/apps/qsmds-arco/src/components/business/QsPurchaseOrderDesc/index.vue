@@ -16,7 +16,8 @@ defineOptions({ name: 'QsPurchaseOrderDesc' })
 const props = defineProps<QsPurchaseOrderDescProps>()
 
 defineSlots<{
-  actions?: () => unknown
+  'actions'?: () => unknown
+  'shipping-mark'?: () => unknown
 }>()
 
 const { t } = useI18n()
@@ -388,8 +389,10 @@ function lineImageItems(
           <dt class="qs-type-compact-label text-muted-foreground">
             {{ t('purchaseOrderDesc.fields.shippingMark') }}
           </dt>
-          <dd class="qs-type-body m-0 mt-2 whitespace-pre-wrap [overflow-wrap:anywhere]">
-            {{ displayText(model.shippingMarkText) }}
+          <dd class="qs-type-body m-0 mt-2 min-w-0">
+            <slot name="shipping-mark">
+              <span class="whitespace-pre-wrap [overflow-wrap:anywhere]">{{ displayText(model.shippingMarkText) }}</span>
+            </slot>
           </dd>
         </div>
         <div class="p-3 border border-border rounded-xl bg-muted/15 min-w-0">
