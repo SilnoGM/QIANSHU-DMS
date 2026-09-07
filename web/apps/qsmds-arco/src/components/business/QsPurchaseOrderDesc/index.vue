@@ -16,6 +16,7 @@ defineOptions({ name: 'QsPurchaseOrderDesc' })
 const props = defineProps<QsPurchaseOrderDescProps>()
 
 defineSlots<{
+  'parts'?: () => unknown
   'actions'?: () => unknown
   'shipping-mark'?: () => unknown
 }>()
@@ -372,6 +373,8 @@ function lineImageItems(
         </template>
       </dl>
     </section>
+
+    <slot name="parts" />
 
     <section
       data-slot="purchase-order-desc-notes"

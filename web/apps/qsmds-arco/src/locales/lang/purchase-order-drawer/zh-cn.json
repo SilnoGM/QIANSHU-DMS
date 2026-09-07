@@ -4,6 +4,12 @@
     "information": "订单详情信息",
     "changes": "订单变更记录",
     "products": "采购产品列表",
+    "parts": {
+      "title": "采购货件",
+      "part": "货件-{number}",
+      "quantity": "本货件数量",
+      "productUnavailable": "产品信息不可用"
+    },
     "payments": "实际付款记录",
     "documents": "订单凭证",
     "paymentVoucher": "付款凭证",

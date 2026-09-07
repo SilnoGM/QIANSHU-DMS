@@ -995,6 +995,8 @@ model PurchaseOrder {
   orderNo                      String                         @unique(map: "purchase_orders_order_no_key") @map("order_no") @db.VarChar(64)
   createIdempotencyKeyHash     Bytes                          @unique(map: "purchase_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
   createRequestFingerprintHash Bytes                          @map("create_request_fingerprint_hash") @db.ByteA
+  createRequestFingerprintVersion String                     @default("purchase-order.create.v4") @map("create_request_fingerprint_version") @db.VarChar(32)
+  partConfigurationSealed      Boolean                        @default(false) @map("part_configuration_sealed")
   purchaseType                 PurchaseOrderType              @map("purchase_type")
   productMode                  PurchaseOrderProductMode       @map("product_mode")
   salesOrderId                 String?                        @map("sales_order_id") @db.Uuid
@@ -1022,6 +1024,7 @@ model PurchaseOrder {
   currency     Currency                     @relation(fields: [currencyCode], references: [code], onDelete: Restrict, onUpdate: Restrict)
   createdBy    User                         @relation("PurchaseOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines        PurchaseOrderLine[]
+  parts        PurchaseOrderPart[]
   payments     PurchaseOrderPayment[]
   documents    PurchaseOrderDocument[]
   statusHistory PurchaseOrderStatusHistory[]
@@ -1055,11 +1058,50 @@ model PurchaseOrderLine {
   purchaseOrder        PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   product              Product?       @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   sourceSalesOrderLine SalesOrderLine? @relation(fields: [sourceSalesOrderLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  partItems            PurchaseOrderPartItem[]
 
+  @@unique([id, purchaseOrderId], map: "purchase_order_lines_id_order_id_key")
   @@unique([purchaseOrderId, lineNumber], map: "purchase_order_lines_order_id_line_number_key")
   @@index([productId, purchaseOrderId], map: "purchase_order_lines_product_id_order_id_idx")
   @@index([sourceSalesOrderLineId, purchaseOrderId], map: "purchase_order_lines_source_sales_line_order_idx")
   @@map("purchase_order_lines")
+}
+
+model PurchaseOrderPart {
+  id                       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId          String @map("purchase_order_id") @db.Uuid
+  key                      String @db.Uuid
+  partNumber               Int    @map("part_number") @db.SmallInt
+  shippingMarkText         String @map("shipping_mark_text") @db.VarChar(64)
+  shippingMarkIssuanceId   String @unique(map: "purchase_order_parts_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
+  shippingMarkKeyHash      Bytes  @map("shipping_mark_key_hash") @db.ByteA
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  shippingMarkIssuance NumberingIssuance @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  items PurchaseOrderPartItem[]
+
+  @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")
+  @@unique([purchaseOrderId, key], map: "purchase_order_parts_order_id_key_key")
+  @@unique([purchaseOrderId, partNumber], map: "purchase_order_parts_order_id_number_key")
+  @@index([shippingMarkText], map: "purchase_order_parts_shipping_mark_text_idx")
+  @@map("purchase_order_parts")
+}
+
+model PurchaseOrderPartItem {
+  id                  String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId      String @map("purchase_order_id") @db.Uuid
+  purchaseOrderPartId String @map("purchase_order_part_id") @db.Uuid
+  purchaseOrderLineId String @map("purchase_order_line_id") @db.Uuid
+  quantity            Int
+
+  part PurchaseOrderPart @relation(fields: [purchaseOrderPartId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict, onUpdate: Restrict)
+  line PurchaseOrderLine @relation(fields: [purchaseOrderLineId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([purchaseOrderPartId, purchaseOrderLineId], map: "purchase_order_part_items_part_line_key")
+  @@index([purchaseOrderLineId, purchaseOrderId], map: "purchase_order_part_items_line_order_idx")
+  @@index([purchaseOrderId], map: "purchase_order_part_items_order_idx")
+  @@map("purchase_order_part_items")
 }
 
 model PurchaseOrderPayment {
@@ -1264,6 +1306,7 @@ model NumberingIssuance {
   ruleVersion NumberingRuleVersion @relation(fields: [ruleVersionId, ruleId], references: [id, ruleId], onDelete: Restrict, onUpdate: Restrict)
   periodState NumberingPeriodState @relation(fields: [ruleId, periodKey], references: [ruleId, periodKey], onDelete: Restrict, onUpdate: Restrict)
   purchaseOrder PurchaseOrder?
+  purchaseOrderPart PurchaseOrderPart?
 
   @@unique([ruleId, generatedNumber], map: "numbering_issuances_rule_id_generated_number_key")
   @@unique([consumerCode, idempotencyKeyHash], map: "numbering_issuances_consumer_code_idempotency_key_hash_key")

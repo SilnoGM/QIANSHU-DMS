@@ -43,7 +43,7 @@ test('采购唛头将低频配置收进同一浮层，保留结构、短说明�
   const compact = field.replace(popup, '')
   assert.doesNotMatch(compact, /<dl|border-y|border-t|刷新规则|查看唛头配置/u)
   assert.match(compact, /purchase-order-shipping-mark-structure/u)
-  assert.match(compact, /正式提交后自动派发/u)
+  assert.match(compact, /正式提交后按货件自动派发/u)
   assert.match(compact, /role="alert"/u)
 })
 

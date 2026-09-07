@@ -13,6 +13,7 @@
 
 - 父页面保留请求、取消、权限和写入生命周期；组件通过 `canManagePayment`、`canAttachDocument` 控制入口，派发 `recordPayment`、`attachDocument` 事件。抽屉不提供作废付款、下载或解除关联入口。
 - 每次打开读取最新详情；产品主图从详情 `lineSummary.previews` 按采购行 ID 匹配，不依赖旧列表快照。
+- 采购货件按 `parts.partNumber` 排序，标题为“货件-01”，默认收起且每次换单重置。每件保留独立唛头复制入口；展开后按 `purchaseOrderLineId` 关联原产品快照和主图，仅显示本货件分配数量，不重复计金额。历史单 `parts` 为空时不推断分件，仍在备注区域显示和复制原订单唛头。
 - 采购可无凭证付款；付款凭证按 `paymentId` 关联，仅在对应付款记录内展示，保留图片预览。无凭证时显示“本次付款未关联凭证”；已作废付款及已解除关联付款凭证保留历史信息，已解除凭证不加载媒体。有效采购单与签收单单独展示，不重复收纳付款凭证。
 - `purchase-order-document-modal.vue` 负责独立凭证上传归档，每单最多一张有效采购单、签收单可多张。`POST /api/purchase-orders/:purchaseOrderId/documents` 不改变履约或付款状态，需 `purchase-orders:document` 权限；关闭、换单、退出登录会取消请求并释放预览资源。
 - 状态、金额及记录数量均直接使用服务端字段，不做本地财务重算。

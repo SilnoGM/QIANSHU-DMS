@@ -58,7 +58,7 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
   assert.deepEqual(
     plan.prepare.map(step => [step.command, step.args]),
     [
-      ['pnpm', ['-C', 'server', 'db:migrate:deploy']],
+      [process.execPath, ['./scripts/browser-auth/migrate-before-historical-fixtures.mjs']],
       ['pnpm', ['-C', 'server', 'build']],
       ['pnpm', ['-C', 'web', 'build']],
       [process.execPath, ['./scripts/browser-auth/provision-admin.mjs']],
@@ -79,6 +79,9 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
     'proxy-development',
     'proxy-production',
   ])
+  const webBuild = plan.prepare.find(step => step.name === 'web-build')
+  assert.equal(webBuild?.env.NODE_ENV, 'production')
+  assert.equal(webBuild?.env.VITE_ENABLE_COMPONENT_LIBRARY, 'true', '隔离浏览器构建必须包含实际组件库验收路由')
   assert.equal(
     plan.prepare.find(step => step.name === 'media-fixture')
       ?.env.QIANSHU_BROWSER_AUTH_MEDIA_STORAGE_ROOT,

@@ -47,6 +47,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
     orderDate: new Date('2026-08-27T00:00:00.000Z'),
     currencyCode: 'CNY',
     shippingMarkText: 'MARK',
+    parts: [],
     lineSubtotalAmount: decimal('100'),
     purchaseTotalAmount: decimal('100'),
     depositDueAmount: decimal('30'),
@@ -417,6 +418,7 @@ describe('PurchaseOrderQueryService', () => {
           customerName: { contains: 'PO', mode: 'insensitive' },
         } } },
         { shippingMarkText: { contains: 'PO', mode: 'insensitive' } },
+        { parts: { some: { shippingMarkText: { contains: 'PO', mode: 'insensitive' } } } },
         { customSupplierName: { contains: 'PO', mode: 'insensitive' } },
       ],
     })
@@ -664,6 +666,7 @@ describe('PurchaseOrderQueryService status counts', () => {
             customerName: { contains: '客户甲', mode: 'insensitive' },
           } } },
           { shippingMarkText: { contains: '客户甲', mode: 'insensitive' } },
+          { parts: { some: { shippingMarkText: { contains: '客户甲', mode: 'insensitive' } } } },
           { customSupplierName: { contains: '客户甲', mode: 'insensitive' } },
         ],
     })

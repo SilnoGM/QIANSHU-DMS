@@ -35469,6 +35469,32 @@
               }
             }
           },
+          "413": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "422": {
             "headers": {
               "X-Request-Id": {
@@ -35559,6 +35585,12 @@
                 "PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED",
                 "PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE",
                 "PURCHASE_ORDER_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 413,
+              "codes": [
+                "PAYLOAD_TOO_LARGE"
               ]
             },
             {
@@ -52836,6 +52868,13 @@
             "type": "string",
             "nullable": true
           },
+          "shippingMarks": {
+            "description": "按货件顺序返回独立唛头；历史订单为空数组",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -52877,6 +52916,7 @@
           "fulfillmentStatus",
           "paymentStatus",
           "shippingMarkText",
+          "shippingMarks",
           "remark",
           "version",
           "createdAt",
@@ -53631,6 +53671,48 @@
           "quantity"
         ]
       },
+      "PurchaseOrderPartItemInputDto": {
+        "type": "object",
+        "properties": {
+          "lineNumber": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "description": "本次最终采购明细的 1 起始行号"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "lineNumber",
+          "quantity"
+        ]
+      },
+      "PurchaseOrderPartInputDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "format": "uuid",
+            "description": "全单唯一且重试时保持不变的 UUID v4 货件标识"
+          },
+          "items": {
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderPartItemInputDto"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "items"
+        ]
+      },
       "CreatePurchaseOrderRequestDto": {
         "type": "object",
         "properties": {
@@ -53679,6 +53761,15 @@
               "$ref": "#/components/schemas/PurchaseOrderLineInputDto"
             }
           },
+          "parts": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "description": "必填货件配置；完整且仅一次覆盖各采购行数量；全单最多 10000 个分配项，创建 JSON 最大 1 MiB。历史 v3 已提交请求仅允许原幂等键恢复。",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderPartInputDto"
+            }
+          },
           "purchaseTotalAmount": {
             "type": "string",
             "pattern": "^(?:0|[1-9]\\d{0,25})(?:\\.\\d{1,2})?$"
@@ -53703,9 +53794,60 @@
           "orderDate",
           "expectedShippingMarkResolution",
           "lines",
+          "parts",
           "purchaseTotalAmount",
           "depositDueAmount",
           "balanceDueAmount"
+        ]
+      },
+      "PurchaseOrderPartItemDto": {
+        "type": "object",
+        "properties": {
+          "purchaseOrderLineId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lineNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "purchaseOrderLineId",
+          "lineNumber",
+          "quantity"
+        ]
+      },
+      "PurchaseOrderPartDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partNumber": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "shippingMarkText": {
+            "type": "string"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderPartItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "partNumber",
+          "shippingMarkText",
+          "items"
         ]
       },
       "PurchaseOrderAmountsDto": {
@@ -54183,6 +54325,13 @@
             "type": "string",
             "nullable": true
           },
+          "shippingMarks": {
+            "description": "按货件顺序返回独立唛头；历史订单为空数组",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -54198,6 +54347,12 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderPartDto"
+            }
           },
           "sourceSalesOrder": {
             "nullable": true,
@@ -54266,10 +54421,12 @@
           "fulfillmentStatus",
           "paymentStatus",
           "shippingMarkText",
+          "shippingMarks",
           "remark",
           "version",
           "createdAt",
           "updatedAt",
+          "parts",
           "sourceSalesOrder",
           "amounts",
           "lines",

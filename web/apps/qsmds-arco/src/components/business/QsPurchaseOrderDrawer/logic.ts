@@ -32,6 +32,32 @@ export function revisionAmounts(revision: PurchaseOrderAmountRevisionDto) {
 }
 
 /** 详情已携带同单授权主图，按采购行 ID 匹配，避免旧列表图片或同名产品串图。 */
-export function getPurchaseProductImages(detail: PurchaseOrderDetailDto): Map<string, string | undefined> {
+export function getPurchaseProductImages(detail: Pick<PurchaseOrderDetailDto, 'lineSummary'>): Map<string, string | undefined> {
   return new Map(detail.lineSummary.previews.map(preview => [preview.lineId, preview.mainImage?.contentUrl]))
+}
+
+/**
+ * 货件只关联产品快照并展示本件分配数量；订单金额继续由原采购行汇总，不能随拆件重复计入。
+ * 历史订单 parts 为空时保持为空，不根据旧唛头或采购行推测历史分件。
+ */
+export function getPurchaseOrderPartRecords(detail: Pick<PurchaseOrderDetailDto, 'parts' | 'lines' | 'lineSummary'>) {
+  const linesById = new Map(detail.lines.map(line => [line.id, line]))
+  const imagesByLine = getPurchaseProductImages(detail)
+  return [...detail.parts].sort((a, b) => a.partNumber - b.partNumber).map(part => ({
+    id: part.id,
+    partNumber: part.partNumber,
+    shippingMarkText: part.shippingMarkText,
+    items: [...part.items].sort((a, b) => a.lineNumber - b.lineNumber).map((item) => {
+      const line = linesById.get(item.purchaseOrderLineId)
+      return {
+        purchaseOrderLineId: item.purchaseOrderLineId,
+        lineNumber: item.lineNumber,
+        quantity: item.quantity,
+        productNo: line?.productNo ?? null,
+        productName: line?.productName ?? null,
+        description: line?.description ?? null,
+        imageSrc: imagesByLine.get(item.purchaseOrderLineId),
+      }
+    }),
+  }))
 }

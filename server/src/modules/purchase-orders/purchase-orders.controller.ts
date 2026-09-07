@@ -448,6 +448,7 @@ export class PurchaseOrdersController {
     session: 'required', authorization: true, csrf: true, badRequest: true,
     conflict: true, validation: true, privateNoStore: true,
     errors: [
+      { status: 413, codes: ['PAYLOAD_TOO_LARGE'] },
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 409, codes: [
         'PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT',

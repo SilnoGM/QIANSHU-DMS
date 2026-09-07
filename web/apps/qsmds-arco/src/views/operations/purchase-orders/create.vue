@@ -20,6 +20,7 @@ import type {
   OrderProductLineModel,
   OrderProductLineReadOnlyModel,
 } from '@/components/business/QsOrderProductLineEditor/types'
+import type { PartConfiguration } from '@/components/business/QsPartConfigurator/types'
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 
 import { Popover as APopover } from '@arco-design/web-vue'
@@ -34,6 +35,7 @@ import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.v
 import QsGenericDrawer from '@/components/business/QsGenericDrawer/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsOrderProductLineEditor from '@/components/business/QsOrderProductLineEditor/index.vue'
+import QsPartConfigurator from '@/components/business/QsPartConfigurator/index.vue'
 import QsPurchaseOrderDesc from '@/components/business/QsPurchaseOrderDesc/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
@@ -65,6 +67,8 @@ import {
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
 } from './purchase-order-list.logic'
+import PurchaseOrderPartsReview from './purchase-order-parts-review.vue'
+import { freezePurchaseOrderPartReview, mapPurchaseOrderPartProducts, reconcilePurchaseOrderParts } from './purchase-order-parts.logic'
 import PurchaseOrderPaymentTerms from './purchase-order-payment-terms.vue'
 import PurchaseOrderShippingMarkSummary from './purchase-order-shipping-mark-summary.vue'
 import {
@@ -86,7 +90,7 @@ const STEP_VALIDATION_MESSAGE = '请先完成并修正当前步骤的必填资�
 const purchaseOrderSteps: StepsItem[] = [
   { id: 'base', title: '采购基础信息' },
   { id: 'products-payment', title: '采购产品与付款' },
-  { id: 'mark-remark', title: '唛头与备注' },
+  { id: 'parts', title: '预定义货物件' },
   { id: 'review', title: '订单详情核对' },
 ]
 
@@ -135,6 +139,8 @@ const formModel = reactive({
   customSupplierName: createContext?.customSupplierName ?? null,
 })
 const customSupplierDraft = ref(createContext?.customSupplierName ?? '')
+const partConfigurations = shallowRef<readonly PartConfiguration[]>([])
+const frozenPartReview = shallowRef<ReturnType<typeof freezePurchaseOrderPartReview> | null>(null)
 const pendingSupplierChange = shallowRef<{
   readonly customSupplierName: string | null
   readonly supplierValue: string | null
@@ -164,6 +170,12 @@ const reviewHeadingRef = useTemplateRef<HTMLElement>('reviewHeadingRef')
 const supplierSelectRef = useTemplateRef<InstanceType<typeof QsDictionarySelect>>('supplierSelectRef')
 const isDesktopSummary = useMediaQuery('(min-width: 1280px)')
 const submission = shallowRef<PurchaseOrderSubmissionState>(createPurchaseOrderEditingState())
+const partProducts = computed(() => submission.value.phase === 'editing'
+  ? mapPurchaseOrderPartProducts(formModel.lines)
+  : frozenPartReview.value?.products ?? [])
+const displayedParts = computed(() => submission.value.phase === 'editing'
+  ? partConfigurations.value
+  : frozenPartReview.value?.parts ?? [])
 const shippingMarkState = shallowRef<PurchaseOrderShippingMarkState>({ error: '', loading: false, resolution: null })
 const shippingMarkDetailsOpen = ref(false)
 const shippingMarkDetailsId = useId()
@@ -430,6 +442,18 @@ function handleLinesUpdate(lines: readonly OrderProductLineModel[]): void {
   clearFeedback()
 }
 
+function handlePartsUpdate(parts: readonly PartConfiguration[]): void {
+  if (editingLocked.value) {
+    return
+  }
+  partConfigurations.value = parts
+  clearFeedback()
+}
+
+function handlePartWarning(message: string): void {
+  toast.warning(message)
+}
+
 function handleDepositUpdate(value: string | null): void {
   formModel.depositDueAmount = value
   clearFeedback()
@@ -655,6 +679,7 @@ function buildCurrentSource() {
     balanceDueAmount: formModel.balanceDueAmount,
     depositDueAmount: formModel.depositDueAmount,
     lines: formModel.lines,
+    parts: partConfigurations.value,
     maximumQuantityByKey: maximumQuantityByKey.value,
     orderDate: formModel.orderDate,
     productMode: productMode!,
@@ -769,7 +794,7 @@ function nextStep(): void {
   const result = validatePurchaseOrderCreateStep(source, step)
   if (!result.valid) {
     fieldErrors.value = { ...fieldErrors.value, ...result.fieldErrors }
-    toast.warning(STEP_VALIDATION_MESSAGE)
+    toast.warning(step === 2 && result.fieldErrors.parts ? result.fieldErrors.parts : STEP_VALIDATION_MESSAGE)
     focusFirstInvalidField(result.fieldErrors)
     return
   }
@@ -824,11 +849,15 @@ function focusFirstInvalidField(errors: Readonly<Record<string, string>>): void 
       customSupplierName: '供应商名称',
       depositDueAmount: '定金',
       expectedShippingMarkResolution: '采购唛头规则',
+      parts: '货件配置',
       lines: '添加数据库产品',
       orderDate: '采购日期',
       salesOrderId: '选择销售订单',
     }
     let label = directLabels[firstField]
+    if (firstField.startsWith('parts.')) {
+      label = '货件配置'
+    }
     const lineField = /^lines\.(\d+)\.(.+)$/u.exec(firstField)
     if (lineField !== null) {
       const lineNumber = Number(lineField[1]) + 1
@@ -914,6 +943,7 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
     requestId.value = failure.requestId
     if (!failure.unknownResult) {
       frozenShippingMarkResolution.value = null
+      frozenPartReview.value = null
       submitConfirmVisible.value = false
       if (steppedCreate.value) {
         createSurface.value = 'form'
@@ -959,6 +989,7 @@ function confirmSubmit(): void {
   frozenShippingMarkResolution.value = shippingMarkResolution.value === null
     ? null
     : Object.freeze({ ...shippingMarkResolution.value })
+  frozenPartReview.value = freezePurchaseOrderPartReview(formModel.lines, partConfigurations.value)
   submission.value = state
   void executeSubmission(state)
 }
@@ -1037,6 +1068,19 @@ watch(() => appAccountStore.authEpoch, () => {
 })
 
 watch(() => formModel.supplierValue, refreshShippingMarkResolution, { flush: 'sync' })
+
+// 明细同步、切换来源和返回修改都经过同一校验。缺失/超量的产品只撤回其分配，
+// 不猜测真实分箱意图；未知结果期间冻结配置，保证原请求恢复不会变成新请求。
+watch(() => formModel.lines.map(line => [line.key, line.quantity]), () => {
+  if (editingLocked.value) {
+    return
+  }
+  const next = reconcilePurchaseOrderParts(formModel.lines, partConfigurations.value)
+  if (next.changed) {
+    partConfigurations.value = next.parts
+    toast.warning('采购产品或数量已变化，受影响产品的货件配置已清除，请重新配置')
+  }
+})
 
 // 配置变更或离开此步骤时关闭传送到 body 的浮层，避免展示上一场景的配置。
 watch([shippingMarkResolution, activeStep, createSurface], () => {
@@ -1336,11 +1380,20 @@ onBeforeUnmount(() => {
 
               <section
                 v-show="activeStep === 2"
-                aria-label="唛头与备注"
+                aria-label="预定义货物件"
                 data-testid="purchase-order-step-mark-remark"
               >
-                <FaCard title="唛头与备注" description="已按采购产品类型与供应商匹配唛头规则，请核对后继续。">
+                <FaCard title="预定义货物件" description="按实际包装分配产品，每个货件将独立派发一个唛头。">
                   <div class="gap-4 grid grid-cols-1">
+                    <div aria-label="货件配置" tabindex="-1" class="outline-none rounded-lg focus-visible:ring-2 focus-visible:ring-primary/40" data-testid="purchase-order-part-configurator">
+                      <QsPartConfigurator
+                        :products="partProducts"
+                        :model-value="displayedParts"
+                        :disabled="editingLocked"
+                        @update:model-value="handlePartsUpdate"
+                        @warning="handlePartWarning"
+                      />
+                    </div>
                     <FaFormItem name="expectedShippingMarkResolution" label="采购唛头" required :auto-bind="false">
                       <div
                         class="p-3 outline-none border border-border rounded-lg bg-background min-w-0 w-full focus-visible:ring-2 focus-visible:ring-primary/40"
@@ -1445,7 +1498,7 @@ onBeforeUnmount(() => {
                           <p class="text-xs text-muted-foreground leading-5 m-0 mt-1" data-testid="purchase-order-shipping-mark-hint">
                             <template v-if="shippingMarkResolution">
                               {{ shippingMarkResolution.matchSource === 'CUSTOM_RULE' ? '自定义采购' : '供应商绑定' }} ·
-                            </template>正式提交后自动派发
+                            </template>正式提交后按货件自动派发
                           </p>
                           <div v-if="!shippingMarkAvailable" class="mt-2" role="alert">
                             <p class="text-sm text-destructive m-0 break-words">
@@ -1561,6 +1614,9 @@ onBeforeUnmount(() => {
                 :currencies="fixedCurrencies"
                 :model="purchaseOrderDescModel"
               >
+                <template #parts>
+                  <PurchaseOrderPartsReview :products="partProducts" :parts="displayedParts" :compact="createSurface !== 'review'" />
+                </template>
                 <template #shipping-mark>
                   <PurchaseOrderShippingMarkSummary
                     :resolution="shippingMarkResolution"
@@ -1642,6 +1698,9 @@ onBeforeUnmount(() => {
         :model="purchaseOrderDescModel"
         class="border-0 rounded-none shadow-none md:rounded-xl"
       >
+        <template #parts>
+          <PurchaseOrderPartsReview :products="partProducts" :parts="displayedParts" />
+        </template>
         <template #shipping-mark>
           <PurchaseOrderShippingMarkSummary
             :resolution="shippingMarkResolution"
@@ -1729,12 +1788,19 @@ onBeforeUnmount(() => {
           {{ formModel.lines.length }} 项
         </dd>
         <dt class="text-sm text-muted-foreground">
+          货件数
+        </dt>
+        <dd class="text-sm font-medium m-0" data-testid="purchase-order-confirm-part-count">
+          {{ displayedParts.length }} 个 · 派发 {{ displayedParts.length }} 个唛头
+        </dd>
+        <dt class="text-sm text-muted-foreground">
           采购总价
         </dt>
         <dd class="m-0 overflow-x-auto">
           <AmountDisplay :value="purchaseTotalAmount" currency="CNY" :currencies="fixedCurrencies" />
         </dd>
       </dl>
+      <PurchaseOrderPartsReview :products="partProducts" :parts="displayedParts" class="mt-4" />
       <section class="mt-4 pt-4 border-t border-border/70 min-w-0" aria-label="唛头规则" data-testid="purchase-order-confirm-shipping-mark">
         <h3 class="text-xs text-muted-foreground font-normal m-0 mb-2">
           唛头规则

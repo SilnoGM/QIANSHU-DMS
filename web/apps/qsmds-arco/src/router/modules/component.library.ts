@@ -246,6 +246,15 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'part-configurator',
+        name: 'componentLibraryQsPartConfigurator',
+        component: () => import('@/views/component_library/business/part-configurator.vue'),
+        meta: {
+          title: '货件配置器',
+          icon: 'i-lucide:package-open',
+        },
+      },
+      {
         path: 'sales-order-desc',
         name: 'componentLibraryQsSalesOrderDesc',
         component: () => import('@/views/component_library/business/sales-order-desc.vue'),

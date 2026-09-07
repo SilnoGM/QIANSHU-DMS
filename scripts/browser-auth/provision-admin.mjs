@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import process from 'node:process'
 
-import { isDirectEntry } from '../run-command.mjs'
+import { isDirectEntry, runCommand } from '../run-command.mjs'
 import { provisionBrowserShippingMarkFixtures } from './provision-shipping-mark-fixtures.mjs'
 
 const bootstrapProgram = String.raw`
@@ -848,6 +848,10 @@ function executeProvisionCommand(definition) {
 export async function provisionAdmin(environment = process.env) {
   const input = readProvisionInput(environment)
   await executeProvisionCommand(createProvisionCommand(input, environment))
+  // 历史夹具先以发布前结构写入，再用真实 migration 升级；不为测试关闭生产守卫。
+  await runCommand('pnpm', ['-C', 'server', 'db:migrate:deploy'], {
+    env: { ...environment, DATABASE_URL: input.databaseUrl, DOTENV_CONFIG_PATH: '/dev/null' },
+  })
 }
 
 if (isDirectEntry(import.meta.url)) {

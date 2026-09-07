@@ -131,8 +131,8 @@ export function createBrowserAuthPlan(input) {
   const prepare = Object.freeze([
     Object.freeze({
       name: 'database-migrations',
-      command: 'pnpm',
-      args: Object.freeze(['-C', 'server', 'db:migrate:deploy']),
+      command: process.execPath,
+      args: Object.freeze(['./scripts/browser-auth/migrate-before-historical-fixtures.mjs']),
       env: prepareEnvironment,
     }),
     Object.freeze({
@@ -145,7 +145,8 @@ export function createBrowserAuthPlan(input) {
       name: 'web-build',
       command: 'pnpm',
       args: Object.freeze(['-C', 'web', 'build']),
-      env: safeEnvironment(sourceEnv, { NODE_ENV: 'production' }),
+      // 仅隔离浏览器验收构建开放组件库，正式生产构建继续遵循默认关闭策略。
+      env: safeEnvironment(sourceEnv, { NODE_ENV: 'production', VITE_ENABLE_COMPONENT_LIBRARY: 'true' }),
     }),
     Object.freeze({
       name: 'admin-fixture',

@@ -156,12 +156,7 @@ test('采购列表展示可复制唛头、备注和可复制销售来源', async
     /<template #cell-shippingMarkSummary="\{ row \}">([\s\S]*?)<template #cell-remarkSummary/u,
   )
   assert.ok(markCell, '应存在采购唛头单元格')
-  assert.match(markCell[1] ?? '', /<FaTooltip[\s\S]*?row\.original\.shippingMarkText/u)
-  assert.match(markCell[1] ?? '', /\{\{ row\.original\.shippingMarkText \?\? '-' \}\}/u)
-  assert.match(
-    markCell[1] ?? '',
-    /<CopyCellButton[\s\S]*?label="采购唛头"[\s\S]*?:text="row\.original\.shippingMarkText \?\? ''"/u,
-  )
+  assert.match(markCell[1] ?? '', /<PurchaseOrderShippingMarksCell :order="row\.original"/u)
 
   const remarkCell = source.match(
     /<template #cell-remarkSummary="\{ row \}">([\s\S]*?)<template #cell-auditSummary/u,
@@ -176,8 +171,8 @@ test('采购列表展示可复制唛头、备注和可复制销售来源', async
   )
   assert.match(
     source,
-    /采购唛头[\s\S]*?<CopyCellButton[\s\S]*?always-visible[\s\S]*?label="采购唛头"[\s\S]*?:text="row\.shippingMarkText \?\? ''"/u,
-    '移动端采购唛头应支持常显复制操作',
+    /采购唛头[\s\S]*?<PurchaseOrderShippingMarksCell :order="row"/u,
+    '移动端采购唛头应复用点击查看和复制组件',
   )
   assert.match(source, /备注[\s\S]*?\{\{ row\.remark \?\? '-' \}\}/u)
 })
@@ -295,7 +290,11 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /const purchaseOrderSteps: StepsItem\[\]/u)
   assert.match(source, /title: '采购基础信息'/u)
   assert.match(source, /title: '采购产品与付款'/u)
-  assert.match(source, /title: '唛头与备注'/u)
+  assert.match(source, /title: '预定义货物件'/u)
+  assert.match(source, /<QsPartConfigurator/u)
+  assert.match(source, /:products="partProducts"/u)
+  assert.match(source, /parts: partConfigurations\.value/u)
+  assert.match(source, /reconcilePurchaseOrderParts\(formModel\.lines, partConfigurations\.value\)/u)
   assert.match(source, /title: '订单详情核对'/u)
   assert.match(source, /title = purchaseType === 'STOCK' \? '新增备货采购' : '新增采购订单'/u)
   assert.doesNotMatch(source, /新增销售关联采购/u)
@@ -310,7 +309,7 @@ test('采购创建页按类型限制来源同步和手工新增，并固定 CNY 
   assert.match(source, /const STEP_VALIDATION_MESSAGE = '请先完成并修正当前步骤的必填资料'/u)
   assert.match(
     source,
-    /function nextStep\(\): void \{[\s\S]*?if \(!result\.valid\) \{[\s\S]*?toast\.warning\(STEP_VALIDATION_MESSAGE\)[\s\S]*?focusFirstInvalidField\(result\.fieldErrors\)[\s\S]*?return/u,
+    /function nextStep\(\): void \{[\s\S]*?if \(!result\.valid\) \{[\s\S]*?toast\.warning\(step === 2 && result\.fieldErrors\.parts \? result\.fieldErrors\.parts : STEP_VALIDATION_MESSAGE\)[\s\S]*?focusFirstInvalidField\(result\.fieldErrors\)[\s\S]*?return/u,
   )
   assert.doesNotMatch(source, /formError\.value = '请先完成并修正当前步骤的必填资料'/u)
   assert.match(

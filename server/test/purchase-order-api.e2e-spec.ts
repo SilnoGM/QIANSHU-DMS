@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { type INestApplication, Module } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Reflector } from '@nestjs/core'
@@ -144,6 +146,8 @@ function responseBody(response: Response): unknown {
 
 describe('PurchaseOrder HTTP API contract', () => {
   let application: INestApplication | undefined
+  let requestApplication: unknown
+  let primaryApplication: unknown
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -153,6 +157,11 @@ describe('PurchaseOrder HTTP API contract', () => {
     application.useGlobalInterceptors(new PrivateNoStoreInterceptor())
     application.use(attachTestAuth)
     configureApplication(application, { nodeEnvironment: 'test' })
+    primaryApplication = application.getHttpAdapter().getInstance()
+    application.use((incoming: { app: unknown }, _response: unknown, next: () => void) => {
+      requestApplication = incoming.app
+      next()
+    })
     await application.init()
   })
 
@@ -313,6 +322,7 @@ describe('PurchaseOrder HTTP API contract', () => {
         actualPurchaseUnitPriceAmount: '10.00',
         quantity: 1,
       }],
+      parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseTotalAmount: '10',
       depositDueAmount: '0',
       balanceDueAmount: '10',
@@ -343,6 +353,25 @@ describe('PurchaseOrder HTTP API contract', () => {
         .send(invalid).expect(422)
     }
     expect(create).toHaveBeenCalledTimes(callsBefore)
+  })
+
+  it('accepts 1000 two-item parts over 100 KiB only on purchase creation and keeps a fixed 1 MiB boundary', async () => {
+    const line = { lineType: 'CUSTOM', name: 'Item', referencePurchaseUnitPriceAmount: '1', actualPurchaseUnitPriceAmount: '1', quantity: 1000 }
+    const payload = { purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Capacity supplier',
+      expectedShippingMarkResolution: RESOLUTION_TOKEN, orderDate: '2026-08-27',
+      lines: [line, line], parts: Array.from({ length: 1000 }, () => ({ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }, { lineNumber: 2, quantity: 1 }] })),
+      purchaseTotalAmount: '2000', depositDueAmount: '0', balanceDueAmount: '2000',
+    }
+    expect(Buffer.byteLength(JSON.stringify(payload))).toBeGreaterThan(102400)
+    await request(requireApplication().getHttpServer()).post('/api/purchase-orders')
+      .set('Idempotency-Key', IDEMPOTENCY_KEY).send(payload).expect(201)
+    expect(requestApplication).toBe(primaryApplication)
+    const oversized = await request(requireApplication().getHttpServer()).post('/api/purchase-orders')
+      .set('Idempotency-Key', IDEMPOTENCY_KEY).send({ padding: 'x'.repeat(1_048_576) }).expect(413)
+    expect(responseBody(oversized)).toMatchObject({ code: 'PAYLOAD_TOO_LARGE' })
+    await request(requireApplication().getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`)
+      // 其他端点仍由原默认 parser 拒绝，既有异常映射也保持不变。
+      .send({ reason: 'x'.repeat(110_000) }).expect(500)
   })
 
   it('archives standalone documents with 201 and rejects payment fields before services', async () => {

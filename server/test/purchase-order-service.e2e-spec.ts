@@ -406,6 +406,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   function linkedInput(sourceSalesOrderLineId: string, quantity: number) {
     const total = String(20 * quantity)
     return {
+      parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity }] }],
       purchaseType: 'SALES_LINKED',
       productMode: 'CATALOG',
       expectedShippingMarkResolution: catalogResolution,
@@ -429,6 +430,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   function linkedCustomInput(sourceSalesOrderLineId: string, quantity: number) {
     const total = String(15 * quantity)
     return {
+      parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity }] }],
       purchaseType: 'SALES_LINKED',
       productMode: 'CUSTOM',
       expectedShippingMarkResolution: customResolution,
@@ -496,6 +498,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   it('enforces admin stock creation and derives payment/pending state', async () => {
     const idempotencyKey = randomUUID()
     const stockInput = {
+      parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
       customSupplierName: 'E2E 备货供应商',
@@ -531,7 +534,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       fulfillmentStatus: 'ORDERED',
       purchaseType: 'STOCK',
       currencyCode: 'CNY',
-      shippingMarkText: expect.stringMatching(/^MARK\d{8}$/u) as unknown,
+      shippingMarkText: null,
+      shippingMarks: [expect.stringMatching(/^MARK\d{8}$/u) as unknown],
       paymentStatus: 'UNPAID',
       lines: [{
         lineType: 'CUSTOM',
@@ -648,6 +652,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
 
   it('persists typed voucher names without renaming source files or reusing uploads', async () => {
     const orderId = await commands.create(context(), {
+      parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: '凭证命名测试供应商',
       expectedShippingMarkResolution: customResolution,
       orderDate: '2026-08-27',

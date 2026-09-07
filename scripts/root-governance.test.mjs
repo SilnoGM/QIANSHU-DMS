@@ -140,6 +140,7 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/purchase-orders/purchase-orders.controller.spec.ts',
   'server/src/modules/purchase-orders/purchase-orders.controller.ts',
   'server/test/purchase-order-api.e2e-spec.ts',
+  'server/test/purchase-order-parts.e2e-spec.ts',
   'server/test/purchase-order-product-mode-migration.e2e-spec.ts',
   'server/test/purchase-order-records.e2e-spec.ts',
   'server/test/purchase-order-schema.e2e-spec.ts',

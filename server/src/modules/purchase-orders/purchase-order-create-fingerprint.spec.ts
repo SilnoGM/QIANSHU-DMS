@@ -3,6 +3,7 @@ import {
   calculatePurchaseOrderCreateFingerprint,
   hashPurchaseOrderIdempotencyKey,
   PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
+  PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION,
   PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
@@ -12,6 +13,7 @@ const TODAY = '2026-08-27'
 
 function payload(overrides: Record<string, unknown> = {}) {
   return normalizePurchaseOrderCreateCommand({
+    parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseType: 'STOCK',
     productMode: 'CUSTOM',
     customSupplierName: '供应商 A',
@@ -34,9 +36,24 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('purchase order create fingerprint', () => {
-  it('uses the approved numbering scope and one stable SHA-256 v3 contract', () => {
+  it('preserves the exact committed v3 fingerprint bytes', () => {
+    // 固定值由改造前 HEAD 的真实 v3 实现计算，守住旧未知结果请求恢复契约。
+    expect(calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload(), PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION))
+      .toBe('e584c78bf0c13aa892153fbf79f753f299f118ee6cd23915b8feeaa300bce0ff')
+  })
+
+  it('changes v4 when part identity, order or allocation changes', () => {
+    const first = payload({ parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 2 }] }] })
+    const split = payload({ parts: [
+      { key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 1 }] },
+      { key: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', items: [{ lineNumber: 1, quantity: 1 }] },
+    ] })
+    const reversed = { ...split, parts: [...split.parts].reverse() }
+    expect(new Set([first, split, reversed].map(value => calculatePurchaseOrderCreateFingerprint(ACTOR_ID, value))).size).toBe(3)
+  })
+  it('uses the approved numbering scope and one stable SHA-256 v4 contract', () => {
     expect(PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION)
-      .toBe('purchase-order.create.v3')
+      .toBe('purchase-order.create.v4')
     expect(PURCHASE_ORDER_NUMBERING_RULE_CODE).toBe('PURCHASE_ORDER')
     expect(PURCHASE_ORDER_NUMBERING_CONSUMER_CODE).toBe('PURCHASE_ORDER.CREATE')
     expect(calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload()))
@@ -58,6 +75,7 @@ describe('purchase order create fingerprint', () => {
       calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload({ expectedShippingMarkResolution: 'b'.repeat(64) })),
       calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload({ remark: 'x' })),
       calculatePurchaseOrderCreateFingerprint(ACTOR_ID, normalizePurchaseOrderCreateCommand({
+        parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 2 }] }],
         purchaseType: 'SALES_LINKED',
         productMode: 'CUSTOM',
         salesOrderId: '11111111-1111-4111-8111-111111111111',

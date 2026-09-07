@@ -1,5 +1,14 @@
 {
   "purchaseOrderList": {
+    "shippingMarks": {
+      "label": "采购唛头",
+      "title": "采购唛头（{count} 个）",
+      "open": "查看 {count} 个采购唛头",
+      "more": "另 {count} 个",
+      "copyAll": "复制全部",
+      "copied": "已复制全部采购唛头",
+      "copyFailed": "复制失败，请重试"
+    },
     "review": {
       "title": "审核采购订单？",
       "description": "请核对采购信息。确认审核后，订单将进入已确认和备货中状态。",

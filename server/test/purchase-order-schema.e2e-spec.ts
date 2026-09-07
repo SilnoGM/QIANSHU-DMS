@@ -296,7 +296,7 @@ describe('purchase order schema with isolated PostgreSQL', () => {
         [orderId, productId, salesOrderLineId, `PUR-E2E-${productId}`],
       )
       await expectConstraintRejection(
-        () => client.query('SET CONSTRAINTS ALL IMMEDIATE'),
+        () => client.query('SET CONSTRAINTS purchase_orders_source_quantity_trigger, purchase_order_lines_source_quantity_trigger IMMEDIATE'),
         'purchase_order_source_quantity_check',
       )
     }

@@ -12,6 +12,7 @@ const TODAY = '2026-08-27'
 
 function linkedInput(): Record<string, unknown> {
   return {
+    parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseType: 'SALES_LINKED',
     productMode: 'CATALOG',
     salesOrderId: '11111111-1111-4111-8111-111111111111',
@@ -36,6 +37,7 @@ function linkedInput(): Record<string, unknown> {
 
 function stockInput(): Record<string, unknown> {
   return {
+    parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseType: 'STOCK',
     productMode: 'CUSTOM',
     customSupplierName: ' ＡＢＣ 供应商 ',
@@ -80,6 +82,7 @@ describe('normalizePurchaseOrderCreateCommand', () => {
 
   it('normalizes a sales-linked command and computes trusted totals', () => {
     expect(normalizePurchaseOrderCreateCommand(linkedInput(), TODAY)).toEqual({
+      parts: [{ key: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', items: [{ lineNumber: 1, quantity: 2 }] }],
       purchaseType: 'SALES_LINKED',
       productMode: 'CATALOG',
       salesOrderId: '11111111-1111-4111-8111-111111111111',

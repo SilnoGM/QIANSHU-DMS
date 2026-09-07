@@ -182,13 +182,29 @@ export class PurchaseOrderListItemDto {
   @ApiProperty({ enum: PurchaseOrderPaymentStatus })
   readonly paymentStatus!: PurchaseOrderPaymentStatus
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
+  @ApiProperty({ type: [String], description: '按货件顺序返回独立唛头；历史订单为空数组' })
+  readonly shippingMarks!: readonly string[]
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly createdAt!: string
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly updatedAt!: string
 }
 
+export class PurchaseOrderPartItemDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly purchaseOrderLineId!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly lineNumber!: number
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
+}
+
+export class PurchaseOrderPartDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly partNumber!: number
+  @ApiProperty({ type: 'string' }) readonly shippingMarkText!: string
+  @ApiProperty({ type: () => [PurchaseOrderPartItemDto] }) readonly items!: readonly PurchaseOrderPartItemDto[]
+}
+
 export class PurchaseOrderDetailDto extends PurchaseOrderListItemDto {
+  @ApiProperty({ type: () => [PurchaseOrderPartDto] }) readonly parts!: readonly PurchaseOrderPartDto[]
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true })
   readonly sourceSalesOrder!: PurchaseOrderSourceSalesOrderDto | null
   @ApiProperty({ type: () => PurchaseOrderAmountsDto }) readonly amounts!: PurchaseOrderAmountsDto

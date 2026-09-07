@@ -4,7 +4,7 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
 import type { PurchaseOrderShippingMarkResolutionDto } from '../purchase-shipping-marks/purchase-shipping-mark-resolution.dto'
 
-export const PURCHASE_SHIPPING_MARK_CONSUMER = 'PURCHASE_ORDER.SHIPPING_MARK'
+export const PURCHASE_SHIPPING_MARK_CONSUMER = 'PURCHASE_ORDER.PART_SHIPPING_MARK'
 
 /** 摘要仅用于发现配置变化，实际 ruleCode 必须取自事务内的可信解析结果。 */
 export function requirePurchaseShippingMark(

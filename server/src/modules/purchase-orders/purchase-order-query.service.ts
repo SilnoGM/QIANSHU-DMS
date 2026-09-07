@@ -80,6 +80,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
   fulfillmentStatus: true,
   paymentStatus: true,
   shippingMarkText: true,
+  parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true } },
   remark: true,
   version: true,
   createdAt: true,
@@ -96,6 +97,15 @@ const PURCHASE_ORDER_LIST_SELECT = {
 
 const PURCHASE_ORDER_DETAIL_SELECT = {
   ...PURCHASE_ORDER_LIST_SELECT,
+  parts: {
+    orderBy: { partNumber: 'asc' },
+    select: {
+      id: true, partNumber: true, shippingMarkText: true,
+      items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
+        purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
+      } },
+    },
+  },
   lineSubtotalAmount: true,
   lines: {
     orderBy: [{ lineNumber: 'asc' as const }, { id: 'asc' as const }],
@@ -234,6 +244,7 @@ export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly fulfillmentStatus: PurchaseOrderFulfillmentStatus
   readonly paymentStatus: PurchaseOrderPaymentStatus
   readonly shippingMarkText: string | null
+  readonly shippingMarks: readonly string[]
   readonly remark: string | null
   readonly version: number
   readonly createdAt: string
@@ -278,6 +289,12 @@ export interface PurchaseOrderStatusCounts {
 }
 
 export interface PurchaseOrderDetail extends PurchaseOrderListItem {
+  readonly parts: readonly {
+    readonly id: string
+    readonly partNumber: number
+    readonly shippingMarkText: string
+    readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
+  }[]
   readonly sourceSalesOrder: {
     readonly id: string
     readonly orderNo: string
@@ -451,6 +468,7 @@ function buildPurchaseOrderBaseWhere(
             customerName: { contains: keyword, mode: 'insensitive' },
           } } },
           { shippingMarkText: { contains: keyword, mode: 'insensitive' } },
+          { parts: { some: { shippingMarkText: { contains: keyword, mode: 'insensitive' } } } },
           { customSupplierName: { contains: keyword, mode: 'insensitive' } },
         ] }),
   }
@@ -519,6 +537,7 @@ function mapListItem(
     fulfillmentStatus: row.fulfillmentStatus,
     paymentStatus: row.paymentStatus,
     shippingMarkText: row.shippingMarkText,
+    shippingMarks: row.parts.map(part => part.shippingMarkText),
     remark: row.remark,
     version: row.version,
     createdAt: row.createdAt.toISOString(),
@@ -759,6 +778,12 @@ export class PurchaseOrderQueryService {
     return {
       ...summary,
       sourceSalesOrder: row.salesOrder,
+      parts: row.parts.map(part => ({
+        id: part.id, partNumber: part.partNumber, shippingMarkText: part.shippingMarkText,
+        items: part.items.map(item => ({
+          purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,
+        })),
+      })),
       shippingMarkText: row.shippingMarkText,
       amounts: {
         lineSubtotalAmount: decimalToFixed4(row.lineSubtotalAmount),

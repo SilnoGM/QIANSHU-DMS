@@ -83,6 +83,34 @@ export class PurchaseOrderLineInputDto {
   quantity!: number
 }
 
+export class PurchaseOrderPartItemInputDto {
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: 100, description: '本次最终采购明细的 1 起始行号' })
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  lineNumber!: number
+
+  @ApiProperty({ type: 'integer', minimum: 1, maximum: 2_147_483_647 })
+  @IsInt()
+  @Min(1)
+  @Max(2_147_483_647)
+  quantity!: number
+}
+
+export class PurchaseOrderPartInputDto {
+  @ApiProperty({ type: 'string', format: 'uuid', description: '全单唯一且重试时保持不变的 UUID v4 货件标识' })
+  @IsUUID('4')
+  key!: string
+
+  @ApiProperty({ type: () => [PurchaseOrderPartItemInputDto], minItems: 1, maxItems: 100 })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseOrderPartItemInputDto)
+  items!: PurchaseOrderPartItemInputDto[]
+}
+
 export class CreatePurchaseOrderRequestDto {
   @ApiProperty({ enum: PurchaseOrderType })
   @IsEnum(PurchaseOrderType)
@@ -135,6 +163,17 @@ export class CreatePurchaseOrderRequestDto {
   @ValidateNested({ each: true })
   @Type(() => PurchaseOrderLineInputDto)
   lines!: PurchaseOrderLineInputDto[]
+
+  @ApiProperty({ type: () => [PurchaseOrderPartInputDto], minItems: 1, maxItems: 1000,
+    description: '必填货件配置；完整且仅一次覆盖各采购行数量；全单最多 10000 个分配项，创建 JSON 最大 1 MiB。历史 v3 已提交请求仅允许原幂等键恢复。' })
+  // DTO 只给历史同键恢复保留缺字段入口；service 在查明已提交 v3 身份后才允许缺失。
+  @ValidateIf((_order: CreatePurchaseOrderRequestDto, value: unknown) => value !== undefined)
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => PurchaseOrderPartInputDto)
+  parts!: PurchaseOrderPartInputDto[]
 
   @ApiProperty({ type: 'string', pattern: PURCHASE_AMOUNT_PATTERN.source })
   @IsString()

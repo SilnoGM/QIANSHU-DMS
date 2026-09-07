@@ -7,7 +7,8 @@ import {
 } from './purchase-order-command.normalizer'
 
 export const PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION =
-  'purchase-order.create.v3' as const
+  'purchase-order.create.v4' as const
+export const PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION = 'purchase-order.create.v3' as const
 export const PURCHASE_ORDER_NUMBERING_RULE_CODE = 'PURCHASE_ORDER' as const
 export const PURCHASE_ORDER_NUMBERING_CONSUMER_CODE =
   'PURCHASE_ORDER.CREATE' as const
@@ -15,10 +16,11 @@ export const PURCHASE_ORDER_NUMBERING_CONSUMER_CODE =
 function serializePurchaseOrderCreateFingerprint(
   actorUserId: string,
   payload: NormalizedPurchaseOrderCreateCommand,
+  version: string,
 ): string {
   // 逐字段构造稳定序列，避免对象 key 顺序或未来非业务字段影响幂等语义。
   return JSON.stringify({
-    version: PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
+    version,
     ruleCode: PURCHASE_ORDER_NUMBERING_RULE_CODE,
     consumerCode: PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
     actorUserId,
@@ -31,6 +33,11 @@ function serializePurchaseOrderCreateFingerprint(
       orderDate: payload.orderDate,
       currencyCode: payload.currencyCode,
       expectedShippingMarkResolution: payload.expectedShippingMarkResolution,
+      ...(version === PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION ? {} : {
+        parts: payload.parts.map(part => ({ key: part.key, items: part.items.map(item => ({
+          lineNumber: item.lineNumber, quantity: item.quantity,
+        })) })),
+      }),
       lines: payload.lines.map(line => line.lineType === 'CATALOG'
         ? {
             lineNumber: line.lineNumber,
@@ -65,6 +72,7 @@ function serializePurchaseOrderCreateFingerprint(
 export function calculatePurchaseOrderCreateFingerprint(
   actorUserId: unknown,
   payload: NormalizedPurchaseOrderCreateCommand,
+  version: string = PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
 ): string {
   if (!isCanonicalPurchaseOrderActorId(actorUserId)) {
     return purchaseOrderValidationFailure(
@@ -74,7 +82,7 @@ export function calculatePurchaseOrderCreateFingerprint(
   }
   return createHash('sha256')
     .update(Buffer.from(
-      serializePurchaseOrderCreateFingerprint(actorUserId, payload),
+      serializePurchaseOrderCreateFingerprint(actorUserId, payload, version),
       'utf8',
     ))
     .digest('hex')

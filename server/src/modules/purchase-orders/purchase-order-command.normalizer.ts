@@ -19,6 +19,7 @@ import {
 import {
   normalizePurchaseOrderDate,
 } from './domain/purchase-order-rules'
+import { normalizePurchaseOrderParts, type NormalizedPurchaseOrderPart } from './purchase-order-parts'
 
 const CANONICAL_UUID_V4_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
@@ -60,6 +61,7 @@ export interface NormalizedPurchaseOrderCreateCommand {
   readonly currencyCode: 'CNY'
   readonly expectedShippingMarkResolution: string
   readonly lines: readonly NormalizedPurchaseOrderCreateLine[]
+  readonly parts: readonly NormalizedPurchaseOrderPart[]
   readonly lineSubtotalAmount: string
   readonly purchaseTotalAmount: string
   readonly depositDueAmount: string
@@ -354,6 +356,7 @@ function normalizePurchaseType(value: unknown): PurchaseOrderType {
 export function normalizePurchaseOrderCreateCommand(
   input: unknown,
   businessToday: string,
+  legacyReplay = false,
 ): NormalizedPurchaseOrderCreateCommand {
   const body = requireRecord(input, 'body')
   rejectUnknownKeys(body, [
@@ -365,6 +368,7 @@ export function normalizePurchaseOrderCreateCommand(
     'orderDate',
     'expectedShippingMarkResolution',
     'lines',
+    ...(legacyReplay ? [] : ['parts']),
     'purchaseTotalAmount',
     'depositDueAmount',
     'balanceDueAmount',
@@ -420,6 +424,7 @@ export function normalizePurchaseOrderCreateCommand(
     currencyCode: 'CNY',
     expectedShippingMarkResolution: body.expectedShippingMarkResolution,
     lines,
+    parts: legacyReplay ? Object.freeze([]) : normalizePurchaseOrderParts(body.parts, lines),
     ...amounts,
     remark: normalizeNullableText(body.remark, 'remark', 1000),
   })

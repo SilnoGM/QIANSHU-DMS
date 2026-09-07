@@ -4,8 +4,10 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { getPurchaseProductImages } from './logic'
+import OrderParts from './OrderParts.vue'
 
 const props = defineProps<{
   detail: PurchaseOrderDetailDto
@@ -172,6 +174,7 @@ const amountItems = computed(() => [
         </div>
       </div>
     </section>
+    <OrderParts :detail="detail" />
     <section :aria-label="t('purchaseOrderDesc.sections.purchase')">
       <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
         <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />
@@ -193,11 +196,12 @@ const amountItems = computed(() => [
         <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />{{ t('purchaseOrderDesc.sections.notes') }}
       </h3>
       <dl class="text-sm m-0 px-4 flex flex-col gap-4">
-        <div class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)]">
+        <div v-if="detail.parts.length === 0" class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)]">
           <dt class="text-muted-foreground">
             {{ t('purchaseOrderDesc.fields.shippingMark') }}
-          </dt><dd class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-            {{ detail.shippingMarkText || '-' }}
+          </dt><dd class="m-0 flex gap-2 min-w-0 items-start">
+            <span class="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ detail.shippingMarkText || '-' }}</span>
+            <CopyCellButton v-if="detail.shippingMarkText" always-visible :label="t('purchaseOrderDesc.fields.shippingMark')" :text="detail.shippingMarkText" />
           </dd>
         </div>
         <div class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)]">

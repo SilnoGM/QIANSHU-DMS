@@ -9,7 +9,7 @@ import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import type {
   PurchaseOrderCreateDependencyService,
 } from './purchase-order-create-dependency.service'
-import { calculatePurchaseOrderCreateFingerprint } from './purchase-order-create-fingerprint'
+import { calculatePurchaseOrderCreateFingerprint, hashPurchaseOrderIdempotencyKey } from './purchase-order-create-fingerprint'
 
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -19,6 +19,7 @@ const IDEMPOTENCY_KEY = '123e4567-e89b-42d3-a456-426614174000'
 
 function input(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseType: 'SALES_LINKED',
     productMode: 'CATALOG',
     salesOrderId: '11111111-1111-4111-8111-111111111111',
@@ -49,9 +50,12 @@ function setup() {
         .mockResolvedValue({ id: ORDER_ID }),
     },
     purchaseOrderLine: {
+      findMany: jest.fn().mockResolvedValue([{ id: PRODUCT_ID, lineNumber: 1 }]),
       createMany: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ count: 1 }),
     },
+    purchaseOrderPart: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+    purchaseOrderPartItem: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
   }
   const prisma = {
     purchaseOrder: {
@@ -128,8 +132,8 @@ describe('PurchaseOrderCommandService', () => {
     expect(fixture.resolver.resolve.mock.calls.map(call => call[2])).toEqual([false, true])
     expect(fixture.numbering.generateScopedInTransaction).toHaveBeenCalledWith(
       fixture.transaction, expect.objectContaining({
-        ruleCode: 'TEST_MARK', consumerCode: 'PURCHASE_ORDER.SHIPPING_MARK',
-        idempotencyKey: IDEMPOTENCY_KEY,
+        ruleCode: 'TEST_MARK', consumerCode: 'PURCHASE_ORDER.PART_SHIPPING_MARK',
+        idempotencyKey: `${hashPurchaseOrderIdempotencyKey(IDEMPOTENCY_KEY).toString('hex')}:${ACTOR_ID}`,
         requestFingerprint: expect.any(String) as unknown,
       }),
     )
@@ -138,7 +142,7 @@ describe('PurchaseOrderCommandService', () => {
     )
     expect(fixture.audit.record).toHaveBeenCalledWith(fixture.transaction, expect.objectContaining({
       metadata: expect.objectContaining({ shippingMarkRuleCode: 'TEST_MARK', shippingMarkRevision: 1,
-        shippingMarkIssuanceId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }) as unknown,
+        partCount: 1, shippingMarkIssuanceIds: ['dddddddd-dddd-4ddd-8ddd-dddddddddddd'] }) as unknown,
     }))
   })
 
@@ -231,8 +235,8 @@ describe('PurchaseOrderCommandService', () => {
         supplierValue: 'SUPPLIER_A',
         customSupplierName: null,
         currencyCode: 'CNY',
-        shippingMarkText: 'AUTO-0001',
-        shippingMarkIssuanceId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      shippingMarkText: null,
+      shippingMarkIssuanceId: null,
         lineSubtotalAmount: '20.0000',
         purchaseTotalAmount: '20.0000',
         depositDueAmount: '5.0000',
@@ -289,6 +293,7 @@ describe('PurchaseOrderCommandService', () => {
       requestId: 'request-zero',
       idempotencyKey: IDEMPOTENCY_KEY,
     }, {
+      parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK',
       productMode: 'CUSTOM',
       customSupplierName: '礼品供应商',

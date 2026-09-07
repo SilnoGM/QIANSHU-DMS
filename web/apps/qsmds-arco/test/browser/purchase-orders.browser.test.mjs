@@ -15,6 +15,16 @@ import {
 } from './numbering.browser.helpers.mjs'
 import { clickOrderDrawerTab } from './order-drawer.browser.helpers.mjs'
 import {
+  assertPartConfiguratorMergeShowcase,
+  assertPurchasePartConfiguratorAppearance,
+  assertPurchasePartDetail,
+  assertPurchaseShippingMarksInteraction,
+  createFirstProductPart,
+  removeFirstPurchasePartItem,
+  removePurchasePart,
+  waitForPurchasePartCount,
+} from './purchase-order-parts.browser.helpers.mjs'
+import {
   apiExpression,
   appRouteUrl,
   clickVisibleButton,
@@ -55,14 +65,14 @@ async function readAvailableShippingMarkSummary(page, productMode) {
     return region?.getClientRects().length > 0
       && region.getAttribute('data-availability') === 'AVAILABLE'
       && region.getAttribute('aria-busy') === 'false'
-      && region.textContent.includes('正式提交后自动派发')
+      && region.textContent.includes('正式提交后按货件自动派发')
       && region.textContent.includes(${JSON.stringify(productMode === 'CUSTOM' ? '自定义采购' : '供应商绑定')})
       && region.querySelector('input, textarea') === null
       && region.querySelectorAll('button').length === 1
       && region.querySelector('dl') === null
       && region.querySelector('[data-testid="purchase-order-shipping-mark-status"]')?.textContent.trim() === '可用'
       && region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]')?.textContent.includes('{SEQ:')
-      && region.textContent.split('正式提交后自动派发').length === 2
+      && region.textContent.split('正式提交后按货件自动派发').length === 2
   })()`)
   await openShippingMarkDetails(page)
   const summary = await page.evaluate(`(() => {
@@ -695,6 +705,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
         hasManualMark: Object.hasOwn(body, 'shippingMarkText'),
         key: Object.entries(request.headers).find(([name]) => name.toLowerCase() === 'idempotency-key')?.[1],
         token: body.expectedShippingMarkResolution,
+        parts: body.parts,
       })
     }
     if (/^\/api\/purchase-orders\/[^/]+\/review$/u.test(path) && request.method === 'POST') {
@@ -734,6 +745,11 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(historicalMixedCancelableOrder?.productMode, 'MIXED')
     assert.equal(historicalMixedActiveOrder?.supplier?.source, 'DICTIONARY')
     assert.equal(historicalMixedActiveOrder?.supplier?.label, supplierLabel)
+    assert.deepEqual(historicalMixedActiveOrder?.shippingMarks, [])
+    assert.deepEqual(historicalMixedCancelableOrder?.shippingMarks, [])
+    const historicalDetail = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(historicalMixedActiveOrder.id)}`))
+    assert.equal(historicalDetail.status, 200)
+    assert.deepEqual(historicalDetail.body?.parts, [], '历史单不得根据旧唛头推测货件')
     await page.navigate(appRouteUrl(configuration.baseUrl, pendingRoute))
     await waitForPurchaseList(page, historicalMixedCancelableOrderNo)
     await waitForStatusToolbarCounts(page, '待办采购状态筛选', {
@@ -753,6 +769,15 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     sensitiveValues: [configuration.password],
   })
   runtime.start()
+
+  await runPurchaseOrderBrowserStep('merge distinct products through the real part configurator showcase', async () => {
+    const requestsBefore = createRequests.length
+    await page.navigate(appRouteUrl(configuration.baseUrl, '/component-library/business/part-configurator'))
+    await assertPartConfiguratorMergeShowcase(page)
+    assert.equal(createRequests.length, requestsBefore, '组件库合件不应创建采购订单')
+    await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
+    await waitForPurchaseList(page, historicalMixedActiveOrderNo)
+  })
 
   await runPurchaseOrderBrowserStep('date range precedes search and clears in place', async () => {
     await page.waitFor(`(() => {
@@ -1046,6 +1071,30 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       ?.getClientRects().length > 0`)
     const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CATALOG')
     await assertShippingMarkPanelAppearance(page)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.activeElement?.getAttribute('aria-label') === '货件配置'`)
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')?.getClientRects().length > 0`)
+    assert.equal(createRequests.length, 0, '未配置货件的下一步不得创建订单')
+    await createFirstProductPart(page, 1)
+    await createFirstProductPart(page, 1)
+    await waitForPurchasePartCount(page, 2)
+    await removePurchasePart(page, 1)
+    await removeFirstPurchasePartItem(page)
+    await createFirstProductPart(page, 2)
+    // 退回更改数量必须撤回超量配置；恢复原数量也不能静默恢复旧箱子。
+    await clickVisibleButton(page, '上一步')
+    await fillLabelledControl(page, '第 1 行产品数量', '1')
+    await waitForPurchasePartCount(page, 0)
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')].some(toast => toast.textContent.includes('受影响产品的货件配置已清除'))`)
+    await fillLabelledControl(page, '第 1 行产品数量', '2')
+    await fillAriaControl(page, '定金', '20')
+    await fillAriaControl(page, '尾款', '140')
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')?.getClientRects().length > 0`)
+    await waitForPurchasePartCount(page, 0)
+    await createFirstProductPart(page, 1)
+    await createFirstProductPart(page, 1)
+    await assertPurchasePartConfiguratorAppearance(page)
     await fillLabelledControl(page, '采购备注', 'BROWSER LINKED REMARK')
     await clickVisibleButton(page, '下一步')
 
@@ -1176,9 +1225,33 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(catalogLinkedOrder?.fulfillmentStatus, 'ORDERED')
     assert.equal(catalogLinkedOrder?.depositDueAmount, '20.0000')
     assert.equal(catalogLinkedOrder?.balanceDueAmount, '140.0000')
-    assert.ok(catalogLinkedOrder?.shippingMarkText, '正式创建后必须返回自动派发的唛头')
+    assert.equal(catalogLinkedOrder?.shippingMarkText, null)
+    assert.equal(catalogLinkedOrder?.shippingMarks.length, 2, '每个货件各返回一个自动派发的唛头')
+    assert.equal(new Set(catalogLinkedOrder.shippingMarks).size, 2)
+    assert.deepEqual(createRequests[0]?.parts.map(part => part.items), [
+      [{ lineNumber: 1, quantity: 1 }],
+      [{ lineNumber: 1, quantity: 1 }],
+    ])
+    assert.ok(createRequests[0].parts.every(part => /^[a-f0-9-]{36}$/iu.test(part.key)))
     assert.equal(createRequests[0]?.hasManualMark, false)
     assert.match(createRequests[0]?.token ?? '', /^[a-f0-9]{64}$/u)
+    const detail = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(catalogLinkedOrder.id)}`))
+    assert.equal(detail.status, 200)
+    assert.deepEqual(detail.body.parts.map(part => part.shippingMarkText), catalogLinkedOrder.shippingMarks)
+    assert.deepEqual(detail.body.parts.map(part => part.items.map(item => ({ lineNumber: item.lineNumber, quantity: item.quantity }))), [
+      [{ lineNumber: 1, quantity: 1 }],
+      [{ lineNumber: 1, quantity: 1 }],
+    ])
+    assert.equal(detail.body.amounts.lineSubtotalAmount, '160.0000', '拆件不得重复计订单金额')
+    const bySecondMark = await page.evaluate(apiExpression(`/api/purchase-orders?view=all&page=1&pageSize=20&keyword=${encodeURIComponent(catalogLinkedOrder.shippingMarks[1])}`))
+    assert.equal(bySecondMark.status, 200)
+    assert.deepEqual(bySecondMark.body.items.map(item => item.id), [catalogLinkedOrder.id])
+    await assertPurchaseShippingMarksInteraction(page, catalogLinkedOrder)
+    await clickVisibleAriaButton(page, `${catalogLinkedOrder.orderNo}：查看详情`)
+    await assertPurchasePartDetail(page, detail.body, true)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await page.waitFor(`!document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.getClientRects().length`)
+    await waitForPurchaseList(page, catalogLinkedOrder.orderNo)
   })
 
   let linkedOrder
@@ -1289,6 +1362,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
       ?.getClientRects().length > 0`)
     const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CUSTOM')
+    await createFirstProductPart(page, 1)
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`(() => {
       const summary = document.querySelector('[data-testid="purchase-order-create-summary-column"]')
@@ -1317,7 +1391,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(linkedOrder?.purchaseTotalAmount, '30.0000')
     assert.equal(linkedOrder?.orderStatus, 'PENDING_REVIEW')
     assert.equal(linkedOrder?.fulfillmentStatus, 'ORDERED')
-    assert.ok(linkedOrder?.shippingMarkText)
+    assert.equal(linkedOrder?.shippingMarkText, null)
+    assert.equal(linkedOrder?.shippingMarks.length, 1)
 
     const detail = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(linkedOrder.id)}`,
@@ -1326,6 +1401,9 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     const customLine = detail.body?.lines?.find(line => line.lineType === 'CUSTOM')
     assert.equal(customLine?.productName, purchaseCustomName)
     assert.equal(customLine?.description, purchaseCustomDescription)
+    assert.equal(detail.body.parts.length, 1)
+    assert.equal(detail.body.parts[0].shippingMarkText, linkedOrder.shippingMarks[0])
+    assert.deepEqual(detail.body.parts[0].items, [{ purchaseOrderLineId: customLine.id, lineNumber: 1, quantity: 1 }])
   })
 
   let order
@@ -1401,6 +1479,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       ?.getClientRects().length > 0`)
     const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CATALOG')
     assert.ok(resolutionRequests > resolutionsBeforeRecovery, '进入唛头步骤自动恢复失败的只读匹配')
+    await createFirstProductPart(page, 1)
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-review"]')
       ?.getClientRects().length > 0`)
@@ -1470,6 +1549,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(Boolean(originalRequest?.key), true)
     assert.equal(createRequests.at(-1)?.key === originalRequest.key, true)
     assert.equal(createRequests.at(-1)?.token === originalRequest.token, true)
+    assert.deepEqual(createRequests.at(-1)?.parts, originalRequest.parts, '未知结果重试须保持货件 key 和内容完全一致')
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
@@ -1484,7 +1564,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(order?.purchaseTotalAmount, '80.0000')
     assert.equal(order?.depositDueAmount, '20.0000')
     assert.equal(order?.balanceDueAmount, '60.0000')
-    assert.ok(order?.shippingMarkText)
+    assert.equal(order?.shippingMarkText, null)
+    assert.equal(order?.shippingMarks.length, 1)
   })
 
   await runPurchaseOrderBrowserStep('stock CUSTOM exposes only temporary products', async () => {
@@ -1691,6 +1772,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       assert.equal(reviewed.body?.version, target.version + 1)
       assert.equal(reviewed.body?.orderNo, target.orderNo)
       assert.equal(reviewed.body?.shippingMarkText, target.shippingMarkText)
+      assert.deepEqual(reviewed.body?.shippingMarks, target.shippingMarks)
       assert.ok(reviewRequests.at(-1)?.expectedVersion >= 1)
       await waitForStatusToolbarCounts(page, index === 0 ? '全部采购状态筛选' : '待办采购状态筛选', index === 0
         ? { 全部采购: 5, 采购审核中: 2, 已确认: 3, 已完成: 0, 已取消: 0 }
@@ -1719,12 +1801,15 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
         && drawer.querySelector('[role="tab"][aria-selected="true"]')
           ?.textContent.includes('订单详情信息')
         && drawer.textContent.includes(${JSON.stringify(productNo)})
-        && drawer.textContent.includes(${JSON.stringify(order.shippingMarkText)})
+        && drawer.textContent.includes(${JSON.stringify(order.shippingMarks[0])})
         && productImage instanceof HTMLImageElement
         && productImage.src.includes('/api/purchase-orders/${order.id}/lines/')
         && productImage.complete
         && productImage.naturalWidth > 0
     })()`)
+    const partsDetail = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(order.id)}`))
+    assert.equal(partsDetail.status, 200)
+    await assertPurchasePartDetail(page, partsDetail.body)
     await clickOrderDrawerTab(page, 'purchase-order-detail-drawer', '订单变更记录')
     await page.waitFor(`document.querySelector(
       '[data-testid="purchase-order-detail-drawer"] section[aria-label="订单变更记录"]',

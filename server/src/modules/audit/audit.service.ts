@@ -18,6 +18,7 @@ export const MAX_AUDIT_METADATA_ENTRY_COUNT = 32
 export const MAX_AUDIT_METADATA_SERIALIZED_BYTES = 8_192
 const MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES = 32_768
 const MAX_PRODUCT_CHANGE_AUDIT_ARRAY_LENGTH = 100
+const MAX_PURCHASE_PART_AUDIT_METADATA_SERIALIZED_BYTES = 65_536
 
 const MAX_REQUEST_ID_LENGTH = 64
 const MAX_AUDIT_REFERENCE_LENGTH = 128
@@ -265,12 +266,23 @@ function validateMetadata(
     ) {
       throw new AuditEventValidationError()
     }
-    metadata[key] = validateMetadataValue(descriptor.value, allowStructured)
+    if (eventType === AuditEventType.PURCHASE_ORDER_CREATED && key === 'shippingMarkIssuanceIds') {
+      // 采购一次最多生成 1000 个货件；只开放该固定字段的 UUID 列表，其他审计边界不变。
+      const ids: unknown = descriptor.value
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > 1000
+        || !ids.every((id: unknown) => typeof id === 'string' && UUID_PATTERN.test(id))) {
+        throw new AuditEventValidationError()
+      }
+      metadata[key] = [...(ids as string[])]
+    }
+    else metadata[key] = validateMetadataValue(descriptor.value, allowStructured)
   }
 
   if (
     Buffer.byteLength(JSON.stringify(metadata), 'utf8')
-    > (allowStructured
+    > (eventType === AuditEventType.PURCHASE_ORDER_CREATED
+        ? MAX_PURCHASE_PART_AUDIT_METADATA_SERIALIZED_BYTES
+        : allowStructured
         ? MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES
         : MAX_AUDIT_METADATA_SERIALIZED_BYTES)
   ) {

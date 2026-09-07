@@ -45,6 +45,7 @@ function createDetail(
       customerName: '测试客户',
     },
     shippingMarkText: null,
+    shippingMarks: [],
     amounts: {
       lineSubtotalAmount: '100.0000',
       purchaseTotalAmount: '100.0000',
@@ -55,6 +56,7 @@ function createDetail(
     },
     createdBy: { id: '33333333-3333-4333-8333-333333333333', displayName: '采购员' },
     lines: [],
+    parts: [],
     payments: [],
     documents: [],
     statusHistory: [],

@@ -19,10 +19,10 @@ import { PurchaseShippingMarksService } from '../src/modules/purchase-shipping-m
 import { IsolatedNumberingPrismaService } from './numbering-e2e-database'
 import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from './purchase-shipping-mark-e2e-database'
 
-export const MARK_CONSUMER = 'PURCHASE_ORDER.SHIPPING_MARK'
+export const MARK_CONSUMER = 'PURCHASE_ORDER.PART_SHIPPING_MARK'
 
-export async function createAtomicityFixture() {
-  const database = await createPurchaseShippingMarkDatabase()
+export async function createAtomicityFixture(deferPartsMigration = false) {
+  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration)
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
     await prisma.onModuleInit()
@@ -59,6 +59,7 @@ export async function createAtomicityFixture() {
     const fixture = {
       prisma, actor, audit, numberingCommands, configContext, customRule,
       resolver, numbering, dependencies, salesProgress, bindings,
+      migrateParts: database.applyPartsMigration,
       context: (idempotencyKey = randomUUID()) => ({
         actorUserId: actor.id, idempotencyKey, requestId: randomUUID(),
       }),
@@ -109,6 +110,7 @@ export async function customInput(fixture: AtomicityFixture) {
   const resolution = await fixture.resolver.read({ productMode: 'CUSTOM' })
   if (resolution.resolutionToken === null) throw new Error('Custom fixture rule is unavailable')
   return {
+    parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
     purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Custom supplier',
     orderDate: '2026-09-07', expectedShippingMarkResolution: resolution.resolutionToken,
     lines: [{ lineType: 'CUSTOM', name: 'Custom item', referencePurchaseUnitPriceAmount: '10',
@@ -135,6 +137,7 @@ export async function prepareCatalog(fixture: AtomicityFixture) {
   return {
     supplierValue, rule,
     input: {
+      parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
       purchaseType: 'STOCK', productMode: 'CATALOG', supplierValue,
       orderDate: '2026-09-07', expectedShippingMarkResolution: resolution.resolutionToken,
       lines: [{ lineType: 'CATALOG', productId: product.id, actualPurchaseUnitPriceAmount: '10', quantity: 1 }],

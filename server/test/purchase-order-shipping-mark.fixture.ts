@@ -9,11 +9,13 @@ import type { Client } from 'pg'
 export async function createPurchaseShippingMarkFixture(client: Client, input: {
   idempotencyKeyHash: Buffer
   requestFingerprintHash: Buffer
-}): Promise<{ shippingMarkIssuanceId: string, shippingMarkText: string }> {
+}): Promise<{ shippingMarkIssuanceId: null, shippingMarkText: null, createPart(orderId: string): Promise<void> }> {
   const ruleId = randomUUID()
   const versionId = randomUUID()
   const shippingMarkIssuanceId = randomUUID()
   const shippingMarkText = '000001'
+  const partKey = randomUUID()
+  const partMarkKeyHash = createHash('sha256').update(`${input.idempotencyKeyHash.toString('hex')}:${partKey}`).digest()
   await client.query(`
     INSERT INTO numbering_rules (id, rule_code, name, purpose)
     VALUES ($1, $2, 'Purchase constraint fixture', 'SHIPPING_MARK')
@@ -41,7 +43,16 @@ export async function createPurchaseShippingMarkFixture(client: Client, input: {
     INSERT INTO numbering_issuances (
       id, rule_id, rule_version_id, period_key, generated_number, sequence_value,
       consumer_code, idempotency_key_hash, request_fingerprint_hash
-    ) VALUES ($1, $2, $3, 'ALL', $4, 1, 'PURCHASE_ORDER.SHIPPING_MARK', $5, $6)
-  `, [shippingMarkIssuanceId, ruleId, versionId, shippingMarkText, input.idempotencyKeyHash, input.requestFingerprintHash])
-  return { shippingMarkIssuanceId, shippingMarkText }
+    ) VALUES ($1, $2, $3, 'ALL', $4, 1, 'PURCHASE_ORDER.PART_SHIPPING_MARK', $5, $6)
+  `, [shippingMarkIssuanceId, ruleId, versionId, shippingMarkText, partMarkKeyHash, input.requestFingerprintHash])
+  return { shippingMarkIssuanceId: null, shippingMarkText: null,
+    async createPart(orderId: string) {
+      const id = randomUUID()
+      await client.query(`INSERT INTO purchase_order_parts (
+        id, purchase_order_id, key, part_number, shipping_mark_text, shipping_mark_issuance_id, shipping_mark_key_hash
+      ) VALUES ($1, $2, $3, 1, $4, $5, $6)`, [id, orderId, partKey, shippingMarkText, shippingMarkIssuanceId, partMarkKeyHash])
+      await client.query(`INSERT INTO purchase_order_part_items (purchase_order_id, purchase_order_part_id, purchase_order_line_id, quantity)
+        SELECT purchase_order_id, $2, id, quantity FROM purchase_order_lines WHERE purchase_order_id = $1`, [orderId, id])
+    },
+  }
 }

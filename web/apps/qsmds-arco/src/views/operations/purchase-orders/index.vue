@@ -77,6 +77,7 @@ import {
 import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
 import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
 import PurchaseOrderReviewModal from './purchase-order-review-modal.vue'
+import PurchaseOrderShippingMarksCell from './purchase-order-shipping-marks-cell.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
 
@@ -300,7 +301,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 140,
   title: t('purchaseOrderList.records.documents'),
 }, {
-  accessorKey: 'shippingMarkText',
+  accessorFn: item => item.shippingMarks.length > 0 ? item.shippingMarks.join('\n') : item.shippingMarkText,
   id: 'shippingMarkSummary',
   minWidth: 200,
   title: '采购唛头',
@@ -1195,23 +1196,7 @@ onBeforeUnmount(() => {
         </template>
 
         <template #cell-shippingMarkSummary="{ row }">
-          <QsTableStackedCell class="group">
-            <QsTableStackedLine content-class="truncate" nowrap>
-              <FaTooltip
-                :text="row.original.shippingMarkText ?? '-'"
-                :disabled="row.original.shippingMarkText === null"
-              >
-                <span class="block truncate">{{ row.original.shippingMarkText ?? '-' }}</span>
-              </FaTooltip>
-              <template #suffix>
-                <CopyCellButton
-                  v-if="row.original.shippingMarkText !== null"
-                  label="采购唛头"
-                  :text="row.original.shippingMarkText ?? ''"
-                />
-              </template>
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <PurchaseOrderShippingMarksCell :order="row.original" />
         </template>
 
         <template #cell-remarkSummary="{ row }">
@@ -1540,16 +1525,8 @@ onBeforeUnmount(() => {
                 <dt class="qs-type-compact-label mb-1">
                   采购唛头
                 </dt>
-                <dd class="m-0 flex gap-1 items-start">
-                  <span class="min-w-0 whitespace-pre-wrap break-words">
-                    {{ row.shippingMarkText ?? '-' }}
-                  </span>
-                  <CopyCellButton
-                    v-if="row.shippingMarkText !== null"
-                    always-visible
-                    label="采购唛头"
-                    :text="row.shippingMarkText ?? ''"
-                  />
+                <dd class="m-0 min-w-0">
+                  <PurchaseOrderShippingMarksCell :order="row" />
                 </dd>
               </div>
               <div class="col-span-2">

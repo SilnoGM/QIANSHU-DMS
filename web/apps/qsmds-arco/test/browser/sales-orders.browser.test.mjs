@@ -1,6 +1,7 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -681,6 +682,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         actualPurchaseUnitPriceAmount: '20',
         quantity: sourceLine.quantity,
       }],
+      parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: sourceLine.quantity }] }],
       purchaseTotalAmount: '40',
       depositDueAmount: '0',
       balanceDueAmount: '40',
@@ -699,6 +701,10 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       return { status: response.status, body: await response.json() }
     })()`)
     assert.equal(purchase.status, 201)
+    assert.equal(purchase.body?.shippingMarkText, null)
+    assert.equal(purchase.body?.shippingMarks.length, 1)
+    assert.equal(purchase.body?.parts.length, 1)
+    assert.equal(purchase.body?.parts[0]?.items[0]?.quantity, sourceLine.quantity)
     assert.equal(purchase.body?.orderStatus, 'PENDING_REVIEW')
     const reviewedPurchase = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/review`,

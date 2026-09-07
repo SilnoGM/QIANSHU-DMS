@@ -1,0 +1,7 @@
+{
+  "purchaseOrderParts": {
+    "title": "预定义货物件",
+    "empty": "尚未配置货件",
+    "summary": "已配置 {count} 个货件，正式提交后逐件派发唛头。"
+  }
+}

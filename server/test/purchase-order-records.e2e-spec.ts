@@ -36,6 +36,7 @@ describe('purchase records constraints on isolated PostgreSQL', () => {
       purchase_order_id, line_number, line_type, product_name_snapshot,
       reference_purchase_unit_price_amount, actual_purchase_unit_price_amount, quantity, line_total_amount
     ) VALUES ($1, 1, 'CUSTOM', 'Records Product', 100, 100, 1, 100)`, [id])
+    await mark.createPart(id)
   }
 
   async function addDocument(type: string, paymentId: string | null = null) {

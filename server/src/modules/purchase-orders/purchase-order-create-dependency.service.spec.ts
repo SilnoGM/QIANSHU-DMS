@@ -14,6 +14,7 @@ function linkedCommand(
   order: Record<string, unknown> = {},
 ) {
   return normalizePurchaseOrderCreateCommand({
+    parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: line.quantity ?? 2 }] }],
     purchaseType: 'SALES_LINKED',
     expectedShippingMarkResolution: 'a'.repeat(64),
     productMode: 'CATALOG',
@@ -37,6 +38,7 @@ function linkedCommand(
 
 function stockCommand() {
   return normalizePurchaseOrderCreateCommand({
+    parts: [{ key: ACTOR_ID, items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseType: 'STOCK',
     expectedShippingMarkResolution: 'a'.repeat(64),
     productMode: 'CUSTOM',

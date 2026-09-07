@@ -196,6 +196,8 @@ test('销售关联采购字段按基础信息、产品付款、唛头备注归�
   assert.equal(resolvePurchaseOrderCreateStepForField('depositDueAmount'), 1)
   assert.equal(resolvePurchaseOrderCreateStepForField('balanceDueAmount'), 1)
   assert.equal(resolvePurchaseOrderCreateStepForField('expectedShippingMarkResolution'), 2)
+  assert.equal(resolvePurchaseOrderCreateStepForField('parts'), 2)
+  assert.equal(resolvePurchaseOrderCreateStepForField('parts.0.items.1.quantity'), 2)
   assert.equal(resolvePurchaseOrderCreateStepForField('remark'), 2)
   assert.equal(resolvePurchaseOrderCreateStepForField('unknown'), null)
   assert.equal(resolvePurchaseOrderCreateStepForErrors({
@@ -209,6 +211,7 @@ test('下一步只拦截当前采购填写步骤的领域错误', () => {
     balanceDueAmount: null,
     depositDueAmount: null,
     lines: [],
+    parts: [],
     maximumQuantityByKey: {},
     orderDate: '2026-08-28',
     productMode: 'CATALOG',
@@ -241,7 +244,11 @@ test('下一步只拦截当前采购填写步骤的领域错误', () => {
     })
   }
 
-  assert.deepEqual(validatePurchaseOrderCreateStep(source, 2), { valid: true })
+  const packages = validatePurchaseOrderCreateStep(source, 2)
+  assert.equal(packages.valid, false)
+  if (!packages.valid) {
+    assert.ok(packages.fieldErrors.parts)
+  }
 })
 
 test('采购产品 loader 映射 CNY 采购定价且保持分页身份', () => {
@@ -439,6 +446,7 @@ test('产品库关联采购构造 DTO 时提交互斥供应商来源并校验数
     customSupplierName: null,
     depositDueAmount: '10.00',
     lines: [catalogLine],
+    parts: [{ key: '33333333-3333-4333-8333-333333333333', items: [{ productKey: catalogLine.key, quantity: 2 }] }],
     maximumQuantityByKey: {
       [catalogLine.key]: 2,
     },
@@ -474,6 +482,7 @@ test('产品库关联采购构造 DTO 时提交互斥供应商来源并校验数
       actualPurchaseUnitPriceAmount: '10.00',
       quantity: 2,
     }],
+    parts: [{ key: '33333333-3333-4333-8333-333333333333', items: [{ lineNumber: 1, quantity: 2 }] }],
     purchaseTotalAmount: '20.00',
     depositDueAmount: '10.00',
     balanceDueAmount: '10.00',
@@ -493,6 +502,7 @@ test('产品库关联采购构造 DTO 时提交互斥供应商来源并校验数
 
 test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', () => {
   const result = buildPurchaseOrderCreateRequest({
+    parts: [{ key: '33333333-3333-4333-8333-333333333333', items: [{ productKey: 'stock-custom', quantity: 1 }] }],
     balanceDueAmount: '8.00',
     customSupplierName: ' 临时供应商 ',
     depositDueAmount: '0.00',
@@ -531,6 +541,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
 
   const invalid = buildPurchaseOrderCreateRequest({
     balanceDueAmount: '8.01',
+    parts: [{ key: '33333333-3333-4333-8333-333333333333', items: [{ productKey: 'stock-custom', quantity: 1 }] }],
     customSupplierName: '临时供应商',
     depositDueAmount: '0.00',
     lines: [{
@@ -564,6 +575,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
 
 test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => {
   const built = buildPurchaseOrderCreateRequest({
+    parts: [{ key: '33333333-3333-4333-8333-333333333333', items: [{ productKey: 'stock-custom', quantity: 1 }] }],
     balanceDueAmount: '8.00',
     customSupplierName: '临时供应商',
     depositDueAmount: '0.00',
@@ -616,6 +628,9 @@ test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => 
   assert.equal(replay.idempotencyKey, submitting.idempotencyKey)
   assert.equal(replay.snapshot, submitting.snapshot)
   assert.equal(replay.snapshot.expectedShippingMarkResolution, 'a'.repeat(64))
+  assert.equal(Object.isFrozen(replay.snapshot.parts), true)
+  assert.equal(Object.isFrozen(replay.snapshot.parts[0]?.items[0]), true)
+  assert.deepEqual(replay.snapshot.parts, built.request.parts)
   assert.equal(Object.hasOwn(replay.snapshot, 'shippingMarkText'), false)
 
   const detail = { id: 'purchase-a' } as PurchaseOrderDetailDto
@@ -633,6 +648,7 @@ test('唛头匹配未完成或摘要非法时第三步不能进入核对', () =>
       depositDueAmount: null,
       expectedShippingMarkResolution,
       lines: [],
+      parts: [],
       maximumQuantityByKey: {},
       orderDate: '2026-09-07',
       productMode: 'CUSTOM',
@@ -645,9 +661,8 @@ test('唛头匹配未完成或摘要非法时第三步不能进入核对', () =>
     }, 2)
     assert.equal(result.valid, false)
     if (!result.valid) {
-      assert.deepEqual(result.fieldErrors, {
-        expectedShippingMarkResolution: '请先取得可用的采购唛头规则并核对',
-      })
+      assert.equal(result.fieldErrors.expectedShippingMarkResolution, '请先取得可用的采购唛头规则并核对')
+      assert.ok(result.fieldErrors.parts)
     }
   }
 })

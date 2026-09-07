@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common'
 
 import type { Prisma } from '../../generated/prisma/client'
@@ -36,6 +38,8 @@ import {
 import {
   calculatePurchaseOrderCreateFingerprint,
   hashPurchaseOrderIdempotencyKey,
+  PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
+  PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION,
   PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
@@ -77,6 +81,7 @@ interface ExistingPurchaseOrder {
   readonly id: string
   readonly createdByUserId: string
   readonly createRequestFingerprintHash: Uint8Array
+  readonly createRequestFingerprintVersion: string
 }
 
 function purchaseOrderException(
@@ -220,19 +225,21 @@ export class PurchaseOrderCommandService {
     input: unknown,
   ): Promise<string> {
     const trusted = validateContext(context)
+    const idempotencyKeyHash = hashPurchaseOrderIdempotencyKey(trusted.idempotencyKey)
+    const existing = await this.findExisting(idempotencyKeyHash)
+    // 仅已持久化 v3 请求允许旧快照恢复；新请求不能凭缺少 parts 回退旧创建路径。
+    const legacyReplay = existing?.createRequestFingerprintVersion === PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION
     const command = normalizePurchaseOrderCreateCommand(
       input,
       this.dependencies.businessToday(),
+      legacyReplay,
     )
     const fingerprint = calculatePurchaseOrderCreateFingerprint(
       trusted.actorUserId,
       command,
+      legacyReplay ? PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION : PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
     )
     const fingerprintHash = Buffer.from(fingerprint, 'hex')
-    const idempotencyKeyHash = hashPurchaseOrderIdempotencyKey(
-      trusted.idempotencyKey,
-    )
-    const existing = await this.findExisting(idempotencyKeyHash)
     if (existing !== null) {
       if (!matchesExisting(existing, trusted.actorUserId, fingerprintHash)) {
         throw idempotencyConflict()
@@ -285,17 +292,22 @@ export class PurchaseOrderCommandService {
         )
         const resolution = await this.shippingMarks.resolve(transaction, command, true)
         const ruleCode = requirePurchaseShippingMark(resolution, command.expectedShippingMarkResolution)
-        const shippingMark = await this.numbering.generateScopedInTransaction(transaction, {
-          ruleCode,
-          consumerCode: PURCHASE_SHIPPING_MARK_CONSUMER,
-          idempotencyKey: trusted.idempotencyKey,
-          requestFingerprint: fingerprint,
-        })
+        const issuedParts = []
+        for (const [index, part] of command.parts.entries()) {
+          // 全单摘要与稳定货件 key 共同绑定派发身份；任何一件失败都退出同一采购事务。
+          const markKey = `${idempotencyKeyHash.toString('hex')}:${part.key}`
+          const mark = await this.numbering.generateScopedInTransaction(transaction, {
+            ruleCode, consumerCode: PURCHASE_SHIPPING_MARK_CONSUMER,
+            idempotencyKey: markKey, requestFingerprint: fingerprint,
+          })
+          issuedParts.push({ id: randomUUID(), part, partNumber: index + 1, mark, markKey })
+        }
         const created = await transaction.purchaseOrder.create({
           data: {
             orderNo: issuance.number,
             createIdempotencyKeyHash: Uint8Array.from(idempotencyKeyHash),
             createRequestFingerprintHash: Uint8Array.from(fingerprintHash),
+            createRequestFingerprintVersion: PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION,
             purchaseType: command.purchaseType,
             productMode: command.productMode,
             salesOrderId: command.salesOrderId,
@@ -303,8 +315,8 @@ export class PurchaseOrderCommandService {
             customSupplierName: command.customSupplierName,
             orderDate: new Date(`${command.orderDate}T00:00:00.000Z`),
             currencyCode: command.currencyCode,
-            shippingMarkText: shippingMark.number,
-            shippingMarkIssuanceId: shippingMark.issuanceId,
+            shippingMarkText: null,
+            shippingMarkIssuanceId: null,
             lineSubtotalAmount: command.lineSubtotalAmount,
             purchaseTotalAmount: command.purchaseTotalAmount,
             depositDueAmount: command.depositDueAmount,
@@ -323,6 +335,23 @@ export class PurchaseOrderCommandService {
         await transaction.purchaseOrderLine.createMany({
           data: effective.lines.map(line => lineData(created.id, line)),
         })
+        const persistedLines = await transaction.purchaseOrderLine.findMany({
+          where: { purchaseOrderId: created.id }, select: { id: true, lineNumber: true },
+        })
+        const lineIdByNumber = new Map(persistedLines.map(line => [line.lineNumber, line.id]))
+        await transaction.purchaseOrderPart.createMany({ data: issuedParts.map(({ id, part, partNumber, mark, markKey }) => ({
+            id,
+            purchaseOrderId: created.id, key: part.key, partNumber,
+            shippingMarkText: mark.number, shippingMarkIssuanceId: mark.issuanceId,
+            shippingMarkKeyHash: Uint8Array.from(hashPurchaseOrderIdempotencyKey(markKey)),
+        })) })
+        await transaction.purchaseOrderPartItem.createMany({ data: issuedParts.flatMap(({ id, part }) => (
+          part.items.map(item => ({
+              purchaseOrderId: created.id,
+              purchaseOrderPartId: id,
+              purchaseOrderLineId: lineIdByNumber.get(item.lineNumber)!, quantity: item.quantity,
+          }))
+        )) })
         // 提交只占用销售来源数量并生成订单号、唛头；审核事务才推进销售备货。
         await this.audit.record(transaction, {
           eventType: AuditEventType.PURCHASE_ORDER_CREATED,
@@ -344,12 +373,14 @@ export class PurchaseOrderCommandService {
             salesLinked: command.salesOrderId !== null,
             orderStatus: 'PENDING_REVIEW',
             shippingMarkRuleCode: ruleCode,
-            shippingMarkRevision: shippingMark.ruleRevision,
-            shippingMarkIssuanceId: shippingMark.issuanceId,
+            partCount: issuedParts.length,
+            shippingMarkRevision: issuedParts[0].mark.ruleRevision,
+            shippingMarkIssuanceIds: issuedParts.map(item => item.mark.issuanceId),
           },
         })
         return created.id
-      }, { isolationLevel: 'Serializable' })
+      // 最多 1000 次既有编号派发共用固定采购事务预算；不放宽全局查询或锁等待上限。
+      }, { isolationLevel: 'Serializable', timeout: 30_000 })
     }
     catch (error) {
       // 事务已退出才可恢复；PG aborted transaction 内继续查询会掩盖原失败。
@@ -436,6 +467,7 @@ export class PurchaseOrderCommandService {
         id: true,
         createdByUserId: true,
         createRequestFingerprintHash: true,
+        createRequestFingerprintVersion: true,
       },
     })
   }

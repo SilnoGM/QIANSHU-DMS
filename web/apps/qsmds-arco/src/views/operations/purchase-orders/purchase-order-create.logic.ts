@@ -9,7 +9,9 @@ import type {
   OrderProductLineModel,
   OrderProductLineReadOnlyModel,
 } from '../../../components/business/QsOrderProductLineEditor/types'
+import type { PartConfiguration } from '../../../components/business/QsPartConfigurator/types'
 import type { ProductSelectorPage } from '../../../components/business/QsProductSelector/types'
+import { buildPurchaseOrderParts } from './purchase-order-parts.logic'
 
 export type PurchaseOrderCreateType = 'SALES_LINKED' | 'STOCK'
 export type PurchaseOrderCreateProductMode = 'CATALOG' | 'CUSTOM'
@@ -43,6 +45,7 @@ export interface PurchaseOrderCreateSource {
   readonly balanceDueAmount: string | null
   readonly depositDueAmount: string | null
   readonly lines: readonly OrderProductLineModel[]
+  readonly parts: readonly PartConfiguration[]
   readonly maximumQuantityByKey: Readonly<Record<string, number | undefined>>
   readonly orderDate: string
   readonly productMode: PurchaseOrderCreateProductMode
@@ -314,7 +317,7 @@ export function resolvePurchaseOrderCreateStepForField(
   ) {
     return 1
   }
-  if (path === 'expectedShippingMarkResolution' || path === 'remark') {
+  if (path === 'expectedShippingMarkResolution' || path === 'remark' || path === 'parts' || path.startsWith('parts.')) {
     return 2
   }
   return null
@@ -613,6 +616,10 @@ export function buildPurchaseOrderCreateRequest(
   }
 
   const expectedShippingMarkResolution = source.expectedShippingMarkResolution
+  const configuredParts = buildPurchaseOrderParts(source.lines, source.parts)
+  if (!configuredParts.valid) {
+    fieldErrors.parts = configuredParts.message
+  }
   const remark = normalizeOptionalText(source.remark)
   if (expectedShippingMarkResolution === null || !/^[a-f0-9]{64}$/u.test(expectedShippingMarkResolution)) {
     fieldErrors.expectedShippingMarkResolution = '请先取得可用的采购唛头规则并核对'
@@ -635,6 +642,7 @@ export function buildPurchaseOrderCreateRequest(
       balanceDueAmount: balance!.normalized,
       depositDueAmount: deposit!.normalized,
       lines: requestLines,
+      parts: configuredParts.valid ? configuredParts.parts : [],
       orderDate: source.orderDate,
       productMode: source.productMode,
       purchaseTotalAmount,

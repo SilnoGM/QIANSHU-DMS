@@ -43,6 +43,19 @@ function createTransactionFixture(): TransactionFixture {
 }
 
 describe('AuditService', () => {
+  it('only permits bounded UUID issuance arrays on purchase creation', async () => {
+    const { transaction, create } = createTransactionFixture()
+    const service = new AuditService()
+    const metadata = { partCount: 1000, shippingMarkIssuanceIds: Array<string>(1000).fill(ACTOR_USER_ID) }
+    const base = { actorType: AuditActorType.USER, actorUserId: ACTOR_USER_ID, outcome: AuditOutcome.SUCCESS }
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED, metadata })).resolves.toBeDefined()
+    expect(create).toHaveBeenCalledTimes(1)
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.USER_PASSWORD_RESET, metadata })).rejects.toBeInstanceOf(AuditEventValidationError)
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED,
+      metadata: { shippingMarkIssuanceIds: ['invalid'] } })).rejects.toBeInstanceOf(AuditEventValidationError)
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED,
+      metadata: { shippingMarkIssuanceIds: Array<string>(1001).fill(ACTOR_USER_ID) } })).rejects.toBeInstanceOf(AuditEventValidationError)
+  })
   it('使用调用方 TransactionClient 写入结构化审计，并复制可变输入', async () => {
     const { transaction, create } = createTransactionFixture()
     const service = new AuditService()
