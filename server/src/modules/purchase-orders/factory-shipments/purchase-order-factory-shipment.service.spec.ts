@@ -75,6 +75,65 @@ function setup(overrides: Record<string, unknown> = {}) {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderFactoryShipmentService', () => {
+  it('rejects pending-review stock purchases before shipment writes', async () => {
+    const fixture = setup({ purchaseType: 'STOCK', salesOrderId: null, orderStatus: 'PENDING_REVIEW' })
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      expectedVersion: 3,
+    })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+  })
+
+  it.each(['ORDERED', 'PREPARING', 'SHIPPED', 'SIGNED'])(
+    'rejects a pending-review purchase even when its fulfillment snapshot is %s',
+    async (fulfillmentStatus) => {
+      const fixture = setup({ orderStatus: 'PENDING_REVIEW', fulfillmentStatus })
+      await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+        expectedVersion: 3,
+      })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
+      expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+      expect(fixture.coverage.advanceWhenAllPurchasesShipped).not.toHaveBeenCalled()
+    },
+  )
+
+  it('ships all approved pending targets without including pending-review orders', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+    fixture.orders.push(purchaseOrder({
+      id: SECOND_PURCHASE_ORDER_ID, orderStatus: 'PENDING_REVIEW',
+    }))
+
+    await expect(fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
+      mode: 'ALL_PENDING',
+      targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, expectedVersion: 3 }],
+    })).resolves.toMatchObject({
+      changedPurchaseOrderCount: 1, remainingPendingShipmentCount: 0,
+      purchaseOrders: [{ id: PURCHASE_ORDER_ID, changed: true }],
+      salesOrder: { advancedToLandTransit: false },
+    })
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: PURCHASE_ORDER_ID },
+      data: { fulfillmentStatus: 'SHIPPED', version: { increment: 1 } },
+    })
+  })
+
+  it.each(['SELECTED', 'ALL_PENDING'])(
+    'rejects %s sales shipping atomically when a pending-review order is explicitly targeted',
+    async (mode) => {
+      const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+      fixture.orders.push(purchaseOrder({
+        id: SECOND_PURCHASE_ORDER_ID, orderStatus: 'PENDING_REVIEW',
+      }))
+      await expect(fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
+        mode,
+        targets: [
+          { purchaseOrderId: PURCHASE_ORDER_ID, expectedVersion: 3 },
+          { purchaseOrderId: SECOND_PURCHASE_ORDER_ID, expectedVersion: 3 },
+        ],
+      })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
+      expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    },
+  )
+
   it('advances ORDERED through PREPARING to SHIPPED in one transaction', async () => {
     const fixture = setup({ purchaseType: 'STOCK', salesOrderId: null })
 

@@ -13,6 +13,10 @@ const repositoryRoot = path.resolve(scriptsDirectory, '..')
 
 const supplierResiduePattern = 'supplier|service[._ /-]?provider'
 const supplierResidueAllowlist = Object.freeze([
+  // 审核确认摘要仅展示已存采购供应商，不新增供应商主数据。
+  'web/apps/qsmds-arco/src/locales/lang/purchase-order-list/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue',
+  'web/apps/qsmds-arco/test/views/purchase-order-review.test.ts',
   // 唛头绑定及采购消费仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据。
   'scripts/browser-auth/provision-shipping-mark-fixtures.mjs',
   'scripts/browser-shipping-mark-fixtures.test.mjs',
@@ -182,6 +186,7 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/src/views/component_library/business/components/FactoryShipmentModalShowcase.vue',
   'web/apps/qsmds-arco/test/api/purchase-orders.test.ts',
   'web/apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
+  'web/apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs',
   'web/apps/qsmds-arco/test/views/purchase-order-create.logic.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-desc.logic.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-detail.logic.test.ts',

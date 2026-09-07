@@ -61,6 +61,7 @@
     "paymentTypes": { "DEPOSIT": "定金", "BALANCE": "尾款", "OTHER": "其他" },
     "dimensions": { "ORDER": "订单状态变更", "FULFILLMENT": "履约状态变更", "PAYMENT": "付款状态变更" },
     "statuses": {
+      "PENDING_REVIEW": "采购审核中",
       "CONFIRMED": "已确认",
       "COMPLETED": "已完成",
       "CANCELLED": "已取消",

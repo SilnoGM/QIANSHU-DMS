@@ -129,6 +129,7 @@ function setup(overrides: {
       findMany: jest.fn().mockResolvedValue(overrides.purchasedRows ?? [{
         sourceSalesOrderLineId: LINE_A_ID,
         quantity: 2,
+        purchaseOrder: { orderStatus: 'CONFIRMED' },
       }]),
     },
     product: { findMany: jest.fn().mockResolvedValue([]) },
@@ -167,6 +168,53 @@ function setup(overrides: {
 }
 
 describe('SalesOrderProductEditService', () => {
+  it.each(['PENDING_REVIEW', 'CONFIRMED', 'COMPLETED'])(
+    'keeps %s quantities reserved while requiring approved coverage to advance',
+    async (orderStatus) => {
+      const fixture = setup({
+        order: { fulfillmentStatus: 'PENDING' },
+        purchasedRows: [{
+          sourceSalesOrderLineId: LINE_A_ID, quantity: 2,
+          purchaseOrder: { orderStatus },
+        }, {
+          sourceSalesOrderLineId: LINE_B_ID, quantity: 1,
+          purchaseOrder: { orderStatus: 'CONFIRMED' },
+        }],
+      })
+      const existingLines = input().existingLines.map((line, index) => ({
+        ...line, desiredQuantity: index === 0 ? 2 : 1,
+      }))
+      const result = await fixture.service.updateProducts({
+        actorUserId: ACTOR_ID, requestId: 'product-edit-approved-coverage',
+      }, ORDER_ID, input({ existingLines, newLines: [] }))
+      expect(result.fulfillmentStatus).toBe(orderStatus === 'PENDING_REVIEW' ? 'PENDING' : 'PREPARING')
+
+      for (const desiredQuantity of [0, 1]) {
+        const reserved = setup({ purchasedRows: [{
+          sourceSalesOrderLineId: LINE_A_ID, quantity: 2, purchaseOrder: { orderStatus },
+        }] })
+        await expect(reserved.service.updateProducts({
+          actorUserId: ACTOR_ID, requestId: 'product-edit-pending-reservation',
+        }, ORDER_ID, input({
+          existingLines: existingLines.map((line, index) => ({
+            ...line, desiredQuantity: index === 0 ? desiredQuantity : line.desiredQuantity,
+          })),
+          newLines: [],
+        }))).rejects.toMatchObject({ code: 'SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED' })
+        expect(reserved.transaction.salesOrder.update).not.toHaveBeenCalled()
+      }
+      expect(fixture.transaction.purchaseOrderLine.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {
+          sourceSalesOrderLineId: { in: [LINE_A_ID, LINE_B_ID] },
+          purchaseOrder: { is: {
+            purchaseType: 'SALES_LINKED', salesOrderId: ORDER_ID,
+            orderStatus: { not: 'CANCELLED' },
+          } },
+        } }),
+      )
+    },
+  )
+
   it('locks lines before order and atomically updates products, amounts and fulfillment', async () => {
     const fixture = setup()
 

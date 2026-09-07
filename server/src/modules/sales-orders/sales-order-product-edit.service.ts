@@ -250,12 +250,12 @@ export class SalesOrderProductEditService {
         }
 
         const sourceIds = order.lines.map(line => line.id)
-        const [activePurchaseOrderCount, purchasedRows, paymentAggregate] = await Promise.all([
+        const [approvedPurchaseOrderCount, purchasedRows, paymentAggregate] = await Promise.all([
           transaction.purchaseOrder.count({
             where: {
               purchaseType: 'SALES_LINKED',
               salesOrderId,
-              orderStatus: { not: 'CANCELLED' },
+              orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
             },
           }),
           transaction.purchaseOrderLine.findMany({
@@ -267,7 +267,11 @@ export class SalesOrderProductEditService {
                 orderStatus: { not: 'CANCELLED' },
               } },
             },
-            select: { sourceSalesOrderLineId: true, quantity: true },
+            select: {
+              sourceSalesOrderLineId: true,
+              quantity: true,
+              purchaseOrder: { select: { orderStatus: true } },
+            },
           }),
           transaction.salesOrderPayment.aggregate({
             where: { salesOrderId, voidedAt: null },
@@ -275,12 +279,20 @@ export class SalesOrderProductEditService {
           }),
         ])
         const purchasedByLine = new Map<string, number>()
+        const approvedPurchasedByLine = new Map<string, number>()
         for (const row of purchasedRows) {
           if (row.sourceSalesOrderLineId === null) continue
           purchasedByLine.set(
             row.sourceSalesOrderLineId,
             (purchasedByLine.get(row.sourceSalesOrderLineId) ?? 0) + row.quantity,
           )
+          // 全部有效采购仍锁定减量下限；只有已审核数量可以推动备货覆盖。
+          if (row.purchaseOrder.orderStatus === 'CONFIRMED' || row.purchaseOrder.orderStatus === 'COMPLETED') {
+            approvedPurchasedByLine.set(
+              row.sourceSalesOrderLineId,
+              (approvedPurchasedByLine.get(row.sourceSalesOrderLineId) ?? 0) + row.quantity,
+            )
+          }
         }
 
         const targetById = new Map(command.existingLines.map(line => [line.lineId, line]))
@@ -321,7 +333,7 @@ export class SalesOrderProductEditService {
               target.actualUnitPriceAmount,
             ) * BigInt(target.desiredQuantity)
             remainingQuantity += Math.max(
-              target.desiredQuantity - activePurchasedQuantity,
+              target.desiredQuantity - (approvedPurchasedByLine.get(line.id) ?? 0),
               0,
             )
           }
@@ -415,7 +427,7 @@ export class SalesOrderProductEditService {
         )
         const fulfillmentStatus: SalesOrderFulfillmentStatus = remainingQuantity > 0
           ? 'PENDING'
-          : order.fulfillmentStatus === 'PENDING' && activePurchaseOrderCount > 0
+          : order.fulfillmentStatus === 'PENDING' && approvedPurchaseOrderCount > 0
             ? 'PREPARING'
             : order.fulfillmentStatus
 

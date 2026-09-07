@@ -6,6 +6,9 @@ import type {
 import type { OrderProductLineModel } from '@/components/business/QsOrderProductLineEditor/types'
 import type { QsPurchaseOrderDescViewModel } from '@/components/business/QsPurchaseOrderDesc/types'
 
+import Decimal from 'decimal.js'
+
+import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 import { calculatePurchaseOrderDraftTotal } from './purchase-order-create.logic'
 import {
   fulfillmentStatusLabel,
@@ -72,6 +75,12 @@ export function mapPurchaseOrderCreateToDesc(
   source: Readonly<PurchaseOrderCreateDescSource>,
 ): QsPurchaseOrderDescViewModel {
   const purchaseTotalAmount = optionalDisplayText(source.purchaseTotalAmount)
+  const total = validateMoneyString(purchaseTotalAmount, { precision: 4 })
+  // 新单实际付款为零；零总价已付清，未填写或非法草稿不能被隐式当作零总价。
+  const paymentStatus = total.valid && total.normalizedValue !== null
+    && new Decimal(total.normalizedValue).isZero()
+    ? 'PAID'
+    : 'UNPAID'
   return {
     amounts: {
       balanceDueAmount: optionalDisplayText(source.balanceDueAmount),
@@ -110,7 +119,11 @@ export function mapPurchaseOrderCreateToDesc(
       customerName: optionalDisplayText(source.salesOrder?.customerName),
       salesOrderNo: optionalDisplayText(source.salesOrder?.orderNo),
     },
-    statuses: [],
+    statuses: [
+      { key: 'ORDER', label: '订单状态', tone: 'warning', value: orderStatusLabel('PENDING_REVIEW') },
+      { key: 'FULFILLMENT', label: '履约状态', tone: 'info', value: fulfillmentStatusLabel('ORDERED') },
+      { key: 'PAYMENT', label: '付款状态', tone: PAYMENT_STATUS_TONES[paymentStatus], value: paymentStatusLabel(paymentStatus) },
+    ],
     supplierLabel: optionalDisplayText(source.supplierLabel),
     updatedAt: null,
   }
@@ -176,7 +189,7 @@ export function mapPurchaseOrderDetailToDesc(
       {
         key: 'ORDER',
         label: '订单状态',
-        tone: detail.orderStatus === 'CANCELLED' ? 'danger' : 'success',
+        tone: detail.orderStatus === 'CANCELLED' ? 'danger' : detail.orderStatus === 'PENDING_REVIEW' ? 'warning' : 'success',
         value: orderStatusLabel(detail.orderStatus),
       },
       {

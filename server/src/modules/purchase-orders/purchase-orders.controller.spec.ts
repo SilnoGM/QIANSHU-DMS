@@ -58,6 +58,7 @@ const providers = [{
 }, {
   provide: PurchaseOrderMutationService,
   useValue: {
+    review: jest.fn(),
     updateOrderStatus: jest.fn(),
     updateFulfillmentStatus: jest.fn(),
     recordPayment: jest.fn(),
@@ -79,6 +80,24 @@ const providers = [{
 class PurchaseOrdersContractModule {}
 
 describe('PurchaseOrdersController', () => {
+  it('requires the independent review permission and delegates the versioned approval', async () => {
+    const review = jest.fn().mockResolvedValue({ id: ORDER_ID })
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      { review } as unknown as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
+    )
+    const input = { expectedVersion: 2, reason: '审核通过' }
+    await expect(controller.review({ purchaseOrderId: ORDER_ID }, input, createRequest()))
+      .resolves.toEqual({ id: ORDER_ID })
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
+    expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrdersController.prototype.review))
+      .toEqual(['purchase-orders:review'])
+  })
   it('allows creation operators to resolve only their scene without binding-management permissions', async () => {
     const shippingMarks = { read: jest.fn().mockResolvedValue({ availability: 'AVAILABLE' }) }
     const controller = new PurchaseOrdersController(
@@ -399,6 +418,32 @@ describe('PurchaseOrdersController OpenAPI', () => {
 
   beforeAll(async () => {
     document = await createOpenApiDocument(PurchaseOrdersContractModule)
+  })
+
+  it('publishes the review route with version, detail response, CSRF and state-conflict contract', () => {
+    const review: ContractOperation | undefined = document.paths[
+      '/api/purchase-orders/{purchaseOrderId}/review'
+    ]?.post
+    expect(review).toMatchObject({
+      operationId: 'purchase_orders_review',
+      security: [{ sessionCookie: [] }],
+      'x-qianshu-contract': {
+        authorization: true, csrf: true, validation: true, privateNoStore: true,
+        errors: expect.arrayContaining([
+          { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+        ]) as unknown,
+      },
+      responses: { 200: { content: { 'application/json': {
+        schema: { $ref: '#/components/schemas/PurchaseOrderDetailDto' },
+      } }, headers: { 'X-Request-Id': expect.any(Object) as unknown } } },
+    })
+    expect(document.components?.schemas?.PurchaseOrderReviewRequestDto).toMatchObject({
+      required: ['expectedVersion'],
+      properties: {
+        expectedVersion: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+        reason: { type: 'string', minLength: 1, maxLength: 500 },
+      },
+    })
   })
 
   it('publishes the scene resolution and automatic shipping mark create contract', () => {

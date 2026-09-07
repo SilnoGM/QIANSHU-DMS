@@ -4,12 +4,13 @@ import type {
   PurchaseOrderPaymentDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
+  PurchaseOrderReviewRequestDto,
   PurchaseOrderStatusRequestDto,
 } from '../../../api/generated/types.gen'
 
 import Decimal from 'decimal.js'
 
-import { nextPurchaseOrderFulfillmentStatus } from './purchase-order-list.logic'
+import { canCancelPurchaseOrderFromList, nextPurchaseOrderFulfillmentStatus } from './purchase-order-list.logic'
 
 export interface PurchaseOrderPaymentDraft {
   readonly amount: string | null
@@ -165,12 +166,36 @@ export function buildPurchaseOrderFulfillmentRequest(
   }
 }
 
+/** 审核必须使用用户刚核对的详情版本，失败后重新读取才能再次确认。 */
+export function buildPurchaseOrderReviewRequest(
+  detail: Pick<PurchaseOrderDetailDto, 'orderStatus' | 'version'>,
+  reason: string,
+): PurchaseOrderMutationBuildResult<PurchaseOrderReviewRequestDto> {
+  if (detail.orderStatus !== 'PENDING_REVIEW') {
+    return { valid: false, fieldError: '采购订单已不处于审核中，请刷新列表' }
+  }
+  if (!Number.isSafeInteger(detail.version) || detail.version < 1) {
+    return { valid: false, fieldError: '当前订单版本不可用，请重新加载详情' }
+  }
+  const normalizedReason = optionalReason(reason)
+  if (!normalizedReason.ok) {
+    return { valid: false, fieldError: '审核说明最多 500 个字符' }
+  }
+  return {
+    valid: true,
+    request: {
+      expectedVersion: detail.version,
+      ...(normalizedReason.value === null ? {} : { reason: normalizedReason.value }),
+    },
+  }
+}
+
 export function buildPurchaseOrderCancellationRequest(
   detail: PurchaseOrderDetailDto,
   reason: string,
 ): PurchaseOrderMutationBuildResult<PurchaseOrderStatusRequestDto> {
-  if (detail.orderStatus !== 'CONFIRMED') {
-    return { fieldError: '只有已确认订单可以取消', valid: false }
+  if (!canCancelPurchaseOrderFromList(detail)) {
+    return { fieldError: '只有审核中或已确认订单可以取消', valid: false }
   }
   try {
     if (!new Decimal(detail.paidAmount).isZero()) {
@@ -229,6 +254,7 @@ export function purchaseOrderStatusHistoryValueLabel(value: string): string {
     CANCELLED: '已取消',
     COMPLETED: '已完成',
     CONFIRMED: '已确认',
+    PENDING_REVIEW: '采购审核中',
     ORDERED: '已下单',
     PAID: '已付清',
     PARTIALLY_PAID: '部分付款',

@@ -18,16 +18,17 @@ import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
 
 export type PurchaseOrderListViewMode = 'all' | 'pending'
 export type PurchaseOrderPendingTask
-  = | 'AWAITING_PAYMENT'
+  = | 'AWAITING_REVIEW'
+    | 'AWAITING_PAYMENT'
     | 'AWAITING_SHIPMENT'
     | 'AWAITING_WAREHOUSE'
-type PurchaseOrderOrderStatusSelection = 'CANCELLED' | 'COMPLETED' | 'CONFIRMED'
+type PurchaseOrderOrderStatusSelection = 'CANCELLED' | 'COMPLETED' | 'CONFIRMED' | 'PENDING_REVIEW'
 export type PurchaseOrderListStatusSelection
   = | 'ALL'
     | PurchaseOrderOrderStatusSelection
     | PurchaseOrderPendingTask
 
-export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
+export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'REVIEW' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
 
 export interface PurchaseOrderPendingActionItem {
   readonly icon: string
@@ -88,6 +89,7 @@ const FULFILLMENT_STATUSES = [
 const PAYMENT_STATUSES = ['UNPAID', 'PARTIALLY_PAID', 'PAID'] as const
 
 const PENDING_TASK_ITEMS: readonly QsStatusSwitchItem[] = [
+  { label: '采购审核中', value: 'AWAITING_REVIEW' },
   { label: '待发货', value: 'AWAITING_SHIPMENT' },
   { label: '待入仓', value: 'AWAITING_WAREHOUSE' },
   { label: '待付款', value: 'AWAITING_PAYMENT' },
@@ -95,6 +97,7 @@ const PENDING_TASK_ITEMS: readonly QsStatusSwitchItem[] = [
 
 const ALL_ORDER_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
   { label: '全部采购', value: 'ALL' },
+  { label: '采购审核中', value: 'PENDING_REVIEW' },
   { label: '已确认', value: 'CONFIRMED' },
   { label: '已完成', value: 'COMPLETED' },
   { label: '已取消', value: 'CANCELLED' },
@@ -110,6 +113,11 @@ const TASK_ACTION: Readonly<Record<
   Exclude<PurchaseOrderPendingTask, 'AWAITING_PAYMENT'>,
   PurchaseOrderPendingActionItem
 >> = {
+  AWAITING_REVIEW: {
+    icon: 'i-lucide:clipboard-check',
+    key: 'REVIEW',
+    label: '审核',
+  },
   AWAITING_SHIPMENT: {
     icon: 'i-lucide:truck',
     key: 'SHIPMENT',
@@ -145,19 +153,25 @@ export function normalizePurchaseOrderStatusSelection(
  */
 export function resolvePurchaseOrderPendingActions(
   task: PurchaseOrderPendingTask,
-  order: Pick<PurchaseOrderListItemDto, 'paymentStatus'>,
+  order: Pick<PurchaseOrderListItemDto, 'orderStatus' | 'paymentStatus'>,
 ): readonly PurchaseOrderPendingActionItem[] {
+  if (task === 'AWAITING_REVIEW') {
+    return order.orderStatus === 'PENDING_REVIEW' ? [TASK_ACTION.AWAITING_REVIEW] : []
+  }
+  if (order.orderStatus !== 'CONFIRMED') {
+    return []
+  }
   if (task === 'AWAITING_PAYMENT') {
     return order.paymentStatus === 'PAID' ? [] : [PAYMENT_ACTION]
   }
   return [TASK_ACTION[task]]
 }
 
-/** 列表取消入口只对已确认订单开放，最终提交前仍由详情接口重新校验最新状态。 */
+/** 审核中与已确认订单可取消，最终提交前仍由详情接口重新校验最新状态。 */
 export function canCancelPurchaseOrderFromList(
   order: Pick<PurchaseOrderListItemDto, 'orderStatus'>,
 ): boolean {
-  return order.orderStatus === 'CONFIRMED'
+  return order.orderStatus === 'PENDING_REVIEW' || order.orderStatus === 'CONFIRMED'
 }
 
 /**
@@ -274,6 +288,7 @@ export function orderStatusLabel(
     CANCELLED: '已取消',
     COMPLETED: '已完成',
     CONFIRMED: '已确认',
+    PENDING_REVIEW: '采购审核中',
   }[value]
 }
 
@@ -305,6 +320,7 @@ export function orderStatusTagClass(
     CANCELLED: 'border-destructive/35 bg-destructive/10 text-destructive',
     COMPLETED: 'border-primary/35 bg-primary/10 text-primary',
     CONFIRMED: 'border-primary/35 bg-primary/10 text-primary',
+    PENDING_REVIEW: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
   }[value]
 }
 

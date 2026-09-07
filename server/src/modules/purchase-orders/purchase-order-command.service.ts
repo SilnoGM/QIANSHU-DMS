@@ -39,7 +39,6 @@ import {
   PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
-import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requirePurchaseShippingMark } from './purchase-order-shipping-mark'
 
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
@@ -205,7 +204,6 @@ export class PurchaseOrderCommandService {
     private readonly numbering: NumberingGeneratorService,
     private readonly audit: AuditService,
     private readonly createDependencies: PurchaseOrderCreateDependencyService,
-    private readonly salesProgress: SalesOrderPurchaseCoverageService,
     private readonly shippingMarks: PurchaseShippingMarkResolverService,
     @Optional()
     @Inject(PURCHASE_ORDER_COMMAND_DEPENDENCIES)
@@ -311,7 +309,7 @@ export class PurchaseOrderCommandService {
             purchaseTotalAmount: command.purchaseTotalAmount,
             depositDueAmount: command.depositDueAmount,
             balanceDueAmount: command.balanceDueAmount,
-            orderStatus: 'CONFIRMED',
+            orderStatus: 'PENDING_REVIEW',
             fulfillmentStatus: 'ORDERED',
             paymentStatus: derivePurchaseOrderPaymentStatus(
               command.purchaseTotalAmount,
@@ -325,18 +323,7 @@ export class PurchaseOrderCommandService {
         await transaction.purchaseOrderLine.createMany({
           data: effective.lines.map(line => lineData(created.id, line)),
         })
-        if (
-          command.purchaseType === 'SALES_LINKED'
-          && command.salesOrderId !== null
-        ) {
-          await this.salesProgress.advanceWhenFullyCovered(transaction, {
-            actorUserId: trusted.actorUserId,
-            purchaseOrderId: created.id,
-            purchaseOrderNo: issuance.number,
-            requestId: trusted.requestId,
-            salesOrderId: command.salesOrderId,
-          })
-        }
+        // 提交只占用销售来源数量并生成订单号、唛头；审核事务才推进销售备货。
         await this.audit.record(transaction, {
           eventType: AuditEventType.PURCHASE_ORDER_CREATED,
           outcome: AuditOutcome.SUCCESS,
@@ -355,6 +342,7 @@ export class PurchaseOrderCommandService {
             currencyCode: command.currencyCode,
             lineCount: effective.lines.length,
             salesLinked: command.salesOrderId !== null,
+            orderStatus: 'PENDING_REVIEW',
             shippingMarkRuleCode: ruleCode,
             shippingMarkRevision: shippingMark.ruleRevision,
             shippingMarkIssuanceId: shippingMark.issuanceId,

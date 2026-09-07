@@ -45,6 +45,19 @@ function enumValues(source: string, name: string): readonly string[] {
 }
 
 describe('purchase order domain schema', () => {
+  it('adds configurable review permission for administrators without rewriting existing purchases', () => {
+    const enumMigration = readFileSync(resolve(serverRoot,
+      'prisma/migrations/20260907053824_purchase_order_review/migration.sql'), 'utf8')
+    const migration = readFileSync(resolve(serverRoot,
+      'prisma/migrations/20260907053825_purchase_order_review_default_and_permission/migration.sql'), 'utf8')
+    expect(enumMigration).toContain('ALTER TYPE "purchase_order_status" ADD VALUE \'PENDING_REVIEW\'')
+    expect(enumMigration).not.toContain('SET DEFAULT')
+    expect(migration).toContain('ALTER TABLE "purchase_orders" ALTER COLUMN "order_status" SET DEFAULT \'PENDING_REVIEW\'')
+    expect(migration).not.toMatch(/UPDATE\s+"purchase_orders"/u)
+    expect(migration).toMatch(/'purchase-orders:review',[\s\S]*?false/u)
+    expect(migration).toContain('role."code" = \'system_admin\'')
+    expect(migration).toContain('permission."code" = \'purchase-orders:review\'')
+  })
   it('publishes the exact purchase enums and six domain models', () => {
     const schema = readFileSync(schemaPath, 'utf8')
 
@@ -53,6 +66,7 @@ describe('purchase order domain schema', () => {
       'STOCK',
     ])
     expect(enumValues(schema, 'PurchaseOrderStatus')).toEqual([
+      'PENDING_REVIEW',
       'CONFIRMED',
       'COMPLETED',
       'CANCELLED',
@@ -105,6 +119,7 @@ describe('purchase order domain schema', () => {
     }
 
     const order = extractPrismaBlock(schema, 'model', 'PurchaseOrder')
+    expect(order).toMatch(/orderStatus\s+PurchaseOrderStatus\s+@default\(PENDING_REVIEW\)/u)
     expect(order).toMatch(/salesOrderId\s+String\?/u)
     expect(order).not.toMatch(/@@unique\(\[salesOrderId\]/u)
     expect(order).toMatch(
@@ -303,6 +318,7 @@ describe('purchase order domain schema', () => {
       'purchase-orders:read',
       'purchase-orders:create',
       'purchase-orders:create-stock',
+      'purchase-orders:review',
       'purchase-orders:update',
       'purchase-orders:payment',
       'purchase-orders:document',

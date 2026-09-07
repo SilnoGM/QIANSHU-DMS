@@ -87,11 +87,12 @@ describe('permission constants', () => {
       'purchase-orders:read',
       'purchase-orders:create',
       'purchase-orders:create-stock',
+      'purchase-orders:review',
       'purchase-orders:update',
       'purchase-orders:payment',
       'purchase-orders:document',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 59)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 60)
   })
 })
 

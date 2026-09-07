@@ -85,7 +85,7 @@ export class SalesOrderPurchaseCoverageService {
     input: AdvanceSalesOrderPurchaseProgressInput,
   ): Promise<void> {
     // 本次采购可能只锁定部分销售明细。额外锁定销售订单主行，才能让同一销售
-    // 订单下、采购不同明细的并发创建也按统一顺序完成最终覆盖判定。
+    // 订单下、审核不同采购单的并发操作也按统一顺序完成最终覆盖判定。
     const locked = await transaction.$queryRaw<LockedSalesOrder[]>(Prisma.sql`
       SELECT
         "id",
@@ -115,7 +115,8 @@ export class SalesOrderPurchaseCoverageService {
         purchaseOrder: {
           salesOrderId: input.salesOrderId,
           purchaseType: 'SALES_LINKED',
-          orderStatus: { not: 'CANCELLED' },
+          // 待审核数量只预占可采购余额，不能推进销售履约。
+          orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
         },
       },
       _sum: { quantity: true },
@@ -146,7 +147,7 @@ export class SalesOrderPurchaseCoverageService {
       dimension: 'FULFILLMENT',
       fromStatus: 'PENDING',
       toStatus: 'PREPARING',
-      reason: '采购订单提交后已覆盖全部销售产品',
+      reason: '采购订单审核通过后已覆盖全部销售产品',
       changedByUserId: input.actorUserId,
     } })
     await this.audit.record(transaction, {
@@ -202,7 +203,7 @@ export class SalesOrderPurchaseCoverageService {
         purchaseOrder: {
           salesOrderId: input.salesOrderId,
           purchaseType: 'SALES_LINKED',
-          orderStatus: { not: 'CANCELLED' },
+          orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
         },
       },
       _sum: { quantity: true },
@@ -297,7 +298,7 @@ export class SalesOrderPurchaseCoverageService {
         purchaseOrder: {
           salesOrderId: input.salesOrderId,
           purchaseType: 'SALES_LINKED',
-          orderStatus: { not: 'CANCELLED' },
+          orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
         },
       },
       _sum: { quantity: true },
@@ -317,13 +318,16 @@ export class SalesOrderPurchaseCoverageService {
         purchaseType: 'SALES_LINKED',
         orderStatus: { not: 'CANCELLED' },
       },
-      select: { fulfillmentStatus: true },
+      select: { fulfillmentStatus: true, orderStatus: true },
     })
     const ready = isSalesOrderPurchaseFullyCovered(salesLines, purchasedBySource)
       && activePurchaseOrders.length > 0
       && activePurchaseOrders.every(purchaseOrder => (
-        purchaseOrder.fulfillmentStatus === 'SHIPPED'
-        || purchaseOrder.fulfillmentStatus === 'SIGNED'
+        (purchaseOrder.orderStatus === 'CONFIRMED' || purchaseOrder.orderStatus === 'COMPLETED')
+        && (
+          purchaseOrder.fulfillmentStatus === 'SHIPPED'
+          || purchaseOrder.fulfillmentStatus === 'SIGNED'
+        )
       ))
     if (!ready) {
       return {

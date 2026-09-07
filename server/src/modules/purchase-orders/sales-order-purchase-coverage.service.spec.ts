@@ -21,6 +21,12 @@ function input() {
   }
 }
 
+interface PurchaseLineFact {
+  readonly sourceSalesOrderLineId: string
+  readonly quantity: number
+  orderStatus: 'PENDING_REVIEW' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED'
+}
+
 function setup(overrides: {
   readonly fulfillmentStatus?:
     | 'PENDING'
@@ -42,6 +48,7 @@ function setup(overrides: {
     readonly id: string
     readonly quantity: number
   }[]
+  readonly purchaseLines?: readonly PurchaseLineFact[]
   readonly shipmentStatuses?: readonly (
     | 'ORDERED'
     | 'PREPARING'
@@ -60,8 +67,23 @@ function setup(overrides: {
       }])
     }),
     purchaseOrderLine: {
-      groupBy: jest.fn<Promise<unknown[]>, [unknown]>(() => {
+      groupBy: jest.fn<Promise<unknown[]>, [unknown]>((query) => {
         calls.push('purchases')
+        if (overrides.purchaseLines !== undefined) {
+          const filter = (query as {
+            where: { purchaseOrder: { orderStatus: { in?: string[], not?: string } } }
+          }).where.purchaseOrder.orderStatus
+          const quantities = new Map<string, number>()
+          for (const line of overrides.purchaseLines) {
+            if (filter.in && !filter.in.includes(line.orderStatus)) continue
+            if (filter.not === line.orderStatus) continue
+            quantities.set(line.sourceSalesOrderLineId,
+              (quantities.get(line.sourceSalesOrderLineId) ?? 0) + line.quantity)
+          }
+          return Promise.resolve([...quantities].map(([sourceSalesOrderLineId, quantity]) => ({
+            sourceSalesOrderLineId, _sum: { quantity },
+          })))
+        }
         return Promise.resolve([...(overrides.purchasedRows ?? [{
           sourceSalesOrderLineId: SALES_LINE_A_ID,
           _sum: { quantity: 2 },
@@ -75,6 +97,7 @@ function setup(overrides: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue(
         (overrides.shipmentStatuses ?? ['SHIPPED']).map(fulfillmentStatus => ({
           fulfillmentStatus,
+          orderStatus: 'CONFIRMED',
         })),
       ),
     },
@@ -161,7 +184,7 @@ describe('SalesOrderPurchaseCoverageService', () => {
         dimension: 'FULFILLMENT',
         fromStatus: 'PENDING',
         toStatus: 'PREPARING',
-        reason: '采购订单提交后已覆盖全部销售产品',
+        reason: '采购订单审核通过后已覆盖全部销售产品',
         changedByUserId: ACTOR_ID,
       } })
     expect(fixture.audit.record).toHaveBeenCalledWith(
@@ -182,6 +205,78 @@ describe('SalesOrderPurchaseCoverageService', () => {
         },
       }),
     )
+  })
+
+  it('advances only after separate approvals cover every reserved sales line', async () => {
+    const purchaseLines: PurchaseLineFact[] = [{
+      sourceSalesOrderLineId: SALES_LINE_A_ID, quantity: 2, orderStatus: 'PENDING_REVIEW',
+    }, {
+      sourceSalesOrderLineId: SALES_LINE_B_ID, quantity: 1, orderStatus: 'PENDING_REVIEW',
+    }]
+    const fixture = setup({ purchaseLines })
+
+    await fixture.service.advanceWhenFullyCovered(fixture.transactionClient, input())
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    purchaseLines[0].orderStatus = 'CONFIRMED'
+    await fixture.service.advanceWhenFullyCovered(fixture.transactionClient, input())
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    purchaseLines[1].orderStatus = 'COMPLETED'
+    await fixture.service.advanceWhenFullyCovered(fixture.transactionClient, input())
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledTimes(1)
+  })
+
+  it('recalculates cancellation from approved coverage even when pending orders reserve the gap', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'PREPARING',
+      purchaseLines: [{
+        sourceSalesOrderLineId: SALES_LINE_A_ID, quantity: 2, orderStatus: 'CONFIRMED',
+      }, {
+        sourceSalesOrderLineId: SALES_LINE_B_ID, quantity: 1, orderStatus: 'PENDING_REVIEW',
+      }, {
+        sourceSalesOrderLineId: SALES_LINE_B_ID, quantity: 1, orderStatus: 'CANCELLED',
+      }],
+    })
+
+    await fixture.service.recalculateAfterPurchaseCancellation(fixture.transactionClient, input())
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: SALES_ORDER_ID },
+      data: { fulfillmentStatus: 'PENDING', version: { increment: 1 } },
+    })
+  })
+
+  it('does not advance shipping when pending-review quantities are needed for coverage', async () => {
+    const fixture = setup({
+      fulfillmentStatus: 'PREPARING',
+      purchaseLines: [{
+        sourceSalesOrderLineId: SALES_LINE_A_ID, quantity: 2, orderStatus: 'CONFIRMED',
+      }, {
+        sourceSalesOrderLineId: SALES_LINE_B_ID, quantity: 1, orderStatus: 'PENDING_REVIEW',
+      }],
+    })
+
+    await expect(fixture.service.advanceWhenAllPurchasesShipped(fixture.transactionClient, {
+      actorUserId: ACTOR_ID,
+      changedPurchaseOrderCount: 1,
+      requestId: 'factory-shipment-review-test',
+      salesOrderId: SALES_ORDER_ID,
+    })).resolves.toEqual({ advancedToLandTransit: false, fulfillmentStatus: 'PREPARING' })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('does not accept an unreviewed order with a shipped snapshot as shipping complete', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+    fixture.transaction.purchaseOrder.findMany.mockResolvedValue([{
+      orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'SHIPPED',
+    }])
+
+    await expect(fixture.service.advanceWhenAllPurchasesShipped(fixture.transactionClient, {
+      actorUserId: ACTOR_ID,
+      changedPurchaseOrderCount: 1,
+      requestId: 'factory-shipment-invalid-snapshot',
+      salesOrderId: SALES_ORDER_ID,
+    })).resolves.toEqual({ advancedToLandTransit: false, fulfillmentStatus: 'PREPARING' })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
   })
 
   it('does not write when any sales line remains unpurchased', async () => {

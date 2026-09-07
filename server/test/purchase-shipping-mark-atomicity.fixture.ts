@@ -10,6 +10,9 @@ import { NumberingGeneratorService } from '../src/modules/numbering/numbering-ge
 import { NumberingQueryService } from '../src/modules/numbering/numbering-query.service'
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
+import { PurchaseOrderMutationService } from '../src/modules/purchase-orders/purchase-order-mutation.service'
+import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
+import type { MediaAssetService } from '../src/modules/media/media-asset.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
 import { PurchaseShippingMarkResolverService } from '../src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PurchaseShippingMarksService } from '../src/modules/purchase-shipping-marks/purchase-shipping-marks.service'
@@ -90,7 +93,15 @@ export function createCommands(
   } as unknown as PrismaService
   return new PurchaseOrderCommandService(
     prisma, fixture.numbering, fixture.audit, fixture.dependencies,
-    fixture.salesProgress, fixture.resolver, { businessToday: () => '2026-09-07' },
+    fixture.resolver, { businessToday: () => '2026-09-07' },
+  )
+}
+
+export function createReviewMutations(fixture: AtomicityFixture) {
+  const lookup = new DictionaryLookupService(fixture.prisma)
+  return new PurchaseOrderMutationService(
+    fixture.prisma, fixture.audit, lookup, {} as MediaAssetService,
+    new PurchaseOrderQueryService(fixture.prisma, lookup), fixture.salesProgress,
   )
 }
 

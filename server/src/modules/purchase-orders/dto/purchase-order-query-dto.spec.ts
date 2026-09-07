@@ -2,10 +2,21 @@ import { plainToInstance } from 'class-transformer'
 import { validate } from 'class-validator'
 
 import {
+  PurchaseOrderListQueryDto,
   PurchaseOrderSourceSalesOrderLinesQueryDto,
   PurchaseOrderSourceSalesOrdersQueryDto,
   PurchaseOrderStatusCountsQueryDto,
 } from './purchase-order-query.dto'
+
+describe('PurchaseOrderListQueryDto review filters', () => {
+  it.each([
+    { view: 'pending', pendingTask: 'AWAITING_REVIEW' },
+    { view: 'all', orderStatus: 'PENDING_REVIEW' },
+  ])('accepts the review view filter %j', async input => {
+    await expect(validate(plainToInstance(PurchaseOrderListQueryDto, input)))
+      .resolves.toEqual([])
+  })
+})
 
 describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {
   it.each([

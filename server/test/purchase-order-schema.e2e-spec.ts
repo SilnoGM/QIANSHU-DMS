@@ -196,6 +196,7 @@ describe('purchase order schema with isolated PostgreSQL', () => {
       { code: 'purchase-orders:document', system_only: false },
       { code: 'purchase-orders:payment', system_only: false },
       { code: 'purchase-orders:read', system_only: false },
+      { code: 'purchase-orders:review', system_only: false },
       { code: 'purchase-orders:update', system_only: false },
     ])
   })

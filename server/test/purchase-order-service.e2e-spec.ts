@@ -371,7 +371,6 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       numbering,
       new AuditService(),
       new PurchaseOrderCreateDependencyService(dictionaryLookup, accessControl),
-      new SalesOrderPurchaseCoverageService(new AuditService()),
       markResolver,
       { businessToday: () => '2026-08-27' },
     )
@@ -528,6 +527,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
     const created = await queries.getById(createdId)
     expect(created).toMatchObject({
+      orderStatus: 'PENDING_REVIEW',
+      fulfillmentStatus: 'ORDERED',
       purchaseType: 'STOCK',
       currencyCode: 'CNY',
       shippingMarkText: expect.stringMatching(/^MARK\d{8}$/u) as unknown,
@@ -537,6 +538,40 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         referencePurchaseUnitPriceAmount: '25.0000',
         actualPurchaseUnitPriceAmount: '25.0000',
       }],
+    })
+
+    await expect(queries.list({ view: 'pending', pendingTask: 'AWAITING_REVIEW', keyword: created.orderNo }))
+      .resolves.toMatchObject({ total: 1 })
+    for (const pendingTask of ['AWAITING_SHIPMENT', 'AWAITING_WAREHOUSE', 'AWAITING_PAYMENT'] as const) {
+      await expect(queries.list({ view: 'pending', pendingTask, keyword: created.orderNo }))
+        .resolves.toMatchObject({ total: 0 })
+    }
+    await expect(mutations.recordPayment(context(), createdId, {
+      paymentType: 'DEPOSIT', amount: '10', paidAt: '2026-08-27T10:00:00.000Z', paymentMethod: 'BANK_TRANSFER',
+    })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
+    await expect(mutations.updateFulfillmentStatus(context(), createdId, { toStatus: 'PREPARING' }))
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
+    await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version }))
+      .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
+    const reviewResults = await Promise.allSettled([
+      mutations.review(context(), createdId, { expectedVersion: created.version }),
+      mutations.review(context(), createdId, { expectedVersion: created.version }),
+    ])
+    expect(reviewResults.filter(result => result.status === 'fulfilled')).toHaveLength(1)
+    expect(reviewResults.find(result => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'PURCHASE_ORDER_STATE_CHANGED' },
+    })
+    await expect(queries.getById(createdId)).resolves.toMatchObject({
+      orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING',
+      shippingMarkText: created.shippingMarkText, orderNo: created.orderNo, version: created.version + 1,
+    })
+    await expect(prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: createdId } }))
+      .resolves.toBe(2)
+    await expect(queries.statusCounts({ view: 'pending', keyword: created.orderNo })).resolves.toMatchObject({
+      items: [
+        { value: 'AWAITING_REVIEW', count: 0 }, { value: 'AWAITING_SHIPMENT', count: 1 },
+        { value: 'AWAITING_WAREHOUSE', count: 0 }, { value: 'AWAITING_PAYMENT', count: 1 },
+      ],
     })
 
     await mutations.recordPayment({
@@ -576,7 +611,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(paidPage.items[0]?.changeSummary.latest?.reason).toContain('25.0000')
     await expect(queries.list({ view: 'all', keyword: created.orderNo, page: 2, pageSize: 1 }))
       .resolves.toMatchObject({ total: 1, items: [] })
-    for (const toStatus of ['PREPARING', 'SHIPPED', 'SIGNED'] as const) {
+    for (const toStatus of ['SHIPPED', 'SIGNED'] as const) {
       await mutations.updateFulfillmentStatus({
         actorUserId, requestId: `purchase-${toStatus}-${suffix}`,
       }, createdId, { toStatus })
@@ -622,7 +657,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       }],
       purchaseTotalAmount: '100', depositDueAmount: '30', balanceDueAmount: '70',
     })
-    const { orderNo } = await queries.getById(orderId)
+    const { orderNo, version } = await queries.getById(orderId)
+    await mutations.review(context(), orderId, { expectedVersion: version })
     for (const [paymentType, label] of [
       ['DEPOSIT', '定金凭证'], ['BALANCE', '尾款凭证'], ['OTHER', '其他付款凭证'],
     ] as const) {
@@ -736,7 +772,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).resolves.toBe(0)
   })
 
-  it('serializes disjoint final purchases and advances exactly once', async () => {
+  it('reserves disjoint final purchases and advances exactly once only after all reviews', async () => {
     const firstKey = randomUUID()
     const secondKey = randomUUID()
     const firstInput = linkedInput(concurrentDistinctSourceAId, 1)
@@ -769,6 +805,22 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     ])
     await expect(commands.create(context(firstKey), firstInput)).resolves.toBe(firstId)
     await expect(commands.create(context(secondKey), secondInput)).resolves.toBe(secondId)
+
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId }, select: { fulfillmentStatus: true, version: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PENDING', version: 1 })
+    const pendingOrders = await prisma.purchaseOrder.findMany({
+      where: { salesOrderId, orderStatus: 'PENDING_REVIEW' },
+      orderBy: { id: 'asc' }, select: { id: true, version: true },
+    })
+    for (const [index, order] of pendingOrders.entries()) {
+      await mutations.review(context(), order.id, { expectedVersion: order.version })
+      if (index < pendingOrders.length - 1) {
+        await expect(prisma.salesOrder.findUniqueOrThrow({
+          where: { id: salesOrderId }, select: { fulfillmentStatus: true },
+        })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
+      }
+    }
 
     await expect(prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
@@ -1012,8 +1064,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       purchasedQuantity: 0,
       remainingQuantity: 2,
     })
-    await commands.create(context(), linkedInput(result.addedLineIds[0], 1))
-    await commands.create(context(), linkedCustomInput(result.addedLineIds[1], 2))
+    const addedCatalogId = await commands.create(context(), linkedInput(result.addedLineIds[0], 1))
+    const addedCustomId = await commands.create(context(), linkedCustomInput(result.addedLineIds[1], 2))
     await expect(commands.create(
       context(),
       linkedInput(result.addedLineIds[0], 1),
@@ -1021,6 +1073,13 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       code: 'PURCHASE_ORDER_SOURCE_QUANTITY_EXCEEDED',
     })
     await expectNoSourceView()
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: salesOrderId }, select: { fulfillmentStatus: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
+    for (const orderId of [addedCatalogId, addedCustomId]) {
+      const order = await queries.getById(orderId)
+      await mutations.review(context(), orderId, { expectedVersion: order.version })
+    }
     await expect(prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
       select: { fulfillmentStatus: true },
@@ -1091,7 +1150,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       },
     })
     expect(initialOrders.length).toBeGreaterThanOrEqual(3)
-    expect(initialOrders.every(order => order.fulfillmentStatus === 'ORDERED'))
+    expect(initialOrders.every(order => order.fulfillmentStatus === 'PREPARING'))
       .toBe(true)
 
     const concurrentTarget = initialOrders[0]
@@ -1142,7 +1201,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       .toEqual(expect.arrayContaining([{
       fromStatus: 'ORDERED',
       toStatus: 'PREPARING',
-      reason: '确认发货时系统自动完成备货状态',
+      reason: '采购订单审核通过，进入备货',
       changedByUserId: actorUserId,
     }, {
       fromStatus: 'PREPARING',
@@ -1159,9 +1218,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })
     expect(purchaseAuditEvents).toHaveLength(2)
     expect(purchaseAuditEvents.some(event => auditMetadataMatches(event.metadata, {
-      automatic: true,
+      action: 'REVIEW',
       fromStatus: 'ORDERED',
-      source: 'PURCHASE_ORDER',
       toStatus: 'PREPARING',
     }))).toBe(true)
     expect(purchaseAuditEvents.some(event => auditMetadataMatches(event.metadata, {

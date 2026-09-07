@@ -35043,6 +35043,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "PENDING_REVIEW",
                 "CONFIRMED",
                 "COMPLETED",
                 "CANCELLED"
@@ -35083,6 +35084,7 @@
             "schema": {
               "type": "string",
               "enum": [
+                "AWAITING_REVIEW",
                 "AWAITING_SHIPMENT",
                 "AWAITING_WAREHOUSE",
                 "AWAITING_PAYMENT"
@@ -40967,6 +40969,301 @@
         }
       }
     },
+    "/api/purchase-orders/{purchaseOrderId}/review": {
+      "post": {
+        "operationId": "purchase_orders_review",
+        "parameters": [
+          {
+            "name": "purchaseOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseOrderReviewRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "PURCHASE_ORDER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PURCHASE_ORDER_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
     "/api/purchase-orders/{purchaseOrderId}/order-status": {
       "patch": {
         "operationId": "purchase_orders_update_order_status",
@@ -41542,6 +41839,7 @@
               "codes": [
                 "PURCHASE_ORDER_CANCELLED",
                 "PURCHASE_ORDER_FULFILLMENT_TRANSITION_INVALID",
+                "PURCHASE_ORDER_STATUS_TRANSITION_INVALID",
                 "VALIDATION_FAILED"
               ]
             }
@@ -41836,6 +42134,7 @@
                 "PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID",
                 "PURCHASE_ORDER_PAYMENT_EXCEEDS_TOTAL",
                 "PURCHASE_ORDER_PAYMENT_METHOD_UNAVAILABLE",
+                "PURCHASE_ORDER_STATUS_TRANSITION_INVALID",
                 "VALIDATION_FAILED"
               ]
             }
@@ -52510,6 +52809,7 @@
           "orderStatus": {
             "type": "string",
             "enum": [
+              "PENDING_REVIEW",
               "CONFIRMED",
               "COMPLETED",
               "CANCELLED"
@@ -52666,9 +52966,11 @@
             "type": "string",
             "enum": [
               "ALL",
+              "PENDING_REVIEW",
               "CONFIRMED",
               "COMPLETED",
               "CANCELLED",
+              "AWAITING_REVIEW",
               "AWAITING_SHIPMENT",
               "AWAITING_WAREHOUSE",
               "AWAITING_PAYMENT"
@@ -53854,6 +54156,7 @@
           "orderStatus": {
             "type": "string",
             "enum": [
+              "PENDING_REVIEW",
               "CONFIRMED",
               "COMPLETED",
               "CANCELLED"
@@ -53974,6 +54277,24 @@
           "documents",
           "statusHistory",
           "amountRevisions"
+        ]
+      },
+      "PurchaseOrderReviewRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "expectedVersion"
         ]
       },
       "PurchaseOrderStatusRequestDto": {

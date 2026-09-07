@@ -146,7 +146,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
       where: {
         salesOrderId,
         purchaseType: 'SALES_LINKED',
-        orderStatus: { not: 'CANCELLED' },
+        orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
       },
       orderBy: [{ orderDate: 'asc' }, { orderNo: 'asc' }, { id: 'asc' }],
       select: CONTEXT_PURCHASE_ORDER_SELECT,

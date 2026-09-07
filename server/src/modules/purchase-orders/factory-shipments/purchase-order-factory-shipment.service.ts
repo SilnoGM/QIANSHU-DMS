@@ -181,7 +181,7 @@ export class PurchaseOrderFactoryShipmentService {
         input.reason,
         'PURCHASE_ORDER',
       )
-      const statusById = new Map(scope.map(item => [
+      const statusById = new Map(scope.filter(item => item.orderStatus === 'CONFIRMED').map(item => [
         item.id,
         item.id === order.id ? result.fulfillmentStatus : item.fulfillmentStatus,
       ]))
@@ -262,7 +262,9 @@ export class PurchaseOrderFactoryShipmentService {
           'SALES_ORDER',
         ))
       }
-      const statusById = new Map(orders.map(order => [order.id, order.fulfillmentStatus]))
+      const statusById = new Map(orders
+        .filter(order => order.orderStatus === 'CONFIRMED')
+        .map(order => [order.id, order.fulfillmentStatus]))
       for (const result of results) statusById.set(result.id, result.fulfillmentStatus)
       const changedCount = results.filter(result => result.changed).length
       const salesResult = await this.advanceSalesOrderWhenReady(
@@ -292,6 +294,10 @@ export class PurchaseOrderFactoryShipmentService {
   }
 
   private validateShipmentTargetState(order: FactoryShipmentPurchaseOrder): void {
+    // 先校验审核事实，再接受已发货幂等重放，避免异常履约快照绕过审核。
+    if (order.orderStatus !== 'CONFIRMED' && order.orderStatus !== 'COMPLETED') {
+      return shipmentNotAllowed()
+    }
     if (isShipmentSatisfied(order.fulfillmentStatus)) return
     if (order.orderStatus !== 'CONFIRMED' || !isPendingShipment(order.fulfillmentStatus)) {
       return shipmentNotAllowed()
@@ -304,7 +310,7 @@ export class PurchaseOrderFactoryShipmentService {
   ): void {
     const targetIds = new Set(targets.map(target => target.purchaseOrderId))
     const currentPendingIds = orders
-      .filter(order => isPendingShipment(order.fulfillmentStatus))
+      .filter(order => order.orderStatus === 'CONFIRMED' && isPendingShipment(order.fulfillmentStatus))
       .map(order => order.id)
     if (currentPendingIds.some(id => !targetIds.has(id))) return stateChanged()
     if (targets.some(target => !orders.some(order => order.id === target.purchaseOrderId))) {

@@ -65,7 +65,7 @@ test('订单凭证独立过滤，保留展开小图退场动画与权限控制�
   assert.match(source, /bg-primary shrink-0 h-5 w-1/u)
   assert.match(source, /v-if="!open" key="thumbnail"/u)
   assert.match(source, /prefers-reduced-motion: reduce/u)
-  assert.match(source, /v-if="canAttachDocument"/u)
+  assert.match(source, /v-if="canAttachDocument && detail\.orderStatus !== 'PENDING_REVIEW'"/u)
   assert.match(source, /DELIVERY_RECEIPT/u)
   assert.doesNotMatch(source, /voidPayment|downloadDocument|detachDocument/u)
 })

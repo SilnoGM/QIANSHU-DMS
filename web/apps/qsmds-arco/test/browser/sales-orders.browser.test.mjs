@@ -653,14 +653,73 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       .some(dialog => dialog.getClientRects().length > 0
         && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
 
-    // 使用正式状态接口按既有状态机推进到海运中，再从真实待办操作上传签收单。
+    // 必须建立真实的已审核采购与发货事实，不能直接跳过采购推进销售履约。
     // 浏览器场景运行在一次性隔离数据库中，不会修改开发环境的业务订单。
-    for (const toStatus of [
-      'PREPARING',
-      'LAND_TRANSIT',
-      'WAREHOUSE_ARRIVED',
-      'SEA_TRANSIT',
-    ]) {
+    const prematureTransition = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
+      'PATCH',
+      { toStatus: 'PREPARING', reason: 'Browser 未审核采购拦截验收' },
+    ))
+    assert.equal(prematureTransition.status, 422)
+    const markResolution = await page.evaluate(apiExpression(
+      '/api/purchase-orders/shipping-mark-resolution?productMode=CATALOG&supplierValue=BROWSER_SUPPLIER_EFFECTIVE',
+    ))
+    assert.equal(markResolution.status, 200)
+    assert.equal(typeof markResolution.body?.resolutionToken, 'string')
+    const sourceLine = detail.body.lines[0]
+    const purchaseInput = {
+      purchaseType: 'SALES_LINKED',
+      productMode: 'CATALOG',
+      salesOrderId: order.id,
+      supplierValue: 'BROWSER_SUPPLIER_EFFECTIVE',
+      orderDate: order.orderDate,
+      expectedShippingMarkResolution: markResolution.body.resolutionToken,
+      lines: [{
+        lineType: 'CATALOG',
+        productId: sourceLine.productId,
+        sourceSalesOrderLineId: sourceLine.id,
+        actualPurchaseUnitPriceAmount: '20',
+        quantity: sourceLine.quantity,
+      }],
+      purchaseTotalAmount: '40',
+      depositDueAmount: '0',
+      balanceDueAmount: '40',
+    }
+    const purchase = await page.evaluate(`(async () => {
+      const response = await fetch('/api/purchase-orders', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Qianshu-CSRF': '1',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify(${JSON.stringify(purchaseInput)}),
+      })
+      return { status: response.status, body: await response.json() }
+    })()`)
+    assert.equal(purchase.status, 201)
+    assert.equal(purchase.body?.orderStatus, 'PENDING_REVIEW')
+    const reviewedPurchase = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/review`,
+      'POST',
+      { expectedVersion: purchase.body.version, reason: 'Browser 签收流程采购审核' },
+    ))
+    assert.equal(reviewedPurchase.status, 200)
+    assert.equal(reviewedPurchase.body?.orderStatus, 'CONFIRMED')
+    const preparedSales = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}`,
+    ))
+    assert.equal(preparedSales.body?.fulfillmentStatus, 'PREPARING')
+    const shipment = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/factory-shipments`,
+      'POST',
+      { expectedVersion: reviewedPurchase.body.version, reason: 'Browser 签收流程采购发货' },
+    ))
+    // 既有发货 POST 使用 Nest 默认的 201；本次不变更该接口响应行为。
+    assert.equal(shipment.status, 201)
+    assert.equal(shipment.body?.salesOrder?.fulfillmentStatus, 'LAND_TRANSIT')
+    for (const toStatus of ['WAREHOUSE_ARRIVED', 'SEA_TRANSIT']) {
       const transition = await page.evaluate(apiExpression(
         `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
         'PATCH',

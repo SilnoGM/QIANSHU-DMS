@@ -894,7 +894,7 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
     }
     submission.value = resolvePurchaseOrderSubmissionSuccess(state, response.data)
     submitConfirmVisible.value = false
-    toast.success(`采购订单 ${response.data.orderNo} 创建成功`)
+    toast.success(`采购订单 ${response.data.orderNo} 创建成功，已进入采购审核中`)
     void router.push({ name: 'qsOperationsPurchaseOrders' })
   }
   catch (error) {

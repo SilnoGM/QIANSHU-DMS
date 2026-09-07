@@ -60,6 +60,7 @@ const MANAGEMENT_PERMISSION_CODES = [
   'purchase-orders:document',
   'purchase-orders:payment',
   'purchase-orders:read',
+  'purchase-orders:review',
   'purchase-orders:update',
   'purchase-shipping-marks:read',
   'purchase-shipping-marks:update',

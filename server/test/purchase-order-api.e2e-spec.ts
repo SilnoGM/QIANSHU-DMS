@@ -7,6 +7,7 @@ import request from 'supertest'
 
 import { configureApplication } from '../src/app.setup'
 import { PrivateNoStoreInterceptor } from '../src/infrastructure/http/private-no-store.interceptor'
+import { ApiException } from '../src/infrastructure/http/api.exception'
 import type { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { AccessControlService } from '../src/modules/access-control/access-control.service'
 import { attachRequestAuthContext } from '../src/modules/auth/auth-context'
@@ -46,6 +47,8 @@ const list = jest.fn().mockResolvedValue({ items: [], page: 2, pageSize: 10, tot
 const getById = jest.fn().mockResolvedValue({ id: ORDER_ID })
 const create = jest.fn<Promise<string>, [unknown, unknown]>()
   .mockResolvedValue(ORDER_ID)
+const review = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
+  .mockResolvedValue({ id: ORDER_ID, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
 const attach = jest.fn<Promise<unknown>, [unknown, unknown, unknown]>()
   .mockResolvedValue({ id: ORDER_ID, amountRevisions: [] })
 const salesOrderLines = jest.fn().mockResolvedValue({
@@ -88,6 +91,7 @@ const readShippingMarkResolution = jest.fn().mockResolvedValue(resolutionRespons
   }, {
     provide: PurchaseOrderMutationService,
     useValue: {
+      review,
       updateOrderStatus: jest.fn(),
       updateFulfillmentStatus: jest.fn(),
       recordPayment: jest.fn(),
@@ -161,6 +165,42 @@ describe('PurchaseOrder HTTP API contract', () => {
     if (!application) throw new Error('Purchase order test app is unavailable')
     return application
   }
+
+  it('reviews using the explicit version and returns persisted detail with 200', async () => {
+    review.mockClear()
+    const response = await request(requireApplication().getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/review`)
+      .send({ expectedVersion: 1, reason: '核对通过' }).expect(200)
+    expect(responseBody(response)).toEqual({
+      id: ORDER_ID, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2,
+    })
+    expect(response.headers['cache-control']).toContain('no-store')
+    expect(response.headers['x-request-id']).toBeTruthy()
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }),
+      ORDER_ID, { expectedVersion: 1, reason: '核对通过' })
+  })
+
+  it.each([
+    {}, { expectedVersion: 0 }, { expectedVersion: 1.2 }, { expectedVersion: '1' },
+    { expectedVersion: null }, { expectedVersion: Number.MAX_SAFE_INTEGER + 1 },
+    { expectedVersion: 1, reason: null }, { expectedVersion: 1, reason: '' },
+    { expectedVersion: 1, reason: 'x'.repeat(501) },
+    { expectedVersion: 1, toStatus: 'CONFIRMED' },
+  ])('rejects invalid review input %j before invoking the service', async body => {
+    review.mockClear()
+    const response = await request(requireApplication().getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/review`).send(body).expect(422)
+    expect(responseBody(response)).toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(review).not.toHaveBeenCalled()
+  })
+
+  it('maps review state conflicts to 409 and accepts an omitted reason', async () => {
+    review.mockRejectedValueOnce(new ApiException(409, 'PURCHASE_ORDER_STATE_CHANGED', '采购订单已变化'))
+    const response = await request(requireApplication().getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/review`).send({ expectedVersion: 1 }).expect(409)
+    expect(responseBody(response)).toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
+    expect(review).toHaveBeenLastCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { expectedVersion: 1 })
+  })
 
   it('transforms the explicit list view and pagination query', async () => {
     const response = await request(requireApplication().getHttpServer())
@@ -372,10 +412,42 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     roleRows.mockClear()
     session.mockClear()
     create.mockClear()
+    review.mockClear()
     readShippingMarkResolution.mockClear()
   })
 
   afterAll(async () => { await application?.close() })
+
+  it('requires the independent review permission even when all other purchase capabilities are granted', async () => {
+    grantedPermissions = ['purchase-orders:read', 'purchase-orders:create', 'purchase-orders:create-stock',
+      'purchase-orders:update', 'purchase-orders:payment', 'purchase-orders:document']
+    const response = await request(application.getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/review`).set(mutationHeaders).set('Cookie', cookie)
+      .send({ expectedVersion: 1 }).expect(403)
+    expect(responseBody(response)).toMatchObject({ code: 'FORBIDDEN' })
+    expect(review).not.toHaveBeenCalled()
+  })
+
+  it('permits an explicitly configured reviewer and applies revocation on the next request', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    const submit = () => request(application.getHttpServer())
+      .post(`/api/purchase-orders/${ORDER_ID}/review`).set(mutationHeaders).set('Cookie', cookie)
+      .send({ expectedVersion: 1 })
+    await submit().expect(200)
+    grantedPermissions = ['purchase-orders:update']
+    await submit().expect(403)
+    expect(review).toHaveBeenCalledTimes(1)
+    expect(roleRows).toHaveBeenCalledTimes(2)
+  })
+
+  it('enforces session and CSRF before review', async () => {
+    grantedPermissions = ['purchase-orders:review']
+    await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`)
+      .set(mutationHeaders).send({ expectedVersion: 1 }).expect(401)
+    await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`)
+      .set('Cookie', cookie).send({ expectedVersion: 1 }).expect(403)
+    expect(review).not.toHaveBeenCalled()
+  })
 
   it('allows an ordinary creation operator to resolve and reach sales-linked creation without management grants', async () => {
     const response = await request(application.getHttpServer()).get('/api/purchase-orders/shipping-mark-resolution')

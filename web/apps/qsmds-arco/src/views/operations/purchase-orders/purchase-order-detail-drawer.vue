@@ -41,7 +41,7 @@ const drawerVisible = computed({
   set: value => emit('update:modelValue', value),
 })
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
-const canAttachDocument = computed(() => auth('purchase-orders:document'))
+const canAttachDocument = computed(() => auth('purchase-orders:document') && detail.value !== null && detail.value.orderStatus !== 'PENDING_REVIEW')
 function cancelDetailRequest(): void {
   requestVersion += 1
   detailAbortController?.abort()

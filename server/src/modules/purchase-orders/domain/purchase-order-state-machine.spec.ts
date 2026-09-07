@@ -6,6 +6,23 @@ import {
 } from './purchase-order-state-machine'
 
 describe('purchase order state machine', () => {
+  it('preserves pending review and reserves approval for the dedicated review operation', () => {
+    expect(derivePurchaseOrderStatus({
+      orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID',
+    })).toBe('PENDING_REVIEW')
+    expect(() => assertPurchaseOrderStatusTransition('PENDING_REVIEW', 'CANCELLED', {
+      activePaidAmount: '0',
+    })).not.toThrow()
+    expect(() => assertPurchaseOrderStatusTransition('PENDING_REVIEW', 'CONFIRMED', {
+      activePaidAmount: '0',
+    })).toThrow(expect.objectContaining({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' }))
+    expect(() => assertPurchaseOrderFulfillmentTransition('ORDERED', 'PREPARING', {
+      orderStatus: 'PENDING_REVIEW',
+    })).toThrow(expect.objectContaining({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' }))
+    expect(isPendingPurchaseOrder({
+      orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED', paymentStatus: 'UNPAID',
+    })).toBe(true)
+  })
   it('allows CONFIRMED -> CANCELLED only without active payments', () => {
     expect(() => assertPurchaseOrderStatusTransition('CONFIRMED', 'CANCELLED', {
       activePaidAmount: '0',

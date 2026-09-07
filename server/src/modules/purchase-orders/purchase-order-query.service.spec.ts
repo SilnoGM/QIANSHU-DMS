@@ -401,10 +401,12 @@ describe('PurchaseOrderQueryService', () => {
       select?: unknown
     } | undefined)
     expect(where?.where).toMatchObject({
-      orderStatus: 'CONFIRMED',
       AND: [{ OR: [
-        { fulfillmentStatus: { not: 'SIGNED' } },
-        { paymentStatus: { not: 'PAID' } },
+        { orderStatus: 'PENDING_REVIEW' },
+        { orderStatus: 'CONFIRMED', OR: [
+          { fulfillmentStatus: { not: 'SIGNED' } },
+          { paymentStatus: { not: 'PAID' } },
+        ] },
       ] }],
       OR: [
         { orderNo: { contains: 'PO', mode: 'insensitive' } },
@@ -458,9 +460,10 @@ describe('PurchaseOrderQueryService', () => {
   })
 
   it.each([
-    ['AWAITING_SHIPMENT', { fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] } }],
-    ['AWAITING_WAREHOUSE', { fulfillmentStatus: 'SHIPPED' }],
-    ['AWAITING_PAYMENT', { paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } }],
+    ['AWAITING_REVIEW', { orderStatus: 'PENDING_REVIEW' }],
+    ['AWAITING_SHIPMENT', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] } }],
+    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED' }],
+    ['AWAITING_PAYMENT', { orderStatus: 'CONFIRMED', paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } }],
   ] as const)('builds the %s pending task predicate', async (pendingTask, taskClause) => {
     const fixture = setup()
 
@@ -470,8 +473,18 @@ describe('PurchaseOrderQueryService', () => {
       where?: { orderStatus?: unknown, AND?: unknown[] }
     }
     expect(query.where).toMatchObject({
-      orderStatus: 'CONFIRMED',
       AND: [taskClause],
+    })
+  })
+
+  it('keeps an explicit status filter intersected with the review task', async () => {
+    const fixture = setup()
+    await fixture.service.list({
+      view: 'pending', pendingTask: 'AWAITING_REVIEW', orderStatus: 'CANCELLED',
+    })
+    const query = fixture.prisma.purchaseOrder.count.mock.calls[0]?.[0] as { where: unknown }
+    expect(query.where).toMatchObject({
+      orderStatus: 'CANCELLED', AND: [{ orderStatus: 'PENDING_REVIEW' }],
     })
   })
 
@@ -574,6 +587,7 @@ describe('PurchaseOrderQueryService', () => {
 describe('PurchaseOrderQueryService status counts', () => {
   function createStatusCountsFixture() {
     const purchaseOrder = {
+      count: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(3),
       groupBy: jest.fn<Promise<unknown[]>, [unknown]>(),
     }
     const transaction = jest.fn(async (
@@ -596,6 +610,9 @@ describe('PurchaseOrderQueryService status counts', () => {
   it('counts all order statuses under the shared base filters and fills missing groups with zero', async () => {
     const fixture = createStatusCountsFixture()
     fixture.purchaseOrder.groupBy.mockResolvedValueOnce([{
+      orderStatus: 'PENDING_REVIEW',
+      _count: { _all: 3 },
+    }, {
       orderStatus: 'CONFIRMED',
       _count: { _all: 5 },
     }, {
@@ -615,7 +632,8 @@ describe('PurchaseOrderQueryService status counts', () => {
     })).resolves.toEqual({
       view: 'all',
       items: [
-        { value: 'ALL', count: 7 },
+        { value: 'ALL', count: 10 },
+        { value: 'PENDING_REVIEW', count: 3 },
         { value: 'CONFIRMED', count: 5 },
         { value: 'COMPLETED', count: 2 },
         { value: 'CANCELLED', count: 0 },
@@ -668,6 +686,7 @@ describe('PurchaseOrderQueryService status counts', () => {
     await expect(fixture.service.statusCounts({ view: 'pending' })).resolves.toEqual({
       view: 'pending',
       items: [
+        { value: 'AWAITING_REVIEW', count: 3 },
         { value: 'AWAITING_SHIPMENT', count: 7 },
         { value: 'AWAITING_WAREHOUSE', count: 2 },
         { value: 'AWAITING_PAYMENT', count: 6 },
@@ -695,6 +714,11 @@ describe('PurchaseOrderQueryService status counts', () => {
       by: ['paymentStatus'],
       where: pendingBaseWhere,
       _count: { _all: true },
+    })
+    expect(fixture.purchaseOrder.count).toHaveBeenCalledWith({
+      where: {
+        AND: [pendingBaseWhere.AND[0], { orderStatus: 'PENDING_REVIEW' }],
+      },
     })
     expect(fixture.transaction).toHaveBeenCalledWith(
       expect.any(Function),

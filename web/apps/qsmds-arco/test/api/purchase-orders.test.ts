@@ -179,6 +179,7 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
   } satisfies PurchaseOrderPaymentRequestDto
 
   await api.create(request, '3e076569-95f2-4fce-8341-70bad4013da6', controller.signal)
+  await api.review('purchase/id', { expectedVersion: 3, reason: '核对无误' }, controller.signal)
   await api.updateOrderStatus('purchase/id', { toStatus: 'CANCELLED', reason: '终止采购' }, controller.signal)
   await api.updateFulfillmentStatus('purchase/id', { toStatus: 'ORDERED' }, controller.signal)
   await api.factoryShipment('purchase/id', {
@@ -191,6 +192,7 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
 
   assert.deepEqual(calls.map(call => [call.method, call.url]), [
     ['post', 'purchase-orders'],
+    ['post', 'purchase-orders/purchase%2Fid/review'],
     ['patch', 'purchase-orders/purchase%2Fid/order-status'],
     ['patch', 'purchase-orders/purchase%2Fid/fulfillment-status'],
     ['post', 'purchase-orders/purchase%2Fid/factory-shipments'],
@@ -204,6 +206,7 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
     retry: false,
     signal: controller.signal,
   })
+  assert.deepEqual(calls[1]?.data, { expectedVersion: 3, reason: '核对无误' })
   for (const call of calls.slice(1)) {
     assert.deepEqual(call.config, {
       errorPresentation: 'local',

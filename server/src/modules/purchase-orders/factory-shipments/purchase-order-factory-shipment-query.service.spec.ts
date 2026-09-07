@@ -117,6 +117,13 @@ describe('PurchaseOrderFactoryShipmentQueryService', () => {
     })
     expect(context.purchaseOrders[0]?.lineSummary.previews[0]?.mainImage?.contentUrl)
       .toContain('/lines/line-a/main-image/')
+    expect(fixture.prisma.purchaseOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {
+        salesOrderId: SALES_ORDER_ID,
+        purchaseType: 'SALES_LINKED',
+        orderStatus: { in: ['CONFIRMED', 'COMPLETED'] },
+      } }),
+    )
   })
 
   it('rejects a sales order outside CONFIRMED and PREPARING', async () => {

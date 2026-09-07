@@ -541,32 +541,33 @@ export class PurchaseOrderQueryService {
       PurchaseOrderPendingTask,
       Prisma.PurchaseOrderWhereInput
     >> = {
+      AWAITING_REVIEW: { orderStatus: 'PENDING_REVIEW' },
       AWAITING_PAYMENT: {
+        orderStatus: 'CONFIRMED',
         paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] },
       },
       AWAITING_SHIPMENT: {
+        orderStatus: 'CONFIRMED',
         fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] },
       },
-      AWAITING_WAREHOUSE: { fulfillmentStatus: 'SHIPPED' },
+      AWAITING_WAREHOUSE: { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED' },
     }
     const pendingClause: Prisma.PurchaseOrderWhereInput | undefined =
       input.view !== 'pending'
         ? undefined
         : input.pendingTask === undefined
           ? { OR: [
-              { fulfillmentStatus: { not: 'SIGNED' } },
-              { paymentStatus: { not: 'PAID' } },
+              { orderStatus: 'PENDING_REVIEW' },
+              { orderStatus: 'CONFIRMED', OR: [
+                { fulfillmentStatus: { not: 'SIGNED' } },
+                { paymentStatus: { not: 'PAID' } },
+              ] },
             ] }
           : taskClauseByType[input.pendingTask]
-    const explicitOrderStatus = input.view === 'pending' && input.orderStatus !== undefined
-      ? { orderStatus: input.orderStatus }
-      : undefined
     const where: Prisma.PurchaseOrderWhereInput = {
       ...buildPurchaseOrderBaseWhere(input),
-      orderStatus: input.view === 'pending'
-        ? 'CONFIRMED'
-        : input.orderStatus,
-      AND: [pendingClause, explicitOrderStatus].filter(
+      orderStatus: input.orderStatus,
+      AND: [pendingClause].filter(
         (value): value is Prisma.PurchaseOrderWhereInput => value !== undefined,
       ),
     }
@@ -647,7 +648,7 @@ export class PurchaseOrderQueryService {
     const baseWhere = buildPurchaseOrderBaseWhere(input)
 
     if (input.view === 'all') {
-      const statuses = ['CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
+      const statuses = ['PENDING_REVIEW', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] as const
       const rows = await this.prisma.purchaseOrder.groupBy({
         by: ['orderStatus'] as const,
         where: baseWhere,
@@ -670,8 +671,12 @@ export class PurchaseOrderQueryService {
     const pendingBaseWhere: Prisma.PurchaseOrderWhereInput = {
       AND: [baseWhere, { orderStatus: 'CONFIRMED' }],
     }
-    const { fulfillmentRows, paymentRows } = await this.prisma.$transaction(
+    const { reviewCount, fulfillmentRows, paymentRows } = await this.prisma.$transaction(
       async (transaction) => {
+        // 审核中仍属待办，但必须与可发货、可付款的已确认订单分开统计。
+        const reviewCount = await transaction.purchaseOrder.count({
+          where: { AND: [baseWhere, { orderStatus: 'PENDING_REVIEW' }] },
+        })
         const fulfillmentRows = await transaction.purchaseOrder.groupBy({
           by: ['fulfillmentStatus'],
           where: pendingBaseWhere,
@@ -682,7 +687,7 @@ export class PurchaseOrderQueryService {
           where: pendingBaseWhere,
           _count: { _all: true },
         })
-        return { fulfillmentRows, paymentRows }
+        return { reviewCount, fulfillmentRows, paymentRows }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     )
@@ -706,6 +711,9 @@ export class PurchaseOrderQueryService {
     return {
       view: 'pending',
       items: [{
+        value: 'AWAITING_REVIEW',
+        count: reviewCount,
+      }, {
         value: 'AWAITING_SHIPMENT',
         count: (fulfillmentCounts.get('ORDERED') ?? 0)
           + (fulfillmentCounts.get('PREPARING') ?? 0),

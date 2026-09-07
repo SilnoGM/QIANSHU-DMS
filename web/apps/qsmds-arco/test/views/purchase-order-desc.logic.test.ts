@@ -142,7 +142,11 @@ test('采购创建草稿映射为独立详情模型并保留产品主图', () =>
     customerName: '客户甲',
     salesOrderNo: 'SO/20260827-00008',
   })
-  assert.deepEqual(result.statuses, [])
+  assert.deepEqual(result.statuses, [
+    { key: 'ORDER', label: '订单状态', tone: 'warning', value: '采购审核中' },
+    { key: 'FULFILLMENT', label: '履约状态', tone: 'info', value: '已下单' },
+    { key: 'PAYMENT', label: '付款状态', tone: 'danger', value: '未付款' },
+  ])
   assert.equal(result.orderNo, null)
   assert.equal(result.purchaseTypeLabel, '销售关联采购')
 })
@@ -174,6 +178,38 @@ test('正式采购详情映射状态、付款进度和采购语义产品字段',
   ])
   assert.equal(result.createdAt, '2026-08-28T01:00:00.000Z')
   assert.equal(result.updatedAt, '2026-08-28T02:00:00.000Z')
+})
+
+test('采购创建预览按零实付与当前总价派生付款状态，空值和非法金额不当作零', () => {
+  for (const [purchaseTotalAmount, expectedValue, expectedTone] of [
+    ['0', '已付清', 'success'],
+    ['0.00', '已付清', 'success'],
+    ['0.0000', '已付清', 'success'],
+    ['20.00', '未付款', 'danger'],
+    ['0.0001', '未付款', 'danger'],
+    [null, '未付款', 'danger'],
+    ['invalid', '未付款', 'danger'],
+  ] as const) {
+    const result = mapPurchaseOrderCreateToDesc({
+      balanceDueAmount: purchaseTotalAmount,
+      depositDueAmount: '0.00',
+      issuerName: '采购员',
+      lines: [],
+      orderDate: '2026-09-07',
+      purchaseTotalAmount,
+      purchaseType: 'STOCK',
+      remark: '',
+      salesOrder: null,
+      shippingMarkText: '',
+      supplierLabel: '供应商',
+    })
+    assert.deepEqual(result.statuses.find(status => status.key === 'PAYMENT'), {
+      key: 'PAYMENT',
+      label: '付款状态',
+      tone: expectedTone,
+      value: expectedValue,
+    }, `总价 ${purchaseTotalAmount}`)
+  }
 })
 
 test('已完成采购详情使用成功语义展示订单状态', () => {

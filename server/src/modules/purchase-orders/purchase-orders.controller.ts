@@ -47,6 +47,7 @@ import {
   PurchaseOrderFulfillmentStatusRequestDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
+  PurchaseOrderReviewRequestDto,
   PurchaseOrderStatusRequestDto,
 } from './dto/purchase-order-mutation.dto'
 import {
@@ -506,6 +507,29 @@ export class PurchaseOrdersController {
     return this.queries.getById(params.purchaseOrderId)
   }
 
+  @Post(':purchaseOrderId/review')
+  @RequirePermissions('purchase-orders:review')
+  @HttpCode(HttpStatus.OK)
+  @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_review',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  review(
+    @Param() params: PurchaseOrderIdParamDto,
+    @Body() dto: PurchaseOrderReviewRequestDto,
+    @Req() request: object,
+  ): Promise<PurchaseOrderDetail> {
+    return this.mutations.review(mutationContext(request), params.purchaseOrderId, dto)
+  }
+
   @Patch(':purchaseOrderId/order-status')
   @RequirePermissions('purchase-orders:update')
   @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderDetailDto })
@@ -546,6 +570,7 @@ export class PurchaseOrdersController {
       { status: 422, codes: [
         'PURCHASE_ORDER_CANCELLED',
         'PURCHASE_ORDER_FULFILLMENT_TRANSITION_INVALID',
+        'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
         'VALIDATION_FAILED',
       ] },
     ],
@@ -577,6 +602,7 @@ export class PurchaseOrdersController {
         'PURCHASE_ORDER_PAYMENT_AMOUNT_INVALID',
         'PURCHASE_ORDER_PAYMENT_EXCEEDS_TOTAL',
         'PURCHASE_ORDER_PAYMENT_METHOD_UNAVAILABLE',
+        'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
         'VALIDATION_FAILED',
       ] },
     ],

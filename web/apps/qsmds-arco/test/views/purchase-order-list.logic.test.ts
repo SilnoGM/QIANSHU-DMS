@@ -165,11 +165,13 @@ test('履约状态只按既定顺序推进，取消和签收订单没有下一�
 test('全部与待办采购使用稳定状态顺序并规范化 URL', () => {
   assert.deepEqual(getPurchaseOrderStatusItems('all'), [
     { label: '全部采购', value: 'ALL' },
+    { label: '采购审核中', value: 'PENDING_REVIEW' },
     { label: '已确认', value: 'CONFIRMED' },
     { label: '已完成', value: 'COMPLETED' },
     { label: '已取消', value: 'CANCELLED' },
   ])
   assert.deepEqual(getPurchaseOrderStatusItems('pending'), [
+    { label: '采购审核中', value: 'AWAITING_REVIEW' },
     { label: '待发货', value: 'AWAITING_SHIPMENT' },
     { label: '待入仓', value: 'AWAITING_WAREHOUSE' },
     { label: '待付款', value: 'AWAITING_PAYMENT' },
@@ -188,26 +190,60 @@ test('全部与待办采购使用稳定状态顺序并规范化 URL', () => {
 
 test('待办采购操作严格只返回当前任务对应的唯一处理动作', () => {
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_SHIPMENT', {
+    orderStatus: 'CONFIRMED',
     paymentStatus: 'UNPAID',
   }).map(item => item.label), ['发货'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_SHIPMENT', {
+    orderStatus: 'CONFIRMED',
     paymentStatus: 'PAID',
   }).map(item => item.label), ['发货'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_WAREHOUSE', {
+    orderStatus: 'CONFIRMED',
     paymentStatus: 'PARTIALLY_PAID',
   }).map(item => item.label), ['到仓'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
+    orderStatus: 'CONFIRMED',
     paymentStatus: 'PARTIALLY_PAID',
   }).map(item => item.label), ['付款'])
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_PAYMENT', {
+    orderStatus: 'CONFIRMED',
     paymentStatus: 'PAID',
   }), [])
 })
 
-test('全部采购仅允许已确认订单从操作列进入取消流程', () => {
+test('全部采购仅允许审核中与已确认订单从操作列进入取消流程', () => {
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'PENDING_REVIEW' }), true)
   assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED' }), true)
   assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'COMPLETED' }), false)
   assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CANCELLED' }), false)
+})
+
+test('采购审核中的标签、独立查询和待办动作不允许提前履约', () => {
+  assert.equal(orderStatusLabel('PENDING_REVIEW'), '采购审核中')
+  assert.equal(normalizePurchaseOrderStatusSelection('pending', 'AWAITING_REVIEW'), 'AWAITING_REVIEW')
+  assert.equal(normalizePurchaseOrderStatusSelection('all', 'PENDING_REVIEW'), 'PENDING_REVIEW')
+  const querySource = { dateRange: {}, filters: {}, page: 1, pageSize: 20, searchKeyword: '' }
+  assert.deepEqual(buildPurchaseOrderListQuery({
+    ...querySource,
+    viewMode: 'pending',
+    statusSelection: 'AWAITING_REVIEW',
+  }), { view: 'pending', pendingTask: 'AWAITING_REVIEW', page: 1, pageSize: 20 })
+  assert.deepEqual(buildPurchaseOrderListQuery({
+    ...querySource,
+    viewMode: 'all',
+    statusSelection: 'PENDING_REVIEW',
+  }), { view: 'all', orderStatus: 'PENDING_REVIEW', page: 1, pageSize: 20 })
+  assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_REVIEW', {
+    orderStatus: 'PENDING_REVIEW',
+    paymentStatus: 'UNPAID',
+  }).map(item => item.key), ['REVIEW'])
+  for (const task of ['AWAITING_PAYMENT', 'AWAITING_SHIPMENT', 'AWAITING_WAREHOUSE'] as const) {
+    assert.deepEqual(resolvePurchaseOrderPendingActions(task, {
+      orderStatus: 'PENDING_REVIEW',
+      paymentStatus: 'UNPAID',
+    }), [])
+  }
+  assert.equal(nextPurchaseOrderFulfillmentStatus({ orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED' }), null)
 })
 
 test('采购发货成功提示完全依据服务端结果区分安全重试和销售联动', () => {

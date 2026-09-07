@@ -23,7 +23,7 @@ watch(() => props.detail.id, () => {
         {{ t('purchaseOrderDrawer.documents') }}
         <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ documents.length }}</span>
       </h3>
-      <FaButton v-if="canAttachDocument" type="button" size="sm" variant="outline" :disabled="busy" @click="emit('attachDocument')">
+      <FaButton v-if="canAttachDocument && detail.orderStatus !== 'PENDING_REVIEW'" type="button" size="sm" variant="outline" :disabled="busy" @click="emit('attachDocument')">
         <FaIcon name="i-lucide:plus" aria-hidden="true" />{{ t('purchaseOrderDrawer.attachDocument') }}
       </FaButton>
     </div>

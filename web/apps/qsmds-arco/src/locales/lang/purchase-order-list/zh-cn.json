@@ -1,5 +1,22 @@
 {
   "purchaseOrderList": {
+    "review": {
+      "title": "审核采购订单？",
+      "description": "请核对采购信息。确认审核后，订单将进入已确认和备货中状态。",
+      "orderNo": "采购订单号",
+      "supplier": "供应商",
+      "amount": "采购金额",
+      "products": "产品数量",
+      "quantity": "{lines} 项产品，共 {quantity} 件",
+      "reason": "审核说明（可选）",
+      "cancel": "返回",
+      "confirm": "确认审核",
+      "reload": "重新加载",
+      "failed": "审核尚未完成",
+      "statusChanged": "订单状态已变化，已刷新列表，请关闭弹窗后查看最新详情。",
+      "reconfirm": "已重新加载最新订单，请再次核对后确认审核。",
+      "success": "采购订单审核成功，已进入备货中"
+    },
     "records": {
       "payments": "实际付款记录",
       "documents": "订单凭证",

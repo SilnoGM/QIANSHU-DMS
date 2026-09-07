@@ -200,6 +200,75 @@ export class PurchaseOrderMutationService {
     })
   }
 
+  async review(
+    context: PurchaseOrderMutationContext,
+    rawPurchaseOrderId: unknown,
+    input: unknown,
+  ): Promise<PurchaseOrderDetail> {
+    const trusted = validateContext(context)
+    const purchaseOrderId = requireUuid(rawPurchaseOrderId, 'purchaseOrderId')
+    const body = requireRecord(input)
+    rejectUnknownKeys(body, ['expectedVersion', 'reason'])
+    const expectedVersion = body.expectedVersion
+    if (typeof expectedVersion !== 'number' || !Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+      return purchaseOrderValidationFailure('expectedVersion')
+    }
+    const reason = body.reason === undefined
+      ? '采购订单审核通过，进入备货'
+      : requireText(body.reason, 'reason', 500)
+    await this.prisma.$transaction(async transaction => {
+      await applyTransactionTimeouts(transaction)
+      // 与取消保持“销售来源行 -> 采购单 -> 销售单”锁序。采购行锁内重读版本和
+      // 审核态，确保两个审核请求只能有一个写状态、历史并推进销售覆盖。
+      await this.lockSourceSalesLines(transaction, purchaseOrderId)
+      const order = await this.lockOrder(transaction, purchaseOrderId)
+      if (order.version !== expectedVersion || order.orderStatus !== 'PENDING_REVIEW'
+        || order.fulfillmentStatus !== 'ORDERED') {
+        throw new ApiException(
+          HttpStatus.CONFLICT,
+          'PURCHASE_ORDER_STATE_CHANGED',
+          '采购订单已变化或已完成审核，请刷新后重试',
+        )
+      }
+      await transaction.purchaseOrder.update({
+        where: { id: purchaseOrderId },
+        data: {
+          orderStatus: 'CONFIRMED',
+          fulfillmentStatus: 'PREPARING',
+          version: { increment: 1 },
+        },
+      })
+      for (const transition of [
+        { dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', eventType: AuditEventType.PURCHASE_ORDER_ORDER_STATUS_CHANGED },
+        { dimension: 'FULFILLMENT', fromStatus: 'ORDERED', toStatus: 'PREPARING', eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED },
+      ] as const) {
+        await transaction.purchaseOrderStatusHistory.create({ data: {
+          purchaseOrderId,
+          dimension: transition.dimension,
+          fromStatus: transition.fromStatus,
+          toStatus: transition.toStatus,
+          reason,
+          changedByUserId: trusted.actorUserId,
+        } })
+        await this.recordAudit(transaction, trusted, {
+          eventType: transition.eventType,
+          targetId: purchaseOrderId,
+          metadata: { action: 'REVIEW', fromStatus: transition.fromStatus, toStatus: transition.toStatus },
+        })
+      }
+      if (order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
+        await this.salesOrderCoverage.advanceWhenFullyCovered(transaction, {
+          actorUserId: trusted.actorUserId,
+          purchaseOrderId,
+          purchaseOrderNo: order.orderNo,
+          requestId: trusted.requestId,
+          salesOrderId: order.salesOrderId,
+        })
+      }
+    })
+    return this.query.getById(purchaseOrderId)
+  }
+
   async updateOrderStatus(
     context: PurchaseOrderMutationContext,
     rawPurchaseOrderId: unknown,
@@ -362,6 +431,12 @@ export class PurchaseOrderMutationService {
       await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
         const order = await this.lockOrder(transaction, purchaseOrderId)
+        if (order.orderStatus === 'PENDING_REVIEW') {
+          return purchaseOrderRuleFailure(
+            'PURCHASE_ORDER_STATUS_TRANSITION_INVALID',
+            '采购订单审核通过后才能记录付款',
+          )
+        }
         if (order.orderStatus === 'CANCELLED') {
           return purchaseOrderRuleFailure(
             'PURCHASE_ORDER_CANCELLED',

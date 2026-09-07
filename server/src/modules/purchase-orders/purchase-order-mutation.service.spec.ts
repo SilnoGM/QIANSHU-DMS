@@ -1,4 +1,5 @@
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
+import { ApiException } from '../../infrastructure/http/api.exception'
 import type { AuditService } from '../audit/audit.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../media/media-asset.service'
@@ -90,6 +91,8 @@ function setup() {
     getById: jest.fn<Promise<typeof detail>, [string]>().mockResolvedValue(detail),
   }
   const coverage = {
+    advanceWhenFullyCovered:
+      jest.fn<Promise<void>, [unknown, unknown]>().mockResolvedValue(undefined),
     recalculateAfterPurchaseCancellation:
       jest.fn<Promise<void>, [unknown, unknown]>().mockResolvedValue(undefined),
   }
@@ -109,6 +112,7 @@ function setup() {
     dictionaryLookup,
     media,
     order,
+    query,
     service,
     transaction,
   }
@@ -117,6 +121,111 @@ function setup() {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderMutationService', () => {
+  it('propagates sales coverage failure from the review transaction without returning success', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+    fixture.coverage.advanceWhenFullyCovered.mockRejectedValue(
+      new ApiException(409, 'PURCHASE_ORDER_STATE_CHANGED', '采购订单依赖状态已变化，请重试'),
+    )
+    await expect(fixture.service.review(context, ORDER_ID, { expectedVersion: 1 }))
+      .rejects.toMatchObject({ status: 409, code: 'PURCHASE_ORDER_STATE_CHANGED' })
+    expect(fixture.query.getById).not.toHaveBeenCalled()
+  })
+  it('reviews a pending order once, records both dimensions and advances sales after the update', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+    fixture.transaction.purchaseOrder.findUnique
+      .mockResolvedValueOnce({ ...fixture.order })
+      .mockResolvedValue({ ...fixture.order, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2 })
+
+    await expect(fixture.service.review(context, ORDER_ID, {
+      expectedVersion: 1, reason: ' 核对通过 ',
+    })).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: { increment: 1 } },
+    })
+    expect(fixture.transaction.purchaseOrderStatusHistory.create.mock.calls).toEqual([
+      [{ data: { purchaseOrderId: ORDER_ID, dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', reason: '核对通过', changedByUserId: ACTOR_ID } }],
+      [{ data: { purchaseOrderId: ORDER_ID, dimension: 'FULFILLMENT', fromStatus: 'ORDERED', toStatus: 'PREPARING', reason: '核对通过', changedByUserId: ACTOR_ID } }],
+    ])
+    expect(fixture.audit.record).toHaveBeenCalledTimes(2)
+    expect(fixture.audit.record.mock.calls).toEqual(expect.arrayContaining([
+      [fixture.transaction, expect.objectContaining({ eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED', metadata: { action: 'REVIEW', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED' } })],
+      [fixture.transaction, expect.objectContaining({ eventType: 'PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED', metadata: { action: 'REVIEW', fromStatus: 'ORDERED', toStatus: 'PREPARING' } })],
+    ]))
+    expect(fixture.coverage.advanceWhenFullyCovered).toHaveBeenCalledWith(fixture.transaction, {
+      actorUserId: ACTOR_ID, purchaseOrderId: ORDER_ID, purchaseOrderNo: fixture.order.orderNo,
+      requestId: context.requestId, salesOrderId: fixture.order.salesOrderId,
+    })
+    expect(fixture.transaction.purchaseOrder.update.mock.invocationCallOrder[0]).toBeLessThan(
+      fixture.coverage.advanceWhenFullyCovered.mock.invocationCallOrder[0] ?? 0,
+    )
+    await expect(fixture.service.review(context, ORDER_ID, { expectedVersion: 1 }))
+      .rejects.toMatchObject({ status: 409, code: 'PURCHASE_ORDER_STATE_CHANGED' })
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction.purchaseOrderStatusHistory.create).toHaveBeenCalledTimes(2)
+    expect(fixture.coverage.advanceWhenFullyCovered).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['PENDING_REVIEW', 'ORDERED', 2],
+    ['PENDING_REVIEW', 'PREPARING', 1],
+    ['CONFIRMED', 'PREPARING', 1],
+    ['CANCELLED', 'ORDERED', 1],
+    ['COMPLETED', 'SIGNED', 1],
+  ])('rejects stale or non-reviewable %s/%s v%s without writes', async (orderStatus, fulfillmentStatus, version) => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({ ...fixture.order, orderStatus, fulfillmentStatus, version })
+    await expect(fixture.service.review(context, ORDER_ID, { expectedVersion: 1 }))
+      .rejects.toMatchObject({ status: 409, code: 'PURCHASE_ORDER_STATE_CHANGED' })
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderStatusHistory.create).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+    expect(fixture.coverage.advanceWhenFullyCovered).not.toHaveBeenCalled()
+  })
+
+  it('reviews stock orders without sales coverage and leaves payment status unchanged', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order, orderStatus: 'PENDING_REVIEW', purchaseType: 'STOCK', salesOrderId: null,
+      paymentStatus: 'PAID', purchaseTotalAmount: decimal('0'),
+    })
+    await fixture.service.review(context, ORDER_ID, { expectedVersion: 1 })
+    expect(fixture.coverage.advanceWhenFullyCovered).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrder.update.mock.calls[0]?.[0]).toMatchObject({
+      data: { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' },
+    })
+    expect(fixture.transaction.purchaseOrder.update.mock.calls[0]?.[0]).not.toHaveProperty('data.paymentStatus')
+  })
+
+  it.each([{}, { expectedVersion: 0 }, { expectedVersion: 1.5 }, { expectedVersion: '1' },
+    { expectedVersion: Number.MAX_SAFE_INTEGER + 1 }, { expectedVersion: 1, unexpected: true },
+    { expectedVersion: 1, reason: '' }, { expectedVersion: 1, reason: null }, { expectedVersion: 1, reason: 'x'.repeat(501) },
+  ])('rejects malformed review input %j before locking', async (input) => {
+    const fixture = setup()
+    await expect(fixture.service.review(context, ORDER_ID, input))
+      .rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(fixture.transaction.purchaseOrder.findUnique).not.toHaveBeenCalled()
+  })
+
+  it('blocks payment and generic fulfillment on pending review orders but allows cancellation', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+    await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'DEPOSIT', amount: '30', paidAt: '2026-08-27T11:00:00.000Z', paymentMethod: 'BANK',
+    })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
+    await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus: 'PREPARING' }))
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, { toStatus: 'CONFIRMED' }))
+      .rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderPayment.create).not.toHaveBeenCalled()
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, { toStatus: 'CANCELLED' }))
+      .resolves.toEqual(fixture.detail)
+  })
+
   it('counts OTHER payments toward full payment without filtering payment types', async () => {
     const fixture = setup()
     fixture.transaction.purchaseOrderPayment.aggregate.mockResolvedValue({ _sum: { amount: decimal('70') } })

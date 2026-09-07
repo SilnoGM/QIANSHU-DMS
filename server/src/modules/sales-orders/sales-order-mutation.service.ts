@@ -41,6 +41,10 @@ import {
 import { isCanonicalSalesOrderActorId } from './sales-order-command.normalizer'
 import { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
 import {
+  assertSalesOrderPurchaseFulfillment,
+  lockSalesOrderPurchaseDependencies,
+} from './sales-order-purchase-fulfillment'
+import {
   SalesOrderQueryService,
   type SalesOrderDetail,
 } from './sales-order-query.service'
@@ -307,6 +311,9 @@ export class SalesOrderMutationService {
     const reason = optionalText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
+      if (toStatus === 'PREPARING' || toStatus === 'LAND_TRANSIT') {
+        await lockSalesOrderPurchaseDependencies(transaction, salesOrderId)
+      }
       const order = await this.lockOrder(transaction, salesOrderId)
       if (order.orderStatus === 'CANCELLED') {
         return salesOrderRuleFailure(
@@ -334,6 +341,9 @@ export class SalesOrderMutationService {
         toStatus,
         { hasActiveDeliveryReceipt: receiptCount > 0 },
       )
+      if (toStatus === 'PREPARING' || toStatus === 'LAND_TRANSIT') {
+        await assertSalesOrderPurchaseFulfillment(transaction, salesOrderId, toStatus)
+      }
       await transaction.salesOrder.update({
         where: { id: salesOrderId },
         data: { fulfillmentStatus: toStatus, version: { increment: 1 } },

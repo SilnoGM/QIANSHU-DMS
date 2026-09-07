@@ -37,6 +37,21 @@ function setup() {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(order),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
+    salesOrderLine: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([
+        { id: 'line-a', quantity: 2 },
+        { id: 'line-b', quantity: 1 },
+      ]),
+    },
+    purchaseOrder: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+        orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED',
+        lines: [
+          { sourceSalesOrderLineId: 'line-a', quantity: 2 },
+          { sourceSalesOrderLineId: 'line-b', quantity: 1 },
+        ],
+      }]),
+    },
     salesOrderPayment: {
       aggregate: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ _sum: { amount: decimal('0.0000') } }),
@@ -122,6 +137,67 @@ const context = {
 }
 
 describe('SalesOrderMutationService', () => {
+  it.each([
+    ['PENDING', 'PREPARING'],
+    ['PREPARING', 'LAND_TRANSIT'],
+  ])('checks approved purchase coverage for manual %s to %s transitions', async (fromStatus, toStatus) => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = fromStatus
+    fixture.transaction.purchaseOrder.findMany.mockResolvedValue([{
+      orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED',
+      lines: [{ sourceSalesOrderLineId: 'line-a', quantity: 2 }],
+    }, {
+      orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED',
+      lines: [{ sourceSalesOrderLineId: 'line-b', quantity: 1 }],
+    }])
+
+    await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus }))
+      .rejects.toMatchObject({ code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID' })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+
+    const approved = setup()
+    approved.order.fulfillmentStatus = fromStatus
+    await expect(approved.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus }))
+      .resolves.toEqual(approved.detail)
+    expect(approved.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { fulfillmentStatus: toStatus, version: { increment: 1 } },
+    })
+    expect(approved.transaction.purchaseOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {
+        purchaseType: 'SALES_LINKED', salesOrderId: ORDER_ID,
+        orderStatus: { not: 'CANCELLED' },
+      } }),
+    )
+    const sqlCalls = approved.transaction.$queryRaw.mock.calls.map(call => (
+      (call[0] as { strings: readonly string[] }).strings.join(' ')
+    )).filter(sql => sql.includes('FOR UPDATE'))
+    expect(sqlCalls[0]).toContain('sales_order_lines')
+    expect(sqlCalls[1]).toContain('purchase_orders')
+    expect(sqlCalls[2]).toContain('sales_orders')
+  })
+
+  it.each([
+    ['CONFIRMED', 'PREPARING'],
+    ['PENDING_REVIEW', 'SHIPPED'],
+    ['PENDING_REVIEW', 'SIGNED'],
+  ])('blocks manual land transit with an effective purchase %s and %s', async (orderStatus, fulfillmentStatus) => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = 'PREPARING'
+    fixture.transaction.purchaseOrder.findMany.mockResolvedValue([{
+      orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED',
+      lines: [
+        { sourceSalesOrderLineId: 'line-a', quantity: 2 },
+        { sourceSalesOrderLineId: 'line-b', quantity: 1 },
+      ],
+    }, { orderStatus, fulfillmentStatus, lines: [] }])
+
+    await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus: 'LAND_TRANSIT' }))
+      .rejects.toMatchObject({ code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID' })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
   it('records ordered status history and enforces the signed receipt gate', async () => {
     const fixture = setup()
     await expect(fixture.service.updateFulfillmentStatus(

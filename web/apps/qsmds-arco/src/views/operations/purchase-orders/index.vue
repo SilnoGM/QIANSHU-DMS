@@ -76,6 +76,7 @@ import {
 } from './purchase-order-list.logic'
 import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
 import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
+import PurchaseOrderReviewModal from './purchase-order-review-modal.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
 
@@ -99,10 +100,11 @@ const canRead = computed(() => auth('purchase-orders:read'))
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
 const canUpdate = computed(() => auth('purchase-orders:update'))
+const canReview = computed(() => auth('purchase-orders:review'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' : '全部采购')
 const pageDescription = computed(() => props.viewMode === 'pending'
-  ? '按待发货、待入仓和待付款分类处理采购订单。'
+  ? '按采购审核中、待发货、待入仓和待付款分类处理采购订单。'
   : '查询所有采购订单及其销售来源、履约和付款状态。')
 const selectedStatus = computed<string>({
   get: () => normalizePurchaseOrderStatusSelection(
@@ -153,6 +155,8 @@ const recordsModalVisible = ref(false)
 const recordsModalKind = ref<PurchaseOrderRecordsKind>('payments')
 const recordsModalOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
+const reviewVisible = ref(false)
+const reviewOrderId = ref<string | null>(null)
 const purchaseStartVisible = ref(false)
 const purchaseStartType = ref<PurchaseStartPurchaseType>('SALES_LINKED')
 const cancelLoadingOrderId = ref<string | null>(null)
@@ -180,6 +184,13 @@ const statusItems = computed(() => withStatusSwitchCounts(
     selectedCount: loading.value ? undefined : total.value,
   },
 ))
+
+// 审核中同时出现查看、审核、取消三个动作，按当前页实际入口扩宽，避免挤成两行。
+const actionColumnWidth = computed(() => props.viewMode === 'all'
+  && canReview.value && canUpdate.value
+  && rows.value.some(order => order.orderStatus === 'PENDING_REVIEW')
+  ? 260
+  : 200)
 
 const supplierFilterOptions = computed(() => (
   supplierCatalog.catalog.value?.items ?? []
@@ -553,7 +564,7 @@ async function loadPurchaseOrderForCancellation(order: PurchaseOrderListItemDto)
     ) {
       return
     }
-    if (response.data.orderStatus !== 'CONFIRMED') {
+    if (!canUpdate.value || !canCancelPurchaseOrderFromList(response.data)) {
       toast.warning('采购订单状态已变化，当前无法取消')
       refreshOrdersAndCounts()
       return
@@ -595,7 +606,18 @@ function pendingActions(order: PurchaseOrderListItemDto) {
 }
 
 function canShowPendingAction(action: PurchaseOrderPendingActionItem): boolean {
+  if (action.key === 'REVIEW') {
+    return canReview.value
+  }
   return action.key === 'PAYMENT' ? canManagePayment.value : canUpdate.value
+}
+
+function openPurchaseOrderReview(order: PurchaseOrderListItemDto): void {
+  if (!canRead.value || !canReview.value || order.orderStatus !== 'PENDING_REVIEW' || reviewVisible.value) {
+    return
+  }
+  reviewOrderId.value = order.id
+  reviewVisible.value = true
 }
 
 function createPurchaseShipmentContext(
@@ -624,6 +646,9 @@ function cancelShipmentRequest(): void {
 }
 
 function openPurchaseFactoryShipment(order: PurchaseOrderListItemDto): void {
+  if (!canUpdate.value || order.orderStatus !== 'CONFIRMED') {
+    return
+  }
   cancelShipmentRequest()
   shipmentTarget.value = order
   shipmentContext.value = createPurchaseShipmentContext(order)
@@ -721,6 +746,16 @@ function handlePendingAction(
   action: PurchaseOrderPendingActionItem,
   order: PurchaseOrderListItemDto,
 ): void {
+  if (!canShowPendingAction(action)) {
+    return
+  }
+  if (action.key === 'REVIEW') {
+    openPurchaseOrderReview(order)
+    return
+  }
+  if (order.orderStatus !== 'CONFIRMED') {
+    return
+  }
   if (action.key === 'SHIPMENT') {
     openPurchaseFactoryShipment(order)
     return
@@ -768,6 +803,8 @@ watch(() => appAccountStore.authEpoch, () => {
   shipmentContext.value = null
   shipmentError.value = null
   detailVisible.value = false
+  reviewVisible.value = false
+  reviewOrderId.value = null
   recordsModalVisible.value = false
   recordsModalOrder.value = null
   selectedOrder.value = null
@@ -785,10 +822,19 @@ watch(() => appAccountStore.authEpoch, () => {
 watch(
   () => [
     props.viewMode,
+    route.name,
     props.viewMode === 'pending' ? route.query.task : route.query.status,
   ] as const,
-  ([nextMode, nextStatus], [previousMode, previousStatus]) => {
-    if (nextMode === previousMode && nextStatus === previousStatus) {
+  ([nextMode, nextRouteName, nextStatus], [previousMode, previousRouteName, previousStatus]) => {
+    // 路由过渡和 KeepAlive 停用期间仍可能触发 watch；旧视图不得删除新视图的
+    // status/task，否则导航会再次 replace，导致刚打开的审核弹窗随页面销毁。
+    const ownRouteName = nextMode === 'pending'
+      ? 'qsOperationsPendingPurchaseOrders'
+      : 'qsOperationsPurchaseOrders'
+    if (nextRouteName !== ownRouteName) {
+      return
+    }
+    if (nextMode === previousMode && nextRouteName === previousRouteName && nextStatus === previousStatus) {
       return
     }
     page.value = 1
@@ -820,7 +866,7 @@ watch(
       void router.replace({ query: nextQuery })
     }
     void loadOrders()
-    if (nextMode !== previousMode) {
+    if (nextMode !== previousMode || nextRouteName !== previousRouteName) {
       void loadStatusCounts()
     }
   },
@@ -907,7 +953,7 @@ onBeforeUnmount(() => {
         data-testid="purchase-order-list-table"
         :row-key="item => item.id"
         :addable="false"
-        :action-column="{ fixed: 'right', minWidth: 200, title: '操作', width: 200 }"
+        :action-column="{ fixed: 'right', minWidth: actionColumnWidth, title: '操作', width: actionColumnWidth }"
         :columns="columns"
         :data="rows"
         :empty-title="viewMode === 'pending' ? '暂无待办采购' : '暂无采购订单'"
@@ -963,7 +1009,18 @@ onBeforeUnmount(() => {
               </template>
             </template>
             <FaButton
-              v-else-if="canUpdate && canCancelPurchaseOrderFromList(row)"
+              v-if="props.viewMode === 'all' && canReview && row.orderStatus === 'PENDING_REVIEW'"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="min-h-11 sm:min-h-8"
+              :aria-label="`${row.orderNo}：审核`"
+              @click="openPurchaseOrderReview(row)"
+            >
+              <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />审核
+            </FaButton>
+            <FaButton
+              v-if="props.viewMode === 'all' && canUpdate && canCancelPurchaseOrderFromList(row)"
               type="button"
               variant="ghost"
               size="sm"
@@ -1544,6 +1601,13 @@ onBeforeUnmount(() => {
     <PurchaseOrderDetailDrawer
       v-model="detailVisible"
       :order="selectedOrder"
+      :currencies="currencyCatalog.currencies.value"
+      @detail-updated="handleDetailUpdated"
+    />
+
+    <PurchaseOrderReviewModal
+      v-model="reviewVisible"
+      :order-id="reviewOrderId"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleDetailUpdated"
     />

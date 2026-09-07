@@ -3,7 +3,7 @@ import { ApiException } from '../src/infrastructure/http/api.exception'
 import { applyTransactionTimeouts } from '../src/infrastructure/database/transaction-timeouts'
 import { createTestShippingMarkRule } from './purchase-shipping-mark-e2e-database'
 import {
-  atomicFacts, createAtomicityFixture, createCommands, customInput, MARK_CONSUMER,
+  atomicFacts, createAtomicityFixture, createCommands, createReviewMutations, customInput, MARK_CONSUMER,
   prepareCatalog, prepareSalesSource, type AtomicityFixture,
 } from './purchase-shipping-mark-atomicity.fixture'
 
@@ -77,10 +77,12 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
     })
   })
 
-  it('rolls back actual sales coverage changes after their audit has been inserted', async () => {
+  it('rolls back review and sales coverage together without changing already issued numbers', async () => {
     await withFixture(async (fixture) => {
       const { source, input } = await prepareSalesSource(fixture)
+      const orderId = await createCommands(fixture).create(fixture.context(), input)
       const before = await atomicFacts(fixture.prisma)
+      expect(before.orders[0]).toMatchObject({ orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED' })
       const advance = fixture.salesProgress.advanceWhenFullyCovered.bind(fixture.salesProgress)
       let reached = false
       jest.spyOn(fixture.salesProgress, 'advanceWhenFullyCovered').mockImplementation(async (transaction, context) => {
@@ -88,13 +90,15 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
         expect(await transaction.salesOrder.findUnique({ where: { id: source.id }, select: { fulfillmentStatus: true } }))
           .toEqual({ fulfillmentStatus: 'PREPARING' })
         expect(await transaction.salesOrderStatusHistory.count({ where: { salesOrderId: source.id } })).toBe(1)
-        expect((await atomicFacts(transaction)).audits).toHaveLength(1)
+        expect((await atomicFacts(transaction)).audits).toHaveLength(2)
         reached = true
         throw new Error('Injected after sales coverage')
       })
-      await expect(createCommands(fixture).create(fixture.context(), input)).rejects.toMatchObject({ code: 'INTERNAL_ERROR' })
+      await expect(createReviewMutations(fixture).review(fixture.context(), orderId, { expectedVersion: 1 }))
+        .rejects.toThrow('Injected after sales coverage')
       expect(reached).toBe(true)
       await assertNoNewPurchase(fixture, before)
+      expect(await fixture.prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: orderId } })).toBe(0)
       expect(await fixture.prisma.salesOrder.findUnique({ where: { id: source.id }, select: { fulfillmentStatus: true, version: true } }))
         .toEqual({ fulfillmentStatus: 'PENDING', version: 1 })
       expect(await fixture.prisma.salesOrderStatusHistory.count({ where: { salesOrderId: source.id } })).toBe(0)

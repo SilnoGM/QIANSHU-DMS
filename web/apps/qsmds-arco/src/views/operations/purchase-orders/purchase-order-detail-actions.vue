@@ -23,6 +23,7 @@ import {
   purchaseOrderPaymentTypeLabel,
 } from './purchase-order-detail.logic'
 import {
+  canCancelPurchaseOrderFromList,
   fulfillmentStatusLabel,
   getPurchaseOrderApiFailure,
   isPurchaseOrderAbortError,
@@ -159,7 +160,7 @@ function openFulfillmentDialog(): void {
 }
 
 function openCancelDialog(): void {
-  if (!canUpdate.value || props.detail.orderStatus !== 'CONFIRMED' || actionLocked.value) {
+  if (!canUpdate.value || !canCancelPurchaseOrderFromList(props.detail) || actionLocked.value) {
     return
   }
   clearActionState()
@@ -167,7 +168,7 @@ function openCancelDialog(): void {
 }
 
 function openVoidDialog(payment: PurchaseOrderPaymentDto): void {
-  if (!canManagePayment.value || payment.voidedAt !== null || actionLocked.value) {
+  if (!canManagePayment.value || props.detail.orderStatus === 'PENDING_REVIEW' || payment.voidedAt !== null || actionLocked.value) {
     return
   }
   clearActionState()
@@ -176,7 +177,7 @@ function openVoidDialog(payment: PurchaseOrderPaymentDto): void {
 }
 
 function openDetachDialog(document: PurchaseOrderDocumentDto): void {
-  if (!canManageDocument.value || document.detachedAt !== null || actionLocked.value) {
+  if (!canManageDocument.value || props.detail.orderStatus === 'PENDING_REVIEW' || document.detachedAt !== null || actionLocked.value) {
     return
   }
   clearActionState()
@@ -235,6 +236,9 @@ async function runDetailMutation(
 }
 
 function submitFulfillment(): void {
+  if (!canUpdate.value) {
+    return
+  }
   const toStatus = nextFulfillmentStatus.value
   if (toStatus === null) {
     return
@@ -259,6 +263,9 @@ function submitFulfillment(): void {
 }
 
 function submitCancellation(): void {
+  if (!canUpdate.value) {
+    return
+  }
   const result = buildPurchaseOrderCancellationRequest(props.detail, actionReason.value)
   if (!result.valid) {
     actionReasonError.value = result.fieldError
@@ -277,6 +284,9 @@ function submitCancellation(): void {
 }
 
 function submitPaymentVoid(): void {
+  if (!canManagePayment.value || props.detail.orderStatus === 'PENDING_REVIEW') {
+    return
+  }
   const payment = selectedPayment.value
   if (payment === null) {
     return
@@ -298,6 +308,9 @@ function submitPaymentVoid(): void {
 }
 
 function submitDocumentDetach(): void {
+  if (!canManageDocument.value || props.detail.orderStatus === 'PENDING_REVIEW') {
+    return
+  }
   const document = selectedDocument.value
   if (document === null) {
     return
@@ -313,7 +326,7 @@ function submitDocumentDetach(): void {
 }
 
 function openPaymentFilePicker(): void {
-  if (canManageDocument.value && !actionLocked.value) {
+  if (canRecordPayment.value && canManageDocument.value && !actionLocked.value) {
     paymentFileInputRef.value?.click()
   }
 }
@@ -322,7 +335,7 @@ async function handlePaymentFileInput(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (file === undefined || !canManageDocument.value || actionLocked.value) {
+  if (file === undefined || !canRecordPayment.value || !canManageDocument.value || actionLocked.value) {
     return
   }
   actionAbortController?.abort()
@@ -374,6 +387,9 @@ function removePaymentVoucher(): void {
 }
 
 function submitPayment(): void {
+  if (!canRecordPayment.value) {
+    return
+  }
   const result = buildPurchaseOrderPaymentRequest({
     amount: paymentAmount.value,
     mediaAssetId: paymentVoucher.value?.mediaAssetId ?? null,

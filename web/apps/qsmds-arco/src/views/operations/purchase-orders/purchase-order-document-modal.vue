@@ -51,7 +51,7 @@ function reset() {
 
 /** 每次操作绑定订单与登录世代；关闭、换单或退出登录后的响应不得污染新抽屉。 */
 async function run(action: (signal: AbortSignal, orderId: string) => Promise<void>) {
-  if (busy.value || !visible.value) {
+  if (busy.value || !visible.value || props.detail.orderStatus === 'PENDING_REVIEW') {
     return
   }
   if (!auth('purchase-orders:document')) {
