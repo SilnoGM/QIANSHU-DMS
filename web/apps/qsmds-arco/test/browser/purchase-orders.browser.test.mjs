@@ -56,24 +56,43 @@ async function readAvailableShippingMarkSummary(page, productMode) {
       && region.getAttribute('data-availability') === 'AVAILABLE'
       && region.getAttribute('aria-busy') === 'false'
       && region.textContent.includes('正式提交后自动派发')
-      && region.textContent.includes(${JSON.stringify(productMode === 'CUSTOM' ? 'CUSTOM_MARK' : '供应商绑定规则')})
+      && region.textContent.includes(${JSON.stringify(productMode === 'CUSTOM' ? '自定义采购' : '供应商绑定')})
       && region.querySelector('input, textarea') === null
-      && region.querySelector('button') === null
+      && region.querySelectorAll('button').length === 1
+      && region.querySelector('dl') === null
       && region.querySelector('[data-testid="purchase-order-shipping-mark-status"]')?.textContent.trim() === '可用'
       && region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]')?.textContent.includes('{SEQ:')
       && region.textContent.split('正式提交后自动派发').length === 2
   })()`)
-  return page.evaluate(`(() => {
+  await openShippingMarkDetails(page)
+  const summary = await page.evaluate(`(() => {
     const region = document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
-    const fields = Object.fromEntries([...region.querySelectorAll('dl > div')].map(field => (
-      [field.querySelector('dt').textContent.trim(), field.querySelector('dd').textContent.trim()]
+    const details = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')
+    const fields = Object.fromEntries([...details.querySelectorAll('dt')].map(field => (
+      [field.textContent.trim(), field.nextElementSibling.textContent.trim()]
     )))
     return [
-      fields['匹配来源'] + '：' + fields['规则编码'] + ' · ' + region.querySelector('p').textContent.trim() + ' · ' + fields['生效版本'] + ' · 可用',
+      fields['匹配来源'] + '：' + fields['规则编码'] + ' · ' + region.querySelector('[data-testid="purchase-order-shipping-mark-name"]').textContent.trim() + ' · ' + fields['生效版本'] + ' · 可用',
       region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]').textContent.trim(),
-      region.querySelector('[data-testid="purchase-order-shipping-mark-hint"]').textContent.trim(),
+      details.querySelector('[data-testid="purchase-order-shipping-mark-dispatch-detail"]').textContent.trim(),
     ].join('\\n')
   })()`)
+  await closeShippingMarkDetails(page)
+  return summary
+}
+
+async function openShippingMarkDetails(page) {
+  await page.evaluate(`document.querySelector('button[aria-label="唛头规则详细配置"]').click()`)
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length > 0`)
+  await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('.arco-trigger-popup')
+    ?.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
+}
+
+async function closeShippingMarkDetails(page) {
+  await page.connection.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  await page.connection.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  await page.waitFor(`!document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length`)
 }
 
 async function assertShippingMarkPanelAppearance(page) {
@@ -87,27 +106,86 @@ async function assertShippingMarkPanelAppearance(page) {
     styles.push(await page.evaluate(`(() => {
       const panel = document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
       const style = getComputedStyle(panel)
-      return { background: style.backgroundColor, color: style.color }
+      return { background: style.backgroundColor, color: style.color, height: panel.getBoundingClientRect().height }
     })()`))
+    assert.ok(styles.at(-1).height >= 100 && styles.at(-1).height <= 120, `compact desktop height: ${styles.at(-1).height}`)
     await saveNumberingScreenshot(page, `purchase-shipping-mark-${theme}`)
+    await openShippingMarkDetails(page)
+    await saveNumberingScreenshot(page, `purchase-shipping-mark-details-${theme}`)
+    await closeShippingMarkDetails(page)
   }
   assert.notEqual(styles[0].background, styles[1].background)
   assert.notEqual(styles[0].color, styles[1].color)
+  await assertShippingMarkDetailsInteraction(page)
   await page.setViewport(390, 844, true)
   await page.waitFor(`innerWidth === 390 && document.querySelector('[data-testid="purchase-order-create-summary-column"]')?.getClientRects().length === 0`)
   await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
   await page.evaluate(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]').scrollIntoView({ block: 'center' })`)
-  assert.equal(await page.evaluate(`(() => {
+  // FaButton 的 transition-all 会过渡响应式尺寸，测量与截图必须等待实际动画结束。
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
+    .getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')`)
+  const mobileSize = await page.evaluate(`(() => {
     const panel = document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
     const rect = panel.getBoundingClientRect()
-    return rect.left >= 0 && rect.right <= document.documentElement.clientWidth
-      && panel.scrollWidth <= panel.clientWidth
-      && getComputedStyle(panel.querySelector('dl')).gridTemplateColumns.split(' ').length === 1
-  })()`), true)
+    return { left: rect.left, right: rect.right, viewport: document.documentElement.clientWidth,
+      scrollWidth: panel.scrollWidth, width: panel.clientWidth, buttonWidth: panel.querySelector('button').getBoundingClientRect().width }
+  })()`)
   await saveNumberingScreenshot(page, 'purchase-shipping-mark-mobile')
+  assert.ok(mobileSize.left >= 0 && mobileSize.right <= mobileSize.viewport
+    && mobileSize.scrollWidth <= mobileSize.width && mobileSize.buttonWidth >= 44, JSON.stringify(mobileSize))
+  await openShippingMarkDetails(page)
+  await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+  assert.equal(await page.evaluate(`(() => {
+    const details = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')
+    const rect = details.getBoundingClientRect()
+    return rect.left >= 0 && rect.right <= innerWidth && details.scrollWidth <= details.clientWidth
+  })()`), true)
+  await saveNumberingScreenshot(page, 'purchase-shipping-mark-details-mobile')
+  await closeShippingMarkDetails(page)
   await page.setViewport(1440, 900, false)
   await page.evaluate(`document.querySelector('#app').__vue_app__.config.globalProperties.$pinia._s.get('appSettings').setColorScheme('light')`)
   await page.waitFor(`!document.documentElement.classList.contains('dark')`)
+}
+
+async function assertShippingMarkDetailsInteraction(page) {
+  await page.evaluate(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]').scrollIntoView({ block: 'center' })`)
+  const point = await page.evaluate(`(() => {
+    const rect = document.querySelector('button[aria-label="唛头规则详细配置"]').getBoundingClientRect()
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+  })()`)
+  assert.equal(await page.evaluate(`document.querySelector('button[aria-label="唛头规则详细配置"]')
+    .contains(document.elementFromPoint(${point.x}, ${point.y}))`), true)
+  // 真实鼠标悬停和键盘焦点都必须可打开；鼠标可移入浮层阅读，离开后关闭。
+  await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0, button: 'none', buttons: 0, pointerType: 'mouse' })
+  await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...point, button: 'none', buttons: 0, pointerType: 'mouse' })
+  await page.waitFor(`document.querySelector('button[aria-label="唛头规则详细配置"]')?.matches(':hover')`)
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length > 0`)
+  await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))')
+  // Arco 入场动画期间会禁用浮层 pointer-events，必须等可交互后再移动真实鼠标。
+  await page.waitFor(`(() => {
+    const popup = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.closest('.arco-trigger-popup')
+    return popup && getComputedStyle(popup).pointerEvents === 'auto'
+      && popup.getAnimations({ subtree: true }).every(animation => animation.playState !== 'running')
+  })()`)
+  const detailsPoint = await page.evaluate(`(() => {
+    const rect = document.querySelector('[data-testid="purchase-order-shipping-mark-details"]').getBoundingClientRect()
+    return { x: rect.x + 10, y: rect.y + 10 }
+  })()`)
+  assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')
+    .contains(document.elementFromPoint(${detailsPoint.x}, ${detailsPoint.y}))`), true)
+  await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...detailsPoint })
+  await page.evaluate('new Promise(resolve => setTimeout(resolve, 200))')
+  await page.waitFor(`document.querySelector('button[aria-label="唛头规则详细配置"]')?.getAttribute('aria-expanded') === 'true'`)
+  await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 0, y: 0 })
+  await page.waitFor(`!document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length`)
+  await page.evaluate(`document.querySelector('button[aria-label="唛头规则详细配置"]').focus()`)
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length > 0`)
+  await closeShippingMarkDetails(page)
+  await page.evaluate(`document.activeElement.blur()`)
+  await openShippingMarkDetails(page)
+  await page.connection.send('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', buttons: 1, clickCount: 1, x: 0, y: 0 })
+  await page.connection.send('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', buttons: 0, clickCount: 1, x: 0, y: 0 })
+  await page.waitFor(`!document.querySelector('[data-testid="purchase-order-shipping-mark-details"]')?.getClientRects().length`)
 }
 
 async function assertConfirmShippingMarkSummary(page, expected) {

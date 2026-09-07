@@ -22,8 +22,10 @@ import type {
 } from '@/components/business/QsOrderProductLineEditor/types'
 import type { ProductPageLoader } from '@/components/business/QsProductSelector/types'
 
+import { Popover as APopover } from '@arco-design/web-vue'
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
-import { useMediaQuery } from '@vueuse/core'
+import { onKeyStroke, useMediaQuery } from '@vueuse/core'
+import { useId } from 'vue'
 
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -162,6 +164,8 @@ const supplierSelectRef = useTemplateRef<InstanceType<typeof QsDictionarySelect>
 const isDesktopSummary = useMediaQuery('(min-width: 1280px)')
 const submission = shallowRef<PurchaseOrderSubmissionState>(createPurchaseOrderEditingState())
 const shippingMarkState = shallowRef<PurchaseOrderShippingMarkState>({ error: '', loading: false, resolution: null })
+const shippingMarkDetailsOpen = ref(false)
+const shippingMarkDetailsId = useId()
 const frozenShippingMarkResolution = shallowRef<PurchaseOrderShippingMarkResolutionDto | null>(null)
 const shippingMarkResolver = createPurchaseOrderShippingMarkResolver({
   canRefresh: () => submission.value.phase === 'editing' && canCreate.value,
@@ -1033,6 +1037,17 @@ watch(() => appAccountStore.authEpoch, () => {
 
 watch(() => formModel.supplierValue, refreshShippingMarkResolution, { flush: 'sync' })
 
+// 配置变更或离开此步骤时关闭传送到 body 的浮层，避免展示上一场景的配置。
+watch([shippingMarkResolution, activeStep, createSurface], () => {
+  shippingMarkDetailsOpen.value = false
+})
+onKeyStroke('Escape', (event) => {
+  if (shippingMarkDetailsOpen.value) {
+    event.stopPropagation()
+    shippingMarkDetailsOpen.value = false
+  }
+})
+
 watch(isDesktopSummary, (desktop) => {
   if (desktop) {
     detailsDrawerVisible.value = false
@@ -1327,7 +1342,7 @@ onBeforeUnmount(() => {
                   <div class="gap-4 grid grid-cols-1">
                     <FaFormItem name="expectedShippingMarkResolution" label="采购唛头" required :auto-bind="false">
                       <div
-                        class="outline-none border border-border rounded-lg bg-background min-w-0 w-full overflow-hidden focus-visible:ring-2 focus-visible:ring-primary/40"
+                        class="p-3 outline-none border border-border rounded-lg bg-background min-w-0 w-full focus-visible:ring-2 focus-visible:ring-primary/40"
                         data-testid="purchase-order-shipping-mark-resolution"
                         :data-availability="shippingMarkResolution?.availability ?? 'PENDING'"
                         aria-label="采购唛头规则"
@@ -1335,12 +1350,12 @@ onBeforeUnmount(() => {
                         :aria-busy="shippingMarkState.loading"
                         tabindex="-1"
                       >
-                        <p v-if="shippingMarkState.loading" class="text-sm text-muted-foreground m-0 p-4" role="status">
+                        <p v-if="shippingMarkState.loading" class="text-sm text-muted-foreground m-0 py-2" role="status">
                           正在匹配采购唛头规则…
                         </p>
                         <template v-else>
-                          <div class="px-4 py-3 flex gap-3 items-center justify-between">
-                            <p class="text-base text-foreground font-semibold m-0 min-w-0 break-words">
+                          <div class="flex gap-2 items-center">
+                            <p class="text-sm text-foreground font-medium m-0 min-w-0 break-words" data-testid="purchase-order-shipping-mark-name">
                               {{ shippingMarkResolution?.name || '尚未匹配唛头规则' }}
                             </p>
                             <FaTag
@@ -1350,53 +1365,88 @@ onBeforeUnmount(() => {
                             >
                               {{ shippingMarkAvailable ? '可用' : '不可用' }}
                             </FaTag>
+                            <!-- FaPopover 仅封装点击触发；此处使用现有 Arco 多触发浮层统一悬停、点击与键盘焦点。 -->
+                            <APopover
+                              v-if="shippingMarkResolution"
+                              v-model:popup-visible="shippingMarkDetailsOpen"
+                              :trigger="['hover', 'click', 'focus']"
+                              :click-to-close="false"
+                              :mouse-enter-delay="200"
+                              :mouse-leave-delay="150"
+                              position="br"
+                              content-class="bg-background! border-border! p-3!"
+                              arrow-class="bg-background! border-border!"
+                            >
+                              <FaButton
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                class="text-muted-foreground ml-auto shrink-0 size-11 sm:size-7"
+                                aria-label="唛头规则详细配置"
+                                aria-haspopup="dialog"
+                                :aria-expanded="shippingMarkDetailsOpen"
+                                :aria-controls="shippingMarkDetailsId"
+                              >
+                                <FaIcon name="i-lucide:info" class="size-4" />
+                              </FaButton>
+                              <template #content>
+                                <div :id="shippingMarkDetailsId" class="text-foreground max-w-[calc(100vw-64px)] w-72" role="dialog" aria-label="唛头规则详细配置" data-testid="purchase-order-shipping-mark-details">
+                                  <dl class="text-sm leading-6 m-0 gap-x-3 gap-y-1 grid grid-cols-[auto_minmax(0,1fr)]">
+                                    <dt class="text-muted-foreground">
+                                      规则编码
+                                    </dt>
+                                    <dd class="font-qs-data-mono m-0 break-all">
+                                      {{ shippingMarkResolution.ruleCode || '-' }}
+                                    </dd>
+                                    <dt class="text-muted-foreground">
+                                      匹配来源
+                                    </dt>
+                                    <dd class="m-0">
+                                      {{ shippingMarkResolution.matchSource === 'CUSTOM_RULE' ? '自定义采购固定规则' : '供应商绑定规则' }}
+                                    </dd>
+                                    <dt class="text-muted-foreground">
+                                      生效版本
+                                    </dt>
+                                    <dd class="m-0">
+                                      {{ shippingMarkResolution.activeRevision === null ? '无生效版本' : `第 ${shippingMarkResolution.activeRevision} 版` }}
+                                    </dd>
+                                    <template v-if="shippingMarkResolution.activeConfig">
+                                      <dt class="text-muted-foreground">
+                                        重置周期
+                                      </dt>
+                                      <dd class="m-0">
+                                        {{ numberingResetPolicyLabel(shippingMarkResolution.activeConfig.resetPolicy) }}
+                                      </dd>
+                                      <dt class="text-muted-foreground">
+                                        时区
+                                      </dt>
+                                      <dd class="font-qs-data-mono m-0 break-all">
+                                        {{ shippingMarkResolution.activeConfig.timezone }}
+                                      </dd>
+                                      <dt class="text-muted-foreground">
+                                        最长长度
+                                      </dt>
+                                      <dd class="m-0">
+                                        {{ shippingMarkResolution.activeConfig.maxOutputLength }} 位
+                                      </dd>
+                                    </template>
+                                  </dl>
+                                  <p class="text-xs text-muted-foreground leading-relaxed m-0 mt-2" data-testid="purchase-order-shipping-mark-dispatch-detail">
+                                    {{ PURCHASE_SHIPPING_MARK_DISPATCH_HINT }}
+                                  </p>
+                                </div>
+                              </template>
+                            </APopover>
                           </div>
-                          <div v-if="shippingMarkResolution?.activeConfig" class="px-4 py-3 border-y border-border bg-muted/20">
-                            <p class="text-xs text-muted-foreground m-0 mb-2">
-                              编号结构
-                            </p>
-                            <p class="font-qs-data-mono text-base text-foreground leading-relaxed m-0 break-all" data-testid="purchase-order-shipping-mark-structure">
-                              {{ formatNumberingRuleStructure(shippingMarkResolution.activeConfig) }}
-                            </p>
-                          </div>
-                          <dl v-if="shippingMarkResolution" class="text-sm m-0 p-4 gap-x-6 gap-y-3 grid grid-cols-1 sm:grid-cols-2">
-                            <div class="min-w-0">
-                              <dt class="text-xs text-muted-foreground mb-1">
-                                规则编码
-                              </dt>
-                              <dd class="font-qs-data-mono text-foreground m-0 break-all">
-                                {{ shippingMarkResolution.ruleCode || '-' }}
-                              </dd>
-                            </div>
-                            <div class="min-w-0">
-                              <dt class="text-xs text-muted-foreground mb-1">
-                                匹配来源
-                              </dt>
-                              <dd class="text-foreground m-0">
-                                {{ shippingMarkResolution.matchSource === 'CUSTOM_RULE' ? '自定义采购固定规则' : '供应商绑定规则' }}
-                              </dd>
-                            </div>
-                            <div>
-                              <dt class="text-xs text-muted-foreground mb-1">
-                                生效版本
-                              </dt>
-                              <dd class="text-foreground m-0">
-                                {{ shippingMarkResolution.activeRevision === null ? '无生效版本' : `第 ${shippingMarkResolution.activeRevision} 版` }}
-                              </dd>
-                            </div>
-                            <div v-if="shippingMarkResolution.activeConfig">
-                              <dt class="text-xs text-muted-foreground mb-1">
-                                重置周期
-                              </dt>
-                              <dd class="text-foreground m-0">
-                                {{ numberingResetPolicyLabel(shippingMarkResolution.activeConfig.resetPolicy) }}
-                              </dd>
-                            </div>
-                          </dl>
-                          <p v-if="shippingMarkResolution?.activeConfig" class="text-xs text-muted-foreground m-0 px-4 pb-3 break-words">
-                            时区：{{ shippingMarkResolution.activeConfig.timezone }} · 最长 {{ shippingMarkResolution.activeConfig.maxOutputLength }} 位
+                          <p v-if="shippingMarkResolution?.activeConfig" class="font-qs-data-mono text-sm text-foreground leading-5 m-0 mt-1 break-all" aria-label="编号结构" data-testid="purchase-order-shipping-mark-structure">
+                            {{ formatNumberingRuleStructure(shippingMarkResolution.activeConfig) }}
                           </p>
-                          <div v-if="!shippingMarkAvailable" class="px-4 pb-3" role="alert">
+                          <p class="text-xs text-muted-foreground leading-5 m-0 mt-1" data-testid="purchase-order-shipping-mark-hint">
+                            <template v-if="shippingMarkResolution">
+                              {{ shippingMarkResolution.matchSource === 'CUSTOM_RULE' ? '自定义采购' : '供应商绑定' }} ·
+                            </template>正式提交后自动派发
+                          </p>
+                          <div v-if="!shippingMarkAvailable" class="mt-2" role="alert">
                             <p class="text-sm text-destructive m-0 break-words">
                               {{ shippingMarkState.error || shippingMarkResolution?.message || '尚未匹配采购唛头规则' }}
                             </p>
@@ -1404,9 +1454,6 @@ onBeforeUnmount(() => {
                               {{ shippingMarkState.error ? '可返回上一步后重试，已填写的内容会保留。' : '请联系管理员配置可用规则。' }}
                             </p>
                           </div>
-                          <p class="text-xs text-muted-foreground leading-relaxed m-0 px-4 py-3 border-t border-border" data-testid="purchase-order-shipping-mark-hint">
-                            {{ PURCHASE_SHIPPING_MARK_DISPATCH_HINT }}
-                          </p>
                         </template>
                       </div>
                       <p v-if="fieldErrors.expectedShippingMarkResolution" class="text-xs text-destructive m-0 mt-1" role="alert">

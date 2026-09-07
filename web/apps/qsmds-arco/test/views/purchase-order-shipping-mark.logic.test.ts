@@ -1,5 +1,6 @@
 import type { PurchaseOrderShippingMarkResolutionDto } from '../../src/api/generated/types.gen'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 解析并发隔离使用 Node.js runner。
 import test from 'node:test'
 import {
@@ -30,6 +31,21 @@ const available: PurchaseOrderShippingMarkResolutionDto = {
   ruleCode: 'SUPPLIER_MARK',
   ruleId: '11111111-1111-4111-8111-111111111111',
 }
+
+test('采购唛头将低频配置收进同一浮层，保留结构、短说明与行内异常', async () => {
+  const source = await readFile(new URL('../../src/views/operations/purchase-orders/create.vue', import.meta.url), 'utf8')
+  const field = source.match(/<FaFormItem name="expectedShippingMarkResolution"[\s\S]*?<\/FaFormItem>/u)?.[0] ?? ''
+  assert.match(field, /<APopover[\s\S]*?:trigger="\['hover', 'click', 'focus'\]"/u)
+  const popup = field.match(/<APopover[\s\S]*?<\/APopover>/u)?.[0] ?? ''
+  for (const label of ['规则编码', '生效版本', '重置周期', '时区', '最长']) {
+    assert.ok(popup.includes(label), `${label} 应位于信息浮层内`)
+  }
+  const compact = field.replace(popup, '')
+  assert.doesNotMatch(compact, /<dl|border-y|border-t|刷新规则|查看唛头配置/u)
+  assert.match(compact, /purchase-order-shipping-mark-structure/u)
+  assert.match(compact, /正式提交后自动派发/u)
+  assert.match(compact, /role="alert"/u)
+})
 
 test('变更场景立即清空旧摘要且取消请求，迟到响应不能覆盖新摘要', async () => {
   const requests: { resolve: (value: PurchaseOrderShippingMarkResolutionDto) => void, signal: AbortSignal }[] = []
