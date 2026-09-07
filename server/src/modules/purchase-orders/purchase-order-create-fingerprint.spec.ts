@@ -16,7 +16,7 @@ function payload(overrides: Record<string, unknown> = {}) {
     productMode: 'CUSTOM',
     customSupplierName: '供应商 A',
     orderDate: TODAY,
-    shippingMarkText: null,
+    expectedShippingMarkResolution: 'a'.repeat(64),
     lines: [{
       lineType: 'CUSTOM',
       name: 'Custom item',
@@ -34,9 +34,9 @@ function payload(overrides: Record<string, unknown> = {}) {
 }
 
 describe('purchase order create fingerprint', () => {
-  it('uses the approved numbering scope and one stable SHA-256 v2 contract', () => {
+  it('uses the approved numbering scope and one stable SHA-256 v3 contract', () => {
     expect(PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION)
-      .toBe('purchase-order.create.v2')
+      .toBe('purchase-order.create.v3')
     expect(PURCHASE_ORDER_NUMBERING_RULE_CODE).toBe('PURCHASE_ORDER')
     expect(PURCHASE_ORDER_NUMBERING_CONSUMER_CODE).toBe('PURCHASE_ORDER.CREATE')
     expect(calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload()))
@@ -55,7 +55,7 @@ describe('purchase order create fingerprint', () => {
         payload(),
       ),
       calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload({ customSupplierName: '供应商 B' })),
-      calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload({ shippingMarkText: 'MARK' })),
+      calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload({ expectedShippingMarkResolution: 'b'.repeat(64) })),
       calculatePurchaseOrderCreateFingerprint(ACTOR_ID, payload({ remark: 'x' })),
       calculatePurchaseOrderCreateFingerprint(ACTOR_ID, normalizePurchaseOrderCreateCommand({
         purchaseType: 'SALES_LINKED',
@@ -63,6 +63,7 @@ describe('purchase order create fingerprint', () => {
         salesOrderId: '11111111-1111-4111-8111-111111111111',
         customSupplierName: '供应商 A',
         orderDate: TODAY,
+        expectedShippingMarkResolution: 'a'.repeat(64),
         lines: [{
           lineType: 'CUSTOM',
           sourceSalesOrderLineId: '22222222-2222-4222-8222-222222222222',

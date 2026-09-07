@@ -7,7 +7,7 @@ import {
 } from './purchase-order-command.normalizer'
 
 export const PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION =
-  'purchase-order.create.v2' as const
+  'purchase-order.create.v3' as const
 export const PURCHASE_ORDER_NUMBERING_RULE_CODE = 'PURCHASE_ORDER' as const
 export const PURCHASE_ORDER_NUMBERING_CONSUMER_CODE =
   'PURCHASE_ORDER.CREATE' as const
@@ -30,7 +30,7 @@ function serializePurchaseOrderCreateFingerprint(
       customSupplierName: payload.customSupplierName,
       orderDate: payload.orderDate,
       currencyCode: payload.currencyCode,
-      shippingMarkText: payload.shippingMarkText,
+      expectedShippingMarkResolution: payload.expectedShippingMarkResolution,
       lines: payload.lines.map(line => line.lineType === 'CATALOG'
         ? {
             lineNumber: line.lineNumber,

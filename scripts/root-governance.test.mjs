@@ -13,7 +13,17 @@ const repositoryRoot = path.resolve(scriptsDirectory, '..')
 
 const supplierResiduePattern = 'supplier|service[._ /-]?provider'
 const supplierResidueAllowlist = Object.freeze([
-  // 唛头绑定仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据或采购自动派发。
+  // 唛头绑定及采购消费仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据。
+  'scripts/browser-auth/provision-shipping-mark-fixtures.mjs',
+  'scripts/browser-shipping-mark-fixtures.test.mjs',
+  'server/src/modules/purchase-orders/purchase-order-shipping-mark-input.spec.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-mark-resolution.dto.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service.spec.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service.ts',
+  'server/test/purchase-shipping-mark-atomicity.e2e-spec.ts',
+  'server/test/purchase-shipping-mark-atomicity.fixture.ts',
+  'specs/purchase-shipping-mark-binding/issuance-tasks.md',
+  'web/apps/qsmds-arco/test/views/purchase-order-shipping-mark.logic.test.ts',
   'server/prisma/migrations/20260906090104_supplier_shipping_mark_rule_bindings/migration.sql',
   'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.controller.ts',
   'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.service.ts',
@@ -1092,7 +1102,7 @@ test('供应商残留门禁读取工作树与未忽略文件并允许冻结历�
   }
 })
 
-test('退役扩展不会重新进入 Regions 与 Numbering Generator', () => {
+test('退役扩展不进入 Regions，编号仅允许已批准的内部事务派发关联', async () => {
   assert.deepEqual(
     gitGrepPaths({
       pattern: 'RegionLookupService',
@@ -1100,19 +1110,15 @@ test('退役扩展不会重新进入 Regions 与 Numbering Generator', () => {
     }),
     [],
   )
-  assert.deepEqual(
-    gitGrepPaths({
-      pattern: 'issuanceId',
-      pathspecs: [
-        'server/src/modules/numbering/numbering-generator.persistence.spec.ts',
-        'server/src/modules/numbering/numbering-generator.persistence.ts',
-        'server/src/modules/numbering/numbering-generator.service.spec.ts',
-        'server/src/modules/numbering/numbering-generator.service.ts',
-        'server/test/numbering-generator.e2e-spec.ts',
-      ],
-    }),
-    [],
-  )
+  const generator = await readFile(fromRoot('server/src/modules/numbering/numbering-generator.service.ts'), 'utf8')
+  const originalResult = /export interface GenerateNumberResult \{([^}]+)\}/u.exec(generator)?.[1]
+  assert.ok(originalResult)
+  assert.doesNotMatch(originalResult, /issuanceId/u)
+  assert.match(generator, /GenerateNumberInTransactionResult extends GenerateNumberResult/u)
+  assert.match(generator, /async generateScopedInTransaction\(/u)
+  assert.match(generator, /function toIndependentResult\(/u)
+  // 新入口不允许把具体供应商或采购规则匹配搬进通用生成算法。
+  assert.doesNotMatch(generator, /supplier|PurchaseOrder|purchase-shipping-marks/iu)
 })
 
 test('Dictionary production runner 保持无参且无业务工厂注入', async () => {

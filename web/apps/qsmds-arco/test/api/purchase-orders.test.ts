@@ -155,6 +155,7 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
   const api = createPurchaseOrdersApi(createRecorder(calls))
   const controller = new AbortController()
   const request = {
+    expectedShippingMarkResolution: 'a'.repeat(64),
     customSupplierName: '临时供应商',
     productMode: 'CUSTOM',
     purchaseType: 'STOCK',
@@ -208,6 +209,23 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
       errorPresentation: 'local',
       retry: false,
       signal: controller.signal,
+    })
+  }
+})
+
+test('唛头匹配只读且仅传当前场景，不创建幂等键', async () => {
+  const calls: Call[] = []
+  const api = createPurchaseOrdersApi(createRecorder(calls))
+  const signal = new AbortController().signal
+  for (const query of [
+    { productMode: 'CATALOG' as const, supplierValue: 'SUPPLIER_CN_01' },
+    { productMode: 'CUSTOM' as const },
+  ]) {
+    await api.shippingMarkResolution(query, signal)
+    assert.deepEqual(calls.at(-1), {
+      method: 'get',
+      url: 'purchase-orders/shipping-mark-resolution',
+      config: { errorPresentation: 'local', params: query, signal },
     })
   }
 })

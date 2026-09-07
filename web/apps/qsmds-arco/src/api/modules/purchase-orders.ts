@@ -10,10 +10,12 @@ import type {
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
   PurchaseOrderProductOptionsDto,
+  PurchaseOrderShippingMarkResolutionDto,
   PurchaseOrdersListData,
   PurchaseOrderSourceSalesOrderLinesDto,
   PurchaseOrderSourceSalesOrdersDto,
   PurchaseOrdersProductOptionsData,
+  PurchaseOrdersShippingMarkResolutionData,
   PurchaseOrdersSourceSalesOrderLinesData,
   PurchaseOrdersSourceSalesOrdersData,
   PurchaseOrdersStatusCountsData,
@@ -25,6 +27,9 @@ import type {
 import api from '../index'
 
 export type PurchaseOrderListQuery = NonNullable<PurchaseOrdersListData['query']>
+export type PurchaseOrderShippingMarkResolutionQuery = NonNullable<
+  PurchaseOrdersShippingMarkResolutionData['query']
+>
 export type PurchaseOrderProductOptionsQuery = NonNullable<
   PurchaseOrdersProductOptionsData['query']
 >
@@ -55,6 +60,13 @@ function documentContentPath(
  */
 export function createPurchaseOrdersApi(client: AxiosInstance) {
   return {
+    shippingMarkResolution: (
+      query: PurchaseOrderShippingMarkResolutionQuery,
+      signal: AbortSignal,
+    ) => client.get<PurchaseOrderShippingMarkResolutionDto>(
+      'purchase-orders/shipping-mark-resolution',
+      { errorPresentation: 'local', params: query, signal },
+    ),
     list: (query: PurchaseOrderListQuery, signal: AbortSignal) =>
       client.get<PurchaseOrderPageDto>('purchase-orders', {
         errorPresentation: 'local',

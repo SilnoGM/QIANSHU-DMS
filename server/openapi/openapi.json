@@ -35554,6 +35554,8 @@
                 "PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT",
                 "PURCHASE_ORDER_NUMBERING_UNAVAILABLE",
                 "PURCHASE_ORDER_NUMBER_CONFLICT",
+                "PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED",
+                "PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE",
                 "PURCHASE_ORDER_STATE_CHANGED"
               ]
             },
@@ -35858,6 +35860,260 @@
               "codes": [
                 "FORBIDDEN",
                 "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/purchase-orders/shipping-mark-resolution": {
+      "get": {
+        "operationId": "purchase_orders_shipping_mark_resolution",
+        "parameters": [
+          {
+            "name": "productMode",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CATALOG",
+                "CUSTOM"
+              ]
+            }
+          },
+          {
+            "name": "supplierValue",
+            "required": false,
+            "in": "query",
+            "description": "CATALOG 必填供应商稳定 value；CUSTOM 禁止传入。",
+            "schema": {
+              "minLength": 1,
+              "maxLength": 64,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderShippingMarkResolutionDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": false,
+          "conflict": false,
+          "validation": true,
+          "session": "required",
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PURCHASE_ORDER_STATE_CHANGED"
               ]
             },
             {
@@ -52450,6 +52706,78 @@
           "items"
         ]
       },
+      "PurchaseOrderShippingMarkResolutionDto": {
+        "type": "object",
+        "properties": {
+          "productMode": {
+            "type": "string",
+            "enum": [
+              "CATALOG",
+              "CUSTOM"
+            ]
+          },
+          "matchSource": {
+            "type": "string",
+            "enum": [
+              "SUPPLIER_BINDING",
+              "CUSTOM_RULE"
+            ]
+          },
+          "ruleId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "ruleCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "activeRevision": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "AVAILABLE",
+              "UNBOUND",
+              "SUPPLIER_UNAVAILABLE",
+              "RULE_MISSING",
+              "WRONG_PURPOSE",
+              "RULE_DISABLED",
+              "NO_ACTIVE_VERSION"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "安全状态提示；AVAILABLE 不代表已预留容量或派发编号。"
+          },
+          "resolutionToken": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[0-9a-f]{64}$",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "AVAILABLE 时返回场景摘要，其他状态为 null；不作为客户端指定规则的凭据。"
+          }
+        },
+        "required": [
+          "productMode",
+          "matchSource",
+          "ruleId",
+          "ruleCode",
+          "name",
+          "activeRevision",
+          "availability",
+          "message",
+          "resolutionToken"
+        ]
+      },
       "PurchaseOrderProductImageDto": {
         "type": "object",
         "properties": {
@@ -53025,10 +53353,10 @@
             "type": "string",
             "format": "date"
           },
-          "shippingMarkText": {
+          "expectedShippingMarkResolution": {
             "type": "string",
-            "maxLength": 2000,
-            "nullable": true
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "采购唛头规则解析返回的匹配摘要，正式提交时重新校验"
           },
           "lines": {
             "minItems": 1,
@@ -53060,6 +53388,7 @@
           "purchaseType",
           "productMode",
           "orderDate",
+          "expectedShippingMarkResolution",
           "lines",
           "purchaseTotalAmount",
           "depositDueAmount",

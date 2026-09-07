@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto'
 
-import { ConfigService } from '@nestjs/config'
 
 import type { Prisma } from '../src/generated/prisma/client'
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import type { AccessControlService } from '../src/modules/access-control/access-control.service'
 import { AuditService } from '../src/modules/audit/audit.service'
-import type { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
+import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../src/modules/media/media-asset.service'
-import type { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
+import { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
+import { PurchaseShippingMarkResolverService } from '../src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service'
+import { IsolatedNumberingPrismaService, type IsolatedNumberingDatabase } from './numbering-e2e-database'
+import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from './purchase-shipping-mark-e2e-database'
 import { PurchaseOrderCommandService } from '../src/modules/purchase-orders/purchase-order-command.service'
 import { PurchaseOrderCreateDependencyService } from '../src/modules/purchase-orders/purchase-order-create-dependency.service'
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
@@ -23,11 +25,6 @@ import { SalesOrderProductEditQueryService } from '../src/modules/sales-orders/s
 import { SalesOrderProductEditService } from '../src/modules/sales-orders/sales-order-product-edit.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 
-function requireDatabaseUrl(): string {
-  const value = process.env.DATABASE_URL
-  if (!value) throw new Error('DATABASE_URL is required for PurchaseOrder E2E tests')
-  return value
-}
 
 /** 查询上下文按数据库精度返回四位小数；修改命令仍遵守销售录入最多两位小数的契约。 */
 function amountInputFromSnapshot(value: string): string {
@@ -71,8 +68,6 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let concurrentDistinctSourceAId: string
   let concurrentDistinctSourceBId: string
   let countryRegionId: string
-  let createdTwdExchangeRate = false
-  let cnyWasEnabled = false
   let issuanceVoucherMediaAssetId: string
   let paymentVoucherMediaAssetId: string
   const purchaseVoucherMediaAssetIds: string[] = []
@@ -82,8 +77,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let splitSourceLineId: string
   let concurrentSourceLineId: string
   let customSourceLineId: string
-  let twdCurrencyId: string
-  let twdWasEnabled = false
+  let database: IsolatedNumberingDatabase
+  let catalogResolution: string
+  let customResolution: string
   let prisma: PrismaService
   let commands: PurchaseOrderCommandService
   let factoryShipments: PurchaseOrderFactoryShipmentService
@@ -97,28 +93,20 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let purchaseNumber = 0
 
   beforeAll(async () => {
-    prisma = new PrismaService(
-      new ConfigService({ DATABASE_URL: requireDatabaseUrl() }),
-    )
+    database = await createPurchaseShippingMarkDatabase()
+    prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
     await prisma.onModuleInit()
 
-    const [cny, twd] = await Promise.all([
-      prisma.currency.findUniqueOrThrow({
-        where: { code: 'CNY' }, select: { enabled: true },
-      }),
+    const [twd] = await Promise.all([
       prisma.currency.findUniqueOrThrow({
         where: { code: 'TWD' },
         select: { id: true, enabled: true, exchangeRate: { select: { id: true } } },
       }),
     ])
-    cnyWasEnabled = cny.enabled
-    twdCurrencyId = twd.id
-    twdWasEnabled = twd.enabled
     if (twd.exchangeRate === null) {
       await prisma.exchangeRate.create({
         data: { currencyId: twd.id, foreignUnitsPerCny: '4.500000000000' },
       })
-      createdTwdExchangeRate = true
     }
     await prisma.currency.updateMany({
       where: { code: { in: ['CNY', 'TWD'] } }, data: { enabled: true },
@@ -135,6 +123,17 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       select: { id: true },
     })
     actorUserId = actor.id
+    const dictionaryType = await prisma.dictionaryType.findUniqueOrThrow({ where: { code: 'service_provider.supplier' } })
+    await prisma.dictionaryItem.create({ data: { dictionaryTypeId: dictionaryType.id, value: supplierValue, label: '采购测试供应商', enabled: true } })
+    await prisma.dictionaryType.update({ where: { id: dictionaryType.id }, data: { enabled: true } })
+    const catalogRule = await createTestShippingMarkRule(prisma, actor.id, `TEST_MARK_${suffix}`)
+    await createTestShippingMarkRule(prisma, actor.id, 'CUSTOM_MARK')
+    await prisma.supplierShippingMarkRuleBinding.create({ data: {
+      supplierValue, ruleId: catalogRule.id, createdByUserId: actor.id, updatedByUserId: actor.id,
+    } })
+    const markResolver = new PurchaseShippingMarkResolverService(prisma, new DictionaryLookupService(prisma))
+    catalogResolution = (await markResolver.read({ productMode: 'CATALOG', supplierValue })).resolutionToken!
+    customResolution = (await markResolver.read({ productMode: 'CUSTOM' })).resolutionToken!
     issuanceVoucherMediaAssetId = (await prisma.mediaAsset.create({
       data: {
         mediaType: 'DOCUMENT',
@@ -348,6 +347,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       )),
     } as unknown as AccessControlService
     const numbering = {
+      generateScopedInTransaction: new NumberingGeneratorService(prisma).generateScopedInTransaction.bind(new NumberingGeneratorService(prisma)),
       generateScoped: jest.fn(() => Promise.resolve({
         number: `PO-E2E-${suffix}-${++purchaseNumber}`,
         idempotentReplay: false,
@@ -372,6 +372,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new AuditService(),
       new PurchaseOrderCreateDependencyService(dictionaryLookup, accessControl),
       new SalesOrderPurchaseCoverageService(new AuditService()),
+      markResolver,
       { businessToday: () => '2026-08-27' },
     )
     factoryShipments = new PurchaseOrderFactoryShipmentService(
@@ -391,116 +392,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   })
 
   afterAll(async () => {
-    if (prisma === undefined) return
-    try {
-      const orders = await prisma.purchaseOrder.findMany({
-        where: { orderNo: { startsWith: `PO-E2E-${suffix}-` } },
-        select: { id: true },
-      })
-      const purchaseOrderIds = orders.map(({ id }) => id)
-      await prisma.$transaction(async (transaction) => {
-        if (purchaseOrderIds.length > 0) {
-          const where = { purchaseOrderId: { in: purchaseOrderIds } }
-          await transaction.purchaseOrderDocument.deleteMany({ where })
-          await transaction.purchaseOrderStatusHistory.deleteMany({ where })
-          await transaction.purchaseOrderPayment.deleteMany({ where })
-          await transaction.purchaseOrderLine.deleteMany({ where })
-          await transaction.purchaseOrder.deleteMany({
-            where: { id: { in: purchaseOrderIds } },
-          })
-        }
-        // 新增付款凭证夹具只按本测试捕获的 ID 清理，并与凭证删除同事务，
-        // 确保 READY 媒体的延迟引用约束不会在清理时看到无引用的残留资产。
-        if (purchaseVoucherMediaAssetIds.length > 0) {
-          await transaction.mediaAsset.deleteMany({
-            where: { id: { in: purchaseVoucherMediaAssetIds } },
-          })
-        }
-        if (salesOrderId !== undefined) {
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_documents" DISABLE TRIGGER "sales_order_documents_invariants_trigger"',
-          )
-          // 销售履约历史是 append-only；隔离 E2E 只在本清理事务内精确停用
-          // 删除门禁，恢复后再提交，不改变任何生产运行时规则。
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_status_history" DISABLE TRIGGER "sales_order_status_history_immutable_trigger"',
-          )
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_payments" DISABLE TRIGGER "sales_order_payments_invariants_trigger"',
-          )
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_amount_revisions" DISABLE TRIGGER "sales_order_amount_revisions_immutable_trigger"',
-          )
-          await transaction.salesOrderDocument.deleteMany({
-            where: { salesOrderId },
-          })
-          await transaction.salesOrderAmountRevision.deleteMany({
-            where: { salesOrderId },
-          })
-          await transaction.salesOrderStatusHistory.deleteMany({
-            where: { salesOrderId },
-          })
-          await transaction.salesOrderPayment.deleteMany({
-            where: { salesOrderId },
-          })
-          await transaction.salesOrderLine.deleteMany({
-            where: { salesOrderId },
-          })
-          await transaction.salesOrder.deleteMany({ where: { id: salesOrderId } })
-          // READY 媒体的引用检查同样是 deferred；必须与凭证和订单一起在
-          // `SET CONSTRAINTS` 前删除，否则夹具清理会留下媒体与地区业务数据。
-          await transaction.mediaAsset.deleteMany({
-            where: { id: { in: [
-              issuanceVoucherMediaAssetId,
-              paymentVoucherMediaAssetId,
-            ] } },
-          })
-          await transaction.$executeRawUnsafe('SET CONSTRAINTS ALL IMMEDIATE')
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_amount_revisions" ENABLE TRIGGER "sales_order_amount_revisions_immutable_trigger"',
-          )
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_payments" ENABLE TRIGGER "sales_order_payments_invariants_trigger"',
-          )
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_status_history" ENABLE TRIGGER "sales_order_status_history_immutable_trigger"',
-          )
-          await transaction.$executeRawUnsafe(
-            'ALTER TABLE "sales_order_documents" ENABLE TRIGGER "sales_order_documents_invariants_trigger"',
-          )
-        }
-        if (productId !== undefined) {
-          await transaction.product.deleteMany({ where: { id: productId } })
-        }
-        if (issuanceVoucherMediaAssetId !== undefined) {
-          await transaction.mediaAsset.deleteMany({
-            where: { id: { in: [
-              issuanceVoucherMediaAssetId,
-              paymentVoucherMediaAssetId,
-            ] } },
-          })
-        }
-        await transaction.region.deleteMany({ where: { code: `PX-${suffix}-C` } })
-        await transaction.region.deleteMany({ where: { code: `PX-${suffix}-P` } })
-        await transaction.region.deleteMany({ where: { code: `PX-${suffix}` } })
-        await transaction.auditEvent.deleteMany({
-          where: { actorUser: { username } },
-        })
-        await transaction.user.deleteMany({ where: { username } })
-      })
-      await prisma.currency.update({
-        where: { code: 'CNY' }, data: { enabled: cnyWasEnabled },
-      })
-      await prisma.currency.update({
-        where: { id: twdCurrencyId }, data: { enabled: twdWasEnabled },
-      })
-      if (createdTwdExchangeRate) {
-        await prisma.exchangeRate.delete({ where: { currencyId: twdCurrencyId } })
-      }
-    }
-    finally {
-      await prisma.onModuleDestroy()
-    }
+    await prisma?.onModuleDestroy()
+    await database?.dispose()
   })
 
   function context(idempotencyKey = randomUUID()) {
@@ -516,6 +409,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     return {
       purchaseType: 'SALES_LINKED',
       productMode: 'CATALOG',
+      expectedShippingMarkResolution: catalogResolution,
       salesOrderId,
       supplierValue,
       orderDate: '2026-08-27',
@@ -538,6 +432,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     return {
       purchaseType: 'SALES_LINKED',
       productMode: 'CUSTOM',
+      expectedShippingMarkResolution: customResolution,
       salesOrderId,
       customSupplierName: 'E2E 临时供应商',
       orderDate: '2026-08-27',
@@ -606,7 +501,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       productMode: 'CUSTOM',
       customSupplierName: 'E2E 备货供应商',
       orderDate: '2026-08-27',
-      shippingMarkText: ' E2E 唛头 ',
+      expectedShippingMarkResolution: customResolution,
       lines: [{
         lineType: 'CUSTOM',
         name: '临时采购产品',
@@ -635,7 +530,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(created).toMatchObject({
       purchaseType: 'STOCK',
       currencyCode: 'CNY',
-      shippingMarkText: 'E2E 唛头',
+      shippingMarkText: expect.stringMatching(/^MARK\d{8}$/u) as unknown,
       paymentStatus: 'UNPAID',
       lines: [{
         lineType: 'CUSTOM',
@@ -719,6 +614,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   it('persists typed voucher names without renaming source files or reusing uploads', async () => {
     const orderId = await commands.create(context(), {
       purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: '凭证命名测试供应商',
+      expectedShippingMarkResolution: customResolution,
       orderDate: '2026-08-27',
       lines: [{
         lineType: 'CUSTOM', name: '凭证命名测试产品', description: null,

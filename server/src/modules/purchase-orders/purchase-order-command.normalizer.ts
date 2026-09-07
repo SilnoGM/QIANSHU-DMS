@@ -18,7 +18,6 @@ import {
 } from './domain/purchase-order-errors'
 import {
   normalizePurchaseOrderDate,
-  normalizePurchaseOrderShippingMark,
 } from './domain/purchase-order-rules'
 
 const CANONICAL_UUID_V4_PATTERN =
@@ -59,7 +58,7 @@ export interface NormalizedPurchaseOrderCreateCommand {
   readonly customSupplierName: string | null
   readonly orderDate: string
   readonly currencyCode: 'CNY'
-  readonly shippingMarkText: string | null
+  readonly expectedShippingMarkResolution: string
   readonly lines: readonly NormalizedPurchaseOrderCreateLine[]
   readonly lineSubtotalAmount: string
   readonly purchaseTotalAmount: string
@@ -364,7 +363,7 @@ export function normalizePurchaseOrderCreateCommand(
     'supplierValue',
     'customSupplierName',
     'orderDate',
-    'shippingMarkText',
+    'expectedShippingMarkResolution',
     'lines',
     'purchaseTotalAmount',
     'depositDueAmount',
@@ -372,6 +371,10 @@ export function normalizePurchaseOrderCreateCommand(
     'remark',
   ])
   const purchaseType = normalizePurchaseType(body.purchaseType)
+  if (typeof body.expectedShippingMarkResolution !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(body.expectedShippingMarkResolution)) {
+    return purchaseOrderValidationFailure('expectedShippingMarkResolution', '请重新核对唛头规则')
+  }
   const productMode = normalizeProductMode(body.productMode)
   const supplier = normalizeSupplierSource(body, productMode)
   const salesOrderId = purchaseType === 'SALES_LINKED'
@@ -415,7 +418,7 @@ export function normalizePurchaseOrderCreateCommand(
     ...supplier,
     orderDate,
     currencyCode: 'CNY',
-    shippingMarkText: normalizePurchaseOrderShippingMark(body.shippingMarkText),
+    expectedShippingMarkResolution: body.expectedShippingMarkResolution,
     lines,
     ...amounts,
     remark: normalizeNullableText(body.remark, 'remark', 1000),

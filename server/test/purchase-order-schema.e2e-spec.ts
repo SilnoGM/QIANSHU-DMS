@@ -1,10 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto'
 
 import { Client } from 'pg'
+import { createPurchaseShippingMarkFixture } from './purchase-order-shipping-mark.fixture'
 
 function requireDatabaseUrl(): string {
   const value = process.env.DATABASE_URL
   if (!value) throw new Error('DATABASE_URL is required for PurchaseOrder E2E tests')
+  const url = new URL(value)
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)
+    || !['127.0.0.1', 'localhost'].includes(url.hostname)
+    || url.username !== 'qianshu_ci' || url.pathname !== '/qianshu_ci') {
+    throw new Error('Purchase schema tests require the isolated CI database')
+  }
   return value
 }
 
@@ -197,6 +204,10 @@ describe('purchase order schema with isolated PostgreSQL', () => {
     const orderId = randomUUID()
     await client.query('SAVEPOINT custom_price_rejection')
     try {
+      const mark = await createPurchaseShippingMarkFixture(client, {
+        idempotencyKeyHash: hash(`purchase-key-${orderId}`),
+        requestFingerprintHash: hash(`purchase-request-${orderId}`),
+      })
       await client.query(
         `
           INSERT INTO "purchase_orders" (
@@ -204,9 +215,10 @@ describe('purchase order schema with isolated PostgreSQL', () => {
             "create_request_fingerprint_hash", "purchase_type", "product_mode",
             "supplier_value", "order_date", "line_subtotal_amount",
             "purchase_total_amount", "deposit_due_amount",
-            "balance_due_amount", "payment_status", "created_by_user_id"
+            "balance_due_amount", "payment_status", "created_by_user_id",
+            "shipping_mark_issuance_id", "shipping_mark_text"
           )
-          VALUES ($1, $2, $3, $4, 'STOCK', 'MIXED', 'SUPPLIER_E2E', CURRENT_DATE, 9, 9, 0, 9, 'UNPAID', $5)
+          VALUES ($1, $2, $3, $4, 'STOCK', 'MIXED', 'SUPPLIER_E2E', CURRENT_DATE, 9, 9, 0, 9, 'UNPAID', $5, $6, $7)
         `,
         [
           orderId,
@@ -214,6 +226,8 @@ describe('purchase order schema with isolated PostgreSQL', () => {
           hash(`purchase-key-${orderId}`),
           hash(`purchase-request-${orderId}`),
           actorId,
+          mark.shippingMarkIssuanceId,
+          mark.shippingMarkText,
         ],
       )
       await expectConstraintRejection(
@@ -241,6 +255,10 @@ describe('purchase order schema with isolated PostgreSQL', () => {
     const orderId = randomUUID()
     await client.query('SAVEPOINT source_quantity_rejection')
     try {
+      const mark = await createPurchaseShippingMarkFixture(client, {
+        idempotencyKeyHash: hash(`purchase-key-${orderId}`),
+        requestFingerprintHash: hash(`purchase-request-${orderId}`),
+      })
       await client.query(
         `
           INSERT INTO "purchase_orders" (
@@ -248,9 +266,10 @@ describe('purchase order schema with isolated PostgreSQL', () => {
             "create_request_fingerprint_hash", "purchase_type", "product_mode", "sales_order_id",
             "supplier_value", "order_date", "line_subtotal_amount",
             "purchase_total_amount", "deposit_due_amount",
-            "balance_due_amount", "payment_status", "created_by_user_id"
+            "balance_due_amount", "payment_status", "created_by_user_id",
+            "shipping_mark_issuance_id", "shipping_mark_text"
           )
-          VALUES ($1, $2, $3, $4, 'SALES_LINKED', 'CATALOG', $5, 'SUPPLIER_E2E', CURRENT_DATE, 20, 20, 0, 20, 'UNPAID', $6)
+          VALUES ($1, $2, $3, $4, 'SALES_LINKED', 'CATALOG', $5, 'SUPPLIER_E2E', CURRENT_DATE, 20, 20, 0, 20, 'UNPAID', $6, $7, $8)
         `,
         [
           orderId,
@@ -259,6 +278,8 @@ describe('purchase order schema with isolated PostgreSQL', () => {
           hash(`purchase-request-${orderId}`),
           salesOrderId,
           actorId,
+          mark.shippingMarkIssuanceId,
+          mark.shippingMarkText,
         ],
       )
       await client.query(

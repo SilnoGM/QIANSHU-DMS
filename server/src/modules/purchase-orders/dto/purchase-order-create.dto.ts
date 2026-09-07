@@ -120,11 +120,13 @@ export class CreatePurchaseOrderRequestDto {
   @Matches(PURCHASE_DATE_PATTERN)
   orderDate!: string
 
-  @ApiProperty({ type: 'string', maxLength: 2000, nullable: true, required: false })
-  @IsOptional()
+  @ApiProperty({
+    type: 'string', pattern: '^[0-9a-f]{64}$',
+    description: '采购唛头规则解析返回的匹配摘要，正式提交时重新校验',
+  })
   @IsString()
-  @IsUnicodeCodePointLength(0, 2000)
-  shippingMarkText?: string | null
+  @Matches(/^[0-9a-f]{64}$/u)
+  expectedShippingMarkResolution!: string
 
   @ApiProperty({ type: () => [PurchaseOrderLineInputDto], minItems: 1, maxItems: 100 })
   @IsArray()

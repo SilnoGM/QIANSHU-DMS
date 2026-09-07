@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { Script } from 'node:vm'
 
 import {
   cacheControlForPath,
@@ -121,6 +122,7 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
     '-C', 'server', 'exec', 'node',
   ])
   assert.equal(command.args.includes(input.password), false)
+  assert.doesNotThrow(() => new Script(command.args.at(-1)))
   assert.match(command.args.at(-1), /INSERT INTO user_profiles/u)
   assert.match(command.args.at(-1), /browser_products_read/u)
   assert.match(command.args.at(-1), /browser_products_update/u)
@@ -147,6 +149,15 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.match(command.args.at(-1), /VALUES \(\\'PRODUCT\\'/u)
   assert.match(command.args.at(-1), /VALUES \(\\'SALES_ORDER\\'/u)
   assert.match(command.args.at(-1), /VALUES \(\\'PURCHASE_ORDER\\'/u)
+  assert.match(command.args.at(-1), /provisionBrowserShippingMarkFixtures\(client, user\.rows\[0\]\.id\)/u)
+  assert.match(command.args.at(-1), /BROWSER_MARK/u)
+  assert.match(command.args.at(-1), /CUSTOM_MARK/u)
+  assert.match(command.args.at(-1), /INSERT INTO supplier_shipping_mark_rule_bindings/u)
+  assert.match(command.args.at(-1), /BROWSER-HISTORICAL-MIXED-ACTIVE-MARK/u)
+  assert.match(command.args.at(-1), /BROWSER-HISTORICAL-MIXED-CANCEL-MARK/u)
+  assert.match(command.args.at(-1), /shippingMarkFixtures\.mixedActiveIssuanceId/u)
+  assert.match(command.args.at(-1), /shippingMarkFixtures\.mixedCancelableIssuanceId/u)
+  assert.doesNotMatch(command.args.at(-1), /DISABLE TRIGGER|session_replication_role/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_versions/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_segments/u)
   assert.match(command.args.at(-1), /SET status = \\'ACTIVE\\'/u)

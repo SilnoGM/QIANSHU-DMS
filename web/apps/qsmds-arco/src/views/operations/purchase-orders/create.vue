@@ -7,8 +7,10 @@ import type {
   PurchaseOrderSubmissionState,
   PurchaseOrderSubmittingState,
 } from './purchase-order-create.logic'
+import type { PurchaseOrderShippingMarkState } from './purchase-order-shipping-mark.logic'
 import type { PurchaseSourceSalesOrderSelection } from './purchase-source-sales-order-selector.types'
 import type {
+  PurchaseOrderShippingMarkResolutionDto,
   PurchaseOrderSourceSalesOrderLineDto,
   PurchaseOrderSourceSalesOrderListItemDto,
 } from '@/api/generated/types.gen'
@@ -61,6 +63,11 @@ import {
   isPurchaseOrderAbortError,
 } from './purchase-order-list.logic'
 import PurchaseOrderPaymentTerms from './purchase-order-payment-terms.vue'
+import {
+  createPurchaseOrderShippingMarkResolver,
+  formatPurchaseOrderShippingMarkSummary,
+  isPurchaseOrderShippingMarkAvailable,
+} from './purchase-order-shipping-mark.logic'
 import PurchaseSourceSalesOrderSelector from './purchase-source-sales-order-selector.vue'
 
 defineOptions({ name: 'OperationsPurchaseOrderCreate' })
@@ -89,6 +96,7 @@ const todayDate = today(getLocalTimeZone())
 const todayIso = todayDate.toString()
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
+const canConfigureShippingMarks = computed(() => auth('purchase-shipping-marks:read'))
 const createContext = parsePurchaseOrderCreateContext({
   canCreateStock: canCreateStock.value,
   customSupplierName: route.query.customSupplierName,
@@ -119,7 +127,6 @@ const formModel = reactive({
   lines: [] as OrderProductLineModel[],
   orderDate: todayIso,
   remark: '',
-  shippingMarkText: '',
   supplierValue: createContext?.supplierValue ?? null,
   customSupplierName: createContext?.customSupplierName ?? null,
 })
@@ -153,6 +160,14 @@ const reviewHeadingRef = useTemplateRef<HTMLElement>('reviewHeadingRef')
 const supplierSelectRef = useTemplateRef<InstanceType<typeof QsDictionarySelect>>('supplierSelectRef')
 const isDesktopSummary = useMediaQuery('(min-width: 1280px)')
 const submission = shallowRef<PurchaseOrderSubmissionState>(createPurchaseOrderEditingState())
+const shippingMarkState = shallowRef<PurchaseOrderShippingMarkState>({ error: '', loading: false, resolution: null })
+const frozenShippingMarkResolution = shallowRef<PurchaseOrderShippingMarkResolutionDto | null>(null)
+const shippingMarkResolver = createPurchaseOrderShippingMarkResolver({
+  canRefresh: () => submission.value.phase === 'editing' && canCreate.value,
+  getAuthEpoch: () => appAccountStore.authEpoch,
+  load: async (query, signal) => (await purchaseOrdersApi.shippingMarkResolution(query, signal)).data,
+  onChange: (state) => { shippingMarkState.value = state },
+})
 let sourceAbortController: AbortController | null = null
 let shortcutAbortController: AbortController | null = null
 let synchronizeAbortController: AbortController | null = null
@@ -178,6 +193,15 @@ const selectedSupplierDisplayLabel = computed(() => (
       ?? formModel.supplierValue
       ?? '—')
 ))
+const shippingMarkResolution = computed(() => (
+  submission.value.phase === 'editing'
+    ? shippingMarkState.value.resolution
+    : frozenShippingMarkResolution.value
+))
+const shippingMarkSummary = computed(() => formatPurchaseOrderShippingMarkSummary(shippingMarkResolution.value))
+const shippingMarkAvailable = computed(() => (
+  !shippingMarkState.value.loading && isPurchaseOrderShippingMarkAvailable(shippingMarkResolution.value)
+))
 const purchaseOrderDescModel = computed(() => mapPurchaseOrderCreateToDesc({
   balanceDueAmount: formModel.balanceDueAmount,
   depositDueAmount: formModel.depositDueAmount,
@@ -191,10 +215,11 @@ const purchaseOrderDescModel = computed(() => mapPurchaseOrderCreateToDesc({
   purchaseType: purchaseType ?? 'SALES_LINKED',
   remark: formModel.remark,
   salesOrder: selectedSalesOrder.value,
-  shippingMarkText: formModel.shippingMarkText,
+  shippingMarkText: shippingMarkSummary.value,
   supplierLabel: selectedSupplierDisplayLabel.value,
 }))
 const submitLocked = computed(() => submission.value.phase === 'submitting')
+const editingLocked = computed(() => submission.value.phase !== 'editing')
 // 两类采购都复用分步填写与核对流程；销售来源能力仍单独受类型约束，
 // 避免为了统一页面体验而把销售订单选择或同步入口泄漏给备货采购。
 const steppedCreate = computed(() => purchaseType !== null)
@@ -218,7 +243,6 @@ const shouldConfirmDiscard = computed(() => (
     || formModel.lines.length > 0
     || formModel.depositDueAmount !== null
     || formModel.balanceDueAmount !== null
-    || formModel.shippingMarkText !== ''
     || formModel.remark !== ''
     || selectedSalesOrder.value !== null
   )
@@ -233,7 +257,7 @@ const formErrorDisplay = computed(() => requestId.value === undefined
 const activeStepTitle = computed(() => purchaseOrderSteps[activeStep.value]?.title ?? '')
 const submitStatusMessage = computed(() => {
   if (submission.value.phase === 'submitting') {
-    return '采购订单正在保存并派发编号，请勿重复操作。'
+    return '采购订单正在保存并派发订单号与唛头，请勿重复操作。'
   }
   if (submission.value.phase === 'unknown') {
     return '保存结果暂时未知，请使用原请求重新确认，避免产生重复采购订单。'
@@ -241,12 +265,13 @@ const submitStatusMessage = computed(() => {
   if (currencyUnavailable.value) {
     return 'CNY 当前不可用，暂时无法提交采购订单。'
   }
-  return '全部步骤已完成且校验通过，可以提交并幂等派发采购订单号。'
+  return '全部步骤已完成且校验通过，正式提交后自动派发订单号与唛头。'
 })
 const submitReady = computed(() => (
   createSurface.value === 'review'
   && submission.value.phase === 'editing'
   && !currencyUnavailable.value
+  && shippingMarkAvailable.value
   && furthestReachedStep.value === PURCHASE_ORDER_CREATE_REVIEW_STEP
 ))
 
@@ -281,8 +306,21 @@ function clearFeedback(): void {
   requestId.value = undefined
 }
 
+function refreshShippingMarkResolution(): void {
+  if (editingLocked.value || productMode === null) {
+    return
+  }
+  if (productMode === 'CATALOG' && !formModel.supplierValue) {
+    shippingMarkResolver.reset()
+    return
+  }
+  void shippingMarkResolver.refresh(productMode === 'CUSTOM'
+    ? { productMode: 'CUSTOM' }
+    : { productMode: 'CATALOG', supplierValue: formModel.supplierValue! })
+}
+
 function updateOrderDate(value: DateValue | DateValue[] | undefined): void {
-  if (value === undefined || Array.isArray(value) || submitLocked.value) {
+  if (value === undefined || Array.isArray(value) || editingLocked.value) {
     return
   }
   formModel.orderDate = value.toString()
@@ -290,7 +328,7 @@ function updateOrderDate(value: DateValue | DateValue[] | undefined): void {
 }
 
 function handleSupplierUpdate(value: string | null): void {
-  if (submitLocked.value || value === formModel.supplierValue) {
+  if (editingLocked.value || value === formModel.supplierValue) {
     return
   }
   requestSupplierChange({ customSupplierName: null, supplierValue: value })
@@ -298,7 +336,7 @@ function handleSupplierUpdate(value: string | null): void {
 
 function handleCustomSupplierUpdate(value: unknown): void {
   const nextValue = String(value ?? '')
-  if (submitLocked.value) {
+  if (editingLocked.value) {
     return
   }
   customSupplierDraft.value = nextValue
@@ -319,7 +357,7 @@ function hasSupplierDependentData(): boolean {
 
 function requestCustomSupplierChange(): void {
   const nextValue = customSupplierDraft.value
-  if (submitLocked.value || nextValue === formModel.customSupplierName) {
+  if (editingLocked.value || nextValue === formModel.customSupplierName) {
     return
   }
   requestSupplierChange({ customSupplierName: nextValue, supplierValue: null })
@@ -393,11 +431,6 @@ function handleDepositUpdate(value: string | null): void {
 
 function handleBalanceUpdate(value: string | null): void {
   formModel.balanceDueAmount = value
-  clearFeedback()
-}
-
-function handleShippingMarkUpdate(value: unknown): void {
-  formModel.shippingMarkText = String(value ?? '')
   clearFeedback()
 }
 
@@ -622,7 +655,9 @@ function buildCurrentSource() {
     purchaseType,
     remark: formModel.remark,
     salesOrderId: selectedSalesOrder.value?.id ?? null,
-    shippingMarkText: formModel.shippingMarkText,
+    expectedShippingMarkResolution: shippingMarkAvailable.value
+      ? shippingMarkResolution.value?.resolutionToken ?? null
+      : null,
     sourceSalesOrderLineIdByKey: sourceSalesOrderLineIdByKey.value,
     supplierValue: formModel.supplierValue,
     customSupplierName: formModel.customSupplierName,
@@ -685,7 +720,8 @@ function enterPurchaseOrderReview(): void {
 
 function nextStep(): void {
   if (
-    !steppedCreate.value
+    editingLocked.value
+    || !steppedCreate.value
     || createSurface.value !== 'form'
     || activeStep.value === PURCHASE_ORDER_CREATE_REVIEW_STEP
   ) {
@@ -745,7 +781,7 @@ function nextStep(): void {
 }
 
 function returnToPurchaseOrderForm(): void {
-  if (!steppedCreate.value || submitLocked.value || createSurface.value !== 'review') {
+  if (!steppedCreate.value || editingLocked.value || createSurface.value !== 'review') {
     return
   }
   createSurface.value = 'form'
@@ -777,6 +813,7 @@ function focusFirstInvalidField(errors: Readonly<Record<string, string>>): void 
       balanceDueAmount: '尾款',
       customSupplierName: '供应商名称',
       depositDueAmount: '定金',
+      expectedShippingMarkResolution: '采购唛头规则',
       lines: '添加数据库产品',
       orderDate: '采购日期',
       salesOrderId: '选择销售订单',
@@ -807,7 +844,7 @@ function focusFirstInvalidField(errors: Readonly<Record<string, string>>): void 
 function requestSubmit(): void {
   if (
     !canCreate.value
-    || submitLocked.value
+    || editingLocked.value
     || currencyUnavailable.value
     || (steppedCreate.value && createSurface.value !== 'review')
   ) {
@@ -852,7 +889,12 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
     void router.push({ name: 'qsOperationsPurchaseOrders' })
   }
   catch (error) {
-    if (controller.signal.aborted || isPurchaseOrderAbortError(error)) {
+    if (
+      controller.signal.aborted
+      || isPurchaseOrderAbortError(error)
+      || state.requestVersion !== submitRequestVersion
+      || state.authEpoch !== appAccountStore.authEpoch
+    ) {
       return
     }
     const failure = getPurchaseOrderMutationFailure(error)
@@ -861,6 +903,7 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
     formError.value = failure.message
     requestId.value = failure.requestId
     if (!failure.unknownResult) {
+      frozenShippingMarkResolution.value = null
       submitConfirmVisible.value = false
       if (steppedCreate.value) {
         createSurface.value = 'form'
@@ -868,6 +911,10 @@ async function executeSubmission(state: PurchaseOrderSubmittingState): Promise<v
         goToFormStep(errorStep ?? 2)
       }
       focusFirstInvalidField(failure.fieldErrors)
+      if (failure.refreshShippingMarkResolution) {
+        // 已知未保存才允许更新摘要；刷新后仍停在第三步，让用户重新核对并确认。
+        refreshShippingMarkResolution()
+      }
     }
   }
   finally {
@@ -899,6 +946,9 @@ function confirmSubmit(): void {
     result.request,
     { authEpoch: appAccountStore.authEpoch, requestVersion: ++submitRequestVersion },
   )
+  frozenShippingMarkResolution.value = shippingMarkResolution.value === null
+    ? null
+    : Object.freeze({ ...shippingMarkResolution.value })
   submission.value = state
   void executeSubmission(state)
 }
@@ -966,6 +1016,7 @@ onBeforeRouteLeave(() => {
 })
 
 watch(() => appAccountStore.authEpoch, () => {
+  shippingMarkResolver.reset()
   shortcutAbortController?.abort()
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
@@ -974,6 +1025,8 @@ watch(() => appAccountStore.authEpoch, () => {
   pendingSupplierChange.value = null
   void router.replace({ name: 'qsOperationsPurchaseOrders' })
 })
+
+watch(() => formModel.supplierValue, refreshShippingMarkResolution, { flush: 'sync' })
 
 watch(isDesktopSummary, (desktop) => {
   if (desktop) {
@@ -988,10 +1041,12 @@ onMounted(() => {
     return
   }
   window.addEventListener('beforeunload', handleBeforeUnload)
+  refreshShippingMarkResolution()
   void bindSourceSalesOrderFromShortcut()
 })
 
 onBeforeUnmount(() => {
+  shippingMarkResolver.reset()
   shortcutAbortController?.abort()
   sourceAbortController?.abort()
   synchronizeAbortController?.abort()
@@ -1263,19 +1318,39 @@ onBeforeUnmount(() => {
                 aria-label="唛头与备注"
                 data-testid="purchase-order-step-mark-remark"
               >
-                <FaCard title="唛头与备注" description="采购唛头首期按文本保存，后续可在同一字段接入自动生成。">
+                <FaCard title="唛头与备注" description="按采购场景匹配唛头规则，正式提交后自动派发。">
                   <div class="gap-4 grid grid-cols-1">
-                    <FaFormItem name="shippingMarkText" label="采购唛头" :auto-bind="false">
-                      <FaTextarea
-                        :model-value="formModel.shippingMarkText"
-                        maxlength="2000"
-                        input-class="min-h-32"
-                        placeholder="输入采购唛头文本"
-                        :disabled="submitLocked"
-                        @update:model-value="handleShippingMarkUpdate"
-                      />
-                      <p v-if="fieldErrors.shippingMarkText" class="text-xs text-destructive m-0 mt-1" role="alert">
-                        {{ fieldErrors.shippingMarkText }}
+                    <FaFormItem name="expectedShippingMarkResolution" label="采购唛头" required :auto-bind="false">
+                      <div
+                        class="p-3 outline-none border border-border rounded-md bg-muted/20 min-w-0 focus-visible:ring-2 focus-visible:ring-primary/40"
+                        data-testid="purchase-order-shipping-mark-resolution"
+                        :data-availability="shippingMarkResolution?.availability ?? 'PENDING'"
+                        aria-label="采购唛头规则"
+                        aria-live="polite"
+                        :aria-busy="shippingMarkState.loading"
+                        tabindex="-1"
+                      >
+                        <p v-if="shippingMarkState.loading" class="text-sm text-muted-foreground m-0" role="status">
+                          正在匹配采购唛头规则…
+                        </p>
+                        <p v-else class="text-sm m-0 whitespace-pre-line break-words" :class="shippingMarkAvailable ? 'text-foreground' : 'text-destructive'">
+                          {{ shippingMarkSummary }}
+                        </p>
+                        <p v-if="shippingMarkState.error" class="text-sm text-destructive m-0 mt-2" role="alert">
+                          {{ shippingMarkState.error }}
+                        </p>
+                        <div class="mt-3 flex flex-wrap gap-2 items-center">
+                          <FaButton type="button" variant="outline" size="sm" class="min-h-11 sm:min-h-8" aria-label="刷新唛头规则" :disabled="editingLocked || shippingMarkState.loading" @click="refreshShippingMarkResolution">
+                            刷新规则
+                          </FaButton>
+                          <FaButton v-if="canConfigureShippingMarks" type="button" variant="outline" size="sm" class="min-h-11 sm:min-h-8" :disabled="editingLocked" @click="router.push({ name: 'systemBasicDataShippingMarkBindings' })">
+                            查看唛头配置
+                          </FaButton>
+                          <span v-else-if="!shippingMarkAvailable && !shippingMarkState.loading" class="text-xs text-muted-foreground">请联系管理员配置可用规则</span>
+                        </div>
+                      </div>
+                      <p v-if="fieldErrors.expectedShippingMarkResolution" class="text-xs text-destructive m-0 mt-1" role="alert">
+                        {{ fieldErrors.expectedShippingMarkResolution }}
                       </p>
                     </FaFormItem>
                     <FaFormItem name="remark" label="采购备注" :auto-bind="false">
@@ -1369,7 +1444,7 @@ onBeforeUnmount(() => {
                 核对采购订单
               </h2>
               <p class="text-sm text-muted-foreground leading-6 m-0 mt-2">
-                请确认下列资料无误；只有二次确认后才会正式保存并派发采购订单号。
+                请确认下列资料无误；只有二次确认后才会正式保存并派发采购订单号与唛头。
               </p>
             </header>
 
@@ -1404,7 +1479,7 @@ onBeforeUnmount(() => {
                     type="button"
                     variant="outline"
                     class="min-h-11 w-full sm:min-h-9 sm:w-auto"
-                    :disabled="submitLocked"
+                    :disabled="editingLocked"
                     @click="returnToPurchaseOrderForm"
                   >
                     返回修改
@@ -1496,13 +1571,20 @@ onBeforeUnmount(() => {
     <QsGenericModal
       :model-value="submitConfirmVisible"
       title="确认提交采购订单？"
-      description="确认后正式保存，并由 PURCHASE_ORDER 规则幂等派发采购订单号。"
+      description="确认后正式保存，并自动派发采购订单号与唛头。"
       size="sm"
       :closable="false"
       :dismiss-on-overlay="false"
       :submitting="submitLocked"
       @update:model-value="submitConfirmVisible = $event"
     >
+      <FaAlert
+        v-if="submission.phase === 'unknown'"
+        title="保存结果未知"
+        :description="formErrorDisplay"
+        variant="destructive"
+        class="mb-4"
+      />
       <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-[5rem_minmax(0,1fr)]">
         <dt class="text-sm text-muted-foreground">
           采购类型
@@ -1528,12 +1610,21 @@ onBeforeUnmount(() => {
         <dd class="m-0 overflow-x-auto">
           <AmountDisplay :value="purchaseTotalAmount" currency="CNY" :currencies="fixedCurrencies" />
         </dd>
+        <dt class="text-sm text-muted-foreground">
+          唛头规则
+        </dt>
+        <dd class="text-sm m-0 whitespace-pre-line break-words" data-testid="purchase-order-confirm-shipping-mark">
+          {{ shippingMarkSummary }}
+        </dd>
       </dl>
       <template #footer>
-        <FaButton type="button" variant="outline" :disabled="submitLocked" @click="submitConfirmVisible = false">
+        <FaButton type="button" variant="outline" :disabled="editingLocked" @click="submitConfirmVisible = false">
           返回检查
         </FaButton>
-        <FaButton type="button" :loading="submitLocked" @click="confirmSubmit">
+        <FaButton v-if="submission.phase === 'unknown'" type="button" @click="retryUnknownSubmission">
+          使用相同请求重新确认
+        </FaButton>
+        <FaButton v-else type="button" :loading="submitLocked" :disabled="!shippingMarkAvailable || editingLocked" @click="confirmSubmit">
           确认提交订单
         </FaButton>
       </template>

@@ -1002,6 +1002,7 @@ model PurchaseOrder {
   orderDate                    DateTime                       @map("order_date") @db.Date
   currencyCode                 String                         @default("CNY") @map("currency_code") @db.Char(3)
   shippingMarkText             String?                        @map("shipping_mark_text") @db.VarChar(2000)
+  shippingMarkIssuanceId       String?                        @unique(map: "purchase_orders_shipping_mark_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
   lineSubtotalAmount           Decimal                        @map("line_subtotal_amount") @db.Decimal(30, 4)
   purchaseTotalAmount          Decimal                        @map("purchase_total_amount") @db.Decimal(30, 4)
   depositDueAmount             Decimal                        @map("deposit_due_amount") @db.Decimal(30, 4)
@@ -1016,6 +1017,7 @@ model PurchaseOrder {
   updatedAt                    DateTime                       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   salesOrder   SalesOrder?                  @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  shippingMarkIssuance NumberingIssuance?    @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   currency     Currency                     @relation(fields: [currencyCode], references: [code], onDelete: Restrict, onUpdate: Restrict)
   createdBy    User                         @relation("PurchaseOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   lines        PurchaseOrderLine[]
@@ -1260,6 +1262,7 @@ model NumberingIssuance {
   rule        NumberingRule        @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   ruleVersion NumberingRuleVersion @relation(fields: [ruleVersionId, ruleId], references: [id, ruleId], onDelete: Restrict, onUpdate: Restrict)
   periodState NumberingPeriodState @relation(fields: [ruleId, periodKey], references: [ruleId, periodKey], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder?
 
   @@unique([ruleId, generatedNumber], map: "numbering_issuances_rule_id_generated_number_key")
   @@unique([consumerCode, idempotencyKeyHash], map: "numbering_issuances_consumer_code_idempotency_key_hash_key")

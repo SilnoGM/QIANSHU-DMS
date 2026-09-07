@@ -2,12 +2,14 @@ import { spawn } from 'node:child_process'
 import process from 'node:process'
 
 import { isDirectEntry } from '../run-command.mjs'
+import { provisionBrowserShippingMarkFixtures } from './provision-shipping-mark-fixtures.mjs'
 
 const bootstrapProgram = String.raw`
 const argon2 = require('argon2')
 const { randomUUID } = require('node:crypto')
 const { Client } = require('pg')
 let fixtureFailureCode = 'UNKNOWN'
+const provisionBrowserShippingMarkFixtures = ${provisionBrowserShippingMarkFixtures.toString()}
 
 ;(async () => {
   const passwordHash = await argon2.hash(
@@ -361,6 +363,9 @@ let fixtureFailureCode = 'UNKNOWN'
       [purchaseOrderRule.rows[0].id],
     )
 
+    fixtureFailureCode = 'PURCHASE_SHIPPING_MARK_RULES'
+    const shippingMarkFixtures = await provisionBrowserShippingMarkFixtures(client, user.rows[0].id)
+
     // 管理域 Browser 场景保留独立的 4 图 2 视频只读样本；产品媒体专属场景使用
     // 另一条空媒体 Product，通过真实 API 写入，避免测试文件顺序影响验收结果。
     const managementProduct = await client.query(
@@ -463,9 +468,8 @@ let fixtureFailureCode = 'UNKNOWN'
       ],
     )
 
-    // 历史 MIXED 采购单只能由迁移回填产生，新建 API 会严格拒绝该类型。
-    // Browser 夹具因此直接写入两张历史单：一张用于付款与发货，另一张保持
-    // 零付款用于取消，避免用同一订单绕过“有有效付款不可取消”的领域约束。
+    // MIXED 展示夹具不经过新建 API，用于付款/发货与零付款取消回归。
+    // 新 INSERT 仍携带合法唯一唛头关联；原历史文本/null 关联由迁移专测覆盖。
     fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_ACTIVE'
     const historicalMixedActiveOrder = await client.query(
       [
@@ -475,19 +479,19 @@ let fixtureFailureCode = 'UNKNOWN'
         'order_date, currency_code, shipping_mark_text, line_subtotal_amount,',
         'purchase_total_amount, deposit_due_amount, balance_due_amount, order_status,',
         'fulfillment_status, payment_status, created_by_user_id, remark, version,',
-        'created_at, updated_at',
+        'created_at, updated_at, shipping_mark_issuance_id',
         ') VALUES (',
         '\'PO-BRW-MIXED-ACTIVE\', decode(repeat(\'a\', 64), \'hex\'),',
         'decode(repeat(\'b\', 64), \'hex\'), \'STOCK\', \'MIXED\', NULL,',
         '\'BROWSER_SUPPLIER_EFFECTIVE\', NULL, CURRENT_DATE, \'CNY\',',
-        '\'BROWSER HISTORICAL MIXED ACTIVE MARK\', 30, 30, 10, 20,',
+        '\'BROWSER-HISTORICAL-MIXED-ACTIVE-MARK\', 30, 30, 10, 20,',
         '\'CONFIRMED\', \'ORDERED\', \'UNPAID\', $1,',
         '\'Browser 历史混合采购付款发货回归\', 1,',
         'clock_timestamp() - interval \'2 minutes\',',
-        'clock_timestamp() - interval \'2 minutes\'',
+        'clock_timestamp() - interval \'2 minutes\', $2',
         ') RETURNING id',
       ].join(' '),
-      [user.rows[0].id],
+      [user.rows[0].id, shippingMarkFixtures.mixedActiveIssuanceId],
     )
     fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_CANCEL'
     const historicalMixedCancelableOrder = await client.query(
@@ -498,19 +502,19 @@ let fixtureFailureCode = 'UNKNOWN'
         'order_date, currency_code, shipping_mark_text, line_subtotal_amount,',
         'purchase_total_amount, deposit_due_amount, balance_due_amount, order_status,',
         'fulfillment_status, payment_status, created_by_user_id, remark, version,',
-        'created_at, updated_at',
+        'created_at, updated_at, shipping_mark_issuance_id',
         ') VALUES (',
         '\'PO-BRW-MIXED-CANCEL\', decode(repeat(\'c\', 64), \'hex\'),',
         'decode(repeat(\'d\', 64), \'hex\'), \'STOCK\', \'MIXED\', NULL,',
         '\'BROWSER_SUPPLIER_EFFECTIVE\', NULL, CURRENT_DATE, \'CNY\',',
-        '\'BROWSER HISTORICAL MIXED CANCEL MARK\', 30, 30, 10, 20,',
+        '\'BROWSER-HISTORICAL-MIXED-CANCEL-MARK\', 30, 30, 10, 20,',
         '\'CONFIRMED\', \'ORDERED\', \'UNPAID\', $1,',
         '\'Browser 历史混合采购取消回归\', 1,',
         'clock_timestamp() - interval \'1 minute\',',
-        'clock_timestamp() - interval \'1 minute\'',
+        'clock_timestamp() - interval \'1 minute\', $2',
         ') RETURNING id',
       ].join(' '),
-      [user.rows[0].id],
+      [user.rows[0].id, shippingMarkFixtures.mixedCancelableIssuanceId],
     )
     fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_LINES'
     for (const historicalOrder of [

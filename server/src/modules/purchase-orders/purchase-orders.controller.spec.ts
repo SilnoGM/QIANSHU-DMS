@@ -9,6 +9,7 @@ import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
 import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import type { ProductMediaContentResponse } from '../products/media/product-media-content.service'
+import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
@@ -41,6 +42,9 @@ function createRequest(): object {
 }
 
 const providers = [{
+  provide: PurchaseShippingMarkResolverService,
+  useValue: { read: jest.fn() },
+}, {
   provide: PurchaseOrderQueryService,
   useValue: { getById: jest.fn(), list: jest.fn(), statusCounts: jest.fn() },
 }, {
@@ -75,6 +79,26 @@ const providers = [{
 class PurchaseOrdersContractModule {}
 
 describe('PurchaseOrdersController', () => {
+  it('allows creation operators to resolve only their scene without binding-management permissions', async () => {
+    const shippingMarks = { read: jest.fn().mockResolvedValue({ availability: 'AVAILABLE' }) }
+    const controller = new PurchaseOrdersController(
+      {} as PurchaseOrderQueryService,
+      {} as PurchaseOrderSourceQueryService,
+      {} as PurchaseOrderCommandService,
+      {} as PurchaseOrderMutationService,
+      {} as PurchaseOrderDocumentService,
+      {} as PurchaseOrderProductImageService,
+      shippingMarks as unknown as PurchaseShippingMarkResolverService,
+    )
+    const query = { productMode: 'CUSTOM' as const }
+    expect(await controller.shippingMarkResolution(query)).toEqual({ availability: 'AVAILABLE' })
+    expect(shippingMarks.read).toHaveBeenCalledWith(query)
+    expect(new Reflector().get(
+      REQUIRED_PERMISSIONS_METADATA,
+      PurchaseOrdersController.prototype.shippingMarkResolution,
+    )).toEqual(['purchase-orders:create'])
+  })
+
   it('keeps base create permission separate from system-only stock authorization', () => {
     const reflector = new Reflector()
     expect(reflector.get(
@@ -104,6 +128,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderMutationService,
       {} as PurchaseOrderDocumentService,
       {} as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
     )
     const request = createRequest()
     const input = { purchaseType: 'STOCK' }
@@ -132,6 +157,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderMutationService,
       {} as PurchaseOrderDocumentService,
       {} as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
     )
     const query = { view: 'pending' as const, supplierValue: 'SUPPLIER_A' }
 
@@ -160,6 +186,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderMutationService,
       {} as PurchaseOrderDocumentService,
       {} as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
     )
     const query = {
       view: 'UNPURCHASED' as const,
@@ -197,6 +224,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderMutationService,
       {} as PurchaseOrderDocumentService,
       { resolve } as unknown as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
     )
     const params = {
       productId: '33333333-3333-4333-8333-333333333333',
@@ -250,6 +278,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderMutationService,
       {} as PurchaseOrderDocumentService,
       { resolveSourceLinePreview } as unknown as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
     )
     const params = {
       salesOrderId: '33333333-3333-4333-8333-333333333333',
@@ -317,6 +346,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderMutationService,
       {} as PurchaseOrderDocumentService,
       { resolveListPreview } as unknown as PurchaseOrderProductImageService,
+      {} as PurchaseShippingMarkResolverService,
     )
     const params = {
       purchaseOrderId: ORDER_ID,
@@ -369,6 +399,46 @@ describe('PurchaseOrdersController OpenAPI', () => {
 
   beforeAll(async () => {
     document = await createOpenApiDocument(PurchaseOrdersContractModule)
+  })
+
+  it('publishes the scene resolution and automatic shipping mark create contract', () => {
+    const resolution: ContractOperation | undefined = document.paths[
+      '/api/purchase-orders/shipping-mark-resolution'
+    ]?.get
+    expect(resolution).toMatchObject({
+      operationId: 'purchase_orders_shipping_mark_resolution',
+      security: [{ sessionCookie: [] }],
+      'x-qianshu-contract': { authorization: true, validation: true, privateNoStore: true },
+      responses: { 200: { headers: { 'X-Request-Id': expect.any(Object) as unknown } } },
+    })
+    expect(resolution?.parameters).toHaveLength(2)
+    expect(resolution?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'productMode', required: true }),
+      expect.objectContaining({ in: 'query', name: 'supplierValue', required: false }),
+    ]))
+    expect(document.components?.schemas?.PurchaseOrderShippingMarkResolutionDto).toMatchObject({
+      required: ['productMode', 'matchSource', 'ruleId', 'ruleCode', 'name', 'activeRevision', 'availability', 'message', 'resolutionToken'],
+      properties: {
+        matchSource: { enum: ['SUPPLIER_BINDING', 'CUSTOM_RULE'] },
+        ruleId: { nullable: true, type: 'string', format: 'uuid' },
+        resolutionToken: { nullable: true, type: 'string', pattern: '^[0-9a-f]{64}$' },
+      },
+    })
+    const create: ContractOperation | undefined = document.paths['/api/purchase-orders']?.post
+    expect(create?.['x-qianshu-contract']).toMatchObject({
+      errors: expect.arrayContaining([
+        expect.objectContaining({ status: 409, codes: expect.arrayContaining([
+          'PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED',
+          'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE',
+        ]) as unknown }),
+      ]) as unknown,
+    })
+    expect(document.components?.schemas?.CreatePurchaseOrderRequestDto).toMatchObject({
+      required: expect.arrayContaining(['expectedShippingMarkResolution']) as unknown,
+      properties: { expectedShippingMarkResolution: { type: 'string', pattern: '^[0-9a-f]{64}$' } },
+    })
+    const schema = document.components?.schemas?.CreatePurchaseOrderRequestDto
+    expect(schema && 'properties' in schema && schema.properties).not.toHaveProperty('shippingMarkText')
   })
 
   it('publishes effective purchased-line snapshots for sales-source reconciliation', () => {

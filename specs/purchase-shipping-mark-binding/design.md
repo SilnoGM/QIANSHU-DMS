@@ -1,6 +1,6 @@
 # 采购唛头规则绑定与自动派发技术设计
 
-状态：本轮仅实施第 3.1 节绑定表、第 5.1 节配置 API/权限、第 6.2 节配置页及对应审计；已获用户确认。自动派发相关设计继续待后续确认，禁止修改采购创建/读取契约或 Generator。业务基线见 [需求](requirements.md)，执行范围见 [任务](tasks.md)。
+状态：绑定配置已完成。用户现已明确确认第 3.2 节采购关联、第 4 节内部事务入口、第 5.2/5.3 节解析及创建契约、第 6.3 节采购页接入。详情派发摘要为可选项，本轮不增加；通过持久化关联与创建审计追溯。执行范围和验证见 [派发任务](issuance-tasks.md)，原绑定阶段记录见 [任务](tasks.md)。
 
 ## 1. 当前真相源
 
@@ -8,25 +8,25 @@
 | --- | --- |
 | [Prisma schema](../../server/prisma/schema.prisma) | 供应商来自字典；Product / PurchaseOrder 保存 `supplierValue`；自定义采购保存 `customSupplierName`；采购单现有 `shippingMarkText` 为可空文本 |
 | [字典 Lookup](../../server/src/modules/dictionaries/dictionary-lookup.service.ts) | 写入有效值校验在调用方事务中对 Type / Item 加共享锁；历史读取允许解析停用、未知值 |
-| [编号 Generator](../../server/src/modules/numbering/numbering-generator.service.ts) | `generate / generateScoped` 均自行开启事务；真实状态机已接收事务但为私有方法；具备幂等、规则检查、计数和随机冲突处理 |
+| [编号 Generator](../../server/src/modules/numbering/numbering-generator.service.ts) | `generate / generateScoped` 自行开启事务；`generateScopedInTransaction` 使用调用方事务并返回台账 ID；共用幂等、规则检查、计数和随机冲突状态机 |
 | [编号持久化](../../server/src/modules/numbering/numbering-generator.persistence.ts) | Rule 使用 `FOR SHARE`；PeriodState 使用 `FOR UPDATE`；Issuance 按规则内文本、消费者加幂等键保持唯一 |
-| [采购创建](../../server/src/modules/purchase-orders/purchase-order-command.service.ts) | 预检后独立派发采购单号，再以 Serializable 事务保存订单、明细和销售覆盖进度；唛头当前直接取请求文本 |
-| [采购创建指纹](../../server/src/modules/purchase-orders/purchase-order-create-fingerprint.ts) | 当前指纹版本为 `purchase-order.create.v2`，包含手填 `shippingMarkText` |
+| [采购创建](../../server/src/modules/purchase-orders/purchase-order-command.service.ts) | 预检后独立派发采购单号，再以 Serializable 事务派发唛头并保存订单、明细、销售覆盖进度及审计 |
+| [采购创建指纹](../../server/src/modules/purchase-orders/purchase-order-create-fingerprint.ts) | 当前指纹版本为 `purchase-order.create.v3`，包含 `expectedShippingMarkResolution`，拒绝手填 `shippingMarkText` |
 | [采购创建页面](../../web/apps/qsmds-arco/src/views/operations/purchase-orders/create.vue) | 第三步为唛头与备注；最终二次确认后才冻结请求和幂等键；有未知结果恢复路径 |
 | [编号路由](../../web/apps/qsmds-arco/src/router/modules/basic.data.ts) | 已有编号列表及隐藏的独立新增页，可沿用 activeMenu 组织配置页 |
 
-不把过去已实施规格中的“尚未部署”等历史状态作为当前部署事实。本轮不查询或更改业务库中的具体供应商、绑定及规则配置。
+不把过去已实施规格中的“尚未部署”等历史状态作为当前部署事实。接入前已只读核对规则及绑定，实际配置可能继续变化；本轮不更改业务库中的供应商、绑定及规则配置。
 
 ## 2. 架构与职责
 
-本轮实际依赖：`HttpModules → PurchaseShippingMarksModule → Prisma / Dictionary / Auth`（审计沿用 AuthModule 导出的 AuditService）。采购模块和编号 Generator 不依赖此配置模块。以下包含自动派发的职责均为后续扩展提案。
+本轮实际依赖：`PurchaseOrdersModule → PurchaseShippingMarksModule → Prisma / Dictionary / Auth`；采购命令同时调用 NumberingModule 的内部事务入口。Numbering 不依赖采购模块。审计沿用 AuthModule 导出的 AuditService。
 
-- 新增采购专属 `PurchaseShippingMarksModule`，承载绑定配置、场景解析和唛头消费编排；UI 入口属于编号管理，不意味着将采购语义写入编号引擎。
-- `PurchaseOrdersModule` 依赖该模块；该模块依赖 Dictionary、Numbering、Auth、Prisma。Numbering 不反向依赖采购模块。
+- 采购专属 `PurchaseShippingMarksModule` 承载绑定配置与场景解析；唛头消费事务由采购命令编排。UI 入口属于编号管理，不意味着将采购语义写入编号引擎。
+- `PurchaseOrdersModule` 依赖该模块及 NumberingModule；场景解析模块依赖 Dictionary、Auth、Prisma。Numbering 不反向依赖采购模块。
 - 不恢复 Supplier API / Store / Prisma model，不给通用 DictionaryItem 添加唛头专用字段，不引入通用“任意实体绑定引擎”。
 - 规则状态/用途/生效版本摘要由采购配置服务按现有 model 只读解析；不复制编号渲染、容量或计数算法。是否耗尽、配置能否生成由正式 Generator 最终判断，页面显示“提交时最终校验”，不承诺预留容量。
 
-## 3. 数据结构（3.1 已授权，3.2 延后）
+## 3. 数据结构（3.1 已完成，3.2 本轮已授权）
 
 ### 3.1 供应商规则绑定
 
@@ -66,7 +66,7 @@
 
 不连续调用两次各自提交的 `generateScoped()` 来生成采购单号和唛头后再保存订单。新增唛头应与订单、明细、销售覆盖进度和创建审计在同一个采购事务中提交。
 
-为此提议给 NumberingGeneratorService 增加一个**仅 Server 内部的受控事务入口**，例如 `generateScopedInTransaction(transaction, input)`：
+为此给 NumberingGeneratorService 增加一个**仅 Server 内部的受控事务入口** `generateScopedInTransaction(transaction, input)`：
 
 - 复用同一套输入校验、生成状态机、渲染器、计数和随机冲突算法，不新增 HTTP 发号接口。
 - 原 `generate / generateScoped` 签名、独立事务、永久派发及现有调用方行为不变。
@@ -74,7 +74,7 @@
 - 新入口不在失败的 PostgreSQL 事务里尝试重放。错误退出后，由采购创建在新事务/连接中恢复原采购结果；找不到已提交订单时返回可识别失败，不盲目再次发号。
 - 仅新内部入口的结果附带 `issuanceId`（生成和重放均返回），原入口返回契约保持不变；复用内部 ledger 查询，不从采购模块直接调用私有编号持久化函数。
 
-这属于**编号服务事务接入能力的窄扩展**，不是零源码改动；需随技术方案单独确认。规则算法、配置、计数维度及永久派发语义不改变。相比新增跨事务“待创建请求表+补偿状态机”，该方案更小且能原子保存唛头。
+这属于已明确批准的**编号服务事务接入能力的窄扩展**。规则算法、配置、计数维度及永久派发语义不改变，不新增跨事务待创建请求表或补偿状态机。
 
 现有采购单号仍沿用原独立幂等派发，首版不改变其已占号但未成单的既有恢复语义，也不承诺采购单号无断号。
 
@@ -99,7 +99,7 @@
 - 已完成派发不会因取消采购或业务重试回收。这里回滚的是未提交事务，不是删除已发布 issuance。
 - 不同身份或不同请求复用同一幂等键：冲突。只读规则匹配失败不得被视为未知提交；真正的提交结果未知禁止编辑请求或生成新幂等键自动重试。
 
-## 5. API 与权限（5.1 已授权，5.2 / 5.3 延后）
+## 5. API 与权限（5.1 已完成，5.2 / 5.3 本轮已授权）
 
 所有接口沿用 Controller → Service → Prisma、统一 ApiError、Request ID、CSRF 与 OpenAPI 生成契约，不手写 generated types。
 
@@ -166,7 +166,7 @@ PUT 提交失败或响应未知时保留输入，通过重新读取确认最终�
 
 ## 7. 验证策略
 
-本轮配置验证及执行结果见 [实施任务](tasks.md)。以下跨采购自动派发的完整验证方案留待后续实施：
+绑定验证见 [实施任务](tasks.md)，以下采购自动派发验证本轮执行，结果见 [派发任务](issuance-tasks.md)：
 
 1. TDD：先覆盖映射唯一性、稳定 value、更换版本冲突、CUSTOM 固定规则、用途/状态/版本校验、越权及公共 DTO 禁止手填，再实现最小业务能力。
 2. 隔离 PostgreSQL：迁移历史文本不变、非法绑定被拒、自动订单缺关联/关联错误被拒、Issuance 不得重复关联、历史关联/文本不可变。
@@ -178,8 +178,8 @@ PUT 提交失败或响应未知时保留输入，通过重新读取确认最终�
 
 ## 8. 上线与审批
 
-- 本轮只交付绑定配置，任务和验证结果见 tasks.md；不接入自动派发，不创建真实业务绑定。
-- 绑定表、配置 API / 权限和页面已获确认；采购关联、场景解析、提交契约、内部事务入口继续等待后续确认。
-- 新增迁移不等于授权应用业务库。绑定配置默认空，`CUSTOM_MARK` 需要管理员自行创建、发布和启用；缺配置不影响当前手填采购流程。
-- 后续接入自动采购时，才需要在上线前完成所有必需配置、执行采购原子性和编号消费验证；本次不得提前阻止采购创建。
-- 不覆盖历史唛头、不修改旧迁移、不在业务库测试派号；不重启、不推送、不发布。上述动作分别取得明确授权后执行。
+- 本轮交付采购自动派发；不创建或改写真实规则和绑定。只读核对时唯一供应商已绑定 TEST_MARK，且 CUSTOM_MARK 已启用并有生效版本；该检查不预留容量。
+- 采购关联、场景解析、提交契约、内部事务入口已获得具体实施授权。
+- 新增迁移不等于授权应用业务库。本轮仅隔离验证，启用功能前仍须明确授权应用 migration，并同步启用匹配的 Web/Server。
+- 新契约要求刷新旧创建页；未完成的旧请求应在切换前处理，不能将 v2 未知结果改成 v3 新请求。未绑定或不可用配置会阻止新单创建，不退回手填。
+- 不覆盖历史唛头、不修改旧迁移、不在业务库测试派号；不重启、不推送、不发布。

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 
 import { Client } from 'pg'
+import { createPurchaseShippingMarkFixture } from './purchase-order-shipping-mark.fixture'
 
 /** 仅允许 CI wrapper 创建的临时数据库；不读取 .env，不向当前业务库写测试记录。 */
 function isolatedDatabaseUrl(): string {
@@ -21,12 +22,16 @@ describe('purchase records constraints on isolated PostgreSQL', () => {
 
   async function createOrder(id: string) {
     const hash = createHash('sha256').update(id).digest()
+    const mark = await createPurchaseShippingMarkFixture(client, {
+      idempotencyKeyHash: hash, requestFingerprintHash: hash,
+    })
     await client.query(`INSERT INTO purchase_orders (
       id, order_no, create_idempotency_key_hash, create_request_fingerprint_hash,
       purchase_type, product_mode, custom_supplier_name, order_date,
-      line_subtotal_amount, purchase_total_amount, deposit_due_amount, balance_due_amount, created_by_user_id
-    ) VALUES ($1, $2, $3, $3, 'STOCK', 'CUSTOM', 'Records E2E', CURRENT_DATE, 100, 100, 30, 70, $4)`,
-    [id, `PO-RECORDS-${id}`, hash, actorId])
+      line_subtotal_amount, purchase_total_amount, deposit_due_amount, balance_due_amount, created_by_user_id,
+      shipping_mark_issuance_id, shipping_mark_text
+    ) VALUES ($1, $2, $3, $3, 'STOCK', 'CUSTOM', 'Records E2E', CURRENT_DATE, 100, 100, 30, 70, $4, $5, $6)`,
+    [id, `PO-RECORDS-${id}`, hash, actorId, mark.shippingMarkIssuanceId, mark.shippingMarkText])
     await client.query(`INSERT INTO purchase_order_lines (
       purchase_order_id, line_number, line_type, product_name_snapshot,
       reference_purchase_unit_price_amount, actual_purchase_unit_price_amount, quantity, line_total_amount

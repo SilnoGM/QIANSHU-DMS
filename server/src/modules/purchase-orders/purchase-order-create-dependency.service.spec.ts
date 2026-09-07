@@ -15,6 +15,7 @@ function linkedCommand(
 ) {
   return normalizePurchaseOrderCreateCommand({
     purchaseType: 'SALES_LINKED',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     productMode: 'CATALOG',
     salesOrderId: SALES_ORDER_ID,
     supplierValue: 'SUPPLIER_A',
@@ -37,6 +38,7 @@ function linkedCommand(
 function stockCommand() {
   return normalizePurchaseOrderCreateCommand({
     purchaseType: 'STOCK',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     productMode: 'CUSTOM',
     customSupplierName: '备货供应商',
     orderDate: '2026-08-27',

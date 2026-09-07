@@ -17,7 +17,7 @@ function linkedInput(): Record<string, unknown> {
     salesOrderId: '11111111-1111-4111-8111-111111111111',
     supplierValue: ' supplier_a ',
     orderDate: TODAY,
-    shippingMarkText: ' BOX A\nBOX B ',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     lines: [
       {
         lineType: 'CATALOG',
@@ -40,7 +40,7 @@ function stockInput(): Record<string, unknown> {
     productMode: 'CUSTOM',
     customSupplierName: ' ＡＢＣ 供应商 ',
     orderDate: TODAY,
-    shippingMarkText: null,
+    expectedShippingMarkResolution: 'a'.repeat(64),
     lines: [{
       lineType: 'CUSTOM',
       name: ' 临时包装 ',
@@ -87,7 +87,7 @@ describe('normalizePurchaseOrderCreateCommand', () => {
       customSupplierName: null,
       orderDate: TODAY,
       currencyCode: 'CNY',
-      shippingMarkText: 'BOX A\nBOX B',
+      expectedShippingMarkResolution: 'a'.repeat(64),
       lines: [
         {
           lineNumber: 1,

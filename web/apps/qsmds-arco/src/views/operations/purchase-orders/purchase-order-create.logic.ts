@@ -49,7 +49,7 @@ export interface PurchaseOrderCreateSource {
   readonly purchaseType: PurchaseOrderCreateType
   readonly remark: string
   readonly salesOrderId: string | null
-  readonly shippingMarkText: string
+  readonly expectedShippingMarkResolution: string | null
   readonly sourceSalesOrderLineIdByKey: Readonly<Record<string, string | undefined>>
   readonly supplierValue: string | null
   readonly customSupplierName: string | null
@@ -90,6 +90,7 @@ export interface PurchaseOrderMutationFailure {
   readonly message: string
   readonly requestId?: string
   readonly unknownResult: boolean
+  readonly refreshShippingMarkResolution?: boolean
 }
 
 export interface PurchaseOrderEditingState {
@@ -313,7 +314,7 @@ export function resolvePurchaseOrderCreateStepForField(
   ) {
     return 1
   }
-  if (path === 'shippingMarkText' || path === 'remark') {
+  if (path === 'expectedShippingMarkResolution' || path === 'remark') {
     return 2
   }
   return null
@@ -611,10 +612,10 @@ export function buildPurchaseOrderCreateRequest(
     fieldErrors.balanceDueAmount = '采购总价必须等于定金与尾款之和'
   }
 
-  const shippingMarkText = normalizeOptionalText(source.shippingMarkText)
+  const expectedShippingMarkResolution = source.expectedShippingMarkResolution
   const remark = normalizeOptionalText(source.remark)
-  if (shippingMarkText !== null && unicodeLength(shippingMarkText) > 2000) {
-    fieldErrors.shippingMarkText = '采购唛头最多 2000 个字符'
+  if (expectedShippingMarkResolution === null || !/^[a-f0-9]{64}$/u.test(expectedShippingMarkResolution)) {
+    fieldErrors.expectedShippingMarkResolution = '请先取得可用的采购唛头规则并核对'
   }
   if (remark !== null && unicodeLength(remark) > 1000) {
     fieldErrors.remark = '备注最多 1000 个字符'
@@ -642,7 +643,7 @@ export function buildPurchaseOrderCreateRequest(
       ...(source.purchaseType === 'SALES_LINKED'
         ? { salesOrderId: source.salesOrderId! }
         : {}),
-      shippingMarkText,
+      expectedShippingMarkResolution: expectedShippingMarkResolution!,
       ...(source.productMode === 'CATALOG'
         ? { supplierValue: supplierValue! }
         : { customSupplierName: customSupplierName! }),
@@ -791,6 +792,15 @@ export function getPurchaseOrderMutationFailure(
     }
   }
   const status = typeof error.status === 'number' ? error.status : undefined
+  const refreshShippingMarkResolution = status === 409 && (
+    body?.code === 'PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED'
+    || body?.code === 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE'
+  )
+  if (refreshShippingMarkResolution) {
+    fieldErrors.expectedShippingMarkResolution = typeof body?.message === 'string'
+      ? body.message
+      : '采购唛头规则已变化或不可用，请刷新核对'
+  }
   return {
     fieldErrors: Object.freeze(fieldErrors),
     message: typeof body?.message === 'string'
@@ -804,5 +814,6 @@ export function getPurchaseOrderMutationFailure(
         ? error.requestId
         : undefined,
     unknownResult: status === undefined || status >= 500,
+    ...(refreshShippingMarkResolution ? { refreshShippingMarkResolution: true } : {}),
   }
 }

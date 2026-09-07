@@ -64,6 +64,23 @@ export interface GenerateNumberResult {
   readonly idempotentReplay: boolean
 }
 
+export interface GenerateNumberInTransactionResult extends GenerateNumberResult {
+  readonly issuanceId: string
+}
+
+/** 独立派发入口保留原返回契约；ledger 身份只提供给共同提交业务事实的新入口。 */
+function toIndependentResult(
+  result: GenerateNumberInTransactionResult,
+): GenerateNumberResult {
+  return {
+    number: result.number,
+    ruleCode: result.ruleCode,
+    ruleRevision: result.ruleRevision,
+    issuedAt: result.issuedAt,
+    idempotentReplay: result.idempotentReplay,
+  }
+}
+
 const IDEMPOTENCY_UNIQUE_CONSTRAINT =
   'numbering_issuances_consumer_code_idempotency_key_hash_key'
 const OUTPUT_UNIQUE_CONSTRAINT =
@@ -141,7 +158,7 @@ function sameHash(left: Buffer, right: Buffer): boolean {
 function resolveIdempotentRecord(
   record: IdempotentIssuanceRecord | null,
   request: ValidatedGenerateNumberRequest,
-): GenerateNumberResult | null {
+): GenerateNumberInTransactionResult | null {
   if (record === null) {
     return null
   }
@@ -153,6 +170,7 @@ function resolveIdempotentRecord(
   }
 
   return {
+    issuanceId: record.id,
     number: record.generatedNumber,
     ruleCode: record.ruleCode,
     ruleRevision: record.revision,
@@ -195,14 +213,35 @@ export class NumberingGeneratorService {
     return this.generateValidated(validateGenerateScopedNumberRequest(input))
   }
 
-  /** 两个公开内部入口只负责各自输入规范，之后必须共用同一状态机。 */
+  /**
+   * 调用方必须在事务第一条 SQL 设置固定超时，并负责提交或回滚全部业务事实。
+   * 本入口不嵌套事务，也不在失败事务内查询 ledger；竞态恢复须由调用方回滚后执行。
+   */
+  async generateScopedInTransaction(
+    transaction: Prisma.TransactionClient,
+    input: Readonly<GenerateScopedNumberRequest>,
+  ): Promise<GenerateNumberInTransactionResult> {
+    const request = validateGenerateScopedNumberRequest(input)
+    try {
+      return await this.generateInTransaction(transaction, request)
+    } catch (error) {
+      if (isIdempotencyUniqueViolation(error)) {
+        throw new NumberingGenerationError(NUMBERING_ERROR_CODES.RULE_STATE_CHANGED)
+      }
+      throw toGenerationError(error)
+    }
+  }
+
+  /** 独立派发入口负责自己的事务生命周期，之后与调用方事务入口共用状态机。 */
   private async generateValidated(
     request: ValidatedGenerateNumberRequest,
   ): Promise<GenerateNumberResult> {
     try {
-      return await this.prisma.$transaction(transaction =>
-        this.generateInTransaction(transaction, request),
-      )
+      const result = await this.prisma.$transaction(async (transaction) => {
+        await applyTransactionTimeouts(transaction)
+        return this.generateInTransaction(transaction, request)
+      })
+      return toIndependentResult(result)
     } catch (error) {
       if (isIdempotencyUniqueViolation(error)) {
         return this.recoverIdempotencyRace(request, error)
@@ -214,9 +253,8 @@ export class NumberingGeneratorService {
   private async generateInTransaction(
     transaction: Prisma.TransactionClient,
     request: ValidatedGenerateNumberRequest,
-  ): Promise<GenerateNumberResult> {
-    // timeout 必须是事务第一条 SQL；之后只使用一次读取到的数据库时间。
-    await applyTransactionTimeouts(transaction)
+  ): Promise<GenerateNumberInTransactionResult> {
+    // 超时由事务所有者设置；状态机只使用一次读取到的数据库时间。
     const asOf = await readNumberingTransactionTimestamp(transaction)
 
     const firstReplay = resolveIdempotentRecord(
@@ -308,7 +346,7 @@ export class NumberingGeneratorService {
         sequenceState.nextSequenceValue,
         this.randomSource,
       )
-      await insertSequenceIssuance(transaction, {
+      const issuanceId = await insertSequenceIssuance(transaction, {
         ...issuanceBase,
         generatedNumber: number,
         sequenceValue: sequenceState.nextSequenceValue,
@@ -323,6 +361,7 @@ export class NumberingGeneratorService {
       })
 
       return {
+        issuanceId,
         number,
         ruleCode: request.ruleCode,
         ruleRevision: snapshot.revision,
@@ -339,6 +378,7 @@ export class NumberingGeneratorService {
       return generationFailure(NUMBERING_ERROR_CODES.CAPACITY_EXHAUSTED)
     }
 
+    let issuanceId: string | null = null
     const number = await retryRandomCandidate(
       () => renderNumberingCandidate(
         snapshot.config,
@@ -346,18 +386,25 @@ export class NumberingGeneratorService {
         null,
         this.randomSource,
       ),
-      candidate => tryInsertRandomIssuance(transaction, {
-        ...issuanceBase,
-        generatedNumber: candidate,
-        sequenceValue: null,
-      }),
+      async (candidate) => {
+        issuanceId = await tryInsertRandomIssuance(transaction, {
+          ...issuanceBase,
+          generatedNumber: candidate,
+          sequenceValue: null,
+        })
+        return issuanceId !== null
+      },
     )
+    if (issuanceId === null) {
+      return generationFailure(NUMBERING_BOUNDARY_ERROR_CODES.INTERNAL_ERROR)
+    }
     await advancePeriodState(transaction, {
       periodStateId: state.id,
       nextSequenceValue: null,
     })
 
     return {
+      issuanceId,
       number,
       ruleCode: request.ruleCode,
       ruleRevision: snapshot.revision,
@@ -390,7 +437,7 @@ export class NumberingGeneratorService {
 
     const replay = resolveIdempotentRecord(record, request)
     if (replay !== null) {
-      return replay
+      return toIndependentResult(replay)
     }
     throw toGenerationError(originalError)
   }

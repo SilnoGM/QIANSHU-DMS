@@ -1,5 +1,6 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
+import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import test from 'node:test'
 
@@ -45,6 +46,24 @@ async function runPurchaseOrderBrowserStep(label, action) {
       cause: error,
     })
   }
+}
+
+async function readAvailableShippingMarkSummary(page, productMode) {
+  await page.waitFor(`(() => {
+    const region = document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"]')
+    return region?.getClientRects().length > 0
+      && region.getAttribute('data-availability') === 'AVAILABLE'
+      && region.getAttribute('aria-busy') === 'false'
+      && region.textContent.includes('正式提交后自动派发')
+      && region.textContent.includes(${JSON.stringify(productMode === 'CUSTOM' ? 'CUSTOM_MARK' : '供应商绑定规则')})
+      && region.querySelector('input, textarea') === null
+  })()`)
+  return page.evaluate(`document.querySelector('[data-testid="purchase-order-shipping-mark-resolution"] p')?.textContent?.trim()`)
+}
+
+async function assertConfirmShippingMarkSummary(page, expected) {
+  await page.waitFor(`document.querySelector('[data-testid="purchase-order-confirm-shipping-mark"]')
+    ?.textContent?.trim() === ${JSON.stringify(expected)}`)
 }
 
 /** 付款方式在手风琴正文内，先验证默认折叠，再展开并等待真实可见内容。 */
@@ -377,6 +396,24 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
   t.after(async () => browser.close())
 
   const page = await browser.newPage()
+  const createRequests = []
+  let resolutionRequests = 0
+  const unsubscribeRequests = page.on('Network.requestWillBeSent', ({ request }) => {
+    const path = new URL(request.url).pathname
+    if (path === '/api/purchase-orders/shipping-mark-resolution') {
+      resolutionRequests += 1
+    }
+    if (path === '/api/purchase-orders' && request.method === 'POST') {
+      const body = JSON.parse(request.postData ?? '{}')
+      // 只核对创建契约；不记录表单、凭据或完整请求。
+      createRequests.push({
+        hasManualMark: Object.hasOwn(body, 'shippingMarkText'),
+        key: Object.entries(request.headers).find(([name]) => name.toLowerCase() === 'idempotency-key')?.[1],
+        token: body.expectedShippingMarkResolution,
+      })
+    }
+  })
+  t.after(unsubscribeRequests)
   await page.setViewport(1440, 900, false)
   await page.connection.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
@@ -717,7 +754,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
       ?.getClientRects().length > 0`)
-    await fillLabelledControl(page, '采购唛头', 'BROWSER LINKED MARK')
+    const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CATALOG')
     await fillLabelledControl(page, '采购备注', 'BROWSER LINKED REMARK')
     await clickVisibleButton(page, '下一步')
 
@@ -746,7 +783,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         && !summary.textContent.includes('采购定价')
         && [...summary.querySelectorAll('[data-currency="CNY"]')]
           .some(amount => amount.getAttribute('aria-label')?.includes('160'))
-        && summary.textContent.includes('BROWSER LINKED MARK')
+        && summary.textContent.includes(${JSON.stringify(shippingMarkSummary)})
         && summary.textContent.includes('BROWSER LINKED REMARK')
     })()`)
 
@@ -814,6 +851,9 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
 
     await clickVisibleButton(page, '提交订单')
     await waitForVisibleDialog(page, '确认提交采购订单？')
+    await assertConfirmShippingMarkSummary(page, shippingMarkSummary)
+    assert.equal(createRequests.length, 0, '读取规则与进入确认不应创建采购订单')
+    assert.ok(resolutionRequests > 0)
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
@@ -841,6 +881,9 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     assert.equal(catalogLinkedOrder?.purchaseTotalAmount, '160.0000')
     assert.equal(catalogLinkedOrder?.depositDueAmount, '20.0000')
     assert.equal(catalogLinkedOrder?.balanceDueAmount, '140.0000')
+    assert.ok(catalogLinkedOrder?.shippingMarkText, '正式创建后必须返回自动派发的唛头')
+    assert.equal(createRequests[0]?.hasManualMark, false)
+    assert.match(createRequests[0]?.token ?? '', /^[a-f0-9]{64}$/u)
   })
 
   let linkedOrder
@@ -950,7 +993,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
       ?.getClientRects().length > 0`)
-    await fillLabelledControl(page, '采购唛头', 'BROWSER CUSTOM LINKED MARK')
+    const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CUSTOM')
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`(() => {
       const summary = document.querySelector('[data-testid="purchase-order-create-summary-column"]')
@@ -962,6 +1005,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     })()`)
     await clickVisibleButton(page, '提交订单')
     await waitForVisibleDialog(page, '确认提交采购订单？')
+    await assertConfirmShippingMarkSummary(page, shippingMarkSummary)
     await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
     await waitForPurchaseList(page, customSupplierName)
 
@@ -976,6 +1020,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     assert.equal(linkedOrder?.supplier?.value, null)
     assert.equal(linkedOrder?.supplier?.label, customSupplierName)
     assert.equal(linkedOrder?.purchaseTotalAmount, '30.0000')
+    assert.ok(linkedOrder?.shippingMarkText)
 
     const detail = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(linkedOrder.id)}`,
@@ -1048,14 +1093,15 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-step-mark-remark"]')
       ?.getClientRects().length > 0`)
-    await fillLabelledControl(page, '采购唛头', 'BROWSER STOCK MARK')
+    const shippingMarkSummary = await readAvailableShippingMarkSummary(page, 'CATALOG')
     await clickVisibleButton(page, '下一步')
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-review"]')
       ?.getClientRects().length > 0`)
     await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-summary-column"]')
-      ?.textContent?.includes('BROWSER STOCK MARK')`)
+      ?.textContent?.includes(${JSON.stringify(shippingMarkSummary)})`)
     await clickVisibleButton(page, '提交订单')
     await waitForVisibleDialog(page, '确认提交采购订单？')
+    await assertConfirmShippingMarkSummary(page, shippingMarkSummary)
     await page.waitFor(`(() => {
       const dialog = [...document.querySelectorAll('[role="dialog"]')]
         .find(candidate => candidate.getClientRects().length > 0
@@ -1064,8 +1110,60 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         && dialog.textContent.includes(${JSON.stringify(supplierLabel)})
         && dialog.textContent.includes('80')
     })()`)
+    // 用公开错误契约注入已知冲突，只检验 Web 的回退与重新确认边界。
+    const resolutionsBeforeConflict = resolutionRequests
+    await page.enableRequestInterception([{ urlPattern: '*/api/purchase-orders', requestStage: 'Request' }])
+    const conflictRequest = page.waitForEvent('Fetch.requestPaused', event => event.request.method === 'POST')
     await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
+    await page.connection.send('Fetch.fulfillRequest', {
+      requestId: (await conflictRequest).requestId,
+      responseCode: 409,
+      responseHeaders: [{ name: 'Content-Type', value: 'application/json' }],
+      body: Buffer.from(JSON.stringify({
+        code: 'PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED',
+        message: '采购唛头规则已变化，请重新核对',
+        requestId: 'browser-shipping-mark-conflict',
+      })).toString('base64'),
+    })
+    await page.disableRequestInterception()
+    await waitForNoVisibleDialog(page, '确认提交采购订单？')
+    await readAvailableShippingMarkSummary(page, 'CATALOG')
+    assert.ok(resolutionRequests > resolutionsBeforeConflict)
+    await page.waitFor(`document.activeElement?.getAttribute('aria-label') === '采购唛头规则'`)
+    assert.equal(await page.evaluate(`Number(document.querySelector('input[aria-label="尾款"]')?.value)`), 60)
+    await clickVisibleButton(page, '下一步')
+    await page.waitFor(`document.querySelector('[data-testid="purchase-order-create-review"]')?.getClientRects().length > 0`)
+    await clickVisibleButton(page, '提交订单')
+    await waitForVisibleDialog(page, '确认提交采购订单？')
+    await assertConfirmShippingMarkSummary(page, shippingMarkSummary)
+    // 响应阶段断网意味着服务端已完成创建，验证恢复不会刷新规则或换幂等键。
+    await page.enableRequestInterception([{ urlPattern: '*/api/purchase-orders', requestStage: 'Response' }])
+    const pausedResponse = page.waitForEvent('Fetch.requestPaused', event => (
+      event.request.method === 'POST' && event.responseStatusCode !== undefined
+    ))
+    await clickDialogButton(page, '确认提交采购订单？', '确认提交订单')
+    const paused = await pausedResponse
+    assert.equal(paused.responseStatusCode, 201, '丢弃响应前须确认服务端已创建订单')
+    await page.failInterceptedRequest(paused.requestId)
+    await page.disableRequestInterception()
+    await page.waitFor(`[...document.querySelectorAll('button')].some(button => (
+      button.getClientRects().length > 0 && button.textContent?.trim() === '使用相同请求重新确认'
+    ))`)
+    const resolutionCountBeforeReplay = resolutionRequests
+    const originalRequest = createRequests.at(-1)
+    await assertConfirmShippingMarkSummary(page, shippingMarkSummary)
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(item => item.getClientRects().length > 0 && item.textContent?.includes('确认提交采购订单？'))
+      return [...(dialog?.querySelectorAll('button') ?? [])]
+        .find(button => button.textContent?.trim() === '返回检查')?.disabled === true
+    })()`)
+    await clickDialogButton(page, '确认提交采购订单？', '使用相同请求重新确认')
     await waitForPurchaseList(page, supplierLabel)
+    assert.equal(resolutionRequests, resolutionCountBeforeReplay)
+    assert.equal(Boolean(originalRequest?.key), true)
+    assert.equal(createRequests.at(-1)?.key === originalRequest.key, true)
+    assert.equal(createRequests.at(-1)?.token === originalRequest.token, true)
 
     const response = await readPurchaseOrders(page)
     assert.equal(response.status, 200)
@@ -1078,6 +1176,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
     assert.equal(order?.purchaseTotalAmount, '80.0000')
     assert.equal(order?.depositDueAmount, '20.0000')
     assert.equal(order?.balanceDueAmount, '60.0000')
+    assert.ok(order?.shippingMarkText)
   })
 
   await runPurchaseOrderBrowserStep('stock CUSTOM exposes only temporary products', async () => {
@@ -1149,7 +1248,7 @@ test('真实 Chrome 覆盖销售关联与备货采购创建、直接取消、详
         && drawer.querySelector('[role="tab"][aria-selected="true"]')
           ?.textContent.includes('订单详情信息')
         && drawer.textContent.includes(${JSON.stringify(productNo)})
-        && drawer.textContent.includes('BROWSER STOCK MARK')
+        && drawer.textContent.includes(${JSON.stringify(order.shippingMarkText)})
         && productImage instanceof HTMLImageElement
         && productImage.src.includes('/api/purchase-orders/${order.id}/lines/')
         && productImage.complete

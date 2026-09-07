@@ -6,6 +6,7 @@ import { DictionaryModule } from '../dictionaries/dictionary.module'
 import { MediaModule } from '../media/media.module'
 import { NumberingModule } from '../numbering/numbering.module'
 import { ProductsModule } from '../products/products.module'
+import { PurchaseShippingMarksModule } from '../purchase-shipping-marks/purchase-shipping-marks.module'
 import { PurchaseOrderDocumentMultipartParser } from './documents/purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
 import {
@@ -31,6 +32,7 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
     MediaModule,
     NumberingModule,
     ProductsModule,
+    PurchaseShippingMarksModule,
   ],
   controllers: [
     PurchaseOrdersController,

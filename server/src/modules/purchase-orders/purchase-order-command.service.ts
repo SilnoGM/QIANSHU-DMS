@@ -16,6 +16,7 @@ import { applyTransactionTimeouts } from '../../infrastructure/database/transact
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import {
   NUMBERING_ERROR_CODES,
   NumberingGenerationError,
@@ -39,6 +40,7 @@ import {
   PURCHASE_ORDER_NUMBERING_RULE_CODE,
 } from './purchase-order-create-fingerprint'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
+import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requirePurchaseShippingMark } from './purchase-order-shipping-mark'
 
 const REQUEST_ID_MAXIMUM_CODE_POINTS = 64
 const PURCHASE_ORDER_STATE_CHANGE_CODES = [
@@ -204,6 +206,7 @@ export class PurchaseOrderCommandService {
     private readonly audit: AuditService,
     private readonly createDependencies: PurchaseOrderCreateDependencyService,
     private readonly salesProgress: SalesOrderPurchaseCoverageService,
+    private readonly shippingMarks: PurchaseShippingMarkResolverService,
     @Optional()
     @Inject(PURCHASE_ORDER_COMMAND_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderCommandServiceDependencies> = {},
@@ -239,39 +242,57 @@ export class PurchaseOrderCommandService {
       return existing.id
     }
 
-    // 常见依赖错误在发号前失败；预检不持有销售行锁，最终事务会完整重读并锁定。
-    await this.prisma.$transaction(async transaction => {
-      await applyTransactionTimeouts(transaction)
-      await this.createDependencies.requireDependencies(
-        transaction,
-        command,
-        trusted.actorUserId,
-        { lockSalesLines: false },
-      )
-    })
-
-    let issuance: Awaited<ReturnType<NumberingGeneratorService['generateScoped']>>
     try {
-      issuance = await this.numbering.generateScoped({
-        ruleCode: PURCHASE_ORDER_NUMBERING_RULE_CODE,
-        consumerCode: PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
-        idempotencyKey: trusted.idempotencyKey,
-        requestFingerprint: fingerprint,
+      // 常见依赖错误在发号前失败；预检不持有销售行锁，最终事务会完整重读并锁定。
+      await this.prisma.$transaction(async transaction => {
+        await applyTransactionTimeouts(transaction)
+        await this.createDependencies.requireDependencies(
+          transaction,
+          command,
+          trusted.actorUserId,
+          { lockSalesLines: false },
+        )
+        requirePurchaseShippingMark(
+          await this.shippingMarks.resolve(transaction, command, false),
+          command.expectedShippingMarkResolution,
+        )
       })
-    }
-    catch (error) {
-      return mapNumberingError(error)
-    }
 
-    try {
+      let issuance: Awaited<ReturnType<NumberingGeneratorService['generateScoped']>>
+      try {
+        issuance = await this.numbering.generateScoped({
+          ruleCode: PURCHASE_ORDER_NUMBERING_RULE_CODE,
+          consumerCode: PURCHASE_ORDER_NUMBERING_CONSUMER_CODE,
+          idempotencyKey: trusted.idempotencyKey,
+          requestFingerprint: fingerprint,
+        })
+      }
+      catch (error) {
+        return mapNumberingError(error)
+      }
+
       return await this.prisma.$transaction(async transaction => {
         await applyTransactionTimeouts(transaction)
+        // 先恢复已提交结果，避免改绑、停用或来源剩余量变化破坏同键恢复。
+        const committed = await this.findExisting(idempotencyKeyHash, transaction)
+        if (committed !== null) {
+          if (!matchesExisting(committed, trusted.actorUserId, fingerprintHash)) throw idempotencyConflict()
+          return committed.id
+        }
         const effective = await this.createDependencies.requireDependencies(
           transaction,
           command,
           trusted.actorUserId,
           { lockSalesLines: true },
         )
+        const resolution = await this.shippingMarks.resolve(transaction, command, true)
+        const ruleCode = requirePurchaseShippingMark(resolution, command.expectedShippingMarkResolution)
+        const shippingMark = await this.numbering.generateScopedInTransaction(transaction, {
+          ruleCode,
+          consumerCode: PURCHASE_SHIPPING_MARK_CONSUMER,
+          idempotencyKey: trusted.idempotencyKey,
+          requestFingerprint: fingerprint,
+        })
         const created = await transaction.purchaseOrder.create({
           data: {
             orderNo: issuance.number,
@@ -284,7 +305,8 @@ export class PurchaseOrderCommandService {
             customSupplierName: command.customSupplierName,
             orderDate: new Date(`${command.orderDate}T00:00:00.000Z`),
             currencyCode: command.currencyCode,
-            shippingMarkText: command.shippingMarkText,
+            shippingMarkText: shippingMark.number,
+            shippingMarkIssuanceId: shippingMark.issuanceId,
             lineSubtotalAmount: command.lineSubtotalAmount,
             purchaseTotalAmount: command.purchaseTotalAmount,
             depositDueAmount: command.depositDueAmount,
@@ -333,12 +355,23 @@ export class PurchaseOrderCommandService {
             currencyCode: command.currencyCode,
             lineCount: effective.lines.length,
             salesLinked: command.salesOrderId !== null,
+            shippingMarkRuleCode: ruleCode,
+            shippingMarkRevision: shippingMark.ruleRevision,
+            shippingMarkIssuanceId: shippingMark.issuanceId,
           },
         })
         return created.id
       }, { isolationLevel: 'Serializable' })
     }
     catch (error) {
+      // 事务已退出才可恢复；PG aborted transaction 内继续查询会掩盖原失败。
+      // 无论是并发冲突还是提交响应丢失，都优先返回已持久化且同身份/指纹的订单。
+      const recovered = await this.findExisting(idempotencyKeyHash)
+      if (recovered !== null) {
+        if (!matchesExisting(recovered, trusted.actorUserId, fingerprintHash)) throw idempotencyConflict()
+        return recovered.id
+      }
+      if (error instanceof NumberingGenerationError) throw mapShippingMarkGenerationError(error)
       if (error instanceof ApiException) throw error
       const facts = readPersistenceErrorFacts(error)
       if (hasPersistenceConstraint(
@@ -405,8 +438,9 @@ export class PurchaseOrderCommandService {
 
   private async findExisting(
     idempotencyKeyHash: Uint8Array,
+    client: Pick<Prisma.TransactionClient, 'purchaseOrder'> = this.prisma,
   ): Promise<ExistingPurchaseOrder | null> {
-    return this.prisma.purchaseOrder.findUnique({
+    return client.purchaseOrder.findUnique({
       where: {
         createIdempotencyKeyHash: Uint8Array.from(idempotencyKeyHash),
       },

@@ -14,6 +14,7 @@ import {
   beginPurchaseOrderSubmission,
   buildPurchaseOrderCreateRequest,
   createPurchaseOrderEditingState,
+  getPurchaseOrderMutationFailure,
   hasPurchasablePurchaseOrderSourceLines,
   parsePurchaseOrderCreateContext,
   parsePurchaseOrderCreateType,
@@ -194,12 +195,12 @@ test('销售关联采购字段按基础信息、产品付款、唛头备注归�
   assert.equal(resolvePurchaseOrderCreateStepForField('lines.0.actualUnitPriceAmount'), 1)
   assert.equal(resolvePurchaseOrderCreateStepForField('depositDueAmount'), 1)
   assert.equal(resolvePurchaseOrderCreateStepForField('balanceDueAmount'), 1)
-  assert.equal(resolvePurchaseOrderCreateStepForField('shippingMarkText'), 2)
+  assert.equal(resolvePurchaseOrderCreateStepForField('expectedShippingMarkResolution'), 2)
   assert.equal(resolvePurchaseOrderCreateStepForField('remark'), 2)
   assert.equal(resolvePurchaseOrderCreateStepForField('unknown'), null)
   assert.equal(resolvePurchaseOrderCreateStepForErrors({
     balanceDueAmount: '金额错误',
-    shippingMarkText: '唛头错误',
+    expectedShippingMarkResolution: '唛头错误',
   }), 1)
 })
 
@@ -214,7 +215,7 @@ test('下一步只拦截当前采购填写步骤的领域错误', () => {
     purchaseType: 'SALES_LINKED',
     remark: '',
     salesOrderId: null,
-    shippingMarkText: '',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     sourceSalesOrderLineIdByKey: {},
     supplierValue: '',
     customSupplierName: null,
@@ -446,7 +447,7 @@ test('产品库关联采购构造 DTO 时提交互斥供应商来源并校验数
     purchaseType: 'SALES_LINKED',
     remark: '  采购说明 ',
     salesOrderId: '77777777-7777-4777-8777-777777777777',
-    shippingMarkText: '  唛头 A\n第二行 ',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     sourceSalesOrderLineIdByKey: {
       [catalogLine.key]: sourceCatalogLine.id,
     },
@@ -465,7 +466,7 @@ test('产品库关联采购构造 DTO 时提交互斥供应商来源并校验数
     salesOrderId: '77777777-7777-4777-8777-777777777777',
     supplierValue: 'SUPPLIER_CN_01',
     orderDate: '2026-08-28',
-    shippingMarkText: '唛头 A\n第二行',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     lines: [{
       lineType: 'CATALOG',
       productId: catalogOption.id,
@@ -513,7 +514,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
-    shippingMarkText: '',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     sourceSalesOrderLineIdByKey: {},
     supplierValue: null,
     today: '2026-08-28',
@@ -550,7 +551,7 @@ test('自定义备货采购只提交文本供应商并校验 CUSTOM 双价格', 
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
-    shippingMarkText: '',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     sourceSalesOrderLineIdByKey: {},
     supplierValue: null,
     today: '2026-08-28',
@@ -584,7 +585,7 @@ test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => 
     purchaseType: 'STOCK',
     remark: '',
     salesOrderId: null,
-    shippingMarkText: '',
+    expectedShippingMarkResolution: 'a'.repeat(64),
     sourceSalesOrderLineIdByKey: {},
     supplierValue: null,
     today: '2026-08-28',
@@ -614,10 +615,55 @@ test('未知创建结果冻结请求并使用原幂等 Key 安全重放', () => 
   })
   assert.equal(replay.idempotencyKey, submitting.idempotencyKey)
   assert.equal(replay.snapshot, submitting.snapshot)
+  assert.equal(replay.snapshot.expectedShippingMarkResolution, 'a'.repeat(64))
+  assert.equal(Object.hasOwn(replay.snapshot, 'shippingMarkText'), false)
 
   const detail = { id: 'purchase-a' } as PurchaseOrderDetailDto
   assert.deepEqual(resolvePurchaseOrderSubmissionSuccess(replay, detail), {
     phase: 'success',
     purchaseOrder: detail,
   })
+})
+
+test('唛头匹配未完成或摘要非法时第三步不能进入核对', () => {
+  for (const expectedShippingMarkResolution of [null, '', 'A'.repeat(64), 'a'.repeat(63)]) {
+    const result = validatePurchaseOrderCreateStep({
+      balanceDueAmount: null,
+      customSupplierName: '供应商',
+      depositDueAmount: null,
+      expectedShippingMarkResolution,
+      lines: [],
+      maximumQuantityByKey: {},
+      orderDate: '2026-09-07',
+      productMode: 'CUSTOM',
+      purchaseType: 'STOCK',
+      remark: '',
+      salesOrderId: null,
+      sourceSalesOrderLineIdByKey: {},
+      supplierValue: null,
+      today: '2026-09-07',
+    }, 2)
+    assert.equal(result.valid, false)
+    if (!result.valid) {
+      assert.deepEqual(result.fieldErrors, {
+        expectedShippingMarkResolution: '请先取得可用的采购唛头规则并核对',
+      })
+    }
+  }
+})
+
+test('唛头上下文变化和不可用均定位第三步，且不属于未知提交', () => {
+  for (const code of [
+    'PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED',
+    'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE',
+  ]) {
+    const failure = getPurchaseOrderMutationFailure({
+      kind: 'http',
+      status: 409,
+      body: { code, message: '唛头规则需要重新核对', requestId: 'request-id' },
+    })
+    assert.equal(failure.unknownResult, false)
+    assert.equal(failure.refreshShippingMarkResolution, true)
+    assert.equal(resolvePurchaseOrderCreateStepForErrors(failure.fieldErrors), 2)
+  }
 })

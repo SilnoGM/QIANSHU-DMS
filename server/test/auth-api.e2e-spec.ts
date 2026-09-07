@@ -61,6 +61,8 @@ const MANAGEMENT_PERMISSION_CODES = [
   'purchase-orders:payment',
   'purchase-orders:read',
   'purchase-orders:update',
+  'purchase-shipping-marks:read',
+  'purchase-shipping-marks:update',
   'regions:create',
   'regions:disable',
   'regions:enable',

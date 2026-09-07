@@ -23,6 +23,8 @@ import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
 import { ApiProductMediaContentContract } from '../products/media/product-media-content.contract'
+import { PurchaseOrderShippingMarkResolutionDto, PurchaseOrderShippingMarkResolutionQueryDto } from '../purchase-shipping-marks/purchase-shipping-mark-resolution.dto'
+import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import {
   applyProductMediaContentResponse,
   type ProductMediaContentHttpResponse,
@@ -122,6 +124,7 @@ export class PurchaseOrdersController {
     private readonly mutations: PurchaseOrderMutationService,
     private readonly documents: PurchaseOrderDocumentService,
     private readonly productImages: PurchaseOrderProductImageService,
+    private readonly shippingMarks: PurchaseShippingMarkResolverService,
   ) {}
 
   @Get()
@@ -159,6 +162,25 @@ export class PurchaseOrdersController {
     @Query() query: PurchaseOrderStatusCountsQueryDto,
   ): Promise<PurchaseOrderStatusCounts> {
     return this.queries.statusCounts(query)
+  }
+
+  @Get('shipping-mark-resolution')
+  @RequirePermissions('purchase-orders:create')
+  @ApiContractResponse({ status: HttpStatus.OK, type: PurchaseOrderShippingMarkResolutionDto })
+  @ApiApplicationContract({
+    operationId: 'purchase_orders_shipping_mark_resolution',
+    session: 'required', authorization: true, badRequest: true,
+    validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  shippingMarkResolution(
+    @Query() query: PurchaseOrderShippingMarkResolutionQueryDto,
+  ): Promise<PurchaseOrderShippingMarkResolutionDto> {
+    return this.shippingMarks.read(query)
   }
 
   @Get('product-options')
@@ -430,6 +452,8 @@ export class PurchaseOrdersController {
         'PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT',
         'PURCHASE_ORDER_NUMBER_CONFLICT',
         'PURCHASE_ORDER_NUMBERING_UNAVAILABLE',
+        'PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED',
+        'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE',
         'PURCHASE_ORDER_STATE_CHANGED',
       ] },
       { status: 422, codes: [
