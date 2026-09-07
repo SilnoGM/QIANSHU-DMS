@@ -94,7 +94,8 @@ describe('Product list API with isolated PostgreSQL', () => {
     }).compile()
     application = moduleRef.createNestApplication()
     configureApplication(application, { nodeEnvironment: 'test' })
-    await application.init()
+    // 套件统一创建并在 afterAll 关闭监听器，避免 supertest 为每次请求临时 listen/close。
+    await application.listen(0, '127.0.0.1')
 
     dictionaryLookup = application.get(DictionaryLookupService)
     passwords = application.get(PasswordProvider)

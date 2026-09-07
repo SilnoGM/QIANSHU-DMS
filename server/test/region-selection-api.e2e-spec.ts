@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { Server } from 'node:http'
 
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
@@ -75,7 +76,8 @@ describe('Region selection API with Cookie Session and PostgreSQL', () => {
     }).compile()
     application = moduleRef.createNestApplication()
     configureApplication(application, { nodeEnvironment: 'test' })
-    await application.init()
+    // 套件统一创建并在 afterAll 关闭监听器，避免 supertest 为每次请求临时 listen/close。
+    await application.listen(0, '127.0.0.1')
     prisma = application.get(PrismaService)
     passwords = application.get(PasswordProvider)
     regions = application.get(RegionQueryService)
@@ -116,6 +118,16 @@ describe('Region selection API with Cookie Session and PostgreSQL', () => {
 
   afterAll(async () => {
     await application.close()
+  })
+
+  it('keeps one suite-owned HTTP listener across consecutive requests', async () => {
+    const server = application.getHttpServer() as Server
+    const address = server.address()
+    expect(address).not.toBeNull()
+    await request(server).get('/api/health').expect(200)
+    await request(server).get('/api/health').expect(200)
+    expect(server.listening).toBe(true)
+    expect(server.address()).toEqual(address)
   })
 
   async function createUser(
