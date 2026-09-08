@@ -510,13 +510,18 @@ export async function selectRegionOption(
 ) {
   const trigger = regionLevelTriggerExpression(rootTestId, level)
   const serializedText = JSON.stringify(text)
-  const expanded = await page.evaluate(
-    `${trigger}?.getAttribute('aria-expanded') === 'true'`,
-  )
-  if (!expanded) {
-    await openRegionLevelSelect(page, rootTestId, level)
-  }
-  await page.waitFor(`(() => {
+  let phase = 'open'
+  try {
+    // 触屏模拟/多页面切换后，DOM focus 不代表窗口持有键盘焦点。
+    await page.bringToFront()
+    await page.waitFor('document.hasFocus()')
+    const expanded = await page.evaluate(
+      `${trigger}?.getAttribute('aria-expanded') === 'true'`,
+    )
+    if (!expanded) {
+      await openRegionLevelSelect(page, rootTestId, level)
+    }
+    await page.waitFor(`(() => {
     const target = ${trigger}
     const contentId = target?.getAttribute('aria-controls')
     const content = contentId ? document.getElementById(contentId) : null
@@ -529,7 +534,8 @@ export async function selectRegionOption(
     ))
     return exact.length === 1
   })()`)
-  await page.evaluate(`(() => {
+    phase = 'focus'
+    const selectedContentId = await page.evaluate(`(() => {
     const target = ${trigger}
     const contentId = target?.getAttribute('aria-controls')
     const content = contentId ? document.getElementById(contentId) : null
@@ -544,10 +550,49 @@ export async function selectRegionOption(
       throw new Error('region option unavailable')
     }
     exact[0].focus({ preventScroll: true })
-    return true
+    return contentId
   })()`)
-  await pressKey(page, 'Enter')
-  await page.waitFor(`${trigger}?.getAttribute('aria-expanded') === 'false'`)
+    await page.waitFor(`(() => {
+    const content = document.getElementById(${JSON.stringify(selectedContentId)})
+    const active = document.activeElement
+    return document.hasFocus() && content?.contains(active)
+      && active?.matches('[data-slot="select-item"][role="option"]')
+      && active.getAttribute('aria-disabled') !== 'true'
+      && active.textContent?.trim() === ${serializedText}
+  })()`)
+    phase = 'activate'
+    await pressKey(page, 'Enter')
+    phase = 'close'
+    // Reka 先收起 expanded，退出动画后才卸载 FocusScope 并回焦。若提前
+    // 选择下一层，旧弹层可能把焦点从新选项抢回，导致可信 Enter 落错控件。
+    await page.waitFor(`(() => {
+    const target = ${trigger}
+    return target?.getAttribute('aria-expanded') === 'false'
+      && document.getElementById(${JSON.stringify(selectedContentId)}) === null
+      && document.activeElement === target
+  })()`)
+  }
+  catch (error) {
+    // 仅记录控件语义与焦点归属，不输出选值、客户信息或请求内容。
+    const diagnostic = await page.evaluate(`(() => {
+      const target = ${trigger}
+      const contentId = target?.getAttribute('aria-controls')
+      const content = contentId ? document.getElementById(contentId) : null
+      const active = document.activeElement
+      return {
+        documentFocused: document.hasFocus(),
+        expanded: target?.getAttribute('aria-expanded') ?? null,
+        contentState: content?.getAttribute('data-state') ?? null,
+        contentVisible: Boolean(content?.getClientRects().length),
+        activeTag: active?.tagName ?? null,
+        activeSlot: active?.getAttribute('data-slot') ?? null,
+        activeRegionLevel: active?.closest('[data-region-level]')?.getAttribute('data-region-level') ?? null,
+        activeIsTrigger: active === target,
+        activeInContent: Boolean(content?.contains(active)),
+      }
+    })()`)
+    throw new Error(`Region option selection failed (${phase}): ${JSON.stringify(diagnostic)}`, { cause: error })
+  }
 }
 
 export async function pressKey(page, key, code = key) {
