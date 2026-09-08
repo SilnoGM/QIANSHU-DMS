@@ -68,7 +68,8 @@ test('付款草稿规范化本地时间、两位金额、字典值和可选凭�
   const result = buildPurchaseOrderPaymentRequest({
     amount: '12.5',
     mediaAssetId: '44444444-4444-4444-8444-444444444444',
-    now: new Date('2026-08-28T12:00:00.000Z'),
+    // 与 datetime-local 输入使用相同的本地时区，避免 UTC Runner 将合法付款误判为未来时间。
+    now: new Date('2026-08-28T20:00'),
     outstandingAmount: '80.0000',
     paidAtLocal: '2026-08-28T18:30',
     paymentMethod: 'BANK_TRANSFER',
@@ -94,7 +95,7 @@ test('付款硬拦截零金额、超额、未来时间和缺失付款方式', ()
   const result = buildPurchaseOrderPaymentRequest({
     amount: '81.00',
     mediaAssetId: null,
-    now: new Date('2026-08-28T12:00:00.000Z'),
+    now: new Date('2026-08-28T20:00'),
     outstandingAmount: '80.0000',
     paidAtLocal: '2026-08-29T18:30',
     paymentMethod: '',
@@ -109,6 +110,32 @@ test('付款硬拦截零金额、超额、未来时间和缺失付款方式', ()
   assert.equal(result.fieldErrors.amount, '付款金额不能超过未付金额 80.0000')
   assert.equal(result.fieldErrors.paidAt, '付款时间不能为空且不能晚于当前时间')
   assert.equal(result.fieldErrors.paymentMethod, '请选择付款方式')
+})
+
+test('付款时间允许早于或等于当前时间，仅拒绝晚于当前时间', () => {
+  for (const [paidAtLocal, valid] of [
+    ['2026-08-28T19:59', true],
+    ['2026-08-28T20:00', true],
+    ['2026-08-28T20:01', false],
+  ] as const) {
+    const result = buildPurchaseOrderPaymentRequest({
+      amount: '12.50',
+      mediaAssetId: null,
+      now: new Date('2026-08-28T20:00'),
+      outstandingAmount: '80.0000',
+      paidAtLocal,
+      paymentMethod: 'BANK_TRANSFER',
+      paymentType: 'DEPOSIT',
+      remark: '',
+    })
+
+    assert.equal(result.valid, valid, paidAtLocal)
+    if (!result.valid) {
+      assert.deepEqual(result.fieldErrors, {
+        paidAt: '付款时间不能为空且不能晚于当前时间',
+      })
+    }
+  }
 })
 
 test('履约只能顺序推进，取消必须先作废有效付款', () => {
