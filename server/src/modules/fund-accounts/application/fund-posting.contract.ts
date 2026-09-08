@@ -1,3 +1,4 @@
+import type { Prisma } from '../../../generated/prisma/client'
 import type {
   FundAccountTarget,
   FundAdjustmentMode,
@@ -13,6 +14,21 @@ export interface FundPostingContext {
   readonly sourceCode: string
   readonly requestId: string
   readonly correlationId?: string
+}
+
+export interface FundBusinessTransactionContext extends FundPostingContext {
+  readonly actorUserId: string
+}
+
+export interface FundPostingExpectedContext {
+  readonly ruleVersionId: string
+  readonly userShareRate: string
+}
+
+export interface FundPostingPreview extends FundPostingExpectedContext {
+  readonly companyShareRate: string
+  readonly businessAmount: string
+  readonly entries: readonly Pick<FundPostingResultEntry, 'accountTarget' | 'direction' | 'amount'>[]
 }
 
 export interface PostBusinessEventInput {
@@ -67,10 +83,29 @@ export interface FundPostingResult {
 }
 
 /**
- * 同一 Server 内业务域唯一可依赖的资金动账端口。Task 4 只冻结契约；具体事务、
- * 账户解析和流水写入由后续统一动账引擎实现。
+ * 同一 Server 内业务域唯一可依赖的资金动账端口。销售收款受控端口复用调用方
+ * 事务，保证审核、正式收款、资金和审计同时提交；管理员能力留在资金模块。
  */
 export abstract class FundPostingService {
+  abstract previewBusinessEventInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: FundBusinessTransactionContext,
+    input: PostBusinessEventInput,
+  ): Promise<FundPostingPreview>
+
+  abstract postBusinessEventInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: FundBusinessTransactionContext,
+    input: PostBusinessEventInput,
+    expectedContext: FundPostingExpectedContext,
+  ): Promise<FundPostingResult>
+
+  abstract reverseBusinessEventInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: FundBusinessTransactionContext,
+    input: FundReversalInput,
+  ): Promise<FundPostingResult>
+
   abstract postBusinessEvent(
     context: FundPostingContext,
     input: PostBusinessEventInput,

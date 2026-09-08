@@ -1,3 +1,4 @@
+import { assertReceiptCapacity, receiptFailure } from './receipts/sales-receipt-money'
 import { HttpStatus, Inject, Injectable, Optional } from '@nestjs/common'
 
 import { Prisma } from '../../generated/prisma/client'
@@ -7,7 +8,6 @@ import {
   AuditOutcome,
   type SalesOrderFulfillmentStatus,
   type SalesOrderPaymentStatus,
-  type SalesOrderPaymentType,
   type SalesOrderStatus,
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
@@ -16,24 +16,18 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
 import {
   DictionaryLookupService,
-  DictionaryValueUnavailableError,
 } from '../dictionaries/dictionary-lookup.service'
 import {
-  MediaAssetLifecycleError,
   MediaAssetService,
 } from '../media/media-asset.service'
 import {
   deriveSalesOrderPaymentStatus,
-  formatSalesOrderAmountUnits,
-  normalizePositiveSalesOrderAmount,
-  parseSalesOrderAmountUnits,
   validateSalesOrderAgreedAmounts,
 } from './domain/sales-order-decimal'
 import {
   salesOrderRuleFailure,
   salesOrderValidationFailure,
 } from './domain/sales-order-errors'
-import { createSalesOrderDocumentTitle } from './domain/sales-order-document-title'
 import {
   assertSalesOrderFulfillmentTransition,
   assertSalesOrderStatusTransition,
@@ -49,14 +43,6 @@ import {
   type SalesOrderDetail,
 } from './sales-order-query.service'
 
-const PAYMENT_TYPES = new Set<SalesOrderPaymentType>([
-  'DEPOSIT',
-  'PROGRESS',
-  'INVOICE_TAX',
-  'BALANCE',
-  'OTHER',
-])
-const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const ORDER_STATUSES = new Set<SalesOrderStatus>([
   'DRAFT',
   'CONFIRMED',
@@ -144,17 +130,6 @@ function requireRecord(
   return value as Readonly<Record<string, unknown>>
 }
 
-function rejectUnknownKeys(
-  body: Readonly<Record<string, unknown>>,
-  allowedKeys: readonly string[],
-  field = 'body',
-): void {
-  const allowed = new Set(allowedKeys)
-  if (Object.keys(body).some(key => !allowed.has(key))) {
-    return salesOrderValidationFailure(field)
-  }
-}
-
 function requireText(
   value: unknown,
   field: string,
@@ -193,37 +168,6 @@ function effectiveReceivedAmount(
  * 小数位规则生成文本。这里全程处理十进制字符串，不转成 number，避免大金额
  * 在添加千分位时发生精度损失。
  */
-function formatPaymentReasonAmount(
-  value: string,
-  order: Pick<MutableOrderRow, 'currencyCode' | 'currency'>,
-): string {
-  const [integerPart = '0', fractionPart = ''] = formatSalesOrderAmountUnits(
-    parseSalesOrderAmountUnits(value),
-  ).split('.')
-  const groupedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/gu, ',')
-  const minimumDigits = Math.max(0, Math.min(order.currency.minorUnit, 4))
-  const lastNonZeroDigit = fractionPart.search(/0*$/u)
-  const visibleDigits = Math.max(minimumDigits, lastNonZeroDigit)
-  const visibleFraction = fractionPart.slice(0, visibleDigits)
-  const amount = visibleFraction.length > 0
-    ? `${groupedInteger}.${visibleFraction}`
-    : groupedInteger
-  return `${order.currency.symbol ?? ''}${amount} ${order.currencyCode}`
-}
-
-function recordedPaymentStatusReason(
-  order: MutableOrderRow,
-  paymentAmount: string,
-  outstandingAmount: string,
-  newStatus: SalesOrderPaymentStatus,
-): string {
-  const payment = formatPaymentReasonAmount(paymentAmount, order)
-  const outstanding = formatPaymentReasonAmount(outstandingAmount, order)
-  return newStatus === 'PAID'
-    ? `用户添加实际收款 ${payment}，剩余 ${outstanding}，订单已付清`
-    : `用户添加实际收款 ${payment}，剩余 ${outstanding} 未收`
-}
-
 @Injectable()
 export class SalesOrderMutationService {
   private readonly dependencies: SalesOrderMutationDependencies
@@ -265,6 +209,9 @@ export class SalesOrderMutationService {
       await applyTransactionTimeouts(transaction)
       const order = await this.lockOrder(transaction, salesOrderId)
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
+      if (toStatus === 'CANCELLED' && await transaction.salesReceiptRequest.count({ where: { salesOrderId, status: 'PENDING_REVIEW' } }) > 0) {
+        receiptFailure('SALES_RECEIPT_STATE_CHANGED', '订单仍有待审核收款，请先处理申请', HttpStatus.CONFLICT)
+      }
       assertSalesOrderStatusTransition(order.orderStatus, toStatus, {
         activeReceivedAmount: receivedAmount,
         fulfillmentStatus: order.fulfillmentStatus,
@@ -397,6 +344,8 @@ export class SalesOrderMutationService {
         balanceDueAmount: body.balanceDueAmount,
       })
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
+      const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } })
+      assertReceiptCapacity(amounts.agreedTotalAmount, receivedAmount, pending._sum.amount?.toFixed(4) ?? '0.0000')
       const newPaymentStatus = deriveSalesOrderPaymentStatus(
         amounts.agreedTotalAmount,
         receivedAmount,
@@ -449,262 +398,28 @@ export class SalesOrderMutationService {
     return this.query.getById(salesOrderId)
   }
 
-  async recordPayment(
+  recordPayment(
     context: SalesOrderMutationContext,
     rawSalesOrderId: unknown,
     input: unknown,
   ): Promise<SalesOrderDetail> {
-    const trusted = validateContext(context)
-    const salesOrderId = requireUuid(rawSalesOrderId, 'salesOrderId')
-    const body = requireRecord(input)
-    rejectUnknownKeys(body, [
-      'paymentType',
-      'amount',
-      'receivedAt',
-      'paymentMethod',
-      'remark',
-      'voucher',
-    ])
-    if (
-      typeof body.paymentType !== 'string'
-      || !PAYMENT_TYPES.has(body.paymentType as SalesOrderPaymentType)
-    ) {
-      return salesOrderValidationFailure('paymentType')
-    }
-    const amount = normalizePositiveSalesOrderAmount(body.amount)
-    const recordedAt = this.dependencies.now()
-    const receivedAt = this.normalizeReceivedAt(body.receivedAt, recordedAt)
-    const paymentMethod = requireText(body.paymentMethod, 'paymentMethod', 64)
-    const remark = optionalText(body.remark, 'remark', 500)
-    const voucher = requireRecord(body.voucher, 'voucher')
-    rejectUnknownKeys(voucher, ['mediaAssetId'], 'voucher')
-    const mediaAssetId = requireUuid(
-      voucher.mediaAssetId,
-      'voucher.mediaAssetId',
-    )
-    try {
-      await this.prisma.$transaction(async transaction => {
-        await applyTransactionTimeouts(transaction)
-        const order = await this.lockOrder(transaction, salesOrderId)
-        if (order.orderStatus === 'CANCELLED') {
-          return salesOrderRuleFailure(
-            'SALES_ORDER_CANCELLED',
-            '已取消订单不能记录收款',
-          )
-        }
-        if (order.orderStatus === 'COMPLETED') {
-          return salesOrderRuleFailure(
-            'SALES_ORDER_COMPLETED',
-            '已完成订单不能记录收款',
-          )
-        }
-        const effectivePaymentMethod = await this.dictionaryLookup
-          .requireEffectiveValue(transaction, {
-            dictionaryCode: PAYMENT_METHOD_DICTIONARY_CODE,
-            value: paymentMethod,
-          })
-        const asset = await transaction.mediaAsset.findFirst({
-          where: {
-            id: mediaAssetId,
-            createdByUserId: trusted.actorUserId,
-            status: 'UPLOADING',
-            mediaType: { in: ['IMAGE', 'DOCUMENT'] },
-            deletedAt: null,
-            objectKey: { not: null },
-          },
-          select: { id: true },
-        })
-        if (asset === null) {
-          return salesOrderRuleFailure(
-            'SALES_ORDER_DOCUMENT_UNAVAILABLE',
-            '所选收款凭证当前不可用',
-          )
-        }
-        const oldReceivedAmount = await this.readReceivedAmount(
-          transaction,
-          salesOrderId,
-        )
-        const newReceivedAmount = formatSalesOrderAmountUnits(
-          parseSalesOrderAmountUnits(oldReceivedAmount)
-          + parseSalesOrderAmountUnits(amount),
-        )
-        const newStatus = deriveSalesOrderPaymentStatus(
-          fixed4(order.agreedTotalAmount),
-          newReceivedAmount,
-        )
-        const outstandingAmount = formatSalesOrderAmountUnits(
-          parseSalesOrderAmountUnits(fixed4(order.agreedTotalAmount))
-          - parseSalesOrderAmountUnits(newReceivedAmount),
-        )
-        const payment = await transaction.salesOrderPayment.create({
-          data: {
-            salesOrderId,
-            paymentType: body.paymentType as SalesOrderPaymentType,
-            amount,
-            receivedAt,
-            paymentMethod: effectivePaymentMethod.value,
-            remark,
-            createdByUserId: trusted.actorUserId,
-          },
-          select: { id: true },
-        })
-        await this.mediaAsset.activate(transaction, mediaAssetId)
-        const document = await transaction.salesOrderDocument.create({
-          data: {
-            salesOrderId,
-            mediaAssetId,
-            paymentId: payment.id,
-            documentType: 'PAYMENT_VOUCHER',
-            title: createSalesOrderDocumentTitle(
-              order.customerName,
-              body.paymentType as SalesOrderPaymentType,
-              recordedAt,
-            ),
-            remark: null,
-            createdByUserId: trusted.actorUserId,
-          },
-          select: { id: true },
-        })
-        await this.writePaymentStatus(
-          transaction,
-          trusted,
-          order,
-          newStatus,
-          recordedPaymentStatusReason(
-            order,
-            amount,
-            outstandingAmount,
-            newStatus,
-          ),
-        )
-        await this.recordAudit(transaction, trusted, {
-          eventType: AuditEventType.SALES_ORDER_PAYMENT_RECORDED,
-          targetId: payment.id,
-          metadata: {
-            salesOrderId,
-            paymentType: body.paymentType as SalesOrderPaymentType,
-          },
-        })
-        await this.recordAudit(transaction, trusted, {
-          eventType: AuditEventType.SALES_ORDER_DOCUMENT_ATTACHED,
-          targetId: document.id,
-          metadata: { salesOrderId, documentType: 'PAYMENT_VOUCHER' },
-        })
-        await this.automaticState.advanceToPendingReconciliationWhenEligible(
-          transaction,
-          trusted,
-          salesOrderId,
-          'PAYMENT',
-        )
-      })
-    }
-    catch (error) {
-      if (error instanceof ApiException) throw error
-      if (error instanceof DictionaryValueUnavailableError) {
-        return salesOrderRuleFailure(
-          'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
-          '收款方式当前不可用',
-          'paymentMethod',
-        )
-      }
-      if (error instanceof MediaAssetLifecycleError) {
-        return salesOrderRuleFailure(
-          'SALES_ORDER_DOCUMENT_UNAVAILABLE',
-          '所选收款凭证当前不可用',
-        )
-      }
-      throw error
-    }
-    return this.query.getById(salesOrderId)
+    void context
+    void rawSalesOrderId
+    void input
+    return Promise.reject(new ApiException(HttpStatus.CONFLICT, 'SALES_ORDER_RECEIPT_REVIEW_REQUIRED', '收款必须提交财务审核，请刷新后重试'))
   }
 
-  async voidPayment(
+  voidPayment(
     context: SalesOrderMutationContext,
     rawSalesOrderId: unknown,
     rawPaymentId: unknown,
     input: unknown,
   ): Promise<SalesOrderDetail> {
-    const trusted = validateContext(context)
-    const salesOrderId = requireUuid(rawSalesOrderId, 'salesOrderId')
-    const paymentId = requireUuid(rawPaymentId, 'paymentId')
-    const body = requireRecord(input)
-    const reason = requireText(body.reason, 'reason', 500)
-    const now = this.dependencies.now()
-    await this.prisma.$transaction(async transaction => {
-      await applyTransactionTimeouts(transaction)
-      const order = await this.lockOrder(transaction, salesOrderId)
-      if (order.orderStatus === 'COMPLETED') {
-        return salesOrderRuleFailure(
-          'SALES_ORDER_COMPLETED',
-          '已完成订单不能作废收款',
-        )
-      }
-      const payment = await transaction.salesOrderPayment.findFirst({
-        where: { id: paymentId, salesOrderId },
-        select: { id: true, amount: true, voidedAt: true },
-      })
-      if (payment === null) {
-        throw new ApiException(
-          HttpStatus.NOT_FOUND,
-          'SALES_ORDER_PAYMENT_NOT_FOUND',
-          '实际收款记录不存在',
-        )
-      }
-      if (payment.voidedAt !== null) {
-        return salesOrderRuleFailure(
-          'SALES_ORDER_PAYMENT_ALREADY_VOIDED',
-          '实际收款记录已作废',
-        )
-      }
-      const oldReceivedAmount = await this.readReceivedAmount(
-        transaction,
-        salesOrderId,
-      )
-      const newReceivedAmount = formatSalesOrderAmountUnits(
-        parseSalesOrderAmountUnits(oldReceivedAmount)
-        - parseSalesOrderAmountUnits(fixed4(payment.amount)),
-      )
-      const newStatus = deriveSalesOrderPaymentStatus(
-        fixed4(order.agreedTotalAmount),
-        newReceivedAmount,
-      )
-      await transaction.salesOrderPayment.update({
-        where: { id: paymentId },
-        data: {
-          voidedAt: now,
-          voidedByUserId: trusted.actorUserId,
-          voidReason: reason,
-        },
-      })
-      await this.writePaymentStatus(
-        transaction,
-        trusted,
-        order,
-        newStatus,
-      )
-      await this.recordAudit(transaction, trusted, {
-        eventType: AuditEventType.SALES_ORDER_PAYMENT_VOIDED,
-        targetId: paymentId,
-        metadata: { salesOrderId, reasonProvided: true },
-      })
-    })
-    return this.query.getById(salesOrderId)
-  }
-
-  private normalizeReceivedAt(value: unknown, now: Date): Date {
-    if (typeof value !== 'string') return salesOrderValidationFailure('receivedAt')
-    const receivedAt = new Date(value)
-    if (
-      !Number.isFinite(receivedAt.getTime())
-      || receivedAt.toISOString() !== value
-      || receivedAt.getTime() > now.getTime()
-    ) {
-      return salesOrderValidationFailure(
-        'receivedAt',
-        '收款时间必须是有效且不晚于当前时间的 UTC 时间',
-      )
-    }
-    return receivedAt
+    void context
+    void rawSalesOrderId
+    void rawPaymentId
+    void input
+    return Promise.reject(new ApiException(HttpStatus.CONFLICT, 'SALES_ORDER_RECEIPT_REVIEW_REQUIRED', '请通过财务纠错入口作废正式收款'))
   }
 
   private async lockOrder(

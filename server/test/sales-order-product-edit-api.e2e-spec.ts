@@ -1,3 +1,4 @@
+import { SalesReceiptService } from '../src/modules/sales-orders/receipts/sales-receipt.service'
 import { type INestApplication, Module } from '@nestjs/common'
 import { APP_GUARD } from '@nestjs/core'
 import { Test } from '@nestjs/testing'
@@ -47,7 +48,8 @@ describe('Sales order product-edit HTTP permission boundary', () => {
 
     @Module({
       controllers: [SalesOrdersController],
-      providers: [{
+      providers: [
+    { provide: SalesReceiptService, useValue: {} },{
         provide: AccessControlService,
         useValue: {
           getPermissionCodes: () => Promise.resolve([...grantedPermissions]),

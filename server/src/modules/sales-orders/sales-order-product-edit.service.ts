@@ -1,3 +1,4 @@
+import { assertReceiptCapacity } from './receipts/sales-receipt-money'
 import { randomUUID } from 'node:crypto'
 
 import { HttpStatus, Injectable } from '@nestjs/common'
@@ -394,6 +395,7 @@ export class SalesOrderProductEditService {
         const paidAmount = paymentAggregate._sum.amount === null
           ? '0.0000'
           : fixed4(paymentAggregate._sum.amount)
+        const pending = await transaction.salesReceiptRequest.aggregate({ where: { salesOrderId: order.id, status: 'PENDING_REVIEW' }, _sum: { amount: true } })
         const paidUnits = parseSalesOrderAmountUnits(paidAmount)
         if (newAgreedUnits < paidUnits) {
           throw failure(
@@ -402,6 +404,7 @@ export class SalesOrderProductEditService {
             '调整后的销售总价不能低于已收款金额',
           )
         }
+        assertReceiptCapacity(formatSalesOrderAmountUnits(newAgreedUnits), paidAmount, pending._sum.amount?.toFixed(4) ?? '0.0000')
         const oldDepositUnits = parseSalesOrderAmountUnits(fixed4(order.depositDueAmount))
         const newDepositUnits = oldDepositUnits > newAgreedUnits
           ? newAgreedUnits

@@ -84,6 +84,9 @@ describe('permission constants', () => {
       'sales-orders:update',
       'sales-orders:payment',
       'sales-orders:document',
+      'sales-receipts:read',
+      'sales-receipts:review',
+      'sales-receipts:void',
       'purchase-orders:read',
       'purchase-orders:create',
       'purchase-orders:create-stock',
@@ -92,7 +95,7 @@ describe('permission constants', () => {
       'purchase-orders:payment',
       'purchase-orders:document',
     ])
-    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 60)
+    expect(new Set(MANAGEMENT_PERMISSION_CODES)).toHaveProperty('size', 63)
   })
 })
 

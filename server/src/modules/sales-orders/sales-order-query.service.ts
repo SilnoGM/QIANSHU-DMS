@@ -614,6 +614,11 @@ function mapSalesOrderDetail(row: SalesOrderDetailRow): SalesOrderDetail {
       return {
         id: payment.id,
         paymentType: payment.paymentType,
+        origin: payment.origin,
+        fundPostingBatchId: payment.fundPostingBatchId,
+        fundReversalBatchId: payment.fundReversalBatchId,
+        foreignUnitsPerCnySnapshot: payment.foreignUnitsPerCnySnapshot?.toFixed(12) ?? null,
+        exchangeRateCapturedAt: payment.exchangeRateCapturedAt?.toISOString() ?? null,
         amount: decimalToFixed4(payment.amount),
         receivedAt: payment.receivedAt.toISOString(),
         paymentMethod: payment.paymentMethod,

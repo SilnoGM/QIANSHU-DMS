@@ -113,6 +113,12 @@ export class SalesOrderLineDto {
 }
 
 export class SalesOrderPaymentDto {
+  @ApiProperty({ enum: ['LEGACY', 'REVIEWED'] }) readonly origin!: 'LEGACY' | 'REVIEWED'
+  @ApiProperty({ type: 'string', nullable: true, format: 'uuid' }) readonly fundPostingBatchId!: string | null
+  @ApiProperty({ type: 'string', nullable: true, format: 'uuid' }) readonly fundReversalBatchId!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly foreignUnitsPerCnySnapshot!: string | null
+  @ApiProperty({ type: 'string', nullable: true, format: 'date-time' }) readonly exchangeRateCapturedAt!: string | null
+
   @ApiProperty({ type: 'string', format: 'uuid' })
   readonly id!: string
 

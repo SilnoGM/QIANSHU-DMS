@@ -2,7 +2,6 @@ import type { PrismaService } from '../../infrastructure/database/prisma.service
 import type { AuditService } from '../audit/audit.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../media/media-asset.service'
-import { DictionaryValueUnavailableError } from '../dictionaries/dictionary-lookup.service'
 import type { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import type { SalesOrderQueryService } from './sales-order-query.service'
@@ -52,6 +51,7 @@ function setup() {
         ],
       }]),
     },
+    salesReceiptRequest: { count: jest.fn().mockResolvedValue(0), aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
     salesOrderPayment: {
       aggregate: jest.fn<Promise<unknown>, [unknown]>()
         .mockResolvedValue({ _sum: { amount: decimal('0.0000') } }),
@@ -249,194 +249,10 @@ describe('SalesOrderMutationService', () => {
       )
   })
 
-  it('derives payment status from effective payments and hard-blocks overpayment', async () => {
+  it.each(['DEPOSIT', 'PROGRESS', 'INVOICE_TAX', 'BALANCE', 'OTHER'] as const)('blocks direct %s receipts after review cutover', async paymentType => {
     const fixture = setup()
-    await expect(fixture.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'DEPOSIT',
-      amount: '30',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      remark: null,
-      voucher: { mediaAssetId: VOUCHER_ID },
-    })).resolves.toEqual(fixture.detail)
-    const paymentCall = fixture.transaction.salesOrderPayment.create
-      .mock.calls[0]?.[0]
-    expect(paymentCall).toMatchObject({
-      data: {
-        amount: '30.0000',
-        createdByUserId: ACTOR_ID,
-      },
-      select: { id: true },
-    })
-    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
-      where: { id: ORDER_ID },
-      data: { paymentStatus: 'PARTIALLY_PAID', version: { increment: 1 } },
-    })
-    expect(fixture.transaction.salesOrderStatusHistory.create)
-      .toHaveBeenCalledWith({
-        data: {
-          salesOrderId: ORDER_ID,
-          dimension: 'PAYMENT',
-          fromStatus: 'UNPAID',
-          toStatus: 'PARTIALLY_PAID',
-          reason: '用户添加实际收款 NT$30.00 TWD，剩余 NT$70.00 TWD 未收',
-          changedByUserId: ACTOR_ID,
-        },
-      })
-    expect(fixture.dictionaryLookup.requireEffectiveValue).toHaveBeenCalledWith(
-      fixture.transaction,
-      { dictionaryCode: 'payment.method', value: 'BANK_TRANSFER' },
-    )
-    expect(fixture.media.activate).toHaveBeenCalledWith(
-      fixture.transaction,
-      VOUCHER_ID,
-    )
-    expect(fixture.transaction.salesOrderDocument.create).toHaveBeenCalledWith({
-      data: {
-        salesOrderId: ORDER_ID,
-        mediaAssetId: VOUCHER_ID,
-        paymentId: 'payment-id',
-        documentType: 'PAYMENT_VOUCHER',
-        title: '王小明-定金凭证-20260820160000000',
-        remark: null,
-        createdByUserId: ACTOR_ID,
-      },
-      select: { id: true },
-    })
-
-    const overpaid = setup()
-    overpaid.transaction.salesOrderPayment.aggregate.mockResolvedValue({
-      _sum: { amount: decimal('90.0000') },
-    })
-    await expect(overpaid.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'BALANCE',
-      amount: '20',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      remark: null,
-      voucher: { mediaAssetId: VOUCHER_ID },
-    })).rejects.toMatchObject({
-      code: 'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
-    })
-  })
-
-  it('records a completed-payment reason when one payment settles the order', async () => {
-    const fixture = setup()
-    await expect(fixture.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'BALANCE',
-      amount: '100',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      remark: null,
-      voucher: { mediaAssetId: VOUCHER_ID },
-    })).resolves.toEqual(fixture.detail)
-
-    expect(fixture.transaction.salesOrderStatusHistory.create)
-      .toHaveBeenCalledWith({
-        data: {
-          salesOrderId: ORDER_ID,
-          dimension: 'PAYMENT',
-          fromStatus: 'UNPAID',
-          toStatus: 'PAID',
-          reason: '用户添加实际收款 NT$100.00 TWD，剩余 NT$0.00 TWD，订单已付清',
-          changedByUserId: ACTOR_ID,
-        },
-      })
-    expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
-      .toHaveBeenCalledWith(
-        fixture.transaction,
-        context,
-        ORDER_ID,
-        'PAYMENT',
-      )
-  })
-
-  it('does not return a successful detail when automatic reconciliation fails', async () => {
-    const fixture = setup()
-    fixture.automaticState.advanceToPendingReconciliationWhenEligible
-      .mockRejectedValue(new Error('automatic-state-failed'))
-
-    await expect(fixture.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'BALANCE',
-      amount: '100',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      remark: null,
-      voucher: { mediaAssetId: VOUCHER_ID },
-    })).rejects.toThrow('automatic-state-failed')
-    expect(fixture.query.getById).not.toHaveBeenCalled()
-  })
-
-  it.each(['DEPOSIT', 'PROGRESS', 'INVOICE_TAX', 'BALANCE', 'OTHER'] as const)(
-    'records %s as an effective payment with one required voucher',
-    async (paymentType) => {
-      const fixture = setup()
-      await expect(fixture.service.recordPayment(context, ORDER_ID, {
-        paymentType,
-        amount: '1',
-        receivedAt: '2026-08-20T07:00:00.000Z',
-        paymentMethod: 'BANK_TRANSFER',
-        remark: null,
-        voucher: { mediaAssetId: VOUCHER_ID },
-      })).resolves.toEqual(fixture.detail)
-      expect(JSON.stringify(
-        fixture.transaction.salesOrderPayment.create.mock.calls[0]?.[0],
-      )).toContain(`"paymentType":"${paymentType}"`)
-    },
-  )
-
-  it('rejects missing vouchers and the removed referenceNo field', async () => {
-    const missing = setup()
-    await expect(missing.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'DEPOSIT',
-      amount: '1',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      remark: null,
-    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
-    expect(missing.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
-
-    const legacy = setup()
-    await expect(legacy.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'DEPOSIT',
-      amount: '1',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      referenceNo: 'REMOVED',
-      remark: null,
-      voucher: { mediaAssetId: VOUCHER_ID },
-    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
-  })
-
-  it('requires one effective payment.method value in the payment transaction', async () => {
-    const missing = setup()
-    await expect(missing.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'DEPOSIT',
-      amount: '1',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: null,
-      remark: null,
-      voucher: { mediaAssetId: VOUCHER_ID },
-    })).rejects.toMatchObject({
-      code: 'VALIDATION_FAILED',
-    })
-    expect(missing.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
-
-    const unavailable = setup()
-    unavailable.dictionaryLookup.requireEffectiveValue.mockRejectedValue(
-      new DictionaryValueUnavailableError('DICTIONARY_ITEM_NOT_FOUND'),
-    )
-    await expect(unavailable.service.recordPayment(context, ORDER_ID, {
-      paymentType: 'DEPOSIT',
-      amount: '1',
-      receivedAt: '2026-08-20T07:00:00.000Z',
-      paymentMethod: 'UNKNOWN_METHOD',
-      remark: null,
-      voucher: { mediaAssetId: VOUCHER_ID },
-    })).rejects.toMatchObject({
-      code: 'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
-    })
-    expect(unavailable.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
+    await expect(fixture.service.recordPayment(context, ORDER_ID, { paymentType, amount: '1', voucher: { mediaAssetId: VOUCHER_ID } })).rejects.toMatchObject({ code: 'SALES_ORDER_RECEIPT_REVIEW_REQUIRED' })
+    expect(fixture.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
   })
 
   it('preserves before/after snapshots for a confirmed payment-term revision', async () => {
@@ -618,7 +434,7 @@ describe('SalesOrderMutationService', () => {
       paymentMethod: 'BANK_TRANSFER',
       remark: null,
       voucher: { mediaAssetId: VOUCHER_ID },
-    })).rejects.toMatchObject({ code: 'SALES_ORDER_COMPLETED' })
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_RECEIPT_REVIEW_REQUIRED' })
     expect(recordFixture.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
 
     const voidFixture = setup()
@@ -635,7 +451,7 @@ describe('SalesOrderMutationService', () => {
       ORDER_ID,
       'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
       { reason: '错误收款' },
-    )).rejects.toMatchObject({ code: 'SALES_ORDER_COMPLETED' })
+    )).rejects.toMatchObject({ code: 'SALES_ORDER_RECEIPT_REVIEW_REQUIRED' })
     expect(voidFixture.transaction.salesOrderPayment.update).not.toHaveBeenCalled()
   })
 })

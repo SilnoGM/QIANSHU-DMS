@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ReceiptSubmission } from '../../workbenches/sales-receipts/submission.logic'
 import type {
   SalesOrderPaymentDraft,
   SalesOrderPaymentDraftErrors,
@@ -6,6 +7,7 @@ import type {
   SalesOrderRecordsInitialAction,
   SalesOrderRecordsKind,
 } from './sales-order-records-modal.logic'
+
 import type {
   SalesOrderAmountRevisionDto,
   SalesOrderDetailDto,
@@ -14,19 +16,22 @@ import type {
   SalesOrderPaymentDto,
   SalesOrderStatusHistoryDto,
   SalesOrderTemporaryDocumentDto,
+  SalesReceiptRequestDetailDto,
 } from '@/api/generated/types.gen'
-
 import type { CurrencyDescriptor } from '@/components/base/currency'
 import salesOrdersApi from '@/api/modules/sales-orders'
+import salesReceiptsApi from '@/api/modules/sales-receipts'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+
+import OrderReceiptRequests from '../../workbenches/sales-receipts/order-receipt-requests.vue'
+import { freezeReceiptSubmission, isReceiptResultUnknown } from '../../workbenches/sales-receipts/submission.logic'
 import { getSalesOrderApiFailure, isSalesOrderAbortError } from './sales-order-create.logic'
 import {
   buildSalesOrderDeliveryReceiptRequest,
@@ -55,6 +60,18 @@ interface UploadedVoucher extends SalesOrderTemporaryDocumentDto {
 }
 
 const { auth } = useAppAuth()
+const accountStore = useAppAccountStore()
+const { t } = useI18n()
+const receiptRequests = shallowRef<SalesReceiptRequestDetailDto[]>([])
+const receiptPage = ref(1)
+const receiptTotal = ref(0)
+const pendingReceiptAmount = ref('0.0000')
+const receiptSubmission = shallowRef<ReceiptSubmission | null>(null)
+const receiptUnknown = ref(false)
+const legacyVoidId = ref<string | null>(null)
+const legacyVoidReason = ref('')
+const legacyVoidError = ref('')
+const resubmittedFromId = ref<string | null>(null)
 const toast = useQsToast()
 const detail = ref<SalesOrderDetailDto | null>(null)
 const loading = ref(false)
@@ -91,7 +108,7 @@ const recordsModalTitle = computed(() => ({
   changes: '变更记录',
 })[props.kind])
 const modalTitle = computed(() => ({
-  'create-payment': '新增实际收款',
+  'create-payment': t('salesReceipt.submit'),
   'create-receipt': '货物签收',
   'records': recordsModalTitle.value,
 })[modalState.value.view])
@@ -126,9 +143,9 @@ const canRecordPayment = computed(() => (
   auth('sales-orders:payment') && auth('sales-orders:document')
 ))
 const actionLocked = computed(() => actionSubmitting.value || actionUploading.value)
-const paymentCurrency = computed(() => props.currencies.find(
-  currency => currency.code === detail.value?.currencyCode,
-) ?? null)
+const paymentLocked = computed(() => actionLocked.value || receiptUnknown.value)
+// 收款原币契约保留四位小数，与资金账户人民币两位显示独立。
+const paymentCurrencies = computed(() => props.currencies.map(currency => ({ ...currency, minorUnit: 4 as const })))
 const paymentTypeOptions: Array<{
   label: string
   value: SalesOrderPaymentDraft['paymentType']
@@ -257,6 +274,9 @@ function releaseUploadedVoucher(voucher: UploadedVoucher | null): void {
 }
 
 function resetPaymentForm(): void {
+  receiptSubmission.value = null
+  receiptUnknown.value = false
+  resubmittedFromId.value = null
   releaseUploadedVoucher(paymentVoucher.value)
   paymentType.value = 'DEPOSIT'
   paymentAmount.value = null
@@ -286,7 +306,7 @@ function openPaymentModal(): void {
 
 /** 单一弹窗宿主内切换视图，彻底避免表格快捷操作产生双弹窗闪屏。 */
 function cancelActionView(): void {
-  if (actionLocked.value) {
+  if (paymentLocked.value) {
     return
   }
   const action = resolveSalesOrderModalCancelAction(modalState.value)
@@ -410,62 +430,119 @@ function removeDeliveryReceipt(): void {
 
 async function submitPayment(): Promise<void> {
   const orderId = detail.value?.id
-  const previousOrderStatus = detail.value?.orderStatus
-  if (orderId === undefined || actionLocked.value) {
+  if (orderId === undefined || actionLocked.value || !canRecordPayment.value) {
     return
   }
-  if (paymentCurrency.value === null) {
-    paymentErrors.value = { amount: '订单币种当前不可用，无法记录收款' }
-    actionError.value = '订单币种当前不可用，请刷新后重试'
-    return
+  if (receiptSubmission.value === null) {
+    const result = buildSalesOrderPaymentRequest({
+      amount: paymentAmount.value,
+      paymentMethod: paymentMethod.value ?? '',
+      paymentType: paymentType.value,
+      receivedAt: paymentReceivedAt.value,
+      remark: paymentRemark.value,
+      voucherMediaAssetId: paymentVoucher.value?.mediaAssetId ?? null,
+    }, 4)
+    if (!result.valid) {
+      paymentErrors.value = result.fieldErrors
+      actionError.value = t('salesReceipt.invalid')
+      return
+    }
+    receiptSubmission.value = freezeReceiptSubmission({
+      ...result.request,
+      ...(resubmittedFromId.value === null ? {} : { resubmittedFromId: resubmittedFromId.value }),
+    }, crypto.randomUUID())
   }
-  const result = buildSalesOrderPaymentRequest({
-    amount: paymentAmount.value,
-    paymentMethod: paymentMethod.value ?? '',
-    paymentType: paymentType.value,
-    receivedAt: paymentReceivedAt.value,
-    remark: paymentRemark.value,
-    voucherMediaAssetId: paymentVoucher.value?.mediaAssetId ?? null,
-  }, paymentCurrency.value.minorUnit)
-  if (!result.valid) {
-    paymentErrors.value = result.fieldErrors
-    actionError.value = '请修正未通过校验的收款信息'
-    return
-  }
-
   const controller = new AbortController()
   actionAbortController = controller
   actionSubmitting.value = true
   actionError.value = ''
   try {
-    const response = await salesOrdersApi.recordPayment(orderId, result.request, controller.signal)
+    const frozen = receiptSubmission.value
+    await salesReceiptsApi.submit(orderId, frozen.payload, frozen.idempotencyKey, controller.signal)
     if (controller.signal.aborted) {
+      return
+    }
+    resetPaymentForm()
+    modalState.value = { origin: 'records', view: 'records' }
+    toast.success(t('salesReceipt.submitted'))
+    await loadDetail()
+    if (detail.value) {
+      emit('detailUpdated', detail.value)
+    }
+  }
+  catch (error) {
+    receiptUnknown.value = isReceiptResultUnknown(error)
+    if (!receiptUnknown.value) {
+      receiptSubmission.value = null
+    }
+    actionError.value = receiptUnknown.value
+      ? t('salesReceipt.unknown')
+      : getSalesOrderApiFailure(error).message
+  }
+  finally {
+    if (actionAbortController === controller) {
+      actionAbortController = null
+      actionSubmitting.value = false
+    }
+  }
+}
+
+function resubmitReceipt(request: SalesReceiptRequestDetailDto): void {
+  if (!canRecordPayment.value) {
+    return
+  }
+  resetPaymentForm()
+  paymentType.value = request.paymentType
+  paymentAmount.value = request.amount
+  paymentReceivedAt.value = formatSalesOrderLocalDateTime(new Date(request.receivedAt))
+  paymentMethod.value = request.paymentMethod
+  paymentRemark.value = request.remark ?? ''
+  resubmittedFromId.value = request.id
+  // 重提复用服务端冻结凭证；不得撤销原申请的凭证引用。
+  paymentVoucher.value = {
+    mediaAssetId: request.voucher.mediaAssetId,
+    originalFilename: request.voucher.title,
+    mediaType: 'DOCUMENT',
+    mimeType: '',
+    sizeBytes: '',
+    previewUrl: null,
+  }
+  modalState.value = { origin: 'records', view: 'create-payment' }
+}
+
+async function voidLegacyPayment(): Promise<void> {
+  if (!detail.value || !legacyVoidId.value || actionLocked.value || !auth('sales-receipts:void')) {
+    return
+  }
+  if (!legacyVoidReason.value.trim()) {
+    legacyVoidError.value = t('salesReceipt.reasonRequired')
+    return
+  }
+  const current = new AbortController()
+  actionAbortController = current
+  actionSubmitting.value = true
+  legacyVoidError.value = ''
+  try {
+    const response = await salesOrdersApi.voidPayment(detail.value.id, legacyVoidId.value, {
+      expectedOrderVersion: detail.value.version,
+      reason: legacyVoidReason.value.trim(),
+    }, current.signal)
+    if (current.signal.aborted) {
       return
     }
     detail.value = response.data
     emit('detailUpdated', response.data)
-    const returnToRecords = modalState.value.origin === 'records'
-    resetPaymentForm()
-    if (returnToRecords) {
-      modalState.value = { origin: 'records', view: 'records' }
-    }
-    else {
-      modalVisible.value = false
-    }
-    toast.success(
-      previousOrderStatus === 'CONFIRMED'
-      && response.data.orderStatus === 'PENDING_RECONCILIATION'
-        ? '订单已签收且已付清，已自动进入待对账'
-        : '实际收款记录添加成功',
-    )
+    legacyVoidId.value = null
+    legacyVoidReason.value = ''
+    toast.success(t('salesReceipt.saved'))
   }
-  catch (error) {
-    if (!isSalesOrderAbortError(error)) {
-      actionError.value = getSalesOrderApiFailure(error).message
+  catch (failure) {
+    if (!current.signal.aborted) {
+      legacyVoidError.value = getSalesOrderApiFailure(failure).message
     }
   }
   finally {
-    if (actionAbortController === controller) {
+    if (actionAbortController === current) {
       actionAbortController = null
       actionSubmitting.value = false
     }
@@ -560,7 +637,10 @@ async function loadDetail(): Promise<void> {
   detail.value = null
 
   try {
-    const response = await salesOrdersApi.getById(orderId, controller.signal)
+    const [response, requests] = await Promise.all([
+      salesOrdersApi.getById(orderId, controller.signal),
+      salesReceiptsApi.orderRequests(orderId, { page: receiptPage.value, pageSize: 20 }, controller.signal),
+    ])
     if (
       currentVersion !== requestVersion
       || controller.signal.aborted
@@ -570,6 +650,9 @@ async function loadDetail(): Promise<void> {
       return
     }
     detail.value = response.data
+    receiptRequests.value = requests.data.items
+    receiptTotal.value = requests.data.total
+    pendingReceiptAmount.value = requests.data.pendingAmount ?? '0.0000'
   }
   catch (error) {
     if (isSalesOrderAbortError(error) || currentVersion !== requestVersion) {
@@ -605,11 +688,23 @@ watch(
     else if (modalState.value.view === 'create-receipt') {
       resetReceiptForm()
     }
+    receiptPage.value = 1
     activeChangeTab.value = 'status'
     void loadDetail()
   },
   { immediate: true },
 )
+
+watch(() => accountStore.authEpoch, () => {
+  cancelDetailRequest()
+  cancelActionRequest()
+  resetPaymentForm()
+  legacyVoidId.value = null
+  legacyVoidReason.value = ''
+  receiptRequests.value = []
+  detail.value = null
+  modalVisible.value = false
+})
 
 onBeforeUnmount(() => {
   cancelDetailRequest()
@@ -627,9 +722,9 @@ onBeforeUnmount(() => {
     :loading="loading"
     :error="errorMessage"
     :size="modalSize"
-    :submitting="actionLocked"
-    :dismiss-on-escape="!actionLocked"
-    :dismiss-on-overlay="!actionLocked"
+    :submitting="paymentLocked"
+    :dismiss-on-escape="!paymentLocked"
+    :dismiss-on-overlay="!paymentLocked"
   >
     <template #header-leading>
       <FaIcon :name="modalIcon" class="size-5" aria-hidden="true" />
@@ -642,7 +737,7 @@ onBeforeUnmount(() => {
         size="sm"
         @click="openPaymentModal"
       >
-        <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />新增实际收款
+        <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />{{ t('salesReceipt.submit') }}
       </FaButton>
     </template>
 
@@ -654,6 +749,7 @@ onBeforeUnmount(() => {
 
     <template v-if="detail && modalState.view === 'records'">
       <section v-if="kind === 'payments'" aria-label="实际收款记录列表">
+        <OrderReceiptRequests v-model:page="receiptPage" :items="receiptRequests" :total="receiptTotal" :pending-amount="pendingReceiptAmount" :currency="detail.currencyCode" :can-submit="canRecordPayment" @resubmit="resubmitReceipt" @page-change="loadDetail" />
         <FaEmpty
           v-if="detail.payments.length === 0"
           icon="i-lucide:hand-coins"
@@ -753,6 +849,25 @@ onBeforeUnmount(() => {
               :currencies="currencies"
               class="qs-type-data-emphasis text-emerald-700 font-semibold whitespace-nowrap dark:text-emerald-300 sm:text-right"
             />
+            <div v-if="payment.origin === 'LEGACY'" class="sm:col-span-2">
+              <p class="text-sm text-muted-foreground">
+                {{ t('salesReceipt.legacy') }}
+              </p>
+              <FaButton v-if="!payment.voidedAt && detail.orderStatus !== 'COMPLETED' && auth('sales-receipts:void') && legacyVoidId !== payment.id" variant="outline" :disabled="actionLocked" @click="legacyVoidId = payment.id; legacyVoidReason = ''; legacyVoidError = ''">
+                {{ t('salesReceipt.void') }}
+              </FaButton>
+              <div v-if="legacyVoidId === payment.id" class="space-y-3">
+                <FaAlert v-if="legacyVoidError" variant="destructive" :title="legacyVoidError" />
+                <FaTextarea v-model="legacyVoidReason" :maxlength="500" :aria-label="t('salesReceipt.reason')" :placeholder="t('salesReceipt.reasonRequired')" :disabled="actionLocked" />
+                <div class="flex gap-3">
+                  <FaButton variant="outline" :disabled="actionLocked" @click="legacyVoidId = null">
+                    {{ t('salesReceipt.cancel') }}
+                  </FaButton><FaButton :loading="actionSubmitting" :disabled="actionLocked" @click="voidLegacyPayment">
+                    {{ t('salesReceipt.confirm') }}
+                  </FaButton>
+                </div>
+              </div>
+            </div>
           </li>
         </ul>
       </section>
@@ -948,11 +1063,14 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-if="detail && modalState.view === 'create-payment'">
+      <p v-if="resubmittedFromId" class="text-sm text-muted-foreground break-words">
+        {{ t('salesReceipt.rejectedReason') }}: {{ receiptRequests.find(request => request.id === resubmittedFromId)?.reviewRemark }}
+      </p>
       <FaAlert
         v-if="actionError"
         variant="destructive"
         icon="i-lucide:circle-alert"
-        title="收款信息未保存"
+        :title="t('salesReceipt.notSubmitted')"
         :description="actionError"
         class="mb-4"
         role="alert"
@@ -960,7 +1078,7 @@ onBeforeUnmount(() => {
 
       <FaForm
         :model="{ paymentType, paymentAmount, paymentReceivedAt, paymentMethod, paymentRemark }"
-        :disabled="actionLocked"
+        :disabled="paymentLocked"
       >
         <div class="gap-x-4 gap-y-1 grid sm:grid-cols-2">
           <FaFormItem name="paymentType" label="收款类型" required>
@@ -978,9 +1096,10 @@ onBeforeUnmount(() => {
             <MoneyInput
               v-model="paymentAmount"
               :currency="detail?.currencyCode ?? null"
-              :currencies="currencies"
+              :currencies="paymentCurrencies"
+              :disabled="paymentLocked"
               :currency-selectable="false"
-              min="0.01"
+              min="0.0001"
               @update:model-value="clearPaymentError('amount')"
             />
             <p v-if="paymentErrors.amount" class="text-xs text-destructive m-0 mt-1">
@@ -1038,7 +1157,7 @@ onBeforeUnmount(() => {
           type="file"
           accept="image/*,.pdf,.doc,.docx"
           class="sr-only"
-          :disabled="actionLocked"
+          :disabled="paymentLocked"
           @change="handlePaymentFileInput"
         >
         <FaButton
@@ -1047,7 +1166,7 @@ onBeforeUnmount(() => {
           variant="outline"
           class="mt-3 min-h-11 w-full"
           :loading="actionUploading"
-          :disabled="actionLocked"
+          :disabled="paymentLocked"
           @click="openPaymentFilePicker"
         >
           <FaIcon name="i-lucide:upload-cloud" aria-hidden="true" />上传收款凭证
@@ -1066,11 +1185,11 @@ onBeforeUnmount(() => {
             <p class="text-sm font-medium m-0 truncate">
               {{ paymentVoucher.originalFilename }}
             </p>
-            <p class="qs-type-meta m-0 mt-1">
+            <p v-if="paymentVoucher.mimeType" class="qs-type-meta m-0 mt-1">
               {{ paymentVoucher.mimeType }} · {{ paymentVoucher.sizeBytes }} bytes
             </p>
           </div>
-          <FaButton type="button" variant="ghost" size="sm" :disabled="actionLocked" @click="removePaymentVoucher">
+          <FaButton type="button" variant="ghost" size="sm" :disabled="paymentLocked" @click="removePaymentVoucher">
             移除
           </FaButton>
         </div>
@@ -1160,11 +1279,11 @@ onBeforeUnmount(() => {
 
     <template #footer>
       <template v-if="modalState.view === 'create-payment'">
-        <FaButton type="button" variant="outline" :disabled="actionLocked" @click="cancelActionView">
+        <FaButton type="button" variant="outline" :disabled="paymentLocked" @click="cancelActionView">
           取消
         </FaButton>
         <FaButton type="button" :loading="actionSubmitting" :disabled="actionLocked" @click="submitPayment">
-          确认添加收款
+          {{ receiptUnknown ? t('salesReceipt.retryOriginal') : t('salesReceipt.submit') }}
         </FaButton>
       </template>
       <template v-else-if="modalState.view === 'create-receipt'">

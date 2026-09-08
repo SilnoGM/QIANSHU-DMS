@@ -1,3 +1,4 @@
+import type { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { AuditService } from '../../audit/audit.service'
 import {
@@ -653,5 +654,68 @@ describe('FundPostingApplicationService idempotency and failures', () => {
       auditFailure.service.postBusinessEvent(CONTEXT, businessInput()),
       'FUND_INTERNAL_ERROR',
     )
+  })
+})
+
+
+describe('sales receipt transaction ports', () => {
+  beforeEach(() => {
+    jest.resetAllMocks()
+    configureSuccessfulPosting(requireInitialRule('ORDER_SETTLEMENT'))
+    mockedLockSource.mockResolvedValue({ id: SOURCE_ID, code: 'SALES_RECEIPT', name: '销售收款', enabled: true })
+  })
+  const context = { ...CONTEXT, sourceCode: 'SALES_RECEIPT', consumerCode: 'SALES_RECEIPT.APPROVE', actorUserId: SOURCE_ID }
+
+  it('previews the locked rule and split without writing or opening a nested transaction', async () => {
+    const { service, prisma, transaction } = fixture()
+    const result = await service.previewBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, businessInput())
+    expect(result).toMatchObject({ ruleVersionId: RULE_ID, userShareRate: '30.00', businessAmount: '100.00' })
+    expect(result.entries.map(entry => entry.amount)).toEqual(['30.00', '70.00'])
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+
+  it('rejects changed locked share rate before all writes', async () => {
+    const { service, transaction } = fixture()
+    await expect(service.postBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, businessInput(), { ruleVersionId: RULE_ID, userShareRate: '29.00' })).rejects.toMatchObject({ code: 'FUND_CONCURRENT_STATE_CHANGED' })
+    expect(mockedLockAccounts).toHaveBeenCalled()
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+
+  it('rejects standalone receipt posting before opening a transaction', async () => {
+    const { service, prisma } = fixture()
+    await expect(service.postBusinessEvent({ ...CONTEXT, sourceCode: 'SALES_RECEIPT' }, businessInput())).rejects.toMatchObject({ code: 'FUND_POSTING_TYPE_NOT_ALLOWED' })
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it('propagates database failure for the outer transaction to roll back', async () => {
+    const { service, prisma, transaction } = fixture()
+    const failure = new Error('unique-conflict')
+    mockedInsertBatch.mockRejectedValue(failure)
+    await expect(service.postBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, businessInput(), { ruleVersionId: RULE_ID, userShareRate: '30.00' })).rejects.toBe(failure)
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(mockedUpdateAccount).not.toHaveBeenCalled()
+  })
+
+  it('rejects a configured debit rule for receipt approval', async () => {
+    const rule = requireInitialRule('ORDER_SETTLEMENT')
+    mockedLockType.mockResolvedValue(postingTypeRecord({ ...rule, amountSignPolicy: 'POSITIVE_ONLY', legs: rule.legs.map(leg => ({ ...leg, directionPolicy: 'DEBIT' })) }))
+    const { service, transaction } = fixture()
+    await expect(service.previewBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, businessInput())).rejects.toMatchObject({ code: 'FUND_POSTING_RULE_UNAVAILABLE' })
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+
+  it('rejects negative receipt income before ledger writes', async () => {
+    const { service, transaction } = fixture()
+    await expect(service.postBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, { ...businessInput(), amount: '-100.00' }, { ruleVersionId: RULE_ID, userShareRate: '30.00' })).rejects.toMatchObject({ code: 'FUND_POSTING_RULE_UNAVAILABLE' })
+    expect(mockedInsertBatch).not.toHaveBeenCalled()
+  })
+
+  it('posts inside the caller transaction with the reviewer as actor', async () => {
+    const { service, prisma, transaction, audit } = fixture()
+    await service.postBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, businessInput(), { ruleVersionId: RULE_ID, userShareRate: '30.00' })
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(mockedInsertBatch).toHaveBeenCalledWith(transaction, expect.objectContaining({ actorUserId: SOURCE_ID, userId: USER_ID }))
+    expect(audit.record).toHaveBeenCalledWith(transaction, expect.objectContaining({ actorUserId: SOURCE_ID, actorType: 'USER' }))
   })
 })

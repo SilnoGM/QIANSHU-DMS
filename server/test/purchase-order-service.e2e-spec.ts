@@ -1,3 +1,8 @@
+import { SalesReceiptService } from '../src/modules/sales-orders/receipts/sales-receipt.service'
+import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/sales-receipt-query.service'
+import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
+import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
+import type { MediaContentDeliveryService } from '../src/modules/media/media-content-delivery.service'
 import { randomUUID } from 'node:crypto'
 
 
@@ -19,7 +24,6 @@ import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purcha
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
-import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { SalesOrderAutomaticStateService } from '../src/modules/sales-orders/sales-order-automatic-state.service'
 import { SalesOrderProductEditQueryService } from '../src/modules/sales-orders/sales-order-product-edit-query.service'
 import { SalesOrderProductEditService } from '../src/modules/sales-orders/sales-order-product-edit.service'
@@ -88,7 +92,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let sourceQueries: PurchaseOrderSourceQueryService
   let productEdits: SalesOrderProductEditService
   let productEditQueries: SalesOrderProductEditQueryService
-  let salesMutations: SalesOrderMutationService
+  let salesReceipts: SalesReceiptService
   let grantStockPermission = true
   let purchaseNumber = 0
 
@@ -357,15 +361,12 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     sourceQueries = new PurchaseOrderSourceQueryService(prisma, dictionaryLookup)
     productEdits = new SalesOrderProductEditService(prisma, new AuditService())
     productEditQueries = new SalesOrderProductEditQueryService(prisma)
-    salesMutations = new SalesOrderMutationService(
-      prisma,
-      new AuditService(),
-      media,
-      dictionaryLookup,
-      salesQuery,
-      new SalesOrderAutomaticStateService(new AuditService()),
-      { now: () => new Date('2026-08-27T11:30:00.000Z') },
+    salesReceipts = new SalesReceiptService(prisma, new SalesReceiptQueryService(prisma), dictionaryLookup, media,
+      new FundPostingApplicationService(prisma, new AuditService()), new AuditService(), new SalesOrderAutomaticStateService(new AuditService()),
+      { getPermissionCodesInTransaction: () => Promise.resolve(['sales-orders:payment', 'sales-orders:document', 'sales-receipts:review']), hasAll: () => true } as unknown as AccessControlService,
+      { stat: () => Promise.resolve({ sizeBytes: 1n, modifiedAt: new Date() }) } as unknown as MediaContentDeliveryService,
     )
+    await new FundAccountCommandService(prisma, new AuditService()).createUserAccount({ actorUserId, requestId: randomUUID() }, { userId: actorUserId, userShareRate: '30' })
     commands = new PurchaseOrderCommandService(
       prisma,
       numbering,
@@ -865,7 +866,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   })
 
   it('atomically edits products once, becomes partial, and returns to completed after purchase', async () => {
-    await salesMutations.recordPayment({
+    const receipt = await salesReceipts.submit({
       actorUserId,
       requestId: `sales-payment-before-product-edit-${suffix}`,
     }, salesOrderId, {
@@ -875,7 +876,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       paymentMethod: 'BANK_TRANSFER',
       remark: null,
       voucher: { mediaAssetId: paymentVoucherMediaAssetId },
-    })
+    }, randomUUID())
+    const approval = await salesReceipts.approvalContext({ actorUserId, requestId: randomUUID() }, receipt.id)
+    await salesReceipts.approve({ actorUserId, requestId: randomUUID() }, receipt.id, { expectedVersion: 1, expectedContext: approval.expectedContext })
     const before = await prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
       select: { version: true, paymentStatus: true, fulfillmentStatus: true },

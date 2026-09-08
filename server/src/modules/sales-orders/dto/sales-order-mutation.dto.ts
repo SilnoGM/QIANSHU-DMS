@@ -2,6 +2,8 @@ import { ApiProperty } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
   IsDefined,
+  IsInt,
+  Min,
   IsEnum,
   IsOptional,
   IsString,
@@ -100,6 +102,11 @@ export class SalesOrderPaymentRequestDto {
 }
 
 export class SalesOrderPaymentVoidRequestDto {
+  @ApiProperty({ minimum: 1 })
+  @IsInt()
+  @Min(1)
+  expectedOrderVersion!: number
+
   @ApiProperty({ type: 'string', minLength: 1, maxLength: 500 })
   @IsString()
   @IsUnicodeCodePointLength(1, 500)

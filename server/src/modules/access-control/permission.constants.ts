@@ -55,6 +55,13 @@ export const SALES_ORDER_PERMISSION_CODES = [
   'sales-orders:document',
 ] as const
 
+/** 财务读取、审核与纠错分别授予；不隐式附送资金管理权限。 */
+export const SALES_RECEIPT_PERMISSION_CODES = [
+  'sales-receipts:read',
+  'sales-receipts:review',
+  'sales-receipts:void',
+] as const
+
 /**
  * 采购订单域按读取、创建、备货创建、审核、通用更新、付款和凭证拆分权限。
  *
@@ -120,6 +127,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
   ...FUND_ACCOUNT_PERMISSION_CODES,
   ...SALES_ORDER_PERMISSION_CODES,
+  ...SALES_RECEIPT_PERMISSION_CODES,
   ...PURCHASE_ORDER_PERMISSION_CODES,
 ] as const
 

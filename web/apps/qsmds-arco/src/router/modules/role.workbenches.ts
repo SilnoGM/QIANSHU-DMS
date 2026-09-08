@@ -1,22 +1,22 @@
 import type { RouteRecordMainRaw } from '@fantastic-admin/types'
 
-// 工作台按已有业务权限展示；不依赖角色名称，也不新增后端授权能力。
+// 工作台按独立业务权限展示，不依赖角色名称。
 export const financeWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.finance',
     icon: 'i-lucide:wallet-cards',
-    auth: ['sales-orders:payment', 'purchase-orders:payment'],
+    auth: ['sales-receipts:read', 'purchase-orders:payment'],
   },
   children: [
     {
       path: '/qs-finance/sales-receipts',
       name: 'qsFinanceSalesReceipts',
-      component: () => import('@/views/workbenches/placeholder.vue'),
+      component: () => import('@/views/workbenches/sales-receipts/index.vue'),
       meta: {
         title: 'workbench.salesReceipts',
         icon: 'i-lucide:arrow-down-to-line',
         singleMenu: true,
-        auth: 'sales-orders:payment',
+        auth: 'sales-receipts:read',
       },
     },
     {

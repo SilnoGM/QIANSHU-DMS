@@ -52,6 +52,9 @@ import {
   type FundPostingTypeRecord,
 } from './fund-posting.persistence'
 import type {
+  FundBusinessTransactionContext,
+  FundPostingExpectedContext,
+  FundPostingPreview,
   FundManualAdjustmentInput,
   FundPostingContext,
   FundPostingResult,
@@ -80,6 +83,9 @@ import {
 } from './fund-reversal.persistence'
 
 const MAX_POSTGRES_BIGINT = 9_223_372_036_854_775_807n
+const SALES_RECEIPT_SOURCE_CODE = 'SALES_RECEIPT'
+const SALES_RECEIPT_APPROVE_CONSUMER_CODE = 'SALES_RECEIPT.APPROVE'
+const SALES_RECEIPT_VOID_CONSUMER_CODE = 'SALES_RECEIPT.VOID'
 const ADMIN_REVERSAL_CONSUMER_CODE = 'ADMIN_REVERSAL'
 const ADMIN_ADJUSTMENT_CONSUMER_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
 const ADMIN_ADJUSTMENT_SOURCE_CODE = 'ADMIN_CONSOLE'
@@ -433,6 +439,10 @@ export class FundPostingApplicationService extends FundPostingService {
     rawInput: PostBusinessEventInput,
   ): Promise<FundPostingResult> {
     const request = normalizePostBusinessEventRequest(rawContext, rawInput)
+    // 销售收款只允许在销售事务中写入，避免独立调用绕过正式收款关联。
+    if (request.context.sourceCode === SALES_RECEIPT_SOURCE_CODE) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
+    }
     try {
       return await this.prisma.$transaction(transaction => (
         this.postInTransaction(transaction, request)
@@ -444,6 +454,73 @@ export class FundPostingApplicationService extends FundPostingService {
       }
       throw toPostingError(error)
     }
+  }
+
+  private normalizeBusinessContext(
+    context: FundBusinessTransactionContext,
+    consumerCode: string,
+  ): FundAccountCommandContext {
+    if (context.sourceCode !== SALES_RECEIPT_SOURCE_CODE || context.consumerCode !== consumerCode) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
+    }
+    return normalizeFundAccountCommandContext({
+      actorUserId: context.actorUserId,
+      requestId: context.requestId,
+      ...(context.correlationId === undefined ? {} : { correlationId: context.correlationId }),
+    })
+  }
+
+  private normalizeBusinessRequest(context: FundBusinessTransactionContext, input: PostBusinessEventInput) {
+    if (input.postingTypeCode !== 'ORDER_SETTLEMENT') {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
+    }
+    return normalizePostBusinessEventRequest({
+      consumerCode: context.consumerCode,
+      sourceCode: context.sourceCode,
+      requestId: context.requestId,
+      ...(context.correlationId === undefined ? {} : { correlationId: context.correlationId }),
+    }, input)
+  }
+
+  async previewBusinessEventInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: FundBusinessTransactionContext,
+    input: PostBusinessEventInput,
+  ): Promise<FundPostingPreview> {
+    this.normalizeBusinessContext(context, SALES_RECEIPT_APPROVE_CONSUMER_CODE)
+    const request = this.normalizeBusinessRequest(context, input)
+    const { postingType, plan, userShareRate } = await this.prepareBusinessPlan(transaction, request)
+    if (userShareRate === undefined || plan.companyShareRate === null) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_INVALID)
+    }
+    return Object.freeze({
+      ruleVersionId: postingType.ruleVersion.id,
+      userShareRate,
+      companyShareRate: plan.companyShareRate,
+      businessAmount: plan.businessAmount,
+      entries: plan.entries.map(({ accountTarget, direction, amount }) => ({ accountTarget, direction, amount })),
+    })
+  }
+
+  /** 外层销售事务拥有提交与回滚权；唯一冲突原样上抛，不能在失败事务内恢复。 */
+  async postBusinessEventInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: FundBusinessTransactionContext,
+    input: PostBusinessEventInput,
+    expectedContext: FundPostingExpectedContext,
+  ): Promise<FundPostingResult> {
+    const actor = this.normalizeBusinessContext(context, SALES_RECEIPT_APPROVE_CONSUMER_CODE)
+    const request = this.normalizeBusinessRequest(context, input)
+    return this.postInTransaction(transaction, request, { actorUserId: actor.actorUserId, expectedContext })
+  }
+
+  async reverseBusinessEventInTransaction(
+    transaction: Prisma.TransactionClient,
+    context: FundBusinessTransactionContext,
+    input: FundReversalInput,
+  ): Promise<FundPostingResult> {
+    const actor = this.normalizeBusinessContext(context, SALES_RECEIPT_VOID_CONSUMER_CODE)
+    return this.reverseInTransaction(transaction, actor, normalizeFundReversalRequest(input), true)
   }
 
   /**
@@ -695,6 +772,7 @@ export class FundPostingApplicationService extends FundPostingService {
     transaction: Prisma.TransactionClient,
     context: FundAccountCommandContext,
     request: NormalizedFundReversalRequest,
+    salesReceipt = false,
   ): Promise<FundPostingResult> {
     await applyTransactionTimeouts(transaction)
     const asOf = await readFundPostingTransactionTimestamp(transaction)
@@ -705,7 +783,7 @@ export class FundPostingApplicationService extends FundPostingService {
       ),
     )
     const replayInput = {
-      consumerCode: ADMIN_REVERSAL_CONSUMER_CODE,
+      consumerCode: salesReceipt ? SALES_RECEIPT_VOID_CONSUMER_CODE : ADMIN_REVERSAL_CONSUMER_CODE,
       sourceCode: identity.businessSourceCode,
       idempotencyKeyHash: request.idempotencyKeyHash,
     } as const
@@ -722,6 +800,17 @@ export class FundPostingApplicationService extends FundPostingService {
       ),
       identity,
     )
+    // 来源固定属于收款域；原批次锁内拒绝通用冲正，不能让账本先于收款作废。
+    if (!salesReceipt && original.businessSourceCode === SALES_RECEIPT_SOURCE_CODE) {
+      throw postingError(FUND_POSTING_ERROR_CODES.REVERSAL_REQUIRES_RECEIPT_VOID)
+    }
+    if (salesReceipt && (
+      original.businessSourceCode !== SALES_RECEIPT_SOURCE_CODE
+      || original.postingTypeCode !== 'ORDER_SETTLEMENT'
+      || original.kind !== 'BUSINESS'
+    )) {
+      throw postingError(FUND_POSTING_ERROR_CODES.REVERSAL_TARGET_INVALID)
+    }
     // 同一原批次上的冲账在行锁处串行；锁后重读可复用刚提交的相同请求。
     const lockedReplay = resolveReplay(
       await readIdempotentFundPosting(transaction, replayInput),
@@ -735,6 +824,12 @@ export class FundPostingApplicationService extends FundPostingService {
       original.id,
     )
     requireConsistentReversalHistory(originalEntries)
+    if (salesReceipt && (
+      parseFundAmountMinor(originalEntries.cumulativeReversedBusinessAmount) !== 0n
+      || parseFundAmountMinor(request.input.amount) !== parseFundAmountMinor(original.businessAmount)
+    )) {
+      throw postingError(FUND_POSTING_ERROR_CODES.REVERSAL_STATE_CHANGED)
+    }
     const plan = calculateFundReversal({
       originalBatchKind: original.kind,
       originalBusinessAmount: original.businessAmount,
@@ -770,7 +865,7 @@ export class FundPostingApplicationService extends FundPostingService {
       batchNo: batchIdentity.batchNo,
       originalBatchId: original.id,
       businessAmount: plan.reversalBusinessAmount,
-      consumerCode: ADMIN_REVERSAL_CONSUMER_CODE,
+      consumerCode: salesReceipt ? SALES_RECEIPT_VOID_CONSUMER_CODE : ADMIN_REVERSAL_CONSUMER_CODE,
       idempotencyKeyHash: request.idempotencyKeyHash,
       requestFingerprintHash: request.requestFingerprintHash,
       reason: request.input.reason,
@@ -865,23 +960,10 @@ export class FundPostingApplicationService extends FundPostingService {
     return replay
   }
 
-  private async postInTransaction(
+  private async prepareBusinessPlan(
     transaction: Prisma.TransactionClient,
     request: NormalizedPostBusinessEventRequest,
-  ): Promise<FundPostingResult> {
-    // timeout 固定为事务第一条 SQL，之后所有时间语义只复用这一次数据库读取。
-    await applyTransactionTimeouts(transaction)
-    const asOf = await readFundPostingTransactionTimestamp(transaction)
-    const replay = resolveReplay(
-      await readIdempotentFundPosting(transaction, {
-        consumerCode: request.context.consumerCode,
-        sourceCode: request.context.sourceCode,
-        idempotencyKeyHash: request.idempotencyKeyHash,
-      }),
-      request.requestFingerprintHash,
-    )
-    if (replay !== null) return replay
-
+  ) {
     const source = requireSource(await lockFundBusinessSourceForPosting(
       transaction,
       request.context.sourceCode,
@@ -919,6 +1001,42 @@ export class FundPostingApplicationService extends FundPostingService {
       request.input.userId,
     )
 
+    const userShareRate = targetAccounts.USER?.userShareRate ?? undefined
+    const plan = calculateFundPostingPlan({
+      rule: buildRule(postingType),
+      amount: request.input.amount,
+      ...(userShareRate === undefined ? {} : { userShareRate }),
+    })
+    // 可配置的结算规则仍须满足收款语义；财务通过只能增加账户余额。
+    if (request.context.sourceCode === SALES_RECEIPT_SOURCE_CODE && (
+      postingType.businessCategory !== 'REVENUE'
+      || parseFundAmountMinor(plan.businessAmount) <= 0n
+      || plan.entries.some(entry => entry.direction !== 'CREDIT')
+    )) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    return { source, postingType, targetAccounts, plan, userShareRate }
+  }
+
+  private async postInTransaction(
+    transaction: Prisma.TransactionClient,
+    request: NormalizedPostBusinessEventRequest,
+    business?: { readonly actorUserId: string; readonly expectedContext: FundPostingExpectedContext },
+  ): Promise<FundPostingResult> {
+    // timeout 固定为事务第一条 SQL，之后所有时间语义只复用这一次数据库读取。
+    await applyTransactionTimeouts(transaction)
+    const asOf = await readFundPostingTransactionTimestamp(transaction)
+    const replay = resolveReplay(
+      await readIdempotentFundPosting(transaction, {
+        consumerCode: request.context.consumerCode,
+        sourceCode: request.context.sourceCode,
+        idempotencyKeyHash: request.idempotencyKeyHash,
+      }),
+      request.requestFingerprintHash,
+    )
+    if (replay !== null) return replay
+
+    const { source, postingType, targetAccounts, plan, userShareRate } = await this.prepareBusinessPlan(transaction, request)
     // 同账户的相同请求会在行锁处串行；锁后再读一次可直接复用先提交的赢家。
     const lockedReplay = resolveReplay(
       await readIdempotentFundPosting(transaction, {
@@ -930,12 +1048,13 @@ export class FundPostingApplicationService extends FundPostingService {
     )
     if (lockedReplay !== null) return lockedReplay
 
-    const userShareRate = targetAccounts.USER?.userShareRate ?? undefined
-    const plan = calculateFundPostingPlan({
-      rule: buildRule(postingType),
-      amount: request.input.amount,
-      ...(userShareRate === undefined ? {} : { userShareRate }),
-    })
+    // 比较的快照就是后续分录使用的快照，不能在锁外检查后再读取另一组比例。
+    if (business !== undefined && (
+      business.expectedContext.ruleVersionId !== postingType.ruleVersion.id
+      || business.expectedContext.userShareRate !== userShareRate
+    )) {
+      throw postingError(FUND_POSTING_ERROR_CODES.CONCURRENT_STATE_CHANGED)
+    }
     const identity = createBatchIdentity()
     const plannedEntries = plan.entries.map((entry, index) => (
       planLedgerEntry(
@@ -954,6 +1073,7 @@ export class FundPostingApplicationService extends FundPostingService {
       id: identity.id,
       batchNo: identity.batchNo,
       kind: 'BUSINESS',
+      ...(business === undefined ? {} : { actorUserId: business.actorUserId }),
       postingTypeId: postingType.id,
       postingTypeCodeSnapshot: postingType.code,
       postingTypeNameSnapshot: postingType.name,
@@ -1007,7 +1127,8 @@ export class FundPostingApplicationService extends FundPostingService {
     await this.audit.record(transaction, {
       eventType: AuditEventType.FUND_BUSINESS_POSTED,
       outcome: AuditOutcome.SUCCESS,
-      actorType: AuditActorType.SYSTEM,
+      actorType: business === undefined ? AuditActorType.SYSTEM : AuditActorType.USER,
+      ...(business === undefined ? {} : { actorUserId: business.actorUserId }),
       targetType: 'FundPostingBatch',
       targetId: identity.id,
       requestId: request.context.requestId,

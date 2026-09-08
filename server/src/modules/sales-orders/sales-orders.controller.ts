@@ -1,3 +1,4 @@
+import { SalesReceiptService } from './receipts/sales-receipt.service'
 import {
   Body,
   Controller,
@@ -124,6 +125,7 @@ function applyDocumentContentResponse(
 export class SalesOrdersController {
   constructor(
     private readonly queries: SalesOrderQueryService,
+    private readonly receipts: SalesReceiptService,
     private readonly commands: SalesOrderCommandService,
     private readonly mutations: SalesOrderMutationService,
     private readonly documents: SalesOrderDocumentService,
@@ -262,6 +264,7 @@ export class SalesOrdersController {
         'SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED',
         'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
         'SALES_ORDER_TOTAL_BELOW_RECEIVED',
+        'SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE',
         'VALIDATION_FAILED',
       ] },
     ],
@@ -583,6 +586,7 @@ export class SalesOrdersController {
     session: 'required', authorization: true, csrf: true, badRequest: true,
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
+      { status: 409, codes: ['SALES_RECEIPT_STATE_CHANGED'] },
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
@@ -649,6 +653,7 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
+        'SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE',
         'SALES_ORDER_PAYMENT_TERMS_MISMATCH',
         'SALES_ORDER_PAYMENT_TERMS_NOT_EDITABLE',
         'SALES_ORDER_TOTAL_MISMATCH',
@@ -679,11 +684,13 @@ export class SalesOrdersController {
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SALES_ORDER_RECEIPT_REVIEW_REQUIRED'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCELLED',
         'SALES_ORDER_COMPLETED',
         'SALES_ORDER_PAYMENT_AMOUNT_INVALID',
         'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
+        'SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE',
         'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
         'VALIDATION_FAILED',
       ] },
@@ -702,13 +709,15 @@ export class SalesOrdersController {
   }
 
   @Post(':salesOrderId/payments/:paymentId/void')
-  @RequirePermissions('sales-orders:payment')
+  @RequirePermissions('sales-receipts:void')
+  @HttpCode(HttpStatus.OK)
   @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderDetailDto })
   @ApiApplicationContract({
     operationId: 'sales_orders_void_payment',
     session: 'required', authorization: true, csrf: true, badRequest: true,
     resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
     errors: [
+      { status: 409, codes: ['SALES_RECEIPT_STATE_CHANGED', 'SALES_RECEIPT_REVERSAL_CONFLICT'] },
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: [
         'SALES_ORDER_NOT_FOUND',
@@ -716,22 +725,24 @@ export class SalesOrdersController {
       ] },
       { status: 422, codes: [
         'SALES_ORDER_COMPLETED',
+        'SALES_RECEIPT_POSTING_UNAVAILABLE',
         'SALES_ORDER_PAYMENT_ALREADY_VOIDED',
         'VALIDATION_FAILED',
       ] },
     ],
   })
-  voidPayment(
+  async voidPayment(
     @Param() params: SalesOrderPaymentIdParamDto,
     @Body() dto: SalesOrderPaymentVoidRequestDto,
     @Req() request: object,
   ): Promise<SalesOrderDetail> {
-    return this.mutations.voidPayment(
+    await this.receipts.voidPayment(
       mutationContext(request),
       params.salesOrderId,
       params.paymentId,
       dto,
     )
+    return this.queries.getById(params.salesOrderId)
   }
 
   @Post(':salesOrderId/delivery-receipts')

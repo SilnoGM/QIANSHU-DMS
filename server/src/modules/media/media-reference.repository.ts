@@ -10,11 +10,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'product_media',
   'sales_order_documents',
   'purchase_order_documents',
+  'sales_receipt_requests',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest'
 >
 
 /**
@@ -50,6 +51,13 @@ export class MediaAssetReferenceRepository {
       },
       select: { id: true },
     })
-    return purchaseOrderReference !== null
+    if (purchaseOrderReference !== null) return true
+
+    // 驳回也必须保留原始收款证据，不能按审核状态排除引用。
+    const receiptReference = await reader.salesReceiptRequest.findFirst({
+      where: { voucherMediaAssetId: assetId },
+      select: { id: true },
+    })
+    return receiptReference !== null
   }
 }

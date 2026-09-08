@@ -16,11 +16,12 @@ test('财务和采购工作台只展示当前用户有权访问的业务入口',
 
   assert.deepEqual(visiblePaths([]), [])
   assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), [])
-  assert.deepEqual(visiblePaths(['sales-orders:payment']), ['/qs-finance/sales-receipts'])
+  assert.deepEqual(visiblePaths(['sales-orders:payment']), [])
+  assert.deepEqual(visiblePaths(['sales-receipts:read']), ['/qs-finance/sales-receipts'])
   assert.deepEqual(visiblePaths(['purchase-orders:payment']), ['/qs-finance/purchase-payments'])
   assert.deepEqual(visiblePaths(['purchase-orders:review']), ['/qs-purchase/reviews'])
   assert.deepEqual(visiblePaths([
-    'sales-orders:payment',
+    'sales-receipts:read',
     'purchase-orders:payment',
     'purchase-orders:review',
   ]), ['/qs-finance/sales-receipts', '/qs-finance/purchase-payments', '/qs-purchase/reviews'])

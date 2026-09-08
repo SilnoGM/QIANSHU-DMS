@@ -355,38 +355,9 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       select: { fulfillmentStatus: true, version: true },
     })).resolves.toEqual({ fulfillmentStatus: 'PENDING', version: 1 })
 
-    const paid = await mutations.recordPayment({
-      actorUserId,
-      requestId: `sales-order-payment-${suffix}`,
-    }, created.id, {
-      paymentType: 'DEPOSIT',
-      amount: '30',
-      receivedAt: '2026-08-20T10:00:00.000Z',
-      paymentMethod: 'BANK_TRANSFER',
-      remark: null,
-      voucher: { mediaAssetId: paymentVoucherMediaAssetId },
-    })
-    expect(paid).toMatchObject({
-      orderStatus: 'CONFIRMED',
-      paymentStatus: 'PARTIALLY_PAID',
-      amounts: {
-        receivedAmount: '30.0000',
-        outstandingAmount: '70.0000',
-      },
-    })
-    await expect(mutations.updateOrderStatus({
-      actorUserId,
-      requestId: `sales-order-cancel-${suffix}`,
-    }, created.id, { toStatus: 'CANCELLED', reason: '错误取消' }))
-      .rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_HAS_PAYMENTS' })
-
-    const statusHistory = await prisma.salesOrderStatusHistory.findMany({
-      where: { salesOrderId: created.id },
-      orderBy: { changedAt: 'asc' },
-      select: { dimension: true, fromStatus: true, toStatus: true },
-    })
-    expect(statusHistory).toEqual([
-      { dimension: 'PAYMENT', fromStatus: 'UNPAID', toStatus: 'PARTIALLY_PAID' },
-    ])
+    await expect(mutations.recordPayment({ actorUserId, requestId: `sales-order-payment-${suffix}` }, created.id, {
+      paymentType: 'DEPOSIT', amount: '30', receivedAt: '2026-08-20T10:00:00.000Z', paymentMethod: 'BANK_TRANSFER', remark: null, voucher: { mediaAssetId: paymentVoucherMediaAssetId },
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_RECEIPT_REVIEW_REQUIRED' })
+    expect(await prisma.salesOrderPayment.count({ where: { salesOrderId: created.id } })).toBe(0)
   })
 })
