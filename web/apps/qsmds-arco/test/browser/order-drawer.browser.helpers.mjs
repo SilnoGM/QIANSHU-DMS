@@ -17,21 +17,42 @@ export async function clickOrderDrawerTab(page, drawerTestId, label) {
   })()`
   await page.bringToFront()
   await page.waitFor(`${source} !== null`)
-  await page.evaluate(`${source}.scrollIntoView({ block: 'nearest', inline: 'nearest' })`)
+  // 吸顶页签的布局框不代表实际可点击区域；展开长记录后先归零当前抽屉正文，
+  // 与抽屉切换页签时的滚动行为保持一致，避免 scrollIntoView 连带移动背景页面。
+  await page.evaluate(`document.querySelector(
+    '[data-testid=${JSON.stringify(drawerTestId)}]',
+  ).parentElement.scrollTo({ top: 0, behavior: 'instant' })`)
   // 抽屉仍在过渡时元素虽有尺寸，却可能不在最终点击位置；只在位置稳定且可命中时操作。
-  await page.waitFor(`(async () => {
-    const tab = ${source}
-    if (!tab) return false
-    const before = tab.getBoundingClientRect()
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
-    const after = tab.getBoundingClientRect()
-    const target = document.elementFromPoint(
-      after.left + after.width / 2, after.top + after.height / 2,
-    )
-    return before.left === after.left && before.top === after.top
-      && before.width === after.width && before.height === after.height
-      && target !== null && tab.contains(target)
-  })()`)
+  try {
+    await page.waitFor(`(async () => {
+      const tab = ${source}
+      if (!tab) return false
+      const before = tab.getBoundingClientRect()
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const after = tab.getBoundingClientRect()
+      const target = document.elementFromPoint(
+        after.left + after.width / 2, after.top + after.height / 2,
+      )
+      return before.left === after.left && before.top === after.top
+        && before.width === after.width && before.height === after.height
+        && target !== null && tab.contains(target)
+    })()`)
+  }
+  catch (cause) {
+    // 只输出几何与节点类型，不输出订单内容、凭据或整页 HTML。
+    const geometry = await page.evaluate(`(() => {
+      const tab = ${source}
+      const body = document.querySelector('[data-testid=${JSON.stringify(drawerTestId)}]')?.parentElement
+      const rect = tab?.getBoundingClientRect()
+      const target = rect && document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+      return {
+        tab: rect?.toJSON(), body: body?.getBoundingClientRect().toJSON(),
+        scrollTop: body?.scrollTop, clientHeight: body?.clientHeight,
+        hitTag: target?.tagName, hitSlot: target?.getAttribute('data-slot'),
+      }
+    })()`)
+    throw new Error(`Order drawer tab is not reachable: ${JSON.stringify(geometry)}`, { cause })
+  }
   const point = await page.evaluate(`(() => {
     const rect = ${source}.getBoundingClientRect()
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }

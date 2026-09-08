@@ -14,6 +14,7 @@ import {
   waitForNoVisibleDialog,
   waitForVisibleDialog,
 } from './numbering.browser.helpers.mjs'
+import { assertOrderDrawerTabScrolling } from './order-drawer-scroll.browser.helpers.mjs'
 import { clickOrderDrawerTab } from './order-drawer.browser.helpers.mjs'
 import {
   assertPartConfiguratorMergeShowcase,
@@ -721,6 +722,9 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
   })
   await runPurchaseOrderBrowserStep('desktop and touch input capabilities', async () => {
     await assertBrowserInputCapabilities(page)
+  })
+  await runPurchaseOrderBrowserStep('drawer scrolling and blocked pointer regression', async () => {
+    await assertOrderDrawerTabScrolling(page)
   })
 
   let historicalMixedActiveOrder
