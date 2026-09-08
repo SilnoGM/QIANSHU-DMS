@@ -15,6 +15,7 @@ import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement, {
   PRODUCT_MANAGEMENT_PERMISSIONS,
 } from './modules/product.management'
+import { financeWorkbench, purchaseWorkbench } from './modules/role.workbenches'
 import SystemManagement, {
   MANAGEMENT_READ_PERMISSIONS,
 } from './modules/system.management'
@@ -94,6 +95,8 @@ const asyncRoutes: RouteRecordMainRaw[] = [
       ...OperationsWorkbenchRoutes,
     ],
   },
+  financeWorkbench,
+  purchaseWorkbench,
   {
     meta: {
       title: '管理员工作台',
