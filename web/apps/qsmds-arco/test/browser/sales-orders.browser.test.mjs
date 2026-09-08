@@ -16,6 +16,7 @@ import {
   waitForVisibleDialog,
 } from './numbering.browser.helpers.mjs'
 import { clickOrderDrawerTab } from './order-drawer.browser.helpers.mjs'
+import { assertRegionSelectFocusLifecycle } from './region-select-focus.browser.helpers.mjs'
 import {
   apiExpression,
   appRouteUrl,
@@ -207,6 +208,10 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
   await page.setViewport(1440, 900, false)
   await page.connection.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+
+  await runSalesOrderBrowserStep('region select focus lifecycle regression', async () => {
+    await assertRegionSelectFocusLifecycle(page)
   })
 
   await runSalesOrderBrowserStep('real login and empty list', async () => {
