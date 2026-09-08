@@ -53,6 +53,11 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
       hmacKeys: ['a'.repeat(43), 'b'.repeat(43), 'c'.repeat(43)],
     },
     sessionDirectory: '/tmp/qianshu-browser-auth-session',
+    sourceEnv: {
+      DISPLAY: ':99',
+      QIANSHU_BROWSER_USE_X11: '1',
+      XAUTHORITY: '/tmp/browser-xvfb-fixture/Xauthority',
+    },
   })
 
   assert.deepEqual(
@@ -102,6 +107,9 @@ test('固定计划使用真实构建、双环境 Server、同源代理和外部 
   )
   assert.equal(plan.runner.env.QIANSHU_BROWSER_AUTH_BASE_URL, 'https://127.0.0.1:41003')
   assert.equal(plan.runner.env.QIANSHU_BROWSER_AUTH_HTTP_BASE_URL, 'http://127.0.0.1:41001')
+  assert.equal(plan.runner.env.DISPLAY, ':99')
+  assert.equal(plan.runner.env.QIANSHU_BROWSER_USE_X11, '1')
+  assert.equal(plan.runner.env.XAUTHORITY, '/tmp/browser-xvfb-fixture/Xauthority')
   assert.equal(
     plan.runner.env.QIANSHU_BROWSER_AUTH_FIXTURE_DIRECTORY,
     '/tmp/qianshu-browser-auth-session/media-fixtures',

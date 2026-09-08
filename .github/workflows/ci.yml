@@ -252,10 +252,10 @@ jobs:
             server/pnpm-lock.yaml
             web/pnpm-lock.yaml
 
-      # Browser auth E2E 会启动真实 Server；即使认证场景不上传视频，媒体配置仍必须指向真实 ffprobe。
-      - name: Install FFmpeg dependency
+      # ffprobe 支持真实 Server；Xvfb 提供可在触屏模拟结束后恢复的鼠标设备能力。
+      - name: Install browser runtime dependencies
         run: |
-          if test ! -x /usr/bin/ffprobe; then
+          if test ! -x /usr/bin/ffprobe || test ! -x /usr/bin/xvfb-run || test ! -x /usr/bin/xauth; then
             # GitHub Runner 的 mirror+file 会优先选择 Azure 镜像；该镜像异常时可能持续阻塞到 Job 超时。
             # 这里使用隔离索引和 Ubuntu 官方 HTTPS 源，避免旧索引、第三方源或云镜像参与解析。
             sudo tee /etc/apt/sources.list.d/qianshu-ubuntu.sources >/dev/null <<'EOF'
@@ -282,9 +282,11 @@ jobs:
               -o Acquire::https::Timeout=30
             )
             sudo timeout 5m apt-get "${apt_options[@]}" update
-            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg
+            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg xvfb xauth
           fi
           test -x /usr/bin/ffprobe
+          test -x /usr/bin/xvfb-run
+          test -x /usr/bin/xauth
           /usr/bin/ffprobe -version
 
       - name: Install Server dependencies
@@ -294,7 +296,9 @@ jobs:
         run: pnpm -C web install --frozen-lockfile
 
       - name: Run isolated browser authentication E2E
-        run: node --run ci:browser-auth-e2e
+        env:
+          QIANSHU_BROWSER_USE_X11: '1'
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -nolisten tcp" node --run ci:browser-auth-e2e
 
       - name: Verify tracked files are unchanged
         run: git diff --exit-code -- .

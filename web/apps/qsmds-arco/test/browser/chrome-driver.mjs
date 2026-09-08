@@ -521,7 +521,23 @@ export function describeChromeStartupFailure({ exitCode, signalCode, stderr }) {
   return `process=${processState}, stderr=${stderrState}`
 }
 
+export function resolveChromeDisplayArguments({
+  platform = process.platform,
+  environment = process.env,
+} = {}) {
+  if (environment.QIANSHU_BROWSER_USE_X11 !== '1') {
+    return ['--headless=new']
+  }
+  if (platform !== 'linux' || !environment.DISPLAY?.trim()) {
+    throw new Error('Browser X11 mode requires a Linux display')
+  }
+  // Linux headless 没有宿主鼠标；关闭触屏模拟后会恢复为 none，而不是 fine/hover。
+  // CI 显式使用 xvfb-run 提供的 X11 设备，保留同页桌面与触屏切换的真实媒体查询。
+  return ['--ozone-platform=x11']
+}
+
 export async function launchChrome({ executable, userDataDirectory }) {
+  const displayArguments = resolveChromeDisplayArguments()
   // Chrome 在部分 macOS 版本不会为 `--remote-debugging-port=0` 写入
   // DevToolsActivePort；先短暂占用 loopback:0 取得端口，再用 HTTP ready
   // endpoint 验证真正监听，避免依赖平台私有文件行为。
@@ -531,7 +547,7 @@ export async function launchChrome({ executable, userDataDirectory }) {
   await mkdir(userDataDirectory, { mode: 0o700, recursive: true })
   const debuggingPort = await allocateDebuggingPort()
   const args = [
-    '--headless=new',
+    ...displayArguments,
     '--remote-debugging-address=127.0.0.1',
     `--remote-debugging-port=${debuggingPort}`,
     `--user-data-dir=${userDataDirectory}`,

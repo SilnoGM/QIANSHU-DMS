@@ -25,7 +25,28 @@ import {
   ChromePage,
   connectBrowserOrStop,
   describeChromeStartupFailure,
+  resolveChromeDisplayArguments,
 } from '../web/apps/qsmds-arco/test/browser/chrome-driver.mjs'
+
+test('浏览器默认保持 headless，仅显式开启的 Linux X11 使用桌面输入设备', () => {
+  for (const platform of ['darwin', 'linux', 'win32']) {
+    assert.deepEqual(resolveChromeDisplayArguments({ platform, environment: {} }), ['--headless=new'])
+  }
+  assert.deepEqual(resolveChromeDisplayArguments({
+    platform: 'linux', environment: { DISPLAY: ':99' },
+  }), ['--headless=new'], '存在 DISPLAY 不等于授权开启桌面浏览器')
+  assert.deepEqual(resolveChromeDisplayArguments({
+    platform: 'linux', environment: { DISPLAY: ':99', QIANSHU_BROWSER_USE_X11: '1' },
+  }), ['--ozone-platform=x11'])
+})
+
+test('显式 X11 模式缺少 Linux 显示环境时失败，不静默退回无鼠标的 headless', () => {
+  for (const [platform, display] of [['linux', undefined], ['linux', ' '], ['darwin', ':99']]) {
+    assert.throws(() => resolveChromeDisplayArguments({
+      platform, environment: { DISPLAY: display, QIANSHU_BROWSER_USE_X11: '1' },
+    }), { message: 'Browser X11 mode requires a Linux display' })
+  }
+})
 
 test('静态入口 HTML 与带 Hash 资源使用不同缓存策略', () => {
   assert.equal(

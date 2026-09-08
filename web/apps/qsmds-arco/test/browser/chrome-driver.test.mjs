@@ -7,6 +7,31 @@ import {
   ChromeBrowser,
   ChromePage,
 } from './chrome-driver.mjs'
+import { assertBrowserInputCapabilities } from './chrome-input.browser.helpers.mjs'
+
+test('输入能力前检允许混合设备，并要求触摸模拟结束后恢复宿主能力', async () => {
+  const calls = []
+  const states = [
+    { coarse: false, fine: true, hover: true, touchPoints: 5 },
+    { coarse: true, fine: false, hover: false, touchPoints: 1 },
+    { coarse: false, fine: true, hover: true, touchPoints: 5 },
+  ]
+  await assertBrowserInputCapabilities({
+    connection: { async send(method, params) { calls.push([method, params.enabled]) } },
+    async setViewport() {},
+    async evaluate() { return states.shift() },
+  })
+  assert.deepEqual(calls, [false, true, false].map(enabled => ['Emulation.setTouchEmulationEnabled', enabled]))
+  assert.equal(states.length, 0)
+})
+
+test('输入能力前检拒绝没有鼠标和悬停的桌面，不降级跳过交互验收', async () => {
+  await assert.rejects(assertBrowserInputCapabilities({
+    connection: { async send() {} },
+    async setViewport() {},
+    async evaluate() { return { coarse: false, fine: false, hover: false, touchPoints: 0 } },
+  }), /Chrome input capabilities must match desktop mode/u)
+})
 
 class FakeSocket {
   constructor({ respondToCommands = false } = {}) {

@@ -471,17 +471,17 @@ test('web-check-build 只使用 Web cache 并验证正式应用产物', async ()
   assert.equal(job.includes('build:examples'), false)
 })
 
-test('browser-auth-e2e 通过隔离的 Ubuntu 官方源安装 FFmpeg 并调用隔离根入口', async () => {
+test('browser-auth-e2e 通过隔离官方源安装运行依赖并在 Xvfb 中调用隔离根入口', async () => {
   const job = extractJobs(await readCiWorkflow()).get('browser-auth-e2e')
   assertDependencySetup(job, [
     'server/pnpm-lock.yaml',
     'web/pnpm-lock.yaml',
   ])
-  const ffmpegDependency = findNamedStep(job, 'Install FFmpeg dependency')
+  const ffmpegDependency = findNamedStep(job, 'Install browser runtime dependencies')
   assert.equal(ffmpegDependency, [
-    '      - name: Install FFmpeg dependency',
+    '      - name: Install browser runtime dependencies',
     '        run: |',
-    '          if test ! -x /usr/bin/ffprobe; then',
+    '          if test ! -x /usr/bin/ffprobe || test ! -x /usr/bin/xvfb-run || test ! -x /usr/bin/xauth; then',
     '            # GitHub Runner 的 mirror+file 会优先选择 Azure 镜像；该镜像异常时可能持续阻塞到 Job 超时。',
     '            # 这里使用隔离索引和 Ubuntu 官方 HTTPS 源，避免旧索引、第三方源或云镜像参与解析。',
     "            sudo tee /etc/apt/sources.list.d/qianshu-ubuntu.sources >/dev/null <<'EOF'",
@@ -508,16 +508,19 @@ test('browser-auth-e2e 通过隔离的 Ubuntu 官方源安装 FFmpeg 并调用�
     '              -o Acquire::https::Timeout=30',
     '            )',
     '            sudo timeout 5m apt-get "${apt_options[@]}" update',
-    '            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg',
+    '            sudo timeout 15m apt-get "${apt_options[@]}" install --yes --no-install-recommends ffmpeg xvfb xauth',
     '          fi',
     '          test -x /usr/bin/ffprobe',
+    '          test -x /usr/bin/xvfb-run',
+    '          test -x /usr/bin/xauth',
     '          /usr/bin/ffprobe -version',
   ].join('\n'))
   assertTextOrder(job, [
     'sudo timeout 5m apt-get "${apt_options[@]}" update',
     'run: pnpm -C server install --frozen-lockfile',
     'run: pnpm -C web install --frozen-lockfile',
-    'run: node --run ci:browser-auth-e2e',
+    "QIANSHU_BROWSER_USE_X11: '1'",
+    'run: xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -nolisten tcp" node --run ci:browser-auth-e2e',
     'run: git diff --exit-code -- .',
   ], 'browser-auth-e2e')
   assert.equal(job.includes('services:'), false)

@@ -5,6 +5,7 @@ import process from 'node:process'
 import test from 'node:test'
 
 import { launchChrome } from './chrome-driver.mjs'
+import { assertBrowserInputCapabilities } from './chrome-input.browser.helpers.mjs'
 import {
   clickDialogButton,
   runNumberingBrowserStep,
@@ -717,6 +718,9 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
   await page.setViewport(1440, 900, false)
   await page.connection.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+  })
+  await runPurchaseOrderBrowserStep('desktop and touch input capabilities', async () => {
+    await assertBrowserInputCapabilities(page)
   })
 
   let historicalMixedActiveOrder
