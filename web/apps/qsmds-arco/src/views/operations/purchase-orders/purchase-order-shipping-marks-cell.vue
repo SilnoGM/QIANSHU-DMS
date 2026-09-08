@@ -5,7 +5,7 @@ import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.
 import { getPurchaseOrderShippingMarksSummary } from './purchase-order-shipping-marks-cell.logic'
 
 const props = defineProps<{
-  order: Pick<PurchaseOrderListItemDto, 'shippingMarks' | 'shippingMarkText'>
+  order: Pick<PurchaseOrderListItemDto, 'shippingMarks' | 'shippingMarkText' | 'orderStatus'>
 }>()
 const { t } = useI18n()
 const toast = useQsToast()
@@ -23,7 +23,7 @@ async function copyAll(): Promise<void> {
 
 <template>
   <FaPopover
-    v-if="summary.marks.length > 0"
+    v-if="summary.showPartMarks"
     align="start"
     :auto-focus="true"
     :collision-padding="12"
@@ -38,12 +38,23 @@ async function copyAll(): Promise<void> {
       :aria-label="t('purchaseOrderList.shippingMarks.open', { count: summary.marks.length })"
       @click.stop
     >
-      <span class="qs-type-data min-w-0 truncate">{{ summary.firstMark }}</span>
-      <span v-if="summary.additionalCount > 0" class="qs-type-meta shrink-0">{{ t('purchaseOrderList.shippingMarks.more', { count: summary.additionalCount }) }}</span>
+      <span class="qs-type-data min-w-0 truncate">{{ summary.primaryMark }}</span>
+      <span class="qs-type-meta shrink-0">{{ summary.baseMark ? t('purchaseOrderList.shippingMarks.partCount', { count: summary.marks.length }) : t('purchaseOrderList.shippingMarks.more', { count: summary.additionalCount }) }}</span>
       <FaIcon name="i-lucide:chevron-down" class="text-muted-foreground shrink-0 size-3.5" aria-hidden="true" />
     </FaButton>
     <template #panel>
       <section data-testid="purchase-order-shipping-marks-panel" :aria-label="t('purchaseOrderList.shippingMarks.title', { count: summary.marks.length })">
+        <div v-if="summary.baseMark" class="mb-3 pb-3 border-b border-border flex gap-3 items-start">
+          <div class="flex-1 min-w-0">
+            <p class="qs-type-meta m-0">
+              {{ t('purchaseOrderList.shippingMarks.baseLabel') }}
+            </p>
+            <p class="qs-type-data m-0 mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {{ summary.baseMark }}
+            </p>
+          </div>
+          <CopyCellButton always-visible :label="t('purchaseOrderList.shippingMarks.baseLabel')" :text="summary.baseMark" class="[&_button]:size-11 sm:[&_button]:size-9" />
+        </div>
         <div class="mb-2 pb-2 border-b border-border flex gap-3 items-center justify-between">
           <span class="qs-type-body-medium">{{ t('purchaseOrderList.shippingMarks.title', { count: summary.marks.length }) }}</span>
           <FaButton type="button" variant="ghost" size="sm" class="shrink-0 min-h-11 sm:min-h-9" @click="copyAll">
@@ -62,12 +73,12 @@ async function copyAll(): Promise<void> {
     </template>
   </FaPopover>
   <div v-else class="flex gap-1 min-w-0 items-start">
-    <span class="qs-type-data pt-1 flex-1 min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ summary.legacyMark ?? '-' }}</span>
+    <span class="qs-type-data pt-1 flex-1 min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ summary.primaryMark ?? t(summary.pending ? 'purchaseOrderList.shippingMarks.pending' : 'purchaseOrderList.shippingMarks.notGenerated') }}</span>
     <CopyCellButton
-      v-if="summary.legacyMark"
+      v-if="summary.primaryMark"
       always-visible
-      :label="t('purchaseOrderList.shippingMarks.label')"
-      :text="summary.legacyMark"
+      :label="t(summary.baseMark ? 'purchaseOrderList.shippingMarks.baseLabel' : 'purchaseOrderList.shippingMarks.label')"
+      :text="summary.primaryMark"
     />
   </div>
 </template>

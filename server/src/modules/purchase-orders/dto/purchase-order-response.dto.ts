@@ -182,7 +182,7 @@ export class PurchaseOrderListItemDto {
   @ApiProperty({ enum: PurchaseOrderPaymentStatus })
   readonly paymentStatus!: PurchaseOrderPaymentStatus
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
-  @ApiProperty({ type: [String], description: '按货件顺序返回独立唛头；历史订单为空数组' })
+  @ApiProperty({ type: [String], description: '按货件顺序返回已派发的货件唛头；待审核新单和无货件历史订单为空数组' })
   readonly shippingMarks!: readonly string[]
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
@@ -199,7 +199,7 @@ export class PurchaseOrderPartItemDto {
 export class PurchaseOrderPartDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly partNumber!: number
-  @ApiProperty({ type: 'string' }) readonly shippingMarkText!: string
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 72, description: '审核前为空；单货件使用基础唛头，多货件追加货件序号' }) readonly shippingMarkText!: string | null
   @ApiProperty({ type: () => [PurchaseOrderPartItemDto] }) readonly items!: readonly PurchaseOrderPartItemDto[]
 }
 

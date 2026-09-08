@@ -11,6 +11,7 @@ import {
   type AuditEventType as AuditEventTypeValue,
   type AuditOutcome as AuditOutcomeValue,
 } from '../../generated/prisma/enums'
+import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 
 export const MAX_AUDIT_METADATA_KEY_LENGTH = 128
 export const MAX_AUDIT_METADATA_STRING_LENGTH = 512
@@ -85,7 +86,7 @@ export class AuditEventValidationError extends Error {
 export class AuditWriteFailedError extends Error {
   readonly code = 'AUDIT_WRITE_FAILED'
 
-  constructor() {
+  constructor(readonly transactionConflict = false) {
     super(AUDIT_WRITE_FAILED_MESSAGE)
     this.name = 'AuditWriteFailedError'
   }
@@ -120,9 +121,14 @@ export class AuditService {
     try {
       return await transaction.auditEvent.create({ data })
     }
-    catch {
-      // 驱动异常可能包含 SQL 参数或连接信息；边界外只暴露固定安全错误。
-      throw new AuditWriteFailedError()
+    catch (error) {
+      // 驱动异常可能包含 SQL 参数或连接信息，不能保留原始 cause/meta；仅将
+      // 明确的事务冲突白名单缩减为布尔分类，供业务在事务退出后提示刷新重试。
+      // 其他审计写入失败仍须失败关闭，不能伪装为状态冲突或在这里重试审计。
+      const facts = readPersistenceErrorFacts(error)
+      throw new AuditWriteFailedError(
+        ['P2034', '40001', '40P01'].some(code => hasPersistenceCode(facts, code)),
+      )
     }
   }
 }

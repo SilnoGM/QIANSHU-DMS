@@ -519,7 +519,7 @@ export class PurchaseOrdersController {
     errors: [
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['PURCHASE_ORDER_NOT_FOUND'] },
-      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+      { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED', 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE'] },
       { status: 422, codes: ['VALIDATION_FAILED'] },
     ],
   })

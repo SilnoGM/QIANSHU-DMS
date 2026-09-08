@@ -430,7 +430,7 @@ describe('PurchaseOrdersController OpenAPI', () => {
       'x-qianshu-contract': {
         authorization: true, csrf: true, validation: true, privateNoStore: true,
         errors: expect.arrayContaining([
-          { status: 409, codes: ['PURCHASE_ORDER_STATE_CHANGED'] },
+          { status: 409, codes: ['PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE', 'PURCHASE_ORDER_STATE_CHANGED'] },
         ]) as unknown,
       },
       responses: { 200: { content: { 'application/json': {
@@ -443,6 +443,9 @@ describe('PurchaseOrdersController OpenAPI', () => {
         expectedVersion: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
         reason: { type: 'string', minLength: 1, maxLength: 500 },
       },
+    })
+    expect(document.components?.schemas?.PurchaseOrderPartDto).toMatchObject({
+      properties: { shippingMarkText: { type: 'string', nullable: true, maxLength: 72 } },
     })
   })
 

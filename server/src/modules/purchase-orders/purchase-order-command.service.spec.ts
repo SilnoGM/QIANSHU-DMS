@@ -1,6 +1,6 @@
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
-import type { AuditService } from '../audit/audit.service'
+import { AuditService } from '../audit/audit.service'
 import type { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
 import type { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
@@ -9,7 +9,7 @@ import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import type {
   PurchaseOrderCreateDependencyService,
 } from './purchase-order-create-dependency.service'
-import { calculatePurchaseOrderCreateFingerprint, hashPurchaseOrderIdempotencyKey } from './purchase-order-create-fingerprint'
+import { calculatePurchaseOrderCreateFingerprint } from './purchase-order-create-fingerprint'
 
 const ACTOR_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const ORDER_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -43,6 +43,7 @@ function input(overrides: Record<string, unknown> = {}): Record<string, unknown>
 
 function setup() {
   const transaction = {
+    auditEvent: { create: jest.fn().mockResolvedValue({}) },
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
     purchaseOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(null),
@@ -126,24 +127,45 @@ function setup() {
 describe('PurchaseOrderCommandService', () => {
   const context = { actorUserId: ACTOR_ID, requestId: 'mark-create', idempotencyKey: IDEMPOTENCY_KEY }
 
-  it('issues the mark in the purchase transaction after a locked resolution check', async () => {
+  it.each([
+    ['40001', 409, 'PURCHASE_ORDER_STATE_CHANGED'],
+    ['23514', 500, 'INTERNAL_ERROR'],
+  ])('maps audit persistence %s without retrying the business transaction', async (code, status, expectedCode) => {
+    const fixture = setup()
+    fixture.transaction.auditEvent.create.mockRejectedValue({
+      code: 'P2010', meta: { driverAdapterError: { cause: { originalCode: code } } },
+    })
+    fixture.audit.record.mockImplementation((tx, event) => new AuditService().record(
+      tx as Parameters<AuditService['record']>[0], event as Parameters<AuditService['record']>[1],
+    ))
+    await expect(fixture.service.create(context, input())).rejects.toMatchObject({ status, code: expectedCode })
+    expect(fixture.transaction.purchaseOrder.create).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction.auditEvent.create).toHaveBeenCalledTimes(1)
+    expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
+  })
+
+  it('creates v5 with sealed allocation inputs and null marks without consuming a shipping issuance', async () => {
+    const fixture = setup()
+    await fixture.service.create(context, input())
+    expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrder.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v5', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
+    }))
+    expect(fixture.transaction.purchaseOrderPart.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
+      purchaseOrderId: ORDER_ID, key: ACTOR_ID, partNumber: 1,
+      shippingMarkText: null, shippingMarkIssuanceId: null, shippingMarkKeyHash: null,
+    })] })
+  })
+
+  it('retains the locked configuration precheck without reserving a mark or audit issuance', async () => {
     const fixture = setup()
     await fixture.service.create(context, input())
     expect(fixture.resolver.resolve.mock.calls.map(call => call[2])).toEqual([false, true])
-    expect(fixture.numbering.generateScopedInTransaction).toHaveBeenCalledWith(
-      fixture.transaction, expect.objectContaining({
-        ruleCode: 'TEST_MARK', consumerCode: 'PURCHASE_ORDER.PART_SHIPPING_MARK',
-        idempotencyKey: `${hashPurchaseOrderIdempotencyKey(IDEMPOTENCY_KEY).toString('hex')}:${ACTOR_ID}`,
-        requestFingerprint: expect.any(String) as unknown,
-      }),
-    )
-    expect(fixture.resolver.resolve.mock.invocationCallOrder[1]).toBeLessThan(
-      fixture.numbering.generateScopedInTransaction.mock.invocationCallOrder[0] ?? 0,
-    )
+    expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
     expect(fixture.audit.record).toHaveBeenCalledWith(fixture.transaction, expect.objectContaining({
-      metadata: expect.objectContaining({ shippingMarkRuleCode: 'TEST_MARK', shippingMarkRevision: 1,
-        partCount: 1, shippingMarkIssuanceIds: ['dddddddd-dddd-4ddd-8ddd-dddddddddddd'] }) as unknown,
+      metadata: expect.objectContaining({ partCount: 1 }) as unknown,
     }))
+    expect(fixture.audit.record.mock.calls[0][1]).not.toHaveProperty('metadata.shippingMarkIssuanceIds')
   })
 
   it('blocks unavailable or changed rules before either number is issued', async () => {
@@ -175,7 +197,7 @@ describe('PurchaseOrderCommandService', () => {
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({
       id: ORDER_ID, createdByUserId: ACTOR_ID, createRequestFingerprintHash: Buffer.from(fingerprint, 'hex'),
     })
-    fixture.numbering.generateScopedInTransaction.mockRejectedValue(new NumberingGenerationError('NUMBERING_RULE_STATE_CHANGED'))
+    fixture.transaction.purchaseOrder.create.mockRejectedValue(new Error('Transaction failed after another commit'))
     await expect(fixture.service.create(context, input())).resolves.toBe(ORDER_ID)
     expect(fixture.prisma.purchaseOrder.findUnique).toHaveBeenCalledTimes(2)
   })
@@ -191,13 +213,11 @@ describe('PurchaseOrderCommandService', () => {
     expect(fixture.numbering.generateScoped).not.toHaveBeenCalled()
   })
 
-  it('maps mark exhaustion distinctly from purchase order numbering errors', async () => {
+  it('does not inspect or consume shipping-mark capacity during creation', async () => {
     const fixture = setup()
     fixture.numbering.generateScopedInTransaction.mockRejectedValue(new NumberingGenerationError('NUMBERING_CAPACITY_EXHAUSTED'))
-    await expect(fixture.service.create(context, input())).rejects.toMatchObject({
-      status: 409, code: 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE',
-    })
-    expect(fixture.transaction.purchaseOrder.create).not.toHaveBeenCalled()
+    await expect(fixture.service.create(context, input())).resolves.toBe(ORDER_ID)
+    expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
   })
 
   it('prechecks before numbering, then locks dependencies and persists trusted snapshots', async () => {
@@ -335,6 +355,24 @@ describe('PurchaseOrderCommandService', () => {
     expect(fixture.dependencies.requireDependencies).not.toHaveBeenCalled()
     expect(fixture.numbering.generateScoped).not.toHaveBeenCalled()
     expect(fixture.resolver.resolve).not.toHaveBeenCalled()
+    expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
+  })
+
+  it.each(['purchase-order.create.v3', 'purchase-order.create.v4', 'purchase-order.create.v5'])('restores the exact committed %s request without rule checks or issuance', async version => {
+    const fixture = setup()
+    const body = input()
+    if (version === 'purchase-order.create.v3') delete body.parts
+    const normalized = normalizePurchaseOrderCreateCommand(body, '2026-08-27', version === 'purchase-order.create.v3')
+    const fingerprint = calculatePurchaseOrderCreateFingerprint(ACTOR_ID, normalized, version)
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue({
+      id: ORDER_ID, createdByUserId: ACTOR_ID, createRequestFingerprintVersion: version,
+      createRequestFingerprintHash: Buffer.from(fingerprint, 'hex'),
+    })
+    await expect(fixture.service.create(context, body)).resolves.toBe(ORDER_ID)
+    await expect(fixture.service.create(context, { ...body, remark: 'Changed request' })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_CREATE_IDEMPOTENCY_CONFLICT' })
+    expect(fixture.dependencies.requireDependencies).not.toHaveBeenCalled()
+    expect(fixture.resolver.resolve).not.toHaveBeenCalled()
+    expect(fixture.numbering.generateScoped).not.toHaveBeenCalled()
     expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
   })
 

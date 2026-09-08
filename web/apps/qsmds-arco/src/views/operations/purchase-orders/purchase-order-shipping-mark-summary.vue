@@ -13,6 +13,7 @@ const props = defineProps<{
 }>()
 
 const detailsOpen = ref(false)
+const { t } = useI18n()
 const detailsId = useId()
 // 触控设备的合成 mouseleave 会关闭刚点开的 hover 浮层，按输入能力启用悬停。
 const supportsHover = useMediaQuery('(hover: hover) and (pointer: fine)')
@@ -122,7 +123,7 @@ useEventListener('keydown', (event: KeyboardEvent) => {
                 </template>
               </dl>
               <p class="text-xs text-muted-foreground leading-relaxed m-0 mt-2">
-                {{ PURCHASE_SHIPPING_MARK_DISPATCH_HINT }}
+                {{ t(PURCHASE_SHIPPING_MARK_DISPATCH_HINT) }}
               </p>
             </div>
           </template>
@@ -132,7 +133,7 @@ useEventListener('keydown', (event: KeyboardEvent) => {
         {{ structure }}
       </p>
       <p class="text-xs text-muted-foreground leading-5 m-0 mt-1" data-testid="shipping-mark-summary-hint">
-        正式提交后自动派发
+        {{ t('purchaseOrderParts.reviewDispatch') }}
       </p>
       <p v-if="failure" class="text-sm text-destructive leading-5 m-0 mt-1 [overflow-wrap:anywhere]" role="alert">
         {{ failure }}

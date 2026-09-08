@@ -8,9 +8,13 @@
       "title": "采购货件",
       "part": "货件-{number}",
       "quantity": "本货件数量",
+      "shippingMark": "货件唛头",
+      "pendingMark": "待审核生成",
+      "notGenerated": "未生成",
       "productUnavailable": "产品信息不可用"
     },
     "payments": "实际付款记录",
+    "baseMarkNotRecorded": "未记录基础唛头",
     "documents": "订单凭证",
     "paymentVoucher": "付款凭证",
     "attachDocument": "添加凭证",

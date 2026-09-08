@@ -8,6 +8,7 @@ import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import { buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
+import { hasPurchaseOrderShippingMarks } from './purchase-order-shipping-mark.logic'
 
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
@@ -192,6 +193,14 @@ onBeforeUnmount(reset)
           </dt>
           <dd class="m-0 mt-1 tabular-nums">
             {{ t('purchaseOrderList.review.quantity', { lines: detail.lines.length, quantity: detail.lineSummary.totalQuantity }) }}
+          </dd>
+        </div>
+        <div class="sm:col-span-2" data-testid="purchase-order-review-shipping-mark">
+          <dt class="text-muted-foreground">
+            {{ t('purchaseOrderList.review.shippingMark') }}
+          </dt>
+          <dd class="leading-6 m-0 mt-1">
+            {{ hasPurchaseOrderShippingMarks(detail) ? t('purchaseOrderList.review.preserveShippingMarks') : t('purchaseOrderList.review.generateShippingMark', { count: detail.parts.length }) }}
           </dd>
         </div>
       </dl>

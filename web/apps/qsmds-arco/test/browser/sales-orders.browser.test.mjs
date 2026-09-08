@@ -500,8 +500,11 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       /^\/api\/sales-orders\/product-options\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/main-image\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/content$/u,
     )
 
-    await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')
-    await page.waitFor(`(() => {
+    await page.waitFor(`(async () => {
+      // 核对区仍可能随图片/布局更新变高，滚动位置必须与本轮几何检查对应。
+      // 等渲染帧后保留原有完整可见和不遮挡断言，不用一次旧 scrollHeight 判定结果。
+      window.scrollTo(0, document.documentElement.scrollHeight)
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       const actions = document.querySelector(
         '[data-testid="sales-order-review-actions"]',
       )
@@ -702,8 +705,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     })()`)
     assert.equal(purchase.status, 201)
     assert.equal(purchase.body?.shippingMarkText, null)
-    assert.equal(purchase.body?.shippingMarks.length, 1)
+    assert.deepEqual(purchase.body?.shippingMarks, [])
     assert.equal(purchase.body?.parts.length, 1)
+    assert.equal(purchase.body?.parts[0]?.shippingMarkText, null)
     assert.equal(purchase.body?.parts[0]?.items[0]?.quantity, sourceLine.quantity)
     assert.equal(purchase.body?.orderStatus, 'PENDING_REVIEW')
     const reviewedPurchase = await page.evaluate(apiExpression(
@@ -713,6 +717,9 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     ))
     assert.equal(reviewedPurchase.status, 200)
     assert.equal(reviewedPurchase.body?.orderStatus, 'CONFIRMED')
+    assert.equal(typeof reviewedPurchase.body?.shippingMarkText, 'string')
+    assert.deepEqual(reviewedPurchase.body?.shippingMarks, [reviewedPurchase.body.shippingMarkText])
+    assert.equal(reviewedPurchase.body?.parts[0]?.shippingMarkText, reviewedPurchase.body.shippingMarkText)
     const preparedSales = await page.evaluate(apiExpression(
       `/api/sales-orders/${encodeURIComponent(order.id)}`,
     ))

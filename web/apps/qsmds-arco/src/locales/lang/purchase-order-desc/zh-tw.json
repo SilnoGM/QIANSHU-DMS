@@ -31,6 +31,7 @@
       "paid": "已付金額",
       "outstanding": "未付金額",
       "shippingMark": "採購嘜頭",
+      "baseShippingMark": "基礎嘜頭",
       "remark": "採購備註",
       "lineIndex": "第 {index} 項採購產品"
     },

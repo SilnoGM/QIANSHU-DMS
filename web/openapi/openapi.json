@@ -41283,6 +41283,7 @@
             {
               "status": 409,
               "codes": [
+                "PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE",
                 "PURCHASE_ORDER_STATE_CHANGED"
               ]
             },
@@ -52869,7 +52870,7 @@
             "nullable": true
           },
           "shippingMarks": {
-            "description": "按货件顺序返回独立唛头；历史订单为空数组",
+            "description": "按货件顺序返回已派发的货件唛头；待审核新单和无货件历史订单为空数组",
             "type": "array",
             "items": {
               "type": "string"
@@ -53751,7 +53752,7 @@
           "expectedShippingMarkResolution": {
             "type": "string",
             "pattern": "^[0-9a-f]{64}$",
-            "description": "采购唛头规则解析返回的匹配摘要，正式提交时重新校验"
+            "description": "采购唛头规则解析返回的匹配摘要，创建时重新预检但不派号；审核使用当时有效规则"
           },
           "lines": {
             "minItems": 1,
@@ -53834,7 +53835,10 @@
             "minimum": 1
           },
           "shippingMarkText": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "maxLength": 72,
+            "description": "审核前为空；单货件使用基础唛头，多货件追加货件序号"
           },
           "items": {
             "type": "array",
@@ -54326,7 +54330,7 @@
             "nullable": true
           },
           "shippingMarks": {
-            "description": "按货件顺序返回独立唛头；历史订单为空数组",
+            "description": "按货件顺序返回已派发的货件唛头；待审核新单和无货件历史订单为空数组",
             "type": "array",
             "items": {
               "type": "string"

@@ -386,6 +386,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       media,
       queries,
       new SalesOrderPurchaseCoverageService(new AuditService()),
+      numbering,
+      markResolver,
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })
@@ -535,7 +537,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       purchaseType: 'STOCK',
       currencyCode: 'CNY',
       shippingMarkText: null,
-      shippingMarks: [expect.stringMatching(/^MARK\d{8}$/u) as unknown],
+      shippingMarks: [],
       paymentStatus: 'UNPAID',
       lines: [{
         lineType: 'CUSTOM',
@@ -567,7 +569,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })
     await expect(queries.getById(createdId)).resolves.toMatchObject({
       orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING',
-      shippingMarkText: created.shippingMarkText, orderNo: created.orderNo, version: created.version + 1,
+      shippingMarkText: expect.stringMatching(/^MARK\d{8}$/u) as unknown,
+      shippingMarks: [expect.stringMatching(/^MARK\d{8}$/u) as unknown],
+      orderNo: created.orderNo, version: created.version + 1,
     })
     await expect(prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: createdId } }))
       .resolves.toBe(2)

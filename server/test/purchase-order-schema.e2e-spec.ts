@@ -205,7 +205,7 @@ describe('purchase order schema with isolated PostgreSQL', () => {
     const orderId = randomUUID()
     await client.query('SAVEPOINT custom_price_rejection')
     try {
-      const mark = await createPurchaseShippingMarkFixture(client, {
+      const mark = createPurchaseShippingMarkFixture(client, {
         idempotencyKeyHash: hash(`purchase-key-${orderId}`),
         requestFingerprintHash: hash(`purchase-request-${orderId}`),
       })
@@ -256,7 +256,7 @@ describe('purchase order schema with isolated PostgreSQL', () => {
     const orderId = randomUUID()
     await client.query('SAVEPOINT source_quantity_rejection')
     try {
-      const mark = await createPurchaseShippingMarkFixture(client, {
+      const mark = createPurchaseShippingMarkFixture(client, {
         idempotencyKeyHash: hash(`purchase-key-${orderId}`),
         requestFingerprintHash: hash(`purchase-request-${orderId}`),
       })

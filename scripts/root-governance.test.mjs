@@ -133,6 +133,9 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/purchase-orders/purchase-order-create-dependency.service.ts',
   'server/src/modules/purchase-orders/purchase-order-create-fingerprint.spec.ts',
   'server/src/modules/purchase-orders/purchase-order-create-fingerprint.ts',
+  // 审核读取当前 supplierValue 绑定以派发基础唛头；不创建供应商实体。
+  'server/src/modules/purchase-orders/purchase-order-mutation.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-mutation.service.ts',
   'server/src/modules/purchase-orders/purchase-order-query.service.spec.ts',
   'server/src/modules/purchase-orders/purchase-order-query.service.ts',
   'server/src/modules/purchase-orders/purchase-order-source-query.service.spec.ts',
@@ -141,6 +144,8 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/purchase-orders/purchase-orders.controller.ts',
   'server/test/purchase-order-api.e2e-spec.ts',
   'server/test/purchase-order-parts.e2e-spec.ts',
+  // 审核派号回归仅校验供应商字典稳定值的规则绑定，不恢复 Supplier 主数据。
+  'server/test/purchase-order-review-marks.e2e-spec.ts',
   'server/test/purchase-order-product-mode-migration.e2e-spec.ts',
   'server/test/purchase-order-records.e2e-spec.ts',
   'server/test/purchase-order-schema.e2e-spec.ts',

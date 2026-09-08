@@ -22,7 +22,7 @@ describe('purchase records constraints on isolated PostgreSQL', () => {
 
   async function createOrder(id: string) {
     const hash = createHash('sha256').update(id).digest()
-    const mark = await createPurchaseShippingMarkFixture(client, {
+    const mark = createPurchaseShippingMarkFixture(client, {
       idempotencyKeyHash: hash, requestFingerprintHash: hash,
     })
     await client.query(`INSERT INTO purchase_orders (

@@ -6,14 +6,16 @@ import test from 'node:test'
 import { getPurchaseOrderPartRecords } from '../../src/components/business/QsPurchaseOrderDrawer/logic'
 import { getPurchaseOrderShippingMarksSummary } from '../../src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.logic'
 
-test('多唛头摘要保留服务端货件顺序和原文，全部复制按换行分隔', () => {
+test('列表以订单基础唛头为主，货件原文和全部复制保留服务端顺序', () => {
   const order = { shippingMarks: ['FIRST-01', 'SECOND-02', 'THIRD-03'], shippingMarkText: 'OLD' }
   assert.deepEqual(getPurchaseOrderShippingMarksSummary(order), {
     marks: ['FIRST-01', 'SECOND-02', 'THIRD-03'],
-    firstMark: 'FIRST-01',
+    baseMark: 'OLD',
+    primaryMark: 'OLD',
+    showPartMarks: true,
+    pending: false,
     additionalCount: 2,
     copyText: 'FIRST-01\nSECOND-02\nTHIRD-03',
-    legacyMark: null,
   })
   assert.deepEqual(order.shippingMarks, ['FIRST-01', 'SECOND-02', 'THIRD-03'])
 })
@@ -21,23 +23,63 @@ test('多唛头摘要保留服务端货件顺序和原文，全部复制按换�
 test('历史单保留原唛头而不推断为货件，空历史单不出现复制内容', () => {
   assert.deepEqual(getPurchaseOrderShippingMarksSummary({ shippingMarks: [], shippingMarkText: '原始唛头\n第二行' }), {
     marks: [],
-    firstMark: null,
+    baseMark: '原始唛头\n第二行',
+    primaryMark: '原始唛头\n第二行',
+    showPartMarks: false,
+    pending: false,
     additionalCount: 0,
     copyText: '',
-    legacyMark: '原始唛头\n第二行',
   })
   assert.deepEqual(getPurchaseOrderShippingMarksSummary({ shippingMarks: [], shippingMarkText: null }), {
     marks: [],
-    firstMark: null,
+    baseMark: null,
+    primaryMark: null,
+    showPartMarks: false,
+    pending: false,
     additionalCount: 0,
     copyText: '',
-    legacyMark: null,
   })
 })
 
 test('单货件不显示额外数量，多个货件同号时也保留每件的唛头', () => {
   assert.equal(getPurchaseOrderShippingMarksSummary({ shippingMarks: ['MARK'], shippingMarkText: null }).additionalCount, 0)
   assert.deepEqual(getPurchaseOrderShippingMarksSummary({ shippingMarks: ['MARK', 'MARK'], shippingMarkText: null }).marks, ['MARK', 'MARK'])
+})
+
+test('单货件与基础唛头同码仅显示一次，历史独立货件码不能反推为基础码', () => {
+  const single = getPurchaseOrderShippingMarksSummary({ shippingMarks: ['BASE'], shippingMarkText: 'BASE' })
+  assert.equal(single.primaryMark, 'BASE')
+  assert.equal(single.showPartMarks, false)
+  const historical = getPurchaseOrderShippingMarksSummary({ shippingMarks: ['OLD-01', 'OLD-02'], shippingMarkText: null })
+  assert.equal(historical.baseMark, null)
+  assert.equal(historical.primaryMark, 'OLD-01')
+  assert.equal(historical.showPartMarks, true)
+  const independent = getPurchaseOrderShippingMarksSummary({ shippingMarks: ['STORED-OTHER'], shippingMarkText: 'BASE' })
+  assert.equal(independent.showPartMarks, true)
+  assert.deepEqual(independent.marks, ['STORED-OTHER'])
+})
+
+test('待审核所有唛头为空时显示待生成，不制造复制文本或货件编号', () => {
+  const pending = getPurchaseOrderShippingMarksSummary({ shippingMarks: [], shippingMarkText: null, orderStatus: 'PENDING_REVIEW' })
+  assert.equal(pending.pending, true)
+  assert.equal(pending.primaryMark, null)
+  assert.equal(pending.showPartMarks, false)
+  assert.equal(pending.copyText, '')
+  assert.equal(getPurchaseOrderShippingMarksSummary({ shippingMarks: [], shippingMarkText: null, orderStatus: 'CANCELLED' }).pending, false)
+  assert.equal(getPurchaseOrderShippingMarksSummary({ shippingMarks: ['OLD'], shippingMarkText: null, orderStatus: 'PENDING_REVIEW' }).pending, false)
+})
+
+test('审核前货件 null 原样保留；审核后的货件独立字段不由基础码或内部序号重算', () => {
+  const records = getPurchaseOrderPartRecords({
+    parts: [
+      { id: 'pending', partNumber: 100, shippingMarkText: null, items: [] },
+      { id: 'stored', partNumber: 1, shippingMarkText: 'STORED-UNCHANGED', items: [] },
+    ],
+    lines: [],
+    lineSummary: { previews: [] },
+  } as unknown as PurchaseOrderDetailDto)
+  assert.equal(records[0]?.shippingMarkText, 'STORED-UNCHANGED')
+  assert.equal(records[1]?.shippingMarkText, null)
 })
 
 test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用货件实际分配数量', () => {
@@ -93,7 +135,10 @@ test('列表桌面与窄屏共用点击展开唛头组件，提供逐号和全�
   assert.match(source, /v-for="\(mark, index\) in summary\.marks"/u)
   assert.match(source, /:text="mark"/u)
   assert.match(source, /navigator\.clipboard\.writeText\(summary\.value\.copyText\)/u)
-  assert.match(source, /:text="summary\.legacyMark"/u)
+  assert.match(source, /v-if="summary\.showPartMarks"/u)
+  assert.match(source, /v-if="summary\.primaryMark"/u)
+  assert.match(source, /:text="summary\.primaryMark"/u)
+  assert.match(source, /purchaseOrderList\.shippingMarks\.pending/u)
   assert.equal((list.match(/<PurchaseOrderShippingMarksCell\b/gu) ?? []).length, 2)
 })
 
@@ -108,7 +153,10 @@ test('详情货件默认折叠且换单重置，复制入口独立于折叠触�
   assert.match(source, /item\.quantity/u)
   assert.doesNotMatch(source, /AmountDisplay|lineTotalAmount|actualPurchaseUnitPriceAmount/u)
   assert.match(information, /<OrderParts :detail="detail"/u)
-  assert.match(information, /v-if="detail\.parts\.length === 0"/u)
+  assert.doesNotMatch(information, /v-if="detail\.parts\.length === 0"/u)
+  assert.match(information, /purchaseOrderDesc\.fields\.baseShippingMark/u)
+  assert.match(source, /<CopyCellButton v-if="part\.shippingMarkText"/u)
+  assert.match(source, /purchaseOrderDrawer\.parts\.pendingMark/u)
   assert.match(information, /:text="detail\.shippingMarkText"/u)
   assert.match(information, /:value="detail\.amounts\.lineSubtotalAmount"/u)
 })

@@ -99,6 +99,7 @@ const router = useRouter()
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const toast = useQsToast()
+const { t } = useI18n()
 const currencyCatalog = useCurrencyCatalog()
 const supplierCatalog = useDictionaryCatalog('service_provider.supplier')
 const todayDate = today(getLocalTimeZone())
@@ -216,7 +217,7 @@ const shippingMarkResolution = computed(() => (
     ? shippingMarkState.value.resolution
     : frozenShippingMarkResolution.value
 ))
-const shippingMarkSummary = computed(() => formatPurchaseOrderShippingMarkSummary(shippingMarkResolution.value))
+const shippingMarkSummary = computed(() => formatPurchaseOrderShippingMarkSummary(shippingMarkResolution.value, t))
 const shippingMarkAvailable = computed(() => (
   !shippingMarkState.value.loading && isPurchaseOrderShippingMarkAvailable(shippingMarkResolution.value)
 ))
@@ -275,7 +276,7 @@ const formErrorDisplay = computed(() => requestId.value === undefined
 const activeStepTitle = computed(() => purchaseOrderSteps[activeStep.value]?.title ?? '')
 const submitStatusMessage = computed(() => {
   if (submission.value.phase === 'submitting') {
-    return '采购订单正在保存并派发订单号与唛头，请勿重复操作。'
+    return t('purchaseOrderParts.saving')
   }
   if (submission.value.phase === 'unknown') {
     return '保存结果暂时未知，请使用原请求重新确认，避免产生重复采购订单。'
@@ -283,7 +284,7 @@ const submitStatusMessage = computed(() => {
   if (currencyUnavailable.value) {
     return 'CNY 当前不可用，暂时无法提交采购订单。'
   }
-  return '全部步骤已完成且校验通过，正式提交后自动派发订单号与唛头。'
+  return t('purchaseOrderParts.ready')
 })
 const submitReady = computed(() => (
   createSurface.value === 'review'
@@ -730,7 +731,7 @@ async function focusPurchaseOrderReview(): Promise<void> {
 
 /**
  * 第三步的“下一步”只切换到只读核对面。这里执行完整领域校验，但不会创建
- * 幂等键、冻结请求快照或访问创建 API；编号仍只在最终二次确认后派发。
+ * 幂等键、冻结请求快照或访问创建 API；采购订单号在最终确认后派发，唛头留待审核。
  */
 function enterPurchaseOrderReview(): void {
   const result = buildCurrentRequest()
@@ -1383,7 +1384,7 @@ onBeforeUnmount(() => {
                 aria-label="预定义货物件"
                 data-testid="purchase-order-step-mark-remark"
               >
-                <FaCard title="预定义货物件" description="按实际包装分配产品，每个货件将独立派发一个唛头。">
+                <FaCard :title="t('purchaseOrderParts.title')" :description="t('purchaseOrderParts.configurationHelp')">
                   <div class="gap-4 grid grid-cols-1">
                     <div aria-label="货件配置" tabindex="-1" class="outline-none rounded-lg focus-visible:ring-2 focus-visible:ring-primary/40" data-testid="purchase-order-part-configurator">
                       <QsPartConfigurator
@@ -1486,7 +1487,7 @@ onBeforeUnmount(() => {
                                     </template>
                                   </dl>
                                   <p class="text-xs text-muted-foreground leading-relaxed m-0 mt-2" data-testid="purchase-order-shipping-mark-dispatch-detail">
-                                    {{ PURCHASE_SHIPPING_MARK_DISPATCH_HINT }}
+                                    {{ t(PURCHASE_SHIPPING_MARK_DISPATCH_HINT) }}
                                   </p>
                                 </div>
                               </template>
@@ -1498,7 +1499,7 @@ onBeforeUnmount(() => {
                           <p class="text-xs text-muted-foreground leading-5 m-0 mt-1" data-testid="purchase-order-shipping-mark-hint">
                             <template v-if="shippingMarkResolution">
                               {{ shippingMarkResolution.matchSource === 'CUSTOM_RULE' ? '自定义采购' : '供应商绑定' }} ·
-                            </template>正式提交后按货件自动派发
+                            </template>{{ t('purchaseOrderParts.reviewDispatch') }}
                           </p>
                           <div v-if="!shippingMarkAvailable" class="mt-2" role="alert">
                             <p class="text-sm text-destructive m-0 break-words">
@@ -1605,7 +1606,7 @@ onBeforeUnmount(() => {
                 核对采购订单
               </h2>
               <p class="text-sm text-muted-foreground leading-6 m-0 mt-2">
-                请确认下列资料无误；只有二次确认后才会正式保存并派发采购订单号与唛头。
+                {{ t('purchaseOrderParts.reviewHelp') }}
               </p>
             </header>
 
@@ -1754,7 +1755,7 @@ onBeforeUnmount(() => {
     <QsGenericModal
       :model-value="submitConfirmVisible"
       title="确认提交采购订单？"
-      description="确认后正式保存，并自动派发采购订单号与唛头。"
+      :description="t('purchaseOrderParts.submitDescription')"
       size="sm"
       :closable="false"
       :dismiss-on-overlay="false"
@@ -1791,7 +1792,7 @@ onBeforeUnmount(() => {
           货件数
         </dt>
         <dd class="text-sm font-medium m-0" data-testid="purchase-order-confirm-part-count">
-          {{ displayedParts.length }} 个 · 派发 {{ displayedParts.length }} 个唛头
+          {{ t('purchaseOrderParts.confirmation', { count: displayedParts.length }) }}
         </dd>
         <dt class="text-sm text-muted-foreground">
           采购总价

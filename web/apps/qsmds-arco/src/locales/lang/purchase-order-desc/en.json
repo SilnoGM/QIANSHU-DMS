@@ -31,6 +31,7 @@
       "paid": "Paid",
       "outstanding": "Outstanding",
       "shippingMark": "Shipping mark",
+      "baseShippingMark": "Base shipping mark",
       "remark": "Purchase remark",
       "lineIndex": "Purchase product {index}"
     },

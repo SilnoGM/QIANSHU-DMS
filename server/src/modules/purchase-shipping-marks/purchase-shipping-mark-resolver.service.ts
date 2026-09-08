@@ -32,7 +32,7 @@ const RESOLUTION_RULE_SELECT = {
   versions: { where: { status: 'ACTIVE' }, select: NUMBERING_VERSION_READ_SELECT, take: 1 },
 } as const satisfies Prisma.NumberingRuleSelect
 const AVAILABILITY_MESSAGES: Record<ShippingMarkAvailability, string> = {
-  AVAILABLE: '正式提交后自动派发，规则容量与生成结果将在提交时最终校验',
+  AVAILABLE: '审核通过时按当时有效规则派发基础唛头，当前检查不预留编号或容量',
   SUPPLIER_UNAVAILABLE: '供应商当前不可用，请检查供应商字典启用状态',
   UNBOUND: '该供应商尚未绑定唛头规则，请联系管理员配置',
   RULE_MISSING: '唛头规则不存在，请联系管理员配置',

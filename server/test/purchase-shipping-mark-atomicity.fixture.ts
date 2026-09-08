@@ -19,10 +19,10 @@ import { PurchaseShippingMarksService } from '../src/modules/purchase-shipping-m
 import { IsolatedNumberingPrismaService } from './numbering-e2e-database'
 import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from './purchase-shipping-mark-e2e-database'
 
-export const MARK_CONSUMER = 'PURCHASE_ORDER.PART_SHIPPING_MARK'
+export const MARK_CONSUMER = 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK'
 
-export async function createAtomicityFixture(deferPartsMigration = false) {
-  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration)
+export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false) {
+  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration)
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
     await prisma.onModuleInit()
@@ -60,6 +60,7 @@ export async function createAtomicityFixture(deferPartsMigration = false) {
       prisma, actor, audit, numberingCommands, configContext, customRule,
       resolver, numbering, dependencies, salesProgress, bindings,
       migrateParts: database.applyPartsMigration,
+      migrateReview: database.applyReviewMigration,
       context: (idempotencyKey = randomUUID()) => ({
         actorUserId: actor.id, idempotencyKey, requestId: randomUUID(),
       }),
@@ -98,11 +99,15 @@ export function createCommands(
   )
 }
 
-export function createReviewMutations(fixture: AtomicityFixture) {
+export function createReviewMutations(fixture: AtomicityFixture, wrap?: (transaction: Prisma.TransactionClient) => Prisma.TransactionClient) {
   const lookup = new DictionaryLookupService(fixture.prisma)
+  const prisma = wrap === undefined ? fixture.prisma : {
+    $transaction: <T>(action: (transaction: Prisma.TransactionClient) => Promise<T>) => fixture.prisma.$transaction(transaction => action(wrap(transaction))),
+  } as unknown as PrismaService
   return new PurchaseOrderMutationService(
-    fixture.prisma, fixture.audit, lookup, {} as MediaAssetService,
+    prisma, fixture.audit, lookup, {} as MediaAssetService,
     new PurchaseOrderQueryService(fixture.prisma, lookup), fixture.salesProgress,
+    fixture.numbering, fixture.resolver,
   )
 }
 

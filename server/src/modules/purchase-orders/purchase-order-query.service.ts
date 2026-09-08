@@ -292,7 +292,7 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
   readonly parts: readonly {
     readonly id: string
     readonly partNumber: number
-    readonly shippingMarkText: string
+    readonly shippingMarkText: string | null
     readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
   }[]
   readonly sourceSalesOrder: {
@@ -537,7 +537,7 @@ function mapListItem(
     fulfillmentStatus: row.fulfillmentStatus,
     paymentStatus: row.paymentStatus,
     shippingMarkText: row.shippingMarkText,
-    shippingMarks: row.parts.map(part => part.shippingMarkText),
+    shippingMarks: row.parts.flatMap(part => part.shippingMarkText === null ? [] : [part.shippingMarkText]),
     remark: row.remark,
     version: row.version,
     createdAt: row.createdAt.toISOString(),

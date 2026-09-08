@@ -11,7 +11,7 @@ import { AuditService } from '../src/modules/audit/audit.service'
 import type { IsolatedNumberingDatabase } from './numbering-e2e-database'
 
 /** 永久派发账本不能逐行清理；完整业务回归使用临时 schema，结束时整体释放。 */
-export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void> }> {
+export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void> }> {
   const baseDatabaseUrl = process.env.DATABASE_URL
   if (!baseDatabaseUrl) throw new Error('Isolated database is required')
   const url = new URL(baseDatabaseUrl)
@@ -30,7 +30,8 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
     await client.query(`SET search_path TO ${quoted}, public`)
     const directory = resolve(__dirname, '../prisma/migrations')
     for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name)).sort()) {
-      if (deferPartsMigration && migration.endsWith('_purchase_order_parts')) continue
+      if (deferPartsMigration && migration >= '20260907120000_purchase_order_parts') continue
+      if (deferReviewMigration && migration >= '20260908013900_purchase_order_review_shipping_marks') continue
       await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
     }
   }
@@ -44,7 +45,13 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
   return {
     baseDatabaseUrl, databaseUrl: url.toString(), schemaName,
     async applyPartsMigration() {
-      await client.query(readFileSync(resolve(__dirname, '../prisma/migrations/20260907120000_purchase_order_parts/migration.sql'), 'utf8'))
+      const directory = resolve(__dirname, '../prisma/migrations')
+      for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260907120000_purchase_order_parts').sort()) {
+        await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
+      }
+    },
+    async applyReviewMigration() {
+      await client.query(readFileSync(resolve(__dirname, '../prisma/migrations/20260908013900_purchase_order_review_shipping_marks/migration.sql'), 'utf8'))
     },
     async dispose() {
       if (disposed) return

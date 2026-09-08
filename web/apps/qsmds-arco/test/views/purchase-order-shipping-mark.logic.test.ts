@@ -3,10 +3,19 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 解析并发隔离使用 Node.js runner。
 import test from 'node:test'
+import messages from '../../src/locales/lang/purchase-order-parts/zh-cn.json'
 import {
+  formatPurchaseOrderShippingMarkSummary as buildShippingMarkSummary,
   createPurchaseOrderShippingMarkResolver,
-  formatPurchaseOrderShippingMarkSummary,
+  hasPurchaseOrderShippingMarks,
 } from '../../src/views/operations/purchase-orders/purchase-order-shipping-mark.logic'
+
+function formatPurchaseOrderShippingMarkSummary(resolution: PurchaseOrderShippingMarkResolutionDto | null) {
+  return buildShippingMarkSummary(
+    resolution,
+    key => messages.purchaseOrderParts[key.replace('purchaseOrderParts.', '') as keyof typeof messages.purchaseOrderParts],
+  )
+}
 
 const available: PurchaseOrderShippingMarkResolutionDto = {
   activeConfig: {
@@ -43,8 +52,24 @@ test('采购唛头将低频配置收进同一浮层，保留结构、短说明�
   const compact = field.replace(popup, '')
   assert.doesNotMatch(compact, /<dl|border-y|border-t|刷新规则|查看唛头配置/u)
   assert.match(compact, /purchase-order-shipping-mark-structure/u)
-  assert.match(compact, /正式提交后按货件自动派发/u)
+  assert.match(compact, /purchaseOrderParts\.reviewDispatch/u)
   assert.match(compact, /role="alert"/u)
+})
+
+test('审核提示识别已存订单及货件唛头，历史码不承诺重新派发', () => {
+  assert.equal(hasPurchaseOrderShippingMarks({ shippingMarkText: null, parts: [{ shippingMarkText: null }] }), false)
+  assert.equal(hasPurchaseOrderShippingMarks({ shippingMarkText: 'V3', parts: [] }), true)
+  assert.equal(hasPurchaseOrderShippingMarks({ shippingMarkText: null, parts: [{ shippingMarkText: 'V4' }] }), true)
+})
+
+test('创建确认与审核提示不再承诺提交派发，每单仅申请一个基础唛头', async () => {
+  const create = await readFile(new URL('../../src/views/operations/purchase-orders/create.vue', import.meta.url), 'utf8')
+  const review = await readFile(new URL('../../src/views/operations/purchase-orders/purchase-order-review-modal.vue', import.meta.url), 'utf8')
+  assert.match(create, /purchaseOrderParts\.confirmation/u)
+  assert.doesNotMatch(create, /派发订单号与唛头|派发采购订单号与唛头|逐件派发|每个货件将独立派发/u)
+  assert.match(review, /hasPurchaseOrderShippingMarks\(detail\)/u)
+  assert.match(review, /purchaseOrderList\.review\.generateShippingMark/u)
+  assert.match(review, /purchaseOrderList\.review\.preserveShippingMarks/u)
 })
 
 test('变更场景立即清空旧摘要且取消请求，迟到响应不能覆盖新摘要', async () => {
@@ -74,7 +99,9 @@ test('摘要复用真实生效规则结构，派发说明只出现一次且不�
     message: '正式提交后自动派发，规则容量与生成结果将在提交时最终校验',
   })
   assert.match(summary, /WGJ-\{YYYY\}-\{SEQ:4,start=1,step=1\}/u)
-  assert.equal(summary.split('正式提交后自动派发').length - 1, 1)
+  assert.equal(summary.split('审核通过后').length - 1, 1)
+  assert.match(summary, /1 个基础唛头/u)
+  assert.doesNotMatch(summary, /正式提交后自动派发/u)
   assert.doesNotMatch(summary, /WGJ-2026-0001/u)
 })
 
@@ -138,6 +165,6 @@ test('只读解析失败保留安全错误，不生成未知提交或候选号',
   assert.equal(latest?.resolution, null)
   assert.equal(latest?.error, '网络暂不可用')
   assert.match(formatPurchaseOrderShippingMarkSummary(available), /SUPPLIER_MARK.*第 2 版.*可用/u)
-  assert.match(formatPurchaseOrderShippingMarkSummary(available), /正式提交后自动派发/u)
+  assert.match(formatPurchaseOrderShippingMarkSummary(available), /审核通过后/u)
   assert.match(formatPurchaseOrderShippingMarkSummary({ ...available, availability: 'RULE_DISABLED', resolutionToken: null, message: '规则已停用' }), /规则已停用/u)
 })

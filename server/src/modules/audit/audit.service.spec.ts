@@ -341,4 +341,44 @@ describe('AuditService', () => {
       unsafeValue,
     )
   })
+
+  it.each([
+    { code: 'P2034' },
+    { code: '40001' },
+    { code: '40P01' },
+    { meta: { driverAdapterError: { cause: { originalCode: '40001' } } } },
+  ])('preserves only a safe transaction conflict classification for %j', async (databaseError) => {
+    const unsafeValue = 'unsafe-sql-parameter-and-connection-secret'
+    const { transaction, create } = createTransactionFixture()
+    create.mockRejectedValueOnce({ ...databaseError, message: unsafeValue, detail: unsafeValue })
+    const error: unknown = await new AuditService().record(transaction, {
+      eventType: AuditEventType.SYSTEM_BOOTSTRAP,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.SYSTEM,
+    }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(AuditWriteFailedError)
+    expect(error).toMatchObject({
+      code: 'AUDIT_WRITE_FAILED', message: 'Audit event write failed', transactionConflict: true,
+    })
+    expect(error).not.toHaveProperty('cause')
+    expect(error).not.toHaveProperty('meta')
+    expect(JSON.stringify(error)).not.toContain(unsafeValue)
+    expect((error as Error).stack).not.toContain(unsafeValue)
+  })
+
+  it.each([
+    { code: '23514' },
+    { code: 'P2028' },
+    { message: '40001' },
+    { meta: { unknown: { code: '40001' } } },
+  ])('does not classify non-allowlisted or unstructured errors as transaction conflicts: %j', async (databaseError) => {
+    const { transaction, create } = createTransactionFixture()
+    create.mockRejectedValueOnce(databaseError)
+    await expect(new AuditService().record(transaction, {
+      eventType: AuditEventType.SYSTEM_BOOTSTRAP,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.SYSTEM,
+    })).rejects.toMatchObject({ code: 'AUDIT_WRITE_FAILED', transactionConflict: false })
+  })
 })

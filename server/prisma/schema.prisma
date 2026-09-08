@@ -995,7 +995,7 @@ model PurchaseOrder {
   orderNo                      String                         @unique(map: "purchase_orders_order_no_key") @map("order_no") @db.VarChar(64)
   createIdempotencyKeyHash     Bytes                          @unique(map: "purchase_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
   createRequestFingerprintHash Bytes                          @map("create_request_fingerprint_hash") @db.ByteA
-  createRequestFingerprintVersion String                     @default("purchase-order.create.v4") @map("create_request_fingerprint_version") @db.VarChar(32)
+  createRequestFingerprintVersion String                     @default("purchase-order.create.v5") @map("create_request_fingerprint_version") @db.VarChar(32)
   partConfigurationSealed      Boolean                        @default(false) @map("part_configuration_sealed")
   purchaseType                 PurchaseOrderType              @map("purchase_type")
   productMode                  PurchaseOrderProductMode       @map("product_mode")
@@ -1072,13 +1072,15 @@ model PurchaseOrderPart {
   purchaseOrderId          String @map("purchase_order_id") @db.Uuid
   key                      String @db.Uuid
   partNumber               Int    @map("part_number") @db.SmallInt
-  shippingMarkText         String @map("shipping_mark_text") @db.VarChar(64)
-  shippingMarkIssuanceId   String @unique(map: "purchase_order_parts_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
-  shippingMarkKeyHash      Bytes  @map("shipping_mark_key_hash") @db.ByteA
+  // 唛头与本单内序号分开保存；正式货件编号属于后续货件域，不复用这两个字段。
+  shippingMarkText         String? @map("shipping_mark_text") @db.VarChar(72)
+  // 仅历史逐件派号保留独立 ledger；新单审核时由采购基础唛头派生，不额外消耗流水。
+  shippingMarkIssuanceId   String? @unique(map: "purchase_order_parts_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
+  shippingMarkKeyHash      Bytes?  @map("shipping_mark_key_hash") @db.ByteA
   createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  shippingMarkIssuance NumberingIssuance @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  shippingMarkIssuance NumberingIssuance? @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   items PurchaseOrderPartItem[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")

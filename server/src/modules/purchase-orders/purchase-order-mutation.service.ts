@@ -14,8 +14,9 @@ import {
 } from '../../generated/prisma/enums'
 import { PrismaService } from '../../infrastructure/database/prisma.service'
 import { applyTransactionTimeouts } from '../../infrastructure/database/transaction-timeouts'
+import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 import { ApiException } from '../../infrastructure/http/api.exception'
-import { AuditService } from '../audit/audit.service'
+import { AuditService, AuditWriteFailedError } from '../audit/audit.service'
 import {
   DictionaryLookupService,
   DictionaryValueUnavailableError,
@@ -46,6 +47,11 @@ import {
   type PurchaseOrderDetail,
 } from './purchase-order-query.service'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
+import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import { NumberingGenerationError } from '../numbering/numbering.errors'
+import { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
+import { PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION, PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION, PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION } from './purchase-order-create-fingerprint'
+import { mapShippingMarkGenerationError, PURCHASE_SHIPPING_MARK_CONSUMER, requirePurchaseShippingMark } from './purchase-order-shipping-mark'
 
 const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const UUID_V4_PATTERN =
@@ -97,6 +103,13 @@ type MutablePurchaseOrder = Prisma.PurchaseOrderGetPayload<{
     purchaseType: true
     salesOrderId: true
     version: true
+    productMode: true
+    supplierValue: true
+    createRequestFingerprintHash: true
+    createRequestFingerprintVersion: true
+    shippingMarkText: true
+    shippingMarkIssuanceId: true
+    _count: { select: { parts: true } }
   }
 }>
 
@@ -190,6 +203,8 @@ export class PurchaseOrderMutationService {
     private readonly mediaAsset: MediaAssetService,
     private readonly query: PurchaseOrderQueryService,
     private readonly salesOrderCoverage: SalesOrderPurchaseCoverageService,
+    private readonly numbering: NumberingGeneratorService,
+    private readonly shippingMarks: PurchaseShippingMarkResolverService,
     @Optional()
     @Inject(PURCHASE_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
@@ -230,14 +245,25 @@ export class PurchaseOrderMutationService {
           '采购订单已变化或已完成审核，请刷新后重试',
         )
       }
+      const mark = await this.issueReviewShippingMark(transaction, order)
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
         data: {
           orderStatus: 'CONFIRMED',
           fulfillmentStatus: 'PREPARING',
           version: { increment: 1 },
+          ...(mark === null ? {} : { shippingMarkText: mark.number, shippingMarkIssuanceId: mark.issuanceId }),
         },
       })
+      if (mark !== null) {
+        // 基础号只派发一次；批量补写派生码，不改变已封存货件配置。超过两位保留完整序号。
+        await transaction.$executeRaw(Prisma.sql`
+          UPDATE purchase_order_parts
+          SET shipping_mark_text = CASE WHEN ${order._count.parts} = 1 THEN ${mark.number}
+            ELSE ${mark.number} || '/货件-' || lpad(part_number::text, greatest(2, length(part_number::text)), '0') END
+          WHERE purchase_order_id = ${order.id}::uuid
+        `)
+      }
       for (const transition of [
         { dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', eventType: AuditEventType.PURCHASE_ORDER_ORDER_STATUS_CHANGED },
         { dimension: 'FULFILLMENT', fromStatus: 'ORDERED', toStatus: 'PREPARING', eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED },
@@ -253,7 +279,12 @@ export class PurchaseOrderMutationService {
         await this.recordAudit(transaction, trusted, {
           eventType: transition.eventType,
           targetId: purchaseOrderId,
-          metadata: { action: 'REVIEW', fromStatus: transition.fromStatus, toStatus: transition.toStatus },
+          metadata: { action: 'REVIEW', fromStatus: transition.fromStatus, toStatus: transition.toStatus,
+            ...(mark === null || transition.dimension !== 'ORDER' ? {} : {
+              shippingMarkIssuanceId: mark.issuanceId, shippingMarkRuleCode: mark.ruleCode,
+              shippingMarkRevision: mark.ruleRevision, partCount: order._count.parts,
+            }),
+          },
         })
       }
       if (order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
@@ -265,8 +296,38 @@ export class PurchaseOrderMutationService {
           salesOrderId: order.salesOrderId,
         })
       }
+    }).catch((error: unknown) => {
+      // 只有事务退出后才映射失败；不在 aborted transaction 中恢复，也不把其他审核当作本次成功。
+      if (error instanceof NumberingGenerationError) throw mapShippingMarkGenerationError(error)
+      const facts = readPersistenceErrorFacts(error)
+      if (
+        (error instanceof AuditWriteFailedError && error.transactionConflict)
+        || ['P2034', '40001', '40P01', '55P03', '57014'].some(code => hasPersistenceCode(facts, code))
+      ) {
+        throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购依赖状态已变化，请刷新核对后重试')
+      }
+      throw error
     })
     return this.query.getById(purchaseOrderId)
+  }
+
+  private async issueReviewShippingMark(transaction: Prisma.TransactionClient, order: MutablePurchaseOrder) {
+    // v3/v4 的真实历史派发不可覆盖。只有新 v5 订单在审核阶段首次派发。
+    if (order.createRequestFingerprintVersion === PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION
+      || order.createRequestFingerprintVersion === PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION) return null
+    if (order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
+      || order.productMode === 'MIXED' || order.shippingMarkText !== null || order.shippingMarkIssuanceId !== null || order._count.parts < 1) {
+      throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购货件或唛头状态已变化，请刷新核对')
+    }
+    const resolution = await this.shippingMarks.resolve(transaction, {
+      productMode: order.productMode, supplierValue: order.supplierValue,
+    }, true)
+    const ruleCode = requirePurchaseShippingMark(resolution)
+    // 审核时读取当前规则与数据库事务时间；订单稳定键/创建指纹可由 SQL 独立验证。
+    return this.numbering.generateScopedInTransaction(transaction, {
+      ruleCode, consumerCode: PURCHASE_SHIPPING_MARK_CONSUMER, idempotencyKey: order.id,
+      requestFingerprint: Buffer.from(order.createRequestFingerprintHash).toString('hex'),
+    })
   }
 
   async updateOrderStatus(
@@ -688,6 +749,13 @@ export class PurchaseOrderMutationService {
         purchaseType: true,
         salesOrderId: true,
         version: true,
+        productMode: true,
+        supplierValue: true,
+        createRequestFingerprintHash: true,
+        createRequestFingerprintVersion: true,
+        shippingMarkText: true,
+        shippingMarkIssuanceId: true,
+        _count: { select: { parts: true } },
       },
     })
     if (order === null) {

@@ -196,12 +196,12 @@ const amountItems = computed(() => [
         <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />{{ t('purchaseOrderDesc.sections.notes') }}
       </h3>
       <dl class="text-sm m-0 px-4 flex flex-col gap-4">
-        <div v-if="detail.parts.length === 0" class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)]">
+        <div class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)]">
           <dt class="text-muted-foreground">
-            {{ t('purchaseOrderDesc.fields.shippingMark') }}
+            {{ t('purchaseOrderDesc.fields.baseShippingMark') }}
           </dt><dd class="m-0 flex gap-2 min-w-0 items-start">
-            <span class="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ detail.shippingMarkText || '-' }}</span>
-            <CopyCellButton v-if="detail.shippingMarkText" always-visible :label="t('purchaseOrderDesc.fields.shippingMark')" :text="detail.shippingMarkText" />
+            <span class="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{{ detail.shippingMarkText ?? t(detail.orderStatus === 'PENDING_REVIEW' && detail.shippingMarks.length === 0 ? 'purchaseOrderDrawer.parts.pendingMark' : 'purchaseOrderDrawer.baseMarkNotRecorded') }}</span>
+            <CopyCellButton v-if="detail.shippingMarkText" always-visible :label="t('purchaseOrderDesc.fields.baseShippingMark')" :text="detail.shippingMarkText" />
           </dd>
         </div>
         <div class="gap-3 grid grid-cols-[4.5rem_minmax(0,1fr)]">

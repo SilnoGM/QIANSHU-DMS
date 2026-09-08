@@ -7,8 +7,9 @@ import {
 } from './purchase-order-command.normalizer'
 
 export const PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION =
-  'purchase-order.create.v4' as const
+  'purchase-order.create.v5' as const
 export const PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION = 'purchase-order.create.v3' as const
+export const PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION = 'purchase-order.create.v4' as const
 export const PURCHASE_ORDER_NUMBERING_RULE_CODE = 'PURCHASE_ORDER' as const
 export const PURCHASE_ORDER_NUMBERING_CONSUMER_CODE =
   'PURCHASE_ORDER.CREATE' as const

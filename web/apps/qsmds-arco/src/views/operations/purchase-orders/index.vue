@@ -301,7 +301,7 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 140,
   title: t('purchaseOrderList.records.documents'),
 }, {
-  accessorFn: item => item.shippingMarks.length > 0 ? item.shippingMarks.join('\n') : item.shippingMarkText,
+  accessorFn: item => item.shippingMarkText ?? item.shippingMarks.join('\n'),
   id: 'shippingMarkSummary',
   minWidth: 200,
   title: '采购唛头',

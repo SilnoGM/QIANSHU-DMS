@@ -1,8 +1,11 @@
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
-import type { AuditService } from '../audit/audit.service'
+import { AuditService } from '../audit/audit.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../media/media-asset.service'
+import type { NumberingGeneratorService } from '../numbering/numbering-generator.service'
+import { NumberingGenerationError } from '../numbering/numbering.errors'
+import type { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import type { PurchaseOrderQueryService } from './purchase-order-query.service'
 import type { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
@@ -28,8 +31,11 @@ function setup() {
     purchaseType: 'SALES_LINKED',
     salesOrderId: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
     version: 1,
+    createRequestFingerprintVersion: 'purchase-order.create.v4',
   }
   const transaction = {
+    auditEvent: { create: jest.fn().mockResolvedValue({}) },
+    $executeRaw: jest.fn<Promise<number>, [unknown]>().mockResolvedValue(1),
     $queryRaw: jest.fn<Promise<unknown[]>, [unknown]>()
       .mockResolvedValue([{ id: ORDER_ID }]),
     purchaseOrder: {
@@ -96,6 +102,16 @@ function setup() {
     recalculateAfterPurchaseCancellation:
       jest.fn<Promise<void>, [unknown, unknown]>().mockResolvedValue(undefined),
   }
+  const numbering = {
+    generateScopedInTransaction: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({
+      number: 'MARK-0001', issuanceId: MEDIA_ID, ruleCode: 'CURRENT_MARK', ruleRevision: 7,
+    }),
+  }
+  const resolver = {
+    resolve: jest.fn<Promise<unknown>, [unknown, unknown, boolean]>().mockResolvedValue({
+      availability: 'AVAILABLE', resolutionToken: 'b'.repeat(64), ruleCode: 'CURRENT_MARK',
+    }),
+  }
   const service = new PurchaseOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
@@ -103,6 +119,8 @@ function setup() {
     media as unknown as MediaAssetService,
     query as unknown as PurchaseOrderQueryService,
     coverage as unknown as SalesOrderPurchaseCoverageService,
+    numbering as unknown as NumberingGeneratorService,
+    resolver as unknown as PurchaseShippingMarkResolverService,
     { now: () => new Date('2026-08-27T12:00:00.000Z') },
   )
   return {
@@ -112,6 +130,8 @@ function setup() {
     dictionaryLookup,
     media,
     order,
+    numbering,
+    resolver,
     query,
     service,
     transaction,
@@ -121,6 +141,95 @@ function setup() {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderMutationService', () => {
+  it.each([
+    ['40001', 'PURCHASE_ORDER_STATE_CHANGED'],
+    ['23514', 'AUDIT_WRITE_FAILED'],
+  ])('preserves audit persistence %s classification during review without retrying issuance', async (code, expectedCode) => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order, orderStatus: 'PENDING_REVIEW', createRequestFingerprintVersion: 'purchase-order.create.v5',
+      createRequestFingerprintHash: Buffer.alloc(32, 1), productMode: 'CUSTOM', supplierValue: null,
+      shippingMarkText: null, shippingMarkIssuanceId: null, _count: { parts: 1 },
+    })
+    fixture.transaction.auditEvent.create.mockRejectedValue({
+      code: 'P2010', meta: { driverAdapterError: { cause: { originalCode: code } } },
+    })
+    fixture.audit.record.mockImplementation((tx, event) => new AuditService().record(
+      tx as Parameters<AuditService['record']>[0], event as Parameters<AuditService['record']>[1],
+    ))
+    await expect(fixture.service.review(context, ORDER_ID, { expectedVersion: 1 })).rejects.toMatchObject({ code: expectedCode })
+    expect(fixture.transaction.auditEvent.create).toHaveBeenCalledTimes(1)
+    expect(fixture.numbering.generateScopedInTransaction).toHaveBeenCalledTimes(1)
+    expect(fixture.query.getById).not.toHaveBeenCalled()
+  })
+
+  it('issues and persists one base mark while approving a v5 order', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order, orderStatus: 'PENDING_REVIEW', createRequestFingerprintVersion: 'purchase-order.create.v5',
+      createRequestFingerprintHash: Buffer.alloc(32, 1), productMode: 'CUSTOM', supplierValue: null,
+      shippingMarkText: null, shippingMarkIssuanceId: null, _count: { parts: 1 },
+    })
+    await fixture.service.review(context, ORDER_ID, { expectedVersion: 1 })
+    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID }, data: {
+        orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: { increment: 1 },
+        shippingMarkText: 'MARK-0001', shippingMarkIssuanceId: MEDIA_ID,
+      },
+    })
+    expect(fixture.resolver.resolve).toHaveBeenCalledWith(fixture.transaction, { productMode: 'CUSTOM', supplierValue: null }, true)
+    expect(fixture.numbering.generateScopedInTransaction).toHaveBeenCalledTimes(1)
+    expect(fixture.numbering.generateScopedInTransaction).toHaveBeenCalledWith(fixture.transaction, {
+      ruleCode: 'CURRENT_MARK', consumerCode: 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK', idempotencyKey: ORDER_ID,
+      requestFingerprint: Buffer.alloc(32, 1).toString('hex'),
+    })
+    const sql = fixture.transaction.$executeRaw.mock.calls[0][0] as { values: unknown[], sql: string }
+    expect(sql.values).toEqual([1, 'MARK-0001', 'MARK-0001', ORDER_ID])
+    expect(sql.sql).toContain('greatest(2, length(part_number::text))')
+    expect(fixture.transaction.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(fixture.audit.record).toHaveBeenCalledWith(fixture.transaction, expect.objectContaining({
+      metadata: expect.objectContaining({ shippingMarkIssuanceId: MEDIA_ID, shippingMarkRuleCode: 'CURRENT_MARK', shippingMarkRevision: 7, partCount: 1 }) as unknown,
+    }))
+  })
+
+  it.each([2, 1000])('uses one issuance and one bulk derived-mark update for %i parts', async count => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order, orderStatus: 'PENDING_REVIEW', createRequestFingerprintVersion: 'purchase-order.create.v5',
+      createRequestFingerprintHash: Buffer.alloc(32, 1), productMode: 'CATALOG', supplierValue: 'SUPPLIER_A',
+      shippingMarkText: null, shippingMarkIssuanceId: null, _count: { parts: count },
+    })
+    await fixture.service.review(context, ORDER_ID, { expectedVersion: 1 })
+    expect(fixture.numbering.generateScopedInTransaction).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction.$executeRaw).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction.$executeRaw.mock.calls[0][0]).toMatchObject({ values: [count, 'MARK-0001', 'MARK-0001', ORDER_ID] })
+    expect(fixture.resolver.resolve).toHaveBeenCalledWith(fixture.transaction, { productMode: 'CATALOG', supplierValue: 'SUPPLIER_A' }, true)
+  })
+
+  it.each(['NUMBERING_CAPACITY_EXHAUSTED', 'NUMBERING_RULE_STATE_CHANGED'] as const)('propagates %s without review writes', async code => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
+      ...fixture.order, orderStatus: 'PENDING_REVIEW', createRequestFingerprintVersion: 'purchase-order.create.v5',
+      createRequestFingerprintHash: Buffer.alloc(32, 1), productMode: 'CUSTOM', supplierValue: null,
+      shippingMarkText: null, shippingMarkIssuanceId: null, _count: { parts: 1 },
+    })
+    fixture.numbering.generateScopedInTransaction.mockRejectedValue(new NumberingGenerationError(code))
+    await expect(fixture.service.review(context, ORDER_ID, { expectedVersion: 1 })).rejects.toMatchObject({
+      code: code === 'NUMBERING_CAPACITY_EXHAUSTED' ? 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE' : 'PURCHASE_ORDER_STATE_CHANGED',
+    })
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.$executeRaw).not.toHaveBeenCalled()
+    expect(fixture.query.getById).not.toHaveBeenCalled()
+  })
+
+  it.each(['purchase-order.create.v3', 'purchase-order.create.v4'])('preserves existing marks when reviewing %s', async version => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({ ...fixture.order, orderStatus: 'PENDING_REVIEW', createRequestFingerprintVersion: version })
+    await fixture.service.review(context, ORDER_ID, { expectedVersion: 1 })
+    expect(fixture.resolver.resolve).not.toHaveBeenCalled()
+    expect(fixture.numbering.generateScopedInTransaction).not.toHaveBeenCalled()
+    expect(fixture.transaction.$executeRaw).not.toHaveBeenCalled()
+  })
   it('propagates sales coverage failure from the review transaction without returning success', async () => {
     const fixture = setup()
     fixture.order.orderStatus = 'PENDING_REVIEW'

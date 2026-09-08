@@ -20,6 +20,7 @@ import {
   assertPurchasePartDetail,
   assertPurchaseShippingMarksInteraction,
   createFirstProductPart,
+  readPurchaseShippingMarkLedger,
   removeFirstPurchasePartItem,
   removePurchasePart,
   waitForPurchasePartCount,
@@ -65,14 +66,14 @@ async function readAvailableShippingMarkSummary(page, productMode) {
     return region?.getClientRects().length > 0
       && region.getAttribute('data-availability') === 'AVAILABLE'
       && region.getAttribute('aria-busy') === 'false'
-      && region.textContent.includes('正式提交后按货件自动派发')
+      && region.textContent.includes('审核通过后生成 1 个基础唛头')
       && region.textContent.includes(${JSON.stringify(productMode === 'CUSTOM' ? '自定义采购' : '供应商绑定')})
       && region.querySelector('input, textarea') === null
       && region.querySelectorAll('button').length === 1
       && region.querySelector('dl') === null
       && region.querySelector('[data-testid="purchase-order-shipping-mark-status"]')?.textContent.trim() === '可用'
       && region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]')?.textContent.includes('{SEQ:')
-      && region.textContent.split('正式提交后按货件自动派发').length === 2
+      && region.textContent.split('审核通过后生成 1 个基础唛头').length === 2
   })()`)
   await openShippingMarkDetails(page)
   const summary = await page.evaluate(`(() => {
@@ -85,7 +86,7 @@ async function readAvailableShippingMarkSummary(page, productMode) {
       name: region.querySelector('[data-testid="purchase-order-shipping-mark-name"]').textContent.trim(),
       status: '可用',
       structure: region.querySelector('[data-testid="purchase-order-shipping-mark-structure"]').textContent.trim(),
-      hint: '正式提交后自动派发',
+      hint: '审核通过后生成 1 个基础唛头',
       fields,
       detailHint: details.querySelector('[data-testid="purchase-order-shipping-mark-dispatch-detail"]').textContent.trim(),
     }
@@ -223,7 +224,7 @@ async function assertCompactShippingMarkSummary(page, scope, expected) {
       && !summary.textContent.includes(${JSON.stringify(expected.fields['匹配来源'])})
       && !summary.textContent.includes(${JSON.stringify(expected.fields['规则编码'])})
       && !summary.textContent.includes(${JSON.stringify(expected.fields['生效版本'])})
-      && summary.textContent.split('正式提交后自动派发').length === 2
+      && summary.textContent.split('审核通过后生成 1 个基础唛头').length === 2
       && summary.querySelector('button[aria-label="查看唛头规则详情"]')?.getAttribute('aria-haspopup') === 'dialog'
   })()`), true, '核对与提交摘要仅保留名称、状态、规则结构及单行短提示')
 }
@@ -720,6 +721,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
 
   let historicalMixedActiveOrder
   let historicalMixedCancelableOrder
+  let initialShippingMarkLedger
   await runPurchaseOrderBrowserStep('real login and historical mixed lists', async () => {
     await page.navigate(appRouteUrl(configuration.baseUrl, '/login'))
     await loginThroughRealHttp(page, configuration)
@@ -733,6 +735,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       已取消: 0,
     })
     const all = await readPurchaseOrders(page)
+    initialShippingMarkLedger = await readPurchaseShippingMarkLedger(page)
     assert.equal(all.status, 200)
     assert.equal(all.body?.total, 2)
     historicalMixedActiveOrder = all.body?.items?.find(
@@ -1226,8 +1229,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(catalogLinkedOrder?.depositDueAmount, '20.0000')
     assert.equal(catalogLinkedOrder?.balanceDueAmount, '140.0000')
     assert.equal(catalogLinkedOrder?.shippingMarkText, null)
-    assert.equal(catalogLinkedOrder?.shippingMarks.length, 2, '每个货件各返回一个自动派发的唛头')
-    assert.equal(new Set(catalogLinkedOrder.shippingMarks).size, 2)
+    assert.deepEqual(catalogLinkedOrder?.shippingMarks, [], '提交后只保存货件，待审核才生成唛头')
+    assert.deepEqual(await readPurchaseShippingMarkLedger(page), initialShippingMarkLedger, '创建拆分货件不消耗任何唛头流水')
     assert.deepEqual(createRequests[0]?.parts.map(part => part.items), [
       [{ lineNumber: 1, quantity: 1 }],
       [{ lineNumber: 1, quantity: 1 }],
@@ -1237,16 +1240,12 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.match(createRequests[0]?.token ?? '', /^[a-f0-9]{64}$/u)
     const detail = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(catalogLinkedOrder.id)}`))
     assert.equal(detail.status, 200)
-    assert.deepEqual(detail.body.parts.map(part => part.shippingMarkText), catalogLinkedOrder.shippingMarks)
+    assert.deepEqual(detail.body.parts.map(part => part.shippingMarkText), [null, null])
     assert.deepEqual(detail.body.parts.map(part => part.items.map(item => ({ lineNumber: item.lineNumber, quantity: item.quantity }))), [
       [{ lineNumber: 1, quantity: 1 }],
       [{ lineNumber: 1, quantity: 1 }],
     ])
     assert.equal(detail.body.amounts.lineSubtotalAmount, '160.0000', '拆件不得重复计订单金额')
-    const bySecondMark = await page.evaluate(apiExpression(`/api/purchase-orders?view=all&page=1&pageSize=20&keyword=${encodeURIComponent(catalogLinkedOrder.shippingMarks[1])}`))
-    assert.equal(bySecondMark.status, 200)
-    assert.deepEqual(bySecondMark.body.items.map(item => item.id), [catalogLinkedOrder.id])
-    await assertPurchaseShippingMarksInteraction(page, catalogLinkedOrder)
     await clickVisibleAriaButton(page, `${catalogLinkedOrder.orderNo}：查看详情`)
     await assertPurchasePartDetail(page, detail.body, true)
     await clickVisibleAriaButton(page, '关闭抽屉')
@@ -1392,7 +1391,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(linkedOrder?.orderStatus, 'PENDING_REVIEW')
     assert.equal(linkedOrder?.fulfillmentStatus, 'ORDERED')
     assert.equal(linkedOrder?.shippingMarkText, null)
-    assert.equal(linkedOrder?.shippingMarks.length, 1)
+    assert.deepEqual(linkedOrder?.shippingMarks, [])
+    assert.deepEqual(await readPurchaseShippingMarkLedger(page), initialShippingMarkLedger)
 
     const detail = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(linkedOrder.id)}`,
@@ -1402,7 +1402,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(customLine?.productName, purchaseCustomName)
     assert.equal(customLine?.description, purchaseCustomDescription)
     assert.equal(detail.body.parts.length, 1)
-    assert.equal(detail.body.parts[0].shippingMarkText, linkedOrder.shippingMarks[0])
+    assert.equal(detail.body.parts[0].shippingMarkText, null)
     assert.deepEqual(detail.body.parts[0].items, [{ purchaseOrderLineId: customLine.id, lineNumber: 1, quantity: 1 }])
   })
 
@@ -1565,7 +1565,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(order?.depositDueAmount, '20.0000')
     assert.equal(order?.balanceDueAmount, '60.0000')
     assert.equal(order?.shippingMarkText, null)
-    assert.equal(order?.shippingMarks.length, 1)
+    assert.deepEqual(order?.shippingMarks, [])
+    assert.deepEqual(await readPurchaseShippingMarkLedger(page), initialShippingMarkLedger, '未知结果原键恢复仍不申请唛头')
   })
 
   await runPurchaseOrderBrowserStep('stock CUSTOM exposes only temporary products', async () => {
@@ -1678,10 +1679,13 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
         assert.deepEqual(rowActionLayout, { singleRow: true, reachable: true })
       }
       const before = reviewRequests.length
+      const beforeLedger = await readPurchaseShippingMarkLedger(page)
       await clickVisibleAriaButton(page, `${target.orderNo}：审核`)
       await waitForVisibleDialog(page, '审核采购订单？')
       await page.waitFor(`document.querySelector('[data-testid="purchase-order-review-confirmation"]')?.textContent.includes(${JSON.stringify(target.orderNo)})`)
       assert.equal(reviewRequests.length, before, '读取审核摘要不会提交审核')
+      await page.waitFor(`document.querySelector('[data-testid="purchase-order-review-shipping-mark"]')?.textContent.includes('仅申请 1 个基础唛头')`)
+      assert.deepEqual(await readPurchaseShippingMarkLedger(page), beforeLedger, '审核确认弹窗不得预占唛头')
       assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-review-confirmation"]')?.textContent.includes(${JSON.stringify(target.supplier.label)})`), true)
       if (index === 0) {
         const reviewModalStyles = []
@@ -1762,6 +1766,8 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
         assert.equal(reviewRequests.length, before + 1, '审核冲突不自动重试 POST')
         const unchanged = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(target.id)}`))
         assert.equal(unchanged.body?.orderStatus, 'PENDING_REVIEW')
+        assert.equal(unchanged.body?.shippingMarkText, null)
+        assert.deepEqual(await readPurchaseShippingMarkLedger(page), beforeLedger)
       }
       await clickDialogButton(page, '审核采购订单？', '确认审核')
       await waitForNoVisibleDialog(page, '审核采购订单？')
@@ -1771,12 +1777,37 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       assert.equal(reviewed.body?.fulfillmentStatus, 'PREPARING')
       assert.equal(reviewed.body?.version, target.version + 1)
       assert.equal(reviewed.body?.orderNo, target.orderNo)
-      assert.equal(reviewed.body?.shippingMarkText, target.shippingMarkText)
-      assert.deepEqual(reviewed.body?.shippingMarks, target.shippingMarks)
+      assert.match(reviewed.body?.shippingMarkText ?? '', index === 1 ? /^CUSTOM-\d{8}$/u : /^BRW-\d{8}$/u)
+      const base = reviewed.body.shippingMarkText
+      assert.deepEqual(reviewed.body.shippingMarks, index === 0 ? [`${base}/货件-01`, `${base}/货件-02`] : [base])
+      assert.deepEqual(reviewed.body.parts.map(part => part.shippingMarkText), reviewed.body.shippingMarks)
+      const afterLedger = await readPurchaseShippingMarkLedger(page)
+      const newIssuances = afterLedger.filter(issuance => !beforeLedger.some(previous => previous.id === issuance.id))
+      assert.equal(afterLedger.length, beforeLedger.length + 1, '审核整单只能派发一个基础唛头')
+      assert.equal(newIssuances.length, 1)
+      assert.equal(newIssuances[0].consumerCode, 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK')
+      assert.equal(newIssuances[0].generatedNumber, base)
+      const staleReview = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(target.id)}/review`, 'POST', { expectedVersion: target.version }))
+      assert.equal(staleReview.status, 409)
+      assert.equal(staleReview.body.code, 'PURCHASE_ORDER_STATE_CHANGED')
+      assert.deepEqual(await readPurchaseShippingMarkLedger(page), afterLedger, '重复审核不得重派基础号')
       assert.ok(reviewRequests.at(-1)?.expectedVersion >= 1)
       await waitForStatusToolbarCounts(page, index === 0 ? '全部采购状态筛选' : '待办采购状态筛选', index === 0
         ? { 全部采购: 5, 采购审核中: 2, 已确认: 3, 已完成: 0, 已取消: 0 }
         : { 采购审核中: 2 - index, 待发货: 3 + index, 待入仓: 0, 待付款: 3 + index })
+      Object.assign(target, { shippingMarkText: base, shippingMarks: reviewed.body.shippingMarks })
+      if (index === 0) {
+        const bySecondMark = await page.evaluate(apiExpression(`/api/purchase-orders?view=all&page=1&pageSize=20&keyword=${encodeURIComponent(reviewed.body.shippingMarks[1])}`))
+        assert.equal(bySecondMark.status, 200)
+        assert.deepEqual(bySecondMark.body.items.map(item => item.id), [target.id])
+        await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
+        await waitForPurchaseList(page, target.orderNo)
+        await assertPurchaseShippingMarksInteraction(page, target)
+        await clickVisibleAriaButton(page, `${target.orderNo}：查看详情`)
+        await assertPurchasePartDetail(page, reviewed.body, true)
+        await clickVisibleAriaButton(page, '关闭抽屉')
+        await page.waitFor(`!document.querySelector('[data-testid="purchase-order-detail-drawer"]')?.getClientRects().length`)
+      }
       process.stdout.write(`[numbering-browser] purchase review case ${index + 1}/3: confirmed and counts refreshed\n`)
     }
     await page.navigate(appRouteUrl(configuration.baseUrl, listRoute))
@@ -2178,6 +2209,45 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
     assert.equal(cancelledAfter.body?.orderStatus, 'CANCELLED')
     assert.equal(cancelledAfter.body?.fulfillmentStatus, 'ORDERED')
     assert.equal(cancelledAfter.body?.paymentStatus, 'UNPAID')
+  })
+
+  await runPurchaseOrderBrowserStep('cancel an unreviewed purchase without allocating any shipping mark', async () => {
+    const beforeLedger = await readPurchaseShippingMarkLedger(page)
+    const resolution = await page.evaluate(apiExpression('/api/purchase-orders/shipping-mark-resolution?productMode=CUSTOM'))
+    assert.equal(resolution.status, 200)
+    const pending = await page.evaluate(`(async () => {
+      const response = await fetch('/api/purchase-orders', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'X-Qianshu-CSRF': '1', 'Idempotency-Key': crypto.randomUUID() },
+        body: JSON.stringify({
+          purchaseType: 'STOCK', productMode: 'CUSTOM', customSupplierName: 'Browser 待审核取消供应商',
+          orderDate: ${JSON.stringify(order.orderDate)}, expectedShippingMarkResolution: ${JSON.stringify(resolution.body.resolutionToken)},
+          lines: [{ lineType: 'CUSTOM', name: 'Browser 待审核取消产品', referencePurchaseUnitPriceAmount: '1', actualPurchaseUnitPriceAmount: '1', quantity: 1 }],
+          parts: [{ key: crypto.randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] }],
+          purchaseTotalAmount: '1', depositDueAmount: '0', balanceDueAmount: '1',
+        }),
+      })
+      return { status: response.status, body: await response.json() }
+    })()`)
+    assert.equal(pending.status, 201)
+    assert.equal(pending.body.shippingMarkText, null)
+    assert.deepEqual(pending.body.shippingMarks, [])
+    assert.equal(pending.body.parts[0].shippingMarkText, null)
+    // 数据由 HTTP 准备；同一 hash 路由的原地导航不会重取缓存列表。进入审核中
+    // 视图触发真实查询，确保后续取消操作作用于刚创建的待审核采购单。
+    await page.navigate(appRouteUrl(configuration.baseUrl, `${listRoute}?status=PENDING_REVIEW`))
+    await waitForPurchaseList(page, pending.body.orderNo)
+    await clickVisibleAriaButton(page, `${pending.body.orderNo}：取消订单`)
+    await waitForVisibleDialog(page, '取消采购订单？')
+    await clickDialogButton(page, '取消采购订单？', '确认取消')
+    await waitForNoVisibleDialog(page, '取消采购订单？')
+    const cancelled = await page.evaluate(apiExpression(`/api/purchase-orders/${encodeURIComponent(pending.body.id)}`))
+    assert.equal(cancelled.status, 200)
+    assert.equal(cancelled.body.orderStatus, 'CANCELLED')
+    assert.equal(cancelled.body.shippingMarkText, null)
+    assert.deepEqual(cancelled.body.shippingMarks, [])
+    assert.equal(cancelled.body.parts[0].shippingMarkText, null)
+    assert.deepEqual(await readPurchaseShippingMarkLedger(page), beforeLedger)
   })
 
   await runPurchaseOrderBrowserStep('390x844 light dark and touch targets', async () => {

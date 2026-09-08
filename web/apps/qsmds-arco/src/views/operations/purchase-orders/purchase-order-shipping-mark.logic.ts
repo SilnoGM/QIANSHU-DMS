@@ -3,7 +3,15 @@ import type { PurchaseOrderShippingMarkResolutionQuery } from '../../../api/modu
 import { formatNumberingRuleStructure } from '../../system/basic-data/numbering/numbering-list.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 
-export const PURCHASE_SHIPPING_MARK_DISPATCH_HINT = '正式提交后自动派发，规则容量与生成结果将在提交时最终校验。'
+export const PURCHASE_SHIPPING_MARK_DISPATCH_HINT = 'purchaseOrderParts.dispatchHint'
+
+/** 旧单已保存的独立货件码也是派发事实，不能仅因订单基础码为空就承诺重新生成。 */
+export function hasPurchaseOrderShippingMarks(order: {
+  shippingMarkText: string | null
+  parts: readonly { shippingMarkText: string | null }[]
+}): boolean {
+  return order.shippingMarkText !== null || order.parts.some(part => part.shippingMarkText !== null)
+}
 
 export interface PurchaseOrderShippingMarkState {
   readonly error: string
@@ -22,9 +30,10 @@ export function isPurchaseOrderShippingMarkAvailable(
 /** 同一摘要用于第三步、详情核对与提交确认，避免候选号被误认为正式唛头。 */
 export function formatPurchaseOrderShippingMarkSummary(
   resolution: PurchaseOrderShippingMarkResolutionDto | null,
+  t: (key: string) => string,
 ): string {
   if (resolution === null) {
-    return '尚未匹配采购唛头规则；正式提交后自动派发'
+    return t('purchaseOrderParts.unmatchedSummary')
   }
   const rule = [resolution.ruleCode, resolution.name].filter(Boolean).join(' · ') || '未匹配规则'
   const revision = resolution.activeRevision === null ? '无生效版本' : `第 ${resolution.activeRevision} 版`
@@ -34,7 +43,7 @@ export function formatPurchaseOrderShippingMarkSummary(
     `${source}：${rule} · ${revision} · ${status}`,
     resolution.activeConfig ? formatNumberingRuleStructure(resolution.activeConfig) : null,
     isPurchaseOrderShippingMarkAvailable(resolution) ? null : resolution.message,
-    PURCHASE_SHIPPING_MARK_DISPATCH_HINT,
+    t(PURCHASE_SHIPPING_MARK_DISPATCH_HINT),
   ].filter(Boolean).join('\n')
 }
 

@@ -150,7 +150,7 @@ export class CreatePurchaseOrderRequestDto {
 
   @ApiProperty({
     type: 'string', pattern: '^[0-9a-f]{64}$',
-    description: '采购唛头规则解析返回的匹配摘要，正式提交时重新校验',
+    description: '采购唛头规则解析返回的匹配摘要，创建时重新预检但不派号；审核使用当时有效规则',
   })
   @IsString()
   @Matches(/^[0-9a-f]{64}$/u)

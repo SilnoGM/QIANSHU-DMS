@@ -1,9 +1,33 @@
 import assert from 'node:assert/strict'
 import process from 'node:process'
 import { saveNumberingScreenshot } from './numbering.browser.helpers.mjs'
+import { apiExpression } from './regions.browser.helpers.mjs'
 
 const configurator = '[data-testid="purchase-order-part-configurator"] [data-slot="qs-part-configurator"]'
 const markPanel = '[data-testid="purchase-order-shipping-marks-panel"]'
+
+/** 通过正式只读 API 检查永久账本，不能用页面展示值或模拟发号次数替代。 */
+export async function readPurchaseShippingMarkLedger(page) {
+  const issuances = []
+  for (let rulePage = 1; ; rulePage++) {
+    const rules = await page.evaluate(apiExpression(`/api/numbering-rules?purpose=SHIPPING_MARK&page=${rulePage}&pageSize=100`))
+    assert.equal(rules.status, 200, '真实测试身份必须具备发号规则读取权限')
+    for (const rule of rules.body.items) {
+      for (let issuancePage = 1; ; issuancePage++) {
+        const ledger = await page.evaluate(apiExpression(`/api/numbering-rules/${encodeURIComponent(rule.id)}/issuances?page=${issuancePage}&pageSize=100`))
+        assert.equal(ledger.status, 200, '真实测试身份必须具备派发记录读取权限')
+        issuances.push(...ledger.body.items.map(item => ({ ...item, ruleId: rule.id })))
+        if (issuancePage * 100 >= ledger.body.total) {
+          break
+        }
+      }
+    }
+    if (rulePage * 100 >= rules.body.total) {
+      break
+    }
+  }
+  return issuances.sort((left, right) => left.id.localeCompare(right.id))
+}
 
 export async function waitForPurchasePartCount(page, count) {
   await page.waitFor(`document.querySelector(${JSON.stringify(configurator)})?.querySelectorAll('[data-slot="part-card"]').length === ${count}`)
@@ -221,20 +245,33 @@ async function activateControl(page, expression, mobile) {
 }
 
 async function escapePopover(page) {
-  await page.connection.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
-  await page.connection.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  const pressEscape = async () => {
+    await page.connection.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+    await page.connection.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })
+  }
+  // 复制按钮的 Tooltip 退场时仍短暂占据最顶层；等真实卸载后再验证一次 Escape
+  // 关闭 Popover，避免把动画期间的键盘事件误当成父浮层关闭失败。
+  await page.waitFor(`![...document.querySelectorAll('[data-slot="tooltip-content"][data-state="closed"]')].some(tooltip => tooltip.isConnected)`)
+  // 键盘打开时首个复制按钮自动获得焦点并显示 Tooltip；按真实浮层层级先关闭
+  // 提示并断言父层保留，再单次关闭父层。不以无条件重复按键掩盖关闭失败。
+  if (await page.evaluate(`!!document.querySelector('[data-slot="tooltip-content"]:not([data-state="closed"])')?.getClientRects().length`)) {
+    await pressEscape()
+    await page.waitFor(`document.querySelector('[data-slot="tooltip-content"]') === null`)
+    assert.equal(await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(markPanel)})].some(panel => panel.getClientRects().length > 0)`), true)
+  }
+  await pressEscape()
   await page.waitFor(`![...document.querySelectorAll(${JSON.stringify(markPanel)})].some(panel => panel.getClientRects().length > 0)`)
 }
 
 export async function assertPurchaseShippingMarksInteraction(page, order) {
   const origin = await page.evaluate('location.origin')
   await page.connection.send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] })
-  const trigger = `([...document.querySelectorAll('[data-testid="purchase-order-shipping-marks-trigger"]')].find(button => button.getClientRects().length > 0 && button.textContent.includes(${JSON.stringify(order.shippingMarks[0])})))`
+  const trigger = `([...document.querySelectorAll('[data-testid="purchase-order-shipping-marks-trigger"]')].find(button => button.getClientRects().length > 0 && button.textContent.includes(${JSON.stringify(order.shippingMarkText)})))`
   const panel = `(document.querySelector(${JSON.stringify(markPanel)}))`
   for (const [theme, mobile] of [['light', false], ['dark', false], ['dark', true]]) {
     await setAppearance(page, theme, mobile)
     await page.waitFor(`${trigger} !== undefined`)
-    assert.equal(await page.evaluate(`${trigger}.textContent.includes('另 1 个')`), true)
+    assert.equal(await page.evaluate(`${trigger}.textContent.includes('2 个货件')`), true)
     await activateControl(page, trigger, mobile)
     await page.waitFor(`${panel}?.getClientRects().length > 0`)
     await page.waitFor(`(async () => {
@@ -259,6 +296,9 @@ export async function assertPurchaseShippingMarksInteraction(page, order) {
         && ${JSON.stringify(order.shippingMarks)}.every(mark => root.textContent.includes(mark))
     })()`)
     await saveNumberingScreenshot(page, `purchase-shipping-marks-list-${mobile ? 'mobile' : theme}`)
+    const copyBase = `${panel}.querySelector('button[aria-label="复制基础唛头"]')`
+    await activateControl(page, copyBase, mobile)
+    await page.waitFor(`navigator.clipboard.readText().then(value => value === ${JSON.stringify(order.shippingMarkText)})`)
     const copyOne = `${panel}.querySelectorAll('li')[1].querySelector('button')`
     await activateControl(page, copyOne, mobile)
     await page.waitFor(`navigator.clipboard.readText().then(value => value === ${JSON.stringify(order.shippingMarks[1])})`)
@@ -303,7 +343,10 @@ export async function assertPurchasePartDetail(page, detail, screenshots = false
         })()`)
       }
     }
-    assert.equal(await page.evaluate(`${article}.textContent.includes(${JSON.stringify(part.shippingMarkText)})`), true)
+    assert.equal(await page.evaluate(`${article}.textContent.includes(${JSON.stringify(part.shippingMarkText ?? '待审核生成')})`), true)
+    if (part.shippingMarkText === null) {
+      assert.equal(await page.evaluate(`${article}.querySelector('button[aria-label*="复制"]') === null`), true)
+    }
   }
   if (screenshots) {
     for (const [theme, mobile] of [['light', false], ['dark', false], ['dark', true]]) {

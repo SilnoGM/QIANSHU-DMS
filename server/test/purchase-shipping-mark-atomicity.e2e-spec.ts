@@ -1,13 +1,14 @@
 import type { Prisma } from '../src/generated/prisma/client'
 import { ApiException } from '../src/infrastructure/http/api.exception'
 import { applyTransactionTimeouts } from '../src/infrastructure/database/transaction-timeouts'
+import { readPersistenceErrorFacts } from '../src/infrastructure/database/persistence-error-facts'
 import { createTestShippingMarkRule } from './purchase-shipping-mark-e2e-database'
 import {
   atomicFacts, createAtomicityFixture, createCommands, createReviewMutations, customInput, MARK_CONSUMER,
   prepareCatalog, prepareSalesSource, type AtomicityFixture,
 } from './purchase-shipping-mark-atomicity.fixture'
 
-type FaultPoint = 'mark' | 'order' | 'lines' | 'audit'
+type FaultPoint = 'order' | 'lines' | 'audit'
 
 async function withFixture(action: (fixture: AtomicityFixture) => Promise<void>): Promise<void> {
   const fixture = await createAtomicityFixture()
@@ -18,7 +19,7 @@ async function withFixture(action: (fixture: AtomicityFixture) => Promise<void>)
 /** 只在真实事务方法成功写入后注入异常；不禁用数据库守卫、不增加生产测试钩子。 */
 function wrapAfterInsert(
   transaction: Prisma.TransactionClient,
-  point: Exclude<FaultPoint, 'mark'>,
+  point: FaultPoint,
   observe: (transaction: Prisma.TransactionClient) => Promise<void>,
 ): Prisma.TransactionClient {
   const fail = async () => { await observe(transaction); throw new Error('Injected after persisted write') }
@@ -45,39 +46,76 @@ async function assertNoNewPurchase(fixture: AtomicityFixture, before: Awaited<Re
 describe('purchase shipping mark atomicity with real PostgreSQL', () => {
   jest.setTimeout(60_000)
 
-  it.each<FaultPoint>(['mark', 'order', 'lines', 'audit'])('rolls back every purchase fact after the %s write', async (point) => {
+  it('classifies a real serializable audit insertion conflict without leaking persistence details', async () => {
+    await withFixture(async fixture => {
+      let readers = 0
+      let bothRead!: () => void
+      let firstCommitted!: () => void
+      const readBarrier = new Promise<void>(resolve => { bothRead = resolve })
+      const commitBarrier = new Promise<void>(resolve => { firstCommitted = resolve })
+      const before = await fixture.prisma.auditEvent.count()
+      let insertionError: unknown
+      const input = { eventType: 'PURCHASE_ORDER_CREATED', actorType: 'USER', actorUserId: fixture.actor.id, outcome: 'SUCCESS', targetType: 'PURCHASE_ORDER' } as const
+      const read = async (transaction: Prisma.TransactionClient) => {
+        await transaction.auditEvent.count()
+        if (++readers === 2) bothRead()
+        await readBarrier
+      }
+      // 两边先建立同一表的读依赖，第一笔提交后再放行第二笔写入；由真实 SSI
+      // 决定冲突，不伪造 Prisma 错误、不替换数据库或放宽业务重试断言。
+      const first = fixture.prisma.$transaction(async transaction => {
+        await read(transaction)
+        await fixture.audit.record(transaction, input)
+      }, { isolationLevel: 'Serializable' })
+      const second = fixture.prisma.$transaction(async transaction => {
+        await read(transaction)
+        await commitBarrier
+        await fixture.audit.record(new Proxy(transaction, {
+          get(target, property): unknown {
+            if (property !== 'auditEvent') return Reflect.get(target, property)
+            return { ...transaction.auditEvent, create: async (args: Prisma.AuditEventCreateArgs) => {
+              try { return await transaction.auditEvent.create(args) }
+              catch (error) { insertionError = error; throw error }
+            } }
+          },
+        }), input)
+      }, { isolationLevel: 'Serializable' }).then(() => undefined, (error: unknown) => error)
+      try { await first }
+      finally { firstCommitted() }
+      const outerError = await second
+      const insertionFacts = readPersistenceErrorFacts(insertionError)
+      expect(insertionFacts.codes.has('40001')).toBe(true)
+      expect(outerError).toMatchObject({ code: 'AUDIT_WRITE_FAILED', message: 'Audit event write failed', transactionConflict: true })
+      expect(outerError).not.toHaveProperty('cause')
+      expect(outerError).not.toHaveProperty('meta')
+      expect(await fixture.prisma.auditEvent.count()).toBe(before + 1)
+    })
+  })
+
+  it.each<FaultPoint>(['order', 'lines', 'audit'])('rolls back pending purchase facts without consuming a mark after the %s write', async (point) => {
     await withFixture(async (fixture) => {
       const request = await customInput(fixture)
       const before = await atomicFacts(fixture.prisma)
       let observed = false
       const observe = async (transaction: Prisma.TransactionClient) => {
         const inside = await atomicFacts(transaction)
-        expect(inside.ledger).toHaveLength(1)
-        expect(inside.periods).toHaveLength(1)
-        expect(inside.periods[0].usedCount).toBe(1n)
-        expect(inside.orders).toHaveLength(point === 'mark' ? 0 : 1)
+        expect(inside.ledger).toHaveLength(0)
+        expect(inside.periods).toHaveLength(0)
+        expect(inside.orders).toHaveLength(1)
         expect(inside.lines).toHaveLength(point === 'lines' || point === 'audit' ? 1 : 0)
         expect(inside.audits).toHaveLength(point === 'audit' ? 1 : 0)
         observed = true
       }
-      if (point === 'mark') {
-        const generate = fixture.numbering.generateScopedInTransaction.bind(fixture.numbering)
-        jest.spyOn(fixture.numbering, 'generateScopedInTransaction').mockImplementation(async (transaction, input) => {
-          await generate(transaction, input)
-          await observe(transaction)
-          throw new Error('Injected after mark generation')
-        })
-      }
-      const command = createCommands(fixture, point === 'mark' ? undefined : transaction => wrapAfterInsert(transaction, point, observe))
+      const command = createCommands(fixture, transaction => wrapAfterInsert(transaction, point, observe))
       await expect(command.create(fixture.context(), request)).rejects.toMatchObject({ code: 'INTERNAL_ERROR' })
       expect(observed).toBe(true)
       await assertNoNewPurchase(fixture, before)
-      // 采购单号仍按原独立事务永久派发；只回滚未提交的唛头与采购事实。
+      // 采购单号仍按原独立事务永久派发；提交阶段从未申请唛头。
       expect(await fixture.prisma.numberingIssuance.count({ where: { consumerCode: 'PURCHASE_ORDER.CREATE' } })).toBe(1)
     })
   })
 
-  it('rolls back review and sales coverage together without changing already issued numbers', async () => {
+  it('rolls back review, its base mark and sales coverage together after downstream failure', async () => {
     await withFixture(async (fixture) => {
       const { source, input } = await prepareSalesSource(fixture)
       const orderId = await createCommands(fixture).create(fixture.context(), input)
@@ -91,6 +129,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
           .toEqual({ fulfillmentStatus: 'PREPARING' })
         expect(await transaction.salesOrderStatusHistory.count({ where: { salesOrderId: source.id } })).toBe(1)
         expect((await atomicFacts(transaction)).audits).toHaveLength(2)
+        expect((await atomicFacts(transaction)).ledger).toHaveLength(1)
         reached = true
         throw new Error('Injected after sales coverage')
       })
@@ -105,17 +144,18 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
     })
   })
 
-  it('uses CUSTOM_MARK and replays a committed order after that rule is disabled', async () => {
+  it('uses CUSTOM_MARK once on review and replays the original submission after disabling the rule', async () => {
     await withFixture(async (fixture) => {
       const request = await customInput(fixture)
       const context = fixture.context()
       const command = createCommands(fixture)
       const id = await command.create(context, request)
-      const order = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: { include: { shippingMarkIssuance: { include: { rule: true } } } } } })
-      expect(order.parts[0].shippingMarkIssuance.rule.ruleCode).toBe('CUSTOM_MARK')
-      expect(order.parts[0].shippingMarkText).toBe(order.parts[0].shippingMarkIssuance.generatedNumber)
-      expect(order.shippingMarkText).toBeNull()
-      expect(order.shippingMarkIssuanceId).toBeNull()
+      await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+      const order = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: true, shippingMarkIssuance: { include: { rule: true } } } })
+      expect(order.shippingMarkIssuance?.rule.ruleCode).toBe('CUSTOM_MARK')
+      expect(order.parts[0].shippingMarkText).toBe(order.shippingMarkIssuance?.generatedNumber)
+      expect(order.shippingMarkText).toBe(order.parts[0].shippingMarkText)
+      expect(order.parts[0].shippingMarkIssuanceId).toBeNull()
       await fixture.numberingCommands.disable(fixture.configContext, fixture.customRule.id, { expectedVersion: fixture.customRule.version })
       const before = await atomicFacts(fixture.prisma)
       jest.spyOn(fixture.resolver, 'resolve').mockRejectedValue(new Error('Replay must not resolve current rules'))
@@ -137,7 +177,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
       expect(acknowledgementLost).toBe(true)
       const facts = await atomicFacts(fixture.prisma)
       expect(facts.orders.map(order => order.id)).toEqual([id])
-      expect(facts.ledger).toHaveLength(1)
+      expect(facts.ledger).toHaveLength(0)
       expect(facts.lines).toHaveLength(1)
       expect(facts.audits).toHaveLength(1)
     })
@@ -157,7 +197,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
       expect(id).toBe(competingId)
       const facts = await atomicFacts(fixture.prisma)
       expect(facts.orders).toHaveLength(1)
-      expect(facts.ledger).toHaveLength(1)
+      expect(facts.ledger).toHaveLength(0)
     })
   })
 
@@ -196,13 +236,11 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
       const expected = mode === 'same key' ? 1 : 3
       expect(new Set(ids).size).toBe(expected)
       const facts = await atomicFacts(fixture.prisma)
-      expect(facts.ledger).toHaveLength(expected)
+      expect(facts.ledger).toHaveLength(0)
       expect(facts.orders).toHaveLength(expected)
       expect(facts.lines).toHaveLength(expected)
       expect(facts.audits).toHaveLength(expected)
-      expect(new Set(facts.ledger.map(row => row.generatedNumber)).size).toBe(expected)
-      expect(facts.ledger.map(row => row.sequenceValue).sort()).toEqual(expected === 1 ? [1n] : [1n, 2n, 3n])
-      expect(facts.periods[0].usedCount).toBe(BigInt(expected))
+      expect(facts.periods).toEqual([])
     })
   })
 
@@ -254,6 +292,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
   it('keeps rollback boundaries when the rule row cannot be locked', async () => {
     await withFixture(async (fixture) => {
       const request = await customInput(fixture)
+      const id = await createCommands(fixture).create(fixture.context(), request)
       let release!: () => void
       let acquired!: () => void
       const acquiredPromise = new Promise<void>(resolve => { acquired = resolve })
@@ -267,7 +306,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
       await acquiredPromise
       const before = await atomicFacts(fixture.prisma)
       try {
-        await expect(createCommands(fixture).create(fixture.context(), request))
+        await expect(createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 }))
           .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
       }
       finally { release(); await blocker }
@@ -275,7 +314,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
     })
   })
 
-  it('returns capacity exhaustion without creating a purchase or consuming a second mark', async () => {
+  it('returns review capacity exhaustion without changing the pending order or consuming a second mark', async () => {
     await withFixture(async (fixture) => {
       const limited = await createTestShippingMarkRule(fixture.prisma, fixture.actor.id, 'LIMITED_MARK')
       const draft = await fixture.numberingCommands.update(fixture.configContext, limited.id, {
@@ -287,9 +326,11 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
       const resolution = await fixture.resolver.read({ productMode: 'CATALOG', supplierValue: catalog.supplierValue })
       const request = { ...catalog.input, expectedShippingMarkResolution: resolution.resolutionToken }
       const command = createCommands(fixture)
-      await command.create(fixture.context(), request)
+      const first = await command.create(fixture.context(), request)
+      const second = await command.create(fixture.context(), request)
+      await createReviewMutations(fixture).review(fixture.context(), first, { expectedVersion: 1 })
       const before = await atomicFacts(fixture.prisma)
-      await expect(command.create(fixture.context(), request)).rejects.toMatchObject({ code: 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE' })
+      await expect(createReviewMutations(fixture).review(fixture.context(), second, { expectedVersion: 1 })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE' })
       await assertNoNewPurchase(fixture, before)
       expect(before.ledger.filter(row => row.consumerCode === MARK_CONSUMER)).toHaveLength(1)
     })

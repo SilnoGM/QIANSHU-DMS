@@ -1,6 +1,7 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreatePurchaseOrderRequestDto,
+  PurchaseOrderDetailDto,
   PurchaseOrderPaymentRequestDto,
 } from '../../src/api/generated/types.gen'
 
@@ -17,8 +18,8 @@ interface Call {
   readonly url: string
 }
 
-function createRecorder(calls: Call[]): AxiosInstance {
-  const response = Promise.resolve({ data: {} })
+function createRecorder(calls: Call[], responseData: unknown = {}): AxiosInstance {
+  const response = Promise.resolve({ data: responseData })
   return {
     delete(url: string, config?: unknown) {
       calls.push({ config, method: 'delete', url })
@@ -167,6 +168,7 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
       actualPurchaseUnitPriceAmount: '10.00',
       quantity: 1,
     }],
+    parts: [{ key: '1752fcb7-0d41-4e90-98b6-54b046b71622', items: [{ lineNumber: 1, quantity: 1 }] }],
     purchaseTotalAmount: '10.00',
     depositDueAmount: '0.00',
     balanceDueAmount: '10.00',
@@ -214,6 +216,33 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
       signal: controller.signal,
     })
   }
+})
+
+test('详情与审核响应保留基础码、可空货件码和服务端货件顺序，不在适配层派生唛头', async () => {
+  const signal = new AbortController().signal
+  const pending = {
+    orderStatus: 'PENDING_REVIEW',
+    shippingMarkText: null,
+    shippingMarks: [],
+    parts: [{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }],
+  } satisfies Pick<PurchaseOrderDetailDto, 'orderStatus' | 'shippingMarkText' | 'shippingMarks' | 'parts'>
+  const api = createPurchaseOrdersApi(createRecorder([], pending))
+  assert.deepEqual((await api.getById('pending', signal)).data, pending)
+  const reviewed = {
+    ...pending,
+    orderStatus: 'CONFIRMED',
+    shippingMarkText: 'BASE',
+    shippingMarks: ['BASE/货件-01', 'BASE/货件-100'],
+    parts: [
+      { id: 'part-1', partNumber: 1, shippingMarkText: 'BASE/货件-01', items: [] },
+      { id: 'part-100', partNumber: 100, shippingMarkText: 'BASE/货件-100', items: [] },
+    ],
+  } satisfies Pick<PurchaseOrderDetailDto, 'orderStatus' | 'shippingMarkText' | 'shippingMarks' | 'parts'>
+  const calls: Call[] = []
+  const reviewedApi = createPurchaseOrdersApi(createRecorder(calls, reviewed))
+  assert.deepEqual((await reviewedApi.review('pending', { expectedVersion: 1 }, signal)).data, reviewed)
+  assert.deepEqual(calls[0]?.data, { expectedVersion: 1 })
+  assert.equal(Object.hasOwn(calls[0]?.data ?? {}, 'shippingMarkText'), false)
 })
 
 test('唛头匹配只读且仅传当前场景，不创建幂等键', async () => {

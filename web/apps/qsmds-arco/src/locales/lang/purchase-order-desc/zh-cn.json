@@ -31,6 +31,7 @@
       "paid": "已付金额",
       "outstanding": "未付金额",
       "shippingMark": "采购唛头",
+      "baseShippingMark": "基础唛头",
       "remark": "采购备注",
       "lineIndex": "第 {index} 项采购产品"
     },

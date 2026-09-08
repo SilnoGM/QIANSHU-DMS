@@ -176,6 +176,17 @@ function setup() {
 }
 
 describe('PurchaseOrderQueryService', () => {
+  it('keeps pending part marks null and excludes them from the summary mark list', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      shippingMarkText: null, orderStatus: 'PENDING_REVIEW',
+      parts: [{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }],
+    }))
+    const detail = await fixture.service.getById('order-id')
+    expect(detail.shippingMarkText).toBeNull()
+    expect(detail.shippingMarks).toEqual([])
+    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }])
+  })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
