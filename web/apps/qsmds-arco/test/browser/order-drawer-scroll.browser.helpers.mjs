@@ -51,14 +51,45 @@ export async function assertOrderDrawerTabScrolling(page) {
     drawer: 0,
   }, '只归零抽屉正文，不能移动背景页面')
 
+  // 覆盖提示浮层悬停暂停的浏览器交互：光标不移走时不能靠无限等待恢复点击。
+  await page.evaluate(`(() => {
+    const rect = document.querySelector('[aria-controls="information"]').getBoundingClientRect()
+    const notice = document.createElement('article')
+    notice.dataset.hoverNotice = ''
+    notice.style.cssText = 'position:fixed;z-index:30;background:silver;left:' + rect.x + 'px;top:' + rect.y + 'px;width:' + rect.width + 'px;height:' + rect.height + 'px'
+    notice.addEventListener('mouseenter', event => {
+      if (event.isTrusted) notice.dataset.paused = 'true'
+    })
+    notice.addEventListener('mouseleave', event => {
+      if (event.isTrusted) setTimeout(() => notice.remove(), 150)
+    })
+    document.body.append(notice)
+  })()`)
+  const noticePoint = await page.evaluate(`(() => {
+    const rect = document.querySelector('[data-hover-notice]').getBoundingClientRect()
+    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
+  })()`)
+  await page.connection.send('Input.dispatchMouseEvent', {
+    ...noticePoint,
+    type: 'mouseMoved',
+    button: 'none',
+    buttons: 0,
+    pointerType: 'mouse',
+  })
+  await page.waitFor(`document.querySelector('[data-hover-notice]')?.dataset.paused === 'true'`)
+  const hoverPage = Object.create(page)
+  hoverPage.waitFor = expression => page.waitFor(expression, 3000)
+  await clickOrderDrawerTab(hoverPage, 'drawer-scroll-fixture', 'Details')
+  assert.equal(await page.evaluate(`document.querySelector('[data-hover-notice]') === null`), true)
+
   await page.evaluate(`document.querySelector('.drawer').insertAdjacentHTML('beforeend', '<div class="blocker"></div>')`)
   // 缩短的只是此反例的诊断等待；遮罩始终存在，不能绕开命中检查强行点击。
   const blockedPage = Object.create(page)
   blockedPage.waitFor = expression => page.waitFor(expression, 1000)
   await assert.rejects(
-    clickOrderDrawerTab(blockedPage, 'drawer-scroll-fixture', 'Details'),
-    /Browser condition timed out|Order drawer tab is not reachable/u,
+    clickOrderDrawerTab(blockedPage, 'drawer-scroll-fixture', 'Changes'),
+    /Order drawer tab is not reachable/u,
   )
-  assert.equal(await page.evaluate(`document.querySelector('[aria-controls="changes"]').getAttribute('aria-selected')`), 'true')
+  assert.equal(await page.evaluate(`document.querySelector('[aria-controls="information"]').getAttribute('aria-selected')`), 'true')
   await page.navigate('about:blank')
 }

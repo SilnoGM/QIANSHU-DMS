@@ -16,6 +16,17 @@ export async function clickOrderDrawerTab(page, drawerTestId, label) {
     )) ?? null
   })()`
   await page.bringToFront()
+  // 中间业务步骤可能用 DOM.click()，光标仍停在上次页签的位置。新出现的
+  // QsToast 堆叠会在该位置悬停暂停，必须先真实移开光标，再等浮层自然消失。
+  // 这里只移动、不点击或关闭提示；持续遮罩仍必须被下方命中检查拒绝。
+  await page.connection.send('Input.dispatchMouseEvent', {
+    x: 0,
+    y: 0,
+    type: 'mouseMoved',
+    button: 'none',
+    buttons: 0,
+    pointerType: 'mouse',
+  })
   await page.waitFor(`${source} !== null`)
   // 吸顶页签的布局框不代表实际可点击区域；展开长记录后先归零当前抽屉正文，
   // 与抽屉切换页签时的滚动行为保持一致，避免 scrollIntoView 连带移动背景页面。
@@ -45,10 +56,37 @@ export async function clickOrderDrawerTab(page, drawerTestId, label) {
       const body = document.querySelector('[data-testid=${JSON.stringify(drawerTestId)}]')?.parentElement
       const rect = tab?.getBoundingClientRect()
       const target = rect && document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)
+      const describe = node => {
+        if (!(node instanceof HTMLElement)) return null
+        const style = getComputedStyle(node)
+        return {
+          tag: node.tagName, slot: node.getAttribute('data-slot'), role: node.getAttribute('role'),
+          rect: node.getBoundingClientRect().toJSON(),
+          inDrawer: Boolean(body?.contains(node)),
+          inParts: Boolean(node.closest('[data-slot="purchase-order-drawer-parts"]')),
+          inToast: Boolean(node.closest('[data-qs-toast], [data-sonner-toaster]')),
+          toastPaused: node.closest('[data-qs-toast]')?.getAttribute('data-paused'),
+          pointerEvents: style.pointerEvents, position: style.position, zIndex: style.zIndex,
+          transform: style.transform, overflow: style.overflow, visibility: style.visibility,
+        }
+      }
+      const ancestors = node => {
+        const result = []
+        for (let depth = 0; node && depth < 9; depth++, node = node.parentElement) result.push(describe(node))
+        return result
+      }
       return {
         tab: rect?.toJSON(), body: body?.getBoundingClientRect().toJSON(),
         scrollTop: body?.scrollTop, clientHeight: body?.clientHeight,
         hitTag: target?.tagName, hitSlot: target?.getAttribute('data-slot'),
+        hit: describe(target), tabAncestors: ancestors(tab), hitAncestors: ancestors(target),
+        hitStack: rect && document.elementsFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2).slice(0, 6).map(describe),
+        dialogs: [...document.querySelectorAll('[role="dialog"]')].filter(node => node.getClientRects().length).map(describe),
+        viewport: {
+          width: innerWidth, height: innerHeight, scrollX, scrollY,
+          offsetTop: visualViewport?.offsetTop, offsetLeft: visualViewport?.offsetLeft,
+          scale: visualViewport?.scale,
+        },
       }
     })()`)
     throw new Error(`Order drawer tab is not reachable: ${JSON.stringify(geometry)}`, { cause })
