@@ -1,6 +1,7 @@
 import { Prisma } from '../../generated/prisma/client'
 import {
   NumberingRuleStatus,
+  type NumberingRulePurpose,
   NumberingRuleVersionStatus,
   type NumberingRuleStatus as NumberingRuleStatusValue,
   type NumberingRuleVersionStatus as NumberingRuleVersionStatusValue,
@@ -14,6 +15,7 @@ import {
 } from './rule-engine'
 
 export interface NumberingRuleMutationRecord {
+  readonly purpose: NumberingRulePurpose
   readonly id: string
   readonly ruleCode: string
   readonly name: string
@@ -31,6 +33,7 @@ export interface NumberingRuleVersionSnapshot {
 }
 
 export interface CreateNumberingRuleRecordInput {
+  readonly purpose: NumberingRulePurpose
   readonly ruleCode: string
   readonly name: string
   readonly description: string | null
@@ -203,7 +206,7 @@ export async function readNumberingRuleForUpdate(
   const rows = await transaction.$queryRaw<NumberingRuleMutationRecord[]>(
     Prisma.sql`
       SELECT "id", "rule_code" AS "ruleCode", "name", "description",
-        "status"::text AS "status", "version"
+        "status"::text AS "status", "version", "purpose"::text AS "purpose"
       FROM "numbering_rules"
       WHERE "id" = CAST(${ruleId} AS uuid)
       FOR UPDATE
@@ -219,7 +222,7 @@ export async function readNumberingRuleForClone(
   const rows = await transaction.$queryRaw<NumberingRuleMutationRecord[]>(
     Prisma.sql`
       SELECT "id", "rule_code" AS "ruleCode", "name", "description",
-        "status"::text AS "status", "version"
+        "status"::text AS "status", "version", "purpose"::text AS "purpose"
       FROM "numbering_rules"
       WHERE "id" = CAST(${ruleId} AS uuid)
       FOR SHARE

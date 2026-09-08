@@ -2,6 +2,27 @@ import {
   assertSalesOrderFulfillmentTransition,
   assertSalesOrderStatusTransition,
 } from './sales-order-state-machine'
+import type {
+  SalesOrderFulfillmentStatus,
+  SalesOrderPaymentStatus,
+  SalesOrderStatus,
+} from '../../../generated/prisma/enums'
+
+function orderStatus(value: string): SalesOrderStatus {
+  return value as SalesOrderStatus
+}
+
+function orderContext(overrides: {
+  readonly activeReceivedAmount?: string
+  readonly fulfillmentStatus?: SalesOrderFulfillmentStatus
+  readonly paymentStatus?: SalesOrderPaymentStatus
+} = {}) {
+  return {
+    activeReceivedAmount: overrides.activeReceivedAmount ?? '0',
+    fulfillmentStatus: overrides.fulfillmentStatus ?? 'PENDING',
+    paymentStatus: overrides.paymentStatus ?? 'UNPAID',
+  }
+}
 
 describe('sales order state machine', () => {
   it.each([
@@ -9,27 +30,86 @@ describe('sales order state machine', () => {
     ['DRAFT', 'CANCELLED'],
     ['CONFIRMED', 'CANCELLED'],
   ] as const)('allows order transition %s -> %s', (from, to) => {
-    expect(() => assertSalesOrderStatusTransition(from, to, {
-      activeReceivedAmount: '0',
-    })).not.toThrow()
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus(from),
+      orderStatus(to),
+      orderContext(),
+    )).not.toThrow()
   })
 
+  it('allows confirmed orders to enter reconciliation only after signed and paid', () => {
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus('CONFIRMED'),
+      orderStatus('PENDING_RECONCILIATION'),
+      orderContext({ fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }),
+    )).not.toThrow()
+  })
+
+  it('allows only eligible reconciliation orders to complete', () => {
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus('PENDING_RECONCILIATION'),
+      orderStatus('COMPLETED'),
+      orderContext({ fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }),
+    )).not.toThrow()
+  })
+
+  it.each([
+    ['PREPARING', 'PAID'],
+    ['SIGNED', 'PARTIALLY_PAID'],
+  ] as const)(
+    'blocks reconciliation when fulfillment=%s and payment=%s',
+    (fulfillmentStatus, paymentStatus) => {
+      expect(() => assertSalesOrderStatusTransition(
+        orderStatus('CONFIRMED'),
+        orderStatus('PENDING_RECONCILIATION'),
+        orderContext({ fulfillmentStatus, paymentStatus }),
+      )).toThrow(expect.objectContaining({
+        code: 'SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET',
+      }))
+    },
+  )
+
+  it.each([
+    ['SIGNED', 'UNPAID'],
+    ['SEA_TRANSIT', 'PAID'],
+  ] as const)(
+    'rechecks completion when fulfillment=%s and payment=%s',
+    (fulfillmentStatus, paymentStatus) => {
+      expect(() => assertSalesOrderStatusTransition(
+        orderStatus('PENDING_RECONCILIATION'),
+        orderStatus('COMPLETED'),
+        orderContext({ fulfillmentStatus, paymentStatus }),
+      )).toThrow(expect.objectContaining({
+        code: 'SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET',
+      }))
+    },
+  )
+
   it('blocks cancellation after any effective payment', () => {
-    expect(() => assertSalesOrderStatusTransition('CONFIRMED', 'CANCELLED', {
-      activeReceivedAmount: '0.0001',
-    })).toThrow(expect.objectContaining({
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus('CONFIRMED'),
+      orderStatus('CANCELLED'),
+      orderContext({ activeReceivedAmount: '0.0001' }),
+    )).toThrow(expect.objectContaining({
       code: 'SALES_ORDER_CANCEL_HAS_PAYMENTS',
     }))
   })
 
   it.each([
     ['CONFIRMED', 'DRAFT'],
+    ['CONFIRMED', 'COMPLETED'],
+    ['PENDING_RECONCILIATION', 'CANCELLED'],
+    ['PENDING_RECONCILIATION', 'CONFIRMED'],
+    ['COMPLETED', 'PENDING_RECONCILIATION'],
+    ['COMPLETED', 'CANCELLED'],
     ['CANCELLED', 'DRAFT'],
     ['DRAFT', 'DRAFT'],
   ] as const)('blocks order transition %s -> %s', (from, to) => {
-    expect(() => assertSalesOrderStatusTransition(from, to, {
-      activeReceivedAmount: '0',
-    })).toThrow(expect.objectContaining({
+    expect(() => assertSalesOrderStatusTransition(
+      orderStatus(from),
+      orderStatus(to),
+      orderContext({ fulfillmentStatus: 'SIGNED', paymentStatus: 'PAID' }),
+    )).toThrow(expect.objectContaining({
       code: 'SALES_ORDER_STATUS_TRANSITION_INVALID',
     }))
   })

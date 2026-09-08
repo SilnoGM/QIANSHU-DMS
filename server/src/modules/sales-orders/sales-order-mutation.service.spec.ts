@@ -3,6 +3,7 @@ import type { AuditService } from '../audit/audit.service'
 import type { DictionaryLookupService } from '../dictionaries/dictionary-lookup.service'
 import type { MediaAssetService } from '../media/media-asset.service'
 import { DictionaryValueUnavailableError } from '../dictionaries/dictionary-lookup.service'
+import type { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import type { SalesOrderQueryService } from './sales-order-query.service'
 
@@ -35,6 +36,21 @@ function setup() {
     salesOrder: {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(order),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
+    },
+    salesOrderLine: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([
+        { id: 'line-a', quantity: 2 },
+        { id: 'line-b', quantity: 1 },
+      ]),
+    },
+    purchaseOrder: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
+        orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED',
+        lines: [
+          { sourceSalesOrderLineId: 'line-a', quantity: 2 },
+          { sourceSalesOrderLineId: 'line-b', quantity: 1 },
+        ],
+      }]),
     },
     salesOrderPayment: {
       aggregate: jest.fn<Promise<unknown>, [unknown]>()
@@ -88,16 +104,23 @@ function setup() {
         value: input.value,
       })),
   }
+  const automaticState = {
+    advanceToPendingReconciliationWhenEligible:
+      jest.fn<Promise<boolean>, [unknown, unknown, string, string]>()
+        .mockResolvedValue(false),
+  }
   const service = new SalesOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
     media as unknown as MediaAssetService,
     dictionaryLookup as unknown as DictionaryLookupService,
     query as unknown as SalesOrderQueryService,
+    automaticState as unknown as SalesOrderAutomaticStateService,
     { now: () => new Date('2026-08-20T08:00:00.000Z') },
   )
   return {
     audit,
+    automaticState,
     detail,
     dictionaryLookup,
     media,
@@ -114,6 +137,67 @@ const context = {
 }
 
 describe('SalesOrderMutationService', () => {
+  it.each([
+    ['PENDING', 'PREPARING'],
+    ['PREPARING', 'LAND_TRANSIT'],
+  ])('checks approved purchase coverage for manual %s to %s transitions', async (fromStatus, toStatus) => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = fromStatus
+    fixture.transaction.purchaseOrder.findMany.mockResolvedValue([{
+      orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED',
+      lines: [{ sourceSalesOrderLineId: 'line-a', quantity: 2 }],
+    }, {
+      orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED',
+      lines: [{ sourceSalesOrderLineId: 'line-b', quantity: 1 }],
+    }])
+
+    await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus }))
+      .rejects.toMatchObject({ code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID' })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+
+    const approved = setup()
+    approved.order.fulfillmentStatus = fromStatus
+    await expect(approved.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus }))
+      .resolves.toEqual(approved.detail)
+    expect(approved.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { fulfillmentStatus: toStatus, version: { increment: 1 } },
+    })
+    expect(approved.transaction.purchaseOrder.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {
+        purchaseType: 'SALES_LINKED', salesOrderId: ORDER_ID,
+        orderStatus: { not: 'CANCELLED' },
+      } }),
+    )
+    const sqlCalls = approved.transaction.$queryRaw.mock.calls.map(call => (
+      (call[0] as { strings: readonly string[] }).strings.join(' ')
+    )).filter(sql => sql.includes('FOR UPDATE'))
+    expect(sqlCalls[0]).toContain('sales_order_lines')
+    expect(sqlCalls[1]).toContain('purchase_orders')
+    expect(sqlCalls[2]).toContain('sales_orders')
+  })
+
+  it.each([
+    ['CONFIRMED', 'PREPARING'],
+    ['PENDING_REVIEW', 'SHIPPED'],
+    ['PENDING_REVIEW', 'SIGNED'],
+  ])('blocks manual land transit with an effective purchase %s and %s', async (orderStatus, fulfillmentStatus) => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = 'PREPARING'
+    fixture.transaction.purchaseOrder.findMany.mockResolvedValue([{
+      orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED',
+      lines: [
+        { sourceSalesOrderLineId: 'line-a', quantity: 2 },
+        { sourceSalesOrderLineId: 'line-b', quantity: 1 },
+      ],
+    }, { orderStatus, fulfillmentStatus, lines: [] }])
+
+    await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus: 'LAND_TRANSIT' }))
+      .rejects.toMatchObject({ code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID' })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
   it('records ordered status history and enforces the signed receipt gate', async () => {
     const fixture = setup()
     await expect(fixture.service.updateFulfillmentStatus(
@@ -145,6 +229,24 @@ describe('SalesOrderMutationService', () => {
       code: 'SALES_ORDER_DELIVERY_RECEIPT_REQUIRED',
     })
     expect(blocked.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('rechecks automatic reconciliation after fulfillment reaches signed', async () => {
+    const fixture = setup()
+
+    await expect(fixture.service.updateFulfillmentStatus(
+      context,
+      ORDER_ID,
+      { toStatus: 'SIGNED', reason: '客户已签收' },
+    )).resolves.toEqual(fixture.detail)
+
+    expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
+      .toHaveBeenCalledWith(
+        fixture.transaction,
+        context,
+        ORDER_ID,
+        'FULFILLMENT',
+      )
   })
 
   it('derives payment status from effective payments and hard-blocks overpayment', async () => {
@@ -240,6 +342,29 @@ describe('SalesOrderMutationService', () => {
           changedByUserId: ACTOR_ID,
         },
       })
+    expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
+      .toHaveBeenCalledWith(
+        fixture.transaction,
+        context,
+        ORDER_ID,
+        'PAYMENT',
+      )
+  })
+
+  it('does not return a successful detail when automatic reconciliation fails', async () => {
+    const fixture = setup()
+    fixture.automaticState.advanceToPendingReconciliationWhenEligible
+      .mockRejectedValue(new Error('automatic-state-failed'))
+
+    await expect(fixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'BALANCE',
+      amount: '100',
+      receivedAt: '2026-08-20T07:00:00.000Z',
+      paymentMethod: 'BANK_TRANSFER',
+      remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
+    })).rejects.toThrow('automatic-state-failed')
+    expect(fixture.query.getById).not.toHaveBeenCalled()
   })
 
   it.each(['DEPOSIT', 'PROGRESS', 'INVOICE_TAX', 'BALANCE', 'OTHER'] as const)(
@@ -334,6 +459,62 @@ describe('SalesOrderMutationService', () => {
       } })
   })
 
+  it.each([
+    ['0.0000', 'UNPAID'],
+    ['50.0000', 'PARTIALLY_PAID'],
+    ['100.0000', 'PAID'],
+  ] as const)(
+    'recalculates payment status as %s received becomes %s after payment-term changes',
+    async (receivedAmount, expectedStatus) => {
+      const fixture = setup()
+      fixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
+        _sum: { amount: decimal(receivedAmount) },
+      })
+
+      await expect(fixture.service.updatePaymentTerms(context, ORDER_ID, {
+        agreedTotalAmount: '100',
+        depositDueAmount: '40',
+        balanceDueAmount: '60',
+        reason: '客户调整付款计划',
+      })).resolves.toEqual(fixture.detail)
+
+      expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: {
+          agreedTotalAmount: '100.0000',
+          depositDueAmount: '40.0000',
+          balanceDueAmount: '60.0000',
+          paymentStatus: expectedStatus,
+          version: { increment: 1 },
+        },
+      })
+      if (expectedStatus === 'UNPAID') {
+        expect(fixture.transaction.salesOrderStatusHistory.create)
+          .not.toHaveBeenCalled()
+      }
+      else {
+        expect(fixture.transaction.salesOrderStatusHistory.create)
+          .toHaveBeenCalledWith({
+            data: {
+              salesOrderId: ORDER_ID,
+              dimension: 'PAYMENT',
+              fromStatus: 'UNPAID',
+              toStatus: expectedStatus,
+              reason: '修改付款约定后系统重新计算付款状态',
+              changedByUserId: ACTOR_ID,
+            },
+          })
+      }
+      expect(fixture.automaticState.advanceToPendingReconciliationWhenEligible)
+        .toHaveBeenCalledWith(
+          fixture.transaction,
+          context,
+          ORDER_ID,
+          'PAYMENT_TERMS',
+        )
+    },
+  )
+
   it('blocks cancellation when effective payments exist', async () => {
     const fixture = setup()
     fixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
@@ -343,5 +524,118 @@ describe('SalesOrderMutationService', () => {
       toStatus: 'CANCELLED',
       reason: '取消',
     })).rejects.toMatchObject({ code: 'SALES_ORDER_CANCEL_HAS_PAYMENTS' })
+  })
+
+  it('enters reconciliation and records ordered history only after signed and paid', async () => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = 'SIGNED'
+    fixture.order.paymentStatus = 'PAID'
+    fixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
+      _sum: { amount: decimal('100.0000') },
+    })
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'PENDING_RECONCILIATION',
+      reason: '提交财务对账',
+    })).resolves.toEqual(fixture.detail)
+
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: {
+        orderStatus: 'PENDING_RECONCILIATION',
+        version: { increment: 1 },
+      },
+    })
+    expect(fixture.transaction.salesOrderStatusHistory.create).toHaveBeenCalledWith({
+      data: {
+        salesOrderId: ORDER_ID,
+        dimension: 'ORDER',
+        fromStatus: 'CONFIRMED',
+        toStatus: 'PENDING_RECONCILIATION',
+        reason: '提交财务对账',
+        changedByUserId: ACTOR_ID,
+      },
+    })
+  })
+
+  it('rejects reconciliation unless the locked order is signed and paid', async () => {
+    const fixture = setup()
+    fixture.order.fulfillmentStatus = 'SIGNED'
+    fixture.order.paymentStatus = 'PARTIALLY_PAID'
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'PENDING_RECONCILIATION',
+      reason: null,
+    })).rejects.toMatchObject({
+      code: 'SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET',
+    })
+    expect(fixture.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('rechecks signed and paid before completing a reconciliation order', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_RECONCILIATION'
+    fixture.order.fulfillmentStatus = 'SIGNED'
+    fixture.order.paymentStatus = 'PAID'
+    fixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
+      _sum: { amount: decimal('100.0000') },
+    })
+
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'COMPLETED',
+      reason: '对账确认无误',
+    })).resolves.toEqual(fixture.detail)
+    expect(fixture.transaction.salesOrder.update).toHaveBeenCalledWith({
+      where: { id: ORDER_ID },
+      data: { orderStatus: 'COMPLETED', version: { increment: 1 } },
+    })
+
+    const blocked = setup()
+    blocked.order.orderStatus = 'PENDING_RECONCILIATION'
+    blocked.order.fulfillmentStatus = 'SIGNED'
+    blocked.order.paymentStatus = 'PARTIALLY_PAID'
+    await expect(blocked.service.updateOrderStatus(context, ORDER_ID, {
+      toStatus: 'COMPLETED',
+      reason: null,
+    })).rejects.toMatchObject({
+      code: 'SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET',
+    })
+    expect(blocked.transaction.salesOrder.update).not.toHaveBeenCalled()
+  })
+
+  it('freezes payment recording and voiding after completion', async () => {
+    const recordFixture = setup()
+    recordFixture.order.orderStatus = 'COMPLETED'
+    recordFixture.order.fulfillmentStatus = 'SIGNED'
+    recordFixture.order.paymentStatus = 'PAID'
+    recordFixture.transaction.salesOrderPayment.aggregate.mockResolvedValue({
+      _sum: { amount: decimal('100.0000') },
+    })
+    await expect(recordFixture.service.recordPayment(context, ORDER_ID, {
+      paymentType: 'OTHER',
+      amount: '1',
+      receivedAt: '2026-08-20T07:00:00.000Z',
+      paymentMethod: 'BANK_TRANSFER',
+      remark: null,
+      voucher: { mediaAssetId: VOUCHER_ID },
+    })).rejects.toMatchObject({ code: 'SALES_ORDER_COMPLETED' })
+    expect(recordFixture.transaction.salesOrderPayment.create).not.toHaveBeenCalled()
+
+    const voidFixture = setup()
+    voidFixture.order.orderStatus = 'COMPLETED'
+    voidFixture.order.fulfillmentStatus = 'SIGNED'
+    voidFixture.order.paymentStatus = 'PAID'
+    voidFixture.transaction.salesOrderPayment.findFirst.mockResolvedValue({
+      id: 'payment-id',
+      amount: decimal('100.0000'),
+      voidedAt: null,
+    })
+    await expect(voidFixture.service.voidPayment(
+      context,
+      ORDER_ID,
+      'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      { reason: '错误收款' },
+    )).rejects.toMatchObject({ code: 'SALES_ORDER_COMPLETED' })
+    expect(voidFixture.transaction.salesOrderPayment.update).not.toHaveBeenCalled()
   })
 })

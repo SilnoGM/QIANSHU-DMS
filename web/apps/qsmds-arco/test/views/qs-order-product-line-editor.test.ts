@@ -7,6 +7,10 @@ const SOURCE = new URL(
   '../../src/components/business/QsOrderProductLineEditor/index.vue',
   import.meta.url,
 )
+const TYPES = new URL(
+  '../../src/components/business/QsOrderProductLineEditor/types.ts',
+  import.meta.url,
+)
 
 test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承载通用明细', async () => {
   const source = await readFile(SOURCE, 'utf8')
@@ -40,6 +44,17 @@ test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承�
     position = next
   }
   assert.match(source, /overflow-x-auto/u)
+  assert.match(source, /data-slot="order-product-line-table"/u)
+  assert.match(
+    source,
+    /data-column="reference-unit-price" class="font-medium p-3 w-44"/u,
+    '通用组件默认参考单价列宽必须保持不变，采购领域只能在调用页局部覆盖',
+  )
+  assert.equal(
+    source.match(/data-column="reference-unit-price"/gu)?.length,
+    3,
+    '参考单价表头、可编辑行与只读行必须共享语义列标记，供领域页面定向调整宽度',
+  )
   assert.match(source, /<FaTooltip/u)
   assert.match(source, /\{\{ labels\.referenceTotal \}\}/u)
   assert.match(source, /\{\{ labels\.actualTotal \}\}/u)
@@ -48,6 +63,41 @@ test('QsOrderProductLineEditor 以空表、两个入口、十列和双汇总承�
   assert.match(source, /未计入汇总/u)
   assert.doesNotMatch(source, /<FaCombobox/u)
   assert.doesNotMatch(source, /<FaTextarea/u)
+})
+
+test('只读产品行始终排在可编辑行之后且不渲染编辑控件', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /export interface OrderProductLineReadOnlyModel/u)
+  assert.match(types, /readonly standardUnitPriceAmount: string/u)
+  assert.match(types, /readonly actualUnitPriceAmount: string/u)
+  assert.match(types, /readonly actualSubtotalAmount: string/u)
+  assert.match(types, /readonly statusDescription: string/u)
+  assert.match(types, /readonly readOnlyLines\?: readonly OrderProductLineReadOnlyModel\[\]/u)
+  assert.match(source, /readOnlyLines: \(\) => \(\[\]\)/u)
+  assert.match(source, /modelValue\.length === 0 && readOnlyLines\.length === 0/u)
+
+  const editableLineStart = source.indexOf('v-for="(line, index) in modelValue"')
+  const readOnlyLineStart = source.indexOf('v-for="line in readOnlyLines"')
+  assert.ok(editableLineStart >= 0, '必须保留可编辑产品行')
+  assert.ok(readOnlyLineStart > editableLineStart, '已采购只读行必须始终排在所有待采购行之后')
+
+  const readOnlyLineEnd = source.indexOf('</tr>', readOnlyLineStart)
+  const readOnlyLineSource = source.slice(readOnlyLineStart, readOnlyLineEnd)
+  assert.match(readOnlyLineSource, /data-readonly-line/u)
+  assert.match(readOnlyLineSource, /bg-muted\/55/u)
+  assert.match(readOnlyLineSource, /:value="line\.standardUnitPriceAmount"/u)
+  assert.match(readOnlyLineSource, /:value="line\.actualUnitPriceAmount"/u)
+  assert.match(readOnlyLineSource, /:value="line\.actualSubtotalAmount"/u)
+  assert.match(readOnlyLineSource, /\{\{ line\.description \|\| '—' \}\}/u)
+  assert.match(readOnlyLineSource, /\{\{ line\.statusLabel \}\}/u)
+  assert.match(readOnlyLineSource, /<FaTooltip :text="line\.statusDescription"/u)
+  assert.match(readOnlyLineSource, /name="i-lucide:info"/u)
+  assert.match(readOnlyLineSource, /tabindex="0"/u)
+  assert.doesNotMatch(readOnlyLineSource, /<(?:FaInput|MoneyInput|FaButton)/u)
 })
 
 test('通用产品明细可按领域适配层开启只读折扣率计算列', async () => {
@@ -94,6 +144,8 @@ test('售价与产品名称列保留完整输入空间，汇总在右侧纵向�
   assert.match(source, /class="font-medium p-3 w-80"[\s\S]*?产品名称/u)
   assert.match(source, /class="max-w-80 block truncate"/u)
   assert.match(source, /class="font-medium p-3 w-72"[\s\S]*?labels\.actualUnitPrice/u)
+  assert.match(source, /class="font-medium p-3 w-36"[\s\S]*?产品数量/u)
+  assert.match(source, /min-width: 3\.25rem/u)
   assert.ok(summaryTag, '必须保留产品金额汇总语义区域')
   assert.ok(summaryTag[1].split(' ').includes('flex'), '汇总区域必须使用弹性布局')
   assert.ok(summaryTag[1].split(' ').includes('flex-col'), '两组汇总必须上下排列')
@@ -108,5 +160,81 @@ test('产品行垂直居中，并补偿表单错误提示预留空间造成的�
   const formItemOffsets = source.match(/class="top-2 relative"/gu) ?? []
 
   assert.match(source, /class="align-middle border-b border-border last:border-b-0"/u)
-  assert.equal(formItemOffsets.length, 4)
+  // 第五处属于按领域显式开启的 CUSTOM 参考价输入；默认销售场景仍不会渲染它。
+  assert.equal(formItemOffsets.length, 5)
+})
+
+test('产品行编辑器仅在调用方开启时允许临时产品填写参考价', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /customReferenceUnitPriceEditable\?: boolean/u)
+  assert.match(types, /temporaryLineInitialActualUnitPriceAmount\?: string \| null/u)
+  assert.match(types, /fixedProductSupplierValue\?: string/u)
+  assert.match(source, /line\.lineType === 'CUSTOM' && customReferenceUnitPriceEditable/u)
+  assert.match(source, /standardUnitPriceAmount: \$event/u)
+  assert.match(source, /:fixed-supplier-value="fixedProductSupplierValue"/u)
+})
+
+test('产品行编辑器允许领域调用方分别关闭数据库和临时产品新增入口', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /catalogProductAddable\?: boolean/u)
+  assert.match(types, /catalogLineInitialActualUnitPriceAmount\?: string \| null/u)
+  assert.match(types, /customProductAddable\?: boolean/u)
+  assert.match(source, /v-if="catalogProductAddable"[\s\S]*?添加数据库产品/u)
+  assert.match(source, /v-if="customProductAddable"[\s\S]*?添加临时产品/u)
+  assert.match(source, /v-if="catalogProductAddable"[\s\S]*?<QsProductSelector/u)
+})
+
+test('产品行编辑器支持领域数量上限、逐字段错误展示与稳定聚焦标签', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(
+    types,
+    /readonly maximumQuantityByKey\?: Readonly<Record<string, number \| undefined>>/u,
+  )
+  assert.match(source, /maximumQuantityByKey: \(\) => \(\{\}\)/u)
+  assert.match(source, /function lineMaximumQuantity\(line: OrderProductLineModel\): number \| undefined/u)
+  assert.match(source, /:max="lineMaximumQuantity\(line\)"/u)
+  assert.match(source, /:aria-label="`第 \$\{index \+ 1\} 行产品数量`"/u)
+  assert.match(source, /lineFieldError\(index, 'quantity'\)/u)
+  assert.match(source, /role="alert"/u)
+})
+
+test('产品行编辑器支持行级数量下限、删除锁和目录快照名称编辑', async () => {
+  const [source, types] = await Promise.all([
+    readFile(SOURCE, 'utf8'),
+    readFile(TYPES, 'utf8'),
+  ])
+
+  assert.match(types, /readonly minimumQuantityByKey\?: Readonly<Record<string, number \| undefined>>/u)
+  assert.match(types, /readonly removalDisabledByKey\?: Readonly<Record<string, boolean \| undefined>>/u)
+  assert.match(types, /readonly nameEditableByKey\?: Readonly<Record<string, boolean \| undefined>>/u)
+  assert.match(types, /readonly lineConstraintDescriptionByKey\?: Readonly<Record<string, string \| undefined>>/u)
+  assert.match(source, /function lineMinimumQuantity\(line: OrderProductLineModel\)/u)
+  assert.match(source, /:min="lineMinimumQuantity\(line\)"/u)
+  assert.match(source, /removalDisabledByKey\[line\.key\]/u)
+  assert.match(source, /nameEditableByKey\[line\.key\]/u)
+  assert.match(source, /lineConstraintDescriptionByKey\[line\.key\]/u)
+})
+
+test('产品行达到领域数量下限后再次减少会抛出明确交互事件', async () => {
+  const source = await readFile(SOURCE, 'utf8')
+
+  assert.match(source, /'quantityMinimumReached': \[lineKey: string, minimumQuantity: number\]/u)
+  assert.match(source, /function decreaseLineQuantity\(index: number\): void/u)
+  assert.match(source, /hasExplicitMinimumQuantity\(line\)/u)
+  assert.match(source, /emit\('quantityMinimumReached', line\.key, minimumQuantity\)/u)
+  assert.match(source, /@click="decreaseLineQuantity\(index\)"/u)
+  assert.match(source, /@keydown\.down\.prevent="decreaseLineQuantity\(index\)"/u)
+  assert.match(source, /:aria-label="`减少第 \$\{index \+ 1\} 行产品数量`"/u)
 })

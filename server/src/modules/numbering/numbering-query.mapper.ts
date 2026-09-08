@@ -197,6 +197,7 @@ export function toNumberingListItemDto(
   return {
     id: rule.id,
     ruleCode: rule.ruleCode,
+    purpose: rule.purpose,
     name: rule.name,
     description: rule.description,
     status: rule.status,
@@ -226,6 +227,7 @@ export function toNumberingDetailDto(
   return {
     id: rule.id,
     ruleCode: rule.ruleCode,
+    purpose: rule.purpose,
     name: rule.name,
     description: rule.description,
     status: rule.status,

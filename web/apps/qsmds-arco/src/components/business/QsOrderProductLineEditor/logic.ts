@@ -2,7 +2,7 @@ import type { ProductSelectionChange } from '../QsProductSelector/types'
 import type { OrderProductLineModel } from './types'
 
 const AMOUNT_SCALE = 10_000n
-const MAXIMUM_QUANTITY = 2_147_483_647
+export const MAXIMUM_QUANTITY = 2_147_483_647
 
 export type ApplyProductSelectionResult
   = | { readonly ok: true, readonly lines: readonly OrderProductLineModel[] }
@@ -52,6 +52,7 @@ function formatAmountUnits(value: bigint, precision: number): string {
 
 export function createTemporaryOrderProductLine(
   key: string = newLineKey(),
+  initialActualUnitPriceAmount: string | null = '0.00',
 ): OrderProductLineModel {
   return {
     key,
@@ -61,10 +62,43 @@ export function createTemporaryOrderProductLine(
     name: '',
     description: '',
     standardUnitPriceAmount: null,
-    actualUnitPriceAmount: '0.00',
+    actualUnitPriceAmount: initialActualUnitPriceAmount,
     quantity: '1',
     mainImage: null,
   }
+}
+
+export type MatchingCustomUnitPriceValidation
+  = | { readonly ok: true }
+    | {
+      readonly ok: false
+      readonly code: 'INVALID' | 'MISMATCH' | 'REQUIRED'
+    }
+
+/**
+ * 采购等领域可以要求临时产品的参考价与实际价分别录入且数值相等。
+ * 比较统一换算为四位定点单位，因此 `12.50` 与 `12.5000` 视为同一金额。
+ */
+export function validateMatchingCustomUnitPrices(
+  line: OrderProductLineModel,
+): MatchingCustomUnitPriceValidation {
+  if (
+    line.lineType !== 'CUSTOM'
+    || line.standardUnitPriceAmount === null
+    || line.actualUnitPriceAmount === null
+    || line.standardUnitPriceAmount === ''
+    || line.actualUnitPriceAmount === ''
+  ) {
+    return { ok: false, code: 'REQUIRED' }
+  }
+  const referenceUnits = amountUnits(line.standardUnitPriceAmount)
+  const actualUnits = amountUnits(line.actualUnitPriceAmount)
+  if (referenceUnits === null || actualUnits === null) {
+    return { ok: false, code: 'INVALID' }
+  }
+  return referenceUnits === actualUnits
+    ? { ok: true }
+    : { ok: false, code: 'MISMATCH' }
 }
 
 /**
@@ -75,6 +109,7 @@ export function applyProductSelectionChanges(
   source: readonly OrderProductLineModel[],
   changes: readonly ProductSelectionChange[],
   maximumLines = 100,
+  initialActualUnitPriceAmount: string | null = '0.00',
 ): ApplyProductSelectionResult {
   const lines = source.map(line => ({ ...line }))
   const productIds = new Set(lines.flatMap(line => (
@@ -170,8 +205,8 @@ export function applyProductSelectionChanges(
       name: change.product.name,
       description: '',
       standardUnitPriceAmount: change.product.standardUnitPriceAmount,
-      // 本单售价属于订单录入值，不继承产品标准价；由用户基于当前订单重新确认。
-      actualUnitPriceAmount: '0.00',
+      // 本单价格属于订单录入值，不继承产品档案参考价；由用户基于当前订单重新确认。
+      actualUnitPriceAmount: initialActualUnitPriceAmount,
       quantity: String(change.quantity),
       mainImage: change.product.mainImage,
     })
@@ -210,18 +245,21 @@ export function calculateOrderProductLineTotals(
     else if (actualTotalValid) {
       actualTotal += actualPrice * BigInt(quantity)
     }
-    if (line.lineType === 'CATALOG') {
-      if (line.standardUnitPriceAmount === null) {
+    // 采购场景允许 CUSTOM 行手工录入采购定价；只要存在明确价格就应与数据库
+    // 产品一样参与汇总。CUSTOM 空价仍保持“未提供参考价”语义，不伪造价格，也
+    // 不计入仅面向数据库产品档案的缺价数量。
+    if (line.standardUnitPriceAmount === null) {
+      if (line.lineType === 'CATALOG') {
         missingStandardPriceCount += 1
-        continue
       }
-      const standardPrice = amountUnits(line.standardUnitPriceAmount)
-      if (standardPrice === null) {
-        standardTotalValid = false
-      }
-      else if (standardTotalValid) {
-        standardTotal += standardPrice * BigInt(quantity)
-      }
+      continue
+    }
+    const standardPrice = amountUnits(line.standardUnitPriceAmount)
+    if (standardPrice === null) {
+      standardTotalValid = false
+    }
+    else if (standardTotalValid) {
+      standardTotal += standardPrice * BigInt(quantity)
     }
   }
   return {

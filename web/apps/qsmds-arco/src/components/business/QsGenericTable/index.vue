@@ -111,7 +111,8 @@ const columnSettings = ref<QsGenericTableColumnSettings>(
 const totalRows = computed(() => props.total ?? props.data.length)
 // 系统页面可能复用已有页头查询与操作区；所有工具都关闭时不保留空白占位。
 const hasToolbar = computed(() =>
-  props.searchable
+  Boolean(slots['query-leading'])
+  || props.searchable
   || props.filterDefinitions.length > 0
   || props.showColumnSettings
   || props.addable)
@@ -453,26 +454,39 @@ watch([tableColumns, isNarrow], () => {
 <template>
   <section class="qs-generic-table qs-type-body min-w-0" aria-label="业务通用表格">
     <div v-if="hasToolbar" class="pb-4 flex flex-wrap gap-3 items-center justify-between">
-      <div v-if="searchable" class="flex flex-1 basis-full gap-2 min-w-0 items-center sm-basis-auto">
-        <!-- FaInput 已提供统一的 clearable 按钮，使用 text 可避免浏览器为 search 再渲染原生清除控件。 -->
-        <FaInput
-          v-model="searchDraft"
-          type="text"
-          clearable
-          class="w-full sm-max-w-80"
-          enterkeyhint="search"
-          inputmode="search"
-          :placeholder="searchPlaceholder"
-          @clear="clearSearch"
-          @keyup.enter="submitSearch"
+      <div
+        v-if="slots['query-leading'] || searchable"
+        class="flex flex-1 basis-full flex-wrap gap-3 min-w-0 items-center sm-basis-auto"
+      >
+        <div
+          v-if="slots['query-leading']"
+          data-slot="qs-generic-table-query-leading"
+          class="basis-full max-w-full sm-basis-auto"
         >
-          <template #start>
-            <FaIcon name="i-lucide:search" />
-          </template>
-        </FaInput>
-        <FaButton variant="outline" @click="submitSearch">
-          查询
-        </FaButton>
+          <slot name="query-leading" />
+        </div>
+
+        <div v-if="searchable" class="flex flex-1 basis-full gap-2 min-w-0 items-center sm-basis-auto">
+          <!-- FaInput 已提供统一的 clearable 按钮，使用 text 可避免浏览器为 search 再渲染原生清除控件。 -->
+          <FaInput
+            v-model="searchDraft"
+            type="text"
+            clearable
+            class="w-full sm-max-w-80"
+            enterkeyhint="search"
+            inputmode="search"
+            :placeholder="searchPlaceholder"
+            @clear="clearSearch"
+            @keyup.enter="submitSearch"
+          >
+            <template #start>
+              <FaIcon name="i-lucide:search" />
+            </template>
+          </FaInput>
+          <FaButton variant="outline" @click="submitSearch">
+            查询
+          </FaButton>
+        </div>
       </div>
 
       <div class="ms-auto flex flex-wrap gap-2 items-center">

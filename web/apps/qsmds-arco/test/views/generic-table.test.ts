@@ -224,6 +224,23 @@ test('通用表格允许调用方关闭列设置并在没有工具时移除工�
   assert.match(source, /v-else-if="showColumnSettings"/u)
 })
 
+test('通用表格通过 query-leading 插槽把领域查询控件放在搜索框前', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsGenericTable/index.vue',
+  )
+  const leadingSlotIndex = source.indexOf('<slot name="query-leading"')
+  const searchInputIndex = source.indexOf('<FaInput', leadingSlotIndex)
+
+  assert.match(source, /Boolean\(slots\['query-leading'\]\)/u)
+  assert.match(source, /data-slot="qs-generic-table-query-leading"/u)
+  assert.ok(leadingSlotIndex >= 0, '应声明 query-leading 查询前置插槽')
+  assert.ok(searchInputIndex > leadingSlotIndex, '领域查询控件必须位于搜索框前')
+  assert.match(
+    source,
+    /v-if="slots\['query-leading'\]"[\s\S]*?basis-full[\s\S]*?sm-basis-auto/u,
+  )
+})
+
 test('操作列由 actions 插槽按需启用并在桌面与窄屏复用同一行级作用域', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',

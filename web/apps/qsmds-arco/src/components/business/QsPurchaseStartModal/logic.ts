@@ -1,0 +1,109 @@
+import type {
+  PurchaseStartPresetSalesOrder,
+  PurchaseStartProductMode,
+  PurchaseStartPurchaseType,
+  PurchaseStartSelection,
+} from './types'
+
+export type PurchaseStartRouteQuery = Readonly<Record<string, string>>
+
+export interface PurchaseStartSupplierDraft {
+  readonly supplierValue: string | null
+  readonly customSupplierName: string
+}
+
+export interface PurchaseStartDraft extends PurchaseStartSupplierDraft {
+  readonly productMode: PurchaseStartProductMode | null
+}
+
+export interface PurchaseStartDraftValidation {
+  readonly valid: boolean
+  readonly message: string | null
+}
+
+export function normalizeCustomSupplierName(value: string): string {
+  return value.normalize('NFKC').trim()
+}
+
+export function resetPurchaseStartSupplierDraft(): PurchaseStartSupplierDraft {
+  return {
+    supplierValue: null,
+    customSupplierName: '',
+  }
+}
+
+export function validatePurchaseStartDraft(
+  draft: PurchaseStartDraft,
+): PurchaseStartDraftValidation {
+  if (draft.productMode === null) {
+    return { valid: false, message: '请选择采购产品类型' }
+  }
+  if (draft.productMode === 'CATALOG') {
+    return draft.supplierValue?.trim()
+      ? { valid: true, message: null }
+      : { valid: false, message: '请选择供应商' }
+  }
+
+  const name = normalizeCustomSupplierName(draft.customSupplierName)
+  if (!name) {
+    return { valid: false, message: '请填写供应商名称' }
+  }
+  if ([...name].length > 128) {
+    return { valid: false, message: '供应商名称不能超过 128 个字符' }
+  }
+  return { valid: true, message: null }
+}
+
+export function createPurchaseStartSelection(
+  draft: PurchaseStartDraft & { readonly purchaseType: PurchaseStartPurchaseType },
+): PurchaseStartSelection {
+  if (draft.productMode === null) {
+    throw new Error('Purchase product mode is required')
+  }
+  if (draft.productMode === 'CATALOG') {
+    const supplierValue = draft.supplierValue?.trim()
+    if (!supplierValue) {
+      throw new Error('Catalog supplier is required')
+    }
+    return {
+      purchaseType: draft.purchaseType,
+      productMode: 'CATALOG',
+      supplierValue,
+      customSupplierName: null,
+    }
+  }
+
+  const customSupplierName = normalizeCustomSupplierName(draft.customSupplierName)
+  if (!customSupplierName || [...customSupplierName].length > 128) {
+    throw new Error('Custom supplier name is invalid')
+  }
+  return {
+    purchaseType: draft.purchaseType,
+    productMode: 'CUSTOM',
+    supplierValue: null,
+    customSupplierName,
+  }
+}
+
+/**
+ * 三个入口统一通过此函数生成创建页查询参数，确保字典供应商与文本供应商不会
+ * 同时进入 URL。销售待办快捷入口只附加定位字段，创建页仍会向服务端复核资格。
+ */
+export function buildPurchaseStartRouteQuery(
+  selection: PurchaseStartSelection,
+  presetSalesOrder: PurchaseStartPresetSalesOrder | null = null,
+): PurchaseStartRouteQuery {
+  return Object.freeze({
+    type: selection.purchaseType,
+    productMode: selection.productMode,
+    ...(selection.productMode === 'CATALOG'
+      ? { supplierValue: selection.supplierValue! }
+      : { customSupplierName: selection.customSupplierName! }),
+    ...(presetSalesOrder === null
+      ? {}
+      : {
+          salesOrderId: presetSalesOrder.id,
+          salesOrderNo: presetSalesOrder.orderNo,
+        }),
+  })
+}

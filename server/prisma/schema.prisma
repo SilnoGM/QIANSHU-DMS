@@ -80,6 +80,8 @@ enum AuditEventType {
   NUMBERING_RULE_VERSION_PUBLISHED
   NUMBERING_RULE_ENABLED
   NUMBERING_RULE_DISABLED
+  SHIPPING_MARK_BINDING_CREATED
+  SHIPPING_MARK_BINDING_UPDATED
   DICTIONARY_TYPE_CREATED
   DICTIONARY_TYPE_UPDATED
   DICTIONARY_TYPE_ENABLED
@@ -115,6 +117,15 @@ enum AuditEventType {
   SALES_ORDER_PAYMENT_VOIDED
   SALES_ORDER_DOCUMENT_ATTACHED
   SALES_ORDER_DOCUMENT_DETACHED
+  SALES_ORDER_PRODUCT_APPENDED
+  SALES_ORDER_PRODUCTS_CHANGED
+  PURCHASE_ORDER_CREATED
+  PURCHASE_ORDER_ORDER_STATUS_CHANGED
+  PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED
+  PURCHASE_ORDER_PAYMENT_RECORDED
+  PURCHASE_ORDER_PAYMENT_VOIDED
+  PURCHASE_ORDER_DOCUMENT_ATTACHED
+  PURCHASE_ORDER_DOCUMENT_DETACHED
 
   @@map("audit_event_type")
 }
@@ -125,6 +136,13 @@ enum RegionLevel {
   CITY
 
   @@map("region_level")
+}
+
+enum NumberingRulePurpose {
+  BUSINESS
+  SHIPPING_MARK
+
+  @@map("numbering_rule_purpose")
 }
 
 enum NumberingRuleStatus {
@@ -203,6 +221,8 @@ enum ProductStatus {
 enum SalesOrderStatus {
   DRAFT
   CONFIRMED
+  PENDING_RECONCILIATION
+  COMPLETED
   CANCELLED
 
   @@map("sales_order_status")
@@ -258,6 +278,78 @@ enum SalesOrderStatusDimension {
   PAYMENT
 
   @@map("sales_order_status_dimension")
+}
+
+enum PurchaseOrderType {
+  SALES_LINKED
+  STOCK
+
+  @@map("purchase_order_type")
+}
+
+enum PurchaseOrderStatus {
+  PENDING_REVIEW
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+
+  @@map("purchase_order_status")
+}
+
+enum PurchaseOrderFulfillmentStatus {
+  ORDERED
+  PREPARING
+  SHIPPED
+  SIGNED
+
+  @@map("purchase_order_fulfillment_status")
+}
+
+enum PurchaseOrderPaymentStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+
+  @@map("purchase_order_payment_status")
+}
+
+enum PurchaseOrderLineType {
+  CATALOG
+  CUSTOM
+
+  @@map("purchase_order_line_type")
+}
+
+enum PurchaseOrderProductMode {
+  CATALOG
+  CUSTOM
+  MIXED
+
+  @@map("purchase_order_product_mode")
+}
+
+enum PurchaseOrderPaymentType {
+  DEPOSIT
+  BALANCE
+  OTHER
+
+  @@map("purchase_order_payment_type")
+}
+
+enum PurchaseOrderDocumentType {
+  PAYMENT_VOUCHER
+  ORDER_ISSUANCE_VOUCHER
+  DELIVERY_RECEIPT
+
+  @@map("purchase_order_document_type")
+}
+
+enum PurchaseOrderStatusDimension {
+  ORDER
+  FULFILLMENT
+  PAYMENT
+
+  @@map("purchase_order_status_dimension")
 }
 
 enum MediaType {
@@ -410,6 +502,15 @@ model User {
   salesOrderDocumentsDetached SalesOrderDocument[]       @relation("SalesOrderDocumentDetachedBy")
   salesOrderStatusesChanged   SalesOrderStatusHistory[]  @relation("SalesOrderStatusChangedBy")
   salesOrderAmountsChanged    SalesOrderAmountRevision[] @relation("SalesOrderAmountChangedBy")
+  purchaseOrdersCreated             PurchaseOrder[]              @relation("PurchaseOrderCreatedBy")
+  purchaseOrderPaymentsCreated      PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentCreatedBy")
+  purchaseOrderPaymentsVoided       PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentVoidedBy")
+  purchaseOrderDocumentsCreated     PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentCreatedBy")
+  purchaseOrderDocumentsDetached    PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentDetachedBy")
+  purchaseOrderStatusesChanged      PurchaseOrderStatusHistory[] @relation("PurchaseOrderStatusChangedBy")
+  purchaseOrderAmountsChanged       PurchaseOrderAmountRevision[] @relation("PurchaseOrderAmountChangedBy")
+  shippingMarkBindingsCreated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingCreatedBy")
+  shippingMarkBindingsUpdated       SupplierShippingMarkRuleBinding[] @relation("ShippingMarkBindingUpdatedBy")
 
   @@index([status], map: "users_status_idx")
   @@map("users")
@@ -578,6 +679,7 @@ model Currency {
 
   exchangeRate ExchangeRate?
   salesOrders  SalesOrder[]
+  purchaseOrders PurchaseOrder[]
 
   @@index([enabled, sortOrder, code, id], map: "currencies_enabled_sort_order_code_id_idx")
   @@map("currencies")
@@ -659,6 +761,7 @@ model Product {
   updatedBy       User?            @relation("ProductUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   media           ProductMedia[]
   salesOrderLines SalesOrderLine[]
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "products_status_updated_at_id_idx")
   @@index([supplierValue, updatedAt(sort: Desc), id(sort: Desc)], map: "products_supplier_value_updated_at_id_idx")
@@ -692,6 +795,7 @@ model MediaAsset {
   createdBy           User                 @relation("MediaAssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   productMedia        ProductMedia[]
   salesOrderDocuments SalesOrderDocument[]
+  purchaseOrderDocuments PurchaseOrderDocument[]
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -762,6 +866,7 @@ model SalesOrder {
   documents       SalesOrderDocument[]
   statusHistory   SalesOrderStatusHistory[]
   amountRevisions SalesOrderAmountRevision[]
+  purchaseOrders  PurchaseOrder[]
 
   @@index([orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_order_date_id_idx")
   @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "sales_orders_statuses_order_date_id_idx")
@@ -786,10 +891,12 @@ model SalesOrderLine {
   actualUnitPriceAmount     Decimal            @map("actual_unit_price_amount") @db.Decimal(30, 4)
   quantity                  Int
   lineTotalAmount           Decimal            @map("line_total_amount") @db.Decimal(30, 4)
+  removedAt                 DateTime?          @map("removed_at") @db.Timestamptz(6)
   createdAt                 DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
 
   salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   product    Product?   @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrderLines PurchaseOrderLine[]
 
   @@unique([salesOrderId, lineNumber], map: "sales_order_lines_order_id_line_number_key")
   @@index([productId, salesOrderId], map: "sales_order_lines_product_id_order_id_idx")
@@ -883,9 +990,232 @@ model SalesOrderAmountRevision {
   @@map("sales_order_amount_revisions")
 }
 
+model PurchaseOrder {
+  id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderNo                      String                         @unique(map: "purchase_orders_order_no_key") @map("order_no") @db.VarChar(64)
+  createIdempotencyKeyHash     Bytes                          @unique(map: "purchase_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
+  createRequestFingerprintHash Bytes                          @map("create_request_fingerprint_hash") @db.ByteA
+  createRequestFingerprintVersion String                     @default("purchase-order.create.v5") @map("create_request_fingerprint_version") @db.VarChar(32)
+  partConfigurationSealed      Boolean                        @default(false) @map("part_configuration_sealed")
+  purchaseType                 PurchaseOrderType              @map("purchase_type")
+  productMode                  PurchaseOrderProductMode       @map("product_mode")
+  salesOrderId                 String?                        @map("sales_order_id") @db.Uuid
+  supplierValue                String?                        @map("supplier_value") @db.VarChar(64)
+  customSupplierName           String?                        @map("custom_supplier_name") @db.VarChar(128)
+  orderDate                    DateTime                       @map("order_date") @db.Date
+  currencyCode                 String                         @default("CNY") @map("currency_code") @db.Char(3)
+  shippingMarkText             String?                        @map("shipping_mark_text") @db.VarChar(2000)
+  shippingMarkIssuanceId       String?                        @unique(map: "purchase_orders_shipping_mark_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
+  lineSubtotalAmount           Decimal                        @map("line_subtotal_amount") @db.Decimal(30, 4)
+  purchaseTotalAmount          Decimal                        @map("purchase_total_amount") @db.Decimal(30, 4)
+  depositDueAmount             Decimal                        @map("deposit_due_amount") @db.Decimal(30, 4)
+  balanceDueAmount             Decimal                        @map("balance_due_amount") @db.Decimal(30, 4)
+  orderStatus                  PurchaseOrderStatus            @default(PENDING_REVIEW) @map("order_status")
+  fulfillmentStatus            PurchaseOrderFulfillmentStatus @default(ORDERED) @map("fulfillment_status")
+  paymentStatus                PurchaseOrderPaymentStatus     @default(UNPAID) @map("payment_status")
+  createdByUserId              String                         @map("created_by_user_id") @db.Uuid
+  remark                       String?                        @db.VarChar(1000)
+  version                      Int                            @default(1)
+  createdAt                    DateTime                       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime                       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  salesOrder   SalesOrder?                  @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  shippingMarkIssuance NumberingIssuance?    @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  currency     Currency                     @relation(fields: [currencyCode], references: [code], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User                         @relation("PurchaseOrderCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  lines        PurchaseOrderLine[]
+  parts        PurchaseOrderPart[]
+  payments     PurchaseOrderPayment[]
+  documents    PurchaseOrderDocument[]
+  statusHistory PurchaseOrderStatusHistory[]
+  amountRevisions PurchaseOrderAmountRevision[]
+
+  @@index([orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_order_date_id_idx")
+  @@index([orderStatus, fulfillmentStatus, paymentStatus, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_statuses_order_date_id_idx")
+  @@index([salesOrderId, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_sales_order_date_id_idx")
+  @@index([supplierValue, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_supplier_date_id_idx")
+  @@index([customSupplierName, orderDate(sort: Desc), id(sort: Desc)], map: "purchase_orders_custom_supplier_date_id_idx")
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id                               String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId                  String                @map("purchase_order_id") @db.Uuid
+  lineNumber                       Int                   @map("line_number") @db.SmallInt
+  lineType                         PurchaseOrderLineType @map("line_type")
+  productId                        String?               @map("product_id") @db.Uuid
+  sourceSalesOrderLineId           String?               @map("source_sales_order_line_id") @db.Uuid
+  productNoSnapshot                String?               @map("product_no_snapshot") @db.VarChar(64)
+  productNameSnapshot              String                @map("product_name_snapshot") @db.VarChar(128)
+  productAttributesSnapshot        Json                  @default("[]") @map("product_attributes_snapshot") @db.JsonB
+  descriptionSnapshot              String?               @map("description_snapshot") @db.VarChar(1000)
+  referencePurchaseUnitPriceAmount Decimal                @map("reference_purchase_unit_price_amount") @db.Decimal(30, 4)
+  actualPurchaseUnitPriceAmount    Decimal                @map("actual_purchase_unit_price_amount") @db.Decimal(30, 4)
+  quantity                         Int
+  lineTotalAmount                  Decimal                @map("line_total_amount") @db.Decimal(30, 4)
+  createdAt                        DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  purchaseOrder        PurchaseOrder  @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  product              Product?       @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  sourceSalesOrderLine SalesOrderLine? @relation(fields: [sourceSalesOrderLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  partItems            PurchaseOrderPartItem[]
+
+  @@unique([id, purchaseOrderId], map: "purchase_order_lines_id_order_id_key")
+  @@unique([purchaseOrderId, lineNumber], map: "purchase_order_lines_order_id_line_number_key")
+  @@index([productId, purchaseOrderId], map: "purchase_order_lines_product_id_order_id_idx")
+  @@index([sourceSalesOrderLineId, purchaseOrderId], map: "purchase_order_lines_source_sales_line_order_idx")
+  @@map("purchase_order_lines")
+}
+
+model PurchaseOrderPart {
+  id                       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId          String @map("purchase_order_id") @db.Uuid
+  key                      String @db.Uuid
+  partNumber               Int    @map("part_number") @db.SmallInt
+  // 唛头与本单内序号分开保存；正式货件编号属于后续货件域，不复用这两个字段。
+  shippingMarkText         String? @map("shipping_mark_text") @db.VarChar(72)
+  // 仅历史逐件派号保留独立 ledger；新单审核时由采购基础唛头派生，不额外消耗流水。
+  shippingMarkIssuanceId   String? @unique(map: "purchase_order_parts_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
+  shippingMarkKeyHash      Bytes?  @map("shipping_mark_key_hash") @db.ByteA
+  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  shippingMarkIssuance NumberingIssuance? @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  items PurchaseOrderPartItem[]
+
+  @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")
+  @@unique([purchaseOrderId, key], map: "purchase_order_parts_order_id_key_key")
+  @@unique([purchaseOrderId, partNumber], map: "purchase_order_parts_order_id_number_key")
+  @@index([shippingMarkText], map: "purchase_order_parts_shipping_mark_text_idx")
+  @@map("purchase_order_parts")
+}
+
+model PurchaseOrderPartItem {
+  id                  String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId      String @map("purchase_order_id") @db.Uuid
+  purchaseOrderPartId String @map("purchase_order_part_id") @db.Uuid
+  purchaseOrderLineId String @map("purchase_order_line_id") @db.Uuid
+  quantity            Int
+
+  part PurchaseOrderPart @relation(fields: [purchaseOrderPartId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict, onUpdate: Restrict)
+  line PurchaseOrderLine @relation(fields: [purchaseOrderLineId, purchaseOrderId], references: [id, purchaseOrderId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([purchaseOrderPartId, purchaseOrderLineId], map: "purchase_order_part_items_part_line_key")
+  @@index([purchaseOrderLineId, purchaseOrderId], map: "purchase_order_part_items_line_order_idx")
+  @@index([purchaseOrderId], map: "purchase_order_part_items_order_idx")
+  @@map("purchase_order_part_items")
+}
+
+model PurchaseOrderPayment {
+  id              String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId String                   @map("purchase_order_id") @db.Uuid
+  paymentType     PurchaseOrderPaymentType @map("payment_type")
+  amount          Decimal                  @db.Decimal(30, 4)
+  paidAt          DateTime                 @map("paid_at") @db.Timestamptz(6)
+  paymentMethod   String                   @map("payment_method") @db.VarChar(64)
+  remark          String?                  @db.VarChar(500)
+  createdByUserId String                   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  voidedAt        DateTime?                @map("voided_at") @db.Timestamptz(6)
+  voidedByUserId  String?                  @map("voided_by_user_id") @db.Uuid
+  voidReason      String?                  @map("void_reason") @db.VarChar(500)
+
+  purchaseOrder PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy     User                   @relation("PurchaseOrderPaymentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  voidedBy      User?                  @relation("PurchaseOrderPaymentVoidedBy", fields: [voidedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  documents     PurchaseOrderDocument[]
+
+  @@index([purchaseOrderId, voidedAt, paidAt(sort: Desc), id(sort: Desc)], map: "purchase_order_payments_order_voided_paid_idx")
+  @@map("purchase_order_payments")
+}
+
+model PurchaseOrderDocument {
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId  String                    @map("purchase_order_id") @db.Uuid
+  mediaAssetId     String                    @map("media_asset_id") @db.Uuid
+  paymentId        String?                   @map("payment_id") @db.Uuid
+  documentType     PurchaseOrderDocumentType @map("document_type")
+  title            String?                   @db.VarChar(128)
+  remark           String?                   @db.VarChar(500)
+  createdByUserId  String                    @map("created_by_user_id") @db.Uuid
+  detachedByUserId String?                   @map("detached_by_user_id") @db.Uuid
+  createdAt        DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  detachedAt       DateTime?                 @map("detached_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  mediaAsset    MediaAsset           @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  payment       PurchaseOrderPayment? @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy     User                 @relation("PurchaseOrderDocumentCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  detachedBy    User?                @relation("PurchaseOrderDocumentDetachedBy", fields: [detachedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([purchaseOrderId, detachedAt, documentType, createdAt(sort: Desc), id(sort: Desc)], map: "purchase_order_documents_order_type_created_idx")
+  @@index([mediaAssetId, detachedAt], map: "purchase_order_documents_asset_detached_idx")
+  @@index([paymentId, detachedAt], map: "purchase_order_documents_payment_detached_idx")
+  @@map("purchase_order_documents")
+}
+
+model PurchaseOrderStatusHistory {
+  id              String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId String                       @map("purchase_order_id") @db.Uuid
+  dimension       PurchaseOrderStatusDimension
+  fromStatus      String                       @map("from_status") @db.VarChar(32)
+  toStatus        String                       @map("to_status") @db.VarChar(32)
+  reason          String?                      @db.VarChar(500)
+  changedByUserId String                       @map("changed_by_user_id") @db.Uuid
+  changedAt       DateTime                     @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  changedBy     User          @relation("PurchaseOrderStatusChangedBy", fields: [changedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([purchaseOrderId, changedAt(sort: Desc), id(sort: Desc)], map: "purchase_order_status_history_order_changed_idx")
+  @@map("purchase_order_status_history")
+}
+
+// 约定金额的前后快照与实际付款事实独立；仅真实约定变更才能新增记录，不回填推测历史。
+model PurchaseOrderAmountRevision {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId        String   @map("purchase_order_id") @db.Uuid
+  oldLineSubtotalAmount  Decimal  @map("old_line_subtotal_amount") @db.Decimal(30, 4)
+  oldPurchaseTotalAmount Decimal  @map("old_purchase_total_amount") @db.Decimal(30, 4)
+  oldDepositDueAmount    Decimal  @map("old_deposit_due_amount") @db.Decimal(30, 4)
+  oldBalanceDueAmount    Decimal  @map("old_balance_due_amount") @db.Decimal(30, 4)
+  newLineSubtotalAmount  Decimal  @map("new_line_subtotal_amount") @db.Decimal(30, 4)
+  newPurchaseTotalAmount Decimal  @map("new_purchase_total_amount") @db.Decimal(30, 4)
+  newDepositDueAmount    Decimal  @map("new_deposit_due_amount") @db.Decimal(30, 4)
+  newBalanceDueAmount    Decimal  @map("new_balance_due_amount") @db.Decimal(30, 4)
+  reason                String   @db.VarChar(500)
+  changedByUserId        String   @map("changed_by_user_id") @db.Uuid
+  changedAt             DateTime @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  changedBy User @relation("PurchaseOrderAmountChangedBy", fields: [changedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([purchaseOrderId, changedAt(sort: Desc), id(sort: Desc)], map: "purchase_order_amount_revisions_order_changed_idx")
+  @@map("purchase_order_amount_revisions")
+}
+
+// 仅为供应商字典值增加业务配置，不恢复独立供应商主数据或供应商级流水。
+model SupplierShippingMarkRuleBinding {
+  supplierValue   String   @id @map("supplier_value") @db.VarChar(64)
+  ruleId          String   @map("rule_id") @db.Uuid
+  version         Int      @default(1)
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  updatedByUserId String   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  rule      NumberingRule @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy User @relation("ShippingMarkBindingCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  updatedBy User @relation("ShippingMarkBindingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([ruleId], map: "supplier_shipping_mark_bindings_rule_idx")
+  @@map("supplier_shipping_mark_rule_bindings")
+}
+
 model NumberingRule {
   id          String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ruleCode    String              @unique(map: "numbering_rules_rule_code_key") @map("rule_code") @db.VarChar(64)
+  purpose     NumberingRulePurpose
   name        String              @db.VarChar(128)
   description String?             @db.VarChar(500)
   status      NumberingRuleStatus @default(DRAFT)
@@ -896,8 +1226,10 @@ model NumberingRule {
   versions     NumberingRuleVersion[]
   periodStates NumberingPeriodState[]
   issuances    NumberingIssuance[]
+  shippingMarkBindings SupplierShippingMarkRuleBinding[]
 
   @@index([status, updatedAt(sort: Desc), id(sort: Desc)], map: "numbering_rules_status_updated_at_id_idx")
+  @@index([purpose, status, updatedAt(sort: Desc), id(sort: Desc)], map: "numbering_rules_purpose_status_updated_id_idx")
   @@map("numbering_rules")
 }
 
@@ -975,6 +1307,8 @@ model NumberingIssuance {
   rule        NumberingRule        @relation(fields: [ruleId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   ruleVersion NumberingRuleVersion @relation(fields: [ruleVersionId, ruleId], references: [id, ruleId], onDelete: Restrict, onUpdate: Restrict)
   periodState NumberingPeriodState @relation(fields: [ruleId, periodKey], references: [ruleId, periodKey], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder?
+  purchaseOrderPart PurchaseOrderPart?
 
   @@unique([ruleId, generatedNumber], map: "numbering_issuances_rule_id_generated_number_key")
   @@unique([consumerCode, idempotencyKeyHash], map: "numbering_issuances_consumer_code_idempotency_key_hash_key")

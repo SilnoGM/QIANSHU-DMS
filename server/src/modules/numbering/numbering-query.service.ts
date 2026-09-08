@@ -150,6 +150,7 @@ export class NumberingQueryService {
           page: query.page,
           pageSize: query.pageSize,
           total: page.total,
+          purposeCounts: page.purposeCounts,
         }
       })
     }

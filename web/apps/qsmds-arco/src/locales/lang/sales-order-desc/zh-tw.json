@@ -5,7 +5,7 @@
     "sections": {
       "basic": "訂單基礎資訊",
       "customer": "客戶資訊",
-      "lines": "產品列表與小計（{count}）",
+      "lines": "銷售產品與小計（{count}）",
       "sales": "銷售資訊",
       "documents": "附件縮圖（{count}）"
     },
@@ -18,6 +18,7 @@
       "customerPhone": "客戶電話",
       "region": "三級地區",
       "fullAddress": "完整地址",
+      "lineRemark": "備註：",
       "actualUnitPrice": "真實售價",
       "quantity": "數量",
       "lineSubtotal": "本行小計",

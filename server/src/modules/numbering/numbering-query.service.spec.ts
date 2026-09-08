@@ -107,6 +107,7 @@ function sequenceVersion(
 
 function rule(versions: NumberingVersionReadRow[]): NumberingRuleReadRow {
   return {
+    purpose: 'BUSINESS',
     id: RULE_ID,
     ruleCode: 'SALES_ORDER',
     name: '销售订单',
@@ -250,6 +251,7 @@ describe('NumberingQueryService', () => {
     const { service, transaction } = createService()
     mockedList.mockResolvedValue({
       total: 1,
+      purposeCounts: [{ value: 'ALL', count: 1 }, { value: 'BUSINESS', count: 1 }, { value: 'SHIPPING_MARK', count: 0 }],
       rows: [rule([sequenceVersion('ACTIVE', 3)])],
     })
     mockedUsage.mockResolvedValue(new Map([[RULE_ID, {
@@ -303,7 +305,7 @@ describe('NumberingQueryService', () => {
         randomMode: 'LETTERS_THEN_DIGITS',
       }],
     }
-    mockedList.mockResolvedValue({ total: 1, rows: [rule([randomVersion])] })
+    mockedList.mockResolvedValue({ total: 1, rows: [rule([randomVersion])], purposeCounts: [{ value: 'ALL', count: 1 }, { value: 'BUSINESS', count: 1 }, { value: 'SHIPPING_MARK', count: 0 }] })
     mockedVersions.mockResolvedValue({
       ruleExists: true,
       total: 1,

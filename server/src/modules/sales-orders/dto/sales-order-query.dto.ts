@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, OmitType } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
   IsEnum,
@@ -82,6 +82,15 @@ export class SalesOrderListQueryDto {
   orderDateTo?: string
 }
 
+export class SalesOrderStatusCountsQueryDto extends OmitType(
+  SalesOrderListQueryDto,
+  ['page', 'pageSize', 'orderStatus', 'fulfillmentStatus'] as const,
+) {
+  @ApiProperty({ enum: ['all', 'pending'] })
+  @IsIn(['all', 'pending'])
+  view!: 'all' | 'pending'
+}
+
 export class SalesOrderProductOptionsQueryDto {
   @ApiProperty({ enum: ['TWD', 'MYR'] })
   @IsIn(['TWD', 'MYR'])
@@ -127,6 +136,31 @@ export class SalesOrderProductImageQueryDto {
   currencyCode!: 'TWD' | 'MYR'
 }
 
+export class SalesOrderProductEditOptionsQueryDto {
+  @ApiProperty({ type: 'string', maxLength: 128, required: false })
+  @IsOptional()
+  @IsString()
+  @IsUnicodeCodePointLength(1, 128)
+  keyword?: string
+
+  @ApiProperty({ type: 'integer', minimum: 1, default: 1, required: false })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => optionalInteger(value))
+  @IsInt()
+  @Min(1)
+  page?: number
+
+  @ApiProperty({
+    type: 'integer', minimum: 1, maximum: 50, default: 20, required: false,
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => optionalInteger(value))
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  pageSize?: number
+}
+
 export class SalesOrderProductImageParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
@@ -141,6 +175,16 @@ export class SalesOrderIdParamDto {
   @ApiProperty({ type: 'string', format: 'uuid' })
   @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
   salesOrderId!: string
+}
+
+export class SalesOrderProductEditImageParamDto extends SalesOrderIdParamDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
+  productId!: string
+
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  @Matches(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u)
+  productMediaId!: string
 }
 
 export class SalesOrderLineProductImageParamDto extends SalesOrderIdParamDto {

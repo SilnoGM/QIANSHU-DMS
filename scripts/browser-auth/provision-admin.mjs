@@ -1,12 +1,15 @@
 import { spawn } from 'node:child_process'
 import process from 'node:process'
 
-import { isDirectEntry } from '../run-command.mjs'
+import { isDirectEntry, runCommand } from '../run-command.mjs'
+import { provisionBrowserShippingMarkFixtures } from './provision-shipping-mark-fixtures.mjs'
 
 const bootstrapProgram = String.raw`
 const argon2 = require('argon2')
 const { randomUUID } = require('node:crypto')
 const { Client } = require('pg')
+let fixtureFailureCode = 'UNKNOWN'
+const provisionBrowserShippingMarkFixtures = ${provisionBrowserShippingMarkFixtures.toString()}
 
 ;(async () => {
   const passwordHash = await argon2.hash(
@@ -133,6 +136,28 @@ const { Client } = require('pg')
       [supplierType.rows[0].id],
     )
 
+    // 采购付款弹窗消费真实字典 Catalog；该类型与条目只写入一次性 Browser 库。
+    const paymentMethodType = await client.query(
+      [
+        'INSERT INTO dictionary_types (code, name, enabled, sort_order)',
+        'VALUES (\'payment.method\', \'付款方式\', false, 30)',
+        'RETURNING id',
+      ].join(' '),
+    )
+    await client.query(
+      [
+        'INSERT INTO dictionary_items (',
+        'dictionary_type_id, value, label, tone, enabled, sort_order',
+        ') VALUES ($1, \'BROWSER_BANK_TRANSFER\', \'Browser 银行转账\',',
+        '\'PRIMARY\', true, 10)',
+      ].join(' '),
+      [paymentMethodType.rows[0].id],
+    )
+    await client.query(
+      'UPDATE dictionary_types SET enabled = true, updated_at = clock_timestamp() WHERE id = $1',
+      [paymentMethodType.rows[0].id],
+    )
+
     // 创建页必须从真实 Currency Catalog 取得 TWD/MYR/CNY。外币先建立当前汇率
     // 再启用，严格遵守数据库 trigger 的顺序约束；数据只存在于一次性 Browser 库。
     const productCurrencies = await client.query(
@@ -156,8 +181,8 @@ const { Client } = require('pg')
     // 片段，再按 DRAFT -> ACTIVE 与规则 ENABLED 的合法顺序完成 fixture。
     const productRule = await client.query(
       [
-        'INSERT INTO numbering_rules (rule_code, name, status, version)',
-        'VALUES (\'PRODUCT\', \'Browser Product Rule\', \'DRAFT\', 1)',
+        'INSERT INTO numbering_rules (rule_code, name, status, version, purpose)',
+        'VALUES (\'PRODUCT\', \'Browser Product Rule\', \'DRAFT\', 1, \'BUSINESS\')',
         'RETURNING id',
       ].join(' '),
     )
@@ -218,8 +243,8 @@ const { Client } = require('pg')
     // PRODUCT 使用独立序列，确保打开表单和前端硬拦截阶段不会提前消耗编号。
     const salesOrderRule = await client.query(
       [
-        'INSERT INTO numbering_rules (rule_code, name, status, version)',
-        'VALUES (\'SALES_ORDER\', \'Browser Sales Order Rule\', \'DRAFT\', 1)',
+        'INSERT INTO numbering_rules (rule_code, name, status, version, purpose)',
+        'VALUES (\'SALES_ORDER\', \'Browser Sales Order Rule\', \'DRAFT\', 1, \'BUSINESS\')',
         'RETURNING id',
       ].join(' '),
     )
@@ -276,6 +301,71 @@ const { Client } = require('pg')
       [salesOrderRule.rows[0].id],
     )
 
+    // 采购 Browser 场景独立消费 PURCHASE_ORDER 规则，确保页面确认前不派号，
+    // 正式创建后获得可稳定断言的 PO-BRW 序列。
+    const purchaseOrderRule = await client.query(
+      [
+        'INSERT INTO numbering_rules (rule_code, name, status, version, purpose)',
+        'VALUES (\'PURCHASE_ORDER\', \'Browser Purchase Order Rule\', \'DRAFT\', 1, \'BUSINESS\')',
+        'RETURNING id',
+      ].join(' '),
+    )
+    const purchaseOrderRuleVersion = await client.query(
+      [
+        'INSERT INTO numbering_rule_versions (',
+        'rule_id, revision, status, reset_policy, timezone, config_fingerprint',
+        ') VALUES ($1, 1, \'DRAFT\', \'NEVER\', \'Asia/Shanghai\', repeat(\'c\', 64))',
+        'RETURNING id',
+      ].join(' '),
+      [purchaseOrderRule.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, fixed_value',
+        ') VALUES',
+        '($1, 0, \'FIXED\', \'PO\'),',
+        '($1, 2, \'FIXED\', \'BRW\')',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, separator_value',
+        ') VALUES',
+        '($1, 1, \'SEPARATOR\', \'-\'),',
+        '($1, 3, \'SEPARATOR\', \'-\')',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'INSERT INTO numbering_rule_segments (',
+        'version_id, position, type, sequence_width, sequence_start_value, sequence_step',
+        ') VALUES ($1, 4, \'SEQUENCE\', 8, 1, 1)',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rule_versions',
+        'SET status = \'ACTIVE\', published_at = clock_timestamp()',
+        'WHERE id = $1',
+      ].join(' '),
+      [purchaseOrderRuleVersion.rows[0].id],
+    )
+    await client.query(
+      [
+        'UPDATE numbering_rules SET status = \'ENABLED\', version = 3,',
+        'updated_at = clock_timestamp() WHERE id = $1',
+      ].join(' '),
+      [purchaseOrderRule.rows[0].id],
+    )
+
+    fixtureFailureCode = 'PURCHASE_SHIPPING_MARK_RULES'
+    const shippingMarkFixtures = await provisionBrowserShippingMarkFixtures(client, user.rows[0].id)
+
     // 管理域 Browser 场景保留独立的 4 图 2 视频只读样本；产品媒体专属场景使用
     // 另一条空媒体 Product，通过真实 API 写入，避免测试文件顺序影响验收结果。
     const managementProduct = await client.query(
@@ -301,6 +391,162 @@ const { Client } = require('pg')
         user.rows[0].id,
       ],
     )
+
+    // 采购分步创建必须在采购 Browser 文件独立运行时也有可关联来源。该夹具使用
+    // 独立客户名，不会命中销售 Browser 场景按客户名执行的“初始为空”查询。
+    fixtureFailureCode = 'PURCHASE_SOURCE_REGION'
+    const regionPath = await client.query(
+      [
+        'SELECT country.id AS country_id, country.code AS country_code, country.name AS country_name,',
+        'province.id AS province_id, province.code AS province_code, province.name AS province_name,',
+        'city.id AS city_id, city.code AS city_code, city.name AS city_name',
+        'FROM regions city',
+        'JOIN regions province ON province.id = city.parent_id',
+        'JOIN regions country ON country.id = province.parent_id',
+        'WHERE city.level = \'CITY\' AND city.enabled AND province.enabled AND country.enabled',
+        'ORDER BY city.code LIMIT 1',
+      ].join(' '),
+    )
+    if (regionPath.rowCount !== 1) throw new Error('purchase_source_region')
+    fixtureFailureCode = 'PURCHASE_SOURCE_ORDER'
+    const purchaseSourceSalesOrder = await client.query(
+      [
+        'INSERT INTO sales_orders (',
+        'order_no, create_idempotency_key_hash, create_request_fingerprint_hash,',
+        'order_date, issuer_user_id, currency_code, customer_name, customer_phone,',
+        'customer_country_region_id, customer_province_state_id, customer_city_id,',
+        'customer_country_region_code_snapshot, customer_province_state_code_snapshot,',
+        'customer_city_code_snapshot, customer_country_region_name_snapshot,',
+        'customer_province_state_name_snapshot, customer_city_name_snapshot,',
+        'customer_address_detail, customer_full_address_snapshot, line_subtotal_amount,',
+        'agreed_total_amount, deposit_due_amount, balance_due_amount, order_status, remark',
+        ') VALUES (',
+        '\'SO-BRW-PURCHASE-SOURCE\', decode(repeat(\'7\', 64), \'hex\'),',
+        'decode(repeat(\'8\', 64), \'hex\'), CURRENT_DATE, $1, \'TWD\',',
+        '\'Browser 采购来源客户\', \'0912888000\', $2, $3, $4, $5, $6, $7,',
+        '$8, $9, $10, \'采购来源路100号\', $11,',
+        '250, 250, 50, 200, \'CONFIRMED\', \'Browser purchase source fixture\'',
+        ') RETURNING id',
+      ].join(' '),
+      [
+        user.rows[0].id,
+        regionPath.rows[0].country_id,
+        regionPath.rows[0].province_id,
+        regionPath.rows[0].city_id,
+        regionPath.rows[0].country_code,
+        regionPath.rows[0].province_code,
+        regionPath.rows[0].city_code,
+        regionPath.rows[0].country_name,
+        regionPath.rows[0].province_name,
+        regionPath.rows[0].city_name,
+        regionPath.rows[0].country_name
+          + regionPath.rows[0].province_name
+          + regionPath.rows[0].city_name
+          + '采购来源路100号',
+      ],
+    )
+    fixtureFailureCode = 'PURCHASE_SOURCE_LINE'
+    await client.query(
+      [
+        'INSERT INTO sales_order_lines (',
+        'sales_order_id, line_number, line_type, product_id, product_no_snapshot,',
+        'product_name_snapshot, product_attributes_snapshot, description_snapshot,',
+        'standard_unit_price_amount, actual_unit_price_amount, quantity, line_total_amount',
+        ') VALUES ($1, 1, \'CATALOG\', $2, \'PRODUCT-BROWSER-001\',',
+        '\'Browser 多媒体产品\', $3::jsonb, \'Browser 采购来源明细\',',
+        '1234.5678, 100, 2, 200),',
+        '($1, 2, \'CUSTOM\', NULL, NULL, \'Browser 销售临时产品\',',
+        '\'[]\'::jsonb, \'Browser 临时来源说明\', NULL, 50, 1, 50)',
+      ].join(' '),
+      [
+        purchaseSourceSalesOrder.rows[0].id,
+        managementProduct.rows[0].id,
+        JSON.stringify([
+          { title: '颜色', value: '墨黑' },
+          { title: '尺寸', value: 'XL' },
+        ]),
+      ],
+    )
+
+    // MIXED 展示夹具不经过新建 API，用于付款/发货与零付款取消回归。
+    // 新 INSERT 仍携带合法唯一唛头关联；原历史文本/null 关联由迁移专测覆盖。
+    fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_ACTIVE'
+    const historicalMixedActiveOrder = await client.query(
+      [
+        'INSERT INTO purchase_orders (',
+        'order_no, create_idempotency_key_hash, create_request_fingerprint_hash,',
+        'purchase_type, product_mode, sales_order_id, supplier_value, custom_supplier_name,',
+        'order_date, currency_code, shipping_mark_text, line_subtotal_amount,',
+        'purchase_total_amount, deposit_due_amount, balance_due_amount, order_status,',
+        'fulfillment_status, payment_status, created_by_user_id, remark, version,',
+        'created_at, updated_at, shipping_mark_issuance_id',
+        ') VALUES (',
+        '\'PO-BRW-MIXED-ACTIVE\', decode(repeat(\'a\', 64), \'hex\'),',
+        'decode(repeat(\'b\', 64), \'hex\'), \'STOCK\', \'MIXED\', NULL,',
+        '\'BROWSER_SUPPLIER_EFFECTIVE\', NULL, CURRENT_DATE, \'CNY\',',
+        '\'BROWSER-HISTORICAL-MIXED-ACTIVE-MARK\', 30, 30, 10, 20,',
+        '\'CONFIRMED\', \'ORDERED\', \'UNPAID\', $1,',
+        '\'Browser 历史混合采购付款发货回归\', 1,',
+        'clock_timestamp() - interval \'2 minutes\',',
+        'clock_timestamp() - interval \'2 minutes\', $2',
+        ') RETURNING id',
+      ].join(' '),
+      [user.rows[0].id, shippingMarkFixtures.mixedActiveIssuanceId],
+    )
+    fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_CANCEL'
+    const historicalMixedCancelableOrder = await client.query(
+      [
+        'INSERT INTO purchase_orders (',
+        'order_no, create_idempotency_key_hash, create_request_fingerprint_hash,',
+        'purchase_type, product_mode, sales_order_id, supplier_value, custom_supplier_name,',
+        'order_date, currency_code, shipping_mark_text, line_subtotal_amount,',
+        'purchase_total_amount, deposit_due_amount, balance_due_amount, order_status,',
+        'fulfillment_status, payment_status, created_by_user_id, remark, version,',
+        'created_at, updated_at, shipping_mark_issuance_id',
+        ') VALUES (',
+        '\'PO-BRW-MIXED-CANCEL\', decode(repeat(\'c\', 64), \'hex\'),',
+        'decode(repeat(\'d\', 64), \'hex\'), \'STOCK\', \'MIXED\', NULL,',
+        '\'BROWSER_SUPPLIER_EFFECTIVE\', NULL, CURRENT_DATE, \'CNY\',',
+        '\'BROWSER-HISTORICAL-MIXED-CANCEL-MARK\', 30, 30, 10, 20,',
+        '\'CONFIRMED\', \'ORDERED\', \'UNPAID\', $1,',
+        '\'Browser 历史混合采购取消回归\', 1,',
+        'clock_timestamp() - interval \'1 minute\',',
+        'clock_timestamp() - interval \'1 minute\', $2',
+        ') RETURNING id',
+      ].join(' '),
+      [user.rows[0].id, shippingMarkFixtures.mixedCancelableIssuanceId],
+    )
+    fixtureFailureCode = 'PURCHASE_HISTORICAL_MIXED_LINES'
+    for (const historicalOrder of [
+      historicalMixedActiveOrder.rows[0],
+      historicalMixedCancelableOrder.rows[0],
+    ]) {
+      await client.query(
+        [
+          'INSERT INTO purchase_order_lines (',
+          'purchase_order_id, line_number, line_type, product_id,',
+          'source_sales_order_line_id, product_no_snapshot, product_name_snapshot,',
+          'product_attributes_snapshot, description_snapshot,',
+          'reference_purchase_unit_price_amount, actual_purchase_unit_price_amount,',
+          'quantity, line_total_amount',
+          ') VALUES ($1, 1, \'CATALOG\', $2, NULL, \'PRODUCT-BROWSER-001\',',
+          '\'Browser 历史混合目录产品\', $3::jsonb,',
+          '\'Browser 历史混合目录明细\', 88.9, 10, 1, 10),',
+          '($1, 2, \'CUSTOM\', NULL, NULL, NULL,',
+          '\'Browser 历史混合临时产品\', \'[]\'::jsonb,',
+          '\'Browser 历史混合临时明细\', 20, 20, 1, 20)',
+        ].join(' '),
+        [
+          historicalOrder.id,
+          managementProduct.rows[0].id,
+          JSON.stringify([
+            { title: '颜色', value: '墨黑' },
+            { title: '尺寸', value: 'XL' },
+          ]),
+        ],
+      )
+    }
+    fixtureFailureCode = 'UNKNOWN'
     const managementMedia = [
       {
         checksum: '1'.repeat(64),
@@ -466,6 +712,7 @@ const { Client } = require('pg')
       ].join(' '),
       [user.rows[0].id, 'e2e:' + randomUUID()],
     )
+    fixtureFailureCode = 'FIXTURE_COMMIT'
     await client.query('COMMIT')
   }
   catch (error) {
@@ -476,7 +723,31 @@ const { Client } = require('pg')
     await client.end()
   }
 })().catch((error) => {
-  process.stderr.write('UNKNOWN')
+  const databaseErrorCode = ({
+    '22P02': 'INVALID_INPUT',
+    23502: 'NOT_NULL',
+    23503: 'FOREIGN_KEY',
+    23505: 'UNIQUE',
+    23514: 'CHECK',
+    42804: 'TYPE',
+  })[error?.code] ?? 'NO_CODE'
+  const databaseConstraintCode = ({
+    sales_orders_address_no_whitespace_check: 'ORDER_ADDRESS',
+    sales_orders_agreed_total_matches_lines_check: 'ORDER_LINES',
+    sales_orders_amount_scales_check: 'ORDER_SCALE',
+    sales_orders_amounts_nonnegative_check: 'ORDER_AMOUNT',
+    sales_orders_create_hash_lengths_check: 'ORDER_HASH',
+    sales_orders_currency_check: 'ORDER_CURRENCY',
+    sales_orders_customer_nonblank_check: 'ORDER_CUSTOMER',
+    sales_orders_payment_terms_sum_check: 'ORDER_PAYMENT',
+    sales_orders_region_snapshot_nonblank_check: 'ORDER_REGION',
+    sales_orders_remark_nonblank_check: 'ORDER_REMARK',
+  })[error?.constraint] ?? ({
+    Error: 'ERROR',
+    RangeError: 'RANGE_ERROR',
+    TypeError: 'TYPE_ERROR',
+  })[error?.constructor?.name] ?? databaseErrorCode
+  process.stderr.write(fixtureFailureCode + '_' + databaseConstraintCode)
   process.exit(1)
 })
 `
@@ -577,6 +848,10 @@ function executeProvisionCommand(definition) {
 export async function provisionAdmin(environment = process.env) {
   const input = readProvisionInput(environment)
   await executeProvisionCommand(createProvisionCommand(input, environment))
+  // 历史夹具先以发布前结构写入，再用真实 migration 升级；不为测试关闭生产守卫。
+  await runCommand('pnpm', ['-C', 'server', 'db:migrate:deploy'], {
+    env: { ...environment, DATABASE_URL: input.databaseUrl, DOTENV_CONFIG_PATH: '/dev/null' },
+  })
 }
 
 if (isDirectEntry(import.meta.url)) {

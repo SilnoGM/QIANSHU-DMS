@@ -138,3 +138,38 @@ test('资金账户审计事件使用稳定中文名称', () => {
   assert.equal(formatAuditEvent('FUND_BUSINESS_POSTED'), '资金业务已记账')
   assert.equal(formatAuditEvent('FUND_POSTING_REVERSED'), '资金动账已冲账')
 })
+
+test('销售订单产品修改审计事件使用销售语义中文名称', () => {
+  assert.equal(
+    formatAuditEvent('SALES_ORDER_PRODUCTS_CHANGED'),
+    '销售订单产品已修改',
+  )
+})
+
+test('采购订单审计事件使用采购语义中文名称', () => {
+  assert.equal(formatAuditEvent('PURCHASE_ORDER_CREATED'), '采购订单已创建')
+  assert.equal(
+    formatAuditEvent('PURCHASE_ORDER_ORDER_STATUS_CHANGED'),
+    '采购订单状态已变更',
+  )
+  assert.equal(
+    formatAuditEvent('PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED'),
+    '采购订单履约状态已变更',
+  )
+  assert.equal(
+    formatAuditEvent('PURCHASE_ORDER_PAYMENT_RECORDED'),
+    '采购订单付款已记录',
+  )
+  assert.equal(
+    formatAuditEvent('PURCHASE_ORDER_PAYMENT_VOIDED'),
+    '采购订单付款已作废',
+  )
+  assert.equal(
+    formatAuditEvent('PURCHASE_ORDER_DOCUMENT_ATTACHED'),
+    '采购订单凭证已关联',
+  )
+  assert.equal(
+    formatAuditEvent('PURCHASE_ORDER_DOCUMENT_DETACHED'),
+    '采购订单凭证已解除',
+  )
+})

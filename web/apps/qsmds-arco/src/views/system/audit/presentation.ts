@@ -45,6 +45,8 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   NUMBERING_RULE_VERSION_PUBLISHED: '编号规则版本已发布',
   NUMBERING_RULE_ENABLED: '编号规则已启用',
   NUMBERING_RULE_DISABLED: '编号规则已停用',
+  SHIPPING_MARK_BINDING_CREATED: '供应商唛头规则已绑定',
+  SHIPPING_MARK_BINDING_UPDATED: '供应商唛头规则已改绑',
   DICTIONARY_TYPE_CREATED: '字典类型已创建',
   DICTIONARY_TYPE_UPDATED: '字典类型已更新',
   DICTIONARY_TYPE_ENABLED: '字典类型已启用',
@@ -80,6 +82,15 @@ const EVENT_LABELS: Readonly<Record<AuditEventDto['eventType'], string>> = {
   SALES_ORDER_PAYMENT_VOIDED: '销售订单收款已作废',
   SALES_ORDER_DOCUMENT_ATTACHED: '销售订单凭证已关联',
   SALES_ORDER_DOCUMENT_DETACHED: '销售订单凭证已解除',
+  SALES_ORDER_PRODUCT_APPENDED: '销售订单产品已追加',
+  SALES_ORDER_PRODUCTS_CHANGED: '销售订单产品已修改',
+  PURCHASE_ORDER_CREATED: '采购订单已创建',
+  PURCHASE_ORDER_ORDER_STATUS_CHANGED: '采购订单状态已变更',
+  PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED: '采购订单履约状态已变更',
+  PURCHASE_ORDER_PAYMENT_RECORDED: '采购订单付款已记录',
+  PURCHASE_ORDER_PAYMENT_VOIDED: '采购订单付款已作废',
+  PURCHASE_ORDER_DOCUMENT_ATTACHED: '采购订单凭证已关联',
+  PURCHASE_ORDER_DOCUMENT_DETACHED: '采购订单凭证已解除',
 }
 
 export function auditMetadataEntries(

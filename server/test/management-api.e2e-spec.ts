@@ -30,6 +30,12 @@ const CSRF_HEADERS = {
 const USERNAME_PREFIX = 'management-api-e2e-'
 const ROLE_CODE_PREFIX = 'management_e2e_'
 const PERMISSION_CODE_PREFIX = 'management-e2e:'
+// 后续绑定配置迁移新增两项业务权限；HTTP 目录返回全部迁移结果，须保留精确集合断言。
+const SEEDED_PERMISSION_CODES = [
+  ...MANAGEMENT_PERMISSION_CODES,
+  'purchase-shipping-marks:read',
+  'purchase-shipping-marks:update',
+] as const
 
 interface ApiErrorBody {
   code: string
@@ -743,9 +749,9 @@ describe('Management API with PostgreSQL', () => {
     const permissionCatalog = readResponseBody<PermissionBody[]>(
       permissionsResponse,
     )
-    expect(permissionCatalog).toHaveLength(MANAGEMENT_PERMISSION_CODES.length)
+    expect(permissionCatalog).toHaveLength(SEEDED_PERMISSION_CODES.length)
     expect(permissionCatalog.map(({ code }) => code)).toEqual(
-      [...MANAGEMENT_PERMISSION_CODES].sort(),
+      [...SEEDED_PERMISSION_CODES].sort(),
     )
     const systemOnlyPermission = permissionCatalog.find(
       ({ systemOnly }) => systemOnly,

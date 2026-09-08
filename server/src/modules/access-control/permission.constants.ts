@@ -56,6 +56,23 @@ export const SALES_ORDER_PERMISSION_CODES = [
 ] as const
 
 /**
+ * 采购订单域按读取、创建、备货创建、审核、通用更新、付款和凭证拆分权限。
+ *
+ * `purchase-orders:create-stock` 在数据库中标记为 systemOnly，只能保留给
+ * `system_admin`；服务端仍必须在创建事务中复核该能力，不能只依赖前端隐藏按钮。
+ * `purchase-orders:review` 默认仅授予系统管理员，但允许通过角色权限管理配置。
+ */
+export const PURCHASE_ORDER_PERMISSION_CODES = [
+  'purchase-orders:read',
+  'purchase-orders:create',
+  'purchase-orders:create-stock',
+  'purchase-orders:review',
+  'purchase-orders:update',
+  'purchase-orders:payment',
+  'purchase-orders:document',
+] as const
+
+/**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
  * 顺序与数据库 seed 一致，既便于契约审查，也避免各业务模块各自拼写字符串。
@@ -103,6 +120,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...PRODUCT_MANAGEMENT_PERMISSION_CODES,
   ...FUND_ACCOUNT_PERMISSION_CODES,
   ...SALES_ORDER_PERMISSION_CODES,
+  ...PURCHASE_ORDER_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

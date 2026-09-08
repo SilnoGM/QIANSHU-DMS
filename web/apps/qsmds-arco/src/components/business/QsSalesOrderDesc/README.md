@@ -1,6 +1,6 @@
 # QsSalesOrderDesc 销售订单详情
 
-`QsSalesOrderDesc` 是销售订单域的纯展示业务组件，按照“订单基础信息 → 客户信息 → 产品列表与小计 → 销售信息 → 附件缩略图”的稳定顺序呈现订单快照。销售总价为主强调，定金与尾款为次级强调。
+`QsSalesOrderDesc` 是销售订单域的纯展示业务组件，按照“订单基础信息 → 客户信息 → 销售产品与小计 → 销售信息 → 附件缩略图”的稳定顺序呈现订单快照。销售总价为主强调，定金与尾款为次级强调。
 
 组件使用独立、只读的 `QsSalesOrderDescViewModel`，不依赖新增订单表单模型、API DTO、Store、权限或路由。创建页与正式详情页应分别在自己的边界把数据映射成该 ViewModel。
 
@@ -25,7 +25,7 @@ import type { QsSalesOrderDescViewModel } from '@/components/business/QsSalesOrd
 | `model` | `Readonly<QsSalesOrderDescViewModel>` | 已由调用方整理好的只读订单详情 |
 | `currencies` | `readonly CurrencyDescriptor[]` | `AmountDisplay` 用于解析币种符号与小数位的中立描述符 |
 
-产品行的真实单价、数量和行小计均由调用方提供。组件不使用浮点数重新计算小计，也不判断总价等式是否成立。
+产品行的主图、说明、真实单价、数量和行小计均由调用方提供。主图通过 `ImageGroup` 显示，无主图时保留稳定占位；组件不使用浮点数重新计算小计，也不判断总价等式是否成立。
 
 ## Slots
 
@@ -33,6 +33,7 @@ import type { QsSalesOrderDescViewModel } from '@/components/business/QsSalesOrd
 
 ## 附件
 
+- 产品主图 URL 由调用方映射，组件只负责展示和加载失败降级；临时产品或无主图产品显示占位图标。
 - 图片附件通过 `ImageGroup` 显示、预览并处理加载失败。
 - 视频、文档、没有可读 URL 的图片都会降级为文件图标，同时保留凭证类型、标题和原始文件名。
 - `thumbnailSrc` 与 `previewSrc` 由调用方提供。新增订单页如使用本地 `Object URL`，创建和回收都必须由持有原始 `File` 的页面负责；本组件不会管理 URL 生命周期。

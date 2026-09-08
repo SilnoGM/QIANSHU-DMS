@@ -15,6 +15,7 @@ function createTransaction(): {
   transaction: Prisma.TransactionClient
   queryRaw: jest.Mock
   ruleCount: jest.Mock
+  ruleGroupBy: jest.Mock
   ruleFindMany: jest.Mock
   ruleFindUnique: jest.Mock
   versionCount: jest.Mock
@@ -23,6 +24,7 @@ function createTransaction(): {
 } {
   const queryRaw = jest.fn()
   const ruleCount = jest.fn()
+  const ruleGroupBy = jest.fn()
   const ruleFindMany = jest.fn()
   const ruleFindUnique = jest.fn()
   const versionCount = jest.fn()
@@ -32,6 +34,7 @@ function createTransaction(): {
     $queryRaw: queryRaw,
     numberingRule: {
       count: ruleCount,
+      groupBy: ruleGroupBy,
       findMany: ruleFindMany,
       findUnique: ruleFindUnique,
     },
@@ -48,6 +51,7 @@ function createTransaction(): {
     transaction,
     queryRaw,
     ruleCount,
+    ruleGroupBy,
     ruleFindMany,
     ruleFindUnique,
     versionCount,
@@ -87,6 +91,7 @@ describe('numbering query persistence', () => {
   it('lists with keyword/status filters and a same-direction UUID tie-breaker', async () => {
     const mocks = createTransaction()
     mocks.ruleCount.mockResolvedValue(2)
+    mocks.ruleGroupBy.mockResolvedValue([{ purpose: 'BUSINESS', _count: { _all: 2 } }])
     mocks.ruleFindMany.mockResolvedValue([])
 
     await expect(readNumberingRuleListPageInTransaction(
@@ -99,9 +104,9 @@ describe('numbering query persistence', () => {
         skip: 10,
         sortOrder: 'asc',
       },
-    )).resolves.toEqual({ total: 2, rows: [] })
+    )).resolves.toEqual({ total: 2, rows: [], purposeCounts: [{ value: 'ALL', count: 2 }, { value: 'BUSINESS', count: 2 }, { value: 'SHIPPING_MARK', count: 0 }] })
 
-    const countArguments = callArgument<{ where: unknown }>(mocks.ruleCount)
+    const countArguments = callArgument<{ where: unknown }>(mocks.ruleGroupBy)
     const findArguments = callArgument<{
       where: unknown
       orderBy: unknown

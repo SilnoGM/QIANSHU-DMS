@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+// eslint-disable-next-line test/no-import-node-test -- 采购审核页面契约使用 Node.js 内置 runner。
+import test from 'node:test'
+import { runInNewContext } from 'node:vm'
+import ts from 'typescript'
+import { nextTick, reactive, ref, watch } from 'vue'
+import { normalizePurchaseOrderStatusSelection } from '../../src/views/operations/purchase-orders/purchase-order-list.logic'
+
+const ROOT = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
+const read = (file: string) => readFile(new URL(file, ROOT), 'utf8')
+
+test('审核两视图入口使用独立权限，并复用确认弹窗与列表计数刷新', async () => {
+  const source = await read('index.vue')
+  assert.match(source, /auth\('purchase-orders:review'\)/u)
+  assert.match(source, /action\.key === 'REVIEW'[\s\S]*?return canReview\.value/u)
+  assert.match(source, /props\.viewMode === 'all' && canReview && row\.orderStatus === 'PENDING_REVIEW'/u)
+  assert.match(source, /<PurchaseOrderReviewModal[\s\S]*?@detail-updated="handleDetailUpdated"/u)
+  assert.match(source, /function handleDetailUpdated[\s\S]*?refreshOrdersAndCounts\(\)/u)
+})
+
+test('审核先取最新详情，二次确认才提交；失败重查并保留说明，换单或退出取消旧请求', async () => {
+  const source = await read('purchase-order-review-modal.vue')
+  assert.match(source, /<QsGenericModal/u)
+  assert.match(source, /purchaseOrdersApi\.getById\(orderId, controller\.signal\)/u)
+  assert.match(source, /buildPurchaseOrderReviewRequest\(current, reason\.value\)/u)
+  assert.match(source, /purchaseOrdersApi\.review\(current\.id, result\.request, controller\.signal\)/u)
+  assert.match(source, /if \(!canConfirm\.value \|\| current === null\)/u)
+  assert.match(source, /:disabled="!canConfirm"[\s\S]*?@click="submit"/u)
+  assert.match(source, /await loadDetail\(failureMessage\(failure\)\)/u)
+  assert.match(source, /loadController\?\.abort\(\)/u)
+  assert.match(source, /mutationController\?\.abort\(\)/u)
+  assert.match(source, /account\.authEpoch, canReview\.value/u)
+  assert.match(source, /detail\.orderNo/u)
+  assert.match(source, /detail\.supplier\.label/u)
+  assert.match(source, /detail\.purchaseTotalAmount/u)
+  assert.match(source, /detail\.lineSummary\.totalQuantity/u)
+})
+
+test('审核中付款及凭证入口均有提交前防御，新建成功明确等待审核', async () => {
+  const [actions, document, drawer, create] = await Promise.all([
+    'purchase-order-detail-actions.vue',
+    'purchase-order-document-modal.vue',
+    'purchase-order-detail-drawer.vue',
+    'create.vue',
+  ].map(read))
+  assert.match(actions, /function submitPayment\(\): void \{\s+if \(!canRecordPayment\.value\)/u)
+  assert.match(actions, /props\.detail\.orderStatus === 'CONFIRMED'/u)
+  assert.match(document, /busy\.value \|\| !visible\.value \|\| props\.detail\.orderStatus === 'PENDING_REVIEW'/u)
+  assert.match(drawer, /detail\.value\.orderStatus !== 'PENDING_REVIEW'/u)
+  assert.match(create, /创建成功，已进入采购审核中/u)
+})
+
+test('采购两视图切换时旧实例不改写目标查询，返回自身路由仍刷新列表及计数', async () => {
+  const source = await read('index.vue')
+  const start = source.indexOf('watch(\n  () => [\n    props.viewMode,')
+  assert.ok(start >= 0)
+  const declaration = source.slice(start, source.indexOf('\nonMounted(', start)).trim()
+  for (const mode of ['all', 'pending'] as const) {
+    const ownName = mode === 'all' ? 'qsOperationsPurchaseOrders' : 'qsOperationsPendingPurchaseOrders'
+    const otherName = mode === 'all' ? 'qsOperationsPendingPurchaseOrders' : 'qsOperationsPurchaseOrders'
+    const ownQuery = mode === 'all' ? { status: 'PENDING_REVIEW' } : { task: 'AWAITING_REVIEW' }
+    const otherQuery = mode === 'all' ? { task: 'AWAITING_REVIEW' } : { status: 'PENDING_REVIEW' }
+    const route = reactive({ name: ownName, query: ownQuery })
+    const replacements: string[] = []
+    let listLoads = 0
+    let countLoads = 0
+    const stop = runInNewContext(ts.transpileModule(`const stop = ${declaration}; stop`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022 },
+    }).outputText, {
+      watch,
+      props: { viewMode: mode },
+      route,
+      page: ref(1),
+      normalizePurchaseOrderStatusSelection,
+      router: { replace: async (value: unknown) => { replacements.push(JSON.stringify(value)) } },
+      loadOrders: async () => { listLoads += 1 },
+      loadStatusCounts: async () => { countLoads += 1 },
+    }) as () => void
+    try {
+      route.name = otherName
+      route.query = otherQuery
+      await nextTick()
+      assert.deepEqual(replacements, [], `${mode} 离开时不得删除目标视图的查询`)
+      assert.equal(listLoads, 0)
+      route.name = ownName
+      route.query = ownQuery
+      await nextTick()
+      assert.deepEqual(replacements, [])
+      assert.equal(listLoads, 1)
+      assert.equal(countLoads, 1)
+    }
+    finally {
+      stop()
+    }
+  }
+})

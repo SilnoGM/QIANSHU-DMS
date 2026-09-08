@@ -1,0 +1,62 @@
+{
+  "salesOrderDrawer": {
+    "title": "销售订单详情",
+    "information": "订单详情信息",
+    "changes": "订单变更记录",
+    "products": "销售产品列表",
+    "payments": "实际收款记录",
+    "documents": "订单凭证",
+    "noPayments": "暂无实际收款记录",
+    "noChanges": "暂无订单变更记录",
+    "amountChange": "金额变更",
+    "remark": "备注",
+    "paymentRemark": "收款备注",
+    "documentRemark": "凭证备注",
+    "reason": "原因",
+    "changedBy": "操作人",
+    "uploadedBy": "上传人",
+    "uploadedAt": "上传时间",
+    "recordedBy": "记录人",
+    "recordedAt": "记录时间",
+    "paymentMethod": "收款方式",
+    "valid": "有效",
+    "voided": "已作废",
+    "voidReason": "作废原因",
+    "detached": "已解除关联",
+    "openDocument": "查看凭证文件",
+    "close": "关闭抽屉",
+    "loading": "正在加载订单详情",
+    "loadFailed": "加载失败",
+    "reload": "重新加载",
+    "print": "打印",
+    "printNotice": "该功能将在后续版本推出，敬请期待",
+    "paymentTypes": {
+      "DEPOSIT": "定金",
+      "PROGRESS": "过程款",
+      "INVOICE_TAX": "开票税金",
+      "BALANCE": "尾款",
+      "OTHER": "其他"
+    },
+    "dimensions": {
+      "ORDER": "订单状态变更",
+      "FULFILLMENT": "订单进度变更",
+      "PAYMENT": "付款状态变更"
+    },
+    "statuses": {
+      "DRAFT": "草稿",
+      "CONFIRMED": "已确认",
+      "PENDING_RECONCILIATION": "待对账",
+      "COMPLETED": "已完成",
+      "CANCELLED": "已取消",
+      "PENDING": "待采购",
+      "PREPARING": "备货中",
+      "LAND_TRANSIT": "陆运中",
+      "WAREHOUSE_ARRIVED": "已到仓",
+      "SEA_TRANSIT": "海运中",
+      "SIGNED": "已签收",
+      "UNPAID": "未付款",
+      "PARTIALLY_PAID": "部分付款",
+      "PAID": "已付清"
+    }
+  }
+}

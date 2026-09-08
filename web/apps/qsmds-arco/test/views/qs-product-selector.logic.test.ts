@@ -56,6 +56,16 @@ test('产品选择分页按稳定 ID 合并，并拒绝旧查询覆盖当前筛�
   }), false)
 })
 
+test('采购订单可以使用 CNY 构造稳定查询身份', () => {
+  assert.equal(createProductSelectorQueryKey({
+    currencyCode: 'CNY',
+    keyword: '  采购包材 ',
+    supplierValue: 'SUPPLIER_CN_01',
+    page: 1,
+    pageSize: 20,
+  }), 'CNY\u0000采购包材\u0000SUPPLIER_CN_01')
+})
+
 test('打开会话时已有数据库产品完整回显到已选列表', () => {
   const existing: ExistingCatalogLine[] = [{
     key: 'line-a',

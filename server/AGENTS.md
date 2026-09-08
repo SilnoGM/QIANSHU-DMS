@@ -47,7 +47,7 @@
 - `prisma/schema.prisma` 与 `prisma/migrations/` 必须纳入 Git。
 - migration 一旦提交并在共享环境应用即视为不可变；禁止修改、重命名或删除已有 migration。
 - 开发环境使用 `pnpm db:migrate:dev` 创建 migration；测试、CI 和部署环境仅使用 `pnpm db:migrate:deploy` 应用既有 migration。
-- 新增或修改数据库 schema 前，必须单独获得用户确认。
+- 新增或修改数据库 schema 前须有明确实施授权；具体对象、范围与授权有效期遵循根 `AGENTS.md`。
 
 ## 接口契约
 
@@ -57,11 +57,11 @@
 - `openapi:generate` 先完成包含 `prisma generate` 的 build，再通过 preview application 离线生成；preview 本身不读取 `.env`、不连接数据库、不监听端口。需要隔离整个命令时显式设置 `DOTENV_CONFIG_PATH=/dev/null`。
 - 正式运行时不开放 Swagger route 或 Swagger UI；snapshot 只从根 `contract:sync` 跨端同步，由 `contract:check` 只读验证。
 - 不在 OpenAPI、错误 body、日志或测试输出中泄露密码、token、连接字符串、SQL、堆栈或底层异常。
-- 新增或修改公共 API、数据结构、错误 code 或 response schema 前，必须单独获得用户确认。
+- 新增或修改公共 API、公共或持久化数据结构、对外错误 code 或 response schema 前须有明确实施授权；具体对象、范围与授权有效期遵循根 `AGENTS.md`。
 
 ## 开发与测试
 
-- 新功能、BUG 修复和复杂改动遵循 TDD：先写失败测试，再实现最小改动，最后在测试保持通过时重构。
+- 行为变更、新功能和 BUG 修复默认遵循 TDD：先建立有意义的失败测试，再最小实现并验证；无法合理建立失败测试时说明原因，保留可复现步骤、定向检查或实际运行验证。
 - 非直观的生命周期、失败传播和安全边界必须写详细中文代码注释；技术标识、变量名、命令和日志保持英文。
 - `pnpm check` 包含 schema 校验、typecheck、只读 lint 与单元测试，不包含需要真实数据库的 E2E。
 - E2E 必须使用隔离的真实 PostgreSQL 测试数据库，并通过进程环境注入 `DATABASE_URL`。
@@ -72,11 +72,13 @@
 - 正式 Server 归档只支持 `Ubuntu 24.04` / `glibc` / `x64` / `Node 24`；Alpine / `musl`、其他 CPU 架构和其他 Node.js 大版本不得标记为已验证。
 - Release 工作流可以在隔离的临时 CI PostgreSQL 中执行归档 smoke test，但不得连接生产数据库或执行生产 migration。
 - 当前 GitHub Release 不包含自动部署；实际部署与 production migration 必须在下游运维流程中单独审查和执行。
-- 阶段五代码与本地验证已实施，GitHub 平台验证以 Task 14 记录为准。
+- GitHub 平台验证以对应 SHA、Run 与产物证据为准；历史记录见仓库根 `docs/全局文档/发布与版本管理.md`，不得用本地成功替代平台验证。
 
 ## 安全红线
 
 - 不硬编码或提交密码、token、连接字符串、Cookie 与真实 `.env`。
 - 日志、异常响应和测试输出不得包含 `DATABASE_URL`、数据库密码或底层敏感错误详情。
 - 不提交 `node_modules/`、`dist/`、`coverage/`、`src/generated/prisma/` 或 `*.log`。
-- 新增或修改公共 API、公共数据结构及数据库 schema 前，必须单独获得用户确认。
+- 新增或修改公共 API、公共或持久化数据结构及数据库 schema 前须有明确实施授权；具体对象、范围与授权有效期遵循根 `AGENTS.md`。
+
+授权范围与确认有效期遵循根 `AGENTS.md`：具体对象和范围已经明确批准时不重复确认；需求或设计确认不自动授权实施。

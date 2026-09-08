@@ -3,7 +3,9 @@ import type {
   NumberingGeneratedNumberMatch,
   NumberingRuleSortOrder,
   NumberingRuleStatus,
+  NumberingRulePurpose,
 } from './dto/numbering-management.dto'
+import type { NumberingRulePurposeCountDto } from './dto/numbering-response.dto'
 import {
   toDecimalString,
   toNullableDecimalString,
@@ -39,6 +41,7 @@ export const NUMBERING_VERSION_READ_SELECT = {
 } as const satisfies Prisma.NumberingRuleVersionSelect
 
 export const NUMBERING_RULE_READ_SELECT = {
+  purpose: true,
   id: true,
   ruleCode: true,
   name: true,
@@ -65,6 +68,7 @@ export type NumberingRuleReadRow = Prisma.NumberingRuleGetPayload<{
 }>
 
 export interface NumberingRuleListPersistenceQuery {
+  readonly purpose?: NumberingRulePurpose
   readonly keyword?: string
   readonly status?: NumberingRuleStatus
   readonly page: number
@@ -179,9 +183,26 @@ function buildRuleWhere(
 export async function readNumberingRuleListPageInTransaction(
   transaction: Prisma.TransactionClient,
   query: NumberingRuleListPersistenceQuery,
-): Promise<{ readonly total: number; readonly rows: NumberingRuleReadRow[] }> {
-  const where = buildRuleWhere(query)
-  const total = await transaction.numberingRule.count({ where })
+): Promise<{
+  readonly total: number
+  readonly rows: NumberingRuleReadRow[]
+  readonly purposeCounts: NumberingRulePurposeCountDto[]
+}> {
+  const baseWhere = buildRuleWhere(query)
+  // 分类计数与分页共享调用方的 RepeatableRead 快照；基础条件故意不含用途。
+  const groups = await transaction.numberingRule.groupBy({
+    by: ['purpose'], where: baseWhere, _count: { _all: true },
+  })
+  const business = groups.find(group => group.purpose === 'BUSINESS')?._count._all ?? 0
+  const shippingMark = groups.find(group => group.purpose === 'SHIPPING_MARK')?._count._all ?? 0
+  const purposeCounts: NumberingRulePurposeCountDto[] = [
+    { value: 'ALL', count: business + shippingMark },
+    { value: 'BUSINESS', count: business },
+    { value: 'SHIPPING_MARK', count: shippingMark },
+  ]
+  const total = query.purpose === 'BUSINESS' ? business
+    : query.purpose === 'SHIPPING_MARK' ? shippingMark : business + shippingMark
+  const where = { ...baseWhere, ...(query.purpose ? { purpose: query.purpose } : {}) }
   const rows = await transaction.numberingRule.findMany({
     where,
     orderBy: [
@@ -193,7 +214,7 @@ export async function readNumberingRuleListPageInTransaction(
     select: NUMBERING_RULE_READ_SELECT,
   })
 
-  return { total, rows }
+  return { total, rows, purposeCounts }
 }
 
 /**

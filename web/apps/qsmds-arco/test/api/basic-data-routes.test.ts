@@ -39,6 +39,22 @@ const basicDataPageContracts = [
     title: '编号管理',
   },
   {
+    auth: 'numbering-rules:read',
+    file: '../../src/views/system/basic-data/numbering/create.vue',
+    menu: false,
+    name: 'systemBasicDataNumberingCreate',
+    path: 'numbering/create',
+    title: '新增编号规则',
+  },
+  {
+    auth: 'purchase-shipping-marks:read',
+    file: '../../src/views/system/basic-data/numbering/shipping-mark-bindings.vue',
+    menu: false,
+    name: 'systemBasicDataShippingMarkBindings',
+    path: 'numbering/shipping-mark-bindings',
+    title: '唛头规则绑定',
+  },
+  {
     auth: 'dictionaries:read',
     file: '../../src/views/system/basic-data/dictionaries/index.vue',
     name: 'systemBasicDataDictionaries',
@@ -170,6 +186,18 @@ test('货币汇率单一菜单使用任一读取权限并隐藏兼容路由', ()
   )
 })
 
+test('唛头绑定隐藏页面由独立配置权限鉴权，不借编号查看或配置写权限开放读取', () => {
+  const bindingRoute = basicDataRoutes.children?.find(
+    route => route.name === 'systemBasicDataShippingMarkBindings',
+  )
+  assert.equal(bindingRoute?.meta?.auth, 'purchase-shipping-marks:read')
+  assert.equal(bindingRoute?.meta?.menu, false)
+  assert.equal(bindingRoute?.meta?.activeMenu, '/system/basic-data/numbering')
+  assert.equal(matchesAuthorization(['purchase-shipping-marks:read'], bindingRoute?.meta?.auth ?? ''), true)
+  assert.equal(matchesAuthorization(['numbering-rules:read'], bindingRoute?.meta?.auth ?? ''), false)
+  assert.equal(matchesAuthorization(['purchase-shipping-marks:update'], bindingRoute?.meta?.auth ?? ''), false)
+})
+
 test('字典菜单与直接访问都精确要求 dictionaries:read', () => {
   const dictionaryRoute = basicDataRoutes.children?.find(
     route => route.name === 'systemBasicDataDictionaries',
@@ -267,7 +295,7 @@ test('编号管理已升级为真实业务页面', () => {
 })
 
 test('字典管理叶子已升级为受权限保护的三面板单页骨架', () => {
-  for (const page of basicDataPageContracts.slice(4)) {
+  for (const page of basicDataPageContracts.filter(page => page.name === 'systemBasicDataDictionaries')) {
     const source = readFileSync(new URL(page.file, import.meta.url), 'utf8')
 
     assert.match(source, /<script setup lang="ts">/u)

@@ -5,7 +5,7 @@
     "sections": {
       "basic": "Order information",
       "customer": "Customer information",
-      "lines": "Products and subtotals ({count})",
+      "lines": "Sales products and subtotals ({count})",
       "sales": "Sales information",
       "documents": "Attachment previews ({count})"
     },
@@ -18,6 +18,7 @@
       "customerPhone": "Phone",
       "region": "Region",
       "fullAddress": "Full address",
+      "lineRemark": "Note:",
       "actualUnitPrice": "Actual price",
       "quantity": "Quantity",
       "lineSubtotal": "Line subtotal",

@@ -10,6 +10,7 @@ import type { MediaAssetService } from '../src/modules/media/media-asset.service
 import type { NumberingGeneratorService } from '../src/modules/numbering/numbering-generator.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
+import { SalesOrderAutomaticStateService } from '../src/modules/sales-orders/sales-order-automatic-state.service'
 import { SalesOrderQueryService } from '../src/modules/sales-orders/sales-order-query.service'
 
 function requireDatabaseUrl(): string {
@@ -180,6 +181,7 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
       media,
       dictionaryLookup,
       query,
+      new SalesOrderAutomaticStateService(new AuditService()),
       { now: () => new Date('2026-08-20T12:00:00.000Z') },
     )
   })
@@ -340,6 +342,18 @@ describe('SalesOrder services with isolated PostgreSQL', () => {
     expect(await prisma.salesOrder.count({
       where: { orderNo: `SO-E2E-${suffix}` },
     })).toBe(1)
+
+    // 实际数据库中的采购覆盖为空时，手工履约请求也必须停留在待采购，
+    // 不能依赖前端隐藏按钮或直接改状态来省略审核前提。
+    await expect(mutations.updateFulfillmentStatus({
+      actorUserId,
+      requestId: `sales-order-unreviewed-${suffix}`,
+    }, created.id, { toStatus: 'PREPARING' }))
+      .rejects.toMatchObject({ code: 'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID' })
+    await expect(prisma.salesOrder.findUniqueOrThrow({
+      where: { id: created.id },
+      select: { fulfillmentStatus: true, version: true },
+    })).resolves.toEqual({ fulfillmentStatus: 'PENDING', version: 1 })
 
     const paid = await mutations.recordPayment({
       actorUserId,

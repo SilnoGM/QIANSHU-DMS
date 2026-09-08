@@ -8,6 +8,7 @@ import {
 import { API_PREFIX } from './app.constants'
 import { ApiExceptionFilter } from './infrastructure/http/api-exception.filter'
 import { requestIdMiddleware } from './infrastructure/http/request-id.middleware'
+import { createPurchaseOrderBodyParser } from './infrastructure/http/purchase-order-body-parser.middleware'
 import { createSecurityHeadersMiddleware } from './infrastructure/http/security-headers.middleware'
 import { createValidationException } from './infrastructure/http/validation-exception.factory'
 import { AuthMetricLogger } from './infrastructure/observability/auth-metric.logger'
@@ -41,6 +42,7 @@ export function configureApplication(
       options.nodeEnvironment ?? 'development',
     ),
   )
+  application.use(createPurchaseOrderBodyParser())
   application.setGlobalPrefix(API_PREFIX)
   application.useGlobalPipes(
     new ValidationPipe({

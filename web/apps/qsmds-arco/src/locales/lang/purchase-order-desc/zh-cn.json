@@ -1,0 +1,50 @@
+{
+  "purchaseOrderDesc": {
+    "title": "采购订单详情",
+    "description": "内容随填写或订单状态实时更新，请逐项核对采购信息。",
+    "sections": {
+      "basic": "订单基础信息",
+      "source": "供应商与销售来源",
+      "lines": "采购产品与小计（{count}）",
+      "purchase": "采购金额",
+      "notes": "采购唛头与备注"
+    },
+    "fields": {
+      "orderNo": "采购订单号",
+      "orderDate": "采购日期",
+      "purchaseType": "采购类型",
+      "issuer": "采购经办人",
+      "currency": "采购币种",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间",
+      "supplier": "供应商",
+      "salesOrderNo": "销售订单",
+      "customerName": "客户名称",
+      "lineRemark": "备注：",
+      "referencePurchaseUnitPrice": "采购定价",
+      "actualPurchaseUnitPrice": "真实采购价",
+      "lineSubtotal": "本行小计",
+      "lineSubtotalAmount": "产品明细汇总",
+      "purchaseTotal": "采购总价",
+      "deposit": "定金",
+      "balance": "尾款",
+      "paid": "已付金额",
+      "outstanding": "未付金额",
+      "shippingMark": "采购唛头",
+      "baseShippingMark": "基础唛头",
+      "remark": "采购备注",
+      "lineIndex": "第 {index} 项采购产品"
+    },
+    "lineTypes": {
+      "CATALOG": "数据库产品",
+      "CUSTOM": "本单临时产品"
+    },
+    "empty": {
+      "text": "未填写",
+      "orderNo": "正式保存后派发",
+      "independentStock": "独立备货",
+      "unlinkedCustomer": "不关联客户",
+      "lines": "暂无采购产品"
+    }
+  }
+}

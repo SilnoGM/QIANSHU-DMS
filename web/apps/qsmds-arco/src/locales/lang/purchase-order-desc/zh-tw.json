@@ -1,0 +1,50 @@
+{
+  "purchaseOrderDesc": {
+    "title": "採購訂單詳情",
+    "description": "內容會隨填寫或訂單狀態即時更新，請逐項核對採購資訊。",
+    "sections": {
+      "basic": "訂單基本資訊",
+      "source": "供應商與銷售來源",
+      "lines": "採購產品與小計（{count}）",
+      "purchase": "採購金額",
+      "notes": "採購嘜頭與備註"
+    },
+    "fields": {
+      "orderNo": "採購訂單號",
+      "orderDate": "採購日期",
+      "purchaseType": "採購類型",
+      "issuer": "採購經辦人",
+      "currency": "採購幣別",
+      "createdAt": "建立時間",
+      "updatedAt": "更新時間",
+      "supplier": "供應商",
+      "salesOrderNo": "銷售訂單",
+      "customerName": "客戶名稱",
+      "lineRemark": "備註：",
+      "referencePurchaseUnitPrice": "採購定價",
+      "actualPurchaseUnitPrice": "實際採購價",
+      "lineSubtotal": "本行小計",
+      "lineSubtotalAmount": "產品明細彙總",
+      "purchaseTotal": "採購總價",
+      "deposit": "訂金",
+      "balance": "尾款",
+      "paid": "已付金額",
+      "outstanding": "未付金額",
+      "shippingMark": "採購嘜頭",
+      "baseShippingMark": "基礎嘜頭",
+      "remark": "採購備註",
+      "lineIndex": "第 {index} 項採購產品"
+    },
+    "lineTypes": {
+      "CATALOG": "資料庫產品",
+      "CUSTOM": "本單臨時產品"
+    },
+    "empty": {
+      "text": "未填寫",
+      "orderNo": "正式儲存後派發",
+      "independentStock": "獨立備貨",
+      "unlinkedCustomer": "不關聯客戶",
+      "lines": "暫無採購產品"
+    }
+  }
+}

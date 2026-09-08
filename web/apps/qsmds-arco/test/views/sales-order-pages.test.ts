@@ -47,6 +47,16 @@ test('销售订单列表先通过 QsGenericModal 选择唯一币种，再携带�
   assert.match(source, /<QsGenericTable/)
   assert.match(source, /salesOrdersApi\.list/)
   assert.match(source, /salesOrdersApi\.issuerOptions/u)
+  assert.match(source, /import SalesOrderDetailDrawer from '.\/sales-order-detail-drawer\.vue'/u)
+  assert.match(source, /const detailVisible = ref\(false\)/u)
+  assert.match(source, /const detailOrder = shallowRef<SalesOrderListItemDto \| null>\(null\)/u)
+  assert.match(source, /function openSalesOrderDetail\(order: SalesOrderListItemDto\): void/u)
+  assert.match(source, /:aria-label="`\$\{row\.orderNo\}：查看详情`"/u)
+  assert.match(source, /@click="openSalesOrderDetail\(row\)"/u)
+  assert.match(source, /<SalesOrderDetailDrawer/u)
+  assert.match(source, /v-model="detailVisible"/u)
+  assert.match(source, /:order="detailOrder"/u)
+  assert.match(source, /:currencies="currencyCatalog\.currencies\.value"/u)
   assert.match(source, /key: 'issuerUserId'[\s\S]*?label: '出单人'/u)
   assert.match(source, /issuerUserId[\s\S]*?buildListQuery/u)
   assert.doesNotMatch(source, /key: '(?:orderStatus|fulfillmentStatus)'/u)
@@ -65,6 +75,8 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.match(source, /resolveSalesOrderQueryTargets/u)
   assert.match(source, /route\.query\.status/u)
   assert.match(source, /router\.push\(\{ query: nextQuery \}\)/u)
+  assert.match(source, /function ensureCanonicalSalesOrderStatusQuery\(\): boolean/u)
+  assert.match(source, /onMounted\(\(\) => \{[\s\S]*?ensureCanonicalSalesOrderStatusQuery\(\)[\s\S]*?scheduleQueryRefresh\(true\)/u)
   assert.match(source, /viewMode === 'pending'[\s\S]*?'待办订单'[\s\S]*?'全部订单'/u)
   assert.ok(headerStart >= 0, '应存在页面头')
   assert.ok(toolbarStart > headerStart, '状态切换工具栏应位于页面头之后')
@@ -74,6 +86,40 @@ test('销售订单列表通过路由视图模式和状态工具栏切换待办�
   assert.match(source, /loadSalesOrderPage/u)
   assert.match(source, /deduplicateSalesOrderItems/u)
   assert.match(source, /summarizeSalesOrderItemsByCurrency/u)
+})
+
+test('销售全部与待办状态工具栏使用服务端全量计数', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /salesOrdersApi\.statusCounts/u)
+  assert.match(source, /withStatusSwitchCounts/u)
+  assert.match(source, /buildSalesOrderStatusCountsQuery/u)
+  assert.match(source, /let countRequestVersion = 0/u)
+  assert.match(source, /countAbortController/u)
+  assert.match(source, /selectedValue: selectedStatus\.value/u)
+  assert.match(source, /selectedCount: loading\.value \? undefined : total\.value/u)
+})
+
+test('销售订单列表在搜索框前复用日期范围筛选并传递订单日期查询', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const tableStart = source.indexOf('<QsGenericTable')
+  const queryLeadingStart = source.indexOf('<template #query-leading>', tableStart)
+  const dateFilterStart = source.indexOf('<QsDateRangeFilter', queryLeadingStart)
+
+  assert.match(source, /import type \{ CalendarDateRangeValue \} from '@fantastic-admin\/components'/u)
+  assert.match(source, /import QsDateRangeFilter from '@\/components\/business\/QsDateRangeFilter\/index\.vue'/u)
+  assert.match(source, /const dateRange = shallowRef<CalendarDateRangeValue>/u)
+  assert.ok(tableStart >= 0, '应存在销售通用表格')
+  assert.ok(queryLeadingStart > tableStart, '销售日期筛选应进入通用表格查询前置插槽')
+  assert.ok(dateFilterStart > queryLeadingStart, '查询前置插槽应渲染日期筛选组件')
+  assert.match(source, /calendar-label="出单日期范围"/u)
+  assert.match(source, /placeholder="出单日期范围"/u)
+  assert.match(source, /@complete="handleDateRangeComplete"/u)
+  assert.match(source, /@clear="clearDateRange"/u)
+  assert.match(source, /orderDateFrom: dateRange\.value\.start\.toString\(\)/u)
+  assert.match(source, /orderDateTo: dateRange\.value\.end\.toString\(\)/u)
+  assert.match(source, /function handleDateRangeComplete\(\): void \{[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(true\)/u)
+  assert.match(source, /function clearDateRange\(\): void \{[\s\S]*?dateRange\.value = \{ end: undefined, start: undefined \}[\s\S]*?page\.value = 1[\s\S]*?scheduleQueryRefresh\(true\)/u)
 })
 
 test('销售订单列表使用十五个复合列并展示服务端全量筛选汇总', async () => {
@@ -200,8 +246,11 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /#cell-documentSummary[\s\S]*?documentSummary\.count[\s\S]*?openRecordsModal\('documents'/u)
   assert.match(source, /#cell-remarkSummary[\s\S]*?<FaTooltip[\s\S]*?row\.original\.remark/u)
   assert.match(source, /#cell-changeRecordsSummary[\s\S]*?changeRecordCount[\s\S]*?openRecordsModal\('changes'/u)
-  assert.match(source, /:action-column="\{ fixed: 'right', minWidth: 180, title: '操作', width: 180 \}"/u)
-  assert.match(source, /<template #actions="\{ row \}">[\s\S]*?v-for="action in salesOrderRowActions\(row\)"/u)
+  assert.match(source, /const actionColumn = computed<QsGenericTableActionColumn>/u)
+  assert.match(source, /props\.viewMode === 'all' \? 210 : 260/u)
+  assert.match(source, /:action-column="actionColumn"/u)
+  assert.match(source, /<template #actions="\{ row \}">[\s\S]*?查看[\s\S]*?<template[\s\S]*?v-if="props\.viewMode === 'pending'"[\s\S]*?v-for="action in salesOrderRowActions\(row\)"/u)
+  assert.match(source, /function salesOrderRowActions\([\s\S]*?props\.viewMode !== 'pending'[\s\S]*?return \[\]/u)
   assert.match(source, /resolvePendingSalesOrderActions/u)
   assert.match(source, /handleSalesOrderRowAction\(action, row\)/u)
   assert.match(source, /action\.key === 'RECORD_PAYMENT'[\s\S]*?openRecordsAction\('payment', order\)/u)
@@ -243,6 +292,8 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /PARTIALLY_PAID: '.*text-amber-700/u)
   assert.match(source, /PAID: '.*text-primary'/u)
   assert.match(source, /CONFIRMED: '.*text-primary'/u)
+  assert.match(source, /PENDING_RECONCILIATION: '.*text-amber-700/u)
+  assert.match(source, /COMPLETED: '.*text-primary'/u)
   assert.match(source, /CANCELLED: '.*text-destructive'/u)
   assert.match(source, /PENDING: '.*text-muted-foreground/u)
   assert.match(source, /PREPARING: '.*text-amber-700/u)
@@ -251,6 +302,7 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /SEA_TRANSIT: '.*text-blue-700/u)
   assert.match(source, /SIGNED: '.*text-primary/u)
   assert.doesNotMatch(source, /SHIPPED/u)
+  assert.doesNotMatch(source, /该订单状态尚未进入当前数据契约/u)
   for (const amountField of [
     'agreedTotalAmount',
     'standardSubtotalAmount',
@@ -268,8 +320,36 @@ test('销售订单列表使用十五个复合列并展示服务端全量筛选�
   assert.match(source, /row\.updatedAt/u)
 })
 
+test('全部销售订单以销售权限和海运前状态提供唯一的修改产品入口', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+  const submitStart = source.indexOf('async function submitProductEdit')
+  const submitEnd = source.indexOf('\nfunction ', submitStart)
+  const submitSource = source.slice(submitStart, submitEnd)
+
+  assert.match(source, /import QsSalesOrderProductsEditorModal/u)
+  assert.match(source, /const canUpdateProducts = computed\(\(\) => auth\('sales-orders:update'\)\)/u)
+  assert.match(source, /function canEditSalesOrderProducts\(order: SalesOrderListItemDto\)/u)
+  assert.match(source, /props\.viewMode === 'all'/u)
+  assert.match(source, /PRODUCT_EDIT_FULFILLMENT_STATUSES/u)
+  for (const status of ['PENDING', 'PREPARING', 'LAND_TRANSIT', 'WAREHOUSE_ARRIVED']) {
+    assert.match(source, new RegExp(`'${status}'`, 'u'))
+  }
+  assert.match(source, /v-if="canEditSalesOrderProducts\(row\)"[\s\S]*?修改产品/u)
+  assert.match(source, /salesOrdersApi\.productEditContext/u)
+  assert.match(source, /salesOrdersApi\.productEditOptions/u)
+  assert.match(source, /salesOrdersApi\.updateProducts/u)
+  assert.match(source, /retry: false|updateProducts/u)
+  assert.match(source, /toast\.success\('销售订单产品已更新'\)/u)
+  assert.match(source, /scheduleQueryRefresh\(true\)/u)
+  assert.ok(submitStart >= 0 && submitEnd > submitStart)
+  assert.doesNotMatch(submitSource, /operationsPurchaseOrderCreate|router\.push/u)
+})
+
 test('销售订单记录弹窗按需读取详情并分开展示收款、凭证与变更记录', async () => {
   const source = await readFile(new URL('sales-order-records-modal.vue', ROOT), 'utf8')
+  const headerExtraStart = source.indexOf('<template #header-extra>')
+  const headerExtraEnd = source.indexOf('</template>', headerExtraStart)
+  const headerExtraSource = source.slice(headerExtraStart, headerExtraEnd)
   const documentsStart = source.indexOf('<section v-else-if="kind === \'documents\'"')
   const documentsEnd = source.indexOf('<section v-else-if="kind === \'changes\'"', documentsStart)
   const documentsSource = source.slice(documentsStart, documentsEnd)
@@ -281,7 +361,7 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /kind === 'changes'/u)
   assert.match(source, /payment\.voidedAt/u)
   assert.match(source, /新增实际收款/u)
-  assert.match(source, /货物签收/u)
+  assert.doesNotMatch(headerExtraSource, /货物签收|openReceiptModal|canSubmitDeliveryReceipt/u)
   assert.match(source, /<QsDictionarySelect/u)
   assert.match(source, /dictionary-code="payment\.method"/u)
   assert.match(source, /v-model="paymentMethod"/u)
@@ -289,6 +369,14 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.doesNotMatch(source, /paymentModalVisible|receiptModalVisible/u)
   assert.match(source, /salesOrdersApi\.recordPayment/u)
   assert.match(source, /salesOrdersApi\.submitDeliveryReceipt/u)
+  assert.match(source, /previousOrderStatus/u)
+  assert.match(source, /response\.data\.orderStatus === 'PENDING_RECONCILIATION'/u)
+  assert.match(source, /订单已签收且已付清，已自动进入待对账/u)
+  assert.match(source, /实际收款记录添加成功/u)
+  assert.match(source, /签收单上传成功，订单已进入已签收/u)
+  assert.doesNotMatch(source, /签收单上传成功，订单进度保持不变/u)
+  assert.match(source, /提交后作为订单级凭证保存，并自动将订单进度更新为已签收/u)
+  assert.match(source, /data-testid="sales-order-delivery-receipt-input"/u)
   assert.match(source, /buildSalesOrderPaymentRequest/u)
   assert.match(source, /buildSalesOrderDeliveryReceiptRequest/u)
   assert.match(source, /payment\.voucher\.contentUrl/u)
@@ -312,7 +400,7 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /outstanding: 'text-destructive font-semibold'/u)
   assert.match(source, /@click="loadDetail"/u)
   assert.match(source, /每笔收款必须上传且只能上传一份凭证/u)
-  assert.match(source, /暂不自动更新订单进度/u)
+  assert.doesNotMatch(source, /暂不自动更新订单进度/u)
   assert.match(source, /v-model="deliveryReceiptRemark"/u)
   assert.match(source, /name="deliveryReceiptRemark"/u)
   assert.match(source, /:maxlength="500"/u)
@@ -373,6 +461,11 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.ok(formEnd >= 0 && formEnd < summaryStart, '订单详情必须位于表单之外')
   assert.ok(pageMainEnd >= 0 && pageMainEnd < summaryStart, '订单详情必须位于表单面板之外')
   assert.match(source, /<QsSalesOrderDesc[\s\S]*?:model="salesOrderDescModel"[\s\S]*?:currencies="fixedCurrencies"/u)
+  assert.match(
+    source,
+    /<QsSalesOrderDesc[\s\S]*?class="border-0 rounded-none shadow-none md:rounded-xl"/u,
+    '销售订单详情抽屉在桌面端必须沿用共享组件的 rounded-xl',
+  )
   assert.match(source, /<QsGenericDrawer[\s\S]*?data-testid="sales-order-details-drawer"/u)
   assert.match(source, /data-testid="sales-order-submit-confirmation"/u)
   assert.match(source, /确认提交销售订单？/u)
@@ -386,6 +479,16 @@ test('新增页使用四步表单与独立双栏实时订单详情', async () =>
   assert.match(source, /function requestSubmitConfirmation\(\): void \{[\s\S]*?!submitReady\.value[\s\S]*?return/u)
   assert.match(source, /function nextStep\(\): void \{[\s\S]*?clearGlobalFailure\(\)/u)
   assert.match(source, /function nextStep\(\): void \{[\s\S]*?replaceFieldErrors\(\{ \.\.\.fieldErrors\.value, \.\.\.result\.fieldErrors \}\)/u)
+  assert.match(source, /const STEP_VALIDATION_MESSAGE = '请先完成并修正当前步骤的必填资料'/u)
+  assert.match(
+    source,
+    /function nextStep\(\): void \{[\s\S]*?if \(!result\.valid\) \{[\s\S]*?toast\.warning\(STEP_VALIDATION_MESSAGE\)[\s\S]*?focusFirstSalesOrderError\(result\.fieldErrors\)[\s\S]*?return/u,
+  )
+  assert.match(
+    source,
+    /function enterSalesOrderReview\(\): void \{[\s\S]*?toast\.warning\('部分资料未通过校验，请修正后再进入订单核对'\)/u,
+  )
+  assert.doesNotMatch(source, /formError\.value = '部分资料未通过校验，请修正后再进入订单核对'/u)
   assert.match(source, /function nextStep\(\): void \{[\s\S]*?persistedStepErrors[\s\S]*?Object\.keys\(persistedStepErrors\)\.length > 0[\s\S]*?return/u)
   assert.match(source, /function replayUnknownResult\(\): void \{[\s\S]*?authEpoch !== appAccountStore\.authEpoch[\s\S]*?return/u)
   assert.match(source, /if \(canRead\.value\) \{[\s\S]*?router\.push[\s\S]*?else \{[\s\S]*?createSalesOrderSubmissionState\(\)/u)
@@ -508,13 +611,76 @@ test('产品明细由薄销售适配层接入通用编辑器，不保留行内�
   assert.match(adapter, /仅本订单/u)
   assert.doesNotMatch(adapter, /<FaCombobox/u)
   assert.match(editor, /step="1"/)
-  assert.match(editor, /min="1"/)
+  assert.match(editor, /:min="lineMinimumQuantity\(line\)"/u)
   assert.match(editor, /<MoneyInput/u)
   assert.match(editor, /class="[^"]*overflow-x-auto[^"]*"/u)
-  assert.match(editor, /v-if="modelValue\.length === 0"/u)
+  assert.match(
+    editor,
+    /v-if="modelValue\.length === 0 && readOnlyLines\.length === 0"/u,
+    '通用编辑器只有在可编辑行与只读历史行都为空时才展示空状态',
+  )
   assert.match(editor, /暂无产品明细/u)
   assert.match(editor, /labels\.actualSubtotal/u)
   assert.match(editor, /labels\.actualTotal/u)
   assert.doesNotMatch(editor, /<FaCombobox/u)
   assert.doesNotMatch(editor, /<FaTextarea/u)
+})
+
+test('销售待采购通过权限受控的采购前置弹窗复核并快捷新增采购', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /const canCreatePurchase = computed\(\(\) => auth\('purchase-orders:create'\)\)/u)
+  assert.match(
+    source,
+    /action\.key === 'SUBMIT_PURCHASE'[\s\S]*?return canCreatePurchase\.value/u,
+    '新增采购操作必须服从采购创建权限',
+  )
+  assert.match(
+    source,
+    /action\.key === 'SUBMIT_PURCHASE'[\s\S]*?purchaseStartPreset\.value = \{ id, orderNo \}[\s\S]*?purchaseStartVisible\.value = true/u,
+    '待采购操作应先打开带预选销售订单的采购前置弹窗',
+  )
+  assert.match(source, /<QsPurchaseStartModal[\s\S]*?purchase-type="SALES_LINKED"[\s\S]*?:preset-sales-order="purchaseStartPreset"/u)
+  assert.match(source, /:validate-preset="validatePresetPurchaseSource"/u)
+  assert.match(source, /purchaseOrdersApi\.sourceSalesOrders\(\{[\s\S]*?productMode: selection\.productMode[\s\S]*?salesOrderId: presetSalesOrder\.id/u)
+  assert.match(source, /query: buildPurchaseStartRouteQuery\(selection, preset\)/u)
+  assert.match(source, /catch \{[\s\S]*?toast\.error\('无法进入新增采购页面，请重试'\)[\s\S]*?purchaseStartVisible\.value = true/u)
+
+  const handler = source.match(
+    /function handleSalesOrderRowAction\([\s\S]*?\n\}/u,
+  )
+  assert.ok(handler, '应存在销售待办动作处理函数')
+  assert.match(handler[0], /SUBMIT_PURCHASE/u)
+  assert.match(handler[0], /purchaseStartVisible\.value = true/u)
+  assert.match(handler[0], /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u)
+})
+
+test('销售待发货使用双更新权限打开聚合发货弹窗并保持后续动作占位', async () => {
+  const source = await readFile(new URL('index.vue', ROOT), 'utf8')
+
+  assert.match(source, /import QsFactoryShipmentModal from '@\/components\/business\/QsFactoryShipmentModal\/index\.vue'/u)
+  assert.match(
+    source,
+    /const canFactoryShipment = computed\(\(\) => \([\s\S]*?auth\('sales-orders:update'\)[\s\S]*?auth\('purchase-orders:update'\)/u,
+    '工厂发货操作必须同时持有销售与采购更新权限',
+  )
+  assert.match(
+    source,
+    /action\.key === 'FACTORY_SHIPMENT'[\s\S]*?return canFactoryShipment\.value/u,
+  )
+  assert.match(source, /salesOrdersApi\.factoryShipmentContext/u)
+  assert.match(source, /salesOrdersApi\.factoryShipment/u)
+  assert.match(source, /formatSalesFactoryShipmentSuccess/u)
+  assert.match(source, /<QsFactoryShipmentModal[\s\S]*?mode="SALES_ORDER"/u)
+  assert.match(source, /@submit="submitSalesFactoryShipment"/u)
+  assert.match(source, /@retry="loadSalesFactoryShipmentContext"/u)
+  assert.match(
+    source,
+    /action\.key === 'FACTORY_SHIPMENT'[\s\S]*?openSalesFactoryShipment\(order\)/u,
+  )
+  assert.match(
+    source,
+    /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u,
+    '货物入仓与装柜出货仍应保持建设中提示',
+  )
 })

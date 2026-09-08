@@ -42,7 +42,7 @@ test('销售订单详情拥有独立业务组件页面与响应式预览入口',
   )
 })
 
-test('销售订单详情 fixture 覆盖两类产品、三段金额和图片附件', () => {
+test('销售订单详情 fixture 覆盖产品主图与说明、两类产品、三段金额和图片附件', () => {
   const fixtureSource = readRelativeSource(
     '../../src/views/component_library/business/fixtures/sales-order-desc.fixture.ts',
   )
@@ -51,6 +51,8 @@ test('销售订单详情 fixture 覆盖两类产品、三段金额和图片附�
   assert.match(fixtureSource, /SALES_ORDER_DESC_SHOWCASE_MODEL/u)
   assert.match(fixtureSource, /lineType: 'CATALOG'/u)
   assert.match(fixtureSource, /lineType: 'CUSTOM'/u)
+  assert.match(fixtureSource, /mainImage:/u)
+  assert.match(fixtureSource, /description:/u)
   assert.match(fixtureSource, /agreedTotalAmount:/u)
   assert.match(fixtureSource, /depositDueAmount:/u)
   assert.match(fixtureSource, /balanceDueAmount:/u)

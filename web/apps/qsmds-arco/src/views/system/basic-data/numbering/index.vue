@@ -3,8 +3,10 @@ import type { TableSortingState } from '@fantastic-admin/components'
 import type { NumberingDetailAction, NumberingLifecycleAction } from './numbering-detail.logic'
 import type { NumberingRuleEditorDrawerExpose } from './numbering-editor.logic'
 import type { NumberingActionPermissions, NumberingRuleFormModel } from './numbering-management.logic'
-import type { NumberingRuleDetailDto } from '@/api/generated/types.gen'
+import type { NumberingRuleDetailDto, NumberingRulePurposeCountDto } from '@/api/generated/types.gen'
 import type { NumberingRuleListItemDto } from '@/api/modules/numbering'
+import type { NumberingPurpose } from '@/api/modules/numbering-purpose'
+
 import type {
   QsGenericTableColumn,
   QsGenericTableFilterDefinition,
@@ -12,13 +14,15 @@ import type {
 } from '@/components/business/QsGenericTable/logic'
 
 import { useMediaQuery } from '@vueuse/core'
-
 import numberingApi from '@/api/modules/numbering'
+import { numberingPurposeLabel, parseNumberingPurpose } from '@/api/modules/numbering-purpose'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
-
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
+import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { hasVisibleTableColumn } from '../../shared/table-query'
+
 import NumberingLifecycleModal from './numbering-lifecycle-modal.vue'
 import {
   buildNumberingTableListQuery,
@@ -38,6 +42,7 @@ import {
   shouldCloseNumberingEditor,
   shouldLoadNumberingIssuances,
 } from './numbering-page.logic'
+import NumberingPurposeSelectModal from './numbering-purpose-select-modal.vue'
 import NumberingRuleDetailDrawer from './numbering-rule-detail-drawer.vue'
 import NumberingRuleEditorDrawer from './numbering-rule-editor-drawer.vue'
 import { useNumberingMaintenance } from './use-numbering-maintenance'
@@ -57,7 +62,20 @@ interface PendingRowAction {
 }
 
 const { auth } = useAppAuth()
+const { t } = useI18n()
 const appAccountStore = useAppAccountStore()
+const route = useRoute()
+const router = useRouter()
+const purposeView = computed(() => parseNumberingPurpose(route.query.purpose) ?? 'ALL')
+const purposeCounts = ref<NumberingRulePurposeCountDto[] | null>(null)
+const purposeChoices = [
+  { value: 'ALL', label: '全部编码' },
+  { value: 'BUSINESS', label: '业务编码' },
+  { value: 'SHIPPING_MARK', label: '唛头编码' },
+]
+const purposeItems = computed(() => purposeCounts.value === null ? purposeChoices : withStatusSwitchCounts(purposeChoices, purposeCounts.value))
+const purposeModalVisible = ref(false)
+const createNavigationPending = ref(false)
 const isNarrow = useMediaQuery('(max-width: 767px)')
 
 const canRead = computed(() => auth('numbering-rules:read'))
@@ -78,12 +96,12 @@ const permissions = computed<NumberingActionPermissions>(() => ({
 }))
 const rows = ref<NumberingRuleListItemDto[]>([])
 const total = ref(0)
-const page = ref(1)
-const pageSize = ref(20)
-const search = ref('')
-const filters = ref<QsGenericTableFilterValues>({})
+const page = ref(Math.max(1, Number(route.query.page) || 1))
+const pageSize = ref([20, 50, 100].includes(Number(route.query.pageSize)) ? Number(route.query.pageSize) : 20)
+const search = ref(typeof route.query.keyword === 'string' ? route.query.keyword : '')
+const filters = ref<QsGenericTableFilterValues>({ status: typeof route.query.status === 'string' ? route.query.status : undefined })
 const sorting = ref<TableSortingState>([
-  { desc: true, id: 'updatedAt' },
+  { desc: route.query.sortOrder !== 'asc', id: 'updatedAt' },
 ])
 const listLoading = ref(false)
 const listError = ref('')
@@ -150,7 +168,6 @@ const {
   loadDetail,
   loadIssuances,
   loadVersions,
-  openCreateEditor,
   openDetail,
   openLifecycle,
   openRuleEditor,
@@ -189,6 +206,12 @@ const columns: QsGenericTableColumn<NumberingRuleListItemDto>[] = [
     id: 'rule',
     minWidth: 220,
     title: '编号规则',
+  },
+  {
+    accessorFn: item => numberingPurposeLabel(item.purpose),
+    id: 'purpose',
+    minWidth: 120,
+    title: '用途分类',
   },
   {
     accessorFn: item => formatNumberingRuleStructure(item.displayVersion.config),
@@ -466,6 +489,7 @@ async function loadNumberingRules(): Promise<void> {
         filters: filters.value,
         page: page.value,
         pageSize: pageSize.value,
+        purpose: purposeView.value,
         search: search.value,
         sorting: sorting.value,
       }),
@@ -479,6 +503,7 @@ async function loadNumberingRules(): Promise<void> {
     page.value = response.data.page
     pageSize.value = response.data.pageSize
     total.value = response.data.total
+    purposeCounts.value = response.data.purposeCounts
   }
   catch (error) {
     if (
@@ -488,6 +513,7 @@ async function loadNumberingRules(): Promise<void> {
       return
     }
     const failure = getNumberingListFailure(error)
+    purposeCounts.value = null
     listError.value = failure.message
     listRequestId.value = failure.requestId
   }
@@ -519,6 +545,8 @@ function handlePaginationChange(): void {
 }
 
 function clearListContext(): void {
+  purposeCounts.value = null
+  purposeModalVisible.value = false
   rows.value = []
   total.value = 0
   listError.value = ''
@@ -632,6 +660,40 @@ watch(
   },
 )
 
+// 取消新增时恢复进入前的条件；成功返回仅携带用途，避免旧筛选隐藏新草稿。
+function listContextQuery() {
+  return {
+    purpose: purposeView.value,
+    page: String(page.value),
+    pageSize: String(pageSize.value),
+    keyword: search.value || undefined,
+    status: typeof filters.value.status === 'string' ? filters.value.status : undefined,
+    sortOrder: sorting.value[0]?.desc === false ? 'asc' : 'desc',
+  }
+}
+async function switchPurpose(value: string): Promise<void> {
+  if (!canRead.value || value === purposeView.value) {
+    return
+  }
+  await router.replace({ query: { ...listContextQuery(), purpose: parseNumberingPurpose(value) ?? 'ALL', page: '1' } })
+}
+async function startCreate(purpose: NumberingPurpose): Promise<void> {
+  if (!canRead.value || !canCreate.value || createNavigationPending.value) {
+    return
+  }
+  createNavigationPending.value = true
+  try {
+    const returnTo = router.resolve({ name: 'systemBasicDataNumbering', query: listContextQuery() }).fullPath
+    await router.push({ name: 'systemBasicDataNumberingCreate', query: { purpose, returnTo } })
+    purposeModalVisible.value = false
+  }
+  finally { createNavigationPending.value = false }
+}
+watch(() => route.query.purpose, () => {
+  purposeCounts.value = null
+  scheduleQueryRefresh()
+})
+
 onMounted(() => {
   if (canRead.value) {
     void loadNumberingRules()
@@ -650,6 +712,7 @@ onBeforeUnmount(() => {
   <div class="numbering-management-page min-w-0">
     <FaPageHeader
       description="集中查看后续业务域的编号结构、规则状态、版本与当前周期容量；所有时间均按 Asia/Shanghai 展示。"
+      default-class="max-w-full flex flex-wrap gap-3 items-center justify-end"
     >
       <template #title>
         <h1 class="m-0">
@@ -658,15 +721,26 @@ onBeforeUnmount(() => {
       </template>
 
       <FaButton
+        v-if="auth('purchase-shipping-marks:read')"
+        data-testid="shipping-mark-bindings-entry"
+        variant="outline"
+        @click="router.push({ name: 'systemBasicDataShippingMarkBindings' })"
+      >
+        <FaIcon name="i-lucide:link" />
+        {{ t('shippingMarkBinding.entryLabel') }}
+      </FaButton>
+      <FaButton
         v-if="canRead && canCreate"
         data-testid="numbering-create-rule"
         class="min-h-11 md:min-h-9"
-        @click="openCreateEditor"
+        @click="purposeModalVisible = true"
       >
         <FaIcon name="i-lucide:plus" />
-        新建编号规则
+        新建规则
       </FaButton>
     </FaPageHeader>
+
+    <NumberingPurposeSelectModal v-if="canRead && canCreate" v-model="purposeModalVisible" :loading="createNavigationPending" @confirm="startCreate" />
 
     <FaPageMain>
       <FaEmpty
@@ -678,6 +752,13 @@ onBeforeUnmount(() => {
       />
 
       <section v-else class="min-w-0" aria-label="编号规则列表与容量统计">
+        <QsStatusSwitchToolbar
+          :model-value="purposeView"
+          :items="purposeItems"
+          class="numbering-purpose-toolbar mb-4"
+          @update:model-value="switchPurpose"
+        />
+
         <div class="mb-4 flex flex-wrap gap-3 items-baseline justify-between">
           <p class="qs-type-description m-0 max-w-3xl">
             容量、已使用与剩余量均为精确整数；下一编号可能是确定值或随机预览。
@@ -891,6 +972,14 @@ onBeforeUnmount(() => {
               </div>
 
               <dl class="m-0 gap-x-4 gap-y-3 grid grid-cols-3 max-[390px]:grid-cols-1">
+                <div v-if="hasVisibleTableColumn(visibleColumns, 'purpose')">
+                  <dt class="qs-type-compact-label mb-1">
+                    用途分类
+                  </dt>
+                  <dd class="qs-type-body m-0">
+                    {{ numberingPurposeLabel(item.purpose) }}
+                  </dd>
+                </div>
                 <div v-if="hasVisibleTableColumn(visibleColumns, 'revision')">
                   <dt class="qs-type-compact-label mb-1">
                     版本
@@ -1122,6 +1211,14 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 用途切换与列表共用面板；仅在当前页移除独立外框并对齐内容左沿。 */
+.numbering-purpose-toolbar {
+  padding-inline: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .numbering-management-page :deep(.qs-generic-table .animate-pulse) {
     animation: none !important;

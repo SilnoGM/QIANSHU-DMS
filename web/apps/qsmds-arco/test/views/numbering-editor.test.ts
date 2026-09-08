@@ -20,6 +20,12 @@ const VIEW_ROOT = new URL(
   import.meta.url,
 )
 
+test('冲突重读详情时仅隐藏编辑表单，不卸载其 dirty 基线和本地输入', async () => {
+  const source = await readFile(new URL('numbering-rule-editor-drawer.vue', VIEW_ROOT), 'utf8')
+  assert.match(source, /<NumberingRuleForm\s+v-show="!loading"/u)
+  assert.doesNotMatch(source, /<QsGenericDrawer[^>]*:loading="loading"/u)
+})
+
 const SOURCE_MODEL: NumberingRuleFormModel = {
   description: '销售订单编号',
   name: '销售订单',
@@ -137,7 +143,12 @@ test('本地与 Server fieldErrors 合并时保留片段路径并由本地结果
 })
 
 test('编辑抽屉契约覆盖 xl、隔离模型、预览提交、错误和一次性关闭旁路', async () => {
-  const source = await readFile(new URL('numbering-rule-editor-drawer.vue', VIEW_ROOT), 'utf8')
+  const shell = await readFile(new URL('numbering-rule-editor-drawer.vue', VIEW_ROOT), 'utf8')
+  const form = await readFile(new URL('numbering-rule-form.vue', VIEW_ROOT), 'utf8')
+  const source = `${shell}\n${form}`
+  assert.match(shell, /<NumberingRuleForm/u)
+  assert.match(shell, /formRef\.value\?\.dirty/u)
+  assert.doesNotMatch(form, /QsGenericDrawer|useRouter|closeBypass/u)
 
   assert.match(source, /QsGenericDrawer/)
   assert.match(source, /size="xl"/)
@@ -157,7 +168,7 @@ test('编辑抽屉契约覆盖 xl、隔离模型、预览提交、错误和一�
   assert.match(source, /requestId:/)
   assert.match(source, /Asia\/Shanghai/)
   assert.match(source, /:submitting="submitLocked"/)
-  assert.match(source, /:loading="loading"/)
+  assert.match(source, /v-if="loading"/)
   assert.match(source, /props\.loading/)
   assert.match(source, /emit\('closed'\)/)
   assert.match(source, /submitRequested/)
@@ -173,7 +184,7 @@ test('编辑抽屉契约覆盖 xl、隔离模型、预览提交、错误和一�
   assert.match(source, /:disabled="submitLocked \|\| effectiveConfigurationLocked"/)
   assert.match(source, /<FaFormItem name="segments" hide-label :auto-bind="false">/)
   assert.match(source, /class="gap-6 grid min-w-0"/)
-  assert.match(source, /<aside class="min-w-0">/)
+  assert.match(source, /<aside class="min-w-0"/)
   assert.doesNotMatch(source, /lg:grid-cols-/)
   assert.doesNotMatch(source, /lg:sticky/)
   assert.doesNotMatch(source, /timezone[^\n]*(?:select|option)/i)

@@ -80,7 +80,7 @@ test('固定计划复用迁移、真实构建、认证 fixture 与双环境同�
   assert.deepEqual(
     plan.prepare.map(step => [step.command, step.args]),
     [
-      ['pnpm', ['-C', 'server', 'db:migrate:deploy']],
+      [process.execPath, ['./scripts/browser-auth/migrate-before-historical-fixtures.mjs']],
       ['pnpm', ['-C', 'server', 'build']],
       ['pnpm', [
         '-C', 'web',

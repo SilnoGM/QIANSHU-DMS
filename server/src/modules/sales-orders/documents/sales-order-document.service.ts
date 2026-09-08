@@ -24,7 +24,9 @@ import {
   salesOrderValidationFailure,
 } from '../domain/sales-order-errors'
 import { createSalesOrderDocumentTitle } from '../domain/sales-order-document-title'
+import { assertSalesOrderFulfillmentTransition } from '../domain/sales-order-state-machine'
 import { isCanonicalSalesOrderActorId } from '../sales-order-command.normalizer'
+import { SalesOrderAutomaticStateService } from '../sales-order-automatic-state.service'
 import type { SalesOrderMutationContext } from '../sales-order-mutation.service'
 import {
   SalesOrderQueryService,
@@ -159,6 +161,7 @@ export class SalesOrderDocumentService {
     private readonly audit: AuditService,
     private readonly query: SalesOrderQueryService,
     private readonly multipart: SalesOrderDocumentMultipartParser,
+    private readonly automaticState: SalesOrderAutomaticStateService,
   ) {}
 
   uploadTemporary(
@@ -220,7 +223,12 @@ export class SalesOrderDocumentService {
         }
         const order = await transaction.salesOrder.findUnique({
           where: { id: salesOrderId },
-          select: { id: true, customerName: true },
+          select: {
+            id: true,
+            customerName: true,
+            fulfillmentStatus: true,
+            orderStatus: true,
+          },
         })
         if (order === null) {
           throw new ApiException(
@@ -229,6 +237,25 @@ export class SalesOrderDocumentService {
             '销售订单不存在',
           )
         }
+        if (order.orderStatus === 'CANCELLED') {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_CANCELLED',
+            '已取消订单不能继续履约',
+          )
+        }
+        if (order.orderStatus === 'COMPLETED') {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_COMPLETED',
+            '已完成订单不能继续履约',
+          )
+        }
+        // 本次事务即将创建的签收单就是 SIGNED 所需的有效凭证；先校验状态机，
+        // 避免非法状态下提前激活临时媒体或留下孤立凭证。
+        assertSalesOrderFulfillmentTransition(
+          order.fulfillmentStatus,
+          'SIGNED',
+          { hasActiveDeliveryReceipt: true },
+        )
         const asset = await transaction.mediaAsset.findFirst({
           where: {
             id: mediaAssetId,
@@ -263,10 +290,22 @@ export class SalesOrderDocumentService {
           },
           select: { id: true },
         })
-        // 货物签收仅新增订单级凭证；订单进度仍等待后续管理员审批。
         await transaction.salesOrder.update({
           where: { id: salesOrderId },
-          data: { version: { increment: 1 } },
+          data: {
+            fulfillmentStatus: 'SIGNED',
+            version: { increment: 1 },
+          },
+        })
+        await transaction.salesOrderStatusHistory.create({
+          data: {
+            salesOrderId,
+            dimension: 'FULFILLMENT',
+            fromStatus: order.fulfillmentStatus,
+            toStatus: 'SIGNED',
+            reason: '业务人员上传签收单后自动确认签收',
+            changedByUserId: context.actorUserId,
+          },
         })
         await this.audit.record(transaction, {
           eventType: AuditEventType.SALES_ORDER_DOCUMENT_ATTACHED,
@@ -278,6 +317,26 @@ export class SalesOrderDocumentService {
           requestId: context.requestId,
           metadata: { salesOrderId, documentType: 'DELIVERY_RECEIPT' },
         })
+        await this.audit.record(transaction, {
+          eventType: AuditEventType.SALES_ORDER_FULFILLMENT_STATUS_CHANGED,
+          outcome: AuditOutcome.SUCCESS,
+          actorType: AuditActorType.USER,
+          actorUserId: context.actorUserId,
+          targetType: 'SALES_ORDER',
+          targetId: salesOrderId,
+          requestId: context.requestId,
+          metadata: {
+            fromStatus: order.fulfillmentStatus,
+            toStatus: 'SIGNED',
+          },
+        })
+        // 签收状态与可能已存在的付清状态必须在同一事务中共同派生待对账。
+        await this.automaticState.advanceToPendingReconciliationWhenEligible(
+          transaction,
+          context,
+          salesOrderId,
+          'DELIVERY_RECEIPT',
+        )
       })
     }
     catch (error) {

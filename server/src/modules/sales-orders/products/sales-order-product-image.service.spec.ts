@@ -6,6 +6,7 @@ import type {
   ProductMediaContentResponse,
 } from '../../products/media/product-media-content.service'
 import { SalesOrderProductImageService } from './sales-order-product-image.service'
+import type { SalesOrderProductEditQueryService } from '../sales-order-product-edit-query.service'
 
 const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
 const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
@@ -26,13 +27,18 @@ function createFixture(found: object | null = { id: PRODUCT_MEDIA_ID }) {
     findFirst: jest.fn().mockResolvedValue({ productId: PRODUCT_ID }),
   }
   const resolve = jest.fn().mockResolvedValue(RESPONSE)
+  const productEditQueries = {
+    context: jest.fn().mockResolvedValue({ salesOrder: { id: SALES_ORDER_ID } }),
+  }
   return {
+    productEditQueries,
     productMedia,
     salesOrderLine,
     resolve,
     service: new SalesOrderProductImageService(
       { productMedia, salesOrderLine } as unknown as PrismaService,
       { resolve } as unknown as ProductMediaContentService,
+      productEditQueries as unknown as SalesOrderProductEditQueryService,
     ),
   }
 }
@@ -91,6 +97,7 @@ describe('SalesOrderProductImageService', () => {
       where: {
         id: SALES_ORDER_LINE_ID,
         salesOrderId: SALES_ORDER_ID,
+        removedAt: null,
         lineType: 'CATALOG',
         productId: { not: null },
         product: {
@@ -131,6 +138,67 @@ describe('SalesOrderProductImageService', () => {
     )).rejects.toMatchObject({
       code: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       publicMessage: '产品主图不存在或当前不可用',
+      status: HttpStatus.NOT_FOUND,
+    })
+    expect(fixture.resolve).not.toHaveBeenCalled()
+  })
+
+  it('revalidates product-edit order and exact current main image relation', async () => {
+    const fixture = createFixture()
+
+    await expect(fixture.service.resolveProductEditOption(
+      SALES_ORDER_ID,
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      '"known"',
+      'bytes=0-0',
+      'HEAD',
+    )).resolves.toBe(RESPONSE)
+
+    expect(fixture.productEditQueries.context).toHaveBeenCalledWith(SALES_ORDER_ID)
+    expect(fixture.productMedia.findFirst).toHaveBeenLastCalledWith({
+      where: {
+        id: PRODUCT_MEDIA_ID,
+        productId: PRODUCT_ID,
+        kind: 'IMAGE',
+        isPrimary: true,
+        detachedAt: null,
+        mediaAsset: { is: { status: 'READY' } },
+        product: { is: { status: 'ACTIVE' } },
+      },
+      select: { id: true },
+    })
+  })
+
+  it('does not enumerate product media when the product-edit order is no longer eligible', async () => {
+    const fixture = createFixture()
+    fixture.productEditQueries.context.mockRejectedValue(
+      new Error('product-edit context is no longer eligible'),
+    )
+
+    await expect(fixture.service.resolveProductEditOption(
+      SALES_ORDER_ID,
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+      undefined,
+      'GET',
+    )).rejects.toThrow('product-edit context is no longer eligible')
+    expect(fixture.productMedia.findFirst).not.toHaveBeenCalled()
+  })
+
+  it('uses the existing non-enumerating image error when a product-edit relation is stale', async () => {
+    const fixture = createFixture(null)
+
+    await expect(fixture.service.resolveProductEditOption(
+      SALES_ORDER_ID,
+      PRODUCT_ID,
+      PRODUCT_MEDIA_ID,
+      undefined,
+      undefined,
+      'GET',
+    )).rejects.toMatchObject({
+      code: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
       status: HttpStatus.NOT_FOUND,
     })
     expect(fixture.resolve).not.toHaveBeenCalled()

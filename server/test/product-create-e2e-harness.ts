@@ -367,6 +367,7 @@ export class ProductCreateE2eHarness {
       .set(CSRF_HEADERS)
       .send({
         ruleCode: PRODUCT_RULE_CODE,
+        purpose: 'BUSINESS',
         name: 'Product E2E Rule',
         resetPolicy: 'NEVER',
         segments: [

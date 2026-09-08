@@ -165,6 +165,33 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'factory-shipment-modal',
+        name: 'componentLibraryQsFactoryShipmentModal',
+        component: () => import('@/views/component_library/business/factory-shipment-modal.vue'),
+        meta: {
+          title: '订单工厂发货弹窗',
+          icon: 'i-lucide:truck',
+        },
+      },
+      {
+        path: 'sales-order-selector-modal',
+        name: 'componentLibraryQsSalesOrderSelectorModal',
+        component: () => import('@/views/component_library/business/sales-order-selector-modal.vue'),
+        meta: {
+          title: '销售订单选择弹窗',
+          icon: 'i-lucide:list-checks',
+        },
+      },
+      {
+        path: 'sales-order-products-editor-modal',
+        name: 'componentLibraryQsSalesOrderProductsEditorModal',
+        component: () => import('@/views/component_library/business/sales-order-products-editor-modal.vue'),
+        meta: {
+          title: '销售订单产品修改弹窗',
+          icon: 'i-lucide:list-restart',
+        },
+      },
+      {
         path: 'good-tooltip',
         name: 'componentLibraryQsGoodTooltip',
         component: () => import('@/views/component_library/business/good-tooltip.vue'),
@@ -219,12 +246,30 @@ const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'part-configurator',
+        name: 'componentLibraryQsPartConfigurator',
+        component: () => import('@/views/component_library/business/part-configurator.vue'),
+        meta: {
+          title: '货件配置器',
+          icon: 'i-lucide:package-open',
+        },
+      },
+      {
         path: 'sales-order-desc',
         name: 'componentLibraryQsSalesOrderDesc',
         component: () => import('@/views/component_library/business/sales-order-desc.vue'),
         meta: {
           title: '销售订单详情',
           icon: 'i-lucide:receipt-text',
+        },
+      },
+      {
+        path: 'purchase-order-desc',
+        name: 'componentLibraryQsPurchaseOrderDesc',
+        component: () => import('@/views/component_library/business/purchase-order-desc.vue'),
+        meta: {
+          title: '采购订单详情',
+          icon: 'i-lucide:shopping-basket',
         },
       },
       {

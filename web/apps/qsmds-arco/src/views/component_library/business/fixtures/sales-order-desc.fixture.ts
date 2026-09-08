@@ -1,6 +1,7 @@
 import type { QsSalesOrderDescViewModel } from '@/components/business/QsSalesOrderDesc/types'
-import depositVoucherSrc from '@/assets/images/component-library/image-group/product-front.svg?url'
+import productImageSrc from '@/assets/images/component-library/image-group/product-front.svg?url'
 import deliveryReceiptSrc from '@/assets/images/component-library/image-group/product-label.svg?url'
+import depositVoucherSrc from '@/assets/images/component-library/image-group/product-package.svg?url'
 
 /**
  * 组件库专用的确定性销售订单快照。
@@ -47,18 +48,25 @@ export const SALES_ORDER_DESC_SHOWCASE_MODEL = {
   lines: [
     {
       actualUnitPriceAmount: '120000.00',
+      description: '模块化收纳组合，包含柜体、层板与标准五金。',
       key: 'line-catalog-product',
       lineSubtotalAmount: '120000.00',
       lineType: 'CATALOG',
+      mainImage: {
+        alt: '千树标准组合柜主图',
+        src: productImageSrc,
+      },
       productName: '千树标准组合柜',
       productNo: 'PRD-202608-001',
       quantity: '1',
     },
     {
       actualUnitPriceAmount: '30000.00',
+      description: '包含上门安装、调试及现场交付说明。',
       key: 'line-custom-product',
       lineSubtotalAmount: '60000.00',
       lineType: 'CUSTOM',
+      mainImage: null,
       productName: '订单专用安装服务',
       productNo: null,
       quantity: '2',

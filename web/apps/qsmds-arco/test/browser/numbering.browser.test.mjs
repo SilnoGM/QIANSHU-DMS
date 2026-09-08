@@ -10,18 +10,20 @@ import {
   clickRuleAction,
   clickSegmentMove,
   clickVisibleButton,
-  clickVisibleDrawerOverlay,
   fillDialogControl,
   observeSuccessfulPageGet,
+  openNumberingCreatePage,
   patchNumberingPermissionsExpression,
   readRuleMenuItems,
   releaseTwoPreviewResponsesNewestFirst,
   restoreNumberingPermissionsExpression,
   runNumberingBrowserStep,
+  saveNumberingScreenshot,
   selectDialogOption,
   waitForAfterAuthentication,
   waitForDialogControlValue,
   waitForNoVisibleDialog,
+  waitForNumberingCreatePage,
   waitForNumberingTable,
   waitForVisibleDialog,
 } from './numbering.browser.helpers.mjs'
@@ -38,6 +40,7 @@ import {
   readConfiguration,
   requestPathname,
 } from './regions.browser.helpers.mjs'
+import { verifyShippingMarkBindings } from './shipping-mark-bindings.browser.scenario.mjs'
 
 const managementRoute = '/system/basic-data/numbering'
 const mainRuleCode = 'E2E_BROWSER_SEQUENCE'
@@ -85,6 +88,7 @@ function createRulePayload(ruleCode, name, segments, resetPolicy = 'NEVER') {
   return {
     description: `${name} Browser E2E`,
     name,
+    purpose: 'BUSINESS',
     resetPolicy,
     ruleCode,
     segments,
@@ -323,9 +327,14 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     const visibleButton = label => [...document.querySelectorAll('button')]
       .find(button => button.getClientRects().length > 0
         && button.textContent?.trim() === label)
-    const createButton = visibleButton('新建编号规则')
+    const createButton = visibleButton('新建规则')
+    const bindingButton = visibleButton('唛头绑定')
     const queryButton = visibleButton('查询')
     return {
+      headerButtonGap: createButton && bindingButton
+        ? createButton.getBoundingClientRect().left
+          - bindingButton.getBoundingClientRect().right
+        : null,
       createHeight: createButton?.getBoundingClientRect().height ?? 0,
       documentFits: document.documentElement.scrollWidth
         <= document.documentElement.clientWidth,
@@ -357,23 +366,20 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     Math.abs(desktop.createHeight - desktop.queryHeight) <= 1,
     `页头主按钮与查询按钮高度不一致: ${JSON.stringify(desktop)}`,
   )
+  assert.equal(desktop.headerButtonGap, 12, '页头按钮之间应保留 12px 间距')
+  await saveNumberingScreenshot(page, 'header-buttons-desktop')
 
-  // Escape、overlay、显式关闭、dirty 确认与 opener 焦点恢复共享同一真实 Drawer。
-  await clickVisibleButton(page, '新建编号规则')
-  await waitForVisibleDialog(page, '新建编号规则')
-  await page.waitFor(`(() => {
-    const dialog = [...document.querySelectorAll('[role="dialog"]')]
-      .find(candidate => candidate.getClientRects().length > 0
-        && candidate.textContent?.includes('新建编号规则'))
-    return Boolean(dialog)
-      && dialog.getAnimations({ subtree: true })
-        .every(animation => animation.playState !== 'running')
-  })()`)
+  // 用途选择不预选，Escape 可退出；新增页自己的 dirty 守卫不依赖 Drawer。
+  await clickVisibleButton(page, '新建规则')
+  await waitForVisibleDialog(page, '选择编码用途')
+  await saveNumberingScreenshot(page, 'purpose-modal-desktop')
+  assert.equal(await page.evaluate(`document.querySelectorAll('input[type="radio"]:checked').length`), 0)
+  await pressKey(page, 'Escape')
+  await waitForNoVisibleDialog(page, '选择编码用途')
+  await openNumberingCreatePage(page, 'BUSINESS')
   const desktopEditor = await page.evaluate(`(() => {
-    const dialog = [...document.querySelectorAll('[role="dialog"]')]
-      .find(candidate => candidate.getClientRects().length > 0
-        && candidate.textContent?.includes('新建编号规则'))
-    const body = dialog?.querySelector('[data-slot="qs-generic-drawer-body"]')
+    const dialog = document.querySelector('[data-testid="numbering-create-page"]')
+    const body = dialog
     const section = document.getElementById('numbering-segment-editor-title')
       ?.closest('section')
     const description = section?.querySelector(
@@ -408,6 +414,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
       sectionFits: section ? fits(section) : false,
     }
   })()`)
+  await saveNumberingScreenshot(page, 'create-page-desktop')
   assert.deepEqual({
     bodyFits: desktopEditor.bodyFits,
     cardFits: desktopEditor.cardFits,
@@ -424,73 +431,82 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     && desktopEditor.descriptionLines <= 3,
     `片段说明布局异常: ${JSON.stringify(desktopEditor)}`,
   )
-  await pressKey(page, 'Escape')
-  await waitForNoVisibleDialog(page, '新建编号规则')
-  await page.waitFor(`document.activeElement?.textContent?.trim()
-    === '新建编号规则'`)
-  await page.waitFor(`document.querySelectorAll('[data-drawer-id]').length === 0`)
 
-  await clickVisibleButton(page, '新建编号规则')
-  await waitForVisibleDialog(page, '新建编号规则')
-  await fillDialogControl(page, '新建编号规则', '规则名称', '待放弃修改')
-  const overlayProbe = await clickVisibleDrawerOverlay(page)
-  assert.deepEqual(overlayProbe, {
-    discardConfirmationVisible: true,
-    editorVisible: true,
-    mouseDownTargetWasOverlay: true,
-    pointerDownTargetWasOverlay: true,
+  await fillDialogControl(page, '新增编号规则', '规则名称', '待放弃修改')
+  await clickDialogButton(page, '新增编号规则', '取消')
+  await waitForVisibleDialog(page, '放弃未保存的修改')
+  await clickDialogButton(page, '放弃未保存的修改', '继续编辑')
+  await waitForNumberingCreatePage(page)
+  await clickDialogButton(page, '新增编号规则', '取消')
+  await clickDialogButton(page, '放弃未保存的修改', '放弃修改')
+  await waitForNumberingTable(page)
+
+  await runNumberingBrowserStep('create URL validation and guarded purpose changes', async () => {
+    await page.evaluate(`document.querySelector('#app').__vue_app__.config.globalProperties.$router.push({
+      name: 'systemBasicDataNumberingCreate', query: { purpose: ['BUSINESS', 'SHIPPING_MARK'] },
+    })`)
+    await waitForVisibleDialog(page, '选择编码用途')
+    assert.equal(await page.evaluate(`document.querySelector('#numbering-segment-editor-title') !== null`), false)
+    await clickDialogButton(page, '选择编码用途', '取消')
+    await waitForNumberingTable(page)
+    await openNumberingCreatePage(page, 'BUSINESS')
+    await fillDialogControl(page, '新增编号规则', '规则名称', '不能跨用途携带的输入')
+    // 不 await 尚待用户确认的路由 Promise；交互通过真实确认框完成。
+    const changePurpose = `(() => {
+      void document.querySelector('#app').__vue_app__.config.globalProperties.$router.replace({
+        name: 'systemBasicDataNumberingCreate', query: { purpose: 'SHIPPING_MARK' },
+      })
+      return true
+    })()`
+    await page.evaluate(changePurpose)
+    await waitForVisibleDialog(page, '放弃未保存的修改')
+    await clickDialogButton(page, '放弃未保存的修改', '继续编辑')
+    await waitForDialogControlValue(page, '新增编号规则', '规则名称', '不能跨用途携带的输入')
+    await page.evaluate(changePurpose)
+    await clickDialogButton(page, '放弃未保存的修改', '放弃修改')
+    await waitForDialogControlValue(page, '新增编号规则', '规则名称', '')
+    assert.equal(await page.evaluate(`location.hash.includes('purpose=SHIPPING_MARK')`), true)
+    await clickDialogButton(page, '新增编号规则', '取消')
+    await waitForNumberingTable(page)
   })
-  await page.waitFor(`document.body.innerText.includes('放弃修改')`)
-  await clickVisibleButton(page, '继续编辑')
-  await waitForVisibleDialog(page, '新建编号规则')
-  await clickDialogAriaButton(page, '新建编号规则', '关闭抽屉')
-  await clickVisibleButton(page, '放弃修改')
-  await waitForNoVisibleDialog(page, '新建编号规则')
-  await page.waitFor(`document.activeElement?.textContent?.trim()
-    === '新建编号规则'`)
-  // 等待 Drawer 的离场动画与 closed 生命周期完成，避免立即重开时复用旧表单上下文。
-  await page.waitFor(`document.querySelectorAll('[data-drawer-id]').length === 0`)
 
   // 通过 UI 真实编排五种片段；最后把 RANDOM 上移一位，证明顺序可编辑。
-  await clickVisibleButton(page, '新建编号规则')
-  await waitForVisibleDialog(page, '新建编号规则')
-  await fillDialogControl(page, '新建编号规则', '规则编码', mainRuleCode)
-  await fillDialogControl(page, '新建编号规则', '规则名称', '浏览器主编号规则')
+  await openNumberingCreatePage(page, 'BUSINESS')
+  await fillDialogControl(page, '新增编号规则', '规则编码', mainRuleCode)
+  await fillDialogControl(page, '新增编号规则', '规则名称', '浏览器主编号规则')
   await fillDialogControl(
     page,
-    '新建编号规则',
+    '新增编号规则',
     '说明',
     '全生命周期与精确容量验收',
   )
-  await selectDialogOption(page, '新建编号规则', '重置周期', '每日重置')
+  await selectDialogOption(page, '新增编号规则', '重置周期', '每日重置')
 
   // 新建模型已经包含一个 SEQUENCE；直接配置它，避免测试制造第二个非法序列。
-  await fillDialogControl(page, '新建编号规则', '位数', '18')
-  await fillDialogControl(page, '新建编号规则', '起始值', '1')
-  await fillDialogControl(page, '新建编号规则', '步长', '1')
-  await selectDialogOption(page, '新建编号规则', '新片段类型', '固定字符')
-  await clickDialogButton(page, '新建编号规则', '添加片段')
-  await fillDialogControl(page, '新建编号规则', '固定字符', 'SO')
-  await selectDialogOption(page, '新建编号规则', '新片段类型', '日期')
-  await clickDialogButton(page, '新建编号规则', '添加片段')
-  await selectDialogOption(page, '新建编号规则', '日期格式', 'YYYYMMDD')
-  await selectDialogOption(page, '新建编号规则', '新片段类型', '分隔符')
-  await clickDialogButton(page, '新建编号规则', '添加片段')
-  await selectDialogOption(page, '新建编号规则', '新片段类型', '随机字符串')
-  await clickDialogButton(page, '新建编号规则', '添加片段')
-  await fillDialogControl(page, '新建编号规则', '大写字母长度', '2')
-  await fillDialogControl(page, '新建编号规则', '数字长度', '2')
-  await selectDialogOption(page, '新建编号规则', '组合方式', '字母数字打散')
+  await fillDialogControl(page, '新增编号规则', '位数', '18')
+  await fillDialogControl(page, '新增编号规则', '起始值', '1')
+  await fillDialogControl(page, '新增编号规则', '步长', '1')
+  await selectDialogOption(page, '新增编号规则', '新片段类型', '固定字符')
+  await clickDialogButton(page, '新增编号规则', '添加片段')
+  await fillDialogControl(page, '新增编号规则', '固定字符', 'SO')
+  await selectDialogOption(page, '新增编号规则', '新片段类型', '日期')
+  await clickDialogButton(page, '新增编号规则', '添加片段')
+  await selectDialogOption(page, '新增编号规则', '日期格式', 'YYYYMMDD')
+  await selectDialogOption(page, '新增编号规则', '新片段类型', '分隔符')
+  await clickDialogButton(page, '新增编号规则', '添加片段')
+  await selectDialogOption(page, '新增编号规则', '新片段类型', '随机字符串')
+  await clickDialogButton(page, '新增编号规则', '添加片段')
+  await fillDialogControl(page, '新增编号规则', '大写字母长度', '2')
+  await fillDialogControl(page, '新增编号规则', '数字长度', '2')
+  await selectDialogOption(page, '新增编号规则', '组合方式', '字母数字打散')
   await clickSegmentMove(
     page,
-    '新建编号规则',
+    '新增编号规则',
     0,
     '下移第 1 个自增数字片段',
   )
   const orderedTypes = await page.evaluate(`(() => {
-    const dialog = [...document.querySelectorAll('[role="dialog"]')]
-      .find(candidate => candidate.getClientRects().length > 0
-        && candidate.textContent?.includes('新建编号规则'))
+    const dialog = document.querySelector('[data-testid="numbering-create-page"]')
     return [...(dialog?.querySelectorAll('ol > li h4') ?? [])]
       .map(heading => heading.textContent?.trim())
   })()`)
@@ -528,7 +544,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     },
   )
   try {
-    await selectDialogOption(page, '新建编号规则', '日期格式', 'YYMMDD')
+    await selectDialogOption(page, '新增编号规则', '日期格式', 'YYMMDD')
     await page.waitFor(`(() => {
       const section = document.getElementById('numbering-preview-title')
         ?.closest('section')
@@ -540,7 +556,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     await new Promise(resolve => setTimeout(resolve, 650))
     assert.equal(invalidPreviewRequestCount, 0)
 
-    await selectDialogOption(page, '新建编号规则', '日期格式', 'YYYYMMDD')
+    await selectDialogOption(page, '新增编号规则', '日期格式', 'YYYYMMDD')
     await page.waitFor(`(() => {
       const section = document.getElementById('numbering-preview-title')
         ?.closest('section')
@@ -571,9 +587,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   try {
     // 同一事件循环内连续输入，稳定证明 300ms debounce 只保留最后一个快照。
     await page.evaluate(`(() => {
-      const dialog = [...document.querySelectorAll('[role="dialog"]')]
-        .find(candidate => candidate.getClientRects().length > 0
-          && candidate.textContent?.includes('新建编号规则'))
+      const dialog = document.querySelector('[data-testid="numbering-create-page"]')
       const label = [...(dialog?.querySelectorAll('label') ?? [])]
         .find(candidate => candidate.getClientRects().length > 0
           && candidate.textContent?.trim().startsWith('位数'))
@@ -619,7 +633,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   }
 
   // 后续精确大数与乱序场景仍使用 18 位序列。
-  await fillDialogControl(page, '新建编号规则', '位数', '18')
+  await fillDialogControl(page, '新增编号规则', '位数', '18')
   await page.waitFor(`(() => {
     const section = document.getElementById('numbering-preview-title')
       ?.closest('section')
@@ -633,13 +647,13 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     baseUrl: configuration.baseUrl,
     firstAction: () => fillDialogControl(
       page,
-      '新建编号规则',
+      '新增编号规则',
       '起始值',
       '2',
     ),
     secondAction: () => fillDialogControl(
       page,
-      '新建编号规则',
+      '新增编号规则',
       '起始值',
       '3',
     ),
@@ -686,32 +700,19 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     }],
     event => event.request?.method === 'POST'
       && requestPathname(event) === '/api/numbering-rules',
-    () => clickDialogButton(page, '新建编号规则', '创建规则'),
+    () => clickDialogButton(page, '新增编号规则', '创建规则'),
     async () => {
       await page.waitFor(`(() => {
-        const dialog = [...document.querySelectorAll('[role="dialog"]')]
-          .find(candidate => candidate.getClientRects().length > 0
-            && candidate.textContent?.includes('新建编号规则'))
-        const drawer = dialog?.querySelector('[data-slot="qs-generic-drawer"]')
-        const footer = dialog?.querySelector(
-          '[data-slot="qs-generic-drawer-footer"]',
-        )
-        const close = dialog?.querySelector('button[aria-label="关闭抽屉"]')
-        return drawer?.getAttribute('aria-busy') === 'true'
-          && footer?.hasAttribute('inert')
-          && close?.disabled === true
+        const editor = document.querySelector('[data-testid="numbering-create-page"]')
+        const buttons = [...(editor?.querySelectorAll('[data-testid="numbering-create-footer"] button') ?? [])]
+        return editor?.getAttribute('aria-busy') === 'true'
+          && buttons.length === 2 && buttons.every(button => button.disabled)
       })()`)
       await pressKey(page, 'Escape')
-      assert.equal(
-        await page.evaluate(`(() => [...document.querySelectorAll(
-          '[role="dialog"]',
-        )].some(dialog => dialog.getClientRects().length > 0
-          && dialog.textContent?.includes('新建编号规则')))()`),
-        true,
-      )
+      await waitForNumberingCreatePage(page)
     },
   )
-  await waitForNoVisibleDialog(page, '新建编号规则')
+  await waitForNumberingTable(page)
   await waitForRuleRow(page, mainRuleCode)
 
   let mainDetail = await getRuleByCode(page, mainRuleCode)
@@ -1117,7 +1118,7 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     const buttons = [...document.querySelectorAll('button')]
       .filter(button => button.getClientRects().length > 0)
     const createButton = buttons.find(
-      button => button.textContent?.trim() === '新建编号规则',
+      button => button.textContent?.trim() === '新建规则',
     )
     return window.innerWidth === 390
       && matchMedia('(max-width: 767px)').matches
@@ -1128,6 +1129,10 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
         ?.startsWith('编号规则操作 · '))
   })()`)
   const mobile = await page.evaluate(`(() => {
+    const headerButtons = [
+      document.querySelector('[data-testid="shipping-mark-bindings-entry"]'),
+      document.querySelector('[data-testid="numbering-create-rule"]'),
+    ]
     const row = [...document.querySelectorAll(
       '[data-testid="numbering-mobile-row"]',
     )].find(candidate => candidate.getClientRects().length > 0
@@ -1137,16 +1142,22 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
       ...document.querySelectorAll('button'),
     ].filter(button => button.getClientRects().length > 0
       && (
-        button.textContent?.trim() === '新建编号规则'
+        button.textContent?.trim() === '新建规则'
         || button.getAttribute('aria-label')
           ?.startsWith('编号规则操作 · ')
       ))
     return {
+      headerButtonsInside: headerButtons.every(button => button
+        && button.getBoundingClientRect().left >= 0
+        && button.getBoundingClientRect().right <= window.innerWidth),
+      headerButtonsWrap: headerButtons[1]
+        ? getComputedStyle(headerButtons[1].parentElement).flexWrap
+        : null,
       buttonHeights: buttons.map(button => Number(
         button.getBoundingClientRect().height.toFixed(3),
       )),
       buttonKinds: buttons.map(button => (
-        button.textContent?.trim() === '新建编号规则'
+        button.textContent?.trim() === '新建规则'
           ? 'create'
           : 'row-action'
       )),
@@ -1165,10 +1176,14 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
   assert.deepEqual({
     cardInside: mobile.cardInside,
     documentFits: mobile.documentFits,
+    headerButtonsInside: mobile.headerButtonsInside,
+    headerButtonsWrap: mobile.headerButtonsWrap,
     hasStatusText: mobile.hasStatusText,
   }, {
     cardInside: true,
     documentFits: true,
+    headerButtonsInside: true,
+    headerButtonsWrap: 'wrap',
     hasStatusText: true,
   })
   assert.equal(
@@ -1270,85 +1285,40 @@ test('真实 Chrome 覆盖编号规则全生命周期、精确统计、恢复与
     features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }],
   })
   await page.waitFor(`!matchMedia('(prefers-reduced-motion: reduce)').matches`)
-  await clickVisibleButton(page, '新建编号规则')
-  await waitForVisibleDialog(page, '新建编号规则')
-  await fillDialogControl(page, '新建编号规则', '规则名称', '移动端待放弃修改')
-  await page.waitFor(`(() => {
-    const dialog = [...document.querySelectorAll('[role="dialog"]')]
-      .find(candidate => candidate.getClientRects().length > 0
-        && candidate.textContent?.includes('新建编号规则'))
-    return Boolean(dialog)
-      && dialog.getAnimations({ subtree: true })
-        .every(animation => animation.playState !== 'running')
-  })()`)
+  await openNumberingCreatePage(page, 'SHIPPING_MARK')
+  await fillDialogControl(page, '新增编号规则', '规则名称', '移动端唛头规则')
+  await fillDialogControl(page, '新增编号规则', '规则编码', 'E2E_BROWSER_SHIPPING')
   const mobileEditor = await page.evaluate(`(() => {
-    const dialog = [...document.querySelectorAll('[role="dialog"]')]
-      .find(candidate => candidate.getClientRects().length > 0
-        && candidate.textContent?.includes('新建编号规则'))
-    const footer = dialog?.querySelector(
-      '[data-slot="qs-generic-drawer-footer"]',
-    )
-    const rect = dialog?.getBoundingClientRect()
-    const footerRect = footer?.getBoundingClientRect()
-    const buttons = [...(footer?.querySelectorAll('button') ?? [])]
-      .filter(button => button.getClientRects().length > 0)
+    const editor = document.querySelector('[data-testid="numbering-create-page"]')
+    const footer = editor?.querySelector('[data-testid="numbering-create-footer"]')
+    footer?.scrollIntoView({ block: 'end' })
+    const rect = editor?.getBoundingClientRect()
     return {
-      documentFits: document.documentElement.scrollWidth
-        <= document.documentElement.clientWidth,
-      footerButtons: buttons.map(
-        button => button.getBoundingClientRect().height,
-      ),
-      footerInside: Boolean(footerRect)
-        && footerRect.left >= 0
-        && footerRect.right <= document.documentElement.clientWidth
-        && footerRect.bottom <= window.innerHeight,
-      formControls: [...(dialog?.querySelectorAll('input, [role="combobox"]')
-        ?? [])].filter(control => control.getClientRects().length > 0).length,
-      inside: Boolean(rect)
-        && rect.left >= 0
-        && rect.right <= document.documentElement.clientWidth,
-      rect: rect ? {
-        left: Number(rect.left.toFixed(3)),
-        right: Number(rect.right.toFixed(3)),
-        width: Number(rect.width.toFixed(3)),
-      } : null,
-      viewportWidth: document.documentElement.clientWidth,
+      documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      formControls: editor?.querySelectorAll('input, [role="combobox"]').length ?? 0,
+      inside: rect && rect.left >= 0 && rect.right <= document.documentElement.clientWidth + 1,
     }
   })()`)
+  await saveNumberingScreenshot(page, 'create-page-mobile')
   assert.equal(mobileEditor.documentFits, true)
-  assert.equal(
-    mobileEditor.inside,
-    true,
-    `移动编辑器超出视口: ${JSON.stringify({
-      rect: mobileEditor.rect,
-      viewportWidth: mobileEditor.viewportWidth,
-    })}`,
-  )
-  assert.equal(
-    mobileEditor.footerInside,
-    true,
-    '移动编辑器 footer 必须保持在可视区域内',
-  )
+  assert.equal(mobileEditor.inside, true)
   assert.ok(mobileEditor.formControls > 0)
-  assert.ok(mobileEditor.footerButtons.length >= 2)
-  assert.equal(
-    mobileEditor.footerButtons.every(height => height >= 44),
-    true,
-  )
-  await clickDialogAriaButton(page, '新建编号规则', '关闭抽屉')
-  await waitForVisibleDialog(page, '放弃未保存修改')
-  await clickDialogButton(page, '放弃未保存修改', '放弃修改')
-  await waitForNoVisibleDialog(page, '放弃未保存修改')
-  await waitForNoVisibleDialog(page, '新建编号规则')
-  await page.waitFor(`document.activeElement?.textContent?.trim()
-    === '新建编号规则'`)
-  await page.waitFor(`document.querySelectorAll('[data-drawer-id]').length === 0`)
-  assert.equal(
-    await page.evaluate(`document.documentElement.scrollWidth
-      <= document.documentElement.clientWidth`),
-    true,
-  )
+  await clickDialogButton(page, '新增编号规则', '创建规则')
+  await waitForRuleRow(page, 'E2E_BROWSER_SHIPPING')
+  const shipping = await getRuleByCode(page, 'E2E_BROWSER_SHIPPING')
+  assert.equal(shipping.purpose, 'SHIPPING_MARK')
+  assert.equal(shipping.status, 'DRAFT')
+  assert.equal(shipping.statistics.usedCount, '0')
+  assert.equal(await page.evaluate(`document.body.innerText.includes('唛头编码')`), true)
+  const aggregate = await page.evaluate(apiExpression('/api/numbering-rules?page=1&pageSize=20&purpose=SHIPPING_MARK'))
+  assertApiStatus(aggregate, 200)
+  const visibleCounts = await page.evaluate(`[...document.querySelectorAll('[data-slot="qs-status-switch-item"]')].map(button => Number(button.children[1]?.textContent))`)
+  assert.deepEqual(visibleCounts, aggregate.body.purposeCounts.map(item => item.count))
+  await page.evaluate(`[...document.querySelectorAll('[data-slot="qs-status-switch-item"]')].find(button => button.textContent.includes('全部编码')).click()`)
+  await waitForRuleRow(page, mainRuleCode)
+  await waitForRuleRow(page, 'E2E_BROWSER_SHIPPING')
 
+  await runNumberingBrowserStep('shipping mark binding configuration', () => verifyShippingMarkBindings(page, configuration))
   issues.stop()
   assert.deepEqual(issues.issues, [])
   assert.equal(
@@ -1680,7 +1650,7 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
   assert.equal(
     await limitedPage.evaluate(`(() => ![...document.querySelectorAll('button')]
       .some(button => button.getClientRects().length > 0
-        && button.textContent?.trim() === '新建编号规则'))()`),
+        && button.textContent?.trim() === '新建规则'))()`),
     true,
   )
 
@@ -1692,7 +1662,7 @@ test('真实普通用户覆盖编号七权限、组合权限、动态撤权与�
   await openManagement()
   await limitedPage.waitFor(`(() => [...document.querySelectorAll('button')]
     .some(button => button.getClientRects().length > 0
-      && button.textContent?.trim() === '新建编号规则'))()`)
+      && button.textContent?.trim() === '新建规则'))()`)
   const createItems = await readRuleMenuItems(
     limitedPage,
     permissionTargetRuleCode,

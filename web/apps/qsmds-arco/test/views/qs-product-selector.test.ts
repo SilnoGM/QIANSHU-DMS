@@ -54,3 +54,12 @@ test('QsProductSelector 加宽桌面弹窗并约束已选产品名称与横向�
   assert.match(source, /v-for="selected in selectedItems"[\s\S]*?min-w-0[\s\S]*?w-full/u)
   assert.match(source, /:aria-label="`移除 \$\{selected\.name\}`"[\s\S]*?class="shrink-0"/u)
 })
+
+test('QsProductSelector 支持由订单固定供应商并隐藏可变供应商筛选', async () => {
+  const source = await readFile(SOURCE, 'utf8')
+
+  assert.match(source, /fixedSupplierValue\?: string/u)
+  assert.match(source, /props\.fixedSupplierValue \?\? supplierValue\.value/u)
+  assert.match(source, /v-if="fixedSupplierValue === undefined"[\s\S]*?aria-label="供应商筛选"/u)
+  assert.match(source, /watch\(\(\) => props\.fixedSupplierValue, closeUntrustedSession\)/u)
+})

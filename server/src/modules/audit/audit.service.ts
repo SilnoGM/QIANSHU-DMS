@@ -11,11 +11,15 @@ import {
   type AuditEventType as AuditEventTypeValue,
   type AuditOutcome as AuditOutcomeValue,
 } from '../../generated/prisma/enums'
+import { hasPersistenceCode, readPersistenceErrorFacts } from '../../infrastructure/database/persistence-error-facts'
 
 export const MAX_AUDIT_METADATA_KEY_LENGTH = 128
 export const MAX_AUDIT_METADATA_STRING_LENGTH = 512
 export const MAX_AUDIT_METADATA_ENTRY_COUNT = 32
 export const MAX_AUDIT_METADATA_SERIALIZED_BYTES = 8_192
+const MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES = 32_768
+const MAX_PRODUCT_CHANGE_AUDIT_ARRAY_LENGTH = 100
+const MAX_PURCHASE_PART_AUDIT_METADATA_SERIALIZED_BYTES = 65_536
 
 const MAX_REQUEST_ID_LENGTH = 64
 const MAX_AUDIT_REFERENCE_LENGTH = 128
@@ -49,7 +53,12 @@ const SAFE_PASSWORD_STATE_METADATA_KEYS = new Set(['mustchangepassword'])
 const RESERVED_METADATA_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
 
 export type AuditMetadataScalar = string | number | boolean | null
-export type AuditMetadata = Record<string, AuditMetadataScalar>
+export type AuditMetadataObject = Record<string, AuditMetadataScalar>
+export type AuditMetadataValue =
+  | AuditMetadataScalar
+  | AuditMetadataScalar[]
+  | AuditMetadataObject[]
+export type AuditMetadata = Record<string, AuditMetadataValue>
 
 export interface RecordAuditEventInput {
   eventType: AuditEventTypeValue
@@ -77,7 +86,7 @@ export class AuditEventValidationError extends Error {
 export class AuditWriteFailedError extends Error {
   readonly code = 'AUDIT_WRITE_FAILED'
 
-  constructor() {
+  constructor(readonly transactionConflict = false) {
     super(AUDIT_WRITE_FAILED_MESSAGE)
     this.name = 'AuditWriteFailedError'
   }
@@ -112,9 +121,14 @@ export class AuditService {
     try {
       return await transaction.auditEvent.create({ data })
     }
-    catch {
-      // 驱动异常可能包含 SQL 参数或连接信息；边界外只暴露固定安全错误。
-      throw new AuditWriteFailedError()
+    catch (error) {
+      // 驱动异常可能包含 SQL 参数或连接信息，不能保留原始 cause/meta；仅将
+      // 明确的事务冲突白名单缩减为布尔分类，供业务在事务退出后提示刷新重试。
+      // 其他审计写入失败仍须失败关闭，不能伪装为状态冲突或在这里重试审计。
+      const facts = readPersistenceErrorFacts(error)
+      throw new AuditWriteFailedError(
+        ['P2034', '40001', '40P01'].some(code => hasPersistenceCode(facts, code)),
+      )
     }
   }
 }
@@ -164,7 +178,7 @@ function validateAuditEventInput(
       MAX_AUDIT_REFERENCE_LENGTH,
     ),
     sourceIpHash: validateSourceIpHash(input.sourceIpHash),
-    metadata: validateMetadata(input.metadata),
+    metadata: validateMetadata(input.metadata, input.eventType),
   }
 }
 
@@ -228,7 +242,10 @@ function validateSourceIpHash(
   return Buffer.from(value)
 }
 
-function validateMetadata(value: AuditMetadata | undefined): AuditMetadata {
+function validateMetadata(
+  value: AuditMetadata | undefined,
+  eventType: AuditEventTypeValue,
+): AuditMetadata {
   if (value === undefined) {
     return {}
   }
@@ -246,22 +263,34 @@ function validateMetadata(value: AuditMetadata | undefined): AuditMetadata {
 
   const metadata: AuditMetadata = {}
 
+  const allowStructured = eventType === AuditEventType.SALES_ORDER_PRODUCTS_CHANGED
   for (const [key, descriptor] of entries) {
     if (
       !descriptor.enumerable
       || !('value' in descriptor)
-      || !isMetadataScalar(descriptor.value)
       || !isSafeMetadataEntry(key, descriptor.value)
     ) {
       throw new AuditEventValidationError()
     }
-
-    metadata[key] = descriptor.value
+    if (eventType === AuditEventType.PURCHASE_ORDER_CREATED && key === 'shippingMarkIssuanceIds') {
+      // 采购一次最多生成 1000 个货件；只开放该固定字段的 UUID 列表，其他审计边界不变。
+      const ids: unknown = descriptor.value
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > 1000
+        || !ids.every((id: unknown) => typeof id === 'string' && UUID_PATTERN.test(id))) {
+        throw new AuditEventValidationError()
+      }
+      metadata[key] = [...(ids as string[])]
+    }
+    else metadata[key] = validateMetadataValue(descriptor.value, allowStructured)
   }
 
   if (
     Buffer.byteLength(JSON.stringify(metadata), 'utf8')
-    > MAX_AUDIT_METADATA_SERIALIZED_BYTES
+    > (eventType === AuditEventType.PURCHASE_ORDER_CREATED
+        ? MAX_PURCHASE_PART_AUDIT_METADATA_SERIALIZED_BYTES
+        : allowStructured
+        ? MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES
+        : MAX_AUDIT_METADATA_SERIALIZED_BYTES)
   ) {
     throw new AuditEventValidationError()
   }
@@ -281,7 +310,7 @@ function isPlainObject(value: unknown): value is AuditMetadata {
 
 function isSafeMetadataEntry(
   key: string,
-  value: AuditMetadataScalar,
+  value: unknown,
 ): boolean {
   if (
     key.length === 0
@@ -301,6 +330,39 @@ function isSafeMetadataEntry(
   return !SENSITIVE_METADATA_KEY_FRAGMENTS.some(fragment =>
     normalizedKey.includes(fragment),
   )
+}
+
+function validateMetadataValue(
+  value: unknown,
+  allowStructured: boolean,
+): AuditMetadataValue {
+  if (isMetadataScalar(value)) return value
+  if (
+    !allowStructured
+    || !Array.isArray(value)
+    || value.length > MAX_PRODUCT_CHANGE_AUDIT_ARRAY_LENGTH
+  ) {
+    throw new AuditEventValidationError()
+  }
+  if (value.every(isMetadataScalar)) return [...value]
+  if (value.every(item => isPlainObject(item))) {
+    return value.map((item) => {
+      const entries = Object.entries(item)
+      if (entries.length > 8) throw new AuditEventValidationError()
+      const normalized: AuditMetadataObject = {}
+      for (const [key, nestedValue] of entries) {
+        if (
+          !isMetadataScalar(nestedValue)
+          || !isSafeMetadataEntry(key, nestedValue)
+        ) {
+          throw new AuditEventValidationError()
+        }
+        normalized[key] = nestedValue
+      }
+      return normalized
+    })
+  }
+  throw new AuditEventValidationError()
 }
 
 function isMetadataScalar(value: unknown): value is AuditMetadataScalar {

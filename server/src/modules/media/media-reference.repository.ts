@@ -9,11 +9,12 @@ import type { Prisma } from '../../generated/prisma/client'
 export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'product_media',
   'sales_order_documents',
+  'purchase_order_documents',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument'
 >
 
 /**
@@ -40,6 +41,15 @@ export class MediaAssetReferenceRepository {
       },
       select: { id: true },
     })
-    return salesOrderReference !== null
+    if (salesOrderReference !== null) return true
+
+    const purchaseOrderReference = await reader.purchaseOrderDocument.findFirst({
+      where: {
+        detachedAt: null,
+        mediaAssetId: assetId,
+      },
+      select: { id: true },
+    })
+    return purchaseOrderReference !== null
   }
 }

@@ -13,6 +13,37 @@ const repositoryRoot = path.resolve(scriptsDirectory, '..')
 
 const supplierResiduePattern = 'supplier|service[._ /-]?provider'
 const supplierResidueAllowlist = Object.freeze([
+  // 审核确认摘要仅展示已存采购供应商，不新增供应商主数据。
+  'web/apps/qsmds-arco/src/locales/lang/purchase-order-list/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue',
+  'web/apps/qsmds-arco/test/views/purchase-order-review.test.ts',
+  // 唛头绑定及采购消费仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据。
+  'scripts/browser-auth/provision-shipping-mark-fixtures.mjs',
+  'scripts/browser-shipping-mark-fixtures.test.mjs',
+  'server/src/modules/purchase-orders/purchase-order-shipping-mark-input.spec.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-mark-resolution.dto.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service.spec.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-mark-resolver.service.ts',
+  'server/test/purchase-shipping-mark-atomicity.e2e-spec.ts',
+  'server/test/purchase-shipping-mark-atomicity.fixture.ts',
+  'server/test/purchase-shipping-mark-resolution.e2e-spec.ts',
+  'specs/purchase-shipping-mark-binding/issuance-tasks.md',
+  'web/apps/qsmds-arco/test/views/purchase-order-shipping-mark.logic.test.ts',
+  'server/prisma/migrations/20260906090104_supplier_shipping_mark_rule_bindings/migration.sql',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.controller.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.service.ts',
+  'server/src/modules/purchase-shipping-marks/purchase-shipping-marks.service.spec.ts',
+  'server/src/modules/purchase-shipping-marks/shipping-mark-binding.dto.ts',
+  'server/src/modules/purchase-shipping-marks/shipping-mark-binding.persistence.ts',
+  'server/test/shipping-mark-bindings.e2e-spec.ts',
+  'specs/purchase-shipping-mark-binding/design.md',
+  'specs/purchase-shipping-mark-binding/requirements.md',
+  'web/apps/qsmds-arco/src/api/modules/shipping-mark-bindings.ts',
+  'web/apps/qsmds-arco/src/locales/lang/shipping-mark-binding/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue',
+  'web/apps/qsmds-arco/src/views/system/basic-data/numbering/use-shipping-mark-bindings.ts',
+  'web/apps/qsmds-arco/test/api/shipping-mark-bindings.test.ts',
+  'web/apps/qsmds-arco/test/browser/shipping-mark-bindings.browser.scenario.mjs',
   'docs/后端文档/数据库迁移规范.md',
   'scripts/contract-check.test.mjs',
   'scripts/openapi-contract.mjs',
@@ -68,12 +99,110 @@ const supplierResidueAllowlist = Object.freeze([
   'server/src/modules/sales-orders/dto/sales-order-query-dto.spec.ts',
   'server/src/modules/sales-orders/dto/sales-order-query.dto.ts',
   'server/src/modules/sales-orders/dto/sales-order-response.dto.ts',
+  // 销售产品修改查询仍只消费 supplierValue 稳定字典值；查询服务与规格
+  // 均不得借此恢复 Supplier 主数据、关系或管理接口。
+  'server/src/modules/sales-orders/products/sales-order-product-option.mapper.ts',
+  'server/src/modules/sales-orders/sales-order-product-edit-query.service.spec.ts',
+  'server/src/modules/sales-orders/sales-order-product-edit-query.service.ts',
   'server/src/modules/sales-orders/sales-order-query.service.spec.ts',
   'server/src/modules/sales-orders/sales-order-query.service.ts',
   'server/src/modules/sales-orders/sales-orders-product-options.controller.spec.ts',
   'server/test/sales-order-service.e2e-spec.ts',
+  'specs/sales-order-product-editing/design.md',
+  // 采购订单域继续消费 service_provider.supplier 的稳定字典值；这里精确冻结
+  // 已授权的 schema、服务、API、E2E 与规格文件，禁止借此恢复 Supplier 主数据域。
+  'server/prisma/migrations/20260827120000_purchase_order_domain/migration.sql',
+  'server/prisma/migrations/20260904160000_purchase_order_product_mode/migration.sql',
+  'server/src/infrastructure/database/purchase-order-schema.spec.ts',
+  'server/src/modules/purchase-orders/dto/purchase-order-create.dto.ts',
+  'server/src/modules/purchase-orders/dto/purchase-order-query-dto.spec.ts',
+  'server/src/modules/purchase-orders/dto/purchase-order-query.dto.ts',
+  'server/src/modules/purchase-orders/dto/purchase-order-response.dto.ts',
+  // 工厂发货上下文仅返回采购单已冻结的 supplierValue 展示值；DTO、查询服务
+  // 与测试仍不得引入 Supplier 主数据、关系或管理接口。
+  'server/src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment-query.service.spec.ts',
+  'server/src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment-query.service.ts',
+  'server/src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.dto.ts',
+  'server/src/modules/purchase-orders/products/purchase-order-product-image.service.spec.ts',
+  'server/src/modules/purchase-orders/products/purchase-order-product-image.service.ts',
+  'server/src/modules/purchase-orders/purchase-order-command.normalizer.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-command.normalizer.ts',
+  'server/src/modules/purchase-orders/purchase-order-command.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-command.service.ts',
+  'server/src/modules/purchase-orders/purchase-order-create-dependency.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-create-dependency.service.ts',
+  'server/src/modules/purchase-orders/purchase-order-create-fingerprint.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-create-fingerprint.ts',
+  // 审核读取当前 supplierValue 绑定以派发基础唛头；不创建供应商实体。
+  'server/src/modules/purchase-orders/purchase-order-mutation.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-mutation.service.ts',
+  'server/src/modules/purchase-orders/purchase-order-query.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-query.service.ts',
+  'server/src/modules/purchase-orders/purchase-order-source-query.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-source-query.service.ts',
+  'server/src/modules/purchase-orders/purchase-orders.controller.spec.ts',
+  'server/src/modules/purchase-orders/purchase-orders.controller.ts',
+  'server/test/purchase-order-api.e2e-spec.ts',
+  'server/test/purchase-order-parts.e2e-spec.ts',
+  // 审核派号回归仅校验供应商字典稳定值的规则绑定，不恢复 Supplier 主数据。
+  'server/test/purchase-order-review-marks.e2e-spec.ts',
+  'server/test/purchase-order-product-mode-migration.e2e-spec.ts',
+  'server/test/purchase-order-records.e2e-spec.ts',
+  'server/test/purchase-order-schema.e2e-spec.ts',
+  'server/test/purchase-order-service.e2e-spec.ts',
+  'specs/order-factory-shipment/design.md',
+  'specs/purchase-order-domain/design.md',
+  'specs/purchase-order-domain/requirements.md',
+  'specs/purchase-order-domain/tasks.md',
+  'specs/purchase-order-product-mode-entry/design.md',
+  'specs/purchase-order-product-mode-entry/requirements.md',
+  'specs/purchase-order-product-mode-entry/tasks.md',
+  'specs/status-switch-toolbar-counts/design.md',
+  'specs/sales-order-add-on-purchase/design.md',
+  'specs/sales-order-add-on-purchase/tasks.md',
   'scripts/browser-auth-runtime.test.mjs',
   'scripts/browser-auth/provision-admin.mjs',
+  // 采购 Web 只消费 service_provider.supplier 字典值、产品 supplierValue 快照
+  // 与展示标签；页面、适配层和测试不允许恢复独立 Supplier 主数据调用。
+  'web/apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue',
+  'web/apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/types.ts',
+  'web/apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue',
+  'web/apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/types.ts',
+  'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/index.vue',
+  'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/types.ts',
+  'web/apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderInformation.vue',
+  // 记录弹窗仅展示已授权采购响应中的供应商标签，不新增供应商主数据访问。
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.vue',
+  'web/apps/qsmds-arco/src/components/business/QsPurchaseStartModal/README.md',
+  'web/apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue',
+  'web/apps/qsmds-arco/src/components/business/QsPurchaseStartModal/logic.ts',
+  'web/apps/qsmds-arco/src/components/business/QsPurchaseStartModal/types.ts',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-order-desc/en.json',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-order-desc/zh-cn.json',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-order-desc/zh-tw.json',
+  'web/apps/qsmds-arco/src/views/component_library/business/fixtures/purchase-order-desc.fixture.ts',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/create.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/index.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-create-review.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-create.logic.ts',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-desc.logic.ts',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-source-sales-order-selector.vue',
+  'web/apps/qsmds-arco/src/views/operations/sales-orders/index.vue',
+  'web/apps/qsmds-arco/src/views/component_library/business/components/FactoryShipmentModalShowcase.vue',
+  'web/apps/qsmds-arco/test/api/purchase-orders.test.ts',
+  'web/apps/qsmds-arco/test/browser/purchase-orders.browser.test.mjs',
+  'web/apps/qsmds-arco/test/browser/sales-orders.browser.test.mjs',
+  'web/apps/qsmds-arco/test/views/purchase-order-create.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-desc.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-detail.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-list.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-pages.test.ts',
+  'web/apps/qsmds-arco/test/views/purchase-order-source-selector.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-factory-shipment-modal.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-order-product-line-editor.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-purchase-start-modal.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-purchase-start-modal.test.ts',
   // 订单产品选择器通过稳定 supplierValue 查询和展示现有产品；规格、组件、
   // fixture 与回归测试属于该字典消费边界，不得引入 Supplier 主数据依赖。
   'specs/order-product-line-editor/design.md',
@@ -985,7 +1114,7 @@ test('供应商残留门禁读取工作树与未忽略文件并允许冻结历�
   }
 })
 
-test('退役扩展不会重新进入 Regions 与 Numbering Generator', () => {
+test('退役扩展不进入 Regions，编号仅允许已批准的内部事务派发关联', async () => {
   assert.deepEqual(
     gitGrepPaths({
       pattern: 'RegionLookupService',
@@ -993,19 +1122,15 @@ test('退役扩展不会重新进入 Regions 与 Numbering Generator', () => {
     }),
     [],
   )
-  assert.deepEqual(
-    gitGrepPaths({
-      pattern: 'issuanceId',
-      pathspecs: [
-        'server/src/modules/numbering/numbering-generator.persistence.spec.ts',
-        'server/src/modules/numbering/numbering-generator.persistence.ts',
-        'server/src/modules/numbering/numbering-generator.service.spec.ts',
-        'server/src/modules/numbering/numbering-generator.service.ts',
-        'server/test/numbering-generator.e2e-spec.ts',
-      ],
-    }),
-    [],
-  )
+  const generator = await readFile(fromRoot('server/src/modules/numbering/numbering-generator.service.ts'), 'utf8')
+  const originalResult = /export interface GenerateNumberResult \{([^}]+)\}/u.exec(generator)?.[1]
+  assert.ok(originalResult)
+  assert.doesNotMatch(originalResult, /issuanceId/u)
+  assert.match(generator, /GenerateNumberInTransactionResult extends GenerateNumberResult/u)
+  assert.match(generator, /async generateScopedInTransaction\(/u)
+  assert.match(generator, /function toIndependentResult\(/u)
+  // 新入口不允许把具体供应商或采购规则匹配搬进通用生成算法。
+  assert.doesNotMatch(generator, /supplier|PurchaseOrder|purchase-shipping-marks/iu)
 })
 
 test('Dictionary production runner 保持无参且无业务工厂注入', async () => {

@@ -39,6 +39,11 @@ import {
   assertSalesOrderStatusTransition,
 } from './domain/sales-order-state-machine'
 import { isCanonicalSalesOrderActorId } from './sales-order-command.normalizer'
+import { SalesOrderAutomaticStateService } from './sales-order-automatic-state.service'
+import {
+  assertSalesOrderPurchaseFulfillment,
+  lockSalesOrderPurchaseDependencies,
+} from './sales-order-purchase-fulfillment'
 import {
   SalesOrderQueryService,
   type SalesOrderDetail,
@@ -55,6 +60,8 @@ const PAYMENT_METHOD_DICTIONARY_CODE = 'payment.method'
 const ORDER_STATUSES = new Set<SalesOrderStatus>([
   'DRAFT',
   'CONFIRMED',
+  'PENDING_RECONCILIATION',
+  'COMPLETED',
   'CANCELLED',
 ])
 const FULFILLMENT_STATUSES = new Set<SalesOrderFulfillmentStatus>([
@@ -227,6 +234,7 @@ export class SalesOrderMutationService {
     private readonly mediaAsset: MediaAssetService,
     private readonly dictionaryLookup: DictionaryLookupService,
     private readonly query: SalesOrderQueryService,
+    private readonly automaticState: SalesOrderAutomaticStateService,
     @Optional()
     @Inject(SALES_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<SalesOrderMutationDependencies> = {},
@@ -259,6 +267,8 @@ export class SalesOrderMutationService {
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
       assertSalesOrderStatusTransition(order.orderStatus, toStatus, {
         activeReceivedAmount: receivedAmount,
+        fulfillmentStatus: order.fulfillmentStatus,
+        paymentStatus: order.paymentStatus,
       })
       await transaction.salesOrder.update({
         where: { id: salesOrderId },
@@ -301,11 +311,20 @@ export class SalesOrderMutationService {
     const reason = optionalText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
+      if (toStatus === 'PREPARING' || toStatus === 'LAND_TRANSIT') {
+        await lockSalesOrderPurchaseDependencies(transaction, salesOrderId)
+      }
       const order = await this.lockOrder(transaction, salesOrderId)
       if (order.orderStatus === 'CANCELLED') {
         return salesOrderRuleFailure(
           'SALES_ORDER_CANCELLED',
           '已取消订单不能继续履约',
+        )
+      }
+      if (order.orderStatus === 'COMPLETED') {
+        return salesOrderRuleFailure(
+          'SALES_ORDER_COMPLETED',
+          '已完成订单不能继续履约',
         )
       }
       const receiptCount = toStatus === 'SIGNED'
@@ -322,6 +341,9 @@ export class SalesOrderMutationService {
         toStatus,
         { hasActiveDeliveryReceipt: receiptCount > 0 },
       )
+      if (toStatus === 'PREPARING' || toStatus === 'LAND_TRANSIT') {
+        await assertSalesOrderPurchaseFulfillment(transaction, salesOrderId, toStatus)
+      }
       await transaction.salesOrder.update({
         where: { id: salesOrderId },
         data: { fulfillmentStatus: toStatus, version: { increment: 1 } },
@@ -339,6 +361,13 @@ export class SalesOrderMutationService {
         targetId: salesOrderId,
         metadata: { fromStatus: order.fulfillmentStatus, toStatus },
       })
+      // 在同一事务内重新读取更新后的三个状态维度，避免调用方凭旧快照判断。
+      await this.automaticState.advanceToPendingReconciliationWhenEligible(
+        transaction,
+        trusted,
+        salesOrderId,
+        'FULFILLMENT',
+      )
     })
     return this.query.getById(salesOrderId)
   }
@@ -368,7 +397,10 @@ export class SalesOrderMutationService {
         balanceDueAmount: body.balanceDueAmount,
       })
       const receivedAmount = await this.readReceivedAmount(transaction, salesOrderId)
-      deriveSalesOrderPaymentStatus(amounts.agreedTotalAmount, receivedAmount)
+      const newPaymentStatus = deriveSalesOrderPaymentStatus(
+        amounts.agreedTotalAmount,
+        receivedAmount,
+      )
       await transaction.salesOrderAmountRevision.create({ data: {
         salesOrderId,
         oldLineSubtotalAmount: fixed4(order.lineSubtotalAmount),
@@ -388,14 +420,31 @@ export class SalesOrderMutationService {
           agreedTotalAmount: amounts.agreedTotalAmount,
           depositDueAmount: amounts.depositDueAmount,
           balanceDueAmount: amounts.balanceDueAmount,
+          paymentStatus: newPaymentStatus,
           version: { increment: 1 },
         },
       })
+      if (newPaymentStatus !== order.paymentStatus) {
+        await transaction.salesOrderStatusHistory.create({ data: {
+          salesOrderId,
+          dimension: 'PAYMENT',
+          fromStatus: order.paymentStatus,
+          toStatus: newPaymentStatus,
+          reason: '修改付款约定后系统重新计算付款状态',
+          changedByUserId: trusted.actorUserId,
+        } })
+      }
       await this.recordAudit(transaction, trusted, {
         eventType: AuditEventType.SALES_ORDER_PAYMENT_TERMS_UPDATED,
         targetId: salesOrderId,
         metadata: { reasonProvided: true },
       })
+      await this.automaticState.advanceToPendingReconciliationWhenEligible(
+        transaction,
+        trusted,
+        salesOrderId,
+        'PAYMENT_TERMS',
+      )
     })
     return this.query.getById(salesOrderId)
   }
@@ -441,6 +490,12 @@ export class SalesOrderMutationService {
           return salesOrderRuleFailure(
             'SALES_ORDER_CANCELLED',
             '已取消订单不能记录收款',
+          )
+        }
+        if (order.orderStatus === 'COMPLETED') {
+          return salesOrderRuleFailure(
+            'SALES_ORDER_COMPLETED',
+            '已完成订单不能记录收款',
           )
         }
         const effectivePaymentMethod = await this.dictionaryLookup
@@ -535,6 +590,12 @@ export class SalesOrderMutationService {
           targetId: document.id,
           metadata: { salesOrderId, documentType: 'PAYMENT_VOUCHER' },
         })
+        await this.automaticState.advanceToPendingReconciliationWhenEligible(
+          transaction,
+          trusted,
+          salesOrderId,
+          'PAYMENT',
+        )
       })
     }
     catch (error) {
@@ -572,6 +633,12 @@ export class SalesOrderMutationService {
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
       const order = await this.lockOrder(transaction, salesOrderId)
+      if (order.orderStatus === 'COMPLETED') {
+        return salesOrderRuleFailure(
+          'SALES_ORDER_COMPLETED',
+          '已完成订单不能作废收款',
+        )
+      }
       const payment = await transaction.salesOrderPayment.findFirst({
         where: { id: paymentId, salesOrderId },
         select: { id: true, amount: true, voidedAt: true },

@@ -28,6 +28,7 @@ export interface NumberingListSortingItem {
 
 /** 把 QsGenericTable 的受控状态适配为领域层唯一的列表查询构造输入。 */
 export function buildNumberingTableListQuery(input: {
+  readonly purpose?: unknown
   readonly filters: QsGenericTableFilterValues
   readonly page: number
   readonly pageSize: number
@@ -37,6 +38,7 @@ export function buildNumberingTableListQuery(input: {
   const updatedAtSorting = input.sorting.find(item => item.id === 'updatedAt')
 
   return buildNumberingRuleListQuery({
+    purpose: input.purpose,
     keyword: input.search,
     page: input.page,
     pageSize: input.pageSize,

@@ -66,6 +66,9 @@ export function readPersistenceErrorFacts(
     visited.add(candidate)
 
     addString(codes, candidate.code)
+    // Prisma 7 driver adapter 把 PostgreSQL SQLSTATE 放在 cause.originalCode；
+    // 只读取这个稳定白名单字段，绝不解析可能包含 SQL 或参数的 originalMessage。
+    addString(codes, candidate.originalCode)
     addConstraint(constraints, targets, candidate.constraint)
     addString(fieldNames, candidate.field_name)
     addString(fieldNames, candidate.fieldName)

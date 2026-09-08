@@ -6,6 +6,7 @@ import {
   ProductMediaContentService,
   type ProductMediaContentResponse,
 } from '../../products/media/product-media-content.service'
+import { SalesOrderProductEditQueryService } from '../sales-order-product-edit-query.service'
 
 function productImageNotFound(): ApiException {
   return new ApiException(
@@ -25,6 +26,7 @@ export class SalesOrderProductImageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly content: ProductMediaContentService,
+    private readonly productEditQueries?: SalesOrderProductEditQueryService,
   ) {}
 
   async resolve(
@@ -63,6 +65,7 @@ export class SalesOrderProductImageService {
         where: {
           id: lineId,
           salesOrderId,
+          removedAt: null,
           lineType: 'CATALOG',
           productId: { not: null },
           product: {
@@ -93,6 +96,51 @@ export class SalesOrderProductImageService {
 
     return this.content.resolve(
       line.productId,
+      productMediaId,
+      ifNoneMatch,
+      range,
+      method,
+    )
+  }
+
+  async resolveProductEditOption(
+    salesOrderId: string,
+    productId: string,
+    productMediaId: string,
+    ifNoneMatch: unknown,
+    range: unknown,
+    method: 'GET' | 'HEAD',
+  ): Promise<ProductMediaContentResponse> {
+    if (this.productEditQueries === undefined) {
+      throw new Error('SalesOrderProductEditQueryService is not configured')
+    }
+    // 图片 URL 可能被长期缓存或复制，内容读取时必须重验订单修改资格与当前产品状态。
+    await this.productEditQueries.context(salesOrderId)
+    let row: { readonly id: string } | null
+    try {
+      row = await this.prisma.productMedia.findFirst({
+        where: {
+          id: productMediaId,
+          productId,
+          kind: 'IMAGE',
+          isPrimary: true,
+          detachedAt: null,
+          mediaAsset: { is: { status: 'READY' } },
+          product: { is: { status: 'ACTIVE' } },
+        },
+        select: { id: true },
+      })
+    }
+    catch {
+      throw new ApiException(
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'INTERNAL_ERROR',
+        '服务器内部错误',
+      )
+    }
+    if (row === null) throw productImageNotFound()
+    return this.content.resolve(
+      productId,
       productMediaId,
       ifNoneMatch,
       range,

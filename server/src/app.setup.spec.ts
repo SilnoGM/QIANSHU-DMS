@@ -36,7 +36,7 @@ describe('configureApplication', () => {
     configureApplication(application, { nodeEnvironment: 'production' })
 
     expect(application.use).toHaveBeenCalledWith(requestIdMiddleware)
-    expect(application.use).toHaveBeenCalledTimes(2)
+    expect(application.use).toHaveBeenCalledTimes(3)
     const securityHeadersMiddleware = use.mock.calls[1]?.[0]
     if (typeof securityHeadersMiddleware !== 'function') {
       throw new Error('Security headers middleware was not registered')

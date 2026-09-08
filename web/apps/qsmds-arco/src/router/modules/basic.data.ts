@@ -67,6 +67,30 @@ const routes: RouteRecordRaw = {
       },
     },
     {
+      path: 'numbering/create',
+      name: 'systemBasicDataNumberingCreate',
+      component: () => import('@/views/system/basic-data/numbering/create.vue'),
+      meta: {
+        title: '新增编号规则',
+        auth: 'numbering-rules:read',
+        activeMenu: '/system/basic-data/numbering',
+        menu: false,
+        tabMerge: 'routeName',
+      },
+    },
+    {
+      path: 'numbering/shipping-mark-bindings',
+      name: 'systemBasicDataShippingMarkBindings',
+      component: () => import('@/views/system/basic-data/numbering/shipping-mark-bindings.vue'),
+      meta: {
+        title: '唛头规则绑定',
+        auth: 'purchase-shipping-marks:read',
+        activeMenu: '/system/basic-data/numbering',
+        menu: false,
+        tabMerge: 'routeName',
+      },
+    },
+    {
       path: 'dictionaries',
       name: 'systemBasicDataDictionaries',
       component: () => import('@/views/system/basic-data/dictionaries/index.vue'),

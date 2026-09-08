@@ -4,13 +4,20 @@ import { HttpStatus, Module, StreamableFile } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import type { OpenAPIObject } from '@nestjs/swagger'
 
+import {
+  getRequestId,
+  requestIdMiddleware,
+} from '../../infrastructure/http/request-id.middleware'
 import { createOpenApiDocument } from '../../openapi/openapi-document.factory'
+import { attachRequestAuthContext } from '../auth/auth-context'
 import { REQUIRED_PERMISSIONS_METADATA } from '../auth/decorators/auth.decorators'
 import type { ProductMediaContentResponse } from '../products/media/product-media-content.service'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { SalesOrderDocumentService } from './documents/sales-order-document.service'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
 import { SalesOrderProductImageService } from './products/sales-order-product-image.service'
+import { SalesOrderProductEditQueryService } from './sales-order-product-edit-query.service'
+import { SalesOrderProductEditService } from './sales-order-product-edit.service'
 import { SalesOrderQueryService } from './sales-order-query.service'
 import { SalesOrdersController } from './sales-orders.controller'
 
@@ -18,18 +25,46 @@ type ContractOperation = NonNullable<OpenAPIObject['paths'][string]['get']> & {
   'x-qianshu-contract'?: unknown
 }
 
+function readOperationContract(operation: unknown): unknown {
+  if (typeof operation !== 'object' || operation === null) return undefined
+  return Object.prototype.hasOwnProperty.call(operation, 'x-qianshu-contract')
+    ? (operation as Record<string, unknown>)['x-qianshu-contract']
+    : undefined
+}
+
 const PRODUCT_ID = '11111111-1111-4111-8111-111111111111'
 const PRODUCT_MEDIA_ID = '22222222-2222-4222-8222-222222222222'
+const SALES_ORDER_ID = '33333333-3333-4333-8333-333333333333'
+const ACTOR_ID = '44444444-4444-4444-8444-444444444444'
+const SESSION_ID = '55555555-5555-4555-8555-555555555555'
+
+function createRequest(): object {
+  const request = {}
+  requestIdMiddleware(request, { setHeader: jest.fn() }, jest.fn())
+  attachRequestAuthContext(request, {
+    id: SESSION_ID,
+    userId: ACTOR_ID,
+    username: 'purchase_operator',
+    displayName: '采购经办人',
+    mustChangePassword: false,
+    createdAt: new Date('2026-09-02T01:00:00.000Z'),
+    lastActivityAt: new Date('2026-09-02T01:00:00.000Z'),
+    idleExpiresAt: new Date('2026-09-02T02:00:00.000Z'),
+    absoluteExpiresAt: new Date('2026-10-02T01:00:00.000Z'),
+  })
+  return request
+}
 
 function createController(result: ProductMediaContentResponse) {
   const issuerOptions = jest.fn().mockResolvedValue({ items: [] })
+  const statusCounts = jest.fn().mockResolvedValue({ view: 'all', items: [] })
   const productOptions = jest.fn().mockResolvedValue({
     items: [], page: 1, pageSize: 20, total: 0,
   })
   const resolve = jest.fn().mockResolvedValue(result)
   const resolveListPreview = jest.fn().mockResolvedValue(result)
   const controller = new SalesOrdersController(
-    { issuerOptions, productOptions } as unknown as SalesOrderQueryService,
+    { issuerOptions, productOptions, statusCounts } as unknown as SalesOrderQueryService,
     {} as SalesOrderCommandService,
     {} as SalesOrderMutationService,
     {} as SalesOrderDocumentService,
@@ -40,6 +75,7 @@ function createController(result: ProductMediaContentResponse) {
     controller,
     issuerOptions,
     productOptions,
+    statusCounts,
     resolve,
     resolveListPreview,
     response,
@@ -55,6 +91,7 @@ function createController(result: ProductMediaContentResponse) {
       issuerOptions: jest.fn(),
       list: jest.fn(),
       productOptions: jest.fn(),
+      statusCounts: jest.fn(),
     },
   }, {
     provide: SalesOrderCommandService,
@@ -66,8 +103,18 @@ function createController(result: ProductMediaContentResponse) {
     provide: SalesOrderDocumentService,
     useValue: {},
   }, {
-    provide: SalesOrderProductImageService,
-    useValue: { resolve: jest.fn(), resolveListPreview: jest.fn() },
+  provide: SalesOrderProductImageService,
+    useValue: {
+      resolve: jest.fn(),
+      resolveListPreview: jest.fn(),
+      resolveProductEditOption: jest.fn(),
+    },
+  }, {
+    provide: SalesOrderProductEditQueryService,
+    useValue: { context: jest.fn(), productOptions: jest.fn() },
+  }, {
+    provide: SalesOrderProductEditService,
+    useValue: { updateProducts: jest.fn() },
   }],
 })
 class SalesOrderProductOptionsContractModule {}
@@ -126,6 +173,29 @@ describe('SalesOrdersController product options', () => {
     expect(reflector.get(
       REQUIRED_PERMISSIONS_METADATA,
       SalesOrdersController.prototype.issuerOptions,
+    )).toEqual(['sales-orders:read'])
+  })
+
+  it('reads status counts with sales-order read permission', async () => {
+    const fixture = createController({
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+    })
+    const query = { view: 'pending' as const, currencyCode: 'TWD' as const }
+
+    await expect(fixture.controller.statusCounts(query)).resolves.toEqual({
+      view: 'all',
+      items: [],
+    })
+    expect(fixture.statusCounts).toHaveBeenCalledWith(query)
+    const reflector = new Reflector()
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      SalesOrdersController.prototype.statusCounts,
     )).toEqual(['sales-orders:read'])
   })
 
@@ -216,6 +286,131 @@ describe('SalesOrdersController product options', () => {
       )).toEqual(['sales-orders:read'])
     }
   })
+
+  it('requires sales-update for every product-edit read', async () => {
+    const stream = Readable.from(Buffer.from('image'))
+    const context = jest.fn().mockResolvedValue({ salesOrder: { id: 'order-id' } })
+    const productOptions = jest.fn().mockResolvedValue({
+      items: [], page: 1, pageSize: 20, total: 0,
+    })
+    const resolveProductEditOption = jest.fn().mockResolvedValue({
+      status: HttpStatus.OK,
+      headers: {
+        'Accept-Ranges': 'bytes',
+        ETag: '"safe"',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      stream,
+    })
+    const controller = new SalesOrdersController(
+      {} as SalesOrderQueryService,
+      {} as SalesOrderCommandService,
+      {} as SalesOrderMutationService,
+      {} as SalesOrderDocumentService,
+      { resolveProductEditOption } as unknown as SalesOrderProductImageService,
+      { context, productOptions } as unknown as SalesOrderProductEditQueryService,
+    )
+    const params = {
+      salesOrderId: '33333333-3333-4333-8333-333333333333',
+      productId: PRODUCT_ID,
+      productMediaId: PRODUCT_MEDIA_ID,
+    }
+    const query = { keyword: '目录' }
+    const response = { status: jest.fn(), setHeader: jest.fn() }
+
+    await expect(controller.productEditContext(params)).resolves.toMatchObject({
+      salesOrder: { id: 'order-id' },
+    })
+    await expect(controller.productEditOptions(params, query)).resolves.toMatchObject({
+      items: [],
+    })
+    await controller.headProductEditOptionMainImage(
+      params, '"known"', 'bytes=0-0', response,
+    )
+    const body = await controller.getProductEditOptionMainImage(
+      params, undefined, undefined, response,
+    )
+    expect(context).toHaveBeenCalledWith(params.salesOrderId)
+    expect(productOptions).toHaveBeenCalledWith(params.salesOrderId, query)
+    expect(resolveProductEditOption).toHaveBeenCalledTimes(2)
+    expect(body).toBeInstanceOf(StreamableFile)
+
+    const reflector = new Reflector()
+    for (const method of [
+      'productEditContext',
+      'productEditOptions',
+      'headProductEditOptionMainImage',
+      'getProductEditOptionMainImage',
+    ] as const) {
+      expect(reflector.get(
+        REQUIRED_PERMISSIONS_METADATA,
+        SalesOrdersController.prototype[method],
+      )).toEqual(['sales-orders:update'])
+    }
+  })
+
+  it('requires sales-update and forwards only trusted context for product writes', async () => {
+    const request = createRequest()
+    const requestId = getRequestId(request)
+    const dto = {
+      expectedVersion: 4,
+      reason: '客户调整产品',
+      confirmDepositReduction: false,
+      existingLines: [{
+        lineId: PRODUCT_ID,
+        name: '销售产品快照',
+        description: null,
+        actualUnitPriceAmount: '120.00',
+        desiredQuantity: 2,
+      }],
+      newLines: [],
+    }
+    const result = {
+      salesOrderId: SALES_ORDER_ID,
+      previousVersion: 4,
+      version: 5,
+      addedLineIds: ['66666666-6666-4666-8666-666666666666'],
+      updatedLineIds: [],
+      removedLineIds: [],
+      amountDelta: '30.0000',
+      paymentStatus: 'PARTIALLY_PAID' as const,
+      fulfillmentStatus: 'PENDING' as const,
+      depositReduced: false,
+      amounts: {
+        lineSubtotalAmount: '330.0000',
+        agreedTotalAmount: '330.0000',
+        depositDueAmount: '100.0000',
+        balanceDueAmount: '230.0000',
+        paidAmount: '300.0000',
+        outstandingAmount: '30.0000',
+      },
+    }
+    const updateProducts = jest.fn().mockResolvedValue(result)
+    const controller = new SalesOrdersController(
+      {} as SalesOrderQueryService,
+      {} as SalesOrderCommandService,
+      {} as SalesOrderMutationService,
+      {} as SalesOrderDocumentService,
+      {} as SalesOrderProductImageService,
+      {} as SalesOrderProductEditQueryService,
+      { updateProducts } as unknown as SalesOrderProductEditService,
+    )
+
+    await expect(controller.updateProducts(
+      { salesOrderId: SALES_ORDER_ID }, dto, request,
+    )).resolves.toEqual(result)
+    expect(updateProducts).toHaveBeenCalledWith(
+      { actorUserId: ACTOR_ID, requestId },
+      SALES_ORDER_ID,
+      dto,
+    )
+
+    const reflector = new Reflector()
+    expect(reflector.get(
+      REQUIRED_PERMISSIONS_METADATA,
+      SalesOrdersController.prototype.updateProducts,
+    )).toEqual(['sales-orders:update'])
+  })
 })
 
 describe('SalesOrdersController product options OpenAPI', () => {
@@ -232,6 +427,20 @@ describe('SalesOrdersController product options OpenAPI', () => {
     ]))
     expect(document.paths['/api/sales-orders/issuer-options']?.get)
       .toMatchObject({ operationId: 'sales_orders_issuer_options' })
+    const statusCounts: ContractOperation | undefined = document.paths[
+      '/api/sales-orders/status-counts'
+    ]?.get
+    expect(statusCounts).toMatchObject({ operationId: 'sales_orders_status_counts' })
+    expect(statusCounts?.parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'view', required: true }),
+      expect.objectContaining({ in: 'query', name: 'currencyCode' }),
+      expect.objectContaining({ in: 'query', name: 'issuerUserId' }),
+    ]))
+    expect(statusCounts?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      privateNoStore: true,
+      validation: true,
+    })
 
     const options = document.paths['/api/sales-orders/product-options']?.get
     expect(options?.operationId).toBe('sales_orders_product_options')
@@ -270,6 +479,78 @@ describe('SalesOrdersController product options OpenAPI', () => {
     }
   })
 
+  it('publishes product-edit context, options and protected image routes', () => {
+    const context = document.paths[
+      '/api/sales-orders/{salesOrderId}/product-edit-context'
+    ]?.get
+    expect(context).toMatchObject({ operationId: 'sales_orders_get_product_edit_context' })
+
+    const options = document.paths[
+      '/api/sales-orders/{salesOrderId}/product-edit-options'
+    ]?.get
+    expect(options).toMatchObject({
+      operationId: 'sales_orders_get_product_edit_options',
+    })
+    expect(options?.parameters).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ in: 'query', name: 'supplierValue' }),
+    ]))
+
+    const imagePath = document.paths[
+      '/api/sales-orders/{salesOrderId}/product-edit-options/{productId}/main-image/{productMediaId}/content'
+    ]
+    expect(imagePath?.head?.operationId)
+      .toBe('sales_orders_head_product_edit_option_main_image')
+    expect(imagePath?.get?.operationId)
+      .toBe('sales_orders_get_product_edit_option_main_image')
+    for (const operation of [
+      context,
+      options,
+      imagePath?.head,
+      imagePath?.get,
+    ] as readonly (ContractOperation | undefined)[]) {
+      expect(operation?.security).toEqual([{ sessionCookie: [] }])
+      expect(operation?.['x-qianshu-contract']).toMatchObject({
+        authorization: true,
+        privateNoStore: true,
+      })
+    }
+  })
+
+  it('publishes the non-retrying product-edit mutation security and stable errors', () => {
+    const operation: ContractOperation | undefined = document.paths[
+      '/api/sales-orders/{salesOrderId}/products'
+    ]?.patch
+
+    expect(operation).toMatchObject({ operationId: 'sales_orders_update_products' })
+    expect(operation?.security).toEqual([{ sessionCookie: [] }])
+    expect(operation?.responses).toHaveProperty('200')
+    expect(operation?.requestBody).toBeDefined()
+    expect(operation?.['x-qianshu-contract']).toMatchObject({
+      authorization: true,
+      csrf: true,
+      conflict: true,
+      privateNoStore: true,
+      resourceLocator: true,
+      validation: true,
+      retry: false,
+    })
+    const contract = JSON.stringify(operation?.['x-qianshu-contract'])
+    for (const code of [
+      'CSRF_REJECTED',
+      'SALES_ORDER_NOT_FOUND',
+      'SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT',
+      'SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED',
+      'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
+      'SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED',
+      'SALES_ORDER_DEPOSIT_REDUCTION_CONFIRMATION_REQUIRED',
+      'SALES_ORDER_TOTAL_BELOW_RECEIVED',
+      'SALES_ORDER_LINE_LIMIT_EXCEEDED',
+      'VALIDATION_FAILED',
+    ]) {
+      expect(contract).toContain(code)
+    }
+  })
+
   it('publishes the dedicated receipt operation and removes general document writes', () => {
     expect(document.paths['/api/sales-orders/{salesOrderId}/delivery-receipts']?.post)
       .toMatchObject({ operationId: 'sales_orders_submit_delivery_receipt' })
@@ -290,6 +571,40 @@ describe('SalesOrdersController product options OpenAPI', () => {
       expect(contract).toContain(`"${status}"`)
     }
     expect(contract).not.toContain('"SHIPPED"')
+  })
+
+  it('publishes five persisted order states and reconciliation transition errors', () => {
+    const contract = JSON.stringify(document)
+    for (const status of [
+      'DRAFT',
+      'CONFIRMED',
+      'PENDING_RECONCILIATION',
+      'COMPLETED',
+      'CANCELLED',
+    ]) {
+      expect(contract).toContain(`"${status}"`)
+    }
+
+    const operation = document.paths[
+      '/api/sales-orders/{salesOrderId}/order-status'
+    ]?.patch
+    const operationContract = JSON.stringify(readOperationContract(operation))
+    expect(operationContract).toContain('SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET')
+    expect(operationContract).toContain('SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET')
+
+    for (const mutationContract of [
+      readOperationContract(document.paths[
+        '/api/sales-orders/{salesOrderId}/fulfillment-status'
+      ]?.patch),
+      readOperationContract(document.paths[
+        '/api/sales-orders/{salesOrderId}/payments'
+      ]?.post),
+      readOperationContract(document.paths[
+        '/api/sales-orders/{salesOrderId}/payments/{paymentId}/void'
+      ]?.post),
+    ]) {
+      expect(JSON.stringify(mutationContract)).toContain('SALES_ORDER_COMPLETED')
+    }
   })
 
   it('publishes independent read-authorized list preview image operations', () => {

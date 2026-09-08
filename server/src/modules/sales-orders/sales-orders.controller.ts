@@ -22,6 +22,7 @@ import { ApiApplicationContract } from '../../openapi/api-contract.decorator'
 import { ApiContractResponse } from '../../openapi/contract-response.decorator'
 import { getRequestAuthContext } from '../auth/auth-context'
 import { RequirePermissions } from '../auth/decorators/auth.decorators'
+import { SalesOrderProductsUpdateRequestDto } from './dto/sales-order-product-edit.dto'
 import {
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDocumentIdParamDto,
@@ -43,14 +44,25 @@ import {
   SalesOrderPaymentIdParamDto,
   SalesOrderProductImageParamDto,
   SalesOrderProductImageQueryDto,
+  SalesOrderProductEditImageParamDto,
+  SalesOrderProductEditOptionsQueryDto,
   SalesOrderProductOptionsQueryDto,
+  SalesOrderStatusCountsQueryDto,
 } from './dto/sales-order-query.dto'
 import {
   SalesOrderDetailDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderProductOptionsDto,
+  SalesOrderProductEditContextDto,
+  SalesOrderProductsUpdateResultDto,
+  SalesOrderStatusCountsDto,
 } from './dto/sales-order-response.dto'
+import { SalesOrderProductEditQueryService } from './sales-order-product-edit-query.service'
+import {
+  SalesOrderProductEditService,
+  type SalesOrderProductsUpdateResult,
+} from './sales-order-product-edit.service'
 import { SalesOrderCommandService } from './sales-order-command.service'
 import { parseSalesOrderIdempotencyKey } from './sales-order-command.normalizer'
 import { SalesOrderMutationService } from './sales-order-mutation.service'
@@ -73,6 +85,7 @@ import {
   type SalesOrderDetail,
   type SalesOrderIssuerOptions,
   type SalesOrderPage,
+  type SalesOrderStatusCounts,
 } from './sales-order-query.service'
 
 const COMMON_FORBIDDEN_ERRORS = [
@@ -115,6 +128,8 @@ export class SalesOrdersController {
     private readonly mutations: SalesOrderMutationService,
     private readonly documents: SalesOrderDocumentService,
     private readonly productImages: SalesOrderProductImageService,
+    private readonly productEditQueries?: SalesOrderProductEditQueryService,
+    private readonly productEditService?: SalesOrderProductEditService,
   ) {}
 
   @Get()
@@ -134,6 +149,27 @@ export class SalesOrdersController {
   })
   list(@Query() query: SalesOrderListQueryDto): Promise<SalesOrderPage> {
     return this.queries.list(query)
+  }
+
+  @Get('status-counts')
+  @RequirePermissions('sales-orders:read')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderStatusCountsDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_status_counts',
+    session: 'required',
+    authorization: true,
+    badRequest: true,
+    validation: true,
+    privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 422, codes: ['VALIDATION_FAILED'] },
+    ],
+  })
+  statusCounts(
+    @Query() query: SalesOrderStatusCountsQueryDto,
+  ): Promise<SalesOrderStatusCounts> {
+    return this.queries.statusCounts(query)
   }
 
   @Get('issuer-options')
@@ -174,6 +210,156 @@ export class SalesOrdersController {
     @Query() query: SalesOrderProductOptionsQueryDto,
   ): Promise<SalesOrderProductOptionsDto> {
     return this.queries.productOptions(query)
+  }
+
+  @Get(':salesOrderId/product-edit-context')
+  @RequirePermissions('sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderProductEditContextDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_get_product_edit_context',
+    session: 'required', authorization: true, badRequest: true,
+    resourceLocator: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 422, codes: [
+        'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
+        'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  productEditContext(
+    @Param() params: SalesOrderIdParamDto,
+  ): Promise<SalesOrderProductEditContextDto> {
+    if (this.productEditQueries === undefined) {
+      throw new Error('SalesOrderProductEditQueryService is not configured')
+    }
+    return this.productEditQueries.context(params.salesOrderId)
+  }
+
+  /**
+   * 产品修改会同时改变销售明细、金额、付款与采购覆盖状态；Controller 只传递
+   * 可信操作者和请求 ID，且显式禁止客户端或中间层自动重放。
+   */
+  @Patch(':salesOrderId/products')
+  @RequirePermissions('sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderProductsUpdateResultDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_update_products',
+    session: 'required', authorization: true, csrf: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    retry: false,
+    errors: [
+      { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: [
+        'SALES_ORDER_PRODUCT_EDIT_STATE_CHANGED',
+        'SALES_ORDER_PRODUCT_EDIT_VERSION_CONFLICT',
+      ] },
+      { status: 422, codes: [
+        'SALES_ORDER_DEPOSIT_REDUCTION_CONFIRMATION_REQUIRED',
+        'SALES_ORDER_LINE_LIMIT_EXCEEDED',
+        'SALES_ORDER_PRODUCT_DECREASE_PURCHASE_LOCKED',
+        'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
+        'SALES_ORDER_TOTAL_BELOW_RECEIVED',
+        'VALIDATION_FAILED',
+      ] },
+    ],
+  })
+  updateProducts(
+    @Param() params: SalesOrderIdParamDto,
+    @Body() dto: SalesOrderProductsUpdateRequestDto,
+    @Req() request: object,
+  ): Promise<SalesOrderProductsUpdateResult> {
+    if (this.productEditService === undefined) {
+      throw new Error('SalesOrderProductEditService is not configured')
+    }
+    return this.productEditService.updateProducts(
+      mutationContext(request),
+      params.salesOrderId,
+      dto,
+    )
+  }
+
+  @Get(':salesOrderId/product-edit-options')
+  @RequirePermissions('sales-orders:update')
+  @ApiContractResponse({ status: HttpStatus.OK, type: SalesOrderProductOptionsDto })
+  @ApiApplicationContract({
+    operationId: 'sales_orders_get_product_edit_options',
+    session: 'required', authorization: true, badRequest: true,
+    resourceLocator: true, conflict: true, validation: true, privateNoStore: true,
+    errors: [
+      { status: 403, codes: [...COMMON_FORBIDDEN_ERRORS] },
+      { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
+      { status: 409, codes: ['SALES_ORDER_STATE_CHANGED'] },
+      {
+        status: 422,
+        codes: [
+          'SALES_ORDER_PRODUCT_EDIT_NOT_ALLOWED',
+          'VALIDATION_FAILED',
+        ],
+      },
+    ],
+  })
+  productEditOptions(
+    @Param() params: SalesOrderIdParamDto,
+    @Query() query: SalesOrderProductEditOptionsQueryDto,
+  ): Promise<SalesOrderProductOptionsDto> {
+    if (this.productEditQueries === undefined) {
+      throw new Error('SalesOrderProductEditQueryService is not configured')
+    }
+    return this.productEditQueries.productOptions(params.salesOrderId, query)
+  }
+
+  @Head(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:update')
+  @ApiProductMediaContentContract('HEAD', {
+    operationId: 'sales_orders_head_product_edit_option_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order product-edit option main image.',
+  })
+  async headProductEditOptionMainImage(
+    @Param() params: SalesOrderProductEditImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<void> {
+    const result = await this.productImages.resolveProductEditOption(
+      params.salesOrderId,
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'HEAD',
+    )
+    applyProductMediaContentResponse(response, result)
+  }
+
+  @Get(':salesOrderId/product-edit-options/:productId/main-image/:productMediaId/content')
+  @RequirePermissions('sales-orders:update')
+  @ApiProductMediaContentContract('GET', {
+    operationId: 'sales_orders_get_product_edit_option_main_image',
+    notFoundCode: 'SALES_ORDER_PRODUCT_IMAGE_NOT_FOUND',
+    description: 'Authorized sales-order product-edit option main image.',
+  })
+  async getProductEditOptionMainImage(
+    @Param() params: SalesOrderProductEditImageParamDto,
+    @Headers('if-none-match') ifNoneMatch: unknown,
+    @Headers('range') range: unknown,
+    @Res({ passthrough: true }) response: ProductMediaContentHttpResponse,
+  ): Promise<StreamableFile | undefined> {
+    const result = await this.productImages.resolveProductEditOption(
+      params.salesOrderId,
+      params.productId,
+      params.productMediaId,
+      ifNoneMatch,
+      range,
+      'GET',
+    )
+    applyProductMediaContentResponse(response, result)
+    return result.stream === undefined
+      ? undefined
+      : new StreamableFile(result.stream)
   }
 
   @Head('product-options/:productId/main-image/:productMediaId/content')
@@ -401,6 +587,8 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCEL_HAS_PAYMENTS',
+        'SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET',
+        'SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET',
         'SALES_ORDER_STATUS_TRANSITION_INVALID',
         'VALIDATION_FAILED',
       ] },
@@ -430,6 +618,7 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCELLED',
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_DELIVERY_RECEIPT_REQUIRED',
         'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
         'VALIDATION_FAILED',
@@ -492,6 +681,7 @@ export class SalesOrdersController {
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
         'SALES_ORDER_CANCELLED',
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_PAYMENT_AMOUNT_INVALID',
         'SALES_ORDER_PAYMENT_EXCEEDS_TOTAL',
         'SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE',
@@ -525,6 +715,7 @@ export class SalesOrdersController {
         'SALES_ORDER_PAYMENT_NOT_FOUND',
       ] },
       { status: 422, codes: [
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_PAYMENT_ALREADY_VOIDED',
         'VALIDATION_FAILED',
       ] },
@@ -555,7 +746,10 @@ export class SalesOrdersController {
       { status: 403, codes: [...COMMON_MUTATION_FORBIDDEN_ERRORS] },
       { status: 404, codes: ['SALES_ORDER_NOT_FOUND'] },
       { status: 422, codes: [
+        'SALES_ORDER_CANCELLED',
+        'SALES_ORDER_COMPLETED',
         'SALES_ORDER_DOCUMENT_UNAVAILABLE',
+        'SALES_ORDER_FULFILLMENT_TRANSITION_INVALID',
         'VALIDATION_FAILED',
       ] },
       { status: 503, codes: ['MEDIA_STORAGE_UNAVAILABLE'] },

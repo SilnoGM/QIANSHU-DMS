@@ -19,6 +19,11 @@ test('创建表单映射为独立订单详情模型并按行计算小计', () =>
     {
       ...createCatalogSalesOrderLine('line-catalog'),
       actualUnitPriceAmount: '12.34',
+      description: ' 展示说明 ',
+      mainImage: {
+        contentUrl: '/api/product-media/catalog-main/content',
+        id: '33333333-3333-4333-8333-333333333333',
+      },
       name: ' 标准组合柜 ',
       productId: '11111111-1111-4111-8111-111111111111',
       productNo: ' PRD-001 ',
@@ -28,6 +33,7 @@ test('创建表单映射为独立订单详情模型并按行计算小计', () =>
     {
       ...createCustomSalesOrderLine('line-custom'),
       actualUnitPriceAmount: '5',
+      description: ' 上门安装与调试 ',
       name: ' 订单安装服务 ',
       quantity: '3',
     },
@@ -87,18 +93,25 @@ test('创建表单映射为独立订单详情模型并按行计算小计', () =>
     lines: [
       {
         actualUnitPriceAmount: '12.34',
+        description: '展示说明',
         key: 'line-catalog',
         lineSubtotalAmount: '24.68',
         lineType: 'CATALOG',
+        mainImage: {
+          alt: '标准组合柜',
+          src: '/api/product-media/catalog-main/content',
+        },
         productName: '标准组合柜',
         productNo: 'PRD-001',
         quantity: '2',
       },
       {
         actualUnitPriceAmount: '5',
+        description: '上门安装与调试',
         key: 'line-custom',
         lineSubtotalAmount: '15.00',
         lineType: 'CUSTOM',
+        mainImage: null,
         productName: '订单安装服务',
         productNo: null,
         quantity: '3',

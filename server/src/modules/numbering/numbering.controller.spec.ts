@@ -463,6 +463,7 @@ describe('NumberingController', () => {
       }],
     }
     const createDto = {
+      purpose: 'BUSINESS' as const,
       ...config,
       ruleCode: 'SALES_ORDER',
       name: '销售订单',

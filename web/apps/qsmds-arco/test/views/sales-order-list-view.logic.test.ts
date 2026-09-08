@@ -1,9 +1,12 @@
+import type { FactoryShipmentResultDto } from '../../src/api/generated/types.gen'
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 销售订单视图状态契约使用 Node.js 内置 runner。
 import test from 'node:test'
 
 import {
+  buildSalesOrderStatusCountsQuery,
   deduplicateSalesOrderItems,
+  formatSalesFactoryShipmentSuccess,
   getSalesOrderStatusItems,
   normalizeSalesOrderStatusSelection,
   resolvePendingSalesOrderActions,
@@ -11,11 +14,78 @@ import {
   summarizeSalesOrderItemsByCurrency,
 } from '../../src/views/operations/sales-orders/sales-order-list-view.logic'
 
-test('待办视图包含履约末端与付款待办，并允许同一订单跨分类出现', () => {
+test('销售工厂发货提示只采用服务端返回的变更与剩余数量', () => {
+  const base: FactoryShipmentResultDto = {
+    purchaseOrders: [{
+      id: 'purchase-1',
+      orderNo: 'PO/20260904-00001',
+      fulfillmentStatus: 'SHIPPED',
+      changed: true,
+    }],
+    changedPurchaseOrderCount: 1,
+    alreadySatisfiedCount: 0,
+    remainingPendingShipmentCount: 2,
+    salesOrder: {
+      id: 'sales-1',
+      orderNo: 'SO/20260904-00001',
+      fulfillmentStatus: 'PREPARING',
+      advancedToLandTransit: false,
+    },
+  }
+
+  assert.equal(
+    formatSalesFactoryShipmentSuccess(base),
+    '已确认 1 张采购单发货，仍有 2 张采购单待发货',
+  )
+  assert.equal(
+    formatSalesFactoryShipmentSuccess({
+      ...base,
+      changedPurchaseOrderCount: 2,
+      remainingPendingShipmentCount: 0,
+      salesOrder: {
+        ...base.salesOrder!,
+        fulfillmentStatus: 'LAND_TRANSIT',
+        advancedToLandTransit: true,
+      },
+    }),
+    '已确认 2 张采购单发货，销售订单已进入陆运中',
+  )
+  assert.equal(
+    formatSalesFactoryShipmentSuccess({
+      ...base,
+      changedPurchaseOrderCount: 0,
+      alreadySatisfiedCount: 1,
+      remainingPendingShipmentCount: 0,
+    }),
+    '所选采购单均已发货，未重复处理',
+  )
+})
+
+test('销售状态计数查询只保留视图和非工具栏基础筛选', () => {
+  assert.deepEqual(buildSalesOrderStatusCountsQuery({
+    currencyCode: 'TWD',
+    fulfillmentStatus: 'PREPARING',
+    issuerUserId: '11111111-1111-4111-8111-111111111111',
+    keyword: 'SO-001',
+    orderDateFrom: '2026-08-01',
+    orderStatus: 'CONFIRMED',
+    page: 2,
+    pageSize: 50,
+    paymentStatus: 'PARTIALLY_PAID',
+  }, 'all'), {
+    currencyCode: 'TWD',
+    issuerUserId: '11111111-1111-4111-8111-111111111111',
+    keyword: 'SO-001',
+    orderDateFrom: '2026-08-01',
+    paymentStatus: 'PARTIALLY_PAID',
+    view: 'all',
+  })
+})
+
+test('待办视图不展示全部待办，并以待采购作为首个有效分类', () => {
   assert.deepEqual(
     getSalesOrderStatusItems('pending').map(item => [item.value, item.label]),
     [
-      ['ALL', '全部待办'],
       ['PENDING', '待采购'],
       ['PREPARING', '待发货'],
       ['LAND_TRANSIT', '待入仓'],
@@ -24,14 +94,8 @@ test('待办视图包含履约末端与付款待办，并允许同一订单跨�
       ['WAITING_PAYMENT', '待收款'],
     ],
   )
-  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'ALL'), [
+  assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'PENDING'), [
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PENDING' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'LAND_TRANSIT' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'WAREHOUSE_ARRIVED' },
-    { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' },
-    { orderStatus: 'CONFIRMED', paymentStatus: 'UNPAID' },
-    { orderStatus: 'CONFIRMED', paymentStatus: 'PARTIALLY_PAID' },
   ])
   assert.deepEqual(resolveSalesOrderQueryTargets('pending', 'SEA_TRANSIT'), [
     { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SEA_TRANSIT' },
@@ -42,7 +106,7 @@ test('待办视图包含履约末端与付款待办，并允许同一订单跨�
   ])
 })
 
-test('全部订单视图排除草稿，并为尚未进入接口契约的状态保留入口', () => {
+test('全部订单视图排除草稿，并把四类正式状态映射到可信服务端查询', () => {
   assert.deepEqual(
     getSalesOrderStatusItems('all').map(item => [item.value, item.label]),
     [
@@ -55,15 +119,23 @@ test('全部订单视图排除草稿，并为尚未进入接口契约的状态�
   )
   assert.deepEqual(resolveSalesOrderQueryTargets('all', 'ALL'), [
     { orderStatus: 'CONFIRMED' },
+    { orderStatus: 'PENDING_RECONCILIATION' },
     { orderStatus: 'CANCELLED' },
+    { orderStatus: 'COMPLETED' },
   ])
-  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'PENDING_RECONCILIATION'), [])
-  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'COMPLETED'), [])
+  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'PENDING_RECONCILIATION'), [
+    { orderStatus: 'PENDING_RECONCILIATION' },
+  ])
+  assert.deepEqual(resolveSalesOrderQueryTargets('all', 'COMPLETED'), [
+    { orderStatus: 'COMPLETED' },
+  ])
 })
 
-test('URL 中非法或跨视图状态回退到当前视图的全部状态', () => {
+test('URL 中缺失、非法或跨视图状态回退到当前视图默认状态', () => {
   assert.equal(normalizeSalesOrderStatusSelection('pending', 'PREPARING'), 'PREPARING')
-  assert.equal(normalizeSalesOrderStatusSelection('pending', 'CANCELLED'), 'ALL')
+  assert.equal(normalizeSalesOrderStatusSelection('pending', undefined), 'PENDING')
+  assert.equal(normalizeSalesOrderStatusSelection('pending', 'ALL'), 'PENDING')
+  assert.equal(normalizeSalesOrderStatusSelection('pending', 'CANCELLED'), 'PENDING')
   assert.equal(normalizeSalesOrderStatusSelection('all', ['CONFIRMED']), 'ALL')
   assert.equal(normalizeSalesOrderStatusSelection('all', undefined), 'ALL')
 })
@@ -76,6 +148,10 @@ test('待办操作按当前筛选收敛，全部待办允许履约与收款操�
   assert.deepEqual(
     resolvePendingSalesOrderActions('PENDING', pendingAndUnpaid).map(action => action.key),
     ['SUBMIT_PURCHASE'],
+  )
+  assert.deepEqual(
+    resolvePendingSalesOrderActions('PENDING', pendingAndUnpaid).map(action => action.label),
+    ['新增采购'],
   )
   assert.deepEqual(
     resolvePendingSalesOrderActions('PREPARING', {

@@ -43,6 +43,19 @@ function createTransactionFixture(): TransactionFixture {
 }
 
 describe('AuditService', () => {
+  it('only permits bounded UUID issuance arrays on purchase creation', async () => {
+    const { transaction, create } = createTransactionFixture()
+    const service = new AuditService()
+    const metadata = { partCount: 1000, shippingMarkIssuanceIds: Array<string>(1000).fill(ACTOR_USER_ID) }
+    const base = { actorType: AuditActorType.USER, actorUserId: ACTOR_USER_ID, outcome: AuditOutcome.SUCCESS }
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED, metadata })).resolves.toBeDefined()
+    expect(create).toHaveBeenCalledTimes(1)
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.USER_PASSWORD_RESET, metadata })).rejects.toBeInstanceOf(AuditEventValidationError)
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED,
+      metadata: { shippingMarkIssuanceIds: ['invalid'] } })).rejects.toBeInstanceOf(AuditEventValidationError)
+    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED,
+      metadata: { shippingMarkIssuanceIds: Array<string>(1001).fill(ACTOR_USER_ID) } })).rejects.toBeInstanceOf(AuditEventValidationError)
+  })
   it('使用调用方 TransactionClient 写入结构化审计，并复制可变输入', async () => {
     const { transaction, create } = createTransactionFixture()
     const service = new AuditService()
@@ -183,6 +196,54 @@ describe('AuditService', () => {
     ).rejects.toBeInstanceOf(AuditEventValidationError)
   })
 
+  it('仅为销售产品修改审计接受受限数组和对象数组', async () => {
+    const { transaction, create } = createTransactionFixture()
+    const service = new AuditService()
+
+    await expect(service.record(transaction, {
+      eventType: AuditEventType.SALES_ORDER_PRODUCTS_CHANGED,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.USER,
+      actorUserId: ACTOR_USER_ID,
+      metadata: {
+        addedLineIds: ['11111111-1111-4111-8111-111111111111'],
+        quantityChanges: [{
+          lineId: '22222222-2222-4222-8222-222222222222',
+          from: 2,
+          to: 3,
+        }],
+        removedLineIds: [],
+      },
+    })).resolves.toBeDefined()
+    const written = create.mock.calls[0]?.[0]
+    expect(written?.data).toMatchObject({
+      metadata: {
+        addedLineIds: ['11111111-1111-4111-8111-111111111111'],
+        quantityChanges: [{
+          lineId: '22222222-2222-4222-8222-222222222222',
+          from: 2,
+          to: 3,
+        }],
+        removedLineIds: [],
+      },
+    })
+  })
+
+  it('拒绝销售产品修改结构化审计中的敏感键', async () => {
+    const { transaction } = createTransactionFixture()
+    const service = new AuditService()
+
+    await expect(service.record(transaction, {
+      eventType: AuditEventType.SALES_ORDER_PRODUCTS_CHANGED,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.USER,
+      actorUserId: ACTOR_USER_ID,
+      metadata: {
+        quantityChanges: [{ password: 'must-not-pass' }],
+      },
+    })).rejects.toBeInstanceOf(AuditEventValidationError)
+  })
+
   it.each([
     [
       'USER actor without actorUserId',
@@ -279,5 +340,45 @@ describe('AuditService', () => {
     expect(JSON.stringify(await operation.catch((error: unknown) => error))).not.toContain(
       unsafeValue,
     )
+  })
+
+  it.each([
+    { code: 'P2034' },
+    { code: '40001' },
+    { code: '40P01' },
+    { meta: { driverAdapterError: { cause: { originalCode: '40001' } } } },
+  ])('preserves only a safe transaction conflict classification for %j', async (databaseError) => {
+    const unsafeValue = 'unsafe-sql-parameter-and-connection-secret'
+    const { transaction, create } = createTransactionFixture()
+    create.mockRejectedValueOnce({ ...databaseError, message: unsafeValue, detail: unsafeValue })
+    const error: unknown = await new AuditService().record(transaction, {
+      eventType: AuditEventType.SYSTEM_BOOTSTRAP,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.SYSTEM,
+    }).catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(AuditWriteFailedError)
+    expect(error).toMatchObject({
+      code: 'AUDIT_WRITE_FAILED', message: 'Audit event write failed', transactionConflict: true,
+    })
+    expect(error).not.toHaveProperty('cause')
+    expect(error).not.toHaveProperty('meta')
+    expect(JSON.stringify(error)).not.toContain(unsafeValue)
+    expect((error as Error).stack).not.toContain(unsafeValue)
+  })
+
+  it.each([
+    { code: '23514' },
+    { code: 'P2028' },
+    { message: '40001' },
+    { meta: { unknown: { code: '40001' } } },
+  ])('does not classify non-allowlisted or unstructured errors as transaction conflicts: %j', async (databaseError) => {
+    const { transaction, create } = createTransactionFixture()
+    create.mockRejectedValueOnce(databaseError)
+    await expect(new AuditService().record(transaction, {
+      eventType: AuditEventType.SYSTEM_BOOTSTRAP,
+      outcome: AuditOutcome.SUCCESS,
+      actorType: AuditActorType.SYSTEM,
+    })).rejects.toMatchObject({ code: 'AUDIT_WRITE_FAILED', transactionConflict: false })
   })
 })

@@ -87,6 +87,7 @@ const BASE_CONFIG: NumberingRuleConfigInputDto = {
 
 function detailDto(overrides: Partial<NumberingRuleDetailDto> = {}) {
   return {
+    purpose: 'BUSINESS',
     id: RULE_ID,
     ruleCode: 'SALES_ORDER',
     name: '销售订单',
@@ -116,6 +117,7 @@ function detailDto(overrides: Partial<NumberingRuleDetailDto> = {}) {
 
 function ruleRecord(overrides: Record<string, unknown> = {}) {
   return {
+    purpose: 'BUSINESS' as const,
     id: RULE_ID,
     ruleCode: 'SALES_ORDER',
     name: '销售订单',
@@ -197,10 +199,22 @@ beforeEach(() => {
 })
 
 describe('NumberingCommandService', () => {
+  it.each(['BUSINESS', 'SHIPPING_MARK'] as const)('creates and clones %s without changing configuration fingerprints', async (purpose) => {
+    const { service, transaction } = createFixture()
+    await service.create(context, { ...BASE_CONFIG, purpose, ruleCode: 'PURPOSE_TEST', name: '用途测试' })
+    expect(mockedCreateRule).toHaveBeenLastCalledWith(transaction, expect.objectContaining({ purpose }))
+    mockedReadForClone.mockResolvedValue(ruleRecord({ purpose }))
+    await service.clone(context, SOURCE_ID, { expectedVersion: 1, ruleCode: 'PURPOSE_COPY', name: '用途复制' })
+    expect(mockedCreateRule).toHaveBeenLastCalledWith(transaction, expect.objectContaining({ purpose }))
+    const calls = mockedCreateDraft.mock.calls
+    expect(calls.at(-1)?.[1].configFingerprint).toBe(calls.at(-2)?.[1].configFingerprint)
+  })
+
   it('creates DRAFT rule/revision/segments/Audit and reads detail in one transaction', async () => {
     const { audit, query, service, transaction } = createFixture()
 
     await expect(service.create(context, {
+      purpose: 'BUSINESS',
       ruleCode: '　sales_order ',
       name: '  销售　订单  ',
       description: '  正式   单据  ',
@@ -212,6 +226,7 @@ describe('NumberingCommandService', () => {
       mockedApplyTransactionTimeouts.mock.invocationCallOrder[0],
     ).toBeLessThan(mockedReadTimestamp.mock.invocationCallOrder[0])
     expect(mockedCreateRule).toHaveBeenCalledWith(transaction, {
+      purpose: 'BUSINESS',
       ruleCode: 'SALES_ORDER',
       name: '销售 订单',
       description: '正式 单据',
@@ -232,7 +247,8 @@ describe('NumberingCommandService', () => {
       requestId: REQUEST_ID,
       metadata: {
         ruleCode: 'SALES_ORDER',
-        changedFields: 'description,name,resetPolicy,ruleCode,segments',
+        changedFields: 'description,name,purpose,resetPolicy,ruleCode,segments',
+        purpose: 'BUSINESS',
         revision: 1,
         version: 1,
         resetPolicy: 'NEVER',
@@ -499,6 +515,7 @@ describe('NumberingCommandService', () => {
 
     expect(mockedReadForClone).toHaveBeenCalledWith(transaction, SOURCE_ID)
     expect(mockedCreateRule).toHaveBeenCalledWith(transaction, {
+      purpose: 'BUSINESS',
       ruleCode: 'CLONED_ORDER',
       name: '克隆订单',
       description: '来源说明',
@@ -632,6 +649,7 @@ describe('NumberingCommandService', () => {
     audit.record.mockRejectedValue(new Error('must-not-leak audit'))
 
     await expect(service.create(context, {
+      purpose: 'BUSINESS',
       ruleCode: 'SALES_ORDER',
       name: '销售订单',
       ...BASE_CONFIG,

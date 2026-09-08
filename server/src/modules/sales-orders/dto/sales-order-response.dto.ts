@@ -367,6 +367,36 @@ export class SalesOrderPageDto {
   @ApiProperty({ type: 'integer' }) readonly total!: number
 }
 
+export const SALES_ORDER_STATUS_COUNT_VALUES = [
+  'ALL',
+  'CONFIRMED',
+  'PENDING_RECONCILIATION',
+  'CANCELLED',
+  'COMPLETED',
+  'PENDING',
+  'PREPARING',
+  'LAND_TRANSIT',
+  'WAREHOUSE_ARRIVED',
+  'SEA_TRANSIT',
+  'WAITING_PAYMENT',
+] as const
+
+export class SalesOrderStatusCountItemDto {
+  @ApiProperty({ enum: SALES_ORDER_STATUS_COUNT_VALUES })
+  readonly value!: typeof SALES_ORDER_STATUS_COUNT_VALUES[number]
+
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly count!: number
+}
+
+export class SalesOrderStatusCountsDto {
+  @ApiProperty({ enum: ['all', 'pending'] })
+  readonly view!: 'all' | 'pending'
+
+  @ApiProperty({ type: () => [SalesOrderStatusCountItemDto] })
+  readonly items!: readonly SalesOrderStatusCountItemDto[]
+}
+
 export class SalesOrderProductOptionDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly productNo!: string
@@ -396,4 +426,92 @@ export class SalesOrderProductOptionsDto {
   @ApiProperty({ type: 'integer' }) readonly page!: number
   @ApiProperty({ type: 'integer' }) readonly pageSize!: number
   @ApiProperty({ type: 'integer' }) readonly total!: number
+}
+
+export class SalesOrderProductEditContextOrderDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string' }) readonly orderNo!: string
+  @ApiProperty({ type: 'string' }) readonly customerName!: string
+  @ApiProperty({ enum: ['TWD', 'MYR'] }) readonly currencyCode!: 'TWD' | 'MYR'
+  @ApiProperty({ enum: SalesOrderStatus }) readonly orderStatus!: SalesOrderStatus
+  @ApiProperty({ enum: SalesOrderFulfillmentStatus })
+  readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
+  @ApiProperty({ enum: SalesOrderPaymentStatus })
+  readonly paymentStatus!: SalesOrderPaymentStatus
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
+}
+
+export class SalesOrderProductEditAmountsDto {
+  @ApiProperty({ type: 'string' }) readonly lineSubtotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly agreedTotalAmount!: string
+  @ApiProperty({ type: 'string' }) readonly depositDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly balanceDueAmount!: string
+  @ApiProperty({ type: 'string' }) readonly paidAmount!: string
+  @ApiProperty({ type: 'string' }) readonly outstandingAmount!: string
+}
+
+export class SalesOrderProductEditExistingLineDto {
+  @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly lineNumber!: number
+  @ApiProperty({ enum: SalesOrderLineType }) readonly lineType!: SalesOrderLineType
+  @ApiProperty({ type: 'string', format: 'uuid', nullable: true })
+  readonly productId!: string | null
+  @ApiProperty({ type: 'string', nullable: true }) readonly productNo!: string | null
+  @ApiProperty({ type: 'string' }) readonly productName!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly description!: string | null
+  @ApiProperty({ type: 'string', nullable: true })
+  readonly standardUnitPriceAmount!: string | null
+  @ApiProperty({ type: 'string' }) readonly actualUnitPriceAmount!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly quantity!: number
+  @ApiProperty({ type: 'string' }) readonly lineTotalAmount!: string
+  @ApiProperty({ type: 'integer', minimum: 0 })
+  readonly activePurchasedQuantity!: number
+  @ApiProperty({ type: 'boolean' }) readonly canDecrease!: boolean
+  @ApiProperty({ type: () => SalesOrderListImageDto, nullable: true, required: true })
+  readonly mainImage!: SalesOrderListImageDto | null
+}
+
+export class SalesOrderProductEditContextDto {
+  @ApiProperty({ type: () => SalesOrderProductEditContextOrderDto })
+  readonly salesOrder!: SalesOrderProductEditContextOrderDto
+  @ApiProperty({ type: () => SalesOrderProductEditAmountsDto })
+  readonly amounts!: SalesOrderProductEditAmountsDto
+  @ApiProperty({ type: () => [SalesOrderProductEditExistingLineDto] })
+  readonly existingLines!: readonly SalesOrderProductEditExistingLineDto[]
+  @ApiProperty({ type: 'integer', minimum: 0, maximum: 100 })
+  readonly availableLineCapacity!: number
+}
+
+export class SalesOrderProductsUpdateResultDto {
+  @ApiProperty({ type: 'string', format: 'uuid' })
+  readonly salesOrderId!: string
+
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  readonly previousVersion!: number
+
+  @ApiProperty({ type: 'integer', minimum: 2 })
+  readonly version!: number
+
+  @ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' } })
+  readonly addedLineIds!: readonly string[]
+
+  @ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' } })
+  readonly updatedLineIds!: readonly string[]
+
+  @ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' } })
+  readonly removedLineIds!: readonly string[]
+
+  @ApiProperty({ type: 'string' })
+  readonly amountDelta!: string
+
+  @ApiProperty({ enum: SalesOrderFulfillmentStatus })
+  readonly fulfillmentStatus!: SalesOrderFulfillmentStatus
+
+  @ApiProperty({ enum: SalesOrderPaymentStatus })
+  readonly paymentStatus!: SalesOrderPaymentStatus
+
+  @ApiProperty({ type: 'boolean' }) readonly depositReduced!: boolean
+
+  @ApiProperty({ type: () => SalesOrderProductEditAmountsDto })
+  readonly amounts!: SalesOrderProductEditAmountsDto
 }

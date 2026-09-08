@@ -19,6 +19,7 @@ const migrationPaths = [
   '20260729100000_currency_seed',
   '20260802090000_numbering_management_schema_and_permissions',
   '20260803090000_dictionary_management_schema_and_permissions',
+  '20260906090000_numbering_rule_purpose',
 ].map(directory => resolve(
   serverRoot,
   `prisma/migrations/${directory}/migration.sql`,
@@ -92,7 +93,9 @@ export class IsolatedNumberingPrismaService extends PrismaClient {
  * 重放正式 migration 到独立 schema，结束时只删除经过严格格式校验的测试 schema，
  * 既验证真实 PostgreSQL 契约，也不会在共享开发库留下永久发号数据。
  */
-export async function createIsolatedNumberingDatabase():
+export async function createIsolatedNumberingDatabase(options: {
+  beforePurposeMigration?: (client: Client) => Promise<void>
+} = {}):
 Promise<IsolatedNumberingDatabase> {
   const baseDatabaseUrl = requireDatabaseUrl()
   const schemaName = `numbering_e2e_${randomUUID().replaceAll('-', '')}`
@@ -106,6 +109,9 @@ Promise<IsolatedNumberingDatabase> {
     schemaCreated = true
     await bootstrap.query(`SET search_path TO ${quotedSchema}, public`)
     for (const migrationPath of migrationPaths) {
+      if (migrationPath.includes('20260906090000_numbering_rule_purpose')) {
+        await options.beforePurposeMigration?.(bootstrap)
+      }
       await bootstrap.query(readFileSync(migrationPath, 'utf8'))
     }
   }

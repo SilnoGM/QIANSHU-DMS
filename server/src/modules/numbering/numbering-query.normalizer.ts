@@ -9,6 +9,7 @@ import {
   NumberingRuleSortBy,
   NumberingRuleSortOrder,
   NumberingRuleStatus,
+  NumberingRulePurpose,
 } from './dto/numbering-management.dto'
 import { normalizeNumberingKeyword } from './numbering.normalizer'
 import type { NumberingRuleListPersistenceQuery } from './numbering-query.persistence'
@@ -17,6 +18,7 @@ const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_SIZE = 20
 const MAXIMUM_PAGE_SIZE = 100
 const RULE_STATUSES = new Set(Object.values(NumberingRuleStatus))
+const RULE_PURPOSES = new Set(Object.values(NumberingRulePurpose))
 const SORT_ORDERS = new Set(Object.values(NumberingRuleSortOrder))
 const GENERATED_NUMBER_MATCHES = new Set(
   Object.values(NumberingGeneratedNumberMatch),
@@ -79,6 +81,7 @@ export function normalizeNumberingRuleListQuery(
   if (
     sortBy !== NumberingRuleSortBy.UPDATED_AT
     || !SORT_ORDERS.has(sortOrder)
+    || (query.purpose !== undefined && !RULE_PURPOSES.has(query.purpose))
     || (
       query.status !== undefined
       && !RULE_STATUSES.has(query.status)
@@ -90,6 +93,7 @@ export function normalizeNumberingRuleListQuery(
   return {
     ...pagination,
     keyword,
+    purpose: query.purpose,
     status: query.status,
     sortOrder,
   }

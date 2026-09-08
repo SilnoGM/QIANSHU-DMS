@@ -2,6 +2,7 @@
 import type {
   QsSalesOrderDescDocumentViewModel,
   QsSalesOrderDescLineType,
+  QsSalesOrderDescLineViewModel,
   QsSalesOrderDescProps,
 } from './types'
 import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
@@ -46,10 +47,44 @@ function lineTypeLabel(lineType: QsSalesOrderDescLineType): string {
   return t(`salesOrderDesc.lineTypes.${lineType}`)
 }
 
+function lineImageItems(
+  line: QsSalesOrderDescLineViewModel,
+): readonly ImageGroupItem[] {
+  const source = line.mainImage?.src.trim()
+  if (!source) {
+    return []
+  }
+  const label = line.mainImage?.alt.trim() || displayText(line.productName)
+  return [{
+    alt: label,
+    key: `${line.key}-main-image`,
+    previewSrc: source,
+    src: source,
+    tooltip: label,
+  }]
+}
+
 function documentTypeLabel(
   document: QsSalesOrderDescDocumentViewModel,
 ): string {
   return t(`salesOrderDesc.documentTypes.${document.documentType}`)
+}
+
+/**
+ * 附件类型同时依靠文字与语义色区分。颜色只用于快速扫描，未知类型仍回退到
+ * 中性主题色，避免服务端未来扩展类型时出现不可读标签。
+ */
+function documentTypeTagClass(documentType: string): string {
+  switch (documentType) {
+    case 'ORDER_ISSUANCE_VOUCHER':
+      return 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:border-sky-500/35! dark:bg-sky-500/10! dark:text-sky-300'
+    case 'PAYMENT_VOUCHER':
+      return 'border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/35! dark:bg-emerald-500/10! dark:text-emerald-300'
+    case 'DELIVERY_RECEIPT':
+      return 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:border-amber-500/35! dark:bg-amber-500/10! dark:text-amber-300'
+    default:
+      return 'border-border bg-muted/50 text-muted-foreground'
+  }
 }
 
 function documentDisplayTitle(
@@ -98,7 +133,7 @@ function documentImageItems(
   <article
     data-slot="qs-sales-order-desc"
     :aria-labelledby="titleId"
-    class="text-foreground p-4 border border-border rounded-2xl bg-background min-w-0 w-full shadow-sm sm:p-6"
+    class="text-foreground p-4 border border-border rounded-xl bg-background min-w-0 w-full shadow-sm sm:p-6"
   >
     <header class="pb-4 border-b border-border/70">
       <h2 :id="titleId" class="qs-type-page-title m-0">
@@ -190,7 +225,7 @@ function documentImageItems(
     <section
       data-slot="sales-order-desc-lines"
       :aria-labelledby="sectionIds.lines"
-      class="mt-4 pt-4 border-t border-border/70"
+      class="mt-4 pt-4 border-t border-border/70 min-w-0"
     >
       <div class="mb-3 flex gap-2.5 items-center">
         <span class="rounded-full bg-primary h-4.5 w-1" aria-hidden="true" />
@@ -212,14 +247,40 @@ function documentImageItems(
           data-slot="sales-order-desc-line"
           class="p-3 border border-border rounded-xl bg-muted/15 min-w-0"
         >
-          <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
-            <span class="text-muted-foreground">
-              {{ line.productNo?.trim() || lineTypeLabel(line.lineType) }} ·
+          <div class="flex gap-3 min-w-0 items-start">
+            <ImageGroup
+              v-if="lineImageItems(line).length > 0"
+              :items="lineImageItems(line)"
+              :max-count="1"
+              :size="56"
+              :tooltip="true"
+              radius="lg"
+              class="shrink-0"
+            />
+            <span
+              v-else
+              class="text-muted-foreground border border-border rounded-lg bg-muted/50 flex-center shrink-0 size-14"
+            >
+              <FaIcon name="i-lucide:image-off" class="size-5" aria-hidden="true" />
             </span>
-            {{ displayText(line.productName) }}
-          </p>
 
-          <dl class="m-0 mt-2 gap-x-4 gap-y-1 grid grid-cols-[minmax(0,1fr)_auto] items-end">
+            <div class="flex-1 min-w-0">
+              <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere]">
+                <span class="text-muted-foreground">
+                  {{ line.productNo?.trim() || lineTypeLabel(line.lineType) }} ·
+                </span>
+                {{ displayText(line.productName) }}
+              </p>
+              <p class="qs-type-meta text-muted-foreground m-0 mt-1 flex flex-wrap gap-x-1 [overflow-wrap:anywhere]">
+                <span class="text-foreground/80 font-medium">
+                  {{ t('salesOrderDesc.fields.lineRemark') }}
+                </span>
+                <span>{{ displayText(line.description) }}</span>
+              </p>
+            </div>
+          </div>
+
+          <dl class="m-0 mt-3 gap-x-4 gap-y-1 grid grid-cols-[minmax(0,1fr)_auto] items-end">
             <div class="min-w-0">
               <dt class="sr-only">
                 {{ t('salesOrderDesc.fields.actualUnitPrice') }}
@@ -371,7 +432,11 @@ function documentImageItems(
           </span>
 
           <div class="min-w-0">
-            <FaTag variant="outline" class="qs-type-status-tag mb-1">
+            <FaTag
+              variant="outline"
+              class="qs-type-status-tag mb-1"
+              :class="documentTypeTagClass(document.documentType)"
+            >
               {{ documentTypeLabel(document) }}
             </FaTag>
             <p class="qs-type-body-medium m-0 [overflow-wrap:anywhere] line-clamp-2" :title="documentDisplayTitle(document)">

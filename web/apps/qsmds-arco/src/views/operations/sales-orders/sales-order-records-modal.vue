@@ -125,7 +125,6 @@ const changeTabs = computed(() => [
 const canRecordPayment = computed(() => (
   auth('sales-orders:payment') && auth('sales-orders:document')
 ))
-const canSubmitDeliveryReceipt = computed(() => auth('sales-orders:document'))
 const actionLocked = computed(() => actionSubmitting.value || actionUploading.value)
 const paymentCurrency = computed(() => props.currencies.find(
   currency => currency.code === detail.value?.currencyCode,
@@ -195,6 +194,8 @@ function statusValueLabel(value: string): string {
   return {
     DRAFT: '草稿',
     CONFIRMED: '已确认',
+    PENDING_RECONCILIATION: '待对账',
+    COMPLETED: '已完成',
     CANCELLED: '已取消',
     PENDING: '待采购',
     PREPARING: '备货中',
@@ -281,14 +282,6 @@ function openPaymentModal(): void {
   }
   resetPaymentForm()
   modalState.value = { origin: 'records', view: 'create-payment' }
-}
-
-function openReceiptModal(): void {
-  if (!canSubmitDeliveryReceipt.value || detail.value === null) {
-    return
-  }
-  resetReceiptForm()
-  modalState.value = { origin: 'records', view: 'create-receipt' }
 }
 
 /** 单一弹窗宿主内切换视图，彻底避免表格快捷操作产生双弹窗闪屏。 */
@@ -417,6 +410,7 @@ function removeDeliveryReceipt(): void {
 
 async function submitPayment(): Promise<void> {
   const orderId = detail.value?.id
+  const previousOrderStatus = detail.value?.orderStatus
   if (orderId === undefined || actionLocked.value) {
     return
   }
@@ -458,7 +452,12 @@ async function submitPayment(): Promise<void> {
     else {
       modalVisible.value = false
     }
-    toast.success('实际收款记录添加成功')
+    toast.success(
+      previousOrderStatus === 'CONFIRMED'
+      && response.data.orderStatus === 'PENDING_RECONCILIATION'
+        ? '订单已签收且已付清，已自动进入待对账'
+        : '实际收款记录添加成功',
+    )
   }
   catch (error) {
     if (!isSalesOrderAbortError(error)) {
@@ -475,6 +474,7 @@ async function submitPayment(): Promise<void> {
 
 async function submitDeliveryReceipt(): Promise<void> {
   const orderId = detail.value?.id
+  const previousOrderStatus = detail.value?.orderStatus
   if (orderId === undefined || actionLocked.value) {
     return
   }
@@ -511,7 +511,12 @@ async function submitDeliveryReceipt(): Promise<void> {
     else {
       modalVisible.value = false
     }
-    toast.success('签收单上传成功，订单进度保持不变')
+    toast.success(
+      previousOrderStatus === 'CONFIRMED'
+      && response.data.orderStatus === 'PENDING_RECONCILIATION'
+        ? '订单已签收且已付清，已自动进入待对账'
+        : '签收单上传成功，订单已进入已签收',
+    )
   }
   catch (error) {
     if (!isSalesOrderAbortError(error)) {
@@ -638,14 +643,6 @@ onBeforeUnmount(() => {
         @click="openPaymentModal"
       >
         <FaIcon name="i-lucide:circle-plus" aria-hidden="true" />新增实际收款
-      </FaButton>
-      <FaButton
-        v-else-if="modalState.view === 'records' && kind === 'documents' && canSubmitDeliveryReceipt"
-        type="button"
-        size="sm"
-        @click="openReceiptModal"
-      >
-        <FaIcon name="i-lucide:package-check" aria-hidden="true" />货物签收
       </FaButton>
     </template>
 
@@ -1094,7 +1091,7 @@ onBeforeUnmount(() => {
         role="alert"
       />
       <p class="text-sm text-muted-foreground m-0">
-        只需上传一份签收单。提交后作为订单级凭证保存，暂不自动更新订单进度。
+        只需上传一份签收单。提交后作为订单级凭证保存，并自动将订单进度更新为已签收。
       </p>
       <FaForm :model="{ deliveryReceiptRemark }" :disabled="actionLocked" class="mt-4">
         <FaFormItem name="deliveryReceiptRemark" label="备注（选填）">
@@ -1113,6 +1110,7 @@ onBeforeUnmount(() => {
       </FaForm>
       <input
         ref="receiptFileInputRef"
+        data-testid="sales-order-delivery-receipt-input"
         type="file"
         accept="image/*,.pdf,.doc,.docx"
         class="sr-only"

@@ -1,15 +1,24 @@
 import type { AxiosInstance } from 'axios'
 import type {
   CreateSalesOrderRequestDto,
+  FactoryShipmentResultDto,
   SalesOrderDeliveryReceiptRequestDto,
   SalesOrderDetailDto,
+  SalesOrderFactoryShipmentContextDto,
+  SalesOrderFactoryShipmentRequestDto,
   SalesOrderIssuerOptionsDto,
   SalesOrderPageDto,
   SalesOrderPaymentRequestDto,
   SalesOrderPaymentVoidRequestDto,
+  SalesOrderProductEditContextDto,
   SalesOrderProductOptionsDto,
+  SalesOrderProductsUpdateRequestDto,
+  SalesOrderProductsUpdateResultDto,
+  SalesOrdersGetProductEditOptionsData,
   SalesOrdersListData,
   SalesOrdersProductOptionsData,
+  SalesOrdersStatusCountsData,
+  SalesOrderStatusCountsDto,
   SalesOrderTemporaryDocumentDto,
 } from '../generated/types.gen'
 
@@ -18,6 +27,12 @@ import api from '../index'
 export type SalesOrderListQuery = NonNullable<SalesOrdersListData['query']>
 export type SalesOrderProductOptionsQuery = NonNullable<
   SalesOrdersProductOptionsData['query']
+>
+export type SalesOrderStatusCountsQuery = NonNullable<
+  SalesOrdersStatusCountsData['query']
+>
+export type SalesOrderProductEditOptionsQuery = NonNullable<
+  SalesOrdersGetProductEditOptionsData['query']
 >
 export type SalesOrderCurrency = 'TWD' | 'MYR'
 
@@ -29,6 +44,12 @@ export function createSalesOrdersApi(client: AxiosInstance) {
   return {
     list: (query: SalesOrderListQuery, signal: AbortSignal) =>
       client.get<SalesOrderPageDto>('sales-orders', {
+        errorPresentation: 'local',
+        params: query,
+        signal,
+      }),
+    statusCounts: (query: SalesOrderStatusCountsQuery, signal: AbortSignal) =>
+      client.get<SalesOrderStatusCountsDto>('sales-orders/status-counts', {
         errorPresentation: 'local',
         params: query,
         signal,
@@ -46,6 +67,47 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       params: query,
       signal,
     }),
+    productEditContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderProductEditContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    factoryShipmentContext: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderFactoryShipmentContextDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/factory-shipment-context`,
+        { errorPresentation: 'local', signal },
+      ),
+    factoryShipment: (
+      salesOrderId: string,
+      data: SalesOrderFactoryShipmentRequestDto,
+      signal: AbortSignal,
+    ) => client.post<FactoryShipmentResultDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/factory-shipments`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    productEditOptions: (
+      salesOrderId: string,
+      query: SalesOrderProductEditOptionsQuery,
+      signal: AbortSignal,
+    ) => client.get<SalesOrderProductOptionsDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-options`,
+      { errorPresentation: 'local', params: query, signal },
+    ),
+    updateProducts: (
+      salesOrderId: string,
+      data: SalesOrderProductsUpdateRequestDto,
+      signal: AbortSignal,
+    ) => client.patch<SalesOrderProductsUpdateResultDto>(
+      `sales-orders/${encodeURIComponent(salesOrderId)}/products`,
+      data,
+      {
+        // 产品修改携带版本号但没有幂等操作键；网络结果未知时禁止自动重放。
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      },
+    ),
     uploadTemporaryDocument: (
       file: File,
       mediaType: 'IMAGE' | 'DOCUMENT',

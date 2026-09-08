@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { Script } from 'node:vm'
 
 import {
   cacheControlForPath,
@@ -16,13 +18,35 @@ import {
   createProvisionCommand,
   readProvisionInput,
 } from './browser-auth/provision-admin.mjs'
+import { resolveManagementMainImageFixturePath } from './browser-auth/provision-media-fixtures.mjs'
 import { classifyServerStartupError } from './browser-auth/server-entry.mjs'
 import {
   CdpConnection,
   ChromePage,
   connectBrowserOrStop,
   describeChromeStartupFailure,
+  resolveChromeDisplayArguments,
 } from '../web/apps/qsmds-arco/test/browser/chrome-driver.mjs'
+
+test('浏览器默认保持 headless，仅显式开启的 Linux X11 使用桌面输入设备', () => {
+  for (const platform of ['darwin', 'linux', 'win32']) {
+    assert.deepEqual(resolveChromeDisplayArguments({ platform, environment: {} }), ['--headless=new'])
+  }
+  assert.deepEqual(resolveChromeDisplayArguments({
+    platform: 'linux', environment: { DISPLAY: ':99' },
+  }), ['--headless=new'], '存在 DISPLAY 不等于授权开启桌面浏览器')
+  assert.deepEqual(resolveChromeDisplayArguments({
+    platform: 'linux', environment: { DISPLAY: ':99', QIANSHU_BROWSER_USE_X11: '1' },
+  }), ['--ozone-platform=x11'])
+})
+
+test('显式 X11 模式缺少 Linux 显示环境时失败，不静默退回无鼠标的 headless', () => {
+  for (const [platform, display] of [['linux', undefined], ['linux', ' '], ['darwin', ':99']]) {
+    assert.throws(() => resolveChromeDisplayArguments({
+      platform, environment: { DISPLAY: display, QIANSHU_BROWSER_USE_X11: '1' },
+    }), { message: 'Browser X11 mode requires a Linux display' })
+  }
+})
 
 test('静态入口 HTML 与带 Hash 资源使用不同缓存策略', () => {
   assert.equal(
@@ -119,6 +143,7 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
     '-C', 'server', 'exec', 'node',
   ])
   assert.equal(command.args.includes(input.password), false)
+  assert.doesNotThrow(() => new Script(command.args.at(-1)))
   assert.match(command.args.at(-1), /INSERT INTO user_profiles/u)
   assert.match(command.args.at(-1), /browser_products_read/u)
   assert.match(command.args.at(-1), /browser_products_update/u)
@@ -127,8 +152,11 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.match(command.args.at(-1), /product-media:read/u)
   assert.match(command.args.at(-1), /service_provider\.supplier/u)
   assert.match(command.args.at(-1), /BROWSER_SUPPLIER_EFFECTIVE/u)
+  assert.match(command.args.at(-1), /payment\.method/u)
+  assert.match(command.args.at(-1), /BROWSER_BANK_TRANSFER/u)
   assert.match(command.args.at(-1), /INSERT INTO products/u)
   assert.match(command.args.at(-1), /PRODUCT-BROWSER-001/u)
+  assert.match(command.args.at(-1), /Browser 销售临时产品/u)
   assert.match(command.args.at(-1), /PRODUCT-MEDIA-BROWSER-001/u)
   assert.match(command.args.at(-1), /INSERT INTO media_assets/u)
   assert.match(command.args.at(-1), /INSERT INTO product_media/u)
@@ -141,6 +169,16 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   assert.match(command.args.at(-1), /INSERT INTO numbering_rules/u)
   assert.match(command.args.at(-1), /VALUES \(\\'PRODUCT\\'/u)
   assert.match(command.args.at(-1), /VALUES \(\\'SALES_ORDER\\'/u)
+  assert.match(command.args.at(-1), /VALUES \(\\'PURCHASE_ORDER\\'/u)
+  assert.match(command.args.at(-1), /provisionBrowserShippingMarkFixtures\(client, user\.rows\[0\]\.id\)/u)
+  assert.match(command.args.at(-1), /BROWSER_MARK/u)
+  assert.match(command.args.at(-1), /CUSTOM_MARK/u)
+  assert.match(command.args.at(-1), /INSERT INTO supplier_shipping_mark_rule_bindings/u)
+  assert.match(command.args.at(-1), /BROWSER-HISTORICAL-MIXED-ACTIVE-MARK/u)
+  assert.match(command.args.at(-1), /BROWSER-HISTORICAL-MIXED-CANCEL-MARK/u)
+  assert.match(command.args.at(-1), /shippingMarkFixtures\.mixedActiveIssuanceId/u)
+  assert.match(command.args.at(-1), /shippingMarkFixtures\.mixedCancelableIssuanceId/u)
+  assert.doesNotMatch(command.args.at(-1), /DISABLE TRIGGER|session_replication_role/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_versions/u)
   assert.match(command.args.at(-1), /INSERT INTO numbering_rule_segments/u)
   assert.match(command.args.at(-1), /SET status = \\'ACTIVE\\'/u)
@@ -165,6 +203,28 @@ test('管理员 fixture 密码只通过子进程 env 传递且输入严格校验
   }
 })
 
+test('媒体 fixture 只写入当前用户的一次性 Browser 媒体根', () => {
+  const root = path.join(os.homedir(), '.qianshu-browser-media-e2e-fixture')
+  assert.equal(
+    resolveManagementMainImageFixturePath(root),
+    path.join(
+      root,
+      'assets/2026/08/11111111-1111-4111-8111-111111111111.png',
+    ),
+  )
+  for (const invalid of [
+    '/',
+    os.homedir(),
+    path.resolve('relative-media-root'),
+    path.join(os.homedir(), 'persistent-media'),
+  ]) {
+    assert.throws(
+      () => resolveManagementMainImageFixturePath(invalid),
+      { message: 'Browser auth media fixture root is invalid' },
+    )
+  }
+})
+
 test('认证 Browser 清单包含真实销售订单创建场景', () => {
   const manifest = JSON.parse(readFileSync(
     path.resolve(import.meta.dirname, '../web/package.json'),
@@ -174,6 +234,18 @@ test('认证 Browser 清单包含真实销售订单创建场景', () => {
   assert.match(
     manifest.scripts['test:browser:auth'],
     /sales-orders\.browser\.test\.mjs/u,
+  )
+})
+
+test('认证 Browser 清单包含真实采购订单创建与详情场景', () => {
+  const manifest = JSON.parse(readFileSync(
+    path.resolve(import.meta.dirname, '../web/package.json'),
+    'utf8',
+  ))
+
+  assert.match(
+    manifest.scripts['test:browser:auth'],
+    /purchase-orders\.browser\.test\.mjs/u,
   )
 })
 

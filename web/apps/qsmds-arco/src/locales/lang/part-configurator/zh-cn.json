@@ -1,0 +1,33 @@
+{
+  "partConfigurator": {
+    "configurator": "货件配置",
+    "products": "本次采购产品",
+    "selectionHelp": "勾选产品并填写本次装入数量，可合并多种产品，也可将同一产品分装至不同货件。",
+    "allocated": "全部产品已装入货件",
+    "selected": "已选 {count} 种产品",
+    "remaining": "剩余数量",
+    "loadQuantity": "本次装入数量",
+    "selectProduct": "选择 {name}",
+    "inputQuantity": "{name} 本次装入数量",
+    "invalidQuantity": "请输入 1 至 {maximum} 的正整数",
+    "create": "创建货物件",
+    "parts": "货件列表",
+    "partCount": "共 {count} 件",
+    "partStats": "{types} 种产品 · 数量 {quantity}",
+    "pendingMark": "货件唛头：审核通过后生成",
+    "removePart": "删除{label}",
+    "removeItem": "从{label}移除{name}",
+    "loadedQuantity": "已装入数量",
+    "empty": "尚未创建货件",
+    "emptyHelp": "在上方选择产品并创建货物件。",
+    "readonlyEmpty": "没有可核对的货件。",
+    "invalid": "请检查货件配置",
+    "limit": "货件最多 {count} 件",
+    "itemLimit": "全单分配明细最多 {count} 项，可移除已有货件或产品后重新合件。",
+    "showMore": "显示更多货件（剩余 {count} 件）",
+    "localProduct": "本单产品",
+    "missingProduct": "产品已移除",
+    "noImage": "暂无主图",
+    "noDescription": "无备注"
+  }
+}

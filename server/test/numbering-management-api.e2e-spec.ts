@@ -26,6 +26,7 @@ const CSRF_HEADERS = {
 } as const
 
 interface NumberingRuleDetailBody {
+  purpose: 'BUSINESS' | 'SHIPPING_MARK'
   id: string
   ruleCode: string
   name: string
@@ -174,6 +175,7 @@ describe('Numbering management API and internal generator with PostgreSQL', () =
       .set(CSRF_HEADERS)
       .send({
         ruleCode: ` ${ruleCode.toLowerCase()} `,
+        purpose: 'BUSINESS',
         name: '  订单编号  ',
         description: '  E2E 生命周期  ',
         ...config,
@@ -357,5 +359,41 @@ describe('Numbering management API and internal generator with PostgreSQL', () =
     expect(serializedAudit).not.toContain('idempotencyKey')
     expect(serializedAudit).not.toContain('idempotencyKeyHash')
     expect(serializedAudit).not.toContain('requestFingerprintHash')
+  })
+
+  it('enforces purposes on create, inherits clone purpose, and counts the keyword/status scope across pages', async () => {
+    const administrator = await createAdministrator()
+    const browser = request.agent(application.getHttpServer())
+    await browser.post('/api/auth/login').set(CSRF_HEADERS)
+      .send({ username: administrator.user.username, password: administrator.password }).expect(200)
+    const keyword = `PURPOSE_${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`
+    const input = { ruleCode: keyword, name: keyword, resetPolicy: 'NEVER', segments: [{ type: 'SEQUENCE', width: 4, startValue: '1', step: '1' }] }
+    for (const purpose of [undefined, null, 'ALL', 'INVALID']) {
+      await browser.post('/api/numbering-rules').set(CSRF_HEADERS).send({ ...input, purpose }).expect(422)
+    }
+    const created = readResponseBody<NumberingRuleDetailBody>(await browser.post('/api/numbering-rules')
+      .set(CSRF_HEADERS).send({ ...input, purpose: 'SHIPPING_MARK' }).expect(201))
+    expect(created.purpose).toBe('SHIPPING_MARK')
+    await browser.patch(`/api/numbering-rules/${created.id}`).set(CSRF_HEADERS)
+      .send({ expectedVersion: 1, name: keyword, purpose: 'BUSINESS' }).expect(422)
+    await browser.post(`/api/numbering-rules/${created.id}/clone`).set(CSRF_HEADERS)
+      .send({ expectedVersion: 1, ruleCode: `${keyword}_COPY`, name: keyword, purpose: 'BUSINESS' }).expect(422)
+    const copied = readResponseBody<NumberingRuleDetailBody>(await browser.post(`/api/numbering-rules/${created.id}/clone`)
+      .set(CSRF_HEADERS).send({ expectedVersion: 1, ruleCode: `${keyword}_COPY`, name: keyword }).expect(201))
+    expect(copied.purpose).toBe('SHIPPING_MARK')
+    await browser.post('/api/numbering-rules').set(CSRF_HEADERS)
+      .send({ ...input, ruleCode: `${keyword}_BUSINESS`, purpose: 'BUSINESS' }).expect(201)
+    for (const [purpose, total] of [[undefined, 3], ['BUSINESS', 1], ['SHIPPING_MARK', 2]] as const) {
+      const response = await browser.get('/api/numbering-rules').query({ keyword, status: 'DRAFT', pageSize: 1, page: 2, ...(purpose ? { purpose } : {}) }).expect(200)
+      expect(response.body).toMatchObject({ total, purposeCounts: [{ value: 'ALL', count: 3 }, { value: 'BUSINESS', count: 1 }, { value: 'SHIPPING_MARK', count: 2 }] })
+    }
+    await browser.get('/api/numbering-rules').query({ purpose: 'ALL' }).expect(422)
+    await browser.post(`/api/numbering-rules/${created.id}/publish`).set(CSRF_HEADERS).send({ expectedVersion: 1, draftRevision: 1 }).expect(200)
+    await browser.post(`/api/numbering-rules/${created.id}/enable`).set(CSRF_HEADERS).send({ expectedVersion: 2 }).expect(200)
+    const idempotencyKey = randomUUID()
+    const issued = await generator.generate({ ruleCode: keyword, consumerCode: 'PURPOSE.E2E', idempotencyKey })
+    const replay = await generator.generate({ ruleCode: keyword, consumerCode: 'PURPOSE.E2E', idempotencyKey })
+    expect(replay.number).toBe(issued.number)
+    expect(issued.number).toBe('0001')
   })
 })

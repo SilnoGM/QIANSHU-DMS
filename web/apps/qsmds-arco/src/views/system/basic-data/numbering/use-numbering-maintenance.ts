@@ -19,6 +19,7 @@ import type {
   NumberingVersionListQuery,
 } from '@/api/modules/numbering'
 
+import type { NumberingPurpose } from '@/api/modules/numbering-purpose'
 import numberingApi from '@/api/modules/numbering'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 
@@ -82,6 +83,7 @@ export function useNumberingMaintenance(
   const toast = useQsToast()
 
   const editorVisible = ref(false)
+  const createPurpose = ref<NumberingPurpose | null>(null)
   const editorMode = ref<NumberingEditorMode>('create')
   const editorFormModel = ref<NumberingRuleFormModel>(
     createNumberingRuleFormModel(null),
@@ -294,7 +296,7 @@ export function useNumberingMaintenance(
     }
   }
 
-  function openCreateEditor(): void {
+  function openCreateEditor(purpose: NumberingPurpose): void {
     if (!permissions.value.canRead || !permissions.value.canCreate) {
       return
     }
@@ -302,6 +304,7 @@ export function useNumberingMaintenance(
     editorAbortController?.abort()
     editorRequestVersion += 1
     editorMode.value = 'create'
+    createPurpose.value = purpose
     editorRule.value = null
     editorFormModel.value = createNumberingRuleFormModel(null)
     editorLoading.value = false
@@ -471,7 +474,10 @@ export function useNumberingMaintenance(
     resetEditorFailure()
     try {
       if (mode === 'create') {
-        await numberingApi.rules.create(buildCreateNumberingRuleRequest(model))
+        if (createPurpose.value === null) {
+          return false
+        }
+        await numberingApi.rules.create(buildCreateNumberingRuleRequest(model, createPurpose.value))
       }
       else if (mode === 'clone' && ruleSnapshot !== null) {
         await numberingApi.rules.clone(

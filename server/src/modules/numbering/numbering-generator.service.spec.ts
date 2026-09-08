@@ -56,6 +56,7 @@ jest.mock('./numbering-generator.persistence', () => ({
 const RULE_ID = '10000000-0000-4000-8000-000000000001'
 const VERSION_ID = '20000000-0000-4000-8000-000000000001'
 const PERIOD_STATE_ID = '30000000-0000-4000-8000-000000000001'
+const ISSUANCE_ID = '40000000-0000-4000-8000-000000000001'
 const AS_OF = new Date('2026-08-02T15:59:59.123Z')
 const REPLAY_ISSUED_AT = new Date('2026-07-31T02:03:04.567Z')
 const MAIN_TRANSACTION = { name: 'main' } as unknown as Prisma.TransactionClient
@@ -78,6 +79,7 @@ const VALIDATED_SCOPED_REQUEST = validateGenerateScopedNumberRequest(
   SCOPED_REQUEST,
 )
 const REPLAY_RECORD = {
+  id: ISSUANCE_ID,
   ruleCode: REQUEST.ruleCode,
   revision: 2,
   generatedNumber: 'SO00',
@@ -170,9 +172,9 @@ describe('NumberingGeneratorService', () => {
       nextSequenceValue: 1n,
       usedCount: 0n,
     })
-    mockedInsertSequence.mockResolvedValue(undefined)
+    mockedInsertSequence.mockResolvedValue(ISSUANCE_ID)
     mockedAdvanceState.mockResolvedValue(undefined)
-    mockedTryRandom.mockResolvedValue(true)
+    mockedTryRandom.mockResolvedValue(ISSUANCE_ID)
   })
 
   it('keeps both internal service methods as one-input contracts', () => {
@@ -190,6 +192,90 @@ describe('NumberingGeneratorService', () => {
       fixture.service.generateScoped.bind(fixture.service)
 
     expect(generateScoped).toHaveLength(1)
+  })
+
+  it('returns the issuance ID using the caller transaction without resetting timeouts', async () => {
+    const fixture = createService()
+    await expect(fixture.service.generateScopedInTransaction(
+      MAIN_TRANSACTION, SCOPED_REQUEST,
+    ))
+      .resolves.toEqual({
+        issuanceId: ISSUANCE_ID,
+        number: 'SO01',
+        ruleCode: SCOPED_REQUEST.ruleCode,
+        ruleRevision: 3,
+        issuedAt: AS_OF.toISOString(),
+        idempotentReplay: false,
+      })
+    expect(fixture.transaction).not.toHaveBeenCalled()
+    expect(mockedTimeouts).not.toHaveBeenCalled()
+    expect(mockedReadIdempotent).toHaveBeenCalledTimes(3)
+  })
+
+  it('returns the historical issuance ID inside the caller transaction before current state checks', async () => {
+    const fixture = createService()
+    mockedReadIdempotent.mockResolvedValueOnce({
+      ...REPLAY_RECORD,
+      ruleCode: SCOPED_REQUEST.ruleCode,
+      requestFingerprintHash: VALIDATED_SCOPED_REQUEST.requestFingerprintHash,
+    })
+    await expect(fixture.service.generateScopedInTransaction(
+      MAIN_TRANSACTION, SCOPED_REQUEST,
+    ))
+      .resolves.toMatchObject({ issuanceId: ISSUANCE_ID, idempotentReplay: true })
+    expect(mockedReadRule).not.toHaveBeenCalled()
+    expect(fixture.transaction).not.toHaveBeenCalled()
+  })
+
+  it('exits a failed caller transaction without attempting idempotency recovery', async () => {
+    const fixture = createService()
+    mockedInsertSequence.mockRejectedValueOnce({
+      code: 'P2002',
+      meta: { target: ['consumerCode', 'idempotencyKeyHash'] },
+    })
+    await expectGenerationError(
+      fixture.service.generateScopedInTransaction(MAIN_TRANSACTION, SCOPED_REQUEST),
+      NUMBERING_ERROR_CODES.RULE_STATE_CHANGED,
+    )
+    expect(fixture.transaction).not.toHaveBeenCalled()
+    expect(mockedReadIdempotent).toHaveBeenCalledTimes(3)
+    expect(mockedAdvanceState).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid scoped input before touching the caller transaction', async () => {
+    const fixture = createService()
+    await expectGenerationError(fixture.service.generateScopedInTransaction(
+      MAIN_TRANSACTION, { ...SCOPED_REQUEST, requestFingerprint: '' },
+    ), NUMBERING_BOUNDARY_ERROR_CODES.VALIDATION_FAILED)
+    expect(mockedTimestamp).not.toHaveBeenCalled()
+    expect(fixture.transaction).not.toHaveBeenCalled()
+  })
+
+  it('returns the accepted random issuance ID after collisions in the caller transaction', async () => {
+    const fixture = createService()
+    mockedReadActive.mockResolvedValue({
+      versionId: VERSION_ID,
+      revision: 6,
+      config: {
+        resetPolicy: 'NEVER',
+        segments: [{
+          type: 'RANDOM', letterLength: 0, digitLength: 1,
+          mode: 'LETTERS_THEN_DIGITS',
+        }],
+      },
+    })
+    mockedLockState.mockResolvedValue({
+      id: PERIOD_STATE_ID, ruleId: RULE_ID, periodKey: 'ALL',
+      nextSequenceValue: null, usedCount: 0n,
+    })
+    mockedTryRandom.mockResolvedValueOnce(null).mockResolvedValueOnce(ISSUANCE_ID)
+
+    await expect(fixture.service.generateScopedInTransaction(
+      MAIN_TRANSACTION, SCOPED_REQUEST,
+    )).resolves.toMatchObject({ issuanceId: ISSUANCE_ID, number: '0' })
+    expect(mockedTryRandom).toHaveBeenCalledTimes(2)
+    expect(mockedAdvanceState).toHaveBeenCalledTimes(1)
+    expect(fixture.transaction).not.toHaveBeenCalled()
   })
 
   it('runs scoped requests through the same state machine with the supplied hash', async () => {
@@ -687,9 +773,9 @@ describe('NumberingGeneratorService', () => {
       usedCount: 0n,
     })
     for (let attempt = 1; attempt <= 31; attempt += 1) {
-      mockedTryRandom.mockResolvedValueOnce(false)
+      mockedTryRandom.mockResolvedValueOnce(null)
     }
-    mockedTryRandom.mockResolvedValueOnce(true)
+    mockedTryRandom.mockResolvedValueOnce(ISSUANCE_ID)
 
     await expect(fixture.service.generate(REQUEST)).resolves.toEqual({
       number: '0',
@@ -728,7 +814,7 @@ describe('NumberingGeneratorService', () => {
       nextSequenceValue: null,
       usedCount: 0n,
     })
-    mockedTryRandom.mockResolvedValue(false)
+    mockedTryRandom.mockResolvedValue(null)
 
     await expectGenerationError(
       fixture.service.generate(REQUEST),

@@ -1,5 +1,6 @@
 import type {
   SalesOrderFulfillmentStatus,
+  SalesOrderPaymentStatus,
   SalesOrderStatus,
 } from '../../../generated/prisma/enums'
 import { parseSalesOrderAmountUnits } from './sales-order-decimal'
@@ -7,7 +8,9 @@ import { salesOrderRuleFailure } from './sales-order-errors'
 
 const ORDER_TRANSITIONS: Readonly<Record<SalesOrderStatus, readonly SalesOrderStatus[]>> = {
   DRAFT: ['CONFIRMED', 'CANCELLED'],
-  CONFIRMED: ['CANCELLED'],
+  CONFIRMED: ['PENDING_RECONCILIATION', 'CANCELLED'],
+  PENDING_RECONCILIATION: ['COMPLETED'],
+  COMPLETED: [],
   CANCELLED: [],
 }
 
@@ -25,7 +28,11 @@ const FULFILLMENT_TRANSITIONS: Readonly<
 export function assertSalesOrderStatusTransition(
   from: SalesOrderStatus,
   to: SalesOrderStatus,
-  context: { readonly activeReceivedAmount: string },
+  context: {
+    readonly activeReceivedAmount: string
+    readonly fulfillmentStatus: SalesOrderFulfillmentStatus
+    readonly paymentStatus: SalesOrderPaymentStatus
+  },
 ): void {
   if (!ORDER_TRANSITIONS[from].includes(to)) {
     return salesOrderRuleFailure(
@@ -40,6 +47,22 @@ export function assertSalesOrderStatusTransition(
     return salesOrderRuleFailure(
       'SALES_ORDER_CANCEL_HAS_PAYMENTS',
       '已有有效收款的订单不能取消',
+    )
+  }
+  // 待对账和已完成都是运营人员显式确认的订单状态。资格只读取行锁事务中的
+  // 履约、付款事实，不能接受客户端随状态请求提交的派生条件。
+  const signedAndPaid = context.fulfillmentStatus === 'SIGNED'
+    && context.paymentStatus === 'PAID'
+  if (to === 'PENDING_RECONCILIATION' && !signedAndPaid) {
+    return salesOrderRuleFailure(
+      'SALES_ORDER_RECONCILIATION_CONDITIONS_NOT_MET',
+      '进入待对账前订单必须已签收且已付清',
+    )
+  }
+  if (to === 'COMPLETED' && !signedAndPaid) {
+    return salesOrderRuleFailure(
+      'SALES_ORDER_COMPLETION_CONDITIONS_NOT_MET',
+      '完成订单前必须重新确认订单已签收且已付清',
     )
   }
 }

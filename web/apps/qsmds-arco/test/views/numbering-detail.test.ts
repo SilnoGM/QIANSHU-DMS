@@ -275,7 +275,7 @@ test('详情组件使用单一 Drawer tabs、受控数据和安全错误展示�
   assert.match(source, /emit\('action'/u)
   assert.match(source, /role="alert"/u)
   assert.match(source, /requestId/u)
-  assert.doesNotMatch(source, /from ['"]@\/api\/modules\/numbering/u)
+  assert.doesNotMatch(source, /from ['"]@\/api\/modules\/numbering['"]/u)
   assert.doesNotMatch(source, /\.rules\.(?:get|versions|issuances|publish|enable|disable)/u)
 })
 

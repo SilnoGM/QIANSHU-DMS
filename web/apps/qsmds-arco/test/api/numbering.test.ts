@@ -15,7 +15,7 @@ interface Call {
 
 function createClientRecorder(): { calls: Call[], client: AxiosInstance } {
   const calls: Call[] = []
-  const response = Promise.resolve({ data: {} })
+  const response = Promise.resolve({ data: { purpose: 'BUSINESS', items: [], page: 1, pageSize: 20, total: 0, purposeCounts: [{ value: 'ALL', count: 0 }, { value: 'BUSINESS', count: 0 }, { value: 'SHIPPING_MARK', count: 0 }] } })
   const client = {
     get(url: string, config?: unknown) {
       calls.push({ method: 'get', url, config })
@@ -130,6 +130,7 @@ test('preview/create/update/clone/publish/enable/disable 均本地呈错且禁�
     ruleId: 'rule-id',
   }
   const createPayload = {
+    purpose: 'BUSINESS' as const,
     resetPolicy: 'NEVER' as const,
     segments,
     ruleCode: 'SALES_ORDER',

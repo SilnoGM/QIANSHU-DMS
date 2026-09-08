@@ -4,6 +4,7 @@ import {
   PartialType,
 } from '@nestjs/swagger'
 import {
+  IsIn,
   IsInt,
   IsString,
   IsUUID,
@@ -17,6 +18,7 @@ import {
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 import { isNormalizableNumberingRuleCode } from '../numbering.normalizer'
 import { NumberingRuleConfigInputDto } from './numbering-segment.dto'
+import { NumberingRulePurpose } from './numbering-management.dto'
 
 const MAX_INT32 = 2_147_483_647
 
@@ -46,6 +48,10 @@ abstract class NumberingExpectedVersionRequestDto {
 
 export class CreateNumberingRuleRequestDto
   extends NumberingRuleConfigInputDto {
+  @ApiProperty({ type: 'string', enum: NumberingRulePurpose })
+  @IsIn(Object.values(NumberingRulePurpose), { message: '请选择有效的编码用途' })
+  purpose!: NumberingRulePurpose
+
   @ApiProperty({ type: 'string', minLength: 1, maxLength: 64 })
   @IsString({ message: '规则编码必须是字符串' })
   @IsUnicodeCodePointLength(1, 64, {

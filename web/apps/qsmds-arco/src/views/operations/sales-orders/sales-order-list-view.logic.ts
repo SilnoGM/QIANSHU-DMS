@@ -1,8 +1,12 @@
 import type {
+  FactoryShipmentResultDto,
   SalesOrderCurrencySummaryDto,
   SalesOrderListItemDto,
 } from '@/api/generated/types.gen'
-import type { SalesOrderListQuery } from '@/api/modules/sales-orders'
+import type {
+  SalesOrderListQuery,
+  SalesOrderStatusCountsQuery,
+} from '@/api/modules/sales-orders'
 import type { QsStatusSwitchItem } from '@/components/business/QsStatusSwitchToolbar/types'
 
 export type SalesOrderListViewMode = 'all' | 'pending'
@@ -56,7 +60,6 @@ type SalesOrderSummarySource = Pick<
 >
 
 const PENDING_STATUS_ITEMS: readonly QsStatusSwitchItem[] = [
-  { label: '全部待办', value: 'ALL' },
   { label: '待采购', value: 'PENDING' },
   { label: '待发货', value: 'PREPARING' },
   { label: '待入仓', value: 'LAND_TRANSIT' },
@@ -81,6 +84,13 @@ const PENDING_FULFILLMENT_STATUSES = [
   'SEA_TRANSIT',
 ] as const
 
+const FORMAL_ORDER_STATUSES = [
+  'CONFIRMED',
+  'PENDING_RECONCILIATION',
+  'CANCELLED',
+  'COMPLETED',
+] as const
+
 const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
   SalesOrderListItemDto['fulfillmentStatus'],
   SalesOrderPendingActionItem
@@ -88,7 +98,7 @@ const PENDING_ACTION_BY_FULFILLMENT_STATUS: Partial<Record<
   PENDING: {
     icon: 'i-lucide:clipboard-plus',
     key: 'SUBMIT_PURCHASE',
-    label: '提交采购',
+    label: '新增采购',
   },
   PREPARING: {
     icon: 'i-lucide:factory',
@@ -136,20 +146,39 @@ export function getSalesOrderStatusItems(
   return viewMode === 'pending' ? PENDING_STATUS_ITEMS : ALL_ORDER_STATUS_ITEMS
 }
 
+/** 计数使用与列表相同的基础筛选，但不能携带分页或当前工具栏状态。 */
+export function buildSalesOrderStatusCountsQuery(
+  listQuery: SalesOrderListQuery,
+  view: SalesOrderListViewMode,
+): SalesOrderStatusCountsQuery {
+  const {
+    fulfillmentStatus: _fulfillmentStatus,
+    orderStatus: _orderStatus,
+    page: _page,
+    pageSize: _pageSize,
+    ...baseQuery
+  } = listQuery
+  return { ...baseQuery, view }
+}
+
 /**
  * URL 查询参数属于不可信输入。这里只接受当前页面工具栏实际声明的值，避免两个页面
- * 互相复用到不属于自己的状态，刷新或浏览器回退时也能稳定落到“全部”。
+ * 互相复用到不属于自己的状态；待办页默认进入首个有效分类“待采购”，全部订单页
+ * 继续默认进入“全部订单”。
  */
 export function normalizeSalesOrderStatusSelection(
   viewMode: SalesOrderListViewMode,
   value: unknown,
 ): SalesOrderListStatusSelection {
+  const defaultSelection: SalesOrderListStatusSelection = viewMode === 'pending'
+    ? 'PENDING'
+    : 'ALL'
   if (typeof value !== 'string') {
-    return 'ALL'
+    return defaultSelection
   }
   return getSalesOrderStatusItems(viewMode).some(item => item.value === value)
     ? value as SalesOrderListStatusSelection
-    : 'ALL'
+    : defaultSelection
 }
 
 /**
@@ -183,8 +212,24 @@ export function resolvePendingSalesOrderActions(
 }
 
 /**
+ * 销售履约状态由 Server 在发货事务中统一重算，Web 只把返回结果翻译为轻提示，
+ * 不根据本地采购单快照重复实现覆盖和全量发货判断。
+ */
+export function formatSalesFactoryShipmentSuccess(
+  result: FactoryShipmentResultDto,
+): string {
+  if (result.changedPurchaseOrderCount === 0) {
+    return '所选采购单均已发货，未重复处理'
+  }
+  if (result.salesOrder?.advancedToLandTransit === true) {
+    return `已确认 ${result.changedPurchaseOrderCount} 张采购单发货，销售订单已进入陆运中`
+  }
+  return `已确认 ${result.changedPurchaseOrderCount} 张采购单发货，仍有 ${result.remainingPendingShipmentCount} 张采购单待发货`
+}
+
+/**
  * 当前公开列表接口只接受单个订单状态与单个履约状态，因此“全部”视图拆成互斥查询目标，
- * 页面再做精确聚合。待对账与已完成尚未进入当前 API/数据库契约，保留入口但不发送非法值。
+ * 页面再做精确聚合。正式订单明确排除历史草稿，四类目标均来自服务端真实枚举。
  */
 export function resolveSalesOrderQueryTargets(
   viewMode: SalesOrderListViewMode,
@@ -211,11 +256,12 @@ export function resolveSalesOrderQueryTargets(
   }
 
   if (selection === 'ALL') {
-    // 首版正式订单无草稿机制；显式查询两个已落地状态，防止历史草稿混入全部订单。
-    return [{ orderStatus: 'CONFIRMED' }, { orderStatus: 'CANCELLED' }]
+    // 首版正式订单无草稿机制；显式查询四个已落地状态，防止历史草稿混入全部订单。
+    return FORMAL_ORDER_STATUSES.map(orderStatus => ({ orderStatus }))
   }
-  if (selection === 'CONFIRMED' || selection === 'CANCELLED') {
-    return [{ orderStatus: selection }]
+  const orderStatus = FORMAL_ORDER_STATUSES.find(status => status === selection)
+  if (orderStatus !== undefined) {
+    return [{ orderStatus }]
   }
   return []
 }

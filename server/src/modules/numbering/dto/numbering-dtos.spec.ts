@@ -269,6 +269,7 @@ describe('numbering request DTO validation', () => {
 
   it('validates each discriminated segment and rejects cross-type fields', async () => {
     const valid = await validatePlain(CreateNumberingRuleRequestDto, {
+      purpose: 'BUSINESS',
       ruleCode: 'sales_order',
       name: '销售订单编号',
       description: null,
@@ -326,6 +327,7 @@ describe('numbering request DTO validation', () => {
 
   it('lets Create and Clone pass normalizable padded rule codes', async () => {
     const create = await validatePlain(CreateNumberingRuleRequestDto, {
+      purpose: 'BUSINESS',
       ruleCode: '　 sales_order \t',
       name: '销售订单编号',
       ...VALID_CONFIG,
@@ -359,6 +361,7 @@ describe('numbering request DTO validation', () => {
       expectedVersion: 8,
     })
     const forbidden = await validatePlain(CreateNumberingRuleRequestDto, {
+      purpose: 'BUSINESS',
       ruleCode: 'sales_order',
       name: '销售订单编号',
       ...VALID_CONFIG,
@@ -505,6 +508,7 @@ describe('numbering OpenAPI DTO contract', () => {
       'publishedAt',
     ])
     expect(Object.keys(listItem.properties as object)).toEqual([
+      'purpose',
       'id',
       'ruleCode',
       'name',
@@ -519,6 +523,7 @@ describe('numbering OpenAPI DTO contract', () => {
       'updatedAt',
     ])
     expect(Object.keys(detail.properties as object)).toEqual([
+      'purpose',
       'id',
       'ruleCode',
       'name',
@@ -554,6 +559,7 @@ describe('numbering OpenAPI DTO contract', () => {
       'issuedAt',
     ])
     expect(Object.keys(rulePage.properties as object)).toEqual([
+      'purposeCounts',
       'items',
       'page',
       'pageSize',

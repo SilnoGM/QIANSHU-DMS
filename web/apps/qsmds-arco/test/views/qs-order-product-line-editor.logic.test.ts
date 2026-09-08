@@ -8,6 +8,7 @@ import {
   applyProductSelectionChanges,
   calculateOrderProductLineTotals,
   createTemporaryOrderProductLine,
+  validateMatchingCustomUnitPrices,
 } from '../../src/components/business/QsOrderProductLineEditor/logic'
 
 const catalogProduct: ProductSelectorItem = {
@@ -76,6 +77,30 @@ test('数据库产品与临时产品新行的本单售价统一从零开始，�
   assert.equal(applied.lines[0]!.actualUnitPriceAmount, '0.00')
 })
 
+test('采购临时产品可从双价格空值开始，并要求规范金额完全相等', () => {
+  const temporary = createTemporaryOrderProductLine('purchase-custom', null)
+
+  assert.equal(temporary.standardUnitPriceAmount, null)
+  assert.equal(temporary.actualUnitPriceAmount, null)
+  assert.deepEqual(validateMatchingCustomUnitPrices(temporary), {
+    ok: false,
+    code: 'REQUIRED',
+  })
+  assert.deepEqual(validateMatchingCustomUnitPrices({
+    ...temporary,
+    standardUnitPriceAmount: '12.50',
+    actualUnitPriceAmount: '12.5000',
+  }), { ok: true })
+  assert.deepEqual(validateMatchingCustomUnitPrices({
+    ...temporary,
+    standardUnitPriceAmount: '12.50',
+    actualUnitPriceAmount: '12.51',
+  }), {
+    ok: false,
+    code: 'MISMATCH',
+  })
+})
+
 test('任一变更不可信时整批失败，不部分写入原数组', () => {
   const result = applyProductSelectionChanges([catalogLine], [{
     kind: 'INCREMENT',
@@ -131,6 +156,25 @@ test('临时产品不伪造标准价，汇总使用四位十进制定点计算',
   ], 4), {
     standardTotal: '25.0000',
     actualTotal: '30.4999',
+    missingStandardPriceCount: 0,
+  })
+})
+
+test('临时产品手工填写采购定价后按数量计入采购定价汇总', () => {
+  const temporary = {
+    ...createTemporaryOrderProductLine('purchase-custom-total', null),
+    name: '手工采购包装服务',
+    standardUnitPriceAmount: '15.00',
+    actualUnitPriceAmount: '15.00',
+    quantity: '2',
+  }
+
+  assert.deepEqual(calculateOrderProductLineTotals([
+    catalogLine,
+    temporary,
+  ], 2), {
+    standardTotal: '55.00',
+    actualTotal: '50.50',
     missingStandardPriceCount: 0,
   })
 })

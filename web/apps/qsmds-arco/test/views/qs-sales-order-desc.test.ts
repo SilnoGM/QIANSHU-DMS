@@ -22,6 +22,8 @@ test('QsSalesOrderDesc 使用独立只读 ViewModel，且不依赖创建表单�
   assert.match(typesSource, /readonly currencyCode: string/u)
   assert.match(typesSource, /readonly customer: Readonly<QsSalesOrderDescCustomerViewModel>/u)
   assert.match(typesSource, /readonly lines: readonly QsSalesOrderDescLineViewModel\[\]/u)
+  assert.match(typesSource, /readonly description: null \| string/u)
+  assert.match(typesSource, /readonly mainImage: null \| Readonly<QsSalesOrderDescImageViewModel>/u)
   assert.match(typesSource, /readonly documents: readonly QsSalesOrderDescDocumentViewModel\[\]/u)
   assert.match(typesSource, /readonly currencies: readonly CurrencyDescriptor\[\]/u)
   assert.doesNotMatch(typesSource, /standardUnitPriceAmount|readonly remark:/u)
@@ -51,6 +53,15 @@ test('详情按五个业务区块固定排序并使用可关联的语义标题',
   }
 
   assert.match(source, /data-slot="qs-sales-order-desc"/u)
+  assert.match(
+    source,
+    /data-slot="qs-sales-order-desc"[\s\S]*?class="[^"]*rounded-xl[^"]*"/u,
+    '共享订单详情组件外层必须使用与页面详情区域一致的 rounded-xl',
+  )
+  assert.doesNotMatch(
+    source,
+    /data-slot="qs-sales-order-desc"[\s\S]*?class="[^"]*rounded-2xl[^"]*"/u,
+  )
   assert.match(source, /<section[\s\S]*:aria-labelledby=/u)
   assert.match(source, /<h3[\s\S]*:id=/u)
   assert.match(source, /<dl/u)
@@ -59,20 +70,44 @@ test('详情按五个业务区块固定排序并使用可关联的语义标题',
   assert.doesNotMatch(source, /<FaDescriptions/u)
 })
 
-test('产品和销售信息统一复用 AmountDisplay，并突出总价、定金和尾款', () => {
+test('销售产品复用采购详情结构展示主图、说明、真实售价、数量和本行小计', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsSalesOrderDesc/index.vue',
   )
+  const zhCn = readRelativeSource(
+    '../../src/locales/lang/sales-order-desc/zh-cn.json',
+  )
 
   assert.match(source, /import AmountDisplay from '@\/components\/base\/AmountDisplay\/index\.vue'/u)
+  assert.match(source, /import ImageGroup from '@\/components\/base\/ImageGroup\/index\.vue'/u)
   assert.match(source, /data-slot="sales-order-desc-line"/u)
+  assert.match(source, /lineImageItems\(line\)/u)
+  assert.match(source, /line\.mainImage/u)
+  assert.match(source, /line\.description/u)
+  assert.match(source, /salesOrderDesc\.fields\.lineRemark/u)
+  assert.doesNotMatch(source, /v-if="line\.description"/u)
+  assert.match(source, /displayText\(line\.description\)/u)
+  assert.match(source, /i-lucide:image-off/u)
+  assert.match(source, /<div class="flex gap-3 min-w-0 items-start">/u)
   assert.match(source, /line\.lineType/u)
   assert.match(source, /line\.productName/u)
   assert.match(source, /line\.productNo/u)
   assert.match(source, /line\.actualUnitPriceAmount/u)
   assert.match(source, /line\.quantity/u)
   assert.match(source, /line\.lineSubtotalAmount/u)
+  assert.match(source, /grid-cols-\[minmax\(0,1fr\)_auto\] items-end/u)
+  assert.match(source, /qs-type-meta text-muted-foreground m-0 flex flex-wrap gap-x-1 items-baseline/u)
+  assert.match(source, /<div class="text-right min-w-0">/u)
+  assert.match(zhCn, /"lines": "销售产品与小计（\{count\}）"/u)
+  assert.match(zhCn, /"lineRemark": "备注："/u)
   assert.match(source, /model\.amounts\.lineSubtotalAmount/u)
+})
+
+test('销售信息统一复用 AmountDisplay，并突出总价、定金和尾款', () => {
+  const source = readRelativeSource(
+    '../../src/components/business/QsSalesOrderDesc/index.vue',
+  )
+
   assert.match(source, /data-slot="sales-order-desc-total"/u)
   assert.match(source, /model\.amounts\.agreedTotalAmount/u)
   assert.match(source, /data-slot="sales-order-desc-deposit"/u)
@@ -87,7 +122,7 @@ test('产品和销售信息统一复用 AmountDisplay，并突出总价、定金
   assert.doesNotMatch(source, /Number\(|parseFloat\(|parseInt\(/u)
 })
 
-test('附件缩略图复用 ImageGroup，文件元数据有稳定降级且操作区由插槽提供', () => {
+test('附件缩略图复用 ImageGroup，类型标签使用可辨识语义色且未知类型稳定降级', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsSalesOrderDesc/index.vue',
   )
@@ -99,6 +134,12 @@ test('附件缩略图复用 ImageGroup，文件元数据有稳定降级且操作
   assert.match(source, /document\.originalFilename/u)
   assert.match(source, /i-lucide:(?:file-text|file|video)/u)
   assert.match(source, /sm:grid-cols-2/u)
+  assert.match(source, /function documentTypeTagClass\(documentType: string\): string/u)
+  assert.match(source, /case 'ORDER_ISSUANCE_VOUCHER':[\s\S]*?dark:border-sky-500\/35![\s\S]*?dark:bg-sky-500\/10![\s\S]*?dark:text-sky-300/u)
+  assert.match(source, /case 'PAYMENT_VOUCHER':[\s\S]*?dark:border-emerald-500\/35![\s\S]*?dark:bg-emerald-500\/10![\s\S]*?dark:text-emerald-300/u)
+  assert.match(source, /case 'DELIVERY_RECEIPT':[\s\S]*?dark:border-amber-500\/35![\s\S]*?dark:bg-amber-500\/10![\s\S]*?dark:text-amber-300/u)
+  assert.match(source, /default:[\s\S]*?border-border bg-muted\/50 text-muted-foreground/u)
+  assert.match(source, /:class="documentTypeTagClass\(document\.documentType\)"/u)
   assert.match(source, /defineSlots<[\s\S]*actions/u)
   assert.match(source, /<slot name="actions"/u)
   assert.doesNotMatch(source, /defineEmits|type="submit"|<FaButton|<button/u)

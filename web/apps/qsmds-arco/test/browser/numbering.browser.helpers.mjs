@@ -1,3 +1,7 @@
+import { Buffer } from 'node:buffer'
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import process from 'node:process'
 
 import {
@@ -9,6 +13,14 @@ import {
 const visibleDialogSelector = '[role="dialog"]'
 
 function dialogExpression(title, body) {
+  // 新增表单已迁为独立页面；字段操作共用定位器，但不把页面伪装为 dialog。
+  if (title === '新增编号规则') {
+    return `(() => {
+      const dialog = document.querySelector('[data-testid="numbering-create-page"]')
+      if (!dialog || !dialog.getClientRects().length) throw new Error('numbering create page unavailable')
+      ${body}
+    })()`
+  }
   return `(() => {
     const dialog = [...document.querySelectorAll(${JSON.stringify(
       visibleDialogSelector,
@@ -161,6 +173,44 @@ export async function waitForVisibleDialog(page, title) {
     dialog.getClientRects().length > 0
     && dialog.textContent?.includes(${JSON.stringify(title)})
   )))()`)
+}
+
+export async function waitForNumberingCreatePage(page) {
+  await page.waitFor(`document.querySelector('[data-testid="numbering-create-page"]')?.getClientRects().length > 0`)
+}
+
+export async function openNumberingCreatePage(page, purpose) {
+  process.stdout.write(`[numbering-browser] select purpose and open create page: ${purpose}\n`)
+  await clickVisibleButton(page, '新建规则')
+  await waitForVisibleDialog(page, '选择编码用途')
+  await page.evaluate(`(() => {
+    const input = document.querySelector('input[type="radio"][value="${purpose}"]')
+    if (!input) throw new Error('numbering purpose radio unavailable')
+    input.focus()
+    input.click()
+  })()`)
+  await clickDialogButton(page, '选择编码用途', '进入新增规则')
+  await waitForNumberingCreatePage(page)
+}
+
+/** 只截取隔离 fixture 的业务画面；截图落临时目录，不写仓库或采集登录页面。 */
+export async function saveNumberingScreenshot(page, label) {
+  // 只等当前可见页面的淡入和预览，不受背景 Toast / 持续动画或隐藏抽屉影响。
+  await page.waitFor(`(() => {
+    const editor = document.querySelector('[data-testid="numbering-create-page"]')
+    if (!editor) return true
+    for (let element = editor; element; element = element.parentElement) {
+      if (Number(getComputedStyle(element).opacity) < 1) return false
+    }
+    const preview = editor.querySelector('#numbering-preview-title')?.closest('section')
+    return !preview || preview.getAttribute('aria-busy') === 'false'
+  })()`)
+  await page.evaluate(`new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`)
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'numbering-purpose-ui-'))
+  const target = path.join(directory, `${label}.png`)
+  const screenshot = await page.connection.send('Page.captureScreenshot', { format: 'png' })
+  await writeFile(target, Buffer.from(screenshot.data, 'base64'))
+  process.stdout.write(`[numbering-browser] screenshot: ${target}\n`)
 }
 
 export async function waitForNoVisibleDialog(page, title) {

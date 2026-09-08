@@ -1,6 +1,7 @@
 /* eslint-disable test/no-import-node-test */
 import assert from 'node:assert/strict'
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -14,10 +15,12 @@ import {
   waitForNoVisibleDialog,
   waitForVisibleDialog,
 } from './numbering.browser.helpers.mjs'
+import { clickOrderDrawerTab } from './order-drawer.browser.helpers.mjs'
 import {
   apiExpression,
   appRouteUrl,
   clickVisibleButton,
+  clickVisibleRowButton,
   collectRuntimeIssues,
   loginThroughRealHttp,
   readConfiguration,
@@ -162,6 +165,28 @@ async function readOrders(page) {
   return page.evaluate(apiExpression(pathname))
 }
 
+/**
+ * 详情入口依赖订单号拼出的 aria-label；通过可见性与禁用态双重约束，确保
+ * 浏览器回归走的是用户可操作按钮，而不是命中抽屉内的隐藏副本。
+ */
+async function clickVisibleAriaButton(page, label) {
+  await page.waitFor(`(() => [...document.querySelectorAll(
+    '[aria-label=${JSON.stringify(label)}]'
+  )].some(element => element.getClientRects().length > 0
+    && !element.disabled))()`)
+  await page.evaluate(`(() => {
+    const element = [...document.querySelectorAll(
+      '[aria-label=${JSON.stringify(label)}]'
+    )].find(candidate => candidate.getClientRects().length > 0
+      && !candidate.disabled)
+    if (!(element instanceof HTMLElement)) {
+      throw new Error('sales order aria button unavailable')
+    }
+    element.click()
+    return true
+  })()`)
+}
+
 test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截及正式派号', {
   timeout: 600_000,
 }, async (t) => {
@@ -229,6 +254,7 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       const desc = summary?.querySelector('[data-slot="qs-sales-order-desc"]')
       return summary?.getClientRects().length > 0
         && desc?.getClientRects().length > 0
+        && getComputedStyle(desc).borderTopLeftRadius === '12px'
         && ![...summary.querySelectorAll('button')]
           .some(button => button.textContent?.trim() === '提交订单')
         && !document.body.innerText.includes('当前币种不可用于新订单')
@@ -284,6 +310,11 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
       '中国台湾 台湾 高雄市 苓雅区 中正一路 100 号 3 楼',
     )
     await clickVisibleButton(page, '下一步')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="warning"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('请先完成并修正当前步骤的必填资料'))`)
+    assert.equal(await page.evaluate(`document.querySelector('.sales-order-alert-stack')
+      ?.getClientRects().length ?? 0`), 0)
     await page.waitFor(`document.body.innerText.includes('详细地址请勿重复填写已选地区')`)
     await page.waitFor(`document.querySelector(
       '[data-testid="sales-order-step-customer"]',
@@ -438,8 +469,42 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
         && submit?.disabled === false
     })()`)
 
-    await page.evaluate('window.scrollTo(0, document.documentElement.scrollHeight)')
-    await page.waitFor(`(() => {
+    const salesProductState = await page.evaluate(`(() => {
+      const summary = document.querySelector(
+        '[data-testid="sales-order-create-summary-column"]',
+      )
+      const salesLine = summary?.querySelector('[data-slot="sales-order-desc-line"]')
+      const salesLineImage = salesLine?.querySelector('[data-slot="image-group"] img')
+      return {
+        imageAlt: salesLineImage?.alt ?? null,
+        imagePath: salesLineImage ? new URL(salesLineImage.src).pathname : null,
+        lineHasProductNo: salesLine?.textContent?.includes('PRODUCT-BROWSER-001') ?? false,
+        lineHasSubtotal: salesLine?.textContent?.includes('本行小计') ?? false,
+        lineHasUnitPrice: salesLine?.textContent?.includes('真实售价') ?? false,
+        titleVisible: summary?.textContent?.includes('销售产品与小计（1）') ?? false,
+      }
+    })()`)
+    assert.deepEqual({
+      ...salesProductState,
+      imagePath: undefined,
+    }, {
+      imageAlt: 'Browser 多媒体产品',
+      imagePath: undefined,
+      lineHasProductNo: true,
+      lineHasSubtotal: true,
+      lineHasUnitPrice: true,
+      titleVisible: true,
+    })
+    assert.match(
+      salesProductState.imagePath ?? '',
+      /^\/api\/sales-orders\/product-options\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/main-image\/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\/content$/u,
+    )
+
+    await page.waitFor(`(async () => {
+      // 核对区仍可能随图片/布局更新变高，滚动位置必须与本轮几何检查对应。
+      // 等渲染帧后保留原有完整可见和不遮挡断言，不用一次旧 scrollHeight 判定结果。
+      window.scrollTo(0, document.documentElement.scrollHeight)
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
       const actions = document.querySelector(
         '[data-testid="sales-order-review-actions"]',
       )
@@ -533,6 +598,206 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     assert.equal(detail.body?.lines?.[0]?.productNo, 'PRODUCT-BROWSER-001')
     assert.equal(detail.body?.lines?.[0]?.actualUnitPriceAmount, '100.0000')
     assert.equal(detail.body?.lines?.[0]?.quantity, 2)
+
+    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+      const productImage = drawer?.querySelector(
+        'section[aria-label="销售产品列表"] [data-slot="image-group"] img',
+      )
+      return drawer?.querySelector('[data-testid="sales-order-detail-drawer"]')
+        && !drawer.querySelector('[data-slot="qs-sales-order-desc"]')
+        && drawer.textContent.includes('订单基础信息')
+        && drawer.textContent.includes('销售产品列表')
+        && drawer.textContent.includes('实际收款记录')
+        && drawer.querySelector('[role="tab"][aria-selected="true"]')
+          ?.textContent.includes('订单详情信息')
+        && drawer.textContent.includes('PRODUCT-BROWSER-001')
+        && drawer.textContent.includes(${JSON.stringify(customerName)})
+        && productImage instanceof HTMLImageElement
+        && productImage.src.includes('/api/sales-orders/${order.id}/lines/')
+        && productImage.complete
+        && productImage.naturalWidth > 0
+    })()`)
+    // 专用抽屉的第二页只显示真实变更；打印当前仅是轻提示，不触发系统打印。
+    await clickOrderDrawerTab(page, 'sales-order-detail-drawer', '订单变更记录')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-detail-drawer"] section[aria-label="订单变更记录"]',
+    )?.getClientRects().length > 0`)
+    await clickOrderDrawerTab(page, 'sales-order-detail-drawer', '订单详情信息')
+    await page.waitFor(`document.querySelector(
+      '[data-testid="sales-order-detail-drawer"] section[aria-label="销售产品列表"]',
+    )?.textContent.includes('PRODUCT-BROWSER-001')`)
+    // 留在变更页关闭，下一次打开必须重置为详情页，而非继承上次的页签。
+    await clickOrderDrawerTab(page, 'sales-order-detail-drawer', '订单变更记录')
+    await clickVisibleButton(page, '打印')
+    await page.waitFor(`document.body.innerText.includes(
+      '该功能将在后续版本推出，敬请期待',
+    )`)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
+
+    // 再次打开同一订单，覆盖抽屉关闭后清理状态并重新请求详情的生命周期。
+    await clickVisibleAriaButton(page, `${order.orderNo}：查看详情`)
+    await page.waitFor(`(() => {
+      const drawer = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes(${JSON.stringify(order.orderNo)}))
+      return drawer?.textContent?.includes('销售产品列表')
+        && drawer.textContent.includes('PRODUCT-BROWSER-001')
+        && drawer.querySelector('[role="tab"][aria-selected="true"]')
+          ?.textContent.includes('订单详情信息')
+    })()`)
+    await clickVisibleAriaButton(page, '关闭抽屉')
+    await page.waitFor(`![...document.querySelectorAll('[role="dialog"]')]
+      .some(dialog => dialog.getClientRects().length > 0
+        && dialog.textContent?.includes(${JSON.stringify(order.orderNo)}))`)
+
+    // 必须建立真实的已审核采购与发货事实，不能直接跳过采购推进销售履约。
+    // 浏览器场景运行在一次性隔离数据库中，不会修改开发环境的业务订单。
+    const prematureTransition = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
+      'PATCH',
+      { toStatus: 'PREPARING', reason: 'Browser 未审核采购拦截验收' },
+    ))
+    assert.equal(prematureTransition.status, 422)
+    const markResolution = await page.evaluate(apiExpression(
+      '/api/purchase-orders/shipping-mark-resolution?productMode=CATALOG&supplierValue=BROWSER_SUPPLIER_EFFECTIVE',
+    ))
+    assert.equal(markResolution.status, 200)
+    assert.equal(typeof markResolution.body?.resolutionToken, 'string')
+    const sourceLine = detail.body.lines[0]
+    const purchaseInput = {
+      purchaseType: 'SALES_LINKED',
+      productMode: 'CATALOG',
+      salesOrderId: order.id,
+      supplierValue: 'BROWSER_SUPPLIER_EFFECTIVE',
+      orderDate: order.orderDate,
+      expectedShippingMarkResolution: markResolution.body.resolutionToken,
+      lines: [{
+        lineType: 'CATALOG',
+        productId: sourceLine.productId,
+        sourceSalesOrderLineId: sourceLine.id,
+        actualPurchaseUnitPriceAmount: '20',
+        quantity: sourceLine.quantity,
+      }],
+      parts: [{ key: randomUUID(), items: [{ lineNumber: 1, quantity: sourceLine.quantity }] }],
+      purchaseTotalAmount: '40',
+      depositDueAmount: '0',
+      balanceDueAmount: '40',
+    }
+    const purchase = await page.evaluate(`(async () => {
+      const response = await fetch('/api/purchase-orders', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Qianshu-CSRF': '1',
+          'Idempotency-Key': crypto.randomUUID(),
+        },
+        body: JSON.stringify(${JSON.stringify(purchaseInput)}),
+      })
+      return { status: response.status, body: await response.json() }
+    })()`)
+    assert.equal(purchase.status, 201)
+    assert.equal(purchase.body?.shippingMarkText, null)
+    assert.deepEqual(purchase.body?.shippingMarks, [])
+    assert.equal(purchase.body?.parts.length, 1)
+    assert.equal(purchase.body?.parts[0]?.shippingMarkText, null)
+    assert.equal(purchase.body?.parts[0]?.items[0]?.quantity, sourceLine.quantity)
+    assert.equal(purchase.body?.orderStatus, 'PENDING_REVIEW')
+    const reviewedPurchase = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/review`,
+      'POST',
+      { expectedVersion: purchase.body.version, reason: 'Browser 签收流程采购审核' },
+    ))
+    assert.equal(reviewedPurchase.status, 200)
+    assert.equal(reviewedPurchase.body?.orderStatus, 'CONFIRMED')
+    assert.equal(typeof reviewedPurchase.body?.shippingMarkText, 'string')
+    assert.deepEqual(reviewedPurchase.body?.shippingMarks, [reviewedPurchase.body.shippingMarkText])
+    assert.equal(reviewedPurchase.body?.parts[0]?.shippingMarkText, reviewedPurchase.body.shippingMarkText)
+    const preparedSales = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}`,
+    ))
+    assert.equal(preparedSales.body?.fulfillmentStatus, 'PREPARING')
+    const shipment = await page.evaluate(apiExpression(
+      `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/factory-shipments`,
+      'POST',
+      { expectedVersion: reviewedPurchase.body.version, reason: 'Browser 签收流程采购发货' },
+    ))
+    // 既有发货 POST 使用 Nest 默认的 201；本次不变更该接口响应行为。
+    assert.equal(shipment.status, 201)
+    assert.equal(shipment.body?.salesOrder?.fulfillmentStatus, 'LAND_TRANSIT')
+    for (const toStatus of ['WAREHOUSE_ARRIVED', 'SEA_TRANSIT']) {
+      const transition = await page.evaluate(apiExpression(
+        `/api/sales-orders/${encodeURIComponent(order.id)}/fulfillment-status`,
+        'PATCH',
+        { toStatus, reason: 'Browser 签收自动推进验收' },
+      ))
+      assert.equal(transition.status, 200)
+      assert.equal(transition.body?.fulfillmentStatus, toStatus)
+    }
+
+    await page.navigate(appRouteUrl(
+      configuration.baseUrl,
+      '/qs-operations/sales/pending-sales-orders?status=SEA_TRANSIT',
+    ))
+    await waitForAfterAuthentication(page, `(() => {
+      const table = document.querySelector('[data-testid="sales-order-list-table"]')
+      return table?.getClientRects().length > 0
+        && !table.querySelector('[aria-busy="true"]')
+        && table.textContent?.includes(${JSON.stringify(order.orderNo)})
+    })()`)
+    await clickVisibleRowButton(page, order.orderNo, '货物签收')
+    await waitForVisibleDialog(page, '货物签收')
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('货物签收'))
+      return dialog?.textContent?.includes('自动将订单进度更新为已签收')
+    })()`)
+    await page.setFiles(
+      '[data-testid="sales-order-delivery-receipt-input"]',
+      [voucherFixture],
+    )
+    await page.waitFor(`(() => {
+      const dialog = [...document.querySelectorAll('[role="dialog"]')]
+        .find(candidate => candidate.getClientRects().length > 0
+          && candidate.textContent?.includes('货物签收'))
+      return dialog?.textContent?.includes('browser-sales-order-voucher.png')
+    })()`)
+    await clickDialogButton(page, '货物签收', '确认货物签收')
+    await page.waitFor(`[...document.querySelectorAll('[data-qs-toast][data-type="success"]')]
+      .some(toast => toast.getClientRects().length > 0
+        && toast.textContent?.includes('签收单上传成功，订单已进入已签收'))`)
+    await waitForNoVisibleDialog(page, '货物签收')
+
+    const signedDetail = await page.evaluate(apiExpression(
+      `/api/sales-orders/${encodeURIComponent(order.id)}`,
+    ))
+    assert.equal(signedDetail.status, 200)
+    assert.equal(signedDetail.body?.fulfillmentStatus, 'SIGNED')
+    assert.equal(signedDetail.body?.orderStatus, 'CONFIRMED')
+    assert.equal(
+      signedDetail.body?.documents?.some(document => (
+        document.documentType === 'DELIVERY_RECEIPT'
+        && document.detachedAt === null
+      )),
+      true,
+    )
+    assert.equal(
+      signedDetail.body?.statusHistory?.some(history => (
+        history.dimension === 'FULFILLMENT'
+        && history.fromStatus === 'SEA_TRANSIT'
+        && history.toStatus === 'SIGNED'
+        && history.reason === '业务人员上传签收单后自动确认签收'
+      )),
+      true,
+    )
   })
 
   runtime.stop()
