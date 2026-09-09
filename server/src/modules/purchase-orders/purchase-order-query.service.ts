@@ -18,7 +18,7 @@ import {
   formatPurchaseOrderAmountUnits,
   parsePurchaseOrderAmountUnits,
 } from './domain/purchase-order-decimal'
-import type { PurchaseOrderPendingTask } from './dto/purchase-order-query.dto'
+import type { PurchaseOrderPendingTask, PurchaseOrderReviewView } from './dto/purchase-order-query.dto'
 import { summarizePurchaseOrderRecords, type PurchaseOrderRecordSummaries } from './purchase-order-record-summary'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
@@ -56,7 +56,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
     where: { detachedAt: null },
     select: { documentType: true, detachedAt: true },
   },
-  _count: { select: { payments: true, statusHistory: true, amountRevisions: true } },
+  _count: { select: { payments: true, statusHistory: true, amountRevisions: true, parts: true } },
   statusHistory: {
     take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
     select: { id: true, changedAt: true, reason: true },
@@ -196,6 +196,7 @@ export interface PurchaseOrderListQueryInput {
   readonly supplierValue?: string
   readonly purchaseType?: PurchaseOrderType
   readonly orderStatus?: PurchaseOrderStatus
+  readonly reviewView?: PurchaseOrderReviewView
   readonly fulfillmentStatus?: PurchaseOrderFulfillmentStatus
   readonly paymentStatus?: PurchaseOrderPaymentStatus
   readonly pendingTask?: PurchaseOrderPendingTask
@@ -245,6 +246,7 @@ export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly paymentStatus: PurchaseOrderPaymentStatus
   readonly shippingMarkText: string | null
   readonly shippingMarks: readonly string[]
+  readonly partCount: number
   readonly remark: string | null
   readonly version: number
   readonly createdAt: string
@@ -277,7 +279,7 @@ export type PurchaseOrderStatusCountValue =
 
 export type PurchaseOrderStatusCountsQueryInput = Omit<
   PurchaseOrderListQueryInput,
-  'orderStatus' | 'page' | 'pageSize' | 'pendingTask'
+  'orderStatus' | 'page' | 'pageSize' | 'pendingTask' | 'reviewView'
 >
 
 export interface PurchaseOrderStatusCounts {
@@ -439,7 +441,7 @@ function mapCurrencySummary(
 function buildPurchaseOrderBaseWhere(
   input: Omit<
     PurchaseOrderListQueryInput,
-    'orderStatus' | 'page' | 'pageSize' | 'pendingTask' | 'view'
+    'orderStatus' | 'page' | 'pageSize' | 'pendingTask' | 'reviewView' | 'view'
   >,
 ): Prisma.PurchaseOrderWhereInput {
   const keyword = input.keyword?.trim().normalize('NFKC')
@@ -527,6 +529,7 @@ function mapListItem(
     supplier,
     createdBy: row.createdBy,
     lineSummary: mapLineSummary(row),
+    partCount: row._count.parts,
     orderDate: row.orderDate.toISOString().slice(0, 10),
     currencyCode: row.currencyCode,
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),
@@ -584,10 +587,17 @@ export class PurchaseOrderQueryService {
               ] },
             ] }
           : taskClauseByType[input.pendingTask]
+    // 审核分类由服务端生成，与显式状态及待办条件取交集，避免组合筛选扩大结果范围。
+    const reviewClause: Prisma.PurchaseOrderWhereInput | undefined =
+      input.reviewView === undefined
+        ? undefined
+        : input.reviewView === 'APPROVED'
+          ? { orderStatus: { in: ['CONFIRMED', 'COMPLETED'] } }
+          : { orderStatus: input.reviewView }
     const where: Prisma.PurchaseOrderWhereInput = {
       ...buildPurchaseOrderBaseWhere(input),
       orderStatus: input.orderStatus,
-      AND: [pendingClause].filter(
+      AND: [pendingClause, reviewClause].filter(
         (value): value is Prisma.PurchaseOrderWhereInput => value !== undefined,
       ),
     }

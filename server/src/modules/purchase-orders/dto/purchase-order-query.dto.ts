@@ -36,6 +36,9 @@ export const PURCHASE_ORDER_PENDING_TASKS = [
   'AWAITING_PAYMENT',
 ] as const
 
+export const PURCHASE_ORDER_REVIEW_VIEWS = ['PENDING_REVIEW', 'APPROVED', 'CANCELLED'] as const
+export type PurchaseOrderReviewView = typeof PURCHASE_ORDER_REVIEW_VIEWS[number]
+
 export type PurchaseOrderPendingTask = typeof PURCHASE_ORDER_PENDING_TASKS[number]
 
 function optionalInteger(value: unknown): unknown {
@@ -91,6 +94,11 @@ export class PurchaseOrderListQueryDto extends PurchaseOrderPageQueryDto {
   @IsEnum(PurchaseOrderStatus)
   orderStatus?: PurchaseOrderStatus
 
+  @ApiProperty({ enum: PURCHASE_ORDER_REVIEW_VIEWS, required: false })
+  @IsOptional()
+  @IsIn(PURCHASE_ORDER_REVIEW_VIEWS)
+  reviewView?: PurchaseOrderReviewView
+
   @ApiProperty({ enum: PurchaseOrderFulfillmentStatus, required: false })
   @IsOptional()
   @IsEnum(PurchaseOrderFulfillmentStatus)
@@ -119,7 +127,7 @@ export class PurchaseOrderListQueryDto extends PurchaseOrderPageQueryDto {
 
 export class PurchaseOrderStatusCountsQueryDto extends OmitType(
   PurchaseOrderListQueryDto,
-  ['page', 'pageSize', 'orderStatus', 'pendingTask'] as const,
+  ['page', 'pageSize', 'orderStatus', 'pendingTask', 'reviewView'] as const,
 ) {}
 
 export class PurchaseOrderProductOptionsQueryDto extends PurchaseOrderPageQueryDto {

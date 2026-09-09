@@ -55,7 +55,7 @@ export const purchaseWorkbench: RouteRecordMainRaw = {
     {
       path: '/qs-purchase/reviews',
       name: 'qsPurchaseReviews',
-      component: () => import('@/views/workbenches/placeholder.vue'),
+      component: () => import('@/views/workbenches/purchase-reviews/index.vue'),
       meta: {
         title: 'workbench.purchaseReviews',
         icon: 'i-lucide:clipboard-check',

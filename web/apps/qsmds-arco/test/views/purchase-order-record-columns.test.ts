@@ -2,8 +2,6 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 采购记录列契约使用现有 Node.js runner。
 import test from 'node:test'
-import { runInNewContext } from 'node:vm'
-import { computed, reactive, ref } from 'vue'
 
 const root = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
 
@@ -41,41 +39,12 @@ test('采购列表按内容横向展开，编号和金额保留安全列宽，�
   assert.match(source, /:action-column="\{ fixed: 'right', minWidth: actionColumnWidth, title: '操作', width: actionColumnWidth \}"/u)
 })
 
-test('操作列随当前页审核中三动作扩宽，普通列表与权限不足仍为200px', async () => {
+test('运营采购只保留查看和取消，不再挂载审核入口', async () => {
   const source = await readFile(new URL('index.vue', root), 'utf8')
-  const start = source.indexOf('const actionColumnWidth = computed(')
-  assert.ok(start >= 0, '列宽应由页面响应式计算')
-  const declaration = source.slice(start, source.indexOf('\n\n', start))
-  const props = reactive({ viewMode: 'all' })
-  const canReview = ref(true)
-  const canUpdate = ref(true)
-  const rows = ref<{ orderStatus: string }[]>([])
-  // 执行页面实际计算式并使用真实 Vue 响应性，避免在测试里复制列宽规则。
-  const width = runInNewContext(`${declaration}; actionColumnWidth`, {
-    computed,
-    props,
-    canReview,
-    canUpdate,
-    rows,
-  }) as Readonly<{ value: number }>
-  assert.equal(width.value, 200)
-  rows.value = [{ orderStatus: 'PENDING_REVIEW' }]
-  assert.equal(width.value, 260)
-  canReview.value = false
-  assert.equal(width.value, 200)
-  canReview.value = true
-  canUpdate.value = false
-  assert.equal(width.value, 200)
-  canUpdate.value = true
-  props.viewMode = 'pending'
-  assert.equal(width.value, 200)
-  props.viewMode = 'all'
-  for (const orderStatus of ['CONFIRMED', 'COMPLETED', 'CANCELLED']) {
-    rows.value = [{ orderStatus }]
-    assert.equal(width.value, 200)
-  }
-  rows.value.push({ orderStatus: 'PENDING_REVIEW' })
-  assert.equal(width.value, 260)
+  assert.match(source, /const actionColumnWidth = 200/u)
+  assert.doesNotMatch(source, /PurchaseOrderReviewModal|openPurchaseOrderReview|canReview/u)
+  assert.match(source, /v-if="canUpdate && canCancelPurchaseOrderFromList\(row\) && \(props.viewMode === 'all' \|\| row.orderStatus === 'PENDING_REVIEW'\)"/u)
+  assert.match(source, /@click="openPurchaseOrderCancellation\(row\)"/u)
 })
 
 test('三列与销售一致使用可点击的图标数量按钮，零记录不禁用', async () => {

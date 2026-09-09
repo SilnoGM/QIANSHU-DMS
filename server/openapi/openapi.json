@@ -39223,6 +39223,19 @@
             }
           },
           {
+            "name": "reviewView",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_REVIEW",
+                "APPROVED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
             "name": "fulfillmentStatus",
             "required": false,
             "in": "query",
@@ -57700,6 +57713,11 @@
               "type": "string"
             }
           },
+          "partCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "采购单货件总数，包含待审核及已取消货件"
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -57742,6 +57760,7 @@
           "paymentStatus",
           "shippingMarkText",
           "shippingMarks",
+          "partCount",
           "remark",
           "version",
           "createdAt",
@@ -59169,6 +59188,11 @@
               "type": "string"
             }
           },
+          "partCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "采购单货件总数，包含待审核及已取消货件"
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -59259,6 +59283,7 @@
           "paymentStatus",
           "shippingMarkText",
           "shippingMarks",
+          "partCount",
           "remark",
           "version",
           "createdAt",

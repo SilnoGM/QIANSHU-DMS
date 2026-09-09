@@ -236,7 +236,7 @@ test('采购审核中的标签、独立查询和待办动作不允许提前履�
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_REVIEW', {
     orderStatus: 'PENDING_REVIEW',
     paymentStatus: 'UNPAID',
-  }).map(item => item.key), ['REVIEW'])
+  }).map(item => item.key), [])
   for (const task of ['AWAITING_PAYMENT', 'AWAITING_SHIPMENT', 'AWAITING_WAREHOUSE'] as const) {
     assert.deepEqual(resolvePurchaseOrderPendingActions(task, {
       orderStatus: 'PENDING_REVIEW',

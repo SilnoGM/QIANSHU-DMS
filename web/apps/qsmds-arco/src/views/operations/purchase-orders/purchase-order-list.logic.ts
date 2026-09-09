@@ -28,7 +28,7 @@ export type PurchaseOrderListStatusSelection
     | PurchaseOrderOrderStatusSelection
     | PurchaseOrderPendingTask
 
-export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'REVIEW' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
+export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
 
 export interface PurchaseOrderPendingActionItem {
   readonly icon: string
@@ -110,14 +110,9 @@ const PAYMENT_ACTION: PurchaseOrderPendingActionItem = {
 }
 
 const TASK_ACTION: Readonly<Record<
-  Exclude<PurchaseOrderPendingTask, 'AWAITING_PAYMENT'>,
+  Exclude<PurchaseOrderPendingTask, 'AWAITING_PAYMENT' | 'AWAITING_REVIEW'>,
   PurchaseOrderPendingActionItem
 >> = {
-  AWAITING_REVIEW: {
-    icon: 'i-lucide:clipboard-check',
-    key: 'REVIEW',
-    label: '审核',
-  },
   AWAITING_SHIPMENT: {
     icon: 'i-lucide:truck',
     key: 'SHIPMENT',
@@ -156,7 +151,7 @@ export function resolvePurchaseOrderPendingActions(
   order: Pick<PurchaseOrderListItemDto, 'orderStatus' | 'paymentStatus'>,
 ): readonly PurchaseOrderPendingActionItem[] {
   if (task === 'AWAITING_REVIEW') {
-    return order.orderStatus === 'PENDING_REVIEW' ? [TASK_ACTION.AWAITING_REVIEW] : []
+    return []
   }
   if (order.orderStatus !== 'CONFIRMED') {
     return []

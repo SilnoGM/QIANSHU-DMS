@@ -76,7 +76,6 @@ import {
 } from './purchase-order-list.logic'
 import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
 import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
-import PurchaseOrderReviewModal from './purchase-order-review-modal.vue'
 import PurchaseOrderShippingMarksCell from './purchase-order-shipping-marks-cell.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
@@ -101,7 +100,6 @@ const canRead = computed(() => auth('purchase-orders:read'))
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
 const canUpdate = computed(() => auth('purchase-orders:update'))
-const canReview = computed(() => auth('purchase-orders:review'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' : '全部采购')
 const pageDescription = computed(() => props.viewMode === 'pending'
@@ -156,8 +154,6 @@ const recordsModalVisible = ref(false)
 const recordsModalKind = ref<PurchaseOrderRecordsKind>('payments')
 const recordsModalOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
-const reviewVisible = ref(false)
-const reviewOrderId = ref<string | null>(null)
 const purchaseStartVisible = ref(false)
 const purchaseStartType = ref<PurchaseStartPurchaseType>('SALES_LINKED')
 const cancelLoadingOrderId = ref<string | null>(null)
@@ -186,12 +182,7 @@ const statusItems = computed(() => withStatusSwitchCounts(
   },
 ))
 
-// 审核中同时出现查看、审核、取消三个动作，按当前页实际入口扩宽，避免挤成两行。
-const actionColumnWidth = computed(() => props.viewMode === 'all'
-  && canReview.value && canUpdate.value
-  && rows.value.some(order => order.orderStatus === 'PENDING_REVIEW')
-  ? 260
-  : 200)
+const actionColumnWidth = 200
 
 const supplierFilterOptions = computed(() => (
   supplierCatalog.catalog.value?.items ?? []
@@ -607,18 +598,7 @@ function pendingActions(order: PurchaseOrderListItemDto) {
 }
 
 function canShowPendingAction(action: PurchaseOrderPendingActionItem): boolean {
-  if (action.key === 'REVIEW') {
-    return canReview.value
-  }
   return action.key === 'PAYMENT' ? canManagePayment.value : canUpdate.value
-}
-
-function openPurchaseOrderReview(order: PurchaseOrderListItemDto): void {
-  if (!canRead.value || !canReview.value || order.orderStatus !== 'PENDING_REVIEW' || reviewVisible.value) {
-    return
-  }
-  reviewOrderId.value = order.id
-  reviewVisible.value = true
 }
 
 function createPurchaseShipmentContext(
@@ -750,10 +730,6 @@ function handlePendingAction(
   if (!canShowPendingAction(action)) {
     return
   }
-  if (action.key === 'REVIEW') {
-    openPurchaseOrderReview(order)
-    return
-  }
   if (order.orderStatus !== 'CONFIRMED') {
     return
   }
@@ -804,8 +780,6 @@ watch(() => appAccountStore.authEpoch, () => {
   shipmentContext.value = null
   shipmentError.value = null
   detailVisible.value = false
-  reviewVisible.value = false
-  reviewOrderId.value = null
   recordsModalVisible.value = false
   recordsModalOrder.value = null
   selectedOrder.value = null
@@ -1010,18 +984,7 @@ onBeforeUnmount(() => {
               </template>
             </template>
             <FaButton
-              v-if="props.viewMode === 'all' && canReview && row.orderStatus === 'PENDING_REVIEW'"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：审核`"
-              @click="openPurchaseOrderReview(row)"
-            >
-              <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />审核
-            </FaButton>
-            <FaButton
-              v-if="props.viewMode === 'all' && canUpdate && canCancelPurchaseOrderFromList(row)"
+              v-if="canUpdate && canCancelPurchaseOrderFromList(row) && (props.viewMode === 'all' || row.orderStatus === 'PENDING_REVIEW')"
               type="button"
               variant="ghost"
               size="sm"
@@ -1578,13 +1541,6 @@ onBeforeUnmount(() => {
     <PurchaseOrderDetailDrawer
       v-model="detailVisible"
       :order="selectedOrder"
-      :currencies="currencyCatalog.currencies.value"
-      @detail-updated="handleDetailUpdated"
-    />
-
-    <PurchaseOrderReviewModal
-      v-model="reviewVisible"
-      :order-id="reviewOrderId"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleDetailUpdated"
     />

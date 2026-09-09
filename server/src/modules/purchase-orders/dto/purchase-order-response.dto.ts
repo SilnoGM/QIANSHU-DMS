@@ -184,6 +184,8 @@ export class PurchaseOrderListItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
   @ApiProperty({ type: [String], description: '按货件顺序返回已派发的货件唛头；待审核新单和无货件历史订单为空数组' })
   readonly shippingMarks!: readonly string[]
+  @ApiProperty({ type: 'integer', minimum: 0, description: '采购单货件总数，包含待审核及已取消货件' })
+  readonly partCount!: number
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly createdAt!: string
