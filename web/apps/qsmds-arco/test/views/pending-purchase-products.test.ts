@@ -16,7 +16,7 @@ function setup() {
   const calls: { signal: AbortSignal, resolve: (value: unknown) => void, reject: (error: Error) => void }[] = []
   let callback!: (value: [string, boolean, number], old: unknown, cleanup: (fn: () => void) => void) => Promise<void>
   let cleanup = () => {}
-  const state = runInNewContext(`${compiled}\n({items, images, withoutImages, loading, failed})`, {
+  const state = runInNewContext(`${compiled}\n({items, visibleItems, hiddenItems, loading, failed})`, {
     defineProps: () => ({ orderId: 'first', active: true }),
     useI18n: () => ({ t: (key: string) => key }),
     ref: (value: unknown) => ({ value }),
@@ -54,7 +54,7 @@ test('切换订单与关闭取消旧请求，延迟结果不能覆盖新订单�
   assert.equal(state.loading.value, false)
 })
 
-test('失败状态可重试，无图片产品保留独立占位且不混入图片预览', async () => {
+test('失败状态可重试，无图片产品保留位置且总展示位置不超过四个', async () => {
   const { state, calls, load } = setup()
   const failed = load('order')
   calls[0]!.reject(new Error('offline'))
@@ -67,8 +67,14 @@ test('失败状态可重试，无图片产品保留独立占位且不混入图�
     { id: 'custom', productName: '自定义', mainImage: null },
   ] } })
   await retry
-  assert.equal(state.images.value.length, 1)
-  assert.equal(state.images.value[0].key, 'image')
-  assert.equal(state.withoutImages.value.length, 1)
-  assert.equal(state.withoutImages.value[0].id, 'custom')
+  assert.equal(state.visibleItems.value.length, 2)
+  assert.equal(state.visibleItems.value[1].id, 'custom')
+  assert.equal(state.hiddenItems.value.length, 0)
+  state.items.value = Array.from({ length: 4 }, (_, id) => ({ id }))
+  assert.equal(state.visibleItems.value.length, 4)
+  assert.equal(state.hiddenItems.value.length, 0)
+  state.items.value = Array.from({ length: 8 }, (_, id) => ({ id }))
+  assert.equal(state.visibleItems.value.length, 3)
+  assert.equal(state.hiddenItems.value.length, 5)
+  assert.equal(state.hiddenItems.value[0].id, 3)
 })
