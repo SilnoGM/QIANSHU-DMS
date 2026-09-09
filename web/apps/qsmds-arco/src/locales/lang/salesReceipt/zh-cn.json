@@ -121,5 +121,12 @@
   "salesReceipt.voucherImageFailed": "凭证图片加载失败，请刷新重试",
   "salesReceipt.voucherImageHint": "点击预览收款凭证",
   "salesReceipt.voucherFileHint": "非图片凭证，点击在新窗口打开文件",
-  "salesReceipt.voucherEmpty": "暂无收款凭证"
+  "salesReceipt.voucherEmpty": "暂无收款凭证",
+  "salesReceipt.accountShare": "分账比例",
+  "salesReceipt.previewIntro": "核对人民币入账金额与账户分配，确认后生效。",
+  "salesReceipt.rejectIntro": "填写驳回原因，便于提交人修正后重新提交。",
+  "salesReceipt.voidIntro": "核对原收款与扣回金额，并记录财务纠错原因。",
+  "salesReceipt.optionalReason": "审核备注（选填）",
+  "salesReceipt.optionalReasonPlaceholder": "可补充本次审核的核对说明",
+  "salesReceipt.requiredReasonPlaceholder": "请填写原因，便于后续核对与追溯"
 }

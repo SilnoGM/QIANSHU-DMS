@@ -6,9 +6,13 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure } from '../../operations/sales-orders/sales-order-create.logic'
+import ReceiptDetailSection from './receipt-detail-section.vue'
+import { formatReceiptDecimal, paymentMethodClass } from './receipt-display'
 import ReceiptPostingSummary from './receipt-posting-summary.vue'
+import ReceiptVoucher from './receipt-voucher.vue'
 
 const props = defineProps<{ requestId: string | null }>()
 const emit = defineEmits<{ close: [], changed: [] }>()
@@ -35,7 +39,15 @@ const visible = computed({ get: () => props.requestId !== null, set: (value) => 
 const canRead = computed(() => auth('sales-receipts:read'))
 const canReview = computed(() => auth('sales-receipts:review'))
 const canVoid = computed(() => auth('sales-receipts:void'))
-const entries = computed(() => action.value === 'approve' ? context.value?.entries ?? [] : detail.value?.approvedPayment?.posting?.entries ?? [])
+const receiptStatusClass = computed(() => detail.value?.status === 'REJECTED'
+  ? 'border-destructive/30 bg-destructive/10 text-destructive'
+  : detail.value?.status === 'APPROVED'
+    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+    : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300')
+const voidPreview = computed(() => {
+  const posting = detail.value?.approvedPayment?.posting
+  return posting ? { ...posting, entries: posting.entries.map(entry => ({ ...entry, direction: 'DEBIT' })) } : null
+})
 const traceRows = computed(() => {
   const item = detail.value
   if (!item) {
@@ -186,7 +198,7 @@ onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
-  <QsGenericModal v-model="visible" :title="t('salesReceipt.detail')" :description="detail ? (detail.collectionNo || t('salesReceipt.unnumbered')) : undefined" size="lg" :loading="loading" :error="error || null" :submitting="busy" :dismiss-on-escape="!busy" :dismiss-on-overlay="!busy">
+  <QsGenericModal v-model="visible" :title="t('salesReceipt.detail')" :description="detail ? (detail.collectionNo || t('salesReceipt.unnumbered')) : undefined" size="xl" :loading="loading" :error="error || null" :submitting="busy" :dismiss-on-escape="!busy" :dismiss-on-overlay="!busy">
     <template #header-leading>
       <FaIcon name="i-lucide:hand-coins" class="size-5" />
     </template>
@@ -195,31 +207,21 @@ onBeforeUnmount(() => controller?.abort())
         {{ t('salesReceipt.refresh') }}
       </FaButton>
     </template>
-    <div v-if="detail" class="space-y-6">
-      <section class="p-4 border border-border rounded-xl bg-muted/15 sm:p-5">
-        <div class="mb-4 space-y-1">
-          <p class="qs-type-compact-label m-0">
-            {{ t('salesReceipt.collectionNo') }}
-          </p>
-          <p class="qs-type-data-emphasis font-mono m-0 select-all break-all">
-            {{ detail.collectionNo || t('salesReceipt.unnumbered') }}
-          </p>
-        </div>
+    <div v-if="detail" class="min-w-0 space-y-4">
+      <section class="p-4 border border-border rounded-xl bg-muted/15 min-w-0 space-y-5 sm:p-5">
         <div class="flex flex-wrap gap-3 items-start justify-between">
-          <div class="min-w-0 space-y-2">
+          <div class="min-w-0 space-y-1">
             <p class="qs-type-compact-label m-0">
-              {{ t('salesReceipt.amount') }}
-            </p>
-            <AmountDisplay :value="detail.amount" :currency="detail.currencyCode" :currencies="currencyCatalog.currencies.value" />
-            <p class="qs-type-meta m-0">
-              {{ t(`salesReceipt.type.${detail.paymentType}`) }} · {{ detail.currencyCode }}
+              {{ t('salesReceipt.collectionNo') }}
+            </p><p class="qs-type-data-emphasis m-0 select-all break-all">
+              {{ detail.collectionNo || t('salesReceipt.unnumbered') }}
             </p>
           </div>
           <div class="flex flex-wrap gap-2">
-            <FaTag variant="outline" class="qs-type-status-tag">
+            <FaTag variant="outline" class="qs-type-status-tag" :class="receiptStatusClass">
               {{ t(`salesReceipt.status.${detail.status}`) }}
             </FaTag>
-            <FaTag v-if="detail.approvedPayment?.voidedAt" variant="outline" class="text-destructive qs-type-status-tag">
+            <FaTag v-if="detail.approvedPayment?.voidedAt" variant="outline" class="text-destructive qs-type-status-tag border-destructive/30 bg-destructive/5">
               {{ t('salesReceipt.voided') }}
             </FaTag>
             <FaTag v-if="detail.resubmittedFromId" variant="outline" class="qs-type-status-tag">
@@ -227,167 +229,206 @@ onBeforeUnmount(() => controller?.abort())
             </FaTag>
           </div>
         </div>
-        <p v-if="detail.status === 'PENDING_REVIEW'" class="qs-type-meta mb-0 mt-4">
-          {{ t('salesReceipt.pendingHint') }}
+        <div class="min-w-0 space-y-2">
+          <p class="qs-type-compact-label m-0">
+            {{ t('salesReceipt.amount') }}
+          </p>
+          <div tabindex="0" :aria-label="t('salesReceipt.amount')" class="max-w-full overflow-x-auto [&_[data-currency]]:text-3xl [&_[data-currency]]:leading-10">
+            <AmountDisplay :value="detail.amount" :currency="detail.currencyCode" :currencies="currencyCatalog.currencies.value" />
+          </div>
+          <div class="flex flex-wrap gap-2 items-center">
+            <FaTag variant="outline">
+              {{ t(`salesReceipt.type.${detail.paymentType}`) }}
+            </FaTag><span class="qs-type-meta">{{ detail.currencyCode }}</span>
+          </div>
+        </div>
+        <p v-if="detail.status === 'PENDING_REVIEW'" class="qs-type-meta m-0 flex gap-2 items-start">
+          <FaIcon name="i-lucide:info" class="mt-0.5 shrink-0 size-4" aria-hidden="true" />{{ t('salesReceipt.pendingHint') }}
         </p>
       </section>
-      <section class="space-y-3">
-        <h3 class="qs-type-section-title m-0">
-          {{ t('salesReceipt.receiptInfo') }}
-        </h3>
-        <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
-          <div>
-            <dt class="qs-type-compact-label mb-1">
-              {{ t('salesReceipt.orderNumber') }}
-            </dt><dd class="qs-type-body m-0 break-words">
-              {{ detail.salesOrder.orderNo }}
-            </dd>
+      <div class="gap-4 grid md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <ReceiptDetailSection :title="t('salesReceipt.receiptInfo')" icon="i-lucide:clipboard-list">
+          <dl class="m-0 gap-x-6 gap-y-4 grid sm:grid-cols-2">
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('salesReceipt.orderNumber') }}
+              </dt><dd class="qs-type-data m-0 break-all">
+                {{ detail.salesOrder.orderNo }}
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('salesReceipt.customer') }}
+              </dt><dd class="qs-type-body m-0 break-words">
+                {{ detail.salesOrder.customerName }}
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('salesReceipt.owner') }}
+              </dt><dd class="m-0 min-w-0">
+                <QsPersonDisplay :display-name="detail.accountOwner.name" size="md" class="max-w-full" />
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('salesReceipt.orderStatus') }}
+              </dt><dd class="m-0">
+                <FaTag variant="outline">
+                  {{ t(`salesReceipt.orderState.${detail.salesOrder.orderStatus}`) }}
+                </FaTag>
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('salesReceipt.receivedAt') }}
+              </dt><dd class="m-0 overflow-x-auto">
+                <DateTimeDisplay :value="detail.receivedAt" />
+              </dd>
+            </div>
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('salesReceipt.method') }}
+              </dt><dd class="m-0">
+                <FaTag variant="outline" class="max-w-full whitespace-normal break-words" :class="paymentMethodClass(detail.paymentMethod)">
+                  {{ detail.paymentMethodNameSnapshot }}
+                </FaTag>
+              </dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="qs-type-compact-label mb-1.5">
+                {{ t('salesReceipt.remark') }}
+              </dt><dd class="qs-type-body m-0 whitespace-pre-wrap break-words">
+                {{ detail.remark || '—' }}
+              </dd>
+            </div>
+          </dl>
+        </ReceiptDetailSection>
+        <ReceiptDetailSection :title="t('salesReceipt.voucherTitle')" icon="i-lucide:paperclip">
+          <div class="flex flex-wrap gap-3 min-w-0 items-center">
+            <ReceiptVoucher :voucher="detail.voucher" :url="`/api/sales-receipt-requests/${encodeURIComponent(detail.id)}/voucher`" />
+            <div class="flex-1 min-w-0 space-y-1">
+              <p class="qs-type-body m-0 break-all">
+                {{ detail.voucher.title }}
+              </p><p class="qs-type-meta m-0">
+                {{ detail.voucher.mimeType || '—' }}
+              </p>
+            </div>
           </div>
-          <div>
-            <dt class="qs-type-compact-label mb-1">
-              {{ t('salesReceipt.customer') }}
-            </dt><dd class="qs-type-body m-0 break-words">
-              {{ detail.salesOrder.customerName }}
-            </dd>
-          </div>
-          <div>
-            <dt class="qs-type-compact-label mb-1">
-              {{ t('salesReceipt.owner') }}
-            </dt><dd class="qs-type-body m-0 break-words">
-              {{ detail.accountOwner.name }}
-            </dd>
-          </div>
-          <div>
-            <dt class="qs-type-compact-label mb-1">
-              {{ t('salesReceipt.orderStatus') }}
-            </dt><dd class="qs-type-data m-0">
-              {{ t(`salesReceipt.orderState.${detail.salesOrder.orderStatus}`) }}
-            </dd>
-          </div>
-          <div>
-            <dt class="qs-type-compact-label mb-1">
-              {{ t('salesReceipt.receivedAt') }}
-            </dt><dd class="qs-type-data m-0">
-              <DateTimeDisplay :value="detail.receivedAt" />
-            </dd>
-          </div>
-          <div>
-            <dt class="qs-type-compact-label mb-1">
-              {{ t('salesReceipt.method') }}
-            </dt><dd class="qs-type-body m-0 break-words">
-              {{ detail.paymentMethodNameSnapshot }}
-            </dd>
-          </div>
-          <div class="sm:col-span-2">
-            <dt class="qs-type-compact-label mb-1">
-              {{ t('salesReceipt.remark') }}
-            </dt><dd class="qs-type-body m-0 whitespace-pre-wrap break-words">
-              {{ detail.remark || '—' }}
-            </dd>
-          </div>
-        </dl>
-      </section>
-      <section class="space-y-3">
-        <h3 class="qs-type-section-title m-0">
-          {{ t('salesReceipt.reviewInfo') }}
-        </h3>
+        </ReceiptDetailSection>
+      </div>
+      <ReceiptDetailSection :title="t('salesReceipt.reviewInfo')" icon="i-lucide:history">
         <dl class="m-0 gap-4 grid sm:grid-cols-2">
-          <div>
-            <dt class="qs-type-compact-label mb-1">
+          <div class="min-w-0">
+            <dt class="qs-type-compact-label mb-1.5">
               {{ t('salesReceipt.submittedAt') }}
-            </dt><dd class="qs-type-body m-0 break-words">
-              {{ detail.submittedBy.name }}<div class="qs-type-meta mt-1">
+            </dt><dd class="m-0 min-w-0 space-y-2">
+              <QsPersonDisplay :display-name="detail.submittedBy.name" size="sm" class="max-w-full" /><div class="overflow-x-auto">
                 <DateTimeDisplay :value="detail.submittedAt" />
               </div>
             </dd>
           </div>
-          <div>
-            <dt class="qs-type-compact-label mb-1">
+          <div class="min-w-0">
+            <dt class="qs-type-compact-label mb-1.5">
               {{ t('salesReceipt.reviewedAt') }}
-            </dt><dd class="qs-type-body m-0 break-words">
-              {{ detail.reviewedBy?.name || '—' }}<div v-if="detail.reviewedAt" class="qs-type-meta mt-1">
+            </dt><dd class="m-0 min-w-0 space-y-2">
+              <QsPersonDisplay v-if="detail.reviewedBy" :display-name="detail.reviewedBy.name" size="sm" class="max-w-full" /><span v-else class="qs-type-meta">—</span><div v-if="detail.reviewedAt" class="overflow-x-auto">
                 <DateTimeDisplay :value="detail.reviewedAt" />
               </div>
             </dd>
           </div>
           <div class="sm:col-span-2">
-            <dt class="qs-type-compact-label mb-1">
+            <dt class="qs-type-compact-label mb-1.5">
               {{ t(detail.status === 'REJECTED' ? 'salesReceipt.rejectedReason' : 'salesReceipt.reviewRemark') }}
             </dt><dd class="qs-type-body m-0 whitespace-pre-wrap break-words">
               {{ detail.reviewRemark || '—' }}
             </dd>
           </div>
         </dl>
-      </section>
-      <section class="space-y-3">
-        <h3 class="qs-type-section-title m-0">
-          {{ t('salesReceipt.voucherTitle') }}
-        </h3>
-        <div class="p-4 border border-border rounded-xl space-y-3">
-          <FaImagePreview v-if="detail.voucher.mediaType === 'IMAGE'" :src="`/api/sales-receipt-requests/${encodeURIComponent(detail.id)}/voucher`" :aria-label="detail.voucher.title" class="rounded-lg max-h-56 max-w-full object-contain" />
-          <a :href="`/api/sales-receipt-requests/${encodeURIComponent(detail.id)}/voucher`" target="_blank" rel="noopener noreferrer" class="qs-type-data text-primary flex gap-2 min-h-11 break-all items-center"><FaIcon name="i-lucide:external-link" class="shrink-0 size-4" />{{ detail.voucher.title }}</a>
-          <p class="qs-type-meta m-0">
-            {{ detail.voucher.mimeType }}
-          </p>
-        </div>
-      </section>
-      <section v-if="detail.approvedPayment" class="space-y-3">
-        <h3 class="qs-type-section-title m-0">
-          {{ t('salesReceipt.posted') }}
-        </h3>
+      </ReceiptDetailSection>
+      <ReceiptDetailSection v-if="detail.approvedPayment" :title="t('salesReceipt.posted')" icon="i-lucide:wallet">
         <FaAlert v-if="detail.approvedPayment.origin === 'LEGACY'" :title="t('salesReceipt.legacy')" />
         <template v-else>
           <ReceiptPostingSummary v-if="detail.approvedPayment.posting" :snapshot="detail.approvedPayment.posting" :currencies="currencyCatalog.currencies.value" />
-          <dl class="m-0 gap-4 grid sm:grid-cols-2">
-            <div>
-              <dt class="qs-type-compact-label mb-1">
+          <dl class="m-0 pt-4 border-t border-border gap-4 grid sm:grid-cols-2">
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
                 {{ t('salesReceipt.rate') }}
-              </dt><dd class="qs-type-data font-mono m-0 break-words">
-                {{ detail.approvedPayment.foreignUnitsPerCnySnapshot }} {{ detail.currencyCode }}/CNY
+              </dt><dd class="qs-type-data m-0 break-all" :title="detail.approvedPayment.foreignUnitsPerCnySnapshot ?? undefined">
+                {{ formatReceiptDecimal(detail.approvedPayment.foreignUnitsPerCnySnapshot) }} {{ detail.currencyCode }}/CNY
               </dd>
             </div>
-            <div>
-              <dt class="qs-type-compact-label mb-1">
+            <div class="min-w-0">
+              <dt class="qs-type-compact-label mb-1.5">
                 {{ t('salesReceipt.rateCapturedAt') }}
-              </dt><dd class="qs-type-data m-0">
+              </dt><dd class="m-0 overflow-x-auto">
                 <DateTimeDisplay :value="detail.approvedPayment.exchangeRateCapturedAt" />
               </dd>
             </div>
           </dl>
         </template>
-      </section>
-      <section v-if="detail.approvedPayment?.voidedAt" class="p-4 border border-destructive/25 rounded-xl bg-destructive/5 space-y-3">
-        <h3 class="qs-type-section-title text-destructive m-0">
-          {{ t('salesReceipt.voided') }}
-        </h3>
+      </ReceiptDetailSection>
+      <ReceiptDetailSection v-if="detail.approvedPayment?.voidedAt" :title="t('salesReceipt.voided')" icon="i-lucide:circle-slash" class="border-destructive/25">
         <dl class="m-0 space-y-3">
           <div>
-            <dt class="qs-type-compact-label mb-1">
+            <dt class="qs-type-compact-label mb-1.5">
               {{ t('salesReceipt.voidedAt') }}
-            </dt><dd class="qs-type-data m-0">
+            </dt><dd class="m-0 overflow-x-auto">
               <DateTimeDisplay :value="detail.approvedPayment.voidedAt" />
             </dd>
-          </div>
-          <div>
-            <dt class="qs-type-compact-label mb-1">
+          </div><div>
+            <dt class="qs-type-compact-label mb-1.5">
               {{ t('salesReceipt.voidReason') }}
             </dt><dd class="qs-type-body m-0 whitespace-pre-wrap break-words">
               {{ detail.approvedPayment.voidReason }}
             </dd>
           </div>
         </dl>
-      </section>
-      <section v-if="detail.approvedPayment?.reversal" class="space-y-3">
-        <h3 class="qs-type-section-title m-0">
-          {{ t('salesReceipt.reversal') }}
-        </h3>
+      </ReceiptDetailSection>
+      <ReceiptDetailSection v-if="detail.approvedPayment?.reversal" :title="t('salesReceipt.reversal')" icon="i-lucide:undo-2">
         <ReceiptPostingSummary :snapshot="detail.approvedPayment.reversal" reversal :currencies="currencyCatalog.currencies.value" />
-      </section>
-      <FaCollapsible class="border border-border rounded-xl overflow-hidden [&_[data-slot=collapsible-trigger]]:w-full">
-        <template #trigger="{ open }">
-          <span class="qs-type-compact-label p-4 flex gap-3 min-h-11 items-center justify-between"><span>{{ t('salesReceipt.trace') }}</span><FaIcon name="i-lucide:chevron-down" class="size-4" :class="open ? 'rotate-180' : ''" /></span>
+      </ReceiptDetailSection>
+      <section v-if="action" ref="actionSection" tabindex="-1" class="p-4 border-2 border-primary/30 rounded-xl bg-background min-w-0 space-y-5 sm:p-5">
+        <header class="flex gap-3 items-start">
+          <span class="text-primary rounded-lg bg-primary/10 flex shrink-0 size-9 items-center justify-center"><FaIcon :name="action === 'approve' ? 'i-lucide:badge-check' : action === 'reject' ? 'i-lucide:message-square-warning' : 'i-lucide:undo-2'" class="size-5" aria-hidden="true" /></span>
+          <div class="min-w-0 space-y-1">
+            <h3 class="qs-type-component-title m-0">
+              {{ t(`salesReceipt.${action}`) }}
+            </h3><p class="qs-type-meta m-0">
+              {{ t(action === 'approve' ? 'salesReceipt.previewIntro' : action === 'reject' ? 'salesReceipt.rejectIntro' : 'salesReceipt.voidIntro') }}
+            </p>
+          </div>
+        </header>
+        <FaAlert v-if="contextError" variant="destructive" :title="contextError" role="alert" />
+        <template v-if="action === 'approve' && context">
+          <ReceiptPostingSummary :snapshot="context" :currencies="currencyCatalog.currencies.value" />
+          <div class="p-3 border border-border rounded-lg bg-muted/15 space-y-2">
+            <div class="qs-type-body flex flex-wrap gap-x-3 gap-y-1 justify-between">
+              <span class="text-muted-foreground">{{ t('salesReceipt.rate') }}</span><span class="font-mono break-all" :title="context.foreignUnitsPerCny">{{ formatReceiptDecimal(context.foreignUnitsPerCny) }} {{ detail.currencyCode }}/CNY</span>
+            </div>
+            <p class="qs-type-meta m-0">
+              {{ t('salesReceipt.previewHint') }}
+            </p>
+          </div>
         </template>
-        <dl class="m-0 p-4 border-t border-border bg-muted/15 gap-4 grid sm:grid-cols-2">
+        <template v-if="action === 'void'">
+          <FaAlert :title="t(detail.approvedPayment?.origin === 'LEGACY' ? 'salesReceipt.legacy' : 'salesReceipt.voidHint')" />
+          <ReceiptPostingSummary v-if="voidPreview" :snapshot="voidPreview" reversal :currencies="currencyCatalog.currencies.value" />
+        </template>
+        <FaForm :model="{ reason }" :disabled="busy" @submit="submit">
+          <FaFormItem name="reason" :label="t(action === 'approve' ? 'salesReceipt.optionalReason' : 'salesReceipt.reason')" :required="action !== 'approve'">
+            <FaTextarea v-model="reason" :maxlength="500" :rows="3" :placeholder="t(action === 'approve' ? 'salesReceipt.optionalReasonPlaceholder' : 'salesReceipt.requiredReasonPlaceholder')" :disabled="busy" :aria-label="t('salesReceipt.reason')" />
+            <p class="qs-type-meta m-0 mt-1.5 text-right">
+              {{ reason.length }} / 500
+            </p>
+          </FaFormItem>
+        </FaForm>
+      </section>
+      <FaCollapsible class="border border-border rounded-xl bg-background overflow-hidden [&_[data-slot=collapsible-trigger]]:w-full">
+        <template #trigger="{ open }">
+          <span class="qs-type-compact-label p-4 flex gap-3 min-h-11 items-center justify-between"><span class="flex gap-2 items-center"><FaIcon name="i-lucide:scan-line" class="size-4" aria-hidden="true" />{{ t('salesReceipt.trace') }}</span><FaIcon name="i-lucide:chevron-down" class="size-4" :class="open ? 'rotate-180' : ''" /></span>
+        </template>
+        <dl class="m-0 p-4 border-t border-border gap-4 grid sm:grid-cols-2">
           <div v-for="[label, value] in traceRows" :key="String(label)" class="min-w-0">
             <dt class="qs-type-compact-label mb-1">
               {{ label }}
@@ -397,32 +438,6 @@ onBeforeUnmount(() => controller?.abort())
           </div>
         </dl>
       </FaCollapsible>
-      <section v-if="action" ref="actionSection" tabindex="-1" class="p-4 border border-primary/30 rounded-xl bg-primary/5 space-y-4">
-        <h3 class="qs-type-section-title m-0">
-          {{ t(`salesReceipt.${action}`) }}
-        </h3>
-        <FaAlert v-if="contextError" variant="destructive" :title="contextError" role="alert" />
-        <template v-if="action === 'approve' && context">
-          <ReceiptPostingSummary :snapshot="context" :currencies="currencyCatalog.currencies.value" />
-          <p class="qs-type-data m-0">
-            {{ t('salesReceipt.rate') }}: <span class="font-mono">{{ context.foreignUnitsPerCny }} {{ detail.currencyCode }}/CNY</span>
-          </p>
-          <p class="qs-type-meta m-0">
-            {{ t('salesReceipt.previewHint') }}
-          </p>
-        </template>
-        <template v-if="action === 'void'">
-          <FaAlert :title="t(detail.approvedPayment?.origin === 'LEGACY' ? 'salesReceipt.legacy' : 'salesReceipt.voidHint')" />
-          <div v-for="(entry, index) in entries" :key="index" class="qs-type-data flex flex-wrap gap-2 justify-between">
-            <span>{{ t(`salesReceipt.target.${entry.accountTarget}`) }} · {{ t('salesReceipt.debit') }}</span><AmountDisplay :value="entry.amount" currency="CNY" :currencies="currencyCatalog.currencies.value" />
-          </div>
-        </template>
-        <FaForm :model="{ reason }" :disabled="busy" @submit="submit">
-          <FaFormItem name="reason" :label="t('salesReceipt.reason')" :required="action !== 'approve'">
-            <FaTextarea v-model="reason" :maxlength="500" :disabled="busy" :aria-label="t('salesReceipt.reason')" />
-          </FaFormItem>
-        </FaForm>
-      </section>
     </div>
     <template #footer>
       <div class="flex flex-wrap gap-2 w-full items-center justify-end">

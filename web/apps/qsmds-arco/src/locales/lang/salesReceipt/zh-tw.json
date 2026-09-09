@@ -121,5 +121,12 @@
   "salesReceipt.voucherImageFailed": "憑證圖片載入失敗，請重新整理後重試",
   "salesReceipt.voucherImageHint": "點擊預覽收款憑證",
   "salesReceipt.voucherFileHint": "非圖片憑證，點擊於新視窗開啟檔案",
-  "salesReceipt.voucherEmpty": "暫無收款憑證"
+  "salesReceipt.voucherEmpty": "暫無收款憑證",
+  "salesReceipt.accountShare": "分帳比例",
+  "salesReceipt.previewIntro": "核對人民幣入帳金額與帳戶分配，確認後生效。",
+  "salesReceipt.rejectIntro": "填寫駁回原因，便於提交人修正後重新提交。",
+  "salesReceipt.voidIntro": "核對原收款與扣回金額，並記錄財務糾錯原因。",
+  "salesReceipt.optionalReason": "審核備註（選填）",
+  "salesReceipt.optionalReasonPlaceholder": "可補充本次審核的核對說明",
+  "salesReceipt.requiredReasonPlaceholder": "請填寫原因，便於後續核對與追溯"
 }

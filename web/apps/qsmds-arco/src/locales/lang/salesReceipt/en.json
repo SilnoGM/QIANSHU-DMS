@@ -121,5 +121,12 @@
   "salesReceipt.voucherImageFailed": "Voucher image failed to load. Refresh and try again.",
   "salesReceipt.voucherImageHint": "Click to preview the receipt voucher",
   "salesReceipt.voucherFileHint": "Non-image voucher. Click to open the file in a new tab.",
-  "salesReceipt.voucherEmpty": "No receipt voucher"
+  "salesReceipt.voucherEmpty": "No receipt voucher",
+  "salesReceipt.accountShare": "Allocation share",
+  "salesReceipt.previewIntro": "Check the CNY amount and account allocation before confirming.",
+  "salesReceipt.rejectIntro": "Explain the rejection so the submitter can revise and resubmit.",
+  "salesReceipt.voidIntro": "Check the original receipt and reversal amounts, and explain the correction.",
+  "salesReceipt.optionalReason": "Review note (optional)",
+  "salesReceipt.optionalReasonPlaceholder": "Add any notes from your review",
+  "salesReceipt.requiredReasonPlaceholder": "Enter a reason for later review and traceability"
 }

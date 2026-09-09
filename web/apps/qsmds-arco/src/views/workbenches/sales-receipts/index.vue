@@ -12,6 +12,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure } from '../../operations/sales-orders/sales-order-create.logic'
 import ReceiptDetail from './receipt-detail.vue'
+import { paymentMethodClass } from './receipt-display'
 import ReceiptVoucher from './receipt-voucher.vue'
 
 const { t } = useI18n()
@@ -50,16 +51,6 @@ const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>((
   { id: 'review', accessorKey: 'status', title: t('salesReceipt.reviewInfo'), minWidth: 200 },
   { id: 'notes', accessorKey: 'remark', title: t('salesReceipt.notes'), minWidth: 220 },
 ])
-const paymentMethodClasses: Record<string, string> = {
-  BANK_TRANSFER: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300',
-  CASH: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  CHECK: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  LETTER_OF_CREDIT: 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300',
-}
-function paymentMethodClass(value: string): string {
-  // 按字典稳定值配色，名称修改或分页变化不改变同一收款方式的颜色。
-  return paymentMethodClasses[value] ?? 'border-border bg-muted text-muted-foreground'
-}
 function statusClass(item: SalesReceiptRequestDetailDto): string {
   if (item.status === 'REJECTED') {
     return 'border-destructive/30 bg-destructive/10 text-destructive'
