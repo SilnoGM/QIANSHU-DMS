@@ -1,4 +1,7 @@
 {
+  "salesReceipt.status.VOIDED": "Voided",
+  "salesReceipt.viewDetails": "View details",
+  "salesReceipt.noReversal": "No fund reversal record",
   "salesReceipt.submit": "Submit receipt for review",
   "salesReceipt.submitted": "Submitted for financial review",
   "salesReceipt.invalid": "Correct the receipt information",

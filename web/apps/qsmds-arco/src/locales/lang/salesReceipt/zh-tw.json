@@ -1,4 +1,7 @@
 {
+  "salesReceipt.status.VOIDED": "已作廢",
+  "salesReceipt.viewDetails": "查看詳情",
+  "salesReceipt.noReversal": "無資金沖正紀錄",
   "salesReceipt.submit": "提交收款審核",
   "salesReceipt.submitted": "已提交，待財務審核",
   "salesReceipt.invalid": "請修正未通過校驗的收款信息",

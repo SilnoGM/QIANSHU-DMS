@@ -19,20 +19,20 @@ const { t } = useI18n()
 const currencyCatalog = useCurrencyCatalog()
 const { auth } = useAppAuth()
 const accountStore = useAppAccountStore()
-const status = ref<SalesReceiptRequestDetailDto['status']>('PENDING_REVIEW')
+const status = ref<SalesReceiptRequestDetailDto['status'] | 'VOIDED'>('PENDING_REVIEW')
 const keyword = ref('')
 const filters = ref<QsGenericTableFilterValues>({})
 const page = ref(1)
 const pageSize = ref(20)
 const items = shallowRef<SalesReceiptRequestDetailDto[]>([])
 const total = ref(0)
-const counts = ref({ PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0 })
+const counts = ref({ PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
 const loading = ref(false)
 const error = ref('')
 const selectedId = ref<string | null>(null)
 let controller: AbortController | null = null
 const canRead = computed(() => auth('sales-receipts:read'))
-const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'REJECTED'] as const).map(value => ({ value, label: t(`salesReceipt.status.${value}`), count: counts.value[value] })))
+const tabs = computed(() => (['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'VOIDED'] as const).map(value => ({ value, label: t(`salesReceipt.status.${value}`), count: counts.value[value] })))
 const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   key: 'currencyCode',
   label: t('salesReceipt.currency'),
@@ -50,12 +50,19 @@ const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>((
   { id: 'submitted', accessorKey: 'submittedAt', title: t('salesReceipt.submittedAt'), minWidth: 185 },
   { id: 'review', accessorKey: 'status', title: t('salesReceipt.reviewInfo'), minWidth: 200 },
   { id: 'notes', accessorKey: 'remark', title: t('salesReceipt.notes'), minWidth: 220 },
+  ...(status.value === 'VOIDED'
+    ? [
+        { id: 'voidedAt', accessorFn: (item: SalesReceiptRequestDetailDto) => item.approvedPayment?.voidedAt, title: t('salesReceipt.voidedAt'), minWidth: 185 },
+        { id: 'voidReason', accessorFn: (item: SalesReceiptRequestDetailDto) => item.approvedPayment?.voidReason, title: t('salesReceipt.voidReason'), minWidth: 220 },
+        { id: 'reversal', title: t('salesReceipt.totalReversalCny'), minWidth: 205 },
+      ]
+    : []),
 ])
 function actionLabel(item: SalesReceiptRequestDetailDto): string {
   if (item.status === 'APPROVED') {
-    return t(item.approvedPayment?.voidedAt ? 'salesReceipt.detail' : 'salesReceipt.voidAction')
+    return t(item.approvedPayment?.voidedAt ? 'salesReceipt.viewDetails' : 'salesReceipt.voidAction')
   }
-  return t('salesReceipt.view')
+  return t(item.status === 'REJECTED' ? 'salesReceipt.viewDetails' : 'salesReceipt.view')
 }
 function statusClass(item: SalesReceiptRequestDetailDto): string {
   if (item.status === 'REJECTED') {
@@ -80,7 +87,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const response = await salesReceiptsApi.list({ page: page.value, pageSize: pageSize.value, status: status.value, keyword: keyword.value.trim() || undefined, currencyCode: filters.value.currencyCode === 'TWD' || filters.value.currencyCode === 'MYR' ? filters.value.currencyCode : undefined }, current.signal)
+    const response = await salesReceiptsApi.list({ page: page.value, pageSize: pageSize.value, view: status.value, keyword: keyword.value.trim() || undefined, currencyCode: filters.value.currencyCode === 'TWD' || filters.value.currencyCode === 'MYR' ? filters.value.currencyCode : undefined }, current.signal)
     if (current.signal.aborted || !canRead.value) {
       return
     }
@@ -100,7 +107,7 @@ async function load(): Promise<void> {
   }
 }
 function selectTab(value: string | number): void {
-  if (value === 'PENDING_REVIEW' || value === 'APPROVED' || value === 'REJECTED') {
+  if (value === 'PENDING_REVIEW' || value === 'APPROVED' || value === 'REJECTED' || value === 'VOIDED') {
     status.value = value
     page.value = 1
     void load()
@@ -112,7 +119,7 @@ function search(): void {
 }
 watch(() => [canRead.value, accountStore.authEpoch], () => {
   items.value = []
-  counts.value = { PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0 }
+  counts.value = { PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 }
   selectedId.value = null
   void load()
 }, { immediate: true })
@@ -238,6 +245,16 @@ onBeforeUnmount(() => controller?.abort())
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
+        <template #cell-voidedAt="{ row }">
+          <DateTimeDisplay :value="row.original.approvedPayment?.voidedAt" />
+        </template>
+        <template #cell-voidReason="{ row }">
+          <span class="whitespace-pre-wrap break-words">{{ row.original.approvedPayment?.voidReason || '—' }}</span>
+        </template>
+        <template #cell-reversal="{ row }">
+          <AmountDisplay v-if="row.original.approvedPayment?.reversal" :value="row.original.approvedPayment.reversal.businessAmount" currency="CNY" :currencies="currencyCatalog.currencies.value" class="text-destructive" />
+          <span v-else class="qs-type-meta">{{ t('salesReceipt.noReversal') }}</span>
+        </template>
         <template #actions="{ row }">
           <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.collectionNo || row.salesOrder.orderNo} · ${actionLabel(row)}`" @click="selectedId = row.id">
             <FaIcon :name="row.status === 'APPROVED' && !row.approvedPayment?.voidedAt ? 'i-lucide:circle-slash' : 'i-lucide:eye'" aria-hidden="true" />{{ actionLabel(row) }}
@@ -320,6 +337,33 @@ onBeforeUnmount(() => controller?.abort())
                   {{ row.reviewRemark }}
                 </dd>
               </div>
+              <template v-if="row.approvedPayment?.voidedAt">
+                <div>
+                  <dt class="qs-type-meta">
+                    {{ t('salesReceipt.voidedAt') }}
+                  </dt>
+                  <dd class="m-0">
+                    <DateTimeDisplay :value="row.approvedPayment.voidedAt" />
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-meta">
+                    {{ t('salesReceipt.voidReason') }}
+                  </dt>
+                  <dd class="m-0 whitespace-pre-wrap break-words">
+                    {{ row.approvedPayment.voidReason || '—' }}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="qs-type-meta">
+                    {{ t('salesReceipt.totalReversalCny') }}
+                  </dt>
+                  <dd class="m-0">
+                    <AmountDisplay v-if="row.approvedPayment.reversal" :value="row.approvedPayment.reversal.businessAmount" currency="CNY" :currencies="currencyCatalog.currencies.value" class="text-destructive" />
+                    <span v-else class="qs-type-meta">{{ t('salesReceipt.noReversal') }}</span>
+                  </dd>
+                </div>
+              </template>
             </dl>
             <div class="flex flex-wrap gap-2 items-center">
               <FaTag v-if="row.resubmittedFromId" variant="outline">
@@ -331,6 +375,6 @@ onBeforeUnmount(() => controller?.abort())
         </template>
       </QsGenericTable>
     </FaPageMain>
-    <ReceiptDetail :request-id="selectedId" @close="selectedId = null" @changed="load" />
+    <ReceiptDetail :request-id="selectedId" @close="selectedId = null" @changed="search" />
   </div>
 </template>

@@ -1,7 +1,7 @@
 import { Injectable, HttpStatus } from '@nestjs/common'
 import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
-import { SalesReceiptStatusDto, type SalesReceiptListQueryDto, type SalesReceiptRequestDetailDto, type SalesReceiptRequestPageDto } from '../dto/sales-receipt.dto'
+import { SalesReceiptStatusDto, SalesReceiptViewDto, type SalesReceiptListQueryDto, type SalesReceiptRequestDetailDto, type SalesReceiptRequestPageDto } from '../dto/sales-receipt.dto'
 import { receiptFailure } from './sales-receipt-money'
 
 const detailInclude = {
@@ -42,6 +42,13 @@ function mapDetail(row: DetailRow): SalesReceiptRequestDetailDto {
   }
 }
 
+// 作废是正式收款属性，不改变审核状态；统一条件用于分页与计数，避免视图重叠。
+function viewWhere(view: SalesReceiptViewDto): Prisma.SalesReceiptRequestWhereInput {
+  if (view === SalesReceiptViewDto.APPROVED) return { status: 'APPROVED', approvedPayment: { is: { voidedAt: null } } }
+  if (view === SalesReceiptViewDto.VOIDED) return { status: 'APPROVED', approvedPayment: { is: { voidedAt: { not: null } } } }
+  return { status: view }
+}
+
 @Injectable()
 export class SalesReceiptQueryService {
   constructor(private readonly prisma: PrismaService) {}
@@ -73,14 +80,13 @@ export class SalesReceiptQueryService {
       if (salesOrderId && !await tx.salesOrder.findUnique({ where: { id: salesOrderId }, select: { id: true } })) {
         receiptFailure('SALES_ORDER_NOT_FOUND', '销售订单不存在', HttpStatus.NOT_FOUND)
       }
-      const where = { ...common, ...(input.status ? { status: input.status } : {}) }
-      const [rows, total, groups] = await Promise.all([
+      const where = { ...common, ...(input.view ? viewWhere(input.view) : input.status ? { status: input.status } : {}) }
+      const [rows, total, pendingCount, approvedCount, rejectedCount, voidedCount] = await Promise.all([
         tx.salesReceiptRequest.findMany({ where, include: detailInclude, orderBy: [{ submittedAt: 'desc' }, { id: 'desc' }], skip: (page - 1) * pageSize, take: pageSize }),
         tx.salesReceiptRequest.count({ where }),
-        tx.salesReceiptRequest.groupBy({ by: ['status'], where: common, _count: true }),
+        ...Object.values(SalesReceiptViewDto).map(view => tx.salesReceiptRequest.count({ where: { ...common, ...viewWhere(view) } })),
       ])
-      const statusCounts = { PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0 }
-      for (const group of groups) statusCounts[group.status] = group._count
+      const statusCounts = { PENDING_REVIEW: pendingCount, APPROVED: approvedCount, REJECTED: rejectedCount, VOIDED: voidedCount }
       const pending = salesOrderId ? await tx.salesReceiptRequest.aggregate({ where: { salesOrderId, status: 'PENDING_REVIEW' }, _sum: { amount: true } }) : null
       return { items: rows.map(mapDetail), total, page, pageSize, statusCounts, pendingAmount: salesOrderId ? pending?._sum.amount?.toFixed(4) ?? '0.0000' : null }
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })

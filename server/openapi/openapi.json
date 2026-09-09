@@ -35016,6 +35016,21 @@
             }
           },
           {
+            "name": "view",
+            "required": false,
+            "in": "query",
+            "description": "财务视图，优先于 status；APPROVED 仅含未作废收款，VOIDED 仅含已通过后作废的收款",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_REVIEW",
+                "APPROVED",
+                "REJECTED",
+                "VOIDED"
+              ]
+            }
+          },
+          {
             "name": "status",
             "required": false,
             "in": "query",
@@ -37789,6 +37804,21 @@
               "maximum": 100,
               "default": 20,
               "type": "number"
+            }
+          },
+          {
+            "name": "view",
+            "required": false,
+            "in": "query",
+            "description": "财务视图，优先于 status；APPROVED 仅含未作废收款，VOIDED 仅含已通过后作废的收款",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING_REVIEW",
+                "APPROVED",
+                "REJECTED",
+                "VOIDED"
+              ]
             }
           },
           {
@@ -56801,12 +56831,16 @@
           },
           "REJECTED": {
             "type": "number"
+          },
+          "VOIDED": {
+            "type": "number"
           }
         },
         "required": [
           "PENDING_REVIEW",
           "APPROVED",
-          "REJECTED"
+          "REJECTED",
+          "VOIDED"
         ]
       },
       "SalesReceiptRequestPageDto": {

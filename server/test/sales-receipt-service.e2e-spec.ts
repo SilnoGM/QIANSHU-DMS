@@ -21,7 +21,7 @@ import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/s
 import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { insertFixture } from './fixtures/sales-receipt-schema.fixture'
-import { SalesReceiptStatusDto, type SalesReceiptRequestCreateDto } from '../src/modules/sales-orders/dto/sales-receipt.dto'
+import { SalesReceiptStatusDto, SalesReceiptViewDto, type SalesReceiptRequestCreateDto } from '../src/modules/sales-orders/dto/sales-receipt.dto'
 
 describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   jest.setTimeout(90000)
@@ -116,6 +116,43 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect(result.approvedPayment?.reversal?.entries.map(entry => entry.amount)).toEqual(['62.50', '145.83'])
     expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('-62.50')
     expect(await prisma.fundPostingBatch.count({ where: { businessId: submitted.id, kind: 'BUSINESS' } })).toBe(1)
+    // 同一订单同时保留四类记录，验证关系筛选发生在分页前，且四个视图不重复计数。
+    async function newReceiptInput(amount: string): Promise<SalesReceiptRequestCreateDto> {
+      const media = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'receipt.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
+      await writeFile(join(process.env.MEDIA_STORAGE_ROOT!, media.objectKey!), Buffer.alloc(128), { mode: 0o600 })
+      await app.get(MediaContentDeliveryService).stat(media.objectKey!)
+      return { ...f.input, amount, voucher: { mediaAssetId: media.id } }
+    }
+    const active = await service.submit(context(f.userId), f.salesOrderId, await newReceiptInput('300'), randomUUID())
+    const activeContext = await service.approvalContext(context(reviewer), active.id)
+    await service.approve(context(reviewer), active.id, { expectedVersion: 1, expectedContext: activeContext.expectedContext })
+    await service.submit(context(f.userId), f.salesOrderId, await newReceiptInput('200'), randomUUID())
+    const rejected = await service.submit(context(f.userId), f.salesOrderId, await newReceiptInput('100'), randomUUID())
+    await service.reject(context(reviewer), rejected.id, { expectedVersion: 1, reason: '测试驳回记录' })
+    const filters = { accountOwnerUserId: f.userId, keyword: result.salesOrder.orderNo, currencyCode: 'TWD', submittedFrom: '2000-01-01T00:00:00.000Z', submittedTo: '2100-01-01T00:00:00.000Z', pageSize: 1 }
+    const expectedCounts = { PENDING_REVIEW: 1, APPROVED: 1, REJECTED: 1, VOIDED: 1 }
+    const activePage = await query.list({ ...filters, view: SalesReceiptViewDto.APPROVED })
+    expect(activePage.total).toBe(1)
+    expect(activePage.items.map(item => item.id)).toEqual([active.id])
+    expect(activePage.statusCounts).toEqual(expectedCounts)
+    const voidedPage = await query.list({ ...filters, view: SalesReceiptViewDto.VOIDED, status: SalesReceiptStatusDto.REJECTED })
+    expect(voidedPage.total).toBe(1)
+    expect(voidedPage.items.map(item => item.id)).toEqual([submitted.id])
+    expect(voidedPage.items[0].status).toBe('APPROVED')
+    expect(voidedPage.items[0].approvedPayment?.voidReason).toBe('重复确认收款')
+    expect(voidedPage.items[0].approvedPayment?.fundReversalBatchId).toBeTruthy()
+    expect(voidedPage.statusCounts).toEqual(expectedCounts)
+    const emptyPage = await query.list({ ...filters, view: SalesReceiptViewDto.VOIDED, page: 2 })
+    expect(emptyPage.items).toEqual([])
+    expect(emptyPage.total).toBe(1)
+    expect(emptyPage.statusCounts).toEqual(expectedCounts)
+    const legacyPage = await query.list({ ...filters, status: SalesReceiptStatusDto.APPROVED, pageSize: 20 }, f.salesOrderId)
+    expect(legacyPage.total).toBe(2)
+    expect(legacyPage.items.map(item => item.id)).toEqual(expect.arrayContaining([active.id, submitted.id]))
+    const noMatch = await query.list({ ...filters, currencyCode: 'MYR', view: SalesReceiptViewDto.VOIDED })
+    expect(noMatch.total).toBe(0)
+    expect(noMatch.statusCounts).toEqual({ PENDING_REVIEW: 0, APPROVED: 0, REJECTED: 0, VOIDED: 0 })
+
   })
   it('reserves pending, rejects with evidence, and resubmits the same voucher as a new request', async () => {
     const f = await fixture()

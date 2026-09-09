@@ -13,20 +13,25 @@ const submit = ast.statements.find(node => ts.isFunctionDeclaration(node) && nod
 // 执行组件实际函数而非复制实现，API 替身避免测试产生真实资金操作。
 const compiled = ts.transpileModule(submit.getText(ast), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
 
-function fixture(fails = false) {
+function fixture(fails = false, operation = 'approve') {
   const events: string[] = []
   const busy = { value: false }
   const context = { value: { expectedContext: {} } as object | null }
   const contextError = { value: '' }
   const sandbox = {
-    detail: { value: { id: 'receipt', version: 1 } },
-    action: { value: 'approve' },
+    detail: { value: { id: 'receipt', version: 1, salesOrderId: 'order', salesOrder: { version: 1 }, approvedPayment: { id: 'payment' } } },
+    action: { value: operation },
     busy,
     context,
     contextError,
-    reason: { value: '' },
+    reason: { value: operation === 'void' ? '重复收款' : '' },
     controller: new AbortController(),
     salesReceiptsApi: { approve: async () => {
+      if (fails) {
+        throw new Error('request failed')
+      }
+    } },
+    salesOrdersApi: { voidPayment: async () => {
       if (fails) {
         throw new Error('request failed')
       }
@@ -58,3 +63,14 @@ test('审核失败保留弹窗并撤销旧预览，显示失败原因', async ()
   assert.match(state.contextError.value, /request failed/u)
   assert.equal(state.busy.value, false)
 })
+
+for (const fails of [false, true]) {
+  test(`作废${fails ? '失败保留弹窗' : '成功关闭弹窗并刷新列表'}`, async () => {
+    const state = fixture(fails, 'void')
+    await state.run()
+    assert.equal(state.events.includes('close'), !fails)
+    assert.equal(state.events.includes('changed'), !fails)
+    assert.ok(!state.events.includes('reload-detail'))
+    assert.equal(state.busy.value, false)
+  })
+}

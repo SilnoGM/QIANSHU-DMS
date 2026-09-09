@@ -34,3 +34,18 @@ test('未知提交冻结凭证及原始字段，网络与服务端错误保留�
   assert.equal(isReceiptResultUnknown({ status: 503 }), true)
   assert.equal(isReceiptResultUnknown({ status: 409 }), false)
 })
+
+test('财务列表传递独立作废视图、分页和搜索条件，订单查询保留原审核状态筛选', async () => {
+  const calls: unknown[] = []
+  const client = { get: (...args: unknown[]) => {
+    calls.push(args)
+    return Promise.resolve({ data: {} })
+  } } as unknown as AxiosInstance
+  const api = createSalesReceiptsApi(client)
+  const signal = new AbortController().signal
+  const query = { view: 'VOIDED' as const, page: 2, pageSize: 20, keyword: 'SC', currencyCode: 'TWD' as const }
+  await api.list(query, signal)
+  await api.orderRequests('order', { status: 'APPROVED' }, signal)
+  assert.deepEqual(calls[0], ['sales-receipt-requests', { errorPresentation: 'local', params: query, signal }])
+  assert.deepEqual(calls[1], ['sales-orders/order/receipt-requests', { errorPresentation: 'local', params: { status: 'APPROVED' }, signal }])
+})

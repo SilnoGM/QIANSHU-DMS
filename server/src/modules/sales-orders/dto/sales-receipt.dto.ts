@@ -6,6 +6,7 @@ import { SalesOrderPaymentRequestDto } from './sales-order-mutation.dto'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 
 export enum SalesReceiptStatusDto { PENDING_REVIEW = 'PENDING_REVIEW', APPROVED = 'APPROVED', REJECTED = 'REJECTED' }
+export enum SalesReceiptViewDto { PENDING_REVIEW = 'PENDING_REVIEW', APPROVED = 'APPROVED', REJECTED = 'REJECTED', VOIDED = 'VOIDED' }
 export class SalesReceiptRequestCreateDto extends SalesOrderPaymentRequestDto {
   @ApiPropertyOptional({ type: 'string', format: 'uuid', nullable: true })
   @IsOptional() @IsUUID('4') resubmittedFromId?: string | null
@@ -22,6 +23,7 @@ export class SalesReceiptOrderVoucherIdDto extends SalesReceiptOrderIdDto {
 export class SalesReceiptListQueryDto {
   @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number
   @ApiPropertyOptional({ default: 20, maximum: 100 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize?: number
+  @ApiPropertyOptional({ enum: SalesReceiptViewDto, description: '财务视图，优先于 status；APPROVED 仅含未作废收款，VOIDED 仅含已通过后作废的收款' }) @IsOptional() @IsEnum(SalesReceiptViewDto) view?: SalesReceiptViewDto
   @ApiPropertyOptional({ enum: SalesReceiptStatusDto }) @IsOptional() @IsEnum(SalesReceiptStatusDto) status?: SalesReceiptStatusDto
   @ApiPropertyOptional() @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128) keyword?: string
   @ApiPropertyOptional({ enum: ['TWD', 'MYR'] }) @IsOptional() @IsEnum({ TWD: 'TWD', MYR: 'MYR' }) currencyCode?: string
@@ -119,6 +121,7 @@ export class SalesReceiptStatusCountsDto {
   @ApiProperty() PENDING_REVIEW!: number
   @ApiProperty() APPROVED!: number
   @ApiProperty() REJECTED!: number
+  @ApiProperty() VOIDED!: number
 }
 export class SalesReceiptRequestPageDto {
   @ApiProperty({ description: 'All pending original-currency amount for an order; null for cross-currency finance queue', type: 'string', nullable: true }) pendingAmount!: string | null
