@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 // eslint-disable-next-line test/no-import-node-test -- 收款快照展示不得通过浮点转换丢失有效数字。
 import test from 'node:test'
-import { formatReceiptDecimal, paymentMethodClass } from '../../src/views/workbenches/sales-receipts/receipt-display'
+import { formatReceiptDecimal, paymentMethodClass, receiptAmountClass } from '../../src/views/workbenches/sales-receipts/receipt-display'
 
 test('汇率及比例展示仅移除小数末零，极大值和极小值的有效数字不丢失', () => {
   assert.equal(formatReceiptDecimal('999999999999999999999999.1234000000'), '999999999999999999999999.1234')
@@ -19,4 +19,12 @@ test('四种收款方式使用独立稳定配色，未知历史方式使用中�
   assert.ok(known.every(value => value.includes('dark:')))
   assert.equal(paymentMethodClass('UNRECOGNIZED'), paymentMethodClass('RETIRED_VALUE'))
   assert.ok(!known.includes(paymentMethodClass('UNRECOGNIZED')))
+})
+
+test('金额颜色按正负数区分，零和负零保持正常颜色', () => {
+  assert.equal(receiptAmountClass('0.0000'), 'text-foreground')
+  assert.equal(receiptAmountClass('-0.00'), 'text-foreground')
+  assert.equal(receiptAmountClass('19.23'), 'text-emerald-700 dark:text-emerald-300')
+  assert.equal(receiptAmountClass('-19.23'), 'text-destructive')
+  assert.equal(receiptAmountClass(`0.${'0'.repeat(350)}1`), 'text-emerald-700 dark:text-emerald-300')
 })

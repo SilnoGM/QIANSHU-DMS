@@ -10,7 +10,7 @@ import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure } from '../../operations/sales-orders/sales-order-create.logic'
 import ReceiptDetailSection from './receipt-detail-section.vue'
-import { formatReceiptDecimal, paymentMethodClass } from './receipt-display'
+import { formatReceiptDecimal, paymentMethodClass, receiptAmountClass } from './receipt-display'
 import ReceiptPostingSummary from './receipt-posting-summary.vue'
 import ReceiptVoucher from './receipt-voucher.vue'
 
@@ -233,8 +233,8 @@ onBeforeUnmount(() => controller?.abort())
           <p class="qs-type-compact-label m-0">
             {{ t('salesReceipt.amount') }}
           </p>
-          <div tabindex="0" :aria-label="t('salesReceipt.amount')" class="max-w-full overflow-x-auto [&_[data-currency]]:text-3xl [&_[data-currency]]:leading-10">
-            <AmountDisplay :value="detail.amount" :currency="detail.currencyCode" :currencies="currencyCatalog.currencies.value" />
+          <div tabindex="0" :aria-label="t('salesReceipt.amount')" class="max-w-full overflow-x-auto [&_[data-currency]]:text-3xl [&_[data-currency]]:leading-10 [&_[data-currency]]:font-bold">
+            <AmountDisplay :class="receiptAmountClass(detail.amount)" :value="detail.amount" :currency="detail.currencyCode" :currencies="currencyCatalog.currencies.value" />
           </div>
           <div class="flex flex-wrap gap-2 items-center">
             <FaTag variant="outline">

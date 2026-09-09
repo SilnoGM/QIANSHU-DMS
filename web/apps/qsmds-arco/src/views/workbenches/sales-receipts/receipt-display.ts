@@ -17,3 +17,11 @@ export function formatReceiptDecimal(value: string | null | undefined): string {
   }
   return value.includes('.') ? value.replace(/0+$/u, '').replace(/\.$/u, '') : value
 }
+
+/** 金额契约为十进制字符串，直接判定有效数字以保留极小值和负零语义。 */
+export function receiptAmountClass(value: string): string {
+  if (!/[1-9]/u.test(value)) {
+    return 'text-foreground'
+  }
+  return value.startsWith('-') ? 'text-destructive' : 'text-emerald-700 dark:text-emerald-300'
+}
