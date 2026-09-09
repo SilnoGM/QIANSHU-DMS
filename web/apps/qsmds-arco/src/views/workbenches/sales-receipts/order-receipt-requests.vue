@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { SalesReceiptRequestDetailDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
+import ReceiptVoucher from './receipt-voucher.vue'
 
 defineProps<{ items: SalesReceiptRequestDetailDto[], canSubmit: boolean, total: number, pendingAmount: string, currency: string }>()
 const emit = defineEmits<{ resubmit: [request: SalesReceiptRequestDetailDto], pageChange: [] }>()
@@ -37,7 +38,7 @@ function changePage(delta: number): void {
           <p v-if="item.reviewRemark" class="text-sm break-words">
             {{ t('salesReceipt.reviewRemark') }}: {{ item.reviewRemark }}
           </p>
-          <a :href="`/api/sales-orders/${encodeURIComponent(item.salesOrderId)}/receipt-requests/${encodeURIComponent(item.id)}/voucher`" target="_blank" rel="noopener noreferrer" class="text-primary underline">{{ t('salesReceipt.voucher') }}</a>
+          <ReceiptVoucher :voucher="item.voucher" :url="`/api/sales-orders/${encodeURIComponent(item.salesOrderId)}/receipt-requests/${encodeURIComponent(item.id)}/voucher`" />
         </div>
         <FaButton v-if="item.status === 'REJECTED' && canSubmit" variant="outline" class="min-h-11" @click="emit('resubmit', item)">
           {{ t('salesReceipt.resubmit') }}

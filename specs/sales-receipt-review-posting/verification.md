@@ -104,3 +104,12 @@
 - 隔离浏览器通过真实收款服务创建 `SC00000001`，编号关键字命中；横向滚动编号保持 `sticky; left: 0`，390px 卡片及详情显示编号和派发 ID；历史空号显示“历史未编号”。亮色和暗色均验证固定列，最后恢复原亮色。本次浏览器未执行审核或资金操作。
 - 调试记录：首次服务测试使用了测试容器重启前的旧端口，刷新私有连接配置后恢复；采购回归首次被隔离库门禁拒绝，测试 helper 加入精确的本机 `receipt_test` 账号/数据库组合后通过，仍拒绝业务库。编号数据库测试两处查询缺少类型导致 ESLint 失败，补齐查询类型后通过。合成浏览器图片初次缺少尺寸被媒体校验拒绝，读取真实图片尺寸后提交成功，未放宽生产校验。首次 drift 检查缺少 `SHADOW_DATABASE_URL`，创建专用隔离 shadow 数据库后通过并清理。
 - 证据：`/tmp/qianshu-collection-{root-tests,unit,contract-sync,contract-check,guards}.txt`，`/tmp/receipt-numbering-{services,purchase-regression}.txt`；截图位于 `/tmp/qianshu-receipt-test-CfNobx/collection-number-{fixed-desktop,390,detail-390}.png`。临时证据不纳入 Git。
+
+## 2026-09-09 收款凭证图片组
+
+- 订单实际收款记录中的申请凭证及财务销售收款列表（桌面/移动）共用 `receipt-voucher.vue`，复用 `ImageGroup` 的工具提示及大图预览；原订单嵌套/财务凭证接口地址分别保留。
+- 图片失败显示失败图标与提示且不能打开预览；非图片文件显示图标、文件名及新窗口打开说明；缺少凭证或地址时显示“暂无收款凭证”。空凭证为防御分支，当前正式 DTO 要求凭证存在，未改后端契约或业务数据来制造此状态。
+- 类型检查、定向 ESLint/Stylelint、既有 ImageGroup 与收款 API 测试 10/10 通过。仅调整展示，未新增源码匹配测试。
+- 隔离浏览器验证：财务表图片提示、大图预览、PDF 入口及损坏图片不打开预览；订单实际收款弹窗的图片预览可关闭并返回原弹窗；390px 下图片组与提示正常展示。全程未提交/审核/作废业务记录。
+- 验证过程：首轮类型检查发现 MIME 类型允许空值，已改为复用生成的 `SalesReceiptVoucherDto` 后通过；本地开发热更新一度触发 API 初始化错误，完整刷新后页面及上述交互通过。测试使用 `localhost:9100`，与业务端 `127.0.0.1:9000` 隔离登录状态。
+- 暗色财务列表已验证图片缩略图/提示、文件入口和失败图标，并恢复原亮色；截图 `/tmp/qianshu-receipt-test-CfNobx/receipt-voucher-finance-dark-tooltip.png`。临时截图不提交。

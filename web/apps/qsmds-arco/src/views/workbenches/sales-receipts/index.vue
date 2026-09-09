@@ -12,6 +12,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getSalesOrderApiFailure } from '../../operations/sales-orders/sales-order-create.logic'
 import ReceiptDetail from './receipt-detail.vue'
+import ReceiptVoucher from './receipt-voucher.vue'
 
 const { t } = useI18n()
 const currencyCatalog = useCurrencyCatalog()
@@ -186,9 +187,7 @@ onBeforeUnmount(() => controller?.abort())
           <QsTableStackedCell>
             <QsTableStackedLine>{{ row.original.paymentMethodNameSnapshot }}</QsTableStackedLine>
             <QsTableStackedLine>
-              <a :href="voucherUrl(row.original)" target="_blank" rel="noopener noreferrer" class="text-primary inline-flex gap-1 min-h-8 items-center">
-                <FaIcon name="i-lucide:paperclip" aria-hidden="true" />{{ t('salesReceipt.voucher') }}
-              </a>
+              <ReceiptVoucher :voucher="row.original.voucher" :url="voucherUrl(row.original)" />
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -309,7 +308,7 @@ onBeforeUnmount(() => controller?.abort())
               <FaTag v-if="row.resubmittedFromId" variant="outline">
                 {{ t('salesReceipt.resubmitted') }}
               </FaTag>
-              <a :href="voucherUrl(row)" target="_blank" rel="noopener noreferrer" class="text-primary inline-flex gap-1 min-h-11 items-center"><FaIcon name="i-lucide:paperclip" aria-hidden="true" />{{ t('salesReceipt.voucher') }}</a>
+              <ReceiptVoucher :voucher="row.voucher" :url="voucherUrl(row)" />
             </div>
           </article>
         </template>

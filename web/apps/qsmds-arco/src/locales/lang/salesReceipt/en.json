@@ -117,5 +117,9 @@
   "salesReceipt.traceLabel.preview.userShareRate": "Approval preview · User share (%)",
   "salesReceipt.collectionNo": "Sales collection number",
   "salesReceipt.unnumbered": "Historical record without a number",
-  "salesReceipt.traceLabel.numberingIssuanceId": "Number issuance ID"
+  "salesReceipt.traceLabel.numberingIssuanceId": "Number issuance ID",
+  "salesReceipt.voucherImageFailed": "Voucher image failed to load. Refresh and try again.",
+  "salesReceipt.voucherImageHint": "Click to preview the receipt voucher",
+  "salesReceipt.voucherFileHint": "Non-image voucher. Click to open the file in a new tab.",
+  "salesReceipt.voucherEmpty": "No receipt voucher"
 }

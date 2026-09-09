@@ -117,5 +117,9 @@
   "salesReceipt.traceLabel.preview.userShareRate": "审核预览 · 用户分账比例（%）",
   "salesReceipt.collectionNo": "销售收款编号",
   "salesReceipt.unnumbered": "历史未编号",
-  "salesReceipt.traceLabel.numberingIssuanceId": "编号派发记录 ID"
+  "salesReceipt.traceLabel.numberingIssuanceId": "编号派发记录 ID",
+  "salesReceipt.voucherImageFailed": "凭证图片加载失败，请刷新重试",
+  "salesReceipt.voucherImageHint": "点击预览收款凭证",
+  "salesReceipt.voucherFileHint": "非图片凭证，点击在新窗口打开文件",
+  "salesReceipt.voucherEmpty": "暂无收款凭证"
 }

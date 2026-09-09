@@ -117,5 +117,9 @@
   "salesReceipt.traceLabel.preview.userShareRate": "審核預覽 · 使用者分帳比例（%）",
   "salesReceipt.collectionNo": "銷售收款編號",
   "salesReceipt.unnumbered": "歷史未編號",
-  "salesReceipt.traceLabel.numberingIssuanceId": "編號派發紀錄 ID"
+  "salesReceipt.traceLabel.numberingIssuanceId": "編號派發紀錄 ID",
+  "salesReceipt.voucherImageFailed": "憑證圖片載入失敗，請重新整理後重試",
+  "salesReceipt.voucherImageHint": "點擊預覽收款憑證",
+  "salesReceipt.voucherFileHint": "非圖片憑證，點擊於新視窗開啟檔案",
+  "salesReceipt.voucherEmpty": "暫無收款憑證"
 }
