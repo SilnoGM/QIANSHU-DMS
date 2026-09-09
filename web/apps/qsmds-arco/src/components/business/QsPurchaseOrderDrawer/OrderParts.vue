@@ -39,7 +39,12 @@ function partTitle(partNumber: number): string {
           >
             <FaIcon name="i-lucide:chevron-down" class="text-muted-foreground mt-0.5 shrink-0 size-4 transition-transform duration-150 motion-reduce:transition-none" :class="expandedPart === part.id ? 'rotate-180' : ''" aria-hidden="true" />
             <span class="min-w-0">
-              <span class="qs-type-body-medium block">{{ partTitle(part.partNumber) }}</span>
+              <span class="flex flex-wrap gap-2 items-center">
+                <span class="qs-type-body-medium">{{ partTitle(part.partNumber) }}</span>
+                <FaTag variant="outline" :class="part.status === 'ACTIVE' ? 'text-primary border-primary/30 bg-primary/10' : part.status === 'CANCELLED' ? 'text-destructive border-destructive/30 bg-destructive/10' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">
+                  {{ t(`purchaseOrderDrawer.parts.status.${part.status}`) }}
+                </FaTag>
+              </span>
               <span class="qs-type-data text-muted-foreground mt-1.5 block whitespace-pre-wrap [overflow-wrap:anywhere]">{{ part.shippingMarkText ?? t(detail.orderStatus === 'PENDING_REVIEW' ? 'purchaseOrderDrawer.parts.pendingMark' : 'purchaseOrderDrawer.parts.notGenerated') }}</span>
             </span>
           </FaButton>

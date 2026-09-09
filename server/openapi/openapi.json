@@ -58650,6 +58650,14 @@
       "PurchaseOrderPartDto": {
         "type": "object",
         "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING_REVIEW",
+              "ACTIVE",
+              "CANCELLED"
+            ]
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -58672,6 +58680,7 @@
           }
         },
         "required": [
+          "status",
           "id",
           "partNumber",
           "shippingMarkText",

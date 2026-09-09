@@ -224,7 +224,7 @@ test('详情与审核响应保留基础码、可空货件码和服务端货件�
     orderStatus: 'PENDING_REVIEW',
     shippingMarkText: null,
     shippingMarks: [],
-    parts: [{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }],
+    parts: [{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }],
   } satisfies Pick<PurchaseOrderDetailDto, 'orderStatus' | 'shippingMarkText' | 'shippingMarks' | 'parts'>
   const api = createPurchaseOrdersApi(createRecorder([], pending))
   assert.deepEqual((await api.getById('pending', signal)).data, pending)
@@ -234,8 +234,8 @@ test('详情与审核响应保留基础码、可空货件码和服务端货件�
     shippingMarkText: 'BASE',
     shippingMarks: ['BASE/货件-01', 'BASE/货件-100'],
     parts: [
-      { id: 'part-1', partNumber: 1, shippingMarkText: 'BASE/货件-01', items: [] },
-      { id: 'part-100', partNumber: 100, shippingMarkText: 'BASE/货件-100', items: [] },
+      { id: 'part-1', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'BASE/货件-01', items: [] },
+      { id: 'part-100', partNumber: 100, status: 'ACTIVE', shippingMarkText: 'BASE/货件-100', items: [] },
     ],
   } satisfies Pick<PurchaseOrderDetailDto, 'orderStatus' | 'shippingMarkText' | 'shippingMarks' | 'parts'>
   const calls: Call[] = []

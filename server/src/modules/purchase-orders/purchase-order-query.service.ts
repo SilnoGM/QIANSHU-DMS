@@ -100,7 +100,7 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
   parts: {
     orderBy: { partNumber: 'asc' },
     select: {
-      id: true, partNumber: true, shippingMarkText: true,
+      id: true, partNumber: true, status: true, shippingMarkText: true,
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
         purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
       } },
@@ -292,6 +292,7 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
   readonly parts: readonly {
     readonly id: string
     readonly partNumber: number
+    readonly status: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
     readonly shippingMarkText: string | null
     readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
   }[]
@@ -779,7 +780,7 @@ export class PurchaseOrderQueryService {
       ...summary,
       sourceSalesOrder: row.salesOrder,
       parts: row.parts.map(part => ({
-        id: part.id, partNumber: part.partNumber, shippingMarkText: part.shippingMarkText,
+        id: part.id, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
         items: part.items.map(item => ({
           purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,
         })),

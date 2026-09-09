@@ -11,7 +11,8 @@
       "shippingMark": "货件唛头",
       "pendingMark": "待审核生成",
       "notGenerated": "未生成",
-      "productUnavailable": "产品信息不可用"
+      "productUnavailable": "产品信息不可用",
+      "status": { "PENDING_REVIEW": "待审核", "ACTIVE": "已生效", "CANCELLED": "已取消" }
     },
     "payments": "实际付款记录",
     "baseMarkNotRecorded": "未记录基础唛头",

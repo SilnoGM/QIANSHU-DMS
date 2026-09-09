@@ -180,12 +180,12 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
       shippingMarkText: null, orderStatus: 'PENDING_REVIEW',
-      parts: [{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }],
+      parts: [{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }],
     }))
     const detail = await fixture.service.getById('order-id')
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
-    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }])
+    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }])
   })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()

@@ -42,6 +42,7 @@ function setup() {
       findUnique: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue(order),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
     },
+    purchaseOrderPart: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
     purchaseOrderLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>()
         .mockResolvedValue([{ sourceSalesOrderLineId: SOURCE_LINE_ID }]),
@@ -141,6 +142,26 @@ function setup() {
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
 
 describe('PurchaseOrderMutationService', () => {
+  it('activates pending parts in the review transaction without changing historical marks', async () => {
+    const fixture = setup()
+    fixture.order.orderStatus = 'PENDING_REVIEW'
+    await fixture.service.review(context, ORDER_ID, { expectedVersion: 1 })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
+      where: { purchaseOrderId: ORDER_ID, status: 'PENDING_REVIEW' },
+      data: { status: 'ACTIVE' },
+    })
+  })
+
+  it.each(['PENDING_REVIEW', 'CONFIRMED'])('cancels %s parts while preserving marks and allocations', async status => {
+    const fixture = setup()
+    fixture.order.orderStatus = status
+    await fixture.service.updateOrderStatus(context, ORDER_ID, { toStatus: 'CANCELLED', reason: '采购取消' })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
+      where: { purchaseOrderId: ORDER_ID, status: { not: 'CANCELLED' } },
+      data: { status: 'CANCELLED' },
+    })
+  })
+
   it.each([
     ['40001', 'PURCHASE_ORDER_STATE_CHANGED'],
     ['23514', 'AUDIT_WRITE_FAILED'],
@@ -218,6 +239,7 @@ describe('PurchaseOrderMutationService', () => {
       code: code === 'NUMBERING_CAPACITY_EXHAUSTED' ? 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE' : 'PURCHASE_ORDER_STATE_CHANGED',
     })
     expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
     expect(fixture.transaction.$executeRaw).not.toHaveBeenCalled()
     expect(fixture.query.getById).not.toHaveBeenCalled()
   })
@@ -290,6 +312,7 @@ describe('PurchaseOrderMutationService', () => {
     await expect(fixture.service.review(context, ORDER_ID, { expectedVersion: 1 }))
       .rejects.toMatchObject({ status: 409, code: 'PURCHASE_ORDER_STATE_CHANGED' })
     expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
     expect(fixture.transaction.purchaseOrderStatusHistory.create).not.toHaveBeenCalled()
     expect(fixture.audit.record).not.toHaveBeenCalled()
     expect(fixture.coverage.advanceWhenFullyCovered).not.toHaveBeenCalled()

@@ -197,6 +197,7 @@ export class PurchaseOrderPartItemDto {
 }
 
 export class PurchaseOrderPartDto {
+  @ApiProperty({ enum: ['PENDING_REVIEW', 'ACTIVE', 'CANCELLED'] }) readonly status!: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly partNumber!: number
   @ApiProperty({ type: 'string', nullable: true, maxLength: 72, description: '审核前为空；单货件使用基础唛头，多货件追加货件序号' }) readonly shippingMarkText!: string | null

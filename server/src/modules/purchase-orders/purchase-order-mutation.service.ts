@@ -264,6 +264,11 @@ export class PurchaseOrderMutationService {
           WHERE purchase_order_id = ${order.id}::uuid
         `)
       }
+      // 与审核、唛头派发共用事务，避免尚未通过的预定义货件被实际作业使用。
+      await transaction.purchaseOrderPart.updateMany({
+        where: { purchaseOrderId, status: 'PENDING_REVIEW' },
+        data: { status: 'ACTIVE' },
+      })
       for (const transition of [
         { dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', eventType: AuditEventType.PURCHASE_ORDER_ORDER_STATUS_CHANGED },
         { dimension: 'FULFILLMENT', fromStatus: 'ORDERED', toStatus: 'PREPARING', eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED },
@@ -355,6 +360,11 @@ export class PurchaseOrderMutationService {
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
         data: { orderStatus: 'CANCELLED', version: { increment: 1 } },
+      })
+      // 取消只改变可用性，原唛头与产品分配继续留存供历史追溯。
+      await transaction.purchaseOrderPart.updateMany({
+        where: { purchaseOrderId, status: { not: 'CANCELLED' } },
+        data: { status: 'CANCELLED' },
       })
       await transaction.purchaseOrderStatusHistory.create({ data: {
         purchaseOrderId,

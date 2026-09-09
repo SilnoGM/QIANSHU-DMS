@@ -314,6 +314,14 @@ enum PurchaseOrderStatus {
   @@map("purchase_order_status")
 }
 
+enum PurchaseOrderPartStatus {
+  PENDING_REVIEW
+  ACTIVE
+  CANCELLED
+
+  @@map("purchase_order_part_status")
+}
+
 enum PurchaseOrderFulfillmentStatus {
   ORDERED
   PREPARING
@@ -1108,6 +1116,8 @@ model PurchaseOrderPart {
   purchaseOrderId          String @map("purchase_order_id") @db.Uuid
   key                      String @db.Uuid
   partNumber               Int    @map("part_number") @db.SmallInt
+  // 提交时保存预定义分配；审核通过才生效，取消后保留唛头与分配历史。
+  status                   PurchaseOrderPartStatus @default(PENDING_REVIEW)
   // 唛头与本单内序号分开保存；正式货件编号属于后续货件域，不复用这两个字段。
   shippingMarkText         String? @map("shipping_mark_text") @db.VarChar(72)
   // 仅历史逐件派号保留独立 ledger；新单审核时由采购基础唛头派生，不额外消耗流水。
