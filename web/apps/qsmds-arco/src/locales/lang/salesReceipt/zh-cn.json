@@ -23,7 +23,7 @@
   "salesReceipt.method": "收款方式",
   "salesReceipt.remark": "备注",
   "salesReceipt.detail": "收款审核详情",
-  "salesReceipt.search": "搜索订单号或客户",
+  "salesReceipt.search": "搜索收款编号、订单号或客户",
   "salesReceipt.searchButton": "查询",
   "salesReceipt.currency": "币种",
   "salesReceipt.allCurrencies": "全部币种",
@@ -114,5 +114,8 @@
   "salesReceipt.traceLabel.preview.exchangeRateId": "审核预览 · 汇率 ID",
   "salesReceipt.traceLabel.preview.exchangeRateVersion": "审核预览 · 汇率版本",
   "salesReceipt.traceLabel.preview.ruleVersionId": "审核预览 · 结算规则 ID",
-  "salesReceipt.traceLabel.preview.userShareRate": "审核预览 · 用户分账比例（%）"
+  "salesReceipt.traceLabel.preview.userShareRate": "审核预览 · 用户分账比例（%）",
+  "salesReceipt.collectionNo": "销售收款编号",
+  "salesReceipt.unnumbered": "历史未编号",
+  "salesReceipt.traceLabel.numberingIssuanceId": "编号派发记录 ID"
 }

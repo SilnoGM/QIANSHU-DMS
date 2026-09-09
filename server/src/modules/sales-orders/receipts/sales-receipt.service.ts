@@ -1,3 +1,5 @@
+import { NumberingGeneratorService } from '../../numbering/numbering-generator.service'
+import { NumberingGenerationError, NUMBERING_ERROR_CODES, NUMBERING_BOUNDARY_ERROR_CODES } from '../../numbering/numbering.errors'
 import { normalizeReceiptReason as reason } from './sales-receipt-normalizer'
 import { AccessControlService } from '../../access-control/access-control.service'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
@@ -28,6 +30,13 @@ type Tx = Prisma.TransactionClient
 function hash(value: string) { return createHash('sha256').update(value).digest() }
 function mapError(error: unknown): never {
   if (error instanceof ApiException) throw error
+  if (error instanceof NumberingGenerationError) {
+    if (error.code === NUMBERING_ERROR_CODES.IDEMPOTENCY_CONFLICT) receiptFailure('SALES_RECEIPT_IDEMPOTENCY_CONFLICT', '该提交标识已用于不同收款内容', HttpStatus.CONFLICT)
+    if (error.code === NUMBERING_ERROR_CODES.OUTPUT_CONFLICT) receiptFailure('SALES_RECEIPT_NUMBER_CONFLICT', '销售收款编号发生冲突，请核对编号规则', HttpStatus.CONFLICT)
+    if (error.code === NUMBERING_BOUNDARY_ERROR_CODES.INTERNAL_ERROR || error.code === NUMBERING_BOUNDARY_ERROR_CODES.VALIDATION_FAILED) receiptFailure('INTERNAL_ERROR', '服务器内部错误', HttpStatus.INTERNAL_SERVER_ERROR)
+    if (error.code === NUMBERING_ERROR_CODES.RULE_STATE_CHANGED || error.code === NUMBERING_ERROR_CODES.GENERATION_RETRY_EXHAUSTED) receiptFailure('SALES_RECEIPT_STATE_CHANGED', '编号规则状态已变化，请使用原提交标识重试', HttpStatus.CONFLICT)
+    receiptFailure('SALES_RECEIPT_NUMBERING_UNAVAILABLE', '销售收款编号规则当前不可用，请联系管理员配置 SALES_COLLECTION', HttpStatus.CONFLICT)
+  }
   if (error instanceof DictionaryValueUnavailableError) receiptFailure('SALES_ORDER_PAYMENT_METHOD_UNAVAILABLE', '收款方式当前不可用')
   if (error instanceof MediaAssetLifecycleError) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '收款凭证当前不可用')
   if (error instanceof FundPostingError) {
@@ -51,6 +60,7 @@ export class SalesReceiptService {
     private readonly automatic: SalesOrderAutomaticStateService,
     private readonly access: AccessControlService,
     private readonly delivery: MediaContentDeliveryService,
+    private readonly numbering: NumberingGeneratorService,
   ) {}
 
   private async authorize(tx: Tx, context: SalesOrderMutationContext, codes: string[]) {
@@ -161,9 +171,16 @@ export class SalesReceiptService {
         if (!reuse && await tx.salesReceiptRequest.count({ where: { voucherMediaAssetId: asset.id } }) > 0) receiptFailure('SALES_ORDER_DOCUMENT_UNAVAILABLE', '收款凭证已关联其他申请')
         await this.verifyVoucher(asset.objectKey!)
         await this.media.activate(tx, asset.id)
+        // 发号与申请共用事务；后续任何写入失败都会回滚派发表及期间计数。
+        // 编号域的幂等键跨用户唯一，复用提交时冻结的摘要而不暴露原始请求键。
+        const issuance = await this.numbering.generateScopedInTransaction(tx, {
+          ruleCode: 'SALES_COLLECTION', consumerCode: 'SALES_COLLECTION.CREATE',
+          idempotencyKey: `${context.actorUserId}:${idempotencyKeyHash.toString('hex')}`,
+          requestFingerprint: requestFingerprintHash.toString('hex'),
+        })
         const row = await tx.salesReceiptRequest.create({ data: { ...normalized, receivedAt, accountOwnerUserId: order.issuerUserId, currencyCode: order.currencyCode,
           paymentMethodNameSnapshot: method.label, voucherTitle: createSalesOrderDocumentTitle(order.customerName, input.paymentType, new Date()),
-          submittedByUserId: context.actorUserId, idempotencyKeyHash, requestFingerprintHash } })
+          submittedByUserId: context.actorUserId, idempotencyKeyHash, requestFingerprintHash, collectionNo: issuance.number, numberingIssuanceId: issuance.issuanceId } })
         await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_SUBMITTED, row.id, salesOrderId)
         return row.id
       })

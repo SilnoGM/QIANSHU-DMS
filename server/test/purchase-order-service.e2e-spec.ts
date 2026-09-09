@@ -1,3 +1,4 @@
+import { ensureReceiptNumberingRule } from './fixtures/sales-receipt-numbering-service.fixture'
 import { SalesReceiptService } from '../src/modules/sales-orders/receipts/sales-receipt.service'
 import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/sales-receipt-query.service'
 import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
@@ -361,10 +362,12 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     sourceQueries = new PurchaseOrderSourceQueryService(prisma, dictionaryLookup)
     productEdits = new SalesOrderProductEditService(prisma, new AuditService())
     productEditQueries = new SalesOrderProductEditQueryService(prisma)
+    await ensureReceiptNumberingRule(prisma, actorUserId)
     salesReceipts = new SalesReceiptService(prisma, new SalesReceiptQueryService(prisma), dictionaryLookup, media,
       new FundPostingApplicationService(prisma, new AuditService()), new AuditService(), new SalesOrderAutomaticStateService(new AuditService()),
       { getPermissionCodesInTransaction: () => Promise.resolve(['sales-orders:payment', 'sales-orders:document', 'sales-receipts:review']), hasAll: () => true } as unknown as AccessControlService,
       { stat: () => Promise.resolve({ sizeBytes: 1n, modifiedAt: new Date() }) } as unknown as MediaContentDeliveryService,
+      new NumberingGeneratorService(prisma),
     )
     await new FundAccountCommandService(prisma, new AuditService()).createUserAccount({ actorUserId, requestId: randomUUID() }, { userId: actorUserId, userShareRate: '30' })
     commands = new PurchaseOrderCommandService(

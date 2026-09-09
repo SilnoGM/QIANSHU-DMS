@@ -95,3 +95,12 @@
 - 核对 `ORDER_SETTLEMENT` 当前启用、规则为收入分账，开单人已有账户，币种已启用且具备有效汇率；不会自动开户或启用管理员停用的规则。
 - 三项新权限仅默认授予系统管理员。新增岗位或用户角色分配另行操作。
 - LEGACY 收款作废只影响原收款事实，不扣未曾入账的资金；新收款按原分录冲正，允许负余额。
+# 2026-09-09 销售收款编号追加验证
+
+- 本次实现：`SALES_COLLECTION` / `SALES_COLLECTION.CREATE` 在收款提交事务内派发，申请返回 `collectionNo` 与 `numberingIssuanceId`；编号物理最左固定，移动端及详情显示，支持编号关键字查询。
+- 业务库只读确认：规则“销售收款编号”已启用，现有 1 条待审核申请；本次不补历史编号，也未应用新增业务库迁移。隔离 `receipt_test` 已部署 `20260909090000_sales_receipt_collection_number`。
+- TDD：服务最初因缺少 `collectionNo` 失败；迁移最初因未限制无编号新增及缺少新字段失败；表格布局采用真实浏览器验证，不保留源码字串镜像测试。最终编号迁移 11 项、收款服务 16 项、采购服务回归 10 项、收款 schema/资金守卫/权限 13 项通过。
+- 根测试 693 项、Server 单元测试 263 套件 / 2799 项通过。前后端类型检查、定向 ESLint / Stylelint、表格及收款 API 26 项通过；`contract:sync`、`contract:check` 通过；隔离 shadow 数据库重放迁移的 drift 检查显示 `No difference detected`。
+- 隔离浏览器通过真实收款服务创建 `SC00000001`，编号关键字命中；横向滚动编号保持 `sticky; left: 0`，390px 卡片及详情显示编号和派发 ID；历史空号显示“历史未编号”。亮色和暗色均验证固定列，最后恢复原亮色。本次浏览器未执行审核或资金操作。
+- 调试记录：首次服务测试使用了测试容器重启前的旧端口，刷新私有连接配置后恢复；采购回归首次被隔离库门禁拒绝，测试 helper 加入精确的本机 `receipt_test` 账号/数据库组合后通过，仍拒绝业务库。编号数据库测试两处查询缺少类型导致 ESLint 失败，补齐查询类型后通过。合成浏览器图片初次缺少尺寸被媒体校验拒绝，读取真实图片尺寸后提交成功，未放宽生产校验。首次 drift 检查缺少 `SHADOW_DATABASE_URL`，创建专用隔离 shadow 数据库后通过并清理。
+- 证据：`/tmp/qianshu-collection-{root-tests,unit,contract-sync,contract-check,guards}.txt`，`/tmp/receipt-numbering-{services,purchase-regression}.txt`；截图位于 `/tmp/qianshu-receipt-test-CfNobx/collection-number-{fixed-desktop,390,detail-390}.png`。临时证据不纳入 Git。

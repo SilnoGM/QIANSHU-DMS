@@ -19,7 +19,7 @@ function mapDetail(row: DetailRow): SalesReceiptRequestDetailDto {
   const payment = row.approvedPayment
   const batch = payment?.fundPostingBatch
   return {
-    id: row.id, salesOrderId: row.salesOrderId, paymentType: row.paymentType,
+    id: row.id, collectionNo: row.collectionNo, numberingIssuanceId: row.numberingIssuanceId, salesOrderId: row.salesOrderId, paymentType: row.paymentType,
     amount: row.amount.toFixed(4), currencyCode: row.currencyCode, receivedAt: row.receivedAt.toISOString(),
     paymentMethod: row.paymentMethod, paymentMethodNameSnapshot: row.paymentMethodNameSnapshot,
     remark: row.remark, status: row.status as SalesReceiptStatusDto, submittedAt: row.submittedAt.toISOString(),
@@ -67,7 +67,7 @@ export class SalesReceiptQueryService {
       ...(input.currencyCode ? { currencyCode: input.currencyCode } : {}),
       ...(input.accountOwnerUserId ? { accountOwnerUserId: input.accountOwnerUserId } : {}),
       ...(from || to ? { submittedAt: { gte: from, lte: to } } : {}),
-      ...(input.keyword ? { salesOrder: { OR: [{ orderNo: { contains: input.keyword, mode: 'insensitive' } }, { customerName: { contains: input.keyword, mode: 'insensitive' } }] } } : {}),
+      ...(input.keyword ? { OR: [{ collectionNo: { contains: input.keyword, mode: 'insensitive' } }, { salesOrder: { OR: [{ orderNo: { contains: input.keyword, mode: 'insensitive' } }, { customerName: { contains: input.keyword, mode: 'insensitive' } }] } }] } : {}),
     }
     return this.prisma.$transaction(async tx => {
       if (salesOrderId && !await tx.salesOrder.findUnique({ where: { id: salesOrderId }, select: { id: true } })) {

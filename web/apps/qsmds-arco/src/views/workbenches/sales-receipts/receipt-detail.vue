@@ -44,6 +44,7 @@ const traceRows = computed(() => {
   const payment = item.approvedPayment
   return [
     [t('salesReceipt.traceLabel.requestId'), item.id],
+    [t('salesReceipt.traceLabel.numberingIssuanceId'), item.numberingIssuanceId],
     [t('salesReceipt.traceLabel.requestVersion'), item.version],
     [t('salesReceipt.traceLabel.salesOrderId'), item.salesOrderId],
     [t('salesReceipt.traceLabel.orderVersion'), item.salesOrder.version],
@@ -185,7 +186,7 @@ onBeforeUnmount(() => controller?.abort())
 </script>
 
 <template>
-  <QsGenericModal v-model="visible" :title="t('salesReceipt.detail')" :description="detail?.salesOrder.orderNo" size="lg" :loading="loading" :error="error || null" :submitting="busy" :dismiss-on-escape="!busy" :dismiss-on-overlay="!busy">
+  <QsGenericModal v-model="visible" :title="t('salesReceipt.detail')" :description="detail ? (detail.collectionNo || t('salesReceipt.unnumbered')) : undefined" size="lg" :loading="loading" :error="error || null" :submitting="busy" :dismiss-on-escape="!busy" :dismiss-on-overlay="!busy">
     <template #header-leading>
       <FaIcon name="i-lucide:hand-coins" class="size-5" />
     </template>
@@ -196,6 +197,14 @@ onBeforeUnmount(() => controller?.abort())
     </template>
     <div v-if="detail" class="space-y-6">
       <section class="p-4 border border-border rounded-xl bg-muted/15 sm:p-5">
+        <div class="mb-4 space-y-1">
+          <p class="qs-type-compact-label m-0">
+            {{ t('salesReceipt.collectionNo') }}
+          </p>
+          <p class="qs-type-data-emphasis font-mono m-0 select-all break-all">
+            {{ detail.collectionNo || t('salesReceipt.unnumbered') }}
+          </p>
+        </div>
         <div class="flex flex-wrap gap-3 items-start justify-between">
           <div class="min-w-0 space-y-2">
             <p class="qs-type-compact-label m-0">

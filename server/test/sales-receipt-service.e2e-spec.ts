@@ -1,3 +1,5 @@
+import { ensureReceiptNumberingRule } from './fixtures/sales-receipt-numbering-service.fixture'
+import { NumberingCommandService } from '../src/modules/numbering/numbering-command.service'
 import { Prisma } from '../src/generated/prisma/client'
 import { SalesOrderProductEditService } from '../src/modules/sales-orders/sales-order-product-edit.service'
 import { ConfigService } from '@nestjs/config'
@@ -62,6 +64,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     } catch (error) { await client.query('ROLLBACK'); throw error }
     const role = await prisma.role.findUniqueOrThrow({ where: { code: 'system_admin' } })
     await prisma.userRole.create({ data: { userId: fixture.userId, roleId: role.id } })
+    await ensureReceiptNumberingRule(prisma, fixture.userId)
     const account = await app.get(FundAccountCommandService).createUserAccount(context(fixture.userId), { userId: fixture.userId, userShareRate: share })
     const media = await prisma.mediaAsset.create({ data: { createdByUserId: fixture.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'receipt.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
     const root = process.env.MEDIA_STORAGE_ROOT!
@@ -80,11 +83,18 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     const key = randomUUID()
     const submitted = await service.submit(context(f.userId), f.salesOrderId, f.input, key)
     expect(submitted.status).toBe('PENDING_REVIEW')
+    expect(submitted.collectionNo).toMatch(/^SC\d{8}$/u)
+    expect(submitted.numberingIssuanceId).toEqual(expect.any(String))
+    const issued = await prisma.numberingIssuance.findUniqueOrThrow({ where: { id: submitted.numberingIssuanceId! } })
+    expect(issued.consumerCode).toBe('SALES_COLLECTION.CREATE')
+    expect(issued.generatedNumber).toBe(submitted.collectionNo)
     expect(submitted.accountOwner.id).toBe(f.userId)
     expect(submitted.accountOwner.id).not.toBe(reviewer)
     expect(await prisma.salesOrderPayment.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
     expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('0.00')
-    expect((await service.submit(context(f.userId), f.salesOrderId, f.input, key)).id).toBe(submitted.id)
+    const replay = await service.submit(context(f.userId), f.salesOrderId, f.input, key)
+    expect(replay).toMatchObject({ id: submitted.id, collectionNo: submitted.collectionNo, numberingIssuanceId: submitted.numberingIssuanceId })
+    expect((await query.list({ keyword: submitted.collectionNo! })).items.map(item => item.id)).toContain(submitted.id)
     await expect(service.submit(context(f.userId), f.salesOrderId, { ...f.input, amount: '999' }, key)).rejects.toMatchObject({ code: 'SALES_RECEIPT_IDEMPOTENCY_CONFLICT' })
     const preview = await service.approvalContext(context(reviewer), submitted.id)
     expect(preview.businessAmount).toBe('208.33')
@@ -100,6 +110,8 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     await service.voidPayment(context(reviewer), f.salesOrderId, payment.id, voidInput)
     const result = await query.getById(submitted.id)
     expect(result.status).toBe('APPROVED')
+    expect(result.collectionNo).toBe(submitted.collectionNo)
+    expect(result.numberingIssuanceId).toBe(submitted.numberingIssuanceId)
     expect(result.approvedPayment?.fundReversalBatchId).toBeTruthy()
     expect(result.approvedPayment?.reversal?.entries.map(entry => entry.amount)).toEqual(['62.50', '145.83'])
     expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('-62.50')
@@ -114,6 +126,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     expect((await query.list({}, f.salesOrderId)).pendingAmount).toBe('0.0000')
     const resubmitted = await service.submit(context(f.userId), f.salesOrderId, { ...f.input, resubmittedFromId: request.id, amount: '800' }, randomUUID())
     expect(resubmitted.id).not.toBe(request.id)
+    expect(resubmitted.collectionNo).not.toBe(request.collectionNo)
     expect(resubmitted.voucher.mediaAssetId).toBe(request.voucher.mediaAssetId)
   })
   it('rolls back payment, balance and review when final audit fails', async () => {
@@ -229,6 +242,50 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
       expect(await prisma.fundPostingBatch.count({ where: { businessId: request.id } })).toBe(0)
       expect((await prisma.fundAccount.findUniqueOrThrow({ where: { id: f.account.id } })).balance.toFixed(2)).toBe('0.00')
     }
+  })
+
+  it('does not consume an issuance or sequence when submission audit fails', async () => {
+    const f = await fixture()
+    const rule = await prisma.numberingRule.findUniqueOrThrow({ where: { ruleCode: 'SALES_COLLECTION' } })
+    const before = await prisma.numberingPeriodState.findMany({ where: { ruleId: rule.id } })
+    const count = await prisma.numberingIssuance.count({ where: { ruleId: rule.id } })
+    const audit = app.get(AuditService)
+    const real = audit.record.bind(audit)
+    const failure = jest.spyOn(audit, 'record').mockImplementation((tx, input) => input.eventType === 'SALES_RECEIPT_SUBMITTED' ? Promise.reject(new Error('injected submit audit failure')) : real(tx, input))
+    const key = randomUUID()
+    try { await expect(service.submit(context(f.userId), f.salesOrderId, f.input, key)).rejects.toThrow('injected submit audit failure') }
+    finally { failure.mockRestore() }
+    expect(await prisma.salesReceiptRequest.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
+    expect(await prisma.numberingIssuance.count({ where: { ruleId: rule.id } })).toBe(count)
+    expect(await prisma.numberingPeriodState.findMany({ where: { ruleId: rule.id } })).toEqual(before)
+    expect((await prisma.mediaAsset.findUniqueOrThrow({ where: { id: f.input.voucher.mediaAssetId } })).status).toBe('UPLOADING')
+    const accepted = await service.submit(context(f.userId), f.salesOrderId, f.input, key)
+    expect(accepted.collectionNo).toBeTruthy()
+    expect(await prisma.numberingIssuance.count({ where: { ruleId: rule.id } })).toBe(count + 1)
+  })
+  it('namespaces the same client key by submitter', async () => {
+    const first = await fixture()
+    const second = await fixture()
+    const key = randomUUID()
+    const receipts = await Promise.all([
+      service.submit(context(first.userId), first.salesOrderId, first.input, key),
+      service.submit(context(second.userId), second.salesOrderId, second.input, key),
+    ])
+    expect(receipts[0].collectionNo).not.toBe(receipts[1].collectionNo)
+    expect(receipts[0].numberingIssuanceId).not.toBe(receipts[1].numberingIssuanceId)
+  })
+  it('returns a safe configuration error without activating evidence when the numbering rule is disabled', async () => {
+    const f = await fixture()
+    const rule = await prisma.numberingRule.findUniqueOrThrow({ where: { ruleCode: 'SALES_COLLECTION' } })
+    const command = app.get(NumberingCommandService)
+    const disabled = await command.disable(context(f.userId), rule.id, { expectedVersion: rule.version })
+    const count = await prisma.numberingIssuance.count({ where: { ruleId: rule.id } })
+    try {
+      await expect(service.submit(context(f.userId), f.salesOrderId, f.input, randomUUID())).rejects.toMatchObject({ code: 'SALES_RECEIPT_NUMBERING_UNAVAILABLE', status: 409 })
+      expect(await prisma.salesReceiptRequest.count({ where: { salesOrderId: f.salesOrderId } })).toBe(0)
+      expect(await prisma.numberingIssuance.count({ where: { ruleId: rule.id } })).toBe(count)
+      expect((await prisma.mediaAsset.findUniqueOrThrow({ where: { id: f.input.voucher.mediaAssetId } })).status).toBe('UPLOADING')
+    } finally { await command.enable(context(f.userId), rule.id, { expectedVersion: disabled.version }) }
   })
 
 })

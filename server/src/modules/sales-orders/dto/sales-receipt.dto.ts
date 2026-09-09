@@ -91,6 +91,8 @@ export class SalesReceiptPaymentDto {
   @ApiProperty({ nullable: true, type: () => SalesReceiptPostingDto }) posting!: SalesReceiptPostingDto | null
 }
 export class SalesReceiptRequestDetailDto {
+  @ApiProperty({ type: 'string', nullable: true, format: 'uuid', description: '编号派发记录；接入编号前的历史申请为 null' }) numberingIssuanceId!: string | null
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 64, description: '销售收款编号；接入编号前的历史申请为 null' }) collectionNo!: string | null
   @ApiProperty({ format: 'uuid' }) id!: string
   @ApiProperty({ format: 'uuid' }) salesOrderId!: string
   @ApiProperty({ enum: SalesOrderPaymentType }) paymentType!: SalesOrderPaymentType

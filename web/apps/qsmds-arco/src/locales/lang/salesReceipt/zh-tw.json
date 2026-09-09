@@ -23,7 +23,7 @@
   "salesReceipt.method": "收款方式",
   "salesReceipt.remark": "備註",
   "salesReceipt.detail": "收款審核詳情",
-  "salesReceipt.search": "搜索訂單號或客戶",
+  "salesReceipt.search": "搜尋收款編號、訂單號或客戶",
   "salesReceipt.searchButton": "查询",
   "salesReceipt.currency": "幣種",
   "salesReceipt.allCurrencies": "全部幣種",
@@ -114,5 +114,8 @@
   "salesReceipt.traceLabel.preview.exchangeRateId": "審核預覽 · 匯率 ID",
   "salesReceipt.traceLabel.preview.exchangeRateVersion": "審核預覽 · 匯率版本",
   "salesReceipt.traceLabel.preview.ruleVersionId": "審核預覽 · 結算規則 ID",
-  "salesReceipt.traceLabel.preview.userShareRate": "審核預覽 · 使用者分帳比例（%）"
+  "salesReceipt.traceLabel.preview.userShareRate": "審核預覽 · 使用者分帳比例（%）",
+  "salesReceipt.collectionNo": "銷售收款編號",
+  "salesReceipt.unnumbered": "歷史未編號",
+  "salesReceipt.traceLabel.numberingIssuanceId": "編號派發紀錄 ID"
 }

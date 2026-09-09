@@ -23,7 +23,7 @@
   "salesReceipt.method": "Payment method",
   "salesReceipt.remark": "Note",
   "salesReceipt.detail": "Receipt review details",
-  "salesReceipt.search": "Search order number or customer",
+  "salesReceipt.search": "Search collection number, order number or customer",
   "salesReceipt.searchButton": "Search",
   "salesReceipt.currency": "Currency",
   "salesReceipt.allCurrencies": "All currencies",
@@ -114,5 +114,8 @@
   "salesReceipt.traceLabel.preview.exchangeRateId": "Approval preview · Exchange rate ID",
   "salesReceipt.traceLabel.preview.exchangeRateVersion": "Approval preview · Exchange rate version",
   "salesReceipt.traceLabel.preview.ruleVersionId": "Approval preview · Settlement rule ID",
-  "salesReceipt.traceLabel.preview.userShareRate": "Approval preview · User share (%)"
+  "salesReceipt.traceLabel.preview.userShareRate": "Approval preview · User share (%)",
+  "salesReceipt.collectionNo": "Sales collection number",
+  "salesReceipt.unnumbered": "Historical record without a number",
+  "salesReceipt.traceLabel.numberingIssuanceId": "Number issuance ID"
 }

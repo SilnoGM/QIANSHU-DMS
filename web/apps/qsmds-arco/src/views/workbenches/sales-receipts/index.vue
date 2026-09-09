@@ -38,6 +38,7 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   options: [{ label: 'TWD', value: 'TWD' }, { label: 'MYR', value: 'MYR' }],
 }])
 const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>(() => [
+  { id: 'collectionNo', accessorKey: 'collectionNo', title: t('salesReceipt.collectionNo'), width: 225, minWidth: 225, fixed: 'left', copyable: true },
   { id: 'order', accessorFn: item => item.salesOrder.orderNo, title: t('salesReceipt.order'), minWidth: 235, copyable: true },
   { id: 'receipt', accessorKey: 'paymentType', title: t('salesReceipt.receiptInfo'), minWidth: 185 },
   { id: 'amount', accessorKey: 'amount', title: t('salesReceipt.amount'), minWidth: 205, align: 'right' },
@@ -123,7 +124,8 @@ onBeforeUnmount(() => controller?.abort())
         v-model:search="keyword"
         v-model:filters="filters"
         row-key="id"
-        table-class="min-w-[1730px]"
+        table-class="min-w-[1900px]"
+        :show-row-number="false"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -140,6 +142,10 @@ onBeforeUnmount(() => controller?.abort())
         @pagination-change="load"
         @retry="load"
       >
+        <template #cell-collectionNo="{ row }">
+          <span v-if="row.original.collectionNo" class="qs-type-data-emphasis font-mono break-all">{{ row.original.collectionNo }}</span>
+          <span v-else class="qs-type-meta">{{ t('salesReceipt.unnumbered') }}</span>
+        </template>
         <template #cell-order="{ row }">
           <QsTableStackedCell>
             <QsTableStackedLine content-class="qs-type-data-emphasis font-mono break-all whitespace-normal">
@@ -226,14 +232,14 @@ onBeforeUnmount(() => controller?.abort())
           </QsTableStackedCell>
         </template>
         <template #actions="{ row }">
-          <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.salesOrder.orderNo} · ${t('salesReceipt.detail')}`" @click="selectedId = row.id">
+          <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.collectionNo || row.salesOrder.orderNo} · ${t('salesReceipt.detail')}`" @click="selectedId = row.id">
             <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('salesReceipt.view') }}
           </FaButton>
         </template>
         <template #mobile-row="{ row }">
           <article class="min-w-0 space-y-4">
             <div class="flex flex-wrap gap-2 items-center justify-between">
-              <span class="qs-type-data-emphasis font-mono break-all">{{ row.salesOrder.orderNo }}</span>
+              <span class="qs-type-data-emphasis font-mono break-all">{{ row.collectionNo || t('salesReceipt.unnumbered') }}</span>
               <FaTag variant="outline" class="qs-type-status-tag" :class="statusClass(row)">
                 {{ t(`salesReceipt.status.${row.status}`) }}
               </FaTag>
@@ -242,7 +248,7 @@ onBeforeUnmount(() => controller?.abort())
               </FaTag>
             </div>
             <p class="qs-type-body m-0">
-              {{ row.salesOrder.customerName }}
+              {{ row.salesOrder.orderNo }} · {{ row.salesOrder.customerName }}
             </p>
             <div class="p-3 rounded-lg bg-muted/30 flex flex-wrap gap-2 items-center justify-between">
               <span>{{ t(`salesReceipt.type.${row.paymentType}`) }}</span>

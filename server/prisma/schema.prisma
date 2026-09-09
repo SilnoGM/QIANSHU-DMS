@@ -1345,6 +1345,7 @@ model NumberingIssuance {
   periodState NumberingPeriodState @relation(fields: [ruleId, periodKey], references: [ruleId, periodKey], onDelete: Restrict, onUpdate: Restrict)
   purchaseOrder PurchaseOrder?
   purchaseOrderPart PurchaseOrderPart?
+  salesReceiptRequest SalesReceiptRequest?
 
   @@unique([ruleId, generatedNumber], map: "numbering_issuances_rule_id_generated_number_key")
   @@unique([consumerCode, idempotencyKeyHash], map: "numbering_issuances_consumer_code_idempotency_key_hash_key")
@@ -1561,6 +1562,8 @@ model FundLedgerEntry {
 /// 提交后的收款事实不可修改；正式收款和资金入账只在财务审核通过时原子生成。
 model SalesReceiptRequest {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  collectionNo String? @unique(map: "sales_receipt_requests_collection_no_key") @map("collection_no") @db.VarChar(64)
+  numberingIssuanceId String? @unique(map: "sales_receipt_requests_numbering_issuance_key") @map("numbering_issuance_id") @db.Uuid
   salesOrderId String @map("sales_order_id") @db.Uuid
   accountOwnerUserId String @map("account_owner_user_id") @db.Uuid
   paymentType SalesOrderPaymentType @map("payment_type")
@@ -1593,6 +1596,7 @@ model SalesReceiptRequest {
   approvedPayment SalesOrderPayment? @relation(fields: [approvedPaymentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   resubmittedFrom SalesReceiptRequest? @relation("ReceiptResubmission", fields: [resubmittedFromId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   resubmissions SalesReceiptRequest[] @relation("ReceiptResubmission")
+  numberingIssuance NumberingIssuance? @relation(fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([submittedByUserId, idempotencyKeyHash], map: "sales_receipt_requests_submitter_idempotency_key")
   @@index([status, submittedAt(sort: Desc), id(sort: Desc)], map: "sales_receipt_requests_status_submitted_id_idx")

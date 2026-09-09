@@ -35352,6 +35352,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -35672,6 +35674,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -35992,6 +35996,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -36334,6 +36340,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -36676,6 +36684,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -37034,6 +37044,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -37364,6 +37376,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -37715,6 +37729,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -38112,6 +38128,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -38479,6 +38497,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -38818,6 +38838,8 @@
               "codes": [
                 "SALES_RECEIPT_CONTEXT_CHANGED",
                 "SALES_RECEIPT_IDEMPOTENCY_CONFLICT",
+                "SALES_RECEIPT_NUMBERING_UNAVAILABLE",
+                "SALES_RECEIPT_NUMBER_CONFLICT",
                 "SALES_RECEIPT_REVERSAL_CONFLICT",
                 "SALES_RECEIPT_STATE_CHANGED"
               ]
@@ -56632,6 +56654,18 @@
       "SalesReceiptRequestDetailDto": {
         "type": "object",
         "properties": {
+          "numberingIssuanceId": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "编号派发记录；接入编号前的历史申请为 null"
+          },
+          "collectionNo": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64,
+            "description": "销售收款编号；接入编号前的历史申请为 null"
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -56731,6 +56765,8 @@
           }
         },
         "required": [
+          "numberingIssuanceId",
+          "collectionNo",
           "id",
           "salesOrderId",
           "paymentType",

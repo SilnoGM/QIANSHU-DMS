@@ -15,7 +15,9 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
   const baseDatabaseUrl = process.env.DATABASE_URL
   if (!baseDatabaseUrl) throw new Error('Isolated database is required')
   const url = new URL(baseDatabaseUrl)
-  if (url.username !== 'qianshu_ci' || url.pathname !== '/qianshu_ci' || !['127.0.0.1', 'localhost'].includes(url.hostname)) {
+  const knownTestDatabase = (url.username === 'qianshu_ci' && url.pathname === '/qianshu_ci')
+    || (url.username === 'receipt_test' && url.pathname === '/receipt_test')
+  if (!knownTestDatabase || !['127.0.0.1', 'localhost'].includes(url.hostname)) {
     throw new Error('Database is outside isolated boundary')
   }
   const schemaName = `purchase_mark_e2e_${randomUUID().replaceAll('-', '')}`
