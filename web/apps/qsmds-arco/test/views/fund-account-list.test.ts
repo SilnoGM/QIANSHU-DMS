@@ -65,7 +65,7 @@ test('页面组合开户、比例修改、手动调账 Modal 和账户流水跳�
     assert.match(pageSource, new RegExp(component, 'u'))
   }
   assert.match(pageSource, /row\.ownerType === 'USER'/u)
-  assert.match(pageSource, /name: 'adminFundAccountTransactions'/u)
+  assert.match(pageSource, /name: 'qsFinanceFundAccountTransactions'/u)
   assert.match(pageSource, /query: \{ accountId: account\.id \}/u)
   assert.doesNotMatch(pageSource, /全部用户/u)
 })

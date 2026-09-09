@@ -46,7 +46,7 @@ import {
   canReverseFundBatch,
 } from './fund-transaction.logic'
 
-defineOptions({ name: 'AdminFundAccountTransactions' })
+defineOptions({ name: 'QsFinanceFundAccountTransactions' })
 
 interface FilterOption {
   readonly label: string

@@ -8,9 +8,7 @@ import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
-import FundAccountManagement, {
-  FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,
-} from './modules/fund-account.management'
+import { financeLegacyRedirects } from './modules/finance-legacy-redirects'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement, {
   PRODUCT_MANAGEMENT_PERMISSIONS,
@@ -22,6 +20,7 @@ import SystemManagement, {
 
 // 固定路由（默认路由）
 const constantRoutes: RouteRecordRaw[] = [
+  ...financeLegacyRedirects,
   {
     path: '/login',
     name: 'login',
@@ -103,12 +102,10 @@ const asyncRoutes: RouteRecordMainRaw[] = [
       icon: 'i-lucide:layout-dashboard',
       auth: [
         ...PRODUCT_MANAGEMENT_PERMISSIONS,
-        ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,
       ],
     },
     children: [
       ProductManagement,
-      FundAccountManagement,
     ],
   },
   {

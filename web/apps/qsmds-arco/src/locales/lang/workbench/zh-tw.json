@@ -1,5 +1,6 @@
 {
   "workbench": {
+    "realtimePayments": "即時收付",
     "finance": "千樹財務工作台",
     "purchase": "千樹採購工作台",
     "salesReceipts": "銷售收款",

@@ -60,8 +60,8 @@ function appRouteUrl(baseUrl, routePath) {
 
 async function verifyFundAccountRoutes(page, baseUrl) {
   for (const [routePath, title] of [
-    ['/admin/fund-accounts/list', '资金账户列表'],
-    ['/admin/fund-accounts/transactions', '资金账户流水'],
+    ['/qs-finance/fund-accounts/list', '资金账户列表'],
+    ['/qs-finance/fund-accounts/transactions', '资金账户流水'],
   ]) {
     await page.navigate(appRouteUrl(baseUrl, routePath))
     await page.waitFor(`(() => (

@@ -13,8 +13,8 @@ export const FUND_ACCOUNT_MANAGEMENT_PERMISSIONS = [
 ] as const
 
 const routes: RouteRecordRaw = {
-  path: '/admin/fund-accounts',
-  name: 'adminFundAccountManagement',
+  path: '/qs-finance/fund-accounts',
+  name: 'qsFinanceFundAccountManagement',
   component: Layout,
   meta: {
     title: '账户管理',
@@ -24,7 +24,7 @@ const routes: RouteRecordRaw = {
   children: [
     {
       path: 'list',
-      name: 'adminFundAccountList',
+      name: 'qsFinanceFundAccountList',
       component: () => import('@/views/admin/fund-account-management/list/index.vue'),
       meta: {
         title: '资金账户列表',
@@ -34,7 +34,7 @@ const routes: RouteRecordRaw = {
     },
     {
       path: 'transactions',
-      name: 'adminFundAccountTransactions',
+      name: 'qsFinanceFundAccountTransactions',
       component: () => import('@/views/admin/fund-account-management/transactions/index.vue'),
       meta: {
         title: '资金账户流水',
