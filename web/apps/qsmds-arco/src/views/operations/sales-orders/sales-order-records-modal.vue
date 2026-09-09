@@ -849,7 +849,7 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-if="detail && modalState.view === 'records'">
-      <section v-if="kind === 'payments'" aria-label="订单收款" class="space-y-5">
+      <section v-if="kind === 'payments'" aria-label="订单收款" class="flex flex-col gap-4">
         <dl class="m-0 p-4 border border-border rounded-xl bg-muted/15 gap-4 grid sm:grid-cols-3">
           <div>
             <dt class="qs-type-meta mb-2">
@@ -884,7 +884,7 @@ onBeforeUnmount(() => {
                 {{ option.label }}
               </FaButton>
             </div>
-            <OrderReceiptRequests v-model:page="receiptPage" :items="receiptRequests" :total="receiptTotal" :focused-id="focusedReceiptId" :can-submit="canRecordPayment" @resubmit="resubmitReceipt" @page-change="loadDetail" @show-payment="showPayment" />
+            <OrderReceiptRequests v-model:page="receiptPage" :items="receiptRequests" :currencies="currencies" :total="receiptTotal" :focused-id="focusedReceiptId" :can-submit="canRecordPayment" @resubmit="resubmitReceipt" @page-change="loadDetail" @show-payment="showPayment" />
           </template>
           <template #payments>
             <div ref="paymentRecordsRef">
@@ -901,8 +901,8 @@ onBeforeUnmount(() => {
                   :key="payment.id"
                   :data-payment-id="payment.id"
                   tabindex="-1"
-                  :class="focusedPaymentId === payment.id ? 'ring-2 ring-primary/30 rounded-lg px-3' : ''"
-                  class="py-4 gap-4 grid sm:grid-cols-[minmax(0,1fr)_auto]"
+                  :class="focusedPaymentId === payment.id ? 'ring-2 ring-primary/30' : ''"
+                  class="px-3 py-4 rounded-lg gap-4 grid sm:grid-cols-[minmax(0,1fr)_auto]"
                 >
                   <div class="min-w-0">
                     <div class="flex flex-wrap gap-2 items-center">
@@ -918,10 +918,10 @@ onBeforeUnmount(() => {
                       >
                         {{ payment.voidedAt === null ? '有效' : '已作废' }}
                       </FaTag>
+                      <FaButton v-if="payment.origin === 'REVIEWED'" variant="link" size="sm" :disabled="sourceLoading" @click="showReceiptSource(payment.id)">
+                        查看来源申请
+                      </FaButton>
                     </div>
-                    <FaButton v-if="payment.origin === 'REVIEWED'" variant="link" size="sm" :disabled="sourceLoading" @click="showReceiptSource(payment.id)">
-                      查看来源申请
-                    </FaButton>
                     <p class="qs-type-meta m-0 mt-2">
                       收款时间：<DateTimeDisplay :value="payment.receivedAt" />
                     </p>
@@ -991,7 +991,7 @@ onBeforeUnmount(() => {
                     :value="payment.amount"
                     :currency="detail.currencyCode"
                     :currencies="currencies"
-                    class="qs-type-data-emphasis text-emerald-700 font-semibold whitespace-nowrap dark:text-emerald-300 sm:text-right"
+                    class="qs-type-data-emphasis text-primary font-semibold whitespace-nowrap self-start sm:text-right"
                   />
                   <div v-if="payment.origin === 'LEGACY'" class="sm:col-span-2">
                     <p class="text-sm text-muted-foreground">
