@@ -109,11 +109,11 @@ export class SalesReceiptService {
   private fundContext(context: SalesOrderMutationContext, action: 'APPROVE' | 'VOID'): FundBusinessTransactionContext {
     return { ...context, sourceCode: 'SALES_RECEIPT', consumerCode: `SALES_RECEIPT.${action}` }
   }
-  private async updatePaymentStatus(tx: Tx, context: SalesOrderMutationContext, order: { id: string, agreedTotalAmount: Prisma.Decimal, paymentStatus: string }, advance: boolean) {
+  private async updatePaymentStatus(tx: Tx, context: SalesOrderMutationContext, order: { id: string, agreedTotalAmount: Prisma.Decimal, paymentStatus: string }, advance: boolean, changeReason: string) {
     const paid = await tx.salesOrderPayment.aggregate({ where: { salesOrderId: order.id, voidedAt: null }, _sum: { amount: true } })
     const paymentStatus = deriveSalesOrderPaymentStatus(order.agreedTotalAmount.toFixed(4), paid._sum.amount?.toFixed(4) ?? '0.0000')
     await tx.salesOrder.update({ where: { id: order.id }, data: { paymentStatus, version: { increment: 1 } } })
-    if (paymentStatus !== order.paymentStatus) await tx.salesOrderStatusHistory.create({ data: { salesOrderId: order.id, dimension: 'PAYMENT', fromStatus: order.paymentStatus, toStatus: paymentStatus, changedByUserId: context.actorUserId } })
+    if (paymentStatus !== order.paymentStatus) await tx.salesOrderStatusHistory.create({ data: { salesOrderId: order.id, dimension: 'PAYMENT', fromStatus: order.paymentStatus, toStatus: paymentStatus, reason: changeReason, changedByUserId: context.actorUserId } })
     if (advance) await this.automatic.advanceToPendingReconciliationWhenEligible(tx, context, order.id, 'PAYMENT')
   }
   private async rate(tx: Tx, currencyCode: string) {
@@ -237,7 +237,7 @@ export class SalesReceiptService {
           origin: 'REVIEWED', fundPostingBatchId: posting.batchId, exchangeRateId: rate.id, exchangeRateVersionSnapshot: rate.version, foreignUnitsPerCnySnapshot: rate.rate, exchangeRateCapturedAt: now } })
         await tx.salesOrderDocument.create({ data: { salesOrderId: order.id, paymentId: payment.id, mediaAssetId: row.voucherMediaAssetId, documentType: 'PAYMENT_VOUCHER', title: row.voucherTitle, createdByUserId: context.actorUserId } })
         await tx.salesReceiptRequest.update({ where: { id }, data: { status: 'APPROVED', reviewedByUserId: context.actorUserId, reviewedAt: now, reviewRemark, approvedPaymentId: payment.id, version: { increment: 1 } } })
-        await this.updatePaymentStatus(tx, context, order, true)
+        await this.updatePaymentStatus(tx, context, order, true, reviewRemark ?? '收款审核通过，系统重新计算付款状态')
         await this.auditEvent(tx, context, AuditEventType.SALES_RECEIPT_APPROVED, id, order.id)
       })
     } catch (error) { return mapError(error) }
@@ -282,7 +282,7 @@ export class SalesReceiptService {
         }
         const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
         await tx.salesOrderPayment.update({ where: { id: paymentId }, data: { voidedAt: now, voidedByUserId: context.actorUserId, voidReason, fundReversalBatchId } })
-        await this.updatePaymentStatus(tx, context, order, false)
+        await this.updatePaymentStatus(tx, context, order, false, voidReason)
         await this.auditEvent(tx, context, AuditEventType.SALES_ORDER_PAYMENT_VOIDED, paymentId, salesOrderId)
       })
     } catch (error) { return mapError(error) }
