@@ -173,7 +173,13 @@ async function submit(): Promise<void> {
     }
     toast.success(t('salesReceipt.saved'))
     emit('changed')
-    await load()
+    if (operation === 'approve') {
+      // 成功关闭由业务流程发出，不走提交期间禁止手动关闭的 visible setter。
+      emit('close')
+    }
+    else {
+      await load()
+    }
   }
   catch (failure) {
     if (current.signal.aborted) {
