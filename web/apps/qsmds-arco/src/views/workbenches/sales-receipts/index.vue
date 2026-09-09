@@ -43,7 +43,8 @@ const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>((
   { id: 'order', accessorFn: item => item.salesOrder.orderNo, title: t('salesReceipt.order'), minWidth: 235, copyable: true },
   { id: 'receipt', accessorKey: 'paymentType', title: t('salesReceipt.receiptInfo'), minWidth: 185 },
   { id: 'amount', accessorKey: 'amount', title: t('salesReceipt.amount'), minWidth: 205, align: 'right' },
-  { id: 'method', accessorKey: 'paymentMethodNameSnapshot', title: t('salesReceipt.paymentAndVoucher'), minWidth: 180 },
+  { id: 'method', accessorKey: 'paymentMethodNameSnapshot', title: t('salesReceipt.method'), minWidth: 140 },
+  { id: 'voucher', accessorFn: item => item.voucher?.title, title: t('salesReceipt.voucherTitle'), minWidth: 180 },
   { id: 'owner', accessorFn: item => item.accountOwner.name, title: t('salesReceipt.owner'), minWidth: 155 },
   { id: 'submitted', accessorKey: 'submittedAt', title: t('salesReceipt.submittedAt'), minWidth: 185 },
   { id: 'review', accessorKey: 'status', title: t('salesReceipt.reviewInfo'), minWidth: 200 },
@@ -125,7 +126,7 @@ onBeforeUnmount(() => controller?.abort())
         v-model:search="keyword"
         v-model:filters="filters"
         row-key="id"
-        table-class="min-w-[1900px]"
+        table-class="min-w-[2040px]"
         :show-row-number="false"
         :columns="columns"
         :data="items"
@@ -184,12 +185,12 @@ onBeforeUnmount(() => controller?.abort())
           </QsTableStackedCell>
         </template>
         <template #cell-method="{ row }">
-          <QsTableStackedCell>
-            <QsTableStackedLine>{{ row.original.paymentMethodNameSnapshot }}</QsTableStackedLine>
-            <QsTableStackedLine>
-              <ReceiptVoucher :voucher="row.original.voucher" :url="voucherUrl(row.original)" />
-            </QsTableStackedLine>
-          </QsTableStackedCell>
+          <FaTag variant="outline" class="max-w-full whitespace-normal break-words">
+            {{ row.original.paymentMethodNameSnapshot }}
+          </FaTag>
+        </template>
+        <template #cell-voucher="{ row }">
+          <ReceiptVoucher :voucher="row.original.voucher" :url="voucherUrl(row.original)" />
         </template>
         <template #cell-owner="{ row }">
           <QsPersonDisplay :display-name="row.original.accountOwner.name" size="sm" />
@@ -265,7 +266,16 @@ onBeforeUnmount(() => controller?.abort())
                 <dt class="qs-type-meta">
                   {{ t('salesReceipt.receivedAt') }}
                 </dt><dd class="m-0">
-                  <DateTimeDisplay :value="row.receivedAt" /> · {{ row.paymentMethodNameSnapshot }}
+                  <DateTimeDisplay :value="row.receivedAt" />
+                </dd>
+              </div>
+              <div>
+                <dt class="qs-type-meta">
+                  {{ t('salesReceipt.method') }}
+                </dt><dd class="m-0">
+                  <FaTag variant="outline" class="max-w-full whitespace-normal break-words">
+                    {{ row.paymentMethodNameSnapshot }}
+                  </FaTag>
                 </dd>
               </div>
               <div>
