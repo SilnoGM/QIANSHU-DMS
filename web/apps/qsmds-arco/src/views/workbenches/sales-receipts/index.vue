@@ -193,7 +193,7 @@ onBeforeUnmount(() => controller?.abort())
           <ReceiptVoucher :voucher="row.original.voucher" :url="voucherUrl(row.original)" />
         </template>
         <template #cell-owner="{ row }">
-          <QsPersonDisplay :display-name="row.original.accountOwner.name" size="sm" />
+          <QsPersonDisplay :display-name="row.original.accountOwner.name" size="md" />
         </template>
         <template #cell-submitted="{ row }">
           <QsTableStackedCell>
@@ -259,7 +259,7 @@ onBeforeUnmount(() => controller?.abort())
                 <dt class="qs-type-meta">
                   {{ t('salesReceipt.owner') }}
                 </dt><dd class="m-0 mt-1">
-                  <QsPersonDisplay :display-name="row.accountOwner.name" size="sm" />
+                  <QsPersonDisplay :display-name="row.accountOwner.name" size="md" />
                 </dd>
               </div>
               <div>
