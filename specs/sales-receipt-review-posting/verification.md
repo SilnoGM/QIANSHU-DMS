@@ -2,6 +2,19 @@
 
 日期：2026-09-08。分支：`feat/finance-purchase-workbenches`。
 
+## 2026-09-09 业务库迁移
+
+用户明确要求“执行迁移”后，向本机 `127.0.0.1:15433/qianshu_dms_dev` 应用两条新增收款 migration。迁移前停止本项目开发服务，核对 43 条已完成 migration 的文件校验和，仅有本次两条待执行项。
+
+- 备份：`/Users/liguangda/Documents/backups/qianshu-dms/20260909-sales-receipt/database.dump`，395359 字节，目录 0700、文件 0600；`pg_restore --list` 可读取归档，未进行恢复演练。
+- SHA-256：`e0abd5517f9e9c39b08cd2939abcb21e7816548c9f67a05ab7b254a98d7c34a7`。
+- `pnpm -C server db:migrate:deploy` 成功应用 `20260908120000_sales_receipt_audit_events`、`20260908120100_sales_receipt_review_posting`；`prisma migrate status` 显示全部 45 条为最新。
+- 41 张既有业务表按原字段计算的行数与完整行摘要均保持一致；收款申请为 0，原正式收款为空。权限/受控来源按 migration 初始化，三个财务权限仅授予 `system_admin`。
+- 摘要脚本首次遇到 PostgreSQL 元数据数组类型解析问题，在执行 migration 前修正为 `text[]` 后完成备份与校验；未修改业务数据或绕过约束。
+- 使用 `node --run dev` 恢复前后端。首次探测处于 Server 编译阶段，3000 尚未监听；启动完成后 Web 9000 HTTP 200、Server 3000 `/api/health` HTTP 200、database `up`。未在业务库创建测试收款或测试账目。
+
+以下 2026-09-08 记录保留当时的实施授权与隔离验收范围；其中“业务库尚未迁移”已由本节的后续明确授权和执行结果取代。未推送或发布。
+
 ## 授权与环境
 
 用户已确认按实施清单修改应用代码、公共 API、schema/migration、权限与受控资金来源，并运行隔离测试。未应用业务库 migration、未修改业务汇率/余额、未新增角色、未推送或发布。
