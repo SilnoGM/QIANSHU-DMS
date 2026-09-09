@@ -40,6 +40,7 @@
   "salesReceipt.prepare": "Review posting preview",
   "salesReceipt.approve": "Approve and post",
   "salesReceipt.reject": "Reject request",
+  "salesReceipt.voidAction": "Void receipt",
   "salesReceipt.void": "Void formal receipt",
   "salesReceipt.voided": "Receipt voided",
   "salesReceipt.previewHint": "Approval uses the effective exchange rate and settlement rule. Configuration changes require a new confirmation.",

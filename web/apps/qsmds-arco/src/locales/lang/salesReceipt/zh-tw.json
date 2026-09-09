@@ -40,6 +40,7 @@
   "salesReceipt.prepare": "核對并審核",
   "salesReceipt.approve": "審核通過并入帳",
   "salesReceipt.reject": "駁回申請",
+  "salesReceipt.voidAction": "作廢收款",
   "salesReceipt.void": "作廢正式收款",
   "salesReceipt.voided": "收款已作廢",
   "salesReceipt.previewHint": "采用審核通過時的有效汇率和結算规則；配置變化時需重新核對。",

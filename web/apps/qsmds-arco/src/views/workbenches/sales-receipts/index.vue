@@ -51,6 +51,12 @@ const columns = computed<QsGenericTableColumn<SalesReceiptRequestDetailDto>[]>((
   { id: 'review', accessorKey: 'status', title: t('salesReceipt.reviewInfo'), minWidth: 200 },
   { id: 'notes', accessorKey: 'remark', title: t('salesReceipt.notes'), minWidth: 220 },
 ])
+function actionLabel(item: SalesReceiptRequestDetailDto): string {
+  if (item.status === 'APPROVED') {
+    return t(item.approvedPayment?.voidedAt ? 'salesReceipt.detail' : 'salesReceipt.voidAction')
+  }
+  return t('salesReceipt.view')
+}
 function statusClass(item: SalesReceiptRequestDetailDto): string {
   if (item.status === 'REJECTED') {
     return 'border-destructive/30 bg-destructive/10 text-destructive'
@@ -233,8 +239,8 @@ onBeforeUnmount(() => controller?.abort())
           </QsTableStackedCell>
         </template>
         <template #actions="{ row }">
-          <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.collectionNo || row.salesOrder.orderNo} · ${t('salesReceipt.detail')}`" @click="selectedId = row.id">
-            <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('salesReceipt.view') }}
+          <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.collectionNo || row.salesOrder.orderNo} · ${actionLabel(row)}`" @click="selectedId = row.id">
+            <FaIcon :name="row.status === 'APPROVED' && !row.approvedPayment?.voidedAt ? 'i-lucide:circle-slash' : 'i-lucide:eye'" aria-hidden="true" />{{ actionLabel(row) }}
           </FaButton>
         </template>
         <template #mobile-row="{ row }">
