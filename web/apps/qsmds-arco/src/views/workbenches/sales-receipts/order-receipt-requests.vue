@@ -7,6 +7,14 @@ defineProps<{ items: SalesReceiptRequestDetailDto[], canSubmit: boolean, total: 
 const emit = defineEmits<{ resubmit: [request: SalesReceiptRequestDetailDto], pageChange: [] }>()
 const page = defineModel<number>('page', { required: true })
 const { t } = useI18n()
+function statusClass(item: SalesReceiptRequestDetailDto): string {
+  if (item.status === 'REJECTED' || item.approvedPayment?.voidedAt) {
+    return 'border-destructive/30 bg-destructive/10 text-destructive'
+  }
+  return item.status === 'APPROVED'
+    ? 'border-primary/30 bg-primary/10 text-primary'
+    : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300'
+}
 function changePage(delta: number): void {
   page.value += delta
   emit('pageChange')
@@ -28,7 +36,7 @@ function changePage(delta: number): void {
       <li v-for="item in items" :key="item.id" class="py-3 flex flex-wrap gap-3 items-start justify-between">
         <div class="min-w-0">
           <div class="flex flex-wrap gap-2 items-center">
-            <FaTag variant="outline">
+            <FaTag variant="outline" :class="statusClass(item)">
               {{ t(`salesReceipt.status.${item.status}`) }}{{ item.approvedPayment?.voidedAt ? ` · ${t('salesReceipt.voided')}` : '' }}
             </FaTag><span class="font-mono">{{ item.amount }} {{ item.currencyCode }}</span>
           </div>
