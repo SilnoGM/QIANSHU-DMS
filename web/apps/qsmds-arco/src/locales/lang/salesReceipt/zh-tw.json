@@ -68,7 +68,7 @@
   "salesReceipt.notPosted": "尚未入帳",
   "salesReceipt.resubmitted": "駁回重提",
   "salesReceipt.notes": "備註 / 審核說明",
-  "salesReceipt.view": "檢視",
+  "salesReceipt.view": "審核收款",
   "salesReceipt.orderNumber": "銷售訂單號",
   "salesReceipt.customer": "客戶",
   "salesReceipt.orderStatus": "訂單狀態",

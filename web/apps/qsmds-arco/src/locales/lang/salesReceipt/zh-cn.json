@@ -68,7 +68,7 @@
   "salesReceipt.notPosted": "尚未入账",
   "salesReceipt.resubmitted": "驳回重提",
   "salesReceipt.notes": "备注 / 审核说明",
-  "salesReceipt.view": "查看",
+  "salesReceipt.view": "审核收款",
   "salesReceipt.orderNumber": "销售订单号",
   "salesReceipt.customer": "客户",
   "salesReceipt.orderStatus": "订单状态",
