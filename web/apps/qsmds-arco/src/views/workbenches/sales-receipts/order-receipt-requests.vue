@@ -3,10 +3,17 @@ import type { SalesReceiptRequestDetailDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ReceiptVoucher from './receipt-voucher.vue'
 
-defineProps<{ items: SalesReceiptRequestDetailDto[], canSubmit: boolean, total: number, pendingAmount: string, currency: string }>()
-const emit = defineEmits<{ resubmit: [request: SalesReceiptRequestDetailDto], pageChange: [] }>()
+const props = defineProps<{ items: SalesReceiptRequestDetailDto[], canSubmit: boolean, total: number, focusedId: string | null }>()
+const emit = defineEmits<{ resubmit: [request: SalesReceiptRequestDetailDto], pageChange: [], showPayment: [paymentId: string] }>()
 const page = defineModel<number>('page', { required: true })
 const { t } = useI18n()
+const recordsRef = ref<HTMLElement | null>(null)
+watch(() => [props.focusedId, props.items] as const, async () => {
+  await nextTick()
+  const element = [...(recordsRef.value?.querySelectorAll<HTMLElement>('[data-request-id]') ?? [])].find(item => item.dataset.requestId === props.focusedId)
+  element?.scrollIntoView({ block: 'nearest' })
+  element?.focus({ preventScroll: true })
+}, { immediate: true })
 function statusClass(item: SalesReceiptRequestDetailDto): string {
   if (item.status === 'REJECTED' || item.approvedPayment?.voidedAt) {
     return 'border-destructive/30 bg-destructive/10 text-destructive'
@@ -22,19 +29,16 @@ function changePage(delta: number): void {
 </script>
 
 <template>
-  <section class="mb-6 p-4 border border-border rounded-lg bg-muted/15">
-    <h3 class="font-semibold m-0">
-      {{ t('salesReceipt.requests') }}
-    </h3>
-    <p class="text-sm text-muted-foreground">
-      {{ t('salesReceipt.pendingAmount') }}: <span class="text-foreground font-mono">{{ pendingAmount }} {{ currency }}</span> · {{ t('salesReceipt.pendingHint') }}
-    </p>
+  <section ref="recordsRef" aria-label="收款申请记录">
     <p v-if="items.length === 0" class="text-muted-foreground">
       {{ t('salesReceipt.empty') }}
     </p>
     <ul v-else class="m-0 p-0 list-none divide-border divide-y">
-      <li v-for="item in items" :key="item.id" class="py-3 flex flex-wrap gap-3 items-start justify-between">
+      <li v-for="item in items" :key="item.id" :data-request-id="item.id" tabindex="-1" :class="focusedId === item.id ? 'ring-2 ring-primary/30 rounded-lg px-3' : ''" class="py-3 flex flex-wrap gap-3 items-start justify-between">
         <div class="min-w-0">
+          <p class="qs-type-data-emphasis m-0 mb-2">
+            {{ item.collectionNo || t('salesReceipt.unnumbered') }}
+          </p>
           <div class="flex flex-wrap gap-2 items-center">
             <FaTag variant="outline" :class="statusClass(item)">
               {{ t(`salesReceipt.status.${item.status}`) }}{{ item.approvedPayment?.voidedAt ? ` · ${t('salesReceipt.voided')}` : '' }}
@@ -48,6 +52,9 @@ function changePage(delta: number): void {
           </p>
           <ReceiptVoucher :voucher="item.voucher" :url="`/api/sales-orders/${encodeURIComponent(item.salesOrderId)}/receipt-requests/${encodeURIComponent(item.id)}/voucher`" />
         </div>
+        <FaButton v-if="item.approvedPayment" variant="outline" class="min-h-11" @click="emit('showPayment', item.approvedPayment.id)">
+          查看对应收款
+        </FaButton>
         <FaButton v-if="item.status === 'REJECTED' && canSubmit" variant="outline" class="min-h-11" @click="emit('resubmit', item)">
           {{ t('salesReceipt.resubmit') }}
         </FaButton>
