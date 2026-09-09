@@ -318,3 +318,15 @@ test('销售产品修改读取不依赖供应商，PATCH 写入局部呈错且�
     url: 'sales-orders/sales%2Forder/products',
   }])
 })
+
+test('待采购产品查询使用订单级只读接口并传递取消信号', async () => {
+  const calls: Call[] = []
+  const api = createSalesOrdersApi(createRecorder(calls))
+  const signal = new AbortController().signal
+  await api.pendingPurchaseProducts('order/1', signal)
+  assert.deepEqual(calls, [{
+    method: 'get',
+    url: 'sales-orders/order%2F1/pending-purchase-products',
+    config: { errorPresentation: 'local', signal },
+  }])
+})

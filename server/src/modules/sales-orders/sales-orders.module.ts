@@ -1,3 +1,5 @@
+import { SalesOrderPendingPurchaseController } from './sales-order-pending-purchase.controller'
+import { SalesOrderPendingPurchaseQueryService } from './sales-order-pending-purchase-query.service'
 import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
 import { SalesReceiptController, SalesReceiptOrderController } from './receipts/sales-receipt.controller'
 import { SalesReceiptService } from './receipts/sales-receipt.service'
@@ -32,10 +34,11 @@ import { SalesOrdersController } from './sales-orders.controller'
     NumberingModule,
     ProductsModule,
   ],
-  controllers: [SalesOrdersController, SalesReceiptController, SalesReceiptOrderController],
+  controllers: [SalesOrderPendingPurchaseController, SalesOrdersController, SalesReceiptController, SalesReceiptOrderController],
   providers: [
     SalesReceiptService, SalesReceiptQueryService, SalesReceiptVoucherService,
     SalesOrderQueryService,
+    SalesOrderPendingPurchaseQueryService,
     SalesOrderProductEditQueryService,
     SalesOrderProductEditService,
     SalesOrderCommandService,

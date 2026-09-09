@@ -67,6 +67,7 @@ import QsGoodTooltipContent from '@/components/business/QsGoodTooltip/QsGoodTool
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsPurchaseStartModal from '@/components/business/QsPurchaseStartModal/index.vue'
 import { buildPurchaseStartRouteQuery } from '@/components/business/QsPurchaseStartModal/logic'
+import PendingPurchaseProducts from '@/components/business/QsPurchaseStartModal/pending-purchase-products.vue'
 import QsSalesOrderProductsEditorModal from '@/components/business/QsSalesOrderProductsEditorModal/index.vue'
 import {
   createSalesOrderProductEditLines,
@@ -2169,7 +2170,11 @@ onBeforeUnmount(() => {
       :validate-preset="validatePresetPurchaseSource"
       @confirm="enterPresetPurchaseCreate"
       @validation-error="toast.warning($event)"
-    />
+    >
+      <template #preset-products>
+        <PendingPurchaseProducts v-if="purchaseStartPreset" :order-id="purchaseStartPreset.id" :active="purchaseStartVisible" />
+      </template>
+    </QsPurchaseStartModal>
 
     <QsGenericModal
       v-model="currencyModalVisible"

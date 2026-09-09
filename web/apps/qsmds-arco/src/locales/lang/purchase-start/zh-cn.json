@@ -1,0 +1,14 @@
+{
+  "purchaseStart": {
+    "pendingProducts": "未采购产品",
+    "loading": "正在加载待采购产品…",
+    "loadFailed": "待采购产品加载失败",
+    "retry": "重试",
+    "empty": "暂无待采购产品",
+    "noImage": "暂无图片",
+    "catalog": "产品库产品",
+    "custom": "自定义产品",
+    "productDescription": "{name} · {type} · 剩余待采购 {quantity} 件",
+    "revalidate": "开始前将重新校验待采购产品"
+  }
+}

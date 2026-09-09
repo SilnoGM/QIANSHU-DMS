@@ -380,7 +380,7 @@ test('销售订单记录弹窗按需读取详情并分开展示收款、凭证�
   assert.match(source, /buildSalesOrderPaymentRequest/u)
   assert.match(source, /buildSalesOrderDeliveryReceiptRequest/u)
   assert.match(source, /payment\.voucher\.contentUrl/u)
-  assert.match(source, /class="qs-type-data-emphasis text-emerald-700 font-semibold/u)
+  assert.match(source, /class="qs-type-data-emphasis text-primary font-semibold/u)
   assert.doesNotMatch(source, /referenceNo|参考编号/u)
   assert.match(source, /document\.detachedAt === null/u)
   assert.match(documentsSource, /<FaImagePreview[\s\S]*?v-if="document\.mediaType === 'IMAGE'"[\s\S]*?:src="document\.contentUrl"/u)

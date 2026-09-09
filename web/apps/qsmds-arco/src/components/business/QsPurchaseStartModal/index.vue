@@ -211,7 +211,9 @@ onBeforeUnmount(abortValidation)
             {{ presetSalesOrder.orderNo }}
           </strong>
         </div>
-        <span class="qs-type-meta text-muted-foreground">开始前将重新校验待采购产品</span>
+        <slot name="preset-products">
+          <span class="qs-type-meta text-muted-foreground">开始前将重新校验待采购产品</span>
+        </slot>
       </section>
 
       <fieldset class="m-0 p-0 border-0 min-w-0" :disabled="disabled || submissionPending">
