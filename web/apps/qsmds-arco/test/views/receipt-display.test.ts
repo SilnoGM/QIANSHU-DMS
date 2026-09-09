@@ -24,7 +24,7 @@ test('四种收款方式使用独立稳定配色，未知历史方式使用中�
 test('金额颜色按正负数区分，零和负零保持正常颜色', () => {
   assert.equal(receiptAmountClass('0.0000'), 'text-foreground')
   assert.equal(receiptAmountClass('-0.00'), 'text-foreground')
-  assert.equal(receiptAmountClass('19.23'), 'text-emerald-700 dark:text-emerald-300')
+  assert.equal(receiptAmountClass('19.23'), 'text-primary')
   assert.equal(receiptAmountClass('-19.23'), 'text-destructive')
-  assert.equal(receiptAmountClass(`0.${'0'.repeat(350)}1`), 'text-emerald-700 dark:text-emerald-300')
+  assert.equal(receiptAmountClass(`0.${'0'.repeat(350)}1`), 'text-primary')
 })

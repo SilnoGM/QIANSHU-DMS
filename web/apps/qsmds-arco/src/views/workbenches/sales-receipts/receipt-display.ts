@@ -23,5 +23,5 @@ export function receiptAmountClass(value: string): string {
   if (!/[1-9]/u.test(value)) {
     return 'text-foreground'
   }
-  return value.startsWith('-') ? 'text-destructive' : 'text-emerald-700 dark:text-emerald-300'
+  return value.startsWith('-') ? 'text-destructive' : 'text-primary'
 }
