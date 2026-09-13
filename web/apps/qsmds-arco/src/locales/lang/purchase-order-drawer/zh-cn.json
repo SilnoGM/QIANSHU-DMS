@@ -9,6 +9,7 @@
       "part": "货件-{number}",
       "quantity": "本货件数量",
       "shippingMark": "货件唛头",
+      "markValue": "唛头：{value}",
       "pendingMark": "待审核生成",
       "notGenerated": "未生成",
       "productUnavailable": "产品信息不可用",

@@ -62,7 +62,7 @@ function partTitle(partNumber: number): string {
                   {{ t(`purchaseOrderDrawer.parts.status.${part.status}`) }}
                 </FaTag>
               </span>
-              <span class="qs-type-data text-muted-foreground mt-1.5 block whitespace-pre-wrap [overflow-wrap:anywhere]">{{ part.shippingMarkText ?? t(detail.orderStatus === 'PENDING_REVIEW' ? 'purchaseOrderDrawer.parts.pendingMark' : 'purchaseOrderDrawer.parts.notGenerated') }}</span>
+              <span class="qs-type-data text-muted-foreground mt-1.5 block whitespace-pre-wrap [overflow-wrap:anywhere]">{{ part.shippingMarkText ? t('purchaseOrderDrawer.parts.markValue', { value: part.shippingMarkText }) : t(detail.orderStatus === 'PENDING_REVIEW' ? 'purchaseOrderDrawer.parts.pendingMark' : 'purchaseOrderDrawer.parts.notGenerated') }}</span>
             </span>
           </FaButton>
           <!-- 保留图片位宽高，淡出时不挤动标题；预览按钮独立于折叠按钮。 -->
