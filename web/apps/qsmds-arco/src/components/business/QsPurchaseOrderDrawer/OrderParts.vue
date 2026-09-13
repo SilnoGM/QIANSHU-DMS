@@ -42,7 +42,7 @@ function partTitle(partNumber: number): string {
       <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ parts.length }}</span>
     </h3>
     <div class="space-y-2.5">
-      <article v-for="part in parts" :key="part.id" :data-part-number="part.partNumber" class="border border-border rounded-xl cursor-pointer transition-colors duration-150 overflow-hidden hover:bg-muted/25 motion-reduce:transition-none" @click="toggleCard($event, part.id)">
+      <article v-for="part in parts" :key="part.id" :data-part-number="part.partNumber" class="border border-primary rounded-xl cursor-pointer transition-colors duration-150 overflow-hidden hover:bg-muted/25 motion-reduce:transition-none" @click="toggleCard($event, part.id)">
         <!-- 复制按钮与展开按钮为并列控件，避免按钮嵌套导致点击复制时同时展开。 -->
         <div class="p-3 flex gap-2 min-w-0 items-start sm:p-4">
           <FaButton
