@@ -6,8 +6,10 @@ import { ConfigService } from '@nestjs/config'
 import { createReceiptTestDatabase } from './fixtures/receipt-test-database'
 import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
 import { MediaContentDeliveryService } from '../src/modules/media/media-content-delivery.service'
-import { chmod, mkdir, writeFile, rename } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
+import { homedir } from 'node:os'
+import mediaConfig, { createMediaConfiguration } from '../src/config/media.config'
 import { randomUUID } from 'node:crypto'
 import { Client } from 'pg'
 import { Test } from '@nestjs/testing'
@@ -31,10 +33,14 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   let query: SalesReceiptQueryService
   let client: Client
   let database: Awaited<ReturnType<typeof createReceiptTestDatabase>>
+  let mediaRoot: string
   beforeAll(async () => {
+    // 凭证使用用户目录下独占测试目录，遵守媒体禁止系统临时目录的约束，结束后清理。
+    mediaRoot = await mkdtemp(join(homedir(), '.qianshu-receipt-media-'))
     database = await createReceiptTestDatabase()
     const isolated = new PrismaService(new ConfigService({ DATABASE_URL: database.databaseUrl }))
-    const module = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrismaService).useValue(isolated).compile()
+    const module = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrismaService).useValue(isolated)
+      .overrideProvider(mediaConfig.KEY).useValue(createMediaConfiguration({ MEDIA_STORAGE_ROOT: mediaRoot })).compile()
     app = module.createNestApplication()
     configureApplication(app, { nodeEnvironment: 'test' })
     await app.init()
@@ -52,7 +58,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
       await tx.dictionaryType.update({ where: { id: dictionary.id }, data: { enabled: true } })
     })
   })
-  afterAll(async () => { await client?.end(); await app?.close(); await database?.close() })
+  afterAll(async () => { await client?.end(); await app?.close(); await database?.close(); if (mediaRoot) await rm(mediaRoot, { recursive: true, force: true }) })
   function context(userId: string) { return { actorUserId: userId, requestId: randomUUID() } }
   async function fixture(share = '30') {
     await client.query('BEGIN')
@@ -67,7 +73,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     await ensureReceiptNumberingRule(prisma, fixture.userId)
     const account = await app.get(FundAccountCommandService).createUserAccount(context(fixture.userId), { userId: fixture.userId, userShareRate: share })
     const media = await prisma.mediaAsset.create({ data: { createdByUserId: fixture.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'receipt.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
-    const root = process.env.MEDIA_STORAGE_ROOT!
+    const root = mediaRoot
     await mkdir(join(root, 'assets'), { recursive: true, mode: 0o700 })
     await chmod(root, 0o700)
     await chmod(join(root, 'assets'), 0o700)
@@ -119,7 +125,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     // 同一订单同时保留四类记录，验证关系筛选发生在分页前，且四个视图不重复计数。
     async function newReceiptInput(amount: string): Promise<SalesReceiptRequestCreateDto> {
       const media = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'receipt.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'b'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
-      await writeFile(join(process.env.MEDIA_STORAGE_ROOT!, media.objectKey!), Buffer.alloc(128), { mode: 0o600 })
+      await writeFile(join(mediaRoot, media.objectKey!), Buffer.alloc(128), { mode: 0o600 })
       await app.get(MediaContentDeliveryService).stat(media.objectKey!)
       return { ...f.input, amount, voucher: { mediaAssetId: media.id } }
     }
@@ -194,7 +200,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
   it('serializes competing submissions and approve versus reject without duplicate postings', async () => {
     const f = await fixture()
     const secondVoucher = await prisma.mediaAsset.create({ data: { createdByUserId: f.userId, mediaType: 'DOCUMENT', status: 'UPLOADING', originalFilename: 'second.pdf', objectKey: `assets/${randomUUID()}.pdf`, mimeType: 'application/pdf', sizeBytes: 128n, checksumSha256: 'c'.repeat(64), uploadExpiresAt: new Date(Date.now() + 3600000) } })
-    await writeFile(join(process.env.MEDIA_STORAGE_ROOT!, secondVoucher.objectKey!), Buffer.alloc(128), { mode: 0o600 })
+    await writeFile(join(mediaRoot, secondVoucher.objectKey!), Buffer.alloc(128), { mode: 0o600 })
     const inputs = [{ ...f.input, amount: '600' }, { ...f.input, amount: '600', voucher: { mediaAssetId: secondVoucher.id } }]
     const outcomes = await Promise.allSettled(inputs.map(input => service.submit(context(f.userId), f.salesOrderId, input, randomUUID())))
     expect(outcomes.filter(item => item.status === 'fulfilled')).toHaveLength(1)
@@ -219,7 +225,7 @@ describe('sales receipt atomic posting in isolated PostgreSQL', () => {
     await expect(app.get(SalesOrderProductEditService).updateProducts(context(f.userId), f.salesOrderId, { expectedVersion: order.version, reason: '调低应收', confirmDepositReduction: false, existingLines: [{ lineId: line.id, name: line.productNameSnapshot, description: null, actualUnitPriceAmount: '450', desiredQuantity: 2 }], newLines: [] })).rejects.toMatchObject({ code: 'SALES_RECEIPT_AMOUNT_EXCEEDS_AVAILABLE' })
     const preview = await service.approvalContext(context(f.userId), request.id)
     const media = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: request.voucher.mediaAssetId } })
-    const path = join(process.env.MEDIA_STORAGE_ROOT!, media.objectKey!)
+    const path = join(mediaRoot, media.objectKey!)
     await rename(path, `${path}.temporarily-missing`)
     try { await expect(service.approve(context(f.userId), request.id, { expectedVersion: 1, expectedContext: preview.expectedContext })).rejects.toMatchObject({ code: 'SALES_ORDER_DOCUMENT_UNAVAILABLE' }) }
     finally { await rename(`${path}.temporarily-missing`, path) }
