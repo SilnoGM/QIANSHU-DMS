@@ -72,9 +72,11 @@
 | 基础圆角 | `--radius = 0.5rem` | 默认 `rounded-sm/md/lg/xl = 4/6/8/12px`，随主题圆角设置变化 |
 | 内容层次 | 边框、弱底色、适度留白 | 不给每组文字都加卡片；复杂分区沿用对应页面已有模式 |
 | 浮层 | Qs Modal / Drawer 的 `shadow-xl` | 用于表达覆盖层级，不复制到普通列表行或每张内容卡片 |
-| 图标 | `FaIcon`，常用 `i-lucide:*` | 优先复用同类动作已有图标；纯图标按钮必须有可访问名称 |
+| 图标 | `FaIcon`；导航使用 `qs-*` 品牌 SVG，工具操作使用现有 `i-lucide:*` 等通用图标 | 同类语义复用已有图标；纯图标按钮必须有可访问名称 |
 
 默认按钮高度为 `36px`，`sm` 为 `32px`，`lg` 为 `40px`。不要通过缩小点击区域提高密度；移动端关键操作保持可点击、可识别。图标与禁用、悬停、焦点表现继续由组件管理。
+
+品牌 SVG 保留 LOGO 的树绿、木棕和黑色轮廓，不随文字颜色变成单色。导航中的 `qs-*` 品牌图标使用 `24px`，保持菜单行高；原有通用菜单图标维持 `20px`。造型、尺寸、清单及接入方法见[图标制作与使用规范](./图标制作与使用规范.md)；当前项目图标可在组件库 `/component-library/basic/icons` 检索和预览。
 
 来源：[FaPageHeader](../../web/packages/components/src/basic/page-header/index.vue)、[FaPageMain](../../web/packages/components/src/basic/page-main/index.vue)、[按钮样式](../../web/packages/components/src/basic/button/button/index.ts)、[UnoCSS 圆角映射](../../web/uno.config.ts)。
 

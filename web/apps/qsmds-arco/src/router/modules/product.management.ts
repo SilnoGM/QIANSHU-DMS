@@ -20,7 +20,7 @@ const routes: RouteRecordRaw = {
   component: Layout,
   meta: {
     title: '产品管理',
-    icon: 'i-lucide:package-open',
+    icon: 'qs-products',
     auth: [...PRODUCT_MANAGEMENT_PERMISSIONS],
   },
   children: [
@@ -30,7 +30,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/admin/product-management/create/index.vue'),
       meta: {
         title: '新增产品',
-        icon: 'i-lucide:package-plus',
+        icon: 'qs-product-create',
         auth: 'products:create',
       },
     },
@@ -40,7 +40,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/admin/product-management/list/index.vue'),
       meta: {
         title: '产品列表',
-        icon: 'i-lucide:list',
+        icon: 'qs-product-list',
         auth: 'products:read',
       },
     },

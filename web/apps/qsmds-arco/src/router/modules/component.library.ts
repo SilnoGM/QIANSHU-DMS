@@ -75,7 +75,7 @@ const routes: RouteRecordRaw[] = [
     },
     meta: {
       title: '基础组件',
-      icon: 'i-lucide:shapes',
+      icon: 'qs-basic-components',
     },
     children: [
       {
@@ -84,7 +84,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/basic/index.vue'),
         meta: {
           title: '金额显示',
-          icon: 'i-lucide:badge-dollar-sign',
+          icon: 'qs-money-display',
         },
       },
       {
@@ -93,7 +93,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/basic/money-input.vue'),
         meta: {
           title: '金额输入',
-          icon: 'i-lucide:hand-coins',
+          icon: 'qs-money-input',
         },
       },
       {
@@ -102,7 +102,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/basic/date-time-display.vue'),
         meta: {
           title: '日期显示',
-          icon: 'i-lucide:clock-3',
+          icon: 'qs-date-time',
         },
       },
       {
@@ -111,7 +111,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/basic/toast.vue'),
         meta: {
           title: '轻提示',
-          icon: 'i-lucide:message-circle-more',
+          icon: 'qs-toast',
         },
       },
       {
@@ -120,7 +120,16 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/basic/image-group.vue'),
         meta: {
           title: '图片组',
-          icon: 'i-lucide:images',
+          icon: 'qs-image-group',
+        },
+      },
+      {
+        path: 'icons',
+        name: 'componentLibraryIcons',
+        component: () => import('@/views/component_library/basic/icons.vue'),
+        meta: {
+          title: '图标库',
+          icon: 'qs-icons',
         },
       },
     ],
@@ -134,7 +143,7 @@ const routes: RouteRecordRaw[] = [
     },
     meta: {
       title: '业务组件',
-      icon: 'i-lucide:workflow',
+      icon: 'qs-business-components',
     },
     children: [
       {
@@ -143,7 +152,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/index.vue'),
         meta: {
           title: '通用表格',
-          icon: 'i-lucide:table-2',
+          icon: 'qs-table',
         },
       },
       {
@@ -152,7 +161,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/generic-drawer.vue'),
         meta: {
           title: '通用抽屉',
-          icon: 'i-lucide:panel-right-open',
+          icon: 'qs-drawer',
         },
       },
       {
@@ -161,7 +170,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/generic-modal.vue'),
         meta: {
           title: '通用模态框',
-          icon: 'i-lucide:panels-top-left',
+          icon: 'qs-modal',
         },
       },
       {
@@ -170,7 +179,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/factory-shipment-modal.vue'),
         meta: {
           title: '订单工厂发货弹窗',
-          icon: 'i-lucide:truck',
+          icon: 'qs-factory-shipment',
         },
       },
       {
@@ -179,7 +188,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/sales-order-selector-modal.vue'),
         meta: {
           title: '销售订单选择弹窗',
-          icon: 'i-lucide:list-checks',
+          icon: 'qs-order-select',
         },
       },
       {
@@ -188,7 +197,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/sales-order-products-editor-modal.vue'),
         meta: {
           title: '销售订单产品修改弹窗',
-          icon: 'i-lucide:list-restart',
+          icon: 'qs-order-products-edit',
         },
       },
       {
@@ -197,7 +206,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/good-tooltip.vue'),
         meta: {
           title: '产品提示',
-          icon: 'i-lucide:package-search',
+          icon: 'qs-product-info',
         },
       },
       {
@@ -206,7 +215,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/region-selector.vue'),
         meta: {
           title: '地区选择器',
-          icon: 'i-lucide:map-pinned',
+          icon: 'qs-regions',
         },
       },
       {
@@ -215,7 +224,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/dictionary-select.vue'),
         meta: {
           title: '字典选择器',
-          icon: 'i-lucide:list-filter',
+          icon: 'qs-dictionaries',
         },
       },
       {
@@ -224,7 +233,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/person-display.vue'),
         meta: {
           title: '人员显示',
-          icon: 'i-lucide:user-round',
+          icon: 'qs-person',
         },
       },
       {
@@ -233,7 +242,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/product-selector.vue'),
         meta: {
           title: '产品选择器',
-          icon: 'i-lucide:package-search',
+          icon: 'qs-product-select',
         },
       },
       {
@@ -242,7 +251,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/order-product-line-editor.vue'),
         meta: {
           title: '订单产品明细编辑器',
-          icon: 'i-lucide:table-properties',
+          icon: 'qs-order-lines',
         },
       },
       {
@@ -251,7 +260,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/part-configurator.vue'),
         meta: {
           title: '货件配置器',
-          icon: 'i-lucide:package-open',
+          icon: 'qs-part-configurator',
         },
       },
       {
@@ -260,7 +269,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/sales-order-desc.vue'),
         meta: {
           title: '销售订单详情',
-          icon: 'i-lucide:receipt-text',
+          icon: 'qs-sales-orders',
         },
       },
       {
@@ -269,7 +278,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/purchase-order-desc.vue'),
         meta: {
           title: '采购订单详情',
-          icon: 'i-lucide:shopping-basket',
+          icon: 'qs-purchase-orders',
         },
       },
       {
@@ -278,7 +287,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/component_library/business/status-switch-toolbar.vue'),
         meta: {
           title: '状态切换工具栏',
-          icon: 'i-lucide:list-filter',
+          icon: 'qs-status-switch',
         },
       },
     ],
@@ -289,7 +298,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/component_library/page_templates/index.vue'),
     meta: {
       title: '页面模板',
-      icon: 'i-lucide:panels-top-left',
+      icon: 'qs-page-templates',
       singleMenu: true,
     },
   },

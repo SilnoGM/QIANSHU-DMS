@@ -21,7 +21,7 @@ const routes: RouteRecordRaw = {
   component: Layout,
   meta: {
     title: '权限体系',
-    icon: 'i-lucide:settings-2',
+    icon: 'qs-access-control',
     auth: [...MANAGEMENT_READ_PERMISSIONS],
   },
   children: [
@@ -31,7 +31,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/system/users/index.vue'),
       meta: {
         title: '用户管理',
-        icon: 'i-lucide:users',
+        icon: 'qs-users',
         auth: 'users:read',
       },
     },
@@ -41,7 +41,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/system/roles/index.vue'),
       meta: {
         title: '角色管理',
-        icon: 'i-lucide:shield-check',
+        icon: 'qs-roles',
         auth: 'roles:read',
       },
     },
@@ -51,7 +51,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/system/permissions/index.vue'),
       meta: {
         title: '权限目录',
-        icon: 'i-lucide:key-round',
+        icon: 'qs-permissions',
         auth: 'roles:read',
       },
     },
@@ -61,7 +61,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/system/audit/index.vue'),
       meta: {
         title: '审计日志',
-        icon: 'i-lucide:scroll-text',
+        icon: 'qs-audit-log',
         auth: 'audit:read',
       },
     },

@@ -5,7 +5,7 @@ import FundAccountManagement, { FUND_ACCOUNT_MANAGEMENT_PERMISSIONS } from './fu
 export const financeWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.finance',
-    icon: 'i-lucide:wallet-cards',
+    icon: 'qs-workbench-finance',
     auth: ['sales-receipts:read', 'purchase-orders:payment', ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS],
   },
   children: [
@@ -15,7 +15,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
       component: () => import('@/layouts/index.vue'),
       meta: {
         title: 'workbench.realtimePayments',
-        icon: 'i-lucide:arrow-left-right',
+        icon: 'qs-realtime-payments',
         auth: ['sales-receipts:read', 'purchase-orders:payment'],
       },
       children: [
@@ -25,7 +25,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
           component: () => import('@/views/workbenches/sales-receipts/index.vue'),
           meta: {
             title: 'workbench.salesReceipts',
-            icon: 'i-lucide:arrow-down-to-line',
+            icon: 'qs-sales-receipts',
             auth: 'sales-receipts:read',
           },
         },
@@ -35,7 +35,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
           component: () => import('@/views/workbenches/placeholder.vue'),
           meta: {
             title: 'workbench.purchasePayments',
-            icon: 'i-lucide:arrow-up-from-line',
+            icon: 'qs-purchase-payments',
             auth: 'purchase-orders:payment',
           },
         },
@@ -48,7 +48,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
 export const purchaseWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.purchase',
-    icon: 'i-lucide:clipboard-check',
+    icon: 'qs-workbench-purchase',
     auth: 'purchase-orders:review',
   },
   children: [
@@ -58,7 +58,7 @@ export const purchaseWorkbench: RouteRecordMainRaw = {
       component: () => import('@/views/workbenches/purchase-reviews/index.vue'),
       meta: {
         title: 'workbench.purchaseReviews',
-        icon: 'i-lucide:clipboard-check',
+        icon: 'qs-purchase-review',
         singleMenu: true,
         auth: 'purchase-orders:review',
       },

@@ -16,7 +16,7 @@ const routes: RouteRecordRaw[] = [
     redirect: { name: 'qsOperationsPendingSalesOrders' },
     meta: {
       title: '销售订单',
-      icon: 'i-lucide:receipt-text',
+      icon: 'qs-sales-orders',
     },
     children: [
       {
@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
         props: { viewMode: 'pending' },
         meta: {
           title: '待办订单',
-          icon: 'i-lucide:list-checks',
+          icon: 'qs-pending',
         },
       },
       {
@@ -36,7 +36,7 @@ const routes: RouteRecordRaw[] = [
         props: { viewMode: 'all' },
         meta: {
           title: '全部订单',
-          icon: 'i-lucide:table-properties',
+          icon: 'qs-all-orders',
         },
       },
       {
@@ -58,7 +58,7 @@ const routes: RouteRecordRaw[] = [
     redirect: { name: 'qsOperationsPendingPurchaseOrders' },
     meta: {
       title: '采购订单',
-      icon: 'i-lucide:shopping-cart',
+      icon: 'qs-purchase-orders',
     },
     children: [
       {
@@ -67,7 +67,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/operations/purchase-orders/pending.vue'),
         meta: {
           title: '待办采购',
-          icon: 'i-lucide:list-checks',
+          icon: 'qs-pending',
           auth: 'purchase-orders:read',
         },
       },
@@ -77,7 +77,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/operations/purchase-orders/index.vue'),
         meta: {
           title: '全部采购',
-          icon: 'i-lucide:table-properties',
+          icon: 'qs-all-orders',
           auth: 'purchase-orders:read',
         },
       },

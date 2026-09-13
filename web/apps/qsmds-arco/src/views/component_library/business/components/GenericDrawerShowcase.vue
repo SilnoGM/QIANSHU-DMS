@@ -20,7 +20,7 @@ const demoStates: Array<{
 }> = [
   {
     description: '完整标题、正文与 Footer',
-    icon: 'i-lucide:layout-panel-right',
+    icon: 'i-lucide:panel-right',
     label: '标准内容',
     value: 'ready',
   },

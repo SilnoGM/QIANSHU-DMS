@@ -10,7 +10,7 @@ const route: RouteRecordRaw = {
   component: () => import('@/views/system/application-settings/index.vue'),
   meta: {
     title: '应用配置',
-    icon: 'i-lucide:sliders-horizontal',
+    icon: 'qs-application-settings',
     singleMenu: true,
   },
 }

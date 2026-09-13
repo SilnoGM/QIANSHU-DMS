@@ -54,7 +54,7 @@ const systemRoutes: RouteRecordRaw[] = [
         component: () => import('@/views/index.vue'),
         meta: {
           title: $t(useAppSettingsStore(pinia).settings.app.home.title),
-          icon: 'i-ant-design:home-twotone',
+          icon: 'qs-home',
           breadcrumb: false,
           auth: [...MANAGEMENT_READ_PERMISSIONS],
         },
@@ -76,7 +76,7 @@ const systemRoutes: RouteRecordRaw[] = [
 const componentLibraryMainRoute: RouteRecordMainRaw = {
   meta: {
     title: '组件库',
-    icon: 'i-lucide:library-big',
+    icon: 'qs-library',
   },
   children: [
     ...ComponentLibraryRoutes,
@@ -88,7 +88,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
   {
     meta: {
       title: '千树运营工作台',
-      icon: 'i-lucide:briefcase-business',
+      icon: 'qs-workbench-operations',
     },
     children: [
       ...OperationsWorkbenchRoutes,
@@ -99,7 +99,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
   {
     meta: {
       title: '管理员工作台',
-      icon: 'i-lucide:layout-dashboard',
+      icon: 'qs-workbench-admin',
       auth: [
         ...PRODUCT_MANAGEMENT_PERMISSIONS,
       ],
@@ -111,7 +111,7 @@ const asyncRoutes: RouteRecordMainRaw[] = [
   {
     meta: {
       title: '系统管理',
-      icon: 'i-lucide:settings-2',
+      icon: 'qs-system',
     },
     children: [
       SystemManagement,

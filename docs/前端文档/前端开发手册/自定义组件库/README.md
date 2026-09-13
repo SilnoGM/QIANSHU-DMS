@@ -74,12 +74,15 @@ web/apps/qsmds-arco/src/components/
 | 基础组件 | `DateTimeDisplay` | `/component-library/basic/date-time-display` |
 | 基础组件 | `QsToast` | `/component-library/basic/toast` |
 | 基础组件 | `ImageGroup` | `/component-library/basic/image-group` |
+| 图标示例 | `FaIcon` 与项目图标资产 | `/component-library/basic/icons` |
 | 业务组件 | `QsGenericTable` | `/component-library/business/generic-table` |
 | 业务组件 | `QsGenericDrawer` | `/component-library/business/generic-drawer` |
 | 业务组件 | `QsGenericModal` | `/component-library/business/generic-modal` |
 | 业务组件 | `QsGoodTooltip` | `/component-library/business/good-tooltip` |
 
 组件库路由在开发环境自动注册。非开发构建只有在公开布尔变量 `VITE_ENABLE_COMPONENT_LIBRARY=true` 时才注册，生产环境默认不提供该入口。Showcase 用于接口和视觉验收，不代表组件已经接入真实业务页面。
+
+图标示例页复用 Fantastic-admin `FaIcon`，不新增自定义图标组件。品牌导航 SVG、通用图标的选择边界、制作和清单维护见[图标制作与使用规范](../../图标制作与使用规范.md)。
 
 ## 5. 真相源
 

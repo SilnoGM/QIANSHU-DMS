@@ -1,0 +1,432 @@
+[
+  {
+    "name": "qs-workbench-operations",
+    "label": "运营工作台",
+    "category": "工作台",
+    "usages": [
+      "千树运营工作台"
+    ]
+  },
+  {
+    "name": "qs-workbench-finance",
+    "label": "财务工作台",
+    "category": "工作台",
+    "usages": [
+      "千树财务工作台"
+    ]
+  },
+  {
+    "name": "qs-workbench-purchase",
+    "label": "采购工作台",
+    "category": "工作台",
+    "usages": [
+      "千树采购工作台"
+    ]
+  },
+  {
+    "name": "qs-workbench-admin",
+    "label": "管理员工作台",
+    "category": "工作台",
+    "usages": [
+      "管理员工作台"
+    ]
+  },
+  {
+    "name": "qs-system",
+    "label": "系统管理",
+    "category": "工作台",
+    "usages": [
+      "系统管理"
+    ]
+  },
+  {
+    "name": "qs-sales-orders",
+    "label": "销售订单",
+    "category": "订单",
+    "usages": [
+      "销售订单",
+      "销售订单详情"
+    ]
+  },
+  {
+    "name": "qs-pending",
+    "label": "待办清单",
+    "category": "订单",
+    "usages": [
+      "待办订单",
+      "待办采购"
+    ]
+  },
+  {
+    "name": "qs-all-orders",
+    "label": "全部清单",
+    "category": "订单",
+    "usages": [
+      "全部订单",
+      "全部采购"
+    ]
+  },
+  {
+    "name": "qs-purchase-orders",
+    "label": "采购订单",
+    "category": "订单",
+    "usages": [
+      "采购订单",
+      "采购订单详情"
+    ]
+  },
+  {
+    "name": "qs-realtime-payments",
+    "label": "实时收付",
+    "category": "财务",
+    "usages": [
+      "实时收付"
+    ]
+  },
+  {
+    "name": "qs-sales-receipts",
+    "label": "销售收款",
+    "category": "财务",
+    "usages": [
+      "销售收款"
+    ]
+  },
+  {
+    "name": "qs-purchase-payments",
+    "label": "采购付款",
+    "category": "财务",
+    "usages": [
+      "采购付款"
+    ]
+  },
+  {
+    "name": "qs-fund-accounts",
+    "label": "账户管理",
+    "category": "财务",
+    "usages": [
+      "账户管理"
+    ]
+  },
+  {
+    "name": "qs-fund-account-list",
+    "label": "资金账户列表",
+    "category": "财务",
+    "usages": [
+      "资金账户列表"
+    ]
+  },
+  {
+    "name": "qs-fund-transactions",
+    "label": "资金流水",
+    "category": "财务",
+    "usages": [
+      "资金账户流水"
+    ]
+  },
+  {
+    "name": "qs-purchase-review",
+    "label": "采购审核",
+    "category": "订单",
+    "usages": [
+      "采购审核"
+    ]
+  },
+  {
+    "name": "qs-products",
+    "label": "产品管理",
+    "category": "产品",
+    "usages": [
+      "产品管理"
+    ]
+  },
+  {
+    "name": "qs-product-create",
+    "label": "新增产品",
+    "category": "产品",
+    "usages": [
+      "新增产品"
+    ]
+  },
+  {
+    "name": "qs-product-list",
+    "label": "产品列表",
+    "category": "产品",
+    "usages": [
+      "产品列表"
+    ]
+  },
+  {
+    "name": "qs-access-control",
+    "label": "权限体系",
+    "category": "系统",
+    "usages": [
+      "权限体系"
+    ]
+  },
+  {
+    "name": "qs-users",
+    "label": "用户管理",
+    "category": "系统",
+    "usages": [
+      "用户管理"
+    ]
+  },
+  {
+    "name": "qs-roles",
+    "label": "角色管理",
+    "category": "系统",
+    "usages": [
+      "角色管理"
+    ]
+  },
+  {
+    "name": "qs-permissions",
+    "label": "权限目录",
+    "category": "系统",
+    "usages": [
+      "权限目录"
+    ]
+  },
+  {
+    "name": "qs-audit-log",
+    "label": "审计日志",
+    "category": "系统",
+    "usages": [
+      "审计日志"
+    ]
+  },
+  {
+    "name": "qs-basic-data",
+    "label": "基础数据",
+    "category": "系统",
+    "usages": [
+      "基础数据"
+    ]
+  },
+  {
+    "name": "qs-regions",
+    "label": "地区",
+    "category": "系统",
+    "usages": [
+      "地区管理",
+      "地区选择器"
+    ]
+  },
+  {
+    "name": "qs-currencies",
+    "label": "货币汇率",
+    "category": "系统",
+    "usages": [
+      "货币汇率"
+    ]
+  },
+  {
+    "name": "qs-numbering",
+    "label": "编号管理",
+    "category": "系统",
+    "usages": [
+      "编号管理"
+    ]
+  },
+  {
+    "name": "qs-dictionaries",
+    "label": "字典",
+    "category": "系统",
+    "usages": [
+      "字典管理",
+      "字典选择器"
+    ]
+  },
+  {
+    "name": "qs-application-settings",
+    "label": "应用配置",
+    "category": "系统",
+    "usages": [
+      "应用配置"
+    ]
+  },
+  {
+    "name": "qs-home",
+    "label": "首页",
+    "category": "工作台",
+    "usages": [
+      "首页"
+    ]
+  },
+  {
+    "name": "qs-library",
+    "label": "组件库",
+    "category": "组件库",
+    "usages": [
+      "组件库"
+    ]
+  },
+  {
+    "name": "qs-basic-components",
+    "label": "基础组件",
+    "category": "组件库",
+    "usages": [
+      "基础组件"
+    ]
+  },
+  {
+    "name": "qs-business-components",
+    "label": "业务组件",
+    "category": "组件库",
+    "usages": [
+      "业务组件"
+    ]
+  },
+  {
+    "name": "qs-page-templates",
+    "label": "页面模板",
+    "category": "组件库",
+    "usages": [
+      "页面模板"
+    ]
+  },
+  {
+    "name": "qs-money-display",
+    "label": "金额显示",
+    "category": "通用组件",
+    "usages": [
+      "金额显示"
+    ]
+  },
+  {
+    "name": "qs-money-input",
+    "label": "金额输入",
+    "category": "通用组件",
+    "usages": [
+      "金额输入"
+    ]
+  },
+  {
+    "name": "qs-date-time",
+    "label": "日期显示",
+    "category": "通用组件",
+    "usages": [
+      "日期显示"
+    ]
+  },
+  {
+    "name": "qs-toast",
+    "label": "轻提示",
+    "category": "通用组件",
+    "usages": [
+      "轻提示"
+    ]
+  },
+  {
+    "name": "qs-image-group",
+    "label": "图片组",
+    "category": "通用组件",
+    "usages": [
+      "图片组"
+    ]
+  },
+  {
+    "name": "qs-table",
+    "label": "通用表格",
+    "category": "通用组件",
+    "usages": [
+      "通用表格"
+    ]
+  },
+  {
+    "name": "qs-drawer",
+    "label": "通用抽屉",
+    "category": "通用组件",
+    "usages": [
+      "通用抽屉"
+    ]
+  },
+  {
+    "name": "qs-modal",
+    "label": "通用模态框",
+    "category": "通用组件",
+    "usages": [
+      "通用模态框"
+    ]
+  },
+  {
+    "name": "qs-factory-shipment",
+    "label": "工厂发货",
+    "category": "通用组件",
+    "usages": [
+      "订单工厂发货弹窗"
+    ]
+  },
+  {
+    "name": "qs-order-select",
+    "label": "订单选择",
+    "category": "通用组件",
+    "usages": [
+      "销售订单选择弹窗"
+    ]
+  },
+  {
+    "name": "qs-order-products-edit",
+    "label": "订单产品修改",
+    "category": "通用组件",
+    "usages": [
+      "销售订单产品修改弹窗"
+    ]
+  },
+  {
+    "name": "qs-product-info",
+    "label": "产品提示",
+    "category": "通用组件",
+    "usages": [
+      "产品提示"
+    ]
+  },
+  {
+    "name": "qs-person",
+    "label": "人员显示",
+    "category": "通用组件",
+    "usages": [
+      "人员显示"
+    ]
+  },
+  {
+    "name": "qs-product-select",
+    "label": "产品选择",
+    "category": "通用组件",
+    "usages": [
+      "产品选择器"
+    ]
+  },
+  {
+    "name": "qs-order-lines",
+    "label": "订单产品明细",
+    "category": "通用组件",
+    "usages": [
+      "订单产品明细编辑器"
+    ]
+  },
+  {
+    "name": "qs-part-configurator",
+    "label": "货件配置",
+    "category": "通用组件",
+    "usages": [
+      "货件配置器"
+    ]
+  },
+  {
+    "name": "qs-status-switch",
+    "label": "状态切换",
+    "category": "通用组件",
+    "usages": [
+      "状态切换工具栏"
+    ]
+  },
+  {
+    "name": "qs-icons",
+    "label": "图标库",
+    "category": "组件库",
+    "usages": [
+      "图标库"
+    ]
+  }
+]

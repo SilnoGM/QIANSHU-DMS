@@ -14,7 +14,7 @@ const routes: RouteRecordRaw = {
   component: Layout,
   meta: {
     title: '基础数据',
-    icon: 'i-lucide:database',
+    icon: 'qs-basic-data',
   },
   children: [
     {
@@ -23,7 +23,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/system/basic-data/regions/index.vue'),
       meta: {
         title: '地区管理',
-        icon: 'i-lucide:map-pinned',
+        icon: 'qs-regions',
         auth: 'regions:read',
       },
     },
@@ -35,7 +35,7 @@ const routes: RouteRecordRaw = {
       ),
       meta: {
         title: '货币汇率',
-        icon: 'i-lucide:coins',
+        icon: 'qs-currencies',
         auth: ['currencies:read', 'exchange-rates:read'],
         tabMerge: 'routeName',
       },
@@ -62,7 +62,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/system/basic-data/numbering/index.vue'),
       meta: {
         title: '编号管理',
-        icon: 'i-lucide:list-ordered',
+        icon: 'qs-numbering',
         auth: 'numbering-rules:read',
       },
     },
@@ -96,7 +96,7 @@ const routes: RouteRecordRaw = {
       component: () => import('@/views/system/basic-data/dictionaries/index.vue'),
       meta: {
         title: '字典管理',
-        icon: 'i-lucide:book-open',
+        icon: 'qs-dictionaries',
         auth: 'dictionaries:read',
       },
     },

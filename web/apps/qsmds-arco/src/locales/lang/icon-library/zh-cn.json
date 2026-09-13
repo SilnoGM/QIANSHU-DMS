@@ -1,0 +1,33 @@
+{
+  "iconLibrary": {
+    "title": "图标示例库",
+    "description": "查找项目图标，查看菜单尺寸效果并复制使用代码。",
+    "search": "搜索图标",
+    "searchPlaceholder": "搜索名称、中文用途或业务分组",
+    "size": "图标尺寸",
+    "background": "菜单背景",
+    "preview": { "default": "默认", "selected": "选中" },
+    "typeAll": "全部图标 ({count})",
+    "typeBrand": "品牌图标 ({count})",
+    "typeGeneral": "通用图标 ({count})",
+    "results": "图标列表",
+    "resultCount": "显示 {count} / {total} 个图标",
+    "reset": "清除筛选",
+    "emptyTitle": "没有匹配的图标",
+    "emptyDescription": "尝试其他名称或用途，或清除筛选查看全部图标。",
+    "detail": "当前图标",
+    "category": "业务分组",
+    "usages": "用途",
+    "noUsages": "通用界面操作",
+    "code": "使用代码",
+    "copyCode": "复制 FaIcon 代码",
+    "copyPending": "正在复制",
+    "copy": {
+      "copied": "使用代码已复制",
+      "unavailable": "当前环境不支持剪贴板，请选中上方代码手动复制。",
+      "failed": "复制失败，请重试或选中上方代码手动复制。"
+    },
+    "themeHint": "背景跟随当前系统主题，图标按所选尺寸原样预览。",
+    "noSelection": "调整筛选条件后，可选择图标查看用途和使用代码。"
+  }
+}

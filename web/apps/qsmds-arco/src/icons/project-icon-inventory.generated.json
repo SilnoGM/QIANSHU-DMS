@@ -1,0 +1,3638 @@
+[
+  {
+    "name": "qs-workbench-operations",
+    "label": "运营工作台",
+    "category": "工作台",
+    "usages": [
+      "千树运营工作台"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-workbench-finance",
+    "label": "财务工作台",
+    "category": "工作台",
+    "usages": [
+      "千树财务工作台"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-workbench-purchase",
+    "label": "采购工作台",
+    "category": "工作台",
+    "usages": [
+      "千树采购工作台"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-workbench-admin",
+    "label": "管理员工作台",
+    "category": "工作台",
+    "usages": [
+      "管理员工作台"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-system",
+    "label": "系统管理",
+    "category": "工作台",
+    "usages": [
+      "系统管理"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-sales-orders",
+    "label": "销售订单",
+    "category": "订单",
+    "usages": [
+      "销售订单",
+      "销售订单详情"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-pending",
+    "label": "待办清单",
+    "category": "订单",
+    "usages": [
+      "待办订单",
+      "待办采购"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-all-orders",
+    "label": "全部清单",
+    "category": "订单",
+    "usages": [
+      "全部订单",
+      "全部采购"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-purchase-orders",
+    "label": "采购订单",
+    "category": "订单",
+    "usages": [
+      "采购订单",
+      "采购订单详情"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-realtime-payments",
+    "label": "实时收付",
+    "category": "财务",
+    "usages": [
+      "实时收付"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-sales-receipts",
+    "label": "销售收款",
+    "category": "财务",
+    "usages": [
+      "销售收款"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-purchase-payments",
+    "label": "采购付款",
+    "category": "财务",
+    "usages": [
+      "采购付款"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-fund-accounts",
+    "label": "账户管理",
+    "category": "财务",
+    "usages": [
+      "账户管理"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-fund-account-list",
+    "label": "资金账户列表",
+    "category": "财务",
+    "usages": [
+      "资金账户列表"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-fund-transactions",
+    "label": "资金流水",
+    "category": "财务",
+    "usages": [
+      "资金账户流水"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-purchase-review",
+    "label": "采购审核",
+    "category": "订单",
+    "usages": [
+      "采购审核"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-products",
+    "label": "产品管理",
+    "category": "产品",
+    "usages": [
+      "产品管理"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-product-create",
+    "label": "新增产品",
+    "category": "产品",
+    "usages": [
+      "新增产品"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-product-list",
+    "label": "产品列表",
+    "category": "产品",
+    "usages": [
+      "产品列表"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-access-control",
+    "label": "权限体系",
+    "category": "系统",
+    "usages": [
+      "权限体系"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-users",
+    "label": "用户管理",
+    "category": "系统",
+    "usages": [
+      "用户管理"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-roles",
+    "label": "角色管理",
+    "category": "系统",
+    "usages": [
+      "角色管理"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-permissions",
+    "label": "权限目录",
+    "category": "系统",
+    "usages": [
+      "权限目录"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-audit-log",
+    "label": "审计日志",
+    "category": "系统",
+    "usages": [
+      "审计日志"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-basic-data",
+    "label": "基础数据",
+    "category": "系统",
+    "usages": [
+      "基础数据"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-regions",
+    "label": "地区",
+    "category": "系统",
+    "usages": [
+      "地区管理",
+      "地区选择器"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-currencies",
+    "label": "货币汇率",
+    "category": "系统",
+    "usages": [
+      "货币汇率"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-numbering",
+    "label": "编号管理",
+    "category": "系统",
+    "usages": [
+      "编号管理"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-dictionaries",
+    "label": "字典",
+    "category": "系统",
+    "usages": [
+      "字典管理",
+      "字典选择器"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-application-settings",
+    "label": "应用配置",
+    "category": "系统",
+    "usages": [
+      "应用配置"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-home",
+    "label": "首页",
+    "category": "工作台",
+    "usages": [
+      "首页"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-library",
+    "label": "组件库",
+    "category": "组件库",
+    "usages": [
+      "组件库"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-basic-components",
+    "label": "基础组件",
+    "category": "组件库",
+    "usages": [
+      "基础组件"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-business-components",
+    "label": "业务组件",
+    "category": "组件库",
+    "usages": [
+      "业务组件"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-page-templates",
+    "label": "页面模板",
+    "category": "组件库",
+    "usages": [
+      "页面模板"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-money-display",
+    "label": "金额显示",
+    "category": "通用组件",
+    "usages": [
+      "金额显示"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-money-input",
+    "label": "金额输入",
+    "category": "通用组件",
+    "usages": [
+      "金额输入"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-date-time",
+    "label": "日期显示",
+    "category": "通用组件",
+    "usages": [
+      "日期显示"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-toast",
+    "label": "轻提示",
+    "category": "通用组件",
+    "usages": [
+      "轻提示"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-image-group",
+    "label": "图片组",
+    "category": "通用组件",
+    "usages": [
+      "图片组"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-table",
+    "label": "通用表格",
+    "category": "通用组件",
+    "usages": [
+      "通用表格"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-drawer",
+    "label": "通用抽屉",
+    "category": "通用组件",
+    "usages": [
+      "通用抽屉"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-modal",
+    "label": "通用模态框",
+    "category": "通用组件",
+    "usages": [
+      "通用模态框"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-factory-shipment",
+    "label": "工厂发货",
+    "category": "通用组件",
+    "usages": [
+      "订单工厂发货弹窗"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-order-select",
+    "label": "订单选择",
+    "category": "通用组件",
+    "usages": [
+      "销售订单选择弹窗"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-order-products-edit",
+    "label": "订单产品修改",
+    "category": "通用组件",
+    "usages": [
+      "销售订单产品修改弹窗"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-product-info",
+    "label": "产品提示",
+    "category": "通用组件",
+    "usages": [
+      "产品提示"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-person",
+    "label": "人员显示",
+    "category": "通用组件",
+    "usages": [
+      "人员显示"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-product-select",
+    "label": "产品选择",
+    "category": "通用组件",
+    "usages": [
+      "产品选择器"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-order-lines",
+    "label": "订单产品明细",
+    "category": "通用组件",
+    "usages": [
+      "订单产品明细编辑器"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-part-configurator",
+    "label": "货件配置",
+    "category": "通用组件",
+    "usages": [
+      "货件配置器"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-status-switch",
+    "label": "状态切换",
+    "category": "通用组件",
+    "usages": [
+      "状态切换工具栏"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-icons",
+    "label": "图标库",
+    "category": "组件库",
+    "usages": [
+      "图标库"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "app-toolbar-collapse",
+    "label": "app-toolbar-collapse",
+    "category": "通用图标",
+    "source": "local",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/FloatingSidebarMenuButton/index.vue",
+      "apps/qsmds-arco/src/layouts/components/SubSidebar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/startSide.vue"
+    ]
+  },
+  {
+    "name": "i-ant-design:caret-down-filled",
+    "label": "i-ant-design:caret-down-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue"
+    ]
+  },
+  {
+    "name": "i-ant-design:caret-up-filled",
+    "label": "i-ant-design:caret-up-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue"
+    ]
+  },
+  {
+    "name": "i-ant-design:check-circle-filled",
+    "label": "i-ant-design:check-circle-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/modal/index.vue"
+    ]
+  },
+  {
+    "name": "i-ant-design:close-circle-filled",
+    "label": "i-ant-design:close-circle-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/modal/index.vue"
+    ]
+  },
+  {
+    "name": "i-ant-design:exclamation-circle-filled",
+    "label": "i-ant-design:exclamation-circle-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/modal/index.vue"
+    ]
+  },
+  {
+    "name": "i-ant-design:info-circle-filled",
+    "label": "i-ant-design:info-circle-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/modal/index.vue"
+    ]
+  },
+  {
+    "name": "i-carbon:checkmark",
+    "label": "i-carbon:checkmark",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/password-strength/index.vue"
+    ]
+  },
+  {
+    "name": "i-carbon:close",
+    "label": "i-carbon:close",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue",
+      "packages/components/src/basic/password-strength/index.vue"
+    ]
+  },
+  {
+    "name": "i-carbon:rotate",
+    "label": "i-carbon:rotate",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-preview/preview.vue"
+    ]
+  },
+  {
+    "name": "i-carbon:rotate-180",
+    "label": "i-carbon:rotate-180",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-preview/preview.vue"
+    ]
+  },
+  {
+    "name": "i-carbon:user-avatar-filled",
+    "label": "i-carbon:user-avatar-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue",
+      "apps/qsmds-arco/src/components/AppAccountButton/profile.vue"
+    ]
+  },
+  {
+    "name": "i-carbon:zoom-in",
+    "label": "i-carbon:zoom-in",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-preview/preview.vue"
+    ]
+  },
+  {
+    "name": "i-carbon:zoom-out",
+    "label": "i-carbon:zoom-out",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-preview/preview.vue"
+    ]
+  },
+  {
+    "name": "i-ci:window",
+    "label": "i-ci:window",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue"
+    ]
+  },
+  {
+    "name": "i-codicon:color-mode",
+    "label": "i-codicon:color-mode",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:arrow-down",
+    "label": "i-ep:arrow-down",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:arrow-left",
+    "label": "i-ep:arrow-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/storage-box/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:caret-bottom",
+    "label": "i-ep:caret-bottom",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/search-bar/index.vue",
+      "packages/components/src/pro/layout-container/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:caret-left",
+    "label": "i-ep:caret-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "packages/components/src/pro/layout-container/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:caret-right",
+    "label": "i-ep:caret-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/layout-container/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:caret-top",
+    "label": "i-ep:caret-top",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "packages/components/src/basic/search-bar/index.vue",
+      "packages/components/src/basic/trend/index.vue",
+      "packages/components/src/pro/layout-container/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:delete",
+    "label": "i-ep:delete",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Favorites/panel.vue",
+      "packages/components/src/pro/icon-picker/index.vue",
+      "packages/components/src/pro/storage-box/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:message-box",
+    "label": "i-ep:message-box",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/storage-box/index.vue"
+    ]
+  },
+  {
+    "name": "i-ep:plus",
+    "label": "i-ep:plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/storage-box/index.vue"
+    ]
+  },
+  {
+    "name": "i-fluent:line-thickness-24-filled",
+    "label": "i-fluent:line-thickness-24-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-heroicons:arrow-path",
+    "label": "i-heroicons:arrow-path",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/multi-step-loader/index.vue",
+      "packages/components/src/pro/steps/index.vue"
+    ]
+  },
+  {
+    "name": "i-heroicons:check",
+    "label": "i-heroicons:check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/steps/index.vue"
+    ]
+  },
+  {
+    "name": "i-heroicons:check-circle",
+    "label": "i-heroicons:check-circle",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/multi-step-loader/index.vue"
+    ]
+  },
+  {
+    "name": "i-heroicons:check-circle-solid",
+    "label": "i-heroicons:check-circle-solid",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/multi-step-loader/index.vue"
+    ]
+  },
+  {
+    "name": "i-heroicons:x-mark",
+    "label": "i-heroicons:x-mark",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/multi-step-loader/index.vue",
+      "packages/components/src/pro/steps/index.vue"
+    ]
+  },
+  {
+    "name": "i-ic:twotone-double-arrow",
+    "label": "i-ic:twotone-double-arrow",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:arrow-circle-left",
+    "label": "i-icon-park-outline:arrow-circle-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-upload/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:arrow-circle-right",
+    "label": "i-icon-park-outline:arrow-circle-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-upload/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:delete",
+    "label": "i-icon-park-outline:delete",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/file-upload/index.vue",
+      "packages/components/src/basic/image-upload/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:dot",
+    "label": "i-icon-park-outline:dot",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:left-bar",
+    "label": "i-icon-park-outline:left-bar",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/login.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:preview-open",
+    "label": "i-icon-park-outline:preview-open",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-upload/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:right-bar",
+    "label": "i-icon-park-outline:right-bar",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/login.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:square",
+    "label": "i-icon-park-outline:square",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/login.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:to-top-one",
+    "label": "i-icon-park-outline:to-top-one",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppBackToTop/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-outline:upload",
+    "label": "i-icon-park-outline:upload",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/file-upload/index.vue",
+      "packages/components/src/basic/image-upload/index.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-twotone:application-two",
+    "label": "i-icon-park-twotone:application-two",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/store/modules/app/notification.ts"
+    ]
+  },
+  {
+    "name": "i-icon-park-twotone:mail",
+    "label": "i-icon-park-twotone:mail",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/store/modules/app/notification.ts"
+    ]
+  },
+  {
+    "name": "i-icon-park-twotone:planet",
+    "label": "i-icon-park-twotone:planet",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/views/link.vue"
+    ]
+  },
+  {
+    "name": "i-icon-park-twotone:seal",
+    "label": "i-icon-park-twotone:seal",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/store/modules/app/notification.ts"
+    ]
+  },
+  {
+    "name": "i-iconoir:refresh-double",
+    "label": "i-iconoir:refresh-double",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/PageReload/index.vue"
+    ]
+  },
+  {
+    "name": "i-ix:upload-fail",
+    "label": "i-ix:upload-fail",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/file-upload/index.vue"
+    ]
+  },
+  {
+    "name": "i-ix:upload-success",
+    "label": "i-ix:upload-success",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/file-upload/index.vue"
+    ]
+  },
+  {
+    "name": "i-jam:stop-sign",
+    "label": "i-jam:stop-sign",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue"
+    ]
+  },
+  {
+    "name": "i-line-md:loading-loop",
+    "label": "i-line-md:loading-loop",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/icon/index.vue"
+    ]
+  },
+  {
+    "name": "i-line-md:loading-twotone-loop",
+    "label": "i-line-md:loading-twotone-loop",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback.vue",
+      "apps/qsmds-arco/src/layouts/components/views/iframe.vue",
+      "packages/components/src/basic/button/index.vue",
+      "packages/components/src/basic/drawer/index.vue",
+      "packages/components/src/basic/image-preview/index.vue",
+      "packages/components/src/basic/modal/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:accessibility",
+    "label": "i-lucide:accessibility",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/status-switch-toolbar.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:align-center",
+    "label": "i-lucide:align-center",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/ColumnSettingsPanel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:align-left",
+    "label": "i-lucide:align-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/ColumnSettingsPanel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:align-right",
+    "label": "i-lucide:align-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/ColumnSettingsPanel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:archive",
+    "label": "i-lucide:archive",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:arrow-down",
+    "label": "i-lucide:arrow-down",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "packages/components/src/basic/table/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:arrow-left",
+    "label": "i-lucide:arrow-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/create/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:arrow-left-right",
+    "label": "i-lucide:arrow-left-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currency-exchange-rate/currency-exchange-rate.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:arrow-right",
+    "label": "i-lucide:arrow-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderHistory.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderHistory.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-change-records.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:arrow-up",
+    "label": "i-lucide:arrow-up",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "packages/components/src/basic/table/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:arrow-up-down",
+    "label": "i-lucide:arrow-up-down",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/table/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:badge",
+    "label": "i-lucide:badge",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:badge-alert",
+    "label": "i-lucide:badge-alert",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/toast.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:badge-check",
+    "label": "i-lucide:badge-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/dictionary-select.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:badge-dollar-sign",
+    "label": "i-lucide:badge-dollar-sign",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/product-selector.vue",
+      "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-desc.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-change-records.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:badge-info",
+    "label": "i-lucide:badge-info",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:banknote",
+    "label": "i-lucide:banknote",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderHistory.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderHistory.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:binary",
+    "label": "i-lucide:binary",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/create.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-purpose-select-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:blend",
+    "label": "i-lucide:blend",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/toast.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:blocks",
+    "label": "i-lucide:blocks",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:book-dashed",
+    "label": "i-lucide:book-dashed",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:boxes",
+    "label": "i-lucide:boxes",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:braces",
+    "label": "i-lucide:braces",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/money-input.vue",
+      "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue",
+      "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-desc.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:brackets",
+    "label": "i-lucide:brackets",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:building-2",
+    "label": "i-lucide:building-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-posting-summary.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:calculator",
+    "label": "i-lucide:calculator",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/exchange-rates/exchange-rate-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/exchange-rates/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:calendar",
+    "label": "i-lucide:calendar",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsDateRangeFilter/index.vue",
+      "packages/components/src/pro/calendar-date-range/index.vue",
+      "packages/components/src/pro/calendar-date/index.vue",
+      "packages/components/src/pro/calendar-month-range/index.vue",
+      "packages/components/src/pro/calendar-month/index.vue",
+      "packages/components/src/pro/calendar-year-range/index.vue",
+      "packages/components/src/pro/calendar-year/index.vue",
+      "packages/components/src/pro/date/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:calendar-days",
+    "label": "i-lucide:calendar-days",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:check",
+    "label": "i-lucide:check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
+      "packages/components/src/pro/code/index.vue",
+      "packages/components/src/pro/storage-box/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:chevron-down",
+    "label": "i-lucide:chevron-down",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/ShipmentParts.vue",
+      "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderDocuments.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderParts.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderRecords.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue",
+      "apps/qsmds-arco/src/views/system/users/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue",
+      "packages/components/src/basic/table/index.vue",
+      "packages/components/src/pro/tree/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:chevron-left",
+    "label": "i-lucide:chevron-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-preview/preview.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:chevron-right",
+    "label": "i-lucide:chevron-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
+      "apps/qsmds-arco/src/components/business/QsStatusSwitchToolbar/index.vue",
+      "packages/components/src/basic/image-preview/preview.vue",
+      "packages/components/src/basic/table/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle",
+    "label": "i-lucide:circle",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-alert",
+    "label": "i-lucide:circle-alert",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/profile.vue",
+      "apps/qsmds-arco/src/components/business/QsGenericDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsGenericModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderSelectorModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-account-create-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-form-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-configuration-confirm-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-manual-adjustment-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-rule-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-form-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-share-rate-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-batch-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/create/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/system/audit/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currencies/currency-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currencies/currency-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-item-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/exchange-rates/exchange-rate-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-form.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-preview.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/permissions/index.vue",
+      "apps/qsmds-arco/src/views/system/roles/index.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/system/roles/role-editor-modal.vue",
+      "apps/qsmds-arco/src/views/system/users/index.vue",
+      "apps/qsmds-arco/src/views/system/users/password-reset-modal.vue",
+      "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/system/users/status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/users/user-form-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-check",
+    "label": "i-lucide:circle-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/QsToast/config.ts",
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-account-create-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-check-big",
+    "label": "i-lucide:circle-check-big",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/create/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-purpose-select-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-dollar-sign",
+    "label": "i-lucide:circle-dollar-sign",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-help",
+    "label": "i-lucide:circle-help",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/create/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-pause",
+    "label": "i-lucide:circle-pause",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-play",
+    "label": "i-lucide:circle-play",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-plus",
+    "label": "i-lucide:circle-plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-slash",
+    "label": "i-lucide:circle-slash",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-slash-2",
+    "label": "i-lucide:circle-slash-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-stop",
+    "label": "i-lucide:circle-stop",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:circle-x",
+    "label": "i-lucide:circle-x",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/QsToast/config.ts",
+      "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:clipboard-check",
+    "label": "i-lucide:clipboard-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericTableShowcase.vue",
+      "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:clipboard-list",
+    "label": "i-lucide:clipboard-list",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/order-receipt-requests.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:clipboard-plus",
+    "label": "i-lucide:clipboard-plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:clock-3",
+    "label": "i-lucide:clock-3",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/components/DateTimeDisplayShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:code",
+    "label": "i-lucide:code",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/code-preview/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:code-xml",
+    "label": "i-lucide:code-xml",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/code-preview/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:coins",
+    "label": "i-lucide:coins",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/money-input.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currency-exchange-rate/currency-exchange-rate.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:columns-3",
+    "label": "i-lucide:columns-3",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
+      "packages/components/src/basic/table/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:copy",
+    "label": "i-lucide:copy",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/components/IconLibraryDetails.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-marks-cell.vue",
+      "packages/components/src/pro/code/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:copy-check",
+    "label": "i-lucide:copy-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-form.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:copy-plus",
+    "label": "i-lucide:copy-plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:database",
+    "label": "i-lucide:database",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:download",
+    "label": "i-lucide:download",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:ellipsis",
+    "label": "i-lucide:ellipsis",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:eraser",
+    "label": "i-lucide:eraser",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:external-link",
+    "label": "i-lucide:external-link",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:eye",
+    "label": "i-lucide:eye",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericTableShowcase.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/index.vue",
+      "packages/components/src/basic/input/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:eye-off",
+    "label": "i-lucide:eye-off",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/input/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:factory",
+    "label": "i-lucide:factory",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:file-clock",
+    "label": "i-lucide:file-clock",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:file-pen-line",
+    "label": "i-lucide:file-pen-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:file-question",
+    "label": "i-lucide:file-question",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:file-text",
+    "label": "i-lucide:file-text",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderDocument.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderDocuments.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDesc/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderDocument.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderRecords.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-document-modal.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:files",
+    "label": "i-lucide:files",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.logic.ts",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:flag",
+    "label": "i-lucide:flag",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:flower-2",
+    "label": "i-lucide:flower-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:focus",
+    "label": "i-lucide:focus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/generic-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:folder-up",
+    "label": "i-lucide:folder-up",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:form-input",
+    "label": "i-lucide:form-input",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/dictionary-select.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:git-commit-horizontal",
+    "label": "i-lucide:git-commit-horizontal",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:git-compare-arrows",
+    "label": "i-lucide:git-compare-arrows",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderHistory.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderHistory.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-item-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-form-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:globe-2",
+    "label": "i-lucide:globe-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:hand-coins",
+    "label": "i-lucide:hand-coins",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/components/MoneyInputShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/money-input.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.logic.ts",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:history",
+    "label": "i-lucide:history",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-change-records.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.logic.ts",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:image",
+    "label": "i-lucide:image",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPartConfigurator/PartProductSummary.vue",
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:image-off",
+    "label": "i-lucide:image-off",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/ImageGroup/index.vue",
+      "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/FactoryShipmentProductSummary.vue",
+      "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/ShipmentParts.vue",
+      "apps/qsmds-arco/src/components/business/QsGoodTooltip/QsGoodTooltipContent.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderInformation.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderParts.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/pending-product-thumbnail.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDesc/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderInformation.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderSelectorModal/SalesOrderProductPreview.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/form/product-form.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-record-list.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-voucher.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:images",
+    "label": "i-lucide:images",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/components/ImageGroupShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:inbox",
+    "label": "i-lucide:inbox",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:info",
+    "label": "i-lucide:info",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/QsToast/config.ts",
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/pending-purchase-products.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-manual-adjustment-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-share-rate-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-shipping-mark-summary.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/roles/role-editor-modal.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:layers-2",
+    "label": "i-lucide:layers-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:layers-3",
+    "label": "i-lucide:layers-3",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/toast.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:layout-dashboard",
+    "label": "i-lucide:layout-dashboard",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:layout-template",
+    "label": "i-lucide:layout-template",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:link",
+    "label": "i-lucide:link",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:link-2",
+    "label": "i-lucide:link-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:list-checks",
+    "label": "i-lucide:list-checks",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/product-selector.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:list-filter",
+    "label": "i-lucide:list-filter",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/FilterPanel.vue",
+      "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-transaction-filters.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/DictionarySelectShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/StatusSwitchToolbarShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/dictionary-select.vue",
+      "apps/qsmds-arco/src/views/component_library/business/status-switch-toolbar.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:list-ordered",
+    "label": "i-lucide:list-ordered",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:list-plus",
+    "label": "i-lucide:list-plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:list-restart",
+    "label": "i-lucide:list-restart",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderProductsEditorModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:list-tree",
+    "label": "i-lucide:list-tree",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-attributes-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:list-x",
+    "label": "i-lucide:list-x",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:loader-circle",
+    "label": "i-lucide:loader-circle",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/QsToast/config.ts",
+      "apps/qsmds-arco/src/components/business/QsDictionarySelect/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-batch-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currency-exchange-rate/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-editor-drawer.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue",
+      "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:lock",
+    "label": "i-lucide:lock",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountForm/login.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:lock-keyhole",
+    "label": "i-lucide:lock-keyhole",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/ColumnSettingsPanel.vue",
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-form-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-form-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currencies/currency-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-item-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-form-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-form.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:map",
+    "label": "i-lucide:map",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:map-pin",
+    "label": "i-lucide:map-pin",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:map-pin-check",
+    "label": "i-lucide:map-pin-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/region-selector.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:map-pinned",
+    "label": "i-lucide:map-pinned",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/components/RegionSelectorShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/region-selector.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:maximize",
+    "label": "i-lucide:maximize",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/image-preview/preview.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:message-circle-more",
+    "label": "i-lucide:message-circle-more",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/QsToast/config.ts",
+      "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/toast.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:message-square-text",
+    "label": "i-lucide:message-square-text",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:message-square-warning",
+    "label": "i-lucide:message-square-warning",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:minus",
+    "label": "i-lucide:minus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:moon-star",
+    "label": "i-lucide:moon-star",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:mouse-pointer-click",
+    "label": "i-lucide:mouse-pointer-click",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/status-switch-toolbar.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-purpose-select-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:move-horizontal",
+    "label": "i-lucide:move-horizontal",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/status-switch-toolbar.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:move-right",
+    "label": "i-lucide:move-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:network",
+    "label": "i-lucide:network",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:package-check",
+    "label": "i-lucide:package-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/part-configurator.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:package-open",
+    "label": "i-lucide:package-open",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDesc/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDesc/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/part-configurator.vue",
+      "apps/qsmds-arco/src/views/component_library/shared/ComponentCatalogPage.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:package-plus",
+    "label": "i-lucide:package-plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:package-search",
+    "label": "i-lucide:package-search",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/components/GoodTooltipImageGroupShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GoodTooltipShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/ProductSelectorShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue",
+      "apps/qsmds-arco/src/views/component_library/business/product-selector.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:panel-left",
+    "label": "i-lucide:panel-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/ColumnSettingsPanel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:panel-right",
+    "label": "i-lucide:panel-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/ColumnSettingsPanel.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/generic-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:panel-right-open",
+    "label": "i-lucide:panel-right-open",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-transaction-table.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericDrawerShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/generic-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:panel-top-dashed",
+    "label": "i-lucide:panel-top-dashed",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/person-display.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:panels-top-left",
+    "label": "i-lucide:panels-top-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/generic-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:paperclip",
+    "label": "i-lucide:paperclip",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDesc/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-desc.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:pencil",
+    "label": "i-lucide:pencil",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:percent",
+    "label": "i-lucide:percent",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:pin",
+    "label": "i-lucide:pin",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/SubSidebar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:pin-off",
+    "label": "i-lucide:pin-off",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/ColumnSettingsPanel.vue",
+      "apps/qsmds-arco/src/layouts/components/SubSidebar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:play",
+    "label": "i-lucide:play",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:plus",
+    "label": "i-lucide:plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderDocuments.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currency-exchange-rate/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
+      "apps/qsmds-arco/src/views/system/roles/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:plus-circle",
+    "label": "i-lucide:plus-circle",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:printer",
+    "label": "i-lucide:printer",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:receipt-text",
+    "label": "i-lucide:receipt-text",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/OrderRecords.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/OrderRecords.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderSelectorModal/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderDescShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-desc.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:redo",
+    "label": "i-lucide:redo",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:redo-2",
+    "label": "i-lucide:redo-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:refresh-cw",
+    "label": "i-lucide:refresh-cw",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderSelectorModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-configuration-drawer.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-transaction-filters.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/system/roles/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:rotate-ccw",
+    "label": "i-lucide:rotate-ccw",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-batch-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:rotate-cw",
+    "label": "i-lucide:rotate-cw",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:route",
+    "label": "i-lucide:route",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/region-selector.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:save",
+    "label": "i-lucide:save",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:scan-eye",
+    "label": "i-lucide:scan-eye",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/person-display.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:scan-line",
+    "label": "i-lucide:scan-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:scan-search",
+    "label": "i-lucide:scan-search",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:scan-text",
+    "label": "i-lucide:scan-text",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-preview.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:scroll-text",
+    "label": "i-lucide:scroll-text",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-batch-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericModalShowcase.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:search",
+    "label": "i-lucide:search",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderSelectorModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-form-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-transaction-filters.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/components/IconLibraryShowcase.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
+      "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue",
+      "packages/components/src/pro/tree/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:search-x",
+    "label": "i-lucide:search-x",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsGenericTable/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderSelectorModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-form-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/SalesOrderSelectorModalShowcase.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-type-list.vue",
+      "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:send",
+    "label": "i-lucide:send",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-type-panel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:shield-alert",
+    "label": "i-lucide:shield-alert",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-configuration-drawer.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/create/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/component_library/business/dictionary-select.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/create.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currencies/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/currency-exchange-rate/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/exchange-rates/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/create.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-detail-drawer.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/shipping-mark-bindings.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/index.vue",
+      "apps/qsmds-arco/src/views/system/users/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:shield-check",
+    "label": "i-lucide:shield-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-posting-rule-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/money-input.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/toast.vue",
+      "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/generic-drawer.vue",
+      "apps/qsmds-arco/src/views/component_library/business/generic-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/order-product-line-editor.vue",
+      "apps/qsmds-arco/src/views/component_library/business/region-selector.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-rule-form.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:shield-off",
+    "label": "i-lucide:shield-off",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:shield-x",
+    "label": "i-lucide:shield-x",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/audit/index.vue",
+      "apps/qsmds-arco/src/views/system/permissions/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:ship",
+    "label": "i-lucide:ship",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:shopping-basket",
+    "label": "i-lucide:shopping-basket",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/PurchaseOrderDescShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:shopping-cart",
+    "label": "i-lucide:shopping-cart",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseStartModal/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:slash",
+    "label": "i-lucide:slash",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:sliders-horizontal",
+    "label": "i-lucide:sliders-horizontal",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-configuration-drawer.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:smartphone",
+    "label": "i-lucide:smartphone",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/page_templates/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:split",
+    "label": "i-lucide:split",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/image-group.vue",
+      "apps/qsmds-arco/src/views/component_library/business/good-tooltip.vue",
+      "apps/qsmds-arco/src/views/component_library/business/part-configurator.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:square",
+    "label": "i-lucide:square",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:star",
+    "label": "i-lucide:star",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:table-2",
+    "label": "i-lucide:table-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:table-properties",
+    "label": "i-lucide:table-properties",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/components/GenericTableShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/order-product-line-editor.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:tags",
+    "label": "i-lucide:tags",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/create.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-purpose-select-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:trash",
+    "label": "i-lucide:trash",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:trash-2",
+    "label": "i-lucide:trash-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsOrderProductLineEditor/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/form/product-attributes-editor.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-image-board.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-segment-editor.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:trending-down",
+    "label": "i-lucide:trending-down",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:trending-up",
+    "label": "i-lucide:trending-up",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/sales-orders/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:triangle-alert",
+    "label": "i-lucide:triangle-alert",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/QsToast/config.ts",
+      "apps/qsmds-arco/src/components/business/QsGenericTable/CopyCellButton.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderProductsEditorModal/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-manual-adjustment-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-reversal-modal.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/fund-transaction-filters.vue",
+      "apps/qsmds-arco/src/views/admin/fund-account-management/transactions/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/create/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/edit/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-panel.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/components/QsToastShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/basic/money-input.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/ProductSelectorShowcase.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/dictionaries/dictionary-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/index.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-lifecycle-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/regions/region-status-change-modal.vue",
+      "apps/qsmds-arco/src/views/system/roles/permission-assignment-modal.vue",
+      "apps/qsmds-arco/src/views/system/users/index.vue",
+      "apps/qsmds-arco/src/views/system/users/password-reset-modal.vue",
+      "apps/qsmds-arco/src/views/system/users/role-assignment-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:truck",
+    "label": "i-lucide:truck",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsFactoryShipmentModal/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/components/FactoryShipmentModalShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/factory-shipment-modal.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:undo",
+    "label": "i-lucide:undo",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:undo-2",
+    "label": "i-lucide:undo-2",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:unplug",
+    "label": "i-lucide:unplug",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/basic/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:upload",
+    "label": "i-lucide:upload",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:upload-cloud",
+    "label": "i-lucide:upload-cloud",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-detail-actions.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/system/basic-data/numbering/numbering-detail.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:user",
+    "label": "i-lucide:user",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountForm/login.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:user-plus",
+    "label": "i-lucide:user-plus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/users/index.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:user-round",
+    "label": "i-lucide:user-round",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/components/PersonDisplayShowcase.vue",
+      "apps/qsmds-arco/src/views/component_library/business/person-display.vue",
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-posting-summary.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:user-round-check",
+    "label": "i-lucide:user-round-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/person-display.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:video",
+    "label": "i-lucide:video",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDesc/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:video-off",
+    "label": "i-lucide:video-off",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/product-management/list/product-videos-modal.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-video-board.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:wallet",
+    "label": "i-lucide:wallet",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/workbenches/sales-receipts/receipt-detail.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:warehouse",
+    "label": "i-lucide:warehouse",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-list.logic.ts",
+      "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-list-view.logic.ts"
+    ]
+  },
+  {
+    "name": "i-lucide:waypoints",
+    "label": "i-lucide:waypoints",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/admin/fund-account-management/list/fund-business-source-panel.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:workflow",
+    "label": "i-lucide:workflow",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/component_library/business/generic-drawer.vue",
+      "apps/qsmds-arco/src/views/component_library/business/generic-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/index.vue",
+      "apps/qsmds-arco/src/views/component_library/business/order-product-line-editor.vue",
+      "apps/qsmds-arco/src/views/component_library/business/purchase-order-desc.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-products-editor-modal.vue",
+      "apps/qsmds-arco/src/views/component_library/business/sales-order-selector-modal.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:x",
+    "label": "i-lucide:x",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/base/QsToast/index.vue",
+      "apps/qsmds-arco/src/components/business/QsDateRangeFilter/index.vue",
+      "apps/qsmds-arco/src/components/business/QsGenericDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsGenericModal/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPartConfigurator/index.vue",
+      "apps/qsmds-arco/src/components/business/QsProductSelector/index.vue",
+      "apps/qsmds-arco/src/components/business/QsPurchaseOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/components/business/QsSalesOrderDrawer/index.vue",
+      "apps/qsmds-arco/src/views/admin/product-management/media/product-media-upload-queue.vue",
+      "apps/qsmds-arco/src/views/system/users/index.vue",
+      "packages/components/src/basic/input/index.vue",
+      "packages/components/src/basic/tag/tag/Tag.vue",
+      "packages/components/src/pro/cascader/index.vue",
+      "packages/components/src/pro/combobox/index.vue"
+    ]
+  },
+  {
+    "name": "i-material-symbols:arrow-drop-down-rounded",
+    "label": "i-material-symbols:arrow-drop-down-rounded",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/page-main/index.vue"
+    ]
+  },
+  {
+    "name": "i-material-symbols:expand-all-rounded",
+    "label": "i-material-symbols:expand-all-rounded",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-material-symbols:help-rounded",
+    "label": "i-material-symbols:help-rounded",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/digital-card/index.vue"
+    ]
+  },
+  {
+    "name": "i-material-symbols:trending-down",
+    "label": "i-material-symbols:trending-down",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/digital-card/index.vue"
+    ]
+  },
+  {
+    "name": "i-material-symbols:trending-flat",
+    "label": "i-material-symbols:trending-flat",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/digital-card/index.vue"
+    ]
+  },
+  {
+    "name": "i-material-symbols:trending-up",
+    "label": "i-material-symbols:trending-up",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/digital-card/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:account-edit",
+    "label": "i-mdi:account-edit",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:arrow-expand-left",
+    "label": "i-mdi:arrow-expand-left",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/moreAction.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:arrow-expand-right",
+    "label": "i-mdi:arrow-expand-right",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/moreAction.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:circle",
+    "label": "i-mdi:circle",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/login.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:close",
+    "label": "i-mdi:close",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/moreAction.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:cog",
+    "label": "i-mdi:cog",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:comment-processing",
+    "label": "i-mdi:comment-processing",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:form-textbox-password",
+    "label": "i-mdi:form-textbox-password",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:home",
+    "label": "i-mdi:home",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:keyboard",
+    "label": "i-mdi:keyboard",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:logout",
+    "label": "i-mdi:logout",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:logout-variant",
+    "label": "i-mdi:logout-variant",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:refresh",
+    "label": "i-mdi:refresh",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/system/audit/index.vue",
+      "apps/qsmds-arco/src/views/system/permissions/index.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:star-plus-outline",
+    "label": "i-mdi:star-plus-outline",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Favorites/panel.vue"
+    ]
+  },
+  {
+    "name": "i-mdi:star-remove",
+    "label": "i-mdi:star-remove",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Favorites/panel.vue"
+    ]
+  },
+  {
+    "name": "i-ph:image-broken-duotone",
+    "label": "i-ph:image-broken-duotone",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/basic/icon/index.vue",
+      "packages/components/src/basic/image-preview/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:close-fill",
+    "label": "i-ri:close-fill",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/moreAction.vue"
+    ]
+  },
+  {
+    "name": "i-ri:close-line",
+    "label": "i-ri:close-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:copyright-line",
+    "label": "i-ri:copyright-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppCopyright/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:external-link-fill",
+    "label": "i-ri:external-link-fill",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/views/link.vue"
+    ]
+  },
+  {
+    "name": "i-ri:fullscreen-exit-line",
+    "label": "i-ri:fullscreen-exit-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Fullscreen/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:fullscreen-line",
+    "label": "i-ri:fullscreen-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Fullscreen/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:logout-box-line",
+    "label": "i-ri:logout-box-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:moon-line",
+    "label": "i-ri:moon-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/ColorScheme/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:more-2-fill",
+    "label": "i-ri:more-2-fill",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/moreAction.vue"
+    ]
+  },
+  {
+    "name": "i-ri:notification-3-line",
+    "label": "i-ri:notification-3-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Notification/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:picture-in-picture-exit-line",
+    "label": "i-ri:picture-in-picture-exit-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:pushpin-2-fill",
+    "label": "i-ri:pushpin-2-fill",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/moreAction.vue"
+    ]
+  },
+  {
+    "name": "i-ri:question-line",
+    "label": "i-ri:question-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "packages/components/src/basic/password-strength/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:refresh-line",
+    "label": "i-ri:refresh-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:screenshot-2-line",
+    "label": "i-ri:screenshot-2-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback.vue"
+    ]
+  },
+  {
+    "name": "i-ri:search-line",
+    "label": "i-ri:search-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Tabbar/moreAction.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/MenuSearch/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue",
+      "packages/components/src/pro/icon-picker/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:sun-line",
+    "label": "i-ri:sun-line",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/ColorScheme/index.vue"
+    ]
+  },
+  {
+    "name": "i-ri:translate",
+    "label": "i-ri:translate",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/I18n/index.vue"
+    ]
+  },
+  {
+    "name": "i-simple-icons:gitcode",
+    "label": "i-simple-icons:gitcode",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/index.vue"
+    ]
+  },
+  {
+    "name": "i-simple-icons:gitee",
+    "label": "i-simple-icons:gitee",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/index.vue"
+    ]
+  },
+  {
+    "name": "i-simple-icons:github",
+    "label": "i-simple-icons:github",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/index.vue"
+    ]
+  },
+  {
+    "name": "i-streamline-ultimate:pen-draw-1-bold",
+    "label": "i-streamline-ultimate:pen-draw-1-bold",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppAccountButton/feedback-canvas.vue"
+    ]
+  },
+  {
+    "name": "i-svg-spinners:90-ring-with-bg",
+    "label": "i-svg-spinners:90-ring-with-bg",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/App.vue",
+      "apps/qsmds-arco/src/components/AppAccountButton/profile.vue"
+    ]
+  },
+  {
+    "name": "i-tabler:clipboard",
+    "label": "i-tabler:clipboard",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/AppSettingsActions.vue"
+    ]
+  },
+  {
+    "name": "i-tabler:clipboard-check",
+    "label": "i-tabler:clipboard-check",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/AppSettingsActions.vue"
+    ]
+  },
+  {
+    "name": "i-tabler:minus",
+    "label": "i-tabler:minus",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue"
+    ]
+  },
+  {
+    "name": "i-tabler:minus-vertical",
+    "label": "i-tabler:minus-vertical",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue"
+    ]
+  },
+  {
+    "name": "i-tabler:mood-empty",
+    "label": "i-tabler:mood-empty",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Favorites/panel.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue",
+      "packages/components/src/pro/icon-picker/index.vue",
+      "packages/components/src/pro/storage-box/index.vue"
+    ]
+  },
+  {
+    "name": "i-tabler:mood-smile",
+    "label": "i-tabler:mood-smile",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/MenuSearch/search.vue"
+    ]
+  },
+  {
+    "name": "i-tdesign:mobile-blocked-filled",
+    "label": "i-tdesign:mobile-blocked-filled",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/AppNotSupportedMobile/index.vue"
+    ]
+  },
+  {
+    "name": "i-uiw:setting-o",
+    "label": "i-uiw:setting-o",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/layouts/index.vue"
+    ]
+  },
+  {
+    "name": "i-uiw:star-off",
+    "label": "i-uiw:star-off",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/components/business/AppSettingsPanel/index.vue",
+      "apps/qsmds-arco/src/layouts/components/Topbar/Toolbar/Favorites/index.vue"
+    ]
+  },
+  {
+    "name": "i-whh:googleplusold",
+    "label": "i-whh:googleplusold",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "packages/components/src/pro/icon-picker/index.vue"
+    ]
+  }
+]
