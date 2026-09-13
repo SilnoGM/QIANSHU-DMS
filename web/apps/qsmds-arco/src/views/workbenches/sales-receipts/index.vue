@@ -188,9 +188,9 @@ onBeforeUnmount(() => controller?.abort())
           </QsTableStackedCell>
         </template>
         <template #cell-amount="{ row }">
-          <QsTableStackedCell class="items-end">
+          <QsTableStackedCell class="text-right justify-items-end">
             <QsTableStackedLine><AmountDisplay :value="row.original.amount" :currency="row.original.currencyCode" :currencies="currencyCatalog.currencies.value" /></QsTableStackedLine>
-            <QsTableStackedLine v-if="row.original.approvedPayment?.posting" :label="t('salesReceipt.totalCny')">
+            <QsTableStackedLine v-if="row.original.approvedPayment?.posting" :label="t('salesReceipt.convertedAmountShort')">
               <AmountDisplay :value="row.original.approvedPayment.posting.businessAmount" currency="CNY" :currencies="currencyCatalog.currencies.value" />
             </QsTableStackedLine>
             <QsTableStackedLine v-else tone="muted">

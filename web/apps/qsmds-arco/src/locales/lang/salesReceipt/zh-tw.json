@@ -38,6 +38,7 @@
   "salesReceipt.legacy": "历史收款，無資金入帳记錄；作廢不扣帳戶資金。",
   "salesReceipt.rate": "每 1 CNY 對应外幣",
   "salesReceipt.totalCny": "人民幣入帳總額",
+  "salesReceipt.convertedAmountShort": "合",
   "salesReceipt.share": "用戶 / 公司比例",
   "salesReceipt.batch": "入帳批次",
   "salesReceipt.prepare": "核對并審核",

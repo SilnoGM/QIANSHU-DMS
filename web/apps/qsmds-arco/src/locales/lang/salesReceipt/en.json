@@ -38,6 +38,7 @@
   "salesReceipt.legacy": "Historical receipt without account posting. Voiding does not debit an account.",
   "salesReceipt.rate": "Foreign units per CNY",
   "salesReceipt.totalCny": "Total posted CNY",
+  "salesReceipt.convertedAmountShort": "Equivalent",
   "salesReceipt.share": "User / Company share",
   "salesReceipt.batch": "Posting batch",
   "salesReceipt.prepare": "Review posting preview",
