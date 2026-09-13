@@ -32,6 +32,7 @@ describe('fund posting error contract', () => {
       'FUND_METADATA_INVALID',
       'FUND_IDEMPOTENCY_CONFLICT',
       'FUND_REVERSAL_STATE_CHANGED',
+      'FUND_REVERSAL_REQUIRES_RECEIPT_VOID',
       'FUND_CONCURRENT_STATE_CHANGED',
       'FUND_INTERNAL_ERROR',
     ])

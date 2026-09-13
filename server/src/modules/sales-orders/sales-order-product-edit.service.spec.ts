@@ -133,6 +133,7 @@ function setup(overrides: {
       }]),
     },
     product: { findMany: jest.fn().mockResolvedValue([]) },
+    salesReceiptRequest: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }) },
     salesOrderPayment: {
       aggregate: jest.fn().mockResolvedValue({
         _sum: { amount: decimal(overrides.paidAmount ?? '80') },

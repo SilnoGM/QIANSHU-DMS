@@ -60,8 +60,8 @@ function appRouteUrl(baseUrl, routePath) {
 
 async function verifyFundAccountRoutes(page, baseUrl) {
   for (const [routePath, title] of [
-    ['/admin/fund-accounts/list', '资金账户列表'],
-    ['/admin/fund-accounts/transactions', '资金账户流水'],
+    ['/qs-finance/fund-accounts/list', '资金账户列表'],
+    ['/qs-finance/fund-accounts/transactions', '资金账户流水'],
   ]) {
     await page.navigate(appRouteUrl(baseUrl, routePath))
     await page.waitFor(`(() => (
@@ -1613,6 +1613,9 @@ test('真实 Chrome 覆盖管理员用户、角色、权限与审计 UI', {
     'sales-orders:payment',
     'sales-orders:read',
     'sales-orders:update',
+    'sales-receipts:read',
+    'sales-receipts:review',
+    'sales-receipts:void',
   ])
   assert.equal(Math.round(permissionDrawerState.width), 768)
   assert.ok(permissionDrawerState.rightGap <= 1)

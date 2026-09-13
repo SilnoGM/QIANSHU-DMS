@@ -30,13 +30,14 @@ describe('media reference extension contract', () => {
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
     const migration = [
+      readFileSync(resolve(serverRoot, 'prisma/migrations/20260908120100_sales_receipt_review_posting/migration.sql'), 'utf8'),
       productMediaMigration,
       salesOrderMigration,
       purchaseOrderMigration,
       purchaseOrderMediaReferenceMigration,
     ].join('\n')
     const referenceTables = modelBlocks(schema)
-      .filter(block => /\bmediaAssetId\b/u.test(block) && /\bdetachedAt\b/u.test(block))
+      .filter(block => (/\bmediaAssetId\b/u.test(block) && /\bdetachedAt\b/u.test(block)) || /\bvoucherMediaAssetId\b/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
       .filter((value): value is string => value !== undefined)
       .sort()
@@ -44,6 +45,7 @@ describe('media reference extension contract', () => {
     expect(referenceTables).toEqual([...MEDIA_ASSET_REFERENCE_TABLES].sort())
     for (const table of MEDIA_ASSET_REFERENCE_TABLES) {
       expect(migration).toContain(`FROM "${table}" AS reference`)
+      if (table === 'sales_receipt_requests') continue
       expect(migration).toMatch(
         new RegExp(`FROM "${table}" AS reference[\\s\\S]*?reference\\."detached_at" IS NULL`, 'u'),
       )

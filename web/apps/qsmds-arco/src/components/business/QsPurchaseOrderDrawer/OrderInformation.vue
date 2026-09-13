@@ -21,6 +21,7 @@ const statusClasses: Record<string, string> = {
   UNPAID: 'text-destructive border-destructive/25 bg-destructive/5',
   PARTIALLY_PAID: 'text-amber-700 border-amber-500/25 bg-amber-500/8 dark:text-amber-300',
   PREPARING: 'text-amber-700 border-amber-500/25 bg-amber-500/8 dark:text-amber-300',
+  PARTIALLY_SHIPPED: 'text-amber-700 border-amber-500/25 bg-amber-500/8 dark:text-amber-300',
   PENDING_REVIEW: 'text-amber-700 border-amber-500/25 bg-amber-500/8 dark:text-amber-300',
   ORDERED: 'text-sky-700 border-sky-500/25 bg-sky-500/8 dark:text-sky-300',
   SHIPPED: 'text-sky-700 border-sky-500/25 bg-sky-500/8 dark:text-sky-300',

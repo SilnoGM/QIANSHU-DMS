@@ -7,12 +7,13 @@ import { matchesAuthorization } from '../../src/composables/app/auth'
 import fundAccountManagementRoutes, {
   FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,
 } from '../../src/router/modules/fund-account.management'
+import { financeWorkbench } from '../../src/router/modules/role.workbenches'
 import { filterAccessibleMenus } from '../../src/store/modules/app/menu.logic'
 
-test('管理员工作台注册账户管理分组及两个资金账户入口', () => {
+test('财务工作台注册账户管理分组及两个资金账户入口', () => {
   assert.deepEqual(FUND_ACCOUNT_MANAGEMENT_PERMISSIONS, ['fund-accounts:read'])
-  assert.equal(fundAccountManagementRoutes.path, '/admin/fund-accounts')
-  assert.equal(fundAccountManagementRoutes.name, 'adminFundAccountManagement')
+  assert.equal(fundAccountManagementRoutes.path, '/qs-finance/fund-accounts')
+  assert.equal(fundAccountManagementRoutes.name, 'qsFinanceFundAccountManagement')
   assert.equal(fundAccountManagementRoutes.meta?.title, '账户管理')
   assert.equal(fundAccountManagementRoutes.meta?.icon, 'i-lucide:wallet-cards')
   assert.deepEqual(
@@ -29,13 +30,13 @@ test('管理员工作台注册账户管理分组及两个资金账户入口', ()
     [
       {
         auth: 'fund-accounts:read',
-        name: 'adminFundAccountList',
+        name: 'qsFinanceFundAccountList',
         path: 'list',
         title: '资金账户列表',
       },
       {
         auth: 'fund-accounts:read',
-        name: 'adminFundAccountTransactions',
+        name: 'qsFinanceFundAccountTransactions',
         path: 'transactions',
         title: '资金账户流水',
       },
@@ -48,37 +49,12 @@ test('管理员工作台注册账户管理分组及两个资金账户入口', ()
   )
 })
 
-test('管理员工作台在产品管理后挂载账户管理', () => {
-  const routesSource = readFileSync(
-    new URL('../../src/router/routes.ts', import.meta.url),
-    'utf8',
-  )
-  const administratorWorkbenchSource = routesSource.slice(
-    routesSource.indexOf('title: \'管理员工作台\''),
-    routesSource.indexOf('title: \'系统管理\''),
-  )
-
-  assert.match(
-    routesSource,
-    /import FundAccountManagement, \{[\s\S]*?FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,[\s\S]*?\} from '\.\/modules\/fund-account\.management'/u,
-  )
-  const productPermissionIndex = administratorWorkbenchSource.indexOf(
-    '...PRODUCT_MANAGEMENT_PERMISSIONS',
-  )
-  const fundAccountPermissionIndex = administratorWorkbenchSource.indexOf(
-    '...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS',
-  )
-  const productRouteIndex = administratorWorkbenchSource.indexOf(
-    'ProductManagement,',
-  )
-  const fundAccountRouteIndex = administratorWorkbenchSource.indexOf(
-    'FundAccountManagement,',
-  )
-
-  assert.ok(productPermissionIndex >= 0)
-  assert.ok(fundAccountPermissionIndex > productPermissionIndex)
-  assert.ok(productRouteIndex > fundAccountPermissionIndex)
-  assert.ok(fundAccountRouteIndex > productRouteIndex)
+test('账户管理迁入财务工作台，管理员移除原入口', () => {
+  assert.ok(financeWorkbench.children.includes(fundAccountManagementRoutes))
+  const source = readFileSync(new URL('../../src/router/routes.ts', import.meta.url), 'utf8')
+  const admin = source.slice(source.indexOf('title: \'管理员工作台\''), source.indexOf('title: \'系统管理\''))
+  assert.ok(!admin.includes('FundAccountManagement'))
+  assert.ok(!admin.includes('FUND_ACCOUNT_MANAGEMENT_PERMISSIONS'))
 })
 
 test('资金账户专属权限精确控制分组、菜单和直接访问资格', () => {

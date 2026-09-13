@@ -1,0 +1,11 @@
+{
+  "workbench": {
+    "realtimePayments": "即時收付",
+    "finance": "千樹財務工作台",
+    "purchase": "千樹採購工作台",
+    "salesReceipts": "銷售收款",
+    "purchasePayments": "採購付款",
+    "purchaseReviews": "採購審核",
+    "pending": "功能待開放"
+  }
+}

@@ -12,10 +12,19 @@ describe('PurchaseOrderListQueryDto review filters', () => {
   it.each([
     { view: 'pending', pendingTask: 'AWAITING_REVIEW' },
     { view: 'all', orderStatus: 'PENDING_REVIEW' },
+    ...['PENDING_REVIEW', 'APPROVED', 'CANCELLED'].map(reviewView => ({ view: 'all', reviewView })),
   ])('accepts the review view filter %j', async input => {
     await expect(validate(plainToInstance(PurchaseOrderListQueryDto, input)))
       .resolves.toEqual([])
   })
+})
+
+it('rejects an unknown review view', async () => {
+  await expect(validate(plainToInstance(PurchaseOrderListQueryDto, { view: 'all', reviewView: 'UNKNOWN' }))).resolves.not.toHaveLength(0)
+})
+
+it('excludes review view from status-count filters', async () => {
+  await expect(validate(plainToInstance(PurchaseOrderStatusCountsQueryDto, { view: 'all', reviewView: 'APPROVED' }), { whitelist: true, forbidNonWhitelisted: true })).resolves.not.toHaveLength(0)
 })
 
 describe('PurchaseOrderSourceSalesOrdersQueryDto', () => {

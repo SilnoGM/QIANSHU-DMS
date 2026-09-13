@@ -188,7 +188,7 @@ test('列汇总支持总数、平均值和求和', () => {
   assert.equal(calculateColumnSummary(rows, { ...baseColumn, summary: { type: 'sum' } }), 600)
 })
 
-test('QsGenericTable 组合 FaTable 与 FaPagination 并保持行号和响应式设置不可取消', () => {
+test('QsGenericTable 组合 FaTable 与 FaPagination 并保持默认行号不参与列隐藏', () => {
   const source = readRelativeSource(
     '../../src/components/business/QsGenericTable/index.vue',
   )

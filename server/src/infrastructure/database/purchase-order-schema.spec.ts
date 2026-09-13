@@ -74,6 +74,7 @@ describe('purchase order domain schema', () => {
     expect(enumValues(schema, 'PurchaseOrderFulfillmentStatus')).toEqual([
       'ORDERED',
       'PREPARING',
+      'PARTIALLY_SHIPPED',
       'SHIPPED',
       'SIGNED',
     ])

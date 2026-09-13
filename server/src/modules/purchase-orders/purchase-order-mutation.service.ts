@@ -264,6 +264,11 @@ export class PurchaseOrderMutationService {
           WHERE purchase_order_id = ${order.id}::uuid
         `)
       }
+      // 与审核、唛头派发共用事务，避免尚未通过的预定义货件被实际作业使用。
+      await transaction.purchaseOrderPart.updateMany({
+        where: { purchaseOrderId, status: 'PENDING_REVIEW' },
+        data: { status: 'ACTIVE' },
+      })
       for (const transition of [
         { dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', eventType: AuditEventType.PURCHASE_ORDER_ORDER_STATUS_CHANGED },
         { dimension: 'FULFILLMENT', fromStatus: 'ORDERED', toStatus: 'PREPARING', eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED },
@@ -348,6 +353,9 @@ export class PurchaseOrderMutationService {
       // 取消与创建使用同一“销售来源行 UUID 升序”锁序，确保释放数量不会穿透并发确认。
       await this.lockSourceSalesLines(transaction, purchaseOrderId)
       const order = await this.lockOrder(transaction, purchaseOrderId)
+      if (['PARTIALLY_SHIPPED', 'SHIPPED', 'SIGNED'].includes(order.fulfillmentStatus)) {
+        return purchaseOrderRuleFailure('PURCHASE_ORDER_STATUS_TRANSITION_INVALID', '已有货件发出的采购订单不能整单取消')
+      }
       const paidAmount = await this.readPaidAmount(transaction, purchaseOrderId)
       assertPurchaseOrderStatusTransition(order.orderStatus, 'CANCELLED', {
         activePaidAmount: paidAmount,
@@ -355,6 +363,11 @@ export class PurchaseOrderMutationService {
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
         data: { orderStatus: 'CANCELLED', version: { increment: 1 } },
+      })
+      // 取消只改变可用性，原唛头与产品分配继续留存供历史追溯。
+      await transaction.purchaseOrderPart.updateMany({
+        where: { purchaseOrderId, status: { not: 'CANCELLED' } },
+        data: { status: 'CANCELLED' },
       })
       await transaction.purchaseOrderStatusHistory.create({ data: {
         purchaseOrderId,
@@ -403,6 +416,10 @@ export class PurchaseOrderMutationService {
       return purchaseOrderValidationFailure('toStatus')
     }
     const toStatus = body.toStatus as PurchaseOrderFulfillmentStatus
+    // 发货事实只能由货件发货命令写入，通用履约接口不能绕过货件分配。
+    if (toStatus === 'SHIPPED' || toStatus === 'PARTIALLY_SHIPPED') {
+      return purchaseOrderRuleFailure('PURCHASE_ORDER_FULFILLMENT_TRANSITION_INVALID', '请通过货件发货操作更新发货状态')
+    }
     const reason = optionalText(body.reason, 'reason', 500)
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
@@ -431,7 +448,7 @@ export class PurchaseOrderMutationService {
         fromStatus: order.fulfillmentStatus,
         toStatus,
         reason: reason ?? `用户确认采购订单进入${{
-          ORDERED: '已下单', PREPARING: '备货中', SHIPPED: '已发货', SIGNED: '已签收',
+          ORDERED: '已下单', PREPARING: '备货中', PARTIALLY_SHIPPED: '部分发货', SHIPPED: '已发货', SIGNED: '已签收',
         }[toStatus]}`,
         changedByUserId: trusted.actorUserId,
       } })

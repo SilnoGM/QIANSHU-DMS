@@ -25,8 +25,8 @@ import {
   readConfiguration,
 } from './regions.browser.helpers.mjs'
 
-const accountListRoute = '/admin/fund-accounts/list'
-const transactionRoute = '/admin/fund-accounts/transactions'
+const accountListRoute = '/qs-finance/fund-accounts/list'
+const transactionRoute = '/qs-finance/fund-accounts/transactions'
 const flowUsername = 'fund_browser_flow_user'
 const limitedUsername = 'fund_browser_limited'
 const profitBusinessNo = 'E2E-ORDER-PROFIT'

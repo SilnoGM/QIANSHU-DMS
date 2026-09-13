@@ -10,13 +10,16 @@ import { normalizePurchaseOrderStatusSelection } from '../../src/views/operation
 const ROOT = new URL('../../src/views/operations/purchase-orders/', import.meta.url)
 const read = (file: string) => readFile(new URL(file, ROOT), 'utf8')
 
-test('审核两视图入口使用独立权限，并复用确认弹窗与列表计数刷新', async () => {
+test('采购工作台独立承担审核，运营两视图保留查看取消并刷新计数', async () => {
   const source = await read('index.vue')
-  assert.match(source, /auth\('purchase-orders:review'\)/u)
-  assert.match(source, /action\.key === 'REVIEW'[\s\S]*?return canReview\.value/u)
-  assert.match(source, /props\.viewMode === 'all' && canReview && row\.orderStatus === 'PENDING_REVIEW'/u)
-  assert.match(source, /<PurchaseOrderReviewModal[\s\S]*?@detail-updated="handleDetailUpdated"/u)
-  assert.match(source, /function handleDetailUpdated[\s\S]*?refreshOrdersAndCounts\(\)/u)
+  const workbench = await readFile(new URL('../../src/views/workbenches/purchase-reviews/index.vue', import.meta.url), 'utf8')
+  assert.doesNotMatch(source, /PurchaseOrderReviewModal|auth\('purchase-orders:review'\)/u)
+  assert.match(source, /canCancelPurchaseOrderFromList\(row\)/u)
+  assert.match(source, /props\.viewMode === 'all' \|\| row\.orderStatus === 'PENDING_REVIEW'/u)
+  assert.match(workbench, /auth\('purchase-orders:review'\)/u)
+  assert.match(workbench, /row\.orderStatus === 'PENDING_REVIEW' && canReview/u)
+  assert.match(workbench, /<PurchaseOrderReviewModal[\s\S]*?@detail-updated="refresh"/u)
+  assert.match(workbench, /function refresh[\s\S]*?load\(\)[\s\S]*?loadCounts\(\)/u)
 })
 
 test('审核先取最新详情，二次确认才提交；失败重查并保留说明，换单或退出取消旧请求', async () => {

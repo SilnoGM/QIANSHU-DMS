@@ -72,14 +72,16 @@ test('待审核所有唛头为空时显示待生成，不制造复制文本或�
 test('审核前货件 null 原样保留；审核后的货件独立字段不由基础码或内部序号重算', () => {
   const records = getPurchaseOrderPartRecords({
     parts: [
-      { id: 'pending', partNumber: 100, shippingMarkText: null, items: [] },
-      { id: 'stored', partNumber: 1, shippingMarkText: 'STORED-UNCHANGED', items: [] },
+      { id: 'pending', partNumber: 100, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] },
+      { id: 'stored', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'STORED-UNCHANGED', items: [] },
     ],
     lines: [],
     lineSummary: { previews: [] },
   } as unknown as PurchaseOrderDetailDto)
   assert.equal(records[0]?.shippingMarkText, 'STORED-UNCHANGED')
   assert.equal(records[1]?.shippingMarkText, null)
+  assert.equal(records[0]?.status, 'ACTIVE')
+  assert.equal(records[1]?.status, 'PENDING_REVIEW')
 })
 
 test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用货件实际分配数量', () => {
@@ -93,8 +95,8 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
       { lineId: 'line-a', mainImage: { contentUrl: '/image-a' } },
     ] },
     parts: [
-      { id: 'part-b', partNumber: 2, shippingMarkText: 'MARK-02', items: [{ purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5 }] },
-      { id: 'part-a', partNumber: 1, shippingMarkText: 'MARK-01', items: [
+      { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [{ purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5 }] },
+      { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', items: [
         { purchaseOrderLineId: 'line-b', lineNumber: 2, quantity: 3 },
         { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 3 },
       ] },
@@ -103,11 +105,11 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
   const before = structuredClone(detail)
   const records = getPurchaseOrderPartRecords(detail)
   assert.deepEqual(records, [
-    { id: 'part-a', partNumber: 1, shippingMarkText: 'MARK-01', items: [
+    { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', items: [
       { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 3, productNo: 'SKU-A', productName: '同名产品', description: 'A 备注', imageSrc: '/image-a' },
       { purchaseOrderLineId: 'line-b', lineNumber: 2, quantity: 3, productNo: 'SKU-B', productName: '同名产品', description: 'B 备注', imageSrc: '/image-b' },
     ] },
-    { id: 'part-b', partNumber: 2, shippingMarkText: 'MARK-02', items: [
+    { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [
       { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5, productNo: 'SKU-A', productName: '同名产品', description: 'A 备注', imageSrc: '/image-a' },
     ] },
   ])
@@ -119,7 +121,7 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
 test('货件为空时不从原唛头和产品总数合成货件，缺失产品快照不串用其他产品', () => {
   assert.deepEqual(getPurchaseOrderPartRecords({ parts: [], lines: [], lineSummary: { previews: [] }, shippingMarkText: 'OLD' } as unknown as PurchaseOrderDetailDto), [])
   const records = getPurchaseOrderPartRecords({
-    parts: [{ id: 'part', partNumber: 1, shippingMarkText: 'MARK', items: [{ purchaseOrderLineId: 'missing', lineNumber: 4, quantity: 2 }] }],
+    parts: [{ id: 'part', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK', items: [{ purchaseOrderLineId: 'missing', lineNumber: 4, quantity: 2 }] }],
     lines: [],
     lineSummary: { previews: [] },
   } as unknown as PurchaseOrderDetailDto)

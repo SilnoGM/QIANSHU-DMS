@@ -1,3 +1,4 @@
+import type { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import {
   AuditService,
@@ -530,5 +531,60 @@ describe('FundPostingApplicationService reversal idempotency and failures', () =
       auditFailure.service.reversePostingBatch(CONTEXT, input()),
       'FUND_INTERNAL_ERROR',
     )
+  })
+})
+
+
+describe('sales receipt full reversal', () => {
+  const context = { ...CONTEXT, sourceCode: 'SALES_RECEIPT', consumerCode: 'SALES_RECEIPT.VOID' }
+  beforeEach(() => {
+    jest.resetAllMocks()
+    configureSuccessfulReversal({ batch: { ...originalBatch(), businessSourceCode: 'SALES_RECEIPT' } })
+  })
+
+  it('blocks administrator reversal under the original batch lock', async () => {
+    const { service } = fixture()
+    await expect(service.reversePostingBatch(CONTEXT, input('100'))).rejects.toMatchObject({ code: 'FUND_REVERSAL_REQUIRES_RECEIPT_VOID' })
+    expect(mockedLockOriginal).toHaveBeenCalled()
+    expect(mockedInsertReversal).not.toHaveBeenCalled()
+  })
+
+  it('reverses the original entries in the caller transaction, allowing negative balances', async () => {
+    const { service, transaction, prisma } = fixture()
+    const result = await service.reverseBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input('100'))
+    expect(prisma.$transaction).not.toHaveBeenCalled()
+    expect(result.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ accountTarget: 'USER', amount: '30.00', balanceAfter: '-20.00' }),
+      expect.objectContaining({ accountTarget: 'COMPANY', amount: '70.00', balanceAfter: '30.00' }),
+    ]))
+    expect(mockedInsertReversal).toHaveBeenCalledWith(transaction, expect.objectContaining({ consumerCode: 'SALES_RECEIPT.VOID', actorUserId: ACTOR_ID }))
+  })
+
+  it('rejects a partial reversal request', async () => {
+    const { service, transaction } = fixture()
+    await expect(service.reverseBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input('40'))).rejects.toMatchObject({ code: 'FUND_REVERSAL_STATE_CHANGED' })
+    expect(mockedInsertReversal).not.toHaveBeenCalled()
+  })
+
+  it('rejects any pre-existing partial reversal instead of deducting twice', async () => {
+    const prior = splitEntries('CREDIT', ['3.00', '7.00'])
+    mockedReadEntries.mockResolvedValue({ ...prior, cumulativeReversedBusinessAmount: '10.00', cumulativeReversedEntryAmount: '10.00' })
+    const { service, transaction } = fixture()
+    await expect(service.reverseBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input('100'))).rejects.toMatchObject({ code: 'FUND_REVERSAL_STATE_CHANGED' })
+    expect(mockedInsertReversal).not.toHaveBeenCalled()
+  })
+
+  it.each(['0.00', '100.00'])('reverses only the actual nonzero entry at %s percent', async (shareRate) => {
+    const target = shareRate === '0.00' ? 'COMPANY' as const : 'USER' as const
+    mockedLockOriginal.mockResolvedValue({ ...originalBatch(), businessSourceCode: 'SALES_RECEIPT', userShareRateSnapshot: shareRate, companyShareRateSnapshot: shareRate === '0.00' ? '100.00' : '0.00' })
+    mockedReadEntries.mockResolvedValue({
+      entries: [{ originalLineNo: 1, accountId: target === 'USER' ? USER_ACCOUNT_ID : COMPANY_ACCOUNT_ID, accountTarget: target, direction: 'CREDIT', amountStrategy: target === 'USER' ? 'USER_SHARE' : 'COMPANY_REMAINDER', amount: '100.00', reversedAmount: '0.00' }],
+      cumulativeReversedBusinessAmount: '0.00', cumulativeReversedEntryAmount: '0.00',
+    })
+    const { service, transaction } = fixture()
+    const result = await service.reverseBusinessEventInTransaction(transaction as unknown as Prisma.TransactionClient, context, input('100'))
+    expect(result.entries).toHaveLength(1)
+    expect(result.entries[0]).toMatchObject({ accountTarget: target, amount: '100.00', direction: 'DEBIT' })
+    expect(mockedLockAccounts).toHaveBeenCalledWith(transaction, [target === 'USER' ? USER_ACCOUNT_ID : COMPANY_ACCOUNT_ID])
   })
 })

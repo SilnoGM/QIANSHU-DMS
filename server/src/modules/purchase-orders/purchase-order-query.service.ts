@@ -18,7 +18,7 @@ import {
   formatPurchaseOrderAmountUnits,
   parsePurchaseOrderAmountUnits,
 } from './domain/purchase-order-decimal'
-import type { PurchaseOrderPendingTask } from './dto/purchase-order-query.dto'
+import type { PurchaseOrderPendingTask, PurchaseOrderReviewView } from './dto/purchase-order-query.dto'
 import { summarizePurchaseOrderRecords, type PurchaseOrderRecordSummaries } from './purchase-order-record-summary'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
@@ -56,7 +56,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
     where: { detachedAt: null },
     select: { documentType: true, detachedAt: true },
   },
-  _count: { select: { payments: true, statusHistory: true, amountRevisions: true } },
+  _count: { select: { payments: true, statusHistory: true, amountRevisions: true, parts: true } },
   statusHistory: {
     take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
     select: { id: true, changedAt: true, reason: true },
@@ -80,7 +80,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
   fulfillmentStatus: true,
   paymentStatus: true,
   shippingMarkText: true,
-  parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true } },
+  parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true, shippedAt: true, status: true } },
   remark: true,
   version: true,
   createdAt: true,
@@ -100,7 +100,9 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
   parts: {
     orderBy: { partNumber: 'asc' },
     select: {
-      id: true, partNumber: true, shippingMarkText: true,
+      id: true, partNumber: true, status: true, shippingMarkText: true,
+      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true,
+      shippedBy: { select: { id: true, displayName: true } },
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
         purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
       } },
@@ -196,6 +198,7 @@ export interface PurchaseOrderListQueryInput {
   readonly supplierValue?: string
   readonly purchaseType?: PurchaseOrderType
   readonly orderStatus?: PurchaseOrderStatus
+  readonly reviewView?: PurchaseOrderReviewView
   readonly fulfillmentStatus?: PurchaseOrderFulfillmentStatus
   readonly paymentStatus?: PurchaseOrderPaymentStatus
   readonly pendingTask?: PurchaseOrderPendingTask
@@ -245,6 +248,9 @@ export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly paymentStatus: PurchaseOrderPaymentStatus
   readonly shippingMarkText: string | null
   readonly shippingMarks: readonly string[]
+  readonly partCount: number
+  readonly shippedPartCount: number
+  readonly pendingPartCount: number
   readonly remark: string | null
   readonly version: number
   readonly createdAt: string
@@ -277,7 +283,7 @@ export type PurchaseOrderStatusCountValue =
 
 export type PurchaseOrderStatusCountsQueryInput = Omit<
   PurchaseOrderListQueryInput,
-  'orderStatus' | 'page' | 'pageSize' | 'pendingTask'
+  'orderStatus' | 'page' | 'pageSize' | 'pendingTask' | 'reviewView'
 >
 
 export interface PurchaseOrderStatusCounts {
@@ -292,7 +298,13 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
   readonly parts: readonly {
     readonly id: string
     readonly partNumber: number
+    readonly status: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
     readonly shippingMarkText: string | null
+    readonly shippedAt: string | null
+    readonly shippedById: string | null
+    readonly shipmentRecordedAt: string | null
+    readonly shipmentRemark: string | null
+    readonly shippedBy: { readonly id: string, readonly displayName: string } | null
     readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
   }[]
   readonly sourceSalesOrder: {
@@ -438,7 +450,7 @@ function mapCurrencySummary(
 function buildPurchaseOrderBaseWhere(
   input: Omit<
     PurchaseOrderListQueryInput,
-    'orderStatus' | 'page' | 'pageSize' | 'pendingTask' | 'view'
+    'orderStatus' | 'page' | 'pageSize' | 'pendingTask' | 'reviewView' | 'view'
   >,
 ): Prisma.PurchaseOrderWhereInput {
   const keyword = input.keyword?.trim().normalize('NFKC')
@@ -526,6 +538,9 @@ function mapListItem(
     supplier,
     createdBy: row.createdBy,
     lineSummary: mapLineSummary(row),
+    partCount: row._count.parts,
+    shippedPartCount: row.parts.filter(part => part.shippedAt != null).length,
+    pendingPartCount: row.parts.filter(part => part.status === 'ACTIVE' && part.shippedAt == null).length,
     orderDate: row.orderDate.toISOString().slice(0, 10),
     currencyCode: row.currencyCode,
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),
@@ -567,9 +582,9 @@ export class PurchaseOrderQueryService {
       },
       AWAITING_SHIPMENT: {
         orderStatus: 'CONFIRMED',
-        fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] },
+        fulfillmentStatus: { in: ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'] },
       },
-      AWAITING_WAREHOUSE: { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED' },
+      AWAITING_WAREHOUSE: { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } },
     }
     const pendingClause: Prisma.PurchaseOrderWhereInput | undefined =
       input.view !== 'pending'
@@ -583,10 +598,17 @@ export class PurchaseOrderQueryService {
               ] },
             ] }
           : taskClauseByType[input.pendingTask]
+    // 审核分类由服务端生成，与显式状态及待办条件取交集，避免组合筛选扩大结果范围。
+    const reviewClause: Prisma.PurchaseOrderWhereInput | undefined =
+      input.reviewView === undefined
+        ? undefined
+        : input.reviewView === 'APPROVED'
+          ? { orderStatus: { in: ['CONFIRMED', 'COMPLETED'] } }
+          : { orderStatus: input.reviewView }
     const where: Prisma.PurchaseOrderWhereInput = {
       ...buildPurchaseOrderBaseWhere(input),
       orderStatus: input.orderStatus,
-      AND: [pendingClause].filter(
+      AND: [pendingClause, reviewClause].filter(
         (value): value is Prisma.PurchaseOrderWhereInput => value !== undefined,
       ),
     }
@@ -710,7 +732,7 @@ export class PurchaseOrderQueryService {
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     )
-    const fulfillmentStatuses = ['ORDERED', 'PREPARING', 'SHIPPED'] as const
+    const fulfillmentStatuses = ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED', 'SHIPPED'] as const
     const fulfillmentCounts = groupedCount(
       fulfillmentRows.map(row => ({
         value: row.fulfillmentStatus,
@@ -735,10 +757,11 @@ export class PurchaseOrderQueryService {
       }, {
         value: 'AWAITING_SHIPMENT',
         count: (fulfillmentCounts.get('ORDERED') ?? 0)
-          + (fulfillmentCounts.get('PREPARING') ?? 0),
+          + (fulfillmentCounts.get('PREPARING') ?? 0)
+          + (fulfillmentCounts.get('PARTIALLY_SHIPPED') ?? 0),
       }, {
         value: 'AWAITING_WAREHOUSE',
-        count: fulfillmentCounts.get('SHIPPED') ?? 0,
+        count: (fulfillmentCounts.get('SHIPPED') ?? 0) + (fulfillmentCounts.get('PARTIALLY_SHIPPED') ?? 0),
       }, {
         value: 'AWAITING_PAYMENT',
         count: paymentStatuses.reduce(
@@ -779,7 +802,12 @@ export class PurchaseOrderQueryService {
       ...summary,
       sourceSalesOrder: row.salesOrder,
       parts: row.parts.map(part => ({
-        id: part.id, partNumber: part.partNumber, shippingMarkText: part.shippingMarkText,
+        id: part.id, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+        shippedAt: part.shippedAt?.toISOString() ?? null,
+        shippedById: part.shippedById ?? null,
+        shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
+        shipmentRemark: part.shipmentRemark ?? null,
+        shippedBy: part.shippedBy ?? null,
         items: part.items.map(item => ({
           purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,
         })),

@@ -9,6 +9,7 @@ import {
   purchaseOrderSupplierFromSources,
   type PurchaseOrderSupplier,
 } from '../purchase-order-query.service'
+import type { PurchaseOrderPartDto } from '../dto/purchase-order-response.dto'
 import { requireFactoryShipmentUuid } from './purchase-order-factory-shipment.normalizer'
 
 const SUPPLIER_DICTIONARY_CODE = 'service_provider.supplier'
@@ -44,6 +45,18 @@ const CONTEXT_PURCHASE_ORDER_SELECT = {
   customSupplierName: true,
   fulfillmentStatus: true,
   version: true,
+  shippingMarkText: true,
+  parts: {
+    orderBy: { partNumber: 'asc' },
+    select: {
+      id: true, partNumber: true, status: true, shippingMarkText: true,
+      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true,
+      shippedBy: { select: { id: true, displayName: true } },
+      items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
+        purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
+      } },
+    },
+  },
   lines: {
     orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
     select: CONTEXT_LINE_SELECT,
@@ -70,6 +83,8 @@ export interface SalesOrderFactoryShipmentContext {
     readonly supplier: PurchaseOrderSupplier
     readonly fulfillmentStatus: PurchaseOrderFulfillmentStatus
     readonly version: number
+    readonly shippingMarkText: string | null
+    readonly parts: readonly PurchaseOrderPartDto[]
     readonly lineSummary: {
       readonly lineCount: number
       readonly totalQuantity: number
@@ -89,7 +104,7 @@ export interface SalesOrderFactoryShipmentContext {
 }
 
 function priority(status: PurchaseOrderFulfillmentStatus): number {
-  return status === 'ORDERED' || status === 'PREPARING' ? 0 : 1
+  return status === 'ORDERED' || status === 'PREPARING' || status === 'PARTIALLY_SHIPPED' ? 0 : 1
 }
 
 function compareContextOrder(
@@ -185,6 +200,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
       pendingShipmentCount: purchaseOrders.filter(order => (
         order.fulfillmentStatus === 'ORDERED'
         || order.fulfillmentStatus === 'PREPARING'
+        || order.fulfillmentStatus === 'PARTIALLY_SHIPPED'
       )).length,
       shipmentSatisfiedCount: purchaseOrders.filter(order => (
         order.fulfillmentStatus === 'SHIPPED'
@@ -205,6 +221,16 @@ export class PurchaseOrderFactoryShipmentQueryService {
       supplier: resolvedSupplier,
       fulfillmentStatus: row.fulfillmentStatus,
       version: row.version,
+      shippingMarkText: row.shippingMarkText,
+      parts: row.parts.map(part => ({
+        id: part.id, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+        shippedAt: part.shippedAt?.toISOString() ?? null,
+        shippedById: part.shippedById,
+        shippedBy: part.shippedBy,
+        shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
+        shipmentRemark: part.shipmentRemark,
+        items: part.items.map(item => ({ purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity })),
+      })),
       lineSummary: {
         lineCount: row.lines.length,
         totalQuantity: row.lines.reduce((sum, line) => sum + line.quantity, 0),

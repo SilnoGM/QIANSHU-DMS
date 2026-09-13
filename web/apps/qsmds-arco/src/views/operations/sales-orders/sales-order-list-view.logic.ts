@@ -219,12 +219,12 @@ export function formatSalesFactoryShipmentSuccess(
   result: FactoryShipmentResultDto,
 ): string {
   if (result.changedPurchaseOrderCount === 0) {
-    return '所选采购单均已发货，未重复处理'
+    return '所选货件已发货，未重复处理'
   }
   if (result.salesOrder?.advancedToLandTransit === true) {
-    return `已确认 ${result.changedPurchaseOrderCount} 张采购单发货，销售订单已进入陆运中`
+    return `已完成 ${result.changedPurchaseOrderCount} 张采购单的本次货件发货，销售订单已进入陆运中`
   }
-  return `已确认 ${result.changedPurchaseOrderCount} 张采购单发货，仍有 ${result.remainingPendingShipmentCount} 张采购单待发货`
+  return `已完成 ${result.changedPurchaseOrderCount} 张采购单的本次货件发货，仍有 ${result.remainingPendingShipmentCount} 张采购单待发货`
 }
 
 /**

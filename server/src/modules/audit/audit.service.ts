@@ -281,12 +281,23 @@ function validateMetadata(
       }
       metadata[key] = [...(ids as string[])]
     }
+    else if (eventType === AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED && key === 'partIds') {
+      // 分批发货仅开放本事件的货件 ID 清单，不能借此写入其他结构化或敏感数据。
+      const ids: unknown = descriptor.value
+      if (!Array.isArray(ids) || ids.length < 1 || ids.length > 1000
+        || !ids.every((id: unknown) => typeof id === 'string' && UUID_PATTERN.test(id))
+        || new Set(ids).size !== ids.length) {
+        throw new AuditEventValidationError()
+      }
+      metadata[key] = [...(ids as string[])]
+    }
     else metadata[key] = validateMetadataValue(descriptor.value, allowStructured)
   }
 
   if (
     Buffer.byteLength(JSON.stringify(metadata), 'utf8')
     > (eventType === AuditEventType.PURCHASE_ORDER_CREATED
+        || (eventType === AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED && 'partIds' in metadata)
         ? MAX_PURCHASE_PART_AUDIT_METADATA_SERIALIZED_BYTES
         : allowStructured
         ? MAX_PRODUCT_CHANGE_AUDIT_METADATA_SERIALIZED_BYTES

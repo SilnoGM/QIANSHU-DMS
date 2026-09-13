@@ -152,7 +152,7 @@ describe('PurchaseOrderCommandService', () => {
       data: expect.objectContaining({ createRequestFingerprintVersion: 'purchase-order.create.v5', shippingMarkText: null, shippingMarkIssuanceId: null }) as unknown,
     }))
     expect(fixture.transaction.purchaseOrderPart.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
-      purchaseOrderId: ORDER_ID, key: ACTOR_ID, partNumber: 1,
+      purchaseOrderId: ORDER_ID, key: ACTOR_ID, partNumber: 1, status: 'PENDING_REVIEW',
       shippingMarkText: null, shippingMarkIssuanceId: null, shippingMarkKeyHash: null,
     })] })
   })

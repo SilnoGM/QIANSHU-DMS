@@ -50,7 +50,7 @@ import FundConfigurationDrawer from './fund-configuration-drawer.vue'
 import FundManualAdjustmentModal from './fund-manual-adjustment-modal.vue'
 import FundShareRateModal from './fund-share-rate-modal.vue'
 
-defineOptions({ name: 'AdminFundAccountList' })
+defineOptions({ name: 'QsFinanceFundAccountList' })
 
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
@@ -697,7 +697,7 @@ function abandonManualAdjustment(): void {
 
 function navigateToTransactions(account: FundAccountDto): void {
   void router.push({
-    name: 'adminFundAccountTransactions',
+    name: 'qsFinanceFundAccountTransactions',
     query: { accountId: account.id },
   })
 }

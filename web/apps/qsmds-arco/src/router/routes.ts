@@ -8,19 +8,19 @@ import ComponentLibraryRoutes, {
   createRegionSelectorBrowserE2eRoutes,
   shouldEnableComponentLibrary,
 } from './modules/component.library'
-import FundAccountManagement, {
-  FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,
-} from './modules/fund-account.management'
+import { financeLegacyRedirects } from './modules/finance-legacy-redirects'
 import OperationsWorkbenchRoutes from './modules/operations.workbench'
 import ProductManagement, {
   PRODUCT_MANAGEMENT_PERMISSIONS,
 } from './modules/product.management'
+import { financeWorkbench, purchaseWorkbench } from './modules/role.workbenches'
 import SystemManagement, {
   MANAGEMENT_READ_PERMISSIONS,
 } from './modules/system.management'
 
 // 固定路由（默认路由）
 const constantRoutes: RouteRecordRaw[] = [
+  ...financeLegacyRedirects,
   {
     path: '/login',
     name: 'login',
@@ -94,18 +94,18 @@ const asyncRoutes: RouteRecordMainRaw[] = [
       ...OperationsWorkbenchRoutes,
     ],
   },
+  financeWorkbench,
+  purchaseWorkbench,
   {
     meta: {
       title: '管理员工作台',
       icon: 'i-lucide:layout-dashboard',
       auth: [
         ...PRODUCT_MANAGEMENT_PERMISSIONS,
-        ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS,
       ],
     },
     children: [
       ProductManagement,
-      FundAccountManagement,
     ],
   },
   {

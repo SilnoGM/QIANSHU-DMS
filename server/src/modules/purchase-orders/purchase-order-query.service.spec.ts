@@ -69,7 +69,7 @@ function orderRow(overrides: Record<string, unknown> = {}) {
     documents: [],
     statusHistory: [],
     amountRevisions: [],
-    _count: { payments: 0, statusHistory: 0, amountRevisions: 0 },
+    _count: { parts: 0, payments: 0, statusHistory: 0, amountRevisions: 0 },
     createdBy: { id: 'actor-id', displayName: '采购员' },
     ...overrides,
   }
@@ -180,17 +180,17 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
       shippingMarkText: null, orderStatus: 'PENDING_REVIEW',
-      parts: [{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }],
+      parts: [{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }],
     }))
     const detail = await fixture.service.getById('order-id')
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
-    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, shippingMarkText: null, items: [] }])
+    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }])
   })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
-      _count: { payments: 0, statusHistory: 0, amountRevisions: 0 },
+      _count: { parts: 0, payments: 0, statusHistory: 0, amountRevisions: 0 },
     })])
     const page = await fixture.service.list({ view: 'all' })
     expect(page.items[0]).toMatchObject({
@@ -230,7 +230,7 @@ describe('PurchaseOrderQueryService', () => {
       ],
       statusHistory: [{ id: 'status-1', changedAt: new Date('2026-09-05T03:00:00Z'), reason: null }],
       amountRevisions: [{ id: 'amount-1', changedAt, reason: '调整采购约定' }],
-      _count: { payments: 5, statusHistory: 3, amountRevisions: 2 },
+      _count: { parts: 0, payments: 5, statusHistory: 3, amountRevisions: 2 },
     })])
     const page = await fixture.service.list({ view: 'all', page: 2, pageSize: 5 })
     expect(page.items[0]).toMatchObject({
@@ -258,7 +258,7 @@ describe('PurchaseOrderQueryService', () => {
         documents: { where: { detachedAt: null }, select: { documentType: true, detachedAt: true } },
         statusHistory: expect.objectContaining({ take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }] }) as unknown,
         amountRevisions: expect.objectContaining({ take: 1, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }] }) as unknown,
-        _count: { select: { payments: true, statusHistory: true, amountRevisions: true } },
+        _count: { select: { payments: true, statusHistory: true, amountRevisions: true, parts: true } },
       }) as unknown,
     }))
     expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Array), { isolationLevel: 'RepeatableRead' })
@@ -268,7 +268,7 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     const changedAt = new Date('2026-09-06T03:00:00Z')
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
-      _count: { payments: 0, statusHistory: 1, amountRevisions: 1 },
+      _count: { parts: 0, payments: 0, statusHistory: 1, amountRevisions: 1 },
       statusHistory: [{ id: 'same-id', changedAt, reason: null }],
       amountRevisions: [{ id: 'same-id', changedAt, reason: '金额调整' }],
     })])
@@ -282,7 +282,7 @@ describe('PurchaseOrderQueryService', () => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
       // 列表仍只加载有效付款；历史总数独立来自数据库关系计数。
-      payments: [], _count: { payments: 2, statusHistory: 0, amountRevisions: 0 },
+      payments: [], _count: { parts: 0, payments: 2, statusHistory: 0, amountRevisions: 0 },
     })])
     const page = await fixture.service.list({ view: 'all' })
     expect(page.items[0]).toMatchObject({
@@ -474,8 +474,8 @@ describe('PurchaseOrderQueryService', () => {
 
   it.each([
     ['AWAITING_REVIEW', { orderStatus: 'PENDING_REVIEW' }],
-    ['AWAITING_SHIPMENT', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] } }],
-    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED' }],
+    ['AWAITING_SHIPMENT', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'] } }],
+    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } }],
     ['AWAITING_PAYMENT', { orderStatus: 'CONFIRMED', paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } }],
   ] as const)('builds the %s pending task predicate', async (pendingTask, taskClause) => {
     const fixture = setup()
@@ -499,6 +499,31 @@ describe('PurchaseOrderQueryService', () => {
     expect(query.where).toMatchObject({
       orderStatus: 'CANCELLED', AND: [{ orderStatus: 'PENDING_REVIEW' }],
     })
+  })
+
+  it.each([
+    ['PENDING_REVIEW', { orderStatus: 'PENDING_REVIEW' }],
+    ['APPROVED', { orderStatus: { in: ['CONFIRMED', 'COMPLETED'] } }],
+    ['CANCELLED', { orderStatus: 'CANCELLED' }],
+  ] as const)('paginates the %s review view with shared filters', async (reviewView, clause) => {
+    const fixture = setup()
+    await fixture.service.list({ view: 'all', reviewView, page: 2, pageSize: 10, supplierValue: 'SUPPLIER_A', orderStatus: 'CANCELLED' })
+    const query = fixture.prisma.purchaseOrder.findMany.mock.calls[0]?.[0] as { where: unknown }
+    expect(query).toMatchObject({ skip: 10, take: 10, where: {
+      supplierValue: 'SUPPLIER_A', orderStatus: 'CANCELLED', AND: [clause],
+    } })
+    expect(fixture.prisma.purchaseOrder.count).toHaveBeenCalledWith({ where: query.where })
+    expect(fixture.prisma.purchaseOrder.aggregate).toHaveBeenCalledWith(expect.objectContaining({ where: query.where }))
+  })
+
+  it('returns the part count independently of issued shipping marks', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      parts: [{ shippingMarkText: null }, { shippingMarkText: null }],
+      _count: { parts: 2, payments: 0, statusHistory: 0, amountRevisions: 0 },
+    })])
+    const result = await fixture.service.list({ view: 'all' })
+    expect(result.items[0]).toMatchObject({ partCount: 2, shippingMarks: [] })
   })
 
   it('returns detail customer through SalesOrder and derives active payment totals', async () => {
@@ -690,6 +715,7 @@ describe('PurchaseOrderQueryService status counts', () => {
       .mockResolvedValueOnce([
         { fulfillmentStatus: 'ORDERED', _count: { _all: 4 } },
         { fulfillmentStatus: 'PREPARING', _count: { _all: 3 } },
+        { fulfillmentStatus: 'PARTIALLY_SHIPPED', _count: { _all: 2 } },
         { fulfillmentStatus: 'SHIPPED', _count: { _all: 2 } },
       ])
       .mockResolvedValueOnce([
@@ -701,8 +727,8 @@ describe('PurchaseOrderQueryService status counts', () => {
       view: 'pending',
       items: [
         { value: 'AWAITING_REVIEW', count: 3 },
-        { value: 'AWAITING_SHIPMENT', count: 7 },
-        { value: 'AWAITING_WAREHOUSE', count: 2 },
+        { value: 'AWAITING_SHIPMENT', count: 9 },
+        { value: 'AWAITING_WAREHOUSE', count: 4 },
         { value: 'AWAITING_PAYMENT', count: 6 },
       ],
     })

@@ -26,7 +26,7 @@
 - `sortable`：是否允许排序。
 - `summary`：支持 `count`、`average`、`sum`，可通过 `component` 和 `componentProps` 指定汇总渲染组件。
 
-行号列由组件生成，始终固定在最左侧且不可隐藏。行号按照 `(page - 1) * pageSize + rowIndex + 1` 连续计算。
+行号列由组件生成，默认固定在最左侧且不参与列设置。`showRowNumber` 默认 `true`；业务编号需要作为最左列时可设为 `false`，同时隐藏桌面行号和默认移动卡片行号。其他页面不传此参数时保持原样，移动插槽的 `row-number` 仍可读取。行号按照 `(page - 1) * pageSize + rowIndex + 1` 连续计算。
 
 `copyable: true` 会为桌面单元格追加复制按钮，按钮在悬停或键盘聚焦时显示；默认窄屏卡片始终显示复制入口。复制内容取自列 `accessorKey` 或 `accessorFn` 的当前值，成功后图标短暂变为勾选，失败时显示错误状态。使用自定义 `mobile-row` 插槽时，业务页面可以像组件库示例一样组合 `CopyCellButton`，让自定义卡片保持同样的反馈。
 

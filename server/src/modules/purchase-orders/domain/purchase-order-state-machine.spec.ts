@@ -51,6 +51,8 @@ describe('purchase order state machine', () => {
   it.each([
     ['ORDERED', 'PREPARING'],
     ['PREPARING', 'SHIPPED'],
+    ['PREPARING', 'PARTIALLY_SHIPPED'],
+    ['PARTIALLY_SHIPPED', 'SHIPPED'],
     ['SHIPPED', 'SIGNED'],
   ] as const)('allows fulfillment transition %s -> %s', (from, to) => {
     expect(() => assertPurchaseOrderFulfillmentTransition(from, to, {

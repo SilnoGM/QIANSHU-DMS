@@ -15,7 +15,9 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
   const baseDatabaseUrl = process.env.DATABASE_URL
   if (!baseDatabaseUrl) throw new Error('Isolated database is required')
   const url = new URL(baseDatabaseUrl)
-  if (url.username !== 'qianshu_ci' || url.pathname !== '/qianshu_ci' || !['127.0.0.1', 'localhost'].includes(url.hostname)) {
+  const knownTestDatabase = (url.username === 'qianshu_ci' && url.pathname === '/qianshu_ci')
+    || (url.username === 'receipt_test' && url.pathname === '/receipt_test')
+  if (!knownTestDatabase || !['127.0.0.1', 'localhost'].includes(url.hostname)) {
     throw new Error('Database is outside isolated boundary')
   }
   const schemaName = `purchase_mark_e2e_${randomUUID().replaceAll('-', '')}`
@@ -51,7 +53,11 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
       }
     },
     async applyReviewMigration() {
-      await client.query(readFileSync(resolve(__dirname, '../prisma/migrations/20260908013900_purchase_order_review_shipping_marks/migration.sql'), 'utf8'))
+      // 恢复全部延后的迁移，当前服务才能使用生命周期与发货字段。
+      const directory = resolve(__dirname, '../prisma/migrations')
+      for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260908013900_purchase_order_review_shipping_marks').sort()) {
+        await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
+      }
     },
     async dispose() {
       if (disposed) return

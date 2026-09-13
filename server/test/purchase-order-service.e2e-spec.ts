@@ -1,3 +1,9 @@
+import { ensureReceiptNumberingRule } from './fixtures/sales-receipt-numbering-service.fixture'
+import { SalesReceiptService } from '../src/modules/sales-orders/receipts/sales-receipt.service'
+import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/sales-receipt-query.service'
+import { FundPostingApplicationService } from '../src/modules/fund-accounts/application/fund-posting.service'
+import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
+import type { MediaContentDeliveryService } from '../src/modules/media/media-content-delivery.service'
 import { randomUUID } from 'node:crypto'
 
 
@@ -19,7 +25,6 @@ import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purcha
 import { PurchaseOrderSourceQueryService } from '../src/modules/purchase-orders/purchase-order-source-query.service'
 import { SalesOrderPurchaseCoverageService } from '../src/modules/purchase-orders/sales-order-purchase-coverage.service'
 import { SalesOrderCommandService } from '../src/modules/sales-orders/sales-order-command.service'
-import { SalesOrderMutationService } from '../src/modules/sales-orders/sales-order-mutation.service'
 import { SalesOrderAutomaticStateService } from '../src/modules/sales-orders/sales-order-automatic-state.service'
 import { SalesOrderProductEditQueryService } from '../src/modules/sales-orders/sales-order-product-edit-query.service'
 import { SalesOrderProductEditService } from '../src/modules/sales-orders/sales-order-product-edit.service'
@@ -88,7 +93,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   let sourceQueries: PurchaseOrderSourceQueryService
   let productEdits: SalesOrderProductEditService
   let productEditQueries: SalesOrderProductEditQueryService
-  let salesMutations: SalesOrderMutationService
+  let salesReceipts: SalesReceiptService
   let grantStockPermission = true
   let purchaseNumber = 0
 
@@ -357,15 +362,14 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     sourceQueries = new PurchaseOrderSourceQueryService(prisma, dictionaryLookup)
     productEdits = new SalesOrderProductEditService(prisma, new AuditService())
     productEditQueries = new SalesOrderProductEditQueryService(prisma)
-    salesMutations = new SalesOrderMutationService(
-      prisma,
-      new AuditService(),
-      media,
-      dictionaryLookup,
-      salesQuery,
-      new SalesOrderAutomaticStateService(new AuditService()),
-      { now: () => new Date('2026-08-27T11:30:00.000Z') },
+    await ensureReceiptNumberingRule(prisma, actorUserId)
+    salesReceipts = new SalesReceiptService(prisma, new SalesReceiptQueryService(prisma), dictionaryLookup, media,
+      new FundPostingApplicationService(prisma, new AuditService()), new AuditService(), new SalesOrderAutomaticStateService(new AuditService()),
+      { getPermissionCodesInTransaction: () => Promise.resolve(['sales-orders:payment', 'sales-orders:document', 'sales-receipts:review']), hasAll: () => true } as unknown as AccessControlService,
+      { stat: () => Promise.resolve({ sizeBytes: 1n, modifiedAt: new Date() }) } as unknown as MediaContentDeliveryService,
+      new NumberingGeneratorService(prisma),
     )
+    await new FundAccountCommandService(prisma, new AuditService()).createUserAccount({ actorUserId, requestId: randomUUID() }, { userId: actorUserId, userShareRate: '30' })
     commands = new PurchaseOrderCommandService(
       prisma,
       numbering,
@@ -557,7 +561,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
     await expect(mutations.updateFulfillmentStatus(context(), createdId, { toStatus: 'PREPARING' }))
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
-    await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version }))
+    await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version, partIds: created.parts.map(part => part.id) }))
       .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
     const reviewResults = await Promise.allSettled([
       mutations.review(context(), createdId, { expectedVersion: created.version }),
@@ -619,11 +623,16 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(paidPage.items[0]?.changeSummary.latest?.reason).toContain('25.0000')
     await expect(queries.list({ view: 'all', keyword: created.orderNo, page: 2, pageSize: 1 }))
       .resolves.toMatchObject({ total: 1, items: [] })
-    for (const toStatus of ['SHIPPED', 'SIGNED'] as const) {
-      await mutations.updateFulfillmentStatus({
-        actorUserId, requestId: `purchase-${toStatus}-${suffix}`,
-      }, createdId, { toStatus })
-    }
+    await expect(mutations.updateOrderStatus({
+      actorUserId, requestId: `purchase-cancel-paid-${suffix}`,
+    }, createdId, { toStatus: 'CANCELLED' }))
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
+    await factoryShipments.shipPurchaseOrder({
+      actorUserId, requestId: `purchase-SHIPPED-${suffix}`,
+    }, createdId, { expectedVersion: paid.version, partIds: paid.parts.map(part => part.id) })
+    await mutations.updateFulfillmentStatus({
+      actorUserId, requestId: `purchase-SIGNED-${suffix}`,
+    }, createdId, { toStatus: 'SIGNED' })
     await expect(queries.list({
       view: 'pending', keyword: created.orderNo,
     })).resolves.toMatchObject({ total: 0, items: [] })
@@ -649,9 +658,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       changeSummary: voided.changeSummary,
     }] })
     await expect(mutations.updateOrderStatus({
-      actorUserId, requestId: `purchase-cancel-paid-${suffix}`,
+      actorUserId, requestId: `purchase-cancel-shipped-${suffix}`,
     }, createdId, { toStatus: 'CANCELLED' }))
-      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
   })
 
   it('persists typed voucher names without renaming source files or reusing uploads', async () => {
@@ -865,7 +874,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
   })
 
   it('atomically edits products once, becomes partial, and returns to completed after purchase', async () => {
-    await salesMutations.recordPayment({
+    const receipt = await salesReceipts.submit({
       actorUserId,
       requestId: `sales-payment-before-product-edit-${suffix}`,
     }, salesOrderId, {
@@ -875,7 +884,9 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       paymentMethod: 'BANK_TRANSFER',
       remark: null,
       voucher: { mediaAssetId: paymentVoucherMediaAssetId },
-    })
+    }, randomUUID())
+    const approval = await salesReceipts.approvalContext({ actorUserId, requestId: randomUUID() }, receipt.id)
+    await salesReceipts.approve({ actorUserId, requestId: randomUUID() }, receipt.id, { expectedVersion: 1, expectedContext: approval.expectedContext })
     const before = await prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
       select: { version: true, paymentStatus: true, fulfillmentStatus: true },
@@ -1156,6 +1167,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         orderNo: true,
         fulfillmentStatus: true,
         version: true,
+        parts: { select: { id: true, partNumber: true } },
       },
     })
     expect(initialOrders.length).toBeGreaterThanOrEqual(3)
@@ -1172,6 +1184,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         requestId: `purchase-factory-concurrent-a-${suffix}`,
       }, concurrentTarget.id, {
         expectedVersion: concurrentTarget.version,
+        partIds: concurrentTarget.parts.map(part => part.id),
         reason: 'E2E 并发发货',
       }),
       factoryShipments.shipPurchaseOrder({
@@ -1179,6 +1192,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         requestId: `purchase-factory-concurrent-b-${suffix}`,
       }, concurrentTarget.id, {
         expectedVersion: concurrentTarget.version,
+        partIds: concurrentTarget.parts.map(part => part.id),
         reason: 'E2E 并发发货',
       }),
     ])
@@ -1215,7 +1229,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     }, {
       fromStatus: 'PREPARING',
       toStatus: 'SHIPPED',
-      reason: 'E2E 并发发货',
+      reason: `本次发货：${concurrentTarget.parts.map(part => `货件-${String(part.partNumber).padStart(2, '0')}`).join('、')}；E2E 并发发货`,
       changedByUserId: actorUserId,
     }]))
     const purchaseAuditEvents = await prisma.auditEvent.findMany({
@@ -1246,7 +1260,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] },
       },
       orderBy: { id: 'asc' },
-      select: { id: true, version: true },
+      select: { id: true, version: true, parts: { select: { id: true } } },
     })
     const finalTarget = pendingOrders.at(-1)
     const selectedTargets = pendingOrders.slice(0, -1)
@@ -1261,6 +1275,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       requestId: `purchase-factory-stale-${suffix}`,
     }, staleTarget.id, {
       expectedVersion: staleTarget.version + 1,
+      partIds: staleTarget.parts.map(part => part.id),
       reason: null,
     })).rejects.toMatchObject({
       status: 409,
@@ -1275,6 +1290,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       targets: selectedTargets.map(target => ({
         purchaseOrderId: target.id,
         expectedVersion: target.version,
+        partIds: target.parts.map(part => part.id),
       })),
       reason: 'E2E 销售分批发货',
     })
@@ -1292,6 +1308,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       requestId: `purchase-factory-final-${suffix}`,
     }, finalTarget.id, {
       expectedVersion: finalTarget.version,
+      partIds: finalTarget.parts.map(part => part.id),
       reason: 'E2E 最后一张采购发货',
     })
     expect(completed).toMatchObject({
@@ -1352,6 +1369,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       requestId: `purchase-factory-retry-${suffix}`,
     }, finalTarget.id, {
       expectedVersion: finalTarget.version,
+      partIds: finalTarget.parts.map(part => part.id),
       reason: 'E2E 安全重试不得重复写历史',
     })).resolves.toMatchObject({
       changedPurchaseOrderCount: 0,

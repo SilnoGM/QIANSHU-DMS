@@ -1,3 +1,10 @@
+import { SalesOrderPendingPurchaseController } from './sales-order-pending-purchase.controller'
+import { SalesOrderPendingPurchaseQueryService } from './sales-order-pending-purchase-query.service'
+import { FundAccountsModule } from '../fund-accounts/fund-accounts.module'
+import { SalesReceiptController, SalesReceiptOrderController } from './receipts/sales-receipt.controller'
+import { SalesReceiptService } from './receipts/sales-receipt.service'
+import { SalesReceiptQueryService } from './receipts/sales-receipt-query.service'
+import { SalesReceiptVoucherService } from './receipts/sales-receipt-voucher.service'
 import { Module } from '@nestjs/common'
 
 import { PrismaModule } from '../../infrastructure/database/prisma.module'
@@ -20,15 +27,18 @@ import { SalesOrdersController } from './sales-orders.controller'
 @Module({
   imports: [
     PrismaModule,
+    FundAccountsModule,
     AuthModule,
     DictionaryModule,
     MediaModule,
     NumberingModule,
     ProductsModule,
   ],
-  controllers: [SalesOrdersController],
+  controllers: [SalesOrderPendingPurchaseController, SalesOrdersController, SalesReceiptController, SalesReceiptOrderController],
   providers: [
+    SalesReceiptService, SalesReceiptQueryService, SalesReceiptVoucherService,
     SalesOrderQueryService,
+    SalesOrderPendingPurchaseQueryService,
     SalesOrderProductEditQueryService,
     SalesOrderProductEditService,
     SalesOrderCommandService,

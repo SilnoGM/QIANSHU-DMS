@@ -62,14 +62,13 @@ test('审核提示识别已存订单及货件唛头，历史码不承诺重新�
   assert.equal(hasPurchaseOrderShippingMarks({ shippingMarkText: null, parts: [{ shippingMarkText: 'V4' }] }), true)
 })
 
-test('创建确认与审核提示不再承诺提交派发，每单仅申请一个基础唛头', async () => {
+test('创建保留唛头确认提示，审核仅展示可折叠货件', async () => {
   const create = await readFile(new URL('../../src/views/operations/purchase-orders/create.vue', import.meta.url), 'utf8')
   const review = await readFile(new URL('../../src/views/operations/purchase-orders/purchase-order-review-modal.vue', import.meta.url), 'utf8')
   assert.match(create, /purchaseOrderParts\.confirmation/u)
   assert.doesNotMatch(create, /派发订单号与唛头|派发采购订单号与唛头|逐件派发|每个货件将独立派发/u)
-  assert.match(review, /hasPurchaseOrderShippingMarks\(detail\)/u)
-  assert.match(review, /purchaseOrderList\.review\.generateShippingMark/u)
-  assert.match(review, /purchaseOrderList\.review\.preserveShippingMarks/u)
+  assert.doesNotMatch(review, /purchaseOrderList\.review\.(generateShippingMark|preserveShippingMarks)/u)
+  assert.match(review, /<OrderParts :detail="detail"/u)
 })
 
 test('变更场景立即清空旧摘要且取消请求，迟到响应不能覆盖新摘要', async () => {

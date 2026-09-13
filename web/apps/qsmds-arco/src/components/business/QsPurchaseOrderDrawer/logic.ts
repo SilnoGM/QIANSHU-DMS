@@ -46,7 +46,12 @@ export function getPurchaseOrderPartRecords(detail: Pick<PurchaseOrderDetailDto,
   return [...detail.parts].sort((a, b) => a.partNumber - b.partNumber).map(part => ({
     id: part.id,
     partNumber: part.partNumber,
+    status: part.status,
     shippingMarkText: part.shippingMarkText,
+    shippedAt: part.shippedAt,
+    shippedBy: part.shippedBy,
+    shipmentRecordedAt: part.shipmentRecordedAt,
+    shipmentRemark: part.shipmentRemark,
     items: [...part.items].sort((a, b) => a.lineNumber - b.lineNumber).map((item) => {
       const line = linesById.get(item.purchaseOrderLineId)
       return {

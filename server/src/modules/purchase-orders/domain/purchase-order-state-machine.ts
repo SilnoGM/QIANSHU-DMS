@@ -19,7 +19,8 @@ const FULFILLMENT_TRANSITIONS: Readonly<
   Record<PurchaseOrderFulfillmentStatus, readonly PurchaseOrderFulfillmentStatus[]>
 > = {
   ORDERED: ['PREPARING'],
-  PREPARING: ['SHIPPED'],
+  PREPARING: ['PARTIALLY_SHIPPED', 'SHIPPED'],
+  PARTIALLY_SHIPPED: ['SHIPPED'],
   SHIPPED: ['SIGNED'],
   SIGNED: [],
 }

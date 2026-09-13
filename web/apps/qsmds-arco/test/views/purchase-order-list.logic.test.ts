@@ -212,10 +212,12 @@ test('待办采购操作严格只返回当前任务对应的唯一处理动作',
 })
 
 test('全部采购仅允许审核中与已确认订单从操作列进入取消流程', () => {
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'PENDING_REVIEW' }), true)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED' }), true)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'COMPLETED' }), false)
-  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CANCELLED' }), false)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED' }), true)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING' }), true)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'PARTIALLY_SHIPPED' }), false)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED' }), false)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'COMPLETED', fulfillmentStatus: 'SIGNED' }), false)
+  assert.equal(canCancelPurchaseOrderFromList({ orderStatus: 'CANCELLED', fulfillmentStatus: 'ORDERED' }), false)
 })
 
 test('采购审核中的标签、独立查询和待办动作不允许提前履约', () => {
@@ -236,7 +238,7 @@ test('采购审核中的标签、独立查询和待办动作不允许提前履�
   assert.deepEqual(resolvePurchaseOrderPendingActions('AWAITING_REVIEW', {
     orderStatus: 'PENDING_REVIEW',
     paymentStatus: 'UNPAID',
-  }).map(item => item.key), ['REVIEW'])
+  }).map(item => item.key), [])
   for (const task of ['AWAITING_PAYMENT', 'AWAITING_SHIPMENT', 'AWAITING_WAREHOUSE'] as const) {
     assert.deepEqual(resolvePurchaseOrderPendingActions(task, {
       orderStatus: 'PENDING_REVIEW',
@@ -260,13 +262,13 @@ test('采购发货成功提示完全依据服务端结果区分安全重试和�
     salesOrder: null,
   }
 
-  assert.equal(formatPurchaseFactoryShipmentSuccess(base), '采购订单已发货')
+  assert.equal(formatPurchaseFactoryShipmentSuccess(base), '所选货件已发货')
   assert.equal(formatPurchaseFactoryShipmentSuccess({
     ...base,
     changedPurchaseOrderCount: 0,
     alreadySatisfiedCount: 1,
     purchaseOrders: [{ ...base.purchaseOrders[0]!, changed: false }],
-  }), '采购订单已处于已发货状态，未重复处理')
+  }), '所选货件已发货，未重复处理')
   assert.equal(formatPurchaseFactoryShipmentSuccess({
     ...base,
     remainingPendingShipmentCount: 2,
@@ -276,7 +278,7 @@ test('采购发货成功提示完全依据服务端结果区分安全重试和�
       fulfillmentStatus: 'PREPARING',
       advancedToLandTransit: false,
     },
-  }), '采购订单已发货，关联销售订单仍有 2 张采购单待发货')
+  }), '所选货件已发货，关联销售订单仍有 2 张采购单待发货')
   assert.equal(formatPurchaseFactoryShipmentSuccess({
     ...base,
     salesOrder: {
@@ -285,5 +287,5 @@ test('采购发货成功提示完全依据服务端结果区分安全重试和�
       fulfillmentStatus: 'LAND_TRANSIT',
       advancedToLandTransit: true,
     },
-  }), '采购订单已发货，关联销售订单已进入陆运中')
+  }), '所选货件已发货，关联销售订单已进入陆运中')
 })

@@ -51,8 +51,8 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
-
 import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
+
 import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
 import {
   buildPurchaseOrderListQuery,
@@ -76,8 +76,8 @@ import {
 } from './purchase-order-list.logic'
 import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
 import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
-import PurchaseOrderReviewModal from './purchase-order-review-modal.vue'
 import PurchaseOrderShippingMarksCell from './purchase-order-shipping-marks-cell.vue'
+import PurchaseShipmentSummary from './purchase-shipment-summary.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
 
@@ -101,7 +101,6 @@ const canRead = computed(() => auth('purchase-orders:read'))
 const canCreate = computed(() => auth('purchase-orders:create'))
 const canCreateStock = computed(() => auth('purchase-orders:create-stock'))
 const canUpdate = computed(() => auth('purchase-orders:update'))
-const canReview = computed(() => auth('purchase-orders:review'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const pageTitle = computed(() => props.viewMode === 'pending' ? '待办采购' : '全部采购')
 const pageDescription = computed(() => props.viewMode === 'pending'
@@ -156,13 +155,12 @@ const recordsModalVisible = ref(false)
 const recordsModalKind = ref<PurchaseOrderRecordsKind>('payments')
 const recordsModalOrder = shallowRef<PurchaseOrderListItemDto | null>(null)
 const cancellationDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
-const reviewVisible = ref(false)
-const reviewOrderId = ref<string | null>(null)
 const purchaseStartVisible = ref(false)
 const purchaseStartType = ref<PurchaseStartPurchaseType>('SALES_LINKED')
 const cancelLoadingOrderId = ref<string | null>(null)
 const shipmentVisible = ref(false)
 const shipmentContext = shallowRef<FactoryShipmentModalContext | null>(null)
+const shipmentDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
 const shipmentTarget = shallowRef<PurchaseOrderListItemDto | null>(null)
 const shipmentContextLoading = ref(false)
 const shipmentSubmitting = ref(false)
@@ -186,12 +184,7 @@ const statusItems = computed(() => withStatusSwitchCounts(
   },
 ))
 
-// 审核中同时出现查看、审核、取消三个动作，按当前页实际入口扩宽，避免挤成两行。
-const actionColumnWidth = computed(() => props.viewMode === 'all'
-  && canReview.value && canUpdate.value
-  && rows.value.some(order => order.orderStatus === 'PENDING_REVIEW')
-  ? 260
-  : 200)
+const actionColumnWidth = 200
 
 const supplierFilterOptions = computed(() => (
   supplierCatalog.catalog.value?.items ?? []
@@ -219,6 +212,7 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   options: [
     { label: '已下单', value: 'ORDERED' },
     { label: '备货中', value: 'PREPARING' },
+    { label: '部分发货', value: 'PARTIALLY_SHIPPED' },
     { label: '已发货', value: 'SHIPPED' },
     { label: '已签收', value: 'SIGNED' },
   ],
@@ -607,22 +601,11 @@ function pendingActions(order: PurchaseOrderListItemDto) {
 }
 
 function canShowPendingAction(action: PurchaseOrderPendingActionItem): boolean {
-  if (action.key === 'REVIEW') {
-    return canReview.value
-  }
   return action.key === 'PAYMENT' ? canManagePayment.value : canUpdate.value
 }
 
-function openPurchaseOrderReview(order: PurchaseOrderListItemDto): void {
-  if (!canRead.value || !canReview.value || order.orderStatus !== 'PENDING_REVIEW' || reviewVisible.value) {
-    return
-  }
-  reviewOrderId.value = order.id
-  reviewVisible.value = true
-}
-
 function createPurchaseShipmentContext(
-  order: PurchaseOrderListItemDto,
+  order: PurchaseOrderDetailDto,
 ): FactoryShipmentModalContext {
   return {
     // 单采购模式只核对当前采购订单；销售联动结果由 Server 提交结果统一返回。
@@ -634,7 +617,15 @@ function createPurchaseShipmentContext(
       supplier: { label: order.supplier.label },
       fulfillmentStatus: order.fulfillmentStatus,
       version: order.version,
-      lineSummary: order.lineSummary,
+      lineSummary: {
+        ...order.lineSummary,
+        previews: order.lineSummary.previews.map((preview) => {
+          const line = order.lines.find(item => item.id === preview.lineId)
+          return { ...preview, productNo: line?.productNo, description: line?.description }
+        }),
+      },
+      shippingMarkText: order.shippingMarkText,
+      parts: order.parts,
     }],
   }
 }
@@ -652,9 +643,11 @@ function openPurchaseFactoryShipment(order: PurchaseOrderListItemDto): void {
   }
   cancelShipmentRequest()
   shipmentTarget.value = order
-  shipmentContext.value = createPurchaseShipmentContext(order)
+  shipmentDetail.value = null
+  shipmentContext.value = null
   shipmentError.value = null
   shipmentVisible.value = true
+  void retryPurchaseFactoryShipment()
 }
 
 function closePurchaseFactoryShipment(): void {
@@ -665,6 +658,7 @@ function closePurchaseFactoryShipment(): void {
   shipmentVisible.value = false
   shipmentError.value = null
   shipmentTarget.value = null
+  shipmentDetail.value = null
   shipmentContext.value = null
 }
 
@@ -678,7 +672,7 @@ function shipmentFailureMessage(error: unknown): string {
 
 async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Promise<void> {
   const target = intent.targets[0]
-  if (target === undefined || shipmentSubmitting.value) {
+  if (target === undefined || shipmentSubmitting.value || shipmentContextLoading.value || shipmentDetail.value === null || shipmentError.value) {
     return
   }
   cancelShipmentRequest()
@@ -689,6 +683,7 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
   try {
     const response = await purchaseOrdersApi.factoryShipment(target.purchaseOrderId, {
       expectedVersion: target.expectedVersion,
+      partIds: [...target.partIds],
       reason: intent.reason,
     }, controller.signal)
     if (controller.signal.aborted) {
@@ -698,6 +693,7 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
     toast.success(formatPurchaseFactoryShipmentSuccess(result))
     shipmentVisible.value = false
     shipmentTarget.value = null
+    shipmentDetail.value = null
     shipmentContext.value = null
     refreshOrdersAndCounts()
   }
@@ -716,30 +712,43 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
 
 async function retryPurchaseFactoryShipment(): Promise<void> {
   const targetId = shipmentTarget.value?.id
-  if (targetId === undefined || shipmentSubmitting.value) {
+  if (targetId === undefined || shipmentSubmitting.value || !shipmentVisible.value || !canUpdate.value) {
     return
   }
+  shipmentAbortController?.abort()
+  const controller = new AbortController()
+  shipmentAbortController = controller
+  const epoch = appAccountStore.authEpoch
   shipmentContextLoading.value = true
   shipmentError.value = null
-  await loadOrders()
-  if (listError.value !== '') {
-    shipmentContextLoading.value = false
-    shipmentError.value = '最新采购订单加载失败，请稍后重试。'
-    return
+  shipmentDetail.value = null
+  shipmentContext.value = null
+  try {
+    const response = await purchaseOrdersApi.getById(targetId, controller.signal)
+    if (controller.signal.aborted || epoch !== appAccountStore.authEpoch || !shipmentVisible.value || shipmentTarget.value?.id !== targetId || !canUpdate.value) {
+      return
+    }
+    const detail = response.data
+    if (detail.orderStatus !== 'CONFIRMED' || !['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'].includes(detail.fulfillmentStatus)) {
+      shipmentError.value = '采购订单状态已变化，当前不可发货。请关闭弹窗后查看最新订单。'
+      refreshOrdersAndCounts()
+      return
+    }
+    // 唛头、货件分配与提交版本来自同一次详情读取，避免核对旧列表后提交新版本。
+    shipmentDetail.value = detail
+    shipmentContext.value = createPurchaseShipmentContext(detail)
   }
-  const refreshedOrder = rows.value.find(order => order.id === targetId)
-  shipmentContextLoading.value = false
-  if (
-    refreshedOrder === undefined
-    || refreshedOrder.orderStatus !== 'CONFIRMED'
-    || !['ORDERED', 'PREPARING'].includes(refreshedOrder.fulfillmentStatus)
-  ) {
-    closePurchaseFactoryShipment()
-    toast.info('采购订单状态已变化，列表已刷新')
-    return
+  catch (error) {
+    if (!controller.signal.aborted && epoch === appAccountStore.authEpoch && !isPurchaseOrderAbortError(error)) {
+      shipmentError.value = shipmentFailureMessage(error)
+    }
   }
-  shipmentTarget.value = refreshedOrder
-  shipmentContext.value = createPurchaseShipmentContext(refreshedOrder)
+  finally {
+    if (shipmentAbortController === controller) {
+      shipmentAbortController = null
+      shipmentContextLoading.value = false
+    }
+  }
 }
 
 /** 发货进入正式业务弹窗；到仓和付款本期继续只说明能力建设状态。 */
@@ -748,10 +757,6 @@ function handlePendingAction(
   order: PurchaseOrderListItemDto,
 ): void {
   if (!canShowPendingAction(action)) {
-    return
-  }
-  if (action.key === 'REVIEW') {
-    openPurchaseOrderReview(order)
     return
   }
   if (order.orderStatus !== 'CONFIRMED') {
@@ -801,11 +806,10 @@ watch(() => appAccountStore.authEpoch, () => {
   cancelShipmentRequest()
   shipmentVisible.value = false
   shipmentTarget.value = null
+  shipmentDetail.value = null
   shipmentContext.value = null
   shipmentError.value = null
   detailVisible.value = false
-  reviewVisible.value = false
-  reviewOrderId.value = null
   recordsModalVisible.value = false
   recordsModalOrder.value = null
   selectedOrder.value = null
@@ -1010,18 +1014,7 @@ onBeforeUnmount(() => {
               </template>
             </template>
             <FaButton
-              v-if="props.viewMode === 'all' && canReview && row.orderStatus === 'PENDING_REVIEW'"
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="min-h-11 sm:min-h-8"
-              :aria-label="`${row.orderNo}：审核`"
-              @click="openPurchaseOrderReview(row)"
-            >
-              <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />审核
-            </FaButton>
-            <FaButton
-              v-if="props.viewMode === 'all' && canUpdate && canCancelPurchaseOrderFromList(row)"
+              v-if="canUpdate && canCancelPurchaseOrderFromList(row) && (props.viewMode === 'all' || row.orderStatus === 'PENDING_REVIEW')"
               type="button"
               variant="ghost"
               size="sm"
@@ -1191,6 +1184,9 @@ onBeforeUnmount(() => {
               <FaTag variant="outline" class="qs-type-status-tag" :class="fulfillmentStatusTagClass(row.original.fulfillmentStatus)">
                 {{ fulfillmentStatusLabel(row.original.fulfillmentStatus) }}
               </FaTag>
+            </QsTableStackedLine>
+            <QsTableStackedLine label="货件进度" tone="muted">
+              已发 {{ row.original.shippedPartCount }} / {{ row.original.partCount }} 件 · 待发 {{ row.original.pendingPartCount }} 件
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -1509,6 +1505,7 @@ onBeforeUnmount(() => {
                   <FaTag variant="outline" :class="fulfillmentStatusTagClass(row.fulfillmentStatus)">
                     {{ fulfillmentStatusLabel(row.fulfillmentStatus) }}
                   </FaTag>
+                  <span class="qs-type-meta text-muted-foreground">已发 {{ row.shippedPartCount }} / {{ row.partCount }} 件</span>
                 </dd>
               </div>
               <div class="col-span-2">
@@ -1582,13 +1579,6 @@ onBeforeUnmount(() => {
       @detail-updated="handleDetailUpdated"
     />
 
-    <PurchaseOrderReviewModal
-      v-model="reviewVisible"
-      :order-id="reviewOrderId"
-      :currencies="currencyCatalog.currencies.value"
-      @detail-updated="handleDetailUpdated"
-    />
-
     <PurchaseOrderDetailActions
       v-if="cancellationDetail"
       ref="cancelActionsRef"
@@ -1608,7 +1598,11 @@ onBeforeUnmount(() => {
       @submit="submitPurchaseFactoryShipment"
       @cancel="closePurchaseFactoryShipment"
       @retry="retryPurchaseFactoryShipment"
-    />
+    >
+      <template #purchase-content>
+        <PurchaseShipmentSummary v-if="shipmentDetail" :detail="shipmentDetail" />
+      </template>
+    </QsFactoryShipmentModal>
 
     <QsPurchaseStartModal
       v-model="purchaseStartVisible"

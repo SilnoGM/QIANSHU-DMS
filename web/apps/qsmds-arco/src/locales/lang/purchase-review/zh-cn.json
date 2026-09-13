@@ -1,0 +1,31 @@
+{
+  "purchaseReview": {
+    "intro": "集中审核采购订单，核对产品、采购金额和预定义货件。",
+    "PENDING_REVIEW": "待审核",
+    "APPROVED": "已通过",
+    "CANCELLED": "已取消",
+    "orderNo": "采购订单编号",
+    "source": "销售来源",
+    "supplier": "供应商",
+    "buyer": "采购人",
+    "products": "采购产品",
+    "parts": "预定义货件",
+    "amount": "采购总额",
+    "terms": "定金 / 尾款",
+    "deposit": "定金",
+    "balance": "尾款",
+    "date": "采购日期 / 提交时间",
+    "status": "订单状态",
+    "review": "审核采购",
+    "view": "查看",
+    "search": "搜索采购单号、销售单号、客户或唛头",
+    "empty": "暂无符合条件的采购订单",
+    "noPermission": "无权读取采购订单",
+    "stock": "独立备货",
+    "noImage": "暂无产品图片",
+    "lineSummary": "{lines} 项产品 · 数量 {quantity}",
+    "partCount": "{count} 个货件",
+    "countsFailed": "视图数量加载失败，请重试",
+    "retry": "重试"
+  }
+}

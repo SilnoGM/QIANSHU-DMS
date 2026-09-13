@@ -99,6 +99,7 @@ export interface FundPostingBatchInsert {
   readonly id: string
   readonly batchNo: string
   readonly kind: 'BUSINESS'
+  readonly actorUserId?: string
   readonly postingTypeId: string
   readonly postingTypeCodeSnapshot: string
   readonly postingTypeNameSnapshot: string
@@ -841,7 +842,7 @@ export async function insertFundPostingBatch(
       adjustmentMode: null,
       reversalOfBatchId: null,
       reversalReason: null,
-      actorUserId: null,
+      actorUserId: input.actorUserId ?? null,
       requestId: input.requestId,
       correlationId: input.correlationId,
       postedAt: input.postedAt,

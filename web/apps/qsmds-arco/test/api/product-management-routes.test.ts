@@ -58,7 +58,7 @@ test('管理员工作台注册产品管理的创建、列表与隐藏编辑路�
   )
 })
 
-test('管理员工作台是第一项独立顶部导航并挂载产品管理', () => {
+test('管理员工作台保留产品管理，资金账户迁移至财务工作台', () => {
   const routesSource = readFileSync(
     new URL('../../src/router/routes.ts', import.meta.url),
     'utf8',
@@ -73,16 +73,16 @@ test('管理员工作台是第一项独立顶部导航并挂载产品管理', ()
   const productPermissionIndex = administratorWorkbenchSource.indexOf(
     '...PRODUCT_MANAGEMENT_PERMISSIONS',
   )
-  const fundAccountPermissionIndex = administratorWorkbenchSource.indexOf(
-    '...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS',
-  )
+  const financeSource = readFileSync(new URL('../../src/router/modules/role.workbenches.ts', import.meta.url), 'utf8')
   const productRouteIndex = administratorWorkbenchSource.indexOf(
     'ProductManagement,',
   )
 
   assert.ok(productPermissionIndex >= 0)
-  assert.ok(fundAccountPermissionIndex > productPermissionIndex)
-  assert.ok(productRouteIndex > fundAccountPermissionIndex)
+  assert.ok(productRouteIndex > productPermissionIndex)
+  assert.doesNotMatch(administratorWorkbenchSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS|FundAccountManagement/u)
+  assert.match(financeSource, /FUND_ACCOUNT_MANAGEMENT_PERMISSIONS/u)
+  assert.match(financeSource, /FundAccountManagement,/u)
   assert.ok(
     asyncRoutesSource.indexOf('title: \'管理员工作台\'')
     < asyncRoutesSource.indexOf('title: \'系统管理\''),

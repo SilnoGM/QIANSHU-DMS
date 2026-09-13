@@ -31,6 +31,18 @@ const salesContext: FactoryShipmentModalContext = {
       supplier: { label: '华东家具制造有限公司' },
       fulfillmentStatus: 'ORDERED',
       version: 3,
+      shippingMarkText: 'DEMO/20260904-00002',
+      parts: [{
+        id: '21111111-6111-4111-8111-111111111111',
+        partNumber: 1,
+        status: 'ACTIVE',
+        shippingMarkText: 'DEMO/20260904-00002/01',
+        shippedAt: null,
+        shippedById: null,
+        shipmentRecordedAt: null,
+        shipmentRemark: null,
+        items: [{ purchaseOrderLineId: '21111111-2111-4111-8111-111111111111', lineNumber: 1, quantity: 2 }],
+      }],
       lineSummary: {
         lineCount: 2,
         totalQuantity: 6,
@@ -57,6 +69,18 @@ const salesContext: FactoryShipmentModalContext = {
       supplier: { label: '北辰五金供应链' },
       fulfillmentStatus: 'PREPARING',
       version: 5,
+      shippingMarkText: 'DEMO/20260904-00003',
+      parts: [{
+        id: '31111111-6111-4111-8111-111111111111',
+        partNumber: 1,
+        status: 'ACTIVE',
+        shippingMarkText: 'DEMO/20260904-00003/01',
+        shippedAt: null,
+        shippedById: null,
+        shipmentRecordedAt: null,
+        shipmentRemark: null,
+        items: [{ purchaseOrderLineId: '31111111-2111-4111-8111-111111111111', lineNumber: 1, quantity: 2 }],
+      }],
       lineSummary: {
         lineCount: 3,
         totalQuantity: 12,
@@ -88,6 +112,18 @@ const salesContext: FactoryShipmentModalContext = {
       supplier: { label: '南港包装服务中心' },
       fulfillmentStatus: 'SHIPPED',
       version: 7,
+      shippingMarkText: 'DEMO/20260904-00004',
+      parts: [{
+        id: '41111111-6111-4111-8111-111111111111',
+        partNumber: 1,
+        status: 'ACTIVE',
+        shippingMarkText: 'DEMO/20260904-00004/01',
+        shippedAt: '2026-09-04T00:00:00Z',
+        shippedById: null,
+        shipmentRecordedAt: '2026-09-04T00:00:00Z',
+        shipmentRemark: null,
+        items: [{ purchaseOrderLineId: '41111111-2111-4111-8111-111111111111', lineNumber: 1, quantity: 2 }],
+      }],
       lineSummary: {
         lineCount: 1,
         totalQuantity: 2,
@@ -138,7 +174,7 @@ function openModal(): void {
           销售聚合发货与单采购发货
         </h3>
         <p class="text-sm text-muted-foreground leading-6 m-0 mt-2 max-w-2xl">
-          销售模式选择本次实际发货的采购单，采购模式仅确认当前采购单；请求与状态推进仍由业务页面负责。
+          销售模式从关联采购单选择货件，采购模式选择当前采购单的货件；请求与状态推进仍由业务页面负责。
         </p>
       </div>
       <FaTag variant="secondary">

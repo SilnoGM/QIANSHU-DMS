@@ -10,6 +10,7 @@ import type {
   SalesOrderPageDto,
   SalesOrderPaymentRequestDto,
   SalesOrderPaymentVoidRequestDto,
+  SalesOrderPendingPurchaseProductsDto,
   SalesOrderProductEditContextDto,
   SalesOrderProductOptionsDto,
   SalesOrderProductsUpdateRequestDto,
@@ -67,6 +68,11 @@ export function createSalesOrdersApi(client: AxiosInstance) {
       params: query,
       signal,
     }),
+    pendingPurchaseProducts: (salesOrderId: string, signal: AbortSignal) =>
+      client.get<SalesOrderPendingPurchaseProductsDto>(
+        `sales-orders/${encodeURIComponent(salesOrderId)}/pending-purchase-products`,
+        { errorPresentation: 'local', signal },
+      ),
     productEditContext: (salesOrderId: string, signal: AbortSignal) =>
       client.get<SalesOrderProductEditContextDto>(
         `sales-orders/${encodeURIComponent(salesOrderId)}/product-edit-context`,

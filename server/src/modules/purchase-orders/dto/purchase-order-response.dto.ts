@@ -184,6 +184,10 @@ export class PurchaseOrderListItemDto {
   @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
   @ApiProperty({ type: [String], description: '按货件顺序返回已派发的货件唛头；待审核新单和无货件历史订单为空数组' })
   readonly shippingMarks!: readonly string[]
+  @ApiProperty({ type: 'integer', minimum: 0, description: '采购单货件总数，包含待审核及已取消货件' })
+  readonly partCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly shippedPartCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0 }) readonly pendingPartCount!: number
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly createdAt!: string
@@ -197,9 +201,15 @@ export class PurchaseOrderPartItemDto {
 }
 
 export class PurchaseOrderPartDto {
+  @ApiProperty({ enum: ['PENDING_REVIEW', 'ACTIVE', 'CANCELLED'] }) readonly status!: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly partNumber!: number
   @ApiProperty({ type: 'string', nullable: true, maxLength: 72, description: '审核前为空；单货件使用基础唛头，多货件追加货件序号' }) readonly shippingMarkText!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shippedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly shippedById!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shipmentRecordedAt!: string | null
+  @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly shipmentRemark!: string | null
+  @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly shippedBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: () => [PurchaseOrderPartItemDto] }) readonly items!: readonly PurchaseOrderPartItemDto[]
 }
 

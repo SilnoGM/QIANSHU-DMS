@@ -49,6 +49,7 @@ const props = withDefaults(defineProps<{
   searchPlaceholder?: string
   showColumnSettings?: boolean
   showPagination?: boolean
+  showRowNumber?: boolean
   stripe?: boolean
   summaryValues?: Record<string, QsGenericTableSummaryValue>
   tableClass?: string
@@ -69,6 +70,7 @@ const props = withDefaults(defineProps<{
   searchPlaceholder: '搜索当前业务数据',
   showColumnSettings: true,
   showPagination: true,
+  showRowNumber: true,
   stripe: false,
   summaryValues: () => ({}),
   tableClass: undefined,
@@ -170,7 +172,7 @@ const tableColumns = computed<TableColumn<TData, any>[]>(() => {
   }
 
   return [
-    rowNumberColumn,
+    ...(props.showRowNumber ? [rowNumberColumn] : []),
     ...visibleBusinessColumns.value.map(column => ({
       ...column,
       // FaTable 只有发现 footer 声明或 footer-* 插槽时才生成表尾。
@@ -724,7 +726,7 @@ watch([tableColumns, isNarrow], () => {
             :row="row"
             :row-number="getContinuousRowNumber(page, pageSize, index)"
           >
-            <div class="mb-3 pb-3 border-b border-border flex items-center justify-between">
+            <div v-if="showRowNumber" class="mb-3 pb-3 border-b border-border flex items-center justify-between">
               <span class="qs-type-meta tabular-nums">
                 #{{ getContinuousRowNumber(page, pageSize, index) }}
               </span>

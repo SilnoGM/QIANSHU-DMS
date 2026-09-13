@@ -1,0 +1,11 @@
+{
+  "workbench": {
+    "realtimePayments": "Real-time payments",
+    "finance": "Qianshu Finance Workbench",
+    "purchase": "Qianshu Purchase Workbench",
+    "salesReceipts": "Sales Receipts",
+    "purchasePayments": "Purchase Payments",
+    "purchaseReviews": "Purchase Review",
+    "pending": "Coming soon"
+  }
+}

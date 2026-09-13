@@ -28,7 +28,7 @@ export type PurchaseOrderListStatusSelection
     | PurchaseOrderOrderStatusSelection
     | PurchaseOrderPendingTask
 
-export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'REVIEW' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
+export type PurchaseOrderPendingActionKey = 'PAYMENT' | 'SHIPMENT' | 'WAREHOUSE_RECEIPT'
 
 export interface PurchaseOrderPendingActionItem {
   readonly icon: string
@@ -83,6 +83,7 @@ const PURCHASE_TYPES = ['SALES_LINKED', 'STOCK'] as const
 const FULFILLMENT_STATUSES = [
   'ORDERED',
   'PREPARING',
+  'PARTIALLY_SHIPPED',
   'SHIPPED',
   'SIGNED',
 ] as const
@@ -110,14 +111,9 @@ const PAYMENT_ACTION: PurchaseOrderPendingActionItem = {
 }
 
 const TASK_ACTION: Readonly<Record<
-  Exclude<PurchaseOrderPendingTask, 'AWAITING_PAYMENT'>,
+  Exclude<PurchaseOrderPendingTask, 'AWAITING_PAYMENT' | 'AWAITING_REVIEW'>,
   PurchaseOrderPendingActionItem
 >> = {
-  AWAITING_REVIEW: {
-    icon: 'i-lucide:clipboard-check',
-    key: 'REVIEW',
-    label: '审核',
-  },
   AWAITING_SHIPMENT: {
     icon: 'i-lucide:truck',
     key: 'SHIPMENT',
@@ -156,7 +152,7 @@ export function resolvePurchaseOrderPendingActions(
   order: Pick<PurchaseOrderListItemDto, 'orderStatus' | 'paymentStatus'>,
 ): readonly PurchaseOrderPendingActionItem[] {
   if (task === 'AWAITING_REVIEW') {
-    return order.orderStatus === 'PENDING_REVIEW' ? [TASK_ACTION.AWAITING_REVIEW] : []
+    return []
   }
   if (order.orderStatus !== 'CONFIRMED') {
     return []
@@ -169,9 +165,9 @@ export function resolvePurchaseOrderPendingActions(
 
 /** 审核中与已确认订单可取消，最终提交前仍由详情接口重新校验最新状态。 */
 export function canCancelPurchaseOrderFromList(
-  order: Pick<PurchaseOrderListItemDto, 'orderStatus'>,
+  order: Pick<PurchaseOrderListItemDto, 'orderStatus' | 'fulfillmentStatus'>,
 ): boolean {
-  return order.orderStatus === 'PENDING_REVIEW' || order.orderStatus === 'CONFIRMED'
+  return order.orderStatus === 'PENDING_REVIEW' || (order.orderStatus === 'CONFIRMED' && ['ORDERED', 'PREPARING'].includes(order.fulfillmentStatus))
 }
 
 /**
@@ -182,15 +178,15 @@ export function formatPurchaseFactoryShipmentSuccess(
   result: FactoryShipmentResultDto,
 ): string {
   if (result.changedPurchaseOrderCount === 0) {
-    return '采购订单已处于已发货状态，未重复处理'
+    return '所选货件已发货，未重复处理'
   }
   if (result.salesOrder === null) {
-    return '采购订单已发货'
+    return '所选货件已发货'
   }
   if (result.salesOrder.advancedToLandTransit) {
-    return '采购订单已发货，关联销售订单已进入陆运中'
+    return '所选货件已发货，关联销售订单已进入陆运中'
   }
-  return `采购订单已发货，关联销售订单仍有 ${result.remainingPendingShipmentCount} 张采购单待发货`
+  return `所选货件已发货，关联销售订单仍有 ${result.remainingPendingShipmentCount} 张采购单待发货`
 }
 
 function enumFilter<T extends string>(
@@ -298,6 +294,7 @@ export function fulfillmentStatusLabel(
   return {
     ORDERED: '已下单',
     PREPARING: '备货中',
+    PARTIALLY_SHIPPED: '部分发货',
     SHIPPED: '已发货',
     SIGNED: '已签收',
   }[value]
@@ -330,6 +327,7 @@ export function fulfillmentStatusTagClass(
   return {
     ORDERED: 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300',
     PREPARING: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    PARTIALLY_SHIPPED: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
     SHIPPED: 'border-teal-500/35 bg-teal-500/10 text-teal-700 dark:text-teal-300',
     SIGNED: 'border-primary/35 bg-primary/10 text-primary',
   }[value]
@@ -386,6 +384,7 @@ export function nextPurchaseOrderFulfillmentStatus(
   > = {
     ORDERED: 'PREPARING',
     PREPARING: 'SHIPPED',
+    PARTIALLY_SHIPPED: 'SHIPPED',
     SHIPPED: 'SIGNED',
     SIGNED: null,
   }

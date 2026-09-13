@@ -6,9 +6,9 @@ import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import OrderParts from '@/components/business/QsPurchaseOrderDrawer/OrderParts.vue'
 import { buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
-import { hasPurchaseOrderShippingMarks } from './purchase-order-shipping-mark.logic'
 
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
@@ -150,11 +150,11 @@ onBeforeUnmount(reset)
     v-model="visible"
     :title="t('purchaseOrderList.review.title')"
     :description="t('purchaseOrderList.review.description')"
-    size="md"
+    size="lg"
     :loading="loading"
     :submitting="submitting"
   >
-    <div data-testid="purchase-order-review-confirmation" class="space-y-4">
+    <div data-testid="purchase-order-review-confirmation" class="flex flex-col gap-4">
       <FaAlert v-if="error" :title="t('purchaseOrderList.review.failed')" :description="error" variant="destructive">
         <template #actions>
           <FaButton type="button" variant="outline" size="sm" :disabled="loading || submitting || !canReview" @click="loadDetail()">
@@ -195,15 +195,13 @@ onBeforeUnmount(reset)
             {{ t('purchaseOrderList.review.quantity', { lines: detail.lines.length, quantity: detail.lineSummary.totalQuantity }) }}
           </dd>
         </div>
-        <div class="sm:col-span-2" data-testid="purchase-order-review-shipping-mark">
-          <dt class="text-muted-foreground">
-            {{ t('purchaseOrderList.review.shippingMark') }}
-          </dt>
-          <dd class="leading-6 m-0 mt-1">
-            {{ hasPurchaseOrderShippingMarks(detail) ? t('purchaseOrderList.review.preserveShippingMarks') : t('purchaseOrderList.review.generateShippingMark', { count: detail.parts.length }) }}
-          </dd>
-        </div>
       </dl>
+      <template v-if="detail">
+        <OrderParts :detail="detail" />
+        <p v-if="detail.parts.length === 0" class="qs-type-meta text-muted-foreground m-0">
+          {{ t('purchaseOrderList.review.noParts') }}
+        </p>
+      </template>
       <label class="flex flex-col gap-2">
         <span class="qs-type-body-medium">{{ t('purchaseOrderList.review.reason') }}</span>
         <FaTextarea v-model="reason" maxlength="500" :disabled="loading || submitting || !canReview" input-class="min-h-20" />

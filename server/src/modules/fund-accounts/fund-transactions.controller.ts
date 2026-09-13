@@ -118,6 +118,7 @@ export class FundTransactionsController {
           'FUND_ACCOUNT_UNAVAILABLE',
           'FUND_CONCURRENT_STATE_CHANGED',
           'FUND_IDEMPOTENCY_CONFLICT',
+          'FUND_REVERSAL_REQUIRES_RECEIPT_VOID',
           'FUND_REVERSAL_STATE_CHANGED',
         ],
       },

@@ -338,7 +338,7 @@ export class PurchaseOrderCommandService {
         const lineIdByNumber = new Map(persistedLines.map(line => [line.lineNumber, line.id]))
         await transaction.purchaseOrderPart.createMany({ data: persistedParts.map(({ id, part, partNumber }) => ({
             id,
-            purchaseOrderId: created.id, key: part.key, partNumber,
+            purchaseOrderId: created.id, key: part.key, partNumber, status: 'PENDING_REVIEW',
             shippingMarkText: null, shippingMarkIssuanceId: null, shippingMarkKeyHash: null,
         })) })
         await transaction.purchaseOrderPartItem.createMany({ data: persistedParts.flatMap(({ id, part }) => (

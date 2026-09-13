@@ -1,3 +1,4 @@
+import { SalesReceiptService } from './receipts/sales-receipt.service'
 import { Readable } from 'node:stream'
 
 import { HttpStatus, Module, StreamableFile } from '@nestjs/common'
@@ -65,6 +66,7 @@ function createController(result: ProductMediaContentResponse) {
   const resolveListPreview = jest.fn().mockResolvedValue(result)
   const controller = new SalesOrdersController(
     { issuerOptions, productOptions, statusCounts } as unknown as SalesOrderQueryService,
+    {} as SalesReceiptService,
     {} as SalesOrderCommandService,
     {} as SalesOrderMutationService,
     {} as SalesOrderDocumentService,
@@ -84,7 +86,8 @@ function createController(result: ProductMediaContentResponse) {
 
 @Module({
   controllers: [SalesOrdersController],
-  providers: [{
+  providers: [
+    { provide: SalesReceiptService, useValue: {} },{
     provide: SalesOrderQueryService,
     useValue: {
       getById: jest.fn(),
@@ -304,7 +307,8 @@ describe('SalesOrdersController product options', () => {
     })
     const controller = new SalesOrdersController(
       {} as SalesOrderQueryService,
-      {} as SalesOrderCommandService,
+      {} as SalesReceiptService,
+    {} as SalesOrderCommandService,
       {} as SalesOrderMutationService,
       {} as SalesOrderDocumentService,
       { resolveProductEditOption } as unknown as SalesOrderProductImageService,
@@ -388,7 +392,8 @@ describe('SalesOrdersController product options', () => {
     const updateProducts = jest.fn().mockResolvedValue(result)
     const controller = new SalesOrdersController(
       {} as SalesOrderQueryService,
-      {} as SalesOrderCommandService,
+      {} as SalesReceiptService,
+    {} as SalesOrderCommandService,
       {} as SalesOrderMutationService,
       {} as SalesOrderDocumentService,
       {} as SalesOrderProductImageService,
