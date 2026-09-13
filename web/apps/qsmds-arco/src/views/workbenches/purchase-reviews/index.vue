@@ -288,8 +288,8 @@ onBeforeUnmount(() => {
           </FaTag>
         </template>
         <template #actions="{ row }">
-          <FaButton v-if="row.orderStatus === 'PENDING_REVIEW' && canReview" size="sm" @click="openReview(row)">
-            {{ t('purchaseReview.review') }}
+          <FaButton v-if="row.orderStatus === 'PENDING_REVIEW' && canReview" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="openReview(row)">
+            <FaIcon name="i-lucide:clipboard-check" aria-hidden="true" />{{ t('purchaseReview.review') }}
           </FaButton>
           <FaButton v-else variant="outline" size="sm" @click="view(row)">
             {{ t('purchaseReview.view') }}

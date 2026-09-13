@@ -4,8 +4,10 @@ import type { CurrencyDescriptor } from '@/components/base/currency'
 
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import { getPurchaseOrderPartRecords } from '@/components/business/QsPurchaseOrderDrawer/logic'
 import { buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 import { hasPurchaseOrderShippingMarks } from './purchase-order-shipping-mark.logic'
@@ -24,6 +26,7 @@ const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const toast = useQsToast()
 const detail = shallowRef<PurchaseOrderDetailDto | null>(null)
+const parts = computed(() => detail.value ? getPurchaseOrderPartRecords(detail.value) : [])
 const reason = ref('')
 const error = ref('')
 const loading = ref(false)
@@ -150,11 +153,11 @@ onBeforeUnmount(reset)
     v-model="visible"
     :title="t('purchaseOrderList.review.title')"
     :description="t('purchaseOrderList.review.description')"
-    size="md"
+    size="lg"
     :loading="loading"
     :submitting="submitting"
   >
-    <div data-testid="purchase-order-review-confirmation" class="space-y-4">
+    <div data-testid="purchase-order-review-confirmation" class="flex flex-col gap-4">
       <FaAlert v-if="error" :title="t('purchaseOrderList.review.failed')" :description="error" variant="destructive">
         <template #actions>
           <FaButton type="button" variant="outline" size="sm" :disabled="loading || submitting || !canReview" @click="loadDetail()">
@@ -204,6 +207,49 @@ onBeforeUnmount(reset)
           </dd>
         </div>
       </dl>
+      <section v-if="detail" :aria-label="t('purchaseOrderDrawer.parts.title')" class="flex flex-col gap-3">
+        <h3 class="qs-type-component-title m-0 flex gap-2 items-center">
+          <FaIcon name="i-lucide:packages" class="text-muted-foreground" aria-hidden="true" />
+          {{ t('purchaseOrderDrawer.parts.title') }}
+          <span class="qs-type-meta text-muted-foreground">{{ parts.length }}</span>
+        </h3>
+        <p v-if="parts.length === 0" class="qs-type-meta text-muted-foreground m-0">
+          {{ t('purchaseOrderList.review.noParts') }}
+        </p>
+        <article v-for="part in parts" :key="part.id" class="border border-border rounded-lg overflow-hidden">
+          <header class="px-4 py-3 bg-muted/25 flex flex-wrap gap-x-3 gap-y-1 items-baseline">
+            <h4 class="qs-type-body-medium m-0">
+              {{ t('purchaseOrderDrawer.parts.part', { number: String(part.partNumber).padStart(2, '0') }) }}
+            </h4>
+            <span class="qs-type-meta text-muted-foreground break-all">{{ part.shippingMarkText ?? t('purchaseOrderDrawer.parts.pendingMark') }}</span>
+          </header>
+          <ul class="m-0 p-0 list-none divide-border divide-y">
+            <li v-for="item in part.items" :key="item.purchaseOrderLineId" class="p-4 flex gap-3 items-start">
+              <ImageGroup v-if="item.imageSrc" :items="[{ src: item.imageSrc, alt: item.productName ?? '' }]" :size="48" :max-count="1" class="shrink-0" />
+              <span v-else class="text-muted-foreground rounded-lg bg-muted flex shrink-0 size-12 items-center justify-center"><FaIcon name="i-lucide:image-off" aria-hidden="true" /></span>
+              <div class="flex-1 min-w-0 space-y-1">
+                <p class="qs-type-body-medium m-0 break-words">
+                  {{ item.productName || t('purchaseOrderDrawer.parts.productUnavailable') }}
+                </p>
+                <p class="qs-type-meta text-muted-foreground m-0 break-all">
+                  {{ item.productNo || t('purchaseOrderDesc.lineTypes.CUSTOM') }}
+                </p>
+                <p v-if="item.description" class="qs-type-meta text-muted-foreground m-0 whitespace-pre-wrap break-words">
+                  {{ item.description }}
+                </p>
+              </div>
+              <div class="text-right shrink-0">
+                <p class="qs-type-meta text-muted-foreground m-0">
+                  {{ t('purchaseOrderDrawer.parts.quantity') }}
+                </p>
+                <p class="qs-type-data-emphasis m-0 mt-1">
+                  {{ item.quantity }}
+                </p>
+              </div>
+            </li>
+          </ul>
+        </article>
+      </section>
       <label class="flex flex-col gap-2">
         <span class="qs-type-body-medium">{{ t('purchaseOrderList.review.reason') }}</span>
         <FaTextarea v-model="reason" maxlength="500" :disabled="loading || submitting || !canReview" input-class="min-h-20" />
