@@ -18,6 +18,7 @@ const statusClasses: Record<string, string> = {
   CANCELLED: orderStatusTagClass('CANCELLED'),
   ORDERED: fulfillmentStatusTagClass('ORDERED'),
   PREPARING: fulfillmentStatusTagClass('PREPARING'),
+  PARTIALLY_SHIPPED: fulfillmentStatusTagClass('PARTIALLY_SHIPPED'),
   SHIPPED: fulfillmentStatusTagClass('SHIPPED'),
   SIGNED: fulfillmentStatusTagClass('SIGNED'),
   UNPAID: paymentStatusTagClass('UNPAID'),

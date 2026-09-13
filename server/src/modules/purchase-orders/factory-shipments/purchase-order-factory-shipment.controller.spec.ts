@@ -92,7 +92,7 @@ describe('factory shipment controllers', () => {
 
     await purchaseController.ship(
       { purchaseOrderId: PURCHASE_ORDER_ID },
-      { expectedVersion: 2 },
+      { partIds: [PURCHASE_ORDER_ID], expectedVersion: 2 },
       authenticated,
     )
     await salesController.context({ salesOrderId: SALES_ORDER_ID })
@@ -100,7 +100,7 @@ describe('factory shipment controllers', () => {
       { salesOrderId: SALES_ORDER_ID },
       {
         mode: 'SELECTED',
-        targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, expectedVersion: 2 }],
+        targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], expectedVersion: 2 }],
       },
       authenticated,
     )
@@ -108,7 +108,7 @@ describe('factory shipment controllers', () => {
     expect(service.shipPurchaseOrder).toHaveBeenCalledWith(
       expect.objectContaining({ actorUserId: ACTOR_ID }),
       PURCHASE_ORDER_ID,
-      { expectedVersion: 2 },
+      { partIds: [PURCHASE_ORDER_ID], expectedVersion: 2 },
     )
     expect(query.getSalesOrderContext).toHaveBeenCalledWith(SALES_ORDER_ID)
     expect(service.shipSalesOrder).toHaveBeenCalledWith(

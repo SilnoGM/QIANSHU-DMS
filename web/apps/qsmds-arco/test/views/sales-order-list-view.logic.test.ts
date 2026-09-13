@@ -35,7 +35,7 @@ test('销售工厂发货提示只采用服务端返回的变更与剩余数量',
 
   assert.equal(
     formatSalesFactoryShipmentSuccess(base),
-    '已确认 1 张采购单发货，仍有 2 张采购单待发货',
+    '已完成 1 张采购单的本次货件发货，仍有 2 张采购单待发货',
   )
   assert.equal(
     formatSalesFactoryShipmentSuccess({
@@ -48,7 +48,7 @@ test('销售工厂发货提示只采用服务端返回的变更与剩余数量',
         advancedToLandTransit: true,
       },
     }),
-    '已确认 2 张采购单发货，销售订单已进入陆运中',
+    '已完成 2 张采购单的本次货件发货，销售订单已进入陆运中',
   )
   assert.equal(
     formatSalesFactoryShipmentSuccess({
@@ -57,7 +57,7 @@ test('销售工厂发货提示只采用服务端返回的变更与剩余数量',
       alreadySatisfiedCount: 1,
       remainingPendingShipmentCount: 0,
     }),
-    '所选采购单均已发货，未重复处理',
+    '所选货件已发货，未重复处理',
   )
 })
 

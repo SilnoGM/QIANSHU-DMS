@@ -185,7 +185,7 @@ describe('PurchaseOrderQueryService', () => {
     const detail = await fixture.service.getById('order-id')
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
-    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }])
+    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }])
   })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()
@@ -474,8 +474,8 @@ describe('PurchaseOrderQueryService', () => {
 
   it.each([
     ['AWAITING_REVIEW', { orderStatus: 'PENDING_REVIEW' }],
-    ['AWAITING_SHIPMENT', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['ORDERED', 'PREPARING'] } }],
-    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', fulfillmentStatus: 'SHIPPED' }],
+    ['AWAITING_SHIPMENT', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'] } }],
+    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } }],
     ['AWAITING_PAYMENT', { orderStatus: 'CONFIRMED', paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } }],
   ] as const)('builds the %s pending task predicate', async (pendingTask, taskClause) => {
     const fixture = setup()
@@ -715,6 +715,7 @@ describe('PurchaseOrderQueryService status counts', () => {
       .mockResolvedValueOnce([
         { fulfillmentStatus: 'ORDERED', _count: { _all: 4 } },
         { fulfillmentStatus: 'PREPARING', _count: { _all: 3 } },
+        { fulfillmentStatus: 'PARTIALLY_SHIPPED', _count: { _all: 2 } },
         { fulfillmentStatus: 'SHIPPED', _count: { _all: 2 } },
       ])
       .mockResolvedValueOnce([
@@ -726,8 +727,8 @@ describe('PurchaseOrderQueryService status counts', () => {
       view: 'pending',
       items: [
         { value: 'AWAITING_REVIEW', count: 3 },
-        { value: 'AWAITING_SHIPMENT', count: 7 },
-        { value: 'AWAITING_WAREHOUSE', count: 2 },
+        { value: 'AWAITING_SHIPMENT', count: 9 },
+        { value: 'AWAITING_WAREHOUSE', count: 4 },
         { value: 'AWAITING_PAYMENT', count: 6 },
       ],
     })

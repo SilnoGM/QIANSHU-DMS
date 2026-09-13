@@ -11,10 +11,12 @@ export type FactoryShipmentMode = 'SELECTED' | 'ALL_PENDING'
 
 export interface FactoryShipmentTarget {
   readonly purchaseOrderId: string
+  readonly partIds: readonly string[]
   readonly expectedVersion: number
 }
 
 export interface PurchaseOrderFactoryShipmentInput {
+  readonly partIds: readonly string[]
   readonly expectedVersion: number
   readonly reason: string | null
 }
@@ -56,6 +58,15 @@ function requireExpectedVersion(value: unknown, field: string): number {
     return purchaseOrderValidationFailure(field, '必须是大于等于 1 的安全整数')
   }
   return value as number
+}
+
+function requirePartIds(value: unknown, field: string): readonly string[] {
+  if (!Array.isArray(value) || value.length < 1 || value.length > 1000) {
+    return purchaseOrderValidationFailure(field, '必须包含 1 至 1000 个货件')
+  }
+  const ids = value.map((id, index) => requireFactoryShipmentUuid(id, `${field}.${index}`))
+  if (new Set(ids).size !== ids.length) return purchaseOrderValidationFailure(field, '货件不得重复')
+  return ids
 }
 
 function normalizeReason(value: unknown): string | null {
@@ -101,8 +112,9 @@ export function normalizePurchaseOrderFactoryShipmentRequest(
   input: unknown,
 ): PurchaseOrderFactoryShipmentInput {
   const body = requireRecord(input)
-  rejectUnknownKeys(body, ['expectedVersion', 'reason'])
+  rejectUnknownKeys(body, ['expectedVersion', 'partIds', 'reason'])
   return {
+    partIds: requirePartIds(body.partIds, 'partIds'),
     expectedVersion: requireExpectedVersion(body.expectedVersion, 'expectedVersion'),
     reason: normalizeReason(body.reason),
   }
@@ -130,10 +142,11 @@ export function normalizeSalesOrderFactoryShipmentRequest(
     const target = requireRecord(value, `targets.${index}`)
     rejectUnknownKeys(
       target,
-      ['purchaseOrderId', 'expectedVersion'],
+      ['purchaseOrderId', 'expectedVersion', 'partIds'],
       `targets.${index}`,
     )
     return {
+      partIds: requirePartIds(target.partIds, `targets.${index}.partIds`),
       purchaseOrderId: requireFactoryShipmentUuid(
         target.purchaseOrderId,
         `targets.${index}.purchaseOrderId`,

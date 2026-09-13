@@ -39244,6 +39244,7 @@
               "enum": [
                 "ORDERED",
                 "PREPARING",
+                "PARTIALLY_SHIPPED",
                 "SHIPPED",
                 "SIGNED"
               ]
@@ -39860,6 +39861,7 @@
               "enum": [
                 "ORDERED",
                 "PREPARING",
+                "PARTIALLY_SHIPPED",
                 "SHIPPED",
                 "SIGNED"
               ]
@@ -57690,6 +57692,7 @@
             "enum": [
               "ORDERED",
               "PREPARING",
+              "PARTIALLY_SHIPPED",
               "SHIPPED",
               "SIGNED"
             ]
@@ -57717,6 +57720,14 @@
             "type": "integer",
             "minimum": 0,
             "description": "采购单货件总数，包含待审核及已取消货件"
+          },
+          "shippedPartCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingPartCount": {
+            "type": "integer",
+            "minimum": 0
           },
           "remark": {
             "type": "string",
@@ -57761,6 +57772,8 @@
           "shippingMarkText",
           "shippingMarks",
           "partCount",
+          "shippedPartCount",
+          "pendingPartCount",
           "remark",
           "version",
           "createdAt",
@@ -58691,6 +58704,35 @@
             "maxLength": 72,
             "description": "审核前为空；单货件使用基础唛头，多货件追加货件序号"
           },
+          "shippedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "shippedById": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "shipmentRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "shipmentRemark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "shippedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
+          },
           "items": {
             "type": "array",
             "items": {
@@ -58703,6 +58745,11 @@
           "id",
           "partNumber",
           "shippingMarkText",
+          "shippedAt",
+          "shippedById",
+          "shipmentRecordedAt",
+          "shipmentRemark",
+          "shippedBy",
           "items"
         ]
       },
@@ -59165,6 +59212,7 @@
             "enum": [
               "ORDERED",
               "PREPARING",
+              "PARTIALLY_SHIPPED",
               "SHIPPED",
               "SIGNED"
             ]
@@ -59192,6 +59240,14 @@
             "type": "integer",
             "minimum": 0,
             "description": "采购单货件总数，包含待审核及已取消货件"
+          },
+          "shippedPartCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pendingPartCount": {
+            "type": "integer",
+            "minimum": 0
           },
           "remark": {
             "type": "string",
@@ -59284,6 +59340,8 @@
           "shippingMarkText",
           "shippingMarks",
           "partCount",
+          "shippedPartCount",
+          "pendingPartCount",
           "remark",
           "version",
           "createdAt",
@@ -59343,6 +59401,7 @@
             "enum": [
               "ORDERED",
               "PREPARING",
+              "PARTIALLY_SHIPPED",
               "SHIPPED",
               "SIGNED"
             ]
@@ -59456,6 +59515,15 @@
       "PurchaseOrderFactoryShipmentRequestDto": {
         "type": "object",
         "properties": {
+          "partIds": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "expectedVersion": {
             "type": "integer",
             "minimum": 1
@@ -59467,6 +59535,7 @@
           }
         },
         "required": [
+          "partIds",
           "expectedVersion"
         ]
       },
@@ -59483,6 +59552,7 @@
           "fulfillmentStatus": {
             "type": "string",
             "enum": [
+              "PARTIALLY_SHIPPED",
               "SHIPPED",
               "SIGNED"
             ]
@@ -59686,6 +59756,7 @@
             "enum": [
               "ORDERED",
               "PREPARING",
+              "PARTIALLY_SHIPPED",
               "SHIPPED",
               "SIGNED"
             ]
@@ -59696,6 +59767,16 @@
           },
           "lineSummary": {
             "$ref": "#/components/schemas/FactoryShipmentLineSummaryDto"
+          },
+          "shippingMarkText": {
+            "type": "string",
+            "nullable": true
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PurchaseOrderPartDto"
+            }
           }
         },
         "required": [
@@ -59706,7 +59787,9 @@
           "supplier",
           "fulfillmentStatus",
           "version",
-          "lineSummary"
+          "lineSummary",
+          "shippingMarkText",
+          "parts"
         ]
       },
       "SalesOrderFactoryShipmentContextDto": {
@@ -59740,6 +59823,15 @@
       "SalesOrderFactoryShipmentTargetDto": {
         "type": "object",
         "properties": {
+          "partIds": {
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "purchaseOrderId": {
             "type": "string",
             "format": "uuid"
@@ -59750,6 +59842,7 @@
           }
         },
         "required": [
+          "partIds",
           "purchaseOrderId",
           "expectedVersion"
         ]

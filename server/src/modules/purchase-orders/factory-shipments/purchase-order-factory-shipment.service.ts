@@ -34,6 +34,7 @@ const AUTOMATIC_PREPARING_REASON = '确认发货时系统自动完成备货状�
 const PENDING_SHIPMENT_STATUSES = new Set<PurchaseOrderFulfillmentStatus>([
   'ORDERED',
   'PREPARING',
+  'PARTIALLY_SHIPPED',
 ])
 const SATISFIED_SHIPMENT_STATUSES = new Set<PurchaseOrderFulfillmentStatus>([
   'SHIPPED',
@@ -48,6 +49,7 @@ interface FactoryShipmentPurchaseOrder {
   readonly purchaseType: PurchaseOrderType
   readonly salesOrderId: string | null
   readonly version: number
+  readonly parts: readonly { readonly id: string; readonly partNumber: number; readonly status: string; readonly shippedAt: Date | null }[]
 }
 
 interface FactoryShipmentSalesOrder {
@@ -61,7 +63,7 @@ export interface FactoryShipmentResult {
   readonly purchaseOrders: readonly {
     readonly id: string
     readonly orderNo: string
-    readonly fulfillmentStatus: 'SHIPPED' | 'SIGNED'
+    readonly fulfillmentStatus: 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'SIGNED'
     readonly changed: boolean
   }[]
   readonly changedPurchaseOrderCount: number
@@ -173,11 +175,13 @@ export class PurchaseOrderFactoryShipmentService {
       if (order === undefined) return shipmentNotAllowed('采购订单已取消或不再有效')
       this.validatePendingTargetVersion(order, input.expectedVersion)
       this.validateShipmentTargetState(order)
+      this.validateParts(order, input.partIds)
 
       const result = await this.advancePurchaseOrder(
         transaction,
         context,
         order,
+        input.partIds,
         input.reason,
         'PURCHASE_ORDER',
       )
@@ -229,7 +233,7 @@ export class PurchaseOrderFactoryShipmentService {
       const targetOrders = targets.map((target) => {
         const order = orderById.get(target.purchaseOrderId)
         if (order === undefined) return targetInvalid()
-        return { order, expectedVersion: target.expectedVersion }
+        return { order, expectedVersion: target.expectedVersion, partIds: target.partIds }
       })
 
       if (input.mode === 'ALL_PENDING') {
@@ -238,6 +242,7 @@ export class PurchaseOrderFactoryShipmentService {
       for (const target of targetOrders) {
         this.validatePendingTargetVersion(target.order, target.expectedVersion)
         this.validateShipmentTargetState(target.order)
+        this.validateParts(target.order, target.partIds)
       }
       const hasPendingTarget = targetOrders.some(target => (
         isPendingShipment(target.order.fulfillmentStatus)
@@ -258,6 +263,7 @@ export class PurchaseOrderFactoryShipmentService {
           transaction,
           context,
           target.order,
+          target.partIds,
           input.reason,
           'SALES_ORDER',
         ))
@@ -304,6 +310,15 @@ export class PurchaseOrderFactoryShipmentService {
     }
   }
 
+  private validateParts(order: FactoryShipmentPurchaseOrder, partIds: readonly string[]): void {
+    if (order.parts.length === 0) return targetInvalid()
+    const selected = partIds.map(id => order.parts.find(part => part.id === id))
+    if (selected.some(part => part === undefined || part.status !== 'ACTIVE')) return targetInvalid()
+    const shippedCount = selected.filter(part => part!.shippedAt !== null).length
+    if (shippedCount > 0 && shippedCount < selected.length) return stateChanged()
+    if (shippedCount === 0 && isShipmentSatisfied(order.fulfillmentStatus)) return stateChanged()
+  }
+
   private assertCompletePendingTargetSet(
     orders: readonly FactoryShipmentPurchaseOrder[],
     targets: readonly FactoryShipmentTarget[],
@@ -313,6 +328,10 @@ export class PurchaseOrderFactoryShipmentService {
       .filter(order => order.orderStatus === 'CONFIRMED' && isPendingShipment(order.fulfillmentStatus))
       .map(order => order.id)
     if (currentPendingIds.some(id => !targetIds.has(id))) return stateChanged()
+    for (const target of targets) {
+      const order = orders.find(item => item.id === target.purchaseOrderId)
+      if (order?.parts.some(part => part.status === 'ACTIVE' && part.shippedAt === null && !target.partIds.includes(part.id))) return stateChanged()
+    }
     if (targets.some(target => !orders.some(order => order.id === target.purchaseOrderId))) {
       return stateChanged()
     }
@@ -322,14 +341,15 @@ export class PurchaseOrderFactoryShipmentService {
     transaction: PrismaTypes.TransactionClient,
     context: FactoryShipmentMutationContext,
     order: FactoryShipmentPurchaseOrder,
+    partIds: readonly string[],
     reason: string | null,
     source: 'PURCHASE_ORDER' | 'SALES_ORDER',
   ): Promise<FactoryShipmentResult['purchaseOrders'][number]> {
-    if (isShipmentSatisfied(order.fulfillmentStatus)) {
+    if (partIds.every(id => order.parts.some(part => part.id === id && part.shippedAt !== null))) {
       return {
         id: order.id,
         orderNo: order.orderNo,
-        fulfillmentStatus: order.fulfillmentStatus as 'SHIPPED' | 'SIGNED',
+        fulfillmentStatus: order.fulfillmentStatus as 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'SIGNED',
         changed: false,
       }
     }
@@ -350,23 +370,36 @@ export class PurchaseOrderFactoryShipmentService {
       )
       fromStatus = 'PREPARING'
     }
-    assertPurchaseOrderFulfillmentTransition(fromStatus, 'SHIPPED', {
+    const shippedAt = new Date()
+    const updated = await transaction.purchaseOrderPart.updateMany({
+      where: { purchaseOrderId: order.id, id: { in: [...partIds] }, status: 'ACTIVE', shippedAt: null },
+      data: { shippedAt, shippedById: context.actorUserId, shipmentRecordedAt: shippedAt, shipmentRemark: reason },
+    })
+    if (updated.count !== partIds.length) return stateChanged()
+    const toStatus = order.parts.filter(part => part.status === 'ACTIVE')
+      .every(part => part.shippedAt !== null || partIds.includes(part.id)) ? 'SHIPPED' : 'PARTIALLY_SHIPPED'
+    if (fromStatus !== toStatus) assertPurchaseOrderFulfillmentTransition(fromStatus, toStatus, {
       orderStatus: order.orderStatus,
     })
+    const partLabels = order.parts.filter(part => partIds.includes(part.id))
+      .map(part => `货件-${String(part.partNumber).padStart(2, '0')}`).join('、')
+    // 状态历史说明有 500 字上限；完整说明在各货件保存，审计保留精确货件 ID。
+    const shipmentReason = [...`本次发货：${partLabels}${reason === null ? '' : `；${reason}`}`].slice(0, 500).join('')
     await this.writePurchaseTransition(
       transaction,
       context,
       order,
       fromStatus,
-      'SHIPPED',
-      reason ?? (source === 'SALES_ORDER' ? '从销售订单确认关联采购单工厂发货' : '用户确认本采购单发货'),
+      toStatus,
+      shipmentReason,
       source,
       false,
+      partIds,
     )
     return {
       id: order.id,
       orderNo: order.orderNo,
-      fulfillmentStatus: 'SHIPPED',
+      fulfillmentStatus: toStatus,
       changed: true,
     }
   }
@@ -380,6 +413,7 @@ export class PurchaseOrderFactoryShipmentService {
     reason: string | null,
     source: 'PURCHASE_ORDER' | 'SALES_ORDER',
     automatic: boolean,
+    partIds: readonly string[] = [],
   ): Promise<void> {
     await transaction.purchaseOrder.update({
       where: { id: order.id },
@@ -401,7 +435,7 @@ export class PurchaseOrderFactoryShipmentService {
       targetType: 'PURCHASE_ORDER',
       targetId: order.id,
       requestId: context.requestId,
-      metadata: { automatic, fromStatus, source, toStatus },
+      metadata: { automatic, fromStatus, source, toStatus, ...(partIds.length === 0 ? {} : { partIds: [...partIds] }) },
     })
   }
 
@@ -442,6 +476,7 @@ export class PurchaseOrderFactoryShipmentService {
         purchaseType: true,
         salesOrderId: true,
         version: true,
+        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true } },
       },
     })
   }
@@ -465,6 +500,7 @@ export class PurchaseOrderFactoryShipmentService {
         purchaseType: true,
         salesOrderId: true,
         version: true,
+        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true } },
       },
     })
   }

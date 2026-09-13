@@ -3,6 +3,7 @@ import { Type } from 'class-transformer'
 import {
   ArrayMaxSize,
   ArrayMinSize,
+  ArrayUnique,
   IsArray,
   IsIn,
   IsInt,
@@ -21,10 +22,19 @@ import {
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 import {
   PurchaseOrderListImageDto,
+  PurchaseOrderPartDto,
   PurchaseOrderSupplierDto,
 } from '../dto/purchase-order-response.dto'
 
 export class PurchaseOrderFactoryShipmentRequestDto {
+  @ApiProperty({ type: [String], minItems: 1, maxItems: 1000, uniqueItems: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  partIds!: string[]
+
   @ApiProperty({ type: 'integer', minimum: 1 })
   @IsInt()
   @Min(1)
@@ -38,6 +48,14 @@ export class PurchaseOrderFactoryShipmentRequestDto {
 }
 
 export class SalesOrderFactoryShipmentTargetDto {
+  @ApiProperty({ type: [String], minItems: 1, maxItems: 1000, uniqueItems: true })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(1000)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  partIds!: string[]
+
   @ApiProperty({ type: 'string', format: 'uuid' })
   @IsUUID('4')
   purchaseOrderId!: string
@@ -71,8 +89,8 @@ export class SalesOrderFactoryShipmentRequestDto {
 export class FactoryShipmentPurchaseOrderResultDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
-  @ApiProperty({ enum: ['SHIPPED', 'SIGNED'] })
-  readonly fulfillmentStatus!: 'SHIPPED' | 'SIGNED'
+  @ApiProperty({ enum: ['PARTIALLY_SHIPPED', 'SHIPPED', 'SIGNED'] })
+  readonly fulfillmentStatus!: 'PARTIALLY_SHIPPED' | 'SHIPPED' | 'SIGNED'
   @ApiProperty({ type: 'boolean' }) readonly changed!: boolean
 }
 
@@ -133,6 +151,8 @@ export class SalesOrderFactoryShipmentContextPurchaseOrderDto {
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: () => FactoryShipmentLineSummaryDto })
   readonly lineSummary!: FactoryShipmentLineSummaryDto
+  @ApiProperty({ type: 'string', nullable: true }) readonly shippingMarkText!: string | null
+  @ApiProperty({ type: () => [PurchaseOrderPartDto] }) readonly parts!: readonly PurchaseOrderPartDto[]
 }
 
 export class SalesOrderFactoryShipmentContextDto {

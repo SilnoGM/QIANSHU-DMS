@@ -783,7 +783,7 @@ async function submitSalesFactoryShipment(intent: FactoryShipmentIntent): Promis
   try {
     const response = await salesOrdersApi.factoryShipment(order.id, {
       mode: intent.mode,
-      targets: intent.targets.map(target => ({ ...target })),
+      targets: intent.targets.map(target => ({ ...target, partIds: [...target.partIds] })),
       reason: intent.reason,
     }, controller.signal)
     if (

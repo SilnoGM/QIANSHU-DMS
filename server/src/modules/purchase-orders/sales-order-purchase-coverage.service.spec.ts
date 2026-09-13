@@ -52,6 +52,7 @@ function setup(overrides: {
   readonly shipmentStatuses?: readonly (
     | 'ORDERED'
     | 'PREPARING'
+    | 'PARTIALLY_SHIPPED'
     | 'SHIPPED'
     | 'SIGNED'
   )[]
@@ -438,10 +439,10 @@ describe('SalesOrderPurchaseCoverageService', () => {
     })
   })
 
-  it('keeps PREPARING when one active purchase is not shipped', async () => {
+  it.each(['PREPARING', 'PARTIALLY_SHIPPED'] as const)('keeps PREPARING when one active purchase is %s', async (status) => {
     const fixture = setup({
       fulfillmentStatus: 'PREPARING',
-      shipmentStatuses: ['SHIPPED', 'PREPARING'],
+      shipmentStatuses: ['SHIPPED', status],
     })
 
     await expect(fixture.service.advanceWhenAllPurchasesShipped(

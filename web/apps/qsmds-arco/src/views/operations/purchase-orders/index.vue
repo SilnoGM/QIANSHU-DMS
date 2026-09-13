@@ -212,6 +212,7 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [{
   options: [
     { label: '已下单', value: 'ORDERED' },
     { label: '备货中', value: 'PREPARING' },
+    { label: '部分发货', value: 'PARTIALLY_SHIPPED' },
     { label: '已发货', value: 'SHIPPED' },
     { label: '已签收', value: 'SIGNED' },
   ],
@@ -616,7 +617,15 @@ function createPurchaseShipmentContext(
       supplier: { label: order.supplier.label },
       fulfillmentStatus: order.fulfillmentStatus,
       version: order.version,
-      lineSummary: order.lineSummary,
+      lineSummary: {
+        ...order.lineSummary,
+        previews: order.lineSummary.previews.map((preview) => {
+          const line = order.lines.find(item => item.id === preview.lineId)
+          return { ...preview, productNo: line?.productNo, description: line?.description }
+        }),
+      },
+      shippingMarkText: order.shippingMarkText,
+      parts: order.parts,
     }],
   }
 }
@@ -674,6 +683,7 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
   try {
     const response = await purchaseOrdersApi.factoryShipment(target.purchaseOrderId, {
       expectedVersion: target.expectedVersion,
+      partIds: [...target.partIds],
       reason: intent.reason,
     }, controller.signal)
     if (controller.signal.aborted) {
@@ -719,7 +729,7 @@ async function retryPurchaseFactoryShipment(): Promise<void> {
       return
     }
     const detail = response.data
-    if (detail.orderStatus !== 'CONFIRMED' || !['ORDERED', 'PREPARING'].includes(detail.fulfillmentStatus)) {
+    if (detail.orderStatus !== 'CONFIRMED' || !['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'].includes(detail.fulfillmentStatus)) {
       shipmentError.value = '采购订单状态已变化，当前不可发货。请关闭弹窗后查看最新订单。'
       refreshOrdersAndCounts()
       return
@@ -1175,6 +1185,9 @@ onBeforeUnmount(() => {
                 {{ fulfillmentStatusLabel(row.original.fulfillmentStatus) }}
               </FaTag>
             </QsTableStackedLine>
+            <QsTableStackedLine label="货件进度" tone="muted">
+              已发 {{ row.original.shippedPartCount }} / {{ row.original.partCount }} 件 · 待发 {{ row.original.pendingPartCount }} 件
+            </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
 
@@ -1492,6 +1505,7 @@ onBeforeUnmount(() => {
                   <FaTag variant="outline" :class="fulfillmentStatusTagClass(row.fulfillmentStatus)">
                     {{ fulfillmentStatusLabel(row.fulfillmentStatus) }}
                   </FaTag>
+                  <span class="qs-type-meta text-muted-foreground">已发 {{ row.shippedPartCount }} / {{ row.partCount }} 件</span>
                 </dd>
               </div>
               <div class="col-span-2">

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { PurchaseOrderDetailDto } from '@/api/generated/types.gen'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
-import OrderParts from '@/components/business/QsPurchaseOrderDrawer/OrderParts.vue'
 
 defineProps<{ detail: PurchaseOrderDetailDto }>()
 const { t } = useI18n()
@@ -38,7 +37,6 @@ const { t } = useI18n()
         <CopyCellButton v-if="detail.shippingMarkText" always-visible :text="detail.shippingMarkText" :label="t('purchaseOrderDesc.fields.baseShippingMark')" class="shrink-0" />
       </div>
     </section>
-    <OrderParts :detail="detail" />
     <p v-if="detail.parts.length === 0" class="qs-type-meta text-muted-foreground m-0">
       {{ t('purchaseOrderList.review.noParts') }}
     </p>

@@ -441,6 +441,17 @@ describe('PurchaseOrderMutationService', () => {
     }) as unknown })
   })
 
+  it('blocks cancellation after any shipment and blocks generic shipment writes', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({ ...fixture.order, fulfillmentStatus: 'PARTIALLY_SHIPPED' })
+    await expect(fixture.service.updateOrderStatus(context, ORDER_ID, { toStatus: 'CANCELLED' }))
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({ ...fixture.order, fulfillmentStatus: 'PREPARING' })
+    await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus: 'SHIPPED' }))
+      .rejects.toMatchObject({ code: 'PURCHASE_ORDER_FULFILLMENT_TRANSITION_INVALID' })
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+  })
+
   it('advances fulfillment in order and blocks cancelled orders', async () => {
     const fixture = setup()
     await fixture.service.updateFulfillmentStatus(

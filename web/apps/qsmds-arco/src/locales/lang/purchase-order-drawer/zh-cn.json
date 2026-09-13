@@ -79,6 +79,7 @@
       "CANCELLED": "已取消",
       "ORDERED": "已下单",
       "PREPARING": "备货中",
+      "PARTIALLY_SHIPPED": "部分发货",
       "SHIPPED": "已发货",
       "SIGNED": "已签收",
       "UNPAID": "未付款",

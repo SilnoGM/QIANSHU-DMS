@@ -20,6 +20,7 @@ import {
 const FULFILLMENT_STATUS_TONES = {
   ORDERED: 'info',
   PREPARING: 'warning',
+  PARTIALLY_SHIPPED: 'warning',
   SHIPPED: 'info',
   SIGNED: 'success',
 } as const

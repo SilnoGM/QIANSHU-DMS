@@ -2,6 +2,7 @@ import type {
   FactoryShipmentImpact,
   FactoryShipmentIntent,
   FactoryShipmentModalPurchaseOrder,
+  FactoryShipmentPart,
   FactoryShipmentPurchaseStatus,
   FactoryShipmentSelectionMode,
 } from './types'
@@ -20,6 +21,10 @@ const statusMeta: Record<FactoryShipmentPurchaseStatus, FactoryShipmentStatusMet
     className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
     label: '备货中',
   },
+  PARTIALLY_SHIPPED: {
+    className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    label: '部分发货',
+  },
   SHIPPED: {
     className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
     label: '已发货',
@@ -35,10 +40,11 @@ export function isPendingFactoryShipment(
 ): boolean {
   return order.fulfillmentStatus === 'ORDERED'
     || order.fulfillmentStatus === 'PREPARING'
+    || order.fulfillmentStatus === 'PARTIALLY_SHIPPED'
 }
 
 function statusPriority(status: FactoryShipmentPurchaseStatus): number {
-  return status === 'ORDERED' || status === 'PREPARING' ? 0 : 1
+  return status === 'ORDERED' || status === 'PREPARING' || status === 'PARTIALLY_SHIPPED' ? 0 : 1
 }
 
 export function sortFactoryShipmentOrders(
@@ -52,16 +58,32 @@ export function sortFactoryShipmentOrders(
   ))
 }
 
-function targetOrders(input: {
+export function isPendingShipmentPart(part: FactoryShipmentPart): boolean {
+  return part.status === 'ACTIVE' && part.shippedAt === null
+}
+
+export function defaultShipmentSelection(orders: readonly FactoryShipmentModalPurchaseOrder[]): string[] {
+  const parts = orders.flatMap(order => isPendingFactoryShipment(order) ? order.parts.filter(isPendingShipmentPart) : [])
+  return parts.length === 1 ? [parts[0]!.id] : []
+}
+
+function shipmentTargets(input: {
   readonly mode: FactoryShipmentSelectionMode
   readonly orders: readonly FactoryShipmentModalPurchaseOrder[]
   readonly selectedIds: readonly string[]
-}): FactoryShipmentModalPurchaseOrder[] {
+}): FactoryShipmentIntent['targets'] {
   const selected = new Set(input.selectedIds)
-  return input.orders
-    .filter(isPendingFactoryShipment)
-    .filter(order => input.mode === 'ALL_PENDING' || selected.has(order.id))
-    .sort((left, right) => left.id.localeCompare(right.id))
+  return input.orders.filter(isPendingFactoryShipment)
+    .map(order => ({
+      purchaseOrderId: order.id,
+      expectedVersion: order.version,
+      partIds: order.parts.filter(isPendingShipmentPart)
+        .filter(part => input.mode === 'ALL_PENDING' || selected.has(part.id))
+        .map(part => part.id)
+        .sort(),
+    }))
+    .filter(target => target.partIds.length > 0)
+    .sort((left, right) => left.purchaseOrderId.localeCompare(right.purchaseOrderId))
 }
 
 export function buildFactoryShipmentIntent(input: {
@@ -73,10 +95,7 @@ export function buildFactoryShipmentIntent(input: {
   const reason = input.reason.trim().normalize('NFKC')
   return {
     mode: input.mode,
-    targets: targetOrders(input).map(order => ({
-      purchaseOrderId: order.id,
-      expectedVersion: order.version,
-    })),
+    targets: shipmentTargets(input),
     reason: reason.length === 0 ? null : reason,
   }
 }
@@ -86,8 +105,8 @@ export function calculateFactoryShipmentImpact(input: {
   readonly orders: readonly FactoryShipmentModalPurchaseOrder[]
   readonly selectedIds: readonly string[]
 }): FactoryShipmentImpact {
-  const pendingCount = input.orders.filter(isPendingFactoryShipment).length
-  const selectedCount = targetOrders(input).length
+  const pendingCount = input.orders.filter(isPendingFactoryShipment).flatMap(order => order.parts.filter(isPendingShipmentPart)).length
+  const selectedCount = shipmentTargets(input).reduce((sum, target) => sum + target.partIds.length, 0)
   const remainingCount = Math.max(0, pendingCount - selectedCount)
   return {
     selectedCount,

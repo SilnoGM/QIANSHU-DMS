@@ -7,17 +7,33 @@ export type FactoryShipmentSelectionMode = 'SELECTED' | 'ALL_PENDING'
 export type FactoryShipmentPurchaseStatus
   = | 'ORDERED'
     | 'PREPARING'
+    | 'PARTIALLY_SHIPPED'
     | 'SHIPPED'
     | 'SIGNED'
 
 export interface FactoryShipmentProductPreview {
   readonly lineId: string
   readonly productName: string
+  readonly productNo?: string | null
+  readonly description?: string | null
   readonly quantity?: number
   readonly mainImage: {
     readonly id: string
     readonly contentUrl: string
   } | null
+}
+
+export interface FactoryShipmentPart {
+  readonly id: string
+  readonly partNumber: number
+  readonly status: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
+  readonly shippingMarkText: string | null
+  readonly shippedAt: string | null
+  readonly shippedById: string | null
+  readonly shippedBy?: { readonly id: string, readonly displayName: string } | null
+  readonly shipmentRecordedAt: string | null
+  readonly shipmentRemark: string | null
+  readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
 }
 
 export interface FactoryShipmentModalPurchaseOrder {
@@ -27,6 +43,8 @@ export interface FactoryShipmentModalPurchaseOrder {
   readonly supplier: { readonly label: string }
   readonly fulfillmentStatus: FactoryShipmentPurchaseStatus
   readonly version: number
+  readonly shippingMarkText: string | null
+  readonly parts: readonly FactoryShipmentPart[]
   readonly lineSummary: {
     readonly lineCount: number
     readonly totalQuantity: number
@@ -51,6 +69,7 @@ export interface FactoryShipmentIntent {
   readonly targets: readonly {
     readonly purchaseOrderId: string
     readonly expectedVersion: number
+    readonly partIds: readonly string[]
   }[]
   readonly reason: string | null
 }
