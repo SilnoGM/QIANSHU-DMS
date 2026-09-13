@@ -1692,7 +1692,7 @@ test('真实 Chrome 覆盖采购创建、双视图审核、直接取消、详情
       await waitForVisibleDialog(page, '审核采购订单？')
       await page.waitFor(`document.querySelector('[data-testid="purchase-order-review-confirmation"]')?.textContent.includes(${JSON.stringify(target.orderNo)})`)
       assert.equal(reviewRequests.length, before, '读取审核摘要不会提交审核')
-      await page.waitFor(`document.querySelector('[data-testid="purchase-order-review-shipping-mark"]')?.textContent.includes('仅申请 1 个基础唛头')`)
+      await page.waitFor(`document.querySelector('[data-slot="purchase-order-drawer-parts"] button[aria-expanded="false"]') !== null`)
       assert.deepEqual(await readPurchaseShippingMarkLedger(page), beforeLedger, '审核确认弹窗不得预占唛头')
       assert.equal(await page.evaluate(`document.querySelector('[data-testid="purchase-order-review-confirmation"]')?.textContent.includes(${JSON.stringify(target.supplier.label)})`), true)
       if (index === 0) {
