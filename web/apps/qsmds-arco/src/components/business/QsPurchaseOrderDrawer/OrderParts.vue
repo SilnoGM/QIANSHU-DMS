@@ -6,7 +6,17 @@ import { getPurchaseOrderPartRecords } from './logic'
 
 const props = defineProps<{ detail: PurchaseOrderDetailDto }>()
 const { t } = useI18n()
-const parts = computed(() => getPurchaseOrderPartRecords(props.detail))
+const parts = computed(() => getPurchaseOrderPartRecords(props.detail).map(part => ({
+  ...part,
+  images: part.items.flatMap(item => item.imageSrc
+    ? [{
+        key: item.purchaseOrderLineId,
+        src: item.imageSrc,
+        alt: item.productName ?? '',
+        tooltip: [item.productName, item.productNo].filter(Boolean).join(' · '),
+      }]
+    : []),
+})))
 const expandedPart = ref<string | null>(null)
 // 同一个抽屉切换采购单时恢复默认收起，避免沿用上单的货件展开状态。
 watch(() => props.detail.id, () => {
@@ -48,6 +58,24 @@ function partTitle(partNumber: number): string {
               <span class="qs-type-data text-muted-foreground mt-1.5 block whitespace-pre-wrap [overflow-wrap:anywhere]">{{ part.shippingMarkText ?? t(detail.orderStatus === 'PENDING_REVIEW' ? 'purchaseOrderDrawer.parts.pendingMark' : 'purchaseOrderDrawer.parts.notGenerated') }}</span>
             </span>
           </FaButton>
+          <!-- 保留图片位宽高，淡出时不挤动标题；预览按钮独立于折叠按钮。 -->
+          <div v-if="part.images.length" class="shrink-0 h-12 w-25 self-center relative">
+            <Transition
+              enter-active-class="transition-opacity duration-150 ease-out motion-reduce:transition-none"
+              leave-active-class="transition-opacity duration-150 ease-out motion-reduce:transition-none"
+              enter-from-class="opacity-0"
+              leave-to-class="opacity-0"
+            >
+              <ImageGroup
+                v-if="expandedPart !== part.id"
+                :items="part.images"
+                :max-count="3"
+                :size="40"
+                :tooltip="true"
+                class="right-0 top-1 absolute"
+              />
+            </Transition>
+          </div>
           <CopyCellButton v-if="part.shippingMarkText" always-visible :label="`${partTitle(part.partNumber)}${t('purchaseOrderDrawer.parts.shippingMark')}`" :text="part.shippingMarkText" class="[&_button]:size-11 sm:[&_button]:size-9" />
         </div>
         <FaCollapsible :model-value="expandedPart === part.id">
