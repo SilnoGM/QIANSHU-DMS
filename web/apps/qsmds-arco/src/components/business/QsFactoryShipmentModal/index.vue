@@ -189,7 +189,8 @@ watch(
 
       <div class="mb-3 flex flex-wrap gap-3 items-center justify-between">
         <span class="qs-type-meta text-muted-foreground">本次发货 {{ impact.selectedCount }} 件 · 剩余 {{ impact.remainingCount }} 件</span>
-        <FaButton type="button" variant="ghost" size="sm" :disabled="submitting || pendingOrders.length === 0" @click="setSelectionMode('ALL_PENDING')">
+        <FaButton type="button" variant="outline" size="sm" class="text-primary border-primary/40 bg-primary/5 hover:text-primary hover:border-primary hover:bg-primary/10" :disabled="submitting || pendingOrders.length === 0" @click="setSelectionMode('ALL_PENDING')">
+          <FaIcon name="i-lucide:list-checks" class="size-4" aria-hidden="true" />
           全选未发货
         </FaButton>
       </div>
