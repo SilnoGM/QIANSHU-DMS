@@ -252,16 +252,24 @@ describe('purchase parts with isolated PostgreSQL', () => {
           purchaseOrderId: id, lineNumber: 1, lineType: 'CUSTOM', productNameSnapshot: 'Custom item',
           productAttributesSnapshot: [], referencePurchaseUnitPriceAmount: '10', actualPurchaseUnitPriceAmount: '10', quantity: 1, lineTotalAmount: '10',
         } })
-        const part = await transaction.purchaseOrderPart.create({ data: {
-          purchaseOrderId: id, key: input.parts[0].key, partNumber: 1,
-          shippingMarkText: mark.number, shippingMarkIssuanceId: mark.issuanceId, shippingMarkKeyHash: createHash('sha256').update(markKey).digest(),
-        } })
-        await transaction.purchaseOrderPartItem.create({ data: { purchaseOrderId: id, purchaseOrderPartId: part.id, purchaseOrderLineId: line.id, quantity: 1 } })
+        // 历史 v4 尚无生命周期、发货列，必须只写当时存在的列。
+        const partId = randomUUID()
+        await transaction.$executeRaw`INSERT INTO purchase_order_parts (
+          id, purchase_order_id, key, part_number, shipping_mark_text,
+          shipping_mark_issuance_id, shipping_mark_key_hash
+        ) VALUES (${partId}::uuid, ${id}::uuid, ${input.parts[0].key}::uuid, 1,
+          ${mark.number}, ${mark.issuanceId}::uuid, ${createHash('sha256').update(markKey).digest()})`
+        await transaction.purchaseOrderPartItem.create({ data: { purchaseOrderId: id, purchaseOrderPartId: partId, purchaseOrderLineId: line.id, quantity: 1 } })
       })
-      const before = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: { include: { items: true } } } })
+      const historicalParts = { select: {
+        id: true, purchaseOrderId: true, key: true, partNumber: true,
+        shippingMarkText: true, shippingMarkIssuanceId: true, shippingMarkKeyHash: true,
+        createdAt: true, items: true,
+      } } as const
+      const before = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: historicalParts } })
       const ledger = await fixture.prisma.numberingIssuance.findMany()
       await fixture.migrateReview()
-      expect(await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: { include: { items: true } } } })).toEqual(before)
+      expect(await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: historicalParts } })).toEqual(before)
       jest.spyOn(fixture.resolver, 'resolve').mockRejectedValue(new Error('Historical v4 must not resolve current rules'))
       await expect(createCommands(fixture).create(context, input)).resolves.toBe(id)
       await expect(createCommands(fixture).create(context, { ...input, parts: [{ ...input.parts[0], key: randomUUID() }] }))

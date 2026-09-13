@@ -53,7 +53,11 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
       }
     },
     async applyReviewMigration() {
-      await client.query(readFileSync(resolve(__dirname, '../prisma/migrations/20260908013900_purchase_order_review_shipping_marks/migration.sql'), 'utf8'))
+      // 恢复全部延后的迁移，当前服务才能使用生命周期与发货字段。
+      const directory = resolve(__dirname, '../prisma/migrations')
+      for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260908013900_purchase_order_review_shipping_marks').sort()) {
+        await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
+      }
     },
     async dispose() {
       if (disposed) return

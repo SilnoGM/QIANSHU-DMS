@@ -16,6 +16,9 @@ const supplierResidueAllowlist = Object.freeze([
   // 审核确认摘要仅展示已存采购供应商，不新增供应商主数据。
   'web/apps/qsmds-arco/src/locales/lang/purchase-order-list/zh-cn.json',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-review/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-shipment-summary.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue',
   'web/apps/qsmds-arco/test/views/purchase-order-review.test.ts',
   // 唛头绑定及采购消费仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据。
   'scripts/browser-auth/provision-shipping-mark-fixtures.mjs',

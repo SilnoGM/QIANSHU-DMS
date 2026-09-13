@@ -95,8 +95,8 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
       { lineId: 'line-a', mainImage: { contentUrl: '/image-a' } },
     ] },
     parts: [
-      { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', items: [{ purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5 }] },
-      { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', items: [
+      { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [{ purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5 }] },
+      { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', items: [
         { purchaseOrderLineId: 'line-b', lineNumber: 2, quantity: 3 },
         { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 3 },
       ] },
@@ -105,11 +105,11 @@ test('货件按编号排序，产品和图片按采购行 ID 关联，仅使用�
   const before = structuredClone(detail)
   const records = getPurchaseOrderPartRecords(detail)
   assert.deepEqual(records, [
-    { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', items: [
+    { id: 'part-a', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK-01', shippedAt: '2026-09-13T08:00:00Z', shippedBy: { id: 'user-1', displayName: '采购员' }, shipmentRecordedAt: '2026-09-13T08:00:00Z', shipmentRemark: '首批', items: [
       { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 3, productNo: 'SKU-A', productName: '同名产品', description: 'A 备注', imageSrc: '/image-a' },
       { purchaseOrderLineId: 'line-b', lineNumber: 2, quantity: 3, productNo: 'SKU-B', productName: '同名产品', description: 'B 备注', imageSrc: '/image-b' },
     ] },
-    { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', items: [
+    { id: 'part-b', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK-02', shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [
       { purchaseOrderLineId: 'line-a', lineNumber: 1, quantity: 5, productNo: 'SKU-A', productName: '同名产品', description: 'A 备注', imageSrc: '/image-a' },
     ] },
   ])

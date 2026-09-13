@@ -732,7 +732,11 @@ test('真实 Chrome 覆盖销售订单币种、产品、地址与金额硬拦截
     const shipment = await page.evaluate(apiExpression(
       `/api/purchase-orders/${encodeURIComponent(purchase.body.id)}/factory-shipments`,
       'POST',
-      { expectedVersion: reviewedPurchase.body.version, reason: 'Browser 签收流程采购发货' },
+      {
+        expectedVersion: reviewedPurchase.body.version,
+        partIds: reviewedPurchase.body.parts.map(part => part.id),
+        reason: 'Browser 签收流程采购发货',
+      },
     ))
     // 既有发货 POST 使用 Nest 默认的 201；本次不变更该接口响应行为。
     assert.equal(shipment.status, 201)
