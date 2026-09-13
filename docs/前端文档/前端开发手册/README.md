@@ -58,6 +58,8 @@ Arco Design Vue 是 Fantastic-admin 无法满足需求时的回退组件库，�
 
 ## 6. 按任务阅读
 
+新增或维护页面时，先阅读 [UI 设计规范与页面开发指南](../UI设计规范.md)，快速确认当前主题、排版角色、页面骨架、组件组合、响应式和交互状态，再进入下列专项章节核对完整契约。
+
 四个知识域均已建立本地分册：框架开发从 [Fantastic-admin 开发手册](./Fantastic-admin/README.md)进入，标准业务 UI 先从 [Fantastic-admin 内置组件手册](./Fantastic-admin内置组件/README.md)和[选型与使用规则](./Fantastic-admin内置组件/选型与使用规则.md)进入；经核对 Fa 能力无法满足已确认契约时，再查 [Arco Design Vue 手册](./Arco-Design-Vue/README.md)作为回退资料。复用正式应用已有能力时，从[自定义组件库手册](./自定义组件库/README.md)核对真实接口和使用边界。下面的任务导航把常见工作直接映射到本地章节和正式应用核对点。
 
 | 任务 | 阅读入口 | 正式应用核对点与边界 |
