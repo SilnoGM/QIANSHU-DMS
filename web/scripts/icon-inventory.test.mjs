@@ -17,11 +17,28 @@ import {
 const webRoot = fileURLToPath(new URL('../', import.meta.url))
 const sample = { name: 'qs-orders', label: '订单', category: '订单', usages: ['销售订单'] }
 
-test('品牌 SVG 固定画布和调色板，拒绝脚本、嵌入内容及事件属性', () => {
-  const valid = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path fill="#2FA127" stroke="#11170F" d="M1 1h20v20Z"/></svg>'
+test('品牌 SVG 使用主题 primary 与森林调色板并保持 64 画布', () => {
+  const valid = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path fill="oklch(var(--primary))" stroke="#27312B" d="M1 1h20v20Z"/></svg>'
   assert.doesNotThrow(() => validateBrandSvg(valid, 'qs-orders'))
   assert.throws(() => validateBrandSvg(valid.replace('0 0 64 64', '0 0 24 24'), 'qs-orders'), /viewBox/u)
-  assert.throws(() => validateBrandSvg(valid.replace('#2FA127', '#ffffff'), 'qs-orders'), /palette/iu)
+  for (const paint of ['color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)', '#F7F8F4', '#9B805F', 'none']) {
+    assert.doesNotThrow(() => validateBrandSvg(valid.replace('</svg>', `<circle fill="${paint}" r="2"/></svg>`), 'qs-orders'))
+  }
+  for (const paint of ['#2FA127', '#8E6439', '#FFF9E9', '#11170F', '#ffffff', 'var(--other)', 'oklch(var(--other))', 'color-mix(in srgb, oklch(var(--primary)) 50%, #F7F8F4)']) {
+    assert.throws(() => validateBrandSvg(valid.replace('#27312B', paint), 'qs-orders'), /palette|unsafe/iu)
+  }
+})
+
+test('品牌 SVG 必须在绘制属性中使用 primary，说明文本或伪属性不能代替主题绑定', () => {
+  const fixedSvg = '<svg viewBox="0 0 64 64"><path fill="#9B805F" d="M1 1h20v20Z"/></svg>'
+  assert.throws(() => validateBrandSvg(fixedSvg, 'qs-orders'), /primary/u)
+  assert.throws(() => validateBrandSvg(fixedSvg.replace('</svg>', '<desc>oklch(var(--primary))</desc></svg>'), 'qs-orders'), /primary|unsafe/iu)
+  assert.throws(() => validateBrandSvg(fixedSvg.replace('<path', '<path data-fill="oklch(var(--primary))"'), 'qs-orders'), /primary|unsafe/iu)
+  assert.throws(() => validateBrandSvg(fixedSvg.replace('</svg>', '<!-- <path fill="oklch(var(--primary))"/> --></svg>'), 'qs-orders'), /primary/u)
+})
+
+test('品牌 SVG 拒绝脚本、嵌入内容、事件和任意变量引用', () => {
+  const valid = '<svg viewBox="0 0 64 64"><path fill="oklch(var(--primary))" d="M1 1h20v20Z"/></svg>'
   for (const unsafe of [
     '<script>alert(1)</script>',
     '<image href="https://example.com/asset.png"/>',
@@ -30,6 +47,7 @@ test('品牌 SVG 固定画布和调色板，拒绝脚本、嵌入内容及事件
     '<path onclick="alert(1)"/>',
     '<path style="fill:red"/>',
     '<use href="https://example.com/asset.svg"/>',
+    '<path filter="var(--external-filter)"/>',
   ]) {
     assert.throws(() => validateBrandSvg(valid.replace('</svg>', `${unsafe}</svg>`), 'qs-orders'), /unsafe/iu)
   }

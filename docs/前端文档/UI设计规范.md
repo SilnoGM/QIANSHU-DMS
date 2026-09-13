@@ -76,7 +76,7 @@
 
 默认按钮高度为 `36px`，`sm` 为 `32px`，`lg` 为 `40px`。不要通过缩小点击区域提高密度；移动端关键操作保持可点击、可识别。图标与禁用、悬停、焦点表现继续由组件管理。
 
-品牌 SVG 保留 LOGO 的树绿、木棕和黑色轮廓，不随文字颜色变成单色。导航中的 `qs-*` 品牌图标使用 `24px`，保持菜单行高；原有通用菜单图标维持 `20px`。造型、尺寸、清单及接入方法见[图标制作与使用规范](./图标制作与使用规范.md)；当前项目图标可在组件库 `/component-library/basic/icons` 检索和预览。
+品牌 SVG 以业务对象为主体，结合不同的森林生命形态；主绿与浅绿引用当前 `--primary`，自然墨色轮廓、纸色和少量木色形成层次。导航中的 `qs-*` 品牌图标使用 `24px`，保持菜单行高；原有通用菜单图标维持 `20px`。造型、主题 Token、清单及接入方法见[图标制作与使用规范](./图标制作与使用规范.md)；当前项目图标可在组件库 `/component-library/basic/icons` 检索和预览。
 
 来源：[FaPageHeader](../../web/packages/components/src/basic/page-header/index.vue)、[FaPageMain](../../web/packages/components/src/basic/page-main/index.vue)、[按钮样式](../../web/packages/components/src/basic/button/button/index.ts)、[UnoCSS 圆角映射](../../web/uno.config.ts)。
 

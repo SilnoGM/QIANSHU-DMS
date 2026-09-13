@@ -6,25 +6,43 @@ import ts from 'typescript'
 
 const defaultWebRoot = fileURLToPath(new URL('../', import.meta.url))
 const appRelative = 'apps/qsmds-arco/src'
-const brandPalette = new Set(['#11170F', '#2FA127', '#8E6439', '#FFF9E9', 'NONE'])
+const primaryPaint = 'oklch(var(--primary))'
+const primaryTintPaint = 'color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)'
+const brandPalette = new Set([primaryPaint, primaryTintPaint, '#27312B', '#F7F8F4', '#9B805F', 'none'])
 
 /** 品牌源图只承载几何绘制，拒绝可执行、远程引用和绕过调色板的内容。 */
 export function validateBrandSvg(source, name) {
-  const svgTag = source.match(/<svg\b[^>]*>/u)?.[0]
+  const content = source.replace(/<!--[\s\S]*?-->/gu, '')
+  const svgTag = content.match(/<svg\b[^>]*>/u)?.[0]
   if (!svgTag || !/\bviewBox=["']0 0 64 64["']/u.test(svgTag)) {
     throw new Error(`Brand SVG requires viewBox="0 0 64 64": ${name}`)
   }
   const allowedTags = new Set(['svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon', 'title', 'desc'])
-  const tags = [...source.matchAll(/<\/?([\w:-]+)/gu)].map(match => match[1])
+  const tags = [...content.matchAll(/<\/?([\w:-]+)/gu)].map(match => match[1])
   if (tags.some(tag => !allowedTags.has(tag))
-    || /\s(?:on[\w:-]+|style|(?:xlink:)?href)\s*=/iu.test(source)
-    || /<!DOCTYPE|<!ENTITY|<\?|url\s*\(/iu.test(source)) {
+    || /\s(?:on[\w:-]+|style|(?:xlink:)?href)\s*=/iu.test(content)
+    || /<!DOCTYPE|<!ENTITY|<\?|url\s*\(/iu.test(content)) {
     throw new Error(`Unsafe content in brand SVG: ${name}`)
   }
-  for (const [, , color] of source.matchAll(/\b(?:fill|stroke)\s*=\s*(["'])(.*?)\1/gu)) {
-    if (!brandPalette.has(color.toUpperCase())) {
-      throw new Error(`Color outside brand palette in ${name}: ${color}`)
-    }
+  let hasPrimaryPaint = false
+  // 只允许两条已确认的主题表达式，不把任意 CSS 变量或 color-mix 参数视为有效调色板。
+  const contentWithoutPaint = content.replace(/<([\w:-]+)\b[^>]*>/gu, (tag, tagName) => {
+    return tag.replace(/\s(?:fill|stroke)\s*=\s*(["'])(.*?)\1/gu, (attribute, quote, paint) => {
+      const canonicalPaint = paint.startsWith('#') ? paint.toUpperCase() : paint
+      if (!brandPalette.has(canonicalPaint)) {
+        throw new Error(`Color outside brand palette in ${name}: ${paint}`)
+      }
+      if (!['title', 'desc'].includes(tagName) && [primaryPaint, primaryTintPaint].includes(paint)) {
+        hasPrimaryPaint = true
+      }
+      return attribute.replace(`${quote}${paint}${quote}`, `${quote}${quote}`)
+    })
+  })
+  if (/var\s*\(/iu.test(contentWithoutPaint)) {
+    throw new Error(`Unsafe variable outside approved paint in brand SVG: ${name}`)
+  }
+  if (!hasPrimaryPaint) {
+    throw new Error(`Brand SVG must bind a paint to --primary: ${name}`)
   }
 }
 

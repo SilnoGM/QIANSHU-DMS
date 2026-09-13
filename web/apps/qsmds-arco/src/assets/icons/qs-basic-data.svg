@@ -1,1 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g transform="translate(4 4) scale(.875)" stroke="#11170F" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20Q9 13 32 13Q55 13 55 20V51Q55 58 32 59Q9 58 9 51Z" fill="#8E6439"/><path d="M9 27Q32 36 55 27M9 42Q32 50 55 42" fill="none"/><path d="M12.29 22.33 C7.14 22.33 7.14 14.83 13.14 14 C12.29 8.17 20.86 6.5 26 9.83 C28.57 3.17 38.86 3.17 41.43 9.83 C47.43 5.67 54.29 9.83 51.71 14.83 C59.43 15.67 57.71 23.17 51.71 23.17 C46.57 24.83 42.29 23.17 40.57 20.67 C34.57 25.67 28.57 24 26 20.67 C21.71 24.83 15.71 24.83 12.29 22.33 Z" fill="#2FA127"/><path d="M18 37L25 38M18 51L25 52" fill="none" stroke-width="2"/></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<g transform="translate(2 2) scale(.9375)">
+<path d="M11 17H51V48Q51 58 31 58Q11 58 11 48Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M11 28Q31 39 51 28V39Q31 49 11 39Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<ellipse cx="31" cy="17" rx="20" ry="8" fill="#F7F8F4" stroke="#27312B" stroke-width="2.5"/>
+<g transform="translate(43 39) rotate(10) scale(0.74)">
+<path d="M2 8Q1 18 9 21Q17 17 16 8Z" fill="#9B805F" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1 10Q0 3 9 3Q17 3 17 10Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8 3Q8 0 11 -1" fill="none" stroke="#27312B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5 8L7 6M11 8L13 6" fill="none" stroke="#27312B" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<g transform="translate(44 39) rotate(60) scale(0.45)">
+<path d="M3 20Q10 12 8 1" fill="none" stroke="#27312B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M8 10Q0 7 2 0Q10 2 8 10Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7 8L4 3L5 7Z" fill="#27312B" stroke="none" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M7 16Q8 7 17 7Q16 16 7 16Z" fill="oklch(var(--primary))" stroke="#27312B" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M9 14L14 10L10 12Z" fill="#27312B" stroke="none" stroke-width="0" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+</svg>

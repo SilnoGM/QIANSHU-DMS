@@ -27,7 +27,7 @@
       "unavailable": "Clipboard access is unavailable. Select the code above and copy it manually.",
       "failed": "Copy failed. Try again or select the code above and copy it manually."
     },
-    "themeHint": "Backgrounds follow the current system theme. Icons appear at the selected size.",
+    "themeHint": "Brand icons echo the logo with forest details. Their green follows the system theme color (--primary). Switch light and dark themes to check the menu appearance.",
     "noSelection": "Adjust the filters, then choose an icon to view its usage and code."
   }
 }
