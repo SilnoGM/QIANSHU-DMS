@@ -51,8 +51,8 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { withStatusSwitchCounts } from '@/components/business/QsStatusSwitchToolbar/logic'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
-
 import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
+
 import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
 import {
   buildPurchaseOrderListQuery,
@@ -77,6 +77,7 @@ import {
 import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell.vue'
 import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
 import PurchaseOrderShippingMarksCell from './purchase-order-shipping-marks-cell.vue'
+import PurchaseShipmentSummary from './purchase-shipment-summary.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
 
@@ -159,6 +160,7 @@ const purchaseStartType = ref<PurchaseStartPurchaseType>('SALES_LINKED')
 const cancelLoadingOrderId = ref<string | null>(null)
 const shipmentVisible = ref(false)
 const shipmentContext = shallowRef<FactoryShipmentModalContext | null>(null)
+const shipmentDetail = shallowRef<PurchaseOrderDetailDto | null>(null)
 const shipmentTarget = shallowRef<PurchaseOrderListItemDto | null>(null)
 const shipmentContextLoading = ref(false)
 const shipmentSubmitting = ref(false)
@@ -602,7 +604,7 @@ function canShowPendingAction(action: PurchaseOrderPendingActionItem): boolean {
 }
 
 function createPurchaseShipmentContext(
-  order: PurchaseOrderListItemDto,
+  order: PurchaseOrderDetailDto,
 ): FactoryShipmentModalContext {
   return {
     // 单采购模式只核对当前采购订单；销售联动结果由 Server 提交结果统一返回。
@@ -632,9 +634,11 @@ function openPurchaseFactoryShipment(order: PurchaseOrderListItemDto): void {
   }
   cancelShipmentRequest()
   shipmentTarget.value = order
-  shipmentContext.value = createPurchaseShipmentContext(order)
+  shipmentDetail.value = null
+  shipmentContext.value = null
   shipmentError.value = null
   shipmentVisible.value = true
+  void retryPurchaseFactoryShipment()
 }
 
 function closePurchaseFactoryShipment(): void {
@@ -645,6 +649,7 @@ function closePurchaseFactoryShipment(): void {
   shipmentVisible.value = false
   shipmentError.value = null
   shipmentTarget.value = null
+  shipmentDetail.value = null
   shipmentContext.value = null
 }
 
@@ -658,7 +663,7 @@ function shipmentFailureMessage(error: unknown): string {
 
 async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Promise<void> {
   const target = intent.targets[0]
-  if (target === undefined || shipmentSubmitting.value) {
+  if (target === undefined || shipmentSubmitting.value || shipmentContextLoading.value || shipmentDetail.value === null || shipmentError.value) {
     return
   }
   cancelShipmentRequest()
@@ -678,6 +683,7 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
     toast.success(formatPurchaseFactoryShipmentSuccess(result))
     shipmentVisible.value = false
     shipmentTarget.value = null
+    shipmentDetail.value = null
     shipmentContext.value = null
     refreshOrdersAndCounts()
   }
@@ -696,30 +702,43 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
 
 async function retryPurchaseFactoryShipment(): Promise<void> {
   const targetId = shipmentTarget.value?.id
-  if (targetId === undefined || shipmentSubmitting.value) {
+  if (targetId === undefined || shipmentSubmitting.value || !shipmentVisible.value || !canUpdate.value) {
     return
   }
+  shipmentAbortController?.abort()
+  const controller = new AbortController()
+  shipmentAbortController = controller
+  const epoch = appAccountStore.authEpoch
   shipmentContextLoading.value = true
   shipmentError.value = null
-  await loadOrders()
-  if (listError.value !== '') {
-    shipmentContextLoading.value = false
-    shipmentError.value = '最新采购订单加载失败，请稍后重试。'
-    return
+  shipmentDetail.value = null
+  shipmentContext.value = null
+  try {
+    const response = await purchaseOrdersApi.getById(targetId, controller.signal)
+    if (controller.signal.aborted || epoch !== appAccountStore.authEpoch || !shipmentVisible.value || shipmentTarget.value?.id !== targetId || !canUpdate.value) {
+      return
+    }
+    const detail = response.data
+    if (detail.orderStatus !== 'CONFIRMED' || !['ORDERED', 'PREPARING'].includes(detail.fulfillmentStatus)) {
+      shipmentError.value = '采购订单状态已变化，当前不可发货。请关闭弹窗后查看最新订单。'
+      refreshOrdersAndCounts()
+      return
+    }
+    // 唛头、货件分配与提交版本来自同一次详情读取，避免核对旧列表后提交新版本。
+    shipmentDetail.value = detail
+    shipmentContext.value = createPurchaseShipmentContext(detail)
   }
-  const refreshedOrder = rows.value.find(order => order.id === targetId)
-  shipmentContextLoading.value = false
-  if (
-    refreshedOrder === undefined
-    || refreshedOrder.orderStatus !== 'CONFIRMED'
-    || !['ORDERED', 'PREPARING'].includes(refreshedOrder.fulfillmentStatus)
-  ) {
-    closePurchaseFactoryShipment()
-    toast.info('采购订单状态已变化，列表已刷新')
-    return
+  catch (error) {
+    if (!controller.signal.aborted && epoch === appAccountStore.authEpoch && !isPurchaseOrderAbortError(error)) {
+      shipmentError.value = shipmentFailureMessage(error)
+    }
   }
-  shipmentTarget.value = refreshedOrder
-  shipmentContext.value = createPurchaseShipmentContext(refreshedOrder)
+  finally {
+    if (shipmentAbortController === controller) {
+      shipmentAbortController = null
+      shipmentContextLoading.value = false
+    }
+  }
 }
 
 /** 发货进入正式业务弹窗；到仓和付款本期继续只说明能力建设状态。 */
@@ -777,6 +796,7 @@ watch(() => appAccountStore.authEpoch, () => {
   cancelShipmentRequest()
   shipmentVisible.value = false
   shipmentTarget.value = null
+  shipmentDetail.value = null
   shipmentContext.value = null
   shipmentError.value = null
   detailVisible.value = false
@@ -1564,7 +1584,11 @@ onBeforeUnmount(() => {
       @submit="submitPurchaseFactoryShipment"
       @cancel="closePurchaseFactoryShipment"
       @retry="retryPurchaseFactoryShipment"
-    />
+    >
+      <template #purchase-content>
+        <PurchaseShipmentSummary v-if="shipmentDetail" :detail="shipmentDetail" />
+      </template>
+    </QsFactoryShipmentModal>
 
     <QsPurchaseStartModal
       v-model="purchaseStartVisible"

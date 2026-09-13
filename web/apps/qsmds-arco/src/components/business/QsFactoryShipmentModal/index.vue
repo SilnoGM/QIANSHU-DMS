@@ -373,43 +373,45 @@ watch(
         </aside>
       </div>
 
-      <section v-else-if="primaryOrder" class="flex-1 min-h-0">
-        <div class="p-4 border border-border rounded-lg bg-background gap-4 grid">
-          <div class="gap-4 grid sm:grid-cols-2">
-            <div class="min-w-0">
-              <span class="qs-type-meta text-muted-foreground block">采购订单</span>
-              <strong class="qs-type-data-emphasis font-mono mt-1 block break-all">
-                {{ primaryOrder.orderNo }}
-              </strong>
+      <section v-else-if="primaryOrder" class="overscroll-contain flex-1 min-h-0 overflow-y-auto">
+        <slot name="purchase-content">
+          <div class="p-4 border border-border rounded-lg bg-background gap-4 grid">
+            <div class="gap-4 grid sm:grid-cols-2">
+              <div class="min-w-0">
+                <span class="qs-type-meta text-muted-foreground block">采购订单</span>
+                <strong class="qs-type-data-emphasis font-mono mt-1 block break-all">
+                  {{ primaryOrder.orderNo }}
+                </strong>
+              </div>
+              <div class="min-w-0 sm:text-end">
+                <span class="qs-type-meta text-muted-foreground block">供应商</span>
+                <strong class="qs-type-body-medium mt-1 block truncate">
+                  {{ primaryOrder.supplier.label }}
+                </strong>
+              </div>
             </div>
-            <div class="min-w-0 sm:text-end">
-              <span class="qs-type-meta text-muted-foreground block">供应商</span>
-              <strong class="qs-type-body-medium mt-1 block truncate">
-                {{ primaryOrder.supplier.label }}
-              </strong>
+            <div class="pt-4 border-t border-border/70 flex flex-wrap gap-3 items-center justify-between">
+              <span class="qs-type-meta text-muted-foreground">
+                {{ primaryOrder.lineSummary.lineCount }} 项产品 · 共 {{ primaryOrder.lineSummary.totalQuantity }} 件
+              </span>
+              <FaTag
+                variant="outline"
+                class="qs-type-status-tag"
+                :class="getPurchaseShipmentStatusMeta(primaryOrder.fulfillmentStatus).className"
+              >
+                {{ getPurchaseShipmentStatusMeta(primaryOrder.fulfillmentStatus).label }}
+              </FaTag>
             </div>
+            <FactoryShipmentProductSummary :previews="primaryOrder.lineSummary.previews" />
           </div>
-          <div class="pt-4 border-t border-border/70 flex flex-wrap gap-3 items-center justify-between">
-            <span class="qs-type-meta text-muted-foreground">
-              {{ primaryOrder.lineSummary.lineCount }} 项产品 · 共 {{ primaryOrder.lineSummary.totalQuantity }} 件
-            </span>
-            <FaTag
-              variant="outline"
-              class="qs-type-status-tag"
-              :class="getPurchaseShipmentStatusMeta(primaryOrder.fulfillmentStatus).className"
-            >
-              {{ getPurchaseShipmentStatusMeta(primaryOrder.fulfillmentStatus).label }}
-            </FaTag>
-          </div>
-          <FactoryShipmentProductSummary :previews="primaryOrder.lineSummary.previews" />
-        </div>
-        <FaAlert
-          v-if="primaryOrder.fulfillmentStatus === 'ORDERED'"
-          class="mt-4"
-          icon="i-lucide:route"
-          title="系统将顺序推进采购履约状态"
-          description="确认后系统将完成备货状态并将本采购单标记为已发货。"
-        />
+          <FaAlert
+            v-if="primaryOrder.fulfillmentStatus === 'ORDERED'"
+            class="mt-4"
+            icon="i-lucide:route"
+            title="系统将顺序推进采购履约状态"
+            description="确认后系统将完成备货状态并将本采购单标记为已发货。"
+          />
+        </slot>
       </section>
 
       <div class="mt-4 shrink-0">
