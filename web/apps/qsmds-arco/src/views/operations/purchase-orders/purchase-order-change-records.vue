@@ -5,10 +5,25 @@ import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { revisionAmounts } from '@/components/business/QsPurchaseOrderDrawer/logic'
+import { fulfillmentStatusTagClass, orderStatusTagClass, paymentStatusTagClass } from './purchase-order-list.logic'
 
 const props = defineProps<{ detail: PurchaseOrderDetailDto, currencies: readonly CurrencyDescriptor[] }>()
 const { t, te } = useI18n()
 const activeChangeTab = ref('status')
+// 变更前后按状态本身着色，与采购列表保持相同语义，不能将变更后统一视为成功。
+const statusClasses: Record<string, string> = {
+  PENDING_REVIEW: orderStatusTagClass('PENDING_REVIEW'),
+  CONFIRMED: orderStatusTagClass('CONFIRMED'),
+  COMPLETED: orderStatusTagClass('COMPLETED'),
+  CANCELLED: orderStatusTagClass('CANCELLED'),
+  ORDERED: fulfillmentStatusTagClass('ORDERED'),
+  PREPARING: fulfillmentStatusTagClass('PREPARING'),
+  SHIPPED: fulfillmentStatusTagClass('SHIPPED'),
+  SIGNED: fulfillmentStatusTagClass('SIGNED'),
+  UNPAID: paymentStatusTagClass('UNPAID'),
+  PARTIALLY_PAID: paymentStatusTagClass('PARTIALLY_PAID'),
+  PAID: paymentStatusTagClass('PAID'),
+}
 const tabs = computed(() => [
   { value: 'status', label: t('purchaseOrderList.records.statusTab', { count: props.detail.statusHistory.length }) },
   { value: 'amount', label: t('purchaseOrderList.records.amountTab', { count: props.detail.amountRevisions.length }) },
@@ -33,11 +48,11 @@ function statusLabel(value: string) {
               <DateTimeDisplay :value="history.changedAt" class="qs-type-meta" />
             </div>
             <p class="m-0 mt-2 flex flex-wrap gap-2 items-center">
-              <FaTag variant="outline" class="qs-type-status-tag">
+              <FaTag variant="outline" class="qs-type-status-tag" :class="statusClasses[history.fromStatus]">
                 {{ statusLabel(history.fromStatus) }}
               </FaTag>
               <FaIcon name="i-lucide:arrow-right" class="text-muted-foreground size-4" aria-hidden="true" />
-              <FaTag variant="outline" class="qs-type-status-tag">
+              <FaTag variant="outline" class="qs-type-status-tag" :class="statusClasses[history.toStatus]">
                 {{ statusLabel(history.toStatus) }}
               </FaTag>
             </p>
