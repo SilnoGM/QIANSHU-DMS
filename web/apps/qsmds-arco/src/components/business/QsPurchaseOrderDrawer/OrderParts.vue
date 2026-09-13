@@ -22,6 +22,13 @@ const expandedPart = ref<string | null>(null)
 watch(() => props.detail.id, () => {
   expandedPart.value = null
 })
+// 卡片空白和文本均可展开，图片预览、复制等交互控件保留独立行为。
+function toggleCard(event: MouseEvent, partId: string): void {
+  if (event.target instanceof Element && event.target.closest('button, a, input, textarea, [role="button"]')) {
+    return
+  }
+  expandedPart.value = expandedPart.value === partId ? null : partId
+}
 function partTitle(partNumber: number): string {
   return t('purchaseOrderDrawer.parts.part', { number: String(partNumber).padStart(2, '0') })
 }
@@ -35,13 +42,13 @@ function partTitle(partNumber: number): string {
       <span class="qs-type-meta px-2 py-0.5 rounded-md bg-muted tabular-nums">{{ parts.length }}</span>
     </h3>
     <div class="space-y-2.5">
-      <article v-for="part in parts" :key="part.id" :data-part-number="part.partNumber" class="border border-border rounded-xl overflow-hidden">
+      <article v-for="part in parts" :key="part.id" :data-part-number="part.partNumber" class="border border-border rounded-xl cursor-pointer transition-colors duration-150 overflow-hidden hover:bg-muted/25 focus-within:ring-2 focus-within:ring-ring motion-reduce:transition-none" @click="toggleCard($event, part.id)">
         <!-- 复制按钮与展开按钮为并列控件，避免按钮嵌套导致点击复制时同时展开。 -->
         <div class="p-3 flex gap-2 min-w-0 items-start sm:p-4">
           <FaButton
             type="button"
             variant="ghost"
-            class="p-1 text-start flex flex-1 gap-3 h-auto min-h-11 min-w-0 items-start justify-start"
+            class="p-1 text-start flex flex-1 gap-3 h-auto min-h-11 min-w-0 items-start justify-start hover:bg-transparent dark:hover:bg-transparent"
             :aria-label="partTitle(part.partNumber)"
             :aria-expanded="expandedPart === part.id"
             :aria-controls="`purchase-part-${detail.id}-${part.id}`"
