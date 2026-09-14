@@ -215,7 +215,14 @@ export interface PurchaseOrderSupplier {
   readonly effectiveEnabled: boolean | null
 }
 
+export interface PurchaseOrderReviewSummary {
+  readonly reviewedAt: string
+  readonly reviewedBy: { readonly id: string, readonly displayName: string }
+  readonly reason: string | null
+}
+
 export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
+  readonly reviewSummary: PurchaseOrderReviewSummary | null
   readonly id: string
   readonly orderNo: string
   readonly purchaseType: PurchaseOrderType
@@ -518,9 +525,22 @@ function mapLineSummary(
   }
 }
 
+function mapReviewSummary(history: {
+  readonly changedAt: Date
+  readonly changedBy: { readonly id: string, readonly displayName: string }
+  readonly reason: string | null
+} | undefined): PurchaseOrderReviewSummary | null {
+  return history === undefined ? null : {
+    reviewedAt: history.changedAt.toISOString(),
+    reviewedBy: history.changedBy,
+    reason: history.reason,
+  }
+}
+
 function mapListItem(
   row: PurchaseOrderListRow,
   supplier: PurchaseOrderSupplier,
+  reviewSummary: PurchaseOrderReviewSummary | null,
 ): PurchaseOrderListItem {
   const records = summarizePurchaseOrderRecords(row)
   const activePaidUnits = parsePurchaseOrderAmountUnits(records.paidAmount)
@@ -529,6 +549,7 @@ function mapListItem(
   )
   return {
     ...records,
+    reviewSummary,
     id: row.id,
     orderNo: row.orderNo,
     purchaseType: row.purchaseType,
@@ -615,45 +636,59 @@ export class PurchaseOrderQueryService {
     // 列表数量、当前页与金额汇总必须共享同一份筛选谓词，并在一个事务快照内读取，
     // 显式使用 RepeatableRead，避免默认 ReadCommitted 下并发付款或订单变更
     // 令“共 N 张”、分类付款与金额矩阵读到不同快照而出现瞬时错位。
-    const [
-      total,
-      rows,
-      orderAggregate,
-      referencePriceLines,
-      paymentAggregate,
-    ] = await this.prisma.$transaction([
-      this.prisma.purchaseOrder.count({ where }),
-      this.prisma.purchaseOrder.findMany({
-        where,
-        orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-        select: PURCHASE_ORDER_LIST_SELECT,
-      }),
-      this.prisma.purchaseOrder.aggregate({
-        where,
-        _count: { _all: true },
-        _sum: {
-          purchaseTotalAmount: true,
-          depositDueAmount: true,
-          balanceDueAmount: true,
-        },
-      }),
-      this.prisma.purchaseOrderLine.findMany({
-        where: { purchaseOrder: { is: where } },
-        select: {
-          referencePurchaseUnitPriceAmount: true,
-          quantity: true,
-        },
-      }),
-      this.prisma.purchaseOrderPayment.aggregate({
-        where: {
-          voidedAt: null,
-          purchaseOrder: { is: where },
-        },
-        _sum: { amount: true },
-      }),
-    ], { isolationLevel: 'RepeatableRead' })
+    const [total, rows, orderAggregate, referencePriceLines, paymentAggregate, reviewByOrderId]
+      = await this.prisma.$transaction(async transaction => {
+        const [total, rows, orderAggregate, referencePriceLines, paymentAggregate] = await Promise.all([
+          transaction.purchaseOrder.count({ where }),
+          transaction.purchaseOrder.findMany({
+            where,
+            orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+            select: PURCHASE_ORDER_LIST_SELECT,
+          }),
+          transaction.purchaseOrder.aggregate({
+            where,
+            _count: { _all: true },
+            _sum: {
+              purchaseTotalAmount: true,
+              depositDueAmount: true,
+              balanceDueAmount: true,
+            },
+          }),
+          transaction.purchaseOrderLine.findMany({
+            where: { purchaseOrder: { is: where } },
+            select: {
+              referencePurchaseUnitPriceAmount: true,
+              quantity: true,
+            },
+          }),
+          transaction.purchaseOrderPayment.aggregate({
+            where: {
+              voidedAt: null,
+              purchaseOrder: { is: where },
+            },
+            _sum: { amount: true },
+          }),
+        ])
+        // 最新变更与审核事实是两种记录：保留原 take:1 摘要，仅批量查询当前页的
+        // 精确审核转换；同一事务快照防止列表状态与审核结果读到不同时间点。
+        const reviewHistory = rows.length === 0 ? [] : await transaction.purchaseOrderStatusHistory.findMany({
+          where: {
+            purchaseOrderId: { in: rows.map(row => row.id) },
+            dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED',
+          },
+          orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+          distinct: ['purchaseOrderId'],
+          select: {
+            purchaseOrderId: true, changedAt: true, reason: true,
+            changedBy: { select: { id: true, displayName: true } },
+          },
+        })
+        return [total, rows, orderAggregate, referencePriceLines, paymentAggregate,
+          new Map(reviewHistory.map(history => [history.purchaseOrderId, mapReviewSummary(history)])),
+        ] as const
+      }, { isolationLevel: 'RepeatableRead' })
     const dictionarySupplierRows = rows.filter(
       (row): row is typeof row & { readonly supplierValue: string } =>
         row.supplierValue !== null,
@@ -675,6 +710,7 @@ export class PurchaseOrderQueryService {
       items: rows.map(row => mapListItem(
         row,
         supplierByOrderId.get(row.id) ?? purchaseOrderSupplierFromSources(row, undefined),
+        reviewByOrderId.get(row.id) ?? null,
       )),
       summariesByCurrency: currencySummary === null ? [] : [currencySummary],
       page,
@@ -793,6 +829,8 @@ export class PurchaseOrderQueryService {
     const summary = mapListItem(
       row,
       purchaseOrderSupplierFromSources(row, resolution),
+      mapReviewSummary(row.statusHistory.find(history => history.dimension === 'ORDER'
+        && history.fromStatus === 'PENDING_REVIEW' && history.toStatus === 'CONFIRMED')),
     )
     const activePaidUnits = parsePurchaseOrderAmountUnits(summary.paidAmount)
     const totalUnits = parsePurchaseOrderAmountUnits(

@@ -15,6 +15,8 @@ import { PurchaseOrderCommandService } from './purchase-order-command.service'
 import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import { PurchaseOrderProductImageService } from './products/purchase-order-product-image.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
+import { PurchaseOrderReviewContextController } from './purchase-order-review-context.controller'
+import { PurchaseOrderReviewContextService } from './purchase-order-review-context.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
 import { PurchaseOrdersController } from './purchase-orders.controller'
 
@@ -42,6 +44,9 @@ function createRequest(): object {
 }
 
 const providers = [{
+  provide: PurchaseOrderReviewContextService,
+  useValue: { read: jest.fn() },
+}, {
   provide: PurchaseShippingMarkResolverService,
   useValue: { read: jest.fn() },
 }, {
@@ -76,10 +81,18 @@ const providers = [{
   },
 }]
 
-@Module({ controllers: [PurchaseOrdersController], providers })
+@Module({ controllers: [PurchaseOrdersController, PurchaseOrderReviewContextController], providers })
 class PurchaseOrdersContractModule {}
 
 describe('PurchaseOrdersController', () => {
+  it('requires review permission for the read-only eligibility check', async () => {
+    const read = jest.fn().mockResolvedValue({ available: true, message: null })
+    const controller = new PurchaseOrderReviewContextController({ read } as unknown as PurchaseOrderReviewContextService)
+    await expect(controller.read({ purchaseOrderId: ORDER_ID })).resolves.toEqual({ available: true, message: null })
+    expect(read).toHaveBeenCalledWith(ORDER_ID)
+    expect(new Reflector().get(REQUIRED_PERMISSIONS_METADATA, PurchaseOrderReviewContextController.prototype.read))
+      .toEqual(['purchase-orders:review'])
+  })
   it('requires the independent review permission and delegates the versioned approval', async () => {
     const review = jest.fn().mockResolvedValue({ id: ORDER_ID })
     const controller = new PurchaseOrdersController(
@@ -418,6 +431,26 @@ describe('PurchaseOrdersController OpenAPI', () => {
 
   beforeAll(async () => {
     document = await createOpenApiDocument(PurchaseOrdersContractModule)
+  })
+
+  it('publishes a private read-only review precheck and nullable historical review summary', () => {
+    const operation: ContractOperation | undefined = document.paths['/api/purchase-orders/{purchaseOrderId}/review-context']?.get
+    expect(operation).toMatchObject({
+      operationId: 'purchase_orders_review_context',
+      security: [{ sessionCookie: [] }],
+      'x-qianshu-contract': { authorization: true, validation: true, privateNoStore: true },
+      responses: { 200: { content: { 'application/json': { schema: { $ref: '#/components/schemas/PurchaseOrderReviewContextDto' } } } } },
+    })
+    expect(operation?.['x-qianshu-contract']).not.toMatchObject({ csrf: true })
+    expect(document.components?.schemas?.PurchaseOrderReviewContextDto).toMatchObject({
+      required: ['available', 'message'],
+      properties: { available: { type: 'boolean' }, message: { type: 'string', nullable: true } },
+    })
+    for (const name of ['PurchaseOrderDetailDto', 'PurchaseOrderListItemDto']) {
+      expect(document.components?.schemas?.[name]).toMatchObject({
+        properties: { reviewSummary: { nullable: true } },
+      })
+    }
   })
 
   it('publishes the review route with version, detail response, CSRF and state-conflict contract', () => {

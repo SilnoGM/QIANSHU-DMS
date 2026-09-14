@@ -18,6 +18,7 @@
     "status": "订单状态",
     "review": "审核采购",
     "view": "查看",
+    "detailTitle": "采购审核详情",
     "search": "搜索采购单号、销售单号、客户或唛头",
     "empty": "暂无符合条件的采购订单",
     "noPermission": "无权读取采购订单",
@@ -26,6 +27,37 @@
     "lineSummary": "{lines} 项产品 · 数量 {quantity}",
     "partCount": "{count} 个货件",
     "countsFailed": "视图数量加载失败，请重试",
-    "retry": "重试"
+    "retry": "重试",
+    "detail": {
+      "title": "采购信息",
+      "purchaseType": "采购类型",
+      "customer": "客户",
+      "noCustomer": "未关联客户",
+      "orderDate": "采购日期",
+      "remark": "订单备注",
+      "noRemark": "未填写",
+      "products": "采购产品明细",
+      "noProducts": "暂无采购产品明细",
+      "lineRemark": "行说明",
+      "unitPrice": "实际采购单价",
+      "quantity": "数量",
+      "lineTotal": "小计",
+      "lineSubtotal": "产品合计",
+      "paymentTerms": "采购金额与付款约定"
+    },
+    "summary": {
+      "title": "审核结果",
+      "reviewer": "审核人",
+      "reviewedAt": "审核时间",
+      "reason": "审核说明",
+      "notRecorded": "未记录"
+    },
+    "recovery": {
+      "pending": "当前仍待审核，已重新加载最新订单，请再次核对后确认审核。",
+      "approved": "当前采购订单已审核通过，无需再次审核",
+      "cancelled": "当前采购订单已取消，不能继续审核",
+      "unavailable": "当前审核条件不可用，请重新检查或联系管理员",
+      "checkRequired": "请先处理审核提示"
+    }
   }
 }

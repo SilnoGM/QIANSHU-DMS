@@ -34,10 +34,12 @@ test('审核先取最新详情，二次确认才提交；失败重查并保留�
   assert.match(source, /loadController\?\.abort\(\)/u)
   assert.match(source, /mutationController\?\.abort\(\)/u)
   assert.match(source, /account\.authEpoch, canReview\.value/u)
-  assert.match(source, /detail\.orderNo/u)
-  assert.match(source, /detail\.supplier\.label/u)
-  assert.match(source, /detail\.purchaseTotalAmount/u)
-  assert.match(source, /detail\.lineSummary\.totalQuantity/u)
+  const details = await read('purchase-order-review-details.vue')
+  assert.match(source, /<PurchaseOrderReviewDetails[^>]*:detail="detail"/u)
+  assert.match(details, /detail\.orderNo/u)
+  assert.match(details, /detail\.supplier\.label/u)
+  assert.match(details, /purchaseTotalAmount/u)
+  assert.match(details, /actualPurchaseUnitPriceAmount/u)
 })
 
 test('审核中付款及凭证入口均有提交前防御，新建成功明确等待审核', async () => {

@@ -154,7 +154,15 @@ export class PurchaseOrderLineSummaryDto {
   readonly previews!: readonly PurchaseOrderLinePreviewDto[]
 }
 
+export class PurchaseOrderReviewSummaryDto {
+  @ApiProperty({ type: 'string', format: 'date-time' }) readonly reviewedAt!: string
+  @ApiProperty({ type: () => PurchaseOrderActorDto }) readonly reviewedBy!: PurchaseOrderActorDto
+  @ApiProperty({ type: 'string', nullable: true }) readonly reason!: string | null
+}
+
 export class PurchaseOrderListItemDto {
+  @ApiProperty({ type: () => PurchaseOrderReviewSummaryDto, nullable: true, description: '精确取自采购待审核到已确认的订单状态变更；无对应历史时为 null' })
+  readonly reviewSummary!: PurchaseOrderReviewSummaryDto | null
   @ApiProperty({ type: () => PurchaseOrderPaymentRecordSummaryDto }) readonly paymentRecordSummary!: PurchaseOrderPaymentRecordSummaryDto
   @ApiProperty({ type: () => PurchaseOrderDocumentSummaryDto }) readonly documentSummary!: PurchaseOrderDocumentSummaryDto
   @ApiProperty({ type: () => PurchaseOrderChangeSummaryDto }) readonly changeSummary!: PurchaseOrderChangeSummaryDto

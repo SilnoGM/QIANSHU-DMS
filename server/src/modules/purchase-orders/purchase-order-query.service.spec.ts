@@ -121,6 +121,9 @@ function setup() {
           }],
         })),
     },
+    purchaseOrderStatusHistory: {
+      findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([]),
+    },
     purchaseOrderLine: {
       findMany: jest.fn<Promise<unknown[]>, [unknown]>().mockResolvedValue([{
         quantity: 2,
@@ -141,7 +144,8 @@ function setup() {
         }]),
     },
     $transaction: jest.fn().mockImplementation(
-      (operations: readonly Promise<unknown>[]) => Promise.all(operations),
+      (operations: readonly Promise<unknown>[] | ((client: unknown) => Promise<unknown>)) =>
+        typeof operations === 'function' ? operations(prisma) : Promise.all(operations),
     ),
   }
   const dictionaryLookup = {
@@ -176,6 +180,77 @@ function setup() {
 }
 
 describe('PurchaseOrderQueryService', () => {
+  it('returns a batched approval summary without replacing the latest status change', async () => {
+    const fixture = setup()
+    const reviewedAt = new Date('2026-09-13T03:00:00.000Z')
+    const laterChangedAt = new Date('2026-09-14T03:00:00.000Z')
+    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管' }
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([
+      orderRow({
+        id: 'approved-order',
+        statusHistory: [{ id: 'shipment', changedAt: laterChangedAt, reason: '货件已发出' }],
+        _count: { parts: 0, payments: 0, statusHistory: 3, amountRevisions: 0 },
+      }),
+      orderRow({ id: 'pending-order', orderStatus: 'PENDING_REVIEW' }),
+      orderRow({ id: 'legacy-order', orderStatus: 'CONFIRMED' }),
+    ])
+    fixture.prisma.purchaseOrderStatusHistory.findMany.mockResolvedValue([{
+      purchaseOrderId: 'approved-order', changedAt: reviewedAt,
+      changedBy: reviewedBy, reason: '价格和货件核对通过',
+    }])
+
+    const page = await fixture.service.list({ view: 'all' })
+
+    expect(page.items[0]).toMatchObject({
+      reviewSummary: { reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: '价格和货件核对通过' },
+      changeSummary: { latest: { kind: 'STATUS', changedAt: laterChangedAt.toISOString(), reason: '货件已发出' } },
+    })
+    expect(page.items[1]).toHaveProperty('reviewSummary', null)
+    expect(page.items[2]).toHaveProperty('reviewSummary', null)
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).toHaveBeenCalledTimes(1)
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).toHaveBeenCalledWith({
+      where: {
+        purchaseOrderId: { in: ['approved-order', 'pending-order', 'legacy-order'] },
+        dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED',
+      },
+      orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
+      distinct: ['purchaseOrderId'],
+      select: {
+        purchaseOrderId: true, changedAt: true, reason: true,
+        changedBy: { select: { id: true, displayName: true } },
+      },
+    })
+    expect(fixture.prisma.purchaseOrder.findUnique).not.toHaveBeenCalled()
+    expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
+  })
+
+  it('skips the review-history lookup for an empty page', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([])
+    expect((await fixture.service.list({ view: 'all' })).items).toEqual([])
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).not.toHaveBeenCalled()
+  })
+
+  it('derives detail review facts only from the exact persisted approval transition', async () => {
+    const fixture = setup()
+    const reviewedAt = new Date('2026-09-13T03:00:00.000Z')
+    const reviewedBy = { id: 'reviewer-id', displayName: '采购主管' }
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      statusHistory: [
+        { id: 'cancel', dimension: 'ORDER', fromStatus: 'CONFIRMED', toStatus: 'CANCELLED', changedAt: new Date('2026-09-14T03:00:00Z'), changedBy: reviewedBy, reason: '后续取消' },
+        { id: 'wrong-dimension', dimension: 'FULFILLMENT', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', changedAt: reviewedAt, changedBy: reviewedBy, reason: '其他维度' },
+        { id: 'wrong-from', dimension: 'ORDER', fromStatus: null, toStatus: 'CONFIRMED', changedAt: reviewedAt, changedBy: reviewedBy, reason: '历史初始化' },
+        { id: 'approval', dimension: 'ORDER', fromStatus: 'PENDING_REVIEW', toStatus: 'CONFIRMED', changedAt: reviewedAt, changedBy: reviewedBy, reason: null },
+      ],
+    }))
+    const detail = await fixture.service.getById('order-id')
+    expect(detail).toHaveProperty('reviewSummary', { reviewedAt: reviewedAt.toISOString(), reviewedBy, reason: null })
+    expect(fixture.prisma.purchaseOrderStatusHistory.findMany).not.toHaveBeenCalled()
+
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({ orderStatus: 'CONFIRMED', updatedAt: reviewedAt }))
+    expect(await fixture.service.getById('order-id')).toHaveProperty('reviewSummary', null)
+  })
+
   it('keeps pending part marks null and excludes them from the summary mark list', async () => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
@@ -261,7 +336,7 @@ describe('PurchaseOrderQueryService', () => {
         _count: { select: { payments: true, statusHistory: true, amountRevisions: true, parts: true } },
       }) as unknown,
     }))
-    expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Array), { isolationLevel: 'RepeatableRead' })
+    expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
   })
 
   it('uses a stable kind-qualified key for equal change times and preserves a missing historical reason', async () => {

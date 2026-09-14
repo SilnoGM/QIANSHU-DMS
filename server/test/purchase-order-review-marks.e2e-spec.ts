@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import type { Prisma } from '../src/generated/prisma/client'
+import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
 import { hashPurchaseOrderIdempotencyKey } from '../src/modules/purchase-orders/purchase-order-create-fingerprint'
+import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
+import { PurchaseOrderReviewContextService } from '../src/modules/purchase-orders/purchase-order-review-context.service'
 import {
   atomicFacts, createAtomicityFixture, createCommands, createReviewMutations, customInput,
   MARK_CONSUMER, prepareCatalog, type AtomicityFixture,
@@ -32,7 +35,20 @@ describe('purchase review mark issuance with isolated PostgreSQL', () => {
       const commands = createCommands(fixture)
       const id = await commands.create(context, catalog.input)
       await fixture.bindings.save(fixture.configContext, catalog.supplierValue, { ruleId: fixture.customRule.id, expectedVersion: 1 })
-      const detail = await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+      const precheck = new PurchaseOrderReviewContextService(fixture.prisma, fixture.resolver)
+      const beforePrecheck = await reviewFacts(fixture)
+      expect(await precheck.read(id)).toEqual({ available: true, message: null })
+      expect(await reviewFacts(fixture)).toEqual(beforePrecheck)
+      const detail = await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1, reason: '核对货件与采购价格无误' })
+      expect(detail.reviewSummary).toMatchObject({
+        reviewedBy: { id: fixture.actor.id, displayName: fixture.actor.displayName },
+        reviewedAt: expect.any(String) as unknown,
+        reason: '核对货件与采购价格无误',
+      })
+      const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+      const page = await query.list({ view: 'all', orderStatus: 'CONFIRMED' })
+      expect(page.items.find(item => item.id === id)?.reviewSummary).toEqual(detail.reviewSummary)
+      expect(await precheck.read(id)).toMatchObject({ available: false, message: expect.stringContaining('已审核通过') as unknown })
       const order = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
       const ledger = await fixture.prisma.numberingIssuance.findMany({ where: { rule: { purpose: 'SHIPPING_MARK' } } })
       expect(ledger).toHaveLength(1)
@@ -69,6 +85,9 @@ describe('purchase review mark issuance with isolated PostgreSQL', () => {
       const id = await createCommands(fixture).create(fixture.context(), await customInput(fixture))
       await fixture.numberingCommands.disable(fixture.configContext, fixture.customRule.id, { expectedVersion: fixture.customRule.version })
       const before = await reviewFacts(fixture)
+      const precheck = new PurchaseOrderReviewContextService(fixture.prisma, fixture.resolver)
+      expect(await precheck.read(id)).toMatchObject({ available: false, message: expect.any(String) as unknown })
+      expect(await reviewFacts(fixture)).toEqual(before)
       await expect(createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 }))
         .rejects.toMatchObject({ code: 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE' })
       expect(await reviewFacts(fixture)).toEqual(before)

@@ -245,6 +245,15 @@ test('详情与审核响应保留基础码、可空货件码和服务端货件�
   assert.equal(Object.hasOwn(calls[0]?.data ?? {}, 'shippingMarkText'), false)
 })
 
+test('审核条件检查只读、保留取消信号并返回具体阻断原因', async () => {
+  const calls: Call[] = []
+  const context = { available: false, message: '供应商唛头规则未启用' }
+  const api = createPurchaseOrdersApi(createRecorder(calls, context))
+  const signal = new AbortController().signal
+  assert.deepEqual((await api.reviewContext('purchase/id', signal)).data, context)
+  assert.deepEqual(calls, [{ method: 'get', url: 'purchase-orders/purchase%2Fid/review-context', config: { errorPresentation: 'local', signal } }])
+})
+
 test('唛头匹配只读且仅传当前场景，不创建幂等键', async () => {
   const calls: Call[] = []
   const api = createPurchaseOrdersApi(createRecorder(calls))

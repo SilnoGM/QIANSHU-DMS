@@ -5,6 +5,7 @@ import type { ImageGroupItem } from '@/components/base/ImageGroup/types'
 import type { QsGenericTableColumn } from '@/components/business/QsGenericTable/logic'
 import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
+import { formatDateTime } from '@/components/base/DateTimeDisplay/format'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
@@ -57,6 +58,16 @@ const columns = computed<QsGenericTableColumn<PurchaseOrderListItemDto>[]>(() =>
   { id: 'amount', accessorKey: 'purchaseTotalAmount', title: t('purchaseReview.amount'), minWidth: 185, align: 'right' },
   { id: 'terms', accessorKey: 'depositDueAmount', title: t('purchaseReview.terms'), minWidth: 220, align: 'right' },
   { id: 'date', accessorKey: 'createdAt', title: t('purchaseReview.date'), minWidth: 190 },
+  ...(status.value === 'PENDING_REVIEW'
+    ? []
+    : [{
+        id: 'reviewSummary',
+        title: t('purchaseReview.summary.title'),
+        minWidth: 245,
+        accessorFn: (row: PurchaseOrderListItemDto) => row.reviewSummary
+          ? `${row.reviewSummary.reviewedBy.displayName} · ${formatDateTime(row.reviewSummary.reviewedAt)} · ${t('purchaseReview.summary.reason')}：${row.reviewSummary.reason || t('purchaseReview.summary.notRecorded')}`
+          : t('purchaseReview.summary.notRecorded'),
+      }]),
   { id: 'status', accessorKey: 'orderStatus', title: t('purchaseReview.status'), minWidth: 130 },
 ])
 function images(row: PurchaseOrderListItemDto): ImageGroupItem[] {
@@ -294,6 +305,20 @@ onBeforeUnmount(() => {
           <FaTag variant="outline" :class="orderStatusTagClass(row.original.orderStatus)">
             {{ orderStatusLabel(row.original.orderStatus) }}
           </FaTag>
+        </template>
+        <template #cell-reviewSummary="{ row }">
+          <QsTableStackedCell v-if="row.original.reviewSummary">
+            <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" />
+            <QsTableStackedLine tone="muted">
+              <DateTimeDisplay :value="row.original.reviewSummary.reviewedAt" />
+            </QsTableStackedLine>
+            <QsTableStackedLine :label="t('purchaseReview.summary.reason')">
+              <FaTooltip :text="row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded')">
+                <span class="max-w-64 block whitespace-pre-wrap break-words line-clamp-2">{{ row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded') }}</span>
+              </FaTooltip>
+            </QsTableStackedLine>
+          </QsTableStackedCell>
+          <span v-else class="qs-type-meta">{{ t('purchaseReview.summary.notRecorded') }}</span>
         </template>
         <template #actions="{ row }">
           <FaButton v-if="row.orderStatus === 'PENDING_REVIEW' && canReview" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" @click="openReview(row)">

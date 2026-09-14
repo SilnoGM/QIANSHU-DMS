@@ -10,6 +10,7 @@ import type {
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
   PurchaseOrderProductOptionsDto,
+  PurchaseOrderReviewContextDto,
   PurchaseOrderReviewRequestDto,
   PurchaseOrderShippingMarkResolutionDto,
   PurchaseOrdersListData,
@@ -61,6 +62,11 @@ function documentContentPath(
  */
 export function createPurchaseOrdersApi(client: AxiosInstance) {
   return {
+    reviewContext: (purchaseOrderId: string, signal: AbortSignal) =>
+      client.get<PurchaseOrderReviewContextDto>(`${orderPath(purchaseOrderId)}/review-context`, {
+        errorPresentation: 'local',
+        signal,
+      }),
     review: (purchaseOrderId: string, data: PurchaseOrderReviewRequestDto, signal: AbortSignal) =>
       client.post<PurchaseOrderDetailDto>(`${orderPath(purchaseOrderId)}/review`, data, {
         errorPresentation: 'local',

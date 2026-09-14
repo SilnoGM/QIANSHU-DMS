@@ -21,6 +21,8 @@ import { PurchaseOrderMutationService } from './purchase-order-mutation.service'
 import { PurchaseOrderProductImageService } from './products/purchase-order-product-image.service'
 import { PurchaseOrderQueryService } from './purchase-order-query.service'
 import { PurchaseOrderSourceQueryService } from './purchase-order-source-query.service'
+import { PurchaseOrderReviewContextService } from './purchase-order-review-context.service'
+import { PurchaseOrderReviewContextController } from './purchase-order-review-context.controller'
 import { PurchaseOrdersController } from './purchase-orders.controller'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 
@@ -36,11 +38,13 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
   ],
   controllers: [
     PurchaseOrdersController,
+    PurchaseOrderReviewContextController,
     PurchaseOrderFactoryShipmentController,
     SalesOrderFactoryShipmentController,
   ],
   providers: [
     PurchaseOrderQueryService,
+    PurchaseOrderReviewContextService,
     PurchaseOrderSourceQueryService,
     PurchaseOrderCreateDependencyService,
     SalesOrderPurchaseCoverageService,
