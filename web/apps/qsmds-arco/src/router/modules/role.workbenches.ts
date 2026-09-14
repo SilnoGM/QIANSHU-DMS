@@ -49,7 +49,7 @@ export const purchaseWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.purchase',
     icon: 'qs-workbench-purchase',
-    auth: 'purchase-orders:review',
+    auth: ['purchase-orders:review', 'purchase-orders:read'],
   },
   children: [
     {
@@ -61,6 +61,17 @@ export const purchaseWorkbench: RouteRecordMainRaw = {
         icon: 'qs-purchase-review',
         singleMenu: true,
         auth: 'purchase-orders:review',
+      },
+    },
+    {
+      path: '/qs-purchase/shipments',
+      name: 'qsPurchaseShipments',
+      component: () => import('@/views/workbenches/shipments/index.vue'),
+      meta: {
+        title: 'workbench.shipments',
+        icon: 'qs-factory-shipment',
+        singleMenu: true,
+        auth: 'purchase-orders:read',
       },
     },
   ],

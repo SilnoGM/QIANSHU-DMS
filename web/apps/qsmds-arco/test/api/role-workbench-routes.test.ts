@@ -15,7 +15,7 @@ test('财务和采购工作台只展示当前用户有权访问的业务入口',
   ).flatMap(menu => menu.children?.flatMap(child => child.children?.map(leaf => `${child.path}/${leaf.path}`) ?? [child.path]) ?? [])
 
   assert.deepEqual(visiblePaths([]), [])
-  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), [])
+  assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), ['/qs-purchase/shipments'])
   assert.deepEqual(visiblePaths(['sales-orders:payment']), [])
   assert.deepEqual(visiblePaths(['sales-receipts:read']), ['/qs-finance/realtime-payments/sales-receipts'])
   assert.deepEqual(visiblePaths(['purchase-orders:payment']), ['/qs-finance/realtime-payments/purchase-payments'])
@@ -25,6 +25,13 @@ test('财务和采购工作台只展示当前用户有权访问的业务入口',
     'purchase-orders:payment',
     'purchase-orders:review',
   ]), ['/qs-finance/realtime-payments/sales-receipts', '/qs-finance/realtime-payments/purchase-payments', '/qs-purchase/reviews'])
+})
+
+test('采购货件菜单复用采购读取权限，审核菜单继续独立授权', () => {
+  const routes = purchaseWorkbench.children
+  assert.deepEqual(routes.map(route => route.name), ['qsPurchaseReviews', 'qsPurchaseShipments'])
+  assert.equal(routes[1]?.meta?.auth, 'purchase-orders:read')
+  assert.equal(routes[0]?.meta?.auth, 'purchase-orders:review')
 })
 
 test('财务分为实时收付和账户管理，叶子路由保留独立权限', () => {

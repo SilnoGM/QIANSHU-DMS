@@ -25,6 +25,8 @@ import { PurchaseOrderReviewContextService } from './purchase-order-review-conte
 import { PurchaseOrderReviewContextController } from './purchase-order-review-context.controller'
 import { PurchaseOrdersController } from './purchase-orders.controller'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
+import { PurchaseShipmentController } from './shipments/purchase-shipment.controller'
+import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-query.service'
 
 @Module({
   imports: [
@@ -41,6 +43,7 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
     PurchaseOrderReviewContextController,
     PurchaseOrderFactoryShipmentController,
     SalesOrderFactoryShipmentController,
+    PurchaseShipmentController,
   ],
   providers: [
     PurchaseOrderQueryService,
@@ -54,6 +57,7 @@ import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-covera
     PurchaseOrderMutationService,
     PurchaseOrderDocumentService,
     PurchaseOrderProductImageService,
+    PurchaseShipmentQueryService,
     {
       provide: PurchaseOrderDocumentMultipartParser,
       useFactory: (): PurchaseOrderDocumentMultipartParser =>
