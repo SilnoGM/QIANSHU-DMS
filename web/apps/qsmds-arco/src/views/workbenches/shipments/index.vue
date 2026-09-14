@@ -12,6 +12,7 @@ import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStac
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import QsPurchaseOrderDrawer from '@/components/business/QsPurchaseOrderDrawer/index.vue'
+import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import { buildShipmentRouteQuery, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentStatusClass } from './logic'
@@ -87,8 +88,8 @@ function navigate(next: PurchaseShipmentListQuery, replace = false): void {
 
 const tabs = computed(() => SHIPMENT_VIEWS.map(value => ({
   value,
-  label: `${t(`purchaseShipments.${value}`)}${countsError.value || counts.value.length === 0 ? '' : ` (${counts.value.find(item => item.value === value)?.count ?? 0})`}`,
-  class: 'min-h-11 shrink-0 flex-none w-auto! px-4 data-[state=active]:text-primary dark:data-[state=active]:text-primary',
+  label: t(`purchaseShipments.${value}`),
+  count: countsError.value || counts.value.length === 0 ? undefined : counts.value.find(item => item.value === value)?.count ?? 0,
 })))
 const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   { key: 'supplierValue', label: t('purchaseShipments.supplier'), options: (supplierCatalog.catalog.value?.items ?? []).map(item => ({ value: item.value, label: item.effectiveEnabled ? item.label : `${item.label}（${t('purchaseShipments.disabled')}）` })) },
@@ -104,7 +105,6 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
   { id: 'supplier', title: t('purchaseShipments.supplier'), accessorFn: row => row.supplier.label, minWidth: 160 },
   { id: 'source', title: t('purchaseShipments.source'), accessorFn: row => row.salesSource?.orderNo ?? t(getShipmentSourceEmptyKey(row.purchaseOrder.purchaseType)), minWidth: 250 },
   { id: 'products', title: t('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 200 },
-  { id: 'quantity', title: t('purchaseShipments.quantity'), accessorFn: row => row.lineSummary.totalQuantity, minWidth: 165, align: 'right' },
   { id: 'buyer', title: t('purchaseShipments.buyer'), accessorFn: row => row.purchaseOrder.createdBy.displayName, minWidth: 160 },
   { id: 'shipped', title: t('purchaseShipments.shipped'), accessorKey: 'shippedAt', minWidth: 200 },
   { id: 'createdAt', title: t('purchaseShipments.createdAt'), accessorKey: 'createdAt', minWidth: 195, defaultVisible: false },
@@ -228,134 +228,143 @@ onBeforeUnmount(() => {
             </FaButton>
           </template>
         </FaAlert>
-        <FaTabs :model-value="activeView" :list="tabs" list-class="h-auto min-h-12 w-full justify-start! overflow-x-auto" content-class="mt-4 min-w-0" class="min-w-0" @update:model-value="selectTab">
-          <template #[activeView]>
-            <QsGenericTable
-              v-model:page="page" v-model:page-size="pageSize" v-model:search="keyword" v-model:filters="filters"
-              row-key="id" :show-row-number="false" :columns="columns" :data="rows" :total="total"
-              :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]"
-              :filter-definitions="filterDefinitions" :search-placeholder="t('purchaseShipments.search')"
-              :empty-title="t('purchaseShipments.empty')" :empty-description="t('purchaseShipments.emptyDescription')"
-              :action-column="{ fixed: 'right', minWidth: 245, width: 245 }" table-class="w-max min-w-full"
-              @search="search" @filter-change="search" @pagination-change="paginate" @retry="refresh"
-            >
-              <template #query-leading>
-                <QsDateRangeFilter v-model="dateRange" :calendar-label="t('purchaseShipments.orderDate')" :placeholder="t('purchaseShipments.orderDate')" @complete="search" @clear="search" />
-              </template>
-              <template #cell-part="{ row }">
-                <QsTableStackedCell class="group">
-                  <QsTableStackedLine weight="semibold">
-                    {{ formatShipmentNumber(row.original.partNumber) }}
-                  </QsTableStackedLine>
-                  <QsTableStackedLine content-class="qs-type-data-emphasis" tone="muted">
-                    {{ row.original.purchaseOrder.orderNo }}
+        <QsStatusSwitchToolbar :model-value="activeView" :items="tabs" :aria-label="t('workbench.shipments')" class="mb-4" @update:model-value="selectTab" />
+        <QsGenericTable
+          v-model:page="page" v-model:page-size="pageSize" v-model:search="keyword" v-model:filters="filters"
+          row-key="id" :show-row-number="false" :columns="columns" :data="rows" :total="total"
+          :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]"
+          :filter-definitions="filterDefinitions" :search-placeholder="t('purchaseShipments.search')"
+          :empty-title="t('purchaseShipments.empty')" :empty-description="t('purchaseShipments.emptyDescription')"
+          :action-column="{ fixed: 'right', minWidth: 245, width: 245 }" table-class="w-max min-w-full"
+          @search="search" @filter-change="search" @pagination-change="paginate" @retry="refresh"
+        >
+          <template #query-leading>
+            <QsDateRangeFilter v-model="dateRange" :calendar-label="t('purchaseShipments.orderDate')" :placeholder="t('purchaseShipments.orderDate')" @complete="search" @clear="search" />
+          </template>
+          <template #cell-part="{ row }">
+            <QsTableStackedCell class="group">
+              <QsTableStackedLine content-class="qs-type-data-emphasis">
+                {{ row.original.purchaseOrder.orderNo }}
+                <template #suffix>
+                  <CopyCellButton :text="row.original.purchaseOrder.orderNo" :label="t('purchaseShipments.orderNo')" />
+                </template>
+              </QsTableStackedLine>
+              <QsTableStackedLine tone="muted">
+                {{ formatShipmentNumber(row.original.partNumber) }}
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </template>
+          <template v-for="markColumn in ['mark', 'baseMark']" :key="markColumn" #[`cell-${markColumn}`]="{ row }">
+            <div class="group flex gap-2 max-w-80 items-center">
+              <FaTooltip :text="(markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText) || emptyMark(row.original)">
+                <span tabindex="0" class="qs-type-data min-w-0 block truncate">{{ (markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText) || emptyMark(row.original) }}</span>
+              </FaTooltip>
+              <CopyCellButton v-if="markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText" :text="(markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText)!" :label="t(`purchaseShipments.${markColumn}`)" />
+            </div>
+          </template>
+          <template #cell-status="{ row }">
+            <FaTag variant="outline" :class="shipmentStatusClass(row.original.viewStatus)">
+              {{ t(`purchaseShipments.${row.original.viewStatus}`) }}
+            </FaTag>
+          </template>
+          <template #cell-source="{ row }">
+            <QsTableStackedCell v-if="row.original.salesSource" class="group">
+              <QsTableStackedLine content-class="qs-type-data-emphasis">
+                {{ row.original.salesSource.orderNo }}<template #suffix>
+                  <CopyCellButton :text="row.original.salesSource.orderNo" :label="t('purchaseShipments.source')" />
+                </template>
+              </QsTableStackedLine>
+              <QsTableStackedLine tone="muted">
+                {{ row.original.salesSource.customerName }}
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+            <span v-else class="qs-type-meta">{{ t(getShipmentSourceEmptyKey(row.original.purchaseOrder.purchaseType)) }}</span>
+          </template>
+          <template #cell-products="{ row }">
+            <QsTableStackedCell>
+              <ShipmentProducts :summary="row.original.lineSummary" />
+              <QsTableStackedLine content-class="qs-type-meta" nowrap tone="muted">
+                {{ t('purchaseShipments.quantitySummary', { count: row.original.lineSummary.lineCount, quantity: row.original.lineSummary.totalQuantity }) }}
+              </QsTableStackedLine>
+            </QsTableStackedCell>
+          </template>
+          <template #cell-buyer="{ row }">
+            <QsPersonDisplay :display-name="row.original.purchaseOrder.createdBy.displayName" size="md" />
+          </template>
+          <template #cell-shipped="{ row }">
+            <QsTableStackedCell v-if="row.original.shippedAt">
+              <DateTimeDisplay :value="row.original.shippedAt" />
+              <QsPersonDisplay v-if="row.original.shippedBy" :display-name="row.original.shippedBy.displayName" size="md" />
+            </QsTableStackedCell>
+            <span v-else class="qs-type-meta">{{ t('purchaseShipments.notShipped') }}</span>
+          </template>
+          <template #cell-createdAt="{ row }">
+            <DateTimeDisplay :value="row.original.createdAt" />
+          </template>
+          <template #cell-recordedAt="{ row }">
+            <DateTimeDisplay :value="row.original.shipmentRecordedAt" />
+          </template>
+          <template #cell-remark="{ row }">
+            <FaTooltip :text="row.original.shipmentRemark || '—'">
+              <span tabindex="0" class="max-w-64 block truncate">{{ row.original.shipmentRemark || '—' }}</span>
+            </FaTooltip>
+          </template>
+          <template #actions="{ row }">
+            <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：${t('purchaseShipments.view')}`" @click="openShipment(row.id)">
+              <FaIcon name="i-lucide:package-search" aria-hidden="true" />{{ t('purchaseShipments.view') }}
+            </FaButton>
+            <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo}：${t('purchaseShipments.viewOrder')}`" @click="openOrder(row.purchaseOrder.id)">
+              <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseShipments.viewOrder') }}
+            </FaButton>
+          </template>
+          <template #mobile-row="{ row }">
+            <div class="min-w-0 space-y-3">
+              <div class="flex gap-2 items-start justify-between">
+                <QsTableStackedCell>
+                  <QsTableStackedLine content-class="qs-type-data-emphasis [overflow-wrap:anywhere]">
+                    {{ row.purchaseOrder.orderNo }}
                     <template #suffix>
-                      <CopyCellButton :text="row.original.purchaseOrder.orderNo" :label="t('purchaseShipments.orderNo')" />
-                    </template>
-                  </QsTableStackedLine>
-                </QsTableStackedCell>
-              </template>
-              <template v-for="markColumn in ['mark', 'baseMark']" :key="markColumn" #[`cell-${markColumn}`]="{ row }">
-                <div class="group flex gap-2 max-w-80 items-center">
-                  <FaTooltip :text="(markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText) || emptyMark(row.original)">
-                    <span tabindex="0" class="qs-type-data min-w-0 block truncate">{{ (markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText) || emptyMark(row.original) }}</span>
-                  </FaTooltip>
-                  <CopyCellButton v-if="markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText" :text="(markColumn === 'mark' ? row.original.shippingMarkText : row.original.purchaseOrder.shippingMarkText)!" :label="t(`purchaseShipments.${markColumn}`)" />
-                </div>
-              </template>
-              <template #cell-status="{ row }">
-                <FaTag variant="outline" :class="shipmentStatusClass(row.original.viewStatus)">
-                  {{ t(`purchaseShipments.${row.original.viewStatus}`) }}
-                </FaTag>
-              </template>
-              <template #cell-source="{ row }">
-                <QsTableStackedCell v-if="row.original.salesSource" class="group">
-                  <QsTableStackedLine content-class="qs-type-data-emphasis">
-                    {{ row.original.salesSource.orderNo }}<template #suffix>
-                      <CopyCellButton :text="row.original.salesSource.orderNo" :label="t('purchaseShipments.source')" />
+                      <CopyCellButton always-visible :text="row.purchaseOrder.orderNo" :label="t('purchaseShipments.orderNo')" />
                     </template>
                   </QsTableStackedLine>
                   <QsTableStackedLine tone="muted">
-                    {{ row.original.salesSource.customerName }}
+                    {{ formatShipmentNumber(row.partNumber) }}
                   </QsTableStackedLine>
                 </QsTableStackedCell>
-                <span v-else class="qs-type-meta">{{ t(getShipmentSourceEmptyKey(row.original.purchaseOrder.purchaseType)) }}</span>
-              </template>
-              <template #cell-products="{ row }">
-                <ShipmentProducts :summary="row.original.lineSummary" />
-              </template>
-              <template #cell-quantity="{ row }">
-                <span class="qs-type-data whitespace-nowrap">{{ t('purchaseShipments.quantitySummary', { count: row.original.lineSummary.lineCount, quantity: row.original.lineSummary.totalQuantity }) }}</span>
-              </template>
-              <template #cell-buyer="{ row }">
-                <QsPersonDisplay :display-name="row.original.purchaseOrder.createdBy.displayName" size="md" />
-              </template>
-              <template #cell-shipped="{ row }">
-                <QsTableStackedCell v-if="row.original.shippedAt">
-                  <DateTimeDisplay :value="row.original.shippedAt" />
-                  <QsPersonDisplay v-if="row.original.shippedBy" :display-name="row.original.shippedBy.displayName" size="md" />
-                </QsTableStackedCell>
-                <span v-else class="qs-type-meta">{{ t('purchaseShipments.notShipped') }}</span>
-              </template>
-              <template #cell-createdAt="{ row }">
-                <DateTimeDisplay :value="row.original.createdAt" />
-              </template>
-              <template #cell-recordedAt="{ row }">
-                <DateTimeDisplay :value="row.original.shipmentRecordedAt" />
-              </template>
-              <template #cell-remark="{ row }">
-                <FaTooltip :text="row.original.shipmentRemark || '—'">
-                  <span tabindex="0" class="max-w-64 block truncate">{{ row.original.shipmentRemark || '—' }}</span>
-                </FaTooltip>
-              </template>
-              <template #actions="{ row }">
-                <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：${t('purchaseShipments.view')}`" @click="openShipment(row.id)">
-                  <FaIcon name="i-lucide:package-search" aria-hidden="true" />{{ t('purchaseShipments.view') }}
-                </FaButton>
-                <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo}：${t('purchaseShipments.viewOrder')}`" @click="openOrder(row.purchaseOrder.id)">
-                  <FaIcon name="i-lucide:eye" aria-hidden="true" />{{ t('purchaseShipments.viewOrder') }}
-                </FaButton>
-              </template>
-              <template #mobile-row="{ row }">
-                <div class="min-w-0 space-y-3">
-                  <div class="flex gap-2 items-center justify-between">
-                    <strong>{{ formatShipmentNumber(row.partNumber) }}</strong><FaTag variant="outline" :class="shipmentStatusClass(row.viewStatus)">
-                      {{ t(`purchaseShipments.${row.viewStatus}`) }}
-                    </FaTag>
-                  </div>
-                  <div class="qs-type-data flex gap-2 items-center">
-                    <span>{{ row.purchaseOrder.orderNo }}</span><CopyCellButton always-visible :text="row.purchaseOrder.orderNo" :label="t('purchaseShipments.orderNo')" />
-                  </div>
-                  <div v-for="mark in [{ label: 'mark', value: row.shippingMarkText }, { label: 'baseMark', value: row.purchaseOrder.shippingMarkText }]" :key="mark.label">
-                    <div class="qs-type-meta mb-1">
-                      {{ t(`purchaseShipments.${mark.label}`) }}
-                    </div>
-                    <div class="flex gap-2 items-start">
-                      <span class="qs-type-data min-w-0 [overflow-wrap:anywhere]">{{ mark.value || emptyMark(row) }}</span><CopyCellButton v-if="mark.value" always-visible :text="mark.value" :label="t(`purchaseShipments.${mark.label}`)" />
-                    </div>
-                  </div>
-                  <p class="m-0">
-                    {{ row.supplier.label }}
-                  </p>
-                  <div v-if="row.salesSource" class="qs-type-meta">
-                    {{ row.salesSource.orderNo }} · {{ row.salesSource.customerName }}
-                  </div>
-                  <div v-else class="qs-type-meta">
-                    {{ t('purchaseShipments.stockSource') }}
-                  </div>
-                  <ShipmentProducts :summary="row.lineSummary" />
-                  <div class="qs-type-data">
-                    {{ t('purchaseShipments.quantitySummary', { count: row.lineSummary.lineCount, quantity: row.lineSummary.totalQuantity }) }}
-                  </div>
-                  <QsPersonDisplay :display-name="row.purchaseOrder.createdBy.displayName" size="md" />
-                  <div v-if="row.shippedAt" class="flex flex-wrap gap-2 items-center">
-                    <DateTimeDisplay :value="row.shippedAt" /><QsPersonDisplay v-if="row.shippedBy" :display-name="row.shippedBy.displayName" size="md" />
-                  </div>
+                <FaTag variant="outline" class="shrink-0" :class="shipmentStatusClass(row.viewStatus)">
+                  {{ t(`purchaseShipments.${row.viewStatus}`) }}
+                </FaTag>
+              </div>
+              <div v-for="mark in [{ label: 'mark', value: row.shippingMarkText }, { label: 'baseMark', value: row.purchaseOrder.shippingMarkText }]" :key="mark.label">
+                <div class="qs-type-meta mb-1">
+                  {{ t(`purchaseShipments.${mark.label}`) }}
                 </div>
-              </template>
-            </QsGenericTable>
+                <div class="flex gap-2 items-start">
+                  <span class="qs-type-data min-w-0 [overflow-wrap:anywhere]">{{ mark.value || emptyMark(row) }}</span><CopyCellButton v-if="mark.value" always-visible :text="mark.value" :label="t(`purchaseShipments.${mark.label}`)" />
+                </div>
+              </div>
+              <p class="m-0">
+                {{ row.supplier.label }}
+              </p>
+              <div v-if="row.salesSource" class="qs-type-meta">
+                {{ row.salesSource.orderNo }} · {{ row.salesSource.customerName }}
+              </div>
+              <div v-else class="qs-type-meta">
+                {{ t('purchaseShipments.stockSource') }}
+              </div>
+              <QsTableStackedCell class="grid!">
+                <ShipmentProducts :summary="row.lineSummary" />
+                <QsTableStackedLine content-class="qs-type-meta" tone="muted">
+                  {{ t('purchaseShipments.quantitySummary', { count: row.lineSummary.lineCount, quantity: row.lineSummary.totalQuantity }) }}
+                </QsTableStackedLine>
+              </QsTableStackedCell>
+              <QsPersonDisplay :display-name="row.purchaseOrder.createdBy.displayName" size="md" />
+              <div v-if="row.shippedAt" class="flex flex-wrap gap-2 items-center">
+                <DateTimeDisplay :value="row.shippedAt" /><QsPersonDisplay v-if="row.shippedBy" :display-name="row.shippedBy.displayName" size="md" />
+              </div>
+            </div>
           </template>
-        </FaTabs>
+        </QsGenericTable>
       </template>
     </FaPageMain>
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
