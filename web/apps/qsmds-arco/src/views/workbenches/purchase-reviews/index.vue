@@ -7,6 +7,7 @@ import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
+import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
 import QsTableStackedLine from '@/components/business/QsGenericTable/QsTableStackedLine.vue'
@@ -235,9 +236,16 @@ onBeforeUnmount(() => {
           </QsTableStackedCell>
         </template>
         <template #cell-source="{ row }">
-          <QsTableStackedCell>
+          <QsTableStackedCell class="group">
             <QsTableStackedLine content-class="qs-type-data-emphasis font-mono">
               {{ row.original.salesOrderNo ?? t('purchaseReview.stock') }}
+              <template #suffix>
+                <CopyCellButton
+                  v-if="row.original.salesOrderNo"
+                  :label="t('purchaseReview.source')"
+                  :text="row.original.salesOrderNo"
+                />
+              </template>
             </QsTableStackedLine>
             <QsTableStackedLine v-if="row.original.customerName" tone="muted">
               {{ row.original.customerName }}
