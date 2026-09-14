@@ -38,8 +38,9 @@ const amounts = computed(() => [
           <dt class="qs-type-meta">
             {{ t('purchaseReview.orderNo') }}
           </dt>
-          <dd class="qs-type-data m-0 mt-1 [overflow-wrap:anywhere]">
-            {{ detail.orderNo }}
+          <dd class="m-0 mt-1 flex gap-2 min-w-0 items-start">
+            <span class="qs-type-data min-w-0 [overflow-wrap:anywhere]">{{ detail.orderNo }}</span>
+            <CopyCellButton always-visible :text="detail.orderNo" :label="t('purchaseReview.orderNo')" />
           </dd>
         </div>
         <div class="min-w-0">
