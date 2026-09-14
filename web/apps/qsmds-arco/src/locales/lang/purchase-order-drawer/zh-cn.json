@@ -7,6 +7,8 @@
     "parts": {
       "title": "采购货件",
       "part": "货件-{number}",
+      "shipmentNo": "货件编号",
+      "unnumbered": "未编号",
       "quantity": "本货件数量",
       "shippingMark": "货件唛头",
       "markValue": "唛头：{value}",

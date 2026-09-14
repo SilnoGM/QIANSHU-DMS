@@ -11,7 +11,7 @@ import { AuditService } from '../src/modules/audit/audit.service'
 import type { IsolatedNumberingDatabase } from './numbering-e2e-database'
 
 /** 永久派发账本不能逐行清理；完整业务回归使用临时 schema，结束时整体释放。 */
-export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void> }> {
+export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void>, applyShipmentNumbers(): Promise<void> }> {
   const baseDatabaseUrl = process.env.DATABASE_URL
   if (!baseDatabaseUrl) throw new Error('Isolated database is required')
   const url = new URL(baseDatabaseUrl)
@@ -32,6 +32,7 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
     await client.query(`SET search_path TO ${quoted}, public`)
     const directory = resolve(__dirname, '../prisma/migrations')
     for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name)).sort()) {
+      if (deferShipmentNumbers && migration.endsWith('_purchase_shipment_number')) continue
       if (deferPartsMigration && migration >= '20260907120000_purchase_order_parts') continue
       if (deferReviewMigration && migration >= '20260908013900_purchase_order_review_shipping_marks') continue
       await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
@@ -58,6 +59,12 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
       for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260908013900_purchase_order_review_shipping_marks').sort()) {
         await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
       }
+    },
+    async applyShipmentNumbers() {
+      const directory = resolve(__dirname, '../prisma/migrations')
+      const migration = readdirSync(directory).find(name => name.endsWith('_purchase_shipment_number'))
+      if (!migration) throw new Error('Shipment numbering migration is missing')
+      await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
     },
     async dispose() {
       if (disposed) return

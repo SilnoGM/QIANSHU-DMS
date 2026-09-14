@@ -45,6 +45,7 @@ export function getPurchaseOrderPartRecords(detail: Pick<PurchaseOrderDetailDto,
   const imagesByLine = getPurchaseProductImages(detail)
   return [...detail.parts].sort((a, b) => a.partNumber - b.partNumber).map(part => ({
     id: part.id,
+    shipmentNo: part.shipmentNo,
     partNumber: part.partNumber,
     status: part.status,
     shippingMarkText: part.shippingMarkText,

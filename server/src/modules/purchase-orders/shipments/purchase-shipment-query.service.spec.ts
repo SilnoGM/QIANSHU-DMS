@@ -14,7 +14,7 @@ function fixture() {
 
 function row() {
   return {
-    id: 'part-1', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK/02', createdAt: new Date('2026-09-14T00:00:00Z'),
+    id: 'part-1', shipmentNo: 'PKG/20260914-00001', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK/02', createdAt: new Date('2026-09-14T00:00:00Z'),
     shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null,
     purchaseOrder: {
       id: 'order-1', orderNo: 'PO/01', orderDate: new Date('2026-09-14'), purchaseType: 'STOCK', productMode: 'CUSTOM', orderStatus: 'CONFIRMED',
@@ -27,6 +27,30 @@ function row() {
 }
 
 describe('PurchaseShipmentQueryService', () => {
+  it('returns the stored shipment number in list and detail, preserving unnumbered historical rows', async () => {
+    const f = fixture()
+    f.part.findMany.mockResolvedValue([row(), { ...row(), id: 'legacy', shipmentNo: null }])
+    const page = await f.service.list({ view: 'ALL' })
+    expect(page.items[0]).toHaveProperty('shipmentNo', 'PKG/20260914-00001')
+    expect(page.items[1]).toHaveProperty('shipmentNo', null)
+    f.part.findUnique.mockResolvedValue(row())
+    expect(await f.service.getById('part-1')).toHaveProperty('shipmentNo', 'PKG/20260914-00001')
+    f.part.findUnique.mockResolvedValue({ ...row(), shipmentNo: null })
+    expect(await f.service.getById('part-1')).toHaveProperty('shipmentNo', null)
+  })
+
+  it('searches shipment numbers using the same normalized filter for rows and status counts', async () => {
+    const f = fixture()
+    await f.service.list({ keyword: '  ＰＫＧ/20260914-00001  ', view: 'ALL' })
+    await f.service.statusCounts({ keyword: '  ＰＫＧ/20260914-00001  ' })
+    const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
+    expect(countCall[0].where).toEqual(listCall[0].where.AND[0])
+    expect(countCall[0].where).toMatchObject({ OR: expect.arrayContaining([
+      { shipmentNo: { contains: 'PKG/20260914-00001', mode: 'insensitive' } },
+    ]) as unknown })
+  })
+
   it('defaults to unshipped active parts and paginates parts, not their parent orders', async () => {
     const f = fixture()
     f.part.findMany.mockResolvedValue([row()]); f.part.count.mockResolvedValue(3)

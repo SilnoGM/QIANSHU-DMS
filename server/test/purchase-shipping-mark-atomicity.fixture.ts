@@ -1,3 +1,5 @@
+import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
+import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { randomBytes, randomUUID } from 'node:crypto'
 
 import type { Prisma } from '../src/generated/prisma/client'
@@ -21,8 +23,8 @@ import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from '
 
 export const MARK_CONSUMER = 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK'
 
-export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false) {
-  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration)
+export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false) {
+  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration, deferShipmentNumbers)
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
     await prisma.onModuleInit()
@@ -32,6 +34,7 @@ export async function createAtomicityFixture(deferPartsMigration = false, deferR
       passwordHash: 'e2e-only-not-a-real-password-hash',
     } })
     await prisma.currency.updateMany({ where: { code: 'CNY' }, data: { enabled: true } })
+    await ensureShipmentNumberingRule(prisma, actor.id)
     const audit = new AuditService()
     const numberingCommands = new NumberingCommandService(prisma, audit, new NumberingQueryService(prisma))
     const configContext = { actorUserId: actor.id, requestId: randomUUID() }
@@ -61,6 +64,7 @@ export async function createAtomicityFixture(deferPartsMigration = false, deferR
       resolver, numbering, dependencies, salesProgress, bindings,
       migrateParts: database.applyPartsMigration,
       migrateReview: database.applyReviewMigration,
+      migrateShipmentNumbers: database.applyShipmentNumbers,
       context: (idempotencyKey = randomUUID()) => ({
         actorUserId: actor.id, idempotencyKey, requestId: randomUUID(),
       }),
@@ -95,7 +99,7 @@ export function createCommands(
   } as unknown as PrismaService
   return new PurchaseOrderCommandService(
     prisma, fixture.numbering, fixture.audit, fixture.dependencies,
-    fixture.resolver, { businessToday: () => '2026-09-07' },
+    fixture.resolver, new PurchaseShipmentNumberingService(fixture.numbering), { businessToday: () => '2026-09-07' },
   )
 }
 

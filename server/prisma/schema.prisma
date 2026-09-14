@@ -123,6 +123,7 @@ enum AuditEventType {
   SALES_ORDER_PRODUCT_APPENDED
   SALES_ORDER_PRODUCTS_CHANGED
   PURCHASE_ORDER_CREATED
+  PURCHASE_SHIPMENT_NUMBER_ASSIGNED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
   PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED
   PURCHASE_ORDER_PAYMENT_RECORDED
@@ -1120,7 +1121,9 @@ model PurchaseOrderPart {
   partNumber               Int    @map("part_number") @db.SmallInt
   // 提交时保存预定义分配；审核通过才生效，取消后保留唛头与分配历史。
   status                   PurchaseOrderPartStatus @default(PENDING_REVIEW)
-  // 唛头与本单内序号分开保存；正式货件编号属于后续货件域，不复用这两个字段。
+  // 正式货件编号独立于本单内序号和唛头；历史双空只允许核对账本后一次补号。
+  shipmentNo               String? @unique(map: "purchase_order_parts_shipment_no_key") @map("shipment_no") @db.VarChar(64)
+  numberingIssuanceId       String? @unique(map: "purchase_order_parts_numbering_issuance_id_key") @map("numbering_issuance_id") @db.Uuid
   shippingMarkText         String? @map("shipping_mark_text") @db.VarChar(72)
   // 仅历史逐件派号保留独立 ledger；新单审核时由采购基础唛头派生，不额外消耗流水。
   shippingMarkIssuanceId   String? @unique(map: "purchase_order_parts_issuance_id_key") @map("shipping_mark_issuance_id") @db.Uuid
@@ -1128,7 +1131,8 @@ model PurchaseOrderPart {
   createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  shippingMarkIssuance NumberingIssuance? @relation(fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  shippingMarkIssuance NumberingIssuance? @relation("PurchasePartShippingMarkIssuance", fields: [shippingMarkIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  numberingIssuance NumberingIssuance? @relation("PurchasePartNumberingIssuance", fields: [numberingIssuanceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   shippedAt DateTime? @map("shipped_at") @db.Timestamptz(6)
   shippedById String? @map("shipped_by_id") @db.Uuid
   shipmentRecordedAt DateTime? @map("shipment_recorded_at") @db.Timestamptz(6)
@@ -1361,7 +1365,8 @@ model NumberingIssuance {
   ruleVersion NumberingRuleVersion @relation(fields: [ruleVersionId, ruleId], references: [id, ruleId], onDelete: Restrict, onUpdate: Restrict)
   periodState NumberingPeriodState @relation(fields: [ruleId, periodKey], references: [ruleId, periodKey], onDelete: Restrict, onUpdate: Restrict)
   purchaseOrder PurchaseOrder?
-  purchaseOrderPart PurchaseOrderPart?
+  purchaseOrderPart PurchaseOrderPart? @relation("PurchasePartShippingMarkIssuance")
+  numberedPurchaseOrderPart PurchaseOrderPart? @relation("PurchasePartNumberingIssuance")
   salesReceiptRequest SalesReceiptRequest?
 
   @@unique([ruleId, generatedNumber], map: "numbering_issuances_rule_id_generated_number_key")

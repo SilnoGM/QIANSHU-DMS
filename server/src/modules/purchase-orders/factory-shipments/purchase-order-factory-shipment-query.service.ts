@@ -49,7 +49,7 @@ const CONTEXT_PURCHASE_ORDER_SELECT = {
   parts: {
     orderBy: { partNumber: 'asc' },
     select: {
-      id: true, partNumber: true, status: true, shippingMarkText: true,
+      id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
       shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true,
       shippedBy: { select: { id: true, displayName: true } },
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
@@ -223,7 +223,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
       version: row.version,
       shippingMarkText: row.shippingMarkText,
       parts: row.parts.map(part => ({
-        id: part.id, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+        id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
         shippedAt: part.shippedAt?.toISOString() ?? null,
         shippedById: part.shippedById,
         shippedBy: part.shippedBy,

@@ -24,7 +24,7 @@ function order(
     fulfillmentStatus,
     version: 2,
     shippingMarkText: null,
-    parts: [{ id: `${id}-part`, partNumber: 1, status: 'ACTIVE', shippingMarkText: null, shippedAt: fulfillmentStatus === 'SHIPPED' || fulfillmentStatus === 'SIGNED' ? '2026-09-04T00:00:00Z' : null, shippedById: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }],
+    parts: [{ id: `${id}-part`, shipmentNo: null, partNumber: 1, status: 'ACTIVE', shippingMarkText: null, shippedAt: fulfillmentStatus === 'SHIPPED' || fulfillmentStatus === 'SIGNED' ? '2026-09-04T00:00:00Z' : null, shippedById: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }],
     lineSummary: { lineCount: 2, totalQuantity: 3, previews: [] },
   }
 }

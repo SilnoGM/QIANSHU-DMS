@@ -98,7 +98,8 @@ const filterDefinitions = computed<QsGenericTableFilterDefinition[]>(() => [
   { key: 'purchaseType', label: t('purchaseShipments.purchaseType'), options: ['SALES_LINKED', 'STOCK'].map(value => ({ value, label: t(`purchaseShipments.${value}`) })) },
 ])
 const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(() => [
-  { id: 'part', title: t('purchaseShipments.part'), accessorFn: row => `${row.purchaseOrder.orderNo} / ${formatShipmentNumber(row.partNumber)}`, fixed: 'left', minWidth: 260 },
+  { id: 'shipmentNo', title: t('purchaseShipments.shipmentNo'), accessorKey: 'shipmentNo', fixed: 'left', minWidth: 255 },
+  { id: 'part', title: t('purchaseShipments.part'), accessorFn: row => `${row.purchaseOrder.orderNo} / ${formatShipmentNumber(row.partNumber)}`, minWidth: 260 },
   { id: 'mark', title: t('purchaseShipments.mark'), accessorKey: 'shippingMarkText', minWidth: 300 },
   { id: 'baseMark', title: t('purchaseShipments.baseMark'), accessorFn: row => row.purchaseOrder.shippingMarkText, minWidth: 245 },
   { id: 'status', title: t('purchaseShipments.status'), accessorFn: row => t(`purchaseShipments.${row.viewStatus}`), minWidth: 120 },
@@ -241,6 +242,12 @@ onBeforeUnmount(() => {
           <template #query-leading>
             <QsDateRangeFilter v-model="dateRange" :calendar-label="t('purchaseShipments.orderDate')" :placeholder="t('purchaseShipments.orderDate')" @complete="search" @clear="search" />
           </template>
+          <template #cell-shipmentNo="{ row }">
+            <div class="group flex gap-2 items-center">
+              <span class="qs-type-data-emphasis whitespace-nowrap" :class="!row.original.shipmentNo && 'text-muted-foreground'">{{ row.original.shipmentNo || t('purchaseShipments.unnumbered') }}</span>
+              <CopyCellButton v-if="row.original.shipmentNo" :text="row.original.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+            </div>
+          </template>
           <template #cell-part="{ row }">
             <QsTableStackedCell class="group">
               <QsTableStackedLine content-class="qs-type-data-emphasis">
@@ -321,6 +328,12 @@ onBeforeUnmount(() => {
             <div class="min-w-0 space-y-3">
               <div class="flex gap-2 items-start justify-between">
                 <QsTableStackedCell>
+                  <QsTableStackedLine content-class="qs-type-data-emphasis [overflow-wrap:anywhere]" :tone="row.shipmentNo ? 'default' : 'muted'">
+                    {{ row.shipmentNo || t('purchaseShipments.unnumbered') }}
+                    <template v-if="row.shipmentNo" #suffix>
+                      <CopyCellButton always-visible :text="row.shipmentNo" :label="t('purchaseShipments.shipmentNo')" />
+                    </template>
+                  </QsTableStackedLine>
                   <QsTableStackedLine content-class="qs-type-data-emphasis [overflow-wrap:anywhere]">
                     {{ row.purchaseOrder.orderNo }}
                     <template #suffix>

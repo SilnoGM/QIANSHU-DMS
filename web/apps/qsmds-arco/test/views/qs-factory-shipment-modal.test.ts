@@ -56,7 +56,9 @@ test('采购发货使用最新详情核对基础唛头与货件，详情加载�
 test('详情读取隔离过期响应，失败不留下可提交上下文，使用最新详情版本', async () => {
   const source = await readFile(new URL('../../src/views/operations/purchase-orders/index.vue', import.meta.url), 'utf8')
   const start = source.indexOf('async function retryPurchaseFactoryShipment():')
-  const body = source.slice(start, source.indexOf('/** 发货进入', start))
+  const end = source.indexOf('function handlePendingAction(', start)
+  assert.ok(start >= 0 && end > start)
+  const body = source.slice(start, end)
   const ref = (value: unknown) => ({ value })
   let resolve: (value: unknown) => void = () => {}
   let fail = false

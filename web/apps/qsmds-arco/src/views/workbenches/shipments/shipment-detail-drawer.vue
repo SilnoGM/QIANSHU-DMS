@@ -91,6 +91,15 @@ const hasShipmentInformation = computed(() => props.detail && (
           {{ t('purchaseShipmentDetail.identity') }}
         </h3>
         <dl class="m-0 p-4 border border-border/70 rounded-lg bg-muted/20 gap-x-6 gap-y-4 grid sm:grid-cols-2">
+          <div class="min-w-0 sm:col-span-2">
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseShipmentDetail.shipmentNo') }}
+            </dt>
+            <dd class="m-0 flex gap-2 min-w-0 items-start">
+              <span class="qs-type-data-emphasis min-w-0 [overflow-wrap:anywhere]" :class="!detail.shipmentNo && 'text-muted-foreground'">{{ detail.shipmentNo || t('purchaseShipmentDetail.unnumbered') }}</span>
+              <CopyCellButton v-if="detail.shipmentNo" always-visible :text="detail.shipmentNo" :label="t('purchaseShipmentDetail.shipmentNo')" />
+            </dd>
+          </div>
           <div class="min-w-0">
             <dt class="qs-type-meta text-muted-foreground mb-1">
               {{ t('purchaseShipmentDetail.orderNo') }}

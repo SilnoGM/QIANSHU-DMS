@@ -251,16 +251,16 @@ describe('PurchaseOrderQueryService', () => {
     expect(await fixture.service.getById('order-id')).toHaveProperty('reviewSummary', null)
   })
 
-  it('keeps pending part marks null and excludes them from the summary mark list', async () => {
+  it.each(['PKG/20260914-00001', null])('keeps pending shipment number %s independent from unissued marks', async shipmentNo => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
       shippingMarkText: null, orderStatus: 'PENDING_REVIEW',
-      parts: [{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }],
+      parts: [{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, items: [] }],
     }))
     const detail = await fixture.service.getById('order-id')
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
-    expect(detail.parts).toEqual([{ id: 'part-1', partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }])
+    expect(detail.parts).toEqual([{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }])
   })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()

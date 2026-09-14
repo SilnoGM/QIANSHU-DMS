@@ -18,7 +18,7 @@ const LINE_SELECT = {
 } as const satisfies Prisma.PurchaseOrderLineSelect
 
 const PART_SELECT = {
-  id: true, partNumber: true, status: true, shippingMarkText: true, createdAt: true,
+  id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true, createdAt: true,
   shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true,
   purchaseOrder: { select: {
     id: true, orderNo: true, orderDate: true, purchaseType: true, productMode: true, orderStatus: true,
@@ -71,6 +71,7 @@ function baseWhere(input: PurchaseShipmentFilterDto): Prisma.PurchaseOrderPartWh
       },
     } },
     ...(!keyword ? {} : { OR: [
+      { shipmentNo: match },
       { shippingMarkText: match },
       { purchaseOrder: { is: { orderNo: match } } },
       { purchaseOrder: { is: { shippingMarkText: match } } },
@@ -95,7 +96,7 @@ function viewWhere(view: PurchaseShipmentView): Prisma.PurchaseOrderPartWhereInp
 function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto): PurchaseShipmentListItemDto {
   const order = row.purchaseOrder
   return {
-    id: row.id, partNumber: row.partNumber, status: row.status,
+    id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
     // 先按货件生命周期归类，仅 ACTIVE 再按发货时间细分，保证各状态视图互斥。
     viewStatus: row.status === 'ACTIVE' ? row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED' : row.status,
     shippingMarkText: row.shippingMarkText, createdAt: row.createdAt.toISOString(),

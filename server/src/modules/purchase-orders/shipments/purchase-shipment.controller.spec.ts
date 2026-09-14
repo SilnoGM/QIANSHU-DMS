@@ -55,6 +55,12 @@ describe('PurchaseShipmentController contract', () => {
       expect(document.paths[path].get).toMatchObject({ operationId, responses: { 200: { headers: { 'X-Request-Id': expect.any(Object) as unknown } }, 401: expect.any(Object) as unknown, 403: expect.any(Object) as unknown, 422: expect.any(Object) as unknown } })
     }
     expect(document.paths['/api/purchase-order-parts/{partId}'].get?.responses).toHaveProperty('404')
+    for (const schema of ['PurchaseShipmentListItemDto', 'PurchaseShipmentDetailDto']) {
+      expect(document.components?.schemas?.[schema]).toMatchObject({
+        required: expect.arrayContaining(['shipmentNo']) as unknown,
+        properties: { shipmentNo: { type: 'string', nullable: true, maxLength: 64 } },
+      })
+    }
     expect(document.components?.schemas?.PurchaseShipmentDetailDto).toMatchObject({ properties: { items: { type: 'array' }, purchaseOrder: expect.any(Object) as unknown, shippedAt: { nullable: true }, viewStatus: { enum: ['PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'CANCELLED'] } } })
     expect(document.components?.schemas?.PurchaseShipmentStatusCountsDto).toMatchObject({ properties: { buyerOptions: { type: 'array' } } })
   })

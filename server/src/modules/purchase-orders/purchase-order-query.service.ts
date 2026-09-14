@@ -100,7 +100,7 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
   parts: {
     orderBy: { partNumber: 'asc' },
     select: {
-      id: true, partNumber: true, status: true, shippingMarkText: true,
+      id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
       shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true,
       shippedBy: { select: { id: true, displayName: true } },
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
@@ -304,6 +304,7 @@ export interface PurchaseOrderStatusCounts {
 export interface PurchaseOrderDetail extends PurchaseOrderListItem {
   readonly parts: readonly {
     readonly id: string
+    readonly shipmentNo: string | null
     readonly partNumber: number
     readonly status: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
     readonly shippingMarkText: string | null
@@ -840,7 +841,7 @@ export class PurchaseOrderQueryService {
       ...summary,
       sourceSalesOrder: row.salesOrder,
       parts: row.parts.map(part => ({
-        id: part.id, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
+        id: part.id, shipmentNo: part.shipmentNo, partNumber: part.partNumber, status: part.status, shippingMarkText: part.shippingMarkText,
         shippedAt: part.shippedAt?.toISOString() ?? null,
         shippedById: part.shippedById ?? null,
         shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,

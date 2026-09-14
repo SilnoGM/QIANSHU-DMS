@@ -39770,7 +39770,9 @@
                 "PURCHASE_ORDER_NUMBER_CONFLICT",
                 "PURCHASE_ORDER_SHIPPING_MARK_CONTEXT_CHANGED",
                 "PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE",
-                "PURCHASE_ORDER_STATE_CHANGED"
+                "PURCHASE_ORDER_STATE_CHANGED",
+                "PURCHASE_SHIPMENT_NUMBERING_UNAVAILABLE",
+                "PURCHASE_SHIPMENT_NUMBER_CONFLICT"
               ]
             },
             {
@@ -48980,7 +48982,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
-            "description": "采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
+            "description": "货件编号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -49287,7 +49289,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
-            "description": "采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
+            "description": "货件编号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -50642,6 +50644,7 @@
                 "SALES_ORDER_PRODUCT_APPENDED",
                 "SALES_ORDER_PRODUCTS_CHANGED",
                 "PURCHASE_ORDER_CREATED",
+                "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
                 "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
                 "PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED",
                 "PURCHASE_ORDER_PAYMENT_RECORDED",
@@ -59814,6 +59817,12 @@
             "type": "string",
             "format": "uuid"
           },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64,
+            "description": "SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空"
+          },
           "partNumber": {
             "type": "integer",
             "minimum": 1
@@ -59863,6 +59872,7 @@
         "required": [
           "status",
           "id",
+          "shipmentNo",
           "partNumber",
           "shippingMarkText",
           "shippedAt",
@@ -61149,6 +61159,12 @@
             "type": "string",
             "format": "uuid"
           },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64,
+            "description": "SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空"
+          },
           "partNumber": {
             "type": "integer",
             "minimum": 1
@@ -61222,6 +61238,7 @@
         },
         "required": [
           "id",
+          "shipmentNo",
           "partNumber",
           "status",
           "viewStatus",
@@ -61385,6 +61402,12 @@
             "type": "string",
             "format": "uuid"
           },
+          "shipmentNo": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 64,
+            "description": "SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空"
+          },
           "partNumber": {
             "type": "integer",
             "minimum": 1
@@ -61464,6 +61487,7 @@
         },
         "required": [
           "id",
+          "shipmentNo",
           "partNumber",
           "status",
           "viewStatus",
@@ -61768,6 +61792,7 @@
               "SALES_ORDER_PRODUCT_APPENDED",
               "SALES_ORDER_PRODUCTS_CHANGED",
               "PURCHASE_ORDER_CREATED",
+              "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
               "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
               "PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED",
               "PURCHASE_ORDER_PAYMENT_RECORDED",

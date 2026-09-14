@@ -6,6 +6,7 @@ import { NumberingGenerationError } from '../numbering/numbering.errors'
 import type { PurchaseShippingMarkResolverService } from '../purchase-shipping-marks/purchase-shipping-mark-resolver.service'
 import { normalizePurchaseOrderCreateCommand } from './purchase-order-command.normalizer'
 import { PurchaseOrderCommandService } from './purchase-order-command.service'
+import type { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
 import type {
   PurchaseOrderCreateDependencyService,
 } from './purchase-order-create-dependency.service'
@@ -77,6 +78,7 @@ function setup() {
       idempotentReplay: false,
     }),
   }
+  const shipmentNumbers = { issue: jest.fn().mockResolvedValue([{ shipmentNo: 'SHIP/0001', numberingIssuanceId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' }]) }
   const audit = {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
   }
@@ -111,6 +113,7 @@ function setup() {
     audit as unknown as AuditService,
     dependencies as unknown as PurchaseOrderCreateDependencyService,
     resolver as unknown as PurchaseShippingMarkResolverService,
+    shipmentNumbers as unknown as PurchaseShipmentNumberingService,
     { businessToday: () => '2026-08-27' },
   )
   return {
@@ -119,6 +122,7 @@ function setup() {
     numbering,
     prisma,
     resolver,
+    shipmentNumbers,
     service,
     transaction,
   }
@@ -126,6 +130,15 @@ function setup() {
 
 describe('PurchaseOrderCommandService', () => {
   const context = { actorUserId: ACTOR_ID, requestId: 'mark-create', idempotencyKey: IDEMPOTENCY_KEY }
+
+  it('issues shipment numbers in the business transaction and aborts creation when numbering is unavailable', async () => {
+    const fixture = setup()
+    fixture.shipmentNumbers.issue.mockRejectedValue(new ApiException(409, 'PURCHASE_SHIPMENT_NUMBERING_UNAVAILABLE', 'Unavailable'))
+    await expect(fixture.service.create(context, input())).rejects.toMatchObject({ code: 'PURCHASE_SHIPMENT_NUMBERING_UNAVAILABLE' })
+    expect(fixture.shipmentNumbers.issue).toHaveBeenCalledWith(fixture.transaction, [expect.objectContaining({ purchaseOrderId: ORDER_ID, key: ACTOR_ID })])
+    expect(fixture.transaction.purchaseOrderPart.createMany).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
+  })
 
   it.each([
     ['40001', 409, 'PURCHASE_ORDER_STATE_CHANGED'],
@@ -153,6 +166,7 @@ describe('PurchaseOrderCommandService', () => {
     }))
     expect(fixture.transaction.purchaseOrderPart.createMany).toHaveBeenCalledWith({ data: [expect.objectContaining({
       purchaseOrderId: ORDER_ID, key: ACTOR_ID, partNumber: 1, status: 'PENDING_REVIEW',
+      shipmentNo: 'SHIP/0001', numberingIssuanceId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
       shippingMarkText: null, shippingMarkIssuanceId: null, shippingMarkKeyHash: null,
     })] })
   })

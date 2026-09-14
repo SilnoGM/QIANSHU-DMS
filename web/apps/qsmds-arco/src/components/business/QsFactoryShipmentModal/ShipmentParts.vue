@@ -11,6 +11,7 @@ const props = defineProps<{
   disabled?: boolean
 }>()
 const emit = defineEmits<{ toggle: [partId: string] }>()
+const { t } = useI18n()
 const expandedId = ref<string | null>(null)
 const records = computed(() => props.order.parts.map(part => ({
   ...part,
@@ -53,16 +54,22 @@ function toggleCard(event: MouseEvent, part: FactoryShipmentPart): void {
           :disabled="disabled || !isPendingShipmentPart(part)"
           @change="emit('toggle', part.id)"
         >
-        <button type="button" class="py-1 text-start flex flex-1 gap-2 min-w-0 items-start" :aria-expanded="expandedId === part.id" :aria-controls="`shipment-part-${part.id}`" @click="expandedId = expandedId === part.id ? null : part.id">
-          <FaIcon name="i-lucide:chevron-down" class="mt-1 shrink-0 size-4 transition-transform duration-150 motion-reduce:transition-none" :class="expandedId === part.id ? 'rotate-180' : ''" />
-          <span class="min-w-0">
-            <span class="flex flex-wrap gap-2 items-center">
-              <strong class="qs-type-body-medium">货件-{{ String(part.partNumber).padStart(2, '0') }}</strong>
-              <FaTag variant="outline" :class="part.shippedAt ? 'text-primary border-primary/30 bg-primary/10' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">{{ part.shippedAt ? '已发货' : part.status === 'ACTIVE' ? '待发货' : '不可发货' }}</FaTag>
+        <div class="flex-1 min-w-0">
+          <div class="pl-6 flex gap-2 min-w-0 items-center">
+            <span class="qs-type-data-emphasis min-w-0 [overflow-wrap:anywhere]" :class="!part.shipmentNo && 'text-muted-foreground'">{{ part.shipmentNo || t('purchaseOrderDrawer.parts.unnumbered') }}</span>
+            <CopyCellButton v-if="part.shipmentNo" always-visible :text="part.shipmentNo" :label="t('purchaseOrderDrawer.parts.shipmentNo')" />
+          </div>
+          <button type="button" class="py-1 text-start flex gap-2 min-w-0 w-full items-start" :aria-expanded="expandedId === part.id" :aria-controls="`shipment-part-${part.id}`" @click="expandedId = expandedId === part.id ? null : part.id">
+            <FaIcon name="i-lucide:chevron-down" class="mt-1 shrink-0 size-4 transition-transform duration-150 motion-reduce:transition-none" :class="expandedId === part.id ? 'rotate-180' : ''" />
+            <span class="min-w-0">
+              <span class="flex flex-wrap gap-2 items-center">
+                <strong class="qs-type-body-medium">货件-{{ String(part.partNumber).padStart(2, '0') }}</strong>
+                <FaTag variant="outline" :class="part.shippedAt ? 'text-primary border-primary/30 bg-primary/10' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">{{ part.shippedAt ? '已发货' : part.status === 'ACTIVE' ? '待发货' : '不可发货' }}</FaTag>
+              </span>
+              <span class="qs-type-data text-muted-foreground mt-1.5 block break-all">唛头：{{ part.shippingMarkText || '未记录' }}</span>
             </span>
-            <span class="qs-type-data text-muted-foreground mt-1.5 block break-all">唛头：{{ part.shippingMarkText || '未记录' }}</span>
-          </span>
-        </button>
+          </button>
+        </div>
         <div v-if="images(part).length" class="shrink-0 h-12 w-25 relative">
           <Transition enter-active-class="transition-opacity duration-150 motion-reduce:transition-none" leave-active-class="transition-opacity duration-150 motion-reduce:transition-none" enter-from-class="opacity-0" leave-to-class="opacity-0">
             <ImageGroup v-if="expandedId !== part.id" :items="images(part)" :max-count="3" :size="40" :tooltip="true" class="right-0 top-1 absolute" />

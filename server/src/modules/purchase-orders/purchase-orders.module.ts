@@ -25,6 +25,8 @@ import { PurchaseOrderReviewContextService } from './purchase-order-review-conte
 import { PurchaseOrderReviewContextController } from './purchase-order-review-context.controller'
 import { PurchaseOrdersController } from './purchase-orders.controller'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
+import { PurchaseShipmentNumberingService } from './shipments/purchase-shipment-numbering.service'
+import { PurchaseShipmentNumberBackfillService } from './shipments/purchase-shipment-number-backfill.service'
 import { PurchaseShipmentController } from './shipments/purchase-shipment.controller'
 import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-query.service'
 
@@ -58,6 +60,8 @@ import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-quer
     PurchaseOrderDocumentService,
     PurchaseOrderProductImageService,
     PurchaseShipmentQueryService,
+    PurchaseShipmentNumberingService,
+    PurchaseShipmentNumberBackfillService,
     {
       provide: PurchaseOrderDocumentMultipartParser,
       useFactory: (): PurchaseOrderDocumentMultipartParser =>

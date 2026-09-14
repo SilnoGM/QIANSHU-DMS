@@ -96,6 +96,7 @@ pnpm -C server auth:cleanup
 pnpm -C server media:cleanup:expired-trash
 pnpm -C server media:ops:health
 pnpm -C server media:recovery:dry-run
+pnpm -C server purchase-shipments:backfill-numbers --actor-user-id <active-user-uuid>
 ```
 
 - `check` 与 `build` 只验证工程和单元测试，不连接数据库；它们在未设置 `DATABASE_URL` 时也应可执行。
@@ -105,6 +106,7 @@ pnpm -C server media:recovery:dry-run
 - `start:prod` 直接执行已经构建的 `dist/main.js`，不会生成 Prisma Client；部署流程必须先完成安装、生成与构建。
 - `auth:bootstrap-admin` 只用于首次创建 `system_admin`；`auth:recover-admin` 只用于已有 `system_admin` 的离线密码恢复。两者都要求本机交互式 TTY，密码不得通过 argv、环境变量或脚本传入。
 - `auth:cleanup` 由单一外部 Cron 定期调用，用于小批清理过期 Session 和限流数据；API 实例不会自行启动清理定时器。
+- `purchase-shipments:backfill-numbers` 运行已构建的 `dist`，必须明确指定有效操作人 `--actor-user-id`；默认只读预览，添加 `--apply` 才为历史双空货件补号。`--limit` 默认 1000、最大 10000，每件独立事务提交；失败后可使用相同命令继续，已正确编号的货件不会重新派号。工具只输出安全汇总，审计记录真实派发时间；不修改货件状态、唛头、产品分配或发货事实。执行前需迁移数据库，并按业务配置发布、启用 `BUSINESS` 用途的 `SHIPMENT_NO` 规则；规则未就绪时，新采购创建会返回 `PURCHASE_SHIPMENT_NUMBERING_UNAVAILABLE`，不会留下采购单或货件编号。
 - `media:cleanup:expired-trash`、`media:ops:health` 与 `media:recovery:dry-run` 运行已构建的 `dist`；清理命令
   仅处理已经超过保留期且再次确认零引用的 `TRASHED` 文件，任一 failed/isolated 均非零退出；health 输出
   read/write/video validator 与容量健康合同，dry run 只读校验恢复后的数据库引用、文件位置、size 和

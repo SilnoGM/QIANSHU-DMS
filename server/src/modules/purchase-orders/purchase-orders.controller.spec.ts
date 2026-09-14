@@ -478,7 +478,8 @@ describe('PurchaseOrdersController OpenAPI', () => {
       },
     })
     expect(document.components?.schemas?.PurchaseOrderPartDto).toMatchObject({
-      properties: { shippingMarkText: { type: 'string', nullable: true, maxLength: 72 } },
+      required: expect.arrayContaining(['shipmentNo']) as unknown,
+      properties: { shipmentNo: { type: 'string', nullable: true, maxLength: 64 }, shippingMarkText: { type: 'string', nullable: true, maxLength: 72 } },
     })
   })
 

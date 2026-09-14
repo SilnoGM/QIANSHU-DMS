@@ -25,6 +25,7 @@ export interface FactoryShipmentProductPreview {
 
 export interface FactoryShipmentPart {
   readonly id: string
+  readonly shipmentNo: string | null
   readonly partNumber: number
   readonly status: 'PENDING_REVIEW' | 'ACTIVE' | 'CANCELLED'
   readonly shippingMarkText: string | null

@@ -1,3 +1,5 @@
+import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
+import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { ensureReceiptNumberingRule } from './fixtures/sales-receipt-numbering-service.fixture'
 import { SalesReceiptService } from '../src/modules/sales-orders/receipts/sales-receipt.service'
 import { SalesReceiptQueryService } from '../src/modules/sales-orders/receipts/sales-receipt-query.service'
@@ -353,6 +355,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     } as unknown as AccessControlService
     const numbering = {
       generateScopedInTransaction: new NumberingGeneratorService(prisma).generateScopedInTransaction.bind(new NumberingGeneratorService(prisma)),
+      generateScopedBatchInTransaction: new NumberingGeneratorService(prisma).generateScopedBatchInTransaction.bind(new NumberingGeneratorService(prisma)),
       generateScoped: jest.fn(() => Promise.resolve({
         number: `PO-E2E-${suffix}-${++purchaseNumber}`,
         idempotentReplay: false,
@@ -363,6 +366,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     productEdits = new SalesOrderProductEditService(prisma, new AuditService())
     productEditQueries = new SalesOrderProductEditQueryService(prisma)
     await ensureReceiptNumberingRule(prisma, actorUserId)
+    await ensureShipmentNumberingRule(prisma, actorUserId)
     salesReceipts = new SalesReceiptService(prisma, new SalesReceiptQueryService(prisma), dictionaryLookup, media,
       new FundPostingApplicationService(prisma, new AuditService()), new AuditService(), new SalesOrderAutomaticStateService(new AuditService()),
       { getPermissionCodesInTransaction: () => Promise.resolve(['sales-orders:payment', 'sales-orders:document', 'sales-receipts:review']), hasAll: () => true } as unknown as AccessControlService,
@@ -376,6 +380,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new AuditService(),
       new PurchaseOrderCreateDependencyService(dictionaryLookup, accessControl),
       markResolver,
+      new PurchaseShipmentNumberingService(numbering),
       { businessToday: () => '2026-08-27' },
     )
     factoryShipments = new PurchaseOrderFactoryShipmentService(

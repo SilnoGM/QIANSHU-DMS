@@ -34,6 +34,7 @@ const salesContext: FactoryShipmentModalContext = {
       shippingMarkText: 'DEMO/20260904-00002',
       parts: [{
         id: '21111111-6111-4111-8111-111111111111',
+        shipmentNo: 'SHIPMENT/20260904-00001',
         partNumber: 1,
         status: 'ACTIVE',
         shippingMarkText: 'DEMO/20260904-00002/01',
@@ -72,6 +73,7 @@ const salesContext: FactoryShipmentModalContext = {
       shippingMarkText: 'DEMO/20260904-00003',
       parts: [{
         id: '31111111-6111-4111-8111-111111111111',
+        shipmentNo: null,
         partNumber: 1,
         status: 'ACTIVE',
         shippingMarkText: 'DEMO/20260904-00003/01',
@@ -115,6 +117,7 @@ const salesContext: FactoryShipmentModalContext = {
       shippingMarkText: 'DEMO/20260904-00004',
       parts: [{
         id: '41111111-6111-4111-8111-111111111111',
+        shipmentNo: 'SHIPMENT/20260904-00002',
         partNumber: 1,
         status: 'ACTIVE',
         shippingMarkText: 'DEMO/20260904-00004/01',

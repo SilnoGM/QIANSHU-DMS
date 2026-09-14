@@ -8,6 +8,8 @@
     "empty": "暂无货件详情",
     "emptyDescription": "请返回列表重新选择货件。",
     "identity": "货件信息",
+    "shipmentNo": "货件编号",
+    "unnumbered": "未编号",
     "shippingMarks": "唛头信息",
     "shippingMark": "货件唛头",
     "baseShippingMark": "基础唛头",

@@ -137,7 +137,7 @@ describe('PurchaseOrderFactoryShipmentQueryService', () => {
       supplierValue: null, customSupplierName: '工厂', fulfillmentStatus: 'PARTIALLY_SHIPPED',
       version: 4, shippingMarkText: 'TEST/1', lines: [],
       parts: [{
-        id: 'part-1', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'TEST/1/01',
+        id: 'part-1', shipmentNo: 'PKG/20260914-00001', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'TEST/1/01',
         shippedAt: new Date('2026-09-13T00:00:00Z'), shippedById: SALES_ORDER_ID,
         shippedBy: { id: SALES_ORDER_ID, displayName: '采购员' },
         shipmentRecordedAt: new Date('2026-09-13T00:00:00Z'), shipmentRemark: '已发货',
@@ -148,7 +148,7 @@ describe('PurchaseOrderFactoryShipmentQueryService', () => {
     expect(result.pendingShipmentCount).toBe(1)
     expect(result.purchaseOrders[0]).toMatchObject({
       shippingMarkText: 'TEST/1',
-      parts: [{ partNumber: 1, shippedAt: '2026-09-13T00:00:00.000Z',
+      parts: [{ shipmentNo: 'PKG/20260914-00001', partNumber: 1, shippedAt: '2026-09-13T00:00:00.000Z',
         shippedBy: { displayName: '采购员' },
         items: [{ purchaseOrderLineId: 'line-1', lineNumber: 1, quantity: 2 }],
       }],

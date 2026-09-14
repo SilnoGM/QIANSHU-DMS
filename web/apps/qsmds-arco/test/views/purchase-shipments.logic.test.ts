@@ -59,7 +59,7 @@ async function pageFixture() {
     openShipment: () => {},
     openOrder: () => {},
   }
-  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search })`, {
+  const state = runInNewContext(ts.transpileModule(`${script}\n;({ keyword, filters, dateRange, page, pageSize, search, columns })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     computed,
@@ -98,6 +98,7 @@ async function pageFixture() {
     page: { value: number }
     pageSize: { value: number }
     search: () => void
+    columns: { value: Array<{ id: string, fixed?: string, accessorKey?: string }> }
   }
   lifecycle.mount!()
   return { state, route, initialPath, initialQuery, permission, navigations, lifecycle, dispose: () => stops.forEach(stop => stop()) }
@@ -145,4 +146,16 @@ test('选择自定义供应商来源时清空具体供应商；冲突 URL 也不
   assert.equal(fixture.navigations.at(-1)?.supplierValue, undefined)
   assert.equal(parseShipmentQuery({ supplierSource: 'CUSTOM_TEXT', supplierValue: 'SUPPLIER_A' }).supplierValue, undefined)
   assert.equal(parseShipmentQuery({ supplierSource: 'DICTIONARY', supplierValue: 'SUPPLIER_A' }).supplierValue, 'SUPPLIER_A')
+})
+
+test('正式货件编号位于最左并固定，所属采购单和产品列保持独立', async (context) => {
+  const fixture = await pageFixture()
+  context.after(fixture.dispose)
+  const columns = fixture.state.columns.value
+  assert.equal(columns[0]?.id, 'shipmentNo')
+  assert.equal(columns[0]?.accessorKey, 'shipmentNo')
+  assert.equal(columns[0]?.fixed, 'left')
+  assert.equal(columns[1]?.id, 'part')
+  assert.equal(columns.some(column => column.id === 'products'), true)
+  assert.equal(columns.some(column => column.id === 'quantity'), false)
 })

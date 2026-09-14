@@ -11,7 +11,7 @@ export type PurchaseShipmentView = typeof PURCHASE_SHIPMENT_VIEWS[number]
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 
 export class PurchaseShipmentFilterDto {
-  @ApiProperty({ type: 'string', maxLength: 128, required: false, description: '采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称' })
+  @ApiProperty({ type: 'string', maxLength: 128, required: false, description: '货件编号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称' })
   @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128)
   keyword?: string
 
@@ -90,6 +90,7 @@ export class PurchaseShipmentLineSummaryDto {
 
 export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'string', nullable: true, maxLength: 64, description: 'SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空' }) readonly shipmentNo!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly partNumber!: number
   @ApiProperty({ enum: PurchaseOrderPartStatus }) readonly status!: PurchaseOrderPartStatus
   @ApiProperty({ enum: PURCHASE_SHIPMENT_VIEWS.filter(value => value !== 'ALL') }) readonly viewStatus!: Exclude<PurchaseShipmentView, 'ALL'>

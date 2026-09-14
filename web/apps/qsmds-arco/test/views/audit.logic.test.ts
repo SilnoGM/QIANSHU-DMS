@@ -148,6 +148,7 @@ test('销售订单产品修改审计事件使用销售语义中文名称', () =>
 
 test('采购订单审计事件使用采购语义中文名称', () => {
   assert.equal(formatAuditEvent('PURCHASE_ORDER_CREATED'), '采购订单已创建')
+  assert.equal(formatAuditEvent('PURCHASE_SHIPMENT_NUMBER_ASSIGNED'), '采购货件编号已派发')
   assert.equal(
     formatAuditEvent('PURCHASE_ORDER_ORDER_STATUS_CHANGED'),
     '采购订单状态已变更',
