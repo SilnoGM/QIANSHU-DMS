@@ -63,7 +63,7 @@ const columns = computed<QsGenericTableColumn<PurchaseOrderListItemDto>[]>(() =>
     : [{
         id: 'reviewSummary',
         title: t('purchaseReview.summary.title'),
-        minWidth: 245,
+        minWidth: 360,
         accessorFn: (row: PurchaseOrderListItemDto) => row.reviewSummary
           ? `${row.reviewSummary.reviewedBy.displayName} · ${formatDateTime(row.reviewSummary.reviewedAt)} · ${t('purchaseReview.summary.reason')}：${row.reviewSummary.reason || t('purchaseReview.summary.notRecorded')}`
           : t('purchaseReview.summary.notRecorded'),
@@ -307,14 +307,14 @@ onBeforeUnmount(() => {
           </FaTag>
         </template>
         <template #cell-reviewSummary="{ row }">
-          <QsTableStackedCell v-if="row.original.reviewSummary">
-            <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" />
-            <QsTableStackedLine tone="muted">
-              <DateTimeDisplay :value="row.original.reviewSummary.reviewedAt" />
-            </QsTableStackedLine>
-            <QsTableStackedLine :label="t('purchaseReview.summary.reason')">
+          <QsTableStackedCell v-if="row.original.reviewSummary" class="max-w-96 w-full">
+            <div class="flex gap-3 min-w-0 whitespace-nowrap items-center">
+              <QsPersonDisplay :display-name="row.original.reviewSummary.reviewedBy.displayName" size="sm" class="max-w-32" />
+              <DateTimeDisplay :value="row.original.reviewSummary.reviewedAt" class="text-muted-foreground shrink-0" />
+            </div>
+            <QsTableStackedLine :label="t('purchaseReview.summary.reason')" nowrap content-class="flex-1 overflow-hidden">
               <FaTooltip :text="row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded')">
-                <span class="max-w-64 block whitespace-pre-wrap break-words line-clamp-2">{{ row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded') }}</span>
+                <span class="block truncate">{{ row.original.reviewSummary.reason || t('purchaseReview.summary.notRecorded') }}</span>
               </FaTooltip>
             </QsTableStackedLine>
           </QsTableStackedCell>
