@@ -54,6 +54,7 @@ import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalo
 import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
 
 import PurchaseOrderDetailDrawer from './purchase-order-detail-drawer.vue'
+import PurchaseOrderListPaymentAction from './purchase-order-list-payment-action.vue'
 import {
   buildPurchaseOrderListQuery,
   buildPurchaseOrderStatusCountsQuery,
@@ -166,6 +167,8 @@ const shipmentContextLoading = ref(false)
 const shipmentSubmitting = ref(false)
 const shipmentError = ref<string | null>(null)
 const cancelActionsRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailActions>>('cancelActionsRef')
+const paymentActionRef = useTemplateRef<InstanceType<typeof PurchaseOrderListPaymentAction>>('paymentActionRef')
+const paymentLoadingOrderId = computed(() => paymentActionRef.value?.loadingOrderId ?? null)
 const todayDate = today(getLocalTimeZone())
 let requestVersion = 0
 let countRequestVersion = 0
@@ -751,7 +754,7 @@ async function retryPurchaseFactoryShipment(): Promise<void> {
   }
 }
 
-/** 发货进入正式业务弹窗；到仓和付款本期继续只说明能力建设状态。 */
+/** 发货和付款进入各自的正式业务弹窗；到仓仍保留建设中提示。 */
 function handlePendingAction(
   action: PurchaseOrderPendingActionItem,
   order: PurchaseOrderListItemDto,
@@ -764,6 +767,10 @@ function handlePendingAction(
   }
   if (action.key === 'SHIPMENT') {
     openPurchaseFactoryShipment(order)
+    return
+  }
+  if (action.key === 'PAYMENT') {
+    void paymentActionRef.value?.open(order.id)
     return
   }
   toast.info(`${action.label}功能正在建设中`)
@@ -1007,6 +1014,8 @@ onBeforeUnmount(() => {
                   size="sm"
                   class="min-h-11 sm:min-h-8"
                   :aria-label="`${row.orderNo}：${action.label}`"
+                  :loading="action.key === 'PAYMENT' && paymentLoadingOrderId === row.id"
+                  :disabled="action.key === 'PAYMENT' && paymentLoadingOrderId !== null"
                   @click="handlePendingAction(action, row)"
                 >
                   <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
@@ -1577,6 +1586,14 @@ onBeforeUnmount(() => {
       :order="selectedOrder"
       :currencies="currencyCatalog.currencies.value"
       @detail-updated="handleDetailUpdated"
+    />
+
+    <PurchaseOrderListPaymentAction
+      ref="paymentActionRef"
+      :active="viewMode === 'pending' && route.name === 'qsOperationsPendingPurchaseOrders' && selectedStatus === 'AWAITING_PAYMENT'"
+      :currencies="currencyCatalog.currencies.value"
+      @detail-updated="handleDetailUpdated"
+      @stale="refreshOrdersAndCounts"
     />
 
     <PurchaseOrderDetailActions

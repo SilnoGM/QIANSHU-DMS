@@ -203,7 +203,7 @@ test('全部与待办采购均使用带计数的状态工具栏', async () => {
   assert.match(
     source,
     /toast\.info\(`\$\{action\.label\}功能正在建设中`\)/u,
-    '到仓和付款仍应保持建设中提示',
+    '到仓仍应保持建设中提示',
   )
   assert.match(source, />发货|action\.label/u)
   assert.match(source, /canCancelPurchaseOrderFromList\(row\)/u)

@@ -1,5 +1,8 @@
 {
   "purchaseOrderList": {
+    "payment": {
+      "unavailable": "采购订单已付清或状态已变化，当前无法记录付款，已刷新列表。"
+    },
     "shippingMarks": {
       "label": "货件唛头",
       "baseLabel": "基础唛头",
