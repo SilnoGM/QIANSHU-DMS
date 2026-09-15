@@ -181,7 +181,7 @@ describe('purchase order image drafts with isolated PostgreSQL and real storage'
     const chunks: Buffer[] = []
     for await (const chunk of response.stream!) { if (!Buffer.isBuffer(chunk)) throw new Error('Invalid stream chunk'); chunks.push(chunk) }
     const bytes = Buffer.concat(chunks)
-    expect(await sharp(bytes).metadata()).toMatchObject({ format: 'png', width: 1600 })
+    expect(await sharp(bytes).metadata()).toMatchObject({ format: 'png', width: 2100, height: 2970, density: 254 })
     if (process.env.PURCHASE_ORDER_IMAGE_E2E_OUTPUT === '1') await writeFile('/tmp/qianshu-purchase-order-image-e2e.png', bytes)
     const persisted = await fixture.prisma.purchaseOrderImageDraft.findUniqueOrThrow({ where: { id: image.id } })
     await images.buildMutations().review(fixture.context(), id, { expectedVersion: detail.version, imageDraftId: image.id })

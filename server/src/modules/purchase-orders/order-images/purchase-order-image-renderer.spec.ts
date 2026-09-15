@@ -51,8 +51,8 @@ describe('PurchaseOrderImageRenderer', () => {
     expect(createHash('sha256').update(font).digest('hex')).toBe('a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da')
     const input = { ...snapshot(), supplierName: '千树设备' }
     const image = await renderer.render(input)
-    expect(await sharp(image).metadata()).toMatchObject({ format: 'png', width: 1600, hasAlpha: false })
-    expect((await sharp(image).metadata()).height).toBeGreaterThan(800)
+    expect(await sharp(image).metadata()).toMatchObject({ format: 'png', width: 2100, height: 2970, density: 254, hasAlpha: false })
+    expect(await sharp(image).extract({ left: 0, top: 2900, width: 2100, height: 70 }).raw().toBuffer()).toEqual(Buffer.alloc(2100 * 70 * 3, 255))
     expect(await sharp(image).extract({ left: 0, top: 0, width: 20, height: 20 }).raw().toBuffer()).toEqual(Buffer.alloc(1200, 255))
     expect(await renderer.render(input)).toEqual(image)
     // 不同汉字必须产生不同像素，防止部署缺字体时全都退化成相同方块。
@@ -60,11 +60,12 @@ describe('PurchaseOrderImageRenderer', () => {
     expect(other).not.toEqual(image)
   })
 
-  it('grows for multiline Chinese and escapes user-provided Pango markup', async () => {
+  it('keeps the A4 page for multiline Chinese and escapes user-provided Pango markup', async () => {
     const original = snapshot()
     const short = await renderer.render(original)
-    const long = await renderer.render({ ...original, remark: '采购说明<&>\n'.repeat(40), lines: original.lines.map(line => ({ ...line, productName: '超长中文产品名称'.repeat(14), description: '<span size="999999">literal</span> & 正常说明' })) })
-    expect((await sharp(long).metadata()).height).toBeGreaterThan((await sharp(short).metadata()).height)
+    const long = await renderer.render({ ...original, remark: '采购说明<&>\n'.repeat(6), lines: original.lines.map(line => ({ ...line, productName: '超长中文产品名称'.repeat(4), description: '<span size="999999">literal</span> & 正常说明' })) })
+    expect(await sharp(long).metadata()).toMatchObject({ width: 2100, height: 2970 })
+    expect(long).not.toEqual(short)
     expect(long.byteLength).toBeLessThan(10 * 1024 * 1024)
   })
 
@@ -78,6 +79,10 @@ describe('PurchaseOrderImageRenderer', () => {
     expect(redPixels).toBeGreaterThan(5000)
     await expect(renderer.render(input)).rejects.toMatchObject({ code: 'PURCHASE_ORDER_IMAGE_PRODUCT_IMAGE_UNAVAILABLE' })
     await expect(renderer.render(input, new Map([['photo-1', Buffer.from('invalid')]]))).rejects.toMatchObject({ code: 'PURCHASE_ORDER_IMAGE_PRODUCT_IMAGE_UNAVAILABLE' })
+  })
+
+  it('rejects content beyond one A4 page without cropping or shrinking the text', async () => {
+    await expect(renderer.render({ ...snapshot(), remark: '一行采购说明\n'.repeat(60) })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_IMAGE_TOO_LARGE' })
   })
 
   it('rejects oversized documents instead of truncating rows or shrinking them unreadably', async () => {
