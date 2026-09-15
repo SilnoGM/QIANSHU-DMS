@@ -9,7 +9,9 @@ import OrderParts from '@/components/business/QsPurchaseOrderDrawer/OrderParts.v
 import { buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 import PurchaseOrderReviewDetails from './purchase-order-review-details.vue'
+import PurchaseOrderReviewImage from './purchase-order-review-image.vue'
 import PurchaseOrderReviewSummary from './purchase-order-review-summary.vue'
+import { usePurchaseOrderImageGeneration } from './use-purchase-order-image-generation'
 
 const props = defineProps<{
   currencies: readonly CurrencyDescriptor[]
@@ -35,7 +37,16 @@ let mutationController: AbortController | null = null
 
 const canReview = computed(() => auth('purchase-orders:read') && auth('purchase-orders:review'))
 const visible = computed({ get: () => props.modelValue, set: value => emit('update:modelValue', value) })
-const canConfirm = computed(() => canReview.value && !loading.value && !submitting.value && detail.value?.orderStatus === 'PENDING_REVIEW' && reviewContext.value?.available === true)
+const image = usePurchaseOrderImageGeneration({
+  detail,
+  orderId: computed(() => props.orderId),
+  enabled: computed(() => visible.value && canReview.value),
+  epoch: computed(() => account.authEpoch),
+})
+const busy = computed(() => submitting.value || image.generating.value)
+const canGenerate = computed(() => canReview.value && !loading.value && !busy.value && detail.value?.orderStatus === 'PENDING_REVIEW' && reviewContext.value?.available === true)
+const canConfirm = computed(() => canGenerate.value && image.ready.value)
+const generationStep = ref(0)
 const terminalNotice = computed(() => {
   if (detail.value?.orderStatus === 'CANCELLED') {
     return t('purchaseReview.recovery.cancelled')
@@ -47,6 +58,7 @@ const terminalNotice = computed(() => {
 })
 
 function reset(): void {
+  image.reset()
   loadController?.abort()
   mutationController?.abort()
   loadController = null
@@ -71,6 +83,7 @@ async function loadDetail(previousFailure = ''): Promise<void> {
     return
   }
   loadController?.abort()
+  image.reset()
   const controller = new AbortController()
   loadController = controller
   const epoch = account.authEpoch
@@ -95,6 +108,10 @@ async function loadDetail(previousFailure = ''): Promise<void> {
       return
     }
     reviewContext.value = contextResponse.data
+    await image.restore(response.data, controller.signal)
+    if (controller.signal.aborted || epoch !== account.authEpoch || props.orderId !== orderId || !visible.value || !canReview.value) {
+      return
+    }
     error.value = !contextResponse.data.available
       ? contextResponse.data.message || t('purchaseReview.recovery.unavailable')
       : previousFailure ? `${previousFailure}。${t('purchaseReview.recovery.pending')}` : ''
@@ -112,12 +129,32 @@ async function loadDetail(previousFailure = ''): Promise<void> {
   }
 }
 
+function generateImage(regenerate: boolean): void {
+  if (!canGenerate.value) {
+    return
+  }
+  error.value = ''
+  generationStep.value = 0
+  image.start(regenerate, [
+    t('purchaseReview.image.steps.detail'),
+    t('purchaseReview.image.steps.marks'),
+    t('purchaseReview.image.steps.image'),
+  ])
+}
+
+async function generationFailed(failure: unknown): Promise<void> {
+  if (image.fail(failure)) {
+    // 派号或渲染的未知结果必须重取草稿和版本，保留已完成的服务端阶段。
+    await loadDetail(failureMessage(failure))
+  }
+}
+
 async function submit(): Promise<void> {
   const current = detail.value
   if (!canConfirm.value || current === null) {
     return
   }
-  const result = buildPurchaseOrderReviewRequest(current, reason.value)
+  const result = buildPurchaseOrderReviewRequest(current, reason.value, image.draft.value)
   if (!result.valid) {
     error.value = result.fieldError
     return
@@ -172,7 +209,7 @@ onBeforeUnmount(reset)
     :description="terminalNotice ? undefined : t('purchaseOrderList.review.description')"
     size="xl"
     :loading="loading"
-    :submitting="submitting"
+    :submitting="busy"
   >
     <div data-testid="purchase-order-review-confirmation" class="flex flex-col gap-4">
       <FaAlert v-if="terminalNotice" :title="terminalNotice" :class="detail?.orderStatus !== 'CANCELLED' ? 'border-primary/30 bg-primary/5 text-primary' : ''" />
@@ -181,7 +218,7 @@ onBeforeUnmount(reset)
           <p class="m-0 whitespace-pre-wrap">
             {{ error }}
           </p>
-          <FaButton type="button" variant="outline" size="sm" class="mt-3" :disabled="loading || submitting || !canReview" @click="loadDetail()">
+          <FaButton type="button" variant="outline" size="sm" class="mt-3" :disabled="loading || busy || !canReview" @click="loadDetail()">
             <FaIcon name="i-lucide:refresh-cw" aria-hidden="true" />{{ t('purchaseOrderList.review.reload') }}
           </FaButton>
         </template>
@@ -194,18 +231,39 @@ onBeforeUnmount(reset)
           {{ t('purchaseOrderList.review.noParts') }}
         </p>
       </template>
+      <PurchaseOrderReviewImage
+        v-if="detail?.orderStatus === 'PENDING_REVIEW'"
+        :draft="image.draft.value"
+        :preview-url="image.previewUrl.value"
+        :image-loaded="image.imageLoaded.value"
+        :image-failed="image.imageFailed.value"
+        :busy="loading || busy"
+        :can-generate="canGenerate"
+        @generate="generateImage"
+        @image-load="image.markLoaded"
+        @image-error="image.markFailed"
+      />
+      <span v-if="image.generating.value" class="sr-only" role="status">{{ image.steps.value[generationStep]?.text }}</span>
       <label v-if="detail?.orderStatus === 'PENDING_REVIEW'" class="flex flex-col gap-2">
         <span class="qs-type-body-medium">{{ t('purchaseOrderList.review.reason') }}</span>
-        <FaTextarea v-model="reason" maxlength="500" :disabled="loading || submitting || !canReview" input-class="min-h-20" />
+        <FaTextarea v-model="reason" maxlength="500" :disabled="loading || busy || !canReview" input-class="min-h-20" />
       </label>
     </div>
     <template #footer>
-      <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="submitting" @click="visible = false">
-        {{ t('purchaseOrderList.review.cancel') }}
+      <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="busy" @click="visible = false">
+        {{ t('purchaseReview.image.close') }}
       </FaButton>
       <FaButton v-if="detail?.orderStatus === 'PENDING_REVIEW'" type="button" class="min-h-11 sm:min-h-9" :disabled="!canConfirm" :loading="submitting" @click="submit">
         {{ t('purchaseOrderList.review.confirm') }}
       </FaButton>
     </template>
   </QsGenericModal>
+  <FaMultiStepLoader
+    :loading="image.generating.value"
+    :steps="image.steps.value"
+    prevent-close
+    @state-change="generationStep = $event"
+    @complete="image.complete"
+    @error="generationFailed"
+  />
 </template>

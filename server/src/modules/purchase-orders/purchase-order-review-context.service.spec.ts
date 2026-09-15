@@ -29,6 +29,14 @@ describe('PurchaseOrderReviewContextService', () => {
     expect(fixture.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
   })
 
+  it('reuses issued marks even when their rule is later disabled', async () => {
+    const fixture = setup()
+    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({ ...fixture.order, shippingMarkText: 'MARK0001', shippingMarkIssuanceId: 'issuance-id' })
+    fixture.resolver.resolve.mockResolvedValue({ availability: 'DISABLED', message: '停用' })
+    await expect(fixture.service.read('order-id')).resolves.toEqual({ available: true, message: null })
+    expect(fixture.resolver.resolve).not.toHaveBeenCalled()
+  })
+
   it('returns rule remediation verbatim and keeps confirmation unavailable', async () => {
     const fixture = setup()
     fixture.resolver.resolve.mockResolvedValue({ availability: 'UNBOUND', message: '该供应商尚未绑定唛头规则，请联系管理员配置' })

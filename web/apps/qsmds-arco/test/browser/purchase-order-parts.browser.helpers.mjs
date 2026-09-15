@@ -343,7 +343,7 @@ export async function assertPurchasePartDetail(page, detail, screenshots = false
         })()`)
       }
     }
-    assert.equal(await page.evaluate(`${article}.textContent.includes(${JSON.stringify(part.shippingMarkText ?? '待审核生成')})`), true)
+    assert.equal(await page.evaluate(`${article}.textContent.includes(${JSON.stringify(part.shippingMarkText ?? '待派发')})`), true)
     if (part.shippingMarkText === null) {
       assert.equal(await page.evaluate(`${article}.querySelector('button[aria-label*="复制"]') === null`), true)
     }

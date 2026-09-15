@@ -3,6 +3,7 @@ import { PassThrough } from 'node:stream'
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
 import type { AuditService } from '../../audit/audit.service'
 import type { MediaAssetService } from '../../media/media-asset.service'
+import type { MediaAssetRetentionService } from '../../media/media-retention.service'
 import type { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
 import type { PurchaseOrderQueryService } from '../purchase-order-query.service'
 import type {
@@ -25,7 +26,7 @@ function setup() {
     purchaseOrderDocument: {
       findFirst: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({
         id: DOCUMENT_ID,
-        documentType: 'PAYMENT_VOUCHER',
+        documentType: 'PAYMENT_VOUCHER', mediaAssetId: MEDIA_ID,
       }),
       update: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({}),
       create: jest.fn<Promise<unknown>, [unknown]>().mockResolvedValue({ id: DOCUMENT_ID }),
@@ -68,6 +69,7 @@ function setup() {
     open: jest.fn<Promise<unknown>, [string]>()
       .mockResolvedValue({ sizeBytes: 100n, contentLength: 100n, stream: new PassThrough() }),
   }
+  const retention = { markUnreferencedForTrash: jest.fn<Promise<string>, [unknown, string]>().mockResolvedValue('TRASHED') }
   const audit = {
     record: jest.fn<Promise<unknown>, [unknown, unknown]>().mockResolvedValue({}),
   }
@@ -91,8 +93,9 @@ function setup() {
     audit as unknown as AuditService,
     query as unknown as PurchaseOrderQueryService,
     multipart as unknown as PurchaseOrderDocumentMultipartParser,
+    retention as unknown as MediaAssetRetentionService,
   )
-  return { audit, delivery, detail, media, multipart, prisma, service, transaction }
+  return { audit, delivery, detail, media, multipart, prisma, retention, service, transaction }
 }
 
 const context = { actorUserId: ACTOR_ID, requestId: 'request-1' }
@@ -174,6 +177,7 @@ describe('PurchaseOrderDocumentService', () => {
           readonly detachedByUserId: string
         }
       }
+    expect(fixture.retention.markUnreferencedForTrash).toHaveBeenCalledWith(fixture.transaction, MEDIA_ID)
     expect(updateInput.where).toEqual({ id: DOCUMENT_ID })
     expect(updateInput.data.detachedAt).toBeInstanceOf(Date)
     expect(updateInput.data.detachedByUserId).toBe(ACTOR_ID)
@@ -185,6 +189,20 @@ describe('PurchaseOrderDocumentService', () => {
       fixture.transaction,
       expect.objectContaining({ eventType: 'PURCHASE_ORDER_DOCUMENT_DETACHED' }),
     )
+  })
+
+  it('preserves a shared ready asset when another domain still references the detached voucher', async () => {
+    const fixture = setup()
+    fixture.retention.markUnreferencedForTrash.mockResolvedValue('ACTIVE_REFERENCE')
+    await expect(fixture.service.detach(context, ORDER_ID, DOCUMENT_ID)).resolves.toEqual(fixture.detail)
+  })
+
+  it('aborts detachment when its media lifecycle changes concurrently', async () => {
+    const fixture = setup()
+    fixture.retention.markUnreferencedForTrash.mockResolvedValue('STATE_CONFLICT')
+    await expect(fixture.service.detach(context, ORDER_ID, DOCUMENT_ID)).rejects.toMatchObject({ code: 'PURCHASE_ORDER_DOCUMENT_UNAVAILABLE' })
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
   })
 
   it('resolves private content with stable headers and ETag', async () => {

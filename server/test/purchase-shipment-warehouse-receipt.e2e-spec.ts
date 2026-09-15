@@ -1,3 +1,5 @@
+import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
+import { reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { randomUUID } from 'node:crypto'
 
 import { Prisma } from '../src/generated/prisma/client'
@@ -19,7 +21,7 @@ async function prepare(fixture: AtomicityFixture, count = 3) {
     parts: Array.from({ length: count }, () => ({ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] })),
     purchaseTotalAmount: String(count * 10), balanceDueAmount: String(count * 10),
   })
-  await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+  await createReviewMutations(fixture).review(fixture.context(), id, await prepareImageReview(fixture, id))
   return fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: { orderBy: { partNumber: 'asc' } } } })
 }
 
@@ -169,10 +171,9 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
     const legacy = await createAtomicityFixture(false, false, false, true)
     try {
       const id = await createCommands(legacy).create(legacy.context(), await customInput(legacy))
-      // 迁移前 schema 没有新只读字段；仅替代命令提交后的响应读取，审核的全部持久化仍用正式服务。
-      const read = jest.spyOn(PurchaseOrderQueryService.prototype, 'getById').mockResolvedValue({ id } as Awaited<ReturnType<PurchaseOrderQueryService['getById']>>)
-      try { await createReviewMutations(legacy).review(legacy.context(), id, { expectedVersion: 1 }) }
-      finally { read.mockRestore() }
+      // 按旧 schema 原有审核、发货写入构造历史事实；新图片生成器不能运行在旧 schema。
+      await reviewHistoricalPurchase(legacy, id)
+      await shipHistoricalPurchase(legacy, id)
       await legacy.prisma.purchaseOrder.update({ where: { id }, data: { fulfillmentStatus: 'SIGNED' } })
       const snapshot = () => legacy.prisma.$queryRaw(Prisma.sql`SELECT to_jsonb(orders) AS data FROM purchase_orders orders WHERE id = ${id}::uuid`)
       const before = await snapshot()

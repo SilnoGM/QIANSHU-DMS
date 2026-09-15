@@ -11,11 +11,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'sales_order_documents',
   'purchase_order_documents',
   'sales_receipt_requests',
+  'purchase_order_image_drafts',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft'
 >
 
 /**
@@ -58,6 +59,11 @@ export class MediaAssetReferenceRepository {
       where: { voucherMediaAssetId: assetId },
       select: { id: true },
     })
-    return receiptReference !== null
+    if (receiptReference !== null) return true
+    const imageDraftReference = await reader.purchaseOrderImageDraft.findFirst({
+      where: { mediaAssetId: assetId, invalidatedAt: null, archivedAt: null },
+      select: { id: true },
+    })
+    return imageDraftReference !== null
   }
 }

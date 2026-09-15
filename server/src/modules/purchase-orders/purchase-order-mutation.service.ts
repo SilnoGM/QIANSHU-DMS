@@ -47,6 +47,8 @@ import {
   type PurchaseOrderDetail,
 } from './purchase-order-query.service'
 import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
+import { PurchaseOrderImageDraftService } from './order-images/purchase-order-image-draft.service'
+import { purchaseReviewSourceBlockReason } from './purchase-order-review-source'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
@@ -207,6 +209,7 @@ export class PurchaseOrderMutationService {
     private readonly numbering: NumberingGeneratorService,
     private readonly shippingMarks: PurchaseShippingMarkResolverService,
     private readonly warehouseReceipts: PurchaseOrderWarehouseReceiptService,
+    private readonly imageDrafts: PurchaseOrderImageDraftService,
     @Optional()
     @Inject(PURCHASE_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
@@ -217,6 +220,64 @@ export class PurchaseOrderMutationService {
     })
   }
 
+  /** 生成图片的第二步：派发结果持久留存，但采购单和货件仍停留在待审核。 */
+  async prepareReviewShippingMarks(
+    context: PurchaseOrderMutationContext,
+    rawPurchaseOrderId: unknown,
+    input: unknown,
+  ): Promise<PurchaseOrderDetail> {
+    const trusted = validateContext(context)
+    const purchaseOrderId = requireUuid(rawPurchaseOrderId, 'purchaseOrderId')
+    const body = requireRecord(input)
+    rejectUnknownKeys(body, ['expectedVersion'])
+    const expectedVersion = body.expectedVersion
+    if (typeof expectedVersion !== 'number' || !Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
+      return purchaseOrderValidationFailure('expectedVersion')
+    }
+    try {
+      await this.prisma.$transaction(async transaction => {
+        await applyTransactionTimeouts(transaction)
+        await this.lockSourceSalesLines(transaction, purchaseOrderId)
+        const order = await this.lockOrder(transaction, purchaseOrderId)
+        if (order.version !== expectedVersion || order.orderStatus !== 'PENDING_REVIEW' || order.fulfillmentStatus !== 'ORDERED') {
+          throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购订单已变化，请刷新后重新生成图片')
+        }
+        if (order.purchaseType === 'SALES_LINKED' && order.salesOrderId !== null) {
+          const source = await transaction.salesOrder.findUnique({ where: { id: order.salesOrderId }, select: { orderStatus: true } })
+          const reason = purchaseReviewSourceBlockReason(source?.orderStatus ?? null)
+          if (reason) throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', reason)
+        }
+        const mark = await this.issueReviewShippingMark(transaction, order)
+        if (mark === null) return
+        await transaction.purchaseOrder.update({ where: { id: order.id }, data: {
+          shippingMarkText: mark.number, shippingMarkIssuanceId: mark.issuanceId, version: { increment: 1 },
+        } })
+        // 全部派生唛头和基础号原子写入；不改变封存配置或待审核货件状态。
+        await transaction.$executeRaw(Prisma.sql`
+          UPDATE purchase_order_parts
+          SET shipping_mark_text = CASE WHEN ${order._count.parts} = 1 THEN ${mark.number}
+            ELSE ${mark.number} || '/货件-' || lpad(part_number::text, greatest(2, length(part_number::text)), '0') END
+          WHERE purchase_order_id = ${order.id}::uuid
+        `)
+        await this.recordAudit(transaction, trusted, {
+          eventType: AuditEventType.PURCHASE_ORDER_REVIEW_MARKS_PREPARED, targetId: order.id,
+          metadata: { shippingMarkIssuanceId: mark.issuanceId, shippingMarkRuleCode: mark.ruleCode,
+            shippingMarkRevision: mark.ruleRevision, partCount: order._count.parts },
+        })
+      })
+    }
+    catch (error) {
+      if (error instanceof NumberingGenerationError) throw mapShippingMarkGenerationError(error)
+      const facts = readPersistenceErrorFacts(error)
+      if ((error instanceof AuditWriteFailedError && error.transactionConflict)
+        || ['P2034', '40001', '40P01', '55P03', '57014'].some(code => hasPersistenceCode(facts, code))) {
+        throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购依赖状态已变化，请刷新后重新生成图片')
+      }
+      throw error
+    }
+    return this.query.getById(purchaseOrderId)
+  }
+
   async review(
     context: PurchaseOrderMutationContext,
     rawPurchaseOrderId: unknown,
@@ -225,7 +286,8 @@ export class PurchaseOrderMutationService {
     const trusted = validateContext(context)
     const purchaseOrderId = requireUuid(rawPurchaseOrderId, 'purchaseOrderId')
     const body = requireRecord(input)
-    rejectUnknownKeys(body, ['expectedVersion', 'reason'])
+    rejectUnknownKeys(body, ['expectedVersion', 'reason', 'imageDraftId'])
+    const imageDraftId = requireUuid(body.imageDraftId, 'imageDraftId')
     const expectedVersion = body.expectedVersion
     if (typeof expectedVersion !== 'number' || !Number.isSafeInteger(expectedVersion) || expectedVersion < 1) {
       return purchaseOrderValidationFailure('expectedVersion')
@@ -247,26 +309,17 @@ export class PurchaseOrderMutationService {
           '采购订单已变化或已完成审核，请刷新后重试',
         )
       }
-      const mark = await this.issueReviewShippingMark(transaction, order)
+      // 审核只归档操作者已经预览过的同一张图片，不再申请或替换唛头。
+      await this.imageDrafts.attachForReview(transaction, trusted, purchaseOrderId, expectedVersion, imageDraftId)
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
         data: {
           orderStatus: 'CONFIRMED',
           fulfillmentStatus: 'PREPARING',
           version: { increment: 1 },
-          ...(mark === null ? {} : { shippingMarkText: mark.number, shippingMarkIssuanceId: mark.issuanceId }),
         },
       })
-      if (mark !== null) {
-        // 基础号只派发一次；批量补写派生码，不改变已封存货件配置。超过两位保留完整序号。
-        await transaction.$executeRaw(Prisma.sql`
-          UPDATE purchase_order_parts
-          SET shipping_mark_text = CASE WHEN ${order._count.parts} = 1 THEN ${mark.number}
-            ELSE ${mark.number} || '/货件-' || lpad(part_number::text, greatest(2, length(part_number::text)), '0') END
-          WHERE purchase_order_id = ${order.id}::uuid
-        `)
-      }
-      // 与审核、唛头派发共用事务，避免尚未通过的预定义货件被实际作业使用。
+      // 与图片归档、审核共用事务，避免尚未通过的预定义货件被实际作业使用。
       await transaction.purchaseOrderPart.updateMany({
         where: { purchaseOrderId, status: 'PENDING_REVIEW' },
         data: { status: 'ACTIVE' },
@@ -287,10 +340,7 @@ export class PurchaseOrderMutationService {
           eventType: transition.eventType,
           targetId: purchaseOrderId,
           metadata: { action: 'REVIEW', fromStatus: transition.fromStatus, toStatus: transition.toStatus,
-            ...(mark === null || transition.dimension !== 'ORDER' ? {} : {
-              shippingMarkIssuanceId: mark.issuanceId, shippingMarkRuleCode: mark.ruleCode,
-              shippingMarkRevision: mark.ruleRevision, partCount: order._count.parts,
-            }),
+            imageDraftId,
           },
         })
       }
@@ -319,18 +369,20 @@ export class PurchaseOrderMutationService {
   }
 
   private async issueReviewShippingMark(transaction: Prisma.TransactionClient, order: MutablePurchaseOrder) {
-    // v3/v4 的真实历史派发不可覆盖。只有新 v5 订单在审核阶段首次派发。
+    // v3/v4 的真实历史派发不可覆盖。只有新 v5 订单在生成审核图片前首次派发。
     if (order.createRequestFingerprintVersion === PURCHASE_ORDER_LEGACY_FINGERPRINT_VERSION
       || order.createRequestFingerprintVersion === PURCHASE_ORDER_PART_ISSUED_FINGERPRINT_VERSION) return null
     if (order.createRequestFingerprintVersion !== PURCHASE_ORDER_CREATE_FINGERPRINT_VERSION
-      || order.productMode === 'MIXED' || order.shippingMarkText !== null || order.shippingMarkIssuanceId !== null || order._count.parts < 1) {
+      || order.productMode === 'MIXED' || (order.shippingMarkText === null) !== (order.shippingMarkIssuanceId === null) || order._count.parts < 1) {
       throw new ApiException(HttpStatus.CONFLICT, 'PURCHASE_ORDER_STATE_CHANGED', '采购货件或唛头状态已变化，请刷新核对')
     }
+    // 已正式派发的唛头不可因关闭弹窗、重生成图片或规则停用而更换。
+    if (order.shippingMarkText !== null) return null
     const resolution = await this.shippingMarks.resolve(transaction, {
       productMode: order.productMode, supplierValue: order.supplierValue,
     }, true)
     const ruleCode = requirePurchaseShippingMark(resolution)
-    // 审核时读取当前规则与数据库事务时间；订单稳定键/创建指纹可由 SQL 独立验证。
+    // 生成图片前读取当前规则与数据库事务时间；订单稳定键/创建指纹可由 SQL 独立验证。
     return this.numbering.generateScopedInTransaction(transaction, {
       ruleCode, consumerCode: PURCHASE_SHIPPING_MARK_CONSUMER, idempotencyKey: order.id,
       requestFingerprint: Buffer.from(order.createRequestFingerprintHash).toString('hex'),
@@ -371,6 +423,7 @@ export class PurchaseOrderMutationService {
         where: { purchaseOrderId, status: { not: 'CANCELLED' } },
         data: { status: 'CANCELLED' },
       })
+      await this.imageDrafts.invalidateForOrder(transaction, purchaseOrderId)
       await transaction.purchaseOrderStatusHistory.create({ data: {
         purchaseOrderId,
         dimension: 'ORDER',

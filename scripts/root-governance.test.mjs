@@ -15,11 +15,34 @@ const supplierResiduePattern = 'supplier|service[._ /-]?provider'
 const supplierResidueAllowlist = Object.freeze([
   // 审核确认摘要仅展示已存采购供应商，不新增供应商主数据。
   'web/apps/qsmds-arco/src/locales/lang/purchase-order-list/zh-cn.json',
-  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue',
+  'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-details.vue',
   'web/apps/qsmds-arco/src/locales/lang/purchase-review/zh-cn.json',
   'web/apps/qsmds-arco/src/views/operations/purchase-orders/purchase-shipment-summary.vue',
   'web/apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue',
   'web/apps/qsmds-arco/test/views/purchase-order-review.test.ts',
+  // 现有 UI 规范明确记录供应商字典选择契约；货件/入仓只展示采购单已有供应商快照。
+  'docs/前端文档/UI设计规范.md',
+  'server/src/modules/purchase-orders/purchase-order-review-context.service.spec.ts',
+  'server/src/modules/purchase-orders/purchase-order-review-context.service.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment-query.service.spec.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment-query.service.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment.controller.spec.ts',
+  'server/src/modules/purchase-orders/shipments/purchase-shipment.dto.ts',
+  'server/test/purchase-shipment-read.e2e-spec.ts',
+  'web/apps/qsmds-arco/src/components/business/QsWarehouseReceiptModal/index.vue',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-shipment-detail/zh-cn.json',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-shipments/zh-cn.json',
+  'web/apps/qsmds-arco/src/locales/lang/purchase-warehouse-receipt/zh-cn.json',
+  'web/apps/qsmds-arco/src/views/workbenches/shipments/index.vue',
+  'web/apps/qsmds-arco/src/views/workbenches/shipments/logic.ts',
+  'web/apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue',
+  'web/apps/qsmds-arco/test/views/purchase-shipments.logic.test.ts',
+  // 采购单图片只冻结并渲染订单供应商名称；不新增 Supplier model、查询入口或关系。
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-renderer.spec.ts',
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-renderer.ts',
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-snapshot.spec.ts',
+  'server/src/modules/purchase-orders/order-images/purchase-order-image-snapshot.ts',
+  'server/test/purchase-order-image-draft.e2e-spec.ts',
   // 唛头绑定及采购消费仅引用供应商字典稳定值；此精确边界不恢复 Supplier 主数据。
   'scripts/browser-auth/provision-shipping-mark-fixtures.mjs',
   'scripts/browser-shipping-mark-fixtures.test.mjs',
@@ -1125,15 +1148,23 @@ test('退役扩展不进入 Regions，编号仅允许已批准的内部事务派
     }),
     [],
   )
-  const generator = await readFile(fromRoot('server/src/modules/numbering/numbering-generator.service.ts'), 'utf8')
-  const originalResult = /export interface GenerateNumberResult \{([^}]+)\}/u.exec(generator)?.[1]
+  // 批量货件派号已把结果类型/独立响应投影抽到 shared；沿真实导入链检查，避免只扫空壳 service。
+  const [generator, shared, batch] = await Promise.all([
+    'numbering-generator.service.ts', 'numbering-generator.shared.ts', 'numbering-generator.batch.ts',
+  ].map(name => readFile(fromRoot('server/src/modules/numbering', name), 'utf8')))
+  const originalResult = /export interface GenerateNumberResult \{([^}]+)\}/u.exec(shared)?.[1]
   assert.ok(originalResult)
   assert.doesNotMatch(originalResult, /issuanceId/u)
-  assert.match(generator, /GenerateNumberInTransactionResult extends GenerateNumberResult/u)
+  assert.match(shared, /GenerateNumberInTransactionResult extends GenerateNumberResult/u)
+  assert.match(generator, /export type \{ GenerateNumberResult, GenerateNumberInTransactionResult \} from '\.\/numbering-generator\.shared'/u)
   assert.match(generator, /async generateScopedInTransaction\(/u)
-  assert.match(generator, /function toIndependentResult\(/u)
+  assert.match(generator, /async generateScopedBatchInTransaction\(/u)
+  assert.match(generator, /return toIndependentResult\(result\)/u)
+  const projection = /export function toIndependentResult\([\s\S]*?\n\}/u.exec(shared)?.[0]
+  assert.ok(projection)
+  assert.doesNotMatch(projection, /issuanceId|\.\.\.result|return result\b/u)
   // 新入口不允许把具体供应商或采购规则匹配搬进通用生成算法。
-  assert.doesNotMatch(generator, /supplier|PurchaseOrder|purchase-shipping-marks/iu)
+  for (const source of [generator, shared, batch]) assert.doesNotMatch(source, /supplier|PurchaseOrder|purchase-shipping-marks/iu)
 })
 
 test('Dictionary production runner 保持无参且无业务工厂注入', async () => {

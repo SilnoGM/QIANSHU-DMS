@@ -1,3 +1,4 @@
+import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
 import { randomUUID } from 'node:crypto'
 
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
@@ -11,7 +12,7 @@ async function createThreeParts(fixture: AtomicityFixture) {
     parts: [1, 2, 3].map(() => ({ key: randomUUID(), items: [{ lineNumber: 1, quantity: 1 }] })),
     purchaseTotalAmount: '30', balanceDueAmount: '30',
   })
-  await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+  await createReviewMutations(fixture).review(fixture.context(), id, await prepareImageReview(fixture, id))
   return fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: { orderBy: { partNumber: 'asc' } } } })
 }
 

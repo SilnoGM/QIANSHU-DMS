@@ -30,6 +30,7 @@ describe('media reference extension contract', () => {
       'prisma/migrations/20260827130000_purchase_order_media_reference_extension/migration.sql',
     ), 'utf8')
     const migration = [
+      readFileSync(resolve(serverRoot, 'prisma/migrations/20260915040452_purchase_order_image_draft/migration.sql'), 'utf8'),
       readFileSync(resolve(serverRoot, 'prisma/migrations/20260908120100_sales_receipt_review_posting/migration.sql'), 'utf8'),
       productMediaMigration,
       salesOrderMigration,
@@ -37,13 +38,17 @@ describe('media reference extension contract', () => {
       purchaseOrderMediaReferenceMigration,
     ].join('\n')
     const referenceTables = modelBlocks(schema)
-      .filter(block => (/\bmediaAssetId\b/u.test(block) && /\bdetachedAt\b/u.test(block)) || /\bvoucherMediaAssetId\b/u.test(block))
+      .filter(block => (/\bmediaAssetId\b/u.test(block) && (/\bdetachedAt\b/u.test(block) || /\binvalidatedAt\b/u.test(block))) || /\bvoucherMediaAssetId\b/u.test(block))
       .map((block) => block.match(/@@map\("([^"]+)"\)/u)?.[1])
       .filter((value): value is string => value !== undefined)
       .sort()
 
     expect(referenceTables).toEqual([...MEDIA_ASSET_REFERENCE_TABLES].sort())
     for (const table of MEDIA_ASSET_REFERENCE_TABLES) {
+      if (table === 'purchase_order_image_drafts') {
+        expect(migration).toContain('reference.invalidated_at IS NULL AND reference.archived_at IS NULL')
+        continue
+      }
       expect(migration).toContain(`FROM "${table}" AS reference`)
       if (table === 'sales_receipt_requests') continue
       expect(migration).toMatch(

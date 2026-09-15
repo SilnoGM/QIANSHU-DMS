@@ -14,7 +14,7 @@
     "parts": "货件列表",
     "partCount": "共 {count} 件",
     "partStats": "{types} 种产品 · 数量 {quantity}",
-    "pendingMark": "货件唛头：审核通过后生成",
+    "pendingMark": "货件唛头：生成采购单图片时派发",
     "removePart": "删除{label}",
     "removeItem": "从{label}移除{name}",
     "loadedQuantity": "已装入数量",

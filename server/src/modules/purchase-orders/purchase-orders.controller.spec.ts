@@ -104,7 +104,7 @@ describe('PurchaseOrdersController', () => {
       {} as PurchaseOrderProductImageService,
       {} as PurchaseShippingMarkResolverService,
     )
-    const input = { expectedVersion: 2, reason: '审核通过' }
+    const input = { expectedVersion: 2, imageDraftId: ORDER_ID, reason: '审核通过' }
     await expect(controller.review({ purchaseOrderId: ORDER_ID }, input, createRequest()))
       .resolves.toEqual({ id: ORDER_ID })
     expect(review).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, input)
@@ -471,8 +471,9 @@ describe('PurchaseOrdersController OpenAPI', () => {
       } }, headers: { 'X-Request-Id': expect.any(Object) as unknown } } },
     })
     expect(document.components?.schemas?.PurchaseOrderReviewRequestDto).toMatchObject({
-      required: ['expectedVersion'],
+      required: ['imageDraftId', 'expectedVersion'],
       properties: {
+        imageDraftId: { type: 'string', format: 'uuid' },
         expectedVersion: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
         reason: { type: 'string', minLength: 1, maxLength: 500 },
       },

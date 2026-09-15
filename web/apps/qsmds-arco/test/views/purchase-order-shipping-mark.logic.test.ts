@@ -98,7 +98,7 @@ test('摘要复用真实生效规则结构，派发说明只出现一次且不�
     message: '正式提交后自动派发，规则容量与生成结果将在提交时最终校验',
   })
   assert.match(summary, /WGJ-\{YYYY\}-\{SEQ:4,start=1,step=1\}/u)
-  assert.equal(summary.split('审核通过后').length - 1, 1)
+  assert.equal(summary.split('生成采购单图片时').length - 1, 1)
   assert.match(summary, /1 个基础唛头/u)
   assert.doesNotMatch(summary, /正式提交后自动派发/u)
   assert.doesNotMatch(summary, /WGJ-2026-0001/u)
@@ -164,6 +164,6 @@ test('只读解析失败保留安全错误，不生成未知提交或候选号',
   assert.equal(latest?.resolution, null)
   assert.equal(latest?.error, '网络暂不可用')
   assert.match(formatPurchaseOrderShippingMarkSummary(available), /SUPPLIER_MARK.*第 2 版.*可用/u)
-  assert.match(formatPurchaseOrderShippingMarkSummary(available), /审核通过后/u)
+  assert.match(formatPurchaseOrderShippingMarkSummary(available), /生成采购单图片时/u)
   assert.match(formatPurchaseOrderShippingMarkSummary({ ...available, availability: 'RULE_DISABLED', resolutionToken: null, message: '规则已停用' }), /规则已停用/u)
 })

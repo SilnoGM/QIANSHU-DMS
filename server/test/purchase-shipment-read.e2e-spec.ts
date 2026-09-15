@@ -1,3 +1,4 @@
+import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
 import { randomUUID } from 'node:crypto'
 
 import type { INestApplication } from '@nestjs/common'
@@ -52,7 +53,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
       purchaseTotalAmount: '30', balanceDueAmount: '30',
     })
     const review = createReviewMutations(fixture)
-    await review.review(fixture.context(), activeId, { expectedVersion: 1 })
+    await review.review(fixture.context(), activeId, await prepareImageReview(fixture, activeId))
     const active = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: activeId }, include: { parts: { orderBy: { partNumber: 'asc' } } } })
     receivedPartId = active.parts[0].id
     shippedPartId = active.parts[1].id
@@ -67,7 +68,7 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     activeVersion = received.version
     const catalog = await prepareCatalog(fixture)
     cancelledId = await commands.create(fixture.context(), catalog.input)
-    await review.review(fixture.context(), cancelledId, { expectedVersion: 1 })
+    await review.review(fixture.context(), cancelledId, await prepareImageReview(fixture, cancelledId))
     const cancelled = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: cancelledId }, include: { parts: true } })
     cancelledPartId = cancelled.parts[0].id
     // 当前数据库禁止已发货再取消；通过正式取消命令准备合法终态，保留已派发的唛头和分配。
@@ -278,7 +279,7 @@ describe('maximum shipment warehouse receipt and read consistency', () => {
         parts: Array.from({ length: 1000 }, () => ({ key: randomUUID(), items: Array.from({ length: 10 }, (_, index) => ({ lineNumber: index + 1, quantity: 1 })) })),
         purchaseTotalAmount: '100000', balanceDueAmount: '100000',
       })
-      await createReviewMutations(fixture).review(fixture.context(), orderId, { expectedVersion: 1 })
+      await createReviewMutations(fixture).review(fixture.context(), orderId, await prepareImageReview(fixture, orderId))
       const orders = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
       const beforeShipment = await orders.getById(orderId)
       const partIds = beforeShipment.parts.map(part => part.id)

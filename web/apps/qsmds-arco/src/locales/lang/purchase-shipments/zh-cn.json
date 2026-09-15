@@ -43,7 +43,7 @@
     "countsErrorDescription": "列表仍可查询，可重试恢复状态数量和采购人筛选。",
     "supplierError": "供应商筛选加载失败",
     "supplierErrorDescription": "列表仍可查询，可重试恢复供应商选项。",
-    "pendingMark": "待审核生成",
+    "pendingMark": "待派发",
     "missingMark": "未记录唛头",
     "notShipped": "尚未发货",
     "noImage": "暂无图片",

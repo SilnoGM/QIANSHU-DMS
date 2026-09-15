@@ -13,7 +13,7 @@
     "shippingMarks": "唛头信息",
     "shippingMark": "货件唛头",
     "baseShippingMark": "基础唛头",
-    "pendingMark": "待审核生成",
+    "pendingMark": "待派发",
     "markNotRecorded": "未记录唛头",
     "orderNo": "采购订单编号",
     "orderDate": "采购日期",

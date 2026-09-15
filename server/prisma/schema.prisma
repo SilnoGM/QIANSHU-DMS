@@ -125,6 +125,8 @@ enum AuditEventType {
   PURCHASE_ORDER_CREATED
   PURCHASE_SHIPMENT_NUMBER_ASSIGNED
   PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED
+  PURCHASE_ORDER_REVIEW_MARKS_PREPARED
+  PURCHASE_ORDER_IMAGE_GENERATED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
   PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED
   PURCHASE_ORDER_PAYMENT_RECORDED
@@ -540,6 +542,7 @@ model User {
   purchaseOrderPaymentsCreated      PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentCreatedBy")
   purchaseOrderPaymentsVoided       PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentVoidedBy")
   purchaseOrderDocumentsCreated     PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentCreatedBy")
+  purchaseOrderImageDraftsGenerated PurchaseOrderImageDraft[]
   purchaseOrderDocumentsDetached    PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentDetachedBy")
   purchaseOrderStatusesChanged      PurchaseOrderStatusHistory[] @relation("PurchaseOrderStatusChangedBy")
   purchaseOrderAmountsChanged       PurchaseOrderAmountRevision[] @relation("PurchaseOrderAmountChangedBy")
@@ -832,6 +835,7 @@ model MediaAsset {
   productMedia        ProductMedia[]
   salesOrderDocuments SalesOrderDocument[]
   purchaseOrderDocuments PurchaseOrderDocument[]
+  purchaseOrderImageDraft PurchaseOrderImageDraft?
 
   @@index([status, uploadExpiresAt, id], map: "media_assets_status_upload_expires_at_id_idx")
   @@index([status, retentionUntil, id], map: "media_assets_status_retention_until_id_idx")
@@ -1076,6 +1080,7 @@ model PurchaseOrder {
   parts        PurchaseOrderPart[]
   payments     PurchaseOrderPayment[]
   documents    PurchaseOrderDocument[]
+  imageDrafts  PurchaseOrderImageDraft[]
   statusHistory PurchaseOrderStatusHistory[]
   amountRevisions PurchaseOrderAmountRevision[]
 
@@ -1217,6 +1222,28 @@ model PurchaseOrderDocument {
   @@index([mediaAssetId, detachedAt], map: "purchase_order_documents_asset_detached_idx")
   @@index([paymentId, detachedAt], map: "purchase_order_documents_payment_detached_idx")
   @@map("purchase_order_documents")
+}
+
+// 采购单图片是独立于正式凭证的持久审核草稿，关闭弹窗不会解除媒体引用。
+model PurchaseOrderImageDraft {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purchaseOrderId   String    @map("purchase_order_id") @db.Uuid
+  mediaAssetId      String    @unique(map: "purchase_order_image_drafts_media_asset_key") @map("media_asset_id") @db.Uuid
+  orderVersion     Int       @map("order_version")
+  snapshotHash     String    @map("snapshot_hash") @db.VarChar(64)
+  templateVersion  String    @map("template_version") @db.VarChar(64)
+  snapshot         Json      @db.JsonB
+  generatedByUserId String    @map("generated_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  invalidatedAt    DateTime? @map("invalidated_at") @db.Timestamptz(6)
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz(6)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  mediaAsset MediaAsset @relation(fields: [mediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  generatedBy User @relation(fields: [generatedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([purchaseOrderId, createdAt(sort: Desc), id(sort: Desc)], map: "purchase_order_image_drafts_order_created_idx")
+  @@map("purchase_order_image_drafts")
 }
 
 model PurchaseOrderStatusHistory {

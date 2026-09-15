@@ -829,8 +829,8 @@ export class PurchaseOrderQueryService {
     }
   }
 
-  async getById(purchaseOrderId: string): Promise<PurchaseOrderDetail> {
-    const row = await this.prisma.purchaseOrder.findUnique({
+  async getById(purchaseOrderId: string, transaction?: Prisma.TransactionClient): Promise<PurchaseOrderDetail> {
+    const row = await (transaction ?? this.prisma).purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
       select: PURCHASE_ORDER_DETAIL_SELECT,
     })
@@ -843,10 +843,14 @@ export class PurchaseOrderQueryService {
     }
     const resolution = row.supplierValue === null
       ? undefined
-      : await this.dictionaryLookup.resolveStoredValue({
+      : await (transaction
+          ? this.dictionaryLookup.resolveStoredValueInTransaction(transaction, {
+              dictionaryCode: SUPPLIER_DICTIONARY_CODE, value: row.supplierValue,
+            })
+          : this.dictionaryLookup.resolveStoredValue({
           dictionaryCode: SUPPLIER_DICTIONARY_CODE,
           value: row.supplierValue,
-        })
+        }))
     const summary = mapListItem(
       row,
       purchaseOrderSupplierFromSources(row, resolution),

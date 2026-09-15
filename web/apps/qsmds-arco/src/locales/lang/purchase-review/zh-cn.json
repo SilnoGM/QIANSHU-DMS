@@ -58,6 +58,26 @@
       "cancelled": "当前采购订单已取消，不能继续审核",
       "unavailable": "当前审核条件不可用，请重新检查或联系管理员",
       "checkRequired": "请先处理审核提示"
+    },
+    "image": {
+      "title": "采购单图片",
+      "generate": "生成采购单图片",
+      "regenerate": "重新生成",
+      "preview": "点击预览采购单图片",
+      "required": "请先生成采购单图片，核对后确认审核。",
+      "retained": "关闭后保留唛头与图片草稿，可稍后继续审核。",
+      "stale": "采购单内容已变化，请重新生成图片后再确认审核。",
+      "ready": "待确认",
+      "outdated": "已过期",
+      "loading": "图片加载中",
+      "loadFailed": "图片加载失败，请重新加载后核对。",
+      "createdBy": "生成于 {time} · {name}",
+      "close": "关闭",
+      "steps": {
+        "detail": "加载采购单详情",
+        "marks": "申请与派发唛头",
+        "image": "生成采购单图片"
+      }
     }
   }
 }

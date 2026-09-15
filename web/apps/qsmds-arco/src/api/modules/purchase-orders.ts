@@ -6,9 +6,13 @@ import type {
   PurchaseOrderDocumentAttachRequestDto,
   PurchaseOrderFactoryShipmentRequestDto,
   PurchaseOrderFulfillmentStatusRequestDto,
+  PurchaseOrderGenerateImageDraftRequestDto,
+  PurchaseOrderImageDraftDto,
+  PurchaseOrderImageDraftResponseDto,
   PurchaseOrderPageDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
+  PurchaseOrderPrepareReviewShippingMarksRequestDto,
   PurchaseOrderProductOptionsDto,
   PurchaseOrderReviewContextDto,
   PurchaseOrderReviewRequestDto,
@@ -63,6 +67,29 @@ function documentContentPath(
  */
 export function createPurchaseOrdersApi(client: AxiosInstance) {
   return {
+    orderImageDraft: (purchaseOrderId: string, signal: AbortSignal) =>
+      client.get<PurchaseOrderImageDraftResponseDto>(`${orderPath(purchaseOrderId)}/order-image-draft`, {
+        errorPresentation: 'local',
+        signal,
+      }),
+    prepareReviewShippingMarks: (purchaseOrderId: string, data: PurchaseOrderPrepareReviewShippingMarksRequestDto, signal: AbortSignal) =>
+      client.post<PurchaseOrderDetailDto>(`${orderPath(purchaseOrderId)}/prepare-review-shipping-marks`, data, {
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      }),
+    generateOrderImageDraft: (purchaseOrderId: string, data: PurchaseOrderGenerateImageDraftRequestDto, signal: AbortSignal) =>
+      client.post<PurchaseOrderImageDraftDto>(`${orderPath(purchaseOrderId)}/order-image-drafts`, data, {
+        errorPresentation: 'local',
+        retry: false,
+        signal,
+      }),
+    getOrderImageDraftContent: (purchaseOrderId: string, draftId: string, signal: AbortSignal) =>
+      client.get<Blob>(`${orderPath(purchaseOrderId)}/order-image-drafts/${encodeURIComponent(draftId)}/content`, {
+        errorPresentation: 'local',
+        responseType: 'blob',
+        signal,
+      }),
     reviewContext: (purchaseOrderId: string, signal: AbortSignal) =>
       client.get<PurchaseOrderReviewContextDto>(`${orderPath(purchaseOrderId)}/review-context`, {
         errorPresentation: 'local',

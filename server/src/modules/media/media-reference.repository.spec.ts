@@ -7,6 +7,18 @@ import {
 const ASSET_ID = '00000000-0000-4000-8000-000000000321'
 
 describe('MediaAssetReferenceRepository', () => {
+  it('protects a current purchase image draft after the review modal is closed', async () => {
+    const draft = jest.fn().mockResolvedValue({ id: 'draft' })
+    const reader = {
+      productMedia: { findFirst: jest.fn().mockResolvedValue(null) },
+      salesOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderImageDraft: { findFirst: draft },
+    } as unknown as Prisma.TransactionClient
+    await expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
+    expect(draft).toHaveBeenCalledWith({ where: { mediaAssetId: ASSET_ID, invalidatedAt: null, archivedAt: null }, select: { id: true } })
+  })
   it('retains a receipt voucher even when the request is rejected', async () => {
     const findFirst = jest.fn().mockResolvedValue({ id: 'rejected-request' })
     const reader = {
@@ -38,6 +50,7 @@ describe('MediaAssetReferenceRepository', () => {
       'sales_order_documents',
       'purchase_order_documents',
       'sales_receipt_requests',
+      'purchase_order_image_drafts',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -68,6 +81,7 @@ describe('MediaAssetReferenceRepository', () => {
       salesOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
       purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
       salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderImageDraft: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

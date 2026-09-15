@@ -25,8 +25,11 @@ test('采购工作台独立承担审核，运营两视图保留查看取消并�
 test('审核先取最新详情，二次确认才提交；失败重查并保留说明，换单或退出取消旧请求', async () => {
   const source = await read('purchase-order-review-modal.vue')
   assert.match(source, /<QsGenericModal/u)
+  assert.match(source, /<FaMultiStepLoader[\s\S]*?:steps="image\.steps\.value"[\s\S]*?@error="generationFailed"/u)
+  assert.match(source, /canGenerate\.value && image\.ready\.value/u)
+  assert.match(source, /<PurchaseOrderReviewImage/u)
   assert.match(source, /purchaseOrdersApi\.getById\(orderId, controller\.signal\)/u)
-  assert.match(source, /buildPurchaseOrderReviewRequest\(current, reason\.value\)/u)
+  assert.match(source, /buildPurchaseOrderReviewRequest\(current, reason\.value, image\.draft\.value\)/u)
   assert.match(source, /purchaseOrdersApi\.review\(current\.id, result\.request, controller\.signal\)/u)
   assert.match(source, /if \(!canConfirm\.value \|\| current === null\)/u)
   assert.match(source, /:disabled="!canConfirm"[\s\S]*?@click="submit"/u)

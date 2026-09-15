@@ -18,7 +18,10 @@ async function createFixture() {
   const success: string[] = []
   let contextCalls = 0
   let reviewCalls = 0
+  const draft = { id: 'draft-1', purchaseOrderId: 'order-1', orderVersion: 1, isCurrent: true }
   const api = {
+    orderImageDraft: async () => ({ data: { draft: { ...draft } } }),
+    getOrderImageDraftContent: async () => ({ data: new Blob(['png'], { type: 'image/png' }) }),
     getById: async () => ({ data: { ...current } }),
     reviewContext: async () => {
       contextCalls += 1
@@ -29,7 +32,22 @@ async function createFixture() {
       throw new Error('响应超时')
     },
   }
-  const state = runInNewContext(ts.transpileModule(`${script}\n;({ loadDetail, submit, reset, canConfirm, detail, error, reason, loading, submitting, visible })`, {
+  const imageSource = (await readFile(new URL('../../src/views/operations/purchase-orders/use-purchase-order-image-generation.ts', import.meta.url), 'utf8'))
+    .replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
+    .replace('export function', 'function')
+  const usePurchaseOrderImageGeneration = runInNewContext(ts.transpileModule(`${imageSource}\n;usePurchaseOrderImageGeneration`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+    computed,
+    ref,
+    shallowRef,
+    AbortController,
+    DOMException,
+    Blob,
+    URL: { createObjectURL: () => 'blob:preview', revokeObjectURL: () => {} },
+    onScopeDispose: () => {},
+    purchaseOrdersApi: api,
+    isPurchaseOrderAbortError: (failure: Error) => failure.name === 'AbortError',
+  })
+  const state = runInNewContext(ts.transpileModule(`${script}\n;({ loadDetail, submit, reset, canConfirm, detail, error, reason, loading, submitting, visible, image })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     AbortController,
@@ -51,6 +69,7 @@ async function createFixture() {
     onBeforeUnmount: () => {},
     purchaseOrdersApi: api,
     buildPurchaseOrderReviewRequest,
+    usePurchaseOrderImageGeneration,
     getPurchaseOrderApiFailure: (failure: Error) => ({ message: failure.message }),
     isPurchaseOrderAbortError: () => false,
   }) as {
@@ -64,8 +83,15 @@ async function createFixture() {
     loading: { value: boolean }
     submitting: { value: boolean }
     visible: { value: boolean }
+    image: { previewUrl: { value: string | null }, markLoaded: (url: string) => void }
   }
-  return { state, current, api, props, account, events, success, calls: () => ({ contextCalls, reviewCalls }) }
+  const loadDetail = async (failure = '') => {
+    await state.loadDetail(failure)
+    if (state.image.previewUrl.value) {
+      state.image.markLoaded(state.image.previewUrl.value)
+    }
+  }
+  return { state: { ...state, loadDetail }, current, api, props, account, events, success, calls: () => ({ contextCalls, reviewCalls }) }
 }
 
 test('审核条件不可用或查询失败时禁止提交，明确显示原因；恢复后可重新核对', async () => {
@@ -118,7 +144,7 @@ test('失败后仍待审核则保留说明和失败原因，更新版本并重�
   assert.match(fixture.state.error.value, /purchaseReview.recovery.pending/u)
   assert.equal(fixture.calls().reviewCalls, 1)
   assert.equal(fixture.calls().contextCalls, 2)
-  assert.equal(fixture.state.canConfirm.value, true)
+  assert.equal(fixture.state.canConfirm.value, false, '版本更新后旧图片不得继续审核，必须重新生成')
 })
 
 test('审核明确成功时解除提交守卫并关闭弹窗，迟到结果不影响新订单', async () => {

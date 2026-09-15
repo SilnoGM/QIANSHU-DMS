@@ -17,6 +17,7 @@ import {
   MediaAssetLifecycleError,
   MediaAssetService,
 } from '../../media/media-asset.service'
+import { MediaAssetRetentionService } from '../../media/media-retention.service'
 import { MediaContentDeliveryService } from '../../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../../media/media-storage'
 import { purchaseOrderRuleFailure, purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
@@ -113,6 +114,7 @@ export class PurchaseOrderDocumentService {
     private readonly audit: AuditService,
     private readonly query: PurchaseOrderQueryService,
     private readonly multipart: PurchaseOrderDocumentMultipartParser,
+    private readonly retention: MediaAssetRetentionService,
   ) {}
 
   uploadTemporary(
@@ -252,7 +254,7 @@ export class PurchaseOrderDocumentService {
       }
       const document = await transaction.purchaseOrderDocument.findFirst({
         where: { id: documentId, purchaseOrderId, detachedAt: null },
-        select: { id: true, documentType: true },
+        select: { id: true, documentType: true, mediaAssetId: true },
       })
       if (document === null) {
         throw new ApiException(
@@ -269,6 +271,12 @@ export class PurchaseOrderDocumentService {
           detachedByUserId: context.actorUserId,
         },
       })
+      // 解除正式凭证后，已归档草稿不再充当有效媒体引用；同事务标记回收，
+      // 保留磁盘原文件直到保留期届满，避免事务回滚却丢失凭证内容。
+      const retained = await this.retention.markUnreferencedForTrash(transaction, document.mediaAssetId)
+      if (retained !== 'TRASHED' && retained !== 'ACTIVE_REFERENCE') {
+        return purchaseOrderRuleFailure('PURCHASE_ORDER_DOCUMENT_UNAVAILABLE', '采购订单凭证状态已变更，请刷新后重试')
+      }
       await transaction.purchaseOrder.update({
         where: { id: purchaseOrderId },
         data: { version: { increment: 1 } },

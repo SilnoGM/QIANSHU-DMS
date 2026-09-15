@@ -179,14 +179,14 @@ describe('PurchaseOrder HTTP API contract', () => {
     review.mockClear()
     const response = await request(requireApplication().getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`)
-      .send({ expectedVersion: 1, reason: '核对通过' }).expect(200)
+      .send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID, reason: '核对通过' }).expect(200)
     expect(responseBody(response)).toEqual({
       id: ORDER_ID, orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING', version: 2,
     })
     expect(response.headers['cache-control']).toContain('no-store')
     expect(response.headers['x-request-id']).toBeTruthy()
     expect(review).toHaveBeenCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }),
-      ORDER_ID, { expectedVersion: 1, reason: '核对通过' })
+      ORDER_ID, { expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID, reason: '核对通过' })
   })
 
   it.each([
@@ -195,7 +195,7 @@ describe('PurchaseOrder HTTP API contract', () => {
     { expectedVersion: 1, reason: null }, { expectedVersion: 1, reason: '' },
     { expectedVersion: 1, reason: 'x'.repeat(501) },
     { expectedVersion: 1, toStatus: 'CONFIRMED' },
-  ])('rejects invalid review input %j before invoking the service', async body => {
+  ].map(body => ({ imageDraftId: PRODUCT_MEDIA_ID, ...body })))('rejects invalid review input %j before invoking the service', async body => {
     review.mockClear()
     const response = await request(requireApplication().getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`).send(body).expect(422)
@@ -203,12 +203,18 @@ describe('PurchaseOrder HTTP API contract', () => {
     expect(review).not.toHaveBeenCalled()
   })
 
+  it.each([{ expectedVersion: 1 }, { expectedVersion: 1, imageDraftId: 'not-a-uuid' }])('requires a valid generated image id before approval: %j', async body => {
+    review.mockClear()
+    await request(requireApplication().getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`).send(body).expect(422)
+    expect(review).not.toHaveBeenCalled()
+  })
+
   it('maps review state conflicts to 409 and accepts an omitted reason', async () => {
     review.mockRejectedValueOnce(new ApiException(409, 'PURCHASE_ORDER_STATE_CHANGED', '采购订单已变化'))
     const response = await request(requireApplication().getHttpServer())
-      .post(`/api/purchase-orders/${ORDER_ID}/review`).send({ expectedVersion: 1 }).expect(409)
+      .post(`/api/purchase-orders/${ORDER_ID}/review`).send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(409)
     expect(responseBody(response)).toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
-    expect(review).toHaveBeenLastCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { expectedVersion: 1 })
+    expect(review).toHaveBeenLastCalledWith(expect.objectContaining({ actorUserId: ACTOR_ID }), ORDER_ID, { expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID })
   })
 
   it('transforms the explicit list view and pagination query', async () => {
@@ -452,7 +458,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
       'purchase-orders:update', 'purchase-orders:payment', 'purchase-orders:document']
     const response = await request(application.getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`).set(mutationHeaders).set('Cookie', cookie)
-      .send({ expectedVersion: 1 }).expect(403)
+      .send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(403)
     expect(responseBody(response)).toMatchObject({ code: 'FORBIDDEN' })
     expect(review).not.toHaveBeenCalled()
   })
@@ -461,7 +467,7 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
     grantedPermissions = ['purchase-orders:review']
     const submit = () => request(application.getHttpServer())
       .post(`/api/purchase-orders/${ORDER_ID}/review`).set(mutationHeaders).set('Cookie', cookie)
-      .send({ expectedVersion: 1 })
+      .send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID })
     await submit().expect(200)
     grantedPermissions = ['purchase-orders:update']
     await submit().expect(403)
@@ -472,9 +478,9 @@ describe('PurchaseOrder shipping mark HTTP authorization with production guards'
   it('enforces session and CSRF before review', async () => {
     grantedPermissions = ['purchase-orders:review']
     await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`)
-      .set(mutationHeaders).send({ expectedVersion: 1 }).expect(401)
+      .set(mutationHeaders).send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(401)
     await request(application.getHttpServer()).post(`/api/purchase-orders/${ORDER_ID}/review`)
-      .set('Cookie', cookie).send({ expectedVersion: 1 }).expect(403)
+      .set('Cookie', cookie).send({ expectedVersion: 1, imageDraftId: PRODUCT_MEDIA_ID }).expect(403)
     expect(review).not.toHaveBeenCalled()
   })
 

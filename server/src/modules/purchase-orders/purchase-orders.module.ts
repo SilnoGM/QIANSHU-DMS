@@ -9,6 +9,9 @@ import { ProductsModule } from '../products/products.module'
 import { PurchaseShippingMarksModule } from '../purchase-shipping-marks/purchase-shipping-marks.module'
 import { PurchaseOrderDocumentMultipartParser } from './documents/purchase-order-document-multipart.parser'
 import { PurchaseOrderDocumentService } from './documents/purchase-order-document.service'
+import { PurchaseOrderImageDraftController } from './order-images/purchase-order-image-draft.controller'
+import { PurchaseOrderImageDraftService } from './order-images/purchase-order-image-draft.service'
+import { PurchaseOrderImageRenderer } from './order-images/purchase-order-image-renderer'
 import {
   PurchaseOrderFactoryShipmentController,
   SalesOrderFactoryShipmentController,
@@ -45,6 +48,7 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
   ],
   controllers: [
     PurchaseOrdersController,
+    PurchaseOrderImageDraftController,
     PurchaseOrderReviewContextController,
     PurchaseOrderFactoryShipmentController,
     SalesOrderFactoryShipmentController,
@@ -62,6 +66,8 @@ import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purch
     PurchaseOrderCommandService,
     PurchaseOrderMutationService,
     PurchaseOrderDocumentService,
+    PurchaseOrderImageDraftService,
+    PurchaseOrderImageRenderer,
     PurchaseOrderProductImageService,
     PurchaseShipmentQueryService,
     PurchaseShipmentNumberingService,

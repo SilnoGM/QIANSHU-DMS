@@ -5,7 +5,7 @@ import { readPersistenceErrorFacts } from '../src/infrastructure/database/persis
 import { createTestShippingMarkRule } from './purchase-shipping-mark-e2e-database'
 import {
   atomicFacts, createAtomicityFixture, createCommands, createReviewMutations, customInput, MARK_CONSUMER,
-  prepareCatalog, prepareSalesSource, type AtomicityFixture,
+  prepareCatalog, prepareImageReview, prepareSalesSource, type AtomicityFixture,
 } from './purchase-shipping-mark-atomicity.fixture'
 
 type FaultPoint = 'order' | 'lines' | 'audit'
@@ -115,10 +115,12 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
     })
   })
 
-  it('rolls back review, its base mark and sales coverage together after downstream failure', async () => {
+  it('rolls back review and sales coverage while retaining the previously prepared mark and image', async () => {
     await withFixture(async (fixture) => {
       const { source, input } = await prepareSalesSource(fixture)
       const orderId = await createCommands(fixture).create(fixture.context(), input)
+      const prepared = await prepareImageReview(fixture, orderId)
+      const imageBefore = await fixture.prisma.purchaseOrderImageDraft.findUniqueOrThrow({ where: { id: prepared.imageDraftId } })
       const before = await atomicFacts(fixture.prisma)
       expect(before.orders[0]).toMatchObject({ orderStatus: 'PENDING_REVIEW', fulfillmentStatus: 'ORDERED' })
       const advance = fixture.salesProgress.advanceWhenFullyCovered.bind(fixture.salesProgress)
@@ -133,10 +135,12 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
         reached = true
         throw new Error('Injected after sales coverage')
       })
-      await expect(createReviewMutations(fixture).review(fixture.context(), orderId, { expectedVersion: 1 }))
+      await expect(createReviewMutations(fixture).review(fixture.context(), orderId, prepared))
         .rejects.toThrow('Injected after sales coverage')
       expect(reached).toBe(true)
       await assertNoNewPurchase(fixture, before)
+      expect(await fixture.prisma.purchaseOrderImageDraft.findUniqueOrThrow({ where: { id: prepared.imageDraftId } })).toEqual(imageBefore)
+      expect(await fixture.prisma.purchaseOrderDocument.count({ where: { purchaseOrderId: orderId } })).toBe(0)
       expect(await fixture.prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: orderId } })).toBe(0)
       expect(await fixture.prisma.salesOrder.findUnique({ where: { id: source.id }, select: { fulfillmentStatus: true, version: true } }))
         .toEqual({ fulfillmentStatus: 'PENDING', version: 1 })
@@ -144,13 +148,13 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
     })
   })
 
-  it('uses CUSTOM_MARK once on review and replays the original submission after disabling the rule', async () => {
+  it('uses CUSTOM_MARK once during image preparation and replays the original submission after disabling the rule', async () => {
     await withFixture(async (fixture) => {
       const request = await customInput(fixture)
       const context = fixture.context()
       const command = createCommands(fixture)
       const id = await command.create(context, request)
-      await createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 })
+      await createReviewMutations(fixture).prepareReviewShippingMarks(fixture.context(), id, { expectedVersion: 1 })
       const order = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id }, include: { parts: true, shippingMarkIssuance: { include: { rule: true } } } })
       expect(order.shippingMarkIssuance?.rule.ruleCode).toBe('CUSTOM_MARK')
       expect(order.parts[0].shippingMarkText).toBe(order.shippingMarkIssuance?.generatedNumber)
@@ -306,7 +310,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
       await acquiredPromise
       const before = await atomicFacts(fixture.prisma)
       try {
-        await expect(createReviewMutations(fixture).review(fixture.context(), id, { expectedVersion: 1 }))
+        await expect(createReviewMutations(fixture).prepareReviewShippingMarks(fixture.context(), id, { expectedVersion: 1 }))
           .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATE_CHANGED' })
       }
       finally { release(); await blocker }
@@ -314,7 +318,7 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
     })
   })
 
-  it('returns review capacity exhaustion without changing the pending order or consuming a second mark', async () => {
+  it('returns image mark capacity exhaustion without changing the pending order or consuming a second mark', async () => {
     await withFixture(async (fixture) => {
       const limited = await createTestShippingMarkRule(fixture.prisma, fixture.actor.id, 'LIMITED_MARK')
       const draft = await fixture.numberingCommands.update(fixture.configContext, limited.id, {
@@ -328,9 +332,9 @@ describe('purchase shipping mark atomicity with real PostgreSQL', () => {
       const command = createCommands(fixture)
       const first = await command.create(fixture.context(), request)
       const second = await command.create(fixture.context(), request)
-      await createReviewMutations(fixture).review(fixture.context(), first, { expectedVersion: 1 })
+      await createReviewMutations(fixture).prepareReviewShippingMarks(fixture.context(), first, { expectedVersion: 1 })
       const before = await atomicFacts(fixture.prisma)
-      await expect(createReviewMutations(fixture).review(fixture.context(), second, { expectedVersion: 1 })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE' })
+      await expect(createReviewMutations(fixture).prepareReviewShippingMarks(fixture.context(), second, { expectedVersion: 1 })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_SHIPPING_MARK_UNAVAILABLE' })
       await assertNoNewPurchase(fixture, before)
       expect(before.ledger.filter(row => row.consumerCode === MARK_CONSUMER)).toHaveLength(1)
     })

@@ -1,3 +1,4 @@
+import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
 import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
@@ -115,6 +116,7 @@ export function createReviewMutations(fixture: AtomicityFixture, wrap?: (transac
     new PurchaseOrderQueryService(fixture.prisma, lookup), fixture.salesProgress,
     fixture.numbering, fixture.resolver,
     new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, new PurchaseOrderQueryService(fixture.prisma, lookup)),
+    createImageReviewService(fixture.prisma, new PurchaseOrderQueryService(fixture.prisma, lookup), fixture.audit),
   )
 }
 
@@ -198,4 +200,11 @@ export async function prepareSalesSource(fixture: AtomicityFixture) {
     input: { ...request, purchaseType: 'SALES_LINKED', salesOrderId: source.id,
       lines: [{ ...request.lines[0], sourceSalesOrderLineId: source.lines[0].id }] },
   }
+}
+
+export async function prepareImageReview(fixture: AtomicityFixture, id: string, mutations = createReviewMutations(fixture)) {
+  const query = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+  const detail = await query.getById(id)
+  await mutations.prepareReviewShippingMarks(fixture.context(), id, { expectedVersion: detail.version })
+  return createImageReviewDraft(fixture.prisma, query, fixture.actor.id, id)
 }

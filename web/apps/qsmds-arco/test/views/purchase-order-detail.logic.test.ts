@@ -187,17 +187,22 @@ test('本地付款时间格式供 datetime-local 稳定回显', () => {
 
 test('审核提交绑定最新版本，限定审核中状态并规范化审核说明', () => {
   const detail = createDetail({ orderStatus: 'PENDING_REVIEW', paidAmount: '0.0000', version: 7 })
-  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, '  已核对  '), {
+  const image = { id: 'draft-1', purchaseOrderId: detail.id, orderVersion: 7, isCurrent: true }
+  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, '  已核对  ', image), {
     valid: true,
-    request: { expectedVersion: 7, reason: '已核对' },
+    request: { expectedVersion: 7, imageDraftId: 'draft-1', reason: '已核对' },
   })
-  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, ''), {
+  assert.deepEqual(buildPurchaseOrderReviewRequest(detail, '', image), {
     valid: true,
-    request: { expectedVersion: 7 },
+    request: { expectedVersion: 7, imageDraftId: 'draft-1' },
   })
-  assert.equal(buildPurchaseOrderReviewRequest(createDetail(), '').valid, false)
-  assert.equal(buildPurchaseOrderReviewRequest(detail, 'x'.repeat(501)).valid, false)
-  assert.equal(buildPurchaseOrderReviewRequest({ ...detail, version: 0 }, '').valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(createDetail(), '', image).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, 'x'.repeat(501), image).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest({ ...detail, version: 0 }, '', image).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', null).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, orderVersion: 6 }).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, isCurrent: false }).valid, false)
+  assert.equal(buildPurchaseOrderReviewRequest(detail, '', { ...image, purchaseOrderId: 'other-order' }).valid, false)
   assert.equal(buildPurchaseOrderCancellationRequest(detail, '').valid, true)
   assert.equal(purchaseOrderStatusHistoryValueLabel('PENDING_REVIEW'), '采购审核中')
 })

@@ -1,9 +1,9 @@
+import { reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { randomUUID } from 'node:crypto'
 import { performance } from 'node:perf_hooks'
 
 import type { Prisma } from '../src/generated/prisma/client'
 import { AuditService } from '../src/modules/audit/audit.service'
-import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseShipmentNumberBackfillService } from '../src/modules/purchase-orders/shipments/purchase-shipment-number-backfill.service'
 import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { createAtomicityFixture, createCommands, createReviewMutations, customInput, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
@@ -127,11 +127,10 @@ describe('historical shipment numbering migration and backfill', () => {
       const ids: string[] = []
       for (let index = 0; index < 3; index += 1) ids.push(await legacy.create(fixture.context(), await customInput(fixture)))
       generate.mockRestore()
+      await reviewHistoricalPurchase(fixture, ids[1])
+      await shipHistoricalPurchase(fixture, ids[1])
       await fixture.migrateShipmentNumbers()
       const review = createReviewMutations(fixture)
-      await review.review(fixture.context(), ids[1], { expectedVersion: 1 })
-      const shipped = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: ids[1] }, include: { parts: true } })
-      await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress).shipPurchaseOrder(fixture.context(), shipped.id, { expectedVersion: shipped.version, partIds: [shipped.parts[0].id], reason: 'Preserved actual shipment' })
       await review.updateOrderStatus(fixture.context(), ids[2], { toStatus: 'CANCELLED', reason: 'Preserved cancellation' })
       const partBefore = await fixture.prisma.purchaseOrderPart.findMany({ orderBy: { id: 'asc' }, include: { items: true } })
       const orderBefore = await fixture.prisma.purchaseOrder.findMany({ orderBy: { id: 'asc' } })

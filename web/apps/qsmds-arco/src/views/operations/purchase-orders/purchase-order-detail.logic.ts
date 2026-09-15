@@ -1,6 +1,7 @@
 import type {
   PurchaseOrderDetailDto,
   PurchaseOrderFulfillmentStatusRequestDto,
+  PurchaseOrderImageDraftDto,
   PurchaseOrderPaymentDto,
   PurchaseOrderPaymentRequestDto,
   PurchaseOrderPaymentVoidRequestDto,
@@ -168,14 +169,18 @@ export function buildPurchaseOrderFulfillmentRequest(
 
 /** 审核必须使用用户刚核对的详情版本，失败后重新读取才能再次确认。 */
 export function buildPurchaseOrderReviewRequest(
-  detail: Pick<PurchaseOrderDetailDto, 'orderStatus' | 'version'>,
+  detail: Pick<PurchaseOrderDetailDto, 'id' | 'orderStatus' | 'version'>,
   reason: string,
+  imageDraft: Pick<PurchaseOrderImageDraftDto, 'id' | 'purchaseOrderId' | 'orderVersion' | 'isCurrent'> | null,
 ): PurchaseOrderMutationBuildResult<PurchaseOrderReviewRequestDto> {
   if (detail.orderStatus !== 'PENDING_REVIEW') {
     return { valid: false, fieldError: '采购订单已不处于审核中，请刷新列表' }
   }
   if (!Number.isSafeInteger(detail.version) || detail.version < 1) {
     return { valid: false, fieldError: '当前订单版本不可用，请重新加载详情' }
+  }
+  if (!imageDraft?.id || !imageDraft.isCurrent || imageDraft.purchaseOrderId !== detail.id || imageDraft.orderVersion !== detail.version) {
+    return { valid: false, fieldError: '请先生成当前采购订单的图片并核对后再确认审核' }
   }
   const normalizedReason = optionalReason(reason)
   if (!normalizedReason.ok) {
@@ -185,6 +190,7 @@ export function buildPurchaseOrderReviewRequest(
     valid: true,
     request: {
       expectedVersion: detail.version,
+      imageDraftId: imageDraft.id,
       ...(normalizedReason.value === null ? {} : { reason: normalizedReason.value }),
     },
   }

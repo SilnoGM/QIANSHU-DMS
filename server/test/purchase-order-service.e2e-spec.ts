@@ -1,3 +1,4 @@
+import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
 import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
@@ -326,6 +327,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         tone: 'DEFAULT',
         value: input.value,
       })),
+      resolveStoredValueInTransaction: jest.fn((_tx: unknown, input: { value: string }) => Promise.resolve({ value: input.value, label: '采购 E2E 供应商', tone: 'DEFAULT', known: true, effectiveEnabled: true })),
       resolveStoredValue: jest.fn((
         input: { dictionaryCode: string, value: string },
       ) => Promise.resolve({
@@ -399,6 +401,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       numbering,
       markResolver,
       new PurchaseOrderWarehouseReceiptService(prisma, new AuditService(), queries),
+      createImageReviewService(prisma, queries, new AuditService()),
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })
@@ -414,6 +417,12 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       idempotencyKey,
       requestId: `purchase-e2e-${randomUUID()}`,
     }
+  }
+
+  async function imageReviewInput(id: string) {
+    const detail = await queries.getById(id)
+    await mutations.prepareReviewShippingMarks(context(), id, { expectedVersion: detail.version })
+    return createImageReviewDraft(prisma, queries, actorUserId, id)
   }
 
   function linkedInput(sourceSalesOrderLineId: string, quantity: number) {
@@ -570,9 +579,10 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
     await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version, partIds: created.parts.map(part => part.id) }))
       .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
+    const imageReview = await imageReviewInput(createdId)
     const reviewResults = await Promise.allSettled([
-      mutations.review(context(), createdId, { expectedVersion: created.version }),
-      mutations.review(context(), createdId, { expectedVersion: created.version }),
+      mutations.review(context(), createdId, imageReview),
+      mutations.review(context(), createdId, imageReview),
     ])
     expect(reviewResults.filter(result => result.status === 'fulfilled')).toHaveLength(1)
     expect(reviewResults.find(result => result.status === 'rejected')).toMatchObject({
@@ -582,7 +592,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       orderStatus: 'CONFIRMED', fulfillmentStatus: 'PREPARING',
       shippingMarkText: expect.stringMatching(/^MARK\d{8}$/u) as unknown,
       shippingMarks: [expect.stringMatching(/^MARK\d{8}$/u) as unknown],
-      orderNo: created.orderNo, version: created.version + 1,
+      orderNo: created.orderNo, version: created.version + 2,
     })
     await expect(prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: createdId } }))
       .resolves.toBe(2)
@@ -623,7 +633,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     expect(paidPage.items[0]).toMatchObject({
       id: createdId, paidAmount: '25.0000',
       paymentRecordSummary: paid.paymentRecordSummary,
-      documentSummary: { count: 0 },
+      documentSummary: { count: 1 },
       changeSummary: paid.changeSummary,
     })
     expect(paidPage.items[0]?.changeSummary.latest?.kind).toBe('STATUS')
@@ -682,8 +692,8 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       }],
       purchaseTotalAmount: '100', depositDueAmount: '30', balanceDueAmount: '70',
     })
-    const { orderNo, version } = await queries.getById(orderId)
-    await mutations.review(context(), orderId, { expectedVersion: version })
+    const { orderNo } = await queries.getById(orderId)
+    await mutations.review(context(), orderId, await imageReviewInput(orderId))
     for (const [paymentType, label] of [
       ['DEPOSIT', '定金凭证'], ['BALANCE', '尾款凭证'], ['OTHER', '其他付款凭证'],
     ] as const) {
@@ -715,7 +725,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     await expect(prisma.purchaseOrderPayment.count({ where: { purchaseOrderId: orderId } }))
       .resolves.toBe(3)
     await expect(prisma.purchaseOrderDocument.count({ where: { purchaseOrderId: orderId } }))
-      .resolves.toBe(3)
+      .resolves.toBe(4)
     await expect(queries.getById(orderId)).resolves.toMatchObject({
       paymentStatus: 'PARTIALLY_PAID', amounts: { paidAmount: '30.0000', outstandingAmount: '70.0000' },
     })
@@ -839,7 +849,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       orderBy: { id: 'asc' }, select: { id: true, version: true },
     })
     for (const [index, order] of pendingOrders.entries()) {
-      await mutations.review(context(), order.id, { expectedVersion: order.version })
+      await mutations.review(context(), order.id, await imageReviewInput(order.id))
       if (index < pendingOrders.length - 1) {
         await expect(prisma.salesOrder.findUniqueOrThrow({
           where: { id: salesOrderId }, select: { fulfillmentStatus: true },
@@ -1104,8 +1114,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       where: { id: salesOrderId }, select: { fulfillmentStatus: true },
     })).resolves.toEqual({ fulfillmentStatus: 'PENDING' })
     for (const orderId of [addedCatalogId, addedCustomId]) {
-      const order = await queries.getById(orderId)
-      await mutations.review(context(), orderId, { expectedVersion: order.version })
+      await mutations.review(context(), orderId, await imageReviewInput(orderId))
     }
     await expect(prisma.salesOrder.findUniqueOrThrow({
       where: { id: salesOrderId },
