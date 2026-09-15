@@ -96,21 +96,28 @@ function partTitle(partNumber: number): string {
         </div>
         <FaCollapsible :model-value="expandedPart === part.id">
           <div :id="`purchase-part-${detail.id}-${part.id}`" class="border-t border-border/70">
-            <div v-if="part.shippedAt" class="qs-type-meta text-muted-foreground p-4 space-y-2">
-              <p class="m-0 whitespace-pre-wrap">
-                发货时间：<DateTimeDisplay :value="part.shippedAt" /> · {{ part.shippedBy?.displayName || '未记录操作人' }}<br>
-                发货说明：{{ part.shipmentRemark || '—' }}
-              </p>
-              <dl class="m-0 flex gap-2 min-w-0 items-start">
-                <dt class="shrink-0">
-                  {{ t('purchaseOrderDrawer.parts.trackingNo') }}：
-                </dt>
-                <dd class="m-0 flex gap-2 min-w-0 items-start">
-                  <span class="min-w-0 [overflow-wrap:anywhere]" :class="part.trackingNo ? 'qs-type-data text-foreground' : ''">{{ part.trackingNo || t('purchaseOrderDrawer.parts.trackingNoMissing') }}</span>
-                  <CopyCellButton v-if="part.trackingNo" always-visible :text="part.trackingNo" :label="t('purchaseOrderDrawer.parts.trackingNo')" />
-                </dd>
-              </dl>
-            </div>
+            <dl v-if="part.shippedAt" class="qs-type-meta text-muted-foreground m-0 p-4 gap-x-2 gap-y-1 grid grid-cols-[max-content_minmax(0,1fr)] items-baseline">
+              <dt class="whitespace-nowrap">
+                发货时间：
+              </dt>
+              <dd class="m-0 flex flex-wrap gap-x-2 min-h-7 min-w-0 items-center">
+                <DateTimeDisplay :value="part.shippedAt" />
+                <span>· {{ part.shippedBy?.displayName || '未记录操作人' }}</span>
+              </dd>
+              <dt class="whitespace-nowrap">
+                发货说明：
+              </dt>
+              <dd class="m-0 flex min-h-7 min-w-0 items-center">
+                <span class="whitespace-pre-wrap [overflow-wrap:anywhere]">{{ part.shipmentRemark || '—' }}</span>
+              </dd>
+              <dt class="whitespace-nowrap">
+                {{ t('purchaseOrderDrawer.parts.trackingNo') }}：
+              </dt>
+              <dd class="m-0 flex gap-2 min-h-7 min-w-0 items-center">
+                <span class="min-w-0 [overflow-wrap:anywhere]" :class="part.trackingNo ? 'qs-type-data text-foreground' : ''">{{ part.trackingNo || t('purchaseOrderDrawer.parts.trackingNoMissing') }}</span>
+                <CopyCellButton v-if="part.trackingNo" always-visible :text="part.trackingNo" :label="t('purchaseOrderDrawer.parts.trackingNo')" />
+              </dd>
+            </dl>
             <dl v-if="part.warehouseReceivedAt" class="qs-type-meta m-0 px-4 pb-4 gap-3 grid sm:grid-cols-2">
               <div>
                 <dt class="text-muted-foreground mb-1">
