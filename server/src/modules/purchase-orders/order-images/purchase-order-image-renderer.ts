@@ -18,7 +18,8 @@ const MIN_LINE_HEIGHT = 132
 const FONT_DIRECTORY = resolve(__dirname, '../../../../deploy/fonts/noto-sans-sc')
 const FONT_FILE = resolve(FONT_DIRECTORY, 'NotoSansSC.ttf')
 // 固定白底单据采用项目 green.light 主色 oklch(0.527 0.154 150.069) 的 sRGB 值；不随浏览器主题变化。
-const COLORS = { primary: '#008236', ink: '#18221c', muted: '#6b756f', line: '#dce4de', soft: '#f2f7f3', white: '#ffffff' }
+// 醒目提示采用 light destructive 色 oklch(0.577 0.245 27.325) 的 sRGB 值。
+const COLORS = { primary: '#008236', destructive: '#e7000b', ink: '#18221c', muted: '#6b756f', line: '#dce4de', soft: '#f2f7f3', white: '#ffffff' }
 
 function escapeMarkup(value: string): string {
   return value.replace(/\p{Cc}/gu, character => character === '\n' || character === '\t' ? character : '')
@@ -226,7 +227,7 @@ class PurchaseOrderImageCanvas {
     this.advance(Math.max(label.height, number.height) + 44)
     const [mark, hint] = await Promise.all([
       this.text(`唛头：${part.shippingMarkText}`, CONTENT_WIDTH - 32, 24, COLORS.primary, true),
-      this.text('（请将此货件唛头贴到包装箱 / 货物上）', CONTENT_WIDTH - 32, 21, COLORS.muted),
+      this.text('（请将此货件唛头贴到包装箱 / 货物上）', CONTENT_WIDTH - 32, 24, COLORS.destructive, true),
     ])
     this.place(mark, MARGIN + 16, this.y)
     if (mark.width + 16 + hint.width <= CONTENT_WIDTH - 32) {
