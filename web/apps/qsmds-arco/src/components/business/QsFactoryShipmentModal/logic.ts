@@ -91,13 +91,33 @@ export function buildFactoryShipmentIntent(input: {
   readonly orders: readonly FactoryShipmentModalPurchaseOrder[]
   readonly selectedIds: readonly string[]
   readonly reason: string
+  readonly trackingNumbersByPart?: Readonly<Record<string, string>>
 }): FactoryShipmentIntent {
   const reason = input.reason.trim().normalize('NFKC')
   return {
     mode: input.mode,
-    targets: shipmentTargets(input),
+    targets: shipmentTargets(input).map((target) => {
+      // 草稿随勾选保留，只提交本次实际发出的货件，避免附带已取消选择的物流信息。
+      const trackingNumbers = target.partIds.flatMap((partId) => {
+        const value = input.trackingNumbersByPart?.[partId] ?? ''
+        const error = validateShipmentTrackingNo(value)
+        if (error) {
+          throw new Error(error)
+        }
+        const trackingNo = value.trim()
+        return trackingNo ? [{ partId, trackingNo }] : []
+      })
+      return trackingNumbers.length ? { ...target, trackingNumbers } : target
+    }),
     reason: reason.length === 0 ? null : reason,
   }
+}
+
+export function validateShipmentTrackingNo(value: string): 'tooLong' | 'controlCharacters' | null {
+  if (/\p{Cc}/u.test(value)) {
+    return 'controlCharacters'
+  }
+  return [...value.trim()].length > 100 ? 'tooLong' : null
 }
 
 export function calculateFactoryShipmentImpact(input: {

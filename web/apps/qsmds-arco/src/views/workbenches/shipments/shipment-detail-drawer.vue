@@ -31,7 +31,7 @@ const title = computed(() => props.detail
   ? `${formatShipmentNumber(props.detail.partNumber)} · ${t('purchaseShipmentDetail.title')}`
   : t('purchaseShipmentDetail.title'))
 const hasShipmentInformation = computed(() => props.detail && (
-  props.detail.shippedAt || props.detail.shippedBy || props.detail.shipmentRecordedAt || props.detail.shipmentRemark
+  props.detail.shippedAt || props.detail.shippedBy || props.detail.shipmentRecordedAt || props.detail.shipmentRemark || props.detail.trackingNo
 ))
 </script>
 
@@ -251,6 +251,15 @@ const hasShipmentInformation = computed(() => props.detail && (
           {{ t('purchaseShipmentDetail.shipment') }}
         </h3>
         <dl v-if="hasShipmentInformation" class="m-0 p-4 border border-border/70 rounded-lg bg-muted/20 gap-x-6 gap-y-4 grid sm:grid-cols-2">
+          <div class="min-w-0 sm:col-span-2">
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseShipmentDetail.trackingNo') }}
+            </dt>
+            <dd class="m-0 flex gap-2 min-w-0 items-start">
+              <span class="qs-type-data min-w-0 [overflow-wrap:anywhere]" :class="!detail.trackingNo && 'text-muted-foreground'">{{ detail.trackingNo || t('purchaseShipmentDetail.trackingNoMissing') }}</span>
+              <CopyCellButton v-if="detail.trackingNo" always-visible :text="detail.trackingNo" :label="t('purchaseShipmentDetail.trackingNo')" />
+            </dd>
+          </div>
           <div>
             <dt class="qs-type-meta text-muted-foreground mb-1">
               {{ t('purchaseShipmentDetail.shippedAt') }}

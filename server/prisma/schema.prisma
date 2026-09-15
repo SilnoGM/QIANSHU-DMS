@@ -1144,6 +1144,8 @@ model PurchaseOrderPart {
   shippedById String? @map("shipped_by_id") @db.Uuid
   shipmentRecordedAt DateTime? @map("shipment_recorded_at") @db.Timestamptz(6)
   shipmentRemark String? @map("shipment_remark") @db.VarChar(500)
+  // 发货时选填的承运物流单号，随发货事实保存，重放不得覆盖。
+  trackingNo String? @map("tracking_no") @db.VarChar(100)
   shippedBy User? @relation("PurchaseOrderPartShippedBy", fields: [shippedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   // 仓库确认收货事实；与发货事实分别冻结，不产生库存数量或资金变动。
   warehouseReceivedAt DateTime? @map("warehouse_received_at") @db.Timestamptz(6)

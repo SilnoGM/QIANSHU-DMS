@@ -260,7 +260,18 @@ describe('PurchaseOrderQueryService', () => {
     const detail = await fixture.service.getById('order-id')
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
-    expect(detail.parts).toEqual([{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null, items: [] }])
+    expect(detail.parts).toEqual([{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, trackingNo: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null, items: [] }])
+  })
+
+  it.each(['SF1234567890', null])('returns shipment tracking number %s in order details', async trackingNo => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      parts: [{ id: 'part-1', shipmentNo: 'PKG/01', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'MARK/01', trackingNo, items: [] }],
+    }))
+    expect((await fixture.service.getById('order-id')).parts[0]).toHaveProperty('trackingNo', trackingNo)
+    expect(fixture.prisma.purchaseOrder.findUnique).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ parts: expect.objectContaining({ select: expect.objectContaining({ trackingNo: true }) as unknown }) as unknown }) as unknown,
+    }))
   })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()

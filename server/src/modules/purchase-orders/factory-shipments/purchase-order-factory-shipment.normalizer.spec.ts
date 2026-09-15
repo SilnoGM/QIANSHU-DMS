@@ -4,6 +4,7 @@ import {
 } from './purchase-order-factory-shipment.normalizer'
 
 const PURCHASE_ORDER_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const SECOND_PART_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 describe('purchase order factory shipment normalizer', () => {
   it('normalizes purchase shipment reason and version', () => {
@@ -27,6 +28,48 @@ describe('purchase order factory shipment normalizer', () => {
       targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], expectedVersion: 2 }],
       reason: null,
     })
+  })
+
+  it('trims optional tracking numbers without changing the carrier identifier', () => {
+    const trackingNumbers = [
+      { partId: PURCHASE_ORDER_ID, trackingNo: '  ＳＦ-123  ' },
+      { partId: SECOND_PART_ID, trackingNo: '   ' },
+    ]
+    const expected = [
+      { partId: PURCHASE_ORDER_ID, trackingNo: 'ＳＦ-123' },
+      { partId: SECOND_PART_ID, trackingNo: null },
+    ]
+    const input = { partIds: [PURCHASE_ORDER_ID, SECOND_PART_ID], expectedVersion: 1, trackingNumbers }
+    expect(normalizePurchaseOrderFactoryShipmentRequest(input)).toMatchObject({ trackingNumbers: expected })
+    expect(normalizeSalesOrderFactoryShipmentRequest({
+      mode: 'SELECTED', targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, ...input }],
+    })).toMatchObject({ targets: [{ trackingNumbers: expected }] })
+    expect(normalizePurchaseOrderFactoryShipmentRequest({
+      ...input, trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo: null }],
+    })).toMatchObject({ trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo: null }] })
+  })
+
+  it.each([
+    null,
+    {},
+    [{ partId: SECOND_PART_ID, trackingNo: 'SF-123' }],
+    [{ partId: PURCHASE_ORDER_ID, trackingNo: 'SF-123' }, { partId: PURCHASE_ORDER_ID, trackingNo: 'SF-456' }],
+    [{ partId: PURCHASE_ORDER_ID, trackingNo: 'a'.repeat(101) }],
+    [{ partId: PURCHASE_ORDER_ID, trackingNo: 'SF\n123' }],
+    [{ partId: PURCHASE_ORDER_ID, trackingNo: '\tSF123' }],
+    [{ partId: PURCHASE_ORDER_ID, trackingNo: 'SF\u0085123' }],
+    [{ partId: PURCHASE_ORDER_ID, trackingNo: 123 }],
+    [{ partId: PURCHASE_ORDER_ID }],
+    [{ partId: 'invalid', trackingNo: 'SF123' }],
+    [{ partId: PURCHASE_ORDER_ID, trackingNo: 'SF123', unknown: true }],
+    Array(1001).fill({ partId: PURCHASE_ORDER_ID, trackingNo: null }),
+  ])('rejects malformed, repeated or unselected tracking numbers %#', (trackingNumbers) => {
+    const input = { partIds: [PURCHASE_ORDER_ID], expectedVersion: 1, trackingNumbers }
+    expect(() => normalizePurchaseOrderFactoryShipmentRequest(input))
+      .toThrow(expect.objectContaining({ code: 'VALIDATION_FAILED' }))
+    expect(() => normalizeSalesOrderFactoryShipmentRequest({
+      mode: 'SELECTED', targets: [{ purchaseOrderId: PURCHASE_ORDER_ID, ...input }],
+    })).toThrow(expect.objectContaining({ code: 'VALIDATION_FAILED' }))
   })
 
   it.each([

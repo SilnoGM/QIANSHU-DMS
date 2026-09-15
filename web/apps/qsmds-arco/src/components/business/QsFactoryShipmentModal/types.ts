@@ -34,6 +34,7 @@ export interface FactoryShipmentPart {
   readonly shippedBy?: { readonly id: string, readonly displayName: string } | null
   readonly shipmentRecordedAt: string | null
   readonly shipmentRemark: string | null
+  readonly trackingNo?: string | null
   readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
 }
 
@@ -71,6 +72,7 @@ export interface FactoryShipmentIntent {
     readonly purchaseOrderId: string
     readonly expectedVersion: number
     readonly partIds: readonly string[]
+    readonly trackingNumbers?: readonly { readonly partId: string, readonly trackingNo: string | null }[]
   }[]
   readonly reason: string | null
 }

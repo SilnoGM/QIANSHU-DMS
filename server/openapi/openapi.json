@@ -61676,6 +61676,12 @@
             "maxLength": 500,
             "nullable": true
           },
+          "trackingNo": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true,
+            "description": "货件物流单号；未填写或历史未记录时为空"
+          },
           "shippedBy": {
             "nullable": true,
             "type": "object",
@@ -61732,6 +61738,7 @@
           "shippedById",
           "shipmentRecordedAt",
           "shipmentRemark",
+          "trackingNo",
           "shippedBy",
           "warehouseReceivedAt",
           "warehouseReceivedById",
@@ -62654,6 +62661,26 @@
           "message"
         ]
       },
+      "FactoryShipmentTrackingNumberDto": {
+        "type": "object",
+        "properties": {
+          "partId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "本次已选中的货件 ID，同一请求不得重复"
+          },
+          "trackingNo": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true,
+            "description": "物流单号；空白或 null 表示未填写，不改写已有单号"
+          }
+        },
+        "required": [
+          "partId",
+          "trackingNo"
+        ]
+      },
       "PurchaseOrderFactoryShipmentRequestDto": {
         "type": "object",
         "properties": {
@@ -62664,6 +62691,13 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "trackingNumbers": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FactoryShipmentTrackingNumberDto"
             }
           },
           "expectedVersion": {
@@ -62974,6 +63008,13 @@
               "type": "string"
             }
           },
+          "trackingNumbers": {
+            "maxItems": 1000,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FactoryShipmentTrackingNumberDto"
+            }
+          },
           "purchaseOrderId": {
             "type": "string",
             "format": "uuid"
@@ -63208,6 +63249,12 @@
             "type": "string",
             "nullable": true
           },
+          "trackingNo": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true,
+            "description": "货件物流单号；未填写或历史未记录时为空"
+          },
           "warehouseReceivedAt": {
             "type": "string",
             "format": "date-time",
@@ -63269,6 +63316,7 @@
           "shippedBy",
           "shipmentRecordedAt",
           "shipmentRemark",
+          "trackingNo",
           "warehouseReceivedAt",
           "warehouseReceivedById",
           "warehouseRecordedAt",
@@ -63488,6 +63536,12 @@
             "type": "string",
             "nullable": true
           },
+          "trackingNo": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true,
+            "description": "货件物流单号；未填写或历史未记录时为空"
+          },
           "warehouseReceivedAt": {
             "type": "string",
             "format": "date-time",
@@ -63555,6 +63609,7 @@
           "shippedBy",
           "shipmentRecordedAt",
           "shipmentRemark",
+          "trackingNo",
           "warehouseReceivedAt",
           "warehouseReceivedById",
           "warehouseRecordedAt",

@@ -38,6 +38,8 @@
     "noImage": "暂无产品图片",
     "noProducts": "暂无货件产品",
     "shipment": "发货信息",
+    "trackingNo": "物流单号",
+    "trackingNoMissing": "未填写",
     "shippedAt": "发货时间",
     "shippedBy": "发货操作人",
     "shipmentRecordedAt": "发货记录时间",

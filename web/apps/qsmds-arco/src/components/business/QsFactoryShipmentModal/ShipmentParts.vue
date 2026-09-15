@@ -3,14 +3,18 @@ import type { FactoryShipmentModalPurchaseOrder, FactoryShipmentPart } from './t
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
-import { isPendingShipmentPart } from './logic'
+import { isPendingShipmentPart, validateShipmentTrackingNo } from './logic'
 
 const props = defineProps<{
   order: FactoryShipmentModalPurchaseOrder
   selectedIds: readonly string[]
+  trackingNumbersByPart: Readonly<Record<string, string>>
   disabled?: boolean
 }>()
-const emit = defineEmits<{ toggle: [partId: string] }>()
+const emit = defineEmits<{
+  toggle: [partId: string]
+  updateTrackingNo: [partId: string, value: string]
+}>()
 const { t } = useI18n()
 const expandedId = ref<string | null>(null)
 const records = computed(() => props.order.parts.map(part => ({
@@ -36,6 +40,10 @@ function toggleCard(event: MouseEvent, part: FactoryShipmentPart): void {
     return
   }
   expandedId.value = expandedId.value === part.id ? null : part.id
+}
+function trackingError(partId: string): string | null {
+  const error = validateShipmentTrackingNo(props.trackingNumbersByPart[partId] ?? '')
+  return error ? t(`factoryShipment.tracking.validation.${error}`) : null
 }
 </script>
 
@@ -76,6 +84,38 @@ function toggleCard(event: MouseEvent, part: FactoryShipmentPart): void {
           </Transition>
         </div>
         <CopyCellButton v-if="part.shippingMarkText" always-visible :text="part.shippingMarkText" label="货件唛头" />
+      </div>
+      <div
+        v-if="isPendingShipmentPart(part) && selectedIds.includes(part.id)"
+        data-slot="shipment-tracking-input"
+        class="px-3 pb-3 cursor-default sm:pl-10"
+        @click.stop
+      >
+        <label :for="`shipment-tracking-${part.id}`" class="qs-type-meta text-muted-foreground mb-1.5 block">
+          {{ t('factoryShipment.tracking.optionalLabel') }}
+        </label>
+        <FaInput
+          :id="`shipment-tracking-${part.id}`"
+          :model-value="trackingNumbersByPart[part.id] ?? ''"
+          class="w-full"
+          input-class="font-mono"
+          :disabled="disabled"
+          :maxlength="100"
+          :placeholder="t('factoryShipment.tracking.placeholder')"
+          :aria-invalid="trackingError(part.id) ? true : undefined"
+          :aria-describedby="trackingError(part.id) ? `shipment-tracking-error-${part.id}` : undefined"
+          :spellcheck="false"
+          clearable
+          @update:model-value="emit('updateTrackingNo', part.id, String($event ?? ''))"
+        />
+        <p v-if="trackingError(part.id)" :id="`shipment-tracking-error-${part.id}`" class="qs-type-meta text-destructive m-0 mt-1.5" role="alert">
+          {{ trackingError(part.id) }}
+        </p>
+      </div>
+      <div v-else-if="part.shippedAt" class="qs-type-meta px-3 pb-3 flex gap-2 items-start sm:pl-10">
+        <span class="text-muted-foreground shrink-0">{{ t('factoryShipment.tracking.label') }}</span>
+        <span class="font-mono min-w-0 break-all" :class="!part.trackingNo && 'text-muted-foreground'">{{ part.trackingNo || t('factoryShipment.tracking.empty') }}</span>
+        <CopyCellButton v-if="part.trackingNo" always-visible :text="part.trackingNo" :label="t('factoryShipment.tracking.label')" />
       </div>
       <FaCollapsible :model-value="expandedId === part.id">
         <div :id="`shipment-part-${part.id}`" class="p-4 border-t border-border/70 space-y-3">

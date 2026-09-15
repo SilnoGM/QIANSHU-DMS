@@ -8,6 +8,8 @@
       "title": "采购货件",
       "part": "货件-{number}",
       "shipmentNo": "货件编号",
+      "trackingNo": "物流单号",
+      "trackingNoMissing": "未填写",
       "unnumbered": "未编号",
       "quantity": "本货件数量",
       "shippingMark": "货件唛头",

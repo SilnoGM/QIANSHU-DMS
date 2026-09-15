@@ -19,7 +19,7 @@ const LINE_SELECT = {
 
 const PART_SELECT = {
   id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true, createdAt: true,
-  shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true,
+  shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true,
   warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
   warehouseReceivedBy: { select: { id: true, displayName: true } },
   purchaseOrder: { select: {
@@ -107,6 +107,7 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto): PurchaseShip
     shippingMarkText: row.shippingMarkText, createdAt: row.createdAt.toISOString(),
     shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: row.shippedBy,
     shipmentRecordedAt: row.shipmentRecordedAt?.toISOString() ?? null, shipmentRemark: row.shipmentRemark,
+    trackingNo: row.trackingNo ?? null,
     warehouseReceivedAt: row.warehouseReceivedAt?.toISOString() ?? null, warehouseReceivedById: row.warehouseReceivedById,
     warehouseRecordedAt: row.warehouseRecordedAt?.toISOString() ?? null, warehouseRemark: row.warehouseRemark,
     warehouseReceivedBy: row.warehouseReceivedBy,

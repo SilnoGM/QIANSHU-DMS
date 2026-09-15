@@ -696,6 +696,7 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
     const response = await purchaseOrdersApi.factoryShipment(target.purchaseOrderId, {
       expectedVersion: target.expectedVersion,
       partIds: [...target.partIds],
+      trackingNumbers: target.trackingNumbers?.map(item => ({ ...item })),
       reason: intent.reason,
     }, controller.signal)
     if (controller.signal.aborted) {

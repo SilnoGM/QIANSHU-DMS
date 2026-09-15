@@ -24,6 +24,7 @@ import { SalesOrderPurchaseCoverageService } from '../sales-order-purchase-cover
 import {
   type FactoryShipmentMutationContext,
   type FactoryShipmentTarget,
+  type FactoryShipmentTrackingNumber,
   normalizeFactoryShipmentContext,
   normalizePurchaseOrderFactoryShipmentRequest,
   normalizeSalesOrderFactoryShipmentRequest,
@@ -49,7 +50,7 @@ interface FactoryShipmentPurchaseOrder {
   readonly purchaseType: PurchaseOrderType
   readonly salesOrderId: string | null
   readonly version: number
-  readonly parts: readonly { readonly id: string; readonly partNumber: number; readonly status: string; readonly shippedAt: Date | null }[]
+  readonly parts: readonly { readonly id: string; readonly partNumber: number; readonly status: string; readonly shippedAt: Date | null; readonly trackingNo: string | null }[]
 }
 
 interface FactoryShipmentSalesOrder {
@@ -175,7 +176,7 @@ export class PurchaseOrderFactoryShipmentService {
       if (order === undefined) return shipmentNotAllowed('采购订单已取消或不再有效')
       this.validatePendingTargetVersion(order, input.expectedVersion)
       this.validateShipmentTargetState(order)
-      this.validateParts(order, input.partIds)
+      this.validateParts(order, input.partIds, input.trackingNumbers)
 
       const result = await this.advancePurchaseOrder(
         transaction,
@@ -184,6 +185,7 @@ export class PurchaseOrderFactoryShipmentService {
         input.partIds,
         input.reason,
         'PURCHASE_ORDER',
+        input.trackingNumbers,
       )
       const statusById = new Map(scope.filter(item => item.orderStatus === 'CONFIRMED').map(item => [
         item.id,
@@ -233,7 +235,7 @@ export class PurchaseOrderFactoryShipmentService {
       const targetOrders = targets.map((target) => {
         const order = orderById.get(target.purchaseOrderId)
         if (order === undefined) return targetInvalid()
-        return { order, expectedVersion: target.expectedVersion, partIds: target.partIds }
+        return { order, expectedVersion: target.expectedVersion, partIds: target.partIds, trackingNumbers: target.trackingNumbers }
       })
 
       if (input.mode === 'ALL_PENDING') {
@@ -242,7 +244,7 @@ export class PurchaseOrderFactoryShipmentService {
       for (const target of targetOrders) {
         this.validatePendingTargetVersion(target.order, target.expectedVersion)
         this.validateShipmentTargetState(target.order)
-        this.validateParts(target.order, target.partIds)
+        this.validateParts(target.order, target.partIds, target.trackingNumbers)
       }
       const hasPendingTarget = targetOrders.some(target => (
         isPendingShipment(target.order.fulfillmentStatus)
@@ -266,6 +268,7 @@ export class PurchaseOrderFactoryShipmentService {
           target.partIds,
           input.reason,
           'SALES_ORDER',
+          target.trackingNumbers,
         ))
       }
       const statusById = new Map(orders
@@ -310,13 +313,22 @@ export class PurchaseOrderFactoryShipmentService {
     }
   }
 
-  private validateParts(order: FactoryShipmentPurchaseOrder, partIds: readonly string[]): void {
+  private validateParts(
+    order: FactoryShipmentPurchaseOrder,
+    partIds: readonly string[],
+    trackingNumbers: readonly FactoryShipmentTrackingNumber[] = [],
+  ): void {
     if (order.parts.length === 0) return targetInvalid()
     const selected = partIds.map(id => order.parts.find(part => part.id === id))
     if (selected.some(part => part === undefined || part.status !== 'ACTIVE')) return targetInvalid()
     const shippedCount = selected.filter(part => part!.shippedAt !== null).length
     if (shippedCount > 0 && shippedCount < selected.length) return stateChanged()
     if (shippedCount === 0 && isShipmentSatisfied(order.fulfillmentStatus)) return stateChanged()
+    // 已发货重放只可确认既有事实，不能借幂等路径补填或更换物流单号。
+    for (const entry of trackingNumbers) {
+      const part = selected.find(item => item!.id === entry.partId)!
+      if (part.shippedAt !== null && entry.trackingNo !== null && part.trackingNo !== entry.trackingNo) return stateChanged()
+    }
   }
 
   private assertCompletePendingTargetSet(
@@ -344,6 +356,7 @@ export class PurchaseOrderFactoryShipmentService {
     partIds: readonly string[],
     reason: string | null,
     source: 'PURCHASE_ORDER' | 'SALES_ORDER',
+    trackingNumbers: readonly FactoryShipmentTrackingNumber[] = [],
   ): Promise<FactoryShipmentResult['purchaseOrders'][number]> {
     if (partIds.every(id => order.parts.some(part => part.id === id && part.shippedAt !== null))) {
       return {
@@ -371,11 +384,26 @@ export class PurchaseOrderFactoryShipmentService {
       fromStatus = 'PREPARING'
     }
     const shippedAt = new Date()
-    const updated = await transaction.purchaseOrderPart.updateMany({
-      where: { purchaseOrderId: order.id, id: { in: [...partIds] }, status: 'ACTIVE', shippedAt: null },
-      data: { shippedAt, shippedById: context.actorUserId, shipmentRecordedAt: shippedAt, shipmentRemark: reason },
-    })
-    if (updated.count !== partIds.length) return stateChanged()
+    const trackingByPartId = new Map(trackingNumbers.map(entry => [entry.partId, entry.trackingNo]))
+    const groups = new Map<string | null, string[]>()
+    for (const partId of partIds) {
+      const trackingNo = trackingByPartId.get(partId) ?? null
+      const group = groups.get(trackingNo) ?? []
+      group.push(partId)
+      groups.set(trackingNo, group)
+    }
+    // 数据库把发货事实冻结；按单号分组，同次条件更新写入单号和发货事实。
+    // 未填单号不写该列，任一组竞争失败都让外层事务回滚全部发货。
+    for (const [trackingNo, ids] of groups) {
+      const updated = await transaction.purchaseOrderPart.updateMany({
+        where: { purchaseOrderId: order.id, id: { in: ids }, status: 'ACTIVE', shippedAt: null },
+        data: {
+          shippedAt, shippedById: context.actorUserId, shipmentRecordedAt: shippedAt, shipmentRemark: reason,
+          ...(trackingNo === null ? {} : { trackingNo }),
+        },
+      })
+      if (updated.count !== ids.length) return stateChanged()
+    }
     const toStatus = order.parts.filter(part => part.status === 'ACTIVE')
       .every(part => part.shippedAt !== null || partIds.includes(part.id)) ? 'SHIPPED' : 'PARTIALLY_SHIPPED'
     if (fromStatus !== toStatus) assertPurchaseOrderFulfillmentTransition(fromStatus, toStatus, {
@@ -476,7 +504,7 @@ export class PurchaseOrderFactoryShipmentService {
         purchaseType: true,
         salesOrderId: true,
         version: true,
-        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true } },
+        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true, trackingNo: true } },
       },
     })
   }
@@ -500,7 +528,7 @@ export class PurchaseOrderFactoryShipmentService {
         purchaseType: true,
         salesOrderId: true,
         version: true,
-        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true } },
+        parts: { select: { id: true, partNumber: true, status: true, shippedAt: true, trackingNo: true } },
       },
     })
   }

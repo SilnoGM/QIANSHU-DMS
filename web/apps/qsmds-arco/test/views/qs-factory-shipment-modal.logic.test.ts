@@ -9,6 +9,7 @@ import {
   defaultShipmentSelection,
   getPurchaseShipmentStatusMeta,
   sortFactoryShipmentOrders,
+  validateShipmentTrackingNo,
 } from '../../src/components/business/QsFactoryShipmentModal/logic'
 
 function order(
@@ -124,4 +125,38 @@ test('只自动选择唯一未发货件，空货件及已发货件不能生成�
   const shipped = order('done', 'SHIPPED')
   assert.deepEqual(buildFactoryShipmentIntent({ mode: 'SELECTED', orders: [shipped], selectedIds: ['done-part'], reason: '' }).targets, [])
   assert.deepEqual(buildFactoryShipmentIntent({ mode: 'ALL_PENDING', orders: [{ ...pending, parts: [] }], selectedIds: [], reason: '' }).targets, [])
+})
+
+test('物流单号只提交选中待发货件，去除首尾空格但保留大小写和全半角', () => {
+  const orders = [order('a', 'ORDERED'), order('b', 'PREPARING'), order('done', 'SHIPPED')]
+  const intent = buildFactoryShipmentIntent({
+    mode: 'SELECTED',
+    orders,
+    selectedIds: ['a-part', 'done-part', 'missing'],
+    reason: '',
+    trackingNumbersByPart: { 'a-part': '  ＳＦab-１２3  ', 'b-part': 'UNSELECTED', 'done-part': 'SHIPPED', 'missing': 'UNKNOWN' },
+  })
+  assert.deepEqual(intent.targets, [{ purchaseOrderId: 'a', expectedVersion: 2, partIds: ['a-part'], trackingNumbers: [{ partId: 'a-part', trackingNo: 'ＳＦab-１２3' }] }])
+})
+
+test('未填写和仅空格的物流单号不进入请求，全选模式保留每个已填货件的独立编号', () => {
+  const orders = [order('a', 'ORDERED'), order('b', 'PREPARING'), order('c', 'PREPARING')]
+  const intent = buildFactoryShipmentIntent({ mode: 'ALL_PENDING', orders, selectedIds: [], reason: '', trackingNumbersByPart: { 'a-part': '  ', 'c-part': 'JD-123' } })
+  assert.deepEqual(intent.targets, [
+    { purchaseOrderId: 'a', expectedVersion: 2, partIds: ['a-part'] },
+    { purchaseOrderId: 'b', expectedVersion: 2, partIds: ['b-part'] },
+    { purchaseOrderId: 'c', expectedVersion: 2, partIds: ['c-part'], trackingNumbers: [{ partId: 'c-part', trackingNo: 'JD-123' }] },
+  ])
+})
+
+test('物流单号限制100字符且拒绝控制字符，未选中错误草稿不影响提交', () => {
+  assert.equal(validateShipmentTrackingNo('A'.repeat(100)), null)
+  assert.equal(validateShipmentTrackingNo(` ${'A'.repeat(100)} `), null)
+  assert.equal(validateShipmentTrackingNo('A'.repeat(101)), 'tooLong')
+  for (const value of ['A\nB', 'A\tB', 'A\u0000B', 'A\u007FB', 'A\u0085B']) {
+    assert.equal(validateShipmentTrackingNo(value), 'controlCharacters')
+  }
+  const input = { mode: 'SELECTED' as const, orders: [order('a', 'ORDERED')], selectedIds: ['a-part'], reason: '' }
+  assert.throws(() => buildFactoryShipmentIntent({ ...input, trackingNumbersByPart: { 'a-part': 'A\nB' } }), /controlCharacters/u)
+  assert.doesNotThrow(() => buildFactoryShipmentIntent({ ...input, trackingNumbersByPart: { 'not-selected': 'A\nB' } }))
 })

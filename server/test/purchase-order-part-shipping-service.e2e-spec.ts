@@ -52,7 +52,7 @@ describe('purchase part shipment service with isolated PostgreSQL', () => {
     try {
       const order = await createThreeParts(fixture)
       const service = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress)
-      const request = { expectedVersion: order.version, partIds: [order.parts[0].id], reason: '首件' }
+      const request = { expectedVersion: order.version, partIds: [order.parts[0].id], reason: '首件', trackingNumbers: [{ partId: order.parts[0].id, trackingNo: 'SF-FIRST' }] }
       const results = await Promise.allSettled([
         service.shipPurchaseOrder(fixture.context(), order.id, request),
         service.shipPurchaseOrder(fixture.context(), order.id, request),
@@ -60,6 +60,7 @@ describe('purchase part shipment service with isolated PostgreSQL', () => {
       expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
       expect(results.find(result => result.status === 'rejected')).toMatchObject({ reason: { code: 'FACTORY_SHIPMENT_STATE_CHANGED' } })
       expect(await fixture.prisma.purchaseOrderPart.count({ where: { purchaseOrderId: order.id, shippedAt: { not: null } } })).toBe(1)
+      expect(await fixture.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: order.parts[0].id } })).toMatchObject({ trackingNo: 'SF-FIRST' })
       expect(await fixture.prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: order.id, toStatus: 'PARTIALLY_SHIPPED' } })).toBe(1)
       await expect(service.shipPurchaseOrder(fixture.context(), order.id, request)).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
       const current = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: order.id } })
@@ -67,6 +68,51 @@ describe('purchase part shipment service with isolated PostgreSQL', () => {
       expect(result.purchaseOrders[0]).toMatchObject({ changed: true, fulfillmentStatus: 'SHIPPED' })
       expect(await fixture.prisma.purchaseOrderPart.count({ where: { purchaseOrderId: order.id, shippedAt: { not: null } } })).toBe(3)
       expect(await fixture.prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: order.id, toStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } } })).toBe(2)
+    }
+    finally { await fixture.dispose() }
+  })
+
+  it('stores optional tracking numbers per part and freezes them together with shipment facts', async () => {
+    const fixture = await createAtomicityFixture()
+    try {
+      const order = await createThreeParts(fixture)
+      const service = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress)
+      const trackingNumbers = [
+        { partId: order.parts[0].id, trackingNo: '  ＳＦ-123  ' },
+        { partId: order.parts[1].id, trackingNo: 'YT-456' },
+        { partId: order.parts[2].id, trackingNo: null },
+      ]
+      // 未发货不得单独预填；物流单号必须与同一次发货事实一起冻结。
+      await expect(fixture.prisma.purchaseOrderPart.update({
+        where: { id: order.parts[0].id }, data: { trackingNo: 'EARLY' },
+      })).rejects.toThrow()
+      await expect(service.shipPurchaseOrder(fixture.context(), order.id, {
+        expectedVersion: order.version, partIds: order.parts.map(part => part.id), trackingNumbers,
+      })).resolves.toMatchObject({ changedPurchaseOrderCount: 1, purchaseOrders: [{ fulfillmentStatus: 'SHIPPED' }] })
+
+      const readParts = () => fixture.prisma.purchaseOrderPart.findMany({
+        where: { purchaseOrderId: order.id }, orderBy: { partNumber: 'asc' },
+      })
+      const facts = await readParts()
+      expect(facts.map(part => part.trackingNo)).toEqual(['ＳＦ-123', 'YT-456', null])
+      expect(facts.every(part => part.shippedAt !== null && part.shippedById === fixture.actor.id)).toBe(true)
+      expect(new Set(facts.map(part => part.shippedAt!.toISOString())).size).toBe(1)
+      for (const replayTracking of [trackingNumbers, undefined]) {
+        await expect(service.shipPurchaseOrder(fixture.context(), order.id, {
+          expectedVersion: order.version, partIds: order.parts.map(part => part.id), trackingNumbers: replayTracking,
+        })).resolves.toMatchObject({ changedPurchaseOrderCount: 0 })
+      }
+      for (const part of facts) {
+        await expect(service.shipPurchaseOrder(fixture.context(), order.id, {
+          expectedVersion: order.version, partIds: [part.id],
+          trackingNumbers: [{ partId: part.id, trackingNo: 'REPLACEMENT' }],
+        })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
+        await expect(fixture.prisma.purchaseOrderPart.update({
+          where: { id: part.id }, data: { trackingNo: 'REPLACEMENT' },
+        })).rejects.toThrow()
+      }
+      expect(await readParts()).toEqual(facts)
+      expect(await fixture.prisma.purchaseOrderStatusHistory.count({ where: { purchaseOrderId: order.id, toStatus: 'SHIPPED' } })).toBe(1)
     }
     finally { await fixture.dispose() }
   })

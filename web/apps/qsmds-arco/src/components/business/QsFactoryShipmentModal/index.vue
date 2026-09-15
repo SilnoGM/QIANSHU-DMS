@@ -12,7 +12,9 @@ import {
   defaultShipmentSelection,
   getPurchaseShipmentStatusMeta,
   isPendingFactoryShipment,
+  isPendingShipmentPart,
   sortFactoryShipmentOrders,
+  validateShipmentTrackingNo,
 } from './logic'
 import ShipmentParts from './ShipmentParts.vue'
 
@@ -41,6 +43,7 @@ const emit = defineEmits<{
 const selectionMode = ref<FactoryShipmentSelectionMode>('SELECTED')
 const selectedIds = ref<string[]>([])
 const reason = ref('')
+const trackingNumbersByPart = ref<Record<string, string>>({})
 
 const sortedOrders = computed(() => sortFactoryShipmentOrders(
   props.context?.purchaseOrders ?? [],
@@ -52,11 +55,16 @@ const impact = computed(() => calculateFactoryShipmentImpact({
   orders: sortedOrders.value,
   selectedIds: selectedIds.value,
 }))
+const trackingNumberErrors = computed(() => sortedOrders.value
+  .filter(isPendingFactoryShipment)
+  .flatMap(order => order.parts.filter(isPendingShipmentPart))
+  .some(part => selectedIds.value.includes(part.id) && validateShipmentTrackingNo(trackingNumbersByPart.value[part.id] ?? '')))
 const canSubmit = computed(() => (
   !props.loading
   && !props.submitting
   && !props.error
   && impact.value.selectedCount > 0
+  && !trackingNumberErrors.value
 ))
 const title = computed(() => props.mode === 'SALES_ORDER'
   ? '确认工厂发货范围'
@@ -67,8 +75,15 @@ const description = computed(() => props.mode === 'SALES_ORDER'
 
 function resetDraft(_mode: FactoryShipmentModalMode): void {
   reason.value = ''
+  trackingNumbersByPart.value = {}
   selectionMode.value = 'SELECTED'
   selectedIds.value = defaultShipmentSelection(sortedOrders.value)
+}
+
+function updateTrackingNo(partId: string, value: string): void {
+  if (!props.submitting) {
+    trackingNumbersByPart.value[partId] = value
+  }
 }
 
 function setSelectionMode(mode: FactoryShipmentSelectionMode): void {
@@ -114,6 +129,7 @@ function submit(): void {
     orders: sortedOrders.value,
     selectedIds: selectedIds.value,
     reason: reason.value,
+    trackingNumbersByPart: trackingNumbersByPart.value,
   }))
 }
 
@@ -124,6 +140,7 @@ watch(
       resetDraft(props.mode)
     }
   },
+  { immediate: true },
 )
 
 watch(
@@ -197,7 +214,7 @@ watch(
       <div data-slot="factory-shipment-order-list" class="pr-1 overscroll-contain flex-1 min-h-0 overflow-y-auto space-y-4">
         <template v-if="mode === 'PURCHASE_ORDER' && primaryOrder">
           <slot name="purchase-content" />
-          <ShipmentParts :order="primaryOrder" :selected-ids="selectedIds" :disabled="submitting" @toggle="togglePart" />
+          <ShipmentParts :order="primaryOrder" :selected-ids="selectedIds" :tracking-numbers-by-part="trackingNumbersByPart" :disabled="submitting" @toggle="togglePart" @update-tracking-no="updateTrackingNo" />
         </template>
         <section v-for="order in mode === 'SALES_ORDER' ? sortedOrders : []" :key="order.id" class="space-y-3">
           <div class="flex flex-wrap gap-3 items-center justify-between">
@@ -212,7 +229,7 @@ watch(
           <p class="qs-type-data whitespace-pre-wrap break-all">
             基础唛头：{{ order.shippingMarkText || '未记录' }}
           </p>
-          <ShipmentParts :order="order" :selected-ids="selectedIds" :disabled="submitting" @toggle="togglePart" />
+          <ShipmentParts :order="order" :selected-ids="selectedIds" :tracking-numbers-by-part="trackingNumbersByPart" :disabled="submitting" @toggle="togglePart" @update-tracking-no="updateTrackingNo" />
         </section>
       </div>
 

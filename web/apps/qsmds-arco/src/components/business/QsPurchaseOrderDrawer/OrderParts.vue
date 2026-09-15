@@ -96,10 +96,21 @@ function partTitle(partNumber: number): string {
         </div>
         <FaCollapsible :model-value="expandedPart === part.id">
           <div :id="`purchase-part-${detail.id}-${part.id}`" class="border-t border-border/70">
-            <p v-if="part.shippedAt" class="qs-type-meta text-muted-foreground m-0 p-4 whitespace-pre-wrap">
-              发货时间：<DateTimeDisplay :value="part.shippedAt" /> · {{ part.shippedBy?.displayName || '未记录操作人' }}<br>
-              发货说明：{{ part.shipmentRemark || '—' }}
-            </p>
+            <div v-if="part.shippedAt" class="qs-type-meta text-muted-foreground p-4 space-y-2">
+              <p class="m-0 whitespace-pre-wrap">
+                发货时间：<DateTimeDisplay :value="part.shippedAt" /> · {{ part.shippedBy?.displayName || '未记录操作人' }}<br>
+                发货说明：{{ part.shipmentRemark || '—' }}
+              </p>
+              <dl class="m-0 flex gap-2 min-w-0 items-start">
+                <dt class="shrink-0">
+                  {{ t('purchaseOrderDrawer.parts.trackingNo') }}：
+                </dt>
+                <dd class="m-0 flex gap-2 min-w-0 items-start">
+                  <span class="min-w-0 [overflow-wrap:anywhere]" :class="part.trackingNo ? 'qs-type-data text-foreground' : ''">{{ part.trackingNo || t('purchaseOrderDrawer.parts.trackingNoMissing') }}</span>
+                  <CopyCellButton v-if="part.trackingNo" always-visible :text="part.trackingNo" :label="t('purchaseOrderDrawer.parts.trackingNo')" />
+                </dd>
+              </dl>
+            </div>
             <dl v-if="part.warehouseReceivedAt" class="qs-type-meta m-0 px-4 pb-4 gap-3 grid sm:grid-cols-2">
               <div>
                 <dt class="text-muted-foreground mb-1">

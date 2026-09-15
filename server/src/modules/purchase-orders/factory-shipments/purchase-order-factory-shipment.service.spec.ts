@@ -215,6 +215,75 @@ describe('PurchaseOrderFactoryShipmentService', () => {
     }))
   })
 
+  it('records each selected part tracking number in the same conditional shipment write', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null, trackingNo: null },
+      { id: SECOND_PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 2, shippedAt: null, trackingNo: null },
+      { id: SALES_LINE_ID, status: 'ACTIVE', partNumber: 3, shippedAt: null, trackingNo: null },
+    ] })
+    await fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID, SECOND_PURCHASE_ORDER_ID], expectedVersion: 3,
+      trackingNumbers: [
+        { partId: PURCHASE_ORDER_ID, trackingNo: '  SF123  ' },
+        { partId: SECOND_PURCHASE_ORDER_ID, trackingNo: 'YT456' },
+      ],
+    })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledTimes(2)
+    for (const [partId, trackingNo] of [[PURCHASE_ORDER_ID, 'SF123'], [SECOND_PURCHASE_ORDER_ID, 'YT456']]) {
+      expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith({
+        where: { purchaseOrderId: PURCHASE_ORDER_ID, id: { in: [partId] }, status: 'ACTIVE', shippedAt: null },
+        data: expect.objectContaining({ trackingNo, shippedAt: expect.any(Date) as unknown }) as unknown,
+      })
+    }
+  })
+
+  it('records tracking numbers from sales shipment targets', async () => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING' })
+    await fixture.service.shipSalesOrder(context, SALES_ORDER_ID, {
+      mode: 'SELECTED', targets: [{
+        purchaseOrderId: PURCHASE_ORDER_ID, partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+        trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo: 'SF123' }],
+      }],
+    })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ trackingNo: 'SF123' }) as unknown,
+    }))
+  })
+
+  it.each([null, '', '   '])('does not clear an existing tracking number when blank %#', async (trackingNo) => {
+    const fixture = setup({ fulfillmentStatus: 'PREPARING', parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null, trackingNo: 'SF123' },
+    ] })
+    await fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo }],
+    })
+    const write = fixture.transaction.purchaseOrderPart.updateMany.mock.calls[0]?.[0] as { data: unknown }
+    expect(write.data).not.toHaveProperty('trackingNo')
+  })
+
+  it.each(['SF123', null, ''])('accepts identical or omitted tracking numbers on shipped replay %#', async (trackingNo) => {
+    const fixture = setup({ fulfillmentStatus: 'SHIPPED', version: 9, parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), trackingNo: 'SF123' },
+    ] })
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo }],
+    })).resolves.toMatchObject({ changedPurchaseOrderCount: 0 })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+  })
+
+  it.each([null, 'SF123'])('rejects replay with a different tracking number instead of overwriting %#', async (trackingNo) => {
+    const fixture = setup({ fulfillmentStatus: 'SHIPPED', version: 9, parts: [
+      { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: new Date(), trackingNo },
+    ] })
+    await expect(fixture.service.shipPurchaseOrder(context, PURCHASE_ORDER_ID, {
+      partIds: [PURCHASE_ORDER_ID], expectedVersion: 3,
+      trackingNumbers: [{ partId: PURCHASE_ORDER_ID, trackingNo: 'YT456' }],
+    })).rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_STATE_CHANGED' })
+    expect(fixture.transaction.purchaseOrderPart.updateMany).not.toHaveBeenCalled()
+  })
+
   it('records another partial shipment even when the status stays unchanged', async () => {
     const fixture = setup({ fulfillmentStatus: 'PARTIALLY_SHIPPED', parts: [
       { id: PURCHASE_ORDER_ID, status: 'ACTIVE', partNumber: 1, shippedAt: null },

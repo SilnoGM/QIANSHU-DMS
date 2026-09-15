@@ -15,7 +15,7 @@ function fixture() {
 function row() {
   return {
     id: 'part-1', shipmentNo: 'PKG/20260914-00001', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK/02', createdAt: new Date('2026-09-14T00:00:00Z'),
-    shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null,
+    shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, trackingNo: null,
     warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null,
     purchaseOrder: {
       id: 'order-1', version: 3, orderNo: 'PO/01', orderDate: new Date('2026-09-14'), purchaseType: 'STOCK', productMode: 'CUSTOM', orderStatus: 'CONFIRMED',
@@ -28,6 +28,17 @@ function row() {
 }
 
 describe('PurchaseShipmentQueryService', () => {
+  it.each(['SF1234567890', null])('returns tracking number %s in shipment list and detail', async trackingNo => {
+    const f = fixture()
+    f.part.findMany.mockResolvedValue([{ ...row(), trackingNo }])
+    expect((await f.service.list({ view: 'ALL' })).items[0]).toHaveProperty('trackingNo', trackingNo)
+    f.part.findUnique.mockResolvedValue({ ...row(), trackingNo })
+    expect(await f.service.getById('part-1')).toHaveProperty('trackingNo', trackingNo)
+    for (const query of [f.part.findMany, f.part.findUnique]) {
+      expect(query).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ trackingNo: true }) as unknown }))
+    }
+  })
+
   it('returns the stored shipment number in list and detail, preserving unnumbered historical rows', async () => {
     const f = fixture()
     f.part.findMany.mockResolvedValue([row(), { ...row(), id: 'legacy', shipmentNo: null }])

@@ -220,6 +220,7 @@ export class PurchaseOrderPartDto {
   @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly shippedById!: string | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shipmentRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly shipmentRemark!: string | null
+  @ApiProperty({ type: 'string', maxLength: 100, nullable: true, description: '货件物流单号；未填写或历史未记录时为空' }) readonly trackingNo!: string | null
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly shippedBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '仓库实际收货时间，不代表库存记账' }) readonly warehouseReceivedAt!: string | null
   @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly warehouseReceivedById!: string | null
