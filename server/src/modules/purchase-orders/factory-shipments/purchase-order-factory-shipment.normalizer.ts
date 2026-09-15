@@ -1,6 +1,7 @@
 import { HttpStatus } from '@nestjs/common'
 
 import { ApiException } from '../../../infrastructure/http/api.exception'
+import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { purchaseOrderValidationFailure } from '../domain/purchase-order-errors'
 
 const UUID_V4_PATTERN =
@@ -14,10 +15,16 @@ export interface FactoryShipmentTrackingNumber {
   readonly trackingNo: string | null
 }
 
+export interface FactoryShipmentDestinationWarehouse {
+  readonly partId: string
+  readonly warehouseValue: string
+}
+
 export interface FactoryShipmentTarget {
   readonly purchaseOrderId: string
   readonly partIds: readonly string[]
   readonly expectedVersion: number
+  readonly destinationWarehouses: readonly FactoryShipmentDestinationWarehouse[]
   readonly trackingNumbers?: readonly FactoryShipmentTrackingNumber[]
 }
 
@@ -25,6 +32,7 @@ export interface PurchaseOrderFactoryShipmentInput {
   readonly partIds: readonly string[]
   readonly expectedVersion: number
   readonly reason: string | null
+  readonly destinationWarehouses: readonly FactoryShipmentDestinationWarehouse[]
   readonly trackingNumbers?: readonly FactoryShipmentTrackingNumber[]
 }
 
@@ -120,6 +128,32 @@ function normalizeTrackingNumbers(
   })
 }
 
+function normalizeDestinationWarehouses(
+  value: unknown,
+  partIds: readonly string[],
+  field: string,
+): readonly FactoryShipmentDestinationWarehouse[] {
+  if (!Array.isArray(value) || value.length !== partIds.length) {
+    return purchaseOrderValidationFailure(field, '每个已选货件必须选择目的地仓库')
+  }
+  const selectedIds = new Set(partIds)
+  const seenIds = new Set<string>()
+  return value.map((item, index) => {
+    const itemField = `${field}.${index}`
+    const entry = requireRecord(item, itemField)
+    rejectUnknownKeys(entry, ['partId', 'warehouseValue'], itemField)
+    const partId = requireFactoryShipmentUuid(entry.partId, `${itemField}.partId`)
+    if (!selectedIds.has(partId) || seenIds.has(partId)) {
+      return purchaseOrderValidationFailure(`${itemField}.partId`, '货件必须已选中且不得重复')
+    }
+    seenIds.add(partId)
+    if (!isNormalizableDictionaryItemValue(entry.warehouseValue)) {
+      return purchaseOrderValidationFailure(`${itemField}.warehouseValue`, '请选择有效的目的地仓库')
+    }
+    return { partId, warehouseValue: normalizeDictionaryItemValue(entry.warehouseValue) }
+  })
+}
+
 export function requireFactoryShipmentUuid(
   value: unknown,
   field: string,
@@ -152,11 +186,12 @@ export function normalizePurchaseOrderFactoryShipmentRequest(
   input: unknown,
 ): PurchaseOrderFactoryShipmentInput {
   const body = requireRecord(input)
-  rejectUnknownKeys(body, ['expectedVersion', 'partIds', 'reason', 'trackingNumbers'])
+  rejectUnknownKeys(body, ['expectedVersion', 'partIds', 'reason', 'trackingNumbers', 'destinationWarehouses'])
   const partIds = requirePartIds(body.partIds, 'partIds')
   const trackingNumbers = normalizeTrackingNumbers(body.trackingNumbers, partIds, 'trackingNumbers')
   return {
     partIds,
+    destinationWarehouses: normalizeDestinationWarehouses(body.destinationWarehouses, partIds, 'destinationWarehouses'),
     expectedVersion: requireExpectedVersion(body.expectedVersion, 'expectedVersion'),
     reason: normalizeReason(body.reason),
     ...(trackingNumbers === undefined ? {} : { trackingNumbers }),
@@ -185,13 +220,14 @@ export function normalizeSalesOrderFactoryShipmentRequest(
     const target = requireRecord(value, `targets.${index}`)
     rejectUnknownKeys(
       target,
-      ['purchaseOrderId', 'expectedVersion', 'partIds', 'trackingNumbers'],
+      ['purchaseOrderId', 'expectedVersion', 'partIds', 'trackingNumbers', 'destinationWarehouses'],
       `targets.${index}`,
     )
     const partIds = requirePartIds(target.partIds, `targets.${index}.partIds`)
     const trackingNumbers = normalizeTrackingNumbers(target.trackingNumbers, partIds, `targets.${index}.trackingNumbers`)
     return {
       partIds,
+      destinationWarehouses: normalizeDestinationWarehouses(target.destinationWarehouses, partIds, `targets.${index}.destinationWarehouses`),
       ...(trackingNumbers === undefined ? {} : { trackingNumbers }),
       purchaseOrderId: requireFactoryShipmentUuid(
         target.purchaseOrderId,

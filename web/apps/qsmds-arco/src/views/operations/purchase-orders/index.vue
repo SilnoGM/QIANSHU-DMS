@@ -697,6 +697,7 @@ async function submitPurchaseFactoryShipment(intent: FactoryShipmentIntent): Pro
       expectedVersion: target.expectedVersion,
       partIds: [...target.partIds],
       trackingNumbers: target.trackingNumbers?.map(item => ({ ...item })),
+      destinationWarehouses: target.destinationWarehouses.map(item => ({ ...item })),
       reason: intent.reason,
     }, controller.signal)
     if (controller.signal.aborted) {

@@ -74,3 +74,22 @@ export function shipmentStatusClass(status: Exclude<ShipmentView, 'ALL'>): strin
     CANCELLED: 'border-destructive/35 bg-destructive/10 text-destructive',
   }[status]
 }
+
+/** 历史货件保留 raw value；停用和未知状态以服务端当前字典解释为准。 */
+export function formatDestinationWarehouse(
+  row: {
+    readonly destinationWarehouseValue: string | null
+    readonly destinationWarehouse: { readonly value: string, readonly label: string | null, readonly known: boolean, readonly effectiveEnabled: boolean } | null
+  },
+  translate: (key: string) => string,
+): string {
+  if (row.destinationWarehouseValue === null) {
+    return translate('purchaseShipments.warehouseMissing')
+  }
+  const warehouse = row.destinationWarehouse
+  if (!warehouse?.known) {
+    return `${row.destinationWarehouseValue}（${translate('purchaseShipments.warehouseUnknown')}）`
+  }
+  const label = warehouse.label ?? row.destinationWarehouseValue
+  return warehouse.effectiveEnabled ? label : `${label}（${translate('purchaseShipments.disabled')}）`
+}

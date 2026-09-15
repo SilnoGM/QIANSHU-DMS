@@ -226,6 +226,7 @@ const supplierResidueAllowlist = Object.freeze([
   'web/apps/qsmds-arco/test/views/purchase-order-pages.test.ts',
   'web/apps/qsmds-arco/test/views/purchase-order-source-selector.test.ts',
   'web/apps/qsmds-arco/test/views/qs-factory-shipment-modal.logic.test.ts',
+  'web/apps/qsmds-arco/test/views/qs-factory-shipment-tracking.test.ts',
   'web/apps/qsmds-arco/test/views/qs-order-product-line-editor.test.ts',
   'web/apps/qsmds-arco/test/views/qs-purchase-start-modal.logic.test.ts',
   'web/apps/qsmds-arco/test/views/qs-purchase-start-modal.test.ts',

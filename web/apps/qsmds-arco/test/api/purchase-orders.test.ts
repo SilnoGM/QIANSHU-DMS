@@ -187,6 +187,8 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
   await api.factoryShipment('purchase/id', {
     expectedVersion: 3,
     reason: '第一批出厂',
+    partIds: ['33333333-3333-4333-8333-333333333333'],
+    destinationWarehouses: [{ partId: '33333333-3333-4333-8333-333333333333', warehouseValue: 'CN-WH-01' }],
   }, controller.signal)
   await api.recordPayment('purchase/id', payment, controller.signal)
   await api.voidPayment('purchase/id', 'payment/id', { reason: '录入错误' }, controller.signal)
@@ -209,6 +211,7 @@ test('采购创建与所有 mutation 禁止自动重试并保持幂等 Key 生�
     signal: controller.signal,
   })
   assert.deepEqual(calls[1]?.data, { expectedVersion: 3, imageDraftId: 'image-draft-1', reason: '核对无误' })
+  assert.deepEqual((calls[4]?.data as { destinationWarehouses: unknown }).destinationWarehouses, [{ partId: '33333333-3333-4333-8333-333333333333', warehouseValue: 'CN-WH-01' }])
   for (const call of calls.slice(1)) {
     assert.deepEqual(call.config, {
       errorPresentation: 'local',

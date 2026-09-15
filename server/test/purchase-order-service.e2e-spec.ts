@@ -1,3 +1,4 @@
+import { destinationWarehouses, ensureDestinationWarehouseDictionary, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
@@ -105,6 +106,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     database = await createPurchaseShippingMarkDatabase()
     prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
     await prisma.onModuleInit()
+    await ensureDestinationWarehouseDictionary(prisma)
 
     const [twd] = await Promise.all([
       prisma.currency.findUniqueOrThrow({
@@ -390,6 +392,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       prisma,
       new AuditService(),
       new SalesOrderPurchaseCoverageService(new AuditService()),
+      new DictionaryLookupService(prisma),
     )
     mutations = new PurchaseOrderMutationService(
       prisma,
@@ -577,7 +580,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
     })).rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
     await expect(mutations.updateFulfillmentStatus(context(), createdId, { toStatus: 'PREPARING' }))
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_STATUS_TRANSITION_INVALID' })
-    await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version, partIds: created.parts.map(part => part.id) }))
+    await expect(factoryShipments.shipPurchaseOrder(context(), createdId, { expectedVersion: created.version, partIds: created.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(created.parts.map(part => part.id)) }))
       .rejects.toMatchObject({ code: 'FACTORY_SHIPMENT_NOT_ALLOWED' })
     const imageReview = await imageReviewInput(createdId)
     const reviewResults = await Promise.allSettled([
@@ -646,7 +649,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       .rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCEL_HAS_PAYMENTS' })
     await factoryShipments.shipPurchaseOrder({
       actorUserId, requestId: `purchase-SHIPPED-${suffix}`,
-    }, createdId, { expectedVersion: paid.version, partIds: paid.parts.map(part => part.id) })
+    }, createdId, { expectedVersion: paid.version, partIds: paid.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(paid.parts.map(part => part.id)) })
     await mutations.updateFulfillmentStatus({
       actorUserId, requestId: `purchase-SIGNED-${suffix}`,
     }, createdId, { toStatus: 'SIGNED' })
@@ -1200,7 +1203,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         requestId: `purchase-factory-concurrent-a-${suffix}`,
       }, concurrentTarget.id, {
         expectedVersion: concurrentTarget.version,
-        partIds: concurrentTarget.parts.map(part => part.id),
+        partIds: concurrentTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(concurrentTarget.parts.map(part => part.id)),
         reason: 'E2E 并发发货',
       }),
       factoryShipments.shipPurchaseOrder({
@@ -1208,7 +1211,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         requestId: `purchase-factory-concurrent-b-${suffix}`,
       }, concurrentTarget.id, {
         expectedVersion: concurrentTarget.version,
-        partIds: concurrentTarget.parts.map(part => part.id),
+        partIds: concurrentTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(concurrentTarget.parts.map(part => part.id)),
         reason: 'E2E 并发发货',
       }),
     ])
@@ -1291,12 +1294,31 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       requestId: `purchase-factory-stale-${suffix}`,
     }, staleTarget.id, {
       expectedVersion: staleTarget.version + 1,
-      partIds: staleTarget.parts.map(part => part.id),
+      partIds: staleTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(staleTarget.parts.map(part => part.id)),
       reason: null,
     })).rejects.toMatchObject({
       status: 409,
       code: 'FACTORY_SHIPMENT_STATE_CHANGED',
     })
+
+    const beforeInvalidWarehouse = async () => ({
+      orders: await prisma.purchaseOrder.findMany({ where: { id: { in: pendingOrders.map(order => order.id) } }, orderBy: { id: 'asc' } }),
+      parts: await prisma.purchaseOrderPart.findMany({ where: { purchaseOrderId: { in: pendingOrders.map(order => order.id) } }, orderBy: { id: 'asc' } }),
+      histories: await prisma.purchaseOrderStatusHistory.count(),
+      audits: await prisma.auditEvent.count(),
+      sales: await prisma.salesOrder.findUniqueOrThrow({ where: { id: salesOrderId } }),
+    })
+    const beforeWarehouseFailure = await beforeInvalidWarehouse()
+    // 最后一张采购单选中无效仓库时，前面已合法校验的采购单也不能留下发货或销售推进事实。
+    await expect(factoryShipments.shipSalesOrder(context(), salesOrderId, {
+      mode: 'SELECTED',
+      targets: pendingOrders.map((target, index) => ({
+        purchaseOrderId: target.id, expectedVersion: target.version,
+        partIds: target.parts.map(part => part.id),
+        destinationWarehouses: destinationWarehouses(target.parts.map(part => part.id), index === pendingOrders.length - 1 ? 'UNKNOWN-WAREHOUSE' : undefined),
+      })),
+    })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(await beforeInvalidWarehouse()).toEqual(beforeWarehouseFailure)
 
     const partial = await factoryShipments.shipSalesOrder({
       actorUserId,
@@ -1306,7 +1328,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       targets: selectedTargets.map(target => ({
         purchaseOrderId: target.id,
         expectedVersion: target.version,
-        partIds: target.parts.map(part => part.id),
+        partIds: target.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(target.parts.map(part => part.id)),
       })),
       reason: 'E2E 销售分批发货',
     })
@@ -1318,13 +1340,19 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
         advancedToLandTransit: false,
       },
     })
+    const salesShippedParts = await prisma.purchaseOrderPart.findMany({
+      where: { purchaseOrderId: { in: selectedTargets.map(target => target.id) } },
+      select: { destinationWarehouseValue: true },
+    })
+    expect(salesShippedParts.length).toBeGreaterThan(0)
+    expect(salesShippedParts.every(part => part.destinationWarehouseValue === TEST_DESTINATION_WAREHOUSE)).toBe(true)
 
     const completed = await factoryShipments.shipPurchaseOrder({
       actorUserId,
       requestId: `purchase-factory-final-${suffix}`,
     }, finalTarget.id, {
       expectedVersion: finalTarget.version,
-      partIds: finalTarget.parts.map(part => part.id),
+      partIds: finalTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(finalTarget.parts.map(part => part.id)),
       reason: 'E2E 最后一张采购发货',
     })
     expect(completed).toMatchObject({
@@ -1385,7 +1413,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       requestId: `purchase-factory-retry-${suffix}`,
     }, finalTarget.id, {
       expectedVersion: finalTarget.version,
-      partIds: finalTarget.parts.map(part => part.id),
+      partIds: finalTarget.parts.map(part => part.id), destinationWarehouses: destinationWarehouses(finalTarget.parts.map(part => part.id)),
       reason: 'E2E 安全重试不得重复写历史',
     })).resolves.toMatchObject({
       changedPurchaseOrderCount: 0,

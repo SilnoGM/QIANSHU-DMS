@@ -12,14 +12,14 @@ const dtoPipe = new ValidationPipe({
 })
 
 async function transformPurchase(trackingNumbers?: unknown) {
-  return dtoPipe.transform({ partIds: [PART_ID], expectedVersion: 1, trackingNumbers }, {
+  return dtoPipe.transform({ partIds: [PART_ID], destinationWarehouses: [PART_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 1, trackingNumbers }, {
     type: 'body', metatype: PurchaseOrderFactoryShipmentRequestDto,
   }) as Promise<PurchaseOrderFactoryShipmentRequestDto>
 }
 
 async function transformSales(trackingNumbers?: unknown) {
   return dtoPipe.transform({
-    mode: 'SELECTED', targets: [{ purchaseOrderId: PART_ID, partIds: [PART_ID], expectedVersion: 1, trackingNumbers }],
+    mode: 'SELECTED', targets: [{ purchaseOrderId: PART_ID, partIds: [PART_ID], destinationWarehouses: [PART_ID].map(partId => ({ partId, warehouseValue: 'CN-A' })), expectedVersion: 1, trackingNumbers }],
   }, { type: 'body', metatype: SalesOrderFactoryShipmentRequestDto }) as Promise<SalesOrderFactoryShipmentRequestDto>
 }
 
@@ -58,4 +58,17 @@ describe('factory shipment tracking number HTTP DTOs', () => {
     expect(() => normalizeSalesOrderFactoryShipmentRequest(sales))
       .toThrow(expect.objectContaining({ code: 'VALIDATION_FAILED' }))
   })
+})
+
+
+describe('factory shipment destination warehouse HTTP DTOs', () => {
+  it.each([undefined, null, [], [{ partId: PART_ID }], [{ partId: PART_ID, warehouseValue: null }], [{ partId: PART_ID, warehouseValue: '' }], [{ partId: PART_ID, warehouseValue: 'A'.repeat(65) }], [{ partId: PART_ID, warehouseValue: 'CN-A', extra: true }]])(
+    'rejects absent or malformed warehouse assignments at the HTTP boundary %#', async destinationWarehouses => {
+      const target = { partIds: [PART_ID], expectedVersion: 1, destinationWarehouses }
+      await expect(dtoPipe.transform(target, { type: 'body', metatype: PurchaseOrderFactoryShipmentRequestDto }))
+        .rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+      await expect(dtoPipe.transform({ mode: 'SELECTED', targets: [{ purchaseOrderId: PART_ID, ...target }] }, { type: 'body', metatype: SalesOrderFactoryShipmentRequestDto }))
+        .rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    },
+  )
 })

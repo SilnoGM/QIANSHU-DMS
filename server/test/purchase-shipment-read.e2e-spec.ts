@@ -1,3 +1,4 @@
+import { destinationWarehouses } from './purchase-destination-warehouse.fixture'
 import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
 import { randomUUID } from 'node:crypto'
 
@@ -58,8 +59,8 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     receivedPartId = active.parts[0].id
     shippedPartId = active.parts[1].id
     unshippedPartId = active.parts[2].id
-    const shipping = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress)
-    await shipping.shipPurchaseOrder(fixture.context(), activeId, { expectedVersion: active.version, partIds: [receivedPartId, shippedPartId], reason: 'First shipment' })
+    const shipping = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma))
+    await shipping.shipPurchaseOrder(fixture.context(), activeId, { expectedVersion: active.version, partIds: [receivedPartId, shippedPartId], destinationWarehouses: destinationWarehouses([receivedPartId, shippedPartId]), reason: 'First shipment' })
     const lookup = new DictionaryLookupService(fixture.prisma)
     orders = new PurchaseOrderQueryService(fixture.prisma, lookup)
     receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
@@ -283,7 +284,7 @@ describe('maximum shipment warehouse receipt and read consistency', () => {
       const orders = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
       const beforeShipment = await orders.getById(orderId)
       const partIds = beforeShipment.parts.map(part => part.id)
-      await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress).shipPurchaseOrder(fixture.context(), orderId, { expectedVersion: beforeShipment.version, partIds, reason: 'Maximum warehouse fixture shipment' })
+      await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma)).shipPurchaseOrder(fixture.context(), orderId, { expectedVersion: beforeShipment.version, partIds, destinationWarehouses: destinationWarehouses(partIds), reason: 'Maximum warehouse fixture shipment' })
       const beforeReceipt = await orders.getById(orderId)
       const receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
       const started = performance.now()

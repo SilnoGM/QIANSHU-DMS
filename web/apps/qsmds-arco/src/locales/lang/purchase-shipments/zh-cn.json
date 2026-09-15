@@ -50,6 +50,9 @@
     "noImageCount": "{count} 项产品无图片",
     "disabled": "已停用",
     "stockSource": "备货采购 · 无销售来源",
-    "WAREHOUSE_RECEIVED": "已入仓"
+    "WAREHOUSE_RECEIVED": "已入仓",
+    "destinationWarehouse": "目的地仓库",
+    "warehouseUnknown": "未知仓库",
+    "warehouseMissing": "未记录"
   }
 }

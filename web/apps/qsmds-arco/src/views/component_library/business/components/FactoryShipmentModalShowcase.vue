@@ -170,7 +170,8 @@ function openModal(): void {
 
 function recordSubmit(intent: FactoryShipmentIntent): void {
   const trackingNumbers = intent.targets.flatMap(target => target.trackingNumbers ?? [])
-  lastEvent.value = `submit · ${intent.targets.length} 张采购单 · 物流单号：${trackingNumbers.map(item => item.trackingNo).join('、') || '未填写'}`
+  const warehouses = intent.targets.flatMap(target => target.destinationWarehouses)
+  lastEvent.value = `submit · ${intent.targets.length} 张采购单 · 物流单号：${trackingNumbers.map(item => item.trackingNo).join('、') || '未填写'} · 目的地仓库：${warehouses.map(item => item.warehouseValue).join('、')}`
 }
 </script>
 

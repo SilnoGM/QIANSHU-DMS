@@ -71,7 +71,7 @@ function shipmentTargets(input: {
   readonly mode: FactoryShipmentSelectionMode
   readonly orders: readonly FactoryShipmentModalPurchaseOrder[]
   readonly selectedIds: readonly string[]
-}): FactoryShipmentIntent['targets'] {
+}): Omit<FactoryShipmentIntent['targets'][number], 'destinationWarehouses'>[] {
   const selected = new Set(input.selectedIds)
   return input.orders.filter(isPendingFactoryShipment)
     .map(order => ({
@@ -92,6 +92,7 @@ export function buildFactoryShipmentIntent(input: {
   readonly selectedIds: readonly string[]
   readonly reason: string
   readonly trackingNumbersByPart?: Readonly<Record<string, string>>
+  readonly destinationWarehousesByPart: Readonly<Record<string, string | null>>
 }): FactoryShipmentIntent {
   const reason = input.reason.trim().normalize('NFKC')
   return {
@@ -107,10 +108,27 @@ export function buildFactoryShipmentIntent(input: {
         const trackingNo = value.trim()
         return trackingNo ? [{ partId, trackingNo }] : []
       })
-      return trackingNumbers.length ? { ...target, trackingNumbers } : target
+      const destinationWarehouses = target.partIds.map((partId) => {
+        const warehouseValue = input.destinationWarehousesByPart[partId]
+        if (warehouseValue === null || warehouseValue === undefined || warehouseValue.length === 0) {
+          throw new Error('warehouseRequired')
+        }
+        return { partId, warehouseValue }
+      })
+      return trackingNumbers.length ? { ...target, destinationWarehouses, trackingNumbers } : { ...target, destinationWarehouses }
     }),
     reason: reason.length === 0 ? null : reason,
   }
+}
+
+export function validateDestinationWarehouse(
+  value: string | null | undefined,
+  selectableValues: readonly string[],
+): 'required' | 'unavailable' | null {
+  if (value === null || value === undefined || value.length === 0) {
+    return 'required'
+  }
+  return selectableValues.includes(value) ? null : 'unavailable'
 }
 
 export function validateShipmentTrackingNo(value: string): 'tooLong' | 'controlCharacters' | null {

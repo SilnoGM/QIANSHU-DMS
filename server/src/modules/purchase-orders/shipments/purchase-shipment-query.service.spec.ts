@@ -28,6 +28,28 @@ function row() {
 }
 
 describe('PurchaseShipmentQueryService', () => {
+  it('resolves historical warehouses once per page and preserves unknown values and null history', async () => {
+    const f = fixture()
+    f.part.findMany.mockResolvedValue([
+      { ...row(), destinationWarehouseValue: 'CN-A' },
+      { ...row(), id: 'part-2', destinationWarehouseValue: 'OLD' },
+      { ...row(), id: 'part-3', destinationWarehouseValue: 'CN-A' },
+      { ...row(), id: 'part-4', destinationWarehouseValue: null },
+    ])
+    f.lookup.resolveStoredValues.mockResolvedValue([
+      { known: true, value: 'CN-A', label: '广州仓', effectiveEnabled: false },
+      { known: false, value: 'OLD' },
+    ])
+    const page = await f.service.list({ view: 'ALL' })
+    expect(f.lookup.resolveStoredValues).toHaveBeenCalledTimes(1)
+    expect(f.lookup.resolveStoredValues).toHaveBeenCalledWith({ dictionaryCode: 'mainland.warehouse', values: ['CN-A', 'OLD'] })
+    expect(page.items[0]).toMatchObject({ destinationWarehouseValue: 'CN-A', destinationWarehouse: { value: 'CN-A', label: '广州仓', known: true, effectiveEnabled: false } })
+    expect(page.items[1]).toMatchObject({ destinationWarehouseValue: 'OLD', destinationWarehouse: { value: 'OLD', label: null, known: false, effectiveEnabled: false } })
+    expect(page.items[3]).toMatchObject({ destinationWarehouseValue: null, destinationWarehouse: null })
+    f.part.findUnique.mockResolvedValue({ ...row(), destinationWarehouseValue: 'CN-A' })
+    expect(await f.service.getById('part-1')).toMatchObject({ destinationWarehouseValue: 'CN-A', destinationWarehouse: { label: '广州仓' } })
+  })
+
   it.each(['SF1234567890', null])('returns tracking number %s in shipment list and detail', async trackingNo => {
     const f = fixture()
     f.part.findMany.mockResolvedValue([{ ...row(), trackingNo }])

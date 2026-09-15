@@ -50,7 +50,7 @@ const CONTEXT_PURCHASE_ORDER_SELECT = {
     orderBy: { partNumber: 'asc' },
     select: {
       id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
-      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true,
+      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
       shippedBy: { select: { id: true, displayName: true } },
       warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
       warehouseReceivedBy: { select: { id: true, displayName: true } },
@@ -233,6 +233,7 @@ export class PurchaseOrderFactoryShipmentQueryService {
         shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
         shipmentRemark: part.shipmentRemark,
         trackingNo: part.trackingNo ?? null,
+        destinationWarehouseValue: part.destinationWarehouseValue ?? null,
         warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
         warehouseReceivedById: part.warehouseReceivedById,
         warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,

@@ -787,6 +787,7 @@ async function submitSalesFactoryShipment(intent: FactoryShipmentIntent): Promis
         ...target,
         partIds: [...target.partIds],
         trackingNumbers: target.trackingNumbers?.map(item => ({ ...item })),
+        destinationWarehouses: target.destinationWarehouses.map(item => ({ ...item })),
       })),
       reason: intent.reason,
     }, controller.signal)

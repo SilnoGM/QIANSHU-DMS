@@ -89,6 +89,13 @@ export class PurchaseShipmentLineSummaryDto {
   @ApiProperty({ type: () => [PurchaseShipmentLinePreviewDto] }) readonly previews!: readonly PurchaseShipmentLinePreviewDto[]
 }
 
+export class PurchaseShipmentDestinationWarehouseDto {
+  @ApiProperty({ type: 'string', description: '历史保存的仓库字典稳定 value' }) readonly value!: string
+  @ApiProperty({ type: 'string', nullable: true }) readonly label!: string | null
+  @ApiProperty({ type: 'boolean' }) readonly known!: boolean
+  @ApiProperty({ type: 'boolean' }) readonly effectiveEnabled!: boolean
+}
+
 export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
   @ApiProperty({ type: 'string', nullable: true, maxLength: 64, description: 'SHIPMENT_NO 派发的永久货件编号；未补号历史货件为空' }) readonly shipmentNo!: string | null
@@ -102,6 +109,8 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shipmentRecordedAt!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shipmentRemark!: string | null
   @ApiProperty({ type: 'string', maxLength: 100, nullable: true, description: '货件物流单号；未填写或历史未记录时为空' }) readonly trackingNo!: string | null
+  @ApiProperty({ type: 'string', maxLength: 64, nullable: true, description: 'mainland.warehouse 的稳定 value；历史未记录时为空' }) readonly destinationWarehouseValue!: string | null
+  @ApiProperty({ type: () => PurchaseShipmentDestinationWarehouseDto, nullable: true }) readonly destinationWarehouse!: PurchaseShipmentDestinationWarehouseDto | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '仓库实际收货时间，不代表库存记账' }) readonly warehouseReceivedAt!: string | null
   @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly warehouseReceivedById!: string | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly warehouseRecordedAt!: string | null

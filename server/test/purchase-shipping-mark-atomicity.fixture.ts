@@ -1,3 +1,4 @@
+import { ensureDestinationWarehouseDictionary } from './purchase-destination-warehouse.fixture'
 import { createImageReviewDraft, createImageReviewService } from './purchase-order-image-review.fixture'
 import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
@@ -30,6 +31,7 @@ export async function createAtomicityFixture(deferPartsMigration = false, deferR
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
     await prisma.onModuleInit()
+    await ensureDestinationWarehouseDictionary(prisma)
     const actor = await prisma.user.create({ data: {
       username: 'mark-atomicity', usernameNormalized: 'mark-atomicity',
       displayName: 'Mark atomicity', passwordChangedAt: new Date(),

@@ -130,6 +130,34 @@ describe('PurchaseOrderFactoryShipmentQueryService', () => {
     )
   })
 
+  it.each(['CN-A', null])('returns partial orders with destination warehouse %s and product allocation', async destinationWarehouseValue => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([{
+      id: SALES_ORDER_ID, orderNo: 'PO/1', orderDate: new Date(), productMode: 'CUSTOM',
+      supplierValue: null, customSupplierName: '工厂', fulfillmentStatus: 'PARTIALLY_SHIPPED',
+      version: 4, shippingMarkText: 'TEST/1', lines: [],
+      parts: [{
+        id: 'part-1', shipmentNo: 'PKG/20260914-00001', partNumber: 1, status: 'ACTIVE', shippingMarkText: 'TEST/1/01', destinationWarehouseValue,
+        shippedAt: new Date('2026-09-13T00:00:00Z'), shippedById: SALES_ORDER_ID,
+        shippedBy: { id: SALES_ORDER_ID, displayName: '采购员' },
+        shipmentRecordedAt: new Date('2026-09-13T00:00:00Z'), shipmentRemark: '已发货',
+        items: [{ purchaseOrderLineId: 'line-1', quantity: 2, line: { lineNumber: 1 } }],
+      }],
+    }])
+    const result = await fixture.service.getSalesOrderContext(SALES_ORDER_ID)
+    expect(result.pendingShipmentCount).toBe(1)
+    expect(result.purchaseOrders[0]).toMatchObject({
+      shippingMarkText: 'TEST/1',
+      parts: [{ shipmentNo: 'PKG/20260914-00001', partNumber: 1, destinationWarehouseValue, shippedAt: '2026-09-13T00:00:00.000Z',
+        shippedBy: { displayName: '采购员' },
+        items: [{ purchaseOrderLineId: 'line-1', lineNumber: 1, quantity: 2 }],
+      }],
+    })
+    expect(fixture.prisma.purchaseOrder.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ parts: expect.objectContaining({ select: expect.objectContaining({ destinationWarehouseValue: true }) as unknown }) as unknown }) as unknown,
+    }))
+  })
+
   it.each(['SF1234567890', null])('returns partial orders with shipment tracking number %s and product allocation', async trackingNo => {
     const fixture = setup()
     fixture.prisma.purchaseOrder.findMany.mockResolvedValue([{

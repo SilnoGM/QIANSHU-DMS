@@ -106,7 +106,7 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
     orderBy: { partNumber: 'asc' },
     select: {
       id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
-      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true,
+      shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
       shippedBy: { select: { id: true, displayName: true } },
       warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
       warehouseReceivedBy: { select: { id: true, displayName: true } },
@@ -323,6 +323,7 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
     readonly shipmentRecordedAt: string | null
     readonly shipmentRemark: string | null
     readonly trackingNo: string | null
+    readonly destinationWarehouseValue: string | null
     readonly shippedBy: { readonly id: string, readonly displayName: string } | null
     readonly warehouseReceivedAt: string | null
     readonly warehouseReceivedById: string | null
@@ -872,6 +873,7 @@ export class PurchaseOrderQueryService {
         shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
         shipmentRemark: part.shipmentRemark ?? null,
         trackingNo: part.trackingNo ?? null,
+        destinationWarehouseValue: part.destinationWarehouseValue ?? null,
         shippedBy: part.shippedBy ?? null,
         warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
         warehouseReceivedById: part.warehouseReceivedById ?? null,

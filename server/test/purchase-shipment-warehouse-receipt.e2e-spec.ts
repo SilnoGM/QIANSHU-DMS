@@ -1,3 +1,4 @@
+import { destinationWarehouses, TEST_DESTINATION_WAREHOUSE } from './purchase-destination-warehouse.fixture'
 import { prepareImageReview } from './purchase-shipping-mark-atomicity.fixture'
 import { reviewHistoricalPurchase, shipHistoricalPurchase } from './purchase-order-historical-review.fixture'
 import { randomUUID } from 'node:crypto'
@@ -27,7 +28,7 @@ async function prepare(fixture: AtomicityFixture, count = 3) {
 
 async function ship(fixture: AtomicityFixture, id: string, partIds: string[]) {
   const order = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
-  await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress).shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds })
+  await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress, new DictionaryLookupService(fixture.prisma)).shipPurchaseOrder(fixture.context(), id, { expectedVersion: order.version, partIds, destinationWarehouses: destinationWarehouses(partIds) })
   return fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id } })
 }
 
@@ -119,7 +120,7 @@ describe('purchase shipment warehouse receipt with isolated PostgreSQL', () => {
   it('rejects an explicit millisecond instant before an existing microsecond shipment fact with the public time error', async () => {
     const order = await prepare(fixture, 1)
     await fixture.prisma.$transaction(async transaction => {
-      await transaction.$executeRaw(Prisma.sql`UPDATE purchase_order_parts SET shipped_at = '2000-01-01T00:00:00.000123Z'::timestamptz, shipped_by_id = ${fixture.actor.id}::uuid, shipment_recorded_at = clock_timestamp() WHERE id = ${order.parts[0].id}::uuid`)
+      await transaction.$executeRaw(Prisma.sql`UPDATE purchase_order_parts SET shipped_at = '2000-01-01T00:00:00.000123Z'::timestamptz, shipped_by_id = ${fixture.actor.id}::uuid, shipment_recorded_at = clock_timestamp(), destination_warehouse_value = ${TEST_DESTINATION_WAREHOUSE} WHERE id = ${order.parts[0].id}::uuid`)
       await transaction.purchaseOrder.update({ where: { id: order.id }, data: { fulfillmentStatus: 'SHIPPED' } })
     })
     const before = await facts(fixture, order.id)

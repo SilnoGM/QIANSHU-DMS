@@ -16,7 +16,7 @@ import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/i
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
 import PurchaseWarehouseReceiptAction from '@/views/operations/purchase-orders/purchase-warehouse-receipt-action.vue'
-import { buildShipmentRouteQuery, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentStatusClass } from './logic'
+import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentStatusClass } from './logic'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
 import ShipmentProducts from './shipment-products.vue'
@@ -111,6 +111,7 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
   { id: 'products', title: t('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 200 },
   { id: 'buyer', title: t('purchaseShipments.buyer'), accessorFn: row => row.purchaseOrder.createdBy.displayName, minWidth: 160 },
   { id: 'shipped', title: t('purchaseShipments.shipped'), accessorKey: 'shippedAt', minWidth: 200 },
+  { id: 'destinationWarehouse', title: t('purchaseShipments.destinationWarehouse'), accessorFn: row => formatDestinationWarehouse(row, t), minWidth: 180 },
   { id: 'received', title: t('purchaseWarehouseReceipt.receivedAt'), accessorKey: 'warehouseReceivedAt', minWidth: 200 },
   { id: 'createdAt', title: t('purchaseShipments.createdAt'), accessorKey: 'createdAt', minWidth: 195, defaultVisible: false },
   { id: 'recordedAt', title: t('purchaseShipments.recordedAt'), accessorKey: 'shipmentRecordedAt', minWidth: 195, defaultVisible: false },
@@ -314,6 +315,9 @@ onBeforeUnmount(() => {
             </QsTableStackedCell>
             <span v-else class="qs-type-meta">{{ t('purchaseShipments.notShipped') }}</span>
           </template>
+          <template #cell-destinationWarehouse="{ row }">
+            <span class="min-w-0 block [overflow-wrap:anywhere]" :class="row.original.destinationWarehouseValue === null && 'text-muted-foreground'">{{ formatDestinationWarehouse(row.original, t) }}</span>
+          </template>
           <template #cell-received="{ row }">
             <QsTableStackedCell v-if="row.original.warehouseReceivedAt">
               <DateTimeDisplay :value="row.original.warehouseReceivedAt" /><QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" />
@@ -389,6 +393,10 @@ onBeforeUnmount(() => {
                 </QsTableStackedLine>
               </QsTableStackedCell>
               <QsPersonDisplay :display-name="row.purchaseOrder.createdBy.displayName" size="md" />
+              <div class="qs-type-meta min-w-0">
+                <span class="text-muted-foreground">{{ t('purchaseShipments.destinationWarehouse') }}：</span>
+                <span class="[overflow-wrap:anywhere]">{{ formatDestinationWarehouse(row, t) }}</span>
+              </div>
               <div v-if="row.warehouseReceivedAt" class="flex flex-wrap gap-2 items-center">
                 <span class="qs-type-meta text-muted-foreground">{{ t('purchaseWarehouseReceipt.receivedAt') }}</span><DateTimeDisplay :value="row.warehouseReceivedAt" /><QsPersonDisplay v-if="row.warehouseReceivedBy" :display-name="row.warehouseReceivedBy.displayName" size="md" />
               </div>

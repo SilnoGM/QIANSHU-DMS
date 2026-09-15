@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm'
 import { parseDate } from '@internationalized/date'
 import ts from 'typescript'
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
-import { buildShipmentRouteQuery, formatShipmentNumber, parseShipmentQuery, shipmentCountsQuery, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
+import { buildShipmentRouteQuery, formatDestinationWarehouse, formatShipmentNumber, parseShipmentQuery, shipmentCountsQuery, shipmentStatusClass } from '../../src/views/workbenches/shipments/logic'
 
 test('货件默认待发货；非法 URL 参数不进入查询', () => {
   assert.deepEqual(parseShipmentQuery({}), { view: 'AWAITING_SHIPMENT', page: 1, pageSize: 20 })
@@ -85,6 +85,7 @@ async function pageFixture() {
     useDictionaryCatalog: () => ({ catalog: ref({ items: [] }), error: ref(null) }),
     useShipmentData: () => data,
     buildShipmentRouteQuery,
+    formatDestinationWarehouse,
     formatShipmentNumber,
     parseShipmentQuery,
     shipmentStatusClass,
@@ -161,4 +162,15 @@ test('正式货件编号位于最左并固定，所属采购单和产品列保�
   assert.equal(columns[1]?.id, 'part')
   assert.equal(columns.some(column => column.id === 'products'), true)
   assert.equal(columns.some(column => column.id === 'quantity'), false)
+})
+
+test('目的地仓库列默认展示，历史空值、有效、停用与未知仓库保留可辨识回显', async (context) => {
+  const fixture = await pageFixture()
+  context.after(fixture.dispose)
+  assert.equal(fixture.state.columns.value.some(column => column.id === 'destinationWarehouse'), true)
+  const t = (key: string) => ({ 'purchaseShipments.warehouseMissing': '未记录', 'purchaseShipments.warehouseUnknown': '未知仓库', 'purchaseShipments.disabled': '已停用' })[key] ?? key
+  assert.equal(formatDestinationWarehouse({ destinationWarehouseValue: null, destinationWarehouse: null }, t), '未记录')
+  assert.equal(formatDestinationWarehouse({ destinationWarehouseValue: 'OLD-WH', destinationWarehouse: { value: 'OLD-WH', label: null, known: false, effectiveEnabled: false } }, t), 'OLD-WH（未知仓库）')
+  assert.equal(formatDestinationWarehouse({ destinationWarehouseValue: 'WH-01', destinationWarehouse: { value: 'WH-01', label: '长沙仓', known: true, effectiveEnabled: true } }, t), '长沙仓')
+  assert.equal(formatDestinationWarehouse({ destinationWarehouseValue: 'WH-01', destinationWarehouse: { value: 'WH-01', label: '长沙仓', known: true, effectiveEnabled: false } }, t), '长沙仓（已停用）')
 })

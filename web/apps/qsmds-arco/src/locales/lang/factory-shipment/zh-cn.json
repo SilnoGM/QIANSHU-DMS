@@ -9,6 +9,15 @@
         "tooLong": "物流单号不能超过 100 个字符",
         "controlCharacters": "物流单号不能包含换行、制表符等控制字符"
       }
+    },
+    "warehouse": {
+      "label": "目的地仓库",
+      "requiredLabel": "目的地仓库（必填）",
+      "placeholder": "请选择目的地仓库",
+      "validation": {
+        "required": "请选择该货件的目的地仓库",
+        "unavailable": "所选仓库当前不可用，请重新选择有效仓库"
+      }
     }
   }
 }

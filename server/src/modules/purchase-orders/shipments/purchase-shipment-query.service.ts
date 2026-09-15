@@ -7,7 +7,7 @@ import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.se
 import { purchaseOrderSupplierFromSources } from '../purchase-order-query.service'
 import type { PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 import { PURCHASE_SHIPMENT_VIEWS } from './purchase-shipment.dto'
-import type { PurchaseShipmentDetailDto, PurchaseShipmentFilterDto, PurchaseShipmentListItemDto, PurchaseShipmentListQueryDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto, PurchaseShipmentView } from './purchase-shipment.dto'
+import type { PurchaseShipmentDestinationWarehouseDto, PurchaseShipmentDetailDto, PurchaseShipmentFilterDto, PurchaseShipmentListItemDto, PurchaseShipmentListQueryDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto, PurchaseShipmentView } from './purchase-shipment.dto'
 
 const LINE_SELECT = {
   lineNumber: true, lineType: true, productId: true, productNoSnapshot: true, productNameSnapshot: true,
@@ -19,7 +19,7 @@ const LINE_SELECT = {
 
 const PART_SELECT = {
   id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true, createdAt: true,
-  shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true,
+  shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true, trackingNo: true, destinationWarehouseValue: true,
   warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
   warehouseReceivedBy: { select: { id: true, displayName: true } },
   purchaseOrder: { select: {
@@ -96,7 +96,7 @@ function viewWhere(view: PurchaseShipmentView): Prisma.PurchaseOrderPartWhereInp
   }
 }
 
-function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto): PurchaseShipmentListItemDto {
+function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto, destinationWarehouse: PurchaseShipmentDestinationWarehouseDto | null): PurchaseShipmentListItemDto {
   const order = row.purchaseOrder
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
@@ -108,6 +108,7 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto): PurchaseShip
     shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: row.shippedBy,
     shipmentRecordedAt: row.shipmentRecordedAt?.toISOString() ?? null, shipmentRemark: row.shipmentRemark,
     trackingNo: row.trackingNo ?? null,
+    destinationWarehouseValue: row.destinationWarehouseValue ?? null, destinationWarehouse,
     warehouseReceivedAt: row.warehouseReceivedAt?.toISOString() ?? null, warehouseReceivedById: row.warehouseReceivedById,
     warehouseRecordedAt: row.warehouseRecordedAt?.toISOString() ?? null, warehouseRemark: row.warehouseRemark,
     warehouseReceivedBy: row.warehouseReceivedBy,
@@ -144,8 +145,8 @@ export class PurchaseShipmentQueryService {
       const rows = await transaction.purchaseOrderPart.findMany({ where, select: PART_SELECT, orderBy: [{ createdAt: 'desc' }, { purchaseOrderId: 'desc' }, { partNumber: 'asc' }, { id: 'asc' }], skip: (page - 1) * pageSize, take: pageSize })
       return [total, rows] as const
     }, { isolationLevel: 'RepeatableRead' })
-    const suppliers = await this.resolveSuppliers(rows)
-    return { page, pageSize, total, items: rows.map(row => mapPart(row, suppliers.get(row.purchaseOrder.id)!)) }
+    const [suppliers, warehouses] = await Promise.all([this.resolveSuppliers(rows), this.resolveWarehouses(rows)])
+    return { page, pageSize, total, items: rows.map(row => mapPart(row, suppliers.get(row.purchaseOrder.id)!, warehouses.get(row.destinationWarehouseValue) ?? null)) }
   }
 
   async statusCounts(input: PurchaseShipmentFilterDto): Promise<PurchaseShipmentStatusCountsDto> {
@@ -175,14 +176,23 @@ export class PurchaseShipmentQueryService {
   async getById(partId: string): Promise<PurchaseShipmentDetailDto> {
     const row = await this.prisma.purchaseOrderPart.findUnique({ where: { id: partId }, select: DETAIL_SELECT })
     if (row === null) throw new ApiException(HttpStatus.NOT_FOUND, 'PURCHASE_ORDER_PART_NOT_FOUND', '采购货件不存在')
-    const suppliers = await this.resolveSuppliers([row])
-    const mapped = mapPart(row, suppliers.get(row.purchaseOrder.id)!)
+    const [suppliers, warehouses] = await Promise.all([this.resolveSuppliers([row]), this.resolveWarehouses([row])])
+    const mapped = mapPart(row, suppliers.get(row.purchaseOrder.id)!, warehouses.get(row.destinationWarehouseValue) ?? null)
     return { ...mapped, items: row.items.map((item, index) => ({
       purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, lineType: item.line.lineType,
       productId: item.line.productId, productNo: item.line.productNoSnapshot, productName: item.line.productNameSnapshot,
       productAttributes: Array.isArray(item.line.productAttributesSnapshot) ? item.line.productAttributesSnapshot.filter((attribute): attribute is Prisma.JsonObject => typeof attribute === 'object' && attribute !== null && !Array.isArray(attribute)) : [],
       description: item.line.descriptionSnapshot, quantity: item.quantity, mainImage: mapped.lineSummary.previews[index].mainImage,
     })) }
+  }
+
+  private async resolveWarehouses(rows: readonly PartRow[]): Promise<ReadonlyMap<string | null, PurchaseShipmentDestinationWarehouseDto>> {
+    const values = [...new Set(rows.flatMap(row => row.destinationWarehouseValue == null ? [] : [row.destinationWarehouseValue]))]
+    const resolved = values.length === 0 ? [] : await this.dictionaryLookup.resolveStoredValues({ dictionaryCode: 'mainland.warehouse', values })
+    return new Map(values.map((value, index) => {
+      const item = resolved[index]
+      return [value, { value, label: item?.known === true ? item.label : null, known: item?.known === true, effectiveEnabled: item?.known === true && item.effectiveEnabled }]
+    }))
   }
 
   private async resolveSuppliers(rows: readonly PartRow[]): Promise<ReadonlyMap<string, PurchaseOrderSupplierDto>> {
