@@ -101,26 +101,26 @@ const routes: RouteRecordRaw[] = [
     redirect: { name: 'qsOperationsWarehouseArrivals' },
     meta: {
       title: '仓储运输',
-      icon: 'qs-factory-shipment',
+      icon: 'qs-warehouse-transport',
     },
     children: [
       {
         path: 'warehouse-arrivals',
         name: 'qsOperationsWarehouseArrivals',
         component: () => import('@/views/workbenches/placeholder.vue'),
-        meta: { title: '到仓货件', icon: 'qs-product-list' },
+        meta: { title: '到仓货件', icon: 'qs-warehouse-arrivals' },
       },
       {
         path: 'ocean-containers',
         name: 'qsOperationsOceanContainers',
         component: () => import('@/views/workbenches/placeholder.vue'),
-        meta: { title: '海运柜次', icon: 'qs-factory-shipment' },
+        meta: { title: '海运柜次', icon: 'qs-ocean-containers' },
       },
       {
         path: 'overseas-storage',
         name: 'qsOperationsOverseasStorage',
         component: () => import('@/views/workbenches/placeholder.vue'),
-        meta: { title: '海外寄仓', icon: 'qs-regions' },
+        meta: { title: '海外寄仓', icon: 'qs-overseas-storage' },
       },
     ],
   },

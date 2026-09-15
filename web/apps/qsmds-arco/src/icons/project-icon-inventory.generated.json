@@ -85,6 +85,42 @@
     "source": "brand"
   },
   {
+    "name": "qs-warehouse-transport",
+    "label": "仓储运输",
+    "category": "仓储运输",
+    "usages": [
+      "千树运营工作台 / 仓储运输"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-warehouse-arrivals",
+    "label": "到仓货件",
+    "category": "仓储运输",
+    "usages": [
+      "仓储运输 / 到仓货件"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-ocean-containers",
+    "label": "海运柜次",
+    "category": "仓储运输",
+    "usages": [
+      "仓储运输 / 海运柜次"
+    ],
+    "source": "brand"
+  },
+  {
+    "name": "qs-overseas-storage",
+    "label": "海外寄仓",
+    "category": "仓储运输",
+    "usages": [
+      "仓储运输 / 海外寄仓"
+    ],
+    "source": "brand"
+  },
+  {
     "name": "qs-realtime-payments",
     "label": "实时收付",
     "category": "财务",

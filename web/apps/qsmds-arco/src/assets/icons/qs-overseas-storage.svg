@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <g transform="translate(2 2) scale(.9375)" stroke="#27312B" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="41" cy="22" r="17" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke-width="2.5"/>
+    <path d="M41 5Q27 21 41 39Q55 22 41 5ZM25 22H58M29 12Q41 18 53 12" fill="none" stroke-width="1.8"/>
+    <path d="M8 34H45V56H8Z" fill="#F7F8F4" stroke-width="2.5"/>
+    <path d="M5 34L25 20L48 34Z" fill="oklch(var(--primary))" stroke-width="2.5"/>
+    <path d="M17 41H35V56H17Z" fill="color-mix(in srgb, oklch(var(--primary)) 18%, #F7F8F4)" stroke-width="2.5"/>
+    <path d="M26 42V47M23 51H29" fill="none" stroke-width="1.8"/>
+    <path d="M42 58Q52 53 53 42" fill="none" stroke-width="2.1"/>
+    <path d="M50 52Q42 50 44 42Q52 43 50 52Z" fill="oklch(var(--primary))" stroke-width="2.1"/>
+    <path d="M50 54Q52 45 60 46Q60 55 50 54Z" fill="oklch(var(--primary))" stroke-width="2.1"/>
+  </g>
+</svg>
