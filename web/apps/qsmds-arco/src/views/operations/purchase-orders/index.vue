@@ -297,6 +297,11 @@ const columns: QsGenericTableColumn<PurchaseOrderListItemDto>[] = [{
   minWidth: 210,
   title: '订单状态',
 }, {
+  accessorKey: 'shippedPartCount',
+  id: 'shipmentProgressSummary',
+  minWidth: 180,
+  title: t('purchaseOrderList.shipmentProgress.title'),
+}, {
   accessorFn: item => item.documentSummary.count,
   id: 'documentRecordsSummary',
   minWidth: 140,
@@ -1203,8 +1208,16 @@ onBeforeUnmount(() => {
                 {{ fulfillmentStatusLabel(row.original.fulfillmentStatus) }}
               </FaTag>
             </QsTableStackedLine>
-            <QsTableStackedLine label="货件进度" tone="muted">
-              已发 {{ row.original.shippedPartCount }} / {{ row.original.partCount }} 件 · {{ t('purchaseWarehouseReceipt.progress', { received: row.original.warehouseReceivedPartCount, total: row.original.partCount }) }}
+          </QsTableStackedCell>
+        </template>
+
+        <template #cell-shipmentProgressSummary="{ row }">
+          <QsTableStackedCell>
+            <QsTableStackedLine :label="t('purchaseOrderList.shipmentProgress.shipped')" content-class="qs-type-data" nowrap>
+              {{ t('purchaseOrderList.shipmentProgress.count', { count: row.original.shippedPartCount, total: row.original.partCount }) }}
+            </QsTableStackedLine>
+            <QsTableStackedLine :label="t('purchaseOrderList.shipmentProgress.received')" content-class="qs-type-data" nowrap>
+              {{ t('purchaseOrderList.shipmentProgress.count', { count: row.original.warehouseReceivedPartCount, total: row.original.partCount }) }}
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
