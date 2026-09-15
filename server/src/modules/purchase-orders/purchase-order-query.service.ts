@@ -80,7 +80,7 @@ const PURCHASE_ORDER_LIST_SELECT = {
   fulfillmentStatus: true,
   paymentStatus: true,
   shippingMarkText: true,
-  parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true, shippedAt: true, status: true } },
+  parts: { orderBy: { partNumber: 'asc' }, select: { shippingMarkText: true, shippedAt: true, warehouseReceivedAt: true, status: true } },
   remark: true,
   version: true,
   createdAt: true,
@@ -95,6 +95,11 @@ const PURCHASE_ORDER_LIST_SELECT = {
   },
 } as const satisfies Prisma.PurchaseOrderSelect
 
+// 待入仓按货件事实判断；部分发货且已发子集均已入仓的采购单不再计入此待办。
+const AWAITING_WAREHOUSE_WHERE = {
+  orderStatus: 'CONFIRMED', parts: { some: { status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null } },
+} as const satisfies Prisma.PurchaseOrderWhereInput
+
 const PURCHASE_ORDER_DETAIL_SELECT = {
   ...PURCHASE_ORDER_LIST_SELECT,
   parts: {
@@ -103,6 +108,9 @@ const PURCHASE_ORDER_DETAIL_SELECT = {
       id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true,
       shippedAt: true, shippedById: true, shipmentRecordedAt: true, shipmentRemark: true,
       shippedBy: { select: { id: true, displayName: true } },
+      warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
+      warehouseReceivedBy: { select: { id: true, displayName: true } },
+
       items: { orderBy: { line: { lineNumber: 'asc' } }, select: {
         purchaseOrderLineId: true, quantity: true, line: { select: { lineNumber: true } },
       } },
@@ -258,6 +266,8 @@ export interface PurchaseOrderListItem extends PurchaseOrderRecordSummaries {
   readonly partCount: number
   readonly shippedPartCount: number
   readonly pendingPartCount: number
+  readonly warehouseReceivedPartCount: number
+  readonly pendingWarehousePartCount: number
   readonly remark: string | null
   readonly version: number
   readonly createdAt: string
@@ -313,6 +323,11 @@ export interface PurchaseOrderDetail extends PurchaseOrderListItem {
     readonly shipmentRecordedAt: string | null
     readonly shipmentRemark: string | null
     readonly shippedBy: { readonly id: string, readonly displayName: string } | null
+    readonly warehouseReceivedAt: string | null
+    readonly warehouseReceivedById: string | null
+    readonly warehouseRecordedAt: string | null
+    readonly warehouseRemark: string | null
+    readonly warehouseReceivedBy: { readonly id: string, readonly displayName: string } | null
     readonly items: readonly { readonly purchaseOrderLineId: string, readonly lineNumber: number, readonly quantity: number }[]
   }[]
   readonly sourceSalesOrder: {
@@ -563,6 +578,8 @@ function mapListItem(
     partCount: row._count.parts,
     shippedPartCount: row.parts.filter(part => part.shippedAt != null).length,
     pendingPartCount: row.parts.filter(part => part.status === 'ACTIVE' && part.shippedAt == null).length,
+    warehouseReceivedPartCount: row.parts.filter(part => part.status === 'ACTIVE' && part.warehouseReceivedAt != null).length,
+    pendingWarehousePartCount: row.parts.filter(part => part.status === 'ACTIVE' && part.shippedAt != null && part.warehouseReceivedAt == null).length,
     orderDate: row.orderDate.toISOString().slice(0, 10),
     currencyCode: row.currencyCode,
     purchaseTotalAmount: formatPurchaseOrderAmountUnits(totalUnits),
@@ -606,7 +623,7 @@ export class PurchaseOrderQueryService {
         orderStatus: 'CONFIRMED',
         fulfillmentStatus: { in: ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'] },
       },
-      AWAITING_WAREHOUSE: { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } },
+      AWAITING_WAREHOUSE: AWAITING_WAREHOUSE_WHERE,
     }
     const pendingClause: Prisma.PurchaseOrderWhereInput | undefined =
       input.view !== 'pending'
@@ -749,11 +766,14 @@ export class PurchaseOrderQueryService {
     const pendingBaseWhere: Prisma.PurchaseOrderWhereInput = {
       AND: [baseWhere, { orderStatus: 'CONFIRMED' }],
     }
-    const { reviewCount, fulfillmentRows, paymentRows } = await this.prisma.$transaction(
+    const { reviewCount, warehouseCount, fulfillmentRows, paymentRows } = await this.prisma.$transaction(
       async (transaction) => {
         // 审核中仍属待办，但必须与可发货、可付款的已确认订单分开统计。
         const reviewCount = await transaction.purchaseOrder.count({
           where: { AND: [baseWhere, { orderStatus: 'PENDING_REVIEW' }] },
+        })
+        const warehouseCount = await transaction.purchaseOrder.count({
+          where: { AND: [baseWhere, AWAITING_WAREHOUSE_WHERE] },
         })
         const fulfillmentRows = await transaction.purchaseOrder.groupBy({
           by: ['fulfillmentStatus'],
@@ -765,7 +785,7 @@ export class PurchaseOrderQueryService {
           where: pendingBaseWhere,
           _count: { _all: true },
         })
-        return { reviewCount, fulfillmentRows, paymentRows }
+        return { reviewCount, warehouseCount, fulfillmentRows, paymentRows }
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     )
@@ -798,7 +818,7 @@ export class PurchaseOrderQueryService {
           + (fulfillmentCounts.get('PARTIALLY_SHIPPED') ?? 0),
       }, {
         value: 'AWAITING_WAREHOUSE',
-        count: (fulfillmentCounts.get('SHIPPED') ?? 0) + (fulfillmentCounts.get('PARTIALLY_SHIPPED') ?? 0),
+        count: warehouseCount,
       }, {
         value: 'AWAITING_PAYMENT',
         count: paymentStatuses.reduce(
@@ -847,6 +867,12 @@ export class PurchaseOrderQueryService {
         shipmentRecordedAt: part.shipmentRecordedAt?.toISOString() ?? null,
         shipmentRemark: part.shipmentRemark ?? null,
         shippedBy: part.shippedBy ?? null,
+        warehouseReceivedAt: part.warehouseReceivedAt?.toISOString() ?? null,
+        warehouseReceivedById: part.warehouseReceivedById ?? null,
+        warehouseRecordedAt: part.warehouseRecordedAt?.toISOString() ?? null,
+        warehouseRemark: part.warehouseRemark ?? null,
+        warehouseReceivedBy: part.warehouseReceivedBy ?? null,
+
         items: part.items.map(item => ({
           purchaseOrderLineId: item.purchaseOrderLineId, lineNumber: item.line.lineNumber, quantity: item.quantity,
         })),

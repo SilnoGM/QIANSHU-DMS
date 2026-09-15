@@ -301,3 +301,14 @@ test('采购凭证上传和私有内容读取覆盖剩余公共操作', async ()
     url: 'purchase-orders/purchase%2Fid/documents/document%2Fid/content',
   }])
 })
+
+test('逐件入仓使用独立 POST，保留版本与范围，禁止自动重试并返回完整详情', async () => {
+  const calls: Call[] = []
+  const updated = { id: 'order', warehouseReceivedPartCount: 1 }
+  const api = createPurchaseOrdersApi(createRecorder(calls, updated))
+  const signal = new AbortController().signal
+  const data = { expectedVersion: 3, partIds: ['part-1'], receivedAt: '2026-09-15T06:30:00.000Z', remark: '到仓' }
+  const result = await api.recordWarehouseReceipt('purchase/order', data, signal)
+  assert.equal(result.data, updated)
+  assert.deepEqual(calls, [{ method: 'post', url: 'purchase-orders/purchase%2Forder/warehouse-receipts', data, config: { errorPresentation: 'local', retry: false, signal } }])
+})

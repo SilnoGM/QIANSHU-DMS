@@ -1,3 +1,4 @@
+import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
 import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { randomBytes, randomUUID } from 'node:crypto'
@@ -23,8 +24,8 @@ import { createPurchaseShippingMarkDatabase, createTestShippingMarkRule } from '
 
 export const MARK_CONSUMER = 'PURCHASE_ORDER.REVIEW_SHIPPING_MARK'
 
-export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false) {
-  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration, deferShipmentNumbers)
+export async function createAtomicityFixture(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false) {
+  const database = await createPurchaseShippingMarkDatabase(deferPartsMigration, deferReviewMigration, deferShipmentNumbers, deferWarehouseReceipt)
   const prisma = new IsolatedNumberingPrismaService(database) as unknown as PrismaService
   try {
     await prisma.onModuleInit()
@@ -65,6 +66,7 @@ export async function createAtomicityFixture(deferPartsMigration = false, deferR
       migrateParts: database.applyPartsMigration,
       migrateReview: database.applyReviewMigration,
       migrateShipmentNumbers: database.applyShipmentNumbers,
+      migrateWarehouseReceipt: database.applyWarehouseReceipt,
       context: (idempotencyKey = randomUUID()) => ({
         actorUserId: actor.id, idempotencyKey, requestId: randomUUID(),
       }),
@@ -112,6 +114,7 @@ export function createReviewMutations(fixture: AtomicityFixture, wrap?: (transac
     prisma, fixture.audit, lookup, {} as MediaAssetService,
     new PurchaseOrderQueryService(fixture.prisma, lookup), fixture.salesProgress,
     fixture.numbering, fixture.resolver,
+    new PurchaseOrderWarehouseReceiptService(prisma, fixture.audit, new PurchaseOrderQueryService(fixture.prisma, lookup)),
   )
 }
 

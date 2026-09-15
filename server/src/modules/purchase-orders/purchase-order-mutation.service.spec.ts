@@ -1,3 +1,4 @@
+import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
 import type { PrismaService } from '../../infrastructure/database/prisma.service'
 import { ApiException } from '../../infrastructure/http/api.exception'
 import { AuditService } from '../audit/audit.service'
@@ -113,6 +114,7 @@ function setup() {
       availability: 'AVAILABLE', resolutionToken: 'b'.repeat(64), ruleCode: 'CURRENT_MARK',
     }),
   }
+  const warehouseReceipts = { receiveAll: jest.fn().mockResolvedValue(detail) }
   const service = new PurchaseOrderMutationService(
     prisma as unknown as PrismaService,
     audit as unknown as AuditService,
@@ -122,6 +124,7 @@ function setup() {
     coverage as unknown as SalesOrderPurchaseCoverageService,
     numbering as unknown as NumberingGeneratorService,
     resolver as unknown as PurchaseShippingMarkResolverService,
+    warehouseReceipts as unknown as PurchaseOrderWarehouseReceiptService,
     { now: () => new Date('2026-08-27T12:00:00.000Z') },
   )
   return {
@@ -133,6 +136,7 @@ function setup() {
     order,
     numbering,
     resolver,
+    warehouseReceipts,
     query,
     service,
     transaction,
@@ -483,50 +487,12 @@ describe('PurchaseOrderMutationService', () => {
     )).rejects.toMatchObject({ code: 'PURCHASE_ORDER_CANCELLED' })
   })
 
-  it('atomically completes a paid order when fulfillment reaches SIGNED', async () => {
+  it('delegates legacy SIGNED to the warehouse fact command without changing the parent directly', async () => {
     const fixture = setup()
-    fixture.transaction.purchaseOrder.findUnique.mockResolvedValue({
-      ...fixture.order,
-      fulfillmentStatus: 'SHIPPED',
-      paymentStatus: 'PAID',
-    })
-
-    await fixture.service.updateFulfillmentStatus(
-      context,
-      ORDER_ID,
-      { toStatus: 'SIGNED', reason: null },
-    )
-
-    expect(fixture.transaction.purchaseOrder.update).toHaveBeenCalledWith({
-      where: { id: ORDER_ID },
-      data: {
-        fulfillmentStatus: 'SIGNED',
-        orderStatus: 'COMPLETED',
-        version: { increment: 1 },
-      },
-    })
-    expect(fixture.transaction.purchaseOrderStatusHistory.create.mock.calls).toContainEqual([{
-      data: {
-        purchaseOrderId: ORDER_ID,
-        dimension: 'ORDER',
-        fromStatus: 'CONFIRMED',
-        toStatus: 'COMPLETED',
-        reason: expect.stringContaining('签收后满足已签收且已付清') as unknown,
-        changedByUserId: ACTOR_ID,
-      },
-    }])
-    expect(fixture.audit.record).toHaveBeenCalledWith(
-      fixture.transaction,
-      expect.objectContaining({
-        eventType: 'PURCHASE_ORDER_ORDER_STATUS_CHANGED',
-        metadata: {
-          automatic: true,
-          fromStatus: 'CONFIRMED',
-          toStatus: 'COMPLETED',
-          trigger: 'FULFILLMENT',
-        },
-      }),
-    )
+    await expect(fixture.service.updateFulfillmentStatus(context, ORDER_ID, { toStatus: 'SIGNED', reason: '已到仓' })).resolves.toBe(fixture.detail)
+    expect(fixture.warehouseReceipts.receiveAll).toHaveBeenCalledWith(context, ORDER_ID, '已到仓')
+    expect(fixture.transaction.purchaseOrder.update).not.toHaveBeenCalled()
+    expect(fixture.audit.record).not.toHaveBeenCalled()
   })
 
   it('records payment without requiring a voucher and derives PARTIALLY_PAID', async () => {

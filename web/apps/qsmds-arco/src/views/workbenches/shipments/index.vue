@@ -15,6 +15,7 @@ import QsPurchaseOrderDrawer from '@/components/business/QsPurchaseOrderDrawer/i
 import QsStatusSwitchToolbar from '@/components/business/QsStatusSwitchToolbar/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { useDictionaryCatalog } from '@/dictionary-catalog/use-dictionary-catalog'
+import PurchaseWarehouseReceiptAction from '@/views/operations/purchase-orders/purchase-warehouse-receipt-action.vue'
 import { buildShipmentRouteQuery, formatShipmentNumber, parseShipmentQuery, SHIPMENT_VIEWS, shipmentStatusClass } from './logic'
 import ShipmentDetailDrawer from './shipment-detail-drawer.vue'
 import { getShipmentSourceEmptyKey } from './shipment-detail.logic'
@@ -29,6 +30,8 @@ const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
 const supplierCatalog = useDictionaryCatalog('service_provider.supplier')
+const warehouseActionRef = useTemplateRef<InstanceType<typeof PurchaseWarehouseReceiptAction>>('warehouseActionRef')
+const canReceive = computed(() => auth('purchase-orders:update'))
 const canRead = computed(() => auth('purchase-orders:read'))
 const instancePath = route.fullPath
 const activated = ref(false)
@@ -108,10 +111,16 @@ const columns = computed<QsGenericTableColumn<PurchaseShipmentListItemDto>[]>(()
   { id: 'products', title: t('purchaseShipments.products'), accessorFn: row => row.lineSummary.previews.map(item => item.productName).join('、'), minWidth: 200 },
   { id: 'buyer', title: t('purchaseShipments.buyer'), accessorFn: row => row.purchaseOrder.createdBy.displayName, minWidth: 160 },
   { id: 'shipped', title: t('purchaseShipments.shipped'), accessorKey: 'shippedAt', minWidth: 200 },
+  { id: 'received', title: t('purchaseWarehouseReceipt.receivedAt'), accessorKey: 'warehouseReceivedAt', minWidth: 200 },
   { id: 'createdAt', title: t('purchaseShipments.createdAt'), accessorKey: 'createdAt', minWidth: 195, defaultVisible: false },
   { id: 'recordedAt', title: t('purchaseShipments.recordedAt'), accessorKey: 'shipmentRecordedAt', minWidth: 195, defaultVisible: false },
   { id: 'remark', title: t('purchaseShipments.remark'), accessorKey: 'shipmentRemark', minWidth: 220, defaultVisible: false },
 ])
+
+function warehouseUpdated(): void {
+  refresh()
+  void loadDetail()
+}
 
 function selectTab(value: string | number): void {
   if (SHIPMENT_VIEWS.includes(value as typeof SHIPMENT_VIEWS[number])) {
@@ -236,7 +245,7 @@ onBeforeUnmount(() => {
           :loading="loading" :error="error" :addable="false" :page-size-options="[20, 50, 100]"
           :filter-definitions="filterDefinitions" :search-placeholder="t('purchaseShipments.search')"
           :empty-title="t('purchaseShipments.empty')" :empty-description="t('purchaseShipments.emptyDescription')"
-          :action-column="{ fixed: 'right', minWidth: 245, width: 245 }" table-class="w-max min-w-full"
+          :action-column="{ fixed: 'right', minWidth: canReceive ? 350 : 245, width: canReceive ? 350 : 245 }" table-class="w-max min-w-full"
           @search="search" @filter-change="search" @pagination-change="paginate" @retry="refresh"
         >
           <template #query-leading>
@@ -305,6 +314,11 @@ onBeforeUnmount(() => {
             </QsTableStackedCell>
             <span v-else class="qs-type-meta">{{ t('purchaseShipments.notShipped') }}</span>
           </template>
+          <template #cell-received="{ row }">
+            <QsTableStackedCell v-if="row.original.warehouseReceivedAt">
+              <DateTimeDisplay :value="row.original.warehouseReceivedAt" /><QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" />
+            </QsTableStackedCell><span v-else class="qs-type-meta text-muted-foreground">—</span>
+          </template>
           <template #cell-createdAt="{ row }">
             <DateTimeDisplay :value="row.original.createdAt" />
           </template>
@@ -317,6 +331,9 @@ onBeforeUnmount(() => {
             </FaTooltip>
           </template>
           <template #actions="{ row }">
+            <FaButton v-if="canReceive && row.viewStatus === 'SHIPPED'" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :disabled="!!warehouseActionRef?.loadingOrderId" @click="warehouseActionRef?.open(row.purchaseOrder.id, [row.id])">
+              <FaIcon name="i-lucide:warehouse" aria-hidden="true" />{{ t('purchaseWarehouseReceipt.action') }}
+            </FaButton>
             <FaButton variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.purchaseOrder.orderNo} ${formatShipmentNumber(row.partNumber)}：${t('purchaseShipments.view')}`" @click="openShipment(row.id)">
               <FaIcon name="i-lucide:package-search" aria-hidden="true" />{{ t('purchaseShipments.view') }}
             </FaButton>
@@ -372,6 +389,9 @@ onBeforeUnmount(() => {
                 </QsTableStackedLine>
               </QsTableStackedCell>
               <QsPersonDisplay :display-name="row.purchaseOrder.createdBy.displayName" size="md" />
+              <div v-if="row.warehouseReceivedAt" class="flex flex-wrap gap-2 items-center">
+                <span class="qs-type-meta text-muted-foreground">{{ t('purchaseWarehouseReceipt.receivedAt') }}</span><DateTimeDisplay :value="row.warehouseReceivedAt" /><QsPersonDisplay v-if="row.warehouseReceivedBy" :display-name="row.warehouseReceivedBy.displayName" size="md" />
+              </div>
               <div v-if="row.shippedAt" class="flex flex-wrap gap-2 items-center">
                 <DateTimeDisplay :value="row.shippedAt" /><QsPersonDisplay v-if="row.shippedBy" :display-name="row.shippedBy.displayName" size="md" />
               </div>
@@ -380,6 +400,7 @@ onBeforeUnmount(() => {
         </QsGenericTable>
       </template>
     </FaPageMain>
+    <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="enabled" @detail-updated="warehouseUpdated" />
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-manage-payment="false" :can-attach-document="false" @reload="loadDetail" />
   </div>

@@ -79,6 +79,7 @@ import PurchaseOrderRecordSummaryCell from './purchase-order-record-summary-cell
 import PurchaseOrderRecordsModal from './purchase-order-records-modal.vue'
 import PurchaseOrderShippingMarksCell from './purchase-order-shipping-marks-cell.vue'
 import PurchaseShipmentSummary from './purchase-shipment-summary.vue'
+import PurchaseWarehouseReceiptAction from './purchase-warehouse-receipt-action.vue'
 
 defineOptions({ name: 'QsOperationsPurchaseOrders' })
 
@@ -167,6 +168,9 @@ const shipmentContextLoading = ref(false)
 const shipmentSubmitting = ref(false)
 const shipmentError = ref<string | null>(null)
 const cancelActionsRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailActions>>('cancelActionsRef')
+const warehouseActionRef = useTemplateRef<InstanceType<typeof PurchaseWarehouseReceiptAction>>('warehouseActionRef')
+watch(() => route.fullPath, () => warehouseActionRef.value?.reset())
+const warehouseLoadingOrderId = computed(() => warehouseActionRef.value?.loadingOrderId ?? null)
 const paymentActionRef = useTemplateRef<InstanceType<typeof PurchaseOrderListPaymentAction>>('paymentActionRef')
 const paymentLoadingOrderId = computed(() => paymentActionRef.value?.loadingOrderId ?? null)
 const todayDate = today(getLocalTimeZone())
@@ -754,7 +758,7 @@ async function retryPurchaseFactoryShipment(): Promise<void> {
   }
 }
 
-/** 发货和付款进入各自的正式业务弹窗；到仓仍保留建设中提示。 */
+/** 所有待办入口进入各自的正式业务弹窗，由最新订单详情确定可操作货件。 */
 function handlePendingAction(
   action: PurchaseOrderPendingActionItem,
   order: PurchaseOrderListItemDto,
@@ -773,7 +777,9 @@ function handlePendingAction(
     void paymentActionRef.value?.open(order.id)
     return
   }
-  toast.info(`${action.label}功能正在建设中`)
+  if (action.key === 'WAREHOUSE_RECEIPT') {
+    void warehouseActionRef.value?.open(order.id)
+  }
 }
 
 function handleDetailUpdated(_detail: PurchaseOrderDetailDto): void {
@@ -1014,14 +1020,17 @@ onBeforeUnmount(() => {
                   size="sm"
                   class="min-h-11 sm:min-h-8"
                   :aria-label="`${row.orderNo}：${action.label}`"
-                  :loading="action.key === 'PAYMENT' && paymentLoadingOrderId === row.id"
-                  :disabled="action.key === 'PAYMENT' && paymentLoadingOrderId !== null"
+                  :loading="(action.key === 'PAYMENT' && paymentLoadingOrderId === row.id) || (action.key === 'WAREHOUSE_RECEIPT' && warehouseLoadingOrderId === row.id)"
+                  :disabled="(action.key === 'PAYMENT' && paymentLoadingOrderId !== null) || (action.key === 'WAREHOUSE_RECEIPT' && warehouseLoadingOrderId !== null)"
                   @click="handlePendingAction(action, row)"
                 >
                   <FaIcon :name="action.icon" aria-hidden="true" />{{ action.label }}
                 </FaButton>
               </template>
             </template>
+            <FaButton v-if="props.viewMode === 'all' && canUpdate && row.orderStatus === 'CONFIRMED' && row.pendingWarehousePartCount > 0" variant="ghost" size="sm" class="text-primary min-h-11 sm:min-h-8" :loading="warehouseLoadingOrderId === row.id" :disabled="warehouseLoadingOrderId !== null" @click="warehouseActionRef?.open(row.id)">
+              <FaIcon name="i-lucide:warehouse" />{{ t('purchaseWarehouseReceipt.action') }}
+            </FaButton>
             <FaButton
               v-if="canUpdate && canCancelPurchaseOrderFromList(row) && (props.viewMode === 'all' || row.orderStatus === 'PENDING_REVIEW')"
               type="button"
@@ -1195,7 +1204,7 @@ onBeforeUnmount(() => {
               </FaTag>
             </QsTableStackedLine>
             <QsTableStackedLine label="货件进度" tone="muted">
-              已发 {{ row.original.shippedPartCount }} / {{ row.original.partCount }} 件 · 待发 {{ row.original.pendingPartCount }} 件
+              已发 {{ row.original.shippedPartCount }} / {{ row.original.partCount }} 件 · {{ t('purchaseWarehouseReceipt.progress', { received: row.original.warehouseReceivedPartCount, total: row.original.partCount }) }}
             </QsTableStackedLine>
           </QsTableStackedCell>
         </template>
@@ -1514,7 +1523,7 @@ onBeforeUnmount(() => {
                   <FaTag variant="outline" :class="fulfillmentStatusTagClass(row.fulfillmentStatus)">
                     {{ fulfillmentStatusLabel(row.fulfillmentStatus) }}
                   </FaTag>
-                  <span class="qs-type-meta text-muted-foreground">已发 {{ row.shippedPartCount }} / {{ row.partCount }} 件</span>
+                  <span class="qs-type-meta text-muted-foreground">已发 {{ row.shippedPartCount }} / {{ row.partCount }} 件 · {{ t('purchaseWarehouseReceipt.progress', { received: row.warehouseReceivedPartCount, total: row.partCount }) }}</span>
                 </dd>
               </div>
               <div class="col-span-2">
@@ -1588,6 +1597,7 @@ onBeforeUnmount(() => {
       @detail-updated="handleDetailUpdated"
     />
 
+    <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="canRead" @detail-updated="handleDetailUpdated" />
     <PurchaseOrderListPaymentAction
       ref="paymentActionRef"
       :active="viewMode === 'pending' && route.name === 'qsOperationsPendingPurchaseOrders' && selectedStatus === 'AWAITING_PAYMENT'"

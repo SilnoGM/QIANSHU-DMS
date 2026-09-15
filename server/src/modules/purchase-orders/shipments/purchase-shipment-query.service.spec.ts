@@ -16,8 +16,9 @@ function row() {
   return {
     id: 'part-1', shipmentNo: 'PKG/20260914-00001', partNumber: 2, status: 'ACTIVE', shippingMarkText: 'MARK/02', createdAt: new Date('2026-09-14T00:00:00Z'),
     shippedAt: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null,
+    warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null,
     purchaseOrder: {
-      id: 'order-1', orderNo: 'PO/01', orderDate: new Date('2026-09-14'), purchaseType: 'STOCK', productMode: 'CUSTOM', orderStatus: 'CONFIRMED',
+      id: 'order-1', version: 3, orderNo: 'PO/01', orderDate: new Date('2026-09-14'), purchaseType: 'STOCK', productMode: 'CUSTOM', orderStatus: 'CONFIRMED',
       shippingMarkText: 'MARK', supplierValue: null, customSupplierName: '临时工厂', createdBy: { id: 'buyer-1', displayName: '采购员' }, salesOrder: null,
     },
     items: [{ purchaseOrderLineId: 'line-1', quantity: 2, line: {
@@ -75,13 +76,13 @@ describe('PurchaseShipmentQueryService', () => {
   it('derives exclusive status counts with cancellation taking precedence over shippedAt', async () => {
     const f = fixture()
     f.part.groupBy.mockResolvedValue([
-      { status: 'PENDING_REVIEW', _count: { _all: 2, shippedAt: 0 } },
-      { status: 'ACTIVE', _count: { _all: 5, shippedAt: 3 } },
-      { status: 'CANCELLED', _count: { _all: 4, shippedAt: 2 } },
+      { status: 'PENDING_REVIEW', _count: { _all: 2, shippedAt: 0, warehouseReceivedAt: 0 } },
+      { status: 'ACTIVE', _count: { _all: 5, shippedAt: 3, warehouseReceivedAt: 2 } },
+      { status: 'CANCELLED', _count: { _all: 4, shippedAt: 2, warehouseReceivedAt: 1 } },
     ])
     f.user.findMany.mockResolvedValue([{ id: 'buyer-1', displayName: '采购员' }])
     const result = await f.service.statusCounts({ keyword: '厂', supplierSource: 'CUSTOM_TEXT' })
-    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 3 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员' }] })
+    expect(result).toEqual({ items: [{ value: 'ALL', count: 11 }, { value: 'PENDING_REVIEW', count: 2 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CANCELLED', count: 4 }], buyerOptions: [{ id: 'buyer-1', displayName: '采购员' }] })
     expect(f.user.findMany).toHaveBeenCalledWith({ where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } }, select: { id: true, displayName: true }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }] })
     expect(f.order.findMany).not.toHaveBeenCalled()
   })
@@ -102,6 +103,27 @@ describe('PurchaseShipmentQueryService', () => {
     const f = fixture(), value = row()
     f.part.findUnique.mockResolvedValue({ ...value, status: 'CANCELLED', shippedAt: new Date('2026-09-13T01:00:00Z'), shipmentRemark: '原发货说明' })
     expect(await f.service.getById('part-1')).toMatchObject({ status: 'CANCELLED', viewStatus: 'CANCELLED', shippedAt: '2026-09-13T01:00:00.000Z', shipmentRemark: '原发货说明', items: [{ purchaseOrderLineId: 'line-1', quantity: 2, productAttributes: [], description: '临时规格' }] })
+  })
+
+  it('excludes received shipments from shipped view and retains all receipt facts in detail', async () => {
+    const f = fixture()
+    await f.service.list({ view: 'SHIPPED' })
+    expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
+      status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null,
+    }] } }))
+    await f.service.list({ view: 'WAREHOUSE_RECEIVED' })
+    expect(f.part.findMany).toHaveBeenLastCalledWith(expect.objectContaining({ where: { AND: [expect.any(Object) as unknown, {
+      status: 'ACTIVE', warehouseReceivedAt: { not: null },
+    }] } }))
+    f.part.findUnique.mockResolvedValue({ ...row(), shippedAt: new Date('2026-09-14T01:00:00Z'),
+      warehouseReceivedAt: new Date('2026-09-14T02:00:00Z'), warehouseRecordedAt: new Date('2026-09-14T03:00:00Z'),
+      warehouseReceivedById: 'receiver-1', warehouseReceivedBy: { id: 'receiver-1', displayName: '收货员' }, warehouseRemark: '外箱完好',
+    })
+    expect(await f.service.getById('part-1')).toMatchObject({
+      viewStatus: 'WAREHOUSE_RECEIVED', warehouseReceivedAt: '2026-09-14T02:00:00.000Z',
+      warehouseRecordedAt: '2026-09-14T03:00:00.000Z', warehouseReceivedById: 'receiver-1',
+      warehouseReceivedBy: { id: 'receiver-1', displayName: '收货员' }, warehouseRemark: '外箱完好', purchaseOrder: { version: 3 },
+    })
   })
 
   it('returns explicit 404 and validates impossible/reversed date ranges before querying', async () => {

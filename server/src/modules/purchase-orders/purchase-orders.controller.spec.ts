@@ -478,8 +478,19 @@ describe('PurchaseOrdersController OpenAPI', () => {
       },
     })
     expect(document.components?.schemas?.PurchaseOrderPartDto).toMatchObject({
-      required: expect.arrayContaining(['shipmentNo']) as unknown,
+      required: expect.arrayContaining(['shipmentNo', 'warehouseReceivedAt', 'warehouseReceivedById', 'warehouseRecordedAt', 'warehouseRemark', 'warehouseReceivedBy']) as unknown,
       properties: { shipmentNo: { type: 'string', nullable: true, maxLength: 64 }, shippingMarkText: { type: 'string', nullable: true, maxLength: 72 } },
+    })
+  })
+
+  it('publishes warehouse receipt conflicts on the legacy fulfillment signing endpoint', () => {
+    expect(document.paths['/api/purchase-orders/{purchaseOrderId}/fulfillment-status']?.patch).toMatchObject({
+      'x-qianshu-contract': { conflict: true, errors: expect.arrayContaining([
+        { status: 409, codes: ['PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED'] },
+        expect.objectContaining({ status: 422, codes: expect.arrayContaining([
+          'PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED', 'PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID', 'PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID',
+        ]) as unknown }),
+      ]) as unknown },
     })
   })
 

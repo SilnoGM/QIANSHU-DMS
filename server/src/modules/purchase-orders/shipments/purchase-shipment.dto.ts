@@ -6,7 +6,7 @@ import { PurchaseOrderLineType, PurchaseOrderPartStatus, PurchaseOrderProductMod
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
 import { PurchaseOrderActorDto, PurchaseOrderListImageDto, PurchaseOrderSourceSalesOrderDto, PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 
-export const PURCHASE_SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'CANCELLED'] as const
+export const PURCHASE_SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CANCELLED'] as const
 export type PurchaseShipmentView = typeof PURCHASE_SHIPMENT_VIEWS[number]
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 
@@ -64,6 +64,7 @@ export class PurchaseShipmentIdParamDto {
 
 export class PurchaseShipmentOrderDto {
   @ApiProperty({ type: 'string', format: 'uuid' }) readonly id!: string
+  @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: 'string' }) readonly orderNo!: string
   @ApiProperty({ type: 'string', format: 'date' }) readonly orderDate!: string
   @ApiProperty({ enum: PurchaseOrderType }) readonly purchaseType!: PurchaseOrderType
@@ -100,6 +101,11 @@ export class PurchaseShipmentListItemDto {
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly shippedBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shipmentRecordedAt!: string | null
   @ApiProperty({ type: 'string', nullable: true }) readonly shipmentRemark!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '仓库实际收货时间，不代表库存记账' }) readonly warehouseReceivedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly warehouseReceivedById!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly warehouseRecordedAt!: string | null
+  @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly warehouseRemark!: string | null
+  @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly warehouseReceivedBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: () => PurchaseShipmentOrderDto }) readonly purchaseOrder!: PurchaseShipmentOrderDto
   @ApiProperty({ type: () => PurchaseOrderSupplierDto }) readonly supplier!: PurchaseOrderSupplierDto
   @ApiProperty({ type: () => PurchaseOrderSourceSalesOrderDto, nullable: true }) readonly salesSource!: PurchaseOrderSourceSalesOrderDto | null

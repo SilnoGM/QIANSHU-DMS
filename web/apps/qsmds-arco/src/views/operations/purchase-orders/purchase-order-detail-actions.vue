@@ -13,7 +13,6 @@ import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
-
 import {
   buildPurchaseOrderCancellationRequest,
   buildPurchaseOrderFulfillmentRequest,
@@ -22,6 +21,7 @@ import {
   formatPurchaseOrderLocalDateTime,
   purchaseOrderPaymentTypeLabel,
 } from './purchase-order-detail.logic'
+
 import {
   canCancelPurchaseOrderFromList,
   fulfillmentStatusLabel,
@@ -29,6 +29,7 @@ import {
   isPurchaseOrderAbortError,
   nextPurchaseOrderFulfillmentStatus,
 } from './purchase-order-list.logic'
+import PurchaseWarehouseReceiptAction from './purchase-warehouse-receipt-action.vue'
 
 interface UploadedVoucher extends PurchaseOrderTemporaryDocumentDto {
   readonly previewUrl: string | null
@@ -52,6 +53,8 @@ const emit = defineEmits<{
 const { auth } = useAppAuth()
 const appAccountStore = useAppAccountStore()
 const toast = useQsToast()
+const warehouseActionRef = useTemplateRef<InstanceType<typeof PurchaseWarehouseReceiptAction>>('warehouseActionRef')
+const warehouseBusy = ref(false)
 const submitting = ref(false)
 const uploading = ref(false)
 const actionError = ref('')
@@ -73,7 +76,7 @@ let actionAbortController: AbortController | null = null
 const canUpdate = computed(() => auth('purchase-orders:update'))
 const canManagePayment = computed(() => auth('purchase-orders:payment'))
 const canManageDocument = computed(() => auth('purchase-orders:document'))
-const actionLocked = computed(() => submitting.value || uploading.value)
+const actionLocked = computed(() => submitting.value || uploading.value || warehouseBusy.value)
 const nextFulfillmentStatus = computed(() => nextPurchaseOrderFulfillmentStatus(props.detail))
 const canRecordPayment = computed(() => (
   canManagePayment.value
@@ -128,6 +131,8 @@ function clearActionState(): void {
 }
 
 function cancelPendingRequests(): void {
+  warehouseActionRef.value?.reset()
+  warehouseBusy.value = false
   actionAbortController?.abort()
   actionAbortController = null
   submitting.value = false
@@ -151,7 +156,18 @@ function openPaymentDialog(): void {
   activeDialog.value = 'payment'
 }
 
+function openWarehouseDialog(): void {
+  if (canUpdate.value && !actionLocked.value) {
+    clearActionState()
+    void warehouseActionRef.value?.open(props.detail.id)
+  }
+}
+
 function openFulfillmentDialog(): void {
+  if (nextFulfillmentStatus.value === 'SIGNED') {
+    openWarehouseDialog()
+    return
+  }
   if (!canUpdate.value || nextFulfillmentStatus.value === null || actionLocked.value) {
     return
   }
@@ -241,6 +257,11 @@ function submitFulfillment(): void {
   }
   const toStatus = nextFulfillmentStatus.value
   if (toStatus === null) {
+    return
+  }
+  if (toStatus === 'SIGNED') {
+    activeDialog.value = null
+    openWarehouseDialog()
     return
   }
   const result = buildPurchaseOrderFulfillmentRequest(
@@ -472,12 +493,14 @@ defineExpose({
   openCancelDialog,
   openDetachDialog,
   openFulfillmentDialog,
+  openWarehouseDialog,
   openPaymentDialog,
   openVoidDialog,
 })
 </script>
 
 <template>
+  <PurchaseWarehouseReceiptAction ref="warehouseActionRef" :active="canUpdate" @busy-change="warehouseBusy = $event" @detail-updated="emit('detailUpdated', $event)" />
   <QsGenericModal
     :model-value="activeDialog === 'payment'"
     title="记录实际付款"

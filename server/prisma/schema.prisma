@@ -124,6 +124,7 @@ enum AuditEventType {
   SALES_ORDER_PRODUCTS_CHANGED
   PURCHASE_ORDER_CREATED
   PURCHASE_SHIPMENT_NUMBER_ASSIGNED
+  PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED
   PURCHASE_ORDER_ORDER_STATUS_CHANGED
   PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED
   PURCHASE_ORDER_PAYMENT_RECORDED
@@ -535,6 +536,7 @@ model User {
   salesOrderAmountsChanged    SalesOrderAmountRevision[] @relation("SalesOrderAmountChangedBy")
   purchaseOrdersCreated             PurchaseOrder[]              @relation("PurchaseOrderCreatedBy")
   purchaseOrderPartsShipped         PurchaseOrderPart[] @relation("PurchaseOrderPartShippedBy")
+  purchaseOrderPartsWarehouseReceived PurchaseOrderPart[] @relation("PurchaseOrderPartWarehouseReceivedBy")
   purchaseOrderPaymentsCreated      PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentCreatedBy")
   purchaseOrderPaymentsVoided       PurchaseOrderPayment[]       @relation("PurchaseOrderPaymentVoidedBy")
   purchaseOrderDocumentsCreated     PurchaseOrderDocument[]      @relation("PurchaseOrderDocumentCreatedBy")
@@ -1138,6 +1140,12 @@ model PurchaseOrderPart {
   shipmentRecordedAt DateTime? @map("shipment_recorded_at") @db.Timestamptz(6)
   shipmentRemark String? @map("shipment_remark") @db.VarChar(500)
   shippedBy User? @relation("PurchaseOrderPartShippedBy", fields: [shippedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  // 仓库确认收货事实；与发货事实分别冻结，不产生库存数量或资金变动。
+  warehouseReceivedAt DateTime? @map("warehouse_received_at") @db.Timestamptz(6)
+  warehouseReceivedById String? @map("warehouse_received_by_id") @db.Uuid
+  warehouseRecordedAt DateTime? @map("warehouse_recorded_at") @db.Timestamptz(6)
+  warehouseRemark String? @map("warehouse_remark") @db.VarChar(500)
+  warehouseReceivedBy User? @relation("PurchaseOrderPartWarehouseReceivedBy", fields: [warehouseReceivedById], references: [id], onDelete: Restrict, onUpdate: Restrict)
   items PurchaseOrderPartItem[]
 
   @@unique([id, purchaseOrderId], map: "purchase_order_parts_id_order_id_key")

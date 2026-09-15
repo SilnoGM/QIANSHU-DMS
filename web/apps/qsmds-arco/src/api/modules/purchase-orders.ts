@@ -24,6 +24,7 @@ import type {
   PurchaseOrderStatusCountsDto,
   PurchaseOrderStatusRequestDto,
   PurchaseOrderTemporaryDocumentDto,
+  PurchaseOrderWarehouseReceiptRequestDto,
 } from '../generated/types.gen'
 
 import api from '../index'
@@ -169,6 +170,15 @@ export function createPurchaseOrdersApi(client: AxiosInstance) {
       signal: AbortSignal,
     ) => client.post<FactoryShipmentResultDto>(
       `${orderPath(purchaseOrderId)}/factory-shipments`,
+      data,
+      { errorPresentation: 'local', retry: false, signal },
+    ),
+    recordWarehouseReceipt: (
+      purchaseOrderId: string,
+      data: PurchaseOrderWarehouseReceiptRequestDto,
+      signal: AbortSignal,
+    ) => client.post<PurchaseOrderDetailDto>(
+      `${orderPath(purchaseOrderId)}/warehouse-receipts`,
       data,
       { errorPresentation: 'local', retry: false, signal },
     ),

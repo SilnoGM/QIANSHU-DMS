@@ -23,9 +23,11 @@ test('Tab 切换保留公共筛选并归一到第一页，数量查询排除视�
 test('货件序号不截断，状态绿色采用主题 primary', () => {
   assert.equal(formatShipmentNumber(1), '货件-01')
   assert.equal(formatShipmentNumber(123), '货件-123')
-  assert.match(shipmentStatusClass('SHIPPED'), /text-primary/u)
+  assert.match(shipmentStatusClass('WAREHOUSE_RECEIVED'), /text-primary/u)
   assert.match(shipmentStatusClass('CANCELLED'), /text-destructive/u)
   assert.notEqual(shipmentStatusClass('AWAITING_SHIPMENT'), shipmentStatusClass('PENDING_REVIEW'))
+  assert.notEqual(shipmentStatusClass('AWAITING_SHIPMENT'), shipmentStatusClass('SHIPPED'))
+  assert.equal(parseShipmentQuery({ view: 'WAREHOUSE_RECEIVED' }).view, 'WAREHOUSE_RECEIVED')
 })
 
 async function pageFixture() {
@@ -66,6 +68,7 @@ async function pageFixture() {
     reactive,
     ref,
     shallowRef,
+    useTemplateRef: () => ref(null),
     parseDate,
     watch: (...args: Parameters<typeof watch>) => stops.push(watch(...args)),
     defineOptions: () => {},
@@ -85,7 +88,7 @@ async function pageFixture() {
     formatShipmentNumber,
     parseShipmentQuery,
     shipmentStatusClass,
-    SHIPMENT_VIEWS: ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'CANCELLED'],
+    SHIPMENT_VIEWS: ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CANCELLED'],
     getShipmentSourceEmptyKey: () => 'stock',
     onMounted: (callback: () => void) => lifecycle.mount = callback,
     onActivated: (callback: () => void) => lifecycle.activate = callback,

@@ -11,7 +11,7 @@ import { AuditService } from '../src/modules/audit/audit.service'
 import type { IsolatedNumberingDatabase } from './numbering-e2e-database'
 
 /** 永久派发账本不能逐行清理；完整业务回归使用临时 schema，结束时整体释放。 */
-export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void>, applyShipmentNumbers(): Promise<void> }> {
+export async function createPurchaseShippingMarkDatabase(deferPartsMigration = false, deferReviewMigration = false, deferShipmentNumbers = false, deferWarehouseReceipt = false): Promise<IsolatedNumberingDatabase & { applyPartsMigration(): Promise<void>, applyReviewMigration(): Promise<void>, applyShipmentNumbers(): Promise<void>, applyWarehouseReceipt(): Promise<void> }> {
   const baseDatabaseUrl = process.env.DATABASE_URL
   if (!baseDatabaseUrl) throw new Error('Isolated database is required')
   const url = new URL(baseDatabaseUrl)
@@ -32,13 +32,15 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
     await client.query(`SET search_path TO ${quoted}, public`)
     const directory = resolve(__dirname, '../prisma/migrations')
     for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name)).sort()) {
-      if (deferShipmentNumbers && migration.endsWith('_purchase_shipment_number')) continue
+      if (deferShipmentNumbers && migration >= '20260914091234_purchase_shipment_number') continue
+      if (deferWarehouseReceipt && migration >= '20260915020459_purchase_shipment_warehouse_receipt') continue
       if (deferPartsMigration && migration >= '20260907120000_purchase_order_parts') continue
       if (deferReviewMigration && migration >= '20260908013900_purchase_order_review_shipping_marks') continue
       await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
     }
   }
   catch (error) {
+    await client.query('ROLLBACK')
     if (created) await client.query(`DROP SCHEMA ${quoted} CASCADE`)
     await client.end()
     throw error
@@ -61,10 +63,20 @@ export async function createPurchaseShippingMarkDatabase(deferPartsMigration = f
       }
     },
     async applyShipmentNumbers() {
+      // 编号和后续迁移一起延后、顺序恢复，避免旧函数定义覆盖新入仓保护。
       const directory = resolve(__dirname, '../prisma/migrations')
-      const migration = readdirSync(directory).find(name => name.endsWith('_purchase_shipment_number'))
-      if (!migration) throw new Error('Shipment numbering migration is missing')
-      await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
+      for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260914091234_purchase_shipment_number').sort()) {
+        await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
+      }
+    },
+    async applyWarehouseReceipt() {
+      const directory = resolve(__dirname, '../prisma/migrations')
+      try {
+        for (const migration of readdirSync(directory).filter(name => /^\d+_/u.test(name) && name >= '20260915020459_purchase_shipment_warehouse_receipt').sort()) {
+          await client.query(readFileSync(resolve(directory, migration, 'migration.sql'), 'utf8'))
+        }
+      }
+      catch (error) { await client.query('ROLLBACK'); throw error }
     },
     async dispose() {
       if (disposed) return

@@ -83,7 +83,7 @@
       "PREPARING": "备货中",
       "PARTIALLY_SHIPPED": "部分发货",
       "SHIPPED": "已发货",
-      "SIGNED": "已签收",
+      "SIGNED": "已入仓",
       "UNPAID": "未付款",
       "PARTIALLY_PAID": "部分付款",
       "PAID": "已付清"

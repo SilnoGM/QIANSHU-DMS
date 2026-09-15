@@ -56,21 +56,21 @@ describe('AuditService', () => {
     await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED,
       metadata: { shippingMarkIssuanceIds: Array<string>(1001).fill(ACTOR_USER_ID) } })).rejects.toBeInstanceOf(AuditEventValidationError)
   })
-  it('permits only bounded unique shipment UUID lists on purchase fulfillment events', async () => {
+  it.each([AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED, AuditEventType.PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED])('permits bounded unique shipment UUID lists on %s', async eventType => {
     const { transaction, create } = createTransactionFixture()
     const service = new AuditService()
     const base = { actorType: AuditActorType.USER, actorUserId: ACTOR_USER_ID, outcome: AuditOutcome.SUCCESS }
     const ids = Array.from({ length: 1000 }, (_, index) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(index).padStart(12, '0')}`)
-    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED,
+    await expect(service.record(transaction, { ...base, eventType,
       metadata: { partIds: ids } })).resolves.toBeDefined()
     expect(create.mock.calls[0]?.[0].data.metadata).toEqual({ partIds: ids })
     for (const partIds of [[], ['invalid'], [ACTOR_USER_ID, ACTOR_USER_ID], [...ids, ACTOR_USER_ID]]) {
-      await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED,
+      await expect(service.record(transaction, { ...base, eventType,
         metadata: { partIds } })).rejects.toBeInstanceOf(AuditEventValidationError)
     }
     await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_CREATED,
       metadata: { partIds: [ACTOR_USER_ID] } })).rejects.toBeInstanceOf(AuditEventValidationError)
-    await expect(service.record(transaction, { ...base, eventType: AuditEventType.PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED,
+    await expect(service.record(transaction, { ...base, eventType,
       metadata: { otherIds: [ACTOR_USER_ID] } })).rejects.toBeInstanceOf(AuditEventValidationError)
     expect(create).toHaveBeenCalledTimes(1)
   })

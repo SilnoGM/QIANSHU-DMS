@@ -12,9 +12,11 @@ import { attachRequestAuthContext } from '../src/modules/auth/auth-context'
 import { PermissionGuard } from '../src/modules/auth/guards/permission.guard'
 import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
+import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
 import { PurchaseShipmentController } from '../src/modules/purchase-orders/shipments/purchase-shipment.controller'
 import { PurchaseShipmentQueryService } from '../src/modules/purchase-orders/shipments/purchase-shipment-query.service'
 import type { PurchaseShipmentDetailDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto } from '../src/modules/purchase-orders/shipments/purchase-shipment.dto'
+import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { atomicFacts, createAtomicityFixture, createCommands, createReviewMutations, customInput, prepareCatalog, prepareSalesSource, type AtomicityFixture } from './purchase-shipping-mark-atomicity.fixture'
 
 describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
@@ -22,8 +24,11 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
   let fixture: AtomicityFixture
   let application: INestApplication
   let service: PurchaseShipmentQueryService
+  let orders: PurchaseOrderQueryService
+  let receipts: PurchaseOrderWarehouseReceiptService
   let pendingId: string, activeId: string, cancelledId: string, linkedId: string
-  let shippedPartId: string, cancelledPartId: string
+  let shippedPartId: string, cancelledPartId: string, receivedPartId: string, unshippedPartId: string
+  let activeVersion: number
   let authenticated = true
   let granted = true
   let before: unknown
@@ -49,9 +54,17 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     const review = createReviewMutations(fixture)
     await review.review(fixture.context(), activeId, { expectedVersion: 1 })
     const active = await fixture.prisma.purchaseOrder.findUniqueOrThrow({ where: { id: activeId }, include: { parts: { orderBy: { partNumber: 'asc' } } } })
-    shippedPartId = active.parts[0].id
+    receivedPartId = active.parts[0].id
+    shippedPartId = active.parts[1].id
+    unshippedPartId = active.parts[2].id
     const shipping = new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress)
-    await shipping.shipPurchaseOrder(fixture.context(), activeId, { expectedVersion: active.version, partIds: [shippedPartId], reason: 'First shipment' })
+    await shipping.shipPurchaseOrder(fixture.context(), activeId, { expectedVersion: active.version, partIds: [receivedPartId, shippedPartId], reason: 'First shipment' })
+    const lookup = new DictionaryLookupService(fixture.prisma)
+    orders = new PurchaseOrderQueryService(fixture.prisma, lookup)
+    receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
+    const beforeReceipt = await orders.getById(activeId)
+    const received = await receipts.receive(fixture.context(), activeId, { expectedVersion: beforeReceipt.version, partIds: [receivedPartId], remark: 'Warehouse checked first part' })
+    activeVersion = received.version
     const catalog = await prepareCatalog(fixture)
     cancelledId = await commands.create(fixture.context(), catalog.input)
     await review.review(fixture.context(), cancelledId, { expectedVersion: 1 })
@@ -94,12 +107,21 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
   })
   afterEach(() => { authenticated = true; granted = true })
 
-  it('counts each part once across all five views and defaults to active unshipped parts', async () => {
+  it('counts each part once across all six views and defaults to active unshipped parts', async () => {
     const counts = (await request(application.getHttpServer()).get('/api/purchase-order-parts/status-counts').expect(200)).body as PurchaseShipmentStatusCountsDto
-    expect(counts.items).toEqual([{ value: 'ALL', count: 7 }, { value: 'PENDING_REVIEW', count: 3 }, { value: 'AWAITING_SHIPMENT', count: 2 }, { value: 'SHIPPED', count: 1 }, { value: 'CANCELLED', count: 1 }])
+    expect(counts.items).toEqual([{ value: 'ALL', count: 7 }, { value: 'PENDING_REVIEW', count: 3 }, { value: 'AWAITING_SHIPMENT', count: 1 }, { value: 'SHIPPED', count: 1 }, { value: 'WAREHOUSE_RECEIVED', count: 1 }, { value: 'CANCELLED', count: 1 }])
+    const partition: string[] = []
+    for (const view of counts.items.filter(item => item.value !== 'ALL')) {
+      const page = await service.list({ view: view.value })
+      expect(page.total).toBe(view.count)
+      expect(page.items.every(item => item.viewStatus === view.value)).toBe(true)
+      partition.push(...page.items.map(item => item.id))
+    }
+    expect(partition).toHaveLength(7)
+    expect(new Set(partition).size).toBe(7)
     const response = await request(application.getHttpServer()).get('/api/purchase-order-parts').expect(200)
     const page = response.body as PurchaseShipmentPageDto
-    expect(page.total).toBe(2)
+    expect(page.total).toBe(1)
     expect(page.items.every(item => item.purchaseOrder.id === activeId && item.shippedAt === null)).toBe(true)
     expect(response.headers['cache-control']).toContain('no-store')
     expect(response.headers['x-request-id']).toEqual(expect.any(String))
@@ -156,6 +178,51 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
     expect((await service.list({ view: 'SHIPPED' })).items.map(item => item.id)).toEqual([shippedPartId])
   })
 
+  it('exposes immutable warehouse receipt facts and the current purchase order version in list/detail reads', async () => {
+    const stored = await fixture.prisma.purchaseOrderPart.findUniqueOrThrow({ where: { id: receivedPartId } })
+    const expectedReceipt = {
+      id: receivedPartId, viewStatus: 'WAREHOUSE_RECEIVED',
+      warehouseReceivedAt: stored.warehouseReceivedAt!.toISOString(),
+      warehouseReceivedById: fixture.actor.id,
+      warehouseReceivedBy: { id: fixture.actor.id, displayName: fixture.actor.displayName },
+      warehouseRecordedAt: stored.warehouseRecordedAt!.toISOString(),
+      warehouseRemark: 'Warehouse checked first part',
+      purchaseOrder: { id: activeId, version: activeVersion },
+    }
+    const response = await request(application.getHttpServer()).get(`/api/purchase-order-parts/${receivedPartId}`).expect(200)
+    expect(response.body as unknown).toMatchObject(expectedReceipt)
+    const page = (await request(application.getHttpServer()).get('/api/purchase-order-parts?view=WAREHOUSE_RECEIVED').expect(200)).body as PurchaseShipmentPageDto
+    expect(page.total).toBe(1)
+    expect(page.items[0]).toMatchObject(expectedReceipt)
+    expect(await service.getById(shippedPartId)).toMatchObject({
+      warehouseReceivedAt: null, warehouseReceivedById: null, warehouseReceivedBy: null,
+      warehouseRecordedAt: null, warehouseRemark: null, purchaseOrder: { version: activeVersion },
+    })
+    const order = await orders.getById(activeId)
+    expect(order).toMatchObject({
+      version: activeVersion, fulfillmentStatus: 'PARTIALLY_SHIPPED',
+      partCount: 3, shippedPartCount: 2, pendingPartCount: 1,
+      warehouseReceivedPartCount: 1, pendingWarehousePartCount: 1,
+    })
+    expect(order.parts.find(part => part.id === receivedPartId)).toMatchObject({
+      warehouseReceivedAt: expectedReceipt.warehouseReceivedAt,
+      warehouseReceivedBy: expectedReceipt.warehouseReceivedBy,
+      warehouseRecordedAt: expectedReceipt.warehouseRecordedAt,
+      warehouseRemark: expectedReceipt.warehouseRemark,
+    })
+  })
+
+  it('counts pending warehouse work by shipped parts still awaiting receipt rather than order shipment status', async () => {
+    const page = await orders.list({ view: 'pending', pendingTask: 'AWAITING_WAREHOUSE' })
+    expect(page.total).toBe(1)
+    expect(page.items[0]).toMatchObject({ id: activeId, pendingWarehousePartCount: 1, warehouseReceivedPartCount: 1, fulfillmentStatus: 'PARTIALLY_SHIPPED' })
+    const counts = await orders.statusCounts({ view: 'pending' })
+    expect(counts.items.find(item => item.value === 'AWAITING_WAREHOUSE')?.count).toBe(1)
+    const filtered = await orders.list({ view: 'pending', pendingTask: 'AWAITING_WAREHOUSE', keyword: page.items[0].orderNo })
+    expect(filtered.items.map(item => item.id)).toEqual([activeId])
+    expect((await orders.statusCounts({ view: 'pending', keyword: 'no-such-order' })).items.find(item => item.value === 'AWAITING_WAREHOUSE')?.count).toBe(0)
+  })
+
   it('rejects malformed/extra query parameters and unknown shipment IDs through HTTP', async () => {
     for (const suffix of ['?view=ACTIVE', '?pageSize=101', '?orderDateFrom=2026-02-30', '?orderDateFrom=2026-09-14&orderDateTo=2026-09-01', '?createdByUserId=invalid', '?supplierSource=CUSTOM_TEXT&supplierValue=MARK_SUPPLIER']) {
       await request(application.getHttpServer()).get(`/api/purchase-order-parts${suffix}`).expect(422)
@@ -179,5 +246,59 @@ describe('purchase shipment reads over isolated PostgreSQL and HTTP', () => {
 
   it('leaves all business records, shipment allocations and numbering facts unchanged', async () => {
     expect(await facts()).toEqual(before)
+  })
+
+  it('removes pending warehouse work after the shipped subset arrives while retaining the unshipped part', async () => {
+    await receipts.receive(fixture.context(), activeId, { expectedVersion: activeVersion, partIds: [shippedPartId], remark: 'Warehouse checked second part' })
+    // 此处只为本测试准备新的已入仓事实；后续查询仍必须零副作用。
+    const afterReceipt = await facts()
+    const detail = await orders.getById(activeId)
+    expect(detail).toMatchObject({ version: activeVersion + 1, fulfillmentStatus: 'PARTIALLY_SHIPPED', warehouseReceivedPartCount: 2, pendingWarehousePartCount: 0, pendingPartCount: 1 })
+    expect((await orders.list({ view: 'pending', pendingTask: 'AWAITING_WAREHOUSE' })).total).toBe(0)
+    expect((await orders.statusCounts({ view: 'pending' })).items.find(item => item.value === 'AWAITING_WAREHOUSE')?.count).toBe(0)
+    expect((await service.list({ view: 'SHIPPED' })).total).toBe(0)
+    expect((await service.list({ view: 'WAREHOUSE_RECEIVED' })).total).toBe(2)
+    expect((await service.list({ view: 'AWAITING_SHIPMENT' })).items.map(item => item.id)).toEqual([unshippedPartId])
+    expect((await service.statusCounts({})).items).toEqual([{ value: 'ALL', count: 7 }, { value: 'PENDING_REVIEW', count: 3 }, { value: 'AWAITING_SHIPMENT', count: 1 }, { value: 'SHIPPED', count: 0 }, { value: 'WAREHOUSE_RECEIVED', count: 2 }, { value: 'CANCELLED', count: 1 }])
+    expect(await facts()).toEqual(afterReceipt)
+  })
+})
+
+describe('maximum shipment warehouse receipt and read consistency', () => {
+  jest.setTimeout(120_000)
+
+  it('receives 1000 shipments with 10000 allocations within unchanged transaction limits and reports each once', async () => {
+    // 单独隔离夹具，不改变上方七件分区与分页回归的数据基线。
+    const fixture = await createAtomicityFixture()
+    try {
+      const base = await customInput(fixture)
+      const orderId = await createCommands(fixture).create(fixture.context(), {
+        ...base,
+        lines: Array.from({ length: 10 }, (_, index) => ({ ...base.lines[0], name: `Maximum warehouse item ${index}`, quantity: 1000 })),
+        parts: Array.from({ length: 1000 }, () => ({ key: randomUUID(), items: Array.from({ length: 10 }, (_, index) => ({ lineNumber: index + 1, quantity: 1 })) })),
+        purchaseTotalAmount: '100000', balanceDueAmount: '100000',
+      })
+      await createReviewMutations(fixture).review(fixture.context(), orderId, { expectedVersion: 1 })
+      const orders = new PurchaseOrderQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+      const beforeShipment = await orders.getById(orderId)
+      const partIds = beforeShipment.parts.map(part => part.id)
+      await new PurchaseOrderFactoryShipmentService(fixture.prisma, fixture.audit, fixture.salesProgress).shipPurchaseOrder(fixture.context(), orderId, { expectedVersion: beforeShipment.version, partIds, reason: 'Maximum warehouse fixture shipment' })
+      const beforeReceipt = await orders.getById(orderId)
+      const receipts = new PurchaseOrderWarehouseReceiptService(fixture.prisma, fixture.audit, orders)
+      const started = performance.now()
+      const result = await receipts.receive(fixture.context(), orderId, { expectedVersion: beforeReceipt.version, partIds, remark: 'Maximum warehouse receipt' })
+      const elapsedMs = Math.round(performance.now() - started)
+      console.info(JSON.stringify({ scenario: 'warehouse-receipt-1000-parts-10000-allocations', elapsedMs }))
+      expect(elapsedMs).toBeLessThan(30_000)
+      expect(result).toMatchObject({ fulfillmentStatus: 'SIGNED', orderStatus: 'CONFIRMED', partCount: 1000, warehouseReceivedPartCount: 1000, pendingWarehousePartCount: 0 })
+      expect(result.parts.every(part => part.warehouseReceivedAt !== null && part.warehouseReceivedById === fixture.actor.id)).toBe(true)
+      const shipments = new PurchaseShipmentQueryService(fixture.prisma, new DictionaryLookupService(fixture.prisma))
+      const counts = await shipments.statusCounts({})
+      expect(counts.items).toEqual([{ value: 'ALL', count: 1000 }, { value: 'PENDING_REVIEW', count: 0 }, { value: 'AWAITING_SHIPMENT', count: 0 }, { value: 'SHIPPED', count: 0 }, { value: 'WAREHOUSE_RECEIVED', count: 1000 }, { value: 'CANCELLED', count: 0 }])
+      expect((await shipments.list({ view: 'WAREHOUSE_RECEIVED', page: 10, pageSize: 100 })).items).toHaveLength(100)
+      expect((await orders.list({ view: 'pending', pendingTask: 'AWAITING_WAREHOUSE' })).total).toBe(0)
+      expect(await fixture.prisma.purchaseOrderPartItem.count({ where: { purchaseOrderId: orderId } })).toBe(10000)
+    }
+    finally { await fixture.dispose() }
   })
 })

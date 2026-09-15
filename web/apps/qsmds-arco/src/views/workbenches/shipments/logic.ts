@@ -1,6 +1,6 @@
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
 
-export const SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'CANCELLED'] as const
+export const SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CANCELLED'] as const
 export type ShipmentView = typeof SHIPMENT_VIEWS[number]
 
 function text(value: unknown): string | undefined {
@@ -69,7 +69,8 @@ export function shipmentStatusClass(status: Exclude<ShipmentView, 'ALL'>): strin
   return {
     PENDING_REVIEW: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
     AWAITING_SHIPMENT: 'border-sky-500/35 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-    SHIPPED: 'border-primary/35 bg-primary/10 text-primary',
+    SHIPPED: 'border-violet-500/35 bg-violet-500/10 text-violet-700 dark:text-violet-300',
+    WAREHOUSE_RECEIVED: 'border-primary/35 bg-primary/10 text-primary',
     CANCELLED: 'border-destructive/35 bg-destructive/10 text-destructive',
   }[status]
 }

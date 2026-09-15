@@ -122,7 +122,7 @@ const TASK_ACTION: Readonly<Record<
   AWAITING_WAREHOUSE: {
     icon: 'i-lucide:warehouse',
     key: 'WAREHOUSE_RECEIPT',
-    label: '到仓',
+    label: '确认入仓',
   },
 }
 
@@ -296,7 +296,7 @@ export function fulfillmentStatusLabel(
     PREPARING: '备货中',
     PARTIALLY_SHIPPED: '部分发货',
     SHIPPED: '已发货',
-    SIGNED: '已签收',
+    SIGNED: '已入仓',
   }[value]
 }
 

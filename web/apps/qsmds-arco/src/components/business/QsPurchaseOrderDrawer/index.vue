@@ -19,6 +19,7 @@ const props = defineProps<{
   busy: boolean
   canManagePayment: boolean
   canAttachDocument?: boolean
+  canReceiveWarehouse?: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   'closed': []
   'recordPayment': []
   'attachDocument': []
+  'receiveWarehouse': []
 }>()
 const { t } = useI18n()
 const toast = useQsToast()
@@ -123,7 +125,10 @@ function onClosed() {
       </FaTabs>
     </div>
     <template #footer>
-      <div class="flex justify-end">
+      <div class="flex gap-2 justify-end">
+        <FaButton v-if="canReceiveWarehouse" variant="ghost" class="text-primary" :disabled="busy || loading || !detail || Boolean(error)" @click="emit('receiveWarehouse')">
+          <FaIcon name="i-lucide:warehouse" class="size-4" />{{ t('purchaseWarehouseReceipt.action') }}
+        </FaButton>
         <FaButton type="button" variant="outline" size="sm" class="px-3 h-8" :disabled="busy || loading || !detail || Boolean(error)" @click="toast.info(t('purchaseOrderDrawer.printNotice'))">
           <FaIcon name="i-lucide:printer" class="size-4" aria-hidden="true" />{{ t('purchaseOrderDrawer.print') }}
         </FaButton>

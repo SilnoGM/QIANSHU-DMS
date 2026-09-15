@@ -196,6 +196,8 @@ export class PurchaseOrderListItemDto {
   readonly partCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly shippedPartCount!: number
   @ApiProperty({ type: 'integer', minimum: 0 }) readonly pendingPartCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0, description: '已确认入仓的有效货件数' }) readonly warehouseReceivedPartCount!: number
+  @ApiProperty({ type: 'integer', minimum: 0, description: '已发货但尚未入仓的有效货件数' }) readonly pendingWarehousePartCount!: number
   @ApiProperty({ type: 'string', nullable: true }) readonly remark!: string | null
   @ApiProperty({ type: 'integer', minimum: 1 }) readonly version!: number
   @ApiProperty({ type: 'string', format: 'date-time' }) readonly createdAt!: string
@@ -219,6 +221,11 @@ export class PurchaseOrderPartDto {
   @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly shipmentRecordedAt!: string | null
   @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly shipmentRemark!: string | null
   @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly shippedBy!: PurchaseOrderActorDto | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true, description: '仓库实际收货时间，不代表库存记账' }) readonly warehouseReceivedAt!: string | null
+  @ApiProperty({ type: 'string', format: 'uuid', nullable: true }) readonly warehouseReceivedById!: string | null
+  @ApiProperty({ type: 'string', format: 'date-time', nullable: true }) readonly warehouseRecordedAt!: string | null
+  @ApiProperty({ type: 'string', maxLength: 500, nullable: true }) readonly warehouseRemark!: string | null
+  @ApiProperty({ type: () => PurchaseOrderActorDto, nullable: true }) readonly warehouseReceivedBy!: PurchaseOrderActorDto | null
   @ApiProperty({ type: () => [PurchaseOrderPartItemDto] }) readonly items!: readonly PurchaseOrderPartItemDto[]
 }
 

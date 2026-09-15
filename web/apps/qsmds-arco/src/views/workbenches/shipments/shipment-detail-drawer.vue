@@ -289,6 +289,44 @@ const hasShipmentInformation = computed(() => props.detail && (
           {{ t('purchaseShipmentDetail.notShipped') }}
         </div>
       </section>
+      <section :aria-label="t('purchaseWarehouseReceipt.received')">
+        <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">
+          <span class="rounded-full bg-primary shrink-0 h-5 w-1" aria-hidden="true" />{{ t('purchaseShipmentDetail.warehouse') }}
+        </h3>
+        <dl v-if="detail.warehouseReceivedAt" class="m-0 p-4 border border-border/70 rounded-lg bg-muted/20 gap-x-6 gap-y-4 grid sm:grid-cols-2">
+          <div>
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseWarehouseReceipt.receivedAt') }}
+            </dt><dd class="m-0">
+              <DateTimeDisplay :value="detail.warehouseReceivedAt" />
+            </dd>
+          </div>
+          <div>
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseWarehouseReceipt.operator') }}
+            </dt><dd class="m-0">
+              <QsPersonDisplay v-if="detail.warehouseReceivedBy" :display-name="detail.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
+            </dd>
+          </div>
+          <div>
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseWarehouseReceipt.recordedAt') }}
+            </dt><dd class="m-0">
+              <DateTimeDisplay :value="detail.warehouseRecordedAt" />
+            </dd>
+          </div>
+          <div v-if="detail.warehouseRemark" class="min-w-0 sm:col-span-2">
+            <dt class="qs-type-meta text-muted-foreground mb-1">
+              {{ t('purchaseWarehouseReceipt.remarkLabel') }}
+            </dt><dd class="m-0 whitespace-pre-wrap break-all">
+              {{ detail.warehouseRemark }}
+            </dd>
+          </div>
+        </dl>
+        <p v-else class="qs-type-meta text-muted-foreground m-0 p-4 border border-border/70 rounded-lg bg-muted/20">
+          {{ t('purchaseShipmentDetail.notReceived') }}
+        </p>
+      </section>
     </div>
     <FaEmpty v-else-if="!loading && !error" icon="i-lucide:package-search" :title="t('purchaseShipmentDetail.empty')" :description="t('purchaseShipmentDetail.emptyDescription')" />
 

@@ -102,6 +102,9 @@ const amountItems = computed(() => [
           </dd>
         </div>
       </dl>
+      <p v-if="detail.partCount" class="qs-type-meta text-muted-foreground m-0 mt-3 px-4">
+        {{ t('purchaseWarehouseReceipt.progress', { received: detail.warehouseReceivedPartCount, total: detail.partCount }) }}
+      </p>
     </section>
     <section data-slot="purchase-order-drawer-source" :aria-label="t('purchaseOrderDesc.sections.source')">
       <h3 class="qs-type-component-title m-0 mb-3 flex gap-2 items-center">

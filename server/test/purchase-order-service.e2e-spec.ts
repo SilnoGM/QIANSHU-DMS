@@ -1,3 +1,4 @@
+import { PurchaseOrderWarehouseReceiptService } from '../src/modules/purchase-orders/warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { ensureShipmentNumberingRule } from './purchase-shipment-numbering.fixture'
 import { PurchaseShipmentNumberingService } from '../src/modules/purchase-orders/shipments/purchase-shipment-numbering.service'
 import { ensureReceiptNumberingRule } from './fixtures/sales-receipt-numbering-service.fixture'
@@ -397,6 +398,7 @@ describe('PurchaseOrder services with isolated PostgreSQL', () => {
       new SalesOrderPurchaseCoverageService(new AuditService()),
       numbering,
       markResolver,
+      new PurchaseOrderWarehouseReceiptService(prisma, new AuditService(), queries),
       { now: () => new Date('2026-08-27T12:00:00.000Z') },
     )
   })

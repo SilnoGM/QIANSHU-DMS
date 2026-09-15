@@ -20,8 +20,10 @@ const LINE_SELECT = {
 const PART_SELECT = {
   id: true, shipmentNo: true, partNumber: true, status: true, shippingMarkText: true, createdAt: true,
   shippedAt: true, shippedBy: { select: { id: true, displayName: true } }, shipmentRecordedAt: true, shipmentRemark: true,
+  warehouseReceivedAt: true, warehouseReceivedById: true, warehouseRecordedAt: true, warehouseRemark: true,
+  warehouseReceivedBy: { select: { id: true, displayName: true } },
   purchaseOrder: { select: {
-    id: true, orderNo: true, orderDate: true, purchaseType: true, productMode: true, orderStatus: true,
+    id: true, version: true, orderNo: true, orderDate: true, purchaseType: true, productMode: true, orderStatus: true,
     shippingMarkText: true, supplierValue: true, customSupplierName: true,
     createdBy: { select: { id: true, displayName: true } },
     salesOrder: { select: { id: true, orderNo: true, customerName: true } },
@@ -88,7 +90,8 @@ function viewWhere(view: PurchaseShipmentView): Prisma.PurchaseOrderPartWhereInp
     case 'ALL': return {}
     case 'PENDING_REVIEW': return { status: 'PENDING_REVIEW' }
     case 'AWAITING_SHIPMENT': return { status: 'ACTIVE', shippedAt: null }
-    case 'SHIPPED': return { status: 'ACTIVE', shippedAt: { not: null } }
+    case 'SHIPPED': return { status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null }
+    case 'WAREHOUSE_RECEIVED': return { status: 'ACTIVE', warehouseReceivedAt: { not: null } }
     case 'CANCELLED': return { status: 'CANCELLED' }
   }
 }
@@ -97,13 +100,18 @@ function mapPart(row: PartRow, supplier: PurchaseOrderSupplierDto): PurchaseShip
   const order = row.purchaseOrder
   return {
     id: row.id, shipmentNo: row.shipmentNo, partNumber: row.partNumber, status: row.status,
-    // 先按货件生命周期归类，仅 ACTIVE 再按发货时间细分，保证各状态视图互斥。
-    viewStatus: row.status === 'ACTIVE' ? row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED' : row.status,
+    // 先按货件生命周期归类，仅 ACTIVE 再按入仓、发货事实细分，保证各状态视图互斥。
+    viewStatus: row.status === 'ACTIVE'
+      ? row.warehouseReceivedAt !== null ? 'WAREHOUSE_RECEIVED' : row.shippedAt === null ? 'AWAITING_SHIPMENT' : 'SHIPPED'
+      : row.status,
     shippingMarkText: row.shippingMarkText, createdAt: row.createdAt.toISOString(),
     shippedAt: row.shippedAt?.toISOString() ?? null, shippedBy: row.shippedBy,
     shipmentRecordedAt: row.shipmentRecordedAt?.toISOString() ?? null, shipmentRemark: row.shipmentRemark,
+    warehouseReceivedAt: row.warehouseReceivedAt?.toISOString() ?? null, warehouseReceivedById: row.warehouseReceivedById,
+    warehouseRecordedAt: row.warehouseRecordedAt?.toISOString() ?? null, warehouseRemark: row.warehouseRemark,
+    warehouseReceivedBy: row.warehouseReceivedBy,
     purchaseOrder: {
-      id: order.id, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
+      id: order.id, version: order.version, orderNo: order.orderNo, orderDate: order.orderDate.toISOString().slice(0, 10),
       purchaseType: order.purchaseType, productMode: order.productMode, orderStatus: order.orderStatus,
       shippingMarkText: order.shippingMarkText, createdBy: order.createdBy,
     },
@@ -142,7 +150,7 @@ export class PurchaseShipmentQueryService {
   async statusCounts(input: PurchaseShipmentFilterDto): Promise<PurchaseShipmentStatusCountsDto> {
     const where = baseWhere(input)
     const [groups, buyers] = await this.prisma.$transaction(async transaction => {
-      const groups = await transaction.purchaseOrderPart.groupBy({ by: ['status'], where, _count: { _all: true, shippedAt: true } })
+      const groups = await transaction.purchaseOrderPart.groupBy({ by: ['status'], where, _count: { _all: true, shippedAt: true, warehouseReceivedAt: true } })
       // 直接查询存在货件采购单的人员，避免 ORM 先加载全部采购单再在内存去重。
       const buyers = await transaction.user.findMany({
         where: { purchaseOrdersCreated: { some: { parts: { some: {} } } } },
@@ -150,11 +158,12 @@ export class PurchaseShipmentQueryService {
       })
       return [groups, buyers] as const
     }, { isolationLevel: 'RepeatableRead' })
-    const counts: Record<PurchaseShipmentView, number> = { ALL: 0, PENDING_REVIEW: 0, AWAITING_SHIPMENT: 0, SHIPPED: 0, CANCELLED: 0 }
+    const counts: Record<PurchaseShipmentView, number> = { ALL: 0, PENDING_REVIEW: 0, AWAITING_SHIPMENT: 0, SHIPPED: 0, WAREHOUSE_RECEIVED: 0, CANCELLED: 0 }
     for (const group of groups) {
       counts.ALL += group._count._all
       if (group.status === 'ACTIVE') {
-        counts.SHIPPED = group._count.shippedAt
+        counts.WAREHOUSE_RECEIVED = group._count.warehouseReceivedAt
+        counts.SHIPPED = group._count.shippedAt - group._count.warehouseReceivedAt
         counts.AWAITING_SHIPMENT = group._count._all - group._count.shippedAt
       }
       else counts[group.status] = group._count._all

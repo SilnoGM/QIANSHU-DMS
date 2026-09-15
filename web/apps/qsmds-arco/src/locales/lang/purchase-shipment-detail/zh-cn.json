@@ -47,7 +47,10 @@
       "PENDING_REVIEW": "待审核",
       "AWAITING_SHIPMENT": "待发货",
       "SHIPPED": "已发货",
-      "CANCELLED": "已取消"
-    }
+      "CANCELLED": "已取消",
+      "WAREHOUSE_RECEIVED": "已入仓"
+    },
+    "warehouse": "入仓记录",
+    "notReceived": "尚未确认入仓"
   }
 }

@@ -46057,11 +46057,20 @@
               ]
             },
             {
+              "status": 409,
+              "codes": [
+                "PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED"
+              ]
+            },
+            {
               "status": 422,
               "codes": [
                 "PURCHASE_ORDER_CANCELLED",
                 "PURCHASE_ORDER_FULFILLMENT_TRANSITION_INVALID",
                 "PURCHASE_ORDER_STATUS_TRANSITION_INVALID",
+                "PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED",
+                "PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID",
+                "PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID",
                 "VALIDATION_FAILED"
               ]
             }
@@ -49060,6 +49069,7 @@
                 "PENDING_REVIEW",
                 "AWAITING_SHIPMENT",
                 "SHIPPED",
+                "WAREHOUSE_RECEIVED",
                 "CANCELLED"
               ]
             }
@@ -49783,6 +49793,304 @@
             {
               "status": 422,
               "codes": [
+                "VALIDATION_FAILED"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "/api/purchase-orders/{purchaseOrderId}/warehouse-receipts": {
+      "post": {
+        "operationId": "purchase_orders_warehouse_receipt",
+        "parameters": [
+          {
+            "name": "purchaseOrderId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Qianshu-CSRF",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseOrderWarehouseReceiptRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "500": {
+            "headers": {
+              "X-Request-Id": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Cache-Control": {
+                "description": "身份相关响应禁止缓存",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "private, no-store"
+                  ]
+                }
+              }
+            },
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "summary": "",
+        "tags": [
+          "purchase-orders"
+        ],
+        "x-qianshu-contract": {
+          "kind": "application",
+          "authentication": true,
+          "authorization": true,
+          "resourceLocator": true,
+          "conflict": true,
+          "validation": true,
+          "session": "required",
+          "csrf": true,
+          "privateNoStore": true,
+          "errors": [
+            {
+              "status": 403,
+              "codes": [
+                "CSRF_REJECTED",
+                "FORBIDDEN",
+                "PASSWORD_CHANGE_REQUIRED"
+              ]
+            },
+            {
+              "status": 404,
+              "codes": [
+                "PURCHASE_ORDER_NOT_FOUND"
+              ]
+            },
+            {
+              "status": 409,
+              "codes": [
+                "PURCHASE_WAREHOUSE_RECEIPT_STATE_CHANGED"
+              ]
+            },
+            {
+              "status": 422,
+              "codes": [
+                "PURCHASE_WAREHOUSE_RECEIPT_NOT_ALLOWED",
+                "PURCHASE_WAREHOUSE_RECEIPT_TARGET_INVALID",
+                "PURCHASE_WAREHOUSE_RECEIPT_TIME_INVALID",
                 "VALIDATION_FAILED"
               ]
             }
@@ -50645,6 +50953,7 @@
                 "SALES_ORDER_PRODUCTS_CHANGED",
                 "PURCHASE_ORDER_CREATED",
                 "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
+                "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
                 "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
                 "PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED",
                 "PURCHASE_ORDER_PAYMENT_RECORDED",
@@ -58851,6 +59160,16 @@
             "type": "integer",
             "minimum": 0
           },
+          "warehouseReceivedPartCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "已确认入仓的有效货件数"
+          },
+          "pendingWarehousePartCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "已发货但尚未入仓的有效货件数"
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -58897,6 +59216,8 @@
           "partCount",
           "shippedPartCount",
           "pendingPartCount",
+          "warehouseReceivedPartCount",
+          "pendingWarehousePartCount",
           "remark",
           "version",
           "createdAt",
@@ -59862,6 +60183,36 @@
               }
             ]
           },
+          "warehouseReceivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "仓库实际收货时间，不代表库存记账"
+          },
+          "warehouseReceivedById": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "warehouseRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "warehouseRemark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "warehouseReceivedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
+          },
           "items": {
             "type": "array",
             "items": {
@@ -59880,6 +60231,11 @@
           "shipmentRecordedAt",
           "shipmentRemark",
           "shippedBy",
+          "warehouseReceivedAt",
+          "warehouseReceivedById",
+          "warehouseRecordedAt",
+          "warehouseRemark",
+          "warehouseReceivedBy",
           "items"
         ]
       },
@@ -60389,6 +60745,16 @@
             "type": "integer",
             "minimum": 0
           },
+          "warehouseReceivedPartCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "已确认入仓的有效货件数"
+          },
+          "pendingWarehousePartCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "已发货但尚未入仓的有效货件数"
+          },
           "remark": {
             "type": "string",
             "nullable": true
@@ -60483,6 +60849,8 @@
           "partCount",
           "shippedPartCount",
           "pendingPartCount",
+          "warehouseReceivedPartCount",
+          "pendingWarehousePartCount",
           "remark",
           "version",
           "createdAt",
@@ -61038,6 +61406,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
           "orderNo": {
             "type": "string"
           },
@@ -61079,6 +61451,7 @@
         },
         "required": [
           "id",
+          "version",
           "orderNo",
           "orderDate",
           "purchaseType",
@@ -61183,6 +61556,7 @@
               "PENDING_REVIEW",
               "AWAITING_SHIPMENT",
               "SHIPPED",
+              "WAREHOUSE_RECEIVED",
               "CANCELLED"
             ]
           },
@@ -61217,6 +61591,36 @@
             "type": "string",
             "nullable": true
           },
+          "warehouseReceivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "仓库实际收货时间，不代表库存记账"
+          },
+          "warehouseReceivedById": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "warehouseRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "warehouseRemark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "warehouseReceivedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
+          },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
           },
@@ -61248,6 +61652,11 @@
           "shippedBy",
           "shipmentRecordedAt",
           "shipmentRemark",
+          "warehouseReceivedAt",
+          "warehouseReceivedById",
+          "warehouseRecordedAt",
+          "warehouseRemark",
+          "warehouseReceivedBy",
           "purchaseOrder",
           "supplier",
           "salesSource",
@@ -61293,6 +61702,7 @@
               "PENDING_REVIEW",
               "AWAITING_SHIPMENT",
               "SHIPPED",
+              "WAREHOUSE_RECEIVED",
               "CANCELLED"
             ]
           },
@@ -61426,6 +61836,7 @@
               "PENDING_REVIEW",
               "AWAITING_SHIPMENT",
               "SHIPPED",
+              "WAREHOUSE_RECEIVED",
               "CANCELLED"
             ]
           },
@@ -61459,6 +61870,36 @@
           "shipmentRemark": {
             "type": "string",
             "nullable": true
+          },
+          "warehouseReceivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "仓库实际收货时间，不代表库存记账"
+          },
+          "warehouseReceivedById": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "warehouseRecordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "warehouseRemark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          },
+          "warehouseReceivedBy": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseOrderActorDto"
+              }
+            ]
           },
           "purchaseOrder": {
             "$ref": "#/components/schemas/PurchaseShipmentOrderDto"
@@ -61497,11 +61938,50 @@
           "shippedBy",
           "shipmentRecordedAt",
           "shipmentRemark",
+          "warehouseReceivedAt",
+          "warehouseReceivedById",
+          "warehouseRecordedAt",
+          "warehouseRemark",
+          "warehouseReceivedBy",
           "purchaseOrder",
           "supplier",
           "salesSource",
           "lineSummary",
           "items"
+        ]
+      },
+      "PurchaseOrderWarehouseReceiptRequestDto": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "partIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "minItems": 1,
+            "maxItems": 1000,
+            "uniqueItems": true
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "实际入仓时间；省略时使用服务器当前时间，不能早于发货或晚于当前时间。"
+          },
+          "remark": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true
+          }
+        },
+        "required": [
+          "expectedVersion",
+          "partIds"
         ]
       },
       "ShippingMarkRuleSummaryDto": {
@@ -61793,6 +62273,7 @@
               "SALES_ORDER_PRODUCTS_CHANGED",
               "PURCHASE_ORDER_CREATED",
               "PURCHASE_SHIPMENT_NUMBER_ASSIGNED",
+              "PURCHASE_SHIPMENT_WAREHOUSE_RECEIVED",
               "PURCHASE_ORDER_ORDER_STATUS_CHANGED",
               "PURCHASE_ORDER_FULFILLMENT_STATUS_CHANGED",
               "PURCHASE_ORDER_PAYMENT_RECORDED",

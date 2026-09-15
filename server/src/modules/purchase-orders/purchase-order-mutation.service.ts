@@ -46,6 +46,7 @@ import {
   PurchaseOrderQueryService,
   type PurchaseOrderDetail,
 } from './purchase-order-query.service'
+import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
 import { SalesOrderPurchaseCoverageService } from './sales-order-purchase-coverage.service'
 import { NumberingGeneratorService } from '../numbering/numbering-generator.service'
 import { NumberingGenerationError } from '../numbering/numbering.errors'
@@ -205,6 +206,7 @@ export class PurchaseOrderMutationService {
     private readonly salesOrderCoverage: SalesOrderPurchaseCoverageService,
     private readonly numbering: NumberingGeneratorService,
     private readonly shippingMarks: PurchaseShippingMarkResolverService,
+    private readonly warehouseReceipts: PurchaseOrderWarehouseReceiptService,
     @Optional()
     @Inject(PURCHASE_ORDER_MUTATION_DEPENDENCIES)
     dependencyOverrides: Partial<PurchaseOrderMutationDependencies> = {},
@@ -421,6 +423,9 @@ export class PurchaseOrderMutationService {
       return purchaseOrderRuleFailure('PURCHASE_ORDER_FULFILLMENT_TRANSITION_INVALID', '请通过货件发货操作更新发货状态')
     }
     const reason = optionalText(body.reason, 'reason', 500)
+    if (toStatus === 'SIGNED') {
+      return this.warehouseReceipts.receiveAll(trusted, purchaseOrderId, reason)
+    }
     await this.prisma.$transaction(async transaction => {
       await applyTransactionTimeouts(transaction)
       const order = await this.lockOrder(transaction, purchaseOrderId)

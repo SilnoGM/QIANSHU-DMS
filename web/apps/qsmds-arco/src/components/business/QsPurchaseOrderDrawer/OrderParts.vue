@@ -3,6 +3,7 @@ import type { PurchaseOrderDetailDto } from '@/api/generated/types.gen'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import ImageGroup from '@/components/base/ImageGroup/index.vue'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { getPurchaseOrderPartRecords } from './logic'
 
 const props = defineProps<{ detail: PurchaseOrderDetailDto }>()
@@ -67,7 +68,7 @@ function partTitle(partNumber: number): string {
                   <FaTag variant="outline" :class="part.status === 'ACTIVE' ? 'text-primary border-primary/30 bg-primary/10' : part.status === 'CANCELLED' ? 'text-destructive border-destructive/30 bg-destructive/10' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">
                     {{ t(`purchaseOrderDrawer.parts.status.${part.status}`) }}
                   </FaTag>
-                  <FaTag v-if="part.status === 'ACTIVE'" variant="outline" :class="part.shippedAt ? 'text-primary border-primary/30 bg-primary/10' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">{{ part.shippedAt ? '已发货' : '待发货' }}</FaTag>
+                  <FaTag v-if="part.status === 'ACTIVE'" variant="outline" :class="part.shippedAt ? 'text-primary border-primary/30 bg-primary/10' : 'text-amber-700 border-amber-500/30 bg-amber-500/10 dark:text-amber-300'">{{ part.warehouseReceivedAt ? t('purchaseWarehouseReceipt.received') : part.shippedAt ? '已发货' : '待发货' }}</FaTag>
                 </span>
                 <span class="qs-type-data text-muted-foreground mt-1.5 block whitespace-pre-wrap [overflow-wrap:anywhere]">{{ part.shippingMarkText ? t('purchaseOrderDrawer.parts.markValue', { value: part.shippingMarkText }) : t(detail.orderStatus === 'PENDING_REVIEW' ? 'purchaseOrderDrawer.parts.pendingMark' : 'purchaseOrderDrawer.parts.notGenerated') }}</span>
               </span>
@@ -99,6 +100,36 @@ function partTitle(partNumber: number): string {
               发货时间：<DateTimeDisplay :value="part.shippedAt" /> · {{ part.shippedBy?.displayName || '未记录操作人' }}<br>
               发货说明：{{ part.shipmentRemark || '—' }}
             </p>
+            <dl v-if="part.warehouseReceivedAt" class="qs-type-meta m-0 px-4 pb-4 gap-3 grid sm:grid-cols-2">
+              <div>
+                <dt class="text-muted-foreground mb-1">
+                  {{ t('purchaseWarehouseReceipt.receivedAt') }}
+                </dt><dd class="m-0">
+                  <DateTimeDisplay :value="part.warehouseReceivedAt" />
+                </dd>
+              </div>
+              <div>
+                <dt class="text-muted-foreground mb-1">
+                  {{ t('purchaseWarehouseReceipt.operator') }}
+                </dt><dd class="m-0">
+                  <QsPersonDisplay v-if="part.warehouseReceivedBy" :display-name="part.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
+                </dd>
+              </div>
+              <div>
+                <dt class="text-muted-foreground mb-1">
+                  {{ t('purchaseWarehouseReceipt.recordedAt') }}
+                </dt><dd class="m-0">
+                  <DateTimeDisplay :value="part.warehouseRecordedAt" />
+                </dd>
+              </div>
+              <div v-if="part.warehouseRemark" class="min-w-0 sm:col-span-2">
+                <dt class="text-muted-foreground mb-1">
+                  {{ t('purchaseWarehouseReceipt.remarkLabel') }}
+                </dt><dd class="m-0 whitespace-pre-wrap break-all">
+                  {{ part.warehouseRemark }}
+                </dd>
+              </div>
+            </dl>
             <ol class="m-0 p-0 list-none divide-border/70 divide-y">
               <li v-for="item in part.items" :key="item.purchaseOrderLineId" :data-line-number="item.lineNumber" class="p-4 flex gap-3 min-w-0 items-start">
                 <ImageGroup v-if="item.imageSrc" :items="[{ src: item.imageSrc, alt: item.productName ?? '' }]" :size="56" :max-count="1" class="shrink-0" />

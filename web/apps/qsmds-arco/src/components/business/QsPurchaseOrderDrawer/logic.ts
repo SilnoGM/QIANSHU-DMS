@@ -53,6 +53,10 @@ export function getPurchaseOrderPartRecords(detail: Pick<PurchaseOrderDetailDto,
     shippedBy: part.shippedBy,
     shipmentRecordedAt: part.shipmentRecordedAt,
     shipmentRemark: part.shipmentRemark,
+    warehouseReceivedAt: part.warehouseReceivedAt,
+    warehouseReceivedBy: part.warehouseReceivedBy,
+    warehouseRecordedAt: part.warehouseRecordedAt,
+    warehouseRemark: part.warehouseRemark,
     items: [...part.items].sort((a, b) => a.lineNumber - b.lineNumber).map((item) => {
       const line = linesById.get(item.purchaseOrderLineId)
       return {

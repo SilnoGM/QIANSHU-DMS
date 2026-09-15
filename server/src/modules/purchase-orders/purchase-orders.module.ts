@@ -30,6 +30,9 @@ import { PurchaseShipmentNumberBackfillService } from './shipments/purchase-ship
 import { PurchaseShipmentController } from './shipments/purchase-shipment.controller'
 import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-query.service'
 
+import { PurchaseOrderWarehouseReceiptController } from './warehouse-receipts/purchase-order-warehouse-receipt.controller'
+import { PurchaseOrderWarehouseReceiptService } from './warehouse-receipts/purchase-order-warehouse-receipt.service'
+
 @Module({
   imports: [
     PrismaModule,
@@ -46,6 +49,7 @@ import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-quer
     PurchaseOrderFactoryShipmentController,
     SalesOrderFactoryShipmentController,
     PurchaseShipmentController,
+    PurchaseOrderWarehouseReceiptController,
   ],
   providers: [
     PurchaseOrderQueryService,
@@ -62,6 +66,7 @@ import { PurchaseShipmentQueryService } from './shipments/purchase-shipment-quer
     PurchaseShipmentQueryService,
     PurchaseShipmentNumberingService,
     PurchaseShipmentNumberBackfillService,
+    PurchaseOrderWarehouseReceiptService,
     {
       provide: PurchaseOrderDocumentMultipartParser,
       useFactory: (): PurchaseOrderDocumentMultipartParser =>

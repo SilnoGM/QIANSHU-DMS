@@ -260,7 +260,7 @@ describe('PurchaseOrderQueryService', () => {
     const detail = await fixture.service.getById('order-id')
     expect(detail.shippingMarkText).toBeNull()
     expect(detail.shippingMarks).toEqual([])
-    expect(detail.parts).toEqual([{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, items: [] }])
+    expect(detail.parts).toEqual([{ id: 'part-1', shipmentNo, partNumber: 1, status: 'PENDING_REVIEW', shippingMarkText: null, shippedAt: null, shippedById: null, shippedBy: null, shipmentRecordedAt: null, shipmentRemark: null, warehouseReceivedAt: null, warehouseReceivedById: null, warehouseRecordedAt: null, warehouseRemark: null, warehouseReceivedBy: null, items: [] }])
   })
   it('returns empty record summaries without inventing records or latest changes', async () => {
     const fixture = setup()
@@ -550,7 +550,7 @@ describe('PurchaseOrderQueryService', () => {
   it.each([
     ['AWAITING_REVIEW', { orderStatus: 'PENDING_REVIEW' }],
     ['AWAITING_SHIPMENT', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['ORDERED', 'PREPARING', 'PARTIALLY_SHIPPED'] } }],
-    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', fulfillmentStatus: { in: ['PARTIALLY_SHIPPED', 'SHIPPED'] } }],
+    ['AWAITING_WAREHOUSE', { orderStatus: 'CONFIRMED', parts: { some: { status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null } } }],
     ['AWAITING_PAYMENT', { orderStatus: 'CONFIRMED', paymentStatus: { in: ['UNPAID', 'PARTIALLY_PAID'] } }],
   ] as const)('builds the %s pending task predicate', async (pendingTask, taskClause) => {
     const fixture = setup()
@@ -599,6 +599,39 @@ describe('PurchaseOrderQueryService', () => {
     })])
     const result = await fixture.service.list({ view: 'all' })
     expect(result.items[0]).toMatchObject({ partCount: 2, shippingMarks: [] })
+  })
+
+  it('counts warehouse receipt facts separately from shipping and excludes cancelled parts', async () => {
+    const fixture = setup()
+    fixture.prisma.purchaseOrder.findMany.mockResolvedValue([orderRow({
+      parts: [
+        { status: 'ACTIVE', shippedAt: new Date(), warehouseReceivedAt: new Date() },
+        { status: 'ACTIVE', shippedAt: new Date(), warehouseReceivedAt: null },
+        { status: 'ACTIVE', shippedAt: null, warehouseReceivedAt: null },
+        { status: 'CANCELLED', shippedAt: new Date(), warehouseReceivedAt: new Date() },
+      ], _count: { parts: 4, payments: 0, statusHistory: 0, amountRevisions: 0 },
+    })])
+    const result = await fixture.service.list({ view: 'all' })
+    expect(result.items[0]).toMatchObject({ partCount: 4, pendingPartCount: 1, warehouseReceivedPartCount: 1, pendingWarehousePartCount: 1 })
+  })
+
+  it('returns receipt actor and both receipt timestamps in purchase order detail', async () => {
+    const fixture = setup()
+    const warehouseReceivedAt = new Date('2026-09-15T02:00:00.000Z')
+    const warehouseRecordedAt = new Date('2026-09-15T03:00:00.000Z')
+    fixture.prisma.purchaseOrder.findUnique.mockResolvedValue(orderRow({
+      lines: [], payments: [], parts: [{
+        id: 'part-received', partNumber: 1, shipmentNo: 'PKG/001', status: 'ACTIVE', shippingMarkText: 'MARK/1',
+        shippedAt: new Date('2026-09-15T01:00:00.000Z'), warehouseReceivedAt, warehouseRecordedAt,
+        warehouseReceivedById: 'receiver-1', warehouseReceivedBy: { id: 'receiver-1', displayName: '仓库确认人' },
+        warehouseRemark: '包装完好', items: [],
+      }], _count: { parts: 1, payments: 0, statusHistory: 0, amountRevisions: 0 },
+    }))
+    const result = await fixture.service.getById('order-id')
+    expect(result).toMatchObject({ warehouseReceivedPartCount: 1, pendingWarehousePartCount: 0, parts: [{
+      warehouseReceivedAt: warehouseReceivedAt.toISOString(), warehouseRecordedAt: warehouseRecordedAt.toISOString(),
+      warehouseReceivedById: 'receiver-1', warehouseReceivedBy: { id: 'receiver-1', displayName: '仓库确认人' }, warehouseRemark: '包装完好',
+    }] })
   })
 
   it('returns detail customer through SalesOrder and derives active payment totals', async () => {
@@ -786,6 +819,7 @@ describe('PurchaseOrderQueryService status counts', () => {
 
   it('counts overlapping pending categories in one repeatable-read snapshot', async () => {
     const fixture = createStatusCountsFixture()
+    fixture.purchaseOrder.count.mockResolvedValueOnce(3).mockResolvedValueOnce(1)
     fixture.purchaseOrder.groupBy
       .mockResolvedValueOnce([
         { fulfillmentStatus: 'ORDERED', _count: { _all: 4 } },
@@ -803,7 +837,7 @@ describe('PurchaseOrderQueryService status counts', () => {
       items: [
         { value: 'AWAITING_REVIEW', count: 3 },
         { value: 'AWAITING_SHIPMENT', count: 9 },
-        { value: 'AWAITING_WAREHOUSE', count: 4 },
+        { value: 'AWAITING_WAREHOUSE', count: 1 },
         { value: 'AWAITING_PAYMENT', count: 6 },
       ],
     })
@@ -834,6 +868,11 @@ describe('PurchaseOrderQueryService status counts', () => {
       where: {
         AND: [pendingBaseWhere.AND[0], { orderStatus: 'PENDING_REVIEW' }],
       },
+    })
+    expect(fixture.purchaseOrder.count).toHaveBeenCalledWith({
+      where: { AND: [pendingBaseWhere.AND[0], { orderStatus: 'CONFIRMED', parts: { some: {
+        status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null,
+      } } }] },
     })
     expect(fixture.transaction).toHaveBeenCalledWith(
       expect.any(Function),
