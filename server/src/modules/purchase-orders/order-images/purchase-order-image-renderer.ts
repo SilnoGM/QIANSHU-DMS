@@ -102,13 +102,10 @@ class PurchaseOrderImageCanvas {
   }
 
   async render(snapshot: PurchaseOrderImageSnapshot, imageBytes: ReadonlyMap<string, Buffer>): Promise<Buffer> {
-    const [brand, title, orderNo] = await Promise.all([
-      this.text('千树 · 采购单', 600, 22, COLORS.primary, true),
-      this.text('采购单', 620, 48, COLORS.ink, true),
+    const [title, orderNo] = await Promise.all([
+      this.text('千树 · 采购单', 620, 48, COLORS.primary, true),
       this.text(snapshot.orderNo, 770, 28, COLORS.ink, true),
     ])
-    this.place(brand, MARGIN, this.y)
-    this.advance(brand.height + 18)
     this.place(title, MARGIN, this.y)
     this.place(orderNo, WIDTH - MARGIN - 770, this.y + 14, 770)
     this.advance(Math.max(title.height, orderNo.height + 14) + 30)
@@ -227,9 +224,21 @@ class PurchaseOrderImageCanvas {
     this.place(label, MARGIN + 16, this.y + 14)
     this.place(number, MARGIN + CONTENT_WIDTH - 856, this.y + 14, 840)
     this.advance(Math.max(label.height, number.height) + 44)
-    const mark = await this.text(`唛头：${part.shippingMarkText}`, CONTENT_WIDTH - 32, 24, COLORS.primary, true)
+    const [mark, hint] = await Promise.all([
+      this.text(`唛头：${part.shippingMarkText}`, CONTENT_WIDTH - 32, 24, COLORS.primary, true),
+      this.text('（请将此货件唛头贴到包装箱 / 货物上）', CONTENT_WIDTH - 32, 21, COLORS.muted),
+    ])
     this.place(mark, MARGIN + 16, this.y)
-    this.advance(mark.height + 20)
+    if (mark.width + 16 + hint.width <= CONTENT_WIDTH - 32) {
+      this.place(hint, MARGIN + 32 + mark.width, this.y + Math.max(0, mark.height - hint.height))
+      this.advance(Math.max(mark.height, hint.height) + 20)
+    }
+    else {
+      // 长唛头保留完整内容，提示另起一行，避免挤压或覆盖唛头。
+      this.advance(mark.height + 10)
+      this.place(hint, MARGIN + 16, this.y)
+      this.advance(hint.height + 20)
+    }
     for (const item of part.items) {
       const product = snapshot.lines.find(line => line.id === item.purchaseOrderLineId)
       if (!product) throw new PurchaseOrderImageError('PURCHASE_ORDER_IMAGE_SNAPSHOT_INVALID')

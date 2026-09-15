@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { normalizePurchaseOrderSnapshotAmount } from '../domain/purchase-order-decimal'
 import type { PurchaseOrderDetail } from '../purchase-order-query.service'
 
-export const PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION = '2'
+export const PURCHASE_ORDER_IMAGE_TEMPLATE_VERSION = '3'
 
 export class PurchaseOrderImageError extends Error {
   constructor(readonly code: 'PURCHASE_ORDER_IMAGE_SNAPSHOT_INVALID' | 'PURCHASE_ORDER_IMAGE_TOO_LARGE' | 'PURCHASE_ORDER_IMAGE_GENERATION_UNAVAILABLE' | 'PURCHASE_ORDER_IMAGE_PRODUCT_IMAGE_UNAVAILABLE') {
