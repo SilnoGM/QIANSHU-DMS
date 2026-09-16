@@ -12,7 +12,6 @@ export interface PackagingCostContext {
 export interface PackagingCostInput {
   packagingTypeValue: string | null
   vendor: string | null
-  customVendorName: string
   amount: string | null
   packagingImages: File[]
   quotationImages: File[]
@@ -31,7 +30,7 @@ export interface PackagingCostDraft {
 
 export type PackagingCostField = keyof PackagingCostInput
 export type PackagingImageError = 'invalidImageType' | 'imageTooLarge' | 'tooManyImages' | 'previewFailed'
-export type PackagingCostError = PackagingImageError | 'requiredPackagingType' | 'requiredVendor' | 'requiredVendorName' | 'requiredAmount' | 'invalidAmount' | 'requiredImages' | 'remarkTooLong'
+export type PackagingCostError = PackagingImageError | 'requiredPackagingType' | 'requiredVendor' | 'requiredAmount' | 'invalidAmount' | 'requiredImages' | 'remarkTooLong'
 export const PACKAGING_IMAGE_LIMIT = 5
 export const PACKAGING_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 export const PACKAGING_DEFAULT_VENDOR = '沙井·诚信木箱'
@@ -53,9 +52,6 @@ export function validatePackagingCost(input: PackagingCostInput, precision = 2):
   }
   if (!['CHENGXIN', 'OTHER'].includes(input.vendor ?? '')) {
     errors.vendor = 'requiredVendor'
-  }
-  if (input.vendor === 'OTHER' && !input.customVendorName.trim()) {
-    errors.customVendorName = 'requiredVendorName'
   }
   const amount = validateMoneyString(input.amount, { precision, min: precision > 0 ? `0.${'0'.repeat(precision - 1)}1` : '1' })
   if (input.amount === null || input.amount === '') {
@@ -89,7 +85,7 @@ export function validatePackagingCost(input: PackagingCostInput, precision = 2):
     errors,
     draft: {
       packagingTypeValue: input.packagingTypeValue!,
-      vendorName: input.vendor === 'OTHER' ? input.customVendorName.trim() : PACKAGING_DEFAULT_VENDOR,
+      vendorName: input.vendor === 'OTHER' ? '其他' : PACKAGING_DEFAULT_VENDOR,
       amount: amount.normalizedValue,
       currency: 'CNY',
       packagingImages: [...input.packagingImages],

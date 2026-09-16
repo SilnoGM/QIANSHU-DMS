@@ -5,13 +5,12 @@ import { validatePackagingCost } from '../../src/views/operations/warehouse-arri
 import { createPackagingImagePreview } from '../../src/views/operations/warehouse-arrivals/packaging-image-preview'
 
 const photo = (type = 'image/png', size = 8) => new File([new Uint8Array(size)], 'proof.png', { type })
-const validInput = () => ({ packagingTypeValue: 'WOODEN_BOX', vendor: 'CHENGXIN', customVendorName: '', amount: '12.3', packagingImages: [photo()], quotationImages: [photo()], remark: '  已确认  ' })
+const validInput = () => ({ packagingTypeValue: 'WOODEN_BOX', vendor: 'CHENGXIN', amount: '12.3', packagingImages: [photo()], quotationImages: [photo()], remark: '  已确认  ' })
 
-test('必填项、其他厂商与金额错误分别定位到字段，不能生成提交草稿', () => {
+test('必填项与金额错误分别定位到字段，不能生成提交草稿', () => {
   const result = validatePackagingCost({ ...validInput(), packagingTypeValue: null, vendor: null, amount: null, packagingImages: [], quotationImages: [] })
   assert.equal(result.draft, null)
   assert.deepEqual(result.errors, { packagingTypeValue: 'requiredPackagingType', vendor: 'requiredVendor', amount: 'requiredAmount', packagingImages: 'requiredImages', quotationImages: 'requiredImages' })
-  assert.equal(validatePackagingCost({ ...validInput(), vendor: 'OTHER', customVendorName: '  ' }).errors.customVendorName, 'requiredVendorName')
   for (const amount of ['0', '-1', '0.001', '1e2', 'NaN', '1,000', ' 2 ']) {
     assert.equal(validatePackagingCost({ ...validInput(), amount }).errors.amount, 'invalidAmount', amount)
   }
@@ -23,9 +22,13 @@ test('提交规范化金额、厂商、备注，保留原始 File 和顺序，�
   assert.deepEqual(result.errors, {})
   assert.deepEqual(result.draft, { packagingTypeValue: 'WOODEN_BOX', vendorName: '沙井·诚信木箱', amount: '12.30', currency: 'CNY', packagingImages: input.packagingImages, quotationImages: input.quotationImages, remark: '已确认' })
   assert.equal(result.draft?.packagingImages[0], input.packagingImages[0])
-  const custom = validatePackagingCost({ ...input, vendor: 'OTHER', customVendorName: '  测试厂商  ', remark: ' ' })
-  assert.equal(custom.draft?.vendorName, '测试厂商')
-  assert.equal(custom.draft?.remark, null)
+  assert.equal(validatePackagingCost({ ...input, remark: ' ' }).draft?.remark, null)
+})
+
+test('其他厂商不要求额外名称，可直接生成费用草稿', () => {
+  const result = validatePackagingCost({ ...validInput(), vendor: 'OTHER' })
+  assert.deepEqual(result.errors, {})
+  assert.equal(result.draft?.vendorName, '其他')
 })
 
 test('两组截图各限 1–5 张 jpeg/png/webp、10 MiB，备注限制 500 字', () => {

@@ -12,7 +12,7 @@ import { createPackagingImagePreview } from '../../src/views/operations/warehous
 const shipment: PackagingCostContext = { shipmentId: 'part-1', shipmentNo: 'SHP-1', shippingMarkText: 'MARK', purchaseOrderNo: 'PO-1', salesOrderNo: 'SO-1', ownerName: '出单人' }
 type Group = 'packagingImages' | 'quotationImages'
 interface ModalState {
-  fields: { value: { packagingTypeValue: string | null, vendor: string | null, customVendorName: string, amount: string | null, remark: string } }
+  fields: { value: { packagingTypeValue: string | null, vendor: string | null, amount: string | null, remark: string } }
   imageUrls: { value: Record<Group, string[]> }
   previews: { value: Record<Group, ReturnType<typeof createPackagingImagePreview>> }
   rules: Record<string, () => string | true>
@@ -67,7 +67,7 @@ async function fixture() {
     return { file, url, response, preview }
   }
   function fill() {
-    state.fields.value = { packagingTypeValue: 'WOODEN_FRAME', vendor: 'OTHER', customVendorName: '  外部厂商  ', amount: '99.5', remark: '  备注  ' }
+    state.fields.value = { packagingTypeValue: 'WOODEN_FRAME', vendor: 'OTHER', amount: '99.5', remark: '  备注  ' }
     return [addImage('packagingImages'), addImage('quotationImages')]
   }
   return {
@@ -101,7 +101,7 @@ test('弹窗逐字段显示错误，填写完整后仅向父层发规范化草�
   assert.equal(f.events[0]?.[0], 'submit')
   const draft = f.events[0]![1]
   assert.equal(draft.amount, '99.50')
-  assert.equal(draft.vendorName, '外部厂商')
+  assert.equal(draft.vendorName, '其他')
   assert.equal(draft.remark, '备注')
   assert.equal(draft.packagingImages[0], photos[0]!.file)
   assert.equal(draft.quotationImages[0], photos[1]!.file)

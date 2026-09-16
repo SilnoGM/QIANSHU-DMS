@@ -3,6 +3,7 @@ import type { PackagingCostContext, PackagingCostDraft, PackagingCostField, Pack
 import MoneyInput from '@/components/base/MoneyInput/index.vue'
 import QsDictionarySelect from '@/components/business/QsDictionarySelect/index.vue'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
+import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { PACKAGING_DEFAULT_VENDOR, PACKAGING_IMAGE_LIMIT, validatePackagingCost } from './packaging-cost.logic'
 import { createPackagingImagePreview } from './packaging-image-preview'
@@ -50,13 +51,13 @@ const validation = computed(() => validatePackagingCost({
   packagingImages: previews.value.packagingImages.files(imageUrls.value.packagingImages),
   quotationImages: previews.value.quotationImages.files(imageUrls.value.quotationImages),
 }, cny.value?.minorUnit ?? 2))
-const rules = Object.fromEntries(['packagingTypeValue', 'vendor', 'customVendorName', 'amount', ...imageGroups, 'remark'].map(field => [field, () => {
+const rules = Object.fromEntries(['packagingTypeValue', 'vendor', 'amount', ...imageGroups, 'remark'].map(field => [field, () => {
   const error = uploadErrors.value[field as ImageGroup] ?? validation.value.errors[field as PackagingCostField]
   return error ? t(`warehousePackagingCost.errors.${error}`) : true
 }]))
 
 function emptyFields() {
-  return { packagingTypeValue: null as string | null, vendor: null as string | null, customVendorName: '', amount: null as string | null, remark: '' }
+  return { packagingTypeValue: null as string | null, vendor: null as string | null, amount: null as string | null, remark: '' }
 }
 
 function createPreviews() {
@@ -122,7 +123,7 @@ onBeforeUnmount(releasePreviews)
   <QsGenericModal
     :model-value="modelValue"
     :title="t('warehousePackagingCost.title')"
-    size="xl"
+    size="lg"
     :loading="loading"
     :error="error"
     :submitting="submitting"
@@ -134,80 +135,94 @@ onBeforeUnmount(releasePreviews)
       </FaButton>
     </template>
     <div v-if="context" class="space-y-5">
-      <dl class="p-4 border border-border rounded-lg bg-muted/25 gap-x-6 gap-y-3 grid sm:grid-cols-2">
-        <div v-for="detail in details" :key="detail.key" class="min-w-0">
-          <dt class="qs-type-meta text-muted-foreground">
-            {{ t(`warehousePackagingCost.${detail.key}`) }}
-          </dt>
-          <dd class="qs-type-data-emphasis mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
-            {{ detail.value }}
-          </dd>
-        </div>
-      </dl>
-      <FaForm ref="form" :key="formKey" :model="formModel" :disabled="submitting" @submit="submit">
-        <div class="gap-x-6 gap-y-4 grid sm:grid-cols-2">
-          <FaFormItem name="packagingTypeValue" :label="t('warehousePackagingCost.packagingType')" :rules="rules.packagingTypeValue" :auto-bind="false" required>
-            <QsDictionarySelect v-model="fields.packagingTypeValue" dictionary-code="warehouse.packaging_type" :disabled="submitting" :placeholder="t('warehousePackagingCost.selectPackagingType')" />
-          </FaFormItem>
-          <FaFormItem name="vendor" :label="t('warehousePackagingCost.vendor')" :rules="rules.vendor" :auto-bind="false" required>
-            <template #label>
-              <span :id="vendorLabelId">{{ t('warehousePackagingCost.vendor') }}</span>
-              <span class="text-destructive" aria-hidden="true">*</span>
-            </template>
-            <FaCombobox :model-value="fields.vendor ?? undefined" :options="vendorOptions" :disabled="submitting" :placeholder="t('warehousePackagingCost.selectVendor')" :input-attrs="{ 'aria-labelledby': vendorLabelId, 'aria-required': true }" class="w-full" @update:model-value="updateVendor" />
-          </FaFormItem>
-          <FaFormItem v-if="fields.vendor === 'OTHER'" name="customVendorName" :label="t('warehousePackagingCost.customVendorName')" :rules="rules.customVendorName" :auto-bind="false" class="sm:col-span-2" required>
-            <FaInput v-model="fields.customVendorName" :disabled="submitting" :placeholder="t('warehousePackagingCost.enterVendorName')" class="w-full" />
-          </FaFormItem>
-          <FaFormItem name="amount" :label="t('warehousePackagingCost.amount')" :rules="rules.amount" :auto-bind="false" required>
-            <MoneyInput v-model="fields.amount" currency="CNY" :currencies="currencies" :currency-selectable="false" :disabled="submitting || !currencyReady" min="0.01" />
-          </FaFormItem>
-          <div class="min-w-0">
-            <p class="text-sm font-medium px-1">
-              {{ t('warehousePackagingCost.owner') }}
-            </p>
-            <p class="qs-type-body-medium mt-2 flex min-h-9 break-all items-center">
-              {{ context.ownerName || t('warehousePackagingCost.notRecorded') }}
-            </p>
-            <p class="qs-type-meta text-muted-foreground mt-1">
-              {{ t('warehousePackagingCost.ownerDescription') }}
-            </p>
+      <section :aria-label="t('warehousePackagingCost.shipmentSection')" class="p-4 border border-border rounded-lg bg-muted/25">
+        <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
+          <h3 class="qs-type-component-title m-0">
+            {{ t('warehousePackagingCost.shipmentSection') }}
+          </h3>
+          <div class="flex gap-2 max-w-full min-w-0 items-center">
+            <span class="qs-type-meta text-muted-foreground shrink-0">{{ t('warehousePackagingCost.owner') }}</span>
+            <QsPersonDisplay v-if="context.ownerName" :display-name="context.ownerName" size="sm" class="max-w-48" />
+            <span v-else class="qs-type-meta text-muted-foreground">{{ t('warehousePackagingCost.notRecorded') }}</span>
           </div>
-          <p v-if="currencyLoading" role="status" class="qs-type-meta text-muted-foreground sm:col-span-2">
+        </div>
+        <dl class="mt-3 gap-x-6 gap-y-3 grid sm:grid-cols-2">
+          <div v-for="detail in details" :key="detail.key" class="min-w-0">
+            <dt class="qs-type-meta text-muted-foreground">
+              {{ t(`warehousePackagingCost.${detail.key}`) }}
+            </dt>
+            <dd class="qs-type-data-emphasis mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {{ detail.value }}
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <FaForm ref="form" :key="formKey" :model="formModel" :disabled="submitting" class="gap-4" @submit="submit">
+        <section :aria-label="t('warehousePackagingCost.costSection')">
+          <h3 class="qs-type-component-title m-0 mb-3">
+            {{ t('warehousePackagingCost.costSection') }}
+          </h3>
+          <div class="gap-x-4 gap-y-1 grid items-start sm:grid-cols-3">
+            <FaFormItem name="packagingTypeValue" :label="t('warehousePackagingCost.packagingType')" :rules="rules.packagingTypeValue" :auto-bind="false" required>
+              <QsDictionarySelect v-model="fields.packagingTypeValue" dictionary-code="warehouse.packaging_type" :disabled="submitting" :placeholder="t('warehousePackagingCost.selectPackagingType')" />
+            </FaFormItem>
+            <FaFormItem name="vendor" :label="t('warehousePackagingCost.vendor')" :rules="rules.vendor" :auto-bind="false" required>
+              <template #label>
+                <span :id="vendorLabelId">{{ t('warehousePackagingCost.vendor') }}</span>
+                <span class="text-destructive" aria-hidden="true">*</span>
+              </template>
+              <FaCombobox :model-value="fields.vendor ?? undefined" :options="vendorOptions" :disabled="submitting" :placeholder="t('warehousePackagingCost.selectVendor')" :input-attrs="{ 'aria-labelledby': vendorLabelId, 'aria-required': true }" class="w-full" @update:model-value="updateVendor" />
+            </FaFormItem>
+            <FaFormItem name="amount" :label="t('warehousePackagingCost.amount')" :rules="rules.amount" :auto-bind="false" required>
+              <MoneyInput v-model="fields.amount" currency="CNY" :currencies="currencies" :currency-selectable="false" :disabled="submitting || !currencyReady" min="0.01" />
+            </FaFormItem>
+          </div>
+          <p v-if="currencyLoading" role="status" class="qs-type-meta text-muted-foreground">
             {{ t('warehousePackagingCost.currencyLoading') }}
           </p>
-          <FaAlert v-else-if="!currencyReady" :title="t('warehousePackagingCost.currencyUnavailable')" variant="destructive" class="sm:col-span-2">
+          <FaAlert v-else-if="!currencyReady" :title="t('warehousePackagingCost.currencyUnavailable')" variant="destructive">
             <template #description>
               <FaButton type="button" variant="outline" size="sm" :disabled="submitting" @click="reloadCurrencies">
                 {{ t('warehousePackagingCost.retry') }}
               </FaButton>
             </template>
           </FaAlert>
-          <FaFormItem v-for="group in imageGroups" :key="group" :name="group" :label="t(`warehousePackagingCost.${group}`)" :rules="rules[group]" :description="t('warehousePackagingCost.imageHint')" :auto-bind="false" required>
-            <FaImageUpload
-              v-model="imageUrls[group]"
-              :disabled="submitting"
-              :max="PACKAGING_IMAGE_LIMIT"
-              :width="88"
-              :height="88"
-              :before-upload="previews[group].beforeUpload"
-              :http-request="previews[group].httpRequest"
-              :after-upload="previews[group].afterUpload"
-              multiple
-            >
-              <span class="text-muted-foreground border-2 border-border rounded-lg border-dashed flex flex-col gap-1 size-full items-center justify-center">
-                <FaIcon name="i-icon-park-outline:upload" class="size-6" aria-hidden="true" />
-                <span class="text-xs">{{ t('warehousePackagingCost.addImage') }}</span>
-              </span>
-            </FaImageUpload>
-          </FaFormItem>
-          <FaFormItem name="remark" :label="t('warehousePackagingCost.remark')" :rules="rules.remark" :auto-bind="false" class="sm:col-span-2">
-            <FaTextarea v-model="fields.remark" :disabled="submitting" :rows="3" :maxlength="500" :placeholder="t('warehousePackagingCost.remarkPlaceholder')" />
-            <p class="qs-type-meta text-muted-foreground text-end">
-              {{ fields.remark.length }}/500
-            </p>
-          </FaFormItem>
-        </div>
+        </section>
+        <section :aria-label="t('warehousePackagingCost.imagesSection')" class="pt-4 border-t border-border">
+          <h3 class="qs-type-component-title m-0">
+            {{ t('warehousePackagingCost.imagesSection') }}
+          </h3>
+          <p class="qs-type-meta text-muted-foreground mb-3 mt-1">
+            {{ t('warehousePackagingCost.imageHint') }}
+          </p>
+          <div class="gap-x-4 gap-y-1 grid items-start sm:grid-cols-2">
+            <FaFormItem v-for="group in imageGroups" :key="group" :name="group" :label="t(`warehousePackagingCost.${group}`)" :rules="rules[group]" :auto-bind="false" required>
+              <FaImageUpload
+                v-model="imageUrls[group]"
+                :disabled="submitting"
+                :max="PACKAGING_IMAGE_LIMIT"
+                :width="88"
+                :height="88"
+                :before-upload="previews[group].beforeUpload"
+                :http-request="previews[group].httpRequest"
+                :after-upload="previews[group].afterUpload"
+                multiple
+              >
+                <span class="text-muted-foreground border-2 border-border rounded-lg border-dashed flex flex-col gap-1 size-full items-center justify-center">
+                  <FaIcon name="i-icon-park-outline:upload" class="size-6" aria-hidden="true" />
+                  <span class="text-xs">{{ t('warehousePackagingCost.addImage') }}</span>
+                </span>
+              </FaImageUpload>
+            </FaFormItem>
+          </div>
+        </section>
+        <FaFormItem name="remark" :label="t('warehousePackagingCost.remark')" :rules="rules.remark" :auto-bind="false">
+          <template #label>
+            <span>{{ t('warehousePackagingCost.remark') }}</span>
+            <span class="qs-type-meta text-muted-foreground ml-auto">{{ fields.remark.length }}/500</span>
+          </template>
+          <FaTextarea v-model="fields.remark" :disabled="submitting" :rows="3" :maxlength="500" :placeholder="t('warehousePackagingCost.remarkPlaceholder')" />
+        </FaFormItem>
       </FaForm>
     </div>
     <template #footer>
