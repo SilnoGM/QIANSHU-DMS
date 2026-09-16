@@ -47,7 +47,7 @@ const columns: QsGenericTableColumn<FundTransactionDto>[] = [
     minWidth: 210,
     title: '账户主体',
   },
-  { accessorKey: 'postingTypeName', id: 'typeCategory', minWidth: 210, title: '类型 / 分类' },
+  { accessorKey: 'postingTypeName', id: 'typeCategory', minWidth: 280, title: '类型 / 分类' },
   { accessorKey: 'businessSourceName', id: 'source', minWidth: 190, title: '业务来源' },
   {
     accessorKey: 'amount',
