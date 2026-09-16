@@ -10,7 +10,6 @@
     "receivedBy": "入仓人",
     "view": "查看",
     "woodenFrame": "打木架",
-    "woodenFrameUnavailable": "打木架功能暂未开放",
     "search": "搜索货件编号、唛头、物流单号、客户、销售单号或产品名称",
     "empty": "暂无到仓货件",
     "emptyDescription": "当前视图下暂无符合条件的货件，可调整仓库或关键词筛选。",

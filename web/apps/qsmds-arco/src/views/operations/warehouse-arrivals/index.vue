@@ -4,7 +4,6 @@ import type { PurchaseShipmentListItemDto } from '@/api/generated/types.gen'
 import type { PurchaseShipmentListQuery } from '@/api/modules/purchase-shipments'
 import type { QsGenericTableFilterDefinition, QsGenericTableFilterValues } from '@/components/business/QsGenericTable/logic'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
-import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import CopyCellButton from '@/components/business/QsGenericTable/CopyCellButton.vue'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsTableStackedCell from '@/components/business/QsGenericTable/QsTableStackedCell.vue'
@@ -21,6 +20,7 @@ import ShipmentProducts from '../../workbenches/shipments/shipment-products.vue'
 import { useShipmentData } from '../../workbenches/shipments/use-shipment-data'
 import ArrivalMobileRow from './arrival-mobile-row.vue'
 import { buildWarehouseArrivalRouteQuery, buildWarehouseFilterOptions, createWarehouseArrivalColumns, parseWarehouseArrivalQuery, WAREHOUSE_ARRIVAL_VIEWS, warehouseArrivalActions, warehouseFilterFromQuery, warehouseFilterToQuery } from './logic'
+import PackagingCostAction from './packaging-cost-action.vue'
 
 defineOptions({ name: 'QsWarehouseArrivals' })
 const route = useRoute()
@@ -28,7 +28,6 @@ const router = useRouter()
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
-const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const warehouseCatalog = useDictionaryCatalog('mainland.warehouse')
 const canRead = computed(() => auth('purchase-orders:read'))
@@ -42,6 +41,7 @@ const keyword = ref(query.value.keyword ?? '')
 const filters = ref<QsGenericTableFilterValues>({ warehouse: warehouseFilterFromQuery(query.value) })
 const page = ref(query.value.page ?? 1)
 const pageSize = ref(query.value.pageSize ?? 20)
+const packagingShipment = shallowRef<PurchaseShipmentListItemDto | null>(null)
 const { rows, total, loading, error, counts, countsError, detail, orderDetail, detailKind, detailLoading, detailError, refresh, loadCounts, loadDetail, openShipment, openOrder } = useShipmentData(enabled, computed(() => account.authEpoch), query, value => navigate({ ...query.value, page: value }, true))
 const tabs = computed(() => WAREHOUSE_ARRIVAL_VIEWS.map(value => ({ value, label: t(`warehouseArrivals.${value}`), count: countsError.value || counts.value.length === 0 ? undefined : counts.value.find(item => item.value === value)?.count ?? 0 })))
 const columns = computed(() => createWarehouseArrivalColumns(activeView.value, t))
@@ -82,7 +82,7 @@ function handleAction(action: WarehouseArrivalAction, row: PurchaseShipmentListI
     void openShipment(row.id)
   }
   else {
-    toast.info(t('warehouseArrivals.woodenFrameUnavailable'))
+    packagingShipment.value = row
   }
 }
 
@@ -118,6 +118,7 @@ watch([enabled, query], ([isEnabled]) => {
 }, { flush: 'sync' })
 watch([enabled, () => account.authEpoch], () => {
   queuedOrderId = null
+  packagingShipment.value = null
 }, { flush: 'sync' })
 onMounted(() => activated.value = true)
 onActivated(() => activated.value = true)
@@ -221,5 +222,6 @@ onBeforeUnmount(() => activated.value = false)
     </FaPageMain>
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-manage-payment="false" :can-attach-document="false" @reload="loadDetail" />
+    <PackagingCostAction v-if="packagingShipment" :shipment="packagingShipment" :enabled="enabled" @close="packagingShipment = null" />
   </div>
 </template>

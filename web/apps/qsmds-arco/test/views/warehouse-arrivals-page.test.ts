@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
-import { compile, computed, createRenderer, defineComponent, effectScope, h, nextTick, reactive, ref, watch } from 'vue'
+import { compile, computed, createRenderer, defineComponent, effectScope, h, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import * as arrivalLogic from '../../src/views/operations/warehouse-arrivals/logic'
 import { useShipmentData } from '../../src/views/workbenches/shipments/use-shipment-data'
 
@@ -35,10 +35,11 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     },
   }
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, activeView, query, rows, tabs, keyword, filters, page, pageSize, selectView, search, paginate, handleAction, refresh, viewOrderFromShipment, shipmentClosed })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ enabled, activeView, query, rows, tabs, keyword, filters, page, pageSize, packagingShipment, selectView, search, paginate, handleAction, refresh, viewOrderFromShipment, shipmentClosed })`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, {
     ...arrivalLogic,
     computed,
     ref,
+    shallowRef,
     watch,
     useI18n: () => ({ t: (key: string) => key }),
     useRoute: () => route,
@@ -64,6 +65,7 @@ async function fixture(initialQuery: Record<string, string> = {}) {
     filters: { value: Record<string, string | undefined> }
     page: { value: number }
     pageSize: { value: number }
+    packagingShipment: { value: { id: string } | null }
     selectView: (value: string) => void
     search: () => void
     paginate: (value: { page: number, pageSize: number }) => void
@@ -95,13 +97,14 @@ test('页面默认已到仓；切换视图归一第一页，并保留关键词�
   assert.equal(f.navigations.at(-1)?.destinationWarehouseMissing, undefined)
 })
 
-test('打木架只发普通信息提示且不请求数据或修改状态；待到仓不允许该操作', async (context) => {
+test('已到仓打木架打开对应货件费用弹窗且不修改列表；待到仓不允许该操作', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
   const requestCount = f.calls.length
   const before = JSON.stringify(f.state.rows.value)
   f.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
-  assert.deepEqual(f.info, ['warehouseArrivals.woodenFrameUnavailable'])
+  assert.equal(f.state.packagingShipment.value?.id, 'part-1')
+  assert.deepEqual(f.info, [])
   assert.equal(f.calls.length, requestCount)
   assert.equal(JSON.stringify(f.state.rows.value), before)
   f.state.handleAction('view', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
@@ -110,6 +113,7 @@ test('打木架只发普通信息提示且不请求数据或修改状态；待�
   const pending = await fixture({ view: 'SHIPPED' })
   context.after(pending.dispose)
   pending.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
+  assert.equal(pending.state.packagingShipment.value, null)
   assert.deepEqual(pending.info, [])
 })
 
@@ -146,6 +150,7 @@ test('缓存返回按URL重建筛选草稿，撤权及身份变化取消读取�
   assert.equal(f.state.enabled.value, false)
   f.state.handleAction('woodenFrame', { id: 'part-1', viewStatus: 'WAREHOUSE_RECEIVED' })
   assert.deepEqual(f.info, [])
+  assert.equal(f.state.packagingShipment.value, null)
 })
 
 test('计数与仓库错误的重试按钮通过真实 FaAlert description 插槽显示并可点击', async () => {

@@ -1,0 +1,100 @@
+import { validateMoneyString } from '../../../components/base/MoneyInput/logic'
+
+export interface PackagingCostContext {
+  shipmentId: string
+  shipmentNo: string | null
+  shippingMarkText: string | null
+  purchaseOrderNo: string | null
+  salesOrderNo: string | null
+  ownerName: string | null
+}
+
+export interface PackagingCostInput {
+  packagingTypeValue: string | null
+  vendor: string | null
+  customVendorName: string
+  amount: string | null
+  packagingImages: File[]
+  quotationImages: File[]
+  remark: string
+}
+
+export interface PackagingCostDraft {
+  packagingTypeValue: string
+  vendorName: string
+  amount: string
+  currency: 'CNY'
+  packagingImages: File[]
+  quotationImages: File[]
+  remark: string | null
+}
+
+export type PackagingCostField = keyof PackagingCostInput
+export type PackagingImageError = 'invalidImageType' | 'imageTooLarge' | 'tooManyImages' | 'previewFailed'
+export type PackagingCostError = PackagingImageError | 'requiredPackagingType' | 'requiredVendor' | 'requiredVendorName' | 'requiredAmount' | 'invalidAmount' | 'requiredImages' | 'remarkTooLong'
+export const PACKAGING_IMAGE_LIMIT = 5
+export const PACKAGING_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+export const PACKAGING_DEFAULT_VENDOR = '沙井·诚信木箱'
+
+export function validatePackagingImage(file: File): PackagingImageError | null {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    return 'invalidImageType'
+  }
+  return file.size > PACKAGING_IMAGE_MAX_BYTES ? 'imageTooLarge' : null
+}
+
+export function validatePackagingCost(input: PackagingCostInput, precision = 2): {
+  errors: Partial<Record<PackagingCostField, PackagingCostError>>
+  draft: PackagingCostDraft | null
+} {
+  const errors: Partial<Record<PackagingCostField, PackagingCostError>> = {}
+  if (!input.packagingTypeValue?.trim()) {
+    errors.packagingTypeValue = 'requiredPackagingType'
+  }
+  if (!['CHENGXIN', 'OTHER'].includes(input.vendor ?? '')) {
+    errors.vendor = 'requiredVendor'
+  }
+  if (input.vendor === 'OTHER' && !input.customVendorName.trim()) {
+    errors.customVendorName = 'requiredVendorName'
+  }
+  const amount = validateMoneyString(input.amount, { precision, min: precision > 0 ? `0.${'0'.repeat(precision - 1)}1` : '1' })
+  if (input.amount === null || input.amount === '') {
+    errors.amount = 'requiredAmount'
+  }
+  else if (!amount.valid) {
+    errors.amount = 'invalidAmount'
+  }
+  for (const field of ['packagingImages', 'quotationImages'] as const) {
+    const files = input[field]
+    if (!files.length) {
+      errors[field] = 'requiredImages'
+    }
+    else if (files.length > PACKAGING_IMAGE_LIMIT) {
+      errors[field] = 'tooManyImages'
+    }
+    else {
+      const error = files.map(validatePackagingImage).find(Boolean)
+      if (error) {
+        errors[field] = error
+      }
+    }
+  }
+  if (input.remark.length > 500) {
+    errors.remark = 'remarkTooLong'
+  }
+  if (Object.keys(errors).length || !amount.valid || amount.normalizedValue === null) {
+    return { errors, draft: null }
+  }
+  return {
+    errors,
+    draft: {
+      packagingTypeValue: input.packagingTypeValue!,
+      vendorName: input.vendor === 'OTHER' ? input.customVendorName.trim() : PACKAGING_DEFAULT_VENDOR,
+      amount: amount.normalizedValue,
+      currency: 'CNY',
+      packagingImages: [...input.packagingImages],
+      quotationImages: [...input.quotationImages],
+      remark: input.remark.trim() || null,
+    },
+  }
+}

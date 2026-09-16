@@ -907,6 +907,7 @@
     "category": "通用图标",
     "source": "iconify",
     "usages": [
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/packaging-cost-modal.vue",
       "packages/components/src/basic/file-upload/index.vue",
       "packages/components/src/basic/image-upload/index.vue"
     ]
