@@ -139,8 +139,8 @@ onBeforeUnmount(releasePreviews)
         <h3 class="qs-type-component-title m-0">
           {{ t('warehousePackagingCost.shipmentSection') }}
         </h3>
-        <dl class="mt-3 gap-x-6 gap-y-4 grid sm:grid-cols-6">
-          <div v-for="detail in details" :key="detail.key" class="min-w-0" :class="['shipmentNo', 'shippingMarkText'].includes(detail.key) ? 'sm:col-span-3' : 'sm:col-span-2'">
+        <dl class="mt-3 gap-x-6 gap-y-4 grid sm:grid-cols-3">
+          <div v-for="detail in details" :key="detail.key" class="min-w-0" :class="{ 'sm:col-span-2': detail.key === 'shippingMarkText' }">
             <dt class="qs-type-meta text-muted-foreground">
               {{ t(`warehousePackagingCost.${detail.key}`) }}
             </dt>
@@ -148,7 +148,7 @@ onBeforeUnmount(releasePreviews)
               {{ detail.value }}
             </dd>
           </div>
-          <div class="min-w-0 sm:col-span-2">
+          <div class="min-w-0">
             <dt class="qs-type-meta text-muted-foreground">
               {{ t('warehousePackagingCost.owner') }}
             </dt>
