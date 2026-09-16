@@ -8,6 +8,9 @@ import { ApiException } from '../../infrastructure/http/api.exception'
 import { AccessControlService } from '../access-control/access-control.service'
 import { AuditService, AuditWriteFailedError } from '../audit/audit.service'
 import { DictionaryLookupService, DictionaryValueUnavailableError } from '../dictionaries/dictionary-lookup.service'
+import { FundPostingService } from '../fund-accounts/application/fund-posting.contract'
+import { FundPostingError } from '../fund-accounts/application/fund-posting.errors'
+import { FundCalculationError } from '../fund-accounts/domain/fund-calculation.errors'
 import { MediaAssetService, MediaAssetLifecycleError } from '../media/media-asset.service'
 import { MediaContentDeliveryService } from '../media/media-content-delivery.service'
 import { requireMediaObjectKeyNamespace } from '../media/media-storage'
@@ -22,6 +25,12 @@ function mapError(error: unknown): never {
   if (error instanceof ApiException) throw error
   if (error instanceof DictionaryValueUnavailableError) return packagingCostFailure('PACKAGING_COST_TYPE_UNAVAILABLE', '包装类型当前不可用')
   if (error instanceof MediaAssetLifecycleError) return imageFailure()
+  if (error instanceof FundPostingError) {
+    if (error.code === 'FUND_CONCURRENT_STATE_CHANGED') return stateChanged()
+    if (error.code === 'FUND_INTERNAL_ERROR') return packagingCostFailure('INTERNAL_ERROR', '资金服务内部错误', 500)
+    return packagingCostFailure('PACKAGING_COST_POSTING_UNAVAILABLE', '归属人资金账户或 WOODEN_PACKING_COST 规则当前不可用，付款未完成')
+  }
+  if (error instanceof FundCalculationError) return packagingCostFailure('PACKAGING_COST_POSTING_UNAVAILABLE', '当前金额无法按包装费用规则记账，付款未完成')
   const facts = readPersistenceErrorFacts(error)
   if ((error instanceof AuditWriteFailedError && error.transactionConflict) || ['P2034', '40001', '40P01', '55P03', '57014'].some(code => hasPersistenceCode(facts, code))) return stateChanged()
   throw error
@@ -36,6 +45,7 @@ export class PackagingCostService {
     private readonly delivery: MediaContentDeliveryService,
     private readonly access: AccessControlService,
     private readonly audit: AuditService,
+    private readonly funds: FundPostingService,
   ) {}
   private async authorize(tx: Prisma.TransactionClient, context: PackagingCostContext, permissions: string[]) {
     const user = await tx.user.findUnique({ where: { id: context.actorUserId }, select: { status: true } })
@@ -120,10 +130,19 @@ export class PackagingCostService {
         // 同一付款人对同一版本的网络重试可重放；其他付款人或不同版本不能覆盖已付款事实。
         if (row.status === 'PAID' && row.paidByUserId === context.actorUserId && row.version === input.expectedVersion + 1) return
         if (row.status !== 'PENDING_PAYMENT' || row.version !== input.expectedVersion) return stateChanged()
+        const fundContext = { ...context, sourceCode: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY' }
+        const postingInput = {
+          postingTypeCode: 'WOODEN_PACKING_COST', userId: row.ownerUserId, amount: row.amount.toFixed(2),
+          businessId: row.id, businessNo: row.shipmentNo, summary: '打木架费用付款', idempotencyKey: row.id,
+        }
+        // 以提报时固定的销售出单人为资金归属，不能使用当前付款人。
+        // 预览和入账共用当前事务及配置/账户锁；规则、比例、资金和付款审计任一失败均回滚。
+        const preview = await this.funds.previewBusinessEventInTransaction(tx, fundContext, postingInput)
+        const posting = await this.funds.postBusinessEventInTransaction(tx, fundContext, postingInput, preview)
         const [{ now }] = await tx.$queryRaw<[{ now: Date }]>(Prisma.sql`SELECT clock_timestamp() AS now`)
         await tx.packagingCostRequest.update({ where: { id }, data: { status: 'PAID', paidByUserId: context.actorUserId, paidAt: now, version: { increment: 1 } } })
-        await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(4), currencyCode: 'CNY' } })
-      })
+        await this.audit.record(tx, { eventType: 'PACKAGING_COST_PAID', actorType: 'USER', actorUserId: context.actorUserId, requestId: context.requestId, outcome: 'SUCCESS', targetType: 'PACKAGING_COST_REQUEST', targetId: id, metadata: { amount: row.amount.toFixed(4), currencyCode: 'CNY', fundPostingBatchId: posting.batchId } })
+      }, { timeout: 30_000 })
     } catch (error) { return mapError(error) }
     return this.queries.getById(id)
   }

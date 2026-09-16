@@ -17,6 +17,8 @@ import mediaConfig, { createMediaConfiguration } from '../src/config/media.confi
 import { PrismaService } from '../src/infrastructure/database/prisma.service'
 import { PasswordProvider } from '../src/modules/auth/providers/password.provider'
 import { DictionaryLookupService } from '../src/modules/dictionaries/dictionary-lookup.service'
+import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
+import { FundConfigurationCommandService } from '../src/modules/fund-accounts/application/fund-configuration-command.service'
 import { MediaContentValidator } from '../src/modules/media/media-content-validator'
 import { PurchaseOrderFactoryShipmentService } from '../src/modules/purchase-orders/factory-shipments/purchase-order-factory-shipment.service'
 import { PurchaseOrderQueryService } from '../src/modules/purchase-orders/purchase-order-query.service'
@@ -90,12 +92,12 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       return { browser, user, role, credentials: { username, password } }
     }
 
-    async function shipment(options: { received?: boolean, salesLinked?: boolean } = {}) {
+    async function shipment(options: { received?: boolean, salesLinked?: boolean, ownerUserId?: string } = {}) {
       const input = await customInput(fixture)
       const source = options.salesLinked === false ? null : await prisma.salesOrder.create({ data: {
         orderNo: `PKG-SO-${randomUUID()}`, createIdempotencyKeyHash: randomBytes(32),
         createRequestFingerprintHash: randomBytes(32), orderDate: new Date('2026-09-07'),
-        issuerUserId: fixture.actor.id, currencyCode: 'TWD', customerName: '包装客户', customerPhone: '12345678',
+        issuerUserId: options.ownerUserId ?? fixture.actor.id, currencyCode: 'TWD', customerName: '包装客户', customerPhone: '12345678',
         customerCountryRegionId: regions[0], customerProvinceStateId: regions[1], customerCityId: regions[2],
         customerCountryRegionCodeSnapshot: 'PKG_COUNTRY', customerProvinceStateCodeSnapshot: 'PKG_PROVINCE', customerCityCodeSnapshot: 'PKG_CITY',
         customerCountryRegionNameSnapshot: '国家', customerProvinceStateNameSnapshot: '省份', customerCityNameSnapshot: '城市',
@@ -143,7 +145,35 @@ export async function createPackagingCostHarness(options: { nativeImageProbe?: b
       }
     }
 
-    return { app, prisma, fixture, mediaRoot, browserWithPermissions, shipment, upload, input,
+    /** 仅给销售归属人开户；付款人及提报人的账户必须显式创建，避免夹具掩盖扣错人的错误。 */
+    async function setupFunds(userShareRate = '30') {
+      const context = { actorUserId: fixture.actor.id, requestId: randomUUID() }
+      const configurations = app.get(FundConfigurationCommandService)
+      let postingType = await prisma.fundPostingType.findUnique({ where: { code: 'WOODEN_PACKING_COST' } })
+      if (!postingType) {
+        const created = await configurations.createPostingType(context, {
+          code: 'WOODEN_PACKING_COST', name: '打木架费用', businessCategory: 'COST', requiresUser: true, amountSignPolicy: 'POSITIVE_ONLY',
+          legs: [
+            { position: 1, accountTarget: 'USER', directionPolicy: 'DEBIT', amountStrategy: 'USER_SHARE' },
+            { position: 2, accountTarget: 'COMPANY', directionPolicy: 'DEBIT', amountStrategy: 'COMPANY_REMAINDER' },
+          ],
+        })
+        const published = await configurations.publishDraftRule(context, { postingTypeId: created.id, draftRuleVersionId: created.draftRule!.id, expectedVersion: created.version })
+        await configurations.setPostingTypeEnabled(context, { postingTypeId: created.id, enabled: true, expectedVersion: published.postingType.version })
+        postingType = await prisma.fundPostingType.findUniqueOrThrow({ where: { id: created.id } })
+      }
+      const source = await prisma.fundBusinessSource.findUnique({ where: { code: 'PACKAGING_COST' } })
+      if (!source) {
+        await configurations.createBusinessSource(context, { code: 'PACKAGING_COST', name: '包装费用付款', enabled: true, allowedPostingTypeIds: [postingType.id] })
+      } else {
+        const updated = await configurations.updateBusinessSource(context, { businessSourceId: source.id, name: source.name, description: source.description, allowedPostingTypeIds: [postingType.id], expectedVersion: source.version })
+        if (!updated.businessSource.enabled) await configurations.setBusinessSourceEnabled(context, { businessSourceId: source.id, enabled: true, expectedVersion: updated.businessSource.version })
+      }
+      const ownerAccount = await app.get(FundAccountCommandService).createUserAccount(context, { userId: fixture.actor.id, userShareRate })
+      return { ownerAccount, postingType }
+    }
+
+    return { app, prisma, fixture, mediaRoot, browserWithPermissions, shipment, upload, input, setupFunds,
       async dispose() { await app.close(); await fixture.dispose(); await rm(mediaRoot, { recursive: true, force: true }) },
     }
   } catch (error) {

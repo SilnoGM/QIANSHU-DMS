@@ -54019,6 +54019,7 @@
             {
               "status": 422,
               "codes": [
+                "PACKAGING_COST_POSTING_UNAVAILABLE",
                 "VALIDATION_FAILED"
               ]
             }

@@ -42,7 +42,7 @@ export class PackagingCostController {
   detail(@Param() params: PackagingCostIdDto) { return this.queries.getById(params.id) }
   @Post() @HttpCode(201) @RequirePermissions('packaging-costs:create') @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } }) @ApiContractResponse({ status: 201, type: PackagingCostRequestDto }) @contract('packaging_costs_create', true, commandErrors)
   submit(@Body() input: PackagingCostRequestCreateDto, @Headers('idempotency-key') key: unknown, @Req() request: object) { return this.commands.submit(context(request), input, key) }
-  @Post(':id/pay') @HttpCode(200) @RequirePermissions('packaging-costs:read', 'packaging-costs:pay') @ApiContractResponse({ status: 200, type: PackagingCostRequestDto }) @contract('packaging_costs_pay', true, [notFound, { status: 409, codes: ['PACKAGING_COST_STATE_CHANGED'] }])
+  @Post(':id/pay') @HttpCode(200) @RequirePermissions('packaging-costs:read', 'packaging-costs:pay') @ApiContractResponse({ status: 200, type: PackagingCostRequestDto }) @contract('packaging_costs_pay', true, [notFound, { status: 409, codes: ['PACKAGING_COST_STATE_CHANGED'] }, { status: 422, codes: ['PACKAGING_COST_POSTING_UNAVAILABLE'] }])
   pay(@Param() params: PackagingCostIdDto, @Body() input: PackagingCostRequestPayDto, @Req() request: object) { return this.commands.pay(context(request), params.id, input) }
   @Post('images') @HttpCode(201) @RequirePermissions('packaging-costs:create') @ApiConsumes('multipart/form-data')
   @ApiBody({ schema: { type: 'object', required: ['mediaType', 'file'], additionalProperties: false, properties: { mediaType: { type: 'string', enum: ['IMAGE'] }, file: { type: 'string', format: 'binary' } } } })

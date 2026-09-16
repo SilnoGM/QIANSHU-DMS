@@ -83,8 +83,8 @@ export interface FundPostingResult {
 }
 
 /**
- * 同一 Server 内业务域唯一可依赖的资金动账端口。销售收款受控端口复用调用方
- * 事务，保证审核、正式收款、资金和审计同时提交；管理员能力留在资金模块。
+ * 同一 Server 内业务域唯一可依赖的资金动账端口。销售收款和包装付款受控端口
+ * 复用调用方事务，保证业务状态、资金和审计同时提交；管理员能力留在资金模块。
  */
 export abstract class FundPostingService {
   abstract previewBusinessEventInTransaction(

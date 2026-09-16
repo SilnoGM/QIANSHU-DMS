@@ -1691,7 +1691,7 @@ model SalesReceiptRequest {
   @@map("sales_receipt_requests")
 }
 
-// 包装费用提交后冻结原始提报与两张证据；付款仅记录确认事实，不生成资金流水。
+// 包装费用提交后冻结原始提报与两张证据；付款状态与资金分录在同一事务中保存。
 model PackagingCostRequest {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   shipmentId String @map("shipment_id") @db.Uuid

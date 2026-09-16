@@ -4,6 +4,7 @@ import request from 'supertest'
 
 import type { PackagingCostRequestDto, PackagingCostRequestPageDto } from '../src/modules/packaging-costs/packaging-cost.dto'
 import { AuditService } from '../src/modules/audit/audit.service'
+import { FundAccountCommandService } from '../src/modules/fund-accounts/application/fund-account-command.service'
 import { MediaAssetReferenceRepository } from '../src/modules/media/media-reference.repository'
 import { MediaAssetRetentionService } from '../src/modules/media/media-retention.service'
 import { createPackagingCostHarness, packagingHeaders, packagingPermissions, type PackagingCostHarness } from './packaging-cost.fixture'
@@ -17,6 +18,7 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
       const permission = await h.prisma.permission.findUniqueOrThrow({ where: { code }, include: { roles: { include: { role: true } } } })
       expect(permission.roles.map(grant => grant.role.code)).toEqual(['system_admin'])
     }
+    await h.setupFunds()
   })
   afterAll(async () => { await h?.dispose() })
 
@@ -29,8 +31,17 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
   async function imagesAreStaged(ids: string[]) {
     expect(await h.prisma.mediaAsset.count({ where: { id: { in: ids }, status: 'UPLOADING' } })).toBe(ids.length)
   }
+  async function fundFacts(id: string, harness = h) {
+    return {
+      request: await harness.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id }, select: { status: true, version: true, paidAt: true, paidByUserId: true } }),
+      accounts: await harness.prisma.fundAccount.findMany({ select: { id: true, balance: true, nextSequence: true, version: true }, orderBy: { id: 'asc' } }),
+      batches: await harness.prisma.fundPostingBatch.findMany({ where: { businessId: id }, include: { entries: true } }),
+      audits: await harness.prisma.auditEvent.findMany({ where: { eventType: { in: ['FUND_BUSINESS_POSTED', 'PACKAGING_COST_PAID'] } }, orderBy: { id: 'asc' } }),
+    }
+  }
 
   it('persists the received shipment, sales issuer and two private images, then confirms the immutable CNY payment', async () => {
+    const ownerAccount = await h.prisma.fundAccount.findUniqueOrThrow({ where: { userId: h.fixture.actor.id } })
     const creator = await h.browserWithPermissions(['packaging-costs:create'])
     const finance = await h.browserWithPermissions(['packaging-costs:read', 'packaging-costs:pay'])
     const shipment = await h.shipment()
@@ -51,6 +62,8 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     expect(pending.body as PackagingCostRequestPageDto).toMatchObject({ total: 1, items: [{ id: submitted.id }], statusCounts: { PENDING_PAYMENT: 1, PAID: 0 } })
     expect(pending.headers['cache-control']).toBe('private, no-store')
     expect(pending.headers['x-request-id']).toBeTruthy()
+    expect(await h.prisma.fundPostingBatch.count()).toBe(initialPostings)
+    expect((await h.prisma.fundAccount.findUniqueOrThrow({ where: { id: ownerAccount.id } })).balance.toFixed(2)).toBe('0.00')
     for (const [kind, mime] of [['PACKAGING', 'image/png'], ['QUOTATION', 'image/webp']]) {
       const url = `/api/packaging-cost-requests/${submitted.id}/images/${kind}`
       const image = await finance.browser.get(url).expect(200)
@@ -66,7 +79,20 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     expect(paid.paidAt).toEqual(expect.any(String))
     const after = await finance.browser.get('/api/packaging-cost-requests').query({ status: 'PAID', keyword: shipment.source!.orderNo }).expect(200)
     expect(after.body as PackagingCostRequestPageDto).toMatchObject({ total: 1, items: [{ id: submitted.id }], statusCounts: { PENDING_PAYMENT: 0, PAID: 1 } })
-    expect(await h.prisma.fundPostingBatch.count()).toBe(initialPostings)
+    expect(await h.prisma.fundPostingBatch.count()).toBe(initialPostings + 1)
+    const batch = await h.prisma.fundPostingBatch.findFirstOrThrow({ where: { businessId: submitted.id }, include: { entries: { orderBy: { lineNo: 'asc' } } } })
+    expect(batch).toMatchObject({ businessSourceCodeSnapshot: 'PACKAGING_COST', consumerCode: 'PACKAGING_COST.PAY', postingTypeCodeSnapshot: 'WOODEN_PACKING_COST', userId: submitted.owner.id })
+    expect(batch.businessAmount.toFixed(2)).toBe('280.50')
+    expect(batch.userShareRateSnapshot?.toFixed(2)).toBe('30.00')
+    expect(batch.entries.map(entry => ({ accountTarget: entry.accountTarget, direction: entry.direction, amount: entry.amount.toFixed(2) }))).toEqual([
+      { accountTarget: 'USER', direction: 'DEBIT', amount: '84.15' }, { accountTarget: 'COMPANY', direction: 'DEBIT', amount: '196.35' },
+    ])
+    expect(batch.entries[0].accountId).toBe(ownerAccount.id)
+    expect((await h.prisma.fundAccount.findUniqueOrThrow({ where: { id: ownerAccount.id } })).balance.toFixed(2)).toBe('-84.15')
+    expect((await h.prisma.fundAccount.findFirstOrThrow({ where: { ownerType: 'COMPANY' } })).balance.toFixed(2)).toBe('-196.35')
+    expect(await h.prisma.fundAccount.count({ where: { userId: { in: [creator.user.id, finance.user.id] } } })).toBe(0)
+    const audit = await h.prisma.auditEvent.findFirstOrThrow({ where: { targetId: submitted.id, eventType: 'PACKAGING_COST_PAID' } })
+    expect(audit.metadata).toMatchObject({ fundPostingBatchId: batch.id })
   })
 
   it('replays concurrent submissions once and rejects a changed amount with the same idempotency key', async () => {
@@ -98,11 +124,16 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     const paid = await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })
     expect(paid).toMatchObject({ status: 'PAID', version: 2, paidByUserId: winner.user.id })
     expect(paid.paidAt).toBeInstanceOf(Date)
+    const posted = await fundFacts(created.id)
+    expect(posted.batches).toHaveLength(1)
+    expect(posted.batches[0].entries).toHaveLength(2)
     await pay(winner.browser, created.id).expect(200)
+    await Promise.all([pay(winner.browser, created.id).expect(200), pay(winner.browser, created.id).expect(200)])
     await pay(loser.browser, created.id).expect(409)
     await pay(winner.browser, created.id, 2).expect(409)
     expect(await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })).toEqual(paid)
     expect(await h.prisma.auditEvent.count({ where: { targetId: created.id, eventType: 'PACKAGING_COST_PAID' } })).toBe(1)
+    expect(await fundFacts(created.id)).toEqual(posted)
   })
 
   it('keeps both images referenced after payment and rejects direct changes to frozen financial facts', async () => {
@@ -234,11 +265,95 @@ describe('packaging cost submission and payment over isolated PostgreSQL and rea
     expect(await h.prisma.packagingCostRequest.count({ where: { shipmentId: shipment.part.id } })).toBe(0)
     await imagesAreStaged([input.packagingImageMediaAssetId, input.quotationImageMediaAssetId])
     const created = (await submit(actor.browser, input).expect(201)).body as PackagingCostRequestDto
+    const beforePayment = await fundFacts(created.id)
     const payFailure = jest.spyOn(audit, 'record').mockImplementation((tx, event) => event.eventType === 'PACKAGING_COST_PAID'
       ? Promise.reject(new Error('injected packaging payment audit failure')) : realRecord(tx, event))
     try { await pay(actor.browser, created.id).expect(500) } finally { payFailure.mockRestore() }
     expect(await h.prisma.packagingCostRequest.findUniqueOrThrow({ where: { id: created.id } })).toMatchObject({ status: 'PENDING_PAYMENT', paidAt: null, paidByUserId: null, version: 1 })
     expect(await h.prisma.auditEvent.count({ where: { targetId: created.id, eventType: 'PACKAGING_COST_PAID' } })).toBe(0)
+    expect(await fundFacts(created.id)).toEqual(beforePayment)
     await pay(actor.browser, created.id).expect(200)
+  })
+
+  it('refuses missing owner accounts without charging the payer or changing payment state', async () => {
+    const payer = await h.browserWithPermissions()
+    const owner = await h.browserWithPermissions([])
+    const shipment = await h.shipment({ ownerUserId: owner.user.id })
+    const created = (await submit(payer.browser, await h.input(payer.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
+    await h.app.get(FundAccountCommandService).createUserAccount({ actorUserId: payer.user.id, requestId: randomUUID() }, { userId: payer.user.id, userShareRate: '70' })
+    const before = await fundFacts(created.id)
+    const failed = await pay(payer.browser, created.id).expect(422)
+    expect(failed.body as unknown).toMatchObject({ code: 'PACKAGING_COST_POSTING_UNAVAILABLE' })
+    expect(await fundFacts(created.id)).toEqual(before)
+    expect(await h.prisma.fundAccount.count({ where: { userId: owner.user.id } })).toBe(0)
+  })
+
+  it('fails closed for missing or disabled posting configuration and authorization without partial ledger writes', async () => {
+    const isolated = await createPackagingCostHarness({ nativeImageProbe: true })
+    try {
+      const { postingType } = await isolated.setupFunds()
+      const source = await isolated.prisma.fundBusinessSource.findUniqueOrThrow({ where: { code: 'PACKAGING_COST' } })
+      const payer = await isolated.browserWithPermissions()
+      const shipment = await isolated.shipment()
+      const created = (await submit(payer.browser, await isolated.input(payer.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
+      const authorization = { businessSourceId: source.id, postingTypeId: postingType.id }
+      const scenarios: { break: () => Promise<unknown>, restore: () => Promise<unknown> }[] = [
+        { break: () => isolated.prisma.fundBusinessSource.update({ where: { id: source.id }, data: { enabled: false } }), restore: () => isolated.prisma.fundBusinessSource.update({ where: { id: source.id }, data: { enabled: true } }) },
+        { break: () => isolated.prisma.fundPostingType.update({ where: { id: postingType.id }, data: { enabled: false } }), restore: () => isolated.prisma.fundPostingType.update({ where: { id: postingType.id }, data: { enabled: true } }) },
+        { break: () => isolated.prisma.fundPostingType.update({ where: { id: postingType.id }, data: { currentRuleVersionId: null } }), restore: () => isolated.prisma.fundPostingType.update({ where: { id: postingType.id }, data: { currentRuleVersionId: postingType.currentRuleVersionId } }) },
+        { break: () => isolated.prisma.fundBusinessSourcePostingType.delete({ where: { businessSourceId_postingTypeId: authorization } }), restore: () => isolated.prisma.fundBusinessSourcePostingType.create({ data: authorization }) },
+        { break: () => isolated.prisma.fundBusinessSource.update({ where: { id: source.id }, data: { code: 'PACKAGING_COST_UNAVAILABLE' } }), restore: () => isolated.prisma.fundBusinessSource.update({ where: { id: source.id }, data: { code: 'PACKAGING_COST' } }) },
+        { break: () => isolated.prisma.fundPostingType.update({ where: { id: postingType.id }, data: { code: 'WOODEN_PACKING_COST_UNAVAILABLE' } }), restore: () => isolated.prisma.fundPostingType.update({ where: { id: postingType.id }, data: { code: 'WOODEN_PACKING_COST' } }) },
+      ]
+      for (const scenario of scenarios) {
+        await scenario.break()
+        try {
+          const before = await fundFacts(created.id, isolated)
+          const failed = await pay(payer.browser, created.id).expect(422)
+          expect(failed.body as unknown).toMatchObject({ code: 'PACKAGING_COST_POSTING_UNAVAILABLE' })
+          expect(await fundFacts(created.id, isolated)).toEqual(before)
+          expect(before.request).toMatchObject({ status: 'PENDING_PAYMENT', version: 1 })
+        } finally { await scenario.restore() }
+      }
+      await pay(payer.browser, created.id).expect(200)
+      expect((await fundFacts(created.id, isolated)).batches).toHaveLength(1)
+    } finally { await isolated.dispose() }
+  })
+
+  it('keeps historical paid requests without ledger batches unchanged when read or retried', async () => {
+    const payer = await h.browserWithPermissions()
+    const shipment = await h.shipment()
+    const created = (await submit(payer.browser, await h.input(payer.browser, shipment.part.id)).expect(201)).body as PackagingCostRequestDto
+    // 仅在隔离库模拟旧版付款事实；保留正式不可变触发器，不为历史付款补造资金批次。
+    await h.prisma.packagingCostRequest.update({ where: { id: created.id }, data: { status: 'PAID', version: 2, paidByUserId: payer.user.id, paidAt: new Date() } })
+    const before = await fundFacts(created.id)
+    expect(before.batches).toEqual([])
+    await payer.browser.get(`/api/packaging-cost-requests/${created.id}`).expect(200)
+    await pay(payer.browser, created.id).expect(200)
+    expect(await fundFacts(created.id)).toEqual(before)
+  })
+
+  it('applies zero and full user shares without creating zero-value entries', async () => {
+    const payer = await h.browserWithPermissions()
+    const commands = h.app.get(FundAccountCommandService)
+    const owner = await h.prisma.fundAccount.findUniqueOrThrow({ where: { userId: h.fixture.actor.id } })
+    async function setShare(value: string) {
+      const current = await h.prisma.fundAccount.findUniqueOrThrow({ where: { id: owner.id } })
+      await commands.updateUserShareRate({ actorUserId: h.fixture.actor.id, requestId: randomUUID() }, { accountId: owner.id, expectedVersion: current.version, userShareRate: value, reason: '包装费用边界验证' })
+    }
+    try {
+      for (const share of ['0', '100']) {
+        await setShare(share)
+        const shipment = await h.shipment()
+        const created = (await submit(payer.browser, { ...await h.input(payer.browser, shipment.part.id), amount: '10' }).expect(201)).body as PackagingCostRequestDto
+        await pay(payer.browser, created.id).expect(200)
+        const batch = await h.prisma.fundPostingBatch.findFirstOrThrow({ where: { businessId: created.id }, include: { entries: true } })
+        expect(batch.userShareRateSnapshot?.toFixed(2)).toBe(`${share}.00`)
+        expect(batch.entries).toHaveLength(1)
+        expect(batch.entries[0].accountTarget).toBe(share === '0' ? 'COMPANY' : 'USER')
+        expect(batch.entries[0].direction).toBe('DEBIT')
+        expect(batch.entries[0].amount.toFixed(2)).toBe('10.00')
+      }
+    } finally { await setShare('30') }
   })
 })

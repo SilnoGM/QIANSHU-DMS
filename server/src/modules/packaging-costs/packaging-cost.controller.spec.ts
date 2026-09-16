@@ -27,6 +27,11 @@ describe('PackagingCostController contract', () => {
     expect(document.paths[`${root}/images`].post).toMatchObject({ operationId: 'packaging_costs_upload_image', requestBody: { content: { 'multipart/form-data': { schema: { required: ['mediaType', 'file'] } } } } })
     expect(document.paths[`${root}/shipment-context/{shipmentId}`].get).toMatchObject({ operationId: 'packaging_costs_shipment_context' })
     expect(document.paths[`${root}/{id}/pay`].post).toMatchObject({ operationId: 'packaging_costs_pay', responses: { 200: expect.any(Object) as unknown, 403: expect.any(Object) as unknown, 409: expect.any(Object) as unknown } })
+    expect(document.paths[`${root}/{id}/pay`].post).toMatchObject({
+      'x-qianshu-contract': { errors: expect.arrayContaining([
+        { status: 422, codes: expect.arrayContaining(['PACKAGING_COST_POSTING_UNAVAILABLE']) as unknown },
+      ]) as unknown },
+    })
     expect(document.components?.schemas?.PackagingCostRequestPayDto).toMatchObject({ required: ['expectedVersion'], properties: { expectedVersion: expect.any(Object) as unknown } })
     expect(document.components?.schemas?.PackagingCostRequestPayDto).not.toHaveProperty('properties.amount')
     for (const method of ['get', 'head'] as const) expect(document.paths[`${root}/{id}/images/{kind}`][method]?.responses).toHaveProperty('304')

@@ -86,6 +86,8 @@ const MAX_POSTGRES_BIGINT = 9_223_372_036_854_775_807n
 const SALES_RECEIPT_SOURCE_CODE = 'SALES_RECEIPT'
 const SALES_RECEIPT_APPROVE_CONSUMER_CODE = 'SALES_RECEIPT.APPROVE'
 const SALES_RECEIPT_VOID_CONSUMER_CODE = 'SALES_RECEIPT.VOID'
+const PACKAGING_COST_SOURCE_CODE = 'PACKAGING_COST'
+const PACKAGING_COST_PAY_CONSUMER_CODE = 'PACKAGING_COST.PAY'
 const ADMIN_REVERSAL_CONSUMER_CODE = 'ADMIN_REVERSAL'
 const ADMIN_ADJUSTMENT_CONSUMER_CODE = 'ADMIN_MANUAL_ADJUSTMENT'
 const ADMIN_ADJUSTMENT_SOURCE_CODE = 'ADMIN_CONSOLE'
@@ -439,8 +441,8 @@ export class FundPostingApplicationService extends FundPostingService {
     rawInput: PostBusinessEventInput,
   ): Promise<FundPostingResult> {
     const request = normalizePostBusinessEventRequest(rawContext, rawInput)
-    // 销售收款只允许在销售事务中写入，避免独立调用绕过正式收款关联。
-    if (request.context.sourceCode === SALES_RECEIPT_SOURCE_CODE) {
+    // 收款和包装付款必须与各自业务状态共用事务，不能独立动账后再补写状态。
+    if ([SALES_RECEIPT_SOURCE_CODE, PACKAGING_COST_SOURCE_CODE].includes(request.context.sourceCode)) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     try {
@@ -458,9 +460,13 @@ export class FundPostingApplicationService extends FundPostingService {
 
   private normalizeBusinessContext(
     context: FundBusinessTransactionContext,
-    consumerCode: string,
+    action: 'POST' | 'REVERSE',
   ): FundAccountCommandContext {
-    if (context.sourceCode !== SALES_RECEIPT_SOURCE_CODE || context.consumerCode !== consumerCode) {
+    const salesReceipt = context.sourceCode === SALES_RECEIPT_SOURCE_CODE
+      && context.consumerCode === (action === 'POST' ? SALES_RECEIPT_APPROVE_CONSUMER_CODE : SALES_RECEIPT_VOID_CONSUMER_CODE)
+    const packagingPayment = action === 'POST' && context.sourceCode === PACKAGING_COST_SOURCE_CODE
+      && context.consumerCode === PACKAGING_COST_PAY_CONSUMER_CODE
+    if (!salesReceipt && !packagingPayment) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizeFundAccountCommandContext({
@@ -471,7 +477,8 @@ export class FundPostingApplicationService extends FundPostingService {
   }
 
   private normalizeBusinessRequest(context: FundBusinessTransactionContext, input: PostBusinessEventInput) {
-    if (input.postingTypeCode !== 'ORDER_SETTLEMENT') {
+    const postingTypeCode = context.sourceCode === PACKAGING_COST_SOURCE_CODE ? 'WOODEN_PACKING_COST' : 'ORDER_SETTLEMENT'
+    if (input.postingTypeCode !== postingTypeCode) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_TYPE_NOT_ALLOWED)
     }
     return normalizePostBusinessEventRequest({
@@ -487,7 +494,7 @@ export class FundPostingApplicationService extends FundPostingService {
     context: FundBusinessTransactionContext,
     input: PostBusinessEventInput,
   ): Promise<FundPostingPreview> {
-    this.normalizeBusinessContext(context, SALES_RECEIPT_APPROVE_CONSUMER_CODE)
+    this.normalizeBusinessContext(context, 'POST')
     const request = this.normalizeBusinessRequest(context, input)
     const { postingType, plan, userShareRate } = await this.prepareBusinessPlan(transaction, request)
     if (userShareRate === undefined || plan.companyShareRate === null) {
@@ -502,14 +509,14 @@ export class FundPostingApplicationService extends FundPostingService {
     })
   }
 
-  /** 外层销售事务拥有提交与回滚权；唯一冲突原样上抛，不能在失败事务内恢复。 */
+  /** 外层业务事务拥有提交与回滚权；唯一冲突原样上抛，不能在失败事务内恢复。 */
   async postBusinessEventInTransaction(
     transaction: Prisma.TransactionClient,
     context: FundBusinessTransactionContext,
     input: PostBusinessEventInput,
     expectedContext: FundPostingExpectedContext,
   ): Promise<FundPostingResult> {
-    const actor = this.normalizeBusinessContext(context, SALES_RECEIPT_APPROVE_CONSUMER_CODE)
+    const actor = this.normalizeBusinessContext(context, 'POST')
     const request = this.normalizeBusinessRequest(context, input)
     return this.postInTransaction(transaction, request, { actorUserId: actor.actorUserId, expectedContext })
   }
@@ -519,7 +526,7 @@ export class FundPostingApplicationService extends FundPostingService {
     context: FundBusinessTransactionContext,
     input: FundReversalInput,
   ): Promise<FundPostingResult> {
-    const actor = this.normalizeBusinessContext(context, SALES_RECEIPT_VOID_CONSUMER_CODE)
+    const actor = this.normalizeBusinessContext(context, 'REVERSE')
     return this.reverseInTransaction(transaction, actor, normalizeFundReversalRequest(input), true)
   }
 
@@ -1012,6 +1019,17 @@ export class FundPostingApplicationService extends FundPostingService {
       postingType.businessCategory !== 'REVENUE'
       || parseFundAmountMinor(plan.businessAmount) <= 0n
       || plan.entries.some(entry => entry.direction !== 'CREDIT')
+    )) {
+      throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
+    }
+    // 包装费用可调整分摊规则，但必须仍是归属人的成本支出，不能变为收入或仅公司业务。
+    // 用户比例为零时引擎会省略零额分录，因此按规则分录校验 USER 目标。
+    if (request.context.sourceCode === PACKAGING_COST_SOURCE_CODE && (
+      postingType.businessCategory !== 'COST'
+      || !postingType.requiresUser
+      || !postingType.ruleVersion.legs.some(leg => leg.accountTarget === 'USER')
+      || parseFundAmountMinor(plan.businessAmount) <= 0n
+      || plan.entries.some(entry => entry.direction !== 'DEBIT')
     )) {
       throw postingError(FUND_POSTING_ERROR_CODES.POSTING_RULE_UNAVAILABLE)
     }
