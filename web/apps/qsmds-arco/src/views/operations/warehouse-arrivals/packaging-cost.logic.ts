@@ -31,7 +31,7 @@ export interface PackagingCostDraft {
 export type PackagingCostField = keyof PackagingCostInput
 export type PackagingImageError = 'invalidImageType' | 'imageTooLarge' | 'tooManyImages' | 'previewFailed'
 export type PackagingCostError = PackagingImageError | 'requiredPackagingType' | 'requiredVendor' | 'requiredAmount' | 'invalidAmount' | 'requiredImages' | 'remarkTooLong'
-export const PACKAGING_IMAGE_LIMIT = 5
+export const PACKAGING_IMAGE_LIMIT = 1
 export const PACKAGING_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 export const PACKAGING_DEFAULT_VENDOR = '沙井·诚信木箱'
 

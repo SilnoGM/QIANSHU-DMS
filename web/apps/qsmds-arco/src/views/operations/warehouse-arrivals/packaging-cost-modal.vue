@@ -208,7 +208,6 @@ onBeforeUnmount(releasePreviews)
                 :before-upload="previews[group].beforeUpload"
                 :http-request="previews[group].httpRequest"
                 :after-upload="previews[group].afterUpload"
-                multiple
               >
                 <span class="text-muted-foreground border-2 border-border rounded-lg border-dashed flex flex-col gap-1 size-full items-center justify-center">
                   <FaIcon name="i-icon-park-outline:upload" class="size-6" aria-hidden="true" />

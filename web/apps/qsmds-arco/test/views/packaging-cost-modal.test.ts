@@ -165,19 +165,23 @@ test('校验期间父层重新加载上下文，晚到校验结果不能提交�
   assert.equal(f.events.length, 0)
 })
 
-test('真实图片控件的 splice 交换经过中间重复值，只按最终顺序同步且不释放仍在列表的 URL', async (context) => {
+test('两组各保留一张图片，拒绝追加；移除后可重新选择且不影响另一组', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
   const first = f.addImage('packagingImages')
-  const second = f.addImage('packagingImages')
+  const quotation = f.addImage('quotationImages')
+  const preview = f.state.previews.value.packagingImages
+  const extra = new File(['extra'], 'extra.png', { type: 'image/png' })
+  assert.equal(preview.afterUpload(preview.httpRequest({ file: extra })), '')
   await nextTick()
   const images = f.state.imageUrls.value.packagingImages
-  images[0] = images.splice(1, 1, images[0]!)[0]!
+  assert.deepEqual([...images], [first.url])
+  images.splice(0, 1)
   await nextTick()
-  assert.deepEqual(f.revoked, [])
-  assert.deepEqual([...images], [second.url, first.url])
-  const files = f.state.previews.value.packagingImages.files(images)
-  assert.equal(files.length, 2)
-  assert.equal(files[0], second.file)
-  assert.equal(files[1], first.file)
+  const replacement = f.addImage('packagingImages')
+  await nextTick()
+  assert.deepEqual(f.revoked, [first.url])
+  assert.deepEqual([...images], [replacement.url])
+  assert.equal(preview.files(images)[0], replacement.file)
+  assert.equal(f.state.previews.value.quotationImages.files(f.state.imageUrls.value.quotationImages)[0], quotation.file)
 })

@@ -31,9 +31,9 @@ test('其他厂商不要求额外名称，可直接生成费用草稿', () => {
   assert.equal(result.draft?.vendorName, '其他')
 })
 
-test('两组截图各限 1–5 张 jpeg/png/webp、10 MiB，备注限制 500 字', () => {
+test('两组截图各限 1 张 jpeg/png/webp、10 MiB，备注限制 500 字', () => {
   for (const field of ['packagingImages', 'quotationImages'] as const) {
-    assert.equal(validatePackagingCost({ ...validInput(), [field]: Array.from({ length: 6 }, () => photo()) }).errors[field], 'tooManyImages')
+    assert.equal(validatePackagingCost({ ...validInput(), [field]: [photo(), photo()] }).errors[field], 'tooManyImages')
     assert.equal(validatePackagingCost({ ...validInput(), [field]: [photo('image/gif')] }).errors[field], 'invalidImageType')
     assert.equal(validatePackagingCost({ ...validInput(), [field]: [photo('image/png', 10 * 1024 * 1024 + 1)] }).errors[field], 'imageTooLarge')
     assert.equal(validatePackagingCost({ ...validInput(), [field]: [photo('image/webp', 10 * 1024 * 1024)] }).draft !== null, true)
@@ -49,16 +49,17 @@ function previewFixture() {
   return { preview, revoked, errors }
 }
 
-test('图片移除立即释放 URL；排序后的 Files 保持对应；关闭/卸载释放剩余且只释放一次', () => {
+test('移除图片释放 URL 并允许重新选择；关闭/卸载释放新图且只释放一次', () => {
   const { preview, revoked } = previewFixture()
   const first = photo()
   const second = photo('image/jpeg')
   const a = preview.afterUpload(preview.httpRequest({ file: first }))
-  const b = preview.afterUpload(preview.httpRequest({ file: second }))
-  preview.sync([a, b])
-  assert.deepEqual(preview.files([b, a]), [second, first])
-  preview.sync([b])
+  preview.sync([a])
+  preview.sync([])
   assert.deepEqual(revoked, [a])
+  const b = preview.afterUpload(preview.httpRequest({ file: second }))
+  preview.sync([b])
+  assert.deepEqual(preview.files([b]), [second])
   preview.dispose()
   preview.dispose()
   assert.deepEqual(revoked, [a, b])
@@ -84,8 +85,8 @@ test('并发图片数量仍受限制；错误钩子返回失败而不抛未处�
   const { preview, errors } = previewFixture()
   assert.equal(preview.beforeUpload(photo('image/svg+xml')), false)
   assert.equal(errors.at(-1), 'invalidImageType')
-  const urls = await Promise.all(Array.from({ length: 6 }, async () => preview.afterUpload(await preview.httpRequest({ file: photo() }))))
-  assert.equal(urls.filter(Boolean).length, 5)
+  const urls = await Promise.all(Array.from({ length: 2 }, async () => preview.afterUpload(await preview.httpRequest({ file: photo() }))))
+  assert.equal(urls.filter(Boolean).length, 1)
   assert.equal(errors.at(-1), 'tooManyImages')
   const failure = createPackagingImagePreview({
     createObjectURL: () => {
