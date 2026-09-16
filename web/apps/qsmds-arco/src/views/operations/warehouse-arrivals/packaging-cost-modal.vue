@@ -148,7 +148,7 @@ onBeforeUnmount(releasePreviews)
               {{ detail.value }}
             </dd>
           </div>
-          <div class="min-w-0">
+          <div class="min-w-0 sm:pl-6">
             <dt class="qs-type-meta text-muted-foreground">
               {{ t('warehousePackagingCost.owner') }}
             </dt>
