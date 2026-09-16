@@ -12,11 +12,12 @@ export const MEDIA_ASSET_REFERENCE_TABLES = Object.freeze([
   'purchase_order_documents',
   'sales_receipt_requests',
   'purchase_order_image_drafts',
+  'packaging_cost_requests',
 ] as const)
 
 type MediaReferenceReader = Pick<
   Prisma.TransactionClient,
-  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft'
+  'productMedia' | 'salesOrderDocument' | 'purchaseOrderDocument' | 'salesReceiptRequest' | 'purchaseOrderImageDraft' | 'packagingCostRequest'
 >
 
 /**
@@ -64,6 +65,11 @@ export class MediaAssetReferenceRepository {
       where: { mediaAssetId: assetId, invalidatedAt: null, archivedAt: null },
       select: { id: true },
     })
-    return imageDraftReference !== null
+    if (imageDraftReference !== null) return true
+    const packagingReference = await reader.packagingCostRequest.findFirst({
+      where: { OR: [{ packagingImageMediaAssetId: assetId }, { quotationImageMediaAssetId: assetId }] },
+      select: { id: true },
+    })
+    return packagingReference !== null
   }
 }

@@ -1,3 +1,4 @@
+import { PackagingCostModule } from './modules/packaging-costs/packaging-cost.module'
 import { AuditModule } from './modules/audit/audit.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { CurrencyModule } from './modules/currencies/currency.module'
@@ -35,4 +36,5 @@ export const HTTP_MODULES = [
   PurchaseOrdersModule,
   PurchaseShippingMarksModule,
   AuditModule,
+  PackagingCostModule,
 ] as const

@@ -51,6 +51,8 @@ enum AuditOutcome {
 }
 
 enum AuditEventType {
+  PACKAGING_COST_SUBMITTED
+  PACKAGING_COST_PAID
   AUTH_LOGIN_SUCCEEDED
   AUTH_LOGIN_FAILED
   AUTH_LOGOUT
@@ -492,6 +494,9 @@ enum FundPostingBatchKind {
 }
 
 model User {
+  packagingCostsOwned PackagingCostRequest[] @relation("PackagingCostOwner")
+  packagingCostsSubmitted PackagingCostRequest[] @relation("PackagingCostSubmitter")
+  packagingCostsPaid PackagingCostRequest[] @relation("PackagingCostPayer")
   id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   username           String     @db.VarChar(128)
   usernameNormalized String     @unique(map: "users_username_normalized_key") @map("username_normalized") @db.VarChar(128)
@@ -807,6 +812,20 @@ model Product {
   @@map("products")
 }
 
+enum PackagingCostStatus {
+  PENDING_PAYMENT
+  PAID
+
+  @@map("packaging_cost_status")
+}
+
+enum PackagingCostVendor {
+  CHENGXIN
+  OTHER
+
+  @@map("packaging_cost_vendor")
+}
+
 model MediaAsset {
   id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   mediaType        MediaType        @map("media_type")
@@ -831,6 +850,8 @@ model MediaAsset {
   deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
   createdBy           User                 @relation("MediaAssetCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  packagingCostImages PackagingCostRequest[] @relation("PackagingCostImage")
+  packagingQuotationImages PackagingCostRequest[] @relation("PackagingQuotationImage")
   receiptRequests SalesReceiptRequest[]
   productMedia        ProductMedia[]
   salesOrderDocuments SalesOrderDocument[]
@@ -864,6 +885,7 @@ model ProductMedia {
 }
 
 model SalesOrder {
+  packagingCosts PackagingCostRequest[]
   id                                String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   orderNo                           String                      @unique(map: "sales_orders_order_no_key") @map("order_no") @db.VarChar(64)
   createIdempotencyKeyHash          Bytes                       @unique(map: "sales_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
@@ -1044,6 +1066,7 @@ model SalesOrderAmountRevision {
 }
 
 model PurchaseOrder {
+  packagingCosts PackagingCostRequest[]
   id                           String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   orderNo                      String                         @unique(map: "purchase_orders_order_no_key") @map("order_no") @db.VarChar(64)
   createIdempotencyKeyHash     Bytes                          @unique(map: "purchase_orders_create_idempotency_key_hash_key") @map("create_idempotency_key_hash") @db.ByteA
@@ -1122,6 +1145,7 @@ model PurchaseOrderLine {
 }
 
 model PurchaseOrderPart {
+  packagingCosts PackagingCostRequest[]
   id                       String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   purchaseOrderId          String @map("purchase_order_id") @db.Uuid
   key                      String @db.Uuid
@@ -1665,4 +1689,48 @@ model SalesReceiptRequest {
   @@index([voucherMediaAssetId], map: "sales_receipt_requests_voucher_idx")
   @@index([accountOwnerUserId, submittedAt(sort: Desc), id(sort: Desc)], map: "sales_receipt_requests_owner_submitted_id_idx")
   @@map("sales_receipt_requests")
+}
+
+// 包装费用提交后冻结原始提报与两张证据；付款仅记录确认事实，不生成资金流水。
+model PackagingCostRequest {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shipmentId String @map("shipment_id") @db.Uuid
+  shipmentNo String @map("shipment_no") @db.VarChar(64)
+  shippingMarkText String @map("shipping_mark_text") @db.VarChar(72)
+  purchaseOrderId String @map("purchase_order_id") @db.Uuid
+  purchaseOrderNo String @map("purchase_order_no") @db.VarChar(64)
+  salesOrderId String @map("sales_order_id") @db.Uuid
+  salesOrderNo String @map("sales_order_no") @db.VarChar(64)
+  ownerUserId String @map("owner_user_id") @db.Uuid
+  packagingType String @map("packaging_type") @db.VarChar(64)
+  packagingTypeName String @map("packaging_type_name") @db.VarChar(128)
+  packagingVendor PackagingCostVendor @map("packaging_vendor")
+  amount Decimal @db.Decimal(30, 4)
+  currencyCode String @default("CNY") @map("currency_code") @db.Char(3)
+  packagingImageMediaAssetId String @unique(map: "packaging_cost_requests_packaging_image_key") @map("packaging_image_media_asset_id") @db.Uuid
+  quotationImageMediaAssetId String @unique(map: "packaging_cost_requests_quotation_image_key") @map("quotation_image_media_asset_id") @db.Uuid
+  remark String? @db.VarChar(500)
+  status PackagingCostStatus @default(PENDING_PAYMENT)
+  submittedByUserId String @map("submitted_by_user_id") @db.Uuid
+  submittedAt DateTime @default(now()) @map("submitted_at") @db.Timestamptz(6)
+  paidByUserId String? @map("paid_by_user_id") @db.Uuid
+  paidAt DateTime? @map("paid_at") @db.Timestamptz(6)
+  version Int @default(1)
+  idempotencyKeyHash Bytes @map("idempotency_key_hash") @db.ByteA
+  requestFingerprintHash Bytes @map("request_fingerprint_hash") @db.ByteA
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  shipment PurchaseOrderPart @relation(fields: [shipmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  owner User @relation("PackagingCostOwner", fields: [ownerUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  submittedBy User @relation("PackagingCostSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  paidBy User? @relation("PackagingCostPayer", fields: [paidByUserId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  packagingImage MediaAsset @relation("PackagingCostImage", fields: [packagingImageMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  quotationImage MediaAsset @relation("PackagingQuotationImage", fields: [quotationImageMediaAssetId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([submittedByUserId, idempotencyKeyHash], map: "packaging_cost_requests_submitter_idempotency_key")
+  @@index([status, submittedAt(sort: Desc), id(sort: Desc)], map: "packaging_cost_requests_status_submitted_idx")
+  @@index([shipmentId, submittedAt(sort: Desc), id(sort: Desc)], map: "packaging_cost_requests_shipment_submitted_idx")
+  @@map("packaging_cost_requests")
 }

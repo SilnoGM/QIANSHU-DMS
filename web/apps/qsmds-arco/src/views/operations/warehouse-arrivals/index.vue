@@ -31,6 +31,7 @@ const account = useAppAccountStore()
 const currencyCatalog = useCurrencyCatalog()
 const warehouseCatalog = useDictionaryCatalog('mainland.warehouse')
 const canRead = computed(() => auth('purchase-orders:read'))
+const canCreatePackaging = computed(() => auth('packaging-costs:create'))
 const instancePath = route.fullPath
 const activated = ref(false)
 // 每个 fullPath 对应独立缓存实例；离开或撤权后立即停止列表、计数和详情读取。
@@ -81,7 +82,7 @@ function handleAction(action: WarehouseArrivalAction, row: PurchaseShipmentListI
   if (action === 'view') {
     void openShipment(row.id)
   }
-  else {
+  else if (canCreatePackaging.value) {
     packagingShipment.value = row
   }
 }
@@ -116,7 +117,7 @@ watch([enabled, query], ([isEnabled]) => {
     pageSize.value = query.value.pageSize ?? 20
   }
 }, { flush: 'sync' })
-watch([enabled, () => account.authEpoch], () => {
+watch([enabled, canCreatePackaging, () => account.authEpoch], () => {
   queuedOrderId = null
   packagingShipment.value = null
 }, { flush: 'sync' })
@@ -210,7 +211,7 @@ onBeforeUnmount(() => activated.value = false)
             <QsPersonDisplay v-if="row.original.warehouseReceivedBy" :display-name="row.original.warehouseReceivedBy.displayName" size="md" /><span v-else>—</span>
           </template>
           <template #actions="{ row }">
-            <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus)" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
+            <FaButton v-for="action in warehouseArrivalActions(activeView, row.viewStatus).filter(value => value !== 'woodenFrame' || canCreatePackaging)" :key="action" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :aria-label="`${row.shipmentNo || t('purchaseShipments.unnumbered')}：${t(`warehouseArrivals.${action}`)}`" @click="handleAction(action, row)">
               <FaIcon :name="action === 'view' ? 'i-lucide:eye' : 'i-lucide:hammer'" aria-hidden="true" />{{ t(`warehouseArrivals.${action}`) }}
             </FaButton>
           </template>
@@ -222,6 +223,6 @@ onBeforeUnmount(() => activated.value = false)
     </FaPageMain>
     <ShipmentDetailDrawer v-model="shipmentVisible" :detail="detail" :loading="detailLoading" :error="detailError" @reload="loadDetail" @view-order="viewOrderFromShipment" @closed="shipmentClosed" />
     <QsPurchaseOrderDrawer v-model="orderVisible" :order="null" :detail="orderDetail" :currencies="currencyCatalog.currencies.value" :loading="detailLoading" :error="detailError" action-error="" :busy="false" :can-manage-payment="false" :can-attach-document="false" @reload="loadDetail" />
-    <PackagingCostAction v-if="packagingShipment" :shipment="packagingShipment" :enabled="enabled" @close="packagingShipment = null" />
+    <PackagingCostAction v-if="packagingShipment" :shipment="packagingShipment" :enabled="enabled && canCreatePackaging" @close="packagingShipment = null" @submitted="refresh" />
   </div>
 </template>

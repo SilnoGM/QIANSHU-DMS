@@ -109,10 +109,10 @@
   },
   {
     "name": "qs-realtime-payments",
-    "label": "实时收付",
+    "label": "实收实付",
     "category": "财务",
     "usages": [
-      "实时收付"
+      "实收实付"
     ]
   },
   {
@@ -129,6 +129,14 @@
     "category": "财务",
     "usages": [
       "采购付款"
+    ]
+  },
+  {
+    "name": "qs-packaging-payments",
+    "label": "打木架付款",
+    "category": "财务",
+    "usages": [
+      "实收实付 / 打木架付款"
     ]
   },
   {

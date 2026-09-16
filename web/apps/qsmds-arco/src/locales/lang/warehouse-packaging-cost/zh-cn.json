@@ -30,7 +30,6 @@
     "contextLoadError": "货件或销售来源加载失败，请重试。",
     "invalidShipment": "货件状态已变更，当前无法提报包装费用。",
     "noSalesSource": "无销售来源",
-    "submitUnavailable": "当前尚未启用费用保存，表单未提交",
     "errors": {
       "requiredPackagingType": "请选择包装类型",
       "requiredVendor": "请选择厂商",
@@ -42,6 +41,10 @@
       "imageTooLarge": "单张图片不能超过 10 MiB",
       "previewFailed": "图片预览失败，请重新选择图片",
       "remarkTooLong": "备注不能超过 500 字"
-    }
+    },
+    "submitSuccess": "费用提报成功，已进入打木架付款",
+    "submitFailed": "费用提报未完成",
+    "resultUnknown": "提交结果暂未确认。已保留原提报，请重试确认后再关闭弹窗，避免重复提报。",
+    "retrySubmission": "重试确认"
   }
 }

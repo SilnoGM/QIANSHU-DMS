@@ -22,7 +22,7 @@ interface ModalState {
 async function fixture() {
   const source = await readFile(new URL('../../src/views/operations/warehouse-arrivals/packaging-cost-modal.vue', import.meta.url), 'utf8')
   const script = source.split('<script setup lang="ts">')[1]!.split('</script>')[0]!.replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
-  const props = reactive({ modelValue: true, context: shipment as PackagingCostContext | null, loading: false, error: null as string | null, submitting: false, submitDisabled: false, submitDisabledHint: null })
+  const props = reactive({ modelValue: true, context: shipment as PackagingCostContext | null, loading: false, error: null as string | null, submitting: false, draftLocked: false, submitDisabled: false, submitDisabledHint: null })
   const events: Array<[string, PackagingCostDraft]> = []
   const revoked: string[] = []
   const fieldErrors: Record<string, string | undefined> = {}
@@ -101,7 +101,7 @@ test('弹窗逐字段显示错误，填写完整后仅向父层发规范化草�
   assert.equal(f.events[0]?.[0], 'submit')
   const draft = f.events[0]![1]
   assert.equal(draft.amount, '99.50')
-  assert.equal(draft.vendorName, '其他')
+  assert.equal(draft.vendor, 'OTHER')
   assert.equal(draft.remark, '备注')
   assert.equal(draft.packagingImages[0], photos[0]!.file)
   assert.equal(draft.quotationImages[0], photos[1]!.file)
@@ -184,4 +184,14 @@ test('两组各保留一张图片，拒绝追加；移除后可重新选择且�
   assert.deepEqual([...images], [replacement.url])
   assert.equal(preview.files(images)[0], replacement.file)
   assert.equal(f.state.previews.value.quotationImages.files(f.state.imageUrls.value.quotationImages)[0], quotation.file)
+})
+
+test('未知结果重试不受币种加载失败阻挡，直接请求父层重放冻结快照', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.props.draftLocked = true
+  f.currencyError.value = 'offline'
+  await f.state.submit()
+  assert.equal(f.events.length, 1)
+  assert.equal(f.events[0]?.[0], 'retrySubmit')
 })

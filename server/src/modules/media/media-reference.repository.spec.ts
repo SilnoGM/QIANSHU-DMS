@@ -51,6 +51,7 @@ describe('MediaAssetReferenceRepository', () => {
       'purchase_order_documents',
       'sales_receipt_requests',
       'purchase_order_image_drafts',
+      'packaging_cost_requests',
     ])
     expect(productMediaFindFirst).toHaveBeenCalledWith({
       where: {
@@ -75,6 +76,16 @@ describe('MediaAssetReferenceRepository', () => {
     })
   })
 
+  it.each(['packagingImageMediaAssetId', 'quotationImageMediaAssetId'])('protects immutable packaging evidence referenced as %s', field => {
+    const packaging = jest.fn().mockImplementation(({ where }: { where: { OR: Record<string, string>[] } }) => Promise.resolve(where.OR.some(filter => filter[field] === ASSET_ID) ? { id: 'packaging' } : null))
+    const reader = {
+      productMedia: { findFirst: jest.fn().mockResolvedValue(null) }, salesOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) }, salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
+      purchaseOrderImageDraft: { findFirst: jest.fn().mockResolvedValue(null) }, packagingCostRequest: { findFirst: packaging },
+    } as unknown as Prisma.TransactionClient
+    return expect(new MediaAssetReferenceRepository().hasActiveReferences(reader, ASSET_ID)).resolves.toBe(true)
+  })
+
   it('returns false when no implemented domain has an active reference', async () => {
     const reader = {
       productMedia: { findFirst: jest.fn().mockResolvedValue(null) },
@@ -82,6 +93,7 @@ describe('MediaAssetReferenceRepository', () => {
       purchaseOrderDocument: { findFirst: jest.fn().mockResolvedValue(null) },
       salesReceiptRequest: { findFirst: jest.fn().mockResolvedValue(null) },
       purchaseOrderImageDraft: { findFirst: jest.fn().mockResolvedValue(null) },
+      packagingCostRequest: { findFirst: jest.fn().mockResolvedValue(null) },
     } as unknown as Prisma.TransactionClient
 
     await expect(

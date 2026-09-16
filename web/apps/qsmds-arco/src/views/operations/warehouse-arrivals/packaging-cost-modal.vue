@@ -14,12 +14,15 @@ const props = withDefaults(defineProps<{
   loading?: boolean
   error?: string | null
   submitting?: boolean
+  draftLocked?: boolean
+  submitError?: string
   submitDisabled?: boolean
   submitDisabledHint?: string | null
-}>(), { loading: false, error: null, submitting: false, submitDisabled: false, submitDisabledHint: null })
+}>(), { loading: false, error: null, submitting: false, draftLocked: false, submitError: '', submitDisabled: false, submitDisabledHint: null })
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'reload': []
+  'retrySubmit': []
   'submit': [draft: PackagingCostDraft]
 }>()
 const { t } = useI18n()
@@ -94,6 +97,11 @@ async function submit() {
   if (validating.value || props.submitting || props.submitDisabled || props.loading || props.error || !props.modelValue || !props.context) {
     return
   }
+  // 未知结果重放原快照，不重新依赖币种或字典的可用性。
+  if (props.draftLocked) {
+    emit('retrySubmit')
+    return
+  }
   const key = formKey.value
   validating.value = true
   try {
@@ -127,6 +135,7 @@ onBeforeUnmount(releasePreviews)
     :loading="loading"
     :error="error"
     :submitting="submitting"
+    :before-close="() => !draftLocked"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <template #header-leading>
@@ -162,24 +171,25 @@ onBeforeUnmount(releasePreviews)
           </div>
         </dl>
       </section>
-      <FaForm ref="form" :key="formKey" :model="formModel" :disabled="submitting" class="gap-4" @submit="submit">
+      <FaAlert v-if="submitError" :title="t('warehousePackagingCost.submitFailed')" :description="draftLocked ? t('warehousePackagingCost.resultUnknown') : submitError" variant="destructive" />
+      <FaForm ref="form" :key="formKey" :model="formModel" :disabled="submitting || draftLocked" class="gap-4" @submit="submit">
         <section :aria-label="t('warehousePackagingCost.costSection')">
           <h3 class="qs-type-component-title m-0 mb-3">
             {{ t('warehousePackagingCost.costSection') }}
           </h3>
           <div class="gap-x-4 gap-y-1 grid items-start sm:grid-cols-3">
             <FaFormItem name="packagingTypeValue" :label="t('warehousePackagingCost.packagingType')" :rules="rules.packagingTypeValue" :auto-bind="false" required>
-              <QsDictionarySelect v-model="fields.packagingTypeValue" dictionary-code="warehouse.packaging_type" :disabled="submitting" :placeholder="t('warehousePackagingCost.selectPackagingType')" />
+              <QsDictionarySelect v-model="fields.packagingTypeValue" dictionary-code="warehouse.packaging_type" :disabled="submitting || draftLocked" :placeholder="t('warehousePackagingCost.selectPackagingType')" />
             </FaFormItem>
             <FaFormItem name="vendor" :label="t('warehousePackagingCost.vendor')" :rules="rules.vendor" :auto-bind="false" required>
               <template #label>
                 <span :id="vendorLabelId">{{ t('warehousePackagingCost.vendor') }}</span>
                 <span class="text-destructive" aria-hidden="true">*</span>
               </template>
-              <FaCombobox :model-value="fields.vendor ?? undefined" :options="vendorOptions" :disabled="submitting" :placeholder="t('warehousePackagingCost.selectVendor')" :input-attrs="{ 'aria-labelledby': vendorLabelId, 'aria-required': true }" class="w-full" @update:model-value="updateVendor" />
+              <FaCombobox :model-value="fields.vendor ?? undefined" :options="vendorOptions" :disabled="submitting || draftLocked" :placeholder="t('warehousePackagingCost.selectVendor')" :input-attrs="{ 'aria-labelledby': vendorLabelId, 'aria-required': true }" class="w-full" @update:model-value="updateVendor" />
             </FaFormItem>
             <FaFormItem name="amount" :label="t('warehousePackagingCost.amount')" :rules="rules.amount" :auto-bind="false" required>
-              <MoneyInput v-model="fields.amount" currency="CNY" :currencies="currencies" :currency-selectable="false" :disabled="submitting || !currencyReady" min="0.01" />
+              <MoneyInput v-model="fields.amount" currency="CNY" :currencies="currencies" :currency-selectable="false" :disabled="submitting || draftLocked || !currencyReady" min="0.01" />
             </FaFormItem>
           </div>
           <p v-if="currencyLoading" role="status" class="qs-type-meta text-muted-foreground">
@@ -187,7 +197,7 @@ onBeforeUnmount(releasePreviews)
           </p>
           <FaAlert v-else-if="!currencyReady" :title="t('warehousePackagingCost.currencyUnavailable')" variant="destructive">
             <template #description>
-              <FaButton type="button" variant="outline" size="sm" :disabled="submitting" @click="reloadCurrencies">
+              <FaButton type="button" variant="outline" size="sm" :disabled="submitting || draftLocked" @click="reloadCurrencies">
                 {{ t('warehousePackagingCost.retry') }}
               </FaButton>
             </template>
@@ -204,7 +214,7 @@ onBeforeUnmount(releasePreviews)
             <FaFormItem v-for="group in imageGroups" :key="group" :name="group" :label="t(`warehousePackagingCost.${group}`)" :rules="rules[group]" :auto-bind="false" required>
               <FaImageUpload
                 v-model="imageUrls[group]"
-                :disabled="submitting"
+                :disabled="submitting || draftLocked"
                 :max="PACKAGING_IMAGE_LIMIT"
                 :width="88"
                 :height="88"
@@ -225,7 +235,7 @@ onBeforeUnmount(releasePreviews)
             <span>{{ t('warehousePackagingCost.remark') }}</span>
             <span class="qs-type-meta text-muted-foreground ml-auto">{{ fields.remark.length }}/500</span>
           </template>
-          <FaTextarea v-model="fields.remark" :disabled="submitting" :rows="3" :maxlength="500" :placeholder="t('warehousePackagingCost.remarkPlaceholder')" />
+          <FaTextarea v-model="fields.remark" :disabled="submitting || draftLocked" :rows="3" :maxlength="500" :placeholder="t('warehousePackagingCost.remarkPlaceholder')" />
         </FaFormItem>
       </FaForm>
     </div>
@@ -235,11 +245,11 @@ onBeforeUnmount(releasePreviews)
           {{ submitDisabledHint }}
         </p>
         <div class="flex gap-2 justify-end">
-          <FaButton type="button" variant="outline" :disabled="submitting" @click="emit('update:modelValue', false)">
+          <FaButton type="button" variant="outline" :disabled="submitting || draftLocked" @click="emit('update:modelValue', false)">
             {{ t('warehousePackagingCost.cancel') }}
           </FaButton>
-          <FaButton type="button" :disabled="submitDisabled || loading || Boolean(error) || !context || !currencyReady" :loading="submitting || validating" @click="submit">
-            {{ t('warehousePackagingCost.submit') }}
+          <FaButton type="button" :disabled="submitDisabled || loading || Boolean(error) || !context || (!draftLocked && !currencyReady)" :loading="submitting || validating" @click="submit">
+            {{ t(draftLocked ? 'warehousePackagingCost.retrySubmission' : 'warehousePackagingCost.submit') }}
           </FaButton>
         </div>
       </div>

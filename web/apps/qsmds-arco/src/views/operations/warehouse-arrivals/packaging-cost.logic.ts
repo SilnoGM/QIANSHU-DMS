@@ -20,7 +20,7 @@ export interface PackagingCostInput {
 
 export interface PackagingCostDraft {
   packagingTypeValue: string
-  vendorName: string
+  vendor: 'CHENGXIN' | 'OTHER'
   amount: string
   currency: 'CNY'
   packagingImages: File[]
@@ -85,7 +85,7 @@ export function validatePackagingCost(input: PackagingCostInput, precision = 2):
     errors,
     draft: {
       packagingTypeValue: input.packagingTypeValue!,
-      vendorName: input.vendor === 'OTHER' ? '其他' : PACKAGING_DEFAULT_VENDOR,
+      vendor: input.vendor as 'CHENGXIN' | 'OTHER',
       amount: amount.normalizedValue,
       currency: 'CNY',
       packagingImages: [...input.packagingImages],

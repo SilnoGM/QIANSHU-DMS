@@ -79,6 +79,13 @@ export const PURCHASE_ORDER_PERMISSION_CODES = [
   'purchase-orders:document',
 ] as const
 
+/** 包装费用提报、财务读取与付款分别授权，不附带采购或销售整单权限。 */
+export const PACKAGING_COST_PERMISSION_CODES = [
+  'packaging-costs:create',
+  'packaging-costs:read',
+  'packaging-costs:pay',
+] as const
+
 /**
  * 首期用户、角色与审计管理功能使用的完整权限目录。
  *
@@ -129,6 +136,7 @@ export const MANAGEMENT_PERMISSION_CODES = [
   ...SALES_ORDER_PERMISSION_CODES,
   ...SALES_RECEIPT_PERMISSION_CODES,
   ...PURCHASE_ORDER_PERMISSION_CODES,
+  ...PACKAGING_COST_PERMISSION_CODES,
 ] as const
 
 export type ManagementPermissionCode =

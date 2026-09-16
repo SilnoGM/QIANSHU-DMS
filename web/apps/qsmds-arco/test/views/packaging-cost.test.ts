@@ -20,7 +20,7 @@ test('提交规范化金额、厂商、备注，保留原始 File 和顺序，�
   const input = validInput()
   const result = validatePackagingCost(input)
   assert.deepEqual(result.errors, {})
-  assert.deepEqual(result.draft, { packagingTypeValue: 'WOODEN_BOX', vendorName: '沙井·诚信木箱', amount: '12.30', currency: 'CNY', packagingImages: input.packagingImages, quotationImages: input.quotationImages, remark: '已确认' })
+  assert.deepEqual(result.draft, { packagingTypeValue: 'WOODEN_BOX', vendor: 'CHENGXIN', amount: '12.30', currency: 'CNY', packagingImages: input.packagingImages, quotationImages: input.quotationImages, remark: '已确认' })
   assert.equal(result.draft?.packagingImages[0], input.packagingImages[0])
   assert.equal(validatePackagingCost({ ...input, remark: ' ' }).draft?.remark, null)
 })
@@ -28,7 +28,7 @@ test('提交规范化金额、厂商、备注，保留原始 File 和顺序，�
 test('其他厂商不要求额外名称，可直接生成费用草稿', () => {
   const result = validatePackagingCost({ ...validInput(), vendor: 'OTHER' })
   assert.deepEqual(result.errors, {})
-  assert.equal(result.draft?.vendorName, '其他')
+  assert.equal(result.draft?.vendor, 'OTHER')
 })
 
 test('两组截图各限 1 张 jpeg/png/webp、10 MiB，备注限制 500 字', () => {

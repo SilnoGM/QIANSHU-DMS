@@ -6,7 +6,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
   meta: {
     title: 'workbench.finance',
     icon: 'qs-workbench-finance',
-    auth: ['sales-receipts:read', 'purchase-orders:payment', ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS],
+    auth: ['sales-receipts:read', 'purchase-orders:payment', 'packaging-costs:read', ...FUND_ACCOUNT_MANAGEMENT_PERMISSIONS],
   },
   children: [
     {
@@ -16,7 +16,7 @@ export const financeWorkbench: RouteRecordMainRaw = {
       meta: {
         title: 'workbench.realtimePayments',
         icon: 'qs-realtime-payments',
-        auth: ['sales-receipts:read', 'purchase-orders:payment'],
+        auth: ['sales-receipts:read', 'purchase-orders:payment', 'packaging-costs:read'],
       },
       children: [
         {
@@ -37,6 +37,16 @@ export const financeWorkbench: RouteRecordMainRaw = {
             title: 'workbench.purchasePayments',
             icon: 'qs-purchase-payments',
             auth: 'purchase-orders:payment',
+          },
+        },
+        {
+          path: 'packaging-payments',
+          name: 'qsFinanceRealtimePackagingPayments',
+          component: () => import('@/views/workbenches/packaging-payments/index.vue'),
+          meta: {
+            title: 'workbench.packagingPayments',
+            icon: 'qs-packaging-payments',
+            auth: 'packaging-costs:read',
           },
         },
       ],
