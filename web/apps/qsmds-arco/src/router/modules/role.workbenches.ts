@@ -40,6 +40,18 @@ export const financeWorkbench: RouteRecordMainRaw = {
           },
         },
         {
+          path: 'purchase-payments/:id',
+          name: 'qsFinanceRealtimePurchasePayablePayment',
+          component: () => import('@/views/workbenches/purchase-payments/payment-page.vue'),
+          meta: {
+            title: 'purchasePayment.payTitle',
+            icon: 'qs-purchase-payments',
+            menu: false,
+            activeMenu: '/qs-finance/realtime-payments/purchase-payments',
+            auth: 'purchase-orders:payment',
+          },
+        },
+        {
           path: 'packaging-payments',
           name: 'qsFinanceRealtimePackagingPayments',
           component: () => import('@/views/workbenches/packaging-payments/index.vue'),

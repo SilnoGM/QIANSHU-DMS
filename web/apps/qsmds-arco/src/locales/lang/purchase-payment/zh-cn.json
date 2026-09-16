@@ -23,7 +23,7 @@
     "paidInfo": "付款信息",
     "status": { "PENDING_PAYMENT": "待付款", "PAID": "已付清", "NO_PAYMENT": "无需付款", "CANCELLED": "已取消" },
     "pay": "付款",
-    "payLabel": "支付 {orderNo} 的{paymentType}",
+    "payLabel": "复制 {orderNo} 的{paymentType}付款链接",
     "payTitle": "确认采购付款",
     "paymentAmount": "本次付款金额",
     "amountHint": "本次将付清该笔款项的待付金额。",
@@ -37,11 +37,27 @@
     "unknownTitle": "付款结果待确认",
     "unknown": "付款结果尚未确认，请保持当前信息并重试确认，系统会核对同一笔付款。",
     "staleTitle": "款项状态已变化",
-    "stale": "款项状态已变化，请关闭弹窗后重新核对。",
+    "stale": "款项状态已变化，请重新核对后再付款。",
     "close": "关闭",
     "cancel": "取消",
     "confirmPay": "确认付款",
     "retryPay": "重试确认",
-    "paySuccess": "采购付款已确认"
+    "paySuccess": "采购付款已确认",
+    "linkCopied": "付款链接已复制，打开链接即可进入付款页面",
+    "copyFailed": "复制失败，请检查浏览器剪贴板权限后重试",
+    "paymentInformation": "付款信息",
+    "pageDescription": "核对款项和归属账户后确认付款。",
+    "backToList": "返回采购付款",
+    "loading": "正在读取付款信息…",
+    "invalidLink": "付款链接无效",
+    "invalidLinkDescription": "请返回采购付款列表，重新复制对应款项的链接。",
+    "loadFailed": "付款信息加载失败",
+    "retry": "重试",
+    "recheck": "重新核对",
+    "finished": {
+      "PAID": "该笔款项已付清，无需重复付款。",
+      "NO_PAYMENT": "该笔款项无需付款。",
+      "CANCELLED": "该采购单已取消，无法继续付款。"
+    }
   }
 }

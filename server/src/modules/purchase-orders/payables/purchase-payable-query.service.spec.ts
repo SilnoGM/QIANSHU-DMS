@@ -16,12 +16,47 @@ function row() {
 }
 function setup() {
   const order = row()
-  const tx = { purchaseOrder: { findMany: jest.fn().mockResolvedValue([order]), count: jest.fn().mockResolvedValue(5), findUnique: jest.fn().mockResolvedValue(order) } }
+  const tx = {
+    purchaseOrder: { findMany: jest.fn().mockResolvedValue([order]), count: jest.fn().mockResolvedValue(5), findUnique: jest.fn().mockResolvedValue(order) },
+    purchaseOrderPayable: { findUnique: jest.fn().mockResolvedValue({ purchaseOrder: order }) },
+  }
   const prisma = { $transaction: jest.fn((action: (tx: unknown) => Promise<unknown>) => action(tx)) }
   const dictionary = { resolveStoredValueInTransaction: jest.fn().mockResolvedValue({ known: true, label: '已停用历史供应商' }) }
   return { order, tx, prisma, dictionary, service: new PurchasePayableQueryService(prisma as unknown as PrismaService, dictionary as unknown as DictionaryLookupService) }
 }
 describe('PurchasePayableQueryService', () => {
+  it('looks up the specific payable and maps its complete parent in the same repeatable-read transaction', async () => {
+    const h = setup()
+    const result = await h.service.getByPayableId('balance')
+    expect(result).toMatchObject({ id: 'order', owner: { id: 'issuer', name: '销售出单人' }, items: [
+      { id: 'deposit', dueAmount: '30.00', status: 'PENDING_PAYMENT' }, { id: 'balance', dueAmount: '70.00', status: 'PAID' },
+    ] })
+    expect(h.prisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(h.prisma.$transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: 'RepeatableRead' })
+    expect(h.tx.purchaseOrderPayable.findUnique).toHaveBeenCalledWith({ where: { id: 'balance' }, select: { purchaseOrder: { include: expect.any(Object) as unknown } } })
+    expect(h.dictionary.resolveStoredValueInTransaction).toHaveBeenCalledWith(h.tx, { dictionaryCode: 'service_provider.supplier', value: 'SUPPLIER' })
+    expect(h.tx.purchaseOrder.findUnique).not.toHaveBeenCalled()
+    expect(h.tx.purchaseOrder.findMany).not.toHaveBeenCalled()
+    expect(h.tx.purchaseOrder.count).not.toHaveBeenCalled()
+  })
+  it.each(['PAID', 'CANCELLED', 'NO_PAYMENT'])('resolves old links whose order no longer belongs in the outstanding list: %s', async status => {
+    const h = setup()
+    const order = { ...h.order, payables: h.order.payables.map(item => ({ ...item,
+      closedAt: status === 'CANCELLED' ? new Date('2026-09-17') : null,
+      dueAmount: status === 'NO_PAYMENT' ? new Prisma.Decimal(0) : item.dueAmount,
+      payments: status === 'PAID' ? [{ amount: item.dueAmount, paidAt: new Date('2026-09-16'), createdBy: { id: 'payer', displayName: '财务' } }] : [],
+    })) }
+    h.tx.purchaseOrderPayable.findUnique.mockResolvedValue({ purchaseOrder: order })
+    expect((await h.service.getByPayableId('balance')).items.map(item => item.status)).toEqual([status, status])
+  })
+  it('returns a payable-specific 404 and does not fall back to a parent-id or outstanding list lookup', async () => {
+    const h = setup()
+    h.tx.purchaseOrderPayable.findUnique.mockResolvedValue(null)
+    await expect(h.service.getByPayableId('order')).rejects.toMatchObject({ code: 'PURCHASE_PAYABLE_NOT_FOUND', status: 404 })
+    expect(h.tx.purchaseOrder.findUnique).not.toHaveBeenCalled()
+    expect(h.tx.purchaseOrder.findMany).not.toHaveBeenCalled()
+    expect(h.dictionary.resolveStoredValueInTransaction).not.toHaveBeenCalled()
+  })
   it('paginates order groups in one repeatable-read snapshot and includes both installment rows', async () => {
     const h = setup()
     const result = await h.service.list({ page: 2, pageSize: 2, keyword: '  PO/2026  ' })

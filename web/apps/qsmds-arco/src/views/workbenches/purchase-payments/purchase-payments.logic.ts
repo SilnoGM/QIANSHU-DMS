@@ -13,6 +13,10 @@ export interface PurchasePayableSelection {
   item: PurchasePayableDto
 }
 
+export function buildPurchasePayableLinkText(orderNo: string, resolvedHref: string, currentUrl: string): string {
+  return `【${orderNo}付款】${new URL(resolvedHref, currentUrl).href}`
+}
+
 export function canPayPurchasePayable(item: PurchasePayableDto): boolean {
   const amount = validateMoneyString(item.remainingAmount, { precision: 2 })
   return item.status === 'PENDING_PAYMENT' && amount.valid && amount.normalizedValue !== null && amount.normalizedValue !== '0.00'

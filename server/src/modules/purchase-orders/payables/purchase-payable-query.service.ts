@@ -40,6 +40,14 @@ export class PurchasePayableQueryService {
       return this.map(tx, order)
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
   }
+  async getByPayableId(id: string): Promise<PurchasePayableOrderDto> {
+    return this.prisma.$transaction(async tx => {
+      // 付款链接绑定具体阶段；已付、取消及零金额仍须显示原状态，不套用待办列表条件。
+      const payable = await tx.purchaseOrderPayable.findUnique({ where: { id }, select: { purchaseOrder: { include } } })
+      if (!payable) return payableFailure('PURCHASE_PAYABLE_NOT_FOUND', '采购应付款不存在', 404)
+      return this.map(tx, payable.purchaseOrder)
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+  }
   async list(input: PurchasePayableListQueryDto): Promise<PurchasePayableOrderPageDto> {
     const page = input.page ?? 1, pageSize = input.pageSize ?? 20, keyword = input.keyword?.trim()
     // 付款状态由有效付款汇总维护，并由数据库约束核对；零总额同样为 PAID。

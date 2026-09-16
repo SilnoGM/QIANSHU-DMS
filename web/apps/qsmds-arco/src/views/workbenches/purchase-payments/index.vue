@@ -1,23 +1,25 @@
 <script setup lang="ts">
-import type { PurchasePayableRow, PurchasePayableSelection } from './purchase-payments.logic'
+import type { PurchasePayableRow } from './purchase-payments.logic'
 import type { PurchasePayableDto, PurchasePayableOrderDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn, QsGenericTableGrouping } from '@/components/business/QsGenericTable/logic'
 import purchaseOrderPayablesApi from '@/api/modules/purchase-order-payables'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { sumMoneyValues } from '@/components/base/MoneyInput/logic'
+import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
-import PaymentModal from './payment-modal.vue'
-import { canPayPurchasePayable, createPurchasePayableGroups } from './purchase-payments.logic'
+import { buildPurchasePayableLinkText, canPayPurchasePayable, createPurchasePayableGroups } from './purchase-payments.logic'
 
 defineOptions({ name: 'QsPurchasePayments' })
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const route = useRoute()
+const router = useRouter()
+const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const canPay = computed(() => auth('purchase-orders:payment'))
 const active = ref(false)
@@ -29,7 +31,7 @@ const orders = shallowRef<PurchasePayableOrderDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
-const selection = shallowRef<PurchasePayableSelection | null>(null)
+const copyingId = ref<string | null>(null)
 let controller: AbortController | null = null
 const groups = computed(() => createPurchasePayableGroups(orders.value))
 const grouping: QsGenericTableGrouping<PurchasePayableRow> = { getRows: group => group.children ?? [], getLabel: group => group.order.orderNo }
@@ -92,24 +94,37 @@ async function load(): Promise<void> {
 
 function search() {
   page.value = 1
-  selection.value = null
   void load()
 }
-function openPayment(row: PurchasePayableRow) {
-  if (enabled.value && !loading.value && row.payable && canPayPurchasePayable(row.payable)) {
-    selection.value = { order: row.order, item: row.payable }
+async function copyPaymentLink(row: PurchasePayableRow) {
+  if (!enabled.value || loading.value || copyingId.value || !row.payable || !canPayPurchasePayable(row.payable)) {
+    return
+  }
+  const id = row.payable.id
+  const requestEpoch = account.authEpoch
+  const href = router.resolve({ name: 'qsFinanceRealtimePurchasePayablePayment', params: { id } }).href
+  copyingId.value = id
+  try {
+    await navigator.clipboard.writeText(buildPurchasePayableLinkText(row.order.orderNo, href, window.location.href))
+    if (enabled.value && account.authEpoch === requestEpoch) {
+      toast.success(t('purchasePayment.linkCopied'))
+    }
+  }
+  catch {
+    if (enabled.value && account.authEpoch === requestEpoch) {
+      toast.error(t('purchasePayment.copyFailed'))
+    }
+  }
+  finally {
+    if (copyingId.value === id) {
+      copyingId.value = null
+    }
   }
 }
-function applyPayment(updated: PurchasePayableOrderDto) {
-  if (updated.items.some(item => item.status === 'PENDING_PAYMENT')) {
-    orders.value = orders.value.map(order => order.id === updated.id ? updated : order)
+function refreshOnFocus() {
+  if (enabled.value) {
+    void load()
   }
-  else {
-    const previousCount = orders.value.length
-    orders.value = orders.value.filter(order => order.id !== updated.id)
-    total.value = Math.max(0, total.value - (previousCount - orders.value.length))
-  }
-  void load()
 }
 watch(() => route.query.keyword, (value) => {
   keyword.value = typeof value === 'string' ? value : ''
@@ -118,15 +133,19 @@ watch(() => route.query.keyword, (value) => {
 watch([enabled, () => account.authEpoch], () => {
   orders.value = []
   total.value = 0
-  selection.value = null
+  copyingId.value = null
   void load()
 }, { immediate: true, flush: 'sync' })
-onMounted(() => active.value = true)
+onMounted(() => {
+  active.value = true
+  window.addEventListener('focus', refreshOnFocus)
+})
 onActivated(() => active.value = true)
 onDeactivated(() => active.value = false)
 onBeforeUnmount(() => {
   active.value = false
   controller?.abort()
+  window.removeEventListener('focus', refreshOnFocus)
 })
 </script>
 
@@ -188,7 +207,7 @@ onBeforeUnmount(() => {
           <span v-else class="text-muted-foreground">—</span>
         </template>
         <template #actions="{ row }">
-          <FaButton v-if="row.payable && canPayPurchasePayable(row.payable)" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :disabled="loading" :aria-label="t('purchasePayment.payLabel', { orderNo: row.order.orderNo, paymentType: t(`purchasePayment.types.${row.payable.paymentType}`) })" @click="openPayment(row)">
+          <FaButton v-if="row.payable && canPayPurchasePayable(row.payable)" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :disabled="loading || copyingId !== null" :aria-label="t('purchasePayment.payLabel', { orderNo: row.order.orderNo, paymentType: t(`purchasePayment.types.${row.payable.paymentType}`) })" @click="copyPaymentLink(row)">
             <FaIcon name="i-lucide:wallet" aria-hidden="true" />{{ t('purchasePayment.pay') }}
           </FaButton>
           <span v-else-if="row.payable" class="text-muted-foreground">{{ t(`purchasePayment.status.${row.payable.status}`) }}</span>
@@ -219,6 +238,5 @@ onBeforeUnmount(() => {
         </template>
       </QsGenericTable>
     </FaPageMain>
-    <PaymentModal v-if="selection" :selection="selection" :enabled="enabled" @close="selection = null" @changed="applyPayment" @refresh="load" />
   </div>
 </template>

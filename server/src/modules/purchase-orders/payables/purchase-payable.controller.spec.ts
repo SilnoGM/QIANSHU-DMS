@@ -14,9 +14,33 @@ import { PurchasePayableIdDto, PurchasePayableListQueryDto, PurchasePayablePayDt
 @Module({ controllers: [PurchasePayableController], providers: [PurchasePayableQueryService, PurchaseOrderMutationService].map(provide => ({ provide, useValue: {} })) })
 class ContractModule {}
 describe('PurchasePayableController', () => {
-  it('requires finance payment permission for listing and payment', () => {
+  it('documents protected payable detail lookup independently from the outstanding list', async () => {
+    const document = await createOpenApiDocument(ContractModule)
+    const operation = document.paths['/api/purchase-order-payables/{id}']?.get
+    expect(operation).toMatchObject({
+      operationId: 'purchase_payables_detail',
+      parameters: expect.arrayContaining([expect.objectContaining({ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } })]) as unknown,
+      responses: {
+        200: { headers: { 'X-Request-Id': expect.any(Object) as unknown }, content: { 'application/json': { schema: { $ref: '#/components/schemas/PurchasePayableOrderDto' } } } },
+        401: expect.any(Object) as unknown, 403: expect.any(Object) as unknown, 404: expect.any(Object) as unknown, 422: expect.any(Object) as unknown,
+      },
+      'x-qianshu-contract': { errors: expect.arrayContaining([
+        { status: 404, codes: ['PURCHASE_PAYABLE_NOT_FOUND'] },
+        { status: 422, codes: expect.arrayContaining(['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE']) as unknown },
+      ]) as unknown },
+    })
+  })
+  it('requires finance payment permission for listing, detail and payment', () => {
     const reflector = new Reflector()
-    for (const method of ['list', 'pay'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
+    for (const method of ['list', 'detail', 'pay'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
+  })
+  it('forwards detail to the exact payable lookup without consulting the outstanding list', async () => {
+    const queries = { getByPayableId: jest.fn().mockResolvedValue({ id: 'order', items: [{ id: 'payable', status: 'PAID' }] }), list: jest.fn(), getOrder: jest.fn() }
+    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService)
+    await expect(controller.detail({ id: 'payable' })).resolves.toEqual({ id: 'order', items: [{ id: 'payable', status: 'PAID' }] })
+    expect(queries.getByPayableId).toHaveBeenCalledWith('payable')
+    expect(queries.list).not.toHaveBeenCalled()
+    expect(queries.getOrder).not.toHaveBeenCalled()
   })
   it('documents fixed server amount, idempotency, private responses, CSRF and payment conflicts', async () => {
     const document = await createOpenApiDocument(ContractModule)

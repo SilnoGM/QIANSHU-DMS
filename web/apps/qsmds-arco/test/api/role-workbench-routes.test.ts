@@ -12,7 +12,7 @@ test('财务和采购工作台只展示当前用户有权访问的业务入口',
     menus,
     value => matchesAuthorization(permissions, value),
     () => true,
-  ).flatMap(menu => menu.children?.flatMap(child => child.children?.map(leaf => `${child.path}/${leaf.path}`) ?? [child.path]) ?? [])
+  ).flatMap(menu => menu.children?.flatMap(child => child.children?.filter(leaf => leaf.meta?.menu !== false).map(leaf => `${child.path}/${leaf.path}`) ?? [child.path]) ?? [])
 
   assert.deepEqual(visiblePaths([]), [])
   assert.deepEqual(visiblePaths(['sales-orders:read', 'purchase-orders:read']), ['/qs-purchase/shipments'])
@@ -39,7 +39,10 @@ test('采购货件菜单复用采购读取权限，审核菜单继续独立授�
 test('财务分为实时收付和账户管理，叶子路由保留独立权限', () => {
   assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/fund-accounts'])
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
-  assert.equal(new Set(routes.map(route => route.name)).size, 5)
+  assert.equal(new Set(routes.map(route => route.name)).size, 6)
+  const paymentDetail = routes.find(route => route.name === 'qsFinanceRealtimePurchasePayablePayment')
+  assert.equal(paymentDetail?.meta?.menu, false)
+  assert.equal(paymentDetail?.meta?.auth, 'purchase-orders:payment')
   for (const route of routes) {
     assert.equal(typeof route.component, 'function')
     assert.equal(typeof route.meta?.auth, 'string')

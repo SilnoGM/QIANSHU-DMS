@@ -19,6 +19,14 @@ export class PurchasePayableController {
   @ApiApplicationContract({ operationId: 'purchase_payables_list', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
     errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] }, { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
   list(@Query() query: PurchasePayableListQueryDto) { return this.queries.list(query) }
+  @Get(':id')
+  @RequirePermissions('purchase-orders:payment')
+  @ApiContractResponse({ status: 200, type: PurchasePayableOrderDto })
+  @ApiApplicationContract({ operationId: 'purchase_payables_detail', session: 'required', authorization: true, badRequest: true, validation: true, privateNoStore: true,
+    errors: [{ status: 403, codes: ['FORBIDDEN', 'PASSWORD_CHANGE_REQUIRED'] },
+      { status: 404, codes: ['PURCHASE_PAYABLE_NOT_FOUND'] },
+      { status: 422, codes: ['VALIDATION_FAILED', 'PURCHASE_PAYABLE_NOT_AVAILABLE'] }] })
+  detail(@Param() params: PurchasePayableIdDto) { return this.queries.getByPayableId(params.id) }
   @Post(':id/pay') @HttpCode(200)
   @RequirePermissions('purchase-orders:payment')
   @ApiHeader({ name: 'Idempotency-Key', required: true, schema: { type: 'string', format: 'uuid' } })
