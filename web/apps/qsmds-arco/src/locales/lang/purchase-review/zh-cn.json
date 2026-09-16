@@ -50,7 +50,7 @@
       "success": "采购信息已复制",
       "failed": "复制失败，请重试",
       "notRecorded": "未记录",
-      "unnumbered": "货件-{number}（未编号）",
+      "partLabel": "货件-{number}",
       "pendingMark": "待派发",
       "productUnavailable": "产品信息不可用",
       "noParts": "暂无预定义货件",
@@ -59,7 +59,7 @@
       "line": "产品名：{productName}*{quantity}\n金额小计：{unitPrice}*{quantity}={subtotal}",
       "amounts": "总价：{total}\n订金：{deposit}\n尾款：{balance}",
       "shippingTitle": "出货请贴货物唛头：",
-      "part": "{shipmentNo}：{products}\n此货件唛头：{shippingMark}"
+      "part": "{partLabel}：{products}\n此货件唛头：{shippingMark}"
     },
     "summary": {
       "title": "审核结果",

@@ -26,7 +26,7 @@ export function buildPurchaseOrderCopyText(detail: PurchaseOrderDetailDto, t: Tr
   const partsText = detail.parts.filter(part => part.status !== 'CANCELLED')
     .sort((a, b) => a.partNumber - b.partNumber)
     .map(part => t('purchaseReview.copy.part', {
-      shipmentNo: text(part.shipmentNo, t('purchaseReview.copy.unnumbered', { number: String(part.partNumber).padStart(2, '0') })),
+      partLabel: t('purchaseReview.copy.partLabel', { number: String(part.partNumber).padStart(2, '0') }),
       products: [...part.items].sort((a, b) => a.lineNumber - b.lineNumber).map(item => products.get(item.purchaseOrderLineId) || t('purchaseReview.copy.productUnavailable')).join('+') || t('purchaseReview.copy.productUnavailable'),
       shippingMark: text(part.shippingMarkText, t('purchaseReview.copy.pendingMark')),
     }))

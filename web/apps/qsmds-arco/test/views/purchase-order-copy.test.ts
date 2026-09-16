@@ -44,10 +44,10 @@ test('完整复制模板按采购行和货件顺序输出，以真实行 ID 关�
 尾款：130.00
 
 出货请贴货物唛头：
-PKG/20260916-00001：木桌+椅子
+货件-01：木桌+椅子
 此货件唛头：TEST/00016/货件-01
 
-PKG/20260916-00002：椅子
+货件-02：椅子
 此货件唛头：TEST/00016/货件-02`)
   assert.equal(JSON.stringify(detail), before)
 })
@@ -62,14 +62,15 @@ test('大额与四位单价保留精度，零约定金额不作为缺失', () =>
   assert.ok(text.includes('订金：0.00'))
 })
 
-test('未派发编号与唛头明确标注，已取消货件不出现在出货贴标清单', () => {
+test('货件序号不依赖 PKG 编号，未派发唛头明确标注，已取消货件不出现在贴标清单', () => {
   const detail = fixture()
   detail.parts[0]!.status = 'CANCELLED'
   detail.parts[1]!.shipmentNo = null
   detail.parts[1]!.shippingMarkText = null
   const text = buildPurchaseOrderCopyText(detail, t)
-  assert.ok(text.includes('货件-01（未编号）：木桌+椅子\n此货件唛头：待派发'))
-  assert.ok(!text.includes('PKG/20260916-00002'))
+  assert.ok(text.includes('货件-01：木桌+椅子\n此货件唛头：待派发'))
+  assert.ok(!text.includes('货件-02'))
+  assert.ok(!text.includes('PKG/'))
   detail.parts = []
   assert.ok(buildPurchaseOrderCopyText(detail, t).endsWith('出货请贴货物唛头：\n暂无预定义货件'))
 })
@@ -82,5 +83,5 @@ test('复制字段内换行归一，缺失产品和金额保留明确占位', ()
   const text = buildPurchaseOrderCopyText(detail, t)
   assert.ok(text.includes('供应商：示例 供应商\n采购日期：'))
   assert.ok(text.includes('金额小计：未记录*2=60.00'))
-  assert.ok(text.includes('PKG/20260916-00002：产品信息不可用'))
+  assert.ok(text.includes('货件-02：产品信息不可用'))
 })
