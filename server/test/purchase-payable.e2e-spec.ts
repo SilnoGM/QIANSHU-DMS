@@ -53,6 +53,46 @@ describe('Purchase payables with isolated PostgreSQL', () => {
     }
   }
 
+  it('lists only outstanding order groups before pagination and restores a group after payment void', async () => {
+    const keyword = `Pending purchase ${randomUUID()}`
+    const groups = []
+    for (const [deposit, balance] of [['3', '7'], ['0', '10'], ['3', '7'], ['0', '0']]) {
+      const input = await customInput(h)
+      const zero = deposit === '0' && balance === '0'
+      const id = await createCommands(h).create(h.context(), {
+        ...input, customSupplierName: keyword, depositDueAmount: deposit, balanceDueAmount: balance,
+        ...(zero ? { purchaseTotalAmount: '0', lines: input.lines.map(line => ({ ...line, referencePurchaseUnitPriceAmount: '0', actualPurchaseUnitPriceAmount: '0' })) } : {}),
+      })
+      await createReviewMutations(h).review(h.context(), id, await prepareImageReview(h, id))
+      groups.push(await queries.getOrder(id))
+    }
+    const [partial, zeroDeposit, cancelled] = groups
+    const first = await queries.list({ keyword, page: 1, pageSize: 1 })
+    const second = await queries.list({ keyword, page: 2, pageSize: 1 })
+    expect(first.total).toBe(3)
+    expect(second.total).toBe(3)
+    expect(first.items).toHaveLength(1)
+    expect(second.items).toHaveLength(1)
+    expect(first.items[0].id).not.toBe(second.items[0].id)
+    expect(first.items[0].items).toHaveLength(2)
+    await pay(partial.items[0].id)
+    await pay(zeroDeposit.items[1].id)
+    await createReviewMutations(h).updateOrderStatus(h.context(), cancelled.id, { toStatus: 'CANCELLED', reason: 'Cancelled' })
+    const pending = await queries.list({ keyword, page: 1, pageSize: 1 })
+    expect(pending.total).toBe(1)
+    expect(pending.items.map(order => order.id)).toEqual([partial.id])
+    expect(pending.items[0].items.map(item => item.status)).toEqual(['PAID', 'PENDING_PAYMENT'])
+    await pay(partial.items[1].id)
+    expect(await queries.list({ keyword })).toMatchObject({ items: [], total: 0 })
+    expect((await queries.getOrder(partial.id)).items.map(item => item.status)).toEqual(['PAID', 'PAID'])
+    const balancePayment = await h.prisma.purchaseOrderPayment.findFirstOrThrow({ where: { purchaseOrderId: partial.id, paymentType: 'BALANCE' } })
+    await createReviewMutations(h).voidPayment(finance(), partial.id, balancePayment.id, { reason: 'Reopen outstanding balance' })
+    const reopened = await queries.list({ keyword })
+    expect(reopened.total).toBe(1)
+    expect(reopened.items[0].id).toBe(partial.id)
+    expect(reopened.items[0].items[1].status).toBe('PENDING_PAYMENT')
+  })
+
   it('atomically reviews once and generates deposit plus balance, preserving a zero stage without posting', async () => {
     const id = await draft('0', '10')
     const review = await prepareImageReview(h, id)

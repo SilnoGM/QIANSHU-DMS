@@ -1,3 +1,4 @@
+import type { PurchasePayableOrderDto } from '../../src/api/generated/types.gen'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 // eslint-disable-next-line test/no-import-node-test -- 执行实际页面脚本，验证采购单分页、权限清理和迟到响应隔离。
@@ -48,6 +49,7 @@ async function fixture() {
     AmountDisplay: {},
   })) as {
     load: () => Promise<void>
+    applyPayment: (order: PurchasePayableOrderDto) => void
     orders: { value: unknown[] }
     total: { value: number }
     error: { value: string }
@@ -115,4 +117,49 @@ test('关闭页面、切账号和撤销付款权限清空旧订单并忽略迟�
     assert.equal(f.state.total.value, 0)
     assert.equal(f.state.error.value, '')
   }
+})
+
+test('部分付款保留整组，付清后立即移除且刷新失败也不恢复已处理订单', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.callbacks.mount!()
+  await flush()
+  f.setExecute(async () => {
+    throw new Error('Refresh unavailable')
+  })
+  const partial = { id: 'order', items: [{ status: 'PAID' }, { status: 'PENDING_PAYMENT' }] } as PurchasePayableOrderDto
+  f.state.orders.value = [partial, { id: 'other' }]
+  f.state.total.value = 2
+  f.state.applyPayment(partial)
+  assert.equal(f.state.orders.value.length, 2)
+  assert.equal(f.state.total.value, 2)
+  await flush()
+  for (const status of ['PAID', 'NO_PAYMENT'] as const) {
+    f.state.orders.value = [partial, { id: 'other' }]
+    f.state.total.value = 2
+    f.state.applyPayment({ ...partial, items: partial.items.map(item => ({ ...item, status })) })
+    assert.deepEqual(JSON.parse(JSON.stringify(f.state.orders.value)), [{ id: 'other' }])
+    assert.equal(f.state.total.value, 1)
+    await flush()
+    assert.equal(f.state.orders.value.length, 1)
+  }
+})
+
+test('最后一页订单处理完后自动返回仍有数据的页码', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  f.callbacks.mount!()
+  await flush()
+  const paid = { id: 'last', items: [{ status: 'PAID' }, { status: 'PAID' }] } as PurchasePayableOrderDto
+  f.state.page.value = 2
+  f.state.total.value = 21
+  f.state.orders.value = [paid]
+  f.setExecute(async () => ({ data: { items: [], total: 20 } }))
+  f.state.applyPayment(paid)
+  assert.equal(f.state.total.value, 20)
+  assert.equal(f.state.orders.value.length, 0)
+  await flush()
+  await flush()
+  assert.equal(f.state.page.value, 1)
+  assert.equal((f.calls.at(-1)?.query as { page: number }).page, 1)
 })

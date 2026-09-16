@@ -42,10 +42,15 @@ export class PurchasePayableQueryService {
   }
   async list(input: PurchasePayableListQueryDto): Promise<PurchasePayableOrderPageDto> {
     const page = input.page ?? 1, pageSize = input.pageSize ?? 20, keyword = input.keyword?.trim()
-    const where: Prisma.PurchaseOrderWhereInput = { payables: { some: {} }, ...(keyword ? { OR: [
-      { orderNo: { contains: keyword, mode: 'insensitive' } }, { customSupplierName: { contains: keyword, mode: 'insensitive' } },
-      { salesOrder: { orderNo: { contains: keyword, mode: 'insensitive' } } },
-    ] } : {}) }
+    // 付款状态由有效付款汇总维护，并由数据库约束核对；零总额同样为 PAID。
+    // 先排除已处理采购单再分页，让组数、页码和付款作废后的重新出现保持一致。
+    const where: Prisma.PurchaseOrderWhereInput = {
+      orderStatus: 'CONFIRMED', paymentStatus: { not: 'PAID' }, payables: { some: { closedAt: null, dueAmount: { gt: 0 } } },
+      ...(keyword ? { OR: [
+        { orderNo: { contains: keyword, mode: 'insensitive' } }, { customSupplierName: { contains: keyword, mode: 'insensitive' } },
+        { salesOrder: { orderNo: { contains: keyword, mode: 'insensitive' } } },
+      ] } : {}),
+    }
     // 按父采购单分页，再读取完整定金/尾款；同一快照内取得组数和明细，避免跨页拆单。
     return this.prisma.$transaction(async tx => {
       const [rows, total] = await Promise.all([

@@ -101,7 +101,14 @@ function openPayment(row: PurchasePayableRow) {
   }
 }
 function applyPayment(updated: PurchasePayableOrderDto) {
-  orders.value = orders.value.map(order => order.id === updated.id ? updated : order)
+  if (updated.items.some(item => item.status === 'PENDING_PAYMENT')) {
+    orders.value = orders.value.map(order => order.id === updated.id ? updated : order)
+  }
+  else {
+    const previousCount = orders.value.length
+    orders.value = orders.value.filter(order => order.id !== updated.id)
+    total.value = Math.max(0, total.value - (previousCount - orders.value.length))
+  }
   void load()
 }
 watch(() => route.query.keyword, (value) => {
