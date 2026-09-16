@@ -129,6 +129,9 @@ onBeforeUnmount(releasePreviews)
     :submitting="submitting"
     @update:model-value="emit('update:modelValue', $event)"
   >
+    <template #header-leading>
+      <FaIcon name="i-lucide:hammer" class="size-5" aria-hidden="true" />
+    </template>
     <template #error-actions>
       <FaButton type="button" variant="outline" @click="emit('reload')">
         {{ t('warehousePackagingCost.retry') }}
