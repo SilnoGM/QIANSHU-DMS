@@ -136,23 +136,25 @@ onBeforeUnmount(releasePreviews)
     </template>
     <div v-if="context" class="space-y-5">
       <section :aria-label="t('warehousePackagingCost.shipmentSection')" class="p-4 border border-border rounded-lg bg-muted/25">
-        <div class="flex flex-wrap gap-x-4 gap-y-2 items-center justify-between">
-          <h3 class="qs-type-component-title m-0">
-            {{ t('warehousePackagingCost.shipmentSection') }}
-          </h3>
-          <div class="flex gap-2 max-w-full min-w-0 items-center">
-            <span class="qs-type-meta text-muted-foreground shrink-0">{{ t('warehousePackagingCost.owner') }}</span>
-            <QsPersonDisplay v-if="context.ownerName" :display-name="context.ownerName" size="sm" class="max-w-48" />
-            <span v-else class="qs-type-meta text-muted-foreground">{{ t('warehousePackagingCost.notRecorded') }}</span>
-          </div>
-        </div>
-        <dl class="mt-3 gap-x-6 gap-y-3 grid sm:grid-cols-2">
-          <div v-for="detail in details" :key="detail.key" class="min-w-0">
+        <h3 class="qs-type-component-title m-0">
+          {{ t('warehousePackagingCost.shipmentSection') }}
+        </h3>
+        <dl class="mt-3 gap-x-6 gap-y-4 grid sm:grid-cols-6">
+          <div v-for="detail in details" :key="detail.key" class="min-w-0" :class="['shipmentNo', 'shippingMarkText'].includes(detail.key) ? 'sm:col-span-3' : 'sm:col-span-2'">
             <dt class="qs-type-meta text-muted-foreground">
               {{ t(`warehousePackagingCost.${detail.key}`) }}
             </dt>
             <dd class="qs-type-data-emphasis mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">
               {{ detail.value }}
+            </dd>
+          </div>
+          <div class="min-w-0 sm:col-span-2">
+            <dt class="qs-type-meta text-muted-foreground">
+              {{ t('warehousePackagingCost.owner') }}
+            </dt>
+            <dd class="mt-1 flex min-h-6 items-center">
+              <QsPersonDisplay v-if="context.ownerName" :display-name="context.ownerName" size="sm" class="max-w-full" />
+              <span v-else class="qs-type-meta text-muted-foreground">{{ t('warehousePackagingCost.notRecorded') }}</span>
             </dd>
           </div>
         </dl>
