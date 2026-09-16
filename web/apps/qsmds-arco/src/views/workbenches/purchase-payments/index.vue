@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PurchasePayableRow, PurchasePayableSelection } from './purchase-payments.logic'
-import type { PurchasePayableOrderDto } from '@/api/generated/types.gen'
+import type { PurchasePayableDto, PurchasePayableOrderDto } from '@/api/generated/types.gen'
 import type { QsGenericTableColumn, QsGenericTableGrouping } from '@/components/business/QsGenericTable/logic'
 import purchaseOrderPayablesApi from '@/api/modules/purchase-order-payables'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
@@ -34,6 +34,12 @@ let controller: AbortController | null = null
 const groups = computed(() => createPurchasePayableGroups(orders.value))
 const grouping: QsGenericTableGrouping<PurchasePayableRow> = { getRows: group => group.children ?? [], getLabel: group => group.order.orderNo }
 const amountColumns = ['dueAmount', 'paidAmount', 'remainingAmount'] as const
+const statusTagClasses: Record<PurchasePayableDto['status'], string> = {
+  PENDING_PAYMENT: 'border-amber-500/35 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  PAID: 'border-primary/35 bg-primary/10 text-primary',
+  NO_PAYMENT: 'border-border bg-muted text-muted-foreground',
+  CANCELLED: 'border-border bg-muted text-muted-foreground',
+}
 const columns = computed<QsGenericTableColumn<PurchasePayableRow>[]>(() => [
   { id: 'paymentType', title: t('purchasePayment.paymentType'), width: 130, fixed: 'left' },
   ...amountColumns.map(id => ({
@@ -163,7 +169,7 @@ onBeforeUnmount(() => {
           <AmountDisplay v-if="row.original.payable" :value="row.original.payable[column]" currency="CNY" :currencies="currencyCatalog.currencies.value" />
         </template>
         <template #cell-status="{ row }">
-          <FaTag v-if="row.original.payable" :variant="row.original.payable.status === 'PENDING_PAYMENT' ? 'outline' : 'secondary'" class="qs-type-status-tag">
+          <FaTag v-if="row.original.payable" variant="outline" class="qs-type-status-tag" :class="statusTagClasses[row.original.payable.status]">
             {{ t(`purchasePayment.status.${row.original.payable.status}`) }}
           </FaTag>
         </template>
@@ -184,7 +190,7 @@ onBeforeUnmount(() => {
           <template v-if="row.payable">
             <div class="flex gap-3 items-center justify-between">
               <strong>{{ t(`purchasePayment.types.${row.payable.paymentType}`) }}</strong>
-              <FaTag variant="outline" class="qs-type-status-tag">
+              <FaTag variant="outline" class="qs-type-status-tag" :class="statusTagClasses[row.payable.status]">
                 {{ t(`purchasePayment.status.${row.payable.status}`) }}
               </FaTag>
             </div>
