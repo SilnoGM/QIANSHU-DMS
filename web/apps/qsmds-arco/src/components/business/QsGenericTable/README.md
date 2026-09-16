@@ -9,6 +9,9 @@
 - `v-model:search`：已应用的搜索词。
 - `v-model:filters`：已应用的筛选条件。
 - `v-model:sorting`：TanStack Table 排序状态。
+- `v-model:expanded`：分组展开状态，类型为 `TableExpandedState`，默认 `true`（全部展开）。传 `{}` 可全部收起，或传以组键为键、布尔值为值的对象控制指定组。
+
+翻页、搜索或筛选时恢复默认全部展开；同页数据更新与排序保留稳定组键对应的折叠状态。
 
 查询、筛选、排序和分页变化后，业务页面通过对应事件请求数据。切换每页数量、搜索、筛选或排序时，组件会把页码归一到第一页。
 
@@ -41,6 +44,89 @@
 默认汇总当前页 `data`；服务端分页场景可通过 `summaryValues` 传入全量数据汇总结果。页面也可以提供 `summary-{columnId}` 插槽覆盖桌面端表尾内容。
 
 `summary`：可选全宽汇总区域，位于数据区域之后、分页之前，适合展示跨列矩阵等领域汇总；内容、响应式布局与业务语义由调用页面负责。
+
+## 分组展示
+
+`grouping` 为可选能力；不传时保持平铺表格行为。启用后，`data` 表示**当前页完整的父组数组**，每组携带全部子行。组件不自行请求、切分、排序或聚合业务数据，也不根据相同字段自动生成分组。
+
+从 `./logic` 导入 `QsGenericTableGrouping<TData>`：
+
+| 配置 | 类型 | 用途 |
+| --- | --- | --- |
+| `getRows` | `(group: TData) => readonly TData[]` | 提取组内明细，保留调用方提供的顺序 |
+| `getLabel` | `(group: TData) => string` | 默认组标题，同时为展开按钮提供可读标签 |
+
+父组与子行沿用同一个 `TData`；可使用含可选 `children` 字段的行类型，或用可辨识联合类型表达两类数据。必须提供稳定的 `rowKey`，父组和子行分别保证键不重复，不能使用当前排序或分页后的数组下标作为业务键。只有一层分组，不递归解释子行中的嵌套数据。
+
+### 分页、排序与汇总
+
+- `pageSize`、`total` 均按**组数**计数；先按组筛选、排序和分页，再将当前页完整组传入 `data`。不得先把子行分页后重新拼组，否则同组明细可能被拆到不同页面。
+- 排序事件仍由页面处理。页面决定组间排序，组内顺序保持 `getRows` 的返回顺序。
+- `paginationUnit` 可自定义计数单位，例如“个采购单”。默认平铺为“条”，分组为“组”。
+- 分组模式自动隐藏普通行号列，`group-header` 中的 `rowNumber` 为跨页连续组号。
+- 默认列汇总只统计当前页全部子行，排除父组且不受折叠影响。金额字符串应像现有平铺示例一样通过 `sumMoneyValues` 精确计算，再传入 `summaryValues`；不要把父组总额与子行金额重复累计。
+
+### 组头与子行插槽
+
+组标题横跨可见列，组件负责展开按钮、键盘操作和展开状态。`group-header` 只定制标题内容，不必重复实现折叠按钮；窄屏复用同一插槽。
+
+| `group-header` 参数 | 含义 |
+| --- | --- |
+| `row` | 原始父组对象 |
+| `rows` | 完整子行数组 |
+| `groupKey` | 从 `rowKey` 解析出的稳定组键 |
+| `index` | 当前页内的组索引，从 `0` 开始 |
+| `rowNumber` | 跨页连续组号，从 `1` 开始 |
+| `expanded` | 当前组是否展开 |
+
+分组模式下，`actions` 和 `mobile-row` 只渲染子行，原有 `row`、`index`、`rowNumber` 参数保留，并追加 `group`（父组对象）、`groupIndex`（当前页内组索引）和 `groupKey`；普通平铺模式下这三个分组参数均为 `undefined`。分组下 `index` 是组内子行索引，`rowNumber` 是所在组的跨页连续组号。`cell-*` 沿用 FaTable 的单元格上下文，子行数据仍通过 `row.original` 读取。
+
+```vue
+<script setup lang="ts">
+import type { TableExpandedState } from '@fantastic-admin/components'
+import type { QsGenericTableGrouping } from '@/components/business/QsGenericTable/logic'
+
+interface DetailRow {
+  id: string
+  name: string
+  amount: string
+  children?: DetailRow[]
+}
+
+const expanded = ref<TableExpandedState>(true)
+const grouping: QsGenericTableGrouping<DetailRow> = {
+  getRows: group => group.children ?? [],
+  getLabel: group => group.name,
+}
+// columns、pageGroups、totalGroups、page、pageSize 由页面维护；pageGroups 为已分页完整组。
+</script>
+
+<template>
+  <QsGenericTable
+    v-model:page="page"
+    v-model:page-size="pageSize"
+    v-model:expanded="expanded"
+    row-key="id"
+    :columns="columns"
+    :data="pageGroups"
+    :grouping="grouping"
+    :total="totalGroups"
+    pagination-unit="个批次"
+  >
+    <template #group-header="{ row, rows, rowNumber }">
+      <span class="qs-type-data-emphasis">#{{ rowNumber }} {{ row.name }}</span>
+      <span class="qs-type-meta">{{ rows.length }} 笔明细</span>
+    </template>
+    <template #actions="{ row, group }">
+      <FaButton v-if="group" variant="ghost" size="sm" @click="openDetail(group, row)">
+        查看
+      </FaButton>
+    </template>
+  </QsGenericTable>
+</template>
+```
+
+可交互示例见组件库“业务通用表格”下的“按批次分组”：24 个本地批次、每组两笔明细，演示整组分页、组排序、受控展开、空数据切换、自定义组头、子行操作和精确金额汇总。桌面表格与窄屏卡片使用同一份组数据。
 
 ## 操作列
 

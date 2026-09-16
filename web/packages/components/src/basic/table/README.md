@@ -29,6 +29,7 @@
 | `expanded` | `TableExpandedState` | - | 受控展开状态 |
 | `getRowId` | `TableOptions<TData>['getRowId']` | - | 自定义行 ID 获取方法 |
 | `getSubRows` | `TableOptions<TData>['getSubRows']` | - | 自定义子行获取方法，未设置时默认读取 `children` |
+| `groupRow` | `(row: Row<TData>) => boolean` | - | 标记跨列分组标题行，命中后仅渲染 `group-header` 插槽，不渲染普通单元格 |
 | `indentSize` | `number` | `20` | 树型数据每一级缩进像素 |
 | `manualExpanding` | `boolean` | `false` | 是否由外部手动处理展开数据 |
 | `multiple` | `boolean` | `false` | 是否为多选模式 |
@@ -82,6 +83,7 @@
 | `caption` | 自定义表格标题 | - |
 | `empty` | 自定义空状态 | `table` |
 | `toolbar` | 自定义工具栏左侧内容 | `table` |
+| `group-header` | 自定义跨列分组标题；包括空组 | `row`、`index`、`table`、`expanded`、`toggle`、`colspan` |
 | `header-{columnId}` | 自定义指定列表头 | `column`、`header`、`table` |
 | `cell-{columnId}` | 自定义指定列单元格 | `cell`、`column`、`index`、`row`、`table`、`value` |
 | `footer-{columnId}` | 自定义指定列表尾 | `column`、`header`、`table` |
@@ -104,3 +106,5 @@
 4. 普通列默认可被列显示控制隐藏，设置 `enableHiding: false` 可禁止某列出现在列显示菜单中。
 5. 排序仅负责状态管理，真正的数据排序请在外部根据 `sorting-change` 自行处理。
 6. 树型数据建议设置 `rowKey` 或 `getRowId`，避免展开状态在数据更新后错位。
+7. `groupRow` 只控制标题行的渲染方式，不自动分组、汇总或分页。组和明细由调用方提供；需要折叠时配合 `tree`、`getSubRows` 与展开状态使用。标题单元格自动横跨当前可见叶列，组内普通行继续使用原有单元格与操作插槽。
+8. `group-header` 使用导出的 `TableGroupHeaderSlotProps<TData>` 类型；`index` 与普通单元格一致，为 `row.index`，`toggle()` 沿用原有受控/非受控展开事件。标题内容及可访问的展开按钮由调用方提供；按钮如不需触发行点击事件，应自行停止冒泡。
