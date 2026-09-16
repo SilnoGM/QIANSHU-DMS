@@ -1,17 +1,20 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
-import { IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min } from 'class-validator'
+import { IsBoolean, IsEnum, IsIn, IsInt, IsOptional, IsString, Matches, Max, Min, ValidateIf } from 'class-validator'
 
 import { PurchaseOrderLineType, PurchaseOrderPartStatus, PurchaseOrderProductMode, PurchaseOrderStatus, PurchaseOrderType } from '../../../generated/prisma/enums'
 import { IsUnicodeCodePointLength } from '../../auth/dto/unicode-code-point-length.validator'
+import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { PurchaseOrderActorDto, PurchaseOrderListImageDto, PurchaseOrderSourceSalesOrderDto, PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 
 export const PURCHASE_SHIPMENT_VIEWS = ['ALL', 'PENDING_REVIEW', 'AWAITING_SHIPMENT', 'SHIPPED', 'WAREHOUSE_RECEIVED', 'CANCELLED'] as const
 export type PurchaseShipmentView = typeof PURCHASE_SHIPMENT_VIEWS[number]
+export const PURCHASE_SHIPMENT_SORTS = ['CREATED_DESC', 'SHIPPED_DESC', 'WAREHOUSE_RECEIVED_DESC'] as const
+export type PurchaseShipmentSort = typeof PURCHASE_SHIPMENT_SORTS[number]
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 
 export class PurchaseShipmentFilterDto {
-  @ApiProperty({ type: 'string', maxLength: 128, required: false, description: '货件编号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称' })
+  @ApiProperty({ type: 'string', maxLength: 128, required: false, description: '货件编号、物流单号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称' })
   @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 128)
   keyword?: string
 
@@ -26,6 +29,18 @@ export class PurchaseShipmentFilterDto {
   @ApiProperty({ type: 'string', maxLength: 64, required: false })
   @IsOptional() @IsString() @IsUnicodeCodePointLength(1, 64)
   supplierValue?: string
+
+  @ApiProperty({ type: 'string', maxLength: 64, required: false, description: 'mainland.warehouse 的稳定 value；按字典规则规范化，允许历史停用或未知值；不能与 destinationWarehouseMissing=true 同时使用' })
+  @Transform(({ value }: { value: unknown }) => isNormalizableDictionaryItemValue(value) ? normalizeDictionaryItemValue(value) : value)
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsString() @IsUnicodeCodePointLength(1, 64) @Matches(/^[A-Z0-9][A-Z0-9._-]*$/u)
+  destinationWarehouseValue?: string
+
+  @ApiProperty({ type: 'boolean', required: false, description: '仅 true 筛选目的地仓库未记录（null）的历史货件；false 或省略均不添加缺失条件；true 与 destinationWarehouseValue 互斥' })
+  @Transform(({ value }: { value: unknown }) => value === 'true' ? true : value === 'false' ? false : value)
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsBoolean()
+  destinationWarehouseMissing?: boolean
 
   @ApiProperty({ enum: ['DICTIONARY', 'CUSTOM_TEXT'], required: false })
   @IsOptional() @IsIn(['DICTIONARY', 'CUSTOM_TEXT'])
@@ -44,6 +59,11 @@ export class PurchaseShipmentListQueryDto extends PurchaseShipmentFilterDto {
   @ApiProperty({ enum: PURCHASE_SHIPMENT_VIEWS, required: false, default: 'AWAITING_SHIPMENT' })
   @IsOptional() @IsIn(PURCHASE_SHIPMENT_VIEWS)
   view?: PurchaseShipmentView
+
+  @ApiProperty({ enum: PURCHASE_SHIPMENT_SORTS, required: false, default: 'CREATED_DESC', description: '按创建、发货或实际到仓时间降序；空时间置后，以创建时间、采购单、货件顺序和 ID 保持分页稳定' })
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsIn(PURCHASE_SHIPMENT_SORTS)
+  sort?: PurchaseShipmentSort
 
   @ApiProperty({ type: 'integer', minimum: 1, maximum: 1000000, default: 1, required: false })
   @Transform(({ value }: { value: unknown }) => typeof value === 'string' && /^\d+$/u.test(value) ? Number(value) : value)

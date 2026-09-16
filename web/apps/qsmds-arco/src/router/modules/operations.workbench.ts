@@ -107,8 +107,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'warehouse-arrivals',
         name: 'qsOperationsWarehouseArrivals',
-        component: () => import('@/views/workbenches/placeholder.vue'),
-        meta: { title: '到仓货件', icon: 'qs-warehouse-arrivals' },
+        component: () => import('@/views/operations/warehouse-arrivals/index.vue'),
+        meta: { title: '到仓货件', icon: 'qs-warehouse-arrivals', auth: 'purchase-orders:read' },
       },
       {
         path: 'ocean-containers',

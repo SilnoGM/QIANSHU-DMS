@@ -1716,6 +1716,7 @@
       "apps/qsmds-arco/src/views/component_library/business/components/GenericTableShowcase.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/workbenches/purchase-reviews/index.vue",
       "apps/qsmds-arco/src/views/workbenches/sales-receipts/index.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/index.vue",
@@ -1886,6 +1887,15 @@
     "usages": [
       "apps/qsmds-arco/src/views/component_library/basic/date-time-display.vue",
       "apps/qsmds-arco/src/views/system/basic-data/regions/region-scope-tree.vue"
+    ]
+  },
+  {
+    "name": "i-lucide:hammer",
+    "label": "i-lucide:hammer",
+    "category": "通用图标",
+    "source": "iconify",
+    "usages": [
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue"
     ]
   },
   {
@@ -2603,6 +2613,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-image.vue",
       "apps/qsmds-arco/src/views/operations/purchase-orders/purchase-order-review-modal.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/sales-order-records-modal.vue",
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/system/roles/index.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/index.vue",
       "apps/qsmds-arco/src/views/workbenches/shipments/shipment-detail-drawer.vue"
@@ -2757,6 +2768,7 @@
       "apps/qsmds-arco/src/views/operations/purchase-orders/index.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/create.vue",
       "apps/qsmds-arco/src/views/operations/sales-orders/index.vue",
+      "apps/qsmds-arco/src/views/operations/warehouse-arrivals/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/currencies/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/currency-exchange-rate/index.vue",
       "apps/qsmds-arco/src/views/system/basic-data/dictionaries/index.vue",

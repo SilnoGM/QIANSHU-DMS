@@ -57,7 +57,7 @@ export function buildShipmentRouteQuery(query: PurchaseShipmentListQuery): Recor
 }
 
 export function shipmentCountsQuery(query: PurchaseShipmentListQuery) {
-  const { view: _view, page: _page, pageSize: _pageSize, ...filters } = query
+  const { view: _view, page: _page, pageSize: _pageSize, sort: _sort, ...filters } = query
   return filters
 }
 

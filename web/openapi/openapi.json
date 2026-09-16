@@ -50491,7 +50491,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
-            "description": "货件编号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
+            "description": "货件编号、物流单号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -50522,6 +50522,25 @@
             "schema": {
               "maxLength": 64,
               "type": "string"
+            }
+          },
+          {
+            "name": "destinationWarehouseValue",
+            "required": false,
+            "in": "query",
+            "description": "mainland.warehouse 的稳定 value；按字典规则规范化，允许历史停用或未知值；不能与 destinationWarehouseMissing=true 同时使用",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "destinationWarehouseMissing",
+            "required": false,
+            "in": "query",
+            "description": "仅 true 筛选目的地仓库未记录（null）的历史货件；false 或省略均不添加缺失条件；true 与 destinationWarehouseValue 互斥",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -50571,6 +50590,21 @@
                 "SHIPPED",
                 "WAREHOUSE_RECEIVED",
                 "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "description": "按创建、发货或实际到仓时间降序；空时间置后，以创建时间、采购单、货件顺序和 ID 保持分页稳定",
+            "schema": {
+              "default": "CREATED_DESC",
+              "type": "string",
+              "enum": [
+                "CREATED_DESC",
+                "SHIPPED_DESC",
+                "WAREHOUSE_RECEIVED_DESC"
               ]
             }
           },
@@ -50799,7 +50833,7 @@
             "name": "keyword",
             "required": false,
             "in": "query",
-            "description": "货件编号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
+            "description": "货件编号、物流单号、采购单号、基础唛头、货件唛头、销售单号、客户、产品名称或自定义供应商名称",
             "schema": {
               "maxLength": 128,
               "type": "string"
@@ -50830,6 +50864,25 @@
             "schema": {
               "maxLength": 64,
               "type": "string"
+            }
+          },
+          {
+            "name": "destinationWarehouseValue",
+            "required": false,
+            "in": "query",
+            "description": "mainland.warehouse 的稳定 value；按字典规则规范化，允许历史停用或未知值；不能与 destinationWarehouseMissing=true 同时使用",
+            "schema": {
+              "maxLength": 64,
+              "type": "string"
+            }
+          },
+          {
+            "name": "destinationWarehouseMissing",
+            "required": false,
+            "in": "query",
+            "description": "仅 true 筛选目的地仓库未记录（null）的历史货件；false 或省略均不添加缺失条件；true 与 destinationWarehouseValue 互斥",
+            "schema": {
+              "type": "boolean"
             }
           },
           {

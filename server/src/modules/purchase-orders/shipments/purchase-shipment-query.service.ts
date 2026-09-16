@@ -4,10 +4,11 @@ import { Prisma } from '../../../generated/prisma/client'
 import { PrismaService } from '../../../infrastructure/database/prisma.service'
 import { ApiException } from '../../../infrastructure/http/api.exception'
 import { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
+import { isNormalizableDictionaryItemValue, normalizeDictionaryItemValue } from '../../dictionaries/dictionary.normalizer'
 import { purchaseOrderSupplierFromSources } from '../purchase-order-query.service'
 import type { PurchaseOrderSupplierDto } from '../dto/purchase-order-response.dto'
 import { PURCHASE_SHIPMENT_VIEWS } from './purchase-shipment.dto'
-import type { PurchaseShipmentDestinationWarehouseDto, PurchaseShipmentDetailDto, PurchaseShipmentFilterDto, PurchaseShipmentListItemDto, PurchaseShipmentListQueryDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto, PurchaseShipmentView } from './purchase-shipment.dto'
+import type { PurchaseShipmentDestinationWarehouseDto, PurchaseShipmentDetailDto, PurchaseShipmentFilterDto, PurchaseShipmentListItemDto, PurchaseShipmentListQueryDto, PurchaseShipmentPageDto, PurchaseShipmentStatusCountsDto, PurchaseShipmentSort, PurchaseShipmentView } from './purchase-shipment.dto'
 
 const LINE_SELECT = {
   lineNumber: true, lineType: true, productId: true, productNoSnapshot: true, productNameSnapshot: true,
@@ -42,6 +43,16 @@ const DETAIL_SELECT = {
 type PartRow = Prisma.PurchaseOrderPartGetPayload<{ select: typeof PART_SELECT }>
 
 function validateFilters(input: PurchaseShipmentFilterDto): void {
+  if (input.destinationWarehouseValue !== undefined && !isNormalizableDictionaryItemValue(input.destinationWarehouseValue)) {
+    throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_FAILED', '目的地仓库值格式无效')
+  }
+  if (input.destinationWarehouseMissing !== undefined && typeof input.destinationWarehouseMissing !== 'boolean') {
+    throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_FAILED', '目的地仓库未记录筛选必须是布尔值')
+  }
+  if (input.destinationWarehouseMissing === true && input.destinationWarehouseValue !== undefined) {
+    throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_FAILED', '未记录仓库筛选不能同时指定目的地仓库')
+  }
+
   for (const value of [input.orderDateFrom, input.orderDateTo]) {
     if (value === undefined) continue
     const date = new Date(`${value}T00:00:00.000Z`)
@@ -60,9 +71,14 @@ function validateFilters(input: PurchaseShipmentFilterDto): void {
 /** 公共筛选始终限定货件自身的产品，避免一个采购单中的其他货件被同一产品关键词误命中。 */
 function baseWhere(input: PurchaseShipmentFilterDto): Prisma.PurchaseOrderPartWhereInput {
   validateFilters(input)
-  const keyword = input.keyword?.trim().normalize('NFKC')
+  const rawKeyword = input.keyword?.trim()
+  const keyword = rawKeyword?.normalize('NFKC')
   const match = { contains: keyword, mode: 'insensitive' } as const
   return {
+    // 历史查询只匹配保存的稳定值，不以字典当前有效性排除停用或未知仓库。
+    destinationWarehouseValue: input.destinationWarehouseMissing === true
+      ? null
+      : input.destinationWarehouseValue === undefined ? undefined : normalizeDictionaryItemValue(input.destinationWarehouseValue),
     purchaseOrder: { is: {
       purchaseType: input.purchaseType,
       createdByUserId: input.createdByUserId,
@@ -74,6 +90,8 @@ function baseWhere(input: PurchaseShipmentFilterDto): Prisma.PurchaseOrderPartWh
     } },
     ...(!keyword ? {} : { OR: [
       { shipmentNo: match },
+      // 承运商单号保存时保留全半角，搜索也必须保持相同字符身份。
+      { trackingNo: { contains: rawKeyword, mode: 'insensitive' } },
       { shippingMarkText: match },
       { purchaseOrder: { is: { orderNo: match } } },
       { purchaseOrder: { is: { shippingMarkText: match } } },
@@ -93,6 +111,19 @@ function viewWhere(view: PurchaseShipmentView): Prisma.PurchaseOrderPartWhereInp
     case 'SHIPPED': return { status: 'ACTIVE', shippedAt: { not: null }, warehouseReceivedAt: null }
     case 'WAREHOUSE_RECEIVED': return { status: 'ACTIVE', warehouseReceivedAt: { not: null } }
     case 'CANCELLED': return { status: 'CANCELLED' }
+  }
+}
+
+function shipmentOrderBy(sort: PurchaseShipmentSort = 'CREATED_DESC'): Prisma.PurchaseOrderPartOrderByWithRelationInput[] {
+  const stableOrder: Prisma.PurchaseOrderPartOrderByWithRelationInput[] = [
+    { createdAt: 'desc' }, { purchaseOrderId: 'desc' }, { partNumber: 'asc' }, { id: 'asc' },
+  ]
+  // 到仓与发货时间允许历史空值，显式置后，末尾唯一 ID 使同时间货件分页可复现。
+  switch (sort) {
+    case 'CREATED_DESC': return stableOrder
+    case 'SHIPPED_DESC': return [{ shippedAt: { sort: 'desc', nulls: 'last' } }, ...stableOrder]
+    case 'WAREHOUSE_RECEIVED_DESC': return [{ warehouseReceivedAt: { sort: 'desc', nulls: 'last' } }, ...stableOrder]
+    default: throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, 'VALIDATION_FAILED', '货件排序方式无效')
   }
 }
 
@@ -139,10 +170,11 @@ export class PurchaseShipmentQueryService {
   async list(input: PurchaseShipmentListQueryDto): Promise<PurchaseShipmentPageDto> {
     const page = input.page ?? 1, pageSize = input.pageSize ?? 20
     const where: Prisma.PurchaseOrderPartWhereInput = { AND: [baseWhere(input), viewWhere(input.view ?? 'AWAITING_SHIPMENT')] }
+    const orderBy = shipmentOrderBy(input.sort)
     // 分页与总数共享数据库快照；数量按货件计算，不先对采购单分页后在内存中拆分。
     const [total, rows] = await this.prisma.$transaction(async transaction => {
       const total = await transaction.purchaseOrderPart.count({ where })
-      const rows = await transaction.purchaseOrderPart.findMany({ where, select: PART_SELECT, orderBy: [{ createdAt: 'desc' }, { purchaseOrderId: 'desc' }, { partNumber: 'asc' }, { id: 'asc' }], skip: (page - 1) * pageSize, take: pageSize })
+      const rows = await transaction.purchaseOrderPart.findMany({ where, select: PART_SELECT, orderBy, skip: (page - 1) * pageSize, take: pageSize })
       return [total, rows] as const
     }, { isolationLevel: 'RepeatableRead' })
     const [suppliers, warehouses] = await Promise.all([this.resolveSuppliers(rows), this.resolveWarehouses(rows)])

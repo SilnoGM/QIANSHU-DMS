@@ -5,7 +5,7 @@ import test from 'node:test'
 
 import operationsWorkbenchRoutes from '../../src/router/modules/operations.workbench'
 
-test('仓储运输提供按业务顺序排列的三个空白页面', () => {
+test('仓储运输提供到仓业务页及两个后续空白页面', () => {
   const warehouseRoute = operationsWorkbenchRoutes.find(route => route.name === 'qsOperationsWarehouseTransport')
   assert.equal(warehouseRoute?.path, '/qs-operations/warehouse-transport')
   assert.equal(warehouseRoute?.meta?.title, '仓储运输')
@@ -16,7 +16,10 @@ test('仓储运输提供按业务顺序排列的三个空白页面', () => {
     { name: 'qsOperationsOceanContainers', path: 'ocean-containers', title: '海运柜次' },
     { name: 'qsOperationsOverseasStorage', path: 'overseas-storage', title: '海外寄仓' },
   ])
-  for (const route of warehouseRoute?.children ?? []) {
+  const arrivals = warehouseRoute?.children?.[0]
+  assert.match(String(arrivals?.component), /operations\/warehouse-arrivals\/index\.vue/u)
+  assert.equal(arrivals?.meta?.auth, 'purchase-orders:read')
+  for (const route of warehouseRoute?.children?.slice(1) ?? []) {
     assert.match(String(route.component), /workbenches\/placeholder\.vue/u)
     assert.equal(route.meta?.auth, undefined)
   }

@@ -1,6 +1,7 @@
 import type { PrismaService } from '../../../infrastructure/database/prisma.service'
 import type { DictionaryLookupService } from '../../dictionaries/dictionary-lookup.service'
 import { PurchaseShipmentQueryService } from './purchase-shipment-query.service'
+import type { PurchaseShipmentFilterDto, PurchaseShipmentListQueryDto } from './purchase-shipment.dto'
 
 function fixture() {
   const part = { findMany: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0), findUnique: jest.fn(), groupBy: jest.fn().mockResolvedValue([]) }
@@ -28,6 +29,80 @@ function row() {
 }
 
 describe('PurchaseShipmentQueryService', () => {
+  it('preserves full-width tracking identifiers while normalizing other keyword fields for both rows and counts', async () => {
+    const f = fixture(), input = { keyword: '  ＳＦ-123  ' }
+    await f.service.list(input)
+    await f.service.statusCounts(input)
+    const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
+    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where)
+    expect(countCall[0].where).toMatchObject({ OR: expect.arrayContaining([
+      { trackingNo: { contains: 'ＳＦ-123', mode: 'insensitive' } },
+      { shipmentNo: { contains: 'SF-123', mode: 'insensitive' } },
+      { purchaseOrder: { is: { orderNo: { contains: 'SF-123', mode: 'insensitive' } } } },
+    ]) as unknown })
+  })
+
+  it('shares warehouse and tracking filters between rows and status counts without validating historical availability', async () => {
+    const f = fixture()
+    const filters = { keyword: '  SF123  ', destinationWarehouseValue: ' retired-a ', destinationWarehouseMissing: false }
+    const query = { ...filters, view: 'WAREHOUSE_RECEIVED' as const, sort: 'WAREHOUSE_RECEIVED_DESC' as const }
+    await f.service.list(query)
+    await f.service.statusCounts(filters)
+    const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: unknown[] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
+    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where)
+    expect(countCall[0].where).toMatchObject({ destinationWarehouseValue: 'RETIRED-A', OR: expect.arrayContaining([
+      { trackingNo: { contains: 'SF123', mode: 'insensitive' } },
+    ]) as unknown })
+    expect(countCall[0].where).not.toHaveProperty('sort')
+    expect(f.lookup.resolveStoredValues).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false, undefined])('applies the missing warehouse filter only when explicitly true: %s', async destinationWarehouseMissing => {
+    const f = fixture()
+    const filters = { keyword: 'shipment', destinationWarehouseMissing }
+    await f.service.list(filters)
+    await f.service.statusCounts(filters)
+    const listCall = f.part.findMany.mock.calls[0] as [{ where: { AND: [{ destinationWarehouseValue?: unknown }] } }]
+    const countCall = f.part.groupBy.mock.calls[0] as [{ where: unknown }]
+    expect(listCall[0].where.AND[0]).toEqual(countCall[0].where)
+    expect(listCall[0].where.AND[0].destinationWarehouseValue).toBe(destinationWarehouseMissing === true ? null : undefined)
+  })
+
+  it.each([
+    { destinationWarehouseMissing: true, destinationWarehouseValue: 'CN-A' },
+    { destinationWarehouseValue: '' }, { destinationWarehouseValue: 'A'.repeat(65) },
+    { destinationWarehouseValue: '仓库' }, { destinationWarehouseValue: null },
+    { destinationWarehouseMissing: 'false' }, { destinationWarehouseMissing: null },
+  ])('rejects conflicting or invalid direct query inputs before accessing data %#', async input => {
+    const f = fixture(), query = input as unknown as PurchaseShipmentFilterDto
+    await expect(f.service.list(query)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    await expect(f.service.statusCounts(query)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(f.prisma.$transaction).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [undefined, []],
+    ['CREATED_DESC', []],
+    ['SHIPPED_DESC', [{ shippedAt: { sort: 'desc', nulls: 'last' } }]],
+    ['WAREHOUSE_RECEIVED_DESC', [{ warehouseReceivedAt: { sort: 'desc', nulls: 'last' } }]],
+  ])('uses stable shipment ordering for %s without changing count filters', async (sort, leadingOrder) => {
+    const f = fixture()
+    await f.service.list({ view: 'ALL', sort } as PurchaseShipmentListQueryDto)
+    expect(f.part.findMany).toHaveBeenCalledWith(expect.objectContaining({ orderBy: [
+      ...leadingOrder as unknown[], { createdAt: 'desc' }, { purchaseOrderId: 'desc' }, { partNumber: 'asc' }, { id: 'asc' },
+    ] }))
+    const first = f.part.findMany.mock.calls[0] as [{ where: unknown }]
+    expect(f.part.count).toHaveBeenCalledWith({ where: first[0].where })
+  })
+
+  it('rejects unsupported direct sort values before querying', async () => {
+    const f = fixture()
+    await expect(f.service.list({ sort: 'SHIPPED_ASC' } as unknown as PurchaseShipmentListQueryDto)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' })
+    expect(f.prisma.$transaction).not.toHaveBeenCalled()
+  })
+
   it('resolves historical warehouses once per page and preserves unknown values and null history', async () => {
     const f = fixture()
     f.part.findMany.mockResolvedValue([
