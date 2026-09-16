@@ -31,29 +31,33 @@ describe('Purchase payable detail HTTP with isolated PostgreSQL', () => {
     return { id, items }
   }
   const path = (id: string) => `/api/purchase-order-payables/${id}`
+  const orderPath = (id: string) => `/api/purchase-order-payables/orders/${id}`
   function expectPrivate(response: request.Response) {
     expect(response.headers['cache-control']).toContain('private')
     expect(response.headers['cache-control']).toContain('no-store')
     expect(response.headers['x-request-id']).toMatch(/^req_/u)
   }
 
-  it('requires a logged-in user with payment permission before exposing any payable', async () => {
+  it.each(['payable', 'order'])('requires a logged-in user with payment permission before exposing any %s', async scope => {
     const group = await reviewed()
-    const unauthenticated = await request(h.app.getHttpServer()).get(path(group.items[0].id)).expect(401)
+    const detailPath = scope === 'order' ? orderPath : path
+    const id = scope === 'order' ? group.id : group.items[0].id
+    const unauthenticated = await request(h.app.getHttpServer()).get(detailPath(id)).expect(401)
     expectPrivate(unauthenticated)
-    const denied = await forbidden.browser.get(path(group.items[0].id)).expect(403)
+    const denied = await forbidden.browser.get(detailPath(id)).expect(403)
     expect(denied.body as { code: string }).toMatchObject({ code: 'FORBIDDEN' })
     expectPrivate(denied)
-    await forbidden.browser.get(path(randomUUID())).expect(403)
+    await forbidden.browser.get(detailPath(randomUUID())).expect(403)
   })
 
-  it('resolves the exact payable UUID to its complete order group without writing payment data', async () => {
+  it.each(['payable', 'order'])('resolves the exact %s UUID to its complete order group without writing payment data', async scope => {
     const first = await reviewed()
     const second = await reviewed()
     const before = await h.prisma.purchaseOrderPayable.findMany({ orderBy: { id: 'asc' } })
     const counts = [await h.prisma.purchaseOrderPayment.count(), await h.prisma.fundPostingBatch.count(), await h.prisma.fundLedgerEntry.count()]
-    for (const item of first.items) {
-      const response = await finance.browser.get(path(item.id)).expect(200)
+    const urls = scope === 'order' ? [orderPath(first.id)] : first.items.map(item => path(item.id))
+    for (const url of urls) {
+      const response = await finance.browser.get(url).expect(200)
       expectPrivate(response)
       const body = response.body as PurchasePayableOrderDto
       expect(body).toMatchObject({ id: first.id, accountOwnerType: 'COMPANY', owner: null, purchaseTotalAmount: '10.00', currencyCode: 'CNY' })
@@ -65,13 +69,15 @@ describe('Purchase payable detail HTTP with isolated PostgreSQL', () => {
     expect([await h.prisma.purchaseOrderPayment.count(), await h.prisma.fundPostingBatch.count(), await h.prisma.fundLedgerEntry.count()]).toEqual(counts)
   })
 
-  it('returns UUID validation errors and precise not-found responses, including a parent order UUID', async () => {
+  it.each(['payable', 'order'])('validates the %s UUID and rejects unknown or wrong-domain IDs', async scope => {
     const group = await reviewed()
-    const invalid = await finance.browser.get(path('not-a-uuid')).expect(422)
+    const detailPath = scope === 'order' ? orderPath : path
+    const invalid = await finance.browser.get(detailPath('not-a-uuid')).expect(422)
     expect(invalid.body as { code: string }).toMatchObject({ code: 'VALIDATION_FAILED' })
     expectPrivate(invalid)
-    for (const id of [randomUUID(), group.id]) {
-      const missing = await finance.browser.get(path(id)).expect(404)
+    const wrongDomainIds = scope === 'order' ? group.items.map(item => item.id) : [group.id]
+    for (const id of [randomUUID(), ...wrongDomainIds]) {
+      const missing = await finance.browser.get(detailPath(id)).expect(404)
       expect(missing.body as { code: string }).toMatchObject({ code: 'PURCHASE_PAYABLE_NOT_FOUND' })
       expectPrivate(missing)
     }
@@ -89,8 +95,8 @@ describe('Purchase payable detail HTTP with isolated PostgreSQL', () => {
     const pendingIds = (pending.body as { items: PurchasePayableOrderDto[] }).items.map(group => group.id)
     for (const group of [paid, cancelled, zero]) expect(pendingIds).not.toContain(group.id)
     for (const [group, expected] of [[paid, ['NO_PAYMENT', 'PAID']], [cancelled, ['CANCELLED', 'CANCELLED']], [zero, ['NO_PAYMENT', 'NO_PAYMENT']]] as const) {
-      for (const item of group.items) {
-        const detail = await finance.browser.get(path(item.id)).expect(200)
+      for (const url of [orderPath(group.id), ...group.items.map(item => path(item.id))]) {
+        const detail = await finance.browser.get(url).expect(200)
         const body = detail.body as PurchasePayableOrderDto
         expect(body.id).toBe(group.id)
         expect(body.items.map(value => value.status)).toEqual(expected)

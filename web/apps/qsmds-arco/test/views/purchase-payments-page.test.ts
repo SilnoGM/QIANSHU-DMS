@@ -7,7 +7,7 @@ import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { computed, effectScope, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import { sumMoneyValues } from '../../src/components/base/MoneyInput/logic'
-import { buildPurchasePayableLinkText, canPayPurchasePayable, createPurchasePayableGroups } from '../../src/views/workbenches/purchase-payments/purchase-payments.logic'
+import { canPayPurchasePayable, createPurchasePayableGroups } from '../../src/views/workbenches/purchase-payments/purchase-payments.logic'
 
 async function fixture() {
   const source = await readFile(new URL('../../src/views/workbenches/purchase-payments/index.vue', import.meta.url), 'utf8')
@@ -18,14 +18,13 @@ async function fixture() {
   const permissions = reactive({ pay: true })
   const copied: string[] = []
   const navigation: unknown[] = []
-  const messages: string[] = []
+  const payments: unknown[] = []
   const focusHandlers = new Map<string, () => void>()
-  let clipboardFailure = false
   const calls: Array<{ query: unknown, signal: AbortSignal }> = []
   const callbacks: Record<string, () => void> = {}
   let execute = async () => ({ data: { items: [], total: 0 } })
   const scope = effectScope()
-  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ load, copyPaymentLink, orders, groups, summaryValues, total, loading, error, page })`, {
+  const state = scope.run(() => runInNewContext(ts.transpileModule(`${script}\n;({ load, openPayment, orders, groups, summaryValues, total, loading, error, page })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     AbortController,
@@ -37,18 +36,12 @@ async function fixture() {
     useI18n: () => ({ t: (key: string) => key }),
     useRoute: () => route,
     useRouter: () => ({
-      resolve: (location: { params: { id: string } }) => ({ href: `/#/qs-finance/realtime-payments/purchase-payments/${location.params.id}` }),
       push: (location: unknown) => navigation.push(location),
     }),
-    useQsToast: () => ({ success: (message: string) => messages.push(message), error: (message: string) => messages.push(message) }),
     navigator: { clipboard: { writeText: async (text: string) => {
-      if (clipboardFailure) {
-        throw new Error('Clipboard denied')
-      }
       copied.push(text)
     } } },
     window: {
-      location: { href: 'https://dms.example/#/qs-finance/realtime-payments/purchase-payments' },
       addEventListener: (name: string, handler: () => void) => focusHandlers.set(name, handler),
       removeEventListener: (name: string) => focusHandlers.delete(name),
     },
@@ -59,11 +52,13 @@ async function fixture() {
     onActivated: (fn: () => void) => callbacks.activate = fn,
     onDeactivated: (fn: () => void) => callbacks.deactivate = fn,
     onBeforeUnmount: (fn: () => void) => callbacks.unmount = fn,
-    purchaseOrderPayablesApi: { list: (query: unknown, signal: AbortSignal) => {
-      calls.push({ query, signal })
-      return execute()
-    } },
-    buildPurchasePayableLinkText,
+    purchaseOrderPayablesApi: {
+      list: (query: unknown, signal: AbortSignal) => {
+        calls.push({ query, signal })
+        return execute()
+      },
+      pay: (...args: unknown[]) => payments.push(args),
+    },
     createPurchasePayableGroups,
     canPayPurchasePayable,
     sumMoneyValues,
@@ -71,7 +66,7 @@ async function fixture() {
     AmountDisplay: {},
   })) as {
     load: () => Promise<void>
-    copyPaymentLink: (row: PurchasePayableRow) => Promise<void>
+    openPayment: (row: PurchasePayableRow) => void
     orders: { value: unknown[] }
     total: { value: number }
     error: { value: string }
@@ -84,9 +79,8 @@ async function fixture() {
     calls,
     copied,
     navigation,
-    messages,
+    payments,
     focusHandlers,
-    failClipboard: () => clipboardFailure = true,
     route,
     account,
     permissions,
@@ -143,23 +137,47 @@ test('关闭页面、切账号和撤销付款权限清空旧订单并忽略迟�
   }
 })
 
-test('付款按钮只复制具体款项链接，不导航、不写入付款；复制失败反馈错误', async (context) => {
+test('财务付款按钮直接导航到具体款项，不复制链接也不直接写入付款', async (context) => {
   const f = await fixture()
   context.after(f.dispose)
   f.callbacks.mount!()
   await flush()
   const row = { id: 'payable', order: { orderNo: 'PO/20260916-00016' }, payable: { id: '11111111-1111-4111-8111-111111111111', status: 'PENDING_PAYMENT', remainingAmount: '7.00' } } as PurchasePayableRow
-  await f.state.copyPaymentLink(row)
-  assert.deepEqual(f.copied, ['【PO/20260916-00016付款】https://dms.example/#/qs-finance/realtime-payments/purchase-payments/11111111-1111-4111-8111-111111111111'])
-  assert.equal(f.navigation.length, 0)
-  assert.equal(f.messages.at(-1), 'purchasePayment.linkCopied')
-  f.failClipboard()
-  await f.state.copyPaymentLink(row)
-  assert.equal(f.copied.length, 1)
-  assert.equal(f.messages.at(-1), 'purchasePayment.copyFailed')
+  assert.equal(typeof f.state.openPayment, 'function')
+  f.state.openPayment(row)
+  assert.deepEqual(JSON.parse(JSON.stringify(f.navigation)), [{
+    name: 'qsFinanceRealtimePurchasePayablePayment',
+    params: { id: '11111111-1111-4111-8111-111111111111' },
+  }])
+  assert.deepEqual(f.copied, [])
+  assert.deepEqual(f.payments, [])
+})
+
+test('财务付款入口在未激活、无权限、加载和不可支付状态下不导航', async (context) => {
+  const f = await fixture()
+  context.after(f.dispose)
+  const row = { id: 'payable', order: { orderNo: 'PO/20260916-00016' }, payable: { id: '11111111-1111-4111-8111-111111111111', status: 'PENDING_PAYMENT', remainingAmount: '7.00' } } as PurchasePayableRow
+  assert.equal(typeof f.state.openPayment, 'function')
+  f.state.openPayment(row)
+  f.callbacks.mount!()
+  await flush()
+  f.state.loading.value = true
+  f.state.openPayment(row)
+  f.state.loading.value = false
+  f.state.openPayment({ ...row, payable: null })
+  for (const status of ['PAID', 'NO_PAYMENT', 'CANCELLED'] as const) {
+    f.state.openPayment({ ...row, payable: { ...row.payable!, status } })
+  }
+  f.state.openPayment({ ...row, payable: { ...row.payable!, remainingAmount: '0.00' } })
   f.permissions.pay = false
-  await f.state.copyPaymentLink(row)
-  assert.equal(f.messages.length, 2)
+  f.state.openPayment(row)
+  f.permissions.pay = true
+  await flush()
+  f.route.name = 'qsFinanceRealtimePurchasePayablePayment'
+  f.state.openPayment(row)
+  assert.deepEqual(f.navigation, [])
+  assert.deepEqual(f.copied, [])
+  assert.deepEqual(f.payments, [])
 })
 
 test('从独立付款页返回窗口时刷新待办，最后一页清空后回到有效页码', async (context) => {

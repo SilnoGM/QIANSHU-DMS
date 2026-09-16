@@ -33,3 +33,12 @@ test('付款深链未登录先登录并保留目标，登录后回到同一款�
   assert.equal(resolveAuthSynchronizationNavigation({ state: 'authenticated', currentFullPath: '/login', currentRouteName: 'login', loginRedirect: path, homeFullPath: '/' }), path)
   assert.equal(isAuthRouteAuthorized(['purchase-orders:payment'], []), false)
 })
+
+test('采购单付款链接与具体款项路由分开，均使用付款权限并隐藏菜单', () => {
+  const router = createRouter({ history: createMemoryHistory(), routes: financeWorkbench.children.map(withoutViews) })
+  const route = router.resolve({ name: 'qsFinanceRealtimePurchaseOrderPayment', params: { id } })
+  assert.equal(route.path, `/qs-finance/realtime-payments/purchase-payments/orders/${id}`)
+  assert.equal(route.meta.menu, false)
+  assert.equal(route.meta.auth, 'purchase-orders:payment')
+  assert.equal(route.meta.whiteList, undefined)
+})

@@ -6,12 +6,11 @@ import purchaseOrderPayablesApi from '@/api/modules/purchase-order-payables'
 import AmountDisplay from '@/components/base/AmountDisplay/index.vue'
 import DateTimeDisplay from '@/components/base/DateTimeDisplay/index.vue'
 import { sumMoneyValues } from '@/components/base/MoneyInput/logic'
-import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericTable from '@/components/business/QsGenericTable/index.vue'
 import QsPersonDisplay from '@/components/business/QsPersonDisplay/index.vue'
 import { useCurrencyCatalog } from '@/currency-catalog/use-currency-catalog'
 import { getPurchaseOrderApiFailure } from '../../operations/purchase-orders/purchase-order-list.logic'
-import { buildPurchasePayableLinkText, canPayPurchasePayable, createPurchasePayableGroups } from './purchase-payments.logic'
+import { canPayPurchasePayable, createPurchasePayableGroups } from './purchase-payments.logic'
 
 defineOptions({ name: 'QsPurchasePayments' })
 const { t } = useI18n()
@@ -19,7 +18,6 @@ const { auth } = useAppAuth()
 const account = useAppAccountStore()
 const route = useRoute()
 const router = useRouter()
-const toast = useQsToast()
 const currencyCatalog = useCurrencyCatalog()
 const canPay = computed(() => auth('purchase-orders:payment'))
 const active = ref(false)
@@ -31,7 +29,6 @@ const orders = shallowRef<PurchasePayableOrderDto[]>([])
 const total = ref(0)
 const loading = ref(false)
 const error = ref('')
-const copyingId = ref<string | null>(null)
 let controller: AbortController | null = null
 const groups = computed(() => createPurchasePayableGroups(orders.value))
 const grouping: QsGenericTableGrouping<PurchasePayableRow> = { getRows: group => group.children ?? [], getLabel: group => group.order.orderNo }
@@ -96,30 +93,11 @@ function search() {
   page.value = 1
   void load()
 }
-async function copyPaymentLink(row: PurchasePayableRow) {
-  if (!enabled.value || loading.value || copyingId.value || !row.payable || !canPayPurchasePayable(row.payable)) {
+function openPayment(row: PurchasePayableRow) {
+  if (!enabled.value || loading.value || !row.payable || !canPayPurchasePayable(row.payable)) {
     return
   }
-  const id = row.payable.id
-  const requestEpoch = account.authEpoch
-  const href = router.resolve({ name: 'qsFinanceRealtimePurchasePayablePayment', params: { id } }).href
-  copyingId.value = id
-  try {
-    await navigator.clipboard.writeText(buildPurchasePayableLinkText(row.order.orderNo, href, window.location.href))
-    if (enabled.value && account.authEpoch === requestEpoch) {
-      toast.success(t('purchasePayment.linkCopied'))
-    }
-  }
-  catch {
-    if (enabled.value && account.authEpoch === requestEpoch) {
-      toast.error(t('purchasePayment.copyFailed'))
-    }
-  }
-  finally {
-    if (copyingId.value === id) {
-      copyingId.value = null
-    }
-  }
+  void router.push({ name: 'qsFinanceRealtimePurchasePayablePayment', params: { id: row.payable.id } })
 }
 function refreshOnFocus() {
   if (enabled.value) {
@@ -133,7 +111,6 @@ watch(() => route.query.keyword, (value) => {
 watch([enabled, () => account.authEpoch], () => {
   orders.value = []
   total.value = 0
-  copyingId.value = null
   void load()
 }, { immediate: true, flush: 'sync' })
 onMounted(() => {
@@ -207,7 +184,7 @@ onBeforeUnmount(() => {
           <span v-else class="text-muted-foreground">—</span>
         </template>
         <template #actions="{ row }">
-          <FaButton v-if="row.payable && canPayPurchasePayable(row.payable)" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :disabled="loading || copyingId !== null" :aria-label="t('purchasePayment.payLabel', { orderNo: row.order.orderNo, paymentType: t(`purchasePayment.types.${row.payable.paymentType}`) })" @click="copyPaymentLink(row)">
+          <FaButton v-if="row.payable && canPayPurchasePayable(row.payable)" variant="ghost" size="sm" class="min-h-11 sm:min-h-8" :disabled="loading || !enabled" :aria-label="t('purchasePayment.payLabel', { orderNo: row.order.orderNo, paymentType: t(`purchasePayment.types.${row.payable.paymentType}`) })" @click="openPayment(row)">
             <FaIcon name="i-lucide:wallet" aria-hidden="true" />{{ t('purchasePayment.pay') }}
           </FaButton>
           <span v-else-if="row.payable" class="text-muted-foreground">{{ t(`purchasePayment.status.${row.payable.status}`) }}</span>

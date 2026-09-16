@@ -16,11 +16,13 @@ test('列表按采购单分页，付款保留幂等键与版本且不自动重�
   const query = { page: 2, pageSize: 20, keyword: 'PO/20260916-00016' }
   await api.list(query, signal)
   await api.get('payable/id', signal)
+  await api.getByOrder('order/id', signal)
   const body = { expectedVersion: 3, paymentMethod: 'CASH', remark: null }
   await api.pay('payable/id', body, 'same-key', signal)
   assert.deepEqual(calls, [
     ['purchase-order-payables', { errorPresentation: 'local', params: query, signal }],
     ['purchase-order-payables/payable%2Fid', { errorPresentation: 'local', signal }],
+    ['purchase-order-payables/orders/order%2Fid', { errorPresentation: 'local', signal }],
     ['purchase-order-payables/payable%2Fid/pay', body, { errorPresentation: 'local', headers: { 'Idempotency-Key': 'same-key' }, retry: false, signal }],
   ])
 })

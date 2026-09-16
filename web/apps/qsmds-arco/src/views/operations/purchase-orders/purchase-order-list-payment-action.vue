@@ -1,101 +1,62 @@
 <script setup lang="ts">
-import type { PurchaseOrderDetailDto } from '@/api/generated/types.gen'
-import type { CurrencyDescriptor } from '@/components/base/currency'
-
-import purchaseOrdersApi from '@/api/modules/purchase-orders'
+import type { PurchaseOrderListItemDto } from '@/api/generated/types.gen'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
-import PurchaseOrderDetailActions from './purchase-order-detail-actions.vue'
-import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
+import { buildPurchasePayableLinkText } from '../../workbenches/purchase-payments/purchase-payments.logic'
 
-const props = defineProps<{
-  active: boolean
-  currencies: readonly CurrencyDescriptor[]
-}>()
-const emit = defineEmits<{
-  detailUpdated: [detail: PurchaseOrderDetailDto]
-  stale: []
-}>()
+const props = defineProps<{ active: boolean }>()
+const emit = defineEmits<{ stale: [] }>()
 const { t } = useI18n()
 const { auth } = useAppAuth()
 const account = useAppAccountStore()
+const router = useRouter()
 const toast = useQsToast()
-const detail = shallowRef<PurchaseOrderDetailDto | null>(null)
 const loadingOrderId = ref<string | null>(null)
-const busy = ref(false)
-const actionsRef = useTemplateRef<InstanceType<typeof PurchaseOrderDetailActions>>('actionsRef')
 const canOpen = computed(() => props.active && auth('purchase-orders:read') && auth('purchase-orders:payment'))
-let controller: AbortController | null = null
+let attempt = 0
 
 function reset(): void {
-  controller?.abort()
-  controller = null
-  actionsRef.value?.cancelPendingRequests()
-  detail.value = null
+  attempt++
   loadingOrderId.value = null
-  busy.value = false
 }
 
-/** 列表读取最新订单状态后，通过共用入口跳转财务采购付款页核对分项应付。 */
-async function open(orderId: string): Promise<void> {
-  if (!canOpen.value || loadingOrderId.value !== null || busy.value) {
+/** 待办入口分享整张采购单；同步发起剪贴板写入以保留浏览器用户手势，打开后再读取最新应付。 */
+async function open(order: PurchaseOrderListItemDto): Promise<void> {
+  if (!canOpen.value || loadingOrderId.value !== null) {
     return
   }
-  reset()
-  const request = new AbortController()
-  controller = request
-  const epoch = account.authEpoch
-  loadingOrderId.value = orderId
-  const isCurrent = () => !request.signal.aborted && controller === request && epoch === account.authEpoch && canOpen.value
+  if (order.orderStatus !== 'CONFIRMED' || order.paymentStatus === 'PAID') {
+    toast.warning(t('purchaseOrderList.payment.unavailable'))
+    emit('stale')
+    return
+  }
+  const currentAttempt = ++attempt
+  const href = router.resolve({ name: 'qsFinanceRealtimePurchaseOrderPayment', params: { id: order.id } }).href
+  loadingOrderId.value = order.id
   try {
-    const response = await purchaseOrdersApi.getById(orderId, request.signal)
-    if (!isCurrent()) {
-      return
-    }
-    if (response.data.orderStatus !== 'CONFIRMED' || response.data.paymentStatus === 'PAID') {
-      toast.warning(t('purchaseOrderList.payment.unavailable'))
-      emit('stale')
-      return
-    }
-    detail.value = response.data
-    await nextTick()
-    if (isCurrent()) {
-      actionsRef.value?.openPaymentDialog()
+    await navigator.clipboard.writeText(buildPurchasePayableLinkText(order.orderNo, href, window.location.href))
+    if (attempt === currentAttempt && canOpen.value) {
+      toast.success(t('purchasePayment.linkCopied'))
     }
   }
-  catch (error) {
-    if (isCurrent() && !isPurchaseOrderAbortError(error)) {
-      const failure = getPurchaseOrderApiFailure(error)
-      toast.error(failure.requestId ? `${failure.message}（requestId: ${failure.requestId}）` : failure.message)
+  catch {
+    if (attempt === currentAttempt && canOpen.value) {
+      toast.error(t('purchasePayment.copyFailed'))
     }
   }
   finally {
-    if (controller === request) {
-      controller = null
+    if (attempt === currentAttempt) {
       loadingOrderId.value = null
     }
   }
 }
 
-function applyUpdatedDetail(updated: PurchaseOrderDetailDto): void {
-  detail.value = updated
-  emit('detailUpdated', updated)
-}
-
-// 离开待付款视图、身份或权限变化时，取消旧详情请求并清空目标订单。
-watch(() => [props.active, account.authEpoch, canOpen.value] as const, reset)
+// 剪贴板操作无法撤回；页面或身份变化后只丢弃迟到反馈，不恢复旧状态。
+watch(() => [props.active, account.authEpoch, canOpen.value] as const, reset, { flush: 'sync' })
 onDeactivated(reset)
 onBeforeUnmount(reset)
-
 defineExpose({ open, loadingOrderId })
 </script>
 
 <template>
-  <PurchaseOrderDetailActions
-    v-if="detail"
-    ref="actionsRef"
-    :detail="detail"
-    :currencies="currencies"
-    @busy-change="busy = $event"
-    @detail-updated="applyUpdatedDetail"
-  />
+  <span hidden />
 </template>

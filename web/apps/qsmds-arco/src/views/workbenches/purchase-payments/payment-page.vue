@@ -11,9 +11,10 @@ const router = useRouter()
 const active = ref(false)
 const locked = ref(false)
 const canPay = computed(() => auth('purchase-orders:payment'))
-const enabled = computed(() => active.value && account.authState === 'authenticated' && canPay.value && route.name === 'qsFinanceRealtimePurchasePayablePayment')
-const id = computed(() => typeof route.params.id === 'string' ? route.params.id : '')
-const { selection, loading, invalid, error, load, applyOrder } = usePurchasePayableDetail(id, enabled, computed(() => account.authEpoch))
+const byOrder = computed(() => route.name === 'qsFinanceRealtimePurchaseOrderPayment')
+const enabled = computed(() => active.value && account.authState === 'authenticated' && canPay.value && (byOrder.value || route.name === 'qsFinanceRealtimePurchasePayablePayment'))
+const target = computed(() => ({ id: typeof route.params.id === 'string' ? route.params.id : '', kind: byOrder.value ? 'order' as const : 'payable' as const }))
+const { order, selection, loading, invalid, error, load, applyOrder, selectPayable } = usePurchasePayableDetail(target, enabled, computed(() => account.authEpoch))
 onMounted(() => active.value = true)
 onActivated(() => active.value = true)
 onDeactivated(() => active.value = false)
@@ -43,7 +44,14 @@ onBeforeUnmount(() => active.value = false)
           {{ t('purchasePayment.retry') }}
         </FaButton>
       </FaEmpty>
-      <PaymentForm v-else-if="selection && enabled" :selection="selection" :enabled="enabled" @changed="applyOrder" @refresh="load" @lock-change="locked = $event" />
+      <div v-else-if="selection && enabled" class="space-y-4">
+        <div v-if="byOrder && order" role="group" :aria-label="t('purchasePayment.selectInstallment')" class="flex flex-wrap gap-2">
+          <FaButton v-for="item in order.items" :key="item.id" :variant="selection.item.id === item.id ? 'default' : 'outline'" :aria-pressed="selection.item.id === item.id" :disabled="locked" @click="selectPayable(item.id)">
+            {{ t(`purchasePayment.types.${item.paymentType}`) }} · {{ t(`purchasePayment.status.${item.status}`) }}
+          </FaButton>
+        </div>
+        <PaymentForm :selection="selection" :enabled="enabled" @changed="applyOrder" @refresh="load" @lock-change="locked = $event" />
+      </div>
     </FaPageMain>
   </div>
 </template>

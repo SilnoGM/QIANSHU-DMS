@@ -14,11 +14,14 @@ import { PurchasePayableIdDto, PurchasePayableListQueryDto, PurchasePayablePayDt
 @Module({ controllers: [PurchasePayableController], providers: [PurchasePayableQueryService, PurchaseOrderMutationService].map(provide => ({ provide, useValue: {} })) })
 class ContractModule {}
 describe('PurchasePayableController', () => {
-  it('documents protected payable detail lookup independently from the outstanding list', async () => {
+  it.each([
+    ['/api/purchase-order-payables/{id}', 'purchase_payables_detail'],
+    ['/api/purchase-order-payables/orders/{id}', 'purchase_payables_order_detail'],
+  ])('documents protected detail lookup independently from the outstanding list: %s', async (path, operationId) => {
     const document = await createOpenApiDocument(ContractModule)
-    const operation = document.paths['/api/purchase-order-payables/{id}']?.get
+    const operation = document.paths[path]?.get
     expect(operation).toMatchObject({
-      operationId: 'purchase_payables_detail',
+      operationId,
       parameters: expect.arrayContaining([expect.objectContaining({ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } })]) as unknown,
       responses: {
         200: { headers: { 'X-Request-Id': expect.any(Object) as unknown }, content: { 'application/json': { schema: { $ref: '#/components/schemas/PurchasePayableOrderDto' } } } },
@@ -32,7 +35,16 @@ describe('PurchasePayableController', () => {
   })
   it('requires finance payment permission for listing, detail and payment', () => {
     const reflector = new Reflector()
-    for (const method of ['list', 'detail', 'pay'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
+    for (const method of ['list', 'detail', 'orderDetail', 'pay'] as const) expect(reflector.get(REQUIRED_PERMISSIONS_METADATA, PurchasePayableController.prototype[method])).toEqual(['purchase-orders:payment'])
+  })
+  it('forwards the order link to the exact order lookup without searching the list or interpreting it as a payable', async () => {
+    const group = { id: 'order', items: [{ id: 'deposit', paymentType: 'DEPOSIT' }, { id: 'balance', paymentType: 'BALANCE' }] }
+    const queries = { getOrder: jest.fn().mockResolvedValue(group), list: jest.fn(), getByPayableId: jest.fn() }
+    const controller = new PurchasePayableController(queries as unknown as PurchasePayableQueryService, {} as PurchaseOrderMutationService)
+    await expect(controller.orderDetail({ id: 'order' })).resolves.toEqual(group)
+    expect(queries.getOrder).toHaveBeenCalledWith('order')
+    expect(queries.list).not.toHaveBeenCalled()
+    expect(queries.getByPayableId).not.toHaveBeenCalled()
   })
   it('forwards detail to the exact payable lookup without consulting the outstanding list', async () => {
     const queries = { getByPayableId: jest.fn().mockResolvedValue({ id: 'order', items: [{ id: 'payable', status: 'PAID' }] }), list: jest.fn(), getOrder: jest.fn() }

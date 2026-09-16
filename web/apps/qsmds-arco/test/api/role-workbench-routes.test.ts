@@ -39,7 +39,7 @@ test('采购货件菜单复用采购读取权限，审核菜单继续独立授�
 test('财务分为实时收付和账户管理，叶子路由保留独立权限', () => {
   assert.deepEqual(financeWorkbench.children.map(route => route.path), ['/qs-finance/realtime-payments', '/qs-finance/fund-accounts'])
   const routes = financeWorkbench.children.flatMap(route => route.children ?? [])
-  assert.equal(new Set(routes.map(route => route.name)).size, 6)
+  assert.equal(new Set(routes.map(route => route.name)).size, 7)
   const paymentDetail = routes.find(route => route.name === 'qsFinanceRealtimePurchasePayablePayment')
   assert.equal(paymentDetail?.meta?.menu, false)
   assert.equal(paymentDetail?.meta?.auth, 'purchase-orders:payment')

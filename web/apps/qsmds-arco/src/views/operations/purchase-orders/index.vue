@@ -765,7 +765,7 @@ async function retryPurchaseFactoryShipment(): Promise<void> {
   }
 }
 
-/** 所有待办入口进入各自的正式业务弹窗，由最新订单详情确定可操作货件。 */
+/** 待办付款只复制链接；发货与入仓进入对应业务入口。 */
 function handlePendingAction(
   action: PurchaseOrderPendingActionItem,
   order: PurchaseOrderListItemDto,
@@ -781,7 +781,7 @@ function handlePendingAction(
     return
   }
   if (action.key === 'PAYMENT') {
-    void paymentActionRef.value?.open(order.id)
+    void paymentActionRef.value?.open(order)
     return
   }
   if (action.key === 'WAREHOUSE_RECEIPT') {
@@ -1616,8 +1616,6 @@ onBeforeUnmount(() => {
     <PurchaseOrderListPaymentAction
       ref="paymentActionRef"
       :active="viewMode === 'pending' && route.name === 'qsOperationsPendingPurchaseOrders' && selectedStatus === 'AWAITING_PAYMENT'"
-      :currencies="currencyCatalog.currencies.value"
-      @detail-updated="handleDetailUpdated"
       @stale="refreshOrdersAndCounts"
     />
 
