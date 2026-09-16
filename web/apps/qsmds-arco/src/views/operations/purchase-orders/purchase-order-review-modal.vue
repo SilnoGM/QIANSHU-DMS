@@ -6,6 +6,7 @@ import purchaseOrdersApi from '@/api/modules/purchase-orders'
 import { useQsToast } from '@/components/base/QsToast/useQsToast'
 import QsGenericModal from '@/components/business/QsGenericModal/index.vue'
 import OrderParts from '@/components/business/QsPurchaseOrderDrawer/OrderParts.vue'
+import { buildPurchaseOrderCopyText } from './purchase-order-copy.logic'
 import { buildPurchaseOrderReviewRequest } from './purchase-order-detail.logic'
 import { getPurchaseOrderApiFailure, isPurchaseOrderAbortError } from './purchase-order-list.logic'
 import PurchaseOrderReviewDetails from './purchase-order-review-details.vue'
@@ -32,6 +33,8 @@ const reason = ref('')
 const error = ref('')
 const loading = ref(false)
 const submitting = ref(false)
+const copying = ref(false)
+let copySequence = 0
 let loadController: AbortController | null = null
 let mutationController: AbortController | null = null
 
@@ -44,6 +47,7 @@ const image = usePurchaseOrderImageGeneration({
   epoch: computed(() => account.authEpoch),
 })
 const busy = computed(() => submitting.value || image.generating.value)
+const canCopy = computed(() => visible.value && canReview.value && !loading.value && !busy.value && !copying.value && detail.value !== null && detail.value.id === props.orderId)
 const canGenerate = computed(() => canReview.value && !loading.value && !busy.value && detail.value?.orderStatus === 'PENDING_REVIEW' && reviewContext.value?.available === true)
 const canConfirm = computed(() => canGenerate.value && image.ready.value)
 const generationStep = ref(0)
@@ -58,6 +62,8 @@ const terminalNotice = computed(() => {
 })
 
 function reset(): void {
+  copySequence += 1
+  copying.value = false
   image.reset()
   loadController?.abort()
   mutationController?.abort()
@@ -69,6 +75,34 @@ function reset(): void {
   reviewContext.value = null
   reason.value = ''
   error.value = ''
+}
+
+async function copyPurchaseInfo(): Promise<void> {
+  const current = detail.value
+  if (!canCopy.value || current === null) {
+    return
+  }
+  const sequence = ++copySequence
+  const epoch = account.authEpoch
+  const isCurrent = () => sequence === copySequence && epoch === account.authEpoch && visible.value && canReview.value && props.orderId === current.id
+  copying.value = true
+  try {
+    await navigator.clipboard.writeText(buildPurchaseOrderCopyText(current, t))
+    if (isCurrent()) {
+      toast.success(t('purchaseReview.copy.success'))
+    }
+  }
+  catch {
+    if (isCurrent()) {
+      toast.error(t('purchaseReview.copy.failed'))
+    }
+  }
+  finally {
+    // 剪贴板请求不可取消；关闭或切换弹窗后，其迟到结果不能回写新弹窗状态。
+    if (sequence === copySequence) {
+      copying.value = false
+    }
+  }
 }
 
 function failureMessage(failure: unknown): string {
@@ -250,12 +284,18 @@ onBeforeUnmount(reset)
       </label>
     </div>
     <template #footer>
-      <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="busy" @click="visible = false">
-        {{ t('purchaseReview.image.close') }}
-      </FaButton>
-      <FaButton v-if="detail?.orderStatus === 'PENDING_REVIEW'" type="button" class="min-h-11 sm:min-h-9" :disabled="!canConfirm" :loading="submitting" @click="submit">
-        {{ t('purchaseOrderList.review.confirm') }}
-      </FaButton>
+      <div class="flex flex-wrap gap-2 w-full items-center justify-end">
+        <FaButton type="button" variant="outline" class="min-h-11 w-full sm:mr-auto sm:min-h-9 sm:w-auto" :disabled="!canCopy" :loading="copying" @click="copyPurchaseInfo">
+          <FaIcon name="i-lucide:copy" aria-hidden="true" />
+          {{ t('purchaseReview.copy.label') }}
+        </FaButton>
+        <FaButton type="button" variant="outline" class="min-h-11 sm:min-h-9" :disabled="busy" @click="visible = false">
+          {{ t('purchaseReview.image.close') }}
+        </FaButton>
+        <FaButton v-if="detail?.orderStatus === 'PENDING_REVIEW'" type="button" class="min-h-11 sm:min-h-9" :disabled="!canConfirm" :loading="submitting" @click="submit">
+          {{ t('purchaseOrderList.review.confirm') }}
+        </FaButton>
+      </div>
     </template>
   </QsGenericModal>
   <FaMultiStepLoader

@@ -5,7 +5,12 @@ import test from 'node:test'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
 import { computed, reactive, ref, shallowRef } from 'vue'
+import { createI18n } from 'vue-i18n'
+import messages from '../../src/locales/lang/purchase-review/zh-cn.json'
+import { buildPurchaseOrderCopyText } from '../../src/views/operations/purchase-orders/purchase-order-copy.logic'
 import { buildPurchaseOrderReviewRequest } from '../../src/views/operations/purchase-orders/purchase-order-detail.logic'
+
+const i18n = createI18n({ legacy: false, locale: 'zh-cn', messages: { 'zh-cn': messages } })
 
 async function createFixture() {
   const source = await readFile(new URL('../../src/views/operations/purchase-orders/purchase-order-review-modal.vue', import.meta.url), 'utf8')
@@ -13,9 +18,28 @@ async function createFixture() {
     .replace(/^import[\s\S]*?from ['"][^'"]+['"]\s*$/gm, '')
   const props = reactive({ orderId: 'order-1', modelValue: true, currencies: [] })
   const account = reactive({ authEpoch: 1 })
-  const current = { id: 'order-1', version: 1, orderStatus: 'PENDING_REVIEW', reviewSummary: null }
+  const current = {
+    id: 'order-1',
+    version: 1,
+    orderStatus: 'PENDING_REVIEW',
+    reviewSummary: null,
+    orderNo: 'PO/20260916-00016',
+    orderDate: '2026-09-16',
+    supplier: { label: '示例供应商' },
+    amounts: { purchaseTotalAmount: '20.0000', depositDueAmount: '5.0000', balanceDueAmount: '15.0000' },
+    lines: [{ id: 'line-1', lineNumber: 1, productName: '木桌', quantity: 2, actualPurchaseUnitPriceAmount: '10.0000', lineTotalAmount: '20.0000' }],
+    parts: [{ partNumber: 1, status: 'PENDING_REVIEW', shipmentNo: 'PKG/01', shippingMarkText: 'TEST/货件-01', items: [{ lineNumber: 1, purchaseOrderLineId: 'line-1' }] }],
+  }
   const events: Array<{ name: string, value: unknown }> = []
   const success: string[] = []
+  const failures: string[] = []
+  const copied: string[] = []
+  const permission = ref(true)
+  const clipboard = {
+    writeText: async (text: string) => {
+      copied.push(text)
+    },
+  }
   let contextCalls = 0
   let reviewCalls = 0
   const draft = { id: 'draft-1', purchaseOrderId: 'order-1', orderVersion: 1, isCurrent: true }
@@ -47,13 +71,14 @@ async function createFixture() {
     purchaseOrdersApi: api,
     isPurchaseOrderAbortError: (failure: Error) => failure.name === 'AbortError',
   })
-  const state = runInNewContext(ts.transpileModule(`${script}\n;({ loadDetail, submit, reset, canConfirm, detail, error, reason, loading, submitting, visible, image })`, {
+  const state = runInNewContext(ts.transpileModule(`${script}\n;({ loadDetail, submit, reset, canConfirm, canCopy, copying, copyPurchaseInfo, detail, error, reason, loading, submitting, visible, image })`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText, {
     AbortController,
     computed,
     ref,
     shallowRef,
+    navigator: { clipboard },
     defineProps: () => props,
     defineEmits: () => (name: string, value: unknown) => {
       events.push({ name, value })
@@ -61,14 +86,15 @@ async function createFixture() {
         props.modelValue = value as boolean
       }
     },
-    useI18n: () => ({ t: (key: string) => key }),
-    useAppAuth: () => ({ auth: () => true }),
+    useI18n: () => ({ t: (key: string, values: Record<string, string | number> = {}) => key.startsWith('purchaseReview.copy.') ? i18n.global.t(key, values) : key }),
+    useAppAuth: () => ({ auth: () => permission.value }),
     useAppAccountStore: () => account,
-    useQsToast: () => ({ success: (message: string) => success.push(message) }),
+    useQsToast: () => ({ success: (message: string) => success.push(message), error: (message: string) => failures.push(message) }),
     watch: () => {},
     onBeforeUnmount: () => {},
     purchaseOrdersApi: api,
     buildPurchaseOrderReviewRequest,
+    buildPurchaseOrderCopyText,
     usePurchaseOrderImageGeneration,
     getPurchaseOrderApiFailure: (failure: Error) => ({ message: failure.message }),
     isPurchaseOrderAbortError: () => false,
@@ -77,6 +103,9 @@ async function createFixture() {
     submit: () => Promise<void>
     reset: () => void
     canConfirm: { value: boolean }
+    canCopy: { value: boolean }
+    copying: { value: boolean }
+    copyPurchaseInfo: () => Promise<void>
     detail: { value: typeof current | null }
     error: { value: string }
     reason: { value: string }
@@ -91,8 +120,93 @@ async function createFixture() {
       state.image.markLoaded(state.image.previewUrl.value)
     }
   }
-  return { state: { ...state, loadDetail }, current, api, props, account, events, success, calls: () => ({ contextCalls, reviewCalls }) }
+  return { state: { ...state, loadDetail }, current, api, props, account, events, success, failures, copied, clipboard, permission, calls: () => ({ contextCalls, reviewCalls }) }
 }
+
+test('点击复制使用已加载的采购详情，不提交审核、不派号，重复点击受保护', async () => {
+  const fixture = await createFixture()
+  assert.equal(fixture.state.canCopy.value, false)
+  await fixture.state.loadDetail()
+  let finish!: () => void
+  fixture.clipboard.writeText = text => new Promise((resolve) => {
+    fixture.copied.push(text)
+    finish = resolve
+  })
+  const pending = fixture.state.copyPurchaseInfo()
+  assert.equal(fixture.state.copying.value, true)
+  await fixture.state.copyPurchaseInfo()
+  assert.equal(fixture.copied.length, 1)
+  assert.match(fixture.copied[0]!, /【PO\/20260916-00016】\n供应商：示例供应商/u)
+  assert.match(fixture.copied[0]!, /金额小计：10\.00\*2=20\.00/u)
+  assert.match(fixture.copied[0]!, /PKG\/01：木桌\n此货件唛头：TEST\/货件-01/u)
+  finish()
+  await pending
+  assert.equal(fixture.state.copying.value, false)
+  assert.deepEqual(fixture.success, ['采购信息已复制'])
+  assert.deepEqual(fixture.calls(), { contextCalls: 1, reviewCalls: 0 })
+  assert.deepEqual(fixture.events, [])
+})
+
+test('复制失败有错误提示且可重试，加载中、提交中、无权、关闭或订单不匹配时不复制', async () => {
+  const fixture = await createFixture()
+  await fixture.state.loadDetail()
+  fixture.clipboard.writeText = async () => {
+    throw new Error('Permission denied')
+  }
+  await fixture.state.copyPurchaseInfo()
+  assert.deepEqual(fixture.failures, ['复制失败，请重试'])
+  assert.deepEqual(fixture.success, [])
+  assert.equal(fixture.state.canCopy.value, true)
+  fixture.clipboard.writeText = async (text) => {
+    fixture.copied.push(text)
+  }
+  for (const flag of [fixture.state.loading, fixture.state.submitting]) {
+    flag.value = true
+    await fixture.state.copyPurchaseInfo()
+    flag.value = false
+  }
+  fixture.permission.value = false
+  await fixture.state.copyPurchaseInfo()
+  fixture.permission.value = true
+  fixture.props.modelValue = false
+  await fixture.state.copyPurchaseInfo()
+  fixture.props.modelValue = true
+  fixture.props.orderId = 'order-2'
+  await fixture.state.copyPurchaseInfo()
+  assert.deepEqual(fixture.copied, [])
+  fixture.props.orderId = 'order-1'
+  await fixture.state.copyPurchaseInfo()
+  assert.equal(fixture.copied.length, 1)
+})
+
+test('切换订单、身份或关闭后，迟到的剪贴板成功和失败不会显示提示', async () => {
+  for (const change of ['order', 'identity', 'close']) {
+    for (const result of ['success', 'failure']) {
+      const fixture = await createFixture()
+      await fixture.state.loadDetail()
+      let finish!: () => void
+      fixture.clipboard.writeText = () => new Promise((resolve, reject) => {
+        finish = () => result === 'success' ? resolve() : reject(new Error('Permission denied'))
+      })
+      const pending = fixture.state.copyPurchaseInfo()
+      if (change === 'order') {
+        fixture.props.orderId = 'order-2'
+      }
+      else if (change === 'identity') {
+        fixture.account.authEpoch += 1
+      }
+      else {
+        fixture.state.reset()
+        fixture.props.modelValue = false
+      }
+      finish()
+      await pending
+      assert.deepEqual(fixture.success, [])
+      assert.deepEqual(fixture.failures, [])
+      assert.equal(fixture.state.copying.value, false)
+    }
+  }
+})
 
 test('审核条件不可用或查询失败时禁止提交，明确显示原因；恢复后可重新核对', async () => {
   const fixture = await createFixture()
